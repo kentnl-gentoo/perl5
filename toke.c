@@ -1,6 +1,6 @@
 /*    toke.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -363,7 +363,7 @@ lex_start(SV *line)
     PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = PL_linestart = SvPVX(PL_linestr);
     PL_bufend = PL_bufptr + SvCUR(PL_linestr);
     SvREFCNT_dec(PL_rs);
-    PL_rs = newSVpv("\n", 1);
+    PL_rs = newSVpvn("\n", 1);
     PL_rsfp = 0;
 }
 
@@ -683,7 +683,7 @@ tokeq(SV *sv)
 	goto finish;
     d = s;
     if ( PL_hints & HINT_NEW_STRING )
-	pv = sv_2mortal(newSVpv(SvPVX(pv), len));
+	pv = sv_2mortal(newSVpvn(SvPVX(pv), len));
     while (s < send) {
 	if (*s == '\\') {
 	    if (s + 1 < send && (s[1] == '\\'))
@@ -719,7 +719,7 @@ sublex_start(void)
 	    SV *nsv;
 
 	    p = SvPV(sv, len);
-	    nsv = newSVpv(p, len);
+	    nsv = newSVpvn(p, len);
 	    SvREFCNT_dec(sv);
 	    sv = nsv;
 	} 
@@ -801,7 +801,7 @@ sublex_done(void)
 {
     if (!PL_lex_starts++) {
 	PL_expect = XOPERATOR;
-	yylval.opval = (OP*)newSVOP(OP_CONST, 0, newSVpv("",0));
+	yylval.opval = (OP*)newSVOP(OP_CONST, 0, newSVpvn("",0));
 	return THING;
     }
 
@@ -823,7 +823,7 @@ sublex_done(void)
 	PL_lex_casemods = 0;
 	*PL_lex_casestack = '\0';
 	PL_lex_starts = 0;
-	if (SvCOMPILED(PL_lex_repl)) {
+	if (SvEVALED(PL_lex_repl)) {
 	    PL_lex_state = LEX_INTERPNORMAL;
 	    PL_lex_starts++;
 	    /*	we don't clear PL_lex_repl here, so that we can check later
@@ -928,10 +928,10 @@ scan_const(char *start)
     register char *d = SvPVX(sv);		/* destination for copies */
     bool dorange = FALSE;			/* are we in a translit range? */
     I32 len;					/* ? */
-    I32 utf = PL_lex_inwhat == OP_TRANS
+    I32 utf = (PL_lex_inwhat == OP_TRANS && PL_sublex_info.sub_op)
 	? (PL_sublex_info.sub_op->op_private & (OPpTRANS_FROM_UTF|OPpTRANS_TO_UTF))
 	: UTF;
-    I32 thisutf = PL_lex_inwhat == OP_TRANS
+    I32 thisutf = (PL_lex_inwhat == OP_TRANS && PL_sublex_info.sub_op)
 	? (PL_sublex_info.sub_op->op_private & (PL_lex_repl ? OPpTRANS_FROM_UTF : OPpTRANS_TO_UTF))
 	: UTF;
 
@@ -1411,7 +1411,7 @@ intuit_method(char *start, GV *gv)
 		return 0;	/* no assumptions -- "=>" quotes bearword */
       bare_package:
 	    PL_nextval[PL_nexttoke].opval = (OP*)newSVOP(OP_CONST, 0,
-						   newSVpv(tmpbuf,0));
+						   newSVpvn(tmpbuf,len));
 	    PL_nextval[PL_nexttoke].opval->op_private = OPpCONST_BARE;
 	    PL_expect = XTERM;
 	    force_next(WORD);
@@ -1487,6 +1487,7 @@ filter_del(filter_t funcp)
 	return;
     /* if filter is on top of stack (usual case) just pop it off */
     if (IoDIRP(FILTER_DATA(AvFILLp(PL_rsfp_filters))) == (DIR*)funcp){
+	IoDIRP(FILTER_DATA(AvFILLp(PL_rsfp_filters))) = NULL;
 	sv_free(av_pop(PL_rsfp_filters));
 
         return;
@@ -1638,7 +1639,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 	*/
 	if (PL_in_my) {
 	    if (strchr(PL_tokenbuf,':'))
-		croak(PL_no_myglob,PL_tokenbuf);
+		yyerror(form(PL_no_myglob,PL_tokenbuf));
 
 	    yylval.opval = newOP(OP_PADANY, 0);
 	    yylval.opval->op_targ = pad_allocmy(PL_tokenbuf);
@@ -1854,7 +1855,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 	    return ')';
 	}
 	if (PL_lex_inwhat == OP_SUBST && PL_linestr == PL_lex_repl
-	    && SvCOMPILED(PL_lex_repl))
+	    && SvEVALED(PL_lex_repl))
 	{
 	    if (PL_bufptr != PL_bufend)
 		croak("Bad evalled substitution pattern");
@@ -1928,7 +1929,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 	    PL_last_uni = 0;
 	    PL_last_lop = 0;
 	    if (PL_lex_brackets)
-		yyerror("Missing right bracket");
+		yyerror("Missing right curly or square bracket");
 	    TOKEN(0);
 	}
 	if (s++ < PL_bufend)
@@ -2372,7 +2373,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
     case ']':
 	s++;
 	if (PL_lex_brackets <= 0)
-	    yyerror("Unmatched right bracket");
+	    yyerror("Unmatched right square bracket");
 	else
 	    --PL_lex_brackets;
 	if (PL_lex_state == LEX_INTERPNORMAL) {
@@ -2529,7 +2530,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
       rightbracket:
 	s++;
 	if (PL_lex_brackets <= 0)
-	    yyerror("Unmatched right bracket");
+	    yyerror("Unmatched right curly bracket");
 	else
 	    PL_expect = (expectation)PL_lex_brackstack[--PL_lex_brackets];
 	if (PL_lex_brackets < PL_lex_formbrack)
@@ -2723,6 +2724,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 	}
 
 	d = s;
+	tmp = (I32)*s;
 	if (PL_lex_state == LEX_NORMAL)
 	    s = skipspace(s);
 
@@ -2764,7 +2766,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 	}
 
 	PL_expect = XOPERATOR;
-	if (PL_lex_state == LEX_NORMAL && isSPACE(*d)) {
+	if (PL_lex_state == LEX_NORMAL && isSPACE((char)tmp)) {
 	    bool islop = (PL_last_lop == PL_oldoldbufptr);
 	    if (!islop || PL_last_lop_op == OP_GREPSTART)
 		PL_expect = XOPERATOR;
@@ -3129,7 +3131,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		/* if we saw a global override before, get the right name */
 
 		if (gvp) {
-		    sv = newSVpv("CORE::GLOBAL::",14);
+		    sv = newSVpvn("CORE::GLOBAL::",14);
 		    sv_catpv(sv,PL_tokenbuf);
 		}
 		else
@@ -3152,11 +3154,8 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		    PL_oldoldbufptr < PL_bufptr &&
 		    (PL_oldoldbufptr == PL_last_lop || PL_oldoldbufptr == PL_last_uni) &&
 		    /* NO SKIPSPACE BEFORE HERE! */
-		    (PL_expect == XREF 
-		     || ((PL_opargs[PL_last_lop_op] >> OASHIFT)& 7) == OA_FILEREF
-		     || (PL_last_lop_op == OP_ENTERSUB 
-			 && PL_last_proto 
-			 && PL_last_proto[PL_last_proto[0] == ';' ? 1 : 0] == '*')) )
+		    (PL_expect == XREF ||
+		     ((PL_opargs[PL_last_lop_op] >> OASHIFT)& 7) == OA_FILEREF))
 		{
 		    bool immediate_paren = *s == '(';
 
@@ -3172,8 +3171,10 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		    /* (But it's an indir obj regardless for sort.) */
 
 		    if ((PL_last_lop_op == OP_SORT ||
-                         (!immediate_paren && (!gv || !GvCVu(gv))) ) &&
-                        (PL_last_lop_op != OP_MAPSTART && PL_last_lop_op != OP_GREPSTART)){
+                         (!immediate_paren && (!gv || !GvCVu(gv)))) &&
+                        (PL_last_lop_op != OP_MAPSTART &&
+			 PL_last_lop_op != OP_GREPSTART))
+		    {
 			PL_expect = (PL_last_lop == PL_oldoldbufptr) ? XTERM : XOPERATOR;
 			goto bareword;
 		    }
@@ -3186,11 +3187,8 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		if (*s == '(') {
 		    CLINE;
 		    if (gv && GvCVu(gv)) {
-			CV *cv;
-			if ((cv = GvCV(gv)) && SvPOK(cv))
-			    PL_last_proto = SvPV((SV*)cv, n_a);
 			for (d = s + 1; *d == ' ' || *d == '\t'; d++) ;
-			if (*d == ')' && (sv = cv_const_sv(cv))) {
+			if (*d == ')' && (sv = cv_const_sv(GvCV(gv)))) {
 			    s = d + 1;
 			    goto its_constant;
 			}
@@ -3199,7 +3197,6 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		    PL_expect = XOPERATOR;
 		    force_next(WORD);
 		    yylval.ival = 0;
-		    PL_last_lop_op = OP_ENTERSUB;
 		    TOKEN('&');
 		}
 
@@ -3223,8 +3220,6 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		    if (lastchar == '-')
 			warn("Ambiguous use of -%s resolved as -&%s()",
 				PL_tokenbuf, PL_tokenbuf);
-		    PL_last_lop = PL_oldbufptr;
-		    PL_last_lop_op = OP_ENTERSUB;
 		    /* Check for a constant sub */
 		    cv = GvCV(gv);
 		    if ((sv = cv_const_sv(cv))) {
@@ -3238,52 +3233,41 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		    /* Resolve to GV now. */
 		    op_free(yylval.opval);
 		    yylval.opval = newCVREF(0, newGVOP(OP_GV, 0, gv));
+		    yylval.opval->op_private |= OPpENTERSUB_NOPAREN;
+		    PL_last_lop = PL_oldbufptr;
 		    PL_last_lop_op = OP_ENTERSUB;
 		    /* Is there a prototype? */
 		    if (SvPOK(cv)) {
 			STRLEN len;
-			PL_last_proto = SvPV((SV*)cv, len);
+			char *proto = SvPV((SV*)cv, len);
 			if (!len)
 			    TERM(FUNC0SUB);
-			if (strEQ(PL_last_proto, "$"))
+			if (strEQ(proto, "$"))
 			    OPERATOR(UNIOPSUB);
-			if (*PL_last_proto == '&' && *s == '{') {
+			if (*proto == '&' && *s == '{') {
 			    sv_setpv(PL_subname,"__ANON__");
 			    PREBLOCK(LSTOPSUB);
 			}
-		    } else
-			PL_last_proto = NULL;
+		    }
 		    PL_nextval[PL_nexttoke].opval = yylval.opval;
 		    PL_expect = XTERM;
 		    force_next(WORD);
 		    TOKEN(NOAMP);
 		}
 
-		if (PL_hints & HINT_STRICT_SUBS &&
-		    lastchar != '-' &&
-		    strnNE(s,"->",2) &&
-		    PL_last_lop_op != OP_TRUNCATE &&  /* S/F prototype in opcode.pl */
-		    PL_last_lop_op != OP_ACCEPT &&
-		    PL_last_lop_op != OP_PIPE_OP &&
-		    PL_last_lop_op != OP_SOCKPAIR &&
-		    !(PL_last_lop_op == OP_ENTERSUB 
-			 && PL_last_proto 
-			 && PL_last_proto[PL_last_proto[0] == ';' ? 1 : 0] == '*'))
-		{
-		    warn(
-		     "Bareword \"%s\" not allowed while \"strict subs\" in use",
-			PL_tokenbuf);
-		    ++PL_error_count;
-		}
-
 		/* Call it a bare word */
 
-	    bareword:
-		if (ckWARN(WARN_RESERVED)) {
-		    if (lastchar != '-') {
-			for (d = PL_tokenbuf; *d && isLOWER(*d); d++) ;
-			if (!*d)
-			    warner(WARN_RESERVED, PL_warn_reserved, PL_tokenbuf);
+		if (PL_hints & HINT_STRICT_SUBS)
+		    yylval.opval->op_private |= OPpCONST_STRICT;
+		else {
+		bareword:
+		    if (ckWARN(WARN_RESERVED)) {
+			if (lastchar != '-') {
+			    for (d = PL_tokenbuf; *d && isLOWER(*d); d++) ;
+			    if (!*d)
+				warner(WARN_RESERVED, PL_warn_reserved,
+				       PL_tokenbuf);
+			}
 		    }
 		}
 
@@ -5011,7 +4995,7 @@ new_constant(char *s, STRLEN len, char *key, SV *sv, SV *pv, char *type)
     sv_2mortal(sv);			/* Parent created it permanently */
     cv = *cvp;
     if (!pv)
-	pv = sv_2mortal(newSVpv(s, len));
+	pv = sv_2mortal(newSVpvn(s, len));
     if (type)
 	typesv = sv_2mortal(newSVpv(type, 0));
     else
@@ -5352,14 +5336,17 @@ scan_subst(char *start)
 
     if (es) {
 	SV *repl;
+	PL_sublex_info.super_bufptr = s;
+	PL_sublex_info.super_bufend = PL_bufend;
+	PL_multi_end = 0;
 	pm->op_pmflags |= PMf_EVAL;
-	repl = newSVpv("",0);
+	repl = newSVpvn("",0);
 	while (es-- > 0)
 	    sv_catpv(repl, es ? "eval " : "do ");
 	sv_catpvn(repl, "{ ", 2);
 	sv_catsv(repl, PL_lex_repl);
 	sv_catpvn(repl, " };", 2);
-	SvCOMPILED_on(repl);
+	SvEVALED_on(repl);
 	SvREFCNT_dec(PL_lex_repl);
 	PL_lex_repl = repl;
     }
@@ -5521,9 +5508,9 @@ scan_heredoc(register char *s)
 #endif
     d = "\n";
     if (outer || !(d=ninstr(s,PL_bufend,d,d+1)))
-	herewas = newSVpv(s,PL_bufend-s);
+	herewas = newSVpvn(s,PL_bufend-s);
     else
-	s--, herewas = newSVpv(s,d-s);
+	s--, herewas = newSVpvn(s,d-s);
     s += SvCUR(herewas);
 
     tmpstr = NEWSV(87,79);
@@ -5541,7 +5528,33 @@ scan_heredoc(register char *s)
     PL_multi_start = PL_curcop->cop_line;
     PL_multi_open = PL_multi_close = '<';
     term = *PL_tokenbuf;
-    if (!outer) {
+    if (PL_lex_inwhat == OP_SUBST && PL_in_eval && !PL_rsfp) {
+	char *bufptr = PL_sublex_info.super_bufptr;
+	char *bufend = PL_sublex_info.super_bufend;
+	char *olds = s - SvCUR(herewas);
+	s = strchr(bufptr, '\n');
+	if (!s)
+	    s = bufend;
+	d = s;
+	while (s < bufend &&
+	  (*s != term || memNE(s,PL_tokenbuf,len)) ) {
+	    if (*s++ == '\n')
+		PL_curcop->cop_line++;
+	}
+	if (s >= bufend) {
+	    PL_curcop->cop_line = PL_multi_start;
+	    missingterm(PL_tokenbuf);
+	}
+	sv_setpvn(herewas,bufptr,d-bufptr+1);
+	sv_setpvn(tmpstr,d+1,s-d);
+	s += len - 1;
+	sv_catpvn(herewas,s,bufend-s);
+	(void)strcpy(bufptr,SvPVX(herewas));
+
+	s = olds;
+	goto retval;
+    }
+    else if (!outer) {
 	d = s;
 	while (s < PL_bufend &&
 	  (*s != term || memNE(s,PL_tokenbuf,len)) ) {
@@ -5605,8 +5618,9 @@ scan_heredoc(register char *s)
 	    sv_catsv(tmpstr,PL_linestr);
 	}
     }
-    PL_multi_end = PL_curcop->cop_line;
     s++;
+retval:
+    PL_multi_end = PL_curcop->cop_line;
     if (SvCUR(tmpstr) + 5 < SvLEN(tmpstr)) {
 	SvLEN_set(tmpstr, SvCUR(tmpstr) + 1);
 	Renew(SvPVX(tmpstr), SvLEN(tmpstr), char);
@@ -5639,19 +5653,23 @@ scan_inputsymbol(char *start)
     register char *s = start;		/* current position in buffer */
     register char *d;
     register char *e;
+    char *end;
     I32 len;
 
     d = PL_tokenbuf;			/* start of temp holding space */
     e = PL_tokenbuf + sizeof PL_tokenbuf;	/* end of temp holding space */
-    s = delimcpy(d, e, s + 1, PL_bufend, '>', &len);	/* extract until > */
+    end = strchr(s, '\n');
+    if (!end)
+	end = PL_bufend;
+    s = delimcpy(d, e, s + 1, end, '>', &len);	/* extract until > */
 
     /* die if we didn't have space for the contents of the <>,
-       or if it didn't end
+       or if it didn't end, or if we see a newline
     */
 
     if (len >= sizeof PL_tokenbuf)
 	croak("Excessively long <> operator");
-    if (s >= PL_bufend)
+    if (s >= end)
 	croak("Unterminated <> operator");
 
     s++;
@@ -6028,17 +6046,17 @@ scan_num(char *start)
 		/* 8 and 9 are not octal */
 		case '8': case '9':
 		    if (shift == 3)
-			yyerror("Illegal octal digit");
+			yyerror(form("Illegal octal digit '%c'", *s));
 		    else
 			if (shift == 1)
-			    yyerror("Illegal binary digit");
+			    yyerror(form("Illegal binary digit '%c'", *s));
 		    /* FALL THROUGH */
 
 	        /* octal digits */
 		case '2': case '3': case '4':
 		case '5': case '6': case '7':
 		    if (shift == 1)
-			yyerror("Illegal binary digit");
+			yyerror(form("Illegal binary digit '%c'", *s));
 		    /* FALL THROUGH */
 
 		case '0': case '1':
@@ -6203,7 +6221,7 @@ scan_formline(register char *s)
     dTHR;
     register char *eol;
     register char *t;
-    SV *stuff = newSVpv("",0);
+    SV *stuff = newSVpvn("",0);
     bool needargs = FALSE;
 
     while (!needargs) {
@@ -6316,7 +6334,7 @@ start_subparse(I32 is_format, U32 flags)
     PL_padix = 0;
     PL_subline = PL_curcop->cop_line;
 #ifdef USE_THREADS
-    av_store(PL_comppad_name, 0, newSVpv("@_", 2));
+    av_store(PL_comppad_name, 0, newSVpvn("@_", 2));
     PL_curpad[0] = (SV*)newAV();
     SvPADMY_on(PL_curpad[0]);	/* XXX Needed? */
 #endif /* USE_THREADS */
@@ -6342,9 +6360,9 @@ yywarn(char *s)
 {
     dTHR;
     --PL_error_count;
-    PL_in_eval |= 2;
+    PL_in_eval |= EVAL_WARNONLY;
     yyerror(s);
-    PL_in_eval &= ~2;
+    PL_in_eval &= ~EVAL_WARNONLY;
     return 0;
 }
 
@@ -6385,7 +6403,7 @@ yyerror(char *s)
 	    where = "within string";
     }
     else {
-	SV *where_sv = sv_2mortal(newSVpv("next char ", 0));
+	SV *where_sv = sv_2mortal(newSVpvn("next char ", 10));
 	if (yychar < 32)
 	    sv_catpvf(where_sv, "^%c", toCTRL(yychar));
 	else if (isPRINT_LC(yychar))
@@ -6407,7 +6425,7 @@ yyerror(char *s)
 		(int)PL_multi_open,(int)PL_multi_close,(long)PL_multi_start);
         PL_multi_end = 0;
     }
-    if (PL_in_eval & 2)
+    if (PL_in_eval & EVAL_WARNONLY)
 	warn("%_", msg);
     else if (PL_in_eval)
 	sv_catsv(ERRSV, msg);

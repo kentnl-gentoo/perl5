@@ -4,7 +4,7 @@
 # various typeglob tests
 #
 
-print "1..29\n";
+print "1..30\n";
 
 # type coersion on assignment
 $foo = 'foo';
@@ -62,7 +62,7 @@ if (defined $baa) {
 #        fact that %X::Y:: is stored in %X:: isn't documented.
 #        (I hope.)
 
-{ package Foo::Bar }
+{ package Foo::Bar; $test=1; }
 print exists $Foo::{'Bar::'} ? "ok 12\n" : "not ok 12\n";
 print $Foo::{'Bar::'} eq '*Foo::Bar::' ? "ok 13\n" : "not ok 13\n";
 
@@ -121,3 +121,13 @@ print {*x{FILEHANDLE}} "ok 23\n";
     ++$test; &{$a};
 }
 
+# does pp_readline() handle glob-ness correctly?
+
+{
+    my $g = *foo;
+    $g = <DATA>;
+    print $g;
+}
+
+__END__
+ok 30

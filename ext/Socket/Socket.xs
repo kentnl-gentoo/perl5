@@ -6,24 +6,27 @@
 # ifdef I_SYS_TYPES
 #  include <sys/types.h>
 # endif
-#include <sys/socket.h>
-#ifdef MPE
-# define PF_INET AF_INET
-# define PF_UNIX AF_UNIX
-# define SOCK_RAW 3
-#endif
-#ifdef I_SYS_UN
-#include <sys/un.h>
-#endif
+# include <sys/socket.h>
+# ifdef MPE
+#  define PF_INET AF_INET
+#  define PF_UNIX AF_UNIX
+#  define SOCK_RAW 3
+# endif
+# ifdef I_SYS_UN
+#  include <sys/un.h>
+# endif
 # ifdef I_NETINET_IN
 #  include <netinet/in.h>
 # endif
-#include <netdb.h>
-#ifdef I_ARPA_INET
-# include <arpa/inet.h>
-#endif
+# include <netdb.h>
+# ifdef I_ARPA_INET
+#  include <arpa/inet.h>
+# endif
+# ifdef I_NETINET_TCP
+#  include <netinet/tcp.h>
+# endif
 #else
-#include "sockadapt.h"
+# include "sockadapt.h"
 #endif
 
 #ifdef I_SYSUIO
@@ -31,21 +34,21 @@
 #endif
 
 #ifndef AF_NBS
-#undef PF_NBS
+# undef PF_NBS
 #endif
 
 #ifndef AF_X25
-#undef PF_X25
+# undef PF_X25
 #endif
 
 #ifndef INADDR_NONE
-#define INADDR_NONE	0xffffffff
+# define INADDR_NONE	0xffffffff
 #endif /* INADDR_NONE */
 #ifndef INADDR_BROADCAST
-#define INADDR_BROADCAST	0xffffffff
+# define INADDR_BROADCAST	0xffffffff
 #endif /* INADDR_BROADCAST */
 #ifndef INADDR_LOOPBACK
-#define INADDR_LOOPBACK         0x7F000001
+# define INADDR_LOOPBACK         0x7F000001
 #endif /* INADDR_LOOPBACK */
 
 #ifndef HAS_INET_ATON
@@ -329,6 +332,12 @@ constant(char *name, int arg)
 	if (strEQ(name, "IOV_MAX"))
 #ifdef IOV_MAX
 	    return IOV_MAX;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "IPPROTO_TCP"))
+#ifdef IPPROTO_TCP
+	    return IPPROTO_TCP;
 #else
 	    goto not_there;
 #endif
@@ -804,6 +813,36 @@ constant(char *name, int arg)
 #endif
 	break;
     case 'T':
+	if (strEQ(name, "TCP_KEEPALIVE"))
+#ifdef TCP_KEEPALIVE
+	    return TCP_KEEPALIVE;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "TCP_MAXRT"))
+#ifdef TCP_MAXRT
+	    return TCP_MAXRT;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "TCP_MAXSEG"))
+#ifdef TCP_MAXSEG
+	    return TCP_MAXSEG;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "TCP_NODELAY"))
+#ifdef TCP_NODELAY
+	    return TCP_NODELAY;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "TCP_STDURG"))
+#ifdef TCP_STDURG
+	    return TCP_STDURG;
+#else
+	    goto not_there;
+#endif
 	break;
     case 'U':
 	if (strEQ(name, "UIO_MAXIOV"))
@@ -879,7 +918,7 @@ inet_ntoa(ip_address_sv)
 	Copy( ip_address, &addr, sizeof addr, char );
 	addr_str = inet_ntoa(addr);
 
-	ST(0) = sv_2mortal(newSVpv(addr_str, strlen(addr_str)));
+	ST(0) = sv_2mortal(newSVpvn(addr_str, strlen(addr_str)));
 	}
 
 void
@@ -896,7 +935,7 @@ pack_sockaddr_un(pathname)
 	if (len > sizeof(sun_ad.sun_path))
 	    len = sizeof(sun_ad.sun_path);
 	Copy( pathname, sun_ad.sun_path, len, char );
-	ST(0) = sv_2mortal(newSVpv((char *)&sun_ad, sizeof sun_ad));
+	ST(0) = sv_2mortal(newSVpvn((char *)&sun_ad, sizeof sun_ad));
 #else
 	ST(0) = (SV *) not_here("pack_sockaddr_un");
 #endif
@@ -931,7 +970,7 @@ unpack_sockaddr_un(sun_sv)
 	e = addr.sun_path;
 	while (*e && e < addr.sun_path + sizeof addr.sun_path)
 	    ++e;
-	ST(0) = sv_2mortal(newSVpv(addr.sun_path, e - addr.sun_path));
+	ST(0) = sv_2mortal(newSVpvn(addr.sun_path, e - addr.sun_path));
 #else
 	ST(0) = (SV *) not_here("unpack_sockaddr_un");
 #endif
@@ -950,7 +989,7 @@ pack_sockaddr_in(port,ip_address)
 	sin.sin_port = htons(port);
 	Copy( ip_address, &sin.sin_addr, sizeof sin.sin_addr, char );
 
-	ST(0) = sv_2mortal(newSVpv((char *)&sin, sizeof sin));
+	ST(0) = sv_2mortal(newSVpvn((char *)&sin, sizeof sin));
 	}
 
 void
@@ -980,7 +1019,7 @@ unpack_sockaddr_in(sin_sv)
 
 	EXTEND(SP, 2);
 	PUSHs(sv_2mortal(newSViv((IV) port)));
-	PUSHs(sv_2mortal(newSVpv((char *)&ip_address,sizeof ip_address)));
+	PUSHs(sv_2mortal(newSVpvn((char *)&ip_address,sizeof ip_address)));
 	}
 
 void
@@ -989,7 +1028,7 @@ INADDR_ANY()
 	{
 	struct in_addr	ip_address;
 	ip_address.s_addr = htonl(INADDR_ANY);
-	ST(0) = sv_2mortal(newSVpv((char *)&ip_address,sizeof ip_address ));
+	ST(0) = sv_2mortal(newSVpvn((char *)&ip_address,sizeof ip_address ));
 	}
 
 void
@@ -998,7 +1037,7 @@ INADDR_LOOPBACK()
 	{
 	struct in_addr	ip_address;
 	ip_address.s_addr = htonl(INADDR_LOOPBACK);
-	ST(0) = sv_2mortal(newSVpv((char *)&ip_address,sizeof ip_address));
+	ST(0) = sv_2mortal(newSVpvn((char *)&ip_address,sizeof ip_address));
 	}
 
 void
@@ -1007,7 +1046,7 @@ INADDR_NONE()
 	{
 	struct in_addr	ip_address;
 	ip_address.s_addr = htonl(INADDR_NONE);
-	ST(0) = sv_2mortal(newSVpv((char *)&ip_address,sizeof ip_address));
+	ST(0) = sv_2mortal(newSVpvn((char *)&ip_address,sizeof ip_address));
 	}
 
 void
@@ -1016,5 +1055,5 @@ INADDR_BROADCAST()
 	{
 	struct in_addr	ip_address;
 	ip_address.s_addr = htonl(INADDR_BROADCAST);
-	ST(0) = sv_2mortal(newSVpv((char *)&ip_address,sizeof ip_address));
+	ST(0) = sv_2mortal(newSVpvn((char *)&ip_address,sizeof ip_address));
 	}

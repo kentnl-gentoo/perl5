@@ -22,6 +22,9 @@ Each of these is explained in further detail below.
 For information on non-Unix systems, see the section on
 L<"Porting information"> below.
 
+If you have problems, corrections, or questions, please see
+L<"Reporting Problems"> below.
+
 For information on what's new in this release, see the
 pod/perldelta.pod file.  For more detailed information about specific
 changes, see the Changes file.
@@ -53,7 +56,9 @@ provide additional or different instructions for building Perl.
 
 If there is a hint file for your system (in the hints/ directory) you
 should also read that hint file for specific information for your
-system.  (Unixware users should use the svr4.sh hint file.)
+system.  (Unixware users should use the svr4.sh hint file.)  If
+there is a README file for your platform, then you should read
+that too.  Additional information is in the Porting/ directory.
 
 =head1 WARNING:  This version is not binary compatible with Perl 5.004.
 
@@ -91,10 +96,10 @@ followed.  This will enable us to officially support this option.
 
 =head1 Space Requirements
 
-The complete perl5 source tree takes up about 10 MB of disk space.  The
+The complete perl5 source tree takes up about 15 MB of disk space.  The
 complete tree after completing make takes roughly 20 MB, though the
 actual total is likely to be quite system-dependent.  The installation
-directories need something on the order of 10 MB, though again that
+directories need something on the order of 15 MB, though again that
 value is system-dependent.
 
 =head1 Start with a Fresh Distribution
@@ -167,10 +172,13 @@ If you want to use your old config.sh but override some of the items
 with command line options, you need to use B<Configure -O>.
 
 By default, for most systems, perl will be installed in
-/usr/local/{bin, lib, man}.  You can specify a different 'prefix' for
-the default installation directory, when Configure prompts you or by
-using the Configure command line option -Dprefix='/some/directory',
-e.g.
+/usr/local/{bin, lib, man}.  (See L<"Installation Directories">
+and L<"Coexistence with earlier versions of perl5"> below for
+further details.)
+
+You can specify a different 'prefix' for the default installation
+directory, when Configure prompts you or by using the Configure command
+line option -Dprefix='/some/directory', e.g.
 
 	sh Configure -Dprefix=/opt/perl
 
@@ -179,9 +187,9 @@ are simplified.  For example, if you use prefix=/opt/perl,
 then Configure will suggest /opt/perl/lib instead of
 /opt/perl/lib/perl5/.
 
-NOTE:  You must not specify an installation directory that is below
-your perl source directory.  If you do, installperl will attempt
-infinite recursion.
+NOTE:  You must not specify an installation directory that is the same
+as or below your perl source directory.  If you do, installperl will
+attempt infinite recursion.
 
 It may seem obvious to say, but Perl is useful only when users can
 easily find it.  It's often a good idea to have both /usr/bin/perl and
@@ -228,150 +236,6 @@ Cross compiling is not supported.
 (The file is called configure.gnu to avoid problems on systems
 that would not distinguish the files "Configure" and "configure".)
 
-=head2 Extensions
-
-By default, Configure will offer to build every extension which appears
-to be supported.  For example, Configure will offer to build GDBM_File
-only if it is able to find the gdbm library.  (See examples below.)
-B, DynaLoader, Fcntl, IO, and attrs are always built by default.
-Configure does not contain code to test for POSIX compliance, so POSIX
-is always built by default as well.  If you wish to skip POSIX, you can
-set the Configure variable useposix=false either in a hint file or from
-the Configure command line.  Similarly, the Opcode extension is always
-built by default, but you can skip it by setting the Configure variable
-useopcode=false either in a hint file for from the command line.
-
-You can learn more about each of these extensions by consulting the
-documentation in the individual .pm modules, located under the
-ext/ subdirectory.
-
-Even if you do not have dynamic loading, you must still build the
-DynaLoader extension; you should just build the stub dl_none.xs
-version.  (Configure will suggest this as the default.)
-
-In summary, here are the Configure command-line variables you can set
-to turn off each extension:
-
-    B			(Always included by default)
-    DB_File		i_db
-    DynaLoader		(Must always be included as a static extension)
-    Fcntl		(Always included by default)
-    GDBM_File		i_gdbm
-    IO			(Always included by default)
-    NDBM_File		i_ndbm
-    ODBM_File		i_dbm
-    POSIX		useposix
-    SDBM_File		(Always included by default)
-    Opcode		useopcode
-    Socket		d_socket
-    Threads		usethreads
-    attrs		(Always included by default)
-
-Thus to skip the NDBM_File extension, you can use
-
-	sh Configure -Ui_ndbm
-
-Again, this is taken care of automatically if you don't have the ndbm
-library.
-
-Of course, you may always run Configure interactively and select only
-the extensions you want.
-
-Note:  The DB_File module will only work with version 1.x of Berkeley
-DB or newer releases of version 2.  Configure will automatically detect
-this for you and refuse to try to build DB_File with version 2.
-
-If you re-use your old config.sh but change your system (e.g. by
-adding libgdbm) Configure will still offer your old choices of extensions
-for the default answer, but it will also point out the discrepancy to
-you.
-
-Finally, if you have dynamic loading (most modern Unix systems do)
-remember that these extensions do not increase the size of your perl
-executable, nor do they impact start-up time, so you probably might as
-well build all the ones that will work on your system.
-
-=head2 Including locally-installed libraries
-
-Perl5 comes with interfaces to number of database extensions, including
-dbm, ndbm, gdbm, and Berkeley db.  For each extension, if
-Configure can find the appropriate header files and libraries, it will
-automatically include that extension.  The gdbm and db libraries
-are not included with perl.  See the library documentation for
-how to obtain the libraries.
-
-Note:  If your database header (.h) files are not in a
-directory normally searched by your C compiler, then you will need to
-include the appropriate -I/your/directory option when prompted by
-Configure.  If your database library (.a) files are not in a directory
-normally searched by your C compiler and linker, then you will need to
-include the appropriate -L/your/directory option when prompted by
-Configure.  See the examples below.
-
-=head2 Examples
-
-=over 4
-
-=item gdbm in /usr/local
-
-Suppose you have gdbm and want Configure to find it and build the
-GDBM_File extension.  This examples assumes you have gdbm.h
-installed in /usr/local/include/gdbm.h and libgdbm.a installed in
-/usr/local/lib/libgdbm.a.  Configure should figure all the
-necessary steps out automatically.
-
-Specifically, when Configure prompts you for flags for
-your C compiler, you should include  -I/usr/local/include.
-
-When Configure prompts you for linker flags, you should include
--L/usr/local/lib.
-
-If you are using dynamic loading, then when Configure prompts you for
-linker flags for dynamic loading, you should again include
--L/usr/local/lib.
-
-Again, this should all happen automatically.  If you want to accept the
-defaults for all the questions and have Configure print out only terse
-messages, then you can just run
-
-	sh Configure -des
-
-and Configure should include the GDBM_File extension automatically.
-
-This should actually work if you have gdbm installed in any of
-(/usr/local, /opt/local, /usr/gnu, /opt/gnu, /usr/GNU, or /opt/GNU).
-
-=item gdbm in /usr/you
-
-Suppose you have gdbm installed in some place other than /usr/local/,
-but you still want Configure to find it.  To be specific, assume you
-have /usr/you/include/gdbm.h and /usr/you/lib/libgdbm.a.  You
-still have to add -I/usr/you/include to cc flags, but you have to take
-an extra step to help Configure find libgdbm.a.  Specifically, when
-Configure prompts you for library directories, you have to add
-/usr/you/lib to the list.
-
-It is possible to specify this from the command line too (all on one
-line):
-
-	sh Configure -des \
-		-Dlocincpth="/usr/you/include" \
-		-Dloclibpth="/usr/you/lib"
-
-locincpth is a space-separated list of include directories to search.
-Configure will automatically add the appropriate -I directives.
-
-loclibpth is a space-separated list of library directories to search.
-Configure will automatically add the appropriate -L directives.  If
-you have some libraries under /usr/local/ and others under
-/usr/you, then you have to include both, namely
-
-	sh Configure -des \
-		-Dlocincpth="/usr/you/include /usr/local/include" \
-		-Dloclibpth="/usr/you/lib /usr/local/lib"
-
-=back
-
 =head2 Installation Directories
 
 The installation directories can all be changed by answering the
@@ -392,9 +256,44 @@ for 5.005 (archname is a string like sun4-sunos, determined by Configure).
 	$sitearch	/usr/local/lib/perl5/site_perl/5.005/archname
 	$sitelib	/usr/local/lib/perl5/site_perl/5.005
 
+	$man1dir	/usr/local/man/man1
+	$man3dir	/usr/local/lib/perl5/man/man3
+
+The perl executable will search the libraries in the order given
+above.
+
+The directories under site_perl are empty, but are intended to be used
+for installing local or site-wide extensions.  Perl will automatically
+look in these directories.
+
 Some users prefer to append a "/share" to $privlib and $sitelib
 to emphasize that those directories can be shared among different
 architectures.
+
+Note that these are just the defaults.  You can actually structure the
+directories any way you like.  They don't even have to be on the same
+filesystem.
+
+Further details about the installation directories, maintenance and
+development subversions, and about supporting multiple versions are
+discussed in L<"Coexistence with earlier versions of perl5"> below.
+
+If you specify a prefix that contains the string "perl", then the
+directory structure is simplified.  For example, if you Configure with
+-Dprefix=/opt/perl, then the defaults for 5.005 are
+
+    Configure variable		Default value
+	$archlib	/opt/perl/lib/5.005/archname
+	$privlib	/opt/perl/lib/5.005
+	$sitearch	/opt/perl/lib/site_perl/5.005/archname
+	$sitelib	/opt/perl/lib/site_perl/5.005
+
+	$man1dir	/opt/perl/man/man1
+	$man3dir	/opt/perl/man/man3
+
+=over 4
+
+=item Man Pages
 
 By default, Configure will use the following directories for manual pages:
 
@@ -422,34 +321,7 @@ Some users also prefer to use a .3pm suffix.  You can do that with
 
 	sh Configure -Dman3ext=3pm
 
-If you specify a prefix that contains the string "perl", then the
-directory structure is simplified.  For example, if you Configure with
--Dprefix=/opt/perl, then the defaults for 5.005 are
-
-    Configure variable		Default value
-	$archlib	/opt/perl/lib/5.005/archname
-	$privlib	/opt/perl/lib/5.005
-	$sitearch	/opt/perl/lib/site_perl/5.005/archname
-	$sitelib	/opt/perl/lib/site_perl/5.005
-
-	$man1dir	/opt/perl/man/man1
-	$man3dir	/opt/perl/man/man3
-
-The perl executable will search the libraries in the order given
-above.
-
-The directories under site_perl are empty, but are intended to be used
-for installing local or site-wide extensions.  Perl will automatically
-look in these directories.
-
-In order to support using things like #!/usr/local/bin/perl5.005 after
-a later version is released, architecture-dependent libraries are
-stored in a version-specific directory, such as
-/usr/local/lib/perl5/archname/5.005/.
-
-Further details about the installation directories, maintenance and
-development subversions, and about supporting multiple versions are
-discussed in L<"Coexistence with earlier versions of perl5"> below.
+=back
 
 Again, these are just the defaults, and can be changed as you run
 Configure.
@@ -539,6 +411,10 @@ answers, you should
 to ensure that Configure doesn't re-use them.
 
 Further information is in the Policy_sh.SH file itself.
+
+If the generated Policy.sh file is unsuitable, you may freely edit it
+to contain any valid shell commands.  It will be run just after the
+platform-specific hints files.
 
 =head2 Configure-time Options
 
@@ -685,9 +561,24 @@ You can elect to build a shared libperl by
 
 	sh Configure -Duseshrplib
 
-To actually build perl, you must add the current working directory to your
-LD_LIBRARY_PATH environment variable before running make.  You can do
-this with
+To build a shared libperl, the environment variable controlling shared
+library search (LD_LIBRARY_PATH in most systems, DYLD_LIBRARY_PATH for
+NeXTSTEP/OPENSTEP, LIBRARY_PATH for BeOS) must be set up to include
+the Perl build directory because that's where the shared libperl will
+be created.   Configure arranges Makefile to have the correct shared
+library search settings.
+
+However, there are some special cases where manually setting the
+shared library path might be required.  For example, if you want to run
+something like the following with the newly-built but not-yet-installed
+./perl:
+
+        cd t; ./perl misc/failing_test.t
+or
+        ./perl -Ilib ~/my_mission_critical_test
+
+then you need to set up the shared library path explicitly.
+You can do this with
 
    LD_LIBRARY_PATH=`pwd`:$LD_LIBRARY_PATH; export LD_LIBRARY_PATH
 
@@ -695,9 +586,13 @@ for Bourne-style shells, or
 
    setenv LD_LIBRARY_PATH `pwd`
 
-for Csh-style shells.  You *MUST* do this before running make.
-Folks running NeXT OPENSTEP must substitute DYLD_LIBRARY_PATH for
-LD_LIBRARY_PATH above.
+for Csh-style shells.  (This procedure may also be needed if for some
+unexpected reason Configure fails to set up Makefile correctly.)
+
+You can often recognize failures to build/use a shared libperl from error
+messages complaining about a missing libperl.so (or libperl.sl in HP-UX),
+for example:
+18126:./miniperl: /sbin/loader: Fatal Error: cannot map libperl.so
 
 There is also an potential problem with the shared perl library if you
 want to have more than one "flavor" of the same version of perl (e.g.
@@ -829,16 +724,157 @@ You should also run Configure interactively to verify that a hint file
 doesn't inadvertently override your ccflags setting.  (Hints files
 shouldn't do that, but some might.)
 
-=head2 What if it doesn't work?
+=head2 Extensions
+
+By default, Configure will offer to build every extension which appears
+to be supported.  For example, Configure will offer to build GDBM_File
+only if it is able to find the gdbm library.  (See examples below.)
+B, DynaLoader, Fcntl, IO, and attrs are always built by default.
+Configure does not contain code to test for POSIX compliance, so POSIX
+is always built by default as well.  If you wish to skip POSIX, you can
+set the Configure variable useposix=false either in a hint file or from
+the Configure command line.  Similarly, the Opcode extension is always
+built by default, but you can skip it by setting the Configure variable
+useopcode=false either in a hint file for from the command line.
+
+You can learn more about each of these extensions by consulting the
+documentation in the individual .pm modules, located under the
+ext/ subdirectory.
+
+Even if you do not have dynamic loading, you must still build the
+DynaLoader extension; you should just build the stub dl_none.xs
+version.  (Configure will suggest this as the default.)
+
+In summary, here are the Configure command-line variables you can set
+to turn off each extension:
+
+    B			(Always included by default)
+    DB_File		i_db
+    DynaLoader		(Must always be included as a static extension)
+    Fcntl		(Always included by default)
+    GDBM_File		i_gdbm
+    IO			(Always included by default)
+    NDBM_File		i_ndbm
+    ODBM_File		i_dbm
+    POSIX		useposix
+    SDBM_File		(Always included by default)
+    Opcode		useopcode
+    Socket		d_socket
+    Threads		usethreads
+    attrs		(Always included by default)
+
+Thus to skip the NDBM_File extension, you can use
+
+	sh Configure -Ui_ndbm
+
+Again, this is taken care of automatically if you don't have the ndbm
+library.
+
+Of course, you may always run Configure interactively and select only
+the extensions you want.
+
+Note:  The DB_File module will only work with version 1.x of Berkeley
+DB or newer releases of version 2.  Configure will automatically detect
+this for you and refuse to try to build DB_File with earlier
+releases of version 2.
+
+If you re-use your old config.sh but change your system (e.g. by
+adding libgdbm) Configure will still offer your old choices of extensions
+for the default answer, but it will also point out the discrepancy to
+you.
+
+Finally, if you have dynamic loading (most modern Unix systems do)
+remember that these extensions do not increase the size of your perl
+executable, nor do they impact start-up time, so you probably might as
+well build all the ones that will work on your system.
+
+=head2 Including locally-installed libraries
+
+Perl5 comes with interfaces to number of database extensions, including
+dbm, ndbm, gdbm, and Berkeley db.  For each extension, if
+Configure can find the appropriate header files and libraries, it will
+automatically include that extension.  The gdbm and db libraries
+are not included with perl.  See the library documentation for
+how to obtain the libraries.
+
+Note:  If your database header (.h) files are not in a
+directory normally searched by your C compiler, then you will need to
+include the appropriate -I/your/directory option when prompted by
+Configure.  If your database library (.a) files are not in a directory
+normally searched by your C compiler and linker, then you will need to
+include the appropriate -L/your/directory option when prompted by
+Configure.  See the examples below.
+
+=head2 Examples
 
 =over 4
 
-=item Environment variable clashes
+=item gdbm in /usr/local
 
-Configure uses a CONFIG variable that is reported to cause trouble on
-ReliantUnix 5.44.  If your system sets this variable, you can try
-unsetting it before you run Configure.  Configure should eventually
-be fixed to avoid polluting the namespace of the environment.
+Suppose you have gdbm and want Configure to find it and build the
+GDBM_File extension.  This examples assumes you have gdbm.h
+installed in /usr/local/include/gdbm.h and libgdbm.a installed in
+/usr/local/lib/libgdbm.a.  Configure should figure all the
+necessary steps out automatically.
+
+Specifically, when Configure prompts you for flags for
+your C compiler, you should include  -I/usr/local/include.
+
+When Configure prompts you for linker flags, you should include
+-L/usr/local/lib.
+
+If you are using dynamic loading, then when Configure prompts you for
+linker flags for dynamic loading, you should again include
+-L/usr/local/lib.
+
+Again, this should all happen automatically.  If you want to accept the
+defaults for all the questions and have Configure print out only terse
+messages, then you can just run
+
+	sh Configure -des
+
+and Configure should include the GDBM_File extension automatically.
+
+This should actually work if you have gdbm installed in any of
+(/usr/local, /opt/local, /usr/gnu, /opt/gnu, /usr/GNU, or /opt/GNU).
+
+=item gdbm in /usr/you
+
+Suppose you have gdbm installed in some place other than /usr/local/,
+but you still want Configure to find it.  To be specific, assume you
+have /usr/you/include/gdbm.h and /usr/you/lib/libgdbm.a.  You
+still have to add -I/usr/you/include to cc flags, but you have to take
+an extra step to help Configure find libgdbm.a.  Specifically, when
+Configure prompts you for library directories, you have to add
+/usr/you/lib to the list.
+
+It is possible to specify this from the command line too (all on one
+line):
+
+	sh Configure -des \
+		-Dlocincpth="/usr/you/include" \
+		-Dloclibpth="/usr/you/lib"
+
+locincpth is a space-separated list of include directories to search.
+Configure will automatically add the appropriate -I directives.
+
+loclibpth is a space-separated list of library directories to search.
+Configure will automatically add the appropriate -L directives.  If
+you have some libraries under /usr/local/ and others under
+/usr/you, then you have to include both, namely
+
+	sh Configure -des \
+		-Dlocincpth="/usr/you/include /usr/local/include" \
+		-Dloclibpth="/usr/you/lib /usr/local/lib"
+
+=back
+
+=head2 What if it doesn't work?
+
+If you run into problems, try some of the following ideas.
+If none of them help, then see L<"Reporting Problems"> below.
+
+=over 4
 
 =item Running Configure Interactively
 
@@ -995,12 +1031,12 @@ explicitly above.
 
 This will attempt to make perl in the current directory.
 
+=head2 What if it doesn't work?
+
 If you can't compile successfully, try some of the following ideas.
 If none of them help, and careful reading of the error message and
-the relevant manual pages on your system doesn't help, you can
-send a message to either the comp.lang.perl.misc newsgroup or to
-perlbug@perl.com with an accurate description of your problem.
-See L<"Reporting Problems"> below.
+the relevant manual pages on your system doesn't help,
+then see L<"Reporting Problems"> below.
 
 =over 4
 
@@ -1373,6 +1409,15 @@ indicate the alternate name on the "make install" line, such as:
 
     make install PERLNAME=myperl
 
+You can separately change the base used for versioned names (like
+"perl5.005") by setting PERLNAME_VERBASE, like
+
+    make install PERLNAME=perl5 PERLNAME_VERBASE=perl
+
+This can be useful if you have to install perl as "perl5" (due to an
+ancient version in /usr/bin supplied by your vendor, eg).  Without this
+the versioned binary would be called "perl55.005".
+
 =head2 Installed files
 
 If you want to see exactly what will happen without installing
@@ -1591,8 +1636,16 @@ comes with the perl distribution, but you need to have perl compiled
 before you can use it.  (If you have not installed it yet, you need to
 run C<./perl -Ilib utils/perlbug> instead of a plain C<perlbug>.)
 
-You might also find helpful information in the Porting directory of the
-perl distribution.
+Please try to make your message brief but clear.  Trim out unnecessary
+information.  Do not include large files (such as config.sh or a complete
+Configure or make log) unless absolutely necessary.  Do not include a
+complete transcript of your build session.  Just include the failing
+commands, the relevant error messages, and whatever preceeding commands
+are necessary to give the appropriate context.  Plain text should
+usually be sufficient--fancy attachments or encodings may actually
+reduce the number of people who read your message.  Your message
+will get relayed to over 400 subscribers around the world so please
+try to keep it brief but clear.
 
 =head1 DOCUMENTATION
 
@@ -1637,4 +1690,4 @@ the contact information to match your distribution.
 
 =head1 LAST MODIFIED
 
-$Id: INSTALL,v 1.42 1998/07/15 18:04:44 doughera Released $
+$Id: INSTALL,v 1.49 1999/05/12 15:36:02 doughera Released $

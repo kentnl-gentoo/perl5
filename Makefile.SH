@@ -1,5 +1,5 @@
 #! /bin/sh
-case $CONFIG in
+case $CONFIGDOTSH in
 '')
 	if test -f config.sh; then TOP=.;
 	elif test -f ../config.sh; then TOP=..;
@@ -43,6 +43,12 @@ true)
 		# NeXT uses a different name.
 		ldlibpth="DYLD_LIBRARY_PATH=`pwd`:$DYLD_LIBRARY_PATH"
 		;;
+	rhapsody*)
+		ldlibpth="DYLD_LIBRARY_PATH=`pwd`/Perl:$DYLD_LIBRARY_PATH"
+		;;
+	cygwin*)	ldlibpth="PATH=`pwd`:$PATH"
+		linklibperl="-lperl"
+		;;
 	os2*)	# OS/2 doesn't need anything special for LD_LIBRARY_PATH.
 		ldlibpth=''
 		;;
@@ -65,8 +71,9 @@ true)
 		aixinstdir=`pwd | sed 's/\/UU$//'`
 		linklibperl="-L $archlibexp/CORE -L $aixinstdir -lperl"
 		;;
-	hpux10*|hpux11*)
-		linklibperl="-L `pwd | sed 's/\/UU$//'` -Wl,+b$archlibexp/CORE -lperl"
+	hpux*)
+		linklibperl="-L `pwd | sed 's/\/UU$//'` -Wl,+s -Wl,+b$archlibexp/CORE -lperl"
+		ldlibpth="SHLIB_PATH=`pwd`:${SHLIB_PATH}"
 		;;
 	beos*)	ldlibpth="LIBRARY_PATH=`pwd`:$LIBRARY_PATH"
 		;;
@@ -205,9 +212,11 @@ shextract = Makefile cflags config.h makeaperl makedepend \
 # Files to be built with variable substitution after miniperl is
 # available.  Dependencies handled manually below (for now).
 
-pl = pod/pod2html.PL pod/pod2latex.PL pod/pod2man.PL pod/pod2text.PL
+pl = pod/pod2html.PL pod/pod2latex.PL pod/pod2man.PL pod/pod2text.PL \
+	pod/pod2usage.PL pod/podchecker.PL pod/podselect.PL
 
-plextract = pod/pod2html pod/pod2latex pod/pod2man pod/pod2text
+plextract = pod/pod2html pod/pod2latex pod/pod2man pod/pod2text \
+	pod/pod2usage pod/podchecker pod/podselect
 
 addedbyconf = UU $(shextract) $(plextract) pstruct
 
@@ -274,8 +283,8 @@ miniperlmain$(OBJ_EXT): miniperlmain.c
 	$(CCCMD) $(PLDLFLAGS) $*.c
 
 perlmain.c: miniperlmain.c config.sh $(FIRSTMAKEFILE)
-	sh writemain $(DYNALOADER) $(static_ext) > tmp
-	sh mv-if-diff tmp perlmain.c
+	sh writemain $(DYNALOADER) $(static_ext) > writemain.tmp
+	sh mv-if-diff writemain.tmp perlmain.c
 
 perlmain$(OBJ_EXT): perlmain.c
 	$(CCCMD) $(PLDLFLAGS) $*.c
@@ -290,11 +299,20 @@ ext.libs: $(static_ext)
 
 # How to build libperl.  This is still rather convoluted.
 # Load up custom Makefile.SH fragment for shared loading and executables:
-if test -r $osname/Makefile.SHs ; then
-	. $osname/Makefile.SHs
+case "$osname" in
+cygwin*)
+	Makefile_s="cygwin32/Makefile.SHs"
+	;;
+*)
+	Makefile_s="$osname/Makefile.SHs"
+	;;
+esac
+
+if test -r $Makefile_s ; then
+	. $Makefile_s
 	$spitshell >>Makefile <<!GROK!THIS!
 
-Makefile: $osname/Makefile.SHs
+Makefile: $Makefile_s
 !GROK!THIS!
 else
 	$spitshell >>Makefile <<'!NO!SUBS!'
@@ -384,12 +402,12 @@ preplibrary: miniperl lib/Config.pm $(plextract)
 # (If trying to create a new port and having problems with the configpm script, 
 # try 'make minitest' and/or commenting out the tests at the end of configpm.)
 lib/Config.pm: config.sh miniperl configpm
-	$(LDLIBPTH) ./miniperl configpm tmp
-	sh mv-if-diff tmp $@
+	$(LDLIBPTH) ./miniperl configpm configpm.tmp
+	sh mv-if-diff configpm.tmp $@
 
 lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl minimod.pl lib/Config.pm
-	$(LDLIBPTH) ./miniperl minimod.pl > tmp
-	sh mv-if-diff tmp $@
+	$(LDLIBPTH) ./miniperl minimod.pl > minimod.tmp
+	sh mv-if-diff minimod.tmp $@
 
 lib/re.pm: ext/re/re.pm
 	rm -f $@
@@ -526,22 +544,22 @@ _mopup:
 
 # Do not 'make _tidy' directly.
 _tidy:
-	-cd pod; $(MAKE) clean
-	-cd utils; $(MAKE) clean
-	-cd x2p; $(MAKE) clean
+	-cd pod; $(LDLIBPTH) $(MAKE) clean
+	-cd utils; $(LDLIBPTH) $(MAKE) clean
+	-cd x2p; $(LDLIBPTH) $(MAKE) clean
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
-	sh ext/util/make_ext clean $$x MAKE=$(MAKE) ; \
+	$(LDLIBPTH) sh ext/util/make_ext clean $$x MAKE=$(MAKE) ; \
 	done
 	rm -f testcompile compilelog
 
 # Do not 'make _cleaner' directly.
 _cleaner:
 	-cd os2; rm -f Makefile
-	-cd pod; $(MAKE) realclean
-	-cd utils; $(MAKE) realclean
-	-cd x2p; $(MAKE) realclean
+	-cd pod; $(LDLIBPTH) $(MAKE) realclean
+	-cd utils; $(LDLIBPTH) $(MAKE) realclean
+	-cd x2p; $(LDLIBPTH) $(MAKE) realclean
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
-	sh ext/util/make_ext realclean $$x MAKE=$(MAKE) ; \
+	$(LDLIBPTH) sh ext/util/make_ext realclean $$x MAKE=$(MAKE) ; \
 	done
 	rm -f *.orig */*.orig *~ */*~ core core.perl.*.? core.miniperl.*.? perl.core miniperl.core t/core t/core.perl.*.? t/perl.core t/tmp???? t/c t/perl so_locations t/nonexistent1
 	rm -rf $(addedbyconf)
@@ -590,11 +608,21 @@ makedepend: makedepend.SH config.sh
 test-prep: miniperl perl preplibrary utilities $(dynamic_ext) $(nonxs_ext)
 	cd t && (rm -f perl$(EXE_EXT); $(LNS) ../perl$(EXE_EXT) perl$(EXE_EXT))
 
+# Second branch is for testing without a tty or controling terminal.
+# See t/op/stat.t
 test check: test-prep
-	cd t && $(LDLIBPTH) ./perl TEST </dev/tty
+	if (true </dev/tty) >/dev/null 2>&1; then \
+	  cd t && $(LDLIBPTH) ./perl TEST </dev/tty; \
+	else \
+	  cd t && PERL_SKIP_TTY_TEST=1 $(LDLIBPTH) ./perl TEST; \
+	fi
 
 utest ucheck: test-prep
-	cd t && $(LDLIBPTH) ./perl UTEST </dev/tty
+	if (true </dev/tty) >/dev/null 2>&1; then \
+	  cd t && $(LDLIBPTH) ./perl UTEST </dev/tty; \
+	else \
+	  cd t && PERL_SKIP_TTY_TEST=1 $(LDLIBPTH) ./perl UTEST; \
+	fi
 
 # For testing without a tty or controling terminal. See t/op/stat.t
 test-notty: test-prep

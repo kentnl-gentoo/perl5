@@ -266,8 +266,6 @@
 #define PL_last_lop		pPerl->PL_last_lop
 #undef  PL_last_lop_op
 #define PL_last_lop_op		pPerl->PL_last_lop_op
-#undef  PL_last_proto
-#define PL_last_proto		pPerl->PL_last_proto
 #undef  PL_last_swash_hv
 #define PL_last_swash_hv	pPerl->PL_last_swash_hv
 #undef  PL_last_swash_key
@@ -502,6 +500,8 @@
 #define PL_preprocess		pPerl->PL_preprocess
 #undef  PL_profiledata
 #define PL_profiledata		pPerl->PL_profiledata
+#undef  PL_protect
+#define PL_protect		pPerl->PL_protect
 #undef  PL_reg_call_cc
 #define PL_reg_call_cc		pPerl->PL_reg_call_cc
 #undef  PL_reg_curpm
@@ -518,6 +518,10 @@
 #define PL_reg_oldcurpm		pPerl->PL_reg_oldcurpm
 #undef  PL_reg_oldpos
 #define PL_reg_oldpos		pPerl->PL_reg_oldpos
+#undef  PL_reg_oldsaved
+#define PL_reg_oldsaved		pPerl->PL_reg_oldsaved
+#undef  PL_reg_oldsavedlen
+#define PL_reg_oldsavedlen	pPerl->PL_reg_oldsavedlen
 #undef  PL_reg_re
 #define PL_reg_re		pPerl->PL_reg_re
 #undef  PL_reg_start_tmp
@@ -879,14 +883,14 @@
 #define boot_core_UNIVERSAL	pPerl->Perl_boot_core_UNIVERSAL
 #undef  bset_obj_store
 #define bset_obj_store		pPerl->Perl_bset_obj_store
-#undef  bset_obj_store
-#define bset_obj_store		pPerl->Perl_bset_obj_store
 #undef  byterun
 #define byterun			pPerl->Perl_byterun
 #undef  cache_re
 #define cache_re		pPerl->Perl_cache_re
 #undef  call_list
 #define call_list		pPerl->Perl_call_list
+#undef  call_list_body
+#define call_list_body		pPerl->Perl_call_list_body
 #undef  cando
 #define cando			pPerl->Perl_cando
 #undef  cast_i32
@@ -899,14 +903,8 @@
 #define cast_uv			pPerl->Perl_cast_uv
 #undef  check_uni
 #define check_uni		pPerl->Perl_check_uni
-#undef  check_uni
-#define check_uni		pPerl->Perl_check_uni
 #undef  checkcomma
 #define checkcomma		pPerl->Perl_checkcomma
-#undef  checkcomma
-#define checkcomma		pPerl->Perl_checkcomma
-#undef  ck_aelem
-#define ck_aelem		pPerl->Perl_ck_aelem
 #undef  ck_anoncode
 #define ck_anoncode		pPerl->Perl_ck_anoncode
 #undef  ck_bitop
@@ -1007,6 +1005,8 @@
 #define debstack		pPerl->Perl_debstack
 #undef  debstackptrs
 #define debstackptrs		pPerl->Perl_debstackptrs
+#undef  default_protect
+#define default_protect		pPerl->Perl_default_protect
 #undef  del_he
 #define del_he			pPerl->Perl_del_he
 #undef  del_sv
@@ -1053,6 +1053,8 @@
 #define do_eof			pPerl->Perl_do_eof
 #undef  do_exec
 #define do_exec			pPerl->Perl_do_exec
+#undef  do_exec3
+#define do_exec3		pPerl->Perl_do_exec3
 #undef  do_execfree
 #define do_execfree		pPerl->Perl_do_execfree
 #undef  do_gv_dump
@@ -1131,6 +1133,8 @@
 #define do_vop			pPerl->Perl_do_vop
 #undef  docatch
 #define docatch			pPerl->Perl_docatch
+#undef  docatch_body
+#define docatch_body		pPerl->Perl_docatch_body
 #undef  doencodes
 #define doencodes		pPerl->Perl_doencodes
 #undef  doeval
@@ -1139,14 +1143,12 @@
 #define dofile			pPerl->Perl_dofile
 #undef  dofindlabel
 #define dofindlabel		pPerl->Perl_dofindlabel
-#undef  dofindlabel
-#define dofindlabel		pPerl->Perl_dofindlabel
 #undef  doform
 #define doform			pPerl->Perl_doform
+#undef  doopen_pmc
+#define doopen_pmc		pPerl->Perl_doopen_pmc
 #undef  doparseform
 #define doparseform		pPerl->Perl_doparseform
-#undef  dopoptoeval
-#define dopoptoeval		pPerl->Perl_dopoptoeval
 #undef  dopoptoeval
 #define dopoptoeval		pPerl->Perl_dopoptoeval
 #undef  dopoptolabel
@@ -1187,10 +1189,6 @@
 #define fbm_compile		pPerl->Perl_fbm_compile
 #undef  fbm_instr
 #define fbm_instr		pPerl->Perl_fbm_instr
-#undef  fetch_gv
-#define fetch_gv		pPerl->Perl_fetch_gv
-#undef  fetch_io
-#define fetch_io		pPerl->Perl_fetch_io
 #undef  filter_add
 #define filter_add		pPerl->Perl_filter_add
 #undef  filter_del
@@ -1211,18 +1209,12 @@
 #define forbid_setid		pPerl->Perl_forbid_setid
 #undef  force_ident
 #define force_ident		pPerl->Perl_force_ident
-#undef  force_ident
-#define force_ident		pPerl->Perl_force_ident
 #undef  force_list
 #define force_list		pPerl->Perl_force_list
 #undef  force_next
 #define force_next		pPerl->Perl_force_next
-#undef  force_next
-#define force_next		pPerl->Perl_force_next
 #undef  force_version
 #define force_version		pPerl->Perl_force_version
-#undef  force_word
-#define force_word		pPerl->Perl_force_word
 #undef  force_word
 #define force_word		pPerl->Perl_force_word
 #undef  form
@@ -1331,8 +1323,6 @@
 #define hv_ksplit		pPerl->Perl_hv_ksplit
 #undef  hv_magic
 #define hv_magic		pPerl->Perl_hv_magic
-#undef  hv_stashpv
-#define hv_stashpv		pPerl->Perl_hv_stashpv
 #undef  hv_store
 #define hv_store		pPerl->Perl_hv_store
 #undef  hv_store_ent
@@ -1377,8 +1367,6 @@
 #define intro_my		pPerl->Perl_intro_my
 #undef  intuit_method
 #define intuit_method		pPerl->Perl_intuit_method
-#undef  intuit_more
-#define intuit_more		pPerl->Perl_intuit_more
 #undef  intuit_more
 #define intuit_more		pPerl->Perl_intuit_more
 #undef  invert
@@ -1503,6 +1491,8 @@
 #define magic_getuvar		pPerl->Perl_magic_getuvar
 #undef  magic_getvec
 #define magic_getvec		pPerl->Perl_magic_getvec
+#undef  magic_killbackrefs
+#define magic_killbackrefs	pPerl->Perl_magic_killbackrefs
 #undef  magic_len
 #define magic_len		pPerl->Perl_magic_len
 #undef  magic_methcall
@@ -1601,8 +1591,6 @@
 #define mod			pPerl->Perl_mod
 #undef  modkids
 #define modkids			pPerl->Perl_modkids
-#undef  modkids
-#define modkids			pPerl->Perl_modkids
 #undef  more_he
 #define more_he			pPerl->Perl_more_he
 #undef  more_sv
@@ -1617,8 +1605,6 @@
 #define more_xrv		pPerl->Perl_more_xrv
 #undef  moreswitches
 #define moreswitches		pPerl->Perl_moreswitches
-#undef  mstats
-#define mstats			pPerl->Perl_mstats
 #undef  mul128
 #define mul128			pPerl->Perl_mul128
 #undef  my
@@ -1635,6 +1621,8 @@
 #define my_exit_jump		pPerl->Perl_my_exit_jump
 #undef  my_failure_exit
 #define my_failure_exit		pPerl->Perl_my_failure_exit
+#undef  my_fflush_all
+#define my_fflush_all		pPerl->Perl_my_fflush_all
 #undef  my_htonl
 #define my_htonl		pPerl->Perl_my_htonl
 #undef  my_lstat
@@ -1755,8 +1743,6 @@
 #define newWHILEOP		pPerl->Perl_newWHILEOP
 #undef  newXS
 #define newXS			pPerl->Perl_newXS
-#undef  newXSUB
-#define newXSUB			pPerl->Perl_newXSUB
 #undef  new_constant
 #define new_constant		pPerl->Perl_new_constant
 #undef  new_he
@@ -1781,12 +1767,10 @@
 #define nextchar		pPerl->Perl_nextchar
 #undef  ninstr
 #define ninstr			pPerl->Perl_ninstr
+#undef  no_bareword_allowed
+#define no_bareword_allowed	pPerl->Perl_no_bareword_allowed
 #undef  no_fh_allowed
 #define no_fh_allowed		pPerl->Perl_no_fh_allowed
-#undef  no_fh_allowed
-#define no_fh_allowed		pPerl->Perl_no_fh_allowed
-#undef  no_op
-#define no_op			pPerl->Perl_no_op
 #undef  no_op
 #define no_op			pPerl->Perl_no_op
 #undef  not_a_number
@@ -1835,12 +1819,16 @@
 #define perl_atexit		pPerl->perl_atexit
 #undef  perl_call_argv
 #define perl_call_argv		pPerl->perl_call_argv
+#undef  perl_call_body
+#define perl_call_body		pPerl->perl_call_body
 #undef  perl_call_method
 #define perl_call_method	pPerl->perl_call_method
 #undef  perl_call_pv
 #define perl_call_pv		pPerl->perl_call_pv
 #undef  perl_call_sv
 #define perl_call_sv		pPerl->perl_call_sv
+#undef  perl_call_xbody
+#define perl_call_xbody		pPerl->perl_call_xbody
 #undef  perl_construct
 #define perl_construct		pPerl->perl_construct
 #undef  perl_destruct
@@ -1871,10 +1859,14 @@
 #define perl_new_numeric	pPerl->perl_new_numeric
 #undef  perl_parse
 #define perl_parse		pPerl->perl_parse
+#undef  perl_parse_body
+#define perl_parse_body		pPerl->perl_parse_body
 #undef  perl_require_pv
 #define perl_require_pv		pPerl->perl_require_pv
 #undef  perl_run
 #define perl_run		pPerl->perl_run
+#undef  perl_run_body
+#define perl_run_body		pPerl->perl_run_body
 #undef  perl_set_numeric_local
 #define perl_set_numeric_local	pPerl->perl_set_numeric_local
 #undef  perl_set_numeric_standard
@@ -2819,24 +2811,14 @@
 #define scan_commit		pPerl->Perl_scan_commit
 #undef  scan_const
 #define scan_const		pPerl->Perl_scan_const
-#undef  scan_const
-#define scan_const		pPerl->Perl_scan_const
 #undef  scan_formline
 #define scan_formline		pPerl->Perl_scan_formline
-#undef  scan_formline
-#define scan_formline		pPerl->Perl_scan_formline
-#undef  scan_heredoc
-#define scan_heredoc		pPerl->Perl_scan_heredoc
 #undef  scan_heredoc
 #define scan_heredoc		pPerl->Perl_scan_heredoc
 #undef  scan_hex
 #define scan_hex		pPerl->Perl_scan_hex
 #undef  scan_ident
 #define scan_ident		pPerl->Perl_scan_ident
-#undef  scan_ident
-#define scan_ident		pPerl->Perl_scan_ident
-#undef  scan_inputsymbol
-#define scan_inputsymbol	pPerl->Perl_scan_inputsymbol
 #undef  scan_inputsymbol
 #define scan_inputsymbol	pPerl->Perl_scan_inputsymbol
 #undef  scan_num
@@ -2845,24 +2827,12 @@
 #define scan_oct		pPerl->Perl_scan_oct
 #undef  scan_pat
 #define scan_pat		pPerl->Perl_scan_pat
-#undef  scan_pat
-#define scan_pat		pPerl->Perl_scan_pat
-#undef  scan_prefix
-#define scan_prefix		pPerl->Perl_scan_prefix
-#undef  scan_str
-#define scan_str		pPerl->Perl_scan_str
 #undef  scan_str
 #define scan_str		pPerl->Perl_scan_str
 #undef  scan_subst
 #define scan_subst		pPerl->Perl_scan_subst
-#undef  scan_subst
-#define scan_subst		pPerl->Perl_scan_subst
 #undef  scan_trans
 #define scan_trans		pPerl->Perl_scan_trans
-#undef  scan_trans
-#define scan_trans		pPerl->Perl_scan_trans
-#undef  scan_word
-#define scan_word		pPerl->Perl_scan_word
 #undef  scan_word
 #define scan_word		pPerl->Perl_scan_word
 #undef  scope
@@ -2885,8 +2855,6 @@
 #define sighandler		pPerl->Perl_sighandler
 #undef  simplify_sort
 #define simplify_sort		pPerl->Perl_simplify_sort
-#undef  skipspace
-#define skipspace		pPerl->Perl_skipspace
 #undef  skipspace
 #define skipspace		pPerl->Perl_skipspace
 #undef  sortcv
@@ -2925,6 +2893,8 @@
 #define sv_2uv			pPerl->Perl_sv_2uv
 #undef  sv_add_arena
 #define sv_add_arena		pPerl->Perl_sv_add_arena
+#undef  sv_add_backref
+#define sv_add_backref		pPerl->Perl_sv_add_backref
 #undef  sv_backoff
 #define sv_backoff		pPerl->Perl_sv_backoff
 #undef  sv_bless
@@ -2945,8 +2915,6 @@
 #define sv_catsv		pPerl->Perl_sv_catsv
 #undef  sv_catsv_mg
 #define sv_catsv_mg		pPerl->Perl_sv_catsv_mg
-#undef  sv_check_thinkfirst
-#define sv_check_thinkfirst	pPerl->Perl_sv_check_thinkfirst
 #undef  sv_chop
 #define sv_chop			pPerl->Perl_sv_chop
 #undef  sv_clean_all
@@ -2965,12 +2933,16 @@
 #define sv_compile_2op		pPerl->Perl_sv_compile_2op
 #undef  sv_dec
 #define sv_dec			pPerl->Perl_sv_dec
+#undef  sv_del_backref
+#define sv_del_backref		pPerl->Perl_sv_del_backref
 #undef  sv_derived_from
 #define sv_derived_from		pPerl->Perl_sv_derived_from
 #undef  sv_dump
 #define sv_dump			pPerl->Perl_sv_dump
 #undef  sv_eq
 #define sv_eq			pPerl->Perl_sv_eq
+#undef  sv_force_normal
+#define sv_force_normal		pPerl->Perl_sv_force_normal
 #undef  sv_free
 #define sv_free			pPerl->Perl_sv_free
 #undef  sv_free_arenas
@@ -2999,8 +2971,6 @@
 #define sv_magic		pPerl->Perl_sv_magic
 #undef  sv_mortalcopy
 #define sv_mortalcopy		pPerl->Perl_sv_mortalcopy
-#undef  sv_mortalgrow
-#define sv_mortalgrow		pPerl->Perl_sv_mortalgrow
 #undef  sv_ncmp
 #define sv_ncmp			pPerl->Perl_sv_ncmp
 #undef  sv_newmortal
@@ -3021,8 +2991,6 @@
 #define sv_pvn			pPerl->Perl_sv_pvn
 #undef  sv_pvn_force
 #define sv_pvn_force		pPerl->Perl_sv_pvn_force
-#undef  sv_ref
-#define sv_ref			pPerl->Perl_sv_ref
 #undef  sv_reftype
 #define sv_reftype		pPerl->Perl_sv_reftype
 #undef  sv_replace
@@ -3031,6 +2999,8 @@
 #define sv_report_used		pPerl->Perl_sv_report_used
 #undef  sv_reset
 #define sv_reset		pPerl->Perl_sv_reset
+#undef  sv_rvweaken
+#define sv_rvweaken		pPerl->Perl_sv_rvweaken
 #undef  sv_setiv
 #define sv_setiv		pPerl->Perl_sv_setiv
 #undef  sv_setiv_mg
@@ -3039,8 +3009,6 @@
 #define sv_setnv		pPerl->Perl_sv_setnv
 #undef  sv_setnv_mg
 #define sv_setnv_mg		pPerl->Perl_sv_setnv_mg
-#undef  sv_setptrobj
-#define sv_setptrobj		pPerl->Perl_sv_setptrobj
 #undef  sv_setpv
 #define sv_setpv		pPerl->Perl_sv_setpv
 #undef  sv_setpv_mg
@@ -3107,6 +3075,8 @@
 #define taint_env		pPerl->Perl_taint_env
 #undef  taint_proper
 #define taint_proper		pPerl->Perl_taint_proper
+#undef  tmps_grow
+#define tmps_grow		pPerl->Perl_tmps_grow
 #undef  to_uni_lower
 #define to_uni_lower		pPerl->Perl_to_uni_lower
 #undef  to_uni_lower_lc
@@ -3129,10 +3099,6 @@
 #define tokeq			pPerl->Perl_tokeq
 #undef  too_few_arguments
 #define too_few_arguments	pPerl->Perl_too_few_arguments
-#undef  too_few_arguments
-#define too_few_arguments	pPerl->Perl_too_few_arguments
-#undef  too_many_arguments
-#define too_many_arguments	pPerl->Perl_too_many_arguments
 #undef  too_many_arguments
 #define too_many_arguments	pPerl->Perl_too_many_arguments
 #undef  uni

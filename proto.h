@@ -91,7 +91,7 @@ VIRTUAL char*	delimcpy _((char* to, char* toend, char* from, char* fromend,
 		    int delim, I32* retlen));
 VIRTUAL void	deprecate _((char* s));
 VIRTUAL OP*	die _((const char* pat,...));
-VIRTUAL OP*	die_where _((char* message));
+VIRTUAL OP*	die_where _((char* message, STRLEN msglen));
 VIRTUAL void	dounwind _((I32 cxix));
 VIRTUAL bool	do_aexec _((SV* really, SV** mark, SV** sp));
 VIRTUAL int	do_binmode _((PerlIO *fp, int iotype, int flag));
@@ -99,6 +99,9 @@ VIRTUAL void    do_chop _((SV* asv, SV* sv));
 VIRTUAL bool	do_close _((GV* gv, bool not_implicit));
 VIRTUAL bool	do_eof _((GV* gv));
 VIRTUAL bool	do_exec _((char* cmd));
+#ifndef WIN32
+VIRTUAL bool	do_exec3 _((char* cmd, int fd, int flag));
+#endif
 VIRTUAL void	do_execfree _((void));
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
 I32	do_ipcctl _((I32 optype, SV** mark, SV** sp));
@@ -154,6 +157,9 @@ VIRTUAL OP*	fold_constants _((OP* arg));
 VIRTUAL char*	form _((const char* pat, ...));
 VIRTUAL void	free_tmps _((void));
 VIRTUAL OP*	gen_constant_list _((OP* o));
+#ifndef HAS_GETENV_LEN
+VIRTUAL char*	getenv_len _((char* key, unsigned long *len));
+#endif
 VIRTUAL void	gp_free _((GV* gv));
 VIRTUAL GP*	gp_ref _((GP* gp));
 VIRTUAL GV*	gv_AVadd _((GV* gv));
@@ -302,7 +308,7 @@ VIRTUAL void	markstack_grow _((void));
 #ifdef USE_LOCALE_COLLATE
 VIRTUAL char*	mem_collxfrm _((const char* s, STRLEN len, STRLEN* xlen));
 #endif
-VIRTUAL char*	mess _((const char* pat, va_list* args));
+VIRTUAL SV*	mess _((const char* pat, va_list* args));
 VIRTUAL int	mg_clear _((SV* sv));
 VIRTUAL int	mg_copy _((SV* sv, SV* nsv, const char* key, I32 klen));
 VIRTUAL MAGIC*	mg_find _((SV* sv, int type));
@@ -323,6 +329,7 @@ char*	my_bzero _((char* loc, I32 len));
 #endif
 VIRTUAL void	my_exit _((U32 status)) __attribute__((noreturn));
 VIRTUAL void	my_failure_exit _((void)) __attribute__((noreturn));
+VIRTUAL I32	my_fflush_all _((void));
 VIRTUAL I32	my_lstat _((ARGSproto));
 #if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
 VIRTUAL I32	my_memcmp _((const char* s1, const char* s2, I32 len));
@@ -617,7 +624,7 @@ VIRTUAL void	sv_setnv _((SV* sv, double num));
 VIRTUAL SV*	sv_setref_iv _((SV* rv, const char* classname, IV iv));
 VIRTUAL SV*	sv_setref_nv _((SV* rv, const char* classname, double nv));
 VIRTUAL SV*	sv_setref_pv _((SV* rv, const char* classname, void* pv));
-VIRTUAL SV*	sv_setref_pvn _((SV* rv, const char* classname, char* pv, I32 n));
+VIRTUAL SV*	sv_setref_pvn _((SV* rv, const char* classname, char* pv, STRLEN n));
 VIRTUAL void	sv_setpv _((SV* sv, const char* ptr));
 VIRTUAL void	sv_setpvn _((SV* sv, const char* ptr, STRLEN len));
 VIRTUAL void	sv_setsv _((SV* dsv, SV* ssv));
@@ -715,9 +722,7 @@ void del_xiv _((XPVIV* p));
 void del_xnv _((XPVNV* p));
 void del_xpv _((XPV* p));
 void del_xrv _((XRV* p));
-void sv_mortalgrow _((void));
 void sv_unglob _((SV* sv));
-void sv_check_thinkfirst _((SV *sv));
 I32 avhv_index_sv _((SV* sv));
 
 void do_report_used _((SV *sv));
@@ -742,6 +747,12 @@ void doencodes _((SV* sv, char* s, I32 len));
 SV* refto _((SV* sv));
 U32 seed _((void));
 OP *docatch _((OP *o));
+void *docatch_body _((va_list args));
+void *perl_parse_body _((va_list args));
+void *perl_run_body _((va_list args));
+void *perl_call_body _((va_list args));
+void perl_call_xbody _((OP *myop, int is_eval));
+void *call_list_body _((va_list args));
 OP *dofindlabel _((OP *o, char *label, OP **opstack, OP **oplimit));
 void doparseform _((SV *sv));
 I32 dopoptoeval _((I32 startingblock));
@@ -751,6 +762,7 @@ I32 dopoptosub _((I32 startingblock));
 I32 dopoptosub_at _((PERL_CONTEXT* cxstk, I32 startingblock));
 void save_lines _((AV *array, SV *sv));
 OP *doeval _((int gimme, OP** startop));
+PerlIO *doopen_pmc _((const char *name, const char *mode));
 I32 sv_ncmp _((SV *a, SV *b));
 I32 sv_i_ncmp _((SV *a, SV *b));
 I32 amagic_ncmp _((SV *a, SV *b));
@@ -809,6 +821,7 @@ CV *get_db_sub _((SV **svp, CV *cv));
 I32 list_assignment _((OP *o));
 void bad_type _((I32 n, char *t, char *name, OP *kid));
 OP *modkids _((OP *o, I32 type));
+void no_bareword_allowed _((OP *o));
 OP *no_fh_allowed _((OP *o));
 OP *scalarboolean _((OP *o));
 OP *too_few_arguments _((OP *o, char* name));
@@ -887,10 +900,11 @@ void del_sv _((SV *p));
 #endif
 void debprof _((OP *o));
 
-void *bset_obj_store _((void *obj, I32 ix));
 OP *new_logop _((I32 type, I32 flags, OP **firstp, OP **otherp));
 void simplify_sort _((OP *o));
 bool is_handle_constructor _((OP *o, I32 argnum));
+void sv_add_backref _((SV *tsv, SV *sv));
+void sv_del_backref _((SV *sv));
 
 I32 do_trans_CC_simple _((SV *sv));
 I32 do_trans_CC_count _((SV *sv));
@@ -964,6 +978,13 @@ VIRTUAL void do_op_dump _((I32 level, PerlIO *file, OP *o));
 VIRTUAL void do_pmop_dump _((I32 level, PerlIO *file, PMOP *pm));
 VIRTUAL void do_sv_dump _((I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops, STRLEN pvlim));
 VIRTUAL void magic_dump _((MAGIC *mg));
+VIRTUAL void* default_protect _((int *excpt, protect_body_t body, ...));
 VIRTUAL void reginitcolors _((void));
 VIRTUAL char* sv_2pv_nolen _((SV* sv));
 VIRTUAL char* sv_pv _((SV *sv));
+VIRTUAL void sv_force_normal _((SV *sv));
+VIRTUAL void tmps_grow _((I32 n));
+VIRTUAL void *bset_obj_store _((void *obj, I32 ix));
+
+VIRTUAL SV* sv_rvweaken _((SV *sv));
+VIRTUAL int magic_killbackrefs _((SV *sv, MAGIC *mg));

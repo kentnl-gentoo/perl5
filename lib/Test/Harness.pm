@@ -11,7 +11,7 @@ use vars qw($VERSION $verbose $switches $have_devel_corestack $curtest
 	    @ISA @EXPORT @EXPORT_OK);
 $have_devel_corestack = 0;
 
-$VERSION = "1.1602";
+$VERSION = "1.1604";
 
 $ENV{HARNESS_ACTIVE} = 1;
 
@@ -74,15 +74,20 @@ sub runtests {
 	$te = $test;
 	chop($te);
 	if ($^O eq 'VMS') { $te =~ s/^.*\.t\./[.t./; }
-	print "$te" . '.' x (20 - length($te));
+	my $blank = (' ' x 77);
+	my $leader = "$te" . '.' x (20 - length($te));
+	my $ml = "";
+	$ml = "\r$blank\r$leader" if -t STDOUT and not $ENV{HARNESS_NOTTY};
+	print $leader;
 	my $fh = new FileHandle;
 	$fh->open($test) or print "can't open $test. $!\n";
 	my $first = <$fh>;
 	my $s = $switches;
-	$s .= q[ "-T"] if $first =~ /^#!.*\bperl.*-\w*T/;
+	$s .= join " ", q[ "-T"], map {qq["-I$_"]} @INC
+	    if $first =~ /^#!.*\bperl.*-\w*T/;
 	$fh->close or print "can't close $test. $!\n";
 	my $cmd = ($ENV{'COMPILE_TEST'})? 
-"./perl -I../lib ../utils/perlcc $test -run -verbose dcf -log ./compilelog |" 
+"./perl -I../lib ../utils/perlcc $test -run 2>> ./compilelog |" 
 															:  "$^X $s $test|";
 	$cmd = "MCR $cmd" if $^O eq 'VMS';
 	$fh->open($cmd) or print "can't run $test. $!\n";
@@ -91,6 +96,7 @@ sub runtests {
 	my %todo = ();
         my $bonus = 0;
 	my $skipped = 0;
+	my $skip_reason;
 	while (<$fh>) {
 	    if( $verbose ){
 		print $_;
@@ -101,26 +107,39 @@ sub runtests {
 		$totmax += $max;
 		$files++;
 		$next = 1;
-	    } elsif (/^1\.\.([0-9]+)/) {
+	    } elsif (/^1\.\.([0-9]+)(\s*\#\s*[Ss]kip\S*(?>\s+)(.+))?/) {
 		$max = $1;
 		$totmax += $max;
 		$files++;
 		$next = 1;
+		$skip_reason = $3 if not $max and defined $3;
 	    } elsif ($max && /^(not\s+)?ok\b/) {
 		my $this = $next;
 		if (/^not ok\s*(\d*)/){
 		    $this = $1 if $1 > 0;
+		    print "${ml}NOK $this\n" if $ml;
 		    if (!$todo{$this}) {
 			push @failed, $this;
 		    } else {
 			$ok++;
 			$totok++;
 		    }
-		} elsif (/^ok\s*(\d*)(\s*\#\s*[Ss]kip)?/) {
+		} elsif (/^ok\s*(\d*)(\s*\#\s*[Ss]kip\S*(?:(?>\s+)(.+))?)?/) {
 		    $this = $1 if $1 > 0;
+		    print "${ml}ok $this/$max" if $ml;
 		    $ok++;
 		    $totok++;
 		    $skipped++ if defined $2;
+		    my $reason;
+		    $reason = 'unknown reason' if defined $2;
+		    $reason = $3 if defined $3;
+		    if (defined $reason and defined $skip_reason) {
+		      # print "was: '$skip_reason' new '$reason'\n";
+		      $skip_reason = 'various reasons'
+			if $skip_reason ne $reason;
+		    } elsif (defined $reason) {
+		      $skip_reason = $reason;
+		    }
 		    $bonus++, $totbonus++ if $todo{$this};
 		}
 		if ($this > $next) {
@@ -143,7 +162,7 @@ sub runtests {
 		       : $wstatus >> 8);
 	if ($wstatus) {
 	    my ($failed, $canon, $percent) = ('??', '??');
-	    printf "dubious\n\tTest returned status $estatus (wstat %d, 0x%x)\n",
+	    printf "${ml}dubious\n\tTest returned status $estatus (wstat %d, 0x%x)\n",
 		    $wstatus,$wstatus;
 	    print "\t\t(VMS status is $estatus)\n" if $^O eq 'VMS';
 	    if (corestatus($wstatus)) { # until we have a wait module
@@ -175,16 +194,18 @@ sub runtests {
 	} elsif ($ok == $max && $next == $max+1) {
 	    if ($max and $skipped + $bonus) {
 		my @msg;
-		push(@msg, "$skipped/$max subtest".($skipped>1?'s':'')." skipped")
+		push(@msg, "$skipped/$max skipped: $skip_reason")
 		    if $skipped;
-		push(@msg, "$bonus subtest".($bonus>1?'s':'').
-		     " unexpectedly succeeded")
+		push(@msg, "$bonus/$max unexpectedly succeeded")
 		    if $bonus;
-		print "ok, ".join(', ', @msg)."\n";
+		print "${ml}ok, ".join(', ', @msg)."\n";
 	    } elsif ($max) {
-		print "ok\n";
+		print "${ml}ok\n";
+	    } elsif (defined $skip_reason) {
+		print "skipped: $skip_reason\n";
+		$tests_skipped++;
 	    } else {
-		print "skipping test on this platform\n";
+		print "skipped test on this platform\n";
 		$tests_skipped++;
 	    }
 	    $good++;
@@ -279,7 +300,7 @@ sub runtests {
 	    die "Failed $bad/$total test scripts, $pct% okay.$subpct\n";
 	}
     }
-    printf("Files=%d,  Tests=%d, %s\n", $files, $totmax, timestr($t_total, 'nop'));
+    printf("Files=%d, Tests=%d, %s\n", $files, $totmax, timestr($t_total, 'nop'));
 
     return ($bad == 0 && $totmax) ;
 }
@@ -413,6 +434,12 @@ variations in spacing and case) after C<ok> or C<ok NUMBER>, it is
 counted as a skipped test.  If the whole testscript succeeds, the
 count of skipped tests is included in the generated output.
 
+C<Test::Harness> reports the text after C< # Skip(whatever)> as a
+reason for skipping.  Similarly, one can include a similar explanation
+in a C<1..0> line emitted if the test is skipped completely:
+
+  1..0 # Skipped: no leverage found
+
 =head1 EXPORT
 
 C<&runtests> is exported by Test::Harness per default.
@@ -449,6 +476,12 @@ above messages.
 
 Setting C<HARNESS_IGNORE_EXITCODE> makes harness ignore the exit status
 of child processes.
+
+Setting C<HARNESS_NOTTY> to a true value forces it to behave as though
+STDOUT were not a console.  You may need to set this if you don't want
+harness to output more frequent progress messages using carriage returns.
+Some consoles may not handle carriage returns properly (which results
+in a somewhat messy output).
 
 If C<HARNESS_FILELEAK_IN_DIR> is set to the name of a directory, harness
 will check after each test whether new files appeared in that directory,

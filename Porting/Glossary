@@ -33,7 +33,7 @@ ansi2knr (ansi2knr.U):
 	Currently, this is not supported, so we just abort.
 
 aphostname (d_gethname.U):
-	Thie variable contains the command which can be used to compute the
+	This variable contains the command which can be used to compute the
 	host name. The command is fully qualified by its absolute path, to make
 	it safe when used by a process with super-user privileges.
 
@@ -259,6 +259,11 @@ cppsymbols (Cppsym.U):
 	alone.  The symbols defined by cc or by cc when it calls cpp are
 	not in this list, see ccsymbols and cppccsymbols.
 	The list is a space-separated list of symbol=value tokens.
+
+crosscompile (crosscompile.U):
+	This variable conditionally defines the CROSSCOMPILE symbol
+	which signifies that the build process is be a cross-compilation.
+	This is normally set by hints files or from Configure command line.
 
 cryptlib (d_crypt.U):
 	This variable holds -lcrypt or the path to a libcrypt.a archive if
@@ -769,7 +774,7 @@ d_inetaton (d_inetaton.U):
 	indicates to the C program that the inet_aton() function is available
 	to parse IP address "dotted-quad" strings.
 
-d_ino64t (io64.U):
+d_ino64_t (io64.U):
 	This symbol will be defined if the C compiler supports ino64_t.
 
 d_int64t (i_inttypes.U):
@@ -796,6 +801,10 @@ d_lchown (d_lchown.U):
 d_link (d_link.U):
 	This variable conditionally defines HAS_LINK if link() is
 	available to create hard links.
+
+d_llseek (io64.U):
+	This variable conditionally defines the HAS_LLSEEK symbol, which
+	indicates to the C program that the llseek() routine is available.
 
 d_locconv (d_locconv.U):
 	This variable conditionally defines HAS_LOCALECONV if localeconv() is
@@ -847,6 +856,11 @@ d_mbtowc (d_mbtowc.U):
 	This variable conditionally defines the HAS_MBTOWC symbol, which
 	indicates to the C program that the mbtowc() routine is available
 	to convert multibyte to a wide character.
+
+d_memchr (d_memchr.U):
+	This variable conditionally defines the HAS_MEMCHR symbol, which
+	indicates to the C program that the memchr() routine is available
+	to locate characters within a C string.
 
 d_memcmp (d_memcmp.U):
 	This variable conditionally defines the HAS_MEMCMP symbol, which
@@ -959,8 +973,11 @@ d_nice (d_nice.U):
 	This variable conditionally defines the HAS_NICE symbol, which
 	indicates to the C program that the nice() routine is available.
 
-d_off64t (io64.U):
+d_off64_t (io64.U):
 	This symbol will be defined if the C compiler supports off64_t.
+
+d_offset_t (io64.U):
+	This symbol will be defined if the C compiler supports offset_t.
 
 d_old_pthread_create_joinable (d_pthrattrj.U):
 	This variable conditionally defines pthread_create_joinable.
@@ -1001,7 +1018,7 @@ d_pause (d_pause.U):
 	to suspend a process until a signal is received.
 
 d_phostname (d_gethname.U):
-	This variable conditionally defines the PHOSTNAME symbol, which
+	This variable conditionally defines the HAS_PHOSTNAME symbol, which
 	contains the shell command which, when fed to popen(), may be
 	used to derive the host name.
 
@@ -1135,11 +1152,11 @@ d_semctl (d_semctl.U):
 	This variable conditionally defines the HAS_SEMCTL symbol, which
 	indicates to the C program that the semctl() routine is available.
 
-d_semctl_semid_ds (d_union_senum.U):
+d_semctl_semid_ds (d_union_semun.U):
 	This variable conditionally defines USE_SEMCTL_SEMID_DS, which
 	indicates that struct semid_ds * is to be used for semctl IPC_STAT.
 
-d_semctl_semun (d_union_senum.U):
+d_semctl_semun (d_union_semun.U):
 	This variable conditionally defines USE_SEMCTL_SEMUN, which
 	indicates that union semun is to be used for semctl IPC_STAT.
 
@@ -1339,6 +1356,10 @@ d_stdio_ptr_lval (d_stdstdio.U):
 	This variable conditionally defines STDIO_PTR_LVALUE if the
 	FILE_ptr macro can be used as an lvalue.
 
+d_stdio_stream_array (stdio_streams.U):
+	This variable tells whether there is an array holding
+	the stdio streams.
+
 d_stdiobase (d_stdstdio.U):
 	This variable conditionally defines USE_STDIO_BASE if this system
 	has a FILE structure declaring a usable _base field (or equivalent)
@@ -1485,7 +1506,7 @@ d_uname (d_gethname.U):
 	indicates to the C program that the uname() routine may be
 	used to derive the host name.
 
-d_union_semun (d_union_senum.U):
+d_union_semun (d_union_semun.U):
 	This variable conditionally defines HAS_UNION_SEMUN if the
 	union semun is defined by including <sys/sem.h>.
 
@@ -1633,6 +1654,17 @@ extensions (Extensions.U):
 	non-xs linked into the package.  It is propagated to Config.pm
 	and is typically used to test whether a particular extesion 
 	is available.
+
+fflushall (fflushall.U):
+	This symbol, if defined, tells that to flush
+	all pending stdio output one must loop through all
+	the stdio file handles stored in an array and fflush them.
+	Note that if fflushNULL is defined, fflushall will not
+	even be probed for and will be left undefined.
+
+fflushNULL (fflushall.U):
+	This symbol, if defined, tells that fflush(NULL) does flush
+	all pending stdio output.
 
 find (Loc.U):
 	This variable is defined but not used by Configure.
@@ -1831,6 +1863,10 @@ i_neterrno (i_neterrno.U):
 	indicates to the C program that <net/errno.h> exists and should
 	be included.
 
+i_netinettcp (i_netinettcp.U):
+	This variable conditionally defines the I_NETINET_TCP symbol,
+	and indicates whether a C program should include <netinet/tcp.h>.
+
 i_niin (i_niin.U):
 	This variable conditionally defines I_NETINET_IN, which indicates
 	to the C program that it should include <netinet/in.h>. Otherwise,
@@ -1839,6 +1875,10 @@ i_niin (i_niin.U):
 i_poll (i_poll.U):
 	This variable conditionally defines the I_POLL symbol, and indicates
 	whether a C program should include <poll.h>.
+
+i_pthread (i_pthread.U):
+	This variable conditionally defines the I_PTHREADEAD symbol,
+	and indicates whether a C program should include <pthread.h>.
 
 i_pwd (i_pwd.U):
 	This variable conditionally defines I_PWD, which indicates
@@ -2233,7 +2273,7 @@ make_set_make (make.U):
 	make_set_make='#'		# If your make program handles this for you,
 	make_set_make="MAKE=$make"	# if it doesn't.
 	I used a comment character so that we can distinguish a
-	'set' value (from a previous config.sh or Configure -D option)
+	'set' value (from a previous config.sh or Configure '-D' option)
 	from an uncomputed value.
 
 mallocobj (mallocsrc.U):
@@ -2321,6 +2361,11 @@ more (Loc.U):
 	full pathname (if any) of the more program.  After Configure runs,
 	the value is reset to a plain "more" and is not useful.
 
+multiarch (multiarch.U):
+	This variable conditionally defines the MULTIARCH symbol
+	which signifies the presence of multiplatform files.
+	This is normally set by hints files.
+
 mv (Loc.U):
 	This variable is defined but not used by Configure.
 	The value is a plain '' and is not useful.
@@ -2348,7 +2393,7 @@ myuname (Oldconfig.U):
 	whole thing is then lower-cased.
 
 n (n.U):
-	This variable contains the -n flag if that is what causes the echo
+	This variable contains the '-n' flag if that is what causes the echo
 	command to suppress newline.  Otherwise it is null.  Correct usage is
 	$echo $n "prompt for a question: $c".
 
@@ -2613,9 +2658,9 @@ sh (sh.U):
 	/bin/sh, though it's possible that some systems will have /bin/ksh,
 	/bin/pdksh, /bin/ash, /bin/bash, or even something such as
 	D:/bin/sh.exe.
-	This unit comes before Options.U, so you can't set sh with a -D
+	This unit comes before Options.U, so you can't set sh with a '-D'
 	option, though you can override this (and startsh)
-	with -O -Dsh=/bin/whatever -Dstartsh=whatever
+	with '-O -Dsh=/bin/whatever -Dstartsh=whatever'
 
 shar (Loc.U):
 	This variable is defined but not used by Configure.
@@ -2652,6 +2697,10 @@ shrpenv (libperl.U):
 shsharp (spitshell.U):
 	This variable tells further Configure units whether your sh can
 	handle # comments.
+
+sig_count (sig_name.U):
+	This variable holds a number larger than the largest valid
+	signal number.  This is usually the same as the NSIG macro.
 
 sig_name (sig_name.U):
 	This variable holds the signal names, space separated. The leading
@@ -2741,7 +2790,7 @@ spackage (package.U):
 
 spitshell (spitshell.U):
 	This variable contains the command necessary to spit out a runnable
-	shell on this system.  It is either cat or a grep -v for # comments.
+	shell on this system.  It is either cat or a grep '-v' for # comments.
 
 split (models.U):
 	This variable contains a flag which will tell the C compiler and loader
@@ -2809,6 +2858,10 @@ stdio_ptr (d_stdstdio.U):
 	_ptr field (or equivalent) of stdio.h's FILE structure.  This will
 	be used to define the macro FILE_ptr(fp).
 
+stdio_stream_array (stdio_streams.U):
+	This variable tells the name of the array holding the stdio streams.
+	Usual values include _iob, __iob, and __sF.
+
 strings (i_string.U):
 	This variable holds the full path of the string header that will be
 	used. Typically /usr/include/string.h or /usr/include/strings.h.
@@ -2841,9 +2894,8 @@ tbl (Loc.U):
 	The value is a plain '' and is not useful.
 
 tee (Loc.U):
-	This variable is be used internally by Configure to determine the
-	full pathname (if any) of the tee program.  After Configure runs,
-	the value is reset to a plain "tee" and is not useful.
+	This variable is defined but not used by Configure.
+	The value is a plain '' and is not useful.
 
 test (Loc.U):
 	This variable is be used internally by Configure to determine the

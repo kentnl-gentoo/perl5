@@ -98,6 +98,17 @@ public:
     {
 	return g_win32_get_sitelib(pl);
     };
+    virtual int Uname(struct utsname *name, int &err)
+    {
+	return win32_uname(name);
+    };
+    virtual char *Getenv_len(const char *varname, unsigned long *len, int &err)
+    {
+	char *e = win32_getenv(varname);
+	if (e)
+	    *len = strlen(e);
+	return e;
+    };
 };
 
 class CPerlSock : public IPerlSock
@@ -574,7 +585,7 @@ public:
 			  |FORMAT_MESSAGE_FROM_SYSTEM, NULL,
 			   dwErr, 0, (char *)&sMsg, 1, NULL);
 	if (0 < dwLen) {
-	    while (0 < dwLen  &&  isspace(sMsg[--dwLen]))
+	    while (0 < dwLen  &&  isSPACE(sMsg[--dwLen]))
 		;
 	    if ('.' != sMsg[dwLen])
 		dwLen++;
@@ -582,9 +593,10 @@ public:
 	}
 	if (0 == dwLen) {
 	    sMsg = (char*)LocalAlloc(0, 64/**sizeof(TCHAR)*/);
-	    dwLen = sprintf(sMsg,
-			"Unknown error #0x%lX (lookup 0x%lX)",
-			dwErr, GetLastError());
+	    if (sMsg)
+		dwLen = sprintf(sMsg,
+			    "Unknown error #0x%lX (lookup 0x%lX)",
+			    dwErr, GetLastError());
 	}
     };
     virtual void FreeBuf(char* sMsg)

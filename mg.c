@@ -1,6 +1,6 @@
 /*    mg.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -341,23 +341,23 @@ magic_regdatum_get(SV *sv, MAGIC *mg)
 {
     dTHR;
     register I32 paren;
-    register char *s;
+    register I32 s;
     register I32 i;
     register REGEXP *rx;
-    char *t;
+    I32 t;
 
     if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
 	paren = mg->mg_len;
 	if (paren < 0)
 	    return 0;
 	if (paren <= rx->nparens &&
-	    (s = rx->startp[paren]) &&
-	    (t = rx->endp[paren]))
+	    (s = rx->startp[paren]) != -1 &&
+	    (t = rx->endp[paren]) != -1)
 	    {
 		if (mg->mg_obj)		/* @+ */
-		    i = t - rx->subbeg;
+		    i = t;
 		else			/* @- */
-		    i = s - rx->subbeg;
+		    i = s;
 		sv_setiv(sv,i);
 	    }
     }
@@ -378,13 +378,15 @@ magic_len(SV *sv, MAGIC *mg)
     case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': case '&':
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
+	    I32 s1, t1;
+
 	    paren = atoi(mg->mg_ptr);
 	  getparen:
 	    if (paren <= rx->nparens &&
-		(s = rx->startp[paren]) &&
-		(t = rx->endp[paren]))
+		(s1 = rx->startp[paren]) != -1 &&
+		(t1 = rx->endp[paren]) != -1)
 	    {
-		i = t - s;
+		i = t1 - s1;
 		if (i >= 0)
 		    return i;
 	    }
@@ -399,8 +401,8 @@ magic_len(SV *sv, MAGIC *mg)
 	return 0;
     case '`':
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
-	    if ((s = rx->subbeg) && rx->startp[0]) {
-		i = rx->startp[0] - s;
+	    if (rx->startp[0] != -1) {
+		i = rx->startp[0];
 		if (i >= 0)
 		    return i;
 	    }
@@ -408,8 +410,8 @@ magic_len(SV *sv, MAGIC *mg)
 	return 0;
     case '\'':
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
-	    if (rx->subend && (s = rx->endp[0])) {
-		i = rx->subend - s;
+	    if (rx->endp[0] != -1) {
+		i = rx->sublen - rx->endp[0];
 		if (i >= 0)
 		    return i;
 	    }
@@ -589,6 +591,8 @@ magic_get(SV *sv, MAGIC *mg)
     case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': case '&':
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
+	    I32 s1, t1;
+
 	    /*
 	     * Pre-threads, this was paren = atoi(GvENAME((GV*)mg->mg_obj));
 	     * XXX Does the new way break anything?
@@ -596,10 +600,11 @@ magic_get(SV *sv, MAGIC *mg)
 	    paren = atoi(mg->mg_ptr);
 	  getparen:
 	    if (paren <= rx->nparens &&
-		(s = rx->startp[paren]) &&
-		(t = rx->endp[paren]))
+		(s1 = rx->startp[paren]) != -1 &&
+		(t1 = rx->endp[paren]) != -1)
 	    {
-		i = t - s;
+		i = t1 - s1;
+		s = rx->subbeg + s1;
 	      getrx:
 		if (i >= 0) {
 		    bool was_tainted;
@@ -607,7 +612,7 @@ magic_get(SV *sv, MAGIC *mg)
 			was_tainted = PL_tainted;
 			PL_tainted = FALSE;
 		    }
-		    sv_setpvn(sv,s,i);
+		    sv_setpvn(sv, s, i);
 		    if (PL_tainting)
 			PL_tainted = (was_tainted || RX_MATCH_TAINTED(rx));
 		    break;
@@ -626,8 +631,8 @@ magic_get(SV *sv, MAGIC *mg)
 	break;
     case '`':
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
-	    if ((s = rx->subbeg) && rx->startp[0]) {
-		i = rx->startp[0] - s;
+	    if ((s = rx->subbeg) && rx->startp[0] != -1) {
+		i = rx->startp[0];
 		goto getrx;
 	    }
 	}
@@ -635,8 +640,9 @@ magic_get(SV *sv, MAGIC *mg)
 	break;
     case '\'':
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
-	    if (rx->subend && (s = rx->endp[0])) {
-		i = rx->subend - s;
+	    if (rx->subbeg && rx->endp[0] != -1) {
+		s = rx->subbeg + rx->endp[0];
+		i = rx->sublen - rx->endp[0];
 		goto getrx;
 	    }
 	}
@@ -1093,7 +1099,7 @@ magic_methcall(SV *sv, MAGIC *mg, char *meth, I32 flags, int n, SV *val)
     if (n > 1) { 
 	if (mg->mg_ptr) {
 	    if (mg->mg_len >= 0)
-		PUSHs(sv_2mortal(newSVpv(mg->mg_ptr, mg->mg_len)));
+		PUSHs(sv_2mortal(newSVpvn(mg->mg_ptr, mg->mg_len)));
 	    else if (mg->mg_len == HEf_SVKEY)
 		PUSHs((SV*)mg->mg_ptr);
 	}
@@ -1586,6 +1592,27 @@ vivify_defelem(SV *sv)
     SvREFCNT_dec(mg->mg_obj);
     mg->mg_obj = Nullsv;
     mg->mg_flags &= ~MGf_REFCOUNTED;
+}
+
+int
+magic_killbackrefs(SV *sv, MAGIC *mg)
+{
+    AV *av = (AV*)mg->mg_obj;
+    SV **svp = AvARRAY(av);
+    I32 i = AvFILLp(av);
+    while (i >= 0) {
+	if (svp[i] && svp[i] != &PL_sv_undef) {
+	    if (!SvWEAKREF(svp[i]))
+		croak("panic: magic_killbackrefs");
+	    /* XXX Should we check that it hasn't changed? */
+	    SvRV(svp[i]) = 0;
+	    SvOK_off(svp[i]);
+	    SvWEAKREF_off(svp[i]);
+	    svp[i] = &PL_sv_undef;
+	}
+	i--;
+    }
+    return 0;
 }
 
 int

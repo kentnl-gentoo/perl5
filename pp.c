@@ -1,6 +1,6 @@
 /*    pp.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -214,7 +214,7 @@ PP(pp_padany)
 
 PP(pp_rv2gv)
 {
-    djSP; dTOPss;
+    djSP; dTOPss;  
 
     if (SvROK(sv)) {
       wasref:
@@ -242,6 +242,24 @@ PP(pp_rv2gv)
 		    goto wasref;
 	    }
 	    if (!SvOK(sv)) {
+		/* If this is a 'my' scalar and flag is set then vivify 
+		 * NI-S 1999/05/07
+		 */ 
+		if (PL_op->op_private & OPpDEREF) {
+		    GV *gv = (GV *) newSV(0);
+		    STRLEN len = 0;
+		    char *name = "";
+		    if (cUNOP->op_first->op_type == OP_PADSV) {
+			SV *padname = *av_fetch(PL_comppad_name, cUNOP->op_first->op_targ, 4);
+			name = SvPV(padname,len);                                                    
+		    }
+		    gv_init(gv, PL_curcop->cop_stash, name, len, 0);
+		    sv_upgrade(sv, SVt_RV);
+		    SvRV(sv) = (SV *) gv;
+		    SvROK_on(sv);
+		    SvSETMAGIC(sv);
+		    goto wasref;
+		}  
 		if (PL_op->op_flags & OPf_REF ||
 		    PL_op->op_private & HINT_STRICT_REFS)
 		    DIE(PL_no_usym, "a symbol");
@@ -448,19 +466,19 @@ PP(pp_prototype)
 		    oa = oa >> 4;
 		}
 		str[n++] = '\0';
-		ret = sv_2mortal(newSVpv(str, n - 1));
+		ret = sv_2mortal(newSVpvn(str, n - 1));
 	    }
 	    else if (code)		/* Non-Overridable */
 		goto set;
 	    else {			/* None such */
 	      nonesuch:
-		croak("Cannot find an opnumber for \"%s\"", s+6);
+		croak("Can't find an opnumber for \"%s\"", s+6);
 	    }
 	}
     }
     cv = sv_2cv(TOPs, &stash, &gv, FALSE);
     if (cv && SvPOK(cv))
-	ret = sv_2mortal(newSVpv(SvPVX(cv), SvCUR(cv)));
+	ret = sv_2mortal(newSVpvn(SvPVX(cv), SvCUR(cv)));
   set:
     SETs(ret);
     RETURN;
@@ -512,6 +530,8 @@ refto(SV *sv)
 	    vivify_defelem(sv);
 	if (!(sv = LvTARG(sv)))
 	    sv = &PL_sv_undef;
+	else
+	    (void)SvREFCNT_inc(sv);
     }
     else if (SvPADTMP(sv))
 	sv = newSVsv(sv);
@@ -609,7 +629,7 @@ PP(pp_gelem)
 	break;
     case 'N':
 	if (strEQ(elem, "NAME"))
-	    sv = newSVpv(GvNAME(gv), GvNAMELEN(gv));
+	    sv = newSVpvn(GvNAME(gv), GvNAMELEN(gv));
 	break;
     case 'P':
 	if (strEQ(elem, "PACKAGE"))
@@ -635,7 +655,6 @@ PP(pp_gelem)
 PP(pp_study)
 {
     djSP; dPOPss;
-    register UNOP *unop = cUNOP;
     register unsigned char *s;
     register I32 pos;
     register I32 ch;
@@ -792,15 +811,8 @@ PP(pp_undef)
     if (!sv)
 	RETPUSHUNDEF;
 
-    if (SvTHINKFIRST(sv)) {
-	if (SvREADONLY(sv)) {
-	    dTHR;
-	    if (PL_curcop != &PL_compiling)
-		croak(PL_no_modify);
-	}
-	if (SvROK(sv))
-	    sv_unref(sv);
-    }
+    if (SvTHINKFIRST(sv))
+	sv_force_normal(sv);
 
     switch (SvTYPE(sv)) {
     case SVt_NULL:
@@ -817,9 +829,12 @@ PP(pp_undef)
 		 CvANON((CV*)sv) ? "(anonymous)" : GvENAME(CvGV((CV*)sv)));
 	/* FALL THROUGH */
     case SVt_PVFM:
-	{ GV* gv = (GV*)SvREFCNT_inc(CvGV((CV*)sv));
-	  cv_undef((CV*)sv);
-	  CvGV((CV*)sv) = gv; }   /* let user-undef'd sub keep its identity */
+	{
+	    /* let user-undef'd sub keep its identity */
+	    GV* gv = (GV*)SvREFCNT_inc(CvGV((CV*)sv));
+	    cv_undef((CV*)sv);
+	    CvGV((CV*)sv) = gv;
+	}
 	break;
     case SVt_PVGV:
 	if (SvFAKE(sv))
@@ -854,7 +869,7 @@ PP(pp_predec)
     djSP;
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
 	croak(PL_no_modify);
-    if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
+    if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MIN)
     {
 	--SvIVX(TOPs);
@@ -872,7 +887,7 @@ PP(pp_postinc)
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
 	croak(PL_no_modify);
     sv_setsv(TARG, TOPs);
-    if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
+    if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MAX)
     {
 	++SvIVX(TOPs);
@@ -893,7 +908,7 @@ PP(pp_postdec)
     if(SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
 	croak(PL_no_modify);
     sv_setsv(TARG, TOPs);
-    if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
+    if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MIN)
     {
 	--SvIVX(TOPs);
@@ -961,48 +976,99 @@ PP(pp_modulo)
 {
     djSP; dATARGET; tryAMAGICbin(modulo,opASSIGN);
     {
-      UV left;
-      UV right;
-      bool left_neg;
-      bool right_neg;
-      UV ans;
+	UV left;
+	UV right;
+	bool left_neg;
+	bool right_neg;
+	bool use_double = 0;
+	double dright;
+	double dleft;
 
-      if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
-	IV i = SvIVX(POPs);
-	right = (right_neg = (i < 0)) ? -i : i;
-      }
-      else {
-	double n = POPn;
-	right = U_V((right_neg = (n < 0)) ? -n : n);
-      }
+	if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
+	    IV i = SvIVX(POPs);
+	    right = (right_neg = (i < 0)) ? -i : i;
+	}
+	else {
+	    dright = POPn;
+	    use_double = 1;
+	    right_neg = dright < 0;
+	    if (right_neg)
+		dright = -dright;
+	}
 
-      if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
-	IV i = SvIVX(POPs);
-	left = (left_neg = (i < 0)) ? -i : i;
-      }
-      else {
-	double n = POPn;
-	left = U_V((left_neg = (n < 0)) ? -n : n);
-      }
+	if (!use_double && SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
+	    IV i = SvIVX(POPs);
+	    left = (left_neg = (i < 0)) ? -i : i;
+	}
+	else {
+	    dleft = POPn;
+	    if (!use_double) {
+		use_double = 1;
+		dright = right;
+	    }
+	    left_neg = dleft < 0;
+	    if (left_neg)
+		dleft = -dleft;
+	}
 
-      if (!right)
-	DIE("Illegal modulus zero");
+	if (use_double) {
+	    double dans;
 
-      ans = left % right;
-      if ((left_neg != right_neg) && ans)
-	ans = right - ans;
-      if (right_neg) {
-	/* XXX may warn: unary minus operator applied to unsigned type */
-	/* could change -foo to be (~foo)+1 instead	*/
-	if (ans <= ~((UV)IV_MAX)+1)
-	  sv_setiv(TARG, ~ans+1);
-	else
-	  sv_setnv(TARG, -(double)ans);
-      }
-      else
-	sv_setuv(TARG, ans);
-      PUSHTARG;
-      RETURN;
+#if 1
+/* Somehow U_V is pessimized even if CASTFLAGS is 0 */
+#  if CASTFLAGS & 2
+#    define CAST_D2UV(d) U_V(d)
+#  else
+#    define CAST_D2UV(d) ((UV)(d))
+#  endif
+	    /* Tried to do this only in the case DOUBLESIZE <= UV_SIZE,
+	     * or, in other words, precision of UV more than of NV.
+	     * But in fact the approach below turned out to be an
+	     * optimization - floor() may be slow */
+	    if (dright <= UV_MAX && dleft <= UV_MAX) {
+		right = CAST_D2UV(dright);
+		left  = CAST_D2UV(dleft);
+		goto do_uv;
+	    }
+#endif
+
+	    /* Backward-compatibility clause: */
+	    dright = floor(dright + 0.5);
+	    dleft  = floor(dleft + 0.5);
+
+	    if (!dright)
+		DIE("Illegal modulus zero");
+
+	    dans = fmod(dleft, dright);
+	    if ((left_neg != right_neg) && dans)
+		dans = dright - dans;
+	    if (right_neg)
+		dans = -dans;
+	    sv_setnv(TARG, dans);
+	}
+	else {
+	    UV ans;
+
+	do_uv:
+	    if (!right)
+		DIE("Illegal modulus zero");
+
+	    ans = left % right;
+	    if ((left_neg != right_neg) && ans)
+		ans = right - ans;
+	    if (right_neg) {
+		/* XXX may warn: unary minus operator applied to unsigned type */
+		/* could change -foo to be (~foo)+1 instead	*/
+		if (ans <= ~((UV)IV_MAX)+1)
+		    sv_setiv(TARG, ~ans+1);
+		else
+		    sv_setnv(TARG, -(double)ans);
+	    }
+	    else
+		sv_setuv(TARG, ans);
+	}
+	PUSHTARG;
+	RETURN;
     }
 }
 
@@ -1037,12 +1103,6 @@ PP(pp_repeat)
 	STRLEN len;
 
 	tmpstr = POPs;
-	if (TARG == tmpstr && SvTHINKFIRST(tmpstr)) {
-	    if (SvREADONLY(tmpstr) && PL_curcop != &PL_compiling)
-		DIE("Can't x= to readonly value");
-	    if (SvROK(tmpstr))
-		sv_unref(tmpstr);
-	}
 	SvSetSV(TARG, tmpstr);
 	SvPV_force(TARG, len);
 	if (count != 1) {
@@ -2767,20 +2827,17 @@ PP(pp_lslice)
 
     for (lelem = firstlelem; lelem <= lastlelem; lelem++) {
 	ix = SvIVx(*lelem);
-	if (ix < 0) {
+	if (ix < 0)
 	    ix += max;
-	    if (ix < 0)
-		*lelem = &PL_sv_undef;
-	    else if (!(*lelem = firstrelem[ix]))
-		*lelem = &PL_sv_undef;
-	}
-	else {
+	else 
 	    ix -= arybase;
-	    if (ix >= max || !(*lelem = firstrelem[ix]))
+	if (ix < 0 || ix >= max)
+	    *lelem = &PL_sv_undef;
+	else {
+	    is_something_there = TRUE;
+	    if (!(*lelem = firstrelem[ix]))
 		*lelem = &PL_sv_undef;
 	}
-	if (!is_something_there && (SvOK(*lelem) || SvGMAGICAL(*lelem)))
-	    is_something_there = TRUE;
     }
     if (is_something_there)
 	SP = lastlelem;
@@ -3181,7 +3238,7 @@ mul128(SV *sv, U8 m)
   U32             i = 0;
 
   if (!strnEQ(s, "0000", 4)) {  /* need to grow sv */
-    SV             *tmpNew = newSVpv("0000000000", 10);
+    SV             *tmpNew = newSVpvn("0000000000", 10);
 
     sv_catsv(tmpNew, sv);
     SvREFCNT_dec(sv);		/* free old sv */
@@ -3274,7 +3331,7 @@ PP(pp_unpack)
 #endif
 	if (isSPACE(datumtype))
 	    continue;
-	if (*pat == '_') {
+	if (*pat == '!') {
 	    char *natstr = "sSiIlL";
 
 	    if (strchr(natstr, datumtype)) {
@@ -3284,7 +3341,7 @@ PP(pp_unpack)
 		pat++;
 	    }
 	    else
-		croak("'_' allowed only after types %s", natstr);
+		croak("'!' allowed only after types %s", natstr);
 	}
 	if (pat >= patend)
 	    len = 1;
@@ -3687,7 +3744,25 @@ PP(pp_unpack)
 #ifdef __osf__
                     /* Without the dummy below unpack("i", pack("i",-1))
                      * return 0xFFffFFff instead of -1 for Digital Unix V4.0
-                     * cc with optimization turned on */
+                     * cc with optimization turned on.
+		     *
+		     * The bug was detected in
+		     * DEC C V5.8-009 on Digital UNIX V4.0 (Rev. 1091) (V4.0E)
+		     * with optimization (-O4) turned on.
+		     * DEC C V5.2-040 on Digital UNIX V4.0 (Rev. 564) (V4.0B)
+		     * does not have this problem even with -O4.
+		     *
+		     * This bug was reported as DECC_BUGS 1431
+		     * and tracked internally as GEM_BUGS 7775.
+		     *
+		     * The bug is fixed in
+		     * Tru64 UNIX V5.0:      Compaq C V6.1-006 or later
+		     * UNIX V4.0F support:   DEC C V5.9-006 or later
+		     * UNIX V4.0E support:   DEC C V5.8-011 or later
+		     * and also in DTK.
+		     *
+		     * See also few lines later for the same bug.
+		     */
                     (aint) ?
 		    	sv_setiv(sv, (IV)aint) :
 #endif
@@ -3719,12 +3794,8 @@ PP(pp_unpack)
 		    sv = NEWSV(41, 0);
 #ifdef __osf__
                     /* Without the dummy below unpack("I", pack("I",0xFFFFFFFF))
-                     * returns 1.84467440737096e+19 instead of 0xFFFFFFFF for
-		     * DEC C V5.8-009 on Digital UNIX V4.0 (Rev. 1091) (aka V4.0D)
-		     * with optimization turned on.
-		     * (DEC C V5.2-040 on Digital UNIX V4.0 (Rev. 564) (aka V4.0B)
-		     * does not have this problem even with -O4)
-		     */
+                     * returns 1.84467440737096e+19 instead of 0xFFFFFFFF.
+		     * See details few lines earlier. */
                     (auint) ?
 		        sv_setuv(sv, (UV)auint) :
 #endif
@@ -4171,11 +4242,11 @@ doencodes(register SV *sv, register char *s, register I32 len)
     sv_catpvn(sv, "\n", 1);
 }
 
-STATIC SV      *
+STATIC SV *
 is_an_int(char *s, STRLEN l)
 {
   STRLEN	 n_a;
-  SV             *result = newSVpv("", l);
+  SV             *result = newSVpvn(s, l);
   char           *result_c = SvPV(result, n_a);	/* convenience */
   char           *out = result_c;
   bool            skip = 1;
@@ -4294,7 +4365,7 @@ PP(pp_pack)
 #endif
 	if (isSPACE(datumtype))
 	    continue;
-        if (*pat == '_') {
+        if (*pat == '!') {
 	    char *natstr = "sSiIlL";
 
 	    if (strchr(natstr, datumtype)) {
@@ -4304,7 +4375,7 @@ PP(pp_pack)
 		pat++;
 	    }
 	    else
-		croak("'_' allowed only after types %s", natstr);
+		croak("'!' allowed only after types %s", natstr);
 	}
 	if (*pat == '*') {
 	    len = strchr("@Xxu", datumtype) ? 0 : items;
@@ -4621,7 +4692,7 @@ PP(pp_pack)
 		{
 		    char   buf[1 + sizeof(UV)];
 		    char  *in = buf + sizeof(buf);
-		    UV     auv = U_V(adouble);;
+		    UV     auv = U_V(adouble);
 
 		    do {
 			*--in = (auv & 0x7f) | 0x80;
@@ -4935,8 +5006,10 @@ PP(pp_split)
     else if (rx->check_substr && !rx->nparens
 	     && (rx->reganch & ROPT_CHECK_ALL)
 	     && !(rx->reganch & ROPT_ANCH)) {
+	int tail = SvTAIL(rx->check_substr) != 0;
+
 	i = SvCUR(rx->check_substr);
-	if (i == 1 && !SvTAIL(rx->check_substr)) {
+	if (i == 1 && !tail) {
 	    i = *SvPVX(rx->check_substr);
 	    while (--limit) {
 		/*SUPPRESS 530*/
@@ -4955,7 +5028,7 @@ PP(pp_split)
 #ifndef lint
 	    while (s < strend && --limit &&
 	      (m=fbm_instr((unsigned char*)s, (unsigned char*)strend,
-		    rx->check_substr, 0)) )
+		    rx->check_substr, PL_multiline ? FBMrf_MULTILINE : 0)) )
 #endif
 	    {
 		dstr = NEWSV(31, m-s);
@@ -4963,7 +5036,7 @@ PP(pp_split)
 		if (make_mortal)
 		    sv_2mortal(dstr);
 		XPUSHs(dstr);
-		s = m + i;
+		s = m + i - tail;	/* Fake \n at the end */
 	    }
 	}
     }
@@ -4973,15 +5046,14 @@ PP(pp_split)
 	       CALLREGEXEC(rx, s, strend, orig, 1, sv, NULL, 0))
 	{
 	    TAINT_IF(RX_MATCH_TAINTED(rx));
-	    if (rx->subbase
-	      && rx->subbase != orig) {
+	    if (RX_MATCH_COPIED(rx) && rx->subbeg != orig) {
 		m = s;
 		s = orig;
-		orig = rx->subbase;
+		orig = rx->subbeg;
 		s = orig + (m - s);
 		strend = s + (strend - m);
 	    }
-	    m = rx->startp[0];
+	    m = rx->startp[0] + orig;
 	    dstr = NEWSV(32, m-s);
 	    sv_setpvn(dstr, s, m-s);
 	    if (make_mortal)
@@ -4989,8 +5061,8 @@ PP(pp_split)
 	    XPUSHs(dstr);
 	    if (rx->nparens) {
 		for (i = 1; i <= rx->nparens; i++) {
-		    s = rx->startp[i];
-		    m = rx->endp[i];
+		    s = rx->startp[i] + orig;
+		    m = rx->endp[i] + orig;
 		    if (m && s) {
 			dstr = NEWSV(33, m-s);
 			sv_setpvn(dstr, s, m-s);
@@ -5002,7 +5074,7 @@ PP(pp_split)
 		    XPUSHs(dstr);
 		}
 	    }
-	    s = rx->endp[0];
+	    s = rx->endp[0] + orig;
 	}
     }
 

@@ -1,6 +1,6 @@
 /*    pp_hot.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -204,19 +204,15 @@ PP(pp_readline)
 {
     tryAMAGICunTARGET(iter, 0);
     PL_last_in_gv = (GV*)(*PL_stack_sp--);
-    if (PL_op->op_flags & OPf_SPECIAL) {	/* Are called as <$var> */
-	if (SvROK(PL_last_in_gv)) {
-	    if (SvTYPE(SvRV(PL_last_in_gv)) != SVt_PVGV) 
-		goto hard_way;
+    if (SvTYPE(PL_last_in_gv) != SVt_PVGV) {
+	if (SvROK(PL_last_in_gv) && SvTYPE(SvRV(PL_last_in_gv)) == SVt_PVGV) 
 	    PL_last_in_gv = (GV*)SvRV(PL_last_in_gv);
-	} else if (SvTYPE(PL_last_in_gv) != SVt_PVGV) {
-	  hard_way: {
+	else {
 	    dSP;
 	    XPUSHs((SV*)PL_last_in_gv);
 	    PUTBACK;
 	    pp_rv2gv(ARGS);
 	    PL_last_in_gv = (GV*)(*PL_stack_sp--);
-	  }
 	}
     }
     return do_readline();
@@ -237,7 +233,7 @@ PP(pp_preinc)
     djSP;
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
 	croak(PL_no_modify);
-    if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
+    if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MAX)
     {
 	++SvIVX(TOPs);
@@ -733,16 +729,10 @@ PP(pp_aassign)
 	    }
 	    break;
 	default:
-	    if (SvTHINKFIRST(sv)) {
-		if (SvREADONLY(sv) && PL_curcop != &PL_compiling) {
-		    if (!SvIMMORTAL(sv))
-			DIE(PL_no_modify);
-		    if (relem <= lastrelem)
-			relem++;
-		    break;
-		}
-		if (SvROK(sv))
-		    sv_unref(sv);
+	    if (SvIMMORTAL(sv)) {
+		if (relem <= lastrelem)
+		    relem++;
+		break;
 	    }
 	    if (relem <= lastrelem) {
 		sv_setsv(sv, *relem);
@@ -856,7 +846,9 @@ PP(pp_match)
     char *strend;
     I32 global;
     I32 r_flags = 0;
-    char *truebase;
+    char *truebase;			/* Start of string, may be
+					   relocated if REx engine
+					   copies the string.  */
     register REGEXP *rx = pm->op_pmregexp;
     bool rxtainted;
     I32 gimme = GIMME;
@@ -898,15 +890,15 @@ PP(pp_match)
 
     /* XXXX What part of this is needed with true \G-support? */
     if (global = pm->op_pmflags & PMf_GLOBAL) {
-	rx->startp[0] = 0;
+	rx->startp[0] = -1;
 	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
 	    MAGIC* mg = mg_find(TARG, 'g');
 	    if (mg && mg->mg_len >= 0) {
 		if (!(rx->reganch & ROPT_GPOS_SEEN))
-		    rx->endp[0] = rx->startp[0] = s + mg->mg_len; 
+		    rx->endp[0] = rx->startp[0] = mg->mg_len; 
 		else if (rx->reganch & ROPT_ANCH_GPOS) {
 		    r_flags |= REXEC_IGNOREPOS;
-		    rx->endp[0] = rx->startp[0] = s + mg->mg_len; 
+		    rx->endp[0] = rx->startp[0] = mg->mg_len; 
 		}
 		minmatch = (mg->mg_flags & MGf_MINMATCH);
 		update_minmatch = 0;
@@ -927,8 +919,8 @@ PP(pp_match)
     }
 
 play_it_again:
-    if (global && rx->startp[0]) {
-	t = s = rx->endp[0];
+    if (global && rx->startp[0] != -1) {
+	t = s = rx->endp[0] + truebase;
 	if ((s + rx->minlen) > strend)
 	    goto nope;
 	if (update_minmatch++)
@@ -936,29 +928,33 @@ play_it_again:
     }
     if (rx->check_substr) {
 	if (!(rx->reganch & ROPT_NOSCAN)) { /* Floating checkstring. */
+	    SV *c = rx->check_substr;
+
 	    if (r_flags & REXEC_SCREAM) {
 		I32 p = -1;
 		char *b;
-		
-		if (PL_screamfirst[BmRARE(rx->check_substr)] < 0)
+
+		if (PL_screamfirst[BmRARE(c)] < 0
+		    && !( BmRARE(c) == '\n' && (BmPREVIOUS(c) == SvCUR(c) - 1)
+			  && SvTAIL(c) ))
 		    goto nope;
 
 		b = (char*)HOP((U8*)s, rx->check_offset_min);
-		if (!(s = screaminstr(TARG, rx->check_substr, b - s, 0, &p, 0)))
+		if (!(s = screaminstr(TARG, c, b - s, 0, &p, 0)))
 		    goto nope;
 
 		if ((rx->reganch & ROPT_CHECK_ALL)
-			 && !PL_sawampersand && !SvTAIL(rx->check_substr))
+			 && !PL_sawampersand && !SvTAIL(c))
 		    goto yup;
 	    }
 	    else if (!(s = fbm_instr((unsigned char*)HOP((U8*)s, rx->check_offset_min),
-				     (unsigned char*)strend, 
-				     rx->check_substr, 0)))
+				     (unsigned char*)strend, c, 
+				     PL_multiline ? FBMrf_MULTILINE : 0)))
 		goto nope;
 	    else if ((rx->reganch & ROPT_CHECK_ALL) && !PL_sawampersand)
 		goto yup;
 	    if (s && rx->check_offset_max < s - t) {
-		++BmUSEFUL(rx->check_substr);
+		++BmUSEFUL(c);
 		s = (char*)HOP((U8*)s, -rx->check_offset_max);
 	    }
 	    else
@@ -969,10 +965,30 @@ play_it_again:
 	else if (!PL_multiline) {	/* Anchored near beginning of string. */
 	    I32 slen;
 	    char *b = (char*)HOP((U8*)s, rx->check_offset_min);
-	    if (*SvPVX(rx->check_substr) != *b
-		|| ((slen = SvCUR(rx->check_substr)) > 1
-		    && memNE(SvPVX(rx->check_substr), b, slen)))
-		goto nope;
+
+	    if (SvTAIL(rx->check_substr)) {
+		slen = SvCUR(rx->check_substr);	/* >= 1 */
+
+		if ( strend - b > slen || strend - b < slen - 1 )
+		    goto nope;
+		if ( strend - b == slen && strend[-1] != '\n')
+		    goto nope;
+		/* Now should match b[0..slen-2] */
+		slen--;
+		if (slen && (*SvPVX(rx->check_substr) != *b
+			     || (slen > 1
+				 && memNE(SvPVX(rx->check_substr), b, slen))))
+		    goto nope;
+		if ((rx->reganch & ROPT_CHECK_ALL) && !PL_sawampersand)
+		    goto yup;
+	    } else {			/* Assume len > 0 */
+		if (*SvPVX(rx->check_substr) != *b
+		    || ((slen = SvCUR(rx->check_substr)) > 1
+			&& memNE(SvPVX(rx->check_substr), b, slen)))
+		    goto nope;
+		if ((rx->reganch & ROPT_CHECK_ALL) && !PL_sawampersand)
+		    goto yup;
+	    }
 	}
 	if (!(rx->reganch & ROPT_NAUGHTY) && --BmUSEFUL(rx->check_substr) < 0
 	    && rx->check_substr == rx->float_substr) {
@@ -1010,17 +1026,17 @@ play_it_again:
 	for (i = !i; i <= iters; i++) {
 	    PUSHs(sv_newmortal());
 	    /*SUPPRESS 560*/
-	    if ((s = rx->startp[i]) && rx->endp[i] ) {
-		len = rx->endp[i] - s;
+	    if ((rx->startp[i] != -1) && rx->endp[i] != -1 ) {
+		len = rx->endp[i] - rx->startp[i];
+		s = rx->startp[i] + truebase;
 		sv_setpvn(*SP, s, len);
 	    }
 	}
 	if (global) {
-	    truebase = rx->subbeg;
-	    strend = rx->subend;
-	    had_zerolen = (rx->startp[0] && rx->startp[0] == rx->endp[0]);
+	    had_zerolen = (rx->startp[0] != -1
+			   && rx->startp[0] == rx->endp[0]);
 	    PUTBACK;			/* EVAL blocks may use stack */
-	    r_flags |= REXEC_IGNOREPOS;
+	    r_flags |= REXEC_IGNOREPOS | REXEC_NOT_FIRST;
 	    goto play_it_again;
 	}
 	else if (!iters)
@@ -1037,8 +1053,8 @@ play_it_again:
 		sv_magic(TARG, (SV*)0, 'g', Nullch, 0);
 		mg = mg_find(TARG, 'g');
 	    }
-	    if (rx->startp[0]) {
-		mg->mg_len = rx->endp[0] - rx->subbeg;
+	    if (rx->startp[0] != -1) {
+		mg->mg_len = rx->endp[0];
 		if (rx->startp[0] == rx->endp[0])
 		    mg->mg_flags |= MGf_MINMATCH;
 		else
@@ -1057,23 +1073,29 @@ yup:					/* Confirmed by check_substr */
     PL_curpm = pm;
     if (pm->op_pmflags & PMf_ONCE)
 	pm->op_pmdynflags |= PMdf_USED;
-    Safefree(rx->subbase);
-    rx->subbase = Nullch;
+    if (RX_MATCH_COPIED(rx))
+	Safefree(rx->subbeg);
+    RX_MATCH_COPIED_off(rx);
+    rx->subbeg = Nullch;
     if (global) {
 	rx->subbeg = truebase;
-	rx->subend = strend;
-	rx->startp[0] = s;
-	rx->endp[0] = s + SvCUR(rx->check_substr);
+	rx->startp[0] = s - truebase;
+	rx->endp[0] = s - truebase + SvCUR(rx->check_substr);
+	rx->sublen = strend - truebase;
 	goto gotcha;
-    }
+    } 
     if (PL_sawampersand) {
-	char *tmps;
+	I32 off;
 
-	tmps = rx->subbase = savepvn(t, strend-t);
-	rx->subbeg = tmps;
-	rx->subend = tmps + (strend-t);
-	tmps = rx->startp[0] = tmps + (s - t);
-	rx->endp[0] = tmps + SvCUR(rx->check_substr);
+	rx->subbeg = savepvn(t, strend - t);
+	rx->sublen = strend - t;
+	RX_MATCH_COPIED_on(rx);
+	off = rx->startp[0] = s - t;
+	rx->endp[0] = off + SvCUR(rx->check_substr);
+    }
+    else {			/* startp/endp are used by @- @+. */
+	rx->startp[0] = s - truebase;
+	rx->endp[0] = s - truebase + SvCUR(rx->check_substr);
     }
     LEAVE_SCOPE(oldsave);
     RETPUSHYES;
@@ -1242,9 +1264,15 @@ do_readline(void)
 		sv_setpv(tmpcmd, "/dev/dosglob/"); /* File System Extension */
 		sv_catsv(tmpcmd, tmpglob);
 #else
+#ifdef CYGWIN32
+		sv_setpv(tmpcmd, "for a in ");
+		sv_catsv(tmpcmd, tmpglob);
+		sv_catpv(tmpcmd, "; do echo -e \"$a\\0\\c\"; done |");
+#else
 		sv_setpv(tmpcmd, "perlglob ");
 		sv_catsv(tmpcmd, tmpglob);
 		sv_catpv(tmpcmd, " |");
+#endif /* !CYGWIN */
 #endif /* !DJGPP */
 #endif /* !OS2 */
 #else /* !DOSISH */
@@ -1274,9 +1302,14 @@ do_readline(void)
 	    SP--;
     }
     if (!fp) {
-	if (ckWARN(WARN_CLOSED) && io && !(IoFLAGS(io) & IOf_START))
-	    warner(WARN_CLOSED,
-		   "Read on closed filehandle <%s>", GvENAME(PL_last_in_gv));
+	if (ckWARN(WARN_CLOSED) && io && !(IoFLAGS(io) & IOf_START)) {
+	    if (type == OP_GLOB)
+		warner(WARN_CLOSED, "glob failed (can't start child: %s)",
+		       Strerror(errno));
+	    else
+		warner(WARN_CLOSED, "Read on closed filehandle <%s>",
+		       GvENAME(PL_last_in_gv));
+	}
 	if (gimme == G_SCALAR) {
 	    (void)SvOK_off(TARG);
 	    PUSHTARG;
@@ -1357,7 +1390,7 @@ do_readline(void)
 		if (!isALPHA(*tmps) && !isDIGIT(*tmps) &&
 		    strchr("$&*(){}[]'\";\\|?<>~`", *tmps))
 			break;
-	    if (*tmps && PerlLIO_stat(SvPVX(sv), &PL_statbuf) < 0) {
+	    if (*tmps && PerlLIO_lstat(SvPVX(sv), &PL_statbuf) < 0) {
 		(void)POPs;		/* Unmatched wildcard?  Chuck it... */
 		continue;
 	    }
@@ -1713,7 +1746,8 @@ PP(pp_subst)
 	    }
 	    else if (!(s = fbm_instr((unsigned char*)HOP((U8*)s, rx->check_offset_min), 
 				     (unsigned char*)strend,
-				     rx->check_substr, 0)))
+				     rx->check_substr, 
+				     PL_multiline ? FBMrf_MULTILINE : 0)))
 		goto nope;
 	    if (s && rx->check_offset_max < s - m) {
 		++BmUSEFUL(rx->check_substr);
@@ -1765,13 +1799,8 @@ PP(pp_subst)
 	SvSCREAM_off(TARG);	/* disable possible screamer */
 	if (once) {
 	    rxtainted |= RX_MATCH_TAINTED(rx);
-	    if (rx->subbase) {
-		m = orig + (rx->startp[0] - rx->subbase);
-		d = orig + (rx->endp[0] - rx->subbase);
-	    } else {
-		m = rx->startp[0];
-		d = rx->endp[0];
-	    }
+	    m = orig + rx->startp[0];
+	    d = orig + rx->endp[0];
 	    s = orig;
 	    if (m - s > strend - d) {  /* faster to shorten from end */
 		if (clen) {
@@ -1814,7 +1843,7 @@ PP(pp_subst)
 		if (iters++ > maxiters)
 		    DIE("Substitution loop");
 		rxtainted |= RX_MATCH_TAINTED(rx);
-		m = rx->startp[0];
+		m = rx->startp[0] + orig;
 		/*SUPPRESS 560*/
 		if (i = m - s) {
 		    if (s != d)
@@ -1825,9 +1854,9 @@ PP(pp_subst)
 		    Copy(c, d, clen, char);
 		    d += clen;
 		}
-		s = rx->endp[0];
+		s = rx->endp[0] + orig;
 	    } while (CALLREGEXEC(rx, s, strend, orig, s == m,
-			      Nullsv, NULL, 0)); /* don't match same null twice */
+				 Nullsv, NULL, REXEC_NOT_FIRST)); /* don't match same null twice */
 	    if (s != d) {
 		i = strend - s;
 		SvCUR_set(TARG, d - SvPVX(TARG) + i);
@@ -1865,21 +1894,21 @@ PP(pp_subst)
 	    PUSHSUBST(cx);
 	    RETURNOP(cPMOP->op_pmreplroot);
 	}
-	r_flags |= REXEC_IGNOREPOS;
+	r_flags |= REXEC_IGNOREPOS | REXEC_NOT_FIRST;
 	do {
 	    if (iters++ > maxiters)
 		DIE("Substitution loop");
 	    rxtainted |= RX_MATCH_TAINTED(rx);
-	    if (rx->subbase && rx->subbase != orig) {
+	    if (RX_MATCH_COPIED(rx) && rx->subbeg != orig) {
 		m = s;
 		s = orig;
-		orig = rx->subbase;
+		orig = rx->subbeg;
 		s = orig + (m - s);
 		strend = s + (strend - m);
 	    }
-	    m = rx->startp[0];
+	    m = rx->startp[0] + orig;
 	    sv_catpvn(dstr, s, m-s);
-	    s = rx->endp[0];
+	    s = rx->endp[0] + orig;
 	    if (clen)
 		sv_catpvn(dstr, c, clen);
 	    if (once)
@@ -2098,7 +2127,12 @@ PP(pp_entersub)
 	break;
     case SVt_PVGV:
 	if (!(cv = GvCVu((GV*)sv)))
-	    cv = sv_2cv(sv, &stash, &gv, TRUE);
+	    cv = sv_2cv(sv, &stash, &gv, FALSE);
+	if (!cv) {
+	    ENTER;
+	    SAVETMPS;
+	    goto try_autoload;
+	}
 	break;
     }
 
@@ -2106,9 +2140,6 @@ PP(pp_entersub)
     SAVETMPS;
 
   retry:
-    if (!cv)
-	DIE("Not a CODE reference");
-
     if (!CvROOT(cv) && !CvXSUB(cv)) {
 	GV* autogv;
 	SV* sub_name;
@@ -2116,29 +2147,37 @@ PP(pp_entersub)
 	/* anonymous or undef'd function leaves us no recourse */
 	if (CvANON(cv) || !(gv = CvGV(cv)))
 	    DIE("Undefined subroutine called");
+
 	/* autoloaded stub? */
 	if (cv != GvCV(gv)) {
 	    cv = GvCV(gv);
-	    goto retry;
 	}
 	/* should call AUTOLOAD now? */
-	if ((autogv = gv_autoload4(GvSTASH(gv), GvNAME(gv), GvNAMELEN(gv),
+	else {
+try_autoload:
+	    if ((autogv = gv_autoload4(GvSTASH(gv), GvNAME(gv), GvNAMELEN(gv),
 				   FALSE)))
-	{
-	    cv = GvCV(autogv);
-	    goto retry;
+	    {
+		cv = GvCV(autogv);
+	    }
+	    /* sorry */
+	    else {
+		sub_name = sv_newmortal();
+		gv_efullname3(sub_name, gv, Nullch);
+		DIE("Undefined subroutine &%s called", SvPVX(sub_name));
+	    }
 	}
-	/* sorry */
-	sub_name = sv_newmortal();
-	gv_efullname3(sub_name, gv, Nullch);
-	DIE("Undefined subroutine &%s called", SvPVX(sub_name));
+	if (!cv)
+	    DIE("Not a CODE reference");
+	goto retry;
     }
 
     gimme = GIMME_V;
-    if ((PL_op->op_private & OPpENTERSUB_DB) && GvCV(PL_DBsub) && !CvNODEBUG(cv))
+    if ((PL_op->op_private & OPpENTERSUB_DB) && GvCV(PL_DBsub) && !CvNODEBUG(cv)) {
 	cv = get_db_sub(&sv, cv);
-    if (!cv)
-	DIE("No DBsub routine");
+	if (!cv)
+	    DIE("No DBsub routine");
+    }
 
 #ifdef USE_THREADS
     /*
@@ -2155,8 +2194,13 @@ PP(pp_entersub)
 	    if (SP > PL_stack_base + TOPMARK)
 		sv = *(PL_stack_base + TOPMARK + 1);
 	    else {
-		MUTEX_UNLOCK(CvMUTEXP(cv));
-		croak("no argument for locked method call");
+		AV *av = (AV*)PL_curpad[0];
+		if (hasargs || !av || AvFILLp(av) < 0
+		    || !(sv = AvARRAY(av)[0]))
+		{
+		    MUTEX_UNLOCK(CvMUTEXP(cv));
+		    croak("no argument for locked method call");
+		}
 	    }
 	    if (SvROK(sv))
 		sv = SvRV(sv);
@@ -2269,6 +2313,7 @@ PP(pp_entersub)
 #endif /* USE_THREADS */
 
     if (CvXSUB(cv)) {
+#ifdef PERL_XSUB_OLDSTYLE
 	if (CvOLDSTYLE(cv)) {
 	    I32 (*fp3)_((int,int,int));
 	    dMARK;
@@ -2285,7 +2330,9 @@ PP(pp_entersub)
 			   items);
 	    PL_stack_sp = PL_stack_base + items;
 	}
-	else {
+	else
+#endif /* PERL_XSUB_OLDSTYLE */
+	{
 	    I32 markix = TOPMARK;
 
 	    PUTBACK;
@@ -2311,9 +2358,8 @@ PP(pp_entersub)
 		    PUTBACK ;		    
 		}
 	    }
-	    if (PL_curcopdb) {		/* We assume that the first
-					   XSUB in &DB::sub is the
-					   called one. */
+	    /* We assume first XSUB in &DB::sub is the called one. */
+	    if (PL_curcopdb) {
 		SAVESPTR(PL_curcop);
 		PL_curcop = PL_curcopdb;
 		PL_curcopdb = NULL;

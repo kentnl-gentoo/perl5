@@ -123,8 +123,16 @@ cc_opclass(OP *o)
     case OA_GVOP:
 	return OPc_GVOP;
 
-    case OA_PVOP:
-	return OPc_PVOP;
+    case OA_PVOP_OR_SVOP:
+        /*
+         * Character translations (tr///) are usually a PVOP, keeping a 
+         * pointer to a table of shorts used to look up translations.
+         * Under utf8, however, a simple table isn't practical; instead,
+         * the OP is an SVOP, and the SV is a reference to a swash
+         * (i.e., an RV pointing to an HV).
+         */
+	return (o->op_private & (OPpTRANS_TO_UTF|OPpTRANS_FROM_UTF))
+		? OPc_SVOP : OPc_PVOP;
 
     case OA_LOOP:
 	return OPc_LOOP;
@@ -213,7 +221,7 @@ make_mg_object(SV *arg, MAGIC *mg)
 static SV *
 cstring(SV *sv)
 {
-    SV *sstr = newSVpv("", 0);
+    SV *sstr = newSVpvn("", 0);
     STRLEN len;
     char *s;
 
@@ -266,7 +274,7 @@ cstring(SV *sv)
 static SV *
 cchar(SV *sv)
 {
-    SV *sstr = newSVpv("'", 0);
+    SV *sstr = newSVpvn("'", 1);
     STRLEN n_a;
     char *s = SvPV(sv, n_a);
 
@@ -446,6 +454,7 @@ BOOT:
 #define B_init_av()	PL_initav
 #define B_main_root()	PL_main_root
 #define B_main_start()	PL_main_start
+#define B_amagic_generation()	PL_amagic_generation
 #define B_comppadlist()	(PL_main_cv ? CvPADLIST(PL_main_cv) : CvPADLIST(PL_compcv))
 #define B_sv_undef()	&PL_sv_undef
 #define B_sv_yes()	&PL_sv_yes
@@ -462,6 +471,9 @@ B_main_root()
 
 B::OP
 B_main_start()
+
+long 
+B_amagic_generation()
 
 B::AV
 B_comppadlist()
@@ -592,7 +604,7 @@ threadsv_names()
 
 	EXTEND(sp, len);
 	for (i = 0; i < len; i++)
-	    PUSHs(sv_2mortal(newSVpv(&PL_threadsv_names[i], 1)));
+	    PUSHs(sv_2mortal(newSVpvn(&PL_threadsv_names[i], 1)));
 #endif
 
 
@@ -800,6 +812,7 @@ LOOP_lastop(o)
 #define COP_cop_seq(o)	o->cop_seq
 #define COP_arybase(o)	o->cop_arybase
 #define COP_line(o)	o->cop_line
+#define COP_warnings(o)	o->cop_warnings
 
 MODULE = B	PACKAGE = B::COP		PREFIX = COP_
 
@@ -825,6 +838,10 @@ COP_arybase(o)
 
 U16
 COP_line(o)
+	B::COP	o
+
+B::SV
+COP_warnings(o)
 	B::COP	o
 
 MODULE = B	PACKAGE = B::SV		PREFIX = Sv
@@ -871,10 +888,10 @@ packiv(sv)
 	     */
 	    wp[0] = htonl(((U32)iv) >> (sizeof(IV)*4));
 	    wp[1] = htonl(iv & 0xffffffff);
-	    ST(0) = sv_2mortal(newSVpv((char *)wp, 8));
+	    ST(0) = sv_2mortal(newSVpvn((char *)wp, 8));
 	} else {
 	    U32 w = htonl((U32)SvIVX(sv));
-	    ST(0) = sv_2mortal(newSVpv((char *)&w, 4));
+	    ST(0) = sv_2mortal(newSVpvn((char *)&w, 4));
 	}
 
 MODULE = B	PACKAGE = B::NV		PREFIX = Sv
@@ -1005,7 +1022,7 @@ BmTABLE(sv)
     CODE:
 	str = SvPV(sv, len);
 	/* Boyer-Moore table is just after string and its safety-margin \0 */
-	ST(0) = sv_2mortal(newSVpv(str + len + 1, 256));
+	ST(0) = sv_2mortal(newSVpvn(str + len + 1, 256));
 
 MODULE = B	PACKAGE = B::GV		PREFIX = Gv
 
@@ -1013,7 +1030,7 @@ void
 GvNAME(gv)
 	B::GV	gv
     CODE:
-	ST(0) = sv_2mortal(newSVpv(GvNAME(gv), GvNAMELEN(gv)));
+	ST(0) = sv_2mortal(newSVpvn(GvNAME(gv), GvNAMELEN(gv)));
 
 B::HV
 GvSTASH(gv)
@@ -1249,7 +1266,7 @@ HvARRAY(hv)
 	    (void)hv_iterinit(hv);
 	    EXTEND(sp, HvKEYS(hv) * 2);
 	    while (sv = hv_iternextsv(hv, &key, &len)) {
-		PUSHs(newSVpv(key, len));
+		PUSHs(newSVpvn(key, len));
 		PUSHs(make_sv_object(sv_newmortal(), sv));
 	    }
 	}

@@ -1,6 +1,6 @@
 /*    doio.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -417,8 +417,8 @@ nextargv(register GV *gv)
     int filedev;
     int fileino;
 #endif
-    int fileuid;
-    int filegid;
+    Uid_t fileuid;
+    Gid_t filegid;
 
     if (!PL_argvoutgv)
 	PL_argvoutgv = gv_fetchpv("ARGVOUT",TRUE,SVt_PVIO);
@@ -913,7 +913,10 @@ do_print(register SV *sv, PerlIO *fp)
 	if (SvIOK(sv)) {
 	    if (SvGMAGICAL(sv))
 		mg_get(sv);
-	    PerlIO_printf(fp, "%ld", (long)SvIVX(sv));
+	    if (SvIsUV(sv))		/* XXXX 64-bit? */
+		PerlIO_printf(fp, "%lu", (unsigned long)SvUVX(sv));
+	    else
+		PerlIO_printf(fp, "%ld", (long)SvIVX(sv));
 	    return !PerlIO_error(fp);
 	}
 	/* FALL THROUGH */
@@ -1001,11 +1004,7 @@ my_lstat(ARGSproto)
     sv = POPs;
     PUTBACK;
     sv_setpv(PL_statname,SvPV(sv, n_a));
-#ifdef HAS_LSTAT
     PL_laststatval = PerlLIO_lstat(SvPV(sv, n_a),&PL_statcache);
-#else
-    PL_laststatval = PerlLIO_stat(SvPV(sv, n_a),&PL_statcache);
-#endif
     if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(SvPV(sv, n_a), '\n'))
 	warner(WARN_NEWLINE, PL_warn_nl, "lstat");
     return PL_laststatval;
@@ -1060,6 +1059,12 @@ do_execfree(void)
 
 bool
 do_exec(char *cmd)
+{
+    return do_exec3(cmd,0,0);
+}
+
+bool
+do_exec3(char *cmd, int fd, int do_report)
 {
     register char **a;
     register char *s;
@@ -1141,9 +1146,15 @@ do_exec(char *cmd)
 	}
 	{
 	    dTHR;
+	    int e = errno;
+
 	    if (ckWARN(WARN_EXEC))
 		warner(WARN_EXEC, "Can't exec \"%s\": %s", 
 		    PL_Argv[0], Strerror(errno));
+	    if (do_report) {
+		PerlLIO_write(fd, (void*)&e, sizeof(int));
+		PerlLIO_close(fd);
+	    }
 	}
     }
     do_execfree();
@@ -1302,11 +1313,7 @@ nothing in the core.
 		    tot--;
 	    }
 	    else {	/* don't let root wipe out directories without -U */
-#ifdef HAS_LSTAT
 		if (PerlLIO_lstat(s,&PL_statbuf) < 0 || S_ISDIR(PL_statbuf.st_mode))
-#else
-		if (PerlLIO_stat(s,&PL_statbuf) < 0 || S_ISDIR(PL_statbuf.st_mode))
-#endif
 		    tot--;
 		else {
 		    if (UNLINK(s))
@@ -1499,6 +1506,7 @@ do_ipcctl(I32 optype, SV **mark, SV **sp)
 #endif
 #ifdef HAS_SEM
     case OP_SEMCTL:
+#ifdef Semctl
 	if (cmd == IPC_STAT || cmd == IPC_SET)
 	    infosize = sizeof(struct semid_ds);
 	else if (cmd == GETALL || cmd == SETALL)
@@ -1514,6 +1522,9 @@ do_ipcctl(I32 optype, SV **mark, SV **sp)
 		/* "short" is technically wrong but much more portable
 		   than guessing about u_?short(_t)? */
 	}
+#else
+	croak("%s not implemented", PL_op_desc[optype]);
+#endif
 	break;
 #endif
 #if !defined(HAS_MSG) || !defined(HAS_SEM) || !defined(HAS_SHM)
@@ -1555,10 +1566,14 @@ do_ipcctl(I32 optype, SV **mark, SV **sp)
 #endif
 #ifdef HAS_SEM
     case OP_SEMCTL: {
+#ifdef Semctl
             union semun unsemds;
 
             unsemds.buf = (struct semid_ds *)a;
 	    ret = Semctl(id, n, cmd, unsemds);
+#else
+	    croak("%s not implemented", PL_op_desc[optype]);
+#endif
         }
 	break;
 #endif
@@ -1615,12 +1630,6 @@ do_msgrcv(SV **mark, SV **sp)
     msize = SvIVx(*++mark);
     mtype = (long)SvIVx(*++mark);
     flags = SvIVx(*++mark);
-    if (SvTHINKFIRST(mstr)) {
-	if (SvREADONLY(mstr))
-	    croak("Can't msgrcv to readonly var");
-	if (SvROK(mstr))
-	    sv_unref(mstr);
-    }
     SvPV_force(mstr, len);
     mbuf = SvGROW(mstr, sizeof(long)+msize+1);
     

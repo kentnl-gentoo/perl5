@@ -450,10 +450,25 @@ public:
     virtual int		Putenv(const char *envstring, int &err) = 0;
     virtual char *	LibPath(char *patchlevel) =0;
     virtual char *	SiteLibPath(char *patchlevel) =0;
+    virtual int		Uname(struct utsname *name, int &err) =0;
+    virtual char *	Getenv_len(const char *varname, unsigned long *len, int &err) = 0;
+#ifdef HAS_ENVGETENV
+    virtual char *	ENVGetenv(const char *varname, int &err) = 0;
+    virtual char *	ENVGetenv_len(const char *varname, unsigned long *len, int &err) = 0;
+#endif
 };
 
 #define PerlEnv_putenv(str)		PL_piENV->Putenv((str), ErrorNo())
 #define PerlEnv_getenv(str)		PL_piENV->Getenv((str), ErrorNo())
+#define PerlEnv_getenv_len(str,l)	PL_piENV->Getenv_len((str), (l), ErrorNo())
+#ifdef HAS_ENVGETENV
+#  define PerlEnv_ENVgetenv(str)	PL_piENV->ENVGetenv((str), ErrorNo())
+#  define PerlEnv_ENVgetenv_len(str,l)	PL_piENV->ENVGetenv_len((str), (l), ErrorNo())
+#else
+#  define PerlEnv_ENVgetenv(str)	PerlEnv_getenv((str))
+#  define PerlEnv_ENVgetenv_len(str,l)	PerlEnv_getenv_len((str),(l))
+#endif
+#define PerlEnv_uname(name)		PL_piENV->Uname((name), ErrorNo())
 #ifdef WIN32
 #define PerlEnv_lib_path(str)		PL_piENV->LibPath((str))
 #define PerlEnv_sitelib_path(str)	PL_piENV->SiteLibPath((str))
@@ -463,6 +478,15 @@ public:
 
 #define PerlEnv_putenv(str)		putenv((str))
 #define PerlEnv_getenv(str)		getenv((str))
+#define PerlEnv_getenv_len(str,l)	getenv_len((str), (l))
+#ifdef HAS_ENVGETENV
+#  define PerlEnv_ENVgetenv(str)	ENVgetenv((str))
+#  define PerlEnv_ENVgetenv_len(str,l)	ENVgetenv_len((str), (l))
+#else
+#  define PerlEnv_ENVgetenv(str)	PerlEnv_getenv((str))
+#  define PerlEnv_ENVgetenv_len(str,l)	PerlEnv_getenv_len((str), (l))
+#endif
+#define PerlEnv_uname(name)		uname((name))
 
 #endif	/* PERL_OBJECT */
 
@@ -573,7 +597,11 @@ public:
 #define PerlLIO_ioctl(fd, u, buf)	ioctl((fd), (u), (buf))
 #define PerlLIO_isatty(fd)		isatty((fd))
 #define PerlLIO_lseek(fd, offset, mode)	lseek((fd), (offset), (mode))
+#ifdef HAS_LSTAT
 #define PerlLIO_lstat(name, buf)	lstat((name), (buf))
+#else
+#define PerlLIO_lstat(name, buf)	PerlLIO_stat((name), (buf))
+#endif
 #define PerlLIO_mktemp(file)		mktemp((file))
 #define PerlLIO_mkstemp(file)		mkstemp((file))
 #define PerlLIO_open(file, flag)	open((file), (flag))

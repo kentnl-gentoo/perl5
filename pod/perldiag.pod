@@ -51,10 +51,10 @@ no useful value.  See L<perlmod>.
 (F) The "use" keyword is recognized and executed at compile time, and returns
 no useful value.  See L<perlmod>.
 
-=item '_' allowed only after types %s
+=item '!' allowed only after types %s
 
-(F) The '_' is allowed in pack() and unpack() only after certain types.
-See L<perlfunc>.
+(F) The '!' is allowed in pack() and unpack() only after certain types.
+See L<perlfunc/pack>.
 
 =item % may only be used in unpack
 
@@ -201,6 +201,11 @@ if you meant it literally.   See L<perlre>.
 
 (F) You had a pack template that specified an absolute position outside
 the string being unpacked.  See L<perlfunc/pack>.
+
+=item <> should be quotes
+
+(F) You wrote C<require E<lt>fileE<gt>> when you should have written
+C<require 'file'>.
 
 =item accept() on closed fd
 
@@ -399,7 +404,7 @@ Perl yourself.
 =item Bareword "%s" not allowed while "strict subs" in use
 
 (F) With "strict subs" in use, a bareword is only allowed as a
-subroutine identifier, in curly braces or to the left of the "=>" symbol.
+subroutine identifier, in curly brackets or to the left of the "=>" symbol.
 Perhaps you need to predeclare a subroutine?
 
 =item Bareword "%s" refers to nonexistent package
@@ -429,6 +434,12 @@ the return value of your socket() call?  See L<perlfunc/bind>.
 =item Bizarre copy of %s in %s
 
 (P) Perl detected an attempt to copy an internal value that is not copiable.
+
+=item Buffer overflow in prime_env_iter: %s
+
+(W) A warning peculiar to VMS.  While Perl was preparing to iterate over
+%ENV, it encountered a logical name or symbol definition which was too long,
+so it was truncated to the string shown.
 
 =item Callback called exit
 
@@ -463,6 +474,13 @@ there isn't a current block.  Note that an "if" or "else" block doesn't
 count as a "loopish" block, as doesn't a block given to sort().  You can
 usually double the curlies to get the same effect though, because the inner
 curlies will be considered a block that loops once.  See L<perlfunc/next>.
+
+=item Can't read CRTL environ
+
+(S) A warning peculiar to VMS.  Perl tried to read an element of %ENV
+from the CRTL's internal environment array and discovered the array was
+missing.  You need to figure out where your CRTL misplaced its environ
+or define F<PERL_ENV_TABLES> (see L<perlvms>) so that environ is not searched.
 
 =item Can't "redo" outside a block
 
@@ -738,13 +756,15 @@ but there is no function to autoload.  Most probable causes are a misprint
 in a function/method name or a failure to C<AutoSplit> the file, say, by
 doing C<make install>.
 
-=item Can't locate %s in @INC
+=item Can't locate %s
 
-(F) You said to do (or require, or use) a file that couldn't be found
-in any of the libraries mentioned in @INC.  Perhaps you need to set the
-PERL5LIB or PERL5OPT environment variable to say where the extra library
-is, or maybe the script needs to add the library name to @INC.  Or maybe
-you just misspelled the name of the file.  See L<perlfunc/require>.
+(F) You said to C<do> (or C<require>, or C<use>) a file that couldn't be
+found. Perl looks for the file in all the locations mentioned in @INC,
+unless the file name included the full path to the file.  Perhaps you need
+to set the PERL5LIB or PERL5OPT environment variable to say where the extra
+library is, or maybe the script needs to add the library name to @INC.  Or
+maybe you just misspelled the name of the file.  See L<perlfunc/require>
+and L<lib>.
 
 =item Can't locate object method "%s" via package "%s"
 
@@ -958,18 +978,23 @@ weren't.
 subscript.  But to the left of the brackets was an expression that
 didn't look like an array reference, or anything else subscriptable.
 
+=item Can't weaken a nonreference
+
+(F) You attempted to weaken something that was not a reference.  Only
+references can be weakened.
+
 =item Can't x= to read-only value
 
 (F) You tried to repeat a constant value (often the undefined value) with
 an assignment operator, which implies modifying the value itself.
 Perhaps you need to copy the value to a temporary, and repeat that.
 
-=item Cannot find an opnumber for "%s"
+=item Can't find an opnumber for "%s"
 
 (F) A string of a form C<CORE::word> was given to prototype(), but
 there is no builtin with the name C<word>.
 
-=item Cannot resolve method `%s' overloading `%s' in package `%s'
+=item Can't resolve method `%s' overloading `%s' in package `%s'
 
 (F|P) Error resolving overloading specified by a method name (as
 opposed to a subroutine reference): no such method callable via the
@@ -1340,14 +1365,18 @@ about 250 characters for simple names, and somewhat more for compound
 names (like C<$A::B>).  You've exceeded Perl's limits.  Future
 versions of Perl are likely to eliminate these arbitrary limitations.
 
-=item Ill-formed logical name |%s| in prime_env_iter
+=item Ill-formed CRTL environ value "%s"
 
-(W) A warning peculiar to VMS.  A logical name was encountered when preparing
-to iterate over %ENV which violates the syntactic rules governing logical
-names.  Because it cannot be translated normally, it is skipped, and will not
-appear in %ENV.  This may be a benign occurrence, as some software packages
-might directly modify logical name tables and introduce nonstandard names,
-or it may indicate that a logical name table has been corrupted.
+(W) A warning peculiar to VMS.  Perl tried to read the CRTL's internal
+environ array, and encountered an element without the C<=> delimiter
+used to spearate keys from values.  The element is ignored.
+
+=item Ill-formed message in prime_env_iter: |%s|
+
+(W) A warning peculiar to VMS.  Perl tried to read a logical name
+or CLI symbol definition when preparing to iterate over %ENV, and
+didn't see the expected delimiter between key and value, so the
+line was ignored.
 
 =item Illegal character %s (carriage return)
 
@@ -1378,16 +1407,25 @@ logic, or you need to put a conditional in to guard against meaningless input.
 (F) You tried to divide a number by 0 to get the remainder.  Most numbers
 don't take to this kindly.
 
-=item Illegal octal digit
+=item Illegal binary digit %s
+
+(F) You used a digit other than 0 and 1 in a binary number.
+
+=item Illegal octal digit %s
 
 (F) You used an 8 or 9 in a octal number.
 
-=item Illegal octal digit ignored
+=item Illegal binary digit %s ignored
+
+(W) You may have tried to use a digit other than 0 or 1 in a binary number.
+Interpretation of the binary number stopped before the offending digit.
+
+=item Illegal octal digit %s ignored
 
 (W) You may have tried to use an 8 or 9 in a octal number.  Interpretation
 of the octal number stopped before the 8 or 9.
 
-=item Illegal hex digit ignored
+=item Illegal hex digit %s ignored
 
 (W) You may have tried to use a character other than 0 - 9 or A - F in a
 hexadecimal number.  Interpretation of the hexadecimal number stopped
@@ -1432,17 +1470,16 @@ C<$ENV{ENV}> or C<$ENV{BASH_ENV}> are derived from data supplied (or
 potentially supplied) by the user.  The script must set the path to a
 known value, using trustworthy data.  See L<perlsec>.
 
-=item Integer overflow in hex number
+=item Integer overflow in %s number
 
-(S) The literal hex number you have specified is too big for your
-architecture. On a 32-bit architecture the largest hex literal is
-0xFFFFFFFF.
-
-=item Integer overflow in octal number
-
-(S) The literal octal number you have specified is too big for your
-architecture. On a 32-bit architecture the largest octal literal is
-037777777777.
+(S) The literal hex, octal or binary number you have specified is
+too big for your architecture. On a 32-bit architecture the largest
+literal hex, octal or binary number representable without overflow
+is 0xFFFFFFFF, 037777777777, or 0b11111111111111111111111111111111
+respectively.  Note that Perl transparently promotes decimal literals
+to a floating point representation internally--subject to loss of
+precision errors in subsequent operations--so this limit usually
+doesn't apply to decimal literals.
 
 =item Internal inconsistency in tracking vforks
 
@@ -1571,11 +1608,11 @@ construction, but the command was missing or blank.
 (S) This is an educated guess made in conjunction with the message "%s
 found where operator expected".  Often the missing operator is a comma.
 
-=item Missing right bracket
+=item Missing right curly or square bracket
 
-(F) The lexer counted more opening curly brackets (braces) than closing ones.
-As a general rule, you'll find it's missing near the place you were last
-editing.
+(F) The lexer counted more opening curly or square brackets than
+closing ones.  As a general rule, you'll find it's missing near the place
+you were last editing.
 
 =item Modification of a read-only value attempted
 
@@ -1763,7 +1800,7 @@ Say C<kill -l> in your shell to see the valid signal names on your system.
 
 =item no UTC offset information; assuming local time is UTC
 
-(S) A warning peculiar to VMS.  Per was unable to find the local
+(S) A warning peculiar to VMS.  Perl was unable to find the local
 timezone offset, so it's assuming that local system time is equivalent
 to UTC.  If it's not, define the logical name F<SYS$TIMEZONE_DIFFERENTIAL>
 to translate to the number of seconds which need to be added to UTC to
@@ -1950,6 +1987,11 @@ See L<perlform>.
 (P) The savestack was requested to restore more localized values than there
 are in the savestack.
 
+=item panic: del_backref
+
+(P) Failed an internal consistency check while trying to reset a weak
+reference.
+
 =item panic: die %s
 
 (P) We popped the context stack to an eval context, and then discovered
@@ -1988,6 +2030,10 @@ and then discovered it wasn't a context we know how to do a goto in.
 
 (P) The lexer got into a bad state parsing a string with brackets.
 
+=item panic: kid popen errno read
+
+(F) forked child returned an incomprehensible message about its errno.
+
 =item panic: last
 
 (P) We popped the context stack to a block context, and then discovered
@@ -2005,6 +2051,11 @@ invalid enum on the top of it.
 =item panic: malloc
 
 (P) Something requested a negative number of bytes of malloc.
+
+=item panic: magic_killbackrefs
+
+(P) Failed an internal consistency check while trying to reset all weak
+references to an object.
 
 =item panic: mapstart
 
@@ -2247,6 +2298,11 @@ to use parens. In any case, a hash requires key/value B<pairs>.
     %hash = [ qw/ an anon array / ];	# WRONG
     %hash = ( one => 1, two => 2, );	# right
     %hash = qw( one 1 two 2 );			# also fine
+
+=item Reference is already weak
+
+(W) You have attempted to weaken a reference that is already weak.
+Doing so has no effect.
 
 =item Reference miscount in sv_replace()
 
@@ -2613,6 +2669,17 @@ will deny it.
 if the last stat that wrote to the stat buffer already went past
 the symlink to get to the real file.  Use an actual filename instead.
 
+=item This Perl can't reset CRTL eviron elements (%s)
+
+=item This Perl can't set CRTL environ elements (%s=%s)
+
+(W) Warnings peculiar to VMS.  You tried to change or delete an element
+of the CRTL's internal environ array, but your copy of Perl wasn't
+built with a CRTL that contained the setenv() function.  You'll need to
+rebuild Perl with a CRTL that does, or redefine F<PERL_ENV_TABLES> (see
+L<perlvms>) so that the environ array isn't the target of the change to
+%ENV which produced the warning.
+
 =item times not implemented
 
 (F) Your version of the C library apparently doesn't do times().  I suspect
@@ -2767,18 +2834,25 @@ representative, who probably put it there in the first place.
 
 (F) There are no byte-swapping functions for a machine with this byte order.
 
+=item Unknown process %x sent message to prime_env_iter: %s
+
+(P) An error peculiar to VMS.  Perl was reading values for %ENV before
+iterating over it, and someone else stuck a message in the stream of
+data Perl expected.  Someone's very confused, or perhaps trying to
+subvert Perl's population of %ENV for nefarious purposes.
+
 =item unmatched () in regexp
 
 (F) Unbackslashed parentheses must always be balanced in regular
 expressions.  If you're a vi user, the % key is valuable for finding
 the matching parenthesis.  See L<perlre>.
 
-=item Unmatched right bracket
+=item Unmatched right %s bracket
 
-(F) The lexer counted more closing curly brackets (braces) than opening
-ones, so you're probably missing an opening bracket.  As a general
-rule, you'll find the missing one (so to speak) near the place you were
-last editing.
+(F) The lexer counted more closing curly or square brackets than
+opening ones, so you're probably missing a matching opening bracket.
+As a general rule, you'll find the missing one (so to speak) near the
+place you were last editing.
 
 =item unmatched [] in regexp
 
@@ -2918,7 +2992,7 @@ bad side effects.
 
 (W) An undefined value was used as if it were already defined.  It was
 interpreted as a "" or a 0, but maybe it was a mistake.  To suppress this
-warning assign an initial value to your variables.
+warning assign a defined value to your variables.
 
 =item Useless use of "re" pragma
 
@@ -2967,6 +3041,13 @@ or C<readdir()> as a boolean value.  Each of these constructs can return a
 value of "0"; that would make the conditional expression false, which is
 probably not what you intended.  When using these constructs in conditional
 expressions, test their values with the C<defined> operator.
+
+=item Value of CLI symbol "%s" too long
+
+(W) A warning peculiar to VMS.  Perl tried to read the value of an %ENV
+element from a CLI symbol table, and found a resultant string longer
+than 1024 characters.  The return value has been truncated to 1024
+characters.
 
 =item Variable "%s" is not imported%s
 

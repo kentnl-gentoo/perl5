@@ -1,6 +1,6 @@
 /*    pp_ctl.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -29,6 +29,7 @@
 #define CALLOP this->*PL_op
 #else
 #define CALLOP *PL_op
+static void *docatch_body _((va_list args));
 static OP *docatch _((OP *o));
 static OP *dofindlabel _((OP *o, char *label, OP **opstack, OP **oplimit));
 static void doparseform _((SV *sv));
@@ -41,6 +42,7 @@ static void save_lines _((AV *array, SV *sv));
 static I32 sortcv _((SV *a, SV *b));
 static void qsortsv _((SV **array, size_t num_elts, I32 (*fun)(SV *a, SV *b)));
 static OP *doeval _((int gimme, OP** startop));
+static PerlIO *doopen_pmc _((const char *name, const char *mode));
 static I32 sv_ncmp _((SV *a, SV *b));
 static I32 sv_i_ncmp _((SV *a, SV *b));
 static I32 amagic_ncmp _((SV *a, SV *b));
@@ -170,8 +172,8 @@ PP(pp_substcont)
 	if (cx->sb_once || !CALLREGEXEC(rx, s, cx->sb_strend, orig,
 				     s == m, cx->sb_targ, NULL,
 				     ((cx->sb_rflags & REXEC_COPY_STR)
-				      ? REXEC_IGNOREPOS 
-				      : (REXEC_COPY_STR|REXEC_IGNOREPOS))))
+				      ? (REXEC_IGNOREPOS|REXEC_NOT_FIRST)
+				      : (REXEC_COPY_STR|REXEC_IGNOREPOS|REXEC_NOT_FIRST))))
 	{
 	    SV *targ = cx->sb_targ;
 	    sv_catpvn(dstr, s, cx->sb_strend - s);
@@ -199,16 +201,16 @@ PP(pp_substcont)
 	    RETURNOP(pm->op_next);
 	}
     }
-    if (rx->subbase && rx->subbase != orig) {
+    if (RX_MATCH_COPIED(rx) && rx->subbeg != orig) {
 	m = s;
 	s = orig;
-	cx->sb_orig = orig = rx->subbase;
+	cx->sb_orig = orig = rx->subbeg;
 	s = orig + (m - s);
 	cx->sb_strend = s + (cx->sb_strend - m);
     }
-    cx->sb_m = m = rx->startp[0];
+    cx->sb_m = m = rx->startp[0] + orig;
     sv_catpvn(dstr, s, m-s);
-    cx->sb_s = rx->endp[0];
+    cx->sb_s = rx->endp[0] + orig;
     cx->sb_rxtainted |= RX_MATCH_TAINTED(rx);
     rxres_save(&cx->sb_rxres, rx);
     RETURNOP(pm->op_pmreplstart);
@@ -229,13 +231,13 @@ rxres_save(void **rsp, REGEXP *rx)
 	*rsp = (void*)p;
     }
 
-    *p++ = (UV)rx->subbase;
-    rx->subbase = Nullch;
+    *p++ = (UV)(RX_MATCH_COPIED(rx) ? rx->subbeg : Nullch);
+    RX_MATCH_COPIED_off(rx);
 
     *p++ = rx->nparens;
 
     *p++ = (UV)rx->subbeg;
-    *p++ = (UV)rx->subend;
+    *p++ = (UV)rx->sublen;
     for (i = 0; i <= rx->nparens; ++i) {
 	*p++ = (UV)rx->startp[i];
 	*p++ = (UV)rx->endp[i];
@@ -248,17 +250,18 @@ rxres_restore(void **rsp, REGEXP *rx)
     UV *p = (UV*)*rsp;
     U32 i;
 
-    Safefree(rx->subbase);
-    rx->subbase = (char*)(*p);
+    if (RX_MATCH_COPIED(rx))
+	Safefree(rx->subbeg);
+    RX_MATCH_COPIED_set(rx, *p);
     *p++ = 0;
 
     rx->nparens = *p++;
 
     rx->subbeg = (char*)(*p++);
-    rx->subend = (char*)(*p++);
+    rx->sublen = (I32)(*p++);
     for (i = 0; i <= rx->nparens; ++i) {
-	rx->startp[i] = (char*)(*p++);
-	rx->endp[i] = (char*)(*p++);
+	rx->startp[i] = (I32)(*p++);
+	rx->endp[i] = (I32)(*p++);
     }
 }
 
@@ -665,7 +668,7 @@ PP(pp_grepstart)
     if (PL_stack_base + *PL_markstack_ptr == SP) {
 	(void)POPMARK;
 	if (GIMME_V == G_SCALAR)
-	    XPUSHs(&PL_sv_no);
+	    XPUSHs(sv_2mortal(newSViv(0)));
 	RETURNOP(PL_op->op_next->op_next);
     }
     PL_stack_sp = PL_stack_base + *PL_markstack_ptr + 1;
@@ -1024,7 +1027,10 @@ PP(pp_range)
 {
     if (GIMME == G_ARRAY)
 	return cCONDOP->op_true;
-    return SvTRUEx(PAD_SV(PL_op->op_targ)) ? cCONDOP->op_false : cCONDOP->op_true;
+    if (SvTRUEx(PAD_SV(PL_op->op_targ)))
+	return cCONDOP->op_false;
+    else
+	return cCONDOP->op_true;
 }
 
 PP(pp_flip)
@@ -1319,7 +1325,7 @@ dounwind(I32 cxix)
 }
 
 OP *
-die_where(char *message)
+die_where(char *message, STRLEN msglen)
 {
     dSP;
     STRLEN n_a;
@@ -1330,11 +1336,10 @@ die_where(char *message)
 	SV **newsp;
 
 	if (message) {
-	    if (PL_in_eval & 4) {
+	    if (PL_in_eval & EVAL_KEEPERR) {
 		SV **svp;
-		STRLEN klen = strlen(message);
 		
-		svp = hv_fetch(ERRHV, message, klen, TRUE);
+		svp = hv_fetch(ERRHV, message, msglen, TRUE);
 		if (svp) {
 		    if (!SvIOK(*svp)) {
 			static char prefix[] = "\t(in cleanup) ";
@@ -1343,11 +1348,11 @@ die_where(char *message)
 			(void)SvIOK_only(*svp);
 			if (!SvPOK(err))
 			    sv_setpv(err,"");
-			SvGROW(err, SvCUR(err)+sizeof(prefix)+klen);
+			SvGROW(err, SvCUR(err)+sizeof(prefix)+msglen);
 			sv_catpvn(err, prefix, sizeof(prefix)-1);
-			sv_catpvn(err, message, klen);
+			sv_catpvn(err, message, msglen);
 			if (ckWARN(WARN_UNSAFE)) {
-			    STRLEN start = SvCUR(err)-klen-sizeof(prefix)+1;
+			    STRLEN start = SvCUR(err)-msglen-sizeof(prefix)+1;
 			    warner(WARN_UNSAFE, SvPVX(err)+start);
 			}
 		    }
@@ -1355,10 +1360,10 @@ die_where(char *message)
 		}
 	    }
 	    else
-		sv_setpv(ERRSV, message);
+		sv_setpvn(ERRSV, message, msglen);
 	}
 	else
-	    message = SvPVx(ERRSV, n_a);
+	    message = SvPVx(ERRSV, msglen);
 
 	while ((cxix = dopoptoeval(cxstack_ix)) < 0 && PL_curstackinfo->si_prev) {
 	    dounwind(-1);
@@ -1373,7 +1378,8 @@ die_where(char *message)
 
 	    POPBLOCK(cx,PL_curpm);
 	    if (CxTYPE(cx) != CXt_EVAL) {
-		PerlIO_printf(PerlIO_stderr(), "panic: die %s", message);
+		PerlIO_write(PerlIO_stderr(), "panic: die ", 11);
+		PerlIO_write(PerlIO_stderr(), message, msglen);
 		my_exit(1);
 	    }
 	    POPEVAL(cx);
@@ -1392,9 +1398,18 @@ die_where(char *message)
 	}
     }
     if (!message)
-	message = SvPVx(ERRSV, n_a);
-    PerlIO_printf(PerlIO_stderr(), "%s",message);
-    PerlIO_flush(PerlIO_stderr());
+	message = SvPVx(ERRSV, msglen);
+    {
+#ifdef USE_SFIO
+	/* SFIO can really mess with your errno */
+	int e = errno;
+#endif
+	PerlIO_write(PerlIO_stderr(), message, msglen);
+	(void)PerlIO_flush(PerlIO_stderr());
+#ifdef USE_SFIO
+	errno = e;
+#endif
+    }
     my_failure_exit();
     /* NOTREACHED */
     return 0;
@@ -1489,7 +1504,8 @@ PP(pp_caller)
 	PUSHs(&PL_sv_undef);
     else
 	PUSHs(sv_2mortal(newSVpv(HvNAME(hv), 0)));
-    PUSHs(sv_2mortal(newSVpv(SvPVX(GvSV(cx->blk_oldcop->cop_filegv)), 0)));
+    PUSHs(sv_2mortal(newSVpvn(SvPVX(GvSV(cx->blk_oldcop->cop_filegv)),
+			      SvCUR(GvSV(cx->blk_oldcop->cop_filegv)))));
     PUSHs(sv_2mortal(newSViv((I32)cx->blk_oldcop->cop_line)));
     if (!MAXARG)
 	RETURN;
@@ -1500,7 +1516,7 @@ PP(pp_caller)
 	PUSHs(sv_2mortal(newSViv((I32)cx->blk_sub.hasargs)));
     }
     else {
-	PUSHs(sv_2mortal(newSVpv("(eval)",0)));
+	PUSHs(sv_2mortal(newSVpvn("(eval)",6)));
 	PUSHs(sv_2mortal(newSViv(0)));
     }
     gimme = (I32)cx->blk_gimme;
@@ -2120,6 +2136,7 @@ PP(pp_goto)
 	    /* Now do some callish stuff. */
 	    SAVETMPS;
 	    if (CvXSUB(cv)) {
+#ifdef PERL_XSUB_OLDSTYLE
 		if (CvOLDSTYLE(cv)) {
 		    I32 (*fp3)_((int,int,int));
 		    while (SP > mark) {
@@ -2132,7 +2149,9 @@ PP(pp_goto)
 				   items);
 		    SP = PL_stack_base + items;
 		}
-		else {
+		else
+#endif /* PERL_XSUB_OLDSTYLE */
+		{
 		    SV **newsp;
 		    I32 gimme;
 
@@ -2477,38 +2496,41 @@ save_lines(AV *array, SV *sv)
     }
 }
 
+STATIC void *
+docatch_body(va_list args)
+{
+    CALLRUNOPS();
+    return NULL;
+}
+
 STATIC OP *
 docatch(OP *o)
 {
     dTHR;
     int ret;
     OP *oldop = PL_op;
-    dJMPENV;
 
-    PL_op = o;
 #ifdef DEBUGGING
     assert(CATCH_GET == TRUE);
-    DEBUG_l(deb("Setting up local jumplevel %p, was %p\n", &cur_env, PL_top_env));
 #endif
-    JMPENV_PUSH(ret);
+    PL_op = o;
+ redo_body:
+    CALLPROTECT(&ret, FUNC_NAME_TO_PTR(docatch_body));
     switch (ret) {
-    default:				/* topmost level handles it */
-pass_the_buck:
-	JMPENV_POP;
+    case 0:
+	break;
+    case 3:
+	if (PL_restartop) {
+	    PL_op = PL_restartop;
+	    PL_restartop = 0;
+	    goto redo_body;
+	}
+	/* FALL THROUGH */
+    default:
 	PL_op = oldop;
 	JMPENV_JUMP(ret);
 	/* NOTREACHED */
-    case 3:
-	if (!PL_restartop)
-	    goto pass_the_buck;
-	PL_op = PL_restartop;
-	PL_restartop = 0;
-	/* FALL THROUGH */
-    case 0:
-        CALLRUNOPS();
-	break;
     }
-    JMPENV_POP;
     PL_op = oldop;
     return Nullop;
 }
@@ -2591,7 +2613,7 @@ doeval(int gimme, OP** startop)
     AV* comppadlist;
     I32 i;
 
-    PL_in_eval = 1;
+    PL_in_eval = EVAL_INEVAL;
 
     PUSHMARK(SP);
 
@@ -2634,7 +2656,7 @@ doeval(int gimme, OP** startop)
     PL_min_intro_pending = 0;
     PL_padix = 0;
 #ifdef USE_THREADS
-    av_store(PL_comppad_name, 0, newSVpv("@_", 2));
+    av_store(PL_comppad_name, 0, newSVpvn("@_", 2));
     PL_curpad[0] = (SV*)newAV();
     SvPADMY_on(PL_curpad[0]);	/* XXX Needed? */
 #endif /* USE_THREADS */
@@ -2668,9 +2690,9 @@ doeval(int gimme, OP** startop)
     PL_curcop = &PL_compiling;
     PL_curcop->cop_arybase = 0;
     SvREFCNT_dec(PL_rs);
-    PL_rs = newSVpv("\n", 1);
+    PL_rs = newSVpvn("\n", 1);
     if (saveop && saveop->op_flags & OPf_SPECIAL)
-	PL_in_eval |= 4;
+	PL_in_eval |= EVAL_KEEPERR;
     else
 	sv_setpv(ERRSV,"");
     if (yyparse() || PL_error_count || !PL_eval_root) {
@@ -2758,6 +2780,38 @@ doeval(int gimme, OP** startop)
     RETURNOP(PL_eval_start);
 }
 
+STATIC PerlIO *
+doopen_pmc(const char *name, const char *mode)
+{
+    STRLEN namelen = strlen(name);
+    PerlIO *fp;
+
+    if (namelen > 3 && strcmp(name + namelen - 3, ".pm") == 0) {
+	SV *pmcsv = newSVpvf("%s%c", name, 'c');
+	char *pmc = SvPV_nolen(pmcsv);
+	Stat_t pmstat;
+	Stat_t pmcstat;
+	if (PerlLIO_stat(pmc, &pmcstat) < 0) {
+	    fp = PerlIO_open(name, mode);
+	}
+	else {
+	    if (PerlLIO_stat(name, &pmstat) < 0 ||
+	        pmstat.st_mtime < pmcstat.st_mtime)
+	    {
+		fp = PerlIO_open(pmc, mode);
+	    }
+	    else {
+		fp = PerlIO_open(name, mode);
+	    }
+	}
+	SvREFCNT_dec(pmcsv);
+    }
+    else {
+	fp = PerlIO_open(name, mode);
+    }
+    return fp;
+}
+
 PP(pp_require)
 {
     djSP;
@@ -2808,7 +2862,7 @@ PP(pp_require)
     )
     {
 	tryname = name;
-	tryrsfp = PerlIO_open(name,PERL_SCRIPT_MODE);
+	tryrsfp = doopen_pmc(name,PERL_SCRIPT_MODE);
     }
     else {
 	AV *ar = GvAVn(PL_incgv);
@@ -2832,7 +2886,7 @@ PP(pp_require)
 #endif
 		TAINT_PROPER("require");
 		tryname = SvPVX(namesv);
-		tryrsfp = PerlIO_open(tryname, PERL_SCRIPT_MODE);
+		tryrsfp = doopen_pmc(tryname, PERL_SCRIPT_MODE);
 		if (tryrsfp) {
 		    if (tryname[0] == '.' && tryname[1] == '/')
 			tryname += 2;
@@ -2846,23 +2900,28 @@ PP(pp_require)
     SvREFCNT_dec(namesv);
     if (!tryrsfp) {
 	if (PL_op->op_type == OP_REQUIRE) {
-	    SV *msg = sv_2mortal(newSVpvf("Can't locate %s in @INC", name));
-	    SV *dirmsgsv = NEWSV(0, 0);
-	    AV *ar = GvAVn(PL_incgv);
-	    I32 i;
-	    if (instr(SvPVX(msg), ".h "))
-		sv_catpv(msg, " (change .h to .ph maybe?)");
-	    if (instr(SvPVX(msg), ".ph "))
-		sv_catpv(msg, " (did you run h2ph?)");
-	    sv_catpv(msg, " (@INC contains:");
-	    for (i = 0; i <= AvFILL(ar); i++) {
-		char *dir = SvPVx(*av_fetch(ar, i, TRUE), n_a);
-		sv_setpvf(dirmsgsv, " %s", dir);
-	        sv_catsv(msg, dirmsgsv);
+	    char *msgstr = name;
+	    if (namesv) {			/* did we lookup @INC? */
+		SV *msg = sv_2mortal(newSVpv(msgstr,0));
+		SV *dirmsgsv = NEWSV(0, 0);
+		AV *ar = GvAVn(PL_incgv);
+		I32 i;
+		sv_catpvn(msg, " in @INC", 8);
+		if (instr(SvPVX(msg), ".h "))
+		    sv_catpv(msg, " (change .h to .ph maybe?)");
+		if (instr(SvPVX(msg), ".ph "))
+		    sv_catpv(msg, " (did you run h2ph?)");
+		sv_catpv(msg, " (@INC contains:");
+		for (i = 0; i <= AvFILL(ar); i++) {
+		    char *dir = SvPVx(*av_fetch(ar, i, TRUE), n_a);
+		    sv_setpvf(dirmsgsv, " %s", dir);
+		    sv_catsv(msg, dirmsgsv);
+		}
+		sv_catpvn(msg, ")", 1);
+		SvREFCNT_dec(dirmsgsv);
+		msgstr = SvPV_nolen(msg);
 	    }
-	    sv_catpvn(msg, ")", 1);
-    	    SvREFCNT_dec(dirmsgsv);
-	    DIE("%_", msg);
+	    DIE("Can't locate %s", msgstr);
 	}
 
 	RETPUSHUNDEF;
@@ -2876,7 +2935,7 @@ PP(pp_require)
 
     ENTER;
     SAVETMPS;
-    lex_start(sv_2mortal(newSVpv("",0)));
+    lex_start(sv_2mortal(newSVpvn("",0)));
     SAVEGENERICSV(PL_rsfp_filters);
     PL_rsfp_filters = Nullav;
 
@@ -3092,7 +3151,7 @@ PP(pp_entertry)
     PUSHEVAL(cx, 0, 0);
     PL_eval_root = PL_op;		/* Only needed so that goto works right. */
 
-    PL_in_eval = 1;
+    PL_in_eval = EVAL_INEVAL;
     sv_setpv(ERRSV,"");
     PUTBACK;
     return DOCATCH(PL_op->op_next);

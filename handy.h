@@ -1,6 +1,6 @@
 /*    handy.h
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -54,7 +54,7 @@
 /* The NeXT dynamic loader headers will not build with the bool macro
    So declare them now to clear confusion.
 */
-#ifdef NeXT
+#if defined(NeXT) || defined(__NeXT__)
 # undef FALSE
 # undef TRUE
   typedef enum bool { FALSE = 0, TRUE = 1 } bool;
@@ -62,7 +62,7 @@
 # ifndef HAS_BOOL
 #  define HAS_BOOL 1
 # endif /* !HAS_BOOL */
-#endif /* NeXT */
+#endif /* NeXT || __NeXT__ */
 
 #ifndef HAS_BOOL
 # if defined(UTS) || defined(VMS)

@@ -11,11 +11,19 @@ use Config;
 
 BEGIN {
     if (-d "lib" && -f "TEST") {
-        if (!$Config{'d_fork'} ||
-	    (($Config{'extensions'} !~ /\bSocket\b/ ||
-	      $Config{'extensions'} !~ /\bIO\b/) &&
-	     !(($^O eq 'VMS') && $Config{d_socket}))) {
-	    print "1..0\n";
+	my $reason;
+	if (! $Config{'d_fork'}) {
+	    $reason = 'no fork';
+	}
+	elsif ($Config{'extensions'} !~ /\bSocket\b/) {
+	    $reason = 'Socket extension unavailable';
+	}
+	elsif ($Config{'extensions'} !~ /\bIO\b/) {
+	    $reason = 'IO extension unavailable';
+	}
+	undef $reason if $^O eq 'VMS' and $Config{d_socket};
+	if ($reason) {
+	    print "1..0 # Skip: $reason\n";
 	    exit 0;
         }
     }
@@ -28,7 +36,9 @@ use IO::Socket;
 
 $listen = IO::Socket::INET->new(Listen => 2,
 				Proto => 'tcp',
-				Timeout => 2,
+				# some systems seem to need as much as 10,
+				# so be generous with the timeout
+				Timeout => 15,
 			       ) or die "$!";
 
 print "ok 1\n";
@@ -44,7 +54,7 @@ $port = $listen->sockport;
 
 if($pid = fork()) {
 
-    $sock = $listen->accept();
+    $sock = $listen->accept() or die "accept failed: $!";
     print "ok 2\n";
 
     $sock->autoflush(1);
@@ -87,7 +97,7 @@ if($pid = fork()) {
 
 # Test various other ways to create INET sockets that should
 # also work.
-$listen = IO::Socket::INET->new(Listen => '', Timeout => 2) or die "$!";
+$listen = IO::Socket::INET->new(Listen => '', Timeout => 15) or die "$!";
 $port = $listen->sockport;
 
 if($pid = fork()) {

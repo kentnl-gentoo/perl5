@@ -1,6 +1,6 @@
 /*    util.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -889,6 +889,14 @@ mem_collxfrm(const char *s, STRLEN len, STRLEN *xlen)
 
 #endif /* USE_LOCALE_COLLATE */
 
+#define FBM_TABLE_OFFSET 2	/* Number of bytes between EOS and table*/
+
+/* As a space optimization, we do not compile tables for strings of length
+   0 and 1, and for strings of length 2 unless FBMcf_TAIL.  These are
+   special-cased in fbm_instr().
+
+   If FBMcf_TAIL, the table is created as if the string has a trailing \n. */
+
 void
 fbm_compile(SV *sv, U32 flags /* not used yet */)
 {
@@ -899,24 +907,32 @@ fbm_compile(SV *sv, U32 flags /* not used yet */)
     I32 rarest = 0;
     U32 frequency = 256;
 
+    if (flags & FBMcf_TAIL)
+	sv_catpvn(sv, "\n", 1);		/* Taken into account in fbm_instr() */
     s = (U8*)SvPV_force(sv, len);
     (void)SvUPGRADE(sv, SVt_PVBM);
-    if (len > 255 || len == 0)	/* TAIL might be on on a zero-length string. */
-	return;			/* can't have offsets that big */
+    if (len == 0)		/* TAIL might be on on a zero-length string. */
+	return;
     if (len > 2) {
-	Sv_Grow(sv,len + 258);
-	table = (unsigned char*)(SvPVX(sv) + len + 1);
-	s = table - 2;
+	I32 mlen = len;
+	unsigned char *sb;
+
+	if (mlen > 255)
+	    mlen = 255;
+	Sv_Grow(sv,len + 256 + FBM_TABLE_OFFSET);
+	table = (unsigned char*)(SvPVX(sv) + len + FBM_TABLE_OFFSET);
+	s = table - 1 - FBM_TABLE_OFFSET; /* Last char */
 	for (i = 0; i < 256; i++) {
-	    table[i] = len;
+	    table[i] = mlen;
 	}
+	table[-1] = flags;		/* Not used yet */
 	i = 0;
-	while (s >= (unsigned char*)(SvPVX(sv)))
-	    {
-		if (table[*s] == len)
-		    table[*s] = i;
-		s--,i++;
-	    }
+	sb = s - mlen;
+	while (s >= sb) {
+	    if (table[*s] == mlen)
+		table[*s] = i;
+	    s--, i++;
+	}
     }
     sv_magic(sv, Nullsv, 'B', Nullch, 0);	/* deep magic */
     SvVALID_on(sv);
@@ -930,119 +946,200 @@ fbm_compile(SV *sv, U32 flags /* not used yet */)
     }
     BmRARE(sv) = s[rarest];
     BmPREVIOUS(sv) = rarest;
+    BmUSEFUL(sv) = 100;			/* Initial value */
+    if (flags & FBMcf_TAIL)
+	SvTAIL_on(sv);
     DEBUG_r(PerlIO_printf(Perl_debug_log, "rarest char %c at %d\n",BmRARE(sv),BmPREVIOUS(sv)));
 }
+
+/* If SvTAIL(littlestr), it has a fake '\n' at end. */
+/* If SvTAIL is actually due to \Z or \z, this gives false positives
+   if multiline */
 
 char *
 fbm_instr(unsigned char *big, register unsigned char *bigend, SV *littlestr, U32 flags)
 {
     register unsigned char *s;
-    register I32 tmp;
-    register I32 littlelen;
-    register unsigned char *little;
-    register unsigned char *table;
-    register unsigned char *olds;
-    register unsigned char *oldlittle;
+    STRLEN l;
+    register unsigned char *little = (unsigned char *)SvPV(littlestr,l);
+    register STRLEN littlelen = l;
+    register I32 multiline = flags & FBMrf_MULTILINE;
 
-    if (SvTYPE(littlestr) != SVt_PVBM || !SvVALID(littlestr)) {
-	STRLEN len;
-	char *l = SvPV(littlestr,len);
-	if (!len) {
-	    if (SvTAIL(littlestr)) {	/* Can be only 0-len constant
-					   substr => we can ignore SvVALID */
-		if (PL_multiline) {
-		    char *t = "\n";
-		    if ((s = (unsigned char*)ninstr((char*)big, (char*)bigend,
-			 			    t, t + len))) {
-			return (char*)s;
-		    }
-		}
-		if (bigend > big && bigend[-1] == '\n')
-		    return (char *)(bigend - 1);
-		else
-		    return (char *) bigend;
-	    }
+    if (bigend - big < littlelen) {
+      check_tail:
+	if ( SvTAIL(littlestr) 
+	     && (bigend - big == littlelen - 1)
+	     && (littlelen == 1 
+		 || *big == *little && memEQ(big, little, littlelen - 1)))
 	    return (char*)big;
-	}
-	return ninstr((char*)big,(char*)bigend, l, l + len);
+	return Nullch;
     }
 
-    littlelen = SvCUR(littlestr);
-    if (SvTAIL(littlestr) && !PL_multiline) {	/* tail anchored? */
+    if (littlelen <= 2) {		/* Special-cased */
+	register char c;
+
+	if (littlelen == 1) {
+	    if (SvTAIL(littlestr) && !multiline) { /* Anchor only! */
+		/* Know that bigend != big.  */
+		if (bigend[-1] == '\n')
+		    return (char *)(bigend - 1);
+		return (char *) bigend;
+	    }
+	    s = big;
+	    while (s < bigend) {
+		if (*s == *little)
+		    return (char *)s;
+		s++;
+	    }
+	    if (SvTAIL(littlestr))
+		return (char *) bigend;
+	    return Nullch;
+	}
+	if (!littlelen)
+	    return (char*)big;		/* Cannot be SvTAIL! */
+
+	/* littlelen is 2 */
+	if (SvTAIL(littlestr) && !multiline) {
+	    if (bigend[-1] == '\n' && bigend[-2] == *little)
+		return (char*)bigend - 2;
+	    if (bigend[-1] == *little)
+		return (char*)bigend - 1;
+	    return Nullch;
+	}
+	{
+	    /* This should be better than FBM if c1 == c2, and almost
+	       as good otherwise: maybe better since we do less indirection.
+	       And we save a lot of memory by caching no table. */
+	    register unsigned char c1 = little[0];
+	    register unsigned char c2 = little[1];
+
+	    s = big + 1;
+	    bigend--;
+	    if (c1 != c2) {
+		while (s <= bigend) {
+		    if (s[0] == c2) {
+			if (s[-1] == c1)
+			    return (char*)s - 1;
+			s += 2;
+			continue;
+		    }
+		  next_chars:
+		    if (s[0] == c1) {
+			if (s == bigend)
+			    goto check_1char_anchor;
+			if (s[1] == c2)
+			    return (char*)s;
+			else {
+			    s++;
+			    goto next_chars;
+			}
+		    }
+		    else
+			s += 2;
+		}
+		goto check_1char_anchor;
+	    }
+	    /* Now c1 == c2 */
+	    while (s <= bigend) {
+		if (s[0] == c1) {
+		    if (s[-1] == c1)
+			return (char*)s - 1;
+		    if (s == bigend)
+			goto check_1char_anchor;
+		    if (s[1] == c1)
+			return (char*)s;
+		    s += 3;
+		}
+		else
+		    s += 2;
+	    }
+	}
+      check_1char_anchor:		/* One char and anchor! */
+	if (SvTAIL(littlestr) && (*bigend == *little))
+	    return (char *)bigend;	/* bigend is already decremented. */
+	return Nullch;
+    }
+    if (SvTAIL(littlestr) && !multiline) {	/* tail anchored? */
+	s = bigend - littlelen;
+	if (s >= big
+	    && bigend[-1] == '\n' 
+	    && *s == *little 
+	    /* Automatically of length > 2 */
+	    && memEQ((char*)s + 1, (char*)little + 1, littlelen - 2))
+	    return (char*)s;		/* how sweet it is */
+	if (s[1] == *little && memEQ((char*)s + 2,(char*)little + 1,
+				     littlelen - 2))
+	    return (char*)s + 1;	/* how sweet it is */
+	return Nullch;
+    }
+    if (SvTYPE(littlestr) != SVt_PVBM || !SvVALID(littlestr)) {
+	char *b = ninstr((char*)big,(char*)bigend,
+			 (char*)little, (char*)little + littlelen);
+
+	if (!b && SvTAIL(littlestr)) {	/* Automatically multiline!  */
+	    /* Chop \n from littlestr: */
+	    s = bigend - littlelen + 1;
+	    if (*s == *little && memEQ((char*)s + 1, (char*)little + 1,
+				       littlelen - 2))
+		return (char*)s;
+	    return Nullch;
+	}
+	return b;
+    }
+    
+    {	/* Do actual FBM.  */
+	register unsigned char *table = little + littlelen + FBM_TABLE_OFFSET;
+	register unsigned char *oldlittle;
+
 	if (littlelen > bigend - big)
 	    return Nullch;
-	little = (unsigned char*)SvPVX(littlestr);
-	s = bigend - littlelen;
-	if (s > big
-	    && bigend[-1] == '\n' 
-	    && s[-1] == *little && memEQ((char*)s - 1,(char*)little,littlelen))
-	    return (char*)s - 1;	/* how sweet it is */
-	else if (*s == *little && memEQ((char*)s,(char*)little,littlelen))
-	    return (char*)s;		/* how sweet it is */
-	return Nullch;
-    }
-    if (littlelen <= 2) {
-	unsigned char c1 = (unsigned char)SvPVX(littlestr)[0];
-	unsigned char c2 = (unsigned char)SvPVX(littlestr)[1];
-	/* This may do extra comparisons if littlelen == 2, but this
-	   should be hidden in the noise since we do less indirection. */
-	
-	s = big;
-	bigend -= littlelen;
-	while (s <= bigend) {
-	    if (s[0] == c1 
-		&& (littlelen == 1 || s[1] == c2)
-		&& (!SvTAIL(littlestr)
-		    || s == bigend
-		    || s[littlelen] == '\n')) /* Automatically multiline */
-	    {
-		return (char*)s;
-	    }
-	    s++;
-	}
-	return Nullch;
-    }
-    table = (unsigned char*)(SvPVX(littlestr) + littlelen + 1);
-    if (--littlelen >= bigend - big)
-	return Nullch;
-    s = big + littlelen;
-    oldlittle = little = table - 2;
-    if (s < bigend) {
-      top2:
-	/*SUPPRESS 560*/
-	if (tmp = table[*s]) {
+	--littlelen;			/* Last char found by table lookup */
+
+	s = big + littlelen;
+	little += littlelen;		/* last char */
+	oldlittle = little;
+	if (s < bigend) {
+	    register I32 tmp;
+
+	  top2:
+	    /*SUPPRESS 560*/
+	    if (tmp = table[*s]) {
 #ifdef POINTERRIGOR
-	    if (bigend - s > tmp) {
-		s += tmp;
-		goto top2;
-	    }
-#else
-	    if ((s += tmp) < bigend)
-		goto top2;
-#endif
-	    return Nullch;
-	}
-	else {
-	    tmp = littlelen;	/* less expensive than calling strncmp() */
-	    olds = s;
-	    while (tmp--) {
-		if (*--s == *--little)
-		    continue;
-	      differ:
-		s = olds + 1;	/* here we pay the price for failure */
-		little = oldlittle;
-		if (s < bigend)	/* fake up continue to outer loop */
+		if (bigend - s > tmp) {
+		    s += tmp;
 		    goto top2;
-		return Nullch;
+		}
+		s += tmp;
+#else
+		if ((s += tmp) < bigend)
+		    goto top2;
+#endif
+		goto check_end;
 	    }
-	    if (SvTAIL(littlestr)	/* automatically multiline */
-		&& olds + 1 != bigend
-		&& olds[1] != '\n') 
-		goto differ;
-	    return (char *)s;
+	    else {		/* less expensive than calling strncmp() */
+		register unsigned char *olds = s;
+
+		tmp = littlelen;
+
+		while (tmp--) {
+		    if (*--s == *--little)
+			continue;
+		  differ:
+		    s = olds + 1;	/* here we pay the price for failure */
+		    little = oldlittle;
+		    if (s < bigend)	/* fake up continue to outer loop */
+			goto top2;
+		    goto check_end;
+		}
+		return (char *)s;
+	    }
 	}
+      check_end:
+	if ( s == bigend && (table[-1] & FBMcf_TAIL)
+	     && memEQ(bigend - littlelen, oldlittle - littlelen, littlelen) )
+	    return (char*)bigend - littlelen;
+	return Nullch;
     }
-    return Nullch;
 }
 
 /* start_shift, end_shift are positive quantities which give offsets
@@ -1051,9 +1148,14 @@ fbm_instr(unsigned char *big, register unsigned char *bigend, SV *littlestr, U32
    old_posp is the way of communication between consequent calls if
    the next call needs to find the . 
    The initial *old_posp should be -1.
-   Note that we do not take into account SvTAIL, so it may give wrong
-   positives if _ALL flag is set.
+
+   Note that we take into account SvTAIL, so one can get extra
+   optimizations if _ALL flag is set.
  */
+
+/* If SvTAIL is actually due to \Z or \z, this gives false positives
+   if PL_multiline.  In fact if !PL_multiline the autoritative answer
+   is not supported yet. */
 
 char *
 screaminstr(SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift, I32 *old_posp, I32 last)
@@ -1071,8 +1173,18 @@ screaminstr(SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift, I32 *old_
 
     if (*old_posp == -1
 	? (pos = PL_screamfirst[BmRARE(littlestr)]) < 0
-	: (((pos = *old_posp), pos += PL_screamnext[pos]) == 0))
+	: (((pos = *old_posp), pos += PL_screamnext[pos]) == 0)) {
+      cant_find:
+	if ( BmRARE(littlestr) == '\n' 
+	     && BmPREVIOUS(littlestr) == SvCUR(littlestr) - 1) {
+	    little = (unsigned char *)(SvPVX(littlestr));
+	    littleend = little + SvCUR(littlestr);
+	    first = *little++;
+	    goto check_tail;
+	}
 	return Nullch;
+    }
+
     little = (unsigned char *)(SvPVX(littlestr));
     littleend = little + SvCUR(littlestr);
     first = *little++;
@@ -1081,10 +1193,14 @@ screaminstr(SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift, I32 *old_
     big = (unsigned char *)(SvPVX(bigstr));
     /* The value of pos we can stop at: */
     stop_pos = SvCUR(bigstr) - end_shift - (SvCUR(littlestr) - 1 - previous);
-    if (previous + start_shift > stop_pos) return Nullch;
+    if (previous + start_shift > stop_pos) {
+	if (previous + start_shift == stop_pos + 1) /* A fake '\n'? */
+	    goto check_tail;
+	return Nullch;
+    }
     while (pos < previous + start_shift) {
 	if (!(pos += PL_screamnext[pos]))
-	    return Nullch;
+	    goto cant_find;
     }
 #ifdef POINTERRIGOR
     do {
@@ -1122,8 +1238,22 @@ screaminstr(SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift, I32 *old_
 	    found = 1;
 	}
     } while ( pos += PL_screamnext[pos] );
-    return (last && found) ? (char *)(big+(*old_posp)) : Nullch;
+    if (last && found) 
+	return (char *)(big+(*old_posp));
 #endif /* POINTERRIGOR */
+  check_tail:
+    if (!SvTAIL(littlestr) || (end_shift > 0))
+	return Nullch;
+    /* Ignore the trailing "\n".  This code is not microoptimized */
+    big = (unsigned char *)(SvPVX(bigstr) + SvCUR(bigstr));
+    stop_pos = littleend - little;	/* Actual littlestr len */
+    if (stop_pos == 0)
+	return (char*)big;
+    big -= stop_pos;
+    if (*big == first
+	&& ((stop_pos == 1) || memEQ(big + 1, little, stop_pos - 1)))
+	return (char*)big;
+    return Nullch;
 }
 
 I32
@@ -1213,7 +1343,7 @@ form(const char* pat, ...)
     return SvPVX(sv);
 }
 
-char *
+SV *
 mess(const char *pat, va_list *args)
 {
     SV *sv = mess_alloc();
@@ -1222,24 +1352,20 @@ mess(const char *pat, va_list *args)
     sv_vsetpvfn(sv, pat, strlen(pat), args, Null(SV**), 0, Null(bool*));
     if (!SvCUR(sv) || *(SvEND(sv) - 1) != '\n') {
 	dTHR;
-	if (PL_dirty)
-	    sv_catpv(sv, dgd);
-	else {
-	    if (PL_curcop->cop_line)
-		sv_catpvf(sv, " at %_ line %ld",
-			  GvSV(PL_curcop->cop_filegv), (long)PL_curcop->cop_line);
-	    if (GvIO(PL_last_in_gv) && IoLINES(GvIOp(PL_last_in_gv))) {
-		bool line_mode = (RsSIMPLE(PL_rs) &&
-				  SvLEN(PL_rs) == 1 && *SvPVX(PL_rs) == '\n');
-		sv_catpvf(sv, ", <%s> %s %ld",
-			  PL_last_in_gv == PL_argvgv ? "" : GvNAME(PL_last_in_gv),
-			  line_mode ? "line" : "chunk", 
-			  (long)IoLINES(GvIOp(PL_last_in_gv)));
-	    }
-	    sv_catpv(sv, ".\n");
+	if (PL_curcop->cop_line)
+	    sv_catpvf(sv, " at %_ line %ld",
+		      GvSV(PL_curcop->cop_filegv), (long)PL_curcop->cop_line);
+	if (GvIO(PL_last_in_gv) && IoLINES(GvIOp(PL_last_in_gv))) {
+	    bool line_mode = (RsSIMPLE(PL_rs) &&
+			      SvCUR(PL_rs) == 1 && *SvPVX(PL_rs) == '\n');
+	    sv_catpvf(sv, ", <%s> %s %ld",
+		      PL_last_in_gv == PL_argvgv ? "" : GvNAME(PL_last_in_gv),
+		      line_mode ? "line" : "chunk", 
+		      (long)IoLINES(GvIOp(PL_last_in_gv)));
 	}
+	sv_catpv(sv, PL_dirty ? dgd : ".\n");
     }
-    return SvPVX(sv);
+    return sv;
 }
 
 OP *
@@ -1252,13 +1378,21 @@ die(const char* pat, ...)
     HV *stash;
     GV *gv;
     CV *cv;
+    SV *msv;
+    STRLEN msglen;
 
     DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			  "%p: die: curstack = %p, mainstack = %p\n",
 			  thr, PL_curstack, PL_mainstack));
 
     va_start(args, pat);
-    message = pat ? mess(pat, &args) : Nullch;
+    if (pat) {
+	msv = mess(pat, &args);
+	message = SvPV(msv,msglen);
+    }
+    else {
+	message = Nullch;
+    }
     va_end(args);
 
     DEBUG_S(PerlIO_printf(PerlIO_stderr(),
@@ -1277,8 +1411,8 @@ die(const char* pat, ...)
 	    SV *msg;
 
 	    ENTER;
-	    if(message) {
-		msg = newSVpv(message, 0);
+	    if (message) {
+		msg = newSVpvn(message, msglen);
 		SvREADONLY_on(msg);
 		SAVEFREESV(msg);
 	    }
@@ -1296,7 +1430,7 @@ die(const char* pat, ...)
 	}
     }
 
-    PL_restartop = die_where(message);
+    PL_restartop = die_where(message, msglen);
     DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 	  "%p: die: restartop = %p, was_in_eval = %d, top_env = %p\n",
 	  thr, PL_restartop, was_in_eval, PL_top_env));
@@ -1314,9 +1448,12 @@ croak(const char* pat, ...)
     HV *stash;
     GV *gv;
     CV *cv;
+    SV *msv;
+    STRLEN msglen;
 
     va_start(args, pat);
-    message = mess(pat, &args);
+    msv = mess(pat, &args);
+    message = SvPV(msv,msglen);
     va_end(args);
     DEBUG_S(PerlIO_printf(PerlIO_stderr(), "croak: 0x%lx %s", (unsigned long) thr, message));
     if (PL_diehook) {
@@ -1332,7 +1469,7 @@ croak(const char* pat, ...)
 	    SV *msg;
 
 	    ENTER;
-	    msg = newSVpv(message, 0);
+	    msg = newSVpvn(message, msglen);
 	    SvREADONLY_on(msg);
 	    SAVEFREESV(msg);
 
@@ -1346,11 +1483,20 @@ croak(const char* pat, ...)
 	}
     }
     if (PL_in_eval) {
-	PL_restartop = die_where(message);
+	PL_restartop = die_where(message, msglen);
 	JMPENV_JUMP(3);
     }
-    PerlIO_puts(PerlIO_stderr(),message);
-    (void)PerlIO_flush(PerlIO_stderr());
+    {
+#ifdef USE_SFIO
+	/* SFIO can really mess with your errno */
+	int e = errno;
+#endif
+	PerlIO_write(PerlIO_stderr(), message, msglen);
+	(void)PerlIO_flush(PerlIO_stderr());
+#ifdef USE_SFIO
+	errno = e;
+#endif
+    }
     my_failure_exit();
 }
 
@@ -1362,9 +1508,12 @@ warn(const char* pat,...)
     HV *stash;
     GV *gv;
     CV *cv;
+    SV *msv;
+    STRLEN msglen;
 
     va_start(args, pat);
-    message = mess(pat, &args);
+    msv = mess(pat, &args);
+    message = SvPV(msv, msglen);
     va_end(args);
 
     if (PL_warnhook) {
@@ -1381,7 +1530,7 @@ warn(const char* pat,...)
 	    SV *msg;
 
 	    ENTER;
-	    msg = newSVpv(message, 0);
+	    msg = newSVpvn(message, msglen);
 	    SvREADONLY_on(msg);
 	    SAVEFREESV(msg);
 
@@ -1395,7 +1544,7 @@ warn(const char* pat,...)
 	    return;
 	}
     }
-    PerlIO_puts(PerlIO_stderr(),message);
+    PerlIO_write(PerlIO_stderr(), message, msglen);
 #ifdef LEAKTEST
     DEBUG_L(*message == '!' 
 	    ? (xstat(message[1]=='!'
@@ -1416,9 +1565,12 @@ warner(U32  err, const char* pat,...)
     HV *stash;
     GV *gv;
     CV *cv;
+    SV *msv;
+    STRLEN msglen;
 
     va_start(args, pat);
-    message = mess(pat, &args);
+    msv = mess(pat, &args);
+    message = SvPV(msv, msglen);
     va_end(args);
 
     if (ckDEAD(err)) {
@@ -1438,7 +1590,7 @@ warner(U32  err, const char* pat,...)
                 SV *msg;
  
                 ENTER;
-                msg = newSVpv(message, 0);
+                msg = newSVpvn(message, msglen);
                 SvREADONLY_on(msg);
                 SAVEFREESV(msg);
  
@@ -1451,10 +1603,10 @@ warner(U32  err, const char* pat,...)
             }
         }
         if (PL_in_eval) {
-            PL_restartop = die_where(message);
+            PL_restartop = die_where(message, msglen);
             JMPENV_JUMP(3);
         }
-        PerlIO_puts(PerlIO_stderr(),message);
+        PerlIO_write(PerlIO_stderr(), message, msglen);
         (void)PerlIO_flush(PerlIO_stderr());
         my_failure_exit();
 
@@ -1474,7 +1626,7 @@ warner(U32  err, const char* pat,...)
                 SV *msg;
  
                 ENTER;
-                msg = newSVpv(message, 0);
+                msg = newSVpvn(message, msglen);
                 SvREADONLY_on(msg);
                 SAVEFREESV(msg);
  
@@ -1487,7 +1639,7 @@ warner(U32  err, const char* pat,...)
                 return;
             }
         }
-        PerlIO_puts(PerlIO_stderr(),message);
+        PerlIO_write(PerlIO_stderr(), message, msglen);
 #ifdef LEAKTEST
         DEBUG_L(xstat());
 #endif
@@ -1496,7 +1648,7 @@ warner(U32  err, const char* pat,...)
 }
 
 #ifndef VMS  /* VMS' my_setenv() is in VMS.c */
-#ifndef WIN32
+#if !defined(WIN32) && !defined(CYGWIN32)
 void
 my_setenv(char *nam, char *val)
 {
@@ -1888,7 +2040,10 @@ my_popen(char *cmd, char *mode)
     register I32 pid;
     SV *sv;
     I32 doexec = strNE(cmd,"-");
+    I32 did_pipes = 0;
+    int pp[2];
 
+    PERL_FLUSHALL_FOR_CHILD;
 #ifdef OS2
     if (doexec) {
 	return my_syspopen(cmd,mode);
@@ -1902,9 +2057,15 @@ my_popen(char *cmd, char *mode)
     }
     if (PerlProc_pipe(p) < 0)
 	return Nullfp;
+    if (doexec && PerlProc_pipe(pp) >= 0)
+	did_pipes = 1;
     while ((pid = (doexec?vfork():fork())) < 0) {
 	if (errno != EAGAIN) {
 	    PerlLIO_close(p[This]);
+	    if (did_pipes) {
+		PerlLIO_close(pp[0]);
+		PerlLIO_close(pp[1]);
+	    }
 	    if (!doexec)
 		croak("Can't fork");
 	    return Nullfp;
@@ -1919,6 +2080,12 @@ my_popen(char *cmd, char *mode)
 #define THIS that
 #define THAT This
 	PerlLIO_close(p[THAT]);
+	if (did_pipes) {
+	    PerlLIO_close(pp[0]);
+#if defined(HAS_FCNTL) && defined(F_SETFD)
+	    fcntl(pp[1], F_SETFD, FD_CLOEXEC);
+#endif
+	}
 	if (p[THIS] != (*mode == 'r')) {
 	    PerlLIO_dup2(p[THIS], *mode == 'r');
 	    PerlLIO_close(p[THIS]);
@@ -1931,9 +2098,10 @@ my_popen(char *cmd, char *mode)
 #define NOFILE 20
 #endif
 	    for (fd = PL_maxsysfd + 1; fd < NOFILE; fd++)
-		PerlLIO_close(fd);
+		if (fd != pp[1])
+		    PerlLIO_close(fd);
 #endif
-	    do_exec(cmd);	/* may or may not use the shell */
+	    do_exec3(cmd,pp[1],did_pipes);	/* may or may not use the shell */
 	    PerlProc__exit(1);
 	}
 	/*SUPPRESS 560*/
@@ -1947,6 +2115,8 @@ my_popen(char *cmd, char *mode)
     }
     do_execfree();	/* free any memory malloced by child on vfork */
     PerlLIO_close(p[that]);
+    if (did_pipes)
+	PerlLIO_close(pp[1]);
     if (p[that] < p[This]) {
 	PerlLIO_dup2(p[This], p[that]);
 	PerlLIO_close(p[This]);
@@ -1956,18 +2126,39 @@ my_popen(char *cmd, char *mode)
     (void)SvUPGRADE(sv,SVt_IV);
     SvIVX(sv) = pid;
     PL_forkprocess = pid;
+    if (did_pipes && pid > 0) {
+	int errkid;
+	int n = 0, n1;
+
+	while (n < sizeof(int)) {
+	    n1 = PerlLIO_read(pp[0],
+			      (void*)(((char*)&errkid)+n),
+			      (sizeof(int)) - n);
+	    if (n1 <= 0)
+		break;
+	    n += n1;
+	}
+	if (n) {			/* Error */
+	    if (n != sizeof(int))
+		croak("panic: kid popen errno read");
+	    PerlLIO_close(pp[0]);
+	    errno = errkid;		/* Propagate errno from kid */
+	    return Nullfp;
+	}
+    }
+    if (did_pipes)
+	 PerlLIO_close(pp[0]);
     return PerlIO_fdopen(p[This], mode);
 }
 #else
 #if defined(atarist) || defined(DJGPP)
 FILE *popen();
 PerlIO *
-my_popen(cmd,mode)
-char	*cmd;
-char	*mode;
+my_popen(char *cmd, char *mode)
 {
     /* Needs work for PerlIO ! */
     /* used 0 for 2nd parameter to PerlIO-exportFILE; apparently not used */
+    PERL_FLUSHALL_FOR_CHILD;
     return popen(PerlIO_exportFILE(cmd, 0), mode);
 }
 #endif
@@ -2187,7 +2378,7 @@ my_pclose(PerlIO *ptr)
 }
 #endif /* !DOSISH */
 
-#if  !defined(DOSISH) || defined(OS2) || defined(WIN32)
+#if  !defined(DOSISH) || defined(OS2) || defined(WIN32) || defined(CYGWIN32)
 I32
 wait4pid(int pid, int *statusp, int flags)
 {
@@ -2351,8 +2542,14 @@ cast_i32(double f)
 IV
 cast_iv(double f)
 {
-    if (f >= IV_MAX)
-	return (IV) IV_MAX;
+    if (f >= IV_MAX) {
+	UV uv;
+	
+	if (f >= (double)UV_MAX)
+	    return (IV) UV_MAX;	
+	uv = (UV) f;
+	return (IV)uv;
+    }
     if (f <= IV_MIN)
 	return (IV) IV_MIN;
     return (IV) f;
@@ -2363,6 +2560,14 @@ cast_uv(double f)
 {
     if (f >= MY_UV_MAX)
 	return (UV) MY_UV_MAX;
+    if (f < 0) {
+	IV iv;
+	
+	if (f < IV_MIN)
+	    return (UV)IV_MIN;
+	iv = (IV) f;
+	return (UV) iv;
+    }
     return (UV) f;
 }
 
@@ -2418,10 +2623,10 @@ scan_bin(char *start, I32 len, I32 *retlen)
       retval = n | (*s++ - '0');
       len--;
     }
-    if (len && (*s >= '2' || *s <= '9')) {
+    if (len && (*s >= '2' && *s <= '9')) {
       dTHR;
       if (ckWARN(WARN_UNSAFE))
-          warner(WARN_UNSAFE, "Illegal binary digit ignored");
+          warner(WARN_UNSAFE, "Illegal binary digit '%c' ignored", *s);
     }
     *retlen = s - start;
     return retval;
@@ -2445,7 +2650,7 @@ scan_oct(char *start, I32 len, I32 *retlen)
     if (len && (*s == '8' || *s == '9')) {
 	dTHR;
 	if (ckWARN(WARN_OCTAL))
-	    warner(WARN_OCTAL, "Illegal octal digit ignored");
+	    warner(WARN_OCTAL, "Illegal octal digit '%c' ignored", *s);
     }
     *retlen = s - start;
     return retval;
@@ -2469,7 +2674,7 @@ scan_hex(char *start, I32 len, I32 *retlen)
 		dTHR;
 		--s;
 		if (ckWARN(WARN_UNSAFE))
-		    warner(WARN_UNSAFE,"Illegal hex digit ignored");
+		    warner(WARN_UNSAFE,"Illegal hex digit '%c' ignored", *s);
 		break;
 	    }
 	}
@@ -2802,11 +3007,11 @@ condpair_magic(SV *sv)
 	COND_INIT(&cp->owner_cond);
 	COND_INIT(&cp->cond);
 	cp->owner = 0;
-	LOCK_SV_MUTEX;
+	MUTEX_LOCK(&PL_cred_mutex);		/* XXX need separate mutex? */
 	mg = mg_find(sv, 'm');
 	if (mg) {
 	    /* someone else beat us to initialising it */
-	    UNLOCK_SV_MUTEX;
+	    MUTEX_UNLOCK(&PL_cred_mutex);	/* XXX need separate mutex? */
 	    MUTEX_DESTROY(&cp->mutex);
 	    COND_DESTROY(&cp->owner_cond);
 	    COND_DESTROY(&cp->cond);
@@ -2817,7 +3022,7 @@ condpair_magic(SV *sv)
 	    mg = SvMAGIC(sv);
 	    mg->mg_ptr = (char *)cp;
 	    mg->mg_len = sizeof(cp);
-	    UNLOCK_SV_MUTEX;
+	    MUTEX_UNLOCK(&PL_cred_mutex);	/* XXX need separate mutex? */
 	    DEBUG_S(WITH_THR(PerlIO_printf(PerlIO_stderr(),
 					   "%p: condpair_magic %p\n", thr, sv));)
 	}
@@ -2840,7 +3045,7 @@ new_struct_thread(struct perl_thread *t)
     SV **svp;
     I32 i;
 
-    sv = newSVpv("", 0);
+    sv = newSVpvn("", 0);
     SvGROW(sv, sizeof(struct perl_thread) + 1);
     SvCUR_set(sv, sizeof(struct perl_thread));
     thr = (Thread) SvPVX(sv);
@@ -2857,6 +3062,8 @@ new_struct_thread(struct perl_thread *t)
     Zero(thr, 1, struct perl_thread);
 #endif
 
+    PL_protect = FUNC_NAME_TO_PTR(default_protect);
+
     thr->oursv = sv;
     init_stacks(ARGS);
 
@@ -2864,7 +3071,7 @@ new_struct_thread(struct perl_thread *t)
     thr->cvcache = newHV();
     thr->threadsv = newAV();
     thr->specific = newAV();
-    thr->errsv = newSVpv("", 0);
+    thr->errsv = newSVpvn("", 0);
     thr->errhv = newHV();
     thr->flags = THRf_R_JOINABLE;
     MUTEX_INIT(&thr->mutex);
@@ -2882,7 +3089,7 @@ new_struct_thread(struct perl_thread *t)
     PL_start_env.je_mustcatch = TRUE;
     PL_top_env  = &PL_start_env;
 
-    PL_in_eval = FALSE;
+    PL_in_eval = EVAL_NULL;	/* ~(EVAL_INEVAL|EVAL_WARNONLY|EVAL_KEEPERR) */
     PL_restartop = 0;
 
     PL_statname = NEWSV(66,0);
@@ -2899,6 +3106,8 @@ new_struct_thread(struct perl_thread *t)
 
     /* parent thread's data needs to be locked while we make copy */
     MUTEX_LOCK(&t->mutex);
+
+    PL_protect = t->Tprotect;
 
     PL_curcop = t->Tcurcop;       /* XXX As good a guess as any? */
     PL_defstash = t->Tdefstash;   /* XXX maybe these should */
@@ -3000,6 +3209,17 @@ get_specialsv_list(void)
  return PL_specialsv_list;
 }
 
+#ifndef HAS_GETENV_LEN
+char *
+getenv_len(char *env_elem, unsigned long *len)
+{
+    char *env_trans = PerlEnv_getenv(env_elem);
+    if (env_trans)
+	*len = strlen(env_trans);
+    return env_trans;
+}
+#endif
+
 
 MGVTBL*
 get_vtbl(int vtbl_id)
@@ -3098,7 +3318,44 @@ get_vtbl(int vtbl_id)
     case want_vtbl_amagicelem:
 	result = &PL_vtbl_amagicelem;
 	break;
+    case want_vtbl_backref:
+	result = &PL_vtbl_backref;
+	break;
     }
     return result;
 }
 
+I32
+my_fflush_all(void)
+{
+#ifdef FFLUSH_NULL
+    return fflush(NULL);
+#else
+    long open_max = -1;
+# if defined(FFLUSH_ALL) && defined(HAS_STDIO_STREAM_ARRAY)
+#  if defined(HAS_SYSCONF) && defined(_SC_OPEN_MAX)
+    open_max = sysconf(_SC_OPEN_MAX);
+#  else
+#   ifdef FOPEN_MAX
+#   open_max = FOPEN_MAX;
+#   else
+#    ifdef OPEN_MAX
+#   open_max = OPEN_MAX;
+#    else
+#     ifdef _NFILE
+#   open_max = _NFILE;
+#     endif
+#    endif
+#   endif
+#  endif
+    if (open_max > 0) {
+      long i;
+      for (i = 0; i < open_max; i++)
+         fflush(&STDIO_STREAM_ARRAY[i]);
+      return 0;
+    }
+# endif
+    SETERRNO(EBADF,RMS$_IFI);
+    return EOF;
+#endif
+}

@@ -213,7 +213,7 @@
  * This is designed for use in a program that uses vast quantities of memory,
  * but bombs when it runs out.
  * 
- * Modifications Copyright Ilya Zakharevich 1996-98.
+ * Modifications Copyright Ilya Zakharevich 1996-99.
  * 
  * Still very quick, but much more thrifty.  (Std config is 10% slower
  * than it was, and takes 67% of old heap size for typical usage.)
@@ -1727,7 +1727,7 @@ dump_mstats(char *s)
 
 #ifdef USE_PERL_SBRK
 
-#   if defined(__MACHTEN_PPC__) || defined(__NeXT__)
+#   if defined(__MACHTEN_PPC__) || defined(NeXT) || defined(__NeXT__)
 #      define PERL_SBRK_VIA_MALLOC
 /*
  * MachTen's malloc() returns a buffer aligned on a two-byte boundary.

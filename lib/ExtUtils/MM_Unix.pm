@@ -384,6 +384,11 @@ sub cflags {
             $self->{OPTIMIZE} =~ s/-TP(\s|$)//;
         }
     }
+
+    if ($self->{POLLUTE}) {
+	$self->{CCFLAGS} .= ' -DPERL_POLLUTE ';
+    }
+
     return $self->{CFLAGS} = qq{
 CCFLAGS = $self->{CCFLAGS}
 OPTIMIZE = $self->{OPTIMIZE}
@@ -1320,10 +1325,12 @@ sub init_dirscan {	# --- File and Directory Lists (.xs .pm .pod etc)
 	    $h{$name} = 1;
 	} elsif ($name =~ /\.PL$/) {
 	    ($pl_files{$name} = $name) =~ s/\.PL$// ;
-	} elsif ($Is_VMS && $name =~ /\.pl$/) {  # case-insensitive filesystem
+	} elsif ($Is_VMS && $name =~ /[._]pl$/i) {
+	    # case-insensitive filesystem, one dot per name, so foo.h.PL
+	    # under Unix appears as foo.h_pl under VMS
 	    local($/); open(PL,$name); my $txt = <PL>; close PL;
 	    if ($txt =~ /Extracting \S+ \(with variable substitutions/) {
-		($pl_files{$name} = $name) =~ s/\.pl$// ;
+		($pl_files{$name} = $name) =~ s/[._]pl$//i ;
 	    }
 	    else { $pm{$name} = $self->catfile('$(INST_LIBDIR)',$name); }
 	} elsif ($name =~ /\.(p[ml]|pod)$/){
@@ -1846,7 +1853,7 @@ usually solves this kind of problem.
 	push @defpath, $component if defined $component;
     }
     $self->{PERL} ||=
-        $self->find_perl(5.0, [ $^X, 'miniperl','perl','perl5',"perl$]" ],
+        $self->find_perl(5.0, [ $self->canonpath($^X), 'miniperl','perl','perl5',"perl$]" ],
 	    \@defpath, $Verbose );
     # don't check if perl is executable, maybe they have decided to
     # supply switches with perl
@@ -2618,7 +2625,7 @@ sub parse_abstract {
     open(FH,$parsefile) or die "Could not open '$parsefile': $!";
     my $inpod = 0;
     my $package = $self->{DISTNAME};
-    $package =~ s/-/::/;
+    $package =~ s/-/::/g;
     while (<FH>) {
         $inpod = /^=(?!cut)/ ? 1 : /^=cut/ ? 0 : $inpod;
         next if !$inpod;
@@ -3495,7 +3502,7 @@ sub xs_c {
     return '' unless $self->needs_linking();
     '
 .xs.c:
-	$(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) $(XSUBPP) $(XSPROTOARG) $(XSUBPPARGS) $*.xs >xstmp.c && $(MV) xstmp.c $*.c
+	$(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) $(XSUBPP) $(XSPROTOARG) $(XSUBPPARGS) $*.xs > $*.xsc && $(MV) $*.xsc $*.c
 ';
 }
 
@@ -3510,7 +3517,7 @@ sub xs_cpp {
     return '' unless $self->needs_linking();
     '
 .xs.cpp:
-	$(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) $(XSUBPP) $(XSPROTOARG) $(XSUBPPARGS) $*.xs >xstmp.c && $(MV) xstmp.c $*.cpp
+	$(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) $(XSUBPP) $(XSPROTOARG) $(XSUBPPARGS) $*.xs > $*.xsc && $(MV) $*.xsc $*.cpp
 ';
 }
 
@@ -3526,7 +3533,7 @@ sub xs_o {	# many makes are too dumb to use xs_c then c_o
     return '' unless $self->needs_linking();
     '
 .xs$(OBJ_EXT):
-	$(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) $(XSUBPP) $(XSPROTOARG) $(XSUBPPARGS) $*.xs >xstmp.c && $(MV) xstmp.c $*.c
+	$(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) $(XSUBPP) $(XSPROTOARG) $(XSUBPPARGS) $*.xs > $*.xsc && $(MV) $*.xsc $*.c
 	$(CCCMD) $(CCCDLFLAGS) -I$(PERL_INC) $(DEFINE) $*.c
 ';
 }

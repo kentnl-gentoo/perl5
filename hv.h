@@ -1,6 +1,6 @@
 /*    hv.h
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -104,7 +104,7 @@ struct xpvhv {
 #define HeSVKEY_force(he)	(HeKEY(he) ?				\
 				 ((HeKLEN(he) == HEf_SVKEY) ?		\
 				  HeKEY_sv(he) :			\
-				  sv_2mortal(newSVpv(HeKEY(he),		\
+				  sv_2mortal(newSVpvn(HeKEY(he),	\
 						     HeKLEN(he)))) :	\
 				 &PL_sv_undef)
 #define HeSVKEY_set(he,sv)	((HeKLEN(he) = HEf_SVKEY), (HeKEY_sv(he) = sv))

@@ -146,9 +146,22 @@ case "`uname -r`" in
 *[123].*)	# old loader
 		lddlflags="$lddlflags -O3"
 		;;
-*)		lddlflags="$lddlflags $optimize -msym"
-		# -msym: If using a sufficiently recent /sbin/loader,
-		# keep the module symbols with the modules.
+*)            if $test "X$optimize" = "X$undef"; then
+                      lddlflags="$lddlflags -msym"
+              else
+		  case "`sizer -v`" in
+		  *4.0D*)
+		      # QAR 56761: -O4 + .so may produce broken code,
+		      # fixed in 4.0E or better.
+		      ;;
+		  *)    
+                      lddlflags="$lddlflags $optimize"
+		      ;;
+		  esac
+		  # -msym: If using a sufficiently recent /sbin/loader,
+		  # keep the module symbols with the modules.
+                  lddlflags="$lddlflags -msym"
+              fi
 		;;
 esac
 # Yes, the above loses if gcc does not use the system linker.
@@ -178,11 +191,9 @@ esac
 # "-Uuseshrplib" prevents this default.
 #
 
-# This or the glibpth change above breaks the build. Commented out
-# for this snapshot.
-#case "$_DEC_cc_style.$useshrplib" in
-#	new.)	useshrplib="$define"	;;
-#esac
+case "$_DEC_cc_style.$useshrplib" in
+	new.)	useshrplib="$define"	;;
+esac
 
 # The EFF_ONLY_OK from <sys/access.h> is present but dysfunctional for
 # [RWX]_OK as of Digital UNIX 4.0[A-D]?.  If and when this gets fixed,

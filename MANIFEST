@@ -33,10 +33,12 @@ Porting/patchls		Flexible patch file listing utility
 Porting/pumpkin.pod	Guidelines and hints for Perl maintainers
 README			The Instructions
 README.amiga		Notes about AmigaOS port
+README.apollo		Notes about Apollo DomainOS port
 README.beos		Notes about BeOS port
 README.cygwin32		Notes about Cygwin32 port
 README.dos		Notes about dos/djgpp port
-README.hpux		Notes about HP/UX port
+README.hpux		Notes about HP-UX port
+README.hurd		Notes about GNU/Hurd port
 README.lexwarn		Notes about lexical warnings
 README.mint		Notes about Atari MiNT port
 README.mpeix		Notes about MPE/iX port
@@ -54,6 +56,7 @@ Todo			The Wishlist
 Todo-5.005		What needs doing before 5.005 release
 XSlock.h		Include file for extensions built with PERL_OBJECT defined
 XSUB.h			Include file for extension subroutines
+apollo/netinet/in.h	Apollo DomainOS port: C header file frontend
 av.c			Array value code
 av.h			Array value header
 beos/nm.c		BeOS port
@@ -69,11 +72,14 @@ configure.com		Configure-equivalent for VMS
 configure.gnu		Crude emulation of GNU configure
 cop.h			Control operator header
 cv.h			Code value header
-cygwin32/cw32imp.h	Cygwin32 port
-cygwin32/gcc2		Cygwin32 port
-cygwin32/ld2		Cygwin32 port
-cygwin32/perlgcc	Cygwin32 port
-cygwin32/perlld		Cygwin32 port
+cygwin32/Makefile.SHs	Shared library generation for Cygwin32 port
+cygwin32/ld2.in		ld wrapper template for Cygwin32 port
+cygwin32/perlld.in	dll generator template for Cygwin32 port
+cygwin32/build-instructions.charles-wilson	Cygwin32 porters notes
+cygwin32/build-instructions.READFIRST		Cygwin32 porters notes
+cygwin32/build-instructions.steven-morlock2	Cygwin32 porters notes
+cygwin32/build-instructions.sebastien-barre	Cygwin32 porters notes
+cygwin32/build-instructions.steven-morlock	Cygwin32 porters notes
 deb.c			Debugging routines
 djgpp/config.over       DOS/DJGPP port
 djgpp/configure.bat     DOS/DJGPP port
@@ -170,6 +176,7 @@ ext/B/B/Disassembler.pm	Compiler Disassembler backend
 ext/B/B/Lint.pm		Compiler Lint backend
 ext/B/B/Showlex.pm	Compiler Showlex backend
 ext/B/B/Stackobj.pm	Compiler stack objects support functions
+ext/B/B/Stash.pm	Compiler module to identify stashes
 ext/B/B/Terse.pm	Compiler Terse backend
 ext/B/B/Xref.pm		Compiler Xref backend
 ext/B/B/assemble	Assemble compiler bytecode
@@ -191,6 +198,9 @@ ext/B/ramblings/magic		Compiler ramblings: notes on magic
 ext/B/ramblings/reg.alloc	Compiler ramblings: register allocation
 ext/B/ramblings/runtime.porting	Compiler ramblings: porting PP enging
 ext/B/typemap		Compiler backend interface types
+ext/ByteLoader/ByteLoader.pm	Bytecode loader Perl module
+ext/ByteLoader/ByteLoader.xs	Bytecode loader external subroutines
+ext/ByteLoader/Makefile.PL	Bytecode loader makefile writer
 ext/DB_File/Changes		Berkeley DB extension change log
 ext/DB_File/DB_File.pm		Berkeley DB extension Perl module
 ext/DB_File/DB_File.xs		Berkeley DB extension external subroutines
@@ -220,6 +230,7 @@ ext/DynaLoader/dl_hpux.xs	HP-UX implementation
 ext/DynaLoader/dl_mpeix.xs	MPE/iX implementation
 ext/DynaLoader/dl_next.xs	Next implementation
 ext/DynaLoader/dl_none.xs	Stub implementation
+ext/DynaLoader/dl_rhapsody.xs	Rhapsody implementation
 ext/DynaLoader/dl_vms.xs	VMS implementation
 ext/DynaLoader/dl_vmesa.xs	VM/ESA implementation
 ext/DynaLoader/dlutils.c	Dynamic loader utilities for dl_*.xs files
@@ -444,6 +455,7 @@ hints/os390.sh		Hints for named architecture
 hints/posix-bc.sh	Hints for named architecture
 hints/powerux.sh	Hints for named architecture
 hints/qnx.sh		Hints for named architecture
+hints/rhapsody.sh	Hints for named architecture
 hints/sco.sh		Hints for named architecture
 hints/sco_2_3_0.sh	Hints for named architecture
 hints/sco_2_3_1.sh	Hints for named architecture
@@ -534,6 +546,7 @@ lib/ExtUtils/Install.pm	Handles 'make install' on extensions
 lib/ExtUtils/Installed.pm	Information on installed extensions
 lib/ExtUtils/Liblist.pm	Locates libraries
 lib/ExtUtils/MM_OS2.pm		MakeMaker methods for OS/2
+lib/ExtUtils/MM_Cygwin.pm	MakeMaker methods for Cygwin
 lib/ExtUtils/MM_Unix.pm		MakeMaker base class for Unix
 lib/ExtUtils/MM_VMS.pm		MakeMaker methods for VMS
 lib/ExtUtils/MM_Win32.pm	MakeMaker methods for Win32
@@ -579,9 +592,15 @@ lib/Net/hostent.pm	By-name interface to Perl's builtin gethost*
 lib/Net/netent.pm	By-name interface to Perl's builtin getnet*
 lib/Net/protoent.pm	By-name interface to Perl's builtin getproto*
 lib/Net/servent.pm	By-name interface to Perl's builtin getserv*
+lib/Pod/Checker.pm	Pod-Parser - check POD documents for syntax errors
 lib/Pod/Functions.pm	used by pod/splitpod
 lib/Pod/Html.pm		Convert POD data to HTML
+lib/Pod/InputObjects.pm	Pod-Parser - define objects for input streams
+lib/Pod/Parser.pm	Pod-Parser - define base class for parsing POD
+lib/Pod/PlainText.pm	Pod-Parser - convert POD data to formatted ASCII text
+lib/Pod/Select.pm	Pod-Parser - select portions of POD docs
 lib/Pod/Text.pm		Convert POD data to formatted ASCII text
+lib/Pod/Usage.pm	Pod-Parser - print usage messages
 lib/Search/Dict.pm	Perform binary search on dictionaries
 lib/SelectSaver.pm	Enforce proper select scoping
 lib/SelfLoader.pm	Load functions only on demand
@@ -668,6 +687,7 @@ lib/unicode/Block.pl				Unicode character database
 lib/unicode/Category.pl				Unicode character database
 lib/unicode/CombiningClass.pl			Unicode character database
 lib/unicode/Decomposition.pl			Unicode character database
+lib/unicode/EthiopicSyllables.txt		Unicode character database
 lib/unicode/In/AlphabeticPresentationForms.pl	Unicode character database
 lib/unicode/In/Arabic.pl			Unicode character database
 lib/unicode/In/ArabicPresentationForms-A.pl	Unicode character database
@@ -694,6 +714,7 @@ lib/unicode/In/Devanagari.pl			Unicode character database
 lib/unicode/In/Dingbats.pl			Unicode character database
 lib/unicode/In/EnclosedAlphanumerics.pl		Unicode character database
 lib/unicode/In/EnclosedCJKLettersandMonths.pl	Unicode character database
+lib/unicode/In/Ethiopic.pl			Unicode character database
 lib/unicode/In/GeneralPunctuation.pl		Unicode character database
 lib/unicode/In/GeometricShapes.pl		Unicode character database
 lib/unicode/In/Georgian.pl			Unicode character database
@@ -796,15 +817,18 @@ lib/unicode/Is/Sc.pl				Unicode character database
 lib/unicode/Is/Sm.pl				Unicode character database
 lib/unicode/Is/So.pl				Unicode character database
 lib/unicode/Is/Space.pl				Unicode character database
+lib/unicode/Is/Syllable.pl			Unicode character database
 lib/unicode/Is/Upper.pl				Unicode character database
 lib/unicode/Is/Z.pl				Unicode character database
 lib/unicode/Is/Zl.pl				Unicode character database
 lib/unicode/Is/Zp.pl				Unicode character database
 lib/unicode/Is/Zs.pl				Unicode character database
 lib/unicode/JamoShort.pl			Unicode character database
+lib/unicode/MakeEthiopicSyllables.PL		Unicode character database
 lib/unicode/Makefile				Unicode character database
 lib/unicode/Name.pl				Unicode character database
 lib/unicode/Number.pl				Unicode character database
+lib/unicode/README.Ethiopic			Unicode character database
 lib/unicode/To/Digit.pl				Unicode character database
 lib/unicode/To/Lower.pl				Unicode character database
 lib/unicode/To/Title.pl				Unicode character database
@@ -842,7 +866,7 @@ mpeix/mpeixish.h	MPE/iX port
 mpeix/nm		MPE/iX port
 mpeix/relink		MPE/iX port
 mv-if-diff		Script to mv a file if it changed
-myconfig		Prints summary of the current configuration
+myconfig.SH		Prints summary of the current configuration
 nostdio.h		Cause compile error on stdio calls
 op.c			Opcode syntax tree code
 op.h			Opcode syntax tree header
@@ -924,6 +948,7 @@ plan9/plan9ish.h	Plan9 port: Plan9-specific C header file
 plan9/setup.rc		Plan9 port: script for easy build+install
 plan9/versnum		Plan9 port: script to print version number
 pod/Makefile		Make pods into something else
+pod/Win32.pod		Documentation for Win32 extras
 pod/buildtoc		generate perltoc.pod
 pod/checkpods.PL	Tool to check for common errors in pods
 pod/perl.pod		Top level perl man page
@@ -936,6 +961,7 @@ pod/perldebug.pod	Debugger info
 pod/perldelta.pod	Changes since last version
 pod/perl5005delta.pod	Changes from 5.004 to 5.005
 pod/perl5004delta.pod	Changes from 5.003 to 5.004
+pod/perldbmfilter.pod	Info about DBM Filters
 pod/perldiag.pod	Diagnostic info
 pod/perldsc.pod		Data Structures Cookbook
 pod/perlembed.pod	Embedding info
@@ -977,6 +1003,7 @@ pod/perltie.pod		Tieing an object class into a simple variable
 pod/perltoc.pod		Table of Contents info
 pod/perltodo.pod	Todo list explained
 pod/perltoot.pod	Tom's object-oriented tutorial
+pod/perltootc.pod	Tom's object-oriented tutorial (more on class data)
 pod/perltrap.pod	Trap info
 pod/perlvar.pod		Variable info
 pod/perlxs.pod		XS api info
@@ -985,6 +1012,9 @@ pod/pod2html.PL		Precursor for translator to turn pod into HTML
 pod/pod2latex.PL	Precursor for translator to turn pod into LaTeX
 pod/pod2man.PL		Precursor for translator to turn pod into manpage
 pod/pod2text.PL		Precursor for translator to turn pod into text
+pod/pod2usage.PL	Pod-Parser - print usage messages from POD docs
+pod/podchecker.PL	Pod-Parser - Pod::Checker::podchecker() CLI
+pod/podselect.PL	Pod-Parser - Pod::Select::podselect() CLI
 pod/roffitall		troff the whole man page set
 pod/rofftoc		Generate a table of contents in troff format
 pod/splitman		Splits perlfunc into multiple man pages
@@ -1046,6 +1076,7 @@ t/io/dup.t		See if >& works right
 t/io/fs.t		See if directory manipulations work
 t/io/inplace.t		See if inplace editing works
 t/io/iprefix.t		See if inplace editing works with prefixes
+t/io/open.t		See if open works
 t/io/pipe.t		See if secure pipes work
 t/io/print.t		See if print commands work
 t/io/read.t		See if read works
@@ -1079,6 +1110,7 @@ t/lib/fields.t          See if base/fields works
 t/lib/filecache.t	See if FileCache works
 t/lib/filecopy.t	See if File::Copy works
 t/lib/filefind.t	See if File::Find works
+t/lib/filefunc.t	See if File::Spec::Functions works
 t/lib/filehand.t	See if FileHandle works
 t/lib/filepath.t	See if File::Path works
 t/lib/filespec.t	See if File::Spec works
@@ -1092,6 +1124,7 @@ t/lib/hostname.t	See if Sys::Hostname works
 t/lib/io_const.t	See if constants from IO work
 t/lib/io_dir.t		See if directory-related methods from IO work
 t/lib/io_dup.t		See if dup()-related methods from IO work
+t/lib/io_linenum.t	See if I/O line numbers are tracked correctly
 t/lib/io_multihomed.t	See if INET sockets work with multi-homed hosts
 t/lib/io_pipe.t		See if pipe()-related methods from IO work
 t/lib/io_poll.t		See if poll()-related methods from IO work
@@ -1126,6 +1159,7 @@ t/lib/textwrap.t	See if Text::Wrap::wrap works
 t/lib/thread.t		Basic test of threading (skipped if no threads) 
 t/lib/tie-push.t	Test for Tie::Array
 t/lib/tie-stdarray.t	Test for Tie::StdArray
+t/lib/tie-stdhandle.t	Test for Tie::StdHandle
 t/lib/tie-stdpush.t	Test for Tie::StdArray
 t/lib/timelocal.t	See if Time::Local works
 t/lib/trig.t		See if Math::Trig works
@@ -1158,6 +1192,7 @@ t/op/glob.t		See if <*> works
 t/op/goto.t		See if goto works
 t/op/goto_xs.t		See if "goto &sub" works on XSUBs
 t/op/grent.t		See if getgr*() functions work
+t/op/grep.t		See if grep() and map() work
 t/op/groups.t		See if $( works
 t/op/gv.t		See if typeglobs work
 t/op/hashwarn.t		See if warnings for bad hash assignments work
@@ -1174,6 +1209,7 @@ t/op/method.t		See if method calls work
 t/op/misc.t		See if miscellaneous bugs have been fixed
 t/op/mkdir.t		See if mkdir works
 t/op/my.t		See if lexical scoping works
+t/op/numconvert.t	See if accessing fields does not change numeric values
 t/op/nothread.t		local @_ test which does not work threaded 
 t/op/oct.t		See if oct and hex work
 t/op/ord.t		See if ord works
@@ -1218,6 +1254,31 @@ t/op/unshift.t		See if unshift works
 t/op/vec.t		See if vectors work
 t/op/wantarray.t	See if wantarray works
 t/op/write.t		See if write works
+t/pod/emptycmd.t	Test empty pod directives
+t/pod/emptycmd.xr	Expected results for emptycmd.t
+t/pod/for.t		Test =for directive
+t/pod/for.xr		Expected results for for.t
+t/pod/headings.t	Test =head directives
+t/pod/headings.xr	Expected results for headings.t
+t/pod/include.t		Test =include directive
+t/pod/include.xr	Expected results for include.t
+t/pod/included.t	Test =include directive
+t/pod/included.xr	Expected results for included.t
+t/pod/lref.t		Test L<...> sequences
+t/pod/lref.xr		Expected results for lref.t
+t/pod/nested_items.t	Test nested =items
+t/pod/nested_items.xr	Expected results for nested_items.t
+t/pod/nested_seqs.t	Test nested interior sequences
+t/pod/nested_seqs.xr	Expected results for nested_seqs.t
+t/pod/oneline_cmds.t	Test single paragraph ==cmds
+t/pod/oneline_cmds.xr	Expected results for oneline_cmds.t
+t/pod/poderrs.t		Test POD errors
+t/pod/poderrs.xr	Expected results for emptycmd.t
+t/pod/special_seqs.t	Test "special" interior sequences
+t/pod/special_seqs.xr	Expected results for emptycmd.t
+t/pod/testcmp.pl	Module to compare output against expected results
+t/pod/testp2pt.pl	Module to test Pod::PlainText for a given file
+t/pod/testpchk.pl	Module to test Pod::Checker for a given file
 t/pragma/constant.t	See if compile-time constants work
 t/pragma/locale.t	See if locale support (i18n and l10n) works
 t/pragma/overload.t	See if operator overloading works
@@ -1226,6 +1287,7 @@ t/pragma/strict-subs	Tests of "use strict 'subs'" for strict.t
 t/pragma/strict-vars	Tests of "use strict 'vars'" for strict.t
 t/pragma/strict.t	See if strictures work
 t/pragma/subs.t		See if subroutine pseudo-importation works
+t/pragma/utf8.t		See if utf8 operations work
 t/pragma/warn/1global	Tests of global warnings for warning.t
 t/pragma/warn/2use	Tests for "use warning" for warning.t
 t/pragma/warn/3both	Tests for interaction of $^W and "use warning"
@@ -1264,6 +1326,7 @@ utils/c2ph.PL		program to translate dbx stabs to perl
 utils/h2ph.PL		A thing to turn C .h files into perl .ph files
 utils/h2xs.PL		Program to make .xs files from C header files
 utils/perlbug.PL	A simple tool to submit a bug report
+utils/perlbc.PL		Front-end for bytecode compiler
 utils/perlcc.PL		Front-end for compiler
 utils/perldoc.PL	A simple tool to find & display perl's documentation
 utils/pl2pm.PL		A pl to pm translator

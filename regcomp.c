@@ -66,7 +66,7 @@
  *
  ****    Alterations to Henry's code are...
  ****
- ****    Copyright (c) 1991-1998, Larry Wall
+ ****    Copyright (c) 1991-1999, Larry Wall
  ****
  ****    You may distribute under the terms of either the GNU General Public
  ****    License or the Artistic License, as specified in the README file.
@@ -616,7 +616,7 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 			
 			l -= old;
 			/* Get the added string: */
-			last_str = newSVpv(s  + old, l);
+			last_str = newSVpvn(s  + old, l);
 			if (deltanext == 0 && pos_before == b) {
 			    /* What was added is a constant string */
 			    if (mincount > 1) {
@@ -875,7 +875,8 @@ pregcomp(char *exp, char *xend, PMOP *pm)
     r->refcnt = 1;
     r->prelen = xend - exp;
     r->precomp = PL_regprecomp;
-    r->subbeg = r->subbase = NULL;
+    r->subbeg = NULL;
+    r->reganch = pm->op_pmflags & PMf_COMPILETIME;
     r->nparens = PL_regnpar - 1;	/* set early to validate backrefs */
 
     r->substrs = 0;			/* Useful during FAIL. */
@@ -898,7 +899,7 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	return(NULL);
 
     /* Dig out information for optimizations. */
-    r->reganch = pm->op_pmflags & PMf_COMPILETIME;
+    r->reganch = pm->op_pmflags & PMf_COMPILETIME; /* Again? */
     pm->op_pmflags = PL_regflags;
     if (UTF)
 	r->reganch |= ROPT_UTF8;
@@ -977,9 +978,9 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	*/
 	minlen = 0;
 
-	data.longest_fixed = newSVpv("",0);
-	data.longest_float = newSVpv("",0);
-	data.last_found = newSVpv("",0);
+	data.longest_fixed = newSVpvn("",0);
+	data.longest_float = newSVpvn("",0);
+	data.last_found = newSVpvn("",0);
 	data.longest = &(data.longest_fixed);
 	first = scan;
 	
@@ -998,6 +999,8 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	    || (data.flags & SF_FL_BEFORE_EOL
 		&& (!(data.flags & SF_FL_BEFORE_MEOL)
 		    || (PL_regflags & PMf_MULTILINE)))) {
+	    int t;
+
 	    if (SvCUR(data.longest_fixed) 			/* ok to leave SvCUR */
 		&& data.offset_fixed == data.offset_float_min
 		&& SvCUR(data.longest_fixed) == SvCUR(data.longest_float))
@@ -1006,12 +1009,10 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	    r->float_substr = data.longest_float;
 	    r->float_min_offset = data.offset_float_min;
 	    r->float_max_offset = data.offset_float_max;
-	    fbm_compile(r->float_substr, 0);
-	    BmUSEFUL(r->float_substr) = 100;
-	    if (data.flags & SF_FL_BEFORE_EOL /* Cannot have SEOL and MULTI */
-		&& (!(data.flags & SF_FL_BEFORE_MEOL)
-		    || (PL_regflags & PMf_MULTILINE))) 
-		SvTAIL_on(r->float_substr);
+	    t = (data.flags & SF_FL_BEFORE_EOL /* Can't have SEOL and MULTI */
+		       && (!(data.flags & SF_FL_BEFORE_MEOL)
+			   || (PL_regflags & PMf_MULTILINE)));
+	    fbm_compile(r->float_substr, t ? FBMcf_TAIL : 0);
 	}
 	else {
 	  remove_float:
@@ -1025,14 +1026,14 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	    || (data.flags & SF_FIX_BEFORE_EOL /* Cannot have SEOL and MULTI */
 		&& (!(data.flags & SF_FIX_BEFORE_MEOL)
 		    || (PL_regflags & PMf_MULTILINE)))) {
+	    int t;
+
 	    r->anchored_substr = data.longest_fixed;
 	    r->anchored_offset = data.offset_fixed;
-	    fbm_compile(r->anchored_substr, 0);
-	    BmUSEFUL(r->anchored_substr) = 100;
-	    if (data.flags & SF_FIX_BEFORE_EOL /* Cannot have SEOL and MULTI */
-		&& (!(data.flags & SF_FIX_BEFORE_MEOL)
-		    || (PL_regflags & PMf_MULTILINE)))
-		SvTAIL_on(r->anchored_substr);
+	    t = (data.flags & SF_FIX_BEFORE_EOL /* Can't have SEOL and MULTI */
+		 && (!(data.flags & SF_FIX_BEFORE_MEOL)
+		     || (PL_regflags & PMf_MULTILINE)));
+	    fbm_compile(r->anchored_substr, t ? FBMcf_TAIL : 0);
 	}
 	else {
 	    r->anchored_substr = Nullsv;
@@ -1070,8 +1071,8 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	r->reganch |= ROPT_LOOKBEHIND_SEEN;
     if (PL_regseen & REG_SEEN_EVAL)
 	r->reganch |= ROPT_EVAL_SEEN;
-    Newz(1002, r->startp, PL_regnpar, char*);
-    Newz(1002, r->endp, PL_regnpar, char*);
+    Newz(1002, r->startp, PL_regnpar, I32);
+    Newz(1002, r->endp, PL_regnpar, I32);
     DEBUG_r(regdump(r));
     return(r);
 }
@@ -1166,9 +1167,9 @@ reg(I32 paren, I32 *flagp)
 		    AV *av;
 		    
 		    if (PL_regcomp_parse - 1 - s) 
-			sv = newSVpv(s, PL_regcomp_parse - 1 - s);
+			sv = newSVpvn(s, PL_regcomp_parse - 1 - s);
 		    else
-			sv = newSVpv("", 0);
+			sv = newSVpvn("", 0);
 
 		    rop = sv_compile_2op(sv, &sop, "re", &av);
 
@@ -2149,6 +2150,10 @@ regpposixcc(I32 value)
 		PL_regcomp_parse++; /* skip over the ending ] */
 		posixcc = s + 1;
 	    }
+	    else {
+		/* maternal grandfather */
+		PL_regcomp_parse = s;
+	    }
 	}
     }
 
@@ -2378,7 +2383,7 @@ regclassutf8(void)
 	    flags |= ANYOF_FOLD;
 	if (LOC)
 	    flags |= ANYOF_LOCALE;
-	listsv = newSVpv("# comment\n",0);
+	listsv = newSVpvn("# comment\n",10);
     }
 
     if (*PL_regcomp_parse == ']' || *PL_regcomp_parse == '-')
@@ -2498,7 +2503,7 @@ regclassutf8(void)
 		    e = strchr(PL_regcomp_parse++, '}');
                     if (!e)
                         FAIL("Missing right brace on \\x{}");
-		    value = scan_hex(PL_regcomp_parse + 1, e - PL_regcomp_parse, &numlen);
+		    value = scan_hex(PL_regcomp_parse, e - PL_regcomp_parse, &numlen);
 		    PL_regcomp_parse = e + 1;
 		}
 		else {
@@ -2909,199 +2914,28 @@ regprop(SV *sv, regnode *o)
 {
 #ifdef DEBUGGING
     dTHR;
-    register char *p = 0;
+    register int k;
 
     sv_setpvn(sv, "", 0);
-    switch (OP(o)) {
-    case BOL:
-	p = "BOL";
-	break;
-    case MBOL:
-	p = "MBOL";
-	break;
-    case SBOL:
-	p = "SBOL";
-	break;
-    case EOL:
-	p = "EOL";
-	break;
-    case EOS:
-	p = "EOS";
-	break;
-    case MEOL:
-	p = "MEOL";
-	break;
-    case SEOL:
-	p = "SEOL";
-	break;
-    case REG_ANY:
-	p = "ANY";
-	break;
-    case SANY:
-	p = "SANY";
-	break;
-    case ANYUTF8:
-	p = "ANYUTF8";
-	break;
-    case SANYUTF8:
-	p = "SANYUTF8";
-	break;
-    case ANYOFUTF8:
-	p = "ANYOFUTF8";
-	break;
-    case ANYOF:
-	p = "ANYOF";
-	break;
-    case BRANCH:
-	p = "BRANCH";
-	break;
-    case EXACT:
-	sv_catpvf(sv, "EXACT <%s%s%s>", PL_colors[0], OPERAND(o) + 1, PL_colors[1]);
-	break;
-    case EXACTF:
-	sv_catpvf(sv, "EXACTF <%s%s%s>", PL_colors[0], OPERAND(o) + 1, PL_colors[1]);
-	break;
-    case EXACTFL:
-	sv_catpvf(sv, "EXACTFL <%s%s%s>", PL_colors[0], OPERAND(o) + 1, PL_colors[1]);
-	break;
-    case NOTHING:
-	p = "NOTHING";
-	break;
-    case TAIL:
-	p = "TAIL";
-	break;
-    case BACK:
-	p = "BACK";
-	break;
-    case END:
-	p = "END";
-	break;
-    case BOUND:
-	p = "BOUND";
-	break;
-    case BOUNDL:
-	p = "BOUNDL";
-	break;
-    case NBOUND:
-	p = "NBOUND";
-	break;
-    case NBOUNDL:
-	p = "NBOUNDL";
-	break;
-    case CURLY:
-	sv_catpvf(sv, "CURLY {%d,%d}", ARG1(o), ARG2(o));
-	break;
-    case CURLYM:
-	sv_catpvf(sv, "CURLYM[%d] {%d,%d}", o->flags, ARG1(o), ARG2(o));
-	break;
-    case CURLYN:
-	sv_catpvf(sv, "CURLYN[%d] {%d,%d}", o->flags, ARG1(o), ARG2(o));
-	break;
-    case CURLYX:
-	sv_catpvf(sv, "CURLYX {%d,%d}", ARG1(o), ARG2(o));
-	break;
-    case REF:
-	sv_catpvf(sv, "REF%d", ARG(o));
-	break;
-    case REFF:
-	sv_catpvf(sv, "REFF%d", ARG(o));
-	break;
-    case REFFL:
-	sv_catpvf(sv, "REFFL%d", ARG(o));
-	break;
-    case OPEN:
-	sv_catpvf(sv, "OPEN%d", ARG(o));
-	break;
-    case CLOSE:
-	sv_catpvf(sv, "CLOSE%d", ARG(o));
-	p = NULL;
-	break;
-    case STAR:
-	p = "STAR";
-	break;
-    case PLUS:
-	p = "PLUS";
-	break;
-    case MINMOD:
-	p = "MINMOD";
-	break;
-    case GPOS:
-	p = "GPOS";
-	break;
-    case UNLESSM:
-	sv_catpvf(sv, "UNLESSM[-%d]", o->flags);
-	break;
-    case IFMATCH:
-	sv_catpvf(sv, "IFMATCH[-%d]", o->flags);
-	break;
-    case SUCCEED:
-	p = "SUCCEED";
-	break;
-    case WHILEM:
-	p = "WHILEM";
-	break;
-    case DIGIT:
-	p = "DIGIT";
-	break;
-    case NDIGIT:
-	p = "NDIGIT";
-	break;
-    case ALNUM:
-	p = "ALNUM";
-	break;
-    case NALNUM:
-	p = "NALNUM";
-	break;
-    case SPACE:
-	p = "SPACE";
-	break;
-    case NSPACE:
-	p = "NSPACE";
-	break;
-    case ALNUML:
-	p = "ALNUML";
-	break;
-    case NALNUML:
-	p = "NALNUML";
-	break;
-    case SPACEL:
-	p = "SPACEL";
-	break;
-    case NSPACEL:
-	p = "NSPACEL";
-	break;
-    case EVAL:
-	p = "EVAL";
-	break;
-    case LONGJMP:
-	p = "LONGJMP";
-	break;
-    case BRANCHJ:
-	p = "BRANCHJ";
-	break;
-    case IFTHEN:
-	p = "IFTHEN";
-	break;
-    case GROUPP:
-	sv_catpvf(sv, "GROUPP%d", ARG(o));
-	break;
-    case LOGICAL:
-	sv_catpvf(sv, "LOGICAL[%d]", o->flags);
-	break;
-    case SUSPEND:
-	p = "SUSPEND";
-	break;
-    case RENUM:
-	p = "RENUM";
-	break;
-    case OPTIMIZED:
-	p = "OPTIMIZED";
-	break;
-    default:
+    if (OP(o) >= reg_num)		/* regnode.type is unsigned */
 	FAIL("corrupted regexp opcode");
+    sv_catpv(sv, (char*)reg_name[OP(o)]); /* Take off const! */
+
+    k = PL_regkind[(U8)OP(o)];
+
+    if (k == EXACT)
+	sv_catpvf(sv, " <%s%s%s>", PL_colors[0], OPERAND(o) + 1, PL_colors[1]);
+    else if (k == CURLY) {
+	if (OP(o) == CURLYM || OP(o) == CURLYN)
+	    sv_catpvf(sv, "[%d]", o->flags); /* Parenth number */
+	sv_catpvf(sv, " {%d,%d}", ARG1(o), ARG2(o));
     }
-    if (p)
-	sv_catpv(sv, p);
+    else if (k == REF || k == OPEN || k == CLOSE || k == GROUPP )
+	sv_catpvf(sv, "%d", ARG(o));	/* Parenth number */
+    else if (k == LOGICAL)
+	sv_catpvf(sv, "[%d]", ARG(o));	/* 2: embedded, otherwise 1 */
+    else if (k == BRANCHJ && (OP(o) == UNLESSM || OP(o) == IFMATCH))
+	sv_catpvf(sv, "[-%d]", o->flags);
 #endif	/* DEBUGGING */
 }
 
@@ -3113,8 +2947,8 @@ pregfree(struct regexp *r)
 	return;
     if (r->precomp)
 	Safefree(r->precomp);
-    if (r->subbase)
-	Safefree(r->subbase);
+    if (RX_MATCH_COPIED(r))
+	Safefree(r->subbeg);
     if (r->substrs) {
 	if (r->anchored_substr)
 	    SvREFCNT_dec(r->anchored_substr);
@@ -3192,6 +3026,7 @@ re_croak2(const char* pat1,const char* pat2,...)
     STRLEN l1 = strlen(pat1);
     STRLEN l2 = strlen(pat2);
     char buf[512];
+    SV *msv;
     char *message;
 
     if (l1 > 510)
@@ -3202,10 +3037,15 @@ re_croak2(const char* pat1,const char* pat2,...)
     Copy(pat2, buf + l1, l2 , char);
     buf[l1 + l2] = '\n';
     buf[l1 + l2 + 1] = '\0';
+#ifdef I_STDARG
+    /* ANSI variant takes additional second argument */
     va_start(args, pat2);
-    message = mess(buf, &args);
+#else
+    va_start(args);
+#endif
+    msv = mess(buf, &args);
     va_end(args);
-    l1 = strlen(message);
+    message = SvPV(msv,l1);
     if (l1 > 512)
 	l1 = 512;
     Copy(message, buf, l1 , char);

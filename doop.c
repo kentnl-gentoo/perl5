@@ -1,6 +1,6 @@
 /*    doop.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -665,7 +665,7 @@ do_join(register SV *sv, SV *del, register SV **mark, register SV **sp)
 	SvGROW(sv, len + 1);		/* so try to pre-extend */
 
 	mark = oldmark;
-	items = sp - mark;;
+	items = sp - mark;
 	++mark;
     }
 
@@ -779,7 +779,7 @@ do_chop(register SV *astr, register SV *sv)
 	}
         return;
     }
-    if (SvTYPE(sv) == SVt_PVHV) {
+    else if (SvTYPE(sv) == SVt_PVHV) {
         HV* hv = (HV*)sv;
 	HE* entry;
         (void)hv_iterinit(hv);
@@ -788,6 +788,8 @@ do_chop(register SV *astr, register SV *sv)
             do_chop(astr,hv_iterval(hv,entry));
         return;
     }
+    else if (SvREADONLY(sv))
+	croak(PL_no_modify);
     s = SvPV(sv, len);
     if (len && !SvPOK(sv))
 	s = SvPV_force(sv, len);
@@ -831,6 +833,8 @@ do_chomp(register SV *sv)
 
     if (RsSNARF(PL_rs))
 	return 0;
+    if (RsRECORD(PL_rs))
+      return 0;
     count = 0;
     if (SvTYPE(sv) == SVt_PVAV) {
 	register I32 i;
@@ -844,7 +848,7 @@ do_chomp(register SV *sv)
 	}
         return count;
     }
-    if (SvTYPE(sv) == SVt_PVHV) {
+    else if (SvTYPE(sv) == SVt_PVHV) {
         HV* hv = (HV*)sv;
 	HE* entry;
         (void)hv_iterinit(hv);
@@ -853,6 +857,8 @@ do_chomp(register SV *sv)
             count += do_chomp(hv_iterval(hv,entry));
         return count;
     }
+    else if (SvREADONLY(sv))
+	croak(PL_no_modify);
     s = SvPV(sv, len);
     if (len && !SvPOKp(sv))
 	s = SvPV_force(sv, len);

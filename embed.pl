@@ -225,9 +225,7 @@ my @staticfuncs = qw(
     del_xnv
     del_xpv
     del_xrv
-    sv_mortalgrow
     sv_unglob
-    sv_check_thinkfirst
     avhv_index_sv
     do_report_used
     do_clean_objs
@@ -247,6 +245,12 @@ my @staticfuncs = qw(
     refto
     seed
     docatch
+    docatch_body
+    perl_parse_body
+    perl_run_body
+    perl_call_body
+    perl_call_xbody
+    call_list_body
     dofindlabel
     doparseform
     dopoptoeval
@@ -256,6 +260,7 @@ my @staticfuncs = qw(
     dopoptosub_at
     save_lines
     doeval
+    doopen_pmc
     sv_ncmp
     sv_i_ncmp
     amagic_ncmp
@@ -308,6 +313,7 @@ my @staticfuncs = qw(
     bad_type
     modkids
     no_fh_allowed
+    no_bareword_allowed
     scalarboolean
     too_few_arguments
     too_many_arguments
@@ -373,10 +379,11 @@ my @staticfuncs = qw(
     dump
     do_aspawn
     debprof
-    bset_obj_store
     new_logop
     simplify_sort
     is_handle_constructor
+    sv_add_backref
+    sv_del_backref
     do_trans_CC_simple
     do_trans_CC_count
     do_trans_CC_complex
@@ -404,6 +411,11 @@ for $sym (sort(keys(%global),@staticfuncs)) {
 print EM <<'END';
 
 #endif	/* PERL_OBJECT */
+
+/* compatibility stubs */
+
+#define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,(IV)ptr)
+#define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,(IV)ptr)
 
 END
 
@@ -541,7 +553,7 @@ END
 
 print EM <<'END';
 
-#ifdef PERL_POLLUTE		/* unsupported in 5.006 */
+#ifdef PERL_POLLUTE		/* disabled by default in 5.006 */
 
 END
 
@@ -551,7 +563,7 @@ for $sym (sort @extvars) {
 
 print EM <<'END';
 
-#endif /* MIN_PERL_DEFINE */
+#endif /* PERL_POLLUTE */
 END
 
 

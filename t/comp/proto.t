@@ -16,7 +16,7 @@ BEGIN {
 
 use strict;
 
-print "1..87\n";
+print "1..100\n";
 
 my $i = 1;
 
@@ -388,7 +388,7 @@ print "# CORE::open => ($p)\nnot " if ($p = prototype('CORE::open')) ne '*;$';
 print "ok ", $i++, "\n";
 
 print "# CORE:Foo => ($p), \$@ => `$@'\nnot " 
-    if defined ($p = eval { prototype('CORE::Foo') or 1 }) or $@ !~ /^Cannot find an opnumber/;
+    if defined ($p = eval { prototype('CORE::Foo') or 1 }) or $@ !~ /^Can't find an opnumber/;
 print "ok ", $i++, "\n";
 
 # correctly note too-short parameter lists that don't end with '$',
@@ -417,9 +417,41 @@ print "ok ", $i++, "\n";
 # test if the (*) prototype allows barewords, constants, scalar expressions,
 # globs and globrefs (just as CORE::open() does), all under stricture
 sub star (*&) { &{$_[1]} }
+sub star2 (**&) { &{$_[2]} }
+sub BAR { "quux" }
 my $star = 'FOO';
 star FOO, sub { print "ok $i\n" if $_[0] eq 'FOO' }; $i++;
+star(FOO, sub { print "ok $i\n" if $_[0] eq 'FOO' }); $i++;
 star "FOO", sub { print "ok $i\n" if $_[0] eq 'FOO' }; $i++;
+star("FOO", sub { print "ok $i\n" if $_[0] eq 'FOO' }); $i++;
 star $star, sub { print "ok $i\n" if $_[0] eq 'FOO' }; $i++;
+star($star, sub { print "ok $i\n" if $_[0] eq 'FOO' }); $i++;
 star *FOO, sub { print "ok $i\n" if $_[0] eq \*FOO }; $i++;
+star(*FOO, sub { print "ok $i\n" if $_[0] eq \*FOO }); $i++;
 star \*FOO, sub { print "ok $i\n" if $_[0] eq \*FOO }; $i++;
+star(\*FOO, sub { print "ok $i\n" if $_[0] eq \*FOO }); $i++;
+star2 FOO, BAR, sub { print "ok $i\n"
+			if $_[0] eq 'FOO' and $_[1] eq 'BAR' }; $i++;
+star2(BAR, FOO, sub { print "ok $i\n"
+			if $_[0] eq 'BAR' and $_[1] eq 'FOO' }); $i++;
+star2 BAR(), FOO, sub { print "ok $i\n"
+			if $_[0] eq 'quux' and $_[1] eq 'FOO' }; $i++;
+star2(FOO, BAR(), sub { print "ok $i\n"
+			if $_[0] eq 'FOO' and $_[1] eq 'quux' }); $i++;
+star2 "FOO", "BAR", sub { print "ok $i\n"
+			if $_[0] eq 'FOO' and $_[1] eq 'BAR' }; $i++;
+star2("FOO", "BAR", sub { print "ok $i\n"
+			if $_[0] eq 'FOO' and $_[1] eq 'BAR' }); $i++;
+star2 $star, $star, sub { print "ok $i\n"
+			if $_[0] eq 'FOO' and $_[1] eq 'FOO' }; $i++;
+star2($star, $star, sub { print "ok $i\n"
+			if $_[0] eq 'FOO' and $_[1] eq 'FOO' }); $i++;
+star2 *FOO, *BAR, sub { print "ok $i\n"
+			if $_[0] eq \*FOO and $_[0] eq \*BAR }; $i++;
+star2(*FOO, *BAR, sub { print "ok $i\n"
+			if $_[0] eq \*FOO and $_[0] eq \*BAR }); $i++;
+star2 \*FOO, \*BAR, sub { no strict 'refs'; print "ok $i\n"
+			if $_[0] eq \*{'FOO'} and $_[0] eq \*{'BAR'} }; $i++;
+star2(\*FOO, \*BAR, sub { no strict 'refs'; print "ok $i\n"
+			if $_[0] eq \*{'FOO'} and $_[0] eq \*{'BAR'} }); $i++;
+

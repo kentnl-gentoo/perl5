@@ -3,8 +3,8 @@
  DB_File.xs -- Perl 5 interface to Berkeley DB 
 
  written by Paul Marquess <Paul.Marquess@btinternet.com>
- last modified 21st February 1999
- version 1.64
+ last modified 6th March 1999
+ version 1.66
 
  All comments/suggestions/problems are welcome
 
@@ -63,6 +63,9 @@
         1.64 -  Tidied up the 1.x to 2.x flags mapping code.
 		Added a patch from Mark Kettenis <kettenis@wins.uva.nl>
 		to fix a flag mapping problem with O_RDONLY on the Hurd
+        1.65 -  Fixed a bug in the PUSH logic.
+		Added BOOT check that using 2.3.4 or greater
+        1.66 -  Added DBM filter code
 
 
 
@@ -103,6 +106,7 @@
 #include <fcntl.h> 
 
 /* #define TRACE */
+#define DBM_FILTERING
 
 
 
@@ -275,28 +279,67 @@ typedef struct {
 #ifdef DB_VERSION_MAJOR
 	DBC *	cursor ;
 #endif
+#ifdef DBM_FILTERING
+	SV *    filter_fetch_key ;
+	SV *    filter_store_key ;
+	SV *    filter_fetch_value ;
+	SV *    filter_store_value ;
+	int     filtering ;
+#endif /* DBM_FILTERING */
+
 	} DB_File_type;
 
 typedef DB_File_type * DB_File ;
 typedef DBT DBTKEY ;
 
-#define my_sv_setpvn(sv, d, s) sv_setpvn(sv, (s ? d : (void*)""), s)
+#ifdef DBM_FILTERING
 
-#define OutputValue(arg, name)  				\
-	{ if (RETVAL == 0) {					\
-	      my_sv_setpvn(arg, name.data, name.size) ;		\
-	  }							\
+#define ckFilter(arg,type,name)					\
+	if (db->type) {						\
+	    SV * save_defsv ;					\
+            /* printf("filtering %s\n", name) ;*/		\
+	    if (db->filtering)					\
+	        croak("recursion detected in %s", name) ;	\
+	    db->filtering = TRUE ;				\
+	    /* SAVE_DEFSV ;*/   /* save $_ */			\
+	    save_defsv = newSVsv(DEFSV) ;			\
+	    sv_setsv(DEFSV, arg) ;				\
+	    PUSHMARK(sp) ;					\
+	    (void) perl_call_sv(db->type, G_DISCARD|G_NOARGS); 	\
+	    /* SPAGAIN ; */						\
+	    sv_setsv(arg, DEFSV) ;				\
+	    sv_setsv(DEFSV, save_defsv) ;				\
+	    SvREFCNT_dec(save_defsv) ;				\
+	    /* PUTBACK ; */						\
+	    db->filtering = FALSE ;				\
+	    /*printf("end of filtering %s\n", name) ;*/		\
 	}
 
-#define OutputKey(arg, name)	 				\
-	{ if (RETVAL == 0) 					\
-	  { 							\
-		if (db->type != DB_RECNO) {			\
-		    my_sv_setpvn(arg, name.data, name.size); 	\
-		}						\
-		else 						\
-		    sv_setiv(arg, (I32)*(I32*)name.data - 1); 	\
-	  } 							\
+#else
+
+#define ckFilter(arg,type, name)
+
+#endif /* DBM_FILTERING */
+
+#define my_sv_setpvn(sv, d, s) sv_setpvn(sv, (s ? d : (void*)""), s)
+
+#define OutputValue(arg, name)  					\
+	{ if (RETVAL == 0) {						\
+	      my_sv_setpvn(arg, name.data, name.size) ;			\
+	      ckFilter(arg, filter_fetch_value,"filter_fetch_value") ; 	\
+	  }								\
+	}
+
+#define OutputKey(arg, name)	 					\
+	{ if (RETVAL == 0) 						\
+	  { 								\
+		if (db->type != DB_RECNO) {				\
+		    my_sv_setpvn(arg, name.data, name.size); 		\
+		}							\
+		else 							\
+		    sv_setiv(arg, (I32)*(I32*)name.data - 1); 		\
+	      ckFilter(arg, filter_fetch_key,"filter_fetch_key") ; 	\
+	  } 								\
 	}
 
 
@@ -346,9 +389,9 @@ GetVersionInfo()
 
     (void)db_version(&Major, &Minor, &Patch) ;
 
-    /* check that libdb is recent enough */
-    if (Major == 2 && Minor ==  0 && Patch < 5)
-	croak("DB_File needs Berkeley DB 2.0.5 or greater, you have %d.%d.%d\n",
+    /* check that libdb is recent enough  -- we need 2.3.4 or greater */
+    if (Major == 2 && (Minor < 3 || (Minor ==  3 && Patch < 4)))
+	croak("DB_File needs Berkeley DB 2.3.4 or greater, you have %d.%d.%d\n",
 		 Major, Minor, Patch) ;
  
 #if PERL_VERSION > 3
@@ -380,7 +423,7 @@ const DBT * key2 ;
     
     data1 = key1->data ;
     data2 = key2->data ;
-
+#if 0
     /* As newSVpv will assume that the data pointer is a null terminated C 
        string if the size parameter is 0, make sure that data points to an 
        empty string if the length is 0
@@ -389,14 +432,14 @@ const DBT * key2 ;
         data1 = "" ; 
     if (key2->size == 0)
         data2 = "" ;
-
+#endif
     ENTER ;
     SAVETMPS;
 
     PUSHMARK(SP) ;
     EXTEND(SP,2) ;
-    PUSHs(sv_2mortal(newSVpv(data1,key1->size)));
-    PUSHs(sv_2mortal(newSVpv(data2,key2->size)));
+    PUSHs(sv_2mortal(newSVpvn(data1,key1->size)));
+    PUSHs(sv_2mortal(newSVpvn(data2,key2->size)));
     PUTBACK ;
 
     count = perl_call_sv(CurrentDB->compare, G_SCALAR); 
@@ -427,7 +470,7 @@ const DBT * key2 ;
     
     data1 = key1->data ;
     data2 = key2->data ;
-
+#if 0
     /* As newSVpv will assume that the data pointer is a null terminated C 
        string if the size parameter is 0, make sure that data points to an 
        empty string if the length is 0
@@ -436,14 +479,14 @@ const DBT * key2 ;
         data1 = "" ;
     if (key2->size == 0)
         data2 = "" ;
-
+#endif
     ENTER ;
     SAVETMPS;
 
     PUSHMARK(SP) ;
     EXTEND(SP,2) ;
-    PUSHs(sv_2mortal(newSVpv(data1,key1->size)));
-    PUSHs(sv_2mortal(newSVpv(data2,key2->size)));
+    PUSHs(sv_2mortal(newSVpvn(data1,key1->size)));
+    PUSHs(sv_2mortal(newSVpvn(data2,key2->size)));
     PUTBACK ;
 
     count = perl_call_sv(CurrentDB->prefix, G_SCALAR); 
@@ -470,17 +513,17 @@ size_t size ;
     dSP ;
     int retval ;
     int count ;
-
+#if 0
     if (size == 0)
         data = "" ;
-
+#endif
      /* DGH - Next two lines added to fix corrupted stack problem */
     ENTER ;
     SAVETMPS;
 
     PUSHMARK(SP) ;
 
-    XPUSHs(sv_2mortal(newSVpv((char*)data,size)));
+    XPUSHs(sv_2mortal(newSVpvn((char*)data,size)));
     PUTBACK ;
 
     count = perl_call_sv(CurrentDB->hash, G_SCALAR); 
@@ -618,6 +661,11 @@ SV *   sv ;
     Zero(RETVAL, 1, DB_File_type) ;
 
     /* Default to HASH */
+#ifdef DBM_FILTERING
+    RETVAL->filtering = 0 ;
+    RETVAL->filter_fetch_key = RETVAL->filter_store_key = 
+    RETVAL->filter_fetch_value = RETVAL->filter_store_value =
+#endif /* DBM_FILTERING */
     RETVAL->hash = RETVAL->compare = RETVAL->prefix = NULL ;
     RETVAL->type = DB_HASH ;
 
@@ -1163,6 +1211,16 @@ db_DESTROY(db)
 	    SvREFCNT_dec(db->compare) ;
 	  if (db->prefix)
 	    SvREFCNT_dec(db->prefix) ;
+#ifdef DBM_FILTERING
+	  if (db->filter_fetch_key)
+	    SvREFCNT_dec(db->filter_fetch_key) ;
+	  if (db->filter_store_key)
+	    SvREFCNT_dec(db->filter_store_key) ;
+	  if (db->filter_fetch_value)
+	    SvREFCNT_dec(db->filter_fetch_value) ;
+	  if (db->filter_store_value)
+	    SvREFCNT_dec(db->filter_store_value) ;
+#endif /* DBM_FILTERING */
 	  Safefree(db) ;
 #ifdef DB_VERSION_MAJOR
 	  if (RETVAL > 0)
@@ -1228,7 +1286,6 @@ db_FIRSTKEY(db)
 	{
 	    DBTKEY	key ;
 	    DBT		value ;
-	    DB *	Db = db->dbp ;
 
 	    DBT_flags(key) ; 
 	    DBT_flags(value) ; 
@@ -1245,7 +1302,6 @@ db_NEXTKEY(db, key)
 	CODE:
 	{
 	    DBT		value ;
-	    DB *	Db = db->dbp ;
 
 	    DBT_flags(value) ; 
 	    CurrentDB = db ;
@@ -1308,7 +1364,6 @@ pop(db)
 	{
 	    DBTKEY	key ;
 	    DBT		value ;
-	    DB *	Db = db->dbp ;
 
 	    DBT_flags(key) ; 
 	    DBT_flags(value) ; 
@@ -1336,7 +1391,6 @@ shift(db)
 	{
 	    DBT		value ;
 	    DBTKEY	key ;
-	    DB *	Db = db->dbp ;
 
 	    DBT_flags(key) ; 
 	    DBT_flags(value) ; 
@@ -1363,7 +1417,6 @@ push(db, ...)
 	CODE:
 	{
 	    DBTKEY	key ;
-	    DBTKEY *	keyptr = &key ; 
 	    DBT		value ;
 	    DB *	Db = db->dbp ;
 	    int		i ;
@@ -1372,34 +1425,35 @@ push(db, ...)
 	    DBT_flags(key) ; 
 	    DBT_flags(value) ; 
 	    CurrentDB = db ;
+#ifdef DB_VERSION_MAJOR
+	   	RETVAL = 0 ;
+		key = empty ;
+	        for (i = 1 ; i < items  ; ++i)
+	        {
+	            value.data = SvPV(ST(i), n_a) ;
+	            value.size = n_a ;
+	            RETVAL = (Db->put)(Db, NULL, &key, &value, DB_APPEND) ;
+	            if (RETVAL != 0)
+	                break;
+		}
+#else		
+	    
 	    /* Set the Cursor to the Last element */
 	    RETVAL = do_SEQ(db, key, value, R_LAST) ;
 	    if (RETVAL >= 0)
 	    {
 		if (RETVAL == 1)
-		    keyptr = &empty ;
-#ifdef DB_VERSION_MAJOR
-	        for (i = 1 ; i < items  ; ++i)
-	        {
-		    
-		    ++ (* (int*)key.data) ;
-	            value.data = SvPV(ST(i), n_a) ;
-	            value.size = n_a ;
-	            RETVAL = (Db->put)(Db, NULL, &key, &value, 0) ;
-	            if (RETVAL != 0)
-	                break;
-		}
-#else
+		    key = empty ;
 	        for (i = items - 1 ; i > 0 ; --i)
 	        {
 	            value.data = SvPV(ST(i), n_a) ;
 	            value.size = n_a ;
-	            RETVAL = (Db->put)(Db, keyptr, &value, R_IAFTER) ;
+	            RETVAL = (Db->put)(Db, &key, &value, R_IAFTER) ;
 	            if (RETVAL != 0)
 	                break;
 	        }
-#endif
 	    }
+#endif
 	}
 	OUTPUT:
 	    RETVAL
@@ -1534,3 +1588,63 @@ db_seq(db, key, value, flags)
 	  key
 	  value
 
+#ifdef DBM_FILTERING
+
+#define setFilter(type)					\
+	{						\
+	    if (db->type)				\
+	        RETVAL = newSVsv(db->type) ; 		\
+	    if (db->type && (code == &PL_sv_undef)) {	\
+                SvREFCNT_dec(db->type) ;		\
+	        db->type = NULL ;			\
+	    }						\
+	    else if (code) {				\
+	        if (db->type)				\
+	            sv_setsv(db->type, code) ;		\
+	        else					\
+	            db->type = newSVsv(code) ;		\
+	    }	    					\
+	}
+
+
+SV *
+filter_fetch_key(db, code)
+	DB_File		db
+	SV *		code
+	SV *		RETVAL = &PL_sv_undef ;
+	CODE:
+	    setFilter(filter_fetch_key) ;
+	OUTPUT:
+	    RETVAL
+
+SV *
+filter_store_key(db, code)
+	DB_File		db
+	SV *		code
+	SV *		RETVAL = &PL_sv_undef ;
+	CODE:
+	    setFilter(filter_store_key) ;
+	OUTPUT:
+	    RETVAL
+
+SV *
+filter_fetch_value(db, code)
+	DB_File		db
+	SV *		code
+	SV *		RETVAL = &PL_sv_undef ;
+	CODE:
+	    setFilter(filter_fetch_value) ;
+	OUTPUT:
+	    RETVAL
+
+SV *
+filter_store_value(db, code)
+	DB_File		db
+	SV *		code
+	SV *		RETVAL = &PL_sv_undef ;
+	CODE:
+	    setFilter(filter_store_value) ;
+	OUTPUT:
+	    RETVAL
+
+#endif /* DBM_FILTERING */

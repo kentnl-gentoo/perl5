@@ -20,7 +20,7 @@
 
 # $Id: Head.U,v 3.0.1.9 1997/02/28 15:02:09 ram Exp $
 #
-# Generated on Thu Feb 25 22:44:22 EET 1999 [metaconfig 3.0 PL70]
+# Generated on Sat May 22 00:54:37 EET DST 1999 [metaconfig 3.0 PL70]
 # (with additional metaconfig patches by perlbug@perl.com)
 
 cat >/tmp/c1$$ <<EOF
@@ -106,6 +106,13 @@ if test -d /usr/lpp -a -f /usr/bin/bsh -a -f /usr/bin/uname; then
 	if test X`/usr/bin/uname -v` = X4; then
 		avoidksh="to avoid AIX 4's /bin/sh"
 		newsh=/usr/bin/bsh
+	fi
+fi
+if test -f /osf_boot -a -f /usr/sbin/setld; then
+	if test X`/usr/bin/uname -s` = XOSF1; then
+	        avoidksh="to avoid Digital UNIX' ksh"
+	        newsh=/bin/sh
+	        unset BIN_SH # if this is 'xpg4' sh will start up ksh
 	fi
 fi
 case "$inksh/$needksh" in
@@ -397,6 +404,7 @@ d_madvise=''
 d_mblen=''
 d_mbstowcs=''
 d_mbtowc=''
+d_memchr=''
 d_memcmp=''
 d_memcpy=''
 d_memmove=''
@@ -565,6 +573,8 @@ lddlflags=''
 usedl=''
 doublesize=''
 ebcdic=''
+fflushNULL=''
+fflushall=''
 fpostype=''
 gidtype=''
 groupstype=''
@@ -598,9 +608,11 @@ i_mntent=''
 i_ndbm=''
 i_netdb=''
 i_neterrno=''
+i_netinettcp=''
 i_niin=''
 i_sysin=''
 i_poll=''
+i_pthread=''
 d_pwage=''
 d_pwchange=''
 d_pwclass=''
@@ -660,11 +672,13 @@ d_dirent64_s=''
 d_flock64_s=''
 d_fstat64=''
 d_ftruncate64=''
-d_ino64t=''
+d_ino64_t=''
+d_llseek=''
 d_lockf64=''
 d_lseek64=''
 d_lstat64=''
-d_off64t=''
+d_off64_t=''
+d_offset_t=''
 d_open64=''
 d_opendir64=''
 d_readdir64=''
@@ -755,6 +769,7 @@ scriptdirexp=''
 selectminbits=''
 selecttype=''
 sh=''
+sig_count=''
 sig_name=''
 sig_name_init=''
 sig_num=''
@@ -784,6 +799,8 @@ d_fsetpos64=''
 d_ftell64=''
 d_ftello64=''
 d_tmpfile64=''
+d_stdio_stream_array=''
+stdio_stream_array=''
 sysman=''
 trnl=''
 uidtype=''
@@ -1310,7 +1327,7 @@ esac
 
 : script used to extract .SH files with variable substitutions
 cat >extract <<'EOS'
-CONFIG=true
+CONFIGDOTSH=true
 echo "Doing variable substitutions on .SH files..."
 if test -f $src/MANIFEST; then
 	set x `awk '{print $1}' <$src/MANIFEST | grep '\.SH$'`
@@ -1769,7 +1786,6 @@ more
 nm
 nroff
 pg
-tee
 test
 uname
 zip
@@ -2095,7 +2111,7 @@ EOM
 					osvers=2
 				fi
 			fi
-			unset tmp
+			tmp=''
 			;;
 		pc*)
 			if test -n "$DJGPP"; then
@@ -4333,10 +4349,13 @@ $cat >findhdr <<EOF
 $startsh
 wanted=\$1
 name=''
-if test -f $usrinc/\$wanted; then
-	echo "$usrinc/\$wanted"
-	exit 0
-fi
+for usrincdir in $usrinc
+do
+	if test -f \$usrincdir/\$wanted; then
+		echo "\$usrincdir/\$wanted"
+		exit 0
+	fi
+done
 awkprg='{ print \$$fieldn }'
 echo "#include <\$wanted>" > foo\$\$.c
 $cppstdin $cppminus $cppflags < foo\$\$.c 2>/dev/null | \
@@ -4344,7 +4363,8 @@ $grep "^[ 	]*#.*\$wanted" | \
 while read cline; do
 	name=\`echo \$cline | $awk "\$awkprg" | $tr -d '"'\`
 	case "\$name" in
-	*/\$wanted) echo "\$name"; exit 0;;
+	*[/\\\\]\$wanted) echo "\$name"; exit 0;;
+	*[\\\\/]\$wanted) echo "\$name"; exit 0;;
 	*) name='';;
 	esac;
 done;
@@ -5312,24 +5332,12 @@ EOM
 		useshrplib='true'
 		# Why does next4 have to be so different?
 		case "${osname}${osvers}" in
-		next4*)	xxx='DYLD_LIBRARY_PATH' ;;
+		next4*|rhapsody*)
+			xxx='DYLD_LIBRARY_PATH' ;;
 		os2*)	xxx='' ;; # Nothing special needed.
 		beos*)  xxx='' ;;
 		*)		xxx='LD_LIBRARY_PATH' ;;
 		esac
-		if test X"$xxx" != "X"; then
-			$cat <<EOM  | $tee -a ../config.msg >&4
-
-To build perl, you must add the current working directory to your
-$xxx environment variable before running make.  You can do
-this with
-   $xxx=\`pwd\`:\$$xxx; export $xxx
-for Bourne-style shells, or
-   setenv $xxx \`pwd\`
-for Csh-style shells.  You *MUST* do this before running make.
-
-EOM
-		fi
 		;;
 	*)	useshrplib='false' ;;
 	esac
@@ -5449,6 +5457,10 @@ if "$useshrplib"; then
 		;;
 	beos)
 		# beos doesn't like the default, either.
+		;;
+	hpux*)
+		# hpux doesn't like the default, either.
+		tmp_shrpenv="env LDOPTS=\"+s +b${shrpdir}\""
 		;;
 	*)
 		tmp_shrpenv="env LD_RUN_PATH=$shrpdir"
@@ -6874,7 +6886,7 @@ while $test $# -ge 2; do
     shift 2;
 done > try.c;
 echo "int main () { struct $struct foo; foo.$field = 0; }" >> try.c;
-if eval $cc $optimize $ccflags -c try.c >/dev/null 2>&1; then
+if $cc $optimize $ccflags -c try.c >/dev/null 2>&1; then
 	val="$define";
 else
 	val="$undef";
@@ -7240,6 +7252,10 @@ if $test X"$use64bits" = X"$define"; then
 	set lockf64 d_lockf64
 	eval $inlibc
 
+	: see if llseek exists
+	set llseek d_llseek
+	eval $inlibc
+
 	: see if lseek64 exists
 	set lseek64 d_lseek64
 	eval $inlibc
@@ -7281,6 +7297,7 @@ if $test X"$use64bits" = X"$define"; then
 	echo $n "Checking to see if your system supports off64_t...$c" >&4
 	$cat >try.c <<EOCP
 #include <sys/types.h>
+#include <unistd.h>
 off64_t foo() { off64_t x; x = 7; return x; }'
 EOCP
 	if $cc $optimize $ccflags -c try.c >/dev/null 2>&1; then
@@ -7291,7 +7308,26 @@ EOCP
 		echo " Nope, it doesn't." >&4
 	fi
 	$rm -f try.*
-	set d_off64t
+	set d_off64_t
+	eval $setvar
+
+	: check for offset_t
+	echo " "
+	echo $n "Checking to see if your system supports offset_t...$c" >&4
+	$cat >try.c <<EOCP
+#include <sys/types.h>
+#include <unistd.h>
+offset_t foo() { offset_t x; x = 7; return x; }'
+EOCP
+	if $cc $optimize $ccflags -c try.c >/dev/null 2>&1; then
+		val="$define"
+		echo " Yup, it does." >&4
+	else
+		val="$undef"
+		echo " Nope, it doesn't." >&4
+	fi
+	$rm -f try.*
+	set d_offset_t
 	eval $setvar
 
 	: check for ino64_t
@@ -7316,7 +7352,7 @@ EOCP
 	else
 		echo " Nope, it doesn't." >&4
 	fi
-	set d_ino64t
+	set d_ino64_t
 	eval $setvar
 
 	: check for struct flock64
@@ -7351,7 +7387,7 @@ EOCP
 
 else
 	val="$undef"
-	for xxx in d_fstat64 d_ftruncate64 d_lockf64 d_lseek64 d_lstat64 d_open64 d_opendir64 d_readdir64 d_seekdir64 d_stat64 d_telldir64 d_truncate64 d_off64t d_ino64t d_flock64_s d_dirent64_s
+	for xxx in d_fstat64 d_ftruncate64 d_lockf64 d_lseek64 d_lstat64 d_open64 d_opendir64 d_readdir64 d_seekdir64 d_stat64 d_telldir64 d_truncate64 d_off64_t d_offset_t d_ino64_t d_flock64_s d_dirent64_s
 	do
 		set $xxx
 		eval $setvar
@@ -8058,13 +8094,13 @@ eval $inlibc
 
 : see how we will look up host name
 echo " "
-if false; then
-	: dummy stub to allow use of elif
-elif set gethostname val -f d_gethname; eval $csym; $val; then
+call=''
+if set gethostname val -f d_gethname; eval $csym; $val; then
 	echo 'gethostname() found.' >&4
 	d_gethname="$define"
 	call=gethostname
-elif set uname val -f d_uname; eval $csym; $val; then
+fi
+if set uname val -f d_uname; eval $csym; $val; then
 	if ./xenix; then
 		$cat <<'EOM'
 uname() was found, but you're running xenix, and older versions of xenix
@@ -8084,7 +8120,9 @@ EOM
 	else
 		echo 'uname() found.' >&4
 		d_uname="$define"
-		call=uname
+		case "$call" in
+		'') call=uname ;;
+		esac
 	fi
 fi
 case "$d_gethname" in
@@ -8645,6 +8683,10 @@ eval $inlibc
 set mbtowc d_mbtowc
 eval $inlibc
 
+: see if memchr exists
+set memchr d_memchr
+eval $inlibc
+
 : see if memcmp exists
 set memcmp d_memcmp
 eval $inlibc
@@ -8768,8 +8810,18 @@ eval $inlibc
 set nice d_nice
 eval $inlibc
 
-: how to create joinable pthreads
+: see if POSIX threads are available
 if test "X$usethreads" = "X$define"; then
+	set pthread.h i_pthread
+	eval $inhdr
+else
+	i_pthread="$undef"
+fi
+
+
+
+: how to create joinable pthreads
+if test "X$usethreads" = "X$define" -a "X$i_pthread" = "X$define"; then
 	echo " "
 	echo "Checking what constant to use for creating joinable pthreads..." >&4 
 	$cat >try.c <<'EOCP'
@@ -9909,6 +9961,41 @@ esac
 set d_stdiobase
 eval $setvar
 
+$cat >&4 <<EOM
+Checking how to access stdio streams by file descriptor number...
+EOM
+case "$stdio_stream_array" in
+'') 	$cat >try.c <<EOCP
+#include <stdio.h>
+int main() {
+  if (&STDIO_STREAM_ARRAY[fileno(stdin)] == stdin)
+    printf("yes\n");
+}
+EOCP
+	for s in _iob __iob __sF
+	do
+	        set try -DSTDIO_STREAM_ARRAY=$s
+		if eval $compile; then
+		    	case "`./try$exe_ext`" in
+			yes)	stdio_stream_array=$s; break ;;
+			esac
+		fi
+	done
+	$rm -f try.* try$exe_ext
+esac
+case "$stdio_stream_array" in
+'')	$cat >&4 <<EOM
+I can't figure out how to access stdio streams by file descriptor number.
+EOM
+	d_stdio_stream_array="$undef"
+	;;
+*)	$cat >&4 <<EOM
+You can access stdio streams by file descriptor number by the $stdio_stream_array array.
+EOM
+	d_stdio_stream_array="$define"
+	;;
+esac
+
 : see if strcoll exists
 set strcoll d_strcoll
 eval $inlibc
@@ -10142,7 +10229,16 @@ $define)
 	false) dflt='n';;
 	*) dflt='y';;
 	esac
-	rp="Some systems have problems with vfork().  Do you want to use it?"
+	cat <<'EOM'
+ 
+Perl can only use a vfork() that doesn't suffer from strict
+restrictions on calling functions or modifying global data in
+the child.  For example, glibc-2.1 contains such a vfork()
+that is unsuitable.  If your system provides a proper fork()
+call, chances are that you do NOT want perl to use vfork().
+
+EOM
+	rp="Do you still want to use vfork()?"
 	. ./myread
 	case "$ans" in
 	y|Y) ;;
@@ -10289,7 +10385,7 @@ case "$crosscompile" in
 esac
 
 case "$osname" in
-next) multiarch="$define" ;;
+next|rhapsody) multiarch="$define" ;;
 esac
 case "$multiarch" in
 ''|[nN]*) multiarch="$undef" ;;
@@ -10866,6 +10962,192 @@ $rm -f tebcdic.c tebcdic
 set ebcdic
 eval $setvar
 
+# SunOS has a <unistd.h> which we generally avoid, but need for this test.
+# For everyone else, we'll trust i_unistd.
+t_unistd=$i_unistd
+case "$osname" in
+sunos) $test -f /usr/include/unistd.h && t_unistd=$define ;;
+esac
+$cat >&4 <<EOM
+Checking how to flush all pending stdio output...
+EOM
+$cat >try.c <<EOCP
+#include <stdio.h>
+#$t_unistd I_UNISTD
+#ifdef I_UNISTD
+# include <unistd.h>
+#endif
+#$d_sysconf HAS_SYSCONF
+#$d_stdio_stream_array HAS_STDIO_STREAM_ARRAY
+#ifdef HAS_STDIO_STREAM_ARRAY
+# define STDIO_STREAM_ARRAY $stdio_stream_array
+#endif
+int main() {
+  FILE* p = fopen("try.out", "w");
+#ifdef TRY_FPUTC
+  fputc('x', p);
+#else
+# ifdef TRY_FPRINTF
+  fprintf(p, "x");
+# endif
+#endif
+#ifdef TRY_FFLUSH_NULL
+  fflush(NULL);
+#endif
+#ifdef TRY_FFLUSH_ALL
+  {
+    long open_max = -1;
+# if defined(HAS_SYSCONF) && defined(_SC_OPEN_MAX)
+    open_max = sysconf(_SC_OPEN_MAX);
+# else
+#  ifdef FOPEN_MAX
+#   open_max = FOPEN_MAX;
+#  else
+#   ifdef OPEN_MAX
+#   open_max = OPEN_MAX;
+#   else
+#    ifdef _NFILE
+#   open_max = _NFILE;
+#    endif
+#   endif
+#  endif
+# endif
+# ifdef HAS_STDIO_STREAM_ARRAY
+    if (open_max > 0) {
+      long i;
+      for (i = 0; i < open_max; i++)
+         fflush(&$stdio_stream_array[i]);
+    }	
+  }
+# endif
+#endif
+  _exit(42);
+}
+EOCP
+: first we have to find out how _not_ to flush
+if $test "X$fflushNULL" = X -o "X$fflushall" = X; then
+    output=''
+    set try -DTRY_FPUTC
+    $rm -f try.out
+    if eval $compile; then
+ 	    ./try$exe_ext 2>/dev/null
+	    if $test ! -s try.out -a "X$?" = X42; then
+		output=-DTRY_FPUTC
+	    fi
+    fi
+    case "$output" in
+    '')
+	    set try -DTRY_FPRINTF
+	    $rm -f try.out
+	    if eval $compile; then
+ 		    ./try$exe_ext 2>/dev/null
+		    if $test ! -s try.out -a "X$?" = X42; then
+			output=-DTRY_FPRINTF
+		    fi
+	    fi
+	;;
+    esac
+fi
+: check for fflush NULL behaviour
+case "$fflushNULL" in
+'') 	set try -DTRY_FFLUSH_NULL $output
+	$rm -f try.out
+	if eval $compile; then
+	    	./try$exe_ext 2>/dev/null
+		code="$?"
+		if $test -s try.out -a "X$code" = X42; then
+			fflushNULL="`$cat try.out`"
+		else
+			if $test "X$code" != X42; then
+				$cat >&4 <<EOM
+(If this test failed, don't worry, we'll try another method shortly.)
+EOM
+			fi
+		fi
+	fi
+	$rm -f core try.core core.try.*
+	case "$fflushNULL" in
+	x)	$cat >&4 <<EOM
+Your fflush(NULL) works okay.
+EOM
+		fflushNULL="$define"
+		;;
+	'')	$cat >&4 <<EOM
+Your fflush(NULL) isn't working (contrary to ANSI C).
+EOM
+		fflushNULL="$undef"
+		;;
+	*)	$cat >&4 <<EOM
+Cannot figure out whether your fflush(NULL) works or not.
+I'm assuming it doesn't (contrary to ANSI C).
+EOM
+		fflushNULL="$undef"
+		;;
+	esac
+	;;
+$define|true|[yY]*)
+	fflushNULL="$define"
+	;;
+*)
+	fflushNULL="$undef"
+	;;
+esac
+: check explicit looping only if NULL did not work
+case "$fflushNULL" in
+"$undef")
+	: check for fflush all behaviour
+	case "$fflushall" in
+	'') 	set try -DTRY_FFLUSH_ALL $output
+		$rm -f try.out
+		if eval $compile; then
+	        $cat >&4 <<EOM
+(Now testing the other method--but note that also this may fail.)
+EOM
+		    	./try$exe_ext 2>/dev/null
+			if $test -s try.out -a "X$?" = X42; then
+				fflushall="`$cat try.out`"
+			fi
+		fi
+		$rm -f core try.core core.try.*
+		case "$fflushall" in
+		x)	$cat >&4 <<EOM
+Whew. Flushing explicitly all the stdio streams works.
+EOM
+			fflushall="$define"
+			;;
+		'')	$cat >&4 <<EOM
+Sigh. Flushing explicitly all the stdio streams doesn't work.
+EOM
+			fflushall="$undef"
+			;;
+		*)	$cat >&4 <<EOM
+Cannot figure out whether flushing stdio streams explicitly works or not.
+I'm assuming it doesn't.
+EOM
+			fflushall="$undef"
+			;;
+		esac
+		;;
+	"$define"|true|[yY]*)
+		fflushall="$define"
+		;;
+	*)
+		fflushall="$undef"
+		;;
+	esac
+	;;
+*)	fflushall="$undef"	
+	;;
+esac
+case "$fflushNULL$fflushall" in
+undefundef)
+	$cat <<EOM
+I cannot figure out how to flush pending stdio output.
+EOM
+	;;
+esac
+$rm -f try.* try$exe_ext
+
 : see what type file positions are declared as in the library
 rp="What is the type for file position used by fsetpos()?"
 set fpos_t fpostype long stdio.h sys/types.h
@@ -11411,6 +11693,8 @@ esac
 
 : Trace out the files included by signal.h, then look for SIGxxx names.
 : Remove SIGARRAYSIZE used by HPUX.
+: Remove SIGSTKSIZE used by Linux.
+: Remove SIGSTKSZ used by Posix.
 : Remove SIGTYP void lines used by OS2.
 xxx=`echo '#include <signal.h>' |
 	$cppstdin $cppminus $cppflags 2>/dev/null |
@@ -11428,7 +11712,7 @@ case "$xxxfiles" in
 '')	xxxfiles=`./findhdr signal.h` ;;
 esac
 xxx=`awk '
-$1 ~ /^#define$/ && $2 ~ /^SIG[A-Z0-9]*$/ && $2 !~ /SIGARRAYSIZE/ && $3 !~ /void/ {
+$1 ~ /^#define$/ && $2 ~ /^SIG[A-Z0-9]*$/ && $2 !~ /SIGARRAYSIZE/ && $2 !~ /SIGSTKSIZE/ && $2 !~ /SIGSTKSZ/ && $3 !~ /void/ {
 	print substr($2, 4, 20)
 }
 $1 == "#" && $2 ~ /^define$/ && $3 ~ /^SIG[A-Z0-9]*$/ && $3 !~ /SIGARRAYSIZE/ && $4 !~ /void/ {
@@ -11528,20 +11812,22 @@ $1 ~ /^NSIG$/ { nsig = $2 }
 	sig_name[$2] = $1
 	sig_num[$2] = $2
     }
-
 }
 END { 
-    if (nsig == 0) { nsig = maxsig + 1 }
-	for (n = 1; n < nsig; n++) {
-		if (sig_name[n]) {
-			printf("%s %d\n", sig_name[n], sig_num[n])
-		}
-		else {
-			printf("NUM%d %d\n", n, n) 
-		}
+    if (nsig == 0) {
+    	nsig = maxsig + 1
+    }
+    printf("NSIG %d\n", nsig);
+    for (n = 1; n < nsig; n++) {
+ 	if (sig_name[n]) {
+ 	    printf("%s %d\n", sig_name[n], sig_num[n])
 	}
+ 	else {
+ 	    printf("NUM%d %d\n", n, n) 
+ 	}
+    }
     for (n = 0; n < ndups; n++) {
-		printf("%s %d\n", dup_name[n], dup_num[n])
+ 	printf("%s %d\n", dup_name[n], dup_num[n])
     }
 }
 EOP
@@ -11607,7 +11893,8 @@ else
 	0) set HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM;;
 	esac
 	echo $@ | $tr ' ' $trnl | \
-		$awk '{ printf $1; printf " %d\n", ++s; }' >signal.lst
+ 	    $awk '{ printf "%s %d\n", $1, ++s; }
+ 		  END { printf "NSIG %d\n", ++s }' >signal.lst
 fi
 $rm -f signal.c signal$_exe signal$_o signal.nsg signal.ls1
 EOS
@@ -11626,19 +11913,20 @@ case "$doinit" in
 yes)
 	echo "Generating a list of signal names and numbers..." >&4
 	. ./signal_cmd
-	sig_name=`$awk '{printf "%s ", $1}' signal.lst`
-	sig_name="ZERO $sig_name"
-	sig_name_init=`$awk 'BEGIN { printf "\"ZERO\", " }
-						{ printf "\"%s\", ", $1 }
-						END { printf "0\n" }' signal.lst`
-	sig_num=`$awk '{printf "%d ", $2}' signal.lst`
-	sig_num="0 $sig_num"
-	sig_num_init=`$awk 'BEGIN { printf "0, " }
-					{ printf "%d, ", $2}
-					END { printf "0\n"}' signal.lst`
+ 	sig_count=`$awk '/^NSIG/ { printf "%d", $2 }' signal.lst`
+ 	sig_name=`$awk 'BEGIN { printf "ZERO " }
+ 			!/^NSIG/ { printf "%s ", $1 }' signal.lst`
+ 	sig_num=`$awk  'BEGIN { printf "0 " }
+ 			!/^NSIG/ { printf "%d ", $2 }' signal.lst`
+ 	sig_name_init=`$awk 'BEGIN	{ printf "\"ZERO\", " }
+ 			     !/^NSIG/	{ printf "\"%s\", ", $1 }
+ 			     END	{ printf "0\n" }' signal.lst`
+ 	sig_num_init=`$awk  'BEGIN	{ printf "0, " }
+ 			     !/^NSIG/	{ printf "%d, ", $2}
+ 			     END	{ printf "0\n"}' signal.lst`
 	;;
 esac
-echo "The following signals are available:"
+echo "The following $sig_count signals are available:"
 echo " "
 echo $sig_name | $awk \
 'BEGIN { linelen = 0 }
@@ -11903,6 +12191,10 @@ esac
 set i_neterrno
 eval $setvar
 
+: see if netinet/tcp.h is available
+set netinet/tcp.h i_netinettcp
+eval $inhdr
+
 : see if this is a poll.h system
 set poll.h i_poll
 eval $inhdr
@@ -11959,12 +12251,16 @@ $eunicefix Cppsym
 ./Cppsym -l $al | $sort | $grep -v '^$' >Cppsym.true
 
 : now check the C compiler for additional symbols
+postprocess_cc_v=''
+case "$osname" in
+aix) postprocess_cc_v="|$tr , ' '" ;;
+esac
 $cat >ccsym <<EOS
 $startsh
 $cat >tmp.c <<EOF
 extern int foo;
 EOF
-for i in \`$cc -v -c tmp.c 2>&1\`
+for i in \`$cc -v -c tmp.c 2>&1 $postprocess_cc_v\`
 do
 	case "\$i" in
 	-D*) echo "\$i" | $sed 's/^-D//';;
@@ -11973,6 +12269,7 @@ do
 done
 $rm -f try.c
 EOS
+postprocess_cc_v=''
 chmod +x ccsym
 $eunicefix ccsym
 ./ccsym > ccsym1.raw
@@ -12742,13 +13039,14 @@ d_hasmntopt='$d_hasmntopt'
 d_htonl='$d_htonl'
 d_index='$d_index'
 d_inetaton='$d_inetaton'
-d_ino64t='$d_ino64t'
+d_ino64_t='$d_ino64_t'
 d_int64t='$d_int64t'
 d_iovec_s='$d_iovec_s'
 d_isascii='$d_isascii'
 d_killpg='$d_killpg'
 d_lchown='$d_lchown'
 d_link='$d_link'
+d_llseek='$d_llseek'
 d_locconv='$d_locconv'
 d_lockf64='$d_lockf64'
 d_lockf='$d_lockf'
@@ -12761,6 +13059,7 @@ d_madvise='$d_madvise'
 d_mblen='$d_mblen'
 d_mbstowcs='$d_mbstowcs'
 d_mbtowc='$d_mbtowc'
+d_memchr='$d_memchr'
 d_memcmp='$d_memcmp'
 d_memcpy='$d_memcpy'
 d_memmove='$d_memmove'
@@ -12786,7 +13085,8 @@ d_munmap='$d_munmap'
 d_mymalloc='$d_mymalloc'
 d_nextkey64='$d_nextkey64'
 d_nice='$d_nice'
-d_off64t='$d_off64t'
+d_off64_t='$d_off64_t'
+d_offset_t='$d_offset_t'
 d_old_pthread_create_joinable='$d_old_pthread_create_joinable'
 d_oldpthreads='$d_oldpthreads'
 d_oldsock='$d_oldsock'
@@ -12872,6 +13172,7 @@ d_statfsflags='$d_statfsflags'
 d_statvfs='$d_statvfs'
 d_stdio_cnt_lval='$d_stdio_cnt_lval'
 d_stdio_ptr_lval='$d_stdio_ptr_lval'
+d_stdio_stream_array='$d_stdio_stream_array'
 d_stdiobase='$d_stdiobase'
 d_stdstdio='$d_stdstdio'
 d_store64='$d_store64'
@@ -12936,6 +13237,8 @@ eunicefix='$eunicefix'
 exe_ext='$exe_ext'
 expr='$expr'
 extensions='$extensions'
+fflushNULL='$fflushNULL'
+fflushall='$fflushall'
 find='$find'
 firstmakefile='$firstmakefile'
 flex='$flex'
@@ -12978,8 +13281,10 @@ i_mntent='$i_mntent'
 i_ndbm='$i_ndbm'
 i_netdb='$i_netdb'
 i_neterrno='$i_neterrno'
+i_netinettcp='$i_netinettcp'
 i_niin='$i_niin'
 i_poll='$i_poll'
+i_pthread='$i_pthread'
 i_pwd='$i_pwd'
 i_rpcsvcdbm='$i_rpcsvcdbm'
 i_sfio='$i_sfio'
@@ -13148,6 +13453,7 @@ shmattype='$shmattype'
 shortsize='$shortsize'
 shrpenv='$shrpenv'
 shsharp='$shsharp'
+sig_count='$sig_count'
 sig_name='$sig_name'
 sig_name_init='$sig_name_init'
 sig_num='$sig_num'
@@ -13179,6 +13485,7 @@ stdio_bufsiz='$stdio_bufsiz'
 stdio_cnt='$stdio_cnt'
 stdio_filbuf='$stdio_filbuf'
 stdio_ptr='$stdio_ptr'
+stdio_stream_array='$stdio_stream_array'
 strings='$strings'
 submit='$submit'
 subversion='$subversion'
@@ -13225,7 +13532,7 @@ $test -f UU/cmdline.opt && $cat UU/cmdline.opt >> config.sh
 : add special variables
 $test -f $src/patchlevel.h && \
 awk '/^#define[ 	]+PERL_/ {printf "%s=%s\n",$2,$3}' $src/patchlevel.h >>config.sh
-echo "CONFIG=true" >>config.sh
+echo "CONFIGDOTSH=true" >>config.sh
 
 : propagate old symbols
 if $test -f UU/config.sh; then

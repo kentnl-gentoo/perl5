@@ -73,6 +73,8 @@ safexrealloc
 safexfree
 Perl_GetVars
 malloced_size
+do_exec3
+getenv_len
 )];
 
 
@@ -155,14 +157,11 @@ while () {
 #undef $name
 extern "C" $type $funcName ($args)
 {
-    char *pstr;
-    char *pmsg;
+    SV *pmsg;
     va_list args;
     va_start(args, $arg);
-    pmsg = pPerl->Perl_mess($arg, &args);
-    New(0, pstr, strlen(pmsg)+1, char);
-    strcpy(pstr, pmsg);
-$return pPerl->Perl_$name($start pstr);
+    pmsg = pPerl->Perl_sv_2mortal(pPerl->Perl_newSVsv(pPerl->Perl_mess($arg, &args)));
+$return pPerl->Perl_$name($start SvPV_nolen(pmsg));
     va_end(args);
 }
 ENDCODE
@@ -988,6 +987,11 @@ int          _win32_ioctl(int i, unsigned int u, char *data)
 int          _win32_utime(const char *f, struct utimbuf *t)
 {
     return pPerl->PL_piLIO->Utime((char*)f, t, ErrorNo());
+}
+
+int          _win32_uname(struct utsname *name)
+{
+    return pPerl->PL_piENV->Uname(name, ErrorNo());
 }
 
 char*   _win32_getenv(const char *name)

@@ -12,6 +12,7 @@
 #ifdef PERL_OBJECT
 #  define DYNAMIC_ENV_FETCH
 #  define ENV_HV_NAME "___ENV_HV_NAME___"
+#  define HAS_GETENV_LEN
 #  define prime_env_iter()
 #  define WIN32IO_IS_STDIO		/* don't pull in custom stdio layer */
 #  ifdef PERL_GLOBAL_STRUCT
@@ -22,7 +23,7 @@
 #endif
 
 #ifdef __GNUC__
-typedef long long __int64;
+// typedef long long __int64;
 #  define Win32_Winsock
 /* GCC does not do __declspec() - render it a nop 
  * and turn on options to avoid importing data 
@@ -81,6 +82,18 @@ struct tms {
 	long	tms_stime;
 	long	tms_cutime;
 	long	tms_cstime;
+};
+
+#ifndef SYS_NMLN
+#define SYS_NMLN	257
+#endif
+
+struct utsname {
+    char sysname[SYS_NMLN];
+    char nodename[SYS_NMLN];
+    char release[SYS_NMLN];
+    char version[SYS_NMLN];
+    char machine[SYS_NMLN];
 };
 
 #ifndef START_EXTERN_C
@@ -161,8 +174,6 @@ struct tms {
 #pragma warn -pro	/* "call to function with no prototype" */
 #pragma warn -stu	/* "undefined structure 'foo'" */
 
-#define USE_RTL_WAIT	/* Borland has a working wait() */
-
 /* Borland is picky about a bare member function name used as its ptr */
 #ifdef PERL_OBJECT
 #define FUNC_NAME_TO_PTR(name)	&(name)
@@ -174,6 +185,7 @@ struct tms {
 
 typedef long		uid_t;
 typedef long		gid_t;
+typedef unsigned short	mode_t;
 #pragma  warning(disable: 4018 4035 4101 4102 4244 4245 4761)
 
 #ifndef PERL_OBJECT
@@ -329,26 +341,29 @@ EXT void win32_strip_return(struct sv *sv);
 #endif
 
 #define HAVE_INTERP_INTERN
+typedef struct {
+    long	num;
+    DWORD	pids[MAXIMUM_WAIT_OBJECTS];
+} child_tab;
+
 struct interp_intern {
-    char *	w32_perlshell_tokens;
-    char **	w32_perlshell_vec;
-    long	w32_perlshell_items;
-    struct av *	w32_fdpid;
-#ifndef USE_RTL_WAIT
-    long	w32_num_children;
-    HANDLE	w32_child_pids[MAXIMUM_WAIT_OBJECTS];
-#endif
+    char *	perlshell_tokens;
+    char **	perlshell_vec;
+    long	perlshell_items;
+    struct av *	fdpid;
+    child_tab *	children;
+    HANDLE	child_handles[MAXIMUM_WAIT_OBJECTS];
 };
 
-#define w32_perlshell_tokens	(PL_sys_intern.w32_perlshell_tokens)
-#define w32_perlshell_vec	(PL_sys_intern.w32_perlshell_vec)
-#define w32_perlshell_items	(PL_sys_intern.w32_perlshell_items)
-#define w32_fdpid		(PL_sys_intern.w32_fdpid)
 
-#ifndef USE_RTL_WAIT
-#  define w32_num_children	(PL_sys_intern.w32_num_children)
-#  define w32_child_pids	(PL_sys_intern.w32_child_pids)
-#endif
+#define w32_perlshell_tokens	(PL_sys_intern.perlshell_tokens)
+#define w32_perlshell_vec	(PL_sys_intern.perlshell_vec)
+#define w32_perlshell_items	(PL_sys_intern.perlshell_items)
+#define w32_fdpid		(PL_sys_intern.fdpid)
+#define w32_children		(PL_sys_intern.children)
+#define w32_num_children	(w32_children->num)
+#define w32_child_pids		(w32_children->pids)
+#define w32_child_handles	(PL_sys_intern.child_handles)
 
 /* 
  * Now Win32 specific per-thread data stuff 
@@ -378,3 +393,4 @@ struct thread_intern {
 #endif /* USE_THREADS */
 
 #endif /* _INC_WIN32_PERL5 */
+

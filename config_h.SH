@@ -242,27 +242,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_getgrps HAS_GETGROUPS		/**/
 
-/* HAS_GETHOSTNAME:
- *	This symbol, if defined, indicates that the C program may use the
- *	gethostname() routine to derive the host name.  See also HAS_UNAME
- *	and PHOSTNAME.
- */
-/* HAS_UNAME:
- *	This symbol, if defined, indicates that the C program may use the
- *	uname() routine to derive the host name.  See also HAS_GETHOSTNAME
- *	and PHOSTNAME.
- */
-/* PHOSTNAME:
- *	This symbol, if defined, indicates that the C program may use the
- *	contents of PHOSTNAME as a command to feed to the popen() routine
- *	to derive the host name.  See also HAS_GETHOSTNAME and HAS_UNAME.
- *	Note that the command uses a fully qualified path, so that it is safe
- *	even if used by a process with super-user privileges.
- */
-#$d_gethname HAS_GETHOSTNAME	/**/
-#$d_uname HAS_UNAME		/**/
-#$d_phostname PHOSTNAME "$aphostname"	/* How to get the host name */
-
 /* HAS_GETLOGIN:
  *	This symbol, if defined, indicates that the getlogin routine is
  *	available to get the login name.
@@ -726,11 +705,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_umask HAS_UMASK		/**/
 
-/* HAS_VFORK:
- *	This symbol, if defined, indicates that vfork() exists.
- */
-#$d_vfork HAS_VFORK	/**/
-
 /* HASVOLATILE:
  *	This symbol, if defined, indicates that this C compiler knows about
  *	the volatile declaration.
@@ -1071,12 +1045,43 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$i_syssecrt   I_SYS_SECURITY	/**/
 
+/* CROSSCOMPILE:
+ *	This symbol, if defined, signifies that we our
+ *	build process is a cross-compilation.
+ */
+#$crosscompile CROSSCOMPILE		/**/
+
+/* INTSIZE:
+ *	This symbol contains the value of sizeof(int) so that the C
+ *	preprocessor can make decisions based on it.
+ */
+/* LONGSIZE:
+ *	This symbol contains the value of sizeof(long) so that the C
+ *	preprocessor can make decisions based on it.
+ */
+/* SHORTSIZE:
+ *	This symbol contains the value of sizeof(short) so that the C
+ *	preprocessor can make decisions based on it.
+ */
+#define INTSIZE $intsize		/**/
+#define LONGSIZE $longsize		/**/
+#define SHORTSIZE $shortsize		/**/
+
+/* MULTIARCH:
+ *	This symbol, if defined, signifies that the build
+ *	process will produce some binary files that are going to be
+ *	used in a cross-platform environment.  This is the case for
+ *	example with the NeXT "fat" binaries that contain executables
+ *	for several CPUs.
+ */
+#$multiarch MULTIARCH		/**/
+
 /* MEM_ALIGNBYTES:
  *	This symbol contains the number of bytes required to align a
  *	double. Usual values are 2, 4 and 8. The default is eight,
  *	for safety.
  */
-#if defined(CROSSCOMPILE) || defined(MULTIARCH) || defined(NeXT) || defined(__NeXT__)
+#if defined(CROSSCOMPILE) || defined(MULTIARCH)
 #  define MEM_ALIGNBYTES 8
 #else
 #define MEM_ALIGNBYTES $alignbytes
@@ -1098,7 +1103,7 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	so the default case (for NeXT) is big endian to catch them. 
  *	This might matter for NeXT 3.0.
  */
-#if defined(CROSSCOMPILE) || defined(MULTIARCH) || defined(NeXT) || defined(__NeXT__)
+#if defined(CROSSCOMPILE) || defined(MULTIARCH)
 #  ifdef __LITTLE_ENDIAN__
 #    if LONGSIZE == 4
 #      define BYTEORDER 0x1234
@@ -1354,22 +1359,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$i_systime I_SYS_TIME		/**/
 #$i_systimek I_SYS_TIME_KERNEL		/**/
 
-/* INTSIZE:
- *	This symbol contains the value of sizeof(int) so that the C
- *	preprocessor can make decisions based on it.
- */
-/* LONGSIZE:
- *	This symbol contains the value of sizeof(long) so that the C
- *	preprocessor can make decisions based on it.
- */
-/* SHORTSIZE:
- *	This symbol contains the value of sizeof(short) so that the C
- *	preprocessor can make decisions based on it.
- */
-#define INTSIZE $intsize		/**/
-#define LONGSIZE $longsize		/**/
-#define SHORTSIZE $shortsize		/**/
-
 /* VAL_O_NONBLOCK:
  *	This symbol is to be used during open() or fcntl(F_SETFL) to turn on
  *	non-blocking I/O for the file descriptor. Note that there is no way
@@ -1576,6 +1565,30 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_gethent HAS_GETHOSTENT		/**/
 
+/* HAS_GETHOSTNAME:
+ *	This symbol, if defined, indicates that the C program may use the
+ *	gethostname() routine to derive the host name.  See also HAS_UNAME
+ *	and PHOSTNAME.
+ */
+/* HAS_UNAME:
+ *	This symbol, if defined, indicates that the C program may use the
+ *	uname() routine to derive the host name.  See also HAS_GETHOSTNAME
+ *	and PHOSTNAME.
+ */
+/* PHOSTNAME:
+ *	This symbol, if defined, indicates the command to feed to the
+ *	popen() routine to derive the host name.  See also HAS_GETHOSTNAME
+ *	and HAS_UNAME.	Note that the command uses a fully qualified path,
+ *	so that it is safe even if used by a process with super-user
+ *	privileges.
+ */
+#$d_gethname HAS_GETHOSTNAME	/**/
+#$d_uname HAS_UNAME		/**/
+#$d_phostname HAS_PHOSTNAME
+#ifdef HAS_PHOSTNAME
+#define PHOSTNAME "$aphostname"	/* How to get the host name */
+#endif
+
 /* HAS_GETNETBYADDR:
  *	This symbol, if defined, indicates that the getnetbyaddr() routine is
  *	available to look up networks by their IP addresses.
@@ -1686,6 +1699,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #ifdef HAS_LONG_LONG
 #define LONGLONGSIZE $longlongsize		/**/
 #endif
+
+/* HAS_MEMCHR:
+ *	This symbol, if defined, indicates that the memchr routine is available
+ *	to locate characters within a C string.
+ */
+#$d_memchr HAS_MEMCHR	/**/
 
 /* HAS_MMAP:
  *	This symbol, if defined, indicates that the mmap system call is
@@ -1885,6 +1904,11 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$d_semctl_semun USE_SEMCTL_SEMUN	/**/
 #$d_semctl_semid_ds USE_SEMCTL_SEMID_DS	/**/
 
+/* HAS_VFORK:
+ *	This symbol, if defined, indicates that vfork() exists.
+ */
+#$d_vfork HAS_VFORK	/**/
+
 /* Signal_t:
  *	This symbol's value is either "void" or "int", corresponding to the
  *	appropriate return type of a signal handler.  Thus, you can declare
@@ -2062,12 +2086,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$d_archlib ARCHLIB "$archlib"		/**/
 #$d_archlib ARCHLIB_EXP "$archlibexp"		/**/
 
-/* CROSSCOMPILE:
- *	This symbol, if defined, signifies that we our
- *	build process is a cross-compilation.
- */
-#$crosscompile CROSSCOMPILE		/**/
-
 /* DLSYM_NEEDS_UNDERSCORE:
  *	This symbol, if defined, indicates that we need to prepend an
  *	underscore to the symbol name before calling dlsym().  This only
@@ -2201,6 +2219,20 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$usedl USE_DYNAMIC_LOADING		/**/
 
+/* FFLUSH_NULL:
+ *	This symbol, if defined, tells that fflush(NULL) does flush
+ *	all pending stdio output.
+ */
+/* FFLUSH_ALL:
+ *	This symbol, if defined, tells that to flush
+ *	all pending stdio output one must loop through all
+ *	the stdio file handles stored in an array and fflush them.
+ *	Note that if fflushNULL is defined, fflushall will not
+ *	even be probed for and will be left undefined.
+ */
+#$fflushNULL	FFLUSH_NULL 		/**/
+#$fflushall	FFLUSH_ALL 		/**/
+
 /* DB_Prefix_t:
  *	This symbol contains the type of the prefix structure element
  *	in the <db.h> header file.  In older versions of DB, it was
@@ -2231,6 +2263,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	should be included.
  */
 #$i_mntent	I_MNTENT		/**/
+
+/* I_NETINET_TCP:
+ *     This symbol, if defined, indicates to the C program that it should
+ *     include <netinet/tcp.h>.
+ */
+#$i_netinettcp   I_NETINET_TCP                /**/
 
 /* I_POLL:
  *	This symbol, if defined, indicates that <poll.h> exists and
@@ -2323,17 +2361,8 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$d_stat64      HAS_STAT64		/**/
 #$d_telldir64   HAS_TELLDIR64	/**/
 #$d_truncate64  HAS_TRUNCATE64	/**/
-#$d_off64t      HAS_OFF64_T    	/**/
+#$d_off64_t      HAS_OFF64_T    	/**/
 #$d_dirent64_s   HAS_STRUCT_DIRENT64 	/**/
-
-/* MULTIARCH:
- *	This symbol, if defined, signifies that the build
- *	process will produce some binary files that are going to be
- *	used in a cross-platform environment.  This is the case for
- *	example with the NeXT "fat" binaries that contain executables
- *	for several CPUs.
- */
-#$multiarch MULTIARCH		/**/
 
 /* PRIVLIB:
  *	This symbol contains the name of the private library for this package.
@@ -2441,6 +2470,17 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$d_ftell64     HAS_FTELL64		/**/
 #$d_ftello64    HAS_FTELLO64		/**/
 #$d_tmpfile64   HAS_TMPFILE64	/**/
+
+/* HAS_STDIO_STREAM_ARRAY:
+ *	This symbol, if defined, tells that there is an array
+ *	holding the stdio streams.
+ */
+/* STDIO_STREAM_ARRAY:
+ *	This symbol tells the name of the array holding the stdio streams.
+ *	Usual values include _iob, __iob, and __sF.
+ */
+#$d_stdio_stream_array	HAS_STDIO_STREAM_ARRAY	/**/
+#define STDIO_STREAM_ARRAY	$stdio_stream_array
 
 /* USE_64_BITS:
  *	This symbol, if defined, indicates that 64-bit interfaces should

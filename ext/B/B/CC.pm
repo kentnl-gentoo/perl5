@@ -8,10 +8,10 @@
 package B::CC;
 use strict;
 use B qw(main_start main_root class comppadlist peekop svref_2object
-	timing_info init_av  
+	timing_info init_av sv_undef amagic_generation 
 	OPf_WANT_LIST OPf_WANT OPf_MOD OPf_STACKED OPf_SPECIAL
 	OPpASSIGN_BACKWARDS OPpLVAL_INTRO OPpDEREF_AV OPpDEREF_HV
-	OPpDEREF OPpFLIP_LINENUM G_ARRAY     
+	OPpDEREF OPpFLIP_LINENUM G_ARRAY G_SCALAR    
 	CXt_NULL CXt_SUB CXt_EVAL CXt_LOOP CXt_SUBST CXt_BLOCK
 	);
 use B::C qw(save_unused_subs objsym init_sections mark_unused
@@ -92,7 +92,7 @@ sub init_hash { map { $_ => 1 } @_ }
 #
 %skip_lexicals = init_hash qw(pp_enter pp_enterloop);
 %skip_invalidate = init_hash qw(pp_enter pp_enterloop);
-%need_curcop = init_hash qw(pp_rv2gv  pp_bless pp_repeat pp_sort pp_caller pp_reset pp_rv2cv pp_entereval pp_require pp_dofile pp_entertry pp_enterloop pp_enteriter );
+%need_curcop = init_hash qw(pp_rv2gv  pp_bless pp_repeat pp_sort pp_caller pp_reset pp_rv2cv pp_entereval pp_require pp_dofile pp_entertry pp_enterloop pp_enteriter pp_entersub pp_enter);
 
 sub debug {
     if ($debug_runtime) {
@@ -399,12 +399,22 @@ sub load_pad {
 	}
 	$pad[$ix] = new B::Stackobj::Padsv ($type, $flags, $ix,
 					    "i_$name", "d_$name");
-	declare("IV", $type == T_INT ? "i_$name = 0" : "i_$name");
-	declare("double", $type == T_DOUBLE ? "d_$name = 0" : "d_$name");
+
 	debug sprintf("PL_curpad[$ix] = %s\n", $pad[$ix]->peek) if $debug_pad;
     }
 }
 
+sub declare_pad {
+    my $ix;
+    for ($ix = 1; $ix <= $#pad; $ix++) {
+	my $type = $pad[$ix]->{type};
+	declare("IV", $type == T_INT ? 
+		sprintf("%s=0",$pad[$ix]->{iv}):$pad[$ix]->{iv}) if $pad[$ix]->save_int;
+	declare("double", $type == T_DOUBLE ?
+		 sprintf("%s = 0",$pad[$ix]->{nv}):$pad[$ix]->{nv} )if $pad[$ix]->save_double;
+
+    }
+}
 #
 # Debugging stuff
 #
@@ -444,7 +454,7 @@ sub doop {
 sub gimme {
     my $op = shift;
     my $flags = $op->flags;
-    return (($flags & OPf_WANT) ? ($flags & OPf_WANT_LIST) : "dowantarray()");
+    return (($flags & OPf_WANT) ? (($flags & OPf_WANT)== OPf_WANT_LIST? G_ARRAY:G_SCALAR) : "dowantarray()");
 }
 
 #
@@ -459,10 +469,12 @@ sub pp_null {
 sub pp_stub {
     my $op = shift;
     my $gimme = gimme($op);
-    if ($gimme != 1) {
+    if ($gimme != G_ARRAY) {
+	my $obj= new B::Stackobj::Const(sv_undef);
+    	push(@stack, $obj);
 	# XXX Change to push a constant sv_undef Stackobj onto @stack
-	write_back_stack();
-	runtime("if ($gimme != G_ARRAY) XPUSHs(&PL_sv_undef);");
+	#write_back_stack();
+	#runtime("if ($gimme != G_ARRAY) XPUSHs(&PL_sv_undef);");
     }
     return $op->next;
 }
@@ -682,6 +694,60 @@ sub numeric_binop {
     return $op->next;
 }
 
+sub pp_ncmp {
+    my ($op) = @_;
+    if ($op->flags & OPf_STACKED) {
+	my $right = pop_numeric();
+	if (@stack >= 1) {
+	    my $left = top_numeric();
+	    runtime sprintf("if (%s > %s){",$left,$right);
+		$stack[-1]->set_int(1);
+	    $stack[-1]->write_back();
+	    runtime sprintf("}else if (%s < %s ) {",$left,$right);
+		$stack[-1]->set_int(-1);
+	    $stack[-1]->write_back();
+	    runtime sprintf("}else if (%s == %s) {",$left,$right);
+		$stack[-1]->set_int(0);
+	    $stack[-1]->write_back();
+	    runtime sprintf("}else {"); 
+		$stack[-1]->set_sv("&PL_sv_undef");
+	    runtime "}";
+	} else {
+	    my $rightruntime = new B::Pseudoreg ("double", "rnv");
+	    runtime(sprintf("$$rightruntime = %s;",$right));
+	    runtime sprintf(qq/if ("TOPn" > %s){/,$rightruntime);
+	    runtime sprintf("sv_setiv(TOPs,1);");
+	    runtime sprintf(qq/}else if ( "TOPn" < %s ) {/,$$rightruntime);
+	    runtime sprintf("sv_setiv(TOPs,-1);");
+	    runtime sprintf(qq/} else if ("TOPn" == %s) {/,$$rightruntime);
+	    runtime sprintf("sv_setiv(TOPs,0);");
+	    runtime sprintf(qq/}else {/); 
+	    runtime sprintf("sv_setiv(TOPs,&PL_sv_undef;");
+	    runtime "}";
+	}
+    } else {
+       	my $targ = $pad[$op->targ];
+	 my $right = new B::Pseudoreg ("double", "rnv");
+	 my $left = new B::Pseudoreg ("double", "lnv");
+	 runtime(sprintf("$$right = %s; $$left = %s;",
+			    pop_numeric(), pop_numeric));
+	runtime sprintf("if (%s > %s){",$$left,$$right);
+		$targ->set_int(1);
+		$targ->write_back();
+	runtime sprintf("}else if (%s < %s ) {",$$left,$$right);
+		$targ->set_int(-1);
+		$targ->write_back();
+	runtime sprintf("}else if (%s == %s) {",$$left,$$right);
+		$targ->set_int(0);
+		$targ->write_back();
+	runtime sprintf("}else {"); 
+		$targ->set_sv("&PL_sv_undef");
+	runtime "}";
+	push(@stack, $targ);
+    }
+    return $op->next;
+}
+
 sub sv_binop {
     my ($op, $operator, $flags) = @_;
     if ($op->flags & OPf_STACKED) {
@@ -777,7 +843,6 @@ BEGIN {
     my $modulo_op = infix_op("%");
     my $lshift_op = infix_op("<<");
     my $rshift_op = infix_op(">>");
-    my $ncmp_op = sub { "($_[0] > $_[1] ? 1 : ($_[0] < $_[1]) ? -1 : 0)" };
     my $scmp_op = prefix_op("sv_cmp");
     my $seq_op = prefix_op("sv_eq");
     my $sne_op = prefix_op("!sv_eq");
@@ -801,7 +866,6 @@ BEGIN {
     sub pp_multiply { numeric_binop($_[0], $multiply_op, INTS_CLOSED) }
     sub pp_divide { numeric_binop($_[0], $divide_op) }
     sub pp_modulo { int_binop($_[0], $modulo_op) } # differs from perl's
-    sub pp_ncmp { numeric_binop($_[0], $ncmp_op, INT_RESULT) }
 
     sub pp_left_shift { int_binop($_[0], $lshift_op) }
     sub pp_right_shift { int_binop($_[0], $rshift_op) }
@@ -875,7 +939,7 @@ sub pp_sassign {
 	    } elsif ($type == T_DOUBLE) {
 		$dst->set_double("SvNV(sv)");
 	    } else {
-		runtime("SvSetSV($dst->{sv}, sv);");
+		runtime("SvSetMagicSV($dst->{sv}, sv);");
 		$dst->invalidate;
 	    }
 	}
@@ -921,7 +985,7 @@ sub pp_list {
     my $op = shift;
     write_back_stack();
     my $gimme = gimme($op);
-    if ($gimme == 1) { # sic
+    if ($gimme == G_ARRAY) { # sic
 	runtime("POPMARK;"); # need this even though not a "full" pp_list
     } else {
 	runtime("PP_LIST($gimme);");
@@ -931,6 +995,7 @@ sub pp_list {
 
 sub pp_entersub {
     my $op = shift;
+    $curcop->write_back;
     write_back_lexicals(REGISTER|TEMPORARY);
     write_back_stack();
     my $sym = doop($op);
@@ -939,6 +1004,19 @@ sub pp_entersub {
     runtime("SPAGAIN;}");
     $know_op = 0;
     invalidate_lexicals(REGISTER|TEMPORARY);
+    return $op->next;
+}
+sub pp_formline {
+    my $op = shift;
+    my $ppname = $op->ppaddr;
+    write_back_lexicals() unless $skip_lexicals{$ppname};
+    write_back_stack() unless $skip_stack{$ppname};
+    my $sym=doop($op);
+    # See comment in pp_grepwhile to see why!
+    $init->add("((LISTOP*)$sym)->op_first = $sym;");    
+    runtime("if (PL_op == ((LISTOP*)($sym))->op_first){");
+    runtime( sprintf("goto %s;",label($op->first)));
+    runtime("}");
     return $op->next;
 }
 
@@ -965,7 +1043,7 @@ sub pp_leavewrite {
     my $sym = doop($op);
     # XXX Is this the right way to distinguish between it returning
     # CvSTART(cv) (via doform) and pop_return()?
-    runtime("if (PL_op) PL_op = (*PL_op->op_ppaddr)(ARGS);");
+    #runtime("if (PL_op) PL_op = (*PL_op->op_ppaddr)(ARGS);");
     runtime("SPAGAIN;");
     $know_op = 0;
     invalidate_lexicals(REGISTER|TEMPORARY);
@@ -996,10 +1074,17 @@ sub pp_entertry {
     write_back_stack();
     my $sym = doop($op);
     my $jmpbuf = sprintf("jmpbuf%d", $jmpbuf_ix++);
-    declare("Sigjmp_buf", $jmpbuf);
+    declare("JMPENV", $jmpbuf);
     runtime(sprintf("PP_ENTERTRY(%s,%s);", $jmpbuf, label($op->other->next)));
     invalidate_lexicals(REGISTER|TEMPORARY);
     return $op->next;
+}
+
+sub pp_leavetry{
+	my $op=shift;
+	default_pp($op);
+	runtime("PP_LEAVETRY;");
+    	return $op->next;
 }
 
 sub pp_grepstart {
@@ -1084,7 +1169,7 @@ sub pp_range {
     }
     write_back_lexicals();
     write_back_stack();
-    if (!($flags & OPf_WANT_LIST)) {
+    unless (($flags & OPf_WANT)== OPf_WANT_LIST) {
 	# We need to save our UNOP structure since pp_flop uses
 	# it to find and adjust out targ. We don't need it ourselves.
 	$op->save;
@@ -1101,7 +1186,7 @@ sub pp_flip {
     if (!($flags & OPf_WANT)) {
 	error("context of flip unknown at compile-time");
     }
-    if ($flags & OPf_WANT_LIST) {
+    if (($flags & OPf_WANT)==OPf_WANT_LIST) {
 	return $op->first->false;
     }
     write_back_lexicals();
@@ -1339,7 +1424,12 @@ sub cc {
 	warn sprintf("Basic block analysis at %s\n", timing_info);
     }
     $leaders = find_leaders($root, $start);
-    @bblock_todo = ($start, values %$leaders);
+    my @leaders= keys %$leaders; 
+    if ($#leaders > -1) { 
+    	@bblock_todo = ($start, values %$leaders) ;
+    } else{
+	runtime("return PL_op?PL_op->op_next:0;");
+    }
     if ($debug_timings) {
 	warn sprintf("Compilation at %s\n", timing_info);
     }
@@ -1369,6 +1459,7 @@ sub cc {
     if ($debug_timings) {
 	warn sprintf("Saving runtime at %s\n", timing_info);
     }
+    declare_pad(@padlist) ;
     save_runtime();
 }
 
@@ -1395,12 +1486,14 @@ sub cc_main {
     my $curpad_nam  = $comppadlist[0]->save;
     my $curpad_sym  = $comppadlist[1]->save;
     my $init_av     = init_av->save; 
-    my $inc_hv      = svref_2object(\%INC)->save;
-    my $inc_av      = svref_2object(\@INC)->save;
     my $start = cc_recurse("pp_main", main_root, main_start, @comppadlist);
+    # Do save_unused_subs before saving inc_hv
     save_unused_subs();
     cc_recurse();
 
+    my $inc_hv      = svref_2object(\%INC)->save;
+    my $inc_av      = svref_2object(\@INC)->save;
+    my $amagic_generate= amagic_generation;
     return if $errors;
     if (!defined($module)) {
 	$init->add(sprintf("PL_main_root = s\\_%x;", ${main_root()}),
@@ -1411,6 +1504,7 @@ sub cc_main {
 		   "GvAV(PL_incgv) = $inc_av;",
 		   "av_store(CvPADLIST(PL_main_cv),0,SvREFCNT_inc($curpad_nam));",
 		   "av_store(CvPADLIST(PL_main_cv),1,SvREFCNT_inc($curpad_sym));",
+		   "PL_amagic_generation= $amagic_generate;",
 		     );
                  
     }

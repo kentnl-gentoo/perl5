@@ -22,7 +22,7 @@ while (($from, $tos) = each %alias_to) {
 
 my $c_header = <<'EOT';
 /*
- *      Copyright (c) 1996-1998 Malcolm Beattie
+ *      Copyright (c) 1996-1999 Malcolm Beattie
  *
  *      You may distribute under the terms of either the GNU General Public
  *      License or the Artistic License, as specified in the README file.
@@ -168,8 +168,6 @@ struct bytestream {
     void (*freadpv)(U32, void*);
 };
 #endif /* INDIRECT_BGET_MACROS */
-
-void *bset_obj_store _((void *, I32));
 
 enum {
 EOT
@@ -386,6 +384,7 @@ cop_filegv	*(SV**)&cCOP->cop_filegv		svindex
 cop_seq		cCOP->cop_seq				U32
 cop_arybase	cCOP->cop_arybase			I32
 cop_line	cCOP->cop_line				line_t
+cop_warnings	cCOP->cop_warnings			svindex
 main_start	PL_main_start				opindex
 main_root	PL_main_root				opindex
 curpad		PL_curpad				svindex		x

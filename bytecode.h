@@ -64,7 +64,7 @@ typedef IV IV64;
 	BGET_U32(hi);					\
 	BGET_U32(lo);					\
 	if (sizeof(IV) == 8)				\
-	    arg = (IV) (hi << (sizeof(IV)*4) | lo);	\
+	    arg = ((IV)hi << (sizeof(IV)*4) | lo);	\
 	else if (((I32)hi == -1 && (I32)lo < 0)		\
 		 || ((I32)hi == 0 && (I32)lo >= 0)) {	\
 	    arg = (I32)lo;				\
@@ -154,7 +154,10 @@ typedef IV IV64;
 	o->op_ppaddr = PL_ppaddr[arg];		\
     } STMT_END
 #define BSET_op_ppaddr(o, arg) croak("op_ppaddr not yet implemented")
-#define BSET_curpad(pad, arg) pad = AvARRAY(arg)
+#define BSET_curpad(pad, arg) STMT_START {	\
+	PL_comppad = (AV *)arg;			\
+	pad = AvARRAY(arg);			\
+    } STMT_END
 
 #define BSET_OBJ_STORE(obj, ix)		\
 	(I32)ix > PL_bytecode_obj_list_fill ?	\

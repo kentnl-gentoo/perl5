@@ -49,9 +49,6 @@
 #define cast_iv			Perl_cast_iv
 #define cast_ulong		Perl_cast_ulong
 #define cast_uv			Perl_cast_uv
-#define check_uni		Perl_check_uni
-#define checkcomma		Perl_checkcomma
-#define ck_aelem		Perl_ck_aelem
 #define ck_anoncode		Perl_ck_anoncode
 #define ck_bitop		Perl_ck_bitop
 #define ck_concat		Perl_ck_concat
@@ -99,6 +96,7 @@
 #define debprofdump		Perl_debprofdump
 #define debstack		Perl_debstack
 #define debstackptrs		Perl_debstackptrs
+#define default_protect		Perl_default_protect
 #define delimcpy		Perl_delimcpy
 #define deprecate		Perl_deprecate
 #define die			Perl_die
@@ -110,6 +108,7 @@
 #define do_close		Perl_do_close
 #define do_eof			Perl_do_eof
 #define do_exec			Perl_do_exec
+#define do_exec3		Perl_do_exec3
 #define do_execfree		Perl_do_execfree
 #define do_gv_dump		Perl_do_gv_dump
 #define do_gvgv_dump		Perl_do_gvgv_dump
@@ -138,8 +137,6 @@
 #define do_vecset		Perl_do_vecset
 #define do_vop			Perl_do_vop
 #define dofile			Perl_dofile
-#define dofindlabel		Perl_dofindlabel
-#define dopoptoeval		Perl_dopoptoeval
 #define dounwind		Perl_dounwind
 #define dowantarray		Perl_dowantarray
 #define dump_all		Perl_dump_all
@@ -152,18 +149,13 @@
 #define dump_sub		Perl_dump_sub
 #define fbm_compile		Perl_fbm_compile
 #define fbm_instr		Perl_fbm_instr
-#define fetch_gv		Perl_fetch_gv
-#define fetch_io		Perl_fetch_io
 #define filter_add		Perl_filter_add
 #define filter_del		Perl_filter_del
 #define filter_read		Perl_filter_read
 #define find_script		Perl_find_script
 #define find_threadsv		Perl_find_threadsv
 #define fold_constants		Perl_fold_constants
-#define force_ident		Perl_force_ident
 #define force_list		Perl_force_list
-#define force_next		Perl_force_next
-#define force_word		Perl_force_word
 #define form			Perl_form
 #define free_tmps		Perl_free_tmps
 #define gen_constant_list	Perl_gen_constant_list
@@ -211,7 +203,6 @@
 #define hv_iterval		Perl_hv_iterval
 #define hv_ksplit		Perl_hv_ksplit
 #define hv_magic		Perl_hv_magic
-#define hv_stashpv		Perl_hv_stashpv
 #define hv_store		Perl_hv_store
 #define hv_store_ent		Perl_hv_store_ent
 #define hv_undef		Perl_hv_undef
@@ -222,7 +213,6 @@
 #define init_thread_intern	Perl_init_thread_intern
 #define instr			Perl_instr
 #define intro_my		Perl_intro_my
-#define intuit_more		Perl_intuit_more
 #define invert			Perl_invert
 #define io_close		Perl_io_close
 #define is_uni_alnum		Perl_is_uni_alnum
@@ -279,6 +269,7 @@
 #define magic_gettaint		Perl_magic_gettaint
 #define magic_getuvar		Perl_magic_getuvar
 #define magic_getvec		Perl_magic_getvec
+#define magic_killbackrefs	Perl_magic_killbackrefs
 #define magic_len		Perl_magic_len
 #define magic_mutexfree		Perl_magic_mutexfree
 #define magic_nextpack		Perl_magic_nextpack
@@ -322,15 +313,14 @@
 #define mg_set			Perl_mg_set
 #define mg_size			Perl_mg_size
 #define mod			Perl_mod
-#define modkids			Perl_modkids
 #define moreswitches		Perl_moreswitches
-#define mstats			Perl_mstats
 #define my			Perl_my
 #define my_bcopy		Perl_my_bcopy
 #define my_bzero		Perl_my_bzero
 #define my_chsize		Perl_my_chsize
 #define my_exit			Perl_my_exit
 #define my_failure_exit		Perl_my_failure_exit
+#define my_fflush_all		Perl_my_fflush_all
 #define my_htonl		Perl_my_htonl
 #define my_lstat		Perl_my_lstat
 #define my_memcmp		Perl_my_memcmp
@@ -389,13 +379,10 @@
 #define newUNOP			Perl_newUNOP
 #define newWHILEOP		Perl_newWHILEOP
 #define newXS			Perl_newXS
-#define newXSUB			Perl_newXSUB
 #define new_stackinfo		Perl_new_stackinfo
 #define new_struct_thread	Perl_new_struct_thread
 #define nextargv		Perl_nextargv
 #define ninstr			Perl_ninstr
-#define no_fh_allowed		Perl_no_fh_allowed
-#define no_op			Perl_no_op
 #define oopsAV			Perl_oopsAV
 #define oopsCV			Perl_oopsCV
 #define oopsHV			Perl_oopsHV
@@ -837,20 +824,9 @@
 #define scalarseq		Perl_scalarseq
 #define scalarvoid		Perl_scalarvoid
 #define scan_bin		Perl_scan_bin
-#define scan_const		Perl_scan_const
-#define scan_formline		Perl_scan_formline
-#define scan_heredoc		Perl_scan_heredoc
 #define scan_hex		Perl_scan_hex
-#define scan_ident		Perl_scan_ident
-#define scan_inputsymbol	Perl_scan_inputsymbol
 #define scan_num		Perl_scan_num
 #define scan_oct		Perl_scan_oct
-#define scan_pat		Perl_scan_pat
-#define scan_prefix		Perl_scan_prefix
-#define scan_str		Perl_scan_str
-#define scan_subst		Perl_scan_subst
-#define scan_trans		Perl_scan_trans
-#define scan_word		Perl_scan_word
 #define scope			Perl_scope
 #define screaminstr		Perl_screaminstr
 #define setdefout		Perl_setdefout
@@ -858,7 +834,6 @@
 #define share_hek		Perl_share_hek
 #define sharepvn		Perl_sharepvn
 #define sighandler		Perl_sighandler
-#define skipspace		Perl_skipspace
 #define stack_grow		Perl_stack_grow
 #define start_subparse		Perl_start_subparse
 #define sub_crush_depth		Perl_sub_crush_depth
@@ -894,6 +869,7 @@
 #define sv_derived_from		Perl_sv_derived_from
 #define sv_dump			Perl_sv_dump
 #define sv_eq			Perl_sv_eq
+#define sv_force_normal		Perl_sv_force_normal
 #define sv_free			Perl_sv_free
 #define sv_free_arenas		Perl_sv_free_arenas
 #define sv_gets			Perl_sv_gets
@@ -916,16 +892,15 @@
 #define sv_pv			Perl_sv_pv
 #define sv_pvn			Perl_sv_pvn
 #define sv_pvn_force		Perl_sv_pvn_force
-#define sv_ref			Perl_sv_ref
 #define sv_reftype		Perl_sv_reftype
 #define sv_replace		Perl_sv_replace
 #define sv_report_used		Perl_sv_report_used
 #define sv_reset		Perl_sv_reset
+#define sv_rvweaken		Perl_sv_rvweaken
 #define sv_setiv		Perl_sv_setiv
 #define sv_setiv_mg		Perl_sv_setiv_mg
 #define sv_setnv		Perl_sv_setnv
 #define sv_setnv_mg		Perl_sv_setnv_mg
-#define sv_setptrobj		Perl_sv_setptrobj
 #define sv_setpv		Perl_sv_setpv
 #define sv_setpv_mg		Perl_sv_setpv_mg
 #define sv_setpvf		Perl_sv_setpvf
@@ -958,6 +933,7 @@
 #define swash_init		Perl_swash_init
 #define taint_env		Perl_taint_env
 #define taint_proper		Perl_taint_proper
+#define tmps_grow		Perl_tmps_grow
 #define to_uni_lower		Perl_to_uni_lower
 #define to_uni_lower_lc		Perl_to_uni_lower_lc
 #define to_uni_title		Perl_to_uni_title
@@ -967,8 +943,6 @@
 #define to_utf8_lower		Perl_to_utf8_lower
 #define to_utf8_title		Perl_to_utf8_title
 #define to_utf8_upper		Perl_to_utf8_upper
-#define too_few_arguments	Perl_too_few_arguments
-#define too_many_arguments	Perl_too_many_arguments
 #define unlnk			Perl_unlnk
 #define unlock_condpair		Perl_unlock_condpair
 #define unshare_hek		Perl_unshare_hek
@@ -1036,20 +1010,17 @@
 #define block_start		CPerlObj::Perl_block_start
 #define boot_core_UNIVERSAL	CPerlObj::Perl_boot_core_UNIVERSAL
 #define bset_obj_store		CPerlObj::Perl_bset_obj_store
-#define bset_obj_store		CPerlObj::Perl_bset_obj_store
 #define byterun			CPerlObj::Perl_byterun
 #define cache_re		CPerlObj::Perl_cache_re
 #define call_list		CPerlObj::Perl_call_list
+#define call_list_body		CPerlObj::Perl_call_list_body
 #define cando			CPerlObj::Perl_cando
 #define cast_i32		CPerlObj::Perl_cast_i32
 #define cast_iv			CPerlObj::Perl_cast_iv
 #define cast_ulong		CPerlObj::Perl_cast_ulong
 #define cast_uv			CPerlObj::Perl_cast_uv
 #define check_uni		CPerlObj::Perl_check_uni
-#define check_uni		CPerlObj::Perl_check_uni
 #define checkcomma		CPerlObj::Perl_checkcomma
-#define checkcomma		CPerlObj::Perl_checkcomma
-#define ck_aelem		CPerlObj::Perl_ck_aelem
 #define ck_anoncode		CPerlObj::Perl_ck_anoncode
 #define ck_bitop		CPerlObj::Perl_ck_bitop
 #define ck_concat		CPerlObj::Perl_ck_concat
@@ -1100,6 +1071,7 @@
 #define debprofdump		CPerlObj::Perl_debprofdump
 #define debstack		CPerlObj::Perl_debstack
 #define debstackptrs		CPerlObj::Perl_debstackptrs
+#define default_protect		CPerlObj::Perl_default_protect
 #define del_he			CPerlObj::Perl_del_he
 #define del_sv			CPerlObj::Perl_del_sv
 #define del_xiv			CPerlObj::Perl_del_xiv
@@ -1123,6 +1095,7 @@
 #define do_close		CPerlObj::Perl_do_close
 #define do_eof			CPerlObj::Perl_do_eof
 #define do_exec			CPerlObj::Perl_do_exec
+#define do_exec3		CPerlObj::Perl_do_exec3
 #define do_execfree		CPerlObj::Perl_do_execfree
 #define do_gv_dump		CPerlObj::Perl_do_gv_dump
 #define do_gvgv_dump		CPerlObj::Perl_do_gvgv_dump
@@ -1162,14 +1135,14 @@
 #define do_vecset		CPerlObj::Perl_do_vecset
 #define do_vop			CPerlObj::Perl_do_vop
 #define docatch			CPerlObj::Perl_docatch
+#define docatch_body		CPerlObj::Perl_docatch_body
 #define doencodes		CPerlObj::Perl_doencodes
 #define doeval			CPerlObj::Perl_doeval
 #define dofile			CPerlObj::Perl_dofile
 #define dofindlabel		CPerlObj::Perl_dofindlabel
-#define dofindlabel		CPerlObj::Perl_dofindlabel
 #define doform			CPerlObj::Perl_doform
+#define doopen_pmc		CPerlObj::Perl_doopen_pmc
 #define doparseform		CPerlObj::Perl_doparseform
-#define dopoptoeval		CPerlObj::Perl_dopoptoeval
 #define dopoptoeval		CPerlObj::Perl_dopoptoeval
 #define dopoptolabel		CPerlObj::Perl_dopoptolabel
 #define dopoptoloop		CPerlObj::Perl_dopoptoloop
@@ -1190,8 +1163,6 @@
 #define emulate_eaccess		CPerlObj::Perl_emulate_eaccess
 #define fbm_compile		CPerlObj::Perl_fbm_compile
 #define fbm_instr		CPerlObj::Perl_fbm_instr
-#define fetch_gv		CPerlObj::Perl_fetch_gv
-#define fetch_io		CPerlObj::Perl_fetch_io
 #define filter_add		CPerlObj::Perl_filter_add
 #define filter_del		CPerlObj::Perl_filter_del
 #define filter_gets		CPerlObj::Perl_filter_gets
@@ -1202,12 +1173,9 @@
 #define fold_constants		CPerlObj::Perl_fold_constants
 #define forbid_setid		CPerlObj::Perl_forbid_setid
 #define force_ident		CPerlObj::Perl_force_ident
-#define force_ident		CPerlObj::Perl_force_ident
 #define force_list		CPerlObj::Perl_force_list
 #define force_next		CPerlObj::Perl_force_next
-#define force_next		CPerlObj::Perl_force_next
 #define force_version		CPerlObj::Perl_force_version
-#define force_word		CPerlObj::Perl_force_word
 #define force_word		CPerlObj::Perl_force_word
 #define form			CPerlObj::Perl_form
 #define fprintf			CPerlObj::Perl_fprintf
@@ -1262,7 +1230,6 @@
 #define hv_iterval		CPerlObj::Perl_hv_iterval
 #define hv_ksplit		CPerlObj::Perl_hv_ksplit
 #define hv_magic		CPerlObj::Perl_hv_magic
-#define hv_stashpv		CPerlObj::Perl_hv_stashpv
 #define hv_store		CPerlObj::Perl_hv_store
 #define hv_store_ent		CPerlObj::Perl_hv_store_ent
 #define hv_undef		CPerlObj::Perl_hv_undef
@@ -1285,7 +1252,6 @@
 #define instr			CPerlObj::Perl_instr
 #define intro_my		CPerlObj::Perl_intro_my
 #define intuit_method		CPerlObj::Perl_intuit_method
-#define intuit_more		CPerlObj::Perl_intuit_more
 #define intuit_more		CPerlObj::Perl_intuit_more
 #define invert			CPerlObj::Perl_invert
 #define io_close		CPerlObj::Perl_io_close
@@ -1348,6 +1314,7 @@
 #define magic_gettaint		CPerlObj::Perl_magic_gettaint
 #define magic_getuvar		CPerlObj::Perl_magic_getuvar
 #define magic_getvec		CPerlObj::Perl_magic_getvec
+#define magic_killbackrefs	CPerlObj::Perl_magic_killbackrefs
 #define magic_len		CPerlObj::Perl_magic_len
 #define magic_methcall		CPerlObj::Perl_magic_methcall
 #define magic_methcall		CPerlObj::Perl_magic_methcall
@@ -1397,7 +1364,6 @@
 #define missingterm		CPerlObj::Perl_missingterm
 #define mod			CPerlObj::Perl_mod
 #define modkids			CPerlObj::Perl_modkids
-#define modkids			CPerlObj::Perl_modkids
 #define more_he			CPerlObj::Perl_more_he
 #define more_sv			CPerlObj::Perl_more_sv
 #define more_xiv		CPerlObj::Perl_more_xiv
@@ -1405,7 +1371,6 @@
 #define more_xpv		CPerlObj::Perl_more_xpv
 #define more_xrv		CPerlObj::Perl_more_xrv
 #define moreswitches		CPerlObj::Perl_moreswitches
-#define mstats			CPerlObj::Perl_mstats
 #define mul128			CPerlObj::Perl_mul128
 #define my			CPerlObj::Perl_my
 #define my_bcopy		CPerlObj::Perl_my_bcopy
@@ -1414,6 +1379,7 @@
 #define my_exit			CPerlObj::Perl_my_exit
 #define my_exit_jump		CPerlObj::Perl_my_exit_jump
 #define my_failure_exit		CPerlObj::Perl_my_failure_exit
+#define my_fflush_all		CPerlObj::Perl_my_fflush_all
 #define my_htonl		CPerlObj::Perl_my_htonl
 #define my_lstat		CPerlObj::Perl_my_lstat
 #define my_memcmp		CPerlObj::Perl_my_memcmp
@@ -1474,7 +1440,6 @@
 #define newUNOP			CPerlObj::Perl_newUNOP
 #define newWHILEOP		CPerlObj::Perl_newWHILEOP
 #define newXS			CPerlObj::Perl_newXS
-#define newXSUB			CPerlObj::Perl_newXSUB
 #define new_constant		CPerlObj::Perl_new_constant
 #define new_he			CPerlObj::Perl_new_he
 #define new_logop		CPerlObj::Perl_new_logop
@@ -1487,9 +1452,8 @@
 #define nextargv		CPerlObj::Perl_nextargv
 #define nextchar		CPerlObj::Perl_nextchar
 #define ninstr			CPerlObj::Perl_ninstr
+#define no_bareword_allowed	CPerlObj::Perl_no_bareword_allowed
 #define no_fh_allowed		CPerlObj::Perl_no_fh_allowed
-#define no_fh_allowed		CPerlObj::Perl_no_fh_allowed
-#define no_op			CPerlObj::Perl_no_op
 #define no_op			CPerlObj::Perl_no_op
 #define not_a_number		CPerlObj::Perl_not_a_number
 #define nuke_stacks		CPerlObj::Perl_nuke_stacks
@@ -1514,9 +1478,11 @@
 #define peep			CPerlObj::Perl_peep
 #define perl_atexit		CPerlObj::perl_atexit
 #define perl_call_argv		CPerlObj::perl_call_argv
+#define perl_call_body		CPerlObj::perl_call_body
 #define perl_call_method	CPerlObj::perl_call_method
 #define perl_call_pv		CPerlObj::perl_call_pv
 #define perl_call_sv		CPerlObj::perl_call_sv
+#define perl_call_xbody		CPerlObj::perl_call_xbody
 #define perl_construct		CPerlObj::perl_construct
 #define perl_destruct		CPerlObj::perl_destruct
 #define perl_eval_pv		CPerlObj::perl_eval_pv
@@ -1532,8 +1498,10 @@
 #define perl_new_ctype		CPerlObj::perl_new_ctype
 #define perl_new_numeric	CPerlObj::perl_new_numeric
 #define perl_parse		CPerlObj::perl_parse
+#define perl_parse_body		CPerlObj::perl_parse_body
 #define perl_require_pv		CPerlObj::perl_require_pv
 #define perl_run		CPerlObj::perl_run
+#define perl_run_body		CPerlObj::perl_run_body
 #define perl_set_numeric_local	CPerlObj::perl_set_numeric_local
 #define perl_set_numeric_standard	CPerlObj::perl_set_numeric_standard
 #define pidgone			CPerlObj::Perl_pidgone
@@ -2006,28 +1974,17 @@
 #define scan_bin		CPerlObj::Perl_scan_bin
 #define scan_commit		CPerlObj::Perl_scan_commit
 #define scan_const		CPerlObj::Perl_scan_const
-#define scan_const		CPerlObj::Perl_scan_const
 #define scan_formline		CPerlObj::Perl_scan_formline
-#define scan_formline		CPerlObj::Perl_scan_formline
-#define scan_heredoc		CPerlObj::Perl_scan_heredoc
 #define scan_heredoc		CPerlObj::Perl_scan_heredoc
 #define scan_hex		CPerlObj::Perl_scan_hex
 #define scan_ident		CPerlObj::Perl_scan_ident
-#define scan_ident		CPerlObj::Perl_scan_ident
-#define scan_inputsymbol	CPerlObj::Perl_scan_inputsymbol
 #define scan_inputsymbol	CPerlObj::Perl_scan_inputsymbol
 #define scan_num		CPerlObj::Perl_scan_num
 #define scan_oct		CPerlObj::Perl_scan_oct
 #define scan_pat		CPerlObj::Perl_scan_pat
-#define scan_pat		CPerlObj::Perl_scan_pat
-#define scan_prefix		CPerlObj::Perl_scan_prefix
-#define scan_str		CPerlObj::Perl_scan_str
 #define scan_str		CPerlObj::Perl_scan_str
 #define scan_subst		CPerlObj::Perl_scan_subst
-#define scan_subst		CPerlObj::Perl_scan_subst
 #define scan_trans		CPerlObj::Perl_scan_trans
-#define scan_trans		CPerlObj::Perl_scan_trans
-#define scan_word		CPerlObj::Perl_scan_word
 #define scan_word		CPerlObj::Perl_scan_word
 #define scope			CPerlObj::Perl_scope
 #define screaminstr		CPerlObj::Perl_screaminstr
@@ -2039,7 +1996,6 @@
 #define sharepvn		CPerlObj::Perl_sharepvn
 #define sighandler		CPerlObj::Perl_sighandler
 #define simplify_sort		CPerlObj::Perl_simplify_sort
-#define skipspace		CPerlObj::Perl_skipspace
 #define skipspace		CPerlObj::Perl_skipspace
 #define sortcv			CPerlObj::Perl_sortcv
 #define stack_grow		CPerlObj::Perl_stack_grow
@@ -2059,6 +2015,7 @@
 #define sv_2pv_nolen		CPerlObj::Perl_sv_2pv_nolen
 #define sv_2uv			CPerlObj::Perl_sv_2uv
 #define sv_add_arena		CPerlObj::Perl_sv_add_arena
+#define sv_add_backref		CPerlObj::Perl_sv_add_backref
 #define sv_backoff		CPerlObj::Perl_sv_backoff
 #define sv_bless		CPerlObj::Perl_sv_bless
 #define sv_catpv		CPerlObj::Perl_sv_catpv
@@ -2069,7 +2026,6 @@
 #define sv_catpvn_mg		CPerlObj::Perl_sv_catpvn_mg
 #define sv_catsv		CPerlObj::Perl_sv_catsv
 #define sv_catsv_mg		CPerlObj::Perl_sv_catsv_mg
-#define sv_check_thinkfirst	CPerlObj::Perl_sv_check_thinkfirst
 #define sv_chop			CPerlObj::Perl_sv_chop
 #define sv_clean_all		CPerlObj::Perl_sv_clean_all
 #define sv_clean_objs		CPerlObj::Perl_sv_clean_objs
@@ -2079,9 +2035,11 @@
 #define sv_collxfrm		CPerlObj::Perl_sv_collxfrm
 #define sv_compile_2op		CPerlObj::Perl_sv_compile_2op
 #define sv_dec			CPerlObj::Perl_sv_dec
+#define sv_del_backref		CPerlObj::Perl_sv_del_backref
 #define sv_derived_from		CPerlObj::Perl_sv_derived_from
 #define sv_dump			CPerlObj::Perl_sv_dump
 #define sv_eq			CPerlObj::Perl_sv_eq
+#define sv_force_normal		CPerlObj::Perl_sv_force_normal
 #define sv_free			CPerlObj::Perl_sv_free
 #define sv_free_arenas		CPerlObj::Perl_sv_free_arenas
 #define sv_gets			CPerlObj::Perl_sv_gets
@@ -2096,7 +2054,6 @@
 #define sv_len_utf8		CPerlObj::Perl_sv_len_utf8
 #define sv_magic		CPerlObj::Perl_sv_magic
 #define sv_mortalcopy		CPerlObj::Perl_sv_mortalcopy
-#define sv_mortalgrow		CPerlObj::Perl_sv_mortalgrow
 #define sv_ncmp			CPerlObj::Perl_sv_ncmp
 #define sv_newmortal		CPerlObj::Perl_sv_newmortal
 #define sv_newref		CPerlObj::Perl_sv_newref
@@ -2107,16 +2064,15 @@
 #define sv_pv			CPerlObj::Perl_sv_pv
 #define sv_pvn			CPerlObj::Perl_sv_pvn
 #define sv_pvn_force		CPerlObj::Perl_sv_pvn_force
-#define sv_ref			CPerlObj::Perl_sv_ref
 #define sv_reftype		CPerlObj::Perl_sv_reftype
 #define sv_replace		CPerlObj::Perl_sv_replace
 #define sv_report_used		CPerlObj::Perl_sv_report_used
 #define sv_reset		CPerlObj::Perl_sv_reset
+#define sv_rvweaken		CPerlObj::Perl_sv_rvweaken
 #define sv_setiv		CPerlObj::Perl_sv_setiv
 #define sv_setiv_mg		CPerlObj::Perl_sv_setiv_mg
 #define sv_setnv		CPerlObj::Perl_sv_setnv
 #define sv_setnv_mg		CPerlObj::Perl_sv_setnv_mg
-#define sv_setptrobj		CPerlObj::Perl_sv_setptrobj
 #define sv_setpv		CPerlObj::Perl_sv_setpv
 #define sv_setpv_mg		CPerlObj::Perl_sv_setpv_mg
 #define sv_setpvf		CPerlObj::Perl_sv_setpvf
@@ -2150,6 +2106,7 @@
 #define swash_init		CPerlObj::Perl_swash_init
 #define taint_env		CPerlObj::Perl_taint_env
 #define taint_proper		CPerlObj::Perl_taint_proper
+#define tmps_grow		CPerlObj::Perl_tmps_grow
 #define to_uni_lower		CPerlObj::Perl_to_uni_lower
 #define to_uni_lower_lc		CPerlObj::Perl_to_uni_lower_lc
 #define to_uni_title		CPerlObj::Perl_to_uni_title
@@ -2161,8 +2118,6 @@
 #define to_utf8_upper		CPerlObj::Perl_to_utf8_upper
 #define tokeq			CPerlObj::Perl_tokeq
 #define too_few_arguments	CPerlObj::Perl_too_few_arguments
-#define too_few_arguments	CPerlObj::Perl_too_few_arguments
-#define too_many_arguments	CPerlObj::Perl_too_many_arguments
 #define too_many_arguments	CPerlObj::Perl_too_many_arguments
 #define uni			CPerlObj::Perl_uni
 #define unlnk			CPerlObj::Perl_unlnk
@@ -2196,4 +2151,9 @@
 #define yywarn			CPerlObj::Perl_yywarn
 
 #endif	/* PERL_OBJECT */
+
+/* compatibility stubs */
+
+#define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,(IV)ptr)
+#define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,(IV)ptr)
 

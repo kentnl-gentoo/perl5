@@ -1,6 +1,6 @@
 /*    sv.h
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -137,7 +137,7 @@ struct io {
 #define SVf_BREAK	0x00400000	/* refcnt is artificially low */
 #define SVf_READONLY	0x00800000	/* may not be modified */
 
-#define SVf_THINKFIRST	(SVf_READONLY|SVf_ROK)
+#define SVf_THINKFIRST	(SVf_READONLY|SVf_ROK|SVf_FAKE)
 
 #define SVp_IOK		0x01000000	/* has valid non-public integer value */
 #define SVp_NOK		0x02000000	/* has valid non-public numeric value */
@@ -153,13 +153,19 @@ struct io {
 
 /* Some private flags. */
 
-#define SVpfm_COMPILED	0x80000000
+#define SVf_IVisUV	0x80000000	/* use XPVUV instead of XPVIV */
+
+#define SVpfm_COMPILED	0x80000000	/* FORMLINE is compiled */
 
 #define SVpbm_VALID	0x80000000
 #define SVpbm_TAIL	0x40000000
 
+#define SVrepl_EVAL	0x40000000	/* Replacement part of s///e */
+
 #define SVphv_SHAREKEYS 0x20000000	/* keys live on shared string table */
 #define SVphv_LAZYDEL	0x40000000	/* entry in xhv_eiter must be deleted */
+
+#define SVprv_WEAKREF   0x80000000      /* Weak reference */
 
 struct xrv {
     SV *	xrv_rv;		/* pointer to another SV */
@@ -320,10 +326,13 @@ struct xpvio {
 #define SvNIOK(sv)		(SvFLAGS(sv) & (SVf_IOK|SVf_NOK))
 #define SvNIOKp(sv)		(SvFLAGS(sv) & (SVp_IOK|SVp_NOK))
 #define SvNIOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_IOK|SVf_NOK| \
-						  SVp_IOK|SVp_NOK))
+						  SVp_IOK|SVp_NOK|SVf_IVisUV))
 
 #define SvOK(sv)		(SvFLAGS(sv) & SVf_OK)
-#define SvOK_off(sv)		(SvFLAGS(sv) &=	~(SVf_OK|SVf_AMAGIC),	\
+#define SvOK_off(sv)		(SvFLAGS(sv) &=	~(SVf_OK|SVf_AMAGIC|	\
+						  SVf_IVisUV),		\
+							SvOOK_off(sv))
+#define SvOK_off_exc_UV(sv)	(SvFLAGS(sv) &=	~(SVf_OK|SVf_AMAGIC),	\
 							SvOOK_off(sv))
 
 #define SvOKp(sv)		(SvFLAGS(sv) & (SVp_IOK|SVp_NOK|SVp_POK))
@@ -337,9 +346,20 @@ struct xpvio {
 #define SvIOK(sv)		(SvFLAGS(sv) & SVf_IOK)
 #define SvIOK_on(sv)		(SvOOK_off(sv), \
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
-#define SvIOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_IOK|SVp_IOK))
+#define SvIOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_IOK|SVp_IOK|SVf_IVisUV))
 #define SvIOK_only(sv)		(SvOK_off(sv), \
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
+#define SvIOK_only_UV(sv)	(SvOK_off_exc_UV(sv), \
+				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
+ 
+#define SvIOK_UV(sv)		((SvFLAGS(sv) & (SVf_IOK|SVf_IVisUV))	\
+				 == (SVf_IOK|SVf_IVisUV))
+#define SvIOK_notUV(sv)		((SvFLAGS(sv) & (SVf_IOK|SVf_IVisUV))	\
+				 == SVf_IOK)
+
+#define SvIsUV(sv)		(SvFLAGS(sv) & SVf_IVisUV)
+#define SvIsUV_on(sv)		(SvFLAGS(sv) |= SVf_IVisUV)
+#define SvIsUV_off(sv)		(SvFLAGS(sv) &= ~SVf_IVisUV)
 
 #define SvNOK(sv)		(SvFLAGS(sv) & SVf_NOK)
 #define SvNOK_on(sv)		(SvFLAGS(sv) |= (SVf_NOK|SVp_NOK))
@@ -350,7 +370,7 @@ struct xpvio {
 #define SvPOK(sv)		(SvFLAGS(sv) & SVf_POK)
 #define SvPOK_on(sv)		(SvFLAGS(sv) |= (SVf_POK|SVp_POK))
 #define SvPOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_POK|SVp_POK))
-#define SvPOK_only(sv)		(SvFLAGS(sv) &= ~(SVf_OK|SVf_AMAGIC),	\
+#define SvPOK_only(sv)		(SvFLAGS(sv) &= ~(SVf_OK|SVf_AMAGIC|SVf_IVisUV),	\
 				    SvFLAGS(sv) |= (SVf_POK|SVp_POK))
 
 #define SvOOK(sv)		(SvFLAGS(sv) & SVf_OOK)
@@ -392,6 +412,11 @@ struct xpvio {
 */
 #define Gv_AMG(stash)           (PL_amagic_generation && Gv_AMupdate(stash))
 
+#define SvWEAKREF(sv)		((SvFLAGS(sv) & (SVf_ROK|SVprv_WEAKREF)) \
+				  == (SVf_ROK|SVprv_WEAKREF))
+#define SvWEAKREF_on(sv)	(SvFLAGS(sv) |=  (SVf_ROK|SVprv_WEAKREF))
+#define SvWEAKREF_off(sv)	(SvFLAGS(sv) &= ~(SVf_ROK|SVprv_WEAKREF))
+
 #define SvTHINKFIRST(sv)	(SvFLAGS(sv) & SVf_THINKFIRST)
 
 #define SvPADBUSY(sv)		(SvFLAGS(sv) & SVs_PADBUSY)
@@ -422,6 +447,10 @@ struct xpvio {
 #define SvCOMPILED(sv)		(SvFLAGS(sv) & SVpfm_COMPILED)
 #define SvCOMPILED_on(sv)	(SvFLAGS(sv) |= SVpfm_COMPILED)
 #define SvCOMPILED_off(sv)	(SvFLAGS(sv) &= ~SVpfm_COMPILED)
+
+#define SvEVALED(sv)		(SvFLAGS(sv) & SVrepl_EVAL)
+#define SvEVALED_on(sv)		(SvFLAGS(sv) |= SVrepl_EVAL)
+#define SvEVALED_off(sv)	(SvFLAGS(sv) &= ~SVrepl_EVAL)
 
 #define SvTAIL(sv)		(SvFLAGS(sv) & SVpbm_TAIL)
 #define SvTAIL_on(sv)		(SvFLAGS(sv) |= SVpbm_TAIL)
@@ -522,12 +551,13 @@ struct xpvio {
 
 #define SvIV(sv) SvIVx(sv)
 #define SvNV(sv) SvNVx(sv)
-#define SvUV(sv) SvIVx(sv)
+#define SvUV(sv) SvUVx(sv)
 #define SvTRUE(sv) SvTRUEx(sv)
 
 #ifndef CRIPPLED_CC
 /* redefine some things to more efficient inlined versions */
 
+/* Let us hope that bitmaps for UV and IV are the same */
 #undef SvIV
 #define SvIV(sv) (SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv))
 

@@ -53,6 +53,7 @@
 #define PL_ofslen		(PL_curinterp->Tofslen)
 #define PL_op			(PL_curinterp->Top)
 #define PL_opsave		(PL_curinterp->Topsave)
+#define PL_protect		(PL_curinterp->Tprotect)
 #define PL_reg_call_cc		(PL_curinterp->Treg_call_cc)
 #define PL_reg_curpm		(PL_curinterp->Treg_curpm)
 #define PL_reg_eval_set		(PL_curinterp->Treg_eval_set)
@@ -61,6 +62,8 @@
 #define PL_reg_magic		(PL_curinterp->Treg_magic)
 #define PL_reg_oldcurpm		(PL_curinterp->Treg_oldcurpm)
 #define PL_reg_oldpos		(PL_curinterp->Treg_oldpos)
+#define PL_reg_oldsaved		(PL_curinterp->Treg_oldsaved)
+#define PL_reg_oldsavedlen	(PL_curinterp->Treg_oldsavedlen)
 #define PL_reg_re		(PL_curinterp->Treg_re)
 #define PL_reg_start_tmp	(PL_curinterp->Treg_start_tmp)
 #define PL_reg_start_tmpl	(PL_curinterp->Treg_start_tmpl)
@@ -198,7 +201,6 @@
 #define PL_incgv		(PL_curinterp->Iincgv)
 #define PL_initav		(PL_curinterp->Iinitav)
 #define PL_inplace		(PL_curinterp->Iinplace)
-#define PL_last_proto		(PL_curinterp->Ilast_proto)
 #define PL_lastfd		(PL_curinterp->Ilastfd)
 #define PL_lastsize		(PL_curinterp->Ilastsize)
 #define PL_lastspbase		(PL_curinterp->Ilastspbase)
@@ -332,7 +334,6 @@
 #define PL_Iincgv		PL_incgv
 #define PL_Iinitav		PL_initav
 #define PL_Iinplace		PL_inplace
-#define PL_Ilast_proto		PL_last_proto
 #define PL_Ilastfd		PL_lastfd
 #define PL_Ilastsize		PL_lastsize
 #define PL_Ilastspbase		PL_lastspbase
@@ -445,6 +446,7 @@
 #define PL_Tofslen		PL_ofslen
 #define PL_Top			PL_op
 #define PL_Topsave		PL_opsave
+#define PL_Tprotect		PL_protect
 #define PL_Treg_call_cc		PL_reg_call_cc
 #define PL_Treg_curpm		PL_reg_curpm
 #define PL_Treg_eval_set	PL_reg_eval_set
@@ -453,6 +455,8 @@
 #define PL_Treg_magic		PL_reg_magic
 #define PL_Treg_oldcurpm	PL_reg_oldcurpm
 #define PL_Treg_oldpos		PL_reg_oldpos
+#define PL_Treg_oldsaved	PL_reg_oldsaved
+#define PL_Treg_oldsavedlen	PL_reg_oldsavedlen
 #define PL_Treg_re		PL_reg_re
 #define PL_Treg_start_tmp	PL_reg_start_tmp
 #define PL_Treg_start_tmpl	PL_reg_start_tmpl
@@ -580,6 +584,7 @@
 #define PL_ofslen		(thr->Tofslen)
 #define PL_op			(thr->Top)
 #define PL_opsave		(thr->Topsave)
+#define PL_protect		(thr->Tprotect)
 #define PL_reg_call_cc		(thr->Treg_call_cc)
 #define PL_reg_curpm		(thr->Treg_curpm)
 #define PL_reg_eval_set		(thr->Treg_eval_set)
@@ -588,6 +593,8 @@
 #define PL_reg_magic		(thr->Treg_magic)
 #define PL_reg_oldcurpm		(thr->Treg_oldcurpm)
 #define PL_reg_oldpos		(thr->Treg_oldpos)
+#define PL_reg_oldsaved		(thr->Treg_oldsaved)
+#define PL_reg_oldsavedlen	(thr->Treg_oldsavedlen)
 #define PL_reg_re		(thr->Treg_re)
 #define PL_reg_start_tmp	(thr->Treg_start_tmp)
 #define PL_reg_start_tmpl	(thr->Treg_start_tmpl)
@@ -943,7 +950,7 @@
 #endif /* PERL_GLOBAL_STRUCT */
 
 
-#ifdef PERL_POLLUTE		/* unsupported in 5.006 */
+#ifdef PERL_POLLUTE		/* disabled by default in 5.006 */
 
 #define DBsingle		PL_DBsingle
 #define DBsub			PL_DBsub
@@ -972,4 +979,4 @@
 #define tainted			PL_tainted
 #define tainting		PL_tainting
 
-#endif /* MIN_PERL_DEFINE */
+#endif /* PERL_POLLUTE */

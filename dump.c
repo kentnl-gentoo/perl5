@@ -1,6 +1,6 @@
 /*    dump.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -267,7 +267,7 @@ sv_peek(SV *sv)
 	if (!SvPVX(sv))
 	    sv_catpv(t, "(null)");
 	else {
-	    SV *tmp = newSVpv("", 0);
+	    SV *tmp = newSVpvn("", 0);
 	    sv_catpv(t, "(");
 	    if (SvOOK(sv))
 		sv_catpvf(t, "[%s]", pv_display(tmp, SvPVX(sv)-SvIVX(sv), SvIVX(sv), 0, 127));
@@ -279,8 +279,12 @@ sv_peek(SV *sv)
 	SET_NUMERIC_STANDARD();
 	sv_catpvf(t, "(%g)",SvNVX(sv));
     }
-    else if (SvIOKp(sv))
-	sv_catpvf(t, "(%ld)",(long)SvIVX(sv));
+    else if (SvIOKp(sv)) {		/* XXXX: IV, UV? */
+	if (SvIsUV(sv))
+	    sv_catpvf(t, "(%lu)",(unsigned long)SvUVX(sv));
+	else
+            sv_catpvf(t, "(%ld)",(long)SvIVX(sv));
+    }
     else
 	sv_catpv(t, "()");
     
@@ -318,7 +322,7 @@ do_pmop_dump(I32 level, PerlIO *file, PMOP *pm)
 	op_dump(pm->op_pmreplroot);
     }
     if (pm->op_pmflags || (pm->op_pmregexp && pm->op_pmregexp->check_substr)) {
-	SV *tmpsv = newSVpv("", 0);
+	SV *tmpsv = newSVpvn("", 0);
 	if (pm->op_pmdynflags & PMdf_USED)
 	    sv_catpv(tmpsv, ",USED");
 	if (pm->op_pmdynflags & PMdf_TAINTED)
@@ -388,7 +392,7 @@ do_op_dump(I32 level, PerlIO *file, OP *o)
     dump_indent(level, file, "ADDR = 0x%lx => 0x%lx\n",o, o->op_next);
 #endif
     if (o->op_flags) {
-	SV *tmpsv = newSVpv("", 0);
+	SV *tmpsv = newSVpvn("", 0);
 	switch (o->op_flags & OPf_WANT) {
 	case OPf_WANT_VOID:
 	    sv_catpv(tmpsv, ",VOID");
@@ -419,7 +423,7 @@ do_op_dump(I32 level, PerlIO *file, OP *o)
 	SvREFCNT_dec(tmpsv);
     }
     if (o->op_private) {
-	SV *tmpsv = newSVpv("", 0);
+	SV *tmpsv = newSVpvn("", 0);
 	if (o->op_type == OP_AASSIGN) {
 	    if (o->op_private & OPpASSIGN_COMMON)
 		sv_catpv(tmpsv, ",COMMON");
@@ -477,6 +481,8 @@ do_op_dump(I32 level, PerlIO *file, OP *o)
 	else if (o->op_type == OP_CONST) {
 	    if (o->op_private & OPpCONST_BARE)
 		sv_catpv(tmpsv, ",BARE");
+	    if (o->op_private & OPpCONST_STRICT)
+		sv_catpv(tmpsv, ",STRICT");
 	}
 	else if (o->op_type == OP_FLIP) {
 	    if (o->op_private & OPpFLIP_LINENUM)
@@ -634,6 +640,7 @@ do_magic_dump(I32 level, PerlIO *file, MAGIC *mg, I32 nest, I32 maxnest, bool du
 #endif
 	    else if (v == &PL_vtbl_amagic)     s = "amagic";
 	    else if (v == &PL_vtbl_amagicelem) s = "amagicelem";
+	    else if (v == &PL_vtbl_backref)    s = "backref";
 	    if (s)
 	        dump_indent(level, file, "    MG_VIRTUAL = &PL_vtbl_%s\n", s);
 	    else
@@ -671,7 +678,7 @@ do_magic_dump(I32 level, PerlIO *file, MAGIC *mg, I32 nest, I32 maxnest, bool du
         if (mg->mg_ptr) {
 	    dump_indent(level, file, "    MG_PTR = 0x%lx", (long)mg->mg_ptr);
 	    if (mg->mg_len >= 0) {
-		SV *sv = newSVpv("", 0);
+		SV *sv = newSVpvn("", 0);
                 PerlIO_printf(file, " %s", pv_display(sv, mg->mg_ptr, mg->mg_len, 0, pvlim));
 		SvREFCNT_dec(sv);
             }
@@ -762,7 +769,10 @@ do_sv_dump(I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops,
     if (flags & SVf_IOK)	sv_catpv(d, "IOK,");
     if (flags & SVf_NOK)	sv_catpv(d, "NOK,");
     if (flags & SVf_POK)	sv_catpv(d, "POK,");
-    if (flags & SVf_ROK)	sv_catpv(d, "ROK,");
+    if (flags & SVf_ROK)  {	
+    				sv_catpv(d, "ROK,");
+	if (SvWEAKREF(sv))	sv_catpv(d, "WEAKREF,");
+    }
     if (flags & SVf_OOK)	sv_catpv(d, "OOK,");
     if (flags & SVf_FAKE)	sv_catpv(d, "FAKE,");
     if (flags & SVf_READONLY)	sv_catpv(d, "READONLY,");
@@ -781,6 +791,7 @@ do_sv_dump(I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops,
 	if (CvCLONE(sv))	sv_catpv(d, "CLONE,");
 	if (CvCLONED(sv))	sv_catpv(d, "CLONED,");
 	if (CvNODEBUG(sv))	sv_catpv(d, "NODEBUG,");
+	if (SvCOMPILED(sv))	sv_catpv(d, "COMPILED,");
 	break;
     case SVt_PVHV:
 	if (HvSHAREKEYS(sv))	sv_catpv(d, "SHAREKEYS,");
@@ -803,9 +814,14 @@ do_sv_dump(I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops,
 		sv_catpv(d, " ),");
 	    }
 	}
+	/* FALL THROGH */
+    default:
+	if (SvEVALED(sv))	sv_catpv(d, "EVALED,");
+	if (SvIsUV(sv))		sv_catpv(d, "IsUV,");
+	break;
     case SVt_PVBM:
 	if (SvTAIL(sv))		sv_catpv(d, "TAIL,");
-	if (SvCOMPILED(sv))	sv_catpv(d, "COMPILED,");
+	if (SvVALID(sv))	sv_catpv(d, "VALID,");
 	break;
     }
 
@@ -869,7 +885,10 @@ do_sv_dump(I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops,
 	return;
     }
     if (type >= SVt_PVIV || type == SVt_IV) {
-	dump_indent(level, file, "  IV = %ld", (long)SvIVX(sv));
+	if (SvIsUV(sv))
+	    dump_indent(level, file, "  UV = %lu", (unsigned long)SvUVX(sv));
+	else
+	    dump_indent(level, file, "  IV = %ld", (long)SvIVX(sv));
 	if (SvOOK(sv))
 	    PerlIO_printf(file, "  (OFFSET)");
 	PerlIO_putc(file, '\n');
@@ -1100,14 +1119,20 @@ do_sv_dump(I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops,
 	dump_indent(level, file, "  PAGE = %ld\n", (long)IoPAGE(sv));
 	dump_indent(level, file, "  PAGE_LEN = %ld\n", (long)IoPAGE_LEN(sv));
 	dump_indent(level, file, "  LINES_LEFT = %ld\n", (long)IoLINES_LEFT(sv));
-	dump_indent(level, file, "  TOP_NAME = \"%s\"\n", IoTOP_NAME(sv));
+        if (IoTOP_NAME(sv))
+            dump_indent(level, file, "  TOP_NAME = \"%s\"\n", IoTOP_NAME(sv));
 	do_gv_dump (level, file, "  TOP_GV", IoTOP_GV(sv));
-	dump_indent(level, file, "  FMT_NAME = \"%s\"\n", IoFMT_NAME(sv));
+        if (IoFMT_NAME(sv))
+            dump_indent(level, file, "  FMT_NAME = \"%s\"\n", IoFMT_NAME(sv));
 	do_gv_dump (level, file, "  FMT_GV", IoFMT_GV(sv));
-	dump_indent(level, file, "  BOTTOM_NAME = \"%s\"\n", IoBOTTOM_NAME(sv));
+        if (IoBOTTOM_NAME(sv))
+            dump_indent(level, file, "  BOTTOM_NAME = \"%s\"\n", IoBOTTOM_NAME(sv));
 	do_gv_dump (level, file, "  BOTTOM_GV", IoBOTTOM_GV(sv));
 	dump_indent(level, file, "  SUBPROCESS = %ld\n", (long)IoSUBPROCESS(sv));
-	dump_indent(level, file, "  TYPE = %c\n", IoTYPE(sv));
+	if (isPRINT(IoTYPE(sv)))
+            dump_indent(level, file, "  TYPE = '%c'\n", IoTYPE(sv));
+	else
+            dump_indent(level, file, "  TYPE = '\\%o'\n", IoTYPE(sv));
 	dump_indent(level, file, "  FLAGS = 0x%lx\n", (long)IoFLAGS(sv));
 	break;
     }

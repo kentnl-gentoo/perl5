@@ -1,6 +1,6 @@
 /*    scope.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -14,6 +14,30 @@
 
 #include "EXTERN.h"
 #include "perl.h"
+
+void *
+default_protect(int *excpt, protect_body_t body, ...)
+{
+    dTHR;
+    dJMPENV;
+    va_list args;
+    int ex;
+    void *ret;
+
+    DEBUG_l(deb("Setting up local jumplevel %p, was %p\n",
+		&cur_env, PL_top_env));
+    JMPENV_PUSH(ex);
+    if (ex)
+	ret = NULL;
+    else {
+	va_start(args, body);
+	ret = CALL_FPTR(body)(args);
+	va_end(args);
+    }
+    *excpt = ex;
+    JMPENV_POP;
+    return ret;
+}
 
 SV**
 stack_grow(SV **sp, SV **p, int n)
@@ -133,6 +157,19 @@ savestack_grow(void)
 }
 
 #undef GROW
+
+void
+tmps_grow(I32 n)
+{
+    dTHR;
+#ifndef STRESS_REALLOC
+    if (n < 128)
+	n = (PL_tmps_max < 512) ? 128 : 512;
+#endif
+    PL_tmps_max = PL_tmps_ix + n + 1;
+    Renew(PL_tmps_stack, PL_tmps_max, SV*);
+}
+
 
 void
 free_tmps(void)
@@ -742,12 +779,8 @@ leave_scope(I32 base)
 	    sv = *(SV**)ptr;
 	    /* Can clear pad variable in place? */
 	    if (SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) {
-		if (SvTHINKFIRST(sv)) {
-		    if (SvREADONLY(sv))
-			croak("panic: leave_scope clearsv");
-		    if (SvROK(sv))
-			sv_unref(sv);
-		}
+		if (SvTHINKFIRST(sv))
+		    sv_force_normal(sv);
 		if (SvMAGICAL(sv))
 		    mg_free(sv);
 

@@ -49,7 +49,7 @@ use Exporter ();
 
 use B qw(minus_c sv_undef walkoptree walksymtable main_root main_start peekop
 	 class cstring cchar svref_2object compile_stats comppadlist hash
-	 threadsv_names main_cv init_av opnumber
+	 threadsv_names main_cv init_av opnumber amagic_generation
 	 AVf_REAL HEf_SVKEY);
 use B::Asmdata qw(@specialsv_name);
 
@@ -401,7 +401,9 @@ sub B::NV::save {
     my ($sv) = @_;
     my $sym = objsym($sv);
     return $sym if defined $sym;
-    $xpvnvsect->add(sprintf("0, 0, 0, %d, %s", $sv->IVX, $sv->NVX));
+    my $val= $sv->NVX;
+    $val .= '.00' if $val =~ /^-?\d+$/;
+    $xpvnvsect->add(sprintf("0, 0, 0, %d, %s", $sv->IVX, $val));
     $svsect->add(sprintf("&xpvnv_list[%d], %lu, 0x%x",
 			 $xpvnvsect->index, $sv->REFCNT + 1, $sv->FLAGS));
     return savesym($sv, sprintf("&sv_list[%d]", $svsect->index));
@@ -453,8 +455,10 @@ sub B::PVNV::save {
     $pv = '' unless defined $pv;
     my $len = length($pv);
     my ($pvsym, $pvmax) = savepv($pv);
+    my $val= $sv->NVX;
+    $val .= '.00' if $val =~ /^-?\d+$/;
     $xpvnvsect->add(sprintf("%s, %u, %u, %d, %s",
-			    $pvsym, $len, $pvmax, $sv->IVX, $sv->NVX));
+			    $pvsym, $len, $pvmax, $sv->IVX, $val));
     $svsect->add(sprintf("&xpvnv_list[%d], %lu, 0x%x",
 			 $xpvnvsect->index, $sv->REFCNT + 1, $sv->FLAGS));
     if (!$pv_copy_on_grow) {
@@ -524,6 +528,7 @@ sub B::PVMG::save_magic {
     my ($sv) = @_;
     #warn sprintf("saving magic for %s (0x%x)\n", class($sv), $$sv); # debug
     my $stash = $sv->SvSTASH;
+    $stash->save;
     if ($$stash) {
 	warn sprintf("xmg_stash = %s (0x%x)\n", $stash->NAME, $$stash)
 	    if $debug_mg;
@@ -542,6 +547,7 @@ sub B::PVMG::save_magic {
 			 class($sv), $$sv, class($obj), $$obj,
 			 cchar($type), cstring($ptr));
 	}
+	$obj->save;
 	if ($len == HEf_SVKEY){
 		#The pointer is an SV*
 		$ptrsv=svref_2object($ptr)->save;
@@ -679,6 +685,7 @@ sub B::CV::save {
 
     if (${$cv->OUTSIDE} == ${main_cv()}){
 	$init->add(sprintf("CvOUTSIDE(s\\_%x)=PL_main_cv;",$$cv));
+	$init->add(sprintf("SvREFCNT_inc(PL_main_cv);"));
     }
 
     if ($$gv) {
@@ -748,45 +755,45 @@ sub B::GV::save {
 #	warn "GV::save saving subfields\n"; # debug
 	my $gvsv = $gv->SV;
 	if ($$gvsv) {
+	    $gvsv->save;
 	    $init->add(sprintf("GvSV($sym) = s\\_%x;", $$gvsv));
 #	    warn "GV::save \$$name\n"; # debug
-	    $gvsv->save;
 	}
 	my $gvav = $gv->AV;
 	if ($$gvav) {
+	    $gvav->save;
 	    $init->add(sprintf("GvAV($sym) = s\\_%x;", $$gvav));
 #	    warn "GV::save \@$name\n"; # debug
-	    $gvav->save;
 	}
 	my $gvhv = $gv->HV;
 	if ($$gvhv) {
+	    $gvhv->save;
 	    $init->add(sprintf("GvHV($sym) = s\\_%x;", $$gvhv));
 #	    warn "GV::save \%$name\n"; # debug
-	    $gvhv->save;
 	}
 	my $gvcv = $gv->CV;
 	if ($$gvcv && !$skip_cv) {
+	    $gvcv->save;
 	    $init->add(sprintf("GvCV($sym) = (CV*)s\\_%x;", $$gvcv));
 #	    warn "GV::save &$name\n"; # debug
-	    $gvcv->save;
 	}
 	my $gvfilegv = $gv->FILEGV;
 	if ($$gvfilegv) {
+	    $gvfilegv->save;
 	    $init->add(sprintf("GvFILEGV($sym) = (GV*)s\\_%x;",$$gvfilegv));
 #	    warn "GV::save GvFILEGV(*$name)\n"; # debug
-	    $gvfilegv->save;
 	}
 	my $gvform = $gv->FORM;
 	if ($$gvform) {
+	    $gvform->save;
 	    $init->add(sprintf("GvFORM($sym) = (CV*)s\\_%x;", $$gvform));
 #	    warn "GV::save GvFORM(*$name)\n"; # debug
-	    $gvform->save;
 	}
 	my $gvio = $gv->IO;
 	if ($$gvio) {
+	    $gvio->save;
 	    $init->add(sprintf("GvIOp($sym) = s\\_%x;", $$gvio));
 #	    warn "GV::save GvIO(*$name)\n"; # debug
-	    $gvio->save;
 	}
     }
     return $sym;
@@ -883,6 +890,7 @@ sub B::HV::save {
 	}
 	$init->add("}");
     }
+    $hv->save_magic();
     return savesym($hv, "(HV*)&sv_list[$sv_list_index]");
 }
 
@@ -1226,7 +1234,8 @@ sub should_save
  if (exists $unused_sub_packages{$package})
   {
    # warn "Cached $package is ".$unused_sub_packages{$package}."\n"; 
-   return $unused_sub_packages{$package} 
+   delete_unsaved_hashINC($package) unless  $unused_sub_packages{$package} ;
+   return $unused_sub_packages{$package}; 
   }
  # Omit the packages which we use (and which cause grief
  # because of fancy "goto &$AUTOLOAD" stuff).
@@ -1234,6 +1243,7 @@ sub should_save
  if ($package eq "FileHandle" || $package eq "Config" || 
      $package eq "SelectSaver" || $package =~/^(B|IO)::/) 
   {
+   delete_unsaved_hashINC($package);
    return $unused_sub_packages{$package} = 0;
   }
  # Now see if current package looks like an OO class this is probably too strong.
@@ -1245,9 +1255,16 @@ sub should_save
      return mark_package($package);
     }
   }
+ delete_unsaved_hashINC($package);
  return $unused_sub_packages{$package} = 0;
 }
-
+sub delete_unsaved_hashINC{
+	my $packname=shift;
+	$packname =~ s/\:\:/\//g;
+	$packname .= '.pm';
+	warn "deleting $packname" if $INC{$packname} ;# debug
+	delete $INC{$packname};
+}
 sub walkpackages 
 {
  my ($symref, $recurse, $prefix) = @_;
@@ -1287,18 +1304,13 @@ sub save_context
  my $curpad_sym = (comppadlist->ARRAY)[1]->save;
  my $inc_hv     = svref_2object(\%INC)->save;
  my $inc_av     = svref_2object(\@INC)->save;
+ my $amagic_generate= amagic_generation;          
  $init->add(   "PL_curpad = AvARRAY($curpad_sym);",
 	       "GvHV(PL_incgv) = $inc_hv;",
 	       "GvAV(PL_incgv) = $inc_av;",
                "av_store(CvPADLIST(PL_main_cv),0,SvREFCNT_inc($curpad_nam));",
-               "av_store(CvPADLIST(PL_main_cv),1,SvREFCNT_inc($curpad_sym));");
-}
-
-sub descend_marked_unused {
-    foreach my $pack (keys %unused_sub_packages)
-    {
-    	mark_package($pack);
-    }
+               "av_store(CvPADLIST(PL_main_cv),1,SvREFCNT_inc($curpad_sym));",
+  		"PL_amagic_generation= $amagic_generate;" );
 }
 
 sub descend_marked_unused {

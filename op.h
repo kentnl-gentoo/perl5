@@ -1,6 +1,6 @@
 /*    op.h
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -123,12 +123,15 @@ typedef U32 PADOFFSET;
 #define OPpDEREF_SV		(32|64)	/*   Want ref to SV. */
   /* OP_ENTERSUB only */
 #define OPpENTERSUB_DB		16	/* Debug subroutine. */
+  /* OP_RV2CV only */
 #define OPpENTERSUB_AMPER	8	/* Used & form to call. */
+#define OPpENTERSUB_NOPAREN	128	/* bare sub call (without parens) */
   /* OP_?ELEM only */
 #define OPpLVAL_DEFER		16	/* Defer creation of array/hash elem */
   /* for OP_RV2?V, lower bits carry hints */
 
 /* Private for OP_CONST */
+#define	OPpCONST_STRICT		8	/* bearword subject to strict 'subs' */
 #define OPpCONST_ENTERED	16	/* Has been entered as symbol. */
 #define OPpCONST_ARYBASE	32	/* Was a $[ translated to constant. */
 #define OPpCONST_BARE		64	/* Was a bare word (filehandle?). */
@@ -311,7 +314,7 @@ struct loop {
 #define OA_PMOP (6 << 8)
 #define OA_SVOP (7 << 8)
 #define OA_GVOP (8 << 8)
-#define OA_PVOP (9 << 8)
+#define OA_PVOP_OR_SVOP (9 << 8)
 #define OA_LOOP (10 << 8)
 #define OA_COP (11 << 8)
 #define OA_BASEOP_OR_UNOP (12 << 8)

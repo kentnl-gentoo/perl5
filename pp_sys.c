@@ -1,6 +1,6 @@
 /*    pp_sys.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -16,6 +16,11 @@
 
 #include "EXTERN.h"
 #include "perl.h"
+
+#ifdef HAS_GETSPENT
+/* Shadow password support for solaris - pdo@cs.umd.edu*/
+#include <shadow.h>
+#endif
 
 /* XXX If this causes problems, set i_unistd=undef in the hint file.  */
 #ifdef I_UNISTD
@@ -370,7 +375,7 @@ PP(pp_glob)
     PL_last_in_gv = (GV*)*PL_stack_sp--;
 
     SAVESPTR(PL_rs);		/* This is not permanent, either. */
-    PL_rs = sv_2mortal(newSVpv("", 1));
+    PL_rs = sv_2mortal(newSVpvn("\000", 1));
 #ifndef DOSISH
 #ifndef CSH
     *SvPVX(PL_rs) = '\n';
@@ -400,27 +405,31 @@ PP(pp_rcatline)
 PP(pp_warn)
 {
     djSP; dMARK;
+    SV *tmpsv;
     char *tmps;
-    STRLEN n_a;
+    STRLEN len;
     if (SP - MARK != 1) {
 	dTARGET;
 	do_join(TARG, &PL_sv_no, MARK, SP);
-	tmps = SvPV(TARG, n_a);
+	tmpsv = TARG;
 	SP = MARK + 1;
     }
     else {
-	tmps = SvPV(TOPs, n_a);
+	tmpsv = TOPs;
     }
-    if (!tmps || !*tmps) {
+    tmps = SvPV(tmpsv, len);
+    if (!tmps || !len) {
   	SV *error = ERRSV;
 	(void)SvUPGRADE(error, SVt_PV);
 	if (SvPOK(error) && SvCUR(error))
 	    sv_catpv(error, "\t...caught");
-	tmps = SvPV(error, n_a);
+	tmpsv = error;
+	tmps = SvPV(tmpsv, len);
     }
-    if (!tmps || !*tmps)
-	tmps = "Warning: something's wrong";
-    warn("%s", tmps);
+    if (!tmps || !len)
+	tmpsv = sv_2mortal(newSVpvn("Warning: something's wrong", 26));
+
+    warn("%_", tmpsv);
     RETSETYES;
 }
 
@@ -428,26 +437,28 @@ PP(pp_die)
 {
     djSP; dMARK;
     char *tmps;
-    SV *tmpsv = Nullsv;
-    char *pat = "%s";
-    STRLEN n_a;
+    SV *tmpsv;
+    STRLEN len;
+    bool multiarg = 0;
     if (SP - MARK != 1) {
 	dTARGET;
 	do_join(TARG, &PL_sv_no, MARK, SP);
-	tmps = SvPV(TARG, n_a);
+	tmpsv = TARG;
+	tmps = SvPV(tmpsv, len);
+	multiarg = 1;
 	SP = MARK + 1;
     }
     else {
 	tmpsv = TOPs;
-	tmps = SvROK(tmpsv) ? Nullch : SvPV(tmpsv, n_a);
+	tmps = SvROK(tmpsv) ? Nullch : SvPV(tmpsv, len);
     }
-    if (!tmps || !*tmps) {
+    if (!tmps || !len) {
   	SV *error = ERRSV;
 	(void)SvUPGRADE(error, SVt_PV);
-	if(tmpsv ? SvROK(tmpsv) : SvROK(error)) {
-	    if(tmpsv)
+	if (multiarg ? SvROK(error) : SvROK(tmpsv)) {
+	    if (!multiarg)
 		SvSetSV(error,tmpsv);
-	    else if(sv_isobject(error)) {
+	    else if (sv_isobject(error)) {
 		HV *stash = SvSTASH(SvRV(error));
 		GV *gv = gv_fetchmethod(stash, "PROPAGATE");
 		if (gv) {
@@ -464,17 +475,19 @@ PP(pp_die)
 		    sv_setsv(error,*PL_stack_sp--);
 		}
 	    }
-	    pat = Nullch;
+	    DIE(Nullch);
 	}
 	else {
 	    if (SvPOK(error) && SvCUR(error))
 		sv_catpv(error, "\t...propagated");
-	    tmps = SvPV(error, n_a);
+	    tmpsv = error;
+	    tmps = SvPV(tmpsv, len);
 	}
     }
-    if (!tmps || !*tmps)
-	tmps = "Died";
-    DIE(pat, tmps);
+    if (!tmps || !len)
+	tmpsv = sv_2mortal(newSVpvn("Died", 4));
+
+    DIE("%_", tmpsv);
 }
 
 /* I/O. */
@@ -486,6 +499,7 @@ PP(pp_open)
     SV *sv;
     char *tmps;
     STRLEN len;
+    MAGIC *mg;
 
     if (MAXARG > 1)
 	sv = POPs;
@@ -498,6 +512,35 @@ PP(pp_open)
 	DIE(PL_no_usym, "filehandle");
     if (GvIOp(gv))
 	IoFLAGS(GvIOp(gv)) &= ~IOf_UNTAINT;
+
+#if 0 /* no undef means tmpfile() yet */
+    if (sv == &PL_sv_undef) {
+#ifdef PerlIO
+	PerlIO *fp = PerlIO_tmpfile();
+#else
+	PerlIO *fp = tmpfile();
+#endif                   
+	if (fp != Nullfp && do_open(gv, "+>&", 3, FALSE, 0, 0, fp)) 
+	    PUSHi( (I32)PL_forkprocess );
+	else
+	    RETPUSHUNDEF;
+	RETURN;
+    }   
+#endif /* no undef means tmpfile() yet */
+
+
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
+	PUSHMARK(SP);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
+	XPUSHs(sv);
+	PUTBACK;
+	ENTER;
+	perl_call_method("OPEN", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	RETURN;
+    }
+
     tmps = SvPV(sv, len);
     if (do_open(gv, tmps, len, FALSE, O_RDONLY, 0, Nullfp))
 	PUSHi( (I32)PL_forkprocess );
@@ -595,9 +638,23 @@ PP(pp_fileno)
     GV *gv;
     IO *io;
     PerlIO *fp;
+    MAGIC  *mg;
+
     if (MAXARG < 1)
 	RETPUSHUNDEF;
     gv = (GV*)POPs;
+
+    if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
+	PUSHMARK(SP);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
+	PUTBACK;
+	ENTER;
+	perl_call_method("FILENO", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	RETURN;
+    }
+
     if (!gv || !(io = GvIO(gv)) || !(fp = IoIFP(io)))
 	RETPUSHUNDEF;
     PUSHi(PerlIO_fileno(fp));
@@ -607,7 +664,7 @@ PP(pp_fileno)
 PP(pp_umask)
 {
     djSP; dTARGET;
-    int anum;
+    Mode_t anum;
 
 #ifdef HAS_UMASK
     if (MAXARG < 1) {
@@ -635,11 +692,23 @@ PP(pp_binmode)
     GV *gv;
     IO *io;
     PerlIO *fp;
+    MAGIC *mg;
 
     if (MAXARG < 1)
 	RETPUSHUNDEF;
 
-    gv = (GV*)POPs;
+    gv = (GV*)POPs; 
+
+    if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
+	PUSHMARK(SP);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
+	PUTBACK;
+	ENTER;
+	perl_call_method("BINMODE", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	RETURN;
+    }
 
     EXTEND(SP, 1);
     if (!(io = GvIO(gv)) || !(fp = IoIFP(io)))
@@ -869,8 +938,8 @@ PP(pp_sselect)
     /* If SELECT_MIN_BITS is greater than one we most probably will want
      * to align the sizes with SELECT_MIN_BITS/8 because for example
      * in many little-endian (Intel, Alpha) systems (Linux, OS/2, Digital
-     * UNIX, Solaris, NeXT) the smallest quantum select() operates on
-     * (sets bit) is 32 bits.  */
+     * UNIX, Solaris, NeXT, Rhapsody) the smallest quantum select() operates
+     * on (sets/tests/clears bits) is 32 bits.  */
     growsize = maxlen + (SELECT_MIN_BITS/8 - (maxlen % (SELECT_MIN_BITS/8)));
 #  else
     growsize = sizeof(fd_set);
@@ -1329,6 +1398,8 @@ PP(pp_sysopen)
     sv = POPs;
     gv = (GV *)POPs;
 
+    /* Need TIEHANDLE method ? */
+
     tmps = SvPV(sv, len);
     if (do_open(gv, tmps, len, TRUE, mode, perm, Nullfp)) {
 	IoLINES(GvIOp(gv)) = 0;
@@ -1598,11 +1669,24 @@ PP(pp_eof)
 {
     djSP;
     GV *gv;
+    MAGIC *mg;
 
     if (MAXARG <= 0)
 	gv = PL_last_in_gv;
     else
 	gv = PL_last_in_gv = (GV*)POPs;
+
+    if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
+	PUSHMARK(SP);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
+	PUTBACK;
+	ENTER;
+	perl_call_method("EOF", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	RETURN;
+    }
+
     PUSHs(boolSV(!gv || do_eof(gv)));
     RETURN;
 }
@@ -1610,12 +1694,25 @@ PP(pp_eof)
 PP(pp_tell)
 {
     djSP; dTARGET;
-    GV *gv;
+    GV *gv;     
+    MAGIC *mg;
 
     if (MAXARG <= 0)
 	gv = PL_last_in_gv;
     else
 	gv = PL_last_in_gv = (GV*)POPs;
+
+    if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
+	PUSHMARK(SP);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
+	PUTBACK;
+	ENTER;
+	perl_call_method("TELL", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	RETURN;
+    }
+
     PUSHi( do_tell(gv) );
     RETURN;
 }
@@ -1631,15 +1728,30 @@ PP(pp_sysseek)
     GV *gv;
     int whence = POPi;
     Off_t offset = POPl;
+    MAGIC *mg;
 
     gv = PL_last_in_gv = (GV*)POPs;
+
+    if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
+	PUSHMARK(SP);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
+	XPUSHs(sv_2mortal(newSViv((IV) offset)));
+	XPUSHs(sv_2mortal(newSViv((IV) whence)));
+	PUTBACK;
+	ENTER;
+	perl_call_method("SEEK", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	RETURN;
+    }
+
     if (PL_op->op_type == OP_SEEK)
 	PUSHs(boolSV(do_seek(gv, offset, whence)));
     else {
 	Off_t n = do_sysseek(gv, offset, whence);
 	PUSHs((n < 0) ? &PL_sv_undef
 	      : sv_2mortal(n ? newSViv((IV)n)
-			   : newSVpv(zero_but_true, ZBTLEN)));
+			   : newSVpvn(zero_but_true, ZBTLEN)));
     }
     RETURN;
 }
@@ -2332,7 +2444,7 @@ PP(pp_stat)
 #ifdef USE_STAT_RDEV
 	PUSHs(sv_2mortal(newSViv((I32)PL_statcache.st_rdev)));
 #else
-	PUSHs(sv_2mortal(newSVpv("", 0)));
+	PUSHs(sv_2mortal(newSVpvn("", 0)));
 #endif
 	PUSHs(sv_2mortal(newSViv((I32)PL_statcache.st_size)));
 #ifdef BIG_TIME
@@ -2348,8 +2460,8 @@ PP(pp_stat)
 	PUSHs(sv_2mortal(newSViv((I32)PL_statcache.st_blksize)));
 	PUSHs(sv_2mortal(newSViv((I32)PL_statcache.st_blocks)));
 #else
-	PUSHs(sv_2mortal(newSVpv("", 0)));
-	PUSHs(sv_2mortal(newSVpv("", 0)));
+	PUSHs(sv_2mortal(newSVpvn("", 0)));
+	PUSHs(sv_2mortal(newSVpvn("", 0)));
 #endif
     }
     RETURN;
@@ -3235,7 +3347,7 @@ PP(pp_readdir)
 	/*SUPPRESS 560*/
 	while (dp = (Direntry_t *)PerlDir_read(IoDIRP(io))) {
 #ifdef DIRNAMLEN
-	    sv = newSVpv(dp->d_name, dp->d_namlen);
+	    sv = newSVpvn(dp->d_name, dp->d_namlen);
 #else
 	    sv = newSVpv(dp->d_name, 0);
 #endif
@@ -3249,7 +3361,7 @@ PP(pp_readdir)
 	if (!(dp = (Direntry_t *)PerlDir_read(IoDIRP(io))))
 	    goto nope;
 #ifdef DIRNAMLEN
-	sv = newSVpv(dp->d_name, dp->d_namlen);
+	sv = newSVpvn(dp->d_name, dp->d_namlen);
 #else
 	sv = newSVpv(dp->d_name, 0);
 #endif
@@ -3380,10 +3492,11 @@ PP(pp_fork)
 {
 #ifdef HAS_FORK
     djSP; dTARGET;
-    int childpid;
+    Pid_t childpid;
     GV *tmpgv;
 
     EXTEND(SP, 1);
+    PERL_FLUSHALL_FOR_CHILD;
     childpid = fork();
     if (childpid < 0)
 	RETSETUNDEF;
@@ -3402,9 +3515,9 @@ PP(pp_fork)
 
 PP(pp_wait)
 {
-#if !defined(DOSISH) || defined(OS2) || defined(WIN32)
+#if !defined(DOSISH) || defined(OS2) || defined(WIN32) || defined(CYGWIN32)
     djSP; dTARGET;
-    int childpid;
+    Pid_t childpid;
     int argflags;
 
     childpid = wait4pid(-1, &argflags, 0);
@@ -3418,9 +3531,9 @@ PP(pp_wait)
 
 PP(pp_waitpid)
 {
-#if !defined(DOSISH) || defined(OS2) || defined(WIN32)
+#if !defined(DOSISH) || defined(OS2) || defined(WIN32) || defined(CYGWIN32)
     djSP; dTARGET;
-    int childpid;
+    Pid_t childpid;
     int optype;
     int argflags;
 
@@ -3439,7 +3552,7 @@ PP(pp_system)
 {
     djSP; dMARK; dORIGMARK; dTARGET;
     I32 value;
-    int childpid;
+    Pid_t childpid;
     int result;
     int status;
     Sigsave_t ihand,qhand;     /* place to save signals during system() */
@@ -3452,6 +3565,7 @@ PP(pp_system)
 	    TAINT_PROPER("system");
 	}
     }
+    PERL_FLUSHALL_FOR_CHILD;
 #if (defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS) && !defined(OS2)
     while ((childpid = vfork()) == -1) {
 	if (errno != EAGAIN) {
@@ -3510,6 +3624,7 @@ PP(pp_exec)
     I32 value;
     STRLEN n_a;
 
+    PERL_FLUSHALL_FOR_CHILD;
     if (PL_op->op_flags & OPf_STACKED) {
 	SV *really = *++MARK;
 	value = (I32)do_aexec(really, MARK, SP);
@@ -4438,6 +4553,9 @@ PP(pp_gpwent)
     register SV *sv;
     struct passwd *pwent;
     STRLEN n_a;
+#ifdef HAS_GETSPENT
+    struct spwd *spwent;
+#endif
 
     if (which == OP_GPWNAM)
 	pwent = getpwnam(POPpx);
@@ -4445,6 +4563,15 @@ PP(pp_gpwent)
 	pwent = getpwuid(POPi);
     else
 	pwent = (struct passwd *)getpwent();
+
+#ifdef HAS_GETSPENT
+   if (which == OP_GPWNAM)
+      spwent = getspnam(pwent->pw_name);
+   else if (which == OP_GPWUID)
+      spwent = getspnam(pwent->pw_name);
+   else
+      spwent = (struct spwd *)getspent();
+#endif
 
     EXTEND(SP, 10);
     if (GIMME != G_ARRAY) {
@@ -4464,7 +4591,14 @@ PP(pp_gpwent)
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
 #ifdef PWPASSWD
+#ifdef HAS_GETSPENT
+      if (spwent)
+              sv_setpv(sv, spwent->sp_pwdp);
+      else
+              sv_setpv(sv, pwent->pw_passwd);
+#else
 	sv_setpv(sv, pwent->pw_passwd);
+#endif
 #endif
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
@@ -4528,6 +4662,9 @@ PP(pp_spwent)
     djSP;
 #if defined(HAS_PASSWD) && defined(HAS_SETPWENT) && !defined(CYGWIN32)
     setpwent();
+#ifdef HAS_GETSPENT
+    setspent();
+#endif
     RETPUSHYES;
 #else
     DIE(PL_no_func, "setpwent");
@@ -4539,6 +4676,9 @@ PP(pp_epwent)
     djSP;
 #if defined(HAS_PASSWD) && defined(HAS_ENDPWENT)
     endpwent();
+#ifdef HAS_GETSPENT
+    endspent();
+#endif
     RETPUSHYES;
 #else
     DIE(PL_no_func, "endpwent");

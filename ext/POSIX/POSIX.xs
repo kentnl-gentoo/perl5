@@ -102,6 +102,9 @@
    }
 #  define times(t) vms_times(t)
 #else
+#if defined (CYGWIN32)
+#    define tzname _tzname
+#endif
 #if defined (WIN32)
 #  undef mkfifo
 #  define mkfifo(a,b) not_here("mkfifo")
@@ -303,7 +306,7 @@ char *tzname[] = { "" , "" };
  */
 #ifdef HAS_GNULIBC
 # ifndef STRUCT_TM_HASZONE
-#    define STRUCT_TM_HAS_ZONE
+#    define STRUCT_TM_HASZONE
 # endif
 #endif
 
@@ -3662,10 +3665,10 @@ strftime(fmt, sec, min, hour, mday, mon, year, wday = -1, yday = -1, isdst = -1)
 		    Renew(buf, bufsize, char);
 		}
 		if ( buf ) {
-		    ST(0) = sv_2mortal(newSVpv(buf, buflen));
+		    ST(0) = sv_2mortal(newSVpvn(buf, buflen));
 		    Safefree(buf);
 		} else {
-		    ST(0) = sv_2mortal(newSVpv(tmpbuf, len));
+		    ST(0) = sv_2mortal(newSVpvn(tmpbuf, len));
 		}
 	    }
 	}
@@ -3677,8 +3680,8 @@ void
 tzname()
     PPCODE:
 	EXTEND(SP,2);
-	PUSHs(sv_2mortal(newSVpv(tzname[0],strlen(tzname[0]))));
-	PUSHs(sv_2mortal(newSVpv(tzname[1],strlen(tzname[1]))));
+	PUSHs(sv_2mortal(newSVpvn(tzname[0],strlen(tzname[0]))));
+	PUSHs(sv_2mortal(newSVpvn(tzname[1],strlen(tzname[1]))));
 
 SysRet
 access(filename, mode)

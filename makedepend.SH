@@ -1,5 +1,5 @@
 #! /bin/sh
-case $CONFIG in
+case $CONFIGDOTSH in
 '')
 	if test -f config.sh; then TOP=.;
 	elif test -f ../config.sh; then TOP=..;
@@ -37,7 +37,7 @@ esac
 
 export PATH || (echo "OOPS, this isn't sh.  Desperation time.  I will feed myself to sh."; sh \$0; kill \$\$)
 
-case $CONFIG in
+case $CONFIGDOTSH in
 '')
 	if test -f config.sh; then TOP=.;
 	elif test -f ../config.sh; then TOP=..;
@@ -105,7 +105,11 @@ for file in `$cat .clist`; do
 		if [ "$osname" = os2 ]; then
 			uwinfix="-e s,\\\\\\\\,/,g"
 		else
-			uwinfix=
+			if [ "$archname" = cygwin32 ]; then
+				uwinfix="-e s,\\\\\\\\,/,g"
+			else
+				uwinfix=
+			fi
 		fi
 	fi
     case "$file" in

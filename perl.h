@@ -107,9 +107,7 @@ class CPerlObj;
 #define PERL_OBJECT_THIS this
 #define _PERL_OBJECT_THIS ,this
 #define PERL_OBJECT_THIS_ this,
-#define CALLRUNOPS (this->*PL_runops)
-#define CALLREGCOMP (this->*PL_regcompp)
-#define CALLREGEXEC (this->*PL_regexecp)
+#define CALL_FPTR(fptr) (this->*fptr)
 
 #else /* !PERL_OBJECT */
 
@@ -123,11 +121,14 @@ class CPerlObj;
 #define PERL_OBJECT_THIS
 #define _PERL_OBJECT_THIS
 #define PERL_OBJECT_THIS_
-#define CALLRUNOPS (*PL_runops)
-#define CALLREGCOMP (*PL_regcompp)
-#define CALLREGEXEC (*PL_regexecp)
+#define CALL_FPTR(fptr) (*fptr)
 
 #endif /* PERL_OBJECT */
+
+#define CALLRUNOPS  CALL_FPTR(PL_runops)
+#define CALLREGCOMP CALL_FPTR(PL_regcompp)
+#define CALLREGEXEC CALL_FPTR(PL_regexecp)
+#define CALLPROTECT CALL_FPTR(PL_protect)
 
 #define VOIDUSED 1
 #include "config.h"
@@ -218,7 +219,7 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
  */
 
 /* define this once if either system, instead of cluttering up the src */
-#if defined(MSDOS) || defined(atarist) || defined(WIN32)
+#if defined(MSDOS) || defined(atarist) || defined(WIN32) || defined(CYGWIN32)
 #define DOSISH 1
 #endif
 
@@ -501,6 +502,12 @@ Free_t   Perl_mfree _((Malloc_t where));
 #   endif
 #endif
 
+#ifndef memchr
+#   ifndef HAS_MEMCHR
+#       define memchr(s,c,n) ninstr((char*)(s), ((char*)(s)) + n, &(c), &(c) + 1)
+#   endif
+#endif
+
 #ifndef HAS_BCMP
 #   ifndef bcmp
 #	define bcmp(s1,s2,l) memcmp(s1,s2,l)
@@ -650,7 +657,8 @@ Free_t   Perl_mfree _((Malloc_t where));
 /* Configure already sets Direntry_t */
 #if defined(I_DIRENT)
 #   include <dirent.h>
-#   if defined(NeXT) && defined(I_SYS_DIR) /* NeXT needs dirent + sys/dir.h */
+    /* NeXT needs dirent + sys/dir.h */
+#   if  defined(I_SYS_DIR) && (defined(NeXT) || defined(__NeXT__))
 #	include <sys/dir.h>
 #   endif
 #else
@@ -1380,7 +1388,7 @@ typedef I32 (*filter_t) _((int, SV *, int));
 #      else
 #        ifdef I_MACH_CTHREADS
 #          include <mach/cthreads.h>
-#          if defined(__NeXT__) && defined(PERL_POLLUTE_MALLOC)
+#          if (defined(NeXT) || defined(__NeXT__)) && defined(PERL_POLLUTE_MALLOC)
 #            define MUTEX_INIT_CALLS_MALLOC
 #          endif
 typedef cthread_t	perl_os_thread;
@@ -1448,6 +1456,22 @@ typedef pthread_key_t	perl_key;
 #   define STATUS_ALL_FAILURE	(PL_statusvalue = 1)
 #endif
 
+/* This defines a way to flush all output buffers.  This may be a
+ * performance issue, so we allow people to disable it.
+ * XXX the default needs a Configure test, as it may not work everywhere.
+ */
+#ifndef PERL_FLUSHALL_FOR_CHILD
+# if defined(FFLUSH_NULL) || defined(USE_SFIO)
+#  define PERL_FLUSHALL_FOR_CHILD	PerlIO_flush((PerlIO*)NULL)
+# else
+#  ifdef FFLUSH_ALL
+#   define PERL_FLUSHALL_FOR_CHILD	my_fflush_all()
+#  else
+#   define PERL_FLUSHALL_FOR_CHILD	(void)0
+#  endif
+# endif
+#endif
+
 /* Some unistd.h's give a prototype for pause() even though
    HAS_PAUSE ends up undefined.  This causes the #define
    below to be rejected by the compmiler.  Sigh.
@@ -1486,11 +1510,7 @@ union any {
 #define ARGSproto void
 #endif /* USE_THREADS */
 
-/* Work around some cygwin32 problems with importing global symbols */
 #if defined(CYGWIN32)
-#  if defined(DLLIMPORT) 
-#   include "cw32imp.h"
-#  endif
 /* USEMYBINMODE
  *   This symbol, if defined, indicates that the program should
  *   use the routine my_binmode(FILE *fp, char iotype) to insure
@@ -1541,6 +1561,8 @@ struct _sublex_info {
     I32 super_state;	/* lexer state to save */
     I32 sub_inwhat;	/* "lex_inwhat" to use */
     OP *sub_op;		/* "lex_op" to use */
+    char *super_bufptr;	/* PL_bufptr that was */
+    char *super_bufend;	/* PL_bufend that was */
 };
 
 typedef struct magic_state MGS;	/* struct magic_state defined in mg.c */
@@ -1630,7 +1652,6 @@ typedef I32 CHECKPOINT;
 #define U_I(what) ((unsigned int)(what))
 #define U_L(what) ((U32)(what))
 #else
-EXTERN_C U32 cast_ulong _((double));
 #define U_S(what) ((U16)cast_ulong((double)(what)))
 #define U_I(what) ((unsigned int)cast_ulong((double)(what)))
 #define U_L(what) (cast_ulong((double)(what)))
@@ -1641,15 +1662,15 @@ EXTERN_C U32 cast_ulong _((double));
 #define I_V(what) ((IV)(what))
 #define U_V(what) ((UV)(what))
 #else
-START_EXTERN_C
-I32 cast_i32 _((double));
-IV cast_iv _((double));
-UV cast_uv _((double));
-END_EXTERN_C
 #define I_32(what) (cast_i32((double)(what)))
 #define I_V(what) (cast_iv((double)(what)))
 #define U_V(what) (cast_uv((double)(what)))
 #endif
+
+/* Used with UV/IV arguments: */
+					/* XXXX: need to speed it up */
+#define CLUMP_2UV(iv)	((iv) < 0 ? 0 : (UV)(iv))
+#define CLUMP_2IV(uv)	((uv) > (UV)IV_MAX ? IV_MAX : (IV)(uv))
 
 struct Outrec {
     I32		o_lines;
@@ -1688,7 +1709,11 @@ Gid_t getegid _((void));
 #define DEBUG_o(a) if (PL_debug & 16)	a
 #define DEBUG_c(a) if (PL_debug & 32)	a
 #define DEBUG_P(a) if (PL_debug & 64)	a
-#define DEBUG_m(a) if (PL_curinterp && PL_debug & 128)	a
+#  ifdef PERL_OBJECT
+#    define DEBUG_m(a) if (PL_debug & 128)	a
+#  else
+#    define DEBUG_m(a) if (PL_curinterp && PL_debug & 128)	a
+#  endif
 #define DEBUG_f(a) if (PL_debug & 256)	a
 #define DEBUG_r(a) if (PL_debug & 512)	a
 #define DEBUG_x(a) if (PL_debug & 1024)	a
@@ -1779,13 +1804,13 @@ END_EXTERN_C
 #endif
 
 #ifndef __cplusplus
-#  ifdef __NeXT__ /* or whatever catches all NeXTs */
+#  if defined(NeXT) || defined(__NeXT__) /* or whatever catches all NeXTs */
 char *crypt ();       /* Maybe more hosts will need the unprototyped version */
 #  else
 #    if !defined(WIN32) || !defined(HAVE_DES_FCRYPT)
 char *crypt _((const char*, const char*));
 #    endif /* !WIN32 && !HAVE_CRYPT_SOURCE */
-#  endif /* !__NeXT__ */
+#  endif /* !NeXT && !__NeXT__ */
 #  ifndef DONT_DECLARE_STD
 #    ifndef getenv
 char *getenv _((const char*));
@@ -1874,26 +1899,33 @@ int runops_debug _((void));
 #endif
 #endif
 
-
 /* _ (for $_) must be first in the following list (DEFSV requires it) */
 #define THREADSV_NAMES "_123456789&`'+/.,\\\";^-%=|~:\001\005!@"
 
-/* VMS doesn't use environ array and NeXT has problems with crt0.o globals */
-#if !defined(VMS) && !(defined(NeXT) && defined(__DYNAMIC__))
-#if !defined(DONT_DECLARE_STD) \
-	|| (defined(__svr4__) && defined(__GNUC__) && defined(sun)) \
-	|| defined(__sgi) || defined(__DGUX)
-extern char **	environ;	/* environment variables supplied via exec */
-#endif
-#else
-#  if defined(NeXT) && defined(__DYNAMIC__)
-
-#  include <mach-o/dyld.h>
+/* NeXT has problems with crt0.o globals */
+#if defined(__DYNAMIC__) && \
+    (defined(NeXT) || defined(__NeXT__) || defined(__APPLE__))
+#  if defined(NeXT) || defined(__NeXT)
+#    include <mach-o/dyld.h>
+#    define environ (*environ_pointer)
 EXT char *** environ_pointer;
-#  define environ (*environ_pointer)
+#  else
+#    if defined(__APPLE__)
+#      include <crt_externs.h>	/* for the env array */
+#      define environ (*_NSGetEnviron())
+#    endif
 #  endif
-#endif /* environ processing */
-
+#else
+   /* VMS and some other platforms don't use the environ array */
+#  if !defined(VMS)
+#    if !defined(DONT_DECLARE_STD) || \
+        (defined(__svr4__) && defined(__GNUC__) && defined(sun)) || \
+        defined(__sgi) || \
+        defined(__DGUX)
+extern char **	environ;	/* environment variables supplied via exec */
+#    endif
+#  endif
+#endif
 
 /* handy constants */
 EXTCONST char PL_warn_uninit[]
@@ -2202,7 +2234,8 @@ enum {		/* pass one of these to get_vtbl */
     want_vtbl_mutex,
 #endif
     want_vtbl_regdata,
-    want_vtbl_regdatum
+    want_vtbl_regdatum,
+    want_vtbl_backref
 };
 
 				/* Note: the lowest 8 bits are reserved for
@@ -2297,7 +2330,7 @@ struct perl_vars {
 EXT struct perl_vars PL_Vars;
 EXT struct perl_vars *PL_VarsPtr INIT(&PL_Vars);
 #else /* PERL_CORE */
-#if !defined(__GNUC__) || !defined(WIN32)
+#if !defined(__GNUC__) || !(defined(WIN32) || defined(CYGWIN32))
 EXT
 #endif /* WIN32 */
 struct perl_vars *PL_VarsPtr;
@@ -2347,9 +2380,6 @@ typedef void *Thread;
 #include "thread.h"
 #include "pp.h"
 #include "proto.h"
-
-#define Perl_sv_setptrobj(rv,ptr,name) Perl_sv_setref_iv(rv,name,(IV)ptr)
-#define Perl_sv_setptrref(rv,ptr) Perl_sv_setref_iv(rv,Nullch,(IV)ptr)
 
 /* The following must follow proto.h as #defines mess up syntax */
 
@@ -2408,7 +2438,7 @@ PERLVAR(object_compatibility[30],	char)
 #undef PERLVARI
 #undef PERLVARIC
 
-#if defined(HASATTRIBUTE) && defined(WIN32)
+#if defined(HASATTRIBUTE) && defined(WIN32) && !defined(CYGWIN32)
 /*
  * This provides a layer of functions and macros to ensure extensions will
  * get to use the same RTL functions as the core.
@@ -2499,6 +2529,9 @@ EXT MGVTBL PL_vtbl_amagic =       {0,     magic_setamagic,
 EXT MGVTBL PL_vtbl_amagicelem =   {0,     magic_setamagic,
                                         0,      0,      magic_setamagic};
 
+EXT MGVTBL PL_vtbl_backref = 	  {0,	0,
+					0,	0,	magic_killbackrefs};
+
 #else /* !DOINIT */
 
 EXT MGVTBL PL_vtbl_sv;
@@ -2538,6 +2571,8 @@ EXT MGVTBL PL_vtbl_collxfrm;
 
 EXT MGVTBL PL_vtbl_amagic;
 EXT MGVTBL PL_vtbl_amagicelem;
+
+EXT MGVTBL PL_vtbl_backref;
 
 #endif /* !DOINIT */
 
@@ -2761,9 +2796,6 @@ typedef struct am_table_short AMTS;
 #       ifdef USE_SEMCTL_SEMID_DS
 #           define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun.buf)
 #       endif
-#   endif
-#   ifndef Semctl	/* Place our bets on the semun horse. */
-#       define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun)
 #   endif
 #endif
 

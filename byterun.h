@@ -1,5 +1,5 @@
 /*
- *      Copyright (c) 1996-1998 Malcolm Beattie
+ *      Copyright (c) 1996-1999 Malcolm Beattie
  *
  *      You may distribute under the terms of either the GNU General Public
  *      License or the Artistic License, as specified in the README file.
@@ -16,10 +16,6 @@ struct bytestream {
     void (*freadpv)(U32, void*);
 };
 #endif /* INDIRECT_BGET_MACROS */
-
-#ifndef PERL_OBJECT
-void *bset_obj_store _((void *, I32));
-#endif
 
 enum {
     INSN_RET,			/* 0 */
@@ -138,10 +134,11 @@ enum {
     INSN_COP_SEQ,			/* 113 */
     INSN_COP_ARYBASE,			/* 114 */
     INSN_COP_LINE,			/* 115 */
-    INSN_MAIN_START,			/* 116 */
-    INSN_MAIN_ROOT,			/* 117 */
-    INSN_CURPAD,			/* 118 */
-    MAX_INSN = 118
+    INSN_COP_WARNINGS,			/* 116 */
+    INSN_MAIN_START,			/* 117 */
+    INSN_MAIN_ROOT,			/* 118 */
+    INSN_CURPAD,			/* 119 */
+    MAX_INSN = 119
 };
 
 enum {

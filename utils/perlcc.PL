@@ -223,8 +223,11 @@ sub _createCode
 
     if (@_ == 2)                                   # compiling a program   
     {
-        _print( "$^X -I@INC -MO=CC,-o$generated_cfile $file\n", 36);
-        $return =  _run("$ -I@INC -MO=CC,-o$generated_cfile $file", 9);
+        _print( "$^X -I@INC -MB::Stash -c  $file\n", 36);
+        my $stash=`$^X -I@INC -MB::Stash -c  $file 2>/dev/null|tail -1`;
+	chomp $stash;
+        _print( "$^X -I@INC -MO=CC,$stash,-o$generated_cfile $file\n", 36);
+        $return =  _run("$ -I@INC -MO=CC,$stash,-o$generated_cfile $file", 9);
         $return;
     }
     else                                           # compiling a shared object
@@ -305,15 +308,18 @@ sub _ccharness
 
     if (!grep(/^-[cS]$/, @args))
     {
-	my $lperl = $^O eq 'os2' ? '-llibperl' : '-lperl';
+	my $lperl = $^O eq 'os2' ? '-llibperl'
+		: $^O eq 'MSWin32' ? "$Config{archlibexp}\\CORE\\perl.lib"
+		: '-lperl';
 	my $flags = $type eq 'dynamic' ? $Config{lddlflags} : $Config{ldflags};
-        $linkargs = "$flags $libdir $lperl @Config{libs}";
+        $linkargs = "$flags $libdir $lperl $Config{libs}";
     }
 
     my @sharedobjects = _getSharedObjects($sourceprog); 
-
+    my $dynaloader = "$Config{'installarchlib'}/auto/DynaLoader/DynaLoader.a";
+    my $optimize = $Config{'optimize'} =~ /-O\d/ ? '' : $Config{'optimize'};
     my $cccmd = 
-        "$Config{cc} @Config{qw(ccflags optimize)} $incdir @sharedobjects @args $linkargs";
+        "$Config{cc} $Config{ccflags} $optimize $incdir @sharedobjects @args $dynaloader $linkargs";
 
 
     _print ("$cccmd\n", 36);
@@ -327,16 +333,16 @@ sub _getSharedObjects
     my (@return);
     local($") = " -I";
 
-    if ($Config{'osname'} eq 'MSWin32') 
     { 
-        # _addstuff;    
-    }
-    else
-    {
-        my ($tmpprog);
-        ($tmpprog = $sourceprog) =~ s"(.*)[\/\\](.*)"$2";
-        $tmpfile = "/tmp/$tmpprog.tst";
-        $incfile = "/tmp/$tmpprog.val";
+	my ($tmpprog);
+	($tmpprog = $sourceprog) =~ s"(.*)[\/\\](.*)"$2";
+	my $tempdir = '/tmp';
+	if ($Config{'osname'} eq 'MSWin32') {
+	    $tempdir = $ENV{TEMP};
+	    $tempdir =~ s[\\][/]g;
+	}
+	$tmpfile = "$tempdir/$tmpprog.tst";
+	$incfile = "$tempdir/$tmpprog.val";
     }
 
     my $fd = new FileHandle("> $tmpfile") || die "Couldn't open $tmpfile!\n";
@@ -558,7 +564,7 @@ sub _checkopts
                                                     && $options->{'gen'})
     {
         push(@errors, 
-"ERROR: The options '-regex', '-run', and '-o' are incompatible with '-gen'. 
+"ERROR: The options '-regex', ' -c -run', and '-o' are incompatible with '-gen'. 
        '-gen' says to stop at C generation, and the other three modify the 
        compilation and/or running process!\n");
     }

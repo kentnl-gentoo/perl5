@@ -1,6 +1,6 @@
 /*    gv.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -621,12 +621,6 @@ gv_fetchpv(const char *nambeg, I32 add, I32 sv_type)
 	    IoFLAGS(GvIOn(gv)) |= IOf_ARGV|IOf_START;
 	}
 	break;
-
-    case 'a':
-    case 'b':
-	if (len == 1)
-	    GvMULTI_on(gv);
-	break;
     case 'E':
 	if (strnEQ(name, "EXPORT", 6))
 	    GvMULTI_on(gv);
@@ -641,15 +635,15 @@ gv_fetchpv(const char *nambeg, I32 add, I32 sv_type)
 		&& AvFILLp(av) == -1)
 	    {
 		char *pname;
-		av_push(av, newSVpv(pname = "NDBM_File",0));
+		av_push(av, newSVpvn(pname = "NDBM_File",9));
 		gv_stashpvn(pname, 9, TRUE);
-		av_push(av, newSVpv(pname = "DB_File",0));
+		av_push(av, newSVpvn(pname = "DB_File",7));
 		gv_stashpvn(pname, 7, TRUE);
-		av_push(av, newSVpv(pname = "GDBM_File",0));
+		av_push(av, newSVpvn(pname = "GDBM_File",9));
 		gv_stashpvn(pname, 9, TRUE);
-		av_push(av, newSVpv(pname = "SDBM_File",0));
+		av_push(av, newSVpvn(pname = "SDBM_File",9));
 		gv_stashpvn(pname, 9, TRUE);
-		av_push(av, newSVpv(pname = "ODBM_File",0));
+		av_push(av, newSVpvn(pname = "ODBM_File",9));
 		gv_stashpvn(pname, 9, TRUE);
 	    }
 	}
@@ -1081,7 +1075,7 @@ Gv_AMupdate(HV *stash)
               break;
             case SVt_PVGV:
               if (!(cv = GvCVu((GV*)sv)))
-                cv = sv_2cv(sv, &stash, &gv, TRUE);
+                cv = sv_2cv(sv, &stash, &gv, FALSE);
               break;
           }
           if (cv) filled=1;
@@ -1136,7 +1130,7 @@ Gv_AMupdate(HV *stash)
 			      (SvPOK(GvSV(gv)) ?  SvPVX(GvSV(gv)) : "???" ),
 			      cp, HvNAME(stash));
 		    } else
-			croak("Cannot resolve method `%.256s' overloading `%s' in package `%.256s'", 
+			croak("Can't resolve method `%.256s' overloading `%s' in package `%.256s'", 
 			      (SvPOK(GvSV(gv)) ?  SvPVX(GvSV(gv)) : "???" ),
 			      cp, HvNAME(stash));
 		}
