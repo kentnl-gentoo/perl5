@@ -159,7 +159,7 @@ require DynaLoader;
 use strict;
 use vars qw( $VERSION @ISA @EXPORT @EXPORT_OK $data );
 
-$VERSION = "2.007";
+$VERSION = "2.008";
 
 @ISA = qw(Exporter DynaLoader);
 @EXPORT =  qw();
@@ -786,6 +786,14 @@ SV *sv;
 #   define call_sv perl_call_sv
 #endif
 
+#ifndef eval_pv
+#   define eval_pv perl_eval_pv
+#endif
+
+#ifndef eval_sv
+#   define eval_sv perl_eval_sv
+#endif
+
 #ifndef PERL_SCAN_GREATER_THAN_UV_MAX
 #   define PERL_SCAN_GREATER_THAN_UV_MAX 0x02
 #endif
@@ -802,7 +810,7 @@ SV *sv;
 #   define PERL_SCAN_DISALLOW_PREFIX 0x02
 #endif
 
-#if (PERL_VERSION >= 6)
+#if (PERL_VERSION > 6) || ((PERL_VERSION == 6) && (PERL_SUBVERSION >= 1))
 #define I32_CAST
 #else
 #define I32_CAST (I32*)
@@ -877,7 +885,7 @@ static UV _grok_bin (char *string, STRLEN *len, I32 *flags, NV *result) {
 #endif
    
 #ifndef grok_numeric_radix
-#   define GROK_NUMERIC_RADIX(sp, send) grok_numeric_radix(sp, send)
+#   define GROK_NUMERIC_RADIX(sp, send) grok_numeric_radix(aTHX_ sp, send)
 
 #define grok_numeric_radix Perl_grok_numeric_radix
     
@@ -885,7 +893,7 @@ bool
 Perl_grok_numeric_radix(pTHX_ const char **sp, const char *send)
 {
 #ifdef USE_LOCALE_NUMERIC
-#if (PERL_VERSION >= 6)
+#if (PERL_VERSION > 6) || ((PERL_VERSION == 6) && (PERL_SUBVERSION >= 1))
     if (PL_numeric_radix_sv && IN_LOCALE) { 
         STRLEN len;
         char* radix = SvPV(PL_numeric_radix_sv, len);
@@ -1114,6 +1122,163 @@ Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep)
   return 0;
 }
 #endif /* grok_number */
+
+#ifndef PERL_MAGIC_sv
+#   define PERL_MAGIC_sv             '\0'
+#endif
+
+#ifndef PERL_MAGIC_overload
+#   define PERL_MAGIC_overload       'A'
+#endif
+
+#ifndef PERL_MAGIC_overload_elem
+#   define PERL_MAGIC_overload_elem  'a'
+#endif
+
+#ifndef PERL_MAGIC_overload_table
+#   define PERL_MAGIC_overload_table 'c'
+#endif
+
+#ifndef PERL_MAGIC_bm
+#   define PERL_MAGIC_bm             'B'
+#endif
+
+#ifndef PERL_MAGIC_regdata
+#   define PERL_MAGIC_regdata        'D'
+#endif
+
+#ifndef PERL_MAGIC_regdatum
+#   define PERL_MAGIC_regdatum       'd'
+#endif
+
+#ifndef PERL_MAGIC_env
+#   define PERL_MAGIC_env            'E'
+#endif
+
+#ifndef PERL_MAGIC_envelem
+#   define PERL_MAGIC_envelem        'e'
+#endif
+
+#ifndef PERL_MAGIC_fm
+#   define PERL_MAGIC_fm             'f'
+#endif
+
+#ifndef PERL_MAGIC_regex_global
+#   define PERL_MAGIC_regex_global   'g'
+#endif
+
+#ifndef PERL_MAGIC_isa
+#   define PERL_MAGIC_isa            'I'
+#endif
+
+#ifndef PERL_MAGIC_isaelem
+#   define PERL_MAGIC_isaelem        'i'
+#endif
+
+#ifndef PERL_MAGIC_nkeys
+#   define PERL_MAGIC_nkeys          'k'
+#endif
+
+#ifndef PERL_MAGIC_dbfile
+#   define PERL_MAGIC_dbfile         'L'
+#endif
+
+#ifndef PERL_MAGIC_dbline
+#   define PERL_MAGIC_dbline         'l'
+#endif
+
+#ifndef PERL_MAGIC_mutex
+#   define PERL_MAGIC_mutex          'm'
+#endif
+
+#ifndef PERL_MAGIC_shared
+#   define PERL_MAGIC_shared         'N'
+#endif
+
+#ifndef PERL_MAGIC_shared_scalar
+#   define PERL_MAGIC_shared_scalar  'n'
+#endif
+
+#ifndef PERL_MAGIC_collxfrm
+#   define PERL_MAGIC_collxfrm       'o'
+#endif
+
+#ifndef PERL_MAGIC_tied
+#   define PERL_MAGIC_tied           'P'
+#endif
+
+#ifndef PERL_MAGIC_tiedelem
+#   define PERL_MAGIC_tiedelem       'p'
+#endif
+
+#ifndef PERL_MAGIC_tiedscalar
+#   define PERL_MAGIC_tiedscalar     'q'
+#endif
+
+#ifndef PERL_MAGIC_qr
+#   define PERL_MAGIC_qr             'r'
+#endif
+
+#ifndef PERL_MAGIC_sig
+#   define PERL_MAGIC_sig            'S'
+#endif
+
+#ifndef PERL_MAGIC_sigelem
+#   define PERL_MAGIC_sigelem        's'
+#endif
+
+#ifndef PERL_MAGIC_taint
+#   define PERL_MAGIC_taint          't'
+#endif
+
+#ifndef PERL_MAGIC_uvar
+#   define PERL_MAGIC_uvar           'U'
+#endif
+
+#ifndef PERL_MAGIC_uvar_elem
+#   define PERL_MAGIC_uvar_elem      'u'
+#endif
+
+#ifndef PERL_MAGIC_vstring
+#   define PERL_MAGIC_vstring        'V'
+#endif
+
+#ifndef PERL_MAGIC_vec
+#   define PERL_MAGIC_vec            'v'
+#endif
+
+#ifndef PERL_MAGIC_utf8
+#   define PERL_MAGIC_utf8           'w'
+#endif
+
+#ifndef PERL_MAGIC_substr
+#   define PERL_MAGIC_substr         'x'
+#endif
+
+#ifndef PERL_MAGIC_defelem
+#   define PERL_MAGIC_defelem        'y'
+#endif
+
+#ifndef PERL_MAGIC_glob
+#   define PERL_MAGIC_glob           '*'
+#endif
+
+#ifndef PERL_MAGIC_arylen
+#   define PERL_MAGIC_arylen         '#'
+#endif
+
+#ifndef PERL_MAGIC_pos
+#   define PERL_MAGIC_pos            '.'
+#endif
+
+#ifndef PERL_MAGIC_backref
+#   define PERL_MAGIC_backref        '<'
+#endif
+
+#ifndef PERL_MAGIC_ext
+#   define PERL_MAGIC_ext            '~'
+#endif
+
 #endif /* _P_P_PORTABILITY_H_ */
 
 /* End of File ppport.h */

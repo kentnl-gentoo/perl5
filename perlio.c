@@ -2613,8 +2613,10 @@ char *
 PerlIOStdio_mode(const char *mode, char *tmode)
 {
     char *ret = tmode;
-    while (*mode) {
-	*tmode++ = *mode++;
+    if (mode) {
+	while (*mode) {
+	    *tmode++ = *mode++;
+	}
     }
 #if defined(PERLIO_USING_CRLF) || defined(__CYGWIN__)
     *tmode++ = 'b';
@@ -4866,7 +4868,7 @@ PerlIO_tmpfile(void)
      if (fd >= 0)
 	  f = PerlIO_fdopen(fd, "w+b");
 #else /* WIN32 */
-#    if defined(HAS_MKSTEMP) && ! defined(VMS)
+#    if defined(HAS_MKSTEMP) && ! defined(VMS) && ! defined(OS2)
      SV *sv = newSVpv("/tmp/PerlIO_XXXXXX", 0);
 
      /*

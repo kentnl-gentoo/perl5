@@ -78,9 +78,9 @@ Perl_Slab_Free(pTHX_ void *op)
     assert( ptr < ( (I32 **) slab + PERL_SLAB_SIZE) );
     assert( *slab > 0 );
     if (--(*slab) == 0) {
-     #ifdef NETWARE
-      #define PerlMemShared PerlMem
-     #endif
+#  ifdef NETWARE
+#    define PerlMemShared PerlMem
+#  endif
 	
     PerlMemShared_free(slab);
 	if (slab == PL_OpSlab) {
@@ -3873,7 +3873,9 @@ Perl_newLOOPEX(pTHX_ I32 type, OP *label)
 	op_free(label);
     }
     else {
-	if (label->op_type == OP_ENTERSUB)
+	/* Check whether it's going to be a goto &function */
+	if (label->op_type == OP_ENTERSUB
+		&& !(label->op_flags & OPf_STACKED))
 	    label = newUNOP(OP_REFGEN, 0, mod(label, OP_REFGEN));
 	o = newUNOP(type, OPf_STACKED, label);
     }

@@ -599,7 +599,7 @@ int usleep(unsigned int);
 #    endif
 #  endif
 #  ifdef BUGGY_MSC
-  #  pragma function(memcmp)
+#    pragma function(memcmp)
 #  endif
 #else
 #   ifndef memcmp
@@ -4365,6 +4365,14 @@ extern void moncontrol(int);
 
 #ifndef PIPESOCK_MODE
 #  define PIPESOCK_MODE
+#endif
+
+#ifndef SOCKET_OPEN_MODE
+#  define SOCKET_OPEN_MODE	PIPESOCK_MODE
+#endif
+
+#ifndef PIPE_OPEN_MODE
+#  define PIPE_OPEN_MODE	PIPESOCK_MODE
 #endif
 
 #define PERL_MAGIC_UTF8_CACHESIZE	2

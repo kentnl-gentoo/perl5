@@ -621,8 +621,8 @@ PP(pp_pipe_op)
     if (PerlProc_pipe(fd) < 0)
 	goto badexit;
 
-    IoIFP(rstio) = PerlIO_fdopen(fd[0], "r"PIPESOCK_MODE);
-    IoOFP(wstio) = PerlIO_fdopen(fd[1], "w"PIPESOCK_MODE);
+    IoIFP(rstio) = PerlIO_fdopen(fd[0], "r"PIPE_OPEN_MODE);
+    IoOFP(wstio) = PerlIO_fdopen(fd[1], "w"PIPE_OPEN_MODE);
     IoOFP(rstio) = IoIFP(rstio);
     IoIFP(wstio) = IoOFP(wstio);
     IoTYPE(rstio) = IoTYPE_RDONLY;
@@ -2295,8 +2295,8 @@ PP(pp_socket)
     fd = PerlSock_socket(domain, type, protocol);
     if (fd < 0)
 	RETPUSHUNDEF;
-    IoIFP(io) = PerlIO_fdopen(fd, "r"PIPESOCK_MODE);	/* stdio gets confused about sockets */
-    IoOFP(io) = PerlIO_fdopen(fd, "w"PIPESOCK_MODE);
+    IoIFP(io) = PerlIO_fdopen(fd, "r"SOCKET_OPEN_MODE);	/* stdio gets confused about sockets */
+    IoOFP(io) = PerlIO_fdopen(fd, "w"SOCKET_OPEN_MODE);
     IoTYPE(io) = IoTYPE_SOCKET;
     if (!IoIFP(io) || !IoOFP(io)) {
 	if (IoIFP(io)) PerlIO_close(IoIFP(io));
@@ -2357,11 +2357,11 @@ PP(pp_sockpair)
     TAINT_PROPER("socketpair");
     if (PerlSock_socketpair(domain, type, protocol, fd) < 0)
 	RETPUSHUNDEF;
-    IoIFP(io1) = PerlIO_fdopen(fd[0], "r"PIPESOCK_MODE);
-    IoOFP(io1) = PerlIO_fdopen(fd[0], "w"PIPESOCK_MODE);
+    IoIFP(io1) = PerlIO_fdopen(fd[0], "r"SOCKET_OPEN_MODE);
+    IoOFP(io1) = PerlIO_fdopen(fd[0], "w"SOCKET_OPEN_MODE);
     IoTYPE(io1) = IoTYPE_SOCKET;
-    IoIFP(io2) = PerlIO_fdopen(fd[1], "r"PIPESOCK_MODE);
-    IoOFP(io2) = PerlIO_fdopen(fd[1], "w"PIPESOCK_MODE);
+    IoIFP(io2) = PerlIO_fdopen(fd[1], "r"SOCKET_OPEN_MODE);
+    IoOFP(io2) = PerlIO_fdopen(fd[1], "w"SOCKET_OPEN_MODE);
     IoTYPE(io2) = IoTYPE_SOCKET;
     if (!IoIFP(io1) || !IoOFP(io1) || !IoIFP(io2) || !IoOFP(io2)) {
 	if (IoIFP(io1)) PerlIO_close(IoIFP(io1));
@@ -2532,8 +2532,8 @@ PP(pp_accept)
 	goto badexit;
     if (IoIFP(nstio))
 	do_close(ngv, FALSE);
-    IoIFP(nstio) = PerlIO_fdopen(fd, "r"PIPESOCK_MODE);
-    IoOFP(nstio) = PerlIO_fdopen(fd, "w"PIPESOCK_MODE);
+    IoIFP(nstio) = PerlIO_fdopen(fd, "r"SOCKET_OPEN_MODE);
+    IoOFP(nstio) = PerlIO_fdopen(fd, "w"SOCKET_OPEN_MODE);
     IoTYPE(nstio) = IoTYPE_SOCKET;
     if (!IoIFP(nstio) || !IoOFP(nstio)) {
 	if (IoIFP(nstio)) PerlIO_close(IoIFP(nstio));
@@ -4037,27 +4037,28 @@ PP(pp_waitpid)
 {
 #if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL)
     dSP; dTARGET;
-    Pid_t childpid;
+    Pid_t pid;
+    Pid_t result;
     int optype;
     int argflags;
 
     optype = POPi;
-    childpid = TOPi;
+    pid = TOPi;
     if (PL_signals & PERL_SIGNALS_UNSAFE_FLAG)
-        childpid = wait4pid(childpid, &argflags, optype);
+        result = wait4pid(pid, &argflags, optype);
     else {
-        while ((childpid = wait4pid(childpid, &argflags, optype)) == -1 &&
+        while ((result = wait4pid(pid, &argflags, optype)) == -1 &&
 	       errno == EINTR) {
 	  PERL_ASYNC_CHECK();
 	}
     }
 #  if defined(USE_ITHREADS) && defined(PERL_IMPLICIT_SYS)
     /* 0 and -1 are both error returns (the former applies to WNOHANG case) */
-    STATUS_NATIVE_SET((childpid && childpid != -1) ? argflags : -1);
+    STATUS_NATIVE_SET((result && result != -1) ? argflags : -1);
 #  else
-    STATUS_NATIVE_SET((childpid > 0) ? argflags : -1);
+    STATUS_NATIVE_SET((result > 0) ? argflags : -1);
 #  endif
-    SETi(childpid);
+    SETi(result);
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "waitpid");

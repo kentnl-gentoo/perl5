@@ -937,8 +937,8 @@ Perl_do_pipe(pTHX_ SV *sv, GV *rgv, GV *wgv)
 
     if (PerlProc_pipe(fd) < 0)
 	goto badexit;
-    IoIFP(rstio) = PerlIO_fdopen(fd[0], "r"PIPESOCK_MODE);
-    IoOFP(wstio) = PerlIO_fdopen(fd[1], "w"PIPESOCK_MODE);
+    IoIFP(rstio) = PerlIO_fdopen(fd[0], "r"PIPE_OPEN_MODE);
+    IoOFP(wstio) = PerlIO_fdopen(fd[1], "w"PIPE_OPEN_MODE);
     IoOFP(rstio) = IoIFP(rstio);
     IoIFP(wstio) = IoOFP(wstio);
     IoTYPE(rstio) = IoTYPE_RDONLY;
@@ -1548,7 +1548,7 @@ Perl_do_exec3(pTHX_ char *cmd, int fd, int do_report)
 
 		while (*t && isSPACE(*t))
 		    ++t;
-		if (!*t && (dup2(1,2) != -1)) {
+		if (!*t && (PerlLIO_dup2(1,2) != -1)) {
 		    s[-2] = '\0';
 		    break;
 		}

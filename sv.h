@@ -234,6 +234,7 @@ perform the upgrade if necessary.  See C<svtype>.
 
 #define SVrepl_EVAL	0x40000000	/* Replacement part of s///e */
 
+#define SVphv_REHASH	0x10000000	/* HV is recalculating hash values */
 #define SVphv_SHAREKEYS 0x20000000	/* keys live on shared string table */
 #define SVphv_LAZYDEL	0x40000000	/* entry in xhv_eiter must be deleted */
 #define SVphv_HASKFLAGS	0x80000000	/* keys have flag byte after hash */
@@ -551,7 +552,7 @@ Set the length of the string which is in the SV.  See C<SvCUR>.
 						  SVp_IOK|SVp_NOK|SVf_IVisUV))
 
 #if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
-#define assert_not_ROK(sv)	({assert(!SvROK(sv) || !SvRV(sv))}),
+#define assert_not_ROK(sv)	({assert(!SvROK(sv) || !SvRV(sv));}),
 #else
 #define assert_not_ROK(sv)	
 #endif

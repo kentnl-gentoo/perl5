@@ -467,6 +467,10 @@ perl_destruct(pTHXx)
 
     /* Destroy the main CV and syntax tree */
     if (PL_main_root) {
+	/* ensure comppad/curpad to refer to main's pad */
+	if (CvPADLIST(PL_main_cv)) {
+	    PAD_SET_CUR_NOSAVE(CvPADLIST(PL_main_cv), 1);
+	}
 	op_free(PL_main_root);
 	PL_main_root = Nullop;
     }
@@ -490,6 +494,7 @@ perl_destruct(pTHXx)
 	 * Non-referenced objects are on their own.
 	 */
 	sv_clean_objs();
+	PL_sv_objcount = 0;
     }
 
     /* unhook hooks which will soon be, or use, destroyed data */
@@ -615,6 +620,8 @@ perl_destruct(pTHXx)
 	PL_e_script = Nullsv;
     }
 
+    PL_perldb = 0;
+
     /* magical thingies */
 
     SvREFCNT_dec(PL_ofs_sv);	/* $, */
@@ -674,6 +681,14 @@ perl_destruct(pTHXx)
     PL_stderrgv = Nullgv;
     PL_last_in_gv = Nullgv;
     PL_replgv = Nullgv;
+    PL_DBgv = Nullgv;
+    PL_DBline = Nullgv;
+    PL_DBsub = Nullgv;
+    PL_DBsingle = Nullsv;
+    PL_DBtrace = Nullsv;
+    PL_DBsignal = Nullsv;
+    PL_DBcv = Nullcv;
+    PL_dbargs = Nullav;
     PL_debstash = Nullhv;
 
     /* reset so print() ends up where we expect */
@@ -708,6 +723,7 @@ perl_destruct(pTHXx)
     Safefree(PL_numeric_name);
     PL_numeric_name = Nullch;
     SvREFCNT_dec(PL_numeric_radix_sv);
+    PL_numeric_radix_sv = Nullsv;
 #endif
 
     /* clear utf8 character classes */
@@ -846,6 +862,7 @@ perl_destruct(pTHXx)
 #ifdef USE_ITHREADS
     /* free the pointer table used for cloning */
     ptr_table_free(PL_ptr_table);
+    PL_ptr_table = (PTR_TBL_t*)NULL;
 #endif
 
     /* free special SVs */
@@ -889,6 +906,7 @@ perl_destruct(pTHXx)
 	}
     }
 #endif
+    PL_sv_count = 0;
 
 
 #if defined(PERLIO_LAYERS)
@@ -907,18 +925,31 @@ perl_destruct(pTHXx)
     SvREADONLY_off(&PL_sv_placeholder);
 
     Safefree(PL_origfilename);
+    PL_origfilename = Nullch;
     Safefree(PL_reg_start_tmp);
+    PL_reg_start_tmp = (char**)NULL;
+    PL_reg_start_tmpl = 0;
     if (PL_reg_curpm)
 	Safefree(PL_reg_curpm);
     Safefree(PL_reg_poscache);
     free_tied_hv_pool();
     Safefree(PL_op_mask);
     Safefree(PL_psig_ptr);
+    PL_psig_ptr = (SV**)NULL;
     Safefree(PL_psig_name);
+    PL_psig_name = (SV**)NULL;
     Safefree(PL_bitcount);
+    PL_bitcount = Nullch;
     Safefree(PL_psig_pend);
+    PL_psig_pend = (int*)NULL;
+    PL_formfeed = Nullsv;
+    Safefree(PL_ofmt);
+    PL_ofmt = Nullch;
     nuke_stacks();
+    PL_tainting = FALSE;
+    PL_taint_warn = FALSE;
     PL_hints = 0;		/* Reset hints. Should hints be per-interpreter ? */
+    PL_debug = 0;
 
     DEBUG_P(debprofdump());
 #ifdef USE_5005THREADS
@@ -1044,7 +1075,7 @@ setuid perl scripts securely.\n");
      * it is your responsibility to provide a good random seed!
      * You can also define PERL_HASH_SEED in compile time, see hv.h. */
     if (!PL_hash_seed_set)
-	 PL_hash_seed = get_hash_seed();
+	 PL_new_hash_seed = get_hash_seed();
     {
 	 char *s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG");
 
@@ -1053,7 +1084,7 @@ setuid perl scripts securely.\n");
 
 	      if (i == 1)
 		   PerlIO_printf(Perl_debug_log, "HASH_SEED = %"UVuf"\n",
-				 PL_hash_seed);
+				 PL_new_hash_seed);
 	 }
     }
 #endif /* #if defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT) */
@@ -2371,11 +2402,11 @@ S_usage(pTHX_ char *name)		/* XXX move this out into a module ? */
     static char *usage_msg[] = {
 "-0[octal]       specify record separator (\\0, if no argument)",
 "-a              autosplit mode with -n or -p (splits $_ into @F)",
-"-C              enable native wide character system interfaces",
+"-C[number/list] enables the listed Unicode features",
 "-c              check syntax only (runs BEGIN and CHECK blocks)",
 "-d[:debugger]   run program under debugger",
 "-D[number/list] set debugging flags (argument is a bit mask or alphabets)",
-"-e 'command'    one line of program (several -e's allowed, omit programfile)",
+"-e program      one line of program (several -e's allowed, omit programfile)",
 "-F/pattern/     split() pattern for -a switch (//'s are optional)",
 "-i[extension]   edit <> files in place (makes backup if extension supplied)",
 "-Idirectory     specify @INC/#include directory (several -I's allowed)",
@@ -2386,16 +2417,16 @@ S_usage(pTHX_ char *name)		/* XXX move this out into a module ? */
 "-P              run program through C preprocessor before compilation",
 "-s              enable rudimentary parsing for switches after programfile",
 "-S              look for programfile using PATH environment variable",
-"-T              enable tainting checks",
 "-t              enable tainting warnings",
+"-T              enable tainting checks",
 "-u              dump core after parsing program",
 "-U              allow unsafe operations",
 "-v              print version, subversion (includes VERY IMPORTANT perl info)",
 "-V[:variable]   print configuration summary (or a single Config.pm variable)",
 "-w              enable many useful warnings (RECOMMENDED)",
 "-W              enable all warnings",
-"-X              disable all warnings",
 "-x[directory]   strip off text before #!perl line and perhaps cd to directory",
+"-X              disable all warnings",
 "\n",
 NULL
 };
@@ -2527,7 +2558,7 @@ Perl_moreswitches(pTHX_ char *s)
 		sv_catpvn(sv, start, s-start);
 		sv_catpv(sv, " split(/,/,q{");
 		sv_catpv(sv, ++s);
-		sv_catpv(sv,    "})");
+		sv_catpv(sv, "})");
 	    }
 	    s += strlen(s);
 	    my_setenv("PERL5DB", SvPV(sv, PL_na));
@@ -2648,9 +2679,10 @@ Perl_moreswitches(pTHX_ char *s)
                     Perl_croak(aTHX_ "Module name required with -%c option",
 			       s[-1]);
 		sv_catpvn(sv, start, s-start);
-		sv_catpv(sv, " split(/,/,q{");
+		sv_catpv(sv, " split(/,/,q");
+		sv_catpvn(sv, "\0)", 1);        /* Use NUL as q//-delimiter. */
 		sv_catpv(sv, ++s);
-		sv_catpv(sv,    "})");
+		sv_catpvn(sv,  "\0)", 2);
 	    }
 	    s += strlen(s);
 	    if (!PL_preambleav)
@@ -3358,7 +3390,7 @@ S_validate_suid(pTHX_ char *validarg, char *scriptname, int fdscript)
 	    PL_euid == PL_statbuf.st_uid)
 	    if (!PL_do_undump)
 		Perl_croak(aTHX_ "YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET!\n\
-FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!\n");
+FIX YOUR KERNEL, OR PUT A C WRAPPER AROUND THIS SCRIPT!\n");
 #endif /* IAMSUID */
 
 	if (PL_euid) {	/* oops, we're not the setuid root perl */

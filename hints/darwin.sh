@@ -13,6 +13,12 @@ perl_version=`awk '/define[ 	]+PERL_VERSION/ {print $3}' $src/patchlevel.h`
 perl_subversion=`awk '/define[ 	]+PERL_SUBVERSION/ {print $3}' $src/patchlevel.h`
 version="${perl_revision}.${perl_version}.${perl_subversion}"
 
+# Pretend that Darwin doesn't know about those system calls [perl #24122]
+d_setregid='undef'
+d_setreuid='undef'
+d_setrgid='undef'
+d_setruid='undef'
+
 # This was previously used in all but causes three cases
 # (no -Ddprefix=, -Dprefix=/usr, -Dprefix=/some/thing/else)
 # but that caused too much grief.
@@ -151,7 +157,7 @@ case "$osvers" in
 *) lddlflags="${ldflags} -bundle -undefined dynamic_lookup"
    case "$ld" in
    *MACOSX_DEVELOPMENT_TARGET*) ;;
-   *) ld="MACOSX_DEPLOYMENT_TARGET=10.3 ${ld}" ;;
+   *) ld="env MACOSX_DEPLOYMENT_TARGET=10.3 ${ld}" ;;
    esac
    ;;
 esac
