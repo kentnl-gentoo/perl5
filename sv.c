@@ -2043,7 +2043,6 @@ register SV *sstr;
     if (sflags & SVf_ROK) {
 	if (dtype >= SVt_PV) {
 	    if (dtype == SVt_PVGV) {
-		/* dTHR; */ /* unneeded, and breaks SunOS 4.1.3 pre-ANSI cc */
 		SV *sref = SvREFCNT_inc(SvRV(sstr));
 		SV *dref = 0;
 		int intro = GvINTRO(dstr);
@@ -3464,6 +3463,8 @@ register SV *sv;
 
     if (!sv)
 	return;
+    if (SvGMAGICAL(sv))
+	mg_get(sv);
     if (SvTHINKFIRST(sv)) {
 	if (SvREADONLY(sv)) {
 	    dTHR;
@@ -3477,8 +3478,6 @@ register SV *sv;
 	  sv_unref(sv);
 	}
     }
-    if (SvGMAGICAL(sv))
-	mg_get(sv);
     flags = SvFLAGS(sv);
     if (flags & SVp_NOK) {
 	(void)SvNOK_only(sv);
@@ -3542,6 +3541,8 @@ register SV *sv;
 
     if (!sv)
 	return;
+    if (SvGMAGICAL(sv))
+	mg_get(sv);
     if (SvTHINKFIRST(sv)) {
 	if (SvREADONLY(sv)) {
 	    dTHR;
@@ -3555,8 +3556,6 @@ register SV *sv;
 	  sv_unref(sv);
 	}
     }
-    if (SvGMAGICAL(sv))
-	mg_get(sv);
     flags = SvFLAGS(sv);
     if (flags & SVp_NOK) {
 	SvNVX(sv) -= 1.0;
@@ -3846,12 +3845,18 @@ HV *stash;
 	}
 	for (i = 0; i <= (I32) HvMAX(stash); i++) {
 	    for (entry = HvARRAY(stash)[i];
-	      entry;
-	      entry = HeNEXT(entry)) {
+		 entry;
+		 entry = HeNEXT(entry))
+	    {
 		if (!todo[(U8)*HeKEY(entry)])
 		    continue;
 		gv = (GV*)HeVAL(entry);
 		sv = GvSV(gv);
+		if (SvTHINKFIRST(sv)) {
+		    if (!SvREADONLY(sv) && SvROK(sv))
+			sv_unref(sv);
+		    continue;
+		}
 		(void)SvOK_off(sv);
 		if (SvTYPE(sv) >= SVt_PV) {
 		    SvCUR_set(sv, 0);

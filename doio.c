@@ -264,7 +264,7 @@ PerlIO *supplied_fp;
 	    else
 		fp = PerlIO_open(name,mode);
 	}
-	else if (name[len-1] == '|') {
+	else if (len > 1 && name[len-1] == '|') {
 	    name[--len] = '\0';
 	    while (len && isSPACE(name[len-1]))
 		name[--len] = '\0';
@@ -349,8 +349,12 @@ PerlIO *supplied_fp;
 	PerlIO_clearerr(fp);
     }
 #if defined(HAS_FCNTL) && defined(F_SETFD)
-    fd = PerlIO_fileno(fp);
-    fcntl(fd,F_SETFD,fd > maxsysfd);
+    {
+	int save_errno = errno;
+	fd = PerlIO_fileno(fp);
+	fcntl(fd,F_SETFD,fd > maxsysfd); /* can change errno */
+	errno = save_errno;
+    }
 #endif
     IoIFP(io) = fp;
     if (writing) {
@@ -767,7 +771,7 @@ do_binmode(fp, iotype, flag)
 	 * document this anywhere). GSAR 97-5-24
 	 */
 	PerlIO_seek(fp,0L,0);
-	fp->flags |= _F_BIN;
+	((FILE*)fp)->flags |= _F_BIN;
 #endif
 	return 1;
     }

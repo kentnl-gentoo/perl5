@@ -1163,11 +1163,8 @@ do_readline()
 		IoFLAGS(io) |= IOf_START;
 	    }
 	    else if (type == OP_GLOB) {
-		if (!do_close(last_in_gv, FALSE) && dowarn)
-		    warn("glob failed (child exited with status %d%s)",
-			STATUS_CURRENT >> 8,
-			(STATUS_CURRENT & 0xFF) ? ", core dumped" : ""
-		    );
+		if (do_close(last_in_gv, FALSE) & ~0xFF)
+		    warn("internal error: glob failed");
 	    }
 	    if (gimme == G_SCALAR) {
 		(void)SvOK_off(TARG);
@@ -1349,7 +1346,7 @@ PP(pp_iter)
 
     EXTEND(SP, 1);
     cx = &cxstack[cxstack_ix];
-    if (cx->cx_type != CXt_LOOP)
+    if (CxTYPE(cx) != CXt_LOOP)
 	DIE("panic: pp_iter");
 
     av = cx->blk_loop.iterary;
@@ -1913,12 +1910,14 @@ PP(pp_entersub)
 	PUSHBLOCK(cx, CXt_SUB, MARK);
 	PUSHSUB(cx);
 	CvDEPTH(cv)++;
+	/* XXX This would be a natural place to set C<compcv = cv> so
+	 * that eval'' ops within this sub know the correct lexical space.
+	 * Owing the speed considerations, we choose to search for the cv
+	 * in doeval() instead.
+	 */
 	if (CvDEPTH(cv) < 2)
 	    (void)SvREFCNT_inc(cv);
 	else {	/* save temporaries on recursion? */
-	    if (CvDEPTH(cv) == 100 && dowarn 
-		  && !(PERLDB_SUB && cv == GvCV(DBsub)))
-		sub_crush_depth(cv);
 	    if (CvDEPTH(cv) > AvFILLp(padlist)) {
 		AV *av;
 		AV *newpad = newAV();
@@ -1994,6 +1993,13 @@ PP(pp_entersub)
 		MARK++;
 	    }
 	}
+	/* warning must come *after* we fully set up the context
+	 * stuff so that __WARN__ handlers can safely dounwind()
+	 * if they want to
+	 */
+	if (CvDEPTH(cv) == 100 && dowarn
+	    && !(PERLDB_SUB && cv == GvCV(DBsub)))
+	    sub_crush_depth(cv);
 #if 0
 	DEBUG_L(PerlIO_printf(PerlIO_stderr(),
 			      "%p entersub returning %p\n", thr, CvSTART(cv)));
