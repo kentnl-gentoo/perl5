@@ -56,6 +56,10 @@
 static void xstat _((void));
 #endif
 
+#ifdef USE_THREADS
+static U32 threadnum = 0;
+#endif /* USE_THREADS */
+
 #ifndef MYMALLOC
 
 /* paranoid version of malloc */
@@ -67,8 +71,7 @@ static void xstat _((void));
  */
 
 Malloc_t
-safemalloc(size)
-MEM_SIZE size;
+safemalloc(MEM_SIZE size)
 {
     Malloc_t ptr;
 #ifdef HAS_64K_LIMIT
@@ -94,6 +97,7 @@ MEM_SIZE size;
     else {
 	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
 	my_exit(1);
+        return Nullch;
     }
     /*NOTREACHED*/
 }
@@ -101,9 +105,7 @@ MEM_SIZE size;
 /* paranoid version of realloc */
 
 Malloc_t
-saferealloc(where,size)
-Malloc_t where;
-MEM_SIZE size;
+saferealloc(Malloc_t where,MEM_SIZE size)
 {
     Malloc_t ptr;
 #if !defined(STANDARD_C) && !defined(HAS_REALLOC_PROTOTYPE)
@@ -144,6 +146,7 @@ MEM_SIZE size;
     else {
 	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
 	my_exit(1);
+	return Nullch;
     }
     /*NOTREACHED*/
 }
@@ -151,13 +154,12 @@ MEM_SIZE size;
 /* safe version of free */
 
 Free_t
-safefree(where)
-Malloc_t where;
+safefree(Malloc_t where)
 {
 #if !(defined(I286) || defined(atarist))
-    DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%x: (%05d) free\n",where,an++));
+    DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%x: (%05d) free\n",(char *) where,an++));
 #else
-    DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%lx: (%05d) free\n",where,an++));
+    DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%lx: (%05d) free\n",(char *) where,an++));
 #endif
     if (where) {
 	/*SUPPRESS 701*/
@@ -168,9 +170,7 @@ Malloc_t where;
 /* safe version of calloc */
 
 Malloc_t
-safecalloc(count, size)
-MEM_SIZE count;
-MEM_SIZE size;
+safecalloc(MEM_SIZE count, MEM_SIZE size)
 {
     Malloc_t ptr;
 
@@ -201,6 +201,7 @@ MEM_SIZE size;
     else {
 	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
 	my_exit(1);
+	return Nullch;
     }
     /*NOTREACHED*/
 }
@@ -212,9 +213,7 @@ MEM_SIZE size;
 #define ALIGN sizeof(long)
 
 Malloc_t
-safexmalloc(x,size)
-I32 x;
-MEM_SIZE size;
+safexmalloc(I32 x, MEM_SIZE size)
 {
     register Malloc_t where;
 
@@ -226,17 +225,14 @@ MEM_SIZE size;
 }
 
 Malloc_t
-safexrealloc(where,size)
-Malloc_t where;
-MEM_SIZE size;
+safexrealloc(Malloc_t where, MEM_SIZE size)
 {
     register Malloc_t new = saferealloc(where - ALIGN, size + ALIGN);
     return new + ALIGN;
 }
 
 void
-safexfree(where)
-Malloc_t where;
+safexfree(Malloc_t where)
 {
     I32 x;
 
@@ -249,10 +245,7 @@ Malloc_t where;
 }
 
 Malloc_t
-safexcalloc(x,count,size)
-I32 x;
-MEM_SIZE count;
-MEM_SIZE size;
+safexcalloc(I32 x,MEM_SIZE count, MEM_SIZE size)
 {
     register Malloc_t where;
 
@@ -265,7 +258,7 @@ MEM_SIZE size;
 }
 
 static void
-xstat()
+xstat(void)
 {
     register I32 i;
 
@@ -282,13 +275,7 @@ xstat()
 /* copy a string up to some (non-backslashed) delimiter, if any */
 
 char *
-delimcpy(to, toend, from, fromend, delim, retlen)
-register char *to;
-register char *toend;
-register char *from;
-register char *fromend;
-register int delim;
-I32 *retlen;
+delimcpy(register char *to, register char *toend, register char *from, register char *fromend, register int delim, I32 *retlen)
 {
     register I32 tolen;
     for (tolen = 0; from < fromend; from++, tolen++) {
@@ -317,9 +304,7 @@ I32 *retlen;
 /* This routine was donated by Corey Satten. */
 
 char *
-instr(big, little)
-register char *big;
-register char *little;
+instr(register char *big, register char *little)
 {
     register char *s, *x;
     register I32 first;
@@ -349,11 +334,7 @@ register char *little;
 /* same as instr but allow embedded nulls */
 
 char *
-ninstr(big, bigend, little, lend)
-register char *big;
-register char *bigend;
-char *little;
-char *lend;
+ninstr(register char *big, register char *bigend, char *little, char *lend)
 {
     register char *s, *x;
     register I32 first = *little;
@@ -382,11 +363,7 @@ char *lend;
 /* reverse of the above--find last substring */
 
 char *
-rninstr(big, bigend, little, lend)
-register char *big;
-char *bigend;
-char *little;
-char *lend;
+rninstr(register char *big, char *bigend, char *little, char *lend)
 {
     register char *bigbeg;
     register char *s, *x;
@@ -416,8 +393,7 @@ char *lend;
  * Set up for a new ctype locale.
  */
 void
-perl_new_ctype(newctype)
-    char *newctype;
+perl_new_ctype(char *newctype)
 {
 #ifdef USE_LOCALE_CTYPE
 
@@ -439,8 +415,7 @@ perl_new_ctype(newctype)
  * Set up for a new collation locale.
  */
 void
-perl_new_collate(newcoll)
-    char *newcoll;
+perl_new_collate(char *newcoll)
 {
 #ifdef USE_LOCALE_COLLATE
 
@@ -484,8 +459,7 @@ perl_new_collate(newcoll)
  * Set up for a new numeric locale.
  */
 void
-perl_new_numeric(newnum)
-    char *newnum;
+perl_new_numeric(char *newnum)
 {
 #ifdef USE_LOCALE_NUMERIC
 
@@ -510,7 +484,7 @@ perl_new_numeric(newnum)
 }
 
 void
-perl_set_numeric_standard()
+perl_set_numeric_standard(void)
 {
 #ifdef USE_LOCALE_NUMERIC
 
@@ -524,7 +498,7 @@ perl_set_numeric_standard()
 }
 
 void
-perl_set_numeric_local()
+perl_set_numeric_local(void)
 {
 #ifdef USE_LOCALE_NUMERIC
 
@@ -542,8 +516,7 @@ perl_set_numeric_local()
  * Initialize locale awareness.
  */
 int
-perl_init_i18nl10n(printwarn)	
-    int printwarn;
+perl_init_i18nl10n(int printwarn)
 {
     int ok = 1;
     /* returns
@@ -772,8 +745,7 @@ perl_init_i18nl10n(printwarn)
 
 /* Backwards compatibility. */
 int
-perl_init_i18nl14n(printwarn)	
-    int printwarn;
+perl_init_i18nl14n(int printwarn)
 {
     return perl_init_i18nl10n(printwarn);
 }
@@ -788,10 +760,7 @@ perl_init_i18nl14n(printwarn)
  * Please see sv_collxfrm() to see how this is used.
  */
 char *
-mem_collxfrm(s, len, xlen)
-     const char *s;
-     STRLEN len;
-     STRLEN *xlen;
+mem_collxfrm(const char *s, STRLEN len, STRLEN *xlen)
 {
     char *xbuf;
     STRLEN xalloc, xin, xout;
@@ -841,8 +810,7 @@ mem_collxfrm(s, len, xlen)
 #endif /* USE_LOCALE_COLLATE */
 
 void
-fbm_compile(sv)
-SV *sv;
+fbm_compile(SV *sv)
 {
     register unsigned char *s;
     register unsigned char *table;
@@ -883,10 +851,7 @@ SV *sv;
 }
 
 char *
-fbm_instr(big, bigend, littlestr)
-unsigned char *big;
-register unsigned char *bigend;
-SV *littlestr;
+fbm_instr(unsigned char *big, register unsigned char *bigend, SV *littlestr)
 {
     register unsigned char *s;
     register I32 tmp;
@@ -959,9 +924,7 @@ SV *littlestr;
 }
 
 char *
-screaminstr(bigstr, littlestr)
-SV *bigstr;
-SV *littlestr;
+screaminstr(SV *bigstr, SV *littlestr)
 {
     register unsigned char *s, *x;
     register unsigned char *big;
@@ -1020,9 +983,7 @@ SV *littlestr;
 }
 
 I32
-ibcmp(s1, s2, len)
-char *s1, *s2;
-register I32 len;
+ibcmp(char *s1, char *s2, register I32 len)
 {
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
@@ -1035,9 +996,7 @@ register I32 len;
 }
 
 I32
-ibcmp_locale(s1, s2, len)
-char *s1, *s2;
-register I32 len;
+ibcmp_locale(char *s1, char *s2, register I32 len)
 {
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
@@ -1052,8 +1011,7 @@ register I32 len;
 /* copy a string to a safe spot */
 
 char *
-savepv(sv)
-char *sv;
+savepv(char *sv)
 {
     register char *newaddr;
 
@@ -1065,9 +1023,7 @@ char *sv;
 /* same thing but with a known length */
 
 char *
-savepvn(sv, len)
-char *sv;
-register I32 len;
+savepvn(char *sv, register I32 len)
 {
     register char *newaddr;
 
@@ -1080,7 +1036,7 @@ register I32 len;
 /* the SV for form() and mess() is not kept in an arena */
 
 static SV *
-mess_alloc()
+mess_alloc(void)
 {
     SV *sv;
     XPVMG *any;
@@ -1119,9 +1075,7 @@ form(pat, va_alist)
 }
 
 char *
-mess(pat, args)
-    const char *pat;
-    va_list *args;
+mess(const char *pat, va_list *args)
 {
     SV *sv;
     static char dgd[] = " during global destruction.\n";
@@ -1172,8 +1126,11 @@ die(pat, va_alist)
     GV *gv;
     CV *cv;
 
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "die: curstack = %p, mainstack= %p\n",
-    		    curstack, mainstack));/*debug*/
+#ifdef USE_THREADS
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+			  "%p: die: curstack = %p, mainstack = %p\n",
+			  thr, curstack, mainstack));
+#endif /* USE_THREADS */
     /* We have to switch back to mainstack or die_where may try to pop
      * the eval block from the wrong stack if die is being called from a
      * signal handler.  - dkindred@cs.cmu.edu */
@@ -1190,8 +1147,11 @@ die(pat, va_alist)
     message = mess(pat, &args);
     va_end(args);
 
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "die: message = %s\ndiehook = %p\n",
-		   message, diehook));/*debug*/
+#ifdef USE_THREADS
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+			  "%p: die: message = %s\ndiehook = %p\n",
+			  thr, message, diehook));
+#endif /* USE_THREADS */
     if (diehook) {
 	/* sv_2cv might call croak() */
 	SV *olddiehook = diehook;
@@ -1219,9 +1179,11 @@ die(pat, va_alist)
     }
 
     restartop = die_where(message);
+#ifdef USE_THREADS
     DEBUG_L(PerlIO_printf(PerlIO_stderr(),
-    		    "die: restartop = %p, was_in_eval = %d, oldrunlevel = %d\n",
-		    restartop, was_in_eval, oldrunlevel));/*debug*/
+	  "%p: die: restartop = %p, was_in_eval = %d, oldrunlevel = %d\n",
+	  thr, restartop, was_in_eval, oldrunlevel));
+#endif /* USE_THREADS */
     if ((!restartop && was_in_eval) || oldrunlevel > 1)
 	JMPENV_JUMP(3);
     return restartop;
@@ -1350,8 +1312,7 @@ warn(pat,va_alist)
 #ifndef VMS  /* VMS' my_setenv() is in VMS.c */
 #ifndef WIN32
 void
-my_setenv(nam,val)
-char *nam, *val;
+my_setenv(char *nam, char *val)
 {
     register I32 i=setenv_getix(nam);		/* where does it go? */
 
@@ -1399,8 +1360,7 @@ char *nam, *val;
 #else /* if WIN32 */
 
 void
-my_setenv(nam,val)
-char *nam, *val;
+my_setenv(char *nam,char *val)
 {
 
 #ifdef USE_WIN32_RTL_ENV
@@ -1465,8 +1425,7 @@ char *nam, *val;
 #endif /* WIN32 */
 
 I32
-setenv_getix(nam)
-char *nam;
+setenv_getix(char *nam)
 {
     register I32 i, len = strlen(nam);
 
@@ -1499,10 +1458,7 @@ char *f;
 
 #if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
 char *
-my_bcopy(from,to,len)
-register char *from;
-register char *to;
-register I32 len;
+my_bcopy(register char *from,register char *to,register I32 len)
 {
     char *retval = to;
 
@@ -1754,12 +1710,10 @@ VTOH(vtohl,long)
     /* VMS' my_popen() is in VMS.c, same with OS/2. */
 #if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS)
 PerlIO *
-my_popen(cmd,mode)
-char	*cmd;
-char	*mode;
+my_popen(char *cmd, char *mode)
 {
     int p[2];
-    register I32 this, that;
+    register I32 This, that;
     register I32 pid;
     SV *sv;
     I32 doexec = strNE(cmd,"-");
@@ -1771,15 +1725,15 @@ char	*mode;
 #endif 
     if (pipe(p) < 0)
 	return Nullfp;
-    this = (*mode == 'w');
-    that = !this;
+    This = (*mode == 'w');
+    that = !This;
     if (doexec && tainting) {
 	taint_env();
 	taint_proper("Insecure %s%s", "EXEC");
     }
     while ((pid = (doexec?vfork():fork())) < 0) {
 	if (errno != EAGAIN) {
-	    close(p[this]);
+	    close(p[This]);
 	    if (!doexec)
 		croak("Can't fork");
 	    return Nullfp;
@@ -1790,7 +1744,7 @@ char	*mode;
 	GV* tmpgv;
 
 #define THIS that
-#define THAT this
+#define THAT This
 	close(p[THAT]);
 	if (p[THIS] != (*mode == 'r')) {
 	    dup2(p[THIS], *mode == 'r');
@@ -1820,16 +1774,16 @@ char	*mode;
     }
     do_execfree();	/* free any memory malloced by child on vfork */
     close(p[that]);
-    if (p[that] < p[this]) {
-	dup2(p[this], p[that]);
-	close(p[this]);
-	p[this] = p[that];
+    if (p[that] < p[This]) {
+	dup2(p[This], p[that]);
+	close(p[This]);
+	p[This] = p[that];
     }
-    sv = *av_fetch(fdpid,p[this],TRUE);
+    sv = *av_fetch(fdpid,p[This],TRUE);
     (void)SvUPGRADE(sv,SVt_IV);
     SvIVX(sv) = pid;
     forkprocess = pid;
-    return PerlIO_fdopen(p[this], mode);
+    return PerlIO_fdopen(p[This], mode);
 }
 #else
 #if defined(atarist) || defined(DJGPP)
@@ -1903,9 +1857,7 @@ int newfd;
 #ifdef HAS_SIGACTION
 
 Sighandler_t
-rsignal(signo, handler)
-int signo;
-Sighandler_t handler;
+rsignal(int signo, Sighandler_t handler)
 {
     struct sigaction act, oact;
 
@@ -1922,8 +1874,7 @@ Sighandler_t handler;
 }
 
 Sighandler_t
-rsignal_state(signo)
-int signo;
+rsignal_state(int signo)
 {
     struct sigaction oact;
 
@@ -1934,10 +1885,7 @@ int signo;
 }
 
 int
-rsignal_save(signo, handler, save)
-int signo;
-Sighandler_t handler;
-Sigsave_t *save;
+rsignal_save(int signo, Sighandler_t handler, Sigsave_t *save)
 {
     struct sigaction act;
 
@@ -1951,9 +1899,7 @@ Sigsave_t *save;
 }
 
 int
-rsignal_restore(signo, save)
-int signo;
-Sigsave_t *save;
+rsignal_restore(int signo, Sigsave_t *save)
 {
     return sigaction(signo, save, (struct sigaction *)NULL);
 }
@@ -1961,9 +1907,7 @@ Sigsave_t *save;
 #else /* !HAS_SIGACTION */
 
 Sighandler_t
-rsignal(signo, handler)
-int signo;
-Sighandler_t handler;
+rsignal(int signo, Sighandler_t handler)
 {
     return signal(signo, handler);
 }
@@ -1972,15 +1916,13 @@ static int sig_trapped;
 
 static
 Signal_t
-sig_trap(signo)
-int signo;
+sig_trap(int signo)
 {
     sig_trapped++;
 }
 
 Sighandler_t
-rsignal_state(signo)
-int signo;
+rsignal_state(int signo)
 {
     Sighandler_t oldsig;
 
@@ -1993,19 +1935,14 @@ int signo;
 }
 
 int
-rsignal_save(signo, handler, save)
-int signo;
-Sighandler_t handler;
-Sigsave_t *save;
+rsignal_save(int signo, Sighandler_t handler, Sigsave_t *save)
 {
     *save = signal(signo, handler);
     return (*save == SIG_ERR) ? -1 : 0;
 }
 
 int
-rsignal_restore(signo, save)
-int signo;
-Sigsave_t *save;
+rsignal_restore(int signo, Sigsave_t *save)
 {
     return (signal(signo, *save) == SIG_ERR) ? -1 : 0;
 }
@@ -2015,8 +1952,7 @@ Sigsave_t *save;
     /* VMS' my_pclose() is in VMS.c; same with OS/2 */
 #if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS)
 I32
-my_pclose(ptr)
-PerlIO *ptr;
+my_pclose(FILE *ptr)
 {
     Sigsave_t hstat, istat, qstat;
     int status;
@@ -2065,10 +2001,7 @@ PerlIO *ptr;
 
 #if  !defined(DOSISH) || defined(OS2)
 I32
-wait4pid(pid,statusp,flags)
-int pid;
-int *statusp;
-int flags;
+wait4pid(int pid, int *statusp, int flags)
 {
     SV *sv;
     SV** svp;
@@ -2128,9 +2061,7 @@ int flags;
 
 void
 /*SUPPRESS 590*/
-pidgone(pid,status)
-int pid;
-int status;
+pidgone(int pid, int status)
 {
     register SV *sv;
     char spid[TYPE_CHARS(int)];
@@ -2163,11 +2094,7 @@ PerlIO *ptr;
 #endif
 
 void
-repeatcpy(to,from,len,count)
-register char *to;
-register char *from;
-I32 len;
-register I32 count;
+repeatcpy(register char *to, register char *from, I32 len, register I32 count)
 {
     register I32 todo;
     register char *frombase = from;
@@ -2301,10 +2228,7 @@ char *b;
 #endif /* !HAS_RENAME */
 
 UV
-scan_oct(start, len, retlen)
-char *start;
-I32 len;
-I32 *retlen;
+scan_oct(char *start, I32 len, I32 *retlen)
 {
     register char *s = start;
     register UV retval = 0;
@@ -2326,23 +2250,20 @@ I32 *retlen;
 }
 
 UV
-scan_hex(start, len, retlen)
-char *start;
-I32 len;
-I32 *retlen;
+scan_hex(char *start, I32 len, I32 *retlen)
 {
     register char *s = start;
     register UV retval = 0;
     bool overflowed = FALSE;
     char *tmp;
 
-    while (len-- && *s && (tmp = strchr(hexdigit, *s))) {
+    while (len-- && *s && (tmp = strchr((char *) hexdigit, *s))) {
 	register UV n = retval << 4;
 	if (!overflowed && (n >> 4) != retval) {
 	    warn("Integer overflow in hex number");
 	    overflowed = TRUE;
 	}
-	retval = n | (tmp - hexdigit) & 15;
+	retval = n | ((tmp - hexdigit) & 15);
 	s++;
     }
     *retlen = s - start;
@@ -2441,8 +2362,7 @@ getTHR _((void))
 #endif /* OLD_PTHREADS_API */
 
 MAGIC *
-condpair_magic(sv)
-SV *sv;
+condpair_magic(SV *sv)
 {
     MAGIC *mg;
     
@@ -2478,6 +2398,98 @@ SV *sv;
     }
     return mg;
 }
+
+/*
+ * Make a new perl thread structure using t as a prototype. Some of the
+ * fields for the new thread are copied from the prototype thread, t,
+ * so t should not be running in perl at the time this function is
+ * called. The use by ext/Thread/Thread.xs in core perl (where t is the
+ * thread calling new_struct_thread) clearly satisfies this constraint.
+ */
+struct thread *
+new_struct_thread(struct thread *t)
+{
+    struct thread *thr;
+    SV *sv;
+    SV **svp;
+    I32 i;
+
+    sv = newSVpv("", 0);
+    SvGROW(sv, sizeof(struct thread) + 1);
+    SvCUR_set(sv, sizeof(struct thread));
+    thr = (Thread) SvPVX(sv);
+    /* Zero(thr, 1, struct thread); */
+
+    /* debug */
+    memset(thr, 0xab, sizeof(struct thread));
+    markstack = 0;
+    scopestack = 0;
+    savestack = 0;
+    retstack = 0;
+    dirty = 0;
+    localizing = 0;
+    /* end debug */
+
+    thr->oursv = sv;
+    init_stacks(thr);
+
+    curcop = &compiling;
+    thr->cvcache = newHV();
+    thr->magicals = newAV();
+    thr->specific = newAV();
+    thr->errsv = newSVpv("", 0);
+    thr->errhv = newHV();
+    thr->flags = THRf_R_JOINABLE;
+    MUTEX_INIT(&thr->mutex);
+
+    curcop = t->Tcurcop;       /* XXX As good a guess as any? */
+    defstash = t->Tdefstash;   /* XXX maybe these should */
+    curstash = t->Tcurstash;   /* always be set to main? */
+    /* top_env needs to be non-zero. The particular value doesn't matter */
+    top_env = t->Ttop_env;
+    runlevel = 1;		/* XXX should be safe ? */
+    in_eval = FALSE;
+    restartop = 0;
+
+    tainted = t->Ttainted;
+    curpm = t->Tcurpm;         /* XXX No PMOP ref count */
+    nrs = newSVsv(t->Tnrs);
+    rs = newSVsv(t->Trs);
+    last_in_gv = (GV*)SvREFCNT_inc(t->Tlast_in_gv);
+    ofslen = t->Tofslen;
+    ofs = savepvn(t->Tofs, ofslen);
+    defoutgv = (GV*)SvREFCNT_inc(t->Tdefoutgv);
+    chopset = t->Tchopset;
+    formtarget = newSVsv(t->Tformtarget);
+    bodytarget = newSVsv(t->Tbodytarget);
+    toptarget = newSVsv(t->Ttoptarget);
+    
+    /* Initialise all per-thread magicals that the template thread used */
+    svp = AvARRAY(t->magicals);
+    for (i = 0; i <= AvFILL(t->magicals); i++, svp++) {
+	if (*svp && *svp != &sv_undef) {
+	    SV *sv = newSVsv(*svp);
+	    av_store(thr->magicals, i, sv);
+	    sv_magic(sv, 0, 0, &per_thread_magicals[i], 1);
+	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+				  "new_struct_thread: copied magical %d\n",i));
+	}
+    } 
+
+    MUTEX_LOCK(&threads_mutex);
+    nthreads++;
+    thr->tid = ++threadnum;
+    thr->next = t->next;
+    thr->prev = t;
+    t->next = thr;
+    thr->next->prev = thr;
+    MUTEX_UNLOCK(&threads_mutex);
+
+#ifdef HAVE_THREAD_INTERN
+    init_thread_intern(thr);
+#endif /* HAVE_THREAD_INTERN */
+    return thr;
+}
 #endif /* USE_THREADS */
 
 #ifdef HUGE_VAL
@@ -2487,8 +2499,9 @@ SV *sv;
  * Needed for SunOS with Sun's 'acc' for example.
  */
 double 
-Perl_huge()
+Perl_huge(void)
 {
  return HUGE_VAL;
 }
 #endif
+

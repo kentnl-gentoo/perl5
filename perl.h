@@ -29,6 +29,22 @@
 
 #include "embed.h"
 
+#ifdef __cplusplus
+#  define START_EXTERN_C extern "C" {
+#  define END_EXTERN_C }
+#  define EXTERN_C extern "C"
+#else
+#  define START_EXTERN_C 
+#  define END_EXTERN_C 
+#  define EXTERN_C
+#endif
+
+#if defined(USE_THREADS) /* && !defined(PERL_CORE) && !defined(PERLDLL) */
+#ifndef CRIPPLED_CC
+#define CRIPPLED_CC
+#endif
+#endif
+
 #ifdef OP_IN_REGISTER
 #  ifdef __GNUC__
 #    define stringify_immed(s) #s
@@ -63,16 +79,6 @@ register struct op *op asm(stringify(OP_IN_REGISTER));
 #define NOOP (void)0
 
 #define WITH_THR(s) do { dTHR; s; } while (0)
-#ifdef USE_THREADS
-#ifdef FAKE_THREADS
-#include "fakethr.h"
-#else
-#include <pthread.h>
-typedef pthread_mutex_t perl_mutex;
-typedef pthread_cond_t perl_cond;
-typedef pthread_key_t perl_key;
-#endif /* FAKE_THREADS */
-#endif /* USE_THREADS */
 
 /*
  * SOFT_CAST can be used for args to prototyped functions to retain some
@@ -455,6 +461,14 @@ typedef pthread_key_t perl_key;
 #else
 #   define SETERRNO(errcode,vmserrcode) errno = (errcode)
 #endif
+
+#ifdef USE_THREADS
+#  define ERRSV (thr->errsv)
+#  define ERRHV (thr->errhv)
+#else
+#  define ERRSV GvSV(errgv)
+#  define ERRHV GvHV(errgv)
+#endif /* USE_THREADS */
 
 #ifndef errno
 	extern int errno;     /* ANSI allows errno to be an lvalue expr */
@@ -867,11 +881,6 @@ typedef pthread_key_t perl_key;
 
 #endif
 
-/* Digital UNIX defines a typedef CONTEXT when pthreads is in use */ 
-#if defined(__osf__)
-#  define CONTEXT PERL_CONTEXT
-#endif
-
 typedef MEM_SIZE STRLEN;
 
 typedef struct op OP;
@@ -900,7 +909,7 @@ typedef struct regexp REGEXP;
 typedef struct gp GP;
 typedef struct gv GV;
 typedef struct io IO;
-typedef struct context CONTEXT;
+typedef struct context PERL_CONTEXT;
 typedef struct block BLOCK;
 
 typedef struct magic MAGIC;
@@ -944,7 +953,31 @@ typedef I32 (*filter_t) _((int, SV *, int));
 #     include "unixish.h"
 #   endif
 # endif
-#endif
+#endif         
+
+/* 
+ * USE_THREADS needs to be after unixish.h as <pthread.h> includes <sys/signal.h>
+ * which defines NSIG - which will stop inclusion of <signal.h>
+ * this results in many functions being undeclared which bothers C++
+ * May make sense to have threads after "*ish.h" anyway
+ */
+
+#ifdef USE_THREADS
+#  ifdef FAKE_THREADS
+#    include "fakethr.h"
+#  else
+#    ifdef WIN32
+#      include <win32thread.h>
+#    else
+#      include <pthread.h>
+typedef pthread_mutex_t perl_mutex;
+typedef pthread_cond_t perl_cond;
+typedef pthread_key_t perl_key;
+#    endif /* WIN32 */
+#  endif /* FAKE_THREADS */
+#endif /* USE_THREADS */
+
+
   
 #ifdef VMS
 #   define STATUS_NATIVE	statusvalue_vms
@@ -1024,7 +1057,7 @@ union any {
 };
 
 #ifdef USE_THREADS
-#define ARGSproto struct thread *
+#define ARGSproto struct thread *thr
 #else
 #define ARGSproto void
 #endif /* USE_THREADS */
@@ -1116,13 +1149,7 @@ EXT char Error[1];
 #define U_I(what) ((unsigned int)(what))
 #define U_L(what) ((U32)(what))
 #else
-#  ifdef __cplusplus
-    extern "C" {
-#  endif
-U32 cast_ulong _((double));
-#  ifdef __cplusplus
-    }
-#  endif
+EXTERN_C U32 cast_ulong _((double));
 #define U_S(what) ((U16)cast_ulong((double)(what)))
 #define U_I(what) ((unsigned int)cast_ulong((double)(what)))
 #define U_L(what) (cast_ulong((double)(what)))
@@ -1133,15 +1160,11 @@ U32 cast_ulong _((double));
 #define I_V(what) ((IV)(what))
 #define U_V(what) ((UV)(what))
 #else
-#  ifdef __cplusplus
-    extern "C" {
-#  endif
+START_EXTERN_C
 I32 cast_i32 _((double));
 IV cast_iv _((double));
 UV cast_uv _((double));
-#  ifdef __cplusplus
-    }
-#  endif
+END_EXTERN_C
 #define I_32(what) (cast_i32((double)(what)))
 #define I_V(what) (cast_iv((double)(what)))
 #define U_V(what) (cast_uv((double)(what)))
@@ -1246,9 +1269,7 @@ char *strcpy(), *strcat();
 #ifdef I_MATH
 #    include <math.h>
 #else
-#   ifdef __cplusplus
-	extern "C" {
-#   endif
+START_EXTERN_C
 	    double exp _((double));
 	    double log _((double));
 	    double log10 _((double));
@@ -1260,9 +1281,7 @@ char *strcpy(), *strcat();
 	    double cos _((double));
 	    double atan2 _((double,double));
 	    double pow _((double,double));
-#   ifdef __cplusplus
-	};
-#   endif
+END_EXTERN_C
 #endif
 
 #ifndef __cplusplus
@@ -1333,6 +1352,8 @@ int runops_standard _((void));
 int runops_debug _((void));
 #endif
 
+#define PER_THREAD_MAGICALS "123456789&`'+/.,\\\";^-%=|~:\001\005!@"
+
 /****************/
 /* Truly global */
 /****************/
@@ -1349,6 +1370,7 @@ EXT struct thread *	eval_owner;	/* Owner thread for doeval */
 EXT int			nthreads;	/* Number of threads currently */
 EXT perl_mutex		threads_mutex;	/* Mutex for nthreads and thread list */
 EXT perl_cond		nthreads_cond;	/* Condition variable for nthreads */
+EXT char *		per_thread_magicals INIT(PER_THREAD_MAGICALS);
 #ifdef FAKE_THREADS
 EXT struct thread *	thr;		/* Currently executing (fake) thread */
 #endif
@@ -1356,7 +1378,7 @@ EXT struct thread *	thr;		/* Currently executing (fake) thread */
 
 /* VMS doesn't use environ array and NeXT has problems with crt0.o globals */
 #if !defined(VMS) && !(defined(NeXT) && defined(__DYNAMIC__))
-#ifndef DONT_DECLARE_STD
+#if !defined(DONT_DECLARE_STD) || (defined(__svr4__) && defined(__GNUC__) && defined(sun))
 extern char **	environ;	/* environment variables supplied via exec */
 #endif
 #else
@@ -1918,7 +1940,7 @@ IEXT OP *	Ieval_start;
 IEXT COP * VOL	Icurcop IINIT(&compiling);
 IEXT COP *	Icurcopdb IINIT(NULL);
 IEXT line_t	Icopline IINIT(NOLINE);
-IEXT CONTEXT *	Icxstack;
+IEXT PERL_CONTEXT *	Icxstack;
 IEXT I32	Icxstack_ix IINIT(-1);
 IEXT I32	Icxstack_max IINIT(128);
 IEXT JMPENV 	Istart_env;	/* empty startup sigjmp() environment */
@@ -1976,10 +1998,7 @@ struct interpreter {
 #include "thread.h"
 #include "pp.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
+START_EXTERN_C
 #include "proto.h"
 
 #ifdef EMBED
@@ -1990,9 +2009,7 @@ extern "C" {
 #define sv_setptrref(rv,ptr) sv_setref_iv(rv,Nullch,(IV)ptr)
 #endif
 
-#ifdef __cplusplus
-};
-#endif
+END_EXTERN_C
 
 /* The following must follow proto.h */
 

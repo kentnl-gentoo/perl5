@@ -1,6 +1,8 @@
 # Global symbols that need to be hidden in embedded applications.
 
 # Variables
+nthreads_cond
+threads_mutex
 
 AMG_names
 Error
@@ -69,6 +71,7 @@ gid
 gt_amg
 hexdigit
 hints
+init_thread_intern
 in_my
 in_my_stash
 inc_amg
@@ -117,6 +120,7 @@ na
 ncmp_amg
 ne_amg
 neg_amg
+new_struct_thread
 nexttoke
 nexttype
 nextval
@@ -139,6 +143,7 @@ nomem
 nomemok
 nomethod_amg
 not_amg
+nthreads
 numeric_local
 numeric_name
 numeric_standard
@@ -158,6 +163,7 @@ pad_reset_pending
 padix
 padix_floor
 patleave
+per_thread_magicals
 pidstatus
 pow_amg
 pow_ass_amg
@@ -236,6 +242,7 @@ sv_no
 sv_undef
 sv_yes
 thisexpr
+thr_key
 timesbuf
 tokenbuf
 uid
@@ -296,10 +303,10 @@ yyval
 # Functions
 
 Gv_AMupdate
-SvTRUE
-SvIV
-SvUV
-SvNV
+sv_true
+sv_iv
+sv_uv
+sv_nv
 amagic_call
 append_elem
 append_list
@@ -613,6 +620,7 @@ newPROG
 newPVOP
 newRANGE
 newRV
+newRV_noinc
 newSLICEOP
 newSTATEOP
 newSUB
@@ -978,6 +986,7 @@ pp_system
 pp_syswrite
 pp_tell
 pp_telldir
+pp_threadsv
 pp_tie
 pp_tied
 pp_time

@@ -42,7 +42,7 @@ static I32 sortcxix;
 
 PP(pp_wantarray)
 {
-    dSP;
+    djSP;
     I32 cxix;
     EXTEND(SP, 1);
 
@@ -66,7 +66,7 @@ PP(pp_regcmaybe)
 }
 
 PP(pp_regcomp) {
-    dSP;
+    djSP;
     register PMOP *pm = (PMOP*)cLOGOP->op_other;
     register char *t;
     SV *tmpstr;
@@ -103,9 +103,9 @@ PP(pp_regcomp) {
 
 PP(pp_substcont)
 {
-    dSP;
+    djSP;
     register PMOP *pm = (PMOP*) cLOGOP->op_other;
-    register CONTEXT *cx = &cxstack[cxstack_ix];
+    register PERL_CONTEXT *cx = &cxstack[cxstack_ix];
     register SV *dstr = cx->sb_dstr;
     register char *s = cx->sb_s;
     register char *m = cx->sb_m;
@@ -164,9 +164,7 @@ PP(pp_substcont)
 }
 
 void
-rxres_save(rsp, rx)
-void **rsp;
-REGEXP *rx;
+rxres_save(void **rsp, REGEXP *rx)
 {
     UV *p = (UV*)*rsp;
     U32 i;
@@ -194,9 +192,7 @@ REGEXP *rx;
 }
 
 void
-rxres_restore(rsp, rx)
-void **rsp;
-REGEXP *rx;
+rxres_restore(void **rsp, REGEXP *rx)
 {
     UV *p = (UV*)*rsp;
     U32 i;
@@ -216,8 +212,7 @@ REGEXP *rx;
 }
 
 void
-rxres_free(rsp)
-void **rsp;
+rxres_free(void **rsp)
 {
     UV *p = (UV*)*rsp;
 
@@ -230,7 +225,7 @@ void **rsp;
 
 PP(pp_formline)
 {
-    dSP; dMARK; dORIGMARK;
+    djSP; dMARK; dORIGMARK;
     register SV *form = *++MARK;
     register U16 *fpc;
     register char *t;
@@ -523,7 +518,7 @@ PP(pp_formline)
 
 PP(pp_grepstart)
 {
-    dSP;
+    djSP;
     SV *src;
 
     if (stack_base + *markstack_ptr == sp) {
@@ -560,7 +555,7 @@ PP(pp_mapstart)
 
 PP(pp_mapwhile)
 {
-    dSP;
+    djSP;
     I32 diff = (sp - stack_base) - *markstack_ptr;
     I32 count;
     I32 shift;
@@ -624,7 +619,7 @@ PP(pp_mapwhile)
 
 PP(pp_sort)
 {
-    dSP; dMARK; dORIGMARK;
+    djSP; dMARK; dORIGMARK;
     register SV **up;
     SV **myorigmark = ORIGMARK;
     register I32 max;
@@ -693,7 +688,7 @@ PP(pp_sort)
     if (sortcop) {
 	if (max > 1) {
 	    AV *oldstack;
-	    CONTEXT *cx;
+	    PERL_CONTEXT *cx;
 	    SV** newsp;
 	    bool oldcatch = CATCH_GET;
 
@@ -758,7 +753,7 @@ PP(pp_range)
 
 PP(pp_flip)
 {
-    dSP;
+    djSP;
 
     if (GIMME == G_ARRAY) {
 	RETURNOP(((CONDOP*)cUNOP->op_first)->op_false);
@@ -790,7 +785,7 @@ PP(pp_flip)
 
 PP(pp_flop)
 {
-    dSP;
+    djSP;
 
     if (GIMME == G_ARRAY) {
 	dPOPPOPssrl;
@@ -847,12 +842,11 @@ PP(pp_flop)
 /* Control. */
 
 static I32
-dopoptolabel(label)
-char *label;
+dopoptolabel(char *label)
 {
     dTHR;
     register I32 i;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
 
     for (i = cxstack_ix; i >= 0; i--) {
 	cx = &cxstack[i];
@@ -888,14 +882,14 @@ char *label;
 }
 
 I32
-dowantarray()
+dowantarray(void)
 {
     I32 gimme = block_gimme();
     return (gimme == G_VOID) ? G_SCALAR : gimme;
 }
 
 I32
-block_gimme()
+block_gimme(void)
 {
     dTHR;
     I32 cxix;
@@ -905,24 +899,23 @@ block_gimme()
 	return G_VOID;
 
     switch (cxstack[cxix].blk_gimme) {
-    case G_VOID:
-	return G_VOID;
     case G_SCALAR:
 	return G_SCALAR;
     case G_ARRAY:
 	return G_ARRAY;
     default:
 	croak("panic: bad gimme: %d\n", cxstack[cxix].blk_gimme);
+    case G_VOID:
+	return G_VOID;
     }
 }
 
 static I32
-dopoptosub(startingblock)
-I32 startingblock;
+dopoptosub(I32 startingblock)
 {
     dTHR;
     I32 i;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
 	cx = &cxstack[i];
 	switch (cx->cx_type) {
@@ -938,12 +931,11 @@ I32 startingblock;
 }
 
 static I32
-dopoptoeval(startingblock)
-I32 startingblock;
+dopoptoeval(I32 startingblock)
 {
     dTHR;
     I32 i;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
 	cx = &cxstack[i];
 	switch (cx->cx_type) {
@@ -958,12 +950,11 @@ I32 startingblock;
 }
 
 static I32
-dopoptoloop(startingblock)
-I32 startingblock;
+dopoptoloop(I32 startingblock)
 {
     dTHR;
     I32 i;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
 	cx = &cxstack[i];
 	switch (cx->cx_type) {
@@ -992,11 +983,10 @@ I32 startingblock;
 }
 
 void
-dounwind(cxix)
-I32 cxix;
+dounwind(I32 cxix)
 {
     dTHR;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     SV **newsp;
     I32 optype;
 
@@ -1026,13 +1016,12 @@ I32 cxix;
 }
 
 OP *
-die_where(message)
-char *message;
+die_where(char *message)
 {
     dTHR;
     if (in_eval) {
 	I32 cxix;
-	register CONTEXT *cx;
+	register PERL_CONTEXT *cx;
 	I32 gimme;
 	SV **newsp;
 
@@ -1040,21 +1029,21 @@ char *message;
 	    SV **svp;
 	    STRLEN klen = strlen(message);
 	    
-	    svp = hv_fetch(GvHV(errgv), message, klen, TRUE);
+	    svp = hv_fetch(ERRHV, message, klen, TRUE);
 	    if (svp) {
 		if (!SvIOK(*svp)) {
 		    static char prefix[] = "\t(in cleanup) ";
 		    sv_upgrade(*svp, SVt_IV);
 		    (void)SvIOK_only(*svp);
-		    SvGROW(GvSV(errgv), SvCUR(GvSV(errgv))+sizeof(prefix)+klen);
-		    sv_catpvn(GvSV(errgv), prefix, sizeof(prefix)-1);
-		    sv_catpvn(GvSV(errgv), message, klen);
+		    SvGROW(ERRSV, SvCUR(ERRSV)+sizeof(prefix)+klen);
+		    sv_catpvn(ERRSV, prefix, sizeof(prefix)-1);
+		    sv_catpvn(ERRSV, message, klen);
 		}
 		sv_inc(*svp);
 	    }
 	}
 	else
-	    sv_setpv(GvSV(errgv), message);
+	    sv_setpv(ERRSV, message);
 	
 	cxix = dopoptoeval(cxstack_ix);
 	if (cxix >= 0) {
@@ -1077,7 +1066,7 @@ char *message;
 	    LEAVE;
 
 	    if (optype == OP_REQUIRE) {
-		char* msg = SvPVx(GvSV(errgv), na);
+		char* msg = SvPVx(ERRSV, na);
 		DIE("%s", *msg ? msg : "Compilation failed in require");
 	    }
 	    return pop_return();
@@ -1092,7 +1081,7 @@ char *message;
 
 PP(pp_xor)
 {
-    dSP; dPOPTOPssrl;
+    djSP; dPOPTOPssrl;
     if (SvTRUE(left) != SvTRUE(right))
 	RETSETYES;
     else
@@ -1101,7 +1090,7 @@ PP(pp_xor)
 
 PP(pp_andassign)
 {
-    dSP;
+    djSP;
     if (!SvTRUE(TOPs))
 	RETURN;
     else
@@ -1110,33 +1099,18 @@ PP(pp_andassign)
 
 PP(pp_orassign)
 {
-    dSP;
+    djSP;
     if (SvTRUE(TOPs))
 	RETURN;
     else
 	RETURNOP(cLOGOP->op_other);
 }
 	
-#ifdef DEPRECATED
-PP(pp_entersubr)
-{
-    dSP;
-    SV** mark = (stack_base + *markstack_ptr + 1);
-    SV* cv = *mark;
-    while (mark < sp) {	/* emulate old interface */
-	*mark = mark[1];
-	mark++;
-    }
-    *sp = cv;
-    return pp_entersub(ARGS);
-}
-#endif
-
 PP(pp_caller)
 {
-    dSP;
+    djSP;
     register I32 cxix = dopoptosub(cxstack_ix);
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     I32 dbcxix;
     I32 gimme;
     SV *sv;
@@ -1230,9 +1204,7 @@ PP(pp_caller)
 }
 
 static int
-sortcv(a, b)
-const void *a;
-const void *b;
+sortcv(const void *a, const void *b)
 {
     dTHR;
     SV * const *str1 = (SV * const *)a;
@@ -1258,24 +1230,20 @@ const void *b;
 }
 
 static int
-sortcmp(a, b)
-const void *a;
-const void *b;
+sortcmp(const void *a, const void *b)
 {
     return sv_cmp(*(SV * const *)a, *(SV * const *)b);
 }
 
 static int
-sortcmp_locale(a, b)
-const void *a;
-const void *b;
+sortcmp_locale(const void *a, const void *b)
 {
     return sv_cmp_locale(*(SV * const *)a, *(SV * const *)b);
 }
 
 PP(pp_reset)
 {
-    dSP;
+    djSP;
     char *tmps;
 
     if (MAXARG < 1)
@@ -1303,7 +1271,7 @@ PP(pp_dbstate)
     {
 	SV **sp;
 	register CV *cv;
-	register CONTEXT *cx;
+	register PERL_CONTEXT *cx;
 	I32 gimme = G_ARRAY;
 	I32 hasargs;
 	GV *gv;
@@ -1345,8 +1313,8 @@ PP(pp_scope)
 
 PP(pp_enteriter)
 {
-    dSP; dMARK;
-    register CONTEXT *cx;
+    djSP; dMARK;
+    register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
     SV **svp;
 
@@ -1377,8 +1345,8 @@ PP(pp_enteriter)
 
 PP(pp_enterloop)
 {
-    dSP;
-    register CONTEXT *cx;
+    djSP;
+    register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
 
     ENTER;
@@ -1393,8 +1361,8 @@ PP(pp_enterloop)
 
 PP(pp_leaveloop)
 {
-    dSP;
-    register CONTEXT *cx;
+    djSP;
+    register PERL_CONTEXT *cx;
     struct block_loop cxloop;
     I32 gimme;
     SV **newsp;
@@ -1434,9 +1402,9 @@ PP(pp_leaveloop)
 
 PP(pp_return)
 {
-    dSP; dMARK;
+    djSP; dMARK;
     I32 cxix;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     struct block_sub cxsub;
     bool popsub2 = FALSE;
     I32 gimme;
@@ -1510,9 +1478,9 @@ PP(pp_return)
 
 PP(pp_last)
 {
-    dSP;
+    djSP;
     I32 cxix;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     struct block_loop cxloop;
     struct block_sub cxsub;
     I32 pop2 = 0;
@@ -1593,7 +1561,7 @@ PP(pp_last)
 PP(pp_next)
 {
     I32 cxix;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     I32 oldsave;
 
     if (op->op_flags & OPf_SPECIAL) {
@@ -1618,7 +1586,7 @@ PP(pp_next)
 PP(pp_redo)
 {
     I32 cxix;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     I32 oldsave;
 
     if (op->op_flags & OPf_SPECIAL) {
@@ -1643,11 +1611,7 @@ PP(pp_redo)
 static OP* lastgotoprobe;
 
 static OP *
-dofindlabel(o,label,opstack,oplimit)
-OP *o;
-char *label;
-OP **opstack;
-OP **oplimit;
+dofindlabel(OP *o, char *label, OP **opstack, OP **oplimit)
 {
     OP *kid;
     OP **ops = opstack;
@@ -1696,10 +1660,10 @@ PP(pp_dump)
 
 PP(pp_goto)
 {
-    dSP;
+    djSP;
     OP *retop = 0;
     I32 ix;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
 #define GOTO_DEPTH 64
     OP *enterops[GOTO_DEPTH];
     char *label;
@@ -1712,7 +1676,7 @@ PP(pp_goto)
 	/* This egregious kludge implements goto &subroutine */
 	if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV) {
 	    I32 cxix;
-	    register CONTEXT *cx;
+	    register PERL_CONTEXT *cx;
 	    CV* cv = (CV*)SvRV(sv);
 	    SV** mark;
 	    I32 items = 0;
@@ -2003,7 +1967,7 @@ PP(pp_goto)
 
 PP(pp_exit)
 {
-    dSP;
+    djSP;
     I32 anum;
 
     if (MAXARG < 1)
@@ -2023,7 +1987,7 @@ PP(pp_exit)
 #ifdef NOTYET
 PP(pp_nswitch)
 {
-    dSP;
+    djSP;
     double value = SvNVx(GvSV(cCOP->cop_gv));
     register I32 match = I_32(value);
 
@@ -2042,7 +2006,7 @@ PP(pp_nswitch)
 
 PP(pp_cswitch)
 {
-    dSP;
+    djSP;
     register I32 match;
 
     if (multiline)
@@ -2063,9 +2027,7 @@ PP(pp_cswitch)
 /* Eval. */
 
 static void
-save_lines(array, sv)
-AV *array;
-SV *sv;
+save_lines(AV *array, SV *sv)
 {
     register char *s = SvPVX(sv);
     register char *send = SvPVX(sv) + SvCUR(sv);
@@ -2089,8 +2051,7 @@ SV *sv;
 }
 
 static OP *
-docatch(o)
-OP *o;
+docatch(OP *o)
 {
     dTHR;
     int ret;
@@ -2131,10 +2092,8 @@ OP *o;
 
 /* With USE_THREADS, eval_owner must be held on entry to doeval */
 static OP *
-doeval(gimme)
-int gimme;
+doeval(int gimme)
 {
-    dTHR;
     dSP;
     OP *saveop = op;
     HV *newstash;
@@ -2212,11 +2171,11 @@ int gimme;
     if (saveop->op_flags & OPf_SPECIAL)
 	in_eval |= 4;
     else
-	sv_setpv(GvSV(errgv),"");
+	sv_setpv(ERRSV,"");
     if (yyparse() || error_count || !eval_root) {
 	SV **newsp;
 	I32 gimme;
-	CONTEXT *cx;
+	PERL_CONTEXT *cx;
 	I32 optype;
 
 	op = saveop;
@@ -2231,7 +2190,7 @@ int gimme;
 	lex_end();
 	LEAVE;
 	if (optype == OP_REQUIRE) {
-	    char* msg = SvPVx(GvSV(errgv), na);
+	    char* msg = SvPVx(ERRSV, na);
 	    DIE("%s", *msg ? msg : "Compilation failed in require");
 	}
 	SvREFCNT_dec(rs);
@@ -2286,8 +2245,8 @@ int gimme;
 
 PP(pp_require)
 {
-    dSP;
-    register CONTEXT *cx;
+    djSP;
+    register PERL_CONTEXT *cx;
     SV *sv;
     char *name;
     char *tryname;
@@ -2436,8 +2395,8 @@ PP(pp_dofile)
 
 PP(pp_entereval)
 {
-    dSP;
-    register CONTEXT *cx;
+    djSP;
+    register PERL_CONTEXT *cx;
     dPOPss;
     I32 gimme = GIMME_V, was = sub_generation;
     char tmpbuf[TYPE_DIGITS(long) + 12];
@@ -2496,12 +2455,12 @@ PP(pp_entereval)
 
 PP(pp_leaveeval)
 {
-    dSP;
+    djSP;
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
     I32 gimme;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     OP *retop;
     U8 save_flags = op -> op_flags;
     I32 optype;
@@ -2585,15 +2544,15 @@ PP(pp_leaveeval)
     LEAVE;
 
     if (!(save_flags & OPf_SPECIAL))
-	sv_setpv(GvSV(errgv),"");
+	sv_setpv(ERRSV,"");
 
     RETURNOP(retop);
 }
 
 PP(pp_entertry)
 {
-    dSP;
-    register CONTEXT *cx;
+    djSP;
+    register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
 
     ENTER;
@@ -2605,19 +2564,19 @@ PP(pp_entertry)
     eval_root = op;		/* Only needed so that goto works right. */
 
     in_eval = 1;
-    sv_setpv(GvSV(errgv),"");
+    sv_setpv(ERRSV,"");
     PUTBACK;
     return DOCATCH(op->op_next);
 }
 
 PP(pp_leavetry)
 {
-    dSP;
+    djSP;
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
     I32 gimme;
-    register CONTEXT *cx;
+    register PERL_CONTEXT *cx;
     I32 optype;
 
     POPBLOCK(cx,newpm);
@@ -2653,13 +2612,12 @@ PP(pp_leavetry)
     curpm = newpm;	/* Don't pop $1 et al till now */
 
     LEAVE;
-    sv_setpv(GvSV(errgv),"");
+    sv_setpv(ERRSV,"");
     RETURN;
 }
 
 static void
-doparseform(sv)
-SV *sv;
+doparseform(SV *sv)
 {
     STRLEN len;
     register char *s = SvPV_force(sv, len);
@@ -2835,3 +2793,4 @@ SV *sv;
     sv_magic(sv, Nullsv, 'f', Nullch, 0);
     SvCOMPILED_on(sv);
 }
+
