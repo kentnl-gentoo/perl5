@@ -19,6 +19,14 @@ require Config;
 require AutoLoader;
 *AUTOLOAD = \&AutoLoader::AUTOLOAD;
 
+# The following require can't be removed during maintenance
+# releases, sadly, because of the risk of buggy code that does 
+# require Carp; Carp::croak "..."; without brackets dying 
+# if Carp hasn't been loaded in earlier compile time. :-( 
+# We'll let those bugs get found on the development track.
+require Carp if $] < 5.00450; 
+
+
 # enable debug/trace messages from DynaLoader perl code
 $dl_debug = $ENV{PERL_DL_DEBUG} || 0 unless defined $dl_debug;
 

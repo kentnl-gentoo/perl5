@@ -18,6 +18,8 @@ Roughly similar in effect to
 	push @ISA, qw(Foo Bar);
     }
 
+This module was introduced with Perl 5.004_04.
+
 =head1 BUGS
 
 Needs proper documentation!
@@ -32,12 +34,12 @@ sub import {
     foreach my $base (@_) {
 	unless (defined %{"$base\::"}) {
 	    eval "require $base";
-	}
-	unless (defined %{"$base\::"}) {
-	    require Carp;
-	    Carp::croak("Base class package \"$base\" is empty.\n",
-			"\t(Perhaps you need to 'use' the module ",
-			"which defines that package first.)");
+	    unless (defined %{"$base\::"}) {
+		require Carp;
+		Carp::croak("Base class package \"$base\" is empty.\n",
+			    "\t(Perhaps you need to 'use' the module ",
+			    "which defines that package first.)");
+	    }
 	}
     }
     

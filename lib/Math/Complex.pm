@@ -1,8 +1,8 @@
 #
 # Complex numbers and associated mathematical functions
 # -- Raphael Manfredi	September 1996
-# -- Jarkko Hietaniemi	March-September 1997
-# -- Daniel S. Lewart	September 1997
+# -- Jarkko Hietaniemi	March-October 1997
+# -- Daniel S. Lewart	October 1997
 #
 
 require Exporter;
@@ -17,7 +17,7 @@ use vars qw($VERSION @ISA
 
 @ISA = qw(Exporter);
 
-$VERSION = 1.03;
+$VERSION = 1.04;
 
 my @trig = qw(
 	      pi
@@ -100,8 +100,11 @@ sub make {
 sub emake {
 	my $self = bless {}, shift;
 	my ($rho, $theta) = @_;
-	$theta += pi() if $rho < 0;
-	$self->{'polar'} = [abs($rho), $theta];
+	if ($rho < 0) {
+	    $rho   = -$rho;
+	    $theta = ($theta <= 0) ? $theta + pi() : $theta - pi();
+	}
+	$self->{'polar'} = [$rho, $theta];
 	$self->{p_dirty} = 0;
 	$self->{c_dirty} = 1;
 	return $self;
@@ -311,30 +314,32 @@ sub divide {
 	    # if both polar better use polar to avoid rounding errors
 	    my ($r1, $t1) = @{$z1->polar};
 	    my ($r2, $t2) = @{$z2->polar};
+	    my $t;
 	    if ($inverted) {
 		_divbyzero "$z2/0" if ($r1 == 0);
-		my $t = $t2 - $t1;
+		$t = $t2 - $t1;
 		if    ($t >   pi()) { $t -= pit2 }
 		elsif ($t <= -pi()) { $t += pit2 }
 		return (ref $z1)->emake($r2 / $r1, $t);
 	    } else {
 		_divbyzero "$z1/0" if ($r2 == 0);
-		my $t = $t1 - $t2;
+		$t = $t1 - $t2;
 		if    ($t >   pi()) { $t -= pit2 }
 		elsif ($t <= -pi()) { $t += pit2 }
 		return (ref $z1)->emake($r1 / $r2, $t);
 	    }
 	} else {
+	    my ($d, $x2, $y2);
 	    if ($inverted) {
-		my ($x2, $y2) = @{$z1->cartesian};
-		my $d = $x2*$x2 + $y2*$y2;
+		($x2, $y2) = @{$z1->cartesian};
+		$d = $x2*$x2 + $y2*$y2;
 		_divbyzero "$z2/0" if $d == 0;
 		return (ref $z1)->make(($x2*$z2)/$d, -($y2*$z2)/$d);
 	    } else {
 		my ($x1, $y1) = @{$z1->cartesian};
 		if (ref $z2) {
-		    my ($x2, $y2) = @{$z2->cartesian};
-		    my $d = $x2*$x2 + $y2*$y2;
+		    ($x2, $y2) = @{$z2->cartesian};
+		    $d = $x2*$x2 + $y2*$y2;
 		    _divbyzero "$z1/0" if $d == 0;
 		    my $u = ($x1*$x2 + $y1*$y2)/$d;
 		    my $v = ($y1*$x2 - $x1*$y2)/$d;
@@ -379,14 +384,7 @@ sub power {
 	    return 0 if ($z1z);
 	    return 1 if ($z2z or $z1 == 1);
 	}
-	$z2 = cplx($z2) unless ref $z2;
-	unless (defined $inverted) {
-		my $z3 = exp($z2 * log $z1);
-		$z1->set_cartesian([@{$z3->cartesian}]);
-		return $z1;
-	}
-	return exp($z2 * log $z1) unless $inverted;
-	return exp($z1 * log $z2);
+	return $inverted ? exp($z1 * log $z2) : exp($z2 * log $z1);
 }
 
 #
@@ -413,7 +411,8 @@ sub negate {
 	my ($z) = @_;
 	if ($z->{c_dirty}) {
 		my ($r, $t) = @{$z->polar};
-		return (ref $z)->emake($r, pi + $t);
+		$t = ($t <= 0) ? $t + pi : $t - pi;
+		return (ref $z)->emake($r, $t);
 	}
 	my ($re, $im) = @{$z->cartesian};
 	return (ref $z)->make(-$re, -$im);
@@ -466,8 +465,8 @@ sub arg {
 #
 sub sqrt {
 	my ($z) = @_;
-	$z = cplx($z, 0) unless ref $z;
-	my ($re, $im) = ref $z ? @{$z->cartesian} : ($z, 0);
+	return $z >= 0 ? sqrt($z) : cplx(0, sqrt(-$z)) unless ref $z;
+	my ($re, $im) = @{$z->cartesian};
 	return cplx($re < 0 ? (0, sqrt(-$re)) : (sqrt($re), 0)) if $im == 0;
 	my ($r, $t) = @{$z->polar};
 	return (ref $z)->emake(sqrt($r), $t/2);
@@ -590,18 +589,12 @@ sub _logofzero {
 #
 sub log {
 	my ($z) = @_;
-	my ($re, $im) = ref $z ? @{$z->cartesian} : ($z, 0);
-	if ($im == 0) {
-	    if ($re > 0) {
-		return cplx(log($re), 0);
-	    } elsif ($re < 0) {
-		return cplx(log(-$re), pi);
-	    } else {
-		_logofzero("log");
-	    }
+	unless (ref $z) {
+	    _logofzero("log") if $z == 0;
+	    return $z > 0 ? log($z) : cplx(log(-$z), pi);
 	}
-	$z = cplx($z, 0) unless ref $z;
 	my ($r, $t) = @{$z->polar};
+	_logofzero("log") if $r == 0;
 	if    ($t >   pi()) { $t -= pit2 }
 	elsif ($t <= -pi()) { $t += pit2 }
 	return (ref $z)->make(log($r), $t);
@@ -621,11 +614,7 @@ sub ln { Math::Complex::log(@_) }
 #
 
 sub log10 {
-	my ($z) = @_;
-
-	return log(cplx($z, 0)) * uplog10 unless ref $z;
-	my ($r, $t) = @{$z->polar};
-	return (ref $z)->make(log($r) * uplog10, $t * uplog10);
+	return Math::Complex::log($_[0]) * uplog10;
 }
 
 #
@@ -715,7 +704,7 @@ sub cosec { Math::Complex::csc(@_) }
 #
 # cot
 #
-# Computes cot(z) = 1 / tan(z).
+# Computes cot(z) = cos(z) / sin(z).
 #
 sub cot {
 	my ($z) = @_;
@@ -738,11 +727,12 @@ sub cotan { Math::Complex::cot(@_) }
 #
 sub acos {
 	my $z = $_[0];
-	my ($x, $y) = ref($z) ? @{$z->cartesian} : ($z, 0);
-	my $t1 = sqrt(($x+1)*($x+1)+$y*$y);
-	my $t2 = sqrt(($x-1)*($x-1)+$y*$y);
-	my $alpha = ($t1+$t2)/2;
-	my $beta  = ($t1-$t2)/2;
+	return atan2(sqrt(1-$z*$z), $z) if (! ref $z) && abs($z) <= 1;
+	my ($x, $y) = ref $z ? @{$z->cartesian} : ($z, 0);
+	my $t1 = sqrt(($x+1)*($x+1) + $y*$y);
+	my $t2 = sqrt(($x-1)*($x-1) + $y*$y);
+	my $alpha = ($t1 + $t2)/2;
+	my $beta  = ($t1 - $t2)/2;
 	my $u = atan2(sqrt(1-$beta*$beta), $beta);
 	my $v = log($alpha + sqrt($alpha*$alpha-1));
 	$v = -$v if $y > 0 || ($y == 0 && $x < -1);
@@ -756,11 +746,12 @@ sub acos {
 #
 sub asin {
 	my $z = $_[0];
-	my ($x, $y) = ref($z) ? @{$z->cartesian} : ($z, 0);
-	my $t1 = sqrt(($x+1)*($x+1)+$y*$y);
-	my $t2 = sqrt(($x-1)*($x-1)+$y*$y);
-	my $alpha = ($t1+$t2)/2;
-	my $beta  = ($t1-$t2)/2;
+	return atan2($z, sqrt(1-$z*$z)) if (! ref $z) && abs($z) <= 1;
+	my ($x, $y) = ref $z ? @{$z->cartesian} : ($z, 0);
+	my $t1 = sqrt(($x+1)*($x+1) + $y*$y);
+	my $t2 = sqrt(($x-1)*($x-1) + $y*$y);
+	my $alpha = ($t1 + $t2)/2;
+	my $beta  = ($t1 - $t2)/2;
 	my $u =  atan2($beta, sqrt(1-$beta*$beta));
 	my $v = -log($alpha + sqrt($alpha*$alpha-1));
 	$v = -$v if $y > 0 || ($y == 0 && $x < -1);
@@ -774,7 +765,7 @@ sub asin {
 #
 sub atan {
 	my ($z) = @_;
-	$z = cplx($z, 0) unless ref $z;
+	return atan2($z, 1) unless ref $z;
 	_divbyzero "atan(i)"  if ( $z == i);
 	_divbyzero "atan(-i)" if (-$z == i);
 	my $log = log((i + $z) / (i - $z));
@@ -790,19 +781,7 @@ sub atan {
 sub asec {
 	my ($z) = @_;
 	_divbyzero "asec($z)", $z if ($z == 0);
-	my ($re, $im);
-	if (ref $z) {
-	    ($re, $im) = @{$z->cartesian};
-	} else {
-	    ($re, $im) = ($z, 0);
-	    $z = cplx($z, 0);
-	}
-	if ($im == 0 and abs($re) >= 1.0) {
-	    my $ire = 1 / $re;
-	    return atan2(sqrt(1 - $ire * $ire), $ire);
-	}
-	my $asec = acos(1 / $z);
-	return $asec;
+	return acos(1 / $z);
 }
 
 #
@@ -813,19 +792,7 @@ sub asec {
 sub acsc {
 	my ($z) = @_;
 	_divbyzero "acsc($z)", $z if ($z == 0);
-	my ($re, $im);
-	if (ref $z) {
-	    ($re, $im) = @{$z->cartesian};
-	} else {
-	    ($re, $im) = ($z, 0);
-	    $z = cplx($z, 0);
-	}
-	if ($im == 0 and abs($re) >= 1.0) {
-	    my $ire = 1 / $re;
-	    return atan2($ire, sqrt(1 - $ire * $ire));
-	}
-	my $acsc = asin(1 / $z);
-	return $acsc;
+	return asin(1 / $z);
 }
 
 #
@@ -842,8 +809,7 @@ sub acosec { Math::Complex::acsc(@_) }
 #
 sub acot {
 	my ($z) = @_;
-	_divbyzero "acot($z)"           if ($z == 0);
-	$z = cplx($z, 0) unless ref $z;
+	return ($z >= 0) ? atan2(1, $z) : atan2(-1, -$z) unless ref $z;
 	_divbyzero "acot(i)", if ( $z == i);
 	_divbyzero "acot(-i)" if (-$z == i);
 	return atan(1 / $z);
@@ -863,15 +829,14 @@ sub acotan { Math::Complex::acot(@_) }
 #
 sub cosh {
 	my ($z) = @_;
-	my $real;
+	my $ex;
 	unless (ref $z) {
-	    $z = cplx($z, 0);
-	    $real = 1;
+	    $ex = exp($z);
+	    return ($ex + 1/$ex)/2;
 	}
 	my ($x, $y) = @{$z->cartesian};
-	my $ex = exp($x);
+	$ex = exp($x);
 	my $ex_1 = 1 / $ex;
-	return cplx(0.5 * ($ex + $ex_1), 0) if $real;
 	return (ref $z)->make(cos($y) * ($ex + $ex_1)/2,
 			      sin($y) * ($ex - $ex_1)/2);
 }
@@ -883,15 +848,14 @@ sub cosh {
 #
 sub sinh {
 	my ($z) = @_;
-	my $real;
+	my $ex;
 	unless (ref $z) {
-	    $z = cplx($z, 0);
-	    $real = 1;
+	    $ex = exp($z);
+	    return ($ex - 1/$ex)/2;
 	}
 	my ($x, $y) = @{$z->cartesian};
-	my $ex = exp($x);
+	$ex = exp($x);
 	my $ex_1 = 1 / $ex;
-	return cplx(0.5 * ($ex - $ex_1), 0) if $real;
 	return (ref $z)->make(cos($y) * ($ex - $ex_1)/2,
 			      sin($y) * ($ex + $ex_1)/2);
 }
@@ -961,14 +925,19 @@ sub cotanh { Math::Complex::coth(@_) }
 #
 # acosh
 #
-# Computes the arc hyperbolic cosine acosh(z) = log(z +- sqrt(z*z-1)).
+# Computes the arc hyperbolic cosine acosh(z) = log(z + sqrt(z*z-1)).
 #
 sub acosh {
 	my ($z) = @_;
-	$z = cplx($z, 0) unless ref $z;
+	unless (ref $z) {
+	    return log($z + sqrt($z*$z-1)) if $z >= 1;
+	    $z = cplx($z, 0);
+	}
 	my ($re, $im) = @{$z->cartesian};
-	return log($re + sqrt(cplx($re*$re - 1, 0)))
-	    if ($im == 0 && $re < 0);
+	if ($im == 0) {
+	    return cplx(log($re + sqrt($re*$re - 1)), 0) if $re >= 1;
+	    return cplx(0, atan2(sqrt(1-$re*$re), $re)) if abs($re) <= 1;
+	}
 	return log($z + sqrt($z*$z - 1));
 }
 
@@ -979,7 +948,6 @@ sub acosh {
 #
 sub asinh {
 	my ($z) = @_;
-	$z = cplx($z, 0) unless ref $z;
 	return log($z + sqrt($z*$z + 1));
 }
 
@@ -990,10 +958,12 @@ sub asinh {
 #
 sub atanh {
 	my ($z) = @_;
+	unless (ref $z) {
+	    return log((1 + $z)/(1 - $z))/2 if abs($z) < 1;
+	    $z = cplx($z, 0);
+	}
 	_divbyzero 'atanh(1)',  "1 - $z" if ($z ==  1);
 	_logofzero 'atanh(-1)'           if ($z == -1);
-	$z = cplx($z, 0) unless ref $z;
-	my ($re, $im) = @{$z->cartesian};
 	return 0.5 * log((1 + $z) / (1 - $z));
 }
 
@@ -1005,12 +975,6 @@ sub atanh {
 sub asech {
 	my ($z) = @_;
 	_divbyzero 'asech(0)', $z if ($z == 0);
-	$z = cplx($z, 0) unless ref $z;
-	my ($re, $im) = @{$z->cartesian};
-	if ($im == 0 && $re < 0) {
-	    my $ire = 1 / $re;
-	    return log($ire + sqrt(cplx($ire*$ire - 1, 0)));
-	}
 	return acosh(1 / $z);
 }
 
@@ -1039,10 +1003,12 @@ sub acosech { Math::Complex::acsch(@_) }
 #
 sub acoth {
 	my ($z) = @_;
+	unless (ref $z) {
+	    return log(($z + 1)/($z - 1))/2 if abs($z) > 1;
+	    $z = cplx($z, 0);
+	}
 	_divbyzero 'acoth(1)', "$z - 1" if ($z ==  1);
 	_logofzero 'acoth(-1)'          if ($z == -1);
-	$z = cplx($z, 0) unless ref $z;
-	my ($re, $im) = @{$z->cartesian};
 	return log((1 + $z) / ($z - 1)) / 2;
 }
 
@@ -1069,10 +1035,11 @@ sub atan2 {
 	    ($re2, $im2) = ref $z2 ? @{$z2->cartesian} : ($z2, 0);
 	}
 	if ($im2 == 0) {
-	    return atan2($re1, $re2) if $im1 == 0;
-	    return ($im1<=>0) * pip2 if $re2 == 0;
+	    return cplx(atan2($re1, $re2), 0) if $im1 == 0;
+	    return cplx(($im1<=>0) * pip2, 0) if $re2 == 0;
 	}
-	my ($u, $v) = @{atan($z1/$z2)->cartesian};
+	my $w = atan($z1/$z2);
+	my ($u, $v) = ref $w ? @{$w->cartesian} : ($w, 0);
 	$u += pi   if $re2 < 0;
 	$u -= pit2 if $u > pi;
 	return cplx($u, $v);
@@ -1083,7 +1050,7 @@ sub atan2 {
 # ->display_format
 #
 # Set (fetch if no argument) display format for all complex numbers that
-# don't happen to have overrriden it via ->display_format
+# don't happen to have overridden it via ->display_format
 #
 # When called as a method, this actually sets the display format for
 # the current object.
@@ -1317,8 +1284,8 @@ noted C<abs(z)>.
 The polar notation (also known as the trigonometric
 representation) is much more handy for performing multiplications and
 divisions of complex numbers, whilst the cartesian notation is better
-suited for additions and substractions. Real numbers are on the I<x>
-axis, and therefore I<theta> is zero.
+suited for additions and subtractions. Real numbers are on the I<x>
+axis, and therefore I<theta> is zero or I<pi>.
 
 All the common operations that can be performed on a real number have
 been defined to work on complex numbers as well, and are merely
@@ -1327,8 +1294,8 @@ they keep their natural meaning when there is no imaginary part, provided
 the number is within their definition set.
 
 For instance, the C<sqrt> routine which computes the square root of
-its argument is only defined for positive real numbers and yields a
-positive real number (it is an application from B<R+> to B<R+>).
+its argument is only defined for non-negative real numbers and yields a
+non-negative real number (it is an application from B<R+> to B<R+>).
 If we allow it to return a complex number, then it can be extended to
 negative real numbers to become an application from B<R> to B<C> (the
 set of complex numbers):
@@ -1342,7 +1309,7 @@ the following definition:
 	sqrt(z = [r,t]) = sqrt(r) * exp(i * t/2)
 
 Indeed, a negative real number can be noted C<[x,pi]>
-(the modulus I<x> is always positive, so C<[x,pi]> is really C<-x>, a
+(the modulus I<x> is always non-negative, so C<[x,pi]> is really C<-x>, a
 negative number)
 and the above definition states that
 
@@ -1408,7 +1375,6 @@ the following (overloaded) operations are supported on complex numbers:
 	log(z1) = log(r1) + i*t1
 	sin(z1) = 1/2i (exp(i * z1) - exp(-i * z1))
 	cos(z1) = 1/2 (exp(i * z1) + exp(-i * z1))
-	abs(z1) = r1
 	atan2(z1, z2) = atan(z1/z2)
 
 The following extra operations are supported on both real and complex
@@ -1495,7 +1461,7 @@ if you like. To create a number using the polar form, use either:
 	$x = cplxe(5, pi/3);
 
 instead. The first argument is the modulus, the second is the angle
-(in radians, the full circle is 2*pi).  (Mnmemonic: C<e> is used as a
+(in radians, the full circle is 2*pi).  (Mnemonic: C<e> is used as a
 notation for complex numbers in the polar form).
 
 It is possible to write:
@@ -1503,7 +1469,7 @@ It is possible to write:
 	$x = cplxe(-3, pi/4);
 
 but that will be silently converted into C<[3,-3pi/4]>, since the modulus
-must be positive (it represents the distance to the origin in the complex
+must be non-negative (it represents the distance to the origin in the complex
 plane).
 
 =head1 STRINGIFICATION
@@ -1612,7 +1578,7 @@ operation (for instance) between two overloaded entities.
 Raphael Manfredi <F<Raphael_Manfredi@grenoble.hp.com>> and
 Jarkko Hietaniemi <F<jhi@iki.fi>>.
 
-Patches by Daniel S. Lewart <F<d-lewart@uiuc.edu>>.
+Extensive patches by Daniel S. Lewart <F<d-lewart@uiuc.edu>>.
 
 =cut
 

@@ -118,6 +118,7 @@ for file in `$cat .clist`; do
     $cppstdin $finc -I/usr/local/include -I. $cppflags $cppminus <UU/$file.c |
     $sed \
 	-e '/^#.*<stdin>/d' \
+	-e '/^#.*"-"/d' \
 	-e 's#\.[0-9][0-9]*\.c#'"$file.c#" \
 	-e 's/^[	 ]*#[	 ]*line/#/' \
 	-e '/^# *[0-9][0-9]* *[".\/]/!d' \

@@ -4,7 +4,7 @@
 # test method calls and autoloading.
 #
 
-print "1..23\n";
+print "1..24\n";
 
 @A::ISA = 'B';
 @B::ISA = 'C';
@@ -117,3 +117,6 @@ test(Y->f(), "B: In Y::f, 3");	# Which sticks
 
 test(A->eee(), "new B: In A::eee, 4");	# We get a correct $autoload
 test(A->eee(), "new B: In A::eee, 4");	# Which sticks
+
+# this test added due to bug discovery
+test(defined(@{"unknown_package::ISA"}) ? "defined" : "undefined", "undefined");

@@ -40,6 +40,9 @@
 #      This is a documented feature of perl's getpwd().
 #   There is currently no support for dynamically linked
 #      libraries.
+#   op/magic.t failure due to a feature of QNX which rewrites script
+#      names before they are executed. I think you'll find that if
+#      you cd `fullpath -t` before doing the make, the test will pass.
 #----------------------------------------------------------------
 # At present, all QNX systems are equivalent architectures,
 # so it might be reasonable to call archname=qnx rather than
@@ -53,6 +56,10 @@
 #
 # If you have suggestions or changes, please let me know.
 #----------------------------------------------------------------
+
+echo ""
+echo "Some tests may fail. Please read the hints/qnx.sh file."
+echo ""
 
 #----------------------------------------------------------------
 # QNX doesn't come with a csh and the ports of tcsh I've used

@@ -199,7 +199,7 @@ sub minus_f_nocase {
 
 sub check_file {
     my($file) = @_;
-    return minus_f_nocase($file) && containspod($file);
+    return minus_f_nocase($file) && containspod($file) ? $file : "";
 }
 
 
@@ -233,7 +233,11 @@ sub searchfor {
 	
 	if ($recurse) {
 	    opendir(D,$dir);
-	    my(@newdirs) = grep(-d,map("$dir/$_",grep(!/^\.\.?$/,readdir(D))));
+	    my @newdirs = map "$dir/$_", grep {
+		not /^\.\.?$/ and
+		not /^auto$/  and   # save time! don't search auto dirs
+		-d  "$dir/$_"
+	    } readdir D;
 	    closedir(D);
 	    next unless @newdirs;
 	    @newdirs = map((s/.dir$//,$_)[1],@newdirs) if $Is_VMS;

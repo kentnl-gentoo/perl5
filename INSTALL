@@ -1186,7 +1186,7 @@ individual subtests is to cd to the t directory and run
 	./perl harness
 
 (this assumes that most basic tests succeed, since harness uses
-complicated constructs). 
+complicated constructs).
 
 You should also read the individual tests to see if there are any helpful
 comments that apply to your system.
@@ -1380,6 +1380,9 @@ see warnings like "no title", "unexpected directive" and "cannot
 resolve" as the files are processed. We are aware of these problems
 (and would welcome patches for them).
 
+You may find it helpful to run installhtml twice. That should reduce
+the number of "cannot resolve" warnings.
+
 =head1 cd pod && make tex && (process the latex files)
 
 Some sites may also wish to make the documentation in the pod/ directory
@@ -1428,10 +1431,14 @@ generate the documentation.
 
 =head1 AUTHOR
 
-Andy Dougherty doughera@lafcol.lafayette.edu , borrowing very heavily
-from the original README by Larry Wall, and also with lots of helpful
-feedback from the perl5-porters@perl.org folks.
+Original author:  Andy Dougherty doughera@lafcol.lafayette.edu ,
+borrowing very heavily from the original README by Larry Wall,
+with lots of helpful feedback and additions from the
+perl5-porters@perl.org folks.
+
+If you have problems or questions, please see L<"Reporting Problems">
+above.
 
 =head1 LAST MODIFIED
 
-$Id: INSTALL,v 1.26.1.1 1997/08/28 18:15:54 Tim.Bunce Released $
+$Id: INSTALL,v 1.28 1997/10/10 16:50:59 doughera Released $

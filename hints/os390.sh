@@ -12,7 +12,7 @@
 #
 
 cc='c89'
-ccflags='-DOEMVS -D_OE_SOCKETS -D_XOPEN_SOURCE_EXTENDED -D_ALL_SOURCE'
+ccflags='-DMAXSIG=38 -DOEMVS -D_OE_SOCKETS -D_XOPEN_SOURCE_EXTENDED -D_ALL_SOURCE'
 optimize='none'
 alignbytes=8
 usemymalloc='y'

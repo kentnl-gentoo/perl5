@@ -1851,6 +1851,11 @@ Prepares a starting point to traverse a hash table.
 
 	I32	hv_iterinit _((HV* tb));
 
+Note that hv_iterinit I<currently> returns the number of I<buckets> in
+the hash and I<not> the number of keys (as indicated in the Advanced
+Perl Programming book). This may change in future. Use the HvKEYS(hv)
+macro to find the number of keys in a hash.
+
 =item hv_iterkey
 
 Returns the key from the current position of the hash iterator.  See

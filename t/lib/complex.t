@@ -258,6 +258,17 @@ sub check {
 		print "# '$try' expected: '$expected' got: '$got' for $args\n";
 	}
 }
+
+sub addsq {
+    my ($z1, $z2) = @_;
+    return ($z1 + i*$z2) * ($z1 - i*$z2);
+}
+
+sub subsq {
+    my ($z1, $z2) = @_;
+    return ($z1 + $z2) * ($z1 - $z2);
+}
+
 __END__
 &+;=
 (3,4):(3,4):(6,8)
@@ -385,9 +396,9 @@ __END__
 |'asec(z)':'acos(1 / z)'
 |'cbrt(z)':'cbrt(r) * exp(i * t/3)'
 |'cos(acos(z))':'z'
-|'cos(z) ** 2 + sin(z) ** 2':1
+|'addsq(cos(z), sin(z))':1
 |'cos(z)':'cosh(i*z)'
-|'cosh(z) ** 2 - sinh(z) ** 2':1
+|'subsq(cosh(z), sinh(z))':1
 |'cot(acot(z))':'z'
 |'cot(z)':'1 / tan(z)'
 |'cot(z)':'cotan(z)'

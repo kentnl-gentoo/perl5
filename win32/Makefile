@@ -469,10 +469,18 @@ minitest : $(MINIPERL) $(GLOBEXE) $(CONFIGPM)
 	$(MINIPERL) -I..\lib test base/*.t comp/*.t cmd/*.t io/*.t op/*.t pragma/*.t
 	cd ..\win32
 
-test : all
+test-prep : all
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
 	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
+
+test : test-prep
+	cd ..\t
+	$(PERLEXE) -I..\lib harness
+	cd ..\win32
+
+test-notty : test-prep
+	set PERL_SKIP_TTY_TEST=1
 	cd ..\t
 	$(PERLEXE) -I..\lib harness
 	cd ..\win32

@@ -691,7 +691,7 @@ perl_init_i18nl10n(printwarn)
 			&& strnNE(*e, "LC_ALL=", 7)
 			&& (p = strchr(*e, '=')))
 		      PerlIO_printf(PerlIO_stderr(), "\t%.*s = \"%s\",\n",
-				    (p - *e), *e, p + 1);
+				    (int)(p - *e), *e, p + 1);
 	      }
 	    }
 

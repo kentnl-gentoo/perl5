@@ -687,6 +687,7 @@ MAGIC* mg;
 	}
     }
 #endif
+    return 0;
 }
 
 int

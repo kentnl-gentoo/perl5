@@ -344,6 +344,8 @@ preplibrary: miniperl lib/Config.pm $(plextract)
 		autosplit_lib_modules(@ARGV)' lib/*.pm lib/*/*.pm
 
 # Take care to avoid modifying lib/Config.pm without reason
+# (If trying to create a new port and having problems with the configpm script, 
+# try 'make minitest' and/or commenting out the tests at the end of configpm.)
 lib/Config.pm: config.sh miniperl configpm
 	./miniperl configpm tmp
 	sh mv-if-diff tmp lib/Config.pm

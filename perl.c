@@ -606,20 +606,23 @@ setuid perl scripts securely.\n");
 		croak("No code specified for -e");
 	    (void)PerlIO_putc(e_fp,'\n');
 	    break;
-	case 'I':
+	case 'I':	/* -I handled both here and in moreswitches() */
 	    forbid_setid("-I");
-	    sv_catpv(sv,"-");
-	    sv_catpv(sv,s);
-	    sv_catpv(sv," ");
-	    if (*++s) {
-		incpush(s, TRUE);
-	    }
-	    else if (argv[1]) {
-		incpush(argv[1], TRUE);
-		sv_catpv(sv,argv[1]);
+	    if (!*++s && (s=argv[1]) != Nullch) {
 		argc--,argv++;
-		sv_catpv(sv," ");
 	    }
+	    while (s && isSPACE(*s))
+		++s;
+	    if (s && *s) {
+		char *e, *p;
+		for (e = s; *e && !isSPACE(*e); e++) ;
+		p = savepvn(s, e-s);
+		incpush(p, TRUE);
+		sv_catpv(sv,"-I");
+		sv_catpv(sv,p);
+		sv_catpv(sv," ");
+		Safefree(p);
+	    }	/* XXX else croak? */
 	    break;
 	case 'P':
 	    forbid_setid("-P");
@@ -719,7 +722,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
   switch_end:
 
     if (!tainting && (s = getenv("PERL5OPT"))) {
-	for (;;) {
+	while (s && *s) {
 	    while (isSPACE(*s))
 		s++;
 	    if (*s == '-') {
@@ -1414,22 +1417,25 @@ char *s;
 	inplace = savepv(s+1);
 	/*SUPPRESS 530*/
 	for (s = inplace; *s && !isSPACE(*s); s++) ;
-	*s = '\0';
-	break;
-    case 'I':
+	if (*s)
+	    *s++ = '\0';
+	return s;
+    case 'I':	/* -I handled both here and in parse_perl() */
 	forbid_setid("-I");
-	if (*++s) {
+	++s;
+	while (*s && isSPACE(*s))
+	    ++s;
+	if (*s) {
 	    char *e, *p;
 	    for (e = s; *e && !isSPACE(*e); e++) ;
 	    p = savepvn(s, e-s);
 	    incpush(p, TRUE);
 	    Safefree(p);
-	    if (*e)
-		return e;
+	    s = e;
 	}
 	else
 	    croak("No space allowed after -I");
-	break;
+	return s;
     case 'l':
 	minus_l = TRUE;
 	s++;
@@ -1513,26 +1519,22 @@ char *s;
 	s++;
 	return s;
     case 'v':
-	{
-	    char patches[80];
-	    patches[0] = '\0';
-#if defined(LOCAL_PATCH_COUNT)
-	    if (LOCAL_PATCH_COUNT > 0) {
-		sprintf(patches," (with %d registered patch%s)",
-		    LOCAL_PATCH_COUNT, (LOCAL_PATCH_COUNT!=1) ? "es" : "");
-	    }
-#endif
 #if defined(SUBVERSION) && SUBVERSION > 0
-	    printf("\nThis is perl, version 5.%03d_%02d%s",
-		PATCHLEVEL, SUBVERSION, patches);
+	printf("\nThis is perl, version 5.%03d_%02d built for %s",
+	    PATCHLEVEL, SUBVERSION, ARCHNAME);
 #else
-	    printf("\nThis is perl, version %s%s", patchlevel, patches);
+	printf("\nThis is perl, version %s built for %s",
+		patchlevel, ARCHNAME);
 #endif
-	}
+#if defined(LOCAL_PATCH_COUNT)
+	if (LOCAL_PATCH_COUNT > 0)
+	    printf("\n(with %d registered patch%s, see perl -V for more detail)",
+		LOCAL_PATCH_COUNT, (LOCAL_PATCH_COUNT!=1) ? "es" : "");
+#endif
 
 	printf("\n\nCopyright 1987-1997, Larry Wall\n");
 #ifdef MSDOS
-	printf("\n\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");
+	printf("\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");
 #endif
 #ifdef DJGPP
 	printf("djgpp v2 port (jpl5003c) by Hirofumi Watanabe, 1996\n");
