@@ -194,6 +194,10 @@ SHELL = $sh
 # how to tr(anslate) newlines
 TRNL = '$trnl'
 
+# not used by Makefile but by installperl;
+# mentioned here so that metaconfig picks it up
+INSTALL_USR_BIN_PERL = $installusrbinperl
+
 !GROK!THIS!
 
 ## In the following dollars and backticks do not need the extra backslash.
@@ -333,7 +337,7 @@ $(LIBPERL_NONSHR): perl$(OBJ_EXT) $(obj)
 	$(AR) rcu $(LIBPERL_NONSHR) perl$(OBJ_EXT) $(obj)
 
 $(MINIPERL_NONSHR): $(LIBPERL_NONSHR) miniperlmain$(OBJ_EXT)
-	$(CCCMD) $(PLDLFLAGS) -DMINIPERL_BUILD -o opmini$(OBJ_EXT) op.c
+	$(CCCMD) $(PLDLFLAGS) -DPERL_EXTERNAL_GLOB -o opmini$(OBJ_EXT) op.c
 	$(CC) $(LDFLAGS) -o $(MINIPERL_NONSHR) miniperlmain$(OBJ_EXT) \
 	    opmini$(OBJ_EXT) $(LIBPERL_NONSHR) $(LIBS)
 
@@ -418,7 +422,7 @@ $(LIBPERL): $& perl$(OBJ_EXT) $(obj) $(LIBPERLEXPORT)
 # The Module used here must not depend on Config or any extensions.
 
 miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)
-	$(CCCMD) $(PLDLFLAGS) -DMINIPERL_BUILD -o opmini$(OBJ_EXT) op.c
+	$(CCCMD) $(PLDLFLAGS) -DPERL_EXTERNAL_GLOB -o opmini$(OBJ_EXT) op.c
 	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl \
 	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL) $(libs)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
@@ -481,10 +485,19 @@ lib/re.pm: ext/re/re.pm
 
 $(plextract):	miniperl lib/Config.pm lib/re.pm
 	$(LDLIBPTH) ./miniperl -Ilib $@.PL
-	
+
+extra.pods: perl
+	-@test -f extra.pods && rm -f `cat extra.pods`
+	-@rm -f extra.pods
+	-@for x in `grep -l '^=[a-z]' README.*` ; do \
+	    nx=`echo $$x | sed -e "s/README\.//"`; \
+	    $(LNS) ../$$x "pod/perl"$$nx".pod" ; \
+	    echo "pod/perl"$$nx".pod" >> extra.pods ; \
+	done
+
 install: all install.perl install.man
 
-install.perl:	all installperl
+install.perl:	all extra.pods installperl
 	if [ -n "$(COMPILE)" ]; \
 	then \
 		cd utils; $(MAKE) compile; \
@@ -494,7 +507,7 @@ install.perl:	all installperl
 	fi
 	$(LDLIBPTH) ./perl installperl
 
-install.man:	all installman
+install.man:	all extra.pods installman
 	$(LDLIBPTH) ./perl installman
 
 # XXX Experimental. Hardwired values, but useful for testing.
@@ -563,7 +576,7 @@ CHMOD_W = chmod +w
 # To force them to run, type
 #	make regen_headers
 regen_headers:	FORCE
-	$(CHMOD_W) proto.h warning.h lib/warning.pm 
+	$(CHMOD_W) proto.h warnings.h lib/warnings.pm 
 	perl keywords.pl
 	perl opcode.pl
 	perl embed.pl
@@ -606,7 +619,8 @@ distclean:	clobber
 # Do not 'make _mopup' directly.
 _mopup:
 	rm -f *$(OBJ_EXT) *$(LIB_EXT) all perlmain.c
-	rm -f perl.exp ext.libs
+	-@test -f extra.pods && rm -f `cat extra.pods`
+	-rm -f perl.exp ext.libs extra.pods
 	-rm -f perl.export perl.dll perl.libexp perl.map perl.def
 	-rm -f perl.loadmap miniperl.loadmap perl.prelmap miniperl.prelmap
 	rm -f perl suidperl miniperl $(LIBPERL)

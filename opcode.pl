@@ -129,7 +129,7 @@ EXT OP * (CPERLscope(*PL_ppaddr)[])(pTHX) = {
 END
 
 for (@ops) {
-    print "\tPerl_pp_$_,\n";
+    print "\tMEMBER_TO_FPTR(Perl_pp_$_),\n";
 }
 
 print <<END;
@@ -148,7 +148,7 @@ EXT OP * (CPERLscope(*PL_check)[]) (pTHX_ OP *op) = {
 END
 
 for (@ops) {
-    print "\t", &tab(3, "Perl_$check{$_},"), "/* $_ */\n";
+    print "\t", &tab(3, "MEMBER_TO_FPTR(Perl_$check{$_}),"), "\t/* $_ */\n";
 }
 
 print <<END;
@@ -183,8 +183,8 @@ END
     '|',  3,		# logop
     '@',  4,		# listop
     '/',  5,		# pmop
-    '$',  6,		# svop
-    '*',  7,		# gvop
+    '$',  6,		# svop_or_padop
+    '#',  7,		# padop
     '"',  8,		# pvop_or_svop
     '{',  9,		# loop
     ';',  10,		# cop
@@ -289,6 +289,10 @@ sub tab {
 
 # lt and friends do SETs (including ncmp, but not scmp)
 
+# Additional mode of failure: the opcode can modify TARG before it "used"
+# all the arguments (or may call an external function which does the same).
+# If the target coincides with one of the arguments ==> kaboom.
+
 # pp.c	pos substr each not OK (RETPUSHUNDEF)
 #	substr vec also not OK due to LV to target (are they???)
 #	ref not OK (RETPUSHNO)
@@ -299,10 +303,20 @@ sub tab {
 #	sprintf: is calling do_sprintf(TARG,...) which can act on TARG
 #	  before other args are processed.
 
+#	Suspicious wrt "additional mode of failure" (and only it):
+#	schop, chop, postinc/dec, bit_and etc, negate, complement.
+
+#	Also suspicious: 4-arg substr, sprintf, uc/lc (POK_only), reverse, pack.
+
+#	substr/vec: doing TAINT_off()???
+
 # pp_hot.c
 #	readline - unknown whether it is safe
 #	match subst not OK (dTARG)
 #	grepwhile not OK (not always setting)
+
+#	Suspicious wrt "additional mode of failure": concat (dealt with
+#	in ck_sassign()), join (same).
 
 # pp_ctl.c
 #	mapwhile flip caller not OK (not always setting)
@@ -316,6 +330,8 @@ sub tab {
 #	fileno getc sysread syswrite tell not OK (meth("FILENO" "GETC"))
 #	sselect shm* sem* msg* syscall - unknown whether they are safe
 #	gmtime not OK (list context)
+
+#	Suspicious wrt "additional mode of failure": warn, die, select.
 
 __END__
 
@@ -334,8 +350,8 @@ wantarray	wantarray		ck_null		is0
 
 const		constant item		ck_svconst	s$	
 
-gvsv		scalar variable		ck_null		ds*	
-gv		glob value		ck_null		ds*	
+gvsv		scalar variable		ck_null		ds$	
+gv		glob value		ck_null		ds$	
 gelem		glob elem		ck_null		d2	S S
 padsv		private variable	ck_null		ds0
 padav		private array		ck_null		d0
@@ -347,9 +363,9 @@ pushre		push regexp		ck_null		d/
 # References and stuff.
 
 rv2gv		ref-to-glob cast	ck_rvconst	ds1	
-rv2sv		scalar deref		ck_rvconst	ds1	
+rv2sv		scalar dereference	ck_rvconst	ds1	
 av2arylen	array length		ck_null		is1	
-rv2cv		subroutine deref	ck_rvconst	d1
+rv2cv		subroutine dereference	ck_rvconst	d1
 anoncode	anonymous subroutine	ck_anoncode	$	
 prototype	subroutine prototype	ck_null		s%	S
 refgen		reference constructor	ck_spair	m1	L
@@ -382,8 +398,8 @@ trans		transliteration (tr///)	ck_null		is"	S
 sassign		scalar assignment	ck_sassign	s0
 aassign		list assignment		ck_null		t2	L L
 
-chop		chop			ck_spair	mTs%	L
-schop		scalar chop		ck_null		sTu%	S?
+chop		chop			ck_spair	mts%	L
+schop		scalar chop		ck_null		stu%	S?
 chomp		chomp			ck_spair	mTs%	L
 schomp		scalar chomp		ck_null		sTu%	S?
 defined		defined operator	ck_defined	isu%	S?
@@ -395,9 +411,9 @@ preinc		preincrement (++)		ck_lfun		dIs1	S
 i_preinc	integer preincrement (++)	ck_lfun		dis1	S
 predec		predecrement (--)		ck_lfun		dIs1	S
 i_predec	integer predecrement (--)	ck_lfun		dis1	S
-postinc		postincrement (++)		ck_lfun		dIsT1	S
+postinc		postincrement (++)		ck_lfun		dIst1	S
 i_postinc	integer postincrement (++)	ck_lfun		disT1	S
-postdec		postdecrement (--)		ck_lfun		dIsT1	S
+postdec		postdecrement (--)		ck_lfun		dIst1	S
 i_postdec	integer postdecrement (--)	ck_lfun		disT1	S
 
 # Ordinary operators.
@@ -445,14 +461,14 @@ seq		string eq		ck_null		ifs2	S S
 sne		string ne		ck_null		ifs2	S S
 scmp		string comparison (cmp)	ck_scmp		ifst2	S S
 
-bit_and		bitwise and (&)		ck_bitop	fsT2	S S
-bit_xor		bitwise xor (^)		ck_bitop	fsT2	S S
-bit_or		bitwise or (|)		ck_bitop	fsT2	S S
+bit_and		bitwise and (&)		ck_bitop	fst2	S S
+bit_xor		bitwise xor (^)		ck_bitop	fst2	S S
+bit_or		bitwise or (|)		ck_bitop	fst2	S S
 
-negate		negation (-)		ck_null		IfsT1	S
+negate		negation (-)		ck_null		Ifst1	S
 i_negate	integer negation (-)	ck_null		ifsT1	S
 not		not			ck_null		ifs1	S
-complement	1's complement (~)	ck_bitop	fsT1	S
+complement	1's complement (~)	ck_bitop	fst1	S
 
 # High falutin' math.
 
@@ -495,7 +511,7 @@ quotemeta	quotemeta		ck_fun		fsTu%	S?
 # Arrays.
 
 rv2av		array dereference	ck_rvconst	dt1	
-aelemfast	constant array element	ck_null		s*	A S
+aelemfast	constant array element	ck_null		s$	A S
 aelem		array element		ck_null		s2	A S
 aslice		array slice		ck_null		m@	A L
 
@@ -718,6 +734,10 @@ getpriority	getpriority		ck_fun		isT@	S S
 setpriority	setpriority		ck_fun		isT@	S S S
 
 # Time calls.
+
+# NOTE: MacOS patches the 'i' of time() away later when the interpreter
+# is created because in MacOS time() is already returning times > 2**31-1,
+# that is, non-integers.
 
 time		time			ck_null		isT0	
 tms		times			ck_null		0	

@@ -35,11 +35,15 @@ print "ok 2\n";
 # look up the user's home directory
 # should return a list with one item, and not set ERROR
 if ($^O ne 'MSWin32') {
+  eval {
     ($name, $home) = (getpwuid($>))[0,7];
+    1;
+  } and do {
     @a = File::Glob::glob("~$name", GLOB_TILDE);
     if (scalar(@a) != 1 || $a[0] ne $home || GLOB_ERROR) {
 	print "not ";
     }
+  };
 }
 print "ok 3\n";
 
@@ -64,15 +68,20 @@ print "ok 5\n";
 
 # check bad protections
 # should return an empty list, and set ERROR
-$dir = "PtEeRsLt.dir";
-mkdir $dir, 0;
-@a = File::Glob::glob("$dir/*", GLOB_ERR);
-#print "\@a = ", array(@a);
-rmdir $dir;
-if (scalar(@a) != 0 || ($^O ne 'MSWin32' && GLOB_ERROR == 0)) {
-    print "not ";
+if ($^O eq 'MSWin32' or $^O eq 'os2' or not $>) {
+    print "ok 6 # skipped\n";
 }
-print "ok 6\n";
+else {
+    $dir = "PtEeRsLt.dir";
+    mkdir $dir, 0;
+    @a = File::Glob::glob("$dir/*", GLOB_ERR);
+    #print "\@a = ", array(@a);
+    rmdir $dir;
+    if (scalar(@a) != 0 || GLOB_ERROR == 0) {
+	print "not ";
+    }
+    print "ok 6\n";
+}
 
 # check for csh style globbing
 @a = File::Glob::glob('{a,b}', GLOB_BRACE | GLOB_NOMAGIC);

@@ -8,7 +8,7 @@
 #define PERLIO_NOT_STDIO 1
 #include "perl.h"
 #include "XSUB.h"
-#if defined(PERL_OBJECT) || defined(PERL_CAPI)
+#if defined(PERL_OBJECT) || defined(PERL_CAPI) || defined(PERL_IMPLICIT_SYS)
 #  undef signal
 #  undef open
 #  undef setmode
@@ -3369,15 +3369,13 @@ sigaction(sig, action, oldaction = 0)
 # This code is really grody because we're trying to make the signal
 # interface look beautiful, which is hard.
 
-	if (!PL_siggv)
-	    gv_fetchpv("SIG", TRUE, SVt_PVHV);
-
 	{
+	    GV *siggv = gv_fetchpv("SIG", TRUE, SVt_PVHV);
 	    struct sigaction act;
 	    struct sigaction oact;
 	    POSIX__SigSet sigset;
 	    SV** svp;
-	    SV** sigsvp = hv_fetch(GvHVn(PL_siggv),
+	    SV** sigsvp = hv_fetch(GvHVn(siggv),
 				 PL_sig_name[sig],
 				 strlen(PL_sig_name[sig]),
 				 TRUE);

@@ -128,7 +128,7 @@
 #  define aTHX_		aTHX,
 #endif
 
-#if defined(PERL_CAPI)
+#if (defined(PERL_CAPI) || defined(PERL_IMPLICIT_SYS)) && !defined(PERL_CORE)
 #  ifndef NO_XSLOCKS
 #    undef closedir
 #    undef opendir
@@ -196,6 +196,7 @@
 #    define fstat		PerlLIO_fstat
 #    define ioctl		PerlLIO_ioctl
 #    define isatty		PerlLIO_isatty
+#    define link                PerlLIO_link
 #    define lseek		PerlLIO_lseek
 #    define lstat		PerlLIO_lstat
 #    define mktemp		PerlLIO_mktemp
@@ -237,6 +238,7 @@
 #    define setjmp		PerlProc_setjmp
 #    define longjmp		PerlProc_longjmp
 #    define signal		PerlProc_signal
+#    define getpid		PerlProc_getpid
 #    define htonl		PerlSock_htonl
 #    define htons		PerlSock_htons
 #    define ntohl		PerlSock_ntohl

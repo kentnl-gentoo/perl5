@@ -54,8 +54,6 @@ while (@ARGV) {
     shift;
 }
 
-umask 022 unless $Is_VMS;
-
 my @scripts = qw(utils/c2ph utils/h2ph utils/h2xs utils/perlbug utils/perldoc
 		utils/pl2pm utils/splain utils/perlcc utils/dprofpp
 		x2p/s2p x2p/find2perl 
@@ -162,7 +160,7 @@ if ($Is_Cygwin) {
   $perldll = 'perl56.' . $dlext if $Config{'ccflags'} =~ /PERL_OBJECT/i;
 }
 
-   if ($dlsrc != "dl_none.xs") {
+   if ($dlsrc ne "dl_none.xs") {
       -f $perldll || die "No perl DLL built\n";
 
 # Install the DLL
@@ -573,13 +571,15 @@ sub installlib {
 
     my $name = $_;
 
-    if ($name eq 'CVS' && -d $name) {
+    # Ignore RCS and CVS directories.
+    if (($name eq 'CVS' or $name eq 'RCS') and -d $name) {
 	$File::Find::prune = 1;
 	return;
     }
     
-    # ignore patch backups and the .exists files.
-    return if $name =~ m{\.orig$|~$|^\.exists};
+    # ignore patch backups, RCS files, emacs backup & temp files and the
+    # .exists files.
+    return if $name =~ m{\.orig$|~$|^#.+#$|,v$|^\.exists};
 
     $name = "$dir/$name" if $dir ne '';
 
