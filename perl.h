@@ -1,6 +1,6 @@
 /*    perl.h
  *
- *    Copyright (c) 1987-1997, Larry Wall
+ *    Copyright (c) 1987-2000, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1712,7 +1712,7 @@ typedef pthread_key_t	perl_key;
 #   endif
 #endif
 
-#if defined(CYGWIN)
+#if defined(__CYGWIN__)
 /* USEMYBINMODE
  *   This symbol, if defined, indicates that the program should
  *   use the routine my_binmode(FILE *fp, char iotype) to insure
@@ -1888,8 +1888,6 @@ struct ptr_tbl {
 #define U_V(what) (cast_uv((NV)(what)))
 #endif
 
-/* Mention NV_PRESERVES_UV so that Configure picks it up. */
-
 /* These do not care about the fractional part, only about the range. */
 #define NV_WITHIN_IV(nv) (I_V(nv) >= IV_MIN && I_V(nv) <= IV_MAX)
 #define NV_WITHIN_UV(nv) ((nv)>=0.0 && U_V(nv) >= UV_MIN && U_V(nv) <= UV_MAX)
@@ -2044,7 +2042,7 @@ char *crypt (const char*, const char*);
 #    ifndef getenv
 char *getenv (const char*);
 #    endif /* !getenv */
-#ifndef EPOC
+#if !defined(EPOC) && !(defined(__hpux) && defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64)
 Off_t lseek (int,Off_t,int);
 #endif
 #  endif /* !DONT_DECLARE_STD */
@@ -2952,16 +2950,22 @@ typedef struct am_table_short AMTS;
 #   endif
 #endif /* _FASTMATH */
 
-#define PERLDB_ALL	0x3f		/* No _NONAME, _GOTO */
-#define PERLDBf_SUB	0x01		/* Debug sub enter/exit. */
-#define PERLDBf_LINE	0x02		/* Keep line #. */
-#define PERLDBf_NOOPT	0x04		/* Switch off optimizations. */
-#define PERLDBf_INTER	0x08		/* Preserve more data for
-					   later inspections.  */
-#define PERLDBf_SUBLINE	0x10		/* Keep subr source lines. */
-#define PERLDBf_SINGLE	0x20		/* Start with single-step on. */
-#define PERLDBf_NONAME	0x40		/* For _SUB: no name of the subr. */
-#define PERLDBf_GOTO	0x80		/* Report goto: call DB::goto. */
+#define PERLDB_ALL		(PERLDBf_SUB	| PERLDBf_LINE	|	\
+				 PERLDBf_NOOPT	| PERLDBf_INTER	|	\
+				 PERLDBf_SUBLINE| PERLDBf_SINGLE|	\
+				 PERLDBf_NAMEEVAL| PERLDBf_NAMEANON)
+					/* No _NONAME, _GOTO */
+#define PERLDBf_SUB		0x01	/* Debug sub enter/exit */
+#define PERLDBf_LINE		0x02	/* Keep line # */
+#define PERLDBf_NOOPT		0x04	/* Switch off optimizations */
+#define PERLDBf_INTER		0x08	/* Preserve more data for
+					   later inspections  */
+#define PERLDBf_SUBLINE		0x10	/* Keep subr source lines */
+#define PERLDBf_SINGLE		0x20	/* Start with single-step on */
+#define PERLDBf_NONAME		0x40	/* For _SUB: no name of the subr */
+#define PERLDBf_GOTO		0x80	/* Report goto: call DB::goto */
+#define PERLDBf_NAMEEVAL	0x100	/* Informative names for evals */
+#define PERLDBf_NAMEANON	0x200	/* Informative names for anon subs */
 
 #define PERLDB_SUB	(PL_perldb && (PL_perldb & PERLDBf_SUB))
 #define PERLDB_LINE	(PL_perldb && (PL_perldb & PERLDBf_LINE))
@@ -2971,6 +2975,8 @@ typedef struct am_table_short AMTS;
 #define PERLDB_SINGLE	(PL_perldb && (PL_perldb & PERLDBf_SINGLE))
 #define PERLDB_SUB_NN	(PL_perldb && (PL_perldb & (PERLDBf_NONAME)))
 #define PERLDB_GOTO	(PL_perldb && (PL_perldb & PERLDBf_GOTO))
+#define PERLDB_NAMEEVAL	(PL_perldb && (PL_perldb & PERLDBf_NAMEEVAL))
+#define PERLDB_NAMEANON	(PL_perldb && (PL_perldb & PERLDBf_NAMEANON))
 
 
 #ifdef USE_LOCALE_NUMERIC
@@ -3006,7 +3012,7 @@ typedef struct am_table_short AMTS;
 
 #endif /* !USE_LOCALE_NUMERIC */
 
-#if !defined(Atol) && defined(USE_LONG_LONG) && defined(HAS_LONG_LONG)
+#if !defined(Atol) && defined(HAS_LONG_LONG)
 #   if !defined(Atol) && defined(HAS_STRTOLL)
 #       define Atol(s) strtoll(s, (char**)NULL, 10)
 #   endif
@@ -3019,8 +3025,7 @@ typedef struct am_table_short AMTS;
 #   define Atol atol /* we assume atol being available anywhere */
 #endif
 
-#if !defined(Strtoul) && defined(USE_LONG_LONG) && defined(HAS_LONG_LONG) \
-	&& defined(HAS_STRTOULL)
+#if !defined(Strtoul) && defined(HAS_LONG_LONG) && defined(HAS_STRTOULL)
 #   define Strtoul strtoull
 #endif
 /* is there atouq() anywhere? */
@@ -3162,5 +3167,13 @@ typedef struct am_table_short AMTS;
 #define PERL_PATCHLEVEL_H_IMPLICIT
 #include "patchlevel.h"
 #undef PERL_PATCHLEVEL_H_IMPLICIT
+
+/* Mention
+   
+   NV_PRESERVES_UV
+   HAS_ICONV
+   I_ICONV
+
+   so that Configure picks them up. */
 
 #endif /* Include guard */

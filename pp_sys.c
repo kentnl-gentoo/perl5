@@ -1,6 +1,6 @@
 /*    pp_sys.c
  *
- *    Copyright (c) 1991-1999, Larry Wall
+ *    Copyright (c) 1991-2000, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1791,7 +1791,11 @@ PP(pp_sysseek)
     if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
 	PUSHMARK(SP);
 	XPUSHs(SvTIED_obj((SV*)gv, mg));
+#if LSEEKSIZE > IVSIZE
+	XPUSHs(sv_2mortal(newSVnv((NV) offset)));
+#else
 	XPUSHs(sv_2mortal(newSViv((IV) offset)));
+#endif
 	XPUSHs(sv_2mortal(newSViv((IV) whence)));
 	PUTBACK;
 	ENTER;

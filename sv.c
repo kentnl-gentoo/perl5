@@ -1,6 +1,6 @@
 /*    sv.c
  *
- *    Copyright (c) 1991-1999, Larry Wall
+ *    Copyright (c) 1991-2000, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -5830,7 +5830,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		uv = va_arg(*args, int);
 	    else
 		uv = (svix < svmax) ? SvIVx(svargs[svix++]) : 0;
-	    if (uv >= 128 && PL_bigchar && !IN_BYTE) {
+	    if ((uv > 255 || (uv > 127 && SvUTF8(sv))) && !IN_BYTE) {
 		eptr = (char*)utf8buf;
 		elen = uv_to_utf8((U8*)eptr, uv) - utf8buf;
 		is_utf = TRUE;
@@ -5872,6 +5872,63 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		    }
 		    is_utf = TRUE;
 		}
+	    }
+	    goto string;
+
+	case 'v':
+	    if (args)
+		argsv = va_arg(*args, SV*);
+	    else if (svix < svmax)
+		argsv = svargs[svix++];
+	    {
+		STRLEN len;
+		U8 *str = (U8*)SvPVx(argsv,len);
+		I32 vlen = len*3+1;
+		SV *vsv = NEWSV(73,vlen);
+		I32 ulen;
+		I32 vfree = vlen;
+		U8 *vptr = (U8*)SvPVX(vsv);
+		STRLEN vcur = 0;
+		bool utf = DO_UTF8(argsv);
+
+		if (utf)
+		    is_utf = TRUE;
+		while (len) {
+		    UV uv;
+
+		    if (utf)
+			uv = utf8_to_uv(str, &ulen);
+		    else {
+			uv = *str;
+			ulen = 1;
+		    }
+		    str += ulen;
+		    len -= ulen;
+		    eptr = ebuf + sizeof ebuf;
+		    do {
+			*--eptr = '0' + uv % 10;
+		    } while (uv /= 10);
+		    elen = (ebuf + sizeof ebuf) - eptr;
+		    while (elen >= vfree-1) {
+			STRLEN off = vptr - (U8*)SvPVX(vsv);
+			vfree += vlen;
+			vlen *= 2;
+			SvGROW(vsv, vlen);
+			vptr = (U8*)SvPVX(vsv) + off;
+		    }
+		    memcpy(vptr, eptr, elen);
+		    vptr += elen;
+		    *vptr++ = '.';
+		    vfree -= elen + 1;
+		    vcur += elen + 1;
+		}
+		if (vcur) {
+		    vcur--;
+		    vptr[-1] = '\0';
+		}
+		SvCUR_set(vsv,vcur);
+		eptr = SvPVX(vsv);
+		elen = vcur;
 	    }
 	    goto string;
 
@@ -6398,7 +6455,7 @@ void *
 Perl_ptr_table_fetch(pTHX_ PTR_TBL_t *tbl, void *sv)
 {
     PTR_TBL_ENT_t *tblent;
-    UV hash = (UV)sv;
+    UV hash = PTR2UV(sv);
     assert(tbl);
     tblent = tbl->tbl_ary[hash & tbl->tbl_max];
     for (; tblent; tblent = tblent->next) {
@@ -6415,7 +6472,7 @@ Perl_ptr_table_store(pTHX_ PTR_TBL_t *tbl, void *oldv, void *newv)
     /* XXX this may be pessimal on platforms where pointers aren't good
      * hash values e.g. if they grow faster in the most significant
      * bits */
-    UV hash = (UV)oldv;
+    UV hash = PTR2UV(oldv);
     bool i = 1;
 
     assert(tbl);
@@ -6455,7 +6512,7 @@ Perl_ptr_table_split(pTHX_ PTR_TBL_t *tbl)
 	    continue;
 	curentp = ary + oldsize;
 	for (entp = ary, ent = *ary; ent; ent = *entp) {
-	    if ((newsize & (UV)ent->oldval) != i) {
+	    if ((newsize & PTR2UV(ent->oldval)) != i) {
 		*entp = ent->next;
 		ent->next = *curentp;
 		*curentp = ent;
@@ -7148,6 +7205,10 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl)
 	case SAVEt_HINTS:
 	    i = POPINT(ss,ix);
 	    TOPINT(nss,ix) = i;
+	    break;
+	case SAVEt_COMPPAD:
+	    av = (AV*)POPPTR(ss,ix);
+	    TOPPTR(nss,ix) = av_dup(av);
 	    break;
 	default:
 	    Perl_croak(aTHX_ "panic: ss_dup inconsistency");
