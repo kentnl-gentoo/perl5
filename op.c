@@ -18,6 +18,8 @@
 #include "EXTERN.h"
 #include "perl.h"
 
+#define USE_OP_MASK  /* Turned on by default in 5.002beta1h */
+
 #ifdef USE_OP_MASK
 /*
  * In the following definition, the ", (OP *) op" is just to make the compiler
