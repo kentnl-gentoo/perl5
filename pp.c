@@ -570,7 +570,7 @@ PP(pp_predec)
 {
     dSP;
     if (SvIOK(TOPs)) {
-    	if (SvIVX(TOPs) == LONG_MIN) {
+    	if (SvIVX(TOPs) == PERL_LONG_MIN) {
     	    sv_setnv(TOPs, (double)SvIVX(TOPs) - 1.0);
     	}
     	else {
@@ -589,7 +589,7 @@ PP(pp_postinc)
     dSP; dTARGET;
     sv_setsv(TARG, TOPs);
     if (SvIOK(TOPs)) {
-    	if (SvIVX(TOPs) == LONG_MAX) {
+    	if (SvIVX(TOPs) == PERL_LONG_MAX) {
     	    sv_setnv(TOPs, (double)SvIVX(TOPs) + 1.0);
     	}
     	else {
@@ -611,7 +611,7 @@ PP(pp_postdec)
     dSP; dTARGET;
     sv_setsv(TARG, TOPs);
     if (SvIOK(TOPs)) {
-    	if (SvIVX(TOPs) == LONG_MIN) {
+    	if (SvIVX(TOPs) == PERL_LONG_MIN) {
     	    sv_setnv(TOPs, (double)SvIVX(TOPs) - 1.0);
     	}
     	else {

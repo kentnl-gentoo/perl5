@@ -133,8 +133,6 @@
 #  endif
 #endif
 
-
-
 #include "perlio.h"
 
 #ifdef USE_NEXT_CTYPE
@@ -557,10 +555,13 @@
 
 /* Previously these definitions used hardcoded figures. 
  * It is hoped these formula are more portable, although
- * no data one way or another is presently known to me. - kja
- *    define LONG_MAX        2147483647L
- *    define LONG_MIN        (-LONG_MAX - 1)
- *    define ULONG_MAX       4294967295L
+ * no data one way or another is presently known to me.
+ * The "PERL_" names are used because these calculated constants
+ * do not meet the ANSI requirements for LONG_MAX, etc., which
+ * need to be constants acceptable to #if - kja
+ *    define PERL_LONG_MAX        2147483647L
+ *    define PERL_LONG_MIN        (-LONG_MAX - 1)
+ *    define PERL ULONG_MAX       4294967295L
  */
 
 #ifdef I_LIMITS  /* Needed for cast_xxx() functions below. */
@@ -571,31 +572,39 @@
 #endif
 #endif
 
-#ifndef LONG_MAX
+#ifdef LONG_MAX
+#define PERL_LONG_MAX LONG_MAX
+#else
 #  ifdef MAXLONG    /* Often used in <values.h> */
-#    define LONG_MAX MAXLONG
+#    define PERL_LONG_MAX MAXLONG
 #  else
-#    define LONG_MAX        ((long) ((~(unsigned long)0) >> 1))
+#    define PERL_LONG_MAX        ((long) ((~(unsigned long)0) >> 1))
 #  endif
 #endif
 
-#ifndef LONG_MIN
+#ifdef LONG_MIN
+#define PERL_LONG_MIN LONG_MIN
+#else
 #  ifdef MINLONG
-#    define LONG_MIN MINLONG
+#    define PERL_LONG_MIN MINLONG
 #  else
-#    define LONG_MIN        (-LONG_MAX - ((3 & -1) == 3))
+#    define PERL_LONG_MIN        (-LONG_MAX - ((3 & -1) == 3))
 #  endif
 #endif
 
-#ifndef ULONG_MAX
+#ifdef ULONG_MAX
+#define PERL_ULONG_MAX ULONG_MAX
+#else
 #  ifdef MAXULONG
-#    define ULONG_MAX MAXULONG
+#    define PERL_ULONG_MAX MAXULONG
 #  else
-#    define ULONG_MAX       (~(unsigned long)0)
+#    define PERL_ULONG_MAX       (~(unsigned long)0)
 #  endif
 #endif
 
-#ifndef ULONG_MIN
+#ifdef ULONG_MIN
+#define PERL_ULONG_MIN ULONG_MIN
+#else
 #  define ULONG_MIN	    0L
 #endif
 
@@ -1719,7 +1728,7 @@ enum {
 
 #if !defined(PERLIO_IS_STDIO) && defined(HAS_ATTRIBUTE)
 /* 
- * New we have __attribute__ out of the way 
+ * Now we have __attribute__ out of the way 
  * Remap printf 
  */
 #define printf PerlIO_stdoutf

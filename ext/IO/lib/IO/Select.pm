@@ -199,7 +199,7 @@ sub can_read
  my $vec = shift;
  my $timeout = shift;
 
- my $r = $vec->[VEC_BITS];
+ my $r = $vec->[VEC_BITS] or return ();
 
  select($r,undef,undef,$timeout) > 0
     ? _handles($vec, $r)
@@ -211,7 +211,7 @@ sub can_write
  my $vec = shift;
  my $timeout = shift;
 
- my $w = $vec->[VEC_BITS];
+ my $w = $vec->[VEC_BITS] or return ();
 
  select(undef,$w,undef,$timeout) > 0
     ? _handles($vec, $w)
@@ -223,7 +223,7 @@ sub has_error
  my $vec = shift;
  my $timeout = shift;
 
- my $e = $vec->[VEC_BITS];
+ my $e = $vec->[VEC_BITS] or return ();
 
  select(undef,undef,$e,$timeout) > 0
     ? _handles($vec, $e)

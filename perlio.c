@@ -7,16 +7,21 @@
  *
  */
 
+#define VOIDUSED 1
+#include "config.h"
+
+#define PERLIO_NOT_STDIO 0 
+#if !defined(PERLIO_IS_STDIO) && !defined(USE_SFIO)
+#define PerlIO FILE
+#endif
 /*
  * This file provides those parts of PerlIO abstraction 
  * which are not #defined in perlio.h.
  * Which these are depends on various Configure #ifdef's 
  */
 
-#define VOIDUSED 1
-#include "config.h"
-
-#define PERLIO_C /**/
+#include "EXTERN.h"
+#include "perl.h"
 
 #ifdef PERLIO_IS_STDIO 
 
@@ -33,8 +38,6 @@ PerlIO_init()
 #else /* PERLIO_IS_STDIO */
 
 #ifdef USE_SFIO
-#include "EXTERN.h"
-#include "perl.h"
 
 #undef HAS_FSETPOS
 #undef HAS_FGETPOS
@@ -72,36 +75,25 @@ PerlIO_init()
    - this should be only file to include <stdio.h>
 */
 
-#include <stdio.h>
-
-static FILE *_stdin()  { return stdin; }
-static FILE *_stdout() { return stdout; }
-static FILE *_stderr() { return stderr; }
-
-#define PerlIO FILE
-
-#include "EXTERN.h"
-#include "perl.h"
-
 #undef PerlIO_stderr
 PerlIO *
 PerlIO_stderr()
 {
- return (PerlIO *) _stderr();
+ return (PerlIO *) stderr;
 }
 
 #undef PerlIO_stdin
 PerlIO *
 PerlIO_stdin()
 {
- return (PerlIO *) _stdin();
+ return (PerlIO *) stdin;
 }
 
 #undef PerlIO_stdout
 PerlIO *
 PerlIO_stdout()
 {
- return (PerlIO *) _stdout();
+ return (PerlIO *) stdout;
 }
 
 #ifdef HAS_SETLINEBUF
@@ -553,3 +545,50 @@ char *pat, *args;
 }
 
 #endif
+
+#ifndef PerlIO_vsprintf
+int 
+PerlIO_vsprintf(s,n,fmt,ap)
+char *s;
+const char *fmt;
+int n;
+va_list ap;
+{
+ int val = vsprintf(s, fmt, ap);
+ if (n >= 0)
+  {
+   if (strlen(s) >= n)
+    {
+     PerlIO_puts(PerlIO_stderr(),"panic: sprintf overflow - memory corrupted!\n");
+     my_exit(1);
+    }
+  }
+ return val;
+}
+#endif
+
+#ifndef PerlIO_sprintf
+int      
+#ifdef I_STDARG
+PerlIO_sprintf(char *s, int n, const char *fmt,...)
+#else
+PerlIO_sprintf(s, n, fmt, va_alist)
+char *s;
+int n;
+const char *fmt;
+va_dcl
+#endif
+{
+ va_list ap;
+ int result;
+#ifdef I_STDARG
+ va_start(ap,fmt);
+#else
+ va_start(ap);
+#endif
+ result = PerlIO_vsprintf(s, n, fmt, ap);
+ va_end(ap);
+ return result;
+}
+#endif
+

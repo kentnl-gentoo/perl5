@@ -1,4 +1,5 @@
 #include "EXTERN.h"
+#define PERLIO_NOT_STDIO 1
 #include "perl.h"
 #include "XSUB.h"
 #include <ctype.h>

@@ -252,7 +252,7 @@ PP(pp_preinc)
 {
     dSP;
     if (SvIOK(TOPs)) {
-    	if (SvIVX(TOPs) == LONG_MAX) {
+    	if (SvIVX(TOPs) == PERL_LONG_MAX) {
     	    sv_setnv(TOPs, (double)(SvIVX(TOPs)) + 1.0 );
     	}
     	else {

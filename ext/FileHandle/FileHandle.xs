@@ -1,11 +1,7 @@
 #include "EXTERN.h"
+#define PERLIO_NOT_STDIO 1
 #include "perl.h"
 #include "XSUB.h"
-
-/* This is to catch case with no stdio */
-#ifndef BUFSIZ
-#define BUFSIZ 1024
-#endif
 
 typedef int SysRet;
 typedef PerlIO * InputStream;

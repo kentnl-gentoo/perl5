@@ -270,7 +270,8 @@ op/stat 3 20 35 as they should, 39 (-t on /dev/null) ???? Sometimes 4
 Sometimes I have seen segfault in socket ????, only if run with Testing tools.
 
 A lot of `bad free'... in databases, bug in DB confirmed on other
-platforms. - Disappeared here.
+platforms. You may disable it by setting PERL_BADFREE environment variable
+to 0.
 
 Here is my result with OMF:
 
@@ -735,7 +736,8 @@ of Configure, like I did with prefix.]
             and the same tests fail.  This new build is a success.
 [Note that bad free() mentioned above are bugs in the Berkeley
 DB. They just are more visible under OS/2 with perl free(), because of
-"rigid" function name resolution.
+"rigid" function name resolution. You may disable it by setting 
+PERL_BADFREE environment variable to 0.
 	To get finer tests, cd to ./t and run 
 		perl harness
 ]

@@ -1,13 +1,13 @@
 #include "EXTERN.h"
+#define PERLIO_NOT_STDIO 1
 #include "perl.h"
 #include "XSUB.h"
+
 #ifdef I_UNISTD
 #  include <unistd.h>
 #endif
-
-/* This is to catch case with no stdio */
-#ifndef BUFSIZ
-#define BUFSIZ 1024
+#ifdef I_FCNTL
+#  include <fcntl.h>
 #endif
 
 typedef int SysRet;
@@ -185,6 +185,7 @@ setvbuf(handle, buf, type, size)
 	int		type
 	int		size
     CODE:
+#ifdef PERLIO_IS_STDIO
 #ifdef _IOFBF   /* Should be HAS_SETVBUF once Configure tests for that */
 	if (handle)
 	    RETVAL = setvbuf(handle, buf, type, size);
@@ -195,6 +196,9 @@ setvbuf(handle, buf, type, size)
 #else
 	    RETVAL = (SysRet) not_here("IO::Handle::setvbuf");
 #endif /* _IOFBF */
+#else
+	    not_here("IO::Handle::setvbuf");
+#endif
     OUTPUT:
 	RETVAL
 

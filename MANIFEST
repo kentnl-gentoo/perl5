@@ -432,6 +432,8 @@ perl_exp.SH			Creates list of exported symbols for AIX.
 perlio.c			C code for PerlIO abstraction.
 perlio.h			Interface to PerlIO abstraction.
 perlsh				A poor man's perl shell
+perlsfio.h			Prototype sfio mapping for PerlIO
+perlsdio.h			Fake stdio using perlio
 perly.c				A byacc'ed perly.y
 perly.c.diff			Fixup perly.c to allow recursion
 perly.fixer			A program to remove yacc stack limitations

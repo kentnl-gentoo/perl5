@@ -88,7 +88,7 @@ MEM_SIZE size;
     else if (nomemok)
 	return Nullch;
     else {
-	PerlIO_fputs(PerlIO_stderr(),no_mem) FLUSH;
+	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
 	my_exit(1);
     }
     /*NOTREACHED*/
@@ -197,7 +197,7 @@ MEM_SIZE size;
     else if (nomemok)
 	return Nullch;
     else {
-	PerlIO_fputs(PerlIO_stderr(),no_mem) FLUSH;
+	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
 	my_exit(1);
     }
     /*NOTREACHED*/
@@ -1719,17 +1719,17 @@ double f;
 	       --Andy Dougherty      <doughera@lafcol.lafayette.edu>
 */
 #ifndef MY_ULONG_MAX
-#  define MY_ULONG_MAX ((UV)LONG_MAX * (UV)2 + (UV)1)
+#  define MY_ULONG_MAX ((UV)PERL_LONG_MAX * (UV)2 + (UV)1)
 #endif
 
 I32
 cast_i32(f)
 double f;
 {
-    if (f >= LONG_MAX)
-	return (I32) LONG_MAX;
-    if (f <= LONG_MIN)
-	return (I32) LONG_MIN;
+    if (f >= PERL_LONG_MAX)
+	return (I32) PERL_LONG_MAX;
+    if (f <= PERL_LONG_MIN)
+	return (I32) PERL_LONG_MIN;
     return (I32) f;
 }
 
@@ -1737,10 +1737,10 @@ IV
 cast_iv(f)
 double f;
 {
-    if (f >= LONG_MAX)
-	return (IV) LONG_MAX;
-    if (f <= LONG_MIN)
-	return (IV) LONG_MIN;
+    if (f >= PERL_LONG_MAX)
+	return (IV) PERL_LONG_MAX;
+    if (f <= PERL_LONG_MIN)
+	return (IV) PERL_LONG_MIN;
     return (IV) f;
 }
 
