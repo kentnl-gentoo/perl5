@@ -599,7 +599,7 @@ perl_destruct(pTHXx)
      */
 #ifndef PERL_MICRO
 #if defined(USE_ENVIRON_ARRAY) && !defined(PERL_USE_SAFE_PUTENV)
-    if (environ != PL_origenviron
+    if (environ != PL_origenviron && !PL_use_safe_putenv
 #ifdef USE_ITHREADS
 	/* only main thread can free environ[0] contents */
 	&& PL_curinterp == aTHX
@@ -2814,7 +2814,7 @@ Perl_moreswitches(pTHX_ char *s)
 	    av_push(PL_preambleav, sv);
 	}
 	else
-	    Perl_croak(aTHX_ "No space allowed after -%c", *(s-1));
+	    Perl_croak(aTHX_ "Missing argument to -%c", *(s-1));
 	return s;
     case 'n':
 	PL_minus_n = TRUE;

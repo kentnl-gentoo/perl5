@@ -606,7 +606,7 @@ Note that the lines are not printed by default.  See B<-p> to have
 lines printed.  If a file named by an argument cannot be opened for
 some reason, Perl warns you about it and moves on to the next file.
 
-Here is an efficient way to delete all files that haven't been modifed for
+Here is an efficient way to delete all files that haven't been modified for
 at least a week:
 
     find . -mtime +7 -print | perl -nle unlink
@@ -1205,7 +1205,7 @@ L<perlvms> and in F<README.vms> in the Perl source distribution.
 In Perls 5.8.1 and later.  If set to C<unsafe> the pre-Perl-5.8.0
 signals behaviour (immediate but unsafe) is restored.  If set to
 C<safe> the safe (or deferred) signals are used.
-See L<perlipc/"Deferred Signals (Safe signals)">.
+See L<perlipc/"Deferred Signals (Safe Signals)">.
 
 =item PERL_UNICODE
 
