@@ -17,6 +17,8 @@ taint_proper(const char *f, char *s)
             "%s %d %d %d\n", s, PL_tainted, PL_uid, PL_euid));
 
     if (PL_tainted) {
+	if (!f)
+	    f = no_security;
 	if (PL_euid != PL_uid)
 	    ug = " while running setuid";
 	else if (PL_egid != PL_gid)
@@ -43,6 +45,9 @@ taint_env(void)
 	"BASH_ENV",	/* bash dain bramage -- I guess it's contagious */
 	NULL
     };
+
+    if(!PL_envgv)
+	return;
 
 #ifdef VMS
     int i = 0;
@@ -87,9 +92,10 @@ taint_env(void)
     svp = hv_fetch(GvHVn(PL_envgv),"TERM",4,FALSE);
     if (svp && *svp && SvTAINTED(*svp)) {
     	dTHR;	/* just for taint */
+	STRLEN n_a;
 	bool was_tainted = PL_tainted;
-	char *t = SvPV(*svp, PL_na);
-	char *e = t + PL_na;
+	char *t = SvPV(*svp, n_a);
+	char *e = t + n_a;
 	PL_tainted = was_tainted;
 	if (t < e && isALNUM(*t))
 	    t++;

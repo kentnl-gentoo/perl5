@@ -599,6 +599,7 @@ emergency_sbrk(MEM_SIZE size)
 	SV *sv;
 	char *pv;
 	int have = 0;
+	STRLEN n_a;
 
 	if (emergency_buffer_size) {
 	    add_to_chain(emergency_buffer, emergency_buffer_size, 0);
@@ -614,7 +615,7 @@ emergency_sbrk(MEM_SIZE size)
 	    return (char *)-1;		/* Now die die die... */
 	}
 	/* Got it, now detach SvPV: */
-	pv = SvPV(sv, PL_na);
+	pv = SvPV(sv, n_a);
 	/* Check alignment: */
 	if (((UV)(pv - sizeof(union overhead))) & ((1<<LOG_OF_MIN_ARENA) - 1)) {
 	    PerlIO_puts(PerlIO_stderr(),"Bad alignment of $^M!\n");
@@ -1254,7 +1255,7 @@ free(void *mp)
  * is extern so the caller can modify it).  If that fails we just copy
  * however many bytes was given to realloc() and hope it's not huge.
  */
-#define reall_srchlen  4	/* 4 should be plenty, -1 =>'s whole list */
+int reall_srchlen = 4;  /* 4 should be plenty, -1 =>'s whole list */
 
 Malloc_t
 realloc(void *mp, size_t nbytes)
