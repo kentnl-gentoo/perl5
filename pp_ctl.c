@@ -900,22 +900,25 @@ PP(pp_flop)
 
     if (GIMME == G_ARRAY) {
 	dPOPPOPssrl;
-	register I32 i;
+	register I32 i, j;
 	register SV *sv;
 	I32 max;
 
 	if (SvNIOKp(left) || !SvPOKp(left) ||
 	  (looks_like_number(left) && *SvPVX(left) != '0') )
 	{
-	    if (SvNV(left) < IV_MIN || SvNV(right) >= IV_MAX)
+	    if (SvNV(left) < IV_MIN || SvNV(right) > IV_MAX)
 		croak("Range iterator outside integer range");
 	    i = SvIV(left);
 	    max = SvIV(right);
 	    if (max >= i) {
-		EXTEND_MORTAL(max - i + 1);
-		EXTEND(SP, max - i + 1);
+		j = max - i + 1;
+		EXTEND_MORTAL(j);
+		EXTEND(SP, j);
 	    }
-	    while (i <= max) {
+	    else
+		j = 0;
+	    while (j--) {
 		sv = sv_2mortal(newSViv(i++));
 		PUSHs(sv);
 	    }
@@ -1464,8 +1467,12 @@ PP(pp_enteriter)
     SAVETMPS;
 
 #ifdef USE_THREADS
-    if (PL_op->op_flags & OPf_SPECIAL)
-	svp = save_threadsv(PL_op->op_targ);	/* per-thread variable */
+    if (PL_op->op_flags & OPf_SPECIAL) {
+	dTHR;
+	svp = &THREADSV(PL_op->op_targ);	/* per-thread variable */
+	SAVEGENERICSV(*svp);
+	*svp = NEWSV(0,0);
+    }
     else
 #endif /* USE_THREADS */
     if (PL_op->op_targ) {
@@ -1473,9 +1480,9 @@ PP(pp_enteriter)
 	SAVESPTR(*svp);
     }
     else {
-	GV *gv = (GV*)POPs;
-	(void)save_scalar(gv);
-	svp = &GvSV(gv);			/* symbol table variable */
+	svp = &GvSV((GV*)POPs);			/* symbol table variable */
+	SAVEGENERICSV(*svp);
+	*svp = NEWSV(0,0);
     }
 
     ENTER;
@@ -2425,7 +2432,7 @@ doeval(int gimme, OP** startop)
     SAVESPTR(PL_compcv);
     PL_compcv = (CV*)NEWSV(1104,0);
     sv_upgrade((SV *)PL_compcv, SVt_PVCV);
-    CvUNIQUE_on(PL_compcv);
+    CvEVAL_on(PL_compcv);
 #ifdef USE_THREADS
     CvOWNER(PL_compcv) = 0;
     New(666, CvMUTEXP(PL_compcv), 1, perl_mutex);

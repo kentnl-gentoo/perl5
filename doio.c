@@ -18,12 +18,11 @@
 #include "perl.h"
 
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
+#ifndef HAS_SEM
 #include <sys/ipc.h>
+#endif
 #ifdef HAS_MSG
 #include <sys/msg.h>
-#endif
-#ifdef HAS_SEM
-#include <sys/sem.h>
 #endif
 #ifdef HAS_SHM
 #include <sys/shm.h>
@@ -1285,18 +1284,18 @@ nothing in the core.
 	    struct utimbuf utbuf;
 #else
 	    struct {
-		long    actime;
-		long	modtime;
+		Time_t	actime;
+		Time_t	modtime;
 	    } utbuf;
 #endif
 
 	    Zero(&utbuf, sizeof utbuf, char);
 #ifdef BIG_TIME
-	    utbuf.actime = (Time_t)SvNVx(*++mark);    /* time accessed */
-	    utbuf.modtime = (Time_t)SvNVx(*++mark);    /* time modified */
+	    utbuf.actime = (Time_t)SvNVx(*++mark);	/* time accessed */
+	    utbuf.modtime = (Time_t)SvNVx(*++mark);	/* time modified */
 #else
-	    utbuf.actime = SvIVx(*++mark);    /* time accessed */
-	    utbuf.modtime = SvIVx(*++mark);    /* time modified */
+	    utbuf.actime = (Time_t)SvIVx(*++mark);	/* time accessed */
+	    utbuf.modtime = (Time_t)SvIVx(*++mark);	/* time modified */
 #endif
 	    APPLY_TAINT_PROPER();
 	    tot = sp - mark;

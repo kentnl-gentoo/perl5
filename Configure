@@ -166,6 +166,7 @@ d_xenix=''
 eunicefix=''
 Mcc=''
 ar=''
+full_ar=''
 awk=''
 bash=''
 bison=''
@@ -411,6 +412,8 @@ d_portable=''
 d_pthread_yield=''
 d_sched_yield=''
 d_pthreads_created_joinable=''
+i_pthread=''
+i_machcthreads=''
 d_readdir=''
 d_rewinddir=''
 d_seekdir=''
@@ -727,6 +730,10 @@ smallmach='pdp11 i8086 z8000 i80286 iAPX286'
 rmlist=''
 
 installusrbinperl=''
+
+ccsymbols=''
+cppsymbols=''
+cppccsymbols=''
 
 : We must find out about Eunice early
 eunicefix=':'
@@ -2000,7 +2007,11 @@ EOM
 		[23]100) osname=mips ;;
 		next*) osname=next ;;
 		i386*)
-			if $test -f /etc/kconfig; then
+			tmp=`/bin/uname -X 2>/dev/null|awk '/3\.2v[45]/{ print $(NF) }'`
+			if $test "$tmp" != "" -a "$3" = "3.2" -a -f '/etc/systemid'; then
+				osname='sco'
+				osvers=$tmp
+			elif $test -f /etc/kconfig; then
 				osname=isc
 				if test "$lns" = "ln -s"; then
 					osvers=4
@@ -2010,6 +2021,7 @@ EOM
 					osvers=2
 				fi
 			fi
+			unset tmp
 			;;
 		pc*)
 			if test -n "$DJGPP"; then
@@ -2404,7 +2416,12 @@ cat <<EOM
 
 Perl can be built to take advantage of threads, on some systems.
 To do so, Configure must be run with -Dusethreads.
-(See README.threads for details.)
+
+Note that threading is a highly experimental feature, and
+some known race conditions still remain.  If you choose to try
+it, be very sure to not actually deploy it for production
+purposes.  README.threads has more details, and is required
+reading if you enable threads.
 EOM
 case "$usethreads" in
 $define|true|[yY]*)     dflt='y';;
@@ -2437,7 +2454,7 @@ case "$usethreads" in
 		. ./usethreads.cbu
 	fi
 	case "$osname" in
-	aix|dec_osf|dos_djgpp|freebsd|hpux|irix|linux|os2|solaris|vmesa)
+	aix|dec_osf|dos_djgpp|freebsd|hpux|irix|linux|next|openbsd|os2|solaris|vmesa)
 		# Known thread-capable platforms.
 		;;
 	*)
@@ -3882,11 +3899,7 @@ if $xxx; then
 	esac;
 fi'
 
-if ./osf1; then
-	set signal.h __LANGUAGE_C__; eval $inctest
-else
-	set signal.h LANGUAGE_C; eval $inctest
-fi
+set signal.h LANGUAGE_C; eval $inctest
 
 case "$hint" in
 none|recommended) dflt="$ccflags $dflt" ;;
@@ -4769,7 +4782,7 @@ nm_extract="$com"
 if $test -f /lib/syscalls.exp; then
 	echo " "
 	echo "Also extracting names from /lib/syscalls.exp for good ole AIX..." >&4
-	$sed -n 's/^\([^ 	]*\)[ 	]*syscall$/\1/p' /lib/syscalls.exp >>libc.list
+	$sed -n 's/^\([^ 	]*\)[ 	]*syscall[0-9]*$/\1/p' /lib/syscalls.exp >>libc.list
 fi
 ;;
 esac
@@ -7835,10 +7848,18 @@ set d_sched_yield
 eval $setvar
 $rm -f try try.*
 
+: see if this is a pthread.h system
+set pthread.h i_pthread
+eval $inhdr
+
+: see if this is a mach/cthreads.h system
+set mach/cthreads.h i_machcthreads
+eval $inhdr
+
 : test whether pthreads are created in joinable -- aka undetached -- state
-if test "X$usethreads" = "X$define"; then
+if test "X$usethreads" = "X$define" -a "X$i_pthread" = "X$define"; then
 	echo $n "Checking whether pthreads are created joinable. $c" >&4 
-	$cat >try.c <<'EOCP'
+	$cat >try.c <<EOCP
 #include <pthread.h>
 #include <stdio.h>
 int main() {
@@ -9798,6 +9819,12 @@ esac
 : Store the full pathname to the sed program for use in the C program
 full_sed=$sed
 
+: Store the full pathname to the ar program for use in the Makefile.SH
+: Respect a hint or command line value for full_ar.
+case "$full_ar" in
+'') full_ar=$ar ;;
+esac
+
 : see what type gids are declared as in the kernel
 echo " "
 echo "Looking for the type for group ids returned by getgid()."
@@ -11086,12 +11113,16 @@ $eunicefix Cppsym
 ./Cppsym -l $al | $sort | $grep -v '^$' >Cppsym.true
 
 : now check the C compiler for additional symbols
+postprocess_cc_v=''
+case "$osname" in
+aix) postprocess_cc_v="|$tr , ' '" ;;
+esac
 $cat >ccsym <<EOS
 $startsh
 $cat >tmp.c <<EOF
 extern int foo;
 EOF
-for i in \`$cc -v -c tmp.c 2>&1\`
+for i in \`$cc -v -c tmp.c 2>&1 $postprocess_cc_v\`
 do
 	case "\$i" in
 	-D*) echo "\$i" | $sed 's/^-D//';;
@@ -11100,6 +11131,7 @@ do
 done
 $rm -f try.c
 EOS
+unset postprocess_cc_v
 chmod +x ccsym
 $eunicefix ccsym
 ./ccsym > ccsym1.raw
@@ -11116,12 +11148,15 @@ $comm -13 ccsym.true ccsym.list >ccsym.own
 $comm -12 ccsym.true ccsym.list >ccsym.com
 $comm -23 ccsym.true ccsym.list >ccsym.cpp
 also=''
-symbols='symbols'
 if $test -z ccsym.raw; then
 	echo "Your C compiler doesn't seem to define any symbol!" >&4
 	echo " "
 	echo "However, your C preprocessor defines the following ones:"
 	$cat Cppsym.true
+    	ccsymbols=''
+	cppsymbols=`$cat Cppsym.true`
+        cppsymbols=`echo $cppsymbols`
+	cppccsymbols="$cppsymbols"
 else
 	if $test -s ccsym.com; then
 		echo "Your C compiler and pre-processor define these symbols:"
@@ -11129,20 +11164,26 @@ else
 		also='also '
 		symbols='ones'
 		$test "$silent" || sleep 1
+		cppccsymbols=`$cat ccsym.com`
+		cppccsymbols=`echo $cppccsymbols`
 	fi
 	if $test -s ccsym.cpp; then
 		$test "$also" && echo " "
-		echo "Your C pre-processor ${also}defines the following $symbols:"
+		echo "Your C pre-processor ${also}defines the following symbols:"
 		$sed -e 's/\(.*\)=.*/\1/' ccsym.cpp
 		also='further '
 		$test "$silent" || sleep 1
+		cppsymbols=`$cat ccsym.cpp`
+		cppsymbols=`echo $cppsymbols`
 	fi
 	if $test -s ccsym.own; then
 		$test "$also" && echo " "
-		echo "Your C compiler ${also}defines the following cpp variables:"
+		echo "Your C compiler ${also}defines the following cpp symbols:"
 		$sed -e 's/\(.*\)=1/\1/' ccsym.own
 		$sed -e 's/\(.*\)=.*/\1/' ccsym.own | $uniq >>Cppsym.true
 		$test "$silent" || sleep 1
+	        ccsymbols=`$cat ccsym.own`
+	        ccsymbols=`echo $ccsymbols`
 	fi
 fi
 $rm -f ccsym*
@@ -11712,6 +11753,7 @@ cc='$cc'
 cccdlflags='$cccdlflags'
 ccdlflags='$ccdlflags'
 ccflags='$ccflags'
+ccsymbols='$ccsymbols'
 cf_by='$cf_by'
 cf_email='$cf_email'
 cf_time='$cf_time'
@@ -11731,6 +11773,8 @@ cpplast='$cpplast'
 cppminus='$cppminus'
 cpprun='$cpprun'
 cppstdin='$cppstdin'
+cppsymbols='$cppsymbols'
+cppccsymbols='$cppccsymbols'
 cryptlib='$cryptlib'
 csh='$csh'
 d_Gconvert='$d_Gconvert'
@@ -11982,6 +12026,7 @@ firstmakefile='$firstmakefile'
 flex='$flex'
 fpostype='$fpostype'
 freetype='$freetype'
+full_ar='$full_ar'
 full_csh='$full_csh'
 full_sed='$full_sed'
 gccversion='$gccversion'
@@ -12010,6 +12055,7 @@ i_grp='$i_grp'
 i_limits='$i_limits'
 i_locale='$i_locale'
 i_malloc='$i_malloc'
+i_machcthreads='$i_machcthreads'
 i_math='$i_math'
 i_memory='$i_memory'
 i_mntent='$i_mntent'
@@ -12018,6 +12064,7 @@ i_netdb='$i_netdb'
 i_neterrno='$i_neterrno'
 i_niin='$i_niin'
 i_pwd='$i_pwd'
+i_pthread='$i_pthread'
 i_rpcsvcdbm='$i_rpcsvcdbm'
 i_sfio='$i_sfio'
 i_sgtty='$i_sgtty'

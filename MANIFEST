@@ -32,6 +32,8 @@ README.amiga		Notes about AmigaOS port
 README.beos		Notes about BeOS port
 README.cygwin32		Notes about Cygwin32 port
 README.dos		Notes about dos/djgpp port
+README.hpux		Notes about HP-UX port
+README.hurd		Notes about GNU/Hurd port
 README.mint		Notes about Atari MiNT port
 README.mpeix		Notes about MPE/iX port
 README.os2		Notes about OS/2 port
@@ -217,6 +219,7 @@ ext/Fcntl/Makefile.PL		Fcntl extension makefile writer
 ext/GDBM_File/GDBM_File.pm	GDBM extension Perl module
 ext/GDBM_File/GDBM_File.xs	GDBM extension external subroutines
 ext/GDBM_File/Makefile.PL	GDBM extension makefile writer
+ext/GDBM_File/hints/sco.pl	Hint for GDBM_File for named architecture
 ext/GDBM_File/typemap		GDBM extension interface types
 ext/IO/IO.pm			Top-level interface to IO::* classes
 ext/IO/IO.xs			IO extension external subroutines
@@ -386,6 +389,7 @@ hints/esix4.sh		Hints for named architecture
 hints/fps.sh		Hints for named architecture
 hints/freebsd.sh	Hints for named architecture
 hints/genix.sh		Hints for named architecture
+hints/gnu.sh		Hints for named architecture
 hints/greenhills.sh	Hints for named architecture
 hints/hpux.sh		Hints for named architecture
 hints/i386.sh		Hints for named architecture
@@ -745,11 +749,13 @@ pod/perlpod.pod		Pod info
 pod/perlport.pod	Portability guide
 pod/perlre.pod		Regular expression info
 pod/perlref.pod		References info
+pod/perlreftut.pod	References tutorial
 pod/perlrun.pod		Execution info
 pod/perlsec.pod		Security info
 pod/perlstyle.pod	Style info
 pod/perlsub.pod		Subroutine info
 pod/perlsyn.pod		Syntax info
+pod/perlthrtut.pod	Threads tutorial
 pod/perltie.pod		Tieing an object class into a simple variable
 pod/perltoc.pod		Table of Contents info
 pod/perltoot.pod	Tom's object-oriented tutorial
@@ -845,7 +851,8 @@ t/lib/dumper.t		See if Data::Dumper works
 t/lib/english.t		See if English works
 t/lib/env.t		See if Env works
 t/lib/errno.t		See if Errno works
-t/lib/fields.t		See if base/fields works
+t/lib/fatal.t           See if Fatal works
+t/lib/fields.t          See if base/fields works
 t/lib/filecache.t	See if FileCache works
 t/lib/filecopy.t	See if File::Copy works
 t/lib/filefind.t	See if File::Find works
@@ -1041,8 +1048,10 @@ vos/build.cm		VOS command macro to build Perl
 vos/Changes		Changes made to port Perl to the VOS operating system
 vos/compile_perl.cm	VOS commnad macro to build multiple version of Perl
 vos/config.h		config.h for VOS
+vos/config_h.SH_orig	config_h.SH at the time config.h was created
 vos/perl.bind		VOS bind control file
 vos/test_vos_dummies.c	Test program for "vos_dummies.c"
+vos/vos_accept.c	Wrapper to fixup nonstandard VOS _accept function
 vos/vos_dummies.c	Wrappers to soak up undefined functions
 vos/vosish.h		VOS-specific header file                
 win32/GenCAPI.pl	Win32 port for C API with PERL_OBJECT

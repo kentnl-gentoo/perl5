@@ -48,10 +48,10 @@ true)
 	os2*)	# OS/2 doesn't need anything special for LD_LIBRARY_PATH.
 		ldlibpth=''
 		;;
-	sunos*|freebsd[23]*)
+	sunos*)
 		linklibperl="-lperl"
 		;;
-	netbsd*)
+	netbsd*|freebsd[234]*)
 		linklibperl="-L. -lperl"
 		;;
 	aix*)
@@ -166,7 +166,7 @@ shellflags = $shellflags
 $make_set_make
 
 # These variables may need to be manually set for non-Unix systems.
-AR = $ar
+AR = $full_ar
 EXE_EXT = $_exe
 LIB_EXT = $_a
 OBJ_EXT = $_o

@@ -541,8 +541,9 @@ some of the main things you can change.
 
 =head2 Threads
 
-On some platforms, perl5.005 can be compiled to use threads.  To
-enable this, read the file README.threads, and then try
+On some platforms, perl5.005 can be compiled with experimental support
+for threads.  To enable this, read the file README.threads, and then
+try:
 
 	sh Configure -Dusethreads
 
@@ -794,11 +795,6 @@ you can change a number of factors in the way perl is built
 by adding appropriate -D directives to your ccflags variable in
 config.sh.
 
-Starting from Perl 5.005_53 you no more need to replace the rand() and
-srand() functions in the perl source by any other random number
-generator because Configure chooses the widest one available
-(drand48(), srandom(), or rand()).
-
 You should also run Configure interactively to verify that a hint file
 doesn't inadvertently override your ccflags setting.  (Hints files
 shouldn't do that, but some might.)
@@ -932,6 +928,42 @@ If you don't have sh, you'll have to copy the sample file Porting/config_H
 to config.h and edit the config.h to reflect your system's peculiarities.
 You'll probably also have to extensively modify the extension building
 mechanism.
+
+=item Environment variable clashes
+
+Configure uses a CONFIG variable that is reported to cause trouble on
+ReliantUnix 5.44.  If your system sets this variable, you can try
+unsetting it before you run Configure.  Configure should eventually
+be fixed to avoid polluting the namespace of the environment.
+
+=item Digital UNIX/Tru64 UNIX and BIN_SH
+
+In Digital UNIX/Tru64 UNIX Configure might abort with
+
+Build a threading Perl? [n]
+Configure[2437]: Syntax error at line 1 : `config.sh' is not expected.
+
+This indicates that Configure is being run with a broken Korn shell
+(even though you think you are using a Bourne shell by using
+"sh Configure" or "./Configure").  The Korn shell bug has been reported
+to Compaq as of February 1999 but in the meanwhile, the reason ksh is
+being used is that you have the environment variable BIN_SH set to
+'xpg4'.  This causes /bin/sh to delegate its duties to /bin/posix/sh
+(a ksh).  Unset the environment variable and rerun Configure.
+
+=item HP-UX 11, pthreads, and libgdbm
+
+If you are running Configure with -Dusethreads in HP-UX 11, be warned
+that POSIX threads and libgdbm (the GNU dbm library) compiled before
+HP-UX 11 do not mix.  This will cause a basic test run by Configure to
+fail
+
+Pthread internal error: message: __libc_reinit() failed, file: ../pthreads/pthread.c, line: 1096
+Return Pointer is 0xc082bf33
+sh: 5345 Quit(coredump)
+
+and Configure will give up.  The cure is to recompile and install
+libgdbm under HP-UX 11.
 
 =item Porting information
 
@@ -1231,6 +1263,17 @@ ones (which ones these are depends on your system and applications)
 with "ipcrm -s SEMAPHORE_ID_HERE" or configure more semaphores to your
 system.
 
+=item GNU binutils
+
+If you mix GNU binutils (nm, ld, ar) with equivalent vendor-supplied
+tools you may be in for some trouble.  For example creating archives
+with an old GNU 'ar' and then using a new current vendor-supplied 'ld'
+may lead into linking problems.  Either recompile your GNU binutils
+under your current operating system release, or modify your PATH not
+to include the GNU utils before running Configure, or specify the
+vendor-supplied utilities explicitly to Configure, for example by
+Configure -Dar=/bin/ar.
+
 =item Miscellaneous
 
 Some additional things that have been reported for either perl4 or perl5:
@@ -1249,6 +1292,12 @@ If you get syntax errors on '(', try -DCRIPPLED_CC.
 
 Machines with half-implemented dbm routines will need to #undef I_ODBM
 
+HP-UX 11 Y2K patch "Y2K-1100 B.11.00.B0125 HP-UX Core OS Year 2000
+Patch Bundle" has been reported to break the io/fs test #18 which
+tests whether utime() can change timestamps.  The Y2K patch seems to
+break utime() so that over NFS the timestamps do not get changed
+(on local filesystems utime() still works).
+ 
 =back
 
 =head1 make test

@@ -85,7 +85,7 @@ begin with C<perl> be referenced with a C<Perl_> prefix.  The bare function
 names without the C<Perl_> prefix are supported with macros, but this
 support may cease in a future release.
 
-See L<perlguts/API LISTING>.
+See L<perlguts/"API LISTING">.
 
 =item Enabling threads has source compatibility issues
 
@@ -100,7 +100,7 @@ directly accessing perl globals as C<GvSV(errgv)>.  The API call is
 backward compatible with existing perls and provides source compatibility
 with threading is enabled.
 
-See L<API Changes for more information>.
+See L<"C Source Compatibility"> for more information.
 
 =back
 
@@ -152,6 +152,9 @@ implementation may change without notice.  There are known limitations
 and some bugs.  These are expected to be fixed in future versions.
 
 See L<README.threads>.
+
+Mach cthreads (NEXTSTEP, OPENSTEP, Rhapsody) are now supported by
+the Thread extension.
 
 =head2 Compiler
 
@@ -310,7 +313,7 @@ and in XSUBs.
 Perl used to complain if it encountered literal carriage returns in
 scripts.  Now they are mostly treated like whitespace within program text.
 Inside string literals and here documents, literal carriage returns are
-ignored if they occur paired with newlines, or get interpreted as newlines
+ignored if they occur paired with linefeeds, or get interpreted as whitespace
 if they stand alone.  This behavior means that literal carriage returns
 in files should be avoided.  You can get the older, more compatible (but
 less generous) behavior by defining the preprocessor symbol
@@ -499,6 +502,8 @@ the command-line arguments used in F<config.sh>.
 BeOS is now supported.  See L<README.beos>.
 
 DOS is now supported under the DJGPP tools.  See L<README.dos>.
+
+GNU/Hurd is now supported.
 
 MiNT is now supported.  See L<README.mint>.
 
@@ -691,7 +696,11 @@ sites.
 
 Some more Perl traps are documented now.  See L<perltrap>.
 
-L<perlopentut> gives a tutorial of using open()
+L<perlopentut> gives a tutorial on using open().
+
+L<perlreftut> gives a tutorial on references.
+
+L<perlthrtut> gives a tutorial on threads.
 
 =head1 New Diagnostics
 

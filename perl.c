@@ -560,6 +560,9 @@ perl_destruct(register PerlInterpreter *sv_interp)
     MUTEX_DESTROY(&PL_cred_mutex);
     MUTEX_DESTROY(&PL_eval_mutex);
     COND_DESTROY(&PL_eval_cond);
+#ifdef EMULATE_ATOMIC_REFCOUNTS
+    MUTEX_DESTROY(&PL_svref_mutex);
+#endif /* EMULATE_ATOMIC_REFCOUNTS */
 
     /* As the penultimate thing, free the non-arena SV for thrsv */
     Safefree(SvPVX(PL_thrsv));
@@ -1747,7 +1750,7 @@ moreswitches(char *s)
 	printf("MVS (OS390) port by Mortice Kern Systems, 1997-1998\n");
 #endif
 #ifdef __VOS__
-	printf("Stratus VOS port by Paul_Green@stratus.com, 1997-1998\n");
+	printf("Stratus VOS port by Paul_Green@stratus.com, 1997-1999\n");
 #endif
 #ifdef __MINT__
 	printf("MiNT port by Guido Flohr, 1997\n");

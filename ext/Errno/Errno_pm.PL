@@ -21,7 +21,7 @@ unlink "errno.c" if -f "errno.c";
 sub process_file {
     my($file) = @_;
 
-    return unless defined $file;
+    return unless defined $file and -f $file;
 
     local *FH;
     if (($^O eq 'VMS') && ($Config{vms_cc_type} ne 'gnuc')) {
@@ -105,7 +105,7 @@ sub get_files {
 	    $pat = '^#(?:line)?\s*\d+\s+"([^"]+)"';
 	}
 	while(<CPPO>) {
-	    if ($^O eq 'os2') {
+	    if ($^O eq 'os2' or $^O eq 'MSWin32') {
 		if (/$pat/o) {
 		   my $f = $1;
 		   $f =~ s,\\\\,/,g;
