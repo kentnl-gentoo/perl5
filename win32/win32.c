@@ -87,18 +87,6 @@ int _CRT_glob = 0;
 #define do_spawn g_do_spawn
 #undef do_exec
 #define do_exec g_do_exec
-#undef opendir
-#define opendir g_opendir
-#undef readdir
-#define readdir g_readdir
-#undef telldir
-#define telldir g_telldir
-#undef seekdir
-#define seekdir g_seekdir
-#undef rewinddir
-#define rewinddir g_rewinddir
-#undef closedir
-#define closedir g_closedir
 #undef getlogin
 #define getlogin g_getlogin
 #endif
@@ -637,7 +625,7 @@ do_exec(char *cmd)
  * return the pointer to the current file name.
  */
 DIR *
-opendir(char *filename)
+win32_opendir(char *filename)
 {
     DIR			*p;
     long		len;
@@ -715,7 +703,7 @@ opendir(char *filename)
  * string pointer to the nDllExport entry.
  */
 struct direct *
-readdir(DIR *dirp)
+win32_readdir(DIR *dirp)
 {
     int         len;
     static int  dummy = 0;
@@ -743,7 +731,7 @@ readdir(DIR *dirp)
 
 /* Telldir returns the current string pointer position */
 long
-telldir(DIR *dirp)
+win32_telldir(DIR *dirp)
 {
     return (long) dirp->curr;
 }
@@ -753,21 +741,21 @@ telldir(DIR *dirp)
  *(Saved by telldir).
  */
 void
-seekdir(DIR *dirp, long loc)
+win32_seekdir(DIR *dirp, long loc)
 {
     dirp->curr = (char *)loc;
 }
 
 /* Rewinddir resets the string pointer to the start */
 void
-rewinddir(DIR *dirp)
+win32_rewinddir(DIR *dirp)
 {
     dirp->curr = dirp->start;
 }
 
 /* free the memory allocated by opendir */
 int
-closedir(DIR *dirp)
+win32_closedir(DIR *dirp)
 {
     Safefree(dirp->start);
     Safefree(dirp);

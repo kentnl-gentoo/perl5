@@ -423,7 +423,7 @@ new_xiv(void)
 	 * See comment in more_xiv() -- RAM.
 	 */
 	xiv_root = *(IV**)xiv;
-	return (XPVIV*)((char*)xiv - sizeof(XPV));
+	return (XPVIV*)((char*)xiv - STRUCT_OFFSET(XPVIV, xiv_iv));
     }
     return more_xiv();
 }
@@ -431,7 +431,7 @@ new_xiv(void)
 STATIC void
 del_xiv(XPVIV *p)
 {
-    IV* xiv = (IV*)((char*)(p) + sizeof(XPV));
+    IV* xiv = (IV*)((char*)(p) + STRUCT_OFFSET(XPVIV, xiv_iv));
     *(IV**)xiv = xiv_root;
     xiv_root = xiv;
 }
@@ -465,7 +465,7 @@ new_xnv(void)
     if (xnv_root) {
 	xnv = xnv_root;
 	xnv_root = *(double**)xnv;
-	return (XPVNV*)((char*)xnv - sizeof(XPVIV));
+	return (XPVNV*)((char*)xnv - STRUCT_OFFSET(XPVNV, xnv_nv));
     }
     return more_xnv();
 }
@@ -473,7 +473,7 @@ new_xnv(void)
 STATIC void
 del_xnv(XPVNV *p)
 {
-    double* xnv = (double*)((char*)(p) + sizeof(XPVIV));
+    double* xnv = (double*)((char*)(p) + STRUCT_OFFSET(XPVNV, xnv_nv));
     *(double**)xnv = xnv_root;
     xnv_root = xnv;
 }
@@ -2959,15 +2959,16 @@ sv_free(SV *sv)
 
     if (!sv)
 	return;
-    if (SvREADONLY(sv)) {
-	if (sv == &sv_undef || sv == &sv_yes || sv == &sv_no)
-	    return;
-    }
     if (SvREFCNT(sv) == 0) {
 	if (SvFLAGS(sv) & SVf_BREAK)
 	    return;
 	if (in_clean_all) /* All is fair */
 	    return;
+	if (SvREADONLY(sv) && SvIMMORTAL(sv)) {
+	    /* make sure SvREFCNT(sv)==0 happens very seldom */
+	    SvREFCNT(sv) = (~(U32)0)/2;
+	    return;
+	}
 	warn("Attempt to free unreferenced scalar");
 	return;
     }
@@ -2980,6 +2981,11 @@ sv_free(SV *sv)
 	return;
     }
 #endif
+    if (SvREADONLY(sv) && SvIMMORTAL(sv)) {
+	/* make sure SvREFCNT(sv)==0 happens very seldom */
+	SvREFCNT(sv) = (~(U32)0)/2;
+	return;
+    }
     sv_clear(sv);
     if (! SvREFCNT(sv))
 	del_SV(sv);
@@ -3602,8 +3608,8 @@ sv_2mortal(register SV *sv)
     dTHR;
     if (!sv)
 	return sv;
-    if (SvREADONLY(sv) && curcop != &compiling)
-	croak(no_modify);
+    if (SvREADONLY(sv) && SvIMMORTAL(sv))
+	return sv;
     if (++tmps_ix >= tmps_max)
 	sv_mortalgrow();
     tmps_stack[tmps_ix] = sv;
@@ -3683,7 +3689,7 @@ newSViv(IV i)
 }
 
 SV *
-newRV(SV *tmpRef)
+newRV_noinc(SV *tmpRef)
 {
     dTHR;
     register SV *sv;
@@ -3694,21 +3700,15 @@ newRV(SV *tmpRef)
     SvFLAGS(sv) = 0;
     sv_upgrade(sv, SVt_RV);
     SvTEMP_off(tmpRef);
-    SvRV(sv) = SvREFCNT_inc(tmpRef);
+    SvRV(sv) = tmpRef;
     SvROK_on(sv);
     return sv;
 }
 
-
-
 SV *
-Perl_newRV_noinc(SV *tmpRef)
+newRV(SV *tmpRef)
 {
-    register SV *sv;
-
-    sv = newRV(tmpRef);
-    SvREFCNT_dec(tmpRef);
-    return sv;
+    return newRV_noinc(SvREFCNT_inc(tmpRef));
 }
 
 /* make an exact duplicate of old */

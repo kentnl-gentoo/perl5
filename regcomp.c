@@ -765,6 +765,7 @@ pregcomp(char *exp, char *xend, PMOP *pm)
     r->prelen = xend - exp;
     r->precomp = regprecomp;
     r->subbeg = r->subbase = NULL;
+    r->nparens = regnpar - 1;		/* set early to validate backrefs */
     regcomp_rx = r;
 
     /* Second pass: emit code. */
@@ -936,7 +937,6 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	r->check_substr = r->anchored_substr = r->float_substr = Nullsv;
     }
 
-    r->nparens = regnpar - 1;
     r->minlen = minlen;
     if (regseen & REG_SEEN_GPOS) 
 	r->reganch |= ROPT_GPOS_SEEN;
@@ -1043,6 +1043,13 @@ reg(I32 paren, I32 *flagp)
 		    regcomp_rx->data->data[n+2] = (void*)sop;
 		    SvREFCNT_dec(sv);
 		} else {		/* First pass */
+		    if (curcop == &compiling) {
+			if (!(hints & HINT_RE_EVAL))
+			    FAIL("Eval-group not allowed, use re 'eval'");
+		    }
+		    else {
+			FAIL("Eval-group not allowed at run time");
+		    }
 		    if (tainted)
 			FAIL("Eval-group in insecure regular expression");
 		}
@@ -1609,6 +1616,8 @@ tryagain:
 		if (num > 9 && num >= regnpar)
 		    goto defchar;
 		else {
+		    if (!SIZE_ONLY && num > regcomp_rx->nparens)
+			FAIL("reference to nonexistent group");
 		    regsawback = 1;
 		    ret = reganode((regflags & PMf_FOLD)
 				   ? ((regflags & PMf_LOCALE) ? REFFL : REFF)

@@ -21,18 +21,11 @@ VIRTUAL OP*	append_elem _((I32 optype, OP* head, OP* tail));
 VIRTUAL OP*	append_list _((I32 optype, LISTOP* first, LISTOP* last));
 VIRTUAL I32	apply _((I32 type, SV** mark, SV** sp));
 VIRTUAL void	assertref _((OP* o));
-VIRTUAL SV*	avhv_delete _((AV *ar, char* key, U32 klen, I32 flags));
-VIRTUAL SV*	avhv_delete_ent _((AV *ar, SV* keysv, I32 flags, U32 hash));
-VIRTUAL bool	avhv_exists _((AV *ar, char* key, U32 klen));
 VIRTUAL bool	avhv_exists_ent _((AV *ar, SV* keysv, U32 hash));
-VIRTUAL SV**	avhv_fetch _((AV *ar, char* key, U32 klen, I32 lval));
 VIRTUAL SV**	avhv_fetch_ent _((AV *ar, SV* keysv, I32 lval, U32 hash));
 VIRTUAL HE*	avhv_iternext _((AV *ar));
-VIRTUAL SV *	avhv_iternextsv _((AV *ar, char** key, I32* retlen));
 VIRTUAL SV*	avhv_iterval _((AV *ar, HE* entry));
 VIRTUAL HV*	avhv_keys _((AV *ar));
-VIRTUAL SV**	avhv_store _((AV *ar, char* key, U32 klen, SV* val, U32 hash));
-VIRTUAL SV**	avhv_store_ent _((AV *av, SV *keysv, SV *val, U32 hash));
 VIRTUAL void	av_clear _((AV* ar));
 VIRTUAL void	av_extend _((AV* ar, I32 key));
 VIRTUAL AV*	av_fake _((I32 size, SV** svp));
@@ -143,7 +136,7 @@ VIRTUAL void	dump_pm _((PMOP* pm));
 VIRTUAL void	dump_packsubs _((HV* stash));
 VIRTUAL void	dump_sub _((GV* gv));
 VIRTUAL void	fbm_compile _((SV* sv, U32 flags));
-VIRTUAL char*	fbm_instr _((unsigned char* big, unsigned char* bigend, SV* littlesv));
+VIRTUAL char*	fbm_instr _((unsigned char* big, unsigned char* bigend, SV* littlesv, U32 flags));
 VIRTUAL char*	find_script _((char *scriptname, bool dosearch, char **search_ext, I32 flags));
 #ifdef USE_THREADS
 VIRTUAL PADOFFSET	find_threadsv _((char *name));
@@ -345,9 +338,7 @@ VIRTUAL OP*	newLISTOP _((I32 type, I32 flags, OP* first, OP* last));
 VIRTUAL OP*	newPMOP _((I32 type, I32 flags));
 VIRTUAL OP*	newPVOP _((I32 type, I32 flags, char* pv));
 VIRTUAL SV*	newRV _((SV* pref));
-#if !defined(__GNUC__) && (defined(CRIPPLED_CC) || defined(USE_THREADS) || defined(PERL_OBJECT))
 VIRTUAL SV*	newRV_noinc _((SV *sv));
-#endif
 VIRTUAL SV*	newSV _((STRLEN len));
 VIRTUAL OP*	newSVREF _((OP* o));
 VIRTUAL OP*	newSVOP _((I32 type, I32 flags, SV* sv));
@@ -669,7 +660,7 @@ void del_xrv _((XRV* p));
 void sv_mortalgrow _((void));
 void sv_unglob _((SV* sv));
 void sv_check_thinkfirst _((SV *sv));
-
+I32 avhv_index_sv _((SV* sv));
 
 void sv_catpv_mg _((SV *sv, char *ptr));
 void sv_catpvf_mg _((SV *sv, const char* pat, ...));
@@ -1214,6 +1205,7 @@ OP *ck_sort _((OP *o));
 OP *ck_split _((OP *o));
 OP *ck_subr _((OP *o));
 OP *ck_svconst _((OP *o));
+OP *ck_sysread _((OP *o));
 OP *ck_trunc _((OP *o));
 void unwind_handler_stack _((void *p));
 void restore_magic _((void *p));

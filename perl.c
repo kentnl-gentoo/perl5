@@ -147,15 +147,21 @@ perl_construct(register PerlInterpreter *sv_interp)
 	sv_upgrade(linestr,SVt_PVIV);
 
 	if (!SvREADONLY(&sv_undef)) {
+	    /* set read-only and try to insure than we wont see REFCNT==0
+	       very often */
+
 	    SvREADONLY_on(&sv_undef);
+	    SvREFCNT(&sv_undef) = (~(U32)0)/2;
 
 	    sv_setpv(&sv_no,No);
 	    SvNV(&sv_no);
 	    SvREADONLY_on(&sv_no);
+	    SvREFCNT(&sv_no) = (~(U32)0)/2;
 
 	    sv_setpv(&sv_yes,Yes);
 	    SvNV(&sv_yes);
 	    SvREADONLY_on(&sv_yes);
+	    SvREFCNT(&sv_yes) = (~(U32)0)/2;
 	}
 
 	nrs = newSVpv("\n", 1);
@@ -1859,8 +1865,7 @@ init_main_stash(void)
        It is properly deallocated in perl_destruct() */
     strtab = newHV();
     HvSHAREKEYS_off(strtab);			/* mandatory */
-    Newz(506,((XPVHV*)SvANY(strtab))->xhv_array,
-	 sizeof(HE*) * (((XPVHV*)SvANY(strtab))->xhv_max + 1), char);
+    hv_ksplit(strtab, 512);
     
     curstash = defstash = newHV();
     curstname = newSVpv("main",4);
@@ -1895,20 +1900,28 @@ open_script(char *scriptname, bool dosearch, SV *sv, int *fdscript)
     dTHR;
     register char *s;
 
-    /* scriptname will be non-NULL if find_script() returns */
-    scriptname = find_script(scriptname, dosearch, NULL, 1);
+    *fdscript = -1;
 
-    if (strnEQ(scriptname, "/dev/fd/", 8) && isDIGIT(scriptname[8]) ) {
-	char *s = scriptname + 8;
-	*fdscript = atoi(s);
-	while (isDIGIT(*s))
-	    s++;
-	if (*s)
-	    scriptname = s + 1;
+    if (e_script) {
+	origfilename = savepv("-e");
     }
-    else
-	*fdscript = -1;
-    origfilename = (e_script ? savepv("-e") : scriptname);
+    else {
+	/* if find_script() returns, it returns a malloc()-ed value */
+	origfilename = scriptname = find_script(scriptname, dosearch, NULL, 1);
+
+	if (strnEQ(scriptname, "/dev/fd/", 8) && isDIGIT(scriptname[8]) ) {
+	    char *s = scriptname + 8;
+	    *fdscript = atoi(s);
+	    while (isDIGIT(*s))
+		s++;
+	    if (*s) {
+		scriptname = savepv(s + 1);
+		Safefree(origfilename);
+		origfilename = scriptname;
+	    }
+	}
+    }
+
     curcop->cop_filegv = gv_fetchfile(origfilename);
     if (strEQ(origfilename,"-"))
 	scriptname = "";

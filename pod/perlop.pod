@@ -399,7 +399,7 @@ encountered.  The final sequence number in a range has the string "E0"
 appended to it, which doesn't affect its numeric value, but gives you
 something to search for if you want to exclude the endpoint.  You can
 exclude the beginning point by waiting for the sequence number to be
-greater than 1.  If either operand of scalar ".." is a numeric literal,
+greater than 1.  If either operand of scalar ".." is a constant expression,
 that operand is implicitly compared to the C<$.> variable, the current
 line number.  Examples:
 
@@ -750,7 +750,6 @@ Options are:
     m	Treat string as multiple lines.
     o	Compile pattern only once.
     s	Treat string as single line.
-    t	Taint $1 etc. if target string is tainted.
     x	Use extended regular expressions.
 
 If "/" is the delimiter then the initial C<m> is optional.  With the C<m>

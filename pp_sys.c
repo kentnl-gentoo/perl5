@@ -889,6 +889,7 @@ PP(pp_getc)
     djSP; dTARGET;
     GV *gv;
     MAGIC *mg;
+    PerlIO *fp;
 
     if (MAXARG <= 0)
 	gv = stdingv;
@@ -910,11 +911,19 @@ PP(pp_getc)
 	    SvSetMagicSV_nosteal(TARG, TOPs);
 	RETURN;
     }
-    if (!gv || do_eof(gv)) /* make sure we have fp with something */
+    if (!gv || !GvIO(gv) || !(fp = IoIFP(GvIOp(gv))))	/* valid fp? */
 	RETPUSHUNDEF;
+
+    if (do_eof(gv)) {			/* handle magic argv, if needed */
+	if (PerlIO_error(fp))
+	    PUSHs(&sv_undef);
+	else
+	    PUSHp("",0);
+	RETURN;
+    }
     TAINT;
     sv_setpv(TARG, " ");
-    *SvPVX(TARG) = PerlIO_getc(IoIFP(GvIOp(gv))); /* should never be EOF */
+    *SvPVX(TARG) = PerlIO_getc(fp);	/* should never be EOF */
     PUSHTARG;
     RETURN;
 }
@@ -1315,7 +1324,12 @@ PP(pp_sysread)
     }
     else
 #endif
+    {
 	length = PerlIO_read(IoIFP(io), buffer+offset, length);
+	/* fread() returns 0 on both error and EOF */
+	if (PerlIO_error(IoIFP(io)))
+	    length = -1;
+    }
     if (length < 0)
 	goto say_undef;
     SvCUR_set(bufsv, length+offset);

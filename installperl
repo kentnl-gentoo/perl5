@@ -52,7 +52,6 @@ if ($scr_ext) { @scripts = map { "$_$scr_ext" } @scripts; }
 
 %archpms = (
     Config => 1, FileHandle => 1, overload => 1,
-    'File/Basename' => 1,	# uses m//t
 );
 
 if ($^O eq 'dos') {
@@ -559,6 +558,7 @@ sub installlib {
 
 sub copy_if_diff {
     my($from,$to)=@_;
+    return 1 if (($^O eq 'VMS') && (-d $from));
     -f $from || die "$0: $from not found";
     $packlist->{$to} = { type => 'file' };
     if (compare($from, $to) || $nonono) {

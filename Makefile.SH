@@ -589,6 +589,9 @@ minitest: miniperl
 ok:	utilities
 	$(LBLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
 
+okfile:	utilities
+	$(LBLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)' -F perl.ok
+
 nok:	utilities
 	$(LBLIBPTH) ./perl -Ilib utils/perlbug -nok -s '(UNINSTALLED)'
 
@@ -610,7 +613,12 @@ Makefile: Makefile.SH ./config.sh
 distcheck: FORCE
 	perl '-MExtUtils::Manifest=&fullcheck' -e 'fullcheck()'
 
-etags:
+elc:	emacs/cperl-mode.elc
+
+emacs/cperl-mode.elc: emacs/cperl-mode.el
+	-cd emacs; emacs -batch -q -no-site-file -f batch-byte-compile cperl-mode.el
+
+etags:	emacs/cperl-mode.elc
 	sh emacs/ptags
 
 # AUTOMATICALLY GENERATED MAKE DEPENDENCIES--PUT NOTHING BELOW THIS LINE

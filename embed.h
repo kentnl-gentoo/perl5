@@ -46,18 +46,11 @@
 #define av_store		Perl_av_store
 #define av_undef		Perl_av_undef
 #define av_unshift		Perl_av_unshift
-#define avhv_delete		Perl_avhv_delete
-#define avhv_delete_ent		Perl_avhv_delete_ent
-#define avhv_exists		Perl_avhv_exists
 #define avhv_exists_ent		Perl_avhv_exists_ent
-#define avhv_fetch		Perl_avhv_fetch
 #define avhv_fetch_ent		Perl_avhv_fetch_ent
 #define avhv_iternext		Perl_avhv_iternext
-#define avhv_iternextsv		Perl_avhv_iternextsv
 #define avhv_iterval		Perl_avhv_iterval
 #define avhv_keys		Perl_avhv_keys
-#define avhv_store		Perl_avhv_store
-#define avhv_store_ent		Perl_avhv_store_ent
 #define band_amg		Perl_band_amg
 #define bind_match		Perl_bind_match
 #define block_end		Perl_block_end
@@ -110,6 +103,7 @@
 #define ck_split		Perl_ck_split
 #define ck_subr			Perl_ck_subr
 #define ck_svconst		Perl_ck_svconst
+#define ck_sysread		Perl_ck_sysread
 #define ck_trunc		Perl_ck_trunc
 #define compl_amg		Perl_compl_amg
 #define concat_amg		Perl_concat_amg
