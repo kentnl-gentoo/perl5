@@ -65,14 +65,18 @@ typedef void (*SVFUNC) _((SV*));
 
 #define new_SV(p)			\
     do {				\
+	MUTEX_LOCK(&sv_mutex);		\
 	(p) = (SV*)safemalloc(sizeof(SV)); \
 	reg_add(p);			\
+	MUTEX_UNLOCK(&sv_mutex);	\
     } while (0)
 
 #define del_SV(p)			\
     do {				\
+	MUTEX_LOCK(&sv_mutex);		\
 	reg_remove(p);			\
         free((char*)(p));		\
+	MUTEX_UNLOCK(&sv_mutex);	\
     } while (0)
 
 static SV **registry;
@@ -171,28 +175,33 @@ U32 flags;
 	--sv_count;			\
     } while (0)
 
+/* sv_mutex must be held while calling uproot_SV() */
 #define uproot_SV(p)			\
     do {				\
-	MUTEX_LOCK(&sv_mutex);		\
 	(p) = sv_root;			\
 	sv_root = (SV*)SvANY(p);	\
 	++sv_count;			\
+    } while (0)
+
+#define new_SV(p)	do {		\
+	MUTEX_LOCK(&sv_mutex);		\
+	if (sv_root)			\
+	    uproot_SV(p);		\
+	else				\
+	    (p) = more_sv();		\
 	MUTEX_UNLOCK(&sv_mutex);	\
     } while (0)
 
-#define new_SV(p)			\
-    if (sv_root)			\
-	uproot_SV(p);			\
-    else				\
-	(p) = more_sv()
-
 #ifdef DEBUGGING
 
-#define del_SV(p)			\
-    if (debug & 32768)			\
-	del_sv(p);			\
-    else				\
-	plant_SV(p)
+#define del_SV(p)	do {		\
+	MUTEX_LOCK(&sv_mutex);		\
+	if (debug & 32768)		\
+	    del_sv(p);			\
+	else				\
+	    plant_SV(p);		\
+	MUTEX_UNLOCK(&sv_mutex);	\
+    } while (0)
 
 static void
 del_sv(p)
@@ -253,6 +262,7 @@ U32 flags;
     SvFLAGS(sv) = SVTYPEMASK;
 }
 
+/* sv_mutex must be held while calling more_sv() */
 static SV*
 more_sv()
 {
@@ -955,7 +965,7 @@ register SV *sv;
 
     case SVt_NULL:
 	sv_catpv(t, "UNDEF");
-	return tokenbuf;
+	goto finish;
     case SVt_IV:
 	sv_catpv(t, "IV");
 	break;
@@ -1503,8 +1513,10 @@ SV *sv;
 {
     I32 numtype = looks_like_number(sv);
 
+#ifdef HAS_STRTOUL
     if (numtype == 1)
-	return atol(SvPVX(sv));
+	return strtoul(SvPVX(sv), Null(char**), 10);
+#endif
     if (!numtype && dowarn)
 	not_a_number(sv);
     SET_NUMERIC_STANDARD();
@@ -1599,6 +1611,7 @@ STRLEN *lp;
     register char *s;
     int olderrno;
     SV *tsv;
+    char tmpbuf[64];	/* Must fit sprintf/Gconvert of longest IV/NV */
 
     if (!sv) {
 	*lp = 0;
@@ -1611,13 +1624,13 @@ STRLEN *lp;
 	    return SvPVX(sv);
 	}
 	if (SvIOKp(sv)) {
-	    (void)sprintf(tokenbuf,"%ld",(long)SvIVX(sv));
+	    (void)sprintf(tmpbuf,"%ld",(long)SvIVX(sv));
 	    tsv = Nullsv;
 	    goto tokensave;
 	}
 	if (SvNOKp(sv)) {
 	    SET_NUMERIC_STANDARD();
-	    Gconvert(SvNVX(sv), DBL_DIG, 0, tokenbuf);
+	    Gconvert(SvNVX(sv), DBL_DIG, 0, tmpbuf);
 	    tsv = Nullsv;
 	    goto tokensave;
 	}
@@ -1673,12 +1686,12 @@ STRLEN *lp;
 	if (SvREADONLY(sv)) {
 	    if (SvNOKp(sv)) {
 		SET_NUMERIC_STANDARD();
-		Gconvert(SvNVX(sv), DBL_DIG, 0, tokenbuf);
+		Gconvert(SvNVX(sv), DBL_DIG, 0, tmpbuf);
 		tsv = Nullsv;
 		goto tokensave;
 	    }
 	    if (SvIOKp(sv)) {
-		(void)sprintf(tokenbuf,"%ld",(long)SvIVX(sv));
+		(void)sprintf(tmpbuf,"%ld",(long)SvIVX(sv));
 		tsv = Nullsv;
 		goto tokensave;
 	    }
@@ -1717,12 +1730,17 @@ STRLEN *lp;
 #endif
     }
     else if (SvIOKp(sv)) {
+	U32 oldIOK = SvIOK(sv);
 	if (SvTYPE(sv) < SVt_PVIV)
 	    sv_upgrade(sv, SVt_PVIV);
 	olderrno = errno;	/* some Xenix systems wipe out errno here */
-	sv_setpvf(sv, "%Vd", SvIVX(sv));
+	sv_setpviv(sv, SvIVX(sv));
 	errno = olderrno;
 	s = SvEND(sv);
+	if (oldIOK)
+	    SvIOK_on(sv);
+	else
+	    SvIOKp_on(sv);
     }
     else {
 	dTHR;
@@ -1743,7 +1761,7 @@ STRLEN *lp;
 
       tokensaveref:
 	if (!tsv)
-	    tsv = newSVpv(tokenbuf, 0);
+	    tsv = newSVpv(tmpbuf, 0);
 	sv_2mortal(tsv);
 	*lp = SvCUR(tsv);
 	return SvPVX(tsv);
@@ -1758,8 +1776,8 @@ STRLEN *lp;
 	    len = SvCUR(tsv);
 	}
 	else {
-	    t = tokenbuf;
-	    len = strlen(tokenbuf);
+	    t = tmpbuf;
+	    len = strlen(tmpbuf);
 	}
 #ifdef FIXNEGATIVEZERO
 	if (len == 2 && t[0] == '-' && t[1] == '0') {
@@ -2709,21 +2727,10 @@ register SV *sv;
 		--sv_objcount;	/* XXX Might want something more general */
 	}
 	if (SvREFCNT(sv)) {
-	    SV *ret;
-	    if ( perldb
-		 && (ret = perl_get_sv("DB::ret", FALSE))
-		 && SvROK(ret) && SvRV(ret) == sv && SvREFCNT(sv) == 1) {
-		/* Debugger is prone to dangling references. */
-		SvRV(ret) = 0;
-		SvROK_off(ret);
-		SvREFCNT(sv) = 0;
-	    }
-	    else {
 		if (in_clean_objs)
 		    croak("DESTROY created new reference to dead object");
 		/* DESTROY gave object new lease on life */
 		return;
-	    }
 	}
     }
     if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv))
@@ -4044,14 +4051,9 @@ I32 n;
 }
 
 SV*
-#ifndef CAN_PROTOTYPE
-sv_bless3(sv,stash,zaptilde)
+sv_bless(sv,stash)
 SV* sv;
 HV* stash;
-bool zaptilde;
-#else
-sv_bless3(SV *sv, HV *stash, bool zaptilde)
-#endif /* CAN_PROTOTYPE */
 {
     dTHR;
     SV *ref;
@@ -4064,8 +4066,6 @@ sv_bless3(SV *sv, HV *stash, bool zaptilde)
 	if (SvOBJECT(ref)) {
 	    if (SvTYPE(ref) != SVt_PVIO)
 		--sv_objcount;
-	    if (zaptilde && SvRMAGICAL(ref))
-		sv_unmagic(ref, '~');	/* stop cross-class pointer forgery */
 	    SvREFCNT_dec(SvSTASH(ref));
 	}
     }
@@ -4083,14 +4083,6 @@ sv_bless3(SV *sv, HV *stash, bool zaptilde)
 #endif /* OVERLOAD */
 
     return sv;
-}
-
-SV*
-sv_bless(sv,stash)
-SV* sv;
-HV* stash;
-{
-    return sv_bless3(sv, stash, FALSE);
 }
 
 static void
@@ -4150,6 +4142,42 @@ SV *sv;
 	    return TRUE;
     }
     return FALSE;
+}
+
+void
+sv_setpviv(sv, iv)
+SV *sv;
+IV iv;
+{
+    STRLEN len;
+    char buf[TYPE_DIGITS(UV)];
+    char *ptr = buf + sizeof(buf);
+    int sign;
+    UV uv;
+    char *p;
+    int i;
+
+    sv_setpvn(sv, "", 0);
+    if (iv >= 0) {
+	uv = iv;
+	sign = 0;
+    } else {
+	uv = -iv;
+	sign = 1;
+    }
+    do {
+	*--ptr = '0' + (uv % 10);
+    } while (uv /= 10);
+    len = (buf + sizeof(buf)) - ptr;
+    /* taking advantage of SvCUR(sv) == 0 */
+    SvGROW(sv, sign + len + 1);
+    p = SvPVX(sv);
+    if (sign)
+	*p++ = '-';
+    memcpy(p, ptr, len);
+    p += len;
+    *p = '\0';
+    SvCUR(sv) = p - SvPVX(sv);
 }
 
 #ifdef I_STDARG
@@ -4598,6 +4626,8 @@ sv_vcatpvfn(sv, pat, patlen, args, svargs, svmax, used_locale)
 	    }
 	    if (fill == '0')
 		*--eptr = fill;
+	    if (left)
+		*--eptr = '-';
 	    if (plus)
 		*--eptr = plus;
 	    if (alt)
@@ -4663,7 +4693,7 @@ sv_vcatpvfn(sv, pat, patlen, args, svargs, svmax, used_locale)
 	need = (have > width ? have : width);
 	gap = need - have;
 
-	SvGROW(sv, SvLEN(sv) + need);
+	SvGROW(sv, SvCUR(sv) + need + 1);
 	p = SvEND(sv);
 	if (esignlen && fill == '0') {
 	    for (i = 0; i < esignlen; i++)

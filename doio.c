@@ -283,6 +283,7 @@ PerlIO *supplied_fp;
     }
     if (IoTYPE(io) &&
       IoTYPE(io) != '|' && IoTYPE(io) != '-') {
+	dTHR;
 	if (Fstat(PerlIO_fileno(fp),&statbuf) < 0) {
 	    (void)PerlIO_close(fp);
 	    goto say_false;
@@ -297,8 +298,9 @@ PerlIO *supplied_fp;
 	    !statbuf.st_mode
 #endif
 	) {
-	    Sock_size_t buflen = sizeof tokenbuf;
-	    if (getsockname(PerlIO_fileno(fp), (struct sockaddr *)tokenbuf,
+	    char tmpbuf[256];
+	    Sock_size_t buflen = sizeof tmpbuf;
+	    if (getsockname(PerlIO_fileno(fp), (struct sockaddr *)tmpbuf,
 			    &buflen) >= 0
 		  || errno != ENOTSOCK)
 		IoTYPE(io) = 's'; /* some OS's return 0 on fstat()ed socket */
@@ -340,6 +342,7 @@ PerlIO *supplied_fp;
 #endif
     IoIFP(io) = fp;
     if (writing) {
+	dTHR;
 	if (IoTYPE(io) == 's'
 	  || (IoTYPE(io) == '>' && S_ISCHR(statbuf.st_mode)) ) {
 	    if (!(IoOFP(io) = PerlIO_fdopen(PerlIO_fileno(fp),"w"))) {
@@ -945,7 +948,7 @@ do_execfree()
     }
 }
 
-#ifndef OS2
+#if !defined(OS2) && !defined(WIN32)
 
 bool
 do_exec(cmd)
@@ -1036,7 +1039,7 @@ char *cmd;
     return FALSE;
 }
 
-#endif /* OS2 */
+#endif /* OS2 || WIN32 */
 
 I32
 apply(type,mark,sp)
@@ -1370,29 +1373,25 @@ SV **sp;
 	    infosize = sizeof(struct semid_ds);
 	else if (cmd == GETALL || cmd == SETALL)
 	{
+	    struct semid_ds semds;
 #ifdef __linux__	/* XXX Need metaconfig test */
-/* linux uses :
-   int semctl (int semid, int semnun, int cmd, union semun arg)
-
+/* linux (and Solaris2?) uses :
+   int semctl (int semid, int semnum, int cmd, union semun arg)
        union semun {
             int val;
             struct semid_ds *buf;
             ushort *array;
        };
 */
-            union semun semds;
-	    if (semctl(id, 0, IPC_STAT, semds) == -1)
+            union semun semun;
+            semun.buf = &semds;
+	    if (semctl(id, 0, IPC_STAT, semun) == -1)
 #else
-	    struct semid_ds semds;
 	    if (semctl(id, 0, IPC_STAT, &semds) == -1)
 #endif
 		return -1;
 	    getinfo = (cmd == GETALL);
-#ifdef __linux__	/* XXX Need metaconfig test */
-	    infosize = semds.buf->sem_nsems * sizeof(short);
-#else
 	    infosize = semds.sem_nsems * sizeof(short);
-#endif
 		/* "short" is technically wrong but much more portable
 		   than guessing about u_?short(_t)? */
 	}

@@ -383,8 +383,14 @@ typedef pthread_key_t perl_key;
 #   include <netinet/in.h>
 #endif
 
+#if defined(SF_APPEND) && defined(USE_SFIO) && defined(I_SFIO)
+/* <sfio.h> defines SF_APPEND and <sys/stat.h> might define SF_APPEND
+ * (the neo-BSD seem to do this).  */
+#   undef SF_APPEND
+#endif
+
 #ifdef I_SYS_STAT
-#include <sys/stat.h>
+#   include <sys/stat.h>
 #endif
 
 /* The stat macros for Amdahl UTS, Unisoft System V/88 (and derivatives
@@ -1310,11 +1316,6 @@ typedef Sighandler_t Sigsave_t;
 # ifndef register
 #  define register
 # endif
-# ifdef MYMALLOC
-#  ifndef DEBUGGING_MSTATS
-#   define DEBUGGING_MSTATS
-#  endif
-# endif
 # define PAD_SV(po) pad_sv(po)
 # define RUNOPS_DEFAULT runops_debug
 #else
@@ -1346,7 +1347,7 @@ EXT perl_mutex		eval_mutex;	/* Mutex for doeval */
 EXT perl_cond		eval_cond;	/* Condition variable for doeval */
 EXT struct thread *	eval_owner;	/* Owner thread for doeval */
 EXT int			nthreads;	/* Number of threads currently */
-EXT perl_mutex		nthreads_mutex;	/* Mutex for nthreads */
+EXT perl_mutex		threads_mutex;	/* Mutex for nthreads and thread list */
 EXT perl_cond		nthreads_cond;	/* Condition variable for nthreads */
 #ifdef FAKE_THREADS
 EXT struct thread *	thr;		/* Currently executing (fake) thread */
@@ -1384,6 +1385,7 @@ EXT U32 *	profiledata;
 EXT int		maxo INIT(MAXO);/* Number of ops */
 EXT char *	osname;		/* operating system */
 EXT char *	sh_path INIT(SH_PATH); /* full path of shell */
+EXT Sighandler_t	sighandlerp;
 
 EXT XPV*	xiv_arenaroot;	/* list of allocated xiv areas */
 EXT IV **	xiv_root;	/* free xiv list--shared by interpreters */
@@ -1924,11 +1926,6 @@ IEXT I32	Irunlevel;
 /* stack stuff */
 IEXT AV *	Icurstack;		/* THE STACK */
 IEXT AV *	Imainstack;	/* the stack when nothing funny is happening */
-#if 0
-IEXT SV **	Imystack_base;	/* stack->array_ary */
-IEXT SV **	Imystack_sp;	/* stack pointer now */
-IEXT SV **	Imystack_max;	/* stack->array_ary + stack->array_max */
-#endif
 
 /* format accumulators */
 IEXT SV *	Iformtarget;
@@ -2236,6 +2233,22 @@ enum {
 
 #endif /* OVERLOAD */
 
+#define PERLDB_ALL	0xff
+#define PERLDBf_SUB	0x01		/* Debug sub enter/exit. */
+#define PERLDBf_LINE	0x02		/* Keep line #. */
+#define PERLDBf_NOOPT	0x04		/* Switch off optimizations. */
+#define PERLDBf_INTER	0x08		/* Preserve more data for
+					   later inspections.  */
+#define PERLDBf_SUBLINE	0x10		/* Keep subr source lines. */
+#define PERLDBf_SINGLE	0x20		/* Start with single-step on. */
+
+#define PERLDB_SUB	(perldb && (perldb & PERLDBf_SUB))
+#define PERLDB_LINE	(perldb && (perldb & PERLDBf_LINE))
+#define PERLDB_NOOPT	(perldb && (perldb & PERLDBf_NOOPT))
+#define PERLDB_INTER	(perldb && (perldb & PERLDBf_INTER))
+#define PERLDB_SUBLINE	(perldb && (perldb & PERLDBf_SUBLINE))
+#define PERLDB_SINGLE	(perldb && (perldb & PERLDBf_SINGLE))
+
 #ifdef USE_LOCALE_COLLATE
 EXT U32		collation_ix;		/* Collation generation index */
 EXT char *	collation_name;		/* Name of current collation */
@@ -2276,6 +2289,19 @@ EXT bool	numeric_local INIT(TRUE);    /* Assume local numerics */
  */
 #define printf PerlIO_stdoutf
 #endif
+
+/*
+ * nice_chunk and nice_chunk size need to be set
+ * and queried under the protection of sv_mutex
+ */
+#define offer_nice_chunk(chunk, chunk_size) do {	\
+	MUTEX_LOCK(&sv_mutex);				\
+	if (!nice_chunk) {				\
+	    nice_chunk = (char*)(chunk);		\
+	    nice_chunk_size = (chunk_size);		\
+	}						\
+	MUTEX_UNLOCK(&sv_mutex);			\
+    } while (0)
 
 #endif /* Include guard */
 
