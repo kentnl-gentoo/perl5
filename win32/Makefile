@@ -32,7 +32,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER = \5.8.2
+#INST_VER = \5.8.3
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -495,6 +495,9 @@ UTILS		=			\
 		..\utils\enc2xs		\
 		..\utils\piconv		\
 		..\utils\cpan		\
+		..\utils\xsubpp		\
+		..\utils\prove		\
+		..\utils\instmodsh	\
 		..\pod\checkpods	\
 		..\pod\pod2html		\
 		..\pod\pod2latex	\
@@ -506,7 +509,6 @@ UTILS		=			\
 		..\x2p\find2perl	\
 		..\x2p\psed		\
 		..\x2p\s2p		\
-		..\lib\ExtUtils\xsubpp	\
 		bin\exetype.pl		\
 		bin\runperl.pl		\
 		bin\pl2bat.pl		\
@@ -994,6 +996,7 @@ utils: $(PERLEXE) $(X2P)
 	cd ..\utils
 	$(MAKE) PERL=$(MINIPERL)
 	cd ..\pod
+	copy ..\vms\perlvms.pod .\perlvms.pod
 	copy ..\README.aix      .\perlaix.pod
 	copy ..\README.amiga    .\perlamiga.pod
 	copy ..\README.apollo   .\perlapollo.pod
@@ -1030,7 +1033,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vms      .\perlvms.pod
 	copy ..\README.vos      .\perlvos.pod
 	copy ..\README.win32    .\perlwin32.pod
-	copy ..\vms\perlvms.pod .\perlvms.pod
+	copy perl583delta.pod perldelta.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\lib
 	$(PERLEXE) lib_pm.PL
@@ -1089,18 +1092,20 @@ distclean: clean
 	cd $(PODDIR)
 	-del /f *.html *.bat checkpods \
 	    perlaix.pod perlamiga.pod perlapollo.pod perlbeos.pod \
-	    perlbs2000.pod perlce.pod perlcygwin.pod perldgux.pod \
-	    perldos.pod perlepoc.pod perlfreebsd.pod perlhurd.pod \
-	    perlhpux.pod perlirix.pod perlmachten.pod \
-	    perlmacos.pod perlmint.pod perlmpeix.pod perlnetware.pod \
+	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
+	    perldelta.pod perldgux.pod perldos.pod perlepoc.pod \
+	    perlfreebsd.pod perlhpux.pod perlhurd.pod perlirix.pod \
+	    perljp.pod perlko.pod perlmachten.pod perlmacos.pod \
+	    perlmacosx.pod perlmint.pod perlmpeix.pod perlnetware.pod \
 	    perlos2.pod perlos390.pod perlos400.pod perlplan9.pod \
-	    perlqnx.pod perlsolaris.pod perltru64.pod perluts.pod \
-	    perlvmesa.pod perlvms.pod perlvos.pod \
-	    perlwin32.pod pod2html pod2latex pod2man pod2text pod2usage \
+	    perlqnx.pod perlsolaris.pod perltru64.pod perltw.pod \
+	    perluts.pod perlvmesa.pod perlvms.pod perlvms.pod perlvos.pod \
+	    perlwin32.pod \
+	    pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
 	cd ..\utils
 	-del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs perldoc perlivp \
-	    dprofpp perlcc libnetcfg enc2xs piconv cpan
+	    dprofpp perlcc libnetcfg enc2xs piconv cpan xsubpp instmodsh prove
 	-del /f *.bat
 	cd ..\win32
 	cd ..\x2p
