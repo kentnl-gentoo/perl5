@@ -43,6 +43,8 @@ true)
 		# NeXT uses a different name.
 		ldlibpth="DYLD_LIBRARY_PATH=`pwd`:$DYLD_LIBRARY_PATH"
 		;;
+	beos*)	ldlibpth="LIBRARY_PATH=`pwd`:$LIBRARY_PATH"
+		;;
 	os2*)	# OS/2 doesn't need anything special for LD_LIBRARY_PATH.
 		ldlibpth=''
 		;;
@@ -602,13 +604,13 @@ minitest: miniperl lib/re.pm
 # Please *don't* use this unless all tests pass.
 # If you want to report test failures, use "make nok" instead.
 ok:	utilities
-	$(LBLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
+	$(LDLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
 
 okfile:	utilities
-	$(LBLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)' -F perl.ok
+	$(LDLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)' -F perl.ok
 
 nok:	utilities
-	$(LBLIBPTH) ./perl -Ilib utils/perlbug -nok -s '(UNINSTALLED)'
+	$(LDLIBPTH) ./perl -Ilib utils/perlbug -nok -s '(UNINSTALLED)'
 
 clist:	$(c)
 	echo $(c) | tr ' ' $(TRNL) >.clist
