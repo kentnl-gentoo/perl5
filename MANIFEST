@@ -887,6 +887,7 @@ op.c			Opcode syntax tree code
 op.h			Opcode syntax tree header
 opcode.h		Automatically generated opcode header
 opcode.pl		Opcode header generatore
+opnames.h		Automatically generated opcode header
 os2/Changes		Changelog for OS/2 port
 os2/Makefile.SHs	Shared library generation for OS/2
 os2/OS2/ExtAttr/Changes		EA access module
@@ -1195,6 +1196,7 @@ t/lib/tie-stdhandle.t	Test for Tie::StdHandle
 t/lib/tie-stdpush.t	Test for Tie::StdArray
 t/lib/timelocal.t	See if Time::Local works
 t/lib/trig.t		See if Math::Trig works
+t/op/64bit.t		See if 64 bitness works
 t/op/append.t		See if . works
 t/op/arith.t		See if arithmetic works
 t/op/array.t		See if array operations work

@@ -1890,7 +1890,8 @@ Perl_fold_constants(pTHX_ register OP *o)
 	goto nope;		/* Don't try to run w/ errors */
 
     for (curop = LINKLIST(o); curop != o; curop = LINKLIST(curop)) {
-	if (curop->op_type != OP_CONST &&
+	if ((curop->op_type != OP_CONST ||
+	     (curop->op_private & OPpCONST_BARE)) &&
 	    curop->op_type != OP_LIST &&
 	    curop->op_type != OP_SCALAR &&
 	    curop->op_type != OP_NULL &&
@@ -4798,12 +4799,13 @@ Perl_ck_fun(pTHX_ OP *o)
 		    char *name = SvPVx(((SVOP*)kid)->op_sv, n_a);
 		    OP *newop = newAVREF(newGVOP(OP_GV, 0,
 			gv_fetchpv(name, TRUE, SVt_PVAV) ));
-		    if (ckWARN(WARN_SYNTAX))
 #ifdef IV_IS_QUAD
+		    if (ckWARN(WARN_SYNTAX))
 			Perl_warner(aTHX_ WARN_SYNTAX,
 			    "Array @%s missing the @ in argument %" PERL_PRId64 " of %s()",
 			    name, (IV)numargs, PL_op_desc[type]);
 #else
+		    if (ckWARN(WARN_SYNTAX))
 			Perl_warner(aTHX_ WARN_SYNTAX,
 			    "Array @%s missing the @ in argument %ld of %s()",
 			    name, (long)numargs, PL_op_desc[type]);
@@ -4824,12 +4826,13 @@ Perl_ck_fun(pTHX_ OP *o)
 		    char *name = SvPVx(((SVOP*)kid)->op_sv, n_a);
 		    OP *newop = newHVREF(newGVOP(OP_GV, 0,
 			gv_fetchpv(name, TRUE, SVt_PVHV) ));
-		    if (ckWARN(WARN_SYNTAX))
 #ifdef IV_IS_QUAD
+		    if (ckWARN(WARN_SYNTAX))
 			Perl_warner(aTHX_ WARN_SYNTAX,
 			    "Hash %%%s missing the %% in argument %" PERL_PRId64 " of %s()",
 			    name, (IV)numargs, PL_op_desc[type]);
 #else
+		    if (ckWARN(WARN_SYNTAX))
 			Perl_warner(aTHX_ WARN_SYNTAX,
 			    "Hash %%%s missing the %% in argument %ld of %s()",
 			    name, (long)numargs, PL_op_desc[type]);
