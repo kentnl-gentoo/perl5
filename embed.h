@@ -46,6 +46,7 @@
 #define av_make			Perl_av_make
 #define av_pop			Perl_av_pop
 #define av_push			Perl_av_push
+#define av_reify		Perl_av_reify
 #define av_shift		Perl_av_shift
 #define av_store		Perl_av_store
 #define av_undef		Perl_av_undef
@@ -341,6 +342,7 @@
 #define magic_mutexfree		Perl_magic_mutexfree
 #define magic_nextpack		Perl_magic_nextpack
 #define magic_set		Perl_magic_set
+#define magic_set_all_env	Perl_magic_set_all_env
 #define magic_setamagic		Perl_magic_setamagic
 #define magic_setarylen		Perl_magic_setarylen
 #define magic_setbm		Perl_magic_setbm
@@ -1347,6 +1349,7 @@
 #define sv_root			(curinterp->Isv_root)
 #define tainted			(curinterp->Itainted)
 #define tainting		(curinterp->Itainting)
+#define thrsv			(curinterp->Ithrsv)
 #define tmps_floor		(curinterp->Itmps_floor)
 #define tmps_ix			(curinterp->Itmps_ix)
 #define tmps_max		(curinterp->Itmps_max)
@@ -1498,6 +1501,7 @@
 #define Isv_root		sv_root
 #define Itainted		tainted
 #define Itainting		tainting
+#define Ithrsv			thrsv
 #define Itmps_floor		tmps_floor
 #define Itmps_ix		tmps_ix
 #define Itmps_max		tmps_max
@@ -1656,6 +1660,7 @@
 #define sv_objcount		Perl_sv_objcount
 #define sv_root			Perl_sv_root
 #define tainted			Perl_tainted
+#define thrsv			Perl_thrsv
 #define tmps_floor		Perl_tmps_floor
 #define tmps_ix			Perl_tmps_ix
 #define tmps_max		Perl_tmps_max
