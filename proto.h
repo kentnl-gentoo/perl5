@@ -1,9 +1,18 @@
+#ifndef PERL_CALLCONV
+#  define PERL_CALLCONV
+#endif 
+
 #ifdef PERL_OBJECT
-#define VIRTUAL virtual
+#define VIRTUAL virtual PERL_CALLCONV
 #else
-#define VIRTUAL
+#define VIRTUAL PERL_CALLCONV
 START_EXTERN_C
 #endif
+
+/* NOTE!!! When new virtual functions are added, they must be added at
+ * the end of this file to maintain binary compatibility with PERL_OBJECT
+ */
+
 
 #ifndef NEXT30_NO_ATTRIBUTE
 #ifndef HASATTRIBUTE       /* disable GNU-cc attribute checking? */
@@ -74,7 +83,7 @@ VIRTUAL char **	get_op_names _((void));
 VIRTUAL char *	get_no_modify _((void));
 VIRTUAL U32 *	get_opargs _((void));
 VIRTUAL I32	cxinc _((void));
-VIRTUAL void	deb _((const char* pat,...)) /*__attribute__((format(printf,1,2)))*/;
+VIRTUAL void	deb _((const char* pat,...));
 VIRTUAL void	deb_growlevel _((void));
 VIRTUAL void	debprofdump _((void));
 VIRTUAL I32	debop _((OP* o));
@@ -216,15 +225,15 @@ VIRTUAL bool	is_uni_print_lc _((U32 c));
 VIRTUAL U32	to_uni_upper_lc _((U32 c));
 VIRTUAL U32	to_uni_title_lc _((U32 c));
 VIRTUAL U32	to_uni_lower_lc _((U32 c));
-VIRTUAL bool	is_utf8_alnum _((unsigned char *p));
-VIRTUAL bool	is_utf8_idfirst _((unsigned char *p));
-VIRTUAL bool	is_utf8_alpha _((unsigned char *p));
-VIRTUAL bool	is_utf8_space _((unsigned char *p));
-VIRTUAL bool	is_utf8_digit _((unsigned char *p));
-VIRTUAL bool	is_utf8_upper _((unsigned char *p));
-VIRTUAL bool	is_utf8_lower _((unsigned char *p));
-VIRTUAL bool	is_utf8_print _((unsigned char *p));
-VIRTUAL bool	is_utf8_mark _((unsigned char *p));
+VIRTUAL bool	is_utf8_alnum _((U8 *p));
+VIRTUAL bool	is_utf8_idfirst _((U8 *p));
+VIRTUAL bool	is_utf8_alpha _((U8 *p));
+VIRTUAL bool	is_utf8_space _((U8 *p));
+VIRTUAL bool	is_utf8_digit _((U8 *p));
+VIRTUAL bool	is_utf8_upper _((U8 *p));
+VIRTUAL bool	is_utf8_lower _((U8 *p));
+VIRTUAL bool	is_utf8_print _((U8 *p));
+VIRTUAL bool	is_utf8_mark _((U8 *p));
 VIRTUAL OP*	jmaybe _((OP* arg));
 VIRTUAL I32	keyword _((char* d, I32 len));
 VIRTUAL void	leave_scope _((I32 base));
@@ -559,13 +568,9 @@ VIRTUAL void	sv_add_arena _((char* ptr, U32 size, U32 flags));
 VIRTUAL int	sv_backoff _((SV* sv));
 VIRTUAL SV*	sv_bless _((SV* sv, HV* stash));
 VIRTUAL void	sv_catpvf _((SV* sv, const char* pat, ...));
-VIRTUAL void	sv_catpvf_mg _((SV *sv, const char* pat, ...));
 VIRTUAL void	sv_catpv _((SV* sv, char* ptr));
-VIRTUAL void	sv_catpv_mg _((SV *sv, char *ptr));
 VIRTUAL void	sv_catpvn _((SV* sv, char* ptr, STRLEN len));
-VIRTUAL void	sv_catpvn_mg _((SV *sv, char *ptr, STRLEN len));
 VIRTUAL void	sv_catsv _((SV* dsv, SV* ssv));
-VIRTUAL void	sv_catsv_mg _((SV *dstr, SV *sstr));
 VIRTUAL void	sv_chop _((SV* sv, char* ptr));
 VIRTUAL void	sv_clean_all _((void));
 VIRTUAL void	sv_clean_objs _((void));
@@ -607,25 +612,17 @@ VIRTUAL void	sv_replace _((SV* sv, SV* nsv));
 VIRTUAL void	sv_report_used _((void));
 VIRTUAL void	sv_reset _((char* s, HV* stash));
 VIRTUAL void	sv_setpvf _((SV* sv, const char* pat, ...));
-VIRTUAL void	sv_setpvf_mg _((SV *sv, const char* pat, ...));
 VIRTUAL void	sv_setiv _((SV* sv, IV num));
-VIRTUAL void	sv_setiv_mg _((SV *sv, IV i));
 VIRTUAL void	sv_setpviv _((SV* sv, IV num));
-VIRTUAL void	sv_setpviv_mg _((SV *sv, IV iv));
 VIRTUAL void	sv_setuv _((SV* sv, UV num));
-VIRTUAL void	sv_setuv_mg _((SV *sv, UV u));
 VIRTUAL void	sv_setnv _((SV* sv, double num));
-VIRTUAL void	sv_setnv_mg _((SV *sv, double num));
 VIRTUAL SV*	sv_setref_iv _((SV* rv, char* classname, IV iv));
 VIRTUAL SV*	sv_setref_nv _((SV* rv, char* classname, double nv));
 VIRTUAL SV*	sv_setref_pv _((SV* rv, char* classname, void* pv));
 VIRTUAL SV*	sv_setref_pvn _((SV* rv, char* classname, char* pv, I32 n));
 VIRTUAL void	sv_setpv _((SV* sv, const char* ptr));
-VIRTUAL void	sv_setpv_mg _((SV *sv, const char *ptr));
 VIRTUAL void	sv_setpvn _((SV* sv, const char* ptr, STRLEN len));
-VIRTUAL void	sv_setpvn_mg _((SV *sv, const char *ptr, STRLEN len));
 VIRTUAL void	sv_setsv _((SV* dsv, SV* ssv));
-VIRTUAL void	sv_setsv_mg _((SV *dstr, SV *sstr));
 VIRTUAL void	sv_taint _((SV* sv));
 VIRTUAL bool	sv_tainted _((SV* sv));
 VIRTUAL int	sv_unmagic _((SV* sv, int type));
@@ -633,7 +630,6 @@ VIRTUAL void	sv_unref _((SV* sv));
 VIRTUAL void	sv_untaint _((SV* sv));
 VIRTUAL bool	sv_upgrade _((SV* sv, U32 mt));
 VIRTUAL void	sv_usepvn _((SV* sv, char* ptr, STRLEN len));
-VIRTUAL void	sv_usepvn_mg _((SV *sv, char *ptr, STRLEN len));
 VIRTUAL void	sv_vcatpvfn _((SV* sv, const char* pat, STRLEN patlen,
 		       va_list* args, SV** svargs, I32 svmax,
 		       bool *used_locale));
@@ -641,12 +637,12 @@ VIRTUAL void	sv_vsetpvfn _((SV* sv, const char* pat, STRLEN patlen,
 		       va_list* args, SV** svargs, I32 svmax,
 		       bool *used_locale));
 VIRTUAL SV*	swash_init _((char* pkg, char* name, SV* listsv, I32 minbits, I32 none));
-VIRTUAL UV	swash_fetch _((SV *sv, unsigned char *ptr));
+VIRTUAL UV	swash_fetch _((SV *sv, U8 *ptr));
 VIRTUAL void	taint_env _((void));
 VIRTUAL void	taint_proper _((const char* f, char* s));
-VIRTUAL UV	to_utf8_lower _((unsigned char *p));
-VIRTUAL UV	to_utf8_upper _((unsigned char *p));
-VIRTUAL UV	to_utf8_title _((unsigned char *p));
+VIRTUAL UV	to_utf8_lower _((U8 *p));
+VIRTUAL UV	to_utf8_upper _((U8 *p));
+VIRTUAL UV	to_utf8_title _((U8 *p));
 #ifdef UNLINK_ALL_VERSIONS
 VIRTUAL I32	unlnk _((char* f));
 #endif
@@ -658,14 +654,15 @@ VIRTUAL void	unshare_hek _((HEK* hek));
 VIRTUAL void	utilize _((int aver, I32 floor, OP* version, OP* id, OP* arg));
 VIRTUAL U8*	utf16_to_utf8 _((U16* p, U8 *d, I32 bytelen));
 VIRTUAL U8*	utf16_to_utf8_reversed _((U16* p, U8 *d, I32 bytelen));
-VIRTUAL I32	utf8_distance _((unsigned char *a, unsigned char *b));
-VIRTUAL U8*	utf8_hop _((unsigned char *s, I32 off));
-VIRTUAL UV	utf8_to_uv _((unsigned char *s, I32* retlen));
-VIRTUAL char*	uv_to_utf8 _((unsigned char *d, UV uv));
+VIRTUAL I32	utf8_distance _((U8 *a, U8 *b));
+VIRTUAL U8*	utf8_hop _((U8 *s, I32 off));
+VIRTUAL UV	utf8_to_uv _((U8 *s, I32* retlen));
+VIRTUAL U8*	uv_to_utf8 _((U8 *d, UV uv));
 VIRTUAL void	vivify_defelem _((SV* sv));
 VIRTUAL void	vivify_ref _((SV* sv, U32 to_what));
 VIRTUAL I32	wait4pid _((int pid, int* statusp, int flags));
 VIRTUAL void	warn _((const char* pat,...));
+VIRTUAL void	warner _((U32 err, const char* pat,...));
 VIRTUAL void	watch _((char** addr));
 VIRTUAL I32	whichsig _((char* sig));
 VIRTUAL int	yyerror _((char* s));
@@ -838,7 +835,9 @@ regnode *reganode _((U8, U32));
 regnode *regatom _((I32 *));
 regnode *regbranch _((I32 *, I32));
 void regc _((U8, char *));
+void reguni _((UV, char *, I32*));
 regnode *regclass _((void));
+regnode *regclassutf8 _((void));
 I32 regcurly _((char *));
 regnode *reg_node _((U8));
 regnode *regpiece _((I32 *));
@@ -858,8 +857,11 @@ I32 regrepeat _((regnode *p, I32 max));
 I32 regrepeat_hard _((regnode *p, I32 max, I32 *lp));
 I32 regtry _((regexp *prog, char *startpos));
 bool reginclass _((char *p, I32 c));
+bool reginclassutf8 _((regnode *f, U8* p));
 CHECKPOINT regcppush _((I32 parenfloor));
 char * regcppop _((void));
+U8 * reghop _((U8 *pos, I32 off));
+U8 * reghopmaybe _((U8 *pos, I32 off));
 void dump _((char *pat,...));
 #ifdef WIN32
 int do_aspawn _((void *vreally, void **vmark, void **vsp));
@@ -931,4 +933,22 @@ VIRTUAL void byterun _((struct bytestream bs));
 #else
 VIRTUAL void byterun _((PerlIO *fp));
 #endif /* INDIRECT_BGET_MACROS */
+
+VIRTUAL void	sv_catpvf_mg _((SV *sv, const char* pat, ...));
+VIRTUAL void	sv_catpv_mg _((SV *sv, char *ptr));
+VIRTUAL void	sv_catpvn_mg _((SV *sv, char *ptr, STRLEN len));
+VIRTUAL void	sv_catsv_mg _((SV *dstr, SV *sstr));
+VIRTUAL void	sv_setpvf_mg _((SV *sv, const char* pat, ...));
+VIRTUAL void	sv_setiv_mg _((SV *sv, IV i));
+VIRTUAL void	sv_setpviv_mg _((SV *sv, IV iv));
+VIRTUAL void	sv_setuv_mg _((SV *sv, UV u));
+VIRTUAL void	sv_setnv_mg _((SV *sv, double num));
+VIRTUAL void	sv_setpv_mg _((SV *sv, const char *ptr));
+VIRTUAL void	sv_setpvn_mg _((SV *sv, const char *ptr, STRLEN len));
+VIRTUAL void	sv_setsv_mg _((SV *dstr, SV *sstr));
+VIRTUAL void	sv_usepvn_mg _((SV *sv, char *ptr, STRLEN len));
+
+/* New virtual functions must be added here to maintain binary
+ * compatablity with PERL_OBJECT
+ */
 

@@ -1,0 +1,25 @@
+  mg.c	AOK
+
+  No such signal: SIG%s
+    $SIG{FRED} = sub {}
+
+  SIG%s handler \"%s\" not defined.
+    $SIG{"INT"} = "ok3"; kill "INT",$$;
+
+
+__END__
+# mg.c
+use warning 'signal' ;
+$SIG{FRED} = sub {};
+EXPECT
+No such signal: SIGFRED at - line 3.
+########
+# mg.c
+use warning 'signal' ;
+if ($^O eq 'MSWin32') {
+    print "SKIPPED\n# win32, can't kill() to raise()\n"; exit;
+}
+$|=1;
+$SIG{"INT"} = "fred"; kill "INT",$$;
+EXPECT
+SIGINT handler "fred" not defined.

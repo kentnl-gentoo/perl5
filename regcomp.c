@@ -38,6 +38,7 @@
 /* *These* symbols are masked to allow static link. */
 #  define Perl_pregfree my_regfree
 #  define Perl_regnext my_regnext
+#  define save_re_context my_save_re_context
 #endif 
 
 /*SUPPRESS 112*/
@@ -206,6 +207,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 STATIC void
 scan_commit(scan_data_t *data)
 {
+    dTHR;
     STRLEN l = CHR_SVLEN(data->last_found);
     STRLEN old_l = CHR_SVLEN(*data->longest);
     
@@ -318,7 +320,10 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 
 	}
 	if (OP(scan) != CURLYX) {
-	    int max = (reg_off_by_arg[OP(scan)] ? I32_MAX : U16_MAX);
+	    int max = (reg_off_by_arg[OP(scan)]
+		       ? I32_MAX
+		       /* I32 may be smaller than U16 on CRAYs! */
+		       : (I32_MAX < U16_MAX ? I32_MAX : U16_MAX));
 	    int off = (reg_off_by_arg[OP(scan)] ? ARG(scan) : NEXT_OFF(scan));
 	    int noff;
 	    regnode *n = scan;
@@ -485,10 +490,10 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 					? (flags & ~SCF_DO_SUBSTR) : flags);
 		if (!scan) 		/* It was not CURLYX, but CURLY. */
 		    scan = next;
-		if (PL_dowarn && (minnext + deltanext == 0) 
+		if (ckWARN(WARN_UNSAFE) && (minnext + deltanext == 0) 
 		    && !(data->flags & (SF_HAS_PAR|SF_IN_PAR))
 		    && maxcount <= 10000) /* Complement check for big count */
-		    warn("Strange *+?{} on zero-length expression");
+		    warner(WARN_UNSAFE, "Strange *+?{} on zero-length expression");
 		min += minnext * mincount;
 		is_inf |= (maxcount == REG_INFTY && (minnext + deltanext) > 0
 			   || deltanext == I32_MAX);
@@ -1553,8 +1558,8 @@ regpiece(I32 *flagp)
 	goto do_curly;
     }
   nest_check:
-    if (PL_dowarn && !SIZE_ONLY && !(flags&HASWIDTH) && max > 10000) {
-	warn("%.*s matches null string many times",
+    if (ckWARN(WARN_UNSAFE) && !SIZE_ONLY && !(flags&HASWIDTH) && max > 10000) {
+	warner(WARN_UNSAFE, "%.*s matches null string many times",
 	    PL_regcomp_parse - origparse, origparse);
     }
 
@@ -1632,6 +1637,9 @@ tryagain:
     case '[':
 	PL_regcomp_parse++;
 	ret = (UTF ? regclassutf8() : regclass());
+	if (*PL_regcomp_parse != ']')
+	    FAIL("unmatched [] in regexp");
+	nextchar();
 	*flagp |= HASWIDTH|SIMPLE;
 	break;
     case '(':
@@ -1699,7 +1707,7 @@ tryagain:
 	    *flagp |= HASWIDTH;
 	    nextchar();
 	    if (UTF && !PL_utf8_mark)
-		is_utf8_mark("~");	/* preload table */
+		is_utf8_mark((U8*)"~");		/* preload table */
 	    break;
 	case 'w':
 	    ret = reg_node(
@@ -1709,7 +1717,7 @@ tryagain:
 	    *flagp |= HASWIDTH|SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_alnum)
-		is_utf8_alnum("a");	/* preload table */
+		is_utf8_alnum((U8*)"a");	/* preload table */
 	    break;
 	case 'W':
 	    ret = reg_node(
@@ -1719,7 +1727,7 @@ tryagain:
 	    *flagp |= HASWIDTH|SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_alnum)
-		is_utf8_alnum("a");	/* preload table */
+		is_utf8_alnum((U8*)"a");	/* preload table */
 	    break;
 	case 'b':
 	    PL_seen_zerolen++;
@@ -1730,7 +1738,7 @@ tryagain:
 	    *flagp |= SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_alnum)
-		is_utf8_alnum("a");	/* preload table */
+		is_utf8_alnum((U8*)"a");	/* preload table */
 	    break;
 	case 'B':
 	    PL_seen_zerolen++;
@@ -1741,7 +1749,7 @@ tryagain:
 	    *flagp |= SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_alnum)
-		is_utf8_alnum("a");	/* preload table */
+		is_utf8_alnum((U8*)"a");	/* preload table */
 	    break;
 	case 's':
 	    ret = reg_node(
@@ -1751,7 +1759,7 @@ tryagain:
 	    *flagp |= HASWIDTH|SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_space)
-		is_utf8_space(" ");	/* preload table */
+		is_utf8_space((U8*)" ");	/* preload table */
 	    break;
 	case 'S':
 	    ret = reg_node(
@@ -1761,21 +1769,44 @@ tryagain:
 	    *flagp |= HASWIDTH|SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_space)
-		is_utf8_space(" ");	/* preload table */
+		is_utf8_space((U8*)" ");	/* preload table */
 	    break;
 	case 'd':
 	    ret = reg_node(UTF ? DIGITUTF8 : DIGIT);
 	    *flagp |= HASWIDTH|SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_digit)
-		is_utf8_digit("1");	/* preload table */
+		is_utf8_digit((U8*)"1");	/* preload table */
 	    break;
 	case 'D':
 	    ret = reg_node(UTF ? NDIGITUTF8 : NDIGIT);
 	    *flagp |= HASWIDTH|SIMPLE;
 	    nextchar();
 	    if (UTF && !PL_utf8_digit)
-		is_utf8_digit("1");	/* preload table */
+		is_utf8_digit((U8*)"1");	/* preload table */
+	    break;
+	case 'p':
+	case 'P':
+	    {	/* a lovely hack--pretend we saw [\pX] instead */
+		char* oldregxend = PL_regxend;
+
+		if (PL_regcomp_parse[1] == '{') {
+		    PL_regxend = strchr(PL_regcomp_parse, '}');
+		    if (!PL_regxend)
+			FAIL("Missing right brace on \\p{}");
+		    PL_regxend++;
+		}
+		else
+		    PL_regxend = PL_regcomp_parse + 2;
+		PL_regcomp_parse--;
+
+		ret = regclassutf8();
+
+		PL_regxend = oldregxend;
+		PL_regcomp_parse--;
+		nextchar();
+		*flagp |= HASWIDTH|SIMPLE;
+	    }
 	    break;
 	case 'n':
 	case 'r':
@@ -1872,6 +1903,8 @@ tryagain:
 		    case 'S':
 		    case 'd':
 		    case 'D':
+		    case 'p':
+		    case 'P':
 			--p;
 			goto loopdone;
 		    case 'n':
@@ -1948,7 +1981,7 @@ tryagain:
 		default:
 		  normal_default:
 		    if ((*p & 0xc0) == 0xc0 && UTF) {
-			ender = utf8_to_uv(p, &numlen);
+			ender = utf8_to_uv((U8*)p, &numlen);
 			p += numlen;
 		    }
 		    else
@@ -2082,8 +2115,9 @@ regclass(void)
 		     * (POSIX Extended Character Classes, that is)
 		     * The text between e.g. [: and :] would start
 		     * at posixccs + 1 and stop at regcomp_parse - 2. */
-		    if (dowarn && !SIZE_ONLY)
-			warn("Character class syntax [%c %c] is reserved for future extensions", posixccc, posixccc);
+		    if (ckWARN(WARN_UNSAFE) && !SIZE_ONLY)
+			warner(WARN_UNSAFE,
+			    "Character class syntax [%c %c] is reserved for future extensions", posixccc, posixccc);
 		    PL_regcomp_parse++; /* skip over the ending ] */
 		}
 	    }
@@ -2211,9 +2245,6 @@ regclass(void)
 	}
 	lastvalue = value;
     }
-    if (*PL_regcomp_parse != ']')
-	FAIL("unmatched [] in regexp");
-    nextchar();
     /* optimize case-insensitive simple patterns (e.g. /[a-z]/i) */
     if (!SIZE_ONLY && (*opnd & (0xFF ^ ANYOF_INVERT)) == ANYOF_FOLD) {
 	for (value = 0; value < 256; ++value) {
@@ -2245,6 +2276,7 @@ regclassutf8(void)
     I32 n;
     SV *listsv;
     U8 flags = 0;
+    dTHR;
 
     if (*PL_regcomp_parse == '^') {	/* Complement of range. */
 	PL_regnaughty++;
@@ -2265,7 +2297,7 @@ regclassutf8(void)
 
     while (PL_regcomp_parse < PL_regxend && *PL_regcomp_parse != ']') {
        skipcond:
-	value = utf8_to_uv(PL_regcomp_parse, &numlen);
+	value = utf8_to_uv((U8*)PL_regcomp_parse, &numlen);
 	PL_regcomp_parse += numlen;
 
 	if (value == '[' && PL_regcomp_parse + 1 < PL_regxend &&
@@ -2286,15 +2318,16 @@ regclassutf8(void)
 		     * (POSIX Extended Character Classes, that is)
 		     * The text between e.g. [: and :] would start
 		     * at posixccs + 1 and stop at regcomp_parse - 2. */
-		    if (dowarn && !SIZE_ONLY)
-			warn("Character class syntax [%c %c] is reserved for future extensions", posixccc, posixccc);
+		    if (ckWARN(WARN_UNSAFE) && !SIZE_ONLY)
+			warner(WARN_UNSAFE,
+			    "Character class syntax [%c %c] is reserved for future extensions", posixccc, posixccc);
 		    PL_regcomp_parse++; /* skip over the ending ] */
 		}
 	    }
 	}
 
 	if (value == '\\') {
-	    value = utf8_to_uv(PL_regcomp_parse, &numlen);
+	    value = utf8_to_uv((U8*)PL_regcomp_parse, &numlen);
 	    PL_regcomp_parse += numlen;
 	    switch (value) {
 	    case 'w':
@@ -2324,7 +2357,7 @@ regclassutf8(void)
 			flags |= ANYOF_SPACEL;
 		    sv_catpvf(listsv, "+utf8::IsSpace\n");
 		    if (!PL_utf8_space)
-			is_utf8_space(" ");
+			is_utf8_space((U8*)" ");
 		}
 		lastvalue = 123456;
 		continue;
@@ -2335,7 +2368,7 @@ regclassutf8(void)
 		    sv_catpvf(listsv,
 			"!utf8::IsSpace\n");
 		    if (!PL_utf8_space)
-			is_utf8_space(" ");
+			is_utf8_space((U8*)" ");
 		}
 		lastvalue = 123456;
 		continue;
@@ -2439,9 +2472,6 @@ regclassutf8(void)
 		sv_catpvf(listsv, "%04x\n", value);
 	}
     }
-    if (*PL_regcomp_parse != ']')
-	FAIL("unmatched [] in regexp");
-    nextchar();
 
     ret = reganode(ANYOFUTF8, 0);
 
@@ -2543,12 +2573,13 @@ reganode(U8 op, U32 arg)
 STATIC void
 reguni(UV uv, char* s, I32* lenp)
 {
+    dTHR;
     if (SIZE_ONLY) {
-	char tmpbuf[10];
+	U8 tmpbuf[10];
 	*lenp = uv_to_utf8(tmpbuf, uv) - tmpbuf;
     }
     else
-	*lenp = uv_to_utf8(s, uv) - s;
+	*lenp = uv_to_utf8((U8*)s, uv) - (U8*)s;
 
 }
 
@@ -3104,7 +3135,8 @@ re_croak2(const char* pat1,const char* pat2,...)
 
 void
 save_re_context(void)
-{
+{                   
+    dTHR;
     SAVEPPTR(PL_bostr);
     SAVEPPTR(PL_regprecomp);		/* uncompiled string. */
     SAVEI32(PL_regnpar);		/* () count. */

@@ -31,8 +31,6 @@ char *getenv _((char *)); /* Usually in <stdlib.h> */
 #include <sys/file.h>
 #endif
 
-dEXTCONST char rcsid[] = "perl.c\nPatch level: ###\n";
-
 #ifdef IAMSUID
 #ifndef DOSUID
 #define DOSUID
@@ -142,6 +140,8 @@ perl_construct(register PerlInterpreter *sv_interp)
 	
 	thr = init_main_thread();
 #endif /* USE_THREADS */
+
+	PL_curcop = &PL_compiling;	/* needed by ckWARN, right away */
 
 	PL_linestr = NEWSV(65,79);
 	sv_upgrade(PL_linestr,SVt_PVIV);
@@ -256,7 +256,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
     /* Pass 1 on any remaining threads: detach joinables, join zombies */
   retry_cleanup:
     MUTEX_LOCK(&PL_threads_mutex);
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			  "perl_destruct: waiting for %d threads...\n",
 			  PL_nthreads - 1));
     for (t = thr->next; t != thr; t = t->next) {
@@ -264,7 +264,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
 	switch (ThrSTATE(t)) {
 	    AV *av;
 	case THRf_ZOMBIE:
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 				  "perl_destruct: joining zombie %p\n", t));
 	    ThrSETSTATE(t, THRf_DEAD);
 	    MUTEX_UNLOCK(&t->mutex);
@@ -278,11 +278,11 @@ perl_destruct(register PerlInterpreter *sv_interp)
 	    MUTEX_UNLOCK(&PL_threads_mutex);
 	    JOIN(t, &av);
 	    SvREFCNT_dec((SV*)av);
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 				  "perl_destruct: joined zombie %p OK\n", t));
 	    goto retry_cleanup;
 	case THRf_R_JOINABLE:
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 				  "perl_destruct: detaching thread %p\n", t));
 	    ThrSETSTATE(t, THRf_R_DETACHED);
 	    /* 
@@ -296,7 +296,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
 	    MUTEX_UNLOCK(&t->mutex);
 	    goto retry_cleanup;
 	default:
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 				  "perl_destruct: ignoring %p (state %u)\n",
 				  t, ThrSTATE(t)));
 	    MUTEX_UNLOCK(&t->mutex);
@@ -308,14 +308,14 @@ perl_destruct(register PerlInterpreter *sv_interp)
     /* Pass 2 on remaining threads: wait for the thread count to drop to one */
     while (PL_nthreads > 1)
     {
-	DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			      "perl_destruct: final wait for %d threads\n",
 			      PL_nthreads - 1));
 	COND_WAIT(&PL_nthreads_cond, &PL_threads_mutex);
     }
     /* At this point, we're the last thread */
     MUTEX_UNLOCK(&PL_threads_mutex);
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "perl_destruct: armageddon has arrived\n"));
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "perl_destruct: armageddon has arrived\n"));
     MUTEX_DESTROY(&PL_threads_mutex);
     COND_DESTROY(&PL_nthreads_cond);
 #endif /* !defined(FAKE_THREADS) */
@@ -405,7 +405,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
     PL_minus_a      = FALSE;
     PL_minus_F      = FALSE;
     PL_doswitches   = FALSE;
-    PL_dowarn       = FALSE;
+    PL_dowarn       = G_WARN_OFF;
     PL_doextract    = FALSE;
     PL_sawampersand = FALSE;	/* must save all match strings */
     PL_sawstudy     = FALSE;	/* do fbm_instr on all strings */
@@ -682,6 +682,7 @@ setuid perl scripts securely.\n");
 
     time(&PL_basetime);
     oldscope = PL_scopestack_ix;
+    PL_dowarn = G_WARN_OFF;
 
     JMPENV_PUSH(ret);
     switch (ret) {
@@ -739,6 +740,8 @@ setuid perl scripts securely.\n");
 	case 'u':
 	case 'U':
 	case 'v':
+	case 'W':
+	case 'X':
 	case 'w':
 	    if (s = moreswitches(s))
 		goto reswitch;
@@ -992,7 +995,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
     if (PL_do_undump)
 	my_unexec();
 
-    if (PL_dowarn)
+    if (ckWARN(WARN_ONCE))
 	gv_check(PL_defstash);
 
     LEAVE;
@@ -1064,10 +1067,8 @@ perl_run(PerlInterpreter *sv_interp)
     if (!PL_restartop) {
 	DEBUG_x(dump_all());
 	DEBUG(PerlIO_printf(Perl_debug_log, "\nEXECUTING...\n\n"));
-#ifdef USE_THREADS
-	DEBUG_L(PerlIO_printf(Perl_debug_log, "main thread is 0x%lx\n",
+	DEBUG_S(PerlIO_printf(Perl_debug_log, "main thread is 0x%lx\n",
 			      (unsigned long) thr));
-#endif /* USE_THREADS */	
 
 	if (PL_minus_c) {
 	    PerlIO_printf(PerlIO_stderr(), "%s syntax OK\n", PL_origfilename);
@@ -1571,7 +1572,7 @@ moreswitches(char *s)
 #ifdef DEBUGGING
 	forbid_setid("-D");
 	if (isALPHA(s[1])) {
-	    static char debopts[] = "psltocPmfrxuLHXD";
+	    static char debopts[] = "psltocPmfrxuLHXDS";
 	    char *d;
 
 	    for (s++; *s && (d = strchr(debopts,*s)); s++)
@@ -1738,6 +1739,9 @@ moreswitches(char *s)
 #ifdef MPE
 	printf("MPE/iX port Copyright by Mark Klein and Mark Bixby, 1996-1998\n");
 #endif
+#ifdef OEMVS
+	printf("MVS (OS390) port by Mortice Kern Systems, 1997-1998\n");
+#endif
 #ifdef BINARY_BUILD_NOTICE
 	BINARY_BUILD_NOTICE;
 #endif
@@ -1749,7 +1753,18 @@ this system using `man perl' or `perldoc perl'.  If you have access to the\n\
 Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
 	PerlProc_exit(0);
     case 'w':
-	PL_dowarn = TRUE;
+	if (! (PL_dowarn & G_WARN_ALL_MASK))
+	    PL_dowarn |= G_WARN_ON; 
+	s++;
+	return s;
+    case 'W':
+	PL_dowarn = G_WARN_ALL_ON|G_WARN_ON; 
+	compiling.cop_warnings = WARN_ALL ;
+	s++;
+	return s;
+    case 'X':
+	PL_dowarn = G_WARN_ALL_OFF; 
+	compiling.cop_warnings = WARN_NONE ;
 	s++;
 	return s;
     case '*':
@@ -2886,10 +2901,8 @@ my_exit(U32 status)
 {
     dTHR;
 
-#ifdef USE_THREADS
-    DEBUG_L(PerlIO_printf(Perl_debug_log, "my_exit: thread %p, status %lu\n",
+    DEBUG_S(PerlIO_printf(Perl_debug_log, "my_exit: thread %p, status %lu\n",
 			  thr, (unsigned long) status));
-#endif /* USE_THREADS */
     switch (status) {
     case 0:
 	STATUS_ALL_SUCCESS;
@@ -2974,8 +2987,10 @@ read_e_script(int idx, SV *buf_sv, int maxlen)
     p  = SvPVX(PL_e_script);
     nl = strchr(p, '\n');
     nl = (nl) ? nl+1 : SvEND(PL_e_script);
-    if (nl-p == 0)
+    if (nl-p == 0) {
+	filter_del(read_e_script);
 	return 0;
+    }
     sv_catpvn(buf_sv, p, nl-p);
     sv_chop(PL_e_script, nl);
     return 1;

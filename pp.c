@@ -234,8 +234,8 @@ PP(pp_rv2gv)
 		if (PL_op->op_flags & OPf_REF ||
 		    PL_op->op_private & HINT_STRICT_REFS)
 		    DIE(no_usym, "a symbol");
-		if (PL_dowarn)
-		    warn(warn_uninit);
+		if (ckWARN(WARN_UNINITIALIZED))
+		    warner(WARN_UNINITIALIZED, warn_uninit);
 		RETSETUNDEF;
 	    }
 	    sym = SvPV(sv, PL_na);
@@ -278,8 +278,8 @@ PP(pp_rv2sv)
 		if (PL_op->op_flags & OPf_REF ||
 		    PL_op->op_private & HINT_STRICT_REFS)
 		    DIE(no_usym, "a SCALAR");
-		if (PL_dowarn)
-		    warn(warn_uninit);
+		if (ckWARN(WARN_UNINITIALIZED))
+		    warner(WARN_UNINITIALIZED, warn_uninit);
 		RETSETUNDEF;
 	    }
 	    sym = SvPV(sv, PL_na);
@@ -520,8 +520,9 @@ PP(pp_bless)
 	SV *ssv = POPs;
 	STRLEN len;
 	char *ptr = SvPV(ssv,len);
-	if (PL_dowarn && len == 0)
-	    warn("Explicit blessing to '' (assuming package main)");
+	if (ckWARN(WARN_UNSAFE) && len == 0)
+	    warner(WARN_UNSAFE, 
+		   "Explicit blessing to '' (assuming package main)");
 	stash = gv_stashpvn(ptr, len, TRUE);
     }
 
@@ -770,8 +771,8 @@ PP(pp_undef)
 	hv_undef((HV*)sv);
 	break;
     case SVt_PVCV:
-	if (PL_dowarn && cv_const_sv((CV*)sv))
-	    warn("Constant subroutine %s undefined",
+	if (ckWARN(WARN_UNSAFE) && cv_const_sv((CV*)sv))
+	    warner(WARN_UNSAFE, "Constant subroutine %s undefined",
 		 CvANON((CV*)sv) ? "(anonymous)" : GvENAME(CvGV((CV*)sv)));
 	/* FALL THROUGH */
     case SVt_PVFM:
@@ -1839,6 +1840,8 @@ PP(pp_substr)
 	else
 	    curlen = utfcurlen;
     }
+    else
+	utfcurlen = 0;
 
     if (pos >= arybase) {
 	pos -= arybase;
@@ -1874,8 +1877,8 @@ PP(pp_substr)
 	rem -= pos;
     }
     if (fail < 0) {
-	if (PL_dowarn || lvalue || repl)
-	    warn("substr outside of string");
+	if (ckWARN(WARN_SUBSTR) || lvalue || repl)
+	    warner(WARN_SUBSTR, "substr outside of string");
 	RETPUSHUNDEF;
     }
     else {
@@ -1887,8 +1890,9 @@ PP(pp_substr)
 	    if (!SvGMAGICAL(sv)) {
 		if (SvROK(sv)) {
 		    SvPV_force(sv,PL_na);
-		    if (PL_dowarn)
-			warn("Attempt to use reference as lvalue in substr");
+		    if (ckWARN(WARN_SUBSTR))
+			warner(WARN_SUBSTR,
+				"Attempt to use reference as lvalue in substr");
 		}
 		if (SvOK(sv))		/* is it defined ? */
 		    (void)SvPOK_only(sv);
@@ -2094,7 +2098,7 @@ PP(pp_ord)
 {
     djSP; dTARGET;
     I32 value;
-    char *tmps = POPp;
+    U8 *tmps = (U8*)POPp;
     I32 retlen;
 
     if (IN_UTF8 && (*tmps & 0x80))
@@ -2116,7 +2120,7 @@ PP(pp_chr)
     if (IN_UTF8 && value >= 128) {
 	SvGROW(TARG,8);
 	tmps = SvPVX(TARG);
-	tmps = uv_to_utf8(tmps, (UV)value);
+	tmps = (char*)uv_to_utf8((U8*)tmps, (UV)value);
 	SvCUR_set(TARG, tmps - SvPVX(TARG));
 	*tmps = '\0';
 	(void)SvPOK_only(TARG);
@@ -2159,7 +2163,7 @@ PP(pp_ucfirst)
     register U8 *s;
     STRLEN slen;
 
-    if (IN_UTF8 && (s = SvPV(sv, slen)) && slen && (*s & 0xc0) == 0xc0) {
+    if (IN_UTF8 && (s = (U8*)SvPV(sv, slen)) && slen && (*s & 0xc0) == 0xc0) {
 	I32 ulen;
 	U8 tmpbuf[10];
 	U8 *tend;
@@ -2177,12 +2181,12 @@ PP(pp_ucfirst)
 
 	if (!SvPADTMP(sv) || tend - tmpbuf != ulen) {
 	    dTARGET;
-	    sv_setpvn(TARG, tmpbuf, tend - tmpbuf);
-	    sv_catpvn(TARG, s + ulen, slen - ulen);
+	    sv_setpvn(TARG, (char*)tmpbuf, tend - tmpbuf);
+	    sv_catpvn(TARG, (char*)(s + ulen), slen - ulen);
 	    SETs(TARG);
 	}
 	else {
-	    s = SvPV_force(sv, slen);
+	    s = (U8*)SvPV_force(sv, slen);
 	    Copy(tmpbuf, s, ulen, U8);
 	}
 	RETURN;
@@ -2194,7 +2198,7 @@ PP(pp_ucfirst)
 	sv = TARG;
 	SETs(sv);
     }
-    s = SvPV_force(sv, PL_na);
+    s = (U8*)SvPV_force(sv, PL_na);
     if (*s) {
 	if (PL_op->op_private & OPpLOCALE) {
 	    TAINT;
@@ -2215,7 +2219,7 @@ PP(pp_lcfirst)
     register U8 *s;
     STRLEN slen;
 
-    if (IN_UTF8 && (s = SvPV(sv, slen)) && slen && (*s & 0xc0) == 0xc0) {
+    if (IN_UTF8 && (s = (U8*)SvPV(sv, slen)) && slen && (*s & 0xc0) == 0xc0) {
 	I32 ulen;
 	U8 tmpbuf[10];
 	U8 *tend;
@@ -2233,12 +2237,12 @@ PP(pp_lcfirst)
 
 	if (!SvPADTMP(sv) || tend - tmpbuf != ulen) {
 	    dTARGET;
-	    sv_setpvn(TARG, tmpbuf, tend - tmpbuf);
-	    sv_catpvn(TARG, s + ulen, slen - ulen);
+	    sv_setpvn(TARG, (char*)tmpbuf, tend - tmpbuf);
+	    sv_catpvn(TARG, (char*)(s + ulen), slen - ulen);
 	    SETs(TARG);
 	}
 	else {
-	    s = SvPV_force(sv, slen);
+	    s = (U8*)SvPV_force(sv, slen);
 	    Copy(tmpbuf, s, ulen, U8);
 	}
 	RETURN;
@@ -2250,7 +2254,7 @@ PP(pp_lcfirst)
 	sv = TARG;
 	SETs(sv);
     }
-    s = SvPV_force(sv, PL_na);
+    s = (U8*)SvPV_force(sv, PL_na);
     if (*s) {
 	if (PL_op->op_private & OPpLOCALE) {
 	    TAINT;
@@ -2278,14 +2282,17 @@ PP(pp_uc)
 	register U8 *d;
 	U8 *send;
 
-	s = SvPV(sv,len);
-	if (!len)
+	s = (U8*)SvPV(sv,len);
+	if (!len) {
+	    sv_setpvn(TARG, "", 0);
+	    SETs(TARG);
 	    RETURN;
+	}
 
 	(void)SvUPGRADE(TARG, SVt_PV);
 	SvGROW(TARG, (len * 2) + 1);
 	(void)SvPOK_only(TARG);
-	d = SvPVX(TARG);
+	d = (U8*)SvPVX(TARG);
 	send = s + len;
 	if (PL_op->op_private & OPpLOCALE) {
 	    TAINT;
@@ -2314,7 +2321,7 @@ PP(pp_uc)
 	SETs(sv);
     }
 
-    s = SvPV_force(sv, len);
+    s = (U8*)SvPV_force(sv, len);
     if (len) {
 	register U8 *send = s + len;
 
@@ -2345,14 +2352,17 @@ PP(pp_lc)
 	register U8 *d;
 	U8 *send;
 
-	s = SvPV(sv,len);
-	if (!len)
+	s = (U8*)SvPV(sv,len);
+	if (!len) {
+	    sv_setpvn(TARG, "", 0);
+	    SETs(TARG);
 	    RETURN;
+	}
 
 	(void)SvUPGRADE(TARG, SVt_PV);
 	SvGROW(TARG, (len * 2) + 1);
 	(void)SvPOK_only(TARG);
-	d = SvPVX(TARG);
+	d = (U8*)SvPVX(TARG);
 	send = s + len;
 	if (PL_op->op_private & OPpLOCALE) {
 	    TAINT;
@@ -2381,7 +2391,7 @@ PP(pp_lc)
 	SETs(sv);
     }
 
-    s = SvPV_force(sv, len);
+    s = (U8*)SvPV_force(sv, len);
     if (len) {
 	register U8 *send = s + len;
 
@@ -2704,8 +2714,8 @@ PP(pp_anonhash)
 	SV *val = NEWSV(46, 0);
 	if (MARK < SP)
 	    sv_setsv(val, *++MARK);
-	else if (PL_dowarn)
-	    warn("Odd number of elements in hash assignment");
+	else if (ckWARN(WARN_UNSAFE))
+	    warner(WARN_UNSAFE, "Odd number of elements in hash assignment");
 	(void)hv_store_ent(hv,key,val,0);
     }
     SP = ORIGMARK;
@@ -3033,17 +3043,17 @@ PP(pp_reverse)
 	up = SvPV_force(TARG, len);
 	if (len > 1) {
 	    if (IN_UTF8) {	/* first reverse each character */
-		unsigned char* s = SvPVX(TARG);
-		unsigned char* send = s + len;
+		U8* s = (U8*)SvPVX(TARG);
+		U8* send = (U8*)(s + len);
 		while (s < send) {
 		    if (*s < 0x80) {
 			s++;
 			continue;
 		    }
 		    else {
-			up = s;
+			up = (char*)s;
 			s += UTF8SKIP(s);
-			down = s - 1;
+			down = (char*)(s - 1);
 			if (s > send || !((*down & 0xc0) == 0x80)) {
 			    warn("Malformed UTF-8 character");
 			    break;
@@ -3099,6 +3109,20 @@ mul128(SV *sv, U8 m)
 }
 
 /* Explosives and implosives. */
+
+static const char uuemap[] =
+    "`!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_";
+static char uudmap[256];        /* Initialised on first use */
+#if 'I' == 73 && 'J' == 74
+/* On an ASCII/ISO kind of system */
+#define ISUUCHAR(ch)    ((ch) >= ' ' && (ch) < 'a')
+#else
+/*
+  Some other sort of character set - use memchr() so we don't match
+  the null byte.
+ */
+#define ISUUCHAR(ch)    (memchr(uuemap, (ch), sizeof(uuemap)-1) || (ch) == ' ')
+#endif
 
 PP(pp_unpack)
 {
@@ -3173,8 +3197,8 @@ PP(pp_unpack)
 	default:
 	    croak("Invalid type in unpack: '%c'", (int)datumtype);
 	case ',': /* grandfather in commas but with a warning */
-	    if (commas++ == 0 && PL_dowarn)
-		warn("Invalid type in unpack: '%c'", (int)datumtype);
+	    if (commas++ == 0 && ckWARN(WARN_UNSAFE))
+		warner(WARN_UNSAFE, "Invalid type in unpack: '%c'", (int)datumtype);
 	    break;
 	case '%':
 	    if (len == 1 && pat[-1] != '1')
@@ -3371,7 +3395,7 @@ PP(pp_unpack)
 		len = strend - s;
 	    if (checksum) {
 		while (len-- > 0 && s < strend) {
-		    auint = utf8_to_uv(s, &along);
+		    auint = utf8_to_uv((U8*)s, &along);
 		    s += along;
 		    culong += auint;
 		}
@@ -3380,7 +3404,7 @@ PP(pp_unpack)
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0 && s < strend) {
-		    auint = utf8_to_uv(s, &along);
+		    auint = utf8_to_uv((U8*)s, &along);
 		    s += along;
 		    sv = NEWSV(37, 0);
 		    sv_setiv(sv, (IV)auint);
@@ -3748,31 +3772,48 @@ PP(pp_unpack)
 	    }
 	    break;
 	case 'u':
+	    /* MKS:
+	     * Initialise the decode mapping.  By using a table driven
+             * algorithm, the code will be character-set independent
+             * (and just as fast as doing character arithmetic)
+             */
+            if (uudmap['M'] == 0) {
+                int i;
+ 
+                for (i = 0; i < sizeof(uuemap); i += 1)
+                    uudmap[uuemap[i]] = i;
+                /*
+                 * Because ' ' and '`' map to the same value,
+                 * we need to decode them both the same.
+                 */
+                uudmap[' '] = 0;
+            }
+
 	    along = (strend - s) * 3 / 4;
 	    sv = NEWSV(42, along);
 	    if (along)
 		SvPOK_on(sv);
-	    while (s < strend && *s > ' ' && *s < 'a') {
+	    while (s < strend && *s > ' ' && ISUUCHAR(*s)) {
 		I32 a, b, c, d;
 		char hunk[4];
 
 		hunk[3] = '\0';
 		len = (*s++ - ' ') & 077;
 		while (len > 0) {
-		    if (s < strend && *s >= ' ')
-			a = (*s++ - ' ') & 077;
-		    else
-			a = 0;
-		    if (s < strend && *s >= ' ')
-			b = (*s++ - ' ') & 077;
-		    else
-			b = 0;
-		    if (s < strend && *s >= ' ')
-			c = (*s++ - ' ') & 077;
-		    else
-			c = 0;
-		    if (s < strend && *s >= ' ')
-			d = (*s++ - ' ') & 077;
+		    if (s < strend && ISUUCHAR(*s))
+			a = uudmap[*s++] & 077;
+ 		    else
+ 			a = 0;
+		    if (s < strend && ISUUCHAR(*s))
+			b = uudmap[*s++] & 077;
+ 		    else
+ 			b = 0;
+		    if (s < strend && ISUUCHAR(*s))
+			c = uudmap[*s++] & 077;
+ 		    else
+ 			c = 0;
+		    if (s < strend && ISUUCHAR(*s))
+			d = uudmap[*s++] & 077;
 		    else
 			d = 0;
 		    hunk[0] = (a << 2) | (b >> 4);
@@ -3833,21 +3874,25 @@ doencodes(register SV *sv, register char *s, register I32 len)
 {
     char hunk[5];
 
-    *hunk = len + ' ';
+    *hunk = uuemap[len];
     sv_catpvn(sv, hunk, 1);
     hunk[4] = '\0';
-    while (len > 0) {
-	hunk[0] = ' ' + (077 & (*s >> 2));
-	hunk[1] = ' ' + (077 & (((*s << 4) & 060) | ((s[1] >> 4) & 017)));
-	hunk[2] = ' ' + (077 & (((s[1] << 2) & 074) | ((s[2] >> 6) & 03)));
-	hunk[3] = ' ' + (077 & (s[2] & 077));
+    while (len > 2) {
+	hunk[0] = uuemap[(077 & (*s >> 2))];
+	hunk[1] = uuemap[(077 & (((*s << 4) & 060) | ((s[1] >> 4) & 017)))];
+	hunk[2] = uuemap[(077 & (((s[1] << 2) & 074) | ((s[2] >> 6) & 03)))];
+	hunk[3] = uuemap[(077 & (s[2] & 077))];
 	sv_catpvn(sv, hunk, 4);
 	s += 3;
 	len -= 3;
     }
-    for (s = SvPVX(sv); *s; s++) {
-	if (*s == ' ')
-	    *s = '`';
+    if (len > 0) {
+	char r = (len > 1 ? s[1] : '\0');
+	hunk[0] = uuemap[(077 & (*s >> 2))];
+	hunk[1] = uuemap[(077 & (((*s << 4) & 060) | ((r >> 4) & 017)))];
+	hunk[2] = uuemap[(077 & ((r << 2) & 074))];
+	hunk[3] = uuemap[0];
+	sv_catpvn(sv, hunk, 4);
     }
     sv_catpvn(sv, "\n", 1);
 }
@@ -3983,8 +4028,8 @@ PP(pp_pack)
 	default:
 	    croak("Invalid type in pack: '%c'", (int)datumtype);
 	case ',': /* grandfather in commas but with a warning */
-	    if (commas++ == 0 && PL_dowarn)
-		warn("Invalid type in pack: '%c'", (int)datumtype);
+	    if (commas++ == 0 && ckWARN(WARN_UNSAFE))
+		warner(WARN_UNSAFE, "Invalid type in pack: '%c'", (int)datumtype);
 	    break;
 	case '%':
 	    DIE("%% may only be used in unpack");
@@ -4168,7 +4213,8 @@ PP(pp_pack)
 		fromstr = NEXTFROM;
 		auint = SvUV(fromstr);
 		SvGROW(cat, SvCUR(cat) + 10);
-		SvCUR_set(cat, uv_to_utf8(SvEND(cat), auint) - SvPVX(cat));
+		SvCUR_set(cat, (char*)uv_to_utf8((U8*)SvEND(cat),auint)
+			       - SvPVX(cat));
 	    }
 	    *SvEND(cat) = '\0';
 	    break;
@@ -4365,8 +4411,9 @@ PP(pp_pack)
 		     * of pack() (and all copies of the result) are
 		     * gone.
 		     */
-		    if (PL_dowarn && (SvTEMP(fromstr) || SvPADTMP(fromstr)))
-			warn("Attempt to pack pointer to temporary value");
+		    if (ckWARN(WARN_UNSAFE) && (SvTEMP(fromstr) || SvPADTMP(fromstr)))
+			warner(WARN_UNSAFE,
+				"Attempt to pack pointer to temporary value");
 		    if (SvPOK(fromstr) || SvNIOK(fromstr))
 			aptr = SvPV(fromstr,PL_na);
 		    else
@@ -4682,7 +4729,7 @@ unlock_condpair(void *svv)
 	croak("panic: unlock_condpair unlocking mutex that we don't own");
     MgOWNER(mg) = 0;
     COND_SIGNAL(MgOWNERCONDP(mg));
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: unlock 0x%lx\n",
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "0x%lx: unlock 0x%lx\n",
 			  (unsigned long)thr, (unsigned long)svv);)
     MUTEX_UNLOCK(MgMUTEXP(mg));
 }
@@ -4707,7 +4754,7 @@ PP(pp_lock)
 	while (MgOWNER(mg))
 	    COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
 	MgOWNER(mg) = thr;
-	DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: pp_lock lock 0x%lx\n",
+	DEBUG_S(PerlIO_printf(PerlIO_stderr(), "0x%lx: pp_lock lock 0x%lx\n",
 			      (unsigned long)thr, (unsigned long)sv);)
 	MUTEX_UNLOCK(MgMUTEXP(mg));
 	SvREFCNT_inc(sv);	/* keep alive until magic_mutexfree */

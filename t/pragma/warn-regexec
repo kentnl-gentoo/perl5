@@ -1,0 +1,57 @@
+  regexec.c	
+
+  count exceeded %d
+
+        $_ = 'a' x (2**15+1); /^()(a\1)*$/ ;
+  count exceeded %d
+
+        $_ = 'a' x (2**15+1); /^()(a\1)*?$/ ;
+
+__END__
+# regexec.c
+use warning 'unsafe' ;
+print("SKIPPED\n# win32 can't increase stacksize in shell\n"),exit
+    if $^O eq 'MSWin32';
+$_ = 'a' x (2**15+1); 
+/^()(a\1)*$/ ;
+#
+# If this test fails with a segmentation violation or similar,
+# you may have to increase the default stacksize limit in your
+# shell.  You may need superuser privileges.
+#
+# Under the sh, ksh, zsh:
+#    $ ulimit -s
+#    8192
+#    $ ulimit -s 16000
+#
+# Under the csh:
+#    % limit stacksize
+#    stacksize        8192 kbytes
+#    % limit stacksize 16000
+#
+EXPECT
+Complex regular subexpression recursion limit (32766) exceeded at - line 6.
+########
+# regexec.c
+use warning 'unsafe' ;
+print("SKIPPED\n# win32 can't increase stacksize in shell\n"),exit
+    if $^O eq 'MSWin32';
+$_ = 'a' x (2**15+1);
+/^()(a\1)*?$/ ;
+#
+# If this test fails with a segmentation violation or similar,
+# you may have to increase the default stacksize limit in your
+# shell.  You may need superuser privileges.
+#
+# Under the sh, ksh, zsh:
+#    $ ulimit -s
+#    8192
+#    $ ulimit -s 16000
+#
+# Under the csh:
+#    % limit stacksize
+#    stacksize        8192 kbytes
+#    % limit stacksize 16000
+#
+EXPECT
+Complex regular subexpression recursion limit (32766) exceeded at - line 6.

@@ -21,6 +21,12 @@
 #ifdef I_UNISTD
 #include <unistd.h>
 #endif
+#ifdef I_FCNTL
+#include <fcntl.h>
+#endif
+#ifdef I_SYS_FILE
+#include <sys/file.h>
+#endif
 
 #define HOP(pos,off) (IN_UTF8 ? utf8_hop(pos, off) : (pos + off))
 
@@ -35,10 +41,10 @@ unset_cvowner(void *cvarg)
     dTHR;
 #endif /* DEBUGGING */
 
-    DEBUG_L((PerlIO_printf(PerlIO_stderr(), "%p unsetting CvOWNER of %p:%s\n",
+    DEBUG_S((PerlIO_printf(PerlIO_stderr(), "%p unsetting CvOWNER of %p:%s\n",
 			   thr, cv, SvPEEK((SV*)cv))));
     MUTEX_LOCK(CvMUTEXP(cv));
-    DEBUG_L(if (CvDEPTH(cv) != 0)
+    DEBUG_S(if (CvDEPTH(cv) != 0)
 		PerlIO_printf(PerlIO_stderr(), "depth %ld != 0\n",
 			      CvDEPTH(cv)););
     assert(thr == CvOWNER(cv));
@@ -328,23 +334,25 @@ PP(pp_print)
 	RETURN;
     }
     if (!(io = GvIO(gv))) {
-	if (PL_dowarn) {
+	if (ckWARN(WARN_UNOPENED)) {
 	    SV* sv = sv_newmortal();
             gv_fullname3(sv, gv, Nullch);
-            warn("Filehandle %s never opened", SvPV(sv,PL_na));
+            warner(WARN_UNOPENED, "Filehandle %s never opened", SvPV(sv,PL_na));
         }
 
 	SETERRNO(EBADF,RMS$_IFI);
 	goto just_say_no;
     }
     else if (!(fp = IoOFP(io))) {
-	if (PL_dowarn)  {
+	if (ckWARN2(WARN_CLOSED, WARN_IO))  {
 	    SV* sv = sv_newmortal();
             gv_fullname3(sv, gv, Nullch);
 	    if (IoIFP(io))
-		warn("Filehandle %s opened only for input", SvPV(sv,PL_na));
-	    else
-		warn("print on closed filehandle %s", SvPV(sv,PL_na));
+		warner(WARN_IO, "Filehandle %s opened only for input", 
+				SvPV(sv,PL_na));
+	    else if (ckWARN(WARN_CLOSED))
+		warner(WARN_CLOSED, "print on closed filehandle %s", 
+				SvPV(sv,PL_na));
 	}
 	SETERRNO(EBADF,IoIFP(io)?RMS$_FAC:RMS$_IFI);
 	goto just_say_no;
@@ -431,8 +439,8 @@ PP(pp_rv2av)
 		    if (PL_op->op_flags & OPf_REF ||
 		      PL_op->op_private & HINT_STRICT_REFS)
 			DIE(no_usym, "an ARRAY");
-		    if (PL_dowarn)
-			warn(warn_uninit);
+		    if (ckWARN(WARN_UNINITIALIZED))
+			warner(WARN_UNINITIALIZED, warn_uninit);
 		    if (GIMME == G_ARRAY)
 			RETURN;
 		    RETPUSHUNDEF;
@@ -515,8 +523,8 @@ PP(pp_rv2hv)
 		    if (PL_op->op_flags & OPf_REF ||
 		      PL_op->op_private & HINT_STRICT_REFS)
 			DIE(no_usym, "a HASH");
-		    if (PL_dowarn)
-			warn(warn_uninit);
+		    if (ckWARN(WARN_UNINITIALIZED))
+			warner(WARN_UNINITIALIZED, warn_uninit);
 		    if (GIMME == G_ARRAY) {
 			SP--;
 			RETURN;
@@ -654,14 +662,14 @@ PP(pp_aassign)
 		if (relem == lastrelem) {
 		    if (*relem) {
 			HE *didstore;
-			if (PL_dowarn) {
+			if (ckWARN(WARN_UNSAFE)) {
 			    if (relem == firstrelem &&
 				SvROK(*relem) &&
 				( SvTYPE(SvRV(*relem)) == SVt_PVAV ||
 				  SvTYPE(SvRV(*relem)) == SVt_PVHV ) )
-				warn("Reference found where even-sized list expected");
+				warner(WARN_UNSAFE, "Reference found where even-sized list expected");
 			    else
-				warn("Odd number of elements in hash assignment");
+				warner(WARN_UNSAFE, "Odd number of elements in hash assignment");
 			}
 			tmpstr = NEWSV(29,0);
 			didstore = hv_store_ent(hash,*relem,tmpstr,0);
@@ -880,7 +888,7 @@ play_it_again:
 		if (PL_screamfirst[BmRARE(rx->check_substr)] < 0)
 		    goto nope;
 
-		b = HOP((U8*)s, rx->check_offset_min);
+		b = (char*)HOP((U8*)s, rx->check_offset_min);
 		if (!(s = screaminstr(TARG, rx->check_substr, b - s, 0, &p, 0)))
 		    goto nope;
 
@@ -896,7 +904,7 @@ play_it_again:
 		goto yup;
 	    if (s && rx->check_offset_max < s - t) {
 		++BmUSEFUL(rx->check_substr);
-		s = HOP((U8*)s, -rx->check_offset_max);
+		s = (char*)HOP((U8*)s, -rx->check_offset_max);
 	    }
 	    else
 		s = t;
@@ -905,7 +913,7 @@ play_it_again:
 	   beginning of match, and the match is anchored at s. */
 	else if (!PL_multiline) {	/* Anchored near beginning of string. */
 	    I32 slen;
-	    char *b = HOP((U8*)s, rx->check_offset_min);
+	    char *b = (char*)HOP((U8*)s, rx->check_offset_min);
 	    if (*SvPVX(rx->check_substr) != *b
 		|| ((slen = SvCUR(rx->check_substr)) > 1
 		    && memNE(SvPVX(rx->check_substr), b, slen)))
@@ -1068,7 +1076,7 @@ do_readline(void)
 		    IoFLAGS(io) &= ~IOf_START;
 		    IoLINES(io) = 0;
 		    if (av_len(GvAVn(PL_last_in_gv)) < 0) {
-			do_open(PL_last_in_gv,"-",1,FALSE,0,0,Nullfp);
+			do_open(PL_last_in_gv,"-",1,FALSE,O_RDONLY,0,Nullfp);
 			sv_setpvn(GvSV(PL_last_in_gv), "-", 1);
 			SvSETMAGIC(GvSV(PL_last_in_gv));
 			fp = IoIFP(io);
@@ -1202,7 +1210,7 @@ do_readline(void)
 #endif /* !CSH */
 #endif /* !DOSISH */
 		(void)do_open(PL_last_in_gv, SvPVX(tmpcmd), SvCUR(tmpcmd),
-			      FALSE, 0, 0, Nullfp);
+			      FALSE, O_RDONLY, 0, Nullfp);
 		fp = IoIFP(io);
 #endif /* !VMS */
 		LEAVE;
@@ -1212,8 +1220,9 @@ do_readline(void)
 	    SP--;
     }
     if (!fp) {
-	if (PL_dowarn && io && !(IoFLAGS(io) & IOf_START))
-	    warn("Read on closed filehandle <%s>", GvENAME(PL_last_in_gv));
+	if (ckWARN(WARN_CLOSED) && io && !(IoFLAGS(io) & IOf_START))
+	    warner(WARN_CLOSED,
+		   "Read on closed filehandle <%s>", GvENAME(PL_last_in_gv));
 	if (gimme == G_SCALAR) {
 	    (void)SvOK_off(TARG);
 	    PUSHTARG;
@@ -1249,7 +1258,7 @@ do_readline(void)
 		IoFLAGS(io) |= IOf_START;
 	    }
 	    else if (type == OP_GLOB) {
-		if (do_close(PL_last_in_gv, FALSE) & ~0xFF)
+		if (!do_close(PL_last_in_gv, FALSE))
 		    warn("internal error: glob failed");
 	    }
 	    if (gimme == G_SCALAR) {
@@ -1465,7 +1474,9 @@ PP(pp_iter)
 	    char *max = SvPV((SV*)av, maxlen);
 	    if (!SvNIOK(cur) && SvCUR(cur) <= maxlen) {
 #ifndef USE_THREADS			  /* don't risk potential race */
-		if (SvREFCNT(*cx->blk_loop.itervar) == 1) {
+		if (SvREFCNT(*cx->blk_loop.itervar) == 1
+		    && !SvMAGICAL(*cx->blk_loop.itervar))
+		{
 		    /* safe to reuse old SV */
 		    sv_setsv(*cx->blk_loop.itervar, cur);
 		}
@@ -1491,7 +1502,9 @@ PP(pp_iter)
 	    RETPUSHNO;
 
 #ifndef USE_THREADS			  /* don't risk potential race */
-	if (SvREFCNT(*cx->blk_loop.itervar) == 1) {
+	if (SvREFCNT(*cx->blk_loop.itervar) == 1
+	    && !SvMAGICAL(*cx->blk_loop.itervar))
+	{
 	    /* safe to reuse old SV */
 	    sv_setiv(*cx->blk_loop.itervar, cx->blk_loop.iterix++);
 	}
@@ -1624,7 +1637,7 @@ PP(pp_subst)
 		if (PL_screamfirst[BmRARE(rx->check_substr)] < 0)
 		    goto nope;
 
-		b = HOP((U8*)s, rx->check_offset_min);
+		b = (char*)HOP((U8*)s, rx->check_offset_min);
 		if (!(s = screaminstr(TARG, rx->check_substr, b - s, 0, &p, 0)))
 		    goto nope;
 	    }
@@ -1634,7 +1647,7 @@ PP(pp_subst)
 		goto nope;
 	    if (s && rx->check_offset_max < s - m) {
 		++BmUSEFUL(rx->check_substr);
-		s = HOP((U8*)s, -rx->check_offset_max);
+		s = (char*)HOP((U8*)s, -rx->check_offset_max);
 	    }
 	    else
 		s = m;
@@ -1643,7 +1656,7 @@ PP(pp_subst)
 	   beginning of match, and the match is anchored at s. */
 	else if (!PL_multiline) { /* Anchored at beginning of string. */
 	    I32 slen;
-	    char *b = HOP((U8*)s, rx->check_offset_min);
+	    char *b = (char*)HOP((U8*)s, rx->check_offset_min);
 	    if (*SvPVX(rx->check_substr) != *b
 		|| ((slen = SvCUR(rx->check_substr)) > 1
 		    && memNE(SvPVX(rx->check_substr), b, slen)))
@@ -2089,7 +2102,7 @@ PP(pp_entersub)
 	    while (MgOWNER(mg))
 		COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
 	    MgOWNER(mg) = thr;
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "%p: pp_entersub lock %p\n",
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "%p: pp_entersub lock %p\n",
 				  thr, sv);)
 	    MUTEX_UNLOCK(MgMUTEXP(mg));
 	    SvREFCNT_inc(sv);	/* Keep alive until magic_mutexfree */
@@ -2133,7 +2146,7 @@ PP(pp_entersub)
 	    /* We already have a clone to use */
 	    MUTEX_UNLOCK(CvMUTEXP(cv));
 	    cv = *(CV**)svp;
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 				  "entersub: %p already has clone %p:%s\n",
 				  thr, cv, SvPEEK((SV*)cv)));
 	    CvOWNER(cv) = thr;
@@ -2147,7 +2160,7 @@ PP(pp_entersub)
 		CvOWNER(cv) = thr;
 		SvREFCNT_inc(cv);
 		MUTEX_UNLOCK(CvMUTEXP(cv));
-		DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+		DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			    "entersub: %p grabbing %p:%s in stash %s\n",
 			    thr, cv, SvPEEK((SV*)cv), CvSTASH(cv) ?
 	    			HvNAME(CvSTASH(cv)) : "(none)"));
@@ -2156,7 +2169,7 @@ PP(pp_entersub)
 		CV *clonecv;
 		SvREFCNT_inc(cv); /* don't let it vanish from under us */
 		MUTEX_UNLOCK(CvMUTEXP(cv));
-		DEBUG_L((PerlIO_printf(PerlIO_stderr(),
+		DEBUG_S((PerlIO_printf(PerlIO_stderr(),
 				       "entersub: %p cloning %p:%s\n",
 				       thr, cv, SvPEEK((SV*)cv))));
 		/*
@@ -2173,7 +2186,7 @@ PP(pp_entersub)
 		cv = clonecv;
 		SvREFCNT_inc(cv);
 	    }
-	    DEBUG_L(if (CvDEPTH(cv) != 0)
+	    DEBUG_S(if (CvDEPTH(cv) != 0)
 			PerlIO_printf(PerlIO_stderr(), "depth %ld != 0\n",
 				      CvDEPTH(cv)););
 	    SAVEDESTRUCTOR(unset_cvowner, (void*) cv);
@@ -2258,7 +2271,7 @@ PP(pp_entersub)
 	if (CvDEPTH(cv) < 2)
 	    (void)SvREFCNT_inc(cv);
 	else {	/* save temporaries on recursion? */
-	    if (CvDEPTH(cv) == 100 && PL_dowarn 
+	    if (CvDEPTH(cv) == 100 && ckWARN(WARN_RECURSION)
 		  && !(PERLDB_SUB && cv == GvCV(PL_DBsub)))
 		sub_crush_depth(cv);
 	    if (CvDEPTH(cv) > AvFILLp(padlist)) {
@@ -2323,7 +2336,7 @@ PP(pp_entersub)
 	    SV** ary;
 
 #if 0
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 	    			  "%p entersub preparing @_\n", thr));
 #endif
 	    av = (AV*)PL_curpad[0];
@@ -2361,7 +2374,7 @@ PP(pp_entersub)
 	    }
 	}
 #if 0
-	DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			      "%p entersub returning %p\n", thr, CvSTART(cv)));
 #endif
 	RETURNOP(CvSTART(cv));
@@ -2372,11 +2385,12 @@ void
 sub_crush_depth(CV *cv)
 {
     if (CvANON(cv))
-	warn("Deep recursion on anonymous subroutine");
+	warner(WARN_RECURSION, "Deep recursion on anonymous subroutine");
     else {
 	SV* tmpstr = sv_newmortal();
 	gv_efullname3(tmpstr, CvGV(cv), Nullch);
-	warn("Deep recursion on subroutine \"%s\"", SvPVX(tmpstr));
+	warner(WARN_RECURSION, "Deep recursion on subroutine \"%s\"", 
+		SvPVX(tmpstr));
     }
 }
 

@@ -19,8 +19,6 @@
 #include "EXTERN.h"
 #include "perl.h"
 
-EXT char rcsid[];
-
 GV *
 gv_AVadd(register GV *gv)
 {
@@ -223,8 +221,9 @@ gv_fetchmeth(HV *stash, char *name, STRLEN len, I32 level)
 	    SV* sv = *svp++;
 	    HV* basestash = gv_stashsv(sv, FALSE);
 	    if (!basestash) {
-		if (PL_dowarn)
-		    warn("Can't locate package %s for @%s::ISA",
+		dTHR;		/* just for ckWARN */
+		if (ckWARN(WARN_MISC))
+		    warner(WARN_MISC, "Can't locate package %s for @%s::ISA",
 			SvPVX(sv), HvNAME(stash));
 		continue;
 	    }
@@ -341,6 +340,7 @@ gv_fetchmethod_autoload(HV *stash, char *name, I32 autoload)
 GV*
 gv_autoload4(HV *stash, char *name, STRLEN len, I32 method)
 {
+    dTHR;
     static char autoload[] = "AUTOLOAD";
     static STRLEN autolen = 8;
     GV* gv;
@@ -358,8 +358,9 @@ gv_autoload4(HV *stash, char *name, STRLEN len, I32 method)
     /*
      * Inheriting AUTOLOAD for non-methods works ... for now.
      */
-    if (PL_dowarn && !method && (GvCVGEN(gv) || GvSTASH(gv) != stash))
-	warn(
+    if (ckWARN(WARN_DEPRECATED) && !method && 
+	(GvCVGEN(gv) || GvSTASH(gv) != stash))
+	warner(WARN_DEPRECATED,
 	  "Use of inherited AUTOLOAD for non-method %s::%.*s() is deprecated",
 	     HvNAME(stash), (int)len, name);
 
@@ -502,25 +503,19 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
 	    bool global = FALSE;
 
 	    if (isUPPER(*name)) {
-		if (*name > 'I') {
-		    if (*name == 'S' && (
-		      strEQ(name, "SIG") ||
-		      strEQ(name, "STDIN") ||
-		      strEQ(name, "STDOUT") ||
-		      strEQ(name, "STDERR") ))
-			global = TRUE;
-		}
-		else if (*name > 'E') {
-		    if (*name == 'I' && strEQ(name, "INC"))
-			global = TRUE;
-		}
-		else if (*name > 'A') {
-		    if (*name == 'E' && strEQ(name, "ENV"))
-			global = TRUE;
-		}
+		if (*name == 'S' && (
+		    strEQ(name, "SIG") ||
+		    strEQ(name, "STDIN") ||
+		    strEQ(name, "STDOUT") ||
+		    strEQ(name, "STDERR")))
+		    global = TRUE;
+		else if (*name == 'I' && strEQ(name, "INC"))
+		    global = TRUE;
+		else if (*name == 'E' && strEQ(name, "ENV"))
+		    global = TRUE;
 		else if (*name == 'A' && (
 		  strEQ(name, "ARGV") ||
-		  strEQ(name, "ARGVOUT") ))
+		  strEQ(name, "ARGVOUT")))
 		    global = TRUE;
 	    }
 	    else if (*name == '_' && !name[1])
@@ -736,8 +731,8 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
 	goto magicalize;
     case '#':
     case '*':
-	if (PL_dowarn && len == 1 && sv_type == SVt_PV)
-	    warn("Use of $%s is deprecated", name);
+	if (ckWARN(WARN_DEPRECATED) && len == 1 && sv_type == SVt_PV)
+	    warner(WARN_DEPRECATED, "Use of $%s is deprecated", name);
 	/* FALL THROUGH */
     case '[':
     case '^':
@@ -755,12 +750,13 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
     case '/':
     case '|':
     case '\001':
+    case '\002':
     case '\004':
     case '\005':
     case '\006':
     case '\010':
+    case '\011':	/* NOT \t in EBCDIC */
     case '\017':
-    case '\t':
     case '\020':
     case '\024':
     case '\027':
@@ -893,7 +889,8 @@ gv_check(HV *stash)
 		PL_curcop->cop_filegv = filegv;
 		if (filegv && GvMULTI(filegv))	/* Filename began with slash */
 		    continue;
-		warn("Name \"%s::%s\" used only once: possible typo",
+		warner(WARN_ONCE,
+			"Name \"%s::%s\" used only once: possible typo",
 			HvNAME(stash), GvNAME(gv));
 	    }
 	}
@@ -1154,7 +1151,7 @@ amagic_call(SV *left, SV *right, int method, int flags)
   CV **cvp=NULL, **ocvp=NULL;
   AMT *amtp, *oamtp;
   int fl=0, off, off1, lr=0, assign=AMGf_assign & flags, notfound=0;
-  int postpr=0, inc_dec_ass=0, assignshift=assign?1:0;
+  int postpr = 0, force_cpy = 0, assignshift = assign ? 1 : 0;
   HV* stash;
   if (!(AMGf_noleft & flags) && SvAMAGIC(left)
       && (mg = mg_find((SV*)(stash=SvSTASH(SvRV(left))),'c'))
@@ -1171,16 +1168,19 @@ amagic_call(SV *left, SV *right, int method, int flags)
       int logic;
 
       /* look for substituted methods */
+      /* In all the covered cases we should be called with assign==0. */
 	 switch (method) {
 	 case inc_amg:
-	   if (((cv = cvp[off=add_ass_amg]) && (inc_dec_ass=1))
-	       || ((cv = cvp[off=add_amg]) && (postpr=1))) {
+	   force_cpy = 1;
+	   if ((cv = cvp[off=add_ass_amg])
+	       || ((cv = cvp[off = add_amg]) && (force_cpy = 0, postpr = 1))) {
 	     right = &PL_sv_yes; lr = -1; assign = 1;
 	   }
 	   break;
 	 case dec_amg:
-	   if (((cv = cvp[off=subtr_ass_amg])  && (inc_dec_ass=1))
-	       || ((cv = cvp[off=subtr_amg]) && (postpr=1))) {
+	   force_cpy = 1;
+	   if ((cv = cvp[off = subtr_ass_amg])
+	       || ((cv = cvp[off = subtr_amg]) && (force_cpy = 0, postpr=1))) {
 	     right = &PL_sv_yes; lr = -1; assign = 1;
 	   }
 	   break;
@@ -1327,6 +1327,7 @@ amagic_call(SV *left, SV *right, int method, int flags)
 	}
 	return NULL;
       }
+      force_cpy = force_cpy || assign;
     }
   }
   if (!notfound) {
@@ -1343,14 +1344,33 @@ amagic_call(SV *left, SV *right, int method, int flags)
 		 flags & AMGf_unary? " for argument" : "",
 		 HvNAME(stash), 
 		 fl? ",\n\tassignment variant used": "") );
+  }
     /* Since we use shallow copy during assignment, we need
      * to dublicate the contents, probably calling user-supplied
      * version of copy operator
      */
-    if ((method + assignshift==off 
-	 && (assign || method==inc_amg || method==dec_amg))
-	|| inc_dec_ass) RvDEEPCP(left);
-  }
+    /* We need to copy in following cases:
+     * a) Assignment form was called.
+     * 		assignshift==1,  assign==T, method + 1 == off
+     * b) Increment or decrement, called directly.
+     * 		assignshift==0,  assign==0, method + 0 == off
+     * c) Increment or decrement, translated to assignment add/subtr.
+     * 		assignshift==0,  assign==T, 
+     *		force_cpy == T
+     * d) Increment or decrement, translated to nomethod.
+     * 		assignshift==0,  assign==0, 
+     *		force_cpy == T
+     * e) Assignment form translated to nomethod.
+     * 		assignshift==1,  assign==T, method + 1 != off
+     *		force_cpy == T
+     */
+    /*	off is method, method+assignshift, or a result of opcode substitution.
+     *	In the latter case assignshift==0, so only notfound case is important.
+     */
+  if (( (method + assignshift == off)
+	&& (assign || (method == inc_amg) || (method == dec_amg)))
+      || force_cpy)
+    RvDEEPCP(left);
   {
     dSP;
     BINOP myop;

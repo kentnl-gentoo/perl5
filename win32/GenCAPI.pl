@@ -141,10 +141,14 @@ while () {
             @args = split(',', $args);
             if ($args[$#args] =~ /\s*\.\.\.\s*/) {
                 if(($name eq "croak") or ($name eq "deb") or ($name eq "die")
-		        or ($name eq "form") or ($name eq "warn")) {
+		        or ($name eq "form") or ($name eq "warn")
+		        or ($name eq "warner")) {
                     print OUTFILE "\n#ifdef $name" . "_defined" unless ($separateObj == 0);
-                    $args[0] =~ /(\w+)\W*$/; 
-                    $arg = $1;
+                    for (@args) { $_ = $1 if /(\w+)\W*$/; }
+                    $arg = $args[$#args-1];
+		    my $start = '';
+		    $start = join(', ',@args[0 .. ($#args - 2)]) if @args > 2;
+		    $start .= ', ' if $start;
                     print OUTFILE <<ENDCODE;
 
 #undef $name
@@ -157,7 +161,7 @@ extern "C" $type $funcName ($args)
     pmsg = pPerl->Perl_mess($arg, &args);
     New(0, pstr, strlen(pmsg)+1, char);
     strcpy(pstr, pmsg);
-$return pPerl->Perl_$name(pstr);
+$return pPerl->Perl_$name($start pstr);
     va_end(args);
 }
 ENDCODE
@@ -202,6 +206,29 @@ extern "C" $type $funcName ($args)
 ENDCODE
                     print OUTFILE "#endif\n" unless ($separateObj == 0);
                 }
+                elsif($name eq "sv_catpvf_mg") {
+                    print OUTFILE "\n#ifdef $name" . "_defined" unless ($separateObj == 0);
+                    $args[0] =~ /(\w+)\W*$/; 
+                    $arg0 = $1;
+                    $args[1] =~ /(\w+)\W*$/; 
+                    $arg1 = $1;
+                    print OUTFILE <<ENDCODE;
+
+#undef $name
+#ifndef mg_set
+#define mg_set pPerl->Perl_mg_set
+#endif
+extern "C" $type $funcName ($args)
+{
+    va_list args;
+    va_start(args, $arg1);
+    pPerl->Perl_sv_vcatpvfn($arg0, $arg1, strlen($arg1), &args, NULL, 0, NULL);
+    va_end(args);
+    SvSETMAGIC(sv);
+}
+ENDCODE
+                    print OUTFILE "#endif\n" unless ($separateObj == 0);
+                }
                 elsif($name eq "sv_setpvf") {
                     print OUTFILE "\n#ifdef $name" . "_defined" unless ($separateObj == 0);
                     $args[0] =~ /(\w+)\W*$/; 
@@ -217,6 +244,29 @@ extern "C" $type $funcName ($args)
     va_start(args, $arg1);
     pPerl->Perl_sv_vsetpvfn($arg0, $arg1, strlen($arg1), &args, NULL, 0, NULL);
     va_end(args);
+}
+ENDCODE
+                    print OUTFILE "#endif\n" unless ($separateObj == 0);
+                }
+                elsif($name eq "sv_setpvf_mg") {
+                    print OUTFILE "\n#ifdef $name" . "_defined" unless ($separateObj == 0);
+                    $args[0] =~ /(\w+)\W*$/; 
+                    $arg0 = $1;
+                    $args[1] =~ /(\w+)\W*$/; 
+                    $arg1 = $1;
+                    print OUTFILE <<ENDCODE;
+
+#undef $name
+#ifndef mg_set
+#define mg_set pPerl->Perl_mg_set
+#endif
+extern "C" $type $funcName ($args)
+{
+    va_list args;
+    va_start(args, $arg1);
+    pPerl->Perl_sv_vsetpvfn($arg0, $arg1, strlen($arg1), &args, NULL, 0, NULL);
+    va_end(args);
+    SvSETMAGIC(sv);
 }
 ENDCODE
                     print OUTFILE "#endif\n" unless ($separateObj == 0);

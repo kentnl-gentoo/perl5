@@ -125,22 +125,37 @@ do_open(GV *gv, register char *name, I32 len, int as_raw, int rawmode, int rawpe
     }
 
     if (as_raw) {
-	result = rawmode & 3;
-	IoTYPE(io) = "<>++"[result];
+#ifndef O_ACCMODE
+#define O_ACCMODE 3		/* Assume traditional implementation */
+#endif
+	switch (result = rawmode & O_ACCMODE) {
+	case O_RDONLY:
+	     IoTYPE(io) = '<';
+	     break;
+	case O_WRONLY:
+	     IoTYPE(io) = '>';
+	     break;
+	case O_RDWR:
+	default:
+	     IoTYPE(io) = '+';
+	     break;
+	}
+
 	writing = (result > 0);
 	fd = PerlLIO_open3(name, rawmode, rawperm);
+
 	if (fd == -1)
 	    fp = NULL;
 	else {
 	    char *fpmode;
-	    if (result == 0)
+	    if (result == O_RDONLY)
 		fpmode = "r";
 #ifdef O_APPEND
 	    else if (rawmode & O_APPEND)
-		fpmode = (result == 1) ? "a" : "a+";
+		fpmode = (result == O_WRONLY) ? "a" : "a+";
 #endif
 	    else
-		fpmode = (result == 1) ? "w" : "r+";
+		fpmode = (result == O_WRONLY) ? "w" : "r+";
 	    fp = PerlIO_fdopen(fd, fpmode);
 	    if (!fp)
 		PerlLIO_close(fd);
@@ -172,9 +187,10 @@ do_open(GV *gv, register char *name, I32 len, int as_raw, int rawmode, int rawpe
 		TAINT_ENV();
 	    TAINT_PROPER("piped open");
 	    if (name[strlen(name)-1] == '|') {
+		dTHR;
 		name[strlen(name)-1] = '\0' ;
-		if (PL_dowarn)
-		    warn("Can't do bidirectional pipe");
+		if (ckWARN(WARN_PIPE))
+		    warner(WARN_PIPE, "Can't do bidirectional pipe");
 	    }
 	    fp = PerlProc_popen(name,"w");
 	    writing = 1;
@@ -283,8 +299,9 @@ do_open(GV *gv, register char *name, I32 len, int as_raw, int rawmode, int rawpe
 	}
     }
     if (!fp) {
-	if (PL_dowarn && IoTYPE(io) == '<' && strchr(name, '\n'))
-	    warn(warn_nl, "open");
+	dTHR;
+	if (ckWARN(WARN_NEWLINE) && IoTYPE(io) == '<' && strchr(name, '\n'))
+	    warner(WARN_NEWLINE, warn_nl, "open");
 	goto say_false;
     }
     if (IoTYPE(io) &&
@@ -400,7 +417,7 @@ nextargv(register GV *gv)
 	sv_setsv(GvSV(gv),sv);
 	SvSETMAGIC(GvSV(gv));
 	PL_oldname = SvPVx(GvSV(gv), oldlen);
-	if (do_open(gv,PL_oldname,oldlen,PL_inplace!=0,0,0,Nullfp)) {
+	if (do_open(gv,PL_oldname,oldlen,PL_inplace!=0,O_RDONLY,0,Nullfp)) {
 	    if (PL_inplace) {
 		TAINT_PROPER("inplace open");
 		if (oldlen == 1 && *PL_oldname == '-') {
@@ -462,7 +479,7 @@ nextargv(register GV *gv)
 		    do_close(gv,FALSE);
 		    (void)PerlLIO_unlink(SvPVX(sv));
 		    (void)PerlLIO_rename(PL_oldname,SvPVX(sv));
-		    do_open(gv,SvPVX(sv),SvCUR(sv),PL_inplace!=0,0,0,Nullfp);
+		    do_open(gv,SvPVX(sv),SvCUR(sv),PL_inplace!=0,O_RDONLY,0,Nullfp);
 #endif /* DOSISH */
 #else
 		    (void)UNLINK(SvPVX(sv));
@@ -601,8 +618,10 @@ do_close(GV *gv, bool not_implicit)
     io = GvIO(gv);
     if (!io) {		/* never opened */
 	if (not_implicit) {
-	    if (PL_dowarn)
-		warn("Close on unopened file <%s>",GvENAME(gv));
+	    dTHR;
+	    if (ckWARN(WARN_UNOPENED))
+		warner(WARN_UNOPENED, 
+		       "Close on unopened file <%s>",GvENAME(gv));
 	    SETERRNO(EBADF,SS$_IVCHAN);
 	}
 	return FALSE;
@@ -699,8 +718,11 @@ do_tell(GV *gv)
 #endif
 	return PerlIO_tell(fp);
     }
-    if (PL_dowarn)
-	warn("tell() on unopened file");
+    {
+	dTHR;
+	if (ckWARN(WARN_UNOPENED))
+	    warner(WARN_UNOPENED, "tell() on unopened file");
+    }
     SETERRNO(EBADF,RMS$_IFI);
     return -1L;
 }
@@ -718,8 +740,11 @@ do_seek(GV *gv, long int pos, int whence)
 #endif
 	return PerlIO_seek(fp, pos, whence) >= 0;
     }
-    if (PL_dowarn)
-	warn("seek() on unopened file");
+    {
+	dTHR;
+	if (ckWARN(WARN_UNOPENED))
+	    warner(WARN_UNOPENED, "seek() on unopened file");
+    }
     SETERRNO(EBADF,RMS$_IFI);
     return FALSE;
 }
@@ -732,8 +757,11 @@ do_sysseek(GV *gv, long int pos, int whence)
 
     if (gv && (io = GvIO(gv)) && (fp = IoIFP(io)))
 	return PerlLIO_lseek(PerlIO_fileno(fp), pos, whence);
-    if (PL_dowarn)
-	warn("sysseek() on unopened file");
+    {
+	dTHR;
+	if (ckWARN(WARN_UNOPENED))
+	    warner(WARN_UNOPENED, "sysseek() on unopened file");
+    }
     SETERRNO(EBADF,RMS$_IFI);
     return -1L;
 }
@@ -853,8 +881,11 @@ do_print(register SV *sv, PerlIO *fp)
     }
     switch (SvTYPE(sv)) {
     case SVt_NULL:
-	if (PL_dowarn)
-	    warn(warn_uninit);
+	{
+	    dTHR;
+	    if (ckWARN(WARN_UNINITIALIZED))
+		warner(WARN_UNINITIALIZED, warn_uninit);
+	}
 	return TRUE;
     case SVt_IV:
 	if (SvIOK(sv)) {
@@ -894,8 +925,8 @@ my_stat(ARGSproto)
 	else {
 	    if (tmpgv == PL_defgv)
 		return PL_laststatval;
-	    if (PL_dowarn)
-		warn("Stat on unopened file <%s>",
+	    if (ckWARN(WARN_UNOPENED))
+		warner(WARN_UNOPENED, "Stat on unopened file <%s>",
 		  GvENAME(tmpgv));
 	    PL_statgv = Nullgv;
 	    sv_setpv(PL_statname,"");
@@ -920,8 +951,8 @@ my_stat(ARGSproto)
 	sv_setpv(PL_statname, s);
 	PL_laststype = OP_STAT;
 	PL_laststatval = PerlLIO_stat(s, &PL_statcache);
-	if (PL_laststatval < 0 && PL_dowarn && strchr(s, '\n'))
-	    warn(warn_nl, "stat");
+	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n'))
+	    warner(WARN_NEWLINE, warn_nl, "stat");
 	return PL_laststatval;
     }
 }
@@ -951,8 +982,8 @@ my_lstat(ARGSproto)
 #else
     PL_laststatval = PerlLIO_stat(SvPV(sv, PL_na),&PL_statcache);
 #endif
-    if (PL_laststatval < 0 && PL_dowarn && strchr(SvPV(sv, PL_na), '\n'))
-	warn(warn_nl, "lstat");
+    if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(SvPV(sv, PL_na), '\n'))
+	warner(WARN_NEWLINE, warn_nl, "lstat");
     return PL_laststatval;
 }
 
@@ -979,8 +1010,9 @@ do_aexec(SV *really, register SV **mark, register SV **sp)
 	    PerlProc_execvp(tmps,PL_Argv);
 	else
 	    PerlProc_execvp(PL_Argv[0],PL_Argv);
-	if (PL_dowarn)
-	    warn("Can't exec \"%s\": %s", PL_Argv[0], Strerror(errno));
+	if (ckWARN(WARN_EXEC))
+	    warner(WARN_EXEC, "Can't exec \"%s\": %s", 
+		PL_Argv[0], Strerror(errno));
     }
     do_execfree();
     return FALSE;
@@ -1082,8 +1114,12 @@ do_exec(char *cmd)
 	    do_execfree();
 	    goto doshell;
 	}
-	if (PL_dowarn)
-	    warn("Can't exec \"%s\": %s", PL_Argv[0], Strerror(errno));
+	{
+	    dTHR;
+	    if (ckWARN(WARN_EXEC))
+		warner(WARN_EXEC, "Can't exec \"%s\": %s", 
+		    PL_Argv[0], Strerror(errno));
+	}
     }
     do_execfree();
     return FALSE;

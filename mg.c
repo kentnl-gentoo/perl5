@@ -346,6 +346,34 @@ magic_len(SV *sv, MAGIC *mg)
     return 0;
 }
 
+#if 0
+static char * 
+printW(sv)
+SV * sv ;
+{
+#if 1
+    return "" ;
+
+#else
+    int i ;
+    static char buffer[50] ;
+    char buf1[20] ;
+    char * p ;
+
+
+    sprintf(buffer, "Buffer %d, Length = %d - ", sv, SvCUR(sv)) ;
+    p = SvPVX(sv) ;
+    for (i = 0; i < SvCUR(sv) ; ++ i) {
+        sprintf (buf1, " %x [%x]", (p+i), *(p+i)) ;
+	strcat(buffer, buf1) ;
+    } 
+
+    return buffer ;
+
+#endif
+}
+#endif
+
 int
 magic_get(SV *sv, MAGIC *mg)
 {
@@ -359,6 +387,18 @@ magic_get(SV *sv, MAGIC *mg)
     switch (*mg->mg_ptr) {
     case '\001':		/* ^A */
 	sv_setsv(sv, PL_bodytarget);
+	break;
+    case '\002':		/* ^B */
+	/* printf("magic_get $^B: ") ; */
+	if (curcop->cop_warnings == WARN_NONE)
+	    /* printf("WARN_NONE\n"), */
+	    sv_setpvn(sv, WARN_NONEstring, WARNsize) ;
+        else if (curcop->cop_warnings == WARN_ALL)
+	    /* printf("WARN_ALL\n"), */
+	    sv_setpvn(sv, WARN_ALLstring, WARNsize) ;
+        else 
+	    /* printf("some %s\n", printW(curcop->cop_warnings)), */
+	    sv_setsv(sv, curcop->cop_warnings);
 	break;
     case '\004':		/* ^D */
 	sv_setiv(sv, (IV)(PL_debug & 32767));
@@ -422,7 +462,7 @@ magic_get(SV *sv, MAGIC *mg)
     case '\010':		/* ^H */
 	sv_setiv(sv, (IV)PL_hints);
 	break;
-    case '\t':			/* ^I */
+    case '\011':		/* ^I */ /* NOT \t in EBCDIC */
 	if (PL_inplace)
 	    sv_setpv(sv, PL_inplace);
 	else
@@ -453,7 +493,7 @@ magic_get(SV *sv, MAGIC *mg)
 #endif
 	break;
     case '\027':		/* ^W */
-	sv_setiv(sv, (IV)PL_dowarn);
+	sv_setiv(sv, (IV)((PL_dowarn & G_WARN_ON) == G_WARN_ON));
 	break;
     case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': case '&':
@@ -520,7 +560,6 @@ magic_get(SV *sv, MAGIC *mg)
 	break;
     case '?':
 	{
-	    dTHR;
 	    sv_setiv(sv, (IV)STATUS_CURRENT);
 #ifdef COMPLEX_STATUS
 	    LvTARGOFF(sv) = PL_statusvalue;
@@ -848,8 +887,8 @@ magic_setsig(SV *sv, MAGIC *mg)
     else {
 	i = whichsig(s);	/* ...no, a brick */
 	if (!i) {
-	    if (PL_dowarn || strEQ(s,"ALARM"))
-		warn("No such signal: SIG%s", s);
+	    if (ckWARN(WARN_SIGNAL) || strEQ(s,"ALARM"))
+		warner(WARN_SIGNAL, "No such signal: SIG%s", s);
 	    return 0;
 	}
 	SvREFCNT_dec(psig_name[i]);
@@ -1149,6 +1188,7 @@ magic_setpos(SV *sv, MAGIC *mg)
     SSize_t pos;
     STRLEN len;
     STRLEN ulen;
+    dTHR;
 
     mg = 0;
     
@@ -1166,7 +1206,7 @@ magic_setpos(SV *sv, MAGIC *mg)
     }
     len = SvPOK(lsv) ? SvCUR(lsv) : sv_len(lsv);
 
-    WITH_THR(pos = SvIV(sv) - PL_curcop->cop_arybase);
+    pos = SvIV(sv) - PL_curcop->cop_arybase;
 
     if (IN_UTF8) {
 	ulen = sv_len_utf8(lsv);
@@ -1418,12 +1458,12 @@ vivify_defelem(SV *sv)
     if (mg->mg_obj) {
 	SV *ahv = LvTARG(sv);
 	if (SvTYPE(ahv) == SVt_PVHV) {
-	    HE *he = hv_fetch_ent((HV*)ahv, mg->mg_obj, FALSE, 0);
+	    HE *he = hv_fetch_ent((HV*)ahv, mg->mg_obj, TRUE, 0);
 	    if (he)
 		value = HeVAL(he);
 	}
 	else {
-	    SV **svp = avhv_fetch_ent((AV*)ahv, mg->mg_obj, FALSE, 0);
+	    SV **svp = avhv_fetch_ent((AV*)ahv, mg->mg_obj, TRUE, 0);
 	    if (svp)
 		value = *svp;
 	}
@@ -1519,6 +1559,21 @@ magic_set(SV *sv, MAGIC *mg)
     case '\001':	/* ^A */
 	sv_setsv(PL_bodytarget, sv);
 	break;
+    case '\002':	/* ^B */
+	if ( ! (PL_dowarn & G_WARN_ALL_MASK)) {
+            if (memEQ(SvPVX(sv), WARN_ALLstring, WARNsize))
+	        compiling.cop_warnings = WARN_ALL;
+	    else if (memEQ(SvPVX(sv), WARN_NONEstring, WARNsize))
+	        compiling.cop_warnings = WARN_NONE;
+            else {
+	        if (compiling.cop_warnings != WARN_NONE && 
+		    compiling.cop_warnings != WARN_ALL)
+	            sv_setsv(compiling.cop_warnings, sv);
+	        else
+		    compiling.cop_warnings = newSVsv(sv) ;
+	    }
+	}
+	break;
     case '\004':	/* ^D */
 	PL_debug = (SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv)) | 0x80000000;
 	DEBUG_x(dump_all());
@@ -1541,7 +1596,7 @@ magic_set(SV *sv, MAGIC *mg)
     case '\010':	/* ^H */
 	PL_hints = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
 	break;
-    case '\t':	/* ^I */
+    case '\011':	/* ^I */ /* NOT \t in EBCDIC */
 	if (PL_inplace)
 	    Safefree(PL_inplace);
 	if (SvOK(sv))
@@ -1568,7 +1623,10 @@ magic_set(SV *sv, MAGIC *mg)
 #endif
 	break;
     case '\027':	/* ^W */
-	PL_dowarn = (bool)(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv));
+	if ( ! (PL_dowarn & G_WARN_ALL_MASK)) {
+	    i = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
+	    PL_dowarn = (i ? G_WARN_ON : G_WARN_OFF) ;
+	}
 	break;
     case '.':
 	if (PL_localizing) {
@@ -1866,7 +1924,7 @@ int
 magic_mutexfree(SV *sv, MAGIC *mg)
 {
     dTHR;
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: magic_mutexfree 0x%lx\n",
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "0x%lx: magic_mutexfree 0x%lx\n",
 			  (unsigned long)thr, (unsigned long)sv);)
     if (MgOWNER(mg))
 	croak("panic: magic_mutexfree");
@@ -1958,8 +2016,8 @@ sighandler(int sig)
 	cv = sv_2cv(psig_ptr[sig],&st,&gv,TRUE);
 
     if (!cv || !CvROOT(cv)) {
-	if (PL_dowarn)
-	    warn("SIG%s handler \"%s\" not defined.\n",
+	if (ckWARN(WARN_SIGNAL))
+	    warner(WARN_SIGNAL, "SIG%s handler \"%s\" not defined.\n",
 		sig_name[sig], (gv ? GvENAME(gv)
 				: ((cv && CvGV(cv))
 				   ? GvENAME(CvGV(cv))

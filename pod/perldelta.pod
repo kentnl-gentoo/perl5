@@ -135,7 +135,12 @@ features make them less often a problem.  See L<New Diagnostics>.
 Perl has a new Social Contract for contributors.  See F<Porting/Contract>.
 
 The license included in much of the Perl documentation has changed.
-See L<perl> and the individual perl man pages listed therein.
+Most of the Perl documentation was previously under the implicit GNU
+General Public License or the Artistic License (at the user's choice).
+Now much of the documentation unambigously states the terms under which
+it may be distributed.  Those terms are in general much less restrictive
+than the GNU GPL.  See L<perl> and the individual perl man pages listed
+therein.
 
 =head1 Core Changes
 
@@ -160,7 +165,7 @@ perl program.  The C backend generates C code that captures perl's state
 just before execution begins.  It eliminates the compile-time overheads
 of the regular perl interpreter, but the run-time performance remains
 comparatively the same.  The CC backend generates optimized C code
-equivivalent to the code path at run-time.  The CC backend has greater
+equivalent to the code path at run-time.  The CC backend has greater
 potential for big optimizations, but only a few optimizations are
 implemented currently.  The Bytecode backend generates a platform
 independent bytecode representation of the interpreter's state
@@ -203,12 +208,12 @@ Changes in the RE engine:
 	New types of nodes to process (SUBEXPR)* and similar expressions
 	    quickly, used if the SUBEXPR has no side effects and matches
 	    strings of the same length;
-	better optimizations by lookup for constant substrings;
+	Better optimizations by lookup for constant substrings;
 	Better search for constants substrings anchored by $ ;
 
 Changes in Perl code using RE engine:
 
-	more optimizations to s/longer/short/;
+	More optimizations to s/longer/short/;
 	study() was not working;
 	/blah/ may be optimized to an analogue of index() if $& $` $' not seen;
 	Unneeded copying of matched-against string removed;
@@ -225,7 +230,7 @@ Note that only the major bug fixes are listed here.  See F<Changes> for others.
 	    possibility of a segfault;
 	(ZERO-LENGTH)* could segfault;
 	(ZERO-LENGTH)* was prohibited;
-	Long RE were not allowed;
+	Long REs were not allowed;
 	/RE/g could skip matches at the same position after a 
 	  zero-length match;
 
@@ -248,9 +253,10 @@ See L<New C<qr//> operator>.
 
 =item Other improvements
 
-	better debugging output (possibly with colors), even from non-debugging Perl;
+	Better debugging output (possibly with colors),
+            even from non-debugging Perl;
 	RE engine code now looks like C, not like assembler;
-	behaviour of RE modifiable by `use re' directive;
+	Behaviour of RE modifiable by `use re' directive;
 	Improved documentation;
 	Test suite significantly extended;
 	Syntax [:^upper:] etc., reserved inside character classes;
@@ -301,13 +307,15 @@ and in XSUBs.
 
 =head2 More generous treatment of carriage returns
 
-Perl used to complain if it encountered carriage returns in scripts.  Now
-they are treated like whitespace.  Literal carriage returns inside
-string literals and here documents are ignored if they are paired with
-newlines, or treated like newlines if they stand alone.  This behavior
-means that literal carriage returns in files should be avoided.  You
-can get the older, more compatible (but less generous) behavior by
-defining the preprocessor symbol C<TMP_CRLF_PATCH> when building perl.
+Perl used to complain if it encountered literal carriage returns in
+scripts.  Now they are mostly treated like whitespace within program text.
+Inside string literals and here documents, literal carriage returns are
+ignored if they occur paired with newlines, or get interpreted as newlines
+if they stand alone.  This behavior means that literal carriage returns
+in files should be avoided.  You can get the older, more compatible (but
+less generous) behavior by defining the preprocessor symbol
+C<PERL_STRICT_CR> when building perl.  Of course, all this has nothing
+whatever to do with how escapes like C<\r> are handled within strings.
 
 Note that this doesn't somehow magically allow you to keep all text files
 in DOS format.  The generous treatment only applies to files that perl
@@ -448,7 +456,7 @@ substr() can now both return and replace in one operation.  The optional
 
 =head2 Negative LENGTH argument to splice
 
-Splice() with a negative LENGTH argument now work similar to what the
+splice() with a negative LENGTH argument now work similar to what the
 LENGTH did for substr().  Previously a negative LENGTH was treated as
 0.  See L<perlfunc/splice>.
 
@@ -493,6 +501,8 @@ BeOS is now supported.  See L<README.beos>.
 DOS is now supported under the DJGPP tools.  See L<README.dos>.
 
 MPE/iX is now supported.  See L<README.mpeix>.
+
+MVS (OS390) is now supported.  See L<README.os390>.
 
 =head2 Changes in existing support
 

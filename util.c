@@ -1253,21 +1253,17 @@ die(const char* pat, ...)
     GV *gv;
     CV *cv;
 
-#ifdef USE_THREADS
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			  "%p: die: curstack = %p, mainstack = %p\n",
 			  thr, PL_curstack, PL_mainstack));
-#endif /* USE_THREADS */
 
     va_start(args, pat);
     message = pat ? mess(pat, &args) : Nullch;
     va_end(args);
 
-#ifdef USE_THREADS
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			  "%p: die: message = %s\ndiehook = %p\n",
 			  thr, message, PL_diehook));
-#endif /* USE_THREADS */
     if (PL_diehook) {
 	/* sv_2cv might call croak() */
 	SV *olddiehook = PL_diehook;
@@ -1301,11 +1297,9 @@ die(const char* pat, ...)
     }
 
     PL_restartop = die_where(message);
-#ifdef USE_THREADS
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 	  "%p: die: restartop = %p, was_in_eval = %d, top_env = %p\n",
 	  thr, PL_restartop, was_in_eval, PL_top_env));
-#endif /* USE_THREADS */
     if ((!PL_restartop && was_in_eval) || PL_top_env->je_prev)
 	JMPENV_JUMP(3);
     return PL_restartop;
@@ -1324,9 +1318,7 @@ croak(const char* pat, ...)
     va_start(args, pat);
     message = mess(pat, &args);
     va_end(args);
-#ifdef USE_THREADS
-    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "croak: 0x%lx %s", (unsigned long) thr, message));
-#endif /* USE_THREADS */
+    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "croak: 0x%lx %s", (unsigned long) thr, message));
     if (PL_diehook) {
 	/* sv_2cv might call croak() */
 	SV *olddiehook = PL_diehook;
@@ -1413,6 +1405,94 @@ warn(const char* pat,...)
 	    : 0);
 #endif
     (void)PerlIO_flush(PerlIO_stderr());
+}
+
+void
+warner(U32  err, const char* pat,...)
+{
+    dTHR;
+    va_list args;
+    char *message;
+    HV *stash;
+    GV *gv;
+    CV *cv;
+
+    va_start(args, pat);
+    message = mess(pat, &args);
+    va_end(args);
+
+    if (ckDEAD(err)) {
+#ifdef USE_THREADS
+        DEBUG_S(PerlIO_printf(PerlIO_stderr(), "croak: 0x%lx %s", (unsigned long) thr, message));
+#endif /* USE_THREADS */
+        if (PL_diehook) {
+            /* sv_2cv might call croak() */
+            SV *olddiehook = PL_diehook;
+            ENTER;
+            SAVESPTR(PL_diehook);
+            PL_diehook = Nullsv;
+            cv = sv_2cv(olddiehook, &stash, &gv, 0);
+            LEAVE;
+            if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
+                dSP;
+                SV *msg;
+ 
+                ENTER;
+                msg = newSVpv(message, 0);
+                SvREADONLY_on(msg);
+                SAVEFREESV(msg);
+ 
+                PUSHMARK(sp);
+                XPUSHs(msg);
+                PUTBACK;
+                perl_call_sv((SV*)cv, G_DISCARD);
+ 
+                LEAVE;
+            }
+        }
+        if (PL_in_eval) {
+            PL_restartop = die_where(message);
+            JMPENV_JUMP(3);
+        }
+        PerlIO_puts(PerlIO_stderr(),message);
+        (void)PerlIO_flush(PerlIO_stderr());
+        my_failure_exit();
+
+    }
+    else {
+        if (PL_warnhook) {
+            /* sv_2cv might call warn() */
+            dTHR;
+            SV *oldwarnhook = PL_warnhook;
+            ENTER;
+            SAVESPTR(PL_warnhook);
+            PL_warnhook = Nullsv;
+            cv = sv_2cv(oldwarnhook, &stash, &gv, 0);
+                LEAVE;
+            if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
+                dSP;
+                SV *msg;
+ 
+                ENTER;
+                msg = newSVpv(message, 0);
+                SvREADONLY_on(msg);
+                SAVEFREESV(msg);
+ 
+                PUSHMARK(sp);
+                XPUSHs(msg);
+                PUTBACK;
+                perl_call_sv((SV*)cv, G_DISCARD);
+ 
+                LEAVE;
+                return;
+            }
+        }
+        PerlIO_puts(PerlIO_stderr(),message);
+#ifdef LEAKTEST
+        DEBUG_L(xstat());
+#endif
+        (void)PerlIO_flush(PerlIO_stderr());
+    }
 }
 
 #ifndef VMS  /* VMS' my_setenv() is in VMS.c */
@@ -2349,8 +2429,11 @@ scan_oct(char *start, I32 len, I32 *retlen)
 	retval = n | (*s++ - '0');
 	len--;
     }
-    if (PL_dowarn && len && (*s == '8' || *s == '9'))
-	warn("Illegal octal digit ignored");
+    if (len && (*s == '8' || *s == '9')) {
+	dTHR;
+	if (ckWARN(WARN_OCTAL))
+	    warner(WARN_OCTAL, "Illegal octal digit ignored");
+    }
     *retlen = s - start;
     return retval;
 }
@@ -2370,9 +2453,10 @@ scan_hex(char *start, I32 len, I32 *retlen)
 	    if (*s == '_')
 		continue;
 	    else {
+		dTHR;
 		--s;
-		if (PL_dowarn)
-		    warn("Illegal hex digit ignored");
+		if (ckWARN(WARN_UNSAFE))
+		    warner(WARN_UNSAFE,"Illegal hex digit ignored");
 		break;
 	    }
 	}
@@ -2719,7 +2803,7 @@ condpair_magic(SV *sv)
 	    mg->mg_ptr = (char *)cp;
 	    mg->mg_len = sizeof(cp);
 	    UNLOCK_SV_MUTEX;
-	    DEBUG_L(WITH_THR(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(WITH_THR(PerlIO_printf(PerlIO_stderr(),
 					   "%p: condpair_magic %p\n", thr, sv));)
 	}
     }
@@ -2820,7 +2904,7 @@ new_struct_thread(struct perl_thread *t)
 	    SV *sv = newSVsv(*svp);
 	    av_store(thr->threadsv, i, sv);
 	    sv_magic(sv, 0, 0, &PL_threadsv_names[i], 1);
-	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 		"new_struct_thread: copied threadsv %d %p->%p\n",i, t, thr));
 	}
     } 
