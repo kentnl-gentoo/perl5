@@ -48,11 +48,11 @@ if(@ARGV<1) {
 	$me = $0;		# Editing $0 is unportable
 	$me =~ s,.*/,,;
 	die <<EOF;
-Usage: $me [-h] [-v] [-t] [-u] [-m] [-l] PageName|ModuleName|ProgramName
+Usage: $me [-h] [-v] [-t] [-u] [-m] [-l] [-F] [-X] PageName|ModuleName|ProgramName
        $me -f PerlFunc
 
-We suggest you use "perldoc perldoc" to get aquainted 
-with the system.
+The -h option prints more help.  Also try "perldoc perldoc" to get
+aquainted with the system.
 EOF
 }
 
@@ -80,7 +80,9 @@ Options:
     -u	 Display unformatted pod text
     -m   Display modules file in its entirety
     -l   Display the modules file name
+    -F   Arguments are file names, not modules
     -v	 Verbosely describe what's going on
+    -X	 use index if present (looks for pod.idx at $Config{archlib})
 
 PageName|ModuleName...
          is the name of a piece of documentation that you want to look at. You 
@@ -94,7 +96,8 @@ BuiltinFunction
          `perlfunc'.
          
 Any switches in the PERLDOC environment variable will be used before the 
-command line arguments.
+command line arguments.  The optional pod index file contains a list of
+filenames, one per line.
 
 EOF
 }
@@ -104,9 +107,12 @@ use Text::ParseWords;
 
 unshift(@ARGV,shellwords($ENV{"PERLDOC"}));
 
-getopts("mhtluvf:") || usage;
+getopts("mhtluvFf:X") || usage;
 
 usage if $opt_h || $opt_h; # avoid -w warning
+
+$podidx = "$Config{'archlib'}/pod.idx";
+$podidx = "" if $opt_X || !-f "pod.idx" && !-r _ && -M _ > 7;
 
 if ($opt_t + $opt_u + $opt_m + $opt_l > 1) {
     usage("only one of -t, -u, -m or -l")
@@ -152,7 +158,7 @@ sub minus_f_nocase {
      # on a case-forgiving file system we can simply use -f $file
      if ($Is_VMS or $Is_MSWin32 or $^O eq 'os2') {
         return $file if -f $file and -r _;
-	warn "Ignored $file: unreadable\n" unless -r _;
+	warn "Ignored $file: unreadable\n" if -f _;
 	return '';
      }
      local *DIR;
@@ -250,10 +256,27 @@ sub searchfor {
 
 
 foreach (@pages) {
+        if ($podidx && open(PODIDX, $podidx)) {
+	    my $searchfor = $_;
+	    local($_);
+	    $searchfor =~ s,::,/,g;
+	    print STDERR "Searching for '$searchfor' in $podidx\n" if $opt_v;
+	    while (<PODIDX>) {
+		chomp;
+		push(@found, $_) if m,/$searchfor(?:\.(?:pod|pm))?$,i;
+	    }
+	    close(PODIDX);
+	    next;
+        }
 	print STDERR "Searching for $_\n" if $opt_v;
 	# We must look both in @INC for library modules and in PATH
 	# for executables, like h2xs or perldoc itself.
 	@searchdirs = @INC;
+	if ($opt_F) {
+	  next unless -r;
+	  push @found, $_ if $opt_m or containspod($_);
+	  next;
+	}
 	unless ($opt_m) { 
 	    if ($Is_VMS) {
 		my($i,$trn);
@@ -357,14 +380,23 @@ if ($opt_f) {
        ++$found if /^\w/;	# found descriptive text
    }
    if (@pod) {
+	my $lines = $ENV{LINES} || 24;
+
        if ($opt_t) {
 	   open(FORMATTER, "| pod2text") || die "Can't start filter";
 	   print FORMATTER "=over 8\n\n";
 	   print FORMATTER @pod;
 	   print FORMATTER "=back\n";
 	   close(FORMATTER);
-       } else {
+       } elsif (@pod < $lines-2) {
 	   print @pod;
+       } else {
+	   foreach $pager (@pagers) {
+		open (PAGER, "| $pager") or next;
+		print PAGER @pod ;
+		close(PAGER) or next;
+		last;
+	   }
        }
    } else {
        die "No documentation for perl function `$opt_f' found\n";
@@ -425,7 +457,7 @@ perldoc - Look up Perl documentation in pod format.
 
 =head1 SYNOPSIS
 
-B<perldoc> [B<-h>] [B<-v>] [B<-t>] [B<-u>] [B<-m>] [B<-l>] PageName|ModuleName|ProgramName
+B<perldoc> [B<-h>] [B<-v>] [B<-t>] [B<-u>] [B<-m>] [B<-l>] [B<-F>]  [B<-X>] PageName|ModuleName|ProgramName
 
 B<perldoc> B<-f> BuiltinFunction
 
@@ -472,10 +504,20 @@ the file for you and simply hand it off for display.
 
 Display the file name of the module found.
 
+=item B<-F> file names
+
+Consider arguments as file names, no search in directories will be performed.
+
 =item B<-f> perlfunc
 
 The B<-f> option followed by the name of a perl built in function will
 extract the documentation of this function from L<perlfunc>.
+
+=item B<-X> use an index if present
+
+The B<-X> option looks for a entry whose basename matches the name given on the
+command line in the file C<$Config{archlib}/pod.idx>.  The pod.idx file should
+contain fully qualified filenames, one per line.
 
 =item B<PageName|ModuleName|ProgramName>
 
@@ -506,6 +548,9 @@ Minor updates by Andy Dougherty <doughera@lafcol.lafayette.edu>
 =cut
 
 #
+# Version 1.13: Fri Feb 27 16:20:50 EST 1997
+#       Gurusamy Sarathy <gsar@umich.edu>
+#	-doc tweaks for -F and -X options
 # Version 1.12: Sat Apr 12 22:41:09 EST 1997
 #       Gurusamy Sarathy <gsar@umich.edu>
 #	-various fixes for win32

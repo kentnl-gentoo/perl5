@@ -72,7 +72,6 @@ void* p;
     }
 }
 
-
 void
 mg_magical(sv)
 SV* sv;
@@ -367,8 +366,20 @@ MAGIC *mg;
 	    sv_setpv(sv, os2error(Perl_rc));
 	}
 #else
+#ifdef WIN32
+	{
+	    DWORD dwErr = GetLastError();
+	    sv_setnv(sv, (double)dwErr);
+	    if (dwErr)
+		win32_str_os_error(sv, dwErr);
+	    else
+		sv_setpv(sv, "");
+	    SetLastError(dwErr);
+	}
+#else
 	sv_setnv(sv, (double)errno);
 	sv_setpv(sv, errno ? Strerror(errno) : "");
+#endif
 #endif
 #endif
 	SvNOK_on(sv);	/* what a wonderful hack! */
@@ -1363,8 +1374,12 @@ MAGIC* mg;
 #ifdef VMS
 	set_vaxc_errno(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv));
 #else
+#ifdef WIN32
+	SetLastError( SvIV(sv) );
+#else
 	/* will anyone ever use this? */
 	SETERRNO(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv), 4);
+#endif
 #endif
 	break;
     case '\006':	/* ^F */
@@ -1495,7 +1510,7 @@ MAGIC* mg;
 	    STATUS_POSIX_SET(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv));
 	break;
     case '!':
-	SETERRNO(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv),
+	SETERRNO(SvIOK(sv) ? SvIVX(sv) : SvOK(sv) ? sv_2iv(sv) : 0,
 		 (SvIV(sv) == EVMSERR) ? 4 : vaxc$errno);
 	break;
     case '<':
@@ -1728,10 +1743,10 @@ sighandler(sig)
 int sig;
 {
     dSP;
-    GV *gv;
+    GV *gv = Nullgv;
     HV *st;
     SV *sv, *tSv = Sv;
-    CV *cv;
+    CV *cv = Nullcv;
     AV *oldstack;
     OP *myop = op;
     U32 flags = 0;
@@ -1783,8 +1798,11 @@ int sig;
     if (!cv || !CvROOT(cv)) {
 	if (dowarn)
 	    warn("SIG%s handler \"%s\" not defined.\n",
-		sig_name[sig], GvENAME(gv) );
-	return;
+		sig_name[sig], (gv ? GvENAME(gv)
+				: ((cv && CvGV(cv))
+				   ? GvENAME(CvGV(cv))
+				   : "__ANON__")));
+	goto cleanup;
     }
 
     oldstack = curstack;
@@ -1807,6 +1825,7 @@ int sig;
     perl_call_sv((SV*)cv, G_DISCARD);
 
     SWITCHSTACK(signalstack, oldstack);
+cleanup:
     if (flags & 1)
 	savestack_ix -= 8; /* Unprotect save in progress. */
     if (flags & 2) {

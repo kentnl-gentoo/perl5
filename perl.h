@@ -1734,7 +1734,14 @@ IEXT bool	Iminus_F;
 IEXT bool	Idoswitches;
 IEXT bool	Idowarn;
 IEXT bool	Idoextract;
-IEXT bool	Isawampersand;	/* must save all match strings */
+    /* sometimes, binary compatibility is a pain */
+#ifdef MULTIPLICITY
+IEXT union { bool b; char c; } Isawampersand_u;	/* must save match strings */
+#undef   sawampersand
+#define  sawampersand  sawampersand_u.c
+#else
+IEXT bool	Isawampersand;
+#endif
 IEXT bool	Isawstudy;	/* do fbm_instr on all strings */
 IEXT bool	Isawvec;
 IEXT bool	Iunsafe;
@@ -2220,6 +2227,9 @@ EXT bool	numeric_local INIT(TRUE);    /* Assume local numerics */
  */
 #define printf PerlIO_stdoutf
 #endif
+
+/* provide some backwards compatibility for XS source from 5.005 */
+#define dTHR typedef int _thr_dummy
 
 #endif /* Include guard */
 

@@ -34,7 +34,7 @@
 #endif
 
 #ifdef I_UTIME
-#  ifdef _MSC_VER
+#  if defined(_MSC_VER) || defined(__MINGW32__)
 #    include <sys/utime.h>
 #  else
 #    include <utime.h>
@@ -92,6 +92,7 @@ PerlIO *supplied_fp;
     PerlIO *fp;
     int fd;
     int result;
+    bool was_fdopen = FALSE;
 
     forkprocess = 1;		/* assume true if no fork */
 
@@ -221,6 +222,8 @@ PerlIO *supplied_fp;
 		    }
 		    if (dodup)
 			fd = dup(fd);
+		    else
+			was_fdopen = TRUE;
 		    if (!(fp = PerlIO_fdopen(fd,mode))) {
 			if (dodup)
 			    close(fd);
@@ -328,7 +331,8 @@ PerlIO *supplied_fp;
 	    sv = *av_fetch(fdpid,fd,TRUE);
 	    (void)SvUPGRADE(sv, SVt_IV);
 	    SvIVX(sv) = pid;
-	    PerlIO_close(fp);
+	    if (!was_fdopen)
+		PerlIO_close(fp);
 
 	}
 	fp = saveifp;
@@ -499,7 +503,8 @@ register GV *gv;
 	    return IoIFP(GvIOp(gv));
 	}
 	else
-	    PerlIO_printf(PerlIO_stderr(), "Can't open %s: %s\n",SvPV(sv, na), Strerror(errno));
+	    PerlIO_printf(PerlIO_stderr(), "Can't open %s: %s\n",
+	      SvPV(sv, na), Strerror(errno));
     }
     if (inplace) {
 	(void)do_close(argvoutgv,FALSE);
@@ -846,6 +851,7 @@ dARGS
     }
     else {
 	SV* sv = POPs;
+	char *s;
 	PUTBACK;
 	if (SvTYPE(sv) == SVt_PVGV) {
 	    tmpgv = (GV*)sv;
@@ -856,11 +862,12 @@ dARGS
 	    goto do_fstat;
 	}
 
+	s = SvPV(sv, na);
 	statgv = Nullgv;
-	sv_setpv(statname,SvPV(sv, na));
+	sv_setpv(statname, s);
 	laststype = OP_STAT;
-	laststatval = Stat(SvPV(sv, na),&statcache);
-	if (laststatval < 0 && dowarn && strchr(SvPV(sv, na), '\n'))
+	laststatval = Stat(s, &statcache);
+	if (laststatval < 0 && dowarn && strchr(s, '\n'))
 	    warn(warn_nl, "stat");
 	return laststatval;
     }

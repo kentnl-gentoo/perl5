@@ -22,6 +22,8 @@
 #define SAVEt_REGCONTEXT 21
 #define SAVEt_STACK_POS  22
 #define SAVEt_I16	23
+#define SAVEt_AELEM     24
+#define SAVEt_HELEM     25
 
 #define SSCHECK(need) if (savestack_ix + need > savestack_max) savestack_grow()
 #define SSPUSHINT(i) (savestack[savestack_ix++].any_i32 = (I32)(i))
@@ -41,8 +43,23 @@
 #define FREE_TMPS() FREETMPS
 #endif
 
+#ifdef DEBUGGING
+#define ENTER							\
+    STMT_START {						\
+	push_scope();						\
+	DEBUG_l(deb("ENTER scope %ld at %s:%d\n",		\
+		    scopestack_ix, __FILE__, __LINE__));	\
+    } STMT_END
+#define LEAVE							\
+    STMT_START {						\
+	DEBUG_l(deb("LEAVE scope %ld at %s:%d\n",		\
+		    scopestack_ix, __FILE__, __LINE__));	\
+	pop_scope();						\
+    } STMT_END
+#else
 #define ENTER push_scope()
 #define LEAVE pop_scope()
+#endif
 #define LEAVE_SCOPE(old) if (savestack_ix > old) leave_scope(old)
 
 /*

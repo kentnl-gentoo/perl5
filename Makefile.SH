@@ -387,12 +387,14 @@ install.html: all installhtml
 run_byacc:	FORCE
 	@ echo 'Expect' 113 shift/reduce and 1 reduce/reduce conflict
 	$(BYACC) -d perly.y
+	chmod 664 perly.c
 	sh $(shellflags) ./perly.fixer y.tab.c perly.c
 	sed -e 's/fprintf *( *stderr *,/PerlIO_printf(Perl_debug_log,/g' \
 	    -e 's/y\.tab/perly/g' perly.c >perly.tmp && mv perly.tmp perly.c
 	echo 'extern YYSTYPE yylval;' >>y.tab.h
 	cmp -s y.tab.h perly.h && rm -f y.tab.h || mv y.tab.h perly.h
-	- perl vms/vms_yfix.pl perly.c perly.h vms/perly_c.vms vms/perly_h.vms
+	chmod 664 vms/perly_c.vms vms/perly_h.vms
+	perl vms/vms_yfix.pl perly.c perly.h vms/perly_c.vms vms/perly_h.vms
 
 # We don't want to regenerate perly.c and perly.h, but they might
 # appear out-of-date after a patch is applied or a new distribution is

@@ -153,6 +153,9 @@ sideff	:	error
 			{ $$ = newLOOPOP(OPf_PARENS, 1, scalar($3), $1); }
 	|	expr UNTIL iexpr
 			{ $$ = newLOOPOP(OPf_PARENS, 1, $3, $1);}
+	|	expr FOR expr
+			{ $$ = newFOROP(0, Nullch, $2,
+					Nullop, $3, $1, Nullop); }
 	;
 
 else	:	/* NULL */
@@ -438,7 +441,8 @@ term	:	term ASSIGNOP term
 	|	scalar	%prec '('
 			{ $$ = $1; }
 	|	star '{' expr ';' '}'
-			{ $$ = newBINOP(OP_GELEM, 0, newGVREF(0,$1), $3); }
+			{ $$ = newBINOP(OP_GELEM, 0, newGVREF(0,$1),
+					scalar($3)); }
 	|	star	%prec '('
 			{ $$ = $1; }
 	|	scalar '[' expr ']'	%prec '('

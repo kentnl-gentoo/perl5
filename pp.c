@@ -1840,7 +1840,7 @@ PP(pp_vec)
 	}
     }
 
-    sv_setiv(TARG, (IV)retnum);
+    sv_setuv(TARG, (UV)retnum);
     PUSHs(TARG);
     RETURN;
 }
@@ -2159,7 +2159,7 @@ PP(pp_aslice)
 		if (!svp || *svp == &sv_undef)
 		    DIE(no_aelem, elem);
 		if (op->op_private & OPpLVAL_INTRO)
-		    save_svref(svp);
+		    save_aelem(av, elem, svp);
 	    }
 	    *MARK = svp ? *svp : &sv_undef;
 	}
@@ -2280,7 +2280,7 @@ PP(pp_hslice)
 		if (!he || HeVAL(he) == &sv_undef)
 		    DIE(no_helem, SvPV(keysv, na));
 		if (op->op_private & OPpLVAL_INTRO)
-		    save_svref(&HeVAL(he));
+		    save_helem(hv, keysv, &HeVAL(he));
 	    }
 	    *MARK = he ? HeVAL(he) : &sv_undef;
 	}
@@ -4136,7 +4136,7 @@ PP(pp_split)
     else {
 	maxiters += (strend - s) * rx->nparens;
 	while (s < strend && --limit &&
-	       pregexec(rx, s, strend, orig, 1, Nullsv, TRUE))
+	       pregexec(rx, s, strend, orig, 1, Nullsv, 0))
 	{
 	    TAINT_IF(rx->exec_tainted);
 	    if (rx->subbase

@@ -193,11 +193,14 @@ AV *
 save_ary(gv)
 GV *gv;
 {
-    AV *oav, *av;
+    AV *oav = GvAVn(gv);
+    AV *av;
 
+    if (!AvREAL(oav) && AvREIFY(oav))
+	av_reify(oav);
     SSCHECK(3);
     SSPUSHPTR(gv);
-    SSPUSHPTR(oav = GvAVn(gv));
+    SSPUSHPTR(oav);
     SSPUSHINT(SAVEt_AV);
 
     GvAV(gv) = Null(AV*);
@@ -243,12 +246,11 @@ void
 save_item(item)
 register SV *item;
 {
-    register SV *sv;
+    register SV *sv = NEWSV(0,0);
 
+    sv_setsv(sv,item);
     SSCHECK(3);
     SSPUSHPTR(item);		/* remember the pointer */
-    sv = NEWSV(0,0);
-    sv_setsv(sv,item);
     SSPUSHPTR(sv);		/* remember the value */
     SSPUSHINT(SAVEt_ITEM);
 }
@@ -365,11 +367,11 @@ SV *sv;
 }
 
 void
-save_freeop(op)
-OP *op;
+save_freeop(o)
+OP *o;
 {
     SSCHECK(2);
-    SSPUSHPTR(op);
+    SSPUSHPTR(o);
     SSPUSHINT(SAVEt_FREEOP);
 }
 
@@ -412,11 +414,11 @@ I32 maxsarg;
     register SV *sv;
     register I32 i;
 
-    SSCHECK(3 * maxsarg);
     for (i = 1; i <= maxsarg; i++) {
-	SSPUSHPTR(sarg[i]);		/* remember the pointer */
 	sv = NEWSV(0,0);
 	sv_setsv(sv,sarg[i]);
+	SSCHECK(3);
+	SSPUSHPTR(sarg[i]);		/* remember the pointer */
 	SSPUSHPTR(sv);			/* remember the value */
 	SSPUSHINT(SAVEt_ITEM);
     }
@@ -434,6 +436,34 @@ void* p;
 }
 
 void
+save_aelem(av,idx,sptr)
+AV *av;
+I32 idx;
+SV **sptr;
+{
+    SSCHECK(4);
+    SSPUSHPTR(av);
+    SSPUSHINT(idx);
+    SSPUSHPTR(*sptr);
+    SSPUSHINT(SAVEt_AELEM);
+    save_scalar_at(sptr);
+}
+
+void
+save_helem(hv,key,sptr)
+HV *hv;
+SV *key;
+SV **sptr;
+{
+    SSCHECK(4);
+    SSPUSHPTR(hv);
+    SSPUSHPTR(key);
+    SSPUSHPTR(*sptr);
+    SSPUSHINT(SAVEt_HELEM);
+    save_scalar_at(sptr);
+}
+
+void
 leave_scope(base)
 I32 base;
 {
@@ -443,6 +473,7 @@ I32 base;
     register AV *av;
     register HV *hv;
     register void* ptr;
+    I32 i;
 
     if (base < -1)
 	croak("panic: corrupt saved stack index");
@@ -568,14 +599,14 @@ I32 base;
 	case SAVEt_GP:				/* scalar reference */
 	    ptr = SSPOPPTR;
 	    gv = (GV*)SSPOPPTR;
-            gp_free(gv);
-            GvGP(gv) = (GP*)ptr;
             if (SvPOK(gv) && SvLEN(gv) > 0) {
                 Safefree(SvPVX(gv));
             }
             SvPVX(gv) = (char *)SSPOPPTR;
             SvCUR(gv) = (STRLEN)SSPOPIV;
             SvLEN(gv) = (STRLEN)SSPOPIV;
+            gp_free(gv);
+            GvGP(gv) = (GP*)ptr;
 	    SvREFCNT_dec(gv);
             break;
 	case SAVEt_FREESV:
@@ -630,12 +661,12 @@ I32 base;
 	    }
 	    else {	/* Someone has a claim on this, so abandon it. */
 		U32 padflags = SvFLAGS(sv) & (SVs_PADBUSY|SVs_PADMY|SVs_PADTMP);
-		SvREFCNT_dec(sv);	/* Cast current value to the winds. */
 		switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
 		case SVt_PVAV:	*(SV**)ptr = (SV*)newAV();	break;
 		case SVt_PVHV:	*(SV**)ptr = (SV*)newHV();	break;
 		default:	*(SV**)ptr = NEWSV(0,0);	break;
 		}
+		SvREFCNT_dec(sv);	/* Cast current value to the winds. */
 		SvFLAGS(*(SV**)ptr) |= padflags; /* preserve pad nature */
 	    }
 	    break;
@@ -651,17 +682,26 @@ I32 base;
 	    (*SSPOPDPTR)(ptr);
 	    break;
 	case SAVEt_REGCONTEXT:
-	    {
-		I32 delta = SSPOPINT;
-		savestack_ix -= delta;	/* regexp must have croaked */
-	    }
+	    i = SSPOPINT;
+	    savestack_ix -= i;  	/* regexp must have croaked */
 	    break;
 	case SAVEt_STACK_POS:		/* Position on Perl stack */
-	    {
-		I32 delta = SSPOPINT;
-		stack_sp = stack_base + delta;
-	    }
+	    i = SSPOPINT;
+	    stack_sp = stack_base + i;
 	    break;
+	case SAVEt_AELEM:		/* array element */
+	    value = (SV*)SSPOPPTR;
+	    i = SSPOPINT;
+	    av = (AV*)SSPOPPTR;
+	    ptr = av_fetch(av,i,1);
+	    goto restore_sv;
+	case SAVEt_HELEM:		/* hash element */
+	    value = (SV*)SSPOPPTR;
+	    sv = (SV*)SSPOPINT;
+	    hv = (HV*)SSPOPPTR;
+	    ptr = hv_fetch_ent(hv, sv, 1, 0);
+	    ptr = &HeVAL((HE*)ptr);
+	    goto restore_sv;
 	default:
 	    croak("panic: leave_scope inconsistency");
 	}
@@ -741,8 +781,8 @@ CONTEXT* cx;
 		(long)cx->sb_iters);
 	PerlIO_printf(Perl_debug_log, "SB_MAXITERS = %ld\n",
 		(long)cx->sb_maxiters);
-	PerlIO_printf(Perl_debug_log, "SB_SAFEBASE = %ld\n",
-		(long)cx->sb_safebase);
+	PerlIO_printf(Perl_debug_log, "SB_SAVEMATCH = %ld\n",
+		(long)cx->sb_savematch);
 	PerlIO_printf(Perl_debug_log, "SB_ONCE = %ld\n",
 		(long)cx->sb_once);
 	PerlIO_printf(Perl_debug_log, "SB_ORIG = %s\n",

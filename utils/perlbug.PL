@@ -217,7 +217,7 @@ EOF
 		$::opt_C = 1; # don't send a copy to the local admin
 		$::opt_s = 1;
 		$subject = "OK: perl $] ${patch_tags}on"
-			  ." $::Config{'osname'} $::Config{'osvers'} $subject";
+			  ." $::Config{'archname'} $::Config{'osvers'} $subject";
 		$::opt_b = 1;
 		$body    = "Perl reported to build OK on this system.\n";
 		$ok = 1;

@@ -17,7 +17,7 @@
 	   --- patchlevel.h	<date here>
 	   *** 38,43 ***
 	   --- 38,44 ---
-	     	,"FOO1235 - some patch"
+			,"MAINT_TRIAL_1 - 5.00x_0x maintenance release trial 1"
 	     	,"BAR3141 - another patch"
 	     	,"BAZ2718 - and another patch"
 	   + 	,"MINE001 - my new patch"
@@ -39,7 +39,7 @@
 /* The following line and terminating '};' are read by perlbug.PL. Don't alter. */ 
 static	char	*local_patches[] = {
 	NULL
-	,"MAINT_TRIAL_4 - 5.004_04 maintenance release trial 4"
+	,"MAINT_TRIAL_1 - 5.004_05 maintenance trial 1"
 	,NULL
 };
 

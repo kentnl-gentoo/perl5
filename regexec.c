@@ -177,7 +177,9 @@ I32 base;
 static I32 regmatch _((char *prog));
 static I32 regrepeat _((char *p, I32 max));
 static I32 regtry _((regexp *prog, char *startpos));
+
 static bool reginclass _((char *p, I32 c));
+#define REGINCLASS(p,c)  (*(p) ? reginclass(p,c) : ANYOF_TEST(p,c))
 
 static bool regtainted;		/* tainted information used? */
 
@@ -185,14 +187,14 @@ static bool regtainted;		/* tainted information used? */
  - pregexec - match a regexp against a string
  */
 I32
-pregexec(prog, stringarg, strend, strbeg, minend, screamer, safebase)
+pregexec(prog, stringarg, strend, strbeg, minend, screamer, savematch)
 register regexp *prog;
 char *stringarg;
 register char *strend;	/* pointer to null at end of string */
 char *strbeg;	/* real beginning of string */
 I32 minend;	/* end of match must be at least minend after stringarg */
 SV *screamer;
-I32 safebase;	/* no need to remember string in subbase */
+I32 savematch;	/* no need to remember string in subbase */
 {
     register char *s;
     register char *c;
@@ -220,7 +222,7 @@ I32 safebase;	/* no need to remember string in subbase */
     if (startpos == strbeg)	/* is ^ valid at stringarg? */
 	regprev = '\n';
     else {
-	regprev = stringarg[-1];
+	regprev = startpos[-1];
 	if (!multiline && regprev == '\n')
 	    regprev = '\0';		/* force ^ to NOT match */
     }
@@ -241,7 +243,7 @@ I32 safebase;	/* no need to remember string in subbase */
 	(!(prog->reganch & ROPT_ANCH_BOL)
 	 || (multiline && prog->regback >= 0)) )
     {
-	if (stringarg == strbeg && screamer) {
+	if (startpos == strbeg && screamer) {
 	    if (screamfirst[BmRARE(prog->regmust)] >= 0)
 		    s = screaminstr(screamer,prog->regmust);
 	    else
@@ -354,7 +356,7 @@ I32 safebase;	/* no need to remember string in subbase */
 	case ANYOF:
 	    c = OPERAND(c);
 	    while (s < strend) {
-		if (reginclass(c, *s)) {
+		if (REGINCLASS(c, *s)) {
 		    if (tmp && regtry(prog, s))
 			goto got_it;
 		    else
@@ -554,30 +556,45 @@ I32 safebase;	/* no need to remember string in subbase */
 
 got_it:
     strend += dontbother;	/* uncheat */
+    prog->subskip = 0;
     prog->subbeg = strbeg;
     prog->subend = strend;
     prog->exec_tainted = regtainted;
 
     /* make sure $`, $&, $', and $digit will work later */
     if (strbeg != prog->subbase) {
-	if (safebase) {
+	if (!savematch) {
 	    if (prog->subbase) {
 		Safefree(prog->subbase);
 		prog->subbase = Nullch;
 	    }
 	}
 	else {
-	    I32 i = strend - startpos + (stringarg - strbeg);
-	    s = savepvn(strbeg, i);
+	    char *svptr;
+	    I32 svlen;
+	    I32 i;
+	    if (savematch == 1) {
+		/* just matched string, for () and $& */
+		svptr = prog->startp[0];
+		svlen = prog->endp[0] - svptr;
+	    }
+	    else {
+		/* whole string, even prefix, for s//g, $`, and $' */
+		svptr = strbeg;
+		svlen = strend - strbeg;
+	    }
+	    prog->subskip = svptr - strbeg;
+	    s = savepvn(svptr, svlen);
 	    Safefree(prog->subbase);
 	    prog->subbase = s;
 	    prog->subbeg = prog->subbase;
-	    prog->subend = prog->subbase + i;
-	    s = prog->subbase + (stringarg - strbeg);
+	    prog->subend = prog->subbase + svlen;
 	    for (i = 0; i <= prog->nparens; i++) {
 		if (prog->endp[i]) {
-		    prog->startp[i] = s + (prog->startp[i] - startpos);
-		    prog->endp[i] = s + (prog->endp[i] - startpos);
+		    prog->startp[i] = (prog->subbase
+				       + (prog->startp[i] - svptr));
+		    prog->endp[i] = (prog->subbase
+				     + (prog->endp[i] - svptr));
 		}
 	    }
 	}
@@ -774,7 +791,7 @@ char *prog;
 	    s = OPERAND(scan);
 	    if (nextchar < 0)
 		nextchar = UCHARAT(locinput);
-	    if (!reginclass(s, nextchar))
+	    if (!REGINCLASS(s, nextchar))
 		sayNO;
 	    if (!nextchar && locinput >= regeol)
 		sayNO;
@@ -1222,7 +1239,7 @@ I32 max;
 	    scan++;
 	break;
     case ANYOF:
-	while (scan < loceol && reginclass(opnd, *scan))
+	while (scan < loceol && REGINCLASS(opnd, *scan))
 	    scan++;
 	break;
     case ALNUM:
@@ -1292,7 +1309,7 @@ register I32 c;
     bool match = FALSE;
 
     c &= 0xFF;
-    if (p[1 + (c >> 3)] & (1 << (c & 7)))
+    if (ANYOF_TEST(p, c))
 	match = TRUE;
     else if (flags & ANYOF_FOLD) {
 	I32 cf;
@@ -1302,7 +1319,7 @@ register I32 c;
 	}
 	else
 	    cf = fold[c];
-	if (p[1 + (cf >> 3)] & (1 << (cf & 7)))
+	if (ANYOF_TEST(p, cf))
 	    match = TRUE;
     }
 
@@ -1318,7 +1335,7 @@ register I32 c;
 	}
     }
 
-    return match ^ ((flags & ANYOF_INVERT) != 0);
+    return (flags & ANYOF_INVERT) ? !match : match;
 }
 
 /*

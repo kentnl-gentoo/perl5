@@ -1,3 +1,4 @@
+
 =head1 NAME
 
 perlfunc - Perl builtin functions
@@ -79,117 +80,120 @@ than one place.
 
 =item Functions for SCALARs or strings
 
-chomp, chop, chr, crypt, hex, index, lc, lcfirst, length,
-oct, ord, pack, q/STRING/, qq/STRING/, reverse, rindex,
-sprintf, substr, tr///, uc, ucfirst, y///
+C<chomp>, C<chop>, C<chr>, C<crypt>, C<hex>, C<index>, C<lc>, C<lcfirst>,
+C<length>, C<oct>, C<ord>, C<pack>, C<q>/STRING/, C<qq>/STRING/, C<reverse>,
+C<rindex>, C<sprintf>, C<substr>, C<tr///>, C<uc>, C<ucfirst>, C<y>///
 
 =item Regular expressions and pattern matching
 
-m//, pos, quotemeta, s///, split, study
+C<m>//, C<pos>, C<quotemeta>, C<s>///, C<split>, C<study>
 
 =item Numeric functions
 
-abs, atan2, cos, exp, hex, int, log, oct, rand, sin, sqrt,
-srand
+C<abs>, C<atan2>, C<cos>, C<exp>, C<hex>, C<int>, C<log>, C<oct>, C<rand>,
+C<sin>, C<sqrt>, C<srand>
 
 =item Functions for real @ARRAYs
 
-pop, push, shift, splice, unshift
+C<pop>, C<push>, C<shift>, C<splice>, C<unshift>
 
 =item Functions for list data
 
-grep, join, map, qw/STRING/, reverse, sort, unpack
+C<grep>, C<join>, C<map>, C<qw>/STRING/, C<reverse>, C<sort>, C<unpack>
 
 =item Functions for real %HASHes
 
-delete, each, exists, keys, values
+C<delete>, C<each>, C<exists>, C<keys>, C<values>
 
 =item Input and output functions
 
-binmode, close, closedir, dbmclose, dbmopen, die, eof,
-fileno, flock, format, getc, print, printf, read, readdir,
-rewinddir, seek, seekdir, select, syscall, sysread, sysseek,
-syswrite, tell, telldir, truncate, warn, write
+C<binmode>, C<close>, C<closedir>, C<dbmclose>, C<dbmopen>, C<die>, C<eof>,
+C<fileno>, C<flock>, C<format>, C<getc>, C<print>, C<printf>, C<read>,
+C<readdir>, C<rewinddir>, C<seek>, C<seekdir>, C<select>, C<syscall>,
+C<sysread>, C<sysseek>, C<syswrite>, C<tell>, C<telldir>, C<truncate>,
+C<warn>, C<write>
 
 =item Functions for fixed length data or records
 
-pack, read, syscall, sysread, syswrite, unpack, vec
+C<pack>, C<read>, C<syscall>, C<sysread>, C<syswrite>, C<unpack>, C<vec>
 
 =item Functions for filehandles, files, or directories
 
-I<-X>, chdir, chmod, chown, chroot, fcntl, glob, ioctl, link,
-lstat, mkdir, open, opendir, readlink, rename, rmdir,
-stat, symlink, umask, unlink, utime
+C<-I<X>>, C<chdir>, C<chmod>, C<chown>, C<chroot>, C<fcntl>, C<glob>,
+C<ioctl>, C<link>, C<lstat>, C<mkdir>, C<open>, C<opendir>, C<readlink>,
+C<rename>, C<rmdir>, C<stat>, C<symlink>, C<umask>, C<unlink>, C<utime>
 
 =item Keywords related to the control flow of your perl program
 
-caller, continue, die, do, dump, eval, exit, goto, last,
-next, redo, return, sub, wantarray
+C<caller>, C<continue>, C<die>, C<do>, C<dump>, C<eval>, C<exit>,
+C<goto>, C<last>, C<next>, C<redo>, C<return>, C<sub>, C<wantarray>
 
 =item Keywords related to scoping
 
-caller, import, local, my, package, use
+C<caller>, C<import>, C<local>, C<my>, C<package>, C<use>
 
 =item Miscellaneous functions
 
-defined, dump, eval, formline, local, my, reset, scalar,
-undef, wantarray
+C<defined>, C<dump>, C<eval>, C<formline>, C<local>, C<my>, C<reset>,
+C<scalar>, C<undef>, C<wantarray>
 
 =item Functions for processes and process groups
 
-alarm, exec, fork, getpgrp, getppid, getpriority, kill,
-pipe, qx/STRING/, setpgrp, setpriority, sleep, system,
-times, wait, waitpid
+C<alarm>, C<exec>, C<fork>, C<getpgrp>, C<getppid>, C<getpriority>, C<kill>,
+C<pipe>, C<qx>/STRING/, C<setpgrp>, C<setpriority>, C<sleep>, C<system>,
+C<times>, C<wait>, C<waitpid>
 
 =item Keywords related to perl modules
 
-do, import, no, package, require, use
+C<do>, C<import>, C<no>, C<package>, C<require>, C<use>
 
 =item Keywords related to classes and object-orientedness
 
-bless, dbmclose, dbmopen, package, ref, tie, tied, untie, use
+C<bless>, C<dbmclose>, C<dbmopen>, C<package>, C<ref>, C<tie>, C<tied>,
+C<untie>, C<use>
 
 =item Low-level socket functions
 
-accept, bind, connect, getpeername, getsockname,
-getsockopt, listen, recv, send, setsockopt, shutdown,
-socket, socketpair
+C<accept>, C<bind>, C<connect>, C<getpeername>, C<getsockname>,
+C<getsockopt>, C<listen>, C<recv>, C<send>, C<setsockopt>, C<shutdown>,
+C<socket>, C<socketpair>
 
 =item System V interprocess communication functions
 
-msgctl, msgget, msgrcv, msgsnd, semctl, semget, semop,
-shmctl, shmget, shmread, shmwrite
+C<msgctl>, C<msgget>, C<msgrcv>, C<msgsnd>, C<semctl>, C<semget>, C<semop>,
+C<shmctl>, C<shmget>, C<shmread>, C<shmwrite>
 
 =item Fetching user and group info
 
-endgrent, endhostent, endnetent, endpwent, getgrent,
-getgrgid, getgrnam, getlogin, getpwent, getpwnam,
-getpwuid, setgrent, setpwent
+C<endgrent>, C<endhostent>, C<endnetent>, C<endpwent>, C<getgrent>,
+C<getgrgid>, C<getgrnam>, C<getlogin>, C<getpwent>, C<getpwnam>,
+C<getpwuid>, C<setgrent>, C<setpwent>
 
 =item Fetching network info
 
-endprotoent, endservent, gethostbyaddr, gethostbyname,
-gethostent, getnetbyaddr, getnetbyname, getnetent,
-getprotobyname, getprotobynumber, getprotoent,
-getservbyname, getservbyport, getservent, sethostent,
-setnetent, setprotoent, setservent
+C<endprotoent>, C<endservent>, C<gethostbyaddr>, C<gethostbyname>,
+C<gethostent>, C<getnetbyaddr>, C<getnetbyname>, C<getnetent>,
+C<getprotobyname>, C<getprotobynumber>, C<getprotoent>,
+C<getservbyname>, C<getservbyport>, C<getservent>, C<sethostent>,
+C<setnetent>, C<setprotoent>, C<setservent>
 
 =item Time-related functions
 
-gmtime, localtime, time, times
+C<gmtime>, C<localtime>, C<time>, C<times>
 
 =item Functions new in perl5
 
-abs, bless, chomp, chr, exists, formline, glob, import, lc,
-lcfirst, map, my, no, prototype, qx, qw, readline, readpipe,
-ref, sub*, sysopen, tie, tied, uc, ucfirst, untie, use
+C<abs>, C<bless>, C<chomp>, C<chr>, C<exists>, C<formline>, C<glob>,
+C<import>, C<lc>, C<lcfirst>, C<map>, C<my>, C<no>, C<prototype>, C<qx>,
+C<qw>, C<readline>, C<readpipe>, C<ref>, C<sub*>, C<sysopen>, C<tie>,
+C<tied>, C<uc>, C<ucfirst>, C<untie>, C<use>
 
 * - C<sub> was a keyword in perl4, but in perl5 it is an
 operator which can be used in expressions.
 
 =item Functions obsoleted in perl5
 
-dbmclose, dbmopen
+C<dbmclose>, C<dbmopen>
 
 =back
 
@@ -197,11 +201,11 @@ dbmclose, dbmopen
 
 =over 8
 
-=item -X FILEHANDLE
+=item I<-X> FILEHANDLE
 
-=item -X EXPR
+=item I<-X> EXPR
 
-=item -X
+=item I<-X>
 
 A file test, where X is one of the letters listed below.  This unary
 operator takes one argument, either a filename or a filehandle, and
@@ -972,22 +976,38 @@ input operators return undef when they run out of data.
 
 =item eval BLOCK
 
-EXPR is parsed and executed as if it were a little Perl program.  It
-is executed in the context of the current Perl program, so that any
+In the first form, the return value of EXPR is parsed and executed as if it
+were a little Perl program.  The value of the expression (which is itself
+determined within a scalar context) is first parsed, and if there are no
+errors, executed in the context of the current Perl program, so that any
 variable settings or subroutine and format definitions remain afterwards.
-The value returned is the value of the last expression evaluated, or a
-return statement may be used, just as with subroutines.  The last
-expression is evaluated in scalar or array context, depending on the
-context of the eval.
+Note that the value is parsed every time the eval executes.  If EXPR is
+omitted, evaluates C<$_>.  This form is typically used to delay parsing
+and subsequent execution of the text of EXPR until run time.
+
+In the second form, the code within the BLOCK is parsed only once--at the
+same time the code surrounding the eval itself was parsed--and executed
+within the context of the current Perl program.  This form is typically
+used to trap exceptions more efficiently than the first (see below), while
+also providing the benefit of checking the code within BLOCK at compile
+time.
+
+The final semicolon, if any, may be omitted from the value of EXPR or within
+the BLOCK.
+
+In both forms, the value returned is the value of the last expression
+evaluated inside the mini-program, or a return statement may be used, just
+as with subroutines.  The expression providing the return value is evaluated
+in void, scalar or array context, depending on the context of the eval itself.
+See L</wantarray> for more on how the evaluation context can be determined.
 
 If there is a syntax error or runtime error, or a die() statement is
 executed, an undefined value is returned by eval(), and C<$@> is set to the
 error message.  If there was no error, C<$@> is guaranteed to be a null
-string.  If EXPR is omitted, evaluates C<$_>.  The final semicolon, if
-any, may be omitted from the expression.  Beware that using eval()
-neither silences perl from printing warnings to STDERR, nor does it
-stuff the text of warning messages into C<$@>.  To do either of those,
-you have to use the C<$SIG{__WARN__}> facility.  See warn() and L<perlvar>.
+string.  Beware that using eval() neither silences perl from printing
+warnings to STDERR, nor does it stuff the text of warning messages into C<$@>.
+To do either of those, you have to use the C<$SIG{__WARN__}> facility.  See
+L</warn> and L<perlvar>.
 
 Note that, because eval() traps otherwise-fatal errors, it is useful for
 determining whether a particular feature (such as socket() or symlink())
@@ -1025,8 +1045,8 @@ die() again, which has the effect of changing their error messages:
     # __DIE__ hooks may modify error messages
     {
        local $SIG{'__DIE__'} = sub { (my $x = $_[0]) =~ s/foo/bar/g; die $x };
-       eval { die "foo foofs here" };
-       print $@ if $@;                # prints "bar barfs here"
+       eval { die "foo lives here" };
+       print $@ if $@;                # prints "bar lives here"
     }
 
 With an eval(), you should be especially careful to remember what's
@@ -1053,6 +1073,8 @@ particular situation, you can just use symbolic references instead, as
 in case 6.
 
 =item exec LIST
+
+=item exec PROGRAM LIST
 
 The exec() function executes a system command I<AND NEVER RETURNS> -
 use system() instead of exec() if you want it to return. It fails and
@@ -1560,6 +1582,7 @@ elements.  That is, modifying an element of a list returned by grep
 actually modifies the element in the original list.
 
 See also L</map> for an array composed of the results of the BLOCK or EXPR.
+
 =item hex EXPR
 
 =item hex
@@ -3064,10 +3087,12 @@ sanity checks in the interest of speed.
 =item splice ARRAY,OFFSET
 
 Removes the elements designated by OFFSET and LENGTH from an array, and
-replaces them with the elements of LIST, if any.  Returns the elements
-removed from the array.  The array grows or shrinks as necessary.  If
-LENGTH is omitted, removes everything from OFFSET onward.  The
-following equivalences hold (assuming C<$[ == 0>):
+replaces them with the elements of LIST, if any.  In a list context,
+returns the elements removed from the array.  In a scalar context,
+returns the last element removed, or C<undef> if no elements are
+removed.  The array grows or shrinks as necessary.  If LENGTH is
+omitted, removes everything from OFFSET onward.  The following
+equivalences hold (assuming C<$[ == 0>):
 
     push(@a,$x,$y)	splice(@a,$#a+1,0,$x,$y)
     pop(@a)		splice(@a,-1)
@@ -3532,6 +3557,8 @@ the new position.
 
 =item system LIST
 
+=item system PROGRAM LIST
+
 Does exactly the same thing as "exec LIST" except that a fork is done
 first, and the parent process waits for the child process to complete.
 Note that argument processing varies depending on the number of
@@ -3540,6 +3567,9 @@ returned by the wait() call.  To get the actual exit value divide by
 256.  See also L</exec>.  This is I<NOT> what you want to use to capture
 the output from a command, for that you should use merely backticks or
 qx//, as described in L<perlop/"`STRING`">.
+
+Like exec(), system() allows you to lie to a program about its name if
+you use the "system PROGRAM LIST" syntax.  Again, see L</exec>.
 
 Because system() and backticks block SIGINT and SIGQUIT, killing the
 program they're running doesn't actually interrupt your program.
@@ -3665,6 +3695,8 @@ Unlike dbmopen(), the tie() function will not use or require a module
 for you--you need to do that explicitly yourself.  See L<DB_File>
 or the F<Config> module for interesting tie() implementations.
 
+For further details see L<perltie>, L<tied VARIABLE>.
+
 =item tied VARIABLE
 
 Returns a reference to the object underlying VARIABLE (the same value
@@ -3688,7 +3720,7 @@ seconds, for this process and the children of this process.
 
 =item tr///
 
-The translation operator.  Same as y///. See L<perlop>.
+The transliteration operator.  Same as y///. See L<perlop>.
 
 =item truncate FILEHANDLE,LENGTH
 
@@ -3968,6 +4000,13 @@ for no value (void context).
 Produces a message on STDERR just like die(), but doesn't exit or throw
 an exception.
 
+If LIST is empty and $@ already contains a value (typically from a
+previous eval) that value is used after appending "\t...caught"
+to $@. This is useful for staying almost, but not entirely similar to
+die().
+
+If $@ is empty then the string "Warning: Something's wrong" is used.
+
 No message is printed if there is a C<$SIG{__WARN__}> handler
 installed.  It is the handler's responsibility to deal with the message
 as it sees fit (like, for instance, converting it into a die()).  Most
@@ -4030,6 +4069,6 @@ Note that write is I<NOT> the opposite of read.  Unfortunately.
 
 =item y///
 
-The translation operator.  Same as tr///.  See L<perlop>.
+The transliteration operator.  Same as tr///.  See L<perlop>.
 
 =back

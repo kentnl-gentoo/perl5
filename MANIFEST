@@ -116,7 +116,7 @@ ext/DB_File/DB_File.xs		Berkeley DB extension external subroutines
 ext/DB_File/DB_File_BS		Berkeley DB extension mkbootstrap fodder
 ext/DB_File/Makefile.PL		Berkeley DB extension makefile writer
 ext/DB_File/typemap		Berkeley DB extension interface types
-ext/DynaLoader/DynaLoader.pm	Dynamic Loader perl module
+ext/DynaLoader/DynaLoader.pm.PL	Dynamic Loader perl module
 ext/DynaLoader/Makefile.PL	Dynamic Loader makefile writer
 ext/DynaLoader/README		Dynamic Loader notes and intro
 ext/DynaLoader/dl_aix.xs	AIX implementation
@@ -172,7 +172,9 @@ ext/POSIX/Makefile.PL		POSIX extension makefile writer
 ext/POSIX/POSIX.pm		POSIX extension Perl module
 ext/POSIX/POSIX.pod		POSIX extension documentation
 ext/POSIX/POSIX.xs		POSIX extension external subroutines
+ext/POSIX/hints/linux.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/next_3.pl	Hint for POSIX for named architecture
+ext/POSIX/hints/sunos_4.pl	Hint for POSIX for named architecture
 ext/POSIX/typemap		POSIX extension interface types
 ext/SDBM_File/Makefile.PL	SDBM extension makefile writer
 ext/SDBM_File/SDBM_File.pm	SDBM extension Perl module
@@ -272,6 +274,7 @@ hints/newsos4.sh	Hints for named architecture
 hints/next_3.sh		Hints for named architecture
 hints/next_3_0.sh	Hints for named architecture
 hints/next_4.sh		Hints for named architecture
+hints/openbsd.sh	Hints for named architecture
 hints/opus.sh		Hints for named architecture
 hints/os2.sh		Hints for named architecture
 hints/os390.sh		Hints for named architecture
@@ -560,6 +563,7 @@ pod/perlfaq9.pod	Frequently Asked Questions, Part 9
 pod/perlform.pod	Format info
 pod/perlfunc.pod	Function info
 pod/perlguts.pod	Internals info
+pod/perlhist.pod	The history of Perl
 pod/perlipc.pod		IPC info
 pod/perllocale.pod	Locale support info
 pod/perllol.pod		How to use lists of lists
@@ -629,6 +633,7 @@ t/comp/multiline.t	See if multiline strings work
 t/comp/package.t	See if packages work
 t/comp/proto.t		See if function prototypes work
 t/comp/redef.t		See if we get correct warnings on redefined subs
+t/comp/require.t	See if require works
 t/comp/script.t		See if script invokation works
 t/comp/term.t		See if more terms work
 t/comp/use.t		See if pragmas work
@@ -680,6 +685,7 @@ t/lib/open2.t		See if IPC::Open2 works
 t/lib/open3.t		See if IPC::Open3 works
 t/lib/ops.t		See if Opcode works
 t/lib/parsewords.t	See if Text::ParseWords works
+t/lib/ph.t		See if h2ph works
 t/lib/posix.t		See if POSIX works
 t/lib/safe1.t		See if Safe works
 t/lib/safe2.t		See if Safe works
@@ -730,6 +736,7 @@ t/op/oct.t		See if oct and hex work
 t/op/ord.t		See if ord works
 t/op/pack.t		See if pack and unpack work
 t/op/pat.t		See if esoteric patterns work
+t/op/pos.t		See if pos works
 t/op/push.t		See if push and pop work
 t/op/quotemeta.t	See if quotemeta works
 t/op/rand.t		See if rand works
@@ -821,6 +828,7 @@ win32/Makefile		Win32 makefile for NMAKE (Visual C++ build)
 win32/TEST		Win32 port
 win32/autosplit.pl	Win32 port
 win32/bin/network.pl	Win32 port
+win32/bin/perlglob.pl	Win32 globbing
 win32/bin/pl2bat.pl	wrap perl scripts into batch files
 win32/bin/runperl.pl	run perl script via batch file namesake
 win32/bin/search.pl	Win32 port
@@ -849,8 +857,6 @@ win32/runperl.c		Win32 port
 win32/splittree.pl	Win32 port
 win32/win32.c		Win32 port
 win32/win32.h		Win32 port
-win32/win32io.c		Win32 port
-win32/win32io.h		Win32 port
 win32/win32iop.h	Win32 port
 win32/win32sck.c	Win32 port
 writemain.SH		Generate perlmain.c from miniperlmain.c+extensions

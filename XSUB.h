@@ -15,7 +15,11 @@
 
 #define dXSI32 I32 ix = XSANY.any_i32
 
-#define XSRETURN(off) stack_sp = stack_base + ax + ((off) - 1); return
+#define XSRETURN(off)					\
+    STMT_START {					\
+	stack_sp = stack_base + ax + ((off) - 1);	\
+	return;						\
+    } STMT_END
 
 /* Simple macros to put new mortal values onto the stack.   */
 /* Typically used to return values from XS functions.       */
@@ -39,7 +43,7 @@
 #ifdef XS_VERSION
 # define XS_VERSION_BOOTCHECK \
     STMT_START {							\
-	char *vn = "", *module = SvPV(ST(0),na);			\
+	char *vn = Nullch, *module = SvPV(ST(0),na);			\
 	if (items >= 2)	 /* version supplied as bootstrap arg */	\
 	    Sv = ST(1);							\
 	else {								\
@@ -51,8 +55,10 @@
 				      vn = "VERSION"), FALSE);		\
 	}								\
 	if (Sv && (!SvOK(Sv) || strNE(XS_VERSION, SvPV(Sv, na))))	\
-	    croak("%s object version %s does not match $%s::%s %_",	\
-		  module, XS_VERSION, module, vn, Sv);			\
+	    croak("%s object version %s does not match %s%s%s%s %_",	\
+		  module, XS_VERSION,					\
+		  vn ? "$" : "", vn ? module : "", vn ? "::" : "",	\
+		  vn ? vn : "bootstrap parameter", Sv);			\
     } STMT_END
 #else
 # define XS_VERSION_BOOTCHECK

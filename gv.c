@@ -104,7 +104,7 @@ int multi;
     GvFILEGV(gv) = curcop->cop_filegv;
     GvEGV(gv) = gv;
     sv_magic((SV*)gv, (SV*)gv, '*', name, len);
-    GvSTASH(gv) = stash;
+    GvSTASH(gv) = (HV*)SvREFCNT_inc(stash);
     GvNAME(gv) = savepvn(name, len);
     GvNAMELEN(gv) = len;
     if (multi)
@@ -427,7 +427,6 @@ I32 sv_type;
     register char *namend;
     HV *stash = 0;
     U32 add_gvflags = 0;
-    char *tmpbuf;
 
     if (*name == '*' && isALPHA(name[1])) /* accidental stringify on a GV? */
 	name++;
@@ -443,23 +442,29 @@ I32 sv_type;
 
 	    len = namend - name;
 	    if (len > 0) {
-		New(601, tmpbuf, len+3, char);
+		char smallbuf[256];
+		char *tmpbuf;
+
+		if (len + 3 < sizeof smallbuf)
+		    tmpbuf = smallbuf;
+		else
+		    New(601, tmpbuf, len+3, char);
 		Copy(name, tmpbuf, len, char);
 		tmpbuf[len++] = ':';
 		tmpbuf[len++] = ':';
 		tmpbuf[len] = '\0';
 		gvp = (GV**)hv_fetch(stash,tmpbuf,len,add);
-		Safefree(tmpbuf);
-		if (!gvp || *gvp == (GV*)&sv_undef)
+		gv = gvp ? *gvp : Nullgv;
+		if (gv && gv != (GV*)&sv_undef) {
+		    if (SvTYPE(gv) != SVt_PVGV)
+			gv_init(gv, stash, tmpbuf, len, (add & 2));
+		    else
+			GvMULTI_on(gv);
+		}
+		if (tmpbuf != smallbuf)
+		    Safefree(tmpbuf);
+		if (!gv || gv == (GV*)&sv_undef)
 		    return Nullgv;
-		gv = *gvp;
-
-		if (SvTYPE(gv) == SVt_PVGV)
-		    GvMULTI_on(gv);
-		else if (!add)
-		    return Nullgv;
-		else
-		    gv_init(gv, stash, nambeg, namend - nambeg, (add & 2));
 
 		if (!(stash = GvHV(gv)))
 		    stash = GvHV(gv) = newHV();
@@ -553,17 +558,26 @@ I32 sv_type;
     /* By this point we should have a stash and a name */
 
     if (!stash) {
-	if (add) {
-	    warn("Global symbol \"%s\" requires explicit package name", name);
-	    ++error_count;
-	    stash = curstash ? curstash : defstash;	/* avoid core dumps */
-	    add_gvflags = ((sv_type == SVt_PV) ? GVf_IMPORTED_SV
-			   : (sv_type == SVt_PVAV) ? GVf_IMPORTED_AV
-			   : (sv_type == SVt_PVHV) ? GVf_IMPORTED_HV
-			   : 0);
-	}
-	else
+	if (!add)
 	    return Nullgv;
+	if (add & ~2) {
+	    char sv_type_char = ((sv_type == SVt_PV) ? '$'
+				 : (sv_type == SVt_PVAV) ? '@'
+				 : (sv_type == SVt_PVHV) ? '%'
+				 : 0);
+	    if (sv_type_char) 
+		warn("Global symbol \"%c%s\" requires explicit package name",
+		     sv_type_char, name);
+	    else
+		warn("Global symbol \"%s\" requires explicit package name",
+		     name);
+	}
+	++error_count;
+	stash = curstash ? curstash : defstash;	/* avoid core dumps */
+	add_gvflags = ((sv_type == SVt_PV) ? GVf_IMPORTED_SV
+		       : (sv_type == SVt_PVAV) ? GVf_IMPORTED_AV
+		       : (sv_type == SVt_PVHV) ? GVf_IMPORTED_HV
+		       : 0);
     }
 
     if (!SvREFCNT(stash))	/* symbol table under destruction */
@@ -664,21 +678,21 @@ I32 sv_type;
 	if (len > 1)
 	    break;
 	ampergv = gv;
-	sawampersand = TRUE;
+	sawampersand |= 1;
 	goto ro_magicalize;
 
     case '`':
 	if (len > 1)
 	    break;
 	leftgv = gv;
-	sawampersand = TRUE;
+	sawampersand |= 2;
 	goto ro_magicalize;
 
     case '\'':
 	if (len > 1)
 	    break;
 	rightgv = gv;
-	sawampersand = TRUE;
+	sawampersand |= 4;
 	goto ro_magicalize;
 
     case ':':

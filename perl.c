@@ -1,6 +1,6 @@
 /*    perl.c
  *
- *    Copyright (c) 1987-1997 Larry Wall
+ *    Copyright (c) 1987-1998 Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -260,10 +260,10 @@ register PerlInterpreter *sv_interp;
     doswitches   = FALSE;
     dowarn       = FALSE;
     doextract    = FALSE;
-    sawampersand = FALSE;	/* must save all match strings */
     sawstudy     = FALSE;	/* do fbm_instr on all strings */
     sawvec       = FALSE;
     unsafe       = FALSE;
+    sawampersand = 0;		/* match strings to save */
 
     Safefree(inplace);
     inplace = Nullch;
@@ -890,8 +890,9 @@ PerlInterpreter *sv_interp;
 	break;
     }
 
-    DEBUG_r(PerlIO_printf(Perl_debug_log, "%s $` $& $' support.\n",
-                    sawampersand ? "Enabling" : "Omitting"));
+    DEBUG_r(PerlIO_printf(Perl_debug_log, "%s $&%s support.\n",
+			  sawampersand ? "Enabling" : "Omitting",
+			  sawampersand > 1 ? "$` $'" : ""));
 
     if (!restartop) {
 	DEBUG_x(dump_all());
@@ -1326,7 +1327,7 @@ char *name;
 "-T              turn on tainting checks",
 "-u              dump core after parsing script",
 "-U              allow unsafe operations",
-"-v              print version number and patchlevel of perl",
+"-v              print version number, patchlevel plus VERY IMPORTANT perl info",
 "-V[:variable]   print perl configuration information",
 "-w              TURN WARNINGS ON FOR COMPILATION OF YOUR SCRIPT. Recommended.",
 "-x[directory]   strip off text before #!perl line and perhaps cd to directory",
@@ -1532,7 +1533,7 @@ char *s;
 		LOCAL_PATCH_COUNT, (LOCAL_PATCH_COUNT!=1) ? "es" : "");
 #endif
 
-	printf("\n\nCopyright 1987-1997, Larry Wall\n");
+	printf("\n\nCopyright 1987-1998, Larry Wall\n");
 #ifdef MSDOS
 	printf("\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");
 #endif
@@ -1548,7 +1549,10 @@ char *s;
 #endif
 	printf("\n\
 Perl may be copied only under the terms of either the Artistic License or the\n\
-GNU General Public License, which may be found in the Perl 5.0 source kit.\n\n");
+GNU General Public License, which may be found in the Perl 5.0 source kit.\n\n\
+Complete documentation for Perl, including FAQ lists, should be found on\n\
+this system using `man perl' or `perldoc perl'.  If you have access to the\n\
+Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
 	exit(0);
     case 'w':
 	dowarn = TRUE;

@@ -1073,6 +1073,10 @@ unsigned long newlen;
 	s = SvPVX(sv);
 	if (newlen > SvLEN(sv))
 	    newlen += 10 * (newlen - SvCUR(sv)); /* avoid copy each time */
+#ifdef HAS_64K_LIMIT
+	if (newlen >= 0x10000)
+	    newlen = 0xFFFF;
+#endif
     }
     else
 	s = SvPVX(sv);
@@ -1130,6 +1134,15 @@ IV i;
 }
 
 void
+sv_setiv_mg(sv,i)
+register SV *sv;
+IV i;
+{
+    sv_setiv(sv,i);
+    SvSETMAGIC(sv);
+}
+
+void
 sv_setuv(sv,u)
 register SV *sv;
 UV u;
@@ -1138,6 +1151,15 @@ UV u;
 	sv_setiv(sv, u);
     else
 	sv_setnv(sv, (double)u);
+}
+
+void
+sv_setuv_mg(sv,u)
+register SV *sv;
+UV u;
+{
+    sv_setuv(sv,u);
+    SvSETMAGIC(sv);
 }
 
 void
@@ -1156,7 +1178,6 @@ double num;
     case SVt_IV:
 	sv_upgrade(sv, SVt_NV);
 	break;
-    case SVt_NV:
     case SVt_RV:
     case SVt_PV:
     case SVt_PVIV:
@@ -1186,6 +1207,15 @@ double num;
     SvNVX(sv) = num;
     (void)SvNOK_only(sv);			/* validate number */
     SvTAINT(sv);
+}
+
+void
+sv_setnv_mg(sv,num)
+register SV *sv;
+double num;
+{
+    sv_setnv(sv,num);
+    SvSETMAGIC(sv);
 }
 
 static void
@@ -1650,7 +1680,7 @@ STRLEN *lp;
 		case SVt_PVHV:	s = "HASH";			break;
 		case SVt_PVCV:	s = "CODE";			break;
 		case SVt_PVGV:	s = "GLOB";			break;
-		case SVt_PVFM:	s = "FORMATLINE";		break;
+		case SVt_PVFM:	s = "FORMLINE";			break;
 		case SVt_PVIO:	s = "IO";			break;
 		default:	s = "UNKNOWN";			break;
 		}
@@ -1908,10 +1938,6 @@ register SV *sstr;
 	    sv_upgrade(dstr, SVt_PVNV);
 	break;
 
-    case SVt_PVLV:
-	sv_upgrade(dstr, SVt_PVLV);
-	break;
-
     case SVt_PVAV:
     case SVt_PVHV:
     case SVt_PVCV:
@@ -1931,7 +1957,7 @@ register SV *sstr;
 		STRLEN len = GvNAMELEN(sstr);
 		sv_upgrade(dstr, SVt_PVGV);
 		sv_magic(dstr, dstr, '*', name, len);
-		GvSTASH(dstr) = GvSTASH(sstr);
+		GvSTASH(dstr) = (HV*)SvREFCNT_inc(GvSTASH(sstr));
 		GvNAME(dstr) = savepvn(name, len);
 		GvNAMELEN(dstr) = len;
 		SvFAKE_on(dstr);	/* can coerce to non-glob */
@@ -1962,8 +1988,10 @@ register SV *sstr;
 		    goto glob_assign;
 	    }
 	}
-	if (dtype < stype)
-	    sv_upgrade(dstr, stype);
+	if (stype == SVt_PVLV)
+	    SvUPGRADE(dstr, SVt_PVNV);
+	else
+	    SvUPGRADE(dstr, stype);
     }
 
     sflags = SvFLAGS(sstr);
@@ -2105,6 +2133,7 @@ register SV *sstr;
 	 */
 
 	if (SvTEMP(sstr) &&		/* slated for free anyway? */
+	    SvREFCNT(sstr) == 1 && 	/* and no other references to it? */
 	    !(sflags & SVf_OOK)) 	/* and not involved in OOK hack? */
 	{
 	    if (SvPVX(dstr)) {		/* we know that dtype >= SVt_PV */
@@ -2164,6 +2193,15 @@ register SV *sstr;
 }
 
 void
+sv_setsv_mg(dstr,sstr)
+SV *dstr;
+register SV *sstr;
+{
+    sv_setsv(dstr,sstr);
+    SvSETMAGIC(dstr);
+}
+
+void
 sv_setpvn(sv,ptr,len)
 register SV *sv;
 register const char *ptr;
@@ -2193,6 +2231,16 @@ register STRLEN len;
     *SvEND(sv) = '\0';
     (void)SvPOK_only(sv);		/* validate pointer */
     SvTAINT(sv);
+}
+
+void
+sv_setpvn_mg(sv,ptr,len)
+register SV *sv;
+register const char *ptr;
+register STRLEN len;
+{
+    sv_setpvn(sv,ptr,len);
+    SvSETMAGIC(sv);
 }
 
 void
@@ -2227,6 +2275,15 @@ register const char *ptr;
 }
 
 void
+sv_setpv_mg(sv,ptr)
+register SV *sv;
+register const char *ptr;
+{
+    sv_setpv(sv,ptr);
+    SvSETMAGIC(sv);
+}
+
+void
 sv_usepvn(sv,ptr,len)
 register SV *sv;
 register char *ptr;
@@ -2253,6 +2310,16 @@ register STRLEN len;
     *SvEND(sv) = '\0';
     (void)SvPOK_only(sv);		/* validate pointer */
     SvTAINT(sv);
+}
+
+void
+sv_usepvn_mg(sv,ptr,len)
+register SV *sv;
+register char *ptr;
+register STRLEN len;
+{
+    sv_usepvn(sv,ptr,len);
+    SvSETMAGIC(sv);
 }
 
 void
@@ -2306,6 +2373,16 @@ register STRLEN len;
 }
 
 void
+sv_catpvn_mg(sv,ptr,len)
+register SV *sv;
+register char *ptr;
+register STRLEN len;
+{
+    sv_catpvn(sv,ptr,len);
+    SvSETMAGIC(sv);
+}
+
+void
 sv_catsv(dstr,sstr)
 SV *dstr;
 register SV *sstr;
@@ -2316,6 +2393,15 @@ register SV *sstr;
 	return;
     if (s = SvPV(sstr, len))
 	sv_catpvn(dstr,s,len);
+}
+
+void
+sv_catsv_mg(dstr,sstr)
+SV *dstr;
+register SV *sstr;
+{
+    sv_catsv(dstr,sstr);
+    SvSETMAGIC(dstr);
 }
 
 void
@@ -2671,37 +2757,37 @@ register SV *sv;
 	if (defstash) {		/* Still have a symbol table? */
 	    dSP;
 	    GV* destructor;
+	    HV* stash;
+	    SV ref;
 
-	    ENTER;
-	    SAVEFREESV(SvSTASH(sv));
+	    Zero(&ref, 1, SV);
+	    sv_upgrade(&ref, SVt_RV);
+	    SvROK_on(&ref);
+	    SvREADONLY_on(&ref);	/* DESTROY() could be naughty */
+	    SvREFCNT(&ref) = 1;
 
-	    destructor = gv_fetchmethod(SvSTASH(sv), "DESTROY");
-	    if (destructor) {
-		SV ref;
+	    do {
+		stash = SvSTASH(sv);
+		destructor = gv_fetchmethod(SvSTASH(sv), "DESTROY");
+		if (destructor) {
+		    ENTER;
+		    SvRV(&ref) = SvREFCNT_inc(sv);
+		    EXTEND(SP, 2);
+		    PUSHMARK(SP);
+		    PUSHs(&ref);
+		    PUTBACK;
+		    perl_call_sv((SV*)GvCV(destructor),
+				 G_DISCARD|G_EVAL|G_KEEPERR);
+		    SvREFCNT(sv)--;
+		    LEAVE;
+		}
+	    } while (SvOBJECT(sv) && SvSTASH(sv) != stash);
 
-		Zero(&ref, 1, SV);
-		sv_upgrade(&ref, SVt_RV);
-		SvRV(&ref) = SvREFCNT_inc(sv);
-		SvROK_on(&ref);
-		SvREFCNT(&ref) = 1;	/* Fake, but otherwise
-					   creating+destructing a ref
-					   leads to disaster. */
-
-		EXTEND(SP, 2);
-		PUSHMARK(SP);
-		PUSHs(&ref);
-		PUTBACK;
-		perl_call_sv((SV*)GvCV(destructor),
-			     G_DISCARD|G_EVAL|G_KEEPERR);
-		del_XRV(SvANY(&ref));
-		SvREFCNT(sv)--;
-	    }
-
-	    LEAVE;
+	    del_XRV(SvANY(&ref));
 	}
-	else
-	    SvREFCNT_dec(SvSTASH(sv));
+
 	if (SvOBJECT(sv)) {
+	    SvREFCNT_dec(SvSTASH(sv));	/* possibly of changed persuasion */
 	    SvOBJECT_off(sv);	/* Curse the object. */
 	    if (SvTYPE(sv) != SVt_PVIO)
 		--sv_objcount;	/* XXX Might want something more general */
@@ -2740,6 +2826,7 @@ register SV *sv;
     case SVt_PVGV:
 	gp_free((GV*)sv);
 	Safefree(GvNAME(sv));
+	SvREFCNT_dec(GvSTASH(sv));
 	/* FALL THROUGH */
     case SVt_PVLV:
     case SVt_PVMG:
@@ -3481,6 +3568,30 @@ STRLEN len;
     return sv;
 }
 
+SV *
+newSVpvn(s,len)
+char *s;
+STRLEN len;
+{
+    register SV *sv;
+
+    new_SV(sv);
+    SvANY(sv) = 0;
+    SvREFCNT(sv) = 1;
+    SvFLAGS(sv) = 0;
+    sv_setpvn(sv,s,len);
+    return sv;
+}
+
+void
+sv_catpv_mg(sv,ptr)
+register SV *sv;
+register char *ptr;
+{
+    sv_catpv(sv,ptr);
+    SvSETMAGIC(sv);
+}
+
 #ifdef I_STDARG
 SV *
 newSVpvf(const char* pat, ...)
@@ -3608,6 +3719,9 @@ HV *stash;
     register PMOP *pm;
     register I32 max;
     char todo[256];
+
+    if (!stash)
+	return;
 
     if (!*s) {		/* reset ?? searches */
 	for (pm = HvPMROOT(stash); pm; pm = pm->op_pmnext) {
@@ -3766,8 +3880,6 @@ register SV *sv;
 {
     if (!sv)
 	return 0;
-    if (SvGMAGICAL(sv))
-	mg_get(sv);
     if (SvPOK(sv)) {
 	register XPV* Xpv;
 	if ((Xpv = (XPV*)SvANY(sv)) &&
@@ -3980,8 +4092,10 @@ SV *rv;
 char *classname;
 void* pv;
 {
-    if (!pv)
+    if (!pv) {
 	sv_setsv(rv, &sv_undef);
+	SvSETMAGIC(rv);
+    }
     else
 	sv_setiv(newSVrv(rv,classname), (IV)pv);
     return rv;
@@ -4146,6 +4260,15 @@ IV iv;
     SvCUR(sv) = p - SvPVX(sv);
 }
 
+void
+sv_setpviv_mg(sv,iv)
+SV *sv;
+IV iv;
+{
+    sv_setpviv(sv,iv);
+    SvSETMAGIC(sv);
+}
+
 #ifdef I_STDARG
 void
 sv_setpvf(SV *sv, const char* pat, ...)
@@ -4168,6 +4291,30 @@ sv_setpvf(sv, pat, va_alist)
     va_end(args);
 }
 
+
+#ifdef I_STDARG
+void
+sv_setpvf_mg(SV *sv, const char* pat, ...)
+#else
+/*VARARGS0*/
+void
+sv_setpvf_mg(sv, pat, va_alist)
+    SV *sv;
+    const char *pat;
+    va_dcl
+#endif
+{
+    va_list args;
+#ifdef I_STDARG
+    va_start(args, pat);
+#else
+    va_start(args);
+#endif
+    sv_vsetpvfn(sv, pat, strlen(pat), &args, Null(SV**), 0, Null(bool*));
+    va_end(args);
+    SvSETMAGIC(sv);
+}
+
 #ifdef I_STDARG
 void
 sv_catpvf(SV *sv, const char* pat, ...)
@@ -4188,6 +4335,29 @@ sv_catpvf(sv, pat, va_alist)
 #endif
     sv_vcatpvfn(sv, pat, strlen(pat), &args, Null(SV**), 0, Null(bool*));
     va_end(args);
+}
+
+#ifdef I_STDARG
+void
+sv_catpvf_mg(SV *sv, const char* pat, ...)
+#else
+/*VARARGS0*/
+void
+sv_catpvf_mg(sv, pat, va_alist)
+    SV *sv;
+    const char *pat;
+    va_dcl
+#endif
+{
+    va_list args;
+#ifdef I_STDARG
+    va_start(args, pat);
+#else
+    va_start(args);
+#endif
+    sv_vcatpvfn(sv, pat, strlen(pat), &args, Null(SV**), 0, Null(bool*));
+    va_end(args);
+    SvSETMAGIC(sv);
 }
 
 void
@@ -4511,6 +4681,8 @@ sv_vcatpvfn(sv, pat, patlen, args, svargs, svmax, used_locale)
 	    switch (base) {
 		unsigned dig;
 	    case 16:
+		if (!uv)
+		    alt = FALSE;
 		p = (c == 'X') ? "0123456789ABCDEF" : "0123456789abcdef";
 		do {
 		    dig = uv & 15;
@@ -4537,8 +4709,12 @@ sv_vcatpvfn(sv, pat, patlen, args, svargs, svmax, used_locale)
 		break;
 	    }
 	    elen = (ebuf + sizeof ebuf) - eptr;
-	    if (has_precis && precis > elen)
-		zeros = precis - elen;
+	    if (has_precis) {
+		if (precis > elen)
+		    zeros = precis - elen;
+		else if (precis == 0 && elen == 1 && *eptr == '0')
+		    elen = 0;
+	    }
 	    break;
 
 	    /* FLOATING POINT */
