@@ -224,6 +224,7 @@ int	magic_setsubstr	_((SV* sv, MAGIC* mg));
 int	magic_settaint	_((SV* sv, MAGIC* mg));
 int	magic_setuvar	_((SV* sv, MAGIC* mg));
 int	magic_setvec	_((SV* sv, MAGIC* mg));
+int	magic_set_all_env _((SV* sv, MAGIC* mg));
 int	magic_wipepack	_((SV* sv, MAGIC* mg));
 void	magicname _((char* sym, char* name, I32 namlen));
 int	main _((int argc, char** argv, char** env));

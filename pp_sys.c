@@ -1369,7 +1369,7 @@ PP(pp_send)
 		if (-offset > blen)
 		    DIE("Offset outside string");
 		offset += blen;
-	    } else if (offset >= blen)
+	    } else if (offset >= blen && blen > 0)
 		DIE("Offset outside string");
 	} else
 	    offset = 0;

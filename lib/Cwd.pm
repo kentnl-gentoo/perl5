@@ -166,7 +166,14 @@ sub fastcwd {
 	closedir(DIR);
 	unshift(@path, $direntry);
     }
-    chdir($path = '/' . join('/', @path));
+    eval {
+	chdir($path = '/' . join('/', @path));
+    };
+    if ($@) {
+	croak "Can't use fastcwd with tainting enabled"
+	    if $@ =~ /^Insecure dependency/;
+	die $@;
+    }
     $path;
 }
 

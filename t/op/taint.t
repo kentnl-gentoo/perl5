@@ -82,7 +82,7 @@ print PROG 'print "@ARGV\n"', "\n";
 close PROG;
 my $echo = "$Invoke_Perl $ECHO";
 
-print "1..138\n";
+print "1..140\n";
 
 # First, let's make sure that Perl is checking the dangerous
 # environment variables. Maybe they aren't set yet, so we'll
@@ -518,7 +518,8 @@ else {
 
 # Test for system/library calls returning string data of dubious origin.
 {
-    if ($Config{i_pwd}) {
+    # No reliable %Config check for getpw*
+    if (eval { setpwent(); getpwent(); 1 }) {
 	setpwent();
 	my @getpwent = getpwent();
 	die "getpwent: $!\n" unless (@getpwent);
@@ -557,6 +558,17 @@ else {
 	unlink($symlink);
     } else {
 	print "# readlink() or symlink() is not available\n";
-	print "138 ok\n";
+	print "ok 138\n";
     }
 }
+
+# test bitwise ops (regression bug)
+{
+    my $why = "y";
+    my $j = "x" | $why;
+    test 139, not tainted $j;
+    $why = $TAINT."y";
+    $j = "x" | $why;
+    test 140,     tainted $j;
+}
+

@@ -891,8 +891,9 @@ Options:
         This prints out your configuration data, without mailing
         anything. You can use this with -v to get more complete data.
   -ok   Report successful build on this system to perl porters
-        (use alone or with -v).
-  -okay As -ok but also report on older systems.
+        (use alone or with -v). Only use -ok if *everything* was ok.
+        If there were *any* problems at all then don't use -ok.
+  -okay As -ok but allow report from old builds.
   -h    Print this help message. 
   
 EOF

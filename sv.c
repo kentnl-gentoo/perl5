@@ -3005,7 +3005,7 @@ sv_collxfrm(sv, nxp)
 	    if (SvREADONLY(sv)) {
 		SAVEFREEPV(xf);
 		*nxp = xlen;
-		return xf;
+		return xf + sizeof(collation_ix);
 	    }
 	    if (! mg) {
 		sv_magic(sv, 0, 'o', 0, 0);
@@ -4122,7 +4122,6 @@ IV iv;
     int sign;
     UV uv;
     char *p;
-    int i;
 
     sv_setpvn(sv, "", 0);
     if (iv >= 0) {

@@ -694,22 +694,24 @@ print \"  \\@INC:\\n    @INC\\n\";");
 	    if (*s)
 		cddir = savepv(s);
 	    break;
-	case '-':
-	    if (*++s) { /* catch use of gnu style long options */
-		if (strEQ(s, "version")) {
-		    s = "v";
-		    goto reswitch;
-		}
-		if (strEQ(s, "help")) {
-		    s = "h";
-		    goto reswitch;
-		}
-		croak("Unrecognized switch: --%s  (-h will show valid options)",s);
-	    }
-	    argc--,argv++;
-	    goto switch_end;
 	case 0:
 	    break;
+	case '-':
+	    if (!*++s || isSPACE(*s)) {
+		argc--,argv++;
+		goto switch_end;
+	    }
+	    /* catch use of gnu style long options */
+	    if (strEQ(s, "version")) {
+		s = "v";
+		goto reswitch;
+	    }
+	    if (strEQ(s, "help")) {
+		s = "h";
+		goto reswitch;
+	    }
+	    s--;
+	    /* FALL THROUGH */
 	default:
 	    croak("Unrecognized switch: -%s  (-h will show valid options)",s);
 	}
@@ -885,7 +887,7 @@ PerlInterpreter *sv_interp;
 	break;
     }
 
-    DEBUG_r(PerlIO_printf(PerlIO_stderr(), "%s $` $& $' support.\n",
+    DEBUG_r(PerlIO_printf(Perl_debug_log, "%s $` $& $' support.\n",
                     sawampersand ? "Enabling" : "Omitting"));
 
     if (!restartop) {

@@ -52,6 +52,9 @@ true)
 		aixinstdir=`pwd | sed 's/\/UU$//'`
 		linklibperl="-L $archlibexp/CORE -L $aixinstdir -lperl"
 		;;
+	hpux10*)
+		linklibperl="-L `pwd | sed 's/\/UU$//'` -Wl,+b$archlibexp/CORE -lperl"
+		;;
 	esac
 	;;
 *)	pldlflags=''
@@ -483,11 +486,12 @@ lint: perly.c $(c)
 	lint $(lintflags) $(defs) perly.c $(c) > perl.fuzz
 
 # Need to unset during recursion to go out of loop.
-# The Configure below just ensures that the dependency list is never empty.
+# The README below ensures that the dependency list is never empty and
+# that when MAKEDEPEND is empty $(FIRSTMAKEFILE) doesn't need rebuilding.
 
 MAKEDEPEND = Makefile makedepend
 
-$(FIRSTMAKEFILE):	Configure $(MAKEDEPEND)
+$(FIRSTMAKEFILE):	README $(MAKEDEPEND)
 	$(MAKE) depend MAKEDEPEND=
 
 config.h: config_h.SH config.sh
@@ -524,8 +528,10 @@ minitest: miniperl
 	- cd t && (rm -f perl$(EXE_EXT); $(LNS) ../miniperl$(EXE_EXT) perl$(EXE_EXT)) \
 		&& ./perl TEST base/*.t comp/*.t cmd/*.t io/*.t op/*.t pragma/*.t </dev/tty
 
-# handy way to run perlbug -ok without having to install and run the
+# Handy way to run perlbug -ok without having to install and run the
 # installed perlbug. We don't re-run the tests here - we trust the user.
+# Please *don't* use this unless all tests pass.
+# If you want to report test failures, just use "perlbug -Ilib".
 ok:
 	./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
 

@@ -669,6 +669,27 @@ MAGIC* mg;
 }
 
 int
+magic_set_all_env(sv,mg)
+SV* sv;
+MAGIC* mg;
+{
+#if defined(VMS)
+    die("Can't make list assignment to %%ENV on this system");
+#else
+    if (localizing) {
+	HE* entry;
+	magic_clear_all_env(sv,mg);
+	hv_iterinit((HV*)sv);
+	while (entry = hv_iternext((HV*)sv)) {
+	    I32 keylen;
+	    my_setenv(hv_iterkey(entry, &keylen),
+		      SvPV(hv_iterval((HV*)sv, entry), na));
+	}
+    }
+#endif
+}
+
+int
 magic_clear_all_env(sv,mg)
 SV* sv;
 MAGIC* mg;
@@ -1645,9 +1666,11 @@ MAGIC* mg;
 	i = len;
 	if (i >= origalen) {
 	    i = origalen;
-	    SvCUR_set(sv, i);
-	    *SvEND(sv) = '\0';
+	    /* don't allow system to limit $0 seen by script */
+	    /* SvCUR_set(sv, i); *SvEND(sv) = '\0'; */
 	    Copy(s, origargv[0], i, char);
+	    s = origargv[0]+i;
+	    *s = '\0';
 	}
 	else {
 	    Copy(s, origargv[0], i, char);

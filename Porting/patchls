@@ -31,6 +31,7 @@ die q{
     -f F   only list patches which patch files matching regexp F
            (F has $ appended unless it contains a /).
     -I     just gather and display summary Information about the patches.
+    -4     write to stdout the PerForce commands to prepare for patching.
 }
 }
 
@@ -46,10 +47,11 @@ $::opt_l = 0;
 $::opt_c = 0;
 $::opt_f = '';
 $::opt_I = 0;
+$::opt_4 = 0;
 
 usage unless @ARGV;
 
-getopts("mihlvcp:f:I") or usage;
+getopts("mihlvc4p:f:I") or usage;
 
 my %cat_title = (
     'BUILD'	=> 'BUILD PROCESS',
@@ -84,6 +86,8 @@ my %ls;
 #	Index: embed.h
 
 my($in, $prevline, $prevtype, $ls);
+my(@removed, @added);
+my $prologue = 1;	# assume prologue till patch or /^exit\b/ seen
 
 foreach my $argv (@ARGV) {
     $in = $argv;
@@ -96,7 +100,13 @@ foreach my $argv (@ARGV) {
     my $type;
     while (<F>) {
 	unless (/^([-+*]{3}) / || /^(Index):/) {
-	    # not an interesting patch line but possibly meta-information
+	    # not an interesting patch line
+	    # but possibly meta-information or prologue
+	    if ($prologue) {
+		push @added, $1     if /^touch\s+(\S+)/;
+		push @removed, $1   if /^rm\s+(?:-f)?\s*(\S+)/;
+		$prologue = 0       if /^exit\b/;
+	    }
 	    next unless $::opt_m;
 	    $ls->{From}{$1}=1       if /^From:\s+(.*\S)/i;
 	    $ls->{Title}{$1}=1      if /^Subject:\s+(?:Re: )?(.*\S)/i;
@@ -106,6 +116,7 @@ foreach my $argv (@ARGV) {
 	}
 	$type = $1;
 	next if /^--- [0-9,]+ ----$/ || /^\*\*\* [0-9,]+ \*\*\*\*$/;
+	$prologue = 0;
 
 	print "Last: $prevline","This: ${_}Got:  $1\n\n" if $::opt_d;
 
@@ -141,9 +152,9 @@ foreach my $argv (@ARGV) {
 print scalar(@ARGV)." files read.\n" if $::opt_v and @ARGV > 1;
 
 
-my @ls  = sort {
-    $a->{category} cmp $b->{category} || $a->{in} cmp $b->{in}
-} values %ls;
+# --- Firstly we filter and sort as needed ---
+
+my @ls  = values %ls;
 
 if ($::opt_f) {		# filter out patches based on -f <regexp>
     my $out;
@@ -156,6 +167,24 @@ if ($::opt_f) {		# filter out patches based on -f <regexp>
 	}
 	$match;
     } @ls;
+}
+
+@ls  = sort {
+    $a->{category} cmp $b->{category} || $a->{in} cmp $b->{in}
+} @ls;
+
+
+# --- Handle special modes ---
+
+if ($::opt_4) {
+    print map { "p4 delete $_\n" } @removed if @removed;
+    print map { "p4 add    $_\n" } @added   if @added;
+    my @patches = grep { $_->{is_in} } @ls;
+    my %patched = map { ($_, 1) } map { keys %{$_->{out}} } @patches;
+    delete @patched{@added};
+    my @patched = sort keys %patched;
+    print map { "p4 edit   $_\n" } @patched if @patched;
+    exit 0;
 }
 
 if ($::opt_I) {
@@ -179,6 +208,8 @@ if ($::opt_I) {
 	    printf "  %-20s\t%s\n", $out, $all_out{$out};
 	}
     }
+    print "Added files:   @added\n"   if @added;
+    print "Removed files: @removed\n" if @removed;
     exit 0+@missing;
 }
 

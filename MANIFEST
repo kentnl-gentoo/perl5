@@ -274,6 +274,7 @@ hints/next_3_0.sh	Hints for named architecture
 hints/next_4.sh		Hints for named architecture
 hints/opus.sh		Hints for named architecture
 hints/os2.sh		Hints for named architecture
+hints/os390.sh		Hints for named architecture
 hints/powerux.sh	Hints for named architecture
 hints/qnx.sh		Hints for named architecture
 hints/sco.sh		Hints for named architecture
@@ -399,6 +400,7 @@ lib/User/pwent.pm	By-name interface to Perl's builtin getpw*
 lib/abbrev.pl		An abbreviation table builder
 lib/assert.pl		assertion and panic with stack trace
 lib/autouse.pm		Load and call a function only when it's used
+lib/base.pm		Establish IS-A relationship at compile time
 lib/bigfloat.pl		An arbitrary precision floating point package
 lib/bigint.pl		An arbitrary precision integer arithmetic package
 lib/bigrat.pl		An arbitrary precision rational arithmetic package

@@ -782,13 +782,16 @@ of suidperl.
 
 =item Can't take log of %g
 
-(F) Logarithms are defined on only positive real numbers.
+(F) For ordinary real numbers, you can't take the logarithm of a
+negative number or zero. There's a Math::Complex package that comes
+standard with Perl, though, if you really want to do that for
+the negative numbers.
 
 =item Can't take sqrt of %g
 
 (F) For ordinary real numbers, you can't take the square root of a
-negative number.  There's a Complex package available for Perl, though,
-if you really want to do that.
+negative number.  There's a Math::Complex package that comes standard
+with Perl, though, if you really want to do that.
 
 =item Can't undef active subroutine
 
@@ -2651,6 +2654,10 @@ The simple rule is:  Inheritance will not work when autoloading
 non-methods.  The simple fix for old code is:  In any module that used to
 depend on inheriting C<AUTOLOAD> for non-methods from a base class named
 C<BaseClass>, execute C<*AUTOLOAD = \&BaseClass::AUTOLOAD> during startup.
+
+In code that currently says C<use AutoLoader; @ISA = qw(AutoLoader);> you
+should remove AutoLoader from @ISA and change C<use AutoLoader;> to
+C<C<use AutoLoader 'AUTOLOAD';>.
 
 =item Use of %s is deprecated
 

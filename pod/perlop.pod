@@ -628,9 +628,9 @@ patterns local to the current package are reset.
 This usage is vaguely deprecated, and may be removed in some future
 version of Perl.
 
-=item m/PATTERN/gimosx
+=item m/PATTERN/cgimosx
 
-=item /PATTERN/gimosx
+=item /PATTERN/cgimosx
 
 Searches a string for a pattern match, and in a scalar context returns
 true (1) or false ('').  If no string is specified via the C<=~> or
@@ -643,6 +643,7 @@ when C<use locale> is in effect.
 
 Options are:
 
+    c	Do not reset search position on a failed match when /g is in effect.
     g	Match globally, i.e., find all occurrences.
     i	Do case-insensitive pattern matching.
     m	Treat string as multiple lines.

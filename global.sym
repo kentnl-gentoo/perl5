@@ -531,6 +531,7 @@ magic_setsubstr
 magic_settaint
 magic_setuvar
 magic_setvec
+magic_set_all_env
 magic_wipepack
 magicname
 markstack_grow

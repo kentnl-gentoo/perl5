@@ -440,6 +440,68 @@ PP(pp_bless)
     RETURN;
 }
 
+PP(pp_gelem)
+{
+    GV *gv;
+    SV *sv;
+    SV *ref;
+    char *elem;
+    dSP;
+
+    sv = POPs;
+    elem = SvPV(sv, na);
+    gv = (GV*)POPs;
+    ref = Nullsv;
+    sv = Nullsv;
+    switch (elem ? *elem : '\0')
+    {
+    case 'A':
+	if (strEQ(elem, "ARRAY"))
+	    ref = (SV*)GvAV(gv);
+	break;
+    case 'C':
+	if (strEQ(elem, "CODE"))
+	    ref = (SV*)GvCVu(gv);
+	break;
+    case 'F':
+	if (strEQ(elem, "FILEHANDLE")) /* XXX deprecate in 5.005 */
+	    ref = (SV*)GvIOp(gv);
+	break;
+    case 'G':
+	if (strEQ(elem, "GLOB"))
+	    ref = (SV*)gv;
+	break;
+    case 'H':
+	if (strEQ(elem, "HASH"))
+	    ref = (SV*)GvHV(gv);
+	break;
+    case 'I':
+	if (strEQ(elem, "IO"))
+	    ref = (SV*)GvIOp(gv);
+	break;
+    case 'N':
+	if (strEQ(elem, "NAME"))
+	    sv = newSVpv(GvNAME(gv), GvNAMELEN(gv));
+	break;
+    case 'P':
+	if (strEQ(elem, "PACKAGE"))
+	    sv = newSVpv(HvNAME(GvSTASH(gv)), 0);
+	break;
+    case 'S':
+	if (strEQ(elem, "SCALAR"))
+	    ref = GvSV(gv);
+	break;
+    }
+    if (ref)
+	sv = newRV(ref);
+    if (sv)
+	sv_2mortal(sv);
+    else
+	sv = &sv_undef;
+    XPUSHs(sv);
+    RETURN;
+}
+
 /* Pattern matching */
 
 PP(pp_study)
@@ -2324,7 +2386,7 @@ PP(pp_anonhash)
 	SV *val = NEWSV(46, 0);
 	if (MARK < SP)
 	    sv_setsv(val, *++MARK);
-	else
+	else if (dowarn)
 	    warn("Odd number of elements in hash list");
 	(void)hv_store_ent(hv,key,val,0);
     }
@@ -4129,6 +4191,11 @@ PP(pp_split)
     }
     if (realarray) {
 	SWITCHSTACK(ary, oldstack);
+	if (SvSMAGICAL(ary)) {
+	    PUTBACK;
+	    mg_set((SV*)ary);
+	    SPAGAIN;
+	}
 	if (gimme == G_ARRAY) {
 	    EXTEND(SP, iters);
 	    Copy(AvARRAY(ary), SP + 1, iters, SV*);

@@ -54,7 +54,7 @@ is replaced with C<"$!"> (the latest error message).
 
 Sets log mask I<$mask_priority> and returns the old mask.
 
-=item setlogsock $sock_type
+=item setlogsock $sock_type (added in 5.004_03)
  
 Sets the socket type to be used for the next call to
 C<openlog()> or C<syslog()>.

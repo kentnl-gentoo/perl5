@@ -4122,10 +4122,13 @@ OP *
 ck_glob(op)
 OP *op;
 {
-    GV *gv = gv_fetchpv("glob", FALSE, SVt_PVCV);
+    GV *gv;
 
     if ((op->op_flags & OPf_KIDS) && !cLISTOP->op_first->op_sibling)
 	append_elem(OP_GLOB, op, newSVREF(newGVOP(OP_GV, 0, defgv)));
+
+    if (!((gv = gv_fetchpv("glob", FALSE, SVt_PVCV)) && GvIMPORTED_CV(gv)))
+	gv = gv_fetchpv("CORE::GLOBAL::glob", FALSE, SVt_PVCV);
 
     if (gv && GvIMPORTED_CV(gv)) {
 	static int glob_index;
@@ -4630,7 +4633,8 @@ OP *op;
 	prev = o;
 	o = o->op_sibling;
     }
-    if (proto && !optional && *proto == '$')
+    if (proto && !optional &&
+	  (*proto && *proto != '@' && *proto != '%' && *proto != ';'))
 	return too_few_arguments(op, gv_ename(namegv));
     return op;
 }

@@ -1171,7 +1171,8 @@ complete build).  If 'make test' doesn't say "All tests successful"
 then something went wrong.  See the file t/README in the t subdirectory.
 
 Note that you can't run the tests in background if this disables
-opening of /dev/tty.
+opening of /dev/tty. You can use 'make test-notty' in that case but
+a few tty tests will be skipped.
 
 If make test bombs out, just cd to the t directory and run ./TEST
 by hand to see if it makes any difference.  If individual tests
@@ -1184,8 +1185,8 @@ individual subtests is to cd to the t directory and run
 
 	./perl harness
 
-(this assumes that most tests succeed, since harness uses
-complicated constructs).
+(this assumes that most basic tests succeed, since harness uses
+complicated constructs). 
 
 You should also read the individual tests to see if there are any helpful
 comments that apply to your system.
@@ -1433,4 +1434,4 @@ feedback from the perl5-porters@perl.org folks.
 
 =head1 LAST MODIFIED
 
-$Id: INSTALL,v 1.26 1997/08/28 18:15:54 doughera Released $
+$Id: INSTALL,v 1.26.1.1 1997/08/28 18:15:54 Tim.Bunce Released $

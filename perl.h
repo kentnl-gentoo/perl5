@@ -1932,7 +1932,8 @@ EXT MGVTBL vtbl_sv =	{magic_get,
 				magic_set,
 					magic_len,
 						0,	0};
-EXT MGVTBL vtbl_env =	{0,	0,	0,	magic_clear_all_env,
+EXT MGVTBL vtbl_env =	{0,	magic_set_all_env,
+				0,	magic_clear_all_env,
 							0};
 EXT MGVTBL vtbl_envelem =	{0,	magic_setenv,
 					0,	magic_clearenv,
@@ -1951,7 +1952,8 @@ EXT MGVTBL vtbl_packelem =	{magic_getpack,
 EXT MGVTBL vtbl_dbline =	{0,	magic_setdbline,
 					0,	0,	0};
 EXT MGVTBL vtbl_isa =	{0,	magic_setisa,
-					0,	0,	0};
+					0,	magic_setisa,
+							0};
 EXT MGVTBL vtbl_isaelem =	{0,	magic_setisa,
 					0,	0,	0};
 EXT MGVTBL vtbl_arylen =	{magic_getarylen,

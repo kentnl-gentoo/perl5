@@ -4,7 +4,7 @@
 # test method calls and autoloading.
 #
 
-print "1..20\n";
+print "1..23\n";
 
 @A::ISA = 'B';
 @B::ISA = 'C';
@@ -23,6 +23,14 @@ test( A->d, "C::d");		# Update hash table;
 
 *B::d = \&D::d;			# Import now.
 test (A->d, "D::d");		# Update hash table;
+
+{
+    local @A::ISA = qw(C);	# Update hash table with split() assignment
+    test (A->d, "C::d");
+    $#A::ISA = -1;
+    test (eval { A->d } || "fail", "fail");
+}
+test (A->d, "D::d");
 
 {
     local *B::d;

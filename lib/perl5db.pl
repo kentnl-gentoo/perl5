@@ -808,9 +808,11 @@ sub DB {
 			last CMD; };
 		    $cmd =~ /^c\b\s*([\w:]*)\s*$/ && do {
 		        end_report(), next CMD if $finished and $level <= 1;
-			$i = $1;
+			$subname = $i = $1;
 			if ($i =~ /\D/) { # subroutine name
-			    ($file,$i) = (find_sub($i) =~ /^(.*):(.*)$/);
+			    $subname = $package."::".$subname 
+			        unless $subname =~ /::/;
+			    ($file,$i) = (find_sub($subname) =~ /^(.*):(.*)$/);
 			    $i += 0;
 			    if ($i) {
 			        $filename = $file;
@@ -1182,8 +1184,8 @@ sub postponed_sub {
     my $offset = $1 || 0;
     # Filename below can contain ':'
     my ($file,$i) = (find_sub($subname) =~ /^(.*):(\d+)-.*$/);
-    $i += $offset;
     if ($i) {
+      $i += $offset;
       local *dbline = $main::{'_<' . $file};
       local $^W = 0;		# != 0 is magical below
       $had_breakpoints{$file}++;

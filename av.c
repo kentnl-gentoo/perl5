@@ -324,6 +324,9 @@ register AV *av;
 	SvPVX(av) = (char*)AvALLOC(av);
     }
     AvFILL(av) = -1;
+
+    if (SvRMAGICAL(av))
+	mg_clear((SV*)av); 
 }
 
 void

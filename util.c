@@ -188,9 +188,9 @@ MEM_SIZE size;
     size *= count;
     ptr = malloc(size?size:1);	/* malloc(0) is NASTY on our system */
 #if !(defined(I286) || defined(atarist))
-    DEBUG_m(PerlIO_printf(PerlIO_stderr(), "0x%x: (%05d) calloc %ld  x %ld bytes\n",ptr,an++,(long)count,(long)size));
+    DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%x: (%05d) calloc %ld  x %ld bytes\n",ptr,an++,(long)count,(long)size));
 #else
-    DEBUG_m(PerlIO_printf(PerlIO_stderr(), "0x%lx: (%05d) calloc %ld x %ld bytes\n",ptr,an++,(long)count,(long)size));
+    DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%lx: (%05d) calloc %ld x %ld bytes\n",ptr,an++,(long)count,(long)size));
 #endif
     if (ptr != Nullch) {
 	memset((void*)ptr, 0, size);

@@ -2823,6 +2823,35 @@ Dereferences an RV to return the SV.
 
 	SV*	SvRV (SV* sv);
 
+=item SvTAINT
+
+Taints an SV if tainting is enabled
+
+	SvTAINT (SV* sv);
+
+=item SvTAINTED
+
+Checks to see if an SV is tainted. Returns TRUE if it is, FALSE if not.
+
+	SvTAINTED (SV* sv);
+
+=item SvTAINTED_off
+
+Untaints an SV. Be I<very> careful with this routine, as it short-circuits
+some of Perl's fundamental security features. XS module authors should
+not use this function unless they fully understand all the implications
+of unconditionally untainting the value. Untainting should be done in
+the standard perl fashion, via a carefully crafted regexp, rather than
+directly untainting variables.
+
+	SvTAINTED_off (SV* sv);
+
+=item SvTAINTED_on
+
+Marks an SV as tainted.
+
+	SvTAINTED_on (SV* sv);
+
 =item sv_setiv
 
 Copies an integer into the given SV.
