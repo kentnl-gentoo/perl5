@@ -429,7 +429,6 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 		delta += (minnext + deltanext) * maxcount - minnext * mincount;
 
 		/* Try powerful optimization CURLYX => CURLYN. */
-#ifdef REGALIGN_STRUCT
 		if (  OP(oscan) == CURLYX && data 
 		      && data->flags & SF_IN_PAR
 		      && !(data->flags & SF_HAS_EVAL)
@@ -461,16 +460,11 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 		    NEXT_OFF(nxt+ 1) = 0; /* just for consistancy. */
 #endif 
 		}
-#endif 
 	      nogo:
 
 		/* Try optimization CURLYX => CURLYM. */
 		if (  OP(oscan) == CURLYX && data 
-#ifdef REGALIGN_STRUCT
 		      && !(data->flags & SF_HAS_PAR)
-#else
-		      && !(data->flags & (SF_HAS_PAR|SF_IN_PAR))
-#endif 
 		      && !(data->flags & SF_HAS_EVAL)
 		      && !deltanext  ) {
 		    /* XXXX How to optimize if data == 0? */
@@ -483,7 +477,6 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 			    && (OP(nxt2) != WHILEM)) 
 			nxt = nxt2;
 		    OP(nxt2)  = SUCCEED; /* Whas WHILEM */
-#ifdef REGALIGN_STRUCT
 		    /* Need to optimize away parenths. */
 		    if (data->flags & SF_IN_PAR) {
 			/* Set the parenth number.  */
@@ -519,7 +512,6 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 			study_chunk(&nxt1, &deltanext, nxt, NULL, 0);
 		    } else
 			oscan->flags = 0;
-#endif 
 		}
 		if (data && fl & (SF_HAS_PAR|SF_IN_PAR)) 
 		    pars++;
@@ -573,13 +565,11 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 		if (data && (fl & SF_HAS_EVAL))
 		    data->flags |= SF_HAS_EVAL;
 	      optimize_curly_tail:
-#ifdef REGALIGN
 		if (OP(oscan) != CURLYX) {
 		    while (regkind[(U8)OP(next = regnext(oscan))] == NOTHING
 			   && NEXT_OFF(next))
 			NEXT_OFF(oscan) += NEXT_OFF(next);
 		}
-#endif
 		continue;
 	    default:			/* REF only? */
 		if (flags & SCF_DO_SUBSTR) {
@@ -624,11 +614,9 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 	} else if (OP(scan) == OPEN) {
 	    pars++;
 	} else if (OP(scan) == CLOSE && ARG(scan) == is_par) {
-#ifdef REGALIGN_STRUCT
 	    next = regnext(scan);
 
 	    if ( next && (OP(next) != WHILEM) && next < last)
-#endif 
 		is_par = 0;		/* Disable optimization */
 	} else if (OP(scan) == EVAL) {
 		if (data)
@@ -658,20 +646,20 @@ study_chunk(regnode **scanp, I32 *deltap, regnode *last, scan_data_t *data, U32 
 STATIC I32
 add_data(I32 n, char *s)
 {
-    if (rx->data) {
-	Renewc(rx->data, 
-	       sizeof(*rx->data) + sizeof(void*) * (rx->data->count + n - 1), 
+    if (regcomp_rx->data) {
+	Renewc(regcomp_rx->data, 
+	       sizeof(*regcomp_rx->data) + sizeof(void*) * (regcomp_rx->data->count + n - 1), 
 	       char, struct reg_data);
-	Renew(rx->data->what, rx->data->count + n, U8);
-	rx->data->count += n;
+	Renew(regcomp_rx->data->what, regcomp_rx->data->count + n, U8);
+	regcomp_rx->data->count += n;
     } else {
-	Newc(1207, rx->data, sizeof(*rx->data) + sizeof(void*) * (n - 1),
+	Newc(1207, regcomp_rx->data, sizeof(*regcomp_rx->data) + sizeof(void*) * (n - 1),
 	     char, struct reg_data);
-	New(1208, rx->data->what, n, U8);
-	rx->data->count = n;
+	New(1208, regcomp_rx->data->what, n, U8);
+	regcomp_rx->data->count = n;
     }
-    Copy(s, rx->data->what + rx->data->count - n, n, U8);
-    return rx->data->count - n;
+    Copy(s, regcomp_rx->data->what + regcomp_rx->data->count - n, n, U8);
+    return regcomp_rx->data->count - n;
 }
 
 /*
@@ -717,7 +705,7 @@ pregcomp(char *exp, char *xend, PMOP *pm)
     extralen = 0;
 
     /* First pass: determine size, legality. */
-    regparse = exp;
+    regcomp_parse = exp;
     regxend = xend;
     regnaughty = 0;
     regnpar = 1;
@@ -758,15 +746,10 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 
     /* Small enough for pointer-storage convention?
        If extralen==0, this means that we will not need long jumps. */
-#ifndef REGALIGN_STRUCT
-    if (regsize >= 0x10000L && extralen)
-	FAIL("regexp too big");
-#else
     if (regsize >= 0x10000L && extralen)
         regsize += extralen;
     else
 	extralen = 0;
-#endif 
 
     /* Allocate space and initialize. */
     Newc(1001, r, sizeof(regexp) + (unsigned)regsize * sizeof(regnode),
@@ -777,10 +760,10 @@ pregcomp(char *exp, char *xend, PMOP *pm)
     r->prelen = xend - exp;
     r->precomp = regprecomp;
     r->subbeg = r->subbase = NULL;
-    rx = r;
+    regcomp_rx = r;
 
     /* Second pass: emit code. */
-    regparse = exp;
+    regcomp_parse = exp;
     regxend = xend;
     regnaughty = 0;
     regnpar = 1;
@@ -954,6 +937,8 @@ pregcomp(char *exp, char *xend, PMOP *pm)
 	r->reganch |= ROPT_GPOS_SEEN;
     if (regseen & REG_SEEN_LOOKBEHIND)
 	r->reganch |= ROPT_LOOKBEHIND_SEEN;
+    if (regseen & REG_SEEN_EVAL)
+	r->reganch |= ROPT_EVAL_SEEN;
     Newz(1002, r->startp, regnpar, char*);
     Newz(1002, r->endp, regnpar, char*);
     DEBUG_r(regdump(r));
@@ -985,21 +970,18 @@ reg(I32 paren, I32 *flagp)
 
     /* Make an OPEN node, if parenthesized. */
     if (paren) {
-	if (*regparse == '?') {
-	    regparse++;
-	    paren = *regparse++;
+	if (*regcomp_parse == '?') {
+	    regcomp_parse++;
+	    paren = *regcomp_parse++;
 	    ret = NULL;			/* For look-ahead/behind. */
 	    switch (paren) {
 	    case '<':
-#ifndef REGALIGN_STRUCT
-		FAIL("lookbehind non-implemented without REGALIGN_STRUCT");
-#endif 
 		regseen |= REG_SEEN_LOOKBEHIND;
-		if (*regparse == '!') 
+		if (*regcomp_parse == '!') 
 		    paren = ',';
-		if (*regparse != '=' && *regparse != '!') 
+		if (*regcomp_parse != '=' && *regcomp_parse != '!') 
 		    goto unknown;
-		regparse++;
+		regcomp_parse++;
 	    case '=':
 	    case '!':
 		seen_zerolen++;
@@ -1011,9 +993,9 @@ reg(I32 paren, I32 *flagp)
 		FAIL2("Sequence (?%c...) not implemented", (int)paren);
 		break;
 	    case '#':
-		while (*regparse && *regparse != ')')
-		    regparse++;
-		if (*regparse != ')')
+		while (*regcomp_parse && *regcomp_parse != ')')
+		    regcomp_parse++;
+		if (*regcomp_parse != ')')
 		    FAIL("Sequence (?#... not terminated");
 		nextchar();
 		*flagp = TRYAGAIN;
@@ -1023,36 +1005,37 @@ reg(I32 paren, I32 *flagp)
 		dTHR;
 		I32 count = 1, n = 0;
 		char c;
-		char *s = regparse;
+		char *s = regcomp_parse;
 		SV *sv;
 		OP_4tree *sop, *rop;
 
 		seen_zerolen++;
-		while (count && (c = *regparse)) {
-		    if (c == '\\' && regparse[1])
-			regparse++;
+		regseen |= REG_SEEN_EVAL;
+		while (count && (c = *regcomp_parse)) {
+		    if (c == '\\' && regcomp_parse[1])
+			regcomp_parse++;
 		    else if (c == '{') 
 			count++;
 		    else if (c == '}') 
 			count--;
-		    regparse++;
+		    regcomp_parse++;
 		}
-		if (*regparse != ')')
+		if (*regcomp_parse != ')')
 		    FAIL("Sequence (?{...}) not terminated or not {}-balanced");
 		if (!SIZE_ONLY) {
 		    AV *av;
 		    
-		    if (regparse - 1 - s) 
-			sv = newSVpv(s, regparse - 1 - s);
+		    if (regcomp_parse - 1 - s) 
+			sv = newSVpv(s, regcomp_parse - 1 - s);
 		    else
 			sv = newSVpv("", 0);
 
 		    rop = sv_compile_2op(sv, &sop, "re", &av);
 
 		    n = add_data(3, "nso");
-		    rx->data->data[n] = (void*)rop;
-		    rx->data->data[n+1] = (void*)av;
-		    rx->data->data[n+2] = (void*)sop;
+		    regcomp_rx->data->data[n] = (void*)rop;
+		    regcomp_rx->data->data[n+1] = (void*)av;
+		    regcomp_rx->data->data[n+2] = (void*)sop;
 		    SvREFCNT_dec(sv);
 		} else {		/* First pass */
 		    if (tainted)
@@ -1064,21 +1047,21 @@ reg(I32 paren, I32 *flagp)
 	    }
 	    case '(':
 	    {
-		if (regparse[0] == '?') {
-		    if (regparse[1] == '=' || regparse[1] == '!' 
-			|| regparse[1] == '<' 
-			|| regparse[1] == '{') { /* Lookahead or eval. */
+		if (regcomp_parse[0] == '?') {
+		    if (regcomp_parse[1] == '=' || regcomp_parse[1] == '!' 
+			|| regcomp_parse[1] == '<' 
+			|| regcomp_parse[1] == '{') { /* Lookahead or eval. */
 			I32 flag;
 			
 			ret = reg_node(LOGICAL);
 			regtail(ret, reg(1, &flag));
 			goto insert_if;
 		    } 
-		} else if (regparse[0] >= '1' && regparse[0] <= '9' ) {
-		    parno = atoi(regparse++);
+		} else if (regcomp_parse[0] >= '1' && regcomp_parse[0] <= '9' ) {
+		    parno = atoi(regcomp_parse++);
 
-		    while (isDIGIT(*regparse))
-			regparse++;
+		    while (isDIGIT(*regcomp_parse))
+			regcomp_parse++;
 		    ret = reganode(GROUPP, parno);
 		    if ((c = *nextchar()) != ')')
 			FAIL2("Switch (?(number%c not recognized", c);
@@ -1108,22 +1091,22 @@ reg(I32 paren, I32 *flagp)
 			regtail(ret, ender);
 		    return ret;
 		} else {
-		    FAIL2("Unknown condition for (?(%.2s", regparse);
+		    FAIL2("Unknown condition for (?(%.2s", regcomp_parse);
 		}
 	    }
             case 0:
                 FAIL("Sequence (? incomplete");
                 break;
 	    default:
-		--regparse;
-		while (*regparse && strchr("iogcmsx", *regparse)) {
-		    if (*regparse != 'o')
-			pmflag(&regflags, *regparse);
-		    ++regparse;
+		--regcomp_parse;
+		while (*regcomp_parse && strchr("iogcmsx", *regcomp_parse)) {
+		    if (*regcomp_parse != 'o')
+			pmflag(&regflags, *regcomp_parse);
+		    ++regcomp_parse;
 		}
 	      unknown:
-		if (*regparse != ')')
-		    FAIL2("Sequence (?%c...) not recognized", *regparse);
+		if (*regcomp_parse != ')')
+		    FAIL2("Sequence (?%c...) not recognized", *regcomp_parse);
 		nextchar();
 		*flagp = TRYAGAIN;
 		return NULL;
@@ -1142,7 +1125,7 @@ reg(I32 paren, I32 *flagp)
     br = regbranch(&flags, 1);
     if (br == NULL)
 	return(NULL);
-    if (*regparse == '|') {
+    if (*regcomp_parse == '|') {
 	if (!SIZE_ONLY && extralen) {
 	    reginsert(BRANCHJ, br);
 	} else
@@ -1161,7 +1144,7 @@ reg(I32 paren, I32 *flagp)
 	*flagp &= ~HASWIDTH;
     *flagp |= flags&SPSTART;
     lastbr = br;
-    while (*regparse == '|') {
+    while (*regcomp_parse == '|') {
 	if (!SIZE_ONLY && extralen) {
 	    ender = reganode(LONGJMP,0);
 	    regtail(NEXTOPER(NEXTOPER(lastbr)), ender); /* Append to the previous. */
@@ -1221,18 +1204,16 @@ reg(I32 paren, I32 *flagp)
 	    if (paren == '>')
 		node = SUSPEND, flag = 0;
 	    reginsert(node,ret);
-#ifdef REGALIGN_STRUCT
 	    ret->flags = flag;
-#endif 
 	    regtail(ret, reg_node(TAIL));
 	}
     }
 
     /* Check for proper termination. */
-    if (paren && (regparse >= regxend || *nextchar() != ')')) {
+    if (paren && (regcomp_parse >= regxend || *nextchar() != ')')) {
 	FAIL("unmatched () in regexp");
-    } else if (!paren && regparse < regxend) {
-	if (*regparse == ')') {
+    } else if (!paren && regcomp_parse < regxend) {
+	if (*regcomp_parse == ')') {
 	    FAIL("unmatched () in regexp");
 	} else
 	    FAIL("junk on end of regexp");	/* "Can't happen". */
@@ -1272,9 +1253,9 @@ regbranch(I32 *flagp, I32 first)
     
     *flagp = WORST;			/* Tentatively. */
 
-    regparse--;
+    regcomp_parse--;
     nextchar();
-    while (regparse < regxend && *regparse != '|' && *regparse != ')') {
+    while (regcomp_parse < regxend && *regcomp_parse != '|' && *regcomp_parse != ')') {
 	flags &= ~TRYAGAIN;
 	latest = regpiece(&flags);
 	if (latest == NULL) {
@@ -1321,7 +1302,7 @@ regpiece(I32 *flagp)
     register char op;
     register char *next;
     I32 flags;
-    char *origparse = regparse;
+    char *origparse = regcomp_parse;
     char *maxpos;
     I32 min;
     I32 max = REG_INFTY;
@@ -1333,10 +1314,10 @@ regpiece(I32 *flagp)
 	return(NULL);
     }
 
-    op = *regparse;
+    op = *regcomp_parse;
 
-    if (op == '{' && regcurly(regparse)) {
-	next = regparse + 1;
+    if (op == '{' && regcurly(regcomp_parse)) {
+	next = regcomp_parse + 1;
 	maxpos = Nullch;
 	while (isDIGIT(*next) || *next == ',') {
 	    if (*next == ',') {
@@ -1350,18 +1331,18 @@ regpiece(I32 *flagp)
 	if (*next == '}') {		/* got one */
 	    if (!maxpos)
 		maxpos = next;
-	    regparse++;
-	    min = atoi(regparse);
+	    regcomp_parse++;
+	    min = atoi(regcomp_parse);
 	    if (*maxpos == ',')
 		maxpos++;
 	    else
-		maxpos = regparse;
+		maxpos = regcomp_parse;
 	    max = atoi(maxpos);
 	    if (!max && *maxpos != '0')
 		max = REG_INFTY;		/* meaning "infinity" */
 	    else if (max >= REG_INFTY)
 		FAIL2("Quantifier in {,} bigger than %d", REG_INFTY - 1);
-	    regparse = next;
+	    regcomp_parse = next;
 	    nextchar();
 
 	do_curly:
@@ -1384,9 +1365,7 @@ regpiece(I32 *flagp)
 		if (SIZE_ONLY)
 		    extralen += 3;
 	    }
-#ifdef REGALIGN_STRUCT
 	    ret->flags = 0;
-#endif 
 
 	    if (min > 0)
 		*flagp = (WORST|HASWIDTH);
@@ -1417,9 +1396,7 @@ regpiece(I32 *flagp)
 
     if (op == '*' && (flags&SIMPLE)) {
 	reginsert(STAR, ret);
-#ifdef REGALIGN_STRUCT
 	ret->flags = 0;
-#endif 
 	regnaughty += 4;
     }
     else if (op == '*') {
@@ -1427,9 +1404,7 @@ regpiece(I32 *flagp)
 	goto do_curly;
     } else if (op == '+' && (flags&SIMPLE)) {
 	reginsert(PLUS, ret);
-#ifdef REGALIGN_STRUCT
 	ret->flags = 0;
-#endif 
 	regnaughty += 3;
     }
     else if (op == '+') {
@@ -1442,19 +1417,15 @@ regpiece(I32 *flagp)
   nest_check:
     if (dowarn && !SIZE_ONLY && !(flags&HASWIDTH) && max > 10000) {
 	warn("%.*s matches null string many times",
-	    regparse - origparse, origparse);
+	    regcomp_parse - origparse, origparse);
     }
 
-    if (*regparse == '?') {
+    if (*regcomp_parse == '?') {
 	nextchar();
 	reginsert(MINMOD, ret);
-#ifdef REGALIGN
 	regtail(ret, ret + NODE_STEP_REGNODE);
-#else
-	regtail(ret, ret + 3);
-#endif
     }
-    if (ISMULT2(regparse))
+    if (ISMULT2(regcomp_parse))
 	FAIL("nested *?+ in regexp");
 
     return(ret);
@@ -1479,7 +1450,7 @@ regatom(I32 *flagp)
     *flagp = WORST;		/* Tentatively. */
 
 tryagain:
-    switch (*regparse) {
+    switch (*regcomp_parse) {
     case '^':
 	seen_zerolen++;
 	nextchar();
@@ -1491,7 +1462,7 @@ tryagain:
 	    ret = reg_node(BOL);
 	break;
     case '$':
-	if (regparse[1]) 
+	if (regcomp_parse[1]) 
 	    seen_zerolen++;
 	nextchar();
 	if (regflags & PMf_MULTILINE)
@@ -1511,7 +1482,7 @@ tryagain:
 	*flagp |= HASWIDTH|SIMPLE;
 	break;
     case '[':
-	regparse++;
+	regcomp_parse++;
 	ret = regclass();
 	*flagp |= HASWIDTH|SIMPLE;
 	break;
@@ -1531,12 +1502,12 @@ tryagain:
 	    *flagp |= TRYAGAIN;
 	    return NULL;
 	}
-	FAIL2("internal urp in regexp at /%s/", regparse);
+	FAIL2("internal urp in regexp at /%s/", regcomp_parse);
 				/* Supposed to be caught earlier. */
 	break;
     case '{':
-	if (!regcurly(regparse)) {
-	    regparse++;
+	if (!regcurly(regcomp_parse)) {
+	    regcomp_parse++;
 	    goto defchar;
 	}
 	/* FALL THROUGH */
@@ -1546,7 +1517,7 @@ tryagain:
 	FAIL("?+*{} follows nothing in regexp");
 	break;
     case '\\':
-	switch (*++regparse) {
+	switch (*++regcomp_parse) {
 	case 'A':
 	    seen_zerolen++;
 	    ret = reg_node(SBOL);
@@ -1619,7 +1590,7 @@ tryagain:
 	case '1': case '2': case '3': case '4':
 	case '5': case '6': case '7': case '8': case '9':
 	    {
-		I32 num = atoi(regparse);
+		I32 num = atoi(regcomp_parse);
 
 		if (num > 9 && num >= regnpar)
 		    goto defchar;
@@ -1629,15 +1600,15 @@ tryagain:
 				   ? ((regflags & PMf_LOCALE) ? REFFL : REFF)
 				   : REF, num);
 		    *flagp |= HASWIDTH;
-		    while (isDIGIT(*regparse))
-			regparse++;
-		    regparse--;
+		    while (isDIGIT(*regcomp_parse))
+			regcomp_parse++;
+		    regcomp_parse--;
 		    nextchar();
 		}
 	    }
 	    break;
 	case '\0':
-	    if (regparse >= regxend)
+	    if (regcomp_parse >= regxend)
 		FAIL("trailing \\ in regexp");
 	    /* FALL THROUGH */
 	default:
@@ -1647,8 +1618,8 @@ tryagain:
 
     case '#':
 	if (regflags & PMf_EXTENDED) {
-	    while (regparse < regxend && *regparse != '\n') regparse++;
-	    if (regparse < regxend)
+	    while (regcomp_parse < regxend && *regcomp_parse != '\n') regcomp_parse++;
+	    if (regcomp_parse < regxend)
 		goto tryagain;
 	}
 	/* FALL THROUGH */
@@ -1660,7 +1631,7 @@ tryagain:
 	    char *oldp, *s;
 	    I32 numlen;
 
-	    regparse++;
+	    regcomp_parse++;
 
 	defchar:
 	    ret = reg_node((regflags & PMf_FOLD)
@@ -1668,7 +1639,7 @@ tryagain:
 			  : EXACT);
 	    s = (char *) OPERAND(ret);
 	    regc(0, s++);		/* save spot for len */
-	    for (len = 0, p = regparse - 1;
+	    for (len = 0, p = regcomp_parse - 1;
 	      len < 127 && p < regxend;
 	      len++)
 	    {
@@ -1772,7 +1743,7 @@ tryagain:
 		regc(ender, s++);
 	    }
 	loopdone:
-	    regparse = p - 1;
+	    regcomp_parse = p - 1;
 	    nextchar();
 	    if (len < 0)
 		FAIL("internal disaster in regexp");
@@ -1784,9 +1755,7 @@ tryagain:
 		*OPERAND(ret) = len;
 	    regc('\0', s++);
 	    if (SIZE_ONLY) {
-#ifdef REGALIGN_STRUCT
 		regsize += (len + 2 + sizeof(regnode) - 1) / sizeof(regnode);
-#endif 
 	    } else {
 		regcode += (len + 2 + sizeof(regnode) - 1) / sizeof(regnode);
 	    }
@@ -1829,9 +1798,9 @@ regclass(void)
     ret = reg_node(ANYOF);
     for (Class = 0; Class < 33; Class++)
 	regc(0, s++);
-    if (*regparse == '^') {	/* Complement of range. */
+    if (*regcomp_parse == '^') {	/* Complement of range. */
 	regnaughty++;
-	regparse++;
+	regcomp_parse++;
 	if (!SIZE_ONLY)
 	    *opnd |= ANYOF_INVERT;
     }
@@ -1844,37 +1813,37 @@ regclass(void)
     } else {
 	regsize += ANY_SKIP;
     }
-    if (*regparse == ']' || *regparse == '-')
+    if (*regcomp_parse == ']' || *regcomp_parse == '-')
 	goto skipcond;		/* allow 1st char to be ] or - */
-    while (regparse < regxend && *regparse != ']') {
+    while (regcomp_parse < regxend && *regcomp_parse != ']') {
        skipcond:
-	Class = UCHARAT(regparse++);
-	if (Class == '[' && regparse + 1 < regxend &&
+	Class = UCHARAT(regcomp_parse++);
+	if (Class == '[' && regcomp_parse + 1 < regxend &&
 	    /* I smell either [: or [= or [. -- POSIX has been here, right? */
-	    (*regparse == ':' || *regparse == '=' || *regparse == '.')) {
-	    char  posixccc = *regparse;
-	    char* posixccs = regparse++;
+	    (*regcomp_parse == ':' || *regcomp_parse == '=' || *regcomp_parse == '.')) {
+	    char  posixccc = *regcomp_parse;
+	    char* posixccs = regcomp_parse++;
 	    
-	    while (regparse < regxend && *regparse != posixccc)
-		regparse++;
-	    if (regparse == regxend)
+	    while (regcomp_parse < regxend && *regcomp_parse != posixccc)
+		regcomp_parse++;
+	    if (regcomp_parse == regxend)
 		/* Grandfather lone [:, [=, [. */
-		regparse = posixccs;
+		regcomp_parse = posixccs;
 	    else {
-		regparse++; /* skip over the posixccc */
-		if (*regparse == ']') {
+		regcomp_parse++; /* skip over the posixccc */
+		if (*regcomp_parse == ']') {
 		    /* Not Implemented Yet.
 		     * (POSIX Extended Character Classes, that is)
 		     * The text between e.g. [: and :] would start
-		     * at posixccs + 1 and stop at regparse - 2. */
+		     * at posixccs + 1 and stop at regcomp_parse - 2. */
 		    if (dowarn && !SIZE_ONLY)
 			warn("Character class syntax [%c %c] is reserved for future extensions", posixccc, posixccc);
-		    regparse++; /* skip over the ending ] */
+		    regcomp_parse++; /* skip over the ending ] */
 		}
 	    }
 	}
 	if (Class == '\\') {
-	    Class = UCHARAT(regparse++);
+	    Class = UCHARAT(regcomp_parse++);
 	    switch (Class) {
 	    case 'w':
 		if (!SIZE_ONLY) {
@@ -1962,17 +1931,17 @@ regclass(void)
 		Class = '\007';
 		break;
 	    case 'x':
-		Class = scan_hex(regparse, 2, &numlen);
-		regparse += numlen;
+		Class = scan_hex(regcomp_parse, 2, &numlen);
+		regcomp_parse += numlen;
 		break;
 	    case 'c':
-		Class = UCHARAT(regparse++);
+		Class = UCHARAT(regcomp_parse++);
 		Class = toCTRL(Class);
 		break;
 	    case '0': case '1': case '2': case '3': case '4':
 	    case '5': case '6': case '7': case '8': case '9':
-		Class = scan_oct(--regparse, 3, &numlen);
-		regparse += numlen;
+		Class = scan_oct(--regcomp_parse, 3, &numlen);
+		regcomp_parse += numlen;
 		break;
 	    }
 	}
@@ -1983,9 +1952,9 @@ regclass(void)
 	}
 	else {
 	    lastclass = Class;
-	    if (*regparse == '-' && regparse+1 < regxend &&
-	      regparse[1] != ']') {
-		regparse++;
+	    if (*regcomp_parse == '-' && regcomp_parse+1 < regxend &&
+	      regcomp_parse[1] != ']') {
+		regcomp_parse++;
 		range = 1;
 		continue;	/* do it next time */
 	    }
@@ -1996,7 +1965,7 @@ regclass(void)
 	}
 	lastclass = Class;
     }
-    if (*regparse != ']')
+    if (*regcomp_parse != ']')
 	FAIL("unmatched [] in regexp");
     nextchar();
     /* optimize case-insensitive simple patterns (e.g. /[a-z]/i) */
@@ -2021,25 +1990,25 @@ regclass(void)
 STATIC char*
 nextchar(void)
 {
-    char* retval = regparse++;
+    char* retval = regcomp_parse++;
 
     for (;;) {
-	if (*regparse == '(' && regparse[1] == '?' &&
-		regparse[2] == '#') {
-	    while (*regparse && *regparse != ')')
-		regparse++;
-	    regparse++;
+	if (*regcomp_parse == '(' && regcomp_parse[1] == '?' &&
+		regcomp_parse[2] == '#') {
+	    while (*regcomp_parse && *regcomp_parse != ')')
+		regcomp_parse++;
+	    regcomp_parse++;
 	    continue;
 	}
 	if (regflags & PMf_EXTENDED) {
-	    if (isSPACE(*regparse)) {
-		regparse++;
+	    if (isSPACE(*regcomp_parse)) {
+		regcomp_parse++;
 		continue;
 	    }
-	    else if (*regparse == '#') {
-		while (*regparse && *regparse != '\n')
-		    regparse++;
-		regparse++;
+	    else if (*regcomp_parse == '#') {
+		while (*regcomp_parse && *regcomp_parse != '\n')
+		    regcomp_parse++;
+		regcomp_parse++;
 		continue;
 	    }
 	}
@@ -2059,11 +2028,7 @@ reg_node(U8 op)
     ret = regcode;
     if (SIZE_ONLY) {
 	SIZE_ALIGN(regsize);
-#ifdef REGALIGN_STRUCT
 	regsize += 1;
-#else
-	regsize += 3;
-#endif 
 	return(ret);
     }
 
@@ -2087,11 +2052,7 @@ reganode(U8 op, U32 arg)
     ret = regcode;
     if (SIZE_ONLY) {
 	SIZE_ALIGN(regsize);
-#ifdef REGALIGN
 	regsize += 2;
-#else
-	regsize += 5;
-#endif 
 	return(ret);
     }
 
@@ -2143,9 +2104,6 @@ reginsert(U8 op, regnode *opnd)
     src = NEXTOPER(place);
     FILL_ADVANCE_NODE(place, op);
     Zero(src, offset, regnode);
-#if defined(REGALIGN) && !defined(REGALIGN_STRUCT)
-    src[offset + 1] = '\177';
-#endif
 }
 
 /*
@@ -2170,27 +2128,11 @@ regtail(regnode *p, regnode *val)
 	scan = temp;
     }
 
-#ifdef REGALIGN
-#  ifdef REGALIGN_STRUCT
     if (reg_off_by_arg[OP(scan)]) {
 	ARG_SET(scan, val - scan);
     } else {
 	NEXT_OFF(scan) = val - scan;
     }
-#  else
-    offset = val - scan;
-#    ifndef lint
-    *(short*)(scan+1) = offset;
-#    endif
-#endif 
-#else
-    if (OP(scan) == BACK)
-	offset = scan - val;
-    else
-	offset = val - scan;
-    *(scan+1) = (offset>>8)&0377;
-    *(scan+2) = offset&0377;
-#endif
 }
 
 /*
@@ -2354,6 +2296,8 @@ regdump(regexp *r)
     if (r->reganch & ROPT_IMPLICIT)
 	PerlIO_printf(Perl_debug_log, "implicit ");
     PerlIO_printf(Perl_debug_log, "minlen %ld ", (long) r->minlen);
+    if (r->reganch & ROPT_EVAL_SEEN)
+	PerlIO_printf(Perl_debug_log, "with eval ");
     PerlIO_printf(Perl_debug_log, "\n");
 #endif	/* DEBUGGING */
 }
@@ -2436,18 +2380,10 @@ regprop(SV *sv, regnode *o)
 	sv_catpvf(sv, "CURLY {%d,%d}", ARG1(o), ARG2(o));
 	break;
     case CURLYM:
-#ifdef REGALIGN_STRUCT
 	sv_catpvf(sv, "CURLYM[%d] {%d,%d}", o->flags, ARG1(o), ARG2(o));
-#else
-	sv_catpvf(sv, "CURLYM {%d,%d}", ARG1(o), ARG2(o));
-#endif 
 	break;
     case CURLYN:
-#ifdef REGALIGN_STRUCT
 	sv_catpvf(sv, "CURLYN[%d] {%d,%d}", o->flags, ARG1(o), ARG2(o));
-#else
-	sv_catpvf(sv, "CURLYN {%d,%d}", ARG1(o), ARG2(o));
-#endif 
 	break;
     case CURLYX:
 	sv_catpvf(sv, "CURLYX {%d,%d}", ARG1(o), ARG2(o));
@@ -2481,18 +2417,10 @@ regprop(SV *sv, regnode *o)
 	p = "GPOS";
 	break;
     case UNLESSM:
-#ifdef REGALIGN_STRUCT
 	sv_catpvf(sv, "UNLESSM[-%d]", o->flags);
-#else
-	p = "UNLESSM";
-#endif 
 	break;
     case IFMATCH:
-#ifdef REGALIGN_STRUCT
 	sv_catpvf(sv, "IFMATCH[-%d]", o->flags);
-#else
-	p = "IFMATCH";
-#endif 
 	break;
     case SUCCEED:
 	p = "SUCCEED";
@@ -2623,14 +2551,7 @@ regnext(register regnode *p)
     if (offset == 0)
 	return(NULL);
 
-#ifdef REGALIGN
     return(p+offset);
-#else
-    if (OP(p) == BACK)
-	return(p-offset);
-    else
-	return(p+offset);
-#endif
 }
 
 STATIC void	

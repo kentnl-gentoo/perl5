@@ -325,6 +325,7 @@
 #define magic_setuvar		Perl_magic_setuvar
 #define magic_setvec		Perl_magic_setvec
 #define magic_sizepack		Perl_magic_sizepack
+#define magic_unchain		Perl_magic_unchain
 #define magic_wipepack		Perl_magic_wipepack
 #define magicname		Perl_magicname
 #define markstack_grow		Perl_markstack_grow
@@ -924,7 +925,6 @@
 #define sle_amg			Perl_sle_amg
 #define slt_amg			Perl_slt_amg
 #define sne_amg			Perl_sne_amg
-#define specialsv_list		Perl_specialsv_list
 #define sqrt_amg		Perl_sqrt_amg
 #define stack_grow		Perl_stack_grow
 #define start_subparse		Perl_start_subparse

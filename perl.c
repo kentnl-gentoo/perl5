@@ -386,7 +386,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
 
     /* call exit list functions */
     while (exitlistlen-- > 0)
-	exitlist[exitlistlen].fn(THIS_ exitlist[exitlistlen].ptr);
+	exitlist[exitlistlen].fn(PERL_OBJECT_THIS_ exitlist[exitlistlen].ptr);
 
     Safefree(exitlist);
 
@@ -476,6 +476,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
     argvoutgv = Nullgv;
     stdingv = Nullgv;
     last_in_gv = Nullgv;
+    replgv = Nullgv;
 
     /* reset so print() ends up where we expect */
     setdefout(Nullgv);
@@ -944,7 +945,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
     boot_core_UNIVERSAL();
 
     if (xsinit)
-	(*xsinit)(THIS);	/* in case linked C routines want magical variables */
+	(*xsinit)(PERL_OBJECT_THIS);	/* in case linked C routines want magical variables */
 #if defined(VMS) || defined(WIN32) || defined(DJGPP)
     init_os_extras();
 #endif
@@ -1815,6 +1816,8 @@ init_main_stash(void)
     defgv = gv_fetchpv("_",TRUE, SVt_PVAV);
     errgv = gv_HVadd(gv_fetchpv("@", TRUE, SVt_PV));
     GvMULTI_on(errgv);
+    replgv = gv_HVadd(gv_fetchpv("\022", TRUE, SVt_PV)); /* ^R */
+    GvMULTI_on(replgv);
     (void)form("%240s","");	/* Preallocate temp - for immediate signals. */
     sv_grow(ERRSV, 240);	/* Preallocate - for immediate signals. */
     sv_setpvn(ERRSV, "", 0);
