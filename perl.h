@@ -1106,7 +1106,11 @@ typedef I32 (*filter_t) _((int, SV *, int));
 #   if defined(PLAN9)
 #     include "./plan9/plan9ish.h"
 #   else
-#     include "unixish.h"
+#     if defined(MPE)
+#       include "mpeix/mpeixish.h"
+#     else
+#       include "unixish.h"
+#     endif
 #   endif
 # endif
 #endif         
@@ -1853,10 +1857,6 @@ typedef I32 (*regexec_t) _((regexp* prog, char* stringarg, char* strend, char*
 			    strbeg, I32 minend, SV* screamer, void* data, 
 			    U32 flags));
 
-EXT regexp*	pregcomp _((char* exp, char* xend, PMOP* pm));
-EXT I32		regexec_flags _((regexp* prog, char* stringarg, char* strend,
-			 char* strbeg, I32 minend, SV* screamer,
-			 void* data, U32 flags));
 #endif
 
 /* Set up PERLVAR macros for populating structs */

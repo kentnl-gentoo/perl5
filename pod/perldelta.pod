@@ -7,7 +7,7 @@ perldelta - what's new for perl5.005
 This document describes differences between the 5.004 release and this one.
 
 [XXX this needs more verbose summaries of the sub topics, instead of just
-the "See L<foo>."  Scheduled for a second iteration. GSAR]
+the "See foo."  Scheduled for a second iteration. GSAR]
 
 =head1 About the new versioning system
 
@@ -216,6 +216,13 @@ people to work on those issues.
 
 See L<perlfunc/prototype>.
 
+=head2 Extended support for exception handling
+
+C<die()> now accepts a reference value, and C<$@> gets set to that
+value in exception traps.  This makes it possible to propagate
+exception objects.  See L<perlfunc/eval>.  [XXX there's nothing
+about this in perlfunc/eval yet.]
+
 =head2 Re-blessing in DESTROY() supported for chaining DESTROY() methods
 
 See L<perlobj/Destructors>.
@@ -271,6 +278,8 @@ the command-line arguments used in F<config.sh>.
 BeOS is now supported.  See L<README.beos>.
 
 DOS is now supported under the DJGPP tools.  See L<README.dos>.
+
+MPE/iX is now supported.  See L<README.mpeix>.
 
 =head2 Changes in existing support
 
@@ -471,12 +480,6 @@ only with arrays that have a hash reference at index 0.
 
 (F) The "goto subroutine" call can't be used to jump out of an eval "string".
 (You can use it to jump out of an eval {BLOCK}, but you probably don't want to.)
-
-=item Can't use %%! because Errno.pm is not available
-
-(F) The first time the %! hash is used, perl automatically loads the
-Errno.pm module. The Errno module is expected to tie the %! hash to
-provide symbolic names for C<$!> errno values.
 
 =item Can't use %%! because Errno.pm is not available
 
