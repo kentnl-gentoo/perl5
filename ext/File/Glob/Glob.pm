@@ -1,13 +1,10 @@
 package File::Glob;
 
 use strict;
-use Carp;
 our($VERSION, @ISA, @EXPORT_OK, @EXPORT_FAIL, %EXPORT_TAGS,
     $AUTOLOAD, $DEFAULT_FLAGS);
 
-require Exporter;
 use XSLoader ();
-require AutoLoader;
 
 @ISA = qw(Exporter AutoLoader);
 
@@ -19,6 +16,7 @@ require AutoLoader;
     bsd_glob
     glob
     GLOB_ABEND
+    GLOB_ALPHASORT
     GLOB_ALTDIRFUNC
     GLOB_BRACE
     GLOB_CSH
@@ -37,6 +35,7 @@ require AutoLoader;
 %EXPORT_TAGS = (
     'glob' => [ qw(
         GLOB_ABEND
+	GLOB_ALPHASORT
         GLOB_ALTDIRFUNC
         GLOB_BRACE
         GLOB_CSH
@@ -58,6 +57,7 @@ require AutoLoader;
 $VERSION = '0.991';
 
 sub import {
+    require Exporter;
     my $i = 1;
     while ($i < @_) {
 	if ($_[$i] =~ /^:(case|nocase|globally)$/) {
@@ -65,7 +65,7 @@ sub import {
 	    $DEFAULT_FLAGS &= ~GLOB_NOCASE() if $1 eq 'case';
 	    $DEFAULT_FLAGS |= GLOB_NOCASE() if $1 eq 'nocase';
 	    if ($1 eq 'globally') {
-		no warnings;
+		local $^W;
 		*CORE::GLOBAL::glob = \&File::Glob::csh_glob;
 	    }
 	    next;
@@ -84,12 +84,14 @@ sub AUTOLOAD {
     ($constname = $AUTOLOAD) =~ s/.*:://;
     my $val = constant($constname, @_ ? $_[0] : 0);
     if ($! != 0) {
-	if ($! =~ /Invalid/) {
+	if ($! =~ /Invalid/ || $!{EINVAL}) {
+	    require AutoLoader;
 	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
 	    goto &AutoLoader::AUTOLOAD;
 	}
 	else {
-		croak "Your vendor has not defined File::Glob macro $constname";
+	    require Carp;
+	    Carp::croak("Your vendor has not defined File::Glob macro $constname");
 	}
     }
     eval "sub $AUTOLOAD { $val }";
@@ -104,7 +106,13 @@ sub GLOB_ERROR {
     return constant('GLOB_ERROR', 0);
 }
 
-sub GLOB_CSH () { GLOB_BRACE() | GLOB_NOMAGIC() | GLOB_QUOTE() | GLOB_TILDE() }
+sub GLOB_CSH () {
+    GLOB_BRACE()
+	| GLOB_NOMAGIC()
+	| GLOB_QUOTE()
+	| GLOB_TILDE()
+	| GLOB_ALPHASORT()
+}
 
 $DEFAULT_FLAGS = GLOB_CSH();
 if ($^O =~ /^(?:MSWin32|VMS|os2|dos|riscos|MacOS)$/) {
@@ -288,7 +296,7 @@ Expand patterns that start with '~' to user name home directories.
 =item C<GLOB_CSH>
 
 For convenience, C<GLOB_CSH> is a synonym for
-C<GLOB_BRACE | GLOB_NOMAGIC | GLOB_QUOTE | GLOB_TILDE>.
+C<GLOB_BRACE | GLOB_NOMAGIC | GLOB_QUOTE | GLOB_TILDE | GLOB_ALPHASORT>.
 
 =back
 
@@ -296,6 +304,18 @@ The POSIX provided C<GLOB_APPEND>, C<GLOB_DOOFFS>, and the FreeBSD
 extensions C<GLOB_ALTDIRFUNC>, and C<GLOB_MAGCHAR> flags have not been
 implemented in the Perl version because they involve more complex
 interaction with the underlying C structures.
+
+The following flag has been added in the Perl implementation for
+csh compatibility:
+
+=over 4
+
+=item C<GLOB_ALPHASORT>
+
+If C<GLOB_NOSORT> is not in effect, sort filenames is alphabetical
+order (case does not matter) rather than in ASCII order.
+
+=back
 
 =head1 DIAGNOSTICS
 
@@ -356,14 +376,32 @@ Win32 users should use the real slash.  If you really want to use
 backslashes, consider using Sarathy's File::DosGlob, which comes with
 the standard Perl distribution.
 
+=item *
+
+Mac OS (Classic) users should note a few differences. Since
+Mac OS is not Unix, when the glob code encounters a tilde glob (e.g.
+~user/foo) and the C<GLOB_TILDE> flag is used, it simply returns that
+pattern without doing any expansion.
+
+Glob on Mac OS is case-insensitive by default (if you don't use any
+flags). If you specify any flags at all and still want glob
+to be case-insensitive, you must include C<GLOB_NOCASE> in the flags.
+
+The path separator is ':' (aka colon), not '/' (aka slash). Mac OS users
+should be careful about specifying relative pathnames. While a full path
+always begins with a volume name, a relative pathname should always
+begin with a ':'.  If specifying a volume name only, a trailing ':' is
+required.
+
 =back
 
 =head1 AUTHOR
 
 The Perl interface was written by Nathan Torkington E<lt>gnat@frii.comE<gt>,
 and is released under the artistic license.  Further modifications were
-made by Greg Bacon E<lt>gbacon@cs.uah.eduE<gt> and Gurusamy Sarathy
-E<lt>gsar@activestate.comE<gt>.  The C glob code has the
+made by Greg Bacon E<lt>gbacon@cs.uah.eduE<gt>, Gurusamy Sarathy
+E<lt>gsar@activestate.comE<gt>, and Thomas Wegner
+E<lt>wegner_thomas@yahoo.comE<gt>.  The C glob code has the
 following copyright:
 
     Copyright (c) 1989, 1993 The Regents of the University of California.

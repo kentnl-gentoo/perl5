@@ -2,32 +2,46 @@
 
 use bytes;
 
-$UnicodeData = "Unicode.301";
+$UnicodeData = "Unicode.txt";
 $SyllableData = "syllables.txt";
 $PropData = "PropList.txt";
 
 
 # Note: we try to keep filenames unique within first 8 chars.  Using
 # subdirectories for the following helps.
-mkdir "In", 0777;
-mkdir "Is", 0777;
-mkdir "To", 0777;
+mkdir "In", 0755;
+mkdir "Is", 0755;
+mkdir "To", 0755;
 
 @todo = (
 # typical
 
-    ['IsWord',  '$cat =~ /^L[ulot]|^Nd/ or $code eq "005F"',	''],
-    ['IsAlnum', '$cat =~ /^L[ulot]|^Nd/',	''],
-    ['IsAlpha',  '$cat =~ /^L[ulot]/',	''],
-    ['IsSpace',  'White space',	$PropData],
+    # 005F: SPACING UNDERSCROE
+    ['IsWord',   '$cat =~ /^[LMN]/ or $code eq "005F"',	''],
+    ['IsAlnum',  '$cat =~ /^[LMN]/',	''],
+    ['IsAlpha',  '$cat =~ /^[LM]/',	''],
+    # 0009: HORIZONTAL TABULATION
+    # 000A: LINE FEED
+    # 000B: VERTICAL TABULATION
+    # 000C: FORM FEED
+    # 000D: CARRIAGE RETURN
+    # 0020: SPACE
+    ['IsSpace',  '$cat  =~ /^Z/ ||
+                  $code =~ /^(0009|000A|000B|000C|000D)$/',	''],
+    ['IsSpacePerl',
+                 '$cat  =~ /^Z/ ||
+                  $code =~ /^(0009|000A|000C|000D)$/',		''],
+    ['IsBlank',  '$code =~ /^(0020|0009)$/ ||
+		  $cat  =~ /^Z[^lp]$/',	''],
     ['IsDigit',  '$cat =~ /^Nd$/',	''],
     ['IsUpper',  '$cat =~ /^L[ut]$/',	''],
     ['IsLower',  '$cat =~ /^Ll$/',	''],
-    ['IsASCII',  'hex $code <= 127',	''],
+    ['IsASCII',  '$code le "007f"',	''],
     ['IsCntrl',  '$cat =~ /^C/',	''],
-    ['IsGraph',  '$cat =~ /^[^C]/ and ($cat !~ /^Z/ and $code ne "0020" or chr(hex $code) !~ /^\s/)',	''],
-    ['IsPrint',  '$cat =~ /^[^C]/',	''],
-    ['IsPunct',  'Punctuation',	$PropData],
+    ['IsGraph',  '$cat =~ /^([LMNPS]|Co)/',	''],
+    ['IsPrint',  '$cat =~ /^([LMNPS]|Co|Zs)/',	''],
+    ['IsPunct',  '$cat =~ /^P/',	''],
+    # 003[0-9]: DIGIT ZERO..NINE, 00[46][1-6]: A..F, a..f
     ['IsXDigit', '$code =~ /^00(3[0-9]|[46][1-6])$/',	''],
     ['ToUpper',  '$up',			'$up'],
     ['ToLower',  '$down',		'$down'],
@@ -145,7 +159,7 @@ mkdir "To", 0777;
     ['IsDCfont',	'$decomp =~ /^<font>/',		''],
     ['IsDCnoBreak',	'$decomp =~ /^<noBreak>/',	''],
     ['IsDCinitial',	'$decomp =~ /^<initial>/',	''],
-    ['IsDCinital',	'$decomp =~ /^<medial>/',	''],
+    ['IsDCmedial',	'$decomp =~ /^<medial>/',	''],
     ['IsDCfinal',	'$decomp =~ /^<final>/',	''],
     ['IsDCisolated',	'$decomp =~ /^<isolated>/',	''],
     ['IsDCcircle',	'$decomp =~ /^<circle>/',	''],
@@ -259,7 +273,7 @@ while (<UD>) {
     next if /^#/;
     next if /^$/;
     chomp;
-    ($code, $last, $name) = split(/; */);
+    ($code, $last, $name) = /^([0-9a-f]+)\.\.([0-9a-f]); (.+)/i;
     if ($name) {
 	print OUT "$code	$last	$name\n";
 	$name =~ s/\s+//g;
@@ -309,7 +323,7 @@ sub proplist {
     elsif ($table =~ /^IsLbrk/) {
 	open(UD, "LineBrk.txt") or warn "Can't open $table: $!";
 
-	$split = '($code, $brk, $name) = split(/;/);';
+	$split = '($code, $brk, $name) = /^([0-9a-f]+);(\w+) # (.+)/i;';
     }
     else {
 	open(UD, $UnicodeData) or warn "Can't open $UnicodeData: $!";

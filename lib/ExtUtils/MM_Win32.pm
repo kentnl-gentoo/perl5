@@ -1,5 +1,7 @@
 package ExtUtils::MM_Win32;
 
+our $VERSION = '1.00';
+
 =head1 NAME
 
 ExtUtils::MM_Win32 - methods to override UN*X behaviour in ExtUtils::MakeMaker
@@ -14,7 +16,7 @@ See ExtUtils::MM_Unix for a documentation of the methods provided
 there. This package overrides the implementation of these methods, not
 the semantics.
 
-=over
+=over 4
 
 =cut 
 
@@ -23,8 +25,8 @@ use Config;
 use File::Basename;
 require Exporter;
 
-Exporter::import('ExtUtils::MakeMaker',
-       qw( $Verbose &neatvalue));
+require ExtUtils::MakeMaker;
+ExtUtils::MakeMaker->import(qw( $Verbose &neatvalue));
 
 $ENV{EMXSHELL} = 'sh'; # to run `commands`
 unshift @MM::ISA, 'ExtUtils::MM_Win32';
@@ -596,7 +598,7 @@ pm_to_blib: $(TO_INST_PM)
 	($NMAKE ? 'qw[ <<pmfiles.dat ],'
 	        : $DMAKE ? 'qw[ $(mktmp,pmfiles.dat $(PM_TO_BLIB:s,\\,\\\\,)\n) ],'
 			 : '{ qw[$(PM_TO_BLIB)] },'
-	 ).q{'}.$autodir.q{')"
+	 ).q{'}.$autodir.q{','$(PM_FILTER)')"
 	}. ($NMAKE ? q{
 $(PM_TO_BLIB)
 <<

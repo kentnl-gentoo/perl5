@@ -12,6 +12,15 @@ $VERSION = "1.0";
 
 Thread - manipulate threads in Perl (EXPERIMENTAL, subject to change)
 
+=head1 CAVEAT
+
+The Thread extension requires Perl to be built in a particular way to
+enable the older 5.005 threading model.  Just to confuse matters, there
+is an alternate threading model known as "ithreads" that does NOT
+support this extension.  If you are using a binary distribution such
+as ActivePerl that is built with ithreads support, this extension CANNOT
+be used.
+
 =head1 SYNOPSIS
 
     use Thread;
@@ -21,6 +30,11 @@ Thread - manipulate threads in Perl (EXPERIMENTAL, subject to change)
     $result = $t->join;
     $result = $t->eval;
     $t->detach;
+    $flags = $t->flags;
+
+    if ($t->done) {
+        $t->join;
+    }
 
     if($t->equal($another_thread)) {
     	# ...
@@ -180,6 +194,17 @@ The C<tid> method returns the tid of a thread. The tid is a monotonically
 increasing integer assigned when a thread is created. The main thread of a
 program will have a tid of zero, while subsequent threads will have tids
 assigned starting with one.
+
+=item flags
+
+The C<flags> method returns the flags for the thread. This is the
+integer value corresponding to the internal flags for the thread, and
+the value may not be all that meaningful to you.
+
+=item done
+
+The C<done> method returns true if the thread you're checking has
+finished, and false otherwise.
 
 =back
 

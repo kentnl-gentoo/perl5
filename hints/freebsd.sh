@@ -86,13 +86,6 @@ case "$osvers" in
 	d_setegid='undef'
 	d_seteuid='undef'
 	;;
-3.*)
-       usevfork='true'         
-       usemymalloc='n'
-       libswanted=`echo $libswanted | sed 's/ malloc / /'`     
-       ;;
-#
-# Guesses at what will be needed after 3.*
 *)	usevfork='true'
 	usemymalloc='n'
 	libswanted=`echo $libswanted | sed 's/ malloc / /'`
@@ -194,7 +187,8 @@ EOM
 POSIX threads are not supported well by FreeBSD $osvers.
 
 Please consider upgrading to at least FreeBSD 2.2.8,
-or preferably to 3.something.
+or preferably to the most recent -RELEASE or -STABLE
+version (see http://www.freebsd.org/releases/).
 
 (While 2.2.7 does have pthreads, it has some problems
  with the combination of threads and pipes and therefore

@@ -3,7 +3,7 @@
 BEGIN {
 	eval { my $q = pack "q", 0 };
 	if ($@) {
-		print "1..0\n# no 64-bit types\n";
+		print "1..0\n# Skip: no 64-bit types\n";
 		exit(0);
 	}
 	chdir 't' if -d 't';
@@ -16,7 +16,7 @@ BEGIN {
 # 32+ bit integers don't cause noise
 no warnings qw(overflow portable);
 
-print "1..52\n";
+print "1..58\n";
 
 my $q = 12345678901;
 my $r = 23456789012;
@@ -220,7 +220,7 @@ if ($^O ne 'unicos') {
     # especially if operating near the UV/IV limits the low-order bits
     # become mangled even by simple arithmetic operations.
     for (23..37) {
-	print "ok #_ # skipped: too imprecise numbers\n";
+	print "ok $_ # skipped: too imprecise numbers\n";
     }
 }
 
@@ -278,5 +278,52 @@ print "ok 51\n";
 
 print "not " unless (sprintf "%u", ~0)    eq '18446744073709551615';
 print "ok 52\n";
+
+# If the 53..55 fail you have problems in the parser's string->int conversion,
+# see toke.c:scan_num().
+
+$q = -9223372036854775808;
+print "# $q ne\n# -9223372036854775808\nnot " unless "$q" eq "-9223372036854775808";
+print "ok 53\n";
+
+$q =  9223372036854775807;
+print "# $q ne\n# 9223372036854775807\nnot " unless "$q" eq "9223372036854775807";
+print "ok 54\n";
+
+$q = 18446744073709551615;
+print "# $q ne\n# 18446744073709551615\nnot " unless "$q" eq "18446744073709551615";
+print "ok 55\n";
+
+# Test that sv_2nv then sv_2iv is the same as sv_2iv direct
+# fails if whatever Atol is defined as can't actually cope with >32 bits.
+my $num = 4294967297;
+my $string = "4294967297";
+{
+  use integer;
+  $num += 0;
+  $string += 0;
+}
+if ($num eq $string) {
+  print "ok 56\n";
+} else {
+  print "not ok 56 # \"$num\" ne \"$string\"\n";
+}
+
+# Test that sv_2nv then sv_2uv is the same as sv_2uv direct
+$num = 4294967297;
+$string = "4294967297";
+$num &= 0;
+$string &= 0;
+if ($num eq $string) {
+  print "ok 57\n";
+} else {
+  print "not ok 57 # \"$num\" ne \"$string\"\n";
+}
+
+$q = "18446744073709551616e0";
+$q += 0;
+print "# \"18446744073709551616e0\" += 0 gives $q\nnot " if "$q" eq "18446744073709551615";
+print "ok 58\n";
+
 
 # eof

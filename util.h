@@ -1,6 +1,6 @@
 /*    util.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -21,13 +21,13 @@
 	 || ((f)[0] && (f)[1] == ':')		/* drive name */	\
 	 || ((f)[0] == '\\' && (f)[1] == '\\'))	/* UNC path */
 #  else		/* !WIN32 */
-#    ifdef DOSISH
+#    if defined( DOSISH) || defined(EPOC)
 #      define PERL_FILE_IS_ABSOLUTE(f) \
 	(*(f) == '/'							\
 	 || ((f)[0] && (f)[1] == ':'))		/* drive name */
-#    else	/* !DOSISH */
+#    else	/* NEITHER DOSISH NOR EPOCISH */
 #      ifdef MACOS_TRADITIONAL
-#        define PERL_FILE_IS_ABSOLUTE(f)	(strchr(f, ':'))
+#        define PERL_FILE_IS_ABSOLUTE(f)	(strchr(f, ':') && *(f) != ':')
 #      else /* !MACOS_TRADITIONAL */
 #        define PERL_FILE_IS_ABSOLUTE(f)	(*(f) == '/')
 #      endif /* MACOS_TRADITIONAL */

@@ -1,6 +1,7 @@
 use 5.005_64;			# for (defined ref) and $#$v and our
 package Dumpvalue;
 use strict;
+our $VERSION = '1.00';
 our(%address, $stab, @stab, %stab, %subs);
 
 # translate control chars to ^X - Randal Schwartz
@@ -494,7 +495,7 @@ A new dumper is created by a call
 
 Recognized options:
 
-=over
+=over 4
 
 =item C<arrayDepth>, C<hashDepth>
 
@@ -562,7 +563,7 @@ method and set() method (which accept multiple arguments).
 
 =head2 Methods
 
-=over
+=over 4
 
 =item dumpValue
 

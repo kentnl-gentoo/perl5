@@ -1,8 +1,9 @@
 #
 # Create the export list for perl.
 #
-# Needed by WIN32 and OS/2 for creating perl.dll
-# and by AIX for creating libperl.a when -Dusershrplib is in effect.
+# Needed by WIN32 and OS/2 for creating perl.dll,
+# and by AIX for creating libperl.a when -Dusershrplib is in effect,
+# and by MacOS Classic.
 #
 # reads global.sym, pp.sym, perlvars.h, intrpvar.h, thrdvar.h, config.h
 # On OS/2 reads miniperl.map as well
@@ -51,12 +52,12 @@ while (@ARGV) {
     $PLATFORM = $1 if ($flag =~ /^PLATFORM=(\w+)$/);
 }
 
-my @PLATFORM = qw(aix win32 os2);
+my @PLATFORM = qw(aix win32 os2 MacOS);
 my %PLATFORM;
 @PLATFORM{@PLATFORM} = ();
 
 defined $PLATFORM || die "PLATFORM undefined, must be one of: @PLATFORM\n";
-exists $PLATFORM{$PLATFORM} || die "PLATFORM must be one of: @PLATFORM\n"; 
+exists $PLATFORM{$PLATFORM} || die "PLATFORM must be one of: @PLATFORM\n";
 
 my $config_sh   = "config.sh";
 my $config_h    = "config.h";
@@ -68,17 +69,24 @@ my $pp_sym      = "pp.sym";
 my $globvar_sym = "globvar.sym";
 my $perlio_sym  = "perlio.sym";
 
-if ($PLATFORM eq 'aix') { 
+if ($PLATFORM eq 'aix') {
     # Nothing for now.
 }
 elsif ($PLATFORM eq 'win32') {
     $CCTYPE = "MSVC" unless defined $CCTYPE;
-    foreach ($thrdvar_h, $intrpvar_h, $perlvars_h, $global_sym, $pp_sym, $globvar_sym) {
+    foreach ($thrdvar_h, $intrpvar_h, $perlvars_h, $global_sym,
+		$pp_sym, $globvar_sym, $perlio_sym) {
 	s!^!..\\!;
     }
 }
+elsif ($PLATFORM eq 'MacOS') {
+    foreach ($thrdvar_h, $intrpvar_h, $perlvars_h, $global_sym,
+		$pp_sym, $globvar_sym, $perlio_sym) {
+	s!^!::!;
+    }
+}
 
-unless ($PLATFORM eq 'win32') {
+unless ($PLATFORM eq 'win32' || $PLATFORM eq 'MacOS') {
     open(CFG,$config_sh) || die "Cannot open $config_sh: $!\n";
     while (<CFG>) {
 	if (/^(?:ccflags|optimize)='(.+)'$/) {
@@ -87,7 +95,7 @@ unless ($PLATFORM eq 'win32') {
 	}
 	if ($PLATFORM eq 'os2') {
 	    $CONFIG_ARGS = $1 if /^(?:config_args)='(.+)'$/;
-	    $ARCHNAME = $1 if /^(?:archname)='(.+)'$/;
+	    $ARCHNAME =    $1 if /^(?:archname)='(.+)'$/;
 	}
     }
     close(CFG);
@@ -96,12 +104,9 @@ unless ($PLATFORM eq 'win32') {
 open(CFG,$config_h) || die "Cannot open $config_h: $!\n";
 while (<CFG>) {
     $define{$1} = 1 if /^\s*#\s*define\s+(MYMALLOC)\b/;
-    $define{$1} = 1 if /^\s*#\s*define\s+(USE_5005THREADS)\b/;
-    $define{$1} = 1 if /^\s*#\s*define\s+(USE_ITHREADS)\b/;
-    $define{$1} = 1 if /^\s*#\s*define\s+(USE_PERLIO)\b/;
     $define{$1} = 1 if /^\s*#\s*define\s+(MULTIPLICITY)\b/;
-    $define{$1} = 1 if /^\s*#\s*define\s+(PERL_IMPLICIT_SYS)\b/;
-    $define{$1} = 1 if /^\s*#\s*define\s+(PERL_BINCOMPAT_5005)\b/;
+    $define{$1} = 1 if /^\s*#\s*define\s+(PERL_\w+)\b/;
+    $define{$1} = 1 if /^\s*#\s*define\s+(USE_\w+)\b/;
 }
 close(CFG);
 
@@ -120,7 +125,7 @@ $define{PERL_IMPLICIT_CONTEXT} ||=
 
 if ($define{PERL_CAPI}) {
     delete $define{PERL_OBJECT};
-    $define{MULTIPLICITY} = 1; 
+    $define{MULTIPLICITY} = 1;
     $define{PERL_IMPLICIT_CONTEXT} = 1;
     $define{PERL_IMPLICIT_SYS}     = 1;
 }
@@ -134,7 +139,7 @@ if ($define{PERL_OBJECT}) {
 
 if ($PLATFORM eq 'win32') {
     warn join(' ',keys %define)."\n";
-    print "LIBRARY Perl56\n";
+    print "LIBRARY Perl57\n";
     print "DESCRIPTION 'Perl interpreter'\n";
     print "EXPORTS\n";
     if ($define{PERL_IMPLICIT_SYS}) {
@@ -145,16 +150,7 @@ if ($PLATFORM eq 'win32') {
 elsif ($PLATFORM eq 'os2') {
     ($v = $]) =~ s/(\d\.\d\d\d)(\d\d)$/$1_$2/;
     $v .= '-thread' if $ARCHNAME =~ /-thread/;
-    #$sum = 0;
-    #for (split //, $v) {
-    #	$sum = ($sum * 33) + ord;
-    #	$sum &= 0xffffff;
-    #}
-    #$sum += $sum >> 5;
-    #$sum &= 0xffff;
-    #$sum = printf '%X', $sum;
     ($dll = $define{PERL_DLL}) =~ s/\.dll$//i;
-    # print STDERR "'$dll' <= '$define{PERL_DLL}'\n";
     print <<"---EOP---";
 LIBRARY '$dll' INITINSTANCE TERMINSTANCE
 DESCRIPTION '\@#perl5-porters\@perl.org:$v#\@ Perl interpreter'
@@ -281,6 +277,8 @@ elsif ($PLATFORM eq 'os2') {
 		    my_tmpfile
 		    my_tmpnam
 		    my_flock
+		    my_rmdir
+		    my_mkdir
 		    malloc_mutex
 		    threads_mutex
 		    nthreads
@@ -311,10 +309,38 @@ elsif ($PLATFORM eq 'os2') {
 		    Perl_hab_GET
 		    )]);
 }
+elsif ($PLATFORM eq 'MacOS') {
+    skip_symbols [qw(
+		    Perl_GetVars
+		    PL_cryptseen
+		    PL_cshlen
+		    PL_cshname
+		    PL_statusvalue_vms
+		    PL_sys_intern
+		    PL_opsave
+		    PL_timesbuf
+		    Perl_dump_fds
+		    Perl_my_bcopy
+		    Perl_my_bzero
+		    Perl_my_chsize
+		    Perl_my_htonl
+		    Perl_my_memcmp
+		    Perl_my_memset
+		    Perl_my_ntohl
+		    Perl_my_swap
+		    Perl_safexcalloc
+		    Perl_safexfree
+		    Perl_safexmalloc
+		    Perl_safexrealloc
+		    Perl_unlnk
+		    Perl_sys_intern_clear
+		    Perl_sys_intern_init
+		    )];
+}
+
 
 unless ($define{'DEBUGGING'}) {
     skip_symbols [qw(
-		    Perl_deb
 		    Perl_deb_growlevel
 		    Perl_debop
 		    Perl_debprofdump
@@ -365,6 +391,8 @@ if ($define{'MYMALLOC'}) {
 		    Perl_mfree
 		    Perl_realloc
 		    Perl_calloc
+		    Perl_strdup
+		    Perl_putenv
 		    )];
     if ($define{'USE_5005THREADS'} || $define{'USE_ITHREADS'}) {
 	emit_symbols [qw(
@@ -441,8 +469,12 @@ unless ($define{'USE_ITHREADS'}) {
 		    Perl_re_dup
 		    Perl_sv_dup
 		    Perl_sys_intern_dup
+		    Perl_ptr_table_clear
 		    Perl_ptr_table_fetch
+		    Perl_ptr_table_free
 		    Perl_ptr_table_new
+		    Perl_ptr_table_clear
+		    Perl_ptr_table_free
 		    Perl_ptr_table_split
 		    Perl_ptr_table_store
 		    perl_clone
@@ -488,8 +520,8 @@ sub readvar {
 	# All symbols have a Perl_ prefix because that's what embed.h
 	# sticks in front of them.
 	push(@syms, &$proc($1,$2,$3)) if (/\bPERLVAR(A?I?C?)\(([IGT])(\w+)/);
-    } 
-    close(VARS); 
+    }
+    close(VARS);
     return \@syms;
 }
 
@@ -509,8 +541,89 @@ if ($define{'PERL_GLOBAL_STRUCT'}) {
 
 my @syms = ($global_sym, $globvar_sym); # $pp_sym is not part of the API
 
+my @layer_syms = qw(
+			 PerlIOBase_clearerr
+			 PerlIOBase_close
+			 PerlIOBase_eof
+			 PerlIOBase_error
+			 PerlIOBase_fileno
+			 PerlIOBase_setlinebuf
+			 PerlIOBase_pushed
+			 PerlIOBase_read
+		         PerlIOBase_unread
+			 PerlIOBuf_bufsiz
+			 PerlIOBuf_fill
+			 PerlIOBuf_flush
+			 PerlIOBuf_get_cnt
+			 PerlIOBuf_get_ptr
+			 PerlIOBuf_open
+			 PerlIOBuf_pushed
+			 PerlIOBuf_read
+			 PerlIOBuf_seek
+			 PerlIOBuf_set_ptrcnt
+			 PerlIOBuf_tell
+			 PerlIOBuf_unread
+			 PerlIOBuf_write
+			 PerlIO_define_layer
+			 PerlIO_arg_fetch
+			 PerlIO_pending
+			 PerlIO_allocate
+			 PerlIO_push
+			 PerlIO_unread
+);
+
 if ($define{'USE_PERLIO'}) {
-     push @syms, $perlio_sym;
+    push @syms, $perlio_sym;
+    if ($define{'USE_SFIO'}) {
+	skip_symbols \@layer_syms;
+	# SFIO defines most of the PerlIO routines as macros
+	skip_symbols [qw(
+			 PerlIO_canset_cnt
+			 PerlIO_clearerr
+			 PerlIO_close
+			 PerlIO_eof
+			 PerlIO_error
+			 PerlIO_exportFILE
+			 PerlIO_fast_gets
+			 PerlIO_fdopen
+			 PerlIO_fileno
+			 PerlIO_findFILE
+			 PerlIO_flush
+			 PerlIO_get_base
+			 PerlIO_get_bufsiz
+			 PerlIO_get_cnt
+			 PerlIO_get_ptr
+			 PerlIO_getc
+			 PerlIO_getname
+			 PerlIO_has_base
+			 PerlIO_has_cntptr
+			 PerlIO_importFILE
+			 PerlIO_open
+			 PerlIO_printf
+			 PerlIO_putc
+			 PerlIO_puts
+			 PerlIO_read
+			 PerlIO_releaseFILE
+			 PerlIO_reopen
+			 PerlIO_rewind
+			 PerlIO_seek
+			 PerlIO_set_cnt
+			 PerlIO_set_ptrcnt
+			 PerlIO_setlinebuf
+			 PerlIO_sprintf
+			 PerlIO_stderr
+			 PerlIO_stdin
+			 PerlIO_stdout
+			 PerlIO_stdoutf
+			 PerlIO_tell
+			 PerlIO_ungetc
+			 PerlIO_vprintf
+			 PerlIO_write
+			 )];
+    }
+} else {
+	# Skip the PerlIO New Generation symbols.
+	skip_symbols \@layer_syms;
 }
 
 for my $syms (@syms) {
@@ -544,15 +657,15 @@ else {
     unless ($define{'PERL_GLOBAL_STRUCT'}) {
 	my $glob = readvar($perlvars_h);
 	emit_symbols $glob;
-    } 
+    }
     unless ($define{'MULTIPLICITY'}) {
 	my $glob = readvar($intrpvar_h);
 	emit_symbols $glob;
-    } 
+    }
     unless ($define{'MULTIPLICITY'} || $define{'USE_5005THREADS'}) {
 	my $glob = readvar($thrdvar_h);
 	emit_symbols $glob;
-    } 
+    }
 }
 
 sub try_symbol {
@@ -572,6 +685,8 @@ while (<DATA>) {
 
 if ($PLATFORM eq 'win32') {
     foreach my $symbol (qw(
+			    setuid
+			    setgid
 			    boot_DynaLoader
 			    Perl_init_os_extras
 			    Perl_thread_create
@@ -579,35 +694,6 @@ if ($PLATFORM eq 'win32') {
 			    RunPerl
 			    win32_errno
 			    win32_environ
-			    win32_stdin
-			    win32_stdout
-			    win32_stderr
-			    win32_ferror
-			    win32_feof
-			    win32_strerror
-			    win32_fprintf
-			    win32_printf
-			    win32_vfprintf
-			    win32_vprintf
-			    win32_fread
-			    win32_fwrite
-			    win32_fopen
-			    win32_fdopen
-			    win32_freopen
-			    win32_fclose
-			    win32_fputs
-			    win32_fputc
-			    win32_ungetc
-			    win32_getc
-			    win32_fileno
-			    win32_clearerr
-			    win32_fflush
-			    win32_ftell
-			    win32_fseek
-			    win32_fgetpos
-			    win32_fsetpos
-			    win32_rewind
-			    win32_tmpfile
 			    win32_abort
 			    win32_fstat
 			    win32_stat
@@ -678,17 +764,6 @@ if ($PLATFORM eq 'win32') {
 			    win32_getenv
 			    win32_putenv
 			    win32_perror
-			    win32_setbuf
-			    win32_setvbuf
-			    win32_flushall
-			    win32_fcloseall
-			    win32_fgets
-			    win32_gets
-			    win32_fgetc
-			    win32_putc
-			    win32_puts
-			    win32_getchar
-			    win32_putchar
 			    win32_malloc
 			    win32_calloc
 			    win32_realloc
@@ -720,6 +795,47 @@ if ($PLATFORM eq 'win32') {
 			    win32_getpid
 			    win32_crypt
 			    win32_dynaload
+
+			    win32_stdin
+			    win32_stdout
+			    win32_stderr
+			    win32_ferror
+			    win32_feof
+			    win32_strerror
+			    win32_fprintf
+			    win32_printf
+			    win32_vfprintf
+			    win32_vprintf
+			    win32_fread
+			    win32_fwrite
+			    win32_fopen
+			    win32_fdopen
+			    win32_freopen
+			    win32_fclose
+			    win32_fputs
+			    win32_fputc
+			    win32_ungetc
+			    win32_getc
+			    win32_fileno
+			    win32_clearerr
+			    win32_fflush
+			    win32_ftell
+			    win32_fseek
+			    win32_fgetpos
+			    win32_fsetpos
+			    win32_rewind
+			    win32_tmpfile
+			    win32_setbuf
+			    win32_setvbuf
+			    win32_flushall
+			    win32_fcloseall
+			    win32_fgets
+			    win32_gets
+			    win32_fgetc
+			    win32_putc
+			    win32_puts
+			    win32_getchar
+			    win32_putchar
 			   ))
     {
 	try_symbol($symbol);
@@ -734,6 +850,15 @@ elsif ($PLATFORM eq 'os2') {
 		    keys %export;
     delete $export{$_} foreach @missing;
 }
+elsif ($PLATFORM eq 'MacOS') {
+    open MACSYMS, 'macperl.sym' or die 'Cannot read macperl.sym';
+
+    while (<MACSYMS>) {
+	try_symbol($_);
+    }
+
+    close MACSYMS;
+}
 
 # Now all symbols should be defined because
 # next we are going to output them.
@@ -744,7 +869,7 @@ foreach my $symbol (sort keys %export) {
 
 sub emit_symbol {
     my $symbol = shift;
-    chomp($symbol); 
+    chomp($symbol);
     $export{$symbol} = 1;
 }
 
@@ -780,7 +905,7 @@ sub output_symbol {
     elsif ($PLATFORM eq 'os2') {
 	print qq(    "$symbol"\n);
     }
-    elsif ($PLATFORM eq 'aix') {
+    elsif ($PLATFORM eq 'aix' || $PLATFORM eq 'MacOS') {
 	print "$symbol\n";
     }
 }
@@ -797,3 +922,41 @@ perl_destruct
 perl_free
 perl_parse
 perl_run
+PerlIO_define_layer
+PerlIOBuf_set_ptrcnt
+PerlIOBuf_get_cnt
+PerlIOBuf_get_ptr
+PerlIOBuf_bufsiz
+PerlIOBase_clearerr
+PerlIOBase_setlinebuf
+PerlIOBase_pushed
+PerlIOBase_read
+PerlIOBase_unread
+PerlIOBase_error
+PerlIOBase_eof
+PerlIOBuf_tell
+PerlIOBuf_seek
+PerlIOBuf_write
+PerlIOBuf_unread
+PerlIOBuf_read
+PerlIOBuf_open
+PerlIOBase_fileno
+PerlIOBuf_pushed
+PerlIOBuf_fill
+PerlIOBuf_flush
+PerlIOBase_close
+PerlIO_define_layer
+PerlIO_pending
+PerlIO_unread
+PerlIO_push
+PerlIO_allocate
+PerlIO_arg_fetch
+PerlIO_apply_layers
+perlsio_binmode
+PerlIO_binmode
+PerlIO_init
+PerlIO_tmpfile
+PerlIO_setpos
+PerlIO_getpos
+PerlIO_vsprintf
+PerlIO_sprintf

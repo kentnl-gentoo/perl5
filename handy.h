@@ -1,6 +1,6 @@
 /*    handy.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -48,10 +48,10 @@ Null SV pointer.
    just figure out all the headers such a test needs.
    Andy Dougherty	August 1996
 */
-/* bool is built-in for g++-2.6.3 and later, which might be used 
+/* bool is built-in for g++-2.6.3 and later, which might be used
    for extensions.  <_G_config.h> defines _G_HAVE_BOOL, but we can't
    be sure _G_config.h will be included before this file.  _G_config.h
-   also defines _G_HAVE_BOOL for both gcc and g++, but only g++ 
+   also defines _G_HAVE_BOOL for both gcc and g++, but only g++
    actually has bool.  Hence, _G_HAVE_BOOL is pretty useless for us.
    g++ can be identified by __GNUG__.
    Andy Dougherty	February 2000
@@ -101,8 +101,8 @@ Null SV pointer.
    Similarly, there is no guarantee that I16 and U16 have exactly 16
    bits.
 
-   For dealing with issues that may arise from various 32/64-bit 
-   systems, we will ask Configure to check out 
+   For dealing with issues that may arise from various 32/64-bit
+   systems, we will ask Configure to check out
 
    	SHORTSIZE == sizeof(short)
    	INTSIZE == sizeof(int)
@@ -114,6 +114,10 @@ Null SV pointer.
 
 */
 
+#ifdef I_INTTYPES /* e.g. Linux has int64_t without <inttypes.h> */
+#   include <inttypes.h>
+#endif
+
 typedef I8TYPE I8;
 typedef U8TYPE U8;
 typedef I16TYPE I16;
@@ -122,16 +126,27 @@ typedef I32TYPE I32;
 typedef U32TYPE U32;
 #ifdef PERL_CORE
 #   ifdef HAS_QUAD
-#       if QUADKIND == QUAD_IS_INT64_T
-#           include <sys/types.h>
-#           ifdef I_INTTYPES /* e.g. Linux has int64_t without <inttypes.h> */
-#               include <inttypes.h>
-#           endif
-#       endif
 typedef I64TYPE I64;
 typedef U64TYPE U64;
 #   endif
 #endif /* PERL_CORE */
+
+#if defined(HAS_QUAD) && defined(USE_64_BIT_INT)
+#   ifndef UINT64_C /* usually from <inttypes.h> */
+#       if defined(HAS_LONG_LONG) && QUADKIND == QUAD_IS_LONG_LONG
+#           define INT64_C(c)	CAT2(c,LL)
+#           define UINT64_C(c)	CAT2(c,ULL)
+#       else
+#           if LONGSIZE == 8 && QUADKIND == QUAD_IS_LONG
+#               define INT64_C(c)	CAT2(c,L)
+#               define UINT64_C(c)	CAT2(c,UL)
+#           else
+#               define INT64_C(c)	((I64TYPE)(c))
+#               define UINT64_C(c)	((U64TYPE)(c))
+#           endif
+#       endif
+#   endif
+#endif
 
 /* Mention I8SIZE, U8SIZE, I16SIZE, U16SIZE, I32SIZE, U32SIZE,
    I64SIZE, and U64SIZE here so that metaconfig pulls them in. */
@@ -408,21 +423,21 @@ Converts the specified character to lowercase.
 #define isPSXSPC_uni(c)		(isSPACE_uni(c) ||(c) == '\f')
 #define isBLANK_uni(c)		isBLANK(c) /* could be wrong */
 
-#define isALNUM_LC_uni(c)	(c < 256 ? isALNUM_LC(c) : is_uni_alnum_lc(c))
-#define isIDFIRST_LC_uni(c)	(c < 256 ? isIDFIRST_LC(c) : is_uni_idfirst_lc(c))
-#define isALPHA_LC_uni(c)	(c < 256 ? isALPHA_LC(c) : is_uni_alpha_lc(c))
-#define isSPACE_LC_uni(c)	(c < 256 ? isSPACE_LC(c) : is_uni_space_lc(c))
-#define isDIGIT_LC_uni(c)	(c < 256 ? isDIGIT_LC(c) : is_uni_digit_lc(c))
-#define isUPPER_LC_uni(c)	(c < 256 ? isUPPER_LC(c) : is_uni_upper_lc(c))
-#define isLOWER_LC_uni(c)	(c < 256 ? isLOWER_LC(c) : is_uni_lower_lc(c))
-#define isALNUMC_LC_uni(c)	(c < 256 ? isALNUMC_LC(c) : is_uni_alnumc_lc(c))
-#define isCNTRL_LC_uni(c)	(c < 256 ? isCNTRL_LC(c) : is_uni_cntrl_lc(c))
-#define isGRAPH_LC_uni(c)	(c < 256 ? isGRAPH_LC(c) : is_uni_graph_lc(c))
-#define isPRINT_LC_uni(c)	(c < 256 ? isPRINT_LC(c) : is_uni_print_lc(c))
-#define isPUNCT_LC_uni(c)	(c < 256 ? isPUNCT_LC(c) : is_uni_punct_lc(c))
-#define toUPPER_LC_uni(c)	(c < 256 ? toUPPER_LC(c) : to_uni_upper_lc(c))
-#define toTITLE_LC_uni(c)	(c < 256 ? toUPPER_LC(c) : to_uni_title_lc(c))
-#define toLOWER_LC_uni(c)	(c < 256 ? toLOWER_LC(c) : to_uni_lower_lc(c))
+#define isALNUM_LC_uvchr(c)	(c < 256 ? isALNUM_LC(c) : is_uni_alnum_lc(c))
+#define isIDFIRST_LC_uvchr(c)	(c < 256 ? isIDFIRST_LC(c) : is_uni_idfirst_lc(c))
+#define isALPHA_LC_uvchr(c)	(c < 256 ? isALPHA_LC(c) : is_uni_alpha_lc(c))
+#define isSPACE_LC_uvchr(c)	(c < 256 ? isSPACE_LC(c) : is_uni_space_lc(c))
+#define isDIGIT_LC_uvchr(c)	(c < 256 ? isDIGIT_LC(c) : is_uni_digit_lc(c))
+#define isUPPER_LC_uvchr(c)	(c < 256 ? isUPPER_LC(c) : is_uni_upper_lc(c))
+#define isLOWER_LC_uvchr(c)	(c < 256 ? isLOWER_LC(c) : is_uni_lower_lc(c))
+#define isALNUMC_LC_uvchr(c)	(c < 256 ? isALNUMC_LC(c) : is_uni_alnumc_lc(c))
+#define isCNTRL_LC_uvchr(c)	(c < 256 ? isCNTRL_LC(c) : is_uni_cntrl_lc(c))
+#define isGRAPH_LC_uvchr(c)	(c < 256 ? isGRAPH_LC(c) : is_uni_graph_lc(c))
+#define isPRINT_LC_uvchr(c)	(c < 256 ? isPRINT_LC(c) : is_uni_print_lc(c))
+#define isPUNCT_LC_uvchr(c)	(c < 256 ? isPUNCT_LC(c) : is_uni_punct_lc(c))
+#define toUPPER_LC_uvchr(c)	(c < 256 ? toUPPER_LC(c) : to_uni_upper_lc(c))
+#define toTITLE_LC_uvchr(c)	(c < 256 ? toUPPER_LC(c) : to_uni_title_lc(c))
+#define toLOWER_LC_uvchr(c)	(c < 256 ? toLOWER_LC(c) : to_uni_lower_lc(c))
 
 #define isPSXSPC_LC_uni(c)	(isSPACE_LC_uni(c) ||(c) == '\f')
 #define isBLANK_LC_uni(c)	isBLANK(c) /* could be wrong */
@@ -448,28 +463,27 @@ Converts the specified character to lowercase.
 #define isPSXSPC_utf8(c)	(isSPACE_utf8(c) ||(c) == '\f')
 #define isBLANK_utf8(c)		isBLANK(c) /* could be wrong */
 
-#define isALNUM_LC_utf8(p)	isALNUM_LC_uni(utf8_to_uv(p, 0))
-#define isIDFIRST_LC_utf8(p)	isIDFIRST_LC_uni(utf8_to_uv(p, 0))
-#define isALPHA_LC_utf8(p)	isALPHA_LC_uni(utf8_to_uv(p, 0))
-#define isSPACE_LC_utf8(p)	isSPACE_LC_uni(utf8_to_uv(p, 0))
-#define isDIGIT_LC_utf8(p)	isDIGIT_LC_uni(utf8_to_uv(p, 0))
-#define isUPPER_LC_utf8(p)	isUPPER_LC_uni(utf8_to_uv(p, 0))
-#define isLOWER_LC_utf8(p)	isLOWER_LC_uni(utf8_to_uv(p, 0))
-#define isALNUMC_LC_utf8(p)	isALNUMC_LC_uni(utf8_to_uv(p, 0))
-#define isCNTRL_LC_utf8(p)	isCNTRL_LC_uni(utf8_to_uv(p, 0))
-#define isGRAPH_LC_utf8(p)	isGRAPH_LC_uni(utf8_to_uv(p, 0))
-#define isPRINT_LC_utf8(p)	isPRINT_LC_uni(utf8_to_uv(p, 0))
-#define isPUNCT_LC_utf8(p)	isPUNCT_LC_uni(utf8_to_uv(p, 0))
-#define toUPPER_LC_utf8(p)	toUPPER_LC_uni(utf8_to_uv(p, 0))
-#define toTITLE_LC_utf8(p)	toTITLE_LC_uni(utf8_to_uv(p, 0))
-#define toLOWER_LC_utf8(p)	toLOWER_LC_uni(utf8_to_uv(p, 0))
+#define isALNUM_LC_utf8(p)	isALNUM_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isIDFIRST_LC_utf8(p)	isIDFIRST_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isALPHA_LC_utf8(p)	isALPHA_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isSPACE_LC_utf8(p)	isSPACE_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isDIGIT_LC_utf8(p)	isDIGIT_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isUPPER_LC_utf8(p)	isUPPER_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isLOWER_LC_utf8(p)	isLOWER_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isALNUMC_LC_utf8(p)	isALNUMC_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isCNTRL_LC_utf8(p)	isCNTRL_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isGRAPH_LC_utf8(p)	isGRAPH_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isPRINT_LC_utf8(p)	isPRINT_LC_uvchr(utf8_to_uvchr(p,  0))
+#define isPUNCT_LC_utf8(p)	isPUNCT_LC_uvchr(utf8_to_uvchr(p,  0))
+#define toUPPER_LC_utf8(p)	toUPPER_LC_uvchr(utf8_to_uvchr(p,  0))
+#define toTITLE_LC_utf8(p)	toTITLE_LC_uvchr(utf8_to_uvchr(p,  0))
+#define toLOWER_LC_utf8(p)	toLOWER_LC_uvchr(utf8_to_uvchr(p,  0))
 
 #define isPSXSPC_LC_utf8(c)	(isSPACE_LC_utf8(c) ||(c) == '\f')
 #define isBLANK_LC_utf8(c)	isBLANK(c) /* could be wrong */
 
 #ifdef EBCDIC
-EXT int ebcdic_control (int);
-#  define toCTRL(c)	ebcdic_control(c)
+#  define toCTRL(c)	Perl_ebcdic_control(c)
 #else
   /* This conversion works both ways, strangely enough. */
 #  define toCTRL(c)    (toUPPER(c) ^ 64)
@@ -484,7 +498,7 @@ typedef U16 line_t;
 #endif
 
 
-/* 
+/*
    XXX LEAKTEST doesn't really work in perl5.  There are direct calls to
    safemalloc() in the source, so LEAKTEST won't pick them up.
    (The main "offenders" are extensions.)
@@ -501,7 +515,7 @@ typedef U16 line_t;
 Creates a new SV.  A non-zero C<len> parameter indicates the number of
 bytes of preallocated string space the SV should have.  An extra byte for a
 tailing NUL is also reserved.  (SvPOK is not set for the SV even if string
-space is allocated.)  The reference count for the new SV is set to 1. 
+space is allocated.)  The reference count for the new SV is set to 1.
 C<id> is an integer id between 0 and 1299 (used to identify leaks).
 
 =for apidoc Am|void|New|int id|void* ptr|int nitems|type
@@ -606,3 +620,14 @@ extern long lastxycount[MAXXCOUNT][MAXYCOUNT];
 #else
 #define StructCopy(s,d,t) Copy(s,d,1,t)
 #endif
+
+#ifdef NEED_VA_COPY
+# ifdef va_copy
+#  define Perl_va_copy(s, d) va_copy(d, s)
+# elif defined(__va_copy)
+#  define Perl_va_copy(s, d) __va_copy(d, s)
+# else
+#  define Perl_va_copy(s, d) Copy(s, d, 1, va_list)
+# endif
+#endif
+

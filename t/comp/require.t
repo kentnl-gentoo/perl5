@@ -8,7 +8,11 @@ BEGIN {
 
 # don't make this lexical
 $i = 1;
-print "1..23\n";
+
+my $Is_EBCDIC = (ord('A') == 193) ? 1 : 0;
+my $total_tests = 23;
+if ($Is_EBCDIC) { $total_tests = 20; }
+print "1..$total_tests\n";
 
 sub do_require {
     %INC = ();
@@ -21,6 +25,7 @@ sub write_file {
     my $f = shift;
     open(REQ,">$f") or die "Can't write '$f': $!";
     binmode REQ;
+    use bytes;
     print REQ @_;
     close REQ;
 }
@@ -125,14 +130,17 @@ dofile();
 sub dofile { do "bleah.do"; };
 print $x;
 
-# UTF-encoded things
+# UTF-encoded things - skipped on EBCDIC machines
+
+if ($Is_EBCDIC) { exit; }
+
 my $utf8 = chr(0xFEFF);
 
 $i++; do_require(qq(${utf8}print "ok $i\n"; 1;\n));
 
 sub bytes_to_utf16 {
     my $utf16 = pack("$_[0]*", unpack("C*", $_[1]));
-    return @_ == 3 && $_[2] ? pack("$_[0]", 0xFEFF) . $utf16 : $utf16; 
+    return @_ == 3 && $_[2] ? pack("$_[0]", 0xFEFF) . $utf16 : $utf16;
 }
 
 $i++; do_require(bytes_to_utf16('n', qq(print "ok $i\\n"; 1;\n), 1)); # BE

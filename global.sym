@@ -21,6 +21,7 @@ Perl_get_context
 Perl_set_context
 Perl_amagic_call
 Perl_Gv_AMupdate
+Perl_gv_handler
 Perl_apply_attrs_string
 Perl_avhv_delete_ent
 Perl_avhv_exists_ent
@@ -67,6 +68,7 @@ Perl_sv_setpvf_nocontext
 Perl_sv_catpvf_mg_nocontext
 Perl_sv_setpvf_mg_nocontext
 Perl_fprintf_nocontext
+Perl_printf_nocontext
 Perl_cv_const_sv
 Perl_cv_undef
 Perl_cx_dump
@@ -90,6 +92,7 @@ Perl_do_close
 Perl_do_join
 Perl_do_open
 Perl_do_open9
+Perl_do_openn
 Perl_dowantarray
 Perl_dump_all
 Perl_dump_eval
@@ -230,6 +233,7 @@ Perl_my_memcmp
 Perl_my_memset
 Perl_my_pclose
 Perl_my_popen
+Perl_my_popen_list
 Perl_my_setenv
 Perl_my_stat
 Perl_my_swap
@@ -279,6 +283,7 @@ Perl_newSVuv
 Perl_newSVnv
 Perl_newSVpv
 Perl_newSVpvn
+Perl_newSVpvn_share
 Perl_newSVpvf
 Perl_vnewSVpvf
 Perl_newSVrv
@@ -314,6 +319,7 @@ Perl_pmflag
 Perl_pop_scope
 Perl_push_scope
 Perl_regdump
+Perl_regclass_swash
 Perl_pregexec
 Perl_pregfree
 Perl_pregcomp
@@ -352,11 +358,13 @@ Perl_save_item
 Perl_save_iv
 Perl_save_list
 Perl_save_long
+Perl_save_mortalizesv
 Perl_save_nogv
 Perl_save_scalar
 Perl_save_pptr
 Perl_save_vptr
 Perl_save_re_context
+Perl_save_padsv
 Perl_save_sptr
 Perl_save_svref
 Perl_save_threadsv
@@ -432,6 +440,7 @@ Perl_sv_setpviv
 Perl_sv_setuv
 Perl_sv_setnv
 Perl_sv_setref_iv
+Perl_sv_setref_uv
 Perl_sv_setref_nv
 Perl_sv_setref_pv
 Perl_sv_setref_pvn
@@ -442,6 +451,7 @@ Perl_sv_taint
 Perl_sv_tainted
 Perl_sv_unmagic
 Perl_sv_unref
+Perl_sv_unref_flags
 Perl_sv_untaint
 Perl_sv_upgrade
 Perl_sv_usepvn
@@ -460,12 +470,18 @@ Perl_unlock_condpair
 Perl_unsharepvn
 Perl_utf16_to_utf8
 Perl_utf16_to_utf8_reversed
+Perl_utf8_length
 Perl_utf8_distance
 Perl_utf8_hop
 Perl_utf8_to_bytes
+Perl_bytes_from_utf8
 Perl_bytes_to_utf8
-Perl_utf8_to_uv
-Perl_uv_to_utf8
+Perl_utf8_to_uvchr
+Perl_utf8_to_uvuni
+Perl_utf8n_to_uvchr
+Perl_utf8n_to_uvuni
+Perl_uvchr_to_utf8
+Perl_uvuni_to_utf8
 Perl_warn
 Perl_vwarn
 Perl_warner
@@ -525,6 +541,7 @@ Perl_sv_utf8_downgrade
 Perl_sv_utf8_encode
 Perl_sv_utf8_decode
 Perl_sv_force_normal
+Perl_sv_force_normal_flags
 Perl_tmps_grow
 Perl_sv_rvweaken
 Perl_newANONATTRSUB
@@ -546,5 +563,7 @@ Perl_ptr_table_new
 Perl_ptr_table_fetch
 Perl_ptr_table_store
 Perl_ptr_table_split
+Perl_ptr_table_clear
+Perl_ptr_table_free
 Perl_sys_intern_clear
 Perl_sys_intern_init

@@ -1,21 +1,39 @@
 #!./perl
 
-# Last change: Fri May 28 03:16:57 BST 1999
-
 # This is written in a peculiar style, since we're trying to avoid
 # most of the constructs we'll be testing for.
 
 $| = 1;
 
-if ($#ARGV >= 0 && $ARGV[0] eq '-v') {
-    $verbose = 1;
-    shift;
+# Cheesy version of Getopt::Std.  Maybe we should replace it with that.
+if ($#ARGV >= 0) {
+    foreach my $idx (0..$#ARGV) {
+	next unless $ARGV[$idx] =~ /^-(\w+)$/;
+	$verbose = 1 if $1 eq 'v';
+	$with_utf= 1 if $1 eq 'utf8';
+	splice(@ARGV, $idx, 1);
+    }
 }
 
 chdir 't' if -f 't/TEST';
 
 die "You need to run \"make test\" first to set things up.\n"
   unless -e 'perl' or -e 'perl.exe';
+
+if ($ENV{PERL_3LOG}) {
+    unless (-x 'perl.third') {
+	unless (-x '../perl.third') {
+	    die "You need to run \"make perl.third first.\n";
+	}
+	else {
+	    print "Symlinking ../perl.third as perl.third...\n";
+	    die "Failed to symlink: $!\n"
+		unless symlink("../perl.third", "perl.third");
+	    die "Symlinked but no executable perl.third: $!\n"
+		unless -x 'perl.third';
+	}
+    }
+}
 
 # check leakage for embedders
 $ENV{PERL_DESTRUCT_LEVEL} = 2 unless exists $ENV{PERL_DESTRUCT_LEVEL};
@@ -24,13 +42,13 @@ $ENV{EMXSHELL} = 'sh';        # For OS/2
 
 if ($#ARGV == -1) {
     @ARGV = split(/[ \n]/,
-      `echo base/*.t comp/*.t cmd/*.t io/*.t; echo op/*.t pragma/*.t lib/*.t`);
+      `echo base/*.t comp/*.t cmd/*.t run/*.t io/*.t; echo op/*.t pragma/*.t lib/*.t pod/*.t camel-III/*.t`);
 }
 
-%infinite = ( 'comp/require.t', 1, 'op/bop.t', 1, 'lib/hostname.t', 1 ); 
+# %infinite = ( 'comp/require.t', 1, 'op/bop.t', 1, 'lib/hostname.t', 1 );
 
 _testprogs('perl', @ARGV);
-_testprogs('compile', @ARGV) if (-e "../testcompile"); 
+_testprogs('compile', @ARGV) if (-e "../testcompile");
 
 sub _testprogs {
     $type = shift @_;
@@ -43,7 +61,7 @@ TESTING COMPILER
 --------------------------------------------------------------------------------
 EOT
 
-    $ENV{PERLCC_TIMEOUT} = 120 
+    $ENV{PERLCC_TIMEOUT} = 120
           if ($type eq 'compile' && !$ENV{PERLCC_TIMEOUT});
 
     $bad = 0;
@@ -62,7 +80,7 @@ EOT
     while ($test = shift @tests) {
 
 	if ( $infinite{$test} && $type eq 'compile' ) {
-	    print STDERR "$test creates infinite loop! Skipping.\n"; 
+	    print STDERR "$test creates infinite loop! Skipping.\n";
             next;
 	}
 	if ($test =~ /^$/) {
@@ -86,13 +104,21 @@ EOT
 	    $switch = '';
 	}
 
+	my $utf = $with_utf ? '-I../lib -Mutf8'
+	                    : '';
+	my $testswitch = '-I. -MTestInit'; # -T will strict . from @INC
 	if ($type eq 'perl') {
-	    open(RESULTS,"./perl$switch $test |") or print "can't run.\n";
+	    my $run = "./perl $testswitch $switch $utf $test |";
+	    open(RESULTS,$run) or print "can't run '$run': $!.\n";
 	}
 	else {
-	    open(RESULTS, "./perl -I../lib ../utils/perlcc ./$test "
-	    		 ."-run -verbose dcf -log ../compilelog |")
-		or print "can't compile.\n";
+	    my $compile =
+		"./perl $testswitch -I../lib ../utils/perlcc -o ".
+                "./$test.plc $utf ./$test ".
+		" && ./$test.plc |";
+	    open(RESULTS, $compile)
+		or print "can't compile '$compile': $!.\n";
+	    unlink "./$test.plc";
 	}
 
 	$ok = 0;
@@ -110,9 +136,23 @@ EOT
 		    $ok = 1;
 		}
 		else {
-		    $next = $1, $ok = 0, last if /^not ok ([0-9]*)/;
-		    if (/^ok (\d+)(\s*#.*)?$/ && $1 == $next) {
-			$next = $next + 1;
+		    if (/^(not )?ok (\d+)(\s*#.*)?/ &&
+			$2 == $next)
+		    {
+			my($not, $num, $extra) = ($1, $2, $3);
+			my($istodo) = $extra =~ /^\s*#\s*TODO/ if $extra;
+
+			if( $not && !$istodo ) {
+			    $ok = 0;
+			    $next = $num;
+			    last;
+			}
+			else {
+			    $next = $next + 1;
+			}
+                    }
+                    elsif (/^Bail out!\s*(.*)/i) { # magic words
+                        die "FAILED--Further testing stopped" . ($1 ? ": $1\n" : ".\n");
 		    }
 		    else {
 			$ok = 0;
@@ -121,6 +161,12 @@ EOT
 	    }
 	}
 	close RESULTS;
+	if ($ENV{PERL_3LOG}) {
+	    my $tpp = $test;
+	    $tpp =~ s:/:_:g;
+	    $tpp =~ s:\.t$::;
+	    rename("perl.3log", "perl.3log.$tpp");
+	}
 	$next = $next - 1;
 	if ($ok && $next == $max) {
 	    if ($max) {
@@ -164,8 +210,8 @@ EOT
    ### Since not all tests were successful, you may want to run some
    ### of them individually and examine any diagnostic messages they
    ### produce.  See the INSTALL document's section on "make test".
-   ### If you are testing the compiler, then ignore this message 
-   ### and run 
+   ### If you are testing the compiler, then ignore this message
+   ### and run
    ###      ./perl harness
    ### in the directory ./t.
 SHRDLU
@@ -173,7 +219,7 @@ SHRDLU
    ###
    ### Since most tests were successful, you have a good chance to
    ### get information with better granularity by running
-   ###     ./perl harness 
+   ###     ./perl harness
    ### in directory ./t.
 SHRDLU
     }

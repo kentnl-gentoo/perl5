@@ -244,17 +244,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_getpgid HAS_GETPGID		/**/
 
-/* HAS_GETPGRP:
- *	This symbol, if defined, indicates that the getpgrp routine is
- *	available to get the current process group.
- */
-/* USE_BSD_GETPGRP:
- *	This symbol, if defined, indicates that getpgrp needs one
- *	arguments whereas USG one needs none.
- */
-#$d_getpgrp HAS_GETPGRP		/**/
-#$d_bsdgetpgrp USE_BSD_GETPGRP	/**/
-
 /* HAS_GETPGRP2:
  *	This symbol, if defined, indicates that the getpgrp2() (as in DG/UX)
  *	routine is available to get the current process group.
@@ -509,18 +498,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_setpgid HAS_SETPGID	/**/
 
-/* HAS_SETPGRP:
- *	This symbol, if defined, indicates that the setpgrp routine is
- *	available to set the current process group.
- */
-/* USE_BSD_SETPGRP:
- *	This symbol, if defined, indicates that setpgrp needs two
- *	arguments whereas USG one needs none.  See also HAS_SETPGID
- *	for a POSIX interface.
- */
-#$d_setpgrp HAS_SETPGRP		/**/
-#$d_bsdsetpgrp USE_BSD_SETPGRP	/**/
-
 /* HAS_SETPGRP2:
  *	This symbol, if defined, indicates that the setpgrp2() (as in DG/UX)
  *	routine is available to set the current process group.
@@ -628,12 +605,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_strtol HAS_STRTOL	/**/
 
-/* HAS_STRTOUL:
- *	This symbol, if defined, indicates that the strtoul routine is
- *	available to provide conversion of strings to unsigned long.
- */
-#$d_strtoul HAS_STRTOUL	/**/
-
 /* HAS_STRXFRM:
  *	This symbol, if defined, indicates that the strxfrm() routine is
  *	available to transform strings.
@@ -693,6 +664,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to set and get the value of the file creation mask.
  */
 #$d_umask HAS_UMASK		/**/
+
+/* HAS_USLEEP:
+ *	This symbol, if defined, indicates that the usleep routine is
+ *	available to let the process sleep on a sub-second accuracy.
+ */
+#$d_usleep HAS_USLEEP		/**/
 
 /* HASVOLATILE:
  *	This symbol, if defined, indicates that this C compiler knows about
@@ -864,7 +841,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol, if defined, indicates that <sys/ioctl.h> exists and should
  *	be included. Otherwise, include <sgtty.h> or <termio.h>.
  */
+/* I_SYS_SOCKIO:
+ *	This symbol, if defined, indicates the <sys/sockio.h> should be included
+ *	to get socket ioctl options, like SIOCATMARK.
+ */
 #$i_sysioctl	I_SYS_IOCTL		/**/
+#$i_syssockio I_SYS_SOCKIO	/**/
 
 /* I_SYS_NDIR:
  *	This symbol, if defined, indicates to the C program that it should
@@ -1003,12 +985,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	D:/bin/sh.exe.
  */
 #define SH_PATH "$sh"  /**/
-
-/* STDCHAR:
- *	This symbol is defined to be the type of char used in stdio.h.
- *	It has the values "unsigned char" or "char".
- */
-#define STDCHAR $stdchar	/**/
 
 /* CROSSCOMPILE:
  *	This symbol, if defined, signifies that we our
@@ -1251,6 +1227,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define CPPRUN "$cpprun"
 #define CPPLAST "$cpplast"
 
+/* HAS__FWALK:
+ *	This symbol, if defined, indicates that the _fwalk system call is
+ *	available to apply a function to all the file handles.
+ */
+#$d__fwalk HAS__FWALK		/**/
+
 /* HAS_ACCESS:
  *	This manifest constant lets the C program know that the access()
  *	system call is available to check for accessibility using real UID/GID.
@@ -1284,6 +1266,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	does not return a value.
  */
 #$d_void_closedir VOID_CLOSEDIR		/**/
+
+/* HAS_STRUCT_CMSGHDR:
+ *	This symbol, if defined, indicates that the struct cmsghdr
+ *	is supported.
+ */
+#$d_cmsghdr_s HAS_STRUCT_CMSGHDR	/**/
 
 /* HAS_CSH:
  *	This symbol, if defined, indicates that the C-shell exists.
@@ -1348,6 +1336,13 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_endsent HAS_ENDSERVENT		/**/
 
+/* FCNTL_CAN_LOCK:
+ *	This symbol, if defined, indicates that fcntl() can be used
+ *	for file locking.  Normally on Unix systems this is defined.
+ *	It may be undefined on VMS.
+ */
+#$d_fcntl_can_lock FCNTL_CAN_LOCK		/**/
+
 /* HAS_FD_SET:
  *	This symbol, when defined, indicates presence of the fd_set typedef
  *	in <sys/types.h>
@@ -1389,6 +1384,13 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to stat filesystems by file descriptors.
  */
 #$d_fstatfs HAS_FSTATFS		/**/
+
+/* HAS_FSYNC:
+ *	This symbol, if defined, indicates that the fsync routine is
+ *	available to write a file's modified data and attributes to
+ *	permanent storage.
+ */
+#$d_fsync HAS_FSYNC		/**/
 
 /* HAS_FTELLO:
  *	This symbol, if defined, indicates that the ftello routine is
@@ -1492,6 +1494,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_gethostprotos	HAS_GETHOST_PROTOS	/**/
 
+/* HAS_GETITIMER:
+ *	This symbol, if defined, indicates that the getitimer routine is
+ *	available to return interval timers.
+ */
+#$d_getitimer HAS_GETITIMER		/**/
+
 /* HAS_GETMNT:
  *	This symbol, if defined, indicates that the getmnt routine is
  *	available to get filesystem mount info by filename.
@@ -1530,11 +1538,29 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_getnetprotos	HAS_GETNET_PROTOS	/**/
 
+/* HAS_GETPAGESIZE:
+ *	This symbol, if defined, indicates that the getpagesize system call
+ *	is available to get system page size, which is the granularity of
+ *	many memory management calls.
+ */
+#$d_getpagsz HAS_GETPAGESIZE		/**/
+
 /* HAS_GETPROTOENT:
  *	This symbol, if defined, indicates that the getprotoent() routine is
  *	available to look up protocols in some data base or another.
  */
 #$d_getpent HAS_GETPROTOENT		/**/
+
+/* HAS_GETPGRP:
+ *	This symbol, if defined, indicates that the getpgrp routine is
+ *	available to get the current process group.
+ */
+/* USE_BSD_GETPGRP:
+ *	This symbol, if defined, indicates that getpgrp needs one
+ *	arguments whereas USG one needs none.
+ */
+#$d_getpgrp HAS_GETPGRP		/**/
+#$d_bsdgetpgrp USE_BSD_GETPGRP	/**/
 
 /* HAS_GETPROTOBYNAME:
  *	This symbol, if defined, indicates that the getprotobyname()
@@ -1782,6 +1808,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_msg HAS_MSG		/**/
 
+/* HAS_STRUCT_MSGHDR:
+ *	This symbol, if defined, indicates that the struct msghdr
+ *	is supported.
+ */
+#$d_msghdr_s HAS_STRUCT_MSGHDR	/**/
+
 /* HAS_OFF64_T:
  *	This symbol will be defined if the C compiler supports off64_t.
  */
@@ -1822,6 +1854,19 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define SCHED_YIELD	$sched_yield	/**/
 #$d_sched_yield HAS_SCHED_YIELD	/**/
 
+/* HAS_READV:
+ *	This symbol, if defined, indicates that the readv routine is
+ *	available to do gather reads.  You will also need <sys/uio.h>
+ *	and there I_SYSUIO.
+ */
+#$d_readv HAS_READV		/**/
+
+/* HAS_RECVMSG:
+ *	This symbol, if defined, indicates that the recvmsg routine is
+ *	available to send structured socket messages.
+ */
+#$d_recvmsg HAS_RECVMSG		/**/
+
 /* HAS_SAFE_BCOPY:
  *	This symbol, if defined, indicates that the bcopy routine is available
  *	to copy potentially overlapping memory blocks. Otherwise you should
@@ -1845,11 +1890,26 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_sanemcmp HAS_SANE_MEMCMP	/**/
 
+/* HAS_SBRK_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the sbrk() function.  Otherwise, it is up
+ *	to the program to supply one.  Good guesses are
+ *		extern void* sbrk _((int));
+ *		extern void* sbrk _((size_t));
+ */
+#$d_sbrkproto	HAS_SBRK_PROTO	/**/
+
 /* HAS_SEM:
  *	This symbol, if defined, indicates that the entire sem*(2) library is
  *	supported.
  */
 #$d_sem HAS_SEM		/**/
+
+/* HAS_SENDMSG:
+ *	This symbol, if defined, indicates that the sendmsg routine is
+ *	available to send structured socket messages.
+ */
+#$d_sendmsg HAS_SENDMSG		/**/
 
 /* HAS_SETGRENT:
  *	This symbol, if defined, indicates that the setgrent routine is
@@ -1870,6 +1930,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_sethent HAS_SETHOSTENT		/**/
 
+/* HAS_SETITIMER:
+ *	This symbol, if defined, indicates that the setitimer routine is
+ *	available to set interval timers.
+ */
+#$d_setitimer HAS_SETITIMER		/**/
+
 /* HAS_SETNETENT:
  *	This symbol, if defined, indicates that the setnetent() routine is
  *	available.
@@ -1881,6 +1947,18 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available.
  */
 #$d_setpent HAS_SETPROTOENT		/**/
+
+/* HAS_SETPGRP:
+ *	This symbol, if defined, indicates that the setpgrp routine is
+ *	available to set the current process group.
+ */
+/* USE_BSD_SETPGRP:
+ *	This symbol, if defined, indicates that setpgrp needs two
+ *	arguments whereas USG one needs none.  See also HAS_SETPGID
+ *	for a POSIX interface.
+ */
+#$d_setpgrp HAS_SETPGRP		/**/
+#$d_bsdsetpgrp USE_BSD_SETPGRP	/**/
 
 /* HAS_SETPROCTITLE:
  *	This symbol, if defined, indicates that the setproctitle routine is
@@ -2071,12 +2149,23 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol is defined if the FILE_cnt macro can be used as an
  *	lvalue.
  */
+/* STDIO_PTR_LVAL_SETS_CNT:
+ *	This symbol is defined if using the FILE_ptr macro as an lvalue
+ *	to increase the pointer by n has the side effect of decreasing the
+ *	value of File_cnt(fp) by n.
+ */
+/* STDIO_PTR_LVAL_NOCHANGE_CNT:
+ *	This symbol is defined if using the FILE_ptr macro as an lvalue
+ *	to increase the pointer by n leaves File_cnt(fp) unchanged.
+ */
 #$d_stdstdio USE_STDIO_PTR 	/**/
 #ifdef USE_STDIO_PTR
 #define FILE_ptr(fp)	$stdio_ptr
 #$d_stdio_ptr_lval STDIO_PTR_LVALUE 		/**/
 #define FILE_cnt(fp)	$stdio_cnt
 #$d_stdio_cnt_lval STDIO_CNT_LVALUE 		/**/
+#$d_stdio_ptr_lval_sets_cnt STDIO_PTR_LVAL_SETS_CNT	/**/
+#$d_stdio_ptr_lval_nochange_cnt STDIO_PTR_LVAL_NOCHANGE_CNT	/**/
 #endif
 
 /* USE_STDIO_BASE:
@@ -2136,6 +2225,18 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_strtoll HAS_STRTOLL		/**/
 
+/* HAS_STRTOQ:
+ *	This symbol, if defined, indicates that the strtoq routine is
+ *	available to convert strings to long longs (quads).
+ */
+#$d_strtoq HAS_STRTOQ		/**/
+
+/* HAS_STRTOUL:
+ *	This symbol, if defined, indicates that the strtoul routine is
+ *	available to provide conversion of strings to unsigned long.
+ */
+#$d_strtoul HAS_STRTOUL	/**/
+
 /* HAS_STRTOULL:
  *	This symbol, if defined, indicates that the strtoull routine is
  *	available to convert strings to unsigned long longs.
@@ -2169,6 +2270,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  * use getrusage(). It may be necessary to include <sys/times.h>.
  */
 #$d_times HAS_TIMES		/**/
+
+/* HAS_UALARM:
+ *	This symbol, if defined, indicates that the ualarm routine is
+ *	available to do alarms with microsecond granularity.
+ */
+#$d_ualarm HAS_UALARM		/**/
 
 /* HAS_UNION_SEMUN:
  *	This symbol, if defined, indicates that the union semun is
@@ -2224,6 +2331,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_vprintf HAS_VPRINTF	/**/
 #$d_charvspr USE_CHAR_VSPRINTF 	/**/
+
+/* HAS_WRITEV:
+ *	This symbol, if defined, indicates that the writev routine is
+ *	available to do scatter writes.
+ */
+#$d_writev HAS_WRITEV		/**/
 
 /* USE_DYNAMIC_LOADING:
  *	This symbol, if defined, indicates that dynamic loading of
@@ -2626,6 +2739,17 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define RD_NODATA $rd_nodata
 #$d_eofnblk EOF_NONBLOCK
 
+/* NEED_VA_COPY:
+ *	This symbol, if defined, indicates that the system stores
+ *	the variable argument list datatype, va_list, in a format
+ *	that cannot be copied by simple assignment, so that some
+ *	other means must be used when copying is required.
+ *	As such systems vary in their provision (or non-provision)
+ *	of copying mechanisms, handy.h defines a platform-
+ *	independent macro, Perl_va_copy(src, dst), to do the job.
+ */
+#$need_va_copy	NEED_VA_COPY		/**/
+
 /* Netdb_host_t:
  *	This symbol holds the type used for the 1st argument
  *	to gethostbyaddr().
@@ -2776,6 +2900,10 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol defines the format string used for printing a Perl UV
  *	as an unsigned hexadecimal integer in lowercase abcdef.
  */
+/* UVXf:
+ *	This symbol defines the format string used for printing a Perl UV
+ *	as an unsigned hexadecimal integer in uppercase ABCDEF.
+ */
 /* NVef:
  *	This symbol defines the format string used for printing a Perl NV
  *	using %e-ish floating point format.
@@ -2792,6 +2920,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define	UVuf		$uvuformat		/**/
 #define	UVof		$uvoformat		/**/
 #define	UVxf		$uvxformat		/**/
+#define	UVXf		$uvXUformat		/**/
 #define	NVef		$nveformat		/**/
 #define	NVff		$nvfformat		/**/
 #define	NVgf		$nvgformat		/**/
@@ -2894,8 +3023,13 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	The last element is 0, corresponding to the 0 at the end of
  *	the sig_name list.
  */
+/* SIG_SIZE:
+ *	This variable contains the number of elements of the sig_name
+ *	and sig_num arrays, excluding the final NULL entry.
+ */
 #define SIG_NAME $sig_name_init		/**/
 #define SIG_NUM  $sig_num_init		/**/
+#define SIG_SIZE $sig_size			/**/
 
 /* SITEARCH:
  *	This symbol contains the name of the private library for this package.
@@ -2974,6 +3108,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	some shell.
  */
 #define STARTPERL "$startperl"		/**/
+
+/* STDCHAR:
+ *	This symbol is defined to be the type of char used in stdio.h.
+ *	It has the values "unsigned char" or "char".
+ */
+#define STDCHAR $stdchar	/**/
 
 /* HAS_STDIO_STREAM_ARRAY:
  *	This symbol, if defined, tells that there is an array
@@ -3192,6 +3332,25 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #define PERL_XS_APIVERSION "$xs_apiversion"
 #define PERL_PM_APIVERSION "$pm_apiversion"
+
+/* HAS_SIGPROCMASK:
+ *	This symbol, if defined, indicates that the sigprocmask
+ *	system call is available to examine or change the signal mask
+ *	of the calling process.
+ */
+#$d_sigprocmask HAS_SIGPROCMASK		/**/
+
+/* HAS_SOCKATMARK:
+ *	This symbol, if defined, indicates that the sockatmark routine is
+ *	available to test whether a socket is at the out-of-band mark.
+ */
+#$d_sockatmark HAS_SOCKATMARK		/**/
+
+/* U32_ALIGNMENT_REQUIRED:
+ *	This symbol, if defined, indicates that you must access
+ *	character data through U32-aligned pointers.
+ */
+#$d_u32align U32_ALIGNMENT_REQUIRED	/**/
 
 #endif
 !GROK!THIS!

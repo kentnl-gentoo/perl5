@@ -1,6 +1,6 @@
 /*    utf8.c
  *
- *    Copyright (c) 1998-2000, Larry Wall
+ *    Copyright (c) 1998-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -26,13 +26,42 @@
 
 /* Unicode support */
 
+/*
+=for apidoc A|U8*|uvuni_to_utf8|U8 *d|UV uv
+
+Adds the UTF8 representation of the Unicode codepoint C<uv> to the end
+of the string C<d>; C<d> should be have at least C<UTF8_MAXLEN+1> free
+bytes available. The return value is the pointer to the byte after the
+end of the new character. In other words,
+
+    d = uvuni_to_utf8(d, uv);
+
+is the recommended Unicode-aware way of saying
+
+    *(d++) = uv;
+
+=cut
+*/
+
 U8 *
-Perl_uv_to_utf8(pTHX_ U8 *d, UV uv)
+Perl_uvuni_to_utf8(pTHX_ U8 *d, UV uv)
 {
-    if (uv < 0x80) {
-	*d++ = uv;
+    if (UNI_IS_INVARIANT(uv)) {
+	*d++ = UTF_TO_NATIVE(uv);
 	return d;
     }
+#if defined(EBCDIC) || 1 /* always for testing */
+    else {
+	STRLEN len  = UNISKIP(uv);
+	U8 *p = d+len-1;
+	while (p > d) {
+	    *p-- = UTF_TO_NATIVE((uv & UTF_CONTINUATION_MASK) | UTF_CONTINUATION_MARK);
+	    uv >>= UTF_ACCUMULATION_SHIFT;
+	}
+	*p = UTF_TO_NATIVE((uv & UTF_START_MASK(len)) | UTF_START_MARK(len));
+	return d+len;
+    }
+#else /* Non loop style */
     if (uv < 0x800) {
 	*d++ = (( uv >>  6)         | 0xc0);
 	*d++ = (( uv        & 0x3f) | 0x80);
@@ -69,7 +98,7 @@ Perl_uv_to_utf8(pTHX_ U8 *d, UV uv)
 	return d;
     }
 #ifdef HAS_QUAD
-    if (uv < 0x1000000000LL)
+    if (uv < UTF8_QUAD_MAX)
 #endif
     {
 	*d++ =                        0xfe;	/* Can't match U+FEFF! */
@@ -99,138 +128,454 @@ Perl_uv_to_utf8(pTHX_ U8 *d, UV uv)
 	return d;
     }
 #endif
+#endif /* Loop style */
 }
 
-/* Tests if some arbitrary number of bytes begins in a valid UTF-8 character.
- * The actual number of bytes in the UTF-8 character will be returned if it
- * is valid, otherwise 0. */
-int
+
+
+/*
+=for apidoc A|STRLEN|is_utf8_char|U8 *s
+
+Tests if some arbitrary number of bytes begins in a valid UTF-8
+character.  Note that an INVARIANT (i.e. ASCII) character is a valid UTF-8 character.
+The actual number of bytes in the UTF-8 character will be returned if
+it is valid, otherwise 0.
+
+=cut */
+STRLEN
 Perl_is_utf8_char(pTHX_ U8 *s)
 {
     U8 u = *s;
-    int slen, len;
+    STRLEN slen, len;
+    UV uv, ouv;
 
-    if (!(u & 0x80))
+    if (UTF8_IS_INVARIANT(u))
 	return 1;
 
-    if (!(u & 0x40))
+    if (!UTF8_IS_START(u))
 	return 0;
 
-    if      (!(u & 0x20))	{ len = 2; }
-    else if (!(u & 0x10))	{ len = 3; }
-    else if (!(u & 0x08))	{ len = 4; }
-    else if (!(u & 0x04))	{ len = 5; }
-    else if (!(u & 0x02))	{ len = 6; }
-    else if (!(u & 0x01))	{ len = 7; }
-    else 			{ len = 13; } /* whoa! */
+    len = UTF8SKIP(s);
+
+    if (len < 2 || !UTF8_IS_CONTINUATION(s[1]))
+	return 0;
 
     slen = len - 1;
     s++;
+    /* The initial value is dubious */
+    uv  = u;
+    ouv = uv;
     while (slen--) {
-	if ((*s & 0xc0) != 0x80)
+	if (!UTF8_IS_CONTINUATION(*s))
 	    return 0;
+	uv = UTF8_ACCUMULATE(uv, *s);
+	if (uv < ouv)
+	    return 0;
+	ouv = uv;
 	s++;
     }
+
+    if (UNISKIP(uv) < len)
+	return 0;
+
     return len;
 }
 
 /*
-=for apidoc Am|bool_utf8_string|U8 *s|STRLEN len
+=for apidoc A|bool|is_utf8_string|U8 *s|STRLEN len
 
-Returns true if first C<len> bytes of the given string form valid a UTF8
-string, false otherwise.
+Returns true if first C<len> bytes of the given string form a valid UTF8
+string, false otherwise.  Note that 'a valid UTF8 string' does not mean
+'a string that contains UTF8' because a valid ASCII string is a valid
+UTF8 string.
 
 =cut
 */
 
-bool 
+bool
 Perl_is_utf8_string(pTHX_ U8 *s, STRLEN len)
 {
-    U8* x=s;
-    U8* send=s+len;
-    int c;
+    U8* x = s;
+    U8* send;
+    STRLEN c;
+
+    if (!len)
+	len = strlen((char *)s);
+    send = s + len;
+
     while (x < send) {
         c = is_utf8_char(x);
+	if (!c)
+	    return FALSE;
         x += c;
-        if (!c || x > send)
-            return 0;
     }
-    return 1;
+    if (x != send)
+	return FALSE;
+
+    return TRUE;
 }
 
+/*
+=for apidoc A|UV|utf8n_to_uvuni|U8 *s|STRLEN curlen|STRLEN *retlen|U32 flags
+
+Bottom level UTF-8 decode routine.
+Returns the unicode code point value of the first character in the string C<s>
+which is assumed to be in UTF8 encoding and no longer than C<curlen>;
+C<retlen> will be set to the length, in bytes, of that character.
+
+If C<s> does not point to a well-formed UTF8 character, the behaviour
+is dependent on the value of C<flags>: if it contains UTF8_CHECK_ONLY,
+it is assumed that the caller will raise a warning, and this function
+will silently just set C<retlen> to C<-1> and return zero.  If the
+C<flags> does not contain UTF8_CHECK_ONLY, warnings about
+malformations will be given, C<retlen> will be set to the expected
+length of the UTF-8 character in bytes, and zero will be returned.
+
+The C<flags> can also contain various flags to allow deviations from
+the strict UTF-8 encoding (see F<utf8.h>).
+
+Most code should use utf8_to_uvchr() rather than call this directly.
+
+=cut */
+
 UV
-Perl_utf8_to_uv(pTHX_ U8* s, I32* retlen)
+Perl_utf8n_to_uvuni(pTHX_ U8* s, STRLEN curlen, STRLEN* retlen, U32 flags)
 {
-    UV uv = *s;
-    int len;
-    if (!(uv & 0x80)) {
-	if (retlen)
-	    *retlen = 1;
-	return *s;
-    }
-    if (!(uv & 0x40)) {
-        dTHR;
-	if (ckWARN_d(WARN_UTF8))     
-	    Perl_warner(aTHX_ WARN_UTF8, "Malformed UTF-8 character");
-	if (retlen)
-	    *retlen = 1;
-	return *s;
+    UV uv = *s, ouv;
+    STRLEN len = 1;
+    bool dowarn = ckWARN_d(WARN_UTF8);
+    STRLEN expectlen = 0;
+    U32 warning = 0;
+
+/* This list is a superset of the UTF8_ALLOW_XXX. */
+
+#define UTF8_WARN_EMPTY				 1
+#define UTF8_WARN_CONTINUATION			 2
+#define UTF8_WARN_NON_CONTINUATION	 	 3
+#define UTF8_WARN_FE_FF				 4
+#define UTF8_WARN_SHORT				 5
+#define UTF8_WARN_OVERFLOW			 6
+#define UTF8_WARN_SURROGATE			 7
+#define UTF8_WARN_BOM				 8
+#define UTF8_WARN_LONG				 9
+#define UTF8_WARN_FFFF				10
+
+    if (curlen == 0 &&
+	!(flags & UTF8_ALLOW_EMPTY)) {
+	warning = UTF8_WARN_EMPTY;
+	goto malformed;
     }
 
-    if      (!(uv & 0x20))	{ len = 2; uv &= 0x1f; }
-    else if (!(uv & 0x10))	{ len = 3; uv &= 0x0f; }
-    else if (!(uv & 0x08))	{ len = 4; uv &= 0x07; }
-    else if (!(uv & 0x04))	{ len = 5; uv &= 0x03; }
-    else if (!(uv & 0x02))	{ len = 6; uv &= 0x01; }
-    else if (!(uv & 0x01))	{ len = 7;  uv = 0; }
-    else 			{ len = 13; uv = 0; } /* whoa! */
+    if (UTF8_IS_INVARIANT(uv)) {
+	if (retlen)
+	    *retlen = 1;
+	return (UV) (NATIVE_TO_UTF(*s));
+    }
+
+    if (UTF8_IS_CONTINUATION(uv) &&
+	!(flags & UTF8_ALLOW_CONTINUATION)) {
+	warning = UTF8_WARN_CONTINUATION;
+	goto malformed;
+    }
+
+    if (UTF8_IS_START(uv) && curlen > 1 && !UTF8_IS_CONTINUATION(s[1]) &&
+	!(flags & UTF8_ALLOW_NON_CONTINUATION)) {
+	warning = UTF8_WARN_NON_CONTINUATION;
+	goto malformed;
+    }
+
+#ifdef EBCDIC
+    uv = NATIVE_TO_UTF(uv);
+#else
+    if ((uv == 0xfe || uv == 0xff) &&
+	!(flags & UTF8_ALLOW_FE_FF)) {
+	warning = UTF8_WARN_FE_FF;
+	goto malformed;
+    }
+#endif
+
+    if      (!(uv & 0x20))	{ len =  2; uv &= 0x1f; }
+    else if (!(uv & 0x10))	{ len =  3; uv &= 0x0f; }
+    else if (!(uv & 0x08))	{ len =  4; uv &= 0x07; }
+    else if (!(uv & 0x04))	{ len =  5; uv &= 0x03; }
+#ifdef EBCDIC
+    else if (!(uv & 0x02))	{ len =  6; uv &= 0x01; }
+    else			{ len =  7; uv &= 0x01; }
+#else
+    else if (!(uv & 0x02))	{ len =  6; uv &= 0x01; }
+    else if (!(uv & 0x01))	{ len =  7; uv = 0; }
+    else			{ len = 13; uv = 0; } /* whoa! */
+#endif
 
     if (retlen)
 	*retlen = len;
-    --len;
+
+    expectlen = len;
+
+    if ((curlen < expectlen) &&
+	!(flags & UTF8_ALLOW_SHORT)) {
+	warning = UTF8_WARN_SHORT;
+	goto malformed;
+    }
+
+    len--;
     s++;
+    ouv = uv;
+
     while (len--) {
-	if ((*s & 0xc0) != 0x80) {
-            dTHR;
-	    if (ckWARN_d(WARN_UTF8))     
-	        Perl_warner(aTHX_ WARN_UTF8, "Malformed UTF-8 character");
-	    if (retlen)
-		*retlen -= len + 1;
-	    return 0xfffd;
+	if (!UTF8_IS_CONTINUATION(*s) &&
+	    !(flags & UTF8_ALLOW_NON_CONTINUATION)) {
+	    s--;
+	    warning = UTF8_WARN_NON_CONTINUATION;
+	    goto malformed;
 	}
 	else
-	    uv = (uv << 6) | (*s++ & 0x3f);
+	    uv = UTF8_ACCUMULATE(uv, *s);
+	if (!(uv > ouv)) {
+	    /* These cannot be allowed. */
+	    if (uv == ouv) {
+		if (!(flags & UTF8_ALLOW_LONG)) {
+		    warning = UTF8_WARN_LONG;
+		    goto malformed;
+		}
+	    }
+	    else { /* uv < ouv */
+		/* This cannot be allowed. */
+		warning = UTF8_WARN_OVERFLOW;
+		goto malformed;
+	    }
+	}
+	s++;
+	ouv = uv;
     }
+
+    if (UNICODE_IS_SURROGATE(uv) &&
+	!(flags & UTF8_ALLOW_SURROGATE)) {
+	warning = UTF8_WARN_SURROGATE;
+	goto malformed;
+    } else if (UNICODE_IS_BYTE_ORDER_MARK(uv) &&
+	       !(flags & UTF8_ALLOW_BOM)) {
+	warning = UTF8_WARN_BOM;
+	goto malformed;
+    } else if ((expectlen > UNISKIP(uv)) &&
+	       !(flags & UTF8_ALLOW_LONG)) {
+	warning = UTF8_WARN_LONG;
+	goto malformed;
+    } else if (UNICODE_IS_ILLEGAL(uv) &&
+	       !(flags & UTF8_ALLOW_FFFF)) {
+	warning = UTF8_WARN_FFFF;
+	goto malformed;
+    }
+
     return uv;
+
+malformed:
+
+    if (flags & UTF8_CHECK_ONLY) {
+	if (retlen)
+	    *retlen = -1;
+	return 0;
+    }
+
+    if (dowarn) {
+	SV* sv = sv_2mortal(newSVpv("Malformed UTF-8 character ", 0));
+
+	switch (warning) {
+	case 0: /* Intentionally empty. */ break;
+	case UTF8_WARN_EMPTY:
+	    Perl_sv_catpvf(aTHX_ sv, "(empty string)");
+	    break;
+	case UTF8_WARN_CONTINUATION:
+	    Perl_sv_catpvf(aTHX_ sv, "(unexpected continuation byte 0x%02"UVxf")", uv);
+	    break;
+	case UTF8_WARN_NON_CONTINUATION:
+	    Perl_sv_catpvf(aTHX_ sv, "(unexpected non-continuation byte 0x%02"UVxf" after start byte 0x%02"UVxf")",
+                           (UV)s[1], uv);
+	    break;
+	case UTF8_WARN_FE_FF:
+	    Perl_sv_catpvf(aTHX_ sv, "(byte 0x%02"UVxf")", uv);
+	    break;
+	case UTF8_WARN_SHORT:
+	    Perl_sv_catpvf(aTHX_ sv, "(%d byte%s, need %d)",
+                           curlen, curlen == 1 ? "" : "s", expectlen);
+	    break;
+	case UTF8_WARN_OVERFLOW:
+	    Perl_sv_catpvf(aTHX_ sv, "(overflow at 0x%"UVxf", byte 0x%02x)",
+                           ouv, *s);
+	    break;
+	case UTF8_WARN_SURROGATE:
+	    Perl_sv_catpvf(aTHX_ sv, "(UTF-16 surrogate 0x%04"UVxf")", uv);
+	    break;
+	case UTF8_WARN_BOM:
+	    Perl_sv_catpvf(aTHX_ sv, "(byte order mark 0x%04"UVxf")", uv);
+	    break;
+	case UTF8_WARN_LONG:
+	    Perl_sv_catpvf(aTHX_ sv, "(%d byte%s, need %d)",
+			   expectlen, expectlen == 1 ? "": "s", UNISKIP(uv));
+	    break;
+	case UTF8_WARN_FFFF:
+	    Perl_sv_catpvf(aTHX_ sv, "(character 0x%04"UVxf")", uv);
+	    break;
+	default:
+	    Perl_sv_catpvf(aTHX_ sv, "(unknown reason)");
+	    break;
+	}
+	
+	if (warning) {
+	    char *s = SvPVX(sv);
+
+	    if (PL_op)
+		Perl_warner(aTHX_ WARN_UTF8,
+			    "%s in %s", s,  PL_op_desc[PL_op->op_type]);
+	    else
+		Perl_warner(aTHX_ WARN_UTF8, "%s", s);
+	}
+    }
+
+    if (retlen)
+	*retlen = expectlen ? expectlen : len;
+
+    return 0;
 }
 
-/* utf8_distance(a,b) returns the number of UTF8 characters between
-   the pointers a and b							*/
+/*
+=for apidoc A|U8* s|utf8_to_uvchr|STRLEN *retlen
 
-I32
+Returns the native character value of the first character in the string C<s>
+which is assumed to be in UTF8 encoding; C<retlen> will be set to the
+length, in bytes, of that character.
+
+If C<s> does not point to a well-formed UTF8 character, zero is
+returned and retlen is set, if possible, to -1.
+
+=cut
+*/
+
+UV
+Perl_utf8_to_uvchr(pTHX_ U8* s, STRLEN* retlen)
+{
+    return Perl_utf8n_to_uvchr(aTHX_ s, UTF8_MAXLEN, retlen, 0);
+}
+
+/*
+=for apidoc A|U8* s|utf8_to_uvuni|STRLEN *retlen
+
+Returns the Unicode code point of the first character in the string C<s>
+which is assumed to be in UTF8 encoding; C<retlen> will be set to the
+length, in bytes, of that character.
+
+This function should only be used when returned UV is considered
+an index into the Unicode semantic tables (e.g. swashes).
+
+If C<s> does not point to a well-formed UTF8 character, zero is
+returned and retlen is set, if possible, to -1.
+
+=cut
+*/
+
+UV
+Perl_utf8_to_uvuni(pTHX_ U8* s, STRLEN* retlen)
+{
+    /* Call the low level routine asking for checks */
+    return Perl_utf8n_to_uvuni(aTHX_ s, UTF8_MAXLEN, retlen, 0);
+}
+
+/*
+=for apidoc A|STRLEN|utf8_length|U8* s|U8 *e
+
+Return the length of the UTF-8 char encoded string C<s> in characters.
+Stops at C<e> (inclusive).  If C<e E<lt> s> or if the scan would end
+up past C<e>, croaks.
+
+=cut
+*/
+
+STRLEN
+Perl_utf8_length(pTHX_ U8* s, U8* e)
+{
+    STRLEN len = 0;
+
+    /* Note: cannot use UTF8_IS_...() too eagerly here since e.g.
+     * the bitops (especially ~) can create illegal UTF-8.
+     * In other words: in Perl UTF-8 is not just for Unicode. */
+
+    if (e < s)
+	Perl_croak(aTHX_ "panic: utf8_length: unexpected end");
+    while (s < e) {
+	U8 t = UTF8SKIP(s);
+
+	if (e - s < t)
+	    Perl_croak(aTHX_ "panic: utf8_length: s=%p (%02X) e=%p l=%d - unaligned end",s,*s,e,t);
+	s += t;
+	len++;
+    }
+
+    return len;
+}
+
+/*
+=for apidoc A|IV|utf8_distance|U8 *a|U8 *b
+
+Returns the number of UTF8 characters between the UTF-8 pointers C<a>
+and C<b>.
+
+WARNING: use only if you *know* that the pointers point inside the
+same UTF-8 buffer.
+
+=cut */
+
+IV
 Perl_utf8_distance(pTHX_ U8 *a, U8 *b)
 {
-    I32 off = 0;
+    IV off = 0;
+
+    /* Note: cannot use UTF8_IS_...() too eagerly here since  e.g.
+     * the bitops (especially ~) can create illegal UTF-8.
+     * In other words: in Perl UTF-8 is not just for Unicode. */
+
     if (a < b) {
 	while (a < b) {
-	    a += UTF8SKIP(a);
+	    U8 c = UTF8SKIP(a);
+
+	    if (b - a < c)
+		Perl_croak(aTHX_ "panic: utf8_distance: unaligned end");
+	    a += c;
 	    off--;
 	}
     }
     else {
 	while (b < a) {
-	    b += UTF8SKIP(b);
+	    U8 c = UTF8SKIP(b);
+
+	    if (a - b < c)
+		Perl_croak(aTHX_ "panic: utf8_distance: unaligned end");
+	    b += c;
 	    off++;
 	}
     }
+
     return off;
 }
 
-/* WARNING: do not use the following unless you *know* off is within bounds */
+/*
+=for apidoc A|U8*|utf8_hop|U8 *s|I32 off
+
+Return the UTF-8 pointer C<s> displaced by C<off> characters, either
+forward or backward.
+
+WARNING: do not use the following unless you *know* C<off> is within
+the UTF-8 data pointed to by C<s> *and* that on entry C<s> is aligned
+on the first byte of character or just after the last byte of a character.
+
+=cut */
 
 U8 *
 Perl_utf8_hop(pTHX_ U8 *s, I32 off)
 {
+    /* Note: cannot use UTF8_IS_...() too eagerly here since e.g
+     * the bitops (especially ~) can create illegal UTF-8.
+     * In other words: in Perl UTF-8 is not just for Unicode. */
+
     if (off >= 0) {
 	while (off--)
 	    s += UTF8SKIP(s);
@@ -238,22 +583,20 @@ Perl_utf8_hop(pTHX_ U8 *s, I32 off)
     else {
 	while (off++) {
 	    s--;
-	    if (*s & 0x80) {
-		while ((*s & 0xc0) == 0x80)
-		    s--;
-	    }
+	    while (UTF8_IS_CONTINUATION(*s))
+		s--;
 	}
     }
     return s;
 }
 
 /*
-=for apidoc Am|U8 *|utf8_to_bytes|U8 *s|STRLEN *len
+=for apidoc A|U8 *|utf8_to_bytes|U8 *s|STRLEN *len
 
 Converts a string C<s> of length C<len> from UTF8 into byte encoding.
 Unlike C<bytes_to_utf8>, this over-writes the original string, and
 updates len to contain the new length.
-Returns zero on failure leaving the string and len unchanged
+Returns zero on failure, setting C<len> to -1.
 
 =cut
 */
@@ -261,30 +604,27 @@ Returns zero on failure leaving the string and len unchanged
 U8 *
 Perl_utf8_to_bytes(pTHX_ U8* s, STRLEN *len)
 {
-    dTHR;
     U8 *send;
     U8 *d;
-    U8 *save;
-
-    send = s + *len;
-    d = save = s;
+    U8 *save = s;
 
     /* ensure valid UTF8 and chars < 256 before updating string */
-    while (s < send) {
-	U8 c = *s++;
-        if (c >= 0x80 &&
-	    ( (s >= send) || ((*s++ & 0xc0) != 0x80) || ((c & 0xfe) != 0xc2)))
-	    return 0;    
-    }
-    s = save;
-    while (s < send) {
-        if (*s < 0x80)
-            *d++ = *s++;
-        else {
-            I32 ulen;
-            *d++ = (U8)utf8_to_uv(s, &ulen);
-            s += ulen;
+    for (send = s + *len; s < send; ) {
+        U8 c = *s++;
+
+        if (!UTF8_IS_INVARIANT(c) &&
+            (!UTF8_IS_DOWNGRADEABLE_START(c) || (s >= send)
+	     || !(c = *s++) || !UTF8_IS_CONTINUATION(c))) {
+            *len = -1;
+            return 0;
         }
+    }
+
+    d = s = save;
+    while (s < send) {
+        STRLEN ulen;
+        *d++ = (U8)utf8_to_uvchr(s, &ulen);
+        s += ulen;
     }
     *d = '\0';
     *len = d - save;
@@ -292,7 +632,60 @@ Perl_utf8_to_bytes(pTHX_ U8* s, STRLEN *len)
 }
 
 /*
-=for apidoc Am|U8 *|bytes_to_utf8|U8 *s|STRLEN *len
+=for apidoc A|U8 *|bytes_from_utf8|U8 *s|STRLEN *len|bool *is_utf8
+
+Converts a string C<s> of length C<len> from UTF8 into byte encoding.
+Unlike <utf8_to_bytes> but like C<bytes_to_utf8>, returns a pointer to
+the newly-created string, and updates C<len> to contain the new
+length.  Returns the original string if no conversion occurs, C<len>
+is unchanged. Do nothing if C<is_utf8> points to 0. Sets C<is_utf8> to
+0 if C<s> is converted or contains all 7bit characters.
+
+=cut */
+
+U8 *
+Perl_bytes_from_utf8(pTHX_ U8* s, STRLEN *len, bool *is_utf8)
+{
+    U8 *d;
+    U8 *start = s;
+    U8 *send;
+    I32 count = 0;
+
+    if (!*is_utf8)
+	return start;
+
+    /* ensure valid UTF8 and chars < 256 before converting string */
+    for (send = s + *len; s < send;) {
+	U8 c = *s++;
+	if (!UTF8_IS_INVARIANT(c)) {
+	    if (UTF8_IS_DOWNGRADEABLE_START(c) && s < send &&
+                (c = *s++) && UTF8_IS_CONTINUATION(c))
+		count++;
+	    else
+		return start;
+	}
+    }
+
+    *is_utf8 = 0;		
+
+    Newz(801, d, (*len) - count + 1, U8);
+    s = start; start = d;
+    while (s < send) {
+	U8 c = *s++;
+	if (!UTF8_IS_INVARIANT(c)) {
+	    /* Then it is two-byte encoded */
+	    c = UTF8_ACCUMULATE(NATIVE_TO_UTF(c), *s++);
+	    c = ASCII_TO_NATIVE(c);
+	}
+	*d++ = c;
+    }
+    *d = '\0';
+    *len = d - start;
+    return start;
+}
+
+/*
+=for apidoc A|U8 *|bytes_to_utf8|U8 *s|STRLEN *len
 
 Converts a string C<s> of length C<len> from ASCII into UTF8 encoding.
 Returns a pointer to the newly-created string, and sets C<len> to
@@ -304,7 +697,6 @@ reflect the new length.
 U8*
 Perl_bytes_to_utf8(pTHX_ U8* s, STRLEN *len)
 {
-    dTHR;
     U8 *send;
     U8 *d;
     U8 *dst;
@@ -314,12 +706,12 @@ Perl_bytes_to_utf8(pTHX_ U8* s, STRLEN *len)
     dst = d;
 
     while (s < send) {
-        if (*s < 0x80)
-            *d++ = *s++;
+        UV uv = NATIVE_TO_ASCII(*s++);
+        if (UNI_IS_INVARIANT(uv))
+            *d++ = UTF_TO_NATIVE(uv);
         else {
-            UV uv = *s++;
-            *d++ = (( uv >>  6)         | 0xc0);
-            *d++ = (( uv        & 0x3f) | 0x80);
+            *d++ = UTF8_EIGHT_BIT_HI(uv);
+            *d++ = UTF8_EIGHT_BIT_LO(uv);
         }
     }
     *d = '\0';
@@ -357,7 +749,6 @@ Perl_utf16_to_utf8(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
 	    continue;
 	}
 	if (uv >= 0xd800 && uv < 0xdbff) {	/* surrogates */
-            dTHR;
 	    UV low = *p++;
 	    if (low < 0xdc00 || low >= 0xdfff)
 		Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
@@ -402,136 +793,136 @@ Perl_utf16_to_utf8_reversed(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
 bool
 Perl_is_uni_alnum(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_alnum(tmpbuf);
 }
 
 bool
 Perl_is_uni_alnumc(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_alnumc(tmpbuf);
 }
 
 bool
 Perl_is_uni_idfirst(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_idfirst(tmpbuf);
 }
 
 bool
 Perl_is_uni_alpha(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_alpha(tmpbuf);
 }
 
 bool
 Perl_is_uni_ascii(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_ascii(tmpbuf);
 }
 
 bool
 Perl_is_uni_space(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_space(tmpbuf);
 }
 
 bool
 Perl_is_uni_digit(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_digit(tmpbuf);
 }
 
 bool
 Perl_is_uni_upper(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_upper(tmpbuf);
 }
 
 bool
 Perl_is_uni_lower(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_lower(tmpbuf);
 }
 
 bool
 Perl_is_uni_cntrl(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_cntrl(tmpbuf);
 }
 
 bool
 Perl_is_uni_graph(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_graph(tmpbuf);
 }
 
 bool
 Perl_is_uni_print(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_print(tmpbuf);
 }
 
 bool
 Perl_is_uni_punct(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_punct(tmpbuf);
 }
 
 bool
 Perl_is_uni_xdigit(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return is_utf8_xdigit(tmpbuf);
 }
 
 U32
 Perl_to_uni_upper(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return to_utf8_upper(tmpbuf);
 }
 
 U32
 Perl_to_uni_title(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return to_utf8_title(tmpbuf);
 }
 
 U32
 Perl_to_uni_lower(pTHX_ U32 c)
 {
-    U8 tmpbuf[UTF8_MAXLEN];
-    uv_to_utf8(tmpbuf, (UV)c);
+    U8 tmpbuf[UTF8_MAXLEN+1];
+    uvchr_to_utf8(tmpbuf, (UV)c);
     return to_utf8_lower(tmpbuf);
 }
 
@@ -645,7 +1036,10 @@ Perl_is_utf8_alnum(pTHX_ U8 *p)
     if (!is_utf8_char(p))
 	return FALSE;
     if (!PL_utf8_alnum)
-	PL_utf8_alnum = swash_init("utf8", "IsAlnum", &PL_sv_undef, 0, 0);
+	/* NOTE: "IsWord", not "IsAlnum", since Alnum is a true
+	 * descendant of isalnum(3), in other words, it doesn't
+	 * contain the '_'. --jhi */
+	PL_utf8_alnum = swash_init("utf8", "IsWord", &PL_sv_undef, 0, 0);
     return swash_fetch(PL_utf8_alnum, p);
 /*    return *p == '_' || is_utf8_alpha(p) || is_utf8_digit(p); */
 #ifdef SURPRISINGLY_SLOWER  /* probably because alpha is usually true */
@@ -705,7 +1099,7 @@ Perl_is_utf8_space(pTHX_ U8 *p)
     if (!is_utf8_char(p))
 	return FALSE;
     if (!PL_utf8_space)
-	PL_utf8_space = swash_init("utf8", "IsSpace", &PL_sv_undef, 0, 0);
+	PL_utf8_space = swash_init("utf8", "IsSpacePerl", &PL_sv_undef, 0, 0);
     return swash_fetch(PL_utf8_space, p);
 }
 
@@ -807,7 +1201,7 @@ Perl_to_utf8_upper(pTHX_ U8 *p)
     if (!PL_utf8_toupper)
 	PL_utf8_toupper = swash_init("utf8", "ToUpper", &PL_sv_undef, 4, 0);
     uv = swash_fetch(PL_utf8_toupper, p);
-    return uv ? uv : utf8_to_uv(p,0);
+    return uv ? UNI_TO_NATIVE(uv) : utf8_to_uvchr(p,0);
 }
 
 UV
@@ -818,7 +1212,7 @@ Perl_to_utf8_title(pTHX_ U8 *p)
     if (!PL_utf8_totitle)
 	PL_utf8_totitle = swash_init("utf8", "ToTitle", &PL_sv_undef, 4, 0);
     uv = swash_fetch(PL_utf8_totitle, p);
-    return uv ? uv : utf8_to_uv(p,0);
+    return uv ? UNI_TO_NATIVE(uv) : utf8_to_uvchr(p,0);
 }
 
 UV
@@ -829,7 +1223,7 @@ Perl_to_utf8_lower(pTHX_ U8 *p)
     if (!PL_utf8_tolower)
 	PL_utf8_tolower = swash_init("utf8", "ToLower", &PL_sv_undef, 4, 0);
     uv = swash_fetch(PL_utf8_tolower, p);
-    return uv ? uv : utf8_to_uv(p,0);
+    return uv ? UNI_TO_NATIVE(uv) : utf8_to_uvchr(p,0);
 }
 
 /* a "swash" is a swatch hash */
@@ -838,10 +1232,11 @@ SV*
 Perl_swash_init(pTHX_ char* pkg, char* name, SV *listsv, I32 minbits, I32 none)
 {
     SV* retval;
-    char tmpbuf[256];
-    dSP;    
+    SV* tokenbufsv = sv_2mortal(NEWSV(0,0));
+    dSP;
+    HV *stash = gv_stashpvn(pkg, strlen(pkg), FALSE);
 
-    if (!gv_stashpv(pkg, 0)) {	/* demand load utf8 */
+    if (!gv_fetchmeth(stash, "SWASHNEW", 8, -1)) {	/* demand load utf8 */
 	ENTER;
 	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT, newSVpv(pkg,0), Nullsv);
 	LEAVE;
@@ -860,16 +1255,20 @@ Perl_swash_init(pTHX_ char* pkg, char* name, SV *listsv, I32 minbits, I32 none)
     SAVEI32(PL_hints);
     PL_hints = 0;
     save_re_context();
-    if (PL_curcop == &PL_compiling)	/* XXX ought to be handled by lex_start */
-	strncpy(tmpbuf, PL_tokenbuf, sizeof tmpbuf);
+    if (PL_curcop == &PL_compiling)
+	/* XXX ought to be handled by lex_start */
+	sv_setpv(tokenbufsv, PL_tokenbuf);
     if (call_method("SWASHNEW", G_SCALAR))
-	retval = newSVsv(*PL_stack_sp--);    
+	retval = newSVsv(*PL_stack_sp--);
     else
 	retval = &PL_sv_undef;
     LEAVE;
     POPSTACK;
     if (PL_curcop == &PL_compiling) {
-	strncpy(PL_tokenbuf, tmpbuf, sizeof tmpbuf);
+	STRLEN len;
+	char* pv = SvPV(tokenbufsv, len);
+
+	Copy(pv, PL_tokenbuf, len+1, char);
 	PL_curcop->op_private = PL_hints;
     }
     if (!SvROK(retval) || SvTYPE(SvRV(retval)) != SVt_PVHV)
@@ -881,13 +1280,33 @@ UV
 Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr)
 {
     HV* hv = (HV*)SvRV(sv);
+    /* Given a UTF-X encoded char 0xAA..0xYY,0xZZ
+       then the "swatch" is a vec() for al the chars which start
+       with 0xAA..0xYY
+       So the key in the hash is length of encoded char -1
+     */
     U32 klen = UTF8SKIP(ptr) - 1;
-    U32 off = ptr[klen] & 127;  /* NB: 64 bit always 0 when len > 1 */
+    U32 off = ptr[klen];
     STRLEN slen;
-    STRLEN needents = (klen ? 64 : 128);
+    STRLEN needents;
     U8 *tmps;
     U32 bit;
     SV *retval;
+
+    if (klen == 0)
+     {
+      /* If char in invariant then swatch is for all the invariant chars
+       * In both UTF-8 and UTF8-MOD that happens to be UTF_CONTINUATION_MARK
+       */
+      needents = UTF_CONTINUATION_MARK;
+      off      = NATIVE_TO_UTF(ptr[klen]);
+     }
+    else
+     {
+      /* If char is encoded then swatch is for the prefix */
+      needents = (1 << UTF_ACCUMULATION_SHIFT);
+      off      = NATIVE_TO_UTF(ptr[klen]) & UTF_CONTINUATION_MASK;
+     }
 
     /*
      * This single-entry cache saves about 1/3 of the utf8 overhead in test
@@ -912,6 +1331,10 @@ Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr)
 	/* If not cached, generate it via utf8::SWASHGET */
 	if (!svp || !SvPOK(*svp) || !(tmps = (U8*)SvPV(*svp, slen))) {
 	    dSP;
+	    /* We use utf8n_to_uvuni() as we want an index into
+	       Unicode tables, not a native character number.
+	     */
+	    UV code_point = utf8n_to_uvuni(ptr, UTF8_MAXLEN, NULL, 0);
 	    ENTER;
 	    SAVETMPS;
 	    save_re_context();
@@ -919,11 +1342,12 @@ Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr)
 	    PUSHMARK(SP);
 	    EXTEND(SP,3);
 	    PUSHs((SV*)sv);
-	    PUSHs(sv_2mortal(newSViv(utf8_to_uv(ptr, 0) & ~(needents - 1))));
+	    /* On EBCDIC & ~(0xA0-1) isn't a useful thing to do */
+	    PUSHs(sv_2mortal(newSViv((klen) ? (code_point & ~(needents - 1)) : 0)));
 	    PUSHs(sv_2mortal(newSViv(needents)));
 	    PUTBACK;
 	    if (call_method("SWASHGET", G_SCALAR))
-		retval = newSVsv(*PL_stack_sp--);    
+		retval = newSVsv(*PL_stack_sp--);
 	    else
 		retval = &PL_sv_undef;
 	    POPSTACK;
@@ -934,7 +1358,7 @@ Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr)
 
 	    svp = hv_store(hv, (char*)ptr, klen, retval, 0);
 
-	    if (!svp || !(tmps = (U8*)SvPV(*svp, slen)) || slen < 8)
+	    if (!svp || !(tmps = (U8*)SvPV(*svp, slen)) || (slen << 3) < needents)
 		Perl_croak(aTHX_ "SWASHGET didn't return result of proper length");
 	}
 
@@ -946,7 +1370,7 @@ Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr)
 	    Copy(ptr, PL_last_swash_key, klen, U8);
     }
 
-    switch ((slen << 3) / needents) {
+    switch ((int)((slen << 3) / needents)) {
     case 1:
 	bit = 1 << (off & 7);
 	off >>= 3;
@@ -963,3 +1387,56 @@ Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr)
     Perl_croak(aTHX_ "panic: swash_fetch");
     return 0;
 }
+
+
+/*
+=for apidoc A|U8*|uvchr_to_utf8|U8 *d|UV uv
+
+Adds the UTF8 representation of the Native codepoint C<uv> to the end
+of the string C<d>; C<d> should be have at least C<UTF8_MAXLEN+1> free
+bytes available. The return value is the pointer to the byte after the
+end of the new character. In other words,
+
+    d = uvchr_to_utf8(d, uv);
+
+is the recommended wide native character-aware way of saying
+
+    *(d++) = uv;
+
+=cut
+*/
+
+/* On ASCII machines this is normally a macro but we want a
+   real function in case XS code wants it
+*/
+#undef Perl_uvchr_to_utf8
+U8 *
+Perl_uvchr_to_utf8(pTHX_ U8 *d, UV uv)
+{
+    return Perl_uvuni_to_utf8(aTHX_ d, NATIVE_TO_UNI(uv));
+}
+
+
+/*
+=for apidoc A|U8* s|utf8n_to_uvchr|STRLEN curlen, STRLEN *retlen, U32 flags
+
+Returns the native character value of the first character in the string C<s>
+which is assumed to be in UTF8 encoding; C<retlen> will be set to the
+length, in bytes, of that character.
+
+Allows length and flags to be passed to low level routine.
+
+=cut
+*/
+/* On ASCII machines this is normally a macro but we want a
+   real function in case XS code wants it
+*/
+#undef Perl_utf8n_to_uvchr
+UV
+Perl_utf8n_to_uvchr(pTHX_ U8* s, STRLEN curlen, STRLEN* retlen, U32 flags)
+{
+    UV uv = Perl_utf8n_to_uvuni(aTHX_ s, curlen, retlen, flags);
+    return UNI_TO_NATIVE(uv);
+}
+
+

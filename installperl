@@ -9,7 +9,7 @@ BEGIN {
 
 use strict;
 my ($Is_VMS, $Is_W32, $Is_OS2, $Is_Cygwin, $nonono, $dostrip,
-    $versiononly, $silent, $verbose, $otherperls);
+    $versiononly, $silent, $verbose, $otherperls, $archname);
 use vars qw /$depth/;
 
 BEGIN {
@@ -54,11 +54,15 @@ while (@ARGV) {
     $nonono = 1 if $ARGV[0] eq '-n';
     $dostrip = 1 if $ARGV[0] eq '-s';
     $versiononly = 1 if $ARGV[0] eq '-v';
+    $versiononly = 0 if $ARGV[0] eq '+v';
     $silent = 1 if $ARGV[0] eq '-S';
     $otherperls = 0 if $ARGV[0] eq '-o';
     $verbose = 1 if $ARGV[0] eq '-V' || $ARGV [0] eq '-n';
+    $archname = 1 if $ARGV[0] eq '-A';
     shift;
 }
+
+$versiononly = 1 if $Config{versiononly} && !defined $versiononly;
 
 my @scripts = qw(utils/c2ph utils/h2ph utils/h2xs utils/perlbug utils/perldoc
 		utils/pl2pm utils/splain utils/perlcc utils/dprofpp
@@ -78,6 +82,7 @@ my @pods = (<pod/*.pod>);
 # files under the archlib directory.
 my %archpms = (
     Config => 1, 
+    lib => 1, 
 );
 
 if ($^O eq 'dos') {
@@ -114,7 +119,7 @@ find(sub {
 # print "[$_]\n" for sort keys %archpms;
 
 my $ver = $Config{version};
-my $release = substr($],0,3);   # Not used presently.
+my $release = substr($],0,3);   # Not used currently.
 my $patchlevel = substr($],3,2);
 die "Patchlevel of perl ($patchlevel)",
     "and patchlevel of config.sh ($Config{'PERL_VERSION'}) don't match\n"
@@ -134,6 +139,15 @@ my $libperl = $Config{libperl};
 my $so = $Config{so};
 my $dlext = $Config{dlext};
 my $dlsrc = $Config{dlsrc};
+if ($^O eq 'os390') {
+    my $pwd;
+    chomp($pwd=`pwd`);
+    my $archlibexp = $Config{archlibexp};
+    my $usedl = $Config{usedl};
+    if ($usedl eq 'define') {
+        `./$^X -pibak -e 's{$pwd\/libperl.x}{$archlibexp/CORE/libperl.x}' lib/Config.pm`;
+    }
+}
 
 my $d_dosuid = $Config{d_dosuid};
 my $binexp = $Config{binexp};
@@ -159,9 +173,9 @@ if ($d_dosuid && $>) { die "You must run as root to install suidperl\n"; }
 -x 'perl' . $exe_ext	|| die "perl isn't executable!\n";
 -x 'suidperl' . $exe_ext|| die "suidperl isn't executable!\n" if $d_dosuid;
 
--f 't/ran_tests'	|| $Is_W32
-			|| warn "WARNING: You've never run 'make test'!!!",
-				"  (Installing anyway.)\n";
+-f 't/rantests'		|| $Is_W32
+                        || warn "WARNING: You've never run 'make test' or",
+                                " some tests failed! (Installing anyway.)\n";
 
 if ($Is_W32 or $Is_Cygwin) {
   my $perldll;
@@ -178,7 +192,7 @@ if ($Is_W32 or $Is_Cygwin) {
       };
     };
   } else {
-    $perldll = 'perl56.' . $dlext;
+    $perldll = 'perl57.' . $dlext;
   }
 
   if ($dlsrc ne "dl_none.xs") {
@@ -308,6 +322,21 @@ if (! $versiononly && ! samepath($installbin, '.') && ($^O ne 'dos') && ! $Is_VM
       if $d_dosuid;
 }
 
+# For development purposes it can be very useful to have multiple perls
+# build for different "architectures" (eg threading or not) simultaneously.
+if ($archname && ! samepath($installbin, '.') && ($^O ne 'dos') && ! $Is_VMS) {
+    my $archperl = "$perl_verbase$ver-$Config{archname}$exe_ext";
+    safe_unlink("$installbin/$archperl");
+    if ($^O eq 'mpeix') {
+	# MPE doesn't support hard links, so use a symlink.
+	# We don't want another cloned copy.
+        symlink($Config{perlpath}, "$installbin/$archperl");
+    } else {
+	link("$installbin/$perl_verbase$ver$exe_ext",
+		"$installbin/$archperl");
+    }
+}
+
 # Offer to install perl in a "standard" location
 
 my $mainperl_is_instperl = 0;
@@ -364,26 +393,25 @@ if (! $versiononly && (-f 'cppstdin') && (! samepath($installbin, '.'))) {
     chmod(0755, "$installbin/cppstdin");
 }
 
-# Install scripts.
-
-mkpath($installscript, $verbose, 0777);
-
 if (! $versiononly) {
+    # Install scripts.
+
+    mkpath($installscript, $verbose, 0777);
+
     for (@scripts) {
 	(my $base = $_) =~ s#.*/##;
 	copy($_, "$installscript/$base");
 	chmod(0755, "$installscript/$base");
     }
-}
 
-# pstruct should be a link to c2ph
-
-if (! $versiononly) {
+    # pstruct should be a link to c2ph
     safe_unlink("$installscript/pstruct$scr_ext");
     if ($^O eq 'dos' or $Is_VMS or $^O eq 'transit') {
-        copy("$installscript/c2ph$scr_ext", "$installscript/pstruct$scr_ext"); 
+	copy("$installscript/c2ph$scr_ext",
+	     "$installscript/pstruct$scr_ext"); 
     } else {
-        link("$installscript/c2ph$scr_ext", "$installscript/pstruct$scr_ext");
+	link("$installscript/c2ph$scr_ext",
+	     "$installscript/pstruct$scr_ext");
     }
 }
 
@@ -391,7 +419,7 @@ if (! $versiononly) {
 # ($installprivlib/pods for cygwin).
 
 my $pod = $Is_Cygwin ? 'pods' : 'pod';
-unless ( $versiononly && !($installprivlib =~ m/\Q$ver/)) {
+if ( !$versiononly || ($installprivlib =~ m/\Q$ver/)) {
     mkpath("${installprivlib}/$pod", $verbose, 0777);
 
     # If Perl 5.003's perldiag.pod is there, rename it.
@@ -602,8 +630,8 @@ sub installlib {
     }
     
     # ignore patch backups, RCS files, emacs backup & temp files and the
-    # .exists files.
-    return if $name =~ m{\.orig$|~$|^#.+#$|,v$|^\.exists};
+    # .exists files, and .PL files.
+    return if $name =~ m{\.orig$|~$|^#.+#$|,v$|^\.exists|\.PL$};
 
     $name = "$dir/$name" if $dir ne '';
 

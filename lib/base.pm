@@ -30,7 +30,7 @@ C<require>s them.  Whether to C<require> a base class package is
 determined by the absence of a global $VERSION in the base package.
 If $VERSION is not detected even after loading it, <base> will
 define $VERSION in the base package, setting it to the string
-C<-1, defined by base.pm>.
+C<-1, set by base.pm>.
 
 =head1 HISTORY
 
@@ -55,7 +55,8 @@ sub import {
     foreach my $base (@_) {
 	next if $pkg->isa($base);
 	push @{"$pkg\::ISA"}, $base;
-	unless (exists ${"$base\::"}{VERSION}) {
+        my $vglob;
+	unless ($vglob = ${"$base\::"}{VERSION} and $vglob{SCALAR}) {
 	    eval "require $base";
 	    # Only ignore "Can't locate" errors from our eval require.
 	    # Other fatal errors (syntax etc) must be reported.
@@ -67,7 +68,7 @@ sub import {
 			    "which defines that package first.)");
 	    }
 	    ${"$base\::VERSION"} = "-1, set by base.pm"
-		unless exists ${"$base\::"}{VERSION};
+		unless $vglob = ${"$base\::"}{VERSION} and $vglob{SCALAR};
 	}
 
 	# A simple test like (defined %{"$base\::FIELDS"}) will

@@ -581,7 +581,6 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     }
     else {
 	if (status < 0) {
-    	    dTHR;
 	    if (ckWARN(WARN_EXEC))
 		Perl_warner(aTHX_ WARN_EXEC, "Can't spawn \"%s\": %s", argv[0], strerror(errno));
 	    status = 255 * 256;
@@ -674,7 +673,6 @@ do_spawn2(char *cmd, int exectype)
     }
     else {
 	if (status < 0) {
-    	    dTHR;
 	    if (ckWARN(WARN_EXEC))
 		Perl_warner(aTHX_ WARN_EXEC, "Can't %s \"%s\": %s",
 		     (exectype == EXECF_EXEC ? "exec" : "spawn"),
@@ -975,6 +973,31 @@ chown(const char *path, uid_t owner, gid_t group)
 {
     /* XXX noop */
     return 0;
+}
+
+/*
+ * XXX this needs strengthening  (for PerlIO)
+ *   -- BKS, 11-11-200
+*/
+int mkstemp(const char *path)
+{
+    dTHX;
+    char buf[MAX_PATH+1];
+    int i = 0, fd = -1;
+
+retry:
+    if (i++ > 10) { /* give up */
+	errno = ENOENT;
+	return -1;
+    }
+    if (!GetTempFileNameA((LPCSTR)path, "plr", 1, buf)) {
+	errno = ENOENT;
+	return -1;
+    }
+    fd = PerlLIO_open3(buf, O_CREAT|O_RDWR|O_EXCL, 0600);
+    if (fd == -1)
+	goto retry;
+    return fd;
 }
 
 static long
@@ -1299,8 +1322,6 @@ win32_longpath(char *path)
     return path;
 }
 
-#ifndef USE_WIN32_RTL_ENV
-
 DllExport char *
 win32_getenv(const char *name)
 {
@@ -1401,8 +1422,6 @@ win32_putenv(const char *name)
     }
     return relval;
 }
-
-#endif
 
 static long
 filetime_to_clock(PFILETIME ft)
@@ -1633,7 +1652,7 @@ win32_uname(struct utsname *name)
 	char *arch;
 	GetSystemInfo(&info);
 
-#if defined(__BORLANDC__) || defined(__MINGW32__)
+#if (defined(__BORLANDC__)&&(__BORLANDC__<=0x520)) || defined(__MINGW32__)
 	switch (info.u.s.wProcessorArchitecture) {
 #else
 	switch (info.wProcessorArchitecture) {
@@ -1850,60 +1869,12 @@ win32_crypt(const char *txt, const char *salt)
 {
     dTHXo;
 #ifdef HAVE_DES_FCRYPT
-    dTHR;
     return des_fcrypt(txt, salt, w32_crypt_buffer);
 #else
     Perl_croak(aTHX_ "The crypt() function is unimplemented due to excessive paranoia.");
     return Nullch;
 #endif
 }
-
-/* C doesn't like repeat struct definitions */
-
-#if defined(USE_FIXED_OSFHANDLE) || defined(PERL_MSVCRT_READFIX)
-
-#ifndef _CRTIMP
-#define _CRTIMP __declspec(dllimport)
-#endif
-
-/*
- * Control structure for lowio file handles
- */
-typedef struct {
-    long osfhnd;    /* underlying OS file HANDLE */
-    char osfile;    /* attributes of file (e.g., open in text mode?) */
-    char pipech;    /* one char buffer for handles opened on pipes */
-    int lockinitflag;
-    CRITICAL_SECTION lock;
-} ioinfo;
-
-
-/*
- * Array of arrays of control structures for lowio files.
- */
-EXTERN_C _CRTIMP ioinfo* __pioinfo[];
-
-/*
- * Definition of IOINFO_L2E, the log base 2 of the number of elements in each
- * array of ioinfo structs.
- */
-#define IOINFO_L2E	    5
-
-/*
- * Definition of IOINFO_ARRAY_ELTS, the number of elements in ioinfo array
- */
-#define IOINFO_ARRAY_ELTS   (1 << IOINFO_L2E)
-
-/*
- * Access macros for getting at an ioinfo struct and its fields from a
- * file handle
- */
-#define _pioinfo(i) (__pioinfo[(i) >> IOINFO_L2E] + ((i) & (IOINFO_ARRAY_ELTS - 1)))
-#define _osfhnd(i)  (_pioinfo(i)->osfhnd)
-#define _osfile(i)  (_pioinfo(i)->osfile)
-#define _pipech(i)  (_pioinfo(i)->pipech)
-
-#endif
 
 #ifdef USE_FIXED_OSFHANDLE
 
@@ -1942,10 +1913,6 @@ EXTERN_C _CRTIMP ioinfo* __pioinfo[];
  * with perl95.exe
  *	-- BKS, 1-23-2000
 */
-
-/* since we are not doing a dup2(), this works fine */
-
-#define _set_osfhnd(fh, osfh) (void)(_osfhnd(fh) = osfh)
 
 /* create an ioinfo entry, kill its handle, and steal the entry */
 
@@ -2157,7 +2124,6 @@ win32_str_os_error(void *sv, DWORD dwErr)
     }
 }
 
-
 DllExport int
 win32_fprintf(FILE *fp, const char *format, ...)
 {
@@ -2363,7 +2329,25 @@ win32_abort(void)
 DllExport int
 win32_fstat(int fd,struct stat *sbufptr)
 {
-    return fstat(fd,sbufptr);
+#ifdef __BORLANDC__
+    /* A file designated by filehandle is not shown as accessible
+     * for write operations, probably because it is opened for reading.
+     * --Vadim Konovalov
+     */ 
+    int rc = fstat(fd,sbufptr);
+    BY_HANDLE_FILE_INFORMATION bhfi;
+    if (GetFileInformationByHandle((HANDLE)_get_osfhandle(fd), &bhfi)) {
+        sbufptr->st_mode &= 0xFE00;
+        if (bhfi.dwFileAttributes & FILE_ATTRIBUTE_READONLY)
+            sbufptr->st_mode |= (S_IREAD + (S_IREAD >> 3) + (S_IREAD >> 6));
+        else
+            sbufptr->st_mode |= ((S_IREAD|S_IWRITE) + ((S_IREAD|S_IWRITE) >> 3)
+              + ((S_IREAD|S_IWRITE) >> 6));
+    }
+    return rc;
+#else
+    return my_fstat(fd,sbufptr);
+#endif
 }
 
 DllExport int
@@ -2372,11 +2356,21 @@ win32_pipe(int *pfd, unsigned int size, int mode)
     return _pipe(pfd, size, mode);
 }
 
+DllExport PerlIO*
+win32_popenlist(const char *mode, IV narg, SV **args)
+{
+ dTHX;
+ Perl_croak(aTHX_ "List form of pipe open not implemented");
+ return NULL;
+}
+
 /*
  * a popen() clone that respects PERL5SHELL
+ *
+ * changed to return PerlIO* rather than FILE * by BKS, 11-11-2000
  */
 
-DllExport FILE*
+DllExport PerlIO*
 win32_popen(const char *command, const char *mode)
 {
 #ifdef USE_RTL_POPEN
@@ -2450,7 +2444,7 @@ win32_popen(const char *command, const char *mode)
     }
 
     /* we have an fd, return a file stream */
-    return (win32_fdopen(p[parent], (char *)mode));
+    return (PerlIO_fdopen(p[parent], (char *)mode));
 
 cleanup:
     /* we don't need to check for errors here */
@@ -2470,7 +2464,7 @@ cleanup:
  */
 
 DllExport int
-win32_pclose(FILE *pf)
+win32_pclose(PerlIO *pf)
 {
 #ifdef USE_RTL_POPEN
     return _pclose(pf);
@@ -2480,7 +2474,7 @@ win32_pclose(FILE *pf)
     SV *sv;
 
     LOCK_FDPID_MUTEX;
-    sv = *av_fetch(w32_fdpid, win32_fileno(pf), TRUE);
+    sv = *av_fetch(w32_fdpid, PerlIO_fileno(pf), TRUE);
 
     if (SvIOK(sv))
 	childpid = SvIVX(sv);
@@ -2492,7 +2486,11 @@ win32_pclose(FILE *pf)
         return -1;
     }
 
-    win32_fclose(pf);
+#ifdef USE_PERLIO
+    PerlIO_close(pf);
+#else
+    fclose(pf);
+#endif
     SvIVX(sv) = 0;
     UNLOCK_FDPID_MUTEX;
 
@@ -2754,10 +2752,13 @@ win32_open(const char *path, int flag, ...)
     return open(PerlDir_mapA(path), flag, pmode);
 }
 
+/* close() that understands socket */
+extern int my_close(int);	/* in win32sck.c */
+
 DllExport int
 win32_close(int fd)
 {
-    return close(fd);
+    return my_close(fd);
 }
 
 DllExport int
@@ -3564,6 +3565,25 @@ win32_dynaload(const char* filename)
 {
     dTHXo;
     HMODULE hModule;
+    char buf[MAX_PATH+1];
+    char *first;
+
+    /* LoadLibrary() doesn't recognize forward slashes correctly,
+     * so turn 'em back. */
+    first = strchr(filename, '/');
+    if (first) {
+	STRLEN len = strlen(filename);
+	if (len <= MAX_PATH) {
+	    strcpy(buf, filename);
+	    filename = &buf[first - filename];
+	    while (*filename) {
+		if (*filename == '/')
+		    *(char*)filename = '\\';
+		++filename;
+	    }
+	    filename = buf;
+	}
+    }
     if (USING_WIDE()) {
 	WCHAR wfilename[MAX_PATH+1];
 	A2WHELPER(filename, wfilename, sizeof(wfilename));
@@ -3852,6 +3872,8 @@ XS(w32_Spawn)
 {
     dXSARGS;
     char *cmd, *args;
+    void *env;
+    char *dir;
     PROCESS_INFORMATION stProcInfo;
     STARTUPINFO stStartInfo;
     BOOL bSuccess = FALSE;
@@ -3861,6 +3883,9 @@ XS(w32_Spawn)
 
     cmd = SvPV_nolen(ST(0));
     args = SvPV_nolen(ST(1));
+
+    env = PerlEnv_get_childenv();
+    dir = PerlEnv_get_childdir();
 
     memset(&stStartInfo, 0, sizeof(stStartInfo));   /* Clear the block */
     stStartInfo.cb = sizeof(stStartInfo);	    /* Set the structure size */
@@ -3874,8 +3899,8 @@ XS(w32_Spawn)
 		NULL,			/* Default thread security */
 		FALSE,			/* Must be TRUE to use std handles */
 		NORMAL_PRIORITY_CLASS,	/* No special scheduling */
-		NULL,			/* Inherit our environment block */
-		NULL,			/* Inherit our currrent directory */
+		env,			/* Inherit our environment block */
+		dir,			/* Inherit our currrent directory */
 		&stStartInfo,		/* -> Startup info */
 		&stProcInfo))		/* <- Process info (if OK) */
     {
@@ -3886,6 +3911,8 @@ XS(w32_Spawn)
 	CloseHandle(stProcInfo.hThread);/* library source code does this. */
 	bSuccess = TRUE;
     }
+    PerlEnv_free_childenv(env);
+    PerlEnv_free_childdir(dir);
     XSRETURN_IV(bSuccess);
 }
 
@@ -4143,7 +4170,7 @@ Perl_sys_intern_dup(pTHX_ struct interp_intern *src, struct interp_intern *dst)
     Newz(1313, dst->children, 1, child_tab);
     dst->pseudo_id		= 0;
     Newz(1313, dst->pseudo_children, 1, child_tab);
-    dst->thr_intern.Winit_socktype = src->thr_intern.Winit_socktype;
+    dst->thr_intern.Winit_socktype = 0;
 }
 #  endif /* USE_ITHREADS */
 #endif /* HAVE_INTERP_INTERN */

@@ -37,7 +37,7 @@ sub configure {
 	$sock->bind($addr) or
 	    return undef;
     }
-    if(exists $arg->{Listen}) {
+    if(exists $arg->{Listen} && $type != SOCK_DGRAM) {
 	$sock->listen($arg->{Listen} || 5) or
 	    return undef;
     }
@@ -103,7 +103,7 @@ be a C<Peer> specification.
 
 
  NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE NOTE
- 
+
 As of VERSION 1.18 all IO::Socket objects have autoflush turned on
 by default. This was not the case with earlier releases.
 

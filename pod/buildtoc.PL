@@ -133,6 +133,7 @@ if (-d "pod") {
     perldebguts         
     perlxstut           
     perlxs              
+    perlclib            
     perlguts            
     perlcall            
     perlutil            
@@ -140,38 +141,55 @@ if (-d "pod") {
     perldbmfilter       
     perlapi             
     perlintern          
+    perliol            
     perlapio            
     perltodo            
     perlhack            
 
     perlhist           
     perldelta           
+    perl571delta         
+    perl570delta         
     perl56delta         
     perl5005delta       
     perl5004delta       
 
+    perlaix
     perlamiga          
+    perlbs2000
     perlcygwin          
     perldos             
+    perlepoc             
     perlhpux            
     perlmachten         
+    perlmacos
+    perlmpeix         
     perlos2             
     perlos390           
-    perlposix-bc
+    perlsolaris
+    perlvmesa
     perlvms             
+    perlvos             
     perlwin32           
 	  );
 
 @ARCHPODS = qw(
+    perlaix	
     perlamiga          
+    perlbs2000
     perlcygwin          
     perldos             
+    perlepoc             
     perlhpux            
     perlmachten         
+    perlmacos
+    perlmpeix
     perlos2             
     perlos390           
-    perlposix-bc
+    perlsolaris
+    perlvmesa
     perlvms             
+    perlvos             
     perlwin32           
           );
 for (@ARCHPODS) { s/$/.pod/ }
@@ -326,7 +344,7 @@ podset( @modules[ sort { $modname[$a] cmp $modname[$b] } 0 .. $#modules ] );
 	Here should be listed all the extra programs' documentation, but they
 	don't all have manual pages yet:
 
-	=over
+	=over 4
 
 	=item a2p
 
@@ -379,13 +397,13 @@ sub podset {
 	}
 	if (s/^=head1 (.*)/=item $1/) {
 	    unhead2();
-	    output "=over\n\n" unless $inhead1;
+	    output "=over 4\n\n" unless $inhead1;
 	    $inhead1 = 1;
 	    output $_; nl(); next;
 	}
 	if (s/^=head2 (.*)/=item $1/) {
 	    unitem();
-	    output "=over\n\n" unless $inhead2;
+	    output "=over 4\n\n" unless $inhead2;
 	    $inhead2 = 1;
 	    output $_; nl(); next;
 	}
@@ -397,7 +415,7 @@ sub podset {
 	    s/\s+$//;
 	    next if /^[\d.]+$/;
 	    next if $pod eq 'perlmodlib' && /^ftp:/;
-	    ##print "=over\n\n" unless $initem;
+	    ##print "=over 4\n\n" unless $initem;
 	    output ", " if $initem;
 	    $initem = 1;
 	    s/\.$//;

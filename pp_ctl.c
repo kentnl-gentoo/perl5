@@ -1,6 +1,6 @@
 /*    pp_ctl.c
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -47,7 +47,7 @@ static I32 sv_cmp_locale_static(pTHXo_ SV *a, SV *b);
 
 PP(pp_wantarray)
 {
-    djSP;
+    dSP;
     I32 cxix;
     EXTEND(SP, 1);
 
@@ -80,7 +80,7 @@ PP(pp_regcreset)
 
 PP(pp_regcomp)
 {
-    djSP;
+    dSP;
     register PMOP *pm = (PMOP*)cLOGOP->op_other;
     register char *t;
     SV *tmpstr;
@@ -115,9 +115,16 @@ PP(pp_regcomp)
 
 	    pm->op_pmflags = pm->op_pmpermflags;	/* reset case sensitivity */
 	    if (DO_UTF8(tmpstr))
-		pm->op_pmdynflags |= PMdf_UTF8;
+		pm->op_pmdynflags |= PMdf_DYN_UTF8;
+	    else {
+		pm->op_pmdynflags &= ~PMdf_DYN_UTF8;
+		if (pm->op_pmdynflags & PMdf_UTF8)
+		    t = (char*)bytes_to_utf8((U8*)t, &len);
+	    }
 	    pm->op_pmregexp = CALLREGCOMP(aTHX_ t, t + len, pm);
-	    PL_reginterp_cnt = 0;		/* XXXX Be extra paranoid - needed
+	    if (!DO_UTF8(tmpstr) && (pm->op_pmdynflags & PMdf_UTF8))
+		Safefree(t);
+	    PL_reginterp_cnt = 0;	/* XXXX Be extra paranoid - needed
 					   inside tie/overload accessors.  */
 	}
     }
@@ -149,7 +156,7 @@ PP(pp_regcomp)
 
 PP(pp_substcont)
 {
-    djSP;
+    dSP;
     register PMOP *pm = (PMOP*) cLOGOP->op_other;
     register PERL_CONTEXT *cx = &cxstack[cxstack_ix];
     register SV *dstr = cx->sb_dstr;
@@ -176,8 +183,8 @@ PP(pp_substcont)
 				      : (REXEC_COPY_STR|REXEC_IGNOREPOS|REXEC_NOT_FIRST))))
 	{
 	    SV *targ = cx->sb_targ;
-	    sv_catpvn(dstr, s, cx->sb_strend - s);
 
+	    sv_catpvn(dstr, s, cx->sb_strend - s);
 	    cx->sb_rxtainted |= RX_MATCH_TAINTED(rx);
 
 	    (void)SvOOK_off(targ);
@@ -185,13 +192,15 @@ PP(pp_substcont)
 	    SvPVX(targ) = SvPVX(dstr);
 	    SvCUR_set(targ, SvCUR(dstr));
 	    SvLEN_set(targ, SvLEN(dstr));
+	    if (DO_UTF8(dstr))
+		SvUTF8_on(targ);
 	    SvPVX(dstr) = 0;
 	    sv_free(dstr);
 
 	    TAINT_IF(cx->sb_rxtainted & 1);
 	    PUSHs(sv_2mortal(newSViv((I32)cx->sb_iters - 1)));
 
-	    (void)SvPOK_only(targ);
+	    (void)SvPOK_only_UTF8(targ);
 	    TAINT_IF(cx->sb_rxtainted);
 	    SvSETMAGIC(targ);
 	    SvTAINT(targ);
@@ -209,8 +218,24 @@ PP(pp_substcont)
 	cx->sb_strend = s + (cx->sb_strend - m);
     }
     cx->sb_m = m = rx->startp[0] + orig;
-    sv_catpvn(dstr, s, m-s);
+    if (m > s)
+	sv_catpvn(dstr, s, m-s);
     cx->sb_s = rx->endp[0] + orig;
+    { /* Update the pos() information. */
+	SV *sv = cx->sb_targ;
+	MAGIC *mg;
+	I32 i;
+	if (SvTYPE(sv) < SVt_PVMG)
+	    (void)SvUPGRADE(sv, SVt_PVMG);
+	if (!(mg = mg_find(sv, 'g'))) {
+	    sv_magic(sv, Nullsv, 'g', Nullch, 0);
+	    mg = mg_find(sv, 'g');
+	}
+	i = m - orig;
+	if (DO_UTF8(sv))
+	    sv_pos_b2u(sv, &i);
+	mg->mg_len = i;
+    }
     cx->sb_rxtainted |= RX_MATCH_TAINTED(rx);
     rxres_save(&cx->sb_rxres, rx);
     RETURNOP(pm->op_pmreplstart);
@@ -279,7 +304,7 @@ Perl_rxres_free(pTHX_ void **rsp)
 
 PP(pp_formline)
 {
-    djSP; dMARK; dORIGMARK;
+    dSP; dMARK; dORIGMARK;
     register SV *tmpForm = *++MARK;
     register U16 *fpc;
     register char *t;
@@ -342,6 +367,7 @@ PP(pp_formline)
 	    case FF_MORE:	name = "MORE";		break;
 	    case FF_LINEMARK:	name = "LINEMARK";	break;
 	    case FF_END:	name = "END";		break;
+            case FF_0DECIMAL:	name = "0DECIMAL";	break;
 	    }
 	    if (arg >= 0)
 		PerlIO_printf(Perl_debug_log, "%-16s%ld\n", name, (long) arg);
@@ -524,8 +550,14 @@ PP(pp_formline)
 	    s = item;
 	    if (item_is_utf) {
 		while (arg--) {
-		    if (*s & 0x80) {
-			switch (UTF8SKIP(s)) {
+		    if (UTF8_IS_CONTINUED(*s)) {
+			STRLEN skip = UTF8SKIP(s);
+			switch (skip) {
+			default:
+			    Move(s,t,skip,char);
+			    s += skip;
+			    t += skip;
+			    break;
 			case 7: *t++ = *s++;
 			case 6: *t++ = *s++;
 			case 5: *t++ = *s++;
@@ -620,6 +652,43 @@ PP(pp_formline)
 	    t += fieldsize;
 	    break;
 
+	case FF_0DECIMAL:
+	    /* If the field is marked with ^ and the value is undefined,
+	       blank it out. */
+	    arg = *fpc++;
+	    if ((arg & 512) && !SvOK(sv)) {
+		arg = fieldsize;
+		while (arg--)
+		    *t++ = ' ';
+		break;
+	    }
+	    gotsome = TRUE;
+	    value = SvNV(sv);
+	    /* Formats aren't yet marked for locales, so assume "yes". */
+	    {
+		STORE_NUMERIC_STANDARD_SET_LOCAL();
+#if defined(USE_LONG_DOUBLE)
+		if (arg & 256) {
+		    sprintf(t, "%#0*.*" PERL_PRIfldbl,
+			    (int) fieldsize, (int) arg & 255, value);
+/* is this legal? I don't have long doubles */
+		} else {
+		    sprintf(t, "%0*.0" PERL_PRIfldbl, (int) fieldsize, value);
+		}
+#else
+		if (arg & 256) {
+		    sprintf(t, "%#0*.*f",
+			    (int) fieldsize, (int) arg & 255, value);
+		} else {
+		    sprintf(t, "%0*.0f",
+			    (int) fieldsize, value);
+		}
+#endif
+		RESTORE_NUMERIC_STANDARD();
+	    }
+	    t += fieldsize;
+	    break;
+	
 	case FF_NEWLINE:
 	    f++;
 	    while (t-- > linemark && *t == ' ') ;
@@ -687,7 +756,7 @@ PP(pp_formline)
 
 PP(pp_grepstart)
 {
-    djSP;
+    dSP;
     SV *src;
 
     if (PL_stack_base + *PL_markstack_ptr == SP) {
@@ -724,12 +793,12 @@ PP(pp_mapstart)
 
 PP(pp_mapwhile)
 {
-    djSP;
+    dSP;
     I32 items = (SP - PL_stack_base) - *PL_markstack_ptr; /* how many new items */
     I32 count;
     I32 shift;
     SV** src;
-    SV** dst; 
+    SV** dst;
 
     /* first, move source pointer to the next item in the source list */
     ++PL_markstack_ptr[-1];
@@ -761,7 +830,7 @@ PP(pp_mapwhile)
 	     * irrelevant.  --jhi */
             if (shift < count)
                 shift = count; /* Avoid shifting too often --Ben Tilly */
-	    
+	
 	    EXTEND(SP,shift);
 	    src = SP;
 	    dst = (SP += shift);
@@ -771,9 +840,9 @@ PP(pp_mapwhile)
 		*dst-- = *src--;
 	}
 	/* copy the new items down to the destination list */
-	dst = PL_stack_base + (PL_markstack_ptr[-2] += items) - 1; 
+	dst = PL_stack_base + (PL_markstack_ptr[-2] += items) - 1;
 	while (items--)
-	    *dst-- = SvTEMP(TOPs) ? POPs : sv_mortalcopy(POPs); 
+	    *dst-- = SvTEMP(TOPs) ? POPs : sv_mortalcopy(POPs);
     }
     LEAVE;					/* exit inner scope */
 
@@ -812,7 +881,7 @@ PP(pp_mapwhile)
 
 PP(pp_sort)
 {
-    djSP; dMARK; dORIGMARK;
+    dSP; dMARK; dORIGMARK;
     register SV **up;
     SV **myorigmark = ORIGMARK;
     register I32 max;
@@ -997,7 +1066,7 @@ PP(pp_range)
 
 PP(pp_flip)
 {
-    djSP;
+    dSP;
 
     if (GIMME == G_ARRAY) {
 	RETURNOP(((LOGOP*)cUNOP->op_first)->op_other);
@@ -1005,10 +1074,17 @@ PP(pp_flip)
     else {
 	dTOPss;
 	SV *targ = PAD_SV(PL_op->op_targ);
+ 	int flip;
 
-	if ((PL_op->op_private & OPpFLIP_LINENUM)
-	  ? (PL_last_in_gv && SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv)))
-	  : SvTRUE(sv) ) {
+ 	if (PL_op->op_private & OPpFLIP_LINENUM) {
+ 	    struct io *gp_io;
+ 	    flip = PL_last_in_gv
+ 		&& (gp_io = GvIOp(PL_last_in_gv))
+ 		&& SvIV(sv) == (IV)IoLINES(gp_io);
+ 	} else {
+ 	    flip = SvTRUE(sv);
+ 	}
+ 	if (flip) {
 	    sv_setiv(PAD_SV(cUNOP->op_first->op_targ), 1);
 	    if (PL_op->op_flags & OPf_SPECIAL) {
 		sv_setiv(targ, 1);
@@ -1029,7 +1105,7 @@ PP(pp_flip)
 
 PP(pp_flop)
 {
-    djSP;
+    dSP;
 
     if (GIMME == G_ARRAY) {
 	dPOPPOPssrl;
@@ -1100,7 +1176,6 @@ PP(pp_flop)
 STATIC I32
 S_dopoptolabel(pTHX_ char *label)
 {
-    dTHR;
     register I32 i;
     register PERL_CONTEXT *cx;
 
@@ -1109,27 +1184,27 @@ S_dopoptolabel(pTHX_ char *label)
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting substitution via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting substitution via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_SUB:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting subroutine via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting subroutine via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_FORMAT:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting format via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting format via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_EVAL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting eval via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting eval via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_NULL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting pseudo-block via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting pseudo-block via %s",
 			PL_op_name[PL_op->op_type]);
 	    return -1;
 	case CXt_LOOP:
@@ -1156,7 +1231,6 @@ Perl_dowantarray(pTHX)
 I32
 Perl_block_gimme(pTHX)
 {
-    dTHR;
     I32 cxix;
 
     cxix = dopoptosub(cxstack_ix);
@@ -1177,17 +1251,29 @@ Perl_block_gimme(pTHX)
     }
 }
 
+I32
+Perl_is_lvalue_sub(pTHX)
+{
+    I32 cxix;
+
+    cxix = dopoptosub(cxstack_ix);
+    assert(cxix >= 0);  /* We should only be called from inside subs */
+
+    if (cxstack[cxix].blk_sub.lval && CvLVALUE(cxstack[cxix].blk_sub.cv))
+	return cxstack[cxix].blk_sub.lval;
+    else
+	return 0;
+}
+
 STATIC I32
 S_dopoptosub(pTHX_ I32 startingblock)
 {
-    dTHR;
     return dopoptosub_at(cxstack, startingblock);
 }
 
 STATIC I32
 S_dopoptosub_at(pTHX_ PERL_CONTEXT *cxstk, I32 startingblock)
 {
-    dTHR;
     I32 i;
     register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
@@ -1208,7 +1294,6 @@ S_dopoptosub_at(pTHX_ PERL_CONTEXT *cxstk, I32 startingblock)
 STATIC I32
 S_dopoptoeval(pTHX_ I32 startingblock)
 {
-    dTHR;
     I32 i;
     register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
@@ -1227,7 +1312,6 @@ S_dopoptoeval(pTHX_ I32 startingblock)
 STATIC I32
 S_dopoptoloop(pTHX_ I32 startingblock)
 {
-    dTHR;
     I32 i;
     register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
@@ -1235,27 +1319,27 @@ S_dopoptoloop(pTHX_ I32 startingblock)
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting substitution via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting substitution via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_SUB:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting subroutine via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting subroutine via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_FORMAT:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting format via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting format via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_EVAL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting eval via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting eval via %s",
 			PL_op_name[PL_op->op_type]);
 	    break;
 	case CXt_NULL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting pseudo-block via %s", 
+		Perl_warner(aTHX_ WARN_EXITING, "Exiting pseudo-block via %s",
 			PL_op_name[PL_op->op_type]);
 	    return -1;
 	case CXt_LOOP:
@@ -1269,7 +1353,6 @@ S_dopoptoloop(pTHX_ I32 startingblock)
 void
 Perl_dounwind(pTHX_ I32 cxix)
 {
-    dTHR;
     register PERL_CONTEXT *cx;
     I32 optype;
 
@@ -1300,42 +1383,6 @@ Perl_dounwind(pTHX_ I32 cxix)
 	    break;
 	}
 	cxstack_ix--;
-    }
-}
-
-/*
- * Closures mentioned at top level of eval cannot be referenced
- * again, and their presence indirectly causes a memory leak.
- * (Note that the fact that compcv and friends are still set here
- * is, AFAIK, an accident.)  --Chip
- *
- * XXX need to get comppad et al from eval's cv rather than
- * relying on the incidental global values.
- */
-STATIC void
-S_free_closures(pTHX)
-{
-    dTHR;
-    SV **svp = AvARRAY(PL_comppad_name);
-    I32 ix;
-    for (ix = AvFILLp(PL_comppad_name); ix >= 0; ix--) {
-	SV *sv = svp[ix];
-	if (sv && sv != &PL_sv_undef && *SvPVX(sv) == '&') {
-	    SvREFCNT_dec(sv);
-	    svp[ix] = &PL_sv_undef;
-
-	    sv = PL_curpad[ix];
-	    if (CvCLONE(sv)) {
-		SvREFCNT_dec(CvOUTSIDE(sv));
-		CvOUTSIDE(sv) = Nullcv;
-	    }
-	    else {
-		SvREFCNT_dec(sv);
-		sv = NEWSV(0,0);
-		SvPADTMP_on(sv);
-		PL_curpad[ix] = sv;
-	    }
-	}
     }
 }
 
@@ -1384,8 +1431,13 @@ Perl_die_where(pTHX_ char *message, STRLEN msglen)
 		    }
 		}
 	    }
-	    else
+	    else {
 		sv_setpvn(ERRSV, message, msglen);
+		if (PL_hints & HINT_UTF8)
+		    SvUTF8_on(ERRSV);
+		else
+		    SvUTF8_off(ERRSV);
+	    }
 	}
 	else
 	    message = SvPVx(ERRSV, msglen);
@@ -1417,6 +1469,12 @@ Perl_die_where(pTHX_ char *message, STRLEN msglen)
 
 	    LEAVE;
 
+	    /* LEAVE could clobber PL_curcop (see save_re_context())
+	     * XXX it might be better to find a way to avoid messing with
+	     * PL_curcop in save_re_context() instead, but this is a more
+	     * minimal fix --GSAR */
+	    PL_curcop = cx->blk_oldcop;
+
 	    if (optype == OP_REQUIRE) {
 		char* msg = SvPVx(ERRSV, n_a);
 		DIE(aTHX_ "%sCompilation failed in require",
@@ -1447,7 +1505,7 @@ Perl_die_where(pTHX_ char *message, STRLEN msglen)
 
 PP(pp_xor)
 {
-    djSP; dPOPTOPssrl;
+    dSP; dPOPTOPssrl;
     if (SvTRUE(left) != SvTRUE(right))
 	RETSETYES;
     else
@@ -1456,7 +1514,7 @@ PP(pp_xor)
 
 PP(pp_andassign)
 {
-    djSP;
+    dSP;
     if (!SvTRUE(TOPs))
 	RETURN;
     else
@@ -1465,7 +1523,7 @@ PP(pp_andassign)
 
 PP(pp_orassign)
 {
-    djSP;
+    dSP;
     if (SvTRUE(TOPs))
 	RETURN;
     else
@@ -1474,7 +1532,7 @@ PP(pp_orassign)
 	
 PP(pp_caller)
 {
-    djSP;
+    dSP;
     register I32 cxix = dopoptosub(cxstack_ix);
     register PERL_CONTEXT *cx;
     register PERL_CONTEXT *ccstack = cxstack;
@@ -1602,10 +1660,10 @@ PP(pp_caller)
 	SV * mask ;
 	SV * old_warnings = cx->blk_oldcop->cop_warnings ;
 
-	if  (old_warnings == pWARN_NONE || 
+	if  (old_warnings == pWARN_NONE ||
 		(old_warnings == pWARN_STD && (PL_dowarn & G_WARN_ON) == 0))
             mask = newSVpvn(WARN_NONEstring, WARNsize) ;
-        else if (old_warnings == pWARN_ALL || 
+        else if (old_warnings == pWARN_ALL ||
 		  (old_warnings == pWARN_STD && PL_dowarn & G_WARN_ON))
             mask = newSVpvn(WARN_ALLstring, WARNsize) ;
         else
@@ -1617,7 +1675,7 @@ PP(pp_caller)
 
 PP(pp_reset)
 {
-    djSP;
+    dSP;
     char *tmps;
     STRLEN n_a;
 
@@ -1644,7 +1702,7 @@ PP(pp_dbstate)
 
     if (PL_op->op_private || SvIV(PL_DBsingle) || SvIV(PL_DBsignal) || SvIV(PL_DBtrace))
     {
-	djSP;
+	dSP;
 	register CV *cv;
 	register PERL_CONTEXT *cx;
 	I32 gimme = G_ARRAY;
@@ -1656,7 +1714,8 @@ PP(pp_dbstate)
 	if (!cv)
 	    DIE(aTHX_ "No DB::DB routine defined");
 
-	if (CvDEPTH(cv) >= 1 && !(PL_debug & (1<<30))) /* don't do recursive DB::DB call */
+	if (CvDEPTH(cv) >= 1 && !(PL_debug & DEBUG_DB_RECURSE_FLAG))
+	    /* don't do recursive DB::DB call */
 	    return NORMAL;
 
 	ENTER;
@@ -1688,7 +1747,7 @@ PP(pp_scope)
 
 PP(pp_enteriter)
 {
-    djSP; dMARK;
+    dSP; dMARK;
     register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
     SV **svp;
@@ -1702,7 +1761,6 @@ PP(pp_enteriter)
 
 #ifdef USE_THREADS
     if (PL_op->op_flags & OPf_SPECIAL) {
-	dTHR;
 	svp = &THREADSV(PL_op->op_targ);	/* per-thread variable */
 	SAVEGENERICSV(*svp);
 	*svp = NEWSV(0,0);
@@ -1710,9 +1768,11 @@ PP(pp_enteriter)
     else
 #endif /* USE_THREADS */
     if (PL_op->op_targ) {
+#ifndef USE_ITHREADS
 	svp = &PL_curpad[PL_op->op_targ];		/* "my" variable */
 	SAVESPTR(*svp);
-#ifdef USE_ITHREADS
+#else
+	SAVEPADSV(PL_op->op_targ);
 	iterdata = (void*)PL_op->op_targ;
 	cxtype |= CXp_PADVAR;
 #endif
@@ -1766,7 +1826,7 @@ PP(pp_enteriter)
 
 PP(pp_enterloop)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
 
@@ -1782,7 +1842,7 @@ PP(pp_enterloop)
 
 PP(pp_leaveloop)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;
@@ -1822,7 +1882,7 @@ PP(pp_leaveloop)
 
 PP(pp_return)
 {
-    djSP; dMARK;
+    dSP; dMARK;
     I32 cxix;
     register PERL_CONTEXT *cx;
     bool popsub2 = FALSE;
@@ -1862,8 +1922,6 @@ PP(pp_return)
 	POPEVAL(cx);
 	if (CxTRYBLOCK(cx))
 	    break;
-	if (AvFILLp(PL_comppad_name) >= 0)
-	    free_closures();
 	lex_end();
 	if (optype == OP_REQUIRE &&
 	    (MARK == SP || (gimme == G_SCALAR && !SvTRUE(*SP))) )
@@ -1933,7 +1991,7 @@ PP(pp_return)
 
 PP(pp_last)
 {
-    djSP;
+    dSP;
     I32 cxix;
     register PERL_CONTEXT *cx;
     I32 pop2 = 0;
@@ -2090,7 +2148,6 @@ S_dofindlabel(pTHX_ OP *o, char *label, OP **opstack, OP **oplimit)
     }
     *ops = 0;
     if (o->op_flags & OPf_KIDS) {
-	dTHR;
 	/* First try all the kids at this level, since that's likeliest. */
 	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling) {
 	    if ((kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) &&
@@ -2121,7 +2178,7 @@ PP(pp_dump)
 
 PP(pp_goto)
 {
-    djSP;
+    dSP;
     OP *retop = 0;
     I32 ix;
     register PERL_CONTEXT *cx;
@@ -2172,7 +2229,7 @@ PP(pp_goto)
 	    if (cxix < cxstack_ix)
 		dounwind(cxix);
 	    TOPBLOCK(cx);
-	    if (CxTYPE(cx) == CXt_EVAL && cx->blk_eval.old_op_type == OP_ENTEREVAL) 
+	    if (CxREALEVAL(cx))
 		DIE(aTHX_ "Can't goto subroutine from an eval-string");
 	    mark = PL_stack_sp;
 	    if (CxTYPE(cx) == CXt_SUB && cx->blk_sub.hasargs) {
@@ -2240,7 +2297,7 @@ PP(pp_goto)
 
 		    PL_stack_sp--;		/* There is no cv arg. */
 		    /* Push a mark for the start of arglist */
-		    PUSHMARK(mark); 
+		    PUSHMARK(mark);
 		    (void)(*CvXSUB(cv))(aTHXo_ cv);
 		    /* Pop the current context like a decent sub should */
 		    POPBLOCK(cx, PL_curpm);
@@ -2314,14 +2371,14 @@ PP(pp_goto)
 #ifdef USE_THREADS
 		if (!cx->blk_sub.hasargs) {
 		    AV* av = (AV*)PL_curpad[0];
-		    
+		
 		    items = AvFILLp(av) + 1;
 		    if (items) {
 			/* Mark is at the end of the stack. */
 			EXTEND(SP, items);
 			Copy(AvARRAY(av), SP + 1, items, SV*);
 			SP += items;
-			PUTBACK ;		    
+			PUTBACK ;		
 		    }
 		}
 #endif /* USE_THREADS */		
@@ -2371,7 +2428,7 @@ PP(pp_goto)
 		     */
 		    SV *sv = GvSV(PL_DBsub);
 		    CV *gotocv;
-		    
+		
 		    if (PERLDB_SUB_NN) {
 			SvIVX(sv) = PTR2IV(cv); /* Already upgraded, saved */
 		    } else {
@@ -2403,6 +2460,8 @@ PP(pp_goto)
 
     if (label && *label) {
 	OP *gotoprobe = 0;
+	bool leaving_eval = FALSE;
+        PERL_CONTEXT *last_eval_cx = 0;
 
 	/* find label */
 
@@ -2412,8 +2471,15 @@ PP(pp_goto)
 	    cx = &cxstack[ix];
 	    switch (CxTYPE(cx)) {
 	    case CXt_EVAL:
-		gotoprobe = PL_eval_root; /* XXX not good for nested eval */
-		break;
+		leaving_eval = TRUE;
+                if (CxREALEVAL(cx)) {
+		    gotoprobe = (last_eval_cx ?
+				last_eval_cx->blk_eval.old_eval_root :
+				PL_eval_root);
+		    last_eval_cx = cx;
+		    break;
+                }
+                /* else fall through */
 	    case CXt_LOOP:
 		gotoprobe = cx->blk_oldcop->op_sibling;
 		break;
@@ -2450,6 +2516,17 @@ PP(pp_goto)
 	}
 	if (!retop)
 	    DIE(aTHX_ "Can't find label %s", label);
+
+	/* if we're leaving an eval, check before we pop any frames
+           that we're not going to punt, otherwise the error
+	   won't be caught */
+
+	if (leaving_eval && *enterops && enterops[1]) {
+	    I32 i;
+            for (i = 1; enterops[i]; i++)
+                if (enterops[i]->op_type == OP_ENTERITER)
+                    DIE(aTHX_ "Can't \"goto\" into the middle of a foreach loop");
+	}
 
 	/* pop unwanted frames */
 
@@ -2498,7 +2575,7 @@ PP(pp_goto)
 
 PP(pp_exit)
 {
-    djSP;
+    dSP;
     I32 anum;
 
     if (MAXARG < 1)
@@ -2519,7 +2596,7 @@ PP(pp_exit)
 #ifdef NOTYET
 PP(pp_nswitch)
 {
-    djSP;
+    dSP;
     NV value = SvNVx(GvSV(cCOP->cop_gv));
     register I32 match = I_32(value);
 
@@ -2538,7 +2615,7 @@ PP(pp_nswitch)
 
 PP(pp_cswitch)
 {
-    djSP;
+    dSP;
     register I32 match;
 
     if (PL_multiline)
@@ -2601,7 +2678,6 @@ S_docatch_body(pTHX)
 STATIC OP *
 S_docatch(pTHX_ OP *o)
 {
-    dTHR;
     int ret;
     OP *oldop = PL_op;
     volatile PERL_SI *cursi = PL_curstackinfo;
@@ -2694,12 +2770,12 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, char *code, AV** avp)
 #else
     SAVEVPTR(PL_op);
 #endif
-    PL_hints = 0;
+    PL_hints &= HINT_UTF8;
 
     PL_op = &dummy;
     PL_op->op_type = OP_ENTEREVAL;
     PL_op->op_flags = 0;			/* Avoid uninit warning. */
-    PUSHBLOCK(cx, CXt_EVAL, SP);
+    PUSHBLOCK(cx, CXt_EVAL|(PL_curcop == &PL_compiling ? 0 : CXp_REAL), SP);
     PUSHEVAL(cx, 0, Nullgv);
     rop = doeval(G_SCALAR, startop);
     POPBLOCK(cx,PL_curpm);
@@ -2728,7 +2804,9 @@ S_doeval(pTHX_ int gimme, OP** startop)
     AV* comppadlist;
     I32 i;
 
-    PL_in_eval = EVAL_INEVAL;
+    PL_in_eval = ((saveop && saveop->op_type == OP_REQUIRE)
+		  ? (EVAL_INREQUIRE | (PL_in_eval & EVAL_INEVAL))
+		  : EVAL_INEVAL);
 
     PUSHMARK(SP);
 
@@ -2788,7 +2866,7 @@ S_doeval(pTHX_ int gimme, OP** startop)
 	CvOUTSIDE(PL_compcv) = (CV*)SvREFCNT_inc(caller);
     }
 
-    SAVEFREESV(PL_compcv);
+    SAVEMORTALIZESV(PL_compcv);	/* must remain until end of current statement */
 
     /* make sure we compile in the right package */
 
@@ -2891,6 +2969,7 @@ S_doeval(pTHX_ int gimme, OP** startop)
     CvDEPTH(PL_compcv) = 1;
     SP = PL_stack_base + POPMARK;		/* pop original mark */
     PL_op = saveop;			/* The caller may need it. */
+    PL_lex_state = LEX_NOTPARSING;	/* $^S needs this. */
 #ifdef USE_THREADS
     MUTEX_LOCK(&PL_eval_mutex);
     PL_eval_owner = 0;
@@ -2935,7 +3014,7 @@ S_doopen_pmc(pTHX_ const char *name, const char *mode)
 
 PP(pp_require)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     SV *sv;
     char *name;
@@ -2943,7 +3022,7 @@ PP(pp_require)
     char *tryname;
     SV *namesv = Nullsv;
     SV** svp;
-    I32 gimme = G_SCALAR;
+    I32 gimme = GIMME_V;
     PerlIO *tryrsfp = 0;
     STRLEN n_a;
     int filter_has_file = 0;
@@ -2955,17 +3034,17 @@ PP(pp_require)
     if (SvNIOKp(sv)) {
 	if (SvPOK(sv) && SvNOK(sv)) {		/* require v5.6.1 */
 	    UV rev = 0, ver = 0, sver = 0;
-	    I32 len;
+	    STRLEN len;
 	    U8 *s = (U8*)SvPVX(sv);
 	    U8 *end = (U8*)SvPVX(sv) + SvCUR(sv);
 	    if (s < end) {
-		rev = utf8_to_uv(s, &len);
+		rev = utf8n_to_uvchr(s, end - s, &len, 0);
 		s += len;
 		if (s < end) {
-		    ver = utf8_to_uv(s, &len);
+		    ver = utf8n_to_uvchr(s, end - s, &len, 0);
 		    s += len;
 		    if (s < end)
-			sver = utf8_to_uv(s, &len);
+			sver = utf8n_to_uvchr(s, end - s, &len, 0);
 		}
 	    }
 	    if (PERL_REVISION < rev
@@ -3021,22 +3100,27 @@ PP(pp_require)
 
     /* prepare to compile file */
 
+#ifdef MACOS_TRADITIONAL
+    if (PERL_FILE_IS_ABSOLUTE(name)
+	|| (*name == ':' && name[1] != ':' && strchr(name+2, ':')))
+    {
+	tryname = name;
+	tryrsfp = doopen_pmc(name,PERL_SCRIPT_MODE);
+	/* We consider paths of the form :a:b ambiguous and interpret them first
+	   as global then as local
+	*/
+    	if (!tryrsfp && *name == ':' && name[1] != ':' && strchr(name+2, ':'))
+	    goto trylocal;
+    }
+    else
+trylocal: {
+#else
     if (PERL_FILE_IS_ABSOLUTE(name)
 	|| (*name == '.' && (name[1] == '/' ||
 			     (name[1] == '.' && name[2] == '/'))))
     {
 	tryname = name;
 	tryrsfp = doopen_pmc(name,PERL_SCRIPT_MODE);
-#ifdef MACOS_TRADITIONAL
-	/* We consider paths of the form :a:b ambiguous and interpret them first
-	   as global then as local
-	*/
-    	if (!tryrsfp && name[0] == ':' && name[1] != ':' && strchr(name+2, ':'))
-	    goto trylocal;
-    }
-    else 
-trylocal: {
-#else
     }
     else {
 #endif
@@ -3072,7 +3156,10 @@ trylocal: {
 		    PUSHs(dirsv);
 		    PUSHs(sv);
 		    PUTBACK;
-		    count = call_sv(loader, G_ARRAY);
+		    if (sv_isobject(loader))
+			count = call_method("INC", G_ARRAY);
+		    else
+			count = call_sv(loader, G_ARRAY);
 		    SPAGAIN;
 
 		    if (count > 0) {
@@ -3243,8 +3330,10 @@ trylocal: {
         PL_compiling.cop_warnings = pWARN_ALL ;
     else if (PL_dowarn & G_WARN_ALL_OFF)
         PL_compiling.cop_warnings = pWARN_NONE ;
-    else 
+    else
         PL_compiling.cop_warnings = pWARN_STD ;
+    SAVESPTR(PL_compiling.cop_io);
+    PL_compiling.cop_io = Nullsv;
 
     if (filter_sub || filter_child_proc) {
 	SV *datasv = filter_add(run_user_filter, Nullsv);
@@ -3271,7 +3360,7 @@ trylocal: {
     PL_eval_owner = thr;
     MUTEX_UNLOCK(&PL_eval_mutex);
 #endif /* USE_THREADS */
-    return DOCATCH(doeval(G_SCALAR, NULL));
+    return DOCATCH(doeval(gimme, NULL));
 }
 
 PP(pp_dofile)
@@ -3281,7 +3370,7 @@ PP(pp_dofile)
 
 PP(pp_entereval)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     dPOPss;
     I32 gimme = GIMME_V, was = PL_sub_generation;
@@ -3298,7 +3387,7 @@ PP(pp_entereval)
     ENTER;
     lex_start(sv);
     SAVETMPS;
- 
+
     /* switch to eval mode */
 
     if (PERLDB_NAMEEVAL && CopLINE(PL_curcop)) {
@@ -3330,6 +3419,13 @@ PP(pp_entereval)
         PL_compiling.cop_warnings = newSVsv(PL_curcop->cop_warnings);
         SAVEFREESV(PL_compiling.cop_warnings);
     }
+    SAVESPTR(PL_compiling.cop_io);
+    if (specialCopIO(PL_curcop->cop_io))
+        PL_compiling.cop_io = PL_curcop->cop_io;
+    else {
+        PL_compiling.cop_io = newSVsv(PL_curcop->cop_io);
+        SAVEFREESV(PL_compiling.cop_io);
+    }
 
     push_return(PL_op->op_next);
     PUSHBLOCK(cx, (CXt_EVAL|CXp_REAL), SP);
@@ -3358,7 +3454,7 @@ PP(pp_entereval)
 
 PP(pp_leaveeval)
 {
-    djSP;
+    dSP;
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
@@ -3400,9 +3496,6 @@ PP(pp_leaveeval)
     }
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
-    if (AvFILLp(PL_comppad_name) >= 0)
-	free_closures();
-
 #ifdef DEBUGGING
     assert(CvDEPTH(PL_compcv) == 1);
 #endif
@@ -3429,7 +3522,7 @@ PP(pp_leaveeval)
 
 PP(pp_entertry)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
 
@@ -3439,7 +3532,6 @@ PP(pp_entertry)
     push_return(cLOGOP->op_other->op_next);
     PUSHBLOCK(cx, (CXt_EVAL|CXp_TRYBLOCK), SP);
     PUSHEVAL(cx, 0, 0);
-    PL_eval_root = PL_op;		/* Only needed so that goto works right. */
 
     PL_in_eval = EVAL_INEVAL;
     sv_setpv(ERRSV,"");
@@ -3449,7 +3541,7 @@ PP(pp_entertry)
 
 PP(pp_leavetry)
 {
-    djSP;
+    dSP;
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
@@ -3513,7 +3605,7 @@ S_doparseform(pTHX_ SV *sv)
 
     if (len == 0)
 	Perl_croak(aTHX_ "Null picture in formline");
-    
+
     New(804, fops, (send - s)*3+10, U16);    /* Almost certainly too long... */
     fpc = fops;
 
@@ -3541,7 +3633,7 @@ S_doparseform(pTHX_ SV *sv)
 	case ' ': case '\t':
 	    skipspaces++;
 	    continue;
-	    
+	
 	case '\n': case 0:
 	    arg = s - base;
 	    skipspaces++;
@@ -3616,6 +3708,24 @@ S_doparseform(pTHX_ SV *sv)
 		}
 		*fpc++ = s - base;		/* fieldsize for FETCH */
 		*fpc++ = FF_DECIMAL;
+                *fpc++ = arg;
+            }
+            else if (*s == '0' && s[1] == '#') {  /* Zero padded decimals */
+                arg = ischop ? 512 : 0;
+		base = s - 1;
+                s++;                                /* skip the '0' first */
+                while (*s == '#')
+                    s++;
+                if (*s == '.') {
+                    char *f;
+                    s++;
+                    f = s;
+                    while (*s == '#')
+                        s++;
+                    arg |= 256 + (s - f);
+                }
+                *fpc++ = s - base;                /* fieldsize for FETCH */
+                *fpc++ = FF_0DECIMAL;
 		*fpc++ = arg;
 	    }
 	    else {
@@ -3679,7 +3789,7 @@ S_doparseform(pTHX_ SV *sv)
  * Research Group at University of California, Berkeley.
  *
  * See also: "Optimistic Merge Sort" (SODA '92)
- *      
+ *
  * The integration to Perl is by John P. Linderman <jpl@research.att.com>.
  *
  * The code can be distributed under the same terms as Perl itself.
@@ -4049,7 +4159,6 @@ S_qsortsv(pTHX_ gptr *list1, size_t nmemb, SVCOMPARE_t cmp)
 static I32
 sortcv(pTHXo_ SV *a, SV *b)
 {
-    dTHR;
     I32 oldsaveix = PL_savestack_ix;
     I32 oldscopeix = PL_scopestack_ix;
     I32 result;
@@ -4073,7 +4182,6 @@ sortcv(pTHXo_ SV *a, SV *b)
 static I32
 sortcv_stacked(pTHXo_ SV *a, SV *b)
 {
-    dTHR;
     I32 oldsaveix = PL_savestack_ix;
     I32 oldscopeix = PL_scopestack_ix;
     I32 result;
@@ -4279,7 +4387,7 @@ run_user_filter(pTHXo_ int idx, SV *buf_sv, int maxlen)
     }
 
     if (filter_sub && len >= 0) {
-	djSP;
+	dSP;
 	int count;
 
 	ENTER;

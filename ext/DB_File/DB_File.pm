@@ -1,8 +1,8 @@
 # DB_File.pm -- Perl 5 interface to Berkeley DB 
 #
 # written by Paul Marquess (Paul.Marquess@btinternet.com)
-# last modified 26th April 2000
-# version 1.73
+# last modified 17th December 2000
+# version 1.75
 #
 #     Copyright (c) 1995-2000 Paul Marquess. All rights reserved.
 #     This program is free software; you can redistribute it and/or
@@ -13,6 +13,7 @@ package DB_File::HASHINFO ;
 
 require 5.003 ;
 
+use warnings;
 use strict;
 use Carp;
 require Tie::Hash;
@@ -104,6 +105,7 @@ sub CLEAR    { my $self = shift ; $self->NotHere("CLEAR") }
 
 package DB_File::RECNOINFO ;
 
+use warnings;
 use strict ;
 
 @DB_File::RECNOINFO::ISA = qw(DB_File::HASHINFO) ;
@@ -121,6 +123,7 @@ sub TIEHASH
 
 package DB_File::BTREEINFO ;
 
+use warnings;
 use strict ;
 
 @DB_File::BTREEINFO::ISA = qw(DB_File::HASHINFO) ;
@@ -140,6 +143,7 @@ sub TIEHASH
 
 package DB_File ;
 
+use warnings;
 use strict;
 use vars qw($VERSION @ISA @EXPORT $AUTOLOAD $DB_BTREE $DB_HASH $DB_RECNO 
             $db_version $use_XSLoader
@@ -147,7 +151,7 @@ use vars qw($VERSION @ISA @EXPORT $AUTOLOAD $DB_BTREE $DB_HASH $DB_RECNO
 use Carp;
 
 
-$VERSION = "1.73" ;
+$VERSION = "1.75" ;
 
 #typedef enum { DB_BTREE, DB_HASH, DB_RECNO } DBTYPE;
 $DB_BTREE = new DB_File::BTREEINFO ;
@@ -271,7 +275,7 @@ sub TIEARRAY
 sub CLEAR 
 {
     my $self = shift;
-    my $key = "" ;
+    my $key = 0 ;
     my $value = "" ;
     my $status = $self->seq($key, $value, R_FIRST());
     my @keys;
@@ -384,8 +388,8 @@ DB_File - Perl5 access to Berkeley DB version 1.x
 
 =head1 SYNOPSIS
 
- use DB_File ;
- 
+ use DB_File;
+
  [$X =] tie %hash,  'DB_File', [$filename, $flags, $mode, $DB_HASH] ;
  [$X =] tie %hash,  'DB_File', $filename, $flags, $mode, $DB_BTREE ;
  [$X =] tie @array, 'DB_File', $filename, $flags, $mode, $DB_RECNO ;
@@ -665,6 +669,7 @@ This example shows how to create a database, add key/value pairs to the
 database, delete keys/value pairs and finally how to enumerate the
 contents of the database.
 
+    use warnings ;
     use strict ;
     use DB_File ;
     use vars qw( %h $k $v ) ;
@@ -694,7 +699,7 @@ contents of the database.
 here is the output:
 
     Banana Exists
- 
+
     orange -> orange
     tomato -> red
     banana -> yellow
@@ -715,6 +720,7 @@ This script shows how to override the default sorting algorithm that
 BTREE uses. Instead of using the normal lexical ordering, a case
 insensitive compare function will be used.
 
+    use warnings ;
     use strict ;
     use DB_File ;
 
@@ -783,6 +789,7 @@ There are some difficulties in using the tied hash interface if you
 want to manipulate a BTREE database with duplicate keys. Consider this
 code:
 
+    use warnings ;
     use strict ;
     use DB_File ;
 
@@ -790,13 +797,13 @@ code:
 
     $filename = "tree" ;
     unlink $filename ;
- 
+
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
- 
+
     tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
- 
+
     # Add some key/value pairs to the file
     $h{'Wall'} = 'Larry' ;
     $h{'Wall'} = 'Brick' ; # Note the duplicate key
@@ -837,27 +844,28 @@ and the API in general.
 
 Here is the script above rewritten using the C<seq> API method.
 
+    use warnings ;
     use strict ;
     use DB_File ;
- 
+
     use vars qw($filename $x %h $status $key $value) ;
 
     $filename = "tree" ;
     unlink $filename ;
- 
+
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
- 
+
     $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
- 
+
     # Add some key/value pairs to the file
     $h{'Wall'} = 'Larry' ;
     $h{'Wall'} = 'Brick' ; # Note the duplicate key
     $h{'Wall'} = 'Brick' ; # Note the duplicate key and value
     $h{'Smith'} = 'John' ;
     $h{'mouse'} = 'mickey' ;
- 
+
     # iterate through the btree using seq
     # and print each key/value pair.
     $key = $value = 0 ;
@@ -865,7 +873,7 @@ Here is the script above rewritten using the C<seq> API method.
          $status == 0 ;
          $status = $x->seq($key, $value, R_NEXT) )
       {  print "$key -> $value\n" }
- 
+
     undef $x ;
     untie %h ;
 
@@ -908,16 +916,17 @@ particular value occurred in the BTREE.
 So assuming the database created above, we can use C<get_dup> like
 this:
 
+    use warnings ;
     use strict ;
     use DB_File ;
- 
+
     use vars qw($filename $x %h ) ;
 
     $filename = "tree" ;
- 
+
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
- 
+
     $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
@@ -933,7 +942,7 @@ this:
 
     @list = $x->get_dup("Smith") ;
     print "Smith =>	[@list]\n" ;
- 
+
     @list = $x->get_dup("Dog") ;
     print "Dog =>	[@list]\n" ;
 
@@ -957,25 +966,26 @@ returns 0. Otherwise the method returns a non-zero value.
 
 Assuming the database from the previous example:
 
+    use warnings ;
     use strict ;
     use DB_File ;
- 
+
     use vars qw($filename $x %h $found) ;
 
     my $filename = "tree" ;
- 
+
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
- 
+
     $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
     $found = ( $x->find_dup("Wall", "Larry") == 0 ? "" : "not") ; 
     print "Larry Wall is $found there\n" ;
-    
+
     $found = ( $x->find_dup("Wall", "Harry") == 0 ? "" : "not") ; 
     print "Harry Wall is $found there\n" ;
-    
+
     undef $x ;
     untie %h ;
 
@@ -995,16 +1005,17 @@ Otherwise the method returns a non-zero value.
 
 Again assuming the existence of the C<tree> database
 
+    use warnings ;
     use strict ;
     use DB_File ;
- 
+
     use vars qw($filename $x %h $found) ;
 
     my $filename = "tree" ;
- 
+
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
- 
+
     $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
@@ -1012,7 +1023,7 @@ Again assuming the existence of the C<tree> database
 
     $found = ( $x->find_dup("Wall", "Larry") == 0 ? "" : "not") ; 
     print "Larry Wall is $found there\n" ;
-    
+
     undef $x ;
     untie %h ;
 
@@ -1039,6 +1050,7 @@ the use of the R_CURSOR flag with seq:
 In the example script below, the C<match> sub uses this feature to find
 and print the first matching key/value pair given a partial key.
 
+    use warnings ;
     use strict ;
     use DB_File ;
     use Fcntl ;
@@ -1059,22 +1071,22 @@ and print the first matching key/value pair given a partial key.
 
     $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE
         or die "Cannot open $filename: $!\n";
- 
+
     # Add some key/value pairs to the file
     $h{'mouse'} = 'mickey' ;
     $h{'Wall'} = 'Larry' ;
     $h{'Walls'} = 'Brick' ; 
     $h{'Smith'} = 'John' ;
- 
+
 
     $key = $value = 0 ;
     print "IN ORDER\n" ;
     for ($st = $x->seq($key, $value, R_FIRST) ;
 	 $st == 0 ;
          $st = $x->seq($key, $value, R_NEXT) )
-	
+
       {  print "$key	-> $value\n" }
- 
+
     print "\nPARTIAL MATCH\n" ;
 
     match "Wa" ;
@@ -1143,6 +1155,7 @@ Here is a simple example that uses RECNO (if you are using a version
 of Perl earlier than 5.004_57 this example won't work -- see 
 L<Extra RECNO Methods> for a workaround).
 
+    use warnings ;
     use strict ;
     use DB_File ;
 
@@ -1232,18 +1245,19 @@ Here is a more complete example that makes use of some of the methods
 described above. It also makes use of the API interface directly (see 
 L<THE API INTERFACE>).
 
+    use warnings ;
     use strict ;
     use vars qw(@h $H $file $i) ;
     use DB_File ;
     use Fcntl ;
-    
+
     $file = "text" ;
 
     unlink $file ;
 
     $H = tie @h, "DB_File", $file, O_RDWR|O_CREAT, 0640, $DB_RECNO 
         or die "Cannot open file $file: $!\n" ;
-    
+
     # first create a text file to play with
     $h[0] = "zero" ;
     $h[1] = "one" ;
@@ -1251,7 +1265,7 @@ L<THE API INTERFACE>).
     $h[3] = "three" ;
     $h[4] = "four" ;
 
-    
+
     # Print the records in order.
     #
     # The length method is needed here because evaluating a tied
@@ -1583,6 +1597,7 @@ the database and have them removed when you read from the database. As I'm
 sure you have already guessed, this is a problem that DBM Filters can
 fix very easily.
 
+    use warnings ;
     use strict ;
     use DB_File ;
 
@@ -1625,6 +1640,7 @@ when reading.
 
 Here is a DBM Filter that does it:
 
+    use warnings ;
     use strict ;
     use DB_File ;
     my %hash ;
@@ -1791,6 +1807,7 @@ Here is a snippet of code that is loosely based on Tom Christiansen's
 I<ggh> script (available from your nearest CPAN archive in
 F<authors/id/TOMC/scripts/nshist.gz>).
 
+    use warnings ;
     use strict ;
     use DB_File ;
     use Fcntl ;
@@ -1947,6 +1964,7 @@ You will encounter this particular error message when you have the
 C<strict 'subs'> pragma (or the full strict pragma) in your script.
 Consider this script:
 
+    use warnings ;
     use strict ;
     use DB_File ;
     use vars qw(%x) ;

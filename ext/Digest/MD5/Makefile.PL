@@ -1,0 +1,21 @@
+require 5.004;
+use strict;
+use Config qw(%Config);
+use ExtUtils::MakeMaker;
+
+my @extra;
+
+unless ($Config{d_u32align}) {
+    @extra = (DEFINE => "-DU32_ALIGNMENT_REQUIRED")
+	if !($Config{'byteorder'} eq '1234' ||
+	     $Config{'byteorder'} eq '4321');
+}
+
+WriteMakefile(
+    'NAME'	   => 'Digest::MD5',
+    'VERSION_FROM' => 'MD5.pm',
+    @extra,
+    'dist'         => { COMPRESS => 'gzip -9f', SUFFIX => 'gz', },
+);
+exit;
+

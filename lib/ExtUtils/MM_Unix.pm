@@ -1,17 +1,19 @@
 package ExtUtils::MM_Unix;
 
+use strict;
+
 use Exporter ();
 use Config;
 use File::Basename qw(basename dirname fileparse);
 use DirHandle;
 use strict;
-use vars qw($VERSION $Is_Mac $Is_OS2 $Is_VMS $Is_Win32 $Is_Dos $Is_PERL_OBJECT
-	    $Verbose %pm %static $Xsubpp_Version);
+our ($Is_Mac,$Is_OS2,$Is_VMS,$Is_Win32,$Is_Dos,$Is_PERL_OBJECT,
+	    $Verbose,%pm,%static,$Xsubpp_Version);
 
-$VERSION = substr q$Revision: 1.12603 $, 10;
-# $Id: MM_Unix.pm,v 1.126 1998/06/28 21:32:49 k Exp k $
+our $VERSION = '1.12603';
 
-Exporter::import('ExtUtils::MakeMaker', qw($Verbose &neatvalue));
+require ExtUtils::MakeMaker;
+ExtUtils::MakeMaker->import(qw($Verbose &neatvalue));
 
 $Is_OS2 = $^O eq 'os2';
 $Is_Mac = $^O eq 'MacOS';
@@ -208,6 +210,7 @@ sub ExtUtils::MM_Unix::parse_version ;
 sub ExtUtils::MM_Unix::pasthru ;
 sub ExtUtils::MM_Unix::path ;
 sub ExtUtils::MM_Unix::perl_archive;
+sub ExtUtils::MM_Unix::perl_archive_after;
 sub ExtUtils::MM_Unix::perl_script ;
 sub ExtUtils::MM_Unix::perldepend ;
 sub ExtUtils::MM_Unix::pm_to_blib ;
@@ -264,6 +267,14 @@ sub c_o {
     my($self) = shift;
     return '' unless $self->needs_linking();
     my(@m);
+    if (my $cpp = $Config{cpprun}) {
+        my $cpp_cmd = $self->const_cccmd;
+        $cpp_cmd =~ s/^CCCMD\s*=\s*\$\(CC\)/$cpp/;
+        push @m, '
+.c.i:
+	'. $cpp_cmd . ' $(CCCDLFLAGS) -I$(PERL_INC) $(DEFINE) $*.c > $*.i
+';
+    }
     push @m, '
 .c$(OBJ_EXT):
 	$(CCCMD) $(CCCDLFLAGS) -I$(PERL_INC) $(DEFINE) $*.c
@@ -305,8 +316,8 @@ sub cflags {
     $libperl ||= $self->{LIBPERL_A} || "libperl$self->{LIB_EXT}" ;
     $libperl =~ s/\.\$\(A\)$/$self->{LIB_EXT}/;
 
-    @cflags{qw(cc ccflags optimize large split shellflags)}
-	= @Config{qw(cc ccflags optimize large split shellflags)};
+    @cflags{qw(cc ccflags optimize shellflags)}
+	= @Config{qw(cc ccflags optimize shellflags)};
     my($optdebug) = "";
 
     $cflags{shellflags} ||= '';
@@ -341,16 +352,12 @@ sub cflags {
 	  optimize=\"$cflags{optimize}\"
 	  perltype=\"$cflags{perltype}\"
 	  optdebug=\"$cflags{optdebug}\"
-	  large=\"$cflags{large}\"
-	  split=\"$cflags{'split'}\"
 	  eval '$prog'
 	  echo cc=\$cc
 	  echo ccflags=\$ccflags
 	  echo optimize=\$optimize
 	  echo perltype=\$perltype
 	  echo optdebug=\$optdebug
-	  echo large=\$large
-	  echo split=\$split
 	  `;
 	my($line);
 	foreach $line (@o){
@@ -368,7 +375,7 @@ sub cflags {
 	$cflags{optimize} = $optdebug;
     }
 
-    for (qw(ccflags optimize perltype large split)) {
+    for (qw(ccflags optimize perltype)) {
 	$cflags{$_} =~ s/^\s+//;
 	$cflags{$_} =~ s/\s+/ /g;
 	$cflags{$_} =~ s/\s+$//;
@@ -411,8 +418,6 @@ sub cflags {
 CCFLAGS = $self->{CCFLAGS}
 OPTIMIZE = $self->{OPTIMIZE}
 PERLTYPE = $self->{PERLTYPE}
-LARGE = $self->{LARGE}
-SPLIT = $self->{SPLIT}
 MPOLLUTE = $pollute
 };
 
@@ -483,7 +488,7 @@ sub const_cccmd {
     return '' unless $self->needs_linking();
     return $self->{CONST_CCCMD} =
 	q{CCCMD = $(CC) -c $(INC) $(CCFLAGS) $(OPTIMIZE) \\
-	$(PERLTYPE) $(LARGE) $(SPLIT) $(MPOLLUTE) $(DEFINE_VERSION) \\
+	$(PERLTYPE) $(MPOLLUTE) $(DEFINE_VERSION) \\
 	$(XS_DEFINE_VERSION)};
 }
 
@@ -586,7 +591,7 @@ MM_VERSION = $ExtUtils::MakeMaker::VERSION
 
     for $tmp (qw/
 	      FULLEXT BASEEXT PARENT_NAME DLBASE VERSION_FROM INC DEFINE OBJECT
-	      LDFROM LINKTYPE
+	      LDFROM LINKTYPE PM_FILTER
 	      /	) {
 	next unless defined $self->{$tmp};
 	push @m, "$tmp = $self->{$tmp}\n";
@@ -634,7 +639,7 @@ MAN3PODS = ".join(" \\\n\t", sort keys %{$self->{MAN3PODS}})."
 # work around a famous dec-osf make(1) feature(?):
 makemakerdflt: all
 
-.SUFFIXES: .xs .c .C .cpp .cxx .cc \$(OBJ_EXT)
+.SUFFIXES: .xs .c .C .cpp .i .cxx .cc \$(OBJ_EXT)
 
 # Nick wanted to get rid of .PRECIOUS. I don't remember why. I seem to recall, that
 # some make implementations will delete the Makefile when we rebuild it. Because
@@ -679,6 +684,10 @@ EXPORT_LIST = $tmp
     $tmp = $self->perl_archive;
     push @m, "
 PERL_ARCHIVE = $tmp
+";
+    $tmp = $self->perl_archive_after;
+    push @m, "
+PERL_ARCHIVE_AFTER = $tmp
 ";
 
 #    push @m, q{
@@ -1067,7 +1076,7 @@ ARMAYBE = '.$armaybe.'
 OTHERLDFLAGS = '.$otherldflags.'
 INST_DYNAMIC_DEP = '.$inst_dynamic_dep.'
 
-$(INST_DYNAMIC): $(OBJECT) $(MYEXTLIB) $(BOOTSTRAP) $(INST_ARCHAUTODIR)/.exists $(EXPORT_LIST) $(PERL_ARCHIVE) $(INST_DYNAMIC_DEP)
+$(INST_DYNAMIC): $(OBJECT) $(MYEXTLIB) $(BOOTSTRAP) $(INST_ARCHAUTODIR)/.exists $(EXPORT_LIST) $(PERL_ARCHIVE) $(PERL_ARCHIVE_AFTER) $(INST_DYNAMIC_DEP)
 ');
     if ($armaybe ne ':'){
 	$ldfrom = 'tmp$(LIB_EXT)';
@@ -1077,11 +1086,19 @@ $(INST_DYNAMIC): $(OBJECT) $(MYEXTLIB) $(BOOTSTRAP) $(INST_ARCHAUTODIR)/.exists 
     $ldfrom = "-all $ldfrom -none" if ($^O eq 'dec_osf');
 
     # The IRIX linker doesn't use LD_RUN_PATH
-    $ldrun = qq{-rpath "$self->{LD_RUN_PATH}"}
+    my $ldrun = qq{-rpath "$self->{LD_RUN_PATH}"}
 	if ($^O eq 'irix' && $self->{LD_RUN_PATH});
 
-    push(@m,'	LD_RUN_PATH="$(LD_RUN_PATH)" $(LD) -o $@ '.$ldrun.' $(LDDLFLAGS) '.$ldfrom.
-		' $(OTHERLDFLAGS) $(MYEXTLIB) $(PERL_ARCHIVE) $(LDLOADLIBS) $(EXPORT_LIST)');
+    # For example in AIX the shared objects/libraries from previous builds
+    # linger quite a while in the shared dynalinker cache even when nobody
+    # is using them.  This is painful if one for instance tries to restart
+    # a failed build because the link command will fail unnecessarily 'cos
+    # the shared object/library is 'busy'.
+    push(@m,'	$(RM_F) $@
+');
+
+    push(@m,'	LD_RUN_PATH="$(LD_RUN_PATH)" $(LD) '.$ldrun.' $(LDDLFLAGS) '.$ldfrom.
+		' $(OTHERLDFLAGS) -o $@ $(MYEXTLIB) $(PERL_ARCHIVE) $(LDLOADLIBS) $(PERL_ARCHIVE_AFTER) $(EXPORT_LIST)');
     push @m, '
 	$(CHMOD) $(PERM_RWX) $@
 ';
@@ -1146,9 +1163,9 @@ in these dirs:
 @$dirs
 ";
     }
-    foreach $dir (@$dirs){
-	next unless defined $dir; # $self->{PERL_SRC} may be undefined
-	foreach $name (@$names){
+    foreach $name (@$names){
+	foreach $dir (@$dirs){
+	    next unless defined $dir; # $self->{PERL_SRC} may be undefined
 	    my ($abs, $val);
 	    if ($self->file_name_is_absolute($name)) { # /foo/bar
 		$abs = $name;
@@ -1656,7 +1673,7 @@ sub init_main {
 
     unless ($self->{PERL_SRC}){
 	my($dir);
-	foreach $dir ($self->updir(),$self->catdir($self->updir(),$self->updir()),$self->catdir($self->updir(),$self->updir(),$self->updir())){
+	foreach $dir ($self->updir(),$self->catdir($self->updir(),$self->updir()),$self->catdir($self->updir(),$self->updir(),$self->updir()),$self->catdir($self->updir(),$self->updir(),$self->updir(),$self->updir())){
 	    if (
 		-f $self->catfile($dir,"config.sh")
 		&&
@@ -1708,6 +1725,7 @@ from the perl source tree.
 	$self->{PERL_INC}     = $self->catdir("$self->{PERL_ARCHLIB}","CORE"); # wild guess for now
 	my $perl_h;
 
+	no warnings 'uninitialized' ;
 	if (not -f ($perl_h = $self->catfile($self->{PERL_INC},"perl.h"))
 	    and not $old){
 	    # Maybe somebody tries to build an extension with an
@@ -2370,7 +2388,7 @@ $(MAKE_APERL_FILE) : $(FIRST_MAKEFILE)
 
     # The front matter of the linkcommand...
     $linkcmd = join ' ', "\$(CC)",
-	    grep($_, @Config{qw(large split ldflags ccdlflags)});
+	    grep($_, @Config{qw(ldflags ccdlflags)});
     $linkcmd =~ s/\s+/ /g;
     $linkcmd =~ s,(perl\.exp),\$(PERL_INC)/$1,;
 
@@ -2453,7 +2471,7 @@ MAP_PERLINC   = @{$perlinc || []}
 MAP_STATIC    = ",
 join(" \\\n\t", reverse sort keys %static), "
 
-MAP_PRELIBS   = $Config::Config{libs} $Config::Config{cryptlib}
+MAP_PRELIBS   = $Config::Config{perllibs} $Config::Config{cryptlib}
 ";
 
     if (defined $libperl) {
@@ -2461,6 +2479,7 @@ MAP_PRELIBS   = $Config::Config{libs} $Config::Config{cryptlib}
     }
     unless ($libperl && -f $lperl) { # Ilya's code...
 	my $dir = $self->{PERL_SRC} || "$self->{PERL_ARCHLIB}/CORE";
+	$dir = "$self->{PERL_ARCHLIB}/.." if $self->{UNINSTALLED_PERL};
 	$libperl ||= "libperl$self->{LIB_EXT}";
 	$libperl   = "$dir/$libperl";
 	$lperl   ||= "libperl$self->{LIB_EXT}";
@@ -2500,7 +2519,7 @@ MAP_LIBPERL = $libperl
 
 push @m, "
 \$(MAP_TARGET) :: $tmp/perlmain\$(OBJ_EXT) \$(MAP_LIBPERL) \$(MAP_STATIC) \$(INST_ARCHAUTODIR)/extralibs.all
-	\$(MAP_LINKCMD) -o \$\@ \$(OPTIMIZE) $tmp/perlmain\$(OBJ_EXT) $ldfrom \$(MAP_STATIC) $llibperl `cat \$(INST_ARCHAUTODIR)/extralibs.all` \$(MAP_PRELIBS)
+	\$(MAP_LINKCMD) -o \$\@ \$(OPTIMIZE) $tmp/perlmain\$(OBJ_EXT) \$(LDFROM) \$(MAP_STATIC) $llibperl `cat \$(INST_ARCHAUTODIR)/extralibs.all` \$(MAP_PRELIBS)
 	$self->{NOECHO}echo 'To install the new \"\$(MAP_TARGET)\" binary, call'
 	$self->{NOECHO}echo '    make -f $makefilename inst_perl MAP_TARGET=\$(MAP_TARGET)'
 	$self->{NOECHO}echo 'To remove the intermediate files say'
@@ -3036,7 +3055,7 @@ sub pm_to_blib {
 pm_to_blib: $(TO_INST_PM)
 	}.$self->{NOECHO}.q{$(PERL) "-I$(INST_ARCHLIB)" "-I$(INST_LIB)" \
 	"-I$(PERL_ARCHLIB)" "-I$(PERL_LIB)" -MExtUtils::Install \
-        -e "pm_to_blib({qw{$(PM_TO_BLIB)}},'}.$autodir.q{')"
+        -e "pm_to_blib({qw{$(PM_TO_BLIB)}},'}.$autodir.q{','$(PM_FILTER)')"
 	}.$self->{NOECHO}.q{$(TOUCH) $@
 };
 }
@@ -3108,6 +3127,7 @@ sub processPL {
         my $list = ref($self->{PL_FILES}->{$plfile})
 		? $self->{PL_FILES}->{$plfile}
 		: [$self->{PL_FILES}->{$plfile}];
+	my $target;
 	foreach $target (@$list) {
 	push @m, "
 all :: $target
@@ -3147,8 +3167,22 @@ realclean purge ::  clean
         push(@m, "	$self->{RM_F} \$(INST_DYNAMIC) \$(INST_BOOT)\n");
         push(@m, "	$self->{RM_F} \$(INST_STATIC)\n");
     }
-    push(@m, "	$self->{RM_F} " . join(" ", values %{$self->{PM}}) . "\n")
-	if keys %{$self->{PM}};
+    # Issue a several little RM_F commands rather than risk creating a
+    # very long command line (useful for extensions such as Encode
+    # that have many files).
+    if (keys %{$self->{PM}}) {
+	my $line = "";
+	foreach (values %{$self->{PM}}) {
+	    if (length($line) + length($_) > 80) {
+		push @m, "\t$self->{RM_F} $line\n";
+		$line = $_;
+	    }
+	    else {
+		$line .= " $_"; 
+	    }
+	}
+    push @m, "\t$self->{RM_F} $line\n" if $line;
+    }
     my(@otherfiles) = ($self->{MAKEFILE},
 		       "$self->{MAKEFILE}.old"); # Makefiles last
     push(@otherfiles, $attribs{FILES}) if $attribs{FILES};
@@ -3293,8 +3327,9 @@ sub subdir_x {
     my($self, $subdir) = @_;
     my(@m);
     if ($Is_Win32 && Win32::IsWin95()) {
-	# XXX: dmake-specific, like rest of Win95 port
-	return <<EOT;
+	if ($Config{'make'} =~ /dmake/i) {
+	    # dmake-specific
+	    return <<EOT;
 subdirs ::
 @[
 	cd $subdir
@@ -3302,8 +3337,16 @@ subdirs ::
 	cd ..
 ]
 EOT
-    }
-    else {
+        } elsif ($Config{'make'} =~ /nmake/i) {
+	    # nmake-specific
+	    return <<EOT;
+subdirs ::
+	cd $subdir
+	\$(MAKE) all \$(PASTHRU)
+	cd ..
+EOT
+	}
+    } else {
 	return <<EOT;
 
 subdirs ::
@@ -3788,6 +3831,21 @@ and Win32 do.
 sub perl_archive
 {
  return '$(PERL_INC)' . "/$Config{libperl}" if $^O eq "beos";
+ return "";
+}
+
+=item perl_archive_after
+
+This is an internal method that returns path to a library which
+should be put on the linker command line I<after> the external libraries
+to be linked to dynamic extensions.  This may be needed if the linker
+is one-pass, and Perl includes some overrides for C RTL functions,
+such as malloc().
+
+=cut 
+
+sub perl_archive_after
+{
  return "";
 }
 

@@ -23,7 +23,7 @@ frame was called with are copied to the @DB::args array.  The
 general mechanisms is enabled by calling Perl with the B<-d> switch, the
 following additional features are enabled (cf. L<perlvar/$^P>):
 
-=over
+=over 4
 
 =item *
 
@@ -32,20 +32,22 @@ Perl inserts the contents of C<$ENV{PERL5DB}> (or C<BEGIN {require
 
 =item *
 
-The array C<@{"_<$filename"}> holds the lines of $filename for all
-files compiled by Perl.  The same for C<eval>ed strings that contain
+Each array C<@{"_<$filename"}> holds the lines of $filename for a
+file compiled by Perl.  The same for C<eval>ed strings that contain
 subroutines, or which are currently being executed.  The $filename
 for C<eval>ed strings looks like C<(eval 34)>.   Code assertions
-in regexes look like C<(re_eval 19)>.
+in regexes look like C<(re_eval 19)>.  
+
+Values in this array are magical in numeric context: they compare
+equal to zero only if the line is not breakable.
 
 =item *
 
-The hash C<%{"_<$filename"}> contains breakpoints and actions keyed
+Each hash C<%{"_<$filename"}> contains breakpoints and actions keyed
 by line number.  Individual entries (as opposed to the whole hash)
 are settable.  Perl only cares about Boolean true here, although
 the values used by F<perl5db.pl> have the form
-C<"$break_condition\0$action">.  Values in this hash are magical
-in numeric context: they are zeros if the line is not breakable.
+C<"$break_condition\0$action">.  
 
 The same holds for evaluated strings that contain subroutines, or
 which are currently being executed.  The $filename for C<eval>ed strings
@@ -53,7 +55,7 @@ looks like C<(eval 34)> or  C<(re_eval 19)>.
 
 =item *
 
-The scalar C<${"_<$filename"}> contains C<"_<$filename">.  This is
+Each scalar C<${"_<$filename"}> contains C<"_<$filename">.  This is
 also the case for evaluated strings that contain subroutines, or
 which are currently being executed.  The $filename for C<eval>ed
 strings looks like C<(eval 34)> or C<(re_eval 19)>.
@@ -400,7 +402,7 @@ shorter than 7 chars.
 
 The fields of interest which may appear in the last line are
 
-=over
+=over 4
 
 =item C<anchored> I<STRING> C<at> I<POS>
 
@@ -691,7 +693,7 @@ Devel::Peek module.
 
 Here is some explanation of that format:
 
-=over
+=over 4
 
 =item C<buckets SMALLEST(APPROX)..GREATEST(APPROX)>
 
@@ -838,7 +840,7 @@ per glob - for glob name, and glob stringification magic.
 
 Here are explanations for other I<Id>s above: 
 
-=over
+=over 4
 
 =item C<717> 
 
@@ -892,7 +894,7 @@ these categories.
 
 If warn() string starts with
 
-=over
+=over 4
 
 =item C<!!!> 
 

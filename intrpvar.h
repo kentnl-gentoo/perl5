@@ -34,7 +34,7 @@ PERLVAR(Iminus_F,	bool)
 PERLVAR(Idoswitches,	bool)
 
 /*
-=for apidoc Amn|bool|PL_dowarn
+=for apidoc mn|bool|PL_dowarn
 
 The C variable which corresponds to Perl's $^W warning variable.
 
@@ -89,20 +89,20 @@ PERLVAR(IDBgv,		GV *)
 PERLVAR(IDBline,	GV *)
 
 /*
-=for apidoc Amn|GV *|PL_DBsub
+=for apidoc mn|GV *|PL_DBsub
 When Perl is run in debugging mode, with the B<-d> switch, this GV contains
 the SV which holds the name of the sub being debugged.  This is the C
 variable which corresponds to Perl's $DB::sub variable.  See
 C<PL_DBsingle>.
 
-=for apidoc Amn|SV *|PL_DBsingle
+=for apidoc mn|SV *|PL_DBsingle
 When Perl is run in debugging mode, with the B<-d> switch, this SV is a
-boolean which indicates whether subs are being single-stepped. 
+boolean which indicates whether subs are being single-stepped.
 Single-stepping is automatically turned on after every step.  This is the C
 variable which corresponds to Perl's $DB::single variable.  See
 C<PL_DBsub>.
 
-=for apidoc Amn|SV *|PL_DBtrace
+=for apidoc mn|SV *|PL_DBtrace
 Trace variable used when Perl is run in debugging mode, with the B<-d>
 switch.  This is the C variable which corresponds to Perl's $DB::trace
 variable.  See C<PL_DBsingle>.
@@ -169,8 +169,7 @@ PERLVARI(Ilaststype,	I32,	OP_STAT)
 PERLVAR(Imess_sv,	SV *)
 
 /* XXX shouldn't these be per-thread? --GSAR */
-PERLVAR(Iors,		char *)		/* output record separator $\ */
-PERLVAR(Iorslen,	STRLEN)
+PERLVAR(Iors_sv,	SV *)		/* output record separator $\ */
 PERLVAR(Iofmt,		char *)		/* output format for numbers $# */
 
 /* interpreter atexit processing */
@@ -181,10 +180,10 @@ PERLVARI(Iexitlistlen,	I32, 0)		/* length of same */
 /*
 =for apidoc Amn|HV*|PL_modglobal
 
-C<PL_modglobal> is a general purpose, interpreter global HV for use by 
+C<PL_modglobal> is a general purpose, interpreter global HV for use by
 extensions that need to keep information on a per-interpreter basis.
-In a pinch, it can also be used as a symbol table for extensions 
-to share data among each other.  It is a good idea to use keys 
+In a pinch, it can also be used as a symbol table for extensions
+to share data among each other.  It is a good idea to use keys
 prefixed by the package name of the extension that owns the data.
 
 =cut
@@ -363,8 +362,8 @@ PERLVARI(Inumeric_standard,	bool,	TRUE)
 					/* Assume simple numerics */
 PERLVARI(Inumeric_local,	bool,	TRUE)
 					/* Assume local numerics */
-PERLVAR(Inumeric_radix,		char)
-					/* The radix character if not '.' */
+PERLVAR(Inumeric_radix,		SV *)
+					/* The radix separator if not '.' */
 
 #endif /* !USE_LOCALE_NUMERIC */
 
@@ -464,6 +463,10 @@ PERLVAR(Ixpvmg_arenaroot,XPVMG*)	/* list of allocated xpvmg areas */
 PERLVAR(Ixpvlv_arenaroot,XPVLV*)	/* list of allocated xpvlv areas */
 PERLVAR(Ixpvbm_arenaroot,XPVBM*)	/* list of allocated xpvbm areas */
 PERLVAR(Ihe_arenaroot,	XPV*)		/* list of allocated he areas */
+
+PERLVAR(Ipsig_pend, int *)		/* per-signal "count" of pending */
+PERLVARI(Isig_pending, int,0)           /* Number if highest signal pending */
+
 
 /* New variables must be added to the very end for binary compatibility.
  * XSUB.h provides wrapper functions via perlapi.h that make this

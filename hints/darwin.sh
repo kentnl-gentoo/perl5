@@ -41,13 +41,16 @@ optimize='-O3';
 # We have a prototype for telldir.
 ccflags="${ccflags} -pipe -fno-common -DHAS_TELLDIR_PROTOTYPE";
 
+# For Errno.
+cppflags='-traditional-cpp';
+
 # Shared library extension is .dylib.
 # Bundle extension is .bundle.
 ld='cc';
 so='dylib';
 dlext='bundle';
 dlsrc='dl_dyld.xs'; usedl='define';
-cccdlflags='';
+cccdlflags=' '; # space, not empty, because otherwise we get -fpic
 lddlflags="${ldflags} -bundle -undefined suppress";
 ldlibpthname='DYLD_LIBRARY_PATH';
 useshrplib='true';
@@ -61,3 +64,4 @@ usevfork='true';
 
 # malloc works
 usemymalloc='n';
+

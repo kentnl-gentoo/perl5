@@ -2,6 +2,8 @@
 
 print "1..30\n";
 
+my $Is_EBCDIC = (ord('A') == 193) ? 1 : 0;
+
 print vec($foo,0,1) == 0 ? "ok 1\n" : "not ok 1\n";
 print length($foo) == 0 ? "ok 2\n" : "not ok 2\n";
 vec($foo,0,1) = 1;
@@ -57,13 +59,20 @@ $x = substr $foo, 1;
 print "not " if vec($x, 0, 8) != 255;
 print "ok 24\n";
 eval { vec($foo, 1, 8) };
-print "not " unless $@ =~ /^Character > 255 in vec\(\) /;
+print "not " if $@;
 print "ok 25\n";
 eval { vec($foo, 1, 8) = 13 };
-print "not " unless $@ =~ /^Character > 255 in vec\(\) /;
+print "not " if $@;
 print "ok 26\n";
-print "not " if $foo ne "\x{100}" . "\xff\xfe";
-print "ok 27\n";
+if ($Is_EBCDIC) {
+    print "not " if $foo ne "\x8c\x0d\xff\x8a\x69";
+    print "ok 27\n";
+}
+else {
+    print "not " if $foo ne "\xc4\x0d\xc3\xbf\xc3\xbe";
+    print "ok 27\n";
+}
+$foo = "\x{100}" . "\xff\xfe";
 $x = substr $foo, 1;
 vec($x, 2, 4) = 7;
 print "not " if $x ne "\xff\xf7";

@@ -19,7 +19,7 @@
  * ADDRCONSTEXT,NEEDCONSTEXT: initialization of data with non-constant values
  *                            (e.g. pointer fields of descriptors)
  */
-#ifdef __DECC
+#if defined(__DECC) || defined(__DECCXX)
 #  pragma message disable (ADDRCONSTEXT,NEEDCONSTEXT)
 #endif
 
@@ -34,7 +34,7 @@
 #define _tolower(c) (((c) < 'A' || (c) > 'Z') ? (c) : (c) | 040)
 /* DECC 1.3 has a funny definition of abs; it's fixed in DECC 4.0, so this
  * can go away once DECC 1.3 isn't in use any more. */
-#if defined(__ALPHA) && defined(__DECC)
+#if defined(__ALPHA) && (defined(__DECC) || defined(__DECCXX))
 #undef abs
 #define abs(__x)        __ABS(__x)
 #undef labs
@@ -51,13 +51,8 @@
 #include <unixio.h>
 #include <unixlib.h>
 #include <file.h>  /* it's not <sys/file.h>, so don't use I_SYS_FILE */
-#if defined(__DECC) && defined(__DECC_VER) && __DECC_VER > 20000000
-#  include <unistd.h> /* DECC has this; VAXC and gcc don't */
-#endif
-
-/* VAXC doesn't have a unary plus operator, so we need to get there indirectly */
-#if defined(VAXC) && !defined(__DECC)
-#  define NO_UNARY_PLUS
+#if (defined(__DECC) && defined(__DECC_VER) && __DECC_VER > 20000000) || defined(__DECCXX)
+#  include <unistd.h> /* DECC has this; gcc doesn't */
 #endif
 
 #ifdef NO_PERL_TYPEDEFS /* a2p; we don't want Perl's special routines */
@@ -170,6 +165,8 @@
 #define vms_do_exec		Perl_vms_do_exec
 #define do_aspawn		Perl_do_aspawn
 #define do_spawn		Perl_do_spawn
+#define my_fdopen               Perl_my_fdopen
+#define my_fclose               Perl_my_fclose
 #define my_fwrite		Perl_my_fwrite
 #define my_flush		Perl_my_flush
 #define my_getpwnam		Perl_my_getpwnam
@@ -377,6 +374,13 @@
  */
 #define fwrite1 my_fwrite
 
+
+#ifndef DONT_MASK_RTL_CALLS
+#  define fdopen my_fdopen
+#  define fclose my_fclose
+#endif
+
+
 /* By default, flush data all the way to disk, not just to RMS buffers */
 #define Fflush(fp) my_flush(fp)
 
@@ -386,11 +390,6 @@
 /* Assorted fiddling with sigs . . . */
 # include <signal.h>
 #define ABORT() abort()
-    /* VAXC's signal.h doesn't #define SIG_ERR, but provides BADSIG instead. */
-#if !defined(SIG_ERR) && defined(BADSIG)
-#  define SIG_ERR BADSIG
-#endif
-
 
 /* Used with our my_utime() routine in vms.c */
 struct utimbuf {
@@ -473,10 +472,10 @@ struct utimbuf {
 #define ENVgetenv_len(v,l) my_getenv_len(v,l,FALSE)
 
 
-/* Thin jacket around cuserid() tomatch Unix' calling sequence */
+/* Thin jacket around cuserid() to match Unix' calling sequence */
 #define getlogin my_getlogin
 
-/* Ditto for sys$hash_passwrod() . . . */
+/* Ditto for sys$hash_password() . . . */
 #define crypt  my_crypt
 
 /* Tweak arg to mkdir & chdir first, so we can tolerate trailing /. */
@@ -539,7 +538,7 @@ struct passwd {
  * to map the unsigned int we want and the unsigned short[3] the CRTL
  * returns into the same member, since gcc has different ideas than DECC
  * and VAXC about sizing union types.
- * N.B 2. The routine cando() in vms.c assumes that &stat.st_ino is the
+ * N.B. 2. The routine cando() in vms.c assumes that &stat.st_ino is the
  * address of a FID.
  */
 /* First, grab the system types, so we don't clobber them later */
@@ -703,6 +702,7 @@ int	Perl_rmscopy (pTHX_ char *, char *, int);
 #endif
 char *	my_getenv_len (const char *, unsigned long *, bool);
 int	vmssetenv (char *, char *, struct dsc$descriptor_s **);
+void	Perl_vmssetuserlnm(char *name, char *eqv);
 char *	my_crypt (const char *, const char *);
 Pid_t	my_waitpid (Pid_t, int *, int);
 char *	my_gconvert (double, int, int, char *);
@@ -736,6 +736,8 @@ bool	vms_do_aexec (SV *, SV **, SV **);
 bool	vms_do_exec (char *);
 unsigned long int	do_aspawn (void *, void **, void **);
 unsigned long int	do_spawn (char *);
+FILE *  my_fdopen (int, const char *);
+int     my_fclose (FILE *);
 int	my_fwrite (void *, size_t, size_t, FILE *);
 int	my_flush (FILE *);
 struct passwd *	my_getpwnam (char *name);
@@ -776,5 +778,7 @@ typedef char __VMS_SEPYTOTORP__;
 #if defined(fileno) && defined(__DECC_VER) && __DECC_VER < 50300000
 #  undef fileno 
 #endif 
+
+#define NO_ENVIRON_ARRAY
 
 #endif  /* __vmsish_h_included */

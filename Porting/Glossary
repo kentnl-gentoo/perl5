@@ -139,8 +139,9 @@ binexp (bin.U):
 	configuration time, for use in your makefiles.
 
 bison (Loc.U):
-	This variable is defined but not used by Configure.
-	The value is a plain '' and is not useful.
+	This variable is used internally by Configure to determine the
+	full pathname (if any) of the bison program.  After Configure runs,
+	the value is reset to a plain "bison" and is not useful.
 
 byacc (Loc.U):
 	This variable is used internally by Configure to determine the
@@ -174,8 +175,8 @@ cat (Loc.U):
 cc (cc.U):
 	This variable holds the name of a command to execute a C compiler which
 	can resolve multiple global references that happen to have the same
-	name.  Usual values are 'cc', 'Mcc', 'cc -M', and 'gcc'.
-	Fervent ANSI compilers may be called 'c89'. AIX has xlc.
+	name.  Usual values are 'cc' and 'gcc'.
+	Fervent ANSI compilers may be called 'c89'.  AIX has xlc.
 
 cccdlflags (dlsrc.U):
 	This variable contains any special flags that might need to be
@@ -340,6 +341,10 @@ csh (Loc.U):
 	full pathname (if any) of the csh program.  After Configure runs,
 	the value is reset to a plain "csh" and is not useful.
 
+d__fwalk (d__fwalk.U):
+	This variable conditionally defines HAS__FWALK if _fwalk() is
+	available to apply a function to all the file handles.
+
 d_access (d_access.U):
 	This variable conditionally defines HAS_ACCESS if the access() system
 	call is available to check for access permissions using real IDs.
@@ -431,6 +436,10 @@ d_chsize (d_chsize.U):
 d_closedir (d_closedir.U):
 	This variable conditionally defines HAS_CLOSEDIR if closedir() is
 	available.
+
+d_cmsghdr_s (d_cmsghdr_s.U):
+	This variable conditionally defines the HAS_STRUCT_CMSGHDR symbol,
+	which indicates that the struct cmsghdr is supported.
 
 d_const (d_const.U):
 	This variable conditionally defines the HASCONST symbol, which
@@ -545,6 +554,10 @@ d_fcntl (d_fcntl.U):
 	This variable conditionally defines the HAS_FCNTL symbol, and indicates
 	whether the fcntl() function exists
 
+d_fcntl_can_lock (d_fcntl_can_lock.U):
+	This variable conditionally defines the FCNTL_CAN_LOCK symbol
+	and indicates whether file locking with fcntl() works.
+
 d_fd_macros (d_fd_set.U):
 	This variable contains the eventual value of the HAS_FD_MACROS symbol,
 	which indicates if your C compiler knows about the macros which
@@ -609,6 +622,10 @@ d_fstatfs (d_fstatfs.U):
 d_fstatvfs (d_statvfs.U):
 	This variable conditionally defines the HAS_FSTATVFS symbol, which
 	indicates to the C program that the fstatvfs() routine is available.
+
+d_fsync (d_fsync.U):
+	This variable conditionally defines the HAS_FSYNC symbol, which
+	indicates to the C program that the fsync() routine is available.
 
 d_ftello (d_ftello.U):
 	This variable conditionally defines the HAS_FTELLO symbol, which
@@ -676,6 +693,10 @@ d_gethostprotos (d_gethostprotos.U):
 	prototypes for the various gethost*() functions.  
 	See also netdbtype.U for probing for various netdb types.
 
+d_getitimer (d_getitimer.U):
+	This variable conditionally defines the HAS_GETITIMER symbol, which
+	indicates to the C program that the getitimer() routine is available.
+
 d_getlogin (d_getlogin.U):
 	This variable conditionally defines the HAS_GETLOGIN symbol, which
 	indicates to the C program that the getlogin() routine is available
@@ -710,6 +731,10 @@ d_getnetprotos (d_getnetprotos.U):
 	which indicates to the C program that <netdb.h> supplies
 	prototypes for the various getnet*() functions.  
 	See also netdbtype.U for probing for various netdb types.
+
+d_getpagsz (d_getpagsz.U):
+	This variable conditionally defines HAS_GETPAGESIZE if getpagesize()
+	is available to get the system page size.
 
 d_getpbyname (d_getprotby.U):
 	This variable conditionally defines the HAS_GETPROTOBYNAME 
@@ -1007,6 +1032,10 @@ d_msgget (d_msgget.U):
 	This variable conditionally defines the HAS_MSGGET symbol, which
 	indicates to the C program that the msgget() routine is available.
 
+d_msghdr_s (d_msghdr_s.U):
+	This variable conditionally defines the HAS_STRUCT_MSGHDR symbol,
+	which indicates that the struct msghdr is supported.
+
 d_msgrcv (d_msgrcv.U):
 	This variable conditionally defines the HAS_MSGRCV symbol, which
 	indicates to the C program that the msgrcv() routine is available.
@@ -1209,6 +1238,14 @@ d_readlink (d_readlink.U):
 	indicates to the C program that the readlink() routine is available
 	to read the value of a symbolic link.
 
+d_readv (d_readv.U):
+	This variable conditionally defines the HAS_READV symbol, which
+	indicates to the C program that the readv() routine is available.
+
+d_recvmsg (d_recvmsg.U):
+	This variable conditionally defines the HAS_RECVMSG symbol, which
+	indicates to the C program that the recvmsg() routine is available.
+
 d_rename (d_rename.U):
 	This variable conditionally defines the HAS_RENAME symbol, which
 	indicates to the C program that the rename() routine is available
@@ -1234,6 +1271,12 @@ d_sanemcmp (d_sanemcmp.U):
 	This variable conditionally defines the HAS_SANE_MEMCMP symbol if
 	the memcpy() routine is available and can be used to compare relative
 	magnitudes of chars with their high bits set.
+
+d_sbrkproto (d_sbrkproto.U):
+	This variable conditionally defines the HAS_SBRK_PROTO symbol,
+	which indicates to the C program that the system provides
+	a prototype for the sbrk() function.  Otherwise, it is
+	up to the program to supply one.
 
 d_sched_yield (d_pthread_y.U):
 	This variable conditionally defines the HAS_SCHED_YIELD
@@ -1282,6 +1325,10 @@ d_semop (d_semop.U):
 	This variable conditionally defines the HAS_SEMOP symbol, which
 	indicates to the C program that the semop() routine is available.
 
+d_sendmsg (d_sendmsg.U):
+	This variable conditionally defines the HAS_SENDMSG symbol, which
+	indicates to the C program that the sendmsg() routine is available.
+
 d_setegid (d_setegid.U):
 	This variable conditionally defines the HAS_SETEGID symbol, which
 	indicates to the C program that the setegid() routine is available
@@ -1305,6 +1352,10 @@ d_setgrps (d_setgrps.U):
 d_sethent (d_sethent.U):
 	This variable conditionally defines HAS_SETHOSTENT if sethostent() is
 	available.
+
+d_setitimer (d_setitimer.U):
+	This variable conditionally defines the HAS_SETITIMER symbol, which
+	indicates to the C program that the setitimer() routine is available.
 
 d_setlinebuf (d_setlnbuf.U):
 	This variable conditionally defines the HAS_SETLINEBUF symbol, which
@@ -1427,10 +1478,19 @@ d_sigaction (d_sigaction.U):
 	This variable conditionally defines the HAS_SIGACTION symbol, which
 	indicates that the Vr4 sigaction() routine is available.
 
+d_sigprocmask (d_sigprocmask.U):
+	This variable conditionally defines HAS_SIGPROCMASK
+	if sigprocmask() is available to examine or change the signal mask
+	of the calling process.
+
 d_sigsetjmp (d_sigsetjmp.U):
 	This variable conditionally defines the HAS_SIGSETJMP symbol,
 	which indicates that the sigsetjmp() routine is available to
 	call setjmp() and optionally save the process's signal mask.
+
+d_sockatmark (d_sockatmark.U):
+	This variable conditionally defines the HAS_SOCKATMARK symbol, which
+	indicates to the C program that the sockatmark() routine is available.
 
 d_socket (d_socket.U):
 	This variable conditionally defines HAS_SOCKET, which indicates
@@ -1477,6 +1537,15 @@ d_stdio_cnt_lval (d_stdstdio.U):
 d_stdio_ptr_lval (d_stdstdio.U):
 	This variable conditionally defines STDIO_PTR_LVALUE if the
 	FILE_ptr macro can be used as an lvalue.
+
+d_stdio_ptr_lval_nochange_cnt (d_stdstdio.U):
+	This symbol is defined if using the FILE_ptr macro as an lvalue
+	to increase the pointer by n leaves File_cnt(fp) unchanged.
+
+d_stdio_ptr_lval_sets_cnt (d_stdstdio.U):
+	This symbol is defined if using the FILE_ptr macro as an lvalue
+	to increase the pointer by n has the side effect of decreasing the
+	value of File_cnt(fp) by n.
 
 d_stdio_stream_array (stdio_streams.U):
 	This variable tells whether there is an array holding
@@ -1532,6 +1601,10 @@ d_strtold (d_strtold.U):
 d_strtoll (d_strtoll.U):
 	This variable conditionally defines the HAS_STRTOLL symbol, which
 	indicates to the C program that the strtoll() routine is available.
+
+d_strtoq (d_strtoq.U):
+	This variable conditionally defines the HAS_STRTOQ symbol, which
+	indicates to the C program that the strtoq() routine is available.
 
 d_strtoul (d_strtoul.U):
 	This variable conditionally defines the HAS_STRTOUL symbol, which
@@ -1618,6 +1691,14 @@ d_tzname (d_tzname.U):
 	This variable conditionally defines HAS_TZNAME if tzname[] is
 	available to access timezone names.
 
+d_u32align (d_u32align.U):
+	This variable tells whether you must access character data
+	through U32-aligned pointers.
+
+d_ualarm (d_ualarm.U):
+	This variable conditionally defines the HAS_UALARM symbol, which
+	indicates to the C program that the ualarm() routine is available.
+
 d_umask (d_umask.U):
 	This variable conditionally defines the HAS_UMASK symbol, which
 	indicates to the C program that the umask() routine is available.
@@ -1631,6 +1712,10 @@ d_uname (d_gethname.U):
 d_union_semun (d_union_semun.U):
 	This variable conditionally defines HAS_UNION_SEMUN if the
 	union semun is defined by including <sys/sem.h>.
+
+d_usleep (d_usleep.U):
+	This variable conditionally defines HAS_USLEEP if usleep() is
+	available to do high granularity sleeps.
 
 d_ustat (d_ustat.U):
 	This variable conditionally defines HAS_USTAT if ustat() is
@@ -1691,6 +1776,10 @@ d_wctomb (d_wctomb.U):
 	This variable conditionally defines the HAS_WCTOMB symbol, which
 	indicates to the C program that the wctomb() routine is available
 	to convert a wide character to a multibyte.
+
+d_writev (d_writev.U):
+	This variable conditionally defines the HAS_WRITEV symbol, which
+	indicates to the C program that the writev() routine is available.
 
 d_xenix (Guess.U):
 	This variable conditionally defines the symbol XENIX, which alerts
@@ -1912,12 +2001,6 @@ hostcat (nis.U):
 	"ypcat hosts" when NIS is used.
 	On some systems, such as os390, there may be no equivalent
 	command, in which case this variable is unset.
-
-huge (models.U):
-	This variable contains a flag which will tell the C compiler and loader
-	to produce a program running with a huge memory model.  If the
-	huge model is not supported, contains the flag to produce large
-	model programs.  It is up to the Makefile to use this.
 
 i16size (perlxv.U):
 	This variable is the size of an I16 in bytes.
@@ -2414,6 +2497,11 @@ intsize (intsize.U):
 	This variable contains the value of the INTSIZE symbol, which
 	indicates to the C program how many bytes there are in an int.
 
+issymlink (issymlink.U):
+	This variable holds the test command to test for a symbolic link
+	(if they are supported).  Typical values include 'test -h' and
+	'test -L'.
+
 ivdformat (perlxvf.U):
 	This variable contains the format string used for printing
 	a Perl IV as a signed decimal integer. 
@@ -2431,11 +2519,6 @@ known_extensions (Extensions.U):
 ksh (Loc.U):
 	This variable is defined but not used by Configure.
 	The value is a plain '' and is not useful.
-
-large (models.U):
-	This variable contains a flag which will tell the C compiler and loader
-	to produce a program running with a large memory model.  It is up to
-	the Makefile to use this.
 
 ld (dlsrc.U):
 	This variable indicates the program to be used to link
@@ -2660,12 +2743,6 @@ Mcc (Loc.U):
 	full pathname (if any) of the Mcc program.  After Configure runs,
 	the value is reset to a plain "Mcc" and is not useful.
 
-medium (models.U):
-	This variable contains a flag which will tell the C compiler and loader
-	to produce a program running with a medium memory model.  If the
-	medium model is not supported, contains the flag to produce large
-	model programs.  It is up to the Makefile to use this.
-
 mips_type (usrinc.U):
 	This variable holds the environment type for the mips system.
 	Possible values are "BSD 4.3" and "System V".
@@ -2679,11 +2756,6 @@ mmaptype (d_mmap.U):
 	This symbol contains the type of pointer returned by mmap()
 	(and simultaneously the type of the first argument).
 	It can be 'void *' or 'caddr_t'.
-
-models (models.U):
-	This variable contains the list of memory models supported by this
-	system.  Possible component values are none, split, unsplit, small,
-	medium, large, and huge.  The component values are space separated.
 
 modetype (modetype.U):
 	This variable defines modetype to be something like mode_t, 
@@ -2730,6 +2802,15 @@ n (n.U):
 	This variable contains the '-n' flag if that is what causes the echo
 	command to suppress newline.  Otherwise it is null.  Correct usage is
 	$echo $n "prompt for a question: $c".
+
+need_va_copy (need_va_copy.U):
+	This symbol, if defined, indicates that the system stores
+	the variable argument list datatype, va_list, in a format
+	that cannot be copied by simple assignment, so that some
+	other means must be used when copying is required.
+	As such systems vary in their provision (or non-provision)
+	of copying mechanisms, handy.h defines a platform-
+	independent macro, Perl_va_copy(src, dst), to do the job.
 
 netdb_hlen_type (netdbtype.U):
 	This variable holds the type used for the 2nd argument to
@@ -2907,6 +2988,10 @@ PERL_VERSION (Oldsyms.U):
 
 perladmin (perladmin.U):
 	Electronic mail address of the perl5 administrator.
+
+perllibs (End.U):
+	The list of libraries needed by Perl only (any libraries needed
+	by extensions only will by dropped, if using dynamic loading).
 
 perlpath (perlpath.U):
 	This variable contains the eventual value of the PERLPATH symbol,
@@ -3152,6 +3237,10 @@ sig_num_init (sig_name.U):
 	below.  A "ZERO" is prepended to the list, and the list is 
 	terminated with a plain 0.
 
+sig_size (sig_name.U):
+	This variable contains the number of elements of the sig_name
+	and sig_num arrays, excluding the final NULL entry.
+
 signal_t (d_voidsig.U):
 	This variable holds the type of the signal handler (void or int).
 
@@ -3230,11 +3319,6 @@ smail (Loc.U):
 	This variable is defined but not used by Configure.
 	The value is a plain '' and is not useful.
 
-small (models.U):
-	This variable contains a flag which will tell the C compiler and loader
-	to produce a program running with a small memory model.  It is up to
-	the Makefile to use this.
-
 so (so.U):
 	This variable holds the extension used to identify shared libraries
 	(also known as shared objects) on the system. Usually set to 'so'.
@@ -3263,12 +3347,6 @@ spackage (package.U):
 spitshell (spitshell.U):
 	This variable contains the command necessary to spit out a runnable
 	shell on this system.  It is either cat or a grep '-v' for # comments.
-
-split (models.U):
-	This variable contains a flag which will tell the C compiler and loader
-	to produce a program that will run in separate I and D space, for those
-	machines that support separation of instruction and data space.  It is
-	up to the Makefile to use this.
 
 sPRId64 (quadfio.U):
 	This variable, if defined, contains the string used by stdio to
@@ -3715,6 +3793,18 @@ version (patchlevel.U):
 	This is suitable for use as a directory name, and hence is
 	filesystem dependent.
 
+versiononly (versiononly.U):
+	If set, this symbol indicates that only the version-specific
+	components of a perl installation should be installed.
+	This may be useful for making a test installation of a new
+	version without disturbing the existing installation.
+	Setting versiononly is equivalent to setting installperl's -v option.
+	In particular, the non-versioned scripts and programs such as
+	a2p, c2ph, h2xs, pod2*, and perldoc are not installed
+	(see INSTALL for a more complete list).  Nor are the man
+	pages installed.
+	Usually, this is undef.
+
 vi (Loc.U):
 	This variable is defined but not used by Configure.
 	The value is a plain '' and is not useful.
@@ -3745,6 +3835,14 @@ xs_apiversion (xs_apiversion.U):
 	debugging, 64bits, sfio, etc., are not checked for currently,
 	though in principle we could go snooping around in old
 	Config.pm files.
+
+yacc (yacc.U):
+	This variable holds the name of the compiler compiler we
+	want to use in the Makefile. It can be yacc, byacc, or bison -y.
+
+yaccflags (yacc.U):
+	This variable contains any additional yacc flags desired by the
+	user.  It is up to the Makefile to use this.
 
 zcat (Loc.U):
 	This variable is defined but not used by Configure.

@@ -4,24 +4,28 @@ require Exporter;
 use Config;
 use File::Find;
 use File::Copy 'copy';
+use File::Spec::Functions qw(splitpath);
 use Carp;
 use strict;
 
-use vars qw($VERSION @ISA @EXPORT_OK
-	    $Is_VMS $Debug $Verbose $Quiet $MANIFEST $found);
+our ($VERSION,@ISA,@EXPORT_OK,
+	    $Is_MacOS,$Is_VMS,
+	    $Debug,$Verbose,$Quiet,$MANIFEST,$found,$DEFAULT_MSKIP);
 
 $VERSION = substr(q$Revision: 1.33 $, 10);
 @ISA=('Exporter');
 @EXPORT_OK = ('mkmanifest', 'manicheck', 'fullcheck', 'filecheck', 
 	      'skipcheck', 'maniread', 'manicopy');
 
+$Is_MacOS = $^O eq 'MacOS';
 $Is_VMS = $^O eq 'VMS';
 if ($Is_VMS) { require File::Basename }
 
-$Debug = 0;
+$Debug = $ENV{PERL_MM_MANIFEST_DEBUG} || 0;
 $Verbose = 1;
 $Quiet = 0;
 $MANIFEST = 'MANIFEST';
+$DEFAULT_MSKIP = (splitpath($INC{"ExtUtils/Manifest.pm"}))[1]."$MANIFEST.SKIP";
 
 # Really cool fix from Ilya :)
 unless (defined $Config{d_link}) {
@@ -49,6 +53,7 @@ sub mkmanifest {
 	}
 	my $text = $all{$file};
 	($file,$text) = split(/\s+/,$text,2) if $Is_VMS && $text;
+	$file = _unmacify($file);
 	my $tabs = (5 - (length($file)+1)/8);
 	$tabs = 1 if $tabs < 1;
 	$tabs = 0 unless $text;
@@ -60,10 +65,11 @@ sub mkmanifest {
 sub manifind {
     local $found = {};
     find(sub {return if -d $_;
-	      (my $name = $File::Find::name) =~ s|./||;
+	      (my $name = $File::Find::name) =~ s|^\./||;
+	      $name =~ s/^:([^:]+)$/$1/ if $Is_MacOS;
 	      warn "Debug: diskfile $name\n" if $Debug;
-	      $name  =~ s#(.*)\.$#\L$1# if $Is_VMS;
-	      $found->{$name} = "";}, ".");
+	      $name =~ s#(.*)\.$#\L$1# if $Is_VMS;
+	      $found->{$name} = "";}, $Is_MacOS ? ":" : ".");
     $found;
 }
 
@@ -115,7 +121,8 @@ sub _manicheck {
 	    }
 	    warn "Debug: manicheck checking from disk $file\n" if $Debug;
 	    unless ( exists $read->{$file} ) {
-		warn "Not in $MANIFEST: $file\n" unless $Quiet;
+		my $canon = "\t" . _unmacify($file) if $Is_MacOS;
+		warn "Not in $MANIFEST: $file$canon\n" unless $Quiet;
 		push @missentry, $file;
 	    }
 	}
@@ -135,7 +142,13 @@ sub maniread {
     while (<M>){
 	chomp;
 	next if /^#/;
-	if ($Is_VMS) {
+	if ($Is_MacOS) {
+	    my($item,$text) = /^(\S+)\s*(.*)/;
+	    $item = _macify($item);
+	    $item =~ s/\\([0-3][0-7][0-7])/sprintf("%c", oct($1))/ge;
+	    $read->{$item}=$text;
+	}
+	elsif ($Is_VMS) {
 	    my($file)= /^(\S+)/;
 	    next unless $file;
 	    my($base,$dir) = File::Basename::fileparse($file);
@@ -160,13 +173,12 @@ sub _maniskip {
     my @skip ;
     $mfile ||= "$MANIFEST.SKIP";
     local *M;
-    return $matches unless -f $mfile;
-    open M, $mfile or return $matches;
+    open M, $mfile or open M, $DEFAULT_MSKIP or return $matches;
     while (<M>){
 	chomp;
 	next if /^#/;
 	next if /^\s*$/;
-	push @skip, $_;
+	push @skip, _macify($_);
     }
     close M;
     my $opts = $Is_VMS ? 'oi ' : 'o ';
@@ -187,15 +199,24 @@ sub manicopy {
     require File::Basename;
     my(%dirs,$file);
     $target = VMS::Filespec::unixify($target) if $Is_VMS;
-    File::Path::mkpath([ $target ],1,$Is_VMS ? undef : 0755);
+    File::Path::mkpath([ $target ],! $Quiet,$Is_VMS ? undef : 0755);
     foreach $file (keys %$read){
-	$file = VMS::Filespec::unixify($file) if $Is_VMS;
-	if ($file =~ m!/!) { # Ilya, that hurts, I fear, or maybe not?
-	    my $dir = File::Basename::dirname($file);
-	    $dir = VMS::Filespec::unixify($dir) if $Is_VMS;
-	    File::Path::mkpath(["$target/$dir"],1,$Is_VMS ? undef : 0755);
+    	if ($Is_MacOS) {
+	    if ($file =~ m!:!) { 
+	   	my $dir = _maccat($target, $file);
+		$dir =~ s/[^:]+$//;
+	    	File::Path::mkpath($dir,1,0755);
+	    }
+	    cp_if_diff($file, _maccat($target, $file), $how);
+	} else {
+	    $file = VMS::Filespec::unixify($file) if $Is_VMS;
+	    if ($file =~ m!/!) { # Ilya, that hurts, I fear, or maybe not?
+		my $dir = File::Basename::dirname($file);
+		$dir = VMS::Filespec::unixify($dir) if $Is_VMS;
+		File::Path::mkpath(["$target/$dir"],! $Quiet,$Is_VMS ? undef : 0755);
+	    }
+	    cp_if_diff($file, "$target/$file", $how);
 	}
-	cp_if_diff($file, "$target/$file", $how);
     }
 }
 
@@ -204,8 +225,8 @@ sub cp_if_diff {
     -f $from or carp "$0: $from not found";
     my($diff) = 0;
     local(*F,*T);
-    open(F,$from) or croak "Can't read $from: $!\n";
-    if (open(T,$to)) {
+    open(F,"< $from\0") or croak "Can't read $from: $!\n";
+    if (open(T,"< $to\0")) {
 	while (<F>) { $diff++,last if $_ ne <T>; }
 	$diff++ unless eof(T);
 	close T;
@@ -233,12 +254,12 @@ sub cp {
     copy($srcFile,$dstFile);
     utime $access, $mod + ($Is_VMS ? 1 : 0), $dstFile;
     # chmod a+rX-w,go-w
-    chmod(  0444 | ( $perm & 0111 ? 0111 : 0 ),  $dstFile );
+    chmod(  0444 | ( $perm & 0111 ? 0111 : 0 ),  $dstFile ) unless ($^O eq 'MacOS');
 }
 
 sub ln {
     my ($srcFile, $dstFile) = @_;
-    return &cp if $Is_VMS;
+    return &cp if $Is_VMS or ($^O eq 'MSWin32' and Win32::IsWin95());
     link($srcFile, $dstFile);
     local($_) = $dstFile; # chmod a+r,go-w+X (except "X" only applies to u=x)
     my $mode= 0444 | (stat)[2] & 0700;
@@ -256,6 +277,42 @@ sub best {
     } else {
 	ln($srcFile, $dstFile) or cp($srcFile, $dstFile);
     }
+}
+
+sub _macify {
+    my($file) = @_;
+
+    return $file unless $Is_MacOS;
+    
+    $file =~ s|^\./||;
+    if ($file =~ m|/|) {
+	$file =~ s|/+|:|g;
+	$file = ":$file";
+    }
+    
+    $file;
+}
+
+sub _maccat {
+    my($f1, $f2) = @_;
+    
+    return "$f1/$f2" unless $Is_MacOS;
+    
+    $f1 .= ":$f2";
+    $f1 =~ s/([^:]:):/$1/g;
+    return $f1;
+}
+
+sub _unmacify {
+    my($file) = @_;
+
+    return $file unless $Is_MacOS;
+    
+    $file =~ s|^:||;
+    $file =~ s|([/ \n])|sprintf("\\%03o", unpack("c", $1))|ge;
+    $file =~ y|:|/|;
+    
+    $file;
 }
 
 1;
@@ -344,14 +401,27 @@ expressions should appear one on each line. Blank lines and lines
 which start with C<#> are skipped.  Use C<\#> if you need a regular
 expression to start with a sharp character. A typical example:
 
+    # Version control files and dirs.
     \bRCS\b
+    \bCVS\b
+    ,v$
+
+    # Makemaker generated files and dirs.
     ^MANIFEST\.
     ^Makefile$
-    ~$
-    \.html$
-    \.old$
     ^blib/
     ^MakeMaker-\d
+
+    # Temp, old and emacs backup files.
+    ~$
+    \.old$
+    ^#.*#$
+    ^\.#
+
+If no MANIFEST.SKIP file is found, a default set of skips will be
+used, similar to the example above.  If you want nothing skipped,
+simply make an empty MANIFEST.SKIP file.
+
 
 =head1 EXPORT_OK
 
@@ -369,11 +439,15 @@ and a developer version including RCS).
 C<$ExtUtils::Manifest::Quiet> defaults to 0. If set to a true value,
 all functions act silently.
 
+C<$ExtUtils::Manifest::Debug> defaults to 0.  If set to a true value,
+or if PERL_MM_MANIFEST_DEBUG is true, debugging output will be
+produced.
+
 =head1 DIAGNOSTICS
 
 All diagnostic output is sent to C<STDERR>.
 
-=over
+=over 4
 
 =item C<Not in MANIFEST:> I<file>
 
@@ -397,12 +471,22 @@ to MANIFEST. $Verbose is set to 1 by default.
 
 =back
 
+=head1 ENVIRONMENT
+
+=over 4
+
+=item B<PERL_MM_MANIFEST_DEBUG>
+
+Turns on debugging
+
+=back
+
 =head1 SEE ALSO
 
 L<ExtUtils::MakeMaker> which has handy targets for most of the functionality.
 
 =head1 AUTHOR
 
-Andreas Koenig <F<koenig@franz.ww.TU-Berlin.DE>>
+Andreas Koenig <F<andreas.koenig@anima.de>>
 
 =cut

@@ -4,7 +4,7 @@ use Test::Harness 1.1601 ();
 use Carp;
 our($VERSION, @ISA, @EXPORT, @EXPORT_OK, $ntest, $TestLevel); #public-ish
 our($TESTOUT, $ONFAIL, %todo, %history, $planned, @FAILDETAIL); #private-ish
-$VERSION = '1.14';
+$VERSION = '1.15';
 require Exporter;
 @ISA=('Exporter');
 @EXPORT=qw(&plan &ok &skip);
@@ -81,8 +81,18 @@ sub ok ($;$$) {
 	$context .= ' TODO?!' if $todo;
 	print $TESTOUT "ok $ntest # ($context)\n";
     } else {
-	print $TESTOUT "not " if !$ok;
-	print $TESTOUT "ok $ntest\n";
+	# Issuing two separate print()s causes severe trouble with 
+	# Test::Harness on VMS.  The "not "'s for failed tests occur
+	# on a separate line and would not get counted as failures.
+	#print $TESTOUT "not " if !$ok;
+	#print $TESTOUT "ok $ntest\n";
+	# Replace with one of a pair of single print()'s as a workaround:
+	if (!$ok) {
+	    print $TESTOUT "not ok $ntest\n";
+        }
+        else {
+	    print $TESTOUT "ok $ntest\n";
+        }
 	
 	if (!$ok) {
 	    my $detail = { 'repetition' => $repetition, 'package' => $pkg,
@@ -141,7 +151,7 @@ __END__
 
 =head1 NAME
 
-  Test - provides a simple framework for writing test scripts
+Test - provides a simple framework for writing test scripts
 
 =head1 SYNOPSIS
 
@@ -177,9 +187,9 @@ __END__
 
 =head1 DESCRIPTION
 
-L<Test::Harness> expects to see particular output when it executes
-tests.  This module aims to make writing proper test scripts just a
-little bit easier (and less error prone :-).
+L<Test::Harness|Test::Harness> expects to see particular output when it
+executes tests.  This module aims to make writing proper test scripts just
+a little bit easier (and less error prone :-).
 
 =head1 TEST TYPES
 

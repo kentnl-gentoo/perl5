@@ -15,7 +15,7 @@ print "1..", scalar @prgs, "\n";
 
 $tmpfile = "misctmp000";
 1 while -f ++$tmpfile;
-END { unlink $tmpfile if $tmpfile; }
+END { while($tmpfile && unlink $tmpfile){} }
 
 $CAT = (($^O eq 'MSWin32') ? '.\perl -e "print <>"' : 'cat');
 
@@ -26,6 +26,9 @@ for (@prgs){
     }
     my($prog,$expected) = split(/\nEXPECT\n/, $_);
     open TEST, ">$tmpfile" or die "Cannot open $tmpfile: $!";
+    $prog =~ s#/dev/null#NL:# if $^O eq 'VMS';     
+    $prog =~ s#if \(-e _ and -f _ and -r _\)#if (-e _ and -f _)# if $^O eq 'VMS';  # VMS file locking 
+
     print TEST $prog, "\n";
     close TEST or die "Cannot close $tmpfile: $!";
 
@@ -371,8 +374,8 @@ argv <e>
 # fdopen from a system descriptor to a system descriptor used to close
 # the former.
 open STDERR, '>&=STDOUT' or die $!;
-select STDOUT; $| = 1; print fileno STDOUT;
-select STDERR; $| = 1; print fileno STDERR;
+select STDOUT; $| = 1; print fileno STDOUT or die $!;
+select STDERR; $| = 1; print fileno STDERR or die $!;
 EXPECT
 1
 2
@@ -562,3 +565,85 @@ Modification of a read-only value attempted at - line 2.
 print qw(ab a\b a\\b);
 EXPECT
 aba\ba\b
+########
+# This test is here instead of pragma/locale.t because
+# the bug depends on in the internal state of the locale
+# settings and pragma/locale messes up that state pretty badly.
+# We need a "fresh run".
+BEGIN {
+    eval { require POSIX };
+    if ($@) {
+	exit(0); # running minitest?
+    }
+}
+use Config;
+my $have_setlocale = $Config{d_setlocale} eq 'define';
+$have_setlocale = 0 if $@;
+# Visual C's CRT goes silly on strings of the form "en_US.ISO8859-1"
+# and mingw32 uses said silly CRT
+$have_setlocale = 0 if $^O eq 'MSWin32' && $Config{cc} =~ /^(cl|gcc)/i;
+exit(0) unless $have_setlocale;
+my @locales;
+if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a|")) {
+    while(<LOCALES>) {
+        chomp;
+        push(@locales, $_);
+    }
+    close(LOCALES);
+}
+exit(0) unless @locales;
+for (@locales) {
+    use POSIX qw(locale_h);
+    use locale;
+    setlocale(LC_NUMERIC, $_) or next;
+    my $s = sprintf "%g %g", 3.1, 3.1;
+    next if $s eq '3.1 3.1' || $s =~ /^(3.+1) \1$/;
+    print "$_ $s\n";
+}
+EXPECT
+########
+die qr(x)
+EXPECT
+(?-xism:x) at - line 1.
+########
+# 20001210.003 mjd@plover.com
+format REMITOUT_TOP =
+FOO
+.
+
+format REMITOUT =
+BAR
+.
+
+# This loop causes a segv in 5.6.0
+for $lineno (1..61) {
+   write REMITOUT;
+}
+
+print "It's OK!";
+EXPECT
+It's OK!
+########
+# Inaba Hiroto
+reset;
+if (0) {
+  if ("" =~ //) {
+  }
+}
+########
+# Nicholas Clark
+$ENV{TERM} = 0;
+reset;
+// if 0;
+########
+# Vadim Konovalov
+use strict;
+sub new_pmop($) {
+    my $pm = shift;
+    return eval "sub {shift=~/$pm/}";
+}
+new_pmop "abcdef"; reset;
+new_pmop "abcdef"; reset;
+new_pmop "abcdef"; reset;
+new_pmop "abcdef"; reset;
+

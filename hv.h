@@ -1,6 +1,6 @@
 /*    hv.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -43,14 +43,22 @@ struct xpvhv {
 };
 
 /* hash a key */
+/* FYI: This is the "One-at-a-Time" algorithm by Bob Jenkins */
+/* from requirements by Colin Plumb. */
+/* (http://burtleburtle.net/bob/hash/doobs.html) */
 #define PERL_HASH(hash,str,len) \
      STMT_START	{ \
 	register const char *s_PeRlHaSh = str; \
 	register I32 i_PeRlHaSh = len; \
 	register U32 hash_PeRlHaSh = 0; \
-	while (i_PeRlHaSh--) \
-	    hash_PeRlHaSh = hash_PeRlHaSh * 33 + *s_PeRlHaSh++; \
-	(hash) = hash_PeRlHaSh + (hash_PeRlHaSh>>5); \
+	while (i_PeRlHaSh--) { \
+	    hash_PeRlHaSh += *s_PeRlHaSh++; \
+	    hash_PeRlHaSh += (hash_PeRlHaSh << 10); \
+	    hash_PeRlHaSh ^= (hash_PeRlHaSh >> 6); \
+	} \
+	hash_PeRlHaSh += (hash_PeRlHaSh << 3); \
+	hash_PeRlHaSh ^= (hash_PeRlHaSh >> 11); \
+	(hash) = (hash_PeRlHaSh + (hash_PeRlHaSh << 15)); \
     } STMT_END
 
 /*
@@ -151,6 +159,8 @@ C<SV*>.
 #define HeKEY(he)		HEK_KEY(HeKEY_hek(he))
 #define HeKEY_sv(he)		(*(SV**)HeKEY(he))
 #define HeKLEN(he)		HEK_LEN(HeKEY_hek(he))
+#define HeKUTF8(he)  HEK_UTF8(HeKEY_hek(he))
+#define HeKLEN_UTF8(he)  (HeKUTF8(he) ? -HeKLEN(he) : HeKLEN(he))
 #define HeVAL(he)		(he)->hent_val
 #define HeHASH(he)		HEK_HASH(HeKEY_hek(he))
 #define HePV(he,lp)		((HeKLEN(he) == HEf_SVKEY) ?		\
@@ -175,6 +185,7 @@ C<SV*>.
 #define HEK_HASH(hek)		(hek)->hek_hash
 #define HEK_LEN(hek)		(hek)->hek_len
 #define HEK_KEY(hek)		(hek)->hek_key
+#define HEK_UTF8(hek)  (*(HEK_KEY(hek)+HEK_LEN(hek)))
 
 /* calculate HV array allocation */
 #if defined(STRANGE_MALLOC) || defined(MYMALLOC)

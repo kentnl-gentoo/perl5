@@ -19,6 +19,8 @@ use Config;
 # just because Errno possibly failing.
 eval { require Errno; import Errno };
 
+use vars qw($ipcsysv); # did we manage to load IPC::SysV?
+
 BEGIN {
   if ($^O eq 'VMS' && !defined($Config{d_setenv})) {
       $ENV{PATH} = $ENV{PATH};
@@ -26,8 +28,11 @@ BEGIN {
   }
   if ($Config{'extensions'} =~ /\bIPC\/SysV\b/
       && ($Config{d_shm} || $Config{d_msg})) {
-     require IPC::SysV;
-     IPC::SysV->import(qw(IPC_PRIVATE IPC_RMID IPC_CREAT S_IRWXU));
+      eval { require IPC::SysV };
+      unless ($@) {
+	  $ipcsysv++;
+	  IPC::SysV->import(qw(IPC_PRIVATE IPC_RMID IPC_CREAT S_IRWXU));
+      }
   }
 }
 
@@ -99,7 +104,7 @@ print PROG 'print "@ARGV\n"', "\n";
 close PROG;
 my $echo = "$Invoke_Perl $ECHO";
 
-print "1..151\n";
+print "1..155\n";
 
 # First, let's make sure that Perl is checking the dangerous
 # environment variables. Maybe they aren't set yet, so we'll
@@ -613,6 +618,10 @@ else {
 
 # test shmread
 {
+    unless ($ipcsysv) {
+	print "ok 150 # skipped: no IPC::SysV\n";
+	last;
+    }
     if ($Config{'extensions'} =~ /\bIPC\/SysV\b/ && $Config{d_shm}) {
 	no strict 'subs';
 	my $sent = "foobar";
@@ -647,6 +656,10 @@ else {
 
 # test msgrcv
 {
+    unless ($ipcsysv) {
+	print "ok 151 # skipped: no IPC::SysV\n";
+	last;
+    }
     if ($Config{'extensions'} =~ /\bIPC\/SysV\b/ && $Config{d_msg}) {
 	no strict 'subs';
 	my $id = msgget(IPC_PRIVATE, IPC_CREAT | S_IRWXU);
@@ -679,5 +692,44 @@ else {
     } else {
 	print "ok 151 # Skipped: SysV message queues are not available\n";
     }
+}
+
+{
+    # bug id 20001004.006
+
+    open IN, "./TEST" or warn "$0: cannot read ./TEST: $!" ;
+    local $/;
+    my $a = <IN>;
+    my $b = <IN>;
+    print "not " unless tainted($a) && tainted($b) && !defined($b);
+    print "ok 152\n";
+    close IN;
+}
+
+{
+    # bug id 20001004.007
+
+    open IN, "./TEST" or warn "$0: cannot read ./TEST: $!" ;
+    my $a = <IN>;
+
+    my $c = { a => 42,
+	      b => $a };
+    print "not " unless !tainted($c->{a}) && tainted($c->{b});
+    print "ok 153\n";
+
+    my $d = { a => $a,
+	      b => 42 };
+    print "not " unless tainted($d->{a}) && !tainted($d->{b});
+    print "ok 154\n";
+
+    my $e = { a => 42,
+	      b => { c => $a, d => 42 } };
+    print "not " unless !tainted($e->{a}) &&
+	                !tainted($e->{b}) &&
+	                 tainted($e->{b}->{c}) &&
+	                !tainted($e->{b}->{d});
+    print "ok 155\n";
+
+    close IN;
 }
 

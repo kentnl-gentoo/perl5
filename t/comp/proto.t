@@ -16,7 +16,7 @@ BEGIN {
 
 use strict;
 
-print "1..110\n";
+print "1..124\n";
 
 my $i = 1;
 
@@ -340,6 +340,7 @@ sub sub_array (&@) {
 
 @array = (qw(O K)," ", $i++);
 sub_array { lc shift } @array;
+sub_array { lc shift } ('O', 'K', ' ', $i++);
 print "\n";
 
 ##
@@ -485,3 +486,19 @@ sub sreftest (\$$) {
     sreftest($helem{$i}, $i++);
     sreftest $aelem[0], $i++;
 }
+
+# test prototypes when they are evaled and there is a syntax error
+# Byacc generates the string "syntax error".  Bison gives the
+# string "parse error".
+#
+for my $p ( "", qw{ () ($) ($@) ($%) ($;$) (&) (&\@) (&@) (%) (\%) (\@) } ) {
+  no warnings 'redefine';
+  my $eval = "sub evaled_subroutine $p { &void *; }";
+  eval $eval;
+  print "# eval[$eval]\nnot " unless $@ && $@ =~ /(parse|syntax) error/i;
+  print "ok ", $i++, "\n";
+}
+
+# Not $$;$;$
+print "not " unless prototype "CORE::substr" eq '$$;$$';
+print "ok ", $i++, "\n";

@@ -4,16 +4,17 @@
 # the format supported by op/regexp.t.  If you want to add a test
 # that does fit that format, add it to op/re_tests, not here.
 
-print "1..223\n";
+$| = 1;
+print "1..581\n";
 
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }
-eval 'use Config';          #  Defaults assumed if this fails
 
-# XXX known to leak scalars
-$ENV{PERL_DESTRUCT_LEVEL} = 0 unless $ENV{PERL_DESTRUCT_LEVEL} > 3;
+use re 'asciirange'; # Compute ranges in ASCII space
+
+eval 'use Config';          #  Defaults assumed if this fails
 
 $x = "abc\ndef\n";
 
@@ -292,7 +293,7 @@ for $l (125, 140, 250, 270, 300000, 30) { # Ordered to free memory
   print "# length=$l\nnot " unless "ba$a=" =~ /a$a=/;
   print "ok $test\n";
   $test++;
-  
+
   print "not " if "b$a=" =~ /a$a=/;
   print "ok $test\n";
   $test++;
@@ -312,11 +313,11 @@ $long_var_len = join '|', 8120 .. 28645;
        );
 
 for ( keys %ans ) {
-  print "# const-len `$_' not =>  $ans{$_}\nnot " 
+  print "# const-len `$_' not =>  $ans{$_}\nnot "
     if $ans{$_} xor /a(?=([yx]($long_constant_len)){2,4}[k-o]).*b./o;
   print "ok $test\n";
   $test++;
-  print "# var-len   `$_' not =>  $ans{$_}\nnot " 
+  print "# var-len   `$_' not =>  $ans{$_}\nnot "
     if $ans{$_} xor /a(?=([yx]($long_var_len)){2,4}[k-o]).*b./o;
   print "ok $test\n";
   $test++;
@@ -325,26 +326,26 @@ for ( keys %ans ) {
 $_ = " a (bla()) and x(y b((l)u((e))) and b(l(e)e)e";
 $expect = "(bla()) ((l)u((e))) (l(e)e)";
 
-sub matchit { 
+sub matchit {
   m/
      (
-       \( 
+       \(
        (?{ $c = 1 })		# Initialize
        (?:
 	 (?(?{ $c == 0 })       # PREVIOUS iteration was OK, stop the loop
 	   (?!
 	   )			# Fail: will unwind one iteration back
-	 )	    
+	 )	
 	 (?:
 	   [^()]+		# Match a big chunk
 	   (?=
 	     [()]
 	   )			# Do not try to match subchunks
 	 |
-	   \( 
+	   \(
 	   (?{ ++$c })
 	 |
-	   \) 
+	   \)
 	   (?{ --$c })
 	 )
        )+			# This may not match with different subblocks
@@ -411,7 +412,7 @@ for $code ('{$blah = 45}','=xx') {
   if ($code eq '=xx') {
     print "#'$@','$res','$blah'\nnot " unless not $@ and $res;
   } else {
-    print "#'$@','$res','$blah'\nnot " unless $@ and $@ =~ /not allowed at runtime/ and $blah == 12;    
+    print "#'$@','$res','$blah'\nnot " unless $@ and $@ =~ /not allowed at runtime/ and $blah == 12;
   }
   print "ok $test\n";
   $test++;
@@ -496,7 +497,7 @@ $test++;
 $_ = 'xabcx';
 foreach $ans ('', 'c') {
   /(?<=(?=a)..)((?=c)|.)/g;
-  print "not " unless $1 eq $ans;
+  print "# \$1  ='$1'\n# \$ans='$ans'\nnot " unless $1 eq $ans;
   print "ok $test\n";
   $test++;
 }
@@ -504,15 +505,15 @@ foreach $ans ('', 'c') {
 $_ = 'a';
 foreach $ans ('', 'a', '') {
   /^|a|$/g;
-  print "not " unless $& eq $ans;
+  print "# \$&  ='$&'\n# \$ans='$ans'\nnot " unless $& eq $ans;
   print "ok $test\n";
   $test++;
 }
 
 sub prefixify {
-  my($v,$a,$b,$res) = @_; 
-  $v =~ s/\Q$a\E/$b/; 
-  print "not " unless $res eq $v; 
+  my($v,$a,$b,$res) = @_;
+  $v =~ s/\Q$a\E/$b/;
+  print "not " unless $res eq $v;
   print "ok $test\n";
   $test++;
 }
@@ -525,30 +526,63 @@ print "not " unless $1 and /$1/;
 print "ok $test\n";
 $test++;
 
-$a=qr/(?{++$b})/; 
+$a=qr/(?{++$b})/;
 $b = 7;
-/$a$a/; 
-print "not " unless $b eq '9'; 
+/$a$a/;
+print "not " unless $b eq '9';
 print "ok $test\n";
 $test++;
 
-$c="$a"; 
-/$a$a/; 
-print "not " unless $b eq '11'; 
+$c="$a";
+/$a$a/;
+print "not " unless $b eq '11';
 print "ok $test\n";
 $test++;
 
 {
-  use re "eval"; 
-  /$a$c$a/; 
-  print "not " unless $b eq '14'; 
+  use re "eval";
+  /$a$c$a/;
+  print "not " unless $b eq '14';
   print "ok $test\n";
   $test++;
 
-  no re "eval"; 
+  local $lex_a = 2;
+  my $lex_a = 43;
+  my $lex_b = 17;
+  my $lex_c = 27;
+  my $lex_res = ($lex_b =~ qr/$lex_b(?{ $lex_c = $lex_a++ })/);
+  print "not " unless $lex_res eq '1';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_a eq '44';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_c eq '43';
+  print "ok $test\n";
+  $test++;
+
+
+  no re "eval";
   $match = eval { /$a$c$a/ };
-  print "not " 
+  print "not "
     unless $b eq '14' and $@ =~ /Eval-group not allowed/ and not $match;
+  print "ok $test\n";
+  $test++;
+}
+
+{
+  local $lex_a = 2;
+  my $lex_a = 43;
+  my $lex_b = 17;
+  my $lex_c = 27;
+  my $lex_res = ($lex_b =~ qr/17(?{ $lex_c = $lex_a++ })/);
+  print "not " unless $lex_res eq '1';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_a eq '44';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_c eq '43';
   print "ok $test\n";
   $test++;
 }
@@ -564,8 +598,8 @@ print "ok $test\n";
 $test++;
 print "not " unless $c == 3;
 print "ok $test\n";
-$test++;  
-  
+$test++;
+
 sub must_warn_pat {
     my $warn_pat = shift;
     return sub { print "not " unless $_[0] =~ /$warn_pat/ }
@@ -626,7 +660,7 @@ print "not " if $+[0] != 2 or $-[0] != 1;
 print "ok $test\n";
 $test++;
 
-print "not " 
+print "not "
    if defined $+[1] or defined $-[1] or defined $+[2] or defined $-[2];
 print "ok $test\n";
 $test++;
@@ -648,7 +682,7 @@ print "not " if $+[2] != 3 or $-[2] != 2;
 print "ok $test\n";
 $test++;
 
-print "not " 
+print "not "
    if defined $+[3] or defined $-[3] or defined $+[4] or defined $-[4];
 print "ok $test\n";
 $test++;
@@ -670,7 +704,7 @@ print "not " if $+[3] != 3 or $-[3] != 2;
 print "ok $test\n";
 $test++;
 
-print "not " 
+print "not "
    if defined $+[2] or defined $-[2] or defined $+[4] or defined $-[4];
 print "ok $test\n";
 $test++;
@@ -688,31 +722,31 @@ print "not " if $+[1] != 2 or $-[1] != 1;
 print "ok $test\n";
 $test++;
 
-print "not " 
+print "not "
    if defined $+[2] or defined $-[2] or defined $+[3] or defined $-[3];
 print "ok $test\n";
 $test++;
 
 eval { $+[0] = 13; };
-print "not " 
+print "not "
    if $@ !~ /^Modification of a read-only value attempted/;
 print "ok $test\n";
 $test++;
 
 eval { $-[0] = 13; };
-print "not " 
+print "not "
    if $@ !~ /^Modification of a read-only value attempted/;
 print "ok $test\n";
 $test++;
 
 eval { @+ = (7, 6, 5); };
-print "not " 
+print "not "
    if $@ !~ /^Modification of a read-only value attempted/;
 print "ok $test\n";
 $test++;
 
 eval { @- = qw(foo bar); };
-print "not " 
+print "not "
    if $@ !~ /^Modification of a read-only value attempted/;
 print "ok $test\n";
 $test++;
@@ -758,7 +792,7 @@ $test++;
 
 undef $foo; undef $bar;
 print "#'$str','$foo','$bar'\nnot "
-    unless $str =~ /b(?{$foo = $_; $bar = pos})c/ 
+    unless $str =~ /b(?{$foo = $_; $bar = pos})c/
 	and $foo eq 'abcde' and $bar eq 2;
 print "ok $test\n";
 $test++;
@@ -766,7 +800,7 @@ $test++;
 undef $foo; undef $bar;
 pos $str = undef;
 print "#'$str','$foo','$bar'\nnot "
-    unless $str =~ /b(?{$foo = $_; $bar = pos})c/g 
+    unless $str =~ /b(?{$foo = $_; $bar = pos})c/g
 	and $foo eq 'abcde' and $bar eq 2 and pos $str eq 3;
 print "ok $test\n";
 $test++;
@@ -775,14 +809,14 @@ $_ = $str;
 
 undef $foo; undef $bar;
 print "#'$str','$foo','$bar'\nnot "
-    unless /b(?{$foo = $_; $bar = pos})c/ 
+    unless /b(?{$foo = $_; $bar = pos})c/
 	and $foo eq 'abcde' and $bar eq 2;
 print "ok $test\n";
 $test++;
 
 undef $foo; undef $bar;
 print "#'$str','$foo','$bar'\nnot "
-    unless /b(?{$foo = $_; $bar = pos})c/g 
+    unless /b(?{$foo = $_; $bar = pos})c/g
 	and $foo eq 'abcde' and $bar eq 2 and pos eq 3;
 print "ok $test\n";
 $test++;
@@ -798,7 +832,7 @@ $test++;
 undef $foo; undef $bar;
 $_ = 'abcde|abcde';
 print "#'$str','$foo','$bar','$_'\nnot "
-    unless s/b(?{$foo = $_; $bar = pos})c/x/g and $foo eq 'abcde|abcde' 
+    unless s/b(?{$foo = $_; $bar = pos})c/x/g and $foo eq 'abcde|abcde'
 	and $bar eq 8 and $_ eq 'axde|axde';
 print "ok $test\n";
 $test++;
@@ -872,7 +906,7 @@ print "not " unless($1  eq 'cd');
 print "ok $test\n";
 $test++;
 
-$_='123x123'; 
+$_='123x123';
 @res = /(\d*|x)/g;
 print "not " unless('123||x|123|' eq join '|', @res);
 print "ok $test\n";
@@ -1064,7 +1098,8 @@ my %space = ( spc   => " ",
 	      cr    => "\r",
 	      lf    => "\n",
 	      ff    => "\f",
-# The vertical tabulator seems miraculously be 12 both in ASCII and EBCDIC.
+# There's no \v but the vertical tabulator seems miraculously
+# be 11 both in ASCII and EBCDIC.
 	      vt    => chr(11),
 	      false => "space" );
 
@@ -1073,14 +1108,442 @@ my @space1 = sort grep { $space{$_} =~ /[[:space:]]/ } keys %space;
 my @space2 = sort grep { $space{$_} =~ /[[:blank:]]/ } keys %space;
 
 print "not " unless "@space0" eq "cr ff lf spc tab";
-print "ok $test\n";
+print "ok $test # @space0\n";
 $test++;
 
 print "not " unless "@space1" eq "cr ff lf spc tab vt";
-print "ok $test\n";
+print "ok $test # @space1\n";
 $test++;
 
 print "not " unless "@space2" eq "spc tab";
+print "ok $test # @space2\n";
+$test++;
+
+# bugid 20001021.005 - this caused a SEGV
+print "not " unless undef =~ /^([^\/]*)(.*)$/;
 print "ok $test\n";
 $test++;
- 
+
+# bugid 20000731.001
+
+print "not " unless "A \x{263a} B z C" =~ /A . B (??{ "z" }) C/;
+print "ok $test\n";
+$test++;
+
+$_ = "a\x{100}b";
+if (/(.)(\C)(\C)(.)/) {
+  print "ok 232\n";
+  if ($1 eq "a") {
+    print "ok 233\n";
+  } else {
+    print "not ok 233\n";
+  }
+  if ($2 eq "\xC4") {
+    print "ok 234\n";
+  } else {
+    print "not ok 234\n";
+  }
+  if ($3 eq "\x80") {
+    print "ok 235\n";
+  } else {
+    print "not ok 235\n";
+  }
+  if ($4 eq "b") {
+    print "ok 236\n";
+  } else {
+    print "not ok 236\n";
+  }
+} else {
+  for (232..236) {
+    print "not ok $_\n";
+  }
+}
+$_ = "\x{100}";
+if (/(\C)/g) {
+  print "ok 237\n";
+  # currently \C are still tagged as UTF-8
+  if ($1 eq "\xC4") {
+    print "ok 238\n";
+  } else {
+    print "not ok 238\n";
+  }
+} else {
+  for (237..238) {
+    print "not ok $_\n";
+  }
+}
+if (/(\C)/g) {
+  print "ok 239\n";
+  # currently \C are still tagged as UTF-8
+  if ($1 eq "\x80") {
+    print "ok 240\n";
+  } else {
+    print "not ok 240\n";
+  }
+} else {
+  for (239..240) {
+    print "not ok $_\n";
+  }
+}
+
+{
+  # japhy -- added 03/03/2001
+  () = (my $str = "abc") =~ /(...)/;
+  $str = "def";
+  print "not " if $1 ne "abc";
+  print "ok 241\n";
+}
+
+# The 242 and 243 go with the 244 and 245.
+# The trick is that in EBCDIC the explicit numeric range should match
+# (as also in non-EBCDIC) but the explicit alphabetic range should not match.
+
+if ("\x8e" =~ /[\x89-\x91]/) {
+  print "ok 242\n";
+} else {
+  print "not ok 242\n";
+}
+
+if ("\xce" =~ /[\xc9-\xd1]/) {
+  print "ok 243\n";
+} else {
+  print "not ok 243\n";
+}
+
+# In most places these tests would succeed since \x8e does not
+# in most character sets match 'i' or 'j' nor would \xce match
+# 'I' or 'J', but strictly speaking these tests are here for
+# the good of EBCDIC, so let's test these only there.
+if (ord('i') == 0x89 && ord('J') == 0xd1) { # EBCDIC
+  if ("\x8e" !~ /[i-j]/) {
+    print "ok 244\n";
+  } else {
+    print "not ok 244\n";
+  }
+  if ("\xce" !~ /[I-J]/) {
+    print "ok 245\n";
+  } else {
+    print "not ok 245\n";
+  }
+} else {
+  for (244..245) {
+    print "ok $_ # Skip: only in EBCDIC\n";
+  }
+}
+
+print "not " unless "\x{ab}" =~ /\x{ab}/;
+print "ok 246\n";
+
+print "not " unless "\x{abcd}" =~ /\x{abcd}/;
+print "ok 247\n";
+
+{
+    # bug id 20001008.001
+
+    my $test = 248;
+    my @x = ("stra\337e 138","stra\337e 138");
+    for (@x) {
+	s/(\d+)\s*([\w\-]+)/$1 . uc $2/e;
+	my($latin) = /^(.+)(?:\s+\d)/;
+	print $latin eq "stra\337e" ? "ok $test\n" :	# 248,249
+	    "#latin[$latin]\nnot ok $test\n";
+	$test++;
+	$latin =~ s/stra\337e/straße/; # \303\237 after the 2nd a
+	use utf8;
+	$latin =~ s!(s)tr(?:aß|s+e)!$1tr.!; # \303\237 after the a
+    }
+}
+
+{
+    print "not " unless "ba\xd4c" =~ /([a\xd4]+)/ && $1 eq "a\xd4";
+    print "ok 250\n";
+
+    print "not " unless "ba\xd4c" =~ /([a\xd4]+)/ && $1 eq "a\x{d4}";
+    print "ok 251\n";
+
+    print "not " unless "ba\x{d4}c" =~ /([a\xd4]+)/ && $1 eq "a\x{d4}";
+    print "ok 252\n";
+
+    print "not " unless "ba\x{d4}c" =~ /([a\xd4]+)/ && $1 eq "a\xd4";
+    print "ok 253\n";
+
+    print "not " unless "ba\xd4c" =~ /([a\x{d4}]+)/ && $1 eq "a\xd4";
+    print "ok 254\n";
+
+    print "not " unless "ba\xd4c" =~ /([a\x{d4}]+)/ && $1 eq "a\x{d4}";
+    print "ok 255\n";
+
+    print "not " unless "ba\x{d4}c" =~ /([a\x{d4}]+)/ && $1 eq "a\x{d4}";
+    print "ok 256\n";
+
+    print "not " unless "ba\x{d4}c" =~ /([a\x{d4}]+)/ && $1 eq "a\xd4";
+    print "ok 257\n";
+}
+
+{
+    # the first half of 20001028.003
+
+    my $X = chr(1448);
+    my ($Y) = $X =~ /(.*)/;
+    print "not " unless $Y eq v1448 && length($Y) == 1;
+    print "ok 258\n";
+}
+
+{
+    # 20001108.001
+
+    my $X = "Szab\x{f3},Bal\x{e1}zs";
+    my $Y = $X;
+    $Y =~ s/(B)/$1/ for 0..3;
+    print "not " unless $Y eq $X && $X eq "Szab\x{f3},Bal\x{e1}zs";
+    print "ok 259\n";
+}
+
+{
+    # the second half of 20001028.003
+
+    $X =~ s/^/chr(1488)/e;
+    print "not " unless length $X == 1 && ord($X) == 1488;
+    print "ok 260\n";
+}
+
+{
+    # 20000517.001
+
+    my $x = "\x{100}A";
+
+    $x =~ s/A/B/;
+
+    print "not " unless $x eq "\x{100}B" && length($x) == 2;
+    print "ok 261\n";
+}
+
+{
+    # bug id 20001230.002
+
+    print "not " unless "École" =~ /^\C\C(.)/ && $1 eq 'c';
+    print "ok 262\n";
+
+    print "not " unless "École" =~ /^\C\C(c)/;
+    print "ok 263\n";
+}
+
+{
+    my $test = 264; # till 575
+
+    use charnames ':full';
+
+    # This is far from complete testing, there are dozens of character
+    # classes in Unicode.  The mixing of literals and \N{...} is
+    # intentional so that in non-Latin-1 places we test the native
+    # characters, not the Unicode code points.
+
+    my %s = (
+	     "a" 				=> 'Ll',
+	     "\N{CYRILLIC SMALL LETTER A}"	=> 'Ll',
+	     "A" 				=> 'Lu',
+	     "\N{GREEK CAPITAL LETTER ALPHA}"	=> 'Lu',
+	     "\N{HIRAGANA LETTER SMALL A}"	=> 'Lo',
+	     "\N{COMBINING GRAVE ACCENT}"	=> 'Mn',
+	     "0"				=> 'Nd',
+	     "\N{ARABIC-INDIC DIGIT ZERO}"	=> 'Nd',
+	     "_"				=> 'N',
+	     "!"				=> 'P',
+	     " "				=> 'Zs',
+	     "\0"				=> 'Cc',
+	     );
+	
+    for my $char (keys %s) {
+	my $class = $s{$char};
+	my $code  = sprintf("%04x", ord($char));
+	printf "# 0x$code\n";
+	print "# IsAlpha\n";
+	if ($class =~ /^[LM]/) {
+	    print "not " unless $char =~ /\p{IsAlpha}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsAlpha}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsAlpha}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsAlpha}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsAlnum\n";
+	if ($class =~ /^[LMN]/ && $char ne "_") {
+	    print "not " unless $char =~ /\p{IsAlnum}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsAlnum}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsAlnum}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsAlnum}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsASCII\n";
+	if ($code <= 127) {
+	    print "not " unless $char =~ /\p{IsASCII}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsASCII}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsASCII}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsASCII}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsCntrl\n";
+	if ($class =~ /^C/) {
+	    print "not " unless $char =~ /\p{IsCntrl}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsCntrl}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsCntrl}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsCntrl}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsBlank\n";
+	if ($class =~ /^Z[lp]/ || $char eq " ") {
+	    print "not " unless $char =~ /\p{IsBlank}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsBlank}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsBlank}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsBlank}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsDigit\n";
+	if ($class =~ /^Nd$/) {
+	    print "not " unless $char =~ /\p{IsDigit}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsDigit}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsDigit}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsDigit}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsGraph\n";
+	if ($class =~ /^([LMNPS])|Co/) {
+	    print "not " unless $char =~ /\p{IsGraph}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsGraph}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsGraph}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsGraph}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsLower\n";
+	if ($class =~ /^Ll$/) {
+	    print "not " unless $char =~ /\p{IsLower}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsLower}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsLower}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsLower}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsPrint\n";
+	if ($class =~ /^([LMNPS])|Co|Zs/) {
+	    print "not " unless $char =~ /\p{IsPrint}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsPrint}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsPrint}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsPrint}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsPunct\n";
+	if ($class =~ /^P/ || $char eq "_") {
+	    print "not " unless $char =~ /\p{IsPunct}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsPunct}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsPunct}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsPunct}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsSpace\n";
+	if ($class =~ /^Z/ || ($code =~ /^(0009|000A|000B|000C|000D)$/)) {
+	    print "not " unless $char =~ /\p{IsSpace}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsSpace}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsSpace}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsSpace}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsUpper\n";
+	if ($class =~ /^L[ut]/) {
+	    print "not " unless $char =~ /\p{IsUpper}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsUpper}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsUpper}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsUpper}/;
+	    print "ok $test\n"; $test++;
+	}
+	print "# IsWord\n";
+	if ($class =~ /^[LMN]/ || $char eq "_") {
+	    print "not " unless $char =~ /\p{IsWord}/;
+	    print "ok $test\n"; $test++;
+	    print "not " if     $char =~ /\P{IsWord}/;
+	    print "ok $test\n"; $test++;
+	} else {
+	    print "not " if     $char =~ /\p{IsWord}/;
+	    print "ok $test\n"; $test++;
+	    print "not " unless $char =~ /\P{IsWord}/;
+	    print "ok $test\n"; $test++;
+	}
+    }
+}
+
+{
+    $_ = "abc\x{100}\x{200}\x{300}\x{380}\x{400}defg";
+
+    if (/(.\x{300})./) {
+	print "ok 576\n";
+
+	print "not " unless $` eq "abc\x{100}" && length($`) == 4;
+	print "ok 577\n";
+
+	print "not " unless $& eq "\x{200}\x{300}\x{380}" && length($&) == 3;
+	print "ok 578\n";
+
+	print "not " unless $' eq "\x{400}defg" && length($') == 5;
+	print "ok 579\n";
+
+	print "not " unless $1 eq "\x{200}\x{300}" && length($1) == 2;
+	print "ok 580\n";
+    } else {
+	for (576..580) { print "not ok $_\n" }
+    }
+}
+
+{
+    # bug id 20010306.008
+
+    $a = "a\x{1234}";
+    # The original bug report had 'no utf8' here but that was irrelevant.
+    $a =~ m/\w/; # used to core dump
+
+    print "ok 581\n";
+}

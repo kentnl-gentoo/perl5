@@ -1,6 +1,6 @@
 /*    op.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -130,9 +130,7 @@ Deprecated.  Use C<GIMME_V> instead.
 /* Private for OP_TRANS */
 #define OPpTRANS_FROM_UTF	1
 #define OPpTRANS_TO_UTF		2
-#define OPpTRANS_IDENTICAL	4
-	/* When CU or UC, means straight latin-1 to utf-8 or vice versa */
-	/* Otherwise, IDENTICAL means the right side is the same as the left */
+#define OPpTRANS_IDENTICAL	4	/* right side is same as left */
 #define OPpTRANS_SQUASH		8
 #define OPpTRANS_DELETE		16
 #define OPpTRANS_COMPLEMENT	32
@@ -140,9 +138,6 @@ Deprecated.  Use C<GIMME_V> instead.
 
 /* Private for OP_REPEAT */
 #define OPpREPEAT_DOLIST	64	/* List replication. */
-
-/* Private for OP_LEAVELOOP */
-#define OPpLOOP_CONTINUE	64	/* a continue block is present */
 
 /* Private for OP_RV2?V, OP_?ELEM */
 #define OPpDEREF		(32|64)	/* Want ref to something: */
@@ -161,7 +156,9 @@ Deprecated.  Use C<GIMME_V> instead.
   /* OP_?ELEM only */
 #define OPpLVAL_DEFER		16	/* Defer creation of array/hash elem */
   /* OP_RV2?V, OP_GVSV only */
-#define OPpOUR_INTRO		16	/* Defer creation of array/hash elem */
+#define OPpOUR_INTRO		16	/* Variable was in an our() */
+  /* OP_RV2[AH]V, OP_PAD[AH]V, OP_[AH]ELEM */
+#define OPpMAYBE_LVSUB		8	/* We might be an lvalue to return */
   /* for OP_RV2?V, lower bits carry hints (currently only HINT_STRICT_REFS) */
 
 /* Private for OPs with TARGLEX */
@@ -232,14 +229,12 @@ struct listop {
     BASEOP
     OP *	op_first;
     OP *	op_last;
-    U32		op_children;
 };
 
 struct pmop {
     BASEOP
     OP *	op_first;
     OP *	op_last;
-    U32		op_children;
     OP *	op_pmreplroot;
     OP *	op_pmreplstart;
     PMOP *	op_pmnext;		/* list of all scanpats */
@@ -247,11 +242,19 @@ struct pmop {
     U16		op_pmflags;
     U16		op_pmpermflags;
     U8		op_pmdynflags;
+#ifdef USE_ITHREADS
+    char *	op_pmstashpv;
+#else
+    HV *	op_pmstash;
+#endif
 };
 
 #define PMdf_USED	0x01		/* pm has been used once already */
 #define PMdf_TAINTED	0x02		/* pm compiled from tainted pattern */
 #define PMdf_UTF8	0x04		/* pm compiled from utf8 data */
+#define PMdf_DYN_UTF8	0x08
+
+#define PMdf_CMP_UTF8	(PMdf_UTF8|PMdf_DYN_UTF8)
 
 #define PMf_RETAINT	0x0001		/* taint $1 etc. if target tainted */
 #define PMf_ONCE	0x0002		/* use pattern only once per reset */
@@ -273,6 +276,20 @@ struct pmop {
 /* mask of bits stored in regexp->reganch */
 #define PMf_COMPILETIME	(PMf_MULTILINE|PMf_SINGLELINE|PMf_LOCALE|PMf_FOLD|PMf_EXTENDED)
 
+#ifdef USE_ITHREADS
+#  define PmopSTASHPV(o)	((o)->op_pmstashpv)
+#  define PmopSTASHPV_set(o,pv)	((o)->op_pmstashpv = ((pv) ? savepv(pv) : Nullch))
+#  define PmopSTASH(o)		(PmopSTASHPV(o) \
+				 ? gv_stashpv(PmopSTASHPV(o),GV_ADD) : Nullhv)
+#  define PmopSTASH_set(o,hv)	PmopSTASHPV_set(o, (hv) ? HvNAME(hv) : Nullch)
+#else
+#  define PmopSTASH(o)		((o)->op_pmstash)
+#  define PmopSTASH_set(o,hv)	((o)->op_pmstash = (hv))
+#  define PmopSTASHPV(o)	(PmopSTASH(o) ? HvNAME(PmopSTASH(o)) : Nullch)
+   /* op_pmstash is not refcounted */
+#  define PmopSTASHPV_set(o,pv)	PmopSTASH_set((o), gv_stashpv(pv,GV_ADD))
+#endif
+
 struct svop {
     BASEOP
     SV *	op_sv;
@@ -292,7 +309,6 @@ struct loop {
     BASEOP
     OP *	op_first;
     OP *	op_last;
-    U32		op_children;
     OP *	op_redoop;
     OP *	op_nextop;
     OP *	op_lastop;
@@ -416,18 +432,16 @@ struct loop {
 #  define OP_REFCNT_LOCK		MUTEX_LOCK(&PL_op_mutex)
 #  define OP_REFCNT_UNLOCK		MUTEX_UNLOCK(&PL_op_mutex)
 #  define OP_REFCNT_TERM		MUTEX_DESTROY(&PL_op_mutex)
-#  define OpREFCNT_set(o,n)		((o)->op_targ = (n))
-#  define OpREFCNT_inc(o)		((o) ? (++(o)->op_targ, (o)) : Nullop)
-#  define OpREFCNT_dec(o)		(--(o)->op_targ)
 #else
 #  define OP_REFCNT_INIT		NOOP
 #  define OP_REFCNT_LOCK		NOOP
 #  define OP_REFCNT_UNLOCK		NOOP
 #  define OP_REFCNT_TERM		NOOP
-#  define OpREFCNT_set(o,n)		NOOP
-#  define OpREFCNT_inc(o)		(o)
-#  define OpREFCNT_dec(o)		0
 #endif
+
+#define OpREFCNT_set(o,n)		((o)->op_targ = (n))
+#define OpREFCNT_inc(o)			((o) ? (++(o)->op_targ, (o)) : Nullop)
+#define OpREFCNT_dec(o)			(--(o)->op_targ)
 
 /* flags used by Perl_load_module() */
 #define PERL_LOADMOD_DENY		0x1

@@ -36,9 +36,15 @@ use strict;
 # make sure creat()s are neither too much nor too little
 INIT { eval { umask(0077) } }   # doubtless someone has no mask
 
+(my \$pager = <<'/../') =~ s/\\s*\\z//;
+$Config{pager}
+/../
 my \@pagers = ();
-push \@pagers, "$Config{'pager'}" if -x "$Config{'pager'}";
-my \$bindir = "$Config{installscript}";
+push \@pagers, \$pager if -x \$pager;
+
+(my \$bindir = <<'/../') =~ s/\\s*\\z//;
+$Config{scriptdir}
+/../
 
 !GROK!THIS!
 
@@ -81,6 +87,7 @@ my $global_target = "";
 my $Is_VMS = $^O eq 'VMS';
 my $Is_MSWin32 = $^O eq 'MSWin32';
 my $Is_Dos = $^O eq 'dos';
+my $Is_OS2 = $^O eq 'os2';
 
 sub usage{
     warn "@_\n" if @_;
@@ -149,7 +156,7 @@ usage if $opt_h;
 
 # refuse to run if we should be tainting and aren't
 # (but regular users deserve protection too, though!)
-if (!($Is_VMS || $Is_MSWin32 || $Is_Dos) && ($> == 0 || $< == 0)
+if (!($Is_VMS || $Is_MSWin32 || $Is_Dos || $Is_OS2) && ($> == 0 || $< == 0)
      && !am_taint_checking()) 
 {{
     if ($opt_U) {
@@ -409,7 +416,11 @@ sub page {
     }
     else {
 	foreach my $pager (@pagers) {
-	    last if system("$pager $tmp") == 0;
+          if ($Is_VMS) {
+           last if system("$pager $tmp") == 0; # quoting prevents logical expansion
+          } else {
+	    last if system("$pager \"$tmp\"") == 0;
+          }
 	}
     }
 }
@@ -555,7 +566,10 @@ eval q{
     sub END { cleanup($tmp, $buffer) } 
     1;
 } || die;
-eval q{ use sigtrap qw(die INT TERM HUP QUIT) };
+
+# exit/die in a windows sighandler is dangerous, so let it do the
+# default thing, which is to exit
+eval q{ use sigtrap qw(die INT TERM HUP QUIT) } unless $^O eq 'MSWin32';
 
 if ($opt_m) {
     foreach my $pager (@pagers) {

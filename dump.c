@@ -1,6 +1,6 @@
 /*    dump.c
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -29,7 +29,6 @@ Perl_dump_indent(pTHX_ I32 level, PerlIO *file, const char* pat, ...)
 void
 Perl_dump_vindent(pTHX_ I32 level, PerlIO *file, const char* pat, va_list *args)
 {
-    dTHR;
     PerlIO_printf(file, "%*s", (int)(level*PL_dumpindent), "");
     PerlIO_vprintf(file, pat, *args);
 }
@@ -37,7 +36,6 @@ Perl_dump_vindent(pTHX_ I32 level, PerlIO *file, const char* pat, va_list *args)
 void
 Perl_dump_all(pTHX)
 {
-    dTHR;
     PerlIO_setlinebuf(Perl_debug_log);
     if (PL_main_root)
 	op_dump(PL_main_root);
@@ -47,7 +45,6 @@ Perl_dump_all(pTHX)
 void
 Perl_dump_packsubs(pTHX_ HV *stash)
 {
-    dTHR;
     I32	i;
     HE	*entry;
 
@@ -197,6 +194,11 @@ Perl_sv_peek(pTHX_ SV *sv)
 	sv_catpv(t, "(");
 	unref++;
     }
+    else if (DEBUG_R_TEST && SvREFCNT(sv) > 1) {
+	Perl_sv_catpvf(aTHX_ t, "<%"UVuf">", (UV)SvREFCNT(sv));
+    }
+
+
     if (SvROK(sv)) {
 	sv_catpv(t, "\\");
 	if (SvCUR(t) + unref > 10) {
@@ -275,6 +277,8 @@ Perl_sv_peek(pTHX_ SV *sv)
 	    if (SvOOK(sv))
 		Perl_sv_catpvf(aTHX_ t, "[%s]", pv_display(tmp, SvPVX(sv)-SvIVX(sv), SvIVX(sv), 0, 127));
 	    Perl_sv_catpvf(aTHX_ t, "%s)", pv_display(tmp, SvPVX(sv), SvCUR(sv), SvLEN(sv), 127));
+	    if (SvUTF8(sv))
+		Perl_sv_catpvf(aTHX_ t, " [UTF8]");
 	    SvREFCNT_dec(tmp);
 	}
     }
@@ -291,7 +295,7 @@ Perl_sv_peek(pTHX_ SV *sv)
     }
     else
 	sv_catpv(t, "()");
-    
+
   finish:
     if (unref) {
 	while (unref--)
@@ -369,7 +373,6 @@ Perl_pmop_dump(pTHX_ PMOP *pm)
 void
 Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 {
-    dTHR;
     Perl_dump_indent(aTHX_ level, file, "{\n");
     level++;
     if (o->op_seq)
@@ -457,6 +460,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 	}
 	else if (o->op_type == OP_ENTERSUB ||
 		 o->op_type == OP_RV2SV ||
+		 o->op_type == OP_GVSV ||
 		 o->op_type == OP_RV2AV ||
 		 o->op_type == OP_RV2HV ||
 		 o->op_type == OP_RV2GV ||
@@ -471,7 +475,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 		if (o->op_private & OPpENTERSUB_HASTARG)
 		    sv_catpv(tmpsv, ",HASTARG");
 	    }
-	    else 
+	    else
 		switch (o->op_private & OPpDEREF) {
 	    case OPpDEREF_SV:
 		sv_catpv(tmpsv, ",SV");
@@ -768,7 +772,6 @@ Perl_do_gvgv_dump(pTHX_ I32 level, PerlIO *file, char *name, GV *sv)
 void
 Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops, STRLEN pvlim)
 {
-    dTHR;
     SV *d;
     char *s;
     U32 flags;
@@ -779,7 +782,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	Perl_dump_indent(aTHX_ level, file, "SV = 0\n");
 	return;
     }
-    
+
     flags = SvFLAGS(sv);
     type = SvTYPE(sv);
 
@@ -822,8 +825,11 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	if (CvUNIQUE(sv))	sv_catpv(d, "UNIQUE,");
 	if (CvCLONE(sv))	sv_catpv(d, "CLONE,");
 	if (CvCLONED(sv))	sv_catpv(d, "CLONED,");
+	if (CvCONST(sv))	sv_catpv(d, "CONST,");
 	if (CvNODEBUG(sv))	sv_catpv(d, "NODEBUG,");
 	if (SvCOMPILED(sv))	sv_catpv(d, "COMPILED,");
+	if (CvLVALUE(sv))	sv_catpv(d, "LVALUE,");
+	if (CvMETHOD(sv))	sv_catpv(d, "METHOD,");
 	break;
     case SVt_PVHV:
 	if (HvSHAREKEYS(sv))	sv_catpv(d, "SHAREKEYS,");
@@ -1000,7 +1006,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 		SV** elt = av_fetch((AV*)sv,count,0);
 
 		Perl_dump_indent(aTHX_ level + 1, file, "Elt No. %"IVdf"\n", (IV)count);
-		if (elt) 
+		if (elt)
 		    do_sv_dump(level+1, file, *elt, nest+1, maxnest, dumpops, pvlim);
 	    }
 	}
@@ -1038,15 +1044,24 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 		}
             }
 	    PerlIO_putc(file, ')');
-	    /* Now calculate quality wrt theoretical value */
+	    /* The "quality" of a hash is defined as the total number of
+	       comparisons needed to access every element once, relative
+	       to the expected number needed for a random hash.
+
+	       The total number of comparisons is equal to the sum of
+	       the squares of the number of entries in each backet.
+	       For a random hash of n keys into k backets, the expected
+	       value is
+				n + n(n-1)/2k
+	    */
+
 	    for (i = max; i > 0; i--) { /* Precision: count down. */
 		sum += freq[i] * i * i;
             }
 	    while ((keys = keys >> 1))
 		pow2 = pow2 << 1;
-	    /* Approximate by Poisson distribution */
 	    theoret = HvKEYS(sv);
-	    theoret += theoret * theoret/pow2;
+	    theoret += theoret * (theoret-1)/pow2;
 	    PerlIO_putc(file, '\n');
 	    Perl_dump_indent(aTHX_ level, file, "  hash quality = %.1"NVff"%%", theoret/sum*100);
 	}
@@ -1116,7 +1131,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 		if (SvPOK(pname[ix]))
 		    Perl_dump_indent(aTHX_ level,
 				/* %5d below is enough whitespace. */
-				file, 
+				file,
 				"%5d. 0x%"UVxf" (%s\"%s\" %"IVdf"-%"IVdf")\n",
 				(int)ix, PTR2UV(ppad[ix]),
 				SvFAKE(pname[ix]) ? "FAKE " : "",
@@ -1127,7 +1142,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	}
 	{
 	    CV *outside = CvOUTSIDE(sv);
-	    Perl_dump_indent(aTHX_ level, file, "  OUTSIDE = 0x%"UVxf" (%s)\n", 
+	    Perl_dump_indent(aTHX_ level, file, "  OUTSIDE = 0x%"UVxf" (%s)\n",
 			PTR2UV(outside),
 			(!outside ? "null"
 			 : CvANON(outside) ? "ANON"

@@ -21,7 +21,9 @@ print '1..', scalar @tests, "\n";
 
 $SIG{__WARN__} = sub {
     if ($_[0] =~ /^Invalid conversion/) {
-	$w = ' INVALID'
+	$w = ' INVALID';
+    } elsif ($_[0] =~ /^Use of uninitialized value/) {
+	$w = ' UNINIT';
     } else {
 	warn @_;
     }
@@ -56,8 +58,17 @@ for ($i = 1; @tests; $i++) {
     }
     elsif ($y eq ">$result<")	# Some C libraries always give
     {				# three-digit exponent
-	print("ok $i >$result< $x # three-digit exponent accepted\n");
+		print("ok $i # >$result< $x three-digit exponent accepted\n");
     }
+	elsif ($result =~ /[-+]\d{3}$/ &&
+		   # Suppress tests with modulo of exponent >= 100 on platforms
+		   # which can't handle such magnitudes (or where we can't tell).
+		   ((!eval {require POSIX}) || # Costly: only do this if we must!
+			(length(&POSIX::DBL_MAX) - rindex(&POSIX::DBL_MAX, '+')) == 3))
+	{
+		print("ok $i # >$template< >$data< >$result<",
+			  " Suppressed: exponent out of range?\n") 
+	}
     else {
 	$y = ($x eq $y ? "" : " => $y");
 	print("not ok $i >$template< >$data< >$result< $x$y",
@@ -166,19 +177,19 @@ __END__
 >%#vd<      >chr(1)<      >1<
 >%vd<       >"\01\02\03"< >1.2.3<
 >%v.3d<     >"\01\02\03"< >001.002.003<
->%v03d<     >"\01\02\03"< >001.002.003<
->%v-3d<     >"\01\02\03"< >1  .2  .3  <
->%v+-3d<    >"\01\02\03"< >+1 .2  .3  <
+>%0v3d<     >"\01\02\03"< >001.002.003<
+>%-v3d<     >"\01\02\03"< >1  .2  .3  <
+>%+-v3d<    >"\01\02\03"< >+1 .2  .3  <
 >%v4.3d<    >"\01\02\03"< > 001. 002. 003<
->%v04.3d<   >"\01\02\03"< >0001.0002.0003<
->%*v02d<    >['-', "\0\7\14"]< >00-07-12<
->%v.*d<     >[3, "\01\02\03"]< >001.002.003<
->%v0*d<     >[3, "\01\02\03"]< >001.002.003<
->%v-*d<     >[3, "\01\02\03"]< >1  .2  .3  <
->%v+-*d<    >[3, "\01\02\03"]< >+1 .2  .3  <
->%v*.*d<    >[4, 3, "\01\02\03"]< > 001. 002. 003<
->%v0*.*d<   >[4, 3, "\01\02\03"]< >0001.0002.0003<
->%*v0*d<    >['-', 2, "\0\7\13"]< >00-07-11<
+>%0v4.3d<   >"\01\02\03"< >0001.0002.0003<
+>%0*v2d<    >['-', "\0\7\14"]< >00-07-12<
+>%v.*d<     >["\01\02\03", 3]< >001.002.003<
+>%0v*d<     >["\01\02\03", 3]< >001.002.003<
+>%-v*d<     >["\01\02\03", 3]< >1  .2  .3  <
+>%+-v*d<    >["\01\02\03", 3]< >+1 .2  .3  <
+>%v*.*d<    >["\01\02\03", 4, 3]< > 001. 002. 003<
+>%0v*.*d<   >["\01\02\03", 4, 3]< >0001.0002.0003<
+>%0*v*d<    >['-', "\0\7\13", 2]< >00-07-11<
 >%e<        >1234.875<    >1.234875e+03<
 >%e<        >0.000012345< >1.234500e-05<
 >%e<        >1234567E96<  >1.234567e+102<
@@ -220,8 +231,8 @@ __END__
 >%.0f<      >0<           >0<
 >%.0f<      >2**38<       >274877906944<   >Should have exact int'l rep'n<
 >%.0f<      >0.1<         >0<
->%.0f<      >0.6<         >1<              >Known to fail with sfio<
->%.0f<      >-0.6<        >-1<             >Known to fail with sfio<
+>%.0f<      >0.6<         >1<              >Known to fail with sfio and (irix|nonstop-ux|powerux)<
+>%.0f<      >-0.6<        >-1<             >Known to fail with sfio and (irix|nonstop-ux|powerux)<
 >%.0f<      >1<           >1<
 >%#.0f<     >1<           >1.<
 >%g<        >12345.6789<  >12345.7<
@@ -299,3 +310,17 @@ __END__
 >%0*x<      >[-10, ,2**32-1]< >ffffffff  <
 >%y<        >''<          >%y INVALID<
 >%z<        >''<          >%z INVALID<
+>%2$d %1$d<	>[12, 34]<	>34 12<
+>%*2$d<		>[12, 3]<	> 12<
+>%2$d %d<	>[12, 34]<	>34 12<
+>%2$d %d %d<	>[12, 34]<	>34 12 34<
+>%3$d %d %d<	>[12, 34, 56]<	>56 12 34<
+>%2$*3$d %d<	>[12, 34, 3]<	> 34 12<
+>%*3$2$d %d<	>[12, 34, 3]<	>%*3$2$d 34 INVALID<
+>%2$d<		>12<	>0 UNINIT<
+>%0$d<		>12<	>%0$d INVALID<
+>%1$$d<		>12<	>%1$$d INVALID<
+>%1$1$d<	>12<	>%1$1$d INVALID<
+>%*2$*2$d<	>[12, 3]<	>%*2$*2$d INVALID<
+>%*2*2$d<	>[12, 3]<	>%*2*2$d INVALID<
+>%0v2.2d<	>''<	><

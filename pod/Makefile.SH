@@ -22,7 +22,7 @@ if test -d pod; then
 fi
 POD=`echo *.pod`
 MAN=`echo $POD|sed 's/\.pod/\.man/g'`
-HTML=`echo $POD|sed 's/perltoc.pod//'|sed 's/\.pod/\.man/g'`
+HTML=`echo $POD|sed 's/perltoc.pod//'|sed 's/\.pod/\.html/g'`
 TEX=`echo $POD|sed 's/\.pod/\.tex/g'`
 
 echo "Extracting pod/Makefile (with variable substitutions)"
@@ -64,6 +64,7 @@ POD2HTML = pod2html \
 	    --libpods=perlfunc:perlguts:perlvar:perlrun:perlop
 
 PERL = ../miniperl
+PERLILIB = $(PERL) -I../lib
 REALPERL = ../perl
 
 all: $(CONVERTERS) man
@@ -73,7 +74,9 @@ converters: $(CONVERTERS)
 regen_pods: perlmodlib.pod toc
 
 buildtoc:	buildtoc.PL perl.pod ../MANIFEST
-	$(PERL) -I ../lib buildtoc.PL
+	$(PERLILIB) buildtoc.PL
+
+perltoc.pod:	buildtoc
 
 man:	pod2man $(MAN)
 
@@ -82,7 +85,7 @@ html:	pod2html $(HTML)
 tex:	pod2latex $(TEX)
 
 toc:	buildtoc
-	$(PERL) -I../lib buildtoc
+	$(PERLILIB) buildtoc
 
 .SUFFIXES: .pm .pod
 
@@ -160,6 +163,9 @@ perlmodlib.pod:	$(PERL) perlmodlib.PL ../mv-if-diff
 	sh ../mv-if-diff perlmodlib.tmp perlmodlib.pod
 
 compile: all
-	$(REALPERL) -I../lib ../utils/perlcc -regex 's/$$/.exe/' pod2latex pod2man pod2text checkpods -prog -verbose dcf -log ../compilelog;
+	$(REALPERL) -I../lib ../utils/perlcc -o pod2latex.exe pod2latex -log ../compilelog
+	$(REALPERL) -I../lib ../utils/perlcc -o pod2man.exe pod2man -log ../compilelog
+	$(REALPERL) -I../lib ../utils/perlcc -o pod2text.exe pod2text -log ../compilelog
+	$(REALPERL) -I../lib ../utils/perlcc -o checkpods.exe checkpods -log ../compilelog
 
 !NO!SUBS!

@@ -115,7 +115,15 @@ if ($wd =~ m#/afs/# || $^O eq 'amigaos' || $^O eq 'dos' || $^O eq 'MSWin32')
     {print "ok 18 # skipped: granularity of the filetime\n";}
 elsif ($atime == 500000000 && $mtime == 500000000 + $delta)
     {print "ok 18\n";}
-else
+elsif ($^O =~ /\blinux\b/i) {
+    # Maybe stat() cannot get the correct atime, as happens via NFS on linux?
+    $foo = (utime 400000000,500000000 + 2*$delta,'b');
+    my ($new_atime, $new_mtime) = (stat('b'))[8,9];
+    if ($new_atime == $atime && $new_mtime - $mtime == $delta)
+	{print "ok 18 # accounted for possible NFS/glibc2.2 bug on linux\n";}
+    else
+	{print "not ok 18 $atime/$new_atime $mtime/$new_mtime\n";}
+} else
     {print "not ok 18 $atime $mtime\n";}
 
 if ((unlink 'b') == 1) {print "ok 19\n";} else {print "not ok 19\n";}
@@ -129,10 +137,15 @@ chdir $wd || die "Can't cd back to $wd";
 unlink 'c';
 if ($^O ne 'MSWin32' and `ls -l perl 2>/dev/null` =~ /^l.*->/) {
     # we have symbolic links
-    if (symlink("TEST","c")) {print "ok 21\n";} else {print "not ok 21\n";}
-    $foo = `grep perl c`;
+    system("cp TEST TEST$$");
+    # we have to copy because e.g. GNU grep gets huffy if we have
+    # a symlink forest to another disk (it complains about too many
+    # levels of symbolic links, even if we have only two)
+    if (symlink("TEST$$","c")) {print "ok 21\n";} else {print "not ok 21\n";}
+    $foo = `grep perl c 2>&1`;
     if ($foo) {print "ok 22\n";} else {print "not ok 22\n";}
     unlink 'c';
+    unlink("TEST$$");
 }
 else {
     print "ok 21\nok 22\n";
@@ -142,14 +155,24 @@ else {
 unlink "Iofs.tmp";
 `echo helloworld > Iofs.tmp`;
 eval { truncate "Iofs.tmp", 5; };
-if ($@ =~ /not implemented/) {
-  print "# truncate not implemented -- skipping tests 23 through 26\n";
-  for (23 .. 26) {
-    print "ok $_\n";
+if ($@) {
+  if ($@ =~ /not implemented/) {
+    print "# truncate not implemented -- skipping tests 23 through 26\n";
+    for (23 .. 26) {
+      print "ok $_ # Skip: no truncate\n";
+    }
+  } else {
+    warn "io/fs before test 23: truncate dies with \$\@[$@]";
   }
 }
 else {
-  if (-s "Iofs.tmp" == 5) {print "ok 23\n"} else {print "not ok 23\n"}
+  if (-s "Iofs.tmp" == 5) {
+    print "ok 23\n";
+  } else {
+    my $s = -s "Iofs.tmp";
+    printf "# -s Iofs.tmp: %s\n", defined($s) ? $s : "UNDEFINED";
+    print "not ok 23\n";
+  }
   truncate "Iofs.tmp", 0;
   if (-z "Iofs.tmp") {print "ok 24\n"} else {print "not ok 24\n"}
   open(FH, ">Iofs.tmp") or die "Can't create Iofs.tmp";

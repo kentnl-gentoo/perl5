@@ -20,12 +20,9 @@ extern SV*	my_re_intuit_string (pTHX_ regexp *prog);
 
 static int oldfl;
 
-#define R_DB 512
-
 static void
 deinstall(pTHX)
 {
-    dTHR;
     PL_regexecp = Perl_regexec_flags;
     PL_regcompp = Perl_pregcomp;
     PL_regint_start = Perl_re_intuit_start;
@@ -33,21 +30,20 @@ deinstall(pTHX)
     PL_regfree = Perl_pregfree;
 
     if (!oldfl)
-	PL_debug &= ~R_DB;
+	PL_debug &= ~DEBUG_r_FLAG;
 }
 
 static void
 install(pTHX)
 {
-    dTHR;
     PL_colorset = 0;			/* Allow reinspection of ENV. */
     PL_regexecp = &my_regexec;
     PL_regcompp = &my_regcomp;
     PL_regint_start = &my_re_intuit_start;
     PL_regint_string = &my_re_intuit_string;
     PL_regfree = &my_regfree;
-    oldfl = PL_debug & R_DB;
-    PL_debug |= R_DB;
+    oldfl = PL_debug & DEBUG_r_FLAG;
+    PL_debug |= ~DEBUG_r_FLAG;
 }
 
 MODULE = re	PACKAGE = re

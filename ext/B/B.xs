@@ -582,11 +582,12 @@ char *
 OP_name(o)
 	B::OP		o
     CODE:
-	ST(0) = sv_newmortal();
-	sv_setpv(ST(0), PL_op_name[o->op_type]);
+	RETVAL = PL_op_name[o->op_type];
+    OUTPUT:
+	RETVAL
 
 
-char *
+void
 OP_ppaddr(o)
 	B::OP		o
     PREINIT:
@@ -648,13 +649,20 @@ B::OP
 LOGOP_other(o)
 	B::LOGOP	o
 
-#define LISTOP_children(o)	o->op_children
-
 MODULE = B	PACKAGE = B::LISTOP		PREFIX = LISTOP_
 
 U32
 LISTOP_children(o)
 	B::LISTOP	o
+	OP *		kid = NO_INIT
+	int		i = NO_INIT
+    CODE:
+	i = 0;
+	for (kid = o->op_first; kid; kid = kid->op_sibling)
+	    i++;
+	RETVAL = i;
+    OUTPUT:
+        RETVAL
 
 #define PMOP_pmreplroot(o)	o->op_pmreplroot
 #define PMOP_pmreplstart(o)	o->op_pmreplstart
@@ -877,11 +885,11 @@ packiv(sv)
 
 MODULE = B	PACKAGE = B::NV		PREFIX = Sv
 
-double
+NV
 SvNV(sv)
 	B::NV	sv
 
-double
+NV
 SvNVX(sv)
 	B::NV	sv
 
@@ -892,6 +900,10 @@ SvRV(sv)
 	B::RV	sv
 
 MODULE = B	PACKAGE = B::PV		PREFIX = Sv
+
+char*
+SvPVX(sv)
+	B::PV	sv
 
 void
 SvPV(sv)
@@ -1229,6 +1241,12 @@ U16
 CvFLAGS(cv)
       B::CV   cv
 
+MODULE = B	PACKAGE = B::CV		PREFIX = cv_
+
+B::SV
+cv_const_sv(cv)
+	B::CV	cv
+
 
 MODULE = B	PACKAGE = B::HV		PREFIX = Hv
 
@@ -1266,7 +1284,7 @@ HvARRAY(hv)
 	    I32 len;
 	    (void)hv_iterinit(hv);
 	    EXTEND(sp, HvKEYS(hv) * 2);
-	    while (sv = hv_iternextsv(hv, &key, &len)) {
+	    while ((sv = hv_iternextsv(hv, &key, &len))) {
 		PUSHs(newSVpvn(key, len));
 		PUSHs(make_sv_object(aTHX_ sv_newmortal(), sv));
 	    }

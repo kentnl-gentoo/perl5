@@ -1,6 +1,6 @@
 /*    cop.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -21,6 +21,7 @@ struct cop {
     I32		cop_arybase;	/* array base this line was compiled with */
     line_t      cop_line;       /* line # of this command */
     SV *	cop_warnings;	/* lexical warnings bitmask */
+    SV *	cop_io;		/* lexical IO defaults */
 };
 
 #define Nullcop Null(COP*)
@@ -433,6 +434,7 @@ L<perlcall>.
 #define EVAL_INEVAL	1	/* some enclosing scope is an eval */
 #define EVAL_WARNONLY	2	/* used by yywarn() when calling yyerror() */
 #define EVAL_KEEPERR	4	/* set by Perl_call_sv if G_KEEPERR */
+#define EVAL_INREQUIRE	8	/* The code is being required. */
 
 /* Support for switching (stack and block) contexts.
  * This ensures magic doesn't invalidate local stack and cx pointers.
@@ -498,7 +500,7 @@ typedef struct stackinfo PERL_SI;
  * PUTBACK/SPAGAIN to flush/refresh any local SP that may be active */
 #define POPSTACK \
     STMT_START {							\
-	djSP;								\
+	dSP;								\
 	PERL_SI *prev = PL_curstackinfo->si_prev;			\
 	if (!prev) {							\
 	    PerlIO_printf(Perl_error_log, "panic: POPSTACK\n");		\

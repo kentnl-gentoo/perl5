@@ -1,6 +1,6 @@
 /*    pp.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -33,6 +33,13 @@ L<perlcall>.
 Declares a local copy of perl's stack pointer for the XSUB, available via
 the C<SP> macro.  See C<SP>.
 
+=for apidoc ms||djSP
+
+Declare Just C<SP>. This is actually identical to C<dSP>, and declares
+a local copy of perl's stack pointer, available via the C<SP> macro.
+See C<SP>.  (Available for backward source code compatibility with the
+old (Perl 5.005) thread model.)
+
 =for apidoc Ams||dMARK
 Declare a stack marker variable, C<mark>, for the XSUB.  See C<MARK> and
 C<dORIGMARK>.
@@ -46,9 +53,9 @@ The original stack mark for the XSUB.  See C<dORIGMARK>.
 =for apidoc Ams||SPAGAIN
 Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 
-=cut
-*/
+=cut */
 
+#undef SP /* Solaris 2.7 i386 has this in /usr/include/sys/reg.h */
 #define SP sp
 #define MARK mark
 #define TARG targ
@@ -60,8 +67,8 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 #define TOPMARK		(*PL_markstack_ptr)
 #define POPMARK		(*PL_markstack_ptr--)
 
-#define djSP		register SV **sp = PL_stack_sp
-#define dSP		dTHR; djSP
+#define dSP		register SV **sp = PL_stack_sp
+#define djSP		dSP
 #define dMARK		register SV **mark = PL_stack_base + POPMARK
 #define dORIGMARK	I32 origmark = mark - PL_stack_base
 #define SETORIGMARK	origmark = mark - PL_stack_base
@@ -93,7 +100,16 @@ See C<PUSHMARK> and L<perlcall> for other uses.
 Pops an SV off the stack.
 
 =for apidoc Amn|char*|POPp
+Pops a string off the stack. Deprecated. New code should provide
+a STRLEN n_a and use POPpx.
+
+=for apidoc Amn|char*|POPpx
 Pops a string off the stack.
+Requires a variable STRLEN n_a in scope.
+
+=for apidoc Amn|char*|POPpbytex
+Pops a string off the stack which must consist of bytes i.e. characters < 256.
+Requires a variable STRLEN n_a in scope.
 
 =for apidoc Amn|NV|POPn
 Pops a double off the stack.
@@ -115,6 +131,7 @@ Pops a long off the stack.
 #define POPs		(*sp--)
 #define POPp		(SvPVx(POPs, PL_na))		/* deprecated */
 #define POPpx		(SvPVx(POPs, n_a))
+#define POPpbytex	(SvPVbytex(POPs, n_a))
 #define POPn		(SvNVx(POPs))
 #define POPi		((IV)SvIVx(POPs))
 #define POPu		((UV)SvUVx(POPs))
@@ -126,6 +143,8 @@ Pops a long off the stack.
 #endif
 
 #define TOPs		(*sp)
+#define TOPm1s		(*(sp-1))
+#define TOPp1s		(*(sp+1))
 #define TOPp		(SvPV(TOPs, PL_na))		/* deprecated */
 #define TOPpx		(SvPV(TOPs, n_a))
 #define TOPn		(SvNV(TOPs))
@@ -373,3 +392,10 @@ See C<PUSHu>.
     SvREFCNT_dec(tmpRef);                   \
     SvRV(rv)=AMG_CALLun(rv,copy);        \
   } } STMT_END
+
+/*
+=for apidoc mU||LVRET
+True if this op will be the return value of an lvalue subroutine
+
+=cut */
+#define LVRET ((PL_op->op_private & OPpMAYBE_LVSUB) && is_lvalue_sub())

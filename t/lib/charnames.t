@@ -8,7 +8,7 @@ BEGIN {
 }
 
 $| = 1;
-print "1..13\n";
+print "1..16\n";
 
 use charnames ':full';
 
@@ -16,7 +16,7 @@ print "not " unless "Here\N{EXCLAMATION MARK}?" eq "Here\041?";
 print "ok 1\n";
 
 {
-  use bytes;			# UTEST can switch utf8 on
+  use bytes;			# TEST -utf8 can switch utf8 on
 
   print "# \$res=$res \$\@='$@'\nnot "
     if $res = eval <<'EOE'
@@ -39,13 +39,22 @@ EOE
 }
 
 # If octal representation of unicode char is \0xyzt, then the utf8 is \3xy\2zt
-$encoded_be = "\320\261";
-$encoded_alpha = "\316\261";
-$encoded_bet = "\327\221";
+if (ord('A') == 65) { # as on ASCII or UTF-8 machines
+    $encoded_be = "\320\261";
+    $encoded_alpha = "\316\261";
+    $encoded_bet = "\327\221";
+    $encoded_deseng = "\360\220\221\215";
+}
+else { # EBCDIC where UTF-EBCDIC may be used (this may be 1047 specific since
+       # UTF-EBCDIC is codepage specific)
+    $encoded_be = "\270\102\130";
+    $encoded_alpha = "\264\130";
+    $encoded_bet = "\270\125\130";
+    $encoded_deseng = "\336\102\103\124";
+}
 
 sub to_bytes {
-    use bytes;
-    my $bytes = shift;
+    pack"a*", shift;
 }
 
 {
@@ -88,5 +97,33 @@ sub to_bytes {
 
     print "not " unless ord($x) == ord($named);
     print "ok 13\n";
+}
+
+{
+   use charnames qw(:full);
+   use utf8;
+   print "not " unless "\x{100}\N{CENT SIGN}" eq "\x{100}"."\N{CENT SIGN}";
+   print "ok 14\n";
+}
+
+{
+  use charnames ':full';
+
+  print "not "
+      unless to_bytes("\N{DESERET SMALL LETTER ENG}") eq $encoded_deseng;
+  print "ok 15\n";
+}
+
+{
+  # 20001114.001	
+
+  if (ord("Ä") == 0xc4) { # Try to do this only on Latin-1.
+      use charnames ':full';
+      my $text = "\N{LATIN CAPITAL LETTER A WITH DIAERESIS}";
+      print "not " unless $text eq "\xc4" && ord($text) == 0xc4;
+      print "ok 16\n";
+  } else {
+      print "ok 16 # Skip: not Latin-1\n";
+  }
 }
 

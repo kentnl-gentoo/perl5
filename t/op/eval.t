@@ -1,6 +1,6 @@
 #!./perl
 
-print "1..40\n";
+print "1..41\n";
 
 eval 'print "ok 1\n";';
 
@@ -37,7 +37,7 @@ open(try,'>Op.eval');
 print try 'print "ok 10\n"; unlink "Op.eval";',"\n";
 close try;
 
-do 'Op.eval'; print $@;
+do './Op.eval'; print $@;
 
 # Test the singlequoted eval optimizer
 
@@ -205,4 +205,19 @@ print $@;
     print "not " if $@;
     print "ok $x\n";
     $x++;
+}
+
+# Check that eval catches bad goto calls
+#   (BUG ID 20010305.003)
+{
+    eval {
+	eval { goto foo; };
+	print ($@ ? "ok 41\n" : "not ok 41\n");
+	last;
+	foreach my $i (1) {
+	    foo: print "not ok 41\n";
+	    print "# jumped into foreach\n";
+	}
+    };
+    print "not ok 41\n" if $@;
 }

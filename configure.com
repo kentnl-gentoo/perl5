@@ -1,4 +1,4 @@
-$ sav_ver = 'F$VERIFY(0)
+$ sav_ver = 'F$VERIFY(0)'
 $! SET VERIFY
 $!
 $! For example, if you unpacked perl into: [USER.PERL-5n...] then you will 
@@ -30,8 +30,6 @@ $! with much valuable help from Charles Bailey &
 $! the whole VMSPerl crew.
 $! Extended and messed about with by Dan Sugalski
 $!
-$ sav_ver = F$VERIFY(0)
-$!
 $! VMS-isms we will need:
 $ echo = "write sys$output "
 $ cat  = "type"
@@ -53,9 +51,19 @@ $ use_two_pot_malloc = "N"
 $ use_pack_malloc = "N"
 $ use_debugmalloc = "N"
 $ ccflags = ""
+$ static_ext = ""
 $ vms_default_directory_name = F$ENVIRONMENT("DEFAULT")
 $ max_allowed_dir_depth = 3  ! e.g. [A.B.PERLxxx] not [A.B.C.PERLxxx]
 $! max_allowed_dir_depth = 2 ! e.g. [A.PERLxxx] not [A.B.PERLxxx]
+$!
+$! Sebastian Bazley's request: close the CONFIG handle with /NOLOG
+$! qualifier "just in case" (configure.com is re @ed in a bad state).
+$! This construct was tested to be not a problem as far back as
+$! VMS V5.5-2, hopefully earlier versions are OK as well.
+$!
+$ CLOSE/NOLOG CONFIG
+$!
+$! Now keep track of open files
 $!
 $ vms_filcnt = F$GETJPI ("","FILCNT")
 $!
@@ -125,9 +133,7 @@ $ silent=""
 $ extractsh=""
 $ override=""
 $ knowitall=""
-$ Using_Dec_C = "n"
-$ Using_Gnu_C = "n"
-$ using_cxx = "n"
+$ ccname="VAX"
 $ Dec_C_Version = ""
 $ cxxversion = ""
 $ use_threads = "F"
@@ -254,18 +260,18 @@ $     P'i' = P'i' - "D"
 $     IF (F$LOCATE("=",P'i') .EQ. F$LENGTH(P'i'))
 $     THEN
 $       tmp = P'i' + "=""define"""
-$       'tmp
+$       'tmp'
 $       DELETE/SYMBOL tmp
 $     ELSE 
 $       IF (F$LOCATE("=",P'i') .EQ. (F$LENGTH(P'i') - 1))
 $       THEN
 $         me = F$PARSE(me,,,"NAME") + F$PARSE(me,,,"TYPE")
-$         echo "''me': use '-Usymbol=val' not '-Dsymbol='."
+$         echo "''me': use ""-Usymbol=val"" not ""-Dsymbol=""."
 $         echo "''me': ignoring -D",P'i'
 $       ELSE
 $          tmp = F$EXTRACT(0,F$LOCATE("=",P'i'),P'i')
 $          tmp = tmp + "=""" + F$EXTRACT(F$LOCATE("=",P'i')+1,F$LENGTH(P'i'),P'i') + """"
-$         'tmp
+$         'tmp'
 $         DELETE/SYMBOL tmp
 $       ENDIF
 $     ENDIF
@@ -277,17 +283,17 @@ $     P'i' = P'i' - "U"
 $     IF (F$LOCATE("=",P'i') .EQ. F$LENGTH(P'i'))
 $     THEN
 $       tmp = P'i' + "="""""
-$       'tmp
+$       'tmp'
 $       DELETE/SYMBOL tmp
 $     ELSE 
 $       IF (F$LOCATE("=",P'i') .LT. (F$LENGTH(P'i') - 1))
 $       THEN
 $         me = F$PARSE(me,,,"NAME") + F$PARSE(me,,,"TYPE")
-$         echo "''me': use '-Dsymbol=val' not '-Usymbol=val'."
+$         echo "''me': use ""-Dsymbol=val"" not ""-Usymbol=val""."
 $         echo "''me': ignoring -U",P'i'
 $       ELSE
 $         tmp = P'i' + "=""undef"""
-$         'tmp
+$         'tmp'
 $         DELETE/SYMBOL tmp
 $       ENDIF
 $     ENDIF
@@ -315,9 +321,10 @@ $!
 $ IF (error)
 $ THEN
 $   me = F$PARSE(me,,,"DIRECTORY")+ F$PARSE(me,,,"NAME")
-$   echo "Usage: @''me' [-dehmrEKOSV] [-fconfig.sh] [-Dsymbol] [-Dsymbol=value]"
+$   echo "Usage: @''me' [-dehmr""EKOSV""] [-fconfig.sh] [""-Dsymbol""] [""-Dsymbol=value""]"
 $   echo "                [-Usymbol]  [-Usymbol=]"
-$   TYPE SYS$INPUT
+$   TYPE SYS$INPUT:
+$   DECK
  "-d" : use defaults for all answers.
  "-e" : go on without questioning past the production of config.sh.    *
  "-f" : specify an alternate default configuration file.
@@ -336,6 +343,7 @@ $   TYPE SYS$INPUT
          -"Usymbol"    symbol gets the value 'undef'
          -"Usymbol="   symbol gets completely empty
   -V  : print version number and exit (with a zero status).
+$   EOD
 $   echo "%Config-I-VMS, lower case switches must be enclosed"
 $   echo "-Config-I-VMS, in double quotation marks, e.g.:"
 $   echo "-Config-I-VMS,   @Configure ""-des"""
@@ -350,7 +358,8 @@ $!
 $Shut_up:
 $ IF F$Mode() .eqs. "BATCH"
 $ THEN
-$   STDOUT = F$GetQuI("DISPLAY_JOB","LOG_SPECIFICATION",,"THIS_JOB")
+$   STDOUT = F$PARSE(F$GETQUI("DISPLAY_ENTRY", "JOB_NAME"), -
+                    F$GETQUI("DISPLAY_ENTRY", "LOG_SPECIFICATION"), ".LOG")
 $   WRITE SYS$OUTPUT "Warning: Executing in batch mode.  To avoid file locking conflicts,"
 $   WRITE SYS$OUTPUT "output intended for SYS$OUTPUT will be sent to a new version"
 $   WRITE SYS$OUTPUT STDOUT
@@ -424,10 +433,12 @@ $ IF (tmp .GES. "7.2") .AND. (F$GETSYI("HW_MODEL") .GE. 1024) THEN GOTO Beyond_d
 $   IF (F$ELEMENT(max_allowed_dir_depth,".",F$ENVIRONMENT("Default")).nes.".")
 $   THEN
 $     TYPE SYS$INPUT:
+$     DECK
 %Config-E-VMS, ERROR:
  Sorry! It apears as though your perl build sub-directory is already too
  deep into the VMS file system. Please try moving stuff into a shallower 
  directory (or altering the "max_allowed_dir_depth" parameter).
+$     EOD
 $     echo4 "ABORTING..."
 $     SET DEFAULT 'vms_default_directory_name' !be kind rewind
 $     STOP
@@ -543,6 +554,8 @@ $   ENDIF
 $   IF ((miss_list .NES. "").OR.(manifestfound .EQS. ""))
 $   THEN
 $     TYPE SYS$INPUT:
+$     DECK
+
 
 THIS PACKAGE SEEMS TO BE INCOMPLETE.
 
@@ -551,6 +564,7 @@ distinct possibility that your kit is damaged, by typing 'y'es.  If you
 do, don't blame me if something goes wrong.  I advise you to type 'n'o
 and contact the author (dan@sidhe.org)
 
+$     EOD
 $     READ SYS$COMMAND/PROMPT="Continue? [n] " ans
 $     IF ans
 $     THEN
@@ -622,7 +636,7 @@ $ IF F$TYPE(usedevel) .EQS. "" THEN usedevel := n
 $ patchlevel_h = F$SEARCH("[-]patchlevel.h")
 $ IF (patchlevel_h.NES."")
 $ THEN
-$   SEARCH 'patchlevel_h "define","PERL_VERSION","epoch"/match=and/out=[]ver.out
+$   SEARCH 'patchlevel_h' "define","PERL_VERSION","epoch"/match=and/out=[]ver.out
 $   IF .NOT. usedevel .AND. usedevel .NES. "define"
 $   THEN
 $     OPEN/READ CONFIG []ver.out
@@ -636,6 +650,7 @@ $     IF tmp .NE. 0
 $     THEN
 $       echo4 "patchlevel is " + F$STRING(xpatchlevel)
 $       cat4 SYS$INPUT:
+$       DECK
 *** WHOA THERE!!! ***
 
     This is an UNSTABLE DEVELOPMENT release.
@@ -649,6 +664,7 @@ $       cat4 SYS$INPUT:
     It is most seriously suggested that you do not continue any further
     unless you want to help in developing and debugging Perl.
 
+$       EOD
 $       dflt="n"
 $       rp="Do you really want to continue? [''dflt'] "
 $       IF (fastread) THEN fastread := FALSE
@@ -661,8 +677,6 @@ $       ELSE
 $         echo4 "Okay, bye."
 $         DELETE/NOLOG/NOCONFIRM []ver.out;
 $         GOTO Clean_up
-$         STOP
-$         exit 0
 $       ENDIF
 $     ENDIF
 $     DELETE/SYMBOL line
@@ -694,6 +708,7 @@ $!
 $ IF (needman)
 $ THEN
 $   TYPE SYS$INPUT:
+$   DECK
 
 This installation shell script will examine your system and ask you questions
 to determine how the perl5 package should be installed. If you get
@@ -702,16 +717,20 @@ process, edit something, then restart this process as you just did.
 Many of the questions will have default answers in square
 brackets; typing carriage return will give you the default.
 
+$   EOD
 $   READ SYS$COMMAND/PROMPT="Type carriage return to continue " ans
 $   TYPE SYS$INPUT:
+$   DECK
 
 In a hurry? You may run '@Configure "-d"'.  This will bypass nearly all
 the questions and use the computed defaults (or the previous answers provided 
 there was already a config.sh file). Type '@Configure "-h"' for a list of 
 options.
 
+$   EOD
 $   READ SYS$COMMAND/PROMPT="Type carriage return to continue " ans
 $   TYPE SYS$INPUT:
+$   DECK
 
 Much effort has been expended to ensure that this shell script will
 run on any VMS system.  If despite that it blows up on yours, your
@@ -719,6 +738,7 @@ best bet is to edit Configure.com and @ it again.  Whatever problems
 you have with Configure.com, let me (dan@sidhe.org) know how I blew
 it.
 
+$   EOD
 $!This installation script affects things in two ways:
 $!
 $!1) it may do direct variable substitutions on some of the files included
@@ -743,7 +763,7 @@ $ sharpbang = "$ "
 $!: figure out how to guarantee sh startup !sfn
 $!: find out where common programs are     !sfn
 $!loclist="awk/cat/comm/cp/echo/expr/find/grep/ln/ls/mkdir/rm/sed/sort/touch/tr/uniq"
-$!trylist="Mcc/byacc/cpp/csh/date/egrep/less/line/more/nroff/perl/pg/sendmail/test/uname"
+$!trylist="byacc/cpp/csh/date/egrep/less/line/more/nroff/perl/pg/sendmail/test/uname"
 $! echo "I don't know where '$file' is, and my life depends on it."
 $! echo "Go find a public domain implementation or fix your PATH setting!"
 $! echo ""
@@ -798,16 +818,18 @@ $! However, watch out for sig_nam, sig_nam_init, sig_num, startperl
 $! and any of the lower case double quoted variables such as the *format
 $! variables in such a config."sh".
 $!
-$   @'config_sh
+$   @'config_sh'
 $!
 $ ENDIF
 $ DELETE/SYMBOL config_dflt
 $!
 $!we actually do not have "hints/" for VMS
 $!     TYPE SYS$INPUT:
+$!     DECK
 $!
 $!First time through, eh?  I have some defaults handy for the following systems:
 $!
+$!     EOD
 $!     echo "     ","VMS_VAX"
 $!     echo "     ","VMS_AXP"
 $!        : Now look for a hint file osname_osvers, unless one has been
@@ -829,12 +851,14 @@ $ IF (osname .NES. "VMS")
 $ THEN
 $   echo4 "Hmm.. I wonder what ''osname' is (?)"
 $   TYPE SYS$INPUT:
+$   DECK
 
 %Config-E-VMS, ERROR:
 
            Err, you do not appear to be running VMS!
  This procedure is intended to Configure the building of Perl for VMS.
 
+$   EOD
 $   READ SYS$COMMAND/PROMPT="Continue anyway? [n] " ans
 $   IF ans
 $   THEN
@@ -848,11 +872,13 @@ $   ENDIF
 $ ELSE           !we are on VMS huzzah!
 $   IF .NOT.silent 
 $   THEN TYPE SYS$INPUT:
+$   DECK
 
 Configure uses the operating system name and version to set some defaults.
 The default value is probably right if the name rings a bell. Otherwise,
 since spelling matters for me, either accept the default or answer "none"
 to leave it blank.
+$   EOD
 $   ENDIF
 $   rp = "Operating system name? [''osname'] "
 $   GOSUB myread
@@ -1093,10 +1119,13 @@ $!: determine where private library files go
 $!: Usual default is /usr/local/lib/perl5.  Also allow things like 
 $!: /opt/perl/lib, since /opt/perl/lib/perl5 would be redundant.
 $   IF .NOT.silent 
-$   THEN TYPE SYS$INPUT:
+$   THEN
+$     TYPE SYS$INPUT:
+$     DECK
 
 There are some auxiliary files for perl5 that need to be put into a
 private library directory that is accessible by everyone.
+$     EOD
 $   ENDIF
 $   IF F$TYPE(privlib) .NES. ""
 $   THEN dflt = privlib
@@ -1192,12 +1221,20 @@ $     line = F$EDIT(line,"COMPRESS, TRIM")
 $     api_subversion = F$ELEMENT(2," ",line)
 $     got_api_subversion = "true"
 $   ENDIF
-$   IF (.NOT.got_patch).OR.(.NOT.got_sub) THEN GOTO Patchlevel_h_loop
+$   IF (.NOT. got_patch) .OR. -
+       (.NOT. got_sub) .OR. - 
+       (.NOT. got_api_revision) .OR. -
+       (.NOT. got_api_version) .OR. -
+       (.NOT. got_api_subversion) -
+      THEN GOTO Patchlevel_h_loop
 $Close_patch:
 $   CLOSE CONFIG
 $ ELSE
 $   patchlevel="0"
 $   subversion="0"
+$   api_revision="0"
+$   api_version="0"
+$   api_subversion="0"
 $ ENDIF
 $ IF (F$STRING(subversion) .NES. "0")
 $ THEN
@@ -1219,10 +1256,13 @@ $     echo ""
 $     echo "''package' contains architecture-dependent library files.  If you are"
 $   ENDIF
 $   IF (.NOT.silent) 
-$   THEN TYPE SYS$INPUT:
+$   THEN
+$     TYPE SYS$INPUT:
+$     DECK
 sharing libraries in a heterogeneous environment, you might store
 these files in a separate location.  Otherwise, you can just include
 them with the rest of the public library files.
+$     EOD
 $   ENDIF
 $   IF F$TYPE(archlib) .NES. ""
 $   THEN dflt = archlib
@@ -1241,10 +1281,11 @@ $!
 $! This quotation from Configure has to be included on VMS:
 $!
 $ TYPE SYS$INPUT:
+$ DECK
 
 There is, however, a strange, musty smell in the air that reminds me of
 something...hmm...yes...I've got it...there's a VMS nearby, or I'm a Blit.
-$ CONTINUE
+$ EOD
 $ IF (.NOT.vms_skip_install)
 $ THEN
 $!: it so happens the Eunice I know will not run shell scripts in Unix format
@@ -1254,12 +1295,15 @@ $!: now see if they want to do setuid emulation   !sfn
 $!
 $!: determine where site specific libraries go.
 $   IF .NOT.silent 
-$   THEN TYPE SYS$INPUT:
+$   THEN
+$     TYPE SYS$INPUT:
+$     DECK
 
 The installation process will also create a directory for
 site-specific extensions and modules.  Some users find it convenient
 to place all local files in this directory rather than in the main
 distribution directory.
+$     EOD
 $   ENDIF
 $   IF F$TYPE(sitelib) .NES. ""
 $   THEN dflt = sitelib
@@ -1276,9 +1320,11 @@ $!
 $!: determine where site specific architecture-dependent libraries go.
 $   IF .NOT.silent 
 $   THEN TYPE SYS$INPUT:
+$     DECK
 
 The installation process will also create a directory for
 architecture-dependent site-specific extensions and modules.
+$     EOD
 $   ENDIF
 $   IF F$TYPE(sitearch) .NES. ""
 $   THEN dflt = sitearch
@@ -1447,7 +1493,7 @@ $ IF (silent) THEN GOSUB Shut_up
 $ CLOSE CONFIG
 $ IF (tmp.NE.%X10000001).and.(tmp.ne.%X00030001)
 $ THEN
-$   echo "Symbol ""''gcc_symbol'"" is not defined. I guess you don't have it."
+$   echo "Symbol ""''gcc_symbol'"" is not defined. I guess you do not have it."
 $   DELETE/NOLOG/NOCONFIRM gccvers.lis;
 $   GOTO Cxx_initial_check
 $ ENDIF
@@ -1465,11 +1511,11 @@ $Cxx_initial_check:
 $!
 $! Do note that [vms]perl source files have a ways to go before they will 
 $! compile under CXX.
-$! In order to test Configure.com with CXX swap the '!' comment character 
-$! between the following two lines.  
+$! In order to test Configure.com with CXX invoke it with "-Dtry_cxx" on
+$! the command line.
 $!
-$! IF 1 .eq. 1
-$ IF 1 .eq. 0
+$ IF F$TYPE(try_cxx) .EQS. "" THEN try_cxx := n
+$ IF try_cxx .OR. try_cxx .EQS. "define"
 $!
 $ THEN
 $!
@@ -1564,51 +1610,53 @@ $   Mcc = ans
 $   IF (F$LOCATE("dec",ans).NE.F$LENGTH(ans)).or.(F$LOCATE("compaq",ans).NE.F$LENGTH(ans))
 $   THEN
 $     Mcc = "cc/decc"
-$     Using_Dec_C := Y
+$! CPQ ?
+$     ccname := DEC
 $     C_COMPILER_Replace = "CC=cc=''Mcc'"
 $   ENDIF
 $   IF F$LOCATE("cxx",F$EDIT(ans,"COLLAPSE,LOWERCASE")) .NE. F$LENGTH(ans)
 $   THEN
 $     Mcc = "cxx"
-$     using_cxx := Y
+$     ccname := CXX
 $     ld = ld_try
-$!     C_COMPILER_Replace = "CC=cc=''Mcc'"
-$   ENDIF
-$   IF Mcc.NES.dflt
-$   THEN
-$     IF F$LOCATE("dec",dflt) .NE. F$LENGTH(dflt) .or. -
-         F$LOCATE("compaq",dflt) .NE. F$LENGTH(dflt)
-$     THEN 
-$       C_COMPILER_Replace = "CC=cc=''Mcc'"
-$     ELSE
-$       Using_Dec_C := Y
-$     ENDIF
-$   ELSE
-$     IF Mcc .EQS. "cc/decc"
+$     C_COMPILER_Replace = "CC=cc=''Mcc'"
+$   ELSE ! Not_cxx
+$     IF Mcc.NES.dflt
 $     THEN
-$       Using_Dec_C := Y
-$       C_COMPILER_Replace = "CC=cc=''Mcc'"
+$       IF F$LOCATE("dec",dflt) .NE. F$LENGTH(dflt) .or. -
+           F$LOCATE("compaq",dflt) .NE. F$LENGTH(dflt)
+$       THEN 
+$         C_COMPILER_Replace = "CC=cc=''Mcc'"
+$       ELSE
+$         ccname := DEC
+$       ENDIF
+$     ELSE
+$       IF Mcc .EQS. "cc/decc"
+$       THEN
+$         ccname := DEC
+$         C_COMPILER_Replace = "CC=cc=''Mcc'"
+$       ENDIF
 $     ENDIF
 $   ENDIF
 $ ELSE 
 $   Mcc = dflt
 $   IF Mcc .EQS. "cc/decc"
 $   THEN
-$     Using_Dec_C := Y
+$     ccname := DEC
 $     C_COMPILER_Replace = "CC=cc=''Mcc'"
 $   ENDIF
 $   IF Mcc .EQS. "gcc"
 $   THEN
-$     Using_Gnu_C := Y
+$     ccname := GCC
 $     C_COMPILER_Replace = "CC=cc=''Mcc'"
 $   ENDIF
 $ ENDIF
 $Decc_Version_check:
 $ ccversion=""
-$ IF Using_Dec_C
+$ IF ccname .EQS. "DEC"
 $ THEN
 $   echo ""
-$   echo4 "Checking for Dec C's version number..."
+$   echo4 "Checking for the Dec C version number..."
 $   OPEN/WRITE CONFIG deccvers.c
 $   WRITE CONFIG "#include <stdlib.h>"  !DECC is sooo picky
 $   WRITE CONFIG "#include <stdio.h>"
@@ -1658,7 +1706,7 @@ $   DELETE/NOLOG/NOCONFIRM deccvers.*;
 $ ENDIF
 $Gcc_check:
 $ gccversion = ""
-$ IF Using_Gnu_C
+$ IF ccname .EQS. "GCC"
 $ THEN
 $   vaxcrtl_olb = F$SEARCH("SYS$LIBRARY:VAXCRTL.OLB")
 $   vaxcrtl_exe = F$SEARCH("SYS$SHARE:VAXCRTL.EXE")
@@ -1703,7 +1751,6 @@ $   THEN
 $     echo ""
 $     echo4 "Checking for GNU cc in disguise and/or its version number..." !>&4
 $     OPEN/WRITE CONFIG gccvers.c
-$!     WRITE CONFIG "#include <stdlib.h>"  !DECC is sooo picky
 $     WRITE CONFIG "#include <stdio.h>"
 $     WRITE CONFIG "int main() {"
 $     WRITE CONFIG "#ifdef __GNUC__"
@@ -1766,14 +1813,14 @@ $       GOTO Host_name
 $     ELSE 
 $       echo "You are using GNU cc ''line'"
 $       gccversion = line
-$       Using_Gnu_C := Y
+$       ccname := "GCC"
 $       C_COMPILER_Replace = "CC=cc=''Mcc'"
 $       GOTO Include_dirs
 $     ENDIF
 $   ENDIF
 $ ENDIF
 $Cxx_Version_check:
-$ IF using_cxx
+$ IF ccname .EQS. "CXX"
 $ THEN
 $   OPEN/WRITE CONFIG cxxvers.c
 $   WRITE CONFIG "#include <stdio.h>"
@@ -1885,6 +1932,10 @@ $  IF myhostname.eqs."".and. -
       F$TRNLNM("UCX$INET_HOST") .nes. "" .and. -
       F$TRNLNM("UCX$INET_DOMAIN") .nes. "" THEN - 
      myhostname = F$TRNLNM("UCX$INET_HOST") + "." + F$TRNLNM("UCX$INET_DOMAIN") 
+$  IF myhostname.eqs."".and. -
+      F$TRNLNM("TCPIP$INET_HOST") .nes. "" .and. -
+      F$TRNLNM("TCPIP$INET_DOMAIN") .nes. "" THEN - 
+     myhostname = F$TRNLNM("TCPIP$INET_HOST") + "." + F$TRNLNM("TCPIP$INET_DOMAIN") 
 $  IF myhostname.eqs."" THEN myhostname = F$TRNLNM("TCPWARE_DOMAINNAME")
 $  IF myhostname.eqs."" THEN myhostname = F$TRNLNM("NEWS_ADDRESS")
 $  IF myhostname.eqs."" THEN myhostname = F$TRNLNM("SYS$NODE") - "::"
@@ -1927,30 +1978,39 @@ $ ENDIF
 $ myhostname = myhostname - mydomain
 $ echo "(Trimming domain name from host name--host name is now ''myhostname')"
 $ IF .NOT.silent 
-$ THEN TYPE SYS$INPUT:
+$ THEN
+$   TYPE SYS$INPUT:
+$   DECK
 
 I need to get your e-mail address in Internet format if possible, i.e.
 something like user@host.domain. Please answer accurately since I have
 no easy means to double check it. The default value provided below
 is most probably close to the reality but may not be valid from outside
 your organization...
+$   EOD
 $ ENDIF
-$ dflt = "''cf_by'@''myhostname'"+"''mydomain'"
-$ rp = "What is your e-mail address? [''dflt'] "
-$ GOSUB myread
-$ IF ans .nes. ""
-$ THEN cf_email = ans
-$ ELSE cf_email = dflt
+$ IF F$TYPE(cf_email) .EQS. "" 
+$ THEN 
+$   dflt = "''cf_by'@''myhostname'"+"''mydomain'"
+$   rp = "What is your e-mail address? [''dflt'] "
+$   GOSUB myread
+$   IF ans .nes. ""
+$   THEN cf_email = ans
+$   ELSE cf_email = dflt
+$   ENDIF
 $ ENDIF
 $!
 $ IF .NOT.silent 
-$ THEN TYPE SYS$INPUT:
+$ THEN
+$   TYPE SYS$INPUT:
+$   DECK
 
 If you or somebody else will be maintaining perl at your site, please
 fill in the correct e-mail address here so that they may be contacted
 if necessary. Currently, the "perlbug" program included with perl
 will send mail to this address in addition to perlbug@perl.com. You may
 enter "none" for no administrator.
+$   EOD
 $ ENDIF
 $ dflt = "''cf_email'"
 $ rp = "Perl administrator e-mail address [''dflt'] "
@@ -1982,21 +2042,22 @@ $!: compute shared library extension
 $!: Looking for optional libraries
 $!: see if nm is to be used to determine whether a symbol is defined or not
 $!: get list of predefined functions in a handy place
-$!: see if we have sigaction
+$!: see if we have sigaction or sigprocmask
 $!: see whether socketshr exists
 $ IF (F$SEARCH(F$PARSE("SocketShr","Sys$Share:.Exe")).NES."")
 $ THEN
 $   Has_socketshr     = "T"
 $   echo ""
-$   echo4 "Hmm... Looks like you have SOCKETSHR's Berkeley networking support."
+$   echo4 "Hmm... Looks like you have SOCKETSHR Berkeley networking support."
 $ ELSE
 $   Has_socketshr     = "F"
 $ ENDIF
-$ IF (Dec_C_Version .GE. 50200000)
+$ IF (ccname .EQS. "DEC" .AND. Dec_C_Version .GE. 50200000) .OR. -
+     (ccname .EQS. "CXX")
 $ THEN
 $   Has_Dec_C_Sockets = "T"
 $   echo ""
-$   echo4 "Hmm... Looks like you've got Dec C's Berkeley networking support."
+$   echo4 "Hmm... Looks like you have Dec C Berkeley networking support."
 $ ELSE
 $   Has_Dec_C_Sockets = "F"
 $ ENDIF
@@ -2004,8 +2065,8 @@ $ ! Hey, we've got both. Default to Dec C, then, since it's better
 $ IF Has_socketshr .OR. Has_Dec_C_Sockets
 $ THEN
 $   echo ""
-$   echo "You've got sockets available. Which socket stack do you want to"
-$   echo "build into perl?"
+$   echo "You have sockets available.  Which socket stack do you want to"
+$   echo "build into Perl?"
 $   IF Has_Dec_C_Sockets
 $   THEN
 $     dflt = "DECC"
@@ -2023,6 +2084,10 @@ $   Has_socketshr = "F"
 $   ans = F$EDIT(ans,"TRIM,COMPRESS,LOWERCASE")
 $   IF ans.eqs."decc" then Has_Dec_C_Sockets = "T"
 $   IF ans.eqs."socketshr" then Has_socketshr = "T"
+$ ENDIF
+$ IF Has_Dec_C_Sockets .or. Has_socketshr
+$ THEN
+$   static_ext = f$edit(static_ext+" "+"Socket","trim,compress")
 $ ENDIF
 $!
 $!
@@ -2046,11 +2111,11 @@ $ ENDIF
 $!
 $! Ask if they want to build with DEBUGGING
 $ echo ""
-$ echo "Perl can be built with extra runtime debugging enabled. This
-$ echo "enables the -D switch, at the cost of some performance. It
-$ echo "was mandatory on perl 5.005 and before on VMS, but is now
-$ echo "optional. If you don't generally use it you should probably
-$ echo "leave this off and gain a bit of extra speed.
+$ echo "Perl can be built with extra runtime debugging enabled. This"
+$ echo "enables the -D switch, at the cost of some performance.  It"
+$ echo "was mandatory on perl 5.005 and before on VMS, but is now"
+$ echo "optional.  If you do not generally use it you should probably"
+$ echo "leave this off and gain a bit of extra speed."
 $ dflt = "y"
 $ rp = "Build a DEBUGGING version of Perl? [''dflt'] "
 $ GOSUB myread
@@ -2066,9 +2131,9 @@ $! Ask if they want to build with MULTIPLICITY
 $ echo ""
 $ echo "Perl can be built so that multiple Perl interpreters can coexist"
 $ echo "within the same Perl executable."
-$ echo "There is some performance overhead, however, so you
-$ echo "probably don't want to choose this unless you're going to be doing
-$ echo "things with embedded perl."
+$ echo "There is some performance overhead, however, so you"
+$ echo "probably do not want to choose this unless you are going to be" 
+$ echo "doing things with embedded perl."
 $ dflt = "n"
 $ rp = "Build Perl for multiplicity? [''dflt'] "
 $ GOSUB myread
@@ -2085,55 +2150,51 @@ $ IF (archname.eqs."VMS_AXP").and.("''f$extract(1,3, f$getsyi(""version""))'".ge
 $ THEN
 $   dflt = use64bitint
 $   echo ""
-$   echo "You can have native 64-bit long integers.
+$   echo "You can have native 64-bit long integers."
 $   echo ""
-$   echo "Perl can be built to take advantage of 64-bit integer types
-$   echo "on some systems, which provide a much larger range for perl's 
-$   echo "mathematical operations.  (Note that does *not* enable 64-bit 
+$   echo "Perl can be built to take advantage of 64-bit integer types"
+$   echo "on some systems, which provide a much larger range for perl's"
+$   echo "mathematical operations.  (Note that does *not* enable 64-bit"
 $   echo "fileops at the moment, as Dec C doesn't do that yet)."
-$   echo "Choosing this option will most probably introduce binary incompatibilities.
+$   echo "Choosing this option will most probably introduce binary incompatibilities."
 $   echo ""
-$   echo "If this doesn't make any sense to you, just accept the default ''dflt'.
+$   echo "If this does not make any sense to you, just accept the default ''dflt'."
 $   rp = "Try to use 64-bit integers, if available? [''dflt'] "
 $   GOSUB myread
 $   IF ans .EQS. "" THEN ans = dflt
-$   IF (f$extract(0, 1, f$edit(ans,"COLLAPSE,UPCASE")) .EQS. "Y")
-$   THEN
-$     use64bitint="Y"
-$   ELSE
-$     use64bitint="N"
+$   IF ans
+$   THEN use64bitint="Y"
+$   ELSE use64bitint="N"
 $   ENDIF
 $   IF (use64bitint)
 $   THEN
 $     dflt = use64bitall
 $     echo ""
-$     echo "Since you chose 64-bitness you may want to try maximal 64-bitness.
-$     echo "What you have chosen is minimal 64-bitness which means just enough
-$     echo "to get 64-bit integers.  The maximal means using as much 64-bitness
-$     echo "as is possible on the platform.  This in turn means even more binary
-$     echo "incompatibilities.  On the other hand, your platform may not have
-$     echo "any more maximal 64-bitness than what you already have chosen.
+$     echo "Since you chose 64-bitness you may want to try maximal 64-bitness."
+$     echo "What you have chosen is minimal 64-bitness which means just enough"
+$     echo "to get 64-bit integers.  The maximal means using as much 64-bitness"
+$     echo "as is possible on the platform.  This in turn means even more binary"
+$     echo "incompatibilities.  On the other hand, your platform may not have"
+$     echo "any more maximal 64-bitness than what you already have chosen."
 $     echo ""
-$     echo "If this doesn't make any sense to you, just accept the default ''dflt'.
+$     echo "If this does not make any sense to you, just accept the default ''dflt'."
 $     rp = "Try to use full 64-bit support, if available? [''dflt'] "
 $     GOSUB myread
 $     IF ans .EQS. "" THEN ans = dflt
-$     IF (f$extract(0, 1, f$edit(ans,"COLLAPSE,UPCASE")) .EQS. "Y")
-$     THEN
-$       use64bitall="Y"
-$     ELSE
-$       use64bitall="N"
+$     IF ans
+$     THEN use64bitall="Y"
+$     ELSE use64bitall="N"
 $     ENDIF
 $   ENDIF
 $ ENDIF ! AXP && >= 7.1
 $!
 $! Ask about threads, if appropriate
-$ if Using_Dec_C
+$ IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
 $ THEN
 $   echo ""
-$   echo "This version of Perl can be built with threads. While really nifty,
-$   echo "they are a beta feature, and there is a speed penalty for perl
-$   echo "programs if you build with threads *even if you don't use them*
+$   echo "This version of Perl can be built with threads. While really nifty,"
+$   echo "they are a beta feature, and there is a speed penalty for perl"
+$   echo "programs if you build with threads *even if you do not use them*."
 $   dflt = "n"
 $   rp = "Build with threads? [''dflt'] "
 $   GOSUB myread
@@ -2141,22 +2202,21 @@ $   if ans.eqs."" then ans = dflt
 $   if (f$extract(0, 1, "''ans'").eqs."Y").or.(f$extract(0, 1, "''ans'").eqs."y")
 $   THEN
 $     use_threads="T"
-$!
 $     ! Shall we do the 5.005-stype threads, or IThreads?
-$     echo "As of 5.5.640, Perl has two different internal threading
-$     echo "implementations, the 5.005 version (5005threads) and an
-$     echo "interpreter-based version (ithreads) that has one
-$     echo "interpreter per thread.  Both are very experimental.  This
-$     echo "arrangement exists to help developers work out which one
-$     echo "is better.
-$     echo "
-$     echo "If you're a casual user, you probably don't want
-$     echo "interpreter-threads at this time.  There doesn't yet exist
-$     echo "a way to create threads from within Perl in this model,
-$     echo "i.e., ""use Thread;"" will NOT work.
-$     echo "
+$     echo "As of 5.5.640, Perl has two different internal threading"
+$     echo "implementations, the 5.005 version (5005threads) and an"
+$     echo "interpreter-based version (ithreads) that has one"
+$     echo "interpreter per thread.  Both are very experimental.  This"
+$     echo "arrangement exists to help developers work out which one"
+$     echo "is better."
+$     echo ""
+$     echo "If you are a casual user, you probably do not want"
+$     echo "interpreter-threads at this time.  There doesn't yet exist"
+$     echo "a way to create threads from within Perl in this model,"
+$     echo "i.e., ""use Thread;"" will NOT work."
+$     echo ""
 $     dflt = "n"
-$     rp = "Build with Interpreter threads? [''dflt']
+$     rp = "Build with Interpreter threads? [''dflt'] "
 $     GOSUB myread
 $     if ans.eqs."" then ans = dflt
 $     if (f$extract(0, 1, "''ans'").eqs."Y").or.(f$extract(0, 1, "''ans'").eqs."y")
@@ -2171,14 +2231,14 @@ $     ! Are they on VMS 7.1 on an alpha?
 $     if (archname.eqs."VMS_AXP").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
 $     THEN
 $       echo ""
-$       echo "Threaded perl can be linked to use multiple kernel threads
-$       echo "and system upcalls on VMS 7.1+ on Alpha systems. This feature
-$       echo "allows multiple threads to execute simultaneously on an SMP
-$       echo "system as well as preventing a single thread from blocking
-$       echo "all the threads in a program, even on a single-processor
-$       echo "machine. Unfortunately this feature isn't safe on an
-$       echo "unpatched 7.1 system. (Several OS patches were required when
-$       echo "this procedure was written)
+$       echo "Threaded perl can be linked to use multiple kernel threads"
+$       echo "and system upcalls on VMS 7.1+ on Alpha systems.  This feature"
+$       echo "allows multiple threads to execute simultaneously on an SMP"
+$       echo "system as well as preventing a single thread from blocking"
+$       echo "all the threads in a program, even on a single-processor"
+$       echo "machine.  Unfortunately, this feature isn't safe on an"
+$       echo "unpatched 7.1 system (several OS patches were required when"
+$       echo "this procedure was written)."
 $       dflt = "n"
 $       rp = "Enable multiple kernel threads and upcalls? [''dflt'] "
 $       gosub myread
@@ -2190,47 +2250,48 @@ $       ENDIF
 $     ENDIF
 $   ENDIF
 $ ENDIF
-$ if archname .eqs. "VMS_AXP"
-$ then
-$!
+$ IF archname .EQS. "VMS_AXP"
+$ THEN
 $! Case sensitive?
-$ echo ""
-$ echo "By default, perl (and pretty much everything else on VMS) uses
-$ echo "case-insensitive linker symbols. Which is to say, when the
-$ echo "underlying C code makes a call to a routine called Perl_foo in
-$ echo "the source, the name in the object modules or shareable images
-$ echo "is really PERL_FOO. There are some packages that use an
-$ echo "embedded perl interpreter that instead require case-sensitive
-$ echo "linker symbols.
-$ echo ""
-$ echo "If you have no idea what this means, and don't have
-$ echo "any program requiring anything, choose the default.
-$ dflt = be_case_sensitive
-$ rp = "Build with case-sensitive symbols? [''dflt'] "
-$ gosub myread
-$ if ans.eqs."" then ans="''dflt'"
-$ be_case_sensitive = "''ans'"
-$!
+$   echo ""
+$   echo "By default, perl (and pretty much everything else on VMS) uses"
+$   echo "case-insensitive linker symbols. Which is to say, when the"
+$   echo "underlying C code makes a call to a routine called Perl_foo in"
+$   echo "the source, the name in the object modules or shareable images"
+$   echo "is really PERL_FOO. There are some packages that use an"
+$   echo "embedded perl interpreter that instead require case-sensitive"
+$   echo "linker symbols."
+$   echo ""
+$   echo "If you have no idea what this means, and do not have"
+$   echo "any program requiring anything, choose the default."
+$   dflt = be_case_sensitive
+$   rp = "Build with case-sensitive symbols? [''dflt'] "
+$   GOSUB myread
+$   IF ans .EQS. "" THEN ans="''dflt'"
+$   be_case_sensitive = "''ans'"
 $! IEEE math?
-$ echo ""
-$ echo "Perl normally uses G_FLOAT format floating point numbers
-$ echo "internally, as do most things on VMS. You can, however, build
-$ echo "with IEEE floating point numbers instead if you need to.
-$ dflt = use_ieee_math
-$ rp = "Use IEEE math? [''dflt'] "
-$ gosub myread
-$ if ans.eqs."" then ans="''dflt'"
-$ use_ieee_math = "''ans'"
-$ endif
+$   echo ""
+$   echo "Perl normally uses G_FLOAT format floating point numbers"
+$   echo "internally, as do most things on VMS.  You can, however, build"
+$   echo "with IEEE floating point numbers instead if you need to."
+$   dflt = use_ieee_math
+$   rp = "Use IEEE math? [''dflt'] "
+$   GOSUB myread
+$   IF ans .eqs. "" THEN ans = "''dflt'"
+$   use_ieee_math = "''ans'"
+$ ENDIF
 $! CC Flags
 $ echo ""
-$ echo "You can, if you need to, pass extra flags on to the C
-$ echo "compiler.  In general you should only do this if you really,
-$ echo "really know what you're doing.
+$ echo "Your compiler may want other flags.  For this question you should include"
+$ echo "/INCLUDE=(whatever) and /DEFINE=(whatever), flags and any other flags"
+$ echo "or qualifiers used by the compiler."
+$ echo ""
+$ echo "To use no flags, specify the word ""none""."
 $ dflt = user_c_flags
-$ rp = "Extra C flags [''dflt'] "
-$ gosub myread
-$ if ans.eqs."" then ans="''dflt'"
+$ rp = "Any additional cc flags? [''dflt'] "
+$ GOSUB myread
+$ IF ans .EQS. "" THEN ans = "''dflt'"
+$ IF ans .EQS. "none" THEN ans = ""
 $ user_c_flags = "''ans'"
 $!
 $! Ask whether they want to use secure logical translation when tainting
@@ -2267,8 +2328,8 @@ $ echo "file types of nothing, .pl, and .com, in that order (e.g. typing"
 $ echo """$ perl foo"" would cause Perl to look for foo., then foo.pl, and"
 $ echo "finally foo.com)."
 $ echo ""
-$ echo "This is currently broken in some configurations. Only enable it if
-$ echo "you know what you're doing. "
+$ echo "This is currently broken in some configurations. Only enable it if"
+$ echo "you know what you are doing."
 $ dflt = "n"
 $ rp = "Always use default file types? [''dflt'] "
 $ GOSUB myread
@@ -2277,15 +2338,18 @@ $ IF ans
 $ THEN d_alwdeftype := Y
 $ ELSE d_alwdeftype := N
 $ ENDIF
-$!
 $! Ask if they want to use perl's memory allocator
 $ echo ""
-$ echo "Perl has a built-in memory allocator that's tuned for perl's
-$ echo "normal memory usage. It's oftentimes better than the standard
-$ echo "system memory allocator. It also has the advantage of providing
-$ echo "memory allocation statistics, if you choose to enable them.
+$ echo "Perl has a built-in memory allocator that is tuned for normal"
+$ echo "memory usage.  It is oftentimes better than the standard system"
+$ echo "memory allocator.  It also has the advantage of providing memory"
+$ echo "allocation statistics, if you choose to enable them."
 $ dflt = "n"
-$ rp = "Build with perl's memory allocator? [''dflt'] "
+$ IF F$TYPE(usemymalloc) .EQS. "STRING"
+$ THEN
+$   IF usemymalloc THEN dflt = "y"
+$ ENDIF
+$ rp = "Do you wish to attempt to use the malloc that comes with ''package'? [''dflt'] "
 $ GOSUB myread
 $ IF ans .eqs. "" THEN ans = dflt
 $ IF ans
@@ -2297,23 +2361,23 @@ $ THEN
 $   IF use_debugging_perl
 $   THEN
 $     echo ""
-$     echo "Perl can keep statistics on memory usage if you choose to use
-$     echo "them. This is useful for debugging, but does have some
-$     echo "performance overhead.
+$     echo "Perl can keep statistics on memory usage if you choose to use"
+$     echo "them.  This is useful for debugging, but does have some"
+$     echo "performance overhead."
 $     dflt = "n"
 $     rp = "Do you want the debugging memory allocator? [''dflt'] "
 $     gosub myread
-$     if ans.eqs."" then ans="''dflt'"
+$     IF ans .eqs. "" THEN ans = "''dflt'"
 $     use_debugmalloc = f$extract(0, 1, f$edit(ans, "COLLAPSE,UPCASE"))
 $   ENDIF
 $   ! Check which memory allocator we want
 $   echo ""
-$   echo "There are currently three different memory allocators: the
-$   echo "default (which is a pretty good general-purpose memory manager),
-$   echo "the TWO_POT allocator (which is optimized to save memory for
-$   echo "larger allocations), and PACK_MALLOC (which is optimized to save
-$   echo "memory for smaller allocations). They're all good, but if your
-$   echo "usage tends towards larger chunks use TWO_POT, otherwise use
+$   echo "There are currently three different memory allocators: the"
+$   echo "default (which is a pretty good general-purpose memory manager),"
+$   echo "the TWO_POT allocator (which is optimized to save memory for"
+$   echo "larger allocations), and PACK_MALLOC (which is optimized to save"
+$   echo "memory for smaller allocations). They're all good, but if your"
+$   echo "usage tends towards larger chunks use TWO_POT, otherwise use"
 $   echo "PACK_MALLOC."
 $   dflt = "DEFAULT"
 $   rp = "Memory allocator (DEFAULT, TWO_POT, PACK_MALLOC) [''dflt'] "
@@ -2325,17 +2389,15 @@ $ ENDIF
 $!
 $! Ask for their default list of extensions to build
 $ echo ""
-$ echo "It's time to specify which modules you want to build into
-$ echo "perl. Most of these are standard and should be chosen, though
-$ echo "you might, for example, want to build GDBM_File instead of
-$ echo "SDBM_File if you have the GDBM library built on your machine.
-$ echo "Whatever you do, make sure the re module is first or things will
-$ echo "break badly"
-$ echo "
+$ echo "It is time to specify which modules you want to build into"
+$ echo "perl. Most of these are standard and should be chosen, though"
+$ echo "you might, for example, want to build GDBM_File instead of"
+$ echo "SDBM_File if you have the GDBM library built on your machine."
+$ echo ""
 $ echo "Which modules do you want to build into perl?"
-$! dflt = "Fcntl Errno File::Glob IO Opcode Byteloader Devel::Peek Devel::DProf Data::Dumper attrs re VMS::Stdio VMS::DCLsym B SDBM_File"
-$ dflt = "re Fcntl Errno File::Glob IO Opcode Devel::Peek Devel::DProf Data::Dumper attrs VMS::Stdio VMS::DCLsym B SDBM_File Storable Thread Sys::Hostname"
-$ if Using_Dec_C
+$! we need to add Byteloader to this list:
+$ dflt = "re Fcntl Encode Errno File::Glob Filter::Util::Call IO Opcode Devel::Peek Devel::DProf Data::Dumper attrs VMS::Stdio VMS::DCLsym B SDBM_File Storable Thread Sys::Hostname Digest::MD5 PerlIO::Scalar MIME::Base64 XS::Typemap"
+$ IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
 $ THEN
 $   dflt = dflt + " POSIX"
 $ ENDIF
@@ -2447,18 +2509,20 @@ $   ELSE build = ans
 $   ENDIF
 $ ELSE
 $   TYPE SYS$INPUT:
+$   DECK
 
 %Config-E-VMS, ERROR:
  Well this looks pretty serious. Perl5 cannot be compiled without a "make"
  utility of some sort and after checking my "builders" list I cannot find
  the symbol or command you use on your system to compile programs.
 
+$   EOD
 $   READ SYS$COMMAND/PROMPT="Which ""MMS"" do you use? " ans
 $   ans = F$EDIT(ans,"TRIM, COMPRESS")
 $   ans = F$EXTRACT(0,F$LOCATE(" ",ans),ans) !throw out "-f Makefile." here
 $   IF (ans .EQS. "") 
 $   THEN build = dflt
-$     echo "I don't know where 'make' is, and my life depends on it."
+$     echo "I do not know where ""make"" is, and my life depends on it."
 $     echo "Go find a make program or fix your DCL$PATH setting!"
 $     echo "ABORTING..."
 $     SET DEFAULT 'vms_default_directory_name' !be kind rewind
@@ -2473,13 +2537,17 @@ $ DELETE/NOLOG Makefile.;
 $ GOTO Beyond_open
 $Open_error:
 $ TYPE SYS$INPUT:
+$ DECK
 
  There seems to be trouble. I just tried to create a file in
+$ EOD
 $ echo4 'F$ENVIRONMENT("DEFAULT")'
 $ TYPE SYS$INPUT:
+$ DECK
  but was unsuccessful. I am stopping now. Please check that directories'
  PROTECTION bits. I will leave you in the directory where you started
  Configure.com
+$ EOD
 $ echo4 "ABORTING..."
 $ GOTO Clean_up
 $ STOP
@@ -2491,8 +2559,17 @@ $ make = F$EDIT(build,"UPCASE")
 $!
 $!: locate the preferred pager for this system
 $!pagers = "most|more|less|type/page"
-$!rp="What pager is used on your system? [''dflt'] "
-$ pager="most"
+$ dflt = "type/page"
+$! assume that the presence of a most symbol indicates the presence
+$! of the pager.
+$ IF F$TYPE(most) .EQS. "STRING" THEN dflt = "most"
+$ IF F$TYPE(pager) .EQS. "STRING" THEN dflt = pager
+$ rp="What pager is used on your system? [''dflt'] "
+$ GOSUB myread
+$ IF (ans .EQS. "") 
+$ THEN pager = dflt
+$ ELSE pager = ans
+$ ENDIF
 $!
 $! update [.vms]config.vms here
 $!
@@ -2512,22 +2589,22 @@ $   DEFmakefile = "Makefile."      !wrt DEF dir (?)
 $   Makefile_SH = "Makefile.in"
 $ ENDIF
 $!
-$ IF macros.NES."" 
-$ THEN 
+$ IF macros .NES. "" 
+$ THEN
 $   tmp = F$LENGTH(macros)
 $   macros = F$EXTRACT(0,(tmp-1),macros) !miss trailing comma
 $   macros = "/macro=(" + macros  + ")"
 $ ENDIF
 $! Build up the extra C flags
 $!
-$ if use_ieee_math
-$ then
+$ IF use_ieee_math
+$ THEN
 $   extra_flags = "''extra_flags'" + "/float=ieee/ieee=denorm_results"
-$ endif
-$ if be_case_sensitive
-$ then
+$ ENDIF
+$ IF be_case_sensitive
+$ THEN
 $   extra_flags = "''extra_flags'" + "/Names=As_Is"
-$ endif
+$ ENDIF
 $ extra_flags = "''extra_flags'" + "''user_c_flags'"
 $!
 $ min_pgflquota = "100000"
@@ -2545,6 +2622,39 @@ $     GOTO Clean_up
 $   ENDIF
 $ ENDIF
 $!
+$! PerlIO abstraction
+$!
+$ dflt = "n"
+$ IF F$TYPE(useperlio) .NES. ""
+$ THEN
+$   IF useperlio THEN dflt = "y"
+$   IF useperlio .EQS. "define" THEN dflt = "y"
+$ ENDIF
+$ IF .NOT. silent
+$ THEN
+$   echo "Previous version of ''package' used the standard IO mechanisms as"
+$   TYPE SYS$INPUT:
+$   DECK
+defined in <stdio.h>.  Versions 5.003_02 and later of perl allow
+alternate IO mechanisms via the PerlIO abstraction layer, but the
+stdio mechanism is still the default.  This abstraction layer can
+use AT&T's sfio (if you already have sfio installed) or regular stdio.
+Using PerlIO with sfio may cause problems with some extension modules.
+
+$   EOD
+$   echo "If this does not make any sense to you, just accept the default '" + dflt + "'."
+$ ENDIF
+$ rp = "Use the experimental PerlIO abstraction layer? [''dflt'] "
+$ GOSUB myread
+$ IF ans .EQS. "" THEN ans = dflt
+$ IF ans
+$ THEN
+$   useperlio = "define"
+$ ELSE
+$   echo "Ok, doing things the stdio way."
+$   useperlio = "undef"
+$ ENDIF
+$!
 $ echo ""
 $ echo4 "Checking the C run-time library."
 $!
@@ -2555,7 +2665,7 @@ $!  - use built config.sh to take config_h.SH -> config.h
 $!  - also take vms/descrip_mms.template -> descrip.mms (VMS Makefile)
 $!              vms/Makefile.in -> Makefile. (VMS GNU Makefile?)
 $!              vms/Makefile.SH -> Makefile. (VMS GNU Makefile?)
-$!  - build Build_Ext.Com extension builder procedure.
+$!  - build make_ext.com extension builder procedure.
 $!
 $! Note for folks from other platforms changing things in here:
 $!
@@ -2604,11 +2714,11 @@ $ vms_ver = F$EXTRACT(1,3, osvers)
 $ IF F$LENGTH(Mcc) .EQ. 0 THEN Mcc := "cc"
 $ MCC = f$edit(mcc, "UPCASE")
 $ C_Compiler_Replace := "CC=CC=''Mcc'''ccflags'"
-$ IF Using_Dec_C
+$ IF ccname .EQS. "DEC"
 $ THEN
 $   Checkcc := "''Mcc'/prefix=all"
 $ ELSE
-$   IF using_cxx
+$   IF ccname .EQS. "CXX"
 $   THEN
 $     Checkcc := cxx
 $   ELSE
@@ -2635,6 +2745,7 @@ $ THEN
 $   use64bitint = "define"
 $   uselargefiles = "define"
 $   uselongdouble = "define"
+$   alignbytes="16"
 $   usemorebits = "define"
 $ ELSE
 $   use64bitint = "undef"
@@ -2684,7 +2795,8 @@ $ ELSE d_mymalloc="undef"
 $ ENDIF
 $!
 $ usedl="define"
-$ startperl="""$ perl 'f$env(\""procedure\"")' 'p1' 'p2' 'p3' 'p4' 'p5' 'p6' 'p7' 'p8'  !\n$ exit++ + ++$status != 0 and $exit = $status = undef;"""
+$ startperl="""$ perl 'f$env(\""procedure\"")' \""'"+"'p1'\"" \""'"+"'p2'\"" \""'"+"'p3'\"" \""'"+"'p4'\"" \""'"+"'p5'\"" \""'"+"'p6'\"" \""'"+"'p7'\"" \""'"+"'p8'\""!\n"
+$ startperl=startperl + "$ exit++ + ++$status!=0 and $exit=$status=undef; while($#ARGV != -1 and $ARGV[$#ARGV] eq '"+"'){pop @ARGV;}"""
 $!
 $ IF ((Use_Threads) .AND. (vms_ver .LES. "6.2"))
 $ THEN
@@ -2692,12 +2804,16 @@ $   libs="SYS$SHARE:CMA$LIB_SHR.EXE/SHARE SYS$SHARE:CMA$RTL.EXE/SHARE SYS$SHARE:
 $ ELSE
 $   libs=" "
 $ ENDIF
-$ IF Using_Dec_C
+$ IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
 $ THEN
 $   libc="(DECCRTL)"
 $ ELSE
 $   libc=" "
 $ ENDIF
+$!
+$! perllibs should be libs with all non-core libs (such as gdbm) removed.
+$!
+$ perllibs=libs
 $!
 $! Are we 64 bit?
 $!
@@ -2730,6 +2846,7 @@ $   quadtype = "long long"
 $   uquadtype = "unsigned long long"
 $   quadkind  = "QUAD_IS_LONG_LONG"
 $   d_frexpl = "define"
+$   d_isnan = "define"
 $   d_isnanl = "define"
 $   d_modfl = "define"
 $ ELSE
@@ -2761,6 +2878,7 @@ $   quadtype = "long"
 $   uquadtype = "unsigned long"
 $   quadkind  = "QUAD_IS_LONG"
 $   d_frexpl = "undef"
+$   d_isnan = "undef"
 $   d_isnanl = "undef"
 $   d_modfl = "undef"
 $ ENDIF
@@ -2805,7 +2923,7 @@ $ CS := "close CONFIG"
 $ DS := "delete/nolog/noconfirm []try.*;*"
 $ Needs_Opt := N
 $ good_compile = %X10B90001
-$ IF Using_Gnu_C
+$ IF ccname .EQS. "GCC"
 $ THEN
 $   open/write OPTCHAN []try.opt
 $   write OPTCHAN "Gnu_CC:[000000]gcclib.olb/library"
@@ -2814,7 +2932,7 @@ $   Close OPTCHAN
 $   Needs_Opt := Y
 $   good_compile = %X10000001
 $ ENDIF
-$ IF using_cxx
+$ IF ccname .EQS. "CXX"
 $ THEN
 $   good_compile = %X15F60001
 $ ENDIF
@@ -2828,14 +2946,14 @@ $!
 $type_size_check: 
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
 $ WS "printf(""%d\n"", sizeof(''tmp'));"
-$ WS "exit(0);
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile
@@ -2845,15 +2963,15 @@ $!: locate header file
 $findhdr:
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
 $ WS "#include <''tmp'>"
-$ WS "int main()
+$ WS "int main()"
 $ WS "{"
 $ WS "printf(""define\n"");"
-$ WS "exit(0);
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB link_ok
@@ -2940,18 +3058,18 @@ $!
 $! Check for __STDC__
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "#ifdef __STDC__
-$ WS "printf(""42\n"");
-$ WS "#else
-$ WS "printf(""1\n"");
-$ WS "#endif
-$ WS "exit(0);
+$ WS "#ifdef __STDC__"
+$ WS "printf(""42\n"");"
+$ WS "#else"
+$ WS "printf(""1\n"");"
+$ WS "#endif"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile
@@ -2973,14 +3091,14 @@ $!
 $! Check for long double size
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "printf(""%d\n"", sizeof(long double));
-$ WS "exit(0);
+$ WS "printf(""%d\n"", sizeof(long double));"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ echo4 "Checking to see if you have long double..."
@@ -3001,14 +3119,14 @@ $ ENDIF
 $!
 $!: check for long long
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "printf(""%d\n"", sizeof(long long));
-$ WS "exit(0);
+$ WS "printf(""%d\n"", sizeof(long long));"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ echo4 "Checking to see if you have long long..."
@@ -3031,15 +3149,15 @@ $! Check the prototype for getgid
 $!
 $ echo "Looking for the type for group ids returned by getgid()."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <types.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <types.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "gid_t foo;
-$ WS "exit(0);
+$ WS "gid_t foo;"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile_ok
@@ -3057,15 +3175,15 @@ $! Check to see if we've got dev_t
 $!
 $ echo "Looking for the type for dev."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <types.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <types.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "dev_t foo;
-$ WS "exit(0);
+$ WS "dev_t foo;"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile_ok
@@ -3109,26 +3227,26 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
-$   WS "#include <types.h>
-$   IF i_unistd .EQS. "define" THEN WS "#include <unistd.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
+$   WS "#include <types.h>"
+$   IF i_unistd .EQS. "define" THEN WS "#include <unistd.h>"
 $   IF Has_Socketshr
 $   THEN
 $     WS "#include <socketshr.h>"
 $   ELSE
-$     WS "#include <time.h>
-$     WS "#include <socket.h>
+$     WS "#include <time.h>"
+$     WS "#include <socket.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "fd_set *foo;
-$   WS "int bar;
-$   WS "foo = NULL;
-$   WS "bar = select(2, foo, foo, foo, NULL);
-$   WS "exit(0);
+$   WS "fd_set *foo;"
+$   WS "int bar;"
+$   WS "foo = NULL;"
+$   WS "bar = select(2, foo, foo, foo, NULL);"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   GOSUB compile_ok
@@ -3150,25 +3268,25 @@ $! Check to see if fd_set exists
 $!
 $ echo "Checking to see how well your C compiler handles fd_set and friends ..."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <types.h>
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <types.h>"
 $ IF Has_Socketshr
 $ THEN
 $   WS "#include <socketshr.h>"
 $ ENDIF
 $ IF Has_Dec_C_Sockets
 $ THEN
-$   WS "#include <time.h>
-$   WS "#include <socket.h>
+$   WS "#include <time.h>"
+$   WS "#include <socket.h>"
 $ ENDIF
-$ WS "int main()
+$ WS "int main()"
 $ WS "{"
-$ WS "fd_set *foo;
-$ WS "int bar;
-$ WS "exit(0);
+$ WS "fd_set *foo;"
+$ WS "int bar;"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile_ok
@@ -3192,19 +3310,19 @@ $! Check to see if off64_t exists
 $!
 $ echo4 "Checking to see if you have off64_t..."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <types.h>
-$ WS "#''i_inttypes IIH
-$ WS "#ifdef IIH
-$ WS "#include <inttypes.h>
-$ WS "#endif
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <types.h>"
+$ WS "#''i_inttypes' IIH"
+$ WS "#ifdef IIH"
+$ WS "#include <inttypes.h>"
+$ WS "#endif"
+$ WS "int main()"
 $ WS "{"
-$ WS "off64_t bar;
-$ WS "exit(0);
+$ WS "off64_t bar;"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile_ok
@@ -3221,19 +3339,19 @@ $! Check to see if fpos64_t exists
 $!
 $ echo4 "Checking to see if you have fpos64_t..."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <types.h>
-$ WS "#''i_inttypes IIH
-$ WS "#ifdef IIH
-$ WS "#include <inttypes.h>
-$ WS "#endif
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <types.h>"
+$ WS "#''i_inttypes' IIH"
+$ WS "#ifdef IIH"
+$ WS "#include <inttypes.h>"
+$ WS "#endif"
+$ WS "int main()"
 $ WS "{"
-$ WS "fpos64_t bar;
-$ WS "exit(0);
+$ WS "fpos64_t bar;"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile_ok
@@ -3250,19 +3368,19 @@ $! Check to see if int64_t exists
 $!
 $ echo4 "Checking to see if you have int64_t..."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <types.h>
-$ WS "#''i_inttypes IIH
-$ WS "#ifdef IIH
-$ WS "#include <inttypes.h>
-$ WS "#endif
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <types.h>"
+$ WS "#''i_inttypes' IIH"
+$ WS "#ifdef IIH"
+$ WS "#include <inttypes.h>"
+$ WS "#endif"
+$ WS "int main()"
 $ WS "{"
-$ WS "int64_t bar;
-$ WS "exit(0);
+$ WS "int64_t bar;"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB compile_ok
@@ -3287,16 +3405,16 @@ $! Check for h_errno
 $!
 $ echo4 "Checking to see if you have h_errno..."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ IF i_unistd .EQS. "define" THEN WS "#include <unistd.h>
-$ IF i_netdb  .EQS. "define" THEN WS "#include <netdb.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ IF i_unistd .EQS. "define" THEN WS "#include <unistd.h>"
+$ IF i_netdb  .EQS. "define" THEN WS "#include <netdb.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "h_errno = 3;
-$ WS "exit(0);
+$ WS "h_errno = 3;"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB link_ok
@@ -3314,25 +3432,25 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
-$   WS "#include <types.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
+$   WS "#include <types.h>"
 $   IF Has_Socketshr
 $   THEN
 $     WS "#include <socketshr.h>"
 $   ELSE
-$     WS "#include <time.h>
-$     WS "#include <socket.h>
+$     WS "#include <time.h>"
+$     WS "#include <socket.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "char name[100];
-$   WS "int bar, baz;
-$   WS "bar = 100;
-$   WS "baz = gethostname(name, bar);
-$   WS "exit(0);
+$   WS "char name[100];"
+$   WS "int bar, baz;"
+$   WS "bar = 100;"
+$   WS "baz = gethostname(name, bar);"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   GOSUB link_ok
@@ -3405,33 +3523,81 @@ $!
 $! Check for fcntl
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <fcntl.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <fcntl.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "fcntl(1,2,3);
-$ WS "exit(0);
+$ WS "fcntl(1,2,3);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "fcntl"
 $ GOSUB inlibc
 $ d_fcntl = tmp
 $!
+$! Check for fcntl locking capability
+$!
+$ echo4 "Checking if fcntl-based file locking works... "
+$ tmp = "undef"
+$ IF d_fcntl .EQS. "define"
+$ THEN
+$   OS
+$   WS "#include <stdio.h>"
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <fcntl.h>"
+$   WS "#include <unistd.h>"
+$   WS "int main() {"
+$   WS "#if defined(F_SETLK) && defined(F_SETLKW)"
+$   WS "     struct flock flock;"
+$   WS "     int retval, fd;"
+$   WS "     fd = open(""try.c"", O_RDONLY);"
+$   WS "     flock.l_type = F_RDLCK;"
+$   WS "     flock.l_whence = SEEK_SET;"
+$   WS "     flock.l_start = flock.l_len = 0;"
+$   WS "     retval = fcntl(fd, F_SETLK, &flock);"
+$   WS "     close(fd);"
+$   WS "     (retval < 0 ? printf(""undef\n"") : printf(""define\n""));"
+$   WS "#else"
+$   WS "     printf(""undef\n"");"
+$   WS "#endif"
+$   WS "}"
+$   CS
+$   GOSUB link_ok
+$   IF compile_status .EQ. good_compile .AND. link_status .EQ. good_link
+$   THEN
+$     GOSUB just_mcr_it
+$     IF tmp .EQS. "define"
+$     THEN
+$       echo4 "Yes, it seems to work."
+$     ELSE
+$       echo4 "Nope, it didn't work."
+$     ENDIF
+$   ELSE
+$     echo4 "I'm unable to compile the test program, so I'll assume not."
+$     tmp = "undef"
+$   ENDIF
+$ ELSE
+$   echo4 "Nope, since you don't even have fcntl()."
+$ ENDIF
+$ d_fcntl_can_lock = tmp
+$!
 $! Check for memchr
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <string.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "char * place;
-$ WS "place = memchr(""foo"", 47, 3)
-$ WS "exit(0);
+$ WS "char * place;"
+$ WS "place = memchr(""foo"", 47, 3)"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "memchr"
@@ -3441,15 +3607,15 @@ $!
 $! Check for strtoull
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <string.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "unsigned __int64 result;
-$ WS "result = strtoull(""123123"", NULL, 10);
-$ WS "exit(0);
+$ WS "unsigned __int64 result;"
+$ WS "result = strtoull(""123123"", NULL, 10);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "strtoull"
@@ -3459,15 +3625,15 @@ $!
 $! Check for strtouq
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <string.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "unsigned __int64 result;
-$ WS "result = strtouq(""123123"", NULL, 10);
-$ WS "exit(0);
+$ WS "unsigned __int64 result;"
+$ WS "result = strtouq(""123123"", NULL, 10);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "strtouq"
@@ -3477,33 +3643,69 @@ $!
 $! Check for strtoll
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <string.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "__int64 result;
-$ WS "result = strtoll(""123123"", NULL, 10);
-$ WS "exit(0);
+$ WS "__int64 result;"
+$ WS "result = strtoll(""123123"", NULL, 10);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "strtoll"
 $ GOSUB inlibc
 $ d_strtoll = tmp
 $!
+$! Check for strtoq
+$!
+$ OS
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
+$ WS "{"
+$ WS "__int64 result;"
+$ WS "result = strtoq(""123123"", NULL, 10);"
+$ WS "exit(0);"
+$ WS "}"
+$ CS
+$ tmp = "strtoq"
+$ GOSUB inlibc
+$ d_strtoq = tmp
+$!
+$! Check for strtoq
+$!
+$ OS
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
+$ WS "{"
+$ WS "__int64 result;"
+$ WS "result = strtoq(""123123"", NULL, 10);"
+$ WS "exit(0);"
+$ WS "}"
+$ CS
+$ tmp = "strtoq"
+$ GOSUB inlibc
+$ d_strtoq = tmp
+$!
 $! Check for strtold
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <string.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "long double result;
-$ WS "result = strtold(""123123"", NULL, 10);
-$ WS "exit(0);
+$ WS "long double result;"
+$ WS "result = strtold(""123123"", NULL, 10);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "strtold"
@@ -3513,15 +3715,15 @@ $!
 $! Check for atoll
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <string.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS " __int64 result;
-$ WS "result = atoll(""123123"");
-$ WS "exit(0);
+$ WS " __int64 result;"
+$ WS "result = atoll(""123123"");"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "atoll"
@@ -3531,15 +3733,15 @@ $!
 $! Check for atolf
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <string.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <string.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "long double
-$ WS "result = atolf(""123123"");
-$ WS "exit(0);
+$ WS "long double"
+$ WS "result = atolf(""123123"");"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "atolf"
@@ -3549,14 +3751,14 @@ $!
 $! Check for access
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "access("foo", F_OK);
-$ WS "exit(0);
+$ WS "access(""foo"", F_OK);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "acess"
@@ -3566,16 +3768,16 @@ $!
 $! Check for bzero
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <strings.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <strings.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "char foo[10];
-$ WS "bzero(foo, 10);
-$ WS "exit(0);
+$ WS "char foo[10];"
+$ WS "bzero(foo, 10);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "bzero"
@@ -3585,16 +3787,16 @@ $!
 $! Check for bcopy
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <strings.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <strings.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "char foo[10], bar[10];
-$ WS "bcopy(""foo"", bar, 3);
-$ WS "exit(0);
+$ WS "char foo[10], bar[10];"
+$ WS "bcopy(""foo"", bar, 3);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "bcopy"
@@ -3604,14 +3806,14 @@ $!
 $! Check for mkstemp
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "mkstemp(""foo"");
-$ WS "exit(0);
+$ WS "mkstemp(""foo"");"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "mkstemp"
@@ -3621,14 +3823,14 @@ $!
 $! Check for mkstemps
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "mkstemps(""foo"", 1);
-$ WS "exit(0);
+$ WS "mkstemps(""foo"", 1);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "mkstemps"
@@ -3638,18 +3840,18 @@ $!
 $! Check for iconv
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "#include <iconv.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "#include <iconv.h>"
+$ WS "int main()"
 $ WS "{"
 $ WS "  iconv_t cd = (iconv_t)0;"
 $ WS "  char *inbuf, *outbuf;"
 $ WS "  size_t inleft, outleft;"
 $ WS "  iconv(cd, &inbuf, &inleft, &outbuf, &outleft);"
-$ WS "exit(0);
+$ WS "  exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB link_ok
@@ -3675,14 +3877,14 @@ $!
 $! Check for mkdtemp
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "mkdtemp(""foo"");
-$ WS "exit(0);
+$ WS "mkdtemp(""foo"");"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "mkdtemp"
@@ -3692,34 +3894,71 @@ $!
 $! Check for setvbuf
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "FILE *foo;
-$ WS "char Buffer[99];
-$ WS "foo = fopen(""foo"", ""r"");
-$ WS "setvbuf(foo, Buffer, 0, 0);
-$ WS "exit(0);
+$ WS "FILE *foo;"
+$ WS "char Buffer[99];"
+$ WS "foo = fopen(""foo"", ""r"");"
+$ WS "setvbuf(foo, Buffer, 0, 0);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "setvbuf"
 $ GOSUB inlibc
 $ d_setvbuf = tmp
 $!
+$! see if sfio.h is available
+$! see if sfio library is available
+$! Ok, but do we want to use it.
+$! IF F$TYPE(usesfio) .EQS. "" THEN usesfio = "undef"
+$! IF val .EQS. "define"
+$! THEN
+$!   IF usesfio .EQS. "define"
+$!   THEN dflt = "y"
+$!   ELSE dflt = "n"
+$!   ENDIF
+$!   echo "''package' can use the sfio library, but it is experimental."
+$!   IF useperlio .EQS. "undef"
+$!   THEN
+$!     echo "For sfio also the PerlIO abstraction layer is needed."
+$!     echo "Earlier you said you would not want that."
+$!   ENDIF
+$!   rp="You seem to have sfio available, do you want to try using it? [''dflt'] "
+$!   GOSUB myread
+$!   IF ans .EQS. "" THEN ans = dflt
+$!   IF ans
+$!   THEN
+$!     echo "Ok, turning on both sfio and PerlIO, then."
+$!     useperlio="define"
+$!     val="define"
+$!   ELSE
+$!     echo "Ok, avoiding sfio this time.  I'll use stdio instead."
+$!     val="undef"
+$!   ENDIF
+$! ELSE
+$!   IF usesfio .EQS. "define"
+$!   THEN
+$!     echo4 "Sorry, cannot find sfio on this machine."
+$!     echo4 "Ignoring your setting of usesfio=''usesfio'."
+$!     val="undef"
+$!   ENDIF
+$! ENDIF
+$!
 $! Check for setenv
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "setenv(""FOO"", ""BAR"", 0);
-$ WS "exit(0);
+$ WS "setenv(""FOO"", ""BAR"", 0);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "setenv"
@@ -3729,14 +3968,14 @@ $!
 $! Check for setproctitle
 $!
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "setproctitle(""%s"", ""FOO"");
-$ WS "exit(0);
+$ WS "setproctitle(""%s"", ""FOO"");"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "setproctitle"
@@ -3770,18 +4009,18 @@ $!
 $ IF Has_Dec_C_Sockets .or. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "endhostent();
-$   WS "exit(0);
+$   WS "endhostent();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "endhostent"
@@ -3796,13 +4035,13 @@ $!
 $ IF Has_Dec_C_Sockets .or. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
 $   WS "int main()"
 $   WS "{"
@@ -3822,18 +4061,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "endprotoent();
-$   WS "exit(0);
+$   WS "endprotoent();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "endprotoent"
@@ -3848,18 +4087,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "endservent();
-$   WS "exit(0);
+$   WS "endservent();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "endservent"
@@ -3874,18 +4113,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "sethostent(1);
-$   WS "exit(0);
+$   WS "sethostent(1);"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "sethostent"
@@ -3900,18 +4139,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "setnetent(1);
-$   WS "exit(0);
+$   WS "setnetent(1);"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "setnetent"
@@ -3926,18 +4165,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "setprotoent(1);
-$   WS "exit(0);
+$   WS "setprotoent(1);"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "setprotoent"
@@ -3952,18 +4191,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "setservent(1);
-$   WS "exit(0);
+$   WS "setservent(1);"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "setservent"
@@ -3978,18 +4217,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "gethostent();
-$   WS "exit(0);
+$   WS "gethostent();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "gethostent"
@@ -4004,18 +4243,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "getnetent();
-$   WS "exit(0);
+$   WS "getnetent();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "getnetent"
@@ -4030,18 +4269,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "getprotoent();
-$   WS "exit(0);
+$   WS "getprotoent();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "getprotoent"
@@ -4056,18 +4295,18 @@ $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "getservent();
-$   WS "exit(0);
+$   WS "getservent();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "getservent"
@@ -4083,18 +4322,18 @@ $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $   echo4 "Checking to see if you have socklen_t..."
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
 $   IF Has_Socketshr
 $   THEN WS "#include <socketshr.h>"
-$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>
+$   ELSE IF i_netdb .EQS. "define" THEN WS "#include <netdb.h>"
 $   ENDIF
-$   WS "int main()
+$   WS "int main()"
 $   WS "{"
-$   WS "socklen_t x = 16;
-$   WS "exit(0);
+$   WS "socklen_t x = 16;"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   GOSUB link_ok
@@ -4115,15 +4354,15 @@ $!
 $ IF use_threads
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <pthread.h>
-$   WS "#include <stdio.h>
-$   WS "int main()
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <pthread.h>"
+$   WS "#include <stdio.h>"
+$   WS "int main()"
 $   WS "{"
-$   WS "pthread_yield();
-$   WS "exit(0);
+$   WS "pthread_yield();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "pthread_yield"
@@ -4138,15 +4377,15 @@ $!
 $ IF use_threads
 $ THEN
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <pthread.h>
-$   WS "#include <stdio.h>
-$   WS "int main()
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <pthread.h>"
+$   WS "#include <stdio.h>"
+$   WS "int main()"
 $   WS "{"
-$   WS "sched_yield();
-$   WS "exit(0);
+$   WS "sched_yield();"
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   tmp = "sched_yield"
@@ -4165,16 +4404,16 @@ $! Check for generic pointer size
 $!
 $ echo4 "Checking to see how big your pointers are..." 
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
-$ WS "int foo;
-$ WS "foo = sizeof(char *);
-$ WS "printf(""%d\n"", foo);
-$ WS "exit(0);
+$ WS "int foo;"
+$ WS "foo = sizeof(char *);"
+$ WS "printf(""%d\n"", foo);"
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ tmp = "char *"
@@ -4195,14 +4434,14 @@ $! Check rand48 and its ilk
 $!
 $ echo4 "Looking for a random number function..."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main()
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
 $ WS "{"
 $ WS "srand48(12L);"
-$ WS "exit(0);
+$ WS "exit(0);"
 $ WS "}"
 $ CS
 $ GOSUB link_ok
@@ -4219,14 +4458,14 @@ $   drand01="random()"
 $   randseedtype = "unsigned"
 $   seedfunc = "srandom"
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
-$   WS "int main()
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
+$   WS "int main()"
 $   WS "{"
 $   WS "srandom(12);"
-$   WS "exit(0);
+$   WS "exit(0);"
 $   WS "}"
 $   CS
 $   GOSUB link_ok
@@ -4240,14 +4479,13 @@ $     seedfunc = "srand"
 $     echo4 "Yick, looks like I have to use rand()."
 $   ENDIF
 $ ENDIF
-$!
 $! Done with compiler checks. Clean up.
 $ IF F$SEARCH("try.c")  .NES."" THEN DELETE/NOLOG/NOCONFIRM try.c;*
 $ IF F$SEARCH("try.obj").NES."" THEN DELETE/NOLOG/NOCONFIRM try.obj;*
 $ IF F$SEARCH("try.exe").NES."" THEN DELETE/NOLOG/NOCONFIRM try.exe;*
 $ IF F$SEARCH("try.opt").NES."" THEN DELETE/NOLOG/NOCONFIRM try.opt;*
 $ IF F$SEARCH("try.out").NES."" THEN DELETE/NOLOG/NOCONFIRM try.out;*
-$ IF using_cxx
+$ IF ccname .EQS. "CXX"
 $ THEN
 $   CALL Cxx_demangler_cleanup
 $ ENDIF
@@ -4255,7 +4493,7 @@ $!
 $! Some that are compiler or VMS version sensitive
 $!
 $! Gnu C stuff
-$ IF Using_Gnu_C
+$ IF ccname .EQS. "GCC"
 $ THEN
 $   d_attribut="define"
 $   vms_cc_type="gcc"
@@ -4265,12 +4503,14 @@ $   d_attribut="undef"
 $ ENDIF
 $!
 $! Dec C >= 5.2 and VMS ver >= 7.0
-$ IF (Using_Dec_C).AND.(F$INTEGER(Dec_C_Version).GE.50200000).AND.(vms_ver .GES. "7.0")
+$ IF (ccname .EQS. "DEC") .AND. -
+     (F$INTEGER(Dec_C_Version).GE.50200000) .AND. (vms_ver .GES. "7.0")
 $ THEN
 $   d_bcmp="define"
 $   d_gettimeod="define"
 $   d_uname="define"
 $   d_sigaction="define"
+$   d_sigprocmask="define"
 $   d_truncate="define"
 $   d_wait4="define"
 $   d_index="define"
@@ -4280,9 +4520,10 @@ $   psnwc1="""ZERO"",""HUP"",""INT"",""QUIT"",""ILL"",""TRAP"",""IOT"",""EMT"","
 $   psnwc2="""PIPE"",""ALRM"",""TERM"",""ABRT"",""USR1"",""USR2"",""SPARE18"",""SPARE19"",""CHLD"",""CONT"",""STOP"",""TSTP"","
 $   psnwc3="""TTIN"",""TTOU"",""DEBUG"",""SPARE27"",""SPARE28"",""SPARE29"",""SPARE30"",""SPARE31"",""SPARE32"",""RTMIN"",""RTMAX"",0"
 $   sig_name_init = psnwc1 + psnwc2 + psnwc3
-$   sig_num="0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 6 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 64"","0"
+$   sig_num="0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 6 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 33 64"",0"
 $   sig_num_init="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,6,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,64,0"
 $!   perl_sig_num_with_commas=sig_num_init
+$   sig_size="36"
 $   uidtype="uid_t"
 $   d_pathconf="define"
 $   d_fpathconf="define"
@@ -4294,6 +4535,7 @@ $   d_gettimeod="undef"
 $   d_bcmp="undef"
 $   d_uname="undef"
 $   d_sigaction="undef"
+$   d_sigprocmask="undef"
 $   d_truncate="undef"
 $   d_wait4="undef"
 $   d_index="undef"
@@ -4304,6 +4546,7 @@ $   sig_name_init = psnwc1 + psnwc2
 $   sig_num="0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 6 16 17"",0"
 $   sig_num_init="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,6,16,17,0"
 $!   perl_sig_num_with_commas=sig_num_init
+$   sig_size="19"
 $   uidtype="unsigned int"
 $   d_pathconf="undef"
 $   d_fpathconf="undef"
@@ -4311,8 +4554,15 @@ $   d_sysconf="undef"
 $   d_sigsetjmp="undef"
 $ ENDIF
 $!
+$ IF d_gethname .EQS. "undef" .AND. d_uname .EQS. "undef"
+$ THEN
+$   d_phostname="define"
+$ ELSE
+$   d_phostname="undef"
+$ ENDIF
+$!
 $! Dec C alone
-$ IF Using_Dec_C
+$ IF ccname .EQS. "DEC"
 $ THEN
 $   d_mbstowcs="define"
 $   d_mbtowc="define"
@@ -4347,6 +4597,8 @@ $   i_locale="undef"
 $   d_locconv="undef"
 $   d_setlocale="undef"
 $ ENDIF
+$ d_stdio_ptr_lval_sets_cnt="undef"
+$ d_stdio_ptr_lval_nochange_cnt="undef"
 $!
 $! Sockets?
 $ if Has_Socketshr .OR. Has_Dec_C_Sockets
@@ -4371,7 +4623,7 @@ $   d_gethostprotos="define"
 $   d_getnetprotos="define"
 $   d_getprotoprotos="define"
 $   d_getservprotos="define"
-$   IF Using_Dec_C
+$   IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
 $   THEN
 $     socksizetype="unsigned int"
 $   ELSE
@@ -4453,20 +4705,20 @@ $   tmp = "long"
 $   GOSUB type_size_check
 $   longsize = tmp
 $ ENDIF
-$
+$!
 $ tmp = "''uvtype'"
 $ GOSUB type_size_check
 $ uvsize = tmp
 $ IF use64bitint .OR. use64bitint .EQS. "define" THEN u64size = tmp
-$
+$!
 $ tmp = "''i8type'"
 $ GOSUB type_size_check
 $ i8size = tmp
-$
+$!
 $ tmp = "''u8type'"
 $ GOSUB type_size_check
 $ u8size = tmp
-$
+$!
 $ tmp = "''i16type'"
 $ GOSUB type_size_check
 $ i16size = tmp
@@ -4477,11 +4729,11 @@ $   tmp = "short"
 $   gosub type_size_check
 $   shortsize = tmp
 $ ENDIF
-$
+$!
 $ tmp = "''u16type'"
 $ GOSUB type_size_check
 $ u16size = tmp
-$
+$!
 $ tmp = "''i32type'"
 $ GOSUB type_size_check
 $ i32size = tmp
@@ -4492,11 +4744,11 @@ $   tmp = "int"
 $   gosub type_size_check
 $   intsize = tmp
 $ ENDIF
-$
+$!
 $ tmp = "''u32type'"
 $ gosub type_size_check
 $ u32size = tmp
-$
+$!
 $ tmp = "''nvtype'"
 $ GOSUB type_size_check
 $ nvsize = tmp
@@ -4507,20 +4759,20 @@ $ echo "(NV will be ""''nvtype'"", ''nvsize' bytes)"
 $!
 $ echo4 "Checking whether your NVs can preserve your UVs..."
 $ OS
-$ WS "#ifdef __DECC
-$ WS "#include <stdlib.h>
-$ WS "#endif
-$ WS "#include <stdio.h>
-$ WS "int main() {
-$ WS "    ''uvtype' k = (''uvtype')~0, l;
-$ WS "    ''nvtype' d;
-$ WS "    l = k;
-$ WS "    d = (''nvtype')l;
-$ WS "    l = (''uvtype')d;
-$ WS "    if (l == k)
-$ WS "       printf(""preserve\n"");
-$ WS "    exit(0);
-$ WS "}
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <stdio.h>"
+$ WS "int main() {"
+$ WS "    ''uvtype' k = (''uvtype')~0, l;"
+$ WS "    ''nvtype' d;"
+$ WS "    l = k;"
+$ WS "    d = (''nvtype')l;"
+$ WS "    l = (''uvtype')d;"
+$ WS "    if (l == k)"
+$ WS "       printf(""preserve\n"");"
+$ WS "    exit(0);"
+$ WS "}"
 $ CS
 $ GOSUB compile
 $ IF tmp .EQS. "preserve"
@@ -4533,22 +4785,22 @@ $   d_nv_preserves_uv = "undef"
 $   echo "No, they can't."
 $   echo4 "Checking how many bits of your UVs your NVs can preserve..."
 $   OS
-$   WS "#ifdef __DECC
-$   WS "#include <stdlib.h>
-$   WS "#endif
-$   WS "#include <stdio.h>
-$   WS "int main() {
-$   WS "    ''uvtype' u = 0;
-$   WS "    int     n = 8 * ''uvsize';
-$   WS "    int     i;
-$   WS "    for (i = 0; i < n; i++) {
-$   WS "      u = u << 1 | (''uvtype')1;
-$   WS "      if ((''uvtype')(''nvtype')u != u)
-$   WS "        break;
-$   WS "    }
-$   WS "    printf(""%d\n"", i);
-$   WS "    exit(0);
-$   WS "}
+$   WS "#if defined(__DECC) || defined(__DECCXX)"
+$   WS "#include <stdlib.h>"
+$   WS "#endif"
+$   WS "#include <stdio.h>"
+$   WS "int main() {"
+$   WS "    ''uvtype' u = 0;"
+$   WS "    int     n = 8 * ''uvsize';"
+$   WS "    int     i;"
+$   WS "    for (i = 0; i < n; i++) {"
+$   WS "      u = u << 1 | (''uvtype')1;"
+$   WS "      if ((''uvtype')(''nvtype')u != u)"
+$   WS "        break;"
+$   WS "    }"
+$   WS "    printf(""%d\n"", i);"
+$   WS "    exit(0);"
+$   WS "}"
 $   GOSUB compile
 $   d_nv_preserves_uv_bits = tmp
 $ ENDIF
@@ -4558,6 +4810,7 @@ $ ivdformat="""ld"""
 $ uvuformat="""lu"""
 $ uvoformat="""lo"""
 $ uvxformat="""lx"""
+$ uvXUformat="""lX"""
 $! uselongdouble?
 $ nveformat="""e"""
 $ nvfformat="""f"""
@@ -4567,23 +4820,31 @@ $! Finally the composite ones. All config
 $!
 $ myuname="''osname' ''myname' ''osvers' ''F$EDIT(hwname, "TRIM")'"
 $!
-$ IF Using_Dec_C
+$ IF ccname .EQS. "DEC"
 $ THEN
 $   ccflags="/Include=[]/Standard=Relaxed_ANSI/Prefix=All/Obj=''obj_ext'/NoList''ccflags'"
+$ ENDIF
+$ i_dirent = "undef"
+$ IF ccname .EQS. "CXX"
+$ THEN
+$   i_dirent = "define"
+$   ccflags="/Include=[]/Standard=ANSI/Prefix=All/Obj=''obj_ext'/NoList''ccflags'"
 $ ENDIF
 $ IF use_vmsdebug_perl
 $ THEN
 $   optimize="/Debug/NoOpt"
+$   ldflags="/Debug/Trace/Map"
 $   dbgprefix = "DBG"
 $ ELSE
 $   optimize= ""
+$   ldflags="/NoTrace/NoMap"
 $   dbgprefix = ""
 $ ENDIF
 $!
 $! Okay, we've got everything configured. Now go write out a config.sh.
 $ basename_config_sh = F$PARSE(config_sh,,,"NAME",)+F$PARSE(config_sh,,,"TYPE",)
 $ echo4 "Creating ''basename_config_sh'..."
-$ open/write CONFIG 'config_sh
+$ open/write CONFIG 'config_sh'
 $ WC := write CONFIG
 $!
 $! ##BEGIN WRITE NEW CONSTANTS HERE##
@@ -4601,10 +4862,13 @@ $ WC ""
 $ WC "CONFIG='true'"
 $ WC "Makefile_SH='" + Makefile_SH + "'"
 $ WC "Mcc='" + Mcc + "'"
-$! WC "PERL_SUBVERSION='" + subversion + "'" ! VMS specific to descrip_mms.template
-$ WC "PERL_VERSION='" + patchlevel + "'" ! VMS specific to descrip_mms.template
+$ WC "PERL_REVISION='" + revision + "'"
+$ WC "PERL_VERSION='" + patchlevel + "'" 
+$ WC "PERL_SUBVERSION='" + subversion + "'" 
+$ WC "PERL_API_VERSION='" + api_version + "'" 
+$ WC "PERL_API_SUBVERSION='" + api_subversion + "'"
 $ WC "alignbytes='" + alignbytes + "'"
-$ WC "aphostname='" + "'"
+$ WC "aphostname='write sys$output f$edit(f$getsyi(\""SCSNODE\""),\""TRIM,LOWERCASE\"")'"
 $ WC "ar='" + "'"
 $ WC "archlib='" + archlib + "'"
 $ WC "archlibexp='" + archlibexp + "'"
@@ -4619,7 +4883,8 @@ $ WC "cc='" + perl_cc + "'"
 $ WC "cccdlflags='" + cccdlflags + "'"
 $ WC "ccdlflags='" + ccdlflags + "'"
 $ WC "ccflags='" + ccflags + "'"
-$ WC "ccversion='" + ccversion + "'" ! VMS specific, oddly enough
+$ WC "ccname='" + ccname + "'"
+$ WC "ccversion='" + ccversion + "'"
 $ WC "cf_by='" + cf_by + "'"
 $ WC "cf_email='" + cf_email + "'"
 $ WC "cf_time='" + cf_time + "'"
@@ -4631,6 +4896,7 @@ $ WC "cppminus='" + cppminus + "'"
 $ WC "cpprun='" + cpprun + "'"
 $ WC "cppstdin='" + cppstdin + "'"
 $ WC "crosscompile='undef'"
+$ WC "d__fwalk='undef'"
 $ WC "d_Gconvert='my_gconvert(x,n,t,b)'"
 $ WC "d_PRId64='" + d_PRId64 + "'"
 $ WC "d_PRIEldbl='" + d_PRIEUldbl + "'"
@@ -4690,6 +4956,7 @@ $ WC "d_eunice='undef'"
 $ WC "d_fchmod='undef'"
 $ WC "d_fchown='undef'"
 $ WC "d_fcntl='" + d_fcntl + "'"
+$ WC "d_fcntl_can_lock='" + d_fcntl_can_lock + "'"
 $ WC "d_fd_set='" + d_fd_set + "'"
 $ WC "d_fgetpos='define'"
 $ WC "d_flexfnam='define'"
@@ -4703,6 +4970,7 @@ $ WC "d_fseeko='undef'"
 $ WC "d_fsetpos='define'"
 $ WC "d_fstatfs='undef'"
 $ WC "d_fstatvfs='undef'"
+$ WC "d_fsync='undef'"
 $ WC "d_ftello='undef'"
 $ WC "d_getcwd='undef'"
 $ WC "d_getespwnam='undef'"
@@ -4714,6 +4982,7 @@ $ WC "d_gethbyname='" + d_gethbyname + "'"
 $ WC "d_gethent='" + d_gethent + "'"
 $ WC "d_gethname='" + d_gethname + "'"
 $ WC "d_gethostprotos='" + d_gethostprotos + "'"
+$ WC "d_getitimer='undef'"
 $ WC "d_getlogin='define'"
 $ WC "d_getmnt='undef'"
 $ WC "d_getmntent='undef'"
@@ -4721,6 +4990,7 @@ $ WC "d_getnbyaddr='" + d_getnbyaddr + "'"
 $ WC "d_getnbyname='" + d_getnbyname + "'"
 $ WC "d_getnent='" + d_getnent + "'"
 $ WC "d_getnetprotos='" + d_getnetprotos + "'"
+$ WC "d_getpagsz='undef'"
 $ WC "d_getpbyname='" + d_getpbyname + "'"
 $ WC "d_getpbynumber='" + d_getpbynumber + "'"
 $ WC "d_getpent='" + d_getpent + "'"
@@ -4747,7 +5017,7 @@ $ WC "d_index='" + d_index + "'"
 $ WC "d_inetaton='undef'"
 $ WC "d_int64_t='" + d_int64_t + "'"
 $ WC "d_isascii='define'"
-$ WC "d_isnan='define'"
+$ WC "d_isnan='" + d_isnan + "'"
 $ WC "d_isnanl='" + d_isnanl + "'"
 $ WC "d_killpg='undef'"
 $ WC "d_lchown='undef'"
@@ -4800,7 +5070,7 @@ $ WC "d_open3='define'"
 $ WC "d_pathconf='" + d_pathconf + "'"
 $ WC "d_pause='define'"
 $ WC "d_perl_otherlibdirs='undef'"
-$ WC "d_phostname='undef'"
+$ WC "d_phostname='" + d_phostname + "'"
 $ WC "d_pipe='define'"
 $ WC "d_poll='undef'"
 $ WC "d_pthread_yield='" + d_pthread_yield + "'"
@@ -4825,6 +5095,7 @@ $ WC "d_rmdir='define'"
 $ WC "d_safebcpy='undef'"
 $ WC "d_safemcpy='define'"
 $ WC "d_sanemcmp='define'"
+$ WC "d_sbrkproto='define'"
 $ WC "d_sched_yield='" + d_sched_yield + "'"
 $ WC "d_scm_rights='undef'"
 $ WC "d_seekdir='define'"
@@ -4839,6 +5110,7 @@ $ WC "d_seteuid='undef'"
 $ WC "d_setgrent='undef'"
 $ WC "d_setgrps='undef'"
 $ WC "d_sethent='" + d_sethent + "'"
+$ WC "d_setitimer='undef'"
 $ WC "d_setlinebuf='undef'"
 $ WC "d_setlocale='" + d_setlocale + "'"
 $ WC "d_setnent='" + d_setnent + "'"
@@ -4862,7 +5134,9 @@ $ WC "d_sfio='undef'"
 $ WC "d_shm='undef'"
 $ WC "d_shmatprototype='undef'"
 $ WC "d_sigaction='" + d_sigaction + "'"
+$ WC "d_sigprocmask='" + d_sigprocmask + "'"
 $ WC "d_sigsetjmp='" + d_sigsetjmp + "'"
+$ WC "d_sockatmark='undef'"
 $ WC "d_socket='" + d_socket + "'"
 $ WC "d_socklen_t='" + d_socklen_t + "'"
 $ WC "d_sockpair='undef'"
@@ -4874,6 +5148,8 @@ $ WC "d_statfs_s='undef'"
 $ WC "d_statfsflags='undef'"
 $ WC "d_stdio_cnt_lval='" + d_stdio_cnt_lval + "'"
 $ WC "d_stdio_ptr_lval='" + d_stdio_ptr_lval + "'"
+$ WC "d_stdio_ptr_lval_sets_cnt='" + d_stdio_ptr_lval_sets_cnt + "'"
+$ WC "d_stdio_ptr_lval_nochange_cnt='" + d_stdio_ptr_lval_nochange_cnt + "'"
 $ WC "d_stdio_stream_array='undef'"
 $ WC "d_stdiobase='" + d_stdiobase + "'"
 $ WC "d_stdstdio='" + d_stdstdio + "'"
@@ -4886,6 +5162,7 @@ $ WC "d_strtod='define'"
 $ WC "d_strtol='define'"
 $ WC "d_strtold='" + d_strtold + "'"
 $ WC "d_strtoll='" + d_strtoll + "'"
+$ WC "d_strtoq='define'"
 $ WC "d_strtoul='define'"
 $ WC "d_strtoull='" + d_strtoull + "'"
 $ WC "d_strtouq='" + d_strtouq + "'"
@@ -4903,10 +5180,13 @@ $ WC "d_telldirproto='define'"
 $ WC "d_times='define'"
 $ WC "d_truncate='" + d_truncate + "'"
 $ WC "d_tzname='undef'"
+$ WC "d_u32align='define'"
+$ WC "d_ualarm='undef'"
 $ WC "d_umask='define'"
 $ WC "d_uname='" + d_uname + "'"
 $ WC "d_union_semun='undef'"
 $ WC "d_unlink_all_versions='undef'"
+$ WC "d_usleep='undef'"
 $ WC "d_ustat='undef'"
 $ WC "d_vendorarch='undef'"
 $ WC "d_vendorlib='undef'"
@@ -4935,6 +5215,7 @@ $ WC "drand01='" + drand01 + "'"
 $ WC "dynamic_ext='" + extensions + "'"
 $ WC "eagain=' '"
 $ WC "ebcdic='undef'"
+$ WC "embedmymalloc='" + mymalloc + "'"
 $ WC "eunicefix=':'"
 $ WC "exe_ext='" + exe_ext + "'"
 $ WC "extensions='" + extensions + "'"
@@ -4963,7 +5244,7 @@ $ WC "i8size='" + i8size + "'"
 $ WC "i8type='" + i8type + "'"
 $ WC "i_arpainet='undef'"
 $ WC "i_dbm='undef'"
-$ WC "i_dirent='undef'"
+$ WC "i_dirent='" + i_dirent + "'"
 $ WC "i_dlfcn='undef'"
 $ WC "i_fcntl='" + i_fcntl + "'"
 $ WC "i_float='define'"
@@ -5011,6 +5292,7 @@ $ WC "i_sysparam='undef'"
 $ WC "i_sysresrc='undef'"
 $ WC "i_syssecrt='" + i_syssecrt + "'"
 $ WC "i_sysselct='undef'"
+$ WC "i_syssockio='undef'"
 $ WC "i_sysstat='define'"
 $ WC "i_sysstatfs='undef'"
 $ WC "i_sysstatvfs='undef'"
@@ -5050,7 +5332,7 @@ $ WC "ivtype='" + ivtype + "'"
 $ WC "known_extensions='" + known_extensions + "'"
 $ WC "ld='" + ld + "'"
 $ WC "lddlflags='/Share'"
-$ WC "ldflags='/NoTrace/NoMap'"
+$ WC "ldflags='" + ldflags + "'"
 $ WC "lib_ext='" + lib_ext + "'"
 $ WC "libc='" + libc + "'"
 $ WC "libpth='/sys$share /sys$library'"
@@ -5071,6 +5353,7 @@ $ WC "multiarch='undef'"
 $ WC "mydomain='" + mydomain + "'"
 $ WC "myhostname='" + myhostname + "'"
 $ WC "myuname='" + myuname + "'"
+$ WC "need_va_copy='undef'"
 $ WC "netdb_hlen_type='" + netdb_hlen_type + "'"
 $ WC "netdb_host_type='" + netdb_host_type + "'"
 $ WC "netdb_name_type='" + netdb_name_type + "'"
@@ -5095,6 +5378,7 @@ $ WC "patchlevel='" + patchlevel + "'"
 $ WC "path_sep='|'"
 $ WC "perl_root='" + perl_root + "'" ! VMS specific $trnlnm()
 $ WC "perladmin='" + perladmin + "'"
+$ WC "perllibs='" + perllibs + "'"
 $ WC "pgflquota='" + pgflquota + "'"
 $ WC "pidtype='" + pidtype + "'"
 $ WC "pm_apiversion='" + version + "'"
@@ -5129,7 +5413,7 @@ $ WC "seedfunc='" + seedfunc + "'"
 $ WC "selectminbits='32'"
 $ WC "selecttype='" + selecttype + "'"
 $ WC "sh='MCR'"
-$ WC "shmattype='" + "'"
+$ WC "shmattype='" + " '"
 $ WC "shortsize='" + shortsize + "'"
 $ WC "shrplib='define'"
 $ WC "sig_name='" + sig_name + "'"
@@ -5138,6 +5422,7 @@ $ WC/symbol tmp
 $ DELETE/SYMBOL tmp
 $ WC "sig_num='" + sig_num + "'"
 $ WC "sig_num_init='" + sig_num_init + "'"
+$ WC "sig_size='" + sig_size + "'"
 $ WC "signal_t='" + signal_t + "'"
 $ WC "sitearch='" + sitearch + "'"
 $ WC "sitearchexp='" + sitearchexp + "'"
@@ -5152,7 +5437,7 @@ $ WC "spitshell='write sys$output '"
 $ WC "src='" + src + "'"
 $ WC "ssizetype='int'"
 $ WC "startperl=" + startperl ! This one's special--no enclosing single quotes
-$ WC "static_ext='" + "'"
+$ WC "static_ext='" + static_ext + "'"
 $ WC "stdchar='" + stdchar + "'"
 $ WC "stdio_base='((*fp)->_base)'"
 $ WC "stdio_bufsiz='((*fp)->_cnt + (*fp)->_ptr - (*fp)->_base)'"
@@ -5177,6 +5462,7 @@ $ WC "uquadtype='" + uquadtype + "'"
 $ WC "use5005threads='" + use5005threads + "'"
 $ WC "use64bitall='" + use64bitall + "'"
 $ WC "use64bitint='" + use64bitint + "'"
+$ WC "usedebugging_perl='" + use_debugging_perl + "'"
 $ WC "usedl='" + usedl + "'"
 $ WC "useithreads='" + useithreads + "'"
 $ WC "uselargefiles='" + uselargefiles + "'"
@@ -5184,7 +5470,7 @@ $ WC "uselongdouble='" + uselongdouble + "'"
 $ WC "usemorebits='" + usemorebits + "'"
 $ WC "usemultiplicity='" + usemultiplicity + "'"
 $ WC "usemymalloc='" + usemymalloc + "'"
-$ WC "useperlio='undef'"
+$ WC "useperlio='" + useperlio + "'"
 $ WC "useposix='false'"
 $ WC "usesocks='undef'"
 $ WC "usethreads='" + usethreads + "'"
@@ -5194,6 +5480,7 @@ $ WC "uvsize='" + uvsize + "'"
 $ WC "uvtype='" + uvtype + "'"
 $ WC "uvuformat='" + uvuformat + "'"
 $ WC "uvxformat='" + uvxformat + "'"
+$ WC "uvXUformat='" + uvXUformat + "'"
 $ WC "vendorarchexp='" + "'"
 $ WC "vendorlib_stem='" + "'"
 $ WC "vendorlibexp='" + "'"
@@ -5211,12 +5498,12 @@ $ CLOSE CONFIG
 $!
 $! Okay, we've gotten here. Build munchconfig.exe
 $ COPY/NOLOG [-.vms]munchconfig.c []
-$ COPY/NOLOG [-.vms]'Makefile_SH []
+$ COPY/NOLOG [-.vms]'Makefile_SH' []
 $ 'Perl_CC' munchconfig.c
 $ IF Needs_Opt
 $ THEN
 $   OPEN/WRITE CONFIG []munchconfig.opt
-$   IF Using_Gnu_C
+$   IF ccname .EQS. "GCC"
 $   THEN
 $     WRITE CONFIG "Gnu_CC:[000000]gcclib.olb/library"
 $   ENDIF
@@ -5229,7 +5516,7 @@ $   'ld' munchconfig.obj
 $ ENDIF
 $ IF F$SEARCH("munchconfig.obj") .NES. "" THEN DELETE/NOLOG/NOCONFIRM munchconfig.obj;
 $ IF F$SEARCH("munchconfig.c") .NES. "" THEN DELETE/NOLOG/NOCONFIRM munchconfig.c;
-$ IF using_cxx
+$ IF ccname .EQS. "CXX"
 $ THEN
 $   CALL Cxx_demangler_cleanup
 $ ENDIF
@@ -5237,10 +5524,12 @@ $!
 $ IF alldone .EQS. ""
 $ THEN
 $   cat4 SYS$INPUT:
+$   DECK
 
 If you'd like to make any changes to the config.sh file before I begin
 to configure things, answer yes to the following question.
 
+$   EOD
 $   dflt="n"
 $   rp="Do you wish to edit ''basename_config_sh'? [''dflt'] "
 $   GOSUB myread
@@ -5252,10 +5541,10 @@ $     echo4 "Be sure to type LOGOUT after you have edited the file,"
 $     echo4 "then this procedure will resume."
 $     echo4 ""
 $     default = F$ENVIRONMENT("DEFAULT")
-$     DIRECTORY 'config_sh
+$     DIRECTORY 'config_sh'
 $     SET DEFAULT [-]
 $     SPAWN/WAIT
-$     SET DEFAULT 'default
+$     SET DEFAULT 'default'
 $   ENDIF
 $ ENDIF
 $!
@@ -5264,8 +5553,10 @@ $ echo4 "Adding ''osname' specific preprocessor commands."
 $ !
 $ ! we need an fdl file
 $ CREATE [-]CONFIG.FDL
+$ DECK
 RECORD
   FORMAT STREAM_LF
+$ EOD
 $ CREATE /FDL=[-]CONFIG.FDL [-]CONFIG.LOCAL
 $ ! First spit out the header info with the local defines (to get
 $ ! around the 255 character command line limit)
@@ -5275,7 +5566,7 @@ $ IF use_two_pot_malloc THEN WC "#define TWO_POT_OPTIMIZE"
 $ IF mymalloc THEN WC "#define EMBEDMYMALLOC"
 $ IF use_pack_malloc THEN WC "#define PACK_MALLOC"
 $ IF use_debugmalloc THEN WC "#define DEBUGGING_MSTATS"
-$ IF Using_Gnu_C THEN WC "#define GNUC_ATTRIBUTE_CHECK"
+$ IF ccname .EQS. "GCC" THEN WC "#define GNUC_ATTRIBUTE_CHECK"
 $ IF (Has_Dec_C_Sockets)
 $ THEN
 $    WC "#define VMS_DO_SOCKETS"
@@ -5305,7 +5596,7 @@ $ echo4 "Extracting config.h (with variable substitutions)"
 $!
 $! Now build the normal config.h
 $ DEFINE/USER_MODE sys$output [-]config.main
-$ mcr []munchconfig 'config_sh [-]config_h.sh
+$ mcr []munchconfig 'config_sh' [-]config_h.sh
 $ ! Concatenate them together
 $ copy [-]config.local,[-]config.main [-]config.h
 $! Clean up
@@ -5313,13 +5604,19 @@ $ DELETE/NOLOG [-]CONFIG.MAIN;*
 $ DELETE/NOLOG [-]CONFIG.LOCAL;*
 $ DELETE/NOLOG [-]CONFIG.FDL;*
 $!
-$ IF Using_Dec_C
+$ IF ccname .EQS. "DEC"
 $ THEN
 $   DECC_REPLACE = "DECC=decc=1"
 $ ELSE
-$   DECC_REPLACE = "DECC=" 
+$   DECC_REPLACE = "DECC="
 $ ENDIF
-$ IF Using_Gnu_C
+$ IF ccname .EQS. "CXX"
+$ THEN
+$   DECCXX_REPLACE = "DECCXX=DECCXX=1"
+$ ELSE
+$   DECCXX_REPLACE = "DECCXX="
+$ ENDIF
+$ IF ccname .EQS. "GCC"
 $ THEN
 $   GNUC_REPLACE = "GNUC=gnuc=1"
 $ ELSE
@@ -5354,13 +5651,17 @@ $ ELSE
 $   MALLOC_REPLACE = "MALLOC="
 $ ENDIF
 $ echo4 "Extracting ''defmakefile' (with variable substitutions)"
-$ DEFINE/USER_MODE sys$output 'UUmakefile 
-$ mcr []munchconfig 'config_sh 'Makefile_SH "''DECC_REPLACE'" "''ARCH_TYPE'" "''GNUC_REPLACE'" "''SOCKET_REPLACE'" "''THREAD_REPLACE'" -
-"''C_Compiler_Replace'" "''MALLOC_REPLACE'" "''Thread_Live_Dangerously'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'"
-$ echo4 "Extracting Build_Ext.Com (without variable substitutions)"
-$ Create Sys$Disk:[-]Build_Ext.Com
+$ DEFINE/USER_MODE sys$output 'UUmakefile'
+$ mcr []munchconfig 'config_sh' 'Makefile_SH' "''DECC_REPLACE'" -
+ "''DECCXX_REPLACE'" "''ARCH_TYPE'" "''GNUC_REPLACE'" "''SOCKET_REPLACE'" -
+ "''THREAD_REPLACE'" "''C_Compiler_Replace'" "''MALLOC_REPLACE'" -
+ "''Thread_Live_Dangerously'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'"
+$! Clean up after ourselves
+$ DELETE/NOLOG/NOCONFIRM []munchconfig.exe;
+$ echo4 "Extracting make_ext.com (without variable substitutions)"
+$ Create Sys$Disk:[-]make_ext.com
 $ Deck/Dollar="$EndOfTpl$"
-$!++ Build_Ext.Com
+$!++ make_ext.com
 $!   NOTE: This file is extracted as part of the VMS configuration process.
 $!   Any changes made to it directly will be lost.  If you need to make any
 $!   changes, please edit the template in Configure.Com instead.
@@ -5378,17 +5679,20 @@ $    ext = F$Element(i," ",p1)
 $    If ext .eqs. " " Then Goto done
 $    Define/User_mode Perl_Env_Tables CLISYM_LOCAL
 $    miniperl
+$    deck
      ($extdir = $ENV{'ext'}) =~ s/::/./g;
      $extdir =~ s#/#.#g;
      if ($extdir =~ /^vms/i) { $extdir =~ s/vms/.vms.ext/i; }
      else                    { $extdir = ".ext.$extdir";   }
      ($ENV{'extdir'} = "[$extdir]");
      ($ENV{'up'} = ('-') x ($extdir =~ tr/././));
+$    eod
 $    Set Default &extdir
 $    redesc = 0
 $    If F$Locate("clean",targ) .eqs. F$Length(targ)
 $    Then
-$      Write Sys$Output "Building ''ext' . . ."
+$      Write Sys$Output ""
+$      Write Sys$Output "	Making ''ext' (dynamic)"
 $      On Error Then Goto done
 $      If F$Search("Descrip.MMS") .eqs. ""
 $      Then
@@ -5411,11 +5715,52 @@ $ done:
 $    sts = $Status
 $    Set Def &def
 $    Exit sts
-$!-- Build_Ext.Com
+$!-- make_ext.com
 $EndOfTpl$
 $!
-$! Clean up after ourselves
-$ DELETE/NOLOG/NOCONFIRM []munchconfig.exe;
+$! Note that the /key qualifier to search, as in:
+$! search README.* "=head"/key=(position=1)/window=0/output=extra.pods
+$! is not supported on VMS V5.5-2, hence not used in extra_pods.com.
+$!
+$ echo4 "Extracting extra_pods.com (without variable substitutions)"
+$ Create Sys$Disk:[-]extra_pods.com
+$ Deck/Dollar="$EOExtra_Pods$"
+$!++ extra_pods.com
+$!   NOTE: This file is extracted as part of the VMS configuration process.
+$!   Any changes made to it directly will be lost.  If you need to make any
+$!   changes, please edit the template in Configure.Com instead.
+$!   Use FORCE if you've just podified a README.* file on VMS.
+$ if f$search("extra.pods") .eqs. "" .or. P1 .eqs. "FORCE" then -
+    search README.* "=head"/window=0/output=extra.pods
+$ open/read/error=extra_close EXTRA extra.pods
+$extra_loop:
+$ read/error=extra_close/END_OF_FILE=extra_close EXTRA file
+$ file_type = f$parse(file,,,"TYPE",) - "."
+$ if file_type .nes. "VMS" .and. file_type .nes. "vms"
+$ then
+$   pod_file = "[.pod]perl''file_type'.pod"
+$   file = file - "''f$parse(file,,,"VERSION",)'"
+$   if p1 .eqs. "CLEAN"
+$   then if f$search(pod_file) .nes. "" then delete/log 'pod_file';*
+$   else
+$     do_copy := false
+$     if f$search(pod_file) .eqs. ""
+$     then do_copy := true
+$     else
+$       file_rdt = f$cvtime(f$file_attributes(file,"RDT"))
+$       pod_file_rdt = f$cvtime(f$file_attributes(pod_file,"RDT"))
+$       if file_rdt .GTS. pod_file_rdt then do_copy := true
+$     endif
+$     if do_copy then copy/log/noconfirm 'file' 'pod_file'
+$   endif
+$ endif
+$ goto extra_loop
+$extra_close:
+$ close EXTRA
+$ if p1 .eqs. "CLEAN" .and. f$search("extra.pods;-1") .nes. "" then -
+    purge/nolog extra.pods
+$!-- extra_pods.com
+$EOExtra_Pods$
 $!
 $!  Warn of dangerous symbols or logical names
 $!
@@ -5423,7 +5768,7 @@ $Bad_environment: SUBROUTINE
 $   Bad_env = ""
 $   IF p2 .eqs. "SYMBOL"
 $   THEN
-$     IF f$type('p1) .nes. "" THEN  Bad_env := SYMBOL
+$     IF f$type('p1') .nes. "" THEN  Bad_env := SYMBOL
 $   ELSE
 $     IF f$trnlnm(p1) .nes. "" THEN Bad_env := LOGICAL
 $   ENDIF
@@ -5443,7 +5788,7 @@ $       WRITE CONFIG " delete before building ''package' via:"
 $       WRITE CONFIG "     $ DELETE/SYMBOL/GLOBAL ''p1'"
 $       IF f$locate("""",&p1) .ge. f$length(&p1)
 $       THEN
-$       WRITE CONFIG " after building, testing, and installing ''package'
+$       WRITE CONFIG " after building, testing, and installing ''package'"
 $       WRITE CONFIG " restore the symbol with:"
 $       WRITE CONFIG "     $ ''p1' == """ + &p1 + """"
 $       ENDIF
@@ -5599,7 +5944,7 @@ $ echo  ""
 $ IF ((.NOT.perl_symbol) .AND. (perl_verb .EQS. "DCLTABLES"))
 $ THEN
 $   file_2_find = "[-]''packageup'_install.com"
-$   OPEN/WRITE CONFIG 'file_2_find
+$   OPEN/WRITE CONFIG 'file_2_find'
 $   WRITE CONFIG "$ set command perl /table=sys$common:[syslib]dcltables.exe -"
 $   WRITE CONFIG "    /output=sys$common:[syslib]dcltables.exe"
 $   WRITE CONFIG "$ install replace sys$common:[syslib]dcltables.exe"
@@ -5658,8 +6003,8 @@ $ THEN
 $   DEASSIGN SYS$OUTPUT
 $!   DEASSIGN SYS$ERROR
 $ ENDIF
-$ IF F$GETJPI("","FILCNT").NE.vms_filcnt THEN CLOSE CONFIG
-$ IF F$GETJPI("","FILCNT").NE.vms_filcnt 
+$ IF F$GETJPI("","FILCNT").GT.vms_filcnt THEN CLOSE CONFIG
+$ IF F$GETJPI("","FILCNT").GT.vms_filcnt
 $ THEN WRITE SYS$ERROR "%Config-W-VMS, WARNING: There is a file still open"
 $ ENDIF
 $ dflt = F$ENVIRONMENT("DEFAULT")
@@ -5671,6 +6016,5 @@ $   SET PROTECTION=(SYSTEM:RWED,OWNER:RWED) UU.DIR
 $   DELETE/NOLOG/NOCONFIRM UU.DIR;
 $ ENDIF
 $ SET DEFAULT 'vms_default_directory_name' !be kind rewind
-$ STOP
 $ EXIT
 $!: End of Configure

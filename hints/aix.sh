@@ -130,9 +130,45 @@ case "$cc" in
 *gcc*) ccdlflags='-Xlinker' ;;
 *) ccversion=`lslpp -L | grep 'C for AIX Compiler$' | awk '{print $2}'`
    case "$ccversion" in
+     '') ccversion=`lslpp -L | grep 'IBM C and C++ Compilers LUM$' | awk '{print $2}'`
+	;;
+     esac
+   case "$ccversion" in
+     3.6.6.0)
+	optimize='none'
+	;;
      4.4.0.0|4.4.0.1|4.4.0.2)
-	echo >&4 "*** This C compiler ($ccversion) is outdated."
-	echo >&4 "*** Please upgrade to at least 4.4.0.3."
+	cat >&4 <<EOF
+***
+*** This C compiler ($ccversion) is outdated.
+***
+*** Please upgrade to at least 4.4.0.3.
+***
+EOF
+	;;
+     5.0.0.0)
+	cat >&4 <<EOF
+***
+*** This C compiler ($ccversion) is known to have optimizer problems
+*** when compiling perl.c.
+***
+*** Disabling optimization for that file but consider upgrading
+*** your C compiler.
+***
+EOF
+perl_cflags='optimize='
+	;;
+     5.0.1.0)
+	cat >&4 <<EOF
+***
+*** This C compiler ($ccversion) is known to have optimizer problems
+*** when compiling regcomp.c.
+***
+*** Disabling optimization for that file but consider upgrading
+*** your C compiler.
+***
+EOF
+regcomp_cflags='optimize='
 	;;
      esac
 esac
@@ -156,6 +192,20 @@ case "$osvers" in
     lddlflags="$lddlflags -bhalt:4 -bM:SRE -bI:\$(PERL_INC)/perl.exp -bE:\$(BASEEXT).exp -b noentry -lc"
     ;;
 esac
+# AIX 4.2 (using latest patchlevels on 20001130) has a broken bind
+# library (getprotobyname and getprotobynumber are outversioned by
+# the same calls in libc, at least for xlc version 3...
+case "`oslevel`" in
+    4.2.1.*)  # Test for xlc version too, should we?
+      case "$ccversion" in    # Don't know if needed for gcc
+          3.1.4.*)    # libswanted "bind ... c ..." => "... c bind ..."
+              set `echo X "$libswanted "| sed -e 's/ bind\( .*\) \([cC]\) / \1 \2 bind /'`
+              shift
+              libswanted="$*"
+              ;;
+          esac
+      ;;
+    esac
 
 # This script UU/usethreads.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use threads.
@@ -346,13 +396,13 @@ EOM
 	    ar="ar -X64"
 	    nm_opt="-X64 $nm_opt"
 	    # Note: Placing the 'qacflags' variable into the 'ldflags' string
-	    # is NOT a typo.  ldqalags is passed to the C compiler for final
+	    # is NOT a typo.  ldflags is passed to the C compiler for final
 	    # linking, and it wants -q64 (-b64 is for ld only!).
 	    case "$qacflags$qaldflags$qalibs" in
 	    '');;
 	    *) ccflags="$ccflags $qacflags"
 	       ldflags="$ldflags $qacflags"
-	       lddqalags="$qaldflags $lddqalags"
+	       lddlflags="$qaldflags $lddlflags"
 	       libswanted="$libswanted $qalibs"
 	       ;;
 	    esac
@@ -380,7 +430,10 @@ cat > UU/uselongdouble.cbu <<'EOCBU'
 # after it has prompted the user for whether to use long doubles.
 case "$uselongdouble" in
 $define|true|[yY]*)
-	ccflags="$ccflags -qlongdouble"
+        case "$cc" in
+        *gcc*) ;;
+        *) ccflags="$ccflags -qlongdouble" ;;
+        esac
 	# The explicit cc128, xlc128, xlC128 are not needed,
 	# the -qlongdouble should do the trick. --jhi
 	d_Gconvert='sprintf((b),"%.*llg",(n),(x))'

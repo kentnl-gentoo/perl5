@@ -145,7 +145,7 @@ sub pod_find
         # * remove e.g. 5.00503
         # * remove pod/ if followed by *.pod (e.g. in pod/perlfunc.pod)
         $SIMPLIFY_RX =
-          qq!^(?i:site_perl/|\Q$Config::Config{archname}\E/|\\d+\\.\\d+([_.]?\\d+)?/|pod/(?=.*?\\.pod\\z))*!;
+          qq!^(?i:site(_perl)?/|\Q$Config::Config{archname}\E/|\\d+\\.\\d+([_.]?\\d+)?/|pod/(?=.*?\\.pod\\z))*!;
 
     }
 
@@ -163,6 +163,7 @@ sub pod_find
         # on VMS canonpath will vmsify:[the.path], but File::Find::find
         # wants /unixy/paths
         $try = File::Spec->canonpath($try) if ($^O ne 'VMS');
+        $try = VMS::Filespec::unixify($try) if ($^O eq 'VMS');
         my $name;
         if(-f $try) {
             if($name = _check_and_extract_name($try, $opts{-verbose})) {
@@ -242,7 +243,7 @@ sub _check_and_extract_name {
 
 The function B<simplify_name> is equivalent to B<basename>, but also
 strips Perl-like extensions (.pm, .pl, .pod) and extensions like
-F<.bat>, F<.cmd> on Win32 and OS/2, respectively.
+F<.bat>, F<.cmd> on Win32 and OS/2, or F<.com> on VMS, respectively.
 
 =cut
 
@@ -261,7 +262,9 @@ sub _simplify {
     # strip Perl's own extensions
     $_[0] =~ s/\.(pod|pm|plx?)\z//i;
     # strip meaningless extensions on Win32 and OS/2
-    $_[0] =~ s/\.(bat|exe|cmd)\z//i if($^O =~ /win|os2/i);
+    $_[0] =~ s/\.(bat|exe|cmd)\z//i if($^O =~ /mswin|os2/i);
+    # strip meaningless extensions on VMS
+    $_[0] =~ s/\.(com)\z//i if($^O eq 'VMS');
 }
 
 # contribution from Tim Jenness <t.jenness@jach.hawaii.edu>

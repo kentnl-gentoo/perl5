@@ -60,6 +60,11 @@
 #  define WARN_INTERNAL WARN_MISC
 #endif
 
+#if defined(__VMS_VER) && __VMS_VER >= 70000000 && __DECC_VER >= 50200000
+#  define RTL_USES_UTC 1
+#endif
+
+
 /* gcc's header files don't #define direct access macros
  * corresponding to VAXC's variant structs */
 #ifdef __GNUC__
@@ -93,6 +98,9 @@ struct itmlst_3 {
 #define expand_wild_cards(a,b,c,d)	mp_expand_wild_cards(aTHX_ a,b,c,d)
 #define getredirection(a,b)		mp_getredirection(aTHX_ a,b)
 
+/* see system service docs for $TRNLNM -- NOT the same as LNM$_MAX_INDEX */
+#define PERL_LNM_MAX_ALLOWED_INDEX 127
+
 static char *__mystrtolower(char *str)
 {
   if (str) for (; *str; ++str) *str= tolower(*str);
@@ -114,6 +122,10 @@ static int no_translate_barewords;
 
 /* Temp for subprocess commands */
 static struct dsc$descriptor_s VMScmd = {0,DSC$K_DTYPE_T,DSC$K_CLASS_S,Nullch};
+
+#ifndef RTL_USES_UTC
+static int tz_updated = 1;
+#endif
 
 /*{{{int vmstrnenv(const char *lnm, char *eqv, unsigned long int idx, struct dsc$descriptor_s **tabvec, unsigned long int flags) */
 int
@@ -143,7 +155,7 @@ Perl_vmstrnenv(pTHX_ const char *lnm, char *eqv, unsigned long int idx,
     }
 #endif
 
-    if (!lnm || !eqv || idx > LNM$_MAX_INDEX) {
+    if (!lnm || !eqv || idx > PERL_LNM_MAX_ALLOWED_INDEX) {
       set_errno(EINVAL); set_vaxc_errno(SS$_BADPARAM); return 0;
     }
     for (cp1 = (char *)lnm, cp2 = uplnm; *cp1; cp1++, cp2++) {
@@ -281,7 +293,7 @@ Perl_my_getenv(pTHX_ const char *lnm, bool sys)
     static char __my_getenv_eqv[LNM$C_NAMLENGTH+1];
     char uplnm[LNM$C_NAMLENGTH+1], *cp1, *cp2, *eqv;
     unsigned long int idx = 0;
-    int trnsuccess;
+    int trnsuccess, success, secure, saverr, savvmserr;
     SV *tmpsv;
 
     if (PL_curinterp) {  /* Perl interpreter running -- may be threaded */
@@ -305,16 +317,25 @@ Perl_my_getenv(pTHX_ const char *lnm, bool sys)
         lnm = uplnm;
       }
       /* Impose security constraints only if tainting */
-      if (sys) sys = PL_curinterp ? PL_tainting : will_taint;
-      if (vmstrnenv(lnm,eqv,idx,
-                    sys ? fildev : NULL,
+      if (sys) {
+        /* Impose security constraints only if tainting */
+        secure = PL_curinterp ? PL_tainting : will_taint;
+        saverr = errno;  savvmserr = vaxc$errno;
+      }
+      else secure = 0;
+      success = vmstrnenv(lnm,eqv,idx,
+                          secure ? fildev : NULL,
 #ifdef SECURE_INTERNAL_GETENV
-                    sys ? PERL__TRNENV_SECURE : 0
+                          secure ? PERL__TRNENV_SECURE : 0
 #else
-                                                0
+			  0
 #endif
-                                                 )) return eqv;
-      else return Nullch;
+			                                     );
+      /* Discard NOLOGNAM on internal calls since we're often looking
+       * for an optional name, and this "error" often shows up as the
+       * (bogus) exit status for a die() call later on.  */
+      if (sys && vaxc$errno == SS$_NOLOGNAM) SETERRNO(saverr,savvmserr);
+      return success ? eqv : Nullch;
     }
 
 }  /* end of my_getenv() */
@@ -329,6 +350,7 @@ my_getenv_len(const char *lnm, unsigned long *len, bool sys)
     char *buf, *cp1, *cp2;
     unsigned long idx = 0;
     static char __my_getenv_len_eqv[LNM$C_NAMLENGTH+1];
+    int secure, saverr, savvmserr;
     SV *tmpsv;
     
     if (PL_curinterp) {  /* Perl interpreter running -- may be threaded */
@@ -352,19 +374,25 @@ my_getenv_len(const char *lnm, unsigned long *len, bool sys)
         idx = strtoul(cp2+1,NULL,0);
         lnm = buf;
       }
-      /* Impose security constraints only if tainting */
-      if (sys) sys = PL_curinterp ? PL_tainting : will_taint;
-      if ((*len = vmstrnenv(lnm,buf,idx,
-                           sys ? fildev : NULL,
+      if (sys) {
+        /* Impose security constraints only if tainting */
+        secure = PL_curinterp ? PL_tainting : will_taint;
+        saverr = errno;  savvmserr = vaxc$errno;
+      }
+      else secure = 0;
+      *len = vmstrnenv(lnm,buf,idx,
+                       secure ? fildev : NULL,
 #ifdef SECURE_INTERNAL_GETENV
-                           sys ? PERL__TRNENV_SECURE : 0
+                       secure ? PERL__TRNENV_SECURE : 0
 #else
-                                                       0
+                                                      0
 #endif
-                                                         )))
-	  return buf;
-      else
-	  return Nullch;
+		                                       );
+      /* Discard NOLOGNAM on internal calls since we're often looking
+       * for an optional name, and this "error" often shows up as the
+       * (bogus) exit status for a die() call later on.  */
+      if (sys && vaxc$errno == SS$_NOLOGNAM) SETERRNO(saverr,savvmserr);
+      return *len ? buf : Nullch;
     }
 
 }  /* end of my_getenv_len() */
@@ -587,7 +615,7 @@ vmssetenv(char *lnm, char *eqv, struct dsc$descriptor_s **tabvec)
             if ((cp1 = strchr(environ[i],'=')) && 
                 !strncmp(environ[i],lnm,cp1 - environ[i])) {
 #ifdef HAS_SETENV
-              return setenv(lnm,eqv,1) ? vaxc$errno : 0;
+              return setenv(lnm,"",1) ? vaxc$errno : 0;
             }
           }
           ivenv = 1; retsts = SS$_NOLOGNAM;
@@ -695,19 +723,56 @@ vmssetenv(char *lnm, char *eqv, struct dsc$descriptor_s **tabvec)
 void
 Perl_my_setenv(pTHX_ char *lnm,char *eqv)
 {
-  if (lnm && *lnm && strlen(lnm) == 7) {
-    char uplnm[8];
-    int i;
-    for (i = 0; lnm[i]; i++) uplnm[i] = _toupper(lnm[i]);
-    if (!strcmp(uplnm,"DEFAULT")) {
-      if (eqv && *eqv) chdir(eqv);
-      return;
+    if (lnm && *lnm) {
+      int len = strlen(lnm);
+      if  (len == 7) {
+        char uplnm[8];
+        int i;
+        for (i = 0; lnm[i]; i++) uplnm[i] = _toupper(lnm[i]);
+        if (!strcmp(uplnm,"DEFAULT")) {
+          if (eqv && *eqv) chdir(eqv);
+          return;
+        }
+    } 
+#ifndef RTL_USES_UTC
+    if (len == 6 || len == 2) {
+      char uplnm[7];
+      int i;
+      for (i = 0; lnm[i]; i++) uplnm[i] = _toupper(lnm[i]);
+      uplnm[len] = '\0';
+      if (!strcmp(uplnm,"UCX$TZ")) tz_updated = 1;
+      if (!strcmp(uplnm,"TZ")) tz_updated = 1;
     }
+#endif
   }
   (void) vmssetenv(lnm,eqv,NULL);
 }
 /*}}}*/
 
+/*{{{static void vmssetuserlnm(char *name, char *eqv);
+/*  vmssetuserlnm
+ *  sets a user-mode logical in the process logical name table
+ *  used for redirection of sys$error
+ */
+void
+Perl_vmssetuserlnm(char *name, char *eqv)
+{
+    $DESCRIPTOR(d_tab, "LNM$PROCESS");
+    struct dsc$descriptor_d d_name = {0,DSC$K_DTYPE_T,DSC$K_CLASS_D,0};
+    unsigned long int iss, attr = LNM$M_CONFINE;
+    unsigned char acmode = PSL$C_USER;
+    struct itmlst_3 lnmlst[2] = {{0, LNM$_STRING, 0, 0},
+                                 {0, 0, 0, 0}};
+    d_name.dsc$a_pointer = name;
+    d_name.dsc$w_length = strlen(name);
+
+    lnmlst[0].buflen = strlen(eqv);
+    lnmlst[0].bufadr = eqv;
+
+    iss = sys$crelnm(&attr,&d_tab,&d_name,&acmode,lnmlst);
+    if (!(iss&1)) lib$signal(iss);
+}
+/*}}}*/
 
 
 /*{{{ char *my_crypt(const char *textpasswd, const char *usrname)*/
@@ -971,6 +1036,9 @@ my_tmpfile(void)
 }
 /*}}}*/
 
+/* default piping mailbox size */
+#define PERL_BUFSIZ        512
+
 
 static void
 create_mbx(unsigned short int *chan, struct dsc$descriptor_s *namdsc)
@@ -984,12 +1052,10 @@ create_mbx(unsigned short int *chan, struct dsc$descriptor_s *namdsc)
   if (!syssize) {
     unsigned long syiitm = SYI$_MAXBUF;
     /*
-     * Get the SYSGEN parameter MAXBUF, and the smaller of it and the
-     * preprocessor consant BUFSIZ from stdio.h defaults as the size of the
-     * 'pipe' mailbox.
+     * Get the SYSGEN parameter MAXBUF
      *
      * If the logical 'PERL_MBX_SIZE' is defined
-     * use the value of the logical instead of BUFSIZ, but again
+     * use the value of the logical instead of PERL_BUFSIZ, but 
      * keep the size between 128 and MAXBUF.
      *
      */
@@ -999,7 +1065,7 @@ create_mbx(unsigned short int *chan, struct dsc$descriptor_s *namdsc)
   if (vmstrnenv("PERL_MBX_SIZE", csize, 0, fildev, 0)) {
       mbxbufsiz = atoi(csize);
   } else {
-      mbxbufsiz = BUFSIZ;
+      mbxbufsiz = PERL_BUFSIZ;
   }
   if (mbxbufsiz < 128) mbxbufsiz = 128;
   if (mbxbufsiz > syssize) mbxbufsiz = syssize;
@@ -1666,6 +1732,18 @@ struct _pipeloc {
 };
 static pPLOC  head_PLOC = 0;
 
+void
+free_pipelocs(void *head)
+{
+    pPLOC p, pnext;
+
+    p = (pPLOC) head;
+    while (p) {
+        pnext = p->next;
+        Safefree(p);
+        p = pnext;
+    }
+}
 
 static void
 store_pipelocs()
@@ -1732,7 +1810,7 @@ store_pipelocs()
         p->dir[NAM$C_MAXRSS] = '\0';
     }
 #endif
-
+    Perl_call_atexit(&free_pipelocs, head_PLOC);
 }
 
 
@@ -1820,17 +1898,19 @@ vmspipe_tempfile(void)
     fprintf(fp,"$ perl_del    = \"delete\"\n");
     fprintf(fp,"$ pif         = \"if\"\n");
     fprintf(fp,"$!  --- define i/o redirection (sys$output set by lib$spawn)\n");
-    fprintf(fp,"$ pif perl_popen_in  .nes. \"\" then perl_define sys$input  'perl_popen_in'\n");
-    fprintf(fp,"$ pif perl_popen_err .nes. \"\" then perl_define sys$error  'perl_popen_err'\n");
+    fprintf(fp,"$ pif perl_popen_in  .nes. \"\" then perl_define/user/name_attributes=confine sys$input  'perl_popen_in'\n");
+    fprintf(fp,"$ pif perl_popen_err .nes. \"\" then perl_define/user/name_attributes=confine sys$error  'perl_popen_err'\n");
+    fprintf(fp,"$ pif perl_popen_out .nes. \"\" then perl_define      sys$output 'perl_popen_out'\n");
     fprintf(fp,"$ cmd = perl_popen_cmd\n");
     fprintf(fp,"$!  --- get rid of global symbols\n");
     fprintf(fp,"$ perl_del/symbol/global perl_popen_in\n");
     fprintf(fp,"$ perl_del/symbol/global perl_popen_err\n");
+    fprintf(fp,"$ perl_del/symbol/global perl_popen_out\n");
     fprintf(fp,"$ perl_del/symbol/global perl_popen_cmd\n");
     fprintf(fp,"$ perl_on\n");
     fprintf(fp,"$ 'cmd\n");
     fprintf(fp,"$ perl_status = $STATUS\n");
-    fprintf(fp,"$ perl_del 'perl_cfile'\n");
+    fprintf(fp,"$ perl_del  'perl_cfile'\n");
     fprintf(fp,"$ perl_exit 'perl_status'\n");
     fsync(fileno(fp));
 
@@ -1869,12 +1949,12 @@ safe_popen(char *cmd, char *mode)
     pInfo info;
     struct dsc$descriptor_s d_symbol= {0, DSC$K_DTYPE_T,
                                       DSC$K_CLASS_S, symbol};
-    struct dsc$descriptor_s d_out = {0, DSC$K_DTYPE_T,
-                                      DSC$K_CLASS_S, out};
     struct dsc$descriptor_s vmspipedsc = {0, DSC$K_DTYPE_T,
                                       DSC$K_CLASS_S, 0};
+
     $DESCRIPTOR(d_sym_cmd,"PERL_POPEN_CMD");
     $DESCRIPTOR(d_sym_in ,"PERL_POPEN_IN");
+    $DESCRIPTOR(d_sym_out,"PERL_POPEN_OUT");
     $DESCRIPTOR(d_sym_err,"PERL_POPEN_ERR");
                             
     /* once-per-program initialization...
@@ -1935,9 +2015,9 @@ safe_popen(char *cmd, char *mode)
     info->in_done    = TRUE;
     info->out_done   = TRUE;
     info->err_done   = TRUE;
+    in[0] = out[0] = err[0] = '\0';
 
     if (*mode == 'r') {             /* piping from subroutine */
-        in[0] = '\0';
 
         info->out = pipe_infromchild_setup(mbx,out);
         if (info->out) {
@@ -1956,13 +2036,13 @@ safe_popen(char *cmd, char *mode)
                 if (!done) _ckvmssts(sys$clref(pipe_ef));
                 _ckvmssts(sys$setast(1));
                 if (!done) _ckvmssts(sys$waitfr(pipe_ef));
-    }
+            }
 
             if (info->out->buf) Safefree(info->out->buf);
             Safefree(info->out);
             Safefree(info);
             return Nullfp;
-    }
+        }
 
         info->err = pipe_mbxtofd_setup(fileno(stderr), err);
         if (info->err) {
@@ -1972,7 +2052,6 @@ safe_popen(char *cmd, char *mode)
         }
 
     } else {                        /* piping to subroutine , mode=w*/
-        int melded;
 
         info->in = pipe_tochild_setup(in,mbx);
         info->fp  = PerlIO_open(mbx, mode);
@@ -2000,21 +2079,9 @@ safe_popen(char *cmd, char *mode)
             if (info->in->buf) Safefree(info->in->buf);
             Safefree(info->in);
             Safefree(info);
-        return Nullfp;
+            return Nullfp;
         }
         
-        /* if SYS$ERROR == SYS$OUTPUT, use only one mbx */
-        
-        melded = FALSE;
-        fgetname(stderr, err);
-        if (strncmp(err,"SYS$ERROR:",10) == 0) {
-            fgetname(stdout, out);
-            if (strncmp(out,"SYS$OUTPUT:",11) == 0) {
-                if (popen_translate("SYS$OUTPUT",out) == popen_translate("SYS$ERROR",err)) {
-                    melded = TRUE;
-                }
-    }
-    }
 
         info->out = pipe_mbxtofd_setup(fileno(stdout), out);
         if (info->out) {
@@ -2022,18 +2089,14 @@ safe_popen(char *cmd, char *mode)
             info->out_done = FALSE;
             info->out->info = info;
         }
-        if (!melded) {
-            info->err = pipe_mbxtofd_setup(fileno(stderr), err);
-            if (info->err) {
-                info->err->pipe_done = &info->err_done;
-                info->err_done = FALSE;
-                info->err->info = info;
+
+        info->err = pipe_mbxtofd_setup(fileno(stderr), err);
+        if (info->err) {
+            info->err->pipe_done = &info->err_done;
+            info->err_done = FALSE;
+            info->err->info = info;
+        }
     }
-        } else {
-            err[0] = '\0';
-    }
-    }
-    d_out.dsc$w_length = strlen(out);   /* lib$spawn sets SYS$OUTPUT so can meld*/
 
     symbol[MAX_DCL_SYMBOL] = '\0';
 
@@ -2045,6 +2108,9 @@ safe_popen(char *cmd, char *mode)
     d_symbol.dsc$w_length = strlen(symbol);
     _ckvmssts(lib$set_symbol(&d_sym_err, &d_symbol, &table));
 
+    strncpy(symbol, out, MAX_DCL_SYMBOL);
+    d_symbol.dsc$w_length = strlen(symbol);
+    _ckvmssts(lib$set_symbol(&d_sym_out, &d_symbol, &table));
 
     p = VMScmd.dsc$a_pointer;
     while (*p && *p != '\n') p++;
@@ -2061,7 +2127,7 @@ safe_popen(char *cmd, char *mode)
     info->next=open_pipes;  /* prepend to list */
     open_pipes=info;
     _ckvmssts(sys$setast(1));
-    _ckvmssts(lib$spawn(&vmspipedsc, &nl_desc, &d_out, &flags,
+    _ckvmssts(lib$spawn(&vmspipedsc, &nl_desc, &nl_desc, &flags,
                       0, &info->pid, &info->completion,
                       0, popen_completion_ast,info,0,0,0));
 
@@ -2075,7 +2141,7 @@ safe_popen(char *cmd, char *mode)
     _ckvmssts(lib$delete_symbol(&d_sym_cmd, &table));
     _ckvmssts(lib$delete_symbol(&d_sym_in,  &table));
     _ckvmssts(lib$delete_symbol(&d_sym_err, &table));
-
+    _ckvmssts(lib$delete_symbol(&d_sym_out, &table));
     vms_execfree(aTHX);
         
     PL_forkprocess = info->pid;
@@ -3549,9 +3615,12 @@ mp_getredirection(pTHX_ int *ac, char ***av)
 	PerlIO_printf(Perl_debug_log,"Can't open output file %s as stdout",out);
 	exit(vaxc$errno);
 	}
+	if (out != NULL) Perl_vmssetuserlnm("SYS$OUTPUT",out);
+
     if (err != NULL) {
         if (strcmp(err,"&1") == 0) {
             dup2(fileno(stdout), fileno(Perl_debug_log));
+            Perl_vmssetuserlnm("SYS$ERROR","SYS$OUTPUT");
         } else {
 	FILE *tmperr;
 	if (NULL == (tmperr = fopen(err, errmode, "mbc=32", "mbf=2")))
@@ -3564,6 +3633,7 @@ mp_getredirection(pTHX_ int *ac, char ***av)
 		{
 		exit(vaxc$errno);
 		}
+	    Perl_vmssetuserlnm("SYS$ERROR",err);
 	}
         }
 #ifdef ARGPROC_DEBUG
@@ -3930,7 +4000,7 @@ vms_image_init(int *argcp, char ***argvp)
   if (tabidx) { tabvec[tabidx] = NULL; env_tables = tabvec; }
 
   getredirection(argcp,argvp);
-#if defined(USE_THREADS) && defined(__DECC)
+#if defined(USE_THREADS) && ( defined(__DECC) || defined(__DECCXX) )
   {
 # include <reentrancy.h>
   (void) decc$set_reentrancy(C$C_MULTITHREAD);
@@ -4692,27 +4762,99 @@ do_spawn(char *cmd)
 }  /* end of do_spawn() */
 /*}}}*/
 
+
+static unsigned int *sockflags, sockflagsize;
+
+/*
+ * Shim fdopen to identify sockets for my_fwrite later, since the stdio
+ * routines found in some versions of the CRTL can't deal with sockets.
+ * We don't shim the other file open routines since a socket isn't
+ * likely to be opened by a name.
+ */
+/*{{{ FILE *my_fdopen(int fd, const char *mode)*/
+FILE *my_fdopen(int fd, const char *mode)
+{
+  FILE *fp = fdopen(fd, (char *) mode);
+
+  if (fp) {
+    unsigned int fdoff = fd / sizeof(unsigned int);
+    struct stat sbuf; /* native stat; we don't need flex_stat */
+    if (!sockflagsize || fdoff > sockflagsize) {
+      if (sockflags) Renew(     sockflags,fdoff+2,unsigned int);
+      else           New  (1324,sockflags,fdoff+2,unsigned int);
+      memset(sockflags+sockflagsize,0,fdoff + 2 - sockflagsize);
+      sockflagsize = fdoff + 2;
+    }
+    if (fstat(fd,&sbuf) == 0 && S_ISSOCK(sbuf.st_mode))
+      sockflags[fdoff] |= 1 << (fd % sizeof(unsigned int));
+  }
+  return fp;
+
+}
+/*}}}*/
+
+
+/*
+ * Clear the corresponding bit when the (possibly) socket stream is closed.
+ * There still a small hole: we miss an implicit close which might occur
+ * via freopen().  >> Todo
+ */
+/*{{{ int my_fclose(FILE *fp)*/
+int my_fclose(FILE *fp) {
+  if (fp) {
+    unsigned int fd = fileno(fp);
+    unsigned int fdoff = fd / sizeof(unsigned int);
+
+    if (sockflagsize && fdoff <= sockflagsize)
+      sockflags[fdoff] &= ~(1 << fd % sizeof(unsigned int));
+  }
+  return fclose(fp);
+}
+/*}}}*/
+
+
 /* 
  * A simple fwrite replacement which outputs itmsz*nitm chars without
  * introducing record boundaries every itmsz chars.
+ * We are using fputs, which depends on a terminating null.  We may
+ * well be writing binary data, so we need to accommodate not only
+ * data with nulls sprinkled in the middle but also data with no null 
+ * byte at the end.
  */
 /*{{{ int my_fwrite(void *src, size_t itmsz, size_t nitm, FILE *dest)*/
 int
 my_fwrite(void *src, size_t itmsz, size_t nitm, FILE *dest)
 {
-  register char *cp, *end;
+  register char *cp, *end, *cpd, *data;
+  register unsigned int fd = fileno(dest);
+  register unsigned int fdoff = fd / sizeof(unsigned int);
+  int retval;
+  int bufsize = itmsz * nitm + 1;
 
-  end = (char *)src + itmsz * nitm;
-
-  while ((char *)src <= end) {
-    for (cp = src; cp <= end; cp++) if (!*cp) break;
-    if (fputs(src,dest) == EOF) return EOF;
-    if (cp < end)
-      if (fputc('\0',dest) == EOF) return EOF;
-    src = cp + 1;
+  if (fdoff < sockflagsize &&
+      (sockflags[fdoff] | 1 << (fd % sizeof(unsigned int)))) {
+    if (write(fd, src, itmsz * nitm) == EOF) return EOF;
+    return nitm;
   }
 
-  return nitm;
+  _ckvmssts_noperl(lib$get_vm(&bufsize, &data));
+  memcpy( data, src, itmsz*nitm );
+  data[itmsz*nitm] = '\0';
+
+  end = data + itmsz * nitm;
+  retval = (int) nitm; /* on success return # items written */
+
+  cpd = data;
+  while (cpd <= end) {
+    for (cp = cpd; cp <= end; cp++) if (!*cp) break;
+    if (fputs(cpd,dest) == EOF) { retval = EOF; break; }
+    if (cp < end)
+      if (fputc('\0',dest) == EOF) { retval = EOF; break; }
+    cpd = cp + 1;
+  }
+
+  if (data) _ckvmssts_noperl(lib$free_vm(&bufsize, &data));
+  return retval;
 
 }  /* end of my_fwrite() */
 /*}}}*/
@@ -5115,9 +5257,6 @@ static long int utc_offset_secs;
 #undef localtime
 #undef time
 
-#if defined(__VMS_VER) && __VMS_VER >= 70000000 && __DECC_VER >= 50200000
-#  define RTL_USES_UTC 1
-#endif
 
 /*
  * DEC C previous to 6.0 corrupts the behavior of the /prefix
@@ -5166,6 +5305,289 @@ static time_t toloc_dst(time_t utc) {
        (gmtime_emulation_type == 1 ? toloc_dst(secs) : \
        ((secs) + utc_offset_secs))))
 
+#ifndef RTL_USES_UTC
+/*
+  
+    ucx$tz = "EST5EDT4,M4.1.0,M10.5.0"  typical 
+        DST starts on 1st sun of april      at 02:00  std time
+            ends on last sun of october     at 02:00  dst time
+    see the UCX management command reference, SET CONFIG TIMEZONE
+    for formatting info.
+
+    No, it's not as general as it should be, but then again, NOTHING
+    will handle UK times in a sensible way. 
+*/
+
+
+/* 
+    parse the DST start/end info:
+    (Jddd|ddd|Mmon.nth.dow)[/hh:mm:ss]
+*/
+
+static char *
+tz_parse_startend(char *s, struct tm *w, int *past)
+{
+    int dinm[] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    int ly, dozjd, d, m, n, hour, min, sec, j, k;
+    time_t g;
+
+    if (!s)    return 0;
+    if (!w) return 0;
+    if (!past) return 0;
+
+    ly = 0;
+    if (w->tm_year % 4        == 0) ly = 1;
+    if (w->tm_year % 100      == 0) ly = 0;
+    if (w->tm_year+1900 % 400 == 0) ly = 1;
+    if (ly) dinm[1]++;
+
+    dozjd = isdigit(*s);
+    if (*s == 'J' || *s == 'j' || dozjd) {
+        if (!dozjd && !isdigit(*++s)) return 0;
+        d = *s++ - '0';
+        if (isdigit(*s)) {
+            d = d*10 + *s++ - '0';
+            if (isdigit(*s)) {
+                d = d*10 + *s++ - '0';
+            }
+        }
+        if (d == 0) return 0;
+        if (d > 366) return 0;
+        d--;
+        if (!dozjd && d > 58 && ly) d++;  /* after 28 feb */
+        g = d * 86400;
+        dozjd = 1;
+    } else if (*s == 'M' || *s == 'm') {
+        if (!isdigit(*++s)) return 0;
+        m = *s++ - '0';
+        if (isdigit(*s)) m = 10*m + *s++ - '0';
+        if (*s != '.') return 0;
+        if (!isdigit(*++s)) return 0;
+        n = *s++ - '0';
+        if (n < 1 || n > 5) return 0;
+        if (*s != '.') return 0;
+        if (!isdigit(*++s)) return 0;
+        d = *s++ - '0';
+        if (d > 6) return 0;
+    }
+
+    if (*s == '/') {
+        if (!isdigit(*++s)) return 0;
+        hour = *s++ - '0';
+        if (isdigit(*s)) hour = 10*hour + *s++ - '0';
+        if (*s == ':') {
+            if (!isdigit(*++s)) return 0;
+            min = *s++ - '0';
+            if (isdigit(*s)) min = 10*min + *s++ - '0';
+            if (*s == ':') {
+                if (!isdigit(*++s)) return 0;
+                sec = *s++ - '0';
+                if (isdigit(*s)) sec = 10*sec + *s++ - '0';
+            }
+        }
+    } else {
+        hour = 2;
+        min = 0;
+        sec = 0;
+    }
+
+    if (dozjd) {
+        if (w->tm_yday < d) goto before;
+        if (w->tm_yday > d) goto after;
+    } else {
+        if (w->tm_mon+1 < m) goto before;
+        if (w->tm_mon+1 > m) goto after;
+
+        j = (42 + w->tm_wday - w->tm_mday)%7;   /*dow of mday 0 */
+        k = d - j; /* mday of first d */
+        if (k <= 0) k += 7;
+        k += 7 * ((n>4?4:n)-1);  /* mday of n'th d */
+        if (n == 5 && k+7 <= dinm[w->tm_mon]) k += 7;
+        if (w->tm_mday < k) goto before;
+        if (w->tm_mday > k) goto after;
+    }
+
+    if (w->tm_hour < hour) goto before;
+    if (w->tm_hour > hour) goto after;
+    if (w->tm_min  < min)  goto before;
+    if (w->tm_min  > min)  goto after;
+    if (w->tm_sec  < sec)  goto before;
+    goto after;
+
+before:
+    *past = 0;
+    return s;
+after:
+    *past = 1;
+    return s;
+}
+
+
+
+
+/*  parse the offset:   (+|-)hh[:mm[:ss]]  */
+
+static char *
+tz_parse_offset(char *s, int *offset)
+{
+    int hour = 0, min = 0, sec = 0;
+    int neg = 0;
+    if (!s) return 0;
+    if (!offset) return 0;
+
+    if (*s == '-') {neg++; s++;}
+    if (*s == '+') s++;
+    if (!isdigit(*s)) return 0;
+    hour = *s++ - '0';
+    if (isdigit(*s)) hour = hour*10+(*s++ - '0');
+    if (hour > 24) return 0;
+    if (*s == ':') {
+        if (!isdigit(*++s)) return 0;
+        min = *s++ - '0';
+        if (isdigit(*s)) min = min*10 + (*s++ - '0');
+        if (min > 59) return 0;
+        if (*s == ':') {
+            if (!isdigit(*++s)) return 0;
+            sec = *s++ - '0';
+            if (isdigit(*s)) sec = sec*10 + (*s++ - '0');
+            if (sec > 59) return 0;
+        }
+    }
+
+    *offset = (hour*60+min)*60 + sec;
+    if (neg) *offset = -*offset;
+    return s;
+}
+
+/*
+    input time is w, whatever type of time the CRTL localtime() uses.
+    sets dst, the zone, and the gmtoff (seconds)
+
+    caches the value of TZ and UCX$TZ env variables; note that 
+    my_setenv looks for these and sets a flag if they're changed
+    for efficiency. 
+
+    We have to watch out for the "australian" case (dst starts in
+    october, ends in april)...flagged by "reverse" and checked by
+    scanning through the months of the previous year.
+
+*/
+
+static int
+tz_parse(time_t *w, int *dst, char *zone, int *gmtoff)
+{
+    time_t when;
+    struct tm *w2;
+    char *s,*s2;
+    char *dstzone, *tz, *s_start, *s_end;
+    int std_off, dst_off, isdst;
+    int y, dststart, dstend;
+    static char envtz[1025];  /* longer than any logical, symbol, ... */
+    static char ucxtz[1025];
+    static char reversed = 0;
+
+    if (!w) return 0;
+
+    if (tz_updated) {
+        tz_updated = 0;
+        reversed = -1;  /* flag need to check  */
+        envtz[0] = ucxtz[0] = '\0';
+        tz = my_getenv("TZ",0);
+        if (tz) strcpy(envtz, tz);
+        tz = my_getenv("UCX$TZ",0);
+        if (tz) strcpy(ucxtz, tz);
+        if (!envtz[0] && !ucxtz[0]) return 0;  /* we give up */
+    }
+    tz = envtz;
+    if (!*tz) tz = ucxtz;
+
+    s = tz;
+    while (isalpha(*s)) s++;
+    s = tz_parse_offset(s, &std_off);
+    if (!s) return 0;
+    if (!*s) {                  /* no DST, hurray we're done! */
+        isdst = 0;
+        goto done;
+    }
+
+    dstzone = s;
+    while (isalpha(*s)) s++;
+    s2 = tz_parse_offset(s, &dst_off);
+    if (s2) {
+        s = s2;
+    } else {
+        dst_off = std_off - 3600;
+    }
+
+    if (!*s) {      /* default dst start/end?? */
+        if (tz != ucxtz) {          /* if TZ tells zone only, UCX$TZ tells rule */
+            s = strchr(ucxtz,',');
+        }
+        if (!s || !*s) s = ",M4.1.0,M10.5.0";   /* we know we do dst, default rule */
+    }
+    if (*s != ',') return 0;
+
+    when = *w;
+    when = _toutc(when);      /* convert to utc */
+    when = when - std_off;    /* convert to pseudolocal time*/
+
+    w2 = localtime(&when);
+    y = w2->tm_year;
+    s_start = s+1;
+    s = tz_parse_startend(s_start,w2,&dststart);
+    if (!s) return 0;
+    if (*s != ',') return 0;
+
+    when = *w;
+    when = _toutc(when);      /* convert to utc */
+    when = when - dst_off;    /* convert to pseudolocal time*/
+    w2 = localtime(&when);
+    if (w2->tm_year != y) {   /* spans a year, just check one time */
+        when += dst_off - std_off;
+        w2 = localtime(&when);
+    }
+    s_end = s+1;
+    s = tz_parse_startend(s_end,w2,&dstend);
+    if (!s) return 0;
+
+    if (reversed == -1) {  /* need to check if start later than end */
+        int j, ds, de;
+
+        when = *w;
+        if (when < 2*365*86400) {
+            when += 2*365*86400;
+        } else {
+            when -= 365*86400;
+        }
+        w2 =localtime(&when);
+        when = when + (15 - w2->tm_yday) * 86400;   /* jan 15 */
+
+        for (j = 0; j < 12; j++) {
+            w2 =localtime(&when);
+            (void) tz_parse_startend(s_start,w2,&ds);
+            (void) tz_parse_startend(s_end,w2,&de);
+            if (ds != de) break;
+            when += 30*86400;
+        }
+        reversed = 0;
+        if (de && !ds) reversed = 1;
+    }
+
+    isdst = dststart && !dstend;
+    if (reversed) isdst = dststart  || !dstend;
+
+done:
+    if (dst)    *dst = isdst;
+    if (gmtoff) *gmtoff = isdst ? dst_off : std_off;
+    if (isdst)  tz = dstzone;
+    if (zone) {
+        while(isalpha(*tz))  *zone++ = *tz++;
+        *zone = '\0';
+    }
+    return 1;
+}
+
+#endif /* !RTL_USES_UTC */
 
 /* my_time(), my_localtime(), my_gmtime()
  * By default traffic in UTC time values, using CRTL gmtime() or
@@ -5197,6 +5619,7 @@ time_t my_time(time_t *timep)
       gmtime_emulation_type++;
       if (!vmstrnenv("SYS$TIMEZONE_DIFFERENTIAL",off,0,fildev,0)) {
         gmtime_emulation_type++;
+        utc_offset_secs = 0;
         Perl_warn(aTHX_ "no UTC offset information; assuming local time is UTC");
       }
       else { utc_offset_secs = atol(off); }
@@ -5265,8 +5688,9 @@ struct tm *
 my_localtime(const time_t *timep)
 {
   dTHX;
-  time_t when;
+  time_t when, whenutc;
   struct tm *rsltmp;
+  int dst, offset;
 
   if (timep == NULL) {
     set_errno(EINVAL); set_vaxc_errno(LIB$_INVARG);
@@ -5282,15 +5706,24 @@ my_localtime(const time_t *timep)
 # endif
   /* CRTL localtime() wants UTC as input, does tz correction itself */
   return localtime(&when);
-# else
+  
+# else /* !RTL_USES_UTC */
+  whenutc = when;
 # ifdef VMSISH_TIME
-  if (!VMSISH_TIME) when = _toloc(when);   /*  Input was UTC */
+  if (!VMSISH_TIME) when = _toloc(whenutc);  /*  input was UTC */
+  if (VMSISH_TIME) whenutc = _toutc(when);   /*  input was truelocal */
 # endif
+  dst = -1;
+#ifndef RTL_USES_UTC
+  if (tz_parse(&when, &dst, 0, &offset)) {   /* truelocal determines DST*/
+      when = whenutc - offset;                   /* pseudolocal time*/
+  }
 # endif
   /* CRTL localtime() wants local time as input, so does no tz correction */
   rsltmp = localtime(&when);
-  if (rsltmp && gmtime_emulation_type != 1) rsltmp->tm_isdst = -1;
+  if (rsltmp && gmtime_emulation_type != 1) rsltmp->tm_isdst = dst;
   return rsltmp;
+# endif
 
 } /*  end of my_localtime() */
 /*}}}*/
@@ -5442,7 +5875,7 @@ int my_utime(char *file, struct utimbuf *utimes)
   fnmdsc.dsc$w_length = mynam.nam$b_name + mynam.nam$b_type + mynam.nam$b_ver;
 
   memset((void *) &myfib, 0, sizeof myfib);
-#ifdef __DECC
+#if defined(__DECC) || defined(__DECCXX)
   for (i=0;i<3;i++) myfib.fib$w_fid[i] = mynam.nam$w_fid[i];
   for (i=0;i<3;i++) myfib.fib$w_did[i] = mynam.nam$w_did[i];
   /* This prevents the revision time of the file being reset to the current

@@ -1,6 +1,6 @@
 /*    sv.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -61,7 +61,7 @@ typedef enum {
 
 /* Using C's structural equivalence to help emulate C++ inheritance here... */
 
-struct sv {
+struct STRUCT_SV {
     void*	sv_any;		/* pointer to something */
     U32		sv_refcnt;	/* how many references to us */
     U32		sv_flags;	/* what we are */
@@ -442,6 +442,18 @@ Unsets the IV status of an SV.
 =for apidoc Am|void|SvIOK_only|SV* sv
 Tells an SV that it is an integer and disables all other OK bits.
 
+=for apidoc Am|void|SvIOK_only_UV|SV* sv
+Tells and SV that it is an unsigned integer and disables all other OK bits.
+
+=for apidoc Am|void|SvIOK_UV|SV* sv
+Returns a boolean indicating whether the SV contains an unsigned integer.
+
+=for apidoc Am|void|SvUOK|SV* sv
+Returns a boolean indicating whether the SV contains an unsigned integer.
+
+=for apidoc Am|void|SvIOK_notUV|SV* sv
+Returns a boolean indicating whether the SV contains an signed integer.
+
 =for apidoc Am|bool|SvNOK|SV* sv
 Returns a boolean indicating whether the SV contains a double.
 
@@ -466,6 +478,7 @@ Unsets the PV status of an SV.
 
 =for apidoc Am|void|SvPOK_only|SV* sv
 Tells an SV that it is a string and disables all other OK bits.
+Will also turn off the UTF8 status.
 
 =for apidoc Am|bool|SvOOK|SV* sv
 Returns a boolean indicating whether the SvIVX is a valid offset value for
@@ -553,6 +566,7 @@ Set the length of the string which is in the SV.  See C<SvCUR>.
 
 #define SvIOK_UV(sv)		((SvFLAGS(sv) & (SVf_IOK|SVf_IVisUV))	\
 				 == (SVf_IOK|SVf_IVisUV))
+#define SvUOK(sv)		SvIOK_UV(sv)
 #define SvIOK_notUV(sv)		((SvFLAGS(sv) & (SVf_IOK|SVf_IVisUV))	\
 				 == SVf_IOK)
 
@@ -565,6 +579,24 @@ Set the length of the string which is in the SV.  See C<SvCUR>.
 #define SvNOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_NOK|SVp_NOK))
 #define SvNOK_only(sv)		((void)SvOK_off(sv), \
 				    SvFLAGS(sv) |= (SVf_NOK|SVp_NOK))
+
+/*
+=for apidoc Am|void|SvUTF8|SV* sv
+Returns a boolean indicating whether the SV contains UTF-8 encoded data.
+
+=for apidoc Am|void|SvUTF8_on|SV *sv
+Turn on the UTF8 status of an SV (the data is not changed, just the flag).
+Do not use frivolously.
+
+=for apidoc Am|void|SvUTF8_off|SV *sv
+Unsets the UTF8 status of an SV.
+
+=for apidoc Am|void|SvPOK_only_UTF8|SV* sv
+Tells an SV that it is a string and disables all other OK bits,
+and leaves the UTF8 status as it was.
+  
+=cut
+ */
 
 #define SvUTF8(sv)		(SvFLAGS(sv) & SVf_UTF8)
 #define SvUTF8_on(sv)		(SvFLAGS(sv) |= (SVf_UTF8))
@@ -688,6 +720,12 @@ Set the length of the string which is in the SV.  See C<SvCUR>.
 #define SvMAGIC(sv)	((XPVMG*)  SvANY(sv))->xmg_magic
 #define SvSTASH(sv)	((XPVMG*)  SvANY(sv))->xmg_stash
 
+/* Ask a scalar nicely to try to become an IV, if possible.
+   Not guaranteed to stay returning void */
+/* Macro won't actually call sv_2iv if already IOK */
+#define SvIV_please(sv) \
+	STMT_START {if (!SvIOKp(sv) && (SvNOK(sv) || SvPOK(sv))) \
+		(void) SvIV(sv); } STMT_END
 #define SvIV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
 		(((XPVIV*)  SvANY(sv))->xiv_iv = val); } STMT_END
@@ -775,7 +813,6 @@ Taints an SV if tainting is enabled
 #define SvTAINT(sv)			\
     STMT_START {			\
 	if (PL_tainting) {		\
-	    dTHR;			\
 	    if (PL_tainted)		\
 		SvTAINTED_on(sv);	\
 	}				\
@@ -1070,4 +1107,9 @@ Returns a pointer to the character buffer.
 
 #define SvGROW(sv,len) (SvLEN(sv) < (len) ? sv_grow(sv,len) : SvPVX(sv))
 #define Sv_Grow sv_grow
+
+#define SV_IMMEDIATE_UNREF	1
+
+#define CLONEf_COPY_STACKS 1
+#define CLONEf_KEEP_PTR_TABLE 2
 

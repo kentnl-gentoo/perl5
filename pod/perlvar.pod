@@ -193,16 +193,21 @@ examples given for the C<@-> variable.
 
 =item $*
 
-Set to 1 to do multi-line matching within a string, 0 to tell Perl
-that it can assume that strings contain a single line, for the purpose
-of optimizing pattern matches.  Pattern matches on strings containing
-multiple newlines can produce confusing results when C<$*> is 0.  Default
-is 0.  (Mnemonic: * matches multiple things.)  This variable
-influences the interpretation of only C<^> and C<$>.  A literal newline can
-be searched for even when C<$* == 0>.
+Set to a non-zero integer value to do multi-line matching within a
+string, 0 (or undefined) to tell Perl that it can assume that strings
+contain a single line, for the purpose of optimizing pattern matches.
+Pattern matches on strings containing multiple newlines can produce
+confusing results when C<$*> is 0 or undefined. Default is undefined.
+(Mnemonic: * matches multiple things.) This variable influences the
+interpretation of only C<^> and C<$>. A literal newline can be searched
+for even when C<$* == 0>.
 
 Use of C<$*> is deprecated in modern Perl, supplanted by 
 the C</s> and C</m> modifiers on pattern matching.
+
+Assigning a non-numerical value to C<$*> triggers a warning (and makes
+C<$*> act if C<$* == 0>), while assigning a numerical value to C<$*>
+makes that an implicit C<int> is applied on the value.
 
 =item input_line_number HANDLE EXPR
 
@@ -619,7 +624,8 @@ across fork() calls.  (Mnemonic: same as shells.)
 =item $<
 
 The real uid of this process.  (Mnemonic: it's the uid you came I<from>,
-if you're running setuid.)
+if you're running setuid.)  You can change both the real uid and
+the effective uid at the same time by using POSIX::setuid().
 
 =item $EFFECTIVE_USER_ID
 
@@ -631,6 +637,9 @@ The effective uid of this process.  Example:
 
     $< = $>;		# set real to effective uid
     ($<,$>) = ($>,$<);	# swap real and effective uid
+
+You can change both the effective uid and the real uid at the same
+time by using POSIX::setuid().
 
 (Mnemonic: it's the uid you went I<to>, if you're running setuid.)
 C<< $< >> and C<< $> >> can be swapped only on machines
@@ -651,6 +660,9 @@ the same as the first number.
 However, a value assigned to C<$(> must be a single number used to
 set the real gid.  So the value given by C<$(> should I<not> be assigned
 back to C<$(> without being forced numeric, such as by adding zero.
+
+You can change both the real gid and the effective gid at the same
+time by using POSIX::setgid().
 
 (Mnemonic: parentheses are used to I<group> things.  The real gid is the
 group you I<left>, if you're running setgid.)
@@ -673,6 +685,9 @@ the rest (if any) are passed to setgroups().  To get the effect of an
 empty list for setgroups(), just repeat the new effective gid; that is,
 to force an effective gid of 5 and an effectively empty setgroups()
 list, say C< $) = "5 5" >.
+
+You can change both the effective gid and the real gid at the same
+time by using POSIX::setgid() (use only a single numeric argument).
 
 (Mnemonic: parentheses are used to I<group> things.  The effective gid
 is the group that's I<right> for you, if you're running setgid.)
@@ -929,7 +944,7 @@ This can be used to determine whether the Perl interpreter executing a
 script is in the right range of versions.  (Mnemonic: use ^V for Version
 Control.)  Example:
 
-    warn "No "our" declarations!\n" if $^V and $^V lt v5.6.0;
+    warn "No \"our\" declarations!\n" if $^V and $^V lt v5.6.0;
 
 See the documentation of C<use VERSION> and C<require VERSION>
 for a convenient way to fail if the running Perl interpreter is too old.

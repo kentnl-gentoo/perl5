@@ -85,8 +85,24 @@ my @list = (1, $yet_smaller_than_iv, $smaller_than_iv, $max_iv, $max_iv + 1,
 unshift @list, (reverse map -$_, @list), 0; # 15 elts
 @list = map "$_", @list; # Normalize
 
-# print "@list\n";
+print "# @list\n";
 
+# need to special case ++ for max_uv, as ++ "magic" on a string gives
+# another string, whereas ++ magic on a string used as a number gives
+# a number. Not a problem when NV preserves UV, but if it doesn't then
+# stringification of the latter gives something in e notation.
+
+my $max_uv_pp = "$max_uv"; $max_uv_pp++;
+my $max_uv_p1 = "$max_uv"; $max_uv_p1+=0; $max_uv_p1++;
+
+# Also need to cope with %g notation for max_uv_p1 that actually gives an
+# integer less than max_uv because of correct rounding for the limited
+# precisision. This bites for 12 byte long doubles and 8 byte UVs
+
+my $temp = $max_uv_p1;
+my $max_uv_p1_as_iv;
+{use integer; $max_uv_p1_as_iv = 0 + sprintf "%s", $temp}
+my $max_uv_p1_as_uv = 0 | sprintf "%s", $temp;
 
 my @opnames = split //, "-+UINPuinp";
 
@@ -178,9 +194,27 @@ for my $num_chain (1..$max_chain) {
 	    }
 	    push @ans, $inpt;
 	  }
-	  $nok++,
-	    print "# '$ans[0]' ne '$ans[1]',\t$num\t=> @opnames[$first,@{$curops[0]},$last] vs @opnames[$first,@{$curops[1]},$last]\n"
-	      if $ans[0] ne $ans[1];
+	  if ($ans[0] ne $ans[1]) {
+	    print "# '$ans[0]' ne '$ans[1]',\t$num\t=> @opnames[$first,@{$curops[0]},$last] vs @opnames[$first,@{$curops[1]},$last]\n";
+	    # XXX ought to check that "+" was in the list of opnames
+	    if ((($ans[0] eq $max_uv_pp) and ($ans[1] eq $max_uv_p1))
+		or (($ans[1] eq $max_uv_pp) and ($ans[0] eq $max_uv_p1))) {
+	      # string ++ versus numeric ++. Tolerate this little
+	      # bit of insanity
+	      print "# ok, as string ++ of max_uv is \"$max_uv_pp\", numeric is $max_uv_p1\n"
+	    } elsif ($opnames[$last] eq 'I' and $ans[1] eq "-1"
+		     and $ans[0] eq $max_uv_p1_as_iv) {
+	      print "# ok, \"$max_uv_p1\" correctly converts to IV \"$max_uv_p1_as_iv\"\n";
+	    } elsif ($opnames[$last] eq 'U' and $ans[1] eq ~0
+		     and $ans[0] eq $max_uv_p1_as_uv) {
+	      print "# ok, \"$max_uv_p1\" correctly converts to UV \"$max_uv_p1_as_uv\"\n";
+	    } elsif (grep {/^N$/} @opnames[@{$curops[0]}]
+		     and $ans[0] == $ans[1] and $ans[0] <= ~0) {
+	      print "# ok, numerically equal - notation changed due to adding zero\n";
+	    } else {
+	      $nok++,
+	    }
+	  }
 	}
 	print "not " if $nok;
 	print "ok $test\n";

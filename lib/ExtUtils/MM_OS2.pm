@@ -1,14 +1,40 @@
 package ExtUtils::MM_OS2;
 
+use strict;
+
+our $VERSION = '1.00';
+
 #use Config;
 #use Cwd;
 #use File::Basename;
 require Exporter;
 
-Exporter::import('ExtUtils::MakeMaker',
-       qw( $Verbose &neatvalue));
+require ExtUtils::MakeMaker;
+ExtUtils::MakeMaker->import(qw( $Verbose &neatvalue));
 
 unshift @MM::ISA, 'ExtUtils::MM_OS2';
+
+=pod
+
+=head1 NAME
+
+ExtUtils::MM_OS2 - methods to override UN*X behaviour in ExtUtils::MakeMaker
+
+=head1 SYNOPSIS
+
+ use ExtUtils::MM_OS2; # Done internally by ExtUtils::MakeMaker if needed
+
+=head1 DESCRIPTION
+
+See ExtUtils::MM_Unix for a documentation of the methods provided
+there. This package overrides the implementation of these methods, not
+the semantics.
+
+=head1 METHODS
+
+=over 4
+
+=cut
 
 sub dlsyms {
     my($self,%attribs) = @_;
@@ -34,7 +60,7 @@ $self->{BASEEXT}.def: Makefile.PL
      ', "DL_VARS" => ', neatvalue($vars), ');\'
 ');
     }
-    if (%{$self->{IMPORTS}}) {
+    if ($self->{IMPORTS} && %{$self->{IMPORTS}}) {
 	# Make import files (needed for static build)
 	-d 'tmp_imp' or mkdir 'tmp_imp', 0777 or die "Can't mkdir tmp_imp";
 	open IMP, '>tmpimp.imp' or die "Can't open tmpimp.imp";
@@ -57,7 +83,7 @@ $self->{BASEEXT}.def: Makefile.PL
 sub static_lib {
     my($self) = @_;
     my $old = $self->ExtUtils::MM_Unix::static_lib();
-    return $old unless %{$self->{IMPORTS}};
+    return $old unless $self->{IMPORTS} && %{$self->{IMPORTS}};
     
     my @chunks = split /\n{2,}/, $old;
     shift @chunks unless length $chunks[0]; # Empty lines at the start
@@ -93,6 +119,22 @@ sub perl_archive
  return "\$(PERL_INC)/libperl\$(LIB_EXT)";
 }
 
+=item perl_archive_after
+
+This is an internal method that returns path to a library which
+should be put on the linker command line I<after> the external libraries
+to be linked to dynamic extensions.  This may be needed if the linker
+is one-pass, and Perl includes some overrides for C RTL functions,
+such as malloc().
+
+=cut 
+
+sub perl_archive_after
+{
+ return "\$(PERL_INC)/libperl_override\$(LIB_EXT)" unless $OS2::is_aout;
+ return "";
+}
+
 sub export_list
 {
  my ($self) = @_;
@@ -100,19 +142,11 @@ sub export_list
 }
 
 1;
+
 __END__
 
-=head1 NAME
+=pod
 
-ExtUtils::MM_OS2 - methods to override UN*X behaviour in ExtUtils::MakeMaker
+=back
 
-=head1 SYNOPSIS
-
- use ExtUtils::MM_OS2; # Done internally by ExtUtils::MakeMaker if needed
-
-=head1 DESCRIPTION
-
-See ExtUtils::MM_Unix for a documentation of the methods provided
-there. This package overrides the implementation of these methods, not
-the semantics.
-
+=cut

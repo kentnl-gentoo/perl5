@@ -56,7 +56,7 @@ be imported individually, and with the C<:crlf> export tag:
 
 In addition, some structure manipulation functions are available:
 
-=over
+=over 4
 
 =item inet_aton HOSTNAME
 
@@ -268,6 +268,7 @@ use XSLoader ();
 	SO_RCVLOWAT
 	SO_RCVTIMEO
 	SO_REUSEADDR
+	SO_REUSEPORT
 	SO_SNDBUF
 	SO_SNDLOWAT
 	SO_SNDTIMEO

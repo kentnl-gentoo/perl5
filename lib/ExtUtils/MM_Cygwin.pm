@@ -1,12 +1,16 @@
 package ExtUtils::MM_Cygwin;
 
+use strict;
+
+our $VERSION = '1.00';
+
 use Config;
 #use Cwd;
 #use File::Basename;
 require Exporter;
 
-Exporter::import('ExtUtils::MakeMaker',
-       qw( $Verbose &neatvalue));
+require ExtUtils::MakeMaker;
+ExtUtils::MakeMaker->import(qw( $Verbose &neatvalue));
 
 unshift @MM::ISA, 'ExtUtils::MM_Cygwin';
 
@@ -99,7 +103,7 @@ ExtUtils::MM_Cygwin - methods to override UN*X behaviour in ExtUtils::MakeMaker
 
 See ExtUtils::MM_Unix for a documentation of the methods provided there.
 
-=over
+=over 4
 
 =item canonpath
 

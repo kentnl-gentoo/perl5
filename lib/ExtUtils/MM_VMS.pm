@@ -7,19 +7,23 @@
 
 package ExtUtils::MM_VMS;
 
+use strict;
+
 use Carp qw( &carp );
 use Config;
 require Exporter;
 use VMS::Filespec;
 use File::Basename;
 use File::Spec;
-our($Revision, @ISA);
-$Revision = '5.56 (27-Apr-1999)';
+our($Revision, @ISA, $VERSION, $Verbose);
+# All on one line so MakeMaker can see it.
+($VERSION) = ($Revision = '5.56 (27-Apr-1999)') =~ /^([\d.]+)/;
 
 @ISA = qw( File::Spec );
 unshift @MM::ISA, 'ExtUtils::MM_VMS';
 
-Exporter::import('ExtUtils::MakeMaker', '$Verbose', '&neatvalue');
+require ExtUtils::MakeMaker;
+ExtUtils::MakeMaker->import('$Verbose', '&neatvalue');
 
 =head1 NAME
 
@@ -37,7 +41,7 @@ the semantics.
 
 =head2 Methods always loaded
 
-=over
+=over 4
 
 =item wraplist
 
@@ -122,7 +126,7 @@ sub ExtUtils::MM_VMS::makeaperl;
 sub ExtUtils::MM_VMS::ext;
 sub ExtUtils::MM_VMS::nicetext;
 
-#use SelfLoader;
+our $AUTOLOAD;
 sub AUTOLOAD {
     my $code;
     if (defined fileno(DATA)) {
@@ -151,11 +155,12 @@ sub AUTOLOAD {
 
 
 # This isn't really an override.  It's just here because ExtUtils::MM_VMS
-# appears in @MM::ISA before ExtUtils::Liblist, so if there isn't an ext()
+# appears in @MM::ISA before ExtUtils::Liblist::Kid, so if there isn't an ext()
 # in MM_VMS, then AUTOLOAD is called, and bad things happen.  So, we just
-# mimic inheritance here and hand off to ExtUtils::Liblist.
+# mimic inheritance here and hand off to ExtUtils::Liblist::Kid.
 sub ext {
-  ExtUtils::Liblist::ext(@_);
+  require ExtUtils::Liblist;
+  ExtUtils::Liblist::Kid::ext(@_);
 }
 
 =back
@@ -168,7 +173,7 @@ For overridden methods, documentation is limited to an explanation
 of why this method overrides the MM_Unix method; see the ExtUtils::MM_Unix
 documentation for more details.
 
-=over
+=over 4
 
 =item guess_name (override)
 
@@ -557,22 +562,23 @@ MM_VMS_REVISION = $ExtUtils::MM_VMS::Revision
 # DLBASE  = Basename part of dynamic library. May be just equal BASEEXT.
 ];
 
-    for $tmp (qw/
+    for my $tmp (qw/
 	      FULLEXT VERSION_FROM OBJECT LDFROM
 	      /	) {
 	next unless defined $self->{$tmp};
 	push @m, "$tmp = ",$self->fixpath($self->{$tmp},0),"\n";
     }
 
-    for $tmp (qw/
+    for my $tmp (qw/
 	      BASEEXT PARENT_NAME DLBASE INC DEFINE LINKTYPE
 	      /	) {
 	next unless defined $self->{$tmp};
 	push @m, "$tmp = $self->{$tmp}\n";
     }
 
-    for $tmp (qw/ XS MAN1PODS MAN3PODS PM /) {
-	next unless defined $self->{$tmp};
+    for my $tmp (qw/ XS MAN1PODS MAN3PODS PM /) {
+	# Where is the space coming from? --jhi
+	next unless $self ne " " && defined $self->{$tmp};
 	my(%tmp,$key);
 	for $key (keys %{$self->{$tmp}}) {
 	    $tmp{$self->fixpath($key,0)} = $self->fixpath($self->{$tmp}{$key},0);
@@ -580,7 +586,7 @@ MM_VMS_REVISION = $ExtUtils::MM_VMS::Revision
 	$self->{$tmp} = \%tmp;
     }
 
-    for $tmp (qw/ C O_FILES H /) {
+    for my $tmp (qw/ C O_FILES H /) {
 	next unless defined $self->{$tmp};
 	my(@tmp,$val);
 	for $val (@{$self->{$tmp}}) {
@@ -601,7 +607,7 @@ MAN3PODS = ',$self->wraplist(sort keys %{$self->{MAN3PODS}}),'
 
 ';
 
-    for $tmp (qw/
+    for my $tmp (qw/
 	      INST_MAN1DIR INSTALLMAN1DIR MAN1EXT INST_MAN3DIR INSTALLMAN3DIR MAN3EXT
 	      /) {
 	next unless defined $self->{$tmp};
@@ -700,7 +706,7 @@ sub cflags {
     # conflate the ones from $Config{'ccflags'} and $self->{DEFINE}
     # ($self->{DEFINE} has already been VMSified in constants() above)
     if ($self->{DEFINE}) { $quals .= $self->{DEFINE}; }
-    for $type (qw(Def Undef)) {
+    for my $type (qw(Def Undef)) {
 	my(@terms);
 	while ($quals =~ m:/${type}i?n?e?=([^/]+):ig) {
 		my $term = $1;
@@ -826,7 +832,7 @@ pm_to_blib.ts : $(TO_INST_PM)
     }
     push(@m,"\t\$(NOECHO) \$(PERL) -e \"print '$line'\" >>.MM_tmp\n") if $line;
 
-    push(@m,q[	$(PERL) "-I$(PERL_LIB)" "-MExtUtils::Install" -e "pm_to_blib({split(' ',<STDIN>)},'].$autodir.q[')" <.MM_tmp]);
+    push(@m,q[	$(PERL) "-I$(PERL_LIB)" "-MExtUtils::Install" -e "pm_to_blib({split(' ',<STDIN>)},'].$autodir.q[','$(PM_FILTER)')" <.MM_tmp]);
     push(@m,qq[
 	\$(NOECHO) Delete/NoLog/NoConfirm .MM_tmp;
 	\$(NOECHO) \$(TOUCH) pm_to_blib.ts
@@ -881,6 +887,11 @@ sub tool_xsubpp {
 	unshift( @tmargs, $self->{XSOPT} );
     }
 
+    if ($Config{'ldflags'} && 
+        $Config{'ldflags'} =~ m!/Debug!i &&
+        (!exists($self->{XSOPT}) || $self->{XSOPT} !~ /linenumbers/)) {
+        unshift(@tmargs,'-nolinenumbers');
+    }
     my $xsubpp_version = $self->xsubpp_version($self->catfile($xsdir,'xsubpp'));
 
     # What are the correct thresholds for version 1 && 2 Paul?
@@ -1209,7 +1220,7 @@ $(BASEEXT).opt : Makefile.PL
 	                   s/.*[:>\/\]]//;       # Trim off dir spec
 			   $upcase ? uc($_) : $_;
 	                 } split ' ', $self->eliminate_macros($self->{OBJECT});
-        my($tmp, @lines,$elt) = '';
+        my($tmp,@lines,$elt) = '';
 	$tmp = shift @omods;
 	foreach $elt (@omods) {
 	    $tmp .= ",$elt";
@@ -1378,7 +1389,7 @@ END
     push @m,
 qq[POD2MAN_EXE = $pod2man_exe\n],
 q[POD2MAN = $(PERL) -we "%m=@ARGV;for (keys %m){" -
--e "system(""MCR $^X $(POD2MAN_EXE) $_ >$m{$_}"");}"
+-e "system(qq/MCR $^X ""-I$(PERL_ARCHLIB)"" ""-I$(PERL_LIB)"" $(POD2MAN_EXE) $_ >$m{$_}/);}"
 ];
     push @m, "\nmanifypods : \$(MAN1PODS) \$(MAN3PODS)\n";
     if (%{$self->{MAN1PODS}} || %{$self->{MAN3PODS}}) {
@@ -1409,7 +1420,7 @@ sub processPL {
         my $list = ref($self->{PL_FILES}->{$plfile})
 		? $self->{PL_FILES}->{$plfile}
 		: [$self->{PL_FILES}->{$plfile}];
-	foreach $target (@$list) {
+	foreach my $target (@$list) {
 	    my $vmsplfile = vmsify($plfile);
 	    my $vmsfile = vmsify($target);
 	    push @m, "
@@ -1890,6 +1901,7 @@ $(OBJECT) : $(PERL_INC)iperlsys.h
 # We do NOT just update config.h because that is not sufficient.
 # An out of date config.h is not fatal but complains loudly!
 $(PERL_INC)config.h : $(PERL_SRC)config.sh
+	$(NOOP)
 
 $(PERL_ARCHLIB)Config.pm : $(PERL_SRC)config.sh
 	$(NOECHO) Write Sys$Error "$(PERL_ARCHLIB)Config.pm may be out of date with config.h or genconfig.pl"
@@ -2040,6 +2052,8 @@ Consequently, it hasn't really been tested, and may well be incomplete.
 
 =cut
 
+our %olbs;
+
 sub makeaperl {
     my($self, %attribs) = @_;
     my($makefilename, $searchdirs, $static, $extra, $perlinc, $target, $tmp, $libperl) = 
@@ -2082,7 +2096,7 @@ $(MAP_TARGET) :: $(MAKE_APERL_FILE)
     $linkcmd =~ s/\s+/ /g;
 
     # Which *.olb files could we make use of...
-    local(%olbs);
+    local(%olbs);       # XXX can this be lexical?
     $olbs{$self->{INST_ARCHAUTODIR}} = "$self->{BASEEXT}\$(LIB_EXT)";
     require File::Find;
     File::Find::find(sub {
@@ -2179,6 +2193,7 @@ $(MAP_TARGET) :: $(MAKE_APERL_FILE)
     push @optlibs, @$extra;
 
     $target = "Perl$Config{'exe_ext'}" unless $target;
+    my $shrtarget;
     ($shrtarget,$targdir) = fileparse($target);
     $shrtarget =~ s/^([^.]*)/$1Shr/;
     $shrtarget = $targdir . $shrtarget;

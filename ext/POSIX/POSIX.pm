@@ -6,7 +6,7 @@ use AutoLoader;
 
 use XSLoader ();
 
-our $VERSION = "1.03" ;
+our $VERSION = "1.04" ;
 
 # Grandfather old foo_h form to new :foo_h form
 my $loaded;
@@ -655,20 +655,6 @@ sub fork {
     CORE::fork;
 }
 
-sub getcwd
-{
-    usage "getcwd()" if @_ != 0;
-    if ($^O eq 'MSWin32') {
-	# this perhaps applies to everyone else also?
-	require Cwd;
-	$cwd = &Cwd::cwd;
-    }
-    else {
-	chop($cwd = `pwd`);
-    }
-    $cwd;
-}
-
 sub getegid {
     usage "getegid()" if @_ != 0;
     $) + 0;
@@ -732,16 +718,6 @@ sub rmdir {
 
 sub setbuf {
     redef "IO::Handle::setbuf()";
-}
-
-sub setgid {
-    usage "setgid(gid)" if @_ != 1;
-    $( = $_[0];
-}
-
-sub setuid {
-    usage "setuid(uid)" if @_ != 1;
-    $< = $_[0];
 }
 
 sub setvbuf {

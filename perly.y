@@ -1,6 +1,6 @@
 /*    perly.y
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -16,7 +16,9 @@
 #include "EXTERN.h"
 #define PERL_IN_PERLY_C
 #include "perl.h"
-
+#ifdef EBCDIC
+#undef YYDEBUG
+#endif
 #define dep() deprecate("\"do\" to call subroutines")
 
 /* stuff included here to make perly_c.diff apply better */
@@ -61,6 +63,7 @@ static void yydestruct(pTHXo_ void *ptr);
 
 #ifdef USE_PURE_BISON
 #define YYLEX_PARAM (&yychar)
+#define yylex yylex_r
 #endif
 
 %}
@@ -124,7 +127,7 @@ static void yydestruct(pTHXo_ void *ptr);
 prog	:	/* NULL */
 		{
 #if defined(YYDEBUG) && defined(DEBUGGING)
-		    yydebug = (PL_debug & 1);
+		    yydebug = (DEBUG_p_TEST);
 #endif
 		    PL_expect = XSTATE;
 		}
@@ -247,13 +250,20 @@ loop	:	label WHILE '(' remember mtexpr ')' mblock cont
 				 newFOROP(0, $1, $2, Nullop, $5, $7, $8)); }
 	|	label FOR '(' remember mnexpr ';' mtexpr ';' mnexpr ')' mblock
 			/* basically fake up an initialize-while lineseq */
-			{ OP *forop = append_elem(OP_LINESEQ,
-					scalar($5),
-					newWHILEOP(0, 1, (LOOP*)Nullop,
-						   $2, scalar($7),
-						   $11, scalar($9)));
+			{ OP *forop;
 			  PL_copline = $2;
-			  $$ = block_end($4, newSTATEOP(0, $1, forop)); }
+			  forop = newSTATEOP(0, $1,
+					    newWHILEOP(0, 1, (LOOP*)Nullop,
+						$2, scalar($7),
+						$11, $9));
+			  if ($5) {
+				forop = append_elem(OP_LINESEQ,
+                                        newSTATEOP(0, ($1?savepv($1):Nullch),
+						   $5),
+					forop);
+			  }
+
+			  $$ = block_end($4, forop); }
 	|	label block cont  /* a block is a loop that happens once */
 			{ $$ = newSTATEOP(0, $1,
 				 newWHILEOP(0, 1, (LOOP*)Nullop,
@@ -266,7 +276,7 @@ nexpr	:	/* NULL */
 	;
 
 texpr	:	/* NULL means true */
-			{ (void)scan_num("1"); $$ = yylval.opval; }
+			{ (void)scan_num("1", &yylval); $$ = yylval.opval; }
 	|	expr
 	;
 

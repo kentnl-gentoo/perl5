@@ -9,7 +9,7 @@
 
 package Data::Dumper;
 
-$VERSION = '2.101';
+$VERSION = '2.102';
 
 #$| = 1;
 
@@ -291,8 +291,7 @@ sub _dump {
     $s->{level}++;
     $ipad = $s->{xpad} x $s->{level};
 
-    
-    if ($realtype eq 'SCALAR') {
+    if ($realtype eq 'SCALAR' || $realtype eq 'REF') {
       if ($realpack) {
 	$out .= 'do{\\(my $o = ' . $s->_dump($$val, "\${$name}") . ')}';
       }
@@ -554,6 +553,8 @@ my %esc = (
 sub qquote {
   local($_) = shift;
   s/([\\\"\@\$])/\\$1/g;
+  my $bytes; { use bytes; $bytes = length }
+  s/([^\x00-\x7f])/'\x{'.sprintf("%x",ord($1)).'}'/ge if $bytes > length;
   return qq("$_") unless 
     /[^ !"\#\$%&'()*+,\-.\/0-9:;<=>?\@A-Z[\\\]^_`a-z{|}~]/;  # fast exit
 
@@ -592,7 +593,6 @@ __END__
 =head1 NAME
 
 Data::Dumper - stringified perl data structures, suitable for both printing and C<eval>
-
 
 =head1 SYNOPSIS
 

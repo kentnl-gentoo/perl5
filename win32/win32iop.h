@@ -72,8 +72,9 @@ DllExport  void		win32_abort(void);
 DllExport  int  	win32_fstat(int fd,struct stat *sbufptr);
 DllExport  int  	win32_stat(const char *name,struct stat *sbufptr);
 DllExport  int		win32_pipe( int *phandles, unsigned int psize, int textmode );
-DllExport  FILE*	win32_popen( const char *command, const char *mode );
-DllExport  int		win32_pclose( FILE *pf);
+DllExport  PerlIO*	win32_popen( const char *command, const char *mode );
+DllExport  PerlIO*	win32_popenlist(const char *mode, IV narg, SV **args);
+DllExport  int		win32_pclose( PerlIO *pf);
 DllExport  int		win32_rename( const char *oname, const char *newname);
 DllExport  int		win32_setmode( int fd, int mode);
 DllExport  long		win32_lseek( int fd, long offset, int origin);
@@ -120,10 +121,8 @@ DllExport  void		win32_seekdir(DIR *dirp, long loc);
 DllExport  void		win32_rewinddir(DIR *dirp);
 DllExport  int		win32_closedir(DIR *dirp);
 
-#ifndef USE_WIN32_RTL_ENV
 DllExport  char*	win32_getenv(const char *name);
 DllExport  int		win32_putenv(const char *name);
-#endif
 
 DllExport  unsigned 	win32_sleep(unsigned int);
 DllExport  int		win32_times(struct tms *timebuf);
@@ -300,12 +299,10 @@ END_EXTERN_C
 #undef crypt
 #define crypt(t,s)		win32_crypt(t,s)
 
-#ifndef USE_WIN32_RTL_ENV
 #undef getenv
 #define getenv win32_getenv
 #undef putenv
 #define putenv win32_putenv
-#endif
 
 #endif /* WIN32IO_IS_STDIO */
 #endif /* WIN32IOP_H */

@@ -1,6 +1,6 @@
 /*    av.h
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -16,7 +16,7 @@ struct xpvav {
     MAGIC*	xmg_magic;	/* magic for scalar array */
     HV*		xmg_stash;	/* class package */
 
-    SV**	xav_alloc;	/* pointer to malloced string */
+    SV**	xav_alloc;	/* pointer to beginning of C array of SVs */
     SV*		xav_arylen;
     U8		xav_flags;
 };

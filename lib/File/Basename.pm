@@ -95,7 +95,7 @@ would yield
     $dir  eq 'Doc_Root:[Help]'
     $type eq '.Rnh'
 
-=over
+=over 4
 
 =item C<basename>
 
@@ -135,7 +135,8 @@ BEGIN {
 
 
 
-use 5.005_64;
+use 5.6.0;
+use warnings;
 our(@ISA, @EXPORT, $VERSION, $Fileparse_fstype, $Fileparse_igncase);
 require Exporter;
 @ISA = qw(Exporter);
@@ -176,7 +177,7 @@ sub fileparse {
       $dirpath ||= '';  # should always be defined
     }
   }
-  if ($fstype =~ /^MS(DOS|Win32)/i) {
+  if ($fstype =~ /^MS(DOS|Win32)|epoc/i) {
     ($dirpath,$basename) = ($fullname =~ /^((?:.*[:\\\/])?)(.*)/s);
     $dirpath .= '.\\' unless $dirpath =~ /[\\\/]\z/;
   }
@@ -189,9 +190,13 @@ sub fileparse {
   }
   elsif ($fstype !~ /^VMS/i) {  # default to Unix
     ($dirpath,$basename) = ($fullname =~ m#^(.*/)?(.*)#s);
-    if ($^O eq 'VMS' and $fullname =~ m:/[^/]+/000000/?:) {
+    if ($^O eq 'VMS' and $fullname =~ m:^(/[^/]+/000000(/|$))(.*):) {
       # dev:[000000] is top of VMS tree, similar to Unix '/'
-      ($basename,$dirpath) = ('',$fullname);
+      # so strip it off and treat the rest as "normal"
+      my $devspec  = $1;
+      my $remainder = $3;
+      ($dirpath,$basename) = ($remainder =~ m#^(.*/)?(.*)#s);
+      $dirpath = $devspec.$dirpath;
     }
     $dirpath = './' unless $dirpath;
   }
@@ -236,7 +241,13 @@ sub dirname {
         if ($_[0] =~ m#/#) { $fstype = '' }
         else { return $dirname || $ENV{DEFAULT} }
     }
-    if ($fstype =~ /MacOS/i) { return $dirname }
+    if ($fstype =~ /MacOS/i) {
+	if( !length($basename) && $dirname !~ /^[^:]+:\z/) {
+	    $dirname =~ s/([^:]):\z/$1/s;
+	    ($basename,$dirname) = fileparse $dirname;
+	}
+	$dirname .= ":" unless $dirname =~ /:\z/;
+    }
     elsif ($fstype =~ /MSDOS/i) { 
         $dirname =~ s/([^:])[\\\/]*\z/$1/;
         unless( length($basename) ) {
@@ -256,7 +267,7 @@ sub dirname {
         chop $dirname;
         $dirname =~ s#[^:/]+\z## unless length($basename);
     }
-    else { 
+    else {
         $dirname =~ s:(.)/*\z:$1:s;
         unless( length($basename) ) {
 	    local($File::Basename::Fileparse_fstype) = $fstype;
