@@ -229,8 +229,9 @@ newthread (SV *startsv, AV *initargs, char *classname)
     static pthread_attr_t attr;
     static int attr_inited = 0;
     sigset_t fullmask, oldmask;
+    static int attr_joinable = ATTR_JOINABLE;
 #endif
-    
+
     savethread = thr;
     thr = new_struct_thread(thr);
     SPAGAIN;
@@ -256,29 +257,17 @@ newthread (SV *startsv, AV *initargs, char *classname)
     err = 0;
     if (!attr_inited) {
 	attr_inited = 1;
-#ifdef OLD_PTHREADS_API
-	err = pthread_attr_create(&attr);
-#else
 	err = pthread_attr_init(&attr);
-#endif
-#ifdef OLD_PTHREADS_API
-#ifdef VMS
-/* This is available with the old pthreads API, but only with */
-/* DecThreads (VMS and Digital Unix) */
+#  ifdef PTHREAD_ATTR_SETDETACHSTATE
 	if (err == 0)
-	    err = pthread_attr_setdetach_np(&attr, ATTR_JOINABLE);
-#endif
-#else
-	if (err == 0)
-	    err = pthread_attr_setdetachstate(&attr, ATTR_JOINABLE);
-#endif
+	    err = PTHREAD_ATTR_SETDETACHSTATE(&attr, attr_joinable);
+
+#  else
+	croak("panic: can't pthread_attr_setdetachstate");
+#  endif
     }
     if (err == 0)
-#ifdef OLD_PTHREADS_API
-	err = pthread_create(&thr->self, attr, threadstart, (void*) thr);
-#else
-	err = pthread_create(&thr->self, &attr, threadstart, (void*) thr);
-#endif
+	err = PTHREAD_CREATE(&thr->self, attr, threadstart, (void*) thr);
     /* Go */
     MUTEX_UNLOCK(&thr->mutex);
 #endif
@@ -623,7 +612,7 @@ await_signal()
 	    croak("panic: await_signal");
 	ST(0) = sv_newmortal();
 	if (ret)
-	    sv_setsv(ST(0), c ? psig_ptr[c] : &PL_sv_no);
+	    sv_setsv(ST(0), c ? PL_psig_ptr[c] : &PL_sv_no);
 	DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			      "await_signal returning %s\n", SvPEEK(ST(0))););
 

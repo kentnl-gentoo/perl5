@@ -202,7 +202,23 @@ PP(pp_padsv)
 
 PP(pp_readline)
 {
+    tryAMAGICunTARGET(iter, 0);
     PL_last_in_gv = (GV*)(*PL_stack_sp--);
+    if (PL_op->op_flags & OPf_SPECIAL) {	/* Are called as <$var> */
+	if (SvROK(PL_last_in_gv)) {
+	    if (SvTYPE(SvRV(PL_last_in_gv)) != SVt_PVGV) 
+		goto hard_way;
+	    PL_last_in_gv = (GV*)SvRV(PL_last_in_gv);
+	} else if (SvTYPE(PL_last_in_gv) != SVt_PVGV) {
+	  hard_way: {
+	    dSP;
+	    XPUSHs((SV*)PL_last_in_gv);
+	    PUTBACK;
+	    pp_rv2gv(ARGS);
+	    PL_last_in_gv = (GV*)(*PL_stack_sp--);
+	  }
+	}
+    }
     return do_readline();
 }
 
@@ -220,7 +236,7 @@ PP(pp_preinc)
 {
     djSP;
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
-	croak(no_modify);
+	croak(PL_no_modify);
     if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MAX)
     {
@@ -311,7 +327,7 @@ PP(pp_print)
 	gv = (GV*)*++MARK;
     else
 	gv = PL_defoutgv;
-    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	if (MARK == ORIGMARK) {
 	    /* If using default handle then we need to make space to 
 	     * pass object as 1st arg, so move other args up ...
@@ -322,7 +338,7 @@ PP(pp_print)
 	    ++SP;
 	}
 	PUSHMARK(MARK - 1);
-	*MARK = mg->mg_obj;
+	*MARK = SvTIED_obj((SV*)gv, mg);
 	PUTBACK;
 	ENTER;
 	perl_call_method("PRINT", G_SCALAR);
@@ -403,16 +419,18 @@ PP(pp_print)
 
 PP(pp_rv2av)
 {
-    djSP; dPOPss;
+    djSP; dTOPss;
     AV *av;
 
     if (SvROK(sv)) {
       wasref:
+	tryAMAGICunDEREF(to_av);
+
 	av = (AV*)SvRV(sv);
 	if (SvTYPE(av) != SVt_PVAV)
 	    DIE("Not an ARRAY reference");
 	if (PL_op->op_flags & OPf_REF) {
-	    PUSHs((SV*)av);
+	    SETs((SV*)av);
 	    RETURN;
 	}
     }
@@ -420,7 +438,7 @@ PP(pp_rv2av)
 	if (SvTYPE(sv) == SVt_PVAV) {
 	    av = (AV*)sv;
 	    if (PL_op->op_flags & OPf_REF) {
-		PUSHs((SV*)av);
+		SETs((SV*)av);
 		RETURN;
 	    }
 	}
@@ -438,16 +456,18 @@ PP(pp_rv2av)
 		if (!SvOK(sv)) {
 		    if (PL_op->op_flags & OPf_REF ||
 		      PL_op->op_private & HINT_STRICT_REFS)
-			DIE(no_usym, "an ARRAY");
+			DIE(PL_no_usym, "an ARRAY");
 		    if (ckWARN(WARN_UNINITIALIZED))
-			warner(WARN_UNINITIALIZED, warn_uninit);
-		    if (GIMME == G_ARRAY)
+			warner(WARN_UNINITIALIZED, PL_warn_uninit);
+		    if (GIMME == G_ARRAY) {
+			POPs;
 			RETURN;
-		    RETPUSHUNDEF;
+		    }
+		    RETSETUNDEF;
 		}
 		sym = SvPV(sv,PL_na);
 		if (PL_op->op_private & HINT_STRICT_REFS)
-		    DIE(no_symref, sym, "an ARRAY");
+		    DIE(PL_no_symref, sym, "an ARRAY");
 		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVAV);
 	    } else {
 		gv = (GV*)sv;
@@ -456,7 +476,7 @@ PP(pp_rv2av)
 	    if (PL_op->op_private & OPpLVAL_INTRO)
 		av = save_ary(gv);
 	    if (PL_op->op_flags & OPf_REF) {
-		PUSHs((SV*)av);
+		SETs((SV*)av);
 		RETURN;
 	    }
 	}
@@ -464,6 +484,7 @@ PP(pp_rv2av)
 
     if (GIMME == G_ARRAY) {
 	I32 maxarg = AvFILL(av) + 1;
+	POPs;				/* XXXX May be optimized away? */
 	EXTEND(SP, maxarg);          
 	if (SvRMAGICAL(av)) {
 	    U32 i; 
@@ -480,7 +501,7 @@ PP(pp_rv2av)
     else {
 	dTARGET;
 	I32 maxarg = AvFILL(av) + 1;
-	PUSHi(maxarg);
+	SETi(maxarg);
     }
     RETURN;
 }
@@ -492,6 +513,8 @@ PP(pp_rv2hv)
 
     if (SvROK(sv)) {
       wasref:
+	tryAMAGICunDEREF(to_hv);
+
 	hv = (HV*)SvRV(sv);
 	if (SvTYPE(hv) != SVt_PVHV && SvTYPE(hv) != SVt_PVAV)
 	    DIE("Not a HASH reference");
@@ -522,9 +545,9 @@ PP(pp_rv2hv)
 		if (!SvOK(sv)) {
 		    if (PL_op->op_flags & OPf_REF ||
 		      PL_op->op_private & HINT_STRICT_REFS)
-			DIE(no_usym, "a HASH");
+			DIE(PL_no_usym, "a HASH");
 		    if (ckWARN(WARN_UNINITIALIZED))
-			warner(WARN_UNINITIALIZED, warn_uninit);
+			warner(WARN_UNINITIALIZED, PL_warn_uninit);
 		    if (GIMME == G_ARRAY) {
 			SP--;
 			RETURN;
@@ -533,7 +556,7 @@ PP(pp_rv2hv)
 		}
 		sym = SvPV(sv,PL_na);
 		if (PL_op->op_private & HINT_STRICT_REFS)
-		    DIE(no_symref, sym, "a HASH");
+		    DIE(PL_no_symref, sym, "a HASH");
 		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVHV);
 	    } else {
 		gv = (GV*)sv;
@@ -593,6 +616,7 @@ PP(pp_aassign)
      * clobber a value on the right that's used later in the list.
      */
     if (PL_op->op_private & OPpASSIGN_COMMON) {
+	EXTEND_MORTAL(lastrelem - firstrelem + 1);
         for (relem = firstrelem; relem <= lastrelem; relem++) {
             /*SUPPRESS 560*/
             if (sv = *relem) {
@@ -689,7 +713,7 @@ PP(pp_aassign)
 	    if (SvTHINKFIRST(sv)) {
 		if (SvREADONLY(sv) && PL_curcop != &PL_compiling) {
 		    if (!SvIMMORTAL(sv))
-			DIE(no_modify);
+			DIE(PL_no_modify);
 		    if (relem <= lastrelem)
 			relem++;
 		    break;
@@ -863,9 +887,9 @@ PP(pp_match)
 	    }
 	}
     }
-    safebase = (((gimme == G_ARRAY) || global || !rx->nparens)
-		&& !PL_sawampersand);
-    safebase = safebase ? 0  : REXEC_COPY_STR ;
+    safebase = ((gimme != G_ARRAY && !global && rx->nparens)
+		|| SvTEMP(TARG) || PL_sawampersand)
+		? REXEC_COPY_STR : 0;
     if (pm->op_pmflags & (PMf_MULTILINE|PMf_SINGLELINE)) {
 	SAVEINT(PL_multiline);
 	PL_multiline = pm->op_pmflags & PMf_MULTILINE;
@@ -1055,9 +1079,9 @@ do_readline(void)
     I32 gimme = GIMME_V;
     MAGIC *mg;
 
-    if (SvRMAGICAL(PL_last_in_gv) && (mg = mg_find((SV*)PL_last_in_gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)PL_last_in_gv, 'q')) {
 	PUSHMARK(SP);
-	XPUSHs(mg->mg_obj);
+	XPUSHs(SvTIED_obj((SV*)PL_last_in_gv, mg));
 	PUTBACK;
 	ENTER;
 	perl_call_method("READLINE", gimme);
@@ -1258,8 +1282,12 @@ do_readline(void)
 		IoFLAGS(io) |= IOf_START;
 	    }
 	    else if (type == OP_GLOB) {
-		if (!do_close(PL_last_in_gv, FALSE))
-		    warn("internal error: glob failed");
+		if (!do_close(PL_last_in_gv, FALSE) && ckWARN(WARN_CLOSED)) {
+		    warner(WARN_CLOSED,
+			   "glob failed (child exited with status %d%s)",
+			   STATUS_CURRENT >> 8,
+			   (STATUS_CURRENT & 0x80) ? ", core dumped" : "");
+		}
 	    }
 	    if (gimme == G_SCALAR) {
 		(void)SvOK_off(TARG);
@@ -1363,7 +1391,7 @@ PP(pp_helem)
 	    SV* lv;
 	    SV* key2;
 	    if (!defer)
-		DIE(no_helem, SvPV(keysv, PL_na));
+		DIE(PL_no_helem, SvPV(keysv, PL_na));
 	    lv = sv_newmortal();
 	    sv_upgrade(lv, SVt_PVLV);
 	    LvTYPE(lv) = 'y';
@@ -1461,7 +1489,7 @@ PP(pp_iter)
 
     EXTEND(SP, 1);
     cx = &cxstack[cxstack_ix];
-    if (cx->cx_type != CXt_LOOP)
+    if (CxTYPE(cx) != CXt_LOOP)
 	DIE("panic: pp_iter");
 
     av = cx->blk_loop.iterary;
@@ -1593,7 +1621,7 @@ PP(pp_subst)
     if (SvREADONLY(TARG)
 	|| (SvTYPE(TARG) > SVt_PVLV
 	    && !(SvTYPE(TARG) == SVt_PVGV && SvFAKE(TARG))))
-	croak(no_modify);
+	croak(PL_no_modify);
     PUTBACK;
 
     s = SvPV(TARG, len);
@@ -1622,7 +1650,8 @@ PP(pp_subst)
 		  && SvTYPE(rx->check_substr) == SVt_PVBM
 		  && SvVALID(rx->check_substr)) 
 		? TARG : Nullsv);
-    safebase = (!rx->nparens && !PL_sawampersand) ? 0 : REXEC_COPY_STR;
+    safebase = (rx->nparens || SvTEMP(TARG) || PL_sawampersand)
+		? REXEC_COPY_STR : 0;
     if (pm->op_pmflags & (PMf_MULTILINE|PMf_SINGLELINE)) {
 	SAVEINT(PL_multiline);
 	PL_multiline = pm->op_pmflags & PMf_MULTILINE;
@@ -2004,12 +2033,16 @@ PP(pp_entersub)
 	    else
 		sym = SvPV(sv, PL_na);
 	    if (!sym)
-		DIE(no_usym, "a subroutine");
+		DIE(PL_no_usym, "a subroutine");
 	    if (PL_op->op_private & HINT_STRICT_REFS)
-		DIE(no_symref, sym, "a subroutine");
+		DIE(PL_no_symref, sym, "a subroutine");
 	    cv = perl_get_cv(sym, TRUE);
 	    break;
 	}
+	{
+	    SV **sp = &sv;		/* Used in tryAMAGICunDEREF macro. */
+	    tryAMAGICunDEREF(to_cv);
+	}	
 	cv = (CV*)SvRV(sv);
 	if (SvTYPE(cv) == SVt_PVCV)
 	    break;
@@ -2105,7 +2138,6 @@ PP(pp_entersub)
 	    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "%p: pp_entersub lock %p\n",
 				  thr, sv);)
 	    MUTEX_UNLOCK(MgMUTEXP(mg));
-	    SvREFCNT_inc(sv);	/* Keep alive until magic_mutexfree */
 	    save_destructor(unlock_condpair, sv);
 	}
 	MUTEX_LOCK(CvMUTEXP(cv));
@@ -2268,12 +2300,14 @@ PP(pp_entersub)
 	PUSHBLOCK(cx, CXt_SUB, MARK);
 	PUSHSUB(cx);
 	CvDEPTH(cv)++;
+	/* XXX This would be a natural place to set C<PL_compcv = cv> so
+	 * that eval'' ops within this sub know the correct lexical space.
+	 * Owing the speed considerations, we choose to search for the cv
+	 * in doeval() instead.
+	 */
 	if (CvDEPTH(cv) < 2)
 	    (void)SvREFCNT_inc(cv);
 	else {	/* save temporaries on recursion? */
-	    if (CvDEPTH(cv) == 100 && ckWARN(WARN_RECURSION)
-		  && !(PERLDB_SUB && cv == GvCV(PL_DBsub)))
-		sub_crush_depth(cv);
 	    if (CvDEPTH(cv) > AvFILLp(padlist)) {
 		AV *av;
 		AV *newpad = newAV();
@@ -2373,6 +2407,13 @@ PP(pp_entersub)
 		MARK++;
 	    }
 	}
+	/* warning must come *after* we fully set up the context
+	 * stuff so that __WARN__ handlers can safely dounwind()
+	 * if they want to
+	 */
+	if (CvDEPTH(cv) == 100 && ckWARN(WARN_RECURSION)
+	    && !(PERLDB_SUB && cv == GvCV(PL_DBsub)))
+	    sub_crush_depth(cv);
 #if 0
 	DEBUG_S(PerlIO_printf(PerlIO_stderr(),
 			      "%p entersub returning %p\n", thr, CvSTART(cv)));
@@ -2413,7 +2454,7 @@ PP(pp_aelem)
 	if (!svp || *svp == &PL_sv_undef) {
 	    SV* lv;
 	    if (!defer)
-		DIE(no_aelem, elem);
+		DIE(PL_no_aelem, elem);
 	    lv = sv_newmortal();
 	    sv_upgrade(lv, SVt_PVLV);
 	    LvTYPE(lv) = 'y';
@@ -2443,7 +2484,7 @@ vivify_ref(SV *sv, U32 to_what)
 	mg_get(sv);
     if (!SvOK(sv)) {
 	if (SvREADONLY(sv))
-	    croak(no_modify);
+	    croak(PL_no_modify);
 	if (SvTYPE(sv) < SVt_RV)
 	    sv_upgrade(sv, SVt_RV);
 	else if (SvTYPE(sv) >= SVt_PV) {
@@ -2502,10 +2543,16 @@ PP(pp_method)
 	    !(iogv = gv_fetchpv(packname, FALSE, SVt_PVIO)) ||
 	    !(ob=(SV*)GvIO(iogv)))
 	{
-	    if (!packname || !isIDFIRST(*packname))
+	    if (!packname || 
+		((*(U8*)packname >= 0xc0 && IN_UTF8)
+		    ? !isIDFIRST_utf8((U8*)packname)
+		    : !isIDFIRST(*packname)
+		))
+	    {
 		DIE("Can't call method \"%s\" %s", name,
 		    SvOK(sv)? "without a package or object reference"
 			    : "on an undefined value");
+	    }
 	    stash = gv_stashpvn(packname, packlen, TRUE);
 	    goto fetch;
 	}

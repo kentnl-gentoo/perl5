@@ -7,7 +7,7 @@
 # Create the export list for perl.
 # Needed by AIX to do dynamic linking.
 #
-# This simple program relies on 'global.sym' and few other *.sym files
+# This simple program relies on global.sym and few other *.sym files
 # and the *var*.h files being up to date with all of the global
 # symbols that a dynamic link library might want to access.
 #
@@ -52,9 +52,10 @@ echo "#!" > perl.exp
 # No interp.sym since 5.005_03.
 # perlio.sym will added later if needed.
 
-syms="global.sym thread.sym"
+syms="global.sym pp.sym"
 
 sed -n '/^[A-Za-z]/ s/^/Perl_/p' $syms                 >> perl.exp
+sed -n '/^[A-Za-z]/ s/^/PL_/p'   globvar.sym           >> perl.exp
 
 sed -n 's/^PERLVAR.*(G\([^[,]*\).*/PL_\1/p' perlvars.h >> perl.exp
 sed -n 's/^PERLVAR.*(I\([^[,]*\).*/PL_\1/p' intrpvar.h >> perl.exp

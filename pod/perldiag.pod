@@ -1002,6 +1002,14 @@ for information on I<Mastering Regular Expressions>.)
 (W) You tried to do a connect on a closed socket.  Did you forget to check
 the return value of your socket() call?  See L<perlfunc/connect>.
 
+=item Constant is not %s reference
+
+(F) A constant value (perhaps declared using the C<use constant> pragma)
+is being dereferenced, but it amounts to the wrong type of reference.  The
+message indicates the type of reference that was expected. This usually
+indicates a syntax error in dereferencing the constant value.
+See L<perlsub/"Constant Functions"> and L<constant>.
+
 =item Constant subroutine %s redefined
 
 (S) You redefined a subroutine which had previously been eligible for
@@ -1096,14 +1104,9 @@ unlikely to be what you want.
 (F) An untrapped exception was raised while executing an END subroutine.
 The interpreter is immediately exited.
 
-=item effective %s access is not implemented
+=item entering effective %s failed
 
-(F) We cannot switch the real and effective uids or gids.
-The C<filetest access> pragma is unavailable in this system.
-
-=item entering effective %s access failed
-
-(F) While under the C<filetest access> pragma, switching the real and
+(F) While under the C<use filetest> pragma, switching the real and
 effective uids or gids failed.
 
 =item Error converting file specification %s
@@ -1422,16 +1425,19 @@ and execute the specified command.
 
 (P) Something went badly wrong in the regular expression parser.
 
-=item internal error: glob failed
+=item glob failed (%s)
 
-(P) Something went wrong with the external program(s) used for C<glob>
-and C<E<lt>*.cE<gt>>.  This may mean that your csh (C shell) is
-broken.  If so, you should change all of the csh-related variables in
-config.sh:  If you have tcsh, make the variables refer to it as if it
-were csh (e.g. C<full_csh='/usr/bin/tcsh'>); otherwise, make them all
-empty (except that C<d_csh> should be C<'undef'>) so that Perl will
-think csh is missing.  In either case, after editing config.sh, run
-C<./Configure -S> and rebuild Perl.
+(W) Something went wrong with the external program(s) used for C<glob>
+and C<E<lt>*.cE<gt>>.  Usually, this means that you supplied a C<glob>
+pattern that caused the external program to fail and exit with a nonzero
+status.  If the message indicates that the abnormal exit resulted in a
+coredump, this may also mean that your csh (C shell) is broken.  If so,
+you should change all of the csh-related variables in config.sh:  If you
+have tcsh, make the variables refer to it as if it were csh (e.g.
+C<full_csh='/usr/bin/tcsh'>); otherwise, make them all empty (except that
+C<d_csh> should be C<'undef'>) so that Perl will think csh is missing.
+In either case, after editing config.sh, run C<./Configure -S> and
+rebuild Perl.
 
 =item internal urp in regexp at /%s/
 
@@ -1486,9 +1492,9 @@ L<perlfunc/last>.
 that name, not even if you count where you were called from.  See
 L<perlfunc/last>.
 
-=item leaving effective %s access failed
+=item leaving effective %s failed
 
-(F) While under the C<filetest access> pragma, switching the real and
+(F) While under the C<use filetest> pragma, switching the real and
 effective uids or gids failed.
 
 =item listen() on closed fd
@@ -2427,6 +2433,14 @@ there was a failure.  You probably wanted to use system() instead,
 which does return.  To suppress this warning, put the exec() in a block
 by itself.
 
+=item Strange *+?{} on zero-length expression
+
+(W) You applied a regular expression quantifier in a place where it
+makes no sense, such as on a zero-width assertion.
+Try putting the quantifier inside the assertion instead.  For example,
+the way to match "abc" provided that it is followed by three
+repetitions of "xyz" is C</abc(?=(?:xyz){3})/>, not C</abc(?=xyz){3}/>.
+
 =item Stub found while resolving method `%s' overloading `%s' in package `%s'
 
 (P) Overloading resolution over @ISA tree may be broken by importation stubs.
@@ -2473,6 +2487,11 @@ of an assignment or as a subroutine argument for example).
 
 (F) Your Perl was compiled with B<-D>SETUID_SCRIPTS_ARE_SECURE_NOW, but a
 version of the setuid emulator somehow got run anyway.
+
+=item switching effective %s is not implemented
+
+(F) While under the C<use filetest> pragma, we cannot switch the
+real and effective uids or gids.
 
 =item syntax error
 

@@ -97,7 +97,7 @@ safemalloc(MEM_SIZE size)
     else if (PL_nomemok)
 	return Nullch;
     else {
-	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
+	PerlIO_puts(PerlIO_stderr(),PL_no_mem) FLUSH;
 	my_exit(1);
         return Nullch;
     }
@@ -151,7 +151,7 @@ saferealloc(Malloc_t where,MEM_SIZE size)
     else if (PL_nomemok)
 	return Nullch;
     else {
-	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
+	PerlIO_puts(PerlIO_stderr(),PL_no_mem) FLUSH;
 	my_exit(1);
 	return Nullch;
     }
@@ -206,7 +206,7 @@ safecalloc(MEM_SIZE count, MEM_SIZE size)
     else if (PL_nomemok)
 	return Nullch;
     else {
-	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
+	PerlIO_puts(PerlIO_stderr(),PL_no_mem) FLUSH;
 	my_exit(1);
 	return Nullch;
     }
@@ -486,11 +486,11 @@ perl_new_ctype(char *newctype)
 
     for (i = 0; i < 256; i++) {
 	if (isUPPER_LC(i))
-	    fold_locale[i] = toLOWER_LC(i);
+	    PL_fold_locale[i] = toLOWER_LC(i);
 	else if (isLOWER_LC(i))
-	    fold_locale[i] = toUPPER_LC(i);
+	    PL_fold_locale[i] = toUPPER_LC(i);
 	else
-	    fold_locale[i] = i;
+	    PL_fold_locale[i] = i;
     }
 
 #endif /* USE_LOCALE_CTYPE */
@@ -928,9 +928,9 @@ fbm_compile(SV *sv, U32 flags /* not used yet */)
 
     s = (unsigned char*)(SvPVX(sv));		/* deeper magic */
     for (i = 0; i < len; i++) {
-	if (freq[s[i]] < frequency) {
+	if (PL_freq[s[i]] < frequency) {
 	    rarest = i;
-	    frequency = freq[s[i]];
+	    frequency = PL_freq[s[i]];
 	}
     }
     BmRARE(sv) = s[rarest];
@@ -1137,7 +1137,7 @@ ibcmp(char *s1, char *s2, register I32 len)
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
     while (len--) {
-	if (*a != *b && *a != fold[*b])
+	if (*a != *b && *a != PL_fold[*b])
 	    return 1;
 	a++,b++;
     }
@@ -1150,7 +1150,7 @@ ibcmp_locale(char *s1, char *s2, register I32 len)
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
     while (len--) {
-	if (*a != *b && *a != fold_locale[*b])
+	if (*a != *b && *a != PL_fold_locale[*b])
 	    return 1;
 	a++,b++;
     }
@@ -1878,7 +1878,7 @@ VTOH(vtohl,long)
 #endif
 
     /* VMS' my_popen() is in VMS.c, same with OS/2. */
-#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS)
+#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS) && !defined(__OPEN_VM)
 PerlIO *
 my_popen(char *cmd, char *mode)
 {
@@ -2130,7 +2130,7 @@ rsignal_restore(int signo, Sigsave_t *save)
 #endif /* !HAS_SIGACTION */
 
     /* VMS' my_pclose() is in VMS.c; same with OS/2 */
-#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS)
+#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS) && !defined(__OPEN_VM)
 I32
 my_pclose(PerlIO *ptr)
 {
@@ -2300,10 +2300,8 @@ repeatcpy(register char *to, register char *from, I32 len, register I32 count)
     }
 }
 
-#ifndef CASTNEGFLOAT
 U32
-cast_ulong(f)
-double f;
+cast_ulong(double f)
 {
     long along;
 
@@ -2318,9 +2316,6 @@ double f;
     return (unsigned long)along;
 }
 # undef BIGDOUBLE
-#endif
-
-#ifndef CASTI32
 
 /* Unfortunately, on some systems the cast_uv() function doesn't
    work with the system-supplied definition of ULONG_MAX.  The
@@ -2343,8 +2338,7 @@ double f;
 #endif
 
 I32
-cast_i32(f)
-double f;
+cast_i32(double f)
 {
     if (f >= I32_MAX)
 	return (I32) I32_MAX;
@@ -2354,8 +2348,7 @@ double f;
 }
 
 IV
-cast_iv(f)
-double f;
+cast_iv(double f)
 {
     if (f >= IV_MAX)
 	return (IV) IV_MAX;
@@ -2365,21 +2358,16 @@ double f;
 }
 
 UV
-cast_uv(f)
-double f;
+cast_uv(double f)
 {
     if (f >= MY_UV_MAX)
 	return (UV) MY_UV_MAX;
     return (UV) f;
 }
 
-#endif
-
 #ifndef HAS_RENAME
 I32
-same_dirent(a,b)
-char *a;
-char *b;
+same_dirent(char *a, char *b)
 {
     char *fa = strrchr(a,'/');
     char *fb = strrchr(b,'/');
@@ -2451,7 +2439,7 @@ scan_hex(char *start, I32 len, I32 *retlen)
     while (len-- && *s) {
 	tmp = strchr((char *) PL_hexdigit, *s++);
 	if (!tmp) {
-	    if (*s == '_')
+	    if (*(s-1) == '_' || (*(s-1) == 'x' && retval == 0))
 		continue;
 	    else {
 		dTHR;
@@ -2570,7 +2558,8 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
 #endif
 	    DEBUG_p(PerlIO_printf(Perl_debug_log,
 				  "Looking for %s\n",cur));
-	    if (PerlLIO_stat(cur,&PL_statbuf) >= 0) {
+	    if (PerlLIO_stat(cur,&PL_statbuf) >= 0
+		&& !S_ISDIR(PL_statbuf.st_mode)) {
 		dosearch = 0;
 		scriptname = cur;
 #ifdef SEARCH_EXTS
@@ -2639,6 +2628,9 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
 #endif
 	    	DEBUG_p(PerlIO_printf(Perl_debug_log, "Looking for %s\n",tmpbuf));
 		retval = PerlLIO_stat(tmpbuf,&PL_statbuf);
+		if (S_ISDIR(PL_statbuf.st_mode)) {
+		    retval = -1;
+		}
 #ifdef SEARCH_EXTS
 	    } while (  retval < 0		/* not there */
 		    && extidx>=0 && ext[extidx]	/* try an extension? */
@@ -2661,7 +2653,9 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
 		xfailed = savepv(tmpbuf);
 	}
 #ifndef DOSISH
-	if (!xfound && !seen_dot && !xfailed && (PerlLIO_stat(scriptname,&PL_statbuf) < 0))
+	if (!xfound && !seen_dot && !xfailed &&
+	    (PerlLIO_stat(scriptname,&PL_statbuf) < 0 
+	     || S_ISDIR(PL_statbuf.st_mode)))
 #endif
 	    seen_dot = 1;			/* Disable message. */
 	if (!xfound) {
@@ -2692,15 +2686,13 @@ schedule(void)
 }
 
 void
-perl_cond_init(cp)
-perl_cond *cp;
+perl_cond_init(perl_cond *cp)
 {
     *cp = 0;
 }
 
 void
-perl_cond_signal(cp)
-perl_cond *cp;
+perl_cond_signal(perl_cond *cp)
 {
     perl_os_thread t;
     perl_cond cond = *cp;
@@ -2720,8 +2712,7 @@ perl_cond *cp;
 }
 
 void
-perl_cond_broadcast(cp)
-perl_cond *cp;
+perl_cond_broadcast(perl_cond *cp)
 {
     perl_os_thread t;
     perl_cond cond, cond_next;
@@ -2742,8 +2733,7 @@ perl_cond *cp;
 }
 
 void
-perl_cond_wait(cp)
-perl_cond *cp;
+perl_cond_wait(perl_cond *cp)
 {
     perl_cond cond;
 
@@ -2761,7 +2751,7 @@ perl_cond *cp;
 }
 #endif /* FAKE_THREADS */
 
-#ifdef OLD_PTHREADS_API
+#ifdef PTHREAD_GETSPECIFIC_INT
 struct perl_thread *
 getTHR _((void))
 {
@@ -2771,7 +2761,7 @@ getTHR _((void))
 	croak("panic: pthread_getspecific");
     return (struct perl_thread *) t;
 }
-#endif /* OLD_PTHREADS_API */
+#endif
 
 MAGIC *
 condpair_magic(SV *sv)
@@ -2830,7 +2820,7 @@ new_struct_thread(struct perl_thread *t)
     SvGROW(sv, sizeof(struct perl_thread) + 1);
     SvCUR_set(sv, sizeof(struct perl_thread));
     thr = (Thread) SvPVX(sv);
-    /* debug */
+#ifdef DEBUGGING
     memset(thr, 0xab, sizeof(struct perl_thread));
     PL_markstack = 0;
     PL_scopestack = 0;
@@ -2838,7 +2828,10 @@ new_struct_thread(struct perl_thread *t)
     PL_retstack = 0;
     PL_dirty = 0;
     PL_localizing = 0;
-    /* end debug */
+    Zero(&PL_hv_fetch_ent_mh, 1, HE);
+#else
+    Zero(thr, 1, struct perl_thread);
+#endif
 
     thr->oursv = sv;
     init_stacks(ARGS);
@@ -2951,27 +2944,26 @@ Perl_GetVars(void)
 char **
 get_op_names(void)
 {
- return op_name;
+ return PL_op_name;
 }
 
 char **
 get_op_descs(void)
 {
- return op_desc;
+ return PL_op_desc;
 }
 
 char *
 get_no_modify(void)
 {
- return (char*)no_modify;
+ return (char*)PL_no_modify;
 }
 
 U32 *
 get_opargs(void)
 {
- return opargs;
+ return PL_opargs;
 }
-
 
 SV **
 get_specialsv_list(void)

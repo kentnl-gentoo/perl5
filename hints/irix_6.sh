@@ -219,7 +219,7 @@ if [ "X$use64bits" = "X$define" ]; then
     uname_r=`uname -r`
     case "$uname_r" in
     [1-5]*|6.[01])
-	echo >&4 "IRIX $uname_r" does not support 64-bit types."
+	echo >&4 "IRIX $uname_r does not support 64-bit types."
 	echo >&4 "You should upgrade to at least IRIX 6.2."
 	exit 1
 	;;
@@ -227,7 +227,20 @@ if [ "X$use64bits" = "X$define" ]; then
     case "$ccflags" in
     *-n32*)
         ccflags="$ccflags -DUSE_LONG_LONG"
+	archname64="-n32"
+	d_open64="$undef"
+	# In -n32 mode (ILP32LL64) we use the standard open().
+	# In -64 we will use the open64().
+	cat << 'EOM' >&2
+
+You will see a *** WHOA THERE!!! ***  message from Configure for
+d_open64.  Keep the recommended value.  See hints/irix6.sh
+for more information.
+
+EOM
         ;;
+    *-64*)
+	;;
     esac
-    ccflags="$ccflags -DUSE_64_BIT_FILES -DNO_OPEN64"
+    ccflags="$ccflags -DUSE_64_BIT_FILES"
 fi

@@ -24,7 +24,7 @@ av_reify(AV *av)
     if (AvREAL(av))
 	return;
 #ifdef DEBUGGING
-    if (SvRMAGICAL(av) && mg_find((SV*)av,'P'))
+    if (SvTIED_mg((SV*)av, 'P'))
 	warn("av_reify called on tied array");
 #endif
     key = AvMAX(av) + 1;
@@ -41,6 +41,7 @@ av_reify(AV *av)
     key = AvARRAY(av) - AvALLOC(av);
     while (key)
 	AvALLOC(av)[--key] = &PL_sv_undef;
+    AvREIFY_off(av);
     AvREAL_on(av);
 }
 
@@ -49,14 +50,14 @@ av_extend(AV *av, I32 key)
 {
     dTHR;			/* only necessary if we have to extend stack */
     MAGIC *mg;
-    if (SvRMAGICAL(av) && (mg = mg_find((SV*)av,'P'))) {
+    if (mg = SvTIED_mg((SV*)av, 'P')) {
 	dSP;
 	ENTER;
 	SAVETMPS;
 	PUSHSTACKi(PERLSI_MAGIC);
 	PUSHMARK(SP);
 	EXTEND(SP,2);
-	PUSHs(mg->mg_obj);
+	PUSHs(SvTIED_obj((SV*)av, mg));
 	PUSHs(sv_2mortal(newSViv(key+1)));
         PUTBACK;
 	perl_call_method("EXTEND", G_SCALAR|G_DISCARD);
@@ -216,7 +217,7 @@ av_store(register AV *av, I32 key, SV *val)
     }
 
     if (SvREADONLY(av) && key >= AvFILL(av))
-	croak(no_modify);
+	croak(PL_no_modify);
 
     if (SvRMAGICAL(av)) {
 	if (mg_find((SV*)av,'P')) {
@@ -335,7 +336,7 @@ av_clear(register AV *av)
     /*SUPPRESS 560*/
 
     if (SvREADONLY(av))
-	croak(no_modify);
+	croak(PL_no_modify);
 
     /* Give any tie a chance to cleanup first */
     if (SvRMAGICAL(av))
@@ -370,7 +371,7 @@ av_undef(register AV *av)
     /*SUPPRESS 560*/
 
     /* Give any tie a chance to cleanup first */
-    if (SvRMAGICAL(av) && mg_find((SV*)av,'P')) 
+    if (SvTIED_mg((SV*)av, 'P')) 
 	av_fill(av, -1);   /* mg_clear() ? */
 
     if (AvREAL(av)) {
@@ -395,14 +396,14 @@ av_push(register AV *av, SV *val)
     if (!av)
 	return;
     if (SvREADONLY(av))
-	croak(no_modify);
+	croak(PL_no_modify);
 
-    if (SvRMAGICAL(av) && (mg = mg_find((SV*)av,'P'))) {
+    if (mg = SvTIED_mg((SV*)av, 'P')) {
 	dSP;
 	PUSHSTACKi(PERLSI_MAGIC);
 	PUSHMARK(SP);
 	EXTEND(SP,2);
-	PUSHs(mg->mg_obj);
+	PUSHs(SvTIED_obj((SV*)av, mg));
 	PUSHs(val);
 	PUTBACK;
 	ENTER;
@@ -423,12 +424,12 @@ av_pop(register AV *av)
     if (!av || AvFILL(av) < 0)
 	return &PL_sv_undef;
     if (SvREADONLY(av))
-	croak(no_modify);
-    if (SvRMAGICAL(av) && (mg = mg_find((SV*)av,'P'))) {
+	croak(PL_no_modify);
+    if (mg = SvTIED_mg((SV*)av, 'P')) {
 	dSP;    
 	PUSHSTACKi(PERLSI_MAGIC);
 	PUSHMARK(SP);
-	XPUSHs(mg->mg_obj);
+	XPUSHs(SvTIED_obj((SV*)av, mg));
 	PUTBACK;
 	ENTER;
 	if (perl_call_method("POP", G_SCALAR)) {
@@ -457,14 +458,14 @@ av_unshift(register AV *av, register I32 num)
     if (!av || num <= 0)
 	return;
     if (SvREADONLY(av))
-	croak(no_modify);
+	croak(PL_no_modify);
 
-    if (SvRMAGICAL(av) && (mg = mg_find((SV*)av,'P'))) {
+    if (mg = SvTIED_mg((SV*)av, 'P')) {
 	dSP;
 	PUSHSTACKi(PERLSI_MAGIC);
 	PUSHMARK(SP);
 	EXTEND(SP,1+num);
-	PUSHs(mg->mg_obj);
+	PUSHs(SvTIED_obj((SV*)av, mg));
 	while (num-- > 0) {
 	    PUSHs(&PL_sv_undef);
 	}
@@ -509,12 +510,12 @@ av_shift(register AV *av)
     if (!av || AvFILL(av) < 0)
 	return &PL_sv_undef;
     if (SvREADONLY(av))
-	croak(no_modify);
-    if (SvRMAGICAL(av) && (mg = mg_find((SV*)av,'P'))) {
+	croak(PL_no_modify);
+    if (mg = SvTIED_mg((SV*)av, 'P')) {
 	dSP;
 	PUSHSTACKi(PERLSI_MAGIC);
 	PUSHMARK(SP);
-	XPUSHs(mg->mg_obj);
+	XPUSHs(SvTIED_obj((SV*)av, mg));
 	PUTBACK;
 	ENTER;
 	if (perl_call_method("SHIFT", G_SCALAR)) {
@@ -551,14 +552,14 @@ av_fill(register AV *av, I32 fill)
 	croak("panic: null array");
     if (fill < 0)
 	fill = -1;
-    if (SvRMAGICAL(av) && (mg = mg_find((SV*)av,'P'))) {
+    if (mg = SvTIED_mg((SV*)av, 'P')) {
 	dSP;            
 	ENTER;
 	SAVETMPS;
 	PUSHSTACKi(PERLSI_MAGIC);
 	PUSHMARK(SP);
 	EXTEND(SP,2);
-	PUSHs(mg->mg_obj);
+	PUSHs(SvTIED_obj((SV*)av, mg));
 	PUSHs(sv_2mortal(newSViv(fill+1)));
 	PUTBACK;
 	perl_call_method("STORESIZE", G_SCALAR|G_DISCARD);

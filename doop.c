@@ -215,10 +215,9 @@ do_trans_UU_count(SV *sv)
     send = s + len;
 
     while (s < send) {
-	if ((uv = swash_fetch(rv, s)) < none) {
-	    s += UTF8SKIP(s);
+	if ((uv = swash_fetch(rv, s)) < none)
 	    matches++;
-	}
+	s += UTF8SKIP(s);
     }
 
     return matches;
@@ -598,7 +597,7 @@ do_trans(SV *sv)
     STRLEN len;
 
     if (SvREADONLY(sv) && !(PL_op->op_private & OPpTRANS_IDENTICAL))
-	croak(no_modify);
+	croak(PL_no_modify);
 
     (void)SvPV(sv, len);
     if (!len)
@@ -1062,7 +1061,7 @@ do_kv(ARGSproto)
 	    RETURN;
 	}
 
-	if (!SvRMAGICAL(keys) || !mg_find((SV*)keys,'P'))
+	if (! SvTIED_mg((SV*)keys, 'P'))
 	    i = HvKEYS(keys);
 	else {
 	    i = 0;

@@ -32,6 +32,18 @@
 #   include <vm/vm_param.h>
 #endif
 
+#ifndef S_IRWXU
+#   ifdef S_IRUSR
+#       define S_IRWXU (S_IRUSR|S_IWUSR|S_IWUSR)
+#       define S_IRWXG (S_IRGRP|S_IWGRP|S_IWGRP)
+#       define S_IRWXO (S_IROTH|S_IWOTH|S_IWOTH)
+#   else
+#       define S_IRWXU 0700
+#       define S_IRWXG 0070
+#       define S_IRWXO 0007
+#   endif
+#endif
+
 MODULE=IPC::SysV	PACKAGE=IPC::Msg::stat
 
 PROTOTYPES: ENABLE
@@ -183,7 +195,7 @@ ftok(path, id)
         key_t k = ftok(path, id);
         ST(0) = k == (key_t) -1 ? &PL_sv_undef : sv_2mortal(newSViv(k));
 #else
-        DIE(no_func, "ftok");
+        DIE(PL_no_func, "ftok");
 #endif
 
 int

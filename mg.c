@@ -31,6 +31,7 @@
 #else
 #  define VTBL			*vtbl
 static void restore_magic _((void *p));
+static int magic_methcall(SV *sv, MAGIC *mg, char *meth, I32 f, int n, SV *val);
 #endif
 
 /*
@@ -94,10 +95,13 @@ restore_magic(void *p)
      */
     if (PL_savestack_ix == mgs->mgs_ss_ix)
     {
-        assert(SSPOPINT == SAVEt_DESTRUCTOR);
+	I32 popval = SSPOPINT;
+        assert(popval == SAVEt_DESTRUCTOR);
         PL_savestack_ix -= 2;
-        assert(SSPOPINT == SAVEt_ALLOC);
-        PL_savestack_ix -= SSPOPINT;
+	popval = SSPOPINT;
+        assert(popval == SAVEt_ALLOC);
+	popval = SSPOPINT;
+        PL_savestack_ix -= popval;
     }
 
 }
@@ -277,7 +281,9 @@ mg_copy(SV *sv, SV *nsv, char *key, I32 klen)
     MAGIC* mg;
     for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
 	if (isUPPER(mg->mg_type)) {
-	    sv_magic(nsv, mg->mg_obj, toLOWER(mg->mg_type), key, klen);
+	    sv_magic(nsv,
+		     mg->mg_type == 'P' ? SvTIED_obj(sv, mg) : mg->mg_obj,
+		     toLOWER(mg->mg_type), key, klen);
 	    count++;
 	}
     }
@@ -461,15 +467,15 @@ magic_get(SV *sv, MAGIC *mg)
 	break;
     case '\002':		/* ^B */
 	/* printf("magic_get $^B: ") ; */
-	if (curcop->cop_warnings == WARN_NONE)
+	if (PL_curcop->cop_warnings == WARN_NONE)
 	    /* printf("WARN_NONE\n"), */
 	    sv_setpvn(sv, WARN_NONEstring, WARNsize) ;
-        else if (curcop->cop_warnings == WARN_ALL)
+        else if (PL_curcop->cop_warnings == WARN_ALL)
 	    /* printf("WARN_ALL\n"), */
 	    sv_setpvn(sv, WARN_ALLstring, WARNsize) ;
         else 
-	    /* printf("some %s\n", printW(curcop->cop_warnings)), */
-	    sv_setsv(sv, curcop->cop_warnings);
+	    /* printf("some %s\n", printW(PL_curcop->cop_warnings)), */
+	    sv_setsv(sv, PL_curcop->cop_warnings);
 	break;
     case '\004':		/* ^D */
 	sv_setiv(sv, (IV)(PL_debug & 32767));
@@ -493,8 +499,11 @@ magic_get(SV *sv, MAGIC *mg)
 	    sv_setnv(sv, (double)errno);
 	    sv_setpv(sv, errno ? Strerror(errno) : "");
 	} else {
-	    if (errno != errno_isOS2)
-		Perl_rc = _syserrno();
+	    if (errno != errno_isOS2) {
+		int tmp = _syserrno();
+		if (tmp)	/* 2nd call to _syserrno() makes it 0 */
+		    Perl_rc = tmp;
+	    }
 	    sv_setnv(sv, (double)Perl_rc);
 	    sv_setpv(sv, os2error(Perl_rc));
 	}
@@ -896,8 +905,8 @@ magic_getsig(SV *sv, MAGIC *mg)
     /* Are we fetching a signal entry? */
     i = whichsig(MgPV(mg,PL_na));
     if (i) {
-    	if(psig_ptr[i])
-    	    sv_setsv(sv,psig_ptr[i]);
+    	if(PL_psig_ptr[i])
+    	    sv_setsv(sv,PL_psig_ptr[i]);
     	else {
     	    Sighandler_t sigstate = rsignal_state(i);
 
@@ -906,7 +915,7 @@ magic_getsig(SV *sv, MAGIC *mg)
     	    	sv_setpv(sv,"IGNORE");
     	    else
     	    	sv_setsv(sv,&PL_sv_undef);
-    	    psig_ptr[i] = SvREFCNT_inc(sv);
+    	    PL_psig_ptr[i] = SvREFCNT_inc(sv);
     	    SvTEMP_off(sv);
     	}
     }
@@ -919,13 +928,13 @@ magic_clearsig(SV *sv, MAGIC *mg)
     /* Are we clearing a signal entry? */
     i = whichsig(MgPV(mg,PL_na));
     if (i) {
-    	if(psig_ptr[i]) {
-    	    SvREFCNT_dec(psig_ptr[i]);
-    	    psig_ptr[i]=0;
+    	if(PL_psig_ptr[i]) {
+    	    SvREFCNT_dec(PL_psig_ptr[i]);
+    	    PL_psig_ptr[i]=0;
     	}
-    	if(psig_name[i]) {
-    	    SvREFCNT_dec(psig_name[i]);
-    	    psig_name[i]=0;
+    	if(PL_psig_name[i]) {
+    	    SvREFCNT_dec(PL_psig_name[i]);
+    	    PL_psig_name[i]=0;
     	}
     }
     return 0;
@@ -962,12 +971,12 @@ magic_setsig(SV *sv, MAGIC *mg)
 		warner(WARN_SIGNAL, "No such signal: SIG%s", s);
 	    return 0;
 	}
-	SvREFCNT_dec(psig_name[i]);
-	SvREFCNT_dec(psig_ptr[i]);
-	psig_ptr[i] = SvREFCNT_inc(sv);
+	SvREFCNT_dec(PL_psig_name[i]);
+	SvREFCNT_dec(PL_psig_ptr[i]);
+	PL_psig_ptr[i] = SvREFCNT_inc(sv);
 	SvTEMP_off(sv); /* Make sure it doesn't go away on us */
-	psig_name[i] = newSVpv(s, strlen(s));
-	SvREADONLY_on(psig_name[i]);
+	PL_psig_name[i] = newSVpv(s, strlen(s));
+	SvREADONLY_on(PL_psig_name[i]);
     }
     if (SvTYPE(sv) == SVt_PVGV || SvROK(sv)) {
 	if (i)
@@ -1033,7 +1042,7 @@ magic_getnkeys(SV *sv, MAGIC *mg)
 
     if (hv) {
 	(void) hv_iterinit(hv);
-	if (!SvRMAGICAL(hv) || !mg_find((SV*)hv,'P'))
+	if (! SvTIED_mg((SV*)hv, 'P'))
 	    i = HvKEYS(hv);
 	else {
 	    /*SUPPRESS 560*/
@@ -1058,13 +1067,13 @@ magic_setnkeys(SV *sv, MAGIC *mg)
 
 /* caller is responsible for stack switching/cleanup */
 STATIC int
-magic_methcall(MAGIC *mg, char *meth, I32 flags, int n, SV *val)
+magic_methcall(SV *sv, MAGIC *mg, char *meth, I32 flags, int n, SV *val)
 {
     dSP;
 
     PUSHMARK(SP);
     EXTEND(SP, n);
-    PUSHs(mg->mg_obj);
+    PUSHs(SvTIED_obj(sv, mg));
     if (n > 1) { 
 	if (mg->mg_ptr) {
 	    if (mg->mg_len >= 0)
@@ -1093,7 +1102,7 @@ magic_methpack(SV *sv, MAGIC *mg, char *meth)
     SAVETMPS;
     PUSHSTACKi(PERLSI_MAGIC);
 
-    if (magic_methcall(mg, meth, G_SCALAR, 2, NULL)) {
+    if (magic_methcall(sv, mg, meth, G_SCALAR, 2, NULL)) {
 	sv_setsv(sv, *PL_stack_sp--);
     }
 
@@ -1118,7 +1127,7 @@ magic_setpack(SV *sv, MAGIC *mg)
     dSP;
     ENTER;
     PUSHSTACKi(PERLSI_MAGIC);
-    magic_methcall(mg, "STORE", G_SCALAR|G_DISCARD, 3, sv);
+    magic_methcall(sv, mg, "STORE", G_SCALAR|G_DISCARD, 3, sv);
     POPSTACK;
     LEAVE;
     return 0;
@@ -1140,7 +1149,7 @@ magic_sizepack(SV *sv, MAGIC *mg)
     ENTER;
     SAVETMPS;
     PUSHSTACKi(PERLSI_MAGIC);
-    if (magic_methcall(mg, "FETCHSIZE", G_SCALAR, 2, NULL)) {
+    if (magic_methcall(sv, mg, "FETCHSIZE", G_SCALAR, 2, NULL)) {
 	sv = *PL_stack_sp--;
 	retval = (U32) SvIV(sv)-1;
     }
@@ -1157,7 +1166,7 @@ int magic_wipepack(SV *sv, MAGIC *mg)
     ENTER;
     PUSHSTACKi(PERLSI_MAGIC);
     PUSHMARK(SP);
-    XPUSHs(mg->mg_obj);
+    XPUSHs(SvTIED_obj(sv, mg));
     PUTBACK;
     perl_call_method("CLEAR", G_SCALAR|G_DISCARD);
     POPSTACK;
@@ -1176,7 +1185,7 @@ magic_nextpack(SV *sv, MAGIC *mg, SV *key)
     PUSHSTACKi(PERLSI_MAGIC);
     PUSHMARK(SP);
     EXTEND(SP, 2);
-    PUSHs(mg->mg_obj);
+    PUSHs(SvTIED_obj(sv, mg));
     if (SvOK(key))
 	PUSHs(key);
     PUTBACK;
@@ -1539,7 +1548,7 @@ vivify_defelem(SV *sv)
 		value = *svp;
 	}
 	if (!value || value == &PL_sv_undef)
-	    croak(no_helem, SvPV(mg->mg_obj, PL_na));
+	    croak(PL_no_helem, SvPV(mg->mg_obj, PL_na));
     }
     else {
 	AV* av = (AV*)LvTARG(sv);
@@ -1548,7 +1557,7 @@ vivify_defelem(SV *sv)
 	else {
 	    SV** svp = av_fetch(av, LvTARGOFF(sv), TRUE);
 	    if (!svp || (value = *svp) == &PL_sv_undef)
-		croak(no_aelem, (I32)LvTARGOFF(sv));
+		croak(PL_no_aelem, (I32)LvTARGOFF(sv));
 	}
     }
     (void)SvREFCNT_inc(value);
@@ -1607,7 +1616,7 @@ int
 magic_setcollxfrm(SV *sv, MAGIC *mg)
 {
     /*
-     * René Descartes said "I think not."
+     * RenE<eacute> Descartes said "I think not."
      * and vanished with a faint plop.
      */
     if (mg->mg_ptr) {
@@ -1633,15 +1642,15 @@ magic_set(SV *sv, MAGIC *mg)
     case '\002':	/* ^B */
 	if ( ! (PL_dowarn & G_WARN_ALL_MASK)) {
             if (memEQ(SvPVX(sv), WARN_ALLstring, WARNsize))
-	        compiling.cop_warnings = WARN_ALL;
+	        PL_compiling.cop_warnings = WARN_ALL;
 	    else if (memEQ(SvPVX(sv), WARN_NONEstring, WARNsize))
-	        compiling.cop_warnings = WARN_NONE;
+	        PL_compiling.cop_warnings = WARN_NONE;
             else {
-	        if (compiling.cop_warnings != WARN_NONE && 
-		    compiling.cop_warnings != WARN_ALL)
-	            sv_setsv(compiling.cop_warnings, sv);
+	        if (PL_compiling.cop_warnings != WARN_NONE && 
+		    PL_compiling.cop_warnings != WARN_ALL)
+	            sv_setsv(PL_compiling.cop_warnings, sv);
 	        else
-		    compiling.cop_warnings = newSVsv(sv) ;
+		    PL_compiling.cop_warnings = newSVsv(sv) ;
 	    }
 	}
 	break;
@@ -2001,7 +2010,6 @@ magic_mutexfree(SV *sv, MAGIC *mg)
 	croak("panic: magic_mutexfree");
     MUTEX_DESTROY(MgMUTEXP(mg));
     COND_DESTROY(MgCONDP(mg));
-    SvREFCNT_dec(sv);
     return 0;
 }
 #endif /* USE_THREADS */
@@ -2011,9 +2019,9 @@ whichsig(char *sig)
 {
     register char **sigv;
 
-    for (sigv = sig_name+1; *sigv; sigv++)
+    for (sigv = PL_sig_name+1; *sigv; sigv++)
 	if (strEQ(sig,*sigv))
-	    return sig_num[sigv - sig_name];
+	    return PL_sig_num[sigv - PL_sig_name];
 #ifdef SIGCLD
     if (strEQ(sig,"CHLD"))
 	return SIGCLD;
@@ -2062,9 +2070,9 @@ sighandler(int sig)
     if (PL_scopestack_ix < PL_scopestack_max - 3)
 	flags |= 16;
 
-    if (!psig_ptr[sig])
+    if (!PL_psig_ptr[sig])
 	die("Signal SIG%s received, but no signal handler set.\n",
-	    sig_name[sig]);
+	    PL_sig_name[sig]);
 
     /* Max number of items pushed there is 3*n or 4. We cannot fix
        infinity, so we fix 4 (in fact 5): */
@@ -2082,27 +2090,27 @@ sighandler(int sig)
     if (flags & 16)
 	PL_scopestack_ix += 1;
     /* sv_2cv is too complicated, try a simpler variant first: */
-    if (!SvROK(psig_ptr[sig]) || !(cv = (CV*)SvRV(psig_ptr[sig])) 
+    if (!SvROK(PL_psig_ptr[sig]) || !(cv = (CV*)SvRV(PL_psig_ptr[sig])) 
 	|| SvTYPE(cv) != SVt_PVCV)
-	cv = sv_2cv(psig_ptr[sig],&st,&gv,TRUE);
+	cv = sv_2cv(PL_psig_ptr[sig],&st,&gv,TRUE);
 
     if (!cv || !CvROOT(cv)) {
 	if (ckWARN(WARN_SIGNAL))
 	    warner(WARN_SIGNAL, "SIG%s handler \"%s\" not defined.\n",
-		sig_name[sig], (gv ? GvENAME(gv)
+		PL_sig_name[sig], (gv ? GvENAME(gv)
 				: ((cv && CvGV(cv))
 				   ? GvENAME(CvGV(cv))
 				   : "__ANON__")));
 	goto cleanup;
     }
 
-    if(psig_name[sig]) {
-    	sv = SvREFCNT_inc(psig_name[sig]);
+    if(PL_psig_name[sig]) {
+    	sv = SvREFCNT_inc(PL_psig_name[sig]);
 	flags |= 64;
 	sig_sv = sv;
     } else {
 	sv = sv_newmortal();
-	sv_setpv(sv,sig_name[sig]);
+	sv_setpv(sv,PL_sig_name[sig]);
     }
 
     PUSHSTACKi(PERLSI_SIGNAL);

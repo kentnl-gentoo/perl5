@@ -29,7 +29,9 @@ while (<GR>) {
     @s = split /:/;
     if (@s == 4) {
 	my ($name_s,$passwd_s,$gid_s,$members_s) = @s;
-	$members_s =~ s/ /,/g;
+	$members_s =~ s/\s*,\s*/,/g;
+	$members_s =~ s/\s+$//;
+	$members_s =~ s/^\s+//;
 	@n = getgrgid($gid_s);
 	# 'nogroup' et al.
 	next unless @n;
@@ -40,7 +42,7 @@ while (<GR>) {
 	    ($name,$passwd,$gid,$members) = @n;
 	    next if $name_s ne $name;
 	}
-	$members =~ s/ /,/g;
+	$members =~ s/\s+/,/g;
 	$not = 1, last
 	    if $name    ne $name_s    or
 # Shadow passwords confuse this.

@@ -530,6 +530,8 @@ C<REFCNT> (corresponding to the C function C<SvREFCNT>).
 
 =item XSUBANY
 
+=item CvFLAGS
+
 =back
 
 =head2 B::HV METHODS
@@ -576,7 +578,7 @@ This returns the function name as a string (e.g. pp_add, pp_rv2av).
 
 =item desc
 
-This returns the op description from the global C op_desc array
+This returns the op description from the global C PL_op_desc array
 (e.g. "addition" "array deref").
 
 =item targ

@@ -92,7 +92,7 @@ perl_alloc(void)
 
 void
 #ifdef PERL_OBJECT
-CPerlObj::perl_construct(void)
+perl_construct(void)
 #else
 perl_construct(register PerlInterpreter *sv_interp)
 #endif
@@ -235,7 +235,7 @@ perl_construct(register PerlInterpreter *sv_interp)
 
 void
 #ifdef PERL_OBJECT
-CPerlObj::perl_destruct(void)
+perl_destruct(void)
 #else
 perl_destruct(register PerlInterpreter *sv_interp)
 #endif
@@ -593,7 +593,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
 
 void
 #ifdef PERL_OBJECT
-CPerlObj::perl_free(void)
+perl_free(void)
 #else
 perl_free(PerlInterpreter *sv_interp)
 #endif
@@ -609,7 +609,7 @@ perl_free(PerlInterpreter *sv_interp)
 
 void
 #ifdef PERL_OBJECT
-CPerlObj::perl_atexit(void (*fn) (CPerlObj*,void *), void *ptr)
+perl_atexit(void (*fn) (CPerlObj*,void *), void *ptr)
 #else
 perl_atexit(void (*fn) (void *), void *ptr)
 #endif
@@ -622,7 +622,7 @@ perl_atexit(void (*fn) (void *), void *ptr)
 
 int
 #ifdef PERL_OBJECT
-CPerlObj::perl_parse(void (*xsinit) (CPerlObj*), int argc, char **argv, char **env)
+perl_parse(void (*xsinit) (CPerlObj*), int argc, char **argv, char **env)
 #else
 perl_parse(PerlInterpreter *sv_interp, void (*xsinit) (void), int argc, char **argv, char **env)
 #endif
@@ -813,13 +813,10 @@ setuid perl scripts securely.\n");
 #else
 		sv_catpv(PL_Sv,"print \"\\nCharacteristics of this binary (from libperl): \\n\",");
 #endif
-#if defined(DEBUGGING) || defined(NO_EMBED) || defined(MULTIPLICITY)
+#if defined(DEBUGGING) || defined(MULTIPLICITY)
 		sv_catpv(PL_Sv,"\"  Compile-time options:");
 #  ifdef DEBUGGING
 		sv_catpv(PL_Sv," DEBUGGING");
-#  endif
-#  ifdef NO_EMBED
-		sv_catpv(PL_Sv," NO_EMBED");
 #  endif
 #  ifdef MULTIPLICITY
 		sv_catpv(PL_Sv," MULTIPLICITY");
@@ -1018,7 +1015,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
 
 int
 #ifdef PERL_OBJECT
-CPerlObj::perl_run(void)
+perl_run(void)
 #else
 perl_run(PerlInterpreter *sv_interp)
 #endif
@@ -1749,6 +1746,12 @@ moreswitches(char *s)
 #ifdef __VOS__
 	printf("Stratus VOS port by Paul_Green@stratus.com, 1997-1998\n");
 #endif
+#ifdef __OPEN_VM
+	printf("VM/ESA port by Neale Ferguson, 1998\n");
+#endif
+#ifdef POSIX_BC
+	printf("BS2000 (POSIX) port by Start Amadeus GmbH, 1998\n");
+#endif
 #ifdef BINARY_BUILD_NOTICE
 	BINARY_BUILD_NOTICE;
 #endif
@@ -1766,12 +1769,12 @@ Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
 	return s;
     case 'W':
 	PL_dowarn = G_WARN_ALL_ON|G_WARN_ON; 
-	compiling.cop_warnings = WARN_ALL ;
+	PL_compiling.cop_warnings = WARN_ALL ;
 	s++;
 	return s;
     case 'X':
 	PL_dowarn = G_WARN_ALL_OFF; 
-	compiling.cop_warnings = WARN_NONE ;
+	PL_compiling.cop_warnings = WARN_NONE ;
 	s++;
 	return s;
     case '*':
@@ -1939,7 +1942,7 @@ init_main_stash(void)
     PL_debstash = GvHV(gv_fetchpv("DB::", GV_ADDMULTI, SVt_PVHV));
     PL_globalstash = GvHV(gv_fetchpv("CORE::GLOBAL::", GV_ADDMULTI, SVt_PVHV));
     /* We must init $/ before switches are processed. */
-    sv_setpvn(GvSV(gv_fetchpv("/", TRUE, SVt_PV)), "\n", 1);
+    sv_setpvn(perl_get_sv("/", TRUE), "\n", 1);
 }
 
 STATIC void
@@ -2008,6 +2011,21 @@ sed %s -e \"/^[^#]/b\" \
  %s | %_ -C %_ %s",
 	  (PL_doextract ? "-e \"1,/^#/d\n\"" : ""),
 #else
+#  ifdef __OPEN_VM
+	sv_setpvf(cmd, "\
+%s %s -e '/^[^#]/b' \
+ -e '/^#[ 	]*include[ 	]/b' \
+ -e '/^#[ 	]*define[ 	]/b' \
+ -e '/^#[ 	]*if[ 	]/b' \
+ -e '/^#[ 	]*ifdef[ 	]/b' \
+ -e '/^#[ 	]*ifndef[ 	]/b' \
+ -e '/^#[ 	]*else/b' \
+ -e '/^#[ 	]*elif[ 	]/b' \
+ -e '/^#[ 	]*undef[ 	]/b' \
+ -e '/^#[ 	]*endif/b' \
+ -e 's/^[ 	]*#.*//' \
+ %s | %_ %_ %s",
+#  else
 	sv_setpvf(cmd, "\
 %s %s -e '/^[^#]/b' \
  -e '/^#[ 	]*include[ 	]/b' \
@@ -2021,6 +2039,7 @@ sed %s -e \"/^[^#]/b\" \
  -e '/^#[ 	]*endif/b' \
  -e 's/^[ 	]*#.*//' \
  %s | %_ -C %_ %s",
+#  endif
 #ifdef LOC_SED
 	  LOC_SED,
 #else

@@ -35,7 +35,9 @@ print "ok ",$i++,"\n";
 
 # compile-time failure in require
 do_require "1)\n";
-print "# $@\nnot " unless $@ =~ /syntax error/i;
+# bison says 'parse error' instead of 'syntax error',
+# various yaccs may or may not capitalize 'syntax'.
+print "# $@\nnot " unless $@ =~ /(syntax|parse) error/mi;
 print "ok ",$i++,"\n";
 
 # successful require

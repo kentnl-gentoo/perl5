@@ -911,6 +911,8 @@
 #define do_vecset           pPerl->Perl_do_vecset
 #undef  do_vop
 #define do_vop              pPerl->Perl_do_vop
+#undef  dofile
+#define dofile              pPerl->Perl_dofile
 #undef  dowantarray
 #define dowantarray         pPerl->Perl_dowantarray
 #undef  dump_all
@@ -960,7 +962,7 @@
 #undef  fold_constants
 #define fold_constants      pPerl->Perl_fold_constants
 #undef  fprintf
-#define fprintf             pPerl->fprintf
+#define fprintf             pPerl->Perl_fprintf
 #undef  free_tmps
 #define free_tmps           pPerl->Perl_free_tmps
 #undef  gen_constant_list
@@ -1492,6 +1494,16 @@
 #define peep                pPerl->Perl_peep
 #undef  perl_atexit
 #define perl_atexit         pPerl->perl_atexit
+#undef  perl_free
+#define perl_free         pPerl->perl_free
+#undef  perl_construct
+#define perl_construct         pPerl->perl_construct
+#undef  perl_destruct
+#define perl_destruct         pPerl->perl_destruct
+#undef  perl_parse
+#define perl_parse         pPerl->perl_parse
+#undef  perl_run
+#define perl_run         pPerl->perl_run
 #undef  perl_call_argv
 #define perl_call_argv      pPerl->perl_call_argv
 #undef  perl_call_method
@@ -1636,6 +1648,8 @@
 #define save_freeop         pPerl->Perl_save_freeop
 #undef  save_freepv
 #define save_freepv         pPerl->Perl_save_freepv
+#undef  save_generic_svref
+#define save_generic_svref  pPerl->Perl_generic_save_svref
 #undef  save_gp
 #define save_gp             pPerl->Perl_save_gp
 #undef  save_hash

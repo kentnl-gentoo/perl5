@@ -27,7 +27,8 @@ dep(void)
 %start prog
 
 %{
-#ifndef OEMVS
+/* I sense a Big Blue pattern here... */
+#if !defined(OEMVS) && !defined(__OPEN_VM) && !defined(POSIX_BC)
 %}
 
 %union {
@@ -38,7 +39,11 @@ dep(void)
 }
 
 %{
-#endif /* OEMVS */
+#endif /* !OEMVS && !__OPEN_VM && !POSIX_BC */
+
+#ifdef USE_PURE_BISON
+#define YYLEX_PARAM (&yychar)
+#endif
 %}
 
 %token <ival> '{' ')'
@@ -512,7 +517,7 @@ term	:	term ASSIGNOP term
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
 			    append_elem(OP_LIST, $3, scalar($2))); }
 	|	DO term	%prec UNIOP
-			{ $$ = newUNOP(OP_DOFILE, 0, scalar($2)); }
+			{ $$ = dofile($2); }
 	|	DO block	%prec '('
 			{ $$ = newUNOP(OP_NULL, OPf_SPECIAL, scope($2)); }
 	|	DO WORD '(' ')'

@@ -61,6 +61,18 @@ static void restore_lex_expect _((void *e));
 static char ident_too_long[] = "Identifier too long";
 
 #define UTF (PL_hints & HINT_UTF8)
+/*
+ * Note: we try to be careful never to call the isXXX_utf8() functions
+ * unless we're pretty sure we've seen the beginning of a UTF-8 character
+ * (that is, the two high bits are set).  Otherwise we risk loading in the
+ * heavy-duty SWASHINIT and SWASHGET routines unnecessarily.
+ */
+#define isIDFIRST_lazy(p) ((!UTF || (*((U8*)p) < 0xc0)) \
+				? isIDFIRST(*(p)) \
+				: isIDFIRST_utf8((U8*)p))
+#define isALNUM_lazy(p) ((!UTF || (*((U8*)p) < 0xc0)) \
+				? isALNUM(*(p)) \
+				: isALNUM_utf8((U8*)p))
 
 /* The following are arranged oddly so that the guard on the switch statement
  * can get by with a single comparison (if the compiler is smart enough).
@@ -95,6 +107,18 @@ static char ident_too_long[] = "Identifier too long";
 
 #ifdef ff_next
 #undef ff_next
+#endif
+
+#ifdef USE_PURE_BISON
+YYSTYPE* yylval_pointer = NULL;
+int* yychar_pointer = NULL;
+#  undef yylval
+#  undef yychar
+#  define yylval (*yylval_pointer)
+#  define yychar (*yychar_pointer)
+#  define PERL_YYLEX_PARAM yylval_pointer,yychar_pointer
+#else
+#  define PERL_YYLEX_PARAM
 #endif
 
 #include "keywords.h"
@@ -167,9 +191,9 @@ no_op(char *what, char *s)
     yywarn(form("%s found where operator expected", what));
     if (is_first)
 	warn("\t(Missing semicolon on previous line?)\n");
-    else if (PL_oldoldbufptr && isIDFIRST(*PL_oldoldbufptr)) {
+    else if (PL_oldoldbufptr && isIDFIRST_lazy(PL_oldoldbufptr)) {
 	char *t;
-	for (t = PL_oldoldbufptr; *t && (isALNUM(*t) || *t == ':'); t++) ;
+	for (t = PL_oldoldbufptr; *t && (isALNUM_lazy(t) || *t == ':'); t++) ;
 	if (t < PL_bufptr && isSPACE(*t))
 	    warn("\t(Do you need to predeclare %.*s?)\n",
 		t - PL_oldoldbufptr, PL_oldoldbufptr);
@@ -476,7 +500,7 @@ check_uni(void) {
 	return;
     while (isSPACE(*PL_last_uni))
 	PL_last_uni++;
-    for (s = PL_last_uni; isALNUM(*s) || *s == '-'; s++) ;
+    for (s = PL_last_uni; isALNUM_lazy(s) || *s == '-'; s++) ;
     if ((t = strchr(s, '(')) && t < PL_bufptr)
 	return;
     ch = *s;
@@ -552,7 +576,7 @@ force_word(register char *start, int token, int check_keyword, int allow_pack, i
     
     start = skipspace(start);
     s = start;
-    if (isIDFIRST(*s) ||
+    if (isIDFIRST_lazy(s) ||
 	(allow_pack && *s == ':') ||
 	(allow_initial_tick && *s == '\'') )
     {
@@ -772,7 +796,7 @@ sublex_done(void)
 
     if (PL_lex_casemods) {		/* oops, we've got some unbalanced parens */
 	PL_lex_state = LEX_INTERPCASEMOD;
-	return yylex();
+	return yylex(PERL_YYLEX_PARAM);
     }
 
     /* Is there a right-hand side to take care of? */
@@ -993,7 +1017,7 @@ scan_const(char *start)
 	}
 
 	/* check for embedded arrays (@foo, @:foo, @'foo, @{foo}, @$foo) */
-	else if (*s == '@' && s[1] && (isALNUM(s[1]) || strchr(":'{$", s[1])))
+	else if (*s == '@' && s[1] && (isALNUM_lazy(s+1) || strchr(":'{$", s[1])))
 	    break;
 
 	/* check for embedded scalars.  only stop if we're sure it's a
@@ -1076,8 +1100,10 @@ scan_const(char *start)
 		if (*s == '{') {
 		    char* e = strchr(s, '}');
 
-		    if (!e)
+		    if (!e) {
 			yyerror("Missing right brace on \\x{}");
+			e = s;
+		    }
 		    if (!utf) {
 			dTHR;
 			if (ckWARN(WARN_UTF8))
@@ -1247,7 +1273,7 @@ intuit_more(register char *s)
 	    case '&':
 	    case '$':
 		weight -= seen[un_char] * 10;
-		if (isALNUM(s[1])) {
+		if (isALNUM_lazy(s+1)) {
 		    scan_ident(s, send, tmpbuf, sizeof tmpbuf, FALSE);
 		    if ((int)strlen(tmpbuf) > 1 && gv_fetchpv(tmpbuf,FALSE, SVt_PV))
 			weight -= 100;
@@ -1532,8 +1558,6 @@ filter_gets(register SV *sv, register PerlIO *fp, STRLEN append)
 	{ "OPERATOR", "TERM", "REF", "STATE", "BLOCK", "TERMBLOCK" };
 #endif
 
-EXT int yychar;		/* last token */
-
 /*
   yylex
 
@@ -1559,8 +1583,7 @@ EXT int yychar;		/* last token */
       if we already built the token before, use it.
 */
 
-int
-yylex(void)
+int yylex(PERL_YYLEX_PARAM_DECL)
 {
     dTHR;
     register char *s;
@@ -1569,6 +1592,11 @@ yylex(void)
     STRLEN len;
     GV *gv = Nullgv;
     GV **gvp = 0;
+
+#ifdef USE_PURE_BISON
+    yylval_pointer = lvalp;
+    yychar_pointer = lcharp;
+#endif
 
     /* check if there's an identifier for us to look at */
     if (PL_pending_ident) {
@@ -1584,7 +1612,7 @@ yylex(void)
 	*/
 	if (PL_in_my) {
 	    if (strchr(PL_tokenbuf,':'))
-		croak(no_myglob,PL_tokenbuf);
+		croak(PL_no_myglob,PL_tokenbuf);
 
 	    yylval.opval = newOP(OP_PADANY, 0);
 	    yylval.opval->op_targ = pad_allocmy(PL_tokenbuf);
@@ -1707,7 +1735,7 @@ yylex(void)
 	    if (PL_bufptr != PL_bufend)
 		PL_bufptr += 2;
 	    PL_lex_state = LEX_INTERPCONCAT;
-	    return yylex();
+	    return yylex(PERL_YYLEX_PARAM);
 	}
 	else {
 	    s = PL_bufptr + 1;
@@ -1751,7 +1779,7 @@ yylex(void)
 		Aop(OP_CONCAT);
 	    }
 	    else
-		return yylex();
+		return yylex(PERL_YYLEX_PARAM);
 	}
 
     case LEX_INTERPPUSH:
@@ -1784,7 +1812,7 @@ yylex(void)
 	    s = PL_bufptr;
 	    Aop(OP_CONCAT);
 	}
-	return yylex();
+	return yylex(PERL_YYLEX_PARAM);
 
     case LEX_INTERPENDMAYBE:
 	if (intuit_more(PL_bufptr)) {
@@ -1833,11 +1861,11 @@ yylex(void)
 		Aop(OP_CONCAT);
 	    else {
 		PL_bufptr = s;
-		return yylex();
+		return yylex(PERL_YYLEX_PARAM);
 	    }
 	}
 
-	return yylex();
+	return yylex(PERL_YYLEX_PARAM);
     case LEX_FORMLINE:
 	PL_lex_state = LEX_NORMAL;
 	s = scan_formline(PL_bufptr);
@@ -1856,16 +1884,8 @@ yylex(void)
   retry:
     switch (*s) {
     default:
-	/*
-	 * Note: we try to be careful never to call the isXXX_utf8() functions unless we're
-	 * pretty sure we've seen the beginning of a UTF-8 character (that is, the two high
-	 * bits are set).  Otherwise we risk loading in the heavy-duty SWASHINIT and SWASHGET
-	 * routines unnecessarily.  You will see this not just here but throughout this file.
-	 */
-	if (UTF && (*s & 0xc0) == 0x80) {
-	    if (isIDFIRST_utf8((U8*)s))
-		goto keylookup;
-	}
+	if (isIDFIRST_lazy(s))
+	    goto keylookup;
 	croak("Unrecognized character \\x%02X", *s & 255);
     case 4:
     case 26:
@@ -2125,7 +2145,7 @@ yylex(void)
 	if (PL_lex_formbrack && PL_lex_brackets <= PL_lex_formbrack) {
 	    PL_bufptr = s;
 	    PL_lex_state = LEX_FORMLINE;
-	    return yylex();
+	    return yylex(PERL_YYLEX_PARAM);
 	}
 	goto retry;
     case '\r':
@@ -2149,7 +2169,7 @@ yylex(void)
 	    if (PL_lex_formbrack && PL_lex_brackets <= PL_lex_formbrack) {
 		PL_bufptr = s;
 		PL_lex_state = LEX_FORMLINE;
-		return yylex();
+		return yylex(PERL_YYLEX_PARAM);
 	    }
 	}
 	else {
@@ -2216,7 +2236,7 @@ yylex(void)
 	else if (*s == '>') {
 	    s++;
 	    s = skipspace(s);
-	    if (isIDFIRST(*s)) {
+	    if (isIDFIRST_lazy(s)) {
 		s = force_word(s,METHOD,FALSE,TRUE,FALSE);
 		TOKEN(ARROW);
 	    }
@@ -2361,7 +2381,7 @@ yylex(void)
 		while (d < PL_bufend && (*d == ' ' || *d == '\t'))
 		    d++;
 	    }
-	    if (d < PL_bufend && isIDFIRST(*d)) {
+	    if (d < PL_bufend && isIDFIRST_lazy(d)) {
 		d = scan_word(d, PL_tokenbuf + 1, sizeof PL_tokenbuf - 1,
 			      FALSE, &len);
 		while (d < PL_bufend && (*d == ' ' || *d == '\t'))
@@ -2449,8 +2469,8 @@ yylex(void)
 		    }
 		    t++;
 		}
-		else if (isALPHA(*s)) {
-		    for (t++; t < PL_bufend && isALNUM(*t); t++) ;
+		else if (isIDFIRST_lazy(s)) {
+		    for (t++; t < PL_bufend && isALNUM_lazy(t); t++) ;
 		}
 		while (t < PL_bufend && isSPACE(*t))
 		    t++;
@@ -2460,7 +2480,7 @@ yylex(void)
 				   || (*t == '=' && t[1] == '>')))
 		    OPERATOR(HASHBRACK);
 		if (PL_expect == XREF)
-		    PL_expect = XTERM;
+		    PL_expect = XSTATE;	/* was XTERM, trying XSTATE */
 		else {
 		    PL_lex_brackstack[PL_lex_brackets-1] = XSTATE;
 		    PL_expect = XSTATE;
@@ -2486,7 +2506,7 @@ yylex(void)
 		if (PL_lex_fakebrack) {
 		    PL_lex_state = LEX_INTERPEND;
 		    PL_bufptr = s;
-		    return yylex();		/* ignore fake brackets */
+		    return yylex(PERL_YYLEX_PARAM);	/* ignore fake brackets */
 		}
 		if (*s == '-' && s[1] == '>')
 		    PL_lex_state = LEX_INTERPENDMAYBE;
@@ -2497,7 +2517,7 @@ yylex(void)
 	if (PL_lex_brackets < PL_lex_fakebrack) {
 	    PL_bufptr = s;
 	    PL_lex_fakebrack = 0;
-	    return yylex();		/* ignore fake brackets */
+	    return yylex(PERL_YYLEX_PARAM);		/* ignore fake brackets */
 	}
 	force_next('}');
 	TOKEN(';');
@@ -2508,9 +2528,9 @@ yylex(void)
 	    AOPERATOR(ANDAND);
 	s--;
 	if (PL_expect == XOPERATOR) {
-	    if (ckWARN(WARN_SEMICOLON) && isALPHA(*s) && PL_bufptr == PL_linestart) {
+	    if (ckWARN(WARN_SEMICOLON) && isIDFIRST_lazy(s) && PL_bufptr == PL_linestart) {
 		PL_curcop->cop_line--;
-		warner(WARN_SEMICOLON, warn_nosemi);
+		warner(WARN_SEMICOLON, PL_warn_nosemi);
 		PL_curcop->cop_line++;
 	    }
 	    BAop(OP_BIT_AND);
@@ -2638,7 +2658,7 @@ yylex(void)
 	    }
 	}
 
-	if (s[1] == '#' && (isALPHA(s[2]) || strchr("_{$:+-", s[2]))) {
+	if (s[1] == '#' && (isIDFIRST_lazy(s+2) || strchr("{$:+-", s[2]))) {
 	    if (PL_expect == XOPERATOR)
 		no_op("Array length", PL_bufptr);
 	    PL_tokenbuf[0] = '@';
@@ -2679,7 +2699,7 @@ yylex(void)
 		PL_tokenbuf[0] = '@';
 		if (ckWARN(WARN_SYNTAX)) {
 		    for(t = s + 1;
-			isSPACE(*t) || isALNUM(*t) || *t == '$';
+			isSPACE(*t) || isALNUM_lazy(t) || *t == '$';
 			t++) ;
 		    if (*t++ == ',') {
 			PL_bufptr = skipspace(PL_bufptr);
@@ -2699,9 +2719,10 @@ yylex(void)
 		    char tmpbuf[sizeof PL_tokenbuf];
 		    STRLEN len;
 		    for (t++; isSPACE(*t); t++) ;
-		    if (isIDFIRST(*t)) {
+		    if (isIDFIRST_lazy(t)) {
 			t = scan_word(t, tmpbuf, sizeof tmpbuf, TRUE, &len);
-			if (*t != '(' && perl_get_cv(tmpbuf, FALSE))
+		        for (; isSPACE(*t); t++) ;
+			if (*t == ';' && perl_get_cv(tmpbuf, FALSE))
 			    warner(WARN_SYNTAX,
 				"You need to quote \"%s\"", tmpbuf);
 		    }
@@ -2716,9 +2737,9 @@ yylex(void)
 		PL_expect = XOPERATOR;
 	    else if (strchr("$@\"'`q", *s))
 		PL_expect = XTERM;		/* e.g. print $fh "foo" */
-	    else if (strchr("&*<%", *s) && isIDFIRST(s[1]))
+	    else if (strchr("&*<%", *s) && isIDFIRST_lazy(s+1))
 		PL_expect = XTERM;		/* e.g. print $fh &sub */
-	    else if (isIDFIRST(*s)) {
+	    else if (isIDFIRST_lazy(s)) {
 		char tmpbuf[sizeof PL_tokenbuf];
 		scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
 		if (tmp = keyword(tmpbuf, len)) {
@@ -2748,9 +2769,9 @@ yylex(void)
 		PL_expect = XTERM;		/* e.g. print $fh 3 */
 	    else if (*s == '.' && isDIGIT(s[1]))
 		PL_expect = XTERM;		/* e.g. print $fh .3 */
-	    else if (strchr("/?-+", *s) && !isSPACE(s[1]))
+	    else if (strchr("/?-+", *s) && !isSPACE(s[1]) && s[1] != '=')
 		PL_expect = XTERM;		/* e.g. print $fh -1 */
-	    else if (*s == '<' && s[1] == '<' && !isSPACE(s[2]))
+	    else if (*s == '<' && s[1] == '<' && !isSPACE(s[2]) && s[2] != '=')
 		PL_expect = XTERM;		/* print $fh <<"EOF" */
 	}
 	PL_pending_ident = '$';
@@ -2776,7 +2797,7 @@ yylex(void)
 	    if (ckWARN(WARN_SYNTAX)) {
 		if (*s == '[' || *s == '{') {
 		    char *t = s + 1;
-		    while (*t && (isALNUM(*t) || strchr(" \t$#+-'\"", *t)))
+		    while (*t && (isALNUM_lazy(t) || strchr(" \t$#+-'\"", *t)))
 			t++;
 		    if (*t == '}' || *t == ']') {
 			t++;
@@ -2797,7 +2818,7 @@ yylex(void)
 	    /* Disable warning on "study /blah/" */
 	    if (PL_oldoldbufptr == PL_last_uni 
 		&& (*PL_last_uni != 's' || s - PL_last_uni < 5 
-		    || memNE(PL_last_uni, "study", 5) || isALNUM(PL_last_uni[5])))
+		    || memNE(PL_last_uni, "study", 5) || isALNUM_lazy(PL_last_uni+5)))
 		check_uni();
 	    s = scan_pat(s,OP_MATCH);
 	    TERM(sublex_start());
@@ -3042,7 +3063,7 @@ yylex(void)
 		if (PL_expect == XOPERATOR) {
 		    if (PL_bufptr == PL_linestart) {
 			PL_curcop->cop_line--;
-			warner(WARN_SEMICOLON, warn_nosemi);
+			warner(WARN_SEMICOLON, PL_warn_nosemi);
 			PL_curcop->cop_line++;
 		    }
 		    else
@@ -3098,7 +3119,7 @@ yylex(void)
 		    (PL_oldoldbufptr == PL_last_lop || PL_oldoldbufptr == PL_last_uni) &&
 		    /* NO SKIPSPACE BEFORE HERE! */
 		    (PL_expect == XREF 
-		     || ((opargs[PL_last_lop_op] >> OASHIFT)& 7) == OA_FILEREF
+		     || ((PL_opargs[PL_last_lop_op] >> OASHIFT)& 7) == OA_FILEREF
 		     || (PL_last_lop_op == OP_ENTERSUB 
 			 && PL_last_proto 
 			 && PL_last_proto[PL_last_proto[0] == ';' ? 1 : 0] == '*')) )
@@ -3110,7 +3131,7 @@ yylex(void)
 
 		    /* Two barewords in a row may indicate method call. */
 
-		    if ((isALPHA(*s) || *s == '$') && (tmp=intuit_method(s,gv)))
+		    if ((isIDFIRST_lazy(s) || *s == '$') && (tmp=intuit_method(s,gv)))
 			return tmp;
 
 		    /* If not a declared subroutine, it's an indirect object. */
@@ -3131,8 +3152,11 @@ yylex(void)
 		if (*s == '(') {
 		    CLINE;
 		    if (gv && GvCVu(gv)) {
+			CV *cv;
+			if ((cv = GvCV(gv)) && SvPOK(cv))
+			    PL_last_proto = SvPV((SV*)cv, PL_na);
 			for (d = s + 1; *d == ' ' || *d == '\t'; d++) ;
-			if (*d == ')' && (sv = cv_const_sv(GvCV(gv)))) {
+			if (*d == ')' && (sv = cv_const_sv(cv))) {
 			    s = d + 1;
 			    goto its_constant;
 			}
@@ -3141,6 +3165,7 @@ yylex(void)
 		    PL_expect = XOPERATOR;
 		    force_next(WORD);
 		    yylval.ival = 0;
+		    PL_last_lop_op = OP_ENTERSUB;
 		    TOKEN('&');
 		}
 
@@ -3154,7 +3179,7 @@ yylex(void)
 
 		/* If followed by a bareword, see if it looks like indir obj. */
 
-		if ((isALPHA(*s) || *s == '$') && (tmp = intuit_method(s,gv)))
+		if ((isIDFIRST_lazy(s) || *s == '$') && (tmp = intuit_method(s,gv)))
 		    return tmp;
 
 		/* Not a method, so call it a subroutine (if defined) */
@@ -3179,6 +3204,7 @@ yylex(void)
 		    /* Resolve to GV now. */
 		    op_free(yylval.opval);
 		    yylval.opval = newCVREF(0, newGVOP(OP_GV, 0, gv));
+		    PL_last_lop_op = OP_ENTERSUB;
 		    /* Is there a prototype? */
 		    if (SvPOK(cv)) {
 			STRLEN len;
@@ -3205,7 +3231,10 @@ yylex(void)
 		    PL_last_lop_op != OP_TRUNCATE &&  /* S/F prototype in opcode.pl */
 		    PL_last_lop_op != OP_ACCEPT &&
 		    PL_last_lop_op != OP_PIPE_OP &&
-		    PL_last_lop_op != OP_SOCKPAIR)
+		    PL_last_lop_op != OP_SOCKPAIR &&
+		    !(PL_last_lop_op == OP_ENTERSUB 
+			 && PL_last_proto 
+			 && PL_last_proto[PL_last_proto[0] == ';' ? 1 : 0] == '*'))
 		{
 		    warn(
 		     "Bareword \"%s\" not allowed while \"strict subs\" in use",
@@ -3220,7 +3249,7 @@ yylex(void)
 		    if (lastchar != '-') {
 			for (d = PL_tokenbuf; *d && isLOWER(*d); d++) ;
 			if (!*d)
-			    warner(WARN_RESERVED, warn_reserved, PL_tokenbuf);
+			    warner(WARN_RESERVED, PL_warn_reserved, PL_tokenbuf);
 		    }
 		}
 
@@ -3468,13 +3497,13 @@ yylex(void)
 	case KEY_foreach:
 	    yylval.ival = PL_curcop->cop_line;
 	    s = skipspace(s);
-	    if (PL_expect == XSTATE && isIDFIRST(*s)) {
+	    if (PL_expect == XSTATE && isIDFIRST_lazy(s)) {
 		char *p = s;
 		if ((PL_bufend - p) >= 3 &&
 		    strnEQ(p, "my", 2) && isSPACE(*(p + 2)))
 		    p += 2;
 		p = skipspace(p);
-		if (isIDFIRST(*p))
+		if (isIDFIRST_lazy(p))
 		    croak("Missing $ on loop variable");
 	    }
 	    OPERATOR(FOR);
@@ -3662,7 +3691,7 @@ yylex(void)
 	    TERM(sublex_start());
 
 	case KEY_map:
-	    LOP(OP_MAPSTART,XREF);
+	    LOP(OP_MAPSTART, XREF);
 	    
 	case KEY_mkdir:
 	    LOP(OP_MKDIR,XTERM);
@@ -3682,7 +3711,7 @@ yylex(void)
 	case KEY_my:
 	    PL_in_my = TRUE;
 	    s = skipspace(s);
-	    if (isIDFIRST(*s)) {
+	    if (isIDFIRST_lazy(s)) {
 		s = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, TRUE, &len);
 		PL_in_my_stash = gv_stashpv(PL_tokenbuf, FALSE);
 		if (!PL_in_my_stash) {
@@ -3714,9 +3743,9 @@ yylex(void)
 
 	case KEY_open:
 	    s = skipspace(s);
-	    if (isIDFIRST(*s)) {
+	    if (isIDFIRST_lazy(s)) {
 		char *t;
-		for (d = s; isALNUM(*d); d++) ;
+		for (d = s; isALNUM_lazy(d); d++) ;
 		t = skipspace(d);
 		if (strchr("|&*+-=!?:.", *t))
 		    warn("Precedence problem: open %.*s should be open(%.*s)",
@@ -3839,7 +3868,7 @@ yylex(void)
 	case KEY_require:
 	    *PL_tokenbuf = '\0';
 	    s = force_word(s,WORD,TRUE,TRUE,FALSE);
-	    if (isIDFIRST(*PL_tokenbuf))
+	    if (isIDFIRST_lazy(PL_tokenbuf))
 		gv_stashpvn(PL_tokenbuf, strlen(PL_tokenbuf), TRUE);
 	    else if (*s == '<')
 		yyerror("<> should be quotes");
@@ -4023,7 +4052,7 @@ yylex(void)
 	  really_sub:
 	    s = skipspace(s);
 
-	    if (isIDFIRST(*s) || *s == '\'' || *s == ':') {
+	    if (isIDFIRST_lazy(s) || *s == '\'' || *s == ':') {
 		char tmpbuf[sizeof PL_tokenbuf];
 		PL_expect = XBLOCK;
 		d = scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
@@ -4895,9 +4924,9 @@ checkcomma(register char *s, char *name, char *what)
 	s++;
     while (s < PL_bufend && isSPACE(*s))
 	s++;
-    if (isIDFIRST(*s)) {
+    if (isIDFIRST_lazy(s)) {
 	w = s++;
-	while (isALNUM(*s))
+	while (isALNUM_lazy(s))
 	    s++;
 	while (s < PL_bufend && isSPACE(*s))
 	    s++;
@@ -4990,9 +5019,9 @@ scan_word(register char *s, char *dest, STRLEN destlen, int allow_package, STRLE
     for (;;) {
 	if (d >= e)
 	    croak(ident_too_long);
-	if (isALNUM(*s))
+	if (isALNUM(*s))	/* UTF handled below */
 	    *d++ = *s++;
-	else if (*s == '\'' && allow_package && isIDFIRST(s[1])) {
+	else if (*s == '\'' && allow_package && isIDFIRST_lazy(s+1)) {
 	    *d++ = ':';
 	    *d++ = ':';
 	    s++;
@@ -5001,7 +5030,7 @@ scan_word(register char *s, char *dest, STRLEN destlen, int allow_package, STRLE
 	    *d++ = *s++;
 	    *d++ = *s++;
 	}
-	else if (UTF && (*s & 0xc0) == 0x80 && isALNUM_utf8((U8*)s)) {
+	else if (UTF && *(U8*)s >= 0xc0 && isALNUM_utf8((U8*)s)) {
 	    char *t = s + UTF8SKIP(s);
 	    while (*t & 0x80 && is_utf8_mark((U8*)t))
 		t += UTF8SKIP(t);
@@ -5044,9 +5073,9 @@ scan_ident(register char *s, register char *send, char *dest, STRLEN destlen, I3
 	for (;;) {
 	    if (d >= e)
 		croak(ident_too_long);
-	    if (isALNUM(*s))
+	    if (isALNUM(*s))	/* UTF handled below */
 		*d++ = *s++;
-	    else if (*s == '\'' && isIDFIRST(s[1])) {
+	    else if (*s == '\'' && isIDFIRST_lazy(s+1)) {
 		*d++ = ':';
 		*d++ = ':';
 		s++;
@@ -5055,7 +5084,7 @@ scan_ident(register char *s, register char *send, char *dest, STRLEN destlen, I3
 		*d++ = *s++;
 		*d++ = *s++;
 	    }
-	    else if (UTF && (*s & 0xc0) == 0x80 && isALNUM_utf8((U8*)s)) {
+	    else if (UTF && *(U8*)s >= 0xc0 && isALNUM_utf8((U8*)s)) {
 		char *t = s + UTF8SKIP(s);
 		while (*t & 0x80 && is_utf8_mark((U8*)t))
 		    t += UTF8SKIP(t);
@@ -5077,7 +5106,7 @@ scan_ident(register char *s, register char *send, char *dest, STRLEN destlen, I3
 	return s;
     }
     if (*s == '$' && s[1] &&
-	(isALNUM(s[1]) || strchr("${", s[1]) || strnEQ(s+1,"::",2)) )
+	(isALNUM_lazy(s+1) || strchr("${", s[1]) || strnEQ(s+1,"::",2)) )
     {
 	return s;
     }
@@ -5104,11 +5133,11 @@ scan_ident(register char *s, register char *send, char *dest, STRLEN destlen, I3
 		}
 	    }
 	}
-	if (isIDFIRST(*d) || (UTF && (*d & 0xc0) == 0x80 && isIDFIRST_utf8((U8*)d))) {
+	if (isIDFIRST_lazy(d)) {
 	    d++;
 	    if (UTF) {
 		e = s;
-		while (e < send && (isALNUM(*e) || ((*e & 0xc0) == 0x80 && isALNUM_utf8((U8*)e)) || *e == ':')) {
+		while (e < send && isALNUM_lazy(e) || *e == ':') {
 		    e += UTF8SKIP(e);
 		    while (e < send && *e & 0x80 && is_utf8_mark((U8*)e))
 			e += UTF8SKIP(e);
@@ -5394,9 +5423,9 @@ scan_heredoc(register char *s)
 	    s++, term = '\'';
 	else
 	    term = '"';
-	if (!isALNUM(*s))
+	if (!isALNUM_lazy(s))
 	    deprecate("bare << to mean <<\"\"");
-	for (; isALNUM(*s); s++) {
+	for (; isALNUM_lazy(s); s++) {
 	    if (d < e)
 		*d++ = *s;
 	}
@@ -5577,7 +5606,7 @@ scan_inputsymbol(char *start)
     if (*d == '$' && d[1]) d++;
 
     /* allow <Pkg'VALUE> or <Pkg::VALUE> */
-    while (*d && (isALNUM(*d) || *d == '\'' || *d == ':'))
+    while (*d && (isALNUM_lazy(d) || *d == '\'' || *d == ':'))
 	d++;
 
     /* If we've tried to read what we allow filehandles to look like, and
@@ -5614,16 +5643,16 @@ scan_inputsymbol(char *start)
 	    if ((tmp = pad_findmy(d)) != NOT_IN_PAD) {
 		OP *o = newOP(OP_PADSV, 0);
 		o->op_targ = tmp;
-		PL_lex_op = (OP*)newUNOP(OP_READLINE, 0, newUNOP(OP_RV2GV, 0, o));
+		PL_lex_op = (OP*)newUNOP(OP_READLINE, 0, o);
 	    }
 	    else {
 		GV *gv = gv_fetchpv(d+1,TRUE, SVt_PV);
 		PL_lex_op = (OP*)newUNOP(OP_READLINE, 0,
-					newUNOP(OP_RV2GV, 0,
 					    newUNOP(OP_RV2SV, 0,
-						newGVOP(OP_GV, 0, gv))));
+						newGVOP(OP_GV, 0, gv)));
 	    }
-	    /* we created the ops in lex_op, so make yylval.ival a null op */
+	    PL_lex_op->op_flags |= OPf_SPECIAL;
+	    /* we created the ops in PL_lex_op, so make yylval.ival a null op */
 	    yylval.ival = OP_NULL;
 	}
 

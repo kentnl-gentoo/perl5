@@ -10,7 +10,7 @@
  * and how they're initialized.
  *
  * The 'G' prefix is only needed for vars that need appropriate #defines
- * generated when built with or without EMBED.  It is also used to generate
+ * generated in embed*.h.  Such symbols are also used to generate
  * the appropriate export list for win32.
  *
  * Avoid build-specific #ifdefs here, like DEBUGGING.  That way,
@@ -70,11 +70,7 @@ PERLVAR(Ghe_root,	HE *)		/* free he list--shared by interpreters */
 PERLVAR(Gnice_chunk,	char *)		/* a nice chunk of memory to reuse */
 PERLVAR(Gnice_chunk_size,	U32)	/* how nice the chunk of memory is */
 
-#ifdef PERL_OBJECT
 PERLVARI(Grunops,	runops_proc_t,	FUNC_NAME_TO_PTR(RUNOPS_DEFAULT))
-#else
-PERLVARI(Grunops,	runops_proc_t *,	RUNOPS_DEFAULT)
-#endif
 
 PERLVAR(Gtokenbuf[256],	char)
 PERLVAR(Gna,		STRLEN)		/* for use in SvPV when length is
@@ -194,7 +190,7 @@ PERLVAR(Glast_swash_slen,	STRLEN)
 /* constants (these are not literals to facilitate pointer comparisons) */
 PERLVARIC(GYes,		char *, "1")
 PERLVARIC(GNo,		char *, "")
-PERLVARIC(Ghexdigit,	char *, "0123456789abcdef0123456789ABCDEFx")
+PERLVARIC(Ghexdigit,	char *, "0123456789abcdef0123456789ABCDEF")
 PERLVARIC(Gpatleave,	char *, "\\.^$@dDwWsSbB+*?|()-nrtfeaxc0123456789[{]}")
 
 PERLVAR(Gspecialsv_list[4],SV *)	/* from byterun.h */
@@ -204,7 +200,5 @@ PERLVAR(Gyydebug,	int)
 PERLVAR(Gyynerrs,	int)
 PERLVAR(Gyyerrflag,	int)
 PERLVAR(Gyychar,	int)
-PERLVAR(Gyyssp,		short*)
-PERLVAR(Gyyvsp,		YYSTYPE*)
 PERLVAR(Gyyval,		YYSTYPE)
 PERLVAR(Gyylval,	YYSTYPE)

@@ -306,7 +306,7 @@ do_open(GV *gv, register char *name, I32 len, int as_raw, int rawmode, int rawpe
     if (!fp) {
 	dTHR;
 	if (ckWARN(WARN_NEWLINE) && IoTYPE(io) == '<' && strchr(name, '\n'))
-	    warner(WARN_NEWLINE, warn_nl, "open");
+	    warner(WARN_NEWLINE, PL_warn_nl, "open");
 	goto say_false;
     }
     if (IoTYPE(io) &&
@@ -754,8 +754,8 @@ do_seek(GV *gv, Off_t pos, int whence)
     return FALSE;
 }
 
-long
-do_sysseek(GV *gv, long int pos, int whence)
+Off_t
+do_sysseek(GV *gv, Off_t pos, int whence)
 {
     register IO *io;
     register PerlIO *fp;
@@ -889,7 +889,7 @@ do_print(register SV *sv, PerlIO *fp)
 	{
 	    dTHR;
 	    if (ckWARN(WARN_UNINITIALIZED))
-		warner(WARN_UNINITIALIZED, warn_uninit);
+		warner(WARN_UNINITIALIZED, PL_warn_uninit);
 	}
 	return TRUE;
     case SVt_IV:
@@ -957,7 +957,7 @@ my_stat(ARGSproto)
 	PL_laststype = OP_STAT;
 	PL_laststatval = PerlLIO_stat(s, &PL_statcache);
 	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n'))
-	    warner(WARN_NEWLINE, warn_nl, "stat");
+	    warner(WARN_NEWLINE, PL_warn_nl, "stat");
 	return PL_laststatval;
     }
 }
@@ -988,7 +988,7 @@ my_lstat(ARGSproto)
     PL_laststatval = PerlLIO_stat(SvPV(sv, PL_na),&PL_statcache);
 #endif
     if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(SvPV(sv, PL_na), '\n'))
-	warner(WARN_NEWLINE, warn_nl, "lstat");
+	warner(WARN_NEWLINE, PL_warn_nl, "lstat");
     return PL_laststatval;
 }
 
@@ -1444,7 +1444,7 @@ do_ipcget(I32 optype, SV **mark, SV **sp)
 #endif
 #if !defined(HAS_MSG) || !defined(HAS_SEM) || !defined(HAS_SHM)
     default:
-	croak("%s not implemented", op_desc[optype]);
+	croak("%s not implemented", PL_op_desc[optype]);
 #endif
     }
     return -1;			/* should never happen */
@@ -1501,7 +1501,7 @@ do_ipcctl(I32 optype, SV **mark, SV **sp)
 #endif
 #if !defined(HAS_MSG) || !defined(HAS_SEM) || !defined(HAS_SHM)
     default:
-	croak("%s not implemented", op_desc[optype]);
+	croak("%s not implemented", PL_op_desc[optype]);
 #endif
     }
 
@@ -1518,7 +1518,9 @@ do_ipcctl(I32 optype, SV **mark, SV **sp)
 	    a = SvPV(astr, len);
 	    if (len != infosize)
 		croak("Bad arg length for %s, is %lu, should be %ld",
-			op_desc[optype], (unsigned long)len, (long)infosize);
+		      PL_op_desc[optype],
+		      (unsigned long)len,
+		      (long)infosize);
 	}
     }
     else

@@ -4,7 +4,7 @@
 # the format supported by op/regexp.t.  If you want to add a test
 # that does fit that format, add it to op/re_tests, not here.
 
-print "1..161\n";
+print "1..162\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -690,5 +690,10 @@ $test++;
 print "not " 
    if defined $+[2] or defined $-[2] or defined $+[3] or defined $-[3];
 print "ok $test\n";
+$test++;
+
+# see if matching against temporaries (created via pp_helem()) is safe
+{ foo => "ok $test\n".$^X }->{foo} =~ /^(.*)\n/g;
+print "$1\n";
 $test++;
 

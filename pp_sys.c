@@ -173,6 +173,17 @@ static int dooneliner _((char *cmd, char *filename));
 
 #endif /* no flock() */
 
+#ifndef MAXPATHLEN
+#  ifdef PATH_MAX
+#    define MAXPATHLEN PATH_MAX
+#  else
+#    define MAXPATHLEN 1024
+#  endif
+#endif
+
+#define ZBTLEN 10
+static char zero_but_true[ZBTLEN + 1] = "0 but true";
+
 #if defined(I_SYS_ACCESS) && !defined(R_OK)
 #  include <sys/access.h>
 #endif
@@ -184,7 +195,7 @@ static int dooneliner _((char *cmd, char *filename));
 /* F_OK unused: if stat() cannot find it... */
 
 #if !defined(PERL_EFF_ACCESS_R_OK) && defined(HAS_ACCESS) && defined(EFF_ONLY_OK) && !defined(NO_EFF_ONLY_OK)
-/* Digital UNIX, UnixWare */
+/* Digital UNIX (when the EFF_ONLY_OK gets fixed), UnixWare */
 #   define PERL_EFF_ACCESS_R_OK(p) (access((p), R_OK | EFF_ONLY_OK))
 #   define PERL_EFF_ACCESS_W_OK(p) (access((p), W_OK | EFF_ONLY_OK))
 #   define PERL_EFF_ACCESS_X_OK(p) (access((p), X_OK | EFF_ONLY_OK))
@@ -221,7 +232,7 @@ emulate_eaccess (const char* path, int mode) {
 
     MUTEX_LOCK(&PL_cred_mutex);
 #if !defined(HAS_SETREUID) && !defined(HAS_SETRESUID)
-    croak("effective uid access is not implemented");
+    croak("switching effective uid is not implemented");
 #else
 #ifdef HAS_SETREUID
     if (setreuid(euid, ruid))
@@ -230,11 +241,11 @@ emulate_eaccess (const char* path, int mode) {
     if (setresuid(euid, ruid, (Uid_t)-1))
 #endif
 #endif
-	croak("entering effective uid access failed");
+	croak("entering effective uid failed");
 #endif
 
 #if !defined(HAS_SETREGID) && !defined(HAS_SETRESGID)
-    croak("effective gid access is not implemented");
+    croak("switching effective gid is not implemented");
 #else
 #ifdef HAS_SETREGID
     if (setregid(egid, rgid))
@@ -243,7 +254,7 @@ emulate_eaccess (const char* path, int mode) {
     if (setresgid(egid, rgid, (Gid_t)-1))
 #endif
 #endif
-	croak("entering effective gid access failed");
+	croak("entering effective gid failed");
 #endif
 
     res = access(path, mode);
@@ -255,7 +266,7 @@ emulate_eaccess (const char* path, int mode) {
     if (setresuid(ruid, euid, (Uid_t)-1))
 #endif
 #endif
-	croak("leaving effective uid access failed");
+	croak("leaving effective uid failed");
 
 #ifdef HAS_SETREGID
     if (setregid(rgid, egid))
@@ -264,7 +275,7 @@ emulate_eaccess (const char* path, int mode) {
     if (setresgid(rgid, egid, (Gid_t)-1))
 #endif
 #endif
-	croak("leaving effective gid access failed");
+	croak("leaving effective gid failed");
     MUTEX_UNLOCK(&PL_cred_mutex);
 
     return res;
@@ -277,22 +288,11 @@ emulate_eaccess (const char* path, int mode) {
 #if !defined(PERL_EFF_ACCESS_R_OK)
 STATIC int
 emulate_eaccess (const char* path, int mode) {
-    croak("effective uid access is not implemented");
+    croak("switching effective uid is not implemented");
     /*NOTREACHED*/
     return -1;
 }
 #endif
-
-#ifndef MAXPATHLEN
-#  ifdef PATH_MAX
-#    define MAXPATHLEN PATH_MAX
-#  else
-#    define MAXPATHLEN 1024
-#  endif
-#endif
-
-#define ZBTLEN 10
-static char zero_but_true[ZBTLEN + 1] = "0 but true";
 
 PP(pp_backtick)
 {
@@ -350,6 +350,8 @@ PP(pp_backtick)
 PP(pp_glob)
 {
     OP *result;
+    tryAMAGICunTARGET(iter, -1);
+
     ENTER;
 
 #ifndef VMS
@@ -359,7 +361,7 @@ PP(pp_glob)
 	 * so for security reasons we must assume the worst.
 	 */
 	TAINT;
-	taint_proper(no_security, "glob");
+	taint_proper(PL_no_security, "glob");
     }
 #endif /* !VMS */
 
@@ -484,12 +486,12 @@ PP(pp_open)
     if (MAXARG > 1)
 	sv = POPs;
     if (!isGV(TOPs))
-	DIE(no_usym, "filehandle");
+	DIE(PL_no_usym, "filehandle");
     if (MAXARG <= 1)
 	sv = GvSV(TOPs);
     gv = (GV*)POPs;
     if (!isGV(gv))
-	DIE(no_usym, "filehandle");
+	DIE(PL_no_usym, "filehandle");
     if (GvIOp(gv))
 	IoFLAGS(GvIOp(gv)) &= ~IOf_UNTAINT;
     tmps = SvPV(sv, len);
@@ -513,9 +515,9 @@ PP(pp_close)
     else
 	gv = (GV*)POPs;
 
-    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	PUSHMARK(SP);
-	XPUSHs(mg->mg_obj);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
 	PUTBACK;
 	ENTER;
 	perl_call_method("CLOSE", G_SCALAR);
@@ -545,7 +547,7 @@ PP(pp_pipe_op)
 	goto badexit;
 
     if (SvTYPE(rgv) != SVt_PVGV || SvTYPE(wgv) != SVt_PVGV)
-	DIE(no_usym, "filehandle");
+	DIE(PL_no_usym, "filehandle");
     rstio = GvIOn(rgv);
     wstio = GvIOn(wgv);
 
@@ -576,7 +578,7 @@ PP(pp_pipe_op)
 badexit:
     RETPUSHUNDEF;
 #else
-    DIE(no_func, "pipe");
+    DIE(PL_no_func, "pipe");
 #endif
 }
 
@@ -707,8 +709,8 @@ PP(pp_tie)
     sv = TOPs;
     POPSTACK;
     if (sv_isobject(sv)) {
-	sv_unmagic(varsv, how);            
-	sv_magic(varsv, sv, how, Nullch, 0);
+	sv_unmagic(varsv, how);
+	sv_magic(varsv, (SvRV(sv) == varsv ? Nullsv : sv), how, Nullch, 0);
     }
     LEAVE;
     SP = PL_stack_base + markoff;
@@ -719,18 +721,12 @@ PP(pp_tie)
 PP(pp_untie)
 {
     djSP;
-    SV * sv ;
-
-    sv = POPs;
+    SV *sv = POPs;
+    char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV) ? 'P' : 'q';
 
     if (ckWARN(WARN_UNTIE)) {
         MAGIC * mg ;
-        if (SvMAGICAL(sv)) {
-            if (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
-                mg = mg_find(sv, 'P') ;
-            else
-                mg = mg_find(sv, 'q') ;
-    
+        if (mg = SvTIED_mg(sv, how)) {
             if (mg && SvREFCNT(SvRV(mg->mg_obj)) > 1)  
 		warner(WARN_UNTIE,
 		    "untie attempted while %lu inner references still exist",
@@ -738,30 +734,23 @@ PP(pp_untie)
         }
     }
  
-    if (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
-	sv_unmagic(sv, 'P');
-    else
-	sv_unmagic(sv, 'q');
+    sv_unmagic(sv, how);
     RETPUSHYES;
 }
 
 PP(pp_tied)
 {
     djSP;
-    SV * sv ;
-    MAGIC * mg ;
+    SV *sv = POPs;
+    char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV) ? 'P' : 'q';
+    MAGIC *mg;
 
-    sv = POPs;
-    if (SvMAGICAL(sv)) {
-        if (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
-            mg = mg_find(sv, 'P') ;
-        else
-            mg = mg_find(sv, 'q') ;
-
-        if (mg)  {
-            PUSHs(sv_2mortal(newSVsv(mg->mg_obj))) ; 
-            RETURN ;
-	}
+    if (mg = SvTIED_mg(sv, how)) {
+	SV *osv = SvTIED_obj(sv, mg);
+	if (osv == mg->mg_obj)
+	    osv = sv_mortalcopy(osv);
+	PUSHs(osv);
+	RETURN;
     }
     RETPUSHUNDEF;
 }
@@ -868,7 +857,12 @@ PP(pp_sselect)
 /* little endians can use vecs directly */
 #if BYTEORDER == 0x1234 || BYTEORDER == 0x12345678
 #  if SELECT_MIN_BITS > 1
-    growsize = SELECT_MIN_BITS / 8;
+    /* If SELECT_MIN_BITS is greater than one we most probably will want
+     * to align the sizes with SELECT_MIN_BITS/8 because for example
+     * in many little-endian (Intel, Alpha) systems (Linux, OS/2, Digital
+     * UNIX, Solaris, NeXT) the smallest quantum select() operates on
+     * (sets bit) is 32 bits.  */
+    growsize = maxlen + (SELECT_MIN_BITS/8 - (maxlen % (SELECT_MIN_BITS/8)));
 #  else
     growsize = sizeof(fd_set);
 #  endif
@@ -1021,10 +1015,10 @@ PP(pp_getc)
     if (!gv)
 	gv = PL_argvgv;
 
-    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	I32 gimme = GIMME_V;
 	PUSHMARK(SP);
-	XPUSHs(mg->mg_obj);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
 	PUTBACK;
 	ENTER;
 	perl_call_method("GETC", gimme);
@@ -1239,7 +1233,7 @@ PP(pp_prtf)
     else
 	gv = PL_defoutgv;
 
-    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	if (MARK == ORIGMARK) {
 	    MEXTEND(SP, 1);
 	    ++MARK;
@@ -1247,7 +1241,7 @@ PP(pp_prtf)
 	    ++SP;
 	}
 	PUSHMARK(MARK - 1);
-	*MARK = mg->mg_obj;
+	*MARK = SvTIED_obj((SV*)gv, mg);
 	PUTBACK;
 	ENTER;
 	perl_call_method("PRINTF", G_SCALAR);
@@ -1351,12 +1345,12 @@ PP(pp_sysread)
 
     gv = (GV*)*++MARK;
     if ((PL_op->op_type == OP_READ || PL_op->op_type == OP_SYSREAD) &&
-	SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q')))
+	(mg = SvTIED_mg((SV*)gv, 'q')))
     {
 	SV *sv;
 	
 	PUSHMARK(MARK-1);
-	*MARK = mg->mg_obj;
+	*MARK = SvTIED_obj((SV*)gv, mg);
 	ENTER;
 	perl_call_method("READ", G_SCALAR);
 	LEAVE;
@@ -1412,7 +1406,7 @@ PP(pp_sysread)
     }
 #else
     if (PL_op->op_type == OP_RECV)
-	DIE(no_sock_func, "recv");
+	DIE(PL_no_sock_func, "recv");
 #endif
     if (offset < 0) {
 	if (-offset > blen)
@@ -1467,6 +1461,13 @@ PP(pp_sysread)
 
 PP(pp_syswrite)
 {
+    djSP;
+    int items = (SP - PL_stack_base) - TOPMARK;
+    if (items == 2) {
+        EXTEND(SP, 1);
+        PUSHs(sv_2mortal(newSViv(sv_len(*SP))));
+        PUTBACK;
+    }
     return pp_send(ARGS);
 }
 
@@ -1483,13 +1484,11 @@ PP(pp_send)
     MAGIC *mg;
 
     gv = (GV*)*++MARK;
-    if (PL_op->op_type == OP_SYSWRITE &&
-	SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q')))
-    {
+    if (PL_op->op_type == OP_SYSWRITE && (mg = SvTIED_mg((SV*)gv, 'q'))) {
 	SV *sv;
 	
 	PUSHMARK(MARK-1);
-	*MARK = mg->mg_obj;
+	*MARK = SvTIED_obj((SV*)gv, mg);
 	ENTER;
 	perl_call_method("WRITE", G_SCALAR);
 	LEAVE;
@@ -1545,7 +1544,7 @@ PP(pp_send)
 
 #else
     else
-	DIE(no_sock_func, "send");
+	DIE(PL_no_sock_func, "send");
 #endif
     if (length < 0)
 	goto say_undef;
@@ -1599,13 +1598,13 @@ PP(pp_sysseek)
     djSP;
     GV *gv;
     int whence = POPi;
-    long offset = POPl;
+    Off_t offset = POPl;
 
     gv = PL_last_in_gv = (GV*)POPs;
     if (PL_op->op_type == OP_SEEK)
 	PUSHs(boolSV(do_seek(gv, offset, whence)));
     else {
-	long n = do_sysseek(gv, offset, whence);
+	Off_t n = do_sysseek(gv, offset, whence);
 	PUSHs((n < 0) ? &PL_sv_undef
 	      : sv_2mortal(n ? newSViv((IV)n)
 			   : newSVpv(zero_but_true, ZBTLEN)));
@@ -1736,7 +1735,7 @@ PP(pp_ioctl)
     if (SvPOK(argsv)) {
 	if (s[SvCUR(argsv)] != 17)
 	    DIE("Possible memory corruption: %s overflowed 3rd argument",
-		op_name[optype]);
+		PL_op_name[optype]);
 	s[SvCUR(argsv)] = 0;		/* put our null back */
 	SvSETMAGIC(argsv);		/* Assume it has changed */
     }
@@ -1779,7 +1778,7 @@ PP(pp_flock)
     PUSHi(value);
     RETURN;
 #else
-    DIE(no_func, "flock()");
+    DIE(PL_no_func, "flock()");
 #endif
 }
 
@@ -1823,7 +1822,7 @@ PP(pp_socket)
 
     RETPUSHYES;
 #else
-    DIE(no_sock_func, "socket");
+    DIE(PL_no_sock_func, "socket");
 #endif
 }
 
@@ -1873,7 +1872,7 @@ PP(pp_sockpair)
 
     RETPUSHYES;
 #else
-    DIE(no_sock_func, "socketpair");
+    DIE(PL_no_sock_func, "socketpair");
 #endif
 }
 
@@ -1932,7 +1931,7 @@ nuts:
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
-    DIE(no_sock_func, "bind");
+    DIE(PL_no_sock_func, "bind");
 #endif
 }
 
@@ -1962,7 +1961,7 @@ nuts:
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
-    DIE(no_sock_func, "connect");
+    DIE(PL_no_sock_func, "connect");
 #endif
 }
 
@@ -1988,7 +1987,7 @@ nuts:
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
-    DIE(no_sock_func, "listen");
+    DIE(PL_no_sock_func, "listen");
 #endif
 }
 
@@ -2045,7 +2044,7 @@ badexit:
     RETPUSHUNDEF;
 
 #else
-    DIE(no_sock_func, "accept");
+    DIE(PL_no_sock_func, "accept");
 #endif
 }
 
@@ -2069,7 +2068,7 @@ nuts:
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
-    DIE(no_sock_func, "shutdown");
+    DIE(PL_no_sock_func, "shutdown");
 #endif
 }
 
@@ -2078,7 +2077,7 @@ PP(pp_gsockopt)
 #ifdef HAS_SOCKET
     return pp_ssockopt(ARGS);
 #else
-    DIE(no_sock_func, "getsockopt");
+    DIE(PL_no_sock_func, "getsockopt");
 #endif
 }
 
@@ -2149,7 +2148,7 @@ nuts2:
     RETPUSHUNDEF;
 
 #else
-    DIE(no_sock_func, "setsockopt");
+    DIE(PL_no_sock_func, "setsockopt");
 #endif
 }
 
@@ -2158,7 +2157,7 @@ PP(pp_getsockname)
 #ifdef HAS_SOCKET
     return pp_getpeername(ARGS);
 #else
-    DIE(no_sock_func, "getsockname");
+    DIE(PL_no_sock_func, "getsockname");
 #endif
 }
 
@@ -2222,7 +2221,7 @@ nuts2:
     RETPUSHUNDEF;
 
 #else
-    DIE(no_sock_func, "getpeername");
+    DIE(PL_no_sock_func, "getpeername");
 #endif
 }
 
@@ -2274,7 +2273,7 @@ PP(pp_stat)
 	    PL_laststatval = PerlLIO_stat(SvPV(PL_statname, PL_na), &PL_statcache);
 	if (PL_laststatval < 0) {
 	    if (ckWARN(WARN_NEWLINE) && strchr(SvPV(PL_statname, PL_na), '\n'))
-		warner(WARN_NEWLINE, warn_nl, "stat");
+		warner(WARN_NEWLINE, PL_warn_nl, "stat");
 	    max = 0;
 	}
     }
@@ -2332,11 +2331,13 @@ PP(pp_ftrread)
 	if (result < 0)
 	    RETPUSHUNDEF;
 	RETPUSHNO;
-    } else
+    }
+    else
 	result = my_stat(ARGS);
 #else
     result = my_stat(ARGS);
 #endif
+    SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
     if (cando(S_IRUSR, 0, &PL_statcache))
@@ -2356,11 +2357,13 @@ PP(pp_ftrwrite)
 	if (result < 0)
 	    RETPUSHUNDEF;
 	RETPUSHNO;
-    } else
+    }
+    else
 	result = my_stat(ARGS);
 #else
     result = my_stat(ARGS);
 #endif
+    SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
     if (cando(S_IWUSR, 0, &PL_statcache))
@@ -2380,11 +2383,13 @@ PP(pp_ftrexec)
 	if (result < 0)
 	    RETPUSHUNDEF;
 	RETPUSHNO;
-    } else
+    }
+    else
 	result = my_stat(ARGS);
 #else
     result = my_stat(ARGS);
 #endif
+    SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
     if (cando(S_IXUSR, 0, &PL_statcache))
@@ -2404,11 +2409,13 @@ PP(pp_fteread)
 	if (result < 0)
 	    RETPUSHUNDEF;
 	RETPUSHNO;
-    } else
+    }
+    else
 	result = my_stat(ARGS);
 #else
     result = my_stat(ARGS);
 #endif
+    SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
     if (cando(S_IRUSR, 1, &PL_statcache))
@@ -2428,11 +2435,13 @@ PP(pp_ftewrite)
 	if (result < 0)
 	    RETPUSHUNDEF;
 	RETPUSHNO;
-    } else
+    }
+    else
 	result = my_stat(ARGS);
 #else
     result = my_stat(ARGS);
 #endif
+    SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
     if (cando(S_IWUSR, 1, &PL_statcache))
@@ -2452,11 +2461,13 @@ PP(pp_fteexec)
 	if (result < 0)
 	    RETPUSHUNDEF;
 	RETPUSHNO;
-    } else
+    }
+    else
 	result = my_stat(ARGS);
 #else
     result = my_stat(ARGS);
 #endif
+    SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
     if (cando(S_IXUSR, 1, &PL_statcache))
@@ -2776,7 +2787,7 @@ PP(pp_fttext)
 #endif
 	if (i < 0) {
 	    if (ckWARN(WARN_NEWLINE) && strchr(SvPV(sv, PL_na), '\n'))
-		warner(WARN_NEWLINE, warn_nl, "open");
+		warner(WARN_NEWLINE, PL_warn_nl, "open");
 	    RETPUSHUNDEF;
 	}
 	PL_laststatval = PerlLIO_fstat(i, &PL_statcache);
@@ -2873,7 +2884,7 @@ PP(pp_chown)
     PUSHi(value);
     RETURN;
 #else
-    DIE(no_func, "Unsupported function chown");
+    DIE(PL_no_func, "Unsupported function chown");
 #endif
 }
 
@@ -2887,7 +2898,7 @@ PP(pp_chroot)
     PUSHi( chroot(tmps) >= 0 );
     RETURN;
 #else
-    DIE(no_func, "chroot");
+    DIE(PL_no_func, "chroot");
 #endif
 }
 
@@ -2956,7 +2967,7 @@ PP(pp_link)
     TAINT_PROPER("link");
     SETi( link(tmps, tmps2) >= 0 );
 #else
-    DIE(no_func, "Unsupported function link");
+    DIE(PL_no_func, "Unsupported function link");
 #endif
     RETURN;
 }
@@ -2971,7 +2982,7 @@ PP(pp_symlink)
     SETi( symlink(tmps, tmps2) >= 0 );
     RETURN;
 #else
-    DIE(no_func, "symlink");
+    DIE(PL_no_func, "symlink");
 #endif
 }
 
@@ -3148,7 +3159,7 @@ nope:
 	SETERRNO(EBADF,RMS$_DIR);
     RETPUSHUNDEF;
 #else
-    DIE(no_dir_func, "opendir");
+    DIE(PL_no_dir_func, "opendir");
 #endif
 }
 
@@ -3204,7 +3215,7 @@ nope:
     else
 	RETPUSHUNDEF;
 #else
-    DIE(no_dir_func, "readdir");
+    DIE(PL_no_dir_func, "readdir");
 #endif
 }
 
@@ -3228,7 +3239,7 @@ nope:
 	SETERRNO(EBADF,RMS$_ISI);
     RETPUSHUNDEF;
 #else
-    DIE(no_dir_func, "telldir");
+    DIE(PL_no_dir_func, "telldir");
 #endif
 }
 
@@ -3251,7 +3262,7 @@ nope:
 	SETERRNO(EBADF,RMS$_ISI);
     RETPUSHUNDEF;
 #else
-    DIE(no_dir_func, "seekdir");
+    DIE(PL_no_dir_func, "seekdir");
 #endif
 }
 
@@ -3272,7 +3283,7 @@ nope:
 	SETERRNO(EBADF,RMS$_ISI);
     RETPUSHUNDEF;
 #else
-    DIE(no_dir_func, "rewinddir");
+    DIE(PL_no_dir_func, "rewinddir");
 #endif
 }
 
@@ -3302,7 +3313,7 @@ nope:
 	SETERRNO(EBADF,RMS$_IFI);
     RETPUSHUNDEF;
 #else
-    DIE(no_dir_func, "closedir");
+    DIE(PL_no_dir_func, "closedir");
 #endif
 }
 
@@ -3328,7 +3339,7 @@ PP(pp_fork)
     PUSHi(childpid);
     RETURN;
 #else
-    DIE(no_func, "Unsupported function fork");
+    DIE(PL_no_func, "Unsupported function fork");
 #endif
 }
 
@@ -3344,7 +3355,7 @@ PP(pp_wait)
     XPUSHi(childpid);
     RETURN;
 #else
-    DIE(no_func, "Unsupported function wait");
+    DIE(PL_no_func, "Unsupported function wait");
 #endif
 }
 
@@ -3363,7 +3374,7 @@ PP(pp_waitpid)
     SETi(childpid);
     RETURN;
 #else
-    DIE(no_func, "Unsupported function waitpid");
+    DIE(PL_no_func, "Unsupported function waitpid");
 #endif
 }
 
@@ -3448,7 +3459,14 @@ PP(pp_exec)
 #ifdef VMS
 	value = (I32)vms_do_aexec(Nullsv, MARK, SP);
 #else
+#  ifdef __OPEN_VM
+	{
+	   (void ) do_aspawn(Nullsv, MARK, SP);
+	   value = 0;
+	}
+#  else
 	value = (I32)do_aexec(Nullsv, MARK, SP);
+#  endif
 #endif
     else {
 	if (PL_tainting) {
@@ -3459,7 +3477,12 @@ PP(pp_exec)
 #ifdef VMS
 	value = (I32)vms_do_exec(SvPVx(sv_mortalcopy(*SP), PL_na));
 #else
+#  ifdef __OPEN_VM
+	(void) do_spawn(SvPVx(sv_mortalcopy(*SP), PL_na));
+	value = 0;
+#  else
 	value = (I32)do_exec(SvPVx(sv_mortalcopy(*SP), PL_na));
+#  endif
 #endif
     }
     SP = ORIGMARK;
@@ -3477,7 +3500,7 @@ PP(pp_kill)
     PUSHi(value);
     RETURN;
 #else
-    DIE(no_func, "Unsupported function kill");
+    DIE(PL_no_func, "Unsupported function kill");
 #endif
 }
 
@@ -3488,7 +3511,7 @@ PP(pp_getppid)
     XPUSHi( getppid() );
     RETURN;
 #else
-    DIE(no_func, "getppid");
+    DIE(PL_no_func, "getppid");
 #endif
 }
 
@@ -3513,7 +3536,7 @@ PP(pp_getpgrp)
     XPUSHi(value);
     RETURN;
 #else
-    DIE(no_func, "getpgrp()");
+    DIE(PL_no_func, "getpgrp()");
 #endif
 }
 
@@ -3542,7 +3565,7 @@ PP(pp_setpgrp)
 #endif /* USE_BSDPGRP */
     RETURN;
 #else
-    DIE(no_func, "setpgrp()");
+    DIE(PL_no_func, "setpgrp()");
 #endif
 }
 
@@ -3557,7 +3580,7 @@ PP(pp_getpriority)
     SETi( getpriority(which, who) );
     RETURN;
 #else
-    DIE(no_func, "getpriority()");
+    DIE(PL_no_func, "getpriority()");
 #endif
 }
 
@@ -3575,7 +3598,7 @@ PP(pp_setpriority)
     SETi( setpriority(which, who, niceval) >= 0 );
     RETURN;
 #else
-    DIE(no_func, "setpriority()");
+    DIE(PL_no_func, "setpriority()");
 #endif
 }
 
@@ -3707,7 +3730,7 @@ PP(pp_alarm)
     PUSHi((I32)anum);
     RETURN;
 #else
-    DIE(no_func, "Unsupported function alarm");
+    DIE(PL_no_func, "Unsupported function alarm");
 #endif
 }
 
@@ -3855,7 +3878,7 @@ PP(pp_ghbyname)
 #ifdef HAS_GETHOSTBYNAME
     return pp_ghostent(ARGS);
 #else
-    DIE(no_sock_func, "gethostbyname");
+    DIE(PL_no_sock_func, "gethostbyname");
 #endif
 }
 
@@ -3864,7 +3887,7 @@ PP(pp_ghbyaddr)
 #ifdef HAS_GETHOSTBYADDR
     return pp_ghostent(ARGS);
 #else
-    DIE(no_sock_func, "gethostbyaddr");
+    DIE(PL_no_sock_func, "gethostbyaddr");
 #endif
 }
 
@@ -3888,7 +3911,7 @@ PP(pp_ghostent)
 #ifdef HAS_GETHOSTBYNAME
 	hent = PerlSock_gethostbyname(POPp);
 #else
-	DIE(no_sock_func, "gethostbyname");
+	DIE(PL_no_sock_func, "gethostbyname");
 #endif
     else if (which == OP_GHBYADDR) {
 #ifdef HAS_GETHOSTBYADDR
@@ -3899,14 +3922,14 @@ PP(pp_ghostent)
 
 	hent = PerlSock_gethostbyaddr(addr, (Netdb_hlen_t) addrlen, addrtype);
 #else
-	DIE(no_sock_func, "gethostbyaddr");
+	DIE(PL_no_sock_func, "gethostbyaddr");
 #endif
     }
     else
 #ifdef HAS_GETHOSTENT
 	hent = PerlSock_gethostent();
 #else
-	DIE(no_sock_func, "gethostent");
+	DIE(PL_no_sock_func, "gethostent");
 #endif
 
 #ifdef HOST_NOT_FOUND
@@ -3954,7 +3977,7 @@ PP(pp_ghostent)
     }
     RETURN;
 #else
-    DIE(no_sock_func, "gethostent");
+    DIE(PL_no_sock_func, "gethostent");
 #endif
 }
 
@@ -3963,7 +3986,7 @@ PP(pp_gnbyname)
 #ifdef HAS_GETNETBYNAME
     return pp_gnetent(ARGS);
 #else
-    DIE(no_sock_func, "getnetbyname");
+    DIE(PL_no_sock_func, "getnetbyname");
 #endif
 }
 
@@ -3972,7 +3995,7 @@ PP(pp_gnbyaddr)
 #ifdef HAS_GETNETBYADDR
     return pp_gnetent(ARGS);
 #else
-    DIE(no_sock_func, "getnetbyaddr");
+    DIE(PL_no_sock_func, "getnetbyaddr");
 #endif
 }
 
@@ -3994,7 +4017,7 @@ PP(pp_gnetent)
 #ifdef HAS_GETNETBYNAME
 	nent = PerlSock_getnetbyname(POPp);
 #else
-        DIE(no_sock_func, "getnetbyname");
+        DIE(PL_no_sock_func, "getnetbyname");
 #endif
     else if (which == OP_GNBYADDR) {
 #ifdef HAS_GETNETBYADDR
@@ -4002,14 +4025,14 @@ PP(pp_gnetent)
 	Netdb_net_t addr = (Netdb_net_t) U_L(POPn);
 	nent = PerlSock_getnetbyaddr(addr, addrtype);
 #else
-	DIE(no_sock_func, "getnetbyaddr");
+	DIE(PL_no_sock_func, "getnetbyaddr");
 #endif
     }
     else
 #ifdef HAS_GETNETENT
 	nent = PerlSock_getnetent();
 #else
-        DIE(no_sock_func, "getnetent");
+        DIE(PL_no_sock_func, "getnetent");
 #endif
 
     EXTEND(SP, 4);
@@ -4041,7 +4064,7 @@ PP(pp_gnetent)
 
     RETURN;
 #else
-    DIE(no_sock_func, "getnetent");
+    DIE(PL_no_sock_func, "getnetent");
 #endif
 }
 
@@ -4050,7 +4073,7 @@ PP(pp_gpbyname)
 #ifdef HAS_GETPROTOBYNAME
     return pp_gprotoent(ARGS);
 #else
-    DIE(no_sock_func, "getprotobyname");
+    DIE(PL_no_sock_func, "getprotobyname");
 #endif
 }
 
@@ -4059,7 +4082,7 @@ PP(pp_gpbynumber)
 #ifdef HAS_GETPROTOBYNUMBER
     return pp_gprotoent(ARGS);
 #else
-    DIE(no_sock_func, "getprotobynumber");
+    DIE(PL_no_sock_func, "getprotobynumber");
 #endif
 }
 
@@ -4081,19 +4104,19 @@ PP(pp_gprotoent)
 #ifdef HAS_GETPROTOBYNAME
 	pent = PerlSock_getprotobyname(POPp);
 #else
-	DIE(no_sock_func, "getprotobyname");
+	DIE(PL_no_sock_func, "getprotobyname");
 #endif
     else if (which == OP_GPBYNUMBER)
 #ifdef HAS_GETPROTOBYNUMBER
 	pent = PerlSock_getprotobynumber(POPi);
 #else
-    DIE(no_sock_func, "getprotobynumber");
+    DIE(PL_no_sock_func, "getprotobynumber");
 #endif
     else
 #ifdef HAS_GETPROTOENT
 	pent = PerlSock_getprotoent();
 #else
-	DIE(no_sock_func, "getprotoent");
+	DIE(PL_no_sock_func, "getprotoent");
 #endif
 
     EXTEND(SP, 3);
@@ -4123,7 +4146,7 @@ PP(pp_gprotoent)
 
     RETURN;
 #else
-    DIE(no_sock_func, "getprotoent");
+    DIE(PL_no_sock_func, "getprotoent");
 #endif
 }
 
@@ -4132,7 +4155,7 @@ PP(pp_gsbyname)
 #ifdef HAS_GETSERVBYNAME
     return pp_gservent(ARGS);
 #else
-    DIE(no_sock_func, "getservbyname");
+    DIE(PL_no_sock_func, "getservbyname");
 #endif
 }
 
@@ -4141,7 +4164,7 @@ PP(pp_gsbyport)
 #ifdef HAS_GETSERVBYPORT
     return pp_gservent(ARGS);
 #else
-    DIE(no_sock_func, "getservbyport");
+    DIE(PL_no_sock_func, "getservbyport");
 #endif
 }
 
@@ -4169,7 +4192,7 @@ PP(pp_gservent)
 
 	sent = PerlSock_getservbyname(name, proto);
 #else
-	DIE(no_sock_func, "getservbyname");
+	DIE(PL_no_sock_func, "getservbyname");
 #endif
     }
     else if (which == OP_GSBYPORT) {
@@ -4182,14 +4205,14 @@ PP(pp_gservent)
 #endif
 	sent = PerlSock_getservbyport(port, proto);
 #else
-	DIE(no_sock_func, "getservbyport");
+	DIE(PL_no_sock_func, "getservbyport");
 #endif
     }
     else
 #ifdef HAS_GETSERVENT
 	sent = PerlSock_getservent();
 #else
-	DIE(no_sock_func, "getservent");
+	DIE(PL_no_sock_func, "getservent");
 #endif
 
     EXTEND(SP, 4);
@@ -4230,7 +4253,7 @@ PP(pp_gservent)
 
     RETURN;
 #else
-    DIE(no_sock_func, "getservent");
+    DIE(PL_no_sock_func, "getservent");
 #endif
 }
 
@@ -4241,7 +4264,7 @@ PP(pp_shostent)
     PerlSock_sethostent(TOPi);
     RETSETYES;
 #else
-    DIE(no_sock_func, "sethostent");
+    DIE(PL_no_sock_func, "sethostent");
 #endif
 }
 
@@ -4252,7 +4275,7 @@ PP(pp_snetent)
     PerlSock_setnetent(TOPi);
     RETSETYES;
 #else
-    DIE(no_sock_func, "setnetent");
+    DIE(PL_no_sock_func, "setnetent");
 #endif
 }
 
@@ -4263,7 +4286,7 @@ PP(pp_sprotoent)
     PerlSock_setprotoent(TOPi);
     RETSETYES;
 #else
-    DIE(no_sock_func, "setprotoent");
+    DIE(PL_no_sock_func, "setprotoent");
 #endif
 }
 
@@ -4274,7 +4297,7 @@ PP(pp_sservent)
     PerlSock_setservent(TOPi);
     RETSETYES;
 #else
-    DIE(no_sock_func, "setservent");
+    DIE(PL_no_sock_func, "setservent");
 #endif
 }
 
@@ -4286,7 +4309,7 @@ PP(pp_ehostent)
     EXTEND(SP,1);
     RETPUSHYES;
 #else
-    DIE(no_sock_func, "endhostent");
+    DIE(PL_no_sock_func, "endhostent");
 #endif
 }
 
@@ -4298,7 +4321,7 @@ PP(pp_enetent)
     EXTEND(SP,1);
     RETPUSHYES;
 #else
-    DIE(no_sock_func, "endnetent");
+    DIE(PL_no_sock_func, "endnetent");
 #endif
 }
 
@@ -4310,7 +4333,7 @@ PP(pp_eprotoent)
     EXTEND(SP,1);
     RETPUSHYES;
 #else
-    DIE(no_sock_func, "endprotoent");
+    DIE(PL_no_sock_func, "endprotoent");
 #endif
 }
 
@@ -4322,7 +4345,7 @@ PP(pp_eservent)
     EXTEND(SP,1);
     RETPUSHYES;
 #else
-    DIE(no_sock_func, "endservent");
+    DIE(PL_no_sock_func, "endservent");
 #endif
 }
 
@@ -4331,7 +4354,7 @@ PP(pp_gpwnam)
 #ifdef HAS_PASSWD
     return pp_gpwent(ARGS);
 #else
-    DIE(no_func, "getpwnam");
+    DIE(PL_no_func, "getpwnam");
 #endif
 }
 
@@ -4340,7 +4363,7 @@ PP(pp_gpwuid)
 #ifdef HAS_PASSWD
     return pp_gpwent(ARGS);
 #else
-    DIE(no_func, "getpwuid");
+    DIE(PL_no_func, "getpwuid");
 #endif
 }
 
@@ -4432,7 +4455,7 @@ PP(pp_gpwent)
     }
     RETURN;
 #else
-    DIE(no_func, "getpwent");
+    DIE(PL_no_func, "getpwent");
 #endif
 }
 
@@ -4443,7 +4466,7 @@ PP(pp_spwent)
     setpwent();
     RETPUSHYES;
 #else
-    DIE(no_func, "setpwent");
+    DIE(PL_no_func, "setpwent");
 #endif
 }
 
@@ -4454,7 +4477,7 @@ PP(pp_epwent)
     endpwent();
     RETPUSHYES;
 #else
-    DIE(no_func, "endpwent");
+    DIE(PL_no_func, "endpwent");
 #endif
 }
 
@@ -4463,7 +4486,7 @@ PP(pp_ggrnam)
 #ifdef HAS_GROUP
     return pp_ggrent(ARGS);
 #else
-    DIE(no_func, "getgrnam");
+    DIE(PL_no_func, "getgrnam");
 #endif
 }
 
@@ -4472,7 +4495,7 @@ PP(pp_ggrgid)
 #ifdef HAS_GROUP
     return pp_ggrent(ARGS);
 #else
-    DIE(no_func, "getgrgid");
+    DIE(PL_no_func, "getgrgid");
 #endif
 }
 
@@ -4526,7 +4549,7 @@ PP(pp_ggrent)
 
     RETURN;
 #else
-    DIE(no_func, "getgrent");
+    DIE(PL_no_func, "getgrent");
 #endif
 }
 
@@ -4537,7 +4560,7 @@ PP(pp_sgrent)
     setgrent();
     RETPUSHYES;
 #else
-    DIE(no_func, "setgrent");
+    DIE(PL_no_func, "setgrent");
 #endif
 }
 
@@ -4548,7 +4571,7 @@ PP(pp_egrent)
     endgrent();
     RETPUSHYES;
 #else
-    DIE(no_func, "endgrent");
+    DIE(PL_no_func, "endgrent");
 #endif
 }
 
@@ -4563,7 +4586,7 @@ PP(pp_getlogin)
     PUSHp(tmps, strlen(tmps));
     RETURN;
 #else
-    DIE(no_func, "getlogin");
+    DIE(PL_no_func, "getlogin");
 #endif
 }
 
@@ -4662,7 +4685,7 @@ PP(pp_syscall)
     PUSHi(retval);
     RETURN;
 #else
-    DIE(no_func, "syscall");
+    DIE(PL_no_func, "syscall");
 #endif
 }
 
