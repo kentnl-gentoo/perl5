@@ -47,11 +47,7 @@
  *	where library files may be held under a private library, for
  *	instance.
  */
-#ifdef _ALPHA_
-#define ARCHNAME "alpha-mswin32"              /**/
-#else
-#define ARCHNAME "x86-mswin32"              /**/
-#endif
+#define ARCHNAME "MSWin32"		/**/
 
 /* BIN:
  *	This symbol holds the path of the bin directory where the package will
@@ -1515,7 +1511,7 @@
  *		d_Gconvert='sprintf((b),"%.*g",(n),(x))'
  *	The last two assume trailing zeros should not be kept.
  */
-#define Gconvert(x,n,t,b) gcvt((x),(n),(b))
+#define Gconvert(x,n,t,b) sprintf((b),"%.*g",(n),(x))
 
 /* HAS_GETPGID:
  *	This symbol, if defined, indicates to the C program that 
@@ -1691,7 +1687,7 @@
  *	/bin/pdksh, /bin/ash, /bin/bash, or even something such as
  *	D:/bin/sh.exe.
  */
-#define SH_PATH "cmd.exe"  /**/
+#define SH_PATH "cmd /x /c"  /**/
 
 /* SIG_NAME:
  *	This symbol contains a list of signal names in order of

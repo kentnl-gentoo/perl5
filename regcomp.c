@@ -58,6 +58,10 @@
 #include "INTERN.h"
 #include "regcomp.h"
 
+#ifdef USE_THREADS
+#undef op
+#endif /* USE_THREADS */
+
 #ifdef MSDOS
 # if defined(BUGGY_MSC6)
  /* MSC 6.00A breaks on op/regexp.t test 85 unless we turn this off */
@@ -257,8 +261,8 @@ PMOP* pm;
 	if (sawplus && (!sawopen || !regsawback))
 	    r->reganch |= ROPT_SKIP;	/* x+ must match 1st of run */
 
-	DEBUG_r(PerlIO_printf(Perl_debug_log, "first %d next %d offset %ld\n",
-	   OP(first), OP(NEXTOPER(first)), (long)(first - scan)));
+	DEBUG_r(PerlIO_printf(Perl_debug_log, "first %d next %d offset %d\n",
+	   OP(first), OP(NEXTOPER(first)), first - scan));
 	/*
 	* If there's something expensive in the r.e., find the
 	* longest literal string that must appear and make it the
@@ -467,9 +471,6 @@ I32 *flagp;
 		nextchar();
 		*flagp = TRYAGAIN;
 		return NULL;
-            case 0:
-                croak("Sequence (? incomplete");
-                break;
 	    default:
 		--regparse;
 		while (*regparse && strchr("iogcmsx", *regparse))
@@ -702,7 +703,7 @@ I32 *flagp;
     }
 
     if (!(flags&HASWIDTH) && op != '?')
-      FAIL("regexp *+ operand could be empty"); /* else may core dump */
+      FAIL("regexp *+ operand could be empty");
 
     nextchar();
 
@@ -1539,13 +1540,13 @@ regexp *r;
 	op = OP(s);
 	/* where, what */
 	regprop(sv, s);
-	PerlIO_printf(Perl_debug_log, "%2ld%s", (long)(s - r->program), SvPVX(sv));
+	PerlIO_printf(Perl_debug_log, "%2d%s", s - r->program, SvPVX(sv));
 	next = regnext(s);
 	s += regarglen[(U8)op];
 	if (next == NULL)		/* Next ptr. */
 	    PerlIO_printf(Perl_debug_log, "(0)");
 	else 
-	    PerlIO_printf(Perl_debug_log, "(%ld)", (long)(s-r->program)+(next-s));
+	    PerlIO_printf(Perl_debug_log, "(%d)", (s-r->program)+(next-s));
 	s += 3;
 	if (op == ANYOF) {
 	    s += 33;
@@ -1595,14 +1596,14 @@ regexp *r;
 - regprop - printable representation of opcode
 */
 void
-regprop(sv, op)
+regprop(sv, o)
 SV *sv;
-char *op;
+char *o;
 {
     register char *p = 0;
 
     sv_setpv(sv, ":");
-    switch (OP(op)) {
+    switch (OP(o)) {
     case BOL:
 	p = "BOL";
 	break;
@@ -1664,25 +1665,25 @@ char *op;
 	p = "NBOUNDL";
 	break;
     case CURLY:
-	sv_catpvf(sv, "CURLY {%d,%d}", ARG1(op), ARG2(op));
+	sv_catpvf(sv, "CURLY {%d,%d}", ARG1(o), ARG2(o));
 	break;
     case CURLYX:
-	sv_catpvf(sv, "CURLYX {%d,%d}", ARG1(op), ARG2(op));
+	sv_catpvf(sv, "CURLYX {%d,%d}", ARG1(o), ARG2(o));
 	break;
     case REF:
-	sv_catpvf(sv, "REF%d", ARG1(op));
+	sv_catpvf(sv, "REF%d", ARG1(o));
 	break;
     case REFF:
-	sv_catpvf(sv, "REFF%d", ARG1(op));
+	sv_catpvf(sv, "REFF%d", ARG1(o));
 	break;
     case REFFL:
-	sv_catpvf(sv, "REFFL%d", ARG1(op));
+	sv_catpvf(sv, "REFFL%d", ARG1(o));
 	break;
     case OPEN:
-	sv_catpvf(sv, "OPEN%d", ARG1(op));
+	sv_catpvf(sv, "OPEN%d", ARG1(o));
 	break;
     case CLOSE:
-	sv_catpvf(sv, "CLOSE%d", ARG1(op));
+	sv_catpvf(sv, "CLOSE%d", ARG1(o));
 	p = NULL;
 	break;
     case STAR:

@@ -24,10 +24,10 @@ sub Getopt {
 		shift(@ARGV);
 		$rest = shift(@ARGV);
 	    }
-	    ${"opt_$first"} = $rest;
+	    eval "\$opt_$first = \$rest;";
 	}
 	else {
-	    ${"opt_$first"} = 1;
+	    eval "\$opt_$first = 1;";
 	    if ($rest ne '') {
 		$ARGV[0] = "-$rest";
 	    }

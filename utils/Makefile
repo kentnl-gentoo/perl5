@@ -12,19 +12,19 @@ all: $(plextract)
 $(plextract):
 	$(PERL) -I../lib $@.PL
 
-c2ph:		c2ph.PL ../config.sh
+c2ph:		c2ph.PL
 
-h2ph:		h2ph.PL ../config.sh
+h2ph:		h2ph.PL
 
-h2xs:		h2xs.PL ../config.sh
+h2xs:		h2xs.PL
 
-perlbug:	perlbug.PL ../config.sh ../patchlevel.h
+perlbug:	perlbug.PL
 
-perldoc:	perldoc.PL ../config.sh
+perldoc:	perldoc.PL
 
-pl2pm:		pl2pm.PL ../config.sh
+pl2pm:		pl2pm.PL
 
-splain:		splain.PL ../config.sh ../lib/diagnostics.pm
+splain:		splain.PL ../lib/diagnostics.pm
 
 clean:
 

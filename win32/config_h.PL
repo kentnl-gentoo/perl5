@@ -37,8 +37,7 @@ while (<SH>)
   s#/[ *\*]*\*/#/**/#;
   if (/^\s*#define\s+ARCHLIB_EXP/)
    {
-     $_ = "#define ARCHLIB_EXP (win32PerlLibPath())\t/**/\n"
-        . "#define APPLLIB_EXP (win32SiteLibPath())\t/**/\n";
+     $_ = "#define ARCHLIB_EXP (win32PerlLibPath())\t/**/\n";
    }
   print H;
  }

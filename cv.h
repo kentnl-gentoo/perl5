@@ -28,7 +28,11 @@ struct xpvcv {
     long	xcv_depth;		/* >= 2 indicates recursive call */
     AV *	xcv_padlist;
     CV *	xcv_outside;
-    U8		xcv_flags;
+#ifdef USE_THREADS
+    perl_mutex *xcv_mutexp;
+    struct thread *xcv_owner;	/* current owner thread */
+#endif /* USE_THREADS */
+    cv_flags_t	xcv_flags;
 };
 
 #define Nullcv Null(CV*)
@@ -43,15 +47,21 @@ struct xpvcv {
 #define CvDEPTH(sv)	((XPVCV*)SvANY(sv))->xcv_depth
 #define CvPADLIST(sv)	((XPVCV*)SvANY(sv))->xcv_padlist
 #define CvOUTSIDE(sv)	((XPVCV*)SvANY(sv))->xcv_outside
+#ifdef USE_THREADS
+#define CvMUTEXP(sv)	((XPVCV*)SvANY(sv))->xcv_mutexp
+#define CvOWNER(sv)	((XPVCV*)SvANY(sv))->xcv_owner
+#endif /* USE_THREADS */
 #define CvFLAGS(sv)	((XPVCV*)SvANY(sv))->xcv_flags
 
-#define CVf_CLONE	0x01	/* anon CV uses external lexicals */
-#define CVf_CLONED	0x02	/* a clone of one of those */
-#define CVf_ANON	0x04	/* CvGV() can't be trusted */
-#define CVf_OLDSTYLE	0x08
-#define CVf_UNIQUE	0x10	/* can't be cloned */
-#define CVf_NODEBUG	0x20	/* no DB::sub indirection for this CV
+#define CVf_CLONE	0x0001	/* anon CV uses external lexicals */
+#define CVf_CLONED	0x0002	/* a clone of one of those */
+#define CVf_ANON	0x0004	/* CvGV() can't be trusted */
+#define CVf_OLDSTYLE	0x0008
+#define CVf_UNIQUE	0x0010	/* can't be cloned */
+#define CVf_NODEBUG	0x0020	/* no DB::sub indirection for this CV
 				   (esp. useful for special XSUBs) */
+#define CVf_METHOD	0x0040	/* CV is explicitly marked as a method */
+#define CVf_LOCKED	0x0080	/* CV locks itself or first arg on entry */
 
 #define CvCLONE(cv)		(CvFLAGS(cv) & CVf_CLONE)
 #define CvCLONE_on(cv)		(CvFLAGS(cv) |= CVf_CLONE)
@@ -76,3 +86,11 @@ struct xpvcv {
 #define CvNODEBUG(cv)		(CvFLAGS(cv) & CVf_NODEBUG)
 #define CvNODEBUG_on(cv)	(CvFLAGS(cv) |= CVf_NODEBUG)
 #define CvNODEBUG_off(cv)	(CvFLAGS(cv) &= ~CVf_NODEBUG)
+
+#define CvMETHOD(cv)		(CvFLAGS(cv) & CVf_METHOD)
+#define CvMETHOD_on(cv)		(CvFLAGS(cv) |= CVf_METHOD)
+#define CvMETHOD_off(cv)	(CvFLAGS(cv) &= ~CVf_METHOD)
+
+#define CvLOCKED(cv)		(CvFLAGS(cv) & CVf_LOCKED)
+#define CvLOCKED_on(cv)		(CvFLAGS(cv) |= CVf_LOCKED)
+#define CvLOCKED_off(cv)	(CvFLAGS(cv) &= ~CVf_LOCKED)

@@ -15,7 +15,6 @@
 #define HAS_KILL
 #define HAS_WAIT
 #define HAS_DLERROR
-#define HAS_WAITPID_RUNTIME (_emx_env & 0x200)
 
 /* USEMYBINMODE
  *	This symbol, if defined, indicates that the program should
@@ -126,7 +125,6 @@ char *my_tmpnam (char *);
 #define fwrite1 fwrite
 
 #define my_getenv(var) getenv(var)
-#define flock	my_flock
 
 void *emx_calloc (size_t, size_t);
 void emx_free (void *);

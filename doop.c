@@ -23,6 +23,7 @@ do_trans(sv,arg)
 SV *sv;
 OP *arg;
 {
+    dTHR;
     register short *tbl;
     register U8 *s;
     register U8 *send;
@@ -453,7 +454,8 @@ dARGS
     I32 gimme = GIMME_V;
     I32 dokeys =   (op->op_type == OP_KEYS);
     I32 dovalues = (op->op_type == OP_VALUES);
-
+    I32 realhv = (SvTYPE(hv) == SVt_PVHV);
+    
     if (op->op_type == OP_RV2HV || op->op_type == OP_PADHV) 
 	dokeys = dovalues = TRUE;
 
@@ -467,7 +469,10 @@ dARGS
 	RETURN;
     }
 
-    (void)hv_iterinit(hv);	/* always reset iterator regardless */
+    if (realhv)
+	(void)hv_iterinit(hv);	/* always reset iterator regardless */
+    else
+	(void)avhv_iterinit((AV*)hv);
 
     if (gimme == G_VOID)
 	RETURN;
@@ -492,7 +497,7 @@ dARGS
 	else {
 	    i = 0;
 	    /*SUPPRESS 560*/
-	    while (entry = hv_iternext(hv)) {
+	    while (entry = realhv ? hv_iternext(hv) : avhv_iternext((AV*)hv)) {
 		i++;
 	    }
 	}
@@ -504,14 +509,15 @@ dARGS
     EXTEND(sp, HvMAX(hv) * (dokeys + dovalues));
 
     PUTBACK;	/* hv_iternext and hv_iterval might clobber stack_sp */
-    while (entry = hv_iternext(hv)) {
+    while (entry = realhv ? hv_iternext(hv) : avhv_iternext((AV*)hv)) {
 	SPAGAIN;
 	if (dokeys)
 	    XPUSHs(hv_iterkeysv(entry));	/* won't clobber stack_sp */
 	if (dovalues) {
 	    tmpstr = sv_newmortal();
 	    PUTBACK;
-	    sv_setsv(tmpstr,hv_iterval(hv,entry));
+	    sv_setsv(tmpstr,realhv ?
+		     hv_iterval(hv,entry) : avhv_iterval((AV*)hv,entry));
 	    DEBUG_H(sv_setpvf(tmpstr, "%lu%%%d=%lu",
 			    (unsigned long)HeHASH(entry),
 			    HvMAX(hv)+1,
@@ -523,4 +529,3 @@ dARGS
     }
     return NORMAL;
 }
-

@@ -384,6 +384,7 @@ register GV *gv;
     }
     filemode = 0;
     while (av_len(GvAV(gv)) >= 0) {
+	dTHR;
 	STRLEN len;
 	sv = av_shift(GvAV(gv));
 	SAVEFREESV(sv);
@@ -624,6 +625,7 @@ bool
 do_eof(gv)
 GV *gv;
 {
+    dTHR;
     register IO *io;
     int ch;
 
@@ -907,6 +909,7 @@ register SV **sp;
     char *tmps;
 
     if (sp > mark) {
+	dTHR;
 	New(401,Argv, sp - mark + 1, char*);
 	a = Argv;
 	while (++mark <= sp) {
@@ -942,7 +945,7 @@ do_execfree()
     }
 }
 
-#if !defined(OS2) && !defined(WIN32)
+#ifndef OS2
 
 bool
 do_exec(cmd)
@@ -1033,7 +1036,7 @@ char *cmd;
     return FALSE;
 }
 
-#endif /* OS2 || WIN32 */
+#endif /* OS2 */
 
 I32
 apply(type,mark,sp)
@@ -1041,6 +1044,7 @@ I32 type;
 register SV **mark;
 register SV **sp;
 {
+    dTHR;
     register I32 val;
     register I32 val2;
     register I32 tot = 0;
@@ -1294,6 +1298,7 @@ I32 optype;
 SV **mark;
 SV **sp;
 {
+    dTHR;
     key_t key;
     I32 n, flags;
 
@@ -1329,6 +1334,7 @@ I32 optype;
 SV **mark;
 SV **sp;
 {
+    dTHR;
     SV *astr;
     char *a;
     I32 id, n, cmd, infosize, getinfo;
@@ -1364,25 +1370,29 @@ SV **sp;
 	    infosize = sizeof(struct semid_ds);
 	else if (cmd == GETALL || cmd == SETALL)
 	{
-	    struct semid_ds semds;
 #ifdef __linux__	/* XXX Need metaconfig test */
-/* linux (and Solaris2?) uses :
-   int semctl (int semid, int semnum, int cmd, union semun arg)
+/* linux uses :
+   int semctl (int semid, int semnun, int cmd, union semun arg)
+
        union semun {
             int val;
             struct semid_ds *buf;
             ushort *array;
        };
 */
-            union semun semun;
-            semun.buf = &semds;
-	    if (semctl(id, 0, IPC_STAT, semun) == -1)
+            union semun semds;
+	    if (semctl(id, 0, IPC_STAT, semds) == -1)
 #else
+	    struct semid_ds semds;
 	    if (semctl(id, 0, IPC_STAT, &semds) == -1)
 #endif
 		return -1;
 	    getinfo = (cmd == GETALL);
+#ifdef __linux__	/* XXX Need metaconfig test */
+	    infosize = semds.buf->sem_nsems * sizeof(short);
+#else
 	    infosize = semds.sem_nsems * sizeof(short);
+#endif
 		/* "short" is technically wrong but much more portable
 		   than guessing about u_?short(_t)? */
 	}
@@ -1453,6 +1463,7 @@ SV **mark;
 SV **sp;
 {
 #ifdef HAS_MSG
+    dTHR;
     SV *mstr;
     char *mbuf;
     I32 id, msize, flags;
@@ -1477,6 +1488,7 @@ SV **mark;
 SV **sp;
 {
 #ifdef HAS_MSG
+    dTHR;
     SV *mstr;
     char *mbuf;
     long mtype;
@@ -1515,6 +1527,7 @@ SV **mark;
 SV **sp;
 {
 #ifdef HAS_SEM
+    dTHR;
     SV *opstr;
     char *opbuf;
     I32 id;
@@ -1542,6 +1555,7 @@ SV **mark;
 SV **sp;
 {
 #ifdef HAS_SHM
+    dTHR;
     SV *mstr;
     char *mbuf, *shm;
     I32 id, mpos, msize;

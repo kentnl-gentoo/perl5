@@ -28,19 +28,16 @@ these.  Other checks, however, are best supported by the language itself,
 and it is these checks especially that contribute to making a setuid Perl
 program more secure than the corresponding C program.
 
-You may not use data derived from outside your program to affect
-something else outside your program--at least, not by accident.  All
-command line arguments, environment variables, locale information (see
-L<perllocale>), results of certain system calls (readdir, readlink,
-the gecos field of getpw* calls), and all file input are marked as
-"tainted".  Tainted data may not be used directly or indirectly in any
-command that invokes a sub-shell, nor in any command that modifies
-files, directories, or processes.  Any variable set within an
-expression that has previously referenced a tainted value itself
-becomes tainted, even if it is logically impossible for the tainted
-value to influence the variable.  Because taintedness is associated
-with each scalar value, some elements of an array can be tainted and
-others not.
+You may not use data derived from outside your program to affect something
+else outside your program--at least, not by accident.  All command line
+arguments, environment variables, locale information (see L<perllocale>),
+and file input are marked as "tainted".  Tainted data may not be used
+directly or indirectly in any command that invokes a sub-shell, nor in any
+command that modifies files, directories, or processes.  Any variable set
+within an expression that has previously referenced a tainted value itself
+becomes tainted, even if it is logically impossible for the tainted value
+to influence the variable.  Because taintedness is associated with each
+scalar value, some elements of an array can be tainted and others not.
 
 For example:
 

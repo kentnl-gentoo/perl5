@@ -46,11 +46,22 @@
 #define av_make			Perl_av_make
 #define av_pop			Perl_av_pop
 #define av_push			Perl_av_push
-#define av_reify		Perl_av_reify
 #define av_shift		Perl_av_shift
 #define av_store		Perl_av_store
 #define av_undef		Perl_av_undef
 #define av_unshift		Perl_av_unshift
+#define avhv_delete		Perl_avhv_delete
+#define avhv_delete_ent		Perl_avhv_delete_ent
+#define avhv_exists		Perl_avhv_exists
+#define avhv_exists_ent		Perl_avhv_exists_ent
+#define avhv_fetch		Perl_avhv_fetch
+#define avhv_fetch_ent		Perl_avhv_fetch_ent
+#define avhv_iterinit		Perl_avhv_iterinit
+#define avhv_iternext		Perl_avhv_iternext
+#define avhv_iternextsv		Perl_avhv_iternextsv
+#define avhv_iterval		Perl_avhv_iterval
+#define avhv_store		Perl_avhv_store
+#define avhv_store_ent		Perl_avhv_store_ent
 #define band_amg		Perl_band_amg
 #define bind_match		Perl_bind_match
 #define block_end		Perl_block_end
@@ -115,6 +126,7 @@
 #define comppad_name_fill	Perl_comppad_name_fill
 #define concat_amg		Perl_concat_amg
 #define concat_ass_amg		Perl_concat_ass_amg
+#define condpair_magic		Perl_condpair_magic
 #define convert			Perl_convert
 #define cop_seqmax		Perl_cop_seqmax
 #define cos_amg			Perl_cos_amg
@@ -265,8 +277,10 @@
 #define ibcmp			Perl_ibcmp
 #define ibcmp_locale		Perl_ibcmp_locale
 #define in_my			Perl_in_my
+#define in_my_stash		Perl_in_my_stash
 #define inc_amg			Perl_inc_amg
 #define ingroup			Perl_ingroup
+#define init_stacks		Perl_init_stacks
 #define instr			Perl_instr
 #define intro_my		Perl_intro_my
 #define intuit_more		Perl_intuit_more
@@ -324,6 +338,7 @@
 #define magic_gettaint		Perl_magic_gettaint
 #define magic_getuvar		Perl_magic_getuvar
 #define magic_len		Perl_magic_len
+#define magic_mutexfree		Perl_magic_mutexfree
 #define magic_nextpack		Perl_magic_nextpack
 #define magic_set		Perl_magic_set
 #define magic_setamagic		Perl_magic_setamagic
@@ -477,6 +492,7 @@
 #define op_name			Perl_op_name
 #define op_seqmax		Perl_op_seqmax
 #define opargs			Perl_opargs
+#define opsave			Perl_opsave
 #define origalen		Perl_origalen
 #define origenviron		Perl_origenviron
 #define osname			Perl_osname
@@ -684,6 +700,7 @@
 #define pp_list			Perl_pp_list
 #define pp_listen		Perl_pp_listen
 #define pp_localtime		Perl_pp_localtime
+#define pp_lock			Perl_pp_lock
 #define pp_log			Perl_pp_log
 #define pp_lslice		Perl_pp_lslice
 #define pp_lstat		Perl_pp_lstat
@@ -927,6 +944,7 @@
 #define save_list		Perl_save_list
 #define save_long		Perl_save_long
 #define save_nogv		Perl_save_nogv
+#define save_op			Perl_save_op
 #define save_pptr		Perl_save_pptr
 #define save_scalar		Perl_save_scalar
 #define save_sptr		Perl_save_sptr
@@ -1006,6 +1024,7 @@
 #define sv_add_arena		Perl_sv_add_arena
 #define sv_backoff		Perl_sv_backoff
 #define sv_bless		Perl_sv_bless
+#define sv_bless3		Perl_sv_bless3
 #define sv_catpv		Perl_sv_catpv
 #define sv_catpvf		Perl_sv_catpvf
 #define sv_catpvn		Perl_sv_catpvn
@@ -1047,7 +1066,6 @@
 #define sv_setptrobj		Perl_sv_setptrobj
 #define sv_setpv		Perl_sv_setpv
 #define sv_setpvf		Perl_sv_setpvf
-#define sv_setpviv		Perl_sv_setpviv
 #define sv_setpvn		Perl_sv_setpvn
 #define sv_setref_iv		Perl_sv_setref_iv
 #define sv_setref_nv		Perl_sv_setref_nv
@@ -1075,6 +1093,7 @@
 #define too_many_arguments	Perl_too_many_arguments
 #define uid			Perl_uid
 #define unlnk			Perl_unlnk
+#define unlock_condpair		Perl_unlock_condpair
 #define unshare_hek		Perl_unshare_hek
 #define unsharepvn		Perl_unsharepvn
 #define utilize			Perl_utilize
@@ -1096,6 +1115,7 @@
 #define vtbl_isa		Perl_vtbl_isa
 #define vtbl_isaelem		Perl_vtbl_isaelem
 #define vtbl_mglob		Perl_vtbl_mglob
+#define vtbl_mutex		Perl_vtbl_mutex
 #define vtbl_nkeys		Perl_vtbl_nkeys
 #define vtbl_pack		Perl_vtbl_pack
 #define vtbl_packelem		Perl_vtbl_packelem
@@ -1247,6 +1267,7 @@
 #define gensym			(curinterp->Igensym)
 #define in_eval			(curinterp->Iin_eval)
 #define incgv			(curinterp->Iincgv)
+#define initav			(curinterp->Iinitav)
 #define inplace			(curinterp->Iinplace)
 #define last_in_gv		(curinterp->Ilast_in_gv)
 #define lastfd			(curinterp->Ilastfd)
@@ -1401,6 +1422,7 @@
 #define Igensym			gensym
 #define Iin_eval		in_eval
 #define Iincgv			incgv
+#define Iinitav			initav
 #define Iinplace		inplace
 #define Ilast_in_gv		last_in_gv
 #define Ilastfd			lastfd
@@ -1564,6 +1586,7 @@
 #define gensym			Perl_gensym
 #define in_eval			Perl_in_eval
 #define incgv			Perl_incgv
+#define initav			Perl_initav
 #define inplace			Perl_inplace
 #define last_in_gv		Perl_last_in_gv
 #define lastfd			Perl_lastfd

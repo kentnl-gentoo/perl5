@@ -79,8 +79,7 @@ my $summary_expanded = 0;
 
 sub myconfig {
 	return $summary if $summary_expanded;
-	$summary =~ s{\$(\w+)}
-		     { my $c = $Config{$1}; defined($c) ? $c : 'undef' }ge;
+	$summary =~ s/\$(\w+)/$Config{$1}/ge;
 	$summary_expanded = 1;
 	$summary;
 }
@@ -179,9 +178,6 @@ ENDOFSET
 }
 
 print CONFIG <<'ENDOFTAIL';
-
-# avoid Config..Exporter..UNIVERSAL search for DESTROY then AUTOLOAD
-sub DESTROY { }
 
 tie %Config, 'Config';
 

@@ -82,13 +82,13 @@ END
 # Emit function declarations.
 
 for (sort keys %ckname) {
-    print "OP *\t", &tab(3,$_),"_((OP* op));\n";
+    print "OP *\t", &tab(3,$_),"_((OP* o));\n";
 }
 
 print "\n";
 
 for (@ops) {
-    print "OP *\t", &tab(3, "pp_\L$_"), "_((void));\n";
+    print "OP *\t", &tab(3, "pp_\L$_"), "_((ARGSproto));\n";
 }
 
 # Emit ppcode switch array.
@@ -342,7 +342,7 @@ vec		vec			ck_fun		ist	S S S
 index		index			ck_index	ist	S S S?
 rindex		rindex			ck_index	ist	S S S?
 
-sprintf		sprintf			ck_fun_locale	mfst	S L
+sprintf		sprintf			ck_fun_locale	mst	S L
 formline	formline		ck_fun		ms	S L
 ord		ord			ck_fun		ifstu	S?
 chr		chr			ck_fun		fstu	S?
@@ -652,3 +652,6 @@ getlogin	getlogin		ck_null		st
 # Miscellaneous.
 
 syscall		syscall			ck_fun		imst	S L
+
+# For multi-threading
+lock		lock			ck_null		s	S

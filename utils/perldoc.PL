@@ -45,11 +45,10 @@ print OUT <<'!NO!SUBS!';
 # the perl manuals, though it too is written in perl.
 
 if(@ARGV<1) {
-	$me = $0;		# Editing $0 is unportable
-	$me =~ s,.*/,,;
+        $0 =~ s,.*/,,;
 	die <<EOF;
-Usage: $me [-h] [-v] [-t] [-u] [-m] [-l] PageName|ModuleName|ProgramName
-       $me -f PerlFunc
+Usage: $0 [-h] [-v] [-t] [-u] [-m] [-l] PageName|ModuleName|ProgramName
+       $0 -f PerlFunc
 
 We suggest you use "perldoc perldoc" to get aquainted 
 with the system.
@@ -57,8 +56,6 @@ EOF
 }
 
 use Getopt::Std;
-use Config '%Config';
-
 $Is_VMS = $^O eq 'VMS';
 $Is_MSWin32 = $^O eq 'MSWin32';
 
@@ -119,14 +116,6 @@ if ($opt_f) {
    @pages = @ARGV;
 }
 
-# Does this look like a module or extension directory?
-if (-f "Makefile.PL") {
-	# Add ., lib and blib/* libs to @INC (if they exist)
-	unshift(@INC, '.');
-	unshift(@INC, 'lib') if -d 'lib';
-	require ExtUtils::testlib;
-}
-
 
 
 sub containspod {
@@ -143,16 +132,17 @@ sub containspod {
 	return 0;
 }
 
-sub minus_f_nocase {
+ sub minus_f_nocase {
      my($file) = @_;
-     # on a case-forgiving file system we can simply use -f $file
-     if ($Is_VMS or $Is_MSWin32 or $^O eq 'os2') {
-        return ( -f $file ) ? $file : '';
-     }
      local *DIR;
      local($")="/";
      my(@p,$p,$cip);
      foreach $p (split(/\//, $file)){
+	if (($Is_VMS or $Is_MSWin32 or $^O eq 'os2') and not scalar @p) {
+	    # VMSish filesystems don't begin at '/'
+	    push(@p,$p);
+	    next;
+	}
  	if (-d ("@p/$p")){
  	    push @p, $p;
  	} elsif (-f ("@p/$p")) {
@@ -162,6 +152,7 @@ sub minus_f_nocase {
  	    my $lcp = lc $p;
  	    opendir DIR, "@p";
  	    while ($cip=readdir(DIR)) {
+		$cip =~ s/\.dir$// if $Is_VMS;
  		if (lc $cip eq $lcp){
  		    $found++;
  		    last;
@@ -193,9 +184,7 @@ sub minus_f_nocase {
  		or ( $ret = minus_f_nocase "$dir/$s"     and containspod($ret))
   		or ( $Is_VMS and 
  		     $ret = minus_f_nocase "$dir/$s.com" and containspod($ret))
-		or ( $^O eq 'os2' and 
- 		     $ret = minus_f_nocase "$dir/$s.cmd" and containspod($ret))
-		or ( ($Is_MSWin32 or $^O eq 'os2') and 
+		or ( $Is_MSWin32 and 
  		     $ret = minus_f_nocase "$dir/$s.bat" and containspod($ret))
  		or ( $ret = minus_f_nocase "$dir/pod/$s.pod")
  		or ( $ret = minus_f_nocase "$dir/pod/$s" and containspod($ret)))
@@ -226,9 +215,10 @@ foreach (@pages) {
 		for ($i = 0; $trn = $ENV{'DCL$PATH'.$i}; $i++) {
 		    push(@searchdirs,$trn);
 		}
+	    } elsif ($Is_MSWin32) {
+	        push(@searchdirs, grep(-d, split(';', $ENV{'PATH'})));
 	    } else {
-	        push(@searchdirs, grep(-d, split($Config{path_sep}, 
-						 $ENV{'PATH'})));
+		    push(@searchdirs, grep(-d, split(':', $ENV{'PATH'})));
 	    }
 	    @files= searchfor(0,$_,@searchdirs);
 	}
@@ -269,12 +259,7 @@ if ($Is_MSWin32) {
 	$tmp = 'Sys$Scratch:perldoc.tmp1_'.$$;
 	push @pagers, qw( most more less type/page );
 } else {
-	if ($^O eq 'os2') {
-	  require POSIX;
-	  $tmp = POSIX::tmpnam();
-	} else {
-	  $tmp = "/tmp/perldoc1.$$";	  
-	}
+	$tmp = "/tmp/perldoc1.$$";
 	push @pagers, qw( more less pg view cat );
 	unshift @pagers, $ENV{PAGER}  if $ENV{PAGER};
 }

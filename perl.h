@@ -29,6 +29,14 @@
 
 #include "embed.h"
 
+#ifdef OP_IN_REGISTER
+#  ifdef __GNUC__
+#    define stringify_immed(s) #s
+#    define stringify(s) stringify_immed(s)
+register struct op *op asm(stringify(OP_IN_REGISTER));
+#  endif
+#endif
+
 /*
  * STMT_START { statements; } STMT_END;
  * can be used as a single statement, as in
@@ -51,6 +59,20 @@
 #  endif
 # endif
 #endif
+
+#define NOOP (void)0
+
+#define WITH_THR(s) do { dTHR; s; } while (0)
+#ifdef USE_THREADS
+#ifdef FAKE_THREADS
+#include "fakethr.h"
+#else
+#include <pthread.h>
+typedef pthread_mutex_t perl_mutex;
+typedef pthread_cond_t perl_cond;
+typedef pthread_key_t perl_key;
+#endif /* FAKE_THREADS */
+#endif /* USE_THREADS */
 
 /*
  * SOFT_CAST can be used for args to prototyped functions to retain some
@@ -361,14 +383,8 @@
 #   include <netinet/in.h>
 #endif
 
-#if defined(SF_APPEND) && defined(USE_SFIO) && defined(I_SFIO)
-/* <sfio.h> defines SF_APPEND and <sys/stat.h> might define SF_APPEND
- * (the neo-BSD seem to do this).  */
-#   undef SF_APPEND
-#endif
-
 #ifdef I_SYS_STAT
-#   include <sys/stat.h>
+#include <sys/stat.h>
 #endif
 
 /* The stat macros for Amdahl UTS, Unisoft System V/88 (and derivatives
@@ -845,6 +861,11 @@
 
 #endif
 
+/* Digital UNIX defines a typedef CONTEXT when pthreads is in use */ 
+#if defined(__osf__)
+#  define CONTEXT PERL_CONTEXT
+#endif
+
 typedef MEM_SIZE STRLEN;
 
 typedef struct op OP;
@@ -995,6 +1016,12 @@ union any {
     long	any_long;
     void	(*any_dptr) _((void*));
 };
+
+#ifdef USE_THREADS
+#define ARGSproto struct thread *
+#else
+#define ARGSproto void
+#endif /* USE_THREADS */
 
 /* Work around some cygwin32 problems with importing global symbols */
 #if defined(CYGWIN32) && defined(DLLIMPORT) 
@@ -1283,9 +1310,26 @@ typedef Sighandler_t Sigsave_t;
 # ifndef register
 #  define register
 # endif
+# ifdef MYMALLOC
+#  ifndef DEBUGGING_MSTATS
+#   define DEBUGGING_MSTATS
+#  endif
+# endif
 # define PAD_SV(po) pad_sv(po)
+# define RUNOPS_DEFAULT runops_debug
 #else
 # define PAD_SV(po) curpad[po]
+# define RUNOPS_DEFAULT runops_standard
+#endif
+
+/*
+ * These need prototyping here because <proto.h> isn't
+ * included until after runops is initialised.
+ */
+
+int runops_standard _((void));
+#ifdef DEBUGGING
+int runops_debug _((void));
 #endif
 
 /****************/
@@ -1294,6 +1338,21 @@ typedef Sighandler_t Sigsave_t;
 
 /* global state */
 EXT PerlInterpreter *	curinterp;	/* currently running interpreter */
+#ifdef USE_THREADS
+EXT perl_key		thr_key;	/* For per-thread struct thread ptr */
+EXT perl_mutex		sv_mutex;	/* Mutex for allocating SVs in sv.c */
+EXT perl_mutex		malloc_mutex;	/* Mutex for malloc */
+EXT perl_mutex		eval_mutex;	/* Mutex for doeval */
+EXT perl_cond		eval_cond;	/* Condition variable for doeval */
+EXT struct thread *	eval_owner;	/* Owner thread for doeval */
+EXT int			nthreads;	/* Number of threads currently */
+EXT perl_mutex		nthreads_mutex;	/* Mutex for nthreads */
+EXT perl_cond		nthreads_cond;	/* Condition variable for nthreads */
+#ifdef FAKE_THREADS
+EXT struct thread *	thr;		/* Currently executing (fake) thread */
+#endif
+#endif /* USE_THREADS */
+
 /* VMS doesn't use environ array and NeXT has problems with crt0.o globals */
 #if !defined(VMS) && !(defined(NeXT) && defined(__DYNAMIC__))
 #ifndef DONT_DECLARE_STD
@@ -1342,8 +1401,12 @@ EXT SV **	stack_max;	/* stack->array_ary + stack->array_max */
 
 /* likewise for these */
 
-EXT OP *	op;		/* current op--oughta be in a global register */
-
+#ifdef OP_IN_REGISTER
+EXT OP *	opsave;		/* save current op register across longjmps */
+#else
+EXT OP *	op;		/* current op--when not in a global register */
+#endif
+EXT int		(*runops) _((void)) INIT(RUNOPS_DEFAULT);
 EXT I32 *	scopestack;	/* blocks we've entered */
 EXT I32		scopestack_ix;
 EXT I32		scopestack_max;
@@ -1578,8 +1641,6 @@ EXTCONST char* block_type[];
 
 #include "perly.h"
 
-#define LEX_NOTPARSING		11	/* borrowed from toke.c */
-
 typedef enum {
     XOPERATOR,
     XTERM,
@@ -1647,6 +1708,7 @@ EXT char *	last_uni;	/* position of last named-unary operator */
 EXT char *	last_lop;	/* position of last list operator */
 EXT OPCODE	last_lop_op;	/* last list operator */
 EXT bool	in_my;		/* we're compiling a "my" declaration */
+EXT HV *	in_my_stash;	/* declared class of this "my" declaration */
 #ifdef FCRYPT
 EXT I32		cryptseen;	/* has fast crypt() been initialized? */
 #endif
@@ -1804,6 +1866,7 @@ IEXT HV *	Idebstash;	/* symbol table for perldb package */
 IEXT SV *	Icurstname;	/* name of current package */
 IEXT AV *	Ibeginav;	/* names of BEGIN subroutines */
 IEXT AV *	Iendav;		/* names of END subroutines */
+IEXT AV *	Iinitav;	/* names of INIT subroutines */
 IEXT HV *	Istrtab;	/* shared string table */
 
 /* memory management */
@@ -1861,9 +1924,11 @@ IEXT I32	Irunlevel;
 /* stack stuff */
 IEXT AV *	Icurstack;		/* THE STACK */
 IEXT AV *	Imainstack;	/* the stack when nothing funny is happening */
+#if 0
 IEXT SV **	Imystack_base;	/* stack->array_ary */
 IEXT SV **	Imystack_sp;	/* stack pointer now */
 IEXT SV **	Imystack_max;	/* stack->array_ary + stack->array_max */
+#endif
 
 /* format accumulators */
 IEXT SV *	Iformtarget;
@@ -1904,6 +1969,7 @@ struct interpreter {
 };
 #endif
 
+#include "thread.h"
 #include "pp.h"
 
 #ifdef __cplusplus
@@ -1980,6 +2046,9 @@ EXT MGVTBL vtbl_fm =	{0,	magic_setfm,
 EXT MGVTBL vtbl_uvar =	{magic_getuvar,
 				magic_setuvar,
 					0,	0,	0};
+#ifdef USE_THREADS
+EXT MGVTBL vtbl_mutex =	{0,	0,	0,	0,	magic_mutexfree};
+#endif /* USE_THREADS */
 EXT MGVTBL vtbl_defelem = {magic_getdefelem,magic_setdefelem,
 					0,	0,	magic_freedefelem};
 
@@ -2019,6 +2088,11 @@ EXT MGVTBL vtbl_pos;
 EXT MGVTBL vtbl_bm;
 EXT MGVTBL vtbl_fm;
 EXT MGVTBL vtbl_uvar;
+
+#ifdef USE_THREADS
+EXT MGVTBL vtbl_mutex;
+#endif /* USE_THREADS */
+
 EXT MGVTBL vtbl_defelem;
 
 #ifdef USE_LOCALE_COLLATE
@@ -2161,22 +2235,6 @@ enum {
 #endif /* _FASTMATH */
 
 #endif /* OVERLOAD */
-
-#define PERLDB_ALL	0xff
-#define PERLDBf_SUB	0x01		/* Debug sub enter/exit. */
-#define PERLDBf_LINE	0x02		/* Keep line #. */
-#define PERLDBf_NOOPT	0x04		/* Switch off optimizations. */
-#define PERLDBf_INTER	0x08		/* Preserve more data for
-					   later inspections.  */
-#define PERLDBf_SUBLINE	0x10		/* Keep subr source lines. */
-#define PERLDBf_SINGLE	0x20		/* Start with single-step on. */
-
-#define PERLDB_SUB	(perldb && (perldb & PERLDBf_SUB))
-#define PERLDB_LINE	(perldb && (perldb & PERLDBf_LINE))
-#define PERLDB_NOOPT	(perldb && (perldb & PERLDBf_NOOPT))
-#define PERLDB_INTER	(perldb && (perldb & PERLDBf_INTER))
-#define PERLDB_SUBLINE	(perldb && (perldb & PERLDBf_SUBLINE))
-#define PERLDB_SINGLE	(perldb && (perldb & PERLDBf_SINGLE))
 
 #ifdef USE_LOCALE_COLLATE
 EXT U32		collation_ix;		/* Collation generation index */

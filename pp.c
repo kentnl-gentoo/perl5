@@ -16,17 +16,6 @@
 #include "perl.h"
 
 /*
- * The compiler on Concurrent CX/UX systems has a subtle bug which only
- * seems to show up when compiling pp.c - it generates the wrong double
- * precision constant value for (double)UV_MAX when used inline in the body
- * of the code below, so this makes a static variable up front (which the
- * compiler seems to get correct) and uses it in place of UV_MAX below.
- */
-#ifdef CXUX_BROKEN_CONSTANT_CONVERT
-static double UV_MAX_cxux = ((double)UV_MAX);
-#endif
-
-/*
  * Types used in bitwise operations.
  *
  * Normally we'd just use IV and UV.  However, some hardware and
@@ -396,6 +385,7 @@ SV* sv;
     else if (SvPADTMP(sv))
 	sv = newSVsv(sv);
     else {
+	dTHR;			/* just for SvREFCNT_inc */
 	SvTEMP_off(sv);
 	(void)SvREFCNT_inc(sv);
     }
@@ -436,7 +426,7 @@ PP(pp_bless)
     else
 	stash = gv_stashsv(POPs, TRUE);
 
-    (void)sv_bless(TOPs, stash);
+    (void)sv_bless3(TOPs, stash, TRUE);
     RETURN;
 }
 
@@ -1461,6 +1451,7 @@ seed()
 #define   SEED_C3	269
 #define   SEED_C5	26107
 
+    dTHR;
     U32 u;
 #ifdef VMS
 #  include <starlet.h>
@@ -1630,56 +1621,37 @@ PP(pp_substr)
     STRLEN curlen;
     I32 pos;
     I32 rem;
-    I32 fail;
     I32 lvalue = op->op_flags & OPf_MOD;
     char *tmps;
     I32 arybase = curcop->cop_arybase;
 
     if (MAXARG > 2)
 	len = POPi;
-    pos = POPi;
+    pos = POPi - arybase;
     sv = POPs;
     tmps = SvPV(sv, curlen);
-    if (pos >= arybase) {
-	pos -= arybase;
-	rem = curlen-pos;
-	fail = rem;
-        if (MAXARG > 2) {
-            if (len < 0) {
-	        rem += len;
-                if (rem < 0)
-                    rem = 0;
-            }
-            else if (rem > len)
-                     rem = len;
-        }
+    if (pos < 0) {
+	pos += curlen + arybase;
+	if (pos < 0 && MAXARG < 3)
+	    pos = 0;
     }
-    else {
-        pos += curlen;
-        if (MAXARG < 3)
-            rem = curlen;
-        else if (len >= 0) {
-            rem = pos+len;
-            if (rem > (I32)curlen)
-                rem = curlen;
-        }
-        else {
-            rem = curlen+len;
-            if (rem < pos)
-                rem = pos;
-        }
-        if (pos < 0)
-            pos = 0;
-        fail = rem;
-        rem -= pos;
-    }
-    if (fail < 0) {
-	if (dowarn || lvalue) 
+    if (pos < 0 || pos > curlen) {
+	if (dowarn || lvalue)
 	    warn("substr outside of string");
 	RETPUSHUNDEF;
     }
     else {
+	if (MAXARG < 3)
+	    len = curlen;
+	else if (len < 0) {
+	    len += curlen - pos;
+	    if (len < 0)
+		len = 0;
+	}
 	tmps += pos;
+	rem = curlen - pos;	/* rem=how many bytes left*/
+	if (rem > len)
+	    rem = len;
 	sv_setpvn(TARG, tmps, rem);
 	if (lvalue) {			/* it's an lvalue! */
 	    if (!SvGMAGICAL(sv)) {
@@ -2118,9 +2090,11 @@ PP(pp_each)
     HV *hash = (HV*)POPs;
     HE *entry;
     I32 gimme = GIMME_V;
+    I32 realhv = (SvTYPE(hash) == SVt_PVHV);
     
     PUTBACK;
-    entry = hv_iternext(hash);		/* might clobber stack_sp */
+    /* might clobber stack_sp */
+    entry = realhv ? hv_iternext(hash) : avhv_iternext((AV*)hash);
     SPAGAIN;
 
     EXTEND(SP, 2);
@@ -2128,7 +2102,9 @@ PP(pp_each)
 	PUSHs(hv_iterkeysv(entry));	/* won't clobber stack_sp */
 	if (gimme == G_ARRAY) {
 	    PUTBACK;
-	    sv_setsv(TARG, hv_iterval(hash, entry));  /* might hit stack_sp */
+	    /* might clobber stack_sp */
+	    sv_setsv(TARG, realhv ?
+		     hv_iterval(hash, entry) : avhv_iterval((AV*)hash, entry));
 	    SPAGAIN;
 	    PUSHs(TARG);
 	}
@@ -2159,11 +2135,16 @@ PP(pp_delete)
 
     if (op->op_private & OPpSLICE) {
 	dMARK; dORIGMARK;
+	U32 hvtype;
 	hv = (HV*)POPs;
-	if (SvTYPE(hv) != SVt_PVHV)
-	    DIE("Not a HASH reference");
+	hvtype = SvTYPE(hv);
 	while (++MARK <= SP) {
-	    sv = hv_delete_ent(hv, *MARK, discard, 0);
+	    if (hvtype == SVt_PVHV)
+		sv = hv_delete_ent(hv, *MARK, discard, 0);
+	    else if (hvtype == SVt_PVAV)
+		sv = avhv_delete_ent((AV*)hv, *MARK, discard, 0);
+	    else
+		DIE("Not a HASH reference");
 	    *MARK = sv ? sv : &sv_undef;
 	}
 	if (discard)
@@ -2177,9 +2158,12 @@ PP(pp_delete)
     else {
 	SV *keysv = POPs;
 	hv = (HV*)POPs;
-	if (SvTYPE(hv) != SVt_PVHV)
+	if (SvTYPE(hv) == SVt_PVHV)
+	    sv = hv_delete_ent(hv, keysv, discard, 0);
+	else if (SvTYPE(hv) == SVt_PVAV)
+	    sv = avhv_delete_ent((AV*)hv, keysv, discard, 0);
+	else
 	    DIE("Not a HASH reference");
-	sv = hv_delete_ent(hv, keysv, discard, 0);
 	if (!sv)
 	    sv = &sv_undef;
 	if (!discard)
@@ -2193,12 +2177,15 @@ PP(pp_exists)
     dSP;
     SV *tmpsv = POPs;
     HV *hv = (HV*)POPs;
-    STRLEN len;
-    if (SvTYPE(hv) != SVt_PVHV) {
+    if (SvTYPE(hv) == SVt_PVHV) {
+	if (hv_exists_ent(hv, tmpsv, 0))
+	    RETPUSHYES;
+    } else if (SvTYPE(hv) == SVt_PVAV) {
+	if (avhv_exists_ent((AV*)hv, tmpsv, 0))
+	    RETPUSHYES;
+    } else {
 	DIE("Not a HASH reference");
     }
-    if (hv_exists_ent(hv, tmpsv, 0))
-	RETPUSHYES;
     RETPUSHNO;
 }
 
@@ -2208,12 +2195,18 @@ PP(pp_hslice)
     register HE *he;
     register HV *hv = (HV*)POPs;
     register I32 lval = op->op_flags & OPf_MOD;
+    I32 realhv = (SvTYPE(hv) == SVt_PVHV);
 
-    if (SvTYPE(hv) == SVt_PVHV) {
+    if (realhv || SvTYPE(hv) == SVt_PVAV) {
 	while (++MARK <= SP) {
 	    SV *keysv = *MARK;
-
-	    he = hv_fetch_ent(hv, keysv, lval, 0);
+	    SV **svp;
+	    if (realhv) {
+		he = hv_fetch_ent(hv, keysv, lval, 0);
+		svp = he ? &HeVAL(he) : 0;
+	    } else {
+		svp = avhv_fetch_ent((AV*)hv, keysv, lval, 0);
+	    }
 	    if (lval) {
 		if (!he || HeVAL(he) == &sv_undef)
 		    DIE(no_helem, SvPV(keysv, na));
@@ -2350,13 +2343,11 @@ PP(pp_splice)
     SP++;
 
     if (++MARK < SP) {
-	offset = i = SvIVx(*MARK);
+	offset = SvIVx(*MARK);
 	if (offset < 0)
 	    offset += AvFILL(ary) + 1;
 	else
 	    offset -= curcop->cop_arybase;
-	if (offset < 0)
-	    DIE(no_aelem, i);
 	if (++MARK < SP) {
 	    length = SvIVx(*MARK++);
 	    if (length < 0)
@@ -2368,6 +2359,12 @@ PP(pp_splice)
     else {
 	offset = 0;
 	length = AvMAX(ary) + 1;
+    }
+    if (offset < 0) {
+	length += offset;
+	offset = 0;
+	if (length < 0)
+	    length = 0;
     }
     if (offset > AvFILL(ary) + 1)
 	offset = AvFILL(ary) + 1;
@@ -2383,12 +2380,6 @@ PP(pp_splice)
 
     newlen = SP - MARK;
     diff = newlen - length;
-    if (newlen && !AvREAL(ary)) {
-	if (AvREIFY(ary))
-	    av_reify(ary);
-	else
-	    assert(AvREAL(ary));		/* would leak, so croak */
-    }
 
     if (diff < 0) {				/* shrinking the area */
 	if (newlen) {
@@ -2700,7 +2691,6 @@ PP(pp_unpack)
     register U32 culong;
     double cdouble;
     static char* bitcount = 0;
-    int commas = 0;
 
     if (gimme != G_ARRAY) {		/* arrange to do first one only */
 	/*SUPPRESS 530*/
@@ -2734,10 +2724,6 @@ PP(pp_unpack)
 	switch(datumtype) {
 	default:
 	    croak("Invalid type in unpack: '%c'", (int)datumtype);
-	case ',': /* grandfather in commas but with a warning */
-	    if (commas++ == 0 && dowarn)
-		warn("Invalid type in unpack: '%c'", (int)datumtype);
-	    break;
 	case '%':
 	    if (len == 1 && pat[-1] != '1')
 		len = 16;
@@ -3490,7 +3476,6 @@ PP(pp_pack)
     char *aptr;
     float afloat;
     double adouble;
-    int commas = 0;
 
     items = SP - MARK;
     MARK++;
@@ -3514,10 +3499,6 @@ PP(pp_pack)
 	switch(datumtype) {
 	default:
 	    croak("Invalid type in pack: '%c'", (int)datumtype);
-	case ',': /* grandfather in commas but with a warning */
-	    if (commas++ == 0 && dowarn)
-		warn("Invalid type in pack: '%c'", (int)datumtype);
-	    break;
 	case '%':
 	    DIE("%% may only be used in unpack");
 	case '@':
@@ -3759,11 +3740,7 @@ PP(pp_pack)
 #ifdef BW_BITS
 		    adouble <= BW_MASK
 #else
-#ifdef CXUX_BROKEN_CONSTANT_CONVERT
-		    adouble <= UV_MAX_cxux
-#else
 		    adouble <= UV_MAX
-#endif
 #endif
 		    )
 		{
@@ -3880,21 +3857,7 @@ PP(pp_pack)
 	case 'p':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
-		if (fromstr == &sv_undef)
-		    aptr = NULL;
-		else {
-		    /* XXX better yet, could spirit away the string to
-		     * a safe spot and hang on to it until the result
-		     * of pack() (and all copies of the result) are
-		     * gone.
-		     */
-		    if (dowarn && (SvTEMP(fromstr) || SvPADTMP(fromstr)))
-			warn("Attempt to pack pointer to temporary value");
-		    if (SvPOK(fromstr) || SvNIOK(fromstr))
-			aptr = SvPV(fromstr,na);
-		    else
-			aptr = SvPV_force(fromstr,na);
-		}
+		aptr = SvPV_force(fromstr, na);	/* XXX Error if TEMP? */
 		sv_catpvn(cat, (char*)&aptr, sizeof(char*));
 	    }
 	    break;
@@ -3966,7 +3929,11 @@ PP(pp_split)
     if (pm->op_pmreplroot)
 	ary = GvAVn((GV*)pm->op_pmreplroot);
     else if (gimme != G_ARRAY)
+#ifdef USE_THREADS
+	ary = (AV*)curpad[0];
+#else
 	ary = GvAVn(defgv);
+#endif /* USE_THREADS */
     else
 	ary = Nullav;
     if (ary && (gimme != G_ARRAY || (pm->op_pmflags & PMf_ONCE))) {
@@ -4148,3 +4115,50 @@ PP(pp_split)
     RETPUSHUNDEF;
 }
 
+#ifdef USE_THREADS
+void
+unlock_condpair(svv)
+void *svv;
+{
+    dTHR;
+    MAGIC *mg = mg_find((SV*)svv, 'm');
+    
+    if (!mg)
+	croak("panic: unlock_condpair unlocking non-mutex");
+    MUTEX_LOCK(MgMUTEXP(mg));
+    if (MgOWNER(mg) != thr)
+	croak("panic: unlock_condpair unlocking mutex that we don't own");
+    MgOWNER(mg) = 0;
+    COND_SIGNAL(MgOWNERCONDP(mg));
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: unlock 0x%lx\n",
+			  (unsigned long)thr, (unsigned long)svv);)
+    MUTEX_UNLOCK(MgMUTEXP(mg));
+}
+#endif /* USE_THREADS */
+
+PP(pp_lock)
+{
+    dSP;
+#ifdef USE_THREADS
+    dTOPss;
+    MAGIC *mg;
+    
+    if (SvROK(sv))
+	sv = SvRV(sv);
+
+    mg = condpair_magic(sv);
+    MUTEX_LOCK(MgMUTEXP(mg));
+    if (MgOWNER(mg) == thr)
+	MUTEX_UNLOCK(MgMUTEXP(mg));
+    else {
+	while (MgOWNER(mg))
+	    COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
+	MgOWNER(mg) = thr;
+	DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: pp_lock lock 0x%lx\n",
+			      (unsigned long)thr, (unsigned long)sv);)
+	MUTEX_UNLOCK(MgMUTEXP(mg));
+	save_destructor(unlock_condpair, sv);
+    }
+#endif /* USE_THREADS */
+    RETURN;
+}

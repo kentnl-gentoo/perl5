@@ -59,6 +59,7 @@ formtarget
 gensym
 in_eval
 incgv
+initav
 inplace
 last_in_gv
 lastfd

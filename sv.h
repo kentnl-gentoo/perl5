@@ -220,6 +220,8 @@ struct xpvbm {
 
 /* This structure much match XPVCV */
 
+typedef U16 cv_flags_t;
+
 struct xpvfm {
     char *	xpv_pv;		/* pointer to malloced string */
     STRLEN	xpv_cur;	/* length of xpv_pv as a C string */
@@ -239,7 +241,12 @@ struct xpvfm {
     long	xcv_depth;		/* >= 2 indicates recursive call */
     AV *	xcv_padlist;
     CV *	xcv_outside;
-    U8		xcv_flags;
+#ifdef USE_THREADS
+    perl_mutex *xcv_mutexp;
+    perl_cond *	xcv_condp;	/* signalled when owner leaves CV */
+    struct thread *xcv_owner;	/* current owner thread */
+#endif /* USE_THREADS */
+    cv_flags_t	xcv_flags;
 
     I32		xfm_lines;
 };

@@ -2,7 +2,7 @@ package DB;
 
 # Debugger for Perl 5.00x; perl5db.pl patch level:
 
-$VERSION = 1.01;
+$VERSION = 1.00;
 $header = "perl5db.pl version $VERSION";
 
 # Enhanced by ilya@math.ohio-state.edu (Ilya Zakharevich)
@@ -296,10 +296,6 @@ if ($notty) {
     $console = "sys\$command";
   }
 
-  if (($^O eq 'MSWin32') and ($emacs or defined $ENV{EMACS})) {
-    $console = undef;
-  }
-
   # Around a bug:
   if (defined $ENV{OS2_SHELL} and ($emacs or $ENV{WINDOWID})) { # In OS/2
     $console = undef;
@@ -432,7 +428,6 @@ sub DB {
 	@typeahead = @$pretype, @typeahead;
       CMD:
 	while (($term || &setterm),
-	       ($term_pid == $$ or &resetterm),
 	       defined ($cmd=&readline("  DB" . ('<' x $level) .
 				       ($#hist+1) . ('>' x $level) .
 				       " "))) {
@@ -1067,7 +1062,7 @@ sub DB {
 	    $evalarg = "\$^D = \$^D | \$DB::db_stop;\n$cmd"; &eval;
 	    if ($onetimeDump) {
 		$onetimeDump = undef;
-	    } elsif ($term_pid == $$) {
+	    } else {
 		print $OUT "\n";
 	    }
 	} continue {		# CMD:
@@ -1128,11 +1123,7 @@ sub sub {
 	  $doret = -2 if $doret eq $#stack or $frame & 16;
 	@ret;
     } else {
-        if (defined wantarray) {
-	    $ret = &$sub;
-        } else {
-            &$sub; undef $ret;
-        };
+	$ret = &$sub;
 	$single |= pop(@stack);
 	($frame & 4 
 	 ? ( (print $LINEINFO ' ' x $#stack, "out "), 
@@ -1395,29 +1386,6 @@ sub setterm {
       $term->SetHistory(@hist);
     }
     ornaments($ornaments) if defined $ornaments;
-    $term_pid = $$;
-}
-
-sub resetterm {			# We forked, so we need a different TTY
-    $term_pid = $$;
-    if (defined &get_fork_TTY) {
-      &get_fork_TTY;
-    } elsif (not defined $fork_TTY 
-	     and defined $ENV{TERM} and $ENV{TERM} eq 'xterm' 
-	     and defined $ENV{WINDOWID} and defined $ENV{DISPLAY}) { 
-        # Possibly _inside_ XTERM
-        open XT, q[3>&1 xterm -title 'Forked Perl debugger' -e sh -c 'tty 1>&3;\
- sleep 10000000' |];
-        $fork_TTY = <XT>;
-        chomp $fork_TTY;
-    }
-    if (defined $fork_TTY) {
-      TTY($fork_TTY);
-      undef $fork_TTY;
-    } else {
-      print $OUT "Forked, but do not know how to change a TTY.\n",
-          "Define \$DB::fork_TTY or get_fork_TTY().\n";
-    }
 }
 
 sub readline {
@@ -1543,21 +1511,8 @@ sub warn {
 }
 
 sub TTY {
-    if (@_ and $term and $term->Features->{newTTY}) {
-      my ($in, $out) = shift;
-      if ($in =~ /,/) {
-	($in, $out) = split /,/, $in, 2;
-      } else {
-	$out = $in;
-      }
-      open IN, $in or die "cannot open `$in' for read: $!";
-      open OUT, ">$out" or die "cannot open `$out' for write: $!";
-      $term->newTTY(\*IN, \*OUT);
-      $IN	= \*IN;
-      $OUT	= \*OUT;
-      return $tty = $in;
-    } elsif ($term and @_) {
-	&warn("Too late to set TTY, enabled on next `R'!\n");
+    if ($term) {
+	&warn("Too late to set TTY, enabled on next `R'!\n") if @_;
     } 
     $tty = shift if @_;
     $tty or $console;
@@ -1826,15 +1781,18 @@ sub dbwarn {
   local $doret = -2;
   local $SIG{__WARN__} = '';
   local $SIG{__DIE__} = '';
-  eval { require Carp } if defined $^S;	# If error/warning during compilation,
-                                        # require may be broken.
-  warn(@_, "\nCannot print stack trace, load with -MCarp option to see stack"),
-    return unless defined &Carp::longmess;
+  eval { require Carp };	# If error/warning during compilation,
+                                # require may be broken.
+  warn(@_, "\nPossible unrecoverable error"), warn("\nTry to decrease warnLevel `O'ption!\n"), return
+    unless defined &Carp::longmess;
+  #&warn("Entering dbwarn\n");
   my ($mysingle,$mytrace) = ($single,$trace);
   $single = 0; $trace = 0;
   my $mess = Carp::longmess(@_);
   ($single,$trace) = ($mysingle,$mytrace);
+  #&warn("Warning in dbwarn\n");
   &warn($mess); 
+  #&warn("Exiting dbwarn\n");
 }
 
 sub dbdie {
@@ -1843,24 +1801,28 @@ sub dbdie {
   local $SIG{__DIE__} = '';
   local $SIG{__WARN__} = '';
   my $i = 0; my $ineval = 0; my $sub;
-  if ($dieLevel > 2) {
+  #&warn("Entering dbdie\n");
+  if ($dieLevel != 2) {
+    while ((undef,undef,undef,$sub) = caller(++$i)) {
+      $ineval = 1, last if $sub eq '(eval)';
+    }
+    {
       local $SIG{__WARN__} = \&dbwarn;
-      &warn(@_);		# Yell no matter what
-      return;
+      &warn(@_) if $dieLevel > 2; # Ineval is false during destruction?
+    }
+    #&warn("dieing quietly in dbdie\n") if $ineval and $dieLevel < 2;
+    die @_ if $ineval and $dieLevel < 2;
   }
-  if ($dieLevel < 2) {
-    die @_ if $^S;		# in eval propagate
-  }
-  eval { require Carp } if defined $^S;	# If error/warning during compilation,
-                                	# require may be broken.
-  die(@_, "\nCannot print stack trace, load with -MCarp option to see stack")
-    unless defined &Carp::longmess;
+  eval { require Carp };	# If error/warning during compilation,
+                                # require may be broken.
+  die(@_, "\nUnrecoverable error") unless defined &Carp::longmess;
   # We do not want to debug this chunk (automatic disabling works
   # inside DB::DB, but not in Carp).
   my ($mysingle,$mytrace) = ($single,$trace);
   $single = 0; $trace = 0;
   my $mess = Carp::longmess(@_);
   ($single,$trace) = ($mysingle,$mytrace);
+  #&warn("dieing loudly in dbdie\n");
   die $mess;
 }
 

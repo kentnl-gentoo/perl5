@@ -533,15 +533,15 @@ PP(pp_tie)
     CATCH_SET(TRUE);
 
     ENTER;
-    SAVESPTR(op);
+    SAVEOP();
     op = (OP *) &myop;
-    if (PERLDB_SUB && curstash != debstash)
+    if (perldb && curstash != debstash)
 	op->op_private |= OPpENTERSUB_DB;
 
     XPUSHs((SV*)GvCV(gv));
     PUTBACK;
 
-    if (op = pp_entersub())
+    if (op = pp_entersub(ARGS))
         runops();
     SPAGAIN;
 
@@ -644,12 +644,12 @@ PP(pp_dbmopen)
     CATCH_SET(TRUE);
 
     ENTER;
-    SAVESPTR(op);
+    SAVEOP();
     op = (OP *) &myop;
-    if (PERLDB_SUB && curstash != debstash)
+    if (perldb && curstash != debstash)
 	op->op_private |= OPpENTERSUB_DB;
     PUTBACK;
-    pp_pushmark();
+    pp_pushmark(ARGS);
 
     EXTEND(sp, 5);
     PUSHs(sv);
@@ -662,7 +662,7 @@ PP(pp_dbmopen)
     PUSHs((SV*)GvCV(gv));
     PUTBACK;
 
-    if (op = pp_entersub())
+    if (op = pp_entersub(ARGS))
         runops();
     SPAGAIN;
 
@@ -670,7 +670,7 @@ PP(pp_dbmopen)
 	sp--;
 	op = (OP *) &myop;
 	PUTBACK;
-	pp_pushmark();
+	pp_pushmark(ARGS);
 
 	PUSHs(sv);
 	PUSHs(left);
@@ -679,7 +679,7 @@ PP(pp_dbmopen)
 	PUSHs((SV*)GvCV(gv));
 	PUTBACK;
 
-	if (op = pp_entersub())
+	if (op = pp_entersub(ARGS))
 	    runops();
 	SPAGAIN;
     }
@@ -834,6 +834,7 @@ void
 setdefout(gv)
 GV *gv;
 {
+    dTHR;
     if (gv)
 	(void)SvREFCNT_inc(gv);
     if (defoutgv)
@@ -921,6 +922,7 @@ CV *cv;
 GV *gv;
 OP *retop;
 {
+    dTHR;
     register CONTEXT *cx;
     I32 gimme = GIMME_V;
     AV* padlist = CvPADLIST(cv);
@@ -2402,20 +2404,16 @@ PP(pp_fttty)
     dSP;
     int fd;
     GV *gv;
-    char *tmps = Nullch;
-
-    if (op->op_flags & OPf_REF)
+    char *tmps;
+    if (op->op_flags & OPf_REF) {
 	gv = cGVOP->op_gv;
-    else if (isGV(TOPs))
-	gv = (GV*)POPs;
-    else if (SvROK(TOPs) && isGV(SvRV(TOPs)))
-	gv = (GV*)SvRV(POPs);
+	tmps = "";
+    }
     else
 	gv = gv_fetchpv(tmps = POPp, FALSE, SVt_PVIO);
-
     if (GvIO(gv) && IoIFP(GvIOp(gv)))
 	fd = PerlIO_fileno(IoIFP(GvIOp(gv)));
-    else if (tmps && isDIGIT(*tmps))
+    else if (isDIGIT(*tmps))
 	fd = atoi(tmps);
     else
 	RETPUSHUNDEF;
@@ -2709,9 +2707,6 @@ PP(pp_readlink)
     char buf[MAXPATHLEN];
     int len;
 
-#ifndef INCOMPLETE_TAINTS
-    TAINT;
-#endif
     tmps = POPp;
     len = readlink(tmps, buf, sizeof buf);
     EXTEND(SP, 1);
@@ -2888,7 +2883,6 @@ PP(pp_readdir)
     register Direntry_t *dp;
     GV *gv = (GV*)POPs;
     register IO *io = GvIOn(gv);
-    SV *sv;
 
     if (!io || !IoDIRP(io))
 	goto nope;
@@ -2897,28 +2891,20 @@ PP(pp_readdir)
 	/*SUPPRESS 560*/
 	while (dp = (Direntry_t *)readdir(IoDIRP(io))) {
 #ifdef DIRNAMLEN
-	    sv = newSVpv(dp->d_name, dp->d_namlen);
+	    XPUSHs(sv_2mortal(newSVpv(dp->d_name, dp->d_namlen)));
 #else
-	    sv = newSVpv(dp->d_name, 0);
+	    XPUSHs(sv_2mortal(newSVpv(dp->d_name, 0)));
 #endif
-#ifndef INCOMPLETE_TAINTS
-  	    SvTAINTED_on(sv);
-#endif
-	    XPUSHs(sv_2mortal(sv));
 	}
     }
     else {
 	if (!(dp = (Direntry_t *)readdir(IoDIRP(io))))
 	    goto nope;
 #ifdef DIRNAMLEN
-	sv = newSVpv(dp->d_name, dp->d_namlen);
+	XPUSHs(sv_2mortal(newSVpv(dp->d_name, dp->d_namlen)));
 #else
-	sv = newSVpv(dp->d_name, 0);
+	XPUSHs(sv_2mortal(newSVpv(dp->d_name, 0)));
 #endif
-#ifndef INCOMPLETE_TAINTS
-	SvTAINTED_on(sv);
-#endif
-	XPUSHs(sv_2mortal(sv));
     }
     RETURN;
 
@@ -4079,9 +4065,6 @@ PP(pp_gpwent)
 #endif
 	PUSHs(sv = sv_mortalcopy(&sv_no));
 	sv_setpv(sv, pwent->pw_gecos);
-#ifndef INCOMPLETE_TAINTS
-	SvTAINTED_on(sv);
-#endif
 	PUSHs(sv = sv_mortalcopy(&sv_no));
 	sv_setpv(sv, pwent->pw_dir);
 	PUSHs(sv = sv_mortalcopy(&sv_no));
@@ -4393,17 +4376,6 @@ int fd;
 int operation;
 {
     int i;
-    int save_errno;
-    Off_t pos;
-
-    /* flock locks entire file so for lockf we need to do the same	*/
-    save_errno = errno;
-    pos = lseek(fd, (Off_t)0, SEEK_CUR);    /* get pos to restore later */
-    if (pos > 0)	/* is seekable and needs to be repositioned	*/
-	if (lseek(fd, (Off_t)0, SEEK_SET) < 0)
-	    pos = -1;	/* seek failed, so don't seek back afterwards	*/
-    errno = save_errno;
-
     switch (operation) {
 
 	/* LOCK_SH - get a shared lock */
@@ -4435,10 +4407,6 @@ int operation;
 	    errno = EINVAL;
 	    break;
     }
-
-    if (pos > 0)      /* need to restore position of the handle	*/
-	lseek(fd, pos, SEEK_SET);	/* ignore error here	*/
-
     return (i);
 }
 

@@ -40,7 +40,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
-#include <unistd.h>	/* see hints/sunos_4_1.sh */
+#include <unistd.h>
 #include <fcntl.h>
 
 #if defined(__VMS) && !defined(__POSIX_SOURCE)
@@ -55,10 +55,7 @@
 #  define mkfifo(a,b) (not_here("mkfifo"),-1)
 #  define tzset() not_here("tzset")
 
-#if ((__VMS_VER >= 70000000) && (__DECC_VER >= 50200000)) || (__CRTL_VER >= 70000000)
-#    define HAS_TZNAME  /* shows up in VMS 7.0 or Dec C 5.6 */
-#    include <utsname.h>
-#else
+#  if __VMS_VER < 70000000
      /* The default VMS emulation of Unix signals isn't very POSIXish */
      typedef int sigset_t;
 #    define sigpending(a) (not_here("sigpending"),0)
@@ -128,7 +125,9 @@
 #    define sa_handler sv_handler
 #    define sa_mask sv_mask
 #    define sigsuspend(set) sigpause(*set)
-#  endif /* __VMS_VER >= 70000000 or Dec C 5.6 */
+#  else
+#    define HAS_TZNAME  /* shows up in VMS 7.0 */
+#  endif /* __VMS_VER < 70000000 */
 
    /* The POSIX notion of ttyname() is better served by getname() under VMS */
    static char ttnambuf[64];

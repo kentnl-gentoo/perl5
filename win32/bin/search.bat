@@ -1,3 +1,9 @@
+@rem = '--*-Perl-*--';
+@rem = '
+@echo off
+perl -S %0.bat %1 %2 %3 %4 %5 %6 %7 %8 %9
+goto endofperl
+@rem ';
 #!/usr/local/bin/perl -w
 'di';
 'ig00';
@@ -1863,3 +1869,5 @@ http://www.wg.omron.co.jp/cgi-bin/j-e/jfriedl.html
 
 .SH "LATEST SOURCE"
 See http://www.wg.omron.co.jp/~jfriedl/perl/index.html
+__END__
+:endofperl

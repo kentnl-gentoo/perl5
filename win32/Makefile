@@ -122,8 +122,8 @@ GLOBEXE=..\perlglob.exe
 CONFIGPM=..\lib\Config.pm
 MINIMOD=..\lib\ExtUtils\Miniperl.pm
 
-PL2BAT=bin\pl2bat.pl
-GLOBBAT = bin\perlglob.bat
+PL2BAT=bin\PL2BAT.BAT
+GLOBBAT = perlglob.bat
 
 MAKE=nmake -nologo
 CFGSH_TMPL = config.vc
@@ -277,8 +277,8 @@ $(DYNALOADER).obj : $(DYNALOADER).c $(CORE_H) $(EXTDIR)\DynaLoader\dlutils.c
 $(GLOBEXE): perlglob.obj
 	$(LINK32) $(LINK_FLAGS) -out:$@ -subsystem:$(SUBSYS) perlglob.obj setargv.obj 
 
-$(GLOBBAT) : ..\lib\File\DosGlob.pm $(MINIPERL)
-	$(MINIPERL) $(PL2BAT) - < ..\lib\File\DosGlob.pm > $(GLOBBAT)
+perlglob.bat : ..\lib\File\DosGlob.pm $(MINIPERL)
+	$(MINIPERL) $(PL2BAT) - < ..\lib\File\DosGlob.pm > $(*B).bat
 
 perlglob.obj  : perlglob.c
 
@@ -294,7 +294,7 @@ config.w32 : $(CFGSH_TMPL)
 ..\config.sh : config.w32 $(MINIPERL) config_sh.PL
 	$(MINIPERL) -I..\lib config_sh.PL "INST_DRV=$(INST_DRV)" \
 	    "INST_TOP=$(INST_TOP)" "cc=$(CC)" "ccflags=$(RUNTIME) -DWIN32" \
-	    "cf_email=$(EMAIL)" "libs=$(LIBFILES)" "incpath=$(CCINCDIR)" \
+	    "cf_email=$(EMAIL)" "libs=$(LIBFILES)" \
 	    "libpth=$(CCLIBDIR)" "libc=$(LIBC)" \
 	    config.w32 > ..\config.sh
 
@@ -403,11 +403,6 @@ $(SOCKET_DLL): $(SOCKET).xs $(PERLEXE)
 	cd ..\..\win32
 
 doc: $(PERLEXE)
-	cd ..\pod
-	$(MAKE) -f ..\win32\pod.mak checkpods pod2html pod2latex \
-		pod2man pod2text
-	$(XCOPY) *.bat ..\win32\bin\*.*
-	cd ..\win32
 	copy ..\README.win32 ..\pod\perlwin32.pod
 	$(PERLEXE) ..\installhtml --podroot=.. --htmldir=./html \
 	    --podpath=pod:lib:ext:utils --htmlroot="//$(INST_HTML::=|)" \
@@ -416,12 +411,10 @@ doc: $(PERLEXE)
 utils: $(PERLEXE)
 	cd ..\utils
 	nmake PERL=$(MINIPERL)
-	$(PERLEXE) ..\win32\$(PL2BAT) h2ph splain perlbug pl2pm c2ph
-	$(PERLEXE) ..\win32\$(PL2BAT) h2xs perldoc pstruct
+	$(PERLEXE) ..\win32\$(PL2BAT) h2ph splain perlbug pl2pm c2ph \
+			h2xs perldoc pstruct
 	$(XCOPY) *.bat ..\win32\bin\*.*
 	cd ..\win32
-	$(PERLEXE) $(PL2BAT) bin\network.pl bin\www.pl bin\runperl.pl \
-			bin\pl2bat.pl
 
 distclean: clean
 	-del /f $(MINIPERL) $(PERLEXE) $(PERLDLL) $(GLOBEXE) \
@@ -433,9 +426,6 @@ distclean: clean
 		$(DYNALOADER).c
 	-del /f $(PODDIR)\*.html
 	-del /f $(PODDIR)\*.bat
-	-del /f ..\config.sh ..\splittree.pl perlmain.c dlutils.c \
-		config.h.new perl95.c
-	-del /f bin\*.bat
 	-rmdir /s /q ..\lib\auto
 	-rmdir /s /q ..\lib\CORE
 	cd $(EXTDIR)
@@ -448,8 +438,9 @@ install : all doc utils
 	$(XCOPY) $(PERLEXE) $(INST_BIN)\*.*
 	$(XCOPY) $(PERL95EXE) $(INST_BIN)\*.*
 	$(XCOPY) $(GLOBEXE) $(INST_BIN)\*.*
+	$(XCOPY) $(GLOBBAT) $(INST_BIN)\*.*
 	$(XCOPY) $(PERLDLL) $(INST_BIN)\*.*
-	$(XCOPY) bin\*.bat $(INST_BIN)\*.*
+	$(XCOPY) bin\*.* $(INST_BIN)\*.*
 	$(RCOPY) ..\lib $(INST_LIB)\*.*
 	$(XCOPY) ..\pod\*.bat $(INST_BIN)\*.*
 	$(XCOPY) ..\pod\*.pod $(INST_POD)\*.*
@@ -490,8 +481,7 @@ clean :
 	-@erase $(CORE_OBJ)
 	-@erase $(WIN32_OBJ)
 	-@erase $(DLL_OBJ)
-	-@erase ..\*.obj ..\*.lib ..\*.exp *.obj *.lib *.exp
-	-@erase ..\t\*.exe ..\t\*.dll ..\t\*.bat
+	-@erase ..\*.obj *.obj ..\*.lib ..\*.exp
 	-@erase *.ilk
 	-@erase *.pdb
 

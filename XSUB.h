@@ -7,7 +7,7 @@
 #endif
 
 #define dXSARGS				\
-	dSP; dMARK;			\
+	dTHR; dSP; dMARK;		\
 	I32 ax = mark - stack_base + 1;	\
 	I32 items = sp - mark
 
@@ -44,15 +44,13 @@
 	    Sv = ST(1);							\
 	else {								\
 	    /* XXX GV_ADDWARN */					\
-	    Sv = perl_get_sv(form("%s::%s", module,			\
-				  vn = "XS_VERSION"), FALSE);		\
+	    Sv = perl_get_sv(vn = form("%s::XS_VERSION", module), FALSE); \
 	    if (!Sv || !SvOK(Sv))					\
-		Sv = perl_get_sv(form("%s::%s", module,			\
-				      vn = "VERSION"), FALSE);		\
+		Sv = perl_get_sv(vn = form("%s::VERSION", module), FALSE); \
 	}								\
 	if (Sv && (!SvOK(Sv) || strNE(XS_VERSION, SvPV(Sv, na))))	\
-	    croak("%s object version %s does not match $%s::%s %_",	\
-		  module, XS_VERSION, module, vn, Sv);			\
+	    croak("%s object version %s does not match $%s %_",		\
+		  module, XS_VERSION, vn, Sv);				\
     } STMT_END
 #else
 # define XS_VERSION_BOOTCHECK

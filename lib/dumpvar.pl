@@ -117,9 +117,9 @@ sub unwrap {
 
     # Check for reused addresses
     if (ref $v) { 
-      ($address) = $v =~ /(0x[0-9a-f]+)\)$/ ; 
+      ($address) = $v =~ /(0x[0-9a-f]+)/ ; 
       if (defined $address) { 
-	($type) = $v =~ /=(.*?)\([^=]+$/ ;
+	($type) = $v =~ /=(.*?)\(/ ;
 	$address{$address}++ ;
 	if ( $address{$address} > 1 ) { 
 	  print "${sp}-> REUSED_ADDRESS\n" ; 
@@ -135,7 +135,7 @@ sub unwrap {
       } 
     }
 
-    if ( UNIVERSAL::isa($v, 'HASH') ) { 
+    if ( ref $v eq 'HASH' or $type eq 'HASH') { 
 	@sortKeys = sort keys(%$v) ;
 	undef $more ; 
 	$tHashDepth = $#sortKeys ; 
@@ -168,7 +168,7 @@ sub unwrap {
 	}
 	print "$sp  empty hash\n" unless @sortKeys;
 	print "$sp$more" if defined $more ;
-    } elsif ( UNIVERSAL::isa($v, 'ARRAY') ) { 
+    } elsif ( ref $v eq 'ARRAY' or $type eq 'ARRAY') { 
 	$tArrayDepth = $#{$v} ; 
 	undef $more ; 
 	$tArrayDepth = $#{$v} < $arrayDepth-1 ? $#{$v} : $arrayDepth-1 
@@ -198,13 +198,13 @@ sub unwrap {
 	}
 	print "$sp  empty array\n" unless @$v;
 	print "$sp$more" if defined $more ;  
-    } elsif (  UNIVERSAL::isa($v, 'SCALAR') or ref $v eq 'REF' ) { 
+    } elsif ( ref $v eq 'SCALAR' or ref $v eq 'REF' or $type eq 'SCALAR' ) { 
 	    print "$sp-> ";
 	    DumpElem $$v, $s;
-    } elsif ( UNIVERSAL::isa($v, 'CODE') ) { 
+    } elsif ( ref $v eq 'CODE' or $type eq 'CODE' ) { 
 	    print "$sp-> ";
 	    dumpsub (0, $v);
-    } elsif ( UNIVERSAL::isa($v, 'GLOB') ) {
+    } elsif (ref $v eq 'GLOB') {
       print "$sp-> ",&stringify($$v,1),"\n";
       if ($globPrint) {
 	$s += 3;

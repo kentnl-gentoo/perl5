@@ -27,7 +27,7 @@
 
 static OP *docatch _((OP *o));
 static OP *doeval _((int gimme));
-static OP *dofindlabel _((OP *op, char *label, OP **opstack, OP **oplimit));
+static OP *dofindlabel _((OP *o, char *label, OP **opstack, OP **oplimit));
 static void doparseform _((SV *sv));
 static I32 dopoptoeval _((I32 startingblock));
 static I32 dopoptolabel _((char *label));
@@ -533,8 +533,8 @@ PP(pp_grepstart)
 	RETURNOP(op->op_next->op_next);
     }
     stack_sp = stack_base + *markstack_ptr + 1;
-    pp_pushmark();				/* push dst */
-    pp_pushmark();				/* push src */
+    pp_pushmark(ARGS);				/* push dst */
+    pp_pushmark(ARGS);				/* push src */
     ENTER;					/* enter outer scope */
 
     SAVETMPS;
@@ -549,7 +549,7 @@ PP(pp_grepstart)
 
     PUTBACK;
     if (op->op_type == OP_MAPSTART)
-	pp_pushmark();				/* push top */
+	pp_pushmark(ARGS);			/* push top */
     return ((LOGOP*)op->op_next)->op_other;
 }
 
@@ -698,7 +698,7 @@ PP(pp_sort)
 	    bool oldcatch = CATCH_GET;
 
 	    SAVETMPS;
-	    SAVESPTR(op);
+	    SAVEOP();
 
 	    oldstack = curstack;
 	    if (!sortstack) {
@@ -850,6 +850,7 @@ static I32
 dopoptolabel(label)
 char *label;
 {
+    dTHR;
     register I32 i;
     register CONTEXT *cx;
 
@@ -896,6 +897,7 @@ dowantarray()
 I32
 block_gimme()
 {
+    dTHR;
     I32 cxix;
 
     cxix = dopoptosub(cxstack_ix);
@@ -918,6 +920,7 @@ static I32
 dopoptosub(startingblock)
 I32 startingblock;
 {
+    dTHR;
     I32 i;
     register CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
@@ -938,6 +941,7 @@ static I32
 dopoptoeval(startingblock)
 I32 startingblock;
 {
+    dTHR;
     I32 i;
     register CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
@@ -957,6 +961,7 @@ static I32
 dopoptoloop(startingblock)
 I32 startingblock;
 {
+    dTHR;
     I32 i;
     register CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
@@ -990,6 +995,7 @@ void
 dounwind(cxix)
 I32 cxix;
 {
+    dTHR;
     register CONTEXT *cx;
     SV **newsp;
     I32 optype;
@@ -1023,6 +1029,7 @@ OP *
 die_where(message)
 char *message;
 {
+    dTHR;
     if (in_eval) {
 	I32 cxix;
 	register CONTEXT *cx;
@@ -1121,7 +1128,7 @@ PP(pp_entersubr)
 	mark++;
     }
     *sp = cv;
-    return pp_entersub();
+    return pp_entersub(ARGS);
 }
 #endif
 
@@ -1227,6 +1234,7 @@ sortcv(a, b)
 const void *a;
 const void *b;
 {
+    dTHR;
     SV * const *str1 = (SV * const *)a;
     SV * const *str2 = (SV * const *)b;
     I32 oldsaveix = savestack_ix;
@@ -1635,8 +1643,8 @@ PP(pp_redo)
 static OP* lastgotoprobe;
 
 static OP *
-dofindlabel(op,label,opstack,oplimit)
-OP *op;
+dofindlabel(o,label,opstack,oplimit)
+OP *o;
 char *label;
 OP **opstack;
 OP **oplimit;
@@ -1647,24 +1655,24 @@ OP **oplimit;
 
     if (ops >= oplimit)
 	croak(too_deep);
-    if (op->op_type == OP_LEAVE ||
-	op->op_type == OP_SCOPE ||
-	op->op_type == OP_LEAVELOOP ||
-	op->op_type == OP_LEAVETRY)
+    if (o->op_type == OP_LEAVE ||
+	o->op_type == OP_SCOPE ||
+	o->op_type == OP_LEAVELOOP ||
+	o->op_type == OP_LEAVETRY)
     {
-	*ops++ = cUNOP->op_first;
+	*ops++ = cUNOPo->op_first;
 	if (ops >= oplimit)
 	    croak(too_deep);
     }
     *ops = 0;
-    if (op->op_flags & OPf_KIDS) {
+    if (o->op_flags & OPf_KIDS) {
 	/* First try all the kids at this level, since that's likeliest. */
-	for (kid = cUNOP->op_first; kid; kid = kid->op_sibling) {
+	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling) {
 	    if ((kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) &&
 		    kCOP->cop_label && strEQ(kCOP->cop_label, label))
 		return kid;
 	}
-	for (kid = cUNOP->op_first; kid; kid = kid->op_sibling) {
+	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling) {
 	    if (kid == lastgotoprobe)
 		continue;
 	    if ((kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) &&
@@ -1672,8 +1680,8 @@ OP **oplimit;
 		 (ops[-1]->op_type != OP_NEXTSTATE &&
 		  ops[-1]->op_type != OP_DBSTATE)))
 		*ops++ = kid;
-	    if (op = dofindlabel(kid, label, ops, oplimit))
-		return op;
+	    if (o = dofindlabel(kid, label, ops, oplimit))
+		return o;
 	}
     }
     *ops = 0;
@@ -1735,8 +1743,10 @@ PP(pp_goto)
 		EXTEND(stack_sp, items); /* @_ could have been extended. */
 		Copy(AvARRAY(av), stack_sp, items, SV*);
 		stack_sp += items;
+#ifndef USE_THREADS
 		SvREFCNT_dec(GvAV(defgv));
 		GvAV(defgv) = cx->blk_sub.savearray;
+#endif /* USE_THREADS */
 		AvREAL_off(av);
 		av_clear(av);
 	    }
@@ -1819,15 +1829,34 @@ PP(pp_goto)
 			svp = AvARRAY(padlist);
 		    }
 		}
+#ifdef USE_THREADS
+		if (!cx->blk_sub.hasargs) {
+		    AV* av = (AV*)curpad[0];
+		    
+		    items = AvFILL(av) + 1;
+		    if (items) {
+			/* Mark is at the end of the stack. */
+			EXTEND(sp, items);
+			Copy(AvARRAY(av), sp + 1, items, SV*);
+			sp += items;
+			PUTBACK ;		    
+		    }
+		}
+#endif /* USE_THREADS */		
 		SAVESPTR(curpad);
 		curpad = AvARRAY((AV*)svp[CvDEPTH(cv)]);
-		if (cx->blk_sub.hasargs) {
+#ifndef USE_THREADS
+		if (cx->blk_sub.hasargs)
+#endif /* USE_THREADS */
+		{
 		    AV* av = (AV*)curpad[0];
 		    SV** ary;
 
+#ifndef USE_THREADS
 		    cx->blk_sub.savearray = GvAV(defgv);
-		    cx->blk_sub.argarray = av;
 		    GvAV(defgv) = (AV*)SvREFCNT_inc(av);
+#endif /* USE_THREADS */
+		    cx->blk_sub.argarray = av;
 		    ++mark;
 
 		    if (items >= AvMAX(av) + 1) {
@@ -1852,7 +1881,7 @@ PP(pp_goto)
 			mark++;
 		    }
 		}
-		if (PERLDB_SUB && curstash != debstash) {
+		if (perldb && curstash != debstash) {
 		    /*
 		     * We do not care about using sv to call CV;
 		     * it's for informational purposes only.
@@ -1940,12 +1969,7 @@ PP(pp_goto)
 	    OP *oldop = op;
 	    for (ix = 1; enterops[ix]; ix++) {
 		op = enterops[ix];
-		/* Eventually we may want to stack the needed arguments
-		 * for each op.  For now, we punt on the hard ones. */
-		if (op->op_type == OP_ENTERITER)
-		    DIE("Can't \"goto\" into the middle of a foreach loop",
-			label);
-		(*op->op_ppaddr)();
+		(*op->op_ppaddr)(ARGS);
 	    }
 	    op = oldop;
 	}
@@ -2063,6 +2087,7 @@ static OP *
 docatch(o)
 OP *o;
 {
+    dTHR;
     int ret;
     I32 oldrunlevel = runlevel;
     OP *oldop = op;
@@ -2099,10 +2124,12 @@ OP *o;
     return Nullop;
 }
 
+/* With USE_THREADS, eval_owner must be held on entry to doeval */
 static OP *
 doeval(gimme)
 int gimme;
 {
+    dTHR;
     dSP;
     OP *saveop = op;
     HV *newstash;
@@ -2128,14 +2155,24 @@ int gimme;
     compcv = (CV*)NEWSV(1104,0);
     sv_upgrade((SV *)compcv, SVt_PVCV);
     CvUNIQUE_on(compcv);
+#ifdef USE_THREADS
+    CvOWNER(compcv) = 0;
+    New(666, CvMUTEXP(compcv), 1, perl_mutex);
+    MUTEX_INIT(CvMUTEXP(compcv));
+#endif /* USE_THREADS */
 
     comppad = newAV();
+    av_push(comppad, Nullsv);
+    curpad = AvARRAY(comppad);
     comppad_name = newAV();
     comppad_name_fill = 0;
     min_intro_pending = 0;
-    av_push(comppad, Nullsv);
-    curpad = AvARRAY(comppad);
     padix = 0;
+#ifdef USE_THREADS
+    av_store(comppad_name, 0, newSVpv("@_", 2));
+    curpad[0] = (SV*)newAV();
+    SvPADMY_on(curpad[0]);	/* XXX Needed? */
+#endif /* USE_THREADS */
 
     comppadlist = newAV();
     AvREAL_off(comppadlist);
@@ -2194,6 +2231,12 @@ int gimme;
 	}
 	SvREFCNT_dec(rs);
 	rs = SvREFCNT_inc(nrs);
+#ifdef USE_THREADS
+	MUTEX_LOCK(&eval_mutex);
+	eval_owner = 0;
+	COND_SIGNAL(&eval_cond);
+	MUTEX_UNLOCK(&eval_mutex);
+#endif /* USE_THREADS */
 	RETPUSHUNDEF;
     }
     SvREFCNT_dec(rs);
@@ -2210,7 +2253,7 @@ int gimme;
     DEBUG_x(dump_eval());
 
     /* Register with debugger: */
-    if (PERLDB_INTER && saveop->op_type == OP_REQUIRE) {
+    if (perldb && saveop->op_type == OP_REQUIRE) {
 	CV *cv = perl_get_cv("DB::postponed", FALSE);
 	if (cv) {
 	    dSP;
@@ -2224,9 +2267,14 @@ int gimme;
     /* compiled okay, so do it */
 
     CvDEPTH(compcv) = 1;
-
     SP = stack_base + POPMARK;		/* pop original mark */
-    op = saveop;					/* The caller may need it. */
+#ifdef USE_THREADS
+    MUTEX_LOCK(&eval_mutex);
+    eval_owner = 0;
+    COND_SIGNAL(&eval_cond);
+    MUTEX_UNLOCK(&eval_mutex);
+#endif /* USE_THREADS */
+
     RETURNOP(eval_start);
 }
 
@@ -2267,9 +2315,6 @@ PP(pp_require)
 	     (name[1] == '.' && name[2] == '/')))
 #ifdef DOSISH
       || (name[0] && name[1] == ':')
-#endif
-#ifdef WIN32
-      || (name[0] == '\\' && name[1] == '\\')	/* UNC path */
 #endif
 #ifdef VMS
 	|| (strchr(name,':')  || ((*name == '[' || *name == '<') &&
@@ -2364,6 +2409,14 @@ PP(pp_require)
     compiling.cop_line = 0;
 
     PUTBACK;
+#ifdef USE_THREADS
+    MUTEX_LOCK(&eval_mutex);
+    if (eval_owner && eval_owner != thr)
+	while (eval_owner)
+	    COND_WAIT(&eval_cond, &eval_mutex);
+    eval_owner = thr;
+    MUTEX_UNLOCK(&eval_mutex);
+#endif /* USE_THREADS */
     return DOCATCH(doeval(G_SCALAR));
 }
 
@@ -2413,12 +2466,19 @@ PP(pp_entereval)
 
     /* prepare to compile string */
 
-    if (PERLDB_LINE && curstash != debstash)
+    if (perldb && curstash != debstash)
 	save_lines(GvAV(compiling.cop_filegv), linestr);
     PUTBACK;
+#ifdef USE_THREADS
+    MUTEX_LOCK(&eval_mutex);
+    if (eval_owner && eval_owner != thr)
+	while (eval_owner)
+	    COND_WAIT(&eval_cond, &eval_mutex);
+    eval_owner = thr;
+    MUTEX_UNLOCK(&eval_mutex);
+#endif /* USE_THREADS */
     ret = doeval(gimme);
-    if (PERLDB_INTER && was != sub_generation /* Some subs defined here. */
-	&& ret != op->op_next) {	/* Successive compilation. */
+    if (perldb && was != sub_generation) { /* Some subs defined here. */
 	strcpy(safestr, "_<(eval )");	/* Anything fake and short. */
     }
     return DOCATCH(ret);
@@ -2466,36 +2526,6 @@ PP(pp_leaveeval)
 	}
     }
     curpm = newpm;	/* Don't pop $1 et al till now */
-
-    /*
-     * Closures mentioned at top level of eval cannot be referenced
-     * again, and their presence indirectly causes a memory leak.
-     * (Note that the fact that compcv and friends are still set here
-     * is, AFAIK, an accident.)  --Chip
-     */
-    if (AvFILL(comppad_name) >= 0) {
-	SV **svp = AvARRAY(comppad_name);
-	I32 ix;
-	for (ix = AvFILL(comppad_name); ix >= 0; ix--) {
-	    SV *sv = svp[ix];
-	    if (sv && sv != &sv_undef && *SvPVX(sv) == '&') {
-		SvREFCNT_dec(sv);
-		svp[ix] = &sv_undef;
-
-		sv = curpad[ix];
-		if (CvCLONE(sv)) {
-		    SvREFCNT_dec(CvOUTSIDE(sv));
-		    CvOUTSIDE(sv) = Nullcv;
-		}
-		else {
-		    SvREFCNT_dec(sv);
-		    sv = NEWSV(0,0);
-		    SvPADTMP_on(sv);
-		    curpad[ix] = sv;
-		}
-	    }
-	}
-    }
 
 #ifdef DEBUGGING
     assert(CvDEPTH(compcv) == 1);

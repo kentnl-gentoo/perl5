@@ -99,11 +99,8 @@ and Configure will use the defaults from then on.
 After it runs, Configure will perform variable substitution on all the
 *.SH files and offer to run make depend.
 
-Configure supports a number of useful options.  Run B<Configure -h> to
-get a listing.  See the Porting/Glossary file for a complete list of
-Configure variables you can set and their definitions.
-
-To compile with gcc, for example, you should run
+Configure supports a number of useful options.  Run B<Configure -h>
+to get a listing.  To compile with gcc, for example, you can run
 
 	sh Configure -Dcc=gcc
 
@@ -125,10 +122,6 @@ If your prefix contains the string "perl", then the directories
 are simplified.  For example, if you use prefix=/opt/perl,
 then Configure will suggest /opt/perl/lib instead of
 /opt/perl/lib/perl5/.
-
-NOTE:  You must not specify an installation directory that is below
-your perl source directory.  If you do, installperl will attempt
-infinite recursion.
 
 By default, Configure will compile perl to use dynamic loading if
 your system supports it.  If you want to force perl to be compiled
@@ -328,14 +321,12 @@ and the following directories for manual pages:
 
 (Actually, Configure recognizes the SVR3-style
 /usr/local/man/l_man/man1 directories, if present, and uses those
-instead.)
-
-The module man pages are stuck in that strange spot so that
+instead.) The module man pages are stuck in that strange spot so that
 they don't collide with other man pages stored in /usr/local/man/man3,
 and so that Perl's man pages don't hide system man pages.  On some
 systems, B<man less> would end up calling up Perl's less.pm module man
-page, rather than the less program.  (This default location will likely
-change to /usr/local/man/man3 in a future release of perl.)
+page, rather than the less program.  (This location may change in a
+future release of perl.)
 
 Note:  Many users prefer to store the module man pages in
 /usr/local/man/man3.  You can do this from the command line with
@@ -428,9 +419,6 @@ installed on multiple systems.  Here's one way to do that:
     make test
     make install
     cd /tmp/perl5
-    # Edit lib/<archname>/<version>/Config.pm to change all the
-    # install* variables back to reflect where everything will
-    # really be installed.
     tar cvf ../perl5-archive.tar .
     # Then, on each machine where you want to install perl,
     cd /usr/local  # Or wherever you specified as $prefix
@@ -467,17 +455,14 @@ compatibility, answer "y".
 
 On the other hand, if you are embedding perl into another application
 and want the maximum namespace protection, then you probably ought to
-answer "n" when Configure asks if you want binary compatibility, or
-disable it from the Configure command line with
-
-	sh Configure -Ud_bincompat3
+answer "n" when Configure asks if you want binary compatibility.
 
 The default answer of "y" to maintain binary compatibility is probably
 appropriate for almost everyone.
 
-In a related issue, old extensions may possibly be affected by the
-changes in the Perl language in the current release.  Please see
-pod/perldelta.pod for a description of what's changed.
+In a related issue, old extensions may possibly be affected by the changes
+in the Perl language in the current release.  Please see pod/perldelta for
+a description of what's changed.
 
 =head2 Selecting File IO mechanisms
 
@@ -637,7 +622,7 @@ to point to the perl build directory.
 
 The only reliable answer is that you should specify a different
 directory for the architecture-dependent library for your -DDEBUGGING
-version of perl.  You can do this by changing all the *archlib*
+version of perl.  You can do this with by changing all the *archlib*
 variables in config.sh, namely archlib, archlib_exp, and
 installarchlib, to point to your new architecture-dependent library.
 
@@ -676,9 +661,20 @@ In a future version of perl, these might be enabled by default.
 
 =over 4
 
-=item -DPERL_EMERGENCY_SBRK
+=item -DDEBUGGING_MSTATS
 
-If PERL_EMERGENCY_SBRK is defined, running out of memory need not be a
+If DEBUGGING_MSTATS is defined, you can extract malloc
+statistics from the Perl interpreter.  The overhead this imposes is not
+large (perl just twiddles integers at malloc/free/sbrk time).  When you
+run perl with the environment variable PERL_DEBUG_MSTATS set to
+either 1 or 2, the interpreter will dump statistics to stderr at exit
+time and (with a value of 2) after compilation.  If you install the
+Devel::Peek module you can get the statistics whenever you like by
+invoking its mstat() function.
+
+=item -DEMERGENCY_SBRK
+
+If EMERGENCY_SBRK is defined, running out of memory need not be a
 fatal error: a memory pool can allocated by assigning to the special
 variable $^M.  See perlvar(1) for more details.
 
@@ -990,10 +986,6 @@ invoke Configure with
 for Solaris systems.  For a SunOS system, you must use -B/bin/
 instead.
 
-Alternatively, recent versions of GNU ld reportedly work if you
-include C<-Wl,-export-dynamic> in the ccdlflags variable in
-config.sh.
-
 =item ld.so.1: ./perl: fatal: relocation error:
 
 If you get this message on SunOS or Solaris, and you're using gcc,
@@ -1052,18 +1044,6 @@ If you run into problems relating to do_aspawn or do_spawn, the
 problem is probably that Configure failed to detect your system's
 fork() function.  Follow the procedure in the previous items
 on L<"vsprintf"> and L<"nm extraction">.
-
-=item __inet_* errors
-
-If you receive unresolved symbol errors during Perl build and/or test
-referring to __inet_* symbols, check to see whether BIND 8.1 is
-installed.  It installs a /usr/local/include/arpa/inet.h that refers to
-these symbols.  Versions of BIND later than 8.1 do not install inet.h
-in that location and avoid the errors.  You should probably update to a
-newer version of BIND.  If you can't, you can either link with the
-updated resolver library provided with BIND 8.1 or rename
-/usr/local/bin/arpa/inet.h during the Perl build and test process to
-avoid the problem.
 
 =item Optimizer
 
@@ -1165,13 +1145,10 @@ Machines with half-implemented dbm routines will need to #undef I_ODBM
 
 =head1 make test
 
-This will run the regression tests on the perl you just made (you
-should run plain 'make' before 'make test' otherwise you won't have a
-complete build).  If 'make test' doesn't say "All tests successful"
-then something went wrong.  See the file t/README in the t subdirectory.
-
-Note that you can't run the tests in background if this disables
-opening of /dev/tty.
+This will run the regression tests on the perl you just made.  If it
+doesn't say "All tests successful" then something went wrong.  See the
+file t/README in the t subdirectory.  Note that you can't run the
+tests in background if this disables opening of /dev/tty.
 
 If make test bombs out, just cd to the t directory and run ./TEST
 by hand to see if it makes any difference.  If individual tests
@@ -1187,7 +1164,7 @@ individual subtests is to cd to the t directory and run
 (this assumes that most tests succeed, since harness uses
 complicated constructs).
 
-You should also read the individual tests to see if there are any helpful
+You can also read the individual tests to see if there are any helpful
 comments that apply to your system.
 
 Note:  One possible reason for errors is that some external programs
@@ -1353,13 +1330,13 @@ to hand-edit some of the converted files to get them to parse
 correctly.  For example, h2ph breaks spectacularly on type casting and
 certain structures.
 
-=head1 installhtml --help
+=head installhtml --help
 
 Some sites may wish to make perl documentation available in HTML
 format.  The installhtml utility can be used to convert pod
-documentation into linked HTML files and install them.
+documentation into linked HTML files and install install them.
 
-The following command-line is an example of one used to convert
+The following command-line is an example of the one we use to convert
 perl documentation:
 
   ./installhtml                   \
@@ -1433,4 +1410,4 @@ feedback from the perl5-porters@perl.org folks.
 
 =head1 LAST MODIFIED
 
-$Id: INSTALL,v 1.26 1997/08/28 18:15:54 doughera Released $
+$Id: INSTALL,v 1.18 1997/05/29 18:24:10 doughera Exp $

@@ -23,9 +23,11 @@ README.cygwin32		Notes about Cygwin32 port
 README.os2		Notes about OS/2 port
 README.plan9		Notes about Plan9 port
 README.qnx		Notes about QNX port
+README.threads		Notes about multithreading
 README.vms		Notes about VMS port
 README.win32		Notes about Win32 port
 Todo			The Wishlist
+Todo.5.005		What needs doing before 5.005 release
 XSUB.h			Include file for extension subroutines
 av.c			Array value code
 av.h			Array value header
@@ -206,6 +208,10 @@ ext/SDBM_File/typemap		SDBM extension interface types
 ext/Socket/Makefile.PL	Socket extension makefile writer
 ext/Socket/Socket.pm	Socket extension Perl module
 ext/Socket/Socket.xs	Socket extension external subroutines
+ext/attrs/Makefile.PL	attrs extension makefile writer
+ext/attrs/attrs.pm	attrs extension Perl module
+ext/attrs/attrs.xs	attrs extension external subroutines
+ext/util/extliblist	Used by extension Makefile.PL to make lib lists
 ext/util/make_ext	Used by Makefile to execute extension Makefiles
 ext/util/mkbootstrap	Turns ext/*/*_BS into bootstrap info
 form.h			Public declarations for the above
@@ -319,6 +325,7 @@ lib/CPAN.pm		Interface to Comprehensive Perl Archive Network
 lib/CPAN/FirstTime.pm	Utility for creating CPAN config files
 lib/CPAN/Nox.pm		Runs CPAN while avoiding compiled extensions
 lib/Carp.pm		Error message base class
+lib/Class/Fields.pm	Set up object field names for pseudo-hash-using classes
 lib/Class/Struct.pm	Declare struct-like datatypes as Perl classes
 lib/Cwd.pm		Various cwd routines (getcwd, fastcwd, chdir)
 lib/Devel/SelfStubber.pm Generate stubs for SelfLoader.pm
@@ -357,6 +364,7 @@ lib/Getopt/Std.pm	Fetch command options (getopt, getopts)
 lib/I18N/Collate.pm	Routines to do strxfrm-based collation
 lib/IPC/Open2.pm	Open a two-ended pipe
 lib/IPC/Open3.pm	Open a three-ended pipe!
+lib/ISA.pm		Initialise @ISA at compile-time
 lib/Math/BigFloat.pm	An arbitrary precision floating-point arithmetic package
 lib/Math/BigInt.pm	An arbitrary precision integer arithmetic package
 lib/Math/Complex.pm	A Complex package
@@ -651,7 +659,6 @@ t/lib/db-btree.t	See if DB_File works
 t/lib/db-hash.t		See if DB_File works
 t/lib/db-recno.t	See if DB_File works
 t/lib/dirhand.t		See if DirHandle works
-t/lib/dosglob.t		See if File::DosGlob works
 t/lib/english.t		See if English works
 t/lib/env.t		See if Env works
 t/lib/filecache.t	See if FileCache works
@@ -768,6 +775,7 @@ t/pragma/subs.t		See if subroutine pseudo-importation works
 t/pragma/warn-1global	Tests of global warnings for warning.t
 t/pragma/warning.t	See if warning controls work
 taint.c			Tainting code
+thread.h		Threading header
 toke.c			The tokener
 universal.c		The default UNIVERSAL package methods
 unixish.h		Defines that are assumed on Unix
@@ -819,10 +827,10 @@ win32/Makefile		Win32 makefile for NMAKE (Visual C++ build)
 win32/TEST		Win32 port
 win32/autosplit.pl	Win32 port
 win32/bin/network.pl	Win32 port
-win32/bin/pl2bat.pl	wrap perl scripts into batch files
-win32/bin/runperl.pl	run perl script via batch file namesake
-win32/bin/search.pl	Win32 port
-win32/bin/webget.pl	Win32 port
+win32/bin/pl2bat.bat	Win32 port
+win32/bin/search.bat	Win32 port
+win32/bin/test.bat	Win32 port
+win32/bin/webget.bat	Win32 port
 win32/bin/www.pl	Win32 port
 win32/config.bc		Win32 base line config.sh (Borland C++ build)
 win32/config.vc		Win32 base line config.sh (Visual C++ build)

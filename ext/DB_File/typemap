@@ -34,5 +34,3 @@ T_dbtkeydatum
 	OutputKey($arg, $var)
 T_dbtdatum
 	OutputValue($arg, $var)
-T_PTROBJ
-        sv_setref_pv($arg, dbtype, (void*)$var);

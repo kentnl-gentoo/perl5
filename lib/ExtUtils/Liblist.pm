@@ -2,7 +2,7 @@ package ExtUtils::Liblist;
 use vars qw($VERSION);
 # Broken out of MakeMaker from version 4.11
 
-$VERSION = substr q$Revision: 1.25 $, 10;
+$VERSION = substr q$Revision: 1.2201 $, 10;
 
 use Config;
 use Cwd 'cwd';
@@ -15,7 +15,7 @@ sub ext {
 }
 
 sub _unix_os2_ext {
-    my($self,$potential_libs, $verbose) = @_;
+    my($self,$potential_libs, $Verbose) = @_;
     if ($^O =~ 'os2' and $Config{libs}) { 
 	# Dynamic libraries are not transitive, so we may need including
 	# the libraries linked against perl.dll again.
@@ -24,7 +24,7 @@ sub _unix_os2_ext {
 	$potential_libs .= $Config{libs};
     }
     return ("", "", "", "") unless $potential_libs;
-    warn "Potential libraries are '$potential_libs':\n" if $verbose;
+    print STDOUT "Potential libraries are '$potential_libs':\n" if $Verbose;
 
     my($so)   = $Config{'so'};
     my($libs) = $Config{'libs'};
@@ -34,6 +34,7 @@ sub _unix_os2_ext {
     # compute $extralibs, $bsloadlibs and $ldloadlibs from
     # $potential_libs
     # this is a rewrite of Andy Dougherty's extliblist in perl
+    # its home is in <distribution>/ext/util
 
     my(@searchpath); # from "-L/path" entries in $potential_libs
     my(@libpath) = split " ", $Config{'libpth'};
@@ -48,12 +49,12 @@ sub _unix_os2_ext {
 	if ($thislib =~ s/^(-[LR])//){	# save path flag type
 	    my($ptype) = $1;
 	    unless (-d $thislib){
-		warn "$ptype$thislib ignored, directory does not exist\n"
-			if $verbose;
+		print STDOUT "$ptype$thislib ignored, directory does not exist\n"
+			if $Verbose;
 		next;
 	    }
 	    unless ($self->file_name_is_absolute($thislib)) {
-	      warn "Warning: $ptype$thislib changed to $ptype$pwd/$thislib\n";
+	      print STDOUT "Warning: $ptype$thislib changed to $ptype$pwd/$thislib\n";
 	      $thislib = $self->catdir($pwd,$thislib);
 	    }
 	    push(@searchpath, $thislib);
@@ -64,7 +65,7 @@ sub _unix_os2_ext {
 
 	# Handle possible library arguments.
 	unless ($thislib =~ s/^-l//){
-	  warn "Unrecognized argument in LIBS ignored: '$thislib'\n";
+	  print STDOUT "Unrecognized argument in LIBS ignored: '$thislib'\n";
 	  next;
 	}
 
@@ -124,10 +125,10 @@ sub _unix_os2_ext {
 		 #
 		 # , the compilation tools expand the environment variables.)
 	    } else {
-		warn "$thislib not found in $thispth\n" if $verbose;
+		print STDOUT "$thislib not found in $thispth\n" if $Verbose;
 		next;
 	    }
-	    warn "'-l$thislib' found at $fullname\n" if $verbose;
+	    print STDOUT "'-l$thislib' found at $fullname\n" if $Verbose;
 	    my($fullnamedir) = dirname($fullname);
 	    push @ld_run_path, $fullnamedir unless $ld_run_path_seen{$fullnamedir}++;
 	    $found++;
@@ -173,7 +174,7 @@ sub _unix_os2_ext {
 	    }
 	    last;	# found one here so don't bother looking further
 	}
-	warn "Note (probably harmless): "
+	print STDOUT "Note (probably harmless): "
 		     ."No library found for -l$thislib\n"
 	    unless $found_lib>0;
     }
@@ -182,7 +183,7 @@ sub _unix_os2_ext {
 }
 
 sub _win32_ext {
-    my($self, $potential_libs, $verbose) = @_;
+    my($self, $potential_libs, $Verbose) = @_;
 
     # If user did not supply a list, we punt.
     # (caller should probably use the list in $Config{libs})
@@ -201,7 +202,7 @@ sub _win32_ext {
 	$potential_libs .= " " if $potential_libs;
 	$potential_libs .= $libs;
     }
-    warn "Potential libraries are '$potential_libs':\n" if $verbose;
+    print STDOUT "Potential libraries are '$potential_libs':\n" if $Verbose;
 
     # compute $extralibs from $potential_libs
 
@@ -217,13 +218,13 @@ sub _win32_ext {
 
 	# Handle possible linker path arguments.
 	if ($thislib =~ s/^-L// and not -d $thislib) {
-	    warn "-L$thislib ignored, directory does not exist\n"
-		if $verbose;
+	    print STDOUT "-L$thislib ignored, directory does not exist\n"
+		if $Verbose;
 	    next;
 	}
 	elsif (-d $thislib) {
 	    unless ($self->file_name_is_absolute($thislib)) {
-	      warn "Warning: -L$thislib changed to -L$pwd/$thislib\n";
+	      print STDOUT "Warning: -L$thislib changed to -L$pwd/$thislib\n";
 	      $thislib = $self->catdir($pwd,$thislib);
 	    }
 	    push(@searchpath, $thislib);
@@ -237,22 +238,22 @@ sub _win32_ext {
 	my($found_lib)=0;
 	foreach $thispth (@searchpath, @libpath){
 	    unless (-f ($fullname="$thispth\\$thislib")) {
-		warn "$thislib not found in $thispth\n" if $verbose;
+		print STDOUT "$thislib not found in $thispth\n" if $Verbose;
 		next;
 	    }
-	    warn "'$thislib' found at $fullname\n" if $verbose;
+	    print STDOUT "'$thislib' found at $fullname\n" if $Verbose;
 	    $found++;
 	    $found_lib++;
 	    push(@extralibs, $fullname);
 	    last;
 	}
-	warn "Note (probably harmless): "
+	print STDOUT "Note (probably harmless): "
 		     ."No library found for '$thislib'\n"
 	    unless $found_lib>0;
     }
     return ('','','','') unless $found;
     $lib = join(' ',@extralibs);
-    warn "Result: $lib\n" if $verbose;
+    print "Result: $lib\n" if $verbose;
     wantarray ? ($lib, '', $lib, '') : $lib;
 }
 
@@ -274,7 +275,7 @@ sub _vms_ext {
                  'Xmu' => 'DECW$XMULIBSHR');
   if ($Config{'vms_cc_type'} ne 'decc') { $libmap{'curses'} = 'VAXCCURSE'; }
 
-  warn "Potential libraries are '$potential_libs'\n" if $verbose;
+  print STDOUT "Potential libraries are '$potential_libs'\n" if $verbose;
 
   # First, sort out directories and library names in the input
   foreach $lib (split ' ',$potential_libs) {
@@ -291,11 +292,11 @@ sub _vms_ext {
   # path in a logical name.)
   foreach $dir (@dirs) {
     unless (-d $dir) {
-      warn "Skipping nonexistent Directory $dir\n" if $verbose > 1;
+      print STDOUT "Skipping nonexistent Directory $dir\n" if $verbose > 1;
       $dir = '';
       next;
     }
-    warn "Resolving directory $dir\n" if $verbose;
+    print STDOUT "Resolving directory $dir\n" if $verbose;
     if ($self->file_name_is_absolute($dir)) { $dir = $self->fixpath($dir,1); }
     else                                    { $dir = $self->catdir($cwd,$dir); }
   }
@@ -320,24 +321,24 @@ sub _vms_ext {
       push(@variants,"lib$lib") if $lib !~ /[:>\]]/;
     }
     push(@variants,$lib);
-    warn "Looking for $lib\n" if $verbose;
+    print STDOUT "Looking for $lib\n" if $verbose;
     foreach $variant (@variants) {
       foreach $dir (@dirs) {
         my($type);
 
         $name = "$dir$variant";
-        warn "\tChecking $name\n" if $verbose > 2;
+        print "\tChecking $name\n" if $verbose > 2;
         if (-f ($test = VMS::Filespec::rmsexpand($name))) {
           # It's got its own suffix, so we'll have to figure out the type
           if    ($test =~ /(?:$so|exe)$/i)      { $type = 'sh'; }
           elsif ($test =~ /(?:$lib_ext|olb)$/i) { $type = 'olb'; }
           elsif ($test =~ /(?:$obj_ext|obj)$/i) {
-            warn "Note (probably harmless): "
+            print STDOUT "Note (probably harmless): "
 			 ."Plain object file $test found in library list\n";
             $type = 'obj';
           }
           else {
-            warn "Note (probably harmless): "
+            print STDOUT "Note (probably harmless): "
 			 ."Unknown library type for $test; assuming shared\n";
             $type = 'sh';
           }
@@ -356,7 +357,7 @@ sub _vms_ext {
         elsif (not length($ctype) and  # If we've got a lib already, don't bother
                ( -f ($test = VMS::Filespec::rmsexpand($name,$obj_ext)) or
                  -f ($test = VMS::Filespec::rmsexpand($name,'.obj'))))  {
-          warn "Note (probably harmless): "
+          print STDOUT "Note (probably harmless): "
 		       ."Plain object file $test found in library list\n";
           $type = 'obj';
           $name = $test unless $test =~ /obj;?\d*$/i;
@@ -369,11 +370,11 @@ sub _vms_ext {
       if ($ctype) { 
         eval '$' . $ctype . "{'$cand'}++";
         die "Error recording library: $@" if $@;
-        warn "\tFound as $cand (really $test), type $ctype\n" if $verbose > 1;
+        print STDOUT "\tFound as $cand (really $ctest), type $ctype\n" if $verbose > 1;
         next LIB;
       }
     }
-    warn "Note (probably harmless): "
+    print STDOUT "Note (probably harmless): "
 		 ."No library found for $lib\n";
   }
 
@@ -386,7 +387,7 @@ sub _vms_ext {
   push(@libs, map { "$_/Library" } sort keys %olb);
   push(@libs, map { "$_/Share"   } sort keys %sh);
   $lib = join(' ',@libs);
-  warn "Result: $lib\n" if $verbose;
+  print "Result: $lib\n" if $verbose;
   wantarray ? ($lib, '', $lib, '') : $lib;
 }
 
@@ -402,7 +403,7 @@ ExtUtils::Liblist - determine libraries to use and how to use them
 
 C<require ExtUtils::Liblist;>
 
-C<ExtUtils::Liblist::ext($self, $potential_libs, $verbose);>
+C<ExtUtils::Liblist::ext($self, $potential_libs, $Verbose);>
 
 =head1 DESCRIPTION
 

@@ -1131,6 +1131,7 @@ mess(pat, args)
     sv = mess_sv;
     sv_vsetpvfn(sv, pat, strlen(pat), args, Null(SV**), 0, Null(bool*));
     if (!SvCUR(sv) || *(SvEND(sv) - 1) != '\n') {
+	dTHR;
 	if (dirty)
 	    sv_catpv(sv, dgd);
 	else {
@@ -1162,6 +1163,7 @@ die(pat, va_alist)
     va_dcl
 #endif
 {
+    dTHR;
     va_list args;
     char *message;
     I32 oldrunlevel = runlevel;
@@ -1170,6 +1172,8 @@ die(pat, va_alist)
     GV *gv;
     CV *cv;
 
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "die: curstack = %p, mainstack= %p\n",
+    		    curstack, mainstack));/*debug*/
     /* We have to switch back to mainstack or die_where may try to pop
      * the eval block from the wrong stack if die is being called from a
      * signal handler.  - dkindred@cs.cmu.edu */
@@ -1186,6 +1190,8 @@ die(pat, va_alist)
     message = mess(pat, &args);
     va_end(args);
 
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "die: message = %s\ndiehook = %p\n",
+		   message, diehook));/*debug*/
     if (diehook) {
 	/* sv_2cv might call croak() */
 	SV *olddiehook = diehook;
@@ -1213,6 +1219,9 @@ die(pat, va_alist)
     }
 
     restartop = die_where(message);
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
+    		    "die: restartop = %p, was_in_eval = %d, oldrunlevel = %d\n",
+		    restartop, was_in_eval, oldrunlevel));/*debug*/
     if ((!restartop && was_in_eval) || oldrunlevel > 1)
 	JMPENV_JUMP(3);
     return restartop;
@@ -1229,6 +1238,7 @@ croak(pat, va_alist)
     va_dcl
 #endif
 {
+    dTHR;
     va_list args;
     char *message;
     HV *stash;
@@ -1242,6 +1252,9 @@ croak(pat, va_alist)
 #endif
     message = mess(pat, &args);
     va_end(args);
+#ifdef USE_THREADS
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "croak: 0x%lx %s", (unsigned long) thr, message));
+#endif /* USE_THREADS */
     if (diehook) {
 	/* sv_2cv might call croak() */
 	SV *olddiehook = diehook;
@@ -1302,6 +1315,7 @@ warn(pat,va_alist)
 
     if (warnhook) {
 	/* sv_2cv might call warn() */
+	dTHR;
 	SV *oldwarnhook = warnhook;
 	ENTER;
 	SAVESPTR(warnhook);
@@ -2085,17 +2099,11 @@ int flags;
 	}
     }
 #ifdef HAS_WAITPID
-#  ifdef HAS_WAITPID_RUNTIME
-    if (!HAS_WAITPID_RUNTIME)
-	goto hard_way;
-#  endif
     return waitpid(pid,statusp,flags);
-#endif
-#if !defined(HAS_WAITPID) && defined(HAS_WAIT4)
+#else
+#ifdef HAS_WAIT4
     return wait4((pid==-1)?0:pid,statusp,flags,Null(struct rusage *));
-#endif
-#if !defined(HAS_WAITPID) && !defined(HAS_WAIT4) || defined(HAS_WAITPID_RUNTIME)
-  hard_way:
+#else
     {
 	I32 result;
 	if (flags)
@@ -2108,6 +2116,7 @@ int flags;
 	}
 	return result;
     }
+#endif
 #endif
 }
 #endif /* !DOSISH */
@@ -2335,6 +2344,138 @@ I32 *retlen;
     return retval;
 }
 
+#ifdef USE_THREADS
+#ifdef FAKE_THREADS
+/* Very simplistic scheduler for now */
+void
+schedule(void)
+{
+    thr = thr->next_run;
+}
+
+void
+perl_cond_init(cp)
+perl_cond *cp;
+{
+    *cp = 0;
+}
+
+void
+perl_cond_signal(cp)
+perl_cond *cp;
+{
+    perl_thread t;
+    perl_cond cond = *cp;
+    
+    if (!cond)
+	return;
+    t = cond->thread;
+    /* Insert t in the runnable queue just ahead of us */
+    t->next_run = thr->next_run;
+    thr->next_run->prev_run = t;
+    t->prev_run = thr;
+    thr->next_run = t;
+    thr->wait_queue = 0;
+    /* Remove from the wait queue */
+    *cp = cond->next;
+    Safefree(cond);
+}
+
+void
+perl_cond_broadcast(cp)
+perl_cond *cp;
+{
+    perl_thread t;
+    perl_cond cond, cond_next;
+    
+    for (cond = *cp; cond; cond = cond_next) {
+	t = cond->thread;
+	/* Insert t in the runnable queue just ahead of us */
+	t->next_run = thr->next_run;
+	thr->next_run->prev_run = t;
+	t->prev_run = thr;
+	thr->next_run = t;
+	thr->wait_queue = 0;
+	/* Remove from the wait queue */
+	cond_next = cond->next;
+	Safefree(cond);
+    }
+    *cp = 0;
+}
+
+void
+perl_cond_wait(cp)
+perl_cond *cp;
+{
+    perl_cond cond;
+
+    if (thr->next_run == thr)
+	croak("panic: perl_cond_wait called by last runnable thread");
+    
+    New(666, cond, 1, struct perl_wait_queue);
+    cond->thread = thr;
+    cond->next = *cp;
+    *cp = cond;
+    thr->wait_queue = cond;
+    /* Remove ourselves from runnable queue */
+    thr->next_run->prev_run = thr->prev_run;
+    thr->prev_run->next_run = thr->next_run;
+}
+#endif /* FAKE_THREADS */
+
+#ifdef OLD_PTHREADS_API
+struct thread *
+getTHR _((void))
+{
+    pthread_addr_t t;
+
+    if (pthread_getspecific(thr_key, &t))
+	croak("panic: pthread_getspecific");
+    return (struct thread *) t;
+}
+#endif /* OLD_PTHREADS_API */
+
+MAGIC *
+condpair_magic(sv)
+SV *sv;
+{
+    MAGIC *mg;
+    
+    SvUPGRADE(sv, SVt_PVMG);
+    mg = mg_find(sv, 'm');
+    if (!mg) {
+	condpair_t *cp;
+
+	New(53, cp, 1, condpair_t);
+	MUTEX_INIT(&cp->mutex);
+	COND_INIT(&cp->owner_cond);
+	COND_INIT(&cp->cond);
+	cp->owner = 0;
+	MUTEX_LOCK(&sv_mutex);
+	mg = mg_find(sv, 'm');
+	if (mg) {
+	    /* someone else beat us to initialising it */
+	    MUTEX_UNLOCK(&sv_mutex);
+	    MUTEX_DESTROY(&cp->mutex);
+	    COND_DESTROY(&cp->owner_cond);
+	    COND_DESTROY(&cp->cond);
+	    Safefree(cp);
+	}
+	else {
+	    sv_magic(sv, Nullsv, 'm', 0, 0);
+	    mg = SvMAGIC(sv);
+	    mg->mg_ptr = (char *)cp;
+	    mg->mg_len = sizeof(cp);
+	    MUTEX_UNLOCK(&sv_mutex);
+	    DEBUG_L(WITH_THR(PerlIO_printf(PerlIO_stderr(),
+					   "0x%lx: condpair_magic 0x%lx\n",
+					   (unsigned long)thr,
+					   (unsigned long)sv));)
+	}
+    }
+    return mg;
+}
+#endif /* USE_THREADS */
 
 #ifdef HUGE_VAL
 /*

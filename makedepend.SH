@@ -28,12 +28,6 @@ MAKE=$make
 !GROK!THIS!
 $spitshell >>makedepend <<'!NO!SUBS!'
 
-# This script should be called with 
-#     sh ./makedepend MAKE=$(MAKE)
-case "$1" in 
-	MAKE=*) eval $1 ;;
-esac
-
 export PATH || (echo "OOPS, this isn't sh.  Desperation time.  I will feed myself to sh."; sh \$0; kill \$\$)
 
 case $CONFIG in

@@ -65,10 +65,6 @@ that don't resolve:
 	-l && !-e && print "bogus link: $File::Find::name\n";
     } 
 
-=head1 BUGS
-
-There is no way to make find or finddepth follow symlinks.
-
 =cut
 
 @ISA = qw(Exporter);
@@ -82,22 +78,18 @@ sub find {
     # compatibility.
     local($topdir,$topdev,$topino,$topmode,$topnlink);
     foreach $topdir (@_) {
-	(($topdev,$topino,$topmode,$topnlink) =
-	  ($Is_VMS ? stat($topdir) : lstat($topdir)))
+	(($topdev,$topino,$topmode,$topnlink) = stat($topdir))
 	  || (warn("Can't stat $topdir: $!\n"), next);
 	if (-d _) {
 	    if (chdir($topdir)) {
 		($dir,$_) = ($topdir,'.');
 		$name = $topdir;
-		$prune = 0;
 		&$wanted;
-		if (!$prune) {
-		    my $fixtopdir = $topdir;
-	            $fixtopdir =~ s,/$,, ;
-		    $fixtopdir =~ s/\.dir$// if $Is_VMS;
-		    $fixtopdir =~ s/\\dir$// if $Is_NT;
-		    &finddir($wanted,$fixtopdir,$topnlink);
-		}
+		my $fixtopdir = $topdir;
+	        $fixtopdir =~ s,/$,, ;
+		$fixtopdir =~ s/\.dir$// if $Is_VMS;
+		$fixtopdir =~ s/\\dir$// if $Is_NT;
+		&finddir($wanted,$fixtopdir,$topnlink);
 	    }
 	    else {
 		warn "Can't cd to $topdir: $!\n";
@@ -177,8 +169,7 @@ sub finddepth {
     # compatibility.
     local($topdir, $topdev, $topino, $topmode, $topnlink);
     foreach $topdir (@_) {
-	(($topdev,$topino,$topmode,$topnlink) =
-	  ($Is_VMS ? stat($topdir) : lstat($topdir)))
+	(($topdev,$topino,$topmode,$topnlink) = stat($topdir))
 	  || (warn("Can't stat $topdir: $!\n"), next);
 	if (-d _) {
 	    if (chdir($topdir)) {
@@ -199,7 +190,6 @@ sub finddepth {
 	    unless (($_,$dir) = File::Basename::fileparse($topdir)) {
 		($dir,$_) = ('.', $topdir);
 	    }
-	    $name = $topdir;
 	    chdir $dir && &$wanted;
 	}
 	chdir $cwd;

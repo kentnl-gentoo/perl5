@@ -35,7 +35,7 @@ Curly brackets are required on C<if>s and C<while>s.
 
 =item *
 
-Variables begin with "$", "@" or "%" in Perl.
+Variables begin with "$" or "@" in Perl.
 
 =item *
 
@@ -168,7 +168,7 @@ There's no switch statement.  (But it's easy to build one on the fly.)
 
 =item *
 
-Variables begin with "$", "@" or "%" in Perl.
+Variables begin with "$" or "@" in Perl.
 
 =item *
 
@@ -437,12 +437,6 @@ whether this should be classed as a bug or not.
 
     # perl4 prints: x=10
     # perl5 prints: Can't find string terminator "'" anywhere before EOF
-
-You can avoid this problem, and remain compatible with perl4, if you
-always explicitly include the package name:
-
-    $x = 10 ;
-    print "x=${main'x}\n" ;
 
 Also see precedence traps, for parsing C<$:>.
 
@@ -929,9 +923,7 @@ Perl4-to-Perl5 traps involving precedence order.
 
 =item * Precedence
 
-LHS vs. RHS of any assignment operator.  LHS is evaluated first
-in perl4, second in perl5; this can affect the relationship
-between side-effects in sub-expressions.
+LHS vs. RHS when both sides are getting an op.
 
     @arr = ( 'left', 'right' );
     $a{shift @arr} = shift @arr;
@@ -1006,6 +998,18 @@ concatenation precedence over filetest operator?
 
     # perl4 prints: no output
     # perl5 prints: Can't modify -e in concatenation
+
+=item * Precedence
+
+Assignment to value takes precedence over assignment to key in
+perl5 when using the shift operator on both sides.
+
+    @arr = ( 'left', 'right' );
+    $a{shift @arr} = shift @arr;
+    print join( ' ', keys %a );
+
+    # perl4 prints: left
+    # perl5 prints: right
 
 =back
 

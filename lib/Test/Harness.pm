@@ -110,8 +110,7 @@ sub runtests {
 		       : $wstatus >> 8);
 	if ($wstatus) {
 	    my ($failed, $canon, $percent) = ('??', '??');
-	    printf "dubious\n\tTest returned status $estatus (wstat %d, 0x%x)\n",
-		    $wstatus,$wstatus;
+	    print "dubious\n\tTest returned status $estatus (wstat $wstatus)\n";
 	    print "\t\t(VMS status is $estatus)\n" if $^O eq 'VMS';
 	    if (corestatus($wstatus)) { # until we have a wait module
 		if ($have_devel_corestack) {
@@ -321,10 +320,6 @@ will generate
 The global variable $Test::Harness::verbose is exportable and can be
 used to let runtests() display the standard output of the script
 without altering the behavior otherwise.
-
-The global variable $Test::Harness::switches is exportable and can be
-used to set perl command line options used for running the test
-script(s). The default value is C<-w>.
 
 =head1 EXPORT
 

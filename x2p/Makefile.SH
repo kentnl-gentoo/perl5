@@ -132,7 +132,7 @@ lint:
 	lint $(lintflags) $(defs) $(c) > a2p.fuzz
 
 depend: $(mallocsrc) ../makedepend
-	sh ../makedepend MAKE=$(MAKE)
+	sh ../makedepend
 
 clist:
 	echo $(c) | tr ' ' '\012' >.clist
@@ -153,7 +153,8 @@ malloc.c: ../malloc.c
 	sed <../malloc.c >malloc.c \
 	    -e 's/"EXTERN.h"/"..\/EXTERN.h"/' \
 	    -e 's/"perl.h"/"..\/perl.h"/' \
-	    -e 's/my_exit/exit/'
+	    -e 's/my_exit/exit/' \
+	    -e 's/MUTEX_[A-Z_]*(&malloc_mutex);//'
 
 # AUTOMATICALLY GENERATED MAKE DEPENDENCIES--PUT NOTHING BELOW THIS LINE
 $(obj):

@@ -357,15 +357,8 @@ MAGIC *mg;
 	}
 #else
 #ifdef OS2
-	if (!(_emx_env & 0x200)) {	/* Under DOS */
-	    sv_setnv(sv, (double)errno);
-	    sv_setpv(sv, errno ? Strerror(errno) : "");
-	} else {
-	    if (errno != errno_isOS2)
-		Perl_rc = _syserrno();
-	    sv_setnv(sv, (double)Perl_rc);
-	    sv_setpv(sv, os2error(Perl_rc));
-	}
+	sv_setnv(sv, (double)Perl_rc);
+	sv_setpv(sv, os2error(Perl_rc));
 #else
 	sv_setnv(sv, (double)errno);
 	sv_setpv(sv, errno ? Strerror(errno) : "");
@@ -390,14 +383,6 @@ MAGIC *mg;
 	break;
     case '\020':		/* ^P */
 	sv_setiv(sv, (IV)perldb);
-	break;
-    case '\023':		/* ^S */
-	if (lex_state != LEX_NOTPARSING)
-	    SvOK_off(sv);
-	else if (in_eval)
-	    sv_setiv(sv, 1);
-	else
-	    sv_setiv(sv, 0);
 	break;
     case '\024':		/* ^T */
 #ifdef BIG_TIME
@@ -469,11 +454,14 @@ MAGIC *mg;
 #endif
 	break;
     case '?':
-	sv_setiv(sv, (IV)STATUS_CURRENT);
+	{
+	    dTHR;
+	    sv_setiv(sv, (IV)STATUS_CURRENT);
 #ifdef COMPLEX_STATUS
-	LvTARGOFF(sv) = statusvalue;
-	LvTARGLEN(sv) = statusvalue_vms;
+	    LvTARGOFF(sv) = statusvalue;
+	    LvTARGLEN(sv) = statusvalue_vms;
 #endif
+	}
 	break;
     case '^':
 	s = IoTOP_NAME(GvIOp(defoutgv));
@@ -506,7 +494,7 @@ MAGIC *mg;
     case '/':
 	break;
     case '[':
-	sv_setiv(sv, (IV)curcop->cop_arybase);
+	WITH_THR(sv_setiv(sv, (IV)curcop->cop_arybase));
 	break;
     case '|':
 	sv_setiv(sv, (IV)(IoFLAGS(GvIOp(defoutgv)) & IOf_FLUSH) != 0 );
@@ -719,6 +707,7 @@ MAGIC* mg;
     	if(psig_ptr[i])
     	    sv_setsv(sv,psig_ptr[i]);
     	else {
+	    dTHR;		/* just for SvREFCNT_inc */
     	    Sighandler_t sigstate = rsignal_state(i);
 
     	    /* cache state so we don't fetch it again */
@@ -758,6 +747,7 @@ magic_setsig(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     register char *s;
     I32 i;
     SV** svp;
@@ -869,6 +859,7 @@ SV* sv;
 MAGIC* mg;
 char *meth;
 {
+    dTHR;
     dSP;
 
     ENTER;
@@ -910,6 +901,7 @@ magic_setpack(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     dSP;
 
     PUSHMARK(sp);
@@ -943,6 +935,7 @@ int magic_wipepack(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     dSP;
 
     PUSHMARK(sp);
@@ -960,6 +953,7 @@ SV* sv;
 MAGIC* mg;
 SV* key;
 {
+    dTHR;
     dSP;
     char *meth = SvOK(key) ? "NEXTKEY" : "FIRSTKEY";
 
@@ -993,6 +987,7 @@ magic_setdbline(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     OP *o;
     I32 i;
     GV* gv;
@@ -1014,6 +1009,7 @@ magic_getarylen(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     sv_setiv(sv, AvFILL((AV*)mg->mg_obj) + curcop->cop_arybase);
     return 0;
 }
@@ -1023,6 +1019,7 @@ magic_setarylen(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     av_fill((AV*)mg->mg_obj, SvIV(sv) - curcop->cop_arybase);
     return 0;
 }
@@ -1037,6 +1034,7 @@ MAGIC* mg;
     if (SvTYPE(lsv) >= SVt_PVMG && SvMAGIC(lsv)) {
 	mg = mg_find(lsv, 'g');
 	if (mg && mg->mg_len >= 0) {
+	    dTHR;
 	    sv_setiv(sv, mg->mg_len + curcop->cop_arybase);
 	    return 0;
 	}
@@ -1070,7 +1068,7 @@ MAGIC* mg;
     }
     len = SvPOK(lsv) ? SvCUR(lsv) : sv_len(lsv);
 
-    pos = SvIV(sv) - curcop->cop_arybase;
+    WITH_THR(pos = SvIV(sv) - curcop->cop_arybase);
     if (pos < 0) {
 	pos += len;
 	if (pos < 0)
@@ -1147,6 +1145,7 @@ magic_settaint(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     if (localizing) {
 	if (localizing == 1)
 	    mg->mg_len <<= 1;
@@ -1188,6 +1187,7 @@ MAGIC* mg;
 		targ = AvARRAY(av)[LvTARGOFF(sv)];
 	}
 	if (targ && targ != &sv_undef) {
+	    dTHR;		/* just for SvREFCNT_dec */
 	    /* somebody else defined it for us */
 	    SvREFCNT_dec(LvTARG(sv));
 	    LvTARG(sv) = SvREFCNT_inc(targ);
@@ -1230,6 +1230,7 @@ void
 vivify_defelem(sv)
 SV* sv;
 {
+    dTHR;			/* just for SvREFCNT_inc and SvREFCNT_dec*/
     MAGIC* mg;
     SV* value;
 
@@ -1326,6 +1327,7 @@ magic_set(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
+    dTHR;
     register char *s;
     I32 i;
     STRLEN len;
@@ -1368,7 +1370,14 @@ MAGIC* mg;
 	    osname = Nullch;
 	break;
     case '\020':	/* ^P */
-	perldb = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
+	i = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
+	if (i != perldb) {
+	    if (perldb)
+		oldlastpm = curpm;
+	    else
+		curpm = oldlastpm;
+	}
+	perldb = i;
 	break;
     case '\024':	/* ^T */
 #ifdef BIG_TIME
@@ -1616,28 +1625,16 @@ MAGIC* mg;
 	    s += strlen(s);
 	    /* See if all the arguments are contiguous in memory */
 	    for (i = 1; i < origargc; i++) {
-		if (origargv[i] == s + 1
-#ifdef OS2
-		    || origargv[i] == s + 2
-#endif 
-		   )
+		if (origargv[i] == s + 1)
 		    s += strlen(++s);	/* this one is ok too */
-		else
-		    break;
 	    }
 	    /* can grab env area too? */
-	    if (origenviron && (origenviron[0] == s + 1
-#ifdef OS2
-				|| (origenviron[0] == s + 9 && (s += 8))
-#endif 
-	       )) {
+	    if (origenviron && origenviron[0] == s + 1) {
 		my_setenv("NoNe  SuCh", Nullch);
 					    /* force copy of environment */
 		for (i = 0; origenviron[i]; i++)
 		    if (origenviron[i] == s + 1)
 			s += strlen(++s);
-		    else
-			break;
 	    }
 	    origalen = s - origargv[0];
 	}
@@ -1664,6 +1661,23 @@ MAGIC* mg;
     return 0;
 }
 
+#ifdef USE_THREADS
+int
+magic_mutexfree(sv, mg)
+SV *sv;
+MAGIC *mg;
+{
+    dTHR;
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "0x%lx: magic_mutexfree 0x%lx\n",
+			  (unsigned long)thr, (unsigned long)sv);)
+    if (MgOWNER(mg))
+	croak("panic: magic_mutexfree");
+    MUTEX_DESTROY(MgMUTEXP(mg));
+    COND_DESTROY(MgCONDP(mg));
+    return 0;
+}
+#endif /* USE_THREADS */
+
 I32
 whichsig(sig)
 char *sig;
@@ -1684,78 +1698,23 @@ char *sig;
     return 0;
 }
 
-static SV* sig_sv;
-
-static void
-unwind_handler_stack(p)
-    void *p;
-{
-    U32 flags = *(U32*)p;
-
-    if (flags & 1)
-	savestack_ix -= 5; /* Unprotect save in progress. */
-    /* cxstack_ix-- Not needed, die already unwound it. */
-    if (flags & 64)
-	SvREFCNT_dec(sig_sv);
-}
-
 Signal_t
 sighandler(sig)
 int sig;
 {
+    dTHR;
     dSP;
     GV *gv;
     HV *st;
-    SV *sv, *tSv = Sv;
+    SV *sv;
     CV *cv;
     AV *oldstack;
-    OP *myop = op;
-    U32 flags = 0;
-    I32 o_save_i = savestack_ix, type;
-    CONTEXT *cx;
-    XPV *tXpv = Xpv;
-    
-    if (savestack_ix + 15 <= savestack_max)
-	flags |= 1;
-    if (cxstack_ix < cxstack_max - 2)
-	flags |= 2;
-    if (markstack_ptr < markstack_max - 2)
-	flags |= 4;
-    if (retstack_ix < retstack_max - 2)
-	flags |= 8;
-    if (scopestack_ix < scopestack_max - 3)
-	flags |= 16;
 
-    if (flags & 2) {		/* POPBLOCK may decrease cxstack too early. */
-	cxstack_ix++;		/* Protect from overwrite. */
-	cx = &cxstack[cxstack_ix];
-	type = cx->cx_type;		/* Can be during partial write. */
-	cx->cx_type = CXt_NULL;		/* Make it safe for unwind. */
-    }
     if (!psig_ptr[sig])
 	die("Signal SIG%s received, but no signal handler set.\n",
 	    sig_name[sig]);
 
-    /* Max number of items pushed there is 3*n or 4. We cannot fix
-       infinity, so we fix 4 (in fact 5): */
-    if (flags & 1) {
-	savestack_ix += 5;		/* Protect save in progress. */
-	o_save_i = savestack_ix;
-	SAVEDESTRUCTOR(unwind_handler_stack, (void*)&flags);
-    }
-    if (flags & 4) 
-	markstack_ptr++;		/* Protect mark. */
-    if (flags & 8) {
-	retstack_ix++;
-	retstack[retstack_ix] = NULL;
-    }
-    if (flags & 16)
-	scopestack_ix += 1;
-    /* sv_2cv is too complicated, try a simpler variant first: */
-    if (!SvROK(psig_ptr[sig]) || !(cv = (CV*)SvRV(psig_ptr[sig])) 
-	|| SvTYPE(cv) != SVt_PVCV)
-	cv = sv_2cv(psig_ptr[sig],&st,&gv,TRUE);
-
+    cv = sv_2cv(psig_ptr[sig],&st,&gv,TRUE);
     if (!cv || !CvROOT(cv)) {
 	if (dowarn)
 	    warn("SIG%s handler \"%s\" not defined.\n",
@@ -1768,11 +1727,9 @@ int sig;
 	AvFILL(signalstack) = 0;
     SWITCHSTACK(curstack, signalstack);
 
-    if(psig_name[sig]) {
+    if(psig_name[sig])
     	sv = SvREFCNT_inc(psig_name[sig]);
-	flags |= 64;
-	sig_sv = sv;
-    } else {
+    else {
 	sv = sv_newmortal();
 	sv_setpv(sv,sig_name[sig]);
     }
@@ -1783,23 +1740,6 @@ int sig;
     perl_call_sv((SV*)cv, G_DISCARD);
 
     SWITCHSTACK(signalstack, oldstack);
-    if (flags & 1)
-	savestack_ix -= 8; /* Unprotect save in progress. */
-    if (flags & 2) {
-	cxstack[cxstack_ix].cx_type = type;
-	cxstack_ix -= 1;
-    }
-    if (flags & 4) 
-	markstack_ptr--;
-    if (flags & 8) 
-	retstack_ix--;
-    if (flags & 16)
-	scopestack_ix -= 1;
-    if (flags & 64)
-	SvREFCNT_dec(sv);
-    op = myop;			/* Apparently not needed... */
-    
-    Sv = tSv;			/* Restore global temporaries. */
-    Xpv = tXpv;
+
     return;
 }

@@ -1,3 +1,9 @@
+@rem = '--*-Perl-*--';
+@rem = '
+@echo off
+perl -S %0.bat %1 %2 %3 %4 %5 %6 %7 %8 %9
+goto endofperl
+@rem ';
 #!/usr/local/bin/perl -w
 
 #-
@@ -1089,3 +1095,5 @@ sub dummy {
 }
 
 __END__
+__END__
+:endofperl

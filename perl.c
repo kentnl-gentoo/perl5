@@ -72,14 +72,29 @@ static void init_main_stash _((void));
 static void init_perllib _((void));
 static void init_postdump_symbols _((int, char **, char **));
 static void init_predump_symbols _((void));
-static void init_stacks _((void));
 static void my_exit_jump _((void)) __attribute__((noreturn));
 static void nuke_stacks _((void));
 static void open_script _((char *, bool, SV *));
+#ifdef USE_THREADS
+static void thread_destruct _((void *));
+#endif /* USE_THREADS */
 static void usage _((char *));
 static void validate_suid _((char *, char*));
 
 static int fdscript = -1;
+
+#if defined(DEBUGGING) && defined(USE_THREADS) && defined(__linux__)
+#include <asm/sigcontext.h>
+static void
+catch_sigsegv(int signo, struct sigcontext_struct sc)
+{
+    signal(SIGSEGV, SIG_DFL);
+    fprintf(stderr, "Segmentation fault dereferencing 0x%lx\n"
+		    "return_address = 0x%lx, eip = 0x%lx\n",
+	    	    sc.cr2, __builtin_return_address(0), sc.eip);
+    fprintf(stderr, "thread = 0x%lx\n", (unsigned long)THR); 
+}
+#endif
 
 PerlInterpreter *
 perl_alloc()
@@ -95,12 +110,39 @@ void
 perl_construct( sv_interp )
 register PerlInterpreter *sv_interp;
 {
+#if defined(USE_THREADS) && !defined(FAKE_THREADS)
+    struct thread *thr;
+#endif
+    
     if (!(curinterp = sv_interp))
 	return;
 
 #ifdef MULTIPLICITY
     Zero(sv_interp, 1, PerlInterpreter);
 #endif
+
+#ifdef USE_THREADS
+#ifdef NEED_PTHREAD_INIT
+    pthread_init();
+#endif /* NEED_PTHREAD_INIT */
+    New(53, thr, 1, struct thread);
+#ifdef FAKE_THREADS
+    self = thr;
+    thr->next = thr->prev = thr->next_run = thr->prev_run = thr;
+    thr->wait_queue = 0;
+    thr->private = 0;
+#else
+    self = pthread_self();
+    if (pthread_key_create(&thr_key, thread_destruct))
+	croak("panic: pthread_key_create");
+    if (pthread_setspecific(thr_key, (void *) thr))
+	croak("panic: pthread_setspecific");
+#endif /* !FAKE_THREADS */
+    nthreads = 1;
+    cvcache = newHV();
+    thrflags = 0;
+    curcop = &compiling;
+#endif /* USE_THREADS */
 
     /* Init the real globals? */
     if (!linestr) {
@@ -121,6 +163,12 @@ register PerlInterpreter *sv_interp;
 
 	nrs = newSVpv("\n", 1);
 	rs = SvREFCNT_inc(nrs);
+
+	MUTEX_INIT(&malloc_mutex);
+	MUTEX_INIT(&sv_mutex);
+	MUTEX_INIT(&eval_mutex);
+	MUTEX_INIT(&nthreads_mutex);
+	COND_INIT(&nthreads_cond);
 
 	pidstatus = newHV();
 
@@ -144,7 +192,6 @@ register PerlInterpreter *sv_interp;
 #endif
 
     init_ids();
-    lex_state = LEX_NOTPARSING;
 
     start_env.je_prev = NULL;
     start_env.je_ret = -1;
@@ -170,20 +217,66 @@ register PerlInterpreter *sv_interp;
 
     fdpid = newAV();	/* for remembering popen pids by fd */
 
-    init_stacks();
+    init_stacks(ARGS);
+    DEBUG( {
+	New(51,debname,128,char);
+	New(52,debdelim,128,char);
+    } )
+
     ENTER;
 }
+
+#ifdef USE_THREADS
+void
+thread_destruct(arg)
+void *arg;
+{
+    struct thread *thr = (struct thread *) arg;
+    /*
+     * Decrement the global thread count and signal anyone listening.
+     * The only official thread listening is the original thread while
+     * in perl_destruct. It waits until it's the only thread and then
+     * performs END blocks and other process clean-ups.
+     */
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "thread_destruct: 0x%lx\n", (unsigned long) thr));
+
+    Safefree(thr);
+    MUTEX_LOCK(&nthreads_mutex);
+    nthreads--;
+    COND_BROADCAST(&nthreads_cond);
+    MUTEX_UNLOCK(&nthreads_mutex);
+}    
+#endif /* USE_THREADS */
 
 void
 perl_destruct(sv_interp)
 register PerlInterpreter *sv_interp;
 {
+    dTHR;
     int destruct_level;  /* 0=none, 1=full, 2=full with checks */
     I32 last_sv_count;
     HV *hv;
 
     if (!(curinterp = sv_interp))
 	return;
+
+#ifdef USE_THREADS
+#ifndef FAKE_THREADS
+    /* Wait until all user-created threads go away */
+    MUTEX_LOCK(&nthreads_mutex);
+    while (nthreads > 1)
+    {
+	DEBUG_L(PerlIO_printf(PerlIO_stderr(), "perl_destruct: waiting for %d threads\n",
+			nthreads - 1));
+	COND_WAIT(&nthreads_cond, &nthreads_mutex);
+    }
+    /* At this point, we're the last thread */
+    MUTEX_UNLOCK(&nthreads_mutex);
+    DEBUG_L(PerlIO_printf(PerlIO_stderr(), "perl_destruct: armageddon has arrived\n"));
+    MUTEX_DESTROY(&nthreads_mutex);
+    COND_DESTROY(&nthreads_cond);
+#endif /* !defined(FAKE_THREADS) */
+#endif /* USE_THREADS */
 
     destruct_level = perl_destruct_level;
 #ifdef DEBUGGING
@@ -336,8 +429,10 @@ register PerlInterpreter *sv_interp;
     /* startup and shutdown function lists */
     SvREFCNT_dec(beginav);
     SvREFCNT_dec(endav);
+    SvREFCNT_dec(initav);
     beginav = Nullav;
     endav = Nullav;
+    initav = Nullav;
 
     /* temp stack during pp_sort() */
     SvREFCNT_dec(sortstack);
@@ -432,6 +527,11 @@ register PerlInterpreter *sv_interp;
     hints = 0;		/* Reset hints. Should hints be per-interpreter ? */
     
     DEBUG_P(debprofdump());
+#ifdef USE_THREADS
+    MUTEX_DESTROY(&sv_mutex);
+    MUTEX_DESTROY(&malloc_mutex);
+    MUTEX_DESTROY(&eval_mutex);
+#endif /* USE_THREADS */
 
     /* As the absolutely last thing, free the non-arena SV for mess() */
 
@@ -462,6 +562,7 @@ int argc;
 char **argv;
 char **env;
 {
+    dTHR;
     register SV *sv;
     register char *s;
     char *scriptname = NULL;
@@ -528,7 +629,6 @@ setuid perl scripts securely.\n");
 	/* my_exit() was called */
 	while (scopestack_ix > oldscope)
 	    LEAVE;
-	FREETMPS;
 	curstash = defstash;
 	if (endav)
 	    call_list(oldscope, endav);
@@ -695,23 +795,12 @@ print \"  \\@INC:\\n    @INC\\n\";");
 		cddir = savepv(s);
 	    break;
 	case '-':
-	    if (*++s) { /* catch use of gnu style long options */
-		if (strEQ(s, "version")) {
-		    s = "v";
-		    goto reswitch;
-		}
-		if (strEQ(s, "help")) {
-		    s = "h";
-		    goto reswitch;
-		}
-		croak("Unrecognized switch: --%s  (-h will show valid options)",s);
-	    }
 	    argc--,argv++;
 	    goto switch_end;
 	case 0:
 	    break;
 	default:
-	    croak("Unrecognized switch: -%s  (-h will show valid options)",s);
+	    croak("Unrecognized switch: -%s",s);
 	}
     }
   switch_end:
@@ -774,6 +863,14 @@ print \"  \\@INC:\\n    @INC\\n\";");
     comppad_name_fill = 0;
     min_intro_pending = 0;
     padix = 0;
+#ifdef USE_THREADS
+    av_store(comppad_name, 0, newSVpv("@_", 2));
+    curpad[0] = (SV*)newAV();
+    SvPADMY_on(curpad[0]);	/* XXX Needed? */
+    CvOWNER(compcv) = 0;
+    New(666, CvMUTEXP(compcv), 1, perl_mutex);
+    MUTEX_INIT(CvMUTEXP(compcv));
+#endif /* USE_THREADS */
 
     comppadlist = newAV();
     AvREAL_off(comppadlist);
@@ -784,8 +881,12 @@ print \"  \\@INC:\\n    @INC\\n\";");
     boot_core_UNIVERSAL();
     if (xsinit)
 	(*xsinit)();	/* in case linked C routines want magical variables */
-#if defined(VMS) || defined(WIN32)
+#ifdef VMS
     init_os_extras();
+#endif
+
+#if defined(DEBUGGING) && defined(USE_THREADS) && defined(__linux__)
+    DEBUG_L(signal(SIGSEGV, (void(*)(int))catch_sigsegv););
 #endif
 
     init_predump_symbols();
@@ -828,7 +929,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
     LEAVE;
     FREETMPS;
 
-#ifdef MYMALLOC
+#ifdef DEBUGGING_MSTATS
     if ((s=getenv("PERL_DEBUG_MSTATS")) && atoi(s) >= 2)
 	dump_mstats("after compilation:");
 #endif
@@ -843,6 +944,7 @@ int
 perl_run(sv_interp)
 PerlInterpreter *sv_interp;
 {
+    dTHR;
     I32 oldscope;
     dJMPENV;
     int ret;
@@ -861,11 +963,11 @@ PerlInterpreter *sv_interp;
 	/* my_exit() was called */
 	while (scopestack_ix > oldscope)
 	    LEAVE;
-	FREETMPS;
 	curstash = defstash;
 	if (endav)
 	    call_list(oldscope, endav);
-#ifdef MYMALLOC
+	FREETMPS;
+#ifdef DEBUGGING_MSTATS
 	if (getenv("PERL_DEBUG_MSTATS"))
 	    dump_mstats("after execution:  ");
 #endif
@@ -891,13 +993,19 @@ PerlInterpreter *sv_interp;
     if (!restartop) {
 	DEBUG_x(dump_all());
 	DEBUG(PerlIO_printf(Perl_debug_log, "\nEXECUTING...\n\n"));
+#ifdef USE_THREADS
+	DEBUG_L(PerlIO_printf(Perl_debug_log, "main thread is 0x%lx\n",
+			      (unsigned long) thr));
+#endif /* USE_THREADS */	
 
 	if (minus_c) {
 	    PerlIO_printf(PerlIO_stderr(), "%s syntax OK\n", origfilename);
 	    my_exit(0);
 	}
-	if (PERLDB_SINGLE && DBsingle)
-	   sv_setiv(DBsingle, 1); 
+	if (perldb && DBsingle)
+	    sv_setiv(DBsingle, 1); 
+	if (initav)
+	    call_list(oldscope, initav);
     }
 
     /* do it */
@@ -979,6 +1087,7 @@ char *subname;
 I32 flags;		/* See G_* flags in cop.h */
 register char **argv;	/* null terminated arg list */
 {
+    dTHR;
     dSP;
 
     PUSHMARK(sp);
@@ -1005,13 +1114,14 @@ perl_call_method(methname, flags)
 char *methname;		/* name of the subroutine */
 I32 flags;		/* See G_* flags in cop.h */
 {
+    dTHR;
     dSP;
     OP myop;
     if (!op)
 	op = &myop;
     XPUSHs(sv_2mortal(newSVpv(methname,0)));
     PUTBACK;
-    pp_method();
+    pp_method(ARGS);
     return perl_call_sv(*stack_sp--, flags);
 }
 
@@ -1021,6 +1131,7 @@ perl_call_sv(sv, flags)
 SV* sv;
 I32 flags;		/* See G_* flags in cop.h */
 {
+    dTHR;
     LOGOP myop;		/* fake syntax tree node */
     SV** sp = stack_sp;
     I32 oldmark;
@@ -1030,7 +1141,6 @@ I32 flags;		/* See G_* flags in cop.h */
     bool oldcatch = CATCH_GET;
     dJMPENV;
     int ret;
-    OP* oldop = op;
 
     if (flags & G_DISCARD) {
 	ENTER;
@@ -1044,7 +1154,7 @@ I32 flags;		/* See G_* flags in cop.h */
     myop.op_flags |= ((flags & G_VOID) ? OPf_WANT_VOID :
 		      (flags & G_ARRAY) ? OPf_WANT_LIST :
 		      OPf_WANT_SCALAR);
-    SAVESPTR(op);
+    SAVEOP();
     op = (OP*)&myop;
 
     EXTEND(stack_sp, 1);
@@ -1052,7 +1162,7 @@ I32 flags;		/* See G_* flags in cop.h */
     oldmark = TOPMARK;
     oldscope = scopestack_ix;
 
-    if (PERLDB_SUB && curstash != debstash
+    if (perldb && curstash != debstash
 	   /* Handle first BEGIN of -d. */
 	  && (DBcv || (DBcv = GvCV(DBsub)))
 	   /* Try harder, since this may have been a sighandler, thus
@@ -1120,7 +1230,7 @@ I32 flags;		/* See G_* flags in cop.h */
 	CATCH_SET(TRUE);
 
     if (op == (OP*)&myop)
-	op = pp_entersub();
+	op = pp_entersub(ARGS);
     if (op)
 	runops();
     retval = stack_sp - (stack_base + oldmark);
@@ -1153,7 +1263,6 @@ I32 flags;		/* See G_* flags in cop.h */
 	FREETMPS;
 	LEAVE;
     }
-    op = oldop;
     return retval;
 }
 
@@ -1164,6 +1273,7 @@ perl_eval_sv(sv, flags)
 SV* sv;
 I32 flags;		/* See G_* flags in cop.h */
 {
+    dTHR;
     UNOP myop;		/* fake syntax tree node */
     SV** sp = stack_sp;
     I32 oldmark = sp - stack_base;
@@ -1171,14 +1281,13 @@ I32 flags;		/* See G_* flags in cop.h */
     I32 oldscope;
     dJMPENV;
     int ret;
-    OP* oldop = op;
-
+    
     if (flags & G_DISCARD) {
 	ENTER;
 	SAVETMPS;
     }
 
-    SAVESPTR(op);
+    SAVEOP();
     op = (OP*)&myop;
     Zero(op, 1, UNOP);
     EXTEND(stack_sp, 1);
@@ -1228,7 +1337,7 @@ I32 flags;		/* See G_* flags in cop.h */
     }
 
     if (op == (OP*)&myop)
-	op = pp_entereval();
+	op = pp_entereval(ARGS);
     if (op)
 	runops();
     retval = stack_sp - (stack_base + oldmark);
@@ -1243,7 +1352,6 @@ I32 flags;		/* See G_* flags in cop.h */
 	FREETMPS;
 	LEAVE;
     }
-    op = oldop;
     return retval;
 }
 
@@ -1252,6 +1360,7 @@ perl_eval_pv(p, croak_on_error)
 char* p;
 I32 croak_on_error;
 {
+    dTHR;
     dSP;
     SV* sv = newSVpv(p, 0);
 
@@ -1300,39 +1409,30 @@ char *name;
 {
     /* This message really ought to be max 23 lines.
      * Removed -h because the user already knows that opton. Others? */
-
-    static char *usage[] = {
-"-0[octal]       specify record separator (\\0, if no argument)",
-"-a              autosplit mode with -n or -p (splits $_ into @F)",
-"-c              check syntax only (runs BEGIN and END blocks)",
-"-d[:debugger]   run scripts under debugger",
-"-D[number/list] set debugging flags (argument is a bit mask or flags)",
-"-e 'command'    one line of script. Several -e's allowed. Omit [programfile].",
-"-F/pattern/     split() pattern for autosplit (-a). The //'s are optional.",
-"-i[extension]   edit <> files in place (make backup if extension supplied)",
-"-Idirectory     specify @INC/#include directory (may be used more than once)",
-"-l[octal]       enable line ending processing, specifies line terminator",
-"-[mM][-]module.. executes `use/no module...' before executing your script.",
-"-n              assume 'while (<>) { ... }' loop around your script",
-"-p              assume loop like -n but print line also like sed",
-"-P              run script through C preprocessor before compilation",
-"-s              enable some switch parsing for switches after script name",
-"-S              look for the script using PATH environment variable",
-"-T              turn on tainting checks",
-"-u              dump core after parsing script",
-"-U              allow unsafe operations",
-"-v              print version number and patchlevel of perl",
-"-V[:variable]   print perl configuration information",
-"-w              TURN WARNINGS ON FOR COMPILATION OF YOUR SCRIPT. Recommended.",
-"-x[directory]   strip off text before #!perl line and perhaps cd to directory",
-"\n",
-NULL
-};
-    char **p = usage;
-
     printf("\nUsage: %s [switches] [--] [programfile] [arguments]", name);
-    while (*p)
-	printf("\n  %s", *p++);
+    printf("\n  -0[octal]       specify record separator (\\0, if no argument)");
+    printf("\n  -a              autosplit mode with -n or -p (splits $_ into @F)");
+    printf("\n  -c              check syntax only (runs BEGIN and END blocks)");
+    printf("\n  -d[:debugger]   run scripts under debugger");
+    printf("\n  -D[number/list] set debugging flags (argument is a bit mask or flags)");
+    printf("\n  -e 'command'    one line of script. Several -e's allowed. Omit [programfile].");
+    printf("\n  -F/pattern/     split() pattern for autosplit (-a). The //'s are optional.");
+    printf("\n  -i[extension]   edit <> files in place (make backup if extension supplied)");
+    printf("\n  -Idirectory     specify @INC/#include directory (may be used more then once)");
+    printf("\n  -l[octal]       enable line ending processing, specifies line teminator");
+    printf("\n  -[mM][-]module.. executes `use/no module...' before executing your script.");
+    printf("\n  -n              assume 'while (<>) { ... }' loop arround your script");
+    printf("\n  -p              assume loop like -n but print line also like sed");
+    printf("\n  -P              run script through C preprocessor before compilation");
+    printf("\n  -s              enable some switch parsing for switches after script name");
+    printf("\n  -S              look for the script using PATH environment variable");
+    printf("\n  -T              turn on tainting checks");
+    printf("\n  -u              dump core after parsing script");
+    printf("\n  -U              allow unsafe operations");
+    printf("\n  -v              print version number and patchlevel of perl");
+    printf("\n  -V[:variable]   print perl configuration information");
+    printf("\n  -w              TURN WARNINGS ON FOR COMPILATION OF YOUR SCRIPT.");
+    printf("\n  -x[directory]   strip off text before #!perl line and perhaps cd to directory\n");
 }
 
 /* This routine handles any switches that can be given during run */
@@ -1378,7 +1478,7 @@ char *s;
 	    s += strlen(s);
 	}
 	if (!perldb) {
-	    perldb = PERLDB_ALL;
+	    perldb = TRUE;
 	    init_debugger();
 	}
 	return s;
@@ -1456,30 +1556,31 @@ char *s;
 	forbid_setid("-m");	/* XXX ? */
 	if (*++s) {
 	    char *start;
+	    SV *sv;
 	    char *use = "use ";
 	    /* -M-foo == 'no foo'	*/
 	    if (*s == '-') { use = "no "; ++s; }
-	    Sv = newSVpv(use,0);
+	    sv = newSVpv(use,0);
 	    start = s;
 	    /* We allow -M'Module qw(Foo Bar)'	*/
 	    while(isALNUM(*s) || *s==':') ++s;
 	    if (*s != '=') {
-		sv_catpv(Sv, start);
+		sv_catpv(sv, start);
 		if (*(start-1) == 'm') {
 		    if (*s != '\0')
 			croak("Can't use '%c' after -mname", *s);
-		    sv_catpv( Sv, " ()");
+		    sv_catpv( sv, " ()");
 		}
 	    } else {
-		sv_catpvn(Sv, start, s-start);
-		sv_catpv(Sv, " split(/,/,q{");
-		sv_catpv(Sv, ++s);
-		sv_catpv(Sv,    "})");
+		sv_catpvn(sv, start, s-start);
+		sv_catpv(sv, " split(/,/,q{");
+		sv_catpv(sv, ++s);
+		sv_catpv(sv,    "})");
 	    }
 	    s += strlen(s);
 	    if (preambleav == NULL)
 		preambleav = newAV();
-	    av_push(preambleav, Sv);
+	    av_push(preambleav, sv);
 	}
 	else
 	    croak("No space allowed after -%c", *(s-1));
@@ -1511,22 +1612,11 @@ char *s;
 	s++;
 	return s;
     case 'v':
-	{
-	    char patches[80];
-	    patches[0] = '\0';
-#if defined(LOCAL_PATCH_COUNT)
-	    if (LOCAL_PATCH_COUNT > 0) {
-		sprintf(patches," (with %d registered patch%s)",
-		    LOCAL_PATCH_COUNT, (LOCAL_PATCH_COUNT!=1) ? "es" : "");
-	    }
-#endif
 #if defined(SUBVERSION) && SUBVERSION > 0
-	    printf("\nThis is perl, version 5.%03d_%02d%s",
-		PATCHLEVEL, SUBVERSION, patches);
+	printf("\nThis is perl, version 5.%03d_%02d", PATCHLEVEL, SUBVERSION);
 #else
-	    printf("\nThis is perl, version %s%s", patchlevel, patches);
+	printf("\nThis is perl, version %s",patchlevel);
 #endif
-	}
 
 	printf("\n\nCopyright 1987-1997, Larry Wall\n");
 #ifdef MSDOS
@@ -1610,6 +1700,7 @@ my_unexec()
 static void
 init_main_stash()
 {
+    dTHR;
     GV *gv;
 
     /* Note that strtab is a rather special HV.  Assumptions are made
@@ -1632,8 +1723,6 @@ init_main_stash()
     defgv = gv_fetchpv("_",TRUE, SVt_PVAV);
     errgv = gv_HVadd(gv_fetchpv("@", TRUE, SVt_PV));
     GvMULTI_on(errgv);
-    (void)form("%240s","");	/* Preallocate temp - for immediate signals. */
-    sv_grow(GvSV(errgv), 240);	/* Preallocate - for immediate signals. */
     sv_setpvn(GvSV(errgv), "", 0);
     curstash = defstash;
     compiling.cop_stash = defstash;
@@ -1653,6 +1742,7 @@ bool dosearch;
 SV *sv;
 #endif
 {
+    dTHR;
     char *xfound = Nullch;
     char *xfailed = Nullch;
     register char *s;
@@ -1662,10 +1752,6 @@ SV *sv;
 #  define SEARCH_EXTS ".bat", ".cmd", NULL
 #  define MAX_EXT_LEN 4
 #endif
-#ifdef OS2
-#  define SEARCH_EXTS ".cmd", ".btm", ".bat", ".pl", NULL
-#  define MAX_EXT_LEN 4
-#endif
 #ifdef VMS
 #  define SEARCH_EXTS ".pl", ".com", NULL
 #  define MAX_EXT_LEN 4
@@ -1673,35 +1759,14 @@ SV *sv;
     /* additional extensions to try in each dir if scriptname not found */
 #ifdef SEARCH_EXTS
     char *ext[] = { SEARCH_EXTS };
-    int extidx = 0, i = 0;
-    char *curext = Nullch;
+    int extidx = (strchr(scriptname,'.')) ? -1 : 0; /* has ext already */
 #else
 #  define MAX_EXT_LEN 0
 #endif
 
-    /*
-     * If dosearch is true and if scriptname does not contain path
-     * delimiters, search the PATH for scriptname.
-     *
-     * If SEARCH_EXTS is also defined, will look for each
-     * scriptname{SEARCH_EXTS} whenever scriptname is not found
-     * while searching the PATH.
-     *
-     * Assuming SEARCH_EXTS is C<".foo",".bar",NULL>, PATH search
-     * proceeds as follows:
-     *   If DOSISH:
-     *     + look for ./scriptname{,.foo,.bar}
-     *     + search the PATH for scriptname{,.foo,.bar}
-     *
-     *   If !DOSISH:
-     *     + look *only* in the PATH for scriptname{,.foo,.bar} (note
-     *       this will not look in '.' if it's not in the PATH)
-     */
-
 #ifdef VMS
     if (dosearch) {
 	int hasdir, idx = 0, deftypes = 1;
-	bool seen_dot = 1;
 
 	hasdir = (strpbrk(scriptname,":[</") != Nullch) ;
 	/* The first time through, just add SEARCH_EXTS to whatever we
@@ -1718,81 +1783,38 @@ SV *sv;
 		continue;	/* don't search dir with too-long name */
 	    strcat(tokenbuf, scriptname);
 #else  /* !VMS */
-
-#ifdef DOSISH
-    if (strEQ(scriptname, "-"))
- 	dosearch = 0;
-    if (dosearch) {		/* Look in '.' first. */
-	char *cur = scriptname;
-#ifdef SEARCH_EXTS
-	if ((curext = strrchr(scriptname,'.')))	/* possible current ext */
-	    while (ext[i])
-		if (strEQ(ext[i++],curext)) {
-		    extidx = -1;		/* already has an ext */
-		    break;
-		}
-	do {
-#endif
-	    DEBUG_p(PerlIO_printf(Perl_debug_log,
-				  "Looking for %s\n",cur));
-	    if (Stat(cur,&statbuf) >= 0) {
-		dosearch = 0;
-		scriptname = cur;
-#ifdef SEARCH_EXTS
-		break;
-#endif
-	    }
-#ifdef SEARCH_EXTS
-	    if (cur == scriptname) {
-		len = strlen(scriptname);
-		if (len+MAX_EXT_LEN+1 >= sizeof(tokenbuf))
-		    break;
-		cur = strcpy(tokenbuf, scriptname);
-	    }
-	} while (extidx >= 0 && ext[extidx]	/* try an extension? */
-		 && strcpy(tokenbuf+len, ext[extidx++]));
-#endif
-    }
-#endif
-
-    if (dosearch && !strchr(scriptname, '/')
-#ifdef DOSISH
-		 && !strchr(scriptname, '\\')
-#endif
-		 && (s = getenv("PATH"))) {
-	bool seen_dot = 0;
-	
+    if (dosearch && !strchr(scriptname, '/') && (s = getenv("PATH"))) {
 	bufend = s + strlen(s);
 	while (s < bufend) {
-#if defined(atarist) || defined(DOSISH)
-	    for (len = 0; *s
-#  ifdef atarist
-		    && *s != ','
-#  endif
-		    && *s != ';'; len++, s++) {
+#ifndef atarist
+	    s = delimcpy(tokenbuf, tokenbuf + sizeof tokenbuf, s, bufend,
+#ifdef DOSISH
+			 ';',
+#else
+			 ':',
+#endif
+			 &len);
+#else  /* atarist */
+	    for (len = 0; *s && *s != ',' && *s != ';'; len++, s++) {
 		if (len < sizeof tokenbuf)
 		    tokenbuf[len] = *s;
 	    }
 	    if (len < sizeof tokenbuf)
 		tokenbuf[len] = '\0';
-#else  /* ! (atarist || DOSISH) */
-	    s = delimcpy(tokenbuf, tokenbuf + sizeof tokenbuf, s, bufend,
-			':',
-			&len);
-#endif /* ! (atarist || DOSISH) */
+#endif /* atarist */
 	    if (s < bufend)
 		s++;
 	    if (len + 1 + strlen(scriptname) + MAX_EXT_LEN >= sizeof tokenbuf)
 		continue;	/* don't search dir with too-long name */
 	    if (len
-#if defined(atarist) || defined(DOSISH)
+#if defined(atarist) && !defined(DOSISH)
 		&& tokenbuf[len - 1] != '/'
+#endif
+#if defined(atarist) || defined(DOSISH)
 		&& tokenbuf[len - 1] != '\\'
 #endif
 	       )
 		tokenbuf[len++] = '/';
-	    if (len == 2 && tokenbuf[0] == '.')
-		seen_dot = 1;
 	    (void)strcpy(tokenbuf + len, scriptname);
 #endif  /* !VMS */
 
@@ -1825,16 +1847,8 @@ SV *sv;
 	    if (!xfailed)
 		xfailed = savepv(tokenbuf);
 	}
-#ifndef DOSISH
-	if (!xfound && !seen_dot && !xfailed && (Stat(scriptname,&statbuf) < 0))
-#endif
-	    seen_dot = 1;			/* Disable message. */
 	if (!xfound)
-	    croak("Can't %s %s%s%s",
-		  (xfailed ? "execute" : "find"),
-		  (xfailed ? xfailed : scriptname),
-		  (xfailed ? "" : " on PATH"),
-		  (xfailed || seen_dot) ? "" : ", '.' not in PATH");
+	    croak("Can't execute %s", xfailed ? xfailed : scriptname );
 	if (xfailed)
 	    Safefree(xfailed);
 	scriptname = xfound;
@@ -2260,6 +2274,7 @@ char *s;
 static void
 init_debugger()
 {
+    dTHR;
     curstash = debstash;
     dbargs = GvAV(gv_AVadd((gv_fetchpv("args", GV_ADDMULTI, SVt_PVAV))));
     AvREAL_off(dbargs);
@@ -2275,8 +2290,9 @@ init_debugger()
     curstash = defstash;
 }
 
-static void
-init_stacks()
+void
+init_stacks(ARGS)
+dARGS
 {
     curstack = newAV();
     mainstack = curstack;		/* remember in case we switch stacks */
@@ -2292,13 +2308,9 @@ init_stacks()
     cxstack_ix	= -1;
 
     New(50,tmps_stack,128,SV*);
+    tmps_floor = -1;
     tmps_ix = -1;
     tmps_max = 128;
-
-    DEBUG( {
-	New(51,debname,128,char);
-	New(52,debdelim,128,char);
-    } )
 
     /*
      * The following stacks almost certainly should be per-interpreter,
@@ -2341,6 +2353,7 @@ init_stacks()
 static void
 nuke_stacks()
 {
+    dTHR;
     Safefree(cxstack);
     Safefree(tmps_stack);
     DEBUG( {
@@ -2355,7 +2368,6 @@ static void
 init_lexer()
 {
     tmpfp = rsfp;
-    rsfp = Nullfp;
     lex_start(linestr);
     rsfp = tmpfp;
     subname = newSVpv("main",4);
@@ -2364,6 +2376,7 @@ init_lexer()
 static void
 init_predump_symbols()
 {
+    dTHR;
     GV *tmpgv;
     GV *othergv;
 
@@ -2651,6 +2664,7 @@ call_list(oldscope, list)
 I32 oldscope;
 AV* list;
 {
+    dTHR;
     line_t oldline = curcop->cop_line;
     STRLEN len;
     dJMPENV;
@@ -2689,10 +2703,10 @@ AV* list;
 	    /* my_exit() was called */
 	    while (scopestack_ix > oldscope)
 		LEAVE;
-	    FREETMPS;
 	    curstash = defstash;
 	    if (endav)
 		call_list(oldscope, endav);
+	    FREETMPS;
 	    JMPENV_POP;
 	    curcop = &compiling;
 	    curcop->cop_line = oldline;
@@ -2723,6 +2737,12 @@ void
 my_exit(status)
 U32 status;
 {
+    dTHR;
+
+#ifdef USE_THREADS
+    DEBUG_L(PerlIO_printf(Perl_debug_log, "my_exit: thread 0x%lx, status %lu\n",
+			 (unsigned long) thr, (unsigned long) status));
+#endif /* USE_THREADS */
     switch (status) {
     case 0:
 	STATUS_ALL_SUCCESS;
@@ -2763,6 +2783,7 @@ my_failure_exit()
 static void
 my_exit_jump()
 {
+    dTHR;
     register CONTEXT *cx;
     I32 gimme;
     SV **newsp;

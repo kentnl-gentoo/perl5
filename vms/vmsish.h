@@ -104,18 +104,17 @@
 #  define tounixpath_ts		Perl_tounixpath_ts
 #  define tovmspath		Perl_tovmspath
 #  define tovmspath_ts		Perl_tovmspath_ts
-#  define vms_image_init	Perl_vms_image_init
+#  define getredirection	Perl_getredirection
 #  define opendir		Perl_opendir
 #  define readdir		Perl_readdir
 #  define telldir		Perl_telldir
 #  define seekdir		Perl_seekdir
 #  define closedir		Perl_closedir
 #  define vmsreaddirversions	Perl_vmsreaddirversions
-#if __VMS_VER < 70000000 || __DECC_VER < 50200000
+#  define getredirection	Perl_getredirection
 #  define my_gmtime		Perl_my_gmtime
 #  define my_localtime		Perl_my_localtime
 #  define my_time		Perl_my_time
-#endif
 #  define cando_by_name		Perl_cando_by_name
 #  define flex_fstat		Perl_flex_fstat
 #  define flex_stat		Perl_flex_stat
@@ -227,7 +226,7 @@
 #endif
 
 #define BIT_BUCKET "_NLA0:"
-#define PERL_SYS_INIT(c,v)  vms_image_init((c),(v))
+#define PERL_SYS_INIT(c,v)  getredirection((c),(v))
 #define PERL_SYS_TERM()
 #define dXSUB_SYS
 #define HAS_KILL
@@ -332,11 +331,9 @@ struct utimbuf {
  * in VMS 6.0 or later use.  We also add shims for time() and localtime()
  * so we can run on UTC by default.
  */
-#if __VMS_VER < 70000000 || __DECC_VER < 50200000
 #define gmtime(t) my_gmtime(t)
 #define localtime(t) my_localtime(t)
 #define time(t) my_time(t)
-#endif
 
 /* VMS doesn't use a real sys_nerr, but we need this when scanning for error
  * messages in text strings . . .
@@ -503,6 +500,7 @@ typedef unsigned myino_t;
 #endif
 
 void	prime_env_iter _((void));
+void	getredirection _((int *, char ***));
 void	init_os_extras _(());
 /* prototype section start marker; `typedef' passes through cpp */
 typedef char  __VMS_PROTOTYPES__;
@@ -513,7 +511,7 @@ Pid_t	my_waitpid _((Pid_t, int *, int));
 char *	my_gconvert _((double, int, int, char *));
 int	do_rmdir _((char *));
 int	kill_file _((char *));
-int	my_mkdir _((char *, Mode_t));
+int	my_mkdir _((char *, mode_t));
 int	my_utime _((char *, struct utimbuf *));
 char *	rmsexpand _((char *, char *, char *, unsigned));
 char *	rmsexpand_ts _((char *, char *, char *, unsigned));
@@ -529,18 +527,16 @@ char *	tounixpath _((char *, char *));
 char *	tounixpath_ts _((char *, char *));
 char *	tovmspath _((char *, char *));
 char *	tovmspath_ts _((char *, char *));
-void	vms_image_init _((int *, char ***));
+void	getredirection _(());
 DIR *	opendir _((char *));
 struct dirent *	readdir _((DIR *));
 long	telldir _((DIR *));
 void	seekdir _((DIR *, long));
 void	closedir _((DIR *));
 void	vmsreaddirversions _((DIR *, int));
-#ifdef my_gmtime
 struct tm *	my_gmtime _((const time_t *));
 struct tm *	my_localtime _((const time_t *));
 time_t	my_time _((time_t *));
-#endif /* We're assuming these three come as a package */
 I32	cando_by_name _((I32, I32, char *));
 int	flex_fstat _((int, struct mystat *));
 int	flex_stat _((char *, struct mystat *));

@@ -70,6 +70,7 @@ gt_amg
 hexdigit
 hints
 in_my
+in_my_stash
 inc_amg
 io_close
 know_next
@@ -149,6 +150,7 @@ op_desc
 op_name
 op_seqmax
 opargs
+opsave
 origalen
 origenviron
 osname
@@ -198,6 +200,7 @@ rsfp
 rsfp_filters
 rshift_amg
 rshift_ass_amg
+runops
 savestack
 savestack_ix
 savestack_max
@@ -254,6 +257,7 @@ vtbl_glob
 vtbl_isa
 vtbl_isaelem
 vtbl_mglob
+vtbl_mutex
 vtbl_nkeys
 vtbl_pack
 vtbl_packelem
@@ -301,6 +305,18 @@ append_elem
 append_list
 apply
 assertref
+avhv_delete
+avhv_delete_ent
+avhv_exists
+avhv_exists_ent
+avhv_fetch
+avhv_fetch_ent
+avhv_iterinit
+avhv_iternext
+avhv_iternextsv
+avhv_iterval
+avhv_store
+avhv_store_ent
 av_clear
 av_extend
 av_fake
@@ -310,7 +326,6 @@ av_len
 av_make
 av_pop
 av_push
-av_reify
 av_shift
 av_store
 av_undef
@@ -360,6 +375,7 @@ ck_split
 ck_subr
 ck_svconst
 ck_trunc
+condpair_magic
 convert
 croak
 cv_ckproto
@@ -480,6 +496,7 @@ hv_undef
 ibcmp
 ibcmp_locale
 ingroup
+init_stacks
 instr
 intro_my
 intuit_more
@@ -510,6 +527,7 @@ magic_getsig
 magic_gettaint
 magic_getuvar
 magic_len
+magic_mutexfree
 magic_nextpack
 magic_set
 magic_setamagic
@@ -816,6 +834,7 @@ pp_link
 pp_list
 pp_listen
 pp_localtime
+pp_lock
 pp_log
 pp_lslice
 pp_lstat
@@ -998,7 +1017,6 @@ rsignal
 rsignal_save
 rsignal_state
 rsignal_restore
-runops
 rxres_free
 rxres_restore
 rxres_save
@@ -1030,6 +1048,7 @@ save_iv
 save_list
 save_long
 save_nogv
+save_op
 save_pptr
 save_scalar
 save_sptr
@@ -1078,6 +1097,7 @@ sv_2uv
 sv_add_arena
 sv_backoff
 sv_bless
+sv_bless3
 sv_catpvf
 sv_catpv
 sv_catpvn
@@ -1119,7 +1139,6 @@ sv_setiv
 sv_setnv
 sv_setptrobj
 sv_setpv
-sv_setpviv
 sv_setpvn
 sv_setref_iv
 sv_setref_nv
@@ -1141,6 +1160,7 @@ taint_proper
 too_few_arguments
 too_many_arguments
 unlnk
+unlock_condpair
 unshare_hek
 unsharepvn
 utilize

@@ -3,7 +3,7 @@
  DB_File.xs -- Perl 5 interface to Berkeley DB 
 
  written by Paul Marquess (pmarquess@bfsec.bt.co.uk)
- last modified 29th Jun 1997
+ last modified 31st May 1997
  version 1.15
 
  All comments/suggestions/problems are welcome
@@ -42,9 +42,7 @@
 	1.13 -  Tidied up a few casts.
 	1.14 -  Made it illegal to tie an associative array to a RECNO
 	        database and an ordinary array to a HASH or BTREE database.
-	1.15 -  Patch from Gisle Aas <gisle@aas.no> to suppress "use of 
-		undefined value" warning with db_get and db_seq.
-
+	1.15 -  Minor additions to DB_File.xs to support multithreaded perl.
 
 */
 
@@ -53,9 +51,6 @@
 #include "XSUB.h"
 
 #include <db.h>
-/* #ifdef DB_VERSION_MAJOR */
-/* #include <db_185.h> */
-/* #endif */
 
 #include <fcntl.h> 
 
@@ -93,7 +88,7 @@ typedef DB_File_type * DB_File ;
 typedef DBT DBTKEY ;
 
 
-/* #define TRACE */
+/* #define TRACE    */
 
 #define db_DESTROY(db)                  ((db->dbp)->close)(db->dbp)
 #define db_DELETE(db, key, flags)       ((db->dbp)->del)(db->dbp, &key, flags)
@@ -140,6 +135,7 @@ btree_compare(key1, key2)
 const DBT * key1 ;
 const DBT * key2 ;
 {
+    dTHR ;
     dSP ;
     void * data1, * data2 ;
     int retval ;
@@ -187,6 +183,7 @@ btree_prefix(key1, key2)
 const DBT * key1 ;
 const DBT * key2 ;
 {
+    dTHR ;
     dSP ;
     void * data1, * data2 ;
     int retval ;
@@ -234,6 +231,7 @@ hash_cb(data, size)
 const void * data ;
 size_t size ;
 {
+    dTHR ;
     dSP ;
     int retval ;
     int count ;
@@ -1068,7 +1066,7 @@ int
 db_get(db, key, value, flags=0)
 	DB_File		db
 	DBTKEY		key
-	DBT		value = NO_INIT
+	DBT		value
 	u_int		flags
 	INIT:
 	  CurrentDB = db ;
@@ -1104,7 +1102,7 @@ int
 db_seq(db, key, value, flags)
 	DB_File		db
 	DBTKEY		key 
-	DBT		value = NO_INIT
+	DBT		value
 	u_int		flags
 	INIT:
 	  CurrentDB = db ;

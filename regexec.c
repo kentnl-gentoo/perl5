@@ -89,6 +89,7 @@ static CHECKPOINT
 regcppush(parenfloor)
 I32 parenfloor;
 {
+    dTHR;
     int retval = savestack_ix;
     int i = (regsize - parenfloor) * 3;
     int p;
@@ -110,6 +111,7 @@ I32 parenfloor;
 static char *
 regcppop()
 {
+    dTHR;
     I32 i = SSPOPINT;
     U32 paren = 0;
     char *input;
@@ -132,36 +134,6 @@ regcppop()
 	regendp[paren] = Nullch;
     }
     return input;
-}
-
-/* After a successful match in WHILEM, we want to restore paren matches
- * that have been overwritten by a failed match attempt in the process
- * of reaching this success. We do this by restoring regstartp[i]
- * wherever regendp[i] has not changed; if OPEN is changed to modify
- * regendp[], the '== endp' test below should be changed to match.
- * This corrects the error of:
- *	0 > length [ "foobar" =~ / ( (foo) | (bar) )* /x ]->[1]
- */
-static void
-regcppartblow(base)
-I32 base;
-{
-    I32 i = SSPOPINT;
-    U32 paren;
-    char *startp;
-    char *endp;
-    assert(i == SAVEt_REGCONTEXT);
-    i = SSPOPINT;
-    /* input, lastparen, size */
-    SSPOPPTR; SSPOPINT; SSPOPINT;
-    for (i -= 3; i > 0; i -= 3) {
-	paren = (U32)SSPOPINT;
-	startp = (char *) SSPOPPTR;
-	endp = (char *) SSPOPPTR;
-	if (paren <= *reglastparen && regendp[paren] == endp)
-	    regstartp[paren] = startp;
-    }
-    assert(savestack_ix == base);
 }
 
 #define regcpblow(cp) leave_scope(cp)
@@ -666,8 +638,8 @@ char *prog;
 	if (regnarrate) {
 	    SV *prop = sv_newmortal();
 	    regprop(prop, scan);
-	    PerlIO_printf(Perl_debug_log, "%*s%2ld%-8.8s\t<%.10s>\n",
-			  regindent*2, "", (long)(scan - regprogram),
+	    PerlIO_printf(Perl_debug_log, "%*s%2d%-8.8s\t<%.10s>\n",
+			  regindent*2, "", scan - regprogram,
 			  SvPVX(prop), locinput);
 	}
 #else
@@ -904,6 +876,7 @@ char *prog;
 		*reglastparen = n;
 	    break;
 	case CURLYX: {
+		dTHR;	    
 		CURCUR cc;
 		CHECKPOINT cp = savestack_ix;
 		cc.oldcc = regcc;
@@ -974,7 +947,7 @@ char *prog;
 		    ln = regcc->cur;
 		    cp = regcppush(cc->parenfloor);
 		    if (regmatch(cc->next)) {
-			regcppartblow(cp);
+			regcpblow(cp);
 			sayYES;	/* All done. */
 		    }
 		    regcppop();
@@ -990,7 +963,7 @@ char *prog;
 		    cc->lastloc = locinput;
 		    cp = regcppush(cc->parenfloor);
 		    if (regmatch(cc->scan)) {
-			regcppartblow(cp);
+			regcpblow(cp);
 			sayYES;
 		    }
 		    regcppop();
@@ -1005,7 +978,7 @@ char *prog;
 		    cc->cur = n;
 		    cc->lastloc = locinput;
 		    if (regmatch(cc->scan)) {
-			regcppartblow(cp);
+			regcpblow(cp);
 			sayYES;
 		    }
 		    regcppop();		/* Restore some previous $<digit>s? */

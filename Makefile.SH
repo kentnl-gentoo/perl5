@@ -183,7 +183,7 @@ addedbyconf = UU $(shextract) $(plextract) pstruct
 h1 = EXTERN.h INTERN.h XSUB.h av.h config.h cop.h cv.h dosish.h
 h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h
 h3 = opcode.h patchlevel.h perl.h perly.h pp.h proto.h regcomp.h
-h4 = regexp.h scope.h sv.h unixish.h util.h perlio.h
+h4 = regexp.h scope.h sv.h unixish.h util.h perlio.h thread.h
 h = $(h1) $(h2) $(h3) $(h4)
 
 c1 = $(mallocsrc) av.c scope.c op.c doop.c doio.c dump.c hv.c mg.c
@@ -303,13 +303,13 @@ perl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs
 	$(SHRPENV) $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o perl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 pureperl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs
-	$(SHRPENV) purify $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o pureperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	purify $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o pureperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 purecovperl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs
-	$(SHRPENV) purecov $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o purecovperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	purecov $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o purecovperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 quantperl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs
-	$(SHRPENV) quantify $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o quantperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	quantify $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o quantperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 # This version, if specified in Configure, does ONLY those scripts which need
 # set-id emulation.  Suidperl must be setuid root.  It contains the "taint"
@@ -317,7 +317,7 @@ quantperl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs
 # has been invoked correctly.
 
 suidperl: $& sperl$(OBJ_EXT) perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs
-	$(SHRPENV) $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o suidperl perlmain$(OBJ_EXT) sperl$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o suidperl perlmain$(OBJ_EXT) sperl$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 !NO!SUBS!
 
@@ -359,18 +359,9 @@ install.perl:	all installperl
 install.man:	all installman
 	./perl installman
 
-# XXX Experimental. Hardwired values, but useful for testing.
-# Eventually Configure could ask for some of these values.
-install.html: all installhtml
-	./perl installhtml                   \
-      --podroot=. --podpath=. --recurse  \
-      --htmldir=$(privlib)/html     \
-      --htmlroot=$(privlib)/html    \
-      --splithead=pod/perlipc     \
-      --splititem=pod/perlfunc    \
-      --libpods=perlfunc:perlguts:perlvar:perlrun:perlop \
-      --verbose
-
+# Not implemented yet.
+#install.html:	all installhtml
+#	./perl installhtml
 
 # I now supply perly.c with the kits, so the following section is
 # used only if you force byacc to run by saying
@@ -422,13 +413,13 @@ regen_headers:	FORCE
 # DynaLoader may be needed for extensions that use Makefile.PL.
 
 $(DYNALOADER):	miniperl preplibrary FORCE
-	@sh ext/util/make_ext static $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
+	@sh ext/util/make_ext static $@ LIBPERL_A=$(LIBPERL)
 
 d_dummy $(dynamic_ext):	miniperl preplibrary $(DYNALOADER) FORCE
-	@sh ext/util/make_ext dynamic $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
+	@sh ext/util/make_ext dynamic $@ LIBPERL_A=$(LIBPERL)
 
 s_dummy $(static_ext):	miniperl preplibrary $(DYNALOADER) FORCE
-	@sh ext/util/make_ext static $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
+	@sh ext/util/make_ext static $@ LIBPERL_A=$(LIBPERL)
 
 clean:		_tidy _mopup
 
@@ -453,7 +444,7 @@ _tidy:
 	-cd utils; $(MAKE) clean
 	-cd x2p; $(MAKE) clean
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) ; do \
-	sh ext/util/make_ext clean $$x MAKE=$(MAKE) ; \
+	sh ext/util/make_ext clean $$x ; \
 	done
 
 # Do not 'make _cleaner' directly.
@@ -463,7 +454,7 @@ _cleaner:
 	-cd utils; $(MAKE) realclean
 	-cd x2p; $(MAKE) realclean
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) ; do \
-	sh ext/util/make_ext realclean $$x MAKE=$(MAKE) ; \
+	sh ext/util/make_ext realclean $$x ; \
 	done
 	rm -f *.orig */*.orig *~ */*~ core t/core t/c t/perl
 	rm -rf $(addedbyconf)
@@ -482,12 +473,11 @@ _cleaner:
 lint: perly.c $(c)
 	lint $(lintflags) $(defs) perly.c $(c) > perl.fuzz
 
-# Need to unset during recursion to go out of loop.
-# The Configure below just ensures that the dependency list is never empty.
+# Need to unset during recursion to go out of loop
 
-MAKEDEPEND = Makefile makedepend
+MAKEDEPEND = makedepend
 
-$(FIRSTMAKEFILE):	Configure $(MAKEDEPEND)
+$(FIRSTMAKEFILE):	Makefile $(MAKEDEPEND)
 	$(MAKE) depend MAKEDEPEND=
 
 config.h: config_h.SH config.sh
@@ -498,7 +488,7 @@ perl.exp: perl_exp.SH config.sh
 
 # When done, touch perlmain.c so that it doesn't get remade each time.
 depend: makedepend
-	sh ./makedepend MAKE=$(MAKE)
+	sh ./makedepend
 	- test -s perlmain.c && touch perlmain.c
 	cd x2p; $(MAKE) depend
 
@@ -523,11 +513,6 @@ minitest: miniperl
 	@echo "to build lib/Config.pm."
 	- cd t && (rm -f perl$(EXE_EXT); $(LNS) ../miniperl$(EXE_EXT) perl$(EXE_EXT)) \
 		&& ./perl TEST base/*.t comp/*.t cmd/*.t io/*.t op/*.t pragma/*.t </dev/tty
-
-# handy way to run perlbug -ok without having to install and run the
-# installed perlbug. We don't re-run the tests here - we trust the user.
-ok:
-	./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
 
 clist:	$(c)
 	echo $(c) | tr ' ' '\012' >.clist

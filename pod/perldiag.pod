@@ -23,7 +23,7 @@ L<perlfunc/eval>.
 
 Some of these messages are generic.  Spots that vary are denoted with a %s,
 just as in a printf format.  Note that some messages start with a %s!
-The symbols C<"%(-?@> sort before the letters, while C<[> and C<\> sort after.
+The symbols C<"%-?@> sort before the letters, while C<[> and C<\> sort after.
 
 =over 4
 
@@ -35,7 +35,7 @@ if you want to localize a package variable.
 
 =item "my" variable %s masks earlier declaration in same scope
 
-(W) A lexical variable has been redeclared in the same scope, effectively
+(S) A lexical variable has been redeclared in the same scope, effectively
 eliminating all access to the previous instance.  This is almost always
 a typographical error.  Note that the earlier variable will still exist
 until the end of the scope or until all closure referents to it are
@@ -143,12 +143,6 @@ Perl yourself.
 instead of Perl.  Check the #! line, or manually feed your script
 into Perl yourself.
 
-=item         (Missing semicolon on previous line?)
-
-(S) This is an educated guess made in conjunction with the message "%s
-found where operator expected".  Don't automatically put a semicolon on
-the previous line just because you saw this message.
-
 =item B<-P> not allowed for setuid/setgid script
 
 (F) The script would have to be opened by the C preprocessor by name,
@@ -158,12 +152,6 @@ which provides a race condition that breaks security.
 
 (F) Perl can't peek at the stdio buffer of filehandles when it doesn't
 know about your kind of stdio.  You'll have to use a filename instead.
-
-=item C<-p> destination: %s
-
-(F) An error occurred during the implicit output invoked by the C<-p>
-command-line switch.  (This output goes to STDOUT unless you've
-redirected it with select().)
 
 =item 500 Server error
 
@@ -277,15 +265,6 @@ could indicate that SvREFCNT_dec() was called too many times, or that
 SvREFCNT_inc() was called too few times, or that the SV was mortalized
 when it shouldn't have been, or that memory has been corrupted.
 
-=item Attempt to pack pointer to temporary value
-
-(W) You tried to pass a temporary value (like the result of a
-function, or a computed expression) to the "p" pack() template.  This
-means the result contains a pointer to a location that could become
-invalid anytime, even before the end of the current statement.  Use
-literals or global values as arguments to the "p" pack() template to
-avoid this warning.
-
 =item Attempt to use reference as lvalue in substr
 
 (W) You supplied a reference as the first argument to substr() used
@@ -394,11 +373,6 @@ exited by calling exit.
 like a block, except that it isn't a proper block.  This usually
 occurs if you tried to jump out of a sort() block or subroutine, which
 is a no-no.  See L<perlfunc/goto>.
-
-=item Can't "goto" into the middle of a foreach loop
-
-(F) A "goto" statement was executed to jump into the middle of a
-foreach loop.  You can't get there from here.  See L<perlfunc/goto>.
 
 =item Can't "last" outside a block
 
@@ -569,19 +543,8 @@ mention "perl" on the #! line somewhere.
 
 =item Can't execute %s
 
-(F) You used the B<-S> switch, but the copies of the script to execute found
-in the PATH did not have correct permissions.
-
-=item Can't find %s on PATH, '.' not in PATH
-
 (F) You used the B<-S> switch, but the script to execute could not be found
-in the PATH, or at least not with the correct permissions.  The script
-exists in the current directory, but PATH prohibits running it.
-
-=item Can't find %s on PATH
-
-(F) You used the B<-S> switch, but the script to execute could not be found
-in the PATH.
+in the PATH, or at least not with the correct permissions.
 
 =item Can't find label %s
 
@@ -594,11 +557,7 @@ for us to go to.  See L<perlfunc/goto>.
 the closing delimiter was omitted.  Because bracketed quotes count nesting
 levels, the following is missing its final parenthesis:
 
-    print q(The character '(' starts a side comment.);
-
-If you're getting this error from a here-document, you may have 
-included unseen whitespace before or after your closing tag. A good 
-programmer's editor will have a way to help you find these characters.
+    print q(The character '(' starts a side comment.)
 
 =item Can't fork
 
@@ -638,12 +597,12 @@ call for another.  It can't manufacture one out of whole cloth.  In general
 you should be calling it out of only an AUTOLOAD routine anyway.  See
 L<perlfunc/goto>.
 
-=item Can't localize through a reference
+=item Can't localize a reference
 
-(F) You said something like C<local $$ref>, which Perl can't currently
-handle, because when it goes to restore the old value of whatever $ref
-pointed to after the scope of the local() is finished, it can't be
-sure that $ref will still be a reference.  
+(F) You said something like C<local $$ref>, which is not allowed because
+the compiler can't determine whether $ref will end up pointing to anything
+with a symbol table entry, and a symbol table entry is necessary to
+do a local.
 
 =item Can't localize lexical variable %s
 
@@ -651,13 +610,6 @@ sure that $ref will still be a reference.
 lexical variable using "my".  This is not allowed.  If you want to
 localize a package variable of the same name, qualify it with the
 package name.
-
-=item Can't locate auto/%s.al in @INC
-
-(F) A function (or method) was called in a package which allows autoload,
-but there is no function to autoload.  Most probable causes are a misprint
-in a function/method name or a failure to C<AutoSplit> the file, say, by
-doing C<make install>.
 
 =item Can't locate %s in @INC
 
@@ -704,11 +656,8 @@ buffer.
 
 =item Can't open %s: %s
 
-(S) The implicit opening of a file through use of the C<E<lt>E<gt>>
-filehandle, either implicitly under the C<-n> or C<-p> command-line
-switches, or explicitly, failed for the indicated reason.  Usually this
-is because you don't have read permission for a file which you named
-on the command line.
+(S) An inplace edit couldn't open the original file for the indicated reason.
+Usually this is because you don't have read permission for the file.
 
 =item Can't open bidirectional pipe
 
@@ -1319,14 +1268,10 @@ See L<perlfunc/sprintf>.
 =item Invalid type in pack: '%s'
 
 (F) The given character is not a valid pack type.  See L<perlfunc/pack>.
-(W) The given character is not a valid pack type but used to be silently
-ignored.
 
 =item Invalid type in unpack: '%s'
 
 (F) The given character is not a valid unpack type.  See L<perlfunc/unpack>.
-(W) The given character is not a valid unpack type but used to be silently
-ignored.
 
 =item ioctl is not implemented
 
@@ -1396,6 +1341,12 @@ found where operator expected".  Often the missing operator is a comma.
 (F) The lexer counted more opening curly brackets (braces) than closing ones.
 As a general rule, you'll find it's missing near the place you were last
 editing.
+
+=item Missing semicolon on previous line?
+
+(S) This is an educated guess made in conjunction with the message "%s
+found where operator expected".  Don't automatically put a semicolon on
+the previous line just because you saw this message.
 
 =item Modification of a read-only value attempted
 
@@ -2023,11 +1974,6 @@ an unintended loop in your inheritance hierarchy.
 (W) The internal sv_replace() function was handed a new SV with a
 reference count of other than 1.
 
-=item regexp *+ operand could be empty
-
-(F) The part of the regexp subject to either the * or + quantifier
-could match an empty string.
-
 =item regexp memory corruption
 
 (P) The regular expression engine got confused by what the regular
@@ -2095,7 +2041,6 @@ or setgid bit set.  This doesn't make much sense.
 
 (F) The lexer couldn't find the final delimiter of a // or m{}
 construct.  Remember that bracketing delimiters count nesting level.
-Missing the leading C<$> from a variable C<$m> may cause this error.
 
 =item %sseek() on unopened file
 
@@ -2124,10 +2069,6 @@ or possibly some other missing operator, such as a comma.
 
 (W) The filehandle you're sending to got itself closed sometime before now.
 Check your logic flow.
-
-=item Sequence (? incomplete
-(F) A regular expression ended with an incomplete extension (?.
-See L<perlre>.
 
 =item Sequence (?#... not terminated
 
@@ -2266,13 +2207,11 @@ L<perlop/"Quote and Quote-like Operators">.
 
 (F) The lexer couldn't find the interior delimiter of a s/// or s{}{}
 construct.  Remember that bracketing delimiters count nesting level.
-Missing the leading C<$> from variable C<$s> may cause this error.
 
 =item Substitution replacement not terminated
 
 (F) The lexer couldn't find the final delimiter of a s/// or s{}{}
 construct.  Remember that bracketing delimiters count nesting level.
-Missing the leading C<$> from variable C<$s> may cause this error.
 
 =item substr outside of string
 
@@ -2429,8 +2368,7 @@ it.   See L<perlre>.
 =item Translation pattern not terminated
 
 (F) The lexer couldn't find the interior delimiter of a tr/// or tr[][]
-or y/// or y[][] construct.  Missing the leading C<$> from variables
-C<$tr> or C<$y> may cause this error.
+construct.
 
 =item Translation replacement not terminated
 
@@ -2553,7 +2491,7 @@ script, a binary program, or a directory as a Perl program.
 (F) You specified a signal name to the kill() function that was not recognized.
 Say C<kill -l> in your shell to see the valid signal names on your system.
 
-=item Unrecognized switch: -%s  (-h will show valid options)
+=item Unrecognized switch: -%s
 
 (F) You specified an illegal option to Perl.  Don't do that.
 (If you think you didn't do that, check the #! line to see if it's

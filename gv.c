@@ -58,6 +58,7 @@ GV *
 gv_fetchfile(name)
 char *name;
 {
+    dTHR;
     char smallbuf[256];
     char *tmpbuf;
     STRLEN tmplen;
@@ -79,7 +80,7 @@ char *name;
     sv_setpv(GvSV(gv), name);
     if (*name == '/' && (instr(name, "/lib/") || instr(name, ".pm")))
 	GvMULTI_on(gv);
-    if (PERLDB_LINE)
+    if (perldb)
 	hv_magic(GvHVn(gv_AVadd(gv)), gv, 'L');
     return gv;
 }
@@ -92,6 +93,7 @@ char *name;
 STRLEN len;
 int multi;
 {
+    dTHR;
     register GP *gp;
 
     sv_upgrade((SV*)gv, SVt_PVGV);
@@ -182,6 +184,7 @@ I32 level;
 	    basestash = gv_stashpvn(packname, packlen, TRUE);
 	    gvp = (GV**)hv_fetch(basestash, "ISA", 3, FALSE);
 	    if (gvp && (gv = *gvp) != (GV*)&sv_undef && (av = GvAV(gv))) {
+		dTHR;		/* just for SvREFCNT_dec */
 		gvp = (GV**)hv_fetch(stash, "ISA", 3, TRUE);
 		if (!gvp || !(gv = *gvp))
 		    croak("Cannot create %s::ISA", HvNAME(stash));
@@ -231,6 +234,7 @@ I32 level;
 		    (cv = GvCV(gv)) &&
 		    (CvROOT(cv) || CvXSUB(cv)))
 		{
+		    dTHR;	/* just for SvREFCNT_inc */
 		    if (cv = GvCV(topgv))
 			SvREFCNT_dec(cv);
 		    GvCV(topgv) = (CV*)SvREFCNT_inc(GvCV(gv));
@@ -258,6 +262,7 @@ HV* stash;
 char* name;
 I32 autoload;
 {
+    dTHR;
     register char *nend;
     char *nsplit = 0;
     GV* gv;
@@ -420,6 +425,7 @@ char *nambeg;
 I32 add;
 I32 sv_type;
 {
+    dTHR;
     register char *name = nambeg;
     register GV *gv = 0;
     GV**gvp;
@@ -740,7 +746,6 @@ I32 sv_type;
     case '7':
     case '8':
     case '9':
-    case '\023':
       ro_magicalize:
 	SvREADONLY_on(GvSV(gv));
       magicalize:
@@ -821,6 +826,7 @@ GV *gv;
 IO *
 newIO()
 {
+    dTHR;
     IO *io;
     GV *iogv;
 
@@ -828,9 +834,7 @@ newIO()
     sv_upgrade((SV *)io,SVt_PVIO);
     SvREFCNT(io) = 1;
     SvOBJECT_on(io);
-    iogv = gv_fetchpv("FileHandle::", FALSE, SVt_PVHV);
-    if (!iogv)
-      iogv = gv_fetchpv("IO::Handle::", TRUE, SVt_PVHV);
+    iogv = gv_fetchpv("IO::Handle::", TRUE, SVt_PVHV);
     SvSTASH(io) = (HV*)SvREFCNT_inc(GvHV(iogv));
     return io;
 }
@@ -839,6 +843,7 @@ void
 gv_check(stash)
 HV* stash;
 {
+    dTHR;
     register HE *entry;
     register I32 i;
     register GV *gv;
@@ -966,6 +971,7 @@ bool
 Gv_AMupdate(stash)
 HV* stash;
 {
+  dTHR;  
   GV** gvp;
   HV* hv;
   GV* gv;
@@ -1129,6 +1135,7 @@ SV* right;
 int method;
 int flags; 
 {
+  dTHR;
   MAGIC *mg; 
   CV *cv; 
   CV **cvp=NULL, **ocvp=NULL;
@@ -1328,6 +1335,7 @@ int flags;
 	|| inc_dec_ass) RvDEEPCP(left);
   }
   {
+    dTHR;
     dSP;
     BINOP myop;
     SV* res;
@@ -1340,12 +1348,12 @@ int flags;
     myop.op_flags = OPf_WANT_SCALAR | OPf_STACKED;
 
     ENTER;
-    SAVESPTR(op);
+    SAVEOP();
     op = (OP *) &myop;
-    if (PERLDB_SUB && curstash != debstash)
+    if (perldb && curstash != debstash)
 	op->op_private |= OPpENTERSUB_DB;
     PUTBACK;
-    pp_pushmark();
+    pp_pushmark(ARGS);
 
     EXTEND(sp, notfound + 5);
     PUSHs(lr>0? right: left);
@@ -1357,7 +1365,7 @@ int flags;
     PUSHs((SV*)cv);
     PUTBACK;
 
-    if (op = pp_entersub())
+    if (op = pp_entersub(ARGS))
       runops();
     LEAVE;
     SPAGAIN;
