@@ -41,7 +41,7 @@ corresponding built-in functions:
 
 =over 4
 
-=item $io->setpos ( POS, WHENCE )
+=item $io->seek ( POS, WHENCE )
 
 Seek the IO::File to position POS, relative to WHENCE:
 
@@ -55,7 +55,7 @@ POS is absolute position. (Seek relative to the start of the file)
 
 POS is an offset from the current position. (Seek relative to current)
 
-=item WHENCE=1 (SEEK_END)
+=item WHENCE=2 (SEEK_END)
 
 POS is an offset from the end of the file. (Seek relative to end)
 
@@ -107,7 +107,7 @@ require Exporter;
 @EXPORT = qw(SEEK_SET SEEK_CUR SEEK_END);
 @ISA = qw(Exporter);
 
-$VERSION = "1.08";
+$VERSION = "1.08_00";
 
 sub seek {
     @_ == 3 or croak 'usage: $io->seek(POS, WHENCE)';

@@ -6,7 +6,7 @@ our($VERSION, @ISA, @EXPORT_OK, @EXPORT_FAIL, %EXPORT_TAGS,
 
 use XSLoader ();
 
-@ISA = qw(Exporter AutoLoader);
+@ISA = qw(Exporter);
 
 # NOTE: The glob() export is only here for compatibility with 5.6.0.
 # csh_glob() should not be used directly, unless you know what you're doing.
@@ -22,6 +22,7 @@ use XSLoader ();
     GLOB_CSH
     GLOB_ERR
     GLOB_ERROR
+    GLOB_LIMIT
     GLOB_MARK
     GLOB_NOCASE
     GLOB_NOCHECK
@@ -41,6 +42,7 @@ use XSLoader ();
         GLOB_CSH
         GLOB_ERR
         GLOB_ERROR
+        GLOB_LIMIT
         GLOB_MARK
         GLOB_NOCASE
         GLOB_NOCHECK
@@ -54,7 +56,7 @@ use XSLoader ();
     ) ],
 );
 
-$VERSION = '0.991';
+$VERSION = '1.01';
 
 sub import {
     require Exporter;
@@ -82,17 +84,10 @@ sub AUTOLOAD {
 
     my $constname;
     ($constname = $AUTOLOAD) =~ s/.*:://;
-    my $val = constant($constname, @_ ? $_[0] : 0);
-    if ($! != 0) {
-	if ($! =~ /Invalid/ || $!{EINVAL}) {
-	    require AutoLoader;
-	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
-	    goto &AutoLoader::AUTOLOAD;
-	}
-	else {
-	    require Carp;
-	    Carp::croak("Your vendor has not defined File::Glob macro $constname");
-	}
+    my ($error, $val) = constant($constname);
+    if ($error) {
+	require Carp;
+	Carp::croak($error);
     }
     eval "sub $AUTOLOAD { $val }";
     goto &$AUTOLOAD;
@@ -103,7 +98,7 @@ XSLoader::load 'File::Glob', $VERSION;
 # Preloaded methods go here.
 
 sub GLOB_ERROR {
-    return constant('GLOB_ERROR', 0);
+    return (constant('GLOB_ERROR'))[1];
 }
 
 sub GLOB_CSH () {
@@ -241,6 +236,15 @@ The POSIX defined flags for bsd_glob() are:
 
 Force bsd_glob() to return an error when it encounters a directory it
 cannot open or read.  Ordinarily bsd_glob() continues to find matches.
+
+=item C<GLOB_LIMIT>
+
+Make bsd_glob() return an error (GLOB_NOSPACE) when the pattern expands
+to a size bigger than the system constant C<ARG_MAX> (usually found in
+limits.h).  If your system does not define this constant, bsd_glob() uses
+C<sysconf(_SC_ARG_MAX)> or C<_POSIX_ARG_MAX> where available (in that
+order).  You can inspect these values using the standard C<POSIX>
+extension.
 
 =item C<GLOB_MARK>
 

@@ -12,17 +12,19 @@ use Config;
 print "1..58\n";
 
 $Is_MSWin32 = $^O eq 'MSWin32';
+$Is_NetWare = $^O eq 'NetWare';
 $Is_Dos = $^O eq 'dos';
-$Is_Dosish = $Is_Dos || $^O eq 'os2' || $Is_MSWin32;
 $Is_Cygwin = $^O eq 'cygwin';
-chop($cwd = ($Is_MSWin32 ? `cd` : `pwd`));
+$Is_MPE = $^O eq 'mpeix';
+$Is_Dosish = $Is_Dos || $^O eq 'os2' || $Is_MSWin32 || $Is_NetWare || $Is_Cygwin;
+chop($cwd = (($Is_MSWin32 || $Is_NetWare) ? `cd` : `pwd`));
 
 $DEV = `ls -l /dev` unless $Is_Dosish or $Is_Cygwin;
 
 unlink "Op.stat.tmp";
 if (open(FOO, ">Op.stat.tmp")) {
   # hack to make Apollo update link count:
-  $junk = `ls Op.stat.tmp` unless ($Is_MSWin32 || $Is_Dos);
+  $junk = `ls Op.stat.tmp` unless ($Is_MSWin32 || $Is_NetWare || $Is_Dos);
 
   ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
    $blksize,$blocks) = stat(FOO);
@@ -32,7 +34,7 @@ if (open(FOO, ">Op.stat.tmp")) {
   else {
     print "# res=$res, nlink=$nlink.\nnot ok 1\n";
   }
-  if ($Is_MSWin32 or $Is_Cygwin or $Is_Dos || ($mtime && $mtime == $ctime)) {
+  if ($Is_MSWin32 or $Is_NetWare or $Is_Cygwin or $Is_Dos || ($mtime && $mtime == $ctime)) {
     print "ok 2\n";
   }
   else {
@@ -52,7 +54,7 @@ if (open(FOO, ">Op.stat.tmp")) {
   print "# open failed: $!\nnot ok 1\nnot ok 2\n";
 }
 
-if ($Is_Dosish) { unlink "Op.stat.tmp2"}
+if ($Is_Dosish || $Is_MPE) { unlink "Op.stat.tmp2"}
 else {
     `rm -f Op.stat.tmp2;ln Op.stat.tmp Op.stat.tmp2; chmod 644 Op.stat.tmp`;
 }
@@ -60,16 +62,16 @@ else {
 ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
     $blksize,$blocks) = stat('Op.stat.tmp');
 
-if ($Is_Dosish || $Config{dont_use_nlink})
+if ($Is_Dosish || $Is_MPE || $Config{dont_use_nlink})
     {print "ok 3 # skipped: no link count\n";} 
 elsif ($nlink == 2)
     {print "ok 3\n";} 
 else {print "# \$nlink is |$nlink|\nnot ok 3\n";}
 
-if (   $Is_Dosish
+if (   $Is_Dosish || $Is_MPE
         # Solaris tmpfs bug
 	|| ($cwd =~ m#^/tmp# and $mtime && $mtime==$ctime && $^O eq 'solaris')
-	|| $cwd =~ m#/afs/#
+    || $cwd =~ m#$Config{'afsroot'}/#
 	|| $^O eq 'amigaos') {
     print "ok 4 # skipped: different semantic of mtime/ctime\n";
 }
@@ -85,7 +87,7 @@ else {
 print "#4	:$mtime: should != :$ctime:\n";
 
 unlink "Op.stat.tmp" or print "# unlink failed: $!\n";
-if ($Is_MSWin32) {  open F, '>Op.stat.tmp' and close F }
+if ($Is_MSWin32 || $Is_NetWare) {  open F, '>Op.stat.tmp' and close F }
 else             { `touch Op.stat.tmp` }
 
 if (-z 'Op.stat.tmp') {print "ok 5\n";} else {print "not ok 5\n";}
@@ -100,7 +102,7 @@ $olduid = $>;		# can't test -r if uid == 0
 $Is_MSWin32 ? `cmd /c echo hi > Op.stat.tmp` : `echo hi >Op.stat.tmp`;
 chmod 0,'Op.stat.tmp';
 eval '$> = 1;';		# so switch uid (may not be implemented)
-if (!$> || $Is_Dos || ! -r 'Op.stat.tmp') {print "ok 9\n";} else {print "not ok 9\n";}
+if (!$> || $Is_Dos || $Is_Cygwin || ! -r 'Op.stat.tmp') {print "ok 9\n";} else {print "not ok 9\n";}
 if (!$> || ! -w 'Op.stat.tmp') {print "ok 10\n";} else {print "not ok 10\n";}
 eval '$> = $olduid;';		# switch uid back (may not be implemented)
 print "# olduid=$olduid, newuid=$>\n" unless ($> == $olduid);
@@ -141,7 +143,7 @@ if (-e 'Op.stat.tmp') {print "ok 27\n";} else {print "not ok 27\n";}
 unlink 'Op.stat.tmp2';
 if (! -e 'Op.stat.tmp2') {print "ok 28\n";} else {print "not ok 28\n";}
 
-if ($Is_MSWin32 || $Is_Dos)
+if ($Is_MSWin32 || $Is_NetWare || $Is_Dos)
     {print "ok 29\n";}
 elsif ($DEV !~ /\nc.* (\S+)\n/)
     {print "ok 29\n";}
@@ -151,7 +153,7 @@ else
     {print "not ok 29\n";}
 if (! -c '.') {print "ok 30\n";} else {print "not ok 30\n";}
 
-if ($Is_MSWin32 || $Is_Dos)
+if ($Is_MSWin32 || $Is_NetWare || $Is_Dos)
     {print "ok 31\n";}
 elsif ($DEV !~ /\ns.* (\S+)\n/)
     {print "ok 31\n";}
@@ -161,7 +163,7 @@ else
     {print "not ok 31\n";}
 if (! -S '.') {print "ok 32\n";} else {print "not ok 32\n";}
 
-if ($Is_MSWin32 || $Is_Dos)
+if ($Is_MSWin32 || $Is_NetWare || $Is_Dos)
     {print "ok 33\n";}
 elsif ($DEV !~ /\nb.* (\S+)\n/)
     {print "ok 33\n";}
@@ -171,7 +173,7 @@ else
     {print "not ok 33\n";}
 if (! -b '.') {print "ok 34\n";} else {print "not ok 34\n";}
 
-if ($^O eq 'mpeix' or $^O eq 'amigaos' or $Is_Dosish or $Is_Cygwin) {
+if ($Is_MPE or $^O eq 'amigaos' or $Is_Dosish or $Is_Cygwin) {
   print "ok 35 # skipped: no -u\n"; goto tty_test;
 }
 
@@ -205,7 +207,7 @@ tty_test:
 # may not be available (at, cron  rsh etc), the PERL_SKIP_TTY_TEST env var
 # can be set to skip the tests that need a tty.
 unless($ENV{PERL_SKIP_TTY_TEST}) {
-    if ($Is_MSWin32) {
+    if ($Is_MSWin32 || $Is_NetWare) {
 	print "ok 36\n";
 	print "ok 37\n";
     }
@@ -236,7 +238,7 @@ else {
     print "ok 39\n";
 }
 open(null,"/dev/null");
-if (! -t null || -e '/xenix' || $^O eq 'machten' || $Is_MSWin32)
+if (! -t null || -e '/xenix' || $^O eq 'machten' || $Is_MSWin32 || $Is_NetWare)
 	{print "ok 40\n";} else {print "not ok 40\n";}
 close(null);
 

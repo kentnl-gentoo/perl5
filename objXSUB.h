@@ -579,6 +579,10 @@
 #define Perl_init_stacks	pPerl->Perl_init_stacks
 #undef  init_stacks
 #define init_stacks		Perl_init_stacks
+#undef  Perl_init_tm
+#define Perl_init_tm		pPerl->Perl_init_tm
+#undef  init_tm
+#define init_tm			Perl_init_tm
 #undef  Perl_instr
 #define Perl_instr		pPerl->Perl_instr
 #undef  instr
@@ -791,6 +795,10 @@
 #define Perl_leave_scope	pPerl->Perl_leave_scope
 #undef  leave_scope
 #define leave_scope		Perl_leave_scope
+#undef  Perl_op_null
+#define Perl_op_null		pPerl->Perl_op_null
+#undef  op_null
+#define op_null			Perl_op_null
 #undef  Perl_load_module
 #define Perl_load_module	pPerl->Perl_load_module
 #undef  load_module
@@ -803,6 +811,14 @@
 #define Perl_looks_like_number	pPerl->Perl_looks_like_number
 #undef  looks_like_number
 #define looks_like_number	Perl_looks_like_number
+#undef  Perl_grok_number
+#define Perl_grok_number	pPerl->Perl_grok_number
+#undef  grok_number
+#define grok_number		Perl_grok_number
+#undef  Perl_grok_numeric_radix
+#define Perl_grok_numeric_radix	pPerl->Perl_grok_numeric_radix
+#undef  grok_numeric_radix
+#define grok_numeric_radix	Perl_grok_numeric_radix
 #if defined(USE_THREADS)
 #endif
 #if defined(USE_LOCALE_COLLATE)
@@ -857,6 +873,10 @@
 #define Perl_mg_size		pPerl->Perl_mg_size
 #undef  mg_size
 #define mg_size			Perl_mg_size
+#undef  Perl_mini_mktime
+#define Perl_mini_mktime	pPerl->Perl_mini_mktime
+#undef  mini_mktime
+#define mini_mktime		Perl_mini_mktime
 #undef  Perl_moreswitches
 #define Perl_moreswitches	pPerl->Perl_moreswitches
 #undef  moreswitches
@@ -865,7 +885,7 @@
 #define Perl_my_atof		pPerl->Perl_my_atof
 #undef  my_atof
 #define my_atof			Perl_my_atof
-#if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
+#if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
 #undef  Perl_my_bcopy
 #define Perl_my_bcopy		pPerl->Perl_my_bcopy
 #undef  my_bcopy
@@ -927,6 +947,10 @@
 #define Perl_my_stat		pPerl->Perl_my_stat
 #undef  my_stat
 #define my_stat			Perl_my_stat
+#undef  Perl_my_strftime
+#define Perl_my_strftime	pPerl->Perl_my_strftime
+#undef  my_strftime
+#define my_strftime		Perl_my_strftime
 #if defined(MYSWAP)
 #undef  Perl_my_swap
 #define Perl_my_swap		pPerl->Perl_my_swap
@@ -1319,6 +1343,10 @@
 #define Perl_rsignal		pPerl->Perl_rsignal
 #undef  rsignal
 #define rsignal			Perl_rsignal
+#undef  Perl_rsignal_state
+#define Perl_rsignal_state	pPerl->Perl_rsignal_state
+#undef  rsignal_state
+#define rsignal_state		Perl_rsignal_state
 #if !defined(HAS_RENAME)
 #endif
 #undef  Perl_savepv
@@ -1629,6 +1657,10 @@
 #define Perl_sv_compile_2op	pPerl->Perl_sv_compile_2op
 #undef  sv_compile_2op
 #define sv_compile_2op		Perl_sv_compile_2op
+#undef  Perl_getcwd_sv
+#define Perl_getcwd_sv		pPerl->Perl_getcwd_sv
+#undef  getcwd_sv
+#define getcwd_sv		Perl_getcwd_sv
 #undef  Perl_sv_dec
 #define Perl_sv_dec		pPerl->Perl_sv_dec
 #undef  sv_dec
@@ -2324,6 +2356,8 @@
 #endif
 #if defined(PERL_IN_PP_C) || defined(PERL_DECL_PROT)
 #endif
+#if defined(PERL_IN_PP_PACK_C) || defined(PERL_DECL_PROT)
+#endif
 #if defined(PERL_IN_PP_CTL_C) || defined(PERL_DECL_PROT)
 #if defined(PERL_FLEXIBLE_EXCEPTIONS)
 #endif
@@ -2335,15 +2369,19 @@
 #  endif
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_DECL_PROT)
+#  ifdef DEBUGGING
+#  endif
 #endif
 #if defined(PERL_IN_REGEXEC_C) || defined(PERL_DECL_PROT)
 #endif
 #if defined(PERL_IN_RUN_C) || defined(PERL_DECL_PROT)
+#   ifdef DEBUGGING
+#   endif
 #endif
 #if defined(PERL_IN_SCOPE_C) || defined(PERL_DECL_PROT)
 #endif
 #if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
-#  if defined(DEBUGGING)
+#  ifdef DEBUGGING
 #  endif
 #  if !defined(NV_PRESERVES_UV)
 #  endif
@@ -2351,6 +2389,8 @@
 #  endif
 #endif
 #if defined(PERL_IN_TOKE_C) || defined(PERL_DECL_PROT)
+#  if defined(DEBUGGING)
+#  endif
 #if 0
 #endif
 #  if defined(CRIPPLED_CC)
@@ -2360,12 +2400,42 @@
 #endif
 #if defined(PERL_IN_UNIVERSAL_C) || defined(PERL_DECL_PROT)
 #endif
+#if defined(PERL_IN_LOCALE_C) || defined(PERL_DECL_PROT)
+#endif
 #if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
 #  if defined(LEAKTEST)
 #  endif
 #endif
 #if defined(PERL_OBJECT)
 #endif
+#undef  Perl_sv_setsv_flags
+#define Perl_sv_setsv_flags	pPerl->Perl_sv_setsv_flags
+#undef  sv_setsv_flags
+#define sv_setsv_flags		Perl_sv_setsv_flags
+#undef  Perl_sv_catpvn_flags
+#define Perl_sv_catpvn_flags	pPerl->Perl_sv_catpvn_flags
+#undef  sv_catpvn_flags
+#define sv_catpvn_flags		Perl_sv_catpvn_flags
+#undef  Perl_sv_catsv_flags
+#define Perl_sv_catsv_flags	pPerl->Perl_sv_catsv_flags
+#undef  sv_catsv_flags
+#define sv_catsv_flags		Perl_sv_catsv_flags
+#undef  Perl_sv_utf8_upgrade_flags
+#define Perl_sv_utf8_upgrade_flags	pPerl->Perl_sv_utf8_upgrade_flags
+#undef  sv_utf8_upgrade_flags
+#define sv_utf8_upgrade_flags	Perl_sv_utf8_upgrade_flags
+#undef  Perl_sv_pvn_force_flags
+#define Perl_sv_pvn_force_flags	pPerl->Perl_sv_pvn_force_flags
+#undef  sv_pvn_force_flags
+#define sv_pvn_force_flags	Perl_sv_pvn_force_flags
+#undef  Perl_sv_2pv_flags
+#define Perl_sv_2pv_flags	pPerl->Perl_sv_2pv_flags
+#undef  sv_2pv_flags
+#define sv_2pv_flags		Perl_sv_2pv_flags
+#undef  Perl_my_atof2
+#define Perl_my_atof2		pPerl->Perl_my_atof2
+#undef  my_atof2
+#define my_atof2		Perl_my_atof2
 
 #endif  /* PERL_CORE && PERL_OBJECT */
 #endif	/* __objXSUB_h__ */

@@ -74,7 +74,6 @@ typedef IV IV64;
 
 #define BGET_op_tr_array(arg) do {			\
 	unsigned short *ary;				\
-	int i;						\
 	New(666, ary, 256, unsigned short);		\
 	BGET_FREAD(ary, sizeof(unsigned short), 256);	\
 	arg = (char *) ary;				\
@@ -133,8 +132,8 @@ typedef IV IV64;
 	hv_store((HV*)sv, bstate->bs_pv.xpv_pv, bstate->bs_pv.xpv_cur, arg, 0)
 #define BSET_pv_free(pv)	Safefree(pv.xpv_pv)
 #define BSET_pregcomp(o, arg) \
-	((PMOP*)o)->op_pmregexp = arg ? \
-		CALLREGCOMP(aTHX_ arg, arg + bstate->bs_pv.xpv_cur, ((PMOP*)o)) : 0
+	(PM_SETRE(((PMOP*)o), (arg ? \
+        	CALLREGCOMP(aTHX_ arg, arg + bstate->bs_pv.xpv_cur, ((PMOP*)o)) : 0)))
 #define BSET_newsv(sv, arg)				\
 	STMT_START {					\
 	    sv = (arg == SVt_PVAV ? (SV*)newAV() :	\

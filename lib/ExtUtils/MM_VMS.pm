@@ -538,7 +538,8 @@ sub constants {
 	      INSTALLSITEARCH INSTALLBIN INSTALLSCRIPT PERL_LIB
 	      PERL_ARCHLIB SITELIBEXP SITEARCHEXP LIBPERL_A MYEXTLIB
 	      FIRST_MAKEFILE MAKE_APERL_FILE PERLMAINCC PERL_SRC PERL_VMS
-	      PERL_INC PERL FULLPERL
+	      PERL_INC PERL FULLPERL PERLRUN PERLRUNINST TEST_LIBS 
+	      PERL_CORE
 	      / ) {
 	next unless defined $self->{$macro};
 	push @m, "$macro = $self->{$macro}\n";
@@ -1332,7 +1333,7 @@ $(OBJECT) : $(INST_ARCHAUTODIR).exists
 
 $(INST_STATIC) : $(OBJECT) $(MYEXTLIB)
 ';
-    # If this extension has it's own library (eg SDBM_File)
+    # If this extension has its own library (eg SDBM_File)
     # then copy that to $(INST_STATIC) and add $(OBJECT) into it.
     push(@m, "\t",'$(CP) $(MYEXTLIB) $(MMS$TARGET)',"\n") if $self->{MYEXTLIB};
 

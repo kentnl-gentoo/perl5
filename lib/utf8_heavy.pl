@@ -26,12 +26,25 @@ sub SWASHNEW {
     while (($caller = caller($i)) eq __PACKAGE__) { $i++ }
     my $encoding = $enc{$caller} || "unicode";
     (my $file = $type) =~ s!::!/!g;
-    $file =~ s#^(I[sn]|To)([A-Z].*)#$1/$2#;
-    $list ||= eval { $caller->$type(); }
-	|| do "$file.pl"
-	|| do "$encoding/$file.pl"
-	|| do "$encoding/Is/${type}.pl"
-	|| croak("Can't find $encoding character property definition via $caller->$type or $file.pl");
+    if ($file =~ /^In(.+)/) {
+	my $In = $1;
+	defined %utf8::In || do "$encoding/In.pl";
+	if (exists $utf8::In{$In}) {
+	    $file = "$encoding/In/$utf8::In{$In}";
+	}
+    } else {
+	$file =~ s#^(Is|To)([A-Z].*)#$1/$2#;
+    }
+
+    {
+        $list ||=
+	    ( exists &{"${caller}::${type}"} &&
+	      eval { $caller->$type() } )
+	    || do "$file.pl"
+	    || do "$encoding/$file.pl"
+	    || do "$encoding/Is/${type}.pl"
+	    || croak("Can't find $encoding character property \"$type\"");
+    }
 
     $| = 1;
 

@@ -184,10 +184,6 @@ Deprecated.  Use C<GIMME_V> instead.
 /* Private for OP_EXISTS */
 #define OPpEXISTS_SUB		64	/* Checking for &sub, not {} or [].  */
 
-/* Private for OP_SORT, OP_PRTF, OP_SPRINTF, OP_FTTEXT, OP_FTBINARY, */
-/*             string comparisons, and case changers. */
-#define OPpLOCALE		64	/* Use locale */
-
 /* Private for OP_SORT */
 #define OPpSORT_NUMERIC		1	/* Optimized away { $a <=> $b } */
 #define OPpSORT_INTEGER		2	/* Ditto while under "use integer" */
@@ -238,7 +234,11 @@ struct pmop {
     OP *	op_pmreplroot;
     OP *	op_pmreplstart;
     PMOP *	op_pmnext;		/* list of all scanpats */
-    REGEXP *	op_pmregexp;		/* compiled expression */
+#ifdef USE_ITHREADS
+    IV          op_pmoffset;
+#else
+    REGEXP *    op_pmregexp;            /* compiled expression */
+#endif
     U16		op_pmflags;
     U16		op_pmpermflags;
     U8		op_pmdynflags;
@@ -248,6 +248,14 @@ struct pmop {
     HV *	op_pmstash;
 #endif
 };
+
+#ifdef USE_ITHREADS
+#define PM_GETRE(o)     ((REGEXP*)SvIVX(PL_regex_pad[(o)->op_pmoffset]))
+#define PM_SETRE(o,r)   (sv_setiv(PL_regex_pad[(o)->op_pmoffset], (IV)r))
+#else
+#define PM_GETRE(o)     ((o)->op_pmregexp)
+#define PM_SETRE(o,r)   ((o)->op_pmregexp = (r))
+#endif
 
 #define PMdf_USED	0x01		/* pm has been used once already */
 #define PMdf_TAINTED	0x02		/* pm compiled from tainted pattern */
@@ -384,7 +392,7 @@ struct loop {
 
 #define Nullop Null(OP*)
 
-/* Lowest byte of PL_opargs */
+/* Lowest byte-and-a-bit of PL_opargs */
 #define OA_MARK 1
 #define OA_FOLDCONST 2
 #define OA_RETSCALAR 4
@@ -447,3 +455,12 @@ struct loop {
 #define PERL_LOADMOD_DENY		0x1
 #define PERL_LOADMOD_NOIMPORT		0x2
 #define PERL_LOADMOD_IMPORT_OPS		0x4
+
+#ifdef USE_REENTRANT_API
+typedef struct {
+  struct tm* tmbuff;
+} REBUF;
+#define localtime(a)       localtime_r(a,PL_reentrant_buffer->tmbuff)
+#define gmtime(a)          gmtime_r(a,PL_reentrant_buffer->tmbuff)
+#endif
+

@@ -1097,6 +1097,13 @@ Perl_init_stacks(pTHXo)
     ((CPerlObj*)pPerl)->Perl_init_stacks();
 }
 
+#undef  Perl_init_tm
+void
+Perl_init_tm(pTHXo_ struct tm *ptm)
+{
+    ((CPerlObj*)pPerl)->Perl_init_tm(ptm);
+}
+
 #undef  Perl_instr
 char*
 Perl_instr(pTHXo_ const char* big, const char* little)
@@ -1468,6 +1475,13 @@ Perl_leave_scope(pTHXo_ I32 base)
     ((CPerlObj*)pPerl)->Perl_leave_scope(base);
 }
 
+#undef  Perl_op_null
+void
+Perl_op_null(pTHXo_ OP* o)
+{
+    ((CPerlObj*)pPerl)->Perl_op_null(o);
+}
+
 #undef  Perl_load_module
 void
 Perl_load_module(pTHXo_ U32 flags, SV* name, SV* ver, ...)
@@ -1490,6 +1504,20 @@ I32
 Perl_looks_like_number(pTHXo_ SV* sv)
 {
     return ((CPerlObj*)pPerl)->Perl_looks_like_number(sv);
+}
+
+#undef  Perl_grok_number
+int
+Perl_grok_number(pTHXo_ const char *pv, STRLEN len, UV *valuep)
+{
+    return ((CPerlObj*)pPerl)->Perl_grok_number(pv, len, valuep);
+}
+
+#undef  Perl_grok_numeric_radix
+bool
+Perl_grok_numeric_radix(pTHXo_ const char **sp, const char *send)
+{
+    return ((CPerlObj*)pPerl)->Perl_grok_numeric_radix(sp, send);
 }
 #if defined(USE_THREADS)
 #endif
@@ -1588,6 +1616,13 @@ Perl_mg_size(pTHXo_ SV* sv)
     return ((CPerlObj*)pPerl)->Perl_mg_size(sv);
 }
 
+#undef  Perl_mini_mktime
+void
+Perl_mini_mktime(pTHXo_ struct tm *pm)
+{
+    ((CPerlObj*)pPerl)->Perl_mini_mktime(pm);
+}
+
 #undef  Perl_moreswitches
 char*
 Perl_moreswitches(pTHXo_ char* s)
@@ -1601,7 +1636,7 @@ Perl_my_atof(pTHXo_ const char *s)
 {
     return ((CPerlObj*)pPerl)->Perl_my_atof(s);
 }
-#if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
+#if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
 
 #undef  Perl_my_bcopy
 char*
@@ -1705,6 +1740,13 @@ I32
 Perl_my_stat(pTHXo)
 {
     return ((CPerlObj*)pPerl)->Perl_my_stat();
+}
+
+#undef  Perl_my_strftime
+char *
+Perl_my_strftime(pTHXo_ char *fmt, int sec, int min, int hour, int mday, int mon, int year, int wday, int yday, int isdst)
+{
+    return ((CPerlObj*)pPerl)->Perl_my_strftime(fmt, sec, min, hour, mday, mon, year, wday, yday, isdst);
 }
 #if defined(MYSWAP)
 
@@ -2411,6 +2453,13 @@ Perl_rsignal(pTHXo_ int i, Sighandler_t t)
 {
     return ((CPerlObj*)pPerl)->Perl_rsignal(i, t);
 }
+
+#undef  Perl_rsignal_state
+Sighandler_t
+Perl_rsignal_state(pTHXo_ int i)
+{
+    return ((CPerlObj*)pPerl)->Perl_rsignal_state(i);
+}
 #if !defined(HAS_RENAME)
 #endif
 
@@ -2953,6 +3002,13 @@ Perl_sv_compile_2op(pTHXo_ SV* sv, OP** startp, char* code, AV** avp)
     return ((CPerlObj*)pPerl)->Perl_sv_compile_2op(sv, startp, code, avp);
 }
 
+#undef  Perl_getcwd_sv
+int
+Perl_getcwd_sv(pTHXo_ SV* sv)
+{
+    return ((CPerlObj*)pPerl)->Perl_getcwd_sv(sv);
+}
+
 #undef  Perl_sv_dec
 void
 Perl_sv_dec(pTHXo_ SV* sv)
@@ -3329,9 +3385,9 @@ Perl_swash_init(pTHXo_ char* pkg, char* name, SV* listsv, I32 minbits, I32 none)
 
 #undef  Perl_swash_fetch
 UV
-Perl_swash_fetch(pTHXo_ SV *sv, U8 *ptr)
+Perl_swash_fetch(pTHXo_ SV *sv, U8 *ptr, bool do_utf8)
 {
-    return ((CPerlObj*)pPerl)->Perl_swash_fetch(sv, ptr);
+    return ((CPerlObj*)pPerl)->Perl_swash_fetch(sv, ptr, do_utf8);
 }
 
 #undef  Perl_taint_env
@@ -3991,23 +4047,23 @@ Perl_newMYSUB(pTHXo_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 
 #undef  Perl_cx_dup
 PERL_CONTEXT*
-Perl_cx_dup(pTHXo_ PERL_CONTEXT* cx, I32 ix, I32 max)
+Perl_cx_dup(pTHXo_ PERL_CONTEXT* cx, I32 ix, I32 max, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_cx_dup(cx, ix, max);
+    return ((CPerlObj*)pPerl)->Perl_cx_dup(cx, ix, max, param);
 }
 
 #undef  Perl_si_dup
 PERL_SI*
-Perl_si_dup(pTHXo_ PERL_SI* si)
+Perl_si_dup(pTHXo_ PERL_SI* si, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_si_dup(si);
+    return ((CPerlObj*)pPerl)->Perl_si_dup(si, param);
 }
 
 #undef  Perl_ss_dup
 ANY*
-Perl_ss_dup(pTHXo_ PerlInterpreter* proto_perl)
+Perl_ss_dup(pTHXo_ PerlInterpreter* proto_perl, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_ss_dup(proto_perl);
+    return ((CPerlObj*)pPerl)->Perl_ss_dup(proto_perl, param);
 }
 
 #undef  Perl_any_dup
@@ -4019,16 +4075,16 @@ Perl_any_dup(pTHXo_ void* v, PerlInterpreter* proto_perl)
 
 #undef  Perl_he_dup
 HE*
-Perl_he_dup(pTHXo_ HE* e, bool shared)
+Perl_he_dup(pTHXo_ HE* e, bool shared, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_he_dup(e, shared);
+    return ((CPerlObj*)pPerl)->Perl_he_dup(e, shared, param);
 }
 
 #undef  Perl_re_dup
 REGEXP*
-Perl_re_dup(pTHXo_ REGEXP* r)
+Perl_re_dup(pTHXo_ REGEXP* r, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_re_dup(r);
+    return ((CPerlObj*)pPerl)->Perl_re_dup(r, param);
 }
 
 #undef  Perl_fp_dup
@@ -4047,23 +4103,23 @@ Perl_dirp_dup(pTHXo_ DIR* dp)
 
 #undef  Perl_gp_dup
 GP*
-Perl_gp_dup(pTHXo_ GP* gp)
+Perl_gp_dup(pTHXo_ GP* gp, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_gp_dup(gp);
+    return ((CPerlObj*)pPerl)->Perl_gp_dup(gp, param);
 }
 
 #undef  Perl_mg_dup
 MAGIC*
-Perl_mg_dup(pTHXo_ MAGIC* mg)
+Perl_mg_dup(pTHXo_ MAGIC* mg, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_mg_dup(mg);
+    return ((CPerlObj*)pPerl)->Perl_mg_dup(mg, param);
 }
 
 #undef  Perl_sv_dup
 SV*
-Perl_sv_dup(pTHXo_ SV* sstr)
+Perl_sv_dup(pTHXo_ SV* sstr, clone_params* param)
 {
-    return ((CPerlObj*)pPerl)->Perl_sv_dup(sstr);
+    return ((CPerlObj*)pPerl)->Perl_sv_dup(sstr, param);
 }
 #if defined(HAVE_INTERP_INTERN)
 
@@ -4162,6 +4218,8 @@ Perl_sys_intern_init(pTHXo)
 #endif
 #if defined(PERL_IN_PP_C) || defined(PERL_DECL_PROT)
 #endif
+#if defined(PERL_IN_PP_PACK_C) || defined(PERL_DECL_PROT)
+#endif
 #if defined(PERL_IN_PP_CTL_C) || defined(PERL_DECL_PROT)
 #if defined(PERL_FLEXIBLE_EXCEPTIONS)
 #endif
@@ -4173,15 +4231,19 @@ Perl_sys_intern_init(pTHXo)
 #  endif
 #endif
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_DECL_PROT)
+#  ifdef DEBUGGING
+#  endif
 #endif
 #if defined(PERL_IN_REGEXEC_C) || defined(PERL_DECL_PROT)
 #endif
 #if defined(PERL_IN_RUN_C) || defined(PERL_DECL_PROT)
+#   ifdef DEBUGGING
+#   endif
 #endif
 #if defined(PERL_IN_SCOPE_C) || defined(PERL_DECL_PROT)
 #endif
 #if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
-#  if defined(DEBUGGING)
+#  ifdef DEBUGGING
 #  endif
 #  if !defined(NV_PRESERVES_UV)
 #  endif
@@ -4189,6 +4251,8 @@ Perl_sys_intern_init(pTHXo)
 #  endif
 #endif
 #if defined(PERL_IN_TOKE_C) || defined(PERL_DECL_PROT)
+#  if defined(DEBUGGING)
+#  endif
 #if 0
 #endif
 #  if defined(CRIPPLED_CC)
@@ -4198,12 +4262,63 @@ Perl_sys_intern_init(pTHXo)
 #endif
 #if defined(PERL_IN_UNIVERSAL_C) || defined(PERL_DECL_PROT)
 #endif
+#if defined(PERL_IN_LOCALE_C) || defined(PERL_DECL_PROT)
+#endif
 #if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
 #  if defined(LEAKTEST)
 #  endif
 #endif
 #if defined(PERL_OBJECT)
 #endif
+
+#undef  Perl_sv_setsv_flags
+void
+Perl_sv_setsv_flags(pTHXo_ SV* dsv, SV* ssv, I32 flags)
+{
+    ((CPerlObj*)pPerl)->Perl_sv_setsv_flags(dsv, ssv, flags);
+}
+
+#undef  Perl_sv_catpvn_flags
+void
+Perl_sv_catpvn_flags(pTHXo_ SV* sv, const char* ptr, STRLEN len, I32 flags)
+{
+    ((CPerlObj*)pPerl)->Perl_sv_catpvn_flags(sv, ptr, len, flags);
+}
+
+#undef  Perl_sv_catsv_flags
+void
+Perl_sv_catsv_flags(pTHXo_ SV* dsv, SV* ssv, I32 flags)
+{
+    ((CPerlObj*)pPerl)->Perl_sv_catsv_flags(dsv, ssv, flags);
+}
+
+#undef  Perl_sv_utf8_upgrade_flags
+STRLEN
+Perl_sv_utf8_upgrade_flags(pTHXo_ SV *sv, I32 flags)
+{
+    return ((CPerlObj*)pPerl)->Perl_sv_utf8_upgrade_flags(sv, flags);
+}
+
+#undef  Perl_sv_pvn_force_flags
+char*
+Perl_sv_pvn_force_flags(pTHXo_ SV* sv, STRLEN* lp, I32 flags)
+{
+    return ((CPerlObj*)pPerl)->Perl_sv_pvn_force_flags(sv, lp, flags);
+}
+
+#undef  Perl_sv_2pv_flags
+char*
+Perl_sv_2pv_flags(pTHXo_ SV* sv, STRLEN* lp, I32 flags)
+{
+    return ((CPerlObj*)pPerl)->Perl_sv_2pv_flags(sv, lp, flags);
+}
+
+#undef  Perl_my_atof2
+char*
+Perl_my_atof2(pTHXo_ const char *s, NV* value)
+{
+    return ((CPerlObj*)pPerl)->Perl_my_atof2(s, value);
+}
 
 #undef Perl_fprintf_nocontext
 int

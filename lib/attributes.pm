@@ -1,6 +1,6 @@
 package attributes;
 
-$VERSION = 0.03;
+our $VERSION = 0.04;
 
 @EXPORT_OK = qw(get reftype);
 @EXPORT = ();
@@ -27,7 +27,7 @@ sub carp {
 #
 # The extra trips through newATTRSUB in the interpreter wipe out any savings
 # from avoiding the BEGIN block.  Just do the bootstrap now.
-BEGIN { bootstrap }
+BEGIN { bootstrap attributes }
 
 sub import {
     @_ > 2 && ref $_[2] or do {
@@ -130,7 +130,8 @@ B<WARNING>: attribute declarations for variables are an I<experimental>
 feature.  The semantics of such declarations could change or be removed
 in future versions.  They are present for purposes of experimentation
 with what the semantics ought to be.  Do not rely on the current
-implementation of this feature.
+implementation of this feature. Variable attributes are currently
+not usable for tieing.
 
 There are only a few attributes currently handled by Perl itself (or
 directly by this module, depending on how you look at it.)  However,

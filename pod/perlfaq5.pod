@@ -469,7 +469,7 @@ whatever:
 Use the <> (glob()) operator, documented in L<perlfunc>.  Older
 versions of Perl require that you have a shell installed that groks
 tildes.  Recent perl versions have this feature built in. The
-Glob::KGlob module (available from CPAN) gives more portable glob
+File::KGlob module (available from CPAN) gives more portable glob
 functionality.
 
 Within Perl, you may use this directly:
@@ -569,7 +569,7 @@ C<Argument list too long>.  People who installed tcsh as csh won't
 have this problem, but their users may be surprised by it.
 
 To get around this, either upgrade to Perl v5.6.0 or later, do the glob
-yourself with readdir() and patterns, or use a module like Glob::KGlob,
+yourself with readdir() and patterns, or use a module like File::KGlob,
 one that doesn't use the shell to do globbing.
 
 =head2 Is there a leak/bug in glob()?
@@ -722,6 +722,34 @@ Here's a much better web-page hit counter:
     $hits = int( (time() - 850_000_000) / rand(1_000) );
 
 If the count doesn't impress your friends, then the code might.  :-)
+
+=head2 All I want to do is append a small amount of text to the end of a file.  Do I still have to use locking?
+
+If you are on a system that correctly implements flock() and you use the
+example appending code from "perldoc -f flock" everything will be OK
+even if the OS you are on doesn't implement append mode correctly (if
+such a system exists.) So if you are happy to restrict yourself to OSs
+that implement flock() (and that's not really much of a restriction)
+then that is what you should do.
+
+If you know you are only going to use a system that does correctly
+implement appending (i.e. not Win32) then you can omit the seek() from
+the above code.
+
+If you know you are only writing code to run on an OS and filesystem that
+does implement append mode correctly (a local filesystem on a modern
+Unix for example), and you keep the file in block-buffered mode and you
+write less than one buffer-full of output between each manual flushing
+of the buffer then each bufferload is almost garanteed to be written to
+the end of the file in one chunk without getting intermingled with
+anyone else's output. You can also use the syswrite() function which is
+simply a wrapper around your systems write(2) system call.
+
+There is still a small theoretical chance that a signal will interrupt
+the system level write() operation before completion.  There is also a
+possibility that some STDIO implementations may call multiple system
+level write()s even if the buffer was empty to start.  There may be some
+systems where this probability is reduced to zero.
 
 =head2 How do I randomly update a binary file?
 
@@ -954,52 +982,6 @@ include also support for non-portable systems as well.
     ReadMode "normal";
     printf "\nYou said %s, char number %03d\n",
         $key, ord $key;
-
-For legacy DOS systems, Dan Carson <dbc@tc.fluke.COM> reports the following:
-
-To put the PC in "raw" mode, use ioctl with some magic numbers gleaned
-from msdos.c (Perl source file) and Ralf Brown's interrupt list (comes
-across the net every so often):
-
-    $old_ioctl = ioctl(STDIN,0,0);     # Gets device info
-    $old_ioctl &= 0xff;
-    ioctl(STDIN,1,$old_ioctl | 32);    # Writes it back, setting bit 5
-
-Then to read a single character:
-
-    sysread(STDIN,$c,1);               # Read a single character
-
-And to put the PC back to "cooked" mode:
-
-    ioctl(STDIN,1,$old_ioctl);         # Sets it back to cooked mode.
-
-So now you have $c.  If C<ord($c) == 0>, you have a two byte code, which
-means you hit a special key.  Read another byte with C<sysread(STDIN,$c,1)>,
-and that value tells you what combination it was according to this
-table:
-
-    # PC 2-byte keycodes = ^@ + the following:
-
-    # HEX     KEYS
-    # ---     ----
-    # 0F      SHF TAB
-    # 10-19   ALT QWERTYUIOP
-    # 1E-26   ALT ASDFGHJKL
-    # 2C-32   ALT ZXCVBNM
-    # 3B-44   F1-F10
-    # 47-49   HOME,UP,PgUp
-    # 4B      LEFT
-    # 4D      RIGHT
-    # 4F-53   END,DOWN,PgDn,Ins,Del
-    # 54-5D   SHF F1-F10
-    # 5E-67   CTR F1-F10
-    # 68-71   ALT F1-F10
-    # 73-77   CTR LEFT,RIGHT,END,PgDn,HOME
-    # 78-83   ALT 1234567890-=
-    # 84      CTR PgUp
-
-This is all trial and error I did a long time ago; I hope I'm reading the
-file that worked...
 
 =head2 How can I tell whether there's a character waiting on a filehandle?
 

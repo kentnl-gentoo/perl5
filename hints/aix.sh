@@ -54,10 +54,20 @@ esac
 # AIX 4.3.* and above default to using nm for symbol extraction
 case "$osvers" in
    3.*|4.1.*|4.2.*)
-      usenm='undef'
+      case "$usenm" in
+	  '') usenm='undef'
+	  esac
+      case "$usenativedlopen" in
+	  '') usenativedlopen='false'
+	  esac
       ;;
    *)
-      usenm='true'
+      case "$usenm" in
+	  '') usenm='true'
+	  esac
+      case "$usenativedlopen" in
+	  '') usenativedlopen='true'
+	  esac
       ;;
 esac
 
@@ -126,6 +136,7 @@ d_setreuid='undef'
 # Changes for dynamic linking by Wayne Scott <wscott@ichips.intel.com>
 #
 # Tell perl which symbols to export for dynamic linking.
+cccdlflags='none'      # All AIX code is position independent
 case "$cc" in
 *gcc*) ccdlflags='-Xlinker' ;;
 *) ccversion=`lslpp -L | grep 'C for AIX Compiler$' | awk '{print $2}'`
@@ -189,14 +200,14 @@ case "$osvers" in
     lddlflags="$lddlflags -H512 -T512 -bhalt:4 -bM:SRE -bI:\$(PERL_INC)/perl.exp -bE:\$(BASEEXT).exp -e _nostart -lc"
     ;;
 *) 
-    lddlflags="$lddlflags -bhalt:4 -bM:SRE -bI:\$(PERL_INC)/perl.exp -bE:\$(BASEEXT).exp -b noentry -lc"
+    lddlflags="$lddlflags -bhalt:4 -bM:SRE -bI:\$(PERL_INC)/perl.exp -bE:\$(BASEEXT).exp -bnoentry -lc"
     ;;
 esac
 # AIX 4.2 (using latest patchlevels on 20001130) has a broken bind
 # library (getprotobyname and getprotobynumber are outversioned by
 # the same calls in libc, at least for xlc version 3...
 case "`oslevel`" in
-    4.2.1.*)  # Test for xlc version too, should we?
+    4.2.1.*)
       case "$ccversion" in    # Don't know if needed for gcc
           3.1.4.*)    # libswanted "bind ... c ..." => "... c bind ..."
               set `echo X "$libswanted "| sed -e 's/ bind\( .*\) \([cC]\) / \1 \2 bind /'`
@@ -246,11 +257,11 @@ EOM
 	lddlflags="$*"
 
 	# Insert pthreads to libswanted, before any libc or libC.
-	set `echo X "$libswanted "| sed -e 's/ \([cC]\) / pthreads \1 /'`
+	set `echo X "$libswanted "| sed -e 's/ \([cC]_r\) / pthreads \1 /'`
 	shift
 	libswanted="$*"
 	# Insert pthreads to lddlflags, before any libc or libC.
-	set `echo X "$lddlflags " | sed -e 's/ \(-l[cC]\) / -lpthreads \1 /'`
+	set `echo X "$lddlflags " | sed -e 's/ \(-l[cC]_r\) / -lpthreads \1 /'`
 	shift
 	lddlflags="$*"
 
@@ -263,9 +274,17 @@ EOCBU
 cat > UU/uselargefiles.cbu <<'EOCBU'
 case "$uselargefiles" in
 ''|$define|true|[yY]*)
+    # Configure should take care of use64bitint and use64bitall being
+    # defined before uselargefiles.cbu is consulted.
+    if test X"$use64bitint:$quadtype" = X"$define:long" -o X"$use64bitall" = Xdefine; then
+# Keep these at the left margin.
+ccflags_uselargefiles="`getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null`"
+ldflags_uselargefiles="`getconf XBS5_LP64_OFF64_LDFLAGS 2>/dev/null`"
+    else
 # Keep these at the left margin.
 ccflags_uselargefiles="`getconf XBS5_ILP32_OFFBIG_CFLAGS 2>/dev/null`"
 ldflags_uselargefiles="`getconf XBS5_ILP32_OFFBIG_LDFLAGS 2>/dev/null`"
+    fi
 	# _Somehow_ in AIX 4.3.1.0 the above getconf call manages to
 	# insert(?) *something* to $ldflags so that later (in Configure) evaluating
 	# $ldflags causes a newline after the '-b64' (the result of the getconf).
@@ -277,8 +296,13 @@ ldflags_uselargefiles="`getconf XBS5_ILP32_OFFBIG_LDFLAGS 2>/dev/null`"
 	# Therefore the line re-evaluating ldflags_uselargefiles: it seems to fix
 	# the whatever it was that AIX managed to break. --jhi
 	ldflags_uselargefiles="`echo $ldflags_uselargefiles`"
+    if test X"$use64bitint:$quadtype" = X"$define:long" -o X"$use64bitall" = Xdefine; then
+# Keep this at the left margin.
+libswanted_uselargefiles="`getconf XBS5_LP64_OFF64_LIBS 2>/dev/null|sed -e 's@^-l@@' -e 's@ -l@ @g`"
+    else
 # Keep this at the left margin.
 libswanted_uselargefiles="`getconf XBS5_ILP32_OFFBIG_LIBS 2>/dev/null|sed -e 's@^-l@@' -e 's@ -l@ @g`"
+    fi
 	case "$ccflags_uselargefiles$ldflags_uselargefiles$libs_uselargefiles" in
 	'');;
 	*) ccflags="$ccflags $ccflags_uselargefiles"
@@ -299,8 +323,14 @@ EOM
 	# Remove xlc-spefific -qflags.
         ccflags="`echo $ccflags | sed -e 's@ -q[^ ]*@ @g' -e 's@^-q[^ ]* @@g'`"
         ldflags="`echo $ldflags | sed -e 's@ -q[^ ]*@ @g' -e 's@^-q[^ ]* @@g'`"
-	echo >&4 "(using ccflags $ccflags)"
-	echo >&4 "(using ldflags $ldflags)"
+        # Move xld-spefific -bflags.
+        ccflags="`echo $ccflags | sed -e 's@ -b@ -Wl,-b@g'`"
+        ldflags="`echo ' '$ldflags | sed -e 's@ -b@ -Wl,-b@g'`"
+        lddlflags="`echo ' '$lddlflags | sed -e 's@ -b@ -Wl,-b@g'`"
+        ld='gcc'
+        echo >&4 "(using ccflags   $ccflags)"
+        echo >&4 "(using ldflags   $ldflags)"
+        echo >&4 "(using lddlflags $lddlflags)"
         ;; 
         esac
         ;;
@@ -430,31 +460,40 @@ cat > UU/uselongdouble.cbu <<'EOCBU'
 # after it has prompted the user for whether to use long doubles.
 case "$uselongdouble" in
 $define|true|[yY]*)
-        case "$cc" in
-        *gcc*) ;;
-        *) ccflags="$ccflags -qlongdouble" ;;
-        esac
-	# The explicit cc128, xlc128, xlC128 are not needed,
-	# the -qlongdouble should do the trick. --jhi
-	d_Gconvert='sprintf((b),"%.*llg",(n),(x))'
+        # -qlongdouble for cc taken out on 20010522 cause it
+        # causes more trouble than it does any good --hmb
+        d_Gconvert='sprintf((b),"%.*llg",((int)(n)),(x))'
 	;;
 esac
 EOCBU
 
-# If the C++ libraries, libC and libC_r, are available we will prefer them
-# over the vanilla libc, because the libC contain loadAndInit() and
-# terminateAndUnload() which work correctly with C++ statics while libc
-# load() and unload() do not.  See ext/DynaLoader/dl_aix.xs.
-# The C-to-C_r switch is done by usethreads.cbu, if needed.
-if test -f /lib/libC.a -a X"`$cc -v 2>&1 | grep gcc`" = X; then
-    # Cify libswanted.
-    set `echo X "$libswanted "| sed -e 's/ c / C c /'`
-    shift
-    libswanted="$*"
-    # Cify lddlflags.
-    set `echo X "$lddlflags "| sed -e 's/ -lc / -lC -lc /'`
-    shift
-    lddlflags="$*"
+if test $usenativedlopen = 'true'
+then
+    ccflags="$ccflags -DUSE_NATIVE_DLOPEN"
+    case "$cc" in
+      *gcc*) ldflags="$ldflags -Wl,-brtl" ;;
+      *)     ldflags="$ldflags -brtl" ;;
+      esac
+else
+    case `oslevel` in
+	4.2.*)	;;	# libC_r has broke gettimeofday
+        *)  # If the C++ libraries, libC and libC_r, are available we will
+	    # prefer them over the vanilla libc, because the libC contain
+	    # loadAndInit() and terminateAndUnload() which work correctly
+	    # with C++ statics while libc load() and unload() do not. See
+	    # ext/DynaLoader/dl_aix.xs. The C-to-C_r switch is done by
+	    # usethreads.cbu, if needed.
+	    if test -f /lib/libC.a -a X"`$cc -v 2>&1 | grep gcc`" = X; then
+		# Cify libswanted.
+		set `echo X "$libswanted "| sed -e 's/ c / C c /'`
+		shift
+		libswanted="$*"
+		# Cify lddlflags.
+		set `echo X "$lddlflags "| sed -e 's/ -lc / -lC -lc /'`
+		shift
+		lddlflags="$*"
+	    fi
+	esac
 fi
 
 # EOF

@@ -7,6 +7,17 @@
  *
  */
 
+/* If we have ActivePerl-like PERL_IMPLICIT_SYS then we need
+   a dTHX to get at the dispatch tables, even when we do not
+   need it for other reasons.
+   Invent a dSYS macro to abstract this out
+*/
+#ifdef PERL_IMPLICIT_SYS
+#define dSYS dTHX
+#else
+#define dSYS dNOOP
+#endif
+
 #define VOIDUSED 1
 #ifdef PERL_MICRO
 #   include "uconfig.h"
@@ -27,6 +38,8 @@
 #include "EXTERN.h"
 #define PERL_IN_PERLIO_C
 #include "perl.h"
+
+#include "XSUB.h"
 
 #undef PerlMemShared_calloc
 #define PerlMemShared_calloc(x,y) calloc(x,y)
@@ -49,7 +62,11 @@ perlsio_binmode(FILE *fp, int iotype, int mode)
     return 0;
 #  else
     dTHX;
+	#ifdef NETWARE
+	if (PerlLIO_setmode(fp, mode) != -1) {
+	#else
     if (PerlLIO_setmode(fileno(fp), mode) != -1) {
+	#endif
 #    if defined(WIN32) && defined(__BORLANDC__)
 	/* The translation mode of the stream is maintained independent
 	 * of the translation mode of the fd in the Borland RTL (heavy
@@ -101,7 +118,11 @@ PerlIO_destruct(pTHX)
 int
 PerlIO_binmode(pTHX_ PerlIO *fp, int iotype, int mode, const char *names)
 {
+#ifdef USE_SFIO
+ return 1;
+#else
  return perlsio_binmode(fp,iotype,mode);
+#endif
 }
 
 /* De-mux PerlIO_openn() into fdopen, freopen and fopen type entries */
@@ -120,7 +141,7 @@ PerlIO_openn(pTHX_ const char *layers, const char *mode, int fd, int imode, int 
       {
        fd = PerlLIO_open3(name,imode,perm);
        if (fd >= 0)
-        return PerlIO_fdopen(fd,mode+1);
+        return PerlIO_fdopen(fd,(char *)mode+1);
       }
      else if (old)
       {
@@ -134,9 +155,29 @@ PerlIO_openn(pTHX_ const char *layers, const char *mode, int fd, int imode, int 
   }
  else
   {
-   return PerlIO_fdopen(fd,mode);
+   return PerlIO_fdopen(fd,(char *)mode);
   }
  return NULL;
+}
+
+XS(XS_PerlIO__Layer__find)
+{
+ dXSARGS;
+ if (items < 2)
+  Perl_croak(aTHX_ "Usage class->find(name[,load])");
+ else
+  {
+   char *name = SvPV_nolen(ST(1));
+   ST(0) = (strEQ(name,"crlf") || strEQ(name,"raw")) ? &PL_sv_yes : &PL_sv_undef;
+   XSRETURN(1);
+  }
+}
+
+
+void
+Perl_boot_core_PerlIO(pTHX)
+{
+ newXS("PerlIO::Layer::find",XS_PerlIO__Layer__find,__FILE__);
 }
 
 #endif
@@ -195,6 +236,28 @@ PerlIO_init(void)
  sfset(sfstdout,SF_SHARE,0);
 }
 
+PerlIO *
+PerlIO_importFILE(FILE *stdio, int fl)
+{
+ int fd    = fileno(stdio);
+ PerlIO *r = PerlIO_fdopen(fd,"r+");
+ return r;
+}
+
+FILE *
+PerlIO_findFILE(PerlIO *pio)
+{
+ int fd = PerlIO_fileno(pio);
+ FILE *f = fdopen(fd,"r+");
+ PerlIO_flush(pio);
+ if (!f && errno == EINVAL)
+  f = fdopen(fd,"w");
+ if (!f && errno == EINVAL)
+  f = fdopen(fd,"r");
+ return f;
+}
+
+
 #else /* USE_SFIO */
 /*======================================================================================*/
 /* Implement all the PerlIO interface ourselves.
@@ -210,16 +273,15 @@ PerlIO_init(void)
 #include <sys/mman.h>
 #endif
 
-#include "XSUB.h"
 
 void PerlIO_debug(const char *fmt,...) __attribute__((format(__printf__,1,2)));
 
 void
 PerlIO_debug(const char *fmt,...)
 {
- dTHX;
  static int dbg = 0;
  va_list ap;
+ dSYS;
  va_start(ap,fmt);
  if (!dbg)
   {
@@ -307,8 +369,70 @@ PerlIO_cleantable(pTHX_ PerlIO **tablep)
   }
 }
 
-HV *PerlIO_layer_hv;
-AV *PerlIO_layer_av;
+PerlIO_list_t *PerlIO_known_layers;
+PerlIO_list_t *PerlIO_def_layerlist;
+
+PerlIO_list_t *
+PerlIO_list_alloc(void)
+{
+ PerlIO_list_t *list;
+ Newz('L',list,1,PerlIO_list_t);
+ list->refcnt = 1;
+ return list;
+}
+
+void
+PerlIO_list_free(PerlIO_list_t *list)
+{
+ if (list)
+  {
+   if (--list->refcnt == 0)
+    {
+     if (list->array)
+      {
+       dTHX;
+       IV i;
+       for (i=0; i < list->cur; i++)
+        {
+         if (list->array[i].arg)
+          SvREFCNT_dec(list->array[i].arg);
+        }
+       Safefree(list->array);
+      }
+     Safefree(list);
+    }
+  }
+}
+
+void
+PerlIO_list_push(PerlIO_list_t *list,PerlIO_funcs *funcs,SV *arg)
+{
+ dTHX;
+ PerlIO_pair_t *p;
+ if (list->cur >= list->len)
+  {
+   list->len += 8;
+   if (list->array)
+    Renew(list->array,list->len,PerlIO_pair_t);
+   else
+    New('l',list->array,list->len,PerlIO_pair_t);
+  }
+ p = &(list->array[list->cur++]);
+ p->funcs = funcs;
+ if ((p->arg = arg)) {
+  SvREFCNT_inc(arg);
+ }
+}
+
+
+void
+PerlIO_cleanup_layers(pTHXo_ void *data)
+{
+#if 0
+ PerlIO_known_layers = Nullhv;
+ PerlIO_def_layerlist = Nullav;
+#endif
+}
 
 void
 PerlIO_cleanup()
@@ -356,8 +480,14 @@ PerlIO_pop(pTHX_ PerlIO *f)
   {
    PerlIO_debug("PerlIO_pop f=%p %s\n",f,l->tab->name);
    if (l->tab->Popped)
-    (*l->tab->Popped)(f);
-   *f = l->next;
+    {
+     /* If popped returns non-zero do not free its layer structure
+        it has either done so itself, or it is shared and still in use
+      */
+     if ((*l->tab->Popped)(f) != 0)
+      return;
+    }
+   *f = l->next;;
    PerlMemShared_free(l);
   }
 }
@@ -365,15 +495,22 @@ PerlIO_pop(pTHX_ PerlIO *f)
 /*--------------------------------------------------------------------------------------*/
 /* XS Interface for perl code */
 
-SV *
+PerlIO_funcs *
 PerlIO_find_layer(pTHX_ const char *name, STRLEN len, int load)
 {
- SV **svp;
- SV *sv;
+ IV i;
  if ((SSize_t) len <= 0)
   len = strlen(name);
- svp  = hv_fetch(PerlIO_layer_hv,name,len,0);
- if (!svp && load && PL_subname && PerlIO_layer_av && av_len(PerlIO_layer_av)+1 >= 2)
+ for (i=0; i < PerlIO_known_layers->cur; i++)
+  {
+   PerlIO_funcs *f = PerlIO_known_layers->array[i].funcs;
+   if (memEQ(f->name,name,len))
+    {
+     PerlIO_debug("%.*s => %p\n",(int)len,name,f);
+     return f;
+    }
+  }
+ if (load && PL_subname && PerlIO_def_layerlist && PerlIO_def_layerlist->cur >= 2)
   {
    SV *pkgsv  = newSVpvn("PerlIO",6);
    SV *layer  = newSVpvn(name,len);
@@ -381,17 +518,13 @@ PerlIO_find_layer(pTHX_ const char *name, STRLEN len, int load)
    /* The two SVs are magically freed by load_module */
    Perl_load_module(aTHX_ 0, pkgsv, Nullsv, layer, Nullsv);
    LEAVE;
-   /* Say this is lvalue so we get an 'undef' if still not there */
-   svp  = hv_fetch(PerlIO_layer_hv,name,len,1);
+   return PerlIO_find_layer(aTHX_ name,len,0);
   }
- if (svp && (sv = *svp))
-  {
-   if (SvROK(sv))
-    return *svp;
-  }
- return Nullsv;
+ PerlIO_debug("Cannot find %.*s\n",(int)len,name);
+ return NULL;
 }
 
+#ifdef USE_ATTRIBUTES_FOR_PERLIO
 
 static int
 perlio_mg_set(pTHX_ SV *sv, MAGIC *mg)
@@ -401,7 +534,6 @@ perlio_mg_set(pTHX_ SV *sv, MAGIC *mg)
    IO *io = GvIOn((GV *)SvRV(sv));
    PerlIO *ifp = IoIFP(io);
    PerlIO *ofp = IoOFP(io);
-   AV *av = (AV *) mg->mg_obj;
    Perl_warn(aTHX_ "set %"SVf" %p %p %p",sv,io,ifp,ofp);
   }
  return 0;
@@ -415,7 +547,6 @@ perlio_mg_get(pTHX_ SV *sv, MAGIC *mg)
    IO *io = GvIOn((GV *)SvRV(sv));
    PerlIO *ifp = IoIFP(io);
    PerlIO *ofp = IoOFP(io);
-   AV *av = (AV *) mg->mg_obj;
    Perl_warn(aTHX_ "get %"SVf" %p %p %p",sv,io,ifp,ofp);
   }
  return 0;
@@ -439,7 +570,7 @@ MGVTBL perlio_vtab = {
  perlio_mg_get,
  perlio_mg_set,
  NULL, /* len */
- NULL,
+ perlio_mg_clear,
  perlio_mg_free
 };
 
@@ -451,9 +582,9 @@ XS(XS_io_MODIFY_SCALAR_ATTRIBUTES)
  MAGIC *mg;
  int count = 0;
  int i;
- sv_magic(sv, (SV *)av, '~', NULL, 0);
+ sv_magic(sv, (SV *)av, PERL_MAGIC_ext, NULL, 0);
  SvRMAGICAL_off(sv);
- mg = mg_find(sv,'~');
+ mg = mg_find(sv, PERL_MAGIC_ext);
  mg->mg_virtual = &perlio_vtab;
  mg_magical(sv);
  Perl_warn(aTHX_ "attrib %"SVf,sv);
@@ -476,6 +607,8 @@ XS(XS_io_MODIFY_SCALAR_ATTRIBUTES)
  XSRETURN(count);
 }
 
+#endif /* USE_ATTIBUTES_FOR_PERLIO */
+
 SV *
 PerlIO_tab_sv(pTHX_ PerlIO_funcs *tab)
 {
@@ -484,19 +617,33 @@ PerlIO_tab_sv(pTHX_ PerlIO_funcs *tab)
  return sv;
 }
 
+XS(XS_PerlIO__Layer__find)
+{
+ dXSARGS;
+ if (items < 2)
+  Perl_croak(aTHX_ "Usage class->find(name[,load])");
+ else
+  {
+   STRLEN len = 0;
+   char *name = SvPV(ST(1),len);
+   bool load  = (items > 2) ? SvTRUE(ST(2)) : 0;
+   PerlIO_funcs *layer = PerlIO_find_layer(aTHX_ name, len, load);
+   ST(0) = (layer) ? sv_2mortal(PerlIO_tab_sv(aTHX_ layer)) : &PL_sv_undef;
+   XSRETURN(1);
+  }
+}
+
 void
 PerlIO_define_layer(pTHX_ PerlIO_funcs *tab)
 {
- if (!PerlIO_layer_hv)
-  {
-   PerlIO_layer_hv = get_hv("open::layers",GV_ADD|GV_ADDMULTI);
-  }
- hv_store(PerlIO_layer_hv,tab->name,strlen(tab->name),PerlIO_tab_sv(aTHX_ tab),0);
+ if (!PerlIO_known_layers)
+  PerlIO_known_layers = PerlIO_list_alloc();
+ PerlIO_list_push(PerlIO_known_layers,tab,Nullsv);
  PerlIO_debug("define %s %p\n",tab->name,tab);
 }
 
 int
-PerlIO_parse_layers(pTHX_ AV *av, const char *names)
+PerlIO_parse_layers(pTHX_ PerlIO_list_t *av, const char *names)
 {
  if (names)
   {
@@ -560,11 +707,10 @@ PerlIO_parse_layers(pTHX_ AV *av, const char *names)
         }
        if (e > s)
         {
-         SV *layer = PerlIO_find_layer(aTHX_ s,llen,1);
+         PerlIO_funcs *layer = PerlIO_find_layer(aTHX_ s,llen,1);
          if (layer)
           {
-           av_push(av,SvREFCNT_inc(layer));
-           av_push(av,(as) ? newSVpvn(as,alen) : &PL_sv_undef);
+           PerlIO_list_push(av, layer, (as) ? newSVpvn(as,alen) : &PL_sv_undef);
           }
          else {
           Perl_warn(aTHX_ "perlio: unknown layer \"%.*s\"",(int)llen,s);
@@ -579,7 +725,7 @@ PerlIO_parse_layers(pTHX_ AV *av, const char *names)
 }
 
 void
-PerlIO_default_buffer(pTHX_ AV *av)
+PerlIO_default_buffer(pTHX_ PerlIO_list_t *av)
 {
  PerlIO_funcs *tab = &PerlIO_perlio;
  if (O_BINARY != O_TEXT)
@@ -594,45 +740,44 @@ PerlIO_default_buffer(pTHX_ AV *av)
     }
   }
  PerlIO_debug("Pushing %s\n",tab->name);
- av_push(av,SvREFCNT_inc(PerlIO_find_layer(aTHX_ tab->name,0,0)));
- av_push(av,&PL_sv_undef);
+ PerlIO_list_push(av,PerlIO_find_layer(aTHX_ tab->name,0,0),&PL_sv_undef);
 }
 
 SV *
-PerlIO_arg_fetch(pTHX_ AV *av,IV n)
+PerlIO_arg_fetch(PerlIO_list_t *av,IV n)
 {
- SV **svp = av_fetch(av,n,FALSE);
- return (svp) ? *svp : Nullsv;
+ return av->array[n].arg;
 }
 
 PerlIO_funcs *
-PerlIO_layer_fetch(pTHX_ AV *av,IV n,PerlIO_funcs *def)
+PerlIO_layer_fetch(pTHX_ PerlIO_list_t *av,IV n,PerlIO_funcs *def)
 {
- SV **svp = av_fetch(av,n,FALSE);
- SV *layer;
- if (svp && (layer = *svp) && SvROK(layer) && SvIOK((layer = SvRV(layer))))
+ if (n >= 0 && n < av->cur)
   {
-   /* PerlIO_debug("Layer %d is %s\n",n/2,tab->name); */
-   return INT2PTR(PerlIO_funcs *, SvIV(layer));
+   PerlIO_debug("Layer %"IVdf" is %s\n",n,av->array[n].funcs->name);
+   return av->array[n].funcs;
   }
  if (!def)
-  Perl_croak(aTHX_ "panic:PerlIO layer array corrupt");
+  Perl_croak(aTHX_ "panic: PerlIO layer array corrupt");
  return def;
 }
 
-AV *
+PerlIO_list_t *
 PerlIO_default_layers(pTHX)
 {
- IV len;
- if (!PerlIO_layer_av)
+ if (!PerlIO_def_layerlist)
   {
    const char *s  = (PL_tainting) ? Nullch : PerlEnv_getenv("PERLIO");
-   PerlIO_layer_av = get_av("open::layers",GV_ADD|GV_ADDMULTI);
+   PerlIO_funcs *osLayer = &PerlIO_unix;
+   PerlIO_def_layerlist  = PerlIO_list_alloc();
+   PerlIO_define_layer(aTHX_ &PerlIO_unix);
+#ifdef WIN32
+   PerlIO_define_layer(aTHX_ &PerlIO_win32);
 #if 0
-   newXS("io::MODIFY_SCALAR_ATTRIBUTES",XS_io_MODIFY_SCALAR_ATTRIBUTES,__FILE__);
+   osLayer = &PerlIO_win32;
+#endif
 #endif
    PerlIO_define_layer(aTHX_ &PerlIO_raw);
-   PerlIO_define_layer(aTHX_ &PerlIO_unix);
    PerlIO_define_layer(aTHX_ &PerlIO_perlio);
    PerlIO_define_layer(aTHX_ &PerlIO_stdio);
    PerlIO_define_layer(aTHX_ &PerlIO_crlf);
@@ -641,34 +786,38 @@ PerlIO_default_layers(pTHX)
 #endif
    PerlIO_define_layer(aTHX_ &PerlIO_utf8);
    PerlIO_define_layer(aTHX_ &PerlIO_byte);
-   av_push(PerlIO_layer_av,SvREFCNT_inc(PerlIO_find_layer(aTHX_ PerlIO_unix.name,0,0)));
-   av_push(PerlIO_layer_av,&PL_sv_undef);
+   PerlIO_list_push(PerlIO_def_layerlist,PerlIO_find_layer(aTHX_ osLayer->name,0,0),&PL_sv_undef);
    if (s)
     {
-     PerlIO_parse_layers(aTHX_ PerlIO_layer_av,s);
+     PerlIO_parse_layers(aTHX_ PerlIO_def_layerlist,s);
     }
    else
     {
-     PerlIO_default_buffer(aTHX_ PerlIO_layer_av);
+     PerlIO_default_buffer(aTHX_ PerlIO_def_layerlist);
     }
   }
- len  = av_len(PerlIO_layer_av)+1;
- if (len < 2)
+ if (PerlIO_def_layerlist->cur < 2)
   {
-   PerlIO_default_buffer(aTHX_ PerlIO_layer_av);
-   len  = av_len(PerlIO_layer_av);
+   PerlIO_default_buffer(aTHX_ PerlIO_def_layerlist);
   }
- return PerlIO_layer_av;
+ return PerlIO_def_layerlist;
 }
 
+void
+Perl_boot_core_PerlIO(pTHX)
+{
+#ifdef USE_ATTRIBUTES_FOR_PERLIO
+   newXS("io::MODIFY_SCALAR_ATTRIBUTES",XS_io_MODIFY_SCALAR_ATTRIBUTES,__FILE__);
+#endif
+   newXS("PerlIO::Layer::find",XS_PerlIO__Layer__find,__FILE__);
+}
 
 PerlIO_funcs *
 PerlIO_default_layer(pTHX_ I32 n)
 {
- AV *av = PerlIO_default_layers(aTHX);
- n *= 2;
+ PerlIO_list_t *av = PerlIO_default_layers(aTHX);
  if (n < 0)
-  n += av_len(PerlIO_layer_av)+1;
+  n += av->cur;
  return PerlIO_layer_fetch(aTHX_ av,n, &PerlIO_stdio);
 }
 
@@ -732,7 +881,6 @@ PerlIORaw_pushed(PerlIO *f, const char *mode, SV *arg)
  /* Pop back to bottom layer */
  if (f && *f)
   {
-   int code = 0;
    PerlIO_flush(f);
    while (!(PerlIOBase(f)->tab->kind & PERLIO_K_RAW))
     {
@@ -757,9 +905,9 @@ PerlIORaw_pushed(PerlIO *f, const char *mode, SV *arg)
 }
 
 int
-PerlIO_apply_layera(pTHX_ PerlIO *f, const char *mode, AV *layers, IV n)
+PerlIO_apply_layera(pTHX_ PerlIO *f, const char *mode, PerlIO_list_t *layers, IV n)
 {
- IV max = av_len(layers)+1;
+ IV max = layers->cur;
  int code = 0;
  while (n < max)
   {
@@ -772,7 +920,7 @@ PerlIO_apply_layera(pTHX_ PerlIO *f, const char *mode, AV *layers, IV n)
        break;
       }
     }
-   n += 2;
+   n++;
   }
  return code;
 }
@@ -783,13 +931,13 @@ PerlIO_apply_layers(pTHX_ PerlIO *f, const char *mode, const char *names)
  int code = 0;
  if (names)
   {
-   AV *layers = newAV();
+   PerlIO_list_t *layers = PerlIO_list_alloc();
    code = PerlIO_parse_layers(aTHX_ layers,names);
    if (code == 0)
     {
      code = PerlIO_apply_layera(aTHX_ f, mode, layers, 0);
     }
-   SvREFCNT_dec((SV *) layers);
+   PerlIO_list_free(layers);
   }
  return code;
 }
@@ -806,8 +954,7 @@ PerlIO_binmode(pTHX_ PerlIO *f, int iotype, int mode, const char *names)
  if (!names && (O_TEXT != O_BINARY && (mode & O_BINARY)))
   {
    PerlIO *top = f;
-   PerlIOl *l;
-   while (l = *top)
+   while (*top)
     {
      if (PerlIOBase(top)->tab == &PerlIO_crlf)
       {
@@ -825,22 +972,36 @@ PerlIO_binmode(pTHX_ PerlIO *f, int iotype, int mode, const char *names)
 int
 PerlIO__close(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Close)(f);
+ if (f && *f)
+   return (*PerlIOBase(f)->tab->Close)(f);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_fdupopen
 PerlIO *
 PerlIO_fdupopen(pTHX_ PerlIO *f)
 {
- char buf[8];
- int fd = PerlLIO_dup(PerlIO_fileno(f));
- PerlIO *new = PerlIO_fdopen(fd,PerlIO_modestr(f,buf));
- if (new)
+ if (f && *f)
   {
-   Off_t posn = PerlIO_tell(f);
-   PerlIO_seek(new,posn,SEEK_SET);
+   char buf[8];
+   int fd = PerlLIO_dup(PerlIO_fileno(f));
+   PerlIO *new = PerlIO_fdopen(fd,PerlIO_modestr(f,buf));
+   if (new)
+    {
+     Off_t posn = PerlIO_tell(f);
+     PerlIO_seek(new,posn,SEEK_SET);
+    }
+   return new;
   }
- return new;
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return NULL;
+  }
 }
 
 #undef PerlIO_close
@@ -864,7 +1025,13 @@ PerlIO_close(PerlIO *f)
 int
 PerlIO_fileno(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Fileno)(f);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Fileno)(f);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 static const char *
@@ -893,7 +1060,7 @@ PerlIO_context_layers(pTHX_ const char *mode)
  return type;
 }
 
-static SV *
+static PerlIO_funcs *
 PerlIO_layer_from_ref(pTHX_ SV *sv)
 {
  /* For any scalar type load the handler which is bundled with perl */
@@ -912,13 +1079,13 @@ PerlIO_layer_from_ref(pTHX_ SV *sv)
    case SVt_PVGV:
     return PerlIO_find_layer(aTHX_ "Glob",4, 0);
   }
- return Nullsv;
+ return NULL;
 }
 
-AV *
+PerlIO_list_t *
 PerlIO_resolve_layers(pTHX_ const char *layers,const char *mode,int narg, SV **args)
 {
- AV *def = PerlIO_default_layers(aTHX);
+ PerlIO_list_t *def = PerlIO_default_layers(aTHX);
  int incdef = 1;
  if (!_perlio)
   PerlIO_stdstreams(aTHX);
@@ -928,12 +1095,11 @@ PerlIO_resolve_layers(pTHX_ const char *layers,const char *mode,int narg, SV **a
    /* If it is a reference but not an object see if we have a handler for it */
    if (SvROK(arg) && !sv_isobject(arg))
     {
-     SV *handler = PerlIO_layer_from_ref(aTHX_ SvRV(arg));
+     PerlIO_funcs *handler = PerlIO_layer_from_ref(aTHX_ SvRV(arg));
      if (handler)
       {
-       def = newAV();
-       av_push(def,SvREFCNT_inc(handler));
-       av_push(def,&PL_sv_undef);
+       def = PerlIO_list_alloc();
+       PerlIO_list_push(def,handler,&PL_sv_undef);
        incdef = 0;
       }
      /* Don't fail if handler cannot be found
@@ -946,15 +1112,14 @@ PerlIO_resolve_layers(pTHX_ const char *layers,const char *mode,int narg, SV **a
   layers = PerlIO_context_layers(aTHX_ mode);
  if (layers && *layers)
   {
-   AV *av;
+   PerlIO_list_t *av;
    if (incdef)
     {
-     IV n = av_len(def)+1;
-     av = newAV();
-     while (n-- > 0)
+     IV i = def->cur;
+     av = PerlIO_list_alloc();
+     for (i=0; i < def->cur; i++)
       {
-       SV **svp = av_fetch(def,n,0);
-       av_store(av,n,(svp) ? SvREFCNT_inc(*svp) : &PL_sv_undef);
+       PerlIO_list_push(av,def->array[i].funcs,def->array[i].arg);
       }
     }
    else
@@ -967,7 +1132,7 @@ PerlIO_resolve_layers(pTHX_ const char *layers,const char *mode,int narg, SV **a
  else
   {
    if (incdef)
-    SvREFCNT_inc(def);
+    def->refcnt++;
    return def;
   }
 }
@@ -987,20 +1152,18 @@ PerlIO_openn(pTHX_ const char *layers, const char *mode, int fd, int imode, int 
   }
  else
   {
-   AV *layera;
+   PerlIO_list_t *layera = NULL;
    IV n;
-   PerlIO_funcs *tab;
+   PerlIO_funcs *tab = NULL;
    if (f && *f)
     {
      /* This is "reopen" - it is not tested as perl does not use it yet */
      PerlIOl *l = *f;
-     layera = newAV();
+     layera = PerlIO_list_alloc();
      while (l)
       {
        SV *arg = (l->tab->Getarg) ? (*l->tab->Getarg)(&l) : &PL_sv_undef;
-       av_unshift(layera,2);
-       av_store(layera,0,PerlIO_tab_sv(aTHX_ l->tab));
-       av_store(layera,1,arg);
+       PerlIO_list_push(layera,l->tab,arg);
        l = *PerlIONext(&l);
       }
     }
@@ -1008,7 +1171,8 @@ PerlIO_openn(pTHX_ const char *layers, const char *mode, int fd, int imode, int 
     {
      layera = PerlIO_resolve_layers(aTHX_ layers, mode, narg, args);
     }
-   n = av_len(layera)-1;
+   /* Start at "top" of layer stack */
+   n = layera->cur-1;
    while (n >= 0)
     {
      PerlIO_funcs *t = PerlIO_layer_fetch(aTHX_ layera,n,NULL);
@@ -1017,25 +1181,27 @@ PerlIO_openn(pTHX_ const char *layers, const char *mode, int fd, int imode, int 
        tab = t;
        break;
       }
-     n -= 2;
+     n--;
     }
    if (tab)
     {
+     /* Found that layer 'n' can do opens - call it */
      PerlIO_debug("openn(%s,'%s','%s',%d,%x,%o,%p,%d,%p)\n",
                   tab->name,layers,mode,fd,imode,perm,f,narg,args);
      f = (*tab->Open)(aTHX_ tab, layera, n, mode,fd,imode,perm,f,narg,args);
      if (f)
       {
-       if (n+2 < av_len(layera)+1)
+       if (n+1 < layera->cur)
         {
-         if (PerlIO_apply_layera(aTHX_ f, mode, layera, n+2) != 0)
+         /* More layers above the one that we used to open - apply them now */
+         if (PerlIO_apply_layera(aTHX_ f, mode, layera, n+1) != 0)
           {
            f = NULL;
           }
         }
       }
     }
-   SvREFCNT_dec(layera);
+   PerlIO_list_free(layera);
   }
  return f;
 }
@@ -1071,35 +1237,65 @@ PerlIO_reopen(const char *path, const char *mode, PerlIO *f)
 SSize_t
 PerlIO_read(PerlIO *f, void *vbuf, Size_t count)
 {
- return (*PerlIOBase(f)->tab->Read)(f,vbuf,count);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Read)(f,vbuf,count);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_unread
 SSize_t
 PerlIO_unread(PerlIO *f, const void *vbuf, Size_t count)
 {
- return (*PerlIOBase(f)->tab->Unread)(f,vbuf,count);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Unread)(f,vbuf,count);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_write
 SSize_t
 PerlIO_write(PerlIO *f, const void *vbuf, Size_t count)
 {
- return (*PerlIOBase(f)->tab->Write)(f,vbuf,count);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Write)(f,vbuf,count);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_seek
 int
 PerlIO_seek(PerlIO *f, Off_t offset, int whence)
 {
- return (*PerlIOBase(f)->tab->Seek)(f,offset,whence);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Seek)(f,offset,whence);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_tell
 Off_t
 PerlIO_tell(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Tell)(f);
+  if (f && *f)
+   return (*PerlIOBase(f)->tab->Tell)(f);
+  else
+   {
+    SETERRNO(EBADF,SS$_IVCHAN);
+    return -1;
+   }
 }
 
 #undef PerlIO_flush
@@ -1108,20 +1304,35 @@ PerlIO_flush(PerlIO *f)
 {
  if (f)
   {
-   PerlIO_funcs *tab = PerlIOBase(f)->tab;
-   if (tab && tab->Flush)
+   if (*f)
     {
-     return (*tab->Flush)(f);
+     PerlIO_funcs *tab = PerlIOBase(f)->tab;
+     if (tab && tab->Flush)
+      {
+       return (*tab->Flush)(f);
+      }
+     else
+      {
+       PerlIO_debug("Cannot flush f=%p :%s\n",f,tab->name);
+       SETERRNO(EBADF,SS$_IVCHAN);
+       return -1;
+      }
     }
    else
     {
-     PerlIO_debug("Cannot flush f=%p :%s\n",f,tab->name);
-     errno = EINVAL;
+     PerlIO_debug("Cannot flush f=%p\n",f);
+     SETERRNO(EBADF,SS$_IVCHAN);
      return -1;
     }
   }
  else
   {
+   /* Is it good API design to do flush-all on NULL,
+    * a potentially errorneous input?  Maybe some magical
+    * value (PerlIO* PERLIO_FLUSH_ALL = (PerlIO*)-1;)?
+    * Yes, stdio does similar things on fflush(NULL),
+    * but should we be bound by their design decisions?
+    * --jhi */
    PerlIO **table = &_perlio;
    int code = 0;
    while ((f = *table))
@@ -1162,28 +1373,52 @@ PerlIOBase_flush_linebuf()
 int
 PerlIO_fill(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Fill)(f);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Fill)(f);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_isutf8
 int
 PerlIO_isutf8(PerlIO *f)
 {
- return (PerlIOBase(f)->flags & PERLIO_F_UTF8) != 0;
+ if (f && *f)
+  return (PerlIOBase(f)->flags & PERLIO_F_UTF8) != 0;
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_eof
 int
 PerlIO_eof(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Eof)(f);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Eof)(f);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_error
 int
 PerlIO_error(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Error)(f);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Error)(f);
+ else
+  {
+   SETERRNO(EBADF,SS$_IVCHAN);
+   return -1;
+  }
 }
 
 #undef PerlIO_clearerr
@@ -1192,23 +1427,25 @@ PerlIO_clearerr(PerlIO *f)
 {
  if (f && *f)
   (*PerlIOBase(f)->tab->Clearerr)(f);
+ else
+  SETERRNO(EBADF,SS$_IVCHAN);
 }
 
 #undef PerlIO_setlinebuf
 void
 PerlIO_setlinebuf(PerlIO *f)
 {
- (*PerlIOBase(f)->tab->Setlinebuf)(f);
+ if (f && *f)
+  (*PerlIOBase(f)->tab->Setlinebuf)(f);
+ else
+  SETERRNO(EBADF,SS$_IVCHAN);
 }
 
 #undef PerlIO_has_base
 int
 PerlIO_has_base(PerlIO *f)
 {
- if (f && *f)
-  {
-   return (PerlIOBase(f)->tab->Get_base != NULL);
-  }
+ if (f && *f) { return (PerlIOBase(f)->tab->Get_base != NULL); }
  return 0;
 }
 
@@ -1252,14 +1489,18 @@ PerlIO_canset_cnt(PerlIO *f)
 STDCHAR *
 PerlIO_get_base(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Get_base)(f);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Get_base)(f);
+ return NULL;
 }
 
 #undef PerlIO_get_bufsiz
 int
 PerlIO_get_bufsiz(PerlIO *f)
 {
- return (*PerlIOBase(f)->tab->Get_bufsiz)(f);
+ if (f && *f)
+  return (*PerlIOBase(f)->tab->Get_bufsiz)(f);
+ return 0;
 }
 
 #undef PerlIO_get_ptr
@@ -1379,10 +1620,10 @@ PerlIO_funcs PerlIO_byte = {
 };
 
 PerlIO *
-PerlIORaw_open(pTHX_ PerlIO_funcs *self,  AV *layers, IV n,const char *mode, int fd, int imode, int perm, PerlIO *old, int narg, SV **args)
+PerlIORaw_open(pTHX_ PerlIO_funcs *self,  PerlIO_list_t *layers, IV n,const char *mode, int fd, int imode, int perm, PerlIO *old, int narg, SV **args)
 {
  PerlIO_funcs *tab = PerlIO_default_btm();
- return (*tab->Open)(aTHX_ tab,layers,n-2,mode,fd,imode,perm,old,narg,args);
+ return (*tab->Open)(aTHX_ tab,layers,n-1,mode,fd,imode,perm,old,narg,args);
 }
 
 PerlIO_funcs PerlIO_raw = {
@@ -1461,8 +1702,10 @@ IV
 PerlIOBase_pushed(PerlIO *f, const char *mode, SV *arg)
 {
  PerlIOl *l = PerlIOBase(f);
+#if 0
  const char *omode = mode;
  char temp[8];
+#endif
  PerlIO_funcs *tab = PerlIOBase(f)->tab;
  l->flags  &= ~(PERLIO_F_CANREAD|PERLIO_F_CANWRITE|
                 PERLIO_F_TRUNCATE|PERLIO_F_APPEND);
@@ -1484,7 +1727,7 @@ PerlIOBase_pushed(PerlIO *f, const char *mode, SV *arg)
       l->flags |= PERLIO_F_TRUNCATE|PERLIO_F_CANWRITE;
       break;
      default:
-      errno = EINVAL;
+      SETERRNO(EINVAL,LIB$_INVARG);
       return -1;
     }
    while (*mode)
@@ -1501,8 +1744,8 @@ PerlIOBase_pushed(PerlIO *f, const char *mode, SV *arg)
         l->flags |= PERLIO_F_CRLF;
         break;
       default:
-       errno = EINVAL;
-       return -1;
+        SETERRNO(EINVAL,LIB$_INVARG);
+        return -1;
       }
     }
   }
@@ -1532,11 +1775,12 @@ SSize_t
 PerlIOBase_unread(PerlIO *f, const void *vbuf, Size_t count)
 {
  dTHX;
+ /* Save the position as current head considers it */
  Off_t old = PerlIO_tell(f);
  SSize_t done;
  PerlIO_push(aTHX_ f,&PerlIO_pending,"r",Nullsv);
+ PerlIOSelf(f,PerlIOBuf)->posn = old;
  done = PerlIOBuf_unread(f,vbuf,count);
- PerlIOSelf(f,PerlIOBuf)->posn = old - done;
  return done;
 }
 
@@ -1551,7 +1795,9 @@ PerlIOBase_read(PerlIO *f, void *vbuf, Size_t count)
    while (count > 0)
     {
      SSize_t avail = PerlIO_get_cnt(f);
-     SSize_t take  = (count < avail) ? count : avail;
+     SSize_t take = 0;
+     if (avail > 0)
+       take = (count < avail) ? count : avail;
      if (take > 0)
       {
        STDCHAR *ptr = PerlIO_get_ptr(f);
@@ -1651,6 +1897,8 @@ int
 PerlIOUnix_oflags(const char *mode)
 {
  int oflags = -1;
+ if (*mode == 'I' || *mode == '#')
+  mode++;
  switch(*mode)
   {
    case 'r':
@@ -1700,7 +1948,7 @@ PerlIOUnix_oflags(const char *mode)
  oflags |= O_BINARY;
  if (*mode || oflags == -1)
   {
-   errno = EINVAL;
+   SETERRNO(EINVAL,LIB$_INVARG);
    oflags = -1;
   }
  return oflags;
@@ -1727,7 +1975,7 @@ PerlIOUnix_pushed(PerlIO *f, const char *mode, SV *arg)
 }
 
 PerlIO *
-PerlIOUnix_open(pTHX_ PerlIO_funcs *self, AV *layers, IV n, const char *mode, int fd, int imode, int perm, PerlIO *f, int narg, SV **args)
+PerlIOUnix_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const char *mode, int fd, int imode, int perm, PerlIO *f, int narg, SV **args)
 {
  if (f)
   {
@@ -1819,7 +2067,7 @@ PerlIOUnix_write(PerlIO *f, const void *vbuf, Size_t count)
 IV
 PerlIOUnix_seek(PerlIO *f, Off_t offset, int whence)
 {
- dTHX;
+ dSYS;
  Off_t new = PerlLIO_lseek(PerlIOSelf(f,PerlIOUnix)->fd,offset,whence);
  PerlIOBase(f)->flags &= ~PERLIO_F_EOF;
  return (new == (Off_t) -1) ? -1 : 0;
@@ -1828,8 +2076,7 @@ PerlIOUnix_seek(PerlIO *f, Off_t offset, int whence)
 Off_t
 PerlIOUnix_tell(PerlIO *f)
 {
- dTHX;
- Off_t posn = PerlLIO_lseek(PerlIOSelf(f,PerlIOUnix)->fd,0,SEEK_CUR);
+ dSYS;
  return PerlLIO_lseek(PerlIOSelf(f,PerlIOUnix)->fd,0,SEEK_CUR);
 }
 
@@ -1895,7 +2142,7 @@ typedef struct
 IV
 PerlIOStdio_fileno(PerlIO *f)
 {
- dTHX;
+ dSYS;
  return PerlSIO_fileno(PerlIOSelf(f,PerlIOStdio)->stdio);
 }
 
@@ -1919,9 +2166,9 @@ PerlIOStdio_mode(const char *mode,char *tmode)
 IV
 PerlIOStdio_pushed(PerlIO *f, const char *mode, SV *arg)
 {
- dTHX;
  if (*PerlIONext(f))
   {
+   dSYS;
    PerlIOStdio *s = PerlIOSelf(f,PerlIOStdio);
    char tmode[8];
    FILE *stdio = PerlSIO_fdopen(PerlIO_fileno(PerlIONext(f)),mode = PerlIOStdio_mode(mode,tmode));
@@ -1948,7 +2195,7 @@ PerlIO_importFILE(FILE *stdio, int fl)
 }
 
 PerlIO *
-PerlIOStdio_open(pTHX_ PerlIO_funcs *self, AV *layers, IV n, const char *mode, int fd, int imode, int perm, PerlIO *f, int narg, SV **args)
+PerlIOStdio_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const char *mode, int fd, int imode, int perm, PerlIO *f, int narg, SV **args)
 {
  char tmode[8];
  if (f)
@@ -2026,7 +2273,7 @@ PerlIOStdio_open(pTHX_ PerlIO_funcs *self, AV *layers, IV n, const char *mode, i
 SSize_t
 PerlIOStdio_read(PerlIO *f, void *vbuf, Size_t count)
 {
- dTHX;
+ dSYS;
  FILE *s = PerlIOSelf(f,PerlIOStdio)->stdio;
  SSize_t got = 0;
  if (count == 1)
@@ -2050,7 +2297,7 @@ PerlIOStdio_read(PerlIO *f, void *vbuf, Size_t count)
 SSize_t
 PerlIOStdio_unread(PerlIO *f, const void *vbuf, Size_t count)
 {
- dTHX;
+ dSYS;
  FILE *s = PerlIOSelf(f,PerlIOStdio)->stdio;
  STDCHAR *buf = ((STDCHAR *)vbuf)+count-1;
  SSize_t unread = 0;
@@ -2068,14 +2315,14 @@ PerlIOStdio_unread(PerlIO *f, const void *vbuf, Size_t count)
 SSize_t
 PerlIOStdio_write(PerlIO *f, const void *vbuf, Size_t count)
 {
- dTHX;
+ dSYS;
  return PerlSIO_fwrite(vbuf,1,count,PerlIOSelf(f,PerlIOStdio)->stdio);
 }
 
 IV
 PerlIOStdio_seek(PerlIO *f, Off_t offset, int whence)
 {
- dTHX;
+ dSYS;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  return PerlSIO_fseek(stdio,offset,whence);
 }
@@ -2083,7 +2330,7 @@ PerlIOStdio_seek(PerlIO *f, Off_t offset, int whence)
 Off_t
 PerlIOStdio_tell(PerlIO *f)
 {
- dTHX;
+ dSYS;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  return PerlSIO_ftell(stdio);
 }
@@ -2091,14 +2338,15 @@ PerlIOStdio_tell(PerlIO *f)
 IV
 PerlIOStdio_close(PerlIO *f)
 {
- dTHX;
-#ifdef HAS_SOCKS5_INIT
- int optval, optlen = sizeof(int);
+ dSYS;
+#ifdef SOCKS5_VERSION_NAME
+ int optval;
+ Sock_size_t optlen = sizeof(int);
 #endif
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  return(
-#ifdef HAS_SOCKS5_INIT
-   (getsockopt(PerlIO_fileno(f), SOL_SOCKET, SO_TYPE, (char *)&optval, &optlen) < 0) ?
+#ifdef SOCKS5_VERSION_NAME
+   (getsockopt(PerlIO_fileno(f), SOL_SOCKET, SO_TYPE, (void *)&optval, &optlen) < 0) ?
        PerlSIO_fclose(stdio) :
        close(PerlIO_fileno(f))
 #else
@@ -2111,7 +2359,7 @@ PerlIOStdio_close(PerlIO *f)
 IV
 PerlIOStdio_flush(PerlIO *f)
 {
- dTHX;
+ dSYS;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  if (PerlIOBase(f)->flags & PERLIO_F_CANWRITE)
   {
@@ -2137,7 +2385,7 @@ PerlIOStdio_flush(PerlIO *f)
 IV
 PerlIOStdio_fill(PerlIO *f)
 {
- dTHX;
+ dSYS;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  int c;
  /* fflush()ing read-only streams can cause trouble on some stdio-s */
@@ -2155,28 +2403,28 @@ PerlIOStdio_fill(PerlIO *f)
 IV
 PerlIOStdio_eof(PerlIO *f)
 {
- dTHX;
+ dSYS;
  return PerlSIO_feof(PerlIOSelf(f,PerlIOStdio)->stdio);
 }
 
 IV
 PerlIOStdio_error(PerlIO *f)
 {
- dTHX;
+ dSYS;
  return PerlSIO_ferror(PerlIOSelf(f,PerlIOStdio)->stdio);
 }
 
 void
 PerlIOStdio_clearerr(PerlIO *f)
 {
- dTHX;
+ dSYS;
  PerlSIO_clearerr(PerlIOSelf(f,PerlIOStdio)->stdio);
 }
 
 void
 PerlIOStdio_setlinebuf(PerlIO *f)
 {
- dTHX;
+ dSYS;
 #ifdef HAS_SETLINEBUF
  PerlSIO_setlinebuf(PerlIOSelf(f,PerlIOStdio)->stdio);
 #else
@@ -2188,7 +2436,7 @@ PerlIOStdio_setlinebuf(PerlIO *f)
 STDCHAR *
 PerlIOStdio_get_base(PerlIO *f)
 {
- dTHX;
+ dSYS;
  FILE *stdio  = PerlIOSelf(f,PerlIOStdio)->stdio;
  return PerlSIO_get_base(stdio);
 }
@@ -2196,7 +2444,7 @@ PerlIOStdio_get_base(PerlIO *f)
 Size_t
 PerlIOStdio_get_bufsiz(PerlIO *f)
 {
- dTHX;
+ dSYS;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  return PerlSIO_get_bufsiz(stdio);
 }
@@ -2206,7 +2454,7 @@ PerlIOStdio_get_bufsiz(PerlIO *f)
 STDCHAR *
 PerlIOStdio_get_ptr(PerlIO *f)
 {
- dTHX;
+ dSYS;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  return PerlSIO_get_ptr(stdio);
 }
@@ -2214,7 +2462,7 @@ PerlIOStdio_get_ptr(PerlIO *f)
 SSize_t
 PerlIOStdio_get_cnt(PerlIO *f)
 {
- dTHX;
+ dSYS;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
  return PerlSIO_get_cnt(stdio);
 }
@@ -2222,8 +2470,8 @@ PerlIOStdio_get_cnt(PerlIO *f)
 void
 PerlIOStdio_set_ptrcnt(PerlIO *f,STDCHAR *ptr,SSize_t cnt)
 {
- dTHX;
  FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
+ dSYS;
  if (ptr != NULL)
   {
 #ifdef STDIO_PTR_LVALUE
@@ -2345,10 +2593,10 @@ PerlIO_releaseFILE(PerlIO *p, FILE *f)
 IV
 PerlIOBuf_pushed(PerlIO *f, const char *mode, SV *arg)
 {
+ dSYS;
  PerlIOBuf *b = PerlIOSelf(f,PerlIOBuf);
  int fd  = PerlIO_fileno(f);
  Off_t posn;
- dTHX;
  if (fd >= 0 && PerlLIO_isatty(fd))
   {
    PerlIOBase(f)->flags |= PERLIO_F_LINEBUF|PERLIO_F_TTY;
@@ -2362,13 +2610,13 @@ PerlIOBuf_pushed(PerlIO *f, const char *mode, SV *arg)
 }
 
 PerlIO *
-PerlIOBuf_open(pTHX_ PerlIO_funcs *self, AV *layers, IV n, const char *mode, int fd, int imode, int perm, PerlIO *f, int narg, SV **args)
+PerlIOBuf_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const char *mode, int fd, int imode, int perm, PerlIO *f, int narg, SV **args)
 {
  if (f)
   {
    PerlIO *next = PerlIONext(f);
-   PerlIO_funcs *tab = PerlIO_layer_fetch(aTHX_ layers, n-2, PerlIOBase(next)->tab);
-   next = (*tab->Open)(aTHX_ tab, layers, n-2, mode,fd,imode,perm,next,narg,args);
+   PerlIO_funcs *tab = PerlIO_layer_fetch(aTHX_ layers, n-1, PerlIOBase(next)->tab);
+   next = (*tab->Open)(aTHX_ tab, layers, n-1, mode,fd,imode,perm,next,narg,args);
    if (!next || (*PerlIOBase(f)->tab->Pushed)(f,mode,PerlIOArg) != 0)
     {
      return NULL;
@@ -2376,17 +2624,17 @@ PerlIOBuf_open(pTHX_ PerlIO_funcs *self, AV *layers, IV n, const char *mode, int
   }
  else
   {
-   PerlIO_funcs *tab = PerlIO_layer_fetch(aTHX_ layers, n-2, PerlIO_default_btm());
+   PerlIO_funcs *tab = PerlIO_layer_fetch(aTHX_ layers, n-1, PerlIO_default_btm());
    int init = 0;
    if (*mode == 'I')
     {
      init = 1;
-     mode++;
+     /* mode++; */
     }
-   f = (*tab->Open)(aTHX_ tab, layers, n-2, mode,fd,imode,perm,NULL,narg,args);
+   f = (*tab->Open)(aTHX_ tab, layers, n-1, mode,fd,imode,perm,NULL,narg,args);
    if (f)
     {
-     PerlIOBuf *b = PerlIOSelf(PerlIO_push(aTHX_ f,self,mode,PerlIOArg),PerlIOBuf);
+     PerlIO_push(aTHX_ f,self,mode,PerlIOArg);
      fd = PerlIO_fileno(f);
 #if O_BINARY != O_TEXT
      /* do something about failing setmode()? --jhi */
@@ -2551,22 +2799,31 @@ PerlIOBuf_unread(PerlIO *f, const void *vbuf, Size_t count)
   {
    if (PerlIOBase(f)->flags & PERLIO_F_RDBUF)
     {
+     /* Buffer is already a read buffer, we can overwrite any chars
+        which have been read back to buffer start
+      */
      avail = (b->ptr - b->buf);
     }
    else
     {
-     avail = b->bufsiz;
+     /* Buffer is idle, set it up so whole buffer is available for unread */
+     avail  = b->bufsiz;
      b->end = b->buf + avail;
      b->ptr = b->end;
      PerlIOBase(f)->flags |= PERLIO_F_RDBUF;
+     /* Buffer extends _back_ from where we are now */
      b->posn -= b->bufsiz;
     }
    if (avail > (SSize_t) count)
-    avail = count;
+    {
+     /* If we have space for more than count, just move count */
+     avail = count;
+    }
    if (avail > 0)
     {
      b->ptr -= avail;
      buf    -= avail;
+     /* In simple stdio-like ungetc() case chars will be already there */
      if (buf != b->ptr)
       {
        Copy(buf,b->ptr,avail,STDCHAR);
@@ -2651,16 +2908,19 @@ Off_t
 PerlIOBuf_tell(PerlIO *f)
 {
  PerlIOBuf *b = PerlIOSelf(f,PerlIOBuf);
+ /* b->posn is file position where b->buf was read, or will be written */
  Off_t posn = b->posn;
  if (b->buf)
-  posn += (b->ptr - b->buf);
+  {
+   /* If buffer is valid adjust position by amount in buffer */
+   posn += (b->ptr - b->buf);
+  }
  return posn;
 }
 
 IV
 PerlIOBuf_close(PerlIO *f)
 {
- dTHX;
  IV code = PerlIOBase_close(f);
  PerlIOBuf *b = PerlIOSelf(f,PerlIOBuf);
  if (b->buf && b->buf != (STDCHAR *) &b->oneword)
@@ -2699,7 +2959,6 @@ PerlIOBuf_get_base(PerlIO *f)
  PerlIOBuf *b = PerlIOSelf(f,PerlIOBuf);
  if (!b->buf)
   {
-   dTHX;
    if (!b->bufsiz)
     b->bufsiz = 4096;
    b->buf = PerlMemShared_calloc(b->bufsiz,sizeof(STDCHAR));
@@ -3013,7 +3272,6 @@ PerlIOCrlf_get_cnt(PerlIO *f)
          else
           {
            int code;
-           dTHX;
            b->ptr++;               /* say we have read it as far as flush() is concerned */
            b->buf++;               /* Leave space an front of buffer */
            b->bufsiz--;            /* Buffer is thus smaller */
@@ -3207,7 +3465,6 @@ PerlIOMmap_map(PerlIO *f)
 {
  dTHX;
  PerlIOMmap *m = PerlIOSelf(f,PerlIOMmap);
- PerlIOBuf  *b = &m->base;
  IV flags = PerlIOBase(f)->flags;
  IV code  = 0;
  if (m->len)
@@ -3498,6 +3755,10 @@ PerlIO_funcs PerlIO_mmap = {
 void
 PerlIO_init(void)
 {
+ dTHX;
+#ifndef WIN32
+ call_atexit(PerlIO_cleanup_layers, NULL);
+#endif
  if (!_perlio)
   {
 #ifndef WIN32
@@ -3549,8 +3810,14 @@ char *
 PerlIO_getname(PerlIO *f, char *buf)
 {
  dTHX;
+ char *name = NULL;
+#ifdef VMS
+ FILE *stdio = PerlIOSelf(f,PerlIOStdio)->stdio;
+ if (stdio) name = fgetname(stdio, buf);
+#else
  Perl_croak(aTHX_ "Don't know how to get file name");
- return NULL;
+#endif
+ return name;
 }
 
 
@@ -3713,7 +3980,7 @@ PerlIO_setpos(PerlIO *f, SV *pos)
    if (f && len == sizeof(Off_t))
     return PerlIO_seek(f,*posn,SEEK_SET);
   }
- errno = EINVAL;
+ SETERRNO(EINVAL,SS$_IVCHAN);
  return -1;
 }
 #else
@@ -3735,7 +4002,7 @@ PerlIO_setpos(PerlIO *f, SV *pos)
 #endif
     }
   }
- errno = EINVAL;
+ SETERRNO(EINVAL,SS$_IVCHAN);
  return -1;
 }
 #endif
@@ -3817,5 +4084,9 @@ PerlIO_sprintf(char *s, int n, const char *fmt,...)
  return result;
 }
 #endif
+
+
+
+
 
 

@@ -42,7 +42,17 @@ main(int argc, char **argv, char **env)
 #undef PERLVARIC
 #endif
 
+    /* if user wants control of gprof profiling off by default */
+    /* noop unless Configure is given -Accflags=-DPERL_GPROF_CONTROL */
+    PERL_GPROF_MONCONTROL(0);
+
     PERL_SYS_INIT3(&argc,&argv,&env);
+
+#ifdef USE_ITHREADS
+    PTHREAD_ATFORK(Perl_atfork_lock,
+                   Perl_atfork_unlock,
+                   Perl_atfork_unlock);
+#endif
 
     if (!PL_do_undump) {
 	my_perl = perl_alloc();

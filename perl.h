@@ -225,8 +225,20 @@ struct perl_thread;
 #  define CALLPROTECT CALL_FPTR(PL_protect)
 #endif
 
+#ifdef HASATTRIBUTE
+#  define PERL_UNUSED_DECL __attribute__((unused))
+#else
+#  define PERL_UNUSED_DECL
+#endif
+
+/* gcc -Wall:
+ * for silencing unused variables that are actually used most of the time,
+ * but we cannot quite get rid of, such `ax' in PPCODE+noargs xsubs
+ */
+#define PERL_UNUSED_VAR(var) if (0) var = var
+
 #define NOOP (void)0
-#define dNOOP extern int Perl___notused
+#define dNOOP extern int Perl___notused PERL_UNUSED_DECL
 
 #ifndef pTHX
 #  define pTHX		void
@@ -256,6 +268,15 @@ struct perl_thread;
 #  define aTHXx		my_perl
 #  define aTHXx_	aTHXx,
 #  define dTHXx		dTHX
+#endif
+
+/* Under PERL_IMPLICIT_SYS (used in Windows for fork emulation)
+ * PerlIO_foo() expands to PL_StdIO->pFOO(PL_StdIO, ...).
+ * dTHXs is therefore needed for all functions using PerlIO_foo(). */
+#ifdef PERL_IMPLICIT_SYS
+#  define dTHXs		dTHX
+#else
+#  define dTHXs		dNOOP
 #endif
 
 #undef START_EXTERN_C
@@ -339,15 +360,15 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
  */
 
 /* define this once if either system, instead of cluttering up the src */
-#if defined(MSDOS) || defined(atarist) || defined(WIN32)
+#if defined(MSDOS) || defined(atarist) || defined(WIN32) || defined(NETWARE)
 #define DOSISH 1
 #endif
 
-#if defined(__STDC__) || defined(vax11c) || defined(_AIX) || defined(__stdc__) || defined(__cplusplus) || defined( EPOC)
+#if defined(__STDC__) || defined(vax11c) || defined(_AIX) || defined(__stdc__) || defined(__cplusplus) || defined( EPOC) || defined(NETWARE)
 # define STANDARD_C 1
 #endif
 
-#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(OS2) || defined(__DGUX) || defined( EPOC) || defined(__QNX__)
+#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(OS2) || defined(__DGUX) || defined( EPOC) || defined(__QNX__) || defined(NETWARE)
 # define DONT_DECLARE_STD 1
 #endif
 
@@ -504,6 +525,14 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 /* If this causes problems, set i_unistd=undef in the hint file.  */
 #ifdef I_UNISTD
 #   include <unistd.h>
+#endif
+
+#if defined(HAS_SYSCALL) && !defined(HAS_SYSCALL_PROTO)
+int syscall(int, ...);
+#endif
+
+#if defined(HAS_USLEEP) && !defined(HAS_USLEEP_PROTO)
+int usleep(unsigned int);
 #endif
 
 #ifdef PERL_MICRO /* Last chance to export Perl_my_swap */
@@ -748,6 +777,9 @@ typedef struct perl_mstats perl_mstats_t;
 #   endif
 # endif
 # ifdef I_NETDB
+#  ifdef NETWARE
+#   include<stdio.h>
+#  endif
 #  include <netdb.h>
 # endif
 # ifndef ENOTSOCK
@@ -755,6 +787,12 @@ typedef struct perl_mstats perl_mstats_t;
 #   include <net/errno.h>
 #  endif
 # endif
+#endif
+
+/* sockatmark() is so new (2001) that many places might have it hidden
+ * behind some -D_BLAH_BLAH_SOURCE guard. */
+#if defined(HAS_SOCKATMARK) && !defined(HAS_SOCKATMARK_PROTO)
+int sockatmark(int);
 #endif
 
 #ifdef SETERRNO
@@ -1028,6 +1066,17 @@ typedef struct perl_mstats perl_mstats_t;
 #undef UV
 #endif
 
+#ifdef	SPRINTF_E_BUG
+#  define sprintf UTS_sprintf_wrap
+#endif
+
+/* Configure gets this right but the UTS compiler gets it wrong.
+   -- Hal Morris <hom00@utsglobal.com> */
+#ifdef UTS
+#  undef  UVTYPE
+#  define UVTYPE unsigned
+#endif
+
 /*
     The IV type is supposed to be long enough to hold any integral
     value or a pointer.
@@ -1084,6 +1133,11 @@ typedef UVTYPE UV;
 #    undef UV_IS_QUAD
 #    undef HAS_QUAD
 #  endif
+#endif
+
+#if defined(uts) || defined(UTS)
+#	undef UV_MAX
+#	define UV_MAX (4294967295u)
 #endif
 
 #define IV_DIG (BIT_DIGITS(IVSIZE * 8))
@@ -1285,24 +1339,8 @@ typedef NVTYPE NV;
 #   endif
 #endif
 
-#if !defined(Perl_atof) && defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
-#   if !defined(Perl_atof) && defined(HAS_STRTOLD)
-#       define Perl_atof(s) (NV)strtold(s, (char**)NULL)
-#   endif
-#   if !defined(Perl_atof) && defined(HAS_ATOLF)
-#       define Perl_atof (NV)atolf
-#   endif
-#   if !defined(Perl_atof) && defined(PERL_SCNfldbl)
-#       define Perl_atof PERL_SCNfldbl
-#       define Perl_atof2(s,f) sscanf((s), "%"PERL_SCNfldbl, &(f))
-#   endif
-#endif
-#if !defined(Perl_atof)
-#   define Perl_atof atof /* we assume atof being available anywhere */
-#endif
-#if !defined(Perl_atof2)
-#   define Perl_atof2(s,f) ((f) = (NV)Perl_atof(s))
-#endif
+#define Perl_atof(s) Perl_my_atof(s)
+#define Perl_atof2(s, np) Perl_my_atof2(s, np)
 
 /* Previously these definitions used hardcoded figures.
  * It is hoped these formula are more portable, although
@@ -1704,6 +1742,22 @@ typedef struct ptr_tbl PTR_TBL_t;
 #   define NEED_ENVIRON_DUP_FOR_MODIFY
 #endif
 
+/*
+ * initialise to avoid floating-point exceptions from overflow, etc
+ */
+#ifndef PERL_FPU_INIT
+#  ifdef HAS_FPSETMASK
+#    if HAS_FLOATINGPOINT_H
+#      include <floatingpoint.h>
+#    endif
+#    define PERL_FPU_INIT fpsetmask(0);
+#  elif PERL_IGNORE_FPUSIG
+#    define PERL_FPU_INIT signal(PERL_IGNORE_FPUSIG, SIG_IGN);
+#  else
+#    define PERL_FPU_INIT
+#  endif
+#endif
+
 #ifndef PERL_SYS_INIT3
 #  define PERL_SYS_INIT3(argvp,argcp,envp) PERL_SYS_INIT(argvp,argcp)
 #endif
@@ -1743,6 +1797,9 @@ typedef struct ptr_tbl PTR_TBL_t;
     * atomic.h everywhere */
 #  define EMULATE_ATOMIC_REFCOUNTS
 #  endif
+#  ifdef NETWARE
+#   include <nw5thread.h>
+#  else
 #  ifdef FAKE_THREADS
 #    include "fakethr.h"
 #  else
@@ -1773,10 +1830,15 @@ typedef pthread_key_t	perl_key;
 #      endif /* OS2 */
 #    endif /* WIN32 */
 #  endif /* FAKE_THREADS */
+#endif	/* NETWARE */
 #endif /* USE_THREADS || USE_ITHREADS */
 
 #ifdef WIN32
 #  include "win32.h"
+#endif
+
+#ifdef NETWARE
+#  include "netware.h"
 #endif
 
 #ifdef VMS
@@ -1842,10 +1904,12 @@ typedef pthread_key_t	perl_key;
 #endif
 
 /* This defines a way to flush all output buffers.  This may be a
- * performance issue, so we allow people to disable it.
+ * performance issue, so we allow people to disable it.  Also, if
+ * we are using stdio, there are broken implementations of fflush(NULL)
+ * out there, Solaris being the most prominent.
  */
 #ifndef PERL_FLUSHALL_FOR_CHILD
-# if defined(FFLUSH_NULL) || defined(USE_SFIO)
+# if defined(USE_PERLIO) || defined(FFLUSH_NULL) || defined(USE_SFIO)
 #  define PERL_FLUSHALL_FOR_CHILD	PerlIO_flush((PerlIO*)NULL)
 # else
 #  ifdef FFLUSH_ALL
@@ -2084,25 +2148,52 @@ struct ptr_tbl {
 	/* otherwise default to functions in util.c */
 #endif
 
-#ifdef CASTNEGFLOAT
-#define U_S(what) ((U16)(what))
-#define U_I(what) ((unsigned int)(what))
-#define U_L(what) ((U32)(what))
-#else
-#define U_S(what) ((U16)cast_ulong((NV)(what)))
-#define U_I(what) ((unsigned int)cast_ulong((NV)(what)))
-#define U_L(what) (cast_ulong((NV)(what)))
-#endif
+/* *MAX Plus 1. A floating point value.
+   Hopefully expressed in a way that dodgy floating point can't mess up.
+   >> 2 rather than 1, so that value is safely less than I32_MAX after 1
+   is added to it
+   May find that some broken compiler will want the value cast to I32.
+   [after the shift, as signed >> may not be as secure as unsigned >>]
+*/
+#define I32_MAX_P1 (2.0 * (1 + (((U32)I32_MAX) >> 1)))
+#define U32_MAX_P1 (4.0 * (1 + ((U32_MAX) >> 2)))
+/* For compilers that can't correctly cast NVs over 0x7FFFFFFF (or
+   0x7FFFFFFFFFFFFFFF) to an unsigned integer. In the future, sizeof(UV)
+   may be greater than sizeof(IV), so don't assume that half max UV is max IV.
+*/
+#define U32_MAX_P1_HALF (2.0 * (1 + ((U32_MAX) >> 2)))
 
-#ifdef CASTI32
-#define I_32(what) ((I32)(what))
-#define I_V(what) ((IV)(what))
-#define U_V(what) ((UV)(what))
-#else
+#define UV_MAX_P1 (4.0 * (1 + ((UV_MAX) >> 2)))
+#define IV_MAX_P1 (2.0 * (1 + (((UV)IV_MAX) >> 1)))
+#define UV_MAX_P1_HALF (2.0 * (1 + ((UV_MAX) >> 2)))
+
+/* This may look like unnecessary jumping through hoops, but converting
+   out of range floating point values to integers *is* undefined behaviour,
+   and it is starting to bite.
+*/
+#ifndef CAST_INLINE
 #define I_32(what) (cast_i32((NV)(what)))
+#define U_32(what) (cast_ulong((NV)(what)))
 #define I_V(what) (cast_iv((NV)(what)))
 #define U_V(what) (cast_uv((NV)(what)))
+#else
+#define I_32(n) ((n) < I32_MAX_P1 ? ((n) < I32_MIN ? I32_MIN : (I32) (n)) \
+                  : ((n) < U32_MAX_P1 ? (I32)(U32) (n) \
+                     : ((n) > 0 ? (I32) U32_MAX : 0 /* NaN */)))
+#define U_32(n) ((n) < 0.0 ? ((n) < I32_MIN ? (UV) I32_MIN : (U32)(I32) (n)) \
+                  : ((n) < U32_MAX_P1 ? (U32) (n) \
+                     : ((n) > 0 ? U32_MAX : 0 /* NaN */)))
+#define I_V(n) ((n) < IV_MAX_P1 ? ((n) < IV_MIN ? IV_MIN : (IV) (n)) \
+                  : ((n) < UV_MAX_P1 ? (IV)(UV) (n) \
+                     : ((n) > 0 ? (IV)UV_MAX : 0 /* NaN */)))
+#define U_V(n) ((n) < 0.0 ? ((n) < IV_MIN ? (UV) IV_MIN : (UV)(IV) (n)) \
+                  : ((n) < UV_MAX_P1 ? (UV) (n) \
+                     : ((n) > 0 ? UV_MAX : 0 /* NaN */)))
 #endif
+
+#define U_S(what) ((U16)U_32(what))
+#define U_I(what) ((unsigned int)U_32(what))
+#define U_L(what) U_32(what)
 
 /* These do not care about the fractional part, only about the range. */
 #define NV_WITHIN_IV(nv) (I_V(nv) >= IV_MIN && I_V(nv) <= IV_MAX)
@@ -2208,23 +2299,28 @@ Gid_t getegid (void);
     } STMT_END
 #  endif
 
-#  define DEBUG_f(a) if (DEBUG_f_TEST) a
-#  define DEBUG_r(a) if (DEBUG_r_TEST) a
-#  define DEBUG_x(a) if (DEBUG_x_TEST) a
-#  define DEBUG_u(a) if (DEBUG_u_TEST) a
-#  define DEBUG_L(a) if (DEBUG_L_TEST) a
-#  define DEBUG_H(a) if (DEBUG_H_TEST) a
-#  define DEBUG_X(a) if (DEBUG_X_TEST) a
-#  define DEBUG_D(a) if (DEBUG_D_TEST) a
+#  define DEBUG__(t, a) \
+	STMT_START { \
+		if (t) STMT_START {a;} STMT_END; \
+	} STMT_END
+
+#  define DEBUG_f(a) DEBUG__(DEBUG_f_TEST, a)
+#  define DEBUG_r(a) DEBUG__(DEBUG_r_TEST, a)
+#  define DEBUG_x(a) DEBUG__(DEBUG_x_TEST, a)
+#  define DEBUG_u(a) DEBUG__(DEBUG_u_TEST, a)
+#  define DEBUG_L(a) DEBUG__(DEBUG_L_TEST, a)
+#  define DEBUG_H(a) DEBUG__(DEBUG_H_TEST, a)
+#  define DEBUG_X(a) DEBUG__(DEBUG_X_TEST, a)
+#  define DEBUG_D(a) DEBUG__(DEBUG_D_TEST, a)
 
 #  ifdef USE_THREADS
-#    define DEBUG_S(a) if (DEBUG_S_TEST) a
+#    define DEBUG_S(a) DEBUG__(DEBUG_S_TEST, a)
 #  else
 #    define DEBUG_S(a)
 #  endif
 
-#  define DEBUG_T(a) if (DEBUG_T_TEST) a
-#  define DEBUG_R(a) if (DEBUG_R_TEST) a
+#  define DEBUG_T(a) DEBUG__(DEBUG_T_TEST, a)
+#  define DEBUG_R(a) DEBUG__(DEBUG_R_TEST, a)
 
 #else /* DEBUGGING */
 
@@ -2272,6 +2368,52 @@ Gid_t getegid (void);
 #endif /* DEBUGGING */
 
 
+/* These constants should be used in preference to to raw characters
+ * when using magic. Note that some perl guts still assume
+ * certain character properties of these constants, namely that
+ * isUPPER() and toLOWER() may do useful mappings.
+ *
+ * Update the magic_names table in dump.c when adding/amending these
+ */
+
+#define PERL_MAGIC_sv		  '\0' /* Special scalar variable */
+#define PERL_MAGIC_overload	  'A' /* %OVERLOAD hash */
+#define PERL_MAGIC_overload_elem  'a' /* %OVERLOAD hash element */
+#define PERL_MAGIC_overload_table 'c' /* Holds overload table (AMT) on stash */
+#define PERL_MAGIC_bm		  'B' /* Boyer-Moore (fast string search) */
+#define PERL_MAGIC_regdata	  'D' /* Regex match position data
+					(@+ and @- vars) */
+#define PERL_MAGIC_regdatum	  'd' /* Regex match position data element */
+#define PERL_MAGIC_env		  'E' /* %ENV hash */
+#define PERL_MAGIC_envelem	  'e' /* %ENV hash element */
+#define PERL_MAGIC_fm		  'f' /* Formline ('compiled' format) */
+#define PERL_MAGIC_regex_global	  'g' /* m//g target / study()ed string */
+#define PERL_MAGIC_isa		  'I' /* @ISA array */
+#define PERL_MAGIC_isaelem	  'i' /* @ISA array element */
+#define PERL_MAGIC_nkeys	  'k' /* scalar(keys()) lvalue */
+#define PERL_MAGIC_dbfile	  'L' /* Debugger %_<filename */
+#define PERL_MAGIC_dbline	  'l' /* Debugger %_<filename element */
+#define PERL_MAGIC_mutex	  'm' /* ??? */
+#define PERL_MAGIC_collxfrm	  'o' /* Locale transformation */
+#define PERL_MAGIC_tied		  'P' /* Tied array or hash */
+#define PERL_MAGIC_tiedelem	  'p' /* Tied array or hash element */
+#define PERL_MAGIC_tiedscalar	  'q' /* Tied scalar or handle */
+#define PERL_MAGIC_qr		  'r' /* precompiled qr// regex */
+#define PERL_MAGIC_sig		  'S' /* %SIG hash */
+#define PERL_MAGIC_sigelem	  's' /* %SIG hash element */
+#define PERL_MAGIC_taint	  't' /* Taintedness */
+#define PERL_MAGIC_uvar		  'U' /* Available for use by extensions */
+#define PERL_MAGIC_vec		  'v' /* vec() lvalue */
+#define PERL_MAGIC_substr	  'x' /* substr() lvalue */
+#define PERL_MAGIC_defelem	  'y' /* Shadow "foreach" iterator variable /
+					smart parameter vivification */
+#define PERL_MAGIC_glob		  '*' /* GV (typeglob) */
+#define PERL_MAGIC_arylen	  '#' /* Array length ($#ary) */
+#define PERL_MAGIC_pos		  '.' /* pos() lvalue */
+#define PERL_MAGIC_backref	  '<' /* ??? */
+#define PERL_MAGIC_ext		  '~' /* Available for use by extensions */
+
+
 #define YYMAXDEPTH 300
 
 #ifndef assert  /* <assert.h> might have been included somehow */
@@ -2289,7 +2431,7 @@ struct ufuncs {
     IV uf_index;
 };
 
-/* In pre-5.7-Perls the 'U' magic didn't get the thread context.
+/* In pre-5.7-Perls the PERL_MAGIC_uvar magic didn't get the thread context.
  * XS code wanting to be backward compatible can do something
  * like the following:
 
@@ -2355,7 +2497,7 @@ END_EXTERN_C
 #  if defined(NeXT) || defined(__NeXT__) /* or whatever catches all NeXTs */
 char *crypt ();       /* Maybe more hosts will need the unprototyped version */
 #  else
-#    if !defined(WIN32)
+#    if !defined(WIN32) && !defined(VMS)
 char *crypt (const char*, const char*);
 #    endif /* !WIN32 */
 #  endif /* !NeXT && !__NeXT__ */
@@ -2379,6 +2521,15 @@ char *getlogin (void);
 I32 unlnk (char*);
 #else
 #define UNLINK PerlLIO_unlink
+#endif
+
+/* some versions of glibc are missing the setresuid() proto */
+#if defined(HAS_SETRESUID) && !defined(HAS_SETRESUID_PROTO)
+int setresuid(uid_t ruid, uid_t euid, uid_t suid);
+#endif
+/* some versions of glibc are missing the setresgid() proto */
+#if defined(HAS_SETRESGID) && !defined(HAS_SETRESGID_PROTO)
+int setresgid(gid_t rgid, gid_t egid, gid_t sgid);
 #endif
 
 #ifndef HAS_SETREUID
@@ -2789,15 +2940,15 @@ enum {		/* pass one of these to get_vtbl */
 #define HINT_PRIVATE_MASK	0x000000ff
 #define HINT_INTEGER		0x00000001
 #define HINT_STRICT_REFS	0x00000002
-/* #define HINT_notused4	0x00000004 */
-#define HINT_BYTE		0x00000008
+#define HINT_LOCALE		0x00000004
+#define HINT_BYTES		0x00000008
+#define HINT_BYTES		0x00000008
 /* #define HINT_notused10	0x00000010 */
 				/* Note: 20,40,80 used for NATIVE_HINTS */
 
 #define HINT_BLOCK_SCOPE	0x00000100
 #define HINT_STRICT_SUBS	0x00000200
 #define HINT_STRICT_VARS	0x00000400
-#define HINT_LOCALE		0x00000800
 
 #define HINT_NEW_INTEGER	0x00001000
 #define HINT_NEW_FLOAT		0x00002000
@@ -2811,8 +2962,6 @@ enum {		/* pass one of these to get_vtbl */
 
 #define HINT_FILETEST_ACCESS	0x00400000
 #define HINT_UTF8		0x00800000
-#define HINT_UTF8_DISTINCT	0x01000000
-#define HINT_RE_ASCIIR		0x02000000
 
 /* Various states of an input record separator SV (rs, nrs) */
 #define RsSNARF(sv)   (! SvOK(sv))
@@ -3332,16 +3481,18 @@ typedef struct am_table_short AMTS;
 #define SET_NUMERIC_LOCAL() \
 	set_numeric_local();
 
-#define IS_NUMERIC_RADIX(s)	\
-	((PL_hints & HINT_LOCALE) && \
-	  PL_numeric_radix && memEQ(s, SvPVX(PL_numeric_radix), SvCUR(PL_numeric_radix)))
+#define IN_LOCALE_RUNTIME	(PL_curcop->op_private & HINT_LOCALE)
+#define IN_LOCALE_COMPILETIME	(PL_hints & HINT_LOCALE)
+
+#define IN_LOCALE \
+	(PL_curcop == &PL_compiling ? IN_LOCALE_COMPILETIME : IN_LOCALE_RUNTIME)
 
 #define STORE_NUMERIC_LOCAL_SET_STANDARD() \
-	bool was_local = (PL_hints & HINT_LOCALE) && PL_numeric_local; \
+	bool was_local = PL_numeric_local && IN_LOCALE; \
 	if (was_local) SET_NUMERIC_STANDARD();
 
 #define STORE_NUMERIC_STANDARD_SET_LOCAL() \
-	bool was_standard = (PL_hints & HINT_LOCALE) && PL_numeric_standard; \
+	bool was_standard = PL_numeric_standard && IN_LOCALE; \
 	if (was_standard) SET_NUMERIC_LOCAL();
 
 #define RESTORE_NUMERIC_LOCAL() \
@@ -3356,12 +3507,13 @@ typedef struct am_table_short AMTS;
 
 #define SET_NUMERIC_STANDARD()  	/**/
 #define SET_NUMERIC_LOCAL()     	/**/
-#define IS_NUMERIC_RADIX(c)		(0)
+#define IS_NUMERIC_RADIX(a, b)		(0)
 #define STORE_NUMERIC_LOCAL_SET_STANDARD()	/**/
 #define STORE_NUMERIC_STANDARD_SET_LOCAL()	/**/
 #define RESTORE_NUMERIC_LOCAL()		/**/
 #define RESTORE_NUMERIC_STANDARD()	/**/
 #define Atof				Perl_atof
+#define IN_LOCALE_RUNTIME		0
 
 #endif /* !USE_LOCALE_NUMERIC */
 
@@ -3461,7 +3613,9 @@ typedef struct am_table_short AMTS;
 
 #ifndef PERL_MICRO
 #   ifndef PERL_OLD_SIGNALS
-#       define PERL_ASYNC_CHECK() if (PL_sig_pending) despatch_signals()
+#		ifndef PERL_ASYNC_CHECK
+#			define PERL_ASYNC_CHECK() if (PL_sig_pending) despatch_signals()
+#		endif
 #   endif
 #endif
 
@@ -3483,17 +3637,21 @@ typedef struct am_table_short AMTS;
  * nice_chunk and nice_chunk size need to be set
  * and queried under the protection of sv_mutex
  */
-#define offer_nice_chunk(chunk, chunk_size) do {	\
-	LOCK_SV_MUTEX;					\
-	if (!PL_nice_chunk) {				\
-	    PL_nice_chunk = (char*)(chunk);		\
-	    PL_nice_chunk_size = (chunk_size);		\
-	}						\
-	else {						\
-	    Safefree(chunk);				\
-	}						\
-	UNLOCK_SV_MUTEX;				\
-    } while (0)
+#define offer_nice_chunk(chunk, chunk_size) STMT_START {  \
+       void *new_chunk;                                   \
+       U32 new_chunk_size;                                \
+       LOCK_SV_MUTEX;                                     \
+       new_chunk = (void *)(chunk);                       \
+       new_chunk_size = (chunk_size);                     \
+       if (new_chunk_size > PL_nice_chunk_size) {         \
+           if (PL_nice_chunk) Safefree(PL_nice_chunk);    \
+           PL_nice_chunk = new_chunk;                     \
+           PL_nice_chunk_size = new_chunk_size;           \
+       } else {                                           \
+           Safefree(chunk);                               \
+       }                                                  \
+       UNLOCK_SV_MUTEX;                                   \
+   } STMT_END
 
 #ifdef HAS_SEM
 #   include <sys/ipc.h>
@@ -3535,6 +3693,10 @@ typedef struct am_table_short AMTS;
 #  include <sys/file.h>
 #endif
 
+#if defined(HAS_FLOCK) && !defined(HAS_FLOCK_PROTO)
+int flock(int fd, int op);
+#endif
+
 #ifndef O_RDONLY
 /* Assume UNIX defaults */
 #    define O_RDONLY	0000
@@ -3554,6 +3716,9 @@ typedef struct am_table_short AMTS;
 #ifdef IAMSUID
 
 #ifdef I_SYS_STATVFS
+#   if defined(PERL_SCO) && !defined(_SVID3)
+#       define _SVID3
+#   endif
 #   include <sys/statvfs.h>     /* for f?statvfs() */
 #endif
 #ifdef I_SYS_MOUNT
@@ -3601,6 +3766,24 @@ typedef struct am_table_short AMTS;
 #define EXEC_ARGV_CAST(x) x
 #endif
 
+#define IS_NUMBER_IN_UV		      0x01 /* number within UV range (maybe not
+					      int).  value returned in pointed-
+					      to UV */
+#define IS_NUMBER_GREATER_THAN_UV_MAX 0x02 /* pointed to UV undefined */
+#define IS_NUMBER_NOT_INT	      0x04 /* saw . or E notation */
+#define IS_NUMBER_NEG		      0x08 /* leading minus sign */
+#define IS_NUMBER_INFINITY	      0x10 /* this is big */
+
+#define GROK_NUMERIC_RADIX(sp, send) grok_numeric_radix(sp, send)
+
+/* to let user control profiling */
+#ifdef PERL_GPROF_CONTROL
+extern void moncontrol(int);
+#define PERL_GPROF_MONCONTROL(x) moncontrol(x)
+#else
+#define PERL_GPROF_MONCONTROL(x)
+#endif
+
 /* and finally... */
 #define PERL_PATCHLEVEL_H_IMPLICIT
 #include "patchlevel.h"
@@ -3644,6 +3827,10 @@ typedef struct am_table_short AMTS;
    I_SYSUIO
    HAS_STRUCT_MSGHDR
    HAS_STRUCT_CMSGHDR
+
+   USE_REENTRANT_API
+
+   HAS_NL_LANGINFO
 
    so that Configure picks them up. */
 

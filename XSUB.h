@@ -18,6 +18,11 @@ Variable which is setup by C<xsubpp> to designate the object in a C++
 XSUB.  This is always the proper type for the C++ object.  See C<CLASS> and 
 L<perlxs/"Using XS With C++">.
 
+=for apidoc Amn|I32|ax
+Variable which is setup by C<xsubpp> to indicate the stack base offset,
+used by the C<ST>, C<XSprePUSH> and C<XSRETURN> macros.  The C<dMARK> macro
+must be called prior to setup the C<MARK> variable.
+
 =for apidoc Amn|I32|items
 Variable which is setup by C<xsubpp> to indicate the number of 
 items on the stack.  See L<perlxs/"Variable-length Parameter Lists">.
@@ -33,10 +38,18 @@ Used to access elements on the XSUB's stack.
 Macro to declare an XSUB and its C parameter list.  This is handled by
 C<xsubpp>.
 
+=for apidoc Ams||dAX
+Sets up the C<ax> variable.
+This is usually handled automatically by C<xsubpp> by calling C<dXSARGS>.
+
+=for apidoc Ams||dITEMS
+Sets up the C<items> variable.
+This is usually handled automatically by C<xsubpp> by calling C<dXSARGS>.
+
 =for apidoc Ams||dXSARGS
-Sets up stack and mark pointers for an XSUB, calling dSP and dMARK.  This
-is usually handled automatically by C<xsubpp>.  Declares the C<items>
-variable to indicate the number of items on the stack.
+Sets up stack and mark pointers for an XSUB, calling dSP and dMARK.
+Sets up the C<ax> and C<items> variables by calling C<dAX> and C<dITEMS>.
+This is usually handled automatically by C<xsubpp>.
 
 =for apidoc Ams||dXSI32
 Sets up the C<ix> variable for an XSUB which has aliases.  This is usually
@@ -53,10 +66,13 @@ handled automatically by C<xsubpp>.
 #  define XS(name) void name(pTHXo_ CV* cv)
 #endif
 
+#define dAX I32 ax = MARK - PL_stack_base + 1
+
+#define dITEMS I32 items = SP - MARK
+
 #define dXSARGS				\
 	dSP; dMARK;			\
-	I32 ax = mark - PL_stack_base + 1;	\
-	I32 items = sp - mark
+	dAX; dITEMS
 
 #define dXSTARG SV * targ = ((PL_op->op_private & OPpENTERSUB_HASTARG) \
 			     ? PAD_SV(PL_op->op_targ) : sv_newmortal())
@@ -74,7 +90,7 @@ handled automatically by C<xsubpp>.
 #  define XSINTERFACE_CVT(ret,name) ret (*name)()
 #endif
 #define dXSFUNCTION(ret)		XSINTERFACE_CVT(ret,XSFUNCTION)
-#define XSINTERFACE_FUNC(ret,cv,f)	((XSINTERFACE_CVT(ret,cv))(f))
+#define XSINTERFACE_FUNC(ret,cv,f)     ((XSINTERFACE_CVT(ret,))(f))
 #define XSINTERFACE_FUNC_SET(cv,f)	\
 		CvXSUBANY(cv).any_dptr = (void (*) (pTHXo_ void*))(f)
 
@@ -242,6 +258,15 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 
 #if (defined(PERL_CAPI) || defined(PERL_IMPLICIT_SYS)) && !defined(PERL_CORE)
 #  ifndef NO_XSLOCKS
+# if defined (NETWARE) && defined (USE_STDIO)
+#    define times		PerlProc_times
+#    define setuid		PerlProc_setuid
+#    define setgid		PerlProc_setgid
+#    define getpid		PerlProc_getpid
+#    define pause		PerlProc_pause
+#    define exit		PerlProc_exit
+#    define _exit		PerlProc__exit
+# else
 #    undef closedir
 #    undef opendir
 #    undef stdin
@@ -256,6 +281,35 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #    undef getc
 #    undef ungetc
 #    undef fileno
+
+//Following symbols were giving redefinition errors while building extensions - sgp 17th Oct 2000
+#ifdef NETWARE
+#	undef readdir
+#	undef fstat
+#	undef stat
+#	undef longjmp
+#	undef endhostent
+#	undef endnetent
+#	undef endprotoent
+#	undef endservent
+#	undef gethostbyaddr
+#	undef gethostbyname
+#	undef gethostent
+#	undef getnetbyaddr
+#	undef getnetbyname
+#	undef getnetent
+#	undef getprotobyname
+#	undef getprotobynumber
+#	undef getprotoent
+#	undef getservbyname
+#	undef getservbyport
+#	undef getservent
+#	undef inet_ntoa
+#	undef sethostent
+#	undef setnetent
+#	undef setprotoent
+#	undef setservent
+#endif	/* NETWARE */
 
 #    define mkdir		PerlDir_mkdir
 #    define chdir		PerlDir_chdir
@@ -394,6 +448,7 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #    define shutdown		PerlSock_shutdown
 #    define socket		PerlSock_socket
 #    define socketpair		PerlSock_socketpair
+#	endif	/* NETWARE && USE_STDIO */
 #  endif  /* NO_XSLOCKS */
 #endif  /* PERL_CAPI */
 

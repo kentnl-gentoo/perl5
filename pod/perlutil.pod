@@ -29,7 +29,7 @@ described in this document.
 
 If it's run from a terminal, F<perldoc> will usually call F<pod2man> to
 translate POD (Plain Old Documentation - see L<perlpod> for an
-explanation) into a man page, and then run F<man> to display it; if
+explanation) into a manpage, and then run F<man> to display it; if
 F<man> isn't available, F<pod2text> will be used instead and the output
 piped through your favourite pager.
 
@@ -122,6 +122,16 @@ subroutine for C<File::Find>:
 As well as these filters for converting other languages, the
 L<pl2pm|pl2pm> utility will help you convert old-style Perl 4 libraries to 
 new-style Perl5 modules.
+
+=head2 Administration
+
+=over 3
+
+=item L<libnetcfg|libnetcfg>
+
+To display and change the libnet configuration run the libnetcfg command.
+
+=back
 
 =head2 Development
 

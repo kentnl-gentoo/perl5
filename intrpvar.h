@@ -362,9 +362,9 @@ PERLVARI(Inumeric_standard,	bool,	TRUE)
 					/* Assume simple numerics */
 PERLVARI(Inumeric_local,	bool,	TRUE)
 					/* Assume local numerics */
-PERLVAR(Inumeric_radix,		SV *)
-					/* The radix separator if not '.' */
 
+PERLVAR(Inumeric_compat1,		char)
+					/* Used to be numeric_radix */
 #endif /* !USE_LOCALE_NUMERIC */
 
 /* utf8 character classes */
@@ -464,10 +464,30 @@ PERLVAR(Ixpvlv_arenaroot,XPVLV*)	/* list of allocated xpvlv areas */
 PERLVAR(Ixpvbm_arenaroot,XPVBM*)	/* list of allocated xpvbm areas */
 PERLVAR(Ihe_arenaroot,	XPV*)		/* list of allocated he areas */
 
+     /* 5.6.0 stopped here */
+
 PERLVAR(Ipsig_pend, int *)		/* per-signal "count" of pending */
 PERLVARI(Isig_pending, int,0)           /* Number if highest signal pending */
 
+#ifdef USE_LOCALE_NUMERIC
+
+PERLVAR(Inumeric_radix_sv,	SV *)	/* The radix separator if not '.' */
+
+#endif
+
+#if defined(USE_ITHREADS)
+PERLVAR(Iregex_pad,     SV**)    /* All regex objects */
+PERLVAR(Iregex_padav,   AV*)    /* All regex objects */
+
+#ifdef USE_REENTRANT_API
+PERLVAR(Ireentrant_buffer, REBUF*) /* were we store _r buffers */
+#endif
+
+#endif
 
 /* New variables must be added to the very end for binary compatibility.
  * XSUB.h provides wrapper functions via perlapi.h that make this
  * irrelevant, but not all code may be expected to #include XSUB.h. */
+
+
+

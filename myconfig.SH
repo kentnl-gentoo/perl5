@@ -1,4 +1,4 @@
-case $CONFIGDOTSH in
+case $PERL_CONFIG_SH in
 '')
 	if test -f config.sh; then TOP=.;
 	elif test -f ../config.sh; then TOP=..;
@@ -27,7 +27,7 @@ $startsh
 
 # Note that the text lines /^Summary of/ .. /^\s*$/ are copied into Config.pm.
 cat <<'!NO!SUBS!'
-Summary of my $package (revision $baserev version $PERL_VERSION subversion $PERL_SUBVERSION) configuration:
+Summary of my $package (revision $baserev $version_patchlevel_string) configuration:
   Platform:
     osname=$osname, osvers=$osvers, archname=$archname
     uname='$myuname'
@@ -44,7 +44,7 @@ Summary of my $package (revision $baserev version $PERL_VERSION subversion $PERL
     intsize=$intsize, longsize=$longsize, ptrsize=$ptrsize, doublesize=$doublesize, byteorder=$byteorder
     d_longlong=$d_longlong, longlongsize=$longlongsize, d_longdbl=$d_longdbl, longdblsize=$longdblsize
     ivtype='$ivtype', ivsize=$ivsize, nvtype='$nvtype', nvsize=$nvsize, Off_t='$lseektype', lseeksize=$lseeksize
-    alignbytes=$alignbytes, usemymalloc=$usemymalloc, prototype=$prototype
+    alignbytes=$alignbytes, usemymalloc=$usemymalloc, prototype=$prototype, bincompat5005=$d_bincompat5005
   Linker and Libraries:
     ld='$ld', ldflags ='$ldflags'
     libpth=$libpth

@@ -1,3 +1,4 @@
+$! OpenVMS configuration procedure for Perl -- do not attempt to run under DOS
 $ sav_ver = 'F$VERIFY(0)'
 $! SET VERIFY
 $!
@@ -583,32 +584,87 @@ $! after finding MANIFEST (see above)
 $!: Configure runs within the UU subdirectory 
 $!
 $!: compute the number of columns on the terminal for proper question formatting
-$! (sfn, will assume 80-ish)
+$ IF F$MODE() .EQS. "BATCH"
+$! else it winds up being 512 in batch
+$ THEN COLUMNS = 80
+$ ELSE COLUMNS = F$GETDVI("SYS$OUTPUT","DEVBUFSIZ")
+$ ENDIF
+$! "-des" sets SYS$OUTPUT to NL: with a DEVBUFSIZ too large (512 again)
+$ IF COLUMNS .GT. 210 THEN COLUMNS = 80
+$! not sure if this would actually be needed - it hopefully will not hurt
+$ IF COLUMNS .LT. 40 THEN COLUMNS = 40
 $!
 $!: set up the echo used in my read              !sfn
 $!: now set up to do reads with possible shell escape and default assignment !sfn
 $ GOTO Beyond_myread
 $!
+$! The sub_rp splitting is intended to handle long symbols such as the dflt for
+$! extensions.
+$!
 $myread:
 $ ans = ""
+$ len_rp = F$LENGTH(rp)
 $ If (fastread)
 $ Then
-$   echo4 "''rp'"
+$   IF len_rp .GT. 210
+$   THEN
+$     i_rp = 0
+$     fastread_rp_loop:
+$       sub_rp = F$EXTRACT(i_rp,COLUMNS,rp)
+$       echo4 "''sub_rp'"
+$       i_rp = i_rp + COLUMNS
+$       IF i_rp .LT. len_rp THEN GOTO fastread_rp_loop
+$   ELSE
+$     echo4 "''rp'"
+$   ENDIF
 $ Else
 $   If (.NOT. silent) Then echo ""
-$   READ SYS$COMMAND/PROMPT="''rp'" ans
+$   IF len_rp .GT. 210
+$   THEN
+$     i_rp = 0
+$     firstread_rp_loop:
+$       sub_rp = F$EXTRACT(i_rp,COLUMNS,rp)
+$       echo4 "''sub_rp'"
+$       i_rp = i_rp + COLUMNS
+$       IF i_rp .LT. len_rp THEN GOTO firstread_rp_loop
+$     READ SYS$COMMAND/PROMPT="''sub_rp'" ans
+$   ELSE
+$     READ SYS$COMMAND/PROMPT="''rp'" ans
+$   ENDIF
 $   IF (ans .EQS. "&-d")
 $   THEN
 $     echo4 "(OK, I will run with -d after this question.)"
 $     IF (.NOT. silent) THEN echo ""
-$     READ SYS$COMMAND/PROMPT="''rp'" ans
+$     IF len_rp .GT. 210
+$     THEN
+$       i_rp = 0
+$       secondread_rp_loop:
+$         sub_rp = F$EXTRACT(i_rp,COLUMNS,rp)
+$         echo4 "''sub_rp'"
+$         i_rp = i_rp + COLUMNS
+$         IF i_rp .LT. len_rp THEN GOTO secondread_rp_loop
+$       READ SYS$COMMAND/PROMPT="''sub_rp'" ans
+$     ELSE
+$       READ SYS$COMMAND/PROMPT="''rp'" ans
+$     ENDIF
 $     fastread := yes
 $   ENDIF
 $   IF (ans .EQS. "&-s")
 $   THEN
 $     echo4 "(OK, I will run with -s after this question.)"
 $     echo ""
-$     READ SYS$COMMAND/PROMPT="''rp'" ans
+$     IF len_rp .GT. 210
+$     THEN
+$       i_rp = 0
+$       thirdread_rp_loop:
+$         sub_rp = F$EXTRACT(i_rp,COLUMNS,rp)
+$         echo4 "''sub_rp'"
+$         i_rp = i_rp + COLUMNS
+$         IF i_rp .LT. len_rp THEN GOTO thirdread_rp_loop
+$       READ SYS$COMMAND/PROMPT="''sub_rp'" ans
+$     ELSE
+$       READ SYS$COMMAND/PROMPT="''rp'" ans
+$     ENDIF
 $     silent := true
 $     GOSUB Shut_up
 $   ENDIF
@@ -1020,6 +1076,9 @@ $!: determine the architecture name
 $! genconfig.pl has either archname='VMS_AXP' or 'VMS_VAX'
 $! Note that DCL in VMS V5.4 does not have F$GETSYI("ARCH_NAME")
 $! but does have F$GETSYI("HW_MODEL").
+$! Please try to use either archname .EQS. "VMS_VAX" or archname .EQS. 
+$! "VMS_AXP" from here on to allow cross-platform configuration (e.g.
+$! configure a VAX build on an Alpha).
 $!
 $ IF (F$GETSYI("HW_MODEL") .LT. 1024)
 $ THEN 
@@ -1048,11 +1107,8 @@ $ vms_prefix = "perl_root"
 $ vms_prefixup = F$EDIT(vms_prefix,"UPCASE")
 $ rp = "Will you be sharing your ''vms_prefixup' with ''otherarch'? [''dflt'] "
 $ GOSUB myread
-$ if ans.NES.""
-$ THEN
-$   ans = F$EXTRACT(0,1,F$EDIT(ans,"COLLAPSE, UPCASE"))
-$ ENDIF
-$ IF (ans.NES."Y")
+$ if ans .EQS. "" THEN ans = dflt
+$ IF .NOT. ans
 $ THEN
 $   sharedperl = "N"
 $ ELSE
@@ -1141,9 +1197,12 @@ $   ENDIF
 $!
 $ ENDIF !%Config-I-VMS, skip remaining "where install" questions
 $!
-$ perl_symbol = "true"
-$ perl_verb = ""
-$ dflt = "y"
+$ IF F$TYPE(perl_symbol) .EQS. "" THEN perl_symbol := true
+$ IF F$TYPE(perl_verb) .EQS. "" THEN perl_verb = ""
+$ IF perl_symbol
+$ THEN dflt = "y"
+$ ELSE dflt = "n"
+$ ENDIF
 $ IF .NOT.silent 
 $ THEN 
 $   echo ""
@@ -1154,11 +1213,15 @@ $   echo "process or the system wide level."
 $ ENDIF
 $ rp = "Invoke perl as a global symbol foreign command? [''dflt'] "
 $ GOSUB myread
-$ IF (.NOT.ans).AND.(ans.NES."") THEN perl_symbol = "false"
+$ IF (ans.EQS."") THEN ans = dflt
+$ IF (.NOT.ans) THEN perl_symbol = "false"
 $!
 $ IF (.NOT.perl_symbol)
 $ THEN
-$   dflt = "y"
+$   IF perl_verb .EQS. "DCLTABLES"
+$   THEN dflt = "n"
+$   ELSE dflt = "y"
+$   ENDIF
 $   IF .NOT.silent 
 $   THEN 
 $     echo ""
@@ -1168,7 +1231,8 @@ $     echo "would require write privilege)."
 $   ENDIF
 $   rp = "Invoke perl as a per process command verb? [ ''dflt' ] "
 $   GOSUB myread
-$   IF (.NOT.ans).AND.(ans.NES."")
+$   IF (ans.EQS."") THEN ans = dflt
+$   IF (.NOT.ans)
 $   THEN perl_verb = "DCLTABLES"
 $   ELSE perl_verb = "PROCESS"
 $   ENDIF
@@ -1889,7 +1953,7 @@ $!
 $List_Parse:
 $ OPEN/READ CONFIG ccvms.lis
 $ READ CONFIG line
-$ IF (F$GETSYI("HW_MODEL") .LT. 1024)
+$ IF archname .EQS. "VMS_VAX"
 $ THEN
 $   read CONFIG line
 $   archsufx = "VAX"
@@ -2084,10 +2148,6 @@ $   Has_socketshr = "F"
 $   ans = F$EDIT(ans,"TRIM,COMPRESS,LOWERCASE")
 $   IF ans.eqs."decc" then Has_Dec_C_Sockets = "T"
 $   IF ans.eqs."socketshr" then Has_socketshr = "T"
-$ ENDIF
-$ IF Has_Dec_C_Sockets .or. Has_socketshr
-$ THEN
-$   static_ext = f$edit(static_ext+" "+"Socket","trim,compress")
 $ ENDIF
 $!
 $!
@@ -2387,6 +2447,46 @@ $   if ans.eqs."TWO_POT" then use_two_pot_malloc = "Y"
 $   if ans.eqs."PACK_MALLOC" then use_pack_malloc = "Y"
 $ ENDIF
 $!
+$ known_extensions = ""
+$ xxx = ""
+$ OPEN/READ CONFIG 'manifestfound'
+$ext_loop:
+$   READ/END_OF_FILE=end_ext/ERROR=end_ext CONFIG line
+$   IF F$EXTRACT(0,4,line) .NES. "ext/" .AND. -
+       F$EXTRACT(0,8,line) .NES. "vms/ext/" THEN goto ext_loop
+$   line = F$EDIT(line,"COMPRESS")
+$   line = F$ELEMENT(0," ",line)
+$   line_len = F$LENGTH(line)
+$   IF F$EXTRACT(line_len - 12,12,line) .NES. "/Makefile.PL" THEN goto ext_loop
+$   IF F$EXTRACT(0,4,line) .EQS. "ext/" THEN -
+      xxx = F$EXTRACT(4,line_len - 16,line)
+$   IF xxx .EQS. "DynaLoader" THEN goto ext_loop     ! omit
+$   IF xxx .EQS. "SDBM_File/sdbm" THEN goto ext_loop ! sub extension - omit
+$   IF F$EXTRACT(0,8,line) .EQS. "vms/ext/" THEN -
+      xxx = "VMS/" + F$EXTRACT(8,line_len - 20,line)
+$   known_extensions = known_extensions + " ''xxx'"
+$   goto ext_loop
+$end_ext:
+$ close CONFIG
+$ DELETE/SYMBOL xxx
+$ known_extensions = F$EDIT(known_extensions,"TRIM,COMPRESS")
+$ dflt = known_extensions
+$ IF ccname .NES. "DEC" .AND. ccname .NES. "CXX"
+$ THEN
+$   dflt = dflt - "POSIX"             ! not with VAX C or GCC
+$ ENDIF
+$ dflt = dflt - "ByteLoader"          ! needs to be ported
+$ dflt = dflt - "DB_File"             ! needs to be ported
+$ dflt = dflt - "GDBM_File"           ! needs porting/special library
+$ dflt = dflt - "IPC/SysV"            ! needs to be ported
+$ dflt = dflt - "NDBM_File"           ! needs porting/special library
+$ dflt = dflt - "ODBM_File"           ! needs porting/special library
+$ IF .NOT. Has_socketshr .AND. .NOT. Has_Dec_C_Sockets
+$ THEN
+$   dflt = dflt - "Socket"            ! optional on VMS
+$ ENDIF
+$ dflt = F$EDIT(dflt,"TRIM,COMPRESS")
+$!
 $! Ask for their default list of extensions to build
 $ echo ""
 $ echo "It is time to specify which modules you want to build into"
@@ -2395,51 +2495,10 @@ $ echo "you might, for example, want to build GDBM_File instead of"
 $ echo "SDBM_File if you have the GDBM library built on your machine."
 $ echo ""
 $ echo "Which modules do you want to build into perl?"
-$! we need to add Byteloader to this list:
-$ dflt = "re Fcntl Encode Errno File::Glob Filter::Util::Call IO Opcode Devel::Peek Devel::DProf Data::Dumper attrs VMS::Stdio VMS::DCLsym B SDBM_File Storable Thread Sys::Hostname Digest::MD5 PerlIO::Scalar MIME::Base64 XS::Typemap"
-$ IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
-$ THEN
-$   dflt = dflt + " POSIX"
-$ ENDIF
 $ rp = "[''dflt'] "
 $ GOSUB myread
-$ if ans.eqs."" then ans = "''dflt'"
-$ a = ""
-$ j = 0
-$ xloop1:
-$   x = f$elem(j," ",ans)
-$   j = j + 1
-$   if x .eqs. " " then goto exloop1
-$   xloop2:
-$       k = f$locate("::",x)
-$       if k .ge. f$len(x) then goto exloop2
-$       x = f$extract(0,k,x) + "/" + f$extract(k+2,f$len(x)-2,x)
-$   goto xloop2
-$   exloop2:
-$   a = a + " " + x
-$ goto xloop1
-$ exloop1:
-$ ans = f$edit(a,"trim")
-$!
-$ a = ""
-$ j = 0
-$ xloop3:
-$   x = f$elem(j," ",dflt)
-$   j = j + 1
-$   if x .eqs. " " then goto exloop3
-$   xloop4:
-$       k = f$locate("::",x)
-$       if k .ge. f$len(x) then goto exloop4
-$       x = f$extract(0,k,x) + "/" + f$extract(k+2,f$len(x)-2,x)
-$   goto xloop4
-$   exloop4:
-$   a = a + " " + x
-$ goto xloop3
-$ exloop3:
-$ dflt = f$edit(a,"trim")
-$!
-$ extensions = "''ans'"
-$ known_extensions = "''dflt'"
+$ if ans .eqs. "" then ans = "''dflt'"
+$ extensions = F$EDIT(ans,"TRIM,COMPRESS")
 $!
 $! %Config-I-VMS, determine build/make utility here (make gmake mmk mms)
 $ echo ""
@@ -2665,7 +2724,6 @@ $!  - use built config.sh to take config_h.SH -> config.h
 $!  - also take vms/descrip_mms.template -> descrip.mms (VMS Makefile)
 $!              vms/Makefile.in -> Makefile. (VMS GNU Makefile?)
 $!              vms/Makefile.SH -> Makefile. (VMS GNU Makefile?)
-$!  - build make_ext.com extension builder procedure.
 $!
 $! Note for folks from other platforms changing things in here:
 $!
@@ -2764,7 +2822,7 @@ $ usemymalloc=mymalloc
 $!
 $ perl_cc=Mcc
 $!
-$ IF (sharedperl .AND. F$GETSYI("HW_MODEL") .GE. 1024)
+$ IF (sharedperl .AND. archname .EQS. "VMS_AXP")
 $ THEN
 $   obj_ext=".abj"
 $   so="axe"
@@ -3596,7 +3654,7 @@ $ WS "#include <string.h>"
 $ WS "int main()"
 $ WS "{"
 $ WS "char * place;"
-$ WS "place = memchr(""foo"", 47, 3)"
+$ WS "place = memchr(""foo"", 47, 3);"
 $ WS "exit(0);"
 $ WS "}"
 $ CS
@@ -4553,6 +4611,22 @@ $   d_fpathconf="undef"
 $   d_sysconf="undef"
 $   d_sigsetjmp="undef"
 $ ENDIF
+$!: see if tzname[] exists
+$ OS
+$ WS "#include <stdio.h>"
+$ WS "#include <time.h>"
+$ WS "int main() { extern short tzname[]; printf(""%hd"", tzname[0]); }"
+$ CS
+$ GOSUB compile_ok
+$ IF compile_status .EQ. good_compile
+$ THEN
+$   d_tzname = "undef"
+$   echo4 "tzname[] NOT found."
+$ ELSE
+$   d_tzname = "define"
+$   echo4 "tzname[] found."
+$ ENDIF
+$ IF F$SEARCH("try.obj") .NES. "" THEN DELETE/NOLOG/NOCONFIRM try.obj;
 $!
 $ IF d_gethname .EQS. "undef" .AND. d_uname .EQS. "undef"
 $ THEN
@@ -4577,7 +4651,9 @@ $   d_strcoll="define"
 $   d_strxfrm="define"
 $   d_wctomb="define"
 $   i_locale="define"
+$   i_langinfo="define"
 $   d_locconv="define"
+$   d_nl_langinfo="define"
 $   d_setlocale="define"
 $   vms_cc_type="decc"
 $ ELSE
@@ -4594,11 +4670,13 @@ $   d_strcoll="undef"
 $   d_strxfrm="undef"
 $   d_wctomb="undef"
 $   i_locale="undef"
+$   i_langinfo="undef"
 $   d_locconv="undef"
+$   d_nl_langinfo="undef"
 $   d_setlocale="undef"
 $ ENDIF
 $ d_stdio_ptr_lval_sets_cnt="undef"
-$ d_stdio_ptr_lval_nochange_cnt="undef"
+$ d_stdio_ptr_lval_nochange_cnt="define"
 $!
 $! Sockets?
 $ if Has_Socketshr .OR. Has_Dec_C_Sockets
@@ -4895,14 +4973,12 @@ $ WC "cpplast='" + cpplast + "'"
 $ WC "cppminus='" + cppminus + "'"
 $ WC "cpprun='" + cpprun + "'"
 $ WC "cppstdin='" + cppstdin + "'"
-$ WC "crosscompile='undef'"
-$ WC "d__fwalk='undef'"
 $ WC "d_Gconvert='my_gconvert(x,n,t,b)'"
-$ WC "d_PRId64='" + d_PRId64 + "'"
 $ WC "d_PRIEldbl='" + d_PRIEUldbl + "'"
 $ WC "d_PRIFldbl='" + d_PRIFUldbl + "'"
 $ WC "d_PRIGldbl='" + d_PRIGUldbl + "'"
 $ WC "d_PRIX64='" + d_PRIXU64 + "'"
+$ WC "d_PRId64='" + d_PRId64 + "'"
 $ WC "d_PRIeldbl='" + d_PRIeldbl + "'"
 $ WC "d_PRIfldbl='" + d_PRIfldbl + "'"
 $ WC "d_PRIgldbl='" + d_PRIgldbl + "'"
@@ -4910,6 +4986,7 @@ $ WC "d_PRIo64='" + d_PRIo64 + "'"
 $ WC "d_PRIu64='" + d_PRIu64 + "'"
 $ WC "d_PRIx64='" + d_PRIx64 + "'"
 $ WC "d_SCNfldbl='" + d_SCNfldbl + "'"
+$ WC "d__fwalk='undef'"
 $ WC "d_access='" + d_access + "'"
 $ WC "d_accessx='undef'"
 $ WC "d_alarm='define'"
@@ -4921,8 +4998,8 @@ $ WC "d_bcmp='" + d_bcmp + "'"
 $ WC "d_bcopy='" + d_bcopy + "'"
 $ WC "d_bincompat3='undef'"
 $ WC "d_bincompat5005='undef'"
-$ WC "d_bsdgetpgrp='undef'"
 $! WC "d_bsdpgrp='undef'"
+$ WC "d_bsdgetpgrp='undef'"
 $ WC "d_bsdsetpgrp='undef'"
 $ WC "d_bzero='" + d_bzero + "'"
 $ WC "d_casti32='define'"
@@ -4937,6 +5014,7 @@ $ WC "d_crypt='define'"
 $ WC "d_csh='undef'"
 $ WC "d_cuserid='define'"
 $ WC "d_dbl_dig='define'"
+$ WC "d_dbminitproto='undef'"
 $ WC "d_difftime='define'"
 $ WC "d_dirnamlen='define'"
 $ WC "d_dlerror='undef'"
@@ -4954,6 +5032,7 @@ $ WC "d_endsent='" + d_endsent + "'"
 $ WC "d_eofnblk='undef'"
 $ WC "d_eunice='undef'"
 $ WC "d_fchmod='undef'"
+$ WC "d_fchdir='undef'"
 $ WC "d_fchown='undef'"
 $ WC "d_fcntl='" + d_fcntl + "'"
 $ WC "d_fcntl_can_lock='" + d_fcntl_can_lock + "'"
@@ -4961,6 +5040,7 @@ $ WC "d_fd_set='" + d_fd_set + "'"
 $ WC "d_fgetpos='define'"
 $ WC "d_flexfnam='define'"
 $ WC "d_flock='undef'"
+$ WC "d_flockproto='undef'"
 $ WC "d_fork='undef'"
 $ WC "d_fpathconf='" + d_fpathconf + "'"
 $ WC "d_fpos64_t='" + d_fpos64_t + "'"
@@ -4972,7 +5052,7 @@ $ WC "d_fstatfs='undef'"
 $ WC "d_fstatvfs='undef'"
 $ WC "d_fsync='undef'"
 $ WC "d_ftello='undef'"
-$ WC "d_getcwd='undef'"
+$ WC "d_getcwd='define'"
 $ WC "d_getespwnam='undef'"
 $ WC "d_getfsstat='undef'"
 $ WC "d_getgrent='define'"
@@ -5048,6 +5128,7 @@ $ WC "d_mkstemps='" + d_mkstemps + "'"
 $ WC "d_mktime='" + d_mktime + "'"
 $ WC "d_mmap='undef'"
 $ WC "d_modfl='" + d_modfl + "'"
+$ WC "d_modfl_pow32_bug='undef'"
 $ WC "d_mprotect='undef'"
 $ WC "d_msg='undef'"
 $ WC "d_msg_ctrunc='undef'"
@@ -5060,6 +5141,7 @@ $ WC "d_msync='undef'"
 $ WC "d_munmap='undef'"
 $ WC "d_mymalloc='" + d_mymalloc + "'"
 $ WC "d_nice='define'"
+$ WC "d_nl_langinfo='" + d_nl_langinfo + "'"
 $ WC "d_nv_preserves_uv='" + d_nv_preserves_uv + "'"
 $ WC "d_nv_preserves_uv_bits='" + d_nv_preserves_uv_bits + "'"
 $ WC "d_off64_t='" + d_off64_t + "'"
@@ -5073,6 +5155,7 @@ $ WC "d_perl_otherlibdirs='undef'"
 $ WC "d_phostname='" + d_phostname + "'"
 $ WC "d_pipe='define'"
 $ WC "d_poll='undef'"
+$ WC "d_pthread_atfork='undef'"
 $ WC "d_pthread_yield='" + d_pthread_yield + "'"
 $ WC "d_pthreads_created_joinable='" + d_pthreads_created_joinable + "'"
 $ WC "d_pwage='undef'"
@@ -5088,6 +5171,7 @@ $ WC "d_quad='" + d_quad + "'"
 $ WC "d_readdir='define'"
 $ WC "d_readlink='undef'"
 $ WC "d_readv='undef'"
+$ WC "d_realpath='undef'"
 $ WC "d_recvmsg='undef'"
 $ WC "d_rename='define'"
 $ WC "d_rewinddir='define'"
@@ -5137,19 +5221,24 @@ $ WC "d_sigaction='" + d_sigaction + "'"
 $ WC "d_sigprocmask='" + d_sigprocmask + "'"
 $ WC "d_sigsetjmp='" + d_sigsetjmp + "'"
 $ WC "d_sockatmark='undef'"
+$ WC "d_sockatmarkproto='undef'"
 $ WC "d_socket='" + d_socket + "'"
 $ WC "d_socklen_t='" + d_socklen_t + "'"
 $ WC "d_sockpair='undef'"
 $ WC "d_socks5_init='undef'"
 $ WC "d_sqrtl='define'"
+$ WC "d_sresgproto='undef'"
+$ WC "d_sresgproto='undef'"
+$ WC "d_sresproto='undef'"
+$ WC "d_sresuproto='undef'"
 $ WC "d_statblks='undef'"
 $ WC "d_statfs_f_flags='undef'"
 $ WC "d_statfs_s='undef'"
 $ WC "d_statfsflags='undef'"
 $ WC "d_stdio_cnt_lval='" + d_stdio_cnt_lval + "'"
 $ WC "d_stdio_ptr_lval='" + d_stdio_ptr_lval + "'"
-$ WC "d_stdio_ptr_lval_sets_cnt='" + d_stdio_ptr_lval_sets_cnt + "'"
 $ WC "d_stdio_ptr_lval_nochange_cnt='" + d_stdio_ptr_lval_nochange_cnt + "'"
+$ WC "d_stdio_ptr_lval_sets_cnt='" + d_stdio_ptr_lval_sets_cnt + "'"
 $ WC "d_stdio_stream_array='undef'"
 $ WC "d_stdiobase='" + d_stdiobase + "'"
 $ WC "d_stdstdio='" + d_stdstdio + "'"
@@ -5158,6 +5247,7 @@ $ WC "d_strcoll='" + d_strcoll + "'"
 $ WC "d_strctcpy='define'"
 $ WC "d_strerrm='strerror((e),vaxc$errno)'"
 $ WC "d_strerror='define'"
+$ WC "d_strftime='define'"
 $ WC "d_strtod='define'"
 $ WC "d_strtol='define'"
 $ WC "d_strtold='" + d_strtold + "'"
@@ -5170,6 +5260,7 @@ $ WC "d_strxfrm='" + d_strxfrm  + "'"
 $ WC "d_suidsafe='undef'"
 $ WC "d_symlink='undef'"
 $ WC "d_syscall='undef'"
+$ WC "d_syscallproto='undef'"
 $ WC "d_sysconf='" + d_sysconf + "'"
 $ WC "d_syserrlst='undef'"
 $ WC "d_system='define'"
@@ -5179,7 +5270,7 @@ $ WC "d_telldir='define'"
 $ WC "d_telldirproto='define'"
 $ WC "d_times='define'"
 $ WC "d_truncate='" + d_truncate + "'"
-$ WC "d_tzname='undef'"
+$ WC "d_tzname='" + d_tzname + "'"
 $ WC "d_u32align='define'"
 $ WC "d_ualarm='undef'"
 $ WC "d_umask='define'"
@@ -5187,6 +5278,7 @@ $ WC "d_uname='" + d_uname + "'"
 $ WC "d_union_semun='undef'"
 $ WC "d_unlink_all_versions='undef'"
 $ WC "d_usleep='undef'"
+$ WC "d_usleepproto='undef'"
 $ WC "d_ustat='undef'"
 $ WC "d_vendorarch='undef'"
 $ WC "d_vendorlib='undef'"
@@ -5212,13 +5304,23 @@ $ WC "dlobj='" + dlobj + "'"
 $ WC "dlsrc='dl_vms.c'"
 $ WC "doublesize='" + doublesize + "'"
 $ WC "drand01='" + drand01 + "'"
-$ WC "dynamic_ext='" + extensions + "'"
+$!
+$! The extensions symbol may be quite long
+$!
+$ tmp = "dynamic_ext='" + extensions + "'"
+$ WC/symbol tmp
+$ DELETE/SYMBOL tmp
 $ WC "eagain=' '"
 $ WC "ebcdic='undef'"
 $ WC "embedmymalloc='" + mymalloc + "'"
 $ WC "eunicefix=':'"
 $ WC "exe_ext='" + exe_ext + "'"
-$ WC "extensions='" + extensions + "'"
+$!
+$! The extensions symbol may be quite long
+$!
+$ tmp = "extensions='" + extensions + "'"
+$ WC/symbol tmp
+$ DELETE/SYMBOL tmp
 $ WC "fflushNULL='define'"
 $ WC "fflushall='undef'"
 $ WC "fpostype='fpos_t'"
@@ -5252,6 +5354,7 @@ $ WC "i_grp='undef'"
 $ WC "i_iconv='" + i_iconv +"'"
 $ WC "i_ieeefp='undef'"
 $ WC "i_inttypes='" + i_inttypes + "'"
+$ WC "i_langinfo='" + i_langinfo + "'"
 $ WC "i_libutil='" + i_libutil + "'"
 $ WC "i_limits='define'"
 $ WC "i_locale='" + i_locale + "'"
@@ -5329,7 +5432,12 @@ $ WC "intsize='" + intsize + "'"
 $ WC "ivdformat='" + ivdformat + "'"
 $ WC "ivsize='" + ivsize + "'"
 $ WC "ivtype='" + ivtype + "'"
-$ WC "known_extensions='" + known_extensions + "'"
+$!
+$! The known_extensions symbol may be quite long
+$!
+$ tmp = "known_extensions='" + known_extensions + "'"
+$ WC/symbol tmp
+$ DELETE/SYMBOL tmp
 $ WC "ld='" + ld + "'"
 $ WC "lddlflags='/Share'"
 $ WC "ldflags='" + ldflags + "'"
@@ -5463,6 +5571,7 @@ $ WC "use5005threads='" + use5005threads + "'"
 $ WC "use64bitall='" + use64bitall + "'"
 $ WC "use64bitint='" + use64bitint + "'"
 $ WC "usedebugging_perl='" + use_debugging_perl + "'"
+$ WC "usecrosscompile='undef'"
 $ WC "usedl='" + usedl + "'"
 $ WC "useithreads='" + useithreads + "'"
 $ WC "uselargefiles='" + uselargefiles + "'"
@@ -5472,6 +5581,7 @@ $ WC "usemultiplicity='" + usemultiplicity + "'"
 $ WC "usemymalloc='" + usemymalloc + "'"
 $ WC "useperlio='" + useperlio + "'"
 $ WC "useposix='false'"
+$ WC "usereentrant='undef'"
 $ WC "usesocks='undef'"
 $ WC "usethreads='" + usethreads + "'"
 $ WC "usevfork='true'"
@@ -5490,7 +5600,7 @@ $ WC "vms_prefix='" + vms_prefix + "'" ! VMS specific
 $ WC "vms_ver='" + vms_ver + "'" ! VMS specific
 $ WC "voidflags='15'"
 $ WC "xs_apiversion='" + version + "'"
-$ WC "CONFIGDOTSH='true'"
+$ WC "PERL_CONFIG_SH='true'"
 $!
 $! ##END WRITE NEW CONSTANTS HERE##
 $!
@@ -5589,6 +5699,13 @@ $ IF be_case_sensitive THEN WC "#define VMS_WE_ARE_CASE_SENSITIVE"
 $ IF d_herrno .EQS. "undef" THEN WC "#define NEED_AN_H_ERRNO"
 $ WC "#define HAS_ENVGETENV"
 $ WC "#define PERL_EXTERNAL_GLOB"
+$ IF archname .EQS. "VMS_VAX" .AND. -
+     ccname .EQS. "DEC" .AND. -
+     ccversion .LE. 50390006
+$ THEN
+$! Alas this does not help to build Fcntl
+$!   WC "#define PERL_IGNORE_FPUSIG SIGFPE"
+$ ENDIF
 $ CLOSE CONFIG
 $!
 $ echo4 "Doing variable substitutions on .SH files..."
@@ -5658,6 +5775,7 @@ $ mcr []munchconfig 'config_sh' 'Makefile_SH' "''DECC_REPLACE'" -
  "''Thread_Live_Dangerously'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'"
 $! Clean up after ourselves
 $ DELETE/NOLOG/NOCONFIRM []munchconfig.exe;
+$!
 $ echo4 "Extracting make_ext.com (without variable substitutions)"
 $ Create Sys$Disk:[-]make_ext.com
 $ Deck/Dollar="$EndOfTpl$"
@@ -5666,17 +5784,31 @@ $!   NOTE: This file is extracted as part of the VMS configuration process.
 $!   Any changes made to it directly will be lost.  If you need to make any
 $!   changes, please edit the template in Configure.Com instead.
 $    def = F$Environment("Default")
-$    exts1 = F$Edit(p1,"Compress")
-$    p2 = F$Edit(p2,"Upcase,Compress,Trim")
-$    If F$Locate("MCR ",p2).eq.0 Then p2 = F$Extract(3,255,p2)
-$    miniperl = "$" + F$Search(F$Parse(p2,".Exe"))
-$    makeutil = p3
-$    if f$type('p3') .nes. "" then makeutil = 'p3'
-$    targ = F$Edit(p4,"Lowercase")
+$!   p1 - how to invoke miniperl (passed in from descrip.mms)
+$    p1 = F$Edit(p1,"Upcase,Compress,Trim")
+$    If F$Locate("MCR ",p1).eq.0 Then p1 = F$Extract(3,255,p1)
+$    miniperl = "$" + F$Search(F$Parse(p1,".Exe"))
+$!   p2 - how to invoke local make utility (passed in from descrip.mms)
+$    makeutil = p2
+$    if f$type('p2') .nes. "" then makeutil = 'p2'
+$!   p3 - make target (passed in from descrip.mms)
+$    targ = F$Edit(p3,"Lowercase")
+$    sts = 1
+$    extensions = ""
+$    open/read CONFIG config.sh
+$ find_ext_loop:
+$    read/end=end_ext_loop CONFIG line
+$    if (f$extract(0,12,line) .NES. "extensions='")
+$    then goto find_ext_loop
+$    else extensions = f$extract(12,f$length(line),line) - "'"
+$    endif
+$ end_ext_loop:
+$    close CONFIG
+$    extensions = f$edit(extensions,"TRIM,COMPRESS")
 $    i = 0
 $ next_ext:
-$    ext = F$Element(i," ",p1)
-$    If ext .eqs. " " Then Goto done
+$    ext = f$element(i," ",extensions)
+$    If ext .eqs. " " .or. ext .eqs. "" Then Goto done
 $    Define/User_mode Perl_Env_Tables CLISYM_LOCAL
 $    miniperl
 $    deck
@@ -5811,6 +5943,8 @@ $ CALL Bad_environment "LIB"
 $ CALL Bad_environment "T"
 $ CALL Bad_environment "FOO"
 $ CALL Bad_environment "EXT"
+$ CALL Bad_environment "SOME_LOGICAL_NAME_NOT_LIKELY"
+$ CALL Bad_environment "DOWN_LOGICAL_NAME_NOT_LIKELY"
 $ CALL Bad_environment "TEST" "SYMBOL"
 $ IF f$search("config.msg") .eqs. "" THEN echo "OK."
 $!
@@ -5823,7 +5957,7 @@ $   echo ""
 $   echo4 "The perl.cld file is now being written..."
 $   OPEN/WRITE CONFIG 'file_2_find'
 $   ext = ".exe"
-$   IF ((sharedperl) .AND. (F$GETSYI("HW_MODEL") .GE. 1024)) THEN ext := .AXE
+$   IF (sharedperl .AND. archname .EQS. "VMS_AXP") THEN ext := .AXE
 $   IF (use_vmsdebug_perl)
 $   THEN
 $     WRITE CONFIG "define verb dbgperl"

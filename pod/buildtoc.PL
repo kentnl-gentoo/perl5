@@ -59,7 +59,40 @@ if (-d "pod") {
   die "$0: failed to chdir('pod'): $!\n" unless chdir("pod");
 }
 
-@pods = qw(
+@ARCHPODS = qw(
+    perlaix	
+    perlapollo
+    perlamiga          
+    perlbeos
+    perlbs2000
+    perlcygwin          
+    perldgux             
+    perldos             
+    perlepoc             
+    perlhpux            
+    perlhurd            
+    perlmachten         
+    perlmacos
+    perlmint
+    perlmpeix
+    perlnetware             
+    perlos2             
+    perlos390           
+    perlqnx
+    perlplan9
+    perlsolaris
+    perltru64
+    perluts
+    perlvmesa
+    perlvms             
+    perlvos             
+    perlwin32           
+          );
+
+@pods = 
+  (
+    qw(
+
     perl
     perlfaq
     perltoc
@@ -148,50 +181,19 @@ if (-d "pod") {
 
     perlhist           
     perldelta           
+    perl572delta         
     perl571delta         
     perl570delta         
     perl56delta         
     perl5005delta       
     perl5004delta       
 
-    perlaix
-    perlamiga          
-    perlbs2000
-    perlcygwin          
-    perldos             
-    perlepoc             
-    perlhpux            
-    perlmachten         
-    perlmacos
-    perlmpeix         
-    perlos2             
-    perlos390           
-    perlsolaris
-    perlvmesa
-    perlvms             
-    perlvos             
-    perlwin32           
-	  );
+    ),
 
-@ARCHPODS = qw(
-    perlaix	
-    perlamiga          
-    perlbs2000
-    perlcygwin          
-    perldos             
-    perlepoc             
-    perlhpux            
-    perlmachten         
-    perlmacos
-    perlmpeix
-    perlos2             
-    perlos390           
-    perlsolaris
-    perlvmesa
-    perlvms             
-    perlvos             
-    perlwin32           
-          );
+    @ARCHPODS
+
+  );
+
 for (@ARCHPODS) { s/$/.pod/ }
 @ARCHPODS{@ARCHPODS} = ();
 
@@ -279,6 +281,7 @@ sub getpods {
 	return if /(.*)\.pm$/ && -f "$1.pod";
 	my $file = $File::Find::name;
 	return if $file eq '../lib/Pod/Functions.pm'; # Used only by pod itself
+        return if $file =~ m!lib/Attribute/Handlers/demo/!;
 
 	die "tut $name" if $file =~ /TUT/;
 	unless (open (F, "< $_\0")) {

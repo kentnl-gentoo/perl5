@@ -45,7 +45,7 @@ L<fields>
 package base;
 
 use 5.005_64;
-our $VERSION = "1.01";
+our $VERSION = "1.02";
 
 sub import {
     my $class = shift;
@@ -56,7 +56,7 @@ sub import {
 	next if $pkg->isa($base);
 	push @{"$pkg\::ISA"}, $base;
         my $vglob;
-	unless ($vglob = ${"$base\::"}{VERSION} and $vglob{SCALAR}) {
+	unless (${*{"$base\::VERSION"}{SCALAR}}) {
 	    eval "require $base";
 	    # Only ignore "Can't locate" errors from our eval require.
 	    # Other fatal errors (syntax etc) must be reported.
@@ -68,7 +68,7 @@ sub import {
 			    "which defines that package first.)");
 	    }
 	    ${"$base\::VERSION"} = "-1, set by base.pm"
-		unless $vglob = ${"$base\::"}{VERSION} and $vglob{SCALAR};
+		unless ${*{"$base\::VERSION"}{SCALAR}};
 	}
 
 	# A simple test like (defined %{"$base\::FIELDS"}) will

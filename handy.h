@@ -116,6 +116,14 @@ Null SV pointer.
 
 #ifdef I_INTTYPES /* e.g. Linux has int64_t without <inttypes.h> */
 #   include <inttypes.h>
+#   ifdef INT32_MIN_BROKEN
+#       undef  INT32_MIN
+#       define INT32_MIN (-2147483647-1)
+#   endif
+#   ifdef INT64_MIN_BROKEN
+#       undef  INT64_MIN
+#       define INT64_MIN (-9223372036854775807LL-1)
+#   endif
 #endif
 
 typedef I8TYPE I8;
@@ -194,6 +202,7 @@ typedef U64TYPE U64;
 
 #endif
 
+/* log(2) is pretty close to  0.30103, just in case anyone is grepping for it */
 #define BIT_DIGITS(N)   (((N)*146)/485 + 1)  /* log2(10) =~ 146/485 */
 #define TYPE_DIGITS(T)  BIT_DIGITS(sizeof(T) * 8)
 #define TYPE_CHARS(T)   (TYPE_DIGITS(T) + 2) /* sign, NUL */
@@ -334,7 +343,7 @@ Converts the specified character to lowercase.
 #   define isASCII(c)	((c) <= 127)
 #   define isCNTRL(c)	((c) < ' ')
 #   define isGRAPH(c)	(isALNUM(c) || isPUNCT(c))
-#   define isPRINT(c)	(((c) > 32 && (c) < 127) || isSPACE(c))
+#   define isPRINT(c)	(((c) > 32 && (c) < 127) || (c) == ' ')
 #   define isPUNCT(c)	(((c) >= 33 && (c) <= 47) || ((c) >= 58 && (c) <= 64)  || ((c) >= 91 && (c) <= 96) || ((c) >= 123 && (c) <= 126))
 #   define isXDIGIT(c)  (isdigit(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F'))
 #   define toUPPER(c)	(isLOWER(c) ? (c) - ('a' - 'A') : (c))

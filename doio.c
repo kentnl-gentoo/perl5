@@ -141,12 +141,21 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
         /* sysopen style args, i.e. integer mode and permissions */
 	STRLEN ix = 0;
 	if (num_svs != 0) {
-	     Perl_croak(aTHX_ "panic:sysopen with multiple args");
+	     Perl_croak(aTHX_ "panic: sysopen with multiple args");
 	}
+	if (rawmode & (O_WRONLY|O_RDWR|O_CREAT
+#ifdef O_APPEND	/* Not fully portable. */
+		       |O_APPEND
+#endif
+#ifdef O_TRUNC	/* Not fully portable. */
+		       |O_TRUNC
+#endif
+		       ))
+	    TAINT_PROPER("sysopen");
 	mode[ix++] = '#'; /* Marker to openn to use numeric "sysopen" */
 
 #if defined(USE_64_BIT_RAWIO) && defined(O_LARGEFILE)
-	rawmode |= O_LARGEFILE;
+	rawmode |= O_LARGEFILE;	/* Transparently largefiley. */
 #endif
 
 #ifndef O_ACCMODE
@@ -193,7 +202,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	num_svs = 1;
 	svp = &namesv;
         type = Nullch;
-	fp = PerlIO_openn(aTHX_ type,mode, -1, rawmode, rawperm, NULL, num_svs, svp);
+	fp = PerlIO_openn(aTHX_ type, mode, -1, rawmode, rawperm, NULL, num_svs, svp);
     }
     else {
 	/* Regular (non-sys) open */
@@ -223,7 +232,9 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    len  = tend-type;
 	}
 	IoTYPE(io) = *type;
-	if ((*type == IoTYPE_RDWR) && ((!num_svs || tend > type+1 && tend[-1] != IoTYPE_PIPE))) { /* scary */
+	if ((*type == IoTYPE_RDWR) && /* scary */
+           (*(type+1) == IoTYPE_RDONLY || *(type+1) == IoTYPE_WRONLY) &&
+	    ((!num_svs || (tend > type+1 && tend[-1] != IoTYPE_PIPE)))) {
 	    mode[1] = *type++;
 	    writing = 1;
 	}
@@ -504,11 +515,13 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
     if (ckWARN(WARN_IO)) {
 	if ((IoTYPE(io) == IoTYPE_RDONLY) &&
 	    (fp == PerlIO_stdout() || fp == PerlIO_stderr())) {
-		Perl_warner(aTHX_ WARN_IO, "'std%s' opened only for input",
-				(fp == PerlIO_stdout()) ? "out" : "err");
+		Perl_warner(aTHX_ WARN_IO,
+			    "Filehandle STD%s opened only for input",
+			    (fp == PerlIO_stdout()) ? "OUT" : "ERR");
 	}
 	else if ((IoTYPE(io) == IoTYPE_WRONLY) && fp == PerlIO_stdin()) {
-		Perl_warner(aTHX_ WARN_IO, "'stdin' opened only for output");
+		Perl_warner(aTHX_ WARN_IO,
+			    "Filehandle STDIN opened only for output");
 	}
     }
 
@@ -555,13 +568,16 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	if (savefd != fd) {
 	    Pid_t pid;
 	    SV *sv;
-	    PerlLIO_dup2(fd, savefd);
+	    if (PerlLIO_dup2(fd, savefd) < 0) {
+		(void)PerlIO_close(fp);
+		goto say_false;
+	    }
 #ifdef VMS
 	    if (savefd != PerlIO_fileno(PerlIO_stdin())) {
 	      char newname[FILENAME_MAX+1];
-	      if (fgetname(fp, newname)) {
-	        if (savefd == PerlIO_fileno(PerlIO_stdout())) Perl_vmssetuserlnm("SYS$OUTPUT", newname);
-	        if (savefd == PerlIO_fileno(PerlIO_stderr())) Perl_vmssetuserlnm("SYS$ERROR",  newname);
+             if (PerlIO_getname(fp, newname)) {
+ 	        if (fd == PerlIO_fileno(PerlIO_stdout())) Perl_vmssetuserlnm(aTHX_ "SYS$OUTPUT", newname);
+ 	        if (fd == PerlIO_fileno(PerlIO_stderr())) Perl_vmssetuserlnm(aTHX_ "SYS$ERROR",  newname);
 	      }
 	    }
 #endif
@@ -996,7 +1012,7 @@ Perl_do_eof(pTHX_ GV *gv)
 Off_t
 Perl_do_tell(pTHX_ GV *gv)
 {
-    register IO *io;
+    register IO *io = 0;
     register PerlIO *fp;
 
     if (gv && (io = GvIO(gv)) && (fp = IoIFP(io))) {
@@ -1015,7 +1031,7 @@ Perl_do_tell(pTHX_ GV *gv)
 bool
 Perl_do_seek(pTHX_ GV *gv, Off_t pos, int whence)
 {
-    register IO *io;
+    register IO *io = 0;
     register PerlIO *fp;
 
     if (gv && (io = GvIO(gv)) && (fp = IoIFP(io))) {
@@ -1034,7 +1050,7 @@ Perl_do_seek(pTHX_ GV *gv, Off_t pos, int whence)
 Off_t
 Perl_do_sysseek(pTHX_ GV *gv, Off_t pos, int whence)
 {
-    register IO *io;
+    register IO *io = 0;
     register PerlIO *fp;
 
     if (gv && (io = GvIO(gv)) && (fp = IoIFP(io)))
@@ -1317,7 +1333,7 @@ Perl_do_aexec5(pTHX_ SV *really, register SV **mark, register SV **sp,
     Perl_croak(aTHX_ "exec? I'm not *that* kind of operating system");
 #else
     register char **a;
-    char *tmps;
+    char *tmps = Nullch;
     STRLEN n_a;
 
     if (sp > mark) {
@@ -1380,7 +1396,6 @@ Perl_do_exec3(pTHX_ char *cmd, int fd, int do_report)
 {
     register char **a;
     register char *s;
-    char flags[10];
 
     while (*cmd && isSPACE(*cmd))
 	cmd++;
@@ -1388,28 +1403,32 @@ Perl_do_exec3(pTHX_ char *cmd, int fd, int do_report)
     /* save an extra exec if possible */
 
 #ifdef CSH
-    if (strnEQ(cmd,PL_cshname,PL_cshlen) && strnEQ(cmd+PL_cshlen," -c",3)) {
-	strcpy(flags,"-c");
-	s = cmd+PL_cshlen+3;
-	if (*s == 'f') {
-	    s++;
-	    strcat(flags,"f");
-	}
-	if (*s == ' ')
-	    s++;
-	if (*s++ == '\'') {
-	    char *ncmd = s;
+    {
+        char flags[10];
+	if (strnEQ(cmd,PL_cshname,PL_cshlen) &&
+	    strnEQ(cmd+PL_cshlen," -c",3)) {
+	  strcpy(flags,"-c");
+	  s = cmd+PL_cshlen+3;
+	  if (*s == 'f') {
+	      s++;
+	      strcat(flags,"f");
+	  }
+	  if (*s == ' ')
+	      s++;
+	  if (*s++ == '\'') {
+	      char *ncmd = s;
 
-	    while (*s)
-		s++;
-	    if (s[-1] == '\n')
-		*--s = '\0';
-	    if (s[-1] == '\'') {
-		*--s = '\0';
-		PerlProc_execl(PL_cshname,"csh", flags,ncmd,(char*)0);
-		*s = '\'';
-		return FALSE;
-	    }
+	      while (*s)
+		  s++;
+	      if (s[-1] == '\n')
+		  *--s = '\0';
+	      if (s[-1] == '\'') {
+		  *--s = '\0';
+		  PerlProc_execl(PL_cshname,"csh", flags, ncmd, (char*)0);
+		  *s = '\'';
+		  return FALSE;
+	      }
+	  }
 	}
     }
 #endif /* CSH */
@@ -1427,7 +1446,8 @@ Perl_do_exec3(pTHX_ char *cmd, int fd, int do_report)
 	goto doshell;
 
     for (s = cmd; *s; s++) {
-	if (*s != ' ' && !isALPHA(*s) && strchr("$&*(){}[]'\";\\|?<>~`\n",*s)) {
+	if (*s != ' ' && !isALPHA(*s) &&
+	    strchr("$&*(){}[]'\";\\|?<>~`\n",*s)) {
 	    if (*s == '\n' && !s[1]) {
 		*s = '\0';
 		break;
@@ -1660,20 +1680,31 @@ nothing in the core.
 	    } utbuf;
 #endif
 
+           SV* accessed = *++mark;
+           SV* modified = *++mark;
+           void * utbufp = &utbuf;
+
+           /* be like C, and if both times are undefined, let the C
+              library figure out what to do.  This usually means
+              "current time" */
+
+           if ( accessed == &PL_sv_undef && modified == &PL_sv_undef )
+             utbufp = NULL;
+           
 	    Zero(&utbuf, sizeof utbuf, char);
 #ifdef BIG_TIME
-	    utbuf.actime = (Time_t)SvNVx(*++mark);	/* time accessed */
-	    utbuf.modtime = (Time_t)SvNVx(*++mark);	/* time modified */
+           utbuf.actime = (Time_t)SvNVx(accessed);     /* time accessed */
+           utbuf.modtime = (Time_t)SvNVx(modified);    /* time modified */
 #else
-	    utbuf.actime = (Time_t)SvIVx(*++mark);	/* time accessed */
-	    utbuf.modtime = (Time_t)SvIVx(*++mark);	/* time modified */
+           utbuf.actime = (Time_t)SvIVx(accessed);     /* time accessed */
+           utbuf.modtime = (Time_t)SvIVx(modified);    /* time modified */
 #endif
 	    APPLY_TAINT_PROPER();
 	    tot = sp - mark;
 	    while (++mark <= sp) {
 		char *name = SvPVx(*mark, n_a);
 		APPLY_TAINT_PROPER();
-		if (PerlLIO_utime(name, &utbuf))
+               if (PerlLIO_utime(name, utbufp))
 		    tot--;
 	    }
 	}
@@ -1998,13 +2029,42 @@ Perl_do_semop(pTHX_ SV **mark, SV **sp)
     id = SvIVx(*++mark);
     opstr = *++mark;
     opbuf = SvPV(opstr, opsize);
-    if (opsize < sizeof(struct sembuf)
-	|| (opsize % sizeof(struct sembuf)) != 0) {
+    if (opsize < 3 * SHORTSIZE
+	|| (opsize % (3 * SHORTSIZE))) {
 	SETERRNO(EINVAL,LIB$_INVARG);
 	return -1;
     }
     SETERRNO(0,0);
-    return semop(id, (struct sembuf *)opbuf, opsize/sizeof(struct sembuf));
+    /* We can't assume that sizeof(struct sembuf) == 3 * sizeof(short). */
+    {
+        int nsops  = opsize / (3 * sizeof (short));
+        int i      = nsops;
+        short *ops = (short *) opbuf;
+        short *o   = ops;
+        struct sembuf *temps, *t;
+        I32 result;
+
+        New (0, temps, nsops, struct sembuf);
+        t = temps;
+        while (i--) {
+            t->sem_num = *o++;
+            t->sem_op  = *o++;
+            t->sem_flg = *o++;
+            t++;
+        }
+        result = semop(id, temps, nsops);
+        t = temps;
+        o = ops;
+        i = nsops;
+        while (i--) {
+            *o++ = t->sem_num;
+            *o++ = t->sem_op;
+            *o++ = t->sem_flg;
+            t++;
+        }
+        Safefree(temps);
+        return result;
+    }
 #else
     Perl_croak(aTHX_ "semop not implemented");
 #endif
@@ -2096,7 +2156,6 @@ Perl_start_glob (pTHX_ SV *tmpglob, IO *io)
 	char rslt[NAM$C_MAXRSS+1+sizeof(unsigned short int)] = {'\0','\0'};
 	char vmsspec[NAM$C_MAXRSS+1];
 	char *rstr = rslt + sizeof(unsigned short int), *begin, *end, *cp;
-	char tmpfnam[L_tmpnam] = "SYS$SCRATCH:";
 	$DESCRIPTOR(dfltdsc,"SYS$DISK:[]*.*;");
 	PerlIO *tmpfp;
 	STRLEN i;
@@ -2111,7 +2170,6 @@ Perl_start_glob (pTHX_ SV *tmpglob, IO *io)
 	   ((struct NAM *)((struct FAB *)cxt)->fab$l_nam)->nam$l_fnb
 	   but that's unsupported, so I don't want to do it now and
 	   have it bite someone in the future. */
-	strcat(tmpfnam,PerlLIO_tmpnam(NULL));
 	cp = SvPV(tmpglob,i);
 	for (; i; i--) {
 	    if (cp[i] == ';') hasver = 1;
@@ -2128,7 +2186,7 @@ Perl_start_glob (pTHX_ SV *tmpglob, IO *io)
 		break;
 	    }
 	}
-	if ((tmpfp = PerlIO_open(tmpfnam,"w+","fop=dlt")) != NULL) {
+       if ((tmpfp = PerlIO_tmpfile()) != NULL) {
 	    Stat_t st;
 	    if (!PerlLIO_stat(SvPVX(tmpglob),&st) && S_ISDIR(st.st_mode))
 		ok = ((wilddsc.dsc$a_pointer = tovmspath(SvPVX(tmpglob),vmsspec)) != NULL);

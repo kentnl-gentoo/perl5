@@ -15,7 +15,7 @@ use Exporter;
 use Errno;
 
 @ISA = qw(IO::Socket);
-$VERSION = "1.25";
+$VERSION = "1.26";
 
 my $EINVAL = exists(&Errno::EINVAL) ? Errno::EINVAL() : 1;
 
@@ -63,7 +63,7 @@ sub _sock_info {
     @serv = getservbyname($port, $proto[0] || "")
 	if ($port =~ m,\D,);
 
-    $port = $pnum || $serv[2] || $defport || undef;
+    $port = $serv[2] || $defport || $pnum;
     unless (defined $port) {
 	$@ = "Bad service '$origport'";
 	return;
@@ -84,7 +84,8 @@ sub _error {
     my $err = shift;
     {
       local($!);
-      $@ = join("",ref($sock),": ",@_);
+      my $title = ref($sock).": ";
+      $@ = join("", $_[0] =~ /^$title/ ? "" : $title, @_);
       close($sock)
 	if(defined fileno($sock));
     }
@@ -189,12 +190,13 @@ sub configure {
 #        my $timeout = ${*$sock}{'io_socket_timeout'};
 #        my $before = time() if $timeout;
 
+	undef $@;
         if ($sock->connect(pack_sockaddr_in($rport, $raddr))) {
 #            ${*$sock}{'io_socket_timeout'} = $timeout;
             return $sock;
         }
 
-	return _error($sock, $!, "Timeout")
+	return _error($sock, $!, $@ || "Timeout")
 	    unless @raddr;
 
 #	if ($timeout) {

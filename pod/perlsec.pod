@@ -44,8 +44,8 @@ directories, or processes, B<with the following exceptions>:
 
 =item *
 
-If you pass a list of arguments to either C<system> or C<exec>,
-the elements of that list are B<not> checked for taintedness.
+If you pass more than one argument to either C<system> or C<exec>,
+the arguments are B<not> checked for taintedness.
 
 =item *
 
@@ -53,9 +53,10 @@ Arguments to C<print> and C<syswrite> are B<not> checked for taintedness.
 
 =back
 
-Any variable set to a value
-derived from tainted data will itself be tainted, even if it is
-logically impossible for the tainted data to alter the variable.
+The value of an expression containing tainted data will itself be
+tainted, even if it is logically impossible for the tainted data to
+affect the value.
+
 Because taintedness is associated with each scalar value, some
 elements of an array can be tainted and others not.
 
@@ -95,12 +96,20 @@ For example:
     unlink $data, $arg;		# Insecure
     umask $arg;			# Insecure
 
-    exec "echo $arg";		# Insecure
+    exec "echo $arg";		# Insecure (uses the shell)
     exec "echo", $arg;		# Secure (doesn't use the shell)
     exec "sh", '-c', $arg;	# Considered secure, alas!
 
     @files = <*.c>;		# insecure (uses readdir() or similar)
     @files = glob('*.c');	# insecure (uses readdir() or similar)
+
+    # In Perl releases older than 5.6.0 the <*.c> and glob('*.c') would
+    # have used an external program to do the filename expansion; but in
+    # either case the result is tainted since the list of filenames comes
+    # from outside of the program.
+
+    $bad = ($arg, 23);		# $bad will be tainted
+    $arg, `true`;		# Insecure (although it isn't really)
 
 If you try to do something insecure, you will get a fatal error saying
 something like "Insecure dependency" or "Insecure $ENV{PATH}".  Note that you
@@ -109,10 +118,11 @@ doing something like the "considered secure" example above.
 
 =head2 Laundering and Detecting Tainted Data
 
-To test whether a variable contains tainted data, and whose use would thus
-trigger an "Insecure dependency" message, check your nearby CPAN mirror
-for the F<Taint.pm> module, which should become available around November
-1997.  Or you may be able to use the following I<is_tainted()> function.
+To test whether a variable contains tainted data, and whose use would
+thus trigger an "Insecure dependency" message, you can use the
+tainted() function of the Scalar::Util module, available in your
+nearby CPAN mirror, and included in Perl starting from the release 5.8.0.
+Or you may be able to use the following I<is_tainted()> function.
 
     sub is_tainted {
 	return ! eval {
@@ -343,10 +353,11 @@ determine the insecure things and exploit them without viewing the
 source.  Security through obscurity, the name for hiding your bugs
 instead of fixing them, is little security indeed.
 
-You can try using encryption via source filters (Filter::* from CPAN).
-But crackers might be able to decrypt it.  You can try using the
-byte code compiler and interpreter described below, but crackers might
-be able to de-compile it.  You can try using the native-code compiler
+You can try using encryption via source filters (Filter::* from CPAN,
+or Filter::Util::Call and Filter::Simple since Perl 5.8).
+But crackers might be able to decrypt it.  You can try using the byte
+code compiler and interpreter described below, but crackers might be
+able to de-compile it.  You can try using the native-code compiler
 described below, but crackers might be able to disassemble it.  These
 pose varying degrees of difficulty to people wanting to get at your
 code, but none can definitively conceal it (this is true of every

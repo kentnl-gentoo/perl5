@@ -95,16 +95,16 @@ struct regnode_charclass {
     U8  type;
     U16 next_off;
     U32 arg1;
-    char bitmap[ANYOF_BITMAP_SIZE];
+    char bitmap[ANYOF_BITMAP_SIZE];	/* only compile-time */
 };
 
-struct regnode_charclass_class {
-    U8	flags;
+struct regnode_charclass_class {	/* has [[:blah:]] classes */
+    U8	flags;				/* should have ANYOF_CLASS here */
     U8  type;
     U16 next_off;
     U32 arg1;
-    char bitmap[ANYOF_BITMAP_SIZE];
-    char classflags[ANYOF_CLASSBITMAP_SIZE];
+    char bitmap[ANYOF_BITMAP_SIZE];		/* both compile-time */
+    char classflags[ANYOF_CLASSBITMAP_SIZE];	/* and run-time */
 };
 
 /* XXX fix this description.
@@ -132,12 +132,19 @@ struct regnode_charclass_class {
 #define ARG_VALUE(arg) (arg)
 #define ARG__SET(arg,val) ((arg) = (val))
 
+#undef ARG
+#undef ARG1
+#undef ARG2
+
 #define ARG(p) ARG_VALUE(ARG_LOC(p))
 #define ARG1(p) ARG_VALUE(ARG1_LOC(p))
 #define ARG2(p) ARG_VALUE(ARG2_LOC(p))
 #define ARG_SET(p, val) ARG__SET(ARG_LOC(p), (val))
 #define ARG1_SET(p, val) ARG__SET(ARG1_LOC(p), (val))
 #define ARG2_SET(p, val) ARG__SET(ARG2_LOC(p), (val))
+
+#undef NEXT_OFF
+#undef NODE_ALIGN
 
 #ifndef lint
 #  define NEXT_OFF(p) ((p)->next_off)
@@ -151,6 +158,11 @@ struct regnode_charclass_class {
 
 #define SIZE_ALIGN NODE_ALIGN
 
+#undef OP
+#undef OPERAND
+#undef MASK
+#undef STRING
+
 #define	OP(p)		((p)->type)
 #define	OPERAND(p)	(((struct regnode_string *)p)->string)
 #define MASK(p)		((char*)OPERAND(p))
@@ -158,6 +170,11 @@ struct regnode_charclass_class {
 #define	STRING(p)	(((struct regnode_string *)p)->string)
 #define STR_SZ(l)	((l + sizeof(regnode) - 1) / sizeof(regnode))
 #define NODE_SZ_STR(p)	(STR_SZ(STR_LEN(p))+1)
+
+#undef NODE_ALIGN
+#undef ARG_LOC
+#undef NEXTOPER
+#undef PREVOPER
 
 #define	NODE_ALIGN(node)
 #define	ARG_LOC(p)	(((struct regnode_1 *)p)->arg1)
@@ -182,7 +199,7 @@ struct regnode_charclass_class {
 
 /* Flags for node->flags of ANYOF */
 
-#define ANYOF_CLASS		0x08
+#define ANYOF_CLASS		0x08	/* has [[:blah:]] classes */
 #define ANYOF_INVERT		0x04
 #define ANYOF_FOLD		0x02
 #define ANYOF_LOCALE		0x01
@@ -193,6 +210,9 @@ struct regnode_charclass_class {
 /* There is a character or a range past 0xff */
 #define ANYOF_UNICODE		0x20
 #define ANYOF_UNICODE_ALL	0x40	/* Can match any char past 0xff */
+
+/* size of node is large (includes class pointer) */
+#define ANYOF_LARGE 		0x80
 
 /* Are there any runtime flags on in this node? */
 #define ANYOF_RUNTIME(s)	(ANYOF_FLAGS(s) & 0x0f)
@@ -330,6 +350,15 @@ typedef struct re_scream_pos_data_s
     I32 *scream_pos;		/* Internal iterator of scream. */
 } re_scream_pos_data;
 
+/* .what is a character array with one character for each member of .data
+ * The character describes the function of the corresponding .data item:
+ *   f - start-class data for regstclass optimization  
+ *   n - Root of op tree for (?{EVAL}) item
+ *   o - Start op for (?{EVAL}) item
+ *   p - Pad for (?{EVAL} item
+ *   s - swash for unicode-style character class
+ * 20010712 mjd@plover.com
+ */
 struct reg_data {
     U32 count;
     U8 *what;

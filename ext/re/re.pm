@@ -1,6 +1,6 @@
 package re;
 
-$VERSION = 0.02;
+our $VERSION = 0.03;
 
 =head1 NAME
 
@@ -79,7 +79,6 @@ See L<perlmodlib/Pragmatic Modules>.
 my %bitmask = (
 taint		=> 0x00100000,
 eval		=> 0x00200000,
-asciirange	=> 0x02000000,
 );
 
 sub setcolor {
@@ -99,7 +98,7 @@ sub setcolor {
 sub bits {
     my $on = shift;
     my $bits = 0;
-    unless(@_) {
+    unless (@_) {
 	require Carp;
 	Carp::carp("Useless use of \"re\" pragma");
     }
@@ -112,19 +111,24 @@ sub bits {
 	  uninstall() unless $on;
 	  next;
       }
-      $bits |= $bitmask{$s} || 0;
+      if (exists $bitmask{$s}) {
+	  $bits |= $bitmask{$s};
+      } else {
+	  require Carp;
+	  Carp::carp("Unknown \"re\" subpragma '$s' (known ones are: @{[join(', ', map {qq('$_')} sort keys %bitmask)]})");
+      }
     }
     $bits;
 }
 
 sub import {
     shift;
-    $^H |= bits(1,@_);
+    $^H |= bits(1, @_);
 }
 
 sub unimport {
     shift;
-    $^H &= ~ bits(0,@_);
+    $^H &= ~ bits(0, @_);
 }
 
 1;

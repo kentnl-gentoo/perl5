@@ -850,7 +850,7 @@ win32_readdir(DIR *dirp)
 		long endpos = dirp->end - dirp->start;
 		long newsize = endpos + strlen(ptr) + 1;
 		/* bump the string table size by enough for the
-		 * new name and it's null terminator */
+		 * new name and its null terminator */
 		while (newsize > dirp->size) {
 		    long curpos = dirp->curr - dirp->start;
 		    dirp->size *= 2;
@@ -3362,8 +3362,15 @@ win32_execvp(const char *cmdname, const char *const *argv)
     dTHXo;
     /* if this is a pseudo-forked child, we just want to spawn
      * the new program, and return */
-    if (w32_pseudo_id)
-	return win32_spawnvp(P_WAIT, cmdname, (char *const *)argv);
+    if (w32_pseudo_id) {
+	int status = win32_spawnvp(P_WAIT, cmdname, (char *const *)argv);
+	if (status != -1) {
+	    my_exit(status);
+	    return 0;
+	}
+	else
+	    return status;
+    }
 #endif
     return execvp(cmdname, (char *const *)argv);
 }

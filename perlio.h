@@ -30,7 +30,9 @@
 
 #if defined(PERL_IMPLICIT_SYS)
 #ifndef USE_PERLIO
+#ifndef NETWARE
 # define USE_PERLIO
+#endif
 #endif
 #endif
 
@@ -60,6 +62,11 @@
 #define fseek fseeko
 #endif
 
+/* BS2000 includes are sometimes a bit non standard :-( */
+#if defined(POSIX_BC) && defined(O_BINARY) && !defined(O_TEXT)
+#undef O_BINARY
+#endif
+
 #ifdef PERLIO_IS_STDIO
 /* #define PerlIO_xxxx() as equivalent stdio function */
 #include "perlsdio.h"
@@ -81,7 +88,7 @@ typedef PerlIOl *PerlIO;
 #define PERLIO_LAYERS 1
 
 extern void	PerlIO_define_layer	(pTHX_ PerlIO_funcs *tab);
-extern SV *	PerlIO_find_layer	(pTHX_ const char *name, STRLEN len, int load);
+extern PerlIO_funcs *PerlIO_find_layer	(pTHX_ const char *name, STRLEN len, int load);
 extern PerlIO *	PerlIO_push		(pTHX_ PerlIO *f,PerlIO_funcs *tab,const char *mode,SV *arg);
 extern void	PerlIO_pop		(pTHX_ PerlIO *f);
 
@@ -237,6 +244,9 @@ extern void	PerlIO_releaseFILE	(PerlIO *,FILE *);
 #ifndef PerlIO_read
 extern SSize_t	PerlIO_read		(PerlIO *,void *,Size_t);
 #endif
+#ifndef PerlIO_unread
+extern SSize_t PerlIO_unread           (PerlIO *,const void *,Size_t);
+#endif
 #ifndef PerlIO_write
 extern SSize_t	PerlIO_write		(PerlIO *,const void *,Size_t);
 #endif
@@ -325,6 +335,9 @@ extern int	PerlIO_apply_layers	(pTHX_ PerlIO *f, const char *mode, const char *n
 #endif
 #ifndef PerlIO_binmode
 extern int	PerlIO_binmode		(pTHX_ PerlIO *f, int iotype, int omode, const char *names);
+#endif
+#ifndef PerlIO_getname
+extern char *  PerlIO_getname          (PerlIO *, char *);
 #endif
 
 extern void PerlIO_destruct(pTHX);

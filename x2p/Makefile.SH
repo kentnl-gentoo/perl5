@@ -1,4 +1,4 @@
-case $CONFIGDOTSH in
+case $PERL_CONFIG_SH in
 '')
 	if test -f config.sh; then TOP=.;
 	elif test -f ../config.sh; then TOP=..;
@@ -102,7 +102,7 @@ all: $(public) $(private) $(util)
 	@echo " "
 
 compile: all
-	$(REALPERL) -I../lib ../utils/perlcc -regex 's/$$/.exe/' $(plextract) -prog -verbose dcf -log ../compilelog;  
+	$(REALPERL) -I../lib ../utils/perlcc -I .. -L .. $(plextract) -v -log ../compilelog;  
 
 a2p: $(obj) a2p$(OBJ_EXT)
 	$(CC) -o a2p $(LDFLAGS) $(obj) a2p$(OBJ_EXT) $(libs)
@@ -111,11 +111,21 @@ a2p: $(obj) a2p$(OBJ_EXT)
 # used only if you force byacc to run by saying
 # make  run_byacc
 
-run_byacc:	FORCE
+check_byacc:
+	@$(BYACC) -V 2>&1 | grep 'version 1\.8\.2'
+
+run_byacc:	FORCE check_byacc
 	@ echo Expect many shift/reduce and reduce/reduce conflicts
 	$(BYACC) a2p.y
 	rm -f a2p.c
-	mv y.tab.c a2p.c
+	sed -e 's/(yyn = yydefred\[yystate\])/((yyn = yydefred[yystate]))/' \
+	    -e 's/(yys = getenv("YYDEBUG"))/((yys = getenv("YYDEBUG")))/' \
+	    -e 's/^yyerrlab://' \
+	    -e 's/^    goto yyerrlab;//' \
+	    -e 's/^yynewerror://' \
+	    -e 's/^    goto yynewerror;//' \
+	    -e 's|^static char yysccsid\(.*\)|/* static char yysccsid\1 */|' \
+	    < y.tab.c > a2p.c
 
 FORCE:
 
@@ -129,7 +139,7 @@ a2p$(OBJ_EXT): a2p.c a2py.c a2p.h EXTERN.h util.h INTERN.h \
 	$(CCCMD) a2p.c
 
 clean:
-	rm -f a2p *$(OBJ_EXT) $(plexe) $(plc) $(plm)
+	rm -f a2p psed *$(OBJ_EXT) $(plexe) $(plc) $(plm)
 
 realclean: clean
 	rm -f core $(addedbyconf) all malloc.c

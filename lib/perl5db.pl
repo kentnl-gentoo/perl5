@@ -2,7 +2,7 @@ package DB;
 
 # Debugger for Perl 5.00x; perl5db.pl patch level:
 
-$VERSION = 1.07;
+$VERSION = 1.13;
 $header = "perl5db.pl version $VERSION";
 
 #
@@ -82,7 +82,6 @@ $header = "perl5db.pl version $VERSION";
 ##################################################################
 
 # Enhanced by ilya@math.ohio-state.edu (Ilya Zakharevich)
-# Latest version available: ftp://ftp.math.ohio-state.edu/pub/users/ilya/perl
 
 # modified Perl debugger, to be run from Emacs in perldb-mode
 # Ray Lischner (uunet!mntgfx!lisch) as of 5 Nov 1990
@@ -119,7 +118,7 @@ $header = "perl5db.pl version $VERSION";
 #	Some additional words on internal work of debugger.
 #	`b load filename' implemented.
 #	`b postpone subr' implemented.
-#	now only `q' exits debugger (overwriteable on $inhibit_exit).
+#	now only `q' exits debugger (overwritable on $inhibit_exit).
 #	When restarting debugger breakpoints/actions persist.
 #     Buglet: When restarting debugger only one breakpoint/action per 
 #		autoloaded function persists.
@@ -129,7 +128,7 @@ $header = "perl5db.pl version $VERSION";
 #	new `inhibitExit' option.
 #	printing of a very long statement interruptible.
 # Changes: 0.98: New command `m' for printing possible methods
-#	'l -' is a synonim for `-'.
+#	'l -' is a synonym for `-'.
 #	Cosmetic bugs in printing stack trace.
 #	`frame' & 8 to print "expanded args" in stack trace.
 #	Can list/break in imported subs.
@@ -147,7 +146,7 @@ $header = "perl5db.pl version $VERSION";
 #	when completing a subroutine name (same for `l').
 # Changes: 1.07: Many fixed by tchrist 13-March-2000
 #   BUG FIXES:
-#   + Added bare mimimal security checks on perldb rc files, plus
+#   + Added bare minimal security checks on perldb rc files, plus
 #     comments on what else is needed.
 #   + Fixed the ornaments that made "|h" completely unusable.
 #     They are not used in print_help if they will hurt.  Strip pod
@@ -155,7 +154,7 @@ $header = "perl5db.pl version $VERSION";
 #   + Fixed mis-formatting of help messages caused by ornaments
 #     to restore Larry's original formatting.  
 #   + Fixed many other formatting errors.  The code is still suboptimal, 
-#     and needs a lot of work at restructuing. It's also misindented
+#     and needs a lot of work at restructuring.  It's also misindented
 #     in many places.
 #   + Fixed bug where trying to look at an option like your pager
 #     shows "1".  
@@ -164,7 +163,7 @@ $header = "perl5db.pl version $VERSION";
 #     or else not caring about detailed status.  This should really be
 #     unified into one place, too.
 #   + Fixed bug where invisible trailing whitespace on commands hoses you,
-#     tricking Perl into thinking you wern't calling a debugger command!
+#     tricking Perl into thinking you weren't calling a debugger command!
 #   + Fixed bug where leading whitespace on commands hoses you.  (One
 #     suggests a leading semicolon or any other irrelevant non-whitespace
 #     to indicate literal Perl code.)
@@ -187,7 +186,74 @@ $header = "perl5db.pl version $VERSION";
 #   + Added to and rearranged the help information.
 #   + Detected apparent misuse of { ... } to declare a block; this used
 #     to work but now is a command, and mysteriously gave no complaint.
-
+#
+# Changes: 1.08: Apr 25, 2001  Jon Eveland <jweveland@yahoo.com>
+#   BUG FIX:
+#   + This patch to perl5db.pl cleans up formatting issues on the help
+#     summary (h h) screen in the debugger.  Mostly columnar alignment
+#     issues, plus converted the printed text to use all spaces, since
+#     tabs don't seem to help much here.
+#
+# Changes: 1.09: May 19, 2001  Ilya Zakharevich <ilya@math.ohio-state.edu>
+#   0) Minor bugs corrected;
+#   a) Support for auto-creation of new TTY window on startup, either
+#      unconditionally, or if started as a kid of another debugger session;
+#   b) New `O'ption CreateTTY
+#       I<CreateTTY>       bits control attempts to create a new TTY on events:
+#                          1: on fork()   2: debugger is started inside debugger
+#                          4: on startup
+#   c) Code to auto-create a new TTY window on OS/2 (currently one one
+#      extra window per session - need named pipes to have more...);
+#   d) Simplified interface for custom createTTY functions (with a backward
+#      compatibility hack); now returns the TTY name to use; return of ''
+#      means that the function reset the I/O handles itself;
+#   d') Better message on the semantic of custom createTTY function;
+#   e) Convert the existing code to create a TTY into a custom createTTY
+#      function;
+#   f) Consistent support for TTY names of the form "TTYin,TTYout";
+#   g) Switch line-tracing output too to the created TTY window;
+#   h) make `b fork' DWIM with CORE::GLOBAL::fork;
+#   i) High-level debugger API cmd_*():
+#      cmd_b_load($filenamepart)            # b load filenamepart
+#      cmd_b_line($lineno [, $cond])        # b lineno [cond]
+#      cmd_b_sub($sub [, $cond])            # b sub [cond]
+#      cmd_stop()                           # Control-C
+#      cmd_d($lineno)                       # d lineno
+#      The cmd_*() API returns FALSE on failure; in this case it outputs
+#      the error message to the debugging output.
+#   j) Low-level debugger API
+#      break_on_load($filename)             # b load filename
+#      @files = report_break_on_load()      # List files with load-breakpoints
+#      breakable_line_in_filename($name, $from [, $to])
+#                                           # First breakable line in the
+#                                           # range $from .. $to.  $to defaults
+#                                           # to $from, and may be less than $to
+#      breakable_line($from [, $to])        # Same for the current file
+#      break_on_filename_line($name, $lineno [, $cond])
+#                                           # Set breakpoint,$cond defaults to 1
+#      break_on_filename_line_range($name, $from, $to [, $cond])
+#                                           # As above, on the first
+#                                           # breakable line in range
+#      break_on_line($lineno [, $cond])     # As above, in the current file
+#      break_subroutine($sub [, $cond])     # break on the first breakable line
+#      ($name, $from, $to) = subroutine_filename_lines($sub)
+#                                           # The range of lines of the text
+#      The low-level API returns TRUE on success, and die()s on failure.
+#
+# Changes: 1.10: May 23, 2001  Daniel Lewart <d-lewart@uiuc.edu>
+#   BUG FIXES:
+#   + Fixed warnings generated by "perl -dWe 42"
+#   + Corrected spelling errors
+#   + Squeezed Help (h) output into 80 columns
+#
+# Changes: 1.11: May 24, 2001  David Dyck <dcd@tc.fluke.com>
+#   + Made "x @INC" work like it used to
+#
+# Changes: 1.12: May 24, 2001  Daniel Lewart <d-lewart@uiuc.edu>
+#   + Fixed warnings generated by "O" (Show debugger options)
+#   + Fixed warnings generated by "p 42" (Print expression)
+# Changes: 1.13: Jun 19, 2001 Scott.L.Miller@compaq.com
+#   + Added windowSize option 
 ####################################################################
 
 # Needed for the statement after exec():
@@ -224,8 +290,8 @@ $inhibit_exit = $option{PrintRet} = 1;
 		  TTY noTTY ReadLine NonStop LineInfo maxTraceLen
 		  recallCommand ShellBang pager tkRunning ornaments
 		  signalLevel warnLevel dieLevel inhibit_exit
-		  ImmediateStop bareStringify
-		  RemotePort);
+		  ImmediateStop bareStringify CreateTTY
+		  RemotePort windowSize);
 
 %optionVars    = (
 		 hashDepth	=> \$dumpvar::hashDepth,
@@ -236,7 +302,8 @@ $inhibit_exit = $option{PrintRet} = 1;
 		 HighBit	=> \$dumpvar::quoteHighBit,
 		 undefPrint	=> \$dumpvar::printUndef,
 		 globPrint	=> \$dumpvar::globPrint,
-		 UsageOnly	=> \$dumpvar::usageOnly,     
+		 UsageOnly	=> \$dumpvar::usageOnly,
+		 CreateTTY	=> \$CreateTTY,
 		 bareStringify	=> \$dumpvar::bareStringify,
 		 frame          => \$frame,
 		 AutoTrace      => \$trace,
@@ -244,6 +311,7 @@ $inhibit_exit = $option{PrintRet} = 1;
 		 maxTraceLen	=> \$maxtrace,
 		 ImmediateStop	=> \$ImmediateStop,
 		 RemotePort	=> \$remoteport,
+		 windowSize	=> \$window,
 );
 
 %optionAction  = (
@@ -274,12 +342,13 @@ $inhibit_exit = $option{PrintRet} = 1;
 
 # These guys may be defined in $ENV{PERL5DB} :
 $rl		= 1	unless defined $rl;
-$warnLevel	= 0	unless defined $warnLevel;
-$dieLevel	= 0	unless defined $dieLevel;
+$warnLevel	= 1	unless defined $warnLevel;
+$dieLevel	= 1	unless defined $dieLevel;
 $signalLevel	= 1	unless defined $signalLevel;
 $pre		= []	unless defined $pre;
 $post		= []	unless defined $post;
 $pretype	= []	unless defined $pretype;
+$CreateTTY	= 3	unless defined $CreateTTY;
 
 warnLevel($warnLevel);
 dieLevel($dieLevel);
@@ -294,7 +363,20 @@ signalLevel($signalLevel);
 setman();
 &recallCommand("!") unless defined $prc;
 &shellBang("!") unless defined $psh;
+sethelp();
 $maxtrace = 400 unless defined $maxtrace;
+$ini_pids = $ENV{PERLDB_PIDS};
+if (defined $ENV{PERLDB_PIDS}) {
+  $pids = "[$ENV{PERLDB_PIDS}]";
+  $ENV{PERLDB_PIDS} .= "->$$";
+  $term_pid = -1;
+} else {
+  $ENV{PERLDB_PIDS} = "$$";
+  $pids = '';
+  $term_pid = $$;
+}
+$pidprompt = '';
+*emacs = $slave_editor if $slave_editor;	# May be used in afterinit()...
 
 if (-e "/dev/tty") {  # this is the wrong metric!
   $rcfile=".perldb";
@@ -358,6 +440,13 @@ if (defined $ENV{PERLDB_OPTS}) {
   parse_options($ENV{PERLDB_OPTS});
 }
 
+if ( not defined &get_fork_TTY and defined $ENV{TERM} and $ENV{TERM} eq 'xterm'
+     and defined $ENV{WINDOWID} and defined $ENV{DISPLAY} ) { # _inside_ XTERM?
+    *get_fork_TTY = \&xterm_get_fork_TTY;
+} elsif ($^O eq 'os2') {
+    *get_fork_TTY = \&os2_get_fork_TTY;
+}
+
 # Here begin the unreadable code.  It needs fixing.
 
 if (exists $ENV{PERLDB_RESTART}) {
@@ -415,6 +504,10 @@ if ($notty) {
     $console = undef;
   }
 
+  if ($^O eq 'NetWare') {
+	$console = undef;
+  }
+
   # Around a bug:
   if (defined $ENV{OS2_SHELL} and ($slave_editor or $ENV{WINDOWID})) { # In OS/2
     $console = undef;
@@ -434,11 +527,14 @@ if ($notty) {
                                );
     if (!$OUT) { die "Unable to connect to remote host: $remoteport\n"; }
     $IN = $OUT;
-  }
-  else {
+  } elsif ($CreateTTY & 4) {
+    create_IN_OUT(4);
+  } else {
     if (defined $console) {
-      open(IN,"+<$console") || open(IN,"<$console") || open(IN,"<&STDIN");
-      open(OUT,"+>$console") || open(OUT,">$console") || open(OUT,">&STDERR")
+      my ($i, $o) = split /,/, $console;
+      $o = $i unless defined $o;
+      open(IN,"+<$i") || open(IN,"<$i") || open(IN,"<&STDIN");
+      open(OUT,"+>$o") || open(OUT,">$o") || open(OUT,">&STDERR")
         || open(OUT,">&STDOUT");	# so we don't dongle stdout
     } else {
       open(IN,"<&STDIN");
@@ -450,22 +546,24 @@ if ($notty) {
 
     $OUT = \*OUT;
   }
-  select($OUT);
+  my $previous = select($OUT);
   $| = 1;			# for DB::OUT
-  select(STDOUT);
+  select($previous);
 
   $LINEINFO = $OUT unless defined $LINEINFO;
   $lineinfo = $console unless defined $lineinfo;
 
-  $| = 1;			# for real STDOUT
-
   $header =~ s/.Header: ([^,]+),v(\s+\S+\s+\S+).*$/$1$2/;
   unless ($runnonstop) {
-    print $OUT "\nLoading DB routines from $header\n";
-    print $OUT ("Editor support ",
-		$slave_editor ? "enabled" : "available",
-		".\n");
-    print $OUT "\nEnter h or `h h' for help, or `$doccmd perldebug' for more help.\n\n";
+    if ($term_pid eq '-1') {
+      print $OUT "\nDaughter DB session started...\n";
+    } else {
+      print $OUT "\nLoading DB routines from $header\n";
+      print $OUT ("Editor support ",
+		  $slave_editor ? "enabled" : "available",
+		  ".\n");
+      print $OUT "\nEnter h or `h h' for help, or `$doccmd perldebug' for more help.\n\n";
+    }
   }
 }
 
@@ -505,7 +603,7 @@ sub DB {
       "package $package;";	# this won't let them modify, alas
     local(*dbline) = $main::{'_<' . $filename};
     $max = $#dbline;
-    if (($stop,$action) = split(/\0/,$dbline{$line})) {
+    if ($dbline{$line} && (($stop,$action) = split(/\0/,$dbline{$line}))) {
 	if ($stop eq '1') {
 	    $signal |= 1;
 	} elsif ($stop) {
@@ -540,7 +638,7 @@ EOP
     if ($single || ($trace & 1) || $was_signal) {
 	if ($slave_editor) {
 	    $position = "\032\032$filename:$line:0\n";
-	    print $LINEINFO $position;
+	    print_lineinfo($position);
 	} elsif ($package eq 'DB::fake') {
 	  $term || &setterm;
 	  print_help(<<EOP);
@@ -565,9 +663,9 @@ EOP
 		$position = "$prefix$line$infix$dbline[$line]$after";
 	    }
 	    if ($frame) {
-		print $LINEINFO ' ' x $stack_depth, "$line:\t$dbline[$line]$after";
+		print_lineinfo(' ' x $stack_depth, "$line:\t$dbline[$line]$after");
 	    } else {
-		print $LINEINFO $position;
+		print_lineinfo($position);
 	    }
 	    for ($i = $line + 1; $i <= $max && $dbline[$i] == 0; ++$i) { #{ vi
 		last if $dbline[$i] =~ /^\s*[\;\}\#\n]/;
@@ -576,9 +674,9 @@ EOP
 		$incr_pos = "$prefix$i$infix$dbline[$i]$after";
 		$position .= $incr_pos;
 		if ($frame) {
-		    print $LINEINFO ' ' x $stack_depth, "$i:\t$dbline[$i]$after";
+		    print_lineinfo(' ' x $stack_depth, "$i:\t$dbline[$i]$after");
 		} else {
-		    print $LINEINFO $incr_pos;
+		    print_lineinfo($incr_pos);
 		}
 	    }
 	}
@@ -596,8 +694,8 @@ EOP
 	@typeahead = (@$pretype, @typeahead);
       CMD:
 	while (($term || &setterm),
-	       ($term_pid == $$ or &resetterm),
-	       defined ($cmd=&readline("  DB" . ('<' x $level) .
+	       ($term_pid == $$ or resetterm(1)),
+	       defined ($cmd=&readline("$pidprompt  DB" . ('<' x $level) .
 				       ($#hist+1) . ('>' x $level) .
 				       " "))) 
         {
@@ -725,10 +823,13 @@ EOP
 			$cmd = "$1 $s";
 		    };
 		    $cmd =~ /^l\b\s*([\':A-Za-z_][\':\w]*(\[.*\])?)/s && do {
-			$subname = $1;
+			my $s = $subname = $1;
 			$subname =~ s/\'/::/;
 			$subname = $package."::".$subname 
 			  unless $subname =~ /::/;
+			$subname = "CORE::GLOBAL::$s"
+			  if not defined &$subname and $s !~ /::/
+			     and defined &{"CORE::GLOBAL::$s"};
 			$subname = "main".$subname if substr($subname,0,2) eq "::";
 			@pieces = split(/:/,find_sub($subname) || $sub{$subname});
 			$subrange = pop @pieces;
@@ -755,7 +856,7 @@ EOP
 			$filename = $filename_ini;
 			*dbline = $main::{'_<' . $filename};
 			$max = $#dbline;
-			print $LINEINFO $position;
+			print_lineinfo($position);
 			next CMD };
 		    $cmd =~ /^w\b\s*(\d*)$/ && do {
 			$incr = $window - 1;
@@ -788,7 +889,9 @@ EOP
 			    $i = $end;
 			} else {
 			    for (; $i <= $end; $i++) {
-			        ($stop,$action) = split(/\0/, $dbline{$i});
+				my ($stop,$action);
+				($stop,$action) = split(/\0/, $dbline{$i}) if
+				    $dbline{$i};
 			        $arrow = ($i==$line 
 					  and $filename eq $filename_ini) 
 				  ?  '==>' 
@@ -896,13 +999,7 @@ EOP
 		      next CMD; };
 		    $cmd =~ /^b\b\s*load\b\s*(.*)/ && do {
 			my $file = $1; $file =~ s/\s+$//;
-			{
-			  $break_on_load{$file} = 1;
-			  $break_on_load{$::INC{$file}} = 1 if $::INC{$file};
-			  $file .= '.pm', redo unless $file =~ /\./;
-			}
-			$had_breakpoints{$file} |= 1;
-			print $OUT "Will stop on load of `@{[join '\', `', sort keys %break_on_load]}'.\n";
+			cmd_b_load($file);
 			next CMD; };
 		    $cmd =~ /^b\b\s*(postpone|compile)\b\s*([':A-Za-z_][':\w]*)\s*(.*)/ && do {
 			my $cond = length $3 ? $3 : '1';
@@ -917,42 +1014,15 @@ EOP
 		    $cmd =~ /^b\b\s*([':A-Za-z_][':\w]*(?:\[.*\])?)\s*(.*)/ && do {
 			$subname = $1;
 			$cond = length $2 ? $2 : '1';
-			$subname =~ s/\'/::/g;
-			$subname = "${'package'}::" . $subname
-			  unless $subname =~ /::/;
-			$subname = "main".$subname if substr($subname,0,2) eq "::";
-			# Filename below can contain ':'
-			($file,$i) = (find_sub($subname) =~ /^(.*):(.*)$/);
-			$i += 0;
-			if ($i) {
-			    local $filename = $file;
-			    local *dbline = $main::{'_<' . $filename};
-			    $had_breakpoints{$filename} |= 1;
-			    $max = $#dbline;
-			    ++$i while $dbline[$i] == 0 && $i < $max;
-			    $dbline{$i} =~ s/^[^\0]*/$cond/;
-			} else {
-			    print $OUT "Subroutine $subname not found.\n";
-			}
+			cmd_b_sub($subname, $cond);
 			next CMD; };
 		    $cmd =~ /^b\b\s*(\d*)\s*(.*)/ && do {
 			$i = $1 || $line;
 			$cond = length $2 ? $2 : '1';
-			if ($dbline[$i] == 0) {
-			    print $OUT "Line $i not breakable.\n";
-			} else {
-			    $had_breakpoints{$filename} |= 1;
-			    $dbline{$i} =~ s/^[^\0]*/$cond/;
-			}
+			cmd_b_line($i, $cond);
 			next CMD; };
 		    $cmd =~ /^d\b\s*(\d*)/ && do {
-			$i = $1 || $line;
-                        if ($dbline[$i] == 0) {
-                            print $OUT "Line $i not breakable.\n";
-                        } else {
-			    $dbline{$i} =~ s/^[^\0]*//;
-			    delete $dbline{$i} if $dbline{$i} eq '';
-                        }
+			cmd_d($1 || $line);
 			next CMD; };
 		    $cmd =~ /^A$/ && do {
 		      print $OUT "Deleting all actions...\n";
@@ -1201,8 +1271,10 @@ EOP
 			set_list("PERLDB_POST", @$post);
 			set_list("PERLDB_TYPEAHEAD", @typeahead);
 			$ENV{PERLDB_RESTART} = 1;
+			delete $ENV{PERLDB_PIDS}; # Restore ini state
+			$ENV{PERLDB_PIDS} = $ini_pids if defined $ini_pids;
 			#print "$^X, '-d', @flags, @script, ($slave_editor ? '-emacs' : ()), @ARGS";
-			exec $^X, '-d', @flags, @script, ($slave_editor ? '-emacs' : ()), @ARGS;
+			exec($^X, '-d', @flags, @script, ($slave_editor ? '-emacs' : ()), @ARGS) ||
 			print $OUT "exec failed: $!\n";
 			last CMD; };
 		    $cmd =~ /^T$/ && do {
@@ -1459,17 +1531,17 @@ sub sub {
     $single &= 1;
     $single |= 4 if $stack_depth == $deep;
     ($frame & 4 
-     ? ( (print $LINEINFO ' ' x ($stack_depth - 1), "in  "), 
+     ? ( print_lineinfo(' ' x ($stack_depth - 1), "in  "),
 	 # Why -1? But it works! :-(
 	 print_trace($LINEINFO, -1, 1, 1, "$sub$al") )
-     : print $LINEINFO ' ' x ($stack_depth - 1), "entering $sub$al\n") if $frame;
+     : print_lineinfo(' ' x ($stack_depth - 1), "entering $sub$al\n")) if $frame;
     if (wantarray) {
 	@ret = &$sub;
 	$single |= $stack[$stack_depth--];
 	($frame & 4 
-	 ? ( (print $LINEINFO ' ' x $stack_depth, "out "), 
+	 ? ( print_lineinfo(' ' x $stack_depth, "out "), 
 	     print_trace($LINEINFO, -1, 1, 1, "$sub$al") )
-	 : print $LINEINFO ' ' x $stack_depth, "exited $sub$al\n") if $frame & 2;
+	 : print_lineinfo(' ' x $stack_depth, "exited $sub$al\n")) if $frame & 2;
 	if ($doret eq $stack_depth or $frame & 16) {
             my $fh = ($doret eq $stack_depth ? $OUT : $LINEINFO);
 	    print $fh ' ' x $stack_depth if $frame & 16;
@@ -1486,9 +1558,9 @@ sub sub {
         };
 	$single |= $stack[$stack_depth--];
 	($frame & 4 
-	 ? ( (print $LINEINFO ' ' x $stack_depth, "out "), 
+	 ? (  print_lineinfo(' ' x $stack_depth, "out "),
 	      print_trace($LINEINFO, -1, 1, 1, "$sub$al") )
-	 : print $LINEINFO ' ' x $stack_depth, "exited $sub$al\n") if $frame & 2;
+	 : print_lineinfo(' ' x $stack_depth, "exited $sub$al\n")) if $frame & 2;
 	if ($doret eq $stack_depth or $frame & 16 and defined wantarray) {
             my $fh = ($doret eq $stack_depth ? $OUT : $LINEINFO);
 	    print $fh (' ' x $stack_depth) if $frame & 16;
@@ -1502,17 +1574,154 @@ sub sub {
     }
 }
 
+### The API section
+
+### Functions with multiple modes of failure die on error, the rest
+### returns FALSE on error.
+### User-interface functions cmd_* output error message.
+
+sub break_on_load {
+  my $file = shift;
+  $break_on_load{$file} = 1;
+  $had_breakpoints{$file} |= 1;
+}
+
+sub report_break_on_load {
+  sort keys %break_on_load;
+}
+
+sub cmd_b_load {
+  my $file = shift;
+  my @files;
+  {
+    push @files, $file;
+    push @files, $::INC{$file} if $::INC{$file};
+    $file .= '.pm', redo unless $file =~ /\./;
+  }
+  break_on_load($_) for @files;
+  @files = report_break_on_load;
+  print $OUT "Will stop on load of `@files'.\n";
+}
+
+$filename_error = '';
+
+sub breakable_line {
+  my ($from, $to) = @_;
+  my $i = $from;
+  if (@_ >= 2) {
+    my $delta = $from < $to ? +1 : -1;
+    my $limit = $delta > 0 ? $#dbline : 1;
+    $limit = $to if ($limit - $to) * $delta > 0;
+    $i += $delta while $dbline[$i] == 0 and ($limit - $i) * $delta > 0;
+  }
+  return $i unless $dbline[$i] == 0;
+  my ($pl, $upto) = ('', '');
+  ($pl, $upto) = ('s', "..$to") if @_ >=2 and $from != $to;
+  die "Line$pl $from$upto$filename_error not breakable\n";
+}
+
+sub breakable_line_in_filename {
+  my ($f) = shift;
+  local *dbline = $main::{'_<' . $f};
+  local $filename_error = " of `$f'";
+  breakable_line(@_);
+}
+
+sub break_on_line {
+  my ($i, $cond) = @_;
+  $cond = 1 unless @_ >= 2;
+  my $inii = $i;
+  my $after = '';
+  my $pl = '';
+  die "Line $i$filename_error not breakable.\n" if $dbline[$i] == 0;
+  $had_breakpoints{$filename} |= 1;
+  if ($dbline{$i}) { $dbline{$i} =~ s/^[^\0]*/$cond/; }
+  else { $dbline{$i} = $cond; }
+}
+
+sub cmd_b_line {
+  eval { break_on_line(@_); 1 } or print $OUT $@ and return;
+}
+
+sub break_on_filename_line {
+  my ($f, $i, $cond) = @_;
+  $cond = 1 unless @_ >= 3;
+  local *dbline = $main::{'_<' . $f};
+  local $filename_error = " of `$f'";
+  local $filename = $f;
+  break_on_line($i, $cond);
+}
+
+sub break_on_filename_line_range {
+  my ($f, $from, $to, $cond) = @_;
+  my $i = breakable_line_in_filename($f, $from, $to);
+  $cond = 1 unless @_ >= 3;
+  break_on_filename_line($f,$i,$cond);
+}
+
+sub subroutine_filename_lines {
+  my ($subname,$cond) = @_;
+  # Filename below can contain ':'
+  find_sub($subname) =~ /^(.*):(\d+)-(\d+)$/;
+}
+
+sub break_subroutine {
+  my $subname = shift;
+  my ($file,$s,$e) = subroutine_filename_lines($subname) or
+    die "Subroutine $subname not found.\n";
+  $cond = 1 unless @_ >= 2;
+  break_on_filename_line_range($file,$s,$e,@_);
+}
+
+sub cmd_b_sub {
+  my ($subname,$cond) = @_;
+  $cond = 1 unless @_ >= 2;
+  unless (ref $subname eq 'CODE') {
+    $subname =~ s/\'/::/g;
+    my $s = $subname;
+    $subname = "${'package'}::" . $subname
+      unless $subname =~ /::/;
+    $subname = "CORE::GLOBAL::$s"
+      if not defined &$subname and $s !~ /::/ and defined &{"CORE::GLOBAL::$s"};
+    $subname = "main".$subname if substr($subname,0,2) eq "::";
+  }
+  eval { break_subroutine($subname,$cond); 1 } or print $OUT $@ and return;
+}
+
+sub cmd_stop {			# As on ^C, but not signal-safy.
+  $signal = 1;
+}
+
+sub delete_breakpoint {
+  my $i = shift;
+  die "Line $i not breakable.\n" if $dbline[$i] == 0;
+  $dbline{$i} =~ s/^[^\0]*//;
+  delete $dbline{$i} if $dbline{$i} eq '';
+}
+
+sub cmd_d {
+  my $i = shift;
+  eval { delete_breakpoint $i; 1 } or print $OUT $@ and return;
+}
+
+### END of the API section
+
 sub save {
     @saved = ($@, $!, $^E, $,, $/, $\, $^W);
     $, = ""; $/ = "\n"; $\ = ""; $^W = 0;
+}
+
+sub print_lineinfo {
+  resetterm(1) if $LINEINFO eq $OUT and $term_pid != $$;
+  print $LINEINFO @_;
 }
 
 # The following takes its argument via $evalarg to preserve current @_
 
 sub eval {
     # 'my' would make it visible from user code
-    #    but so does local! --tchrist  
-    local @res;			
+    #    but so does local! --tchrist  [... into @DB::res, not @res. IZ]
+    local @res;
     {
 	local $otrace = $trace;
 	local $osingle = $single;
@@ -1528,10 +1737,9 @@ sub eval {
     eval { &DB::save };
     if ($at) {
 	print $OUT $at;
-    } elsif ($onetimeDump eq 'dump') {
-	dumpit($OUT, \@res);
-    } elsif ($onetimeDump eq 'methods') {
-	methods($res[0]);
+    } elsif ($onetimeDump) {
+	dumpit($OUT, \@res) if $onetimeDump eq 'dump';
+	methods($res[0])    if $onetimeDump eq 'methods';
     }
     @res;
 }
@@ -1572,7 +1780,7 @@ sub postponed {
   $filename =~ s/^_<//;
   $signal = 1, print $OUT "'$filename' loaded...\n"
     if $break_on_load{$filename};
-  print $LINEINFO ' ' x $stack_depth, "Package $filename.\n" if $frame;
+  print_lineinfo(' ' x $stack_depth, "Package $filename.\n") if $frame;
   return unless $postponed_file{$filename};
   $had_breakpoints{$filename} |= 1;
   #%dbline = %{$postponed_file{$filename}}; # Cannot be done: unsufficient magic
@@ -1607,6 +1815,7 @@ sub dumpit {
 
 sub print_trace {
   my $fh = shift;
+  resetterm(1) if $fh eq $LINEINFO and $LINEINFO eq $OUT and $term_pid != $$;
   my @sub = dump_trace($_[0] + 1, $_[1]);
   my $short = $_[2];		# Print short report, next one for sub name
   my $s;
@@ -1746,8 +1955,10 @@ sub setterm {
     eval { require Term::ReadLine } or die $@;
     if ($notty) {
 	if ($tty) {
-	    open(IN,"<$tty") or die "Cannot open TTY `$TTY' for read: $!";
-	    open(OUT,">$tty") or die "Cannot open TTY `$TTY' for write: $!";
+	    my ($i, $o) = split $tty, /,/;
+	    $o = $i unless defined $o;
+	    open(IN,"<$i") or die "Cannot open TTY `$i' for read: $!";
+	    open(OUT,">$o") or die "Cannot open TTY `$o' for write: $!";
 	    $IN = \*IN;
 	    $OUT = \*OUT;
 	    my $sel = select($OUT);
@@ -1760,6 +1971,9 @@ sub setterm {
 	    $IN = $term_rv->IN;
 	    $OUT = $term_rv->OUT;
 	}
+    }
+    if ($term_pid eq '-1') {		# In a TTY with another debugger
+	resetterm(2);
     }
     if (!$rl) {
 	$term = new Term::ReadLine::Stub 'perldb', $IN, $OUT;
@@ -1784,32 +1998,99 @@ sub setterm {
     $term_pid = $$;
 }
 
-sub resetterm {			# We forked, so we need a different TTY
-    $term_pid = $$;
-    if (defined &get_fork_TTY) {
-      &get_fork_TTY;
-    } elsif (not defined $fork_TTY 
-	     and defined $ENV{TERM} and $ENV{TERM} eq 'xterm' 
-	     and defined $ENV{WINDOWID} and defined $ENV{DISPLAY}) { 
-        # Possibly _inside_ XTERM
-        open XT, q[3>&1 xterm -title 'Forked Perl debugger' -e sh -c 'tty 1>&3;\
+# Example get_fork_TTY functions
+sub xterm_get_fork_TTY {
+  (my $name = $0) =~ s,^.*[/\\],,s;
+  open XT, qq[3>&1 xterm -title "Daughter Perl debugger $pids $name" -e sh -c 'tty 1>&3;\
  sleep 10000000' |];
-        $fork_TTY = <XT>;
-        chomp $fork_TTY;
-    }
-    if (defined $fork_TTY) {
-      TTY($fork_TTY);
-      undef $fork_TTY;
-    } else {
+  my $tty = <XT>;
+  chomp $tty;
+  $pidprompt = '';		# Shown anyway in titlebar
+  return $tty;
+}
+
+# This one resets $IN, $OUT itself
+sub os2_get_fork_TTY {
+  $^F = 40;		# XXXX Fixme!
+  my ($in1, $out1, $in2, $out2);
+  # Having -d in PERL5OPT would lead to a disaster...
+  local $ENV{PERL5OPT} = $ENV{PERL5OPT}    if $ENV{PERL5OPT};
+  $ENV{PERL5OPT} =~ s/(?:^|(?<=\s))-d\b//  if $ENV{PERL5OPT};
+  $ENV{PERL5OPT} =~ s/(?:^|(?<=\s))-d\B/-/ if $ENV{PERL5OPT};
+  print $OUT "Making PERL5OPT->`$ENV{PERL5OPT}'.\n" if $ENV{PERL5OPT};
+  (my $name = $0) =~ s,^.*[/\\],,s;
+  if ( pipe $in1, $out1 and pipe $in2, $out2 and
+       # system P_SESSION will fail if there is another process
+       # in the same session with a "dependent" asynchronous child session.
+       (($kpid = CORE::system 4, $^X, '-we', <<'ES', fileno $in1, fileno $out2, "Daughter Perl debugger $pids $name") >= 0 or warn "system P_SESSION: $!, $^E" and 0) # P_SESSION
+use Term::ReadKey;
+use OS2::Process;
+
+my $in = shift;		# Read from here and pass through
+set_title pop;
+system P_NOWAIT, $^X, '-we', <<EOS or die "Cannot start a grandkid";
+  open IN, '<&=$in' or die "open <&=$in: \$!";
+  \$| = 1; print while sysread IN, \$_, 1<<16;
+EOS
+
+my $out = shift;
+open OUT, ">&=$out" or die "Cannot open &=$out for writing: $!";
+select OUT;    $| = 1;
+ReadMode 4;		# Nodelay on kbd.  Pipe is automatically nodelay...
+print while sysread STDIN, $_, 1<<16;
+ES
+	and close $in1 and close $out2 ) {
+      $pidprompt = '';		# Shown anyway in titlebar
+      reset_IN_OUT($in2, $out1);
+      $tty = '*reset*';
+      return '';			# Indicate that reset_IN_OUT is called
+   }
+   return;
+}
+
+sub create_IN_OUT {	# Create a window with IN/OUT handles redirected there
+    my $in = &get_fork_TTY if defined &get_fork_TTY;
+    $in = $fork_TTY if defined $fork_TTY; # Backward compatibility
+    if (not defined $in) {
+      my $why = shift;
+      print_help(<<EOP) if $why == 1;
+I<#########> Forked, but do not know how to create a new B<TTY>. I<#########>
+EOP
+      print_help(<<EOP) if $why == 2;
+I<#########> Daughter session, do not know how to change a B<TTY>. I<#########>
+  This may be an asynchronous session, so the parent debugger may be active.
+EOP
+      print_help(<<EOP) if $why != 4;
+  Since two debuggers fight for the same TTY, input is severely entangled.
+
+EOP
       print_help(<<EOP);
-I<#########> Forked, but do not know how to change a B<TTY>. I<#########>
-  Define B<\$DB::fork_TTY> 
-       - or a function B<DB::get_fork_TTY()> which will set B<\$DB::fork_TTY>.
-  The value of B<\$DB::fork_TTY> should be the name of I<TTY> to use.
+  I know how to switch the output to a different window in xterms
+  and OS/2 consoles only.  For a manual switch, put the name of the created I<TTY>
+  in B<\$DB::fork_TTY>, or define a function B<DB::get_fork_TTY()> returning this.
+
   On I<UNIX>-like systems one can get the name of a I<TTY> for the given window
   by typing B<tty>, and disconnect the I<shell> from I<TTY> by B<sleep 1000000>.
+
 EOP
+    } elsif ($in ne '') {
+      TTY($in);
     }
+    undef $fork_TTY;
+}
+
+sub resetterm {			# We forked, so we need a different TTY
+    my $in = shift;
+    my $systemed = $in > 1 ? '-' : '';
+    if ($pids) {
+      $pids =~ s/\]/$systemed->$$]/;
+    } else {
+      $pids = "[$term_pid->$$]";
+    }
+    $pidprompt = $pids;
+    $term_pid = $$;
+    return unless $CreateTTY & $in;
+    create_IN_OUT($in);
 }
 
 sub readline {
@@ -1859,6 +2140,7 @@ sub option_val {
     } else {
 	$val = $option{$opt};
     }
+    $val = $default unless defined $val;
     $val
 }
 
@@ -1867,7 +2149,7 @@ sub parse_options {
     # too dangerous to let intuitive usage overwrite important things
     # defaultion should never be the default
     my %opt_needs_val = map { ( $_ => 1 ) } qw{
-        arrayDepth hashDepth LineInfo maxTraceLen ornaments
+        arrayDepth hashDepth LineInfo maxTraceLen ornaments windowSize
         pager quote ReadLine recallCommand RemotePort ShellBang TTY
     };
     while (length) {
@@ -1975,6 +2257,22 @@ sub warn {
     print $OUT $msg;
 }
 
+sub reset_IN_OUT {
+    my $switch_li = $LINEINFO eq $OUT;
+    if ($term and $term->Features->{newTTY}) {
+      ($IN, $OUT) = (shift, shift);
+      $term->newTTY($IN, $OUT);
+    } elsif ($term) {
+	&warn("Too late to set IN/OUT filehandles, enabled on next `R'!\n");
+    } else {
+      ($IN, $OUT) = (shift, shift);
+    }
+    my $o = select $OUT;
+    $| = 1;
+    select $o;
+    $LINEINFO = $OUT if $switch_li;
+}
+
 sub TTY {
     if (@_ and $term and $term->Features->{newTTY}) {
       my ($in, $out) = shift;
@@ -1985,13 +2283,11 @@ sub TTY {
       }
       open IN, $in or die "cannot open `$in' for read: $!";
       open OUT, ">$out" or die "cannot open `$out' for write: $!";
-      $term->newTTY(\*IN, \*OUT);
-      $IN	= \*IN;
-      $OUT	= \*OUT;
+      reset_IN_OUT(\*IN,\*OUT);
       return $tty = $in;
-    } elsif ($term and @_) {
-	&warn("Too late to set TTY, enabled on next `R'!\n");
-    } 
+    }
+    &warn("Too late to set TTY, enabled on next `R'!\n") if $term and @_;
+    # Useful if done through PERLDB_OPTS:
     $tty = shift if @_;
     $tty or $console;
 }
@@ -2053,7 +2349,6 @@ sub shellBang {
     $psh = $sh;
     $psh =~ s/\\b$//;
     $psh =~ s/\\(.)/$1/g;
-    &sethelp;
     $psh;
 }
 
@@ -2075,7 +2370,6 @@ sub recallCommand {
     $prc = $rc;
     $prc =~ s/\\b$//;
     $prc =~ s/\\(.)/$1/g;
-    &sethelp;
     $prc;
 }
 
@@ -2110,7 +2404,7 @@ sub list_versions {
 }
 
 sub sethelp {
-    # XXX: make sure these are tabs between the command and explantion,
+    # XXX: make sure there are tabs between the command and explanation,
     #      or print_help will screw up your formatting if you have
     #      eeevil ornaments enabled.  This is an insane mess.
 
@@ -2184,7 +2478,6 @@ B<>> I<expr>		Define Perl command to run after each prompt.
 B<>>B<>> I<expr>		Add to the list of Perl commands to run after each prompt.
 B<{> I<db_command>	Define debugger command to run before each prompt.
 B<{> ?			List debugger commands to run before each prompt.
-B<<> I<expr>		Define Perl command to run before each prompt.
 B<{{> I<db_command>	Add to the list of debugger commands to run before each prompt.
 B<$prc> I<number>	Redo a previous command (default previous command).
 B<$prc> I<-number>	Redo number'th-to-last command.
@@ -2203,7 +2496,7 @@ I<command>		Execute as a perl statement in current package.
 B<v>		Show versions of loaded modules.
 B<R>		Pure-man-restart of debugger, some of debugger state
 		and command-line options may be lost.
-		Currently the following setting are preserved: 
+		Currently the following settings are preserved:
 		history, breakpoints and actions, debugger B<O>ptions 
 		and the following command-line options: I<-w>, I<-I>, I<-e>.
 
@@ -2229,10 +2522,13 @@ B<O> [I<opt>B<=>I<val>] [I<opt>=B<\">I<val>B<\">] ...
     I<bareStringify> 		Do not print the overload-stringified value;
   Other options include:
     I<PrintRet>		affects printing of return value after B<r> command,
-    I<frame>		affects printing messages on entry and exit from subroutines.
-    I<AutoTrace>	affects printing messages on every possible breaking point.
-    I<maxTraceLen>	gives maximal length of evals/args listed in stack trace.
+    I<frame>		affects printing messages on subroutine entry/exit.
+    I<AutoTrace>	affects printing messages on possible breaking points.
+    I<maxTraceLen>	gives max length of evals/args listed in stack trace.
     I<ornaments> 	affects screen appearance of the command line.
+    I<CreateTTY> 	bits control attempts to create a new TTY on events:
+			1: on fork()	2: debugger is started inside debugger
+			4: on startup
 	During startup options are initialized from \$ENV{PERLDB_OPTS}.
 	You can put additional initialization options I<TTY>, I<noTTY>,
 	I<ReadLine>, I<NonStop>, and I<RemotePort> there (or use
@@ -2247,8 +2543,9 @@ B<$doccmd> I<manpage>	Runs the external doc viewer B<$doccmd> command on the
 
 Type `|h' for a paged display if this was too hard to read.
 
-"; # Fix balance of vi % matching: } }}
+"; # Fix balance of vi % matching: }}}}
 
+    #  note: tabs in the following section are not-so-helpful
     $summary = <<"END_SUM";
 I<List/search source lines:>               I<Control script execution:>
   B<l> [I<ln>|I<sub>]  List source code            B<T>           Stack trace
@@ -2256,7 +2553,7 @@ I<List/search source lines:>               I<Control script execution:>
   B<w> [I<line>]    List around line            B<n> [I<expr>]    Next, steps over subs
   B<f> I<filename>  View source in file         <B<CR>/B<Enter>>  Repeat last B<n> or B<s>
   B</>I<pattern>B</> B<?>I<patt>B<?>   Search forw/backw    B<r>           Return from subroutine
-  B<v>	      Show versions of modules    B<c> [I<ln>|I<sub>]  Continue until position
+  B<v>           Show versions of modules    B<c> [I<ln>|I<sub>]  Continue until position
 I<Debugger controls:>                        B<L>           List break/watch/actions
   B<O> [...]     Set debugger options        B<t> [I<expr>]    Toggle trace [trace expr]
   B<<>[B<<>]|B<{>[B<{>]|B<>>[B<>>] [I<cmd>] Do pre/post-prompt B<b> [I<ln>|I<event>|I<sub>] [I<cnd>] Set breakpoint
@@ -2265,13 +2562,13 @@ I<Debugger controls:>                        B<L>           List break/watch/act
   B<=> [I<a> I<val>]   Define/list an alias        B<W> I<expr>      Add a watch expression
   B<h> [I<db_cmd>]  Get help on command         B<A> or B<W>      Delete all actions/watch
   B<|>[B<|>]I<db_cmd>  Send output to pager        B<$psh>\[B<$psh>\] I<syscmd> Run cmd in a subprocess
-  B<q> or B<^D>     Quit			  B<R>	      Attempt a restart
-I<Data Examination:>	      B<expr>     Execute perl code, also see: B<s>,B<n>,B<t> I<expr>
-  B<x>|B<m> I<expr>	Evals expr in list context, dumps the result or lists methods.
-  B<p> I<expr>	Print expression (uses script's current package).
-  B<S> [[B<!>]I<pat>]	List subroutine names [not] matching pattern
-  B<V> [I<Pk> [I<Vars>]]	List Variables in Package.  Vars can be ~pattern or !pattern.
-  B<X> [I<Vars>]	Same as \"B<V> I<current_package> [I<Vars>]\".
+  B<q> or B<^D>     Quit                        B<R>           Attempt a restart
+I<Data Examination:>     B<expr>     Execute perl code, also see: B<s>,B<n>,B<t> I<expr>
+  B<x>|B<m> I<expr>       Evals expr in list context, dumps the result or lists methods.
+  B<p> I<expr>         Print expression (uses script's current package).
+  B<S> [[B<!>]I<pat>]     List subroutine names [not] matching pattern
+  B<V> [I<Pk> [I<Vars>]]  List Variables in Package.  Vars can be ~pattern or !pattern.
+  B<X> [I<Vars>]       Same as \"B<V> I<current_package> [I<Vars>]\".
 For more help, type B<h> I<cmd_letter>, or run B<$doccmd perldebug> for all docs.
 END_SUM
 				# ')}}; # Fix balance of vi % matching
@@ -2284,8 +2581,8 @@ sub print_help {
     # ornaments: A pox on both their houses!
     #
     # A help command will have everything up to and including
-    # the first tab sequence paddeed into a field 16 (or if indented 20)
-    # wide.  If it's wide than that, an extra space will be added.
+    # the first tab sequence padded into a field 16 (or if indented 20)
+    # wide.  If it's wider than that, an extra space will be added.
     s{
 	^ 		    	# only matters at start of line
 	  ( \040{4} | \t )*	# some subcommands are indented
@@ -2299,9 +2596,9 @@ sub print_help {
 	my $clean = $command;
 	$clean =~ s/[BI]<([^>]*)>/$1/g;  
     # replace with this whole string:
-	(length($leadwhite) ? " " x 4 : "")
+	($leadwhite ? " " x 4 : "")
       . $command
-      . ((" " x (16 + (length($leadwhite) ? 4 : 0) - length($clean))) || " ")
+      . ((" " x (16 + ($leadwhite ? 4 : 0) - length($clean))) || " ")
       . $text;
 
     }mgex;
@@ -2362,7 +2659,7 @@ sub dbwarn {
   local $SIG{__DIE__} = '';
   eval { require Carp } if defined $^S;	# If error/warning during compilation,
                                         # require may be broken.
-  warn(@_, "\nCannot print stack trace, load with -MCarp option to see stack"),
+  CORE::warn(@_, "\nCannot print stack trace, load with -MCarp option to see stack"),
     return unless defined &Carp::longmess;
   my ($mysingle,$mytrace) = ($single,$trace);
   $single = 0; $trace = 0;
@@ -2385,7 +2682,8 @@ sub dbdie {
   if ($dieLevel < 2) {
     die @_ if $^S;		# in eval propagate
   }
-  eval { require Carp } if defined $^S;	# If error/warning during compilation,
+  # No need to check $^S, eval is much more robust nowadays
+  eval { require Carp }; #if defined $^S;# If error/warning during compilation,
                                 	# require may be broken.
 
   die(@_, "\nCannot print stack trace, load with -MCarp option to see stack")
@@ -2395,7 +2693,13 @@ sub dbdie {
   # inside DB::DB, but not in Carp).
   my ($mysingle,$mytrace) = ($single,$trace);
   $single = 0; $trace = 0;
-  my $mess = Carp::longmess(@_);
+  my $mess = "@_";
+  { 
+    package Carp;		# Do not include us in the list
+    eval {
+      $mess = Carp::longmess(@_);
+    };
+  }
   ($single,$trace) = ($mysingle,$mytrace);
   die $mess;
 }
@@ -2406,7 +2710,7 @@ sub warnLevel {
     $warnLevel = shift;
     if ($warnLevel) {
       $SIG{__WARN__} = \&DB::dbwarn;
-    } else {
+    } elsif ($prevwarn) {
       $SIG{__WARN__} = $prevwarn;
     }
   }
@@ -2424,7 +2728,7 @@ sub dieLevel {
         ( $dieLevel == 1 ? " outside of evals" : ""), ".\n"
 	  if $I_m_init;
       print $OUT "Dump printed too.\n" if $dieLevel > 2;
-    } else {
+    } elsif ($prevdie) {
       $SIG{__DIE__} = $prevdie;
       print $OUT "Default die handler restored.\n";
     }
@@ -2457,6 +2761,7 @@ sub CvGV_name {
 sub CvGV_name_or_bust {
   my $in = shift;
   return if $skipCvGV;		# Backdoor to avoid problems if XS broken...
+  return unless ref $in;
   $in = \&$in;			# Hard reference...
   eval {require Devel::Peek; 1} or return;
   my $gv = Devel::Peek::CvGV($in) or return;
@@ -2510,7 +2815,7 @@ sub methods_via {
 }
 
 sub setman { 
-    $doccmd = $^O !~ /^(?:MSWin32|VMS|os2|dos|amigaos|riscos|MacOS)\z/s
+    $doccmd = $^O !~ /^(?:MSWin32|VMS|os2|dos|amigaos|riscos|MacOS|NetWare)\z/s
 		? "man"             # O Happy Day!
 		: "perldoc";        # Alas, poor unfortunates
 }
@@ -2542,7 +2847,7 @@ sub runman {
     my $oldpath = $ENV{MANPATH};
     $ENV{MANPATH} = $manpath if $manpath;
     my $nopathopt = $^O =~ /dunno what goes here/;
-    if (system($doccmd, 
+    if (CORE::system($doccmd, 
 		# I just *know* there are men without -M
 		(($manpath && !$nopathopt) ? ("-M", $manpath) : ()),  
 	    split ' ', $page) )
@@ -2559,7 +2864,7 @@ sub runman {
 	      }) 
 	    {
 		$page =~ s/^/perl/;
-		system($doccmd, 
+		CORE::system($doccmd, 
 			(($manpath && !$nopathopt) ? ("-M", $manpath) : ()),  
 			$page);
 	    }
@@ -2603,7 +2908,7 @@ BEGIN {			# This does not compile, alas.
 
 BEGIN {$^W = $ini_warn;}	# Switch warnings back
 
-#use Carp;			# This did break, left for debuggin
+#use Carp;			# This did break, left for debugging
 
 sub db_complete {
   # Specific code for b c l V m f O, &blah, $blah, @blah, %blah

@@ -11,6 +11,7 @@ use 5.6.0;
 use strict;
 use warnings;
 use Carp;
+use File::Spec;
 our(@ISA, @EXPORT, @EXPORT_OK, $VERSION, $Too_Big, $Syscopy_is_copy);
 sub copy;
 sub syscopy;
@@ -22,7 +23,7 @@ sub mv;
 # package has not yet been updated to work with Perl 5.004, and so it
 # would be a Bad Thing for the CPAN module to grab it and replace this
 # module.  Therefore, we set this module's version higher than 2.0.
-$VERSION = '2.03';
+$VERSION = '2.04';
 
 require Exporter;
 @ISA = qw(Exporter);
@@ -31,16 +32,19 @@ require Exporter;
 
 $Too_Big = 1024 * 1024 * 2;
 
-sub _catname { #  Will be replaced by File::Spec when it arrives
+sub _catname {
     my($from, $to) = @_;
     if (not defined &basename) {
 	require File::Basename;
 	import  File::Basename 'basename';
     }
-    if ($^O eq 'VMS')  { $to = VMS::Filespec::vmspath($to) . basename($from); }
-    elsif ($^O eq 'MacOS') { $to =~ s/^([^:]+)$/:$1/; $to .= ':' . basename($from); }
-    elsif ($to =~ m|\\|)   { $to .= '\\' . basename($from); }
-    else                   { $to .= '/' . basename($from); }
+
+    if ($^O eq 'MacOS') {
+	# a partial dir name that's valid only in the cwd (e.g. 'tmp')
+	$to = ':' . $to if $to !~ /:/;
+    }
+
+    return File::Spec->catfile($to, basename($from));
 }
 
 sub copy {
@@ -71,6 +75,7 @@ sub copy {
 	&& !($from_a_handle && $^O eq 'mpeix')	# and neither can MPE/iX.
 	&& !($from_a_handle && $^O eq 'MSWin32')
 	&& !($from_a_handle && $^O eq 'MacOS')
+	&& !($from_a_handle && $^O eq 'NetWare')
        )
     {
 	return syscopy($from, $to);
@@ -79,24 +84,27 @@ sub copy {
     my $closefrom = 0;
     my $closeto = 0;
     my ($size, $status, $r, $buf);
-    local(*FROM, *TO);
     local($\) = '';
 
+    my $from_h;
     if ($from_a_handle) {
-	*FROM = *$from{FILEHANDLE};
+       $from_h = $from;
     } else {
 	$from = _protect($from) if $from =~ /^\s/s;
-	open(FROM, "< $from\0") or goto fail_open1;
-	binmode FROM or die "($!,$^E)";
+       $from_h = \do { local *FH };
+       open($from_h, "< $from\0") or goto fail_open1;
+       binmode $from_h or die "($!,$^E)";
 	$closefrom = 1;
     }
 
+    my $to_h;
     if ($to_a_handle) {
-	*TO = *$to{FILEHANDLE};
+       $to_h = $to;
     } else {
 	$to = _protect($to) if $to =~ /^\s/s;
-	open(TO,"> $to\0") or goto fail_open2;
-	binmode TO or die "($!,$^E)";
+       $to_h = \do { local *FH };
+       open($to_h,"> $to\0") or goto fail_open2;
+       binmode $to_h or die "($!,$^E)";
 	$closeto = 1;
     }
 
@@ -104,7 +112,8 @@ sub copy {
 	$size = shift(@_) + 0;
 	croak("Bad buffer size for copy: $size\n") unless ($size > 0);
     } else {
-	$size = -s FROM;
+       no warnings 'uninitialized';
+       $size = -s $from_h;
 	$size = 1024 if ($size < 512);
 	$size = $Too_Big if ($size > $Too_Big);
     }
@@ -112,17 +121,17 @@ sub copy {
     $! = 0;
     for (;;) {
 	my ($r, $w, $t);
-	defined($r = sysread(FROM, $buf, $size))
+       defined($r = sysread($from_h, $buf, $size))
 	    or goto fail_inner;
 	last unless $r;
 	for ($w = 0; $w < $r; $w += $t) {
-	    $t = syswrite(TO, $buf, $r - $w, $w)
+           $t = syswrite($to_h, $buf, $r - $w, $w)
 		or goto fail_inner;
 	}
     }
 
-    close(TO) || goto fail_open2 if $closeto;
-    close(FROM) || goto fail_open1 if $closefrom;
+    close($to_h) || goto fail_open2 if $closeto;
+    close($from_h) || goto fail_open1 if $closefrom;
 
     # Use this idiom to avoid uninitialized value warning.
     return 1;
@@ -132,14 +141,14 @@ sub copy {
     if ($closeto) {
 	$status = $!;
 	$! = 0;
-	close TO;
+       close $to_h;
 	$! = $status unless $!;
     }
   fail_open2:
     if ($closefrom) {
 	$status = $!;
 	$! = 0;
-	close FROM;
+       close $from_h;
 	$! = $status unless $!;
     }
   fail_open1:
@@ -369,6 +378,34 @@ it sets C<$!>, deletes the output file, and returns 0.
 
 All functions return 1 on success, 0 on failure.
 $! will be set if an error was encountered.
+
+=head1 NOTES
+
+=over 4
+
+=item *
+
+On Mac OS (Classic), the path separator is ':', not '/', and the 
+current directory is denoted as ':', not '.'. You should be careful 
+about specifying relative pathnames. While a full path always begins 
+with a volume name, a relative pathname should always begin with a 
+':'.  If specifying a volume name only, a trailing ':' is required.
+
+E.g.
+
+  copy("file1", "tmp");        # creates the file 'tmp' in the current directory
+  copy("file1", ":tmp:");      # creates :tmp:file1
+  copy("file1", ":tmp");       # same as above
+  copy("file1", "tmp");        # same as above, if 'tmp' is a directory (but don't do   
+                               # that, since it may cause confusion, see example #1)
+  copy("file1", "tmp:file1");  # error, since 'tmp:' is not a volume
+  copy("file1", ":tmp:file1"); # ok, partial path
+  copy("file1", "DataHD:");    # creates DataHD:file1
+  
+  move("MacintoshHD:fileA", "DataHD:fileB"); # moves (don't copies) files from one 
+                                             # volume to another
+
+=back
 
 =head1 AUTHOR
 

@@ -12,7 +12,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 
-$VERSION = "1.00";
+$VERSION = "1.00_00";
 
 {
     package IPC::Semaphore::stat;
@@ -88,7 +88,7 @@ sub op {
     @_ >= 4 || croak '$sem->op( OPLIST )';
     my $self = shift;
     croak 'Bad arg count' if @_ % 3;
-    my $data = pack("s*",@_);
+    my $data = pack("s!*",@_);
     semop($$self,$data);
 }
 
@@ -126,12 +126,12 @@ sub getall {
     my $data = "";
     semctl($$self,0,GETALL,$data)
 	or return ();
-    (unpack("s*",$data));
+    (unpack("s!*",$data));
 }
 
 sub setall {
     my $self = shift;
-    my $data = pack("s*",@_);
+    my $data = pack("s!*",@_);
     semctl($$self,0,SETALL,$data);
 }
 
@@ -206,7 +206,7 @@ Returns the values of the semaphore set as an array.
 =item getncnt ( SEM )
 
 Returns the number of processed waiting for the semaphore C<SEM> to
-become greater than it's current value
+become greater than its current value
 
 =item getpid ( SEM )
 

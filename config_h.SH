@@ -4,7 +4,7 @@ esac
 case "$CONFIG_H" in
 '') CONFIG_H=config.h ;;
 esac
-case $CONFIG in
+case $PERL_CONFIG_SH in
 '')
 	if test -f $CONFIG_SH; then TOP=.;
 	elif test -f ../$CONFIG_SH; then TOP=..;
@@ -144,26 +144,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	occurred from a call to dlopen(), dlclose() or dlsym().
  */
 #$d_dlerror HAS_DLERROR	/**/
-
-/* SETUID_SCRIPTS_ARE_SECURE_NOW:
- *	This symbol, if defined, indicates that the bug that prevents
- *	setuid scripts from being secure is not present in this kernel.
- */
-/* DOSUID:
- *	This symbol, if defined, indicates that the C program should
- *	check the script that it is executing for setuid/setgid bits, and
- *	attempt to emulate setuid/setgid on systems that have disabled
- *	setuid #! scripts because the kernel can't do it securely.
- *	It is up to the package designer to make sure that this emulation
- *	is done securely.  Among other things, it should do an fstat on
- *	the script it just opened to make sure it really is a setuid/setgid
- *	script, it should make sure the arguments passed correspond exactly
- *	to the argument on the #! line, and it should not trust any
- *	subprocesses to which it must pass the filename rather than the
- *	file descriptor of the script to be executed.
- */
-#$d_suidsafe SETUID_SCRIPTS_ARE_SECURE_NOW	/**/
-#$d_dosuid DOSUID		/**/
 
 /* HAS_DUP2:
  *	This symbol, if defined, indicates that the dup2 routine is
@@ -942,17 +922,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$i_values I_VALUES		/**/
 
-/* I_STDARG:
- *	This symbol, if defined, indicates that <stdarg.h> exists and should
- *	be included.
- */
-/* I_VARARGS:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <varargs.h>.
- */
-#$i_stdarg I_STDARG		/**/
-#$i_varargs I_VARARGS	/**/
-
 /* I_VFORK:
  *	This symbol, if defined, indicates to the C program that it should
  *	include vfork.h.
@@ -985,12 +954,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	D:/bin/sh.exe.
  */
 #define SH_PATH "$sh"  /**/
-
-/* CROSSCOMPILE:
- *	This symbol, if defined, signifies that we our
- *	build process is a cross-compilation.
- */
-#$crosscompile CROSSCOMPILE		/**/
 
 /* INTSIZE:
  *	This symbol contains the value of sizeof(int) so that the C
@@ -1062,14 +1025,20 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	by Configure.  You shouldn't rely on it too much; the specific
  *	feature tests from Configure are generally more reliable.
  */
+/* OSVERS:
+ *	This symbol contains the version of the operating system, as determined
+ *	by Configure.  You shouldn't rely on it too much; the specific
+ *	feature tests from Configure are generally more reliable.
+ */
 #define OSNAME "$osname"		/**/
+#define OSVERS "$osvers"		/**/
 
 /* MEM_ALIGNBYTES:
  *	This symbol contains the number of bytes required to align a
  *	double, or a long double when applicable. Usual values are 2,
  *	4 and 8. The default is eight, for safety.
  */
-#if defined(CROSSCOMPILE) || defined(MULTIARCH)
+#if defined(USE_CROSS_COMPILE) || defined(MULTIARCH)
 #  define MEM_ALIGNBYTES 8
 #else
 #define MEM_ALIGNBYTES $alignbytes
@@ -1146,7 +1115,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	so the default case (for NeXT) is big endian to catch them. 
  *	This might matter for NeXT 3.0.
  */
-#if defined(CROSSCOMPILE) || defined(MULTIARCH)
+#if defined(USE_CROSS_COMPILE) || defined(MULTIARCH)
 #  ifdef __LITTLE_ENDIAN__
 #    if LONGSIZE == 4
 #      define BYTEORDER 0x1234
@@ -1335,6 +1304,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to close whatever was being used for service queries.
  */
 #$d_endsent HAS_ENDSERVENT		/**/
+
+/* HAS_FCHDIR:
+ *	This symbol, if defined, indicates that the fchdir routine is
+ *	available to change directory using a file descriptor.
+ */
+#$d_fchdir HAS_FCHDIR		/**/
 
 /* FCNTL_CAN_LOCK:
  *	This symbol, if defined, indicates that fcntl() can be used
@@ -1794,7 +1769,15 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to split a long double x into a fractional part f and
  *	an integer part i such that |f| < 1.0 and (f + i) = x.
  */
+/* HAS_MODFL_POW32_BUG:
+ *	This symbol, if defined, indicates that the modfl routine is
+ *	broken for long doubles >= pow(2, 32).
+ *	For example from 4294967303.150000 one would get 4294967302.000000
+ *	and 1.150000.  The bug has been seen in certain versions of glibc,
+ *	release 2.2.2 is known to be okay.
+ */
 #$d_modfl HAS_MODFL		/**/
+#$d_modfl_pow32_bug HAS_MODFL_POW32_BUG		/**/
 
 /* HAS_MPROTECT:
  *	This symbol, if defined, indicates that the mprotect system call is
@@ -1869,7 +1852,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 
 /* HAS_SAFE_BCOPY:
  *	This symbol, if defined, indicates that the bcopy routine is available
- *	to copy potentially overlapping memory blocks. Otherwise you should
+ *	to copy potentially overlapping memory blocks. Normally, you should
  *	probably use memmove() or memcpy(). If neither is defined, roll your
  *	own version.
  */
@@ -1877,9 +1860,9 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 
 /* HAS_SAFE_MEMCPY:
  *	This symbol, if defined, indicates that the memcpy routine is available
- *	to copy potentially overlapping memory blocks. Otherwise you should
- *	probably use memmove() or memcpy(). If neither is defined, roll your
- *	own version.
+ *	to copy potentially overlapping memory blocks.  If you need to
+ *	copy overlapping memory blocks, you should check HAS_MEMMOVE and
+ *	use memmove() instead, if available.
  */
 #$d_safemcpy HAS_SAFE_MEMCPY	/**/
 
@@ -2425,8 +2408,25 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	in the <db.h> header file.  In older versions of DB, it was
  *	int, while in newer ones it is size_t.
  */
+/* DB_VERSION_MAJOR_CFG:
+ *	This symbol, if defined, defines the major version number of
+ *	Berkeley DB found in the <db.h> header when Perl was configured.
+ */
+/* DB_VERSION_MINOR_CFG:
+ *	This symbol, if defined, defines the minor version number of
+ *	Berkeley DB found in the <db.h> header when Perl was configured.
+ *	For DB version 1 this is always 0.
+ */
+/* DB_VERSION_PATCH_CFG:
+ *	This symbol, if defined, defines the patch version number of
+ *	Berkeley DB found in the <db.h> header when Perl was configured.
+ *	For DB version 1 this is always 0.
+ */
 #define DB_Hash_t	$db_hashtype		/**/
 #define DB_Prefix_t	$db_prefixtype  	/**/
+#define DB_VERSION_MAJOR_CFG	$db_version_major  	/**/
+#define DB_VERSION_MINOR_CFG	$db_version_minor  	/**/
+#define DB_VERSION_PATCH_CFG	$db_version_patch  	/**/
 
 /* I_GRP:
  *	This symbol, if defined, indicates to the C program that it should
@@ -2957,7 +2957,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This macro is to be used to generate uniformly distributed
  *	random numbers over the range [0., 1.[.  You may have to supply
  *	an 'extern double drand48();' in your program since SunOS 4.1.3
- *	doesn't provide you with anything relevant in it's headers.
+ *	doesn't provide you with anything relevant in its headers.
  *	See HAS_DRAND48_PROTO.
  */
 /* Rand_seed_t:
@@ -3236,12 +3236,18 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol, if defined, indicates that Perl should
  *	be built to use the old draft POSIX threads API.
  */
+/* USE_REENTRANT_API:
+ *	This symbol, if defined, indicates that Perl should
+ *	try to use the various _r versions of library functions.
+ *	This is extremely experimental.
+ */
 #$use5005threads	USE_5005THREADS		/**/
 #$useithreads	USE_ITHREADS		/**/
 #if defined(USE_5005THREADS) && !defined(USE_ITHREADS)
 #define		USE_THREADS		/* until src is revised*/
 #endif
 #$d_oldpthreads	OLD_PTHREADS_API		/**/
+#$usereentrant	USE_REENTRANT_API	/**/
 
 /* PERL_VENDORARCH:
  *	If defined, this symbol contains the name of a private library.
@@ -3333,6 +3339,72 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define PERL_XS_APIVERSION "$xs_apiversion"
 #define PERL_PM_APIVERSION "$pm_apiversion"
 
+/* SETUID_SCRIPTS_ARE_SECURE_NOW:
+ *	This symbol, if defined, indicates that the bug that prevents
+ *	setuid scripts from being secure is not present in this kernel.
+ */
+/* DOSUID:
+ *	This symbol, if defined, indicates that the C program should
+ *	check the script that it is executing for setuid/setgid bits, and
+ *	attempt to emulate setuid/setgid on systems that have disabled
+ *	setuid #! scripts because the kernel can't do it securely.
+ *	It is up to the package designer to make sure that this emulation
+ *	is done securely.  Among other things, it should do an fstat on
+ *	the script it just opened to make sure it really is a setuid/setgid
+ *	script, it should make sure the arguments passed correspond exactly
+ *	to the argument on the #! line, and it should not trust any
+ *	subprocesses to which it must pass the filename rather than the
+ *	file descriptor of the script to be executed.
+ */
+#$d_suidsafe SETUID_SCRIPTS_ARE_SECURE_NOW	/**/
+#$d_dosuid DOSUID		/**/
+
+/* I_STDARG:
+ *	This symbol, if defined, indicates that <stdarg.h> exists and should
+ *	be included.
+ */
+/* I_VARARGS:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <varargs.h>.
+ */
+#$i_stdarg I_STDARG		/**/
+#$i_varargs I_VARARGS	/**/
+
+/* USE_CROSS_COMPILE:
+ *	This symbol, if defined, indicates that Perl is being cross-compiled.
+ */
+/* PERL_TARGETARCH:
+ *	This symbol, if defined, indicates the target architecture
+ *	Perl has been cross-compiled to.  Undefined if not a cross-compile.
+ */
+#ifndef USE_CROSS_COMPILE
+#$usecrosscompile	USE_CROSS_COMPILE	/**/
+#define	PERL_TARGETARCH	"$targetarch"	/**/
+#endif
+
+/* HAS_DBMINIT_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the dbminit() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int dbminit(char *);
+ */
+#$d_dbminitproto	HAS_DBMINIT_PROTO	/**/
+
+/* HAS_FLOCK_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the flock() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int flock(int, int);
+ */
+#$d_flockproto	HAS_FLOCK_PROTO	/**/
+
+/* HAS_NL_LANGINFO:
+ *	This symbol, if defined, indicates that the nl_langinfo routine is
+ *	available to return local data.  You will also need <langinfo.h>
+ *	and therefore I_LANGINFO.
+ */
+#$d_nl_langinfo HAS_NL_LANGINFO		/**/
+
 /* HAS_SIGPROCMASK:
  *	This symbol, if defined, indicates that the sigprocmask
  *	system call is available to examine or change the signal mask
@@ -3346,11 +3418,70 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_sockatmark HAS_SOCKATMARK		/**/
 
+/* HAS_SOCKATMARK_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the sockatmark() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int sockatmark _((int));
+ */
+#$d_sockatmarkproto	HAS_SOCKATMARK_PROTO	/**/
+
+/* HAS_SETRESGID_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the setresgid() function.  Otherwise, it is up
+ *	to the program to supply one.  Good guesses are
+ *		extern int setresgid(uid_t ruid, uid_t euid, uid_t suid);
+ */
+#$d_sresgproto	HAS_SETRESGID_PROTO	/**/
+
+/* HAS_SETRESUID_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the setresuid() function.  Otherwise, it is up
+ *	to the program to supply one.  Good guesses are
+ *		extern int setresuid(uid_t ruid, uid_t euid, uid_t suid);
+ */
+#$d_sresuproto	HAS_SETRESUID_PROTO	/**/
+
+/* HAS_STRFTIME:
+ *	This symbol, if defined, indicates that the strftime routine is
+ *	available to do time formatting.
+ */
+#$d_strftime HAS_STRFTIME		/**/
+
+/* HAS_SYSCALL_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the syscall() function.  Otherwise, it is up
+ *	to the program to supply one.  Good guesses are
+ *		extern int syscall(int,  ...);
+ *		extern int syscall(long, ...);
+ */
+#$d_syscallproto	HAS_SYSCALL_PROTO	/**/
+
 /* U32_ALIGNMENT_REQUIRED:
  *	This symbol, if defined, indicates that you must access
  *	character data through U32-aligned pointers.
  */
 #$d_u32align U32_ALIGNMENT_REQUIRED	/**/
+
+/* HAS_USLEEP_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the usleep() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int usleep(useconds_t);
+ */
+#$d_usleepproto	HAS_USLEEP_PROTO	/**/
+
+/* I_LANGINFO:
+ *	This symbol, if defined, indicates that <langinfo.h> exists and
+ *	should be included.
+ */
+#$i_langinfo	I_LANGINFO		/**/
+
+/* HAS_PTHREAD_ATFORK:
+ *	This symbol, if defined, indicates that the pthread_atfork routine
+ *	is available setup fork handlers.
+ */
+#$d_pthread_atfork HAS_PTHREAD_ATFORK		/**/
 
 #endif
 !GROK!THIS!

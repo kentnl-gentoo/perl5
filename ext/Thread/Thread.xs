@@ -81,15 +81,12 @@ threadstart(void *arg)
     return 0;
 #else
     Thread thr = (Thread) arg;
-    LOGOP myop;
     dSP;
     I32 oldmark = TOPMARK;
-    I32 oldscope = PL_scopestack_ix;
     I32 retval;
     SV *sv;
     AV *av;
-    int i, ret;
-    dJMPENV;
+    int i;
 
 #if defined(MULTIPLICITY)
     PERL_SET_INTERP(thr->interp);
@@ -150,7 +147,6 @@ threadstart(void *arg)
     FREETMPS;
     LEAVE;
 
-  finishoff:
 #if 0    
     /* removed for debug */
     SvREFCNT_dec(PL_curstack);
@@ -279,10 +275,17 @@ newthread (pTHX_ SV *startsv, AV *initargs, char *classname)
     if (!attr_inited) {
 	attr_inited = 1;
 	err = pthread_attr_init(&attr);
+#  ifdef THREAD_CREATE_NEEDS_STACK
+       if (err == 0)
+            err = pthread_attr_setstacksize(&attr, THREAD_CREATE_NEEDS_STACK);
+       if (err)
+           croak("panic: pthread_attr_setstacksize failed");
+#  endif
 #  ifdef PTHREAD_ATTR_SETDETACHSTATE
 	if (err == 0)
 	    err = PTHREAD_ATTR_SETDETACHSTATE(&attr, attr_joinable);
-
+       if (err)
+           croak("panic: pthread_attr_setdetachstate failed");
 #  else
 	croak("panic: can't pthread_attr_setdetachstate");
 #  endif
@@ -338,15 +341,15 @@ static Signal_t handle_thread_signal (int sig);
 static Signal_t
 handle_thread_signal(int sig)
 {
-    dTHXo;
     unsigned char c = (unsigned char) sig;
+    dTHX;
     /*
      * We're not really allowed to call fprintf in a signal handler
      * so don't be surprised if this isn't robust while debugging
      * with -DL.
      */
     DEBUG_S(PerlIO_printf(Perl_debug_log,
-	    "handle_thread_signal: got signal %d\n", sig););
+	    "handle_thread_signal: got signal %d\n", sig));
     write(sig_pipe[1], &c, 1);
 }
 
@@ -371,7 +374,7 @@ join(t)
 	if (t == thr)
 	    croak("Attempt to join self");
 	DEBUG_S(PerlIO_printf(Perl_debug_log, "%p: joining %p (state %u)\n",
-			      thr, t, ThrSTATE(t)););
+			      thr, t, ThrSTATE(t)));
     	MUTEX_LOCK(&t->mutex);
 	switch (ThrSTATE(t)) {
 	case THRf_R_JOINABLE:
@@ -414,7 +417,7 @@ detach(t)
     CODE:
 #ifdef USE_THREADS
 	DEBUG_S(PerlIO_printf(Perl_debug_log, "%p: detaching %p (state %u)\n",
-			      thr, t, ThrSTATE(t)););
+			      thr, t, ThrSTATE(t)));
     	MUTEX_LOCK(&t->mutex);
 	switch (ThrSTATE(t)) {
 	case THRf_R_JOINABLE:
@@ -492,7 +495,7 @@ void
 DESTROY(t)
 	SV *	t
     PPCODE:
-	PUSHs(&PL_sv_yes);
+	PUSHs(t ? &PL_sv_yes : &PL_sv_no);
 
 void
 yield()
@@ -662,7 +665,7 @@ await_signal()
 	if (ret)
 	    sv_setsv(ST(0), c ? PL_psig_ptr[c] : &PL_sv_no);
 	DEBUG_S(PerlIO_printf(Perl_debug_log,
-			      "await_signal returning %s\n", SvPEEK(ST(0))););
+			      "await_signal returning %s\n", SvPEEK(ST(0))));
 
 MODULE = Thread		PACKAGE = Thread::Specific
 

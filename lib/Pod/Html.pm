@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT);
-$VERSION = 1.03;
+$VERSION = 1.04;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 
@@ -42,6 +42,12 @@ Pod::Html takes the following arguments:
 
 Adds "Back to Top" links in front of every HEAD1 heading (except for
 the first).  By default, no backlink are being generated.
+
+=item cachedir
+
+    --cachedir=name
+
+Creates the item and directory caches in the given directory.
 
 =item css
 
@@ -194,6 +200,8 @@ This program is distributed under the Artistic License.
 
 =cut
 
+my $cachedir = ".";		# The directory to which item and directory
+				# caches will be written.
 my $cache_ext = $^O eq 'VMS' ? ".tmp" : ".x~~";
 my $dircache = "pod2htmd$cache_ext";
 my $itemcache = "pod2htmi$cache_ext";
@@ -305,7 +313,7 @@ sub clean_data($){
 	${$dataref}[$i] =~ s/\s+\Z//;
 
         # have a look for all-space lines
-	if( ${$dataref}[$i] =~ /^\s+$/m ){
+      if( ${$dataref}[$i] =~ /^\s+$/m and $dataref->[$i] !~ /^\s/ ){
 	    my @chunks = split( /^\s+$/m, ${$dataref}[$i] );
 	    splice( @$dataref, $i, 1, @chunks );
 	}
@@ -491,6 +499,7 @@ END_OF_HEAD
 	else {
 	    next if $ignore;
 	    next if @begin_stack && $begin_stack[-1] ne 'html';
+            print HTML and next if @begin_stack && $begin_stack[-1] eq 'html';
 	    my $text = $_;
 	    if( $text =~ /\A\s+/ ){
 		process_pre( \$text );
@@ -565,9 +574,10 @@ $usage =<<END_OF_USAGE;
 Usage:  $0 --help --htmlroot=<name> --infile=<name> --outfile=<name>
            --podpath=<name>:...:<name> --podroot=<name>
            --libpods=<name>:...:<name> --recurse --verbose --index
-           --netscape --norecurse --noindex
+           --netscape --norecurse --noindex --cachedir=<name>
 
   --backlink     - set text for "back to top" links (default: none).
+  --cachedir     - directory for the item and directory cache files.
   --css          - stylesheet URL
   --flush        - flushes the item and directory caches.
   --[no]header   - produce block header/footer (default is no headers).
@@ -600,14 +610,15 @@ Usage:  $0 --help --htmlroot=<name> --infile=<name> --outfile=<name>
 END_OF_USAGE
 
 sub parse_command_line {
-    my ($opt_backlink,$opt_css,$opt_flush,$opt_header,$opt_help,$opt_htmldir,
-	$opt_htmlroot,$opt_index,$opt_infile,$opt_libpods,$opt_netscape,
-	$opt_outfile,$opt_podpath,$opt_podroot,$opt_quiet,$opt_recurse,
-	$opt_title,$opt_verbose);
+    my ($opt_backlink,$opt_cachedir,$opt_css,$opt_flush,$opt_header,$opt_help,
+	$opt_htmldir,$opt_htmlroot,$opt_index,$opt_infile,$opt_libpods,
+	$opt_netscape,$opt_outfile,$opt_podpath,$opt_podroot,$opt_quiet,
+	$opt_recurse,$opt_title,$opt_verbose);
 
     unshift @ARGV, split ' ', $Config{pod2html} if $Config{pod2html};
     my $result = GetOptions(
 			    'backlink=s' => \$opt_backlink,
+			    'cachedir=s' => \$opt_cachedir,
 			    'css=s'      => \$opt_css,
 			    'flush'      => \$opt_flush,
 			    'header!'    => \$opt_header,
@@ -635,6 +646,7 @@ sub parse_command_line {
     @libpods  = split(":", $opt_libpods) if defined $opt_libpods;
 
     $backlink = $opt_backlink if defined $opt_backlink;
+    $cachedir = $opt_cachedir if defined $opt_cachedir;
     $css      = $opt_css      if defined $opt_css;
     $header   = $opt_header   if defined $opt_header;
     $htmldir  = $opt_htmldir  if defined $opt_htmldir;
@@ -651,6 +663,8 @@ sub parse_command_line {
 
     warn "Flushing item and directory caches\n"
 	if $opt_verbose && defined $opt_flush;
+    $dircache = "$cachedir/pod2htmd$cache_ext";
+    $itemcache = "$cachedir/pod2htmi$cache_ext";
     unlink($dircache, $itemcache) if defined $opt_flush;
 }
 

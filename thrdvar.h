@@ -182,8 +182,9 @@ PERLVAR(Tregeol,	char *)		/* End of input, for $ check. */
 PERLVAR(Tregstartp,	I32 *)		/* Pointer to startp array. */
 PERLVAR(Tregendp,	I32 *)		/* Ditto for endp. */
 PERLVAR(Treglastparen,	U32 *)		/* Similarly for lastparen. */
+PERLVAR(Treglastcloseparen, U32 *)	/* Similarly for lastcloseparen. */
 PERLVAR(Tregtill,	char *)		/* How far we are required to go. */
-PERLVAR(Tregprev,	char)		/* char before regbol, \n if none */
+PERLVAR(Tregcompat1,	char)		/* used to be regprev1 */
 PERLVAR(Treg_start_tmp,	char **)	/* from regexec.c */
 PERLVAR(Treg_start_tmpl,U32)		/* from regexec.c */
 PERLVAR(Tregdata,	struct reg_data *)

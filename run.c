@@ -63,8 +63,9 @@ I32
 Perl_debop(pTHX_ OP *o)
 {
 #ifdef DEBUGGING
+    AV *padlist, *comppad;
+    CV *cv;
     SV *sv;
-    SV **svp;
     STRLEN n_a;
     Perl_deb(aTHX_ "%s", PL_op_name[o->op_type]);
     switch (o->op_type) {
@@ -86,12 +87,18 @@ Perl_debop(pTHX_ OP *o)
     case OP_PADAV:
     case OP_PADHV:
 	/* print the lexical's name */
-	svp = av_fetch(PL_comppad_name, o->op_targ, FALSE);
-	if (svp)
-	    PerlIO_printf(Perl_debug_log, "(%s)", SvPV(*svp,n_a));
-	else
+        cv = deb_curcv(cxstack_ix);
+        if (cv) {
+            padlist = CvPADLIST(cv);
+            comppad = (AV*)(*av_fetch(padlist, 0, FALSE));
+            sv = *av_fetch(comppad, o->op_targ, FALSE);
+        } else
+            sv = Nullsv;
+        if (sv)
+           PerlIO_printf(Perl_debug_log, "(%s)", SvPV_nolen(sv));
+        else
            PerlIO_printf(Perl_debug_log, "[%"UVuf"]", (UV)o->op_targ);
-	break;
+        break;
     default:
 	break;
     }
@@ -99,6 +106,26 @@ Perl_debop(pTHX_ OP *o)
 #endif	/* DEBUGGING */
     return 0;
 }
+
+#ifdef DEBUGGING
+
+STATIC CV*
+S_deb_curcv(pTHX_ I32 ix)
+{
+    PERL_CONTEXT *cx = &cxstack[ix];
+    if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT)
+        return cx->blk_sub.cv;
+    else if (CxTYPE(cx) == CXt_EVAL && !CxTRYBLOCK(cx))
+        return PL_compcv;
+    else if (ix == 0 && PL_curstackinfo->si_type == PERLSI_MAIN)
+        return PL_main_cv;
+    else if (ix <= 0)
+        return Nullcv;
+    else
+        return deb_curcv(ix - 1);
+}
+
+#endif  /* DEBUGGING */
 
 void
 Perl_watch(pTHX_ char **addr)
@@ -111,15 +138,17 @@ Perl_watch(pTHX_ char **addr)
 #endif	/* DEBUGGING */
 }
 
+#ifdef DEBUGGING
+
 STATIC void
 S_debprof(pTHX_ OP *o)
 {
-#ifdef DEBUGGING
     if (!PL_profiledata)
 	Newz(000, PL_profiledata, MAXO, U32);
     ++PL_profiledata[o->op_type];
-#endif /* DEBUGGING */
 }
+
+#endif /* DEBUGGING */
 
 void
 Perl_debprofdump(pTHX)

@@ -54,10 +54,12 @@ EOM
     print "1..0 # Skip: @_\n" if @_;
 }
 
+$| = 1;
+
 print "# checking whether we have sparse files...\n";
 
 # Known have-nots.
-if ($^O eq 'MSWin32' || $^O eq 'VMS') {
+if ($^O eq 'MSWin32' || $^O eq 'NetWare' || $^O eq 'VMS') {
     print "1..0 # Skip: no sparse files in $^O\n";
     bye();
 }

@@ -273,7 +273,7 @@ From http://rsync.samba.org/README.html:
 
    "Rsync uses rsh or ssh for communication. It does not need to be
     setuid and requires no special privileges for installation.  It
-    does not require a inetd entry or a deamon.  You must, however,
+    does not require an inetd entry or a daemon.  You must, however,
     have a working rsh or ssh system.  Using ssh is recommended for
     its security features."
 
@@ -434,7 +434,7 @@ look how others apply the fix.
 =item Finding the source of misbehaviour
 
 When you keep in sync with bleadperl, the pumpking would love to
-I<see> that the community efforts realy work. So after each of his
+I<see> that the community efforts really work. So after each of his
 sync points, you are to 'make test' to check if everything is still
 in working order. If it is, you do 'make ok', which will send an OK
 report to perlbug@perl.org. (If you do not have access to a mailer
@@ -442,7 +442,7 @@ from the system you just finished successfully 'make test', you can
 do 'make okfile', which creates the file C<perl.ok>, which you can
 than take to your favourite mailer and mail yourself).
 
-But of course, as always, things will not allways lead to a success
+But of course, as always, things will not always lead to a success
 path, and one or more test do not pass the 'make test'. Before
 sending in a bug report (using 'make nok' or 'make nokfile'), check
 the mailing list if someone else has reported the bug already and if
@@ -1387,6 +1387,9 @@ the C<pack> happens at runtime, so it's going to be in one of the F<pp>
 files. Sure enough, C<pp_pack> is in F<pp.c>. Since we're going to be
 altering this file, let's copy it to F<pp.c~>.
 
+[Well, it was in F<pp.c> when this tutorial was written. It has now been
+split off with C<pp_unpack> to its own file, F<pp_pack.c>]
+
 Now let's look over C<pp_pack>: we take a pattern into C<pat>, and then
 loop over the pattern, taking each format character in turn into
 C<datum_type>. Then for each possible format character, we swallow up
@@ -1686,18 +1689,18 @@ and -Uusemymalloc flags, after that you can use the make targets
 "perl.third" and "test.third".
 
 The short story is that with "atom" you can instrument the Perl
-executable to create a new executable called "perl.third".  When the
+executable to create a new executable called F<perl.third>.  When the
 instrumented executable is run, it creates a log of dubious memory
-traffic in file called "perl.3log".  See the manual pages of atom and
+traffic in file called F<perl.3log>.  See the manual pages of atom and
 third for more information.  The most extensive Third Degree
 documentation is available in the Compaq "Tru64 UNIX Programmer's
 Guide", chapter "Debugging Programs with Third Degree".
 
-The "test.third" leaves a lot of files named perl.3log.* in the t/
+The "test.third" leaves a lot of files named F<perl.3log.*> in the t/
 subdirectory.  There is a problem with these files: Third Degree is so
 effective that it finds problems also in the system libraries.
-Therefore there are certain types of errors that you should ignore
-in your debugging.  Errors with stack traces matching
+Therefore there are certain types of errors that you should ignore in
+your debugging.  Errors with stack traces matching
 
     __actual_atof|__catgets|_doprnt|__exc_|__exec|_findio|__localtime|setlocale|__sia_|__strxfrm
 
@@ -1728,6 +1731,52 @@ need to do too, if you don't want to see the "global leaks":
 
 	PERL_DESTRUCT_LEVEL=2 ./perl.third t/foo/bar.t
 
+=head2 Gprof Profiling
+
+gprof is a profiling tool available in many UNIX platforms.
+The profiling is based on statistical time-sampling; this means that
+some routines, especially those executing really fast, may be missed.
+
+You can build a profiled version of perl called "perl.gprof" by
+invoking the make target "perl.gprof".  Running the profiled version
+of Perl will create an output file called F<gmon.out> is created which
+contains the profiling data collected during the execution.
+
+The gprof tool can then display the collected data in various ways.
+Usually gprof understands the following options:
+
+=over 4
+
+=item -a
+
+Suppress statically defined functions from the profile.
+
+=item -b
+
+Suppress the verbose descriptions in the profile.
+
+=item -e routine
+
+Exclude the given routine and its descendants from the profile.
+
+=item -f routine
+
+Display only the given routine and its descendants in the profile.
+
+=item -s
+
+Generate a summary file called F<gmon.sum> which then may be given
+to subsequent gprof runs to accumulate data over several runs.
+
+=item -z
+
+Display routines that have zero usage.
+
+=back
+
+For more detailed explanation of the available commands and output
+formats, see your own local documentation of gprof.
+
 =head2 Pixie Profiling
 
 Pixie is a profiling tool available on IRIX and Tru64
@@ -1735,9 +1784,9 @@ Pixie is a profiling tool available on IRIX and Tru64
 using "basic-block counting".  A basic block is a program region that
 is entered only at the beginning and exited only at the end.
 
-You can build a profiled version of perl called "perl.pixie" by
+You can build a profiled version of perl called F<perl.pixie> by
 invoking the make target "perl.pixie" (in Tru64 a file called
-"perl.Addrs" will also be silently created, this file contains the
+F<perl.Addrs> will also be silently created, this file contains the
 addresses of the basic blocks).  Running the profiled version of Perl
 will create a new file called "perl.Counts" which contains the counts
 for the basic block for that particular program execution.
@@ -1767,23 +1816,23 @@ In Tru64 the following options are available:
 
 =over 4
 
-=item -p
+=item -p[rocedures]
 
-Procecures sorted in descending order by the number of cycles executed
+Procedures sorted in descending order by the number of cycles executed
 in each procedure.  Useful for finding the hotspot procedures.
 (This is the default option.)
 
-=item -h
+=item -h[eavy]
 
 Lines sorted in descending order by the number of cycles executed in
 each line.  Useful for finding the hotspot lines.
 
-=item -i
+=item -i[nvocations]
 
 The called procedures are sorted in descending order by number of calls
 made to the procedures.  Useful for finding the most used procedures.
 
-=item -l
+=item -l[ines]
 
 Grouped by procedure, sorted by cycles executed per procedure.
 Useful for finding the hotspots of procedures.
@@ -1792,7 +1841,7 @@ Useful for finding the hotspots of procedures.
 
 The compiler emitted code for these lines, but the code was unexecuted.
 
-=item -zero
+=item -z[ero]
 
 Unexecuted procedures.
 

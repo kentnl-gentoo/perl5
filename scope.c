@@ -197,12 +197,13 @@ S_save_scalar_at(pTHX_ SV **sptr)
 	    MAGIC* mg;
 	    bool oldtainted = PL_tainted;
 	    mg_get(osv);		/* note, can croak! */
-	    if (PL_tainting && PL_tainted && (mg = mg_find(osv, 't'))) {
+	    if (PL_tainting && PL_tainted &&
+			(mg = mg_find(osv, PERL_MAGIC_taint))) {
 		SAVESPTR(mg->mg_obj);
 		mg->mg_obj = osv;
 	    }
 	    SvFLAGS(osv) |= (SvFLAGS(osv) &
-		(SVp_IOK|SVp_NOK|SVp_POK)) >> PRIVSHIFT;
+               (SVp_NOK|SVp_POK)) >> PRIVSHIFT;
 	    PL_tainted = oldtainted;
 	}
 	SvMAGIC(sv) = SvMAGIC(osv);
@@ -698,7 +699,7 @@ Perl_leave_scope(pTHX_ I32 base)
 		     SvTYPE(value) != SVt_PVGV)
 	    {
 		SvFLAGS(value) |= (SvFLAGS(value) &
-				   (SVp_IOK|SVp_NOK|SVp_POK)) >> PRIVSHIFT;
+                                  (SVp_NOK|SVp_POK)) >> PRIVSHIFT;
 		SvMAGICAL_off(value);
 		/* XXX this is a leak when we get here because the
 		 * mg_get() in save_scalar_at() croaked */
@@ -901,7 +902,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    if (ptr) {
 		sv = *(SV**)ptr;
 		if (sv && sv != &PL_sv_undef) {
-		    if (SvTIED_mg((SV*)av, 'P'))
+		    if (SvTIED_mg((SV*)av, PERL_MAGIC_tied))
 			(void)SvREFCNT_inc(sv);
 		    SvREFCNT_dec(av);
 		    goto restore_sv;
@@ -919,7 +920,7 @@ Perl_leave_scope(pTHX_ I32 base)
 		SV *oval = HeVAL((HE*)ptr);
 		if (oval && oval != &PL_sv_undef) {
 		    ptr = &HeVAL((HE*)ptr);
-		    if (SvTIED_mg((SV*)hv, 'P'))
+		    if (SvTIED_mg((SV*)hv, PERL_MAGIC_tied))
 			(void)SvREFCNT_inc(*(SV**)ptr);
 		    SvREFCNT_dec(hv);
 		    SvREFCNT_dec(sv);

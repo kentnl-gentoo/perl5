@@ -111,6 +111,21 @@ test.  Outside a C<while> test, this will not happen.
 
 =over 8
 
+=item $a
+
+=item $b
+
+Special package variables when using sort(), see L<perlfunc/sort>.
+Because of this specialness $a and $b don't need to be declared
+(using local(), use vars, or our()) even when using the strict
+vars pragma.  Don't lexicalize them with C<my $a> or C<my $b>
+if you want to be able to use them in the sort() comparison block
+or function.
+
+=back
+
+=over 8
+
 =item $<I<digits>>
 
 Contains the subpattern from the corresponding set of capturing
@@ -165,14 +180,32 @@ performance penalty on all regular expression matches.  See L<BUGS>.
 
 =item $+
 
-The last bracket matched by the last search pattern.  This is useful if
-you don't know which one of a set of alternative patterns matched.  For
-example:
+The text matched by the last bracket of the last successful search pattern.
+This is useful if you don't know which one of a set of alternative patterns
+matched. For example:
 
     /Version: (.*)|Revision: (.*)/ && ($rev = $+);
 
 (Mnemonic: be positive and forward looking.)
 This variable is read-only and dynamically scoped to the current BLOCK.
+
+=item $^N
+
+The text matched by the used group most-recently closed (i.e. the group
+with the rightmost closing parenthesis) of the last successful search
+pattern.  (Mnemonic: the (possibly) Nested parenthesis that most
+recently closed.)
+
+This is primarly used inside C<(?{...})> blocks for examining text
+recently matched. For example, to effectively capture text to a variable
+(in addition to C<$1>, C<$2>, etc.), replace C<(...)> with
+
+     (?:(...)(?{ $var = $^N }))
+
+By setting and then using C<$var> in this way relieves you from having to
+worry about exactly which numbered set of parentheses they are.
+
+This variable is dynamically scoped to the current BLOCK.
 
 =item @LAST_MATCH_END
 
@@ -596,10 +629,10 @@ Also see L<Error Indicators>.
 
 =item $@
 
-The Perl syntax error message from the last eval() operator.  If null, the
-last eval() parsed and executed correctly (although the operations you
-invoked may have failed in the normal fashion).  (Mnemonic: Where was
-the syntax error "at"?)
+The Perl syntax error message from the last eval() operator.
+If $@ is the null string, the last eval() parsed and executed
+correctly (although the operations you invoked may have failed in the
+normal fashion).  (Mnemonic: Where was the syntax error "at"?)
 
 Warning messages are not collected in this variable.  You can,
 however, set up a routine to process warnings by setting C<$SIG{__WARN__}>
@@ -996,6 +1029,13 @@ The array @ARGV contains the command-line arguments intended for
 the script.  C<$#ARGV> is generally the number of arguments minus
 one, because C<$ARGV[0]> is the first argument, I<not> the program's
 command name itself.  See C<$0> for the command name.
+
+=item @F
+
+The array @F contains the fields of each line read in when autosplit
+mode is turned on.  See L<perlrun> for the B<-a> switch.  This array
+is package-specific, and must be declared or given a full package name
+if not in package main when running under C<strict 'vars'>.
 
 =item @INC
 

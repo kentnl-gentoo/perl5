@@ -6,10 +6,11 @@ use strict qw[ subs refs ];
 
 use Carp;
 use Exporter;
+use Config;
 our(@ISA, @EXPORT, $VERSION);
 @ISA = 'Exporter';
 @EXPORT = '&Mksymlists';
-$VERSION = substr q$Revision: 1.17 $, 10;
+$VERSION = substr q$Revision: 1.18 $, 10;
 
 sub Mksymlists {
     my(%spec) = @_;
@@ -86,6 +87,8 @@ sub _write_os2 {
 	$distname = 'perl5-porters@perl.org';
 	$comment = "Core $comment";
     }
+    $comment = "$comment (Perl-config: $Config{config_args})";
+    $comment = substr($comment, 0, 200) . "...)" if length $comment > 203;
     rename "$data->{FILE}.def", "$data->{FILE}_def.old";
 
     open(DEF,">$data->{FILE}.def")

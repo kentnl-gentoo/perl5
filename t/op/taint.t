@@ -15,6 +15,8 @@ BEGIN {
 use strict;
 use Config;
 
+$| = 1;
+
 # We do not want the whole taint.t to fail
 # just because Errno possibly failing.
 eval { require Errno; import Errno };
@@ -38,9 +40,12 @@ BEGIN {
 
 my $Is_VMS = $^O eq 'VMS';
 my $Is_MSWin32 = $^O eq 'MSWin32';
+my $Is_NetWare = $^O eq 'NetWare';
 my $Is_Dos = $^O eq 'dos';
+my $Is_Cygwin = $^O eq 'cygwin';
 my $Invoke_Perl = $Is_VMS ? 'MCR Sys$Disk:[]Perl.' :
-                  $Is_MSWin32 ? '.\perl' : './perl';
+                  ($Is_MSWin32 ? '.\perl' :
+                  ($Is_NetWare ? 'perl' : './perl'));
 my @MoreEnv = qw/IFS CDPATH ENV BASH_ENV/;
 
 if ($Is_VMS) {
@@ -97,14 +102,14 @@ sub test ($$;$) {
 }
 
 # We need an external program to call.
-my $ECHO = ($Is_MSWin32 ? ".\\echo$$" : "./echo$$");
+my $ECHO = ($Is_MSWin32 ? ".\\echo$$" : ($Is_NetWare ? "echo$$" : "./echo$$"));
 END { unlink $ECHO }
 open PROG, "> $ECHO" or die "Can't create $ECHO: $!";
 print PROG 'print "@ARGV\n"', "\n";
 close PROG;
 my $echo = "$Invoke_Perl $ECHO";
 
-print "1..155\n";
+print "1..174\n";
 
 # First, let's make sure that Perl is checking the dangerous
 # environment variables. Maybe they aren't set yet, so we'll
@@ -116,9 +121,15 @@ print "1..155\n";
     delete @ENV{@MoreEnv};
     $ENV{TERM} = 'dumb';
 
+    if ($Is_Cygwin) {
+	system("/usr/bin/cp /usr/bin/cygwin1.dll .") &&
+	    die "$0: failed to cp cygwin1.dll: $!\n";
+	END { unlink "cygwin1.dll" } # yes, done for all platforms...
+    }
+
     test 1, eval { `$echo 1` } eq "1\n";
 
-    if ($Is_MSWin32 || $Is_VMS || $Is_Dos) {
+    if ($Is_MSWin32 || $Is_NetWare || $Is_VMS || $Is_Dos) {
 	print "# Environment tainting tests skipped\n";
 	for (2..5) { print "ok $_\n" }
     }
@@ -142,7 +153,7 @@ print "1..155\n";
     }
 
     my $tmp;
-    if ($^O eq 'os2' || $^O eq 'amigaos' || $Is_MSWin32 || $Is_Dos) {
+    if ($^O eq 'os2' || $^O eq 'amigaos' || $Is_MSWin32 || $Is_NetWare || $Is_Dos) {
 	print "# all directories are writeable\n";
     }
     else {
@@ -731,5 +742,100 @@ else {
     print "ok 155\n";
 
     close IN;
+}
+
+{
+    # bug id 20010519.003
+
+    BEGIN {
+	use vars qw($has_fcntl);
+	eval { require Fcntl; import Fcntl; };
+	unless ($@) {
+	    $has_fcntl = 1;
+	}
+    }
+
+    unless ($has_fcntl) {
+	for (156..173) {
+	    print "ok $_ # Skip: no Fcntl (no dynaloading?)\n";
+	}
+    } else {
+	my $evil = "foo" . $TAINT;
+
+	eval { sysopen(my $ro, $evil, &O_RDONLY) };
+	test 156, $@ !~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $wo, $evil, &O_WRONLY) };
+	test 157, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $rw, $evil, &O_RDWR) };
+	test 158, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $ap, $evil, &O_APPEND) };
+	test 159, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $cr, $evil, &O_CREAT) };
+	test 160, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $tr, $evil, &O_TRUNC) };
+	test 161, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $ro, "foo", &O_RDONLY | $evil) };
+	test 162, $@ !~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $wo, "foo", &O_WRONLY | $evil) };
+	test 163, $@ =~ /^Insecure dependency/, $@;
+
+	eval { sysopen(my $rw, "foo", &O_RDWR | $evil) };
+	test 164, $@ =~ /^Insecure dependency/, $@;
+
+	eval { sysopen(my $ap, "foo", &O_APPEND | $evil) };
+	test 165, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $cr, "foo", &O_CREAT | $evil) };
+	test 166, $@ =~ /^Insecure dependency/, $@;
+
+	eval { sysopen(my $tr, "foo", &O_TRUNC | $evil) };
+	test 167, $@ =~ /^Insecure dependency/, $@;
+
+	eval { sysopen(my $ro, "foo", &O_RDONLY, $evil) };
+	test 168, $@ !~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $wo, "foo", &O_WRONLY, $evil) };
+	test 169, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $rw, "foo", &O_RDWR, $evil) };
+	test 170, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $ap, "foo", &O_APPEND, $evil) };
+	test 171, $@ =~ /^Insecure dependency/, $@;
+	
+	eval { sysopen(my $cr, "foo", &O_CREAT, $evil) };
+	test 172, $@ =~ /^Insecure dependency/, $@;
+
+	eval { sysopen(my $tr, "foo", &O_TRUNC, $evil) };
+	test 173, $@ =~ /^Insecure dependency/, $@;
+	
+	unlink("foo"); # not unlink($evil), because that would fail...
+    }
+}
+
+{
+    # bug 20010526.004
+
+    use warnings;
+
+    $SIG{__WARN__} = sub { print "not " };
+
+    sub fmi {
+	my $divnum = shift()/1;
+	sprintf("%1.1f\n", $divnum);
+    }
+
+    fmi(21 . $TAINT);
+    fmi(37);
+    fmi(248);
+
+    print "ok 174\n";
 }
 

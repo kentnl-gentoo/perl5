@@ -77,7 +77,7 @@ important.  Note that this function requires you to specify the length of
 the format.
 
 STRLEN is an integer type (Size_t, usually defined as size_t in
-config.h) guaranteed to be large enough to represent the size of 
+config.h) guaranteed to be large enough to represent the size of
 any string that perl can handle.
 
 The C<sv_set*()> functions are not generic enough to operate on values
@@ -224,7 +224,7 @@ actually removing the characters, C<sv_chop> sets the flag C<OOK>
 (offset OK) to signal to other functions that the offset hack is in
 effect, and it puts the number of bytes chopped off into the IV field
 of the SV. It then moves the PV pointer (called C<SvPVX>) forward that
-many bytes, and adjusts C<SvCUR> and C<SvLEN>. 
+many bytes, and adjusts C<SvCUR> and C<SvLEN>.
 
 Hence, at this point, the start of the buffer that we allocated lives
 at C<SvPVX(sv) - SvIV(sv)> in memory and the PV pointer is pointing
@@ -273,6 +273,14 @@ pointer in an SV, you can use the following three macros instead:
 
 These will tell you if you truly have an integer, double, or string pointer
 stored in your SV.  The "p" stands for private.
+
+The are various ways in which the private and public flags may differ.
+For example, a tied SV may have a valid underlying value in the IV slot
+(so SvIOKp is true), but the data should be accessed via the FETCH
+routine rather than directly, so SvIOK is false. Another is when
+numeric conversion has occured and precision has been lost: only the
+private flag is set on 'lossy' values. So when an NV is converted to an
+IV with loss, SvIOKp, SvNOKp and SvNOK will be set, while SvIOK wont be.
 
 In general, though, it's best to use the C<Sv*V> macros.
 
@@ -571,7 +579,7 @@ is the function implementing the C<UNIVERSAL::isa> functionality.
 
 	bool sv_derived_from(SV* sv, const char* name);
 
-To check if you've got an object derived from a specific class you have 
+To check if you've got an object derived from a specific class you have
 to write:
 
 	if (sv_isobject(sv) && sv_derived_from(sv, class)) { ... }
@@ -650,9 +658,11 @@ See L<perlcall> and L<perlxs> for more details on these macros.
 However, if you mortalize a variable twice, the reference count will
 later be decremented twice.
 
-You should be careful about creating mortal variables.  Strange things
-can happen if you make the same value mortal within multiple contexts,
-or if you make a variable mortal multiple times.
+"Mortal" SVs are mainly used for SVs that are placed on perl's stack.
+For example an SV which is created just to pass a number to a called sub
+is made mortal to have it cleaned up automatically when stack is popped.
+Similarly results returned by XSUBs (which go in the stack) are often
+made mortal.
 
 To create a mortal variable, use the functions:
 
@@ -660,9 +670,28 @@ To create a mortal variable, use the functions:
     SV*  sv_2mortal(SV*)
     SV*  sv_mortalcopy(SV*)
 
-The first call creates a mortal SV, the second converts an existing
+The first call creates a mortal SV (with no value), the second converts an existing
 SV to a mortal SV (and thus defers a call to C<SvREFCNT_dec>), and the
 third creates a mortal copy of an existing SV.
+Because C<sv_newmortal> gives the new SV no value,it must normally be given one
+via C<sv_setpv>, C<sv_setiv> etc. :
+
+    SV *tmp = sv_newmortal();
+    sv_setiv(tmp, an_integer);
+
+As that is multiple C statements it is quite common so see this idiom instead:
+
+    SV *tmp = sv_2mortal(newSViv(an_integer));
+
+
+You should be careful about creating mortal variables.  Strange things
+can happen if you make the same value mortal within multiple contexts,
+or if you make a variable mortal multiple times. Thinking of "Mortalization"
+as deferred C<SvREFCNT_dec> should help to minimize such problems.
+For example if you are passing an SV which you I<know> has high enough REFCNT
+to survive its use on the stack you need not do any mortalization.
+If you are not sure then doing an C<SvREFCNT_inc> and C<sv_2mortal>, or
+making a C<sv_mortalcopy> is safer.
 
 The mortal routines are not just for SVs -- AVs and HVs can be
 made mortal by passing their address (type-casted to C<SV*>) to the
@@ -796,11 +825,11 @@ The C<sv> argument is a pointer to the SV that is to acquire a new magical
 feature.
 
 If C<sv> is not already magical, Perl uses the C<SvUPGRADE> macro to
-set the C<SVt_PVMG> flag for the C<sv>.  Perl then continues by adding
-it to the beginning of the linked list of magical features.  Any prior
-entry of the same type of magic is deleted.  Note that this can be
-overridden, and multiple instances of the same type of magic can be
-associated with an SV.
+convert C<sv> to type C<SVt_PVMG>. Perl then continues by adding new magic
+to the beginning of the linked list of magical features.  Any prior entry
+of the same type of magic is deleted.  Note that this can be overridden,
+and multiple instances of the same type of magic can be associated with an
+SV.
 
 The C<name> and C<namlen> arguments are used to associate a string with
 the magic, typically the name of a variable. C<namlen> is stored in the
@@ -810,13 +839,17 @@ copy of the name is stored in C<mg_ptr> field.
 The sv_magic function uses C<how> to determine which, if any, predefined
 "Magic Virtual Table" should be assigned to the C<mg_virtual> field.
 See the "Magic Virtual Table" section below.  The C<how> argument is also
-stored in the C<mg_type> field.
+stored in the C<mg_type> field. The value of C<how> should be chosen
+from the set of macros C<PERL_MAGIC_foo> found perl.h. Note that before
+these macros were added, Perl internals used to directly use character
+literals, so you may occasionally come across old code or documentation
+referrring to 'U' magic rather than C<PERL_MAGIC_uvar> for example.
 
 The C<obj> argument is stored in the C<mg_obj> field of the C<MAGIC>
 structure.  If it is not the same as the C<sv> argument, the reference
 count of the C<obj> object is incremented.  If it is the same, or if
-the C<how> argument is "#", or if it is a NULL pointer, then C<obj> is
-merely stored, without the reference count being incremented.
+the C<how> argument is C<PERL_MAGIC_arylen>, or if it is a NULL pointer,
+then C<obj> is merely stored, without the reference count being incremented.
 
 There is also a function to add magic to an C<HV>:
 
@@ -860,67 +893,76 @@ actions depending on which function is being called.
     svt_free            Free any extra storage associated with the SV.
 
 For instance, the MGVTBL structure called C<vtbl_sv> (which corresponds
-to an C<mg_type> of '\0') contains:
+to an C<mg_type> of C<PERL_MAGIC_sv>) contains:
 
     { magic_get, magic_set, magic_len, 0, 0 }
 
-Thus, when an SV is determined to be magical and of type '\0', if a get
-operation is being performed, the routine C<magic_get> is called.  All
-the various routines for the various magical types begin with C<magic_>.
-NOTE: the magic routines are not considered part of the Perl API, and may
-not be exported by the Perl library.
+Thus, when an SV is determined to be magical and of type C<PERL_MAGIC_sv>,
+if a get operation is being performed, the routine C<magic_get> is
+called.  All the various routines for the various magical types begin
+with C<magic_>.  NOTE: the magic routines are not considered part of
+the Perl API, and may not be exported by the Perl library.
 
 The current kinds of Magic Virtual Tables are:
 
-    mg_type  MGVTBL              Type of magic
-    -------  ------              ----------------------------
-    \0       vtbl_sv             Special scalar variable
-    A        vtbl_amagic         %OVERLOAD hash
-    a        vtbl_amagicelem     %OVERLOAD hash element
-    c        (none)              Holds overload table (AMT) on stash
-    B        vtbl_bm             Boyer-Moore (fast string search)
-    D        vtbl_regdata        Regex match position data (@+ and @- vars)
-    d        vtbl_regdatum       Regex match position data element
-    E        vtbl_env            %ENV hash
-    e        vtbl_envelem        %ENV hash element
-    f        vtbl_fm             Formline ('compiled' format)
-    g        vtbl_mglob          m//g target / study()ed string
-    I        vtbl_isa            @ISA array
-    i        vtbl_isaelem        @ISA array element
-    k        vtbl_nkeys          scalar(keys()) lvalue
-    L        (none)              Debugger %_<filename 
-    l        vtbl_dbline         Debugger %_<filename element
-    o        vtbl_collxfrm       Locale transformation
-    P        vtbl_pack           Tied array or hash
-    p        vtbl_packelem       Tied array or hash element
-    q        vtbl_packelem       Tied scalar or handle
-    S        vtbl_sig            %SIG hash
-    s        vtbl_sigelem        %SIG hash element
-    t        vtbl_taint          Taintedness
-    U        vtbl_uvar           Available for use by extensions
-    v        vtbl_vec            vec() lvalue
-    x        vtbl_substr         substr() lvalue
-    y        vtbl_defelem        Shadow "foreach" iterator variable /
-                                  smart parameter vivification
-    *        vtbl_glob           GV (typeglob)
-    #        vtbl_arylen         Array length ($#ary)
-    .        vtbl_pos            pos() lvalue
-    ~        (none)              Available for use by extensions
+    mg_type
+    (old-style char and macro)   MGVTBL         Type of magic
+    --------------------------   ------         ----------------------------
+    \0 PERL_MAGIC_sv             vtbl_sv        Special scalar variable
+    A  PERL_MAGIC_overload       vtbl_amagic    %OVERLOAD hash
+    a  PERL_MAGIC_overload_elem  vtbl_amagicelem %OVERLOAD hash element
+    c  PERL_MAGIC_overload_table (none)         Holds overload table (AMT)
+						on stash
+    B  PERL_MAGIC_bm             vtbl_bm        Boyer-Moore (fast string search)
+    D  PERL_MAGIC_regdata        vtbl_regdata   Regex match position data
+						(@+ and @- vars)
+    d  PERL_MAGIC_regdatum       vtbl_regdatum  Regex match position data
+						element
+    E  PERL_MAGIC_env            vtbl_env       %ENV hash
+    e  PERL_MAGIC_envelem        vtbl_envelem   %ENV hash element
+    f  PERL_MAGIC_fm             vtbl_fm        Formline ('compiled' format)
+    g  PERL_MAGIC_regex_global   vtbl_mglob     m//g target / study()ed string
+    I  PERL_MAGIC_isa            vtbl_isa       @ISA array
+    i  PERL_MAGIC_isaelem        vtbl_isaelem   @ISA array element
+    k  PERL_MAGIC_nkeys          vtbl_nkeys     scalar(keys()) lvalue
+    L  PERL_MAGIC_dbfile         (none)         Debugger %_<filename
+    l  PERL_MAGIC_dbline         vtbl_dbline    Debugger %_<filename element
+    m  PERL_MAGIC_mutex          vtbl_mutex     ???
+    o  PERL_MAGIC_collxfrm       vtbl_collxfrm  Locale collate transformation
+    P  PERL_MAGIC_tied           vtbl_pack      Tied array or hash
+    p  PERL_MAGIC_tiedelem       vtbl_packelem  Tied array or hash element
+    q  PERL_MAGIC_tiedscalar     vtbl_packelem  Tied scalar or handle
+    r  PERL_MAGIC_qr             vtbl_qr        precompiled qr// regex
+    S  PERL_MAGIC_sig            vtbl_sig       %SIG hash
+    s  PERL_MAGIC_sigelem        vtbl_sigelem   %SIG hash element
+    t  PERL_MAGIC_taint          vtbl_taint     Taintedness
+    U  PERL_MAGIC_uvar           vtbl_uvar      Available for use by extensions
+    v  PERL_MAGIC_vec            vtbl_vec       vec() lvalue
+    x  PERL_MAGIC_substr         vtbl_substr    substr() lvalue
+    y  PERL_MAGIC_defelem        vtbl_defelem   Shadow "foreach" iterator
+						variable / smart parameter
+						vivification
+    *  PERL_MAGIC_glob           vtbl_glob      GV (typeglob)
+    #  PERL_MAGIC_arylen         vtbl_arylen    Array length ($#ary)
+    .  PERL_MAGIC_pos            vtbl_pos       pos() lvalue
+    <  PERL_MAGIC_backref        vtbl_backref   ???
+    ~  PERL_MAGIC_ext            (none)         Available for use by extensions
 
 When an uppercase and lowercase letter both exist in the table, then the
 uppercase letter is used to represent some kind of composite type (a list
 or a hash), and the lowercase letter is used to represent an element of
-that composite type.
+that composite type. Some internals code makes use of this case
+relationship.
 
-The '~' and 'U' magic types are defined specifically for use by
-extensions and will not be used by perl itself.  Extensions can use
-'~' magic to 'attach' private information to variables (typically
-objects).  This is especially useful because there is no way for
-normal perl code to corrupt this private information (unlike using
-extra elements of a hash object).
+The C<PERL_MAGIC_ext> and C<PERL_MAGIC_uvar> magic types are defined
+specifically for use by extensions and will not be used by perl itself.
+Extensions can use C<PERL_MAGIC_ext> magic to 'attach' private information
+to variables (typically objects).  This is especially useful because
+there is no way for normal perl code to corrupt this private information
+(unlike using extra elements of a hash object).
 
-Similarly, 'U' magic can be used much like tie() to call a C function
-any time a scalar's value is used or changed.  The C<MAGIC>'s
+Similarly, C<PERL_MAGIC_uvar> magic can be used much like tie() to call a
+C function any time a scalar's value is used or changed.  The C<MAGIC>'s
 C<mg_ptr> field points to a C<ufuncs> structure:
 
     struct ufuncs {
@@ -930,8 +972,8 @@ C<mg_ptr> field points to a C<ufuncs> structure:
     };
 
 When the SV is read from or written to, the C<uf_val> or C<uf_set>
-function will be called with C<uf_index> as the first arg and a
-pointer to the SV as the second.  A simple example of how to add 'U'
+function will be called with C<uf_index> as the first arg and a pointer to
+the SV as the second.  A simple example of how to add C<PERL_MAGIC_uvar>
 magic is shown below.  Note that the ufuncs structure is copied by
 sv_magic, so you can safely allocate it on the stack.
 
@@ -944,14 +986,14 @@ sv_magic, so you can safely allocate it on the stack.
         uf.uf_val   = &my_get_fn;
         uf.uf_set   = &my_set_fn;
         uf.uf_index = 0;
-        sv_magic(sv, 0, 'U', (char*)&uf, sizeof(uf));
+        sv_magic(sv, 0, PERL_MAGIC_uvar, (char*)&uf, sizeof(uf));
 
-Note that because multiple extensions may be using '~' or 'U' magic,
-it is important for extensions to take extra care to avoid conflict.
-Typically only using the magic on objects blessed into the same class
-as the extension is sufficient.  For '~' magic, it may also be
-appropriate to add an I32 'signature' at the top of the private data
-area and check that.
+Note that because multiple extensions may be using C<PERL_MAGIC_ext>
+or C<PERL_MAGIC_uvar> magic, it is important for extensions to take
+extra care to avoid conflict.  Typically only using the magic on
+objects blessed into the same class as the extension is sufficient.
+For C<PERL_MAGIC_ext> magic, it may also be appropriate to add an I32
+'signature' at the top of the private data area and check that.
 
 Also note that the C<sv_set*()> and C<sv_cat*()> functions described
 earlier do B<not> invoke 'set' magic on their targets.  This must
@@ -981,7 +1023,8 @@ the mg_type field is changed to be the lowercase letter.
 
 =head2 Understanding the Magic of Tied Hashes and Arrays
 
-Tied hashes and arrays are magical beasts of the 'P' magic type.
+Tied hashes and arrays are magical beasts of the C<PERL_MAGIC_tied>
+magic type.
 
 WARNING: As of the 5.004 release, proper usage of the array and hash
 access functions requires understanding a few caveats.  Some
@@ -1012,7 +1055,7 @@ to do this.
         tie = newRV_noinc((SV*)newHV());
         stash = gv_stashpv("MyTie", TRUE);
         sv_bless(tie, stash);
-        hv_magic(hash, tie, 'P');
+        hv_magic(hash, (GV*)tie, PERL_MAGIC_tied);
         RETVAL = newRV_noinc(hash);
     OUTPUT:
         RETVAL
@@ -1184,7 +1227,7 @@ at the end of I<pseudo-block>.
 
 The following API list contains functions, thus one needs to
 provide pointers to the modifiable data explicitly (either C pointers,
-or Perlish C<GV *>s).  Where the above macros take C<int>, a similar 
+or Perlish C<GV *>s).  Where the above macros take C<int>, a similar
 function takes C<int *>.
 
 =over 4
@@ -1253,13 +1296,12 @@ extended using the macro:
 where C<SP> is the macro that represents the local copy of the stack pointer,
 and C<num> is the number of elements the stack should be extended by.
 
-Now that there is room on the stack, values can be pushed on it using the
-macros to push IVs, doubles, strings, and SV pointers respectively:
+Now that there is room on the stack, values can be pushed on it using C<PUSHs>
+macro. The values pushed will often need to be "mortal" (See L</Reference Counts and Mortality>).
 
-    PUSHi(IV)
-    PUSHn(double)
-    PUSHp(char*, I32)
-    PUSHs(SV*)
+    PUSHs(sv_2mortal(newSViv(an_integer)))
+    PUSHs(sv_2mortal(newSVpv("Some String",0)))
+    PUSHs(sv_2mortal(newSVnv(3.141592)))
 
 And now the Perl program calling C<tzname>, the two values will be assigned
 as in:
@@ -1267,16 +1309,16 @@ as in:
     ($standard_abbrev, $summer_abbrev) = POSIX::tzname;
 
 An alternate (and possibly simpler) method to pushing values on the stack is
-to use the macros:
+to use the macro:
 
-    XPUSHi(IV)
-    XPUSHn(double)
-    XPUSHp(char*, I32)
     XPUSHs(SV*)
 
-These macros automatically adjust the stack for you, if needed.  Thus, you
+This macro automatically adjust the stack for you, if needed.  Thus, you
 do not need to call C<EXTEND> to extend the stack.
-However, see L</Putting a C value on Perl stack>
+
+Despite their suggestions in earlier versions of this document the macros
+C<PUSHi>, C<PUSHn> and C<PUSHp> are I<not> suited to XSUBs which return
+multiple results, see L</Putting a C value on Perl stack>.
 
 For more information, consult L<perlxs> and L<perlxstut>.
 
@@ -1421,7 +1463,7 @@ which bypasses C<TARG>.
 
 On a related note, if you do use C<(X)PUSH[npi]>, then you're going to
 need a C<dTARG> in your variable declarations so that the C<*PUSH*>
-macros can make use of the local variable C<TARG>. 
+macros can make use of the local variable C<TARG>.
 
 =head2 Scratchpads
 
@@ -1625,6 +1667,23 @@ additional complications for conditionals).  These optimizations are
 done in the subroutine peep().  Optimizations performed at this stage
 are subject to the same restrictions as in the pass 2.
 
+=head2 Pluggable runops
+
+The compile tree is executed in a runops function.  There are two runops
+functions in F<run.c>.  C<Perl_runops_debug> is used with DEBUGGING and
+C<Perl_runops_standard> is used otherwise.  For fine control over the
+execution of the compile tree it is possible to provide your own runops
+function.
+
+It's probably best to copy one of the existing runops functions and
+change it to suit your needs.  Then, in the BOOT section of your XS
+file, add the line:
+
+  PL_runops = my_runops;
+
+This function should be as efficient as possible to keep your programs
+running as fast as possible.
+
 =head1 Examining internal data structures with the C<dump> functions
 
 To aid debugging, the source file F<dump.c> contains a number of
@@ -1633,7 +1692,7 @@ functions which produce formatted output of internal data structures.
 The most commonly used of these functions is C<Perl_sv_dump>; it's used
 for dumping SVs, AVs, HVs, and CVs. The C<Devel::Peek> module calls
 C<sv_dump> to produce debugging output from Perl-space, so users of that
-module should already be familiar with its format. 
+module should already be familiar with its format.
 
 C<Perl_op_dump> can be used to dump an C<OP> structure or any of its
 derivatives, and produces output similiar to C<perl -Dx>; in fact,
@@ -1690,13 +1749,13 @@ the Perl source (as it does in so many other situations) makes heavy
 use of macros and subroutine naming conventions.
 
 First problem: deciding which functions will be public API functions and
-which will be private.  All functions whose names begin C<S_> are private 
+which will be private.  All functions whose names begin C<S_> are private
 (think "S" for "secret" or "static").  All other functions begin with
 "Perl_", but just because a function begins with "Perl_" does not mean it is
-part of the API. (See L</Internal Functions>.) The easiest way to be B<sure> a 
-function is part of the API is to find its entry in L<perlapi>.  
-If it exists in L<perlapi>, it's part of the API.  If it doesn't, and you 
-think it should be (i.e., you need it for your extension), send mail via 
+part of the API. (See L</Internal Functions>.) The easiest way to be B<sure> a
+function is part of the API is to find its entry in L<perlapi>.
+If it exists in L<perlapi>, it's part of the API.  If it doesn't, and you
+think it should be (i.e., you need it for your extension), send mail via
 L<perlbug> explaining why you think it should be.
 
 Second problem: there must be a syntax so that the same subroutine
@@ -2006,7 +2065,7 @@ The argument list should end with C<...>, like this:
 
 =item M
 
-This function is part of the experimental development API, and may change 
+This function is part of the experimental development API, and may change
 or disappear without notice.
 
 =item o

@@ -41,10 +41,6 @@
 #  include <sys/wait.h>
 #endif
 
-#ifdef I_LOCALE
-#  include <locale.h>
-#endif
-
 #define FLUSH
 
 #ifdef LEAKTEST
@@ -60,13 +56,13 @@ long lastxycount[MAXXCOUNT][MAXYCOUNT];
 #  define FD_CLOEXEC 1			/* NeXT needs this */
 #endif
 
-/* paranoid version of system's malloc() */
-
 /* NOTE:  Do not call the next three routines directly.  Use the macros
  * in handy.h, so that we can easily redefine everything to do tracking of
  * allocated hunks back to the original New to track down any memory leaks.
  * XXX This advice seems to be widely ignored :-(   --AD  August 1996.
  */
+
+/* paranoid version of system's malloc() */
 
 Malloc_t
 Perl_safesysmalloc(MEM_SIZE size)
@@ -340,6 +336,37 @@ S_xstat(pTHX_ int flag)
 
 #endif /* LEAKTEST */
 
+/* These must be defined when not using Perl's malloc for binary
+ * compatibility */
+
+#ifndef MYMALLOC
+
+Malloc_t Perl_malloc (MEM_SIZE nbytes)
+{
+    dTHXs;
+    return PerlMem_malloc(nbytes);
+}
+
+Malloc_t Perl_calloc (MEM_SIZE elements, MEM_SIZE size)
+{
+    dTHXs;
+    return PerlMem_calloc(elements, size);
+}
+
+Malloc_t Perl_realloc (Malloc_t where, MEM_SIZE nbytes)
+{
+    dTHXs;
+    return PerlMem_realloc(where, nbytes);
+}
+
+Free_t   Perl_mfree (Malloc_t where)
+{
+    dTHXs;
+    PerlMem_free(where);
+}
+
+#endif
+
 /* copy a string up to some (non-backslashed) delimiter, if any */
 
 char *
@@ -457,528 +484,6 @@ Perl_rninstr(pTHX_ register const char *big, const char *bigend, const char *lit
     return Nullch;
 }
 
-/*
- * Set up for a new ctype locale.
- */
-void
-Perl_new_ctype(pTHX_ char *newctype)
-{
-#ifdef USE_LOCALE_CTYPE
-
-    int i;
-
-    for (i = 0; i < 256; i++) {
-	if (isUPPER_LC(i))
-	    PL_fold_locale[i] = toLOWER_LC(i);
-	else if (isLOWER_LC(i))
-	    PL_fold_locale[i] = toUPPER_LC(i);
-	else
-	    PL_fold_locale[i] = i;
-    }
-
-#endif /* USE_LOCALE_CTYPE */
-}
-
-/*
- * Standardize the locale name from a string returned by 'setlocale'.
- *
- * The standard return value of setlocale() is either
- * (1) "xx_YY" if the first argument of setlocale() is not LC_ALL
- * (2) "xa_YY xb_YY ..." if the first argument of setlocale() is LC_ALL
- *     (the space-separated values represent the various sublocales,
- *      in some unspecificed order)
- *
- * In some platforms it has a form like "LC_SOMETHING=Lang_Country.866\n",
- * which is harmful for further use of the string in setlocale().
- *
- */
-STATIC char *
-S_stdize_locale(pTHX_ char *locs)
-{
-    char *s;
-    bool okay = TRUE;
-
-    if ((s = strchr(locs, '='))) {
-	char *t;
-
-	okay = FALSE;
-	if ((t = strchr(s, '.'))) {
-	    char *u;
-
-	    if ((u = strchr(t, '\n'))) {
-
-		if (u[1] == 0) {
-		    STRLEN len = u - s;
-		    Move(s + 1, locs, len, char);
-		    locs[len] = 0;
-		    okay = TRUE;
-		}
-	    }
-	}
-    }
-
-    if (!okay)
-	Perl_croak(aTHX_ "Can't fix broken locale name \"%s\"", locs);
-
-    return locs;
-}
-
-/*
- * Set up for a new collation locale.
- */
-void
-Perl_new_collate(pTHX_ char *newcoll)
-{
-#ifdef USE_LOCALE_COLLATE
-
-    if (! newcoll) {
-	if (PL_collation_name) {
-	    ++PL_collation_ix;
-	    Safefree(PL_collation_name);
-	    PL_collation_name = NULL;
-	}
-	PL_collation_standard = TRUE;
-	PL_collxfrm_base = 0;
-	PL_collxfrm_mult = 2;
-	return;
-    }
-
-    if (! PL_collation_name || strNE(PL_collation_name, newcoll)) {
-	++PL_collation_ix;
-	Safefree(PL_collation_name);
-	PL_collation_name = stdize_locale(savepv(newcoll));
-	PL_collation_standard = (strEQ(newcoll, "C") || strEQ(newcoll, "POSIX"));
-
-	{
-	  /*  2: at most so many chars ('a', 'b'). */
-	  /* 50: surely no system expands a char more. */
-#define XFRMBUFSIZE  (2 * 50)
-	  char xbuf[XFRMBUFSIZE];
-	  Size_t fa = strxfrm(xbuf, "a",  XFRMBUFSIZE);
-	  Size_t fb = strxfrm(xbuf, "ab", XFRMBUFSIZE);
-	  SSize_t mult = fb - fa;
-	  if (mult < 1)
-	      Perl_croak(aTHX_ "strxfrm() gets absurd");
-	  PL_collxfrm_base = (fa > mult) ? (fa - mult) : 0;
-	  PL_collxfrm_mult = mult;
-	}
-    }
-
-#endif /* USE_LOCALE_COLLATE */
-}
-
-void
-Perl_set_numeric_radix(pTHX)
-{
-#ifdef USE_LOCALE_NUMERIC
-# ifdef HAS_LOCALECONV
-    struct lconv* lc;
-
-    lc = localeconv();
-    if (lc && lc->decimal_point) {
-	if (lc->decimal_point[0] == '.' && lc->decimal_point[1] == 0) {
-	    SvREFCNT_dec(PL_numeric_radix);
-	    PL_numeric_radix = 0;
-	}
-	else {
-	    if (PL_numeric_radix)
-		sv_setpv(PL_numeric_radix, lc->decimal_point);
-	    else
-		PL_numeric_radix = newSVpv(lc->decimal_point, 0);
-	}
-    }
-    else
-	PL_numeric_radix = 0;
-# endif /* HAS_LOCALECONV */
-#endif /* USE_LOCALE_NUMERIC */
-}
-
-/*
- * Set up for a new numeric locale.
- */
-void
-Perl_new_numeric(pTHX_ char *newnum)
-{
-#ifdef USE_LOCALE_NUMERIC
-
-    if (! newnum) {
-	if (PL_numeric_name) {
-	    Safefree(PL_numeric_name);
-	    PL_numeric_name = NULL;
-	}
-	PL_numeric_standard = TRUE;
-	PL_numeric_local = TRUE;
-	return;
-    }
-
-    if (! PL_numeric_name || strNE(PL_numeric_name, newnum)) {
-	Safefree(PL_numeric_name);
-	PL_numeric_name = stdize_locale(savepv(newnum));
-	PL_numeric_standard = (strEQ(newnum, "C") || strEQ(newnum, "POSIX"));
-	PL_numeric_local = TRUE;
-	set_numeric_radix();
-    }
-
-#endif /* USE_LOCALE_NUMERIC */
-}
-
-void
-Perl_set_numeric_standard(pTHX)
-{
-#ifdef USE_LOCALE_NUMERIC
-
-    if (! PL_numeric_standard) {
-	setlocale(LC_NUMERIC, "C");
-	PL_numeric_standard = TRUE;
-	PL_numeric_local = FALSE;
-	set_numeric_radix();
-    }
-
-#endif /* USE_LOCALE_NUMERIC */
-}
-
-void
-Perl_set_numeric_local(pTHX)
-{
-#ifdef USE_LOCALE_NUMERIC
-
-    if (! PL_numeric_local) {
-	setlocale(LC_NUMERIC, PL_numeric_name);
-	PL_numeric_standard = FALSE;
-	PL_numeric_local = TRUE;
-	set_numeric_radix();
-    }
-
-#endif /* USE_LOCALE_NUMERIC */
-}
-
-/*
- * Initialize locale awareness.
- */
-int
-Perl_init_i18nl10n(pTHX_ int printwarn)
-{
-    int ok = 1;
-    /* returns
-     *    1 = set ok or not applicable,
-     *    0 = fallback to C locale,
-     *   -1 = fallback to C locale failed
-     */
-
-#if defined(USE_LOCALE)
-
-#ifdef USE_LOCALE_CTYPE
-    char *curctype   = NULL;
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-    char *curcoll    = NULL;
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-    char *curnum     = NULL;
-#endif /* USE_LOCALE_NUMERIC */
-#ifdef __GLIBC__
-    char *language   = PerlEnv_getenv("LANGUAGE");
-#endif
-    char *lc_all     = PerlEnv_getenv("LC_ALL");
-    char *lang       = PerlEnv_getenv("LANG");
-    bool setlocale_failure = FALSE;
-
-#ifdef LOCALE_ENVIRON_REQUIRED
-
-    /*
-     * Ultrix setlocale(..., "") fails if there are no environment
-     * variables from which to get a locale name.
-     */
-
-    bool done = FALSE;
-
-#ifdef LC_ALL
-    if (lang) {
-	if (setlocale(LC_ALL, ""))
-	    done = TRUE;
-	else
-	    setlocale_failure = TRUE;
-    }
-    if (!setlocale_failure) {
-#ifdef USE_LOCALE_CTYPE
-	if (! (curctype =
-	       setlocale(LC_CTYPE,
-			 (!done && (lang || PerlEnv_getenv("LC_CTYPE")))
-				    ? "" : Nullch)))
-	    setlocale_failure = TRUE;
-	else
-	    curctype = savepv(curctype);
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-	if (! (curcoll =
-	       setlocale(LC_COLLATE,
-			 (!done && (lang || PerlEnv_getenv("LC_COLLATE")))
-				   ? "" : Nullch)))
-	    setlocale_failure = TRUE;
-	else
-	    curcoll = savepv(curcoll);
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-	if (! (curnum =
-	       setlocale(LC_NUMERIC,
-			 (!done && (lang || PerlEnv_getenv("LC_NUMERIC")))
-				  ? "" : Nullch)))
-	    setlocale_failure = TRUE;
-	else
-	    curnum = savepv(curnum);
-#endif /* USE_LOCALE_NUMERIC */
-    }
-
-#endif /* LC_ALL */
-
-#endif /* !LOCALE_ENVIRON_REQUIRED */
-
-#ifdef LC_ALL
-    if (! setlocale(LC_ALL, ""))
-	setlocale_failure = TRUE;
-#endif /* LC_ALL */
-
-    if (!setlocale_failure) {
-#ifdef USE_LOCALE_CTYPE
-	if (! (curctype = setlocale(LC_CTYPE, "")))
-	    setlocale_failure = TRUE;
-	else
-	    curctype = savepv(curctype);
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-	if (! (curcoll = setlocale(LC_COLLATE, "")))
-	    setlocale_failure = TRUE;
-	else
-	    curcoll = savepv(curcoll);
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-	if (! (curnum = setlocale(LC_NUMERIC, "")))
-	    setlocale_failure = TRUE;
-	else
-	    curnum = savepv(curnum);
-#endif /* USE_LOCALE_NUMERIC */
-    }
-
-    if (setlocale_failure) {
-	char *p;
-	bool locwarn = (printwarn > 1 ||
-			(printwarn &&
-			 (!(p = PerlEnv_getenv("PERL_BADLANG")) || atoi(p))));
-
-	if (locwarn) {
-#ifdef LC_ALL
-
-	    PerlIO_printf(Perl_error_log,
-	       "perl: warning: Setting locale failed.\n");
-
-#else /* !LC_ALL */
-
-	    PerlIO_printf(Perl_error_log,
-	       "perl: warning: Setting locale failed for the categories:\n\t");
-#ifdef USE_LOCALE_CTYPE
-	    if (! curctype)
-		PerlIO_printf(Perl_error_log, "LC_CTYPE ");
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-	    if (! curcoll)
-		PerlIO_printf(Perl_error_log, "LC_COLLATE ");
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-	    if (! curnum)
-		PerlIO_printf(Perl_error_log, "LC_NUMERIC ");
-#endif /* USE_LOCALE_NUMERIC */
-	    PerlIO_printf(Perl_error_log, "\n");
-
-#endif /* LC_ALL */
-
-	    PerlIO_printf(Perl_error_log,
-		"perl: warning: Please check that your locale settings:\n");
-
-#ifdef __GLIBC__
-	    PerlIO_printf(Perl_error_log,
-			  "\tLANGUAGE = %c%s%c,\n",
-			  language ? '"' : '(',
-			  language ? language : "unset",
-			  language ? '"' : ')');
-#endif
-
-	    PerlIO_printf(Perl_error_log,
-			  "\tLC_ALL = %c%s%c,\n",
-			  lc_all ? '"' : '(',
-			  lc_all ? lc_all : "unset",
-			  lc_all ? '"' : ')');
-
-#if defined(USE_ENVIRON_ARRAY)
-	    {
-	      char **e;
-	      for (e = environ; *e; e++) {
-		  if (strnEQ(*e, "LC_", 3)
-			&& strnNE(*e, "LC_ALL=", 7)
-			&& (p = strchr(*e, '=')))
-		      PerlIO_printf(Perl_error_log, "\t%.*s = \"%s\",\n",
-				    (int)(p - *e), *e, p + 1);
-	      }
-	    }
-#else
-	    PerlIO_printf(Perl_error_log,
-			  "\t(possibly more locale environment variables)\n");
-#endif
-
-	    PerlIO_printf(Perl_error_log,
-			  "\tLANG = %c%s%c\n",
-			  lang ? '"' : '(',
-			  lang ? lang : "unset",
-			  lang ? '"' : ')');
-
-	    PerlIO_printf(Perl_error_log,
-			  "    are supported and installed on your system.\n");
-	}
-
-#ifdef LC_ALL
-
-	if (setlocale(LC_ALL, "C")) {
-	    if (locwarn)
-		PerlIO_printf(Perl_error_log,
-      "perl: warning: Falling back to the standard locale (\"C\").\n");
-	    ok = 0;
-	}
-	else {
-	    if (locwarn)
-		PerlIO_printf(Perl_error_log,
-      "perl: warning: Failed to fall back to the standard locale (\"C\").\n");
-	    ok = -1;
-	}
-
-#else /* ! LC_ALL */
-
-	if (0
-#ifdef USE_LOCALE_CTYPE
-	    || !(curctype || setlocale(LC_CTYPE, "C"))
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-	    || !(curcoll || setlocale(LC_COLLATE, "C"))
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-	    || !(curnum || setlocale(LC_NUMERIC, "C"))
-#endif /* USE_LOCALE_NUMERIC */
-	    )
-	{
-	    if (locwarn)
-		PerlIO_printf(Perl_error_log,
-      "perl: warning: Cannot fall back to the standard locale (\"C\").\n");
-	    ok = -1;
-	}
-
-#endif /* ! LC_ALL */
-
-#ifdef USE_LOCALE_CTYPE
-	curctype = savepv(setlocale(LC_CTYPE, Nullch));
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-	curcoll = savepv(setlocale(LC_COLLATE, Nullch));
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-	curnum = savepv(setlocale(LC_NUMERIC, Nullch));
-#endif /* USE_LOCALE_NUMERIC */
-    }
-    else {
-
-#ifdef USE_LOCALE_CTYPE
-    new_ctype(curctype);
-#endif /* USE_LOCALE_CTYPE */
-
-#ifdef USE_LOCALE_COLLATE
-    new_collate(curcoll);
-#endif /* USE_LOCALE_COLLATE */
-
-#ifdef USE_LOCALE_NUMERIC
-    new_numeric(curnum);
-#endif /* USE_LOCALE_NUMERIC */
-    }
-
-#endif /* USE_LOCALE */
-
-#ifdef USE_LOCALE_CTYPE
-    if (curctype != NULL)
-	Safefree(curctype);
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-    if (curcoll != NULL)
-	Safefree(curcoll);
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-    if (curnum != NULL)
-	Safefree(curnum);
-#endif /* USE_LOCALE_NUMERIC */
-    return ok;
-}
-
-/* Backwards compatibility. */
-int
-Perl_init_i18nl14n(pTHX_ int printwarn)
-{
-    return init_i18nl10n(printwarn);
-}
-
-#ifdef USE_LOCALE_COLLATE
-
-/*
- * mem_collxfrm() is a bit like strxfrm() but with two important
- * differences. First, it handles embedded NULs. Second, it allocates
- * a bit more memory than needed for the transformed data itself.
- * The real transformed data begins at offset sizeof(collationix).
- * Please see sv_collxfrm() to see how this is used.
- */
-char *
-Perl_mem_collxfrm(pTHX_ const char *s, STRLEN len, STRLEN *xlen)
-{
-    char *xbuf;
-    STRLEN xAlloc, xin, xout; /* xalloc is a reserved word in VC */
-
-    /* the first sizeof(collationix) bytes are used by sv_collxfrm(). */
-    /* the +1 is for the terminating NUL. */
-
-    xAlloc = sizeof(PL_collation_ix) + PL_collxfrm_base + (PL_collxfrm_mult * len) + 1;
-    New(171, xbuf, xAlloc, char);
-    if (! xbuf)
-	goto bad;
-
-    *(U32*)xbuf = PL_collation_ix;
-    xout = sizeof(PL_collation_ix);
-    for (xin = 0; xin < len; ) {
-	SSize_t xused;
-
-	for (;;) {
-	    xused = strxfrm(xbuf + xout, s + xin, xAlloc - xout);
-	    if (xused == -1)
-		goto bad;
-	    if (xused < xAlloc - xout)
-		break;
-	    xAlloc = (2 * xAlloc) + 1;
-	    Renew(xbuf, xAlloc, char);
-	    if (! xbuf)
-		goto bad;
-	}
-
-	xin += strlen(s + xin) + 1;
-	xout += xused;
-
-	/* Embedded NULs are understood but silently skipped
-	 * because they make no sense in locale collation. */
-    }
-
-    xbuf[xout] = '\0';
-    *xlen = xout - sizeof(PL_collation_ix);
-    return xbuf;
-
-  bad:
-    Safefree(xbuf);
-    *xlen = 0;
-    return NULL;
-}
-
-#endif /* USE_LOCALE_COLLATE */
-
 #define FBM_TABLE_OFFSET 2	/* Number of bytes between EOS and table*/
 
 /* As a space optimization, we do not compile tables for strings of length
@@ -1033,7 +538,7 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
 	    s--, i++;
 	}
     }
-    sv_magic(sv, Nullsv, 'B', Nullch, 0);	/* deep magic */
+    sv_magic(sv, Nullsv, PERL_MAGIC_bm, Nullch, 0);	/* deep magic */
     SvVALID_on(sv);
 
     s = (unsigned char*)(SvPVX(sv));		/* deeper magic */
@@ -1218,16 +723,8 @@ Perl_fbm_instr(pTHX_ unsigned char *big, register unsigned char *bigend, SV *lit
 	  top2:
 	    /*SUPPRESS 560*/
 	    if ((tmp = table[*s])) {
-#ifdef POINTERRIGOR
-		if (bigend - s > tmp) {
-		    s += tmp;
-		    goto top2;
-		}
-		s += tmp;
-#else
 		if ((s += tmp) < bigend)
 		    goto top2;
-#endif
 		goto check_end;
 	    }
 	    else {		/* less expensive than calling strncmp() */
@@ -1268,7 +765,7 @@ Perl_fbm_instr(pTHX_ unsigned char *big, register unsigned char *bigend, SV *lit
  */
 
 /* If SvTAIL is actually due to \Z or \z, this gives false positives
-   if PL_multiline.  In fact if !PL_multiline the autoritative answer
+   if PL_multiline.  In fact if !PL_multiline the authoritative answer
    is not supported yet. */
 
 char *
@@ -1307,33 +804,20 @@ Perl_screaminstr(pTHX_ SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift
     /* The value of pos we can stop at: */
     stop_pos = SvCUR(bigstr) - end_shift - (SvCUR(littlestr) - 1 - previous);
     if (previous + start_shift > stop_pos) {
+/*
+  stop_pos does not include SvTAIL in the count, so this check is incorrect
+  (I think) - see [ID 20010618.006] and t/op/study.t. HVDS 2001/06/19
+*/
+#if 0
 	if (previous + start_shift == stop_pos + 1) /* A fake '\n'? */
 	    goto check_tail;
+#endif
 	return Nullch;
     }
     while (pos < previous + start_shift) {
 	if (!(pos += PL_screamnext[pos]))
 	    goto cant_find;
     }
-#ifdef POINTERRIGOR
-    do {
-	if (pos >= stop_pos) break;
-	if (big[pos-previous] != first)
-	    continue;
-	for (x=big+pos+1-previous,s=little; s < littleend; /**/ ) {
-	    if (*s++ != *x++) {
-		s--;
-		break;
-	    }
-	}
-	if (s == littleend) {
-	    *old_posp = pos;
-	    if (!last) return (char *)(big+pos-previous);
-	    found = 1;
-	}
-    } while ( pos += PL_screamnext[pos] );
-    return (last && found) ? (char *)(big+(*old_posp)-previous) : Nullch;
-#else /* !POINTERRIGOR */
     big -= previous;
     do {
 	if (pos >= stop_pos) break;
@@ -1353,7 +837,6 @@ Perl_screaminstr(pTHX_ SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift
     } while ( pos += PL_screamnext[pos] );
     if (last && found)
 	return (char *)(big+(*old_posp));
-#endif /* POINTERRIGOR */
   check_tail:
     if (!SvTAIL(littlestr) || (end_shift > 0))
 	return Nullch;
@@ -1520,17 +1003,60 @@ Perl_mess(pTHX_ const char *pat, ...)
     return retval;
 }
 
+STATIC COP*
+S_closest_cop(pTHX_ COP *cop, OP *o)
+{
+    /* Look for PL_op starting from o.  cop is the last COP we've seen. */
+
+    if (!o || o == PL_op) return cop;
+
+    if (o->op_flags & OPf_KIDS) {
+	OP *kid;
+	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling)
+	{
+	    COP *new_cop;
+
+	    /* If the OP_NEXTSTATE has been optimised away we can still use it
+	     * the get the file and line number. */
+
+	    if (kid->op_type == OP_NULL && kid->op_targ == OP_NEXTSTATE)
+		cop = (COP *)kid;
+
+	    /* Keep searching, and return when we've found something. */
+
+	    new_cop = closest_cop(cop, kid);
+	    if (new_cop) return new_cop;
+	}
+    }
+
+    /* Nothing found. */
+
+    return 0;
+}
+
 SV *
 Perl_vmess(pTHX_ const char *pat, va_list *args)
 {
     SV *sv = mess_alloc();
     static char dgd[] = " during global destruction.\n";
+    COP *cop;
 
     sv_vsetpvfn(sv, pat, strlen(pat), args, Null(SV**), 0, Null(bool*));
     if (!SvCUR(sv) || *(SvEND(sv) - 1) != '\n') {
-	if (CopLINE(PL_curcop))
+
+	/*
+	 * Try and find the file and line for PL_op.  This will usually be
+	 * PL_curcop, but it might be a cop that has been optimised away.  We
+	 * can try to find such a cop by searching through the optree starting
+	 * from the sibling of PL_curcop.
+	 */
+
+	cop = closest_cop(PL_curcop, PL_curcop->op_sibling);
+	if (!cop) cop = PL_curcop;
+
+	if (CopLINE(cop))
 	    Perl_sv_catpvf(aTHX_ sv, " at %s line %"IVdf,
-			   CopFILE(PL_curcop), (IV)CopLINE(PL_curcop));
+			   CopFILE(cop), (IV)CopLINE(cop));
 	if (GvIO(PL_last_in_gv) && IoLINES(GvIOp(PL_last_in_gv))) {
 	    bool line_mode = (RsSIMPLE(PL_rs) &&
 			      SvCUR(PL_rs) == 1 && *SvPVX(PL_rs) == '\n');
@@ -1980,7 +1506,7 @@ Perl_vwarner(pTHX_ U32  err, const char* pat, va_list* args)
 
 #ifdef USE_ENVIRON_ARRAY
        /* VMS' and EPOC's my_setenv() is in vms.c and epoc.c */
-#if !defined(WIN32)
+#if !defined(WIN32) && !defined(NETWARE)
 void
 Perl_my_setenv(pTHX_ char *nam, char *val)
 {
@@ -2034,7 +1560,7 @@ Perl_my_setenv(pTHX_ char *nam, char *val)
 #endif  /* PERL_USE_SAFE_PUTENV */
 }
 
-#else /* WIN32 */
+#else /* WIN32 || NETWARE */
 
 void
 Perl_my_setenv(pTHX_ char *nam,char *val)
@@ -2051,7 +1577,7 @@ Perl_my_setenv(pTHX_ char *nam,char *val)
     Safefree(envstr);
 }
 
-#endif /* WIN32 */
+#endif /* WIN32 || NETWARE */
 
 I32
 Perl_setenv_getix(pTHX_ char *nam)
@@ -2085,7 +1611,7 @@ Perl_unlnk(pTHX_ char *f)	/* unlink all versions of a file */
 #endif
 
 /* this is a drop-in replacement for bcopy() */
-#if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
+#if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
 char *
 Perl_my_bcopy(register const char *from,register char *to,register I32 len)
 {
@@ -2312,7 +1838,7 @@ VTOH(vtohl,long)
 PerlIO *
 Perl_my_popen_list(pTHX_ char *mode, int n, SV **args)
 {
-#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(OS2) && !defined(VMS) && !defined(__OPEN_VM) && !defined(EPOC) && !defined(MACOS_TRADITIONAL)
+#if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(OS2) && !defined(VMS) && !defined(__OPEN_VM) && !defined(EPOC) && !defined(MACOS_TRADITIONAL) && !defined(NETWARE)
     int p[2];
     register I32 This, that;
     register Pid_t pid;
@@ -2345,8 +1871,6 @@ Perl_my_popen_list(pTHX_ char *mode, int n, SV **args)
     }
     if (pid == 0) {
 	/* Child */
-	GV* tmpgv;
-	int fd;
 #undef THIS
 #undef THAT
 #define THIS that
@@ -2368,12 +1892,16 @@ Perl_my_popen_list(pTHX_ char *mode, int n, SV **args)
 	}
 #if !defined(HAS_FCNTL) || !defined(F_SETFD)
 	/* No automatic close - do it by hand */
-#ifndef NOFILE
-#define NOFILE 20
-#endif
-	for (fd = PL_maxsysfd + 1; fd < NOFILE; fd++) {
-	    if (fd != pp[1])
-		PerlLIO_close(fd);
+#  ifndef NOFILE
+#  define NOFILE 20
+#  endif
+	{
+	    int fd;
+
+	    for (fd = PL_maxsysfd + 1; fd < NOFILE; fd++) {
+	        if (fd != pp[1])
+		    PerlLIO_close(fd);
+	    }
 	}
 #endif
 	do_aexec5(Nullsv, args-1, args-1+n, pp[1], did_pipes);
@@ -2502,11 +2030,16 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 #ifndef NOFILE
 #define NOFILE 20
 #endif
-	    for (fd = PL_maxsysfd + 1; fd < NOFILE; fd++)
-		if (fd != pp[1])
-		    PerlLIO_close(fd);
+	    {
+	        int fd;
+
+		for (fd = PL_maxsysfd + 1; fd < NOFILE; fd++)
+		    if (fd != pp[1])
+		        PerlLIO_close(fd);
+	    }
 #endif
-	    do_exec3(cmd,pp[1],did_pipes);	/* may or may not use the shell */
+	    /* may or may not use the shell */
+	    do_exec3(cmd, pp[1], did_pipes);
 	    PerlProc__exit(1);
 	}
 #endif	/* defined OS2 */
@@ -2564,7 +2097,7 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
     return PerlIO_fdopen(p[This], mode);
 }
 #else
-#if defined(atarist) || defined(DJGPP)
+#if defined(atarist)
 FILE *popen();
 PerlIO *
 Perl_my_popen(pTHX_ char *cmd, char *mode)
@@ -2576,6 +2109,20 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
     */
     return PerlIO_importFILE(popen(cmd, mode), 0);
 }
+#else
+#if defined(DJGPP)
+FILE *djgpp_popen();
+PerlIO *
+Perl_my_popen(pTHX_ char *cmd, char *mode)
+{
+    PERL_FLUSHALL_FOR_CHILD;
+    /* Call system's popen() to get a FILE *, then import it.
+       used 0 for 2nd parameter to PerlIO_importFILE;
+       apparently not used
+    */
+    return PerlIO_importFILE(djgpp_popen(cmd, mode), 0);
+}
+#endif
 #endif
 
 #endif /* !DOSISH */
@@ -2750,7 +2297,7 @@ Perl_my_pclose(pTHX_ PerlIO *ptr)
     Pid_t pid;
     Pid_t pid2;
     bool close_failed;
-    int saved_errno;
+    int saved_errno = 0;
 #ifdef VMS
     int saved_vaxc_errno;
 #endif
@@ -2802,17 +2349,18 @@ Perl_my_pclose(pTHX_ PerlIO *ptr)
 }
 #endif /* !DOSISH */
 
-#if  (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL)
+#if  (!defined(DOSISH) || defined(OS2) || defined(WIN32) || defined(NETWARE)) && !defined(MACOS_TRADITIONAL)
 I32
 Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
 {
+    if (!pid)
+	return -1;
+#if !defined(HAS_WAITPID) && !defined(HAS_WAIT4) || defined(HAS_WAITPID_RUNTIME)
+    {
     SV *sv;
     SV** svp;
     char spid[TYPE_CHARS(int)];
 
-    if (!pid)
-	return -1;
-#if !defined(HAS_WAITPID) && !defined(HAS_WAIT4) || defined(HAS_WAITPID_RUNTIME)
     if (pid > 0) {
 	sprintf(spid, "%"IVdf, (IV)pid);
 	svp = hv_fetch(PL_pidstatus,spid,strlen(spid),FALSE);
@@ -2834,6 +2382,7 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
 	    (void)hv_delete(PL_pidstatus,spid,strlen(spid),G_DISCARD);
 	    return pid;
 	}
+        }
     }
 #endif
 #ifdef HAS_WAITPID
@@ -2862,7 +2411,7 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
     }
 #endif
 }
-#endif /* !DOSISH || OS2 || WIN32 */
+#endif /* !DOSISH || OS2 || WIN32 || NETWARE */
 
 void
 /*SUPPRESS 590*/
@@ -2878,7 +2427,7 @@ Perl_pidgone(pTHX_ Pid_t pid, int status)
     return;
 }
 
-#if defined(atarist) || defined(OS2) || defined(DJGPP)
+#if defined(atarist) || defined(OS2)
 int pclose();
 #ifdef HAS_FORK
 int					/* Cannot prototype with I32
@@ -2892,9 +2441,20 @@ Perl_my_pclose(pTHX_ PerlIO *ptr)
     /* Needs work for PerlIO ! */
     FILE *f = PerlIO_findFILE(ptr);
     I32 result = pclose(f);
-#if defined(DJGPP)
-    result = (result << 8) & 0xff00;
+    PerlIO_releaseFILE(ptr,f);
+    return result;
+}
 #endif
+
+#if defined(DJGPP)
+int djgpp_pclose();
+I32
+Perl_my_pclose(pTHX_ PerlIO *ptr)
+{
+    /* Needs work for PerlIO ! */
+    FILE *f = PerlIO_findFILE(ptr);
+    I32 result = djgpp_pclose(f);
+    result = (result << 8) & 0xff00;
     PerlIO_releaseFILE(ptr,f);
     return result;
 }
@@ -2918,85 +2478,6 @@ Perl_repeatcpy(pTHX_ register char *to, register const char *from, I32 len, regi
 	}
 	from = frombase;
     }
-}
-
-U32
-Perl_cast_ulong(pTHX_ NV f)
-{
-    long along;
-
-#if CASTFLAGS & 2
-#   define BIGDOUBLE 2147483648.0
-    if (f >= BIGDOUBLE)
-	return (unsigned long)(f-(long)(f/BIGDOUBLE)*BIGDOUBLE)|0x80000000;
-#endif
-    if (f >= 0.0)
-	return (unsigned long)f;
-    along = (long)f;
-    return (unsigned long)along;
-}
-# undef BIGDOUBLE
-
-/* Unfortunately, on some systems the cast_uv() function doesn't
-   work with the system-supplied definition of ULONG_MAX.  The
-   comparison  (f >= ULONG_MAX) always comes out true.  It must be a
-   problem with the compiler constant folding.
-
-   In any case, this workaround should be fine on any two's complement
-   system.  If it's not, supply a '-DMY_ULONG_MAX=whatever' in your
-   ccflags.
-	       --Andy Dougherty      <doughera@lafcol.lafayette.edu>
-*/
-
-/* Code modified to prefer proper named type ranges, I32, IV, or UV, instead
-   of LONG_(MIN/MAX).
-                           -- Kenneth Albanowski <kjahds@kjahds.com>
-*/
-
-#ifndef MY_UV_MAX
-#  define MY_UV_MAX ((UV)IV_MAX * (UV)2 + (UV)1)
-#endif
-
-I32
-Perl_cast_i32(pTHX_ NV f)
-{
-    if (f >= I32_MAX)
-	return (I32) I32_MAX;
-    if (f <= I32_MIN)
-	return (I32) I32_MIN;
-    return (I32) f;
-}
-
-IV
-Perl_cast_iv(pTHX_ NV f)
-{
-    if (f >= IV_MAX) {
-	UV uv;
-	
-	if (f >= (NV)UV_MAX)
-	    return (IV) UV_MAX;	
-	uv = (UV) f;
-	return (IV)uv;
-    }
-    if (f <= IV_MIN)
-	return (IV) IV_MIN;
-    return (IV) f;
-}
-
-UV
-Perl_cast_uv(pTHX_ NV f)
-{
-    if (f >= MY_UV_MAX)
-	return (UV) MY_UV_MAX;
-    if (f < 0) {
-	IV iv;
-	
-	if (f < IV_MIN)
-	    return (UV)IV_MIN;
-	iv = (IV) f;
-	return (UV) iv;
-    }
-    return (UV) f;
 }
 
 #ifndef HAS_RENAME
@@ -3035,216 +2516,6 @@ Perl_same_dirent(pTHX_ char *a, char *b)
 	   tmpstatbuf1.st_ino == tmpstatbuf2.st_ino;
 }
 #endif /* !HAS_RENAME */
-
-NV
-Perl_scan_bin(pTHX_ char *start, STRLEN len, STRLEN *retlen)
-{
-    register char *s = start;
-    register NV rnv = 0.0;
-    register UV ruv = 0;
-    register bool seenb = FALSE;
-    register bool overflowed = FALSE;
-
-    for (; len-- && *s; s++) {
-	if (!(*s == '0' || *s == '1')) {
-	    if (*s == '_' && len && *retlen
-		&& (s[1] == '0' || s[1] == '1'))
-	    {
-		--len;
-		++s;
-	    }
-	    else if (seenb == FALSE && *s == 'b' && ruv == 0) {
-		/* Disallow 0bbb0b0bbb... */
-		seenb = TRUE;
-		continue;
-	    }
-	    else {
-		if (ckWARN(WARN_DIGIT))
-		    Perl_warner(aTHX_ WARN_DIGIT,
-				"Illegal binary digit '%c' ignored", *s);
-		break;
-	    }
-	}
-	if (!overflowed) {
-	    register UV xuv = ruv << 1;
-
-	    if ((xuv >> 1) != ruv) {
-		overflowed = TRUE;
-		rnv = (NV) ruv;
-		if (ckWARN_d(WARN_OVERFLOW))
-		    Perl_warner(aTHX_ WARN_OVERFLOW,
-				"Integer overflow in binary number");
-	    }
-	    else
-		ruv = xuv | (*s - '0');
-	}
-	if (overflowed) {
-	    rnv *= 2;
-	    /* If an NV has not enough bits in its mantissa to
-	     * represent an UV this summing of small low-order numbers
-	     * is a waste of time (because the NV cannot preserve
-	     * the low-order bits anyway): we could just remember when
-	     * did we overflow and in the end just multiply rnv by the
-	     * right amount. */
-	    rnv += (*s - '0');
-	}
-    }
-    if (!overflowed)
-	rnv = (NV) ruv;
-    if (   ( overflowed && rnv > 4294967295.0)
-#if UVSIZE > 4
-	|| (!overflowed && ruv > 0xffffffff  )
-#endif
-	) {
-	if (ckWARN(WARN_PORTABLE))
-	    Perl_warner(aTHX_ WARN_PORTABLE,
-			"Binary number > 0b11111111111111111111111111111111 non-portable");
-    }
-    *retlen = s - start;
-    return rnv;
-}
-
-NV
-Perl_scan_oct(pTHX_ char *start, STRLEN len, STRLEN *retlen)
-{
-    register char *s = start;
-    register NV rnv = 0.0;
-    register UV ruv = 0;
-    register bool overflowed = FALSE;
-
-    for (; len-- && *s; s++) {
-	if (!(*s >= '0' && *s <= '7')) {
-	    if (*s == '_' && len && *retlen
-		&& (s[1] >= '0' && s[1] <= '7'))
-	    {
-		--len;
-		++s;
-	    }
-	    else {
-		/* Allow \octal to work the DWIM way (that is, stop scanning
-		 * as soon as non-octal characters are seen, complain only iff
-		 * someone seems to want to use the digits eight and nine). */
-		if (*s == '8' || *s == '9') {
-		    if (ckWARN(WARN_DIGIT))
-			Perl_warner(aTHX_ WARN_DIGIT,
-				    "Illegal octal digit '%c' ignored", *s);
-		}
-		break;
-	    }
-	}
-	if (!overflowed) {
-	    register UV xuv = ruv << 3;
-
-	    if ((xuv >> 3) != ruv) {
-		overflowed = TRUE;
-		rnv = (NV) ruv;
-		if (ckWARN_d(WARN_OVERFLOW))
-		    Perl_warner(aTHX_ WARN_OVERFLOW,
-				"Integer overflow in octal number");
-	    }
-	    else
-		ruv = xuv | (*s - '0');
-	}
-	if (overflowed) {
-	    rnv *= 8.0;
-	    /* If an NV has not enough bits in its mantissa to
-	     * represent an UV this summing of small low-order numbers
-	     * is a waste of time (because the NV cannot preserve
-	     * the low-order bits anyway): we could just remember when
-	     * did we overflow and in the end just multiply rnv by the
-	     * right amount of 8-tuples. */
-	    rnv += (NV)(*s - '0');
-	}
-    }
-    if (!overflowed)
-	rnv = (NV) ruv;
-    if (   ( overflowed && rnv > 4294967295.0)
-#if UVSIZE > 4
-	|| (!overflowed && ruv > 0xffffffff  )
-#endif
-	) {
-	if (ckWARN(WARN_PORTABLE))
-	    Perl_warner(aTHX_ WARN_PORTABLE,
-			"Octal number > 037777777777 non-portable");
-    }
-    *retlen = s - start;
-    return rnv;
-}
-
-NV
-Perl_scan_hex(pTHX_ char *start, STRLEN len, STRLEN *retlen)
-{
-    register char *s = start;
-    register NV rnv = 0.0;
-    register UV ruv = 0;
-    register bool overflowed = FALSE;
-    char *hexdigit;
-
-    if (len > 2) {
-	if (s[0] == 'x') {
-	    s++;
-	    len--;
-	}
-	else if (len > 3 && s[0] == '0' && s[1] == 'x') {
-	    s+=2;
-	    len-=2;
-	}
-    }
-
-    for (; len-- && *s; s++) {
-	hexdigit = strchr((char *) PL_hexdigit, *s);
-	if (!hexdigit) {
-	    if (*s == '_' && len && *retlen && s[1]
-		&& (hexdigit = strchr((char *) PL_hexdigit, s[1])))
-	    {
-		--len;
-		++s;
-	    }
-	    else {
-		if (ckWARN(WARN_DIGIT))
-		    Perl_warner(aTHX_ WARN_DIGIT,
-				"Illegal hexadecimal digit '%c' ignored", *s);
-		break;
-	    }
-	}
-	if (!overflowed) {
-	    register UV xuv = ruv << 4;
-
-	    if ((xuv >> 4) != ruv) {
-		overflowed = TRUE;
-		rnv = (NV) ruv;
-		if (ckWARN_d(WARN_OVERFLOW))
-		    Perl_warner(aTHX_ WARN_OVERFLOW,
-				"Integer overflow in hexadecimal number");
-	    }
-	    else
-		ruv = xuv | ((hexdigit - PL_hexdigit) & 15);
-	}
-	if (overflowed) {
-	    rnv *= 16.0;
-	    /* If an NV has not enough bits in its mantissa to
-	     * represent an UV this summing of small low-order numbers
-	     * is a waste of time (because the NV cannot preserve
-	     * the low-order bits anyway): we could just remember when
-	     * did we overflow and in the end just multiply rnv by the
-	     * right amount of 16-tuples. */
-	    rnv += (NV)((hexdigit - PL_hexdigit) & 15);
-	}
-    }
-    if (!overflowed)
-	rnv = (NV) ruv;
-    if (   ( overflowed && rnv > 4294967295.0)
-#if UVSIZE > 4
-	|| (!overflowed && ruv > 0xffffffff  )
-#endif
-	) {
-	if (ckWARN(WARN_PORTABLE))
-	    Perl_warner(aTHX_ WARN_PORTABLE,
-			"Hexadecimal number > 0xffffffff non-portable");
-    }
-    *retlen = s - start;
-    return rnv;
-}
 
 char*
 Perl_find_script(pTHX_ char *scriptname, bool dosearch, char **search_ext, I32 flags)
@@ -3489,11 +2760,11 @@ Perl_get_context(void)
 	Perl_croak_nocontext("panic: pthread_getspecific");
     return (void*)t;
 #  else
-#  ifdef I_MACH_CTHREADS
+#    ifdef I_MACH_CTHREADS
     return (void*)cthread_data(cthread_self());
-#  else
-    return (void*)pthread_getspecific(PL_thr_key);
-#  endif
+#    else
+    return (void*)PTHREAD_GETSPECIFIC(PL_thr_key);
+#    endif
 #  endif
 #else
     return (void*)NULL;
@@ -3596,8 +2867,8 @@ Perl_condpair_magic(pTHX_ SV *sv)
 {
     MAGIC *mg;
 
-    SvUPGRADE(sv, SVt_PVMG);
-    mg = mg_find(sv, 'm');
+    (void)SvUPGRADE(sv, SVt_PVMG);
+    mg = mg_find(sv, PERL_MAGIC_mutex);
     if (!mg) {
 	condpair_t *cp;
 
@@ -3607,7 +2878,7 @@ Perl_condpair_magic(pTHX_ SV *sv)
 	COND_INIT(&cp->cond);
 	cp->owner = 0;
 	LOCK_CRED_MUTEX;		/* XXX need separate mutex? */
-	mg = mg_find(sv, 'm');
+	mg = mg_find(sv, PERL_MAGIC_mutex);
 	if (mg) {
 	    /* someone else beat us to initialising it */
 	    UNLOCK_CRED_MUTEX;		/* XXX need separate mutex? */
@@ -3617,13 +2888,13 @@ Perl_condpair_magic(pTHX_ SV *sv)
 	    Safefree(cp);
 	}
 	else {
-	    sv_magic(sv, Nullsv, 'm', 0, 0);
+	    sv_magic(sv, Nullsv, PERL_MAGIC_mutex, 0, 0);
 	    mg = SvMAGIC(sv);
 	    mg->mg_ptr = (char *)cp;
 	    mg->mg_len = sizeof(cp);
 	    UNLOCK_CRED_MUTEX;		/* XXX need separate mutex? */
 	    DEBUG_S(WITH_THR(PerlIO_printf(Perl_debug_log,
-					   "%p: condpair_magic %p\n", thr, sv));)
+					   "%p: condpair_magic %p\n", thr, sv)));
 	}
     }
     return mg;
@@ -3650,7 +2921,7 @@ Perl_sv_lock(pTHX_ SV *osv)
 	MgOWNER(mg) = thr;
 	DEBUG_S(PerlIO_printf(Perl_debug_log,
 			      "0x%"UVxf": Perl_lock lock 0x%"UVxf"\n",
-			      PTR2UV(thr), PTR2UV(sv));)
+			      PTR2UV(thr), PTR2UV(sv)));
 	MUTEX_UNLOCK(MgMUTEXP(mg));
 	SAVEDESTRUCTOR_X(Perl_unlock_condpair, sv);
     }
@@ -3761,7 +3032,7 @@ Perl_new_struct_thread(pTHX_ struct perl_thread *t)
 	if (*svp && *svp != &PL_sv_undef) {
 	    SV *sv = newSVsv(*svp);
 	    av_store(thr->threadsv, i, sv);
-	    sv_magic(sv, 0, 0, &PL_threadsv_names[i], 1);
+	    sv_magic(sv, 0, PERL_MAGIC_sv, &PL_threadsv_names[i], 1);
 	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 		"new_struct_thread: copied threadsv %"IVdf" %p->%p\n",
 				  (IV)i, t, thr));
@@ -3787,22 +3058,6 @@ Perl_new_struct_thread(pTHX_ struct perl_thread *t)
     return thr;
 }
 #endif /* USE_THREADS */
-
-#if defined(HUGE_VAL) || (defined(USE_LONG_DOUBLE) && defined(HUGE_VALL))
-/*
- * This hack is to force load of "huge" support from libm.a
- * So it is in perl for (say) POSIX to use.
- * Needed for SunOS with Sun's 'acc' for example.
- */
-NV
-Perl_huge(void)
-{
-#   if defined(USE_LONG_DOUBLE) && defined(HUGE_VALL)
-    return HUGE_VALL;
-#   endif
-    return HUGE_VAL;
-}
-#endif
 
 #ifdef PERL_GLOBAL_STRUCT
 struct perl_vars *
@@ -3969,28 +3224,28 @@ Perl_my_fflush_all(pTHX)
     extern void _fwalk(int (*)(FILE *));
     _fwalk(&fflush);
     return 0;
-#   else
-    long open_max = -1;
+# else
 #  if defined(FFLUSH_ALL) && defined(HAS_STDIO_STREAM_ARRAY)
+    long open_max = -1;
 #   ifdef PERL_FFLUSH_ALL_FOPEN_MAX
     open_max = PERL_FFLUSH_ALL_FOPEN_MAX;
 #   else
-#   if defined(HAS_SYSCONF) && defined(_SC_OPEN_MAX)
+#    if defined(HAS_SYSCONF) && defined(_SC_OPEN_MAX)
     open_max = sysconf(_SC_OPEN_MAX);
-#   else
-#    ifdef FOPEN_MAX
-    open_max = FOPEN_MAX;
-#    else
-#     ifdef OPEN_MAX
-    open_max = OPEN_MAX;
 #     else
-#      ifdef _NFILE
+#      ifdef FOPEN_MAX
+    open_max = FOPEN_MAX;
+#      else
+#       ifdef OPEN_MAX
+    open_max = OPEN_MAX;
+#       else
+#        ifdef _NFILE
     open_max = _NFILE;
+#        endif
+#       endif
 #      endif
 #     endif
 #    endif
-#   endif
-#   endif
     if (open_max > 0) {
       long i;
       for (i = 0; i < open_max; i++)
@@ -4007,29 +3262,6 @@ Perl_my_fflush_all(pTHX)
 #endif
 }
 
-NV
-Perl_my_atof(pTHX_ const char* s)
-{
-    NV x = 0.0;
-#ifdef USE_LOCALE_NUMERIC
-    if ((PL_hints & HINT_LOCALE) && PL_numeric_local) {
-	NV y;
-
-	Perl_atof2(s, x);
-	SET_NUMERIC_STANDARD();
-	Perl_atof2(s, y);
-	SET_NUMERIC_LOCAL();
-	if ((y < 0.0 && y < x) || (y > 0.0 && y > x))
-	    return y;
-    }
-    else
-	Perl_atof2(s, x);
-#else
-    Perl_atof2(s, x);
-#endif
-    return x;
-}
-
 void
 Perl_report_evil_fh(pTHX_ GV *gv, IO *io, I32 op)
 {
@@ -4040,11 +3272,12 @@ Perl_report_evil_fh(pTHX_ GV *gv, IO *io, I32 op)
 	op == OP_LEAVEWRITE ? "write" :		/* "write exit" not nice */
 	PL_op_desc[op];
     char *pars = OP_IS_FILETEST(op) ? "" : "()";
-    char *type = OP_IS_SOCKET(op) || (io && IoTYPE(io) == IoTYPE_SOCKET) ?
+    char *type = OP_IS_SOCKET(op) ||
+                 (gv && io && IoTYPE(io) == IoTYPE_SOCKET) ?
                      "socket" : "filehandle";
     char *name = NULL;
 
-    if (io && IoTYPE(io) == IoTYPE_CLOSED) {
+    if (gv && io && IoTYPE(io) == IoTYPE_CLOSED) {
 	vile = "closed";
 	warn_type = WARN_CLOSED;
     }
@@ -4078,7 +3311,7 @@ Perl_report_evil_fh(pTHX_ GV *gv, IO *io, I32 op)
     else {
 	Perl_warner(aTHX_ warn_type,
 		    "%s%s on %s %s", func, pars, vile, type);
-	if (io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
+	if (gv && io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
 	    Perl_warner(aTHX_ warn_type,
 			"\t(Are you trying to call %s%s on dirhandle?)\n",
 			func, pars);
@@ -4124,3 +3357,463 @@ Perl_ebcdic_control(pTHX_ int ch)
 	}
 }
 #endif
+
+/* XXX struct tm on some systems (SunOS4/BSD) contains extra (non POSIX)
+ * fields for which we don't have Configure support yet:
+ *   char *tm_zone;   -- abbreviation of timezone name
+ *   long tm_gmtoff;  -- offset from GMT in seconds
+ * To workaround core dumps from the uninitialised tm_zone we get the
+ * system to give us a reasonable struct to copy.  This fix means that
+ * strftime uses the tm_zone and tm_gmtoff values returned by
+ * localtime(time()). That should give the desired result most of the
+ * time. But probably not always!
+ *
+ * This is a temporary workaround to be removed once Configure
+ * support is added and NETaa14816 is considered in full.
+ * It does not address tzname aspects of NETaa14816.
+ */
+#ifdef HAS_GNULIBC
+# ifndef STRUCT_TM_HASZONE
+#    define STRUCT_TM_HASZONE
+# endif
+#endif
+
+void
+Perl_init_tm(pTHX_ struct tm *ptm)	/* see mktime, strftime and asctime */
+{
+#ifdef STRUCT_TM_HASZONE
+    Time_t now;
+    (void)time(&now);
+    Copy(localtime(&now), ptm, 1, struct tm);
+#endif
+}
+
+/*
+ * mini_mktime - normalise struct tm values without the localtime()
+ * semantics (and overhead) of mktime().
+ */
+void
+Perl_mini_mktime(pTHX_ struct tm *ptm)
+{
+    int yearday;
+    int secs;
+    int month, mday, year, jday;
+    int odd_cent, odd_year;
+
+#define	DAYS_PER_YEAR	365
+#define	DAYS_PER_QYEAR	(4*DAYS_PER_YEAR+1)
+#define	DAYS_PER_CENT	(25*DAYS_PER_QYEAR-1)
+#define	DAYS_PER_QCENT	(4*DAYS_PER_CENT+1)
+#define	SECS_PER_HOUR	(60*60)
+#define	SECS_PER_DAY	(24*SECS_PER_HOUR)
+/* parentheses deliberately absent on these two, otherwise they don't work */
+#define	MONTH_TO_DAYS	153/5
+#define	DAYS_TO_MONTH	5/153
+/* offset to bias by March (month 4) 1st between month/mday & year finding */
+#define	YEAR_ADJUST	(4*MONTH_TO_DAYS+1)
+/* as used here, the algorithm leaves Sunday as day 1 unless we adjust it */
+#define	WEEKDAY_BIAS	6	/* (1+6)%7 makes Sunday 0 again */
+
+/*
+ * Year/day algorithm notes:
+ *
+ * With a suitable offset for numeric value of the month, one can find
+ * an offset into the year by considering months to have 30.6 (153/5) days,
+ * using integer arithmetic (i.e., with truncation).  To avoid too much
+ * messing about with leap days, we consider January and February to be
+ * the 13th and 14th month of the previous year.  After that transformation,
+ * we need the month index we use to be high by 1 from 'normal human' usage,
+ * so the month index values we use run from 4 through 15.
+ *
+ * Given that, and the rules for the Gregorian calendar (leap years are those
+ * divisible by 4 unless also divisible by 100, when they must be divisible
+ * by 400 instead), we can simply calculate the number of days since some
+ * arbitrary 'beginning of time' by futzing with the (adjusted) year number,
+ * the days we derive from our month index, and adding in the day of the
+ * month.  The value used here is not adjusted for the actual origin which
+ * it normally would use (1 January A.D. 1), since we're not exposing it.
+ * We're only building the value so we can turn around and get the
+ * normalised values for the year, month, day-of-month, and day-of-year.
+ *
+ * For going backward, we need to bias the value we're using so that we find
+ * the right year value.  (Basically, we don't want the contribution of
+ * March 1st to the number to apply while deriving the year).  Having done
+ * that, we 'count up' the contribution to the year number by accounting for
+ * full quadracenturies (400-year periods) with their extra leap days, plus
+ * the contribution from full centuries (to avoid counting in the lost leap
+ * days), plus the contribution from full quad-years (to count in the normal
+ * leap days), plus the leftover contribution from any non-leap years.
+ * At this point, if we were working with an actual leap day, we'll have 0
+ * days left over.  This is also true for March 1st, however.  So, we have
+ * to special-case that result, and (earlier) keep track of the 'odd'
+ * century and year contributions.  If we got 4 extra centuries in a qcent,
+ * or 4 extra years in a qyear, then it's a leap day and we call it 29 Feb.
+ * Otherwise, we add back in the earlier bias we removed (the 123 from
+ * figuring in March 1st), find the month index (integer division by 30.6),
+ * and the remainder is the day-of-month.  We then have to convert back to
+ * 'real' months (including fixing January and February from being 14/15 in
+ * the previous year to being in the proper year).  After that, to get
+ * tm_yday, we work with the normalised year and get a new yearday value for
+ * January 1st, which we subtract from the yearday value we had earlier,
+ * representing the date we've re-built.  This is done from January 1
+ * because tm_yday is 0-origin.
+ *
+ * Since POSIX time routines are only guaranteed to work for times since the
+ * UNIX epoch (00:00:00 1 Jan 1970 UTC), the fact that this algorithm
+ * applies Gregorian calendar rules even to dates before the 16th century
+ * doesn't bother me.  Besides, you'd need cultural context for a given
+ * date to know whether it was Julian or Gregorian calendar, and that's
+ * outside the scope for this routine.  Since we convert back based on the
+ * same rules we used to build the yearday, you'll only get strange results
+ * for input which needed normalising, or for the 'odd' century years which
+ * were leap years in the Julian calander but not in the Gregorian one.
+ * I can live with that.
+ *
+ * This algorithm also fails to handle years before A.D. 1 gracefully, but
+ * that's still outside the scope for POSIX time manipulation, so I don't
+ * care.
+ */
+
+    year = 1900 + ptm->tm_year;
+    month = ptm->tm_mon;
+    mday = ptm->tm_mday;
+    /* allow given yday with no month & mday to dominate the result */
+    if (ptm->tm_yday >= 0 && mday <= 0 && month <= 0) {
+	month = 0;
+	mday = 0;
+	jday = 1 + ptm->tm_yday;
+    }
+    else {
+	jday = 0;
+    }
+    if (month >= 2)
+	month+=2;
+    else
+	month+=14, year--;
+    yearday = DAYS_PER_YEAR * year + year/4 - year/100 + year/400;
+    yearday += month*MONTH_TO_DAYS + mday + jday;
+    /*
+     * Note that we don't know when leap-seconds were or will be,
+     * so we have to trust the user if we get something which looks
+     * like a sensible leap-second.  Wild values for seconds will
+     * be rationalised, however.
+     */
+    if ((unsigned) ptm->tm_sec <= 60) {
+	secs = 0;
+    }
+    else {
+	secs = ptm->tm_sec;
+	ptm->tm_sec = 0;
+    }
+    secs += 60 * ptm->tm_min;
+    secs += SECS_PER_HOUR * ptm->tm_hour;
+    if (secs < 0) {
+	if (secs-(secs/SECS_PER_DAY*SECS_PER_DAY) < 0) {
+	    /* got negative remainder, but need positive time */
+	    /* back off an extra day to compensate */
+	    yearday += (secs/SECS_PER_DAY)-1;
+	    secs -= SECS_PER_DAY * (secs/SECS_PER_DAY - 1);
+	}
+	else {
+	    yearday += (secs/SECS_PER_DAY);
+	    secs -= SECS_PER_DAY * (secs/SECS_PER_DAY);
+	}
+    }
+    else if (secs >= SECS_PER_DAY) {
+	yearday += (secs/SECS_PER_DAY);
+	secs %= SECS_PER_DAY;
+    }
+    ptm->tm_hour = secs/SECS_PER_HOUR;
+    secs %= SECS_PER_HOUR;
+    ptm->tm_min = secs/60;
+    secs %= 60;
+    ptm->tm_sec += secs;
+    /* done with time of day effects */
+    /*
+     * The algorithm for yearday has (so far) left it high by 428.
+     * To avoid mistaking a legitimate Feb 29 as Mar 1, we need to
+     * bias it by 123 while trying to figure out what year it
+     * really represents.  Even with this tweak, the reverse
+     * translation fails for years before A.D. 0001.
+     * It would still fail for Feb 29, but we catch that one below.
+     */
+    jday = yearday;	/* save for later fixup vis-a-vis Jan 1 */
+    yearday -= YEAR_ADJUST;
+    year = (yearday / DAYS_PER_QCENT) * 400;
+    yearday %= DAYS_PER_QCENT;
+    odd_cent = yearday / DAYS_PER_CENT;
+    year += odd_cent * 100;
+    yearday %= DAYS_PER_CENT;
+    year += (yearday / DAYS_PER_QYEAR) * 4;
+    yearday %= DAYS_PER_QYEAR;
+    odd_year = yearday / DAYS_PER_YEAR;
+    year += odd_year;
+    yearday %= DAYS_PER_YEAR;
+    if (!yearday && (odd_cent==4 || odd_year==4)) { /* catch Feb 29 */
+	month = 1;
+	yearday = 29;
+    }
+    else {
+	yearday += YEAR_ADJUST;	/* recover March 1st crock */
+	month = yearday*DAYS_TO_MONTH;
+	yearday -= month*MONTH_TO_DAYS;
+	/* recover other leap-year adjustment */
+	if (month > 13) {
+	    month-=14;
+	    year++;
+	}
+	else {
+	    month-=2;
+	}
+    }
+    ptm->tm_year = year - 1900;
+    if (yearday) {
+      ptm->tm_mday = yearday;
+      ptm->tm_mon = month;
+    }
+    else {
+      ptm->tm_mday = 31;
+      ptm->tm_mon = month - 1;
+    }
+    /* re-build yearday based on Jan 1 to get tm_yday */
+    year--;
+    yearday = year*DAYS_PER_YEAR + year/4 - year/100 + year/400;
+    yearday += 14*MONTH_TO_DAYS + 1;
+    ptm->tm_yday = jday - yearday;
+    /* fix tm_wday if not overridden by caller */
+    if ((unsigned)ptm->tm_wday > 6)
+	ptm->tm_wday = (jday + WEEKDAY_BIAS) % 7;
+}
+
+char *
+Perl_my_strftime(pTHX_ char *fmt, int sec, int min, int hour, int mday, int mon, int year, int wday, int yday, int isdst)
+{
+#ifdef HAS_STRFTIME
+  char *buf;
+  int buflen;
+  struct tm mytm;
+  int len;
+
+  init_tm(&mytm);	/* XXX workaround - see init_tm() above */
+  mytm.tm_sec = sec;
+  mytm.tm_min = min;
+  mytm.tm_hour = hour;
+  mytm.tm_mday = mday;
+  mytm.tm_mon = mon;
+  mytm.tm_year = year;
+  mytm.tm_wday = wday;
+  mytm.tm_yday = yday;
+  mytm.tm_isdst = isdst;
+  mini_mktime(&mytm);
+  buflen = 64;
+  New(0, buf, buflen, char);
+  len = strftime(buf, buflen, fmt, &mytm);
+  /*
+  ** The following is needed to handle to the situation where
+  ** tmpbuf overflows.  Basically we want to allocate a buffer
+  ** and try repeatedly.  The reason why it is so complicated
+  ** is that getting a return value of 0 from strftime can indicate
+  ** one of the following:
+  ** 1. buffer overflowed,
+  ** 2. illegal conversion specifier, or
+  ** 3. the format string specifies nothing to be returned(not
+  **	  an error).  This could be because format is an empty string
+  **    or it specifies %p that yields an empty string in some locale.
+  ** If there is a better way to make it portable, go ahead by
+  ** all means.
+  */
+  if ((len > 0 && len < buflen) || (len == 0 && *fmt == '\0'))
+    return buf;
+  else {
+    /* Possibly buf overflowed - try again with a bigger buf */
+    int     fmtlen = strlen(fmt);
+    int	    bufsize = fmtlen + buflen;
+
+    New(0, buf, bufsize, char);
+    while (buf) {
+      buflen = strftime(buf, bufsize, fmt, &mytm);
+      if (buflen > 0 && buflen < bufsize)
+	break;
+      /* heuristic to prevent out-of-memory errors */
+      if (bufsize > 100*fmtlen) {
+	Safefree(buf);
+	buf = NULL;
+	break;
+      }
+      bufsize *= 2;
+      Renew(buf, bufsize, char);
+    }
+    return buf;
+  }
+#else
+  Perl_croak(aTHX_ "panic: no strftime");
+#endif
+}
+
+
+#define SV_CWD_RETURN_UNDEF \
+sv_setsv(sv, &PL_sv_undef); \
+return FALSE
+
+#define SV_CWD_ISDOT(dp) \
+    (dp->d_name[0] == '.' && (dp->d_name[1] == '\0' || \
+        (dp->d_name[1] == '.' && dp->d_name[2] == '\0')))
+
+/*
+=for apidoc getcwd_sv
+
+Fill the sv with current working directory
+
+=cut
+*/
+
+/* Originally written in Perl by John Bazik; rewritten in C by Ben Sugars.
+ * rewritten again by dougm, optimized for use with xs TARG, and to prefer
+ * getcwd(3) if available
+ * Comments from the orignal:
+ *     This is a faster version of getcwd.  It's also more dangerous
+ *     because you might chdir out of a directory that you can't chdir
+ *     back into. */
+
+int
+Perl_getcwd_sv(pTHX_ register SV *sv)
+{
+#ifndef PERL_MICRO
+
+#ifdef HAS_GETCWD
+    {
+	char buf[MAXPATHLEN];
+
+        /* Some getcwd()s automatically allocate a buffer of the given
+	 * size from the heap if they are given a NULL buffer pointer.
+	 * The problem is that this behaviour is not portable. */
+        if (getcwd(buf, sizeof(buf) - 1)) {
+            STRLEN len = strlen(buf);
+            sv_setpvn(sv, buf, len);
+            return TRUE;
+        }
+        else {
+            sv_setsv(sv, &PL_sv_undef);
+            return FALSE;
+        }
+    }
+
+#else
+
+    struct stat statbuf;
+    int orig_cdev, orig_cino, cdev, cino, odev, oino, tdev, tino;
+    int namelen, pathlen=0;
+    DIR *dir;
+    Direntry_t *dp;
+
+    (void)SvUPGRADE(sv, SVt_PV);
+
+    if (PerlLIO_lstat(".", &statbuf) < 0) {
+        SV_CWD_RETURN_UNDEF;
+    }
+
+    orig_cdev = statbuf.st_dev;
+    orig_cino = statbuf.st_ino;
+    cdev = orig_cdev;
+    cino = orig_cino;
+
+    for (;;) {
+        odev = cdev;
+        oino = cino;
+
+        if (PerlDir_chdir("..") < 0) {
+            SV_CWD_RETURN_UNDEF;
+        }
+        if (PerlLIO_stat(".", &statbuf) < 0) {
+            SV_CWD_RETURN_UNDEF;
+        }
+
+        cdev = statbuf.st_dev;
+        cino = statbuf.st_ino;
+
+        if (odev == cdev && oino == cino) {
+            break;
+        }
+        if (!(dir = PerlDir_open("."))) {
+            SV_CWD_RETURN_UNDEF;
+        }
+
+        while ((dp = PerlDir_read(dir)) != NULL) {
+#ifdef DIRNAMLEN
+            namelen = dp->d_namlen;
+#else
+            namelen = strlen(dp->d_name);
+#endif
+            /* skip . and .. */
+            if (SV_CWD_ISDOT(dp)) {
+                continue;
+            }
+
+            if (PerlLIO_lstat(dp->d_name, &statbuf) < 0) {
+                SV_CWD_RETURN_UNDEF;
+            }
+
+            tdev = statbuf.st_dev;
+            tino = statbuf.st_ino;
+            if (tino == oino && tdev == odev) {
+                break;
+            }
+        }
+
+        if (!dp) {
+            SV_CWD_RETURN_UNDEF;
+        }
+
+        if (pathlen + namelen + 1 >= MAXPATHLEN) {
+            SV_CWD_RETURN_UNDEF;
+	}
+
+        SvGROW(sv, pathlen + namelen + 1);
+
+        if (pathlen) {
+            /* shift down */
+            Move(SvPVX(sv), SvPVX(sv) + namelen + 1, pathlen, char);
+        }
+
+        /* prepend current directory to the front */
+        *SvPVX(sv) = '/';
+        Move(dp->d_name, SvPVX(sv)+1, namelen, char);
+        pathlen += (namelen + 1);
+
+#ifdef VOID_CLOSEDIR
+        PerlDir_close(dir);
+#else
+        if (PerlDir_close(dir) < 0) {
+            SV_CWD_RETURN_UNDEF;
+        }
+#endif
+    }
+
+    if (pathlen) {
+        SvCUR_set(sv, pathlen);
+        *SvEND(sv) = '\0';
+        SvPOK_only(sv);
+
+	if (PerlDir_chdir(SvPVX(sv)) < 0) {
+            SV_CWD_RETURN_UNDEF;
+        }
+    }
+    if (PerlLIO_stat(".", &statbuf) < 0) {
+        SV_CWD_RETURN_UNDEF;
+    }
+
+    cdev = statbuf.st_dev;
+    cino = statbuf.st_ino;
+
+    if (cdev != orig_cdev || cino != orig_cino) {
+        Perl_croak(aTHX_ "Unstable directory path, "
+                   "current directory changed unexpectedly");
+    }
+#endif
+
+    return TRUE;
+#else
+    return FALSE;
+#endif
+}
+

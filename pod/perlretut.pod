@@ -710,9 +710,12 @@ indicated below it:
     /(ab(cd|ef)((gi)|j))/;
      1  2      34
 
-so that if the regexp matched, e.g., C<$2> would contain 'cd' or 'ef'.
-For convenience, perl sets C<$+> to the highest numbered C<$1>, C<$2>,
-... that got assigned.
+so that if the regexp matched, e.g., C<$2> would contain 'cd' or 'ef'. For
+convenience, perl sets C<$+> to the string held by the highest numbered
+C<$1>, C<$2>, ... that got assigned (and, somewhat related, C<$^N> to the
+value of the C<$1>, C<$2>, ... most-recently assigned; i.e. the C<$1>,
+C<$2>, ... associated with the rightmost closing parenthesis used in the
+match).
 
 Closely associated with the matching variables C<$1>, C<$2>, ... are
 the B<backreferences> C<\1>, C<\2>, ... .  Backreferences are simply
@@ -1745,7 +1748,13 @@ You can also use the official Unicode class names with the C<\p> and
 C<\P>, like C<\p{L}> for Unicode 'letters', or C<\p{Lu}> for uppercase
 letters, or C<\P{Nd}> for non-digits.  If a C<name> is just one
 letter, the braces can be dropped.  For instance, C<\pM> is the
-character class of Unicode 'marks'.
+character class of Unicode 'marks', for example accent marks.
+For the full list see L<perlunicode>.
+
+The Unicode has also been separated into various sets of charaters
+which you can test with C<\p{In...}> (in) and C<\P{In...}> (not in),
+for example C<\p{InLatin}>, C<\p{InGreek}>, or C<\P{InKatakana}>.
+For the full list see L<perlunicode>.
 
 C<\X> is an abbreviation for a character class sequence that includes
 the Unicode 'combining character sequences'.  A 'combining character
@@ -1756,6 +1765,9 @@ character sequence with base character C<A> and combining character
 S<C<COMBINING RING> >, which translates in Danish to A with the circle
 atop it, as in the word Angstrom.  C<\X> is equivalent to C<\PM\pM*}>,
 i.e., a non-mark followed by one or more marks.
+
+For the the full and latest information about Unicode see the latest
+Unicode standard, or the Unicode Consortium's website http://www.unicode.org/
 
 As if all those classes weren't enough, Perl also defines POSIX style
 character classes.  These have the form C<[:name:]>, with C<name> the

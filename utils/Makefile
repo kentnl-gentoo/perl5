@@ -5,22 +5,23 @@ REALPERL = ../perl
 # Files to be built with variable substitution after miniperl is
 # available.  Dependencies handled manually below (for now).
 
-pl = c2ph.PL h2ph.PL h2xs.PL perlbug.PL perldoc.PL pl2pm.PL splain.PL perlcc.PL dprofpp.PL
-plextract  = c2ph h2ph h2xs perlbug perldoc pl2pm splain perlcc dprofpp
-plextractexe  = ./c2ph ./h2ph ./h2xs ./perlbug ./perldoc ./pl2pm ./splain ./perlcc ./dprofpp
+pl = c2ph.PL h2ph.PL h2xs.PL perlbug.PL perldoc.PL pl2pm.PL splain.PL perlcc.PL dprofpp.PL libnetcfg.PL
+plextract  = c2ph h2ph h2xs perlbug perldoc pl2pm splain perlcc dprofpp libnetcfg
+plextractexe  = ./c2ph ./h2ph ./h2xs ./perlbug ./perldoc ./pl2pm ./splain ./perlcc ./dprofpp ./libnetcfg
 
 all: $(plextract) 
 
 compile: all $(plextract)
-	$(REALPERL) -I../lib perlcc c2ph -o c2ph.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc h2ph -o h2ph.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc h2xs -o h2xs.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc perlbug -o perlbug.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc perldoc -o perldoc.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc pl2pm -o pl2pm.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc splain -o splain.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc perlcc -o perlcc.exe -v 10 -log ../compilelog;
-	$(REALPERL) -I../lib perlcc dprofpp -o dprofpp.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. c2ph -o c2ph.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. h2ph -o h2ph.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. h2xs -o h2xs.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. perlbug -o perlbug.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. perldoc -o perldoc.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. pl2pm -o pl2pm.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. splain -o splain.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. perlcc -I .. -L .. -o perlcc.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. dprofpp -o dprofpp.exe -v 10 -log ../compilelog;
+	$(REALPERL) -I../lib perlcc -I .. -L .. libnetcfg -o libnetcfg.exe -v 10 -log ../compilelog;
 
 $(plextract):
 	$(PERL) -I../lib $@.PL
@@ -42,6 +43,8 @@ splain:		splain.PL ../config.sh ../lib/diagnostics.pm
 perlcc:		perlcc.PL ../config.sh
 
 dprofpp:	dprofpp.PL ../config.sh
+
+libnetcfg:	libnetcfg.PL ../config.sh
 
 clean:
 

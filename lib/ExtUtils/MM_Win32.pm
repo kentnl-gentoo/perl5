@@ -254,7 +254,8 @@ sub constants {
 	      INSTALLSITEARCH INSTALLBIN INSTALLSCRIPT PERL_LIB
 	      PERL_ARCHLIB SITELIBEXP SITEARCHEXP LIBPERL_A MYEXTLIB
 	      FIRST_MAKEFILE MAKE_APERL_FILE PERLMAINCC PERL_SRC
-	      PERL_INC PERL FULLPERL
+	      PERL_INC PERL FULLPERL PERLRUN PERLRUNINST TEST_LIBS 
+	      FULL_AR PERL_CORE
 
 	      / ) {
 	next unless defined $self->{$tmp};
@@ -415,7 +416,7 @@ sub static_lib {
 $(INST_STATIC): $(OBJECT) $(MYEXTLIB) $(INST_ARCHAUTODIR)\.exists
 	$(RM_RF) $@
 END
-    # If this extension has it's own library (eg SDBM_File)
+    # If this extension has its own library (eg SDBM_File)
     # then copy that to $(INST_STATIC) and add $(OBJECT) into it.
     push(@m, "\t$self->{CP} \$(MYEXTLIB) \$\@\n") if $self->{MYEXTLIB};
 
@@ -531,6 +532,21 @@ $(INST_DYNAMIC): $(OBJECT) $(MYEXTLIB) $(BOOTSTRAP) $(INST_ARCHAUTODIR)\.exists 
     push @m, $self->dir_target('$(INST_ARCHAUTODIR)');
     join('',@m);
 }
+
+sub clean
+{
+    my ($self) = @_;
+    my $s = &ExtUtils::MM_Unix::clean;
+    my $clean = $GCC ? 'dll.base dll.exp' : '*.pdb';
+    $s .= <<END;
+clean ::
+	-\$(RM_F) $clean
+
+END
+    return $s;
+}
+
+
 
 sub perl_archive
 {

@@ -85,11 +85,11 @@ modify_SV_attributes(pTHXo_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 		    }
 		    break;
 		case 's':
-		    if (strEQ(name, "shared")) {
+      if (strEQ(name, "unique")) {
 			if (negated)
-			    GvSHARED_off(CvGV((CV*)sv));
+			    GvUNIQUE_off(CvGV((CV*)sv));
 			else
-			    GvSHARED_on(CvGV((CV*)sv));
+			    GvUNIQUE_on(CvGV((CV*)sv));
 			continue;
 		    }
 		    break;
@@ -102,8 +102,8 @@ modify_SV_attributes(pTHXo_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
               case 6:
 		switch (*name) {
                   case 's':
-		    if (strEQ(name, "shared")) {
-                        /* toke.c has already marked as GvSHARED */
+      if (strEQ(name, "unique")) {
+                        /* toke.c has already marked as GVf_UNIQUE */
                         continue;
                     }
                 }
@@ -126,6 +126,9 @@ XS(XS_attributes_bootstrap)
 {
     dXSARGS;
     char *file = __FILE__;
+
+    if( items > 1 )
+        Perl_croak(aTHX_ "Usage: attributes::bootstrap $module");
 
     newXSproto("attributes::_warn_reserved", XS_attributes__warn_reserved, file, "");
     newXS("attributes::_modify_attrs",	XS_attributes__modify_attrs,	file);
@@ -186,8 +189,8 @@ usage:
 #endif
 	if (cvflags & CVf_METHOD)
 	    XPUSHs(sv_2mortal(newSVpvn("method", 6)));
-        if (GvSHARED(CvGV((CV*)sv)))
-	    XPUSHs(sv_2mortal(newSVpvn("shared", 6)));
+        if (GvUNIQUE(CvGV((CV*)sv)))
+     XPUSHs(sv_2mortal(newSVpvn("unique", 6)));
 	break;
     default:
 	break;
@@ -228,18 +231,17 @@ usage:
 	HV *stash = Nullhv;
 	switch (SvTYPE(sv)) {
 	case SVt_PVCV:
-	    if (CvGV(sv) && isGV(CvGV(sv)) && GvSTASH(CvGV(sv)) &&
-			    HvNAME(GvSTASH(CvGV(sv))))
+	    if (CvGV(sv) && isGV(CvGV(sv)) && GvSTASH(CvGV(sv)))
 		stash = GvSTASH(CvGV(sv));
-	    else if (/* !CvANON(sv) && */ CvSTASH(sv) && HvNAME(CvSTASH(sv)))
+	    else if (/* !CvANON(sv) && */ CvSTASH(sv))
 		stash = CvSTASH(sv);
 	    break;
 	case SVt_PVMG:
-	    if (!(SvFAKE(sv) && SvTIED_mg(sv, '*')))
+	    if (!(SvFAKE(sv) && SvTIED_mg(sv, PERL_MAGIC_glob)))
 		break;
 	    /*FALLTHROUGH*/
 	case SVt_PVGV:
-	    if (GvGP(sv) && GvESTASH((GV*)sv) && HvNAME(GvESTASH((GV*)sv)))
+	    if (GvGP(sv) && GvESTASH((GV*)sv))
 		stash = GvESTASH((GV*)sv);
 	    break;
 	default:

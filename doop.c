@@ -141,7 +141,7 @@ S_do_trans_complex(pTHX_ SV *sv)/* SPC - NOT OK */
     I32 grows = PL_op->op_private & OPpTRANS_GROWS;
     I32 complement = PL_op->op_private & OPpTRANS_COMPLEMENT;
     I32 del = PL_op->op_private & OPpTRANS_DELETE;
-    STRLEN len, rlen;
+    STRLEN len, rlen = 0;
     short *tbl;
     I32 ch;
 
@@ -308,7 +308,7 @@ S_do_trans_simple_utf8(pTHX_ SV *sv)/* SPC - OK */
     SV** svp = hv_fetch(hv, "NONE", 4, FALSE);
     UV none = svp ? SvUV(*svp) : 0x7fffffff;
     UV extra = none + 1;
-    UV final;
+    UV final = 0;
     UV uv;
     I32 isutf8;
     U8 hibit = 0;
@@ -344,7 +344,7 @@ S_do_trans_simple_utf8(pTHX_ SV *sv)/* SPC - OK */
     }
 
     while (s < send) {
-	if ((uv = swash_fetch(rv, s)) < none) {
+	if ((uv = swash_fetch(rv, s, TRUE)) < none) {
 	    s += UTF8SKIP(s);
 	    matches++;
 	    d = uvuni_to_utf8(d, uv);
@@ -397,7 +397,7 @@ STATIC I32
 S_do_trans_count_utf8(pTHX_ SV *sv)/* SPC - OK */
 {
     U8 *s;
-    U8 *start, *send;
+    U8 *start = 0, *send;
     I32 matches = 0;
     STRLEN len;
 
@@ -423,7 +423,7 @@ S_do_trans_count_utf8(pTHX_ SV *sv)/* SPC - OK */
     send = s + len;
 
     while (s < send) {
-	if ((uv = swash_fetch(rv, s)) < none || uv == extra)
+	if ((uv = swash_fetch(rv, s, TRUE)) < none || uv == extra)
 	    matches++;
 	s += UTF8SKIP(s);
     }
@@ -448,7 +448,7 @@ S_do_trans_complex_utf8(pTHX_ SV *sv) /* SPC - NOT OK */
     SV** svp = hv_fetch(hv, "NONE", 4, FALSE);
     UV none = svp ? SvUV(*svp) : 0x7fffffff;
     UV extra = none + 1;
-    UV final;
+    UV final = 0;
     bool havefinal = FALSE;
     UV uv;
     STRLEN len;
@@ -491,7 +491,7 @@ S_do_trans_complex_utf8(pTHX_ SV *sv) /* SPC - NOT OK */
     if (squash) {
 	UV puv = 0xfeedface;
 	while (s < send) {
-	    uv = swash_fetch(rv, s);
+	    uv = swash_fetch(rv, s, TRUE);
 	
 	    if (d > dend) {
 	        STRLEN clen = d - dstart;
@@ -546,7 +546,7 @@ S_do_trans_complex_utf8(pTHX_ SV *sv) /* SPC - NOT OK */
     }
     else {
 	while (s < send) {
-	    uv = swash_fetch(rv, s);
+	    uv = swash_fetch(rv, s, TRUE);
 	    if (d > dend) {
 	        STRLEN clen = d - dstart;
 		STRLEN nlen = dend - dstart + len + UTF8_MAXLEN;
@@ -646,8 +646,10 @@ Perl_do_join(pTHX_ register SV *sv, SV *del, register SV **mark, register SV **s
     register I32 items = sp - mark;
     register STRLEN len;
     STRLEN delimlen;
-    register char *delim = SvPV(del, delimlen);
     STRLEN tmplen;
+
+    (void) SvPV(del, delimlen); /* stringify and get the delimlen */
+    /* SvCUR assumes it's SvPOK() and woe betide you if it's not. */
 
     mark++;
     len = (items > 0 ? (delimlen * (items - 1) ) : 0);
@@ -667,14 +669,16 @@ Perl_do_join(pTHX_ register SV *sv, SV *del, register SV **mark, register SV **s
 	++mark;
     }
 
+    sv_setpv(sv, "");
+    if (PL_tainting && SvMAGICAL(sv))
+	SvTAINTED_off(sv);
+
     if (items-- > 0) {
-	sv_setpv(sv, "");
 	if (*mark)
 	    sv_catsv(sv, *mark);
 	mark++;
     }
-    else
-	sv_setpv(sv,"");
+
     if (delimlen) {
 	for (; items > 0; items--,mark++) {
 	    sv_catsv(sv,del);
@@ -989,6 +993,7 @@ Perl_do_chomp(pTHX_ register SV *sv)
 {
     register I32 count;
     STRLEN len;
+    STRLEN n_a;
     char *s;
 
     if (RsSNARF(PL_rs))
@@ -1020,8 +1025,6 @@ Perl_do_chomp(pTHX_ register SV *sv)
     else if (SvREADONLY(sv))
 	Perl_croak(aTHX_ PL_no_modify);
     s = SvPV(sv, len);
-    if (len && !SvPOKp(sv))
-	s = SvPV_force(sv, len);
     if (s && len) {
 	s += --len;
 	if (RsPARA(PL_rs)) {
@@ -1052,12 +1055,13 @@ Perl_do_chomp(pTHX_ register SV *sv)
 		count += rslen;
 	    }
 	}
-	*s = '\0';
+	s = SvPV_force(sv, n_a);
 	SvCUR_set(sv, len);
+	*SvEND(sv) = '\0';
 	SvNIOK_off(sv);
+	SvSETMAGIC(sv);
     }
   nope:
-    SvSETMAGIC(sv);
     return count;
 }
 
@@ -1080,7 +1084,7 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
     char *rsave;
     bool left_utf = DO_UTF8(left);
     bool right_utf = DO_UTF8(right);
-    I32 needlen;
+    I32 needlen = 0;
 
     if (left_utf && !right_utf)
 	sv_utf8_upgrade(right);
@@ -1291,7 +1295,7 @@ Perl_do_kv(pTHX)
 	if (PL_op->op_flags & OPf_MOD || LVRET) {	/* lvalue */
 	    if (SvTYPE(TARG) < SVt_PVLV) {
 		sv_upgrade(TARG, SVt_PVLV);
-		sv_magic(TARG, Nullsv, 'k', Nullch, 0);
+		sv_magic(TARG, Nullsv, PERL_MAGIC_nkeys, Nullch, 0);
 	    }
 	    LvTYPE(TARG) = 'k';
 	    if (LvTARG(TARG) != (SV*)keys) {
@@ -1303,7 +1307,7 @@ Perl_do_kv(pTHX)
 	    RETURN;
 	}
 
-	if (! SvTIED_mg((SV*)keys, 'P'))
+	if (! SvTIED_mg((SV*)keys, PERL_MAGIC_tied))
 	    i = HvKEYS(keys);
 	else {
 	    i = 0;

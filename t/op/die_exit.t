@@ -15,6 +15,8 @@ if ($^O eq 'mpeix') {
     exit 0;
 }
 
+$| = 1;
+
 my $perl = -e '../perl' ? '../perl' : -e './perl' ? './perl' : 'perl';
 
 use strict;
@@ -48,7 +50,7 @@ foreach my $test (1 .. $max) {
     my($bang, $query, $code) = @{$tests{$test}};
     $code ||= 'die;';
     my $exit =
-	($^O eq 'MSWin32'
+	(($^O eq 'MSWin32' || $^O eq 'NetWare')
 	 ? system qq($perl -e "\$! = $bang; \$? = $query; $code" 2> nul)
 	 : system qq($perl -e '\$! = $bang; \$? = $query; $code' 2> /dev/null));
 

@@ -153,6 +153,7 @@ Perl_hv_undef
 Perl_ibcmp
 Perl_ibcmp_locale
 Perl_init_stacks
+Perl_init_tm
 Perl_instr
 Perl_is_uni_alnum
 Perl_is_uni_alnumc
@@ -206,9 +207,12 @@ Perl_is_utf8_punct
 Perl_is_utf8_xdigit
 Perl_is_utf8_mark
 Perl_leave_scope
+Perl_op_null
 Perl_load_module
 Perl_vload_module
 Perl_looks_like_number
+Perl_grok_number
+Perl_grok_numeric_radix
 Perl_markstack_grow
 Perl_mess
 Perl_vmess
@@ -221,6 +225,7 @@ Perl_mg_length
 Perl_mg_magical
 Perl_mg_set
 Perl_mg_size
+Perl_mini_mktime
 Perl_moreswitches
 Perl_my_atof
 Perl_my_bcopy
@@ -236,6 +241,7 @@ Perl_my_popen
 Perl_my_popen_list
 Perl_my_setenv
 Perl_my_stat
+Perl_my_strftime
 Perl_my_swap
 Perl_my_htonl
 Perl_my_ntohl
@@ -330,6 +336,7 @@ Perl_regnext
 Perl_repeatcpy
 Perl_rninstr
 Perl_rsignal
+Perl_rsignal_state
 Perl_savepv
 Perl_savepvn
 Perl_savestack_grow
@@ -406,6 +413,7 @@ Perl_sv_cmp
 Perl_sv_cmp_locale
 Perl_sv_collxfrm
 Perl_sv_compile_2op
+Perl_getcwd_sv
 Perl_sv_dec
 Perl_sv_dump
 Perl_sv_derived_from
@@ -567,3 +575,10 @@ Perl_ptr_table_clear
 Perl_ptr_table_free
 Perl_sys_intern_clear
 Perl_sys_intern_init
+Perl_sv_setsv_flags
+Perl_sv_catpvn_flags
+Perl_sv_catsv_flags
+Perl_sv_utf8_upgrade_flags
+Perl_sv_pvn_force_flags
+Perl_sv_2pv_flags
+Perl_my_atof2

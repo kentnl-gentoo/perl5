@@ -42,8 +42,13 @@ on the platform.  If that's not okay with you, use
 	make test
 	make install
 
-For information on non-Unix systems, see the section on
-L<"Porting information"> below.
+For information on non-Unix systems, see the section on L<"Porting
+information"> below.
+
+If "make install" just says "`install' is up to date" or something
+similar, you may be on case-preserving filesystems such as Mac's HFS+
+and you should say "make install-all".  (This confusion brought to you
+by the Perl distribution having a file called INSTALL.)
 
 If you have problems, corrections, or questions, please see
 L<"Reporting Problems"> below.
@@ -178,10 +183,10 @@ does not work with some C++ compilers.
 
 =head1 Space Requirements
 
-The complete perl5 source tree takes up about 20 MB of disk space.
-After completing make, it takes up roughly 30 MB, though the actual
+The complete perl5 source tree takes up about 35 MB of disk space.
+After completing make, it takes up roughly 50 MB, though the actual
 total is likely to be quite system-dependent.  The installation
-directories need something on the order of 20 MB, though again that
+directories need something on the order of 30 MB, though again that
 value is system-dependent.
 
 =head1 Start with a Fresh Distribution
@@ -725,11 +730,30 @@ or by
 Eventually (by perl v5.6.0) this internal confusion ought to disappear,
 and these options may disappear as well.
 
+=head2 Large file support.
+
+Since Perl 5.6.0 Perl has supported large files (files larger than
+2 gigabytes), and in many common platforms like Linux or Solaris this
+support is on by default.
+
+This is both good and bad. It is good in that you can use large files,
+seek(), stat(), and -s them.  It is bad if you are interfacing Perl
+using some extension, also the components you are connecting to must
+be large file aware: if Perl thinks files can be large but the other
+parts of the software puzzle do not understand the concept, bad things
+will happen.  One popular extension suffering from this ailment is the
+Apache extension mod_perl.
+
+There's also one known limitation with the current large files
+implementation: unless you also have 64-bit integers (see the next
+section), you cannot use the printf/sprintf non-decimal integer
+formats like C<%x> to print filesizes.  You can use C<%d>, though.
+
 =head2 64 bit support.
 
-If your platform does not have 64 bits natively, but can simulate them with
-compiler flags and/or C<long long> or C<int64_t>, you can build a perl that
-uses 64 bits.
+If your platform does not have 64 bits natively, but can simulate them
+with compiler flags and/or C<long long> or C<int64_t>, you can build a
+perl that uses 64 bits.
 
 There are actually two modes of 64-bitness: the first one is achieved
 using Configure -Duse64bitint and the second one using Configure
@@ -891,8 +915,8 @@ You can elect to build a shared libperl by
 
 To build a shared libperl, the environment variable controlling shared
 library search (LD_LIBRARY_PATH in most systems, DYLD_LIBRARY_PATH for
-NeXTSTEP/OPENSTEP/Darwin, LIBRARY_PATH for BeOS, SHLIB_PATH for
-HP-UX, LIBPATH for AIX, PATH for Cygwin) must be set up to include
+NeXTSTEP/OPENSTEP/Darwin, LIBRARY_PATH for BeOS, LD_LIBRARY_PATH/SHLIB_PATH
+for HP-UX, LIBPATH for AIX, PATH for Cygwin) must be set up to include
 the Perl build directory because that's where the shared libperl will
 be created.  Configure arranges makefile to have the correct shared
 library search settings.
@@ -1390,6 +1414,26 @@ Study also how other non-UNIX ports have solved problems.
 
 =back
 
+=head1 suidperl
+
+suidperl is an optional component, which is built or installed by default.
+From perlfaq1:
+
+	On some systems, setuid and setgid scripts (scripts written
+        in the C shell, Bourne shell, or Perl, for example, with the
+        set user or group ID permissions enabled) are insecure due to
+        a race condition in the kernel. For those systems, Perl versions
+        5 and 4 attempt to work around this vulnerability with an optional
+        component, a special program named suidperl, also known as sperl.
+        This program attempts to emulate the set-user-ID and set-group-ID
+        features of the kernel.
+
+Because of the buggy history of suidperl, and the difficulty
+of properly security auditing as large and complex piece of
+software as Perl, we cannot recommend using suidperl and the feature
+should be considered deprecated.
+Instead use for example 'sudo': http://www.courtesan.com/sudo/
+
 =head1 make depend
 
 This will look for all the includes.  The output is stored in makefile.
@@ -1692,6 +1736,110 @@ break utime() so that over NFS the timestamps do not get changed
 (on local filesystems utime() still works).
 
 =back
+
+=head2 Cross-compilation
+
+Starting from Perl 5.8 Perl has the beginnings of cross-compilation
+support.  What is known to work is running Configure in a
+cross-compilation environment and building the miniperl executable.
+What is known not work work is building the perl executable because
+that would require building extensions: Dynaloader statically and
+File::Glob dynamically, for extensions one needs MakeMaker and
+MakeMaker is not yet cross-compilation aware, and neither is
+the main Makefile.
+
+Since the functionality is so lacking, it must be considered
+highly experimental.  It is so experimental that it is not even
+mentioned during an interactive Configure session, a direct command
+line invocation (detailed shortly) is required to access the
+functionality.
+
+    NOTE: Perl is routinely built using cross-compilation
+    in the EPOC environment but the solutions from there
+    can't directly be used elsewhere.
+
+The one environment where cross-compilation has successfully been used
+as of this writing is the Compaq iPAQ running ARM Linux.  The build
+host was Intel Linux, the networking setup was PPP + SSH.  The exact
+setup details are beyond the scope of this document, see
+http://www.handhelds.org/ for more information.
+
+To run Configure in cross-compilation mode the basic switch is
+C<-Dusecrosscompile>.
+
+   sh ./Configure -des -Dusecrosscompile -D...
+
+This will make the cpp symbol USE_CROSS_COMPILE and the %Config
+symbol C<usecrosscompile> available.
+
+During the Configure and build, certain helper scripts will be created
+into the Cross/ subdirectory.  The scripts are used to execute a
+cross-compiled executable, and to transfer files to and from the
+target host.  The execution scripts are named F<run-*> and the
+transfer scripts F<to-*> and F<from-*>.  The part after the dash is
+the method to use for remote execution and transfer: by default the
+methods are B<ssh> and B<scp>, thus making the scripts F<run-ssh>,
+F<to-scp>, and F<from-scp>.
+
+To configure the scripts for a target host and a directory (in which
+the execution will happen and which is to and from where the transfer
+happens), supply Configure with
+
+    -Dtargethost=so.me.ho.st -Dtargetdir=/tar/get/dir
+
+The targethost is what e.g. ssh will use as the hostname, the targetdir
+must exist (the scripts won't create it), the targetdir defaults to /tmp.
+You can also specify a username to use for ssh/rsh logins
+
+    -Dtargetuser=luser
+
+but in case you don't, "root" will be used.
+
+Because this is a cross-compilation effort, you will also need to specify
+which target environment and which compilation environment to use.
+This includes the compiler, the header files, and the libraries.
+In the below we use the usual settings for the iPAQ cross-compilation
+environment:
+
+    -Dtargetarch=arm-linux
+    -Dcc=arm-linux-gcc
+    -Dusrinc=/skiff/local/arm-linux/include
+    -Dincpth=/skiff/local/arm-linux/include
+    -Dlibpth=/skiff/local/arm-linux/lib
+
+If the name of the C<cc> has the usual GNU C semantics for cross
+compilers, that is, CPU-OS-gcc, the names of the C<ar>, C<nm>, and
+C<ranlib> will also be automatically chosen to be CPU-OS-ar and so on.
+(The C<ld> requires more thought and will be chosen later by Configure
+as appropriate.)  Also, in this case the incpth, libpth, and usrinc
+will be guessed by Configure (unless explicitly set to something else,
+in which case Configure's guesses with be appended).
+
+In addition to the default execution/transfer methods you can also
+choose B<rsh> for execution, and B<rcp> or B<cp> for transfer,
+for example:
+
+    -Dtargetrun=rsh -Dtargetto=rcp -Dtargetfrom=cp
+
+Putting it all together:
+
+    sh ./Configure -des -Dusecrosscompile \
+        -Dtargethost=so.me.ho.st \
+	-Dtargetdir=/tar/get/dir \
+        -Dtargetuser=root \
+        -Dtargetarch=arm-linux \
+        -Dcc=arm-linux-gcc \
+        -Dusrinc=/skiff/local/arm-linux/include \
+        -Dincpth=/skiff/local/arm-linux/include \
+        -Dlibpth=/skiff/local/arm-linux/lib \
+        -D...
+
+or if you are happy with the defaults
+
+    sh ./Configure -des -Dusecrosscompile \
+        -Dtargethost=so.me.ho.st \
+        -Dcc=arm-linux-gcc \
+        -D...
 
 =head1 make test
 
@@ -2162,6 +2310,3 @@ If you are distributing a modified version of perl (perhaps as part of
 a larger package) please B<do> modify these installation instructions
 and the contact information to match your distribution.
 
-=head1 LAST MODIFIED
-
-$Id: INSTALL,v 1.58 1999/07/23 14:43:00 doughera Exp $

@@ -1,5 +1,5 @@
 package Cwd;
-require 5.000;
+require 5.6.0;
 
 =head1 NAME
 
@@ -73,18 +73,63 @@ environment variable will be kept up to date.  (See
 L<perlsub/Overriding Builtin Functions>.) Note that it will only be
 kept up to date if all packages which use chdir import it from Cwd.
 
+=head1 NOTES
+
+=over 4
+
+=item *
+
+On Mac OS (Classic), the path separator is ':', not '/', and the 
+current directory is denoted as ':', not '.'. To move up the directory 
+tree, you will use '::' to move up one level, but ':::' and so on to 
+move up the tree two or more levels (i.e. the equivalent to '../../..'
+is '::::'). Generally, you should be careful about specifying relative pathnames. 
+While a full path always begins with a volume name, a relative pathname 
+should always begin with a ':'.  If specifying a volume name only, a 
+trailing ':' is required.
+
+Actually, on Mac OS, the C<getcwd()>, C<fastgetcwd()> and C<fastcwd()>
+functions  are all aliases for the C<cwd()> function, which, on Mac OS,
+calls `pwd`. Likewise, the C<abs_path()> function is an alias for
+C<fast_abs_path()>.
+
+=back
+
 =cut
 
 use strict;
 
 use Carp;
 
-our $VERSION = '2.04';
+our $VERSION = '2.05';
 
 use base qw/ Exporter /;
 our @EXPORT = qw(cwd getcwd fastcwd fastgetcwd);
 our @EXPORT_OK = qw(chdir abs_path fast_abs_path realpath fast_realpath);
 
+# sys_cwd may keep the builtin command
+
+# All the functionality of this module may provided by builtins,
+# there is no sense to process the rest of the file.
+# The best choice may be to have this in BEGIN, but how to return from BEGIN?
+
+if ($^O eq 'os2' && defined &sys_cwd && defined &sys_abspath) {
+    local $^W = 0;
+    *cwd		= \&sys_cwd;
+    *getcwd		= \&cwd;
+    *fastgetcwd		= \&cwd;
+    *fastcwd		= \&cwd;
+    *abs_path		= \&sys_abspath;
+    *fast_abs_path	= \&abs_path;
+    *realpath		= \&abs_path;
+    *fast_realpath	= \&abs_path;
+    return 1;
+}
+
+eval {
+    require XSLoader;
+    XSLoader::load('Cwd');
+};
 
 # The 'natural and safe form' for UNIX (pwd may be setuid root)
 
@@ -120,20 +165,6 @@ sub getcwd
 {
     abs_path('.');
 }
-
-# Now a callout to an XSUB.  We have to delay booting of the XSUB
-# until the first time fastcwd is called since Cwd::cwd is needed in the
-# building of perl when dynamic loading may be unavailable
-my $booted = 0;
-sub fastcwd {
-    unless ($booted) {
-	require XSLoader;
-        XSLoader::load("Cwd");
-	++$booted;
-    }
-    return &Cwd::_fastcwd;
-}
-
 
 # Keeps track of current working directory in PWD environment var
 # Usage:
@@ -205,70 +236,14 @@ sub chdir {
     1;
 }
 
-# Taken from Cwd.pm It is really getcwd with an optional
-# parameter instead of '.'
-#
-
-sub abs_path
-{
-    my $start = @_ ? shift : '.';
-    my($dotdots, $cwd, @pst, @cst, $dir, @tst);
-
-    unless (@cst = stat( $start ))
-    {
-	carp "stat($start): $!";
-	return '';
-    }
-    $cwd = '';
-    $dotdots = $start;
-    do
-    {
-	$dotdots .= '/..';
-	@pst = @cst;
-	unless (opendir(PARENT, $dotdots))
-	{
-	    carp "opendir($dotdots): $!";
-	    return '';
-	}
-	unless (@cst = stat($dotdots))
-	{
-	    carp "stat($dotdots): $!";
-	    closedir(PARENT);
-	    return '';
-	}
-	if ($pst[0] == $cst[0] && $pst[1] == $cst[1])
-	{
-	    $dir = undef;
-	}
-	else
-	{
-	    do
-	    {
-		unless (defined ($dir = readdir(PARENT)))
-	        {
-		    carp "readdir($dotdots): $!";
-		    closedir(PARENT);
-		    return '';
-		}
-		$tst[0] = $pst[0]+1 unless (@tst = lstat("$dotdots/$dir"))
-	    }
-	    while ($dir eq '.' || $dir eq '..' || $tst[0] != $pst[0] ||
-		   $tst[1] != $pst[1]);
-	}
-	$cwd = (defined $dir ? "$dir" : "" ) . "/$cwd" ;
-	closedir(PARENT);
-    } while (defined $dir);
-    chop($cwd) unless $cwd eq '/'; # drop the trailing /
-    $cwd;
-}
-
 # added function alias for those of us more
 # used to the libc function.  --tchrist 27-Jan-00
 *realpath = \&abs_path;
 
 sub fast_abs_path {
     my $cwd = getcwd();
-    my $path = @_ ? shift : '.';
+    require File::Spec;
+    my $path = @_ ? shift : File::Spec->curdir;
     CORE::chdir($path) || croak "Cannot chdir to $path:$!";
     my $realpath = getcwd();
     CORE::chdir($cwd)  || croak "Cannot chdir back to $cwd:$!";
@@ -382,7 +357,7 @@ sub _epoc_cwd {
         *fastcwd	= \&_dos_cwd;
         *abs_path	= \&fast_abs_path;
     }
-    elsif ($^O eq 'qnx') {
+    elsif ($^O =~ m/^(?:qnx|nto)$/ ) {
         *cwd		= \&_qnx_cwd;
         *getcwd		= \&_qnx_cwd;
         *fastgetcwd	= \&_qnx_cwd;

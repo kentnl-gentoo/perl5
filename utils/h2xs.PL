@@ -59,12 +59,12 @@ will be used, with the first character capitalized.
 
 If the extension might need extra libraries, they should be included
 here.  The extension Makefile.PL will take care of checking whether
-the libraries actually exist and how they should be loaded.
-The extra libraries should be specified in the form -lm -lposix, etc,
-just as on the cc command line.  By default, the Makefile.PL will
-search through the library path determined by Configure.  That path
-can be augmented by including arguments of the form B<-L/another/library/path>
-in the extra-libraries argument.
+the libraries actually exist and how they should be loaded.  The extra
+libraries should be specified in the form -lm -lposix, etc, just as on
+the cc command line.  By default, the Makefile.PL will search through
+the library path determined by Configure.  That path can be augmented
+by including arguments of the form B<-L/another/library/path> in the
+extra-libraries argument.
 
 =head1 OPTIONS
 
@@ -72,8 +72,8 @@ in the extra-libraries argument.
 
 =item B<-A>
 
-Omit all autoload facilities.  This is the same as B<-c> but also removes the
-S<C<use AutoLoader>> statement from the .pm file.
+Omit all autoload facilities.  This is the same as B<-c> but also
+removes the S<C<use AutoLoader>> statement from the .pm file.
 
 =item B<-C>
 
@@ -116,6 +116,18 @@ two methods are constructed for the structure type itself, C<_to_ptr>
 which returns a Ptr type pointing to the same structure, and a C<new>
 method to construct and return a new structure, initialised to zeroes.
 
+=item B<-b> I<version>
+
+Generates a .pm file which is backwards compatible with the specified
+perl version.
+
+For versions < 5.6.0, the changes are.
+    - no use of 'our' (uses 'use vars' instead)
+    - no 'use warnings'
+
+Specifying a compatibility version higher than the version of perl you
+are using to run h2xs will have no effect.
+
 =item B<-c>
 
 Omit C<constant()> from the .xs file and corresponding specialised
@@ -157,7 +169,8 @@ from typemaps.  Should not be used without B<-x>.
 This may be useful since, say, types which are C<typedef>-equivalent
 to integers may represent OS-related handles, and one may want to work
 with these handles in OO-way, as in C<$handle-E<gt>do_something()>.
-Use C<-o .> if you want to handle all the C<typedef>ed types as opaque types.
+Use C<-o .> if you want to handle all the C<typedef>ed types as opaque
+types.
 
 The type-to-match is whitewashed (except for commas, which have no
 whitespace before them, and multiple C<*> which have no whitespace
@@ -165,14 +178,24 @@ between them).
 
 =item B<-p> I<prefix>
 
-Specify a prefix which should be removed from the Perl function names, e.g., S<-p sec_rgy_> 
-This sets up the XS B<PREFIX> keyword and removes the prefix from functions that are
-autoloaded via the C<constant()> mechanism.
+Specify a prefix which should be removed from the Perl function names,
+e.g., S<-p sec_rgy_> This sets up the XS B<PREFIX> keyword and removes
+the prefix from functions that are autoloaded via the C<constant()>
+mechanism.
 
 =item B<-s> I<sub1,sub2>
 
-Create a perl subroutine for the specified macros rather than autoload with the constant() subroutine.
-These macros are assumed to have a return type of B<char *>, e.g., S<-s sec_rgy_wildcard_name,sec_rgy_wildcard_sid>.
+Create a perl subroutine for the specified macros rather than autoload
+with the constant() subroutine.  These macros are assumed to have a
+return type of B<char *>, e.g.,
+S<-s sec_rgy_wildcard_name,sec_rgy_wildcard_sid>.
+
+=item B<-t> I<type>
+
+Specify the internal type that the constant() mechanism uses for macros.
+The default is IV (signed integer).  Currently all macros found during the
+header scanning process will be assumed to have this type.  Future versions
+of C<h2xs> may gain the ability to make educated guesses.
 
 =item B<-v> I<version>
 
@@ -184,26 +207,15 @@ to the templates.  The default is 0.01.
 Automatically generate XSUBs basing on function declarations in the
 header file.  The package C<C::Scan> should be installed. If this
 option is specified, the name of the header file may look like
-C<NAME1,NAME2>. In this case NAME1 is used instead of the specified string,
-but XSUBs are emitted only for the declarations included from file NAME2.
+C<NAME1,NAME2>. In this case NAME1 is used instead of the specified
+string, but XSUBs are emitted only for the declarations included from
+file NAME2.
 
 Note that some types of arguments/return-values for functions may
 result in XSUB-declarations/typemap-entries which need
 hand-editing. Such may be objects which cannot be converted from/to a
 pointer (like C<long long>), pointers to functions, or arrays.  See
 also the section on L<LIMITATIONS of B<-x>>.
-
-=item B<-b> I<version>
-
-Generates a .pm file which is backwards compatible with the specified
-perl version.
-
-For versions < 5.6.0, the changes are.
-    - no use of 'our' (uses 'use vars' instead)
-    - no 'use warnings'
-
-Specifying a compatibility version higher than the version of perl you
-are using to run h2xs will have no effect.
 
 =back
 
@@ -412,6 +424,10 @@ my $compat_version = $];
 
 use Getopt::Std;
 use Config;
+use Text::Wrap;
+$Text::Wrap::huge = 'overflow';
+$Text::Wrap::columns = 80;
+use ExtUtils::Constant qw (constant_types C_constant XS_constant autoload);
 
 sub usage {
     warn "@_\n" if @_;
@@ -426,6 +442,7 @@ version: $H2XS_VERSION
     -P   Omit the stub POD section.
     -X   Omit the XS portion (implies both -c and -f).
     -a   Generate get/set accessors for struct and union members (used with -x).
+    -b   Specify a perl version to be backwards compatibile with
     -c   Omit the constant() function and specialised AUTOLOAD from the XS file.
     -d   Turn on debugging messages.
     -f   Force creation of the extension even if the C header does not exist.
@@ -436,9 +453,9 @@ version: $H2XS_VERSION
     -o   Regular expression for \"opaque\" types.
     -p   Specify a prefix which should be removed from the Perl function names.
     -s   Create subroutines for specified macros.
+    -t   Default type for autoloaded constants
     -v   Specify a version number for this extension.
     -x   Autogenerate XSUBs using C::Scan.
-    -b   Specify a perl version to be backwards compatibile with
 extra_libraries
          are any libraries that might be needed for loading the
          extension, e.g. -lm would try to link in the math library.
@@ -446,10 +463,10 @@ EOFUSAGE
 }
 
 
-getopts("ACF:M:OPXacdfhkmn:o:p:s:v:xb:") || usage;
-use vars qw($opt_A $opt_C $opt_F $opt_M $opt_O $opt_P $opt_X $opt_a $opt_c $opt_d
-	    $opt_f $opt_h $opt_k $opt_m $opt_n $opt_o $opt_p $opt_s $opt_v $opt_x 
-	    $opt_b);
+getopts("ACF:M:OPXacdfhkmn:o:p:s:v:xb:t:") || usage;
+use vars qw($opt_A $opt_C $opt_F $opt_M $opt_O $opt_P $opt_X $opt_a $opt_c
+            $opt_d $opt_f $opt_h $opt_k $opt_m $opt_n $opt_o $opt_p $opt_s
+            $opt_v $opt_x $opt_b $opt_t);
 
 usage if $opt_h;
 
@@ -536,6 +553,7 @@ if( @path_h ){
     use Config;
     use File::Spec;
     my @paths;
+    my $pre_sub_tri_graphs = 1;
     if ($^O eq 'VMS') {  # Consider overrides of default location
       # XXXX This is not equivalent to what the older version did:
       #		it was looking at $hadsys header-file per header-file...
@@ -599,6 +617,19 @@ if( @path_h ){
       open(CH, "<$rel_path_h") || die "Can't open $rel_path_h: $!\n";
     defines:
       while (<CH>) {
+	if ($pre_sub_tri_graphs) {
+	    # Preprocess all tri-graphs 
+	    # including things stuck in quoted string constants.
+	    s/\?\?=/#/g;                         # | ??=|  #|
+	    s/\?\?\!/|/g;                        # | ??!|  ||
+	    s/\?\?'/^/g;                         # | ??'|  ^|
+	    s/\?\?\(/[/g;                        # | ??(|  [|
+	    s/\?\?\)/]/g;                        # | ??)|  ]|
+	    s/\?\?\-/~/g;                        # | ??-|  ~|
+	    s/\?\?\//\\/g;                       # | ??/|  \|
+	    s/\?\?</{/g;                         # | ??<|  {|
+	    s/\?\?>/}/g;                         # | ??>|  }|
+	}
 	if (/^[ \t]*#[ \t]*define\s+([\$\w]+)\b(?!\()\s*(?=[^" \t])(.*)/) {
 	    my $def = $1;
 	    my $rest = $2;
@@ -664,11 +695,11 @@ else {
 if( $nested ){
 	my $modpath = "";
 	foreach (@modparts){
-		mkdir("$modpath$_", 0777);
+		-d "$modpath$_" || mkdir("$modpath$_", 0777);
 		$modpath .= "$_/";
 	}
 }
-mkdir($modpname, 0777);
+-d "$modpname"   || mkdir($modpname, 0777);
 chdir($modpname) || die "Can't chdir $ext$modpname: $!\n";
 
 my %types_seen;
@@ -891,41 +922,7 @@ if (@vdecls) {
 }
 
 
-$tmp = ( $compat_version < 5.006 ?  "" : "our \$AUTOLOAD;" );
-print PM <<"END" unless $opt_c or $opt_X;
-sub AUTOLOAD {
-    # This AUTOLOAD is used to 'autoload' constants from the constant()
-    # XS function.  If a constant is not found then control is passed
-    # to the AUTOLOAD in AutoLoader.
-
-    my \$constname;
-    $tmp
-    (\$constname = \$AUTOLOAD) =~ s/.*:://;
-    croak "&${module}::constant not defined" if \$constname eq 'constant';
-    my \$val = constant(\$constname, \@_ ? \$_[0] : 0);
-    if (\$! != 0) {
-	if (\$! =~ /Invalid/ || \$!{EINVAL}) {
-	    \$AutoLoader::AUTOLOAD = \$AUTOLOAD;
-	    goto &AutoLoader::AUTOLOAD;
-	}
-	else {
-	    croak "Your vendor has not defined $module macro \$constname";
-	}
-    }
-    {
-	no strict 'refs';
-	# Fixed between 5.005_53 and 5.005_61
-	if (\$] >= 5.00561) {
-	    *\$AUTOLOAD = sub () { \$val };
-	}
-	else {
-	    *\$AUTOLOAD = sub { \$val };
-	}
-    }
-    goto &\$AUTOLOAD;
-}
-
-END
+print PM autoload ($module, $compat_version) unless $opt_c or $opt_X;
 
 if( ! $opt_X ){ # print bootstrap, unless XS is disabled
 	print PM <<"END";
@@ -1059,13 +1056,28 @@ my $pod = <<"END" unless $opt_P;
 #
 #Blah blah blah.
 $exp_doc$meth_doc$revhist
+#
+#=head1 SEE ALSO
+#
+#Mention other useful documentation such as the documentation of
+#related modules or operating system documentation (such as man pages
+#in UNIX), or any relevant external documentation such as RFCs or
+#standards.
+#
+#If you have a mailing list set up for your module, mention it here.
+#
+#If you have a web site set up for your module, mention it here.
+#
 #=head1 AUTHOR
 #
 #$author, E<lt>${email}E<gt>
 #
-#=head1 SEE ALSO
+#=head1 COPYRIGHT AND LICENSE
 #
-#L<perl>.
+#Copyright ${\(1900 + (localtime) [5])} by $author
+#
+#This library is free software; you can redistribute it and/or modify
+#it under the same terms as Perl itself. 
 #
 #=cut
 END
@@ -1132,173 +1144,16 @@ sub td_is_struct {
   return ($struct_typedefs{$otype} = $out);
 }
 
-# Some macros will bomb if you try to return them from a double-returning func.
-# Say, ((char *)0), or strlen (if somebody #define STRLEN strlen).
-# Fortunately, we can detect both these cases...
-sub protect_convert_to_double {
-  my $in = shift;
-  my $val;
-  return '' unless defined ($val = $seen_define{$in});
-  return '(IV)' if $known_fnames{$val};
-  # OUT_t of ((OUT_t)-1):
-  return '' unless $val =~ /^\s*(\(\s*)?\(\s*([^()]*?)\s*\)/;
-  td_is_pointer($2) ? '(IV)' : '';
-}
-
-# For each of the generated functions, length($pref) leading
-# letters are already checked.  Moreover, it is recommended that
-# the generated functions uses switch on letter at offset at least
-# $off + length($pref).
-#
-# The given list has length($pref) chars removed at front, it is
-# guarantied that $off leading chars in the rest are the same for all
-# elts of the list.
-#
-# Returns: how at which offset it was decided to make a switch, or -1 if none.
-
-sub write_const;
-
-sub write_const {
-  my ($fh, $pref, $off, $list) = (shift,shift,shift,shift);
-  my %leading;
-  my $offarg = length $pref;
-
-  if (@$list == 0) {		# Can happen on the initial iteration only
-    print $fh <<"END";
-static double
-constant(char *name, int len, int arg)
-{
-    errno = EINVAL;
-    return 0;
-}
-END
-    return -1;
-  }
-
-  if (@$list == 1) {		# Can happen on the initial iteration only
-    my $protect = protect_convert_to_double("$pref$list->[0]");
-
-    print $fh <<"END";
-static double
-constant(char *name, int len, int arg)
-{
-    errno = 0;
-    if (strEQ(name + $offarg, "$list->[0]")) {	/* $pref removed */
-#ifdef $pref$list->[0]
-	return $protect$pref$list->[0];
-#else
-	errno = ENOENT;
-	return 0;
-#endif
-    }
-    errno = EINVAL;
-    return 0;
-}
-END
-    return -1;
-  }
-
-  for my $n (@$list) {
-    my $c = substr $n, $off, 1;
-    $leading{$c} = [] unless exists $leading{$c};
-    push @{$leading{$c}}, $off < length $n ? substr $n,  $off + 1 : $n
-  }
-
-  if (keys(%leading) == 1) {
-    return 1 + write_const $fh, $pref, $off + 1, $list;
-  }
-
-  my $leader = substr $list->[0], 0, $off;
-  foreach my $letter (keys %leading) {
-    write_const $fh, "$pref$leader$letter", 0, $leading{$letter}
-      if @{$leading{$letter}} > 1;
-  }
-
-  my $npref = "_$pref";
-  $npref = '' if $pref eq '';
-
-  print $fh <<"END";
-static double
-constant$npref(char *name, int len, int arg)
-{
-END
-
-  print $fh <<"END" if $npref eq '';
-    errno = 0;
-END
-
-  print $fh <<"END" if $off;
-    if ($offarg + $off >= len ) {
-	errno = EINVAL;
-	return 0;
-    }
-END
-
-  print $fh <<"END";
-    switch (name[$offarg + $off]) {
-END
-
-  foreach my $letter (sort keys %leading) {
-    my $let = $letter;
-    $let = '\0' if $letter eq '';
-
-    print $fh <<EOP;
-    case '$let':
-EOP
-    if (@{$leading{$letter}} > 1) {
-      # It makes sense to call a function
-      if ($off) {
-	print $fh <<EOP;
-	if (!strnEQ(name + $offarg,"$leader", $off))
-	    break;
-EOP
-      }
-      print $fh <<EOP;
-	return constant_$pref$leader$letter(name, len, arg);
-EOP
-    }
-    else {
-      # Do it ourselves
-      my $protect
-	= protect_convert_to_double("$pref$leader$letter$leading{$letter}[0]");
-
-      print $fh <<EOP;
-	if (strEQ(name + $offarg, "$leader$letter$leading{$letter}[0]")) {	/* $pref removed */
-#ifdef $pref$leader$letter$leading{$letter}[0]
-	    return $protect$pref$leader$letter$leading{$letter}[0];
-#else
-	    goto not_there;
-#endif
-	}
-EOP
-    }
-  }
-  print $fh <<"END";
-    }
-    errno = EINVAL;
-    return 0;
-
-not_there:
-    errno = ENOENT;
-    return 0;
-}
-
-END
-
-}
+my $types = {};
+# Important. Passing an undef scalar doesn't cause the
+# autovivified hashref to appear back out in this scope.
 
 if( ! $opt_c ) {
-  print XS <<"END";
-static int
-not_here(char *s)
-{
-    croak("${module}::%s not implemented on this architecture", s);
-    return -1;
-}
-
-END
-
-  write_const(\*XS, '', 0, \@const_names);
+  print XS constant_types(), "\n";
+  foreach (C_constant ($module, undef, $opt_t, $types, undef, undef,
+           @const_names)) {
+    print XS $_, "\n";
+  }
 }
 
 print_tievar_subs(\*XS, $_, $vdecl_hash{$_}) for @vdecls;
@@ -1332,22 +1187,8 @@ END
 
 # If a constant() function was written then output a corresponding
 # XS declaration:
-print XS <<"END" unless $opt_c;
-
-double
-constant(sv,arg)
-    PREINIT:
-	STRLEN		len;
-    INPUT:
-	SV *		sv
-	char *		s = SvPV(sv, len);
-	int		arg
-    CODE:
-	RETVAL = constant(s,len,arg);
-    OUTPUT:
-	RETVAL
-
-END
+# XXX IVs
+print XS XS_constant ($module, $types) unless $opt_c;
 
 my %seen_decl;
 my %typemap;
@@ -1591,7 +1432,7 @@ sub get_typemap {
   my $proto_re = "[" . quotemeta('\$%&*@;') . "]" ;
 
   # Start with useful default values
-  $typemap{float} = 'T_DOUBLE';
+  $typemap{float} = 'T_NV';
 
   foreach my $typemap (@tm) {
     next unless -e $typemap ;
@@ -1806,37 +1647,71 @@ COPYRIGHT AND LICENCE
 
 Put the correct copyright and licence information here.
 
-Copyright (C) $thisyear $author blah blah blah
+Copyright (C) $thisyear $author
+
+This library is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself. 
 
 _RMEND_
 close(RM) || die "Can't close $ext$modpname/README: $!\n";
 
-warn "Writing $ext$modpname/test.pl\n";
-open(EX, ">test.pl") || die "Can't create $ext$modpname/test.pl: $!\n";
-print EX <<'_END_';
+my $testdir  = "t";
+my $testfile = "$testdir/1.t";
+unless (-d "$testdir") {
+  mkdir "$testdir" or die "Cannot mkdir $testdir: $!\n";
+}
+warn "Writing $ext$modpname/$testfile\n";
+my $tests = @const_names ? 2 : 1;
+
+open EX, ">$testfile" or die "Can't create $ext$modpname/$testfile: $!\n";
+print EX <<_END_;
 # Before `make install' is performed this script should be runnable with
-# `make test'. After `make install' it should work as `perl test.pl'
+# `make test'. After `make install' it should work as `perl 1.t'
 
 #########################
 
-# change 'tests => 1' to 'tests => last_test_to_print';
+# change 'tests => $tests' to 'tests => last_test_to_print';
 
 use Test;
-BEGIN { plan tests => 1 };
-_END_
-print EX <<_END_;
+BEGIN { plan tests => $tests };
 use $module;
-_END_
-print EX <<'_END_';
 ok(1); # If we made it this far, we're ok.
 
+_END_
+if (@const_names) {
+  my $const_names = join " ", @const_names;
+  print EX <<'_END_';
+
+my $fail;
+foreach my $constname (qw(
+_END_
+  print EX wrap ("\t", "\t", $const_names);
+  print EX (")) {\n");
+  print EX <<_END_;
+  next if (eval "my \\\$a = \$constname; 1");
+  if (\$\@ =~ /^Your vendor has not defined $module macro \$constname/) {
+    print "# pass: \$\@";
+  } else {
+    print "# fail: \$\@";
+    \$fail = 1;    
+  }
+}
+if (\$fail) {
+  print "not ok 2\\n";
+} else {
+  print "ok 2\\n";
+}
+
+_END_
+}
+print EX <<'_END_';
 #########################
 
 # Insert your test code below, the Test module is use()ed here so read
 # its man page ( perldoc Test ) for help writing this test script.
 
 _END_
-close(EX) || die "Can't close $ext$modpname/test.pl: $!\n";
+close(EX) || die "Can't close $ext$modpname/$testfile: $!\n";
 
 unless ($opt_C) {
   warn "Writing $ext$modpname/Changes\n";
@@ -1856,7 +1731,7 @@ EOP
 
 warn "Writing $ext$modpname/MANIFEST\n";
 open(MANI,'>MANIFEST') or die "Can't create MANIFEST: $!";
-my @files = <*>;
+my @files = grep { -f } (<*>, <t/*>);
 if (!@files) {
   eval {opendir(D,'.');};
   unless ($@) { @files = readdir(D); closedir(D); }

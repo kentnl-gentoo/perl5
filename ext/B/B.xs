@@ -667,7 +667,7 @@ LISTOP_children(o)
 #define PMOP_pmreplroot(o)	o->op_pmreplroot
 #define PMOP_pmreplstart(o)	o->op_pmreplstart
 #define PMOP_pmnext(o)		o->op_pmnext
-#define PMOP_pmregexp(o)	o->op_pmregexp
+#define PMOP_pmregexp(o)	PM_GETRE(o)
 #define PMOP_pmflags(o)		o->op_pmflags
 #define PMOP_pmpermflags(o)	o->op_pmpermflags
 
@@ -712,7 +712,7 @@ PMOP_precomp(o)
 	REGEXP *	rx = NO_INIT
     CODE:
 	ST(0) = sv_newmortal();
-	rx = o->op_pmregexp;
+	rx = PM_GETRE(o);
 	if (rx)
 	    sv_setpvn(ST(0), rx->precomp, rx->prelen);
 
@@ -756,11 +756,22 @@ PVOP_pv(o)
 	B::PVOP	o
     CODE:
 	/*
-	 * OP_TRANS uses op_pv to point to a table of 256 shorts
+	 * OP_TRANS uses op_pv to point to a table of 256 or >=258 shorts
 	 * whereas other PVOPs point to a null terminated string.
 	 */
-	ST(0) = sv_2mortal(newSVpv(o->op_pv, (o->op_type == OP_TRANS) ?
-				   256 * sizeof(short) : 0));
+	if (o->op_type == OP_TRANS &&
+		(o->op_private & OPpTRANS_COMPLEMENT) &&
+		!(o->op_private & OPpTRANS_DELETE))
+	{
+	    short* tbl = (short*)o->op_pv;
+	    short entries = 257 + tbl[256];
+	    ST(0) = sv_2mortal(newSVpv(o->op_pv, entries * sizeof(short)));
+	}
+	else if (o->op_type == OP_TRANS) {
+	    ST(0) = sv_2mortal(newSVpv(o->op_pv, 256 * sizeof(short)));
+	}
+	else
+	    ST(0) = sv_2mortal(newSVpv(o->op_pv, 0));
 
 #define LOOP_redoop(o)	o->op_redoop
 #define LOOP_nextop(o)	o->op_nextop
@@ -911,6 +922,7 @@ SvPV(sv)
     CODE:
 	ST(0) = sv_newmortal();
 	sv_setpvn(ST(0), SvPVX(sv), SvCUR(sv));
+	SvFLAGS(ST(0)) |= SvUTF8(sv);
 
 STRLEN
 SvLEN(sv)

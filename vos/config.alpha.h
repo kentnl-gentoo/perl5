@@ -13,7 +13,7 @@
 /*
  * Package name      : perl5
  * Source directory  : /vos_ftp_site/pub/vos/posix/(alpha|ga)/perl
- * Configuration time: 2000-10-23 18:48 UCT
+ * Configuration time: 2001-06-11 02:41 UCT
  * Configured by     : Paul_Green@stratus.com
  * Target system     : VOS
  */
@@ -121,26 +121,6 @@
  */
 /*#define HAS_DLERROR	/**/
 
-/* SETUID_SCRIPTS_ARE_SECURE_NOW:
- *	This symbol, if defined, indicates that the bug that prevents
- *	setuid scripts from being secure is not present in this kernel.
- */
-/* DOSUID:
- *	This symbol, if defined, indicates that the C program should
- *	check the script that it is executing for setuid/setgid bits, and
- *	attempt to emulate setuid/setgid on systems that have disabled
- *	setuid #! scripts because the kernel can't do it securely.
- *	It is up to the package designer to make sure that this emulation
- *	is done securely.  Among other things, it should do an fstat on
- *	the script it just opened to make sure it really is a setuid/setgid
- *	script, it should make sure the arguments passed correspond exactly
- *	to the argument on the #! line, and it should not trust any
- *	subprocesses to which it must pass the filename rather than the
- *	file descriptor of the script to be executed.
- */
-#define SETUID_SCRIPTS_ARE_SECURE_NOW	/**/
-/*#define DOSUID		/**/
-
 /* HAS_DUP2:
  *	This symbol, if defined, indicates that the dup2 routine is
  *	available to duplicate file descriptors.
@@ -164,19 +144,6 @@
  *	the fcntl() function exists.
  */
 #define HAS_FCNTL		/**/
-
-/* HAS__FWALK:
- *	This symbol, if defined, indicates that the _fwalk system call is
- *	available to apply a function to all the file handles.
- */
-/*#define HAS__FWALK		/ **/
-
-/* FCNTL_CAN_LOCK:
- *	This symbol, if defined, indicates that fcntl() can be used
- *	for file locking.  Normally on Unix systems this is defined.
- *	It may be undefined on VMS.
- */
-#define FCNTL_CAN_LOCK		/**/
 
 /* HAS_FGETPOS:
  *	This symbol, if defined, indicates that the fgetpos routine is
@@ -225,13 +192,6 @@
  *	available to get the login name.
  */
 #define HAS_GETLOGIN		/**/
-
-/* HAS_GETPAGESIZE:
- *	This symbol, if defined, indicates that the getpagesize system call
- *	is available to get system page size, which is the granularity of
- *	many memory management calls.
- */
-/*#define HAS_GETPAGESIZE		/**/
 
 /* HAS_GETPGID:
  *	This symbol, if defined, indicates to the C program that 
@@ -442,19 +402,6 @@
  */
 #define HAS_READLINK		/**/
 
-/* HAS_READV:
- *	This symbol, if defined, indicates that the readv routine is
- *	available to do gather reads.  You will also need <sys/uio.h>
- *	and there I_SYSUIO.
- */
-/*#define HAS_READV		/**/
-
-/* HAS_RECVMSG:
- *	This symbol, if defined, indicates that the recvmsg routine is
- *	available to send structured socket messages.
- */
-/*#define HAS_RECVMSG		/**/
-
 /* HAS_RENAME:
  *	This symbol, if defined, indicates that the rename routine is available
  *	to rename files.  Otherwise you should do the unlink(), link(), unlink()
@@ -613,12 +560,6 @@
  *	to provide better numeric string conversion than atoi() and friends.
  */
 #define HAS_STRTOL	/**/
-
-/* HAS_STRTOUL:
- *	This symbol, if defined, indicates that the strtoul routine is
- *	available to provide conversion of strings to unsigned long.
- */
-#define HAS_STRTOUL	/**/
 
 /* HAS_STRXFRM:
  *	This symbol, if defined, indicates that the strxfrm() routine is
@@ -856,7 +797,12 @@
  *	This symbol, if defined, indicates that <sys/ioctl.h> exists and should
  *	be included. Otherwise, include <sgtty.h> or <termio.h>.
  */
+/* I_SYS_SOCKIO:
+ *	This symbol, if defined, indicates the <sys/sockio.h> should be included
+ *	to get socket ioctl options, like SIOCATMARK.
+ */
 #define	I_SYS_IOCTL		/**/
+/*#define I_SYS_SOCKIO	/**/
 
 /* I_SYS_NDIR:
  *	This symbol, if defined, indicates to the C program that it should
@@ -952,17 +898,6 @@
  */
 #define I_VALUES		/**/
 
-/* I_STDARG:
- *	This symbol, if defined, indicates that <stdarg.h> exists and should
- *	be included.
- */
-/* I_VARARGS:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <varargs.h>.
- */
-#define I_STDARG		/**/
-/*#define I_VARARGS	/**/
-
 /* I_VFORK:
  *	This symbol, if defined, indicates to the C program that it should
  *	include vfork.h.
@@ -995,18 +930,6 @@
  *	D:/bin/sh.exe.
  */
 #define SH_PATH "/bin/sh"  /**/
-
-/* STDCHAR:
- *	This symbol is defined to be the type of char used in stdio.h.
- *	It has the values "unsigned char" or "char".
- */
-#define STDCHAR unsigned char	/**/
-
-/* CROSSCOMPILE:
- *	This symbol, if defined, signifies that we our
- *	build process is a cross-compilation.
- */
-/*#define CROSSCOMPILE		/**/
 
 /* INTSIZE:
  *	This symbol contains the value of sizeof(int) so that the C
@@ -1078,14 +1001,20 @@
  *	by Configure.  You shouldn't rely on it too much; the specific
  *	feature tests from Configure are generally more reliable.
  */
+/* OSVERS:
+ *	This symbol contains the version of the operating system, as determined
+ *	by Configure.  You shouldn't rely on it too much; the specific
+ *	feature tests from Configure are generally more reliable.
+ */
 #define OSNAME "VOS"		/**/
+#define OSVERS "VOS"		/**/
 
 /* MEM_ALIGNBYTES:
  *	This symbol contains the number of bytes required to align a
  *	double, or a long double when applicable. Usual values are 2,
  *	4 and 8. The default is eight, for safety.
  */
-#if defined(CROSSCOMPILE) || defined(MULTIARCH)
+#if defined(USE_CROSS_COMPILE) || defined(MULTIARCH)
 #  define MEM_ALIGNBYTES 8
 #else
 #define MEM_ALIGNBYTES 8
@@ -1162,7 +1091,7 @@
  *	so the default case (for NeXT) is big endian to catch them. 
  *	This might matter for NeXT 3.0.
  */
-#if defined(CROSSCOMPILE) || defined(MULTIARCH)
+#if defined(USE_CROSS_COMPILE) || defined(MULTIARCH)
 #  ifdef __LITTLE_ENDIAN__
 #    if LONGSIZE == 4
 #      define BYTEORDER 0x1234
@@ -1243,6 +1172,12 @@
 #define CPPRUN "cc -E -"
 #define CPPLAST "-"
 
+/* HAS__FWALK:
+ *	This symbol, if defined, indicates that the _fwalk system call is
+ *	available to apply a function to all the file handles.
+ */
+/*#define HAS__FWALK		/**/
+
 /* HAS_ACCESS:
  *	This manifest constant lets the C program know that the access()
  *	system call is available to check for accessibility using real UID/GID.
@@ -1281,7 +1216,7 @@
  *	This symbol, if defined, indicates that the struct cmsghdr
  *	is supported.
  */
-/*#define HAS_STRUCT_CMSGHDR	/ **/
+/*#define HAS_STRUCT_CMSGHDR	/**/
 
 /* HAS_CSH:
  *	This symbol, if defined, indicates that the C-shell exists.
@@ -1345,6 +1280,19 @@
  *	available to close whatever was being used for service queries.
  */
 #define HAS_ENDSERVENT		/**/
+
+/* HAS_FCHDIR:
+ *	This symbol, if defined, indicates that the fchdir routine is
+ *	available to change directory using a file descriptor.
+ */
+/*#define HAS_FCHDIR		/**/
+
+/* FCNTL_CAN_LOCK:
+ *	This symbol, if defined, indicates that fcntl() can be used
+ *	for file locking.  Normally on Unix systems this is defined.
+ *	It may be undefined on VMS.
+ */
+#define FCNTL_CAN_LOCK		/**/
 
 /* HAS_FD_SET:
  *	This symbol, when defined, indicates presence of the fd_set typedef
@@ -1541,11 +1489,29 @@
  */
 #define	HAS_GETNET_PROTOS	/**/
 
+/* HAS_GETPAGESIZE:
+ *	This symbol, if defined, indicates that the getpagesize system call
+ *	is available to get system page size, which is the granularity of
+ *	many memory management calls.
+ */
+/*#define HAS_GETPAGESIZE		/**/
+
 /* HAS_GETPROTOENT:
  *	This symbol, if defined, indicates that the getprotoent() routine is
  *	available to look up protocols in some data base or another.
  */
 #define HAS_GETPROTOENT		/**/
+
+/* HAS_GETPGRP:
+ *	This symbol, if defined, indicates that the getpgrp routine is
+ *	available to get the current process group.
+ */
+/* USE_BSD_GETPGRP:
+ *	This symbol, if defined, indicates that getpgrp needs one
+ *	arguments whereas USG one needs none.
+ */
+#define HAS_GETPGRP		/**/
+/*#define USE_BSD_GETPGRP	/**/
 
 /* HAS_GETPROTOBYNAME:
  *	This symbol, if defined, indicates that the getprotobyname()
@@ -1779,7 +1745,15 @@
  *	available to split a long double x into a fractional part f and
  *	an integer part i such that |f| < 1.0 and (f + i) = x.
  */
+/* HAS_MODFL_POW32_BUG:
+ *	This symbol, if defined, indicates that the modfl routine is
+ *	broken for long doubles >= pow(2, 32).
+ *	For example from 4294967303.150000 one would get 4294967302.000000
+ *	and 1.150000.  The bug has been seen in certain versions of glibc,
+ *	release 2.2.2 is known to be okay.
+ */
 /*#define HAS_MODFL		/**/
+/*#define HAS_MODFL_POW32_BUG		/**/
 
 /* HAS_MPROTECT:
  *	This symbol, if defined, indicates that the mprotect system call is
@@ -1797,7 +1771,7 @@
  *	This symbol, if defined, indicates that the struct msghdr
  *	is supported.
  */
-/*#define HAS_STRUCT_MSGHDR	/ **/
+/*#define HAS_STRUCT_MSGHDR	/**/
 
 /* HAS_OFF64_T:
  *	This symbol will be defined if the C compiler supports off64_t.
@@ -1839,9 +1813,22 @@
 #define SCHED_YIELD		/**/
 /*#define HAS_SCHED_YIELD	/**/
 
+/* HAS_READV:
+ *	This symbol, if defined, indicates that the readv routine is
+ *	available to do gather reads.  You will also need <sys/uio.h>
+ *	and there I_SYSUIO.
+ */
+/*#define HAS_READV		/**/
+
+/* HAS_RECVMSG:
+ *	This symbol, if defined, indicates that the recvmsg routine is
+ *	available to send structured socket messages.
+ */
+/*#define HAS_RECVMSG		/**/
+
 /* HAS_SAFE_BCOPY:
  *	This symbol, if defined, indicates that the bcopy routine is available
- *	to copy potentially overlapping memory blocks. Otherwise you should
+ *	to copy potentially overlapping memory blocks. Normally, you should
  *	probably use memmove() or memcpy(). If neither is defined, roll your
  *	own version.
  */
@@ -1849,9 +1836,9 @@
 
 /* HAS_SAFE_MEMCPY:
  *	This symbol, if defined, indicates that the memcpy routine is available
- *	to copy potentially overlapping memory blocks. Otherwise you should
- *	probably use memmove() or memcpy(). If neither is defined, roll your
- *	own version.
+ *	to copy potentially overlapping memory blocks.  If you need to
+ *	copy overlapping memory blocks, you should check HAS_MEMMOVE and
+ *	use memmove() instead, if available.
  */
 /*#define HAS_SAFE_MEMCPY	/**/
 
@@ -1869,7 +1856,7 @@
  *		extern void* sbrk _((int));
  *		extern void* sbrk _((size_t));
  */
-/*#define	HAS_SBRK_PROTO	/ **/
+/*#define	HAS_SBRK_PROTO	/**/
 
 /* HAS_SEM:
  *	This symbol, if defined, indicates that the entire sem*(2) library is
@@ -1920,6 +1907,18 @@
  */
 #define HAS_SETPROTOENT		/**/
 
+/* HAS_SETPGRP:
+ *	This symbol, if defined, indicates that the setpgrp routine is
+ *	available to set the current process group.
+ */
+/* USE_BSD_SETPGRP:
+ *	This symbol, if defined, indicates that setpgrp needs two
+ *	arguments whereas USG one needs none.  See also HAS_SETPGID
+ *	for a POSIX interface.
+ */
+/*#define HAS_SETPGRP		/**/
+/*#define USE_BSD_SETPGRP	/**/
+
 /* HAS_SETPROCTITLE:
  *	This symbol, if defined, indicates that the setproctitle routine is
  *	available to set process title.
@@ -1962,13 +1961,6 @@
  *	is available.
  */
 /*#define HAS_SIGACTION	/**/
-
-/* HAS_SIGPROCMASK:
- *	This symbol, if defined, indicates that sigprocmask
- *	system call is available to examine or change the signal mask
- *	of the calling process.
- */
-/*#define HAS_SIGPROCMASK	/**/
 
 /* HAS_SIGSETJMP:
  *	This variable indicates to the C program that the sigsetjmp()
@@ -2193,16 +2185,16 @@
 /*#define HAS_STRTOLL		/**/
 
 /* HAS_STRTOQ:
- *	This symbol, if defined, indicates that the strtouq routine is
+ *	This symbol, if defined, indicates that the strtoq routine is
  *	available to convert strings to long longs (quads).
  */
 /*#define HAS_STRTOQ		/**/
 
-/* HAS_STRTOQ:
- *	This symbol, if defined, indicates that the strtouq routine is
- *	available to convert strings to long longs (quads).
+/* HAS_STRTOUL:
+ *	This symbol, if defined, indicates that the strtoul routine is
+ *	available to provide conversion of strings to unsigned long.
  */
-/*#define HAS_STRTOQ		/**/
+#define HAS_STRTOUL	/**/
 
 /* HAS_STRTOULL:
  *	This symbol, if defined, indicates that the strtoull routine is
@@ -2392,8 +2384,25 @@
  *	in the <db.h> header file.  In older versions of DB, it was
  *	int, while in newer ones it is size_t.
  */
+/* DB_VERSION_MAJOR_CFG:
+ *	This symbol, if defined, defines the major version number of
+ *	Berkeley DB found in the <db.h> header when Perl was configured.
+ */
+/* DB_VERSION_MINOR_CFG:
+ *	This symbol, if defined, defines the minor version number of
+ *	Berkeley DB found in the <db.h> header when Perl was configured.
+ *	For DB version 1 this is always 0.
+ */
+/* DB_VERSION_PATCH_CFG:
+ *	This symbol, if defined, defines the patch version number of
+ *	Berkeley DB found in the <db.h> header when Perl was configured.
+ *	For DB version 1 this is always 0.
+ */
 #define DB_Hash_t	int		/**/
 #define DB_Prefix_t	int  	/**/
+#define DB_VERSION_MAJOR_CFG	undef  	/**/
+#define DB_VERSION_MINOR_CFG	undef  	/**/
+#define DB_VERSION_PATCH_CFG	undef  	/**/
 
 /* I_GRP:
  *	This symbol, if defined, indicates to the C program that it should
@@ -2706,6 +2715,17 @@
 #define RD_NODATA -1
 #define EOF_NONBLOCK
 
+/* NEED_VA_COPY:
+ *	This symbol, if defined, indicates that the system stores
+ *	the variable argument list datatype, va_list, in a format
+ *	that cannot be copied by simple assignment, so that some
+ *	other means must be used when copying is required.
+ *	As such systems vary in their provision (or non-provision)
+ *	of copying mechanisms, handy.h defines a platform-
+ *	independent macro, Perl_va_copy(src, dst), to do the job.
+ */
+/*#define	NEED_VA_COPY		/**/
+
 /* Netdb_host_t:
  *	This symbol holds the type used for the 1st argument
  *	to gethostbyaddr().
@@ -2857,8 +2877,8 @@
  *	as an unsigned hexadecimal integer in lowercase abcdef.
  */
 /* UVXf:
- *     This symbol defines the format string used for printing a Perl UV
- *     as an unsigned hexadecimal integer in uppercase ABCDEF.
+ *	This symbol defines the format string used for printing a Perl UV
+ *	as an unsigned hexadecimal integer in uppercase ABCDEF.
  */
 /* NVef:
  *	This symbol defines the format string used for printing a Perl NV
@@ -2913,7 +2933,7 @@
  *	This macro is to be used to generate uniformly distributed
  *	random numbers over the range [0., 1.[.  You may have to supply
  *	an 'extern double drand48();' in your program since SunOS 4.1.3
- *	doesn't provide you with anything relevant in it's headers.
+ *	doesn't provide you with anything relevant in its headers.
  *	See HAS_DRAND48_PROTO.
  */
 /* Rand_seed_t:
@@ -3065,6 +3085,12 @@
  */
 #define STARTPERL "!perl.pm"		/**/
 
+/* STDCHAR:
+ *	This symbol is defined to be the type of char used in stdio.h.
+ *	It has the values "unsigned char" or "char".
+ */
+#define STDCHAR unsigned char	/**/
+
 /* HAS_STDIO_STREAM_ARRAY:
  *	This symbol, if defined, tells that there is an array
  *	holding the stdio streams.
@@ -3186,12 +3212,18 @@
  *	This symbol, if defined, indicates that Perl should
  *	be built to use the old draft POSIX threads API.
  */
+/* USE_REENTRANT_API:
+ *	This symbol, if defined, indicates that Perl should
+ *	try to use the various _r versions of library functions.
+ *	This is extremely experimental.
+ */
 /*#define	USE_5005THREADS		/**/
 /*#define	USE_ITHREADS		/**/
 #if defined(USE_5005THREADS) && !defined(USE_ITHREADS)
 #define		USE_THREADS		/* until src is revised*/
 #endif
 /*#define	OLD_PTHREADS_API		/**/
+/*#define	USE_REENTRANT_API	/**/
 
 /* PERL_VENDORARCH:
  *	If defined, this symbol contains the name of a private library.
@@ -3283,50 +3315,148 @@
 #define PERL_XS_APIVERSION "5.00563"
 #define PERL_PM_APIVERSION "5.005"
 
-/* HAS_GETPGRP:
- *	This symbol, if defined, indicates that the getpgrp routine is
- *	available to get the current process group.
+/* SETUID_SCRIPTS_ARE_SECURE_NOW:
+ *	This symbol, if defined, indicates that the bug that prevents
+ *	setuid scripts from being secure is not present in this kernel.
  */
-/* USE_BSD_GETPGRP:
- *	This symbol, if defined, indicates that getpgrp needs one
- *	arguments whereas USG one needs none.
+/* DOSUID:
+ *	This symbol, if defined, indicates that the C program should
+ *	check the script that it is executing for setuid/setgid bits, and
+ *	attempt to emulate setuid/setgid on systems that have disabled
+ *	setuid #! scripts because the kernel can't do it securely.
+ *	It is up to the package designer to make sure that this emulation
+ *	is done securely.  Among other things, it should do an fstat on
+ *	the script it just opened to make sure it really is a setuid/setgid
+ *	script, it should make sure the arguments passed correspond exactly
+ *	to the argument on the #! line, and it should not trust any
+ *	subprocesses to which it must pass the filename rather than the
+ *	file descriptor of the script to be executed.
  */
-#define HAS_GETPGRP		/**/
-/*#define USE_BSD_GETPGRP	/**/
+#define SETUID_SCRIPTS_ARE_SECURE_NOW	/**/
+/*#define DOSUID		/**/
 
-/* HAS_SETPGRP:
- *	This symbol, if defined, indicates that the setpgrp routine is
- *	available to set the current process group.
+/* I_STDARG:
+ *	This symbol, if defined, indicates that <stdarg.h> exists and should
+ *	be included.
  */
-/* USE_BSD_SETPGRP:
- *	This symbol, if defined, indicates that setpgrp needs two
- *	arguments whereas USG one needs none.  See also HAS_SETPGID
- *	for a POSIX interface.
+/* I_VARARGS:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <varargs.h>.
  */
-/*#define HAS_SETPGRP		/**/
-/*#define USE_BSD_SETPGRP	/**/
+#define I_STDARG		/**/
+/*#define I_VARARGS	/**/
 
-/* NEED_VA_COPY:
- *	This symbol, if defined, indicates that the system stores
- *	the variable argument list datatype, va_list, in a format
- *	that cannot be copied by simple assignment, so that some
- *	other means must be used when copying is required.
- *	As such systems vary in their provision (or non-provision)
- *	of copying mechanisms, handy.h defines a platform-
- *	independent macro, Perl_va_copy(src, dst), to do the job.
+/* USE_CROSS_COMPILE:
+ *	This symbol, if defined, indicates that Perl is being cross-compiled.
  */
-/*#define	NEED_VA_COPY		/ **/
+/* PERL_TARGETARCH:
+ *	This symbol, if defined, indicates the target architecture
+ *	Perl has been cross-compiled to.  Undefined if not a cross-compile.
+ */
+#ifndef USE_CROSS_COMPILE
+/*#define	USE_CROSS_COMPILE	/**/
+#define	PERL_TARGETARCH	"undef"	/**/
+#endif
+
+/* HAS_DBMINIT_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the dbminit() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int dbminit(char *);
+ */
+/*#define	HAS_DBMINIT_PROTO	/**/
+
+/* HAS_FLOCK_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the flock() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int flock(int, int);
+ */
+/*#define	HAS_FLOCK_PROTO	/**/
+
+/* HAS_NL_LANGINFO:
+ *	This symbol, if defined, indicates that the nl_langinfo routine is
+ *	available to return local data.  You will also need <langinfo.h>
+ *	and therefore I_LANGINFO.
+ */
+/*#define HAS_NL_LANGINFO		/**/
+
+/* HAS_SIGPROCMASK:
+ *	This symbol, if defined, indicates that the sigprocmask
+ *	system call is available to examine or change the signal mask
+ *	of the calling process.
+ */
+/*#define HAS_SIGPROCMASK		/**/
 
 /* HAS_SOCKATMARK:
  *	This symbol, if defined, indicates that the sockatmark routine is
  *	available to test whether a socket is at the out-of-band mark.
  */
-/*#define HAS_SOCKATMARK		/ **/
+/*#define HAS_SOCKATMARK		/**/
+
+/* HAS_SOCKATMARK_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the sockatmark() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int sockatmark _((int));
+ */
+/*#define	HAS_SOCKATMARK_PROTO	/**/
+
+/* HAS_SETRESGID_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the setresgid() function.  Otherwise, it is up
+ *	to the program to supply one.  Good guesses are
+ *		extern int setresgid(uid_t ruid, uid_t euid, uid_t suid);
+ */
+/*#define	HAS_SETRESGID_PROTO	/**/
+
+/* HAS_SETRESUID_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the setresuid() function.  Otherwise, it is up
+ *	to the program to supply one.  Good guesses are
+ *		extern int setresuid(uid_t ruid, uid_t euid, uid_t suid);
+ */
+/*#define	HAS_SETRESUID_PROTO	/**/
+
+/* HAS_STRFTIME:
+ *	This symbol, if defined, indicates that the strftime routine is
+ *	available to do time formatting.
+ */
+#define HAS_STRFTIME		/**/
+
+/* HAS_SYSCALL_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the syscall() function.  Otherwise, it is up
+ *	to the program to supply one.  Good guesses are
+ *		extern int syscall(int,  ...);
+ *		extern int syscall(long, ...);
+ */
+/*#define	HAS_SYSCALL_PROTO	/**/
 
 /* U32_ALIGNMENT_REQUIRED:
  *	This symbol, if defined, indicates that you must access
  *	character data through U32-aligned pointers.
  */
 #define U32_ALIGNMENT_REQUIRED	/**/
+
+/* HAS_USLEEP_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the usleep() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern int usleep(useconds_t);
+ */
+/*#define	HAS_USLEEP_PROTO	/**/
+
+/* I_LANGINFO:
+ *	This symbol, if defined, indicates that <langinfo.h> exists and
+ *	should be included.
+ */
+/*#define	I_LANGINFO		/**/
+
+/* HAS_PTHREAD_ATFORK:
+ *	This symbol, if defined, indicates that the pthread_atfork routine
+ *	is available setup fork handlers.
+ */
+/*#define HAS_PTHREAD_ATFORK		/**/
 
 #endif

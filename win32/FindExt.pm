@@ -4,7 +4,8 @@ use File::Find;
 use File::Basename;
 use Cwd;
 
-my $no = join('|',qw(DynaLoader GDBM_File ODBM_File NDBM_File DB_File Syslog Sysv));
+my $no = join('|',qw(DynaLoader GDBM_File ODBM_File NDBM_File DB_File
+		     Syslog SysV Langinfo));
 $no = qr/^(?:$no)$/i;
 
 my %ext;
@@ -27,7 +28,7 @@ sub dynamic_extensions
 
 sub noxs_extensions
 {
- return grep $ext{$_} eq 'noxs',keys %ext;
+ return grep $ext{$_} eq 'nonxs',keys %ext;
 }
 
 sub extensions
@@ -37,7 +38,7 @@ sub extensions
 
 sub find_ext
 {
- if (/^(.*)\.pm$/i || /^(.*)_pm.PL$/i)
+ if (/^(.*)\.pm$/i || /^(.*)_pm\.PL$/i || /^(.*)\.xs$/i)
   {
    my $name = $1;
    return if $name =~ $no; 

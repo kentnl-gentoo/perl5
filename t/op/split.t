@@ -5,7 +5,7 @@ BEGIN {
     @INC = '../lib';
 }
 
-print "1..44\n";
+print "1..45\n";
 
 $FS = ':';
 
@@ -51,7 +51,9 @@ print $_ eq '1:2:3:4:5:6:::' ? "ok 10\n" : "not ok 10 $_\n";
 
 # Does assignment to a list imply split to one more field than that?
 if ($^O eq 'MSWin32') { $foo = `.\\perl -D1024 -e "(\$a,\$b) = split;" 2>&1` }
+elsif ($^O eq 'NetWare') { $foo = `perl -D1024 -e "(\$a,\$b) = split;" 2>&1` }
 elsif ($^O eq 'VMS')  { $foo = `./perl "-D1024" -e "(\$a,\$b) = split;" 2>&1` }
+elsif ($^O eq 'MacOS'){ $foo = `$^X "-D1024" -e "(\$a,\$b) = split;"` }
 else                  { $foo = `./perl -D1024 -e '(\$a,\$b) = split;' 2>&1` }
 print $foo =~ /DEBUGGING/ || $foo =~ /SV = (VOID|IV\(3\))/ ? "ok 11\n" : "not ok 11\n";
 
@@ -242,3 +244,13 @@ print "ok 32\n";
     print "ok 44\n";
 }
 
+{
+    # check that PMf_WHITE is cleared after \s+ is used
+    # reported in <20010627113312.RWGY6087.viemta06@localhost>
+    my $r;
+    foreach my $pat ( qr/\s+/, qr/ll/ ) {
+	$r = join ':' => split($pat, "hello cruel world");
+    }
+    print "not " unless $r eq "he:o cruel world";
+    print "ok 45\n";
+}

@@ -24,11 +24,11 @@ PERL_CALLCONV PerlInterpreter*	perl_clone_using(PerlInterpreter *interp, UV flag
 #  endif
 #endif
 
-#if defined(MYMALLOC)
 PERL_CALLCONV Malloc_t	Perl_malloc(MEM_SIZE nbytes);
 PERL_CALLCONV Malloc_t	Perl_calloc(MEM_SIZE elements, MEM_SIZE size);
 PERL_CALLCONV Malloc_t	Perl_realloc(Malloc_t where, MEM_SIZE nbytes);
 PERL_CALLCONV Free_t	Perl_mfree(Malloc_t where);
+#if defined(MYMALLOC)
 PERL_CALLCONV MEM_SIZE	Perl_malloced_size(void *p);
 #endif
 
@@ -91,6 +91,7 @@ PERL_CALLCONV OP*	Perl_block_end(pTHX_ I32 floor, OP* seq);
 PERL_CALLCONV I32	Perl_block_gimme(pTHX);
 PERL_CALLCONV int	Perl_block_start(pTHX_ int full);
 PERL_CALLCONV void	Perl_boot_core_UNIVERSAL(pTHX);
+PERL_CALLCONV void	Perl_boot_core_PerlIO(pTHX);
 PERL_CALLCONV void	Perl_call_list(pTHX_ I32 oldscope, AV* av_list);
 PERL_CALLCONV bool	Perl_cando(pTHX_ Mode_t mode, Uid_t effective, Stat_t* statbufp);
 PERL_CALLCONV U32	Perl_cast_ulong(pTHX_ NV f);
@@ -333,6 +334,7 @@ PERL_CALLCONV I32	Perl_ibcmp_locale(pTHX_ const char* a, const char* b, I32 len)
 PERL_CALLCONV bool	Perl_ingroup(pTHX_ Gid_t testgid, Uid_t effective);
 PERL_CALLCONV void	Perl_init_debugger(pTHX);
 PERL_CALLCONV void	Perl_init_stacks(pTHX);
+PERL_CALLCONV void	Perl_init_tm(pTHX_ struct tm *ptm);
 PERL_CALLCONV U32	Perl_intro_my(pTHX);
 PERL_CALLCONV char*	Perl_instr(pTHX_ const char* big, const char* little);
 PERL_CALLCONV bool	Perl_io_close(pTHX_ IO* io, bool not_implicit);
@@ -395,6 +397,8 @@ PERL_CALLCONV I32	Perl_keyword(pTHX_ char* d, I32 len);
 PERL_CALLCONV void	Perl_leave_scope(pTHX_ I32 base);
 PERL_CALLCONV void	Perl_lex_end(pTHX);
 PERL_CALLCONV void	Perl_lex_start(pTHX_ SV* line);
+PERL_CALLCONV void	Perl_op_null(pTHX_ OP* o);
+PERL_CALLCONV void	Perl_op_clear(pTHX_ OP* o);
 PERL_CALLCONV OP*	Perl_linklist(pTHX_ OP* o);
 PERL_CALLCONV OP*	Perl_list(pTHX_ OP* o);
 PERL_CALLCONV OP*	Perl_listkids(pTHX_ OP* o);
@@ -402,6 +406,8 @@ PERL_CALLCONV void	Perl_load_module(pTHX_ U32 flags, SV* name, SV* ver, ...);
 PERL_CALLCONV void	Perl_vload_module(pTHX_ U32 flags, SV* name, SV* ver, va_list* args);
 PERL_CALLCONV OP*	Perl_localize(pTHX_ OP* arg, I32 lexical);
 PERL_CALLCONV I32	Perl_looks_like_number(pTHX_ SV* sv);
+PERL_CALLCONV int	Perl_grok_number(pTHX_ const char *pv, STRLEN len, UV *valuep);
+PERL_CALLCONV bool	Perl_grok_numeric_radix(pTHX_ const char **sp, const char *send);
 PERL_CALLCONV int	Perl_magic_clearenv(pTHX_ SV* sv, MAGIC* mg);
 PERL_CALLCONV int	Perl_magic_clear_all_env(pTHX_ SV* sv, MAGIC* mg);
 PERL_CALLCONV int	Perl_magic_clearpack(pTHX_ SV* sv, MAGIC* mg);
@@ -475,12 +481,13 @@ PERL_CALLCONV U32	Perl_mg_length(pTHX_ SV* sv);
 PERL_CALLCONV void	Perl_mg_magical(pTHX_ SV* sv);
 PERL_CALLCONV int	Perl_mg_set(pTHX_ SV* sv);
 PERL_CALLCONV I32	Perl_mg_size(pTHX_ SV* sv);
+PERL_CALLCONV void	Perl_mini_mktime(pTHX_ struct tm *pm);
 PERL_CALLCONV OP*	Perl_mod(pTHX_ OP* o, I32 type);
 PERL_CALLCONV int	Perl_mode_from_discipline(pTHX_ SV* discp);
 PERL_CALLCONV char*	Perl_moreswitches(pTHX_ char* s);
 PERL_CALLCONV OP*	Perl_my(pTHX_ OP* o);
 PERL_CALLCONV NV	Perl_my_atof(pTHX_ const char *s);
-#if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
+#if (!defined(HAS_MEMCPY) && !defined(HAS_BCOPY)) || (!defined(HAS_MEMMOVE) && !defined(HAS_SAFE_MEMCPY) && !defined(HAS_SAFE_BCOPY))
 PERL_CALLCONV char*	Perl_my_bcopy(const char* from, char* to, I32 len);
 #endif
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
@@ -503,6 +510,7 @@ PERL_CALLCONV PerlIO*	Perl_my_popen_list(pTHX_ char* mode, int n, SV ** args);
 #endif
 PERL_CALLCONV void	Perl_my_setenv(pTHX_ char* nam, char* val);
 PERL_CALLCONV I32	Perl_my_stat(pTHX);
+PERL_CALLCONV char *	Perl_my_strftime(pTHX_ char *fmt, int sec, int min, int hour, int mday, int mon, int year, int wday, int yday, int isdst);
 #if defined(MYSWAP)
 PERL_CALLCONV short	Perl_my_swap(pTHX_ short s);
 PERL_CALLCONV long	Perl_my_htonl(pTHX_ long l);
@@ -747,6 +755,7 @@ PERL_CALLCONV I32	Perl_sv_cmp_locale(pTHX_ SV* sv1, SV* sv2);
 PERL_CALLCONV char*	Perl_sv_collxfrm(pTHX_ SV* sv, STRLEN* nxp);
 #endif
 PERL_CALLCONV OP*	Perl_sv_compile_2op(pTHX_ SV* sv, OP** startp, char* code, AV** avp);
+PERL_CALLCONV int	Perl_getcwd_sv(pTHX_ SV* sv);
 PERL_CALLCONV void	Perl_sv_dec(pTHX_ SV* sv);
 PERL_CALLCONV void	Perl_sv_dump(pTHX_ SV* sv);
 PERL_CALLCONV bool	Perl_sv_derived_from(pTHX_ SV* sv, const char* name);
@@ -805,7 +814,7 @@ PERL_CALLCONV void	Perl_sv_vcatpvfn(pTHX_ SV* sv, const char* pat, STRLEN patlen
 PERL_CALLCONV void	Perl_sv_vsetpvfn(pTHX_ SV* sv, const char* pat, STRLEN patlen, va_list* args, SV** svargs, I32 svmax, bool *maybe_tainted);
 PERL_CALLCONV NV	Perl_str_to_version(pTHX_ SV *sv);
 PERL_CALLCONV SV*	Perl_swash_init(pTHX_ char* pkg, char* name, SV* listsv, I32 minbits, I32 none);
-PERL_CALLCONV UV	Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr);
+PERL_CALLCONV UV	Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr, bool do_utf8);
 PERL_CALLCONV void	Perl_taint_env(pTHX);
 PERL_CALLCONV void	Perl_taint_proper(pTHX_ const char* f, const char* s);
 PERL_CALLCONV UV	Perl_to_utf8_lower(pTHX_ U8 *p);
@@ -947,17 +956,17 @@ PERL_CALLCONV void	Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, O
 PERL_CALLCONV OP *	Perl_my_attrs(pTHX_ OP *o, OP *attrs);
 PERL_CALLCONV void	Perl_boot_core_xsutils(pTHX);
 #if defined(USE_ITHREADS)
-PERL_CALLCONV PERL_CONTEXT*	Perl_cx_dup(pTHX_ PERL_CONTEXT* cx, I32 ix, I32 max);
-PERL_CALLCONV PERL_SI*	Perl_si_dup(pTHX_ PERL_SI* si);
-PERL_CALLCONV ANY*	Perl_ss_dup(pTHX_ PerlInterpreter* proto_perl);
+PERL_CALLCONV PERL_CONTEXT*	Perl_cx_dup(pTHX_ PERL_CONTEXT* cx, I32 ix, I32 max, clone_params* param);
+PERL_CALLCONV PERL_SI*	Perl_si_dup(pTHX_ PERL_SI* si, clone_params* param);
+PERL_CALLCONV ANY*	Perl_ss_dup(pTHX_ PerlInterpreter* proto_perl, clone_params* param);
 PERL_CALLCONV void*	Perl_any_dup(pTHX_ void* v, PerlInterpreter* proto_perl);
-PERL_CALLCONV HE*	Perl_he_dup(pTHX_ HE* e, bool shared);
-PERL_CALLCONV REGEXP*	Perl_re_dup(pTHX_ REGEXP* r);
+PERL_CALLCONV HE*	Perl_he_dup(pTHX_ HE* e, bool shared, clone_params* param);
+PERL_CALLCONV REGEXP*	Perl_re_dup(pTHX_ REGEXP* r, clone_params* param);
 PERL_CALLCONV PerlIO*	Perl_fp_dup(pTHX_ PerlIO* fp, char type);
 PERL_CALLCONV DIR*	Perl_dirp_dup(pTHX_ DIR* dp);
-PERL_CALLCONV GP*	Perl_gp_dup(pTHX_ GP* gp);
-PERL_CALLCONV MAGIC*	Perl_mg_dup(pTHX_ MAGIC* mg);
-PERL_CALLCONV SV*	Perl_sv_dup(pTHX_ SV* sstr);
+PERL_CALLCONV GP*	Perl_gp_dup(pTHX_ GP* gp, clone_params* param);
+PERL_CALLCONV MAGIC*	Perl_mg_dup(pTHX_ MAGIC* mg, clone_params* param);
+PERL_CALLCONV SV*	Perl_sv_dup(pTHX_ SV* sstr, clone_params* param);
 #if defined(HAVE_INTERP_INTERN)
 PERL_CALLCONV void	Perl_sys_intern_dup(pTHX_ struct interp_intern* src, struct interp_intern* dst);
 #endif
@@ -1024,8 +1033,6 @@ STATIC OP*	S_no_fh_allowed(pTHX_ OP *o);
 STATIC OP*	S_scalarboolean(pTHX_ OP *o);
 STATIC OP*	S_too_few_arguments(pTHX_ OP *o, char* name);
 STATIC OP*	S_too_many_arguments(pTHX_ OP *o, char* name);
-STATIC void	S_op_clear(pTHX_ OP* o);
-STATIC void	S_null(pTHX_ OP* o);
 STATIC PADOFFSET	S_pad_addlex(pTHX_ SV* name);
 STATIC PADOFFSET	S_pad_findlex(pTHX_ char* name, PADOFFSET newoff, U32 seq, CV* startcv, I32 cx_ix, I32 saweval, U32 flags);
 STATIC OP*	S_newDEFSVOP(pTHX);
@@ -1081,9 +1088,12 @@ STATIC struct perl_thread *	S_init_main_thread(pTHX);
 #endif
 
 #if defined(PERL_IN_PP_C) || defined(PERL_DECL_PROT)
-STATIC void	S_doencodes(pTHX_ SV* sv, char* s, I32 len);
 STATIC SV*	S_refto(pTHX_ SV* sv);
 STATIC U32	S_seed(pTHX);
+#endif
+
+#if defined(PERL_IN_PP_PACK_C) || defined(PERL_DECL_PROT)
+STATIC void	S_doencodes(pTHX_ SV* sv, char* s, I32 len);
 STATIC SV*	S_mul128(pTHX_ SV *sv, U8 m);
 STATIC SV*	S_is_an_int(pTHX_ char *s, STRLEN l);
 STATIC int	S_div128(pTHX_ SV *pnum, bool *done);
@@ -1138,8 +1148,10 @@ STATIC void	S_regoptail(pTHX_ struct RExC_state_t*, regnode *, regnode *);
 STATIC void	S_regtail(pTHX_ struct RExC_state_t*, regnode *, regnode *);
 STATIC char*	S_regwhite(pTHX_ char *, char *);
 STATIC char*	S_nextchar(pTHX_ struct RExC_state_t*);
+#  ifdef DEBUGGING
 STATIC regnode*	S_dumpuntil(pTHX_ regnode *start, regnode *node, regnode *last, SV* sv, I32 l);
 STATIC void	S_put_byte(pTHX_ SV* sv, int c);
+#  endif
 STATIC void	S_scan_commit(pTHX_ struct RExC_state_t*, struct scan_data_t *data);
 STATIC void	S_cl_anything(pTHX_ struct RExC_state_t*, struct regnode_charclass_class *cl);
 STATIC int	S_cl_is_anything(pTHX_ struct regnode_charclass_class *cl);
@@ -1172,7 +1184,10 @@ STATIC char*	S_find_byclass(pTHX_ regexp * prog, regnode *c, char *s, char *stre
 #endif
 
 #if defined(PERL_IN_RUN_C) || defined(PERL_DECL_PROT)
+#   ifdef DEBUGGING
+STATIC CV*	S_deb_curcv(pTHX_ I32 ix);
 STATIC void	S_debprof(pTHX_ OP *o);
+#   endif
 #endif
 
 #if defined(PERL_IN_SCOPE_C) || defined(PERL_DECL_PROT)
@@ -1224,11 +1239,10 @@ STATIC void	S_not_a_number(pTHX_ SV *sv);
 STATIC I32	S_visit(pTHX_ SVFUNC_t f);
 STATIC void	S_sv_add_backref(pTHX_ SV *tsv, SV *sv);
 STATIC void	S_sv_del_backref(pTHX_ SV *sv);
-#  if defined(DEBUGGING)
+#  ifdef DEBUGGING
 STATIC void	S_del_sv(pTHX_ SV *p);
 #  endif
 #  if !defined(NV_PRESERVES_UV)
-STATIC int	S_sv_2inuv_non_preserve(pTHX_ SV *sv, I32 numtype);
 STATIC int	S_sv_2iuv_non_preserve(pTHX_ SV *sv, I32 numtype);
 #  endif
 STATIC I32	S_expect_number(pTHX_ char** pattern);
@@ -1244,6 +1258,7 @@ STATIC void	S_force_next(pTHX_ I32 type);
 STATIC char*	S_force_version(pTHX_ char *start);
 STATIC char*	S_force_word(pTHX_ char *start, int token, int check_keyword, int allow_pack, int allow_tick);
 STATIC SV*	S_tokeq(pTHX_ SV *sv);
+STATIC int	S_pending_ident(pTHX);
 STATIC char*	S_scan_const(pTHX_ char *start);
 STATIC char*	S_scan_formline(pTHX_ char *s);
 STATIC char*	S_scan_heredoc(pTHX_ char *s);
@@ -1271,7 +1286,9 @@ STATIC I32	S_sublex_start(pTHX);
 STATIC char *	S_filter_gets(pTHX_ SV *sv, PerlIO *fp, STRLEN append);
 STATIC HV *	S_find_in_my_stash(pTHX_ char *pkgname, I32 len);
 STATIC SV*	S_new_constant(pTHX_ char *s, STRLEN len, const char *key, SV *sv, SV *pv, const char *type);
+#  if defined(DEBUGGING)
 STATIC void	S_tokereport(pTHX_ char *thing, char *s, I32 rv);
+#  endif
 STATIC int	S_ao(pTHX_ int toketype);
 STATIC void	S_depcom(pTHX);
 STATIC char*	S_incl_perldb(pTHX);
@@ -1291,8 +1308,12 @@ STATIC I32	S_cr_textfilter(pTHX_ int idx, SV *sv, int maxlen);
 STATIC SV*	S_isa_lookup(pTHX_ HV *stash, const char *name, int len, int level);
 #endif
 
-#if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
+#if defined(PERL_IN_LOCALE_C) || defined(PERL_DECL_PROT)
 STATIC char*	S_stdize_locale(pTHX_ char* locs);
+#endif
+
+#if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
+STATIC COP*	S_closest_cop(pTHX_ COP *cop, OP *o);
 STATIC SV*	S_mess_alloc(pTHX);
 #  if defined(LEAKTEST)
 STATIC void	S_xstat(pTHX_ int);
@@ -1302,3 +1323,16 @@ STATIC void	S_xstat(pTHX_ int);
 #if defined(PERL_OBJECT)
 };
 #endif
+
+START_EXTERN_C
+
+PERL_CALLCONV void	Perl_sv_setsv_flags(pTHX_ SV* dsv, SV* ssv, I32 flags);
+PERL_CALLCONV void	Perl_sv_catpvn_flags(pTHX_ SV* sv, const char* ptr, STRLEN len, I32 flags);
+PERL_CALLCONV void	Perl_sv_catsv_flags(pTHX_ SV* dsv, SV* ssv, I32 flags);
+PERL_CALLCONV STRLEN	Perl_sv_utf8_upgrade_flags(pTHX_ SV *sv, I32 flags);
+PERL_CALLCONV char*	Perl_sv_pvn_force_flags(pTHX_ SV* sv, STRLEN* lp, I32 flags);
+PERL_CALLCONV char*	Perl_sv_2pv_flags(pTHX_ SV* sv, STRLEN* lp, I32 flags);
+PERL_CALLCONV char*	Perl_my_atof2(pTHX_ const char *s, NV* value);
+
+END_EXTERN_C
+

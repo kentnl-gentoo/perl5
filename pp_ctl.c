@@ -86,29 +86,36 @@ PP(pp_regcomp)
     SV *tmpstr;
     STRLEN len;
     MAGIC *mg = Null(MAGIC*);
-
+    
     tmpstr = POPs;
+
+    /* prevent recompiling under /o and ithreads. */
+#if defined(USE_ITHREADS) || defined(USE_THREADS)
+    if (pm->op_pmflags & PMf_KEEP && PM_GETRE(pm))
+	 RETURN;
+#endif
+
     if (SvROK(tmpstr)) {
 	SV *sv = SvRV(tmpstr);
 	if(SvMAGICAL(sv))
-	    mg = mg_find(sv, 'r');
+	    mg = mg_find(sv, PERL_MAGIC_qr);
     }
     if (mg) {
 	regexp *re = (regexp *)mg->mg_obj;
-	ReREFCNT_dec(pm->op_pmregexp);
-	pm->op_pmregexp = ReREFCNT_inc(re);
+	ReREFCNT_dec(PM_GETRE(pm));
+	PM_SETRE(pm, ReREFCNT_inc(re));
     }
     else {
 	t = SvPV(tmpstr, len);
 
 	/* Check against the last compiled regexp. */
-	if (!pm->op_pmregexp || !pm->op_pmregexp->precomp ||
-	    pm->op_pmregexp->prelen != len ||
-	    memNE(pm->op_pmregexp->precomp, t, len))
+	if (!PM_GETRE(pm) || !PM_GETRE(pm)->precomp ||
+	    PM_GETRE(pm)->prelen != len ||
+	    memNE(PM_GETRE(pm)->precomp, t, len))
 	{
-	    if (pm->op_pmregexp) {
-		ReREFCNT_dec(pm->op_pmregexp);
-		pm->op_pmregexp = Null(REGEXP*);	/* crucial if regcomp aborts */
+	    if (PM_GETRE(pm)) {
+		ReREFCNT_dec(PM_GETRE(pm));
+		PM_SETRE(pm, Null(REGEXP*));	/* crucial if regcomp aborts */
 	    }
 	    if (PL_op->op_flags & OPf_SPECIAL)
 		PL_reginterp_cnt = I32_MAX; /* Mark as safe.  */
@@ -121,7 +128,7 @@ PP(pp_regcomp)
 		if (pm->op_pmdynflags & PMdf_UTF8)
 		    t = (char*)bytes_to_utf8((U8*)t, &len);
 	    }
-	    pm->op_pmregexp = CALLREGCOMP(aTHX_ t, t + len, pm);
+	    PM_SETRE(pm, CALLREGCOMP(aTHX_ t, t + len, pm));
 	    if (!DO_UTF8(tmpstr) && (pm->op_pmdynflags & PMdf_UTF8))
 		Safefree(t);
 	    PL_reginterp_cnt = 0;	/* XXXX Be extra paranoid - needed
@@ -138,10 +145,12 @@ PP(pp_regcomp)
     }
 #endif
 
-    if (!pm->op_pmregexp->prelen && PL_curpm)
+    if (!PM_GETRE(pm)->prelen && PL_curpm)
 	pm = PL_curpm;
-    else if (strEQ("\\s+", pm->op_pmregexp->precomp))
+    else if (strEQ("\\s+", PM_GETRE(pm)->precomp))
 	pm->op_pmflags |= PMf_WHITE;
+    else
+	pm->op_pmflags &= ~PMf_WHITE;
 
     /* XXX runtime compiled output needs to move to the pad */
     if (pm->op_pmflags & PMf_KEEP) {
@@ -227,9 +236,9 @@ PP(pp_substcont)
 	I32 i;
 	if (SvTYPE(sv) < SVt_PVMG)
 	    (void)SvUPGRADE(sv, SVt_PVMG);
-	if (!(mg = mg_find(sv, 'g'))) {
-	    sv_magic(sv, Nullsv, 'g', Nullch, 0);
-	    mg = mg_find(sv, 'g');
+	if (!(mg = mg_find(sv, PERL_MAGIC_regex_global))) {
+	    sv_magic(sv, Nullsv, PERL_MAGIC_regex_global, Nullch, 0);
+	    mg = mg_find(sv, PERL_MAGIC_regex_global);
 	}
 	i = m - orig;
 	if (DO_UTF8(sv))
@@ -312,18 +321,18 @@ PP(pp_formline)
     register char *s;
     register char *send;
     register I32 arg;
-    register SV *sv;
-    char *item;
-    I32 itemsize;
-    I32 fieldsize;
+    register SV *sv = Nullsv;
+    char *item = Nullch;
+    I32 itemsize  = 0;
+    I32 fieldsize = 0;
     I32 lines = 0;
     bool chopspace = (strchr(PL_chopset, ' ') != Nullch);
-    char *chophere;
-    char *linemark;
+    char *chophere = Nullch;
+    char *linemark = Nullch;
     NV value;
-    bool gotsome;
+    bool gotsome = FALSE;
     STRLEN len;
-    STRLEN fudge = SvCUR(tmpForm) * (IN_BYTE ? 1 : 3) + 1;
+    STRLEN fudge = SvCUR(tmpForm) * (IN_BYTES ? 1 : 3) + 1;
     bool item_is_utf = FALSE;
 
     if (!SvMAGICAL(tmpForm) || !SvCOMPILED(tmpForm)) {
@@ -373,7 +382,7 @@ PP(pp_formline)
 		PerlIO_printf(Perl_debug_log, "%-16s%ld\n", name, (long) arg);
 	    else
 		PerlIO_printf(Perl_debug_log, "%-16s\n", name);
-	} )
+	} );
 	switch (*fpc++) {
 	case FF_LINEMARK:
 	    linemark = t;
@@ -887,7 +896,7 @@ PP(pp_sort)
     register I32 max;
     HV *stash;
     GV *gv;
-    CV *cv;
+    CV *cv = 0;
     I32 gimme = GIMME;
     OP* nextop = PL_op->op_next;
     I32 overloading = 0;
@@ -1031,7 +1040,7 @@ PP(pp_sort)
 			? ( (PL_op->op_private & OPpSORT_INTEGER)
 			    ? ( overloading ? amagic_i_ncmp : sv_i_ncmp)
 			    : ( overloading ? amagic_ncmp : sv_ncmp))
-			: ( (PL_op->op_private & OPpLOCALE)
+			: ( IN_LOCALE_RUNTIME
 			    ? ( overloading
 				? amagic_cmp_locale
 				: sv_cmp_locale_static)
@@ -1079,7 +1088,7 @@ PP(pp_flip)
  	if (PL_op->op_private & OPpFLIP_LINENUM) {
  	    struct io *gp_io;
  	    flip = PL_last_in_gv
- 		&& (gp_io = GvIOp(PL_last_in_gv))
+ 		&& (gp_io = GvIO(PL_last_in_gv))
  		&& SvIV(sv) == (IV)IoLINES(gp_io);
  	} else {
  	    flip = SvTRUE(sv);
@@ -1160,7 +1169,8 @@ PP(pp_flop)
 	SV *targ = PAD_SV(cUNOP->op_first->op_targ);
 	sv_inc(targ);
 	if ((PL_op->op_private & OPpFLIP_LINENUM)
-	  ? (PL_last_in_gv && SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv)))
+	  ? (GvIO(PL_last_in_gv)
+	     && SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv)))
 	  : SvTRUE(sv) ) {
 	    sv_setiv(PAD_SV(((UNOP*)cUNOP->op_first)->op_first->op_targ), 0);
 	    sv_catpv(targ, "E0");
@@ -1433,10 +1443,6 @@ Perl_die_where(pTHX_ char *message, STRLEN msglen)
 	    }
 	    else {
 		sv_setpvn(ERRSV, message, msglen);
-		if (PL_hints & HINT_UTF8)
-		    SvUTF8_on(ERRSV);
-		else
-		    SvUTF8_off(ERRSV);
 	    }
 	}
 	else
@@ -1545,7 +1551,7 @@ PP(pp_caller)
 
     if (MAXARG)
 	count = POPi;
-    EXTEND(SP, 10);
+
     for (;;) {
 	/* we may be in a higher stacklevel, so dig down deeper */
 	while (cxix < 0 && top_si->si_type != PERLSI_MAIN) {
@@ -1554,8 +1560,10 @@ PP(pp_caller)
 	    cxix = dopoptosub_at(ccstack, top_si->si_cxix);
 	}
 	if (cxix < 0) {
-	    if (GIMME != G_ARRAY)
+	    if (GIMME != G_ARRAY) {
+		EXTEND(SP, 1);
 		RETPUSHUNDEF;
+            }
 	    RETURN;
 	}
 	if (PL_DBsub && cxix >= 0 &&
@@ -1577,6 +1585,7 @@ PP(pp_caller)
 
     stashname = CopSTASHPV(cx->blk_oldcop);
     if (GIMME != G_ARRAY) {
+        EXTEND(SP, 1);
 	if (!stashname)
 	    PUSHs(&PL_sv_undef);
 	else {
@@ -1586,6 +1595,8 @@ PP(pp_caller)
 	}
 	RETURN;
     }
+
+    EXTEND(SP, 10);
 
     if (!stashname)
 	PUSHs(&PL_sv_undef);
@@ -2835,6 +2846,9 @@ S_doeval(pTHX_ int gimme, OP** startop)
     PL_compcv = (CV*)NEWSV(1104,0);
     sv_upgrade((SV *)PL_compcv, SVt_PVCV);
     CvEVAL_on(PL_compcv);
+    assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_EVAL);
+    cxstack[cxstack_ix].blk_eval.cv = PL_compcv;
+
 #ifdef USE_THREADS
     CvOWNER(PL_compcv) = 0;
     New(666, CvMUTEXP(PL_compcv), 1, perl_mutex);
@@ -3019,7 +3033,7 @@ PP(pp_require)
     SV *sv;
     char *name;
     STRLEN len;
-    char *tryname;
+    char *tryname = Nullch;
     SV *namesv = Nullsv;
     SV** svp;
     I32 gimme = GIMME_V;
@@ -3032,7 +3046,7 @@ PP(pp_require)
 
     sv = POPs;
     if (SvNIOKp(sv)) {
-	if (SvPOK(sv) && SvNOK(sv)) {		/* require v5.6.1 */
+	if (SvPOK(sv) && SvNOK(sv) && SvNV(sv)) {		/* require v5.6.1 */
 	    UV rev = 0, ver = 0, sver = 0;
 	    STRLEN len;
 	    U8 *s = (U8*)SvPVX(sv);
@@ -3592,14 +3606,14 @@ S_doparseform(pTHX_ SV *sv)
     STRLEN len;
     register char *s = SvPV_force(sv, len);
     register char *send = s + len;
-    register char *base;
+    register char *base = Nullch;
     register I32 skipspaces = 0;
-    bool noblank;
-    bool repeat;
+    bool noblank   = FALSE;
+    bool repeat    = FALSE;
     bool postspace = FALSE;
     U16 *fops;
     register U16 *fpc;
-    U16 *linepc;
+    U16 *linepc = 0;
     register I32 arg;
     bool ischop;
 
@@ -3778,7 +3792,7 @@ S_doparseform(pTHX_ SV *sv)
     }
     Copy(fops, s, arg, U16);
     Safefree(fops);
-    sv_magic(sv, Nullsv, 'f', Nullch, 0);
+    sv_magic(sv, Nullsv, PERL_MAGIC_fm, Nullch, 0);
     SvCOMPILED_on(sv);
 }
 

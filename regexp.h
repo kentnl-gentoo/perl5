@@ -30,12 +30,14 @@ typedef struct regexp {
         struct reg_data *data;	/* Additional data. */
 	char *subbeg;		/* saved or original string 
 				   so \digit works forever. */
+        U32 *offsets;           /* offset annotations 20001228 MJD */
 	I32 sublen;		/* Length of string pointed by subbeg */
 	I32 refcnt;
 	I32 minlen;		/* mininum possible length of $& */
 	I32 prelen;		/* length of precomp */
 	U32 nparens;		/* number of parentheses */
 	U32 lastparen;		/* last paren matched */
+	U32 lastcloseparen;	/* last paren matched */
 	U32 reganch;		/* Internal use only +
 				   Tainted information used by regexec? */
 	regnode program[1];	/* Unwarranted chumminess with compiler. */

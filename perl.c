@@ -58,6 +58,29 @@ static I32 read_e_script(pTHXo_ int idx, SV *buf_sv, int maxlen);
     } STMT_END
 #else
 #  if defined(USE_ITHREADS)
+
+/* this is called in parent before the fork() */
+void
+Perl_atfork_lock(void)
+{
+    /* locks must be held in locking order (if any) */
+#ifdef MYMALLOC
+    MUTEX_LOCK(&PL_malloc_mutex);
+#endif
+    OP_REFCNT_LOCK;
+}
+
+/* this is called in both parent and child after the fork() */
+void
+Perl_atfork_unlock(void)
+{
+    /* locks must be released in same order as in S_atfork_lock() */
+#ifdef MYMALLOC
+    MUTEX_UNLOCK(&PL_malloc_mutex);
+#endif
+    OP_REFCNT_UNLOCK;
+}
+
 #  define INIT_TLS_AND_INTERP \
     STMT_START {				\
 	if (!PL_curinterp) {			\
@@ -149,7 +172,6 @@ void
 perl_construct(pTHXx)
 {
 #ifdef USE_THREADS
-    int i;
 #ifndef FAKE_THREADS
     struct perl_thread *thr = NULL;
 #endif /* FAKE_THREADS */
@@ -227,8 +249,8 @@ perl_construct(pTHXx)
 	 * space.  The other alternative would be to provide STDAUX and STDPRN
 	 * filehandles.
 	 */
-	(void)fclose(stdaux);
-	(void)fclose(stdprn);
+	(void)PerlIO_close(PerlIO_importFILE(stdaux, 0));
+	(void)PerlIO_close(PerlIO_importFILE(stdprn, 0));
 #endif
     }
 
@@ -284,7 +306,13 @@ perl_construct(pTHXx)
     PL_fdpid = newAV();			/* for remembering popen pids by fd */
     PL_modglobal = newHV();		/* pointers to per-interpreter module globals */
     PL_errors = newSVpvn("",0);
-
+#ifdef USE_ITHREADS
+        PL_regex_padav = newAV();
+#endif
+#ifdef USE_REENTRANT_API
+    New(31337, PL_reentrant_buffer,1, REBUF);
+    New(31337, PL_reentrant_buffer->tmbuff,1, struct tm);
+#endif
     ENTER;
 }
 
@@ -585,7 +613,7 @@ perl_destruct(pTHXx)
 #ifdef USE_LOCALE_NUMERIC
     Safefree(PL_numeric_name);
     PL_numeric_name = Nullch;
-    SvREFCNT_dec(PL_numeric_radix);
+    SvREFCNT_dec(PL_numeric_radix_sv);
 #endif
 
     /* clear utf8 character classes */
@@ -777,6 +805,11 @@ perl_destruct(pTHXx)
     PL_thrsv = Nullsv;
 #endif /* USE_THREADS */
 
+#ifdef USE_REENTRANT_API
+    Safefree(PL_reentrant_buffer->tmbuff);
+    Safefree(PL_reentrant_buffer);
+#endif
+
     sv_free_arenas();
 
     /* As the absolutely last thing, free the non-arena SV for mess() */
@@ -788,7 +821,8 @@ perl_destruct(pTHXx)
 	    MAGIC* moremagic;
 	    for (mg = SvMAGIC(PL_mess_sv); mg; mg = moremagic) {
 		moremagic = mg->mg_moremagic;
-		if (mg->mg_ptr && mg->mg_type != 'g' && mg->mg_len >= 0)
+		if (mg->mg_ptr && mg->mg_type != PERL_MAGIC_regex_global
+						&& mg->mg_len >= 0)
 		    Safefree(mg->mg_ptr);
 		Safefree(mg);
 	    }
@@ -816,14 +850,24 @@ perl_free(pTHXx)
 #if defined(PERL_OBJECT)
     PerlMem_free(this);
 #else
-#  if defined(WIN32)
+#  if defined(WIN32) || defined(NETWARE)
 #  if defined(PERL_IMPLICIT_SYS)
-    void *host = w32_internal_host;
-    if (PerlProc_lasthost()) {
+    #ifdef NETWARE
+		void *host = nw_internal_host;
+	#else
+		void *host = w32_internal_host;
+	#endif
+	#ifndef NETWARE
+	if (PerlProc_lasthost()) {
 	PerlIO_cleanup();
-    }
+	}
+	#endif
     PerlMem_free(aTHXx);
-    win32_delete_internal_host(host);
+	#ifdef NETWARE
+		nw5_delete_internal_host(host);
+	#else
+		win32_delete_internal_host(host);
+	#endif
 #else
     PerlIO_cleanup();
     PerlMem_free(aTHXx);
@@ -964,7 +1008,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     AV* comppadlist;
     register SV *sv;
     register char *s;
-    char *cddir = Nullch;
+    char *popts, *cddir = Nullch;
 
     sv_setpvn(PL_linestr,"",0);
     sv = newSVpvn("",0);		/* first used for -I flags */
@@ -1142,7 +1186,12 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #endif
 		sv_catpv(PL_Sv, "; \
 $\"=\"\\n    \"; \
-@env = map { \"$_=\\\"$ENV{$_}\\\"\" } sort grep {/^PERL/} keys %ENV; \
+@env = map { \"$_=\\\"$ENV{$_}\\\"\" } sort grep {/^PERL/} keys %ENV; ");
+#ifdef __CYGWIN__
+		sv_catpv(PL_Sv,"\
+push @env, \"CYGWIN=\\\"$ENV{CYGWIN}\\\"\";");
+#endif
+		sv_catpv(PL_Sv, "\
 print \"  \\%ENV:\\n    @env\\n\" if @env; \
 print \"  \\@INC:\\n    @INC\\n\";");
 	    }
@@ -1189,8 +1238,9 @@ print \"  \\@INC:\\n    @INC\\n\";");
 #ifndef SECURE_INTERNAL_GETENV
         !PL_tainting &&
 #endif
-	(s = PerlEnv_getenv("PERL5OPT")))
+	(popts = PerlEnv_getenv("PERL5OPT")))
     {
+    	s = savepv(popts);
 	while (isSPACE(*s))
 	    s++;
 	if (*s == '-' && *(s+1) == 'T')
@@ -1295,6 +1345,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
     av_store(comppadlist, 1, (SV*)PL_comppad);
     CvPADLIST(PL_compcv) = comppadlist;
 
+    boot_core_PerlIO();
     boot_core_UNIVERSAL();
 #ifndef PERL_MICRO
     boot_core_xsutils();
@@ -1679,7 +1730,7 @@ Perl_call_sv(pTHX_ SV *sv, I32 flags)
     LOGOP myop;		/* fake syntax tree node */
     UNOP method_op;
     I32 oldmark;
-    I32 retval;
+    volatile I32 retval = 0;
     I32 oldscope;
     bool oldcatch = CATCH_GET;
     int ret;
@@ -1866,8 +1917,8 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 {
     dSP;
     UNOP myop;		/* fake syntax tree node */
-    I32 oldmark = SP - PL_stack_base;
-    I32 retval;
+    volatile I32 oldmark = SP - PL_stack_base;
+    volatile I32 retval = 0;
     I32 oldscope;
     int ret;
     OP* oldop = PL_op;
@@ -2013,14 +2064,14 @@ Perl_magicname(pTHX_ char *sym, char *name, I32 namlen)
     register GV *gv;
 
     if ((gv = gv_fetchpv(sym,TRUE, SVt_PV)))
-	sv_magic(GvSV(gv), (SV*)gv, 0, name, namlen);
+	sv_magic(GvSV(gv), (SV*)gv, PERL_MAGIC_sv, name, namlen);
 }
 
 STATIC void
 S_usage(pTHX_ char *name)		/* XXX move this out into a module ? */
 {
     /* This message really ought to be max 23 lines.
-     * Removed -h because the user already knows that opton. Others? */
+     * Removed -h because the user already knows that option. Others? */
 
     static char *usage_msg[] = {
 "-0[octal]       specify record separator (\\0, if no argument)",
@@ -2287,9 +2338,22 @@ Perl_moreswitches(pTHX_ char *s)
 	s++;
 	return s;
     case 'v':
+#if !defined(DGUX)
 	PerlIO_printf(PerlIO_stdout(),
 		      Perl_form(aTHX_ "\nThis is perl, v%"VDf" built for %s",
 				PL_patchlevel, ARCHNAME));
+#else /* DGUX */
+/* Adjust verbose output as in the perl that ships with the DG/UX OS from EMC */
+	PerlIO_printf(PerlIO_stdout(),
+			Perl_form(aTHX_ "\nThis is perl, version %vd\n", PL_patchlevel));
+	PerlIO_printf(PerlIO_stdout(),
+			Perl_form(aTHX_ "        built under %s at %s %s\n",
+					OSNAME, __DATE__, __TIME__));
+	PerlIO_printf(PerlIO_stdout(),
+			Perl_form(aTHX_ "        OS Specific Release: %s\n",
+					OSVERS));
+#endif /* !DGUX */
+
 #if defined(LOCAL_PATCH_COUNT)
 	if (LOCAL_PATCH_COUNT > 0)
 	    PerlIO_printf(PerlIO_stdout(),
@@ -2329,7 +2393,7 @@ Perl_moreswitches(pTHX_ char *s)
 #endif
 #ifdef MPE
 	PerlIO_printf(PerlIO_stdout(),
-		      "MPE/iX port Copyright by Mark Klein and Mark Bixby, 1996-1999\n");
+		      "MPE/iX port Copyright by Mark Klein and Mark Bixby, 1996-2001\n");
 #endif
 #ifdef OEMVS
 	PerlIO_printf(PerlIO_stdout(),
@@ -2615,6 +2679,9 @@ S_open_script(pTHX_ char *scriptname, bool dosearch, SV *sv, int *fdscript)
 	sv_catpvn(sv, "-I", 2);
 	sv_catpv(sv,PRIVLIB_EXP);
 
+	DEBUG_P(PerlIO_printf(Perl_debug_log,
+			      "PL_preprocess: scriptname=\"%s\", cpp=\"%s\", sv=\"%s\", CPPMINUS=\"%s\"\n",
+			      scriptname, SvPVX (cpp), SvPVX (sv), CPPMINUS));
 #if defined(MSDOS) || defined(WIN32)
 	Perl_sv_setpvf(aTHX_ cmd, "\
 sed %s -e \"/^[^#]/b\" \
@@ -2718,8 +2785,14 @@ sed %s -e \"/^[^#]/b\" \
 	}
 #endif
 #endif
+#ifdef IAMSUID
+	errno = EPERM;
+	Perl_croak(aTHX_ "Can't open perl script: %s\n",
+		   Strerror(errno));
+#else
 	Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
 		   CopFILE(PL_curcop), Strerror(errno));
+#endif
     }
 }
 
@@ -3102,7 +3175,8 @@ S_find_beginning(pTHX)
 	if ((s = sv_gets(PL_linestr, PL_rsfp, 0)) == Nullch)
 	    Perl_croak(aTHX_ "No Perl script found in input\n");
 #endif
-	if (*s == '#' && s[1] == '!' && (s = instr(s,"perl"))) {
+	s2 = s;
+	if (*s == '#' && s[1] == '!' && ((s = instr(s,"perl")) || (s = instr(s2,"PERL")))) {
 	    PerlIO_ungetc(PL_rsfp, '\n');		/* to keep line count right */
 	    PL_doextract = FALSE;
 	    while (*s && !(isSPACE (*s) || *s == '#')) s++;
@@ -3115,6 +3189,9 @@ S_find_beginning(pTHX)
 		    while ((s = moreswitches(s)))
 			;
 	    }
+#ifdef MACOS_TRADITIONAL
+	    break;
+#endif
 	}
     }
 }
@@ -3294,8 +3371,8 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
     char *s;
     SV *sv;
     GV* tmpgv;
-    char **dup_env_base = 0;
 #ifdef NEED_ENVIRON_DUP_FOR_MODIFY
+    char **dup_env_base = 0;
     int dup_env_count = 0;
 #endif
 
@@ -3355,7 +3432,7 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 	HV *hv;
 	GvMULTI_on(PL_envgv);
 	hv = GvHVn(PL_envgv);
-	hv_magic(hv, Nullgv, 'E');
+	hv_magic(hv, Nullgv, PERL_MAGIC_env);
 #ifdef USE_ENVIRON_ARRAY
 	/* Note that if the supplied env parameter is actually a copy
 	   of the global environ then it may now point to free'd memory
@@ -3406,9 +3483,6 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 	}
 #endif /* NEED_ENVIRON_DUP_FOR_MODIFY */
 #endif /* USE_ENVIRON_ARRAY */
-#ifdef DYNAMIC_ENV_FETCH
-	HvNAME(hv) = savepv(ENV_HV_NAME);
-#endif
     }
     TAINT_NOT;
     if ((tmpgv = gv_fetchpv("$",TRUE, SVt_PV)))

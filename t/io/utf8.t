@@ -3,11 +3,13 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
-    unless (exists $open::layers{'perlio'}) {
+    unless (find PerlIO::Layer 'perlio') {
 	print "1..0 # Skip: not perlio\n";
 	exit 0;
     }
 }
+
+no utf8; # so that the naked 8-bit chars won't gripe under use utf8
 
 $| = 1;
 my $total_tests = 25;
@@ -175,5 +177,6 @@ $x = <F>; chomp $x;
 eval { sprintf "%vd\n", $x; }
 }
 
+close F;
 unlink('a');
 

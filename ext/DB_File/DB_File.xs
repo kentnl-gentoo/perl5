@@ -3,12 +3,12 @@
  DB_File.xs -- Perl 5 interface to Berkeley DB 
 
  written by Paul Marquess <Paul.Marquess@btinternet.com>
- last modified 17 December 2000
- version 1.75
+ last modified 26th April 2001
+ version 1.77
 
  All comments/suggestions/problems are welcome
 
-     Copyright (c) 1995-2000 Paul Marquess. All rights reserved.
+     Copyright (c) 1995-2001 Paul Marquess. All rights reserved.
      This program is free software; you can redistribute it and/or
      modify it under the same terms as Perl itself.
 
@@ -90,9 +90,12 @@
 		Added suppport to allow DB_File to be built with 
 		Berkeley DB 3.2 -- btree_compare, btree_prefix and hash_cb
 		needed to be changed.
+        1.76 -  No change to DB_File.xs
+        1.77 -  Tidied up a few types used in calling newSVpvn.
 
 */
 
+#define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"  
 #include "perl.h"
 #include "XSUB.h"
@@ -116,11 +119,35 @@
 #    define DEFSV		GvSV(defgv)
 #endif
 
+/* Mention DB_VERSION_MAJOR_CFG, DB_VERSION_MINOR_CFG, and
+   DB_VERSION_PATCH_CFG here so that Configure pulls them all in. */
+
 /* Being the Berkeley DB we prefer the <sys/cdefs.h> (which will be
  * shortly #included by the <db.h>) __attribute__ to the possibly
  * already defined __attribute__, for example by GNUC or by Perl. */
 
+#if DB_VERSION_MAJOR_CFG < 2
+
 #undef __attribute__
+
+/* Since we dropped the gccish definition of __attribute__ we will want
+ * to redefine dNOOP, however (so that dTHX continues to work).  Yes,
+ * all this means that we can't do attribute checking on the DB_File,
+ * boo, hiss. */
+#undef  dNOOP
+#define dNOOP extern int Perl___notused
+/* Ditto for dXSARGS. */
+#undef  dXSARGS
+#define dXSARGS				\
+	dSP; dMARK;			\
+	I32 ax = mark - PL_stack_base + 1;	\
+	I32 items = sp - mark
+
+#endif
+
+/* avoid -Wall; DB_File xsubs never make use of `ix' setup for ALIASes */
+#undef dXSI32
+#define dXSI32 dNOOP
 
 /* If Perl has been compiled with Threads support,the symbol op will
    be defined here. This clashes with a field name in db.h, so get rid of it.
@@ -517,12 +544,12 @@ const DBT * key2 ;
     dTHX;
 #endif    
     dSP ;
-    void * data1, * data2 ;
+    char * data1, * data2 ;
     int retval ;
     int count ;
     
-    data1 = key1->data ;
-    data2 = key2->data ;
+    data1 = (char *) key1->data ;
+    data2 = (char *) key2->data ;
 
 #ifndef newSVpvn
     /* As newSVpv will assume that the data pointer is a null terminated C 
@@ -588,12 +615,12 @@ const DBT * key2 ;
     dTHX;
 #endif    
     dSP ;
-    void * data1, * data2 ;
+    char * data1, * data2 ;
     int retval ;
     int count ;
     
-    data1 = key1->data ;
-    data2 = key2->data ;
+    data1 = (char *) key1->data ;
+    data2 = (char *) key2->data ;
 
 #ifndef newSVpvn
     /* As newSVpv will assume that the data pointer is a null terminated C 
@@ -1687,11 +1714,13 @@ db_EXISTS(db, key)
 	OUTPUT:
 	  RETVAL
 
-int
+void
 db_FETCH(db, key, flags=0)
 	DB_File		db
 	DBTKEY		key
 	u_int		flags
+	PREINIT:
+	int RETVAL;
 	CODE:
 	{
             DBT		value ;
@@ -1714,9 +1743,11 @@ db_STORE(db, key, value, flags=0)
 	  CurrentDB = db ;
 
 
-int
+void
 db_FIRSTKEY(db)
 	DB_File		db
+	PREINIT:
+	int RETVAL;
 	CODE:
 	{
 	    DBTKEY	key ;
@@ -1730,10 +1761,12 @@ db_FIRSTKEY(db)
 	    OutputKey(ST(0), key) ;
 	}
 
-int
+void
 db_NEXTKEY(db, key)
 	DB_File		db
 	DBTKEY		key
+	PREINIT:
+	int RETVAL;
 	CODE:
 	{
 	    DBT		value ;
@@ -1759,7 +1792,6 @@ unshift(db, ...)
 	    DBT		value ;
 	    int		i ;
 	    int		One ;
-	    DB *	Db = db->dbp ;
 	    STRLEN	n_a;
 
 	    DBT_clear(key) ; 
@@ -1782,7 +1814,7 @@ unshift(db, ...)
 #ifdef DB_VERSION_MAJOR
            	RETVAL = (db->cursor->c_put)(db->cursor, &key, &value, DB_BEFORE) ;
 #else
-	        RETVAL = (Db->put)(Db, &key, &value, R_IBEFORE) ;
+	        RETVAL = (db->dbp->put)(db->dbp, &key, &value, R_IBEFORE) ;
 #endif
 	        if (RETVAL != 0)
 	            break;
@@ -1791,10 +1823,12 @@ unshift(db, ...)
 	OUTPUT:
 	    RETVAL
 
-I32
+void
 pop(db)
 	DB_File		db
 	ALIAS:		POP = 1
+	PREINIT:
+	I32 RETVAL;
 	CODE:
 	{
 	    DBTKEY	key ;
@@ -1818,10 +1852,12 @@ pop(db)
 	    }
 	}
 
-I32
+void
 shift(db)
 	DB_File		db
 	ALIAS:		SHIFT = 1
+	PREINIT:
+	I32 RETVAL;
 	CODE:
 	{
 	    DBT		value ;
@@ -1962,16 +1998,18 @@ db_put(db, key, value, flags=0)
 int
 db_fd(db)
 	DB_File		db
-	int		status = 0 ;
 	CODE:
 	  CurrentDB = db ;
 #ifdef DB_VERSION_MAJOR
 	  RETVAL = -1 ;
-	  status = (db->in_memory
-		? -1 
-		: ((db->dbp)->fd)(db->dbp, &RETVAL) ) ;
-	  if (status != 0)
-	    RETVAL = -1 ;
+	  {
+	    int	status = 0 ;
+	    status = (db->in_memory
+		      ? -1 
+		      : ((db->dbp)->fd)(db->dbp, &RETVAL) ) ;
+	    if (status != 0)
+	      RETVAL = -1 ;
+	  }
 #else
 	  RETVAL = (db->in_memory
 		? -1 

@@ -1,10 +1,10 @@
 # DB_File.pm -- Perl 5 interface to Berkeley DB 
 #
 # written by Paul Marquess (Paul.Marquess@btinternet.com)
-# last modified 17th December 2000
-# version 1.75
+# last modified 26th April 2001
+# version 1.77
 #
-#     Copyright (c) 1995-2000 Paul Marquess. All rights reserved.
+#     Copyright (c) 1995-2001 Paul Marquess. All rights reserved.
 #     This program is free software; you can redistribute it and/or
 #     modify it under the same terms as Perl itself.
 
@@ -151,7 +151,7 @@ use vars qw($VERSION @ISA @EXPORT $AUTOLOAD $DB_BTREE $DB_HASH $DB_RECNO
 use Carp;
 
 
-$VERSION = "1.75" ;
+$VERSION = "1.77" ;
 
 #typedef enum { DB_BTREE, DB_HASH, DB_RECNO } DBTYPE;
 $DB_BTREE = new DB_File::BTREEINFO ;
@@ -307,6 +307,171 @@ sub STORESIZE
     }
 }
  
+
+sub SPLICE
+{
+    my $self = shift;
+    my $offset = shift;
+    if (not defined $offset) {
+	carp 'Use of uninitialized value in splice';
+	$offset = 0;
+    }
+
+    my $length = @_ ? shift : 0;
+    # Carping about definedness comes _after_ the OFFSET sanity check.
+    # This is so we get the same error messages as Perl's splice().
+    # 
+
+    my @list = @_;
+
+    my $size = $self->FETCHSIZE();
+    
+    # 'If OFFSET is negative then it start that far from the end of
+    # the array.'
+    # 
+    if ($offset < 0) {
+	my $new_offset = $size + $offset;
+	if ($new_offset < 0) {
+	    die "Modification of non-creatable array value attempted, "
+	      . "subscript $offset";
+	}
+	$offset = $new_offset;
+    }
+
+    if ($offset > $size) {
+ 	$offset = $size;
+    }
+
+    if (not defined $length) {
+	carp 'Use of uninitialized value in splice';
+	$length = 0;
+    }
+
+    # 'If LENGTH is omitted, removes everything from OFFSET onward.'
+    if (not defined $length) {
+	$length = $size - $offset;
+    }
+
+    # 'If LENGTH is negative, leave that many elements off the end of
+    # the array.'
+    # 
+    if ($length < 0) {
+	$length = $size - $offset + $length;
+
+	if ($length < 0) {
+	    # The user must have specified a length bigger than the
+	    # length of the array passed in.  But perl's splice()
+	    # doesn't catch this, it just behaves as for length=0.
+	    # 
+	    $length = 0;
+	}
+    }
+
+    if ($length > $size - $offset) {
+	$length = $size - $offset;
+    }
+
+    # $num_elems holds the current number of elements in the database.
+    my $num_elems = $size;
+
+    # 'Removes the elements designated by OFFSET and LENGTH from an
+    # array,'...
+    # 
+    my @removed = ();
+    foreach (0 .. $length - 1) {
+	my $old;
+	my $status = $self->get($offset, $old);
+	if ($status != 0) {
+	    my $msg = "error from Berkeley DB on get($offset, \$old)";
+	    if ($status == 1) {
+		$msg .= ' (no such element?)';
+	    }
+	    else {
+		$msg .= ": error status $status";
+		if (defined $! and $! ne '') {
+		    $msg .= ", message $!";
+		}
+	    }
+	    die $msg;
+	}
+	push @removed, $old;
+
+	$status = $self->del($offset);
+	if ($status != 0) {
+	    my $msg = "error from Berkeley DB on del($offset)";
+	    if ($status == 1) {
+		$msg .= ' (no such element?)';
+	    }
+	    else {
+		$msg .= ": error status $status";
+		if (defined $! and $! ne '') {
+		    $msg .= ", message $!";
+		}
+	    }
+	    die $msg;
+	}
+
+	-- $num_elems;
+    }
+
+    # ...'and replaces them with the elements of LIST, if any.'
+    my $pos = $offset;
+    while (defined (my $elem = shift @list)) {
+	my $old_pos = $pos;
+	my $status;
+	if ($pos >= $num_elems) {
+	    $status = $self->put($pos, $elem);
+	}
+	else {
+	    $status = $self->put($pos, $elem, $self->R_IBEFORE);
+	}
+
+	if ($status != 0) {
+	    my $msg = "error from Berkeley DB on put($pos, $elem, ...)";
+	    if ($status == 1) {
+		$msg .= ' (no such element?)';
+	    }
+	    else {
+		$msg .= ", error status $status";
+		if (defined $! and $! ne '') {
+		    $msg .= ", message $!";
+		}
+	    }
+	    die $msg;
+	}
+
+	die "pos unexpectedly changed from $old_pos to $pos with R_IBEFORE"
+	  if $old_pos != $pos;
+
+	++ $pos;
+	++ $num_elems;
+    }
+
+    if (wantarray) {
+	# 'In list context, returns the elements removed from the
+	# array.'
+	# 
+	return @removed;
+    }
+    elsif (defined wantarray and not wantarray) {
+	# 'In scalar context, returns the last element removed, or
+	# undef if no elements are removed.'
+	# 
+	if (@removed) {
+	    my $last = pop @removed;
+	    return "$last";
+	}
+	else {
+	    return undef;
+	}
+    }
+    elsif (not defined wantarray) {
+	# Void context
+    }
+    else { die }
+}
+sub ::DB_File::splice { &SPLICE }
+
 sub find_dup
 {
     croak "Usage: \$db->find_dup(key,value)\n"
@@ -414,6 +579,7 @@ DB_File - Perl5 access to Berkeley DB version 1.x
  $X->push(list);
  $a = $X->shift;
  $X->unshift(list);
+ @r = $X->splice(offset, length, elements);
 
  # DBM Filters
  $old_filter = $db->filter_store_key  ( sub { ... } ) ;
@@ -475,7 +641,7 @@ number.
 =head2 Using DB_File with Berkeley DB version 2 or 3
 
 Although B<DB_File> is intended to be used with Berkeley DB version 1,
-it can also be used with version 2.or 3 In this case the interface is
+it can also be used with version 2 or 3. In this case the interface is
 limited to the functionality provided by Berkeley DB 1.x. Anywhere the
 version 2 or 3 interface differs, B<DB_File> arranges for it to work
 like version 1. This feature allows B<DB_File> scripts that were built
@@ -486,8 +652,8 @@ If you want to make use of the new features available in Berkeley DB
 
 B<Note:> The database file format has changed in both Berkeley DB
 version 2 and 3. If you cannot recreate your databases, you must dump
-any existing databases with the C<db_dump185> utility that comes with
-Berkeley DB.
+any existing databases with either the C<db_dump> or the C<db_dump185>
+utility that comes with Berkeley DB.
 Once you have rebuilt DB_File to use Berkeley DB version 2 or 3, your
 databases can be recreated using C<db_load>. Refer to the Berkeley DB
 documentation for further details.
@@ -675,7 +841,7 @@ contents of the database.
     use vars qw( %h $k $v ) ;
 
     unlink "fruit" ;
-    tie %h, "DB_File", "fruit", O_RDWR|O_CREAT, 0640, $DB_HASH 
+    tie %h, "DB_File", "fruit", O_RDWR|O_CREAT, 0666, $DB_HASH 
         or die "Cannot open file 'fruit': $!\n";
 
     # Add a few key/value pairs to the file
@@ -736,7 +902,7 @@ insensitive compare function will be used.
     $DB_BTREE->{'compare'} = \&Compare ;
 
     unlink "tree" ;
-    tie %h, "DB_File", "tree", O_RDWR|O_CREAT, 0640, $DB_BTREE 
+    tie %h, "DB_File", "tree", O_RDWR|O_CREAT, 0666, $DB_BTREE 
         or die "Cannot open file 'tree': $!\n" ;
 
     # Add a key/value pair to the file
@@ -801,7 +967,7 @@ code:
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
 
-    tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
+    tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
     # Add some key/value pairs to the file
@@ -856,7 +1022,7 @@ Here is the script above rewritten using the C<seq> API method.
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
 
-    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
+    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
     # Add some key/value pairs to the file
@@ -927,7 +1093,7 @@ this:
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
 
-    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
+    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
     my $cnt  = $x->get_dup("Wall") ;
@@ -977,7 +1143,7 @@ Assuming the database from the previous example:
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
 
-    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
+    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
     $found = ( $x->find_dup("Wall", "Larry") == 0 ? "" : "not") ; 
@@ -1016,7 +1182,7 @@ Again assuming the existence of the C<tree> database
     # Enable duplicate records
     $DB_BTREE->{'flags'} = R_DUP ;
 
-    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE 
+    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE 
 	or die "Cannot open $filename: $!\n";
 
     $x->del_dup("Wall", "Larry") ;
@@ -1069,7 +1235,7 @@ and print the first matching key/value pair given a partial key.
     $filename = "tree" ;
     unlink $filename ;
 
-    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_BTREE
+    $x = tie %h, "DB_File", $filename, O_RDWR|O_CREAT, 0666, $DB_BTREE
         or die "Cannot open $filename: $!\n";
 
     # Add some key/value pairs to the file
@@ -1149,6 +1315,9 @@ That means that you can specify other options (e.g. cachesize) and
 still have bval default to C<"\n"> for variable length records, and
 space for fixed length records.
 
+Also note that the bval option only allows you to specify a single byte
+as a delimeter.
+
 =head2 A Simple Example
 
 Here is a simple example that uses RECNO (if you are using a version 
@@ -1163,7 +1332,7 @@ L<Extra RECNO Methods> for a workaround).
     unlink $filename ;
 
     my @h ;
-    tie @h, "DB_File", $filename, O_RDWR|O_CREAT, 0640, $DB_RECNO 
+    tie @h, "DB_File", $filename, O_RDWR|O_CREAT, 0666, $DB_RECNO 
         or die "Cannot open file 'text': $!\n" ;
 
     # Add a few key/value pairs to the file
@@ -1237,6 +1406,10 @@ Pushes the elements of C<list> to the start of the array.
 
 Returns the number of elements in the array.
 
+=item B<$X-E<gt>splice(offset, length, elements);>
+
+Returns a splice of the the array.
+
 =back
 
 =head2 Another Example
@@ -1255,7 +1428,7 @@ L<THE API INTERFACE>).
 
     unlink $file ;
 
-    $H = tie @h, "DB_File", $file, O_RDWR|O_CREAT, 0640, $DB_RECNO 
+    $H = tie @h, "DB_File", $file, O_RDWR|O_CREAT, 0666, $DB_RECNO 
         or die "Cannot open file $file: $!\n" ;
 
     # first create a text file to play with
@@ -1675,7 +1848,7 @@ peril!
 
 The locking technique went like this. 
 
-    $db = tie(%db, 'DB_File', '/tmp/foo.db', O_CREAT|O_RDWR, 0644)
+    $db = tie(%db, 'DB_File', '/tmp/foo.db', O_CREAT|O_RDWR, 0666)
         || die "dbcreat /tmp/foo.db $!";
     $fd = $db->fd;
     open(DB_FH, "+<&=$fd") || die "dup $!";
@@ -2033,7 +2206,7 @@ compile properly on IRIX 5.3.
 
 =head1 COPYRIGHT
 
-Copyright (c) 1995-1999 Paul Marquess. All rights reserved. This program
+Copyright (c) 1995-2001 Paul Marquess. All rights reserved. This program
 is free software; you can redistribute it and/or modify it under the
 same terms as Perl itself.
 

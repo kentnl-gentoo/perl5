@@ -142,51 +142,56 @@ PP(pp_concat)
   dSP; dATARGET; tryAMAGICbin(concat,opASSIGN);
   {
     dPOPTOPssrl;
-    SV* rcopy = Nullsv;
+    STRLEN llen;
+    char* lpv;
+    bool lbyte;
+    STRLEN rlen;
+    char* rpv = SvPV(right, rlen);	/* mg_get(right) happens here */
+    bool rbyte = !SvUTF8(right);
 
-    if (SvGMAGICAL(left))
-        mg_get(left);
-    if (TARG == right && SvGMAGICAL(right))
-        mg_get(right);
-
-    if (TARG == right && left != right)
-	/* Clone since otherwise we cannot prepend. */
-	rcopy = sv_2mortal(newSVsv(right));
-
-    if (TARG != left)
-	sv_setsv(TARG, left);
-
-    if (TARG == right) {
-	if (left == right) {
-	    /*  $right = $right . $right; */
-	    STRLEN rlen;
-	    char *rpv = SvPV(right, rlen);
-
-	    sv_catpvn(TARG, rpv, rlen);
-	}
-	else /* $right = $left  . $right; */
-	    sv_catsv(TARG, rcopy);
+    if (TARG == right && right != left) {
+	right = sv_2mortal(newSVpvn(rpv, rlen));
+	rpv = SvPV(right, rlen);	/* no point setting UTF8 here */
     }
-    else {
-	if (!SvOK(TARG)) /* Avoid warning when concatenating to undef. */
-	    sv_setpv(TARG, "");
-	/* $other = $left . $right; */
-	/* $left  = $left . $right; */
-	sv_catsv(TARG, right);
+
+    if (TARG != left) {
+	lpv = SvPV(left, llen);		/* mg_get(left) may happen here */
+	lbyte = !SvUTF8(left);
+	sv_setpvn(TARG, lpv, llen);
+	if (!lbyte)
+	    SvUTF8_on(TARG);
+	else
+	    SvUTF8_off(TARG);
+    }
+    else { /* TARG == left */
+	if (SvGMAGICAL(left))
+	    mg_get(left);		/* or mg_get(left) may happen here */
+	if (!SvOK(TARG))
+	    sv_setpv(left, "");
+	lpv = SvPV_nomg(left, llen);
+	lbyte = !SvUTF8(left);
     }
 
 #if defined(PERL_Y2KWARN)
-    if ((SvIOK(right) || SvNOK(right)) && ckWARN(WARN_Y2K)) {
-	STRLEN n;
-	char *s = SvPV(TARG,n);
-	if (n >= 2 && s[n-2] == '1' && s[n-1] == '9'
-	    && (n == 2 || !isDIGIT(s[n-3])))
+    if ((SvIOK(right) || SvNOK(right)) && ckWARN(WARN_Y2K) && SvOK(TARG)) {
+	if (llen >= 2 && lpv[llen - 2] == '1' && lpv[llen - 1] == '9'
+	    && (llen == 2 || !isDIGIT(lpv[llen - 3])))
 	{
 	    Perl_warner(aTHX_ WARN_Y2K, "Possible Y2K bug: %s",
 			"about to append an integer to '19'");
 	}
     }
 #endif
+
+    if (lbyte != rbyte) {
+	if (lbyte)
+	    sv_utf8_upgrade_nomg(TARG);
+	else {
+	    sv_utf8_upgrade_nomg(right);
+	    rpv = SvPV(right, rlen);
+	}
+    }
+    sv_catpvn_nomg(TARG, rpv, rlen);
 
     SETTARG;
     RETURN;
@@ -390,8 +395,8 @@ PP(pp_add)
 	/* Unless the left argument is integer in range we are going to have to
 	   use NV maths. Hence only attempt to coerce the right argument if
 	   we know the left is integer.  */
-	register UV auv;
-	bool auvok;
+	register UV auv = 0;
+	bool auvok = FALSE;
 	bool a_valid = 0;
 
 	if (!useleft) {
@@ -553,7 +558,7 @@ PP(pp_print)
 	gv = (GV*)*++MARK;
     else
 	gv = PL_defoutgv;
-    if ((mg = SvTIED_mg((SV*)gv, 'q'))) {
+    if ((mg = SvTIED_mg((SV*)gv, PERL_MAGIC_tiedscalar))) {
       had_magic:
 	if (MARK == ORIGMARK) {
 	    /* If using default handle then we need to make space to
@@ -577,7 +582,8 @@ PP(pp_print)
 	RETURN;
     }
     if (!(io = GvIO(gv))) {
-        if ((GvEGV(gv)) && (mg = SvTIED_mg((SV*)GvEGV(gv),'q')))
+        if ((GvEGV(gv))
+		&& (mg = SvTIED_mg((SV*)GvEGV(gv), PERL_MAGIC_tiedscalar)))
             goto had_magic;
 	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
 	    report_evil_fh(gv, io, PL_op->op_type);
@@ -1184,7 +1190,7 @@ PP(pp_qr)
     register PMOP *pm = cPMOP;
     SV *rv = sv_newmortal();
     SV *sv = newSVrv(rv, "Regexp");
-    sv_magic(sv,(SV*)ReREFCNT_inc(pm->op_pmregexp),'r',0,0);
+    sv_magic(sv,(SV*)ReREFCNT_inc(PM_GETRE(pm)), PERL_MAGIC_qr,0,0);
     RETURNX(PUSHs(rv));
 }
 
@@ -1198,7 +1204,7 @@ PP(pp_match)
     I32 global;
     I32 r_flags = REXEC_CHECKED;
     char *truebase;			/* Start of string  */
-    register REGEXP *rx = pm->op_pmregexp;
+    register REGEXP *rx = PM_GETRE(pm);
     bool rxtainted;
     I32 gimme = GIMME;
     STRLEN len;
@@ -1232,7 +1238,7 @@ PP(pp_match)
 
     if (!rx->prelen && PL_curpm) {
 	pm = PL_curpm;
-	rx = pm->op_pmregexp;
+	rx = PM_GETRE(pm);
     }
     if (rx->minlen > len) goto failure;
 
@@ -1242,7 +1248,7 @@ PP(pp_match)
     if ((global = pm->op_pmflags & PMf_GLOBAL)) {
 	rx->startp[0] = -1;
 	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
-	    MAGIC* mg = mg_find(TARG, 'g');
+	    MAGIC* mg = mg_find(TARG, PERL_MAGIC_regex_global);
 	    if (mg && mg->mg_len >= 0) {
 		if (!(rx->reganch & ROPT_GPOS_SEEN))
 		    rx->endp[0] = rx->startp[0] = mg->mg_len;
@@ -1276,6 +1282,7 @@ play_it_again:
     }
     if (rx->reganch & RE_USE_INTUIT &&
 	DO_UTF8(TARG) == ((rx->reganch & ROPT_UTF8) != 0)) {
+	PL_bostr = truebase;
 	s = CALLREG_INTUIT_START(aTHX_ rx, TARG, s, strend, r_flags, NULL);
 
 	if (!s)
@@ -1341,10 +1348,10 @@ play_it_again:
 	if (global) {
 	    MAGIC* mg = 0;
 	    if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG))
-		mg = mg_find(TARG, 'g');
+		mg = mg_find(TARG, PERL_MAGIC_regex_global);
 	    if (!mg) {
-		sv_magic(TARG, (SV*)0, 'g', Nullch, 0);
-		mg = mg_find(TARG, 'g');
+		sv_magic(TARG, (SV*)0, PERL_MAGIC_regex_global, Nullch, 0);
+		mg = mg_find(TARG, PERL_MAGIC_regex_global);
 	    }
 	    if (rx->startp[0] != -1) {
 		mg->mg_len = rx->endp[0];
@@ -1403,7 +1410,7 @@ nope:
 ret_no:
     if (global && !(pm->op_pmflags & PMf_CONTINUE)) {
 	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
-	    MAGIC* mg = mg_find(TARG, 'g');
+	    MAGIC* mg = mg_find(TARG, PERL_MAGIC_regex_global);
 	    if (mg)
 		mg->mg_len = -1;
 	}
@@ -1427,7 +1434,7 @@ Perl_do_readline(pTHX)
     I32 gimme = GIMME_V;
     MAGIC *mg;
 
-    if ((mg = SvTIED_mg((SV*)PL_last_in_gv, 'q'))) {
+    if ((mg = SvTIED_mg((SV*)PL_last_in_gv, PERL_MAGIC_tiedscalar))) {
 	PUSHMARK(SP);
 	XPUSHs(SvTIED_obj((SV*)PL_last_in_gv, mg));
 	PUTBACK;
@@ -1621,7 +1628,7 @@ PP(pp_helem)
     U32 defer = PL_op->op_private & OPpLVAL_DEFER;
     SV *sv;
     U32 hash = (SvFAKE(keysv) && SvREADONLY(keysv)) ? SvUVX(keysv) : 0;
-    I32 preeminent;
+    I32 preeminent = 0;
 
     if (SvTYPE(hv) == SVt_PVHV) {
 	if (PL_op->op_private & OPpLVAL_INTRO)
@@ -1648,7 +1655,7 @@ PP(pp_helem)
 	    lv = sv_newmortal();
 	    sv_upgrade(lv, SVt_PVLV);
 	    LvTYPE(lv) = 'y';
-	    sv_magic(lv, key2 = newSVsv(keysv), 'y', Nullch, 0);
+	    sv_magic(lv, key2 = newSVsv(keysv), PERL_MAGIC_defelem, Nullch, 0);
 	    SvREFCNT_dec(key2);	/* sv_magic() increments refcount */
 	    LvTARG(lv) = SvREFCNT_inc(hv);
 	    LvTARGLEN(lv) = 1;
@@ -1712,12 +1719,12 @@ PP(pp_leave)
 	SP = newsp;
     else if (gimme == G_SCALAR) {
 	MARK = newsp + 1;
-	if (MARK <= SP)
+	if (MARK <= SP) {
 	    if (SvFLAGS(TOPs) & (SVs_PADTMP|SVs_TEMP))
 		*MARK = TOPs;
 	    else
 		*MARK = sv_mortalcopy(TOPs);
-	else {
+	} else {
 	    MEXTEND(mark,0);
 	    *MARK = &PL_sv_undef;
 	}
@@ -1811,13 +1818,21 @@ PP(pp_iter)
 
     SvREFCNT_dec(*itersvp);
 
-    if ((sv = SvMAGICAL(av)
-	      ? *av_fetch(av, ++cx->blk_loop.iterix, FALSE)
-	      : AvARRAY(av)[++cx->blk_loop.iterix]))
+    if (SvMAGICAL(av) || AvREIFY(av)) {
+	SV **svp = av_fetch(av, ++cx->blk_loop.iterix, FALSE);
+	if (svp)
+	    sv = *svp;
+	else
+	    sv = Nullsv;
+    }
+    else {
+	sv = AvARRAY(av)[++cx->blk_loop.iterix];
+    }
+    if (sv)
 	SvTEMP_off(sv);
     else
 	sv = &PL_sv_undef;
-    if (av != PL_curstack && SvIMMORTAL(sv)) {
+    if (av != PL_curstack && sv == &PL_sv_undef) {
 	SV *lv = cx->blk_loop.iterlval;
 	if (lv && SvREFCNT(lv) > 1) {
 	    SvREFCNT_dec(lv);
@@ -1829,7 +1844,7 @@ PP(pp_iter)
 	    lv = cx->blk_loop.iterlval = NEWSV(26, 0);
 	    sv_upgrade(lv, SVt_PVLV);
 	    LvTYPE(lv) = 'y';
-	    sv_magic(lv, Nullsv, 'y', Nullch, 0);
+	    sv_magic(lv, Nullsv, PERL_MAGIC_defelem, Nullch, 0);
 	}
 	LvTARG(lv) = SvREFCNT_inc(av);
 	LvTARGOFF(lv) = cx->blk_loop.iterix;
@@ -1860,7 +1875,7 @@ PP(pp_subst)
     bool rxtainted;
     char *orig;
     I32 r_flags;
-    register REGEXP *rx = pm->op_pmregexp;
+    register REGEXP *rx = PM_GETRE(pm);
     STRLEN len;
     int force_on_match = 0;
     I32 oldsave = PL_savestack_ix;
@@ -1906,7 +1921,7 @@ PP(pp_subst)
 
     if (!rx->prelen && PL_curpm) {
 	pm = PL_curpm;
-	rx = pm->op_pmregexp;
+	rx = PM_GETRE(pm);
     }
     r_flags = (rx->nparens || SvTEMP(TARG) || PL_sawampersand)
 		? REXEC_COPY_STR : 0;
@@ -1918,6 +1933,7 @@ PP(pp_subst)
     }
     orig = m = s;
     if (rx->reganch & RE_USE_INTUIT) {
+	PL_bostr = orig;
 	s = CALLREG_INTUIT_START(aTHX_ rx, TARG, s, strend, r_flags, NULL);
 
 	if (!s)
@@ -2299,18 +2315,16 @@ PP(pp_leavesublv)
 	else if (gimme == G_ARRAY) {
 	    EXTEND_MORTAL(SP - newsp);
 	    for (mark = newsp + 1; mark <= SP; mark++) {
-		if (SvFLAGS(*mark) & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)) {
+		if (*mark != &PL_sv_undef
+		    && SvFLAGS(*mark) & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)) {
 		    /* Might be flattened array after $#array =  */
 		    PUTBACK;
 		    POPSUB(cx,sv);
 		    PL_curpm = newpm;
 		    LEAVE;
 		    LEAVESUB(sv);
-		    DIE(aTHX_ "Can't return %s from lvalue subroutine",
-			(*mark != &PL_sv_undef)
-			? (SvREADONLY(TOPs)
-			    ? "a readonly value" : "a temporary")
-			: "an uninitialized value");
+		    DIE(aTHX_ "Can't return a %s from lvalue subroutine",
+			SvREADONLY(TOPs) ? "readonly value" : "temporary");
 		}
 		else {
 		    /* Can be a localized value subject to deletion. */
@@ -2553,7 +2567,7 @@ try_autoload:
 		COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
 	    MgOWNER(mg) = thr;
 	    DEBUG_S(PerlIO_printf(Perl_debug_log, "%p: pp_entersub lock %p\n",
-				  thr, sv);)
+				  thr, sv));
 	    MUTEX_UNLOCK(MgMUTEXP(mg));
 	    SAVEDESTRUCTOR_X(Perl_unlock_condpair, sv);
 	}
@@ -2637,7 +2651,7 @@ try_autoload:
 	    }
 	    DEBUG_S(if (CvDEPTH(cv) != 0)
 			PerlIO_printf(Perl_debug_log, "depth %ld != 0\n",
-				      CvDEPTH(cv)););
+                                     CvDEPTH(cv)));
 	    SAVEDESTRUCTOR_X(unset_cvowner, (void*) cv);
 	}
     }
@@ -2889,7 +2903,7 @@ PP(pp_aelem)
 	    lv = sv_newmortal();
 	    sv_upgrade(lv, SVt_PVLV);
 	    LvTYPE(lv) = 'y';
-	    sv_magic(lv, Nullsv, 'y', Nullch, 0);
+	    sv_magic(lv, Nullsv, PERL_MAGIC_defelem, Nullch, 0);
 	    LvTARG(lv) = SvREFCNT_inc(av);
 	    LvTARGOFF(lv) = elem;
 	    LvTARGLEN(lv) = 1;
@@ -2975,7 +2989,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
     HV* stash;
     char* name;
     STRLEN namelen;
-    char* packname;
+    char* packname = 0;
     STRLEN packlen;
 
     name = SvPV(meth, namelen);
@@ -2985,18 +2999,20 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	Perl_croak(aTHX_ "Can't call method \"%s\" on an undefined value", name);
 
     if (SvGMAGICAL(sv))
-        mg_get(sv);
+	mg_get(sv);
     if (SvROK(sv))
 	ob = (SV*)SvRV(sv);
     else {
 	GV* iogv;
 
+	/* this isn't a reference */
 	packname = Nullch;
 	if (!SvOK(sv) ||
 	    !(packname = SvPV(sv, packlen)) ||
 	    !(iogv = gv_fetchpv(packname, FALSE, SVt_PVIO)) ||
 	    !(ob=(SV*)GvIO(iogv)))
 	{
+	    /* this isn't the name of a filehandle either */
 	    if (!packname ||
 		((UTF8_IS_START(*packname) && DO_UTF8(sv))
 		    ? !isIDFIRST_utf8((U8*)packname)
@@ -3007,12 +3023,15 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 			   SvOK(sv) ? "without a package or object reference"
 				    : "on an undefined value");
 	    }
-	    stash = gv_stashpvn(packname, packlen, TRUE);
+	    /* assume it's a package name */
+	    stash = gv_stashpvn(packname, packlen, FALSE);
 	    goto fetch;
 	}
+	/* it _is_ a filehandle name -- replace with a reference */
 	*(PL_stack_base + TOPMARK + 1) = sv_2mortal(newRV((SV*)iogv));
     }
 
+    /* if we got here, ob should be a reference or a glob */
     if (!ob || !(SvOBJECT(ob)
 		 || (SvTYPE(ob) == SVt_PVGV && (ob = (SV*)GvIO((GV*)ob))
 		     && SvOBJECT(ob))))
@@ -3024,6 +3043,9 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
     stash = SvSTASH(ob);
 
   fetch:
+    /* NOTE: stash may be null, hope hv_fetch_ent and
+       gv_fetchmethod can cope (it seems they can) */
+
     /* shortcut for simple names */
     if (hashp) {
 	HE* he = hv_fetch_ent(stash, meth, 0, *hashp);
@@ -3036,11 +3058,18 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
     }
 
     gv = gv_fetchmethod(stash, name);
+
     if (!gv) {
+	/* This code tries to figure out just what went wrong with
+	   gv_fetchmethod.  It therefore needs to duplicate a lot of
+	   the internals of that function.  We can't move it inside
+	   Perl_gv_fetchmethod_autoload(), however, since that would
+	   cause UNIVERSAL->can("NoSuchPackage::foo") to croak, and we
+	   don't want that.
+	*/
 	char* leaf = name;
 	char* sep = Nullch;
 	char* p;
-	GV* gv;
 
 	for (p = name; *p; p++) {
 	    if (*p == '\'')
@@ -3049,24 +3078,28 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 		sep = p, leaf = p + 2;
 	}
 	if (!sep || ((sep - name) == 5 && strnEQ(name, "SUPER", 5))) {
-	    packname = sep ? CopSTASHPV(PL_curcop) : HvNAME(stash);
+	    /* the method name is unqualified or starts with SUPER:: */ 
+	    packname = sep ? CopSTASHPV(PL_curcop) :
+		stash ? HvNAME(stash) : packname;
 	    packlen = strlen(packname);
 	}
 	else {
+	    /* the method name is qualified */
 	    packname = name;
 	    packlen = sep - name;
 	}
-	gv = gv_fetchpv(packname, 0, SVt_PVHV);
-	if (gv && isGV(gv)) {
+	
+	/* we're relying on gv_fetchmethod not autovivifying the stash */
+	if (gv_stashpvn(packname, packlen, FALSE)) {
 	    Perl_croak(aTHX_
-		       "Can't locate object method \"%s\" via package \"%s\"",
-		       leaf, packname);
+		       "Can't locate object method \"%s\" via package \"%.*s\"",
+		       leaf, (int)packlen, packname);
 	}
 	else {
 	    Perl_croak(aTHX_
-		       "Can't locate object method \"%s\" via package \"%s\""
-		       " (perhaps you forgot to load \"%s\"?)",
-		       leaf, packname, packname);
+		       "Can't locate object method \"%s\" via package \"%.*s\""
+		       " (perhaps you forgot to load \"%.*s\"?)",
+		       leaf, (int)packlen, packname, (int)packlen, packname);
 	}
     }
     return isGV(gv) ? (SV*)GvCV(gv) : (SV*)gv;
@@ -3083,7 +3116,7 @@ unset_cvowner(pTHXo_ void *cvarg)
     MUTEX_LOCK(CvMUTEXP(cv));
     DEBUG_S(if (CvDEPTH(cv) != 0)
 		PerlIO_printf(Perl_debug_log, "depth %ld != 0\n",
-			      CvDEPTH(cv)););
+                             CvDEPTH(cv)));
     assert(thr == CvOWNER(cv));
     CvOWNER(cv) = 0;
     MUTEX_UNLOCK(CvMUTEXP(cv));

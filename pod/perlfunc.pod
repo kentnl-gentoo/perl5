@@ -398,8 +398,9 @@ on the previous timer.
 For delays of finer granularity than one second, you may use Perl's
 four-argument version of select() leaving the first three arguments
 undefined, or you might be able to use the C<syscall> interface to
-access setitimer(2) if your system supports it.  The Time::HiRes module
-from CPAN may also prove useful.
+access setitimer(2) if your system supports it.  The Time::HiRes
+module (from CPAN, and starting from Perl 5.8 part of the standard
+distribution) may also prove useful.
 
 It is usually a mistake to intermix C<alarm> and C<sleep> calls.
 (C<sleep> may be internally implemented in your system with C<alarm>)
@@ -474,17 +475,17 @@ representation matches the internal representation, but on some
 platforms the external representation of C<\n> is made up of more than
 one character.
 
-Mac OS and all variants of Unix use a single character to end each line
-in the external representation of text (even though that single
-character is not necessarily the same across these platforms).
-Consequently binmode() has no effect on these operating systems.  In
-other systems like VMS, MS-DOS and the various flavors of MS-Windows
-your program sees a C<\n> as a simple C<\cJ>, but what's stored in text
-files are the two characters C<\cM\cJ>.  That means that, if you don't
-use binmode() on these systems, C<\cM\cJ> sequences on disk will be
-converted to C<\n> on input, and any C<\n> in your program will be
-converted back to C<\cM\cJ> on output.  This is what you want for text
-files, but it can be disastrous for binary files.
+Mac OS, all variants of Unix, and Stream_LF files on VMS use a single
+character to end each line in the external representation of text (even
+though that single character is CARRIAGE RETURN on Mac OS and LINE FEED
+on Unix and most VMS files).  Consequently binmode() has no effect on
+these operating systems.  In other systems like OS/2, DOS and the various
+flavors of MS-Windows your program sees a C<\n> as a simple C<\cJ>, but
+what's stored in text files are the two characters C<\cM\cJ>.  That means
+that, if you don't use binmode() on these systems, C<\cM\cJ> sequences on
+disk will be converted to C<\n> on input, and any C<\n> in your program
+will be converted back to C<\cM\cJ> on output.  This is what you want for
+text files, but it can be disastrous for binary files.
 
 Another consequence of using binmode() (on some systems) is that
 special end-of-file markers will be seen as part of the data stream.
@@ -2628,15 +2629,18 @@ to be converted into a file mode, for example. (Although perl will
 automatically convert strings into numbers as needed, this automatic
 conversion assumes base 10.)
 
-=item open FILEHANDLE,MODE,LIST
-
 =item open FILEHANDLE,EXPR
+
+=item open FILEHANDLE,MODE,EXPR
+
+=item open FILEHANDLE,MODE,EXPR,LIST
 
 =item open FILEHANDLE
 
 Opens the file whose filename is given by EXPR, and associates it with
-FILEHANDLE.  If FILEHANDLE is an expression, its value is used as the
-name of the real filehandle wanted.  (This is considered a symbolic
+FILEHANDLE.  If FILEHANDLE is an undefined lexical (C<my>) variable the variable is
+assigned a reference to a new anonymous filehandle, otherwise if FILEHANDLE is an expression,
+its value is used as the name of the real filehandle wanted.  (This is considered a symbolic
 reference, so C<use strict 'refs'> should I<not> be in effect.)
 
 If EXPR is omitted, the scalar
@@ -2646,7 +2650,8 @@ for this purpose; so if you're using C<my>, specify EXPR in your call
 to open.)  See L<perlopentut> for a kinder, gentler explanation of opening
 files.
 
-If MODE is C<< '<' >> or nothing, the file is opened for input.
+If three or more arguments are specified then the mode of opening and the file name
+are separate. If MODE is C<< '<' >> or nothing, the file is opened for input.
 If MODE is C<< '>' >>, the file is truncated and opened for
 output, being created if necessary.  If MODE is C<<< '>>' >>>,
 the file is opened for appending, again being created if necessary.
@@ -2663,7 +2668,8 @@ C<'w'>, C<'w+'>, C<'a'>, and C<'a+'>.
 
 In the 2-arguments (and 1-argument) form of the call the mode and
 filename should be concatenated (in this order), possibly separated by
-spaces.  It is possible to omit the mode if the mode is C<< '<' >>.
+spaces.  It is possible to omit the mode in these forms if the mode is
+C<< '<' >>.
 
 If the filename begins with C<'|'>, the filename is interpreted as a
 command to which output is to be piped, and if the filename ends with a
@@ -2674,14 +2680,18 @@ that pipes both in I<and> out, but see L<IPC::Open2>, L<IPC::Open3>,
 and L<perlipc/"Bidirectional Communication with Another Process">
 for alternatives.)
 
-If MODE is C<'|-'>, the filename is interpreted as a
+For three or more arguments if MODE is C<'|-'>, the filename is interpreted as a
 command to which output is to be piped, and if MODE is
 C<'-|'>, the filename is interpreted as a command which pipes output to
 us.  In the 2-arguments (and 1-argument) form one should replace dash
 (C<'-'>) with the command.  See L<perlipc/"Using open() for IPC">
 for more examples of this.  (You are not allowed to C<open> to a command
 that pipes both in I<and> out, but see L<IPC::Open2>, L<IPC::Open3>,
-and L<perlipc/"Bidirectional Communication"> for alternatives.)
+and L<perlipc/"Bidirectional Communication"> for alternatives.) In 3+ arg form of
+pipe opens then if LIST is specified (extra arguments after the command name) then
+LIST becomes arguments to the command invoked if the platform supports it.
+The meaning of C<open> with more than three arguments for non-pipe modes
+is not yet specified. Experimental "layers" may give extra LIST arguments meaning.
 
 In the 2-arguments (and 1-argument) form opening C<'-'> opens STDIN
 and opening C<< '>-' >> opens STDOUT.
@@ -2699,6 +2709,10 @@ and those that don't is their text file formats.  Systems like Unix, MacOS, and
 Plan9, which delimit lines with a single character, and which encode that
 character in C as C<"\n">, do not need C<binmode>.  The rest need it.
 
+In the three argument form MODE may also contain a list of IO "layers" (see L<open> and
+L<PerlIO> for more details) to be applied to the handle. This can be used to achieve the
+effect of C<binmode> as well as more complex behaviours.
+
 When opening a file, it's usually a bad idea to continue normal execution
 if the request failed, so C<open> is frequently used in connection with
 C<die>.  Even if C<die> won't do what you want (say, in a CGI script,
@@ -2713,6 +2727,7 @@ being C<undef>:
     open(TMP, "+>", undef) or die ...
 
 opens a filehandle to an anonymous temporary file.
+
 
 Examples:
 
@@ -2797,18 +2812,24 @@ STDERR:
     print STDOUT "stdout 2\n";
     print STDERR "stderr 2\n";
 
-If you specify C<< '<&=N' >>, where C<N> is a number, then Perl will do an
-equivalent of C's C<fdopen> of that file descriptor; this is more
-parsimonious of file descriptors.  For example:
+If you specify C<< '<&=N' >>, where C<N> is a number, then Perl will
+do an equivalent of C's C<fdopen> of that file descriptor; this is
+more parsimonious of file descriptors.  For example:
 
     open(FILEHANDLE, "<&=$fd")
+
 or
+
     open(FILEHANDLE, "<&=", $fd)
 
-Note that if perl is using the standard C libaries fdopen() then on many UNIX systems,
-fdopen() is known to fail when file descriptors
+Note that if Perl is using the standard C libraries' fdopen() then on
+many UNIX systems, fdopen() is known to fail when file descriptors
 exceed a certain value, typically 255. If you need more file
 descriptors than that, consider rebuilding Perl to use the C<PerlIO>.
+
+You can see whether Perl has been compiled with PerlIO or not by
+running C<perl -V> and looking for C<useperlio=> line.  If C<useperlio>
+is C<define>, you have PerlIO, otherwise you don't.
 
 If you open a pipe on the command C<'-'>, i.e., either C<'|-'> or C<'-|'>
 with 2-arguments (or 1-argument) form of open(), then
@@ -2934,6 +2955,8 @@ See L<utf8> for more about Unicode.
 
 =item our EXPR
 
+=item our EXPR : ATTRIBUTES
+
 An C<our> declares the listed variables to be valid globals within
 the enclosing block, file, or C<eval>.  That is, it has the same
 scoping rules as a "my" declaration, but does not create a local
@@ -2971,6 +2994,28 @@ package, Perl will emit warnings if you have asked for them.
     print $bar;		# prints 30
 
     our $bar;		# emits warning
+
+An C<our> declaration may also have a list of attributes associated
+with it.  B<WARNING>: This is an experimental feature that may be
+changed or removed in future releases of Perl.  It should not be
+relied upon.
+
+The only currently recognized attribute is C<unique> which indicates
+that a single copy of the global is to be used by all interpreters
+should the program happen to be running in a multi-interpreter
+environment. (The default behaviour would be for each interpreter to
+have its own copy of the global.)  In such an environment, this
+attribute also has the effect of making the global readonly.
+Examples:
+
+    our @EXPORT : unique = qw(foo);
+    our %EXPORT_TAGS : unique = (bar => [qw(aa bb cc)]);
+    our $VERSION : unique = "1.00";
+
+Multi-interpreter environments can come to being either through the
+fork() emulation on Windows platforms, or by embedding perl in a
+multi-threaded application.  The C<unique> attribute does nothing in
+all other environments.
 
 =item pack TEMPLATE,LIST
 
@@ -3202,7 +3247,7 @@ not support long longs.)
 The integer formats C<s>, C<S>, C<i>, C<I>, C<l>, and C<L>
 are inherently non-portable between processors and operating systems
 because they obey the native byteorder and endianness.  For example a
-4-byte integer 0x12345678 (305419896 decimal) be ordered natively
+4-byte integer 0x12345678 (305419896 decimal) would be ordered natively
 (arranged in and handled by the CPU registers) into bytes as
 
  	0x12 0x34 0x56 0x78	# big-endian
@@ -3211,7 +3256,8 @@ because they obey the native byteorder and endianness.  For example a
 Basically, the Intel and VAX CPUs are little-endian, while everybody
 else, for example Motorola m68k/88k, PPC, Sparc, HP PA, Power, and
 Cray are big-endian.  Alpha and MIPS can be either: Digital/Compaq
-used/uses them in little-endian mode; SGI/Cray uses them in big-endian mode.
+used/uses them in little-endian mode; SGI/Cray uses them in big-endian
+mode.
 
 The names `big-endian' and `little-endian' are comic references to
 the classic "Gulliver's Travels" (via the paper "On Holy Wars and a
@@ -3238,7 +3284,7 @@ Byteorders C<'1234'> and C<'12345678'> are little-endian, C<'4321'>
 and C<'87654321'> are big-endian.
 
 If you want portable packed integers use the formats C<n>, C<N>,
-C<v>, and C<V>, their byte endianness and size is known.
+C<v>, and C<V>, their byte endianness and size are known.
 See also L<perlport>.
 
 =item *
@@ -3358,8 +3404,10 @@ C<$::sail> is equivalent to C<$main::sail> (as well as to C<$main'sail>,
 still seen in older code).
 
 If NAMESPACE is omitted, then there is no current package, and all
-identifiers must be fully qualified or lexicals.  This is stricter
-than C<use strict>, since it also extends to function names.
+identifiers must be fully qualified or lexicals.  However, you are
+strongly advised not to make use of this feature. Its use can cause
+unexpected behaviour, even crashing some versions of Perl. It is
+deprecated, and will be removed from a future release.
 
 See L<perlmod/"Packages"> for more information about packages, modules,
 and classes.  See L<perlsub> for other scoping issues.
@@ -3506,8 +3554,15 @@ If EXPR is omitted, uses C<$_>.
 
 Returns a random fractional number greater than or equal to C<0> and less
 than the value of EXPR.  (EXPR should be positive.)  If EXPR is
-omitted, the value C<1> is used.  Automatically calls C<srand> unless
-C<srand> has already been called.  See also C<srand>.
+omitted, or a C<0>, the value C<1> is used.  Automatically calls C<srand>
+unless C<srand> has already been called.  See also C<srand>.
+
+Apply C<int()> to the value returned by C<rand()> if you want random
+integers instead of random fractional numbers.  For example,
+
+    int(rand(10))
+
+returns a random integer between C<0> and C<9>, inclusive.
 
 (Note: If your rand function consistently returns numbers that are too
 large or too small, then your version of Perl was probably compiled
@@ -4013,14 +4068,14 @@ documentation.
 =item semop KEY,OPSTRING
 
 Calls the System V IPC function semop to perform semaphore operations
-such as signaling and waiting.  OPSTRING must be a packed array of
+such as signalling and waiting.  OPSTRING must be a packed array of
 semop structures.  Each semop structure can be generated with
-C<pack("sss", $semnum, $semop, $semflag)>.  The number of semaphore
+C<pack("s!3", $semnum, $semop, $semflag)>.  The number of semaphore
 operations is implied by the length of OPSTRING.  Returns true if
 successful, or false if there is an error.  As an example, the
 following code waits on semaphore $semnum of semaphore id $semid:
 
-    $semop = pack("sss", $semnum, -1, 0);
+    $semop = pack("s!3", $semnum, -1, 0);
     die "Semaphore trouble: $!\n" unless semop($semid, $semop);
 
 To signal the semaphore, replace C<-1> with C<1>.  See also
@@ -4151,8 +4206,9 @@ busy multitasking system.
 
 For delays of finer granularity than one second, you may use Perl's
 C<syscall> interface to access setitimer(2) if your system supports
-it, or else see L</select> above.  The Time::HiRes module from CPAN
-may also help.
+it, or else see L</select> above.  The Time::HiRes module (from CPAN,
+and starting from Perl 5.8 part of the standard distribution) may also
+help.
 
 See also the POSIX module's C<pause> function.
 
@@ -4242,6 +4298,12 @@ loop control operators described in L<perlsyn> or with C<goto>.
 
 When C<use locale> is in effect, C<sort LIST> sorts LIST according to the
 current collation locale.  See L<perllocale>.
+
+Perl does B<not> guarantee that sort is stable.  (A I<stable> sort
+preserves the input order of elements that compare equal.)  5.7 and
+5.8 happen to use a stable mergesort, but 5.6 and earlier used quicksort,
+which is not stable.  Do not assume that future perls will continue to
+use a stable sort.
 
 Examples:
 
@@ -4399,11 +4461,15 @@ splits on whitespace (after skipping any leading whitespace).  Anything
 matching PATTERN is taken to be a delimiter separating the fields.  (Note
 that the delimiter may be longer than one character.)
 
-If LIMIT is specified and positive, splits into no more than that
-many fields (though it may split into fewer).  If LIMIT is unspecified
-or zero, trailing null fields are stripped (which potential users
-of C<pop> would do well to remember).  If LIMIT is negative, it is
-treated as if an arbitrarily large LIMIT had been specified.
+If LIMIT is specified and positive, it represents the maximum number
+of fields the EXPR will be split into, though the actual number of
+fields returned depends on the number of times PATTERN matches within
+EXPR.  If LIMIT is unspecified or zero, trailing null fields are
+stripped (which potential users of C<pop> would do well to remember).
+If LIMIT is negative, it is treated as if an arbitrarily large LIMIT
+had been specified.  Note that splitting an EXPR that evaluates to the
+empty string always returns the empty list, regardless of the LIMIT
+specified.
 
 A pattern matching the null string (not to be confused with
 a null pattern C<//>, which is just one member of the set of patterns
@@ -5271,6 +5337,8 @@ seconds, for this process and the children of this process.
 
     ($user,$system,$cuser,$csystem) = times;
 
+In scalar context, C<times> returns C<$user>.
+
 =item tr///
 
 The transliteration operator.  Same as C<y///>.  See L<perlop>.
@@ -5452,7 +5520,7 @@ Does the opposite of a C<shift>.  Or the opposite of a C<push>,
 depending on how you look at it.  Prepends list to the front of the
 array, and returns the new number of elements in the array.
 
-    unshift(ARGV, '-e') unless $ARGV[0] =~ /^-/;
+    unshift(@ARGV, '-e') unless $ARGV[0] =~ /^-/;
 
 Note the LIST is prepended whole, not one element at a time, so the
 prepended elements stay in the same order.  Use C<reverse> to do the
@@ -5563,6 +5631,13 @@ command if the files already exist:
     #!/usr/bin/perl
     $now = time;
     utime $now, $now, @ARGV;
+
+If the first two elements of the list are C<undef>, then the utime(2)
+function in the C library will be called with a null second argument.
+On most systems, this will set the file's access and modification
+times to the current time.  (i.e. equivalent to the example above.)
+
+    utime undef, undef, @ARGV;
 
 =item values HASH
 

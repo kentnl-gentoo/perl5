@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION);
 use Carp;
 
-$VERSION = '2.01';
+$VERSION = '2.03';
 
 
 # LOAD FILTERING MODULE...
@@ -18,13 +18,13 @@ $::_S_W_I_T_C_H = sub { croak "case statement not in switch block" };
 
 my $offset;
 my $fallthrough;
-my $nextlabel = 1;
 
 sub import
 {
+	$DB::single = 1;
 	$fallthrough = grep /\bfallthrough\b/, @_;
 	$offset = (caller)[2]+1;
-	filter_add({}) unless @_>1 && $_[1] ne '__';
+	filter_add({}) unless @_>1 && $_[1] eq 'noimport';
 	my $pkg = caller;
 	no strict 'refs';
 	for ( qw( on_defined on_exists ) )
@@ -80,7 +80,7 @@ sub filter_blocks
 	my $text = "";
 	component: while (pos $source < length $source)
 	{
-		if ($source =~ m/(\G\s*use\s+switch\b)/gc)
+		if ($source =~ m/(\G\s*use\s+Switch\b)/gc)
 		{
 			$text .= q{use Switch 'noimport'};
 			next component;
@@ -88,20 +88,20 @@ sub filter_blocks
 		my @pos = Text::Balanced::_match_quotelike(\$source,qr/\s*/,1,1);
 		if (defined $pos[0])
 		{
-			$text .= substr($source,$pos[2],$pos[18]-$pos[2]);
+			$text .= " " . substr($source,$pos[2],$pos[18]-$pos[2]);
 			next component;
 		}
 		@pos = Text::Balanced::_match_variable(\$source,qr/\s*/);
 		if (defined $pos[0])
 		{
-			$text .= substr($source,$pos[0],$pos[4]-$pos[0]);
+			$text .= " " . substr($source,$pos[0],$pos[4]-$pos[0]);
 			next component;
 		}
 
 		if ($source =~ m/\G(\n*)(\s*)switch\b(?=\s*[(])/gc)
 		{
 			$text .= $1.$2.'S_W_I_T_C_H: while (1) ';
-			@pos = Text::Balanced::_match_codeblock(\$source,qr/\s*/,qr/\(/,qr/\)/,qr/\{/,qr/\}/,undef) 
+			@pos = Text::Balanced::_match_codeblock(\$source,qr/\s*/,qr/\(/,qr/\)/,qr/[[{(<]/,qr/[]})>]/,undef) 
 			or do {
 				die "Bad switch statement (problem in the parentheses?) near $Switch::file line ", line(substr($source,0,pos $source),$line), "\n";
 			};
@@ -182,11 +182,11 @@ sub in
 	my @numy;
 	for my $nextx ( @$x )
 	{
-		my $numx = ref($nextx) || (~$nextx&$nextx) eq 0;
+		my $numx = ref($nextx) || defined $nextx && (~$nextx&$nextx) eq 0;
 		for my $j ( 0..$#$y )
 		{
 			my $nexty = $y->[$j];
-			push @numy, ref($nexty) || (~$nexty&$nexty) eq 0
+			push @numy, ref($nexty) || defined $nexty && (~$nexty&$nexty) eq 0
 				if @numy <= $j;
 			return 1 if $numx && $numy[$j] && $nextx==$nexty
 			         || $nextx eq $nexty;
@@ -222,12 +222,13 @@ sub switch(;$)
 			    return $s_val->($c_val);
 			  };
 	}
-	elsif ($s_ref eq "" && (~$s_val&$s_val) eq 0)	# NUMERIC SCALAR
+	elsif ($s_ref eq "" && defined $s_val && (~$s_val&$s_val) eq 0)	# NUMERIC SCALAR
 	{
 		$::_S_W_I_T_C_H =
 		      sub { my $c_val = $_[0];
 			    my $c_ref = ref $c_val;
 			    return $s_val == $c_val 	if $c_ref eq ""
+							&& defined $c_val
 							&& (~$c_val&$c_val) eq 0;
 			    return $s_val eq $c_val 	if $c_ref eq "";
 			    return in([$s_val],$c_val)	if $c_ref eq 'ARRAY';
@@ -454,8 +455,8 @@ Switch - A switch statement for Perl
 
 =head1 VERSION
 
-This document describes version 2.01 of Switch,
-released January  9, 2001.
+This document describes version 2.03 of Switch,
+released May 15, 2001.
 
 =head1 SYNOPSIS
 

@@ -12,7 +12,7 @@ our ($VERSION,@ISA,@EXPORT_OK,
 	    $Is_MacOS,$Is_VMS,
 	    $Debug,$Verbose,$Quiet,$MANIFEST,$found,$DEFAULT_MSKIP);
 
-$VERSION = substr(q$Revision: 1.33 $, 10);
+$VERSION = substr(q$Revision: 1.34 $, 10);
 @ISA=('Exporter');
 @EXPORT_OK = ('mkmanifest', 'manicheck', 'fullcheck', 'filecheck', 
 	      'skipcheck', 'maniread', 'manicopy');
@@ -121,7 +121,7 @@ sub _manicheck {
 	    }
 	    warn "Debug: manicheck checking from disk $file\n" if $Debug;
 	    unless ( exists $read->{$file} ) {
-		my $canon = "\t" . _unmacify($file) if $Is_MacOS;
+		my $canon = $Is_MacOS ? "\t" . _unmacify($file) : '';
 		warn "Not in $MANIFEST: $file$canon\n" unless $Quiet;
 		push @missentry, $file;
 	    }

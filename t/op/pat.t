@@ -5,14 +5,13 @@
 # that does fit that format, add it to op/re_tests, not here.
 
 $| = 1;
-print "1..581\n";
+
+print "1..672\n";
 
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }
-
-use re 'asciirange'; # Compute ranges in ASCII space
 
 eval 'use Config';          #  Defaults assumed if this fails
 
@@ -1130,6 +1129,8 @@ print "not " unless "A \x{263a} B z C" =~ /A . B (??{ "z" }) C/;
 print "ok $test\n";
 $test++;
 
+my $ordA = ord('A');
+
 $_ = "a\x{100}b";
 if (/(.)(\C)(\C)(.)/) {
   print "ok 232\n";
@@ -1138,15 +1139,32 @@ if (/(.)(\C)(\C)(.)/) {
   } else {
     print "not ok 233\n";
   }
-  if ($2 eq "\xC4") {
-    print "ok 234\n";
+  if ($ordA == 65) { # ASCII (or equivalent), should be UTF-8
+      if ($2 eq "\xC4") {
+	  print "ok 234\n";
+      } else {
+	  print "not ok 234\n";
+      }
+      if ($3 eq "\x80") {
+	  print "ok 235\n";
+      } else {
+	  print "not ok 235\n";
+      }
+  } elsif ($ordA == 193) { # EBCDIC (or equivalent), should be UTF-EBCDIC
+      if ($2 eq "\x8C") {
+	  print "ok 234\n";
+      } else {
+	  print "not ok 234\n";
+      }
+      if ($3 eq "\x41") {
+	  print "ok 235\n";
+      } else {
+	  print "not ok 235\n";
+      }
   } else {
-    print "not ok 234\n";
-  }
-  if ($3 eq "\x80") {
-    print "ok 235\n";
-  } else {
-    print "not ok 235\n";
+      for (234..235) {
+	  print "not ok $_ # ord('A') == $ordA\n";
+      }
   }
   if ($4 eq "b") {
     print "ok 236\n";
@@ -1162,10 +1180,20 @@ $_ = "\x{100}";
 if (/(\C)/g) {
   print "ok 237\n";
   # currently \C are still tagged as UTF-8
-  if ($1 eq "\xC4") {
-    print "ok 238\n";
+  if ($ordA == 65) {
+      if ($1 eq "\xC4") {
+	  print "ok 238\n";
+      } else {
+	  print "not ok 238\n";
+      }
+  } elsif ($ordA == 193) {
+      if ($1 eq "\x8C") {
+	  print "ok 238\n";
+      } else {
+	  print "not ok 238\n";
+      }
   } else {
-    print "not ok 238\n";
+      print "not ok 238 # ord('A') == $ordA\n";
   }
 } else {
   for (237..238) {
@@ -1175,10 +1203,20 @@ if (/(\C)/g) {
 if (/(\C)/g) {
   print "ok 239\n";
   # currently \C are still tagged as UTF-8
-  if ($1 eq "\x80") {
-    print "ok 240\n";
+  if ($ordA == 65) {
+      if ($1 eq "\x80") {
+	  print "ok 240\n";
+      } else {
+	  print "not ok 240\n";
+      }
+  } elsif ($ordA == 193) {
+      if ($1 eq "\x41") {
+	  print "ok 240\n";
+      } else {
+	  print "not ok 240\n";
+      }
   } else {
-    print "not ok 240\n";
+      print "not ok 240 # ord('A') == $ordA\n";
   }
 } else {
   for (239..240) {
@@ -1302,6 +1340,7 @@ print "ok 247\n";
 {
     # the second half of 20001028.003
 
+    my $X = '';
     $X =~ s/^/chr(1488)/e;
     print "not " unless length $X == 1 && ord($X) == 1488;
     print "ok 260\n";
@@ -1353,10 +1392,11 @@ print "ok 247\n";
 	     "\0"				=> 'Cc',
 	     );
 	
-    for my $char (keys %s) {
+    for my $char (map { s/^\S+ //; $_ }
+                    sort map { sprintf("%06x", ord($_))." $_" } keys %s) {
 	my $class = $s{$char};
-	my $code  = sprintf("%04x", ord($char));
-	printf "# 0x$code\n";
+	my $code  = sprintf("%06x", ord($char));
+	printf "#\n# 0x$code\n#\n";
 	print "# IsAlpha\n";
 	if ($class =~ /^[LM]/) {
 	    print "not " unless $char =~ /\p{IsAlpha}/;
@@ -1382,7 +1422,7 @@ print "ok 247\n";
 	    print "ok $test\n"; $test++;
 	}
 	print "# IsASCII\n";
-	if ($code <= 127) {
+	if ($code le '00007f') {
 	    print "not " unless $char =~ /\p{IsASCII}/;
 	    print "ok $test\n"; $test++;
 	    print "not " if     $char =~ /\P{IsASCII}/;
@@ -1547,3 +1587,345 @@ print "ok 247\n";
 
     print "ok 581\n";
 }
+
+{
+    $test = 582;
+
+    # bugid 20010410.006
+    for my $rx (
+		'/(.*?)\{(.*?)\}/csg',
+		'/(.*?)\{(.*?)\}/cg',
+		'/(.*?)\{(.*?)\}/sg',
+		'/(.*?)\{(.*?)\}/g',
+		'/(.+?)\{(.+?)\}/csg',
+	       )
+    {
+	my($input, $i);
+
+	$i = 0;
+	$input = "a{b}c{d}";
+        eval <<EOT;
+	while (eval \$input =~ $rx) {
+	    print "# \\\$1 = '\$1' \\\$2 = '\$2'\n";
+	    ++\$i;
+	}
+EOT
+	print "not " unless $i == 2;
+	print "ok " . $test++ . "\n";
+    }
+}
+
+{
+    # from Robin Houston
+
+    my $x = "\x{12345678}";
+    $x =~ s/(.)/$1/g;
+    print "not " unless ord($x) == 0x12345678 && length($x) == 1;
+    print "ok 587\n";
+}
+
+{
+    my $x = "\x7f";
+
+    print "not " if     $x =~ /[\x80-\xff]/;
+    print "ok 588\n";
+
+    print "not " if     $x =~ /[\x80-\x{100}]/;
+    print "ok 589\n";
+
+    print "not " if     $x =~ /[\x{100}]/;
+    print "ok 590\n";
+
+    print "not " if     $x =~ /\p{InLatin1Supplement}/;
+    print "ok 591\n";
+
+    print "not " unless $x =~ /\P{InLatin1Supplement}/;
+    print "ok 592\n";
+
+    print "not " if     $x =~ /\p{InLatinExtendedA}/;
+    print "ok 593\n";
+
+    print "not " unless $x =~ /\P{InLatinExtendedA}/;
+    print "ok 594\n";
+}
+
+{
+    my $x = "\x80";
+
+    print "not " unless $x =~ /[\x80-\xff]/;
+    print "ok 595\n";
+
+    print "not " unless $x =~ /[\x80-\x{100}]/;
+    print "ok 596\n";
+
+    print "not " if     $x =~ /[\x{100}]/;
+    print "ok 597\n";
+
+    print "not " unless $x =~ /\p{InLatin1Supplement}/;
+    print "ok 598\n";
+
+    print "not " if    $x =~ /\P{InLatin1Supplement}/;
+    print "ok 599\n";
+
+    print "not " if     $x =~ /\p{InLatinExtendedA}/;
+    print "ok 600\n";
+
+    print "not " unless $x =~ /\P{InLatinExtendedA}/;
+    print "ok 601\n";
+}
+
+{
+    my $x = "\xff";
+
+    print "not " unless $x =~ /[\x80-\xff]/;
+    print "ok 602\n";
+
+    print "not " unless $x =~ /[\x80-\x{100}]/;
+    print "ok 603\n";
+
+    print "not " if     $x =~ /[\x{100}]/;
+    print "ok 604\n";
+
+    print "not " unless $x =~ /\p{InLatin1Supplement}/;
+    print "ok 605\n";
+
+    print "not " if     $x =~ /\P{InLatin1Supplement}/;
+    print "ok 606\n";
+
+    print "not " if     $x =~ /\p{InLatinExtendedA}/;
+    print "ok 607\n";
+
+    print "not " unless $x =~ /\P{InLatinExtendedA}/;
+    print "ok 608\n";
+}
+
+{
+    my $x = "\x{100}";
+
+    print "not " if     $x =~ /[\x80-\xff]/;
+    print "ok 609\n";
+
+    print "not " unless $x =~ /[\x80-\x{100}]/;
+    print "ok 610\n";
+
+    print "not " unless $x =~ /[\x{100}]/;
+    print "ok 611\n";
+
+    print "not " if     $x =~ /\p{InLatin1Supplement}/;
+    print "ok 612\n";
+
+    print "not " unless $x =~ /\P{InLatin1Supplement}/;
+    print "ok 613\n";
+
+    print "not " unless $x =~ /\p{InLatinExtendedA}/;
+    print "ok 614\n";
+
+    print "not " if     $x =~ /\P{InLatinExtendedA}/;
+    print "ok 615\n";
+}
+
+{
+    # from japhy
+    my $w;
+    use warnings;    
+    local $SIG{__WARN__} = sub { $w .= shift };
+
+    $w = "";
+    eval 'qr/(?c)/';
+    print "not " if $w !~ /^Useless \(\?c\)/;
+    print "ok 616\n";
+
+    $w = "";
+    eval 'qr/(?-c)/';
+    print "not " if $w !~ /^Useless \(\?-c\)/;
+    print "ok 617\n";
+
+    $w = "";
+    eval 'qr/(?g)/';
+    print "not " if $w !~ /^Useless \(\?g\)/;
+    print "ok 618\n";
+
+    $w = "";
+    eval 'qr/(?-g)/';
+    print "not " if $w !~ /^Useless \(\?-g\)/;
+    print "ok 619\n";
+
+    $w = "";
+    eval 'qr/(?o)/';
+    print "not " if $w !~ /^Useless \(\?o\)/;
+    print "ok 620\n";
+
+    $w = "";
+    eval 'qr/(?-o)/';
+    print "not " if $w !~ /^Useless \(\?-o\)/;
+    print "ok 621\n";
+
+    # now test multi-error regexes
+
+    $w = "";
+    eval 'qr/(?g-o)/';
+    print "not " if $w !~ /^Useless \(\?g\).*\nUseless \(\?-o\)/;
+    print "ok 622\n";
+
+    $w = "";
+    eval 'qr/(?g-c)/';
+    print "not " if $w !~ /^Useless \(\?g\).*\nUseless \(\?-c\)/;
+    print "ok 623\n";
+
+    $w = "";
+    eval 'qr/(?o-cg)/';  # (?c) means (?g) error won't be thrown
+    print "not " if $w !~ /^Useless \(\?o\).*\nUseless \(\?-c\)/;
+    print "ok 624\n";
+
+    $w = "";
+    eval 'qr/(?ogc)/';
+    print "not " if $w !~ /^Useless \(\?o\).*\nUseless \(\?g\).*\nUseless \(\?c\)/;
+    print "ok 625\n";
+}
+
+# More Unicode "class" tests
+
+{
+    use charnames ':full';
+
+    print "not " unless "\N{LATIN CAPITAL LETTER A}" =~ /\p{InBasicLatin}/;
+    print "ok 626\n";
+
+    print "not " unless "\N{LATIN CAPITAL LETTER A WITH GRAVE}" =~ /\p{InLatin1Supplement}/;
+    print "ok 627\n";
+
+    print "not " unless "\N{LATIN CAPITAL LETTER A WITH MACRON}" =~ /\p{InLatinExtendedA}/;
+    print "ok 628\n";
+
+    print "not " unless "\N{LATIN SMALL LETTER B WITH STROKE}" =~ /\p{InLatinExtendedB}/;
+    print "ok 629\n";
+
+    print "not " unless "\N{KATAKANA LETTER SMALL A}" =~ /\p{InKatakana}/;
+    print "ok 630\n";
+}
+
+$_ = "foo";
+
+eval <<"EOT"; die if $@;
+  /f
+   o\r
+   o
+   \$
+  /x && print "ok 631\n";
+EOT
+
+eval <<"EOT"; die if $@;
+  /f
+   o
+   o
+   \$\r
+  /x && print "ok 632\n";
+EOT
+
+#test /o feature
+sub test_o { $_[0] =~/$_[1]/o; return $1}
+if(test_o('abc','(.)..') eq 'a') {
+    print "ok 633\n";
+} else {
+    print "not ok 633\n";
+}
+if(test_o('abc','..(.)') eq 'a') {
+    print "ok 634\n";
+} else {
+    print "not ok 634\n";
+}
+
+# 635..639: ID 20010619.003 (only the space character is
+# supposed to be [:print:], not the whole isprint()).
+
+print "not " if "\n"     =~ /[[:print:]]/;
+print "ok 635\n";
+
+print "not " if "\t"     =~ /[[:print:]]/;
+print "ok 636\n";
+
+# Amazingly vertical tabulator is the same in ASCII and EBCDIC.
+print "not " if "\014"  =~ /[[:print:]]/;
+print "ok 637\n";
+
+print "not " if "\r"    =~ /[[:print:]]/;
+print "ok 638\n";
+
+print "not " unless " " =~ /[[:print:]]/;
+print "ok 639\n";
+
+##
+## Test basic $^N usage outside of a regex
+##
+$x = "abcdef";
+$T="ok 640\n";if ($x =~ /cde/ and not defined $^N)         {print $T} else {print "not $T"};
+$T="ok 641\n";if ($x =~ /(cde)/          and $^N eq "cde") {print $T} else {print "not $T"};
+$T="ok 642\n";if ($x =~ /(c)(d)(e)/      and $^N eq   "e") {print $T} else {print "not $T"};
+$T="ok 643\n";if ($x =~ /(c(d)e)/        and $^N eq "cde") {print $T} else {print "not $T"};
+$T="ok 644\n";if ($x =~ /(foo)|(c(d)e)/  and $^N eq "cde") {print $T} else {print "not $T"};
+$T="ok 645\n";if ($x =~ /(c(d)e)|(foo)/  and $^N eq "cde") {print $T} else {print "not $T"};
+$T="ok 646\n";if ($x =~ /(c(d)e)|(abc)/  and $^N eq "abc") {print $T} else {print "not $T"};
+$T="ok 647\n";if ($x =~ /(c(d)e)|(abc)x/ and $^N eq "cde") {print $T} else {print "not $T"};
+$T="ok 648\n";if ($x =~ /(c(d)e)(abc)?/  and $^N eq "cde") {print $T} else {print "not $T"};
+$T="ok 649\n";if ($x =~ /(?:c(d)e)/      and $^N eq  "d" ) {print $T} else {print "not $T"};
+$T="ok 650\n";if ($x =~ /(?:c(d)e)(?:f)/ and $^N eq  "d" ) {print $T} else {print "not $T"};
+$T="ok 651\n";if ($x =~ /(?:([abc])|([def]))*/ and $^N eq  "f" ){print $T} else {print "not $T"};
+$T="ok 652\n";if ($x =~ /(?:([ace])|([bdf]))*/ and $^N eq  "f" ){print $T} else {print "not $T"};
+$T="ok 653\n";if ($x =~ /(([ace])|([bd]))*/    and $^N eq  "e" ){print $T} else {print "not $T"};
+{
+ $T="ok 654\n";if($x =~ /(([ace])|([bdf]))*/   and $^N eq  "f" ){print $T} else {print "not $T"};
+}
+## test to see if $^N is automatically localized -- it should now
+## have the value set in test 653
+$T="ok 655\n";if ($^N eq  "e" ){print $T} else {print "not $T"};
+
+##
+## Now test inside (?{...})
+##
+$T="ok 656\n";if ($x =~ /a([abc])(?{$y=$^N})c/      and $y eq "b" ){print $T} else {print "not $T"};
+$T="ok 657\n";if ($x =~ /a([abc]+)(?{$y=$^N})d/     and $y eq "bc"){print $T} else {print "not $T"};
+$T="ok 658\n";if ($x =~ /a([abcdefg]+)(?{$y=$^N})d/ and $y eq "bc"){print $T} else {print "not $T"};
+$T="ok 659\n";if ($x =~ /(a([abcdefg]+)(?{$y=$^N})d)(?{$z=$^N})e/ and $y eq "bc" and $z eq "abcd")
+              {print $T} else {print "not $T"};
+$T="ok 660\n";if ($x =~ /(a([abcdefg]+)(?{$y=$^N})de)(?{$z=$^N})/ and $y eq "bc" and $z eq "abcde")
+              {print $T} else {print "not $T"};
+
+# Test the Unicode script classes
+
+print "not " unless chr(0x100) =~ /\p{InLatin}/; # outside Latin-1
+print "ok 661\n";
+
+print "not " unless chr(0x212b) =~ /\p{InLatin}/; # Angstrom sign, very outside
+print "ok 662\n";
+
+print "not " unless chr(0x5d0) =~ /\p{InHebrew}/; # inside HebrewBlock
+print "ok 663\n";
+
+print "not " unless chr(0xfb4f) =~ /\p{InHebrew}/; # outside HebrewBlock
+print "ok 664\n";
+
+print "not " unless chr(0xb5) =~ /\p{InGreek}/; # singleton (not in a range)
+print "ok 665\n";
+
+print "not " unless chr(0x37a) =~ /\p{InGreek}/; # singleton
+print "ok 666\n";
+
+print "not " unless chr(0x386) =~ /\p{InGreek}/; # singleton
+print "ok 667\n";
+
+print "not " unless chr(0x387) =~ /\P{InGreek}/; # not there
+print "ok 668\n";
+
+print "not " unless chr(0x388) =~ /\p{InGreek}/; # range
+print "ok 669\n";
+
+print "not " unless chr(0x38a) =~ /\p{InGreek}/; # range
+print "ok 670\n";
+
+print "not " unless chr(0x38b) =~ /\P{InGreek}/; # not there
+print "ok 671\n";
+
+print "not " unless chr(0x38c) =~ /\p{InGreek}/; # singleton
+print "ok 672\n";
+
+

@@ -8,9 +8,13 @@ $| = 1;
 # Cheesy version of Getopt::Std.  Maybe we should replace it with that.
 if ($#ARGV >= 0) {
     foreach my $idx (0..$#ARGV) {
-	next unless $ARGV[$idx] =~ /^-(\w+)$/;
+	next unless $ARGV[$idx] =~ /^-(\S+)$/;
 	$verbose = 1 if $1 eq 'v';
 	$with_utf= 1 if $1 eq 'utf8';
+	if ($1 =~ /^deparse(,.+)?$/) {
+	    $deparse = 1;
+	    $deparse_opts = $1;
+	}
 	splice(@ARGV, $idx, 1);
     }
 }
@@ -20,7 +24,7 @@ chdir 't' if -f 't/TEST';
 die "You need to run \"make test\" first to set things up.\n"
   unless -e 'perl' or -e 'perl.exe';
 
-if ($ENV{PERL_3LOG}) {
+if ($ENV{PERL_3LOG}) { # Tru64 third(1) tool, see perlhack
     unless (-x 'perl.third') {
 	unless (-x '../perl.third') {
 	    die "You need to run \"make perl.third first.\n";
@@ -40,25 +44,68 @@ $ENV{PERL_DESTRUCT_LEVEL} = 2 unless exists $ENV{PERL_DESTRUCT_LEVEL};
 
 $ENV{EMXSHELL} = 'sh';        # For OS/2
 
-if ($#ARGV == -1) {
-    @ARGV = split(/[ \n]/,
-      `echo base/*.t comp/*.t cmd/*.t run/*.t io/*.t; echo op/*.t pragma/*.t lib/*.t pod/*.t camel-III/*.t`);
+# Roll your own File::Find!
+use TestInit;
+use File::Spec;
+my $curdir = File::Spec->curdir;
+my $updir  = File::Spec->updir;
+
+sub _find_tests {
+    my($dir) = @_;
+    opendir DIR, $dir || die "Trouble opening $dir: $!";
+    foreach my $f (sort { $a cmp $b } readdir DIR) {
+        next if $f eq $curdir or $f eq $updir;
+
+        my $fullpath = File::Spec->catdir($dir, $f);
+
+        _find_tests($fullpath) if -d $fullpath;
+        push @ARGV, $fullpath if $f =~ /\.t$/;
+    }
 }
 
-# %infinite = ( 'comp/require.t', 1, 'op/bop.t', 1, 'lib/hostname.t', 1 );
+unless (@ARGV) {
+    foreach my $dir (qw(base comp cmd run io op lib)) {
+        _find_tests($dir);
+    }
+    my $mani = File::Spec->catdir($updir, "MANIFEST");
+    if (open(MANI, $mani)) {
+        while (<MANI>) { # similar code in t/harness
+	    if (m!^(ext/\S+/([^/]+\.t|test\.pl)|lib/\S+?(\.t|test\.pl))\s!) {
+		push @ARGV, $1;
+		$OVER{$1} = File::Spec->catdir($updir, $1);
+	    }
+	}
+    } else {
+        warn "$0: cannot open $mani: $!\n";
+    }
+    _find_tests('pod');
+}
 
-_testprogs('perl', @ARGV);
-_testprogs('compile', @ARGV) if (-e "../testcompile");
+# Tests known to cause infinite loops for the perlcc tests.
+# %infinite = ( 'comp/require.t', 1, 'op/bop.t', 1, 'lib/hostname.t', 1 );
+%infinite = ();
+
+if ($deparse) {
+    _testprogs('deparse', @ARGV);
+} else {
+    _testprogs('perl', @ARGV);
+    _testprogs('compile', @ARGV) if (-e "../testcompile");
+}
 
 sub _testprogs {
     $type = shift @_;
     @tests = @_;
 
-
     print <<'EOT' if ($type eq 'compile');
---------------------------------------------------------------------------------
+------------------------------------------------------------------------------
 TESTING COMPILER
---------------------------------------------------------------------------------
+------------------------------------------------------------------------------
+EOT
+
+    print <<'EOT' if ($type eq 'deparse');
+------------------------------------------------------------------------------
+TESTING DEPARSER
+------------------------------------------------------------------------------
 EOT
 
     $ENV{PERLCC_TIMEOUT} = 120
@@ -69,14 +116,17 @@ EOT
     $total = @tests;
     $files  = 0;
     $totmax = 0;
-    $maxlen = 0;
-    foreach (@tests) {
-	$len = length;
-	$maxlen = $len if $len > $maxlen;
+    my $maxlen = 0;
+    my $maxsuflen = 0;
+    foreach (@tests) { # The same code in lib/Test/Harness.pm:_run_all_tests
+	my $suf    = /\.(\w+)$/ ? $1 : '';
+	my $len    = length;
+	my $suflen = length $suf;
+	$maxlen    = $len    if $len    > $maxlen;
+	$maxsuflen = $suflen if $suflen > $maxsuflen;
     }
-    # +3 : we want three dots between the test name and the "ok"
-    # -2 : the .t suffix
-    $dotdotdot = $maxlen + 3 - 2;
+    # + 3 : we want three dots between the test name and the "ok"
+    $dotdotdot = $maxlen + 3 - $maxsuflen;
     while ($test = shift @tests) {
 
 	if ( $infinite{$test} && $type eq 'compile' ) {
@@ -86,13 +136,25 @@ EOT
 	if ($test =~ /^$/) {
 	    next;
 	}
+	if ($type eq 'deparse') {
+	    if ($test eq "comp/redef.t") {
+		# Redefinition happens at compile time
+		next;
+	    }
+	    elsif ($test eq "lib/switch.t") {
+		# B::Deparse doesn't support source filtering
+		next;
+	    }
+	}
 	$te = $test;
-	chop($te);
+	$te =~ s/\.\w+$/./;
 	print "$te" . '.' x ($dotdotdot - length($te));
+
+	$test = $OVER{$test} if exists $OVER{$test};
 
 	open(SCRIPT,"<$test") or die "Can't run $test.\n";
 	$_ = <SCRIPT>;
-	close(SCRIPT);
+	close(SCRIPT) unless ($type eq 'deparse');
 	if (/#!.*perl(.*)$/) {
 	    $switch = $1;
 	    if ($^O eq 'VMS') {
@@ -104,21 +166,42 @@ EOT
 	    $switch = '';
 	}
 
-	my $utf = $with_utf ? '-I../lib -Mutf8'
-	                    : '';
+	my $file_opts = "";
+	if ($type eq 'deparse') {
+	    # Look for #line directives which change the filename
+	    while (<SCRIPT>) {
+		$file_opts .= ",-f$3$4"
+			if /^#\s*line\s+(\d+)\s+((\w+)|"([^"]+)")/;
+	    }
+	    close(SCRIPT);
+	}
+
+	$test = $OVER{$test} if exists $OVER{$test};
+
+	my $utf = $with_utf ? '-I../lib -Mutf8' : '';
 	my $testswitch = '-I. -MTestInit'; # -T will strict . from @INC
-	if ($type eq 'perl') {
-	    my $run = "./perl $testswitch $switch $utf $test |";
+	if ($type eq 'deparse') {
+	    my $deparse =
+		"./perl $testswitch $switch -I../lib -MO=-qq,Deparse,".
+		"-l$deparse_opts$file_opts ".
+		"$test > $test.dp ".
+		"&& ./perl $testswitch $switch -I../lib $test.dp |";
+	    open(RESULTS, $deparse)
+		or print "can't deparse '$deparse': $!.\n";
+	}
+	elsif ($type eq 'perl') {
+	    my $perl = $ENV{PERL} || './perl';
+	    my $run = "$perl $testswitch $switch $utf $test |";
 	    open(RESULTS,$run) or print "can't run '$run': $!.\n";
 	}
 	else {
 	    my $compile =
 		"./perl $testswitch -I../lib ../utils/perlcc -o ".
-                "./$test.plc $utf ./$test ".
-		" && ./$test.plc |";
+                "$test.plc $utf $test ".
+		" && $test.plc |";
 	    open(RESULTS, $compile)
 		or print "can't compile '$compile': $!.\n";
-	    unlink "./$test.plc";
+	    unlink "$test.plc";
 	}
 
 	$ok = 0;
@@ -128,8 +211,9 @@ EOT
 		print $_;
 	    }
 	    unless (/^#/) {
-		if (/^1\.\.([0-9]+)/) {
+		if (/^1\.\.([0-9]+)( todo ([\d ]+))?/) {
 		    $max = $1;
+                    %todo = map { $_ => 1 } split / /, $3 if $3;
 		    $totmax += $max;
 		    $files += 1;
 		    $next = 1;
@@ -141,6 +225,7 @@ EOT
 		    {
 			my($not, $num, $extra) = ($1, $2, $3);
 			my($istodo) = $extra =~ /^\s*#\s*TODO/ if $extra;
+                        $istodo = 1 if $todo{$num};
 
 			if( $not && !$istodo ) {
 			    $ok = 0;
@@ -161,11 +246,16 @@ EOT
 	    }
 	}
 	close RESULTS;
+	if ($type eq 'deparse') {
+	    unlink "./$test.dp";
+	}
 	if ($ENV{PERL_3LOG}) {
 	    my $tpp = $test;
+	    $tpp =~ s:^../::;
 	    $tpp =~ s:/:_:g;
 	    $tpp =~ s:\.t$::;
-	    rename("perl.3log", "perl.3log.$tpp");
+	    rename("perl.3log", "perl.3log.$tpp") ||
+		die "rename: perl3.log to perl.3log.$tpp: $!\n";
 	}
 	$next = $next - 1;
 	if ($ok && $next == $max) {

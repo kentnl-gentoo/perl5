@@ -1,4 +1,4 @@
-case $CONFIG in
+case $PERL_CONFIG_SH in
 '')
 	if test -f config.sh; then TOP=.;
 	elif test -f ../config.sh; then TOP=..;
@@ -84,7 +84,7 @@ html:	pod2html $(HTML)
 
 tex:	pod2latex $(TEX)
 
-toc:	buildtoc
+toc perltoc.pod:	buildtoc
 	$(PERLILIB) buildtoc
 
 .SUFFIXES: .pm .pod
@@ -157,15 +157,15 @@ podchecker:	podchecker.PL ../lib/Config.pm
 podselect:	podselect.PL ../lib/Config.pm
 	$(PERL) -I ../lib podselect.PL
 
-perlmodlib.pod:	$(PERL) perlmodlib.PL ../mv-if-diff
+perlmodlib.pod:	$(PERL) perlmodlib.PL ../mv-if-diff ../MANIFEST
 	rm -f perlmodlib.tmp
 	$(PERL) -I ../lib perlmodlib.PL
 	sh ../mv-if-diff perlmodlib.tmp perlmodlib.pod
 
 compile: all
-	$(REALPERL) -I../lib ../utils/perlcc -o pod2latex.exe pod2latex -log ../compilelog
-	$(REALPERL) -I../lib ../utils/perlcc -o pod2man.exe pod2man -log ../compilelog
-	$(REALPERL) -I../lib ../utils/perlcc -o pod2text.exe pod2text -log ../compilelog
-	$(REALPERL) -I../lib ../utils/perlcc -o checkpods.exe checkpods -log ../compilelog
+	$(REALPERL) -I../lib ../utils/perlcc -I .. -L .. -o pod2latex.exe pod2latex -log ../compilelog
+	$(REALPERL) -I../lib ../utils/perlcc -I .. -L .. -o pod2man.exe pod2man -log ../compilelog
+	$(REALPERL) -I../lib ../utils/perlcc -I .. -L .. -o pod2text.exe pod2text -log ../compilelog
+	$(REALPERL) -I../lib ../utils/perlcc -I .. -L .. -o checkpods.exe checkpods -log ../compilelog
 
 !NO!SUBS!

@@ -1,7 +1,14 @@
 #if defined(USE_THREADS) || defined(USE_ITHREADS)
 
+#if defined(VMS)
+#include <builtins.h>
+#endif
+
 #ifdef WIN32
 #  include <win32thread.h>
+#else
+#ifdef NETWARE
+#  include <nw5thread.h>
 #else
 #  ifdef OLD_PTHREADS_API /* Here be dragons. */
 #    define DETACH(t) \
@@ -50,6 +57,7 @@
 #    define pthread_mutexattr_default NULL
 #    define pthread_condattr_default  NULL
 #  endif
+#endif	/* NETWARE */
 #endif
 
 #ifndef PTHREAD_CREATE
@@ -67,6 +75,10 @@
 #  else
 #    define PTHREAD_CREATE_JOINABLE 0 /* Panic?  No, guess. */
 #  endif
+#endif
+
+#ifdef DGUX
+#  define THREAD_CREATE_NEEDS_STACK (16*1024)
 #endif
 
 #ifdef I_MACH_CTHREADS
@@ -241,8 +253,22 @@
     } STMT_END
 #endif /* JOIN */
 
+/* Use an unchecked fetch of thread-specific data instead of a checked one.
+ * It would fail if the key were bogus, but if the key were bogus then
+ * Really Bad Things would be happening anyway. --dan */
+#if (defined(__ALPHA) && (__VMS_VER >= 70000000)) || \
+    (defined(__alpha) && defined(__osf__)) /* Available only on >= 4.0 */
+#  define HAS_PTHREAD_UNCHECKED_GETSPECIFIC_NP /* Configure test needed */
+#endif
+
+#ifdef HAS_PTHREAD_UNCHECKED_GETSPECIFIC_NP
+#  define PTHREAD_GETSPECIFIC(key) pthread_unchecked_getspecific_np(key)
+#else
+#  define PTHREAD_GETSPECIFIC(key) pthread_getspecific(key)
+#endif
+
 #ifndef PERL_GET_CONTEXT
-#  define PERL_GET_CONTEXT	pthread_getspecific(PL_thr_key)
+#  define PERL_GET_CONTEXT	PTHREAD_GETSPECIFIC(PL_thr_key)
 #endif
 
 #ifndef PERL_SET_CONTEXT
@@ -274,6 +300,24 @@
     STMT_START {						\
 	pthread_key_delete(PL_thr_key);				\
     } STMT_END
+#endif
+
+void Perl_atfork_lock(void);
+void Perl_atfork_unlock(void);
+
+#ifndef PTHREAD_ATFORK
+#  ifdef HAS_PTHREAD_ATFORK
+#    define PTHREAD_ATFORK(prepare,parent,child)		\
+	pthread_atfork(prepare,parent,child)
+#  else
+#    ifdef HAS_FORK
+#      define PTHREAD_ATFORK(prepare,parent,child)		\
+	 Perl_croak(aTHX_ "No pthread_atfork() -- fork() too unsafe");
+#    else
+#      define PTHREAD_ATFORK(prepare,parent,child)		\
+	 NOOP
+#    endif
+#  endif
 #endif
 
 #ifndef THREAD_RET_TYPE
@@ -429,4 +473,8 @@ typedef struct condpair {
 
 #ifndef INIT_THREADS
 #  define INIT_THREADS NOOP
+#endif
+
+#ifndef PTHREAD_ATFORK
+#  define PTHREAD_ATFORK(prepare,parent,child)	NOOP
 #endif
