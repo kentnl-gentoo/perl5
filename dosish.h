@@ -28,7 +28,6 @@
        } STMT_END
 #    define pthread_mutexattr_default NULL
 #    define pthread_condattr_default NULL
-#    define pthread_attr_default NULL
 #    define pthread_addr_t any_t
 #  endif
 #else	/* DJGPP */
@@ -44,11 +43,6 @@
 #define PERL_SYS_TERM() MALLOC_TERM
 #define dXSUB_SYS
 #define TMPPATH "plXXXXXX"
-
-#ifdef WIN32
-#define HAS_UTIME
-#define HAS_KILL
-#endif
 
 /*
  * 5.003_07 and earlier keyed on #ifdef MSDOS for determining if we were 
@@ -123,11 +117,15 @@
 #ifndef WIN32
 #  define Stat(fname,bufptr) stat((fname),(bufptr))
 #else
+#  define HAS_IOCTL
+#  define HAS_UTIME
+#  define HAS_KILL
+#  define HAS_WAIT
 /*
  * This provides a layer of functions and macros to ensure extensions will
  * get to use the same RTL functions as the core.
  */
-#ifndef HASATTRIBUTE
-#  include <win32iop.h>
-#endif
+#  ifndef HASATTRIBUTE
+#    include <win32iop.h>
+#  endif
 #endif	/* WIN32 */

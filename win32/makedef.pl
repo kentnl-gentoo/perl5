@@ -219,6 +219,7 @@ Perl_nthreads
 Perl_nthreads_cond
 Perl_per_thread_magicals
 Perl_thread_create
+Perl_threadnum
 Perl_find_threadsv
 Perl_threadsv_names
 Perl_thrsv
@@ -278,6 +279,11 @@ unless ($define{'DEBUGGING'})
     Perl_sv_peek
     Perl_watchaddr
     Perl_watchok)];
+ }
+
+if ($define{'HAVE_DES_FCRYPT'})
+ {
+  emit_symbols [qw(win32_crypt)];
  }
 
 open (GLOBAL, "<../global.sym") || die "failed to open global.sym" . $!;
@@ -502,6 +508,9 @@ win32_times
 win32_alarm
 win32_open_osfhandle
 win32_get_osfhandle
+win32_ioctl
+win32_wait
+win32_str_os_error
 Perl_win32_init
 Perl_init_os_extras
 Perl_getTHR

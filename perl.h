@@ -113,7 +113,8 @@ register struct op *op asm(stringify(OP_IN_REGISTER));
 # define STANDARD_C 1
 #endif
 
-#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(OS2)
+#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(OS2) \
+	|| defined(__DGUX)
 # define DONT_DECLARE_STD 1
 #endif
 
@@ -204,6 +205,11 @@ register struct op *op asm(stringify(OP_IN_REGISTER));
 #endif
 
 #include "perlio.h"
+#include "perllio.h"
+#include "perlsock.h"
+#include "perlproc.h"
+#include "perlenv.h"
+#include "perldir.h"
 
 #ifdef USE_NEXT_CTYPE
 
@@ -470,8 +476,8 @@ Free_t   Perl_free _((Malloc_t where));
 #ifdef USE_THREADS
 #  define ERRSV (thr->errsv)
 #  define ERRHV (thr->errhv)
-#  define DEFSV *av_fetch(thr->threadsv, find_threadsv("_"), FALSE)
-#  define SAVE_DEFSV save_threadsv(find_threadsv("_"))
+#  define DEFSV THREADSV(0)
+#  define SAVE_DEFSV save_threadsv(0)
 #else
 #  define ERRSV GvSV(errgv)
 #  define ERRHV GvHV(errgv)
@@ -944,7 +950,7 @@ typedef union any ANY;
 typedef I32 (*filter_t) _((int, SV *, int));
 #define FILTER_READ(idx, sv, len)  filter_read(idx, sv, len)
 #define FILTER_DATA(idx)	   (AvARRAY(rsfp_filters)[idx])
-#define FILTER_ISREADER(idx)	   (idx >= AvFILL(rsfp_filters))
+#define FILTER_ISREADER(idx)	   (idx >= AvFILLp(rsfp_filters))
 
 #ifdef DOSISH
 # if defined(OS2)
@@ -1255,7 +1261,7 @@ Gid_t getegid _((void));
 	if (!(what)) {							\
 	    croak("Assertion failed: file \"%s\", line %d",		\
 		__FILE__, __LINE__);					\
-	    exit(1);							\
+	    PerlProc_exit(1);							\
 	}})
 #endif
 
@@ -1299,19 +1305,21 @@ END_EXTERN_C
 #endif
 
 #ifndef __cplusplus
-#ifdef __NeXT__ /* or whatever catches all NeXTs */
+#  ifdef __NeXT__ /* or whatever catches all NeXTs */
 char *crypt ();       /* Maybe more hosts will need the unprototyped version */
-#else
+#  else
+#    if !defined(WIN32) || !defined(HAVE_DES_FCRYPT)
 char *crypt _((const char*, const char*));
-#endif
-#ifndef DONT_DECLARE_STD
-#ifndef getenv
+#    endif /* !WIN32 && !HAVE_CRYPT_SOURCE */
+#  endif /* !__NeXT__ */
+#  ifndef DONT_DECLARE_STD
+#    ifndef getenv
 char *getenv _((const char*));
-#endif
+#    endif /* !getenv */
 Off_t lseek _((int,Off_t,int));
-#endif
+#  endif /* !DONT_DECLARE_STD */
 char *getlogin _((void));
-#endif
+#endif /* !__cplusplus */
 
 #ifdef UNLINK_ALL_VERSIONS /* Currently only makes sense for VMS */
 #define UNLINK unlnk
@@ -1376,11 +1384,14 @@ int runops_standard _((void));
 int runops_debug _((void));
 #endif
 
+/* _ (for $_) must be first in the following list (DEFSV requires it) */
 #define THREADSV_NAMES "_123456789&`'+/.,\\\";^-%=|~:\001\005!@"
 
 /* VMS doesn't use environ array and NeXT has problems with crt0.o globals */
 #if !defined(VMS) && !(defined(NeXT) && defined(__DYNAMIC__))
-#if !defined(DONT_DECLARE_STD) || (defined(__svr4__) && defined(__GNUC__) && defined(sun)) || defined(__sgi)
+#if !defined(DONT_DECLARE_STD) \
+	|| (defined(__svr4__) && defined(__GNUC__) && defined(sun)) \
+	|| defined(__sgi) || defined(__DGUX)
 extern char **	environ;	/* environment variables supplied via exec */
 #endif
 #else
@@ -1664,14 +1675,16 @@ struct perl_thread {
 #include "thrdvar.h"
 };
 
+typedef struct perl_thread *Thread;
+
+#else
+typedef void *Thread;
 #endif
 
 /* Done with PERLVAR macros for now ... */
 #undef PERLVAR
 #undef PERLVARI
 #undef PERLVARIC
-
-typedef struct perl_thread *Thread;
 
 #include "thread.h"
 #include "pp.h"
@@ -1743,7 +1756,7 @@ EXT MGVTBL vtbl_sigelem =	{magic_getsig,
 					magic_setsig,
 					0,	magic_clearsig,
 							0};
-EXT MGVTBL vtbl_pack =	{0,	0,	0,	magic_wipepack,
+EXT MGVTBL vtbl_pack =	{0,	0,	magic_sizepack,	magic_wipepack,
 							0};
 EXT MGVTBL vtbl_packelem =	{magic_getpack,
 				magic_setpack,
@@ -2028,12 +2041,12 @@ enum {
  * and queried under the protection of sv_mutex
  */
 #define offer_nice_chunk(chunk, chunk_size) do {	\
-	MUTEX_LOCK(&sv_mutex);				\
+	LOCK_SV_MUTEX;					\
 	if (!nice_chunk) {				\
 	    nice_chunk = (char*)(chunk);		\
 	    nice_chunk_size = (chunk_size);		\
 	}						\
-	MUTEX_UNLOCK(&sv_mutex);			\
+	UNLOCK_SV_MUTEX;				\
     } while (0)
 
 

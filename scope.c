@@ -19,8 +19,16 @@ SV**
 stack_grow(SV **sp, SV **p, int n)
 {
     dTHR;
+#if defined(DEBUGGING) && !defined(USE_THREADS)
+    static int growing = 0;
+    if (growing++)
+      abort();
+#endif
     stack_sp = sp;
     av_extend(curstack, (p - stack_base) + (n) + 128);
+#if defined(DEBUGGING) && !defined(USE_THREADS)
+    growing--;
+#endif
     return stack_sp;
 }
 
@@ -197,11 +205,14 @@ AV *
 save_ary(GV *gv)
 {
     dTHR;
-    AV *oav, *av;
+    AV *oav = GvAVn(gv);
+    AV *av;
 
+    if (!AvREAL(oav) && AvREIFY(oav))
+	av_reify(oav);
     SSCHECK(3);
     SSPUSHPTR(gv);
-    SSPUSHPTR(oav = GvAVn(gv));
+    SSPUSHPTR(oav);
     SSPUSHINT(SAVEt_AV);
 
     GvAV(gv) = Null(AV*);
@@ -335,7 +346,7 @@ save_threadsv(PADOFFSET i)
 {
 #ifdef USE_THREADS
     dTHR;
-    SV **svp = av_fetch(thr->threadsv, i, FALSE);
+    SV **svp = &THREADSV(i);	/* XXX Change to save by offset */
     DEBUG_L(PerlIO_printf(PerlIO_stderr(), "save_threadsv %u: %p %p:%s\n",
 			  i, svp, *svp, SvPEEK(*svp)));
     save_svref(svp);
@@ -658,12 +669,12 @@ leave_scope(I32 base)
 	    }
 	    else {	/* Someone has a claim on this, so abandon it. */
 		U32 padflags = SvFLAGS(sv) & (SVs_PADBUSY|SVs_PADMY|SVs_PADTMP);
-		SvREFCNT_dec(sv);	/* Cast current value to the winds. */
 		switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
 		case SVt_PVAV:	*(SV**)ptr = (SV*)newAV();	break;
 		case SVt_PVHV:	*(SV**)ptr = (SV*)newHV();	break;
 		default:	*(SV**)ptr = NEWSV(0,0);	break;
 		}
+		SvREFCNT_dec(sv);	/* Cast current value to the winds. */
 		SvFLAGS(*(SV**)ptr) |= padflags; /* preserve pad nature */
 	    }
 	    break;

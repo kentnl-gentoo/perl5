@@ -14,6 +14,7 @@
 
 #include "EXTERN.h"
 #include "perl.h"
+#include "perlmem.h"
 
 #if !defined(NSIG) || defined(M_UNIX) || defined(M_XENIX)
 #include <signal.h>
@@ -56,10 +57,6 @@
 static void xstat _((void));
 #endif
 
-#ifdef USE_THREADS
-static U32 threadnum = 0;
-#endif /* USE_THREADS */
-
 #ifndef MYMALLOC
 
 /* paranoid version of malloc */
@@ -84,7 +81,7 @@ safemalloc(MEM_SIZE size)
     if ((long)size < 0)
 	croak("panic: malloc");
 #endif
-    ptr = malloc(size?size:1);	/* malloc(0) is NASTY on our system */
+    ptr = PerlMem_malloc(size?size:1);	/* malloc(0) is NASTY on our system */
 #if !(defined(I286) || defined(atarist))
     DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%x: (%05d) malloc %ld bytes\n",ptr,an++,(long)size));
 #else
@@ -109,7 +106,7 @@ saferealloc(Malloc_t where,MEM_SIZE size)
 {
     Malloc_t ptr;
 #if !defined(STANDARD_C) && !defined(HAS_REALLOC_PROTOTYPE)
-    Malloc_t realloc();
+    Malloc_t PerlMem_realloc();
 #endif /* !defined(STANDARD_C) && !defined(HAS_REALLOC_PROTOTYPE) */
 
 #ifdef HAS_64K_LIMIT 
@@ -125,7 +122,7 @@ saferealloc(Malloc_t where,MEM_SIZE size)
     if ((long)size < 0)
 	croak("panic: realloc");
 #endif
-    ptr = realloc(where,size?size:1);	/* realloc(0) is NASTY on our system */
+    ptr = PerlMem_realloc(where,size?size:1);	/* realloc(0) is NASTY on our system */
 
 #if !(defined(I286) || defined(atarist))
     DEBUG_m( {
@@ -163,7 +160,7 @@ safefree(Malloc_t where)
 #endif
     if (where) {
 	/*SUPPRESS 701*/
-	free(where);
+	PerlMem_free(where);
     }
 }
 
@@ -186,7 +183,7 @@ safecalloc(MEM_SIZE count, MEM_SIZE size)
 	croak("panic: calloc");
 #endif
     size *= count;
-    ptr = malloc(size?size:1);	/* malloc(0) is NASTY on our system */
+    ptr = PerlMem_malloc(size?size:1);	/* malloc(0) is NASTY on our system */
 #if !(defined(I286) || defined(atarist))
     DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%x: (%05d) calloc %ld  x %ld bytes\n",ptr,an++,(long)count,(long)size));
 #else
@@ -536,8 +533,8 @@ perl_init_i18nl10n(int printwarn)
 #ifdef USE_LOCALE_NUMERIC
     char *curnum     = NULL;
 #endif /* USE_LOCALE_NUMERIC */
-    char *lc_all     = getenv("LC_ALL");
-    char *lang       = getenv("LANG");
+    char *lc_all     = PerlEnv_getenv("LC_ALL");
+    char *lang       = PerlEnv_getenv("LANG");
     bool setlocale_failure = FALSE;
 
 #ifdef LOCALE_ENVIRON_REQUIRED
@@ -561,19 +558,19 @@ perl_init_i18nl10n(int printwarn)
     {
 #ifdef USE_LOCALE_CTYPE
 	if (! (curctype = setlocale(LC_CTYPE,
-				    (!done && (lang || getenv("LC_CTYPE")))
+				    (!done && (lang || PerlEnv_getenv("LC_CTYPE")))
 				    ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_CTYPE */
 #ifdef USE_LOCALE_COLLATE
 	if (! (curcoll = setlocale(LC_COLLATE,
-				   (!done && (lang || getenv("LC_COLLATE")))
+				   (!done && (lang || PerlEnv_getenv("LC_COLLATE")))
 				   ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_COLLATE */
 #ifdef USE_LOCALE_NUMERIC
 	if (! (curnum = setlocale(LC_NUMERIC,
-				  (!done && (lang || getenv("LC_NUMERIC")))
+				  (!done && (lang || PerlEnv_getenv("LC_NUMERIC")))
 				  ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_NUMERIC */
@@ -620,7 +617,7 @@ perl_init_i18nl10n(int printwarn)
 	char *p;
 	bool locwarn = (printwarn > 1 || 
 			printwarn &&
-			(!(p = getenv("PERL_BADLANG")) || atoi(p)));
+			(!(p = PerlEnv_getenv("PERL_BADLANG")) || atoi(p)));
 
 	if (locwarn) {
 #ifdef LC_ALL
@@ -1455,7 +1452,7 @@ my_setenv(char *nam,char *val)
 	vallen = strlen(val);
     New(904, envstr, namlen + vallen + 3, char);
     (void)sprintf(envstr,"%s=%s",nam,val);
-    (void)putenv(envstr);
+    (void)PerlEnv_putenv(envstr);
     if (oldstr)
 	Safefree(oldstr);
 #ifdef _MSC_VER
@@ -1512,7 +1509,7 @@ char *f;
 {
     I32 i;
 
-    for (i = 0; unlink(f) >= 0; i++) ;
+    for (i = 0; PerlLIO_unlink(f) >= 0; i++) ;
     return i ? 0 : -1;
 }
 #endif
@@ -1784,7 +1781,7 @@ my_popen(char *cmd, char *mode)
 	return my_syspopen(cmd,mode);
     }
 #endif 
-    if (pipe(p) < 0)
+    if (PerlProc_pipe(p) < 0)
 	return Nullfp;
     This = (*mode == 'w');
     that = !This;
@@ -1794,7 +1791,7 @@ my_popen(char *cmd, char *mode)
     }
     while ((pid = (doexec?vfork():fork())) < 0) {
 	if (errno != EAGAIN) {
-	    close(p[This]);
+	    PerlLIO_close(p[This]);
 	    if (!doexec)
 		croak("Can't fork");
 	    return Nullfp;
@@ -1806,10 +1803,10 @@ my_popen(char *cmd, char *mode)
 
 #define THIS that
 #define THAT This
-	close(p[THAT]);
+	PerlLIO_close(p[THAT]);
 	if (p[THIS] != (*mode == 'r')) {
-	    dup2(p[THIS], *mode == 'r');
-	    close(p[THIS]);
+	    PerlLIO_dup2(p[THIS], *mode == 'r');
+	    PerlLIO_close(p[THIS]);
 	}
 	if (doexec) {
 #if !defined(HAS_FCNTL) || !defined(F_SETFD)
@@ -1819,10 +1816,10 @@ my_popen(char *cmd, char *mode)
 #define NOFILE 20
 #endif
 	    for (fd = maxsysfd + 1; fd < NOFILE; fd++)
-		close(fd);
+		PerlLIO_close(fd);
 #endif
 	    do_exec(cmd);	/* may or may not use the shell */
-	    _exit(1);
+	    PerlProc__exit(1);
 	}
 	/*SUPPRESS 560*/
 	if (tmpgv = gv_fetchpv("$",TRUE, SVt_PV))
@@ -1834,10 +1831,10 @@ my_popen(char *cmd, char *mode)
 #undef THAT
     }
     do_execfree();	/* free any memory malloced by child on vfork */
-    close(p[that]);
+    PerlLIO_close(p[that]);
     if (p[that] < p[This]) {
-	dup2(p[This], p[that]);
-	close(p[This]);
+	PerlLIO_dup2(p[This], p[that]);
+	PerlLIO_close(p[This]);
 	p[This] = p[that];
     }
     sv = *av_fetch(fdpid,p[This],TRUE);
@@ -1871,7 +1868,7 @@ char *s;
 
     PerlIO_printf(PerlIO_stderr(),"%s", s);
     for (fd = 0; fd < 32; fd++) {
-	if (Fstat(fd,&tmpstatbuf) >= 0)
+	if (PerlLIO_fstat(fd,&tmpstatbuf) >= 0)
 	    PerlIO_printf(PerlIO_stderr()," %d",fd);
     }
     PerlIO_printf(PerlIO_stderr(),"\n");
@@ -1887,7 +1884,7 @@ int newfd;
 #if defined(HAS_FCNTL) && defined(F_DUPFD)
     if (oldfd == newfd)
 	return oldfd;
-    close(newfd);
+    PerlLIO_close(newfd);
     return fcntl(oldfd, F_DUPFD, newfd);
 #else
 #define DUP2_MAX_FDS 256
@@ -1897,18 +1894,18 @@ int newfd;
 
     if (oldfd == newfd)
 	return oldfd;
-    close(newfd);
+    PerlLIO_close(newfd);
     /* good enough for low fd's... */
-    while ((fd = dup(oldfd)) != newfd && fd >= 0) {
+    while ((fd = PerlLIO_dup(oldfd)) != newfd && fd >= 0) {
 	if (fdx >= DUP2_MAX_FDS) {
-	    close(fd);
+	    PerlLIO_close(fd);
 	    fd = -1;
 	    break;
 	}
 	fdtmp[fdx++] = fd;
     }
     while (fdx > 0)
-	close(fdtmp[--fdx]);
+	PerlLIO_close(fdtmp[--fdx]);
     return fd;
 #endif
 }
@@ -1970,7 +1967,7 @@ rsignal_restore(int signo, Sigsave_t *save)
 Sighandler_t
 rsignal(int signo, Sighandler_t handler)
 {
-    return signal(signo, handler);
+    return PerlProc_signal(signo, handler);
 }
 
 static int sig_trapped;
@@ -1988,24 +1985,24 @@ rsignal_state(int signo)
     Sighandler_t oldsig;
 
     sig_trapped = 0;
-    oldsig = signal(signo, sig_trap);
-    signal(signo, oldsig);
+    oldsig = PerlProc_signal(signo, sig_trap);
+    PerlProc_signal(signo, oldsig);
     if (sig_trapped)
-        kill(getpid(), signo);
+        PerlProc_kill(getpid(), signo);
     return oldsig;
 }
 
 int
 rsignal_save(int signo, Sighandler_t handler, Sigsave_t *save)
 {
-    *save = signal(signo, handler);
+    *save = PerlProc_signal(signo, handler);
     return (*save == SIG_ERR) ? -1 : 0;
 }
 
 int
 rsignal_restore(int signo, Sigsave_t *save)
 {
-    return (signal(signo, *save) == SIG_ERR) ? -1 : 0;
+    return (PerlProc_signal(signo, *save) == SIG_ERR) ? -1 : 0;
 }
 
 #endif /* !HAS_SIGACTION */
@@ -2013,7 +2010,7 @@ rsignal_restore(int signo, Sigsave_t *save)
     /* VMS' my_pclose() is in VMS.c; same with OS/2 */
 #if (!defined(DOSISH) || defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS)
 I32
-my_pclose(FILE *ptr)
+my_pclose(PerlIO *ptr)
 {
     Sigsave_t hstat, istat, qstat;
     int status;
@@ -2023,6 +2020,9 @@ my_pclose(FILE *ptr)
     int saved_errno;
 #ifdef VMS
     int saved_vaxc_errno;
+#endif
+#ifdef WIN32
+    int saved_win32_errno;
 #endif
 
     svp = av_fetch(fdpid,PerlIO_fileno(ptr),TRUE);
@@ -2039,9 +2039,12 @@ my_pclose(FILE *ptr)
 #ifdef VMS
 	saved_vaxc_errno = vaxc$errno;
 #endif
+#ifdef WIN32
+	saved_win32_errno = GetLastError();
+#endif
     }
 #ifdef UTS
-    if(kill(pid, 0) < 0) { return(pid); }   /* HOM 12/23/91 */
+    if(PerlProc_kill(pid, 0) < 0) { return(pid); }   /* HOM 12/23/91 */
 #endif
     rsignal_save(SIGHUP, SIG_IGN, &hstat);
     rsignal_save(SIGINT, SIG_IGN, &istat);
@@ -2060,7 +2063,7 @@ my_pclose(FILE *ptr)
 }
 #endif /* !DOSISH */
 
-#if  !defined(DOSISH) || defined(OS2)
+#if  !defined(DOSISH) || defined(OS2) || defined(WIN32)
 I32
 wait4pid(int pid, int *statusp, int flags)
 {
@@ -2118,7 +2121,7 @@ wait4pid(int pid, int *statusp, int flags)
     }
 #endif
 }
-#endif /* !DOSISH */
+#endif /* !DOSISH || OS2 || WIN32 */
 
 void
 /*SUPPRESS 590*/
@@ -2437,11 +2440,11 @@ condpair_magic(SV *sv)
 	COND_INIT(&cp->owner_cond);
 	COND_INIT(&cp->cond);
 	cp->owner = 0;
-	MUTEX_LOCK(&sv_mutex);
+	LOCK_SV_MUTEX;
 	mg = mg_find(sv, 'm');
 	if (mg) {
 	    /* someone else beat us to initialising it */
-	    MUTEX_UNLOCK(&sv_mutex);
+	    UNLOCK_SV_MUTEX;
 	    MUTEX_DESTROY(&cp->mutex);
 	    COND_DESTROY(&cp->owner_cond);
 	    COND_DESTROY(&cp->cond);
@@ -2452,7 +2455,7 @@ condpair_magic(SV *sv)
 	    mg = SvMAGIC(sv);
 	    mg->mg_ptr = (char *)cp;
 	    mg->mg_len = sizeof(cp);
-	    MUTEX_UNLOCK(&sv_mutex);
+	    UNLOCK_SV_MUTEX;
 	    DEBUG_L(WITH_THR(PerlIO_printf(PerlIO_stderr(),
 					   "%p: condpair_magic %p\n", thr, sv));)
 	}
@@ -2537,7 +2540,7 @@ new_struct_thread(struct perl_thread *t)
     
     /* Initialise all per-thread SVs that the template thread used */
     svp = AvARRAY(t->threadsv);
-    for (i = 0; i <= AvFILL(t->threadsv); i++, svp++) {
+    for (i = 0; i <= AvFILLp(t->threadsv); i++, svp++) {
 	if (*svp && *svp != &sv_undef) {
 	    SV *sv = newSVsv(*svp);
 	    av_store(thr->threadsv, i, sv);
@@ -2546,6 +2549,7 @@ new_struct_thread(struct perl_thread *t)
 		"new_struct_thread: copied threadsv %d %p->%p\n",i, t, thr));
 	}
     } 
+    thr->threadsvp = AvARRAY(thr->threadsv);
 
     MUTEX_LOCK(&threads_mutex);
     nthreads++;
