@@ -1853,6 +1853,10 @@
 #define Perl_utf16_to_utf8_reversed	pPerl->Perl_utf16_to_utf8_reversed
 #undef  utf16_to_utf8_reversed
 #define utf16_to_utf8_reversed	Perl_utf16_to_utf8_reversed
+#undef  Perl_utf8_length
+#define Perl_utf8_length	pPerl->Perl_utf8_length
+#undef  utf8_length
+#define utf8_length		Perl_utf8_length
 #undef  Perl_utf8_distance
 #define Perl_utf8_distance	pPerl->Perl_utf8_distance
 #undef  utf8_distance
@@ -1865,6 +1869,10 @@
 #define Perl_utf8_to_bytes	pPerl->Perl_utf8_to_bytes
 #undef  utf8_to_bytes
 #define utf8_to_bytes		Perl_utf8_to_bytes
+#undef  Perl_bytes_from_utf8
+#define Perl_bytes_from_utf8	pPerl->Perl_bytes_from_utf8
+#undef  bytes_from_utf8
+#define bytes_from_utf8		Perl_bytes_from_utf8
 #undef  Perl_bytes_to_utf8
 #define Perl_bytes_to_utf8	pPerl->Perl_bytes_to_utf8
 #undef  bytes_to_utf8
@@ -2130,6 +2138,14 @@
 #define Perl_sv_force_normal	pPerl->Perl_sv_force_normal
 #undef  sv_force_normal
 #define sv_force_normal		Perl_sv_force_normal
+#undef  Perl_sv_add_backref
+#define Perl_sv_add_backref	pPerl->Perl_sv_add_backref
+#undef  sv_add_backref
+#define sv_add_backref		Perl_sv_add_backref
+#undef  Perl_sv_del_backref
+#define Perl_sv_del_backref	pPerl->Perl_sv_del_backref
+#undef  sv_del_backref
+#define sv_del_backref		Perl_sv_del_backref
 #undef  Perl_tmps_grow
 #define Perl_tmps_grow		pPerl->Perl_tmps_grow
 #undef  tmps_grow

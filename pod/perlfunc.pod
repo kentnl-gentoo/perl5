@@ -274,8 +274,8 @@ X<-S>X<-b>X<-c>X<-t>X<-u>X<-g>X<-k>X<-T>X<-B>X<-M>X<-A>X<-C>
     -O	File is owned by real uid.
 
     -e	File exists.
-    -z	File has zero size.
-    -s	File has nonzero size (returns size).
+    -z	File has zero size (is empty).
+    -s	File has nonzero size (returns size in bytes).
 
     -f	File is a plain file.
     -d	File is a directory.
@@ -692,11 +692,8 @@ On POSIX systems, you can detect this condition this way:
 
 Returns the character represented by that NUMBER in the character set.
 For example, C<chr(65)> is C<"A"> in either ASCII or Unicode, and
-chr(0x263a) is a Unicode smiley face. Within the scope of C<use utf8>, 
-characters higher than 127 are encoded in Unicode; if you don't want
-this, temporarily C<use bytes> or use C<pack("C*",...)>
-
-For the reverse, use L</ord>.  
+chr(0x263a) is a Unicode smiley face (but only within the scope of
+a C<use utf8>).  For the reverse, use L</ord>.  
 See L<utf8> for more about Unicode.
 
 If NUMBER is omitted, uses C<$_>.
@@ -923,7 +920,10 @@ element to return happens to be C<undef>.
 
 You may also use C<defined(&func)> to check whether subroutine C<&func>
 has ever been defined.  The return value is unaffected by any forward
-declarations of C<&foo>.
+declarations of C<&foo>.  Note that a subroutine which is not defined
+may still be callable: its package may have an C<AUTOLOAD> method that
+makes it spring into existence the first time that it is called -- see
+L<perlsub>.
 
 Use of C<defined> on aggregates (hashes and arrays) is deprecated.  It
 used to report whether memory for that aggregate has ever been
@@ -1479,7 +1479,10 @@ it exists, but the reverse doesn't necessarily hold true.
 Given an expression that specifies the name of a subroutine,
 returns true if the specified subroutine has ever been declared, even
 if it is undefined.  Mentioning a subroutine name for exists or defined
-does not count as declaring it.
+does not count as declaring it.  Note that a subroutine which does not
+exist may still be callable: its package may have an C<AUTOLOAD>
+method that makes it spring into existence the first time that it is
+called -- see L<perlsub>.
 
     print "Exists\n" 	if exists &subroutine;
     print "Defined\n" 	if defined &subroutine;
@@ -2878,7 +2881,7 @@ another way to protect your filenames from interpretation.  For example:
     sysopen(HANDLE, $path, O_RDWR|O_CREAT|O_EXCL)
 	or die "sysopen $path: $!";
     $oldfh = select(HANDLE); $| = 1; select($oldfh);
-    print HANDLE "stuff $$\n");
+    print HANDLE "stuff $$\n";
     seek(HANDLE, 0, 0);
     print "File contains: ", <HANDLE>;
 
@@ -3502,12 +3505,13 @@ with the wrong number of RANDBITS.)
 =item read FILEHANDLE,SCALAR,LENGTH
 
 Attempts to read LENGTH bytes of data into variable SCALAR from the
-specified FILEHANDLE.  Returns the number of bytes actually read,
-C<0> at end of file, or undef if there was an error.  SCALAR will be grown
-or shrunk to the length actually read.  An OFFSET may be specified to
-place the read data at some other place than the beginning of the
-string.  This call is actually implemented in terms of stdio's fread(3)
-call.  To get a true read(2) system call, see C<sysread>.
+specified FILEHANDLE.  Returns the number of bytes actually read, C<0>
+at end of file, or undef if there was an error.  SCALAR will be grown
+or shrunk to the length actually read.  If SCALAR needs growing, the
+new bytes will be zero bytes.  An OFFSET may be specified to place
+the read data into some other place in SCALAR than the beginning.
+The call is actually implemented in terms of stdio's fread(3) call.
+To get a true read(2) system call, see C<sysread>.
 
 =item readdir DIRHANDLE
 

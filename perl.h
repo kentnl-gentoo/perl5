@@ -179,7 +179,7 @@ class CPerlObj;
 struct perl_thread;
 #    define pTHX	register struct perl_thread *thr
 #    define aTHX	thr
-#    define dTHR	dNOOP
+#    define dTHR	dNOOP /* only backward compatibility */
 #    define dTHXa(a)	pTHX = (struct perl_thread*)a
 #  else
 #    ifndef MULTIPLICITY
@@ -299,7 +299,7 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #endif
 
 #define WITH_THX(s) STMT_START { dTHX; s; } STMT_END
-#define WITH_THR(s) STMT_START { dTHR; s; } STMT_END
+#define WITH_THR(s) WITH_THX(s)
 
 /*
  * SOFT_CAST can be used for args to prototyped functions to retain some
@@ -2136,6 +2136,7 @@ Gid_t getegid (void);
 #  else
 #    define DEBUG_S(a)
 #  endif
+#define DEBUG_T(a) if (PL_debug & (1<<17))	a
 #else
 #define DEB(a)
 #define DEBUG(a)
@@ -2156,6 +2157,7 @@ Gid_t getegid (void);
 #define DEBUG_X(a)
 #define DEBUG_D(a)
 #define DEBUG_S(a)
+#define DEBUG_T(a)
 #endif
 #define YYMAXDEPTH 300
 
@@ -3172,9 +3174,9 @@ typedef struct am_table_short AMTS;
 #define SET_NUMERIC_LOCAL() \
 	set_numeric_local();
 
-#define IS_NUMERIC_RADIX(c)	\
+#define IS_NUMERIC_RADIX(s)	\
 	((PL_hints & HINT_LOCALE) && \
-	  PL_numeric_radix && (c) == PL_numeric_radix)
+	  PL_numeric_radix_sv && memEQ(s, SvPVX(PL_numeric_radix_sv), SvCUR(PL_numeric_radix_sv)))
 
 #define STORE_NUMERIC_LOCAL_SET_STANDARD() \
 	bool was_local = (PL_hints & HINT_LOCALE) && PL_numeric_local; \

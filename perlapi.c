@@ -3350,8 +3350,15 @@ Perl_utf16_to_utf8_reversed(pTHXo_ U8* p, U8 *d, I32 bytelen, I32 *newlen)
     return ((CPerlObj*)pPerl)->Perl_utf16_to_utf8_reversed(p, d, bytelen, newlen);
 }
 
+#undef  Perl_utf8_length
+STRLEN
+Perl_utf8_length(pTHXo_ U8* s, U8 *e)
+{
+    return ((CPerlObj*)pPerl)->Perl_utf8_length(s, e);
+}
+
 #undef  Perl_utf8_distance
-I32
+IV
 Perl_utf8_distance(pTHXo_ U8 *a, U8 *b)
 {
     return ((CPerlObj*)pPerl)->Perl_utf8_distance(a, b);
@@ -3369,6 +3376,13 @@ U8*
 Perl_utf8_to_bytes(pTHXo_ U8 *s, STRLEN *len)
 {
     return ((CPerlObj*)pPerl)->Perl_utf8_to_bytes(s, len);
+}
+
+#undef  Perl_bytes_from_utf8
+U8*
+Perl_bytes_from_utf8(pTHXo_ U8 *s, STRLEN *len, bool *is_utf8)
+{
+    return ((CPerlObj*)pPerl)->Perl_bytes_from_utf8(s, len, is_utf8);
 }
 
 #undef  Perl_bytes_to_utf8
@@ -3852,6 +3866,20 @@ void
 Perl_sv_force_normal(pTHXo_ SV *sv)
 {
     ((CPerlObj*)pPerl)->Perl_sv_force_normal(sv);
+}
+
+#undef  Perl_sv_add_backref
+void
+Perl_sv_add_backref(pTHXo_ SV *tsv, SV *sv)
+{
+    ((CPerlObj*)pPerl)->Perl_sv_add_backref(tsv, sv);
+}
+
+#undef  Perl_sv_del_backref
+void
+Perl_sv_del_backref(pTHXo_ SV *sv)
+{
+    ((CPerlObj*)pPerl)->Perl_sv_del_backref(sv);
 }
 
 #undef  Perl_tmps_grow

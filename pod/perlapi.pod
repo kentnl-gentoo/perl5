@@ -182,13 +182,33 @@ must then use C<av_store> to assign values to these new elements.
 =for hackers
 Found in file av.c
 
+=item bytes_from_utf8
+
+Converts a string C<s> of length C<len> from UTF8 into byte encoding.
+Unlike <utf8_to_bytes> but like C<bytes_to_utf8>, returns a pointer to
+the newly-created string, and updates C<len> to contain the new
+length.  Returns the original string if no conversion occurs, C<len>
+is unchanged. Do nothing if C<is_utf8> points to 0. Sets C<is_utf8> to
+0 if C<s> is converted or contains all 7bit characters.
+
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	U8*	bytes_from_utf8(U8 *s, STRLEN *len, bool *is_utf8)
+
+=for hackers
+Found in file utf8.c
+
 =item bytes_to_utf8
 
 Converts a string C<s> of length C<len> from ASCII into UTF8 encoding.
 Returns a pointer to the newly-created string, and sets C<len> to
 reflect the new length.
 
-	U8 *	bytes_to_utf8(U8 *s, STRLEN *len)
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	U8*	bytes_to_utf8(U8 *s, STRLEN *len)
 
 =for hackers
 Found in file utf8.c
@@ -1000,6 +1020,27 @@ character.
 =for hackers
 Found in file handy.h
 
+=item is_utf8_char
+
+Tests if some arbitrary number of bytes begins in a valid UTF-8 character.
+The actual number of bytes in the UTF-8 character will be returned if it
+is valid, otherwise 0. 
+ 
+	STRLEN	is_utf8_char(U8 *p)
+
+=for hackers
+Found in file utf8.c
+
+=item is_utf8_string
+
+Returns true if first C<len> bytes of the given string form valid a UTF8
+string, false otherwise.
+
+	bool	is_utf8_string(U8 *s, STRLEN len)
+
+=for hackers
+Found in file utf8.c
+
 =item items
 
 Variable which is setup by C<xsubpp> to indicate the number of 
@@ -1413,51 +1454,6 @@ Tells a Perl interpreter to run.  See L<perlembed>.
 
 =for hackers
 Found in file perl.c
-
-=item PL_DBsingle
-
-When Perl is run in debugging mode, with the B<-d> switch, this SV is a
-boolean which indicates whether subs are being single-stepped. 
-Single-stepping is automatically turned on after every step.  This is the C
-variable which corresponds to Perl's $DB::single variable.  See
-C<PL_DBsub>.
-
-	SV *	PL_DBsingle
-
-=for hackers
-Found in file intrpvar.h
-
-=item PL_DBsub
-
-When Perl is run in debugging mode, with the B<-d> switch, this GV contains
-the SV which holds the name of the sub being debugged.  This is the C
-variable which corresponds to Perl's $DB::sub variable.  See
-C<PL_DBsingle>.
-
-	GV *	PL_DBsub
-
-=for hackers
-Found in file intrpvar.h
-
-=item PL_DBtrace
-
-Trace variable used when Perl is run in debugging mode, with the B<-d>
-switch.  This is the C variable which corresponds to Perl's $DB::trace
-variable.  See C<PL_DBsingle>.
-
-	SV *	PL_DBtrace
-
-=for hackers
-Found in file intrpvar.h
-
-=item PL_dowarn
-
-The C variable which corresponds to Perl's $^W warning variable.
-
-	bool	PL_dowarn
-
-=for hackers
-Found in file intrpvar.h
 
 =item PL_modglobal
 
@@ -2342,19 +2338,19 @@ false, defined or undefined.  Does not handle 'get' magic.
 =for hackers
 Found in file sv.h
 
+=item svtype
+
+An enum of flags for Perl types.  These are found in the file B<sv.h> 
+in the C<svtype> enum.  Test these flags with the C<SvTYPE> macro.
+
+=for hackers
+Found in file sv.h
+
 =item SvTYPE
 
 Returns the type of the SV.  See C<svtype>.
 
 	svtype	SvTYPE(SV* sv)
-
-=for hackers
-Found in file sv.h
-
-=item svtype
-
-An enum of flags for Perl types.  These are found in the file B<sv.h> 
-in the C<svtype> enum.  Test these flags with the C<SvTYPE> macro.
 
 =for hackers
 Found in file sv.h
@@ -2546,8 +2542,9 @@ Found in file sv.c
 
 =item sv_catsv
 
-Concatenates the string from SV C<ssv> onto the end of the string in SV
-C<dsv>.  Handles 'get' magic, but not 'set' magic.  See C<sv_catsv_mg>.
+Concatenates the string from SV C<ssv> onto the end of the string in
+SV C<dsv>.  Modifies C<dsv> but not C<ssv>.  Handles 'get' magic, but
+not 'set' magic.  See C<sv_catsv_mg>.
 
 	void	sv_catsv(SV* dsv, SV* ssv)
 
@@ -3110,6 +3107,9 @@ Found in file sv.c
 
 Convert the PV of an SV to its UTF8-encoded form.
 
+NOTE: this function is experimental and may change or be
+removed without notice.
+
 	void	sv_utf8_upgrade(SV *sv)
 
 =for hackers
@@ -3167,12 +3167,49 @@ Converts the specified character to uppercase.
 =for hackers
 Found in file handy.h
 
-=item U8 *s
+=item utf8_distance
 
-Returns true if first C<len> bytes of the given string form valid a UTF8
-string, false otherwise.
+Returns the number of UTF8 characters between the UTF-8 pointers C<a>
+and C<b>.
 
-	is_utf8_string	U8 *s(STRLEN len)
+WARNING: use only if you *know* that the pointers point inside the
+same UTF-8 buffer.
+
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	IV	utf8_distance(U8 *a, U8 *b)
+
+=for hackers
+Found in file utf8.c
+
+=item utf8_hop
+
+Return the UTF-8 pointer C<s> displaced by C<off> characters, either
+forward or backward.
+
+WARNING: do not use the following unless you *know* C<off> is within
+the UTF-8 data pointed to by C<s> *and* that on entry C<s> is aligned
+on the first byte of character or just after the last byte of a character.
+
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	U8*	utf8_hop(U8 *s, I32 off)
+
+=for hackers
+Found in file utf8.c
+
+=item utf8_length
+
+Return the length of the UTF-8 char encoded string C<s> in characters.
+Stops at C<e> (inclusive).  If C<e E<lt> s> or if the scan would end
+up past C<e>, croaks.
+
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	STRLEN	utf8_length(U8* s, U8 *e)
 
 =for hackers
 Found in file utf8.c
@@ -3184,7 +3221,10 @@ Unlike C<bytes_to_utf8>, this over-writes the original string, and
 updates len to contain the new length.
 Returns zero on failure, setting C<len> to -1.
 
-	U8 *	utf8_to_bytes(U8 *s, STRLEN *len)
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	U8*	utf8_to_bytes(U8 *s, STRLEN *len)
 
 =for hackers
 Found in file utf8.c
@@ -3193,16 +3233,23 @@ Found in file utf8.c
 
 Returns the character value of the first character in the string C<s>
 which is assumed to be in UTF8 encoding and no longer than C<curlen>;
-C<retlen> will be set to the length, in bytes, of that character,
-and the pointer C<s> will be advanced to the end of the character.
+C<retlen> will be set to the length, in bytes, of that character.
 
 If C<s> does not point to a well-formed UTF8 character, the behaviour
 is dependent on the value of C<flags>: if it contains UTF8_CHECK_ONLY,
 it is assumed that the caller will raise a warning, and this function
-will set C<retlen> to C<-1> and return.  The C<flags> can also contain
-various flags to allow deviations from the strict UTF-8 encoding.
+will silently just set C<retlen> to C<-1> and return zero.  If the
+C<flags> does not contain UTF8_CHECK_ONLY, warnings about
+malformations will be given, C<retlen> will be set to the expected
+length of the UTF-8 character in bytes, and zero will be returned.
 
-	U8* s	utf8_to_uv(STRLEN curlen, I32 *retlen, U32 flags)
+The C<flags> can also contain various flags to allow deviations from
+the strict UTF-8 encoding (see F<utf8.h>).
+
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	UV	utf8_to_uv(U8 *s, STRLEN curlen, STRLEN* retlen, U32 flags)
 
 =for hackers
 Found in file utf8.c
@@ -3211,13 +3258,36 @@ Found in file utf8.c
 
 Returns the character value of the first character in the string C<s>
 which is assumed to be in UTF8 encoding; C<retlen> will be set to the
-length, in bytes, of that character, and the pointer C<s> will be
-advanced to the end of the character.
+length, in bytes, of that character.
 
 If C<s> does not point to a well-formed UTF8 character, zero is
 returned and retlen is set, if possible, to -1.
 
-	U8* s	utf8_to_uv_simple(STRLEN *retlen)
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	UV	utf8_to_uv_simple(U8 *s, STRLEN* retlen)
+
+=for hackers
+Found in file utf8.c
+
+=item uv_to_utf8
+
+Adds the UTF8 representation of the Unicode codepoint C<uv> to the end
+of the string C<d>; C<d> should be have at least C<UTF8_MAXLEN+1> free
+bytes available. The return value is the pointer to the byte after the
+end of the new character. In other words, 
+
+    d = uv_to_utf8(d, uv);
+
+is the recommended Unicode-aware way of saying
+
+    *(d++) = uv;
+
+NOTE: this function is experimental and may change or be
+removed without notice.
+
+	U8*	uv_to_utf8(U8 *d, UV uv)
 
 =for hackers
 Found in file utf8.c

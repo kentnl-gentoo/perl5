@@ -61,7 +61,7 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 #define POPMARK		(*PL_markstack_ptr--)
 
 #define djSP		register SV **sp = PL_stack_sp
-#define dSP		dTHR; djSP
+#define dSP		djSP
 #define dMARK		register SV **mark = PL_stack_base + POPMARK
 #define dORIGMARK	I32 origmark = mark - PL_stack_base
 #define SETORIGMARK	origmark = mark - PL_stack_base
@@ -373,3 +373,10 @@ See C<PUSHu>.
     SvREFCNT_dec(tmpRef);                   \
     SvRV(rv)=AMG_CALLun(rv,copy);        \
   } } STMT_END
+
+/*
+=for apidoc mU||LVRET
+True if this op will be the return value of an lvalue subroutine
+
+=cut */
+#define LVRET ((PL_op->op_private & OPpMAYBE_LVSUB) && is_lvalue_sub())

@@ -76,8 +76,10 @@ PP(pp_stringify)
     char *s;
     s = SvPV(TOPs,len);
     sv_setpvn(TARG,s,len);
-    if (SvUTF8(TOPs) && !IN_BYTE)
+    if (SvUTF8(TOPs))
 	SvUTF8_on(TARG);
+    else
+	SvUTF8_off(TARG);
     SETTARG;
     RETURN;
 }
@@ -140,103 +142,52 @@ PP(pp_concat)
   djSP; dATARGET; tryAMAGICbin(concat,opASSIGN);
   {
     dPOPTOPssrl;
-    STRLEN len;
-    U8 *s;
-    bool left_utf;
-    bool right_utf;
+    SV* rcopy = Nullsv;
 
-    if (TARG == right && SvGMAGICAL(right))
-        mg_get(right);
     if (SvGMAGICAL(left))
         mg_get(left);
+    if (TARG == right && SvGMAGICAL(right))
+        mg_get(right);
 
-    left_utf  = DO_UTF8(left);
-    right_utf = DO_UTF8(right);
- 
-    if (left_utf != right_utf) {
-        if (TARG == right && !right_utf) {
-            sv_utf8_upgrade(TARG); /* Now straight binary copy */
-            SvUTF8_on(TARG);
-        }
-        else {
-            /* Set TARG to PV(left), then add right */
-            U8 *l, *c, *olds = NULL;
-            STRLEN targlen;
-	    s = (U8*)SvPV(right,len);
-	    right_utf |= DO_UTF8(right);
-            if (TARG == right) {
-		/* Take a copy since we're about to overwrite TARG */
-		olds = s = (U8*)savepvn((char*)s, len);
-	    }
-	    if (!SvOK(left) && SvTYPE(left) <= SVt_PVMG) {
-	        if (SvREADONLY(left))
-		    left = sv_2mortal(newSVsv(left));
-		else
-		    sv_setpv(left, "");	/* Suppress warning. */
-	    }
-            l = (U8*)SvPV(left, targlen);
-	    left_utf |= DO_UTF8(left);
-            if (TARG != left)
-                sv_setpvn(TARG, (char*)l, targlen);
-            if (!left_utf)
-                sv_utf8_upgrade(TARG);
-            /* Extend TARG to length of right (s) */
-            targlen = SvCUR(TARG) + len;
-            if (!right_utf) {
-                /* plus one for each hi-byte char if we have to upgrade */
-                for (c = s; c < s + len; c++)  {
-                    if (*c & 0x80)
-                        targlen++;
-                }
-            }
-            SvGROW(TARG, targlen+1);
-            /* And now copy, maybe upgrading right to UTF8 on the fly */
-            for (c = (U8*)SvEND(TARG); len--; s++) {
-                 if (*s & 0x80 && !right_utf)
-                     c = uv_to_utf8(c, *s);
-                 else
-                     *c++ = *s;
-            }
-            SvCUR_set(TARG, targlen);
-            *SvEND(TARG) = '\0';
-            SvUTF8_on(TARG);
-            SETs(TARG);
-	    Safefree(olds);
-            RETURN;
-        }
-    }
+    if (TARG == right && left != right)
+	/* Clone since otherwise we cannot prepend. */
+	rcopy = sv_2mortal(newSVsv(right));
 
-    if (TARG != left) {
-	s = (U8*)SvPV(left,len);
-	if (TARG == right) {
-	    sv_insert(TARG, 0, 0, (char*)s, len);
-	    SETs(TARG);
-	    RETURN;
+    if (TARG != left)
+	sv_setsv(TARG, left);
+
+    if (TARG == right) {
+	if (left == right) {
+	    /*  $right = $right . $right; */
+	    STRLEN rlen;
+	    char *rpv = SvPV(right, rlen);
+
+	    sv_catpvn(TARG, rpv, rlen);
 	}
-	sv_setpvn(TARG, (char *)s, len);
+	else /* $right = $left  . $right; */
+	    sv_catsv(TARG, rcopy);
     }
-    else if (!SvOK(TARG) && SvTYPE(TARG) <= SVt_PVMG)
-	sv_setpv(TARG, "");	/* Suppress warning. */
-    s = (U8*)SvPV(right,len);
-    if (SvOK(TARG)) {
+    else {
+	if (!SvOK(TARG)) /* Avoid warning when concatenating to undef. */
+	    sv_setpv(TARG, "");
+	/* $other = $left . $right; */
+	/* $left  = $left . $right; */
+	sv_catsv(TARG, right);
+    }
+
 #if defined(PERL_Y2KWARN)
-	if ((SvIOK(right) || SvNOK(right)) && ckWARN(WARN_Y2K)) {
-	    STRLEN n;
-	    char *s = SvPV(TARG,n);
-	    if (n >= 2 && s[n-2] == '1' && s[n-1] == '9'
-		&& (n == 2 || !isDIGIT(s[n-3])))
-	    {
-		Perl_warner(aTHX_ WARN_Y2K, "Possible Y2K bug: %s",
-			    "about to append an integer to '19'");
-	    }
+    if ((SvIOK(right) || SvNOK(right)) && ckWARN(WARN_Y2K)) {
+	STRLEN n;
+	char *s = SvPV(TARG,n);
+	if (n >= 2 && s[n-2] == '1' && s[n-1] == '9'
+	    && (n == 2 || !isDIGIT(s[n-3])))
+	{
+	    Perl_warner(aTHX_ WARN_Y2K, "Possible Y2K bug: %s",
+			"about to append an integer to '19'");
 	}
-#endif
-	sv_catpvn(TARG, (char *)s, len);
     }
-    else
-	sv_setpvn(TARG, (char *)s, len);	/* suppress warning */
-    if (left_utf)
-	SvUTF8_on(TARG);
+#endif
+
     SETTARG;
     RETURN;
   }
@@ -406,7 +357,6 @@ PP(pp_print)
 	RETURN;
     }
     if (!(io = GvIO(gv))) {
-        dTHR;
         if ((GvEGV(gv)) && (mg = SvTIED_mg((SV*)GvEGV(gv),'q')))
             goto had_magic;
 	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
@@ -497,11 +447,24 @@ PP(pp_rv2av)
 	    SETs((SV*)av);
 	    RETURN;
 	}
+	else if (LVRET) {
+	    if (GIMME == G_SCALAR)
+		Perl_croak(aTHX_ "Can't return array to lvalue scalar context");
+	    SETs((SV*)av);
+	    RETURN;
+	}
     }
     else {
 	if (SvTYPE(sv) == SVt_PVAV) {
 	    av = (AV*)sv;
 	    if (PL_op->op_flags & OPf_REF) {
+		SETs((SV*)av);
+		RETURN;
+	    }
+	    else if (LVRET) {
+		if (GIMME == G_SCALAR)
+		    Perl_croak(aTHX_ "Can't return array to lvalue"
+			       " scalar context");
 		SETs((SV*)av);
 		RETURN;
 	    }
@@ -558,6 +521,13 @@ PP(pp_rv2av)
 		SETs((SV*)av);
 		RETURN;
 	    }
+	    else if (LVRET) {
+		if (GIMME == G_SCALAR)
+		    Perl_croak(aTHX_ "Can't return array to lvalue"
+			       " scalar context");
+		SETs((SV*)av);
+		RETURN;
+	    }
 	}
     }
 
@@ -601,11 +571,24 @@ PP(pp_rv2hv)
 	    SETs((SV*)hv);
 	    RETURN;
 	}
+	else if (LVRET) {
+	    if (GIMME == G_SCALAR)
+		Perl_croak(aTHX_ "Can't return hash to lvalue scalar context");
+	    SETs((SV*)hv);
+	    RETURN;
+	}
     }
     else {
 	if (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV) {
 	    hv = (HV*)sv;
 	    if (PL_op->op_flags & OPf_REF) {
+		SETs((SV*)hv);
+		RETURN;
+	    }
+	    else if (LVRET) {
+		if (GIMME == G_SCALAR)
+		    Perl_croak(aTHX_ "Can't return hash to lvalue"
+			       " scalar context");
 		SETs((SV*)hv);
 		RETURN;
 	    }
@@ -659,6 +642,13 @@ PP(pp_rv2hv)
 	    if (PL_op->op_private & OPpLVAL_INTRO)
 		hv = save_hash(gv);
 	    if (PL_op->op_flags & OPf_REF) {
+		SETs((SV*)hv);
+		RETURN;
+	    }
+	    else if (LVRET) {
+		if (GIMME == G_SCALAR)
+		    Perl_croak(aTHX_ "Can't return hash to lvalue"
+			       " scalar context");
 		SETs((SV*)hv);
 		RETURN;
 	    }
@@ -1020,7 +1010,7 @@ PP(pp_match)
     s = SvPV(TARG, len);
     strend = s + len;
     if (!s)
-	DIE(aTHX_ "panic: do_match");
+	DIE(aTHX_ "panic: pp_match");
     rxtainted = ((pm->op_pmdynflags & PMdf_TAINTED) ||
 		 (PL_tainted && (pm->op_pmflags & PMf_RETAINT)));
     TAINT_NOT;
@@ -1076,7 +1066,8 @@ play_it_again:
 	if (update_minmatch++)
 	    minmatch = had_zerolen;
     }
-    if (rx->reganch & RE_USE_INTUIT) {
+    if (rx->reganch & RE_USE_INTUIT &&
+	DO_UTF8(TARG) == ((rx->reganch & ROPT_UTF8) != 0)) {
 	s = CALLREG_INTUIT_START(aTHX_ rx, TARG, s, strend, r_flags, NULL);
 
 	if (!s)
@@ -1556,7 +1547,7 @@ PP(pp_helem)
     SV **svp;
     SV *keysv = POPs;
     HV *hv = (HV*)POPs;
-    U32 lval = PL_op->op_flags & OPf_MOD;
+    U32 lval = PL_op->op_flags & OPf_MOD || LVRET;
     U32 defer = PL_op->op_private & OPpLVAL_DEFER;
     SV *sv;
 
@@ -1793,6 +1784,8 @@ PP(pp_subst)
     STRLEN len;
     int force_on_match = 0;
     I32 oldsave = PL_savestack_ix;
+    bool do_utf8;
+    STRLEN slen;
 
     /* known replacement string? */
     dstr = (pm->op_pmflags & PMf_CONST) ? POPs : Nullsv;
@@ -1801,7 +1794,10 @@ PP(pp_subst)
     else {
 	TARG = DEFSV;
 	EXTEND(SP,1);
-    }                  
+    }
+    do_utf8 = DO_UTF8(TARG);
+    if (SvFAKE(TARG) && SvREADONLY(TARG))
+	sv_force_normal(TARG);
     if (SvREADONLY(TARG)
 	|| (SvTYPE(TARG) > SVt_PVLV
 	    && !(SvTYPE(TARG) == SVt_PVGV && SvFAKE(TARG))))
@@ -1819,12 +1815,13 @@ PP(pp_subst)
 
   force_it:
     if (!pm || !s)
-	DIE(aTHX_ "panic: do_subst");
+	DIE(aTHX_ "panic: pp_subst");
 
     strend = s + len;
-    maxiters = 2*(strend - s) + 10;	/* We can match twice at each 
-					   position, once with zero-length,
-					   second time with non-zero. */
+    slen = do_utf8 ? utf8_length((U8*)s, (U8*)strend) : len;
+    maxiters = 2 * slen + 10;	/* We can match twice at each
+				   position, once with zero-length,
+				   second time with non-zero. */
 
     if (!rx->prelen && PL_curpm) {
 	pm = PL_curpm;
@@ -1965,6 +1962,8 @@ PP(pp_subst)
     if (CALLREGEXEC(aTHX_ rx, s, strend, orig, 0, TARG, NULL,
 		    r_flags | REXEC_CHECKED))
     {
+	bool isutf8;
+
 	if (force_on_match) {
 	    force_on_match = 0;
 	    s = SvPV_force(TARG, len);
@@ -2007,6 +2006,7 @@ PP(pp_subst)
 	SvPVX(TARG) = SvPVX(dstr);
 	SvCUR_set(TARG, SvCUR(dstr));
 	SvLEN_set(TARG, SvLEN(dstr));
+	isutf8 = DO_UTF8(dstr);
 	SvPVX(dstr) = 0;
 	sv_free(dstr);
 
@@ -2015,6 +2015,8 @@ PP(pp_subst)
 	PUSHs(sv_2mortal(newSViv((I32)iters)));
 
 	(void)SvPOK_only(TARG);
+	if (isutf8)
+	    SvUTF8_on(TARG);
 	TAINT_IF(rxtainted);
 	SvSETMAGIC(TARG);
 	SvTAINT(TARG);
@@ -2285,7 +2287,6 @@ PP(pp_leavesublv)
 STATIC CV *
 S_get_db_sub(pTHX_ SV **svp, CV *cv)
 {
-    dTHR;
     SV *dbsv = GvSV(PL_DBsub);
 
     if (!PERLDB_SUB_NN) {
@@ -2784,7 +2785,7 @@ PP(pp_aelem)
     SV** svp;
     IV elem = POPi;
     AV* av = (AV*)POPs;
-    U32 lval = PL_op->op_flags & OPf_MOD;
+    U32 lval = PL_op->op_flags & OPf_MOD || LVRET;
     U32 defer = (PL_op->op_private & OPpLVAL_DEFER) && (elem > AvFILL(av));
     SV *sv;
 
@@ -2909,8 +2910,8 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	    !(iogv = gv_fetchpv(packname, FALSE, SVt_PVIO)) ||
 	    !(ob=(SV*)GvIO(iogv)))
 	{
-	    if (!packname || 
-		((*(U8*)packname >= 0xc0 && DO_UTF8(sv))
+	    if (!packname ||
+		((UTF8_IS_START(*packname) && DO_UTF8(sv))
 		    ? !isIDFIRST_utf8((U8*)packname)
 		    : !isIDFIRST(*packname)
 		))
@@ -2989,9 +2990,6 @@ static void
 unset_cvowner(pTHXo_ void *cvarg)
 {
     register CV* cv = (CV *) cvarg;
-#ifdef DEBUGGING
-    dTHR;
-#endif /* DEBUGGING */
 
     DEBUG_S((PerlIO_printf(Perl_debug_log, "%p unsetting CvOWNER of %p:%s\n",
 			   thr, cv, SvPEEK((SV*)cv))));

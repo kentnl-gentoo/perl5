@@ -273,6 +273,7 @@
 #define io_close		Perl_io_close
 #define invert			Perl_invert
 #define is_gv_magical		Perl_is_gv_magical
+#define is_lvalue_sub		Perl_is_lvalue_sub
 #define is_uni_alnum		Perl_is_uni_alnum
 #define is_uni_alnumc		Perl_is_uni_alnumc
 #define is_uni_idfirst		Perl_is_uni_idfirst
@@ -725,9 +726,11 @@
 #define utilize			Perl_utilize
 #define utf16_to_utf8		Perl_utf16_to_utf8
 #define utf16_to_utf8_reversed	Perl_utf16_to_utf8_reversed
+#define utf8_length		Perl_utf8_length
 #define utf8_distance		Perl_utf8_distance
 #define utf8_hop		Perl_utf8_hop
 #define utf8_to_bytes		Perl_utf8_to_bytes
+#define bytes_from_utf8		Perl_bytes_from_utf8
 #define bytes_to_utf8		Perl_bytes_to_utf8
 #define utf8_to_uv_simple	Perl_utf8_to_uv_simple
 #define utf8_to_uv		Perl_utf8_to_uv
@@ -817,6 +820,8 @@
 #define sv_utf8_encode		Perl_sv_utf8_encode
 #define sv_utf8_decode		Perl_sv_utf8_decode
 #define sv_force_normal		Perl_sv_force_normal
+#define sv_add_backref		Perl_sv_add_backref
+#define sv_del_backref		Perl_sv_del_backref
 #define tmps_grow		Perl_tmps_grow
 #define sv_rvweaken		Perl_sv_rvweaken
 #define magic_killbackrefs	Perl_magic_killbackrefs
@@ -891,6 +896,7 @@
 #define scalarboolean		S_scalarboolean
 #define too_few_arguments	S_too_few_arguments
 #define too_many_arguments	S_too_many_arguments
+#define trlist_upgrade		S_trlist_upgrade
 #define op_clear		S_op_clear
 #define null			S_null
 #define pad_addlex		S_pad_addlex
@@ -1078,8 +1084,6 @@
 #define sv_unglob		S_sv_unglob
 #define not_a_number		S_not_a_number
 #define visit			S_visit
-#define sv_add_backref		S_sv_add_backref
-#define sv_del_backref		S_sv_del_backref
 #  if defined(DEBUGGING)
 #define del_sv			S_del_sv
 #  endif
@@ -1169,6 +1173,7 @@
 #define ck_open			Perl_ck_open
 #define ck_repeat		Perl_ck_repeat
 #define ck_require		Perl_ck_require
+#define ck_return		Perl_ck_return
 #define ck_rfun			Perl_ck_rfun
 #define ck_rvconst		Perl_ck_rvconst
 #define ck_sassign		Perl_ck_sassign
@@ -1739,6 +1744,7 @@
 #define io_close(a,b)		Perl_io_close(aTHX_ a,b)
 #define invert(a)		Perl_invert(aTHX_ a)
 #define is_gv_magical(a,b,c)	Perl_is_gv_magical(aTHX_ a,b,c)
+#define is_lvalue_sub()		Perl_is_lvalue_sub(aTHX)
 #define is_uni_alnum(a)		Perl_is_uni_alnum(aTHX_ a)
 #define is_uni_alnumc(a)	Perl_is_uni_alnumc(aTHX_ a)
 #define is_uni_idfirst(a)	Perl_is_uni_idfirst(aTHX_ a)
@@ -2186,9 +2192,11 @@
 #define utilize(a,b,c,d,e)	Perl_utilize(aTHX_ a,b,c,d,e)
 #define utf16_to_utf8(a,b,c,d)	Perl_utf16_to_utf8(aTHX_ a,b,c,d)
 #define utf16_to_utf8_reversed(a,b,c,d)	Perl_utf16_to_utf8_reversed(aTHX_ a,b,c,d)
+#define utf8_length(a,b)	Perl_utf8_length(aTHX_ a,b)
 #define utf8_distance(a,b)	Perl_utf8_distance(aTHX_ a,b)
 #define utf8_hop(a,b)		Perl_utf8_hop(aTHX_ a,b)
 #define utf8_to_bytes(a,b)	Perl_utf8_to_bytes(aTHX_ a,b)
+#define bytes_from_utf8(a,b,c)	Perl_bytes_from_utf8(aTHX_ a,b,c)
 #define bytes_to_utf8(a,b)	Perl_bytes_to_utf8(aTHX_ a,b)
 #define utf8_to_uv_simple(a,b)	Perl_utf8_to_uv_simple(aTHX_ a,b)
 #define utf8_to_uv(a,b,c,d)	Perl_utf8_to_uv(aTHX_ a,b,c,d)
@@ -2272,6 +2280,8 @@
 #define sv_utf8_encode(a)	Perl_sv_utf8_encode(aTHX_ a)
 #define sv_utf8_decode(a)	Perl_sv_utf8_decode(aTHX_ a)
 #define sv_force_normal(a)	Perl_sv_force_normal(aTHX_ a)
+#define sv_add_backref(a,b)	Perl_sv_add_backref(aTHX_ a,b)
+#define sv_del_backref(a)	Perl_sv_del_backref(aTHX_ a)
 #define tmps_grow(a)		Perl_tmps_grow(aTHX_ a)
 #define sv_rvweaken(a)		Perl_sv_rvweaken(aTHX_ a)
 #define magic_killbackrefs(a,b)	Perl_magic_killbackrefs(aTHX_ a,b)
@@ -2346,6 +2356,7 @@
 #define scalarboolean(a)	S_scalarboolean(aTHX_ a)
 #define too_few_arguments(a,b)	S_too_few_arguments(aTHX_ a,b)
 #define too_many_arguments(a,b)	S_too_many_arguments(aTHX_ a,b)
+#define trlist_upgrade(a,b)	S_trlist_upgrade(aTHX_ a,b)
 #define op_clear(a)		S_op_clear(aTHX_ a)
 #define null(a)			S_null(aTHX_ a)
 #define pad_addlex(a)		S_pad_addlex(aTHX_ a)
@@ -2532,8 +2543,6 @@
 #define sv_unglob(a)		S_sv_unglob(aTHX_ a)
 #define not_a_number(a)		S_not_a_number(aTHX_ a)
 #define visit(a)		S_visit(aTHX_ a)
-#define sv_add_backref(a,b)	S_sv_add_backref(aTHX_ a,b)
-#define sv_del_backref(a)	S_sv_del_backref(aTHX_ a)
 #  if defined(DEBUGGING)
 #define del_sv(a)		S_del_sv(aTHX_ a)
 #  endif
@@ -2623,6 +2632,7 @@
 #define ck_open(a)		Perl_ck_open(aTHX_ a)
 #define ck_repeat(a)		Perl_ck_repeat(aTHX_ a)
 #define ck_require(a)		Perl_ck_require(aTHX_ a)
+#define ck_return(a)		Perl_ck_return(aTHX_ a)
 #define ck_rfun(a)		Perl_ck_rfun(aTHX_ a)
 #define ck_rvconst(a)		Perl_ck_rvconst(aTHX_ a)
 #define ck_sassign(a)		Perl_ck_sassign(aTHX_ a)
@@ -3407,6 +3417,8 @@
 #define invert			Perl_invert
 #define Perl_is_gv_magical	CPerlObj::Perl_is_gv_magical
 #define is_gv_magical		Perl_is_gv_magical
+#define Perl_is_lvalue_sub	CPerlObj::Perl_is_lvalue_sub
+#define is_lvalue_sub		Perl_is_lvalue_sub
 #define Perl_is_uni_alnum	CPerlObj::Perl_is_uni_alnum
 #define is_uni_alnum		Perl_is_uni_alnum
 #define Perl_is_uni_alnumc	CPerlObj::Perl_is_uni_alnumc
@@ -4284,12 +4296,16 @@
 #define utf16_to_utf8		Perl_utf16_to_utf8
 #define Perl_utf16_to_utf8_reversed	CPerlObj::Perl_utf16_to_utf8_reversed
 #define utf16_to_utf8_reversed	Perl_utf16_to_utf8_reversed
+#define Perl_utf8_length	CPerlObj::Perl_utf8_length
+#define utf8_length		Perl_utf8_length
 #define Perl_utf8_distance	CPerlObj::Perl_utf8_distance
 #define utf8_distance		Perl_utf8_distance
 #define Perl_utf8_hop		CPerlObj::Perl_utf8_hop
 #define utf8_hop		Perl_utf8_hop
 #define Perl_utf8_to_bytes	CPerlObj::Perl_utf8_to_bytes
 #define utf8_to_bytes		Perl_utf8_to_bytes
+#define Perl_bytes_from_utf8	CPerlObj::Perl_bytes_from_utf8
+#define bytes_from_utf8		Perl_bytes_from_utf8
 #define Perl_bytes_to_utf8	CPerlObj::Perl_bytes_to_utf8
 #define bytes_to_utf8		Perl_bytes_to_utf8
 #define Perl_utf8_to_uv_simple	CPerlObj::Perl_utf8_to_uv_simple
@@ -4455,6 +4471,10 @@
 #define sv_utf8_decode		Perl_sv_utf8_decode
 #define Perl_sv_force_normal	CPerlObj::Perl_sv_force_normal
 #define sv_force_normal		Perl_sv_force_normal
+#define Perl_sv_add_backref	CPerlObj::Perl_sv_add_backref
+#define sv_add_backref		Perl_sv_add_backref
+#define Perl_sv_del_backref	CPerlObj::Perl_sv_del_backref
+#define sv_del_backref		Perl_sv_del_backref
 #define Perl_tmps_grow		CPerlObj::Perl_tmps_grow
 #define tmps_grow		Perl_tmps_grow
 #define Perl_sv_rvweaken	CPerlObj::Perl_sv_rvweaken
@@ -4583,6 +4603,8 @@
 #define too_few_arguments	S_too_few_arguments
 #define S_too_many_arguments	CPerlObj::S_too_many_arguments
 #define too_many_arguments	S_too_many_arguments
+#define S_trlist_upgrade	CPerlObj::S_trlist_upgrade
+#define trlist_upgrade		S_trlist_upgrade
 #define S_op_clear		CPerlObj::S_op_clear
 #define op_clear		S_op_clear
 #define S_null			CPerlObj::S_null
@@ -4925,10 +4947,6 @@
 #define not_a_number		S_not_a_number
 #define S_visit			CPerlObj::S_visit
 #define visit			S_visit
-#define S_sv_add_backref	CPerlObj::S_sv_add_backref
-#define sv_add_backref		S_sv_add_backref
-#define S_sv_del_backref	CPerlObj::S_sv_del_backref
-#define sv_del_backref		S_sv_del_backref
 #  if defined(DEBUGGING)
 #define S_del_sv		CPerlObj::S_del_sv
 #define del_sv			S_del_sv
@@ -5088,6 +5106,8 @@
 #define ck_repeat		Perl_ck_repeat
 #define Perl_ck_require		CPerlObj::Perl_ck_require
 #define ck_require		Perl_ck_require
+#define Perl_ck_return		CPerlObj::Perl_ck_return
+#define ck_return		Perl_ck_return
 #define Perl_ck_rfun		CPerlObj::Perl_ck_rfun
 #define ck_rfun			Perl_ck_rfun
 #define Perl_ck_rvconst		CPerlObj::Perl_ck_rvconst

@@ -172,6 +172,7 @@ ext/B/B/Bblock.pm	Compiler basic block analysis support
 ext/B/B/Bytecode.pm	Compiler Bytecode backend
 ext/B/B/C.pm		Compiler C backend
 ext/B/B/CC.pm		Compiler CC backend
+ext/B/B/Concise.pm	Compiler Concise backend
 ext/B/B/Debug.pm	Compiler Debug backend
 ext/B/B/Deparse.pm	Compiler Deparse backend
 ext/B/B/Disassembler.pm	Compiler Disassembler backend
@@ -337,6 +338,7 @@ ext/POSIX/hints/netbsd.pl       Hint for POSIX for named architecture
 ext/POSIX/hints/next_3.pl       Hint for POSIX for named architecture
 ext/POSIX/hints/openbsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/sunos_4.pl	Hint for POSIX for named architecture
+ext/POSIX/hints/svr4.pl		Hint for POSIX for named architecture
 ext/POSIX/typemap		POSIX extension interface types
 ext/SDBM_File/Makefile.PL	SDBM extension makefile writer
 ext/SDBM_File/SDBM_File.pm	SDBM extension Perl module
@@ -406,6 +408,7 @@ ext/attrs/Makefile.PL	attrs extension makefile writer
 ext/attrs/attrs.pm	attrs extension Perl module
 ext/attrs/attrs.xs	attrs extension external subroutines
 ext/re/Makefile.PL	re extension makefile writer
+ext/re/hints/aix.pl	Hints for re for named architecture
 ext/re/hints/mpeix.pl	Hints for re for named architecture
 ext/re/re.pm		re extension Perl module
 ext/re/re.xs		re extension external subroutines
@@ -655,6 +658,7 @@ lib/Pod/Plainer.pm	Pod migration utility module
 lib/Pod/Select.pm	Pod-Parser - select portions of POD docs
 lib/Pod/Text.pm		Pod-Parser - convert POD data to formatted ASCII text
 lib/Pod/Text/Color.pm	Convert POD data to color ASCII text
+lib/Pod/Text/Overstrike.pm	Convert POD data to formatted overstrike text
 lib/Pod/Text/Termcap.pm	Convert POD data to ASCII text with format escapes
 lib/Pod/Usage.pm	Pod-Parser - print usage messages
 lib/Search/Dict.pm	Perform binary search on dictionaries
@@ -864,6 +868,7 @@ lib/unicode/Is/BidiRLE.pl			Unicode character database
 lib/unicode/Is/BidiRLO.pl			Unicode character database
 lib/unicode/Is/BidiS.pl				Unicode character database
 lib/unicode/Is/BidiWS.pl			Unicode character database
+lib/unicode/Is/Blank.pl				Unicode character database
 lib/unicode/Is/C.pl				Unicode character database
 lib/unicode/Is/Cc.pl				Unicode character database
 lib/unicode/Is/Cf.pl				Unicode character database
@@ -952,6 +957,7 @@ lib/unicode/Is/Sk.pl				Unicode character database
 lib/unicode/Is/Sm.pl				Unicode character database
 lib/unicode/Is/So.pl				Unicode character database
 lib/unicode/Is/Space.pl				Unicode character database
+lib/unicode/Is/SpacePerl.pl			Unicode character database
 lib/unicode/Is/SylA.pl				Unicode character database
 lib/unicode/Is/SylAA.pl				Unicode character database
 lib/unicode/Is/SylAAI.pl			Unicode character database
@@ -1411,6 +1417,7 @@ t/op/chars.t		See if character escapes work
 t/op/chop.t		See if chop works
 t/op/closure.t		See if closures work
 t/op/cmp.t		See if the various string and numeric compare work
+t/op/concat.t		See if string concatenation works
 t/op/cond.t		See if conditional expressions work
 t/op/context.t		See if context propagation works
 t/op/defins.t		See if auto-insert of defined() works
@@ -1439,6 +1446,7 @@ t/op/inc.t		See if inc/dec of integers near 32 bit limit work
 t/op/index.t		See if index works
 t/op/int.t		See if int works
 t/op/join.t		See if join works
+t/op/length.t		See if length works
 t/op/lex_assign.t	See if ops involving lexicals or pad temps work
 t/op/lfs.t		See if large files work for perlio
 t/op/list.t		See if array lists work
@@ -1471,6 +1479,7 @@ t/op/regexp.t		See if regular expressions work
 t/op/regexp_noamp.t	See if regular expressions work with optimizations
 t/op/regmesg.t		See if one can get regular expression errors
 t/op/repeat.t		See if x operator works
+t/op/reverse.t		See if reverse operator works
 t/op/runlevel.t		See if die() works from perl_call_*()
 t/op/sleep.t		See if sleep works
 t/op/sort.t		See if sort works
@@ -1493,6 +1502,7 @@ t/op/tr.t		See if tr works
 t/op/undef.t		See if undef works
 t/op/universal.t	See if UNIVERSAL class works
 t/op/unshift.t		See if unshift works
+t/op/utf8decode.t	See if UTF-8 decoding works
 t/op/vec.t		See if vectors work
 t/op/ver.t		See if v-strings and the %v format flag work
 t/op/wantarray.t	See if wantarray works

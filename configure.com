@@ -53,9 +53,19 @@ $ use_two_pot_malloc = "N"
 $ use_pack_malloc = "N"
 $ use_debugmalloc = "N"
 $ ccflags = ""
+$ static_ext = ""
 $ vms_default_directory_name = F$ENVIRONMENT("DEFAULT")
 $ max_allowed_dir_depth = 3  ! e.g. [A.B.PERLxxx] not [A.B.C.PERLxxx]
 $! max_allowed_dir_depth = 2 ! e.g. [A.PERLxxx] not [A.B.PERLxxx]
+$!
+$! Sebastian Bazley's request: close the CONFIG handle with /NOLOG
+$! qualifier "just in case" (configure.com is re @ed in a bad state).
+$! This construct was tested to be not a problem as far back as
+$! VMS V5.5-2, hopefully earlier versions are OK as well.
+$!
+$ CLOSE/NOLOG CONFIG
+$!
+$! Now keep track of open files
 $!
 $ vms_filcnt = F$GETJPI ("","FILCNT")
 $!
@@ -1214,12 +1224,20 @@ $     line = F$EDIT(line,"COMPRESS, TRIM")
 $     api_subversion = F$ELEMENT(2," ",line)
 $     got_api_subversion = "true"
 $   ENDIF
-$   IF (.NOT.got_patch).OR.(.NOT.got_sub) THEN GOTO Patchlevel_h_loop
+$   IF (.NOT. got_patch) .OR. -
+       (.NOT. got_sub) .OR. - 
+       (.NOT. got_api_revision) .OR. -
+       (.NOT. got_api_version) .OR. -
+       (.NOT. got_api_subversion) -
+      THEN GOTO Patchlevel_h_loop
 $Close_patch:
 $   CLOSE CONFIG
 $ ELSE
 $   patchlevel="0"
 $   subversion="0"
+$   api_revision="0"
+$   api_version="0"
+$   api_subversion="0"
 $ ENDIF
 $ IF (F$STRING(subversion) .NES. "0")
 $ THEN
@@ -2061,6 +2079,10 @@ $   ans = F$EDIT(ans,"TRIM,COMPRESS,LOWERCASE")
 $   IF ans.eqs."decc" then Has_Dec_C_Sockets = "T"
 $   IF ans.eqs."socketshr" then Has_socketshr = "T"
 $ ENDIF
+$ IF Has_Dec_C_Sockets .or. Has_socketshr
+$ THEN
+$   static_ext = f$edit(static_ext+" "+"Socket","trim,compress")
+$ ENDIF
 $!
 $!
 $! Ask if they want to build with VMS_DEBUG perl
@@ -2368,7 +2390,7 @@ $ echo "SDBM_File if you have the GDBM library built on your machine."
 $ echo ""
 $ echo "Which modules do you want to build into perl?"
 $! dflt = "Fcntl Errno File::Glob IO Opcode Byteloader Devel::Peek Devel::DProf Data::Dumper attrs re VMS::Stdio VMS::DCLsym B SDBM_File"
-$ dflt = "re Fcntl Errno File::Glob IO Opcode Devel::Peek Devel::DProf Data::Dumper attrs VMS::Stdio VMS::DCLsym B SDBM_File Storable Thread Sys::Hostname"
+$ dflt = "re Fcntl Errno File::Glob IO Opcode Devel::Peek Devel::DProf Data::Dumper attrs VMS::Stdio VMS::DCLsym B SDBM_File Thread Sys::Hostname"
 $ IF Using_Dec_C .OR. using_cxx
 $ THEN
 $   dflt = dflt + " POSIX"
@@ -4685,9 +4707,11 @@ $ ENDIF
 $ IF use_vmsdebug_perl
 $ THEN
 $   optimize="/Debug/NoOpt"
+$   ldflags="/Debug/Trace/Map"
 $   dbgprefix = "DBG"
 $ ELSE
 $   optimize= ""
+$   ldflags="/NoTrace/NoMap"
 $   dbgprefix = ""
 $ ENDIF
 $!
@@ -4712,8 +4736,11 @@ $ WC ""
 $ WC "CONFIG='true'"
 $ WC "Makefile_SH='" + Makefile_SH + "'"
 $ WC "Mcc='" + Mcc + "'"
-$! WC "PERL_SUBVERSION='" + subversion + "'" ! VMS specific to descrip_mms.template
-$ WC "PERL_VERSION='" + patchlevel + "'" ! VMS specific to descrip_mms.template
+$ WC "PERL_REVISION=" + revision
+$ WC "PERL_VERSION=" + patchlevel
+$ WC "PERL_SUBVERSION=" + subversion
+$ WC "PERL_API_VERSION=" + api_version
+$ WC "PERL_API_SUBVERSION=" + api_subversion
 $ WC "alignbytes='" + alignbytes + "'"
 $ WC "aphostname='" + "'"
 $ WC "ar='" + "'"
@@ -4940,6 +4967,7 @@ $ WC "d_rmdir='define'"
 $ WC "d_safebcpy='undef'"
 $ WC "d_safemcpy='define'"
 $ WC "d_sanemcmp='define'"
+$ WC "d_sbrkproto='undef'"
 $ WC "d_sched_yield='" + d_sched_yield + "'"
 $ WC "d_scm_rights='undef'"
 $ WC "d_seekdir='define'"
@@ -5168,7 +5196,7 @@ $ WC "ivtype='" + ivtype + "'"
 $ WC "known_extensions='" + known_extensions + "'"
 $ WC "ld='" + ld + "'"
 $ WC "lddlflags='/Share'"
-$ WC "ldflags='/NoTrace/NoMap'"
+$ WC "ldflags='" + ldflags + "'"
 $ WC "lib_ext='" + lib_ext + "'"
 $ WC "libc='" + libc + "'"
 $ WC "libpth='/sys$share /sys$library'"
@@ -5271,7 +5299,7 @@ $ WC "spitshell='write sys$output '"
 $ WC "src='" + src + "'"
 $ WC "ssizetype='int'"
 $ WC "startperl=" + startperl ! This one's special--no enclosing single quotes
-$ WC "static_ext='" + "'"
+$ WC "static_ext='" + static_ext + "'"
 $ WC "stdchar='" + stdchar + "'"
 $ WC "stdio_base='((*fp)->_base)'"
 $ WC "stdio_bufsiz='((*fp)->_cnt + (*fp)->_ptr - (*fp)->_base)'"

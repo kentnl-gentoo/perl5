@@ -106,7 +106,6 @@ bset_obj_store(pTHXo_ struct byteloader_state *bstate, void *obj, I32 ix)
 void
 byterun(pTHXo_ register struct byteloader_state *bstate)
 {
-    dTHR;
     register int insn;
     U32 ix;
     SV *specialsv_list[6];
@@ -380,7 +379,6 @@ op_private	PL_op->op_private			U8
 op_first	cUNOP->op_first				opindex
 op_last		cBINOP->op_last				opindex
 op_other	cLOGOP->op_other			opindex
-op_children	cLISTOP->op_children			U32
 op_pmreplroot	cPMOP->op_pmreplroot			opindex
 op_pmreplrootgv	*(SV**)&cPMOP->op_pmreplroot		svindex
 op_pmreplstart	cPMOP->op_pmreplstart			opindex

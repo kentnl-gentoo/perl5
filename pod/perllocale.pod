@@ -554,11 +554,11 @@ change the character used for the decimal point--perhaps from '.'  to ','.
 These functions aren't aware of such niceties as thousands separation and
 so on.  (See L<The localeconv function> if you care about these things.)
 
-Output produced by print() is also affected by the
-current locale: it depends on whether C<use locale> or C<no locale> is in
-effect, and corresponds to what you'd get from printf()
-in the "C" locale.  The same is true for Perl's internal conversions
-between numeric and string formats:
+Output produced by print() is also affected by the current locale: it
+depends on whether C<use locale> or C<no locale> is in effect, and
+corresponds to what you'd get from printf() in the "C" locale.  The
+same is true for Perl's internal conversions between numeric and
+string formats:
 
         use POSIX qw(strtod);
         use locale;
@@ -643,15 +643,6 @@ case-mapping table is in effect.
 
 =item *
 
-Some systems are broken in that they allow the "C" locale to be
-overridden by users.  If the decimal point character in the
-C<LC_NUMERIC> category of the "C" locale is surreptitiously changed
-from a dot to a comma, C<sprintf("%g", 0.123456e3)> produces a
-string result of "123,456".  Many people would interpret this as
-one hundred and twenty-three thousand, four hundred and fifty-six.
-
-=item *
-
 A sneaky C<LC_COLLATE> locale could result in the names of students with
 "D" grades appearing ahead of those with "A"s.
 
@@ -687,16 +678,22 @@ the locale:
 
 =over 4
 
-=item B<Comparison operators> (C<lt>, C<le>, C<ge>, C<gt> and C<cmp>):
+=item  *
+
+B<Comparison operators> (C<lt>, C<le>, C<ge>, C<gt> and C<cmp>):
 
 Scalar true/false (or less/equal/greater) result is never tainted.
 
-=item B<Case-mapping interpolation> (with C<\l>, C<\L>, C<\u> or C<\U>)
+=item  *
+
+B<Case-mapping interpolation> (with C<\l>, C<\L>, C<\u> or C<\U>)
 
 Result string containing interpolated material is tainted if
 C<use locale> is in effect.
 
-=item B<Matching operator> (C<m//>):
+=item  *
+
+B<Matching operator> (C<m//>):
 
 Scalar true/false result never tainted.
 
@@ -709,7 +706,9 @@ expression contains C<\w> (to match an alphanumeric character), C<\W>
 C<use locale> is in effect and the regular expression contains C<\w>,
 C<\W>, C<\s>, or C<\S>.
 
-=item B<Substitution operator> (C<s///>):
+=item  *
+
+B<Substitution operator> (C<s///>):
 
 Has the same behavior as the match operator.  Also, the left
 operand of C<=~> becomes tainted when C<use locale> in effect
@@ -717,20 +716,30 @@ if modified as a result of a substitution based on a regular
 expression match involving C<\w>, C<\W>, C<\s>, or C<\S>; or of
 case-mapping with C<\l>, C<\L>,C<\u> or C<\U>.
 
-=item B<Output formatting functions> (printf() and write()):
+=item  *
 
-Success/failure result is never tainted.
+B<Output formatting functions> (printf() and write()):
 
-=item B<Case-mapping functions> (lc(), lcfirst(), uc(), ucfirst()):
+Results are never tainted because otherwise even output from print,
+for example C<print(1/7)>, should be tainted if C<use locale> is in
+effect.
+
+=item  *
+
+B<Case-mapping functions> (lc(), lcfirst(), uc(), ucfirst()):
 
 Results are tainted if C<use locale> is in effect.
 
-=item B<POSIX locale-dependent functions> (localeconv(), strcoll(),
+=item  *
+
+B<POSIX locale-dependent functions> (localeconv(), strcoll(),
 strftime(), strxfrm()):
 
 Results are never tainted.
 
-=item B<POSIX character class tests> (isalnum(), isalpha(), isdigit(),
+=item  *
+
+B<POSIX character class tests> (isalnum(), isalpha(), isdigit(),
 isgraph(), islower(), isprint(), ispunct(), isspace(), isupper(),
 isxdigit()):
 

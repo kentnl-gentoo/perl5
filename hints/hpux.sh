@@ -179,6 +179,7 @@ EOM
     ccflags="$ccflags +DD64"
     ldflags="$ldflags +DD64"
     test -d /lib/pa20_64 && loclibpth="$loclibpth /lib/pa20_64"
+    libswanted="$libswanted pthread"
     libscheck='case "`/usr/bin/file $xxx`" in
 *LP64*|*PA-RISC2.0*) ;;
 *) xxx=/no/64-bit$xxx ;;
@@ -347,9 +348,7 @@ EOM
             fi
 
             # HP-UX 10.X uses the old pthreads API
-            case "$d_oldpthreads" in
-            '') d_oldpthreads="$define" ;;
-            esac
+            d_oldpthreads="$define"
 
             # include libcma before all the others
             libswanted="cma $libswanted"
