@@ -38,6 +38,8 @@ Returns the current working directory.
 
 Re-implements the getcwd(3) (or getwd(3)) functions in Perl.
 
+Taint-safe.
+
 =item cwd
 
     my $cwd = cwd();
@@ -46,7 +48,7 @@ The cwd() is the most natural form for the current architecture. For
 most systems it is identical to `pwd` (but without the trailing line
 terminator).
 
-Unfortunately, cwd() tends to break if called under taint mode.
+Taint-safe.
 
 =item fastcwd
 
@@ -87,17 +89,24 @@ Uses the same algorithm as getcwd().  Symbolic links and relative-path
 components ("." and "..") are resolved to return the canonical
 pathname, just like realpath(3).
 
+Taint-safe.
+
 =item realpath
 
   my $abs_path = realpath($file);
 
 A synonym for abs_path().
 
+Taint-safe.
+
 =item fast_abs_path
 
   my $abs_path = fast_abs_path($file);
 
 A more dangerous, but potentially faster version of abs_path.
+
+This function is B<Not> taint-safe : you can't use it in programs
+that work under taint mode.
 
 =back
 
@@ -187,6 +196,7 @@ $pwd_cmd ||= 'pwd';
 
 # The 'natural and safe form' for UNIX (pwd may be setuid root)
 sub _backtick_pwd {
+    local @ENV{qw(PATH IFS CDPATH ENV BASH_ENV)};
     my $cwd = `$pwd_cmd`;
     # Belt-and-suspenders in case someone said "undef $/".
     local $/ = "\n";
@@ -261,9 +271,9 @@ sub fastcwd {
     $path = '/' . join('/', @path);
     if ($^O eq 'apollo') { $path = "/".$path; }
     # At this point $path may be tainted (if tainting) and chdir would fail.
-    # To be more useful we untaint it then check that we landed where we started.
-    $path = $1 if $path =~ /^(.*)\z/s;	# untaint
-    CORE::chdir($path) || return undef;
+    # Untaint it then check that we landed where we started.
+    $path =~ /^(.*)\z/s		# untaint
+	&& CORE::chdir($1) or return undef;
     ($cdev, $cino) = stat('.');
     die "Unstable directory path, current directory changed unexpectedly"
 	if $cdev != $orig_cdev || $cino != $orig_cino;
@@ -406,9 +416,10 @@ sub fast_abs_path {
     my $cwd = getcwd();
     require File::Spec;
     my $path = @_ ? shift : File::Spec->curdir;
-    CORE::chdir($path) || croak "Cannot chdir to $path:$!";
+    CORE::chdir($path) || croak "Cannot chdir to $path: $!";
     my $realpath = getcwd();
-    CORE::chdir($cwd)  || croak "Cannot chdir back to $cwd:$!";
+    -d $cwd && CORE::chdir($cwd) ||
+	croak "Cannot chdir back to $cwd: $!";
     $realpath;
 }
 

@@ -224,7 +224,7 @@ make_mg_object(pTHX_ SV *arg, MAGIC *mg)
 }
 
 static SV *
-cstring(pTHX_ SV *sv)
+cstring(pTHX_ SV *sv, bool perlstyle)
 {
     SV *sstr = newSVpvn("", 0);
     STRLEN len;
@@ -233,6 +233,34 @@ cstring(pTHX_ SV *sv)
 
     if (!SvOK(sv))
 	sv_setpvn(sstr, "0", 1);
+    else if (perlstyle && SvUTF8(sv))
+    {
+	SV *tmpsv = sv_newmortal(); /* Temporary SV to feed sv_uni_display */
+	len = SvCUR(sv);
+	s = sv_uni_display(tmpsv, sv, 8*len, UNI_DISPLAY_QQ);
+	sv_setpv(sstr,"\"");
+	while (*s)
+	{
+	    if (*s == '"')
+		sv_catpv(sstr, "\\\"");
+	    else if (*s == '$')
+		sv_catpv(sstr, "\\$");
+	    else if (*s == '@')
+		sv_catpv(sstr, "\\@");
+	    else if (*s == '\\')
+	    {
+		if (strchr("nrftax\\",*(s+1)))
+		    sv_catpvn(sstr, s++, 2);
+		else
+		    sv_catpv(sstr, "\\\\");
+	    }
+	    else /* should always be printable */
+		sv_catpvn(sstr, s, 1);
+	    ++s;
+	}
+	sv_catpv(sstr, "\"");
+	return sstr;
+    }
     else
     {
 	/* XXX Optimise? */
@@ -246,11 +274,15 @@ cstring(pTHX_ SV *sv)
 	    else if (*s == '\\')
 		sv_catpv(sstr, "\\\\");
             /* trigraphs - bleagh */
-            else if (*s == '?' && len>=3 && s[1] == '?')
+            else if (!perlstyle && *s == '?' && len>=3 && s[1] == '?')
             {
                 sprintf(escbuff, "\\%03o", '?');
                 sv_catpv(sstr, escbuff);
             }
+	    else if (perlstyle && *s == '$')
+		sv_catpv(sstr, "\\$");
+	    else if (perlstyle && *s == '@')
+		sv_catpv(sstr, "\\@");
 #ifdef EBCDIC
 	    else if (isPRINT(*s))
 #else
@@ -269,7 +301,7 @@ cstring(pTHX_ SV *sv)
 		sv_catpv(sstr, "\\b");
 	    else if (*s == '\f')
 		sv_catpv(sstr, "\\f");
-	    else if (*s == '\v')
+	    else if (!perlstyle && *s == '\v')
 		sv_catpv(sstr, "\\v");
 	    else
 	    {
@@ -333,7 +365,7 @@ void
 walkoptree(pTHX_ SV *opsv, char *method)
 {
     dSP;
-    OP *o;
+    OP *o, *kid;
     dMY_CXT;
 
     if (!SvROK(opsv))
@@ -351,12 +383,17 @@ walkoptree(pTHX_ SV *opsv, char *method)
     PUTBACK;
     perl_call_method(method, G_DISCARD);
     if (o && (o->op_flags & OPf_KIDS)) {
-	OP *kid;
 	for (kid = ((UNOP*)o)->op_first; kid; kid = kid->op_sibling) {
 	    /* Use the same opsv. Rely on methods not to mess it up. */
 	    sv_setiv(newSVrv(opsv, cc_opclassname(aTHX_ kid)), PTR2IV(kid));
 	    walkoptree(aTHX_ opsv, method);
 	}
+    }
+    if (o && (cc_opclass(aTHX_ o) == OPc_PMOP)
+	    && (kid = cPMOPo->op_pmreplroot))
+    {
+	sv_setiv(newSVrv(opsv, opclassnames[OPc_PMOP]), PTR2IV(kid));
+	walkoptree(aTHX_ opsv, method);
     }
 }
 
@@ -561,7 +598,15 @@ SV *
 cstring(sv)
 	SV *	sv
     CODE:
-	RETVAL = cstring(aTHX_ sv);
+	RETVAL = cstring(aTHX_ sv, 0);
+    OUTPUT:
+	RETVAL
+
+SV *
+perlstring(sv)
+	SV *	sv
+    CODE:
+	RETVAL = cstring(aTHX_ sv, 1);
     OUTPUT:
 	RETVAL
 
@@ -623,7 +668,7 @@ OP_ppaddr(o)
     CODE:
 	sv_setpvn(sv, "PL_ppaddr[OP_", 13);
 	sv_catpv(sv, PL_op_name[o->op_type]);
-	for (i=13; i<SvCUR(sv); ++i)
+	for (i=13; (STRLEN)i < SvCUR(sv); ++i)
 	    SvPVX(sv)[i] = toUPPER(SvPVX(sv)[i]);
 	sv_catpv(sv, "]");
 	ST(0) = sv;
@@ -741,11 +786,11 @@ PMOP_pmoffset(o)
 
 #endif
 
-U16
+U32
 PMOP_pmflags(o)
 	B::PMOP		o
 
-U16
+U32
 PMOP_pmpermflags(o)
 	B::PMOP		o
 

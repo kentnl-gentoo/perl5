@@ -96,8 +96,14 @@ my @exe = qw(
     vms/ext/Stdio/test.pl
     vms/ext/filespec.t
     x2p/*.SH
-    Porting/patchls
+    Porting/findrfuncs
+    Porting/genlog
     Porting/makerel
+    Porting/p4d2p
+    Porting/p4desc
+    Porting/p4genpatch
+    Porting/patchls
+    Porting/*.pl
     mpeix/nm
     mpeix/relink
 );
@@ -131,7 +137,6 @@ my @writables = qw(
     vms/perly_c.vms
     vms/perly_h.vms
     win32/Makefile
-    win32/Makefile.win64
     win32/makefile.mk
     win32/config_H.bc
     win32/config_H.gc
@@ -148,7 +153,6 @@ my @crlf = qw(
     README.dos
     README.win32
     win32/Makefile
-    win32/Makefile.win64
     win32/makefile.mk
     wince/Makefile.ce
     wince/README.compile

@@ -100,45 +100,79 @@ esc_q(register char *d, register char *s, register STRLEN slen)
 static I32
 esc_q_utf8(pTHX_ SV* sv, register char *src, register STRLEN slen)
 {
-    char *s, *send, *r;
-    STRLEN grow = 0, j = 1, l;
-    bool dquote = FALSE;
+    char *s, *send, *r, *rstart;
+    STRLEN j, cur = SvCUR(sv);
+    /* Could count 128-255 and 256+ in two variables, if we want to
+       be like &qquote and make a distinction.  */
+    STRLEN grow = 0;	/* bytes needed to represent chars 128+ */
+    /* STRLEN topbit_grow = 0;	bytes needed to represent chars 128-255 */
+    STRLEN backslashes = 0;
+    STRLEN single_quotes = 0;
+    STRLEN qq_escapables = 0;	/* " $ @ will need a \ in "" strings.  */
+    STRLEN normal = 0;
 
     /* this will need EBCDICification */
     for (s = src, send = src + slen; s < send; s += UTF8SKIP(s)) {
-        UV k = utf8_to_uvchr((U8*)s, &l);
+        UV k = utf8_to_uvchr((U8*)s, NULL);
 
-	grow +=
-	  (*s == '"' || *s == '\\') ? 2 :
-	  (k < 0x80 ? 1 : UNISKIP(k) + 1 + 4); /* 4: \x{} */
+        if (k > 127) {
+            /* 4: \x{} then count the number of hex digits.  */
+            grow += 4 + (k <= 0xFF ? 2 : k <= 0xFFF ? 3 : k <= 0xFFFF ? 4 :
+#if UVSIZE == 4
+                8 /* We may allocate a bit more than the minimum here.  */
+#else
+                k <= 0xFFFFFFFF ? 8 : UVSIZE * 4
+#endif
+                );
+        } else if (k == '\\') {
+            backslashes++;
+        } else if (k == '\'') {
+            single_quotes++;
+        } else if (k == '"' || k == '$' || k == '@') {
+            qq_escapables++;
+        } else {
+            normal++;
+        }
     }
-    sv_grow(sv, SvCUR(sv)+3+grow); /* 3: ""\0 */
-    r = SvPVX(sv) + SvCUR(sv);
+    if (grow) {
+        /* We have something needing hex. 3 is ""\0 */
+        sv_grow(sv, cur + 3 + grow + 2*backslashes + single_quotes
+		+ 2*qq_escapables + normal);
+        rstart = r = SvPVX(sv) + cur;
 
-    for (s = src; s < send; s += UTF8SKIP(s)) {
-        UV k = utf8_to_uvchr((U8*)s, &l);
+        *r++ = '"';
 
-	if (*s == '"' || *s == '\\') {
-	    r[j++] = '\\';
-	    r[j++] = *s;
-	}
-	else if (k < 0x80)
-	    r[j++] = k;
-	else {
-	    r[j++] = '\\';
-	    r[j++] = 'x';
-	    r[j++] = '{';
-	    j += sprintf(r + j, "%"UVxf, k);
-	    r[j++] = '}';
-	    dquote = TRUE;
-	}
+        for (s = src; s < send; s += UTF8SKIP(s)) {
+            UV k = utf8_to_uvchr((U8*)s, NULL);
+
+            if (k == '"' || k == '\\' || k == '$' || k == '@') {
+                *r++ = '\\';
+                *r++ = (char)k;
+            }
+            else if (k < 0x80)
+                *r++ = (char)k;
+            else {
+                r += sprintf(r, "\\x{%"UVxf"}", k);
+            }
+        }
+        *r++ = '"';
+    } else {
+        /* Single quotes.  */
+        sv_grow(sv, cur + 3 + 2*backslashes + 2*single_quotes
+		+ qq_escapables + normal);
+        rstart = r = SvPVX(sv) + cur;
+        *r++ = '\'';
+        for (s = src; s < send; s ++) {
+            char k = *s;
+            if (k == '\'' || k == '\\')
+                *r++ = '\\';
+            *r++ = k;
+        }
+        *r++ = '\'';
     }
-    if (dquote)
-      r[0] = r[j++] = '"';
-    else
-      r[0] = r[j++] = '\'';
-    r[j] = '\0';
-    SvCUR_set(sv, SvCUR(sv) + j);
+    *r = '\0';
+    j = r - rstart;
+    SvCUR_set(sv, cur + j);
 
     return j;
 }
@@ -220,7 +254,7 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	
 	ival = SvRV(val);
 	realtype = SvTYPE(ival);
-        (void) sprintf(id, "0x%lx", (unsigned long)ival);
+        (void) sprintf(id, "0x%"UVxf, PTR2UV(ival));
 	idlen = strlen(id);
 	if (SvOBJECT(ival))
 	    realpack = HvNAME(SvSTASH(ival));
@@ -540,13 +574,15 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 
             /* foreach (keys %hash) */
             for (i = 0; 1; i++) {
-		char *nkey = NULL;
+		char *nkey;
+                char *nkey_buffer = NULL;
 		I32 nticks = 0;
 		SV* keysv;
 		STRLEN keylen;
+                I32 nlen;
 		bool do_utf8 = FALSE;
 
-                if ((sortkeys && !(keys && i <= av_len(keys))) ||
+                if ((sortkeys && !(keys && (I32)i <= av_len(keys))) ||
                     !(entry = hv_iternext((HV *)ival)))
                     break;
 
@@ -558,7 +594,8 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		    svp = av_fetch(keys, i, FALSE);
 		    keysv = svp ? *svp : sv_mortalcopy(&PL_sv_undef);
 		    key = SvPV(keysv, keylen);
-		    svp = hv_fetch((HV*)ival, key, keylen, 0);
+		    svp = hv_fetch((HV*)ival, key,
+                                   SvUTF8(keysv) ? -(I32)keylen : keylen, 0);
 		    hval = svp ? *svp : sv_mortalcopy(&PL_sv_undef);
 		}
 		else {
@@ -570,22 +607,39 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		key = SvPV(keysv, keylen);
 		klen = keylen;
 
-		if (do_utf8) {
-		    char *okey = SvPVX(retval) + SvCUR(retval);
-		    I32 nlen;
+                sv_catsv(retval, totpad);
+                sv_catsv(retval, ipad);
+                /* old logic was first to check utf8 flag, and if utf8 always
+                   call esc_q_utf8.  This caused test to break under -Mutf8,
+                   because there even strings like 'c' have utf8 flag on.
+                   Hence with quotekeys == 0 the XS code would still '' quote
+                   them based on flags, whereas the perl code would not,
+                   based on regexps.
+                   The perl code is correct.
+                   needs_quote() decides that anything that isn't a valid
+                   perl identifier needs to be quoted, hence only correctly
+                   formed strings with no characters outside [A-Za-z0-9_:]
+                   won't need quoting.  None of those characters are used in
+                   the byte encoding of utf8, so anything with utf8
+                   encoded characters in will need quoting. Hence strings
+                   with utf8 encoded characters in will end up inside do_utf8
+                   just like before, but now strings with utf8 flag set but
+                   only ascii characters will end up in the unquoted section.
 
-		    sv_catsv(retval, totpad);
-		    sv_catsv(retval, ipad);
-		    nlen = esc_q_utf8(aTHX_ retval, key, klen);
-
-		    sname = newSVsv(iname);
-		    sv_catpvn(sname, okey, nlen);
-		    sv_catpvn(sname, "}", 1);
-		}
-		else {
-		    if (quotekeys || needs_quote(key)) {
+                   There should also be less tests for the (probably currently)
+                   more common doesn't need quoting case.
+                   The code is also smaller (22044 vs 22260) because I've been
+                   able to pull the comon logic out to both sides.  */
+                if (quotekeys || needs_quote(key)) {
+                    if (do_utf8) {
+                        STRLEN ocur = SvCUR(retval);
+                        nlen = esc_q_utf8(aTHX_ retval, key, klen);
+                        nkey = SvPVX(retval) + ocur;
+                    }
+                    else {
 		        nticks = num_q(key, klen);
-			New(0, nkey, klen+nticks+3, char);
+			New(0, nkey_buffer, klen+nticks+3, char);
+                        nkey = nkey_buffer;
 			nkey[0] = '\'';
 			if (nticks)
 			    klen += esc_q(nkey+1, key, klen);
@@ -593,20 +647,19 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 			    (void)Copy(key, nkey+1, klen, char);
 			nkey[++klen] = '\'';
 			nkey[++klen] = '\0';
+                        nlen = klen;
+                        sv_catpvn(retval, nkey, klen);
 		    }
-		    else {
-		        New(0, nkey, klen, char);
-			(void)Copy(key, nkey, klen, char);
-		    }
-
-		    sname = newSVsv(iname);
-		    sv_catpvn(sname, nkey, klen);
-		    sv_catpvn(sname, "}", 1);
-
-		    sv_catsv(retval, totpad);
-		    sv_catsv(retval, ipad);
-		    sv_catpvn(retval, nkey, klen);
+                }
+                else {
+                    nkey = key;
+                    nlen = klen;
+                    sv_catpvn(retval, nkey, klen);
 		}
+                sname = newSVsv(iname);
+                sv_catpvn(sname, nkey, nlen);
+                sv_catpvn(sname, "}", 1);
+
 		sv_catpvn(retval, " => ", 4);
 		if (indent >= 2) {
 		    char *extra;
@@ -627,7 +680,7 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 			freezer, toaster, purity, deepcopy, quotekeys, bless,
 			maxdepth, sortkeys);
 		SvREFCNT_dec(sname);
-		Safefree(nkey);
+		Safefree(nkey_buffer);
 		if (indent >= 2)
 		    SvREFCNT_dec(newapad);
 	    }
@@ -674,7 +727,7 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	STRLEN i;
 	
 	if (namelen) {
-	    (void) sprintf(id, "0x%lx", (unsigned long)val);
+	    (void) sprintf(id, "0x%"UVxf, PTR2UV(val));
 	    if ((svp = hv_fetch(seenhv, id, (idlen = strlen(id)), FALSE)) &&
 		(sv = *svp) && SvROK(sv) &&
 		(seenentry = (AV*)SvRV(sv)))
@@ -708,7 +761,26 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	    else
 	      (void) sprintf(tmpbuf, "%"IVdf, SvIV(val));
             len = strlen(tmpbuf);
-	    sv_catpvn(retval, tmpbuf, len);
+            /* For 5.6.x and earlier will need to change this test to check
+               NV if NOK, as there NOK trumps IOK, and NV=3.5,IV=3 is valid.
+               Current code will Dump that as $VAR1 = 3;
+               Changes in 5.7 series mean that now IOK is only set if scalar
+               is precisely integer.  */
+            if (SvPOK(val)) {
+              /* Need to check to see if this is a string such as " 0".
+                 I'm assuming from sprintf isn't going to clash with utf8.
+                 Is this valid on EBCDIC?  */
+              STRLEN pvlen;
+              const char *pv = SvPV(val, pvlen);
+              if (pvlen != len || memNE(pv, tmpbuf, len))
+                goto integer_came_from_string;
+            }
+            if (len > 10) {
+              /* Looks like we're on a 64 bit system.  Make it a string so that
+                 if a 32 bit system reads the number it will cope better.  */
+              sv_catpvf(retval, "'%s'", tmpbuf);
+            } else
+              sv_catpvn(retval, tmpbuf, len);
 	}
 	else if (realtype == SVt_PVGV) {/* GLOBs can end up with scribbly names */
 	    c = SvPV(val, i);
@@ -781,6 +853,7 @@ DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	    sv_catpvn(retval, "undef", 5);
 	}
 	else {
+        integer_came_from_string:
 	    c = SvPV(val, i);
 	    if (DO_UTF8(val))
 	        i += esc_q_utf8(aTHX_ retval, c, i);

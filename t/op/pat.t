@@ -6,7 +6,7 @@
 
 $| = 1;
 
-print "1..858\n";
+print "1..910\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -2675,22 +2675,6 @@ print "# some Unicode properties\n";
 }
 
 {
-    print "# [ID 20020124.005]\n";
-
-    # Fixed by #14795.
-
-    $char = "\x{f00f}";
-    $x = "$char b $char";
-
-    $x =~ s{($char)}{
-	"c" =~ /d/;
-	"x";
-    }ge;
-
-    print $x eq "x b x" ? "ok 855\n" : "not ok 855\n";
-}
-
-{
     print "# UTF-8 hash keys and /\$/\n";
     # http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2002-01/msg01327.html
 
@@ -2698,7 +2682,7 @@ print "# some Unicode properties\n";
     my $v = substr($u,0,1);
     my $w = substr($u,1,1);
     my %u = ( $u => $u, $v => $v, $w => $w );
-    my $i = 856; 
+    my $i = 855; 
     for (keys %u) {
 	my $m1 = /^\w*$/ ? 1 : 0;
 	my $m2 = $u{$_}=~/^\w*$/ ? 1 : 0;
@@ -2706,3 +2690,197 @@ print "# some Unicode properties\n";
 	$i++;
     }
 }
+
+{
+    print "# [ID 20020124.005]\n";
+    # Fixed by #14795.
+    my $i = 858;
+    for my $char ("a", "\x{df}", "\x{100}"){
+	$x = "$char b $char";
+	$x =~ s{($char)}{
+	    "c" =~ /c/;
+	    "x";
+	}ge;
+	print substr($x,0,1) eq substr($x,-1,1) ?
+	    "ok $i\n" : "not ok $i # debug: $x\n";
+ 	$i++;
+   }
+}
+
+{
+    print "# SEGV in s/// and UTF-8\n";
+    $s = "s#\x{100}" x 4;
+    $s =~ s/[^\w]/ /g;
+    print $s eq "s \x{100}" x 4 ? "ok 861\n" : "not ok 861\n";
+}
+
+{
+    print "# UTF-8 bug (maybe alreayd known?)\n";
+    my $u;
+
+    $u = "foo";
+    $u =~ s/./\x{100}/g;
+    print $u eq "\x{100}\x{100}\x{100}" ? "ok 862\n" : "not ok 862\n";
+
+    $u = "foobar";
+    $u =~ s/[ao]/\x{100}/g;
+    print $u eq "f\x{100}\x{100}b\x{100}r" ? "ok 863\n" : "not ok 863\n";
+
+    $u =~ s/\x{100}/e/g;
+    print $u eq "feeber" ? "ok 864\n" : "not ok 864\n";
+}
+
+{
+    print "# UTF-8 bug with s///\n";
+    # check utf8/non-utf8 mixtures
+    # try to force all float/anchored check combinations
+    my $c = "\x{100}";
+    my $test = 865;
+    my $subst;
+    for my $re (
+	"xx.*$c", "x.*$c$c", "$c.*xx", "$c$c.*x", "xx.*(?=$c)", "(?=$c).*xx",
+    ) {
+	print "xxx" =~ /$re/ ? "not ok $test\n" : "ok $test\n";
+	++$test;
+	print +($subst = "xxx") =~ s/$re// ? "not ok $test\n" : "ok $test\n";
+	++$test;
+    }
+    for my $re ("xx.*$c*", "$c*.*xx") {
+	print "xxx" =~ /$re/ ? "ok $test\n" : "not ok $test\n";
+	++$test;
+	($subst = "xxx") =~ s/$re//;
+	print $subst eq '' ? "ok $test\n" : "not ok $test\t# $subst\n";
+	++$test;
+    }
+    for my $re ("xxy*", "y*xx") {
+	print "xx$c" =~ /$re/ ? "ok $test\n" : "not ok $test\n";
+	++$test;
+	($subst = "xx$c") =~ s/$re//;
+	print $subst eq $c ? "ok $test\n" : "not ok $test\n";
+	++$test;
+	print "xy$c" =~ /$re/ ? "not ok $test\n" : "ok $test\n";
+	++$test;
+	print +($subst = "xy$c") =~ /$re/ ? "not ok $test\n" : "ok $test\n";
+	++$test;
+    }
+    for my $re ("xy$c*z", "x$c*yz") {
+	print "xyz" =~ /$re/ ? "ok $test\n" : "not ok $test\n";
+	++$test;
+	($subst = "xyz") =~ s/$re//;
+	print $subst eq '' ? "ok $test\n" : "not ok $test\n";
+	++$test;
+    }
+}
+
+{
+    print "# qr/.../x\n";
+    my $test = 893;
+
+    my $R = qr/ A B C # D E/x;
+
+    print eval {"ABCDE" =~ $R} ? "ok $test\n" : "not ok $test\n";
+    $test++;
+
+    print eval {"ABCDE" =~ m/$R/} ? "ok $test\n" : "not ok $test\n";
+    $test++;
+
+    print eval {"ABCDE" =~ m/($R)/} ? "ok $test\n" : "not ok $test\n";
+    $test++;
+}
+
+{
+    print "# illegal Unicode properties\n";
+    my $test = 896;
+
+    print eval { "a" =~ /\pq / }      ? "not ok $test\n" : "ok $test\n";
+    $test++;
+
+    print eval { "a" =~ /\p{qrst} / } ? "not ok $test\n" : "ok $test\n";
+    $test++;
+}
+
+{
+    print "# [ID 20020412.005] wrong pmop flags checked when empty pattern\n";
+    # requires reuse of last successful pattern
+    my $test = 898;
+    $test =~ /\d/;
+    for (0 .. 1) {
+	my $match = ?? + 0;
+	if ($match != $_) {
+	    print "ok $test\n";
+	} else {
+	    printf "not ok %s\t# 'match once' %s on %s iteration\n", $test,
+		    $match ? 'succeeded' : 'failed', $_ ? 'second' : 'first';
+	}
+	++$test;
+    }
+    $test =~ /(\d)/;
+    my $result = join '', $test =~ //g;
+    if ($result eq $test) {
+	print "ok $test\n";
+    } else {
+	printf "not ok %s\t# expected '%s', got '%s'\n", $test, $test, $result;
+    }
+    ++$test;
+}
+
+print "# user-defined character properties\n";
+
+sub InKana1 {
+    return <<'END';
+3040	309F
+30A0	30FF
+END
+}
+
+sub InKana2 {
+    return <<'END';
++utf8::InHiragana
++utf8::InKatakana
+END
+}
+
+sub InKana3 {
+    return <<'END';
++utf8::InHiragana
++utf8::InKatakana
+-utf8::IsCn
+END
+}
+
+sub InNotKana {
+    return <<'END';
+!utf8::InHiragana
+-utf8::InKatakana
++utf8::IsCn
+END
+}
+
+$test = 901;
+
+print "\x{3040}" =~ /\p{InKana1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+print "\x{303F}" =~ /\P{InKana1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+
+print "\x{3040}" =~ /\p{InKana2}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+print "\x{303F}" =~ /\P{InKana2}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+
+print "\x{3041}" =~ /\p{InKana3}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+print "\x{3040}" =~ /\P{InKana3}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+
+print "\x{3040}" =~ /\p{InNotKana}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+print "\x{3041}" =~ /\P{InNotKana}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+
+sub InConsonant { # Not EBCDIC-aware.
+    return <<EOF;
+0061	007f
+-0061
+-0065
+-0069
+-006f
+-0075
+EOF
+}
+
+print "d" =~ /\p{InConsonant}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+print "e" =~ /\P{InConsonant}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+

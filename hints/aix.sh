@@ -141,7 +141,12 @@ cc_type=xlc
 case "$cc" in
 *gcc*)
    cc_type=gcc
-   ccdlflags='-Xlinker' ;;
+   ccdlflags='-Xlinker'
+   if [ "X$gccversion" = "X" ]; then
+     # Done too late in Configure if hinted
+     gccversion=`$cc --version | sed 's/.*(GCC) *//`
+     fi
+   ;;
 *) ccversion=`lslpp -L | grep 'C for AIX Compiler$' | awk '{print $2}'`
    case "$ccversion" in
      '') ccversion=`lslpp -L | grep 'IBM C and C++ Compilers LUM$' | awk '{print $2}'`
@@ -245,7 +250,20 @@ case "$usethreads" in
 $define|true|[yY]*)
 	ccflags="$ccflags -DNEED_PTHREAD_INIT"
 	case "$cc" in
-	gcc) ;;
+	*gcc*)
+echo "GCC $gccversion disabling some _r functions" >&4
+	    case "$gccversion" in
+		3*) d_drand48_r='undef'
+		    d_endgrent_r='undef'
+		    d_endpwent_r='undef'
+		    d_getgrent_r='undef'
+		    d_getpwent_r='undef'
+		    d_random_r='undef'
+		    d_srand48_r='undef'
+		    d_strerror_r='undef'
+		    ;;
+		esac
+	    ;;
 	cc_r) ;;
 	cc|xl[cC]_r) 
 	    echo >&4 "Switching cc to cc_r because of POSIX threads."
@@ -253,6 +271,10 @@ $define|true|[yY]*)
 	    # (e.g. pragma/overload core dumps)	 Let's suspect xlC_r, too.
 	    # --jhi@iki.fi
 	    cc=cc_r
+
+	    case "`oslevel`" in
+		4.2.1.*) i_crypt='undef' ;;
+		esac
 	    ;;
 	'') 
 	    cc=cc_r
@@ -332,26 +354,18 @@ libswanted_uselargefiles="`getconf XBS5_ILP32_OFFBIG_LIBS 2>/dev/null|sed -e 's@
 	esac
 	case "$gccversion" in
 	'') ;;
-	*)
-	cat >&4 <<EOM
-
-*** Warning: gcc in AIX might not work with the largefile support of Perl
-*** (default since 5.6.0), this combination hasn't been tested.
-*** I will try, though.
-
-EOM
-	# Remove xlc-spefific -qflags.
-        ccflags="`echo $ccflags | sed -e 's@ -q[^ ]*@ @g' -e 's@^-q[^ ]* @@g'`"
-        ldflags="`echo $ldflags | sed -e 's@ -q[^ ]*@ @g' -e 's@^-q[^ ]* @@g'`"
-        # Move xld-spefific -bflags.
-        ccflags="`echo $ccflags | sed -e 's@ -b@ -Wl,-b@g'`"
-        ldflags="`echo ' '$ldflags | sed -e 's@ -b@ -Wl,-b@g'`"
-        lddlflags="`echo ' '$lddlflags | sed -e 's@ -b@ -Wl,-b@g'`"
-        ld='gcc'
-        echo >&4 "(using ccflags   $ccflags)"
-        echo >&4 "(using ldflags   $ldflags)"
-        echo >&4 "(using lddlflags $lddlflags)"
-        ;; 
+	*) # Remove xlc-spefific -qflags.
+	   ccflags="`echo $ccflags | sed -e 's@ -q[^ ]*@ @g' -e 's@^-q[^ ]* @@g'`"
+	   ldflags="`echo $ldflags | sed -e 's@ -q[^ ]*@ @g' -e 's@^-q[^ ]* @@g'`"
+	   # Move xld-spefific -bflags.
+	   ccflags="`echo $ccflags | sed -e 's@ -b@ -Wl,-b@g'`"
+	   ldflags="`echo ' '$ldflags | sed -e 's@ -b@ -Wl,-b@g'`"
+	   lddlflags="`echo ' '$lddlflags | sed -e 's@ -b@ -Wl,-b@g'`"
+	   ld='gcc'
+	   echo >&4 "(using ccflags   $ccflags)"
+	   echo >&4 "(using ldflags   $ldflags)"
+	   echo >&4 "(using lddlflags $lddlflags)"
+	   ;; 
         esac
         ;;
 esac
@@ -464,9 +478,6 @@ EOM
 	    ''|64*) archname64=64all ;;
 	    esac
 	    longsize="8"
-	    # Don't try backwards compatibility
-	    bincompat="$undef"
-	    d_bincompat5005="$undef"
 	    qacflags=''
 	    qaldflags=''
 	    qalibs=''

@@ -6,9 +6,9 @@ sub DEBUG () { 0 }
 
 sub DESTROY {}
 
-sub croak { require Carp; Carp::croak(@_) }
-
 my %Cache;
+
+sub croak { require Carp; Carp::croak(@_) }
 
 ##
 ## "SWASH" == "SWATCH HASH". A "swatch" is a swatch of the Unicode landscape
@@ -81,6 +81,25 @@ sub SWASHNEW {
                 last GETFILE;
             }
 
+	    ##
+	    ## It could be a user-defined property.
+	    ##
+
+	    if ($type =~ /^I[ns](\w+)$/) {
+                my @caller = caller(1);
+
+                if (defined $caller[0]) {
+                    my $prop = $caller[0] . "::" . $type;
+
+                    if (exists &{$prop}) {
+                        no strict 'refs';
+
+                        $list = &{$prop};
+                        last GETFILE;
+                    }
+                }
+            }
+
             ##
             ## Last attempt -- see if it's a "To" name (e.g. "ToLower")
             ##
@@ -95,24 +114,29 @@ sub SWASHNEW {
             ## If we reach this line, it's because we couldn't figure
             ## out what to do with $type. Ouch.
             ##
-            croak("Can't find Unicode character property \"$type\"");
+
+            return $type;
         }
 
-        print "found it (file='$file')\n" if DEBUG;
+	if (defined $file) {
+	    print "found it (file='$file')\n" if DEBUG;
 
-        ##
-        ## If we reach here, it was due to a 'last GETFILE' above, so we
-        ## have a filename, so now we load it if we haven't already.
-        ## If we have, return the cached results. The cache key is the
-        ## file to load.
-        ##
-        if ($Cache{$file} and ref($Cache{$file}) eq $class)
-        {
-            print "Returning cached '$file' for \\p{$type}\n" if DEBUG;
-            return $Cache{$class, $file};
-        }
+	    ##
+	    ## If we reach here, it was due to a 'last GETFILE' above
+	    ## (exception: user-defined properties), so we
+	    ## have a filename, so now we load it if we haven't already.
+	    ## If we have, return the cached results. The cache key is the
+	    ## file to load.
+	    ##
+	    if ($Cache{$file} and ref($Cache{$file}) eq $class)
+	    {
+		print "Returning cached '$file' for \\p{$type}\n" if DEBUG;
+		return $Cache{$class, $file};
+	    }
 
-        $list = do $file;
+	    $list = do $file;
+	}
+
         $ListSorted = 1; ## we know that these lists are sorted
     }
 
@@ -160,7 +184,14 @@ sub SWASHNEW {
 	    print STDERR "$1 => $2\n" if DEBUG;
 	    if ($char =~ /[-+!]/) {
 		my ($c,$t) = split(/::/, $name, 2);	# bogus use of ::, really
-		my $subobj = $c->SWASHNEW($t, "", 0, 0, 0);
+		my $subobj;
+		if ($c eq 'utf8') {
+		    $subobj = $c->SWASHNEW($t, "", 0, 0, 0);
+		}
+		elsif ($c =~ /^([0-9a-fA-F]+)/) {
+		    $subobj = utf8->SWASHNEW("", $c, 0, 0, 0);
+		}
+		return $subobj unless ref $subobj;
 		push @extras, $name => $subobj;
 		$bits = $subobj->{BITS} if $bits < $subobj->{BITS};
 	    }
@@ -240,7 +271,7 @@ sub SWASHGET {
 	}
 	else {
 	  LINE:
-	    while (/^([0-9a-fA-F]+)(?:\t([0-9a-fA-F]+))?/mg) {
+	    while (/^([0-9a-fA-F]+)(?:[ \t]+([0-9a-fA-F]+))?/mg) {
 		my $min = hex $1;
 		my $max = (defined $2 ? hex $2 : $min);
 		next if $max < $start;

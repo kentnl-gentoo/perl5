@@ -1,9 +1,13 @@
 #!./perl
 
-# This test harness will (eventually) test the "tie" functionality
-# without the need for a *DBM* implementation.
-
-# Currently it only tests the untie warning 
+# Add new tests to the end with format:
+# ########
+#
+# # test description
+# Test code
+# EXPECT
+# Warn or die msgs (if any) at - line 1234
+#
 
 chdir 't' if -d 't';
 @INC = '../lib';
@@ -11,29 +15,23 @@ $ENV{PERL5LIB} = "../lib";
 
 $|=1;
 
-# catch warnings into fatal errors
-$SIG{__WARN__} = sub { die "WARNING: @_" } ;
-$SIG{__DIE__}  = sub { die @_ };
-
 undef $/;
-@prgs = split "\n########\n", <DATA>;
-print "1..", scalar @prgs, "\n";
+@prgs = split /^########\n/m, <DATA>;
 
+require './test.pl';
+plan(tests => scalar @prgs);
 for (@prgs){
-    my($prog,$expected) = split(/\nEXPECT\n/, $_);
-    eval "$prog" ;
-    $status = $?;
-    $results = $@ ;
+    ++$i;
+    my($prog,$expected) = split(/\nEXPECT\n/, $_, 2);
+    print("not ok $i # bad test format\n"), next
+        unless defined $expected;
+    my ($testname) = $prog =~ /^# (.*)\n/m;
+    $testname ||= '';
+    $TODO = $testname =~ s/^TODO //;
     $results =~ s/\n+$//;
     $expected =~ s/\n+$//;
-    if ( $status or $results and $results !~ /^(WARNING: )?$expected/){
-	print STDERR "STATUS: $status\n";
-	print STDERR "PROG: $prog\n";
-	print STDERR "EXPECTED:\n$expected\n";
-	print STDERR "GOT:\n$results\n";
-	print "not ";
-    }
-    print "ok ", ++$i, "\n";
+
+    fresh_perl_is($prog, $expected, {}, $testname);
 }
 
 __END__
@@ -106,7 +104,7 @@ use Tie::Hash ;
 $a = tie %h, Tie::StdHash;
 untie %h;
 EXPECT
-untie attempted while 1 inner references still exist
+untie attempted while 1 inner references still exist at - line 6.
 ########
 
 # strict behaviour, with 1 extra references via tied generating an error
@@ -116,7 +114,7 @@ tie %h, Tie::StdHash;
 $a = tied %h;
 untie %h;
 EXPECT
-untie attempted while 1 inner references still exist
+untie attempted while 1 inner references still exist at - line 7.
 ########
 
 # strict behaviour, with 1 extra references which are destroyed
@@ -138,14 +136,14 @@ untie %h;
 EXPECT
 ########
 
-# strict error behaviour, with 2 extra references 
+# strict error behaviour, with 2 extra references
 use warnings 'untie';
 use Tie::Hash ;
 $a = tie %h, Tie::StdHash;
 $b = tied %h ;
 untie %h;
 EXPECT
-untie attempted while 2 inner references still exist
+untie attempted while 2 inner references still exist at - line 7.
 ########
 
 # strict behaviour, check scope of strictness.
@@ -162,29 +160,59 @@ $C = $B = tied %H ;
 untie %H;
 EXPECT
 ########
+
 # Forbidden aggregate self-ties
-my ($a, $b) = (0, 0);
 sub Self::TIEHASH { bless $_[1], $_[0] }
-sub Self::DESTROY { $b = $_[0] + 1; }
 {
-    my %c = 42;
+    my %c;
     tie %c, 'Self', \%c;
 }
 EXPECT
-Self-ties of arrays and hashes are not supported 
+Self-ties of arrays and hashes are not supported at - line 6.
 ########
+
 # Allowed scalar self-ties
-my ($a, $b) = (0, 0);
+my $destroyed = 0;
 sub Self::TIESCALAR { bless $_[1], $_[0] }
-sub Self::DESTROY   { $b = $_[0] + 1; }
+sub Self::DESTROY   { $destroyed = 1; }
 {
     my $c = 42;
-    $a = $c + 0;
     tie $c, 'Self', \$c;
 }
-die unless $a == 0 && $b == 43;
+die "self-tied scalar not DESTROYed" unless $destroyed == 1;
 EXPECT
 ########
+
+# TODO Allowed glob self-ties
+my $destroyed = 0;
+my $printed   = 0;
+sub Self2::TIEHANDLE { bless $_[1], $_[0] }
+sub Self2::DESTROY   { $destroyed = 1; }
+sub Self2::PRINT     { $printed = 1; }
+{
+    use Symbol;
+    my $c = gensym;
+    tie *$c, 'Self2', $c;
+    print $c 'Hello';
+}
+die "self-tied glob not PRINTed" unless $printed == 1;
+die "self-tied glob not DESTROYed" unless $destroyed == 1;
+EXPECT
+########
+
+# Allowed IO self-ties
+my $destroyed = 0;
+sub Self3::TIEHANDLE { bless $_[1], $_[0] }
+sub Self3::DESTROY   { $destroyed = 1; }
+{
+    use Symbol 'geniosym';
+    my $c = geniosym;
+    tie *$c, 'Self3', $c;
+}
+die "self-tied IO not DESTROYed" unless $destroyed == 1;
+EXPECT
+########
+
 # Interaction of tie and vec
 
 my ($a, $b);
@@ -197,8 +225,18 @@ vec($b,1,1)=0;
 die unless $a eq $b;
 EXPECT
 ########
-# An attempt at lvalueable barewords broke this
 
+# correct unlocalisation of tied hashes (patch #16431)
+use Tie::Hash ;
+tie %tied, Tie::StdHash;
+{ local $hash{'foo'} } warn "plain hash bad unlocalize" if exists $hash{'foo'};
+{ local $tied{'foo'} } warn "tied hash bad unlocalize" if exists $tied{'foo'};
+{ local $ENV{'foo'}  } warn "%ENV bad unlocalize" if exists $ENV{'foo'};
+EXPECT
+########
+
+# An attempt at lvalueable barewords broke this
 tie FH, 'main';
 EXPECT
-
+Can't modify constant item in tie at - line 3, near "'main';"
+Execution of - aborted due to compilation errors.

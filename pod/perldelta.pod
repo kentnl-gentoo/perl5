@@ -46,6 +46,28 @@ More Extensive Regression Testing
 
 =head1 Incompatible Changes
 
+=head2 Binary Incompatibility
+
+B<Perl 5.8 is not binary compatible with earlier releases of Perl.>
+
+B<You have to recompile your XS modules.>
+
+(Pure Perl modules should continue to work.)
+
+The major reason for the discontinuity is the new IO architecture
+called PerlIO.  PerlIO is the default configuration because without
+it many new features of Perl 5.8 cannot be used.  In other words:
+you just have to recompile your modules containing XS code, sorry
+about that.
+
+In future releases of Perl, non-PerlIO aware XS modules may become
+completely unsupported.  This shouldn't be too difficult for module
+authors, however: PerlIO has been designed as a drop-in replacement
+(at the source code level) for the stdio interface.
+
+Depending on your platform, there are also other reasons why
+we decided to break binary compatibility, please read on. 
+
 =head2 64-bit platforms and malloc
 
 If your pointers are 64 bits wide, the Perl malloc is no longer being
@@ -114,12 +136,6 @@ C<\p{InTibetan}> refers to the block. When there is no name conflict, you
 can omit the C<In> from the block name (e.g. C<\p{BraillePatterns}>), but
 to be safe, it's probably best to always use the C<In>).
 
-=head2 Perl Parser Stress Tested
-
-The Perl parser has been stress tested using both random input and
-Markov chain input and the few found crashes and lockups have been
-fixed.
-
 =head2 REF(...) Instead Of SCALAR(...)
 
 A reference to a reference now stringifies as "REF(0x81485ec)" instead
@@ -131,7 +147,7 @@ value of ref().
 The undocumented pack/unpack template letters D/F have been recycled
 for better use: now they stand for long double (if supported by the
 platform) and NV (Perl internal floating point type).  (They used
-to be aliases for f/d, but you never knew that.)
+to be aliases for d/f, but you never knew that.)
 
 =head2 Deprecations
 
@@ -213,7 +229,8 @@ and will be removed in Perl 5.10.0, and the feature will be
 implemented differently.  Not only is the current interface rather
 ugly, but the current implementation slows down normal array and hash
 use quite noticeably. The C<fields> pragma interface will remain
-available.
+available.  The I<restricted hashes> interface is expected to
+be the replacement interface (see L<Hash::Util>).
 
 =item *
 
@@ -224,6 +241,12 @@ The syntaxes C<< @a->[...] >> and  C<< %h->{...} >> have now been deprecated.
 After years of trying the suidperl is considered to be too complex to
 ever be considered truly secure.  The suidperl functionality is likely
 to be removed in a future release.
+
+=item *
+
+The 5.005 threads model (module C<Thread>) is deprecated and expected
+to be removed in Perl 5.10.  Multithreaded code should be migrated to
+the new ithreads model (see L<threads> and L<threads::shared>).
 
 =item *
 
@@ -239,9 +262,16 @@ functionality, see pack('U0', ...) and pack('C0', ...).
 =item *
 
 Earlier Perls treated "sub foo (@bar)" as equivalent to "sub foo (@)".
-The prototypes are now checked at compile-time for invalid characters.
-An optional warning is generated ("Illegal character in prototype...")
-but this may be upgraded to a fatal error in a future release.
+The prototypes are now checked better at compile-time for invalid
+syntax.  An optional warning is generated ("Illegal character in
+prototype...")  but this may be upgraded to a fatal error in a future
+release.
+
+=item *
+
+The existing behaviour when localising tied arrays and hashes is wrong,
+and will be changed in a future release, so do not rely on the existing
+behaviour. See L<"Localising Tied Arrays and Hashes Is Broken">.
 
 =back
 
@@ -317,7 +347,21 @@ The list form of C<open> is now implemented for pipes (at least on UNIX):
 creates a pipe, and runs the equivalent of exec('cat', '/etc/motd') in
 the child process.
 
+=item *
+
+If your locale environment variables (LANGUAGE, LC_ALL, LC_CTYPE, LANG)
+contain the strings 'UTF-8' or 'UTF8' (case-insensitive matching),
+the default encoding of your STDIN, STDOUT, and STDERR, and of
+B<any subsequent file open>, is UTF-8.
+
 =back
+
+=head2 Restricted Hashes
+
+A restricted hash is restricted to a certain set of keys, no keys
+outside the set can be added.  Also individual keys can be restricted
+so that the key cannot be deleted and the value cannot be changed.
+No new syntax is involved: the Hash::Util module is the interface.
 
 =head2 Safe Signals
 
@@ -331,27 +375,29 @@ doing, like finishing an internal operation (like sort()) or an
 external operation (like an I/O operation), and only then look at any
 arrived signals (and before starting the next operation).  No more corrupt
 internal state since the current operation is always finished first,
-but the signal may take more time to get heard.
+but the signal may take more time to get heard.  Note that breaking
+out from potentially blocking operations should still work, though.
 
 =head2 Unicode Overhaul
 
 Unicode in general should be now much more usable than in Perl 5.6.0
 (or even in 5.6.1).  Unicode can be used in hash keys, Unicode in
 regular expressions should work now, Unicode in tr/// should work now,
-Unicode in I/O should work now.
+Unicode in I/O should work now.  See L<perluniintro> for introduction
+and L<perlunicode> for details.
 
 =over 4
 
 =item *
 
 The Unicode Character Database coming with Perl has been upgraded
-to Unicode 3.1.1.  For more information, see http://www.unicode.org/.
+to Unicode 3.2.0.  For more information, see http://www.unicode.org/ .
 
 =item *
 
 For developers interested in enhancing Perl's Unicode capabilities:
 almost all the UCD files are included with the Perl distribution in
-the F<lib/unicore subdirectory>.  The most notable omission, for space
+the F<lib/unicore> subdirectory.  The most notable omission, for space
 considerations, is the Unihan database.
 
 =item *
@@ -393,6 +439,18 @@ to AUTOLOAD subroutines and you can assign to the AUTOLOAD return value.
 
 =item *
 
+The $Config{byteorder} (and corresponding BYTEORDER in config.h) was
+previously wrong in platforms if sizeof(long) was 4, but sizeof(IV)
+was 8.  The byteorder was only sizeof(long) bytes long (1234 or 4321),
+but now it is correctly sizeof(IV) bytes long, (12345678 or 87654321).
+(This problem didn't affect Windows platforms.)
+
+Also, $Config{byteorder} is now computed dynamically--this is more
+robust with "fat binaries" where an executable image contains binaries
+for more than one binary platform, and when cross-compiling.
+
+=item *
+
 C<perl -d:Module=arg,arg,arg> now works (previously one couldn't pass
 in multiple arguments.)
 
@@ -408,9 +466,9 @@ removed/changed in future releases.)
 
 =item *
 
-chomp() and chop() have been demoted back to I<not> being overridable
-because they cannot really be overridden-- the problem is that their
-prototype cannot be expressed and therefore one really cannot write
+chomp() and chop() are now overridable.  Note, however, that their
+prototype (as given by C<prototype("CORE::chomp")> is undefined,
+because it cannot be expressed and therefore one cannot really write
 replacements to override these builtins.
 
 =item *
@@ -475,6 +533,12 @@ my __PACKAGE__ $obj now works.
 
 =item *
 
+POSIX::sleep() now returns the number of I<unslept> seconds
+(as the POSIX standard says), as opposed to CORE::sleep() which
+returns the number of slept seconds.
+
+=item *
+
 The printf() and sprintf() now support parameter reordering using the
 C<%\d+\$> and C<*\d+\$> syntaxes.  For example
 
@@ -496,7 +560,7 @@ prototype(\[$@%&]) is now available to implicitly create references
 =item *
 
 A new command-line option, C<-t> is available.  It is the
-little brother of C<-T>: instead of dieing on taint violations,
+little brother of C<-T>: instead of dying on taint violations,
 lexical warnings are given.  B<This is only meant as a temporary
 debugging aid while securing the code of old legacy applications.
 This is not a substitute for -T.>
@@ -509,6 +573,11 @@ with any arguments), and now the said forms cause a warning.
 You should carefully launder the arguments to guarantee their
 validity.  In future releases of Perl the forms will become fatal
 errors so consider starting laundering now.
+
+=item *
+
+Tied hash interfaces are now required to have the EXISTS and DELETE
+methods (either own or inherited).
 
 =item *
 
@@ -536,6 +605,31 @@ simply B<between digits>.
 Rather than relying on C's argv[0] (which may not contain a full pathname)
 where possible $^X is now set by asking the operating system.
 (eg by reading F</proc/self/exe> on Linux, F</proc/curproc/file> on FreeBSD)
+
+=item *
+
+A new variable, C<${^TAINT}>, indicates whether taint mode is enabled.
+
+=item *
+
+You can now override the readline() builtin, and this overrides also
+the <FILEHANDLE> angle bracket operator.
+
+=item *
+
+The command-line options -s and -F are now recognized on the shebang
+(#!) line.
+
+=item *
+
+Use of the C</c> match modifier without an accompanying C</g> modifier
+elicits a new warning: C<Use of /c modifier is meaningless without /g>.
+
+Use of C</c> in substitutions, even with C</g>, elicits 
+C<Use of /c modifier is meaningless in s///>.  
+
+Use of C</g> with C<split> elicits C<Use of /g modifier is meaningless
+in split>.
 
 =back
 
@@ -566,6 +660,12 @@ exact compilation phase (BEGIN, CHECK, INIT, or END).
 B<B::Concise> is a new compiler backend for walking the Perl syntax
 tree, printing concise info about ops, from Stephen McCamant.  The
 output is highly customisable.  See L<B::Concise>.
+
+=item *
+
+The new bignum, bigint, and bigrat pragmas implement transparent
+bignum support (using the Math::BigInt, Math::BigFloat, and
+Math::BigRat backends), by Tels.
 
 =item *
 
@@ -606,15 +706,24 @@ included since its further use is discouraged.
 
 =item *
 
-C<Encode>, by Nick Ing-Simmons, provides a mechanism to translate
-between different character encodings.  Support for Unicode,
-ISO-8859-*, ASCII, CP*, KOI8-R, and three variants of EBCDIC are
-compiled in to the module.  Several other encodings (like Japanese,
-Chinese, and MacIntosh encodings) are included and will be loaded at
-runtime.  See L<Encode>.
+C<Encode>, orginally by Nick Ing-Simmons and now maintained by Dan
+Kogai, provides a mechanism to translate between different character
+encodings.  Support for Unicode, ISO-8859-1, and ASCII are compiled in
+to the module.  Several other encodings (like the rest of the
+ISO-8859, CP*/Win*, Mac, KOI8-R, three variants EBCDIC, Chinese,
+Japanese, and Korean encodings) are included and can be loaded at
+runtime.  (For space considerations, the largest Chinese encodings
+have been separated into their own CPAN module, Encode::HanExtra,
+which Encode will use if available).  See L<Encode>.
 
 Any encoding supported by Encode module is also available to the
 ":encoding()" layer if PerlIO is used.
+
+=item *
+
+C<Hash::Util> is the interface to the new I<restricted hashes>
+feature.  (Implemented by Jeffrey Friedl, Nick Ing-Simmons, and
+Michael Schwern.)
 
 =item *
 
@@ -680,7 +789,8 @@ Ilya Zakharevich.
 
 L<libnet> is a collection of perl5 modules related to network
 programming, from Graham Barr.  See L<Net::FTP>, L<Net::NNTP>,
-L<Net::Ping>, L<Net::POP3>, L<Net::SMTP>, and L<Net::Time>.
+L<Net::Ping> (not part of libnet, but related), L<Net::POP3>,
+L<Net::SMTP>, and L<Net::Time>.
 
 Perl installation leaves libnet unconfigured, use F<libnetcfg> to configure.
 
@@ -691,10 +801,10 @@ sum(), min(), first(), and shuffle(), by Graham Barr.  See L<List::Util>.
 
 =item *
 
-C<Locale::Constants>, C<Locale::Country>, C<Locale::Currency>, and
-C<Locale::Language>, from Neil Bowers, have been added.  They provide the
-codes for various locale standards, such as "fr" for France, "usd" for
-US Dollar, and "jp" for Japanese.
+C<Locale::Constants>, C<Locale::Country>, C<Locale::Currency>
+C<Locale::Language>, and L<Locale::Script>, from Neil Bowers, have
+been added.  They provide the codes for various locale standards, such
+as "fr" for France, "usd" for US Dollar, and "ja" for Japanese.
 
     use Locale::Country;
 
@@ -710,6 +820,11 @@ C<Locale::Maketext> is localization framework from Sean Burke.  See
 L<Locale::Maketext>, and L<Locale::Maketext::TPJ13>.  The latter is an
 article about software localization, originally published in The Perl
 Journal #13, republished here with kind permission.
+
+=item *
+
+C<Math::BigRat> for big rational numbers, to accompany Math::BigInt and
+Math::BigFloat, from Tels.
 
 =item *
 
@@ -807,7 +922,12 @@ C<sort> is a new pragma for controlling the behaviour of sort().
 
 C<Storable> gives persistence to Perl data structures by allowing the
 storage and retrieval of Perl data to and from files in a fast and
-compact binary format, from Raphael Manfredi.  See L<Storable>.
+compact binary format.  Because in effect Storable does serialisation
+of Perl data structues, with it you can also clone deep, hierarchical
+datastructures.  Storable was originally created by Raphael Manfredi,
+but it is now maintained by Abhijit Menon-Sen.  Storable has been
+enhanced to understand the two new hash features, Unicode keys and
+restricted hashes.  See L<Storable>.
 
 =item *
 
@@ -956,6 +1076,10 @@ is called with an array/hash element as the B<sole> argument.
 
 =item *
 
+The return value of Cwd::fastcwd() is now tainted.
+
+=item *
+
 Data::Dumper has now an option to sort hashes.
 
 =item *
@@ -970,6 +1094,12 @@ other improvements.
 
 =item *
 
+Devel::Peek now has an interface for the Perl memory statistics
+(this works only if you are using perl's malloc, and if you have
+compiled with debugging).
+
+=item *
+
 The English module can now be used without the infamous performance
 hit by saying
 
@@ -978,6 +1108,11 @@ hit by saying
 (Assuming, of course, that one doesn't need the troublesome variables
 C<$`>, C<$&>, or C<$'>.)  Also, introduced C<@LAST_MATCH_START> and
 C<@LAST_MATCH_END> English aliases for C<@-> and C<@+>.
+
+=item *
+
+ExtUtils::MakeMaker now uses File::Spec internally, which hopefully
+leads into better portability.
 
 =item *
 
@@ -1002,6 +1137,11 @@ more portable.
 
 =item *
 
+The warnings issued by File::Find now belong to their own category.
+You can enable/disable them with C<use/no warnings 'File::Find';>.
+
+=item *
+
 File::Glob::glob() renamed to File::Glob::bsd_glob() to avoid
 prototype mismatch with CORE::glob().
 
@@ -1009,12 +1149,6 @@ prototype mismatch with CORE::glob().
 
 File::Glob now supports C<GLOB_LIMIT> constant to limit the size of
 the returned list of filenames.
-
-=item *
-
-Devel::Peek now has an interface for the Perl memory statistics
-(this works only if you are using perl's malloc, and if you have
-compiled with debugging).
 
 =item *
 
@@ -1044,11 +1178,6 @@ with 'no lib' now works.
 
 =item *
 
-ExtUtils::MakeMaker now uses File::Spec internally, which hopefully
-leads into better portability.
-
-=item *
-
 Math::BigFloat and Math::BigInt have undergone a full rewrite.
 They are now magnitudes faster, and they support various
 bignum libraries such as GMP and PARI as their backends.
@@ -1059,10 +1188,19 @@ Math::Complex handles inf, NaN etc., better.
 
 =item *
 
-Net::Ping has been muchly enhanced.  Multihoming is now supported.
-There is now "external" protocol which uses Net::Ping::External module
-which runs external ping(1) and parses the output.  A version of
-Net::Ping::External is available in CPAN.
+Net::Ping has been muchly enhanced: multihoming is now supported,
+Win32 functionality is better, there is now time measuring
+functionality (optionally high-resolution using Time::HiRes),
+and there is now "external" protocol which uses Net::Ping::External
+module which runs your external ping utility and parses the output.
+A version of Net::Ping::External is available in CPAN.
+
+Note that some of the Net::Ping tests are disabled when running
+under the Perl distribution since one cannot assume one or more
+of the following: enabled echo port at localhost, full Internet
+connectivity, or sympathetic firewalls.  You can set the environment
+variable PERL_TEST_Net_Ping to "1" (one) before running the Perl test
+suite to enable all the Net::Ping tests.
 
 =item *
 
@@ -1092,7 +1230,19 @@ The Shell module now has an OO interface.
 
 =item *
 
+In Sys::Syslog there is now a failover mechanism that will go
+through alternative connection mechanisms until the message
+is successfully logged.
+
+=item *
+
 The Test module has been significantly enhanced.
+
+=item *
+
+Time::Local::timelocal() does not handle fractional seconds anymore.
+The rationale is that neither does localtime(), and timelocal() and
+localtime() are supposed to be inverses of each other.
 
 =item *
 
@@ -1120,6 +1270,11 @@ Emacs perl mode (emacs/cperl-mode.el) has been updated to version
 =item *
 
 F<emacs/e2ctags.pl> is now much faster.
+
+=item *
+
+C<enc2xs> is a tool for people adding their own encodings to the
+Encode module.
 
 =item *
 
@@ -1160,6 +1315,8 @@ perl.org, not perl.com.
 C<perlcc> has been rewritten and its user interface (that is,
 command line) is much more like that of the UNIX C compiler, cc.
 (The perlbc tools has been removed.  Use C<perlcc -B> instead.)
+B<Note that perlcc is still considered very experimental and
+unsupported.>
 
 =item *
 
@@ -1168,7 +1325,21 @@ for running any time after installing Perl.
 
 =item *
 
+C<piconv> is an implementation of the character conversion utility
+C<iconv>, demonstrating the new Encode module.
+
+=item *
+
 C<pod2html> now allows specifying a cache directory.
+
+=item *
+
+C<pod2html> now produces XHTML 1.0.
+
+=item *
+
+C<pod2html> now understands POD written using different line endings
+(PC-like CRLF versus UNIX-like LF versus MacClassic-like CR).
 
 =item *
 
@@ -1281,6 +1452,14 @@ as perlI<platform>:
     perlnetware perlos2 perlos390 perlplan9 perlqnx perlsolaris
     perltru64 perluts perlvmesa perlvms perlvos perlwin32
 
+Eastern Asian Perl users are now welcomed in their own languages:
+README.jp (Japanese), README.ko (Korean), README.cn (simplified
+Chinese) and README.tw (traditional Chinese), which are written in
+normal pod but encoded in EUC-JP, EUC-KR, EUC-CN and Big5.  These
+will get installed as
+
+   perljp perlko perlcn perltw
+
 =over 4
 
 =item *
@@ -1290,8 +1469,9 @@ confusion with the Perl POSIX module.
 
 =item *
 
-The documentation for the WinCE platform is called "CE", to avoid
-confusion with the perlwin32 documentation on 8.3-restricted filesystems.
+The documentation for the WinCE platform is called perlce (README.ce
+in the source code kit), to avoid confusion with the perlwin32
+documentation on 8.3-restricted filesystems.
 
 =back
 
@@ -1387,7 +1567,7 @@ exist, but they wouldn't have arrived in time to save quicksort.
 =item *
 
 Hashes now use Bob Jenkins "One-at-a-Time" hashing key algorithm
-(http://burtleburtle.net/bob/hash/doobs.html).  This algorithm is
+( http://burtleburtle.net/bob/hash/doobs.html ).  This algorithm is
 reasonably fast while producing a much better spread of values than
 the old hashing algorithm (originally by Chris Torek, later tweaked by
 Ilya Zakharevich).  Hash values output from the algorithm on a hash of
@@ -1443,8 +1623,9 @@ warning that there may be trouble ahead.
 
 =item *
 
-If binary compatibility with the 5.005 release is not wanted, Configure
-no longer suggests including the 5.005 modules in @INC.
+Since Perl 5.8 is not binary-compatible with previous releases
+of Perl, Configure no longer suggests including the 5.005
+modules in @INC.
 
 =item *
 
@@ -1462,12 +1643,6 @@ configure.gnu now works with options with whitespace in them.
 =item *
 
 installperl now outputs everything to STDERR.
-
-=item *
-
-$Config{byteorder} is now computed dynamically (this is more robust
-with "fat binaries" where an executable image contains binaries for
-more than one binary platform.)
 
 =item *
 
@@ -1579,6 +1754,22 @@ Thread extension requires being Configured with C<-Duse5005threads>).
 But note that the Thread.pm interface is now shared by both
 thread models.
 
+=item *
+
+The Gconvert macro ($Config{d_Gconvert}) used by perl for stringifying
+floating-point numbers is now more picky about using sprintf %.*g
+rules for the conversion.  Some platforms that used to use gcvt may
+now resort to the slower sprintf.
+
+=item *
+
+The obsolete method of making a special (e.g., debugging) flavor
+of perl by saying
+
+	make LIBPERL=libperld.a
+
+has been removed. Use -DDEBUGGING instead.
+
 =back
 
 =head2 New Or Improved Platforms
@@ -1599,11 +1790,7 @@ long doubles support in AIX should be better now.  See L<perlaix>.
 
 =item *
 
-After a long pause, AmigaOS has been verified to be happy with Perl.
-
-=item *
-
-AtheOS (http://www.atheos.cx/) is a new platform.
+AtheOS ( http://www.atheos.cx/ ) is a new platform.
 
 =item *
 
@@ -1677,6 +1864,13 @@ in unexpected order.
 
 =item *
 
+Stratus VOS is now supported using Perl's native build method
+(Configure).  This is the recommended method to build Perl on
+VOS.  The older methods, which build miniperl, are still
+available.  See L<perlvos>.
+
+=item *
+
 Amdahl UTS UNIX mainframe platform is now supported.
 
 =item *
@@ -1706,7 +1900,9 @@ The autouse pragma didn't work for Multi::Part::Function::Names.
 =item *
 
 caller() could cause core dumps in certain situations.  Carp was sometimes
-affected by this problem.
+affected by this problem.  In particular, caller() now returns a
+subroutine name of C<(unknown)> for subroutines that have been removed
+from the symbol table.
 
 =item *
 
@@ -1751,6 +1947,7 @@ L<dprofpp> -R didn't work.
 =item *
 
 C<*foo{FORMAT}> now works.
+
 =item *
 
 Infinity is now recognized as a number.
@@ -1793,6 +1990,40 @@ Line renumbering with eval and C<#line> now works.
 =item *
 
 Fixed numerous memory leaks, especially in eval "".
+
+=item *
+
+Localised tied variables no more leak memory
+
+    use Tie::Hash;
+    tie my %tied_hash => 'Tie::StdHash';
+
+    ...
+
+    # Used to leak memory every time local() was called,
+    # in a loop this added up.
+    local($tied_hash{Foo}) = 1;
+
+=item *
+
+Localised hash elements (and %ENV) are correctly unlocalised to not to
+exist, if that's what they were.
+
+
+    use Tie::Hash;
+    tie my %tied_hash => 'Tie::StdHash';
+
+    ...
+
+    # Nothing has set the FOO element so far
+
+    { local $tied_hash{FOO} = 'Bar' }
+
+    # This used to print, but not now.
+    print "exists!\n" if exists $tied_hash{FOO};
+
+As a side effect of this fix, tied hash interfaces B<must> define
+the EXISTS and DELETE methods.
 
 =item *
 
@@ -1973,6 +2204,11 @@ Allow read-only string on left hand side of non-modifying tr///.
 
 =item *
 
+If C<STDERR> is tied, warnings caused by C<warn> and C<die> now
+correctly pass to it.
+
+=item *
+
 Several Unicode fixes.
 
 =over 8
@@ -1985,7 +2221,7 @@ UTF-16 (UCS-2) encoded Perl files should now be read correctly.
 
 =item *
 
-The character tables have been updated to Unicode 3.1.1.
+The character tables have been updated to Unicode 3.2.0.
 
 =item *
 
@@ -2056,7 +2292,7 @@ Setting C<$0> now works (as much as possible; see L<perlvar> for details).
 
 Cygwin
 
-Numerous updates; currently synchronised with Cygwin 1.1.4.
+Numerous updates; currently synchronised with Cygwin 1.3.10.
 
 =item *
 
@@ -2078,7 +2314,8 @@ Perl now works on post-3.0 FreeBSDs.
 
 HP-UX
 
-README.hpux updated; C<Configure -Duse64bitall> now almost works.
+README.hpux updated; C<Configure -Duse64bitall> now works;
+now uses HP-UX malloc instead of Perl malloc.
 
 =item *
 
@@ -2121,6 +2358,12 @@ MPE/iX update after Perl 5.6.0.  See README.mpeix.
 
 =item *
 
+NetBSD/threads: try installing the GNU pth (should be in the
+packages collection, or http://www.gnu.org/software/pth/),
+and Configure with -Duseithreads. 
+
+=item *
+
 NetBSD/sparc
 
 Perl now works on NetBSD/sparc.
@@ -2136,6 +2379,15 @@ Now works with usethreads (see INSTALL).
 Solaris
 
 64-bitness using the Sun Workshop compiler now works.
+
+=item *
+
+Stratus VOS
+
+The native build method requires at least VOS Release 14.5.0
+and GNU C++/GNU Tools 2.0.1 or later.  The Perl pack function
+now maps overflowed values to +infinity and underflowed values
+to -infinity.
 
 =item *
 
@@ -2167,8 +2419,7 @@ unimplemented.  It now works as documented.
 
 The C<waitpid> emulation has been improved.  The worst bug (now fixed)
 was that a pid of -1 would cause a wildcard search of all processes on
-the system.  The most significant enhancement is that we can now
-usually get the completion status of a terminated process.
+the system.  
 
 POSIX-style signals are now emulated much better on VMS versions prior
 to 7.0.
@@ -2179,6 +2430,14 @@ functionality and better error handling.
 File access tests now use current process privileges rather than the
 user's default privileges, which could sometimes result in a mismatch
 between reported access and actual access.
+
+There is a new C<kill> implementation based on C<sys$sigprc> that allows 
+older VMS systems (pre-7.0) to use C<kill> to send signals rather than
+simply force exit.  This implementation also allows later systems to
+call C<kill> from within a signal handler.
+
+Iterative logical name translations are now limited to 10 iterations in
+imitation of SHOW LOGICAL and other OpenVMS facilities.
 
 =item *
 
@@ -2264,7 +2523,7 @@ concurrently. (Still 16M per thread.)
 
 =item *
 
-C<File::Spec-&gt;tmpdir()> now prefers C:/temp over /tmp
+C<< File::Spec->tmpdir() >> now prefers C:/temp over /tmp
 (works better when perl is running as service).
 
 =item *
@@ -2278,7 +2537,17 @@ Windows 9x.
 
 =item *
 
+Win64 compilation is now supported.
+
+=item *
+
 winsock handle leak fixed.
+
+=item *
+
+The Perl parser has been stress tested using both random input and
+Markov chain input and the few found crashes and lockups have been
+fixed.
 
 =back
 
@@ -2321,11 +2590,23 @@ respectively.
 
 =item *
 
-perl5db.pl has been modified to present a more consistent commands
-interface, via (CommandSet=580).  perl5db.t was also added to test the
-changes, and as a placeholder for further tests.
+The debugger (perl5db.pl) has been modified to present a more
+consistent commands interface, via (CommandSet=580).  perl5db.t was
+also added to test the changes, and as a placeholder for further tests.
 
-See L<perldebug>
+See L<perldebug>.
+
+=item *
+
+The debugger has a new C<dumpDepth> option to control the maximum
+depth to which nested structures are dumped.  The C<x> command has
+been extended so that C<x N EXPR> dumps out the value of I<EXPR> to a
+depth of at most I<N> levels.
+
+=item *
+
+The debugger can now show lexical variables if you have the CPAN
+module PadWalker installed.
 
 =item *
 
@@ -2347,12 +2628,18 @@ for the C<"c"> format and a number less than -128 or more than 127.
 =item *
 
 Certain regex modifiers such as C<(?o)> make sense only if applied to
-the entire regex.  You will an optional warning if you try to do otherwise.
+the entire regex.  You will get an optional warning if you try to do
+otherwise. 
 
 =item *
 
-Using arrays or hashes as references (e.g. C<< %foo-&gt;{bar} >>
+Using arrays or hashes as references (e.g. C<< %foo->{bar} >>
 has been deprecated for a while.  Now you will get an optional warning.
+
+=item *
+
+Using C<sort> in scalar context now issues an optional warning.
+This didn't do anything useful, as the sort was not performed.
 
 =back
 
@@ -2463,21 +2750,21 @@ unfortunately, always possible.  The suidperl functionality is most
 probably going to be removed in Perl 5.10.  In any case, suidperl
 should only be used by security experts who know exactly what they are
 doing and why they are using suidperl instead of some other solution
-such as sudo (see http://www.courtesan.com/sudo/).
+such as sudo ( see http://www.courtesan.com/sudo/ ).
 
 =head1 New Tests
 
-Several new tests have been added, especially for the F<lib>
-subsection.  There are now about 34 000 individual tests (spread over
-about 530 test scripts), in the regression suite (5.6.1 has about
-11700 tests, in 258 test scripts) Many of the new tests are introduced
-by the new modules, but still in general Perl is now more thoroughly
-tested.
+Several new tests have been added, especially for the F<lib> and F<ext>
+subsections.  There are now about 65 000 individual tests (spread over
+about 700 test scripts), in the regression suite (5.6.1 has about
+11700 tests, in 258 test scripts)  Many of the new tests are of course
+introduced by the new modules, but still in general Perl is now more
+thoroughly tested.
 
 Because of the large number of tests, running the regression suite
 will take considerably longer time than it used to: expect the suite
 to take up to 4-5 times longer to run than in perl 5.6.  In a really
-fast machine you can hope to finish the suite in about 5 minutes
+fast machine you can hope to finish the suite in about 6-8 minutes
 (wallclock time).
 
 The tests are now reported in a different order than in earlier Perls.
@@ -2508,55 +2795,106 @@ The AIX C compiler vac version 5.0.0.0 may produce buggy code,
 resulting in few random tests failing, but when the failing tests
 are run by hand, they succeed.  We suggest upgrading to at least
 vac version 5.0.1.0, that has been known to compile Perl correctly.
-"lslpp -L|grep vac.C" will tell you the vac version.
+"lslpp -L|grep vac.C" will tell you the vac version. See README.aix.
+
+=item *
+
+If building threaded Perl, you may get compilation warning from pp_sys.c:
+
+  "pp_sys.c", line 4651.39: 1506-280 (W) Function argument assignment between types "unsigned char*" and "const void*" is not allowed.
+
+This is harmless; it is caused by the getnetbyaddr() and getnetbyaddr_r()
+having slightly different types for their first argument.
 
 =back
 
-=head2 Amiga Perl Invoking Mystery
+=head2 Alpha systems with old gccs fail several tests
 
-One cannot call Perl using the C<volume:> syntax, that is, C<perl -v>
-works, but for example C<bin:perl -v> doesn't.  The exact reason isn't
-known but the current suspect is the F<ixemul> library.
+If you see op/pack, op/pat, op/regexp, or ext/Storable tests failing
+in a Linux/alpha or *BSD/Alpha, it's probably time to upgrade your gcc.
+gccs prior to 2.95.3 are definitely not good enough, and gcc 3.1 may
+be even better.  (RedHat Linux/alpha with gcc 3.1 reported no problems,
+as did Linux 2.4.18 with gcc 2.95.4.)  (In Tru64, it is preferable to
+use the bundled C compiler.)
+
+=head2 AmigaOS
+
+Perl 5.8.0 doesn't build in AmigaOS.  It broke at some point
+during the ithreads work and we could not find Amiga experts
+to unbreak the problems.
+
+=head2 BeOS
+
+The following tests fail on 5.8.0 Perl in BeOS Personal 5.03:
+
+ t/op/lfs............................FAILED at test 17
+ t/op/magic..........................FAILED at test 24
+ ext/POSIX/t/sigaction...............FAILED at test 13
+ ext/POSIX/t/waitpid.................FAILED at test 1
+
+See L<perlbeos> (README.beos) for more details.
+
+=head2 Cygwin "unable to remap"
+
+For example when building the Tk extension for Cygwin,
+you may get an error message saying "unable to remap".
+This is known problem with Cygwin, and a workaround is
+detailed in here: http://sources.redhat.com/ml/cygwin/2001-12/msg00894.html
+
+=head2 ext/threads/t/libc
+
+If this test fails, it indicates that your libc (C library) is not
+threadsafe.  This particular test stress tests the localtime() call to
+find out whether it is threadsafe.  See L<perlthrtut> for more information.
+
+=head2 FreeBSD Failing locale Test 117 For ISO8859-15 Locales
+
+The ISO8859-15 locales may fail the locale test 117 in FreeBSD.
+This is caused by the characters \xFF (y with diaeresis) and \xBE
+(Y with diaeresis) not behaving correctly when being matched
+case-insensitively.
+
+=head2 Modifying $_ Inside for(..)
+
+   for (1..5) { $_++ }
+
+works without complaint.  It shouldn't.  (You should be able to
+modify only lvalue elements inside the loops.)  You can see the
+correct behaviour by replacing the 1..5 with 1, 2, 3, 4, 5.
+
+=head2 mod_perl 1.26 Doesn't Build With Threaded Perl
+
+Use mod_perl 1.27 or higher.
 
 =head2 lib/ftmp-security tests warn 'system possibly insecure'
 
 Don't panic.  Read INSTALL 'make test' section instead.
 
-=head2 Cygwin intermittent failures of lib/Memoize/t/expire_file 11 and 12
-
-The subtests 11 and 12 sometimes fail and sometimes work.
-
-=head2 FreeBSD 4.5 fails lib/File/Spec/t/rel2abs2rel.t
-
-F<lib/File/Spec/t/rel2abs2rel.t> tests that "`` works" by running a
-a perl 1 liner in backticks, using "$^X" as the path to perl.
-It is failing on FreeBSD 4.5, but only when run as part of make test.
-This seems to be a kernel problem rather than perl - reading the symlink
-F</proc/curproc/file> returns "unknown" rather than the path to perl, and a
-kernel debugger reveals that variable C<numfullpathfail2> in
-F</usr/src/sys/kern/vfs_cache.c> is being incremented whenever
-F</proc/curproc/file> fails to return the perl executable's path.
-
-=head2 HP-UX lib/io_multihomed Fails When LP64-Configured
-
-The lib/io_multihomed test may hang in HP-UX if Perl has been
-configured to be 64-bit. Because other 64-bit platforms do not hang in
-this test, HP-UX is suspect. All other tests pass in 64-bit HP-UX. The
-test attempts to create and connect to "multihomed" sockets (sockets
-which have multiple IP addresses).
-
-=head2  HP-UX lib/posix Subtest 9 Fails When LP64-Configured
+=head2 HP-UX lib/posix Subtest 9 Fails When LP64-Configured
 
 If perl is configured with -Duse64bitall, the successful result of the
 subtest 10 of lib/posix may arrive before the successful result of the
 subtest 9, which confuses the test harness so much that it thinks the
 subtest 9 failed.
 
+=head2 Linux with glibc 2.2.5 fails t/op/int subtest #6 with -Duse64bitint
+
+This is a known bug in the glibc 2.2.5 with long long integers.
+( http://bugzilla.redhat.com/bugzilla/show_bug.cgi?id=65612 )
+
 =head2 Linux With Sfio Fails op/misc Test 48
 
 No known fix.
 
+=head2 libwww-perl (LWP) fails base/date #51
+
+Use libwww-perl 5.65 or later.
+
 =head2 Mac OS X
+
+Please remember to set your environment variable LC_ALL to "C"
+(setenv LC_ALL C) before running "make test" to avoid a lot of
+warnings about the broken locales of Mac OS X.
 
 The following tests are known to fail:
 
@@ -2564,73 +2902,118 @@ The following tests are known to fail:
  -------------------------------------------------------------------------
  ../ext/DB_File/t/db-btree.t    0    11    ??   ??       %  ??
  ../ext/DB_File/t/db-recno.t              149    3   2.01%  61 63 65
- ../ext/POSIX/t/posix.t                    31    1   3.23%  10
 
-=head2 OS/390
+If you are building on a UFS partition, you will also probably see
+t/op/stat.t subtest #9 fail.  This is caused by Darwin's UFS not
+supporting inode change time.
 
-OS/390 has rather many test failures but the situation is actually
-better than it was in 5.6.0, it's just that so many new modules and
-tests have been added.
+Also the ext/POSIX/t/posix.t subtest #10 fails but it is skipped for
+now because the failure is Apple's fault, not Perl's (blocked signals
+are lost).
 
-Failed 10/611 test scripts, 98.36% okay. 72/53809 subtests failed, 99.87% okay.
-Failed Test                  Stat Wstat Total Fail  Failed  List of Failed
--------------------------------------------------------------------------------
-../ext/B/t/deparse.t                       17    1   5.88%  14
-../ext/IO/lib/IO/t/io_unix.t                5    4  80.00%  2-5
-../lib/utf8.t                              94   13  13.83%  27 30-31 43 46 73
-                                                            76 79 82 85 88 91
-                                                            94
-../lib/Benchmark.t              1   256   159    1   0.63%  75
-../lib/ExtUtils/t/Embed.t                   9    9 100.00%  1-9
-../lib/ExtUtils/t/ExtUtils.t               27   19  70.37%  5-23
-op/pat.t                                  858    9   1.05%  242-243 665 776 785
-                                                            832-834 845
-op/sprintf.t                              224    3   1.34%  98 100 136
-op/tr.t                                    97    5   5.15%  63 71-74
-uni/fold.t                                767    8   1.04%  25-26 62 169 196
-                                                            648 697-698
-57 tests and 377 subtests skipped.
+If you Configure with ithreads, ext/threads/t/libc.t will fail, again
+not Perl's fault-- the libc of Mac OS X is not threadsafe (in this
+particular test the localtime() call is found to be threadunsafe.)
 
-=head2 op/sprintf tests 129 and 130
+=head2 op/sprintf tests 91, 129, and 130
 
-The op/sprintf tests 129 and 130 are known to fail on some platforms.
+The op/sprintf tests 91, 129, and 130 are known to fail on some platforms.
 Examples include any platform using sfio, and Compaq/Tandem's NonStop-UX.
-The failing platforms do not comply with the ANSI C Standard, line
-19ff on page 134 of ANSI X3.159 1989 to be exact.  (They produce
-something other than "1" and "-1" when formatting 0.6 and -0.6 using
-the printf format "%.0f", most often they produce "0" and "-0".)
 
-=head2  Failure of Thread tests
+The test 91 is known to fail at QNX6 (nto), because C<sprintf '%e',0>
+incorrectly produces C<0.000000e+0> instead of C<0.000000e+00>.
 
-B<Note that support for 5.005-style threading remains experimental
-and practically unsupported.>
+For the tests 129 and 130 the failing platforms do not comply with
+the ANSI C Standard, line 19ff on page 134 of ANSI X3.159 1989 to
+be exact.  (They produce something other than "1" and "-1" when
+formatting 0.6 and -0.6 using the printf format "%.0f", most often
+they produce "0" and "-0".)
+
+=head2 Solaris 2.5
+
+In case you are still using Solaris 2.5 (aka SunOS 5.5), you may
+experience failures (the test core dumping) in lib/locale.t.
+The suggested cure is to upgrade your Solaris.
+
+=head2 Stratus VOS
+
+When Perl is built using the native build process on VOS Release
+14.5.0 and GNU C++/GNU Tools 2.0.1, all attempted tests either
+pass or result in TODO (ignored) failures.
+
+=head2 Term::ReadKey not working on Win32
+
+Use Term::ReadKey 2.20 or later.
+
+=head2 Failure of Thread (5.005-style) tests
+
+B<Note that support for 5.005-style threading is deprecated,
+experimental and practically unsupported.  In 5.10 it is expected
+to be removed.>
 
 The following tests are known to fail due to fundamental problems in
 the 5.005 threading implementation. These are not new failures--Perl
 5.005_0x has the same bugs, but didn't have these tests.
 
-  ext/List/Util/t/first         2
-  lib/autouse                   4
-  ext/Thread/thr5005            19-20
+ ../ext/List/Util/t/first.t         255 65280     7    4  57.14%  2 5-7
+ ../lib/English.t                     2   512    54    2   3.70%  2-3
+ ../lib/Filter/Simple/t/data.t                    6    3  50.00%  1-3
+ ../lib/Filter/Simple/t/filter_onl                9    3  33.33%  1-2 5
+ ../lib/autouse.t                                10    1  10.00%  4
+ op/flip.t                                       15    1   6.67%  15
 
-These failures are unlikely to get fixed as the 5.005-style
-threads are considered fundamentally broken.
+These failures are unlikely to get fixed as the 5.005-style threads
+are considered fundamentally broken.  (Basically what happens is that
+competing threads can corrupt shared global state.)
 
 =head2 UNICOS
 
-  ../ext/Socket/socketpair.t    1   256    45    1   2.22%  12
-  ../lib/Math/Trig.t                       26    1   3.85%  25
-  ../lib/warnings.t                       460    1   0.22%  425
-  io/fs.t                                  36    1   2.78%  31
-  op/numconvert.t                        1440   13   0.90%  208 509-510
-  657-658 665-666 829-830 989-990 1149-1150
+ ../lib/Math/Trig.t                          26    1   3.85%  25
+ ../lib/warnings.t                          470    1   0.21%  429
 
-=head2 UNICOS and UNICOS/mk
+The Trig.t failure is caused by the slighly differing (from IEEE)
+floating point implementation of UNICOS.  The warnings.t failure is
+also related: the test assumes a certain floating point output format,
+this assumption fails in UNICOS.
 
-The io/fs test #31 is failing because in UNICOS and UNICOS/mk
-truncate() cannot be used to grow the size of filehandles, only
-to reduce the size.  The workaround is to truncate files instead
-of filehandles.
+=head2 UNICOS/mk
+
+=over 4
+
+=item *
+
+During Configure the test
+
+    Guessing which symbols your C compiler and preprocessor define...
+
+will probably fail with error messages like
+
+    CC-20 cc: ERROR File = try.c, Line = 3
+      The identifier "bad" is undefined.
+
+      bad switch yylook 79bad switch yylook 79bad switch yylook 79bad switch yylook 79#ifdef A29K
+      ^
+
+    CC-65 cc: ERROR File = try.c, Line = 3
+      A semicolon is expected at this point.
+
+This is caused by a bug in awk utility of UNICOS/mk.  You can ignore
+the error, but it does cause a slight problem: you cannot fully
+benefit from the h2ph utility (see L<h2ph>) that can be used to
+convert C headers to Perl libraries, mainly used to be able to access
+from Perl the constants defined using C preprocessor, cpp.  Because of
+the above error parts of the converted headers will be invisible.
+Luckily, these days the need for h2ph is rare.
+
+=item *
+
+If building Perl with the interpreter threads (ithreads), the
+getgrent(), getgrnam(), and getgrgid() functions cannot return the
+list of the group members due to a bug in the multithreaded support of
+UNICOS/mk.  What this means that in list context the functions will
+return only three values, not four.
+
+=back
 
 =head2 UTS
 
@@ -2645,38 +3028,64 @@ needing further debugging and/or porting work.
 =head2 Win32
 
 In multi-CPU boxes there are some problems with the I/O buffering:
-some output may appear twice.  The Win32 following failures are known
-as of 5.7.3:
+some output may appear twice.
 
-  ..\ext/Encode/t/JP.t      4  1024    22    4  18.18%  9 14 18 21
-  ..\ext/threads/t/end.t                6    4  66.67%  3-6
-  ..\lib/blib.t             3   768     7    3  42.86%  1 4-5
+=head2 XML::Parser not working
 
-=head2 Localising a Tied Variable Leaks Memory
+Use XML::Parser 2.31 or later.
 
-    use Tie::Hash;
-    tie my %tie_hash => 'Tie::StdHash';
+=head2 z/OS (OS/390)
 
-    ...
+z/OS has rather many test failures but the situation is actually
+better than it was in 5.6.0, it's just that so many new modules and
+tests have been added.
 
-    local($tie_hash{Foo}) = 1; # leaks
+ Failed Test                   Stat Wstat Total Fail  Failed  List of Failed
+ ---------------------------------------------------------------------------
+ ../ext/Data/Dumper/t/dumper.t              357    8   2.24%  311 314 325 327
+                                                              331 333 337 339
+ ../ext/IO/lib/IO/t/io_unix.t                 5    4  80.00%  2-5
+ ../ext/Storable/t/downgrade.t   12  3072   169   12   7.10%  14-15 46-47 78-79
+                                                              110-111 150 161
+ ../lib/ExtUtils/t/Constant.t   121 30976    48   48 100.00%  1-48
+ ../lib/ExtUtils/t/Embed.t                    9    9 100.00%  1-9
+ op/pat.t                                   910    7   0.77%  665 776 785 832-
+                                                              834 845
+ op/sprintf.t                               224    3   1.34%  98 100 136
+ op/tr.t                                     97    5   5.15%  63 71-74
+ uni/fold.t                                 780    6   0.77%  61 169 196 661
+                                                              710-711
 
-Code like the above is known to leak memory every time the local()
-is executed.
+The dumper.t and downgrade.t are problems in the tests, the io_unix
+and sprintf are problems in the USS (UDP sockets and printf formats).
+The pat, tr, and fold are genuine Perl problems caused by EBCDIC (and
+in the pat and fold cases, combining that with Unicode).  The Constant
+and Embed are probably problems in the tests (since they test Perl's
+ability to build extensions, and that seems to be working reasonably well.)
 
 =head2 Localising Tied Arrays and Hashes Is Broken
 
     local %tied_array;
 
 doesn't work as one would expect: the old value is restored
-incorrectly.
+incorrectly.  This will be changed in a future release, but we don't
+know yet which the new semantics will exactly be.  In any case the
+change will break existing code that relies on the current
+(ill-defined) semantics, so just avoid doing this in general.
 
-=head2 Self-tying of Arrays and Hashes Is Forbidden
+=head2 Self-tying Problems
 
 Self-tying of arrays and hashes is broken in rather deep and
 hard-to-fix ways.  As a stop-gap measure to avoid people from getting
 frustrated at the mysterious results (core dumps, most often) it is
 for now forbidden (you will get a fatal error even from an attempt).
+
+A change to self-tying of globs has caused them to be recursively
+referenced (see: L<perlobj/"Two-Phased Garbage Collection">).  You
+will now need an explicit untie to destroy a self-tied glob.  This
+behaviour may be fixed at a later date.
+
+Self-tying of scalars and IO thingies works.
 
 =head2 Building Extensions Can Fail Because Of Largefiles
 
@@ -2699,9 +3108,9 @@ platform-dependent.
 Though mostly working, Unicode support still has problem spots on
 EBCDIC platforms.  One such known spot are the C<\p{}> and C<\P{}>
 regular expression constructs for code points less than 256: the
-pP are testing for Unicode code points, not knowing about EBCDIC.
+C<pP> are testing for Unicode code points, not knowing about EBCDIC.
 
-=head2 The Compiler Suite Is Still Experimental
+=head2 The Compiler Suite Is Still Very Experimental
 
 The compiler suite is slowly getting better but it continues to be
 highly experimental.  Use in production environments is discouraged.
@@ -2725,12 +3134,17 @@ because it was felt that it didn't have enough value in it to be a
 core module.  It is still a useful module, though, and is available
 from the CPAN.
 
+Perl 5.8 unfortunately does not build anymore on AmigaOS,
+this broke at some point accidentally.  Since there are not that many
+Amiga developers available, we could not get this fixed and tested in
+time for 5.8.0.
+
 =head1 Reporting Bugs
 
 If you find what you think is a bug, you might check the articles
 recently posted to the comp.lang.perl.misc newsgroup and the perl
-bug database at http://bugs.perl.org.  There may also be
-information at http://www.perl.com/, the Perl Home Page.
+bug database at http://bugs.perl.org/  There may also be
+information at http://www.perl.com/ , the Perl Home Page.
 
 If you believe you have an unreported bug, please run the B<perlbug>
 program included with your release.  Be sure to trim your bug down

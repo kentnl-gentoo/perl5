@@ -180,7 +180,7 @@ is('foo',((chr(193) eq 'A') ? v134.150.150 : v102.111.111),"v-string ne ''");
 # Chapter 15, pp403
 
 # See if sane addr and gethostbyaddr() work
-eval { require Socket; gethostbyaddr(v127.0.0.1, Socket::AF_INET) };
+eval { require Socket; gethostbyaddr(v127.0.0.1, &Socket::AF_INET) };
 if ($@) {
     # No - so do not test insane fails.
     $@ =~ s/\n/\n# /g;
@@ -189,7 +189,7 @@ SKIP: {
     skip("No Socket::AF_INET # $@") if $@;
     my $ip   = v2004.148.0.1;
     my $host;
-    eval { $host = gethostbyaddr($ip,Socket::AF_INET) };
+    eval { $host = gethostbyaddr($ip,&Socket::AF_INET) };
     like($@, qr/Wide character/, "Non-bytes leak to gethostbyaddr");
 }
 
@@ -205,9 +205,20 @@ is(v200, eval("+v200"), 'v200 eq eval("+v200")' );
 # Tests for string/numeric value of $] itself
 my ($revision,$version,$subversion) = split '\.', sprintf("%vd",$^V);
 
+print "# revision   = '$revision'\n";
+print "# version    = '$version'\n";
+print "# subversion = '$subversion'\n";
+
 my $v = sprintf("%d.%.3d%.3d",$revision,$version,$subversion);
 
-ok( $v eq "$]", qq{"\$^V eq "\$]"});
+print "# v = '$v'\n";
+print "# ] = '$]'\n";
+
+$v =~ s/000$// if $subversion == 0;
+
+print "# v = '$v'\n";
+
+ok( $v eq "$]", qq{\$^V eq "\$]"});
 
 $v = $revision + $version/1000 + $subversion/1000000;
 

@@ -41,8 +41,12 @@ BEGIN {
 		}
 	}
 
+
+    # % means 'match one character' on VMS.  Everything else is ?
+    my $match_char = $^O eq 'VMS' ? '%' : '?';
+	($ARGV[0] = $file) =~ s/.\z/$match_char/;
+
 	# this should find the file
-	($ARGV[0] = $file) =~ s/.\z/\?/;
 	ExtUtils::Command::expand_wildcards();
 
 	is( scalar @ARGV, 1, 'found one file' );
@@ -97,43 +101,44 @@ BEGIN {
 	# to the beginning of the day in Win95.
     # There's a small chance of a 1 second flutter here.
     my $stamp = (stat($ARGV[0]))[9];
-	ok( abs($now - $stamp) <= 1, 'checking modify time stamp' ) ||
-      print "# mtime == $stamp, should be $now\n";
+	cmp_ok( abs($now - $stamp), '<=', 1, 'checking modify time stamp' ) ||
+      diag "mtime == $stamp, should be $now";
 
-SKIP: {
-	if ($^O eq 'amigaos' || $^O eq 'os2' || $^O eq 'MSWin32' ||
-	    $^O eq 'NetWare' || $^O eq 'dos' || $^O eq 'cygwin') {
-           skip( "different file permission semantics on $^O", 3);
-	}
+    SKIP: {
+        if ($^O eq 'amigaos' || $^O eq 'os2' || $^O eq 'MSWin32' ||
+            $^O eq 'NetWare' || $^O eq 'dos' || $^O eq 'cygwin'  ||
+            $^O eq 'MacOS') {
+            skip( "different file permission semantics on $^O", 3);
+        }
 
-	# change a file to execute-only
-	@ARGV = ( 0100, 'ecmdfile' );
-	ExtUtils::Command::chmod();
+        # change a file to execute-only
+        @ARGV = ( 0100, 'ecmdfile' );
+        ExtUtils::Command::chmod();
 
-	is( ((stat('ecmdfile'))[2] & 07777) & 0700,
-	    0100, 'change a file to execute-only' );
+        is( ((stat('ecmdfile'))[2] & 07777) & 0700,
+            0100, 'change a file to execute-only' );
 
-	# change a file to read-only
-	@ARGV = ( 0400, 'ecmdfile' );
-	ExtUtils::Command::chmod();
+        # change a file to read-only
+        @ARGV = ( 0400, 'ecmdfile' );
+        ExtUtils::Command::chmod();
 
-	is( ((stat('ecmdfile'))[2] & 07777) & 0700,
-	    ($^O eq 'vos' ? 0500 : 0400), 'change a file to read-only' );
+        is( ((stat('ecmdfile'))[2] & 07777) & 0700,
+            ($^O eq 'vos' ? 0500 : 0400), 'change a file to read-only' );
 
-	# change a file to write-only
-	@ARGV = ( 0200, 'ecmdfile' );
-	ExtUtils::Command::chmod();
+        # change a file to write-only
+        @ARGV = ( 0200, 'ecmdfile' );
+        ExtUtils::Command::chmod();
 
-	is( ((stat('ecmdfile'))[2] & 07777) & 0700,
-	    ($^O eq 'vos' ? 0700 : 0200), 'change a file to write-only' );
-     }
+        is( ((stat('ecmdfile'))[2] & 07777) & 0700,
+            ($^O eq 'vos' ? 0700 : 0200), 'change a file to write-only' );
+    }
 
-	# change a file to read-write
+    # change a file to read-write
 	@ARGV = ( 0600, 'ecmdfile' );
 	ExtUtils::Command::chmod();
 
-	is( ((stat('ecmdfile'))[2] & 07777) & 0700,
-	    ($^O eq 'vos' ? 0700 : 0600), 'change a file to read-write' );
+    is( ((stat('ecmdfile'))[2] & 07777) & 0700,
+        ($^O eq 'vos' ? 0700 : 0600), 'change a file to read-write' );
 
 	# mkpath
 	@ARGV = ( File::Spec->join( 'ecmddir', 'temp2' ) );

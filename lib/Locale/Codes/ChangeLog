@@ -1,6 +1,36 @@
 
 		ChangeLog for Locale-Codes Distribution
 
+2.04  2002-05-23 neilb
+
+	* updated according to changes in ISO 3166-1 described
+	  in ISO 3166-1 newsletters V-4 and V-5, dated 2002-05-20:
+		- Kazakstan is now "Kazakhstan"
+		- Macau is now "Macao"
+	  The old names are retained as aliases.
+
+	  The alpha-2 and alpha-3 codes for East Timor have changed:
+		tp -> tl
+		tmp -> tls
+	  the numeric code stays 626. If you want to support the old
+	  codes, you can use the semi-private function alias_code().
+
+2.03  2002-03-24 neilb
+
+	* Fixed a typo in the alias for the Vatican, reported (with patch)
+	  by Philip Newton.
+	* Added "Moldova" as an alias for "Moldova, Republic of"
+	* Updated Makefile.PL to include AUTHOR and ABSTRACT
+
+2.02  2002-03-09 neilb
+
+	* added semi-private routine rename_country() to Locale::Country,
+	  based on a patch from Iain Chalmers.
+	* added test rename.t for the above function.
+	* renamed _alias_code to be alias_code. Have retained the old
+	  name for backwards compatibility. Will remove it when the
+	  major version number next changes.
+
 2.01  2002-02-18 neilb
 
 	* Split the documentation for all modules into separate pod files.

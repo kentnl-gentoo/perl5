@@ -55,19 +55,44 @@ it returns FALSE.
 =head1 ppport.h
 
 The file written by this module, typically C<ppport.h>, provides access
-to the following Perl API if not already available:
+to the following Perl API if not already available (and in some cases [*]
+even if available, access to a fixed interface):
 
+    aMY_CXT
+    aMY_CXT_
+    _aMY_CXT
+    aTHX
+    aTHX_
+    AvFILLp
+    boolSV(b)
     DEFSV
+    dMY_CXT	
+    dMY_CXT_SV
+    dNOOP
+    dTHR
+    dTHX
+    dTHXa
+    dTHXoa
     ERRSV
-    INT2PTR(any,d)
+    gv_stashpvn(str,len,flags)
+    INT2PTR(type,int)
+    IVdf
     MY_CXT
     MY_CXT_INIT
+    newCONSTSUB(stash,name,sv)
+    newRV_inc(sv)
+    newRV_noinc(sv)
+    newSVpvn(data,len)
     NOOP
+    NV 
+    NVef
+    NVff
+    NVgf
     PERL_REVISION
     PERL_SUBVERSION
     PERL_UNUSED_DECL
+    PERL_UNUSED_DECL
     PERL_VERSION
-    PL_Sv
     PL_compiling
     PL_copline
     PL_curcop
@@ -80,32 +105,27 @@ to the following Perl API if not already available:
     PL_rsfp_filters
     PL_rsfpv
     PL_stdingv
+    PL_Sv
     PL_sv_no
     PL_sv_undef
     PL_sv_yes
-    PTR2IV(d)
-    SAVE_DEFSV
-    START_MY_CXT
-    _aMY_CXT
-    _pMY_CXT
-    aMY_CXT
-    aMY_CXT_
-    aTHX
-    aTHX_
-    boolSV(b)
-    dMY_CXT	
-    dMY_CXT_SV
-    dNOOP
-    dTHR
-    gv_stashpvn(str,len,flags)
-    newCONSTSUB(stash,name,sv)
-    newRV_inc(sv)
-    newRV_noinc(sv)
-    newSVpvn(data,len)
     pMY_CXT
     pMY_CXT_
+    _pMY_CXT
     pTHX
     pTHX_
+    PTR2IV(ptr)
+    PTR2NV(ptr)
+    PTR2ul(ptr)
+    PTR2UV(ptr)
+    SAVE_DEFSV
+    START_MY_CXT
+    SvPVbyte(sv,lp) [*]
+    UVof
+    UVSIZE
+    UVuf
+    UVxf
+    UVXf
 
 =head1 AUTHOR
 
@@ -369,6 +389,7 @@ __DATA__
 #	define PL_curstash	curstash
 #	define PL_defgv		defgv
 #	define PL_dirty		dirty
+#	define PL_dowarn	dowarn
 #	define PL_hints		hints
 #	define PL_na		na
 #	define PL_perldb	perldb
@@ -381,28 +402,75 @@ __DATA__
 /* Replace: 0 */
 #endif
 
+#ifdef HASATTRIBUTE
+#  if defined(__GNUC__) && defined(__cplusplus)
+#    define PERL_UNUSED_DECL
+#  else
+#    define PERL_UNUSED_DECL __attribute__((unused))
+#  endif
+#else
+#  define PERL_UNUSED_DECL
+#endif
+
+#ifndef dNOOP
+#  define NOOP (void)0
+#  define dNOOP extern int Perl___notused PERL_UNUSED_DECL
+#endif
+
+#ifndef dTHR
+#  define dTHR          dNOOP
+#endif
+
+#ifndef dTHX
+#  define dTHX          dNOOP
+#  define dTHXa(x)      dNOOP
+#  define dTHXoa(x)     dNOOP
+#endif
+
 #ifndef pTHX
-#    define pTHX
+#    define pTHX	void
 #    define pTHX_
 #    define aTHX
 #    define aTHX_
 #endif         
 
-#ifndef PTR2IV
-#    define PTR2IV(d)   (IV)(d)
-#endif
- 
-#ifndef INT2PTR
-#    define INT2PTR(any,d)      (any)(d)
+#ifndef UVSIZE
+#   define UVSIZE IVSIZE
 #endif
 
-#ifndef dTHR
-#  ifdef WIN32
-#	define dTHR extern int Perl___notused
-#  else
-#	define dTHR extern int errno
-#  endif
+#ifndef NVTYPE
+#   if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
+#       define NVTYPE long double
+#   else
+#       define NVTYPE double
+#   endif
+typedef NVTYPE NV;
 #endif
+
+#ifndef INT2PTR
+
+#if (IVSIZE == PTRSIZE) && (UVSIZE == PTRSIZE)
+#  define PTRV                  UV
+#  define INT2PTR(any,d)        (any)(d)
+#else
+#  if PTRSIZE == LONGSIZE
+#    define PTRV                unsigned long
+#  else
+#    define PTRV                unsigned
+#  endif
+#  define INT2PTR(any,d)        (any)(PTRV)(d)
+#endif
+#define NUM2PTR(any,d)  (any)(PTRV)(d)
+#define PTR2IV(p)       INT2PTR(IV,p)
+#define PTR2UV(p)       INT2PTR(UV,p)
+#define PTR2NV(p)       NUM2PTR(NV,p)
+#if PTRSIZE == LONGSIZE
+#  define PTR2ul(p)     (unsigned long)(p)
+#else
+#  define PTR2ul(p)     INT2PTR(unsigned long,p)        
+#endif
+
+#endif /* !INT2PTR */
 
 #ifndef boolSV
 #	define boolSV(b) ((b) ? &PL_sv_yes : &PL_sv_no)
@@ -440,7 +508,7 @@ __DATA__
           nsv;                            \
       })
 #  else
-#    if defined(CRIPPLED_CC) || defined(USE_THREADS)
+#    if defined(USE_THREADS)
 static SV * newRV_noinc (SV * sv)
 {
           SV *nsv = (SV*)newRV(sv);       
@@ -510,20 +578,6 @@ SV *sv;
 #endif
 
 #endif /* newCONSTSUB */
-
-#ifndef NOOP
-#  define NOOP (void)0
-#endif
-
-#ifdef HASATTRIBUTE
-#  define PERL_UNUSED_DECL __attribute__((unused))
-#else
-#  define PERL_UNUSED_DECL
-#endif    
-
-#ifndef dNOOP
-#  define dNOOP extern int Perl___notused PERL_UNUSED_DECL
-#endif
 
 #ifndef START_MY_CXT
 
@@ -612,6 +666,59 @@ SV *sv;
 #endif 
 
 #endif /* START_MY_CXT */
+
+#ifndef IVdf
+#  if IVSIZE == LONGSIZE
+#       define	IVdf		"ld"
+#       define	UVuf		"lu"
+#       define	UVof		"lo"
+#       define	UVxf		"lx"
+#       define	UVXf		"lX"
+#   else
+#       if IVSIZE == INTSIZE
+#           define	IVdf	"d"
+#           define	UVuf	"u"
+#           define	UVof	"o"
+#           define	UVxf	"x"
+#           define	UVXf	"X"
+#       endif
+#   endif
+#endif
+
+#ifndef NVef
+#   if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE) && \
+	defined(PERL_PRIfldbl) /* Not very likely, but let's try anyway. */ 
+#       define NVef		PERL_PRIeldbl
+#       define NVff		PERL_PRIfldbl
+#       define NVgf		PERL_PRIgldbl
+#   else
+#       define NVef		"e"
+#       define NVff		"f"
+#       define NVgf		"g"
+#   endif
+#endif
+
+#ifndef AvFILLp			/* Older perls (<=5.003) lack AvFILLp */
+#   define AvFILLp AvFILL
+#endif
+
+#ifdef SvPVbyte
+#   if PERL_REVISION == 5 && PERL_VERSION < 7
+       /* SvPVbyte does not work in perl-5.6.1, borrowed version for 5.7.3 */
+#       undef SvPVbyte
+#       define SvPVbyte(sv, lp) \
+          ((SvFLAGS(sv) & (SVf_POK|SVf_UTF8)) == (SVf_POK) \
+           ? ((lp = SvCUR(sv)), SvPVX(sv)) : my_sv_2pvbyte(aTHX_ sv, &lp))
+       static char *
+       my_sv_2pvbyte(pTHX_ register SV *sv, STRLEN *lp)
+       {   
+           sv_utf8_downgrade(sv,0);
+           return SvPV(sv,*lp);
+       }
+#   endif
+#else
+#   define SvPVbyte SvPV
+#endif
 
 #endif /* _P_P_PORTABILITY_H_ */
 

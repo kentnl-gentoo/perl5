@@ -36,7 +36,7 @@ sub skip {
     return 1;
 }
 
-print "1..44\n";
+print "1..46\n";
 
 $Is_MSWin32 = $^O eq 'MSWin32';
 $Is_NetWare = $^O eq 'NetWare';
@@ -55,7 +55,7 @@ $PERL = ($Is_NetWare            ? 'perl'   :
 eval '$ENV{"FOO"} = "hi there";';	# check that ENV is inited inside eval
 # cmd.exe will echo 'variable=value' but 4nt will echo just the value
 # -- Nikola Knezevic
-if ($Is_MSWin32)  { ok `set FOO` =~ /^(FOO=)?hi there$/; }
+if ($Is_MSWin32)  { ok `set FOO` =~ /^(?:FOO=)?hi there$/; }
 elsif ($Is_MacOS) { ok "1 # skipped", 1; }
 elsif ($Is_VMS)   { ok `write sys\$output f\$trnlnm("FOO")` eq "hi there\n"; }
 else              { ok `echo \$FOO` eq "hi there\n"; }
@@ -134,10 +134,15 @@ ok((keys %h)[0] eq "foo\034bar", (keys %h)[0]);
 }
 
 # $?, $@, $$
-system qq[$PERL "-I../lib" -e "use vmsish qw(hushed); exit(0)"];
-ok $? == 0, $?;
-system qq[$PERL "-I../lib" -e "use vmsish qw(hushed); exit(1)"];
-ok $? != 0, $?;
+if ($Is_MacOS) {
+    skip('$? + system are broken on MacPerl') for 1..2;
+}
+else {
+    system qq[$PERL "-I../lib" -e "use vmsish qw(hushed); exit(0)"];
+    ok $? == 0, $?;
+    system qq[$PERL "-I../lib" -e "use vmsish qw(hushed); exit(1)"];
+    ok $? != 0, $?;
+}
 
 eval { die "foo\n" };
 ok $@ eq "foo\n", $@;
@@ -246,7 +251,7 @@ else {
 	$0 = "bar";
 # cmd.exe will echo 'variable=value' but 4nt will echo just the value
 # -- Nikola Knezevic
-	ok ($Is_MSWin32 ? (`set __NoNeSuCh` =~ /^(__NoNeSuCh=)?foo$/)
+       ok ($Is_MSWin32 ? (`set __NoNeSuCh` =~ /^(?:__NoNeSuCh=)?foo$/)
 			    : (`echo \$__NoNeSuCh` eq "foo\n") );
 }
 
@@ -301,3 +306,11 @@ ok $^S == 0;
 ok ${^TAINT} == 0;
 eval { ${^TAINT} = 1 };
 ok ${^TAINT} == 0;
+
+# 5.6.1 had a bug: @+ and @- were not properly interpolated
+# into double-quoted strings
+# 20020414 mjd-perl-patch+@plover.com
+"I like pie" =~ /(I) (like) (pie)/;
+ok "@-" eq  "0 0 2 7";
+ok "@+" eq "10 1 6 10";
+

@@ -213,6 +213,15 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	if (num_svs) {
 	    /* New style explict name, type is just mode and discipline/layer info */
 	    STRLEN l = 0;
+#ifdef USE_STDIO
+	    if (SvROK(*svp) && !strchr(name,'&')) {
+		if (ckWARN(WARN_IO))
+		    Perl_warner(aTHX_ packWARN(WARN_IO),
+			    "Can't open a reference");
+		SETERRNO(EINVAL, LIB$_INVARG);
+		goto say_false;
+	    }
+#endif /* USE_STDIO */
 	    name = SvOK(*svp) ? SvPV(*svp, l) : "";
 	    len = (I32)l;
 	    name = savepvn(name, len);
@@ -248,7 +257,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    if (*name == '\0') {
 		/* command is missing 19990114 */
 		if (ckWARN(WARN_PIPE))
-		    Perl_warner(aTHX_ WARN_PIPE, "Missing command in piped open");
+		    Perl_warner(aTHX_ packWARN(WARN_PIPE), "Missing command in piped open");
 		errno = EPIPE;
 		goto say_false;
 	    }
@@ -258,7 +267,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    if (!num_svs && name[len-1] == '|') {
 		name[--len] = '\0' ;
 		if (ckWARN(WARN_PIPE))
-		    Perl_warner(aTHX_ WARN_PIPE, "Can't open bidirectional pipe");
+		    Perl_warner(aTHX_ packWARN(WARN_PIPE), "Can't open bidirectional pipe");
 	    }
 	    mode[0] = 'w';
 	    writing = 1;
@@ -455,7 +464,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    if (*name == '\0') {
 		/* command is missing 19990114 */
 		if (ckWARN(WARN_PIPE))
-		    Perl_warner(aTHX_ WARN_PIPE, "Missing command in piped open");
+		    Perl_warner(aTHX_ packWARN(WARN_PIPE), "Missing command in piped open");
 		errno = EPIPE;
 		goto say_false;
 	    }
@@ -504,19 +513,19 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
     }
     if (!fp) {
 	if (ckWARN(WARN_NEWLINE) && IoTYPE(io) == IoTYPE_RDONLY && strchr(name, '\n'))
-	    Perl_warner(aTHX_ WARN_NEWLINE, PL_warn_nl, "open");
+	    Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "open");
 	goto say_false;
     }
 
     if (ckWARN(WARN_IO)) {
 	if ((IoTYPE(io) == IoTYPE_RDONLY) &&
 	    (fp == PerlIO_stdout() || fp == PerlIO_stderr())) {
-		Perl_warner(aTHX_ WARN_IO,
+		Perl_warner(aTHX_ packWARN(WARN_IO),
 			    "Filehandle STD%s opened only for input",
 			    (fp == PerlIO_stdout()) ? "OUT" : "ERR");
 	}
 	else if ((IoTYPE(io) == IoTYPE_WRONLY) && fp == PerlIO_stdin()) {
-		Perl_warner(aTHX_ WARN_IO,
+		Perl_warner(aTHX_ packWARN(WARN_IO),
 			    "Filehandle STDIN opened only for output");
 	}
     }
@@ -640,7 +649,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	if (IoTYPE(io) == IoTYPE_SOCKET
 	    || (IoTYPE(io) == IoTYPE_WRONLY && fd >= 0 && S_ISCHR(PL_statbuf.st_mode)) ) {
 	    mode[0] = 'w';
-	    if (!(IoOFP(io) = PerlIO_openn(aTHX_ type,mode,fd,0,0,NULL,num_svs,svp))) {
+	    if (!(IoOFP(io) = PerlIO_openn(aTHX_ type,mode,fd,0,0,NULL,0,svp))) {
 		PerlIO_close(fp);
 		IoIFP(io) = Nullfp;
 		goto say_false;
@@ -712,7 +721,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 		filegid = PL_statbuf.st_gid;
 		if (!S_ISREG(PL_filemode)) {
 		    if (ckWARN_d(WARN_INPLACE))	
-		        Perl_warner(aTHX_ WARN_INPLACE,
+		        Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			    "Can't do inplace edit: %s is not a regular file",
 		            PL_oldname );
 		    do_close(gv,FALSE);
@@ -744,7 +753,7 @@ Perl_nextargv(pTHX_ register GV *gv)
                       )
 		    {
 			if (ckWARN_d(WARN_INPLACE))	
-			    Perl_warner(aTHX_ WARN_INPLACE,
+			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			      "Can't do inplace edit: %s would not be unique",
 			      SvPVX(sv));
 			do_close(gv,FALSE);
@@ -752,10 +761,10 @@ Perl_nextargv(pTHX_ register GV *gv)
 		    }
 #endif
 #ifdef HAS_RENAME
-#if !defined(DOSISH) && !defined(__CYGWIN__)
+#if !defined(DOSISH) && !defined(__CYGWIN__) && !defined(EPOC)
 		    if (PerlLIO_rename(PL_oldname,SvPVX(sv)) < 0) {
 		        if (ckWARN_d(WARN_INPLACE))	
-			    Perl_warner(aTHX_ WARN_INPLACE,
+			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			      "Can't rename %s to %s: %s, skipping file",
 			      PL_oldname, SvPVX(sv), Strerror(errno) );
 			do_close(gv,FALSE);
@@ -771,7 +780,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 		    (void)UNLINK(SvPVX(sv));
 		    if (link(PL_oldname,SvPVX(sv)) < 0) {
 		        if (ckWARN_d(WARN_INPLACE))	
-			    Perl_warner(aTHX_ WARN_INPLACE,
+			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			      "Can't rename %s to %s: %s, skipping file",
 			      PL_oldname, SvPVX(sv), Strerror(errno) );
 			do_close(gv,FALSE);
@@ -785,7 +794,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 #  ifndef VMS  /* Don't delete; use automatic file versioning */
 		    if (UNLINK(PL_oldname) < 0) {
 		        if (ckWARN_d(WARN_INPLACE))	
-			    Perl_warner(aTHX_ WARN_INPLACE,
+			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			      "Can't remove %s: %s, skipping file",
 			      PL_oldname, Strerror(errno) );
 			do_close(gv,FALSE);
@@ -809,7 +818,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 #endif
 		{
 		    if (ckWARN_d(WARN_INPLACE))	
-		        Perl_warner(aTHX_ WARN_INPLACE, "Can't do inplace edit on %s: %s",
+		        Perl_warner(aTHX_ packWARN(WARN_INPLACE), "Can't do inplace edit on %s: %s",
 		          PL_oldname, Strerror(errno) );
 		    do_close(gv,FALSE);
 		    continue;
@@ -843,12 +852,12 @@ Perl_nextargv(pTHX_ register GV *gv)
 		if (PerlLIO_stat(PL_oldname, &PL_statbuf) >= 0
 		    && !S_ISREG(PL_statbuf.st_mode))	
 		{
-		    Perl_warner(aTHX_ WARN_INPLACE,
+		    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 				"Can't do inplace edit: %s is not a regular file",
 				PL_oldname);
 		}
 		else
-		    Perl_warner(aTHX_ WARN_INPLACE, "Can't open %s: %s",
+		    Perl_warner(aTHX_ packWARN(WARN_INPLACE), "Can't open %s: %s",
 				PL_oldname, Strerror(eno));
 	    }
 	}
@@ -895,6 +904,7 @@ Perl_do_pipe(pTHX_ SV *sv, GV *rgv, GV *wgv)
 	goto badexit;
     IoIFP(rstio) = PerlIO_fdopen(fd[0], "r");
     IoOFP(wstio) = PerlIO_fdopen(fd[1], "w");
+    IoOFP(rstio) = IoIFP(rstio);
     IoIFP(wstio) = IoOFP(wstio);
     IoTYPE(rstio) = IoTYPE_RDONLY;
     IoTYPE(wstio) = IoTYPE_WRONLY;
@@ -1154,7 +1164,7 @@ I32 fd;			/* file descriptor */
 Off_t length;		/* length to set file to */
 {
     struct flock fl;
-    struct stat filebuf;
+    Stat_t filebuf;
 
     if (PerlLIO_fstat(fd, &filebuf) < 0)
 	return -1;
@@ -1243,7 +1253,7 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 	    if (!sv_utf8_downgrade((sv = sv_mortalcopy(sv)), TRUE)
 		&& ckWARN_d(WARN_UTF8))
 	    {
-		Perl_warner(aTHX_ WARN_UTF8, "Wide character in print");
+		Perl_warner(aTHX_ packWARN(WARN_UTF8), "Wide character in print");
 	    }
 	}
 	tmps = SvPV(sv, len);
@@ -1308,7 +1318,7 @@ Perl_my_stat(pTHX)
 	PL_laststype = OP_STAT;
 	PL_laststatval = PerlLIO_stat(s, &PL_statcache);
 	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n'))
-	    Perl_warner(aTHX_ WARN_NEWLINE, PL_warn_nl, "stat");
+	    Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "stat");
 	return PL_laststatval;
     }
 }
@@ -1327,7 +1337,7 @@ Perl_my_lstat(pTHX)
 	    return PL_laststatval;
 	}
 	if (ckWARN(WARN_IO)) {
-	    Perl_warner(aTHX_ WARN_IO, "Use of -l on filehandle %s",
+	    Perl_warner(aTHX_ packWARN(WARN_IO), "Use of -l on filehandle %s",
 		    GvENAME(cGVOP_gv));
 	    return (PL_laststatval = -1);
 	}
@@ -1338,14 +1348,14 @@ Perl_my_lstat(pTHX)
     sv = POPs;
     PUTBACK;
     if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVGV && ckWARN(WARN_IO)) {
-	Perl_warner(aTHX_ WARN_IO, "Use of -l on filehandle %s",
+	Perl_warner(aTHX_ packWARN(WARN_IO), "Use of -l on filehandle %s",
 		GvENAME((GV*) SvRV(sv)));
 	return (PL_laststatval = -1);
     }
     sv_setpv(PL_statname,SvPV(sv, n_a));
     PL_laststatval = PerlLIO_lstat(SvPV(sv, n_a),&PL_statcache);
     if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(SvPV(sv, n_a), '\n'))
-	Perl_warner(aTHX_ WARN_NEWLINE, PL_warn_nl, "lstat");
+	Perl_warner(aTHX_ packWARN(WARN_NEWLINE), PL_warn_nl, "lstat");
     return PL_laststatval;
 }
 
@@ -1386,7 +1396,7 @@ Perl_do_aexec5(pTHX_ SV *really, register SV **mark, register SV **sp,
 	else
 	    PerlProc_execvp(PL_Argv[0],EXEC_ARGV_CAST(PL_Argv));
 	if (ckWARN(WARN_EXEC))
-	    Perl_warner(aTHX_ WARN_EXEC, "Can't exec \"%s\": %s",
+	    Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't exec \"%s\": %s",
 		(really ? tmps : PL_Argv[0]), Strerror(errno));
 	if (do_report) {
 	    int e = errno;
@@ -1524,7 +1534,7 @@ Perl_do_exec3(pTHX_ char *cmd, int fd, int do_report)
 	    int e = errno;
 
 	    if (ckWARN(WARN_EXEC))
-		Perl_warner(aTHX_ WARN_EXEC, "Can't exec \"%s\": %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't exec \"%s\": %s",
 		    PL_Argv[0], Strerror(errno));
 	    if (do_report) {
 		PerlLIO_write(fd, (void*)&e, sizeof(int));

@@ -8,9 +8,11 @@ BEGIN {
 
 $|  = 1;
 use warnings;
+use Config;
 $Is_VMS = $^O eq 'VMS';
+$Is_MacOS = $^O eq 'MacOS';
 
-plan tests => 95;
+plan tests => 94;
 
 my $Perl = which_perl();
 
@@ -78,7 +80,7 @@ SKIP: {
     skip "open -| busted and noisy on VMS", 3 if $Is_VMS;
 
     ok( open(my $f, '-|', <<EOC),     'open -|' );
-    $Perl -e "print qq(a row\n); print qq(another row\n)"
+    $Perl -e "print qq(a row\\n); print qq(another row\\n)"
 EOC
 
     my @rows = <$f>;
@@ -86,7 +88,9 @@ EOC
     ok( close($f),                      '       close' );
 }
 
-{
+SKIP: {
+    skip "Output for |- doesn't go to shell on MacOS", 5 if $Is_MacOS;
+
     ok( open(my $f, '|-', <<EOC),     'open |-' );
     $Perl -pe "s/^not //"
 EOC
@@ -171,7 +175,7 @@ SKIP: {
     skip "open -| busted and noisy on VMS", 3 if $Is_VMS;
 
     ok( open(local $f, '-|', <<EOC),  'open local $f, "-|", ...' );
-    $Perl -e "print qq(a row\n); print qq(another row\n)"
+    $Perl -e "print qq(a row\\n); print qq(another row\\n)"
 EOC
     my @rows = <$f>;
 
@@ -179,7 +183,9 @@ EOC
     ok( close($f),                      '       close' );
 }
 
-{
+SKIP: {
+    skip "Output for |- doesn't go to shell on MacOS", 5 if $Is_MacOS;
+
     ok( open(local $f, '|-', <<EOC),  'open local $f, "|-", ...' );
     $Perl -pe "s/^not //"
 EOC
@@ -216,16 +222,22 @@ like( $@, qr/Bad filehandle:\s+afile/,          '       right error' );
     }
 }
 
-# magic temporary file via 3 arg open with undef
+
+# other dupping techniques
 {
-    ok( open(my $x,"+<",undef), 'magic temp file via 3 arg open with undef');
-    ok( defined fileno($x),     '       fileno' );
+    ok( open(my $stdout, ">&", \*STDOUT), 'dup \*STDOUT into lexical fh');
+    ok( open(STDOUT,     ">&", $stdout),  'restore dupped STDOUT from lexical fh');
+}
 
-    select $x;
-    ok( (print "ok\n"),         '       print' );
+SKIP: {
+    skip "This perl uses perlio", 1 if $Config{useperlio};
+    skip "This system doesn't understand EINVAL", 1 unless exists $!{EINVAL};
 
-    select STDOUT;
-    ok( seek($x,0,0),           '       seek' );
-    is( scalar <$x>, "ok\n",    '       readline' );
-    ok( tell($x) >= 3,          '       tell' );
+    no warnings 'io';
+    ok( !open(F,'>',\my $s) && $!{EINVAL}, 'open(reference) raises EINVAL' );
+}
+
+{
+    ok( !eval { open F, "BAR", "QUUX" },       'Unknown open() mode' );
+    like( $@, qr/\QUnknown open() mode 'BAR'/, '       right error' );
 }

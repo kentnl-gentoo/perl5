@@ -1,5 +1,56 @@
 Revision history for Perl extension Test::Harness
 
+2.24  Wed May 29 19:02:18 EDT 2002
+    * Nikola Knezevic found a bug when tests are completely skipped
+      but no reason is given it was considered a failure.
+    * Made Test::Harness::Straps->analyze_file & Test::Harness a bit
+      more graceful when the test doesn't exist.
+
+2.23  Wed May 22 12:59:47 EDT 2002
+    - reason for all skip wasn't being displayed.  Broken in 2.20.
+    - Changed the wait status tests to conform with POSIX standards.
+    - Quieted some SYSTEM$ABORT noise leaking out from dying test tests
+      on VMS.
+
+2.22  Fri May 17 19:01:35 EDT 2002
+    - Fixed parsing of #!/usr/bin/perl-current to not see a -t.
+      (RT #574)
+    - Fixed exit codes on MPE/iX
+
+2.21  Mon May  6 00:43:22 EDT 2002
+    - removed a bunch of dead code left over after 2.20's gutting.
+    - The fix for the $^X "bug" added in 2.02 has been removed.  It
+      caused more trouble than the old bug (I'd never seen a problem
+      before anyway)
+    - 2.20 broke $verbose
+
+2.20  Sat May  4 22:31:20 EDT 2002
+    * An almost complete conversion of the Test::Harness test parsing
+      to use Test::Harness::Straps.
+
+2.04  Tue Apr 30 00:54:49 EDT 2002
+    * Changing the output format of skips
+    - Taking into account VMS's special exit codes in the tests.
+
+2.03  Thu Apr 25 01:01:34 EDT 2002
+    * $^X fix made safer.
+    - Noise from loading wait.ph to analyze core files supressed
+    - MJD found a situation where a test could run Test::Harness
+      out of memory.  Protecting against that specific case.
+    - Made the 1..M docs a bit clearer.
+    - Fixed TODO tests so Test::Harness does not display a NOK for
+      them.
+    - Test::Harness::Straps->analyze_file() docs were not clear as to
+      its effects
+
+2.02  Thu Mar 14 18:06:04 EST 2002
+    * Ken Williams fixed the long standing $^X bug.
+    * Added HARNESS_VERBOSE
+    * Fixed a bug where Test::Harness::Straps was considering a test that 
+      is ok but died as passing.
+    - Added the exit and wait codes of the test to the 
+      analyze_file() results.
+
 2.01  Thu Dec 27 18:54:36 EST 2001
     * Added 'passing' to the results to tell you if the test passed
     * Added Test::Harness::Straps example (examples/mini_harness.plx)

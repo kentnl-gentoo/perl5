@@ -104,8 +104,8 @@ S_mul128(pTHX_ SV *sv, U8 m)
     t--;
   while (t > s) {
     i = ((*t - '0') << 7) + m;
-    *(t--) = '0' + (i % 10);
-    m = i / 10;
+    *(t--) = '0' + (char)(i % 10);
+    m = (char)(i / 10);
   }
   return (sv);
 }
@@ -202,12 +202,12 @@ S_measure_struct(pTHX_ char *pat, register char *patend)
 	case 'U':			/* XXXX Is it correct? */
 	case 'w':
 	case 'u':
-	    buf[0] = datumtype;
+	    buf[0] = (char)datumtype;
 	    buf[1] = 0;
 	    Perl_croak(aTHX_ "%s not allowed in length fields", buf);
 	case ',': /* grandfather in commas but with a warning */
 	    if (commas++ == 0 && ckWARN(WARN_UNPACK))
-		Perl_warner(aTHX_ WARN_UNPACK,
+		Perl_warner(aTHX_ packWARN(WARN_UNPACK),
 			    "Invalid type in unpack: '%c'", (int)datumtype);
 	    /* FALL THROUGH */
 	case '%':
@@ -458,7 +458,7 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 #if defined(HAS_LONG_DOUBLE) && defined(USE_LONG_DOUBLE)
     long double aldouble;
 #endif
-    bool do_utf8 = flags & UNPACK_DO_UTF8;
+    bool do_utf8 = (flags & UNPACK_DO_UTF8) != 0;
 
     while ((pat = next_symbol(pat, patend)) < patend) {
 	datumtype = *pat++ & 0xFF;
@@ -500,7 +500,7 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 	    Perl_croak(aTHX_ "Invalid type in unpack: '%c'", (int)datumtype);
 	case ',': /* grandfather in commas but with a warning */
 	    if (commas++ == 0 && ckWARN(WARN_UNPACK))
-		Perl_warner(aTHX_ WARN_UNPACK,
+		Perl_warner(aTHX_ packWARN(WARN_UNPACK),
 			    "Invalid type in unpack: '%c'", (int)datumtype);
 	    break;
 	case '%':
@@ -720,6 +720,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -748,6 +750,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -770,7 +774,7 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 	    if (checksum) {
 		while (len-- > 0 && s < strend) {
 		    STRLEN alen;
-		    auint = NATIVE_TO_UNI(utf8n_to_uvchr((U8*)s, strend - s, &alen, 0));
+		    auint = NATIVE_TO_UNI(utf8n_to_uvchr((U8*)s, strend - s, &alen, ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANYUV));
 		    along = alen;
 		    s += along;
 		    if (checksum > bits_in_uv)
@@ -780,11 +784,13 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0 && s < strend) {
 		    STRLEN alen;
-		    auint = NATIVE_TO_UNI(utf8n_to_uvchr((U8*)s, strend - s, &alen, 0));
+		    auint = NATIVE_TO_UNI(utf8n_to_uvchr((U8*)s, strend - s, &alen, ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANYUV));
 		    along = alen;
 		    s += along;
 		    sv = NEWSV(37, 0);
@@ -833,6 +839,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 #if SHORTSIZE != SIZE16
@@ -909,6 +917,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 #if SHORTSIZE != SIZE16
@@ -958,6 +968,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1009,6 +1021,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1042,6 +1056,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1068,6 +1084,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1120,6 +1138,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 #if LONGSIZE != SIZE32
@@ -1198,6 +1218,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 #if LONGSIZE != SIZE32
@@ -1252,6 +1274,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 	    }
 	    break;
 	case 'w':
+            if (len && (flags & UNPACK_ONLY_ONE))
+                len = 1;
 	    EXTEND(SP, len);
 	    EXTEND_MORTAL(len);
 	    {
@@ -1275,7 +1299,7 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 
 			sv = Perl_newSVpvf(aTHX_ "%.*"UVf, (int)TYPE_DIGITS(UV), auv);
 			while (s < strend) {
-			    sv = mul128(sv, *s & 0x7f);
+			    sv = mul128(sv, (U8)(*s & 0x7f));
 			    if (!(*s++ & 0x80)) {
 				bytes = 0;
 				break;
@@ -1325,6 +1349,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
             else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
                 EXTEND(SP, len);
                 EXTEND_MORTAL(len);
                 while (len-- > 0) {
@@ -1358,6 +1384,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
             else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
                 EXTEND(SP, len);
                 EXTEND_MORTAL(len);
                 while (len-- > 0) {
@@ -1390,6 +1418,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1413,6 +1443,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1436,6 +1468,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1460,6 +1494,8 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 		}
 	    }
 	    else {
+                if (len && (flags & UNPACK_ONLY_ONE))
+                    len = 1;
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
@@ -1517,16 +1553,17 @@ Perl_unpack_str(pTHX_ char *pat, register char *patend, register char *s, char *
 			d = PL_uudmap[*(U8*)s++] & 077;
 		    else
 			d = 0;
-		    hunk[0] = (a << 2) | (b >> 4);
-		    hunk[1] = (b << 4) | (c >> 2);
-		    hunk[2] = (c << 6) | d;
+		    hunk[0] = (char)((a << 2) | (b >> 4));
+		    hunk[1] = (char)((b << 4) | (c >> 2));
+		    hunk[2] = (char)((c << 6) | d);
 		    sv_catpvn(sv, hunk, (len > 3) ? 3 : len);
 		    len -= 3;
 		}
 		if (*s == '\n')
 		    s++;
-		else if (s[1] == '\n')		/* possible checksum byte */
-		    s += 2;
+		else	/* possible checksum byte */
+		    if (s + 1 < strend && s[1] == '\n')
+		        s += 2;
 	    }
 	    XPUSHs(sv_2mortal(sv));
 	    break;
@@ -1794,7 +1831,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 	    Perl_croak(aTHX_ "Invalid type in pack: '%c'", (int)datumtype);
 	case ',': /* grandfather in commas but with a warning */
 	    if (commas++ == 0 && ckWARN(WARN_PACK))
-		Perl_warner(aTHX_ WARN_PACK,
+		Perl_warner(aTHX_ packWARN(WARN_PACK),
 			    "Invalid type in pack: '%c'", (int)datumtype);
 	    break;
 	case '%':
@@ -1839,7 +1876,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 	    /* FALL THROUGH */
 	case 'X':
 	  shrink:
-	    if (SvCUR(cat) < len)
+	    if ((I32)SvCUR(cat) < len)
 		Perl_croak(aTHX_ "X outside of string");
 	    SvCUR(cat) -= len;
 	    *SvEND(cat) = '\0';
@@ -1871,7 +1908,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 		if (datumtype == 'Z')
 		    ++len;
 	    }
-	    if (fromlen >= len) {
+	    if ((I32)fromlen >= len) {
 		sv_catpvn(cat, aptr, len);
 		if (datumtype == 'Z')
 		    *(SvEND(cat)-1) = '\0';
@@ -1910,7 +1947,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 		SvCUR(cat) += (len+7)/8;
 		SvGROW(cat, SvCUR(cat) + 1);
 		aptr = SvPVX(cat) + aint;
-		if (len > fromlen)
+		if (len > (I32)fromlen)
 		    len = fromlen;
 		aint = len;
 		items = 0;
@@ -1966,7 +2003,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 		SvCUR(cat) += (len+1)/2;
 		SvGROW(cat, SvCUR(cat) + 1);
 		aptr = SvPVX(cat) + aint;
-		if (len > fromlen)
+		if (len > (I32)fromlen)
 		    len = fromlen;
 		aint = len;
 		items = 0;
@@ -2016,7 +2053,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 		    aint = SvIV(fromstr);
 		    if ((aint < 0 || aint > 255) &&
 			ckWARN(WARN_PACK))
-		        Perl_warner(aTHX_ WARN_PACK,
+		        Perl_warner(aTHX_ packWARN(WARN_PACK),
 				    "Character in \"C\" format wrapped");
 		    achar = aint & 255;
 		    sv_catpvn(cat, &achar, sizeof(char));
@@ -2025,7 +2062,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 		    aint = SvIV(fromstr);
 		    if ((aint < -128 || aint > 127) &&
 			ckWARN(WARN_PACK))
-		        Perl_warner(aTHX_ WARN_PACK,
+		        Perl_warner(aTHX_ packWARN(WARN_PACK),
 				    "Character in \"c\" format wrapped");
 		    achar = aint & 255;
 		    sv_catpvn(cat, &achar, sizeof(char));
@@ -2038,8 +2075,12 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 		fromstr = NEXTFROM;
 		auint = UNI_TO_NATIVE(SvUV(fromstr));
 		SvGROW(cat, SvCUR(cat) + UTF8_MAXLEN + 1);
-		SvCUR_set(cat, (char*)uvchr_to_utf8((U8*)SvEND(cat),auint)
-			       - SvPVX(cat));
+		SvCUR_set(cat,
+			  (char*)uvchr_to_utf8_flags((U8*)SvEND(cat),
+						     auint,
+						     ckWARN(WARN_UTF8) ?
+						     0 : UNICODE_ALLOW_ANY)
+			  - SvPVX(cat));
 	    }
 	    *SvEND(cat) = '\0';
 	    break;
@@ -2047,14 +2088,42 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 	case 'f':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
+#ifdef __VOS__
+/* VOS does not automatically map a floating-point overflow
+   during conversion from double to float into infinity, so we
+   do it by hand.  This code should either be generalized for
+   any OS that needs it, or removed if and when VOS implements
+   posix-976 (suggestion to support mapping to infinity).
+   Paul.Green@stratus.com 02-04-02.  */
+		if (SvNV(fromstr) > FLT_MAX)
+		     afloat = _float_constants[0];   /* single prec. inf. */
+		else if (SvNV(fromstr) < -FLT_MAX)
+		     afloat = _float_constants[0];   /* single prec. inf. */
+		else afloat = (float)SvNV(fromstr);
+#else
 		afloat = (float)SvNV(fromstr);
+#endif
 		sv_catpvn(cat, (char *)&afloat, sizeof (float));
 	    }
 	    break;
 	case 'd':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
+#ifdef __VOS__
+/* VOS does not automatically map a floating-point overflow
+   during conversion from long double to double into infinity,
+   so we do it by hand.  This code should either be generalized
+   for any OS that needs it, or removed if and when VOS
+   implements posix-976 (suggestion to support mapping to
+   infinity).  Paul.Green@stratus.com 02-04-02.  */
+		if (SvNV(fromstr) > DBL_MAX)
+		     adouble = _double_constants[0];   /* double prec. inf. */
+		else if (SvNV(fromstr) < -DBL_MAX)
+		     adouble = _double_constants[0];   /* double prec. inf. */
+		else adouble = (double)SvNV(fromstr);
+#else
 		adouble = (double)SvNV(fromstr);
+#endif
 		sv_catpvn(cat, (char *)&adouble, sizeof (double));
 	    }
 	    break;
@@ -2163,29 +2232,24 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 	case 'w':
             while (len-- > 0) {
 		fromstr = NEXTFROM;
-		adouble = Perl_floor(SvNV(fromstr));
+		anv = SvNV(fromstr);
 
-		if (adouble < 0)
+		if (anv < 0)
 		    Perl_croak(aTHX_ "Cannot compress negative numbers");
 
-		if (
-#if UVSIZE > 4 && UVSIZE >= NVSIZE
-		    adouble <= 0xffffffff
-#else
-#   ifdef CXUX_BROKEN_CONSTANT_CONVERT
-		    adouble <= UV_MAX_cxux
-#   else
-		    adouble <= UV_MAX
-#   endif
-#endif
-		    )
+                /* 0xFFFFFFFFFFFFFFFF may cast to 18446744073709551616.0,
+                   which is == UV_MAX_P1. IOK is fine (instead of UV_only), as
+                   any negative IVs will have already been got by the croak()
+                   above. IOK is untrue for fractions, so we test them
+                   against UV_MAX_P1.  */
+		if (SvIOK(fromstr) || anv < UV_MAX_P1)
 		{
-		    char   buf[1 + sizeof(UV)];
+		    char   buf[(sizeof(UV)*8)/7+1];
 		    char  *in = buf + sizeof(buf);
-		    UV     auv = U_V(adouble);
+		    UV     auv = SvUV(fromstr);
 
 		    do {
-			*--in = (auv & 0x7f) | 0x80;
+			*--in = (char)((auv & 0x7f) | 0x80);
 			auv >>= 7;
 		    } while (auv);
 		    buf[sizeof(buf) - 1] &= 0x7f; /* clear continue bit */
@@ -2213,16 +2277,17 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 		    SvREFCNT_dec(norm);	/* free norm */
                 }
 		else if (SvNOKp(fromstr)) {
-		    char   buf[sizeof(double) * 2];	/* 8/7 <= 2 */
+		    char   buf[sizeof(NV) * 2];	/* 8/7 <= 2 */
 		    char  *in = buf + sizeof(buf);
 
+                    anv = Perl_floor(anv);
 		    do {
-			double next = floor(adouble / 128);
-			*--in = (unsigned char)(adouble - (next * 128)) | 0x80;
+			NV next = Perl_floor(anv / 128);
+			*--in = (unsigned char)(anv - (next * 128)) | 0x80;
 			if (in <= buf)  /* this cannot happen ;-) */
 			    Perl_croak(aTHX_ "Cannot compress integer");
-			adouble = next;
-		    } while (adouble > 0);
+			anv = next;
+		    } while (anv > 0);
 		    buf[sizeof(buf) - 1] &= 0x7f; /* clear continue bit */
 		    sv_catpvn(cat, in, (buf + sizeof(buf)) - in);
 		}
@@ -2353,7 +2418,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 						|| (SvPADTMP(fromstr)
 						    && !SvREADONLY(fromstr))))
 		    {
-			Perl_warner(aTHX_ WARN_PACK,
+			Perl_warner(aTHX_ packWARN(WARN_PACK),
 				"Attempt to pack pointer to temporary value");
 		    }
 		    if (SvPOK(fromstr) || SvNIOK(fromstr))
@@ -2375,7 +2440,7 @@ Perl_pack_cat(pTHX_ SV *cat, char *pat, register char *patend, register SV **beg
 	    while (fromlen > 0) {
 		I32 todo;
 
-		if (fromlen > len)
+		if ((I32)fromlen > len)
 		    todo = len;
 		else
 		    todo = fromlen;

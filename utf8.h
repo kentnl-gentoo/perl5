@@ -67,19 +67,23 @@ END_EXTERN_C
 
  Code Points		1st Byte  2nd Byte  3rd Byte  4th Byte
 
-   U+0000..U+007F	00..7F   
-   U+0080..U+07FF	C2..DF    80..BF   
-   U+0800..U+0FFF	E0        A0..BF    80..BF  
-   U+1000..U+CFFF       E1..EC    80..BF    80..BF  
-   U+D000..U+D7FF       ED        80..9F    80..BF  
+   U+0000..U+007F	00..7F
+   U+0080..U+07FF	C2..DF    80..BF
+   U+0800..U+0FFF	E0        A0..BF    80..BF
+   U+1000..U+CFFF       E1..EC    80..BF    80..BF
+   U+D000..U+D7FF       ED        80..9F    80..BF
    U+D800..U+DFFF       ******* ill-formed *******
-   U+E000..U+FFFF       EE..EF    80..BF    80..BF  
+   U+E000..U+FFFF       EE..EF    80..BF    80..BF
   U+10000..U+3FFFF	F0        90..BF    80..BF    80..BF
   U+40000..U+FFFFF	F1..F3    80..BF    80..BF    80..BF
  U+100000..U+10FFFF	F4        80..8F    80..BF    80..BF
 
 Note the A0..BF in U+0800..U+0FFF, the 80..9F in U+D000...U+D7FF,
 the 90..BF in U+10000..U+3FFFF, and the 80...8F in U+100000..U+10FFFF.
+The "gaps" are caused by legal UTF-8 avoiding non-shortest encodings:
+it is technically possible to UTF-8-encode a single code point in different
+ways, but that is explicitly forbidden, and the shortest possible encoding
+should always be used (and that is what Perl does).
 
  */
 
@@ -176,36 +180,34 @@ encoded character.
 #define UTF8_ALLOW_FE_FF		0x0008
 #define UTF8_ALLOW_SHORT		0x0010
 #define UTF8_ALLOW_SURROGATE		0x0020
-#define UTF8_ALLOW_BOM			0x0040
-#define UTF8_ALLOW_FFFF			0x0080
-#define UTF8_ALLOW_LONG			0x0100
+#define UTF8_ALLOW_FFFF			0x0040 /* Allows also FFFE. */
+#define UTF8_ALLOW_LONG			0x0080
 #define UTF8_ALLOW_ANYUV		(UTF8_ALLOW_EMPTY|UTF8_ALLOW_FE_FF|\
-					 UTF8_ALLOW_SURROGATE|UTF8_ALLOW_BOM|\
+					 UTF8_ALLOW_SURROGATE|\
 					 UTF8_ALLOW_FFFF|UTF8_ALLOW_LONG)
-#define UTF8_ALLOW_ANY			0x00ff
+#define UTF8_ALLOW_ANY			0x00FF
 #define UTF8_CHECK_ONLY			0x0200
 
-#define UNICODE_SURROGATE_FIRST		0xd800
-#define UNICODE_SURROGATE_LAST		0xdfff
-#define UNICODE_REPLACEMENT		0xfffd
-#define UNICODE_BYTER_ORDER_MARK	0xfffe
-#define UNICODE_ILLEGAL			0xffff
+#define UNICODE_SURROGATE_FIRST		0xD800
+#define UNICODE_SURROGATE_LAST		0xDFFF
+#define UNICODE_REPLACEMENT		0xFFFD
+#define UNICODE_BYTE_ORDER_MARK		0xFEFF
+#define UNICODE_ILLEGAL			0xFFFF
 
 /* Though our UTF-8 encoding can go beyond this,
- * let's be conservative. */
+ * let's be conservative and do as Unicode 3.2 says. */
 #define PERL_UNICODE_MAX	0x10FFFF
 
 #define UNICODE_ALLOW_SURROGATE 0x0001	/* Allow UTF-16 surrogates (EVIL) */
 #define UNICODE_ALLOW_FDD0	0x0002	/* Allow the U+FDD0...U+FDEF */
-#define UNICODE_ALLOW_FFFE	0x0004	/* Allow 0xFFFE, 0x1FFFE, ... */
-#define UNICODE_ALLOW_FFFF	0x0008	/* Allow 0xFFFE, 0x1FFFE, ... */
-#define UNICODE_ALLOW_SUPER	0x0010	/* Allow past 10xFFFF */
-#define UNICODE_ALLOW_ANY	0xFFFF
+#define UNICODE_ALLOW_FFFF	0x0004	/* Allow 0xFFF[EF], 0x1FFF[EF], ... */
+#define UNICODE_ALLOW_SUPER	0x0008	/* Allow past 10xFFFF */
+#define UNICODE_ALLOW_ANY	0x000F
 
 #define UNICODE_IS_SURROGATE(c)		((c) >= UNICODE_SURROGATE_FIRST && \
 					 (c) <= UNICODE_SURROGATE_LAST)
 #define UNICODE_IS_REPLACEMENT(c)	((c) == UNICODE_REPLACEMENT)
-#define UNICODE_IS_BYTE_ORDER_MARK(c)	((c) == UNICODE_BYTER_ORDER_MARK)
+#define UNICODE_IS_BYTE_ORDER_MARK(c)	((c) == UNICODE_BYTE_ORDER_MARK)
 #define UNICODE_IS_ILLEGAL(c)		((c) == UNICODE_ILLEGAL)
 
 #ifdef HAS_QUAD

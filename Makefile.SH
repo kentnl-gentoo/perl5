@@ -36,6 +36,7 @@ true)
 	esac
 
 	pldlflags="$cccdlflags"
+	static_target='static_pic'
 	case "${osname}${osvers}" in
 	next4*)
 		ld=libtool
@@ -97,10 +98,11 @@ true)
         esac
 	;;
 *)	pldlflags=''
+	static_target='static'
 	;;
 esac
 
-case "`pwd`" in
+case "$ldlibpth" in
 # Protect any spaces
 *" "*) ldlibpth=`echo $ldlibpth|sed 's/ /\\\\ /g'` ;;
 esac
@@ -188,6 +190,13 @@ LIBPERL = $libperl
 LLIBPERL= $linklibperl
 SHRPENV = $shrpenv
 
+# Static targets are ordinarily built without CCCDLFLAGS.  However,
+# if building a shared libperl.so that might later be linked into
+# another application, then it might be appropriate to also build static
+# extensions (usually just DynaLoader) with relocatable code (e.g. -fPIC
+# for GNU cc).  This is handled by ext/util/make_ext.
+STATIC = $static_target
+
 # The following is used to include the current directory in
 # the dynamic loader path you are building a shared libperl.
 LDLIBPTH = $ldlibpth
@@ -261,9 +270,9 @@ esac
 ## In the following dollars and backticks do not need the extra backslash.
 $spitshell >>Makefile <<'!NO!SUBS!'
 
-CCCMD    = `sh $(shellflags) cflags "optimize='$(OPTIMIZE)'" $(LIBPERL) $@`
+CCCMD    = `sh $(shellflags) cflags "optimize='$(OPTIMIZE)'" $@`
 
-CCCMDSRC = `sh $(shellflags) cflags "optimize='$(OPTIMIZE)'" $(LIBPERL) $<`
+CCCMDSRC = `sh $(shellflags) cflags "optimize='$(OPTIMIZE)'" $<`
 
 private = preplibrary lib/Config.pm lib/ExtUtils/Miniperl.pm
 
@@ -296,28 +305,18 @@ h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
 h5 = utf8.h warnings.h
 h = $(h1) $(h2) $(h3) $(h4) $(h5)
 
-c1 = $(mallocsrc) av.c scope.c op.c doop.c doio.c dump.c hv.c mg.c
+c1 = $(mallocsrc) av.c scope.c op.c doop.c doio.c dump.c hv.c mg.c reentr.c
 c2 = perl.c perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c
 c3 = gv.c sv.c taint.c toke.c util.c deb.c run.c universal.c xsutils.c
 c4 = globals.c perlio.c perlapi.c numeric.c locale.c pp_pack.c pp_sort.c
 
 c = $(c1) $(c2) $(c3) $(c4) miniperlmain.c perlmain.c
 
-obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT)
+obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) xsutils$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT)
 
 obj = $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
-
-# Once perl has been Configure'd and built ok you build different
-# perl variants (Debugging, Embedded, Multiplicity etc) by saying:
-#	make clean; make LIBPERL=libperl<type>.a
-# where <type> is some combination of 'd' and(or) 'e' or 'm'.
-# See cflags to understand how this works.
-#
-# This mechanism is getting clunky and might not even work any more.
-# EMBEDDING is on by default, and MULTIPLICITY doesn't work.
-#
 
 lintflags = -hbvxac
 
@@ -566,7 +565,7 @@ perl.third.config: config.sh
 	@grep "^usemymalloc='n'" config.sh >/dev/null || exit 1
 
 perl.third: /usr/bin/atom perl.third.config perl
-	atom -tool third -L. -all -gp -toolargs="-quiet -invalid -uninit heap+stack+partword+copy -min 0" perl
+	atom -tool third -L. -all -gp -toolargs="-invalid -uninit heap+stack+copy -min 0" perl
 	@echo "Now you may run perl.third and then study perl.3log."
 
 # Pixie Perls (Tru64 and IRIX only)
@@ -652,20 +651,23 @@ sperl$(OBJ_EXT): perl.c $(h)
 
 # We have to call our ./makedir because Ultrix 4.3 make can't handle the line
 #	test -d lib/auto || mkdir lib/auto
+# We need to autosplit in two steps because VOS can't handle so many args
 #
 .PHONY: preplibrary
 preplibrary: miniperl$(EXE_EXT) lib/Config.pm lib/lib.pm $(PREPLIBRARY_LIBPERL)
 	@sh ./makedir lib/auto
 	@echo "	AutoSplitting perl library"
 	$(LDLIBPTH) ./miniperl -Ilib -e 'use AutoSplit; \
-		autosplit_lib_modules(@ARGV)' lib/*.pm lib/*/*.pm
+		autosplit_lib_modules(@ARGV)' lib/*.pm
+	$(LDLIBPTH) ./miniperl -Ilib -e 'use AutoSplit; \
+		autosplit_lib_modules(@ARGV)' lib/*/*.pm
 	$(MAKE) lib/re.pm
 
 # Take care to avoid modifying lib/Config.pm without reason
 # (If trying to create a new port and having problems with the configpm script,
 # try 'make minitest' and/or commenting out the tests at the end of configpm.)
 lib/Config.pm: config.sh miniperl$(EXE_EXT) configpm
-	$(LDLIBPTH) ./miniperl configpm configpm.tmp
+	$(LDLIBPTH) ./miniperl -Ilib configpm configpm.tmp
 	sh mv-if-diff configpm.tmp $@
 
 lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl$(EXE_EXT) minimod.pl lib/Config.pm
@@ -676,9 +678,12 @@ lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl$(EXE_EXT) minimod.pl lib/Confi
 lib/re.pm: ext/re/re.pm
 	cp ext/re/re.pm ext/re/re.tmp && sh mv-if-diff ext/re/re.tmp lib/re.pm
 
-$(plextract):	miniperl$(EXE_EXT) lib/Config.pm
+$(plextract):	miniperl$(EXE_EXT) lib/Config.pm x2p/s2p
 	@-rm -f $@
 	$(LDLIBPTH) ./miniperl -Ilib $@.PL
+
+x2p/s2p: miniperl$(EXE_EXT) lib/Config.pm x2p/s2p.PL
+	cd x2p; $(LDLIBPTH) $(MAKE) s2p
 
 lib/lib.pm:	miniperl$(EXE_EXT) lib/Config.pm
 	@-rm -f $@
@@ -705,7 +710,7 @@ extras.install: perl$(EXE_EXT)
 	-@test -s extras.lst && $(LDLIBPTH) PATH=`pwd`:${PATH} PERL5LIB=`pwd`/lib ./perl -Ilib -MCPAN -e '@ARGV&&install(@ARGV)' `cat extras.lst`
 
 .PHONY: install install-strip install-all install-verbose install-silent \
-	no-install install.perl install.man installman install.html installhtml
+	no-install install.perl install.man install.html
 
 install-strip:
 	$(MAKE) STRIPFLAGS=-s install
@@ -847,13 +852,13 @@ regen_all: $(PERLYVMS) regen_headers regen_pods
 # DynaLoader may be needed for extensions that use Makefile.PL.
 
 $(DYNALOADER):	miniperl$(EXE_EXT) preplibrary FORCE
-	@$(LDLIBPTH) sh ext/util/make_ext static $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
+	@$(LDLIBPTH) sh ext/util/make_ext $(STATIC) $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
 
 d_dummy $(dynamic_ext):	miniperl$(EXE_EXT) preplibrary $(DYNALOADER) FORCE
 	@$(LDLIBPTH) sh ext/util/make_ext dynamic $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
 
 s_dummy $(static_ext):	miniperl$(EXE_EXT) preplibrary $(DYNALOADER) FORCE
-	@$(LDLIBPTH) sh ext/util/make_ext static $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
+	@$(LDLIBPTH) sh ext/util/make_ext $(STATIC) $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
 
 n_dummy $(nonxs_ext):	miniperl$(EXE_EXT) preplibrary $(DYNALOADER) FORCE
 	@$(LDLIBPTH) sh ext/util/make_ext nonxs $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
@@ -892,6 +897,7 @@ _mopup:
 	-rm -f perl.Addrs perl.Counts t/perl.Addrs t/perl.Counts *perl.xok
 	-rm -f perlld cygwin.c ld2 libperl*.def libperl*.dll cygperl*.dll *.exe.stackdump
 	rm -f perl$(EXE_EXT) suidperl$(EXE_EXT) miniperl$(EXE_EXT) $(LIBPERL) libperl.* microperl
+	rm -f opcode.h-old opnames.h-old pp.sym-old pp_proto.h-old
 
 # Do not 'make _tidy' directly.
 _tidy:
@@ -930,7 +936,7 @@ _cleaner2:
 	rm -rf lib/Encode
 	-rmdir lib/IO/Socket lib/IO/t lib/IO
 	-rmdir lib/Filter/Util lib/List lib/MIME lib/PerlIO lib/Scalar lib/Sys
-	-rmdir lib/Thread lib/XS
+	-rmdir lib/Thread lib/XS lib/threads/shared lib/threads t/lib/B
 
 _realcleaner:
 	@$(LDLIBPTH) $(MAKE) _cleaner1 CLEAN=realclean
@@ -975,7 +981,7 @@ makedepend: makedepend.SH config.sh
 
 .PHONY: test check test_prep test_prep_nodll test_prep_pre _test_prep \
 	test_tty test-tty _test_tty test_notty test-notty _test_notty \
-	utest ucheck test.utf8 check.utf8 \
+	utest ucheck test.utf8 check.utf8 test.torture torturetest \
 	test.third check.third utest.third ucheck.third test_notty.third \
 	test.deparse test_notty.deparse \
 	minitest coretest
@@ -1031,6 +1037,11 @@ test-prep:	test_prep
 test-tty:	test_tty
 
 test-notty:	test_notty
+
+# Torture testing
+
+test.torture torturetest:	test_prep
+	PERL=./perl TEST_ARGS=-torture $(MAKE) _test
 
 # Targets for Third Degree testing.
 

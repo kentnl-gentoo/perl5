@@ -356,9 +356,16 @@
 
 #ifdef DEBUGGING
 #  undef DEBUG_m
-#  define DEBUG_m(a)  \
+#  define DEBUG_m(a) 							\
     STMT_START {							\
-	if (PERL_GET_INTERP) { dTHX; if (DEBUG_m_TEST) { a; } }	\
+	if (PERL_GET_INTERP) {						\
+	    dTHX;							\
+	    if (DEBUG_m_TEST) {						\
+		PL_debug &= ~DEBUG_m_FLAG;				\
+		a;							\
+		PL_debug |= DEBUG_m_FLAG;				\
+	    }								\
+	}								\
     } STMT_END
 #endif
 
@@ -923,7 +930,7 @@ static	u_int goodsbrk;
 
 static char *emergency_buffer;
 static MEM_SIZE emergency_buffer_size;
-static int no_mem;	/* 0 if the last request for more memory succeeded.
+static MEM_SIZE no_mem;	/* 0 if the last request for more memory succeeded.
 			   Otherwise the size of the failing request. */
 
 static Malloc_t
@@ -1103,11 +1110,6 @@ Perl_malloc(register size_t nbytes)
   		return (NULL);
 	}
 
-	DEBUG_m(PerlIO_printf(Perl_debug_log,
-			      "0x%"UVxf": (%05lu) malloc %ld bytes\n",
-			      PTR2UV(p), (unsigned long)(PL_an++),
-			      (long)size));
-
 	/* remove from linked list */
 #if defined(RCHECK)
 	if ((PTR2UV(p)) & (MEM_ALIGNBYTES - 1)) {
@@ -1127,6 +1129,11 @@ Perl_malloc(register size_t nbytes)
   	nextf[bucket] = p->ov_next;
 
 	MALLOC_UNLOCK;
+
+	DEBUG_m(PerlIO_printf(Perl_debug_log,
+			      "0x%"UVxf": (%05lu) malloc %ld bytes\n",
+			      PTR2UV(p), (unsigned long)(PL_an++),
+			      (long)size));
 
 #ifdef IGNORE_SMALL_BAD_FREE
 	if (bucket >= FIRST_BUCKET_WITH_CHECK)
@@ -1160,7 +1167,7 @@ Perl_malloc(register size_t nbytes)
 
 static char *last_sbrk_top;
 static char *last_op;			/* This arena can be easily extended. */
-static int sbrked_remains;
+static MEM_SIZE sbrked_remains;
 static int sbrk_good = SBRK_ALLOW_FAILURES * SBRK_FAILURE_PRICE;
 
 #ifdef DEBUGGING_MSTATS
@@ -1595,7 +1602,7 @@ Perl_mfree(void *mp)
 		{
 		    dTHX;
 		    if (!PERL_IS_ALIVE || !PL_curcop || ckWARN_d(WARN_MALLOC))
-			Perl_warner(aTHX_ WARN_MALLOC, "%s free() ignored (RMAGIC, PERL_CORE)",
+			Perl_warner(aTHX_ packWARN(WARN_MALLOC), "%s free() ignored (RMAGIC, PERL_CORE)",
 				    ovp->ov_rmagic == RMAGIC - 1 ?
 				    "Duplicate" : "Bad");
 		}
@@ -1608,7 +1615,7 @@ Perl_mfree(void *mp)
 		{
 		    dTHX;
 		    if (!PERL_IS_ALIVE || !PL_curcop || ckWARN_d(WARN_MALLOC))
-			Perl_warner(aTHX_ WARN_MALLOC, "%s", "Bad free() ignored (PERL_CORE)");
+			Perl_warner(aTHX_ packWARN(WARN_MALLOC), "%s", "Bad free() ignored (PERL_CORE)");
 		}
 #else
 		warn("%s", "Bad free() ignored");
@@ -1695,7 +1702,7 @@ Perl_realloc(void *mp, size_t nbytes)
 		{
 		    dTHX;
 		    if (!PERL_IS_ALIVE || !PL_curcop || ckWARN_d(WARN_MALLOC))
-			Perl_warner(aTHX_ WARN_MALLOC, "%srealloc() %signored",
+			Perl_warner(aTHX_ packWARN(WARN_MALLOC), "%srealloc() %signored",
 				    (ovp->ov_rmagic == RMAGIC - 1 ? "" : "Bad "),
 				    ovp->ov_rmagic == RMAGIC - 1
 				    ? "of freed memory " : "");
@@ -1710,7 +1717,7 @@ Perl_realloc(void *mp, size_t nbytes)
 		{
 		    dTHX;
 		    if (!PERL_IS_ALIVE || !PL_curcop || ckWARN_d(WARN_MALLOC))
-			Perl_warner(aTHX_ WARN_MALLOC, "%s",
+			Perl_warner(aTHX_ packWARN(WARN_MALLOC), "%s",
 				    "Bad realloc() ignored");
 		}
 #else

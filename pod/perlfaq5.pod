@@ -1,6 +1,6 @@
 =head1 NAME
 
-perlfaq5 - Files and Formats ($Revision: 1.9 $, $Date: 2002/02/11 19:30:21 $)
+perlfaq5 - Files and Formats ($Revision: 1.18 $, $Date: 2002/05/30 07:04:25 $)
 
 =head1 DESCRIPTION
 
@@ -9,72 +9,56 @@ formats, and footers.
 
 =head2 How do I flush/unbuffer an output filehandle?  Why must I do this?
 
-The C standard I/O library (stdio) normally buffers characters sent to
-devices.  This is done for efficiency reasons so that there isn't a
-system call for each byte.  Any time you use print() or write() in
-Perl, you go though this buffering.  syswrite() circumvents stdio and
-buffering.
+Perl does not support truly unbuffered output (except
+insofar as you can C<syswrite(OUT, $char, 1)>), although it
+does support is "command buffering", in which a physical
+write is performed after every output command.
 
-In most stdio implementations, the type of output buffering and the size of
-the buffer varies according to the type of device.  Disk files are block
-buffered, often with a buffer size of more than 2k.  Pipes and sockets
-are often buffered with a buffer size between 1/2 and 2k.  Serial devices
-(e.g. modems, terminals) are normally line-buffered, and stdio sends
-the entire line when it gets the newline.
+The C standard I/O library (stdio) normally buffers
+characters sent to devices so that there isn't a system call
+for each byte. In most stdio implementations, the type of
+output buffering and the size of the buffer varies according
+to the type of device. Perl's print() and write() functions
+normally buffer output, while syswrite() bypasses buffering
+all together.
 
-Perl does not support truly unbuffered output (except insofar as you can
-C<syswrite(OUT, $char, 1)>).  What it does instead support is "command
-buffering", in which a physical write is performed after every output
-command.  This isn't as hard on your system as unbuffering, but does
-get the output where you want it when you want it.
+If you want your output to be sent immediately when you
+execute print() or write() (for instance, for some network
+protocols), you must set the handle's autoflush flag. This
+flag is the Perl variable $| and when it is set to a true
+value, Perl will flush the handle's buffer after each
+print() or write(). Setting $| affects buffering only for
+the currently selected default file handle. You choose this
+handle with the one argument select() call (see
+L<perlvar/$|> and L<perlfunc/select>).
 
-If you expect characters to get to your device when you print them there,
-you'll want to autoflush its handle.
-Use select() and the C<$|> variable to control autoflushing
-(see L<perlvar/$|> and L<perlfunc/select>):
+Use select() to choose the desired handle, then set its
+per-filehandle variables.
 
     $old_fh = select(OUTPUT_HANDLE);
     $| = 1;
     select($old_fh);
 
-Or using the traditional idiom:
+Some idioms can handle this in a single statement:
 
     select((select(OUTPUT_HANDLE), $| = 1)[0]);
 
-Or if don't mind slowly loading several thousand lines of module code
-just because you're afraid of the C<$|> variable:
+    $| = 1, select $_ for select OUTPUT_HANDLE;
 
-    use FileHandle;
-    open(DEV, "+</dev/tty"); 	  # ceci n'est pas une pipe
-    DEV->autoflush(1);
-
-or the newer IO::* modules:
+Some modules offer object-oriented access to handles and their
+variables, although they may be overkill if this is the only
+thing you do with them.  You can use IO::Handle:
 
     use IO::Handle;
     open(DEV, ">/dev/printer");   # but is this?
     DEV->autoflush(1);
 
-or even this:
+or IO::Socket:
 
     use IO::Socket;		  # this one is kinda a pipe?
-    $sock = IO::Socket::INET->new(PeerAddr => 'www.perl.com',
-				  PeerPort => 'http(80)',
-				  Proto    => 'tcp');
-    die "$!" unless $sock;
+	my $sock = IO::Socket::INET->new( 'www.example.com:80' ) ;
 
     $sock->autoflush();
-    print $sock "GET / HTTP/1.0" . "\015\012" x 2;
-    $document = join('', <$sock>);
-    print "DOC IS: $document\n";
-
-Note the bizarrely hard coded carriage return and newline in their octal
-equivalents.  This is the ONLY way (currently) to assure a proper flush
-on all platforms, including Macintosh.  That's the way things work in
-network programming: you really should specify the exact bit pattern
-on the network line terminator.  In practice, C<"\n\n"> often works,
-but this is not portable.
-
-See L<perlfaq9> for other examples of fetching URLs over the web.
 
 =head2 How do I change one line in a file/delete a line in a file/insert a line in the middle of a file/append to the beginning of a file?
 
@@ -172,74 +156,31 @@ well.   It also only works on global variables, not lexicals.
 
 =head2 How can I make a filehandle local to a subroutine?  How do I pass filehandles between subroutines?  How do I make an array of filehandles?
 
-The fastest, simplest, and most direct way is to localize the typeglob
-of the filehandle in question:
+As of perl5.6, open() autovivifies file and directory handles
+as references if you pass it an uninitialized scalar variable.
+You can then pass these references just like any other scalar,
+and use them in the place of named handles.
 
-    local *TmpHandle;
+	open my    $fh, $file_name;
 
-Typeglobs are fast (especially compared with the alternatives) and
-reasonably easy to use, but they also have one subtle drawback.  If you
-had, for example, a function named TmpHandle(), or a variable named
-%TmpHandle, you just hid it from yourself.
+	open local $fh, $file_name;
 
-    sub findme {
-        local *HostFile;
-	open(HostFile, "</etc/hosts") or die "no /etc/hosts: $!";
-	local $_;		# <- VERY IMPORTANT
-        while (<HostFile>) {
-	    print if /\b127\.(0\.0\.)?1\b/;
-	}
-	# *HostFile automatically closes/disappears here
-    }
+	print $fh "Hello World!\n";
 
-Here's how to use typeglobs in a loop to open and store a bunch of
-filehandles.  We'll use as values of the hash an ordered
-pair to make it easy to sort the hash in insertion order.
+	process_file( $fh );
 
-    @names = qw(motd termcap passwd hosts);
-    my $i = 0;
-    foreach $filename (@names) {
-	local *FH;
-	open(FH, "/etc/$filename") || die "$filename: $!";
-        $file{$filename} = [ $i++, *FH ];
-    }
+Before perl5.6, you had to deal with various typeglob idioms
+which you may see in older code.
 
-    # Using the filehandles in the array
-    foreach $name (sort { $file{$a}[0] <=> $file{$b}[0] } keys %file) {
-        my $fh = $file{$name}[1];
-        my $line = <$fh>;
-        print "$name $. $line";
-    }
+	open FILE, "> $filename";
+	process_typeglob(   *FILE );
+	process_reference( \*FILE );
 
-For passing filehandles to functions, the easiest way is to 
-preface them with a star, as in func(*STDIN).  
-See L<perlfaq7/"Passing Filehandles"> for details.
+	sub process_typeglob  { local *FH = shift; print FH  "Typeglob!" }
+	sub process_reference { local $fh = shift; print $fh "Reference!" }
 
-If you want to create many anonymous handles, you should check out the
-Symbol, FileHandle, or IO::Handle (etc.) modules.  Here's the equivalent
-code with Symbol::gensym, which is reasonably light-weight:
-
-    foreach $filename (@names) {
-	use Symbol;
-	my $fh = gensym();
-	open($fh, "/etc/$filename") || die "open /etc/$filename: $!";
-        $file{$filename} = [ $i++, $fh ];
-    }
-
-Here's using the semi-object-oriented FileHandle module, which certainly
-isn't light-weight:
-
-    use FileHandle;
-
-    foreach $filename (@names) {
-        my $fh = FileHandle->new("/etc/$filename") or die "$filename: $!";
-        $file{$filename} = [ $i++, $fh ];
-    }
-
-Please understand that whether the filehandle happens to be a (probably
-localized) typeglob or an anonymous handle from one of the modules
-in no way affects the bizarre rules for managing indirect handles.
-See the next question.
+If you want to create many anonymous handles, you should
+check out the Symbol or IO::Handle modules.
 
 =head2 How can I use a filehandle indirectly?
 
@@ -253,12 +194,9 @@ to get indirect filehandles:
     $fh = \*SOME_FH;       # ref to typeglob (bless-able)
     $fh =  *SOME_FH{IO};   # blessed IO::Handle from *SOME_FH typeglob
 
-Or, you can use the C<new> method from the FileHandle or IO modules to
+Or, you can use the C<new> method from one of the IO::* modules to
 create an anonymous filehandle, store that in a scalar variable,
 and use it as though it were a normal filehandle.
-
-    use FileHandle;
-    $fh = FileHandle->new();
 
     use IO::Handle;                     # 5.004 or higher
     $fh = IO::Handle->new();
@@ -267,7 +205,7 @@ Then use any of those as you would a normal filehandle.  Anywhere that
 Perl is expecting a filehandle, an indirect filehandle may be used
 instead. An indirect filehandle is just a scalar variable that contains
 a filehandle.  Functions like C<print>, C<open>, C<seek>, or
-the C<< <FH> >> diamond operator will accept either a read filehandle
+the C<< <FH> >> diamond operator will accept either a named filehandle
 or a scalar variable containing one:
 
     ($ifh, $ofh, $efh) = (*STDIN, *STDOUT, *STDERR);
@@ -327,9 +265,9 @@ This approach of treating C<print> and C<printf> like object methods
 calls doesn't work for the diamond operator.  That's because it's a
 real operator, not just a function with a comma-less argument.  Assuming
 you've been storing typeglobs in your structure as we did above, you
-can use the built-in function named C<readline> to reads a record just
+can use the built-in function named C<readline> to read a record just
 as C<< <> >> does.  Given the initialization shown above for @fd, this
-would work, but only because readline() require a typeglob.  It doesn't
+would work, but only because readline() requires a typeglob.  It doesn't
 work with objects or strings, which might be a bug we haven't fixed yet.
 
     $got = readline($fd[0]);
@@ -350,37 +288,23 @@ See L<perlform/"Accessing Formatting Internals"> for an swrite() function.
 
 =head2 How can I output my numbers with commas added?
 
-This one will do it for you:
+This one from Benjamin Goldberg will do it for you:
 
-    sub commify {
-        my $number = shift;
-	1 while ($number =~ s/^([-+]?\d+)(\d{3})/$1,$2/);
-	return $number;
-    }
+   s/(^[-+]?\d+?(?=(?>(?:\d{3})+)(?!\d))|\G\d{3}(?=\d))/$1,/g;
 
-    $n = 23659019423.2331;
-    print "GOT: ", commify($n), "\n";
+or written verbosely:
 
-    GOT: 23,659,019,423.2331
-
-You can't just:
-
-    s/^([-+]?\d+)(\d{3})/$1,$2/g;
-
-because you have to put the comma in and then recalculate your
-position.
-
-Alternatively, this code commifies all numbers in a line regardless of
-whether they have decimal portions, are preceded by + or -, or
-whatever:
-
-    # from Andrew Johnson <ajohnson@gpu.srv.ualberta.ca>
-    sub commify {
-       my $input = shift;
-        $input = reverse $input;
-        $input =~ s<(\d\d\d)(?=\d)(?!\d*\.)><$1,>g;
-        return scalar reverse $input;
-    }
+   s/(
+       ^[-+]?            # beginning of number.
+       \d{1,3}?          # first digits before first comma
+       (?=               # followed by, (but not included in the match) :
+          (?>(?:\d{3})+) # some positive multiple of three digits.
+          (?!\d)         # an *exact* multiple, not x * 3 + 1 or whatever.
+       )
+      |                  # or:
+       \G\d{3}           # after the last group, get three digits
+       (?=\d)            # but they have to have more digits after them.
+   )/$1,/xg;
 
 =head2 How can I translate tildes (~) in a filename?
 
@@ -501,34 +425,22 @@ best therefore to use glob() only in list context.
 
 Normally perl ignores trailing blanks in filenames, and interprets
 certain leading characters (or a trailing "|") to mean something
-special.  To avoid this, you might want to use a routine like the one below.
-It turns incomplete pathnames into explicit relative ones, and tacks a
-trailing null byte on the name to make perl leave it alone:
+special. 
 
-    sub safe_filename {
-	local $_  = shift;
-        s#^([^./])#./$1#;
-        $_ .= "\0";
-	return $_;
-    }
+The three argument form of open() lets you specify the mode
+separately from the filename.  The open() function treats
+special mode characters and whitespace in the filename as 
+literals
 
-    $badpath = "<<<something really wicked   ";
-    $fn = safe_filename($badpath");
-    open(FH, "> $fn") or "couldn't open $badpath: $!";
+	open FILE, "<", "  file  ";  # filename is "   file   "
+	open FILE, ">", ">file";     # filename is ">file"
 
-This assumes that you are using POSIX (portable operating systems
-interface) paths.  If you are on a closed, non-portable, proprietary
-system, you may have to adjust the C<"./"> above.
-
-It would be a lot clearer to use sysopen(), though:
+It may be a lot clearer to use sysopen(), though:
 
     use Fcntl;
     $badpath = "<<<something really wicked   ";
     sysopen (FH, $badpath, O_WRONLY | O_CREAT | O_TRUNC)
 	or die "can't open $badpath: $!";
-
-For more information, see also the new L<perlopentut> if you have it
-(new for 5.6).
 
 =head2 How can I reliably rename a file?
 
@@ -688,14 +600,17 @@ Don't forget them or you'll be quite sorry.
 
 =head2 How do I get a file's timestamp in perl?
 
-If you want to retrieve the time at which the file was last read,
-written, or had its meta-data (owner, etc) changed, you use the B<-M>,
-B<-A>, or B<-C> file test operations as documented in L<perlfunc>.  These
-retrieve the age of the file (measured against the start-time of your
-program) in days as a floating point number.  To retrieve the "raw"
-time in seconds since the epoch, you would call the stat function,
-then use localtime(), gmtime(), or POSIX::strftime() to convert this
-into human-readable form.
+If you want to retrieve the time at which the file was last
+read, written, or had its meta-data (owner, etc) changed,
+you use the B<-M>, B<-A>, or B<-C> file test operations as
+documented in L<perlfunc>.  These retrieve the age of the
+file (measured against the start-time of your program) in
+days as a floating point number. Some platforms may not have
+all of these times.  See L<perlport> for details. To
+retrieve the "raw" time in seconds since the epoch, you
+would call the stat function, then use localtime(),
+gmtime(), or POSIX::strftime() to convert this into
+human-readable form.
 
 Here's an example:
 
@@ -780,27 +695,14 @@ you see someone do this:
 
     @lines = <INPUT>;
 
-you should think long and hard about why you need everything loaded
-at once.  It's just not a scalable solution.  You might also find it
-more fun to use the standard DB_File module's $DB_RECNO bindings,
-which allow you to tie an array to a file so that accessing an element
-the array actually accesses the corresponding line in the file.
+you should think long and hard about why you need everything loaded at
+once.  It's just not a scalable solution.  You might also find it more
+fun to use the standard Tie::File module, or the DB_File module's
+$DB_RECNO bindings, which allow you to tie an array to a file so that
+accessing an element the array actually accesses the corresponding
+line in the file.
 
-On very rare occasion, you may have an algorithm that demands that
-the entire file be in memory at once as one scalar.  The simplest solution
-to that is
-
-    $var = `cat $file`;
-
-Being in scalar context, you get the whole thing.  In list context,
-you'd get a list of all the lines:
-
-    @lines = `cat $file`;
-
-This tiny but expedient solution is neat, clean, and portable to
-all systems on which decent tools have been installed.  For those
-who prefer not to use the toolbox, you can of course read the file
-manually, although this makes for more complicated code.
+You can read the entire filehandle contents into a scalar.
 
     {
 	local(*INPUT, $/);
@@ -812,6 +714,13 @@ That temporarily undefs your record separator, and will automatically
 close the file at block exit.  If the file is already open, just use this:
 
     $var = do { local $/; <INPUT> };
+
+For ordinary files you can also use the read function.
+
+	read( INPUT, $var, -s INPUT );
+
+The third argument tests the byte size of the data on the INPUT filehandle
+and reads that many bytes into the buffer $var.
 
 =head2 How can I read in a file by paragraphs?
 
@@ -1021,7 +930,7 @@ Or, just use the fdopen(3S) feature of open():
 	close F;
     }
 
-=head2 Why can't I use "C:\temp\foo" in DOS paths?  What doesn't `C:\temp\foo.exe` work?
+=head2 Why can't I use "C:\temp\foo" in DOS paths?  Why doesn't `C:\temp\foo.exe` work?
 
 Whoops!  You just put a tab and a formfeed into that filename!
 Remember that within double quoted strings ("like\this"), the

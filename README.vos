@@ -16,11 +16,11 @@ books on Perl.
 These are instructions for building Perl from source.  Most people can
 simply download a pre-compiled distribution from the VOS anonymous FTP
 site.  If you are running VOS Release 14.2.0 or earlier, download Perl
-from ftp://ftp.stratus.com/pub/vos/posix/alpha/alpha.html.  If you are
+from ftp://ftp.stratus.com/pub/vos/posix/alpha/alpha.html  If you are
 running VOS Release 14.3.0 or later, download Perl from
-ftp://ftp.stratus.com/pub/vos/posix/ga/ga.html.  Instructions for
+ftp://ftp.stratus.com/pub/vos/posix/ga/ga.html  Instructions for
 unbundling the Perl distribution file are at
-ftp://ftp.stratus.com/pub/vos/utility/utility.html.
+ftp://ftp.stratus.com/pub/vos/utility/utility.html
 
 If you are running VOS Release 14.4.1 or later, you can obtain a
 pre-compiled, supported copy of perl by purchasing Release 2.0.1
@@ -44,7 +44,7 @@ using the VOS Standard C Cross-compiler.  You must build perl on
 VOS Release 14.1.0 (or later) on an XA/R or Continuum platform.
 
 This version of perl is properly called "miniperl" because it
-does not contain the full perl functionality.
+does not contain the complete perl functionality.
 
 You must build perl with the compile_perl.cm command macro found
 in the vos subdirectory.
@@ -58,7 +58,7 @@ perl on VOS Release 14.1.0 (or later) on an XA/R or Continuum
 platform.
 
 This version of perl is properly called "miniperl" because it
-does not contain the full perl functionality.
+does not contain the complete perl functionality.
 
 You must build perl with the compile_perl.cm command macro found
 in the vos subdirectory.
@@ -73,7 +73,7 @@ on VOS Release 14.1.0 (or later) on an XA/R or Continuum
 platform.
 
 This version of perl is properly called "miniperl" because it
-does not contain the full perl functionality.
+does not contain the complete perl functionality.
 
 You must build perl with the compile_perl.cm command macro found
 in the vos subdirectory.
@@ -81,14 +81,14 @@ in the vos subdirectory.
 =item 4
 
 If you have a Stratus Continuum (PARISC-based) platform that is
-running VOS Release 14.3.0 through VOS Release 14.4.0, you must
+running VOS Release 14.3.0 through VOS Release 14.4.1, you must
 build perl using the generally-available version of VOS POSIX
 support, and using either the VOS Standard C compiler or the VOS
 GNU C compiler.  You must build perl on VOS Release 14.3.0 (or
 later) on a Continuum platform.
 
 This version of perl is properly called "miniperl" because it
-does not contain the full perl functionality.
+does not contain the complete perl functionality.
 
 You must build perl with the compile_perl.cm command macro found
 in the vos subdirectory.
@@ -96,17 +96,17 @@ in the vos subdirectory.
 =item 5
 
 If you have a Stratus Continuum (PA-RISC-based) platform that is
-running VOS Release 14.4.1 or later, you must build perl using
-the generally-available version of VOS POSIX support.  You must
-use the VOS GNU C compiler and the VOS GNU Tools product.  You
-must build perl on VOS Release 14.4.1 (or later) on a Continuum
-platform.
+running VOS Release 14.5.0 or later, you can either use the
+previous method to build "miniperl" or you can build "full
+perl", which contains the complete functionality of perl.  I
+strongly recommend that you build full perl.  To build full
+perl, you must use the generally-available version of VOS POSIX
+support.  You must use the VOS GNU C compiler and the VOS GNU
+C/C++ and GNU Tools Release 2.0.1 product.  You must build full
+perl on VOS Release 14.5.0 (or later) on a Continuum platform.
 
-This version of perl is properly called "full perl" because it
-contains the full perl functionality.
-
-You must use the supplied Configure script and makefiles to build
-perl.
+You must build full perl with the compile_full_perl.cm command
+macro found in the vos subdirectory.
 
 =back
 
@@ -115,7 +115,7 @@ perl.
 Note that there are two different implementations of POSIX.1
 support on VOS.  There is an alpha version of POSIX that is
 available from the Stratus anonymous ftp site
-(ftp://ftp.stratus.com/pub/vos/posix/alpha/alpha.html).  There
+( ftp://ftp.stratus.com/pub/vos/posix/alpha/alpha.html ).  There
 is a generally-available version of POSIX that comes with VOS
 Release 14.3.0 or higher.  This port of POSIX will compile and
 bind with either version of POSIX.
@@ -169,7 +169,7 @@ binary file-transfer mode.  Or use the Uniform Resource
 Locator (URL)
 ftp://ftp.stratus.com/pub/vos/posix/alpha/posix.save.evf.gz from
 your web browser.  Instructions for unbundling this file
-are at ftp://ftp.stratus.com/pub/vos/utility/utility.html.
+are at ftp://ftp.stratus.com/pub/vos/utility/utility.html
 This is not a standard Stratus product.
 
 In VOS Release 14.3.0, the generally-available version of
@@ -223,20 +223,11 @@ execute on the PA7100, PA8000, PA8500 and PA8600 processors, and
 that code compiled for the pa8000 processor type can execute on
 the PA8000, PA8500 and PA8600 processors.
 
-To build perl using the supplied Configure script and makefiles,
-execute the following commands.
-
-     !add_library_path command >system>gnu_library>bin -after '(current_dir)'
-     !bash
-          gzip -d perl-5.8.0.tar.gz
-          tar -xvf perl-5.8.0.tar
-          cd perl-5.8.0
-          Configure -d
-          gmake
-
-If you wish to run the test cases, type:
-
-          gmake test
+To build full perl using the supplied Configure script and
+makefiles, change to the "vos" subdirectory and type the command
+"compile_full_perl" or "start_process compile_full_perl".  This
+will configure, build, and test perl.  All of the test cases
+that are executed should pass.
 
 =head2 Installing Perl 5 on VOS
 
@@ -245,7 +236,7 @@ If you wish to run the test cases, type:
 =item 1
 
 If you have built perl using the Configure script, ensure that
-you have modify permission to >system>ported and type
+you have modify permission to C<< >system>ported >> and type
 
      gmake install
 
@@ -325,6 +316,22 @@ supported epoch is January 1, 1980 to January 17, 2038.
 See the file pod/perlport.pod for more information about the VOS
 port of Perl.
 
+=head2 Handling of underflow and overflow
+
+VOS does not support automatically mapping overflowed
+floating-point values to +infinity, nor automatically mapping
+underflowed floating-point values to -infinity, unlike many
+other platforms.  The Perl pack function has been modified to
+perform such mapping in software on VOS.  Performing other
+floating-point computations that underflow or overflow will
+probably result in SIGFPE.  Don't push your luck.
+
+=head1 TEST STATUS
+
+When Perl is built using the native build process on VOS Release
+14.5.0 and GNU C++/GNU Tools 2.0.1, all attempted tests either
+pass or result in TODO (ignored) failures.
+
 =head1 SUPPORT STATUS
 
 I'm offering this port "as is".  You can ask me questions, but I
@@ -343,6 +350,6 @@ Paul Green (Paul.Green@stratus.com)
 
 =head1 LAST UPDATE
 
-February 15, 2001
+May 13, 2002
 
 =cut

@@ -25,6 +25,12 @@
 #  include <locale.h>
 #endif
 
+#ifdef I_LANGINFO
+#   include <langinfo.h>
+#endif
+
+#include "reentr.h"
+
 /*
  * Standardize the locale name from a string returned by 'setlocale'.
  *
@@ -212,7 +218,7 @@ Perl_new_collate(pTHX_ char *newcoll)
 	  SSize_t mult = fb - fa;
 	  if (mult < 1)
 	      Perl_croak(aTHX_ "strxfrm() gets absurd");
-	  PL_collxfrm_base = (fa > mult) ? (fa - mult) : 0;
+	  PL_collxfrm_base = (fa > (Size_t)mult) ? (fa - mult) : 0;
 	  PL_collxfrm_mult = mult;
 	}
     }
@@ -462,9 +468,46 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
 #ifdef USE_LOCALE_NUMERIC
     new_numeric(curnum);
 #endif /* USE_LOCALE_NUMERIC */
+
     }
 
 #endif /* USE_LOCALE */
+
+    {
+	 bool wantutf8 = FALSE;
+	 char *codeset = NULL;
+#if defined(HAS_NL_LANGINFO) && defined(CODESET)
+	 codeset = nl_langinfo(CODESET);
+#endif
+	 if (codeset &&
+	     (ibcmp(codeset,  "UTF-8", 5) == 0 ||
+	      ibcmp(codeset,  "UTF8",  4) == 0))
+	      wantutf8 = TRUE;
+#if defined(USE_LOCALE)
+#ifdef __GLIBC__
+	 if (!wantutf8 && language &&
+	     (ibcmp(language, "UTF-8", 5) == 0 ||
+	      ibcmp(language, "UTF8",  4) == 0))
+	      wantutf8 = TRUE;
+#endif
+	 if (!wantutf8 && lc_all &&
+	     (ibcmp(lc_all,   "UTF-8", 5) == 0 ||
+	      ibcmp(lc_all,   "UTF8",  4) == 0))
+	      wantutf8 = TRUE;
+#ifdef USE_LOCALE_CTYPE
+	 if (!wantutf8 && curctype &&
+	     (ibcmp(curctype,     "UTF-8", 5) == 0 ||
+	      ibcmp(curctype,     "UTF8",  4) == 0))
+	      wantutf8 = TRUE;
+#endif
+	 if (!wantutf8 && lang &&
+	     (ibcmp(lang,     "UTF-8", 5) == 0 ||
+	      ibcmp(lang,     "UTF8",  4) == 0))
+	      wantutf8 = TRUE;
+#endif /* USE_LOCALE */
+	 if (wantutf8)
+	      PL_wantutf8 = TRUE;
+    }
 
 #ifdef USE_LOCALE_CTYPE
     if (curctype != NULL)
@@ -520,7 +563,7 @@ Perl_mem_collxfrm(pTHX_ const char *s, STRLEN len, STRLEN *xlen)
 	    xused = strxfrm(xbuf + xout, s + xin, xAlloc - xout);
 	    if (xused == -1)
 		goto bad;
-	    if (xused < xAlloc - xout)
+	    if ((STRLEN)xused < xAlloc - xout)
 		break;
 	    xAlloc = (2 * xAlloc) + 1;
 	    Renew(xbuf, xAlloc, char);

@@ -9,7 +9,6 @@
  * 20-Aug-1999 revisions by Charles Bailey  bailey@newman.upenn.edu
  */
 
-#include <accdef.h>
 #include <acedef.h>
 #include <acldef.h>
 #include <armdef.h>
@@ -105,6 +104,12 @@ struct itmlst_3 {
 
 /* see system service docs for $TRNLNM -- NOT the same as LNM$_MAX_INDEX */
 #define PERL_LNM_MAX_ALLOWED_INDEX 127
+
+/* OpenVMS User's Guide says at least 9 iterative translations will be performed,
+ * depending on the facility.  SHOW LOGICAL does 10, so we'll imitate that for
+ * the Perl facility.
+ */
+#define PERL_LNM_MAX_ITER 10
 
 #define MAX_DCL_SYMBOL              255     /* well, what *we* can set, at least*/
 #define MAX_DCL_LINE_LENGTH        (4*MAX_DCL_SYMBOL-4)
@@ -230,11 +235,11 @@ Perl_vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
 	      if (thr && PL_curcop) {
 #endif
 		if (ckWARN(WARN_MISC)) {
-		  Perl_warner(aTHX_ WARN_MISC,"Value of CLI symbol \"%s\" too long",lnm);
+		  Perl_warner(aTHX_ packWARN(WARN_MISC),"Value of CLI symbol \"%s\" too long",lnm);
 		}
 #if defined(USE_5005THREADS)
 	      } else {
-		  Perl_warner(aTHX_ WARN_MISC,"Value of CLI symbol \"%s\" too long",lnm);
+		  Perl_warner(aTHX_ packWARN(WARN_MISC),"Value of CLI symbol \"%s\" too long",lnm);
 	      }
 #endif
 	      
@@ -494,7 +499,7 @@ prime_env_iter(void)
       for (j = 0; environ[j]; j++) { 
         if (!(start = strchr(environ[j],'='))) {
           if (ckWARN(WARN_INTERNAL)) 
-            Perl_warner(aTHX_ WARN_INTERNAL,"Ill-formed CRTL environ value \"%s\"\n",environ[j]);
+            Perl_warner(aTHX_ packWARN(WARN_INTERNAL),"Ill-formed CRTL environ value \"%s\"\n",environ[j]);
         }
         else {
           start++;
@@ -564,7 +569,7 @@ prime_env_iter(void)
         continue;
       }
       if (sts == SS$_BUFFEROVF && ckWARN(WARN_INTERNAL))
-        Perl_warner(aTHX_ WARN_INTERNAL,"Buffer overflow in prime_env_iter: %s",buf);
+        Perl_warner(aTHX_ packWARN(WARN_INTERNAL),"Buffer overflow in prime_env_iter: %s",buf);
 
       for (cp1 = buf; *cp1 && isspace(*cp1); cp1++) ;
       if (*cp1 == '(' || /* Logical name table name */
@@ -585,7 +590,7 @@ prime_env_iter(void)
         cp1--;  /* stop on last non-space char */
       }
       if ((!keylen || (cp1 - cp2 < -1)) && ckWARN(WARN_INTERNAL)) {
-        Perl_warner(aTHX_ WARN_INTERNAL,"Ill-formed message in prime_env_iter: |%s|",buf);
+        Perl_warner(aTHX_ packWARN(WARN_INTERNAL),"Ill-formed message in prime_env_iter: |%s|",buf);
         continue;
       }
       PERL_HASH(hash,key,keylen);
@@ -661,7 +666,7 @@ Perl_vmssetenv(pTHX_ char *lnm, char *eqv, struct dsc$descriptor_s **tabvec)
           ivenv = 1; retsts = SS$_NOLOGNAM;
 #else
               if (ckWARN(WARN_INTERNAL))
-                Perl_warner(aTHX_ WARN_INTERNAL,"This Perl can't reset CRTL environ elements (%s)",lnm);
+                Perl_warner(aTHX_ packWARN(WARN_INTERNAL),"This Perl can't reset CRTL environ elements (%s)",lnm);
               ivenv = 1; retsts = SS$_NOSUCHPGM;
               break;
             }
@@ -696,7 +701,7 @@ Perl_vmssetenv(pTHX_ char *lnm, char *eqv, struct dsc$descriptor_s **tabvec)
         return setenv(lnm,eqv,1) ? vaxc$errno : 0;
 #else
         if (ckWARN(WARN_INTERNAL))
-          Perl_warner(aTHX_ WARN_INTERNAL,"This Perl can't set CRTL environ elements (%s=%s)",lnm,eqv);
+          Perl_warner(aTHX_ packWARN(WARN_INTERNAL),"This Perl can't set CRTL environ elements (%s=%s)",lnm,eqv);
         retsts = SS$_NOSUCHPGM;
 #endif
       }
@@ -718,7 +723,7 @@ Perl_vmssetenv(pTHX_ char *lnm, char *eqv, struct dsc$descriptor_s **tabvec)
 	  if (eqvdsc.dsc$w_length > LNM$C_NAMLENGTH) {
 	    eqvdsc.dsc$w_length = LNM$C_NAMLENGTH;
 	    if (ckWARN(WARN_MISC)) {
-	      Perl_warner(aTHX_ WARN_MISC,"Value of logical \"%s\" too long. Truncating to %i bytes",lnm, LNM$C_NAMLENGTH);
+	      Perl_warner(aTHX_ packWARN(WARN_MISC),"Value of logical \"%s\" too long. Truncating to %i bytes",lnm, LNM$C_NAMLENGTH);
 	    }
 	  }
           retsts = lib$set_logical(&lnmdsc,&eqvdsc,tabvec[0],0,0);
@@ -789,7 +794,7 @@ Perl_my_setenv(pTHX_ char *lnm,char *eqv)
 }
 /*}}}*/
 
-/*{{{static void vmssetuserlnm(char *name, char *eqv);
+/*{{{static void vmssetuserlnm(char *name, char *eqv); */
 /*  vmssetuserlnm
  *  sets a user-mode logical in the process logical name table
  *  used for redirection of sys$error
@@ -1096,13 +1101,18 @@ Perl_my_sigaction (pTHX_ int sig, const struct sigaction* act,
 #ifdef KILL_BY_SIGPRC
 #include <errnodef.h>
 
-/* okay, this is some BLATENT hackery ... 
-   we use this if the kill() in the CRTL uses sys$forcex, causing the
+/* We implement our own kill() using the undocumented system service
+   sys$sigprc for one of two reasons:
+
+   1.) If the kill() in an older CRTL uses sys$forcex, causing the
    target process to do a sys$exit, which usually can't be handled 
    gracefully...certainly not by Perl and the %SIG{} mechanism.
 
-   Instead we use the (undocumented) system service sys$sigprc.
-   It has the same parameters as sys$forcex, but throws an exception
+   2.) If the kill() in the CRTL can't be called from a signal
+   handler without disappearing into the ether, i.e., the signal
+   it purportedly sends is never trapped. Still true as of VMS 7.3.
+
+   sys$sigprc has the same parameters as sys$forcex, but throws an exception
    in the target process rather than calling sys$exit.
 
    Note that distinguishing SIGSEGV from SIGBUS requires an extra arg
@@ -1336,6 +1346,18 @@ struct exit_control_block
     unsigned long int exit_status;
 }; 
 
+typedef struct _closed_pipes    Xpipe;
+typedef struct _closed_pipes*  pXpipe;
+
+struct _closed_pipes {
+    int             pid;            /* PID of subprocess */
+    unsigned long   completion;     /* termination status of subprocess */
+};
+#define NKEEPCLOSED 50
+static Xpipe closed_list[NKEEPCLOSED];
+static int   closed_index = 0;
+static int   closed_num = 0;
+
 #define RETRY_DELAY     "0 ::0.20"
 #define MAX_RETRY              50
 
@@ -1471,6 +1493,15 @@ popen_completion_ast(pInfo info)
 {
   pInfo i = open_pipes;
   int iss;
+  pXpipe x;
+
+  info->completion &= 0x0FFFFFFF; /* strip off "control" field */
+  closed_list[closed_index].pid = info->pid;
+  closed_list[closed_index].completion = info->completion;
+  closed_index++;
+  if (closed_index == NKEEPCLOSED) 
+    closed_index = 0;
+  closed_num++;
 
   while (i) {
     if (i == info) break;
@@ -1478,7 +1509,6 @@ popen_completion_ast(pInfo info)
   }
   if (!i) return;       /* unlinked, probably freed too */
 
-  info->completion &= 0x0FFFFFFF; /* strip off "control" field */
   info->done = TRUE;
 
 /*
@@ -2195,7 +2225,7 @@ static PerlIO *
 safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
 {
     static int handler_set_up = FALSE;
-    unsigned long int sts, flags=1;  /* nowait - gnu c doesn't allow &1 */
+    unsigned long int sts, flags = CLI$M_NOWAIT;
     unsigned int table = LIB$K_CLI_GLOBAL_SYM;
     int j, wait = 0;
     char *p, mode[10], symbol[MAX_DCL_SYMBOL+1], *vmspipe;
@@ -2253,7 +2283,7 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
         tpipe = vmspipe_tempfile(aTHX);
         if (!tpipe) {       /* a fish popular in Boston */
             if (ckWARN(WARN_PIPE)) {
-                Perl_warner(aTHX_ WARN_PIPE,"unable to find VMSPIPE.COM for i/o piping");
+                Perl_warner(aTHX_ packWARN(WARN_PIPE),"unable to find VMSPIPE.COM for i/o piping");
             }
         return Nullfp;
         }
@@ -2284,7 +2314,7 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
       }
       set_vaxc_errno(sts);
       if (*mode != 'n' && ckWARN(WARN_PIPE)) {
-        Perl_warner(aTHX_ WARN_PIPE,"Can't pipe \"%*s\": %s", strlen(cmd), cmd, Strerror(errno));
+        Perl_warner(aTHX_ packWARN(WARN_PIPE),"Can't pipe \"%*s\": %s", strlen(cmd), cmd, Strerror(errno));
       }
       *psts = sts;
       return Nullfp; 
@@ -2466,7 +2496,11 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
     info->next=open_pipes;  /* prepend to list */
     open_pipes=info;
     _ckvmssts(sys$setast(1));
-    _ckvmssts(lib$spawn(&vmspipedsc, &nl_desc, &nl_desc, &flags,
+    /* Omit arg 2 (input file) so the child will get the parent's SYS$INPUT
+     * and SYS$COMMAND.  vmspipe.com will redefine SYS$INPUT, but we'll still
+     * have SYS$COMMAND if we need it.
+     */
+    _ckvmssts(lib$spawn(&vmspipedsc, 0, &nl_desc, &flags,
                       0, &info->pid, &info->completion,
                       0, popen_completion_ast,info,0,0,0));
 
@@ -2634,6 +2668,7 @@ Perl_my_waitpid(pTHX_ Pid_t pid, int *statusp, int flags)
     pInfo info;
     int done;
     int sts;
+    int j;
     
     if (statusp) *statusp = 0;
     
@@ -2651,9 +2686,18 @@ Perl_my_waitpid(pTHX_ Pid_t pid, int *statusp, int flags)
 
       if (statusp) *statusp = info->completion;
       return pid;
-
     }
-    else {  /* this child is not one of our own pipe children */
+
+    /* child that already terminated? */
+
+    for (j = 0; j < NKEEPCLOSED && j < closed_num; j++) {
+        if (closed_list[j].pid == pid) {
+            if (statusp) *statusp = closed_list[j].completion;
+            return pid;
+        }
+    }
+
+    /* fall through if this child is not one of our own pipe children */
 
 #if defined(__CRTL_VER) && __CRTL_VER >= 70100322
 
@@ -2676,22 +2720,16 @@ Perl_my_waitpid(pTHX_ Pid_t pid, int *statusp, int flags)
 
 #endif /* defined(__CRTL_VER) && __CRTL_VER >= 70100322 */
 
+    {
       $DESCRIPTOR(intdsc,"0 00:00:01");
       unsigned long int ownercode = JPI$_OWNER, ownerpid;
       unsigned long int pidcode = JPI$_PID, mypid;
       unsigned long int interval[2];
-      int termination_mbu = 0;
-      unsigned short qio_iosb[4];
       unsigned int jpi_iosb[2];
-      struct itmlst_3 jpilist[3] = { 
+      struct itmlst_3 jpilist[2] = { 
           {sizeof(ownerpid),        JPI$_OWNER, &ownerpid,        0},
-          {sizeof(termination_mbu), JPI$_TMBU,  &termination_mbu, 0},
           {                      0,         0,                 0, 0} 
       };
-      char trmmbx[NAM$C_DVI+1];
-      $DESCRIPTOR(trmmbxdsc,trmmbx);
-      struct accdef trmmsg;
-      unsigned short int mbxchan;
 
       if (pid <= 0) {
         /* Sorry folks, we don't presently implement rooting around for 
@@ -2702,9 +2740,9 @@ Perl_my_waitpid(pTHX_ Pid_t pid, int *statusp, int flags)
         return -1;
       }
 
-      /* Get the owner of the child so I can warn if it's not mine, plus
-       * get the termination mailbox.  If the process doesn't exist or I
-       * don't have the privs to look at it, I can go home early.
+      /* Get the owner of the child so I can warn if it's not mine. If the 
+       * process doesn't exist or I don't have the privs to look at it, 
+       * I can go home early.
        */
       sts = sys$getjpiw(0,&pid,NULL,&jpilist,&jpi_iosb,NULL,NULL);
       if (sts & 1) sts = jpi_iosb[0];
@@ -2727,63 +2765,23 @@ Perl_my_waitpid(pTHX_ Pid_t pid, int *statusp, int flags)
         /* remind folks they are asking for non-standard waitpid behavior */
         _ckvmssts(lib$getjpi(&pidcode,0,0,&mypid,0,0));
         if (ownerpid != mypid)
-          Perl_warner(aTHX_ WARN_EXEC,
+          Perl_warner(aTHX_ packWARN(WARN_EXEC),
                       "waitpid: process %x is not a child of process %x",
                       pid,mypid);
       }
 
-      /* It's possible to have a mailbox unit number but no actual mailbox; we 
-       * check for this by assigning a channel to it, which we need anyway.
-       */
-      if (termination_mbu != 0) {
-          sprintf(trmmbx, "MBA%d:", termination_mbu);
-          trmmbxdsc.dsc$w_length = strlen(trmmbx);
-          sts = sys$assign(&trmmbxdsc, &mbxchan, 0, 0);
-          if (sts == SS$_NOSUCHDEV) {
-              termination_mbu = 0; /* set up to take "no mailbox" case */
-              sts = SS$_NORMAL;
-          }
-          _ckvmssts(sts);
-      }
-      /* If the process doesn't have a termination mailbox, then simply check
-       * on it once a second until it's not there anymore.
-       */
-      if (termination_mbu == 0) {
-          _ckvmssts(sys$bintim(&intdsc,interval));
-          while ((sts=lib$getjpi(&ownercode,&pid,0,&ownerpid,0,0)) & 1) {
+      /* simply check on it once a second until it's not there anymore. */
+
+      _ckvmssts(sys$bintim(&intdsc,interval));
+      while ((sts=lib$getjpi(&ownercode,&pid,0,&ownerpid,0,0)) & 1) {
             _ckvmssts(sys$schdwk(0,0,interval,0));
             _ckvmssts(sys$hiber());
-          }
-          if (sts == SS$_NONEXPR) sts = SS$_NORMAL;
-      } 
-      else {
-        /* If we do have a termination mailbox, post reads to it until we get a
-         * termination message, discarding messages of the wrong type or for other
-         * processes.  If there is a place to put the final status, then do so.
-         */
-          sts = SS$_NORMAL;
-          while (sts & 1) {
-              memset((void *) &trmmsg, 0, sizeof(trmmsg));
-              sts = sys$qiow(0,mbxchan,IO$_READVBLK,&qio_iosb,0,0,
-                             &trmmsg,ACC$K_TERMLEN,0,0,0,0);
-              if (sts & 1) sts = qio_iosb[0];
-
-              if ( sts & 1 
-                   && trmmsg.acc$w_msgtyp == MSG$_DELPROC 
-                   && trmmsg.acc$l_pid == pid ) {
-
-                  if (statusp) *statusp = trmmsg.acc$l_finalsts;
-                  sts = sys$dassgn(mbxchan);
-                  break;
-              }
-          }
-      } /* termination_mbu ? */
+      }
+      if (sts == SS$_NONEXPR) sts = SS$_NORMAL;
 
       _ckvmssts(sts);
       return pid;
-
-    } /* else one of our own pipe children */
-                    
+    }
 }  /* end of waitpid() */
 /*}}}*/
 /*}}}*/
@@ -3015,6 +3013,7 @@ static char *mp_do_fileify_dirspec(pTHX_ char *dir,char *buf,int ts)
     unsigned long int dirlen, retlen, addmfd = 0, hasfilename = 0;
     char *retspec, *cp1, *cp2, *lastdir;
     char trndir[NAM$C_MAXRSS+2], vmsdir[NAM$C_MAXRSS+1];
+    unsigned short int trnlnm_iter_count;
 
     if (!dir || !*dir) {
       set_errno(EINVAL); set_vaxc_errno(SS$_BADPARAM); return NULL;
@@ -3031,7 +3030,11 @@ static char *mp_do_fileify_dirspec(pTHX_ char *dir,char *buf,int ts)
     }
     if (!strpbrk(dir+1,"/]>:")) {
       strcpy(trndir,*dir == '/' ? dir + 1: dir);
-      while (!strpbrk(trndir,"/]>:>") && my_trnlnm(trndir,trndir,0)) ;
+      trnlnm_iter_count = 0;
+      while (!strpbrk(trndir,"/]>:>") && my_trnlnm(trndir,trndir,0)) {
+        trnlnm_iter_count++; 
+        if (trnlnm_iter_count >= PERL_LNM_MAX_ITER) break;
+      }
       dir = trndir;
       dirlen = strlen(dir);
     }
@@ -3337,6 +3340,7 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
     static char __pathify_retbuf[NAM$C_MAXRSS+1];
     unsigned long int retlen;
     char *retpath, *cp1, *cp2, trndir[NAM$C_MAXRSS+1];
+    unsigned short int trnlnm_iter_count;
 
     if (!dir || !*dir) {
       set_errno(EINVAL); set_vaxc_errno(SS$_BADPARAM); return NULL;
@@ -3345,8 +3349,11 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
     if (*dir) strcpy(trndir,dir);
     else getcwd(trndir,sizeof trndir - 1);
 
+    trnlnm_iter_count = 0;
     while (!strpbrk(trndir,"/]:>") && !no_translate_barewords
 	   && my_trnlnm(trndir,trndir,0)) {
+      trnlnm_iter_count++; 
+      if (trnlnm_iter_count >= PERL_LNM_MAX_ITER) break;
       STRLEN trnlen = strlen(trndir);
 
       /* Trap simple rooted lnms, and return lnm:[000000] */
@@ -3523,6 +3530,7 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
   static char __tounixspec_retbuf[NAM$C_MAXRSS+1];
   char *dirend, *rslt, *cp1, *cp2, *cp3, tmp[NAM$C_MAXRSS+1];
   int devlen, dirlen, retlen = NAM$C_MAXRSS+1, expand = 0;
+  unsigned short int trnlnm_iter_count;
 
   if (spec == NULL) return NULL;
   if (strlen(spec) > NAM$C_MAXRSS) return NULL;
@@ -3569,11 +3577,14 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
         if (ts) Safefree(rslt);
         return NULL;
       }
+      trnlnm_iter_count = 0;
       do {
         cp3 = tmp;
         while (*cp3 != ':' && *cp3) cp3++;
         *(cp3++) = '\0';
         if (strchr(cp3,']') != NULL) break;
+        trnlnm_iter_count++; 
+        if (trnlnm_iter_count >= PERL_LNM_MAX_ITER+1) break;
       } while (vmstrnenv(tmp,tmp,0,fildev,0));
       if (ts && !buf &&
           ((devlen = strlen(tmp)) + (dirlen = strlen(cp2)) + 1 > retlen)) {
@@ -3894,7 +3905,7 @@ static void mp_expand_wild_cards(pTHX_ char *item,
 				struct list_item **tail,
 				int *count);
 
-static int background_process(int argc, char **argv);
+static int background_process(pTHX_ int argc, char **argv);
 
 static void pipe_and_fork(pTHX_ char **cmargv);
 
@@ -3944,11 +3955,11 @@ mp_getredirection(pTHX_ int *ac, char ***av)
      */
     ap = argv[argc-1];
     if (0 == strcmp("&", ap))
-	exit(background_process(--argc, argv));
+       exit(background_process(aTHX_ --argc, argv));
     if (*ap && '&' == ap[strlen(ap)-1])
 	{
 	ap[strlen(ap)-1] = '\0';
-	exit(background_process(argc, argv));
+       exit(background_process(aTHX_ argc, argv));
 	}
     /*
      * Now we handle the general redirection cases that involve '>', '>>',
@@ -4344,7 +4355,7 @@ pipe_and_fork(pTHX_ char **cmargv)
 	}
 }
 
-static int background_process(int argc, char **argv)
+static int background_process(pTHX_ int argc, char **argv)
 {
 char command[2048] = "$";
 $DESCRIPTOR(value, "");
@@ -5221,7 +5232,7 @@ Perl_vms_do_exec(pTHX_ char *cmd)
     }
     set_vaxc_errno(retsts);
     if (ckWARN(WARN_EXEC)) {
-      Perl_warner(aTHX_ WARN_EXEC,"Can't exec \"%*s\": %s",
+      Perl_warner(aTHX_ packWARN(WARN_EXEC),"Can't exec \"%*s\": %s",
              vmscmd->dsc$w_length, vmscmd->dsc$a_pointer, Strerror(errno));
     }
     vms_execfree(vmscmd);
@@ -5275,7 +5286,7 @@ Perl_do_spawn(pTHX_ char *cmd)
       }
       set_vaxc_errno(sts);
       if (ckWARN(WARN_EXEC)) {
-        Perl_warner(aTHX_ WARN_EXEC,"Can't spawn: %s",
+        Perl_warner(aTHX_ packWARN(WARN_EXEC),"Can't spawn: %s",
 		    Strerror(errno));
       }
     }
@@ -6577,7 +6588,7 @@ Perl_cando_by_name(pTHX_ I32 bit, Uid_t effective, char *fname)
          {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, usrname};
   char vmsname[NAM$C_MAXRSS+1], fileified[NAM$C_MAXRSS+1];
   unsigned long int objtyp = ACL$C_FILE, access, retsts, privused, iosb[2];
-  unsigned short int retlen;
+  unsigned short int retlen, trnlnm_iter_count;
   struct dsc$descriptor_s namdsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
   union prvdef curprv;
   struct itmlst_3 armlst[3] = {{sizeof access, CHP$_ACCESS, &access, &retlen},
@@ -6593,7 +6604,11 @@ Perl_cando_by_name(pTHX_ I32 bit, Uid_t effective, char *fname)
   /* Make sure we expand logical names, since sys$check_access doesn't */
   if (!strpbrk(fname,"/]>:")) {
     strcpy(fileified,fname);
-    while (!strpbrk(fileified,"/]>:>") && my_trnlnm(fileified,fileified,0)) ;
+    trnlnm_iter_count = 0;
+    while (!strpbrk(fileified,"/]>:>") && my_trnlnm(fileified,fileified,0)) {
+        trnlnm_iter_count++; 
+        if (trnlnm_iter_count >= PERL_LNM_MAX_ITER) break;
+    }
     fname = fileified;
   }
   if (!do_tovmsspec(fname,vmsname,1)) return FALSE;
@@ -6701,8 +6716,10 @@ Perl_flex_stat(pTHX_ const char *fspec, Stat_t *statbufp)
     char fileified[NAM$C_MAXRSS+1];
     char temp_fspec[NAM$C_MAXRSS+300];
     int retval = -1;
+    int saved_errno, saved_vaxc_errno;
 
     if (!fspec) return retval;
+    saved_errno = errno; saved_vaxc_errno = vaxc$errno;
     strcpy(temp_fspec, fspec);
     if (statbufp == (Stat_t *) &PL_statcache)
       do_tovmsspec(temp_fspec,namecache,0);
@@ -6753,6 +6770,8 @@ Perl_flex_stat(pTHX_ const char *fspec, Stat_t *statbufp)
       }
 #     endif
     }
+    /* If we were successful, leave errno where we found it */
+    if (retval == 0) { errno = saved_errno; vaxc$errno = saved_vaxc_errno; }
     return retval;
 
 }  /* end of flex_stat() */

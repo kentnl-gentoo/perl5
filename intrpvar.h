@@ -487,7 +487,7 @@ PERLVAR(Iregex_pad,     SV**)		/* All regex objects */
 PERLVAR(Iregex_padav,   AV*)		/* All regex objects */
 
 #ifdef USE_REENTRANT_API
-PERLVAR(Ireentrant_buffer, REBUF*)	/* here we store the _r buffers */
+PERLVAR(Ireentrant_buffer, REENTR*)	/* here we store the _r buffers */
 #endif
 
 #endif
@@ -514,6 +514,13 @@ PERLVAR(IOpPtr,I32 **)
 PERLVARI(IOpSpace,I32,0)
 PERLVAR(IOpSlab,I32 *)
 #endif
+
+PERLVAR(Iwantutf8, bool)	/* want utf8 as the default discipline */
+
+PERLVAR(Iutf8_idstart,	SV *)
+PERLVAR(Iutf8_idcont,	SV *)
+
+PERLVAR(Isort_RealCmp,  SVCOMPARE_t)
 
 /* New variables must be added to the very end for binary compatibility.
  * XSUB.h provides wrapper functions via perlapi.h that make this

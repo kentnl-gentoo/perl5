@@ -8,7 +8,7 @@
 
 package B::Deparse;
 use Carp;
-use B qw(class main_root main_start main_cv svref_2object opnumber cstring
+use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 OPf_WANT OPf_WANT_VOID OPf_WANT_SCALAR OPf_WANT_LIST
 	 OPf_KIDS OPf_REF OPf_STACKED OPf_SPECIAL OPf_MOD
 	 OPpLVAL_INTRO OPpOUR_INTRO OPpENTERSUB_AMPER OPpSLICE OPpCONST_BARE
@@ -542,14 +542,14 @@ sub compile {
 	my $self = B::Deparse->new(@args);
 	# First deparse command-line args
 	if (defined $^I) { # deparse -i
-	    print q(BEGIN { $^I = ).cstring($^I).qq(; }\n);
+	    print q(BEGIN { $^I = ).perlstring($^I).qq(; }\n);
 	}
 	if ($^W) { # deparse -w
 	    print qq(BEGIN { \$^W = $^W; }\n);
 	}
 	if ($/ ne "\n" or defined $O::savebackslash) { # deparse -l and -0
-	    my $fs = cstring($/) || 'undef';
-	    my $bs = cstring($O::savebackslash) || 'undef';
+	    my $fs = perlstring($/) || 'undef';
+	    my $bs = perlstring($O::savebackslash) || 'undef';
 	    print qq(BEGIN { \$/ = $fs; \$\\ = $bs; }\n);
 	}
 	my @BEGINs  = B::begin_av->isa("B::AV") ? B::begin_av->ARRAY : ();
@@ -586,7 +586,7 @@ sub compile {
 sub coderef2text {
     my $self = shift;
     my $sub = shift;
-    croak "Usage: ->coderef2text(CODEREF)" unless ref($sub) eq "CODE";
+    croak "Usage: ->coderef2text(CODEREF)" unless UNIVERSAL::isa($sub, "CODE");
 
     $self->init();
     return $self->indent($self->deparse_sub(svref_2object($sub)));
@@ -1080,7 +1080,8 @@ sub gv_name {
 Carp::confess() if $gv->isa("B::CV");
     my $stash = $gv->STASH->NAME;
     my $name = $gv->SAFENAME;
-    if ($stash eq $self->{'curstash'} or $globalnames{$name}
+    if (($stash eq 'main' && $globalnames{$name})
+	or ($stash eq $self->{'curstash'} && !$globalnames{$name})
 	or $name =~ /^[^A-Za-z_]/)
     {
 	$stash = "";
@@ -1265,7 +1266,7 @@ sub declare_warnings {
     elsif (($to & WARN_MASK) eq "\0"x length($to)) {
 	return "no warnings;\n";
     }
-    return "BEGIN {\${^WARNING_BITS} = ".cstring($to)."}\n";
+    return "BEGIN {\${^WARNING_BITS} = ".perlstring($to)."}\n";
 }
 
 sub declare_hints {

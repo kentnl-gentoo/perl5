@@ -1,30 +1,24 @@
 #!./perl
-
-# $Id: freeze.t,v 1.0.1.1 2001/07/01 11:25:16 ram Exp $
 #
 #  Copyright (c) 1995-2000, Raphael Manfredi
 #  
 #  You may redistribute only under the same terms as Perl 5, as specified
 #  in the README file that comes with the distribution.
 #
-# $Log: freeze.t,v $
-# Revision 1.0.1.1  2001/07/01 11:25:16  ram
-# patch12: added test cases for mem corruption during thaw()
-#
-# Revision 1.0  2000/09/01 19:40:41  ram
-# Baseline for first official release.
-#
 
 sub BEGIN {
-    chdir('t') if -d 't';
-    @INC = '.'; 
-    push @INC, '../lib';
+    if ($ENV{PERL_CORE}){
+	chdir('t') if -d 't';
+	@INC = ('.', '../lib', '../ext/Storable/t');
+    } else {
+	unshift @INC, 't';
+    }
     require Config; import Config;
-    if ($Config{'extensions'} !~ /\bStorable\b/) {
+    if ($ENV{PERL_CORE} and $Config{'extensions'} !~ /\bStorable\b/) {
         print "1..0 # Skip: Storable was not built\n";
         exit 0;
     }
-    require 'lib/st-dump.pl';
+    require 'st-dump.pl';
     sub ok;
 }
 
@@ -142,4 +136,3 @@ ok 18, !$@;
 
 thaw $frozen;			# used to segfault here
 ok 19, 1;
-

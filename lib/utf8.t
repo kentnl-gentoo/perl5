@@ -1,10 +1,19 @@
 #!./perl 
 
+my $has_perlio;
+
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
+    unless ($has_perlio = find PerlIO::Layer 'perlio') {
+	print <<EOF;
+# Since you don't have perlio you might get failures with UTF-8 locales.
+EOF
+    }
 }
+
+no utf8; # Ironic, no?
 
 # NOTE!
 #
@@ -145,7 +154,7 @@ plan tests => 94;
              # Now we do the real byte sequences that are valid UTF8
              (map {
                ["the utf8 sequence for chr $_->[0]",
-                qq(\$a = "$_->[1]"; \$b = show \$a), qr/^>$_->[2]<$/],
+                qq{\$a = "$_->[1]"; \$b = show \$a}, qr/^>$_->[2]<$/],
                ["no utf8; for the utf8 sequence for chr $_->[0]",
                 qq(no utf8; \$a = "$_->[1]"; \$b = show \$a), qr/^>$_->[2]<$/],
                ["use utf8; for the utf8 sequence for chr $_->[0]",
@@ -159,12 +168,13 @@ plan tests => 94;
     use utf8; %a = ("\xE1\xA0"=>"sterling");
     print 'start'; printf '%x,', ord \$_ foreach keys %a; print "end\n";
 BANG
-	      qr/^Malformed UTF-8 character \(2 bytes, need 3.+\).*start\d+,end$/s
+	      qr/^Malformed UTF-8 character \(\d bytes?, need \d, .+\).*start\d+,end$/sm
 	     ],
             );
     foreach (@tests) {
         my ($why, $prog, $expect) = @$_;
         open P, ">$progfile" or die "Can't open '$progfile': $!";
+        binmode(P, ":bytes") if $has_perlio;
 	print P $show, $prog, '; print $b'
             or die "Print to 'progfile' failed: $!";
         close P or die "Can't close '$progfile': $!";

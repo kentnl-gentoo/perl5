@@ -357,6 +357,8 @@ void *emx_realloc (void *, size_t);
 
 #include <stdlib.h>	/* before the following definitions */
 #include <unistd.h>	/* before the following definitions */
+#include <fcntl.h>
+#include <sys/stat.h>
 
 #define chdir	_chdir2
 #define getcwd	_getcwd2
@@ -369,6 +371,26 @@ void *emx_realloc (void *, size_t);
 	(FILE_ptr(fp) > FILE_base(fp) && c == (int)*(FILE_ptr(fp) - 1) \
 	 ? (--FILE_ptr(fp), ++FILE_cnt(fp), (int)c) : ungetc(c,fp))
 #endif
+
+#define PERLIO_IS_BINMODE_FD(fd) _PERLIO_IS_BINMODE_FD(fd)
+
+#ifdef __GNUG__
+# define HAS_BOOL 
+#endif
+#ifndef HAS_BOOL
+# define bool char
+# define HAS_BOOL 1
+#endif
+
+#include <emx/io.h> /* for _fd_flags() prototype */
+
+static inline bool
+_PERLIO_IS_BINMODE_FD(int fd)
+{
+    int *pflags = _fd_flags(fd);
+
+    return pflags && (*pflags) & O_BINARY;
+}
 
 /* ctermid is missing from emx0.9d */
 char *ctermid(char *s);

@@ -15,15 +15,20 @@ my $Perl = which_perl();
 
 $Is_Amiga   = $^O eq 'amigaos';
 $Is_Cygwin  = $^O eq 'cygwin';
+$Is_Darwin  = $^O eq 'darwin';
 $Is_Dos     = $^O eq 'dos';
+$Is_MacOS   = $^O eq 'MacOS';
 $Is_MPE     = $^O eq 'mpeix';
 $Is_MSWin32 = $^O eq 'MSWin32';
 $Is_NetWare = $^O eq 'NetWare';
 $Is_OS2     = $^O eq 'os2';
 $Is_Solaris = $^O eq 'solaris';
 $Is_VMS     = $^O eq 'VMS';
+$Is_DGUX    = $^O eq 'dgux';
 
 $Is_Dosish  = $Is_Dos || $Is_OS2 || $Is_MSWin32 || $Is_NetWare || $Is_Cygwin;
+
+$Is_UFS     = $Is_Darwin && (() = `df -t ufs .`) == 2;
 
 my($DEV, $INO, $MODE, $NLINK, $UID, $GID, $RDEV, $SIZE,
    $ATIME, $MTIME, $CTIME, $BLKSIZE, $BLOCKS) = (0..12);
@@ -99,10 +104,12 @@ SKIP: {
         # no ctime concept $ctime is ALWAYS == $mtime
         # expect netware to be the same ...
         skip "No ctime concept on this OS", 2
-                                     if $Is_MSWin32;
+                                     if $Is_MSWin32 || 
+                                        ($Is_Darwin && $Is_UFS);
+
         if( !ok($mtime, 'hard link mtime') ||
             !isnt($mtime, $ctime, 'hard link ctime != mtime') ) {
-            print <<DIAG;
+            print STDERR <<DIAG;
 # Check if you are on a tmpfs of some sort.  Building in /tmp sometimes
 # has this problem.  Also building on the ClearCase VOBS filesystem may
 # cause this failure.
@@ -169,7 +176,7 @@ ok(-w $tmpfile,     '   -w');
 
 SKIP: {
     skip "-x simply determins if a file ends in an executable suffix", 1
-      if $Is_Dosish;
+      if $Is_Dosish || $Is_MacOS;
 
     ok(-x $tmpfile,     '   -x');
 }
@@ -200,20 +207,20 @@ unlink($tmpfile_link);
 ok(! -e $tmpfile_link,  '   -e on unlinked file');
 
 SKIP: {
-    skip "No character, socket or block special files", 3
+    skip "No character, socket or block special files", 6
       if $Is_MSWin32 || $Is_NetWare || $Is_Dos;
-    skip "/dev isn't available to test against", 3
+    skip "/dev isn't available to test against", 6
       unless -d '/dev' && -r '/dev' && -x '/dev';
 
     my $LS  = $Config{d_readlink} ? "ls -lL" : "ls -l";
     my $CMD = "$LS /dev 2>/dev/null";
     my $DEV = qx($CMD);
 
-    skip "$CMD failed", 3 if $DEV eq '';
+    skip "$CMD failed", 6 if $DEV eq '';
 
     my @DEV = do { my $dev; opendir($dev, "/dev") ? readdir($dev) : () };
 
-    skip "opendir failed: $!", 3 if @DEV == 0;
+    skip "opendir failed: $!", 6 if @DEV == 0;
 
     # /dev/stdout might be either character special or a named pipe,
     # or a symlink, or a socket, depending on which OS and how are
@@ -243,14 +250,20 @@ SKIP: {
 	is($c1, $c2, "ls and $_[1] agreeing on /dev ($c1 $c2)");
     };
 
+SKIP: {
+    skip("DG/UX ls -L broken", 3) if $Is_DGUX;
+
     $try->('b', '-b');
     $try->('c', '-c');
     $try->('s', '-S');
+
 }
 
 ok(! -b $Curdir,    '!-b cwd');
 ok(! -c $Curdir,    '!-c cwd');
 ok(! -S $Curdir,    '!-S cwd');
+
+}
 
 SKIP: {
     my($cnt, $uid);
@@ -318,14 +331,18 @@ SKIP: {
 
 
 # These aren't strictly "stat" calls, but so what?
+my $statfile = File::Spec->catfile($Curdir, 'op', 'stat.t');
+ok(  -T $statfile,    '-T');
+ok(! -B $statfile,    '!-B');
 
-ok(-T 'op/stat.t',      '-T');
-ok(! -B 'op/stat.t',    '!-B');
-
+SKIP: {
+     skip("DG/UX", 1) if $Is_DGUX;
 ok(-B $Perl,      '-B');
+}
+
 ok(! -T $Perl,    '!-T');
 
-open(FOO,'op/stat.t');
+open(FOO,$statfile);
 SKIP: {
     eval { -T FOO; };
     skip "-T/B on filehandle not implemented", 15 if $@ =~ /not implemented/;
@@ -341,7 +358,7 @@ SKIP: {
     ok(! -B FOO,    '   still -B');
     close(FOO);
 
-    open(FOO,'op/stat.t');
+    open(FOO,$statfile);
     $_ = <FOO>;
     like($_, qr/perl/,      'reopened and after readline');
     ok(-T FOO,      '   still -T');
@@ -376,7 +393,7 @@ ok(-f(),    '     -f() "');
 unlink $tmpfile or print "# unlink failed: $!\n";
 
 # bug id 20011101.069
-my @r = \stat(".");
+my @r = \stat($Curdir);
 is(scalar @r, 13,   'stat returns full 13 elements');
 
 SKIP: {

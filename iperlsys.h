@@ -88,13 +88,19 @@ typedef void		(*LPSetBuf)(struct IPerlStdIO*, FILE*, char*);
 typedef int		(*LPSetVBuf)(struct IPerlStdIO*, FILE*, char*, int,
 			    Size_t);
 typedef void		(*LPSetCnt)(struct IPerlStdIO*, FILE*, int);
+
+#ifndef NETWARE
 typedef void		(*LPSetPtr)(struct IPerlStdIO*, FILE*, char*);
+#elif defined(NETWARE)
+typedef void		(*LPSetPtr)(struct IPerlStdIO*, FILE*, char*, int);
+#endif
+
 typedef void		(*LPSetlinebuf)(struct IPerlStdIO*, FILE*);
 typedef int		(*LPPrintf)(struct IPerlStdIO*, FILE*, const char*,
 			    ...);
 typedef int		(*LPVprintf)(struct IPerlStdIO*, FILE*, const char*,
 			    va_list);
-typedef long		(*LPTell)(struct IPerlStdIO*, FILE*);
+typedef Off_t		(*LPTell)(struct IPerlStdIO*, FILE*);
 typedef int		(*LPSeek)(struct IPerlStdIO*, FILE*, Off_t, int);
 typedef void		(*LPRewind)(struct IPerlStdIO*, FILE*);
 typedef FILE*		(*LPTmpfile)(struct IPerlStdIO*);
@@ -275,9 +281,16 @@ struct IPerlStdIOInfo
 #define PerlSIO_stdout			stdout
 #define PerlSIO_stderr			stderr
 #define PerlSIO_fopen(x,y)		fopen(x,y)
+#ifdef __VOS__
+/* Work around VOS bug posix-979, wrongly setting errno when at end of file. */
+#define PerlSIO_fclose(f)		(((errno==1025)?errno=0:0),fclose(f))
+#define PerlSIO_feof(f)			(((errno==1025)?errno=0:0),feof(f))
+#define PerlSIO_ferror(f)		(((errno==1025)?errno=0:0),ferror(f))
+#else
 #define PerlSIO_fclose(f)		fclose(f)
 #define PerlSIO_feof(f)			feof(f)
 #define PerlSIO_ferror(f)		ferror(f)
+#endif
 #define PerlSIO_clearerr(f)		clearerr(f)
 #define PerlSIO_fgetc(f)			fgetc(f)
 #ifdef FILE_base
@@ -327,9 +340,9 @@ struct IPerlStdIOInfo
 #define PerlSIO_set_ptr(f,p)		PerlIOProc_abort()
 #endif
 #define PerlSIO_setlinebuf(f)		setlinebuf(f)
-#define PerlSIO_printf			Perl_fprintf_nocontext
-#define PerlSIO_stdoutf			*PL_StdIO->pPrintf
-#define PerlSIO_vprintf(f,fmt,a)	
+#define PerlSIO_printf			fprintf
+#define PerlSIO_stdoutf			printf
+#define PerlSIO_vprintf(f,fmt,a)	vfprintf(f,fmt,a)
 #define PerlSIO_ftell(f)		ftell(f)
 #define PerlSIO_fseek(f,o,w)		fseek(f,o,w)
 #define PerlSIO_fgetpos(f,p)		fgetpos(f,p)
@@ -590,15 +603,15 @@ typedef int		(*LPLIOClose)(struct IPerlLIO*, int);
 typedef int		(*LPLIODup)(struct IPerlLIO*, int);
 typedef int		(*LPLIODup2)(struct IPerlLIO*, int, int);
 typedef int		(*LPLIOFlock)(struct IPerlLIO*, int, int);
-typedef int		(*LPLIOFileStat)(struct IPerlLIO*, int, struct stat*);
+typedef int		(*LPLIOFileStat)(struct IPerlLIO*, int, Stat_t*);
 typedef int		(*LPLIOIOCtl)(struct IPerlLIO*, int, unsigned int,
 			    char*);
 typedef int		(*LPLIOIsatty)(struct IPerlLIO*, int);
 typedef int		(*LPLIOLink)(struct IPerlLIO*, const char*,
 				     const char *);
-typedef long		(*LPLIOLseek)(struct IPerlLIO*, int, long, int);
+typedef Off_t		(*LPLIOLseek)(struct IPerlLIO*, int, Off_t, int);
 typedef int		(*LPLIOLstat)(struct IPerlLIO*, const char*,
-			    struct stat*);
+			    Stat_t*);
 typedef char*		(*LPLIOMktemp)(struct IPerlLIO*, char*);
 typedef int		(*LPLIOOpen)(struct IPerlLIO*, const char*, int);	
 typedef int		(*LPLIOOpen3)(struct IPerlLIO*, const char*, int, int);	
@@ -611,7 +624,7 @@ typedef int		(*LPLIOSetmode)(struct IPerlLIO*, FILE*, int);
 typedef int		(*LPLIOSetmode)(struct IPerlLIO*, int, int);
 #endif	/* NETWARE */
 typedef int		(*LPLIONameStat)(struct IPerlLIO*, const char*,
-			    struct stat*);
+			    Stat_t*);
 typedef char*		(*LPLIOTmpnam)(struct IPerlLIO*, char*);
 typedef int		(*LPLIOUmask)(struct IPerlLIO*, int);
 typedef int		(*LPLIOUnlink)(struct IPerlLIO*, const char*);
@@ -795,6 +808,25 @@ struct IPerlMemInfo
 	(*PL_Mem->pIsLocked)(PL_Mem)
 
 /* Shared memory macros */
+#ifdef NETWARE
+
+ #define PerlMemShared_malloc(size)			    \
+	(*PL_Mem->pMalloc)(PL_Mem, (size))
+#define PerlMemShared_realloc(buf, size)		    \
+	(*PL_Mem->pRealloc)(PL_Mem, (buf), (size))
+#define PerlMemShared_free(buf)				    \
+	(*PL_Mem->pFree)(PL_Mem, (buf))
+#define PerlMemShared_calloc(num, size)			    \
+	(*PL_Mem->pCalloc)(PL_Mem, (num), (size))
+#define PerlMemShared_get_lock()			    \
+	(*PL_Mem->pGetLock)(PL_Mem)
+#define PerlMemShared_free_lock()			    \
+	(*PL_Mem->pFreeLock)(PL_Mem)
+#define PerlMemShared_is_locked()			    \
+	(*PL_Mem->pIsLocked)(PL_Mem)
+
+#else
+
 #define PerlMemShared_malloc(size)			    \
 	(*PL_MemShared->pMalloc)(PL_MemShared, (size))
 #define PerlMemShared_realloc(buf, size)		    \
@@ -810,6 +842,7 @@ struct IPerlMemInfo
 #define PerlMemShared_is_locked()			    \
 	(*PL_MemShared->pIsLocked)(PL_MemShared)
 
+#endif
 
 /* Parse tree memory macros */
 #define PerlMemParse_malloc(size)			    \
@@ -920,6 +953,8 @@ typedef int		(*LPProcSpawnvp)(struct IPerlProc*, int, const char*,
 typedef int		(*LPProcASpawn)(struct IPerlProc*, void*, void**, void**);
 #endif
 typedef int		(*LPProcLastHost)(struct IPerlProc*);
+typedef int		(*LPProcGetTimeOfDay)(struct IPerlProc*,
+					      struct timeval*, void*);
 
 struct IPerlProc
 {
@@ -960,6 +995,7 @@ struct IPerlProc
 #endif
     LPProcLastHost      pLastHost;
     LPProcPopenList	pPopenList;
+    LPProcGetTimeOfDay	pGetTimeOfDay;
 };
 
 struct IPerlProcInfo
@@ -1043,6 +1079,8 @@ struct IPerlProcInfo
 #endif
 #define PerlProc_lasthost()						\
 	(*PL_Proc->pLastHost)(PL_Proc)
+#define PerlProc_gettimeofday(t,z)					\
+	(*PL_Proc->pGetTimeOfDay)(PL_Proc,(t),(z))
 
 #else	/* PERL_IMPLICIT_SYS */
 
@@ -1077,12 +1115,15 @@ struct IPerlProcInfo
 #define PerlProc_signal(n, h)	signal((n), (h))
 #define PerlProc_fork()		my_fork()
 #define PerlProc_getpid()	getpid()
+#define PerlProc_gettimeofday(t,z)	gettimeofday((t),(z))
 
 #ifdef WIN32
 #define PerlProc_DynaLoad(f)						\
 	win32_dynaload((f))
 #define PerlProc_GetOSError(s,e)					\
 	win32_str_os_error((s), (e))
+#undef PerlProc_signal
+#define PerlProc_signal(n, h) win32_signal((n), (h))
 #endif
 #endif	/* PERL_IMPLICIT_SYS */
 

@@ -8,7 +8,7 @@ require Exporter;
 use vars qw/@ISA $VERSION/;
 @ISA = qw(Exporter);
 
-$VERSION = '0.25';
+$VERSION = '0.28';
 
 # Package to store unsigned big integers in decimal and do math with them
 
@@ -72,6 +72,8 @@ sub _base_len
     #print "BASE_LEN: $BASE_LEN MAX_VAL: $MAX_VAL BASE: $BASE RBASE: $RBASE ";
     #print "BASE_LEN_SMALL: $BASE_LEN_SMALL MBASE: $MBASE\n";
 
+    undef &_mul;
+    undef &_div;
     if ($caught & 1 != 0)
       {
       # must USE_MUL
@@ -106,7 +108,8 @@ BEGIN
   $e = 5 if $^O =~ /^uts/;	# UTS get's some special treatment
   $e = 5 if $^O =~ /^unicos/;	# unicos is also problematic (6 seems to work
 				# there, but we play safe)
-  $e = 8 if $e > 8;		# cap, for VMS, OS/390 and other 64 bit systems
+  $e = 7 if $e > 7;		# cap, for VMS, OS/390 and other 64 bit systems
+				# 8 fails inside random testsuite, so take 7
 
   # determine how many digits fit into an integer and can be safely added 
   # together plus carry w/o causing an overflow
@@ -392,7 +395,7 @@ sub _sub
   {
   # (ref to int_num_array, ref to int_num_array, swap)
   # subtract base 1eX numbers -- stolen from Knuth Vol 2 pg 232, $x > $y
-  # subtract Y from X (X is always greater/equal!) by modifying x in place
+  # subtract Y from X by modifying x in place
   my ($c,$sx,$sy,$s) = @_;
  
   my $car = 0; my $i; my $j = 0;
@@ -410,7 +413,9 @@ sub _sub
   #print "case 1 (swap)\n";
   for $i (@$sx)
     {
-    last unless defined $sy->[$j] || $car;
+    # we can't do an early out if $x is than $y, since we
+    # need to copy the high chunks from $y. Found by Bob Mathews.
+    #last unless defined $sy->[$j] || $car;
     $sy->[$j] += $BASE
      if $car = (($sy->[$j] = $i-($sy->[$j]||0) - $car) < 0);
     $j++;
@@ -482,9 +487,11 @@ sub _mul_use_mul
     }
 
   # since multiplying $x with $x fails, make copy in this case
-  $yv = [@$xv] if "$xv" eq "$yv";	# same references?
+  $yv = [@$xv] if $xv == $yv;	# same references?
+#  $yv = [@$xv] if "$xv" eq "$yv";	# same references?
+
   # since multiplying $x with $x would fail here, use the faster squaring
-#  return _square($c,$xv) if "$xv" eq "$yv";	# same reference?
+#  return _square($c,$xv) if $xv == $yv;	# same reference?
 
   if ($LEN_CONVERT != 0)
     {
@@ -562,9 +569,10 @@ sub _mul_use_div
 
  
   # since multiplying $x with $x fails, make copy in this case
-  $yv = [@$xv] if "$xv" eq "$yv";	# same references?
+  $yv = [@$xv] if $xv == $yv;	# same references?
+#  $yv = [@$xv] if "$xv" eq "$yv";	# same references?
   # since multiplying $x with $x would fail here, use the faster squaring
-#  return _square($c,$xv) if "$xv" eq "$yv";	# same reference?
+#  return _square($c,$xv) if $xv == $yv;	# same reference?
 
   if ($LEN_CONVERT != 0)
     {
@@ -639,7 +647,7 @@ sub _div_use_mul
     return $x;
     }
 
-  my $y = [ @$yorg ];
+  my $y = [ @$yorg ];				# always make copy to preserve
   if ($LEN_CONVERT != 0)
     {
     $c->_to_small($x); $c->_to_small($y);
@@ -779,7 +787,7 @@ sub _div_use_div
     return $x;
     }
 
-  my $y = [ @$yorg ];
+  my $y = [ @$yorg ];				# always make copy to preserve
   if ($LEN_CONVERT != 0)
     {
     $c->_to_small($x); $c->_to_small($y);
@@ -1174,7 +1182,7 @@ sub _rsft
       $dst++;
       }
     splice (@$x,$dst) if $dst > 0;		# kill left-over array elems
-    pop @$x if $x->[-1] == 0;			# kill last element if 0
+    pop @$x if $x->[-1] == 0 && @$x > 1;	# kill last element if 0
     } # else rem == 0
   $x;
   }
@@ -1568,6 +1576,16 @@ sub _from_bin
   $x;
   }
 
+sub _modinv
+  {
+  # inverse modulus
+  }
+
+sub _modpow
+  {
+  # modulus of power ($x ** $y) % $z
+  }
+
 ##############################################################################
 ##############################################################################
 
@@ -1671,6 +1689,8 @@ slow) fallback routines to emulate these:
 	_gcd(obj,obj)	return Greatest Common Divisor of two objects
 	
 	_zeros(obj)	return number of trailing decimal zeros
+	_modinv		return inverse modulus
+	_modpow		return modulus of power ($x ** $y) % $z
 
 Input strings come in as unsigned but with prefix (i.e. as '123', '0xabc'
 or '0b1101').

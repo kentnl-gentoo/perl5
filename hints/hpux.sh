@@ -18,9 +18,9 @@ if [ "$xxOsRevMajor" -ge 10 ]; then
     # up to date with new CPU/OS releases.
     xxcpu=`getconf CPU_VERSION`; # Get the number.
     xxcpu=`printf '0x%x' $xxcpu`; # convert to hex
-    archname=`sed -n -e "s/^#[ \t]*define[ \t]*CPU_//p" /usr/include/sys/unistd.h |
-	sed -n -e "s/[ \t]*$xxcpu[ \t].*//p" |
-	sed -e s/_RISC/-RISC/ -e s/HP_// -e s/_/./`;
+    archname=`sed -n -e "s/^#[[:space:]]*define[[:space:]]*CPU_//p" /usr/include/sys/unistd.h |
+	sed -n -e "s/[[:space:]]*$xxcpu[[:space:]].*//p" |
+	sed -e s/_RISC/-RISC/ -e s/HP_// -e s/_/./ -e "s/[[:space:]]*//g"`;
 else
     # This system is running <= 9.x
     # Tested on 9.0[57] PA and [78].0 MC680[23]0.  Idea: After removing
@@ -31,14 +31,19 @@ else
 	sed -e 's/HP-//' -e 1q`;
     selecttype='int *'
     fi
-    # For some strange reason, the u32align test from Configure hangs in
-    # HP-UX 10.20 since the December 2001 patches.  So hint it to avoid
-    # the test.
-    if [ "$xxOsRevMajor" -le 10 ]; then
-	d_u32align=$define
+
+# For some strange reason, the u32align test from Configure hangs in
+# HP-UX 10.20 since the December 2001 patches.  So hint it to avoid
+# the test.
+if [ "$xxOsRevMajor" -le 10 ]; then
+    d_u32align=$define
     fi
 
 echo "Archname is $archname"
+
+# Fix XSlib (CPAN) confusion when re-using a prefix but changing from ILP32
+# to LP64 builds.  They're NOT binary compatible, so quit claiming they are.
+archname64=LP64
 
 
 ### HP-UX OS specific behaviour
@@ -71,13 +76,31 @@ case `$cc -v 2>&1`"" in
 	    ccflags="$cc_cppflags"
 	    if [ "X$gccversion" = "X" ]; then
 		# Done too late in Configure if hinted
-		gccversion=`$cc --version`
+		gccversion=`$cc --version | sed 's/.*(GCC) *//'`
 		fi
+	    case "$gccversion" in
+		[012]*) # HP-UX and gcc-2.* break UINT32_MAX :-(
+			ccflags="$ccflags -DUINT32_MAX_BROKEN"
+			;;
+               3*)     # GCC (both 32bit and 64bit) will define __STDC_EXT__
+                       # by default when using GCC 3.0 and newer versions of
+                       # the compiler.
+                       cppflags="$cc_cppflags"
+                       ;;
+		esac
 	    case "`getconf KERNEL_BITS 2>/dev/null`" in
 		*64*)
 		    echo "main(){}">try.c
 		    case "$gccversion" in
-			3*) ccflags="$ccflags -mpa-risc-2-0"
+			3*)
+			    case "$archname" in
+                               PA-RISC*)
+                                   case "$ccflags" in
+                                       *-mpa-risc*) ;;
+                                       *) ccflags="$ccflags -mpa-risc-2-0" ;;
+                                       esac
+                                   ;;
+				esac
 			    ;;
 			*)  # gcc with gas will not accept +DA2.0
 			    case "`$cc -c -Wa,+DA2.0 try.c 2>&1`" in
@@ -96,12 +119,14 @@ case `$cc -v 2>&1`"" in
 			    gnu_ld=yes
 			    ;;
 			*)			# HPld
-                           case "$gccversion" in
-                               [12]*)
-                                   ldflags="$ldflags -Wl,+vnocompatwarnings"
-                                   ccflags="$ccflags -Wl,+vnocompatwarnings"
-                                   ;;
-                               esac
+			   case "$gccversion" in
+			       [12]*)
+				   # Why not 3 as well here?
+				   # Since not relevant to IA64, not changed.
+				   ldflags="$ldflags -Wl,+vnocompatwarnings"
+				   ccflags="$ccflags -Wl,+vnocompatwarnings"
+				   ;;
+			       esac
 			    ;;
 			esac
 		    rm -f try.c
@@ -111,9 +136,9 @@ case `$cc -v 2>&1`"" in
     *)      ccisgcc=''
 	    ccversion=`which cc | xargs what | awk '/Compiler/{print $2}'`
 	    case "$ccflags" in
-	    "-Ae "*) ;;
-	    *) ccflags="-Ae $cc_cppflags -Wl,+vnocompatwarnings" ;;
-	    esac
+               "-Ae "*) ;;
+               *) ccflags="-Ae $cc_cppflags -Wl,+vnocompatwarnings" ;;
+               esac
 	    # Needed because cpp does only support -Aa (not -Ae)
 	    cpplast='-'
 	    cppminus='-'
@@ -157,14 +182,23 @@ case "$usemorebits" in
     $define|true|[yY]*) use64bitint="$define"; uselongdouble="$define" ;;
     esac
 
-case "$uselongdouble" in
-    $define|true|[yY]*)
-	cat <<EOM >&4
+case "$archname" in
+    IA64*)
+	# While here, override so=sl auto-detection
+	so='so'
+	;;
+    *)
+	case "$uselongdouble" in
+	    *) ;;
+	    $define|true|[yY]*)
+		cat <<EOM >&4
 
 *** long doubles are not (yet) supported on HP-UX (any version)
 *** Until it does, we cannot continue, aborting.
 EOM
-	exit 1 ;;
+		exit 1 ;;
+	    esac
+	;;
     esac
 
 case "$use64bitint" in
@@ -207,8 +241,15 @@ EOM
 		# HP-UX soon, including a user-friendly exit
 		case $gcc_64native in
 		    no) case "$gccversion" in
-			    [12]*)  ccflags="$ccflags -mlp64"
-				    ldflags="$ldflags -Wl,+DD64"
+			    [123]*) ccflags="$ccflags -mlp64"
+				    case "$archname" in
+					PA-RISC*)
+					    ldflags="$ldflags -Wl,+DD64"
+					    ;;
+					IA64*)
+					    ldflags="$ldflags -mlp64"
+					    ;;
+					esac
 				    ;;
 			    esac
 			;;
@@ -222,6 +263,7 @@ EOM
 
 	# Reset the library checker to make sure libraries
 	# are the right type
+	# (NOTE: on IA64, this doesn't work with .a files.)
 	libscheck='case "`/usr/bin/file $xxx`" in
 		       *ELF-64*|*LP64*|*PA-RISC2.0*) ;;
 		       *) xxx=/no/64-bit$xxx ;;
@@ -289,6 +331,7 @@ optimization, raise the 'maxdsiz' kernel configuration parameter
 to at least 0x08000000 (128 Mb) and rebuild your kernel.
 EOM
 regexec_cflags=''
+doop_cflags=''
     fi
 
 case "$ccisgcc" in
@@ -331,15 +374,22 @@ case "$ccisgcc" in
 	    "")           optimize="+O2 +Onolimit" ;;
 	    *O[3456789]*) optimize=`echo "$optimize" | sed -e 's/O[3-9]/O2/'` ;;
 	    esac
+	case "$optimize" in
+	    *-O*|\
+	    *O2*)   opt=`echo "$optimize" | sed -e 's/-O/+O2/' -e 's/O2/O1/' -e 's/ *+Onolimit//'`
+		    ;;
+	    *)      opt="$optimize"
+		    ;;
+	    esac
 	if [ $maxdsiz -le 64 ]; then
-	    case "$optimize" in
-		*-O*|\
-		*O2*)	opt=`echo "$optimize" | sed -e 's/-O/+O2/' -e 's/O2/O1/' -e 's/ *+Onolimit//'`
-			toke_cflags="$toke_cflags;optimize=\"$opt\""
-			regexec_cflags="optimize=\"$opt\""
-			;;
-		esac
+	    toke_cflags="$toke_cflags;optimize=\"$opt\""
+	    regexec_cflags="optimize=\"$opt\""
 	    fi
+	case "$archname" in
+	    IA64*)
+		doop_cflags="optimize=\"$opt\""
+		;;
+	    esac
 	ld=/usr/bin/ld
 	cccdlflags='+Z'
 	lddlflags='-b +vnocompatwarnings'
@@ -369,12 +419,12 @@ case "$uselargefiles" in
 	# but we cheat for now.  (Keep that in the left margin.)
 ccflags_uselargefiles="-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
 
-	case "$ccflags" in
-	*" $ccflags_uselargefiles") ;;
+	case " $ccflags " in
+	*" $ccflags_uselargefiles "*) ;;
 	*) ccflags="$ccflags $ccflags_uselargefiles" ;;
 	esac
 
-        if test -z "$ccisgcc" -a -z "$gccversion"; then
+	if test -z "$ccisgcc" -a -z "$gccversion"; then
 	    # The strict ANSI mode (-Aa) doesn't like large files.
 	    ccflags=`echo " $ccflags "|sed 's@ -Aa @ @g'`
 	    case "$ccflags" in
@@ -409,10 +459,10 @@ EOM
 		if [ -f /usr/lib/libcma.sl ]; then
 		    # DCE (from Core OS CD) is installed
 
-                   # Check if it is pristine, or patched
-                   cmavsn=`what /usr/lib/libcma.sl 2>&1 | grep 1996`
-                   if [ ! -z "$cmavsn" ]; then
-                       cat <<EOM >&4
+		   # Check if it is pristine, or patched
+		   cmavsn=`what /usr/lib/libcma.sl 2>&1 | grep 1996`
+		   if [ ! -z "$cmavsn" ]; then
+		       cat <<EOM >&4
 
 ***************************************************************************
 
@@ -427,8 +477,8 @@ consider to upgrade using patch PHSS_23672 (read README.hpux)
 
 (sleeping for 10 seconds...)
 EOM
-			  sleep 10
-                       fi
+		       sleep 10
+		       fi
 
 		    # It needs # libcma and OLD_PTHREADS_API. Also
 		    # <pthread.h> needs to be #included before any
@@ -443,6 +493,21 @@ EOM
 		    # tell perl.h to include <pthread.h> before other
 		    # include files
 		    ccflags="$ccflags -DPTHREAD_H_FIRST"
+# First column on purpose:
+# this is not a standard Configure variable
+# but we need to get this noticed.
+pthread_h_first="$define"
+
+		    # HP-UX 10.X seems to have no easy
+		    # way of detecting these *time_r protos.
+		    d_gmtime_r_proto='define'
+		    gmtime_r_proto='REENTRANT_PROTO_I_TS'
+		    d_localtime_r_proto='define'
+		    localtime_r_proto='REENTRANT_PROTO_I_TS'
+
+		    # Avoid the poisonous conflicting (and irrelevant)
+		    # prototypes of setkey(). 
+		    i_crypt="$undef"
 
 		    # CMA redefines select to cma_select, and cma_select
 		    # expects int * instead of fd_set * (just like 9.X)
@@ -477,16 +542,38 @@ EOM
 		fi
 	else
 	    # 12 may want upping the _POSIX_C_SOURCE datestamp...
-	    ccflags=" -D_POSIX_C_SOURCE=199506L $ccflags"
+	    ccflags=" -D_POSIX_C_SOURCE=199506L -D_REENTRANT $ccflags"
 	    set `echo X "$libswanted "| sed -e 's/ c / pthread c /'`
 	    shift
 	    libswanted="$*"
 	    fi
 
-	usemymalloc='n'
 	;;
     esac
 EOCBU
 
+# The mysterious io_xs memory corruption in 11.00 32bit seems to get
+# fixed by not using Perl's malloc.  
+usemymalloc='n'
+case "$useperlio" in
+    $undef|false|[nN]*) usemymalloc='y' ;;
+    esac
+
 # fpclassify() is a macro, the library call is Fpclassify
+# Similarly with the others below.
 d_fpclassify='define'
+d_isnan='define'
+d_isinf='define'
+d_isfinite='define'
+d_unordered='define'
+# Next one(s) need the leading tab.  These are special 'hint' symbols that
+# are not to be propagated to config.sh, all related to pthreads draft 4
+# interfaces.
+case "$d_oldpthreads" in
+    ''|$undef)
+	d_crypt_r_proto='undef'
+	d_getgrent_r_proto='undef'
+	d_getpwent_r_proto='undef'
+	d_strerror_r_proto='undef'
+	;;
+    esac

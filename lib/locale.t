@@ -308,7 +308,7 @@ if ($^O eq 'os390') {
     $locales =~ s/Thai:th:th:11 tis620\n//;
 }
 
-sub in_utf8 () { $^H & 0x08 }
+sub in_utf8 () { $^H & 0x08 || (${^OPEN} || "") =~ /:utf8/ }
 
 if (in_utf8) {
     require "lib/locale/utf8";
@@ -430,11 +430,12 @@ if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a 2>/dev/null|")) {
 
 setlocale(LC_ALL, "C");
 
-sub utf8locale { $_[0] =~ /utf-?8/i }
-
 @Locale = sort @Locale;
 
-debug "# Locales = @Locale\n";
+debug "# Locales =\n";
+for ( @Locale ) {
+    debug "# $_\n";
+}
 
 my %Problem;
 my %Okay;
@@ -520,18 +521,19 @@ foreach $Locale (@Locale) {
 
 	# Test \w.
     
-	if (utf8locale($Locale)) {
-	    # utf8 and locales do not mix.
-	    debug "# skipping UTF-8 locale '$Locale'\n";
-	    push @utf8locale, $Locale;
-            @utf8skip{99..102} = ();
-	} else {
-	    my $word = join('', @Neoalpha);
+	my $word = join('', @Neoalpha);
 
-	    $word =~ /^(\w+)$/;
- 
-	    tryneoalpha($Locale, 99, $1 eq $word);
+	if ($Locale =~ /utf-?8/i) {
+	    debug "# unknown whether locale and Unicode have the same \\w, skipping test 99 for locale '$Locale'\n";
+	    push @{$Okay{99}}, $Locale;
+	} else {
+	    if ($word =~ /^(\w+)$/) {
+		tryneoalpha($Locale, 99, 1);
+	    } else {
+		tryneoalpha($Locale, 99, 0);
+	    }
 	}
+
 	# Cross-check the whole 8-bit character set.
 
 	for (map { chr } 0..255) {
@@ -712,50 +714,55 @@ foreach $Locale (@Locale) {
     # case-insensitively the UPPER, and does the UPPER match
     # case-insensitively the lc of the UPPER.  And vice versa.
     {
-        if (utf8locale($Locale)) {
-	    # utf8 and locales do not mix.
-	    debug "# skipping UTF-8 locale '$Locale'\n";
-	    push @utf8locale, $Locale;
-            $utf8skip{117}++;
-	} else {
-	    use locale;
-	    no utf8;
-            my $re = qr/[\[\(\{\*\+\?\|\^\$\\]/;
+        use locale;
+        no utf8;
+        my $re = qr/[\[\(\{\*\+\?\|\^\$\\]/;
 
-	    my @f = ();
-	    foreach my $x (keys %UPPER) {
-		my $y = lc $x;
-		next unless uc $y eq $x;
-		print "# UPPER $x lc $y ",
-			$x =~ /$y/i ? 1 : 0, " ",
-			$y =~ /$x/i ? 1 : 0, "\n" if 0;
-		# If $x and $y contain regular expression characters
-		# AND THEY lowercase (/i) to regular expression characters,
-		# regcomp() will be mightily confused.  No, the \Q doesn't
-		# help here (maybe regex engine internal lowercasing
-		# is done after the \Q?)  An example of this happening is
-		# the bg_BG (Bulgarian) locale under EBCDIC (OS/390 USS):
-		# the chr(173) (the "[") is the lowercase of the chr(235).
-		# Similarly losing EBCDIC locales include cs_cz, cs_CZ,
-		# el_gr, el_GR, en_us.IBM-037 (!), en_US.IBM-037 (!),
-		# et_ee, et_EE, hr_hr, hr_HR, hu_hu, hu_HU, lt_LT,
-		# mk_mk, mk_MK, nl_nl.IBM-037, nl_NL.IBM-037,
-		# pl_pl, pl_PL, ro_ro, ro_RO, ru_ru, ru_RU,
-		# sk_sk, sk_SK, sl_si, sl_SI, tr_tr, tr_TR.
-		if ($x =~ $re || $y =~ $re) {
-		    print "# Regex characters in '$x' or '$y', skipping test 117 for locale '$Locale'\n";
-		    next;
-		}
-		# With utf8 both will fail since the locale concept
-		# of upper/lower does not work well in Unicode.
-		push @f, $x unless $x =~ /$y/i == $y =~ /$x/i;
+        my @f = ();
+        foreach my $x (keys %UPPER) {
+	    my $y = lc $x;
+	    next unless uc $y eq $x;
+	    print "# UPPER $x lc $y ",
+	    $x =~ /$y/i ? 1 : 0, " ",
+	    $y =~ /$x/i ? 1 : 0, "\n" if 0;
+	    #
+	    # If $x and $y contain regular expression characters
+	    # AND THEY lowercase (/i) to regular expression characters,
+	    # regcomp() will be mightily confused.  No, the \Q doesn't
+	    # help here (maybe regex engine internal lowercasing
+	    # is done after the \Q?)  An example of this happening is
+	    # the bg_BG (Bulgarian) locale under EBCDIC (OS/390 USS):
+	    # the chr(173) (the "[") is the lowercase of the chr(235).
+	    #
+	    # Similarly losing EBCDIC locales include cs_cz, cs_CZ,
+	    # el_gr, el_GR, en_us.IBM-037 (!), en_US.IBM-037 (!),
+	    # et_ee, et_EE, hr_hr, hr_HR, hu_hu, hu_HU, lt_LT,
+	    # mk_mk, mk_MK, nl_nl.IBM-037, nl_NL.IBM-037,
+	    # pl_pl, pl_PL, ro_ro, ro_RO, ru_ru, ru_RU,
+	    # sk_sk, sk_SK, sl_si, sl_SI, tr_tr, tr_TR.
+	    #
+	    # Similar things can happen even under (bastardised)
+	    # non-EBCDIC locales: in many European countries before the
+	    # advent of ISO 8859-x nationally customised versions of
+	    # ISO 646 were devised, reusing certain punctuation
+	    # characters for modified characters needed by the
+	    # country/language.  For example, the "|" might have
+	    # stood for U+00F6 or LATIN SMALL LETTER O WITH DIAERESIS.
+	    #
+	    if ($x =~ $re || $y =~ $re) {
+		print "# Regex characters in '$x' or '$y', skipping test 117 for locale '$Locale'\n";
+		next;
 	    }
+	    # With utf8 both will fail since the locale concept
+	    # of upper/lower does not work well in Unicode.
+	    push @f, $x unless $x =~ /$y/i == $y =~ /$x/i;
+
 	    foreach my $x (keys %lower) {
 		my $y = uc $x;
 		next unless lc $y eq $x;
 		print "# lower $x uc $y ",
-			$x =~ /$y/i ? 1 : 0, " ",
-			$y =~ /$x/i ? 1 : 0, "\n" if 0;
+		$x =~ /$y/i ? 1 : 0, " ",
+		$y =~ /$x/i ? 1 : 0, "\n" if 0;
 		if ($x =~ $re || $y =~ $re) { # See above.
 		    print "# Regex characters in '$x' or '$y', skipping test 117 for locale '$Locale'\n";
 		    next;
@@ -778,7 +785,7 @@ foreach (&last_without_setlocale()+1..$last) {
     if ($Problem{$_} || !defined $Okay{$_} || !@{$Okay{$_}}) {
 	if ($_ == 102) {
 	    print "# The failure of test 102 is not necessarily fatal.\n";
-	    print "# It usually indicates a problem in the enviroment,\n";
+	    print "# It usually indicates a problem in the environment,\n";
 	    print "# not in Perl itself.\n";
 	}
 	print "not ";

@@ -58,17 +58,24 @@ SKIP: {
     $sigset->delset(1);
     ok(! $sigset->ismember(1),  'POSIX::SigSet->delset' );
     ok(  $sigset->ismember(3),  'POSIX::SigSet->ismember' );
-    
+
     SKIP: {
         skip("no kill() support on Mac OS", 4) if $Is_MacOS;
 
-       print "# warning, darwin seems to loose blocked signals (failing test 10)\n" if($^O eq 'darwin');
+        my $sigint_called = 0;
+
 	my $mask   = new POSIX::SigSet &SIGINT;
 	my $action = new POSIX::SigAction 'main::SigHUP', $mask, 0;
 	sigaction(&SIGHUP, $action);
 	$SIG{'INT'} = 'SigINT';
 	kill 'HUP', $$;
 	sleep 1;
+
+        printf "%s 10 -   masked SIGINT received %s\n",
+          $sigint_called ? "ok" : "not ok",
+          $^O eq 'darwin' ? "# TODO Darwin seems to loose blocked signals" 
+                          : '';
+
 	print "ok 11 - signal masks successful\n";
 	
 	sub SigHUP {
@@ -79,7 +86,7 @@ SKIP: {
 	}
 
         sub SigINT {
-	    print "ok 10 -   masked SIGINT received\n";
+            $sigint_called++;
 	}
 
         # The order of the above tests is very important, so
@@ -178,10 +185,6 @@ try_strftime("Fri Mar 31 00:00:00 2000 091", 0,0,0, 31,2,100);
 	my $foo  = $!;
 	my $errno = POSIX::errno();
 
-        local $TODO;
-        $TODO = 'POSIX::errno() munged by autoloading on VMS' 
-            if $Is_VMS && $test == 0;
-
         # Force numeric context.
 	is( $errno + 0, $foo + 0,     'autoloading and errno() mix' );
     }
@@ -212,11 +215,17 @@ is ($result, undef, "fgets should fail");
 like ($@, qr/^Use method IO::Handle::gets\(\) instead/,
       "check its redef message");
 
-$| = 0;
-# The following line assumes buffered output, which may be not true:
-print '@#!*$@(!@#$' unless ($Is_MacOS || $Is_OS2 || $Is_UWin || $Is_OS390 ||
+# Check that output is not flushed by _exit. This test should be last
+# in the file, and is not counted in the total number of tests.
+if ($^O eq 'vos') {
+ print "# TODO - hit VOS bug posix-885 - _exit flushes output buffers.\n";
+} else {
+ $| = 0;
+ # The following line assumes buffered output, which may be not true:
+ print '@#!*$@(!@#$' unless ($Is_MacOS || $Is_OS2 || $Is_UWin || $Is_OS390 ||
                             $Is_VMS ||
 			    (defined $ENV{PERLIO} &&
 			     $ENV{PERLIO} eq 'unix' &&
 			     $Config::Config{useperlio}));
-_exit(0);
+ _exit(0);
+}

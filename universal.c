@@ -49,7 +49,7 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
     if (gvp && (gv = *gvp) != (GV*)&PL_sv_undef && (subgen = GvSV(gv))
 	&& (hv = GvHV(gv)))
     {
-	if (SvIV(subgen) == PL_sub_generation) {
+	if (SvIV(subgen) == (IV)PL_sub_generation) {
 	    SV* sv;
 	    SV** svp = (SV**)hv_fetch(hv, name, len, FALSE);
 	    if (svp && (sv = *svp) != (SV*)&PL_sv_undef) {
@@ -93,7 +93,7 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
 		HV* basestash = gv_stashsv(sv, FALSE);
 		if (!basestash) {
 		    if (ckWARN(WARN_MISC))
-			Perl_warner(aTHX_ WARN_SYNTAX,
+			Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
 		             "Can't locate package %s for @%s::ISA",
 			    SvPVX(sv), HvNAME(stash));
 		    continue;
@@ -167,7 +167,9 @@ XS(XS_utf8_upgrade);
 XS(XS_utf8_downgrade);
 XS(XS_utf8_unicode_to_native);
 XS(XS_utf8_native_to_unicode);
-XS(XS_access_readonly);
+XS(XS_Internals_SvREADONLY);
+XS(XS_Internals_SvREFCNT);
+XS(XS_Internals_hv_clear_placehold);
 
 void
 Perl_boot_core_UNIVERSAL(pTHX)
@@ -184,7 +186,10 @@ Perl_boot_core_UNIVERSAL(pTHX)
     newXS("utf8::downgrade", XS_utf8_downgrade, file);
     newXS("utf8::native_to_unicode", XS_utf8_native_to_unicode, file);
     newXS("utf8::unicode_to_native", XS_utf8_unicode_to_native, file);
-    newXSproto("access::readonly",XS_access_readonly, file, "\\[$%@];$");
+    newXSproto("Internals::SvREADONLY",XS_Internals_SvREADONLY, file, "\\[$%@];$");
+    newXSproto("Internals::SvREFCNT",XS_Internals_SvREFCNT, file, "\\[$%@];$");
+    newXSproto("Internals::hv_clear_placeholders",
+               XS_Internals_hv_clear_placehold, file, "\\%");
 }
 
 
@@ -460,22 +465,90 @@ XS(XS_utf8_unicode_to_native)
  XSRETURN(1);
 }
 
-XS(XS_access_readonly)
+XS(XS_Internals_SvREADONLY)	/* This is dangerous stuff. */
 {
     dXSARGS;
     SV *sv = SvRV(ST(0));
-    IV old = SvREADONLY(sv);
-    if (items == 2) {
+    if (items == 1) {
+	 if (SvREADONLY(sv))
+	     XSRETURN_YES;
+	 else
+	     XSRETURN_NO;
+    }
+    else if (items == 2) {
 	if (SvTRUE(ST(1))) {
 	    SvREADONLY_on(sv);
+	    XSRETURN_YES;
 	}
 	else {
+	    /* I hope you really know what you are doing. */
 	    SvREADONLY_off(sv);
+	    XSRETURN_NO;
 	}
     }
-    if (old)
-	XSRETURN_YES;
-    else
-	XSRETURN_NO;
+    XSRETURN_UNDEF; /* Can't happen. */
 }
 
+XS(XS_Internals_SvREFCNT)	/* This is dangerous stuff. */
+{
+    dXSARGS;
+    SV *sv = SvRV(ST(0));
+    if (items == 1)
+	 XSRETURN_IV(SvREFCNT(sv) - 1); /* Minus the ref created for us. */
+    else if (items == 2) {
+         /* I hope you really know what you are doing. */
+	 SvREFCNT(sv) = SvIV(ST(1));
+	 XSRETURN_IV(SvREFCNT(sv));
+    }
+    XSRETURN_UNDEF; /* Can't happen. */
+}
+
+/* Maybe this should return the number of placeholders found in scalar context,
+   and a list of them in list context.  */
+XS(XS_Internals_hv_clear_placehold)
+{
+    dXSARGS;
+    HV *hv = (HV *) SvRV(ST(0));
+
+    /* I don't care how many parameters were passed in, but I want to avoid
+       the unused variable warning. */
+
+    items = (I32)HvPLACEHOLDERS(hv);
+
+    if (items) {
+        HE *entry;
+        I32 riter = HvRITER(hv);
+        HE *eiter = HvEITER(hv);
+        hv_iterinit(hv);
+        /* This may look suboptimal with the items *after* the iternext, but
+           it's quite deliberate. We only get here with items==0 if we've
+           just deleted the last placeholder in the hash. If we've just done
+           that then it means that the hash is in lazy delete mode, and the
+           HE is now only referenced in our iterator. If we just quit the loop
+           and discarded our iterator then the HE leaks. So we do the && the
+           other way to ensure iternext is called just one more time, which
+           has the side effect of triggering the lazy delete.  */
+        while ((entry = hv_iternext_flags(hv, HV_ITERNEXT_WANTPLACEHOLDERS))
+            && items) {
+            SV *val = hv_iterval(hv, entry);
+
+            if (val == &PL_sv_undef) {
+
+                /* It seems that I have to go back in the front of the hash
+                   API to delete a hash, even though I have a HE structure
+                   pointing to the very entry I want to delete, and could hold
+                   onto the previous HE that points to it. And it's easier to
+                   go in with SVs as I can then specify the precomputed hash,
+                   and don't have fun and games with utf8 keys.  */
+                SV *key = hv_iterkeysv(entry);
+
+                hv_delete_ent (hv, key, G_DISCARD, HeHASH(entry));
+                items--;
+            }
+        }
+        HvRITER(hv) = riter;
+        HvEITER(hv) = eiter;
+    }
+
+    XSRETURN(0);
+}

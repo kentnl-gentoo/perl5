@@ -1,7 +1,7 @@
 #
 # Locale::Country - ISO codes for country identification (ISO 3166)
 #
-# $Id: Country.pm,v 2.1 2002/02/06 04:07:09 neilb Exp $
+# $Id: Country.pm,v 2.4 2002/05/20 05:05:18 neilb Exp $
 #
 
 package Locale::Country;
@@ -17,7 +17,7 @@ use Locale::Constants;
 #	Public Global Variables
 #-----------------------------------------------------------------------
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION   = sprintf("%d.%02d", q$Revision: 2.1 $ =~ /(\d+)\.(\d+)/);
+$VERSION   = sprintf("%d.%02d", q$Revision: 2.4 $ =~ /(\d+)\.(\d+)/);
 @ISA       = qw(Exporter);
 @EXPORT    = qw(code2country country2code
                 all_country_codes all_country_names
@@ -153,15 +153,15 @@ sub all_country_names
 
 #=======================================================================
 #
-# _alias_code ( ALIAS => CODE [ , CODESET ] )
+# alias_code ( ALIAS => CODE [ , CODESET ] )
 #
 # Add an alias for an existing code. If the CODESET isn't specified,
 # then we use the default (currently the alpha-2 codeset).
 #
-#   Locale::Country::_alias_code('uk' => 'gb');
+#   Locale::Country::alias_code('uk' => 'gb');
 #
 #=======================================================================
-sub _alias_code
+sub alias_code
 {
     my $alias = shift;
     my $real  = shift;
@@ -180,6 +180,81 @@ sub _alias_code
     $COUNTRIES->[$codeset]->{"\L$country"} = $alias;
 
     return $alias;
+}
+
+# old name of function for backwards compatibility
+*_alias_code = *alias_code;
+
+
+#=======================================================================
+#
+# rename_country
+#
+# change the official name for a country, eg:
+#	gb => 'Great Britain'
+# rather than the standard 'United Kingdom'. The original is retained
+# as an alias, but the new name will be returned if you lookup the
+# name from code.
+#
+#=======================================================================
+sub rename_country
+{
+    my $code     = shift;
+    my $new_name = shift;
+    my $codeset = @_ > 0 ? shift : _code2codeset($code);
+    my $country;
+    my $c;
+
+
+    if (not defined $codeset)
+    {
+        carp "rename_country(): unknown country code \"$code\"\n";
+        return 0;
+    }
+
+    $country = $CODES->[$codeset]->{$code};
+
+    foreach my $cset (LOCALE_CODE_ALPHA_2,
+			LOCALE_CODE_ALPHA_3,
+			LOCALE_CODE_NUMERIC)
+    {
+	if ($cset == $codeset)
+	{
+	    $c = $code;
+	}
+	else
+	{
+	    $c = country_code2code($code, $codeset, $cset);
+	}
+
+	$CODES->[$cset]->{$c} = $new_name;
+	$COUNTRIES->[$cset]->{"\L$new_name"} = $c;
+    }
+
+    return 1;
+}
+
+
+#=======================================================================
+#
+# _code2codeset
+#
+# given a country code in an unknown codeset, return the codeset
+# it is from, or undef.
+#
+#=======================================================================
+sub _code2codeset
+{
+    my $code = shift;
+
+
+    foreach my $codeset (LOCALE_CODE_ALPHA_2, LOCALE_CODE_ALPHA_3,
+			LOCALE_CODE_NUMERIC)
+    {
+	return $codeset if (exists $CODES->[$codeset]->{$code})
+    }
+
+    return undef;
 }
 
 
@@ -348,7 +423,7 @@ kp:prk:408:Korea, Democratic People's Republic of:Korea, North:North Korea
 kr:kor:410:Korea, Republic of:Korea, South:South Korea
 kw:kwt:414:Kuwait
 ky:cym:136:Cayman Islands
-kz:kaz:398:Kazakstan
+kz:kaz:398:Kazakhstan:Kazakstan
 la:lao:418:Lao People's Democratic Republic
 lb:lbn:422:Lebanon
 lc:lca:662:Saint Lucia
@@ -362,14 +437,14 @@ lv:lva:428:Latvia
 ly:lby:434:Libyan Arab Jamahiriya:Libya
 ma:mar:504:Morocco
 mc:mco:492:Monaco
-md:mda:498:Moldova, Republic of
+md:mda:498:Moldova, Republic of:Moldova
 mg:mdg:450:Madagascar
 mh:mhl:584:Marshall Islands
 mk:mkd:807:Macedonia, the Former Yugoslav Republic of:Macedonia, Former Yugoslav Republic of:Macedonia
 ml:mli:466:Mali
 mm:mmr:104:Myanmar
 mn:mng:496:Mongolia
-mo:mac:446:Macau
+mo:mac:446:Macao:Macau
 mp:mnp:580:Northern Mariana Islands
 mq:mtq:474:Martinique
 mr:mrt:478:Mauritania
@@ -442,7 +517,7 @@ tk:tkl:772:Tokelau
 tm:tkm:795:Turkmenistan
 tn:tun:788:Tunisia
 to:ton:776:Tonga
-tp:tmp:626:East Timor
+tl:tls:626:East Timor
 tr:tur:792:Turkey
 tt:tto:780:Trinidad and Tobago
 tv:tuv:798:Tuvalu
@@ -454,7 +529,7 @@ um:::United States Minor Outlying Islands
 us:usa:840:United States:USA:United States of America
 uy:ury:858:Uruguay
 uz:uzb:860:Uzbekistan
-va:vat:336:Holy See (Vatican City State):Hole See (Vatican City)
+va:vat:336:Holy See (Vatican City State):Holy See (Vatican City)
 vc:vct:670:Saint Vincent and the Grenadines
 ve:ven:862:Venezuela
 vg:vgb:092:Virgin Islands, British:British Virgin Islands

@@ -381,7 +381,7 @@ failure.
 
 The timeout in the [PKG] can be specified as zero to effect a "poll",
 but you shouldn't do that because a new IO::Select object will be
-created behind the scenes just do to the single poll.  This is
+created behind the scenes just to do the single poll.  This is
 horrendously inefficient.  Use rather true select() with a zero
 timeout on the handle, or non-blocking IO.
 
@@ -416,7 +416,8 @@ The atmark() functionality is also exportable as sockatmark() function:
 	use IO::Socket 'sockatmark';
 
 This allows for a more traditional use of sockatmark() as a procedural
-socket function.
+socket function.  If your system does not support sockatmark(), the
+C<use> declaration will fail at compile time.
 
 =item connected
 

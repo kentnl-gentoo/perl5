@@ -1,6 +1,11 @@
 #!./perl -w
 
-print "1..133\n";
+BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+}
+
+print "1..134\n";
 
 sub try ($$) {
    print +($_[1] ? "ok" : "not ok"), " $_[0]\n";
@@ -17,7 +22,7 @@ sub tryeq_sloppy ($$$) {
     print "ok $_[0]\n";
   } else {
     my $error = abs ($_[1] - $_[2]) / $_[1];
-    if ($error < 1e-10) {
+    if ($error < 1e-9) {
       print "ok $_[0] # $_[1] is close to $_[2], \$^O eq $^O\n";
     } else {
       print "not ok $_[0] # $_[1] != $_[2]\n";
@@ -237,7 +242,7 @@ tryeq 120, -0x80000000/1, -0x80000000;
 tryeq 121, -0x80000000/-1, 0x80000000;
 
 # The example for sloppy divide, rigged to avoid the peephole optimiser.
-tryeq 122, "20." / "5.", 4;
+tryeq_sloppy 122, "20." / "5.", 4;
 
 tryeq 123, 2.5 / 2, 1.25;
 tryeq 124, 3.5 / -2, -1.75;
@@ -247,9 +252,9 @@ tryeq 126, -5.5 / -2, 2.75;
 # Bluuurg if your floating point can't accurately cope with powers of 2
 # [I suspect this is parsing string->float problems, not actual arith]
 tryeq_sloppy 127, 18446744073709551616/1, 18446744073709551616; # Bluuurg
-tryeq 128, 18446744073709551616/2, 9223372036854775808;
-tryeq 129, 18446744073709551616/4294967296, 4294967296;
-tryeq 130, 18446744073709551616/9223372036854775808, 2;
+tryeq_sloppy 128, 18446744073709551616/2, 9223372036854775808;
+tryeq_sloppy 129, 18446744073709551616/4294967296, 4294967296;
+tryeq_sloppy 130, 18446744073709551616/9223372036854775808, 2;
 
 {
   # The peephole optimiser is wrong to think that it can substitute intops
@@ -258,7 +263,7 @@ tryeq 130, 18446744073709551616/9223372036854775808, 2;
   my $n = 1127;
 
   my $float = ($n % 1000) * 167772160.0;
-  tryeq 131, $float, 21307064320;
+  tryeq_sloppy 131, $float, 21307064320;
 
   # On a 32 bit machine, if the i_multiply op is used, you will probably get
   # -167772160. It's actually undefined behaviour, so anything may happen.
@@ -268,4 +273,26 @@ tryeq 130, 18446744073709551616/9223372036854775808, 2;
   my $t = time;
   my $t1000 = time() * 1000;
   try 133, abs($t1000 -1000 * $t) <= 2000;
+}
+
+if ($^O eq 'vos') {
+  print "not ok 134 # TODO VOS raises SIGFPE instead of producing infinity.\n";
+} else {
+  # The computation of $v should overflow and produce "infinity"
+  # on any system whose max exponent is less than 10**1506.
+  # The exact string used to represent infinity varies by OS,
+  # so we don't test for it; all we care is that we don't die.
+  #
+  # Perl considers it to be an error if SIGFPE is raised.
+  # Chances are the interpreter will die, since it doesn't set
+  # up a handler for SIGFPE.  That's why this test is last; to
+  # minimize the number of test failures.  --PG
+
+  my $n = 5000;
+  my $v = 2;
+  while (--$n)
+  {
+    $v *= 2;
+  }
+  print "ok 134\n";
 }

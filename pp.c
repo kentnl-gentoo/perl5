@@ -17,6 +17,8 @@
 #include "perl.h"
 #include "keywords.h"
 
+#include "reentr.h"
+
 /* variations on pp_null */
 
 /* XXX I can't imagine anyone who doesn't have this actually _needs_
@@ -62,7 +64,7 @@ PP(pp_padav)
 	EXTEND(SP, maxarg);
 	if (SvMAGICAL(TARG)) {
 	    U32 i;
-	    for (i=0; i < maxarg; i++) {
+	    for (i=0; i < (U32)maxarg; i++) {
 		SV **svp = av_fetch((AV*)TARG, i, FALSE);
 		SP[i+1] = (svp) ? *svp : &PL_sv_undef;
 	    }
@@ -519,7 +521,7 @@ PP(pp_bless)
 	    Perl_croak(aTHX_ "Attempt to bless into a reference");
 	ptr = SvPV(ssv,len);
 	if (ckWARN(WARN_MISC) && len == 0)
-	    Perl_warner(aTHX_ WARN_MISC,
+	    Perl_warner(aTHX_ packWARN(WARN_MISC),
 		   "Explicit blessing to '' (assuming package main)");
 	stash = gv_stashpvn(ptr, len, TRUE);
     }
@@ -555,7 +557,7 @@ PP(pp_gelem)
     case 'F':
 	if (strEQ(elem, "FILEHANDLE")) {
 	    /* finally deprecated in 5.8.0 */
-	    deprecate_old("*glob{FILEHANDLE}");
+	    deprecate("*glob{FILEHANDLE}");
 	    tmpRef = (SV*)GvIOp(gv);
 	}
 	else
@@ -776,7 +778,7 @@ PP(pp_undef)
 	break;
     case SVt_PVCV:
 	if (ckWARN(WARN_MISC) && cv_const_sv((CV*)sv))
-	    Perl_warner(aTHX_ WARN_MISC, "Constant subroutine %s undefined",
+	    Perl_warner(aTHX_ packWARN(WARN_MISC), "Constant subroutine %s undefined",
 		 CvANON((CV*)sv) ? "(anonymous)" : GvENAME(CvGV((CV*)sv)));
 	/* FALL THROUGH */
     case SVt_PVFM:
@@ -877,10 +879,98 @@ PP(pp_postdec)
 PP(pp_pow)
 {
     dSP; dATARGET; tryAMAGICbin(pow,opASSIGN);
+#ifdef PERL_PRESERVE_IVUV
+    /* ** is implemented with pow. pow is floating point. Perl programmers
+       write 2 ** 31 and expect it to be 2147483648
+       pow never made any guarantee to deliver a result to 53 (or whatever)
+       bits of accuracy. Which is unfortunate, as perl programmers expect it
+       to, and on some platforms (eg Irix with long doubles) it doesn't in
+       a very visible case. (2 ** 31, which a regression test uses)
+       So we'll implement power-of-2 ** +ve integer with multiplies, to avoid
+       these problems.  */
     {
-      dPOPTOPnnrl;
-      SETn( Perl_pow( left, right) );
-      RETURN;
+        SvIV_please(TOPm1s);
+        if (SvIOK(TOPm1s)) {
+            bool baseuok = SvUOK(TOPm1s);
+            UV baseuv;
+
+            if (baseuok) {
+                baseuv = SvUVX(TOPm1s);
+            } else {
+                IV iv = SvIVX(TOPm1s);
+                if (iv >= 0) {
+                    baseuv = iv;
+                    baseuok = TRUE; /* effectively it's a UV now */
+                } else {
+                    baseuv = -iv; /* abs, baseuok == false records sign */
+                }
+            }
+            SvIV_please(TOPs);
+            if (SvIOK(TOPs)) {
+                UV power;
+
+                if (SvUOK(TOPs)) {
+                    power = SvUVX(TOPs);
+                } else {
+                    IV iv = SvIVX(TOPs);
+                    if (iv >= 0) {
+                        power = iv;
+                    } else {
+                        goto float_it; /* Can't do negative powers this way.  */
+                    }
+                }
+                /* now we have integer ** positive integer.
+                   foo & (foo - 1) is zero only for a power of 2.  */
+                if (!(baseuv & (baseuv - 1))) {
+                    /* We are raising power-of-2 to postive integer.
+                       The logic here will work for any base (even non-integer
+                       bases) but it can be less accurate than
+                       pow (base,power) or exp (power * log (base)) when the
+                       intermediate values start to spill out of the mantissa.
+                       With powers of 2 we know this can't happen.
+                       And powers of 2 are the favourite thing for perl
+                       programmers to notice ** not doing what they mean. */
+                    NV result = 1.0;
+                    NV base = baseuok ? baseuv : -(NV)baseuv;
+                    int n = 0;
+
+                    /* The logic is this.
+                       x ** n === x ** m1 * x ** m2 where n = m1 + m2
+                       so as 42 is 32 + 8 + 2
+                       x ** 42 can be written as
+                       x ** 32 * x ** 8 * x ** 2
+                       I can calculate x ** 2, x ** 4, x ** 8 etc trivially:
+                       x ** 2n is x ** n * x ** n
+                       So I loop round, squaring x each time
+                       (x, x ** 2, x ** 4, x ** 8) and multiply the result
+                       by the x-value whenever that bit is set in the power.
+                       To finish as soon as possible I zero bits in the power
+                       when I've done them, so that power becomes zero when
+                       I clear the last bit (no more to do), and the loop
+                       terminates.  */
+                    for (; power; base *= base, n++) {
+                        /* Do I look like I trust gcc with long longs here?
+                           Do I hell.  */
+                        UV bit = (UV)1 << (UV)n;
+                        if (power & bit) {
+                            result *= base;
+                            /* Only bother to clear the bit if it is set.  */
+                            power &= ~bit;
+                        }
+                    }
+                    SP--;
+                    SETn( result );
+                    RETURN;
+                }
+            }
+        }
+    }
+      float_it:
+#endif    
+    {
+        dPOPTOPnnrl;
+        SETn( Perl_pow( left, right) );
+        RETURN;
     }
 }
 
@@ -1097,7 +1187,7 @@ PP(pp_divide)
                     }
                     /* 2s complement assumption */
                     if (result <= (UV)IV_MIN)
-                        SETi( -result );
+                        SETi( -(IV)result );
                     else {
                         /* It's exact but too negative for IV. */
                         SETn( -(NV)result );
@@ -1389,7 +1479,7 @@ PP(pp_subtract)
 		    buv = (UV)-biv;
 	    }
 	    /* ?uvok if value is >= 0. basically, flagged as UV if it's +ve,
-	       else "IV" now, independant of how it came in.
+	       else "IV" now, independent of how it came in.
 	       if a, b represents positive, A, B negative, a maps to -A etc
 	       a - b =>  (a - b)
 	       A - b => -(a + b)
@@ -2592,7 +2682,7 @@ S_seed(pTHX)
     u = (U32)SEED_C1 * when[0] + (U32)SEED_C2 * when[1];
 #else
 #  ifdef HAS_GETTIMEOFDAY
-    gettimeofday(&when,(struct timezone *) 0);
+    PerlProc_gettimeofday(&when,NULL);
     u = (U32)SEED_C1 * when.tv_sec + (U32)SEED_C2 * when.tv_usec;
 #  else
     (void)time(&when);
@@ -2956,7 +3046,7 @@ PP(pp_substr)
 	if (lvalue || repl)
 	    Perl_croak(aTHX_ "substr outside of string");
 	if (ckWARN(WARN_SUBSTR))
-	    Perl_warner(aTHX_ WARN_SUBSTR, "substr outside of string");
+	    Perl_warner(aTHX_ packWARN(WARN_SUBSTR), "substr outside of string");
 	RETPUSHUNDEF;
     }
     else {
@@ -2992,7 +3082,7 @@ PP(pp_substr)
 		    STRLEN n_a;
 		    SvPV_force(sv,n_a);
 		    if (ckWARN(WARN_SUBSTR))
-			Perl_warner(aTHX_ WARN_SUBSTR,
+			Perl_warner(aTHX_ packWARN(WARN_SUBSTR),
 				"Attempt to use reference as lvalue in substr");
 		}
 		if (SvOK(sv))		/* is it defined ? */
@@ -3073,7 +3163,7 @@ PP(pp_index)
 	sv_pos_u2b(big, &offset, 0);
     if (offset < 0)
 	offset = 0;
-    else if (offset > biglen)
+    else if (offset > (I32)biglen)
 	offset = biglen;
     if (!(tmps2 = fbm_instr((unsigned char*)tmps + offset,
       (unsigned char*)tmps + biglen, little, 0)))
@@ -3114,7 +3204,7 @@ PP(pp_rindex)
     }
     if (offset < 0)
 	offset = 0;
-    else if (offset > blen)
+    else if (offset > (I32)blen)
 	offset = blen;
     if (!(tmps2 = rninstr(tmps,  tmps  + offset,
 			  tmps2, tmps2 + llen)))
@@ -3147,13 +3237,15 @@ PP(pp_ord)
     U8 *s = (U8*)SvPVx(argsv, len);
     SV *tmpsv;
 
-    if (PL_encoding && !DO_UTF8(argsv)) {
+    if (PL_encoding && SvPOK(argsv) && !DO_UTF8(argsv)) {
         tmpsv = sv_2mortal(newSVsv(argsv));
-        s = (U8*)Perl_sv_recode_to_utf8(aTHX_ tmpsv, PL_encoding);
+        s = (U8*)sv_recode_to_utf8(tmpsv, PL_encoding);
         argsv = tmpsv;
     }
 
-    XPUSHu(DO_UTF8(argsv) ? utf8_to_uvchr(s, 0) : (*s & 0xff));
+    XPUSHu(DO_UTF8(argsv) ?
+	   utf8n_to_uvchr(s, UTF8_MAXLEN, 0, UTF8_ALLOW_ANYUV) :
+	   (*s & 0xff));
 
     RETURN;
 }
@@ -3167,7 +3259,7 @@ PP(pp_chr)
     (void)SvUPGRADE(TARG,SVt_PV);
 
     if (value > 255 && !IN_BYTES) {
-	SvGROW(TARG, UNISKIP(value)+1);
+	SvGROW(TARG, (STRLEN)UNISKIP(value)+1);
 	tmps = (char*)uvchr_to_utf8_flags((U8*)SvPVX(TARG), value, 0);
 	SvCUR_set(TARG, tmps - SvPVX(TARG));
 	*tmps = '\0';
@@ -3180,11 +3272,11 @@ PP(pp_chr)
     SvGROW(TARG,2);
     SvCUR_set(TARG, 1);
     tmps = SvPVX(TARG);
-    *tmps++ = value;
+    *tmps++ = (char)value;
     *tmps = '\0';
     (void)SvPOK_only(TARG);
     if (PL_encoding)
-        Perl_sv_recode_to_utf8(aTHX_ TARG, PL_encoding);
+        sv_recode_to_utf8(TARG, PL_encoding);
     XPUSHs(TARG);
     RETURN;
 }
@@ -3213,12 +3305,12 @@ PP(pp_crypt)
 #   else
     sv_setpv(TARG, PerlProc_crypt(tmps, SvPV(right, n_a)));
 #   endif
+    SETs(TARG);
+    RETURN;
 #else
     DIE(aTHX_
       "The crypt() function is unimplemented due to excessive paranoia.");
 #endif
-    SETs(TARG);
-    RETURN;
 }
 
 PP(pp_ucfirst)
@@ -3293,7 +3385,7 @@ PP(pp_lcfirst)
 	
 	tend = uvchr_to_utf8(tmpbuf, uv);
 
-	if (!SvPADTMP(sv) || tend - tmpbuf != ulen || SvREADONLY(sv)) {
+	if (!SvPADTMP(sv) || (STRLEN)(tend - tmpbuf) != ulen || SvREADONLY(sv)) {
 	    dTARGET;
 	    sv_setpvn(TARG, (char*)tmpbuf, tend - tmpbuf);
 	    sv_catpvn(TARG, (char*)(s + ulen), slen - ulen);
@@ -3598,7 +3690,8 @@ PP(pp_each)
 
     EXTEND(SP, 2);
     if (entry) {
-	PUSHs(hv_iterkeysv(entry));	/* won't clobber stack_sp */
+        SV* sv = hv_iterkeysv(entry);
+	PUSHs(sv);	/* won't clobber stack_sp */
 	if (gimme == G_ARRAY) {
 	    SV *val;
 	    PUTBACK;
@@ -3867,7 +3960,7 @@ PP(pp_anonhash)
 	if (MARK < SP)
 	    sv_setsv(val, *++MARK);
 	else if (ckWARN(WARN_MISC))
-	    Perl_warner(aTHX_ WARN_MISC, "Odd number of elements in anonymous hash");
+	    Perl_warner(aTHX_ packWARN(WARN_MISC), "Odd number of elements in anonymous hash");
 	(void)hv_store_ent(hv,key,val,0);
     }
     SP = ORIGMARK;
@@ -3928,7 +4021,7 @@ PP(pp_splice)
     }
     if (offset > AvFILLp(ary) + 1) {
 	if (ckWARN(WARN_MISC))
-	    Perl_warner(aTHX_ WARN_MISC, "splice() offset past end of array" );
+	    Perl_warner(aTHX_ packWARN(WARN_MISC), "splice() offset past end of array" );
 	offset = AvFILLp(ary) + 1;
     }
     after = AvFILLp(ary) + 1 - (offset + length);
@@ -4213,7 +4306,7 @@ PP(pp_reverse)
 			while (down > up) {
 			    tmp = *up;
 			    *up++ = *down;
-			    *down-- = tmp;
+			    *down-- = (char)tmp;
 			}
 		    }
 		}
@@ -4223,7 +4316,7 @@ PP(pp_reverse)
 	    while (down > up) {
 		tmp = *up;
 		*up++ = *down;
-		*down-- = tmp;
+		*down-- = (char)tmp;
 	    }
 	    (void)SvPOK_only_UTF8(TARG);
 	}
@@ -4453,7 +4546,7 @@ PP(pp_split)
 		(void)SvUTF8_on(dstr);
 	    XPUSHs(dstr);
 	    if (rx->nparens) {
-		for (i = 1; i <= rx->nparens; i++) {
+		for (i = 1; i <= (I32)rx->nparens; i++) {
 		    s = rx->startp[i] + orig;
 		    m = rx->endp[i] + orig;
 

@@ -171,6 +171,15 @@ Use of -l on filehandle STDIN at - line 3.
 Use of -l on filehandle $fh at - line 6.
 ########
 # doio.c [Perl_do_aexec5]
+BEGIN {
+    if ($^O eq 'MacOS') {
+	print <<EOM;
+SKIPPED
+# no exec on Mac OS
+EOM
+	exit;
+    }
+}
 use warnings 'io' ;
 exec "lskdjfalksdjfdjfkls","" ;
 no warnings 'io' ;
@@ -180,6 +189,15 @@ OPTION regex
 Can't exec "lskdjfalksdjfdjfkls": .+
 ########
 # doio.c [Perl_do_exec3]
+BEGIN {
+    if ($^O eq 'MacOS') {
+	print <<EOM;
+SKIPPED
+# no exec on Mac OS
+EOM
+	exit;
+    }
+}
 use warnings 'io' ;
 exec "lskdjfalksdjfdjfkls", "abc" ;
 no warnings 'io' ;
@@ -189,6 +207,15 @@ OPTION regex
 Can't exec "lskdjfalksdjfdjfkls(:? abc)?": .+
 ########
 # doio.c [win32_execvp]
+BEGIN {
+    if ($^O eq 'MacOS') {
+	print <<EOM;
+SKIPPED
+# no exec on Mac OS
+EOM
+	exit;
+    }
+}
 use warnings 'exec' ;
 exec $^X, "-e0" ;
 EXPECT
@@ -228,3 +255,23 @@ no warnings 'io' ;
 $a = eof STDOUT ;
 EXPECT
 Filehandle STDOUT opened only for output at - line 3.
+########
+# doio.c [Perl_do_openn]
+use Config;
+BEGIN {
+    if ($Config{useperlio}) {
+	print <<EOM;
+SKIPPED
+# warns only without perlio
+EOM
+	exit;
+    }
+}
+use warnings 'io';
+my $x = "foo";
+open FOO, '>', \$x;
+open BAR, '>&', \*STDOUT; # should not warn
+no warnings 'io';
+open FOO, '>', \$x;
+EXPECT
+Can't open a reference at - line 14.

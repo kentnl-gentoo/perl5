@@ -315,11 +315,13 @@ PERL_CALLCONV char*	Perl_hv_iterkey(pTHX_ HE* entry, I32* retlen);
 PERL_CALLCONV SV*	Perl_hv_iterkeysv(pTHX_ HE* entry);
 PERL_CALLCONV HE*	Perl_hv_iternext(pTHX_ HV* tb);
 PERL_CALLCONV SV*	Perl_hv_iternextsv(pTHX_ HV* hv, char** key, I32* retlen);
+PERL_CALLCONV HE*	Perl_hv_iternext_flags(pTHX_ HV* tb, I32 flags);
 PERL_CALLCONV SV*	Perl_hv_iterval(pTHX_ HV* tb, HE* entry);
 PERL_CALLCONV void	Perl_hv_ksplit(pTHX_ HV* hv, IV newmax);
 PERL_CALLCONV void	Perl_hv_magic(pTHX_ HV* hv, GV* gv, int how);
 PERL_CALLCONV SV**	Perl_hv_store(pTHX_ HV* tb, const char* key, I32 klen, SV* val, U32 hash);
 PERL_CALLCONV HE*	Perl_hv_store_ent(pTHX_ HV* tb, SV* key, SV* val, U32 hash);
+PERL_CALLCONV SV**	Perl_hv_store_flags(pTHX_ HV* tb, const char* key, I32 klen, SV* val, U32 hash, int flags);
 PERL_CALLCONV void	Perl_hv_undef(pTHX_ HV* tb);
 PERL_CALLCONV I32	Perl_ibcmp(pTHX_ const char* a, const char* b, I32 len);
 PERL_CALLCONV I32	Perl_ibcmp_locale(pTHX_ const char* a, const char* b, I32 len);
@@ -375,6 +377,7 @@ PERL_CALLCONV bool	Perl_is_utf8_string(pTHX_ U8 *s, STRLEN len);
 PERL_CALLCONV bool	Perl_is_utf8_alnum(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_alnumc(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_idfirst(pTHX_ U8 *p);
+PERL_CALLCONV bool	Perl_is_utf8_idcont(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_alpha(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_ascii(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_space(pTHX_ U8 *p);
@@ -463,7 +466,6 @@ PERL_CALLCONV void	Perl_markstack_grow(pTHX);
 #if defined(USE_LOCALE_COLLATE)
 PERL_CALLCONV char*	Perl_mem_collxfrm(pTHX_ const char* s, STRLEN len, STRLEN* xlen);
 #endif
-PERL_CALLCONV int	Perl_memcmp_byte_utf8(pTHX_ char *sbyte, STRLEN lbyte, char *sutf, STRLEN lutf);
 PERL_CALLCONV SV*	Perl_mess(pTHX_ const char* pat, ...)
 #ifdef CHECK_FORMAT
  __attribute__((format(printf,pTHX_1,pTHX_2)))
@@ -596,6 +598,12 @@ PERL_CALLCONV PerlIO*	Perl_start_glob(pTHX_ SV* pattern, IO *io);
 #if defined(USE_5005THREADS)
 PERL_CALLCONV struct perl_thread*	Perl_new_struct_thread(pTHX_ struct perl_thread *t);
 #endif
+#if defined(USE_REENTRANT_API)
+PERL_CALLCONV void	Perl_reentrant_size(pTHX);
+PERL_CALLCONV void	Perl_reentrant_init(pTHX);
+PERL_CALLCONV void	Perl_reentrant_free(pTHX);
+PERL_CALLCONV void*	Perl_reentrant_retry(const char*, ...);
+#endif
 PERL_CALLCONV void	Perl_call_atexit(pTHX_ ATEXIT_t fn, void *ptr);
 PERL_CALLCONV I32	Perl_call_argv(pTHX_ const char* sub_name, I32 flags, char** argv);
 PERL_CALLCONV I32	Perl_call_method(pTHX_ const char* methname, I32 flags);
@@ -619,7 +627,7 @@ PERL_CALLCONV void	Perl_set_numeric_standard(pTHX);
 PERL_CALLCONV void	Perl_require_pv(pTHX_ const char* pv);
 PERL_CALLCONV void	Perl_pack_cat(pTHX_ SV *cat, char *pat, char *patend, SV **beglist, SV **endlist, SV ***next_in_list, U32 flags);
 PERL_CALLCONV void	Perl_pidgone(pTHX_ Pid_t pid, int status);
-PERL_CALLCONV void	Perl_pmflag(pTHX_ U16* pmfl, int ch);
+PERL_CALLCONV void	Perl_pmflag(pTHX_ U32* pmfl, int ch);
 PERL_CALLCONV OP*	Perl_pmruntime(pTHX_ OP* pm, OP* expr, OP* repl);
 PERL_CALLCONV OP*	Perl_pmtrans(pTHX_ OP* o, OP* expr, OP* repl);
 PERL_CALLCONV OP*	Perl_pop_return(pTHX);
@@ -651,9 +659,9 @@ PERL_CALLCONV void	Perl_rxres_save(pTHX_ void** rsp, REGEXP* prx);
 #if !defined(HAS_RENAME)
 PERL_CALLCONV I32	Perl_same_dirent(pTHX_ char* a, char* b);
 #endif
-PERL_CALLCONV char*	Perl_savepv(pTHX_ const char* sv);
-PERL_CALLCONV char*	Perl_savesharedpv(pTHX_ const char* sv);
-PERL_CALLCONV char*	Perl_savepvn(pTHX_ const char* sv, I32 len);
+PERL_CALLCONV char*	Perl_savepv(pTHX_ const char* pv);
+PERL_CALLCONV char*	Perl_savesharedpv(pTHX_ const char* pv);
+PERL_CALLCONV char*	Perl_savepvn(pTHX_ const char* pv, I32 len);
 PERL_CALLCONV void	Perl_savestack_grow(pTHX);
 PERL_CALLCONV void	Perl_save_aelem(pTHX_ AV* av, I32 idx, SV **sptr);
 PERL_CALLCONV I32	Perl_save_alloc(pTHX_ I32 size, I32 pad);
@@ -791,7 +799,6 @@ PERL_CALLCONV void	Perl_sv_setpvf(pTHX_ SV* sv, const char* pat, ...)
 ;
 PERL_CALLCONV void	Perl_sv_vsetpvf(pTHX_ SV* sv, const char* pat, va_list* args);
 PERL_CALLCONV void	Perl_sv_setiv(pTHX_ SV* sv, IV num);
-PERL_CALLCONV void	Perl_sv_setpviv(pTHX_ SV* sv, IV num);
 PERL_CALLCONV void	Perl_sv_setuv(pTHX_ SV* sv, UV num);
 PERL_CALLCONV void	Perl_sv_setnv(pTHX_ SV* sv, NV num);
 PERL_CALLCONV SV*	Perl_sv_setref_iv(pTHX_ SV* rv, const char* classname, IV iv);
@@ -914,7 +921,6 @@ PERL_CALLCONV void	Perl_sv_setpvf_mg(pTHX_ SV *sv, const char* pat, ...)
 ;
 PERL_CALLCONV void	Perl_sv_vsetpvf_mg(pTHX_ SV* sv, const char* pat, va_list* args);
 PERL_CALLCONV void	Perl_sv_setiv_mg(pTHX_ SV *sv, IV i);
-PERL_CALLCONV void	Perl_sv_setpviv_mg(pTHX_ SV *sv, IV iv);
 PERL_CALLCONV void	Perl_sv_setuv_mg(pTHX_ SV *sv, UV u);
 PERL_CALLCONV void	Perl_sv_setnv_mg(pTHX_ SV *sv, NV num);
 PERL_CALLCONV void	Perl_sv_setpv_mg(pTHX_ SV *sv, const char *ptr);
@@ -945,9 +951,9 @@ PERL_CALLCONV void	Perl_reginitcolors(pTHX);
 PERL_CALLCONV char*	Perl_sv_2pv_nolen(pTHX_ SV* sv);
 PERL_CALLCONV char*	Perl_sv_2pvutf8_nolen(pTHX_ SV* sv);
 PERL_CALLCONV char*	Perl_sv_2pvbyte_nolen(pTHX_ SV* sv);
-PERL_CALLCONV char*	Perl_sv_pv(pTHX_ SV *sv);
-PERL_CALLCONV char*	Perl_sv_pvutf8(pTHX_ SV *sv);
-PERL_CALLCONV char*	Perl_sv_pvbyte(pTHX_ SV *sv);
+/* PERL_CALLCONV char*	sv_pv(pTHX_ SV *sv); */
+/* PERL_CALLCONV char*	sv_pvutf8(pTHX_ SV *sv); */
+/* PERL_CALLCONV char*	sv_pvbyte(pTHX_ SV *sv); */
 /* PERL_CALLCONV STRLEN	sv_utf8_upgrade(pTHX_ SV *sv); */
 PERL_CALLCONV bool	Perl_sv_utf8_downgrade(pTHX_ SV *sv, bool fail_ok);
 PERL_CALLCONV void	Perl_sv_utf8_encode(pTHX_ SV *sv);
@@ -995,6 +1001,7 @@ PERL_CALLCONV char *	Perl_custom_op_desc(pTHX_ OP* op);
 PERL_CALLCONV void	Perl_sv_nosharing(pTHX_ SV *);
 PERL_CALLCONV void	Perl_sv_nolocking(pTHX_ SV *);
 PERL_CALLCONV void	Perl_sv_nounlocking(pTHX_ SV *);
+PERL_CALLCONV int	Perl_nothreadhook(pTHX);
 
 END_EXTERN_C
 
@@ -1023,8 +1030,12 @@ STATIC void	S_hfreeentries(pTHX_ HV *hv);
 STATIC void	S_more_he(pTHX);
 STATIC HE*	S_new_he(pTHX);
 STATIC void	S_del_he(pTHX_ HE *p);
-STATIC HEK*	S_save_hek(pTHX_ const char *str, I32 len, U32 hash);
+STATIC HEK*	S_save_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags);
 STATIC void	S_hv_magic_check(pTHX_ HV *hv, bool *needs_copy, bool *needs_store);
+STATIC void	S_unshare_hek_or_pvn(pTHX_ HEK* hek, const char* sv, I32 len, U32 hash);
+STATIC HEK*	S_share_hek_flags(pTHX_ const char* sv, I32 len, U32 hash, int flags);
+STATIC SV**	S_hv_fetch_flags(pTHX_ HV* tb, const char* key, I32 klen, I32 lval, int flags);
+STATIC void	S_hv_notallowed(pTHX_ int flags, const char *key, I32 klen, const char *msg);
 #endif
 
 #if defined(PERL_IN_MG_C) || defined(PERL_DECL_PROT)
@@ -1187,8 +1198,7 @@ STATIC I32	S_regmatch(pTHX_ regnode *prog);
 STATIC I32	S_regrepeat(pTHX_ regnode *p, I32 max);
 STATIC I32	S_regrepeat_hard(pTHX_ regnode *p, I32 max, I32 *lp);
 STATIC I32	S_regtry(pTHX_ regexp *prog, char *startpos);
-STATIC bool	S_reginclass(pTHX_ regnode *n, U8 *p, bool do_utf8sv_is_utf8);
-STATIC bool	S_reginclasslen(pTHX_ regnode *n, U8 *p, STRLEN *lenp, bool do_utf8sv_is_utf8);
+STATIC bool	S_reginclass(pTHX_ regnode *n, U8 *p, STRLEN *lenp, bool do_utf8sv_is_utf8);
 STATIC CHECKPOINT	S_regcppush(pTHX_ I32 parenfloor);
 STATIC char*	S_regcppop(pTHX);
 STATIC char*	S_regcp_set_to(pTHX_ I32 ss);
@@ -1198,6 +1208,8 @@ STATIC U8*	S_reghop3(pTHX_ U8 *pos, I32 off, U8 *lim);
 STATIC U8*	S_reghopmaybe(pTHX_ U8 *pos, I32 off);
 STATIC U8*	S_reghopmaybe3(pTHX_ U8 *pos, I32 off, U8 *lim);
 STATIC char*	S_find_byclass(pTHX_ regexp * prog, regnode *c, char *s, char *strend, char *startpos, I32 norun);
+STATIC void	S_to_utf8_substr(pTHX_ regexp * prog);
+STATIC void	S_to_byte_substr(pTHX_ regexp * prog);
 #endif
 
 #if defined(PERL_IN_DUMP_C) || defined(PERL_DECL_PROT)
@@ -1311,9 +1323,6 @@ STATIC char*	S_incl_perldb(pTHX);
 STATIC I32	S_utf16_textfilter(pTHX_ int idx, SV *sv, int maxlen);
 STATIC I32	S_utf16rev_textfilter(pTHX_ int idx, SV *sv, int maxlen);
 #endif
-#  if defined(CRIPPLED_CC)
-STATIC int	S_uni(pTHX_ I32 f, char *s);
-#  endif
 #  if defined(PERL_CR_FILTER)
 STATIC I32	S_cr_textfilter(pTHX_ int idx, SV *sv, int maxlen);
 #  endif

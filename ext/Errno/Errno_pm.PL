@@ -13,10 +13,6 @@ select OUT;
 my $file;
 foreach $file (get_files()) {
     process_file($file);
-    if ($^O eq 'MSWin32') {
-      $file =~ s/errno/winsock/;
-      process_file($file);
-    }
 }
 write_errno_pm();
 unlink "errno.c" if -f "errno.c";
@@ -131,9 +127,13 @@ sub get_files {
 	    die "Cannot open errno.c";
 
 	if ($^O eq 'NetWare') {
-		print CPPI "#include <nwerrno.h>\n";
+	    print CPPI "#include <nwerrno.h>\n";
 	} else {
-		print CPPI "#include <errno.h>\n";
+	    print CPPI "#include <errno.h>\n";
+	    if ($^O eq 'MSWin32') {
+		print CPPI "#define _WINSOCKAPI_\n"; # don't drag in everything
+		print CPPI "#include <winsock.h>\n";
+	    }
 	}
 
 	close(CPPI);
@@ -287,6 +287,7 @@ use strict;
 	die "Errno architecture ($Config{'archname'}-$Config{'osvers'}) does not match executable architecture (\$Config{'archname'}-\$Config{'osvers'})";
 
 \$VERSION = "$VERSION";
+\$VERSION = eval \$VERSION;
 \@ISA = qw(Exporter);
 
 EDQ

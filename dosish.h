@@ -37,7 +37,7 @@
 #  else
 #	 ifdef NETWARE
 #      define PERL_SYS_INIT(c,v)	Perl_nw5_init(c,v)
-#      define BIT_BUCKET "nul"
+#      define BIT_BUCKET "nwnul"
 #    else
 #      define PERL_SYS_INIT(c,v)
 #      define BIT_BUCKET "\\dev\\nul" /* "wanna be like, umm, Newlined, or somethin?" */
@@ -79,7 +79,11 @@
  *	to include <sys/stat.h> and <sys/types.h> to get any typedef'ed
  *	information.
  */
+#if defined(WIN64) || defined(USE_LARGE_FILES)
+#define Stat_t struct _stati64
+#else
 #define Stat_t struct stat
+#endif
 
 /* USE_STAT_RDEV:
  *	This symbol is defined if this system has a stat structure declaring

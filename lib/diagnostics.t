@@ -1,8 +1,13 @@
 #!./perl
 
 BEGIN {
-    chdir '..' if -d '../pod' && -d '../t';
-    @INC = 'lib';
+    if ($^O eq 'MacOS') {
+	chdir '::' if -d '::pod' && -d '::t';
+	@INC = ':lib:';
+    } else {
+	chdir '..' if -d '../pod' && -d '../t';
+	@INC = 'lib';
+    }
 }
 
 use Test::More tests => 2;
@@ -15,4 +20,4 @@ eval {
     'base'->import(qw(I::do::not::exist));
 };
 
-is( $@, '',   'diagnostics not tripped up by "use base qw(Dont::Exist)"' );
+like( $@, qr/^Base class package "I::do::not::exist" is empty/);

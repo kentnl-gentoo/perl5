@@ -1,7 +1,7 @@
 package Time::HiRes;
 
 use strict;
-use vars qw($VERSION @ISA @EXPORT @EXPORT_OK $AUTOLOAD);
+use vars qw($VERSION $XS_VERSION @ISA @EXPORT @EXPORT_OK $AUTOLOAD);
 
 require Exporter;
 use XSLoader;
@@ -13,6 +13,8 @@ use XSLoader;
 		 getitimer setitimer ITIMER_REAL ITIMER_VIRTUAL ITIMER_PROF);
 
 $VERSION = '1.20_00';
+$XS_VERSION = $VERSION;
+$VERSION = eval $VERSION;
 
 sub AUTOLOAD {
     my $constname;
@@ -29,7 +31,7 @@ sub AUTOLOAD {
     goto &$AUTOLOAD;
 }
 
-XSLoader::load 'Time::HiRes', $VERSION;
+XSLoader::load 'Time::HiRes', $XS_VERSION;
 
 # Preloaded methods go here.
 
@@ -168,10 +170,10 @@ replacement for the C<alarm> provided with perl, see the EXAMPLES below.
 
 C<setitimer ( $which, $floating_seconds [, $interval_floating_seconds ] )>
 
-Start up an interval timer: after a certain time, a signal is arrives,
-and more may keep arriving at certain intervals.  To disable a timer,
-use time of zero.  If interval is set to zero (or unspecified), the
-timer is disabled after the next delivered signal.
+Start up an interval timer: after a certain time, a signal arrives,
+and more signals may keep arriving at certain intervals.  To disable
+a timer, use time of zero.  If interval is set to zero (or unspecified),
+the timer is disabled B<after> the next delivered signal.
 
 Use of interval timers may interfere with alarm(), sleep(), and usleep().
 In standard-speak the "interaction is unspecified", which means that
@@ -189,9 +191,9 @@ I<real time>, that is, wallclock time.  SIGALRM is delivered when
 the timer expires.
 
 ITIMER_VIRTUAL counts time in (process) I<virtual time>, that is, only
-when the process is running.  In multiprocessing/user/CPU systems this
-may be much less than real time.  (This time is also known as the
-I<user time>.)  SIGVTALRM is delivered when the timer expires.
+when the process is running.  In multiprocessor/user/CPU systems this
+may be more or less than real or wallclock time.  (This time is also
+known as the I<user time>.)  SIGVTALRM is delivered when the timer expires.
 
 ITIMER_PROF counts time when either the process virtual time or when
 the operating system is running on behalf of the process (such as
@@ -282,7 +284,7 @@ Here is an example of using NVtime from C:
   SV **svp = hv_fetch(PL_modglobal, "Time::NVtime", 12, 0);
   if (!svp)         croak("Time::HiRes is required");
   if (!SvIOK(*svp)) croak("Time::NVtime isn't a function pointer");
-  myNVtime = (double(*)()) SvIV(*svp);
+  myNVtime = INT2PTR(double(*)(), SvIV(*svp));
   printf("The current time is: %f\n", (*myNVtime)());
 
 =head1 CAVEATS

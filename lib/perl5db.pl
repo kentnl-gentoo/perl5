@@ -1,7 +1,7 @@
 package DB;
 
 # Debugger for Perl 5.00x; perl5db.pl patch level:
-$VERSION = 1.17;
+$VERSION = 1.19;
 $header  = "perl5db.pl version $VERSION";
 
 # It is crucial that there is no lexicals in scope of `eval ""' down below
@@ -316,6 +316,10 @@ sub eval {
 #   + m(methods),   M(modules)        # ...           (was m,v)
 #   + o(option)                       # lc            (was O)
 #   + v(view code), V(view Variables) # ...           (was w,V)
+# Changes: 1.18: Mar 17, 2002 Richard Foley <richard.foley@rfi.net>
+#   + fixed missing cmd_O bug
+# Changes: 1.19: Mar 29, 2002 Spider Boardman
+#   + Added missing local()s -- DB::DB is called recursively.
 # 
 ####################################################################
 
@@ -438,7 +442,7 @@ if (defined $ENV{PERLDB_PIDS}) {
   $term_pid = -1;
 } else {
   $ENV{PERLDB_PIDS} = "$$";
-  $pids = '';
+  $pids = "{pid=$$}";
   $term_pid = $$;
 }
 $pidprompt = '';
@@ -662,12 +666,20 @@ sub DB {
     }
     $runnonstop = 0 if $single or $signal; # Disable it if interactive.
     &save;
-    ($package, $filename, $line) = caller;
-    $filename_ini = $filename;
-    $usercontext = '($@, $!, $^E, $,, $/, $\, $^W) = @saved;' .
+    local($package, $filename, $line) = caller;
+    local $filename_ini = $filename;
+    local $usercontext = '($@, $!, $^E, $,, $/, $\, $^W) = @saved;' .
       "package $package;";	# this won't let them modify, alas
     local(*dbline) = $main::{'_<' . $filename};
-    $max = $#dbline;
+
+    # we need to check for pseudofiles on Mac OS (these are files
+    # not attached to a filename, but instead stored in Dev:Pseudo)
+    if ($^O eq 'MacOS' && $#dbline < 0) {
+	$filename_ini = $filename = 'Dev:Pseudo';
+	*dbline = $main::{'_<' . $filename};
+    }
+
+    local $max = $#dbline;
     if ($dbline{$line} && (($stop,$action) = split(/\0/,$dbline{$line}))) {
 		if ($stop eq '1') {
 			$signal |= 1;
@@ -786,7 +798,11 @@ EOP
 						next CMD;
 					} 
 		    }
-        $cmd =~ /^q$/ && ($fall_off_end = 1) && clean_ENV() && exit $?;
+                    $cmd =~ /^q$/ && do {
+                        $fall_off_end = 1;
+                        clean_ENV();
+                        exit $?;
+                    };
 		    $cmd =~ /^t$/ && do {
 			$trace ^= 1;
 			local $\ = '';
@@ -815,7 +831,10 @@ EOP
 			    local $frame = 0;
 			    local $doret = -2;
 			    # must detect sigpipe failures
-			    eval { &main::dumpvar($packname,@vars) };
+                           eval { &main::dumpvar($packname,
+                                                 defined $option{dumpDepth}
+                                                  ? $option{dumpDepth} : -1,
+                                                 @vars) };
 			    if ($@) {
 				die unless $@ =~ /dumpvar print failed/;
 			    } 
@@ -1426,7 +1445,7 @@ sub cmd_wrapper {
 	my $call = 'cmd_'.(
 		$set{$CommandSet}{$cmd} || $cmd
 	);
-	# print "rjsf: cmd_wrapper($cmd): $CommandSet($set{$CommandSet}{$cmd}) => call($call)\n";
+	# print "cmd_wrapper($cmd): $CommandSet($set{$CommandSet}{$cmd}) => call($call)\n";
 
 	return &$call($line, $dblineno);
 }
@@ -1870,6 +1889,12 @@ sub cmd_o {
 	}
 }
 
+sub cmd_O {
+	print $OUT "The old O command is now the o command.\n";        # hint
+	print $OUT "Use 'h' to get current command help synopsis or\n"; # 
+	print $OUT "use 'o CommandSet=pre580' to revert to old usage\n"; # 
+}
+
 sub cmd_v {
 	my $line = shift;
 
@@ -2217,6 +2242,9 @@ sub os2_get_fork_TTY {
   $ENV{PERL5OPT} =~ s/(?:^|(?<=\s))-d\b//  if $ENV{PERL5OPT};
   $ENV{PERL5OPT} =~ s/(?:^|(?<=\s))-d\B/-/ if $ENV{PERL5OPT};
   print $OUT "Making kid PERL5OPT->`$ENV{PERL5OPT}'.\n" if $ENV{PERL5OPT};
+  local $ENV{PERL5LIB} = $ENV{PERL5LIB} ? $ENV{PERL5LIB} : $ENV{PERLLIB};
+  $ENV{PERL5LIB} = '' unless defined $ENV{PERL5LIB};
+  $ENV{PERL5LIB} = join ';', @ini_INC, split /;/, $ENV{PERL5LIB};
   (my $name = $0) =~ s,^.*[/\\],,s;
   my @args;
   if ( pipe $in1, $out1 and pipe $in2, $out2
@@ -2225,6 +2253,8 @@ sub os2_get_fork_TTY {
        and @args = ($rl, fileno $in1, fileno $out2,
 		    "Daughter Perl debugger $pids $name") and
        (($kpid = CORE::system 4, $^X, '-we', <<'ES', @args) >= 0 # P_SESSION
+END {sleep 5 unless $loaded}
+BEGIN {open STDIN,  '</dev/con' or warn "reopen stdin: $!"}
 use OS2::Process;
 
 my ($rl, $in) = (shift, shift);		# Read from $in and pass through
@@ -2794,6 +2824,7 @@ I<Data Examination:>     B<expr>     Execute perl code, also see: B<s>,B<n>,B<t>
   B<S> [[B<!>]I<pat>]     List subroutine names [not] matching pattern
   B<V> [I<Pk> [I<Vars>]]  List Variables in Package.  Vars can be ~pattern or !pattern.
   B<X> [I<Vars>]       Same as \"B<V> I<current_package> [I<Vars>]\".
+  B<y> [I<n> [I<Vars>]]   List lexicals in higher scope <n>.  Vars same as B<V>.
 For more help, type B<h> I<cmd_letter>, or run B<$doccmd perldebug> for all docs.
 END_SUM
 				# ')}}; # Fix balance of vi % matching
@@ -2961,6 +2992,7 @@ I<Data Examination:>     B<expr>     Execute perl code, also see: B<s>,B<n>,B<t>
   B<S> [[B<!>]I<pat>]     List subroutine names [not] matching pattern
   B<V> [I<Pk> [I<Vars>]]  List Variables in Package.  Vars can be ~pattern or !pattern.
   B<X> [I<Vars>]       Same as \"B<V> I<current_package> [I<Vars>]\".
+  B<y> [I<n> [I<Vars>]]   List lexicals in higher scope <n>.  Vars same as B<V>.
 For more help, type B<h> I<cmd_letter>, or run B<$doccmd perldebug> for all docs.
 END_SUM
 				# ')}}; # Fix balance of vi % matching

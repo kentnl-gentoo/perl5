@@ -1,8 +1,31 @@
 package threads;
 
-use 5.7.2;
+use 5.007_003;
 use strict;
 use warnings;
+use Config;
+
+BEGIN {
+    unless ($Config{useithreads}) {
+	my @caller = caller(2);
+        die <<EOF;
+$caller[1] line $caller[2]:
+
+This Perl hasn't been configured and built properly for the threads
+module to work.  (The 'useithreads' configuration option hasn't been used.)
+
+Having threads support requires all of Perl and all of the modules in
+the Perl installation to be rebuilt, it is not just a question of adding
+the threads module.  (In other words, threaded and non-threaded Perls
+are binary incompatible.)
+
+If you want to the use the threads module, please contact the people
+who built your Perl.
+
+Cannot continue, aborting.
+EOF
+    }
+}
 
 use overload
     '==' => \&equal,
@@ -22,19 +45,24 @@ require DynaLoader;
 
 our @ISA = qw(Exporter DynaLoader);
 
-our %EXPORT_TAGS = ( all => [qw()]);
+our %EXPORT_TAGS = ( all => [qw(yield)]);
 
 our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 our @EXPORT = qw(
-	
+async	
 );
-our $VERSION = '0.05';
+our $VERSION = '0.99';
 
 
 sub equal {
     return 1 if($_[0]->tid() == $_[1]->tid());
     return 0;
+}
+
+sub async (&;@) {
+    my $cref = shift;
+    return threads->new($cref,@_);
 }
 
 $threads::threads = 1;
@@ -55,26 +83,28 @@ threads - Perl extension allowing use of interpreter based threads from perl
 
 =head1 SYNOPSIS
 
-use threads;
+    use threads;
 
-sub start_thread {
-    print "Thread started\n";
-}
+    sub start_thread {
+	print "Thread started\n";
+    }
 
-my $thread = threads->create("start_thread","argument");
+    my $thread  = threads->create("start_thread","argument");
+    my $thread2 = $thread->create(sub { print "I am a thread"},"argument");
+    my $thread3 = async { foreach (@files) { ... } };
 
-$thread->create(sub { print "I am a thread"},"argument");
+    $thread->join();
+    $thread->detach();
 
-$thread->join();
+    $thread = threads->self();
 
-$thread->detach();
+    $thread->tid();
+    threads->tid();
+    threads->self->tid();
 
-$thread = threads->self();
+    threads->yield();
 
-threads->tid();
-threads->self->tid();
-
-$thread->tid();
+    threads->list();
 
 =head1 DESCRIPTION
 
@@ -91,7 +121,7 @@ important to note that variables are not shared between threads, all
 variables are per default thread local.  To use shared variables one
 must use threads::shared.
 
-It is also important to note that you preferably enable threads by
+It is also important to note that you must enable threads by
 doing C<use threads> as early as possible and that it is not possible
 to enable threading inside an eval "";  In particular, if you are
 intending to share variables with threads::shared, you must
@@ -104,40 +134,105 @@ a warning if you do it the other way around.
 
 This will create a new thread with the entry point function and give
 it LIST as parameters.  It will return the corresponding threads
-object.
+object. The new() method is an alias for create().
 
 =item $thread->join
 
-This will wait for the corresponding thread to join. When it finishes
-join will return the return values of the entry point function.  If a
-thread has been detached, join will return without wait.
+This will wait for the corresponding thread to join. When the thread finishes,
+join() will return the return values of the entry point function. If the
+thread has been detached, an error will be thrown. If the program
+exits without all other threads having been either joined or detached,
+then a warning will be issued. (A program exits either because one of its
+threads explicitly calls exit(), or in the case of the main thread, reaches
+the end of the main program file.)
 
 =item $thread->detach
 
-Will throw away the return value from the thread and make it
-non-joinable.
+Will make the thread unjoinable, and cause any eventual return value to be
+discarded.
 
 =item threads->self
 
-This will return the object for the current thread.
+This will return the thread object for the current thread.
 
 =item $thread->tid
 
-This will return the id of the thread.  threads->self->tid() is a
-quick way to get current thread id.
+This will return the id of the thread.  Thread IDs are integers, with the
+main thread in a program being 0.  Currently Perl assigns a unique tid to
+every thread ever created in your program, assigning the first thread to
+be created a tid of 1, and increasing the tid by 1 for each new thread
+that's created.
+
+NB the class method C<< threads->tid() >> is a quick way to get the
+current thread id if you don't have your thread object handy.
+
+=item threads->yield();
+
+This is a suggestion to the OS to let this thread yield CPU time to other
+threads.  What actually happens is highly dependent upon the underlying
+thread implementation.
+
+You may do C<use threads qw(yield)> then use just a bare C<yield> in your
+code.
+
+=item threads->list();
+
+This will return a list of all non joined, non detached threads.
+
+=item async BLOCK;
+
+C<async> creates a thread to execute the block immediately following
+it.  This block is treated as an anonymous sub, and so must have a
+semi-colon after the closing brace. Like C<< threads->new >>, C<async>
+returns a thread object.
 
 =back
 
+=head1 WARNINGS
 
-=head1 TODO
+=over 4
+
+=item A thread exited while %d other threads were still running
+
+A thread (not necessarily the main thread) exited while there were
+still other threads running.  Usually it's a good idea to first collect
+the return values of the created threads by joining them, and only then
+exit from then main thread.
+
+=back
+
+=head1 BUGS / TODO
+
+The current implementation of threads has been an attempt to get
+a correct threading system working that could be built on, 
+and optimized, in newer versions of perl.
+
+Currently the overhead of creating a thread is rather large,
+also the cost of returning values can be large. These are areas
+were there most likely will be work done to optimize what data
+that needs to be cloned.
 
 =over
 
-=item Fix so the return value is returned when you join.
+=item Parent-Child threads.
 
-=item Add join_all.
+On some platforms it might not be possible to destroy "parent"
+threads while there are still existing child "threads".
 
-=item Fix memory leaks!
+This will be possibly be fixed in later versions of perl.
+
+=item tid is I32
+
+The tid is a 32 bit integer, it can potentially overflow. 
+This might be fixed in a later version of perl.
+
+=item Returning objects
+
+When you return an object the entire stash that the object is blessed
+as well. This will lead to a large memory usage.
+The ideal situation would be to detect the original stash if it existed.
+
+=item PERL_OLD_SIGNALS are not threadsafe, will not be.
 
 =back
 
@@ -161,17 +256,6 @@ Vipul Ved Prakash E<lt>mail at vipul.netE<gt>
 Helping with debugging.
 
 please join perl-ithreads@perl.org for more information
-
-=head1 BUGS
-
-=over
-
-=item creating a thread from within a thread is unsafe under win32
-
-=item PERL_OLD_SIGNALS are not threadsafe, will not be.
-
-
-=back
 
 =head1 SEE ALSO
 

@@ -15,42 +15,6 @@
 
 /* NO_EMBED is no longer supported. i.e. EMBED is always active. */
 
-/* provide binary compatible (but inconsistent) names */
-#if defined(PERL_BINCOMPAT_5005)
-#  define  Perl_call_atexit		perl_atexit
-#  define  Perl_eval_sv			perl_eval_sv
-#  define  Perl_eval_pv			perl_eval_pv
-#  define  Perl_call_argv		perl_call_argv
-#  define  Perl_call_method		perl_call_method
-#  define  Perl_call_pv			perl_call_pv
-#  define  Perl_call_sv			perl_call_sv
-#  define  Perl_get_av			perl_get_av
-#  define  Perl_get_cv			perl_get_cv
-#  define  Perl_get_hv			perl_get_hv
-#  define  Perl_get_sv			perl_get_sv
-#  define  Perl_init_i18nl10n		perl_init_i18nl10n
-#  define  Perl_init_i18nl14n		perl_init_i18nl14n
-#  define  Perl_new_collate		perl_new_collate
-#  define  Perl_new_ctype		perl_new_ctype
-#  define  Perl_new_numeric		perl_new_numeric
-#  define  Perl_require_pv		perl_require_pv
-#  define  Perl_safesyscalloc		Perl_safecalloc
-#  define  Perl_safesysfree		Perl_safefree
-#  define  Perl_safesysmalloc		Perl_safemalloc
-#  define  Perl_safesysrealloc		Perl_saferealloc
-#  define  Perl_set_numeric_local	perl_set_numeric_local
-#  define  Perl_set_numeric_standard	perl_set_numeric_standard
-/* malloc() pollution was the default in earlier versions, so enable
- * it for bincompat; but not for systems that used to do prevent that,
- * or when they ask for {HIDE,EMBED}MYMALLOC */
-#  if !defined(EMBEDMYMALLOC) && !defined(HIDEMYMALLOC)
-#    if !defined(NeXT) && !defined(__NeXT) && !defined(__MACHTEN__) && \
-        !defined(__QNX__)
-#      define  PERL_POLLUTE_MALLOC
-#    endif
-#  endif
-#endif
-
 /* Hide global symbols */
 
 #if !defined(PERL_IMPLICIT_CONTEXT)
@@ -263,11 +227,13 @@
 #define hv_iterkeysv		Perl_hv_iterkeysv
 #define hv_iternext		Perl_hv_iternext
 #define hv_iternextsv		Perl_hv_iternextsv
+#define hv_iternext_flags	Perl_hv_iternext_flags
 #define hv_iterval		Perl_hv_iterval
 #define hv_ksplit		Perl_hv_ksplit
 #define hv_magic		Perl_hv_magic
 #define hv_store		Perl_hv_store
 #define hv_store_ent		Perl_hv_store_ent
+#define hv_store_flags		Perl_hv_store_flags
 #define hv_undef		Perl_hv_undef
 #define ibcmp			Perl_ibcmp
 #define ibcmp_locale		Perl_ibcmp_locale
@@ -323,6 +289,7 @@
 #define is_utf8_alnum		Perl_is_utf8_alnum
 #define is_utf8_alnumc		Perl_is_utf8_alnumc
 #define is_utf8_idfirst		Perl_is_utf8_idfirst
+#define is_utf8_idcont		Perl_is_utf8_idcont
 #define is_utf8_alpha		Perl_is_utf8_alpha
 #define is_utf8_ascii		Perl_is_utf8_ascii
 #define is_utf8_space		Perl_is_utf8_space
@@ -411,7 +378,6 @@
 #if defined(USE_LOCALE_COLLATE)
 #define mem_collxfrm		Perl_mem_collxfrm
 #endif
-#define memcmp_byte_utf8	Perl_memcmp_byte_utf8
 #define mess			Perl_mess
 #define vmess			Perl_vmess
 #define qerror			Perl_qerror
@@ -533,6 +499,12 @@
 #define peep			Perl_peep
 #if defined(USE_5005THREADS)
 #define new_struct_thread	Perl_new_struct_thread
+#endif
+#if defined(USE_REENTRANT_API)
+#define reentrant_size		Perl_reentrant_size
+#define reentrant_init		Perl_reentrant_init
+#define reentrant_free		Perl_reentrant_free
+#define reentrant_retry		Perl_reentrant_retry
 #endif
 #define call_atexit		Perl_call_atexit
 #define call_argv		Perl_call_argv
@@ -717,7 +689,6 @@
 #define sv_setpvf		Perl_sv_setpvf
 #define sv_vsetpvf		Perl_sv_vsetpvf
 #define sv_setiv		Perl_sv_setiv
-#define sv_setpviv		Perl_sv_setpviv
 #define sv_setuv		Perl_sv_setuv
 #define sv_setnv		Perl_sv_setnv
 #define sv_setref_iv		Perl_sv_setref_iv
@@ -823,7 +794,6 @@
 #define sv_setpvf_mg		Perl_sv_setpvf_mg
 #define sv_vsetpvf_mg		Perl_sv_vsetpvf_mg
 #define sv_setiv_mg		Perl_sv_setiv_mg
-#define sv_setpviv_mg		Perl_sv_setpviv_mg
 #define sv_setuv_mg		Perl_sv_setuv_mg
 #define sv_setnv_mg		Perl_sv_setnv_mg
 #define sv_setpv_mg		Perl_sv_setpv_mg
@@ -850,9 +820,6 @@
 #define sv_2pv_nolen		Perl_sv_2pv_nolen
 #define sv_2pvutf8_nolen	Perl_sv_2pvutf8_nolen
 #define sv_2pvbyte_nolen	Perl_sv_2pvbyte_nolen
-#define sv_pv			Perl_sv_pv
-#define sv_pvutf8		Perl_sv_pvutf8
-#define sv_pvbyte		Perl_sv_pvbyte
 #define sv_utf8_downgrade	Perl_sv_utf8_downgrade
 #define sv_utf8_encode		Perl_sv_utf8_encode
 #define sv_utf8_decode		Perl_sv_utf8_decode
@@ -897,6 +864,7 @@
 #define sv_nosharing		Perl_sv_nosharing
 #define sv_nolocking		Perl_sv_nolocking
 #define sv_nounlocking		Perl_sv_nounlocking
+#define nothreadhook		Perl_nothreadhook
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
 #define avhv_index_sv		S_avhv_index_sv
 #define avhv_index		S_avhv_index
@@ -919,8 +887,12 @@
 #define more_he			S_more_he
 #define new_he			S_new_he
 #define del_he			S_del_he
-#define save_hek		S_save_hek
+#define save_hek_flags		S_save_hek_flags
 #define hv_magic_check		S_hv_magic_check
+#define unshare_hek_or_pvn	S_unshare_hek_or_pvn
+#define share_hek_flags		S_share_hek_flags
+#define hv_fetch_flags		S_hv_fetch_flags
+#define hv_notallowed		S_hv_notallowed
 #endif
 #if defined(PERL_IN_MG_C) || defined(PERL_DECL_PROT)
 #define save_magic		S_save_magic
@@ -1074,7 +1046,6 @@
 #define regrepeat_hard		S_regrepeat_hard
 #define regtry			S_regtry
 #define reginclass		S_reginclass
-#define reginclasslen		S_reginclasslen
 #define regcppush		S_regcppush
 #define regcppop		S_regcppop
 #define regcp_set_to		S_regcp_set_to
@@ -1084,6 +1055,8 @@
 #define reghopmaybe		S_reghopmaybe
 #define reghopmaybe3		S_reghopmaybe3
 #define find_byclass		S_find_byclass
+#define to_utf8_substr		S_to_utf8_substr
+#define to_byte_substr		S_to_byte_substr
 #endif
 #if defined(PERL_IN_DUMP_C) || defined(PERL_DECL_PROT)
 #define deb_curcv		S_deb_curcv
@@ -1192,9 +1165,6 @@
 #define utf16_textfilter	S_utf16_textfilter
 #define utf16rev_textfilter	S_utf16rev_textfilter
 #endif
-#  if defined(CRIPPLED_CC)
-#define uni			S_uni
-#  endif
 #  if defined(PERL_CR_FILTER)
 #define cr_textfilter		S_cr_textfilter
 #  endif
@@ -1823,11 +1793,13 @@
 #define hv_iterkeysv(a)		Perl_hv_iterkeysv(aTHX_ a)
 #define hv_iternext(a)		Perl_hv_iternext(aTHX_ a)
 #define hv_iternextsv(a,b,c)	Perl_hv_iternextsv(aTHX_ a,b,c)
+#define hv_iternext_flags(a,b)	Perl_hv_iternext_flags(aTHX_ a,b)
 #define hv_iterval(a,b)		Perl_hv_iterval(aTHX_ a,b)
 #define hv_ksplit(a,b)		Perl_hv_ksplit(aTHX_ a,b)
 #define hv_magic(a,b,c)		Perl_hv_magic(aTHX_ a,b,c)
 #define hv_store(a,b,c,d,e)	Perl_hv_store(aTHX_ a,b,c,d,e)
 #define hv_store_ent(a,b,c,d)	Perl_hv_store_ent(aTHX_ a,b,c,d)
+#define hv_store_flags(a,b,c,d,e,f)	Perl_hv_store_flags(aTHX_ a,b,c,d,e,f)
 #define hv_undef(a)		Perl_hv_undef(aTHX_ a)
 #define ibcmp(a,b,c)		Perl_ibcmp(aTHX_ a,b,c)
 #define ibcmp_locale(a,b,c)	Perl_ibcmp_locale(aTHX_ a,b,c)
@@ -1883,6 +1855,7 @@
 #define is_utf8_alnum(a)	Perl_is_utf8_alnum(aTHX_ a)
 #define is_utf8_alnumc(a)	Perl_is_utf8_alnumc(aTHX_ a)
 #define is_utf8_idfirst(a)	Perl_is_utf8_idfirst(aTHX_ a)
+#define is_utf8_idcont(a)	Perl_is_utf8_idcont(aTHX_ a)
 #define is_utf8_alpha(a)	Perl_is_utf8_alpha(aTHX_ a)
 #define is_utf8_ascii(a)	Perl_is_utf8_ascii(aTHX_ a)
 #define is_utf8_space(a)	Perl_is_utf8_space(aTHX_ a)
@@ -1970,7 +1943,6 @@
 #if defined(USE_LOCALE_COLLATE)
 #define mem_collxfrm(a,b,c)	Perl_mem_collxfrm(aTHX_ a,b,c)
 #endif
-#define memcmp_byte_utf8(a,b,c,d)	Perl_memcmp_byte_utf8(aTHX_ a,b,c,d)
 #define vmess(a,b)		Perl_vmess(aTHX_ a,b)
 #define qerror(a)		Perl_qerror(aTHX_ a)
 #define sortsv(a,b,c)		Perl_sortsv(aTHX_ a,b,c)
@@ -2090,6 +2062,11 @@
 #define peep(a)			Perl_peep(aTHX_ a)
 #if defined(USE_5005THREADS)
 #define new_struct_thread(a)	Perl_new_struct_thread(aTHX_ a)
+#endif
+#if defined(USE_REENTRANT_API)
+#define reentrant_size()	Perl_reentrant_size(aTHX)
+#define reentrant_init()	Perl_reentrant_init(aTHX)
+#define reentrant_free()	Perl_reentrant_free(aTHX)
 #endif
 #define call_atexit(a,b)	Perl_call_atexit(aTHX_ a,b)
 #define call_argv(a,b,c)	Perl_call_argv(aTHX_ a,b,c)
@@ -2272,7 +2249,6 @@
 #define sv_reset(a,b)		Perl_sv_reset(aTHX_ a,b)
 #define sv_vsetpvf(a,b,c)	Perl_sv_vsetpvf(aTHX_ a,b,c)
 #define sv_setiv(a,b)		Perl_sv_setiv(aTHX_ a,b)
-#define sv_setpviv(a,b)		Perl_sv_setpviv(aTHX_ a,b)
 #define sv_setuv(a,b)		Perl_sv_setuv(aTHX_ a,b)
 #define sv_setnv(a,b)		Perl_sv_setnv(aTHX_ a,b)
 #define sv_setref_iv(a,b,c)	Perl_sv_setref_iv(aTHX_ a,b,c)
@@ -2374,7 +2350,6 @@
 #define sv_catsv_mg(a,b)	Perl_sv_catsv_mg(aTHX_ a,b)
 #define sv_vsetpvf_mg(a,b,c)	Perl_sv_vsetpvf_mg(aTHX_ a,b,c)
 #define sv_setiv_mg(a,b)	Perl_sv_setiv_mg(aTHX_ a,b)
-#define sv_setpviv_mg(a,b)	Perl_sv_setpviv_mg(aTHX_ a,b)
 #define sv_setuv_mg(a,b)	Perl_sv_setuv_mg(aTHX_ a,b)
 #define sv_setnv_mg(a,b)	Perl_sv_setnv_mg(aTHX_ a,b)
 #define sv_setpv_mg(a,b)	Perl_sv_setpv_mg(aTHX_ a,b)
@@ -2399,9 +2374,6 @@
 #define sv_2pv_nolen(a)		Perl_sv_2pv_nolen(aTHX_ a)
 #define sv_2pvutf8_nolen(a)	Perl_sv_2pvutf8_nolen(aTHX_ a)
 #define sv_2pvbyte_nolen(a)	Perl_sv_2pvbyte_nolen(aTHX_ a)
-#define sv_pv(a)		Perl_sv_pv(aTHX_ a)
-#define sv_pvutf8(a)		Perl_sv_pvutf8(aTHX_ a)
-#define sv_pvbyte(a)		Perl_sv_pvbyte(aTHX_ a)
 #define sv_utf8_downgrade(a,b)	Perl_sv_utf8_downgrade(aTHX_ a,b)
 #define sv_utf8_encode(a)	Perl_sv_utf8_encode(aTHX_ a)
 #define sv_utf8_decode(a)	Perl_sv_utf8_decode(aTHX_ a)
@@ -2446,6 +2418,7 @@
 #define sv_nosharing(a)		Perl_sv_nosharing(aTHX_ a)
 #define sv_nolocking(a)		Perl_sv_nolocking(aTHX_ a)
 #define sv_nounlocking(a)	Perl_sv_nounlocking(aTHX_ a)
+#define nothreadhook()		Perl_nothreadhook(aTHX)
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
 #define avhv_index_sv(a)	S_avhv_index_sv(aTHX_ a)
 #define avhv_index(a,b,c)	S_avhv_index(aTHX_ a,b,c)
@@ -2468,8 +2441,12 @@
 #define more_he()		S_more_he(aTHX)
 #define new_he()		S_new_he(aTHX)
 #define del_he(a)		S_del_he(aTHX_ a)
-#define save_hek(a,b,c)		S_save_hek(aTHX_ a,b,c)
+#define save_hek_flags(a,b,c,d)	S_save_hek_flags(aTHX_ a,b,c,d)
 #define hv_magic_check(a,b,c)	S_hv_magic_check(aTHX_ a,b,c)
+#define unshare_hek_or_pvn(a,b,c,d)	S_unshare_hek_or_pvn(aTHX_ a,b,c,d)
+#define share_hek_flags(a,b,c,d)	S_share_hek_flags(aTHX_ a,b,c,d)
+#define hv_fetch_flags(a,b,c,d,e)	S_hv_fetch_flags(aTHX_ a,b,c,d,e)
+#define hv_notallowed(a,b,c,d)	S_hv_notallowed(aTHX_ a,b,c,d)
 #endif
 #if defined(PERL_IN_MG_C) || defined(PERL_DECL_PROT)
 #define save_magic(a,b)		S_save_magic(aTHX_ a,b)
@@ -2621,8 +2598,7 @@
 #define regrepeat(a,b)		S_regrepeat(aTHX_ a,b)
 #define regrepeat_hard(a,b,c)	S_regrepeat_hard(aTHX_ a,b,c)
 #define regtry(a,b)		S_regtry(aTHX_ a,b)
-#define reginclass(a,b,c)	S_reginclass(aTHX_ a,b,c)
-#define reginclasslen(a,b,c,d)	S_reginclasslen(aTHX_ a,b,c,d)
+#define reginclass(a,b,c,d)	S_reginclass(aTHX_ a,b,c,d)
 #define regcppush(a)		S_regcppush(aTHX_ a)
 #define regcppop()		S_regcppop(aTHX)
 #define regcp_set_to(a)		S_regcp_set_to(aTHX_ a)
@@ -2632,6 +2608,8 @@
 #define reghopmaybe(a,b)	S_reghopmaybe(aTHX_ a,b)
 #define reghopmaybe3(a,b,c)	S_reghopmaybe3(aTHX_ a,b,c)
 #define find_byclass(a,b,c,d,e,f)	S_find_byclass(aTHX_ a,b,c,d,e,f)
+#define to_utf8_substr(a)	S_to_utf8_substr(aTHX_ a)
+#define to_byte_substr(a)	S_to_byte_substr(aTHX_ a)
 #endif
 #if defined(PERL_IN_DUMP_C) || defined(PERL_DECL_PROT)
 #define deb_curcv(a)		S_deb_curcv(aTHX_ a)
@@ -2740,9 +2718,6 @@
 #define utf16_textfilter(a,b,c)	S_utf16_textfilter(aTHX_ a,b,c)
 #define utf16rev_textfilter(a,b,c)	S_utf16rev_textfilter(aTHX_ a,b,c)
 #endif
-#  if defined(CRIPPLED_CC)
-#define uni(a,b)		S_uni(aTHX_ a,b)
-#  endif
 #  if defined(PERL_CR_FILTER)
 #define cr_textfilter(a,b,c)	S_cr_textfilter(aTHX_ a,b,c)
 #  endif
@@ -3192,7 +3167,7 @@
 #  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,PTR2IV(ptr))
 #endif
 
-#if !defined(PERL_CORE) && !defined(PERL_NOCOMPAT) && !defined(PERL_BINCOMPAT_5005)
+#if !defined(PERL_CORE) && !defined(PERL_NOCOMPAT)
 
 /* Compatibility for various misnamed functions.  All functions
    in the API that begin with "perl_" (not "Perl_") take an explicit

@@ -208,7 +208,6 @@ get_emd_part(SV **prev_pathp, char *trailing_path, ...)
     char *ptr;
     char *optr;
     char *strip;
-    int oldsize, newsize;
     STRLEN baselen;
 
     va_start(ap, trailing_path);
@@ -286,8 +285,6 @@ win32_get_xlib(const char *pl, const char *xlib, const char *libname)
     dTHX;
     char regstr[40];
     char pathstr[MAX_PATH+1];
-    DWORD datalen;
-    int len, newsize;
     SV *sv1 = Nullsv;
     SV *sv2 = Nullsv;
 
@@ -575,7 +572,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     else {
 	if (status < 0) {
 	    if (ckWARN(WARN_EXEC))
-		Perl_warner(aTHX_ WARN_EXEC, "Can't spawn \"%s\": %s", argv[0], strerror(errno));
+		Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't spawn \"%s\": %s", argv[0], strerror(errno));
 	    status = 255 * 256;
 	}
 	else
@@ -690,7 +687,7 @@ do_spawn2(char *cmd, int exectype)
     else {
 	if (status < 0) {
 	    if (ckWARN(WARN_EXEC))
-		Perl_warner(aTHX_ WARN_EXEC, "Can't %s \"%s\": %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't %s \"%s\": %s",
 		     (exectype == EXECF_EXEC ? "exec" : "spawn"),
 		     cmd, strerror(errno));
 	    status = 255 * 256;
@@ -733,7 +730,7 @@ win32_opendir(char *filename)
     long		len;
     long		idx;
     char		scanname[MAX_PATH+3];
-    struct stat		sbuf;
+    Stat_t		sbuf;
     WIN32_FIND_DATAA	aFindData;
     WIN32_FIND_DATAW	wFindData;
     HANDLE		fh;
@@ -1022,7 +1019,7 @@ find_pid(int pid)
     dTHX;
     long child = w32_num_children;
     while (--child >= 0) {
-	if (w32_child_pids[child] == pid)
+	if ((int)w32_child_pids[child] == pid)
 	    return child;
     }
     return -1;
@@ -1049,7 +1046,7 @@ find_pseudo_pid(int pid)
     dTHX;
     long child = w32_num_pseudo_children;
     while (--child >= 0) {
-	if (w32_pseudo_child_pids[child] == pid)
+	if ((int)w32_pseudo_child_pids[child] == pid)
 	    return child;
     }
     return -1;
@@ -1160,7 +1157,7 @@ alien_process:
 }
 
 DllExport int
-win32_stat(const char *path, struct stat *sbuf)
+win32_stat(const char *path, Stat_t *sbuf)
 {
     dTHX;
     char	buffer[MAX_PATH+1];
@@ -1217,10 +1214,18 @@ win32_stat(const char *path, struct stat *sbuf)
 
     /* pwbuffer or path will be mapped correctly above */
     if (USING_WIDE()) {
-	res = _wstat(pwbuffer, (struct _stat *)sbuf);
+#if defined(WIN64) || defined(USE_LARGE_FILES)
+	res = _wstati64(pwbuffer, sbuf);
+#else
+	res = _wstat(pwbuffer, (struct _stat*)sbuf);
+#endif
     }
     else {
+#if defined(WIN64) || defined(USE_LARGE_FILES)
+	res = _stati64(path, sbuf);
+#else
 	res = stat(path, sbuf);
+#endif
     }
     sbuf->st_nlink = nlink;
 
@@ -1238,7 +1243,7 @@ win32_stat(const char *path, struct stat *sbuf)
 	}
 	if (r != 0xffffffff && (r & FILE_ATTRIBUTE_DIRECTORY)) {
 	    /* sbuf may still contain old garbage since stat() failed */
-	    Zero(sbuf, 1, struct stat);
+	    Zero(sbuf, 1, Stat_t);
 	    sbuf->st_mode = S_IFDIR | S_IREAD;
 	    errno = 0;
 	    if (!(r & FILE_ATTRIBUTE_READONLY))
@@ -1284,6 +1289,18 @@ win32_stat(const char *path, struct stat *sbuf)
     return res;
 }
 
+#define isSLASH(c) ((c) == '/' || (c) == '\\')
+#define SKIP_SLASHES(s) \
+    STMT_START {				\
+	while (*(s) && isSLASH(*(s)))		\
+	    ++(s);				\
+    } STMT_END
+#define COPY_NONSLASHES(d,s) \
+    STMT_START {				\
+	while (*(s) && !isSLASH(*(s)))		\
+	    *(d)++ = *(s)++;			\
+    } STMT_END
+
 /* Find the longname of a given path.  path is destructively modified.
  * It should have space for at least MAX_PATH characters. */
 DllExport char *
@@ -1299,61 +1316,74 @@ win32_longpath(char *path)
 	return Nullch;
 
     /* drive prefix */
-    if (isALPHA(path[0]) && path[1] == ':' &&
-	(path[2] == '/' || path[2] == '\\'))
-    {
+    if (isALPHA(path[0]) && path[1] == ':') {
 	start = path + 2;
 	*tmpstart++ = path[0];
 	*tmpstart++ = ':';
     }
     /* UNC prefix */
-    else if ((path[0] == '/' || path[0] == '\\') &&
-	     (path[1] == '/' || path[1] == '\\'))
-    {
+    else if (isSLASH(path[0]) && isSLASH(path[1])) {
 	start = path + 2;
 	*tmpstart++ = path[0];
 	*tmpstart++ = path[1];
-	/* copy machine name */
-	while (*start && *start != '/' && *start != '\\')
-	    *tmpstart++ = *start++;
+	SKIP_SLASHES(start);
+	COPY_NONSLASHES(tmpstart,start);	/* copy machine name */
 	if (*start) {
-	    *tmpstart++ = *start;
-	    start++;
-	    /* copy share name */
-	    while (*start && *start != '/' && *start != '\\')
-		*tmpstart++ = *start++;
+	    *tmpstart++ = *start++;
+	    SKIP_SLASHES(start);
+	    COPY_NONSLASHES(tmpstart,start);	/* copy share name */
 	}
     }
-    sep = *start++;
-    if (sep == '/' || sep == '\\')
-	*tmpstart++ = sep;
     *tmpstart = '\0';
-    while (sep) {
-	/* walk up to slash */
-	while (*start && *start != '/' && *start != '\\')
-	    ++start;
+    while (*start) {
+	/* copy initial slash, if any */
+	if (isSLASH(*start)) {
+	    *tmpstart++ = *start++;
+	    *tmpstart = '\0';
+	    SKIP_SLASHES(start);
+	}
 
-	/* discard doubled slashes */
-	while (*start && (start[1] == '/' || start[1] == '\\'))
+	/* FindFirstFile() expands "." and "..", so we need to pass
+	 * those through unmolested */
+	if (*start == '.'
+	    && (!start[1] || isSLASH(start[1])
+		|| (start[1] == '.' && (!start[2] || isSLASH(start[2])))))
+	{
+	    COPY_NONSLASHES(tmpstart,start);	/* copy "." or ".." */
+	    *tmpstart = '\0';
+	    continue;
+	}
+
+	/* if this is the end, bust outta here */
+	if (!*start)
+	    break;
+
+	/* now we're at a non-slash; walk up to next slash */
+	while (*start && !isSLASH(*start))
 	    ++start;
-	sep = *start;
 
 	/* stop and find full name of component */
+	sep = *start;
 	*start = '\0';
 	fhand = FindFirstFile(path,&fdata);
+	*start = sep;
 	if (fhand != INVALID_HANDLE_VALUE) {
-	    strcpy(tmpstart, fdata.cFileName);
-	    tmpstart += strlen(fdata.cFileName);
-	    if (sep)
-		*tmpstart++ = sep;
-	    *tmpstart = '\0';
-	    *start++ = sep;
-	    FindClose(fhand);
+	    STRLEN len = strlen(fdata.cFileName);
+	    if ((STRLEN)(tmpbuf + sizeof(tmpbuf) - tmpstart) > len) {
+		strcpy(tmpstart, fdata.cFileName);
+		tmpstart += len;
+		FindClose(fhand);
+	    }
+	    else {
+		FindClose(fhand);
+		errno = ERANGE;
+		return Nullch;
+	    }
 	}
 	else {
 	    /* failed a step, just return without side effects */
 	    /*PerlIO_printf(Perl_debug_log, "Failed to find %s\n", path);*/
-	    *start = sep;
+	    errno = EINVAL;
 	    return Nullch;
 	}
     }
@@ -1478,22 +1508,21 @@ win32_times(struct tms *timebuf)
     FILETIME user;
     FILETIME kernel;
     FILETIME dummy;
+    clock_t process_time_so_far = clock();
     if (GetProcessTimes(GetCurrentProcess(), &dummy, &dummy,
                         &kernel,&user)) {
 	timebuf->tms_utime = filetime_to_clock(&user);
 	timebuf->tms_stime = filetime_to_clock(&kernel);
 	timebuf->tms_cutime = 0;
 	timebuf->tms_cstime = 0;
-
     } else {
         /* That failed - e.g. Win95 fallback to clock() */
-        clock_t t = clock();
-	timebuf->tms_utime = t;
+	timebuf->tms_utime = process_time_so_far;
 	timebuf->tms_stime = 0;
 	timebuf->tms_cutime = 0;
 	timebuf->tms_cstime = 0;
     }
-    return 0;
+    return process_time_so_far;
 }
 
 /* fix utime() so it works on directories in NT */
@@ -1620,6 +1649,38 @@ win32_utime(const char *filename, struct utimbuf *times)
 
     CloseHandle(handle);
     return rc;
+}
+
+typedef union {
+    unsigned __int64	ft_i64;
+    FILETIME		ft_val;
+} FT_t;
+
+#ifdef __GNUC__
+#define Const64(x) x##LL
+#else
+#define Const64(x) x##i64
+#endif
+/* Number of 100 nanosecond units from 1/1/1601 to 1/1/1970 */
+#define EPOCH_BIAS  Const64(116444736000000000)
+
+/* NOTE: This does not compute the timezone info (doing so can be expensive,
+ * and appears to be unsupported even by glibc) */
+DllExport int
+win32_gettimeofday(struct timeval *tp, void *not_used)
+{
+    FT_t ft;
+
+    /* this returns time in 100-nanosecond units  (i.e. tens of usecs) */
+    GetSystemTimeAsFileTime(&ft.ft_val);
+
+    /* seconds since epoch */
+    tp->tv_sec = (long)((ft.ft_i64 - EPOCH_BIAS) / Const64(10000000));
+
+    /* microseconds remaining */
+    tp->tv_usec = (long)((ft.ft_i64 / Const64(10)) % Const64(1000000));
+
+    return 0;
 }
 
 DllExport int
@@ -1920,7 +1981,6 @@ win32_internal_wait(int *status, DWORD timeout)
 	}
     }
 
-FAILED:
     errno = GetLastError();
     return -1;
 }
@@ -2068,7 +2128,7 @@ win32_crypt(const char *txt, const char *salt)
 #define FTEXT			0x80	/* file handle is in text mode */
 
 /***
-*int my_open_osfhandle(long osfhandle, int flags) - open C Runtime file handle
+*int my_open_osfhandle(intptr_t osfhandle, int flags) - open C Runtime file handle
 *
 *Purpose:
 *       This function allocates a free C Runtime file handle and associates
@@ -2079,7 +2139,7 @@ win32_crypt(const char *txt, const char *salt)
 *	This works with MSVC++ 4.0+ or GCC/Mingw32
 *
 *Entry:
-*       long osfhandle - Win32 HANDLE to associate with C Runtime file handle.
+*       intptr_t osfhandle - Win32 HANDLE to associate with C Runtime file handle.
 *       int flags      - flags to associate with C Runtime file handle.
 *
 *Exit:
@@ -2103,7 +2163,7 @@ static int
 _alloc_osfhnd(void)
 {
     HANDLE hF = CreateFile("NUL", 0, 0, NULL, OPEN_ALWAYS, 0, NULL);
-    int fh = _open_osfhandle((long)hF, 0);
+    int fh = _open_osfhandle((intptr_t)hF, 0);
     CloseHandle(hF);
     if (fh == -1)
         return fh;
@@ -2112,7 +2172,7 @@ _alloc_osfhnd(void)
 }
 
 static int
-my_open_osfhandle(long osfhandle, int flags)
+my_open_osfhandle(intptr_t osfhandle, int flags)
 {
     int fh;
     char fileflags;		/* _osfile flags */
@@ -2465,16 +2525,45 @@ win32_fflush(FILE *pf)
     return fflush(pf);
 }
 
-DllExport long
+DllExport Off_t
 win32_ftell(FILE *pf)
 {
+#if defined(WIN64) || defined(USE_LARGE_FILES)
+    fpos_t pos;
+    if (fgetpos(pf, &pos))
+	return -1;
+    return (Off_t)pos;
+#else
     return ftell(pf);
+#endif
 }
 
 DllExport int
-win32_fseek(FILE *pf,long offset,int origin)
+win32_fseek(FILE *pf, Off_t offset,int origin)
 {
+#if defined(WIN64) || defined(USE_LARGE_FILES)
+    fpos_t pos;
+    switch (origin) {
+    case SEEK_CUR:
+	if (fgetpos(pf, &pos))
+	    return -1;
+	offset += pos;
+	break;
+    case SEEK_END:
+	fseek(pf, 0, SEEK_END);
+	pos = _telli64(fileno(pf));
+	offset += pos;
+	break;
+    case SEEK_SET:
+	break;
+    default:
+	errno = EINVAL;
+	return -1;
+    }
+    return fsetpos(pf, &offset);
+#else
     return fseek(pf, offset, origin);
+#endif
 }
 
 DllExport int
@@ -2514,8 +2603,11 @@ win32_tmpfile(void)
 				   | FILE_FLAG_DELETE_ON_CLOSE,
 				   NULL);
 	    if (fh != INVALID_HANDLE_VALUE) {
-		int fd = win32_open_osfhandle((long)fh, 0);
+		int fd = win32_open_osfhandle((intptr_t)fh, 0);
 		if (fd >= 0) {
+#if defined(__BORLANDC__)
+        	    setmode(fd,O_BINARY);
+#endif
 		    DEBUG_p(PerlIO_printf(Perl_debug_log,
 					  "Created tmpfile=%s\n",filename));
 		    return fdopen(fd, "w+b");
@@ -2534,7 +2626,7 @@ win32_abort(void)
 }
 
 DllExport int
-win32_fstat(int fd,struct stat *sbufptr)
+win32_fstat(int fd, Stat_t *sbufptr)
 {
 #ifdef __BORLANDC__
     /* A file designated by filehandle is not shown as accessible
@@ -2583,6 +2675,7 @@ win32_popen(const char *command, const char *mode)
 #ifdef USE_RTL_POPEN
     return _popen(command, mode);
 #else
+    dTHX;
     int p[2];
     int parent, child;
     int stdfd, oldfd;
@@ -2926,16 +3019,24 @@ win32_setmode(int fd, int mode)
     return setmode(fd, mode);
 }
 
-DllExport long
-win32_lseek(int fd, long offset, int origin)
+DllExport Off_t
+win32_lseek(int fd, Off_t offset, int origin)
 {
+#if defined(WIN64) || defined(USE_LARGE_FILES)
+    return _lseeki64(fd, offset, origin);
+#else
     return lseek(fd, offset, origin);
+#endif
 }
 
-DllExport long
+DllExport Off_t
 win32_tell(int fd)
 {
+#if defined(WIN64) || defined(USE_LARGE_FILES)
+    return _telli64(fd);
+#else
     return tell(fd);
+#endif
 }
 
 DllExport int
@@ -3479,7 +3580,7 @@ qualified_path(const char *cmd)
 	    if (*pathstr == '"') {	/* foo;"baz;etc";bar */
 		pathstr++;		/* skip initial '"' */
 		while (*pathstr && *pathstr != '"') {
-		    if (curfullcmd-fullcmd < MAX_PATH-cmdlen-5)
+		    if ((STRLEN)(curfullcmd-fullcmd) < MAX_PATH-cmdlen-5)
 			*curfullcmd++ = *pathstr;
 		    pathstr++;
 		}
@@ -3487,7 +3588,7 @@ qualified_path(const char *cmd)
 		    pathstr++;		/* skip trailing '"' */
 	    }
 	    else {
-		if (curfullcmd-fullcmd < MAX_PATH-cmdlen-5)
+		if ((STRLEN)(curfullcmd-fullcmd) < MAX_PATH-cmdlen-5)
 		    *curfullcmd++ = *pathstr;
 		pathstr++;
 	    }
@@ -3500,7 +3601,7 @@ qualified_path(const char *cmd)
 	    *curfullcmd++ = '\\';
 	}
     }
-GIVE_UP:
+
     Safefree(fullcmd);
     return Nullch;
 }
@@ -3659,14 +3760,14 @@ win32_spawnvp(int mode, const char *cmdname, const char *const *argv)
     StartupInfo.hStdInput	= tbl.childStdIn;
     StartupInfo.hStdOutput	= tbl.childStdOut;
     StartupInfo.hStdError	= tbl.childStdErr;
-    if (StartupInfo.hStdInput != INVALID_HANDLE_VALUE &&
-	StartupInfo.hStdOutput != INVALID_HANDLE_VALUE &&
-	StartupInfo.hStdError != INVALID_HANDLE_VALUE)
+    if (StartupInfo.hStdInput == INVALID_HANDLE_VALUE &&
+	StartupInfo.hStdOutput == INVALID_HANDLE_VALUE &&
+	StartupInfo.hStdError == INVALID_HANDLE_VALUE)
     {
-	StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
+	create |= CREATE_NEW_CONSOLE;
     }
     else {
-	create |= CREATE_NEW_CONSOLE;
+	StartupInfo.dwFlags |= STARTF_USESTDHANDLES;
     }
     if (w32_use_showwindow) {
         StartupInfo.dwFlags |= STARTF_USESHOWWINDOW;
@@ -3860,7 +3961,7 @@ static DWORD pagesize  = 0;		/* XXX threadead */
 static DWORD allocsize = 0;		/* XXX threadead */
 
 void *
-sbrk(int need)
+sbrk(ptrdiff_t need)
 {
  void *result;
  if (!pagesize)
@@ -3952,8 +4053,8 @@ win32_free(void *block)
 }
 
 
-int
-win32_open_osfhandle(long handle, int flags)
+DllExport int
+win32_open_osfhandle(intptr_t handle, int flags)
 {
 #ifdef USE_FIXED_OSFHANDLE
     if (IsWin95())
@@ -3962,10 +4063,62 @@ win32_open_osfhandle(long handle, int flags)
     return _open_osfhandle(handle, flags);
 }
 
-long
+DllExport intptr_t
 win32_get_osfhandle(int fd)
 {
-    return _get_osfhandle(fd);
+    return (intptr_t)_get_osfhandle(fd);
+}
+
+DllExport FILE *
+win32_fdupopen(FILE *pf)
+{
+    FILE* pfdup;
+    fpos_t pos;
+    char mode[3];
+    int fileno = win32_dup(win32_fileno(pf));
+
+    /* open the file in the same mode */
+#ifdef __BORLANDC__
+    if((pf)->flags & _F_READ) {
+	mode[0] = 'r';
+	mode[1] = 0;
+    }
+    else if((pf)->flags & _F_WRIT) {
+	mode[0] = 'a';
+	mode[1] = 0;
+    }
+    else if((pf)->flags & _F_RDWR) {
+	mode[0] = 'r';
+	mode[1] = '+';
+	mode[2] = 0;
+    }
+#else
+    if((pf)->_flag & _IOREAD) {
+	mode[0] = 'r';
+	mode[1] = 0;
+    }
+    else if((pf)->_flag & _IOWRT) {
+	mode[0] = 'a';
+	mode[1] = 0;
+    }
+    else if((pf)->_flag & _IORW) {
+	mode[0] = 'r';
+	mode[1] = '+';
+	mode[2] = 0;
+    }
+#endif
+
+    /* it appears that the binmode is attached to the
+     * file descriptor so binmode files will be handled
+     * correctly
+     */
+    pfdup = win32_fdopen(fileno, mode);
+
+    /* move the file pointer to the same position */
+    if (!fgetpos(pf, &pos)) {
+	fsetpos(pfdup, &pos);
+    }
+    return pfdup;
 }
 
 DllExport void*
@@ -4533,24 +4686,39 @@ Perl_init_os_extras(void)
      */
 }
 
-PerlInterpreter *
+void *
 win32_signal_context(void)
 {
     dTHX;
+#ifdef MULTIPLICITY
     if (!my_perl) {
 	my_perl = PL_curinterp;
 	PERL_SET_THX(my_perl);
     }
     return my_perl;
+#else
+#ifdef USE_5005THREADS
+    return aTHX;
+#else
+    return PL_curinterp;
+#endif
+#endif
 }
+
 
 BOOL WINAPI
 win32_ctrlhandler(DWORD dwCtrlType)
 {
+#ifdef MULTIPLICITY
     dTHXa(PERL_GET_SIG_CONTEXT);
 
     if (!my_perl)
 	return FALSE;
+#else
+#ifdef USE_5005THREADS
+    dTHX;
+#endif
+#endif
 
     switch(dwCtrlType) {
     case CTRL_CLOSE_EVENT:
@@ -4673,7 +4841,11 @@ Perl_sys_intern_init(pTHX)
     for (i=0; i < SIG_SIZE; i++) {
     	w32_sighandler[i] = SIG_DFL;
     }
+#  ifdef MULTIPLICTY
     if (my_perl == PL_curinterp) {
+#  else
+    {
+#  endif
 	/* Force C runtime signal stuff to set its console handler */
 	signal(SIGINT,&win32_csighandler);
 	signal(SIGBREAK,&win32_csighandler);
@@ -4693,7 +4865,11 @@ Perl_sys_intern_clear(pTHX)
     	KillTimer(NULL,w32_timerid);
     	w32_timerid=0;
     }
+#  ifdef MULTIPLICITY
     if (my_perl == PL_curinterp) {
+#  else
+    {
+#  endif
 	SetConsoleCtrlHandler(win32_ctrlhandler,FALSE);
     }
 #  ifdef USE_ITHREADS

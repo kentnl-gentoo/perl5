@@ -41,10 +41,13 @@ to extract an ASCII tar archive on OS/390, try this:
 
    pax -o to=IBM-1047,from=ISO8859-1 -r < latest.tar
 
+or
+
+   zcat latest.tar.Z | pax -o to=IBM-1047,from=ISO8859-1 -r
+
 If you get lots of errors of the form
 
   tar: FSUM7171 ...: cannot set uid/gid: EDC5139I Operation not permitted.
-  tar: FSUM7148 cannot create file "...": EDC5111I Permission denied.
 
 you didn't read the above and tried to use tar instead of pax, you'll
 first have to remove the (now corrupt) perl directory
@@ -421,14 +424,11 @@ L<INSTALL>, L<perlport>, L<perlebcdic>, L<ExtUtils::MakeMaker>.
 
 =head2 Mailing list for Perl on OS/390
 
-The Perl Institute (http://www.perl.org/) maintains a perl-mvs
-mailing list of interest to all folks building and/or
-using perl on all EBCDIC platforms (not just OS/390).
-To subscribe, send a message of:
+If you are interested in the VM/ESA, z/OS (formerly known as OS/390)
+and POSIX-BC (BS2000) ports of Perl then see the perl-mvs mailing list.
+To subscribe, send an empty message to perl-mvs-subscribe@perl.org.
 
-    subscribe perl-mvs
-
-to majordomo@perl.org.   See also:
+See also:
 
     http://lists.perl.org/showlist.cgi?name=perl-mvs
 

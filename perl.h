@@ -21,6 +21,10 @@
 #define USE_STDIO
 #endif /* PERL_FOR_X2P */
 
+#if defined(DGUX)
+#include <sys/fcntl.h>
+#endif
+
 #define VOIDUSED 1
 #ifdef PERL_MICRO
 #   include "uconfig.h"
@@ -73,6 +77,18 @@
 #  endif
 #endif
 
+/* undef WIN32 when building on Cygwin (for libwin32) - gph */
+#ifdef __CYGWIN__
+#   undef WIN32
+#   undef _WIN32
+#endif
+
+/* Use the reentrant APIs like localtime_r and getpwent_r */
+/* Win32 has naturally threadsafe libraries, no need to use any _r variants. */
+#if defined(USE_ITHREADS) && !defined(USE_REENTRANT_API) && !defined(NETWARE) && !defined(WIN32) && !defined(__APPLE__)
+#   define USE_REENTRANT_API
+#endif
+
 /* <--- here ends the logic shared by perl.h and makedef.pl */
 
 #ifdef PERL_IMPLICIT_CONTEXT
@@ -121,7 +137,11 @@ struct perl_thread;
 #endif
 
 #ifdef HASATTRIBUTE
-#  define PERL_UNUSED_DECL __attribute__((unused))
+#  if defined(__GNUC__) && defined(__cplusplus)
+#    define PERL_UNUSED_DECL
+#  else
+#    define PERL_UNUSED_DECL __attribute__((unused))
+#  endif
 #else
 #  define PERL_UNUSED_DECL
 #endif
@@ -334,12 +354,6 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #  endif
 #endif
 
-/* Use the reentrant APIs like localtime_r and getpwent_r */
-/* Win32 has naturally threadsafe libraries, no need to use any _r variants. */
-#if defined(USE_ITHREADS) && !defined(USE_REENTRANT_API) && !defined(WIN32) && !defined(__APPLE__)
-#   define USE_REENTRANT_API
-#endif
-
 /* HP-UX 10.X CMA (Common Multithreaded Architecure) insists that
    pthread.h must be included before all other header files.
 */
@@ -477,12 +491,14 @@ int usleep(unsigned int);
 #  else
 #    define EMBEDMYMALLOC	/* for compatibility */
 #  endif
+START_EXTERN_C
 Malloc_t Perl_malloc (MEM_SIZE nbytes);
 Malloc_t Perl_calloc (MEM_SIZE elements, MEM_SIZE size);
 Malloc_t Perl_realloc (Malloc_t where, MEM_SIZE nbytes);
 /* 'mfree' rather than 'free', since there is already a 'perl_free'
  * that causes clashes with case-insensitive linkers */
 Free_t   Perl_mfree (Malloc_t where);
+END_EXTERN_C
 
 typedef struct perl_mstats perl_mstats_t;
 
@@ -1229,7 +1245,7 @@ typedef NVTYPE NV;
 #   else
 #       define Perl_frexp(x,y) ((long double)frexp((double)(x),y))
 #   endif
-#   ifndef Perl_isinf
+#   ifndef Perl_isnan
 #       ifdef HAS_ISNANL
 #           define Perl_isnan(x) isnanl(x)
 #       endif
@@ -1337,7 +1353,7 @@ typedef NVTYPE NV;
 #if !defined(Perl_fp_class) && defined(HAS_FPCLASSIFY)
 #    include <math.h>
 #    define Perl_fp_class(x)		fpclassify(x)
-#    define Perl_fp_class_nan(x)	(fp_classify(x)==FP_SNAN|FP|_fp_classify(x)==QNAN)
+#    define Perl_fp_class_nan(x)	(fp_classify(x)==FP_SNAN||fp_classify(x)==FP_QNAN)
 #    define Perl_fp_class_inf(x)	(fp_classify(x)==FP_INFINITE)
 #    define Perl_fp_class_norm(x)	(fp_classify(x)==FP_NORMAL)
 #    define Perl_fp_class_denorm(x)	(fp_classify(x)==FP_SUBNORMAL)
@@ -1418,8 +1434,30 @@ int isnan(double d);
 #   endif
 #endif
 
-#define Perl_atof(s) Perl_my_atof(s)
-#define Perl_atof2(s, np) Perl_my_atof2(s, np)
+/* The default is to use Perl's own atof() implementation (in numeric.c).
+ * Usually that is the one to use but for some platforms (e.g. UNICOS)
+ * it is however best to use the native implementation of atof.
+ * You can experiment with using your native one by -DUSE_PERL_ATOF=0.
+ * Some good tests to try out with either setting are t/base/num.t,
+ * t/op/numconvert.t, and t/op/pack.t. */
+
+#ifndef USE_PERL_ATOF
+#   ifndef _UNICOS
+#       define USE_PERL_ATOF
+#   endif
+#else
+#   if USE_PERL_ATOF == 0
+#       undef USE_PERL_ATOF
+#   endif
+#endif
+
+#ifdef USE_PERL_ATOF
+#   define Perl_atof(s) Perl_my_atof(s)
+#   define Perl_atof2(s, n) Perl_my_atof2(aTHX_ (s), &(n))
+#else
+#   define Perl_atof(s) (NV)atof(s)
+#   define Perl_atof2(s, n) ((n) = atof(s))
+#endif
 
 /* Previously these definitions used hardcoded figures.
  * It is hoped these formula are more portable, although
@@ -2138,6 +2176,22 @@ typedef I32 (*filter_t) (pTHX_ int, SV *, int);
 #define FILTER_DATA(idx)	   (AvARRAY(PL_rsfp_filters)[idx])
 #define FILTER_ISREADER(idx)	   (idx >= AvFILLp(PL_rsfp_filters))
 
+#if defined(_AIX) && !defined(_AIX43)
+#if defined(USE_REENTRANT) || defined(_REENTRANT) || defined(_THREAD_SAFE)
+/* We cannot include <crypt.h> to get the struct crypt_data
+ * because of setkey prototype problems when threading */
+typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
+    /* From OSF, Not needed in AIX
+       char C[28], D[28];
+    */
+    char E[48];
+    char KS[16][48];
+    char block[66];
+    char iobuf[16];
+} CRYPTD;
+#endif /* threading */
+#endif /* AIX */
+
 #if !defined(OS2) && !defined(MACOS_TRADITIONAL)
 #  include "iperlsys.h"
 #endif
@@ -2255,6 +2309,12 @@ struct ptr_tbl {
 #  define htovs(x)	vtohs(x)
 # endif
 	/* otherwise default to functions in util.c */
+#ifndef htovs
+short htovs(short n);
+short vtohs(short n);
+long htovl(long n);
+long vtohl(long n);
+#endif
 #endif
 
 /* *MAX Plus 1. A floating point value.
@@ -2690,7 +2750,9 @@ END_EXTERN_C
 char *crypt ();       /* Maybe more hosts will need the unprototyped version */
 #  else
 #    if !defined(WIN32) && !defined(VMS)
+#ifndef crypt
 char *crypt (const char*, const char*);
+#endif
 #    endif /* !WIN32 */
 #  endif /* !NeXT && !__NeXT__ */
 #  ifndef DONT_DECLARE_STD
@@ -2705,7 +2767,9 @@ Off_t lseek (int,Off_t,int);
 #      endif
 #    endif
 #  endif /* !DONT_DECLARE_STD */
+#ifndef getlogin
 char *getlogin (void);
+#endif
 #endif /* !__cplusplus */
 
 #ifdef UNLINK_ALL_VERSIONS /* Currently only makes sense for VMS */
@@ -2785,6 +2849,7 @@ typedef Sighandler_t Sigsave_t;
 
 typedef int (CPERLscope(*runops_proc_t)) (pTHX);
 typedef void (CPERLscope(*share_proc_t)) (pTHX_ SV *sv);
+typedef int  (CPERLscope(*thrhook_proc_t)) (pTHX);
 typedef OP* (CPERLscope(*PPADDR_t)[]) (pTHX);
 
 /* _ (for $_) must be first in the following list (DEFSV requires it) */
@@ -3175,7 +3240,7 @@ struct perl_debug_pad {
 };
 
 #define PERL_DEBUG_PAD(i)	&(PL_debug_pad.pad[i])
-#define PERL_DEBUG_PAD_ZERO(i)	(sv_setpvn(PERL_DEBUG_PAD(i), "", 0), PERL_DEBUG_PAD(i))
+#define PERL_DEBUG_PAD_ZERO(i)	(SvPVX(PERL_DEBUG_PAD(i))[0] = 0, SvCUR(PERL_DEBUG_PAD(i)) = 0, PERL_DEBUG_PAD(i))
 
 /* Enable variables which are pointers to functions */
 typedef void (CPERLscope(*peep_t))(pTHX_ OP* o);
@@ -3576,14 +3641,14 @@ EXTCONST char * PL_AMG_names[NofAMmeth];
 END_EXTERN_C
 
 struct am_table {
-  long was_ok_sub;
+  U32 was_ok_sub;
   long was_ok_am;
   U32 flags;
   CV* table[NofAMmeth];
   long fallback;
 };
 struct am_table_short {
-  long was_ok_sub;
+  U32 was_ok_sub;
   long was_ok_am;
   U32 flags;
 };
@@ -3704,7 +3769,7 @@ typedef struct am_table_short AMTS;
 #define STORE_NUMERIC_STANDARD_SET_LOCAL()	/**/
 #define RESTORE_NUMERIC_LOCAL()		/**/
 #define RESTORE_NUMERIC_STANDARD()	/**/
-#define Atof				Perl_atof
+#define Atof				my_atof
 #define IN_LOCALE_RUNTIME		0
 
 #endif /* !USE_LOCALE_NUMERIC */
@@ -3712,6 +3777,9 @@ typedef struct am_table_short AMTS;
 #if !defined(Strtol) && defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
 #    ifdef __hpux
 #        define strtoll __strtoll	/* secret handshake */
+#    endif
+#    ifdef WIN64
+#        define strtoll _strtoi64	/* secret handshake */
 #    endif
 #   if !defined(Strtol) && defined(HAS_STRTOLL)
 #       define Strtol	strtoll
@@ -3729,6 +3797,9 @@ typedef struct am_table_short AMTS;
  * (as is done for Atoul(), see below) but for backward compatibility
  * we just assume atol(). */
 #   if defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG && defined(HAS_ATOLL)
+#    ifdef WIN64
+#       define atoll    _atoi64		/* secret handshake */
+#    endif
 #       define Atol	atoll
 #   else
 #       define Atol	atol
@@ -3738,6 +3809,9 @@ typedef struct am_table_short AMTS;
 #if !defined(Strtoul) && defined(USE_64_BIT_INT) && defined(UV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
 #    ifdef __hpux
 #        define strtoull __strtoull	/* secret handshake */
+#    endif
+#    ifdef WIN64
+#        define strtoull _strtoui64	/* secret handshake */
 #    endif
 #    if !defined(Strtoul) && defined(HAS_STRTOULL)
 #       define Strtoul	strtoull
@@ -3881,10 +3955,11 @@ typedef struct am_table_short AMTS;
  * Boilerplate macros for initializing and accessing interpreter-local
  * data from C.  All statics in extensions should be reworked to use
  * this, if you want to make the extension thread-safe.  See ext/re/re.xs
- * for an example of the use of these macros.
+ * for an example of the use of these macros, and perlxs.pod for more.
  *
  * Code that uses these macros is responsible for the following:
- * 1. #define MY_CXT_KEY to a unique string, e.g. "DynaLoader_guts"
+ * 1. #define MY_CXT_KEY to a unique string, e.g.
+ *    "DynaLoader::_guts" XS_VERSION
  * 2. Declare a typedef named my_cxt_t that is a structure that contains
  *    all the data that needs to be interpreter-local.
  * 3. Use the START_MY_CXT macro after the declaration of my_cxt_t.

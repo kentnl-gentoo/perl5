@@ -342,7 +342,7 @@ sub searchfor {
     for ($i=0; $i<@dirs; $i++) {
 	$dir = $dirs[$i];
 	($dir = VMS::Filespec::unixpath($dir)) =~ s!/\z!! if $Is_VMS;
-	if (       ( $ret = check_file $dir,"$s.pod")
+	if (       (! $opt_m && ( $ret = check_file $dir,"$s.pod"))
 		or ( $ret = check_file $dir,"$s.pm")
 		or ( $ret = check_file $dir,$s)
 		or ( $Is_VMS and
@@ -458,7 +458,8 @@ foreach (@pages) {
 	    print STDERR "Loosely found as @files\n" if $opt_v;
 	}
 	else {
-	    print STDERR "No documentation found for \"$_\".\n";
+	    print STDERR "No " .
+		($opt_m ? "module" : "documentation") . " found for \"$_\".\n";
 	    if (@global_found) {
 		print STDERR "However, try\n";
 		for my $dir (@global_found) {
@@ -689,6 +690,9 @@ the perl library modules.
 
 Your system may also have man pages installed for those modules, in
 which case you can probably just use the man(1) command.
+
+If you are looking for a table of contents to the Perl library modules
+documentation, see the L<perltoc> page.
 
 =head1 OPTIONS
 

@@ -7,6 +7,7 @@ BEGIN {
 use Memoize;
 use Config;
 
+$|=1;
 print "1..11\n";
 
 eval { memoize({}) };
@@ -36,7 +37,7 @@ for $mod (qw(DB_File GDBM_File SDBM_File ODBM_File NDBM_File)) {
   };
   print $@ =~ /can only store scalars/
      || $@ =~ /Can't locate.*in \@INC/ ? "ok $n\n" : "not ok $n # $@\n";
-  1 while unlink $dummyfile, "$dummyfile.dir", "$dummyfile.pag";
+  1 while unlink $dummyfile, "$dummyfile.dir", "$dummyfile.pag", "$dummyfile.db";
   $n++;
 }
 

@@ -170,7 +170,7 @@ PP(pp_concat)
 	if (llen >= 2 && lpv[llen - 2] == '1' && lpv[llen - 1] == '9'
 	    && (llen == 2 || !isDIGIT(lpv[llen - 3])))
 	{
-	    Perl_warner(aTHX_ WARN_Y2K, "Possible Y2K bug: %s",
+	    Perl_warner(aTHX_ packWARN(WARN_Y2K), "Possible Y2K bug: %s",
 			"about to append an integer to '19'");
 	}
     }
@@ -421,7 +421,7 @@ PP(pp_add)
 		    buv = (UV)-biv;
 	    }
 	    /* ?uvok if value is >= 0. basically, flagged as UV if it's +ve,
-	       else "IV" now, independant of how it came in.
+	       else "IV" now, independent of how it came in.
 	       if a, b represents positive, A, B negative, a maps to -A etc
 	       a + b =>  (a + b)
 	       A + b => -(a - b)
@@ -734,7 +734,7 @@ PP(pp_rv2av)
 	EXTEND(SP, maxarg);
 	if (SvRMAGICAL(av)) {
 	    U32 i;
-	    for (i=0; i < maxarg; i++) {
+	    for (i=0; i < (U32)maxarg; i++) {
 		SV **svp = av_fetch(av, i, FALSE);
 		SP[i+1] = (svp) ? *svp : &PL_sv_undef;
 	    }
@@ -927,11 +927,11 @@ S_do_oddball(pTHX_ HV *hash, SV **relem, SV **firstrelem)
 		(SvTYPE(SvRV(*relem)) == SVt_PVAV ||
 		 SvTYPE(SvRV(*relem)) == SVt_PVHV))
 	    {
-		Perl_warner(aTHX_ WARN_MISC,
+		Perl_warner(aTHX_ packWARN(WARN_MISC),
 			    "Reference found where even-sized list expected");
 	    }
 	    else
-		Perl_warner(aTHX_ WARN_MISC,
+		Perl_warner(aTHX_ packWARN(WARN_MISC),
 			    "Odd number of elements in hash assignment");
 	}
 	if (SvTYPE(hash) == SVt_PVAV) {
@@ -1184,6 +1184,7 @@ PP(pp_match)
 {
     dSP; dTARG;
     register PMOP *pm = cPMOP;
+    PMOP *dynpm = pm;
     register char *t;
     register char *s;
     char *strend;
@@ -1217,6 +1218,7 @@ PP(pp_match)
 
     PL_reg_match_utf8 = DO_UTF8(TARG);
 
+    /* PMdf_USED is set after a ?? matches once */
     if (pm->op_pmdynflags & PMdf_USED) {
       failure:
 	if (gimme == G_ARRAY)
@@ -1224,17 +1226,19 @@ PP(pp_match)
 	RETPUSHNO;
     }
 
+    /* empty pattern special-cased to use last successful pattern if possible */
     if (!rx->prelen && PL_curpm) {
 	pm = PL_curpm;
 	rx = PM_GETRE(pm);
     }
-    if (rx->minlen > len)
-      goto failure;
+
+    if (rx->minlen > (I32)len)
+	goto failure;
 
     truebase = t = s;
 
     /* XXXX What part of this is needed with true \G-support? */
-    if ((global = pm->op_pmflags & PMf_GLOBAL)) {
+    if ((global = dynpm->op_pmflags & PMf_GLOBAL)) {
 	rx->startp[0] = -1;
 	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
 	    MAGIC* mg = mg_find(TARG, PERL_MAGIC_regex_global);
@@ -1287,8 +1291,8 @@ play_it_again:
     if (CALLREGEXEC(aTHX_ rx, s, strend, truebase, minmatch, TARG, NULL, r_flags))
     {
 	PL_curpm = pm;
-	if (pm->op_pmflags & PMf_ONCE)
-	    pm->op_pmdynflags |= PMdf_USED;
+	if (dynpm->op_pmflags & PMf_ONCE)
+	    dynpm->op_pmdynflags |= PMdf_USED;
 	goto gotcha;
     }
     else
@@ -1325,7 +1329,7 @@ play_it_again:
 	    }
 	}
 	if (global) {
-	    if (pm->op_pmflags & PMf_CONTINUE) {
+	    if (dynpm->op_pmflags & PMf_CONTINUE) {
 		MAGIC* mg = 0;
 		if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG))
 		    mg = mg_find(TARG, PERL_MAGIC_regex_global);
@@ -1378,8 +1382,8 @@ yup:					/* Confirmed by INTUIT */
 	RX_MATCH_TAINTED_on(rx);
     TAINT_IF(RX_MATCH_TAINTED(rx));
     PL_curpm = pm;
-    if (pm->op_pmflags & PMf_ONCE)
-	pm->op_pmdynflags |= PMdf_USED;
+    if (dynpm->op_pmflags & PMf_ONCE)
+	dynpm->op_pmdynflags |= PMdf_USED;
     if (RX_MATCH_COPIED(rx))
 	Safefree(rx->subbeg);
     RX_MATCH_COPIED_off(rx);
@@ -1416,7 +1420,7 @@ yup:					/* Confirmed by INTUIT */
 
 nope:
 ret_no:
-    if (global && !(pm->op_pmflags & PMf_CONTINUE)) {
+    if (global && !(dynpm->op_pmflags & PMf_CONTINUE)) {
 	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
 	    MAGIC* mg = mg_find(TARG, PERL_MAGIC_regex_global);
 	    if (mg)
@@ -1488,7 +1492,7 @@ Perl_do_readline(pTHX)
 	if (ckWARN2(WARN_GLOB, WARN_CLOSED)
 		&& (!io || !(IoFLAGS(io) & IOf_START))) {
 	    if (type == OP_GLOB)
-		Perl_warner(aTHX_ WARN_GLOB,
+		Perl_warner(aTHX_ packWARN(WARN_GLOB),
 			    "glob failed (can't start child: %s)",
 			    Strerror(errno));
 	    else
@@ -1545,7 +1549,7 @@ Perl_do_readline(pTHX)
 	    }
 	    else if (type == OP_GLOB) {
 		if (!do_close(PL_last_in_gv, FALSE) && ckWARN(WARN_GLOB)) {
-		    Perl_warner(aTHX_ WARN_GLOB,
+		    Perl_warner(aTHX_ packWARN(WARN_GLOB),
 			   "glob failed (child exited with status %d%s)",
 			   (int)(STATUS_CURRENT >> 8),
 			   (STATUS_CURRENT & 0x80) ? ", core dumped" : "");
@@ -1639,8 +1643,25 @@ PP(pp_helem)
     I32 preeminent = 0;
 
     if (SvTYPE(hv) == SVt_PVHV) {
-	if (PL_op->op_private & OPpLVAL_INTRO)
-	    preeminent = SvRMAGICAL(hv) ? 1 : hv_exists_ent(hv, keysv, 0);
+	if (PL_op->op_private & OPpLVAL_INTRO) {
+	    MAGIC *mg;
+	    HV *stash;
+	    /* does the element we're localizing already exist? */
+	    preeminent =  
+		/* can we determine whether it exists? */
+		(    !SvRMAGICAL(hv)
+		  || mg_find((SV*)hv, PERL_MAGIC_env)
+		  || (     (mg = mg_find((SV*)hv, PERL_MAGIC_tied))
+			/* Try to preserve the existenceness of a tied hash
+			 * element by using EXISTS and DELETE if possible.
+			 * Fallback to FETCH and STORE otherwise */
+			&& (stash = SvSTASH(SvRV(SvTIED_obj((SV*)hv, mg))))
+			&& gv_fetchmethod_autoload(stash, "EXISTS", TRUE)
+			&& gv_fetchmethod_autoload(stash, "DELETE", TRUE)
+		    )
+		) ? hv_exists_ent(hv, keysv, 0) : 1;
+
+	}
 	he = hv_fetch_ent(hv, keysv, lval && !defer, hash);
 	svp = he ? &HeVAL(he) : 0;
     }
@@ -1888,6 +1909,7 @@ PP(pp_subst)
     int force_on_match = 0;
     I32 oldsave = PL_savestack_ix;
     STRLEN slen;
+    bool doutf8 = FALSE;
 
     /* known replacement string? */
     dstr = (pm->op_pmflags & PMf_CONST) ? POPs : Nullsv;
@@ -1960,10 +1982,17 @@ PP(pp_subst)
     once = !(rpm->op_pmflags & PMf_GLOBAL);
 
     /* known replacement string? */
-    c = dstr ? SvPV(dstr, clen) : Nullch;
-
+    if (dstr) {
+        c = SvPV(dstr, clen);
+	doutf8 = DO_UTF8(dstr);
+    }
+    else {
+        c = Nullch;
+	doutf8 = FALSE;
+    }
+    
     /* can do inplace substitution? */
-    if (c && clen <= rx->minlen && (once || !(r_flags & REXEC_COPY_STR))
+    if (c && (I32)clen <= rx->minlen && (once || !(r_flags & REXEC_COPY_STR))
 	&& !(rx->reganch & ROPT_LOOKBEHIND_SEEN)) {
 	if (!CALLREGEXEC(aTHX_ rx, s, strend, orig, 0, TARG, NULL,
 			 r_flags | REXEC_CHECKED))
@@ -2067,8 +2096,6 @@ PP(pp_subst)
     if (CALLREGEXEC(aTHX_ rx, s, strend, orig, 0, TARG, NULL,
 		    r_flags | REXEC_CHECKED))
     {
-	bool isutf8;
-
 	if (force_on_match) {
 	    force_on_match = 0;
 	    s = SvPV_force(TARG, len);
@@ -2107,14 +2134,21 @@ PP(pp_subst)
 		break;
 	} while (CALLREGEXEC(aTHX_ rx, s, strend, orig, s == m,
 			     TARG, NULL, r_flags));
-	sv_catpvn(dstr, s, strend - s);
+	if (doutf8 && !DO_UTF8(dstr)) {
+	    SV* nsv = sv_2mortal(newSVpvn(s, strend - s));
+	    
+	    sv_utf8_upgrade(nsv);
+	    sv_catpvn(dstr, SvPVX(nsv), SvCUR(nsv));
+	}
+	else
+	    sv_catpvn(dstr, s, strend - s);
 
 	(void)SvOOK_off(TARG);
 	Safefree(SvPVX(TARG));
 	SvPVX(TARG) = SvPVX(dstr);
 	SvCUR_set(TARG, SvCUR(dstr));
 	SvLEN_set(TARG, SvLEN(dstr));
-	isutf8 = DO_UTF8(dstr);
+	doutf8 |= DO_UTF8(dstr);
 	SvPVX(dstr) = 0;
 	sv_free(dstr);
 
@@ -2123,7 +2157,7 @@ PP(pp_subst)
 	PUSHs(sv_2mortal(newSViv((I32)iters)));
 
 	(void)SvPOK_only(TARG);
-	if (isutf8)
+	if (doutf8)
 	    SvUTF8_on(TARG);
 	TAINT_IF(rxtainted);
 	SvSETMAGIC(TARG);
@@ -2879,11 +2913,11 @@ void
 Perl_sub_crush_depth(pTHX_ CV *cv)
 {
     if (CvANON(cv))
-	Perl_warner(aTHX_ WARN_RECURSION, "Deep recursion on anonymous subroutine");
+	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on anonymous subroutine");
     else {
 	SV* tmpstr = sv_newmortal();
 	gv_efullname3(tmpstr, CvGV(cv), Nullch);
-	Perl_warner(aTHX_ WARN_RECURSION, "Deep recursion on subroutine \"%s\"",
+	Perl_warner(aTHX_ packWARN(WARN_RECURSION), "Deep recursion on subroutine \"%s\"",
 		SvPVX(tmpstr));
     }
 }
@@ -2900,7 +2934,7 @@ PP(pp_aelem)
     SV *sv;
 
     if (SvROK(elemsv) && !SvGAMAGIC(elemsv) && ckWARN(WARN_MISC))
-	Perl_warner(aTHX_ WARN_MISC, "Use of reference \"%s\" as array index", SvPV_nolen(elemsv));
+	Perl_warner(aTHX_ packWARN(WARN_MISC), "Use of reference \"%s\" as array index", SvPV_nolen(elemsv));
     if (elem > 0)
 	elem -= PL_curcop->cop_arybase;
     if (SvTYPE(av) != SVt_PVAV)

@@ -67,7 +67,10 @@ case "$osvers" in
 #
 2.0.5*|2.0-built*|2.1*)
  	usevfork='true'
-	usemymalloc='n'
+	case "$usemymalloc" in
+	    "") usemymalloc='n'
+	        ;;
+	esac
 	d_setregid='define'
 	d_setreuid='define'
 	d_setegid='undef'
@@ -79,7 +82,10 @@ case "$osvers" in
 # don't use -lmalloc (maybe there's an old one from 1.1.5.1 floating around)
 2.2*)
  	usevfork='true'
-	usemymalloc='n'
+	case "$usemymalloc" in
+	    "") usemymalloc='n'
+	        ;;
+	esac
 	libswanted=`echo $libswanted | sed 's/ malloc / /'`
 	d_setregid='define'
 	d_setreuid='define'
@@ -87,7 +93,10 @@ case "$osvers" in
 	d_seteuid='undef'
 	;;
 *)	usevfork='true'
-	usemymalloc='n'
+	case "$usemymalloc" in
+	    "") usemymalloc='n'
+	        ;;
+	esac
 	libswanted=`echo $libswanted | sed 's/ malloc / /'`
 	;;
 esac
@@ -210,6 +219,13 @@ EOM
 		 exit 1
 	      fi
 	      ldflags="-pthread $ldflags"
+	      case "$osvers" in
+	      4.*)	# 4.x has gethostbyaddr_r but it is
+			# "Temporary function, not threadsafe"...
+			d_gethostbyaddr_r="undef"
+			d_gethostbyaddr_r_proto="undef"
+			;;
+	      esac
 	      ;;
 
 	esac
@@ -230,5 +246,11 @@ EOM
         esac
 
         unset lc_r
+
+	# Even with the malloc mutexes the Perl malloc does not
+	# seem to be threadsafe in FreeBSD?
+	usemymalloc=n
+
 esac
 EOCBU
+

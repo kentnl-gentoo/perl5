@@ -1,25 +1,39 @@
-use 5.7.2;
-use strict;
+use 5.007003;
 use ExtUtils::MakeMaker;
 
-my %tables = (8859 => ['ascii.ucm', 'cp1250.ucm', 'koi8-r.ucm', 'jis0201.ucm' ],
-              EBCDIC  => ['cp1047.ucm','cp37.ucm','posix-bc.ucm'],
-              Symbols => ['symbol.ucm','dingbats.ucm'],
-	      );
+# Just for sure :)
+unless($ENV{PERL_CORE}) {
+    $ENV{PERL_CORE} = 1 if ($^X =~ m{\bminiperl[^/\\\]>:]*$}o);
+}
 
-opendir(ENC,'Encode');
-while (defined(my $file = readdir(ENC)))
-{
-    if ($file =~ /8859.*\.ucm/)
-    {
-	push(@{$tables{8859}},$file);
+my %tables = 
+    (
+     def_t => ['ascii.ucm',
+	       '8859-1.ucm',
+	       'null.ucm',
+	       'ctrl.ucm',
+	       ]
+     );
+
+my @exe_files = qw(bin/enc2xs
+		   bin/piconv
+		   );
+my @more_exe_files = qw(
+			unidump
+			);
+my @pmlibdirs = qw(lib Encode);
+for my $arg (@ARGV){
+    if ($arg eq "MORE_SCRIPTS"){
+	push @exe_files, @more_exe_files;
+    }
+    if ($arg eq "INSTALL_UCM"){
+	push @pmlibdirs, "ucm";
     }
 }
-closedir(ENC);
-
 
 WriteMakefile(
 	      NAME		=> "Encode",
+	      EXE_FILES         => \@exe_files,
 	      VERSION_FROM	=> 'Encode.pm',
 	      OBJECT		=> '$(O_FILES)',
 	      'dist'		=> {
@@ -28,6 +42,9 @@ WriteMakefile(
 		  DIST_DEFAULT => 'all tardist',
 	      },
 	      MAN3PODS	=> {},
+	      INC       => "-I./Encode",
+	      PMLIBDIRS => \@pmlibdirs,
+	      INSTALLDIRS => 'perl',
 	      );
 
 package MY;
@@ -56,10 +73,12 @@ sub post_initialize
     my @files;
     foreach my $table (keys %tables)
     {
-	foreach my $ext (qw($(OBJ_EXT) .c .h _def.h .fnm))
+	foreach my $ext (qw($(OBJ_EXT) .c .h .exh .fnm))
     {
 	push (@files,$table.$ext);
     }
+    $self->{SOURCE} .= " $table.c"
+	if $^O eq 'MacOS' && $self->{SOURCE} !~ /\b$table\.c\b/;
 }
 $self->{'clean'}{'FILES'} .= join(' ',@files);
 return '';
@@ -68,9 +87,9 @@ return '';
 sub postamble
 {
     my $self = shift;
-    my $dir  = $self->catdir($self->curdir,'Encode');
-    my $str  = "# Encode\$(OBJ_EXT) depends on .h and _def.h files not .c files - but all written by compile\n";
-    $str  .= 'Encode$(OBJ_EXT) :';
+    my $dir  = $self->catdir($self->curdir,'ucm');
+    my $str  = "# Encode\$(OBJ_EXT) depends on .h and .exh files not .c files - but all written by enc2xs\n";
+    $str  .= $^O eq 'MacOS' ? 'Encode.c.{$(MACPERL_BUILD_EXT_STATIC)}.o :' : 'Encode$(OBJ_EXT) :';
     foreach my $table (keys %tables)
     {
 	$str .= " $table.c";
@@ -81,7 +100,8 @@ sub postamble
 	my $numlines = 1;
 	my $lengthsofar = length($str);
 	my $continuator = '';
-	$str .= "$table.c : compile Makefile.PL";
+	my $enc2xs = $self->catfile('bin', 'enc2xs');
+	$str .= "$table.c : $enc2xs Makefile.PL";
 	foreach my $file (@{$tables{$table}})
 	{
 	    $str .= $continuator.' '.$self->catfile($dir,$file);
@@ -93,9 +113,11 @@ sub postamble
 		$continuator = '';
 	    }
 	}
-        $str .= $^O eq 'VMS' # In VMS quote to preserve case
-            ? qq{\n\t\$(PERL) compile -"Q" -"O" -o \$\@ -f $table.fnm\n\n}
-            : qq{\n\t\$(PERL) compile -Q -O -o \$\@ -f $table.fnm\n\n};
+	my $plib   = $self->{PERL_CORE} ? '"-I$(PERL_LIB)"' : '';
+	$plib .= " -MCross=$::Cross::platform" if defined $::Cross::platform;
+	my $ucopts = '-"Q" -"O"';
+	$str .=
+	    qq{\n\t\$(PERL) $plib $enc2xs $ucopts -o \$\@ -f $table.fnm\n\n};
 	open (FILELIST, ">$table.fnm")
 	    || die "Could not open $table.fnm: $!";
 	foreach my $file (@{$tables{$table}})

@@ -24,7 +24,8 @@ struct hek {
     I32		hek_len;	/* length of hash key */
     char	hek_key[1];	/* variable-length hash key */
     /* the hash-key is \0-terminated */
-    /* after the \0 there is a byte telling whether the key is UTF8 */
+    /* after the \0 there is a byte for flags, such as whether the key is
+       UTF8 */
 };
 
 /* hash structure: */
@@ -46,12 +47,19 @@ struct xpvhv {
 };
 
 /* hash a key */
-/* FYI: This is the "One-at-a-Time" algorithm by Bob Jenkins */
-/* from requirements by Colin Plumb. */
-/* (http://burtleburtle.net/bob/hash/doobs.html) */
+/* FYI: This is the "One-at-a-Time" algorithm by Bob Jenkins
+ * from requirements by Colin Plumb.
+ * (http://burtleburtle.net/bob/hash/doobs.html) */
+/* The use of a temporary pointer and the casting games
+ * is needed to serve the dual purposes of
+ * (a) the hashed data being interpreted as "unsigned char" (new since 5.8,
+ *     a "char" can be either signed or signed, depending on the compiler)
+ * (b) catering for old code that uses a "char"
+ */
 #define PERL_HASH(hash,str,len) \
      STMT_START	{ \
-	register const char *s_PeRlHaSh = str; \
+	register const char *s_PeRlHaSh_tmp = str; \
+	register const unsigned char *s_PeRlHaSh = (const unsigned char *)s_PeRlHaSh_tmp; \
 	register I32 i_PeRlHaSh = len; \
 	register U32 hash_PeRlHaSh = 0; \
 	while (i_PeRlHaSh--) { \
@@ -159,10 +167,20 @@ C<SV*>.
 #define HvTOTALKEYS(hv)		XHvTOTALKEYS((XPVHV*)  SvANY(hv))
 #define HvPLACEHOLDERS(hv)	XHvPLACEHOLDERS((XPVHV*)  SvANY(hv))
 
-
 #define HvSHAREKEYS(hv)		(SvFLAGS(hv) & SVphv_SHAREKEYS)
 #define HvSHAREKEYS_on(hv)	(SvFLAGS(hv) |= SVphv_SHAREKEYS)
 #define HvSHAREKEYS_off(hv)	(SvFLAGS(hv) &= ~SVphv_SHAREKEYS)
+
+/* This is an optimisation flag. It won't be set if all hash keys have a 0
+ * flag. Currently the only flags relate to utf8.
+ * Hence it won't be set if all keys are 8 bit only. It will be set if any key
+ * is utf8 (including 8 bit keys that were entered as utf8, and need upgrading
+ * when retrieved during iteration. It may still be set when there are no longer
+ * any utf8 keys.
+ */
+#define HvHASKFLAGS(hv)		(SvFLAGS(hv) & SVphv_HASKFLAGS)
+#define HvHASKFLAGS_on(hv)	(SvFLAGS(hv) |= SVphv_HASKFLAGS)
+#define HvHASKFLAGS_off(hv)	(SvFLAGS(hv) &= ~SVphv_HASKFLAGS)
 
 #define HvLAZYDEL(hv)		(SvFLAGS(hv) & SVphv_LAZYDEL)
 #define HvLAZYDEL_on(hv)	(SvFLAGS(hv) |= SVphv_LAZYDEL)
@@ -188,7 +206,9 @@ C<SV*>.
 #define HeKEY_sv(he)		(*(SV**)HeKEY(he))
 #define HeKLEN(he)		HEK_LEN(HeKEY_hek(he))
 #define HeKUTF8(he)  HEK_UTF8(HeKEY_hek(he))
+#define HeKWASUTF8(he)  HEK_WASUTF8(HeKEY_hek(he))
 #define HeKLEN_UTF8(he)  (HeKUTF8(he) ? -HeKLEN(he) : HeKLEN(he))
+#define HeKFLAGS(he)  HEK_FLAGS(HeKEY_hek(he))
 #define HeVAL(he)		(he)->hent_val
 #define HeHASH(he)		HEK_HASH(HeKEY_hek(he))
 #define HePV(he,lp)		((HeKLEN(he) == HEf_SVKEY) ?		\
@@ -213,7 +233,21 @@ C<SV*>.
 #define HEK_HASH(hek)		(hek)->hek_hash
 #define HEK_LEN(hek)		(hek)->hek_len
 #define HEK_KEY(hek)		(hek)->hek_key
-#define HEK_UTF8(hek)		(*(HEK_KEY(hek)+HEK_LEN(hek)+1))
+#define HEK_FLAGS(hek)	(*((unsigned char *)(HEK_KEY(hek))+HEK_LEN(hek)+1))
+
+#define HVhek_UTF8	0x01 /* Key is utf8 encoded. */
+#define HVhek_WASUTF8	0x02 /* Key is bytes here, but was supplied as utf8. */
+#define HVhek_FREEKEY	0x100 /* Internal flag to say key is malloc()ed.  */
+#define HVhek_PLACEHOLD	0x200 /* Internal flag to create placeholder.
+                               * (may change, but Storable is a core module) */
+#define HVhek_MASK	0xFF
+
+#define HEK_UTF8(hek)		(HEK_FLAGS(hek) & HVhek_UTF8)
+#define HEK_UTF8_on(hek)	(HEK_FLAGS(hek) |= HVhek_UTF8)
+#define HEK_UTF8_off(hek)	(HEK_FLAGS(hek) &= ~HVhek_UTF8)
+#define HEK_WASUTF8(hek)	(HEK_FLAGS(hek) & HVhek_WASUTF8)
+#define HEK_WASUTF8_on(hek)	(HEK_FLAGS(hek) |= HVhek_WASUTF8)
+#define HEK_WASUTF8_off(hek)	(HEK_FLAGS(hek) &= ~HVhek_WASUTF8)
 
 /* calculate HV array allocation */
 #if defined(STRANGE_MALLOC) || defined(MYMALLOC)
@@ -225,6 +259,9 @@ C<SV*>.
 			 ? (size) * sizeof(HE*)				\
 			 : (size) * sizeof(HE*) * 2 - MALLOC_OVERHEAD)
 #endif
+
+/* Flags for hv_iternext_flags.  */
+#define HV_ITERNEXT_WANTPLACEHOLDERS	0x01	/* Don't skip placeholders.  */
 
 /* available as a function in hv.c */
 #define Perl_sharepvn(sv, len, hash) HEK_KEY(share_hek(sv, len, hash))

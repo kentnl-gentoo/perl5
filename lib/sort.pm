@@ -1,8 +1,13 @@
 package sort;
 
-our $VERSION = '1.00';
+our $VERSION = '1.01';
 
-$sort::hint_bits       = 0x00020000; # HINT_LOCALIZE_HH, really...
+# Currently the hints for pp_sort are stored in the global variable
+# $sort::hints. An improvement would be to store them in $^H{SORT} and have
+# this information available somewhere in the listop OP_SORT, to allow lexical
+# scoping of this pragma. -- rgs 2002-04-30
+
+our $hints	       = 0;
 
 $sort::quicksort_bit   = 0x00000001;
 $sort::mergesort_bit   = 0x00000002;
@@ -17,18 +22,17 @@ sub import {
 	require Carp;
 	Carp::croak("sort pragma requires arguments");
     }
-    $^H |= $sort::hint_bits;
     local $_;
-    no warnings 'uninitialized';	# $^H{SORT} bitops would warn
+    no warnings 'uninitialized';	# bitops would warn
     while ($_ = shift(@_)) {
 	if (/^_q(?:uick)?sort$/) {
-	    $^H{SORT} &= ~$sort::sort_bits;
-	    $^H{SORT} |=  $sort::quicksort_bit;
+	    $hints &= ~$sort::sort_bits;
+	    $hints |=  $sort::quicksort_bit;
 	} elsif ($_ eq '_mergesort') {
-	    $^H{SORT} &= ~$sort::sort_bits;
-	    $^H{SORT} |=  $sort::mergesort_bit;
+	    $hints &= ~$sort::sort_bits;
+	    $hints |=  $sort::mergesort_bit;
 	} elsif ($_ eq 'stable') {
-	    $^H{SORT} |=  $sort::stable_bit;
+	    $hints |=  $sort::stable_bit;
 	} else {
 	    require Carp;
 	    Carp::croak("sort: unknown subpragma '$_'");
@@ -38,10 +42,10 @@ sub import {
 
 sub current {
     my @sort;
-    if ($^H{SORT}) {
-	push @sort, 'quicksort' if $^H{SORT} & $sort::quicksort_bit;
-	push @sort, 'mergesort' if $^H{SORT} & $sort::mergesort_bit;
-	push @sort, 'stable'    if $^H{SORT} & $sort::stable_bit;
+    if ($hints) {
+	push @sort, 'quicksort' if $hints & $sort::quicksort_bit;
+	push @sort, 'mergesort' if $hints & $sort::mergesort_bit;
+	push @sort, 'stable'    if $hints & $sort::stable_bit;
     }
     push @sort, 'mergesort' unless @sort;
     join(' ', @sort);
@@ -99,6 +103,11 @@ is often faster for small arrays, and on platforms with small memory
 caches that are much faster than main memory.  You can force the
 choice of algorithm with this pragma, but this feels heavy-handed,
 so the subpragmas beginning with a C<_> may not persist beyond Perl 5.8.
+
+=head1 CAVEATS
+
+This pragma is not lexically scoped : its effect is global to the program
+it appears in.  This may change in future versions.
 
 =cut
 

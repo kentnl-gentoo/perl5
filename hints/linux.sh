@@ -56,6 +56,33 @@ if test -L /lib/libc.so.6; then
     libc=/lib/$libc
 fi
 
+# glibc 2.2.90 and above apparently change stdio streams so Perl's
+# direct buffer manipulation no longer works.  The Configure tests
+# should be changed to correctly detect this, but until then,
+# the following check should at least let perl compile and run.
+# (This quick fix should be updated before 5.8.1.)
+# Since we just computed libc above, we'll use it here.  A typical 
+# value looks like libc='/lib/libc-2.0.6.so'
+# To be defensive, reject all unknown versions > 2.2.9.
+# A. Dougherty, May. 30, 2002
+case "$libc" in
+*-2.[01]*)  ;;
+*-2.2.so) ;;
+*-2.2.[0-9].*) ;;
+*)  # Honor a command-line override
+    if test -z "$d_stdstdio"; then
+	d_stdstdio="$undef"
+	cat <<'EOM' >&4
+
+Disabling perl's stdio buffer snooping.  This will generate a harmless
+	    *** WHOA THERE!!! ***
+message in Configure.  Accept the recommended value.
+Read hints/linux.sh for further information.
+EOM
+    fi
+    ;;
+esac
+
 # Configure may fail to find lstat() since it's a static/inline
 # function in <sys/stat.h>.
 d_lstat=define
@@ -249,10 +276,23 @@ esac
 cat > UU/usethreads.cbu <<'EOCBU'
 case "$usethreads" in
 $define|true|[yY]*)
-        ccflags="-D_REENTRANT $ccflags"
+        ccflags="-D_REENTRANT -D_GNU_SOURCE $ccflags"
         set `echo X "$libswanted "| sed -e 's/ c / pthread c /'`
         shift
         libswanted="$*"
+
+	# Somehow at least in Debian 2.2 these manage to escape
+	# the #define forest of <features.h> and <time.h> so that
+	# the hasproto macro of Configure doesn't see these protos,
+	# even with the -D_GNU_SOURCE.
+
+	d_asctime_r_proto="$define"
+	d_crypt_r_proto="$define"
+	d_ctime_r_proto="$define"
+	d_gmtime_r_proto="$define"
+	d_localtime_r_proto="$define"
+	d_random_r_proto="$define"
+
 	;;
 esac
 EOCBU

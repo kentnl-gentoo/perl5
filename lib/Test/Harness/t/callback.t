@@ -10,7 +10,11 @@ BEGIN {
     }
 }
 
-my $SAMPLE_TESTS = $ENV{PERL_CORE} ? 'lib/sample-tests' : 't/sample-tests';
+use File::Spec::Functions;
+
+my $SAMPLE_TESTS = $ENV{PERL_CORE}
+    ? catdir(curdir(), 'lib', 'sample-tests')
+    : catdir(curdir(), 't', 'sample-tests');
 
 use Test::More;
 
@@ -28,8 +32,9 @@ use Test::More;
             simple      => [qw( header test test test test test )],
             simple_fail => [qw( header test test test test test )],
             'skip'      => [qw( header test test test test test )],
-            skip_all    => [qw( header )],
-            skip_no_msg => [qw( header test )],
+            skipall     => [qw( header )],
+            skipall_nomsg => [qw( header )],
+            skip_nomsg  => [qw( header test )],
             taint       => [qw( header test )],
             'todo'      => [qw( header test test test test test )],
             todo_inline => [qw( header test test test )],
@@ -47,9 +52,14 @@ $strap->{callback} = sub {
     push @out, $type;
 };
                             
+$SAMPLE_TESTS = VMS::Filespec::unixify($SAMPLE_TESTS) if $^O eq 'VMS';
+
 while( my($test, $expect) = each %samples ) {
     local @out = ();
-    $strap->analyze_file("$SAMPLE_TESTS/$test");
+
+    $strap->analyze_file($^O eq 'macos' ?
+			 catfile($SAMPLE_TESTS, $test) :
+			 "$SAMPLE_TESTS/$test");
 
     is_deeply(\@out, $expect,   "$test callback");
 }

@@ -1,11 +1,11 @@
 # -*- Mode: cperl; coding: utf-8; cperl-indent-level: 4 -*-
 package CPAN;
-$VERSION = '1.59_56';
-# $Id: CPAN.pm,v 1.385 2001/02/09 21:37:57 k Exp $
+$VERSION = '1.61';
+# $Id: CPAN.pm,v 1.390 2002/05/07 10:04:58 k Exp $
 
 # only used during development:
 $Revision = "";
-# $Revision = "[".substr(q$Revision: 1.385 $, 10)."]";
+# $Revision = "[".substr(q$Revision: 1.390 $, 10)."]";
 
 use Carp ();
 use Config ();
@@ -22,6 +22,7 @@ use Safe ();
 use Text::ParseWords ();
 use Text::Wrap;
 use File::Spec;
+use Sys::Hostname;
 no lib "."; # we need to run chdir all over and we would get at wrong
             # libraries there
 
@@ -460,19 +461,33 @@ sub checklock {
     if (-f $lockfile && -M _ > 0) {
 	my $fh = FileHandle->new($lockfile) or
             $CPAN::Frontend->mydie("Could not open $lockfile: $!");
-	my $other = <$fh>;
+	my $otherpid  = <$fh>;
+	my $otherhost = <$fh>;
 	$fh->close;
-	if (defined $other && $other) {
-	    chomp $other;
-	    return if $$==$other; # should never happen
+	if (defined $otherpid && $otherpid) {
+	    chomp $otherpid;
+        }
+	if (defined $otherhost && $otherhost) {
+	    chomp $otherhost;
+	}
+	my $thishost  = hostname();
+	if (defined $otherhost && defined $thishost &&
+	    $otherhost ne '' && $thishost ne '' &&
+	    $otherhost ne $thishost) {
+            $CPAN::Frontend->mydie(sprintf("CPAN.pm panic: Lockfile $lockfile\n".
+                                           "reports other host $otherhost and other process $otherpid.\n".
+                                           "Cannot proceed.\n"));
+	}
+	elsif (defined $otherpid && $otherpid) {
+	    return if $$ == $otherpid; # should never happen
 	    $CPAN::Frontend->mywarn(
 				    qq{
-There seems to be running another CPAN process ($other). Contacting...
+There seems to be running another CPAN process (pid $otherpid).  Contacting...
 });
-	    if (kill 0, $other) {
+	    if (kill 0, $otherpid) {
 		$CPAN::Frontend->mydie(qq{Other job is running.
 You may want to kill it and delete the lockfile, maybe. On UNIX try:
-    kill $other
+    kill $otherpid
     rm $lockfile
 });
 	    } elsif (-w $lockfile) {
@@ -492,9 +507,9 @@ You may want to kill it and delete the lockfile, maybe. On UNIX try:
 			   );
 	    }
 	} else {
-            $CPAN::Frontend->mydie(sprintf("CPAN.pm panic: Lockfile $lockfile ".
+            $CPAN::Frontend->mydie(sprintf("CPAN.pm panic: Lockfile $lockfile\n".
                                            "reports other process with ID ".
-                                           "$other. Cannot proceed.\n"));
+                                           "$otherpid. Cannot proceed.\n"));
         }
     }
     my $dotcpan = $CPAN::Config->{cpan_home};
@@ -558,6 +573,7 @@ or
 	$CPAN::Frontend->mydie("Could not open >$lockfile: $!");
     }
     $fh->print($$, "\n");
+    $fh->print(hostname(), "\n");
     $self->{LOCK} = $lockfile;
     $fh->close;
     $SIG{TERM} = sub {
@@ -768,6 +784,29 @@ sub cleanup {
   # require Carp;
   # Carp::cluck("DEBUGGING");
   $CPAN::Frontend->mywarn("Lockfile removed.\n");
+}
+
+sub is_tested {
+    my($self,$what) = @_;
+    $self->{is_tested}{$what} = 1;
+}
+
+sub is_installed {
+    my($self,$what) = @_;
+    delete $self->{is_tested}{$what};
+}
+
+sub set_perl5lib {
+    my($self) = @_;
+    $self->{is_tested} ||= {};
+    return unless %{$self->{is_tested}};
+    my $env = $ENV{PERL5LIB};
+    $env = $ENV{PERLLIB} unless defined $env;
+    my @env;
+    push @env, $env if defined $env and length $env;
+    my @dirs = map {("$_/blib/arch", "$_/blib/lib")} keys %{$self->{is_tested}};
+    $CPAN::Frontend->myprint("Prepending @dirs to PERL5LIB.\n");
+    $ENV{PERL5LIB} = join $Config::Config{path_sep}, @dirs, @env;
 }
 
 package CPAN::CacheMgr;
@@ -2077,7 +2116,7 @@ sub config {
         @ISA = qw(Exporter LWP::UserAgent);
         $SETUPDONE++;
     } else {
-        $CPAN::Frontent->mywarn("LWP::UserAgent not available\n");
+        $CPAN::Frontend->mywarn("LWP::UserAgent not available\n");
     }
 }
 
@@ -2234,7 +2273,7 @@ sub localize {
             CPAN::LWP::UserAgent->config;
 	    eval {$Ua = CPAN::LWP::UserAgent->new;}; # Why is has_usable still not fit enough?
             if ($@) {
-                $CPAN::Frontent->mywarn("CPAN::LWP::UserAgent->new dies with $@")
+                $CPAN::Frontend->mywarn("CPAN::LWP::UserAgent->new dies with $@")
                     if $CPAN::DEBUG;
             } else {
                 my($var);
@@ -2385,7 +2424,7 @@ sub hosteasy {
               CPAN::LWP::UserAgent->config;
               eval { $Ua = CPAN::LWP::UserAgent->new; };
               if ($@) {
-                  $CPAN::Frontent->mywarn("CPAN::LWP::UserAgent->new dies with $@");
+                  $CPAN::Frontend->mywarn("CPAN::LWP::UserAgent->new dies with $@");
               }
 	  }
 	  my $res = $Ua->mirror($url, $aslocal);
@@ -2517,7 +2556,7 @@ Trying with "$funkyftp$src_switch" to get
     $url
 ]);
 	  my($system) =
-	      "$chdir$funkyftp$src_switch '$url' $devnull$stdout_redir";
+	      "$chdir$funkyftp$src_switch \"$url\" $devnull$stdout_redir";
 	  $self->debug("system[$system]") if $CPAN::DEBUG;
 	  my($wstatus);
 	  if (($wstatus = system($system)) == 0
@@ -2550,7 +2589,7 @@ Trying with "$funkyftp$src_switch" to get
 Trying with "$funkyftp$src_switch" to get
   $url.gz
 ]);
-	    my($system) = "$funkyftp$src_switch '$url.gz' $devnull > $asl_gz";
+	    my($system) = "$funkyftp$src_switch \"$url.gz\" $devnull > $asl_gz";
 	    $self->debug("system[$system]") if $CPAN::DEBUG;
 	    my($wstatus);
 	    if (($wstatus = system($system)) == 0
@@ -4617,9 +4656,12 @@ sub test {
         return;
     }
 
+    local $ENV{PERL5LIB} = $ENV{PERL5LIB} || "";
+    $CPAN::META->set_perl5lib;
     my $system = join " ", $CPAN::Config->{'make'}, "test";
     if (system($system) == 0) {
 	 $CPAN::Frontend->myprint("  $system -- OK\n");
+	 $CPAN::META->is_tested($self->{'build_dir'});
 	 $self->{make_test} = "YES";
     } else {
 	 $self->{make_test} = "NO";
@@ -4735,6 +4777,7 @@ sub install {
     $pipe->close;
     if ($?==0) {
 	 $CPAN::Frontend->myprint("  $system -- OK\n");
+	 $CPAN::META->is_installed($self->{'build_dir'});
 	 return $self->{'install'} = "YES";
     } else {
 	 $self->{'install'} = "NO";
@@ -4753,6 +4796,14 @@ sub dir {
 }
 
 package CPAN::Bundle;
+
+sub look {
+    my $self = shift;
+    $CPAN::Frontend->myprint(
+                             qq{ look() commmand on bundles not}.
+                             qq{ implemented (What should it do?)}
+                            );
+}
 
 sub undelay {
     my $self = shift;
@@ -5275,8 +5326,8 @@ sub manpage_headline {
     my $inpod = 0;
     local $/ = "\n";
     while (<$fh>) {
-      $inpod = m/^=(?!head1\s+NAME)/ ? 0 :
-	  m/^=head1\s+NAME/ ? 1 : $inpod;
+      $inpod = m/^=(?!head1\s+NAME\s*$)/ ? 0 :
+	  m/^=head1\s+NAME\s*$/ ? 1 : $inpod;
       next unless $inpod;
       next if /^=/;
       next if /^\s+$/;

@@ -26,7 +26,7 @@
 #endif
 
 #ifdef PerlIO
-#ifdef MACOS_TRADITIONAL
+#if defined(MACOS_TRADITIONAL) && defined(USE_SFIO)
 #define PERLIO_IS_STDIO 1
 #undef setbuf
 #undef setvbuf
@@ -64,12 +64,12 @@ not_here(char *s)
 static int
 io_blocking(pTHX_ InputStream f, int block)
 {
+#if defined(HAS_FCNTL)
     int RETVAL;
     if(!f) {
 	errno = EBADF;
 	return -1;
     }
-#if defined(HAS_FCNTL)
     RETVAL = fcntl(PerlIO_fileno(f), F_GETFL, 0);
     if (RETVAL >= 0) {
 	int mode = RETVAL;
@@ -145,7 +145,7 @@ io_blocking(pTHX_ InputStream f, int block)
     }
     return RETVAL;
 #else
- return -1;
+    return -1;
 #endif
 }
 
@@ -242,7 +242,7 @@ PPCODE:
     for(i=1, j=0  ; j < nfd ; j++) {
 	fds[j].fd = SvIV(ST(i));
 	i++;
-	fds[j].events = SvIV(ST(i));
+	fds[j].events = (short)SvIV(ST(i));
 	i++;
 	fds[j].revents = 0;
     }

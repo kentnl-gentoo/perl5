@@ -62,7 +62,7 @@ For ease of access, the Perl manual has been split up into several sections.
     perlsub		Perl subroutines
     perlfunc		Perl built-in functions
       perlopentut	Perl open() tutorial
-      perlpacktut       Perl open() tutorial
+      perlpacktut       Perl pack() and unpack() tutorial
     perlpod		Perl plain old documentation
     perlpodspec         Perl plain old documentation format specification
     perlrun		Perl execution and options
@@ -135,6 +135,13 @@ For ease of access, the Perl manual has been split up into several sections.
     perl56delta		Perl changes in version 5.6
     perl5005delta	Perl changes in version 5.005
     perl5004delta	Perl changes in version 5.004
+
+=head2 Language-Specific
+
+    perlcn		Perl for Simplified Chinese (in EUC-CN)
+    perljp		Perl for Japanese (in EUC-JP)
+    perlko		Perl for Korean (in EUC-KR)
+    perltw		Perl for Traditional Chinese (in Big5)
 
 =head2 Platform-Specific
 

@@ -93,7 +93,7 @@ PP(pp_regcomp)
 
 	/* Check against the last compiled regexp. */
 	if (!PM_GETRE(pm) || !PM_GETRE(pm)->precomp ||
-	    PM_GETRE(pm)->prelen != len ||
+	    PM_GETRE(pm)->prelen != (I32)len ||
 	    memNE(PM_GETRE(pm)->precomp, t, len))
 	{
 	    if (PM_GETRE(pm)) {
@@ -396,7 +396,7 @@ PP(pp_formline)
 	    else {
 		sv = &PL_sv_no;
 		if (ckWARN(WARN_SYNTAX))
-		    Perl_warner(aTHX_ WARN_SYNTAX, "Not enough format arguments");
+		    Perl_warner(aTHX_ packWARN(WARN_SYNTAX), "Not enough format arguments");
 	    }
 	    break;
 
@@ -405,7 +405,7 @@ PP(pp_formline)
 	    itemsize = len;
 	    if (DO_UTF8(sv)) {
 		itemsize = sv_len_utf8(sv);
-		if (itemsize != len) {
+		if (itemsize != (I32)len) {
 		    I32 itembytes;
 		    if (itemsize > fieldsize) {
 			itemsize = fieldsize;
@@ -447,7 +447,7 @@ PP(pp_formline)
 	    itemsize = len;
 	    if (DO_UTF8(sv)) {
 		itemsize = sv_len_utf8(sv);
-		if (itemsize != len) {
+		if (itemsize != (I32)len) {
 		    I32 itembytes;
 		    if (itemsize <= fieldsize) {
 			send = chophere = s + itemsize;
@@ -896,13 +896,16 @@ PP(pp_flip)
     else {
 	dTOPss;
 	SV *targ = PAD_SV(PL_op->op_targ);
- 	int flip;
+ 	int flip = 0;
 
  	if (PL_op->op_private & OPpFLIP_LINENUM) {
- 	    struct io *gp_io;
- 	    flip = PL_last_in_gv
- 		&& (gp_io = GvIO(PL_last_in_gv))
- 		&& SvIV(sv) == (IV)IoLINES(gp_io);
+	    if (GvIO(PL_last_in_gv)) {
+		flip = SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv));
+	    }
+	    else {
+		GV *gv = gv_fetchpv(".", TRUE, SVt_PV);
+		if (gv && GvSV(gv)) flip = SvIV(sv) == SvIV(GvSV(gv));
+	    }
  	} else {
  	    flip = SvTRUE(sv);
  	}
@@ -980,11 +983,23 @@ PP(pp_flop)
     else {
 	dTOPss;
 	SV *targ = PAD_SV(cUNOP->op_first->op_targ);
+	int flop = 0;
 	sv_inc(targ);
-	if ((PL_op->op_private & OPpFLIP_LINENUM)
-	  ? (GvIO(PL_last_in_gv)
-	     && SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv)))
-	  : SvTRUE(sv) ) {
+
+	if (PL_op->op_private & OPpFLIP_LINENUM) {
+	    if (GvIO(PL_last_in_gv)) {
+		flop = SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv));
+	    }
+	    else {
+		GV *gv = gv_fetchpv(".", TRUE, SVt_PV);
+		if (gv && GvSV(gv)) flop = SvIV(sv) == SvIV(GvSV(gv));
+	    }
+	}
+	else {
+	    flop = SvTRUE(sv);
+	}
+
+	if (flop) {
 	    sv_setiv(PAD_SV(((UNOP*)cUNOP->op_first)->op_first->op_targ), 0);
 	    sv_catpv(targ, "E0");
 	}
@@ -1007,27 +1022,27 @@ S_dopoptolabel(pTHX_ char *label)
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting substitution via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting substitution via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_SUB:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting subroutine via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting subroutine via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_FORMAT:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting format via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting format via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_EVAL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting eval via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting eval via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_NULL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting pseudo-block via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting pseudo-block via %s",
 			OP_NAME(PL_op));
 	    return -1;
 	case CXt_LOOP:
@@ -1142,27 +1157,27 @@ S_dopoptoloop(pTHX_ I32 startingblock)
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting substitution via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting substitution via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_SUB:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting subroutine via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting subroutine via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_FORMAT:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting format via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting format via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_EVAL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting eval via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting eval via %s",
 			OP_NAME(PL_op));
 	    break;
 	case CXt_NULL:
 	    if (ckWARN(WARN_EXITING))
-		Perl_warner(aTHX_ WARN_EXITING, "Exiting pseudo-block via %s",
+		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting pseudo-block via %s",
 			OP_NAME(PL_op));
 	    return -1;
 	case CXt_LOOP:
@@ -1253,7 +1268,7 @@ Perl_die_where(pTHX_ char *message, STRLEN msglen)
 		    sv_catpvn(err, message, msglen);
 		    if (ckWARN(WARN_MISC)) {
 			STRLEN start = SvCUR(err)-msglen-sizeof(prefix)+1;
-			Perl_warner(aTHX_ WARN_MISC, SvPVX(err)+start);
+			Perl_warner(aTHX_ packWARN(WARN_MISC), SvPVX(err)+start);
 		    }
 		}
 	    }
@@ -1435,11 +1450,18 @@ PP(pp_caller)
     if (!MAXARG)
 	RETURN;
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
+	GV *cvgv = CvGV(ccstack[cxix].blk_sub.cv);
 	/* So is ccstack[dbcxix]. */
-	sv = NEWSV(49, 0);
-	gv_efullname3(sv, CvGV(ccstack[cxix].blk_sub.cv), Nullch);
-	PUSHs(sv_2mortal(sv));
-	PUSHs(sv_2mortal(newSViv((I32)cx->blk_sub.hasargs)));
+	if (isGV(cvgv)) {
+	    sv = NEWSV(49, 0);
+	    gv_efullname3(sv, cvgv, Nullch);
+	    PUSHs(sv_2mortal(sv));
+	    PUSHs(sv_2mortal(newSViv((I32)cx->blk_sub.hasargs)));
+	}
+	else {
+	    PUSHs(sv_2mortal(newSVpvn("(unknown)",9)));
+	    PUSHs(sv_2mortal(newSViv((I32)cx->blk_sub.hasargs)));
+	}
     }
     else {
 	PUSHs(sv_2mortal(newSVpvn("(eval)",6)));
@@ -1545,7 +1567,7 @@ PP(pp_dbstate)
 	register CV *cv;
 	register PERL_CONTEXT *cx;
 	I32 gimme = G_ARRAY;
-	I32 hasargs;
+	U8 hasargs;
 	GV *gv;
 
 	gv = PL_DBgv;
@@ -2155,7 +2177,7 @@ PP(pp_goto)
 		    cx->blk_sub.hasargs = 0;
 		}
 		cx->blk_sub.cv = cv;
-		cx->blk_sub.olddepth = CvDEPTH(cv);
+		cx->blk_sub.olddepth = (U16)CvDEPTH(cv);
 		CvDEPTH(cv)++;
 		if (CvDEPTH(cv) < 2)
 		    (void)SvREFCNT_inc(cv);
@@ -2520,6 +2542,7 @@ S_docatch(pTHX_ OP *o)
 {
     int ret;
     OP *oldop = PL_op;
+    OP *retop;
     volatile PERL_SI *cursi = PL_curstackinfo;
     dJMPENV;
 
@@ -2527,6 +2550,15 @@ S_docatch(pTHX_ OP *o)
     assert(CATCH_GET == TRUE);
 #endif
     PL_op = o;
+
+    /* Normally, the leavetry at the end of this block of ops will
+     * pop an op off the return stack and continue there. By setting
+     * the op to Nullop, we force an exit from the inner runops()
+     * loop. DAPM.
+     */
+    retop = pop_return();
+    push_return(Nullop);
+
 #ifdef PERL_FLEXIBLE_EXCEPTIONS
  redo_body:
     CALLPROTECT(aTHX_ pcur_env, &ret, MEMBER_TO_FPTR(S_docatch_body));
@@ -2541,11 +2573,15 @@ S_docatch(pTHX_ OP *o)
 #endif
 	break;
     case 3:
+	/* die caught by an inner eval - continue inner loop */
 	if (PL_restartop && cursi == PL_curstackinfo) {
 	    PL_op = PL_restartop;
 	    PL_restartop = 0;
 	    goto redo_body;
 	}
+	/* a die in this eval - continue in outer loop */
+	if (!PL_restartop)
+	    break;
 	/* FALL THROUGH */
     default:
 	JMPENV_POP;
@@ -2555,7 +2591,7 @@ S_docatch(pTHX_ OP *o)
     }
     JMPENV_POP;
     PL_op = oldop;
-    return Nullop;
+    return retop;
 }
 
 OP *
@@ -2627,7 +2663,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, char *code, AV** avp)
     *avp = (AV*)SvREFCNT_inc(PL_comppad);
     LEAVE;
     if (PL_curcop == &PL_compiling)
-	PL_compiling.op_private = PL_hints;
+	PL_compiling.op_private = (U8)(PL_hints & HINT_PRIVATE_MASK);
 #ifdef OP_IN_REGISTER
     op = PL_opsave;
 #endif
@@ -2898,7 +2934,7 @@ PP(pp_require)
 		    PERL_VERSION, PERL_SUBVERSION);
 	    }
 	    if (ckWARN(WARN_PORTABLE))
-		Perl_warner(aTHX_ WARN_PORTABLE,
+		Perl_warner(aTHX_ packWARN(WARN_PORTABLE),
                         "v-string in use/require non-portable");
 	    RETPUSHYES;
 	}
@@ -2916,11 +2952,11 @@ PP(pp_require)
 
 		/* help out with the "use 5.6" confusion */
 		if (sver == 0 && (rev > 5 || (rev == 5 && ver >= 100))) {
-		    DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--"
-			"this is only v%d.%d.%d, stopped"
-			" (did you mean v%"UVuf".%03"UVuf"?)",
-			rev, ver, sver, PERL_REVISION, PERL_VERSION,
-			PERL_SUBVERSION, rev, ver/100);
+		    DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required"
+			" (did you mean v%"UVuf".%03"UVuf"?)--"
+			"this is only v%d.%d.%d, stopped",
+			rev, ver, sver, rev, ver/100,
+			PERL_REVISION, PERL_VERSION, PERL_SUBVERSION);
 		}
 		else {
 		    DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--"
@@ -2947,6 +2983,17 @@ PP(pp_require)
 	tryname = name;
 	tryrsfp = doopen_pmc(name,PERL_SCRIPT_MODE);
     }
+#ifdef MACOS_TRADITIONAL
+    if (!tryrsfp) {
+	char newname[256];
+
+	MacPerl_CanonDir(name, newname, 1);
+	if (path_is_absolute(newname)) {
+	    tryname = newname;
+	    tryrsfp = doopen_pmc(newname,PERL_SCRIPT_MODE);
+	}
+    }
+#endif
     if (!tryrsfp) {
 	AV *ar = GvAVn(PL_incgv);
 	I32 i;
@@ -3080,8 +3127,11 @@ PP(pp_require)
 		  ) {
 		    char *dir = SvPVx(dirsv, n_a);
 #ifdef MACOS_TRADITIONAL
-		    char buf[256];
-		    Perl_sv_setpvf(aTHX_ namesv, "%s%s", MacPerl_CanonDir(dir, buf), name+(name[0] == ':'));
+		    char buf1[256];
+		    char buf2[256];
+
+		    MacPerl_CanonDir(name, buf2, 1);
+		    Perl_sv_setpvf(aTHX_ namesv, "%s%s", MacPerl_CanonDir(dir, buf1, 0), buf2+(buf2[0] == ':'));
 #else
 #ifdef VMS
 		    char *unixdir;
@@ -3095,14 +3145,6 @@ PP(pp_require)
 #endif
 		    TAINT_PROPER("require");
 		    tryname = SvPVX(namesv);
-#ifdef MACOS_TRADITIONAL
-		    {
-		    	/* Convert slashes in the name part, but not the directory part, to colons */
-		    	char * colon;
-		    	for (colon = tryname+strlen(dir); colon = strchr(colon, '/'); )
-			    *colon++ = ':';
-		    }
-#endif
 		    tryrsfp = doopen_pmc(tryname, PERL_SCRIPT_MODE);
 		    if (tryrsfp) {
 			if (tryname[0] == '.' && tryname[1] == '/')
@@ -3299,7 +3341,7 @@ PP(pp_entereval)
     MUTEX_UNLOCK(&PL_eval_mutex);
 #endif /* USE_5005THREADS */
     ret = doeval(gimme, NULL);
-    if (PERLDB_INTER && was != PL_sub_generation /* Some subs defined here. */
+    if (PERLDB_INTER && was != (I32)PL_sub_generation /* Some subs defined here. */
 	&& ret != PL_op->op_next) {	/* Successive compilation. */
 	strcpy(safestr, "_<(eval )");	/* Anything fake and short. */
     }
@@ -3399,13 +3441,14 @@ PP(pp_leavetry)
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
+    OP* retop;
     I32 gimme;
     register PERL_CONTEXT *cx;
     I32 optype;
 
     POPBLOCK(cx,newpm);
     POPEVAL(cx);
-    pop_return();
+    retop = pop_return();
 
     TAINT_NOT;
     if (gimme == G_VOID)
@@ -3437,7 +3480,7 @@ PP(pp_leavetry)
 
     LEAVE;
     sv_setpv(ERRSV,"");
-    RETURN;
+    RETURNOP(retop);
 }
 
 STATIC void
@@ -3496,14 +3539,14 @@ S_doparseform(pTHX_ SV *sv)
 		if (postspace)
 		    *fpc++ = FF_SPACE;
 		*fpc++ = FF_LITERAL;
-		*fpc++ = arg;
+		*fpc++ = (U16)arg;
 	    }
 	    postspace = FALSE;
 	    if (s <= send)
 		skipspaces--;
 	    if (skipspaces) {
 		*fpc++ = FF_SKIP;
-		*fpc++ = skipspaces;
+		*fpc++ = (U16)skipspaces;
 	    }
 	    skipspaces = 0;
 	    if (s <= send)
@@ -3514,7 +3557,7 @@ S_doparseform(pTHX_ SV *sv)
 		    arg = fpc - linepc + 1;
 		else
 		    arg = 0;
-		*fpc++ = arg;
+		*fpc++ = (U16)arg;
 	    }
 	    if (s < send) {
 		linepc = fpc;
@@ -3537,7 +3580,7 @@ S_doparseform(pTHX_ SV *sv)
 	    arg = (s - base) - 1;
 	    if (arg) {
 		*fpc++ = FF_LITERAL;
-		*fpc++ = arg;
+		*fpc++ = (U16)arg;
 	    }
 
 	    base = s - 1;
@@ -3562,7 +3605,7 @@ S_doparseform(pTHX_ SV *sv)
 		}
 		*fpc++ = s - base;		/* fieldsize for FETCH */
 		*fpc++ = FF_DECIMAL;
-                *fpc++ = arg;
+                *fpc++ = (U16)arg;
             }
             else if (*s == '0' && s[1] == '#') {  /* Zero padded decimals */
                 arg = ischop ? 512 : 0;
@@ -3580,7 +3623,7 @@ S_doparseform(pTHX_ SV *sv)
                 }
                 *fpc++ = s - base;                /* fieldsize for FETCH */
                 *fpc++ = FF_0DECIMAL;
-		*fpc++ = arg;
+		*fpc++ = (U16)arg;
 	    }
 	    else {
 		I32 prespace = 0;
@@ -3609,7 +3652,7 @@ S_doparseform(pTHX_ SV *sv)
 		*fpc++ = ischop ? FF_CHECKCHOP : FF_CHECKNL;
 
 		if (prespace)
-		    *fpc++ = prespace;
+		    *fpc++ = (U16)prespace;
 		*fpc++ = FF_ITEM;
 		if (ismore)
 		    *fpc++ = FF_MORE;
@@ -3713,7 +3756,7 @@ S_path_is_absolute(pTHX_ char *name)
 {
     if (PERL_FILE_IS_ABSOLUTE(name)
 #ifdef MACOS_TRADITIONAL
-	|| (*name == ':' && name[1] != ':' && strchr(name+2, ':')))
+	|| (*name == ':'))
 #else
 	|| (*name == '.' && (name[1] == '/' ||
 			     (name[1] == '.' && name[2] == '/'))))

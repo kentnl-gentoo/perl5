@@ -30,13 +30,17 @@ END {
 # Use this instead of "print STDERR" when outputing failure diagnostic 
 # messages
 sub _diag {
+    return unless @_;
+    my @mess = map { /^#/ ? "$_\n" : "# $_\n" } 
+               map { split /\n/ } @_;
     my $fh = $TODO ? *STDOUT : *STDERR;
-    print $fh @_;
+    print $fh @mess;
+
 }
 
 sub skip_all {
     if (@_) {
-	print STDOUT "1..0 - @_\n";
+	print STDOUT "1..0 # Skipped: @_\n";
     } else {
 	print STDOUT "1..0\n";
     }
@@ -64,8 +68,7 @@ sub _ok {
     }
 
     # Ensure that the message is properly escaped.
-    _diag map { /^#/ ? "$_\n" : "# $_\n" } 
-          map { split /\n/ } @mess if @mess;
+    _diag @mess;
 
     $test++;
 
@@ -148,6 +151,70 @@ sub isnt {
     _ok($pass, _where(), $name, @mess);
 }
 
+sub cmp_ok {
+    my($got, $type, $expected, $name, @mess) = @_;
+
+    my $pass;
+    {
+        local $^W = 0;
+        local($@,$!);   # don't interfere with $@
+                        # eval() sometimes resets $!
+        $pass = eval "\$got $type \$expected";
+    }
+    unless ($pass) {
+        # It seems Irix long doubles can have 2147483648 and 2147483648
+        # that stringify to the same thing but are acutally numerically
+        # different. Display the numbers if $type isn't a string operator,
+        # and the numbers are stringwise the same.
+        # (all string operators have alphabetic names, so tr/a-z// is true)
+        # This will also show numbers for some uneeded cases, but will
+        # definately be helpful for things such as == and <= that fail
+        if ($got eq $expected and $type !~ tr/a-z//) {
+            unshift @mess, "# $got - $expected = " . ($got - $expected) . "\n";
+        }
+        unshift(@mess, "#      got "._q($got)."\n",
+                       "# expected $type "._q($expected)."\n");
+    }
+    _ok($pass, _where(), $name, @mess);
+}
+
+# Check that $got is within $range of $expected
+# if $range is 0, then check it's exact
+# else if $expected is 0, then $range is an absolute value
+# otherwise $range is a fractional error.
+# Here $range must be numeric, >= 0
+# Non numeric ranges might be a useful future extension. (eg %)
+sub within {
+    my ($got, $expected, $range, $name, @mess) = @_;
+    my $pass;
+    if (!defined $got or !defined $expected or !defined $range) {
+        # This is a fail, but doesn't need extra diagnostics
+    } elsif ($got !~ tr/0-9// or $expected !~ tr/0-9// or $range !~ tr/0-9//) {
+        # This is a fail
+        unshift @mess, "# got, expected and range must be numeric\n";
+    } elsif ($range < 0) {
+        # This is also a fail
+        unshift @mess, "# range must not be negative\n";
+    } elsif ($range == 0) {
+        # Within 0 is ==
+        $pass = $got == $expected;
+    } elsif ($expected == 0) {
+        # If expected is 0, treat range as absolute
+        $pass = ($got <= $range) && ($got >= - $range);
+    } else {
+        my $diff = $got - $expected;
+        $pass = abs ($diff / $expected) < $range;
+    }
+    unless ($pass) {
+        if ($got eq $expected) {
+            unshift @mess, "# $got - $expected = " . ($got - $expected) . "\n";
+        }
+	unshift@mess, "#      got "._q($got)."\n",
+		      "# expected "._q($expected)." (within "._q($range).")\n";
+    }
+    _ok($pass, _where(), $name, @mess);
+}
+
 # Note: this isn't quite as fancy as Test::More::like().
 sub like {
     my ($got, $expected, $name, @mess) = @_;
@@ -177,11 +244,12 @@ sub fail {
 }
 
 sub curr_test {
+    $test = shift if @_;
     return $test;
 }
 
 sub next_test {
-    $test++
+  $test++;
 }
 
 # Note: can't pass multipart messages since we try to
@@ -255,6 +323,7 @@ USE_OK
 #   switches => [ command-line switches ]
 #   nolib    => 1 # don't use -I../lib (included by default)
 #   prog     => one-liner (avoid quotes)
+#   progs    => [ multi-liner (avoid quotes) ]
 #   progfile => perl script
 #   stdin    => string to feed the stdin
 #   stderr   => redirect stderr to stdout
@@ -280,9 +349,6 @@ sub _quote_args {
 sub runperl {
     my %args = @_;
     my $runperl = $^X;
-    if ($args{switches}) {
-	_quote_args(\$runperl, $args{switches});
-    }
     unless ($args{nolib}) {
 	if ($is_macos) {
 	    $runperl .= ' -I::lib';
@@ -293,25 +359,46 @@ sub runperl {
 	    $runperl .= ' "-I../lib"'; # doublequotes because of VMS
 	}
     }
+    if ($args{switches}) {
+	_quote_args(\$runperl, $args{switches});
+    }
     if (defined $args{prog}) {
-	if ($is_mswin || $is_netware || $is_vms) {
-	    $runperl .= qq( -e ") . $args{prog} . qq(");
-	}
-	else {
-	    $runperl .= qq( -e ') . $args{prog} . qq(');
-	}
+        $args{progs} = [$args{prog}]
+    }
+    if (defined $args{progs}) {
+        foreach my $prog (@{$args{progs}}) {
+            if ($is_mswin || $is_netware || $is_vms) {
+                $runperl .= qq ( -e "$prog" );
+            }
+            else {
+                $runperl .= qq ( -e '$prog' );
+            }
+        }
     } elsif (defined $args{progfile}) {
 	$runperl .= qq( "$args{progfile}");
     }
     if (defined $args{stdin}) {
-        # so we don't try to put literal newlines and crs onto the
-        # command line.
-        $args{stdin} =~ s/\n/\\n/g;
-        $args{stdin} =~ s/\r/\\r/g;
+	# so we don't try to put literal newlines and crs onto the
+	# command line.
+	$args{stdin} =~ s/\n/\\n/g;
+	$args{stdin} =~ s/\r/\\r/g;
 
 	if ($is_mswin || $is_netware || $is_vms) {
 	    $runperl = qq{$^X -e "print qq(} .
 		$args{stdin} . q{)" | } . $runperl;
+	}
+	elsif ($is_macos) {
+	    # MacOS can only do two processes under MPW at once;
+	    # the test itself is one; we can't do two more, so
+	    # write to temp file
+	    my $stdin = qq{$^X -e 'print qq(} . $args{stdin} . qq{)' > teststdin; };
+	    if ($args{verbose}) {
+		my $stdindisplay = $stdin;
+		$stdindisplay =~ s/\n/\n\#/g;
+		print STDERR "# $stdindisplay\n";
+	    }
+	    `$stdin`;
+	    $runperl .= q{ < teststdin };
 	}
 	else {
 	    $runperl = qq{$^X -e 'print qq(} .
@@ -333,6 +420,7 @@ sub runperl {
     return $result;
 }
 
+*run_perl = \&runperl; # Nice alias.
 
 sub DIE {
     print STDERR "# @_\n";
@@ -345,6 +433,9 @@ sub which_perl {
     unless (defined $Perl) {
 	$Perl = $^X;
 	
+	# VMS should have 'perl' aliased properly
+	return $Perl if $^O eq 'VMS';
+
 	my $exe;
 	eval "require Config; Config->import";
 	if ($@) {
@@ -448,10 +539,10 @@ sub _fresh_perl {
 
     my $pass = $resolve->($results);
     unless ($pass) {
-        print STDERR "# PROG: $switch\n$prog\n";
-        print STDERR "# EXPECTED:\n", $resolve->(), "\n";
-        print STDERR "# GOT:\n$results\n";
-        print STDERR "# STATUS: $status\n";
+        _diag "# PROG: \n$prog\n";
+        _diag "# EXPECTED:\n", $resolve->(), "\n";
+        _diag "# GOT:\n$results\n";
+        _diag "# STATUS: $status\n";
     }
 
     # Use the first line of the program as a name if none was given

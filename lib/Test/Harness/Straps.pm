@@ -1,12 +1,12 @@
 # -*- Mode: cperl; cperl-indent-level: 4 -*-
-# $Id: Straps.pm,v 1.1.2.17 2002/01/07 22:34:33 schwern Exp $
+# $Id: Straps.pm,v 1.8 2002/05/29 23:02:48 schwern Exp $
 
 package Test::Harness::Straps;
 
 use strict;
 use vars qw($VERSION);
 use Config;
-$VERSION = '0.08';
+$VERSION = '0.12';
 
 use Test::Harness::Assert;
 use Test::Harness::Iterator;
@@ -137,24 +137,25 @@ sub _analyze_iterator {
                    todo     => 0,
                    skip     => 0,
                    bonus    => 0,
-                   
+
                    details  => []
                   );
 
-
+    # Set them up here so callbacks can have them.
+    $self->{totals}{$name}         = \%totals;
     while( defined(my $line = $it->next) ) {
         $self->_analyze_line($line, \%totals);
         last if $self->{saw_bailout};
     }
 
-    my $passed = $totals{skip_all} || 
-                  ($totals{max} == $totals{seen} && 
+    $totals{skip_all} = $self->{skip_all} if defined $self->{skip_all};
+
+    my $passed = !$totals{max} ||
+                  ($totals{max} && $totals{seen} &&
+                   $totals{max} == $totals{seen} && 
                    $totals{max} == $totals{ok});
     $totals{passing} = $passed ? 1 : 0;
 
-    $totals{skip_all} = $self->{skip_all} if defined $self->{skip_all};
-
-    $self->{totals}{$name} = \%totals;
     return %totals;
 }
 
@@ -163,7 +164,7 @@ sub _analyze_line {
     my($self, $line, $totals) = @_;
 
     my %result = ();
-        
+
     $self->{line}++;
 
     my $type;
@@ -171,7 +172,7 @@ sub _analyze_line {
         $type = 'header';
 
         $self->{saw_header}++;
-        
+
         $totals->{max} += $self->{max};
     }
     elsif( $self->_is_test($line, \%result) ) {
@@ -205,8 +206,14 @@ sub _analyze_line {
 
         $totals->{ok}++ if $pass;
 
-        $totals->{details}[$result{number} - 1] = 
+        if( $result{number} > 100000 ) {
+            warn "Enourmous test number seen [test $result{number}]\n";
+            warn "Can't detailize, too big.\n";
+        }
+        else {
+            $totals->{details}[$result{number} - 1] = 
                                {$self->_detailize($pass, \%result)};
+        }
 
         # XXX handle counter mismatch
     }
@@ -242,13 +249,23 @@ sub analyze_fh {
 
   my %results = $strap->analyze_file($test_file);
 
-Like C<analyze>, but it reads from the given $test_file.  It will also
-use that name for the total report.
+Like C<analyze>, but it runs the given $test_file and parses it's
+results.  It will also use that name for the total report.
 
 =cut
 
 sub analyze_file {
     my($self, $file) = @_;
+
+    unless( -e $file ) {
+        $self->{error} = "$file does not exist";
+        return;
+    }
+
+    unless( -r $file ) {
+        $self->{error} = "$file is not readable";
+        return;
+    }
 
     local $ENV{PERL5LIB} = $self->_INC2PERL5LIB;
 
@@ -264,12 +281,30 @@ sub analyze_file {
     }
 
     my %results = $self->analyze_fh($file, \*FILE);
-    close FILE;
+    my $exit = close FILE;
+    $results{'wait'} = $?;
+    if( $? && $self->{_is_vms} ) {
+        eval q{use vmsish "status"; $results{'exit'} = $?};
+    }
+    else {
+        $results{'exit'} = _wait2exit($?);
+    }
+    $results{passing} = 0 unless $? == 0;
 
     $self->_restore_PERL5LIB();
 
     return %results;
 }
+
+
+eval { require POSIX; &POSIX::WEXITSTATUS(0) };
+if( $@ ) {
+    *_wait2exit = sub { $_[0] >> 8 };
+}
+else {
+    *_wait2exit = sub { POSIX::WEXITSTATUS($_[0]) }
+}
+
 
 =begin _private
 
@@ -290,8 +325,14 @@ sub _switches {
     my $s = '';
     $s .= " $ENV{'HARNESS_PERL_SWITCHES'}"
       if exists $ENV{'HARNESS_PERL_SWITCHES'};
-    $s .= join " ", qq[ "-$1"], map {qq["-I$_"]} $self->_filtered_INC
-      if $first =~ /^#!.*\bperl.*-\w*([Tt]+)/;
+
+    # When taint mode is on, PERL5LIB is ignored.  So we need to put
+    # all that on the command line as -Is.
+    if ($first =~ /^#!.*\bperl.*\s-\w*([Tt]+)/) {
+      $s .= join " ", qq[ "-$1"], map {qq["-I$_"]} $self->_filtered_INC;
+    } elsif ($^O eq 'MacOS') {
+      $s .= join " ", map {qq["-I$_"]} $self->_filtered_INC;
+    }
 
     close(TEST) or print "can't close $file. $!\n";
 
@@ -558,6 +599,9 @@ The %results returned from analyze() contain the following information:
   passing           true if the whole test is considered a pass 
                     (or skipped), false if its a failure
 
+  exit              the exit code of the test run, if from a file
+  wait              the wait code of the test run, if from a file
+
   max               total tests which should have been run
   seen              total tests actually seen
   skip_all          if the whole test was skipped, this will 
@@ -615,8 +659,11 @@ sub _detailize {
     assert( !(grep !defined $details{$_}, keys %details),
             'test contains the ok and actual_ok info' );
 
+    # We don't want these to be undef because they are often
+    # checked and don't want the checker to have to deal with
+    # uninitialized vars.
     foreach my $piece (qw(name type reason)) {
-        $details{$piece} = $test->{$piece} if $test->{$piece};
+        $details{$piece} = defined $test->{$piece} ? $test->{$piece} : '';
     }
 
     return %details;

@@ -153,11 +153,13 @@ Perl_hv_iterkey
 Perl_hv_iterkeysv
 Perl_hv_iternext
 Perl_hv_iternextsv
+Perl_hv_iternext_flags
 Perl_hv_iterval
 Perl_hv_ksplit
 Perl_hv_magic
 Perl_hv_store
 Perl_hv_store_ent
+Perl_hv_store_flags
 Perl_hv_undef
 Perl_ibcmp
 Perl_ibcmp_locale
@@ -206,6 +208,7 @@ Perl_is_utf8_string
 Perl_is_utf8_alnum
 Perl_is_utf8_alnumc
 Perl_is_utf8_idfirst
+Perl_is_utf8_idcont
 Perl_is_utf8_alpha
 Perl_is_utf8_ascii
 Perl_is_utf8_space
@@ -229,7 +232,6 @@ Perl_grok_number
 Perl_grok_numeric_radix
 Perl_grok_oct
 Perl_markstack_grow
-Perl_memcmp_byte_utf8
 Perl_mess
 Perl_vmess
 Perl_sortsv
@@ -322,6 +324,10 @@ Perl_ninstr
 Perl_op_free
 Perl_pad_sv
 Perl_new_struct_thread
+Perl_reentrant_size
+Perl_reentrant_init
+Perl_reentrant_free
+Perl_reentrant_retry
 Perl_call_atexit
 Perl_call_argv
 Perl_call_method
@@ -467,7 +473,6 @@ Perl_sv_reset
 Perl_sv_setpvf
 Perl_sv_vsetpvf
 Perl_sv_setiv
-Perl_sv_setpviv
 Perl_sv_setuv
 Perl_sv_setnv
 Perl_sv_setref_iv
@@ -546,7 +551,6 @@ Perl_sv_catsv_mg
 Perl_sv_setpvf_mg
 Perl_sv_vsetpvf_mg
 Perl_sv_setiv_mg
-Perl_sv_setpviv_mg
 Perl_sv_setuv_mg
 Perl_sv_setnv_mg
 Perl_sv_setpv_mg
@@ -570,9 +574,6 @@ Perl_reginitcolors
 Perl_sv_2pv_nolen
 Perl_sv_2pvutf8_nolen
 Perl_sv_2pvbyte_nolen
-Perl_sv_pv
-Perl_sv_pvutf8
-Perl_sv_pvbyte
 Perl_sv_utf8_downgrade
 Perl_sv_utf8_encode
 Perl_sv_utf8_decode
@@ -608,6 +609,7 @@ Perl_custom_op_desc
 Perl_sv_nosharing
 Perl_sv_nolocking
 Perl_sv_nounlocking
+Perl_nothreadhook
 Perl_sv_setsv_flags
 Perl_sv_catpvn_flags
 Perl_sv_catsv_flags

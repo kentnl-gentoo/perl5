@@ -136,8 +136,8 @@ C<pack>, C<read>, C<syscall>, C<sysread>, C<syswrite>, C<unpack>, C<vec>
 
 C<-I<X>>, C<chdir>, C<chmod>, C<chown>, C<chroot>, C<fcntl>, C<glob>,
 C<ioctl>, C<link>, C<lstat>, C<mkdir>, C<open>, C<opendir>,
-C<readlink>, C<rename>, C<rmdir>, C<stat>, C<symlink>, C<umask>,
-C<unlink>, C<utime>
+C<readlink>, C<rename>, C<rmdir>, C<stat>, C<symlink>, C<sysopen>,
+C<umask>, C<unlink>, C<utime>
 
 =item Keywords related to the control flow of your perl program
 
@@ -172,7 +172,7 @@ C<untie>, C<use>
 
 C<accept>, C<bind>, C<connect>, C<getpeername>, C<getsockname>,
 C<getsockopt>, C<listen>, C<recv>, C<send>, C<setsockopt>, C<shutdown>,
-C<sockatmark>, C<socket>, C<socketpair>
+C<socket>, C<socketpair>
 
 =item System V interprocess communication functions
 
@@ -234,7 +234,7 @@ C<msgsnd>, C<open>, C<pipe>, C<readlink>, C<rename>, C<select>, C<semctl>,
 C<semget>, C<semop>, C<setgrent>, C<sethostent>, C<setnetent>,
 C<setpgrp>, C<setpriority>, C<setprotoent>, C<setpwent>,
 C<setservent>, C<setsockopt>, C<shmctl>, C<shmget>, C<shmread>,
-C<shmwrite>, C<sockatmark>, C<socket>, C<socketpair>,
+C<shmwrite>, C<socket>, C<socketpair>,
 C<stat>, C<symlink>, C<syscall>, C<sysopen>, C<system>,
 C<times>, C<truncate>, C<umask>, C<unlink>,
 C<utime>, C<wait>, C<waitpid>
@@ -294,9 +294,9 @@ X<-S>X<-b>X<-c>X<-t>X<-u>X<-g>X<-k>X<-T>X<-B>X<-M>X<-A>X<-C>
     -T	File is an ASCII text file (heuristic guess).
     -B	File is a "binary" file (opposite of -T).
 
-    -M	Age of file in days when script started.
+    -M	Script start time minus file modification time, in days.
     -A	Same for access time.
-    -C	Same for inode change time.
+    -C	Same for inode change time (Unix, may differ for other platforms)
 
 Example:
 
@@ -452,14 +452,16 @@ L<perlipc/"Sockets: Client/Server Communication">.
 Arranges for FILEHANDLE to be read or written in "binary" or "text" mode
 on systems where the run-time libraries distinguish between binary and
 text files.  If FILEHANDLE is an expression, the value is taken as the
-name of the filehandle.  DISCIPLINE can be either of C<:raw> for
-binary mode or C<:crlf> for "text" mode.  If the DISCIPLINE is
-omitted, it defaults to C<:raw>.  Returns true on success, C<undef> on
-failure.  The C<:raw> are C<:clrf>, and any other directives of the
-form C<:...>, are called I/O I<disciplines>.
+name of the filehandle.
 
-The C<open> pragma can be used to establish default I/O disciplines.
-See L<open>.
+DISCIPLINE can be either of C<:raw> for binary mode or C<:crlf> for
+"text" mode.  If the DISCIPLINE is omitted, it defaults to C<:raw>.
+Returns true on success, C<undef> on failure.  To mark FILEHANDLE as
+UTF-8, use C<:utf8>, and to mark it as bytes, use C<:bytes>.
+
+The C<:raw> are C<:clrf>, and any other directives of the form
+C<:...>, are called I/O I<disciplines>.  The C<open> pragma can be
+used to establish default I/O disciplines.  See L<open>.
 
 In general, binmode() should be called after open() but before any I/O
 is done on the filehandle.  Calling binmode() will flush any possibly
@@ -552,11 +554,13 @@ C<$is_require> are set: C<$is_require> is true if the frame is created by a
 C<require> or C<use> statement, $evaltext contains the text of the
 C<eval EXPR> statement.  In particular, for an C<eval BLOCK> statement,
 $filename is C<(eval)>, but $evaltext is undefined.  (Note also that
-each C<use> statement creates a C<require> frame inside an C<eval EXPR>)
-frame.  C<$hasargs> is true if a new instance of C<@_> was set up for the
-frame.  C<$hints> and C<$bitmask> contain pragmatic hints that the caller
-was compiled with.  The C<$hints> and C<$bitmask> values are subject to
-change between versions of Perl, and are not meant for external use.
+each C<use> statement creates a C<require> frame inside an C<eval EXPR>
+frame.)  $subroutine may also be C<(unknown)> if this particular
+subroutine happens to have been deleted from the symbol table.
+C<$hasargs> is true if a new instance of C<@_> was set up for the frame.
+C<$hints> and C<$bitmask> contain pragmatic hints that the caller was
+compiled with.  The C<$hints> and C<$bitmask> values are subject to change
+between versions of Perl, and are not meant for external use.
 
 Furthermore, when called from within the DB package, caller returns more
 detailed information: it sets the list variable C<@DB::args> to be the
@@ -1054,16 +1058,16 @@ Equivalent examples:
     die "Can't cd to spool: $!\n" unless chdir '/usr/spool/news';
     chdir '/usr/spool/news' or die "Can't cd to spool: $!\n"
 
-If the value of EXPR does not end in a newline, the current script line
-number and input line number (if any) are also printed, and a newline
-is supplied.  Note that the "input line number" (also known as "chunk")
-is subject to whatever notion of "line" happens to be currently in
-effect, and is also available as the special variable C<$.>.
-See L<perlvar/"$/"> and L<perlvar/"$.">.
+If the last element of LIST does not end in a newline, the current
+script line number and input line number (if any) are also printed,
+and a newline is supplied.  Note that the "input line number" (also
+known as "chunk") is subject to whatever notion of "line" happens to
+be currently in effect, and is also available as the special variable
+C<$.>.  See L<perlvar/"$/"> and L<perlvar/"$.">.
 
-Hint: sometimes appending C<", stopped"> to your message
-will cause it to make better sense when the string C<"at foo line 123"> is
-appended.  Suppose you are running script "canasta".
+Hint: sometimes appending C<", stopped"> to your message will cause it
+to make better sense when the string C<"at foo line 123"> is appended.
+Suppose you are running script "canasta".
 
     die "/etc/games is no good";
     die "/etc/games is no good, stopped";
@@ -1276,7 +1280,10 @@ formed from the files listed on the command line and accessed via the
 C<< <> >> operator.  Since C<< <> >> isn't explicitly opened,
 as a normal filehandle is, an C<eof()> before C<< <> >> has been
 used will cause C<@ARGV> to be examined to determine if input is
-available.
+available.   Similarly, an C<eof()> after C<< <> >> has returned 
+end-of-file will assume you are processing another C<@ARGV> list,
+and if you haven't set C<@ARGV>, will read input from C<STDIN>;
+see L<perlop/"I/O Operators">.
 
 In a C<< while (<>) >> loop, C<eof> or C<eof(ARGV)> can be used to
 detect the end of each file, C<eof()> will only detect the end of the
@@ -2649,7 +2656,13 @@ that executes once.  Thus C<next> will exit such a block early.
 See also L</continue> for an illustration of how C<last>, C<next>, and
 C<redo> work.
 
+=item no Module VERSION LIST
+
+=item no Module VERSION
+
 =item no Module LIST
+
+=item no Module
 
 See the L</use> function, which C<no> is the opposite of.
 
@@ -2799,7 +2812,13 @@ opens a filehandle to an anonymous temporary file.
 
 File handles can be opened to "in memory" files held in Perl scalars via:
 
-    open($fh,'>', \$variable) || ..
+    open($fh, '>', \$variable) || ..
+
+Though if you try to re-open C<STDOUT> or C<STDERR> as an "in memory"
+file, you have to close it first:
+
+    close STDOUT;
+    open STDOUT, '>', \$variable or die "Can't open STDOUT: $!";
 
 Examples:
 
@@ -2864,27 +2883,27 @@ mode you specify should match the mode of the original filehandle.
 IO buffers.) If you use the 3 arg form then you can pass either a number,
 the name of a filehandle or the normal "reference to a glob".
 
-Here is a script that saves, redirects, and restores STDOUT and
-STDERR:
+Here is a script that saves, redirects, and restores C<STDOUT> and
+C<STDERR> using various methods:
 
     #!/usr/bin/perl
-    open(my $oldout, ">&", \*STDOUT);
-    open(OLDERR, ">&STDERR");
+    open my $oldout, ">&STDOUT"     or die "Can't dup STDOUT: $!";
+    open OLDERR,     ">&", \*STDERR or die "Can't dup STDERR: $!";
 
-    open(STDOUT, '>', "foo.out") || die "Can't redirect stdout";
-    open(STDERR, ">&STDOUT")     || die "Can't dup stdout";
+    open STDOUT, '>', "foo.out" or die "Can't redirect STDOUT: $!";
+    open STDERR, ">&STDOUT"     or die "Can't dup STDOUT: $!";
 
-    select(STDERR); $| = 1;	# make unbuffered
-    select(STDOUT); $| = 1;	# make unbuffered
+    select STDERR; $| = 1;	# make unbuffered
+    select STDOUT; $| = 1;	# make unbuffered
 
     print STDOUT "stdout 1\n";	# this works for
     print STDERR "stderr 1\n"; 	# subprocesses too
 
-    close(STDOUT);
-    close(STDERR);
+    close STDOUT;
+    close STDERR;
 
-    open(STDOUT, ">&OLDOUT");
-    open(STDERR, ">&OLDERR");
+    open STDOUT, ">&", $oldout or die "Can't dup \$oldout: $!";
+    open STDERR, ">&OLDERR"    or die "Can't dup OLDERR: $!";
 
     print STDOUT "stdout 2\n";
     print STDERR "stderr 2\n";
@@ -3430,10 +3449,10 @@ aligned at a multiple of C<count> bytes.  For example, to pack() or
 unpack() C's C<struct {char c; double d; char cc[2]}> one may need to
 use the template C<C x![d] d C[2]>; this assumes that doubles must be
 aligned on the double's size.
- 
+
 For alignment commands C<count> of 0 is equivalent to C<count> of 1;
 both result in no-ops.
-  
+
 =item *
 
 A comment in a TEMPLATE starts with C<#> and goes to the end of line.
@@ -4232,6 +4251,9 @@ You can effect a sleep of 250 milliseconds this way:
 
     select(undef, undef, undef, 0.25);
 
+Note that whether C<select> gets restarted after signals (say, SIGALRM)
+is implementation-dependent.
+
 B<WARNING>: One should not attempt to mix buffered I/O (like C<read>
 or <FH>) with C<select>, except as permitted by POSIX, and even
 then only on POSIX systems.  You have to use C<sysread> instead.
@@ -4413,26 +4435,6 @@ help.
 
 See also the POSIX module's C<pause> function.
 
-=item sockatmark SOCKET
-
-Returns true if the socket is positioned at the out-of-band mark
-(also known as the urgent data mark), false otherwise.  Use right
-after reading from the socket.
-
-Not available directly, one has to import the function from
-the IO::Socket extension
-
-    use IO::Socket 'sockatmark';
-
-Even this doesn't guarantee that sockatmark() really is available,
-though, because sockatmark() is a relatively recent addition to
-the family of socket functions.  If it is unavailable, attempt to
-use it will fail
-
-	IO::Socket::atmark not implemented on this architecture ...
-
-See also L<IO::Socket>.
-
 =item socket SOCKET,DOMAIN,TYPE,PROTOCOL
 
 Opens a socket of the specified kind and attaches it to filehandle
@@ -4601,12 +4603,8 @@ Examples:
     use sort 'stable';
     @new = sort { substr($a, 3, 5) cmp substr($b, 3, 5) } @old;
 
-    # force use of quicksort (not portable outside Perl 5.8)
-    use sort '_quicksort';  # note discouraging _
-    @new = sort { substr($a, 3, 5) cmp substr($b, 3, 5) } @old;
-
-    # similar to the previous example, but demand stability as well
-    use sort qw( _mergesort stable );
+    # force use of mergesort (not portable outside Perl 5.8)
+    use sort '_mergesort';  # note discouraging _
     @new = sort { substr($a, 3, 5) cmp substr($b, 3, 5) } @old;
 
 If you're using strict, you I<must not> declare $a
@@ -4640,7 +4638,8 @@ returns the last element removed, or C<undef> if no elements are
 removed.  The array grows or shrinks as necessary.
 If OFFSET is negative then it starts that far from the end of the array.
 If LENGTH is omitted, removes everything from OFFSET onward.
-If LENGTH is negative, leaves that many elements off the end of the array.
+If LENGTH is negative, removes the elements from OFFSET onward
+except for -LENGTH elements at the end of the array.
 If both OFFSET and LENGTH are omitted, removes everything. If OFFSET is
 past the end of the array, perl issues a warning, and splices at the
 end of the array.
@@ -5644,6 +5643,9 @@ specified length.  Produces a fatal error if truncate isn't implemented
 on your system.  Returns true if successful, the undefined value
 otherwise.
 
+The behavior is undefined if LENGTH is greater than the length of the
+file.
+
 =item uc EXPR
 
 =item uc
@@ -5909,8 +5911,6 @@ by C<use>, i.e., it calls C<unimport Module LIST> instead of C<import>.
     no integer;
     no strict 'refs';
     no warnings;
-
-If no C<unimport> method can be found the call fails with a fatal error.
 
 See L<perlmodlib> for a list of standard modules and pragmas.  See L<perlrun>
 for the C<-M> and C<-m> command-line options to perl that give C<use>

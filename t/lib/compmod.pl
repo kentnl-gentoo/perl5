@@ -1,8 +1,8 @@
 #!./perl
 
 BEGIN {
-    chdir '..' if -d '../pod' && -d '../t';
-    @INC = 'lib';
+    chdir 't';
+    @INC = '../lib';
 }
 
 my $module = shift;
@@ -11,7 +11,8 @@ my $module = shift;
 eval "use $module ();";
 if( $@ ) {
     print "not ";
-    warn "require failed with '$@'\n";
+    $@ =~ s/\n/\n# /g;
+    warn "# require failed with '$@'\n";
 }
 print "ok - $module\n";
 

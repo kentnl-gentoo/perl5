@@ -8,6 +8,7 @@ BEGIN
   $| = 1;
   # to locate the testing files
   my $location = $0; $location =~ s/bare_mbf.t//i;
+  print "$0\n";
   if ($ENV{PERL_CORE})
     {
     # testing with the core distribution
@@ -26,11 +27,10 @@ BEGIN
     }
   print "# INC = @INC\n";
 
-  plan tests => 1592;
+  plan tests => 1601;
   }
 
-use Math::BigInt lib => 'BareCalc';
-use Math::BigFloat;
+use Math::BigFloat lib => 'BareCalc';
 
 use vars qw ($class $try $x $y $f @args $ans $ans1 $ans1_str $setup $CL);
 $class = "Math::BigFloat";

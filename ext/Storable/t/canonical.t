@@ -1,23 +1,20 @@
 #!./perl
-
-# $Id: canonical.t,v 1.0 2000/09/01 19:40:41 ram Exp $
 #
 #  Copyright (c) 1995-2000, Raphael Manfredi
 #  
 #  You may redistribute only under the same terms as Perl 5, as specified
 #  in the README file that comes with the distribution.
 #  
-# $Log: canonical.t,v $
-# Revision 1.0  2000/09/01 19:40:41  ram
-# Baseline for first official release.
-#
 
 sub BEGIN {
-    chdir('t') if -d 't';
-    @INC = '.'; 
-    push @INC, '../lib';
+    if ($ENV{PERL_CORE}){
+	chdir('t') if -d 't';
+	@INC = ('.', '../lib');
+    } else {
+	unshift @INC, 't';
+    }
     require Config; import Config;
-    if ($Config{'extensions'} !~ /\bStorable\b/) {
+    if ($ENV{PERL_CORE} and $Config{'extensions'} !~ /\bStorable\b/) {
         print "1..0 # Skip: Storable was not built\n";
         exit 0;
     }
@@ -65,7 +62,7 @@ if ($debugging) {
 for (my $i = 0; $i < $hashsize; $i++) {
 	my($k) = int(rand(1_000_000));
 	$k = MD5->hexhash($k) if $gotmd5 and int(rand(2));
-	$a1{$k} = { key => "$k", value => $i };
+	$a1{$k} = { key => "$k", "value" => $i };
 
 	# A third of the elements are references to further hashes
 
@@ -98,7 +95,7 @@ print STDERR Data::Dumper::Dumper(\%a1) if ($verbose and $gotdd);
 # Copy the hash, element by element in order of the keys
 
 foreach $k (sort keys %a1) {
-    $a2{$k} = { key => "$k", value => $a1{$k}->{value} };
+    $a2{$k} = { key => "$k", "value" => $a1{$k}->{value} };
 }
 
 # Deep clone the hash
@@ -150,4 +147,3 @@ ok 7, $$cloned{''}[0] == \$$cloned{a};
 
 $$cloned{a} = "blah";
 ok 8, $$cloned{''}[0] == \$$cloned{a};
-

@@ -105,6 +105,7 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On pushre, re is /\s+/ imp. by split " " */
 				/*  On regcomp, "use re 'eval'" was in scope */
 				/*  On OP_READLINE, was <$filehandle> */
+				/*  On RV2[SG]V, don't create GV--in defined()*/
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -250,8 +251,8 @@ struct pmop {
 #else
     REGEXP *    op_pmregexp;            /* compiled expression */
 #endif
-    U16		op_pmflags;
-    U16		op_pmpermflags;
+    U32		op_pmflags;
+    U32		op_pmpermflags;
     U8		op_pmdynflags;
 #ifdef USE_ITHREADS
     char *	op_pmstashpv;
@@ -262,7 +263,7 @@ struct pmop {
 
 #ifdef USE_ITHREADS
 #define PM_GETRE(o)     (INT2PTR(REGEXP*,SvIVX(PL_regex_pad[(o)->op_pmoffset])))
-#define PM_SETRE(o,r)   (sv_setiv(PL_regex_pad[(o)->op_pmoffset], PTR2IV(r)))
+#define PM_SETRE(o,r)   STMT_START { SV* sv = PL_regex_pad[(o)->op_pmoffset]; sv_setiv(sv, PTR2IV(r)); } STMT_END
 #define PM_GETRE_SAFE(o) (PL_regex_pad ? PM_GETRE(o) : (REGEXP*)0)
 #define PM_SETRE_SAFE(o,r) if (PL_regex_pad) PM_SETRE(o,r)
 #else
@@ -281,7 +282,7 @@ struct pmop {
 
 #define PMf_RETAINT	0x0001		/* taint $1 etc. if target tainted */
 #define PMf_ONCE	0x0002		/* use pattern only once per reset */
-#define PMf_REVERSED	0x0004		/* Should be matched right->left */
+#define PMf_UNUSED	0x0004		/* free for use */
 #define PMf_MAYBE_CONST	0x0008		/* replacement contains variables */
 #define PMf_SKIPWHITE	0x0010		/* skip leading whitespace for split */
 #define PMf_WHITE	0x0020		/* pattern is \s+ */
@@ -476,25 +477,6 @@ struct loop {
 #define PERL_LOADMOD_IMPORT_OPS		0x4
 
 #ifdef USE_REENTRANT_API
-
-typedef struct {
-  struct tm* tmbuff;
-} REBUF;
-
-#define localtime(a)       (localtime_r((a),PL_reentrant_buffer->tmbuff) ? PL_reentrant_buffer->tmbuff : NULL)
-#define gmtime(a)          (gmtime_r((a),PL_reentrant_buffer->tmbuff) ?  PL_reentrant_buffer->tmbuff : NULL)
-
-#ifdef OLD_PTHREADS_API
-
-/* HP-UX 10.20 returns 0 on success, what it returns on failure is hidden
-   in the fog somewhere, possibly -1 which means the following should do 
-   the right thing - 20010816 sky */
-
-#undef localtime
-#undef gmtime
-#define localtime(a)       ((localtime_r((a),PL_reentrant_buffer->tmbuff) == 0) ? PL_reentrant_buffer->tmbuff : NULL)
-#define gmtime(a)          ((gmtime_r((a),PL_reentrant_buffer->tmbuff) == 0) ? PL_reentrant_buffer->tmbuff : NULL)
-#endif /* HP-UX 10.20 */
-
+#include "reentr.h"
 #endif
 

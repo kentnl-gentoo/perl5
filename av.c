@@ -30,7 +30,7 @@ Perl_av_reify(pTHX_ AV *av)
 	return;
 #ifdef DEBUGGING
     if (SvTIED_mg((SV*)av, PERL_MAGIC_tied) && ckWARN_d(WARN_DEBUGGING))
-	Perl_warner(aTHX_ WARN_DEBUGGING, "av_reify called on tied array");
+	Perl_warner(aTHX_ packWARN(WARN_DEBUGGING), "av_reify called on tied array");
 #endif
     key = AvMAX(av) + 1;
     while (key > AvFILLp(av) + 1)
@@ -119,7 +119,7 @@ Perl_av_extend(pTHX_ AV *av, I32 key)
 		bytes = (newmax + 1) * sizeof(SV*);
 #define MALLOC_OVERHEAD 16
 		itmp = MALLOC_OVERHEAD;
-		while (itmp - MALLOC_OVERHEAD < bytes)
+		while ((MEM_SIZE)(itmp - MALLOC_OVERHEAD) < bytes)
 		    itmp += itmp;
 		itmp -= MALLOC_OVERHEAD;
 		itmp /= sizeof(SV*);
@@ -395,7 +395,7 @@ Perl_av_clear(pTHX_ register AV *av)
 
 #ifdef DEBUGGING
     if (SvREFCNT(av) == 0 && ckWARN_d(WARN_DEBUGGING)) {
-	Perl_warner(aTHX_ WARN_DEBUGGING, "Attempt to clear deleted array");
+	Perl_warner(aTHX_ packWARN(WARN_DEBUGGING), "Attempt to clear deleted array");
     }
 #endif
     if (!av)
@@ -823,7 +823,7 @@ Perl_av_exists(pTHX_ AV *av, I32 key)
 	    mg = mg_find(sv, PERL_MAGIC_tiedelem);
 	    if (mg) {
 		magic_existspack(sv, mg);
-		return SvTRUE(sv);
+		return (bool)SvTRUE(sv);
 	    }
 	}
     }

@@ -40,7 +40,7 @@ my ($f,$z,$a,$exp,@a,$m,$e,$round_mode,$expected_class);
 
 while (<DATA>) 
   {
-  chop;
+  chomp;
   next if /^#/;	# skip comments
   if (s/^&//) 
     {
@@ -163,9 +163,18 @@ while (<DATA>)
         $try .= "\$x ^ \$y;";
       }elsif ($f eq "bpow"){
         $try .= "\$x ** \$y;";
+      } elsif( $f eq "bmodinv") {
+       $try .= "\$x->bmodinv(\$y);";
       }elsif ($f eq "digit"){
-        $try = "\$x = $class->new('$args[0]'); \$x->digit($args[1]);";
-      } else { warn "Unknown op '$f'"; }
+        $try .= "\$x->digit(\$y);";
+      } else {
+       $try .= "\$z = $class->new(\"$args[2]\");";
+
+       # Functions with three arguments
+       if( $f eq "bmodpow") {
+         $try .= "\$x->bmodpow(\$y,\$z);";
+       } else { warn "Unknown op '$f'"; }
+      }
     } # end else all other ops
 
   $ans1 = eval $try;
@@ -311,25 +320,25 @@ $x = Math::BigInt->new(0); if (!$x) { ok (1,1); } else { ok($x,'to be false') }
 
 @args = Math::BigInt::objectify(2,4,5);
 ok (scalar @args,3);		# $class, 4, 5
-ok ($args[0],$class);
+ok ($args[0] =~ /^Math::BigInt/);
 ok ($args[1],4);
 ok ($args[2],5);
 
 @args = Math::BigInt::objectify(0,4,5);
 ok (scalar @args,3);		# $class, 4, 5
-ok ($args[0],$class);
+ok ($args[0] =~ /^Math::BigInt/);
 ok ($args[1],4);
 ok ($args[2],5);
 
 @args = Math::BigInt::objectify(2,4,5);
 ok (scalar @args,3);		# $class, 4, 5
-ok ($args[0],$class);
+ok ($args[0] =~ /^Math::BigInt/);
 ok ($args[1],4);
 ok ($args[2],5);
 
 @args = Math::BigInt::objectify(2,4,5,6,7);
 ok (scalar @args,5);		# $class, 4, 5, 6, 7
-ok ($args[0],$class);
+ok ($args[0] =~ /^Math::BigInt/);
 ok ($args[1],4); ok (ref($args[1]),$args[0]);
 ok ($args[2],5); ok (ref($args[2]),$args[0]);
 ok ($args[3],6); ok (ref($args[3]),'');
@@ -446,6 +455,11 @@ if ($x > $BASE) { ok (1,1) } else { ok ("$x > $BASE","$x < $BASE"); }
 $x = $class->new($MAX); ok ($x->length(), length($MAX));
 
 ###############################################################################
+# test bug that $class->digit($string) did not work
+
+ok ($class->digit(123,2),1);
+
+###############################################################################
 # bug in sub where number with at least 6 trailing zeros after any op failed
 
 $x = $class->new(123456); $z = $class->new(10000); $z *= 10; $x -= $z;
@@ -490,6 +504,19 @@ $x = $class->new('-322056000'); ($x,$y) = $x->bdiv('-12882240');
 ok ($y,'0'); is_valid($y);	# $y not '-0'
 
 ###############################################################################
+# bone/binf etc as plain calls (Lite failed them)
+
+ok ($class->bzero(),0);
+ok ($class->bone(),1);
+ok ($class->bone('+'),1);
+ok ($class->bone('-'),-1);
+ok ($class->bnan(),'NaN');
+ok ($class->binf(),'inf');
+ok ($class->binf('+'),'inf');
+ok ($class->binf('-'),'-inf');
+ok ($class->binf('-inf'),'-inf');
+
+###############################################################################
 # all tests done
 
 1;
@@ -515,15 +542,20 @@ sub is_valid
   my ($x,$f) = @_;
 
   my $e = 0;			# error?
+
+  # allow the check to pass for all Lite, and all MBI and subclasses
   # ok as reference? 
-  $e = 'Not a reference to Math::BigInt' if !ref($x);
+  $e = 'Not a reference to Math::BigInt' if ref($x) !~ /^Math::BigInt/;
 
-  # has ok sign?
-  $e = "Illegal sign $x->{sign} (expected: '+', '-', '-inf', '+inf' or 'NaN'"
-   if $e eq '0' && $x->{sign} !~ /^(\+|-|\+inf|-inf|NaN)$/;
-
-  $e = "-0 is invalid!" if $e ne '0' && $x->{sign} eq '-' && $x == 0;
-  $e = $CALC->_check($x->{value}) if $e eq '0';
+  if (ref($x) ne 'Math::BigInt::Lite')
+    {
+    # has ok sign?
+    $e = "Illegal sign $x->{sign} (expected: '+', '-', '-inf', '+inf' or 'NaN'"
+     if $e eq '0' && $x->{sign} !~ /^(\+|-|\+inf|-inf|NaN)$/;
+  
+    $e = "-0 is invalid!" if $e ne '0' && $x->{sign} eq '-' && $x == 0;
+    $e = $CALC->_check($x->{value}) if $e eq '0';
+    }
 
   # test done, see if error did crop up
   ok (1,1), return if ($e eq '0');
@@ -1029,6 +1061,26 @@ baddNaN:+inf:NaN
 -123456789:987654321:864197532
 -123456789:-987654321:-1111111110
 +123456789:-987654321:-864197532
+-1:10001:10000
+-1:100001:100000
+-1:1000001:1000000
+-1:10000001:10000000
+-1:100000001:100000000
+-1:1000000001:1000000000
+-1:10000000001:10000000000
+-1:100000000001:100000000000
+-1:1000000000001:1000000000000
+-1:10000000000001:10000000000000
+-1:-10001:-10002
+-1:-100001:-100002
+-1:-1000001:-1000002
+-1:-10000001:-10000002
+-1:-100000001:-100000002
+-1:-1000000001:-1000000002
+-1:-10000000001:-10000000002
+-1:-100000000001:-100000000002
+-1:-1000000000001:-1000000000002
+-1:-10000000000001:-10000000000002
 &bsub
 abc:abc:NaN
 abc:+0:NaN
@@ -1071,6 +1123,26 @@ abc:+0:NaN
 -123456789:+987654321:-1111111110
 -123456789:-987654321:864197532
 +123456789:-987654321:1111111110
+10001:1:10000
+100001:1:100000
+1000001:1:1000000
+10000001:1:10000000
+100000001:1:100000000
+1000000001:1:1000000000
+10000000001:1:10000000000
+100000000001:1:100000000000
+1000000000001:1:1000000000000
+10000000000001:1:10000000000000
+10001:-1:10002
+100001:-1:100002
+1000001:-1:1000002
+10000001:-1:10000002
+100000001:-1:100000002
+1000000001:-1:1000000002
+10000000001:-1:10000000002
+100000000001:-1:100000000002
+1000000000001:-1:1000000000002
+10000000000001:-1:10000000000002
 &bmul
 abc:abc:NaN
 abc:+0:NaN
@@ -1248,6 +1320,42 @@ inf:0:inf
 14:3:4
 # bug in Calc with '99999' vs $BASE-1
 10000000000000000000000000000000000000000000000000000000000000000000000000000000000:10000000375084540248994272022843165711074:999999962491547381984643365663244474111576
+#&bmodinv
+## format: number:modulus:result
+## bmodinv Data errors
+#abc:abc:NaN
+#abc:5:NaN
+#5:abc:NaN
+## bmodinv Expected Results from normal use
+#1:5:1
+#3:5:2
+#-2:5:2
+#324958749843759385732954874325984357439658735983745:2348249874968739:1741662881064902
+## bmodinv Error cases / useless use of function
+#3:-5:NaN
+#inf:5:NaN
+#&bmodpow
+## format: number:exponent:modulus:result
+## bmodpow Data errors
+#abc:abc:abc:NaN
+#5:abc:abc:NaN
+#abc:5:abc:NaN
+#abc:abc:5:NaN
+#5:5:abc:NaN
+#5:abc:5:NaN
+#abc:5:5:NaN
+## bmodpow Expected results
+#0:0:2:1
+#1:0:2:1
+#0:0:1:0
+#8:7:5032:3840
+#8:-1:5033:4404
+#98436739867439843769485798542749827593285729587325:43698764986460981048259837659386739857456983759328457:6943857329857295827698367:3104744730915914415259518
+## bmodpow Error cases
+#8:8:-5:NaN
+#8:-1:16:NaN
+#inf:5:13:NaN
+#5:inf:13:NaN
 &bmod
 # inf handling, see table in doc
 0:inf:0

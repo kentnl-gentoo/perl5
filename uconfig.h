@@ -1014,17 +1014,9 @@
 #define BIN "/usr/local/bin"	/**/
 #define BIN_EXP ""	/**/
 
-/* PERL_BINCOMPAT_5005:
- *	This symbol, if defined, indicates that this version of Perl should be
- *	binary-compatible with Perl 5.005.  This is impossible for builds
- *	that use features like threads and multiplicity it is always 
- *	for those versions.
- */
-/*#define PERL_BINCOMPAT_5005			/ **/
-
 /* BYTEORDER:
  *	This symbol holds the hexadecimal constant defined in byteorder,
- *	i.e. 0x1234 or 0x4321, etc...
+ *	in a UV, i.e. 0x1234 or 0x4321 or 0x12345678, etc...
  *	If the compiler supports cross-compiling or multiple-architecture
  *	binaries (eg. on NeXT systems), use compiler-defined macros to
  *	determine the byte order.
@@ -1132,6 +1124,19 @@
  */
 /*#define HAS_ACCESS		/ **/
 
+/* HAS_ASCTIME_R:
+ *	This symbol, if defined, indicates that the asctime_r routine
+ *	is available to asctime re-entrantly.
+ */
+/* ASCTIME_R_PROTO:
+ *	This symbol encodes the prototype of asctime_r.
+ *	It is zero if d_asctime_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_asctime_r
+ *	is defined.
+ */
+/*#define HAS_ASCTIME_R	   / **/
+#define ASCTIME_R_PROTO 0	   /**/
+
 /* CASTI32:
  *	This symbol is defined if the C compiler can cast negative
  *	or large floating point numbers to 32-bit ints.
@@ -1183,6 +1188,19 @@
  */
 /*#define HAS_STRUCT_CMSGHDR	/ **/
 
+/* HAS_CRYPT_R:
+ *	This symbol, if defined, indicates that the crypt_r routine
+ *	is available to crypt re-entrantly.
+ */
+/* CRYPT_R_PROTO:
+ *	This symbol encodes the prototype of crypt_r.
+ *	It is zero if d_crypt_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_crypt_r
+ *	is defined.
+ */
+/*#define HAS_CRYPT_R	   / **/
+#define CRYPT_R_PROTO 0	   /**/
+
 /* HAS_CSH:
  *	This symbol, if defined, indicates that the C-shell exists.
  */
@@ -1194,6 +1212,19 @@
 #define CSH ""	/**/
 #endif
 
+/* HAS_CTIME_R:
+ *	This symbol, if defined, indicates that the ctime_r routine
+ *	is available to ctime re-entrantly.
+ */
+/* CTIME_R_PROTO:
+ *	This symbol encodes the prototype of ctime_r.
+ *	It is zero if d_ctime_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_ctime_r
+ *	is defined.
+ */
+/*#define HAS_CTIME_R	   / **/
+#define CTIME_R_PROTO 0	   /**/
+
 /* DLSYM_NEEDS_UNDERSCORE:
  *	This symbol, if defined, indicates that we need to prepend an
  *	underscore to the symbol name before calling dlsym().  This only
@@ -1201,6 +1232,19 @@
  *	case if you're using dl_dlopen.xs.
  */
 /*#define 	DLSYM_NEEDS_UNDERSCORE 	/ **/
+
+/* HAS_DRAND48_R:
+ *	This symbol, if defined, indicates that the drand48_r routine
+ *	is available to drand48 re-entrantly.
+ */
+/* DRAND48_R_PROTO:
+ *	This symbol encodes the prototype of drand48_r.
+ *	It is zero if d_drand48_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_drand48_r
+ *	is defined.
+ */
+/*#define HAS_DRAND48_R	   / **/
+#define DRAND48_R_PROTO 0	   /**/
 
 /* HAS_DRAND48_PROTO:
  *	This symbol, if defined, indicates that the system provides
@@ -1215,6 +1259,19 @@
  *	available for finalizing sequential access of the group database.
  */
 /*#define HAS_ENDGRENT		/ **/
+
+/* HAS_ENDGRENT_R:
+ *	This symbol, if defined, indicates that the endgrent_r routine
+ *	is available to endgrent re-entrantly.
+ */
+/* ENDGRENT_R_PROTO:
+ *	This symbol encodes the prototype of endgrent_r.
+ *	It is zero if d_endgrent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_endgrent_r
+ *	is defined.
+ */
+/*#define HAS_ENDGRENT_R	   / **/
+#define ENDGRENT_R_PROTO 0	   /**/
 
 /* HAS_ENDHOSTENT:
  *	This symbol, if defined, indicates that the endhostent() routine is
@@ -1239,6 +1296,19 @@
  *	available for finalizing sequential access of the passwd database.
  */
 /*#define HAS_ENDPWENT		/ **/
+
+/* HAS_ENDPWENT_R:
+ *	This symbol, if defined, indicates that the endpwent_r routine
+ *	is available to endpwent re-entrantly.
+ */
+/* ENDPWENT_R_PROTO:
+ *	This symbol encodes the prototype of endpwent_r.
+ *	It is zero if d_endpwent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_endpwent_r
+ *	is defined.
+ */
+/*#define HAS_ENDPWENT_R	   / **/
+#define ENDPWENT_R_PROTO 0	   /**/
 
 /* HAS_ENDSERVENT:
  *	This symbol, if defined, indicates that the endservent() routine is
@@ -1418,6 +1488,45 @@
  */
 /*#define HAS_GETGRENT		/ **/
 
+/* HAS_GETGRENT_R:
+ *	This symbol, if defined, indicates that the getgrent_r routine
+ *	is available to getgrent re-entrantly.
+ */
+/* GETGRENT_R_PROTO:
+ *	This symbol encodes the prototype of getgrent_r.
+ *	It is zero if d_getgrent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getgrent_r
+ *	is defined.
+ */
+/*#define HAS_GETGRENT_R	   / **/
+#define GETGRENT_R_PROTO 0	   /**/
+
+/* HAS_GETGRGID_R:
+ *	This symbol, if defined, indicates that the getgrgid_r routine
+ *	is available to getgrgid re-entrantly.
+ */
+/* GETGRGID_R_PROTO:
+ *	This symbol encodes the prototype of getgrgid_r.
+ *	It is zero if d_getgrgid_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getgrgid_r
+ *	is defined.
+ */
+/*#define HAS_GETGRGID_R	   / **/
+#define GETGRGID_R_PROTO 0	   /**/
+
+/* HAS_GETGRNAM_R:
+ *	This symbol, if defined, indicates that the getgrnam_r routine
+ *	is available to getgrnam re-entrantly.
+ */
+/* GETGRNAM_R_PROTO:
+ *	This symbol encodes the prototype of getgrnam_r.
+ *	It is zero if d_getgrnam_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getgrnam_r
+ *	is defined.
+ */
+/*#define HAS_GETGRNAM_R	   / **/
+#define GETGRNAM_R_PROTO 0	   /**/
+
 /* HAS_GETHOSTBYADDR:
  *	This symbol, if defined, indicates that the gethostbyaddr() routine is
  *	available to look up hosts by their IP addresses.
@@ -1478,6 +1587,19 @@
  *	available to return interval timers.
  */
 /*#define HAS_GETITIMER		/ **/
+
+/* HAS_GETLOGIN_R:
+ *	This symbol, if defined, indicates that the getlogin_r routine
+ *	is available to getlogin re-entrantly.
+ */
+/* GETLOGIN_R_PROTO:
+ *	This symbol encodes the prototype of getlogin_r.
+ *	It is zero if d_getlogin_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getlogin_r
+ *	is defined.
+ */
+/*#define HAS_GETLOGIN_R	   / **/
+#define GETLOGIN_R_PROTO 0	   /**/
 
 /* HAS_GETMNT:
  *	This symbol, if defined, indicates that the getmnt routine is
@@ -1573,6 +1695,45 @@
  */
 /*#define HAS_GETPWENT		/ **/
 
+/* HAS_GETPWENT_R:
+ *	This symbol, if defined, indicates that the getpwent_r routine
+ *	is available to getpwent re-entrantly.
+ */
+/* GETPWENT_R_PROTO:
+ *	This symbol encodes the prototype of getpwent_r.
+ *	It is zero if d_getpwent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getpwent_r
+ *	is defined.
+ */
+/*#define HAS_GETPWENT_R	   / **/
+#define GETPWENT_R_PROTO 0	   /**/
+
+/* HAS_GETPWNAM_R:
+ *	This symbol, if defined, indicates that the getpwnam_r routine
+ *	is available to getpwnam re-entrantly.
+ */
+/* GETPWNAM_R_PROTO:
+ *	This symbol encodes the prototype of getpwnam_r.
+ *	It is zero if d_getpwnam_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getpwnam_r
+ *	is defined.
+ */
+/*#define HAS_GETPWNAM_R	   / **/
+#define GETPWNAM_R_PROTO 0	   /**/
+
+/* HAS_GETPWUID_R:
+ *	This symbol, if defined, indicates that the getpwuid_r routine
+ *	is available to getpwuid re-entrantly.
+ */
+/* GETPWUID_R_PROTO:
+ *	This symbol encodes the prototype of getpwuid_r.
+ *	It is zero if d_getpwuid_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getpwuid_r
+ *	is defined.
+ */
+/*#define HAS_GETPWUID_R	   / **/
+#define GETPWUID_R_PROTO 0	   /**/
+
 /* HAS_GETSERVENT:
  *	This symbol, if defined, indicates that the getservent() routine is
  *	available to look up network services in some data base or another.
@@ -1593,6 +1754,19 @@
  */
 /*#define HAS_GETSPNAM		/ **/
 
+/* HAS_GETSPNAM_R:
+ *	This symbol, if defined, indicates that the getspnam_r routine
+ *	is available to getspnam re-entrantly.
+ */
+/* GETSPNAM_R_PROTO:
+ *	This symbol encodes the prototype of getspnam_r.
+ *	It is zero if d_getspnam_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getspnam_r
+ *	is defined.
+ */
+/*#define HAS_GETSPNAM_R	   / **/
+#define GETSPNAM_R_PROTO 0	   /**/
+
 /* HAS_GETSERVBYNAME:
  *	This symbol, if defined, indicates that the getservbyname()
  *	routine is available to look up services by their name.
@@ -1603,6 +1777,19 @@
  */
 /*#define HAS_GETSERVBYNAME		/ **/
 /*#define HAS_GETSERVBYPORT		/ **/
+
+/* HAS_GMTIME_R:
+ *	This symbol, if defined, indicates that the gmtime_r routine
+ *	is available to gmtime re-entrantly.
+ */
+/* GMTIME_R_PROTO:
+ *	This symbol encodes the prototype of gmtime_r.
+ *	It is zero if d_gmtime_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_gmtime_r
+ *	is defined.
+ */
+/*#define HAS_GMTIME_R	   / **/
+#define GMTIME_R_PROTO 0	   /**/
 
 /* HAS_GNULIBC:
  *	This symbol, if defined, indicates to the C program that 
@@ -1694,6 +1881,19 @@
  *	for DBL_DIG, there's no good guess for LDBL_DIG if it is undefined.
  */
 /*#define HAS_LDBL_DIG 	/ * */
+
+/* HAS_LOCALTIME_R:
+ *	This symbol, if defined, indicates that the localtime_r routine
+ *	is available to localtime re-entrantly.
+ */
+/* LOCALTIME_R_PROTO:
+ *	This symbol encodes the prototype of localtime_r.
+ *	It is zero if d_localtime_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_localtime_r
+ *	is defined.
+ */
+/*#define HAS_LOCALTIME_R	   / **/
+#define LOCALTIME_R_PROTO 0	   /**/
 
 /* HAS_LONG_DOUBLE:
  *	This symbol will be defined if the C compiler supports long
@@ -1847,6 +2047,32 @@
 #define SCHED_YIELD	sched_yield()	/**/
 /*#define HAS_SCHED_YIELD	/ **/
 
+/* HAS_RANDOM_R:
+ *	This symbol, if defined, indicates that the random_r routine
+ *	is available to random re-entrantly.
+ */
+/* RANDOM_R_PROTO:
+ *	This symbol encodes the prototype of random_r.
+ *	It is zero if d_random_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_random_r
+ *	is defined.
+ */
+/*#define HAS_RANDOM_R	   / **/
+#define RANDOM_R_PROTO 0	   /**/
+
+/* HAS_READDIR_R:
+ *	This symbol, if defined, indicates that the readdir_r routine
+ *	is available to readdir re-entrantly.
+ */
+/* READDIR_R_PROTO:
+ *	This symbol encodes the prototype of readdir_r.
+ *	It is zero if d_readdir_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_readdir_r
+ *	is defined.
+ */
+/*#define HAS_READDIR_R	   / **/
+#define READDIR_R_PROTO 0	   /**/
+
 /* HAS_READV:
  *	This symbol, if defined, indicates that the readv routine is
  *	available to do gather reads.  You will also need <sys/uio.h>
@@ -1910,6 +2136,19 @@
  */
 /*#define HAS_SETGRENT		/ **/
 
+/* HAS_SETGRENT_R:
+ *	This symbol, if defined, indicates that the setgrent_r routine
+ *	is available to setgrent re-entrantly.
+ */
+/* SETGRENT_R_PROTO:
+ *	This symbol encodes the prototype of setgrent_r.
+ *	It is zero if d_setgrent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_setgrent_r
+ *	is defined.
+ */
+/*#define HAS_SETGRENT_R	   / **/
+#define SETGRENT_R_PROTO 0	   /**/
+
 /* HAS_SETGROUPS:
  *	This symbol, if defined, indicates that the setgroups() routine is
  *	available to set the list of process groups.  If unavailable, multiple
@@ -1964,6 +2203,19 @@
  *	available for initializing sequential access of the passwd database.
  */
 /*#define HAS_SETPWENT		/ **/
+
+/* HAS_SETPWENT_R:
+ *	This symbol, if defined, indicates that the setpwent_r routine
+ *	is available to setpwent re-entrantly.
+ */
+/* SETPWENT_R_PROTO:
+ *	This symbol encodes the prototype of setpwent_r.
+ *	It is zero if d_setpwent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_setpwent_r
+ *	is defined.
+ */
+/*#define HAS_SETPWENT_R	   / **/
+#define SETPWENT_R_PROTO 0	   /**/
 
 /* HAS_SETSERVENT:
  *	This symbol, if defined, indicates that the setservent() routine is
@@ -2086,6 +2338,32 @@
  */
 /*#define HAS_SQRTL		/ **/
 
+/* HAS_SRAND48_R:
+ *	This symbol, if defined, indicates that the srand48_r routine
+ *	is available to srand48 re-entrantly.
+ */
+/* SRAND48_R_PROTO:
+ *	This symbol encodes the prototype of srand48_r.
+ *	It is zero if d_srand48_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_srand48_r
+ *	is defined.
+ */
+/*#define HAS_SRAND48_R	   / **/
+#define SRAND48_R_PROTO 0	   /**/
+
+/* HAS_SRANDOM_R:
+ *	This symbol, if defined, indicates that the srandom_r routine
+ *	is available to srandom re-entrantly.
+ */
+/* SRANDOM_R_PROTO:
+ *	This symbol encodes the prototype of srandom_r.
+ *	It is zero if d_srandom_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_srandom_r
+ *	is defined.
+ */
+/*#define HAS_SRANDOM_R	   / **/
+#define SRANDOM_R_PROTO 0	   /**/
+
 /* USE_STAT_BLOCKS:
  *	This symbol is defined if this system has a stat structure declaring
  *	st_blksize and st_blocks.
@@ -2206,6 +2484,19 @@
 /*#define HAS_SYS_ERRLIST	/ **/
 #define Strerror(e) strerror(e)
 
+/* HAS_STRERROR_R:
+ *	This symbol, if defined, indicates that the strerror_r routine
+ *	is available to strerror re-entrantly.
+ */
+/* STRERROR_R_PROTO:
+ *	This symbol encodes the prototype of strerror_r.
+ *	It is zero if d_strerror_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_strerror_r
+ *	is defined.
+ */
+/*#define HAS_STRERROR_R	   / **/
+#define STRERROR_R_PROTO 0	   /**/
+
 /* HAS_STRTOLD:
  *	This symbol, if defined, indicates that the strtold routine is
  *	available to convert strings to long doubles.
@@ -2250,12 +2541,16 @@
  */
 /*#define	HAS_TELLDIR_PROTO	/ **/
 
+/* HAS_TIME:
+ *	This symbol, if defined, indicates that the time() routine exists.
+ */
 /* Time_t:
  *	This symbol holds the type returned by time(). It can be long,
  *	or time_t on BSD sites (in which case <sys/types.h> should be
  *	included).
  */
-#define Time_t int		/* Time type */
+#define HAS_TIME		/**/
+#define Time_t time_t		/* Time type */
 
 /* HAS_TIMES:
  *	This symbol, if defined, indicates that the times() routine exists.
@@ -2263,6 +2558,19 @@
  * use getrusage(). It may be necessary to include <sys/times.h>.
  */
 /*#define HAS_TIMES		/ **/
+
+/* HAS_TMPNAM_R:
+ *	This symbol, if defined, indicates that the tmpnam_r routine
+ *	is available to tmpnam re-entrantly.
+ */
+/* TMPNAM_R_PROTO:
+ *	This symbol encodes the prototype of tmpnam_r.
+ *	It is zero if d_tmpnam_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_tmpnam_r
+ *	is defined.
+ */
+/*#define HAS_TMPNAM_R	   / **/
+#define TMPNAM_R_PROTO 0	   /**/
 
 /* HAS_UALARM:
  *	This symbol, if defined, indicates that the ualarm routine is
@@ -2645,9 +2953,14 @@
  *	This symbol, if defined, indicates to the C program that it should
  *	include <sys/time.h> with KERNEL defined.
  */
+/* HAS_TM_TM_ZONE:
+ *	This symbol, if defined, indicates to the C program that
+ *	the struct tm has a tm_zone field.
+ */
 #define I_TIME		/**/
 /*#define I_SYS_TIME		/ **/
 /*#define I_SYS_TIME_KERNEL		/ **/
+/*#define HAS_TM_TM_ZONE		/ **/
 
 /* I_USTAT:
  *	This symbol, if defined, indicates that <ustat.h> exists and
@@ -3331,8 +3644,8 @@
  *	See INSTALL for how this works.
  *	The versioned site_perl directory was introduced in 5.005,
  *	so that is the lowest possible value.
- *	Since this can depend on compile time options (such as
- *	bincompat) it is set by Configure.  Other non-default sources
+ *	Since this can depend on compile time options
+ *	it is set by Configure.  Other non-default sources
  *	of potential incompatibility, such as multiplicity, threads,
  *	debugging, 64bits, sfio, etc., are not checked for currently,
  *	though in principle we could go snooping around in old
@@ -3353,7 +3666,7 @@
  *	(presumably) be similar.
  *	See the INSTALL file for how this works.
  */
-#define PERL_XS_APIVERSION "5.005"
+#define PERL_XS_APIVERSION "5.008"
 #define PERL_PM_APIVERSION "5.005"
 
 /* HAS_CRYPT:
@@ -3569,7 +3882,9 @@
  *	This symbol, if defined, indicates that you must access
  *	character data through U32-aligned pointers.
  */
+#ifndef U32_ALIGNMENT_REQUIRED
 #define U32_ALIGNMENT_REQUIRED	/**/
+#endif
 
 /* HAS_USLEEP_PROTO:
  *	This symbol, if defined, indicates that the system provides
@@ -3578,6 +3893,12 @@
  *		extern int usleep(useconds_t);
  */
 /*#define	HAS_USLEEP_PROTO	/ **/
+
+/* I_CRYPT:
+ *	This symbol, if defined, indicates that <crypt.h> exists and
+ *	should be included.
+ */
+/*#define	I_CRYPT		/ **/
 
 /* I_FP:
  *	This symbol, if defined, indicates that <fp.h> exists and
@@ -3591,10 +3912,322 @@
  */
 /*#define	I_LANGINFO		/ **/
 
+/* HAS_CTERMID_R:
+ *	This symbol, if defined, indicates that the ctermid_r routine
+ *	is available to ctermid re-entrantly.
+ */
+/* CTERMID_R_PROTO:
+ *	This symbol encodes the prototype of ctermid_r.
+ *	It is zero if d_ctermid_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_ctermid_r
+ *	is defined.
+ */
+/*#define HAS_CTERMID_R	   / **/
+#define CTERMID_R_PROTO 0	   /**/
+
+/* HAS_ENDHOSTENT_R:
+ *	This symbol, if defined, indicates that the endhostent_r routine
+ *	is available to endhostent re-entrantly.
+ */
+/* ENDHOSTENT_R_PROTO:
+ *	This symbol encodes the prototype of endhostent_r.
+ *	It is zero if d_endhostent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_endhostent_r
+ *	is defined.
+ */
+/*#define HAS_ENDHOSTENT_R	   / **/
+#define ENDHOSTENT_R_PROTO 0	   /**/
+
+/* HAS_ENDNETENT_R:
+ *	This symbol, if defined, indicates that the endnetent_r routine
+ *	is available to endnetent re-entrantly.
+ */
+/* ENDNETENT_R_PROTO:
+ *	This symbol encodes the prototype of endnetent_r.
+ *	It is zero if d_endnetent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_endnetent_r
+ *	is defined.
+ */
+/*#define HAS_ENDNETENT_R	   / **/
+#define ENDNETENT_R_PROTO 0	   /**/
+
+/* HAS_ENDPROTOENT_R:
+ *	This symbol, if defined, indicates that the endprotoent_r routine
+ *	is available to endprotoent re-entrantly.
+ */
+/* ENDPROTOENT_R_PROTO:
+ *	This symbol encodes the prototype of endprotoent_r.
+ *	It is zero if d_endprotoent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_endprotoent_r
+ *	is defined.
+ */
+/*#define HAS_ENDPROTOENT_R	   / **/
+#define ENDPROTOENT_R_PROTO 0	   /**/
+
+/* HAS_ENDSERVENT_R:
+ *	This symbol, if defined, indicates that the endservent_r routine
+ *	is available to endservent re-entrantly.
+ */
+/* ENDSERVENT_R_PROTO:
+ *	This symbol encodes the prototype of endservent_r.
+ *	It is zero if d_endservent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_endservent_r
+ *	is defined.
+ */
+/*#define HAS_ENDSERVENT_R	   / **/
+#define ENDSERVENT_R_PROTO 0	   /**/
+
+/* HAS_GETHOSTBYADDR_R:
+ *	This symbol, if defined, indicates that the gethostbyaddr_r routine
+ *	is available to gethostbyaddr re-entrantly.
+ */
+/* GETHOSTBYADDR_R_PROTO:
+ *	This symbol encodes the prototype of gethostbyaddr_r.
+ *	It is zero if d_gethostbyaddr_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_gethostbyaddr_r
+ *	is defined.
+ */
+/*#define HAS_GETHOSTBYADDR_R	   / **/
+#define GETHOSTBYADDR_R_PROTO 0	   /**/
+
+/* HAS_GETHOSTBYNAME_R:
+ *	This symbol, if defined, indicates that the gethostbyname_r routine
+ *	is available to gethostbyname re-entrantly.
+ */
+/* GETHOSTBYNAME_R_PROTO:
+ *	This symbol encodes the prototype of gethostbyname_r.
+ *	It is zero if d_gethostbyname_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_gethostbyname_r
+ *	is defined.
+ */
+/*#define HAS_GETHOSTBYNAME_R	   / **/
+#define GETHOSTBYNAME_R_PROTO 0	   /**/
+
+/* HAS_GETHOSTENT_R:
+ *	This symbol, if defined, indicates that the gethostent_r routine
+ *	is available to gethostent re-entrantly.
+ */
+/* GETHOSTENT_R_PROTO:
+ *	This symbol encodes the prototype of gethostent_r.
+ *	It is zero if d_gethostent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_gethostent_r
+ *	is defined.
+ */
+/*#define HAS_GETHOSTENT_R	   / **/
+#define GETHOSTENT_R_PROTO 0	   /**/
+
+/* HAS_GETNETBYADDR_R:
+ *	This symbol, if defined, indicates that the getnetbyaddr_r routine
+ *	is available to getnetbyaddr re-entrantly.
+ */
+/* GETNETBYADDR_R_PROTO:
+ *	This symbol encodes the prototype of getnetbyaddr_r.
+ *	It is zero if d_getnetbyaddr_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getnetbyaddr_r
+ *	is defined.
+ */
+/*#define HAS_GETNETBYADDR_R	   / **/
+#define GETNETBYADDR_R_PROTO 0	   /**/
+
+/* HAS_GETNETBYNAME_R:
+ *	This symbol, if defined, indicates that the getnetbyname_r routine
+ *	is available to getnetbyname re-entrantly.
+ */
+/* GETNETBYNAME_R_PROTO:
+ *	This symbol encodes the prototype of getnetbyname_r.
+ *	It is zero if d_getnetbyname_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getnetbyname_r
+ *	is defined.
+ */
+/*#define HAS_GETNETBYNAME_R	   / **/
+#define GETNETBYNAME_R_PROTO 0	   /**/
+
+/* HAS_GETNETENT_R:
+ *	This symbol, if defined, indicates that the getnetent_r routine
+ *	is available to getnetent re-entrantly.
+ */
+/* GETNETENT_R_PROTO:
+ *	This symbol encodes the prototype of getnetent_r.
+ *	It is zero if d_getnetent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getnetent_r
+ *	is defined.
+ */
+/*#define HAS_GETNETENT_R	   / **/
+#define GETNETENT_R_PROTO 0	   /**/
+
+/* HAS_GETPROTOBYNAME_R:
+ *	This symbol, if defined, indicates that the getprotobyname_r routine
+ *	is available to getprotobyname re-entrantly.
+ */
+/* GETPROTOBYNAME_R_PROTO:
+ *	This symbol encodes the prototype of getprotobyname_r.
+ *	It is zero if d_getprotobyname_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getprotobyname_r
+ *	is defined.
+ */
+/*#define HAS_GETPROTOBYNAME_R	   / **/
+#define GETPROTOBYNAME_R_PROTO 0	   /**/
+
+/* HAS_GETPROTOBYNUMBER_R:
+ *	This symbol, if defined, indicates that the getprotobynumber_r routine
+ *	is available to getprotobynumber re-entrantly.
+ */
+/* GETPROTOBYNUMBER_R_PROTO:
+ *	This symbol encodes the prototype of getprotobynumber_r.
+ *	It is zero if d_getprotobynumber_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getprotobynumber_r
+ *	is defined.
+ */
+/*#define HAS_GETPROTOBYNUMBER_R	   / **/
+#define GETPROTOBYNUMBER_R_PROTO 0	   /**/
+
+/* HAS_GETPROTOENT_R:
+ *	This symbol, if defined, indicates that the getprotoent_r routine
+ *	is available to getprotoent re-entrantly.
+ */
+/* GETPROTOENT_R_PROTO:
+ *	This symbol encodes the prototype of getprotoent_r.
+ *	It is zero if d_getprotoent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getprotoent_r
+ *	is defined.
+ */
+/*#define HAS_GETPROTOENT_R	   / **/
+#define GETPROTOENT_R_PROTO 0	   /**/
+
+/* HAS_GETSERVBYNAME_R:
+ *	This symbol, if defined, indicates that the getservbyname_r routine
+ *	is available to getservbyname re-entrantly.
+ */
+/* GETSERVBYNAME_R_PROTO:
+ *	This symbol encodes the prototype of getservbyname_r.
+ *	It is zero if d_getservbyname_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getservbyname_r
+ *	is defined.
+ */
+/*#define HAS_GETSERVBYNAME_R	   / **/
+#define GETSERVBYNAME_R_PROTO 0	   /**/
+
+/* HAS_GETSERVBYPORT_R:
+ *	This symbol, if defined, indicates that the getservbyport_r routine
+ *	is available to getservbyport re-entrantly.
+ */
+/* GETSERVBYPORT_R_PROTO:
+ *	This symbol encodes the prototype of getservbyport_r.
+ *	It is zero if d_getservbyport_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getservbyport_r
+ *	is defined.
+ */
+/*#define HAS_GETSERVBYPORT_R	   / **/
+#define GETSERVBYPORT_R_PROTO 0	   /**/
+
+/* HAS_GETSERVENT_R:
+ *	This symbol, if defined, indicates that the getservent_r routine
+ *	is available to getservent re-entrantly.
+ */
+/* GETSERVENT_R_PROTO:
+ *	This symbol encodes the prototype of getservent_r.
+ *	It is zero if d_getservent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_getservent_r
+ *	is defined.
+ */
+/*#define HAS_GETSERVENT_R	   / **/
+#define GETSERVENT_R_PROTO 0	   /**/
+
 /* HAS_PTHREAD_ATFORK:
  *	This symbol, if defined, indicates that the pthread_atfork routine
  *	is available setup fork handlers.
  */
 /*#define HAS_PTHREAD_ATFORK		/ **/
+
+/* HAS_READDIR64_R:
+ *	This symbol, if defined, indicates that the readdir64_r routine
+ *	is available to readdir64 re-entrantly.
+ */
+/* READDIR64_R_PROTO:
+ *	This symbol encodes the prototype of readdir64_r.
+ *	It is zero if d_readdir64_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_readdir64_r
+ *	is defined.
+ */
+/*#define HAS_READDIR64_R	   / **/
+#define READDIR64_R_PROTO 0	   /**/
+
+/* HAS_SETHOSTENT_R:
+ *	This symbol, if defined, indicates that the sethostent_r routine
+ *	is available to sethostent re-entrantly.
+ */
+/* SETHOSTENT_R_PROTO:
+ *	This symbol encodes the prototype of sethostent_r.
+ *	It is zero if d_sethostent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_sethostent_r
+ *	is defined.
+ */
+/*#define HAS_SETHOSTENT_R	   / **/
+#define SETHOSTENT_R_PROTO 0	   /**/
+
+/* HAS_SETLOCALE_R:
+ *	This symbol, if defined, indicates that the setlocale_r routine
+ *	is available to setlocale re-entrantly.
+ */
+/* SETLOCALE_R_PROTO:
+ *	This symbol encodes the prototype of setlocale_r.
+ *	It is zero if d_setlocale_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_setlocale_r
+ *	is defined.
+ */
+/*#define HAS_SETLOCALE_R	   / **/
+#define SETLOCALE_R_PROTO 0	   /**/
+
+/* HAS_SETNETENT_R:
+ *	This symbol, if defined, indicates that the setnetent_r routine
+ *	is available to setnetent re-entrantly.
+ */
+/* SETNETENT_R_PROTO:
+ *	This symbol encodes the prototype of setnetent_r.
+ *	It is zero if d_setnetent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_setnetent_r
+ *	is defined.
+ */
+/*#define HAS_SETNETENT_R	   / **/
+#define SETNETENT_R_PROTO 0	   /**/
+
+/* HAS_SETPROTOENT_R:
+ *	This symbol, if defined, indicates that the setprotoent_r routine
+ *	is available to setprotoent re-entrantly.
+ */
+/* SETPROTOENT_R_PROTO:
+ *	This symbol encodes the prototype of setprotoent_r.
+ *	It is zero if d_setprotoent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_setprotoent_r
+ *	is defined.
+ */
+/*#define HAS_SETPROTOENT_R	   / **/
+#define SETPROTOENT_R_PROTO 0	   /**/
+
+/* HAS_SETSERVENT_R:
+ *	This symbol, if defined, indicates that the setservent_r routine
+ *	is available to setservent re-entrantly.
+ */
+/* SETSERVENT_R_PROTO:
+ *	This symbol encodes the prototype of setservent_r.
+ *	It is zero if d_setservent_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_setservent_r
+ *	is defined.
+ */
+/*#define HAS_SETSERVENT_R	   / **/
+#define SETSERVENT_R_PROTO 0	   /**/
+
+/* HAS_TTYNAME_R:
+ *	This symbol, if defined, indicates that the ttyname_r routine
+ *	is available to ttyname re-entrantly.
+ */
+/* TTYNAME_R_PROTO:
+ *	This symbol encodes the prototype of ttyname_r.
+ *	It is zero if d_ttyname_r is undef, and one of the
+ *	REENTRANT_PROTO_T_ABC macros of reentr.h if d_ttyname_r
+ *	is defined.
+ */
+/*#define HAS_TTYNAME_R	   / **/
+#define TTYNAME_R_PROTO 0	   /**/
 
 #endif

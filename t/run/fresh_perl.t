@@ -52,6 +52,13 @@ foreach my $prog (@prgs) {
 
     my($prog,$expected) = split(/\nEXPECT\n/, $raw_prog);
 
+    if ($prog =~ /^\# SKIP: (.+)/m) {
+	if (eval $1) {
+	    ok(1, "Skip: $1");
+	    next;
+	}
+    }
+
     $expected =~ s/\n+$//;
 
     fresh_perl_is($prog, $expected, { switches => [$switch] }, $name);
@@ -95,7 +102,7 @@ EXPECT
 ########
 eval {sub bar {print "In bar";}}
 ########
-system './perl -ne "print if eof" /dev/null'
+system './perl -ne "print if eof" /dev/null' unless $^O eq 'MacOS'
 ########
 chop($file = <DATA>);
 ########
@@ -282,7 +289,7 @@ print "ok\n" if ("\0" lt "\xFF");
 EXPECT
 ok
 ########
-open(H,'run/fresh_perl.t'); # must be in the 't' directory
+open(H,$^O eq 'MacOS' ? ':run:fresh_perl.t' : 'run/fresh_perl.t'); # must be in the 't' directory
 stat(H);
 print "ok\n" if (-e _ and -f _ and -r _);
 EXPECT
@@ -573,7 +580,7 @@ EOT
 EXPECT
 ok
 ########
-# This test is here instead of pragma/locale.t because
+# This test is here instead of lib/locale.t because
 # the bug depends on in the internal state of the locale
 # settings and pragma/locale messes up that state pretty badly.
 # We need a "fresh run".
@@ -591,7 +598,7 @@ $have_setlocale = 0 if $@;
 $have_setlocale = 0 if (($^O eq 'MSWin32' || $^O eq 'NetWare') && $Config{cc} =~ /^(cl|gcc)/i);
 exit(0) unless $have_setlocale;
 my @locales;
-if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a|")) {
+if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a 2>/dev/null|")) {
     while(<LOCALES>) {
         chomp;
         push(@locales, $_);
@@ -788,3 +795,39 @@ package main;
 $test = Foo->new(); # must be package var
 EXPECT
 ok
+######## example from Camel 5, ch. 15, pp.406 (with my)
+# SKIP: ord "A" == 193 # EBCDIC
+use strict;
+use utf8;
+my $人 = 2; # 0xe4 0xba 0xba: U+4eba, "human" in CJK ideograph
+$人++; # a child is born
+print $人, "\n";
+EXPECT
+3
+######## example from Camel 5, ch. 15, pp.406 (with our)
+# SKIP: ord "A" == 193 # EBCDIC
+use strict;
+use utf8;
+our $人 = 2; # 0xe4 0xba 0xba: U+4eba, "human" in CJK ideograph
+$人++; # a child is born
+print $人, "\n";
+EXPECT
+3
+######## example from Camel 5, ch. 15, pp.406 (with package vars)
+# SKIP: ord "A" == 193 # EBCDIC
+use utf8;
+$人 = 2; # 0xe4 0xba 0xba: U+4eba, "human" in CJK ideograph
+$人++; # a child is born
+print $人, "\n";
+EXPECT
+3
+######## example from Camel 5, ch. 15, pp.406 (with use vars)
+# SKIP: ord "A" == 193 # EBCDIC
+use strict;
+use utf8;
+use vars qw($人);
+$人 = 2; # 0xe4 0xba 0xba: U+4eba, "human" in CJK ideograph
+$人++; # a child is born
+print $人, "\n";
+EXPECT
+3

@@ -237,17 +237,24 @@ sub unwrap {
       print "$sp-> ",&stringify($$v,1),"\n";
       if ($globPrint) {
 	$s += 3;
-	dumpglob($s, "{$$v}", $$v, 1);
+       dumpglob($s, "{$$v}", $$v, 1, $m-1);
       } elsif (defined ($fileno = fileno($v))) {
 	print( (' ' x ($s+3)) .  "FileHandle({$$v}) => fileno($fileno)\n" );
       }
     } elsif (ref \$v eq 'GLOB') {
       if ($globPrint) {
-	dumpglob($s, "{$v}", $v, 1) if $globPrint;
+       dumpglob($s, "{$v}", $v, 1, $m-1) if $globPrint;
       } elsif (defined ($fileno = fileno(\$v))) {
 	print( (' ' x $s) .  "FileHandle({$v}) => fileno($fileno)\n" );
       }
     }
+}
+
+sub matchlex {
+  (my $var = $_[0]) =~ s/.//;
+  $var eq $_[1] or 
+    ($_[1] =~ /^([!~])(.)([\x00-\xff]*)/) and 
+      ($1 eq '!') ^ (eval { $var =~ /$2$3/ });
 }
 
 sub matchvar {
@@ -296,16 +303,16 @@ sub quote {
 
 sub dumpglob {
     return if $DB::signal;
-    my ($off,$key, $val, $all) = @_;
+    my ($off,$key, $val, $all, $m) = @_;
     local(*entry) = $val;
     my $fileno;
     if (($key !~ /^_</ or $dumpDBFiles) and defined $entry) {
       print( (' ' x $off) . "\$", &unctrl($key), " = " );
-      DumpElem $entry, 3+$off;
+      DumpElem $entry, 3+$off, $m;
     }
     if (($key !~ /^_</ or $dumpDBFiles) and @entry) {
       print( (' ' x $off) . "\@$key = (\n" );
-      unwrap(\@entry,3+$off) ;
+      unwrap(\@entry,3+$off,$m) ;
       print( (' ' x $off) .  ")\n" );
     }
     if ($key ne "main::" && $key ne "DB::" && %entry
@@ -313,7 +320,7 @@ sub dumpglob {
 	&& ($key !~ /^_</ or $dumpDBFiles)
 	&& !($package eq "dumpvar" and $key eq "stab")) {
       print( (' ' x $off) . "\%$key = (\n" );
-      unwrap(\%entry,3+$off) ;
+      unwrap(\%entry,3+$off,$m) ;
       print( (' ' x $off) .  ")\n" );
     }
     if (defined ($fileno = fileno(*entry))) {
@@ -324,6 +331,36 @@ sub dumpglob {
 	dumpsub($off, $key);
       }
     }
+}
+
+sub dumplex {
+  return if $DB::signal;
+  my ($key, $val, $m, @vars) = @_;
+  return if @vars && !grep( matchlex($key, $_), @vars );
+  local %address;
+  my $off = 0;  # It reads better this way
+  my $fileno;
+  if (UNIVERSAL::isa($val,'ARRAY')) {
+    print( (' ' x $off) . "$key = (\n" );
+    unwrap($val,3+$off,$m) ;
+    print( (' ' x $off) .  ")\n" );
+  }
+  elsif (UNIVERSAL::isa($val,'HASH')) {
+    print( (' ' x $off) . "$key = (\n" );
+    unwrap($val,3+$off,$m) ;
+    print( (' ' x $off) .  ")\n" );
+  }
+  elsif (UNIVERSAL::isa($val,'IO')) {
+    print( (' ' x $off) .  "FileHandle($key) => fileno($fileno)\n" );
+  }
+  #  No lexical subroutines yet...
+  #  elsif (UNIVERSAL::isa($val,'CODE')) {
+  #    dumpsub($off, $$val);
+  #  }
+  else {
+    print( (' ' x $off) . &unctrl($key), " = " );
+    DumpElem $$val, 3+$off, $m;
+  }
 }
 
 sub CvGV_name_or_bust {
@@ -361,7 +398,7 @@ sub findsubs {
 }
 
 sub main::dumpvar {
-    my ($package,@vars) = @_;
+    my ($package,$m,@vars) = @_;
     local(%address,$key,$val,$^W);
     $package .= "::" unless $package =~ /::$/;
     *stab = *{"main::"};
@@ -379,7 +416,7 @@ sub main::dumpvar {
 	  if ($package ne 'dumpvar' or $key ne 'stab')
 	     and ref(\$val) eq 'GLOB';
       } else {
-	dumpglob(0,$key, $val);
+       dumpglob(0,$key, $val, 0, $m);
       }
     }
     if ($usageOnly) {

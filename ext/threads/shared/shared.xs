@@ -1,6 +1,6 @@
-/*    sharedsv.c
+/*    shared.xs
  *
- *    Copyright (c) 2001, Larry Wall
+ *    Copyright (c) 2001-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -17,6 +17,8 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+
+#ifdef USE_ITHREADS
 
 #define SHAREDSvPTR(a)      ((a)->sv)
 
@@ -260,7 +262,7 @@ Perl_sharedsv_associate(pTHX_ SV **psv, SV *ssv, shared_sv *data)
 
     /* Try shared SV as 1st choice */
     if (!data && ssv && SvTYPE(ssv) >= SVt_PVMG) {
-	if (mg = mg_find(ssv, PERL_MAGIC_ext)) {
+	if( (mg = mg_find(ssv, PERL_MAGIC_ext)) ){
 	    data = (shared_sv *) mg->mg_ptr;
 	}
     }
@@ -462,7 +464,6 @@ sharedsv_scalar_mg_free(pTHX_ SV *sv, MAGIC *mg)
 int
 sharedsv_scalar_mg_clear(pTHX_ SV *sv, MAGIC *mg)
 {
-    shared_sv *shared = (shared_sv *) mg->mg_ptr;
     return 0;
 }
 
@@ -536,7 +537,6 @@ int
 sharedsv_elem_mg_STORE(pTHX_ SV *sv, MAGIC *mg)
 {
     dTHXc;
-    bool allowed;
     shared_sv *shared = SV_to_sharedsv(aTHX_ mg->mg_obj);
     shared_sv *target;
     SV **svp;
@@ -573,7 +573,6 @@ sharedsv_elem_mg_DELETE(pTHX_ SV *sv, MAGIC *mg)
 {
     dTHXc;
     shared_sv *shared = SV_to_sharedsv(aTHX_ mg->mg_obj);
-    SV* ssv;
     ENTER_LOCK;
     sharedsv_elem_mg_FETCH(aTHX_ sv, mg);
     if (SvTYPE(SHAREDSvPTR(shared)) == SVt_PVAV) {
@@ -724,10 +723,19 @@ Perl_sharedsv_lock(pTHX_ shared_sv* ssv)
     recursive_lock_acquire(aTHX_ &ssv->lock, __FILE__, __LINE__);
 }
 
+/* handles calls from lock() builtin via PL_lockhook */
+
 void
 Perl_sharedsv_locksv(pTHX_ SV *sv)
 {
-    Perl_sharedsv_lock(aTHX_ Perl_sharedsv_find(aTHX_ sv));
+    shared_sv* shared;
+
+    if(SvROK(sv))
+	sv = SvRV(sv);
+    shared = Perl_sharedsv_find(aTHX_ sv);
+    if(!shared)
+       croak("lock can only be used on shared values");
+    Perl_sharedsv_lock(aTHX_ shared);
 }
 
 =head1 Shared SV Functions
@@ -752,10 +760,13 @@ Perl_sharedsv_init(pTHX)
   PL_sharehook = &Perl_sharedsv_share;
 }
 
+#endif /* USE_ITHREADS */
+
 MODULE = threads::shared	PACKAGE = threads::shared::tie
 
 PROTOTYPES: DISABLE
 
+#ifdef USE_ITHREADS
 
 void
 PUSH(shared_sv *shared, ...)
@@ -912,9 +923,10 @@ _id(SV *ref)
 	PROTOTYPE: \[$@%]
 CODE:
 	shared_sv *shared;
+	ref = SvRV(ref);
 	if(SvROK(ref))
 	    ref = SvRV(ref);
-	if (shared = Perl_sharedsv_find(aTHX_ ref)) {
+	if( (shared = Perl_sharedsv_find(aTHX_ ref)) ){
 	    ST(0) = sv_2mortal(newSViv(PTR2IV(shared)));
 	    XSRETURN(1);
 	}
@@ -926,19 +938,20 @@ _refcnt(SV *ref)
 	PROTOTYPE: \[$@%]
 CODE:
 	shared_sv *shared;
+	ref = SvRV(ref);
 	if(SvROK(ref))
 	    ref = SvRV(ref);
-	if (shared = Perl_sharedsv_find(aTHX_ ref)) {
+	if( (shared = Perl_sharedsv_find(aTHX_ ref)) ){
 	  if (SHAREDSvPTR(shared)) {
 	    ST(0) = sv_2mortal(newSViv(SvREFCNT(SHAREDSvPTR(shared))));
 	    XSRETURN(1);
 	  }
 	  else {
-	     Perl_warn(aTHX_ "%_ s=%p has no shared SV",ST(0),shared);
+	     Perl_warn(aTHX_ "%" SVf " s=%p has no shared SV",ST(0),shared);
 	  }
 	}
 	else {
-	     Perl_warn(aTHX_ "%_ is not shared",ST(0));
+	     Perl_warn(aTHX_ "%" SVf " is not shared",ST(0));
 	}
 	XSRETURN_UNDEF;
 
@@ -946,18 +959,20 @@ void
 share(SV *ref)
 	PROTOTYPE: \[$@%]
 	CODE:
+	ref = SvRV(ref);
 	if(SvROK(ref))
 	    ref = SvRV(ref);
-	Perl_sharedsv_share(aTHX, ref);
+	Perl_sharedsv_share(aTHX_ ref);
 
 void
 lock_enabled(SV *ref)
 	PROTOTYPE: \[$@%]
 	CODE:
 	shared_sv* shared;
+	ref = SvRV(ref);
 	if(SvROK(ref))
 	    ref = SvRV(ref);
-	shared = Perl_sharedsv_find(aTHX, ref);
+	shared = Perl_sharedsv_find(aTHX_ ref);
 	if(!shared)
 	   croak("lock can only be used on shared values");
 	Perl_sharedsv_lock(aTHX_ shared);
@@ -968,6 +983,7 @@ cond_wait_enabled(SV *ref)
 	CODE:
 	shared_sv* shared;
 	int locks;
+	ref = SvRV(ref);
 	if(SvROK(ref))
 	    ref = SvRV(ref);
 	shared = Perl_sharedsv_find(aTHX_ ref);
@@ -978,8 +994,16 @@ cond_wait_enabled(SV *ref)
 	/* Stealing the members of the lock object worries me - NI-S */
 	MUTEX_LOCK(&shared->lock.mutex);
 	shared->lock.owner = NULL;
-	locks = shared->lock.locks = 0;
+	locks = shared->lock.locks;
+	shared->lock.locks = 0;
+
+	/* since we are releasing the lock here we need to tell other
+	people that is ok to go ahead and use it */
+	COND_SIGNAL(&shared->lock.cond);
 	COND_WAIT(&shared->user_cond, &shared->lock.mutex);
+	while(shared->lock.owner != NULL) {
+		COND_WAIT(&shared->lock.cond,&shared->lock.mutex);
+	}	
 	shared->lock.owner = aTHX;
 	shared->lock.locks = locks;
 	MUTEX_UNLOCK(&shared->lock.mutex);
@@ -989,9 +1013,13 @@ cond_signal_enabled(SV *ref)
 	PROTOTYPE: \[$@%]
 	CODE:
 	shared_sv* shared;
+	ref = SvRV(ref);
 	if(SvROK(ref))
 	    ref = SvRV(ref);
 	shared = Perl_sharedsv_find(aTHX_ ref);
+	if (ckWARN(WARN_THREADS) && shared->lock.owner != aTHX)
+	    Perl_warner(aTHX_ packWARN(WARN_THREADS),
+			    "cond_signal() called on unlocked variable");
 	if(!shared)
 	    croak("cond_signal can only be used on shared values");
 	COND_SIGNAL(&shared->user_cond);
@@ -1001,14 +1029,25 @@ cond_broadcast_enabled(SV *ref)
 	PROTOTYPE: \[$@%]
 	CODE:
 	shared_sv* shared;
+	ref = SvRV(ref);
 	if(SvROK(ref))
 	    ref = SvRV(ref);
 	shared = Perl_sharedsv_find(aTHX_ ref);
 	if(!shared)
 	    croak("cond_broadcast can only be used on shared values");
+	if (ckWARN(WARN_THREADS) && shared->lock.owner != aTHX)
+	    Perl_warner(aTHX_ packWARN(WARN_THREADS),
+			    "cond_broadcast() called on unlocked variable");
 	COND_BROADCAST(&shared->user_cond);
+
+#endif /* USE_ITHREADS */
 
 BOOT:
 {
+#ifdef USE_ITHREADS
      Perl_sharedsv_init(aTHX);
+#endif /* USE_ITHREADS */
 }
+
+
+

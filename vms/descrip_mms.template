@@ -261,13 +261,13 @@ FULLLIBS2 = $(LIBS2)|$(THRLIBS1)|$(THRLIBS2)
 
 c0 = $(MALLOC_C) $(SOCKC) av.c deb.c doio.c doop.c dump.c globals.c gv.c hv.c
 c1 = mg.c locale.c miniperlmain.c numeric.c op.c perl.c perlapi.c perlio.c
-c2 = perly.c pp.c pp_ctl.c pp_hot.c pp_pack.c pp_sort.c pp_sys.c regcomp.c regexec.c
+c2 = perly.c pp.c pp_ctl.c pp_hot.c pp_pack.c pp_sort.c pp_sys.c regcomp.c regexec.c reentr.c
 c3 = run.c scope.c sv.c taint.c toke.c universal.c utf8.c util.c vms.c xsutils.c
 c = $(c0) $(c1) $(c2) $(c3)
 
 obj0 = $(MALLOC_O) $(SOCKO) av$(O) deb$(O) doio$(O) doop$(O) dump$(O)
 obj1 = globals$(O) gv$(O) hv$(O) locale$(O) mg$(O) miniperlmain$(O) numeric$(O)
-obj2 = op$(O) perl$(O) perlapi$(O) perlio$(O) perly$(O) pp$(O) pp_ctl$(O) pp_hot$(O)
+obj2 = op$(O) perl$(O) perlapi$(O) perlio$(O) perly$(O) pp$(O) pp_ctl$(O) pp_hot$(O) reentr$(O)
 obj3 = pp_pack$(O) pp_sort$(O) pp_sys$(O) regcomp$(O) regexec$(O) run$(O) scope$(O) sv$(O) taint$(O) toke$(O)
 obj4 = universal$(O) utf8$(O) util$(O) vms$(O) xsutils$(O)
 obj = $(obj0) $(obj1) $(obj2) $(obj3) $(obj4)
@@ -330,6 +330,7 @@ LIBPREREQ = $(ARCHDIR)Config.pm [.lib.VMS]Filespec.pm [.lib]DynaLoader.pm [.lib]
 utils1 = [.lib.pod]perldoc.com [.lib.ExtUtils]Miniperl.pm [.utils]c2ph.com [.utils]h2ph.com 
 utils2 = [.utils]h2xs.com [.utils]libnetcfg.com [.lib]perlbug.com [.lib]perlcc.com [.utils]dprofpp.com 
 utils3 = [.utils]perlivp.com [.lib]splain.com [.utils]pl2pm.com [.lib.ExtUtils]xsubpp.com
+utils4 = [.utils]enc2xs.com [.utils]piconv.com
 
 .ifdef NOX2P
 all : base extras archcorefiles preplibrary perlpods
@@ -346,7 +347,7 @@ extras : dynext libmods utils podxform extra.pods
 	@ $(NOOP)
 libmods : $(LIBPREREQ)
 	@ $(NOOP)
-utils : $(utils1) $(utils2) $(utils3)
+utils : $(utils1) $(utils2) $(utils3) $(utils4)
 	@ $(NOOP)
 podxform : [.lib.pod]pod2text.com [.lib.pod]pod2html.com [.lib.pod]pod2latex.com [.lib.pod]pod2man.com [.lib.pod]podchecker.com [.lib.pod]pod2usage.com [.lib.pod]podselect.com
 	@ $(NOOP)
@@ -488,7 +489,7 @@ $(ARCHDIR)vmspipe.com : vmspipe.com
 	@ Rename/Log xsloader.pm [.ext.dynaloader]
 
 dynext : $(LIBPREREQ) $(DBG)perlshr$(E) preplibrary
-	@make_ext "$(MINIPERL_EXE)" "$(MMS)"
+       @make_ext "$(MINIPERL_EXE)" "$(MMS)"
 
 [.lib]lib.pm : [.lib]lib_pm.PL
 	$(MINIPERL) $(MMS$SOURCE)
@@ -518,6 +519,9 @@ dynext : $(LIBPREREQ) $(DBG)perlshr$(E) preplibrary
 [.utils]dprofpp.com : [.utils]dprofpp.PL $(ARCHDIR)Config.pm
 	$(MINIPERL) $(MMS$SOURCE)
 
+[.utils]enc2xs.com : [.utils]enc2xs.PL $(ARCHDIR)Config.pm
+	$(MINIPERL) $(MMS$SOURCE)
+
 [.utils]h2ph.com : [.utils]h2ph.PL $(ARCHDIR)Config.pm
 	$(MINIPERL) $(MMS$SOURCE)
 
@@ -534,6 +538,9 @@ dynext : $(LIBPREREQ) $(DBG)perlshr$(E) preplibrary
 [.lib]perlcc.com : [.utils]perlcc.PL $(ARCHDIR)Config.pm
 	$(MINIPERL) $(MMS$SOURCE)
 	Copy/Log [.utils]perlcc.com $(MMS$TARGET)
+
+[.utils]piconv.com : [.utils]piconv.PL $(ARCHDIR)Config.pm
+	$(MINIPERL) $(MMS$SOURCE)
 
 [.utils]pl2pm.com : [.utils]pl2pm.PL $(ARCHDIR)Config.pm
 	$(MINIPERL) $(MMS$SOURCE)
@@ -1159,8 +1166,9 @@ pp_hot$(O) : pp_hot.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH)
 	$(CC) $(CORECFLAGS) $(MMS$SOURCE)
 pp_pack$(O) : pp_pack.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH) iperlsys.h perlsdio.h perl.h regexp.h sv.h util.h form.h gv.h cv.h opnames.h op.h cop.h av.h hv.h mg.h scope.h warnings.h utf8.h perly.h thread.h pp.h proto.h pp_proto.h opcode.h embedvar.h intrpvar.h thrdvar.h perlvars.h patchlevel.h
 pp_sort$(O) : pp_sort.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH) iperlsys.h perlsdio.h perl.h regexp.h sv.h util.h form.h gv.h cv.h opnames.h op.h cop.h av.h hv.h mg.h scope.h warnings.h utf8.h perly.h thread.h pp.h proto.h pp_proto.h opcode.h embedvar.h intrpvar.h thrdvar.h perlvars.h patchlevel.h
-pp_sys$(O) : pp_sys.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH) iperlsys.h perlsdio.h perl.h regexp.h sv.h util.h form.h gv.h cv.h opnames.h op.h cop.h av.h hv.h mg.h scope.h warnings.h utf8.h perly.h thread.h pp.h proto.h pp_proto.h opcode.h embedvar.h intrpvar.h thrdvar.h perlvars.h patchlevel.h
+pp_sys$(O) : pp_sys.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH) iperlsys.h perlsdio.h perl.h regexp.h sv.h util.h form.h gv.h cv.h opnames.h op.h cop.h av.h hv.h mg.h scope.h warnings.h utf8.h perly.h thread.h pp.h proto.h pp_proto.h opcode.h embedvar.h intrpvar.h thrdvar.h perlvars.h patchlevel.h reentr.h
 	$(CC) $(CORECFLAGS) $(MMS$SOURCE)
+reentr(O) : reentr.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH) iperlsys.h perlsdio.h perl.h regexp.h sv.h util.h form.h gv.h cv.h opnames.h op.h cop.h av.h hv.h mg.h scope.h warnings.h utf8.h perly.h thread.h pp.h proto.h pp_proto.h opcode.h embedvar.h intrpvar.h thrdvar.h perlvars.h patchlevel.h intern.h reentr.h
 regcomp$(O) : regcomp.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH) iperlsys.h perlsdio.h perl.h regexp.h sv.h util.h form.h gv.h cv.h opnames.h op.h cop.h av.h hv.h mg.h scope.h warnings.h utf8.h perly.h thread.h pp.h proto.h pp_proto.h opcode.h embedvar.h intrpvar.h thrdvar.h perlvars.h patchlevel.h intern.h regcomp.h regnodes.h
 	$(CC) $(CORECFLAGS) $(MMS$SOURCE)
 regexec$(O) : regexec.c extern.h perl.h config.h embed.h handy.h vmsish.h $(SOCKH) iperlsys.h perlsdio.h perl.h regexp.h sv.h util.h form.h gv.h cv.h opnames.h op.h cop.h av.h hv.h mg.h scope.h warnings.h utf8.h perly.h thread.h pp.h proto.h pp_proto.h opcode.h embedvar.h intrpvar.h thrdvar.h perlvars.h patchlevel.h regcomp.h regnodes.h

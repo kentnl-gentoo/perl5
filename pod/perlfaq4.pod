@@ -1,6 +1,6 @@
 =head1 NAME
 
-perlfaq4 - Data Manipulation ($Revision: 1.14 $, $Date: 2002/02/08 22:30:23 $)
+perlfaq4 - Data Manipulation ($Revision: 1.25 $, $Date: 2002/05/30 07:04:25 $)
 
 =head1 DESCRIPTION
 
@@ -135,7 +135,9 @@ functions is that it works with numbers of ANY size, that it is
 optimized for speed on some operations, and for at least some
 programmers the notation might be familiar.
 
-=item B<How do I convert Hexadecimal into decimal:>
+=over 4
+
+=item How do I convert hexadecimal into decimal
 
 Using perl's built in conversion of 0x notation:
 
@@ -158,7 +160,7 @@ Using the CPAN module Bit::Vector:
     $vec = Bit::Vector->new_Hex(32, "DEADBEEF");
     $dec = $vec->to_Dec();
 
-=item B<How do I convert from decimal to hexadecimal:>
+=item How do I convert from decimal to hexadecimal
 
 Using sprint:
 
@@ -181,7 +183,7 @@ And Bit::Vector supports odd bit counts:
     $vec->Resize(32); # suppress leading 0 if unwanted
     $hex = $vec->to_Hex();
 
-=item B<How do I convert from octal to decimal:>
+=item How do I convert from octal to decimal
 
 Using Perl's built in conversion of numbers with leading zeros:
 
@@ -200,7 +202,7 @@ Using Bit::Vector:
     $vec->Chunk_List_Store(3, split(//, reverse "33653337357"));
     $dec = $vec->to_Dec();
 
-=item B<How do I convert from decimal to octal:>
+=item How do I convert from decimal to octal
 
 Using sprintf:
 
@@ -212,7 +214,12 @@ Using Bit::Vector
     $vec = Bit::Vector->new_Dec(32, -559038737);
     $oct = reverse join('', $vec->Chunk_List_Read(3));
 
-=item B<How do I convert from binary to decimal:>
+=item How do I convert from binary to decimal
+
+Perl 5.6 lets you write binary numbers directly with
+the 0b notation:
+
+	$number = 0b10110110;
 
 Using pack and ord
 
@@ -231,7 +238,7 @@ Using Bit::Vector:
     $vec = Bit::Vector->new_Bin(32, "11011110101011011011111011101111");
     $dec = $vec->to_Dec();
 
-=item B<How do I convert from decimal to binary:>
+=item How do I convert from decimal to binary
 
 Using unpack;
 
@@ -246,6 +253,7 @@ Using Bit::Vector:
 The remaining transformations (e.g. hex -> oct, bin -> hex, etc.)
 are left as an exercise to the inclined reader.
 
+=back
 
 =head2 Why doesn't & work the way I want it to?
 
@@ -345,6 +353,20 @@ CPAN.  It uses the imperfections in your system's timer to generate
 random numbers, but this takes quite a while.  If you want a better
 pseudorandom generator than comes with your operating system, look at
 ``Numerical Recipes in C'' at http://www.nr.com/ .
+
+=head2 How do I get a random number between X and Y?
+
+Use the following simple function.  It selects a random integer between
+(and possibly including!) the two given integers, e.g.,
+C<random_int_in(50,120)>
+
+   sub random_int_in ($$) {
+     my($min, $max) = @_;
+      # Assumes that the two arguments are integers themselves!
+     return $min if $min == $max;
+     ($min, $max) = ($max, $min)  if  $min > $max;
+     return $min + int rand(1 + $max - $min);
+   }
 
 =head1 Data: Dates
 
@@ -689,6 +711,11 @@ integers:
     $string = "-9 55 48 -2 23 -76 4 14 -44";
     while ($string =~ /-\d+/g) { $count++ }
     print "There are $count negative numbers in the string";
+
+Another version uses a global match in list context, then assigns the
+result to a scalar, producing a count of the number of matches.
+
+	$count = () = $string =~ /-\d+/g;
 
 =head2 How do I capitalize all the words on one line?
 
@@ -1125,11 +1152,11 @@ designed to answer this question quickly and efficiently.  Arrays aren't.
 
 That being said, there are several ways to approach this.  If you
 are going to make this query many times over arbitrary string values,
-the fastest way is probably to invert the original array and keep an
-associative array lying about whose keys are the first array's values.
+the fastest way is probably to invert the original array and maintain a
+hash whose keys are the first array's values.
 
     @blues = qw/azure cerulean teal turquoise lapis-lazuli/;
-    undef %is_blue;
+    %is_blue = ();
     for (@blues) { $is_blue{$_} = 1 }
 
 Now you can check whether $is_blue{$some_color}.  It might have been a
@@ -1139,7 +1166,7 @@ If the values are all small integers, you could use a simple indexed
 array.  This kind of an array will take up less space:
 
     @primes = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31);
-    undef @is_tiny_prime;
+    @is_tiny_prime = ();
     for (@primes) { $is_tiny_prime[$_] = 1 }
     # or simply  @istiny_prime[@primes] = (1) x @primes;
 
@@ -1316,28 +1343,21 @@ lists, or you could just do something like this with an array:
 If you either have Perl 5.8.0 or later installed, or if you have
 Scalar-List-Utils 1.03 or later installed, you can say:
 
-        use List::Util 'shuffle';
+    use List::Util 'shuffle';
 
 	@shuffled = shuffle(@list);
 
-If not, you can use this:
+If not, you can use a Fisher-Yates shuffle.
 
-    # fisher_yates_shuffle
-    # generate a random permutation of an array in place
-    # As in shuffling a deck of cards
-    #
     sub fisher_yates_shuffle {
         my $deck = shift;  # $deck is a reference to an array
         my $i = @$deck;
-        while (--$i) {
+        while ($i--) {
             my $j = int rand ($i+1);
             @$deck[$i,$j] = @$deck[$j,$i];
         }
     }
 
-And here is an example of using it:
-
-    #
     # shuffle my mpeg collection
     #
     my @mpeg = <audio/*/*.mp3>;
@@ -1379,12 +1399,19 @@ Here's another; let's compute spherical volumes:
 	$_ *= (4/3) * 3.14159;  # this will be constant folded
     }
 
-If you want to do the same thing to modify the values of the hash,
-you may not use the C<values> function, oddly enough.  You need a slice:
+If you want to do the same thing to modify the values of the
+hash, you can use the C<values> function.  As of Perl 5.6
+the values are not copied, so if you modify $orbit (in this
+case), you modify the value.
 
-    for $orbit ( @orbits{keys %orbits} ) {
+    for $orbit ( values %orbits ) {
 	($orbit **= 3) *= (4/3) * 3.14159; 
     }
+
+Prior to perl 5.6 C<values> returned copies of the values,
+so older perl code often contains constructions such as
+C<@orbits{keys %orbits}> instead of C<values %orbits> where
+the hash is to be modified.
 
 =head2 How do I select a random element from an array?
 
@@ -1522,6 +1549,13 @@ get those bits into your @ints array:
 
 This method gets faster the more sparse the bit vector is.
 (Courtesy of Tim Bunce and Winfried Koenig.)
+
+You can make the while loop a lot shorter with this suggestion
+from Benjamin Goldberg:
+
+	while($vec =~ /[^\0]+/g ) {
+	   push @ints, grep vec($vec, $_, 1), $-[0] * 8 .. $+[0] * 8;
+	}
 
 Or use the CPAN module Bit::Vector:
 
@@ -1676,15 +1710,17 @@ The Tie::IxHash module from CPAN might also be instructive.
 
 =head2 What's the difference between "delete" and "undef" with hashes?
 
-Hashes are pairs of scalars: the first is the key, the second is the
-value.  The key will be coerced to a string, although the value can be
-any kind of scalar: string, number, or reference.  If a key C<$key> is
-present in the array, C<exists($key)> will return true.  The value for
-a given key can be C<undef>, in which case C<$array{$key}> will be
-C<undef> while C<$exists{$key}> will return true.  This corresponds to
-(C<$key>, C<undef>) being in the hash.
+Hashes contain pairs of scalars: the first is the key, the
+second is the value.  The key will be coerced to a string,
+although the value can be any kind of scalar: string,
+number, or reference.  If a key $key is present in
+%hash, C<exists($hash{$key})> will return true.  The value
+for a given key can be C<undef>, in which case
+C<$hash{$key}> will be C<undef> while C<exists $hash{$key}>
+will return true.  This corresponds to (C<$key>, C<undef>)
+being in the hash.
 
-Pictures help...  here's the C<%ary> table:
+Pictures help...  here's the %hash table:
 
 	  keys  values
 	+------+------+
@@ -1696,16 +1732,16 @@ Pictures help...  here's the C<%ary> table:
 
 And these conditions hold
 
-	$ary{'a'}                       is true
-	$ary{'d'}                       is false
-	defined $ary{'d'}               is true
-	defined $ary{'a'}               is true
-	exists $ary{'a'}                is true (Perl5 only)
-	grep ($_ eq 'a', keys %ary)     is true
+	$hash{'a'}                       is true
+	$hash{'d'}                       is false
+	defined $hash{'d'}               is true
+	defined $hash{'a'}               is true
+	exists $hash{'a'}                is true (Perl5 only)
+	grep ($_ eq 'a', keys %hash)     is true
 
 If you now say
 
-	undef $ary{'a'}
+	undef $hash{'a'}
 
 your table now reads:
 
@@ -1720,18 +1756,18 @@ your table now reads:
 
 and these conditions now hold; changes in caps:
 
-	$ary{'a'}                       is FALSE
-	$ary{'d'}                       is false
-	defined $ary{'d'}               is true
-	defined $ary{'a'}               is FALSE
-	exists $ary{'a'}                is true (Perl5 only)
-	grep ($_ eq 'a', keys %ary)     is true
+	$hash{'a'}                       is FALSE
+	$hash{'d'}                       is false
+	defined $hash{'d'}               is true
+	defined $hash{'a'}               is FALSE
+	exists $hash{'a'}                is true (Perl5 only)
+	grep ($_ eq 'a', keys %hash)     is true
 
 Notice the last two: you have an undef value, but a defined key!
 
 Now, consider this:
 
-	delete $ary{'a'}
+	delete $hash{'a'}
 
 your table now reads:
 
@@ -1744,23 +1780,22 @@ your table now reads:
 
 and these conditions now hold; changes in caps:
 
-	$ary{'a'}                       is false
-	$ary{'d'}                       is false
-	defined $ary{'d'}               is true
-	defined $ary{'a'}               is false
-	exists $ary{'a'}                is FALSE (Perl5 only)
-	grep ($_ eq 'a', keys %ary)     is FALSE
+	$hash{'a'}                       is false
+	$hash{'d'}                       is false
+	defined $hash{'d'}               is true
+	defined $hash{'a'}               is false
+	exists $hash{'a'}                is FALSE (Perl5 only)
+	grep ($_ eq 'a', keys %hash)     is FALSE
 
 See, the whole entry is gone!
 
 =head2 Why don't my tied hashes make the defined/exists distinction?
 
-They may or may not implement the EXISTS() and DEFINED() methods
-differently.  For example, there isn't the concept of undef with hashes
-that are tied to DBM* files. This means the true/false tables above
-will give different results when used on such a hash.  It also means
-that exists and defined do the same thing with a DBM* file, and what
-they end up doing is not what they do with ordinary hashes.
+This depends on the tied hash's implementation of EXISTS().
+For example, there isn't the concept of undef with hashes
+that are tied to DBM* files. It also means that exists() and
+defined() do the same thing with a DBM* file, and what they
+end up doing is not what they do with ordinary hashes.
 
 =head2 How do I reset an each() operation part-way through?
 
@@ -1885,9 +1920,13 @@ Assuming that you don't care about IEEE notations like "NaN" or
    if (/^-?\d+$/)       { print "is an integer\n" }
    if (/^[+-]?\d+$/)    { print "is a +/- integer\n" }
    if (/^-?\d+\.?\d*$/) { print "is a real number\n" }
-   if (/^-?(?:\d+(?:\.\d*)?|\.\d+)$/) { print "is a decimal number" }
+   if (/^-?(?:\d+(?:\.\d*)?|\.\d+)$/) { print "is a decimal number\n" }
    if (/^([+-]?)(?=\d|\.\d)\d*(\.\d*)?([Ee]([+-]?\d+))?$/)
-			{ print "a C float" }
+			{ print "a C float\n" }
+
+You can also use the L<Data::Types|Data::Types> module on
+the CPAN, which exports functions that validate data types
+using these and other regular expressions.
 
 If you're on a POSIX system, Perl's supports the C<POSIX::strtod>
 function.  Its semantics are somewhat cumbersome, so here's a C<getnum>
@@ -1912,9 +1951,9 @@ if you just want to say, ``Is this a float?''
 
     sub is_numeric { defined getnum($_[0]) } 
 
-Or you could check out the String::Scanf module on CPAN instead.  The
-POSIX module (part of the standard Perl distribution) provides the
-C<strtod> and C<strtol> for converting strings to double and longs,
+Or you could check out the L<String::Scanf|String::Scanf> module on the CPAN
+instead. The POSIX module (part of the standard Perl distribution) provides
+the C<strtod> and C<strtol> for converting strings to double and longs,
 respectively.
 
 =head2 How do I keep persistent data across program calls?

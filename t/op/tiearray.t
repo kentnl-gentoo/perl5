@@ -101,7 +101,7 @@ sub SPLICE
 
 package main;
 
-print "1..35\n";                   
+print "1..36\n";                   
 my $test = 1;
 
 {my @ary;
@@ -196,7 +196,7 @@ foreach $n (@ary)
   print "ok ", $test++,"\n";         
  }
 
-# (30-33) 20020303 MJD
+# (30-33) 20020303 mjd-perl-patch+@plover.com
 @ary = ();
 $seen{POP} = 0;
 pop @ary;                       # this didn't used to call POP at all
@@ -222,9 +222,25 @@ print "ok ", $test++,"\n";
 untie @ary;   
 
 }
+
+# 20020401 mjd-perl-patch+@plover.com
+# Thanks to Dave Mitchell for the small test case and the fix
+{
+  my @a;
+  
+  sub X::TIEARRAY { bless {}, 'X' }
+
+  sub X::SPLICE {
+    do '/dev/null';
+    die;
+  }
+
+  tie @a, 'X';
+  eval { splice(@a) };
+  # If we survived this far.
+  print "ok ", $test++, "\n";
+}
                            
 print "not " unless $seen{'DESTROY'} == 2;
 print "ok ", $test++,"\n";         
-
-
 

@@ -1,14 +1,18 @@
-#!/usr/bin/perl -w
+#!/usr/bin/perl -Tw
 
 BEGIN {
     if( $ENV{PERL_CORE} ) {
         chdir 't' if -d 't';
         @INC = '../lib';
     }
+    else {
+        # ./lib is there so t/lib can be seen even after we chdir.
+        unshift @INC, 't/lib', './lib';
+    }
 }
 chdir 't';
 
-use Test::More tests => 3;
+use Test::More tests => 5;
 
 BEGIN { 
     # non-core tests will have blib in their path.  We remove it
@@ -26,3 +30,8 @@ use_ok( 'ExtUtils::testlib' );
 
 @blib_paths = grep { /blib/ } @INC;
 is( @blib_paths, 2, 'ExtUtils::testlib added two @INC dirs!' );
+ok( !(grep !File::Spec->file_name_is_absolute($_), @blib_paths),
+                    '  and theyre absolute');
+
+eval { eval "# @INC"; };
+is( $@, '',     '@INC is not tainted' );

@@ -1,39 +1,25 @@
 #!./perl
-
-# $Id: lock.t,v 1.0.1.4 2001/01/03 09:41:00 ram Exp $
 #
-#  @COPYRIGHT@
-#
-# $Log: lock.t,v $
-# Revision 1.0.1.4  2001/01/03 09:41:00  ram
-# patch7: use new CAN_FLOCK routine to determine whether to run tests
-#
-# Revision 1.0.1.3  2000/10/26 17:11:27  ram
-# patch5: just check $^O, there's no need for the whole Config
-#
-# Revision 1.0.1.2  2000/10/23 18:03:07  ram
-# patch4: protected calls to flock() for dos platform
-#
-# Revision 1.0.1.1  2000/09/28 21:44:06  ram
-# patch2: created.
-#
+#  Copyright (c) 1995-2000, Raphael Manfredi
+#  
+#  You may redistribute only under the same terms as Perl 5, as specified
+#  in the README file that comes with the distribution.
 #
 
 sub BEGIN {
-    chdir('t') if -d 't';
-    @INC = '.'; 
-    push @INC, '../lib';
+    if ($ENV{PERL_CORE}){
+	chdir('t') if -d 't';
+	@INC = ('.', '../lib', '../ext/Storable/t');
+    } else {
+	unshift @INC, 't';
+    }
     require Config; import Config;
-    if ($Config{'extensions'} !~ /\bStorable\b/) {
+    if ($ENV{PERL_CORE} and $Config{'extensions'} !~ /\bStorable\b/) {
         print "1..0 # Skip: Storable was not built\n";
         exit 0;
     }
-    if ($^O eq 'mpeix') {
-	print "1..0 # Skip: truncate missing on MPE\n";
-	exit 0;
-    }	
 
-    require 'lib/st-dump.pl';
+    require 'st-dump.pl';
 }
 
 sub ok;

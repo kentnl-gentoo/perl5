@@ -3,10 +3,11 @@
 BEGIN {
 	chdir 't' if -d 't';
 	@INC = '../lib';
+	push @INC, "::lib:$MacPerl::Architecture:" if $^O eq 'MacOS';
 	require Config; import Config;
 }
 
-use Test::More tests => 15;
+use Test::More tests => 16;
 
 # open::import expects 'open' as its first argument, but it clashes with open()
 sub import {
@@ -18,11 +19,11 @@ ok( require 'open.pm', 'requiring open' );
 
 # this should fail
 eval { import() };
-like( $@, qr/needs explicit list of disciplines/, 
+like( $@, qr/needs explicit list of disciplines/,
 	'import should fail without args' );
 
 # the hint bits shouldn't be set yet
-is( $^H & $open::hint_bits, 0, 
+is( $^H & $open::hint_bits, 0,
 	'hint bits should not be set in $^H before open import' );
 
 # prevent it from loading I18N::Langinfo, so we can test encoding failures
@@ -32,19 +33,28 @@ local $SIG{__WARN__} = sub {
 };
 
 # and it shouldn't be able to find this discipline
-eval{ import( 'IN', 'macguffin' ) };
-like( $warn, qr/Unknown discipline layer/, 
+$warn = '';
+eval q{ no warnings 'layer'; use open IN => ':macguffin' ; };
+is( $warn, '',
+	'should not warn about unknown discipline with bad discipline provided' );
+
+$warn = '';
+eval q{ use warnings 'layer'; use open IN => ':macguffin' ; };
+like( $warn, qr/Unknown discipline layer/,
 	'should warn about unknown discipline with bad discipline provided' );
 
-# now load a real-looking locale
-$ENV{LC_ALL} = ' .utf8';
-import( 'IN', 'locale' );
-is( ${^OPEN}, ":utf8\0", 
-	'should set a valid locale layer' );
+SKIP: {
+    skip("no perlio, no :utf8", 1) unless (find PerlIO::Layer 'perlio');
+    # now load a real-looking locale
+    $ENV{LC_ALL} = ' .utf8';
+    import( 'IN', 'locale' );
+    like( ${^OPEN}, qr/^(:utf8)?:utf8\0/,
+        'should set a valid locale layer' );
+}
 
 # and see if it sets the magic variables appropriately
 import( 'IN', ':crlf' );
-ok( $^H & $open::hint_bits, 
+ok( $^H & $open::hint_bits,
 	'hint bits should be set in $^H after open import' );
 is( $^H{'open_IN'}, 'crlf', 'should have set crlf layer' );
 
@@ -63,7 +73,7 @@ is( ${^OPEN}, ":raw :crlf\0:raw :crlf",
 is( $^H{'open_IO'}, 'crlf', 'should record last layer set in %^H' );
 
 SKIP: {
-    skip("no perlio, no :utf8", 4) unless $Config{'useperlio'};
+    skip("no perlio, no :utf8", 4) unless (find PerlIO::Layer 'perlio');
 
     eval <<EOE;
     use open ':utf8';

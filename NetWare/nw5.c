@@ -104,8 +104,22 @@ nw_setbuf(FILE *pf, char *buf)
 int
 nw_setmode(FILE *fp, int mode)
 {
+/**
+	// Commented since a few abends were happening in fnFpSetMode
 	int *dummy = 0;
 	return(fnFpSetMode(fp, mode, dummy));
+**/
+
+	int handle = -1;
+	errno = 0;
+
+	handle = fileno(fp);
+	if (errno)
+	{
+		errno = 0;
+		return -1;
+	}
+	return setmode(handle, mode);
 }
 
 int
@@ -582,7 +596,7 @@ nw_open(const char *path, int flag, ...)
     va_end(ap);
 
 	if (stricmp(path, "/dev/null")==0)
-	path = "NUL";
+	path = "NWNUL";
 
 	return open(path, flag, pmode);
 }
@@ -935,7 +949,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
 	if (status < 0) {
     	    dTHR;
 	    if (ckWARN(WARN_EXEC))
-		Perl_warner(aTHX_ WARN_EXEC, "Can't spawn \"%s\": %s", argv[0], strerror(errno));
+		Perl_warner(aTHX_ packWARN(WARN_EXEC), "Can't spawn \"%s\": %s", argv[0], strerror(errno));
 	    status = 255 * 256;
 	}
 	else
@@ -968,3 +982,10 @@ fork(void)
 	return 0;
 }
 
+
+// added to remove undefied symbol error in CodeWarrior compilation
+int
+Perl_Ireentrant_buffer_ptr(aTHX)
+{
+	return 0;
+}

@@ -5,6 +5,9 @@ BEGIN {
         chdir 't' if -d 't';
         @INC = '../lib';
     }
+    else {
+        unshift @INC, 't/lib';
+    }
 }
 chdir 't';
 
@@ -15,12 +18,13 @@ BEGIN {
         plan skip_all => 'Non-Unix platform';
     }
     else {
-        plan tests => 108; 
+        plan tests => 112;
     }
 }
 
 BEGIN { use_ok( 'ExtUtils::MM_Unix' ); }
 
+use vars qw($VERSION);
 $VERSION = '0.02';
 use strict;
 use File::Spec;
@@ -88,7 +92,6 @@ foreach ( qw /
   fixin
   force
   guess_name
-  htmlifypods
   init_dirscan
   init_main
   init_others
@@ -129,7 +132,7 @@ foreach ( qw /
   xsubpp_version 
   / )
   {
-  ok ($class->can ($_), "can $_");
+      can_ok($class, $_);
   }
 
 ###############################################################################
@@ -140,7 +143,7 @@ ok ( join (' ', $class->dist_basics()), 'distclean :: realclean distcheck');
 ###############################################################################
 # has_link_code tests
 
-my $t = {}; bless $t,$class;
+my $t = bless { NAME => "Foo" }, $class;
 $t->{HAS_LINK_CODE} = 1; 
 is ($t->has_link_code(),1,'has_link_code'); is ($t->{HAS_LINK_CODE},1);
 
@@ -183,8 +186,25 @@ is ($t->nicetext('LOTR'),'LOTR','nicetext');
 my $self_name = $ENV{PERL_CORE} ? '../lib/ExtUtils/t/MM_Unix.t' 
                                 : 'MM_Unix.t';
 
-is ($t->parse_version($self_name),'0.02',
-  'parse_version on ourself');
+is( $t->parse_version($self_name), '0.02',  'parse_version on ourself');
+
+my %versions = (
+                '$VERSION = 0.0'    => 0.0,
+                '$VERSION = -1.0'   => -1.0,
+                '$VERSION = undef'  => 'undef',
+                '$wibble  = 1.0'    => 'undef',
+               );
+
+while( my($code, $expect) = each %versions ) {
+    open(FILE, ">VERSION.tmp") || die $!;
+    print FILE "$code\n";
+    close FILE;
+
+    is( $t->parse_version('VERSION.tmp'), $expect, $code );
+
+    unlink "VERSION.tmp";
+}
+
 
 ###############################################################################
 # perl_script (on unix any ordinary, readable file)
@@ -218,4 +238,15 @@ foreach (qw/ export_list perl_archive perl_archive_after/)
   is ($t->$_(),'',"$_() is empty string on Unix"); 
   }
 
+
+{
+    $t->{CCFLAGS} = '-DMY_THING';
+    $t->{LIBPERL_A} = 'libperl.a';
+    $t->{LIB_EXT}   = '.a';
+    local $t->{NEEDS_LINKING} = 1;
+    $t->cflags();
+
+    # Brief bug where CCFLAGS was being blown away
+    is( $t->{CCFLAGS}, '-DMY_THING',    'cflags retains CCFLAGS' );
+}
 

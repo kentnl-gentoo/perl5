@@ -16,6 +16,11 @@
 #define PERL_IN_PP_SORT_C
 #include "perl.h"
 
+#if defined(UNDER_CE)
+/* looks like 'small' is reserved word for WINCE (or somesuch)*/
+#define	small xsmall
+#endif
+
 static I32 sortcv(pTHX_ SV *a, SV *b);
 static I32 sortcv_stacked(pTHX_ SV *a, SV *b);
 static I32 sortcv_xsub(pTHX_ SV *a, SV *b);
@@ -29,10 +34,9 @@ static I32 amagic_cmp_locale(pTHX_ SV *a, SV *b);
 #define sv_cmp_static Perl_sv_cmp
 #define sv_cmp_locale_static Perl_sv_cmp_locale
 
-#define SORTHINTS(hintsvp) \
-     ((PL_hintgv &&	\
-      (hintsvp = hv_fetch(GvHV(PL_hintgv), "SORT", 4, FALSE))) ? \
-	  (I32)SvIV(*hintsvp) : 0)
+#define SORTHINTS(hintsv) \
+    (((hintsv) = GvSV(gv_fetchpv("sort::hints", GV_ADDMULTI, SVt_IV))), \
+    (SvIOK(hintsv) ? ((I32)SvIV(hintsv)) : 0))
 
 #ifndef SMALLSORT
 #define	SMALLSORT (200)
@@ -753,7 +757,7 @@ S_qsortsvu(pTHX_ SV ** array, size_t num_elts, SVCOMPARE_t compare)
       register size_t n, j;
       register SV **q;
       for (n = num_elts, q = array; n > 1; ) {
-         j = n-- * Drand01();
+         j = (size_t)(n-- * Drand01());
          temp = q[j];
          q[j] = q[n];
          q[n] = temp;
@@ -1282,7 +1286,6 @@ S_qsortsvu(pTHX_ SV ** array, size_t num_elts, SVCOMPARE_t compare)
  * dictated by the indirect array.
  */
 
-static SVCOMPARE_t RealCmp;
 
 static I32
 cmpindir(pTHX_ gptr a, gptr b)
@@ -1291,7 +1294,7 @@ cmpindir(pTHX_ gptr a, gptr b)
     gptr *ap = (gptr *)a;
     gptr *bp = (gptr *)b;
 
-    if ((sense = RealCmp(aTHX_ *ap, *bp)) == 0)
+    if ((sense = PL_sort_RealCmp(aTHX_ *ap, *bp)) == 0)
 	 sense = (ap > bp) ? 1 : ((ap < bp) ? -1 : 0);
     return sense;
 }
@@ -1299,9 +1302,9 @@ cmpindir(pTHX_ gptr a, gptr b)
 STATIC void
 S_qsortsv(pTHX_ gptr *list1, size_t nmemb, SVCOMPARE_t cmp)
 {
-    SV **hintsvp;
+    SV *hintsv;
 
-    if (SORTHINTS(hintsvp) & HINT_SORT_STABLE) {
+    if (SORTHINTS(hintsv) & HINT_SORT_STABLE) {
 	 register gptr **pp, *q;
 	 register size_t n, j, i;
 	 gptr *small[SMALLSORT], **indir, tmp;
@@ -1315,8 +1318,8 @@ S_qsortsv(pTHX_ gptr *list1, size_t nmemb, SVCOMPARE_t cmp)
 	 /* Copy pointers to original array elements into indirect array */
 	 for (n = nmemb, pp = indir, q = list1; n--; ) *pp++ = q++;
 
-	 savecmp = RealCmp;	/* Save current comparison routine, if any */
-	 RealCmp = cmp;	/* Put comparison routine where cmpindir can find it */
+	 savecmp = PL_sort_RealCmp;	/* Save current comparison routine, if any */
+	 PL_sort_RealCmp = cmp;	/* Put comparison routine where cmpindir can find it */
 
 	 /* sort, with indirection */
 	 S_qsortsvu(aTHX_ (gptr *)indir, nmemb, cmpindir);
@@ -1361,7 +1364,7 @@ S_qsortsv(pTHX_ gptr *list1, size_t nmemb, SVCOMPARE_t cmp)
 	/* free iff allocated */
 	 if (indir != small) { Safefree(indir); }
 	 /* restore prevailing comparison routine */
-	 RealCmp = savecmp;
+	 PL_sort_RealCmp = savecmp;
     } else {
 	 S_qsortsvu(aTHX_ list1, nmemb, cmp);
     }
@@ -1376,6 +1379,8 @@ Sort an array. Here is an example:
 
     sortsv(AvARRAY(av), av_len(av)+1, Perl_sv_cmp_locale);
 
+See lib/sort.pm for details about controlling the sorting algorithm.
+
 =cut
 */
 
@@ -1384,18 +1389,21 @@ Perl_sortsv(pTHX_ SV **array, size_t nmemb, SVCOMPARE_t cmp)
 {
     void (*sortsvp)(pTHX_ SV **array, size_t nmemb, SVCOMPARE_t cmp) =
         S_mergesortsv;
-    SV **hintsvp;
+    SV *hintsv;
     I32 hints;
 
-    if ((hints = SORTHINTS(hintsvp))) {
-	 if (hints & HINT_SORT_QUICKSORT)
-	      sortsvp = S_qsortsv;
-	 else {
-	      if (hints & HINT_SORT_MERGESORT)
-		   sortsvp = S_mergesortsv;
-	      else
-		   sortsvp = S_mergesortsv;
-	 }
+    /*  Sun's Compiler (cc: WorkShop Compilers 4.2 30 Oct 1996 C 4.2) used 
+	to miscompile this function under optimization -O.  If you get test 
+	errors related to picking the correct sort() function, try recompiling 
+	this file without optimiziation.  -- A.D.  4/2002.
+    */
+    hints = SORTHINTS(hintsv);
+    if (hints & HINT_SORT_QUICKSORT) {
+	sortsvp = S_qsortsv;
+    }
+    else {
+	/* The default as of 5.8.0 is mergesort */
+	sortsvp = S_mergesortsv;
     }
 
     sortsvp(aTHX_ array, nmemb, cmp);

@@ -11,51 +11,18 @@
 my $PLATFORM;
 my $CCTYPE;
 
-my %bincompat5005 =
-      (
-       Perl_call_atexit		=>	"perl_atexit",
-       Perl_eval_sv		=>	"perl_eval_sv",
-       Perl_eval_pv		=>	"perl_eval_pv",
-       Perl_call_argv		=>	"perl_call_argv",
-       Perl_call_method		=>	"perl_call_method",
-       Perl_call_pv		=>	"perl_call_pv",
-       Perl_call_sv		=>	"perl_call_sv",
-       Perl_get_av		=>	"perl_get_av",
-       Perl_get_cv		=>	"perl_get_cv",
-       Perl_get_hv		=>	"perl_get_hv",
-       Perl_get_sv		=>	"perl_get_sv",
-       Perl_init_i18nl10n	=>	"perl_init_i18nl10n",
-       Perl_init_i18nl14n	=>	"perl_init_i18nl14n",
-       Perl_new_collate		=>	"perl_new_collate",
-       Perl_new_ctype		=>	"perl_new_ctype",
-       Perl_new_numeric		=>	"perl_new_numeric",
-       Perl_require_pv		=>	"perl_require_pv",
-       Perl_safesyscalloc	=>	"Perl_safecalloc",
-       Perl_safesysfree		=>	"Perl_safefree",
-       Perl_safesysmalloc	=>	"Perl_safemalloc",
-       Perl_safesysrealloc	=>	"Perl_saferealloc",
-       Perl_set_numeric_local	=>	"perl_set_numeric_local",
-       Perl_set_numeric_standard  =>	"perl_set_numeric_standard",
-       Perl_malloc		=>	"malloc",
-       Perl_mfree		=>	"free",
-       Perl_realloc		=>	"realloc",
-       Perl_calloc		=>	"calloc",
-      );
-
-my $bincompat5005 = join("|", keys %bincompat5005);
-
 while (@ARGV) {
     my $flag = shift;
     $define{$1} = 1 if ($flag =~ /^-D(\w+)$/);
     $define{$1} = $2 if ($flag =~ /^-D(\w+)=(.+)$/);
     $CCTYPE   = $1 if ($flag =~ /^CCTYPE=(\w+)$/);
     $PLATFORM = $1 if ($flag =~ /^PLATFORM=(\w+)$/);
-	if ($PLATFORM eq 'netware') {
-		$FILETYPE = $1 if ($flag =~ /^FILETYPE=(\w+)$/);
-	}
+    if ($PLATFORM eq 'netware') {
+	$FILETYPE = $1 if ($flag =~ /^FILETYPE=(\w+)$/);
+    }
 }
 
-my @PLATFORM = qw(aix win32 os2 MacOS netware);
+my @PLATFORM = qw(aix win32 wince os2 MacOS netware);
 my %PLATFORM;
 @PLATFORM{@PLATFORM} = ();
 
@@ -75,7 +42,7 @@ my $perlio_sym  = "perlio.sym";
 if ($PLATFORM eq 'aix') {
     # Nothing for now.
 }
-elsif ($PLATFORM eq 'win32' || $PLATFORM eq 'netware') {
+elsif ($PLATFORM =~ /^win(?:32|ce)$/ || $PLATFORM eq 'netware') {
     $CCTYPE = "MSVC" unless defined $CCTYPE;
     foreach ($thrdvar_h, $intrpvar_h, $perlvars_h, $global_sym,
 		$pp_sym, $globvar_sym, $perlio_sym) {
@@ -89,7 +56,7 @@ elsif ($PLATFORM eq 'MacOS') {
     }
 }
 
-unless ($PLATFORM eq 'win32' || $PLATFORM eq 'MacOS' || $PLATFORM eq 'netware') {
+unless ($PLATFORM eq 'win32' || $PLATFORM eq 'wince' || $PLATFORM eq 'MacOS' || $PLATFORM eq 'netware') {
     open(CFG,$config_sh) || die "Cannot open $config_sh: $!\n";
     while (<CFG>) {
 	if (/^(?:ccflags|optimize)='(.+)'$/) {
@@ -131,18 +98,25 @@ $define{PERL_IMPLICIT_CONTEXT} ||=
     $define{USE_5005THREADS}  ||
     $define{MULTIPLICITY} ;
 
+if ($define{USE_ITHREADS} && $PLATFORM ne 'win32' && $^O ne 'darwin') {
+    $define{USE_REENTRANT_API} = 1;
+}
+
 # perl.h logic duplication ends
 
 my $sym_ord = 0;
 
-if ($PLATFORM eq 'win32') {
+if ($PLATFORM =~ /^win(?:32|ce)$/) {
     warn join(' ',keys %define)."\n";
-    print "LIBRARY Perl57\n";
+    ($dll = ($define{PERL_DLL} || "perl58")) =~ s/\.dll$//i;
+    print "LIBRARY $dll\n";
     print "DESCRIPTION 'Perl interpreter'\n";
     print "EXPORTS\n";
     if ($define{PERL_IMPLICIT_SYS}) {
 	output_symbol("perl_get_host_info");
 	output_symbol("perl_alloc_override");
+    }
+    if ($define{USE_ITHREADS} and $define{PERL_IMPLICIT_SYS}) {
 	output_symbol("perl_clone_host");
     }
 }
@@ -186,7 +160,7 @@ elsif ($PLATFORM eq 'aix') {
 }
 elsif ($PLATFORM eq 'netware') {
 	if ($FILETYPE eq 'def') {
-	print "LIBRARY Perl57\n";
+	print "LIBRARY perl58\n";
 	print "DESCRIPTION 'Perl interpreter for NetWare'\n";
 	print "EXPORTS\n";
 	}
@@ -233,6 +207,77 @@ if ($PLATFORM eq 'win32') {
 		     PL_sortcxix
 		     PL_sublex_info
 		     PL_timesbuf
+		     main
+		     Perl_ErrorNo
+		     Perl_GetVars
+		     Perl_do_exec3
+		     Perl_do_ipcctl
+		     Perl_do_ipcget
+		     Perl_do_msgrcv
+		     Perl_do_msgsnd
+		     Perl_do_semop
+		     Perl_do_shmio
+		     Perl_dump_fds
+		     Perl_init_thread_intern
+		     Perl_my_bzero
+		     Perl_my_bcopy
+		     Perl_my_htonl
+		     Perl_my_ntohl
+		     Perl_my_swap
+		     Perl_my_chsize
+		     Perl_same_dirent
+		     Perl_setenv_getix
+		     Perl_unlnk
+		     Perl_watch
+		     Perl_safexcalloc
+		     Perl_safexmalloc
+		     Perl_safexfree
+		     Perl_safexrealloc
+		     Perl_my_memcmp
+		     Perl_my_memset
+		     PL_cshlen
+		     PL_cshname
+		     PL_opsave
+		     Perl_do_exec
+		     Perl_getenv_len
+		     Perl_my_pclose
+		     Perl_my_popen
+		     )];
+}
+elsif ($PLATFORM eq 'wince') {
+    skip_symbols [qw(
+		     PL_statusvalue_vms
+		     PL_archpat_auto
+		     PL_cryptseen
+		     PL_DBcv
+		     PL_generation
+		     PL_lastgotoprobe
+		     PL_linestart
+		     PL_modcount
+		     PL_pending_ident
+		     PL_sortcxix
+		     PL_sublex_info
+		     PL_timesbuf
+		     PL_collation_ix
+		     PL_collation_name
+		     PL_collation_standard
+		     PL_collxfrm_base
+		     PL_collxfrm_mult
+		     PL_numeric_compat1
+		     PL_numeric_local
+		     PL_numeric_name
+		     PL_numeric_radix_sv
+		     PL_numeric_standard
+		     PL_vtbl_collxfrm
+		     Perl_sv_collxfrm
+		     setgid
+		     setuid
+		     win32_async_check
+		     win32_free_childdir
+		     win32_free_childenv
+		     win32_get_childdir
+		     win32_get_childenv
+		     win32_spawnvp
 		     main
 		     Perl_ErrorNo
 		     Perl_GetVars
@@ -434,6 +479,33 @@ elsif ($PLATFORM eq 'netware') {
 			Perl_getenv_len
 			Perl_my_pclose
 			Perl_my_popen
+			Perl_sys_intern_init
+			Perl_sys_intern_dup
+			Perl_sys_intern_clear
+			Perl_my_bcopy
+			Perl_PerlIO_write
+			Perl_PerlIO_unread
+			Perl_PerlIO_tell
+			Perl_PerlIO_stdout
+			Perl_PerlIO_stdin
+			Perl_PerlIO_stderr
+			Perl_PerlIO_setlinebuf
+			Perl_PerlIO_set_ptrcnt
+			Perl_PerlIO_set_cnt
+			Perl_PerlIO_seek
+			Perl_PerlIO_read
+			Perl_PerlIO_get_ptr
+			Perl_PerlIO_get_cnt
+			Perl_PerlIO_get_bufsiz
+			Perl_PerlIO_get_base
+			Perl_PerlIO_flush
+			Perl_PerlIO_fill
+			Perl_PerlIO_fileno
+			Perl_PerlIO_error
+			Perl_PerlIO_eof
+			Perl_PerlIO_close
+			Perl_PerlIO_clearerr
+			PerlIO_perlio
 			)];
 }
 
@@ -655,6 +727,9 @@ if ($define{'PERL_GLOBAL_STRUCT'}) {
 
 my @syms = ($global_sym, $globvar_sym); # $pp_sym is not part of the API
 
+# Symbols that are the public face of the PerlIO layers implementation
+# These are in _addition to_ the public face of the abstraction
+# and need to be exported to allow XS modules to implement layers
 my @layer_syms = qw(
 			 PerlIOBase_clearerr
 			 PerlIOBase_close
@@ -663,39 +738,82 @@ my @layer_syms = qw(
 			 PerlIOBase_error
 			 PerlIOBase_fileno
 			 PerlIOBase_pushed
+			 PerlIOBase_popped
 			 PerlIOBase_read
 			 PerlIOBase_setlinebuf
-		         PerlIOBase_unread
+			 PerlIOBase_unread
 			 PerlIOBuf_bufsiz
 			 PerlIOBuf_fill
 			 PerlIOBuf_flush
+			 PerlIOBuf_get_base
 			 PerlIOBuf_get_cnt
 			 PerlIOBuf_get_ptr
 			 PerlIOBuf_open
 			 PerlIOBuf_pushed
+			 PerlIOBuf_popped
 			 PerlIOBuf_read
 			 PerlIOBuf_seek
 			 PerlIOBuf_set_ptrcnt
 			 PerlIOBuf_tell
 			 PerlIOBuf_unread
 			 PerlIOBuf_write
+			 PerlIO_debug
 			 PerlIO_allocate
+			 PerlIO_apply_layera
+			 PerlIO_apply_layers
 			 PerlIO_arg_fetch
 			 PerlIO_define_layer
-	                 PerlIO_modestr
+			 PerlIO_modestr
+			 PerlIO_parse_layers
+			 PerlIO_layer_fetch
+			 PerlIO_list_free
+			 PerlIO_apply_layera
 			 PerlIO_pending
 			 PerlIO_push
 			 PerlIO_sv_dup
-			 PL_def_layerlist
-			 PL_known_layers
-			 PL_perlio
+			 PerlIO_perlio
+
+Perl_PerlIO_clearerr
+Perl_PerlIO_close
+Perl_PerlIO_eof
+Perl_PerlIO_error
+Perl_PerlIO_fileno
+Perl_PerlIO_fill
+Perl_PerlIO_flush
+Perl_PerlIO_get_base
+Perl_PerlIO_get_bufsiz
+Perl_PerlIO_get_cnt
+Perl_PerlIO_get_ptr
+Perl_PerlIO_read
+Perl_PerlIO_seek
+Perl_PerlIO_set_cnt
+Perl_PerlIO_set_ptrcnt
+Perl_PerlIO_setlinebuf
+Perl_PerlIO_stderr
+Perl_PerlIO_stdin
+Perl_PerlIO_stdout
+Perl_PerlIO_tell
+Perl_PerlIO_unread
+Perl_PerlIO_write
+
 );
+if ($PLATFORM eq 'netware') {
+    push(@layer_syms,'PL_def_layerlist','PL_known_layers','PL_perlio');
+}
 
 if ($define{'USE_PERLIO'}) {
+    # Export the symols that make up the PerlIO abstraction, regardless
+    # of its implementation - read from a file
     push @syms, $perlio_sym;
+
+    # This part is then dependent on how the abstraction is implemented
     if ($define{'USE_SFIO'}) {
+	# Old legacy non-stdio "PerlIO"
 	skip_symbols \@layer_syms;
 	# SFIO defines most of the PerlIO routines as macros
+	# So undo most of what $perlio_sym has just done - d'oh !
+	# Perhaps it would be better to list the ones which do exist
+	# And emit them
 	skip_symbols [qw(
 			 PerlIO_canset_cnt
 			 PerlIO_clearerr
@@ -738,11 +856,49 @@ if ($define{'USE_PERLIO'}) {
 			 PerlIO_ungetc
 			 PerlIO_vprintf
 			 PerlIO_write
+			 PerlIO_perlio
+			 Perl_PerlIO_clearerr
+			 Perl_PerlIO_close
+			 Perl_PerlIO_eof
+			 Perl_PerlIO_error
+			 Perl_PerlIO_fileno
+			 Perl_PerlIO_fill
+			 Perl_PerlIO_flush
+			 Perl_PerlIO_get_base
+			 Perl_PerlIO_get_bufsiz
+			 Perl_PerlIO_get_cnt
+			 Perl_PerlIO_get_ptr
+			 Perl_PerlIO_read
+			 Perl_PerlIO_seek
+			 Perl_PerlIO_set_cnt
+			 Perl_PerlIO_set_ptrcnt
+			 Perl_PerlIO_setlinebuf
+			 Perl_PerlIO_stderr
+			 Perl_PerlIO_stdin
+			 Perl_PerlIO_stdout
+			 Perl_PerlIO_tell
+			 Perl_PerlIO_unread
+			 Perl_PerlIO_write
+                         PL_def_layerlist
+                         PL_known_layers
+                         PL_perlio
 			 )];
     }
+    else {
+	# PerlIO with layers - export implementation
+	emit_symbols \@layer_syms;
+    }
 } else {
-	# Skip the PerlIO New Generation symbols.
+	# -Uuseperlio
+	# Skip the PerlIO layer symbols - although
+	# nothing should have exported them any way
 	skip_symbols \@layer_syms;
+        skip_symbols [qw(PL_def_layerlist PL_known_layers PL_perlio)];
+
+	# Also do NOT add abstraction symbols from $perlio_sym
+	# abstraction is done as #define to stdio
+	# Remaining remnants that _may_ be functions
+	# are handled in <DATA>
 }
 
 for my $syms (@syms) {
@@ -802,7 +958,7 @@ while (<DATA>) {
     try_symbol($_);
 }
 
-if ($PLATFORM eq 'win32') {
+if ($PLATFORM =~ /^win(?:32|ce)$/) {
     foreach my $symbol (qw(
 			    setuid
 			    setgid
@@ -899,6 +1055,7 @@ if ($PLATFORM eq 'win32') {
 			    win32_link
 			    win32_unlink
 			    win32_utime
+			    win32_gettimeofday
 			    win32_uname
 			    win32_wait
 			    win32_waitpid
@@ -970,7 +1127,7 @@ elsif ($PLATFORM eq 'os2') {
     /^\s*[\da-f:]+\s+(\w+)/i and $mapped{$1}++ foreach <MAP>;
     close MAP or die 'Cannot close miniperl.map';
 
-    @missing = grep { !exists $mapped{$_} and !exists $bincompat5005{$_} }
+    @missing = grep { !exists $mapped{$_} }
 		    keys %export;
     delete $export{$_} foreach @missing;
 }
@@ -1114,6 +1271,12 @@ foreach my $symbol (qw(
 			fnInsertHashListAddrs
 			fnGetHashListAddrs
 			Perl_deb
+			Perl_sv_setsv
+			Perl_sv_catsv
+			Perl_sv_catpvn
+			Perl_sv_2pv
+			nw_freeenviron
+			Remove_Thread_Ctx
 			   ))
     {
 	try_symbol($symbol);
@@ -1127,12 +1290,7 @@ foreach my $symbol (sort keys %export) {
     output_symbol($symbol);
 }
 
-if ($PLATFORM eq 'netware') {
-	# This may not be the right way to do.  This is to make sure
-	# that the last symbol will not contain a comma else
-	# Watcom linker cribs
-	print "\tdummy\n";
-} elsif ($PLATFORM eq 'os2') {
+if ($PLATFORM eq 'os2') {
 	print "; LAST_ORDINAL=$sym_ord\n";
 }
 
@@ -1144,9 +1302,7 @@ sub emit_symbol {
 
 sub output_symbol {
     my $symbol = shift;
-    $symbol = $bincompat5005{$symbol}
-	if $define{PERL_BINCOMPAT_5005} and $symbol =~ /^($bincompat5005)$/;
-    if ($PLATFORM eq 'win32') {
+    if ($PLATFORM =~ /^win(?:32|ce)$/) {
 	$symbol = "_$symbol" if $CCTYPE eq 'BORLAND';
 	print "\t$symbol\n";
 # XXX: binary compatibility between compilers is an exercise
@@ -1196,41 +1352,10 @@ perl_destruct
 perl_free
 perl_parse
 perl_run
-PerlIOBase_clearerr
-PerlIOBase_close
-PerlIOBase_dup
-PerlIOBase_eof
-PerlIOBase_error
-PerlIOBase_fileno
-PerlIOBase_pushed
-PerlIOBase_read
-PerlIOBase_setlinebuf
-PerlIOBase_unread
-PerlIOBuf_bufsiz
-PerlIOBuf_fill
-PerlIOBuf_flush
-PerlIOBuf_get_cnt
-PerlIOBuf_get_ptr
-PerlIOBuf_open
-PerlIOBuf_pushed
-PerlIOBuf_read
-PerlIOBuf_seek
-PerlIOBuf_set_ptrcnt
-PerlIOBuf_tell
-PerlIOBuf_unread
-PerlIOBuf_write
-PerlIO_allocate
-PerlIO_apply_layers
-PerlIO_arg_fetch
+# Oddities from PerlIO
 PerlIO_binmode
-PerlIO_define_layer
-PerlIO_define_layer
 PerlIO_getpos
 PerlIO_init
-PerlIO_modestr
-PerlIO_pending
-PerlIO_perlio
-PerlIO_push
 PerlIO_setpos
 PerlIO_sprintf
 PerlIO_sv_dup

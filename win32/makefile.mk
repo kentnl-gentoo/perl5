@@ -1,12 +1,13 @@
 #
 # Makefile to build perl on Windows NT using DMAKE.
 # Supported compilers:
-#	Visual C++ 2.0 thro 6.0
+#	Visual C++ 2.0 through 6.0 (and possibly newer versions)
 #	Borland C++ 5.02
 #	Mingw32 with gcc-2.95.2 or better  **experimental**
+#	MS Platform SDK 64-bit compiler and tools **experimental**
 #
 # This is set up to build a perl.exe that runs off a shared library
-# (perl57.dll).  Also makes individual DLLs for the XS extensions.
+# (perl58.dll).  Also makes individual DLLs for the XS extensions.
 #
 
 ##
@@ -33,7 +34,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.7.2
+INST_VER	*= \5.8.0
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -48,26 +49,30 @@ INST_ARCH	*= \$(ARCHNAME)
 
 #
 # uncomment to enable multiple interpreters.  This is need for fork()
-# emulation.
+# emulation and for thread support.
 #
 USE_MULTI	*= define
 
 #
-# Beginnings of interpreter cloning/threads; still very incomplete.
-# This should be enabled to get the fork() emulation.  This needs
-# USE_MULTI as well.
+# Interpreter cloning/threads; now reasonably complete.
+# This should be enabled to get the fork() emulation.  
+# This needs USE_MULTI above.
 #
 USE_ITHREADS	*= define
 
 #
 # uncomment to enable the implicit "host" layer for all system calls
-# made by perl.  This needs USE_MULTI above.  This is also needed to
-# get fork().
+# made by perl.  This needs USE_MULTI above.  
+# This is also needed to get fork().
 #
 USE_IMP_SYS	*= define
 
 #
-# uncomment to enable the experimental PerlIO I/O subsystem.
+# Comment out next assign to disable perl's I/O subsystem and use compiler's 
+# stdio for IO - depending on your compiler vendor and run time library you may 
+# then get a number of fails from make test i.e. bugs - complain to them not us ;-). 
+# You will also be unable to take full advantage of perl5.8's support for multiple 
+# encodings and may see lower IO performance. You have been warned.
 USE_PERLIO	= define
 
 #
@@ -111,7 +116,7 @@ CCTYPE		*= MSVC60
 # If not enabled, we automatically try to use maximum optimization
 # with all compilers that are known to have a working optimizer.
 #
-CFG		*= Debug
+#CFG		*= Debug
 
 #
 # uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
@@ -237,10 +242,6 @@ USE_5005THREADS	*= undef
 USE_ITHREADS	!= undef
 .ENDIF
 
-.IF "$(USE_IMP_SYS)" == "define"
-PERL_MALLOC	!= undef
-.ENDIF
-
 USE_MULTI	*= undef
 USE_ITHREADS	*= undef
 USE_IMP_SYS	*= undef
@@ -264,9 +265,20 @@ BUILDOPT	+= -DPERL_IMPLICIT_CONTEXT
 BUILDOPT	+= -DPERL_IMPLICIT_SYS
 .ENDIF
 
-.IMPORT .IGNORE : PROCESSOR_ARCHITECTURE
+.IMPORT .IGNORE : PROCESSOR_ARCHITECTURE PROCESSOR_ARCHITEW6432
 
 PROCESSOR_ARCHITECTURE *= x86
+
+.IF "$(WIN64)" == ""
+.IF "$(PROCESSOR_ARCHITEW6432)" != ""
+PROCESSOR_ARCHITECTURE	!= $(PROCESSOR_ARCHITEW6432)
+WIN64			= define
+.ELIF "$(PROCESSOR_ARCHITECTURE)" == "IA64"
+WIN64			= define
+.ELSE
+WIN64			= undef
+.ENDIF
+.ENDIF
 
 .IF "$(USE_5005THREADS)" == "define"
 ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-thread
@@ -450,30 +462,43 @@ PERLDLL_RES	=
 .IF  "$(CFG)" == "Debug"
 .IF "$(CCTYPE)" == "MSVC20"
 OPTIMIZE	= -Od -MD -Z7 -DDEBUGGING
-LINK_DBG	= -debug -pdb:none
 .ELSE
-# -Zi requires .pdb file(s)
-#OPTIMIZE	= -Od -MD -Zi -DDEBUGGING
-#LINK_DBG	= -debug
-OPTIMIZE	= -O1 -MD -Z7 -DDEBUGGING
-LINK_DBG	= -debug -debugtype:both -pdb:none
+OPTIMIZE	= -O1 -MD -Zi -DDEBUGGING
 .ENDIF
+LINK_DBG	= -debug
 .ELSE
-.IF "$(CFG)" == "Optimize"
-# -O1 yields smaller code, which turns out to be faster than -O2
-#OPTIMIZE	= -O2 -MD -DNDEBUG
-OPTIMIZE	= -O1 -MD -DNDEBUG
-.ELSE
-OPTIMIZE	= -Od -MD -DNDEBUG
-.ENDIF
+OPTIMIZE	= -MD -DNDEBUG
 LINK_DBG	= -release
+.IF "$(WIN64)" == "define"
+# enable Whole Program Optimizations (WPO) and Link Time Code Generation (LTCG)
+OPTIMIZE	+= -Ox -GL
+LINK_DBG	+= -ltcg
+.ELSE
+# -O1 yields smaller code, which turns out to be faster than -O2 on x86
+OPTIMIZE	+= -O1
+#OPTIMIZE	+= -O2
+.ENDIF
+.ENDIF
+
+.IF "$(WIN64)" == "define"
+DEFINES		+= -DWIN64 -DCONSERVATIVE
+OPTIMIZE	+= -Wp64 -Op
+.ENDIF
+
+.IF "$(USE_PERLCRT)" != "define"
+BUILDOPT	+= -DPERL_MSVCRT_READFIX
 .ENDIF
 
 LIBBASEFILES	= $(CRYPT_LIB) \
 		oldnames.lib kernel32.lib user32.lib gdi32.lib winspool.lib \
 		comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib \
 		netapi32.lib uuid.lib wsock32.lib mpr.lib winmm.lib \
-		version.lib odbc32.lib odbccp32.lib
+		version.lib
+
+# win64 doesn't have some libs
+.IF "$(WIN64)" != "define"
+LIBBASEFILES	+= odbc32.lib odbccp32.lib
+.ENDIF
 
 # we add LIBC here, since we may be using PerlCRT.dll
 LIBFILES	= $(LIBBASEFILES) $(LIBC)
@@ -486,10 +511,6 @@ LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
 OBJOUT_FLAG	= -Fo
 EXEOUT_FLAG	= -Fe
 LIBOUT_FLAG	= /out:
-
-.IF "$(USE_PERLCRT)" != "define"
-BUILDOPT	+= -DPERL_MSVCRT_READFIX
-.ENDIF
 
 .ENDIF
 
@@ -568,11 +589,14 @@ UTILS		=			\
 		..\utils\perlbug	\
 		..\utils\pl2pm 		\
 		..\utils\c2ph		\
+		..\utils\pstruct	\
 		..\utils\h2xs		\
 		..\utils\perldoc	\
 		..\utils\perlcc		\
 		..\utils\perlivp	\
 		..\utils\libnetcfg	\
+		..\utils\enc2xs		\
+		..\utils\piconv		\
 		..\pod\checkpods	\
 		..\pod\pod2html		\
 		..\pod\pod2latex	\
@@ -582,6 +606,7 @@ UTILS		=			\
 		..\pod\podchecker	\
 		..\pod\podselect	\
 		..\x2p\find2perl	\
+		..\x2p\psed		\
 		..\x2p\s2p		\
 		..\lib\ExtUtils\xsubpp	\
 		bin\exetype.pl		\
@@ -599,20 +624,24 @@ CFGH_TMPL	= config_H.bc
 
 CFGSH_TMPL	= config.gc
 CFGH_TMPL	= config_H.gc
-PERLIMPLIB	= ..\libperl57$(a)
+PERLIMPLIB	= ..\libperl58$(a)
 
 .ELSE
 
+.IF "$(WIN64)" == "define"
+CFGSH_TMPL	= config.vc64
+CFGH_TMPL	= config_H.vc64
+.ELSE
 CFGSH_TMPL	= config.vc
 CFGH_TMPL	= config_H.vc
+.ENDIF
 
 .ENDIF
 
 # makedef.pl must be updated if this changes, and this should normally
 # only change when there is an incompatible revision of the public API.
-# XXX so why did we change it from perl56 to perl57?
-PERLIMPLIB	*= ..\perl57$(a)
-PERLDLL		= ..\perl57.dll
+PERLIMPLIB	*= ..\perl58$(a)
+PERLDLL		= ..\perl58.dll
 
 XCOPY		= xcopy /f /r /i /d
 RCOPY		= xcopy /f /r /i /e /d
@@ -646,6 +675,7 @@ MICROCORE_SRC	=		\
 		..\pp_pack.c	\
 		..\pp_sort.c	\
 		..\pp_sys.c	\
+		..\reentr.c	\
 		..\regcomp.c	\
 		..\regexec.c	\
 		..\run.c	\
@@ -671,9 +701,11 @@ WIN32_SRC	=		\
 		.\win32sck.c	\
 		.\win32thread.c
 
-.IF "$(USE_PERLIO)" == "define"
+# We need this for miniperl build unless we override canned 
+# config.h #define building mini\*
+#.IF "$(USE_PERLIO)" == "define"
 WIN32_SRC	+= .\win32io.c
-.ENDIF
+#.ENDIF
 
 .IF "$(CRYPT_SRC)" != ""
 WIN32_SRC	+= .\$(CRYPT_SRC)
@@ -785,8 +817,10 @@ CFG_VARS	=					\
 		libpth=$(CCLIBDIR:s/\/\\/);$(EXTRALIBDIRS:s/\/\\/)	~	\
 		libc=$(LIBC)			~	\
 		make=dmake			~	\
-		_o=$(o)	obj_ext=$(o)		~	\
-		_a=$(a)	lib_ext=$(a)		~	\
+		_o=$(o)				~	\
+		obj_ext=$(o)			~	\
+		_a=$(a)				~	\
+		lib_ext=$(a)			~	\
 		static_ext=$(STATIC_EXT)	~	\
 		use5005threads=$(USE_5005THREADS)	~	\
 		useithreads=$(USE_ITHREADS)	~	\
@@ -1130,7 +1164,6 @@ distclean: clean
 	-del /f $(LIBDIR)\Scalar\Util.pm
 	-del /f $(LIBDIR)\Unicode\Normalize.pm
 	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
-	-if exist $(LIBDIR)\Thread rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
 	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B
 	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data || rmdir /s $(LIBDIR)\Data
 	-if exist $(LIBDIR)\Filter\Util\Call rmdir /s /q $(LIBDIR)\Filter\Util\Call || rmdir /s $(LIBDIR)\Filter
@@ -1151,14 +1184,14 @@ distclean: clean
 	    perlvmesa.pod perlvms.pod perlvos.pod \
 	    perlwin32.pod pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
-	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc \
-	    perlivp dprofpp *.bat
-	-cd ..\x2p && del /f find2perl s2p *.bat
+	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
+	    perldoc perlivp dprofpp perlcc libnetcfg enc2xs piconv *.bat
+	-cd ..\x2p && del /f find2perl s2p psed *.bat
 	-del /f ..\config.sh ..\splittree.pl perlmain.c dlutils.c config.h.new
 	-del /f $(CONFIGPM)
 	-del /f bin\*.bat
-	-cd $(EXTDIR) && del /s *$(a) *.def *.map *.pdb *.bs Makefile *$(o) \
-	    pm_to_blib
+	-cd .. && del /s *$(a) *.map *.pdb *.ilk *.bs *$(o) .exists pm_to_blib
+	-cd $(EXTDIR) && del /s *.def Makefile Makefile.old
 	-if exist $(AUTODIR) rmdir /s /q $(AUTODIR) || rmdir /s $(AUTODIR)
 	-if exist $(COREDIR) rmdir /s /q $(COREDIR) || rmdir /s $(COREDIR)
 
@@ -1214,6 +1247,16 @@ test-wide-notty : test-prep
 	set PERL_SKIP_TTY_TEST=1 && \
 	    set HARNESS_PERL_SWITCHES=-C && \
 	    cd ..\t && $(PERLEXE) -I..\lib harness
+
+_test : $(RIGHTMAKE)
+	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
+	$(XCOPY) $(PERLDLL) ..\t\$(NULL)
+.IF "$(CCTYPE)" == "BORLAND"
+	$(XCOPY) $(GLOBBAT) ..\t\$(NULL)
+.ELSE
+	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
+.ENDIF
+	cd ..\t && $(PERLEXE) -I..\lib harness
 
 clean : Extensions_clean
 	-@erase miniperlmain$(o)

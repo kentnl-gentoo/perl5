@@ -75,7 +75,7 @@ This information should not be considered complete; it includes possibly
 transient information about idiosyncrasies of some of the ports, almost
 all of which are in a state of constant evolution.  Thus, this material
 should be considered a perpetual work in progress
-(<IMG SRC="yellow_sign.gif" ALT="Under Construction">).
+(C<< <IMG SRC="yellow_sign.gif" ALT="Under Construction"> >>).
 
 =head1 ISSUES
 
@@ -171,8 +171,8 @@ newline representation.  A single line of code will often suffice:
 Some of this may be confusing.  Here's a handy reference to the ASCII CR
 and LF characters.  You can print it out and stick it in your wallet.
 
-    LF  ==  \012  ==  \x0A  ==  \cJ  ==  ASCII 10
-    CR  ==  \015  ==  \x0D  ==  \cM  ==  ASCII 13
+    LF  eq  \012  eq  \x0A  eq  \cJ  eq  chr(10)  eq  ASCII 10
+    CR  eq  \015  eq  \x0D  eq  \cM  eq  chr(13)  eq  ASCII 13
 
              | Unix | DOS  | Mac  |
         ---------------------------
@@ -188,7 +188,23 @@ The Unix column assumes that you are not accessing a serial line
 "\n", and "\n" on output becomes CRLF.
 
 These are just the most common definitions of C<\n> and C<\r> in Perl.
-There may well be others.
+There may well be others.  For example, on an EBCDIC implementation such
+as z/OS or OS/400 the above material is similar to "Unix" but the code
+numbers change:
+
+    LF  eq  \025  eq  \x15  eq           chr(21)  eq  CP-1047 21
+    LF  eq  \045  eq  \x25  eq  \cU  eq  chr(37)  eq  CP-0037 37
+    CR  eq  \015  eq  \x0D  eq  \cM  eq  chr(13)  eq  CP-1047 13
+    CR  eq  \015  eq  \x0D  eq  \cM  eq  chr(13)  eq  CP-0037 13
+
+             | z/OS | OS/400 |
+        ----------------------
+        \n   |  LF  |  LF    |
+        \r   |  CR  |  CR    |
+        \n * |  LF  |  LF    |
+        \r * |  CR  |  CR    |
+        ----------------------
+        * text-mode STDIO
 
 =head2 Numbers endianness and Width
 
@@ -261,6 +277,9 @@ The filesystem may support neither access timestamp nor change
 timestamp (meaning that about the only portable timestamp is the
 modification timestamp), or one second granularity of any timestamps
 (e.g. the FAT filesystem limits the time granularity to two seconds).
+
+The "inode change timestamp" (the C<-C> filetest) may really be the
+"creation timestamp" (which it is not in UNIX).
 
 VOS perl can emulate Unix filenames with C</> as path separator.  The
 native pathname characters greater-than, less-than, number-sign, and
@@ -359,6 +378,10 @@ many networking schemes and utilities for separating the nodename and
 the pathname, and so on).  For the same reasons, avoid C<@>, C<;> and
 C<|>.
 
+Don't assume that in pathnames you can collapse two leading slashes
+C<//> into one: some networking and clustering filesystems have special
+semantics for that.  Let the operating system to sort it out.
+
 The I<portable filename characters> as defined by ANSI C are
 
  a b c d e f g h i j k l m n o p q r t u v w x y z
@@ -367,11 +390,11 @@ The I<portable filename characters> as defined by ANSI C are
  . _ -
 
 and the "-" shouldn't be the first character.  If you want to be
-hypercorrect, stay within the 8.3 naming convention (all the files and
-directories have to be unique within one directory if their names are
-lowercased and truncated to eight characters before the C<.>, if any,
-and to three characters after the C<.>, if any).  (And do not use
-C<.>s in directory names.)
+hypercorrect, stay case-insensitive and within the 8.3 naming
+convention (all the files and directories have to be unique within one
+directory if their names are lowercased and truncated to eight
+characters before the C<.>, if any, and to three characters after the
+C<.>, if any).  (And do not use C<.>s in directory names.)
 
 =head2 System Interaction
 
@@ -424,6 +447,38 @@ Don't count on per-program environment variables, or per-program current
 directories.
 
 Don't count on specific values of C<$!>.
+
+=head2 Command names versus file pathnames
+
+Don't assume that the name used to invoke a command or program with
+C<system> or C<exec> can also be used to test for the existence of the
+file that holds the executable code for that command or program.
+First, many systems have "internal" commands that are built-in to the
+shell or OS and while these commands can be invoked, there is no
+corresponding file.  Second, some operating systems (e.g., Cygwin,
+DJGPP, OS/2, and VOS) have required suffixes for executable files;
+these suffixes are generally permitted on the command name but are not
+required.  Thus, a command like "perl" might exist in a file named
+"perl", "perl.exe", or "perl.pm", depending on the operating system.
+The variable "_exe" in the Config module holds the executable suffix,
+if any.  Third, the VMS port carefully sets up $^X and
+$Config{perlpath} so that no further processing is required.  This is
+just as well, because the matching regular expression used below would
+then have to deal with a possible trailing version number in the VMS
+file name.
+
+To convert $^X to a file pathname, taking account of the requirements
+of the various operating system possibilities, say:
+  use Config;
+  $thisperl = $^X;
+  if ($^O ne 'VMS')
+     {$thisperl .= $Config{_exe} unless $thisperl =~ m/$Config{_exe}$/i;}
+
+To convert $Config{perlpath} to a file pathname, say:
+  use Config;
+  $thisperl = $Config{perlpath};
+  if ($^O ne 'VMS')
+     {$thisperl .= $Config{_exe} unless $thisperl =~ m/$Config{_exe}$/i;}
 
 =head2 Interprocess Communication (IPC)
 
@@ -673,6 +728,7 @@ are a few of the more popular Unix flavors:
     --------------------------------------------
     AIX           aix        aix
     BSD/OS        bsdos      i386-bsdos
+    Darwin        darwin     darwin
     dgux          dgux       AViiON-dgux
     DYNIX/ptx     dynixptx   i386-dynixptx
     FreeBSD       freebsd    freebsd-i386    
@@ -789,7 +845,7 @@ and L<perldos>.
 
 The EMX environment for DOS, OS/2, etc. emx@iaehv.nl,
 http://www.leo.org/pub/comp/os/os2/leo/gnu/emx+gcc/index.html or
-ftp://hobbes.nmsu.edu/pub/os2/dev/emx.  Also L<perlos2>.
+ftp://hobbes.nmsu.edu/pub/os2/dev/emx/  Also L<perlos2>.
 
 =item *
 
@@ -1016,12 +1072,12 @@ Perl on VOS is discussed in F<README.vos> in the perl distribution
 (installed as L<perlvos>).  Perl on VOS can accept either VOS- or
 Unix-style file specifications as in either of the following:
 
-    $ perl -ne "print if /perl_setup/i" >system>notices
-    $ perl -ne "print if /perl_setup/i" /system/notices
+    C<< $ perl -ne "print if /perl_setup/i" >system>notices >>
+    C<< $ perl -ne "print if /perl_setup/i" /system/notices >>
 
 or even a mixture of both as in:
 
-    $ perl -ne "print if /perl_setup/i" >system/notices
+    C<< $ perl -ne "print if /perl_setup/i" >system/notices >>
 
 Even though VOS allows the slash character to appear in object
 names, because the VOS port of Perl interprets it as a pathname
@@ -1030,11 +1086,12 @@ contain a slash character cannot be processed.  Such files must be
 renamed before they can be processed by Perl.  Note that VOS limits
 file names to 32 or fewer characters.
 
-See F<README.vos> for restrictions that apply when Perl is built
-with the alpha version of VOS POSIX.1 support.
-
-Perl on VOS is built without any extensions and does not support
-dynamic loading.
+Perl on VOS can be built using two different compilers and two different
+versions of the POSIX runtime.  The recommended method for building full
+Perl is with the GNU C compiler and the generally-available version of
+VOS POSIX support.  See F<README.vos> (installed as L<perlvos>) for
+restrictions that apply when Perl is built using the VOS Standard C
+compiler or the alpha version of VOS POSIX support.
 
 The value of C<$^O> on VOS is "VOS".  To determine the architecture that
 you are running on without resorting to loading all of C<%Config> you
@@ -1066,7 +1123,7 @@ Also see:
 
 =item *
 
-F<README.vos>
+F<README.vos> (installed as L<perlvos>)
 
 =item *
 
@@ -1074,12 +1131,12 @@ The VOS mailing list.
 
 There is no specific mailing list for Perl on VOS.  You can post
 comments to the comp.sys.stratus newsgroup, or subscribe to the general
-Stratus mailing list.  Send a letter with "Subscribe Info-Stratus" in
+Stratus mailing list.  Send a letter with "subscribe Info-Stratus" in
 the message body to majordomo@list.stratagy.com.
 
 =item *
 
-VOS Perl on the web at http://ftp.stratus.com/pub/vos/vos.html
+VOS Perl on the web at http://ftp.stratus.com/pub/vos/posix/posix.html
 
 =back
 
@@ -1432,6 +1489,9 @@ Only good for changing "owner" and "other" read-write access. (S<RISC OS>)
 
 Access permissions are mapped onto VOS access-control list changes. (VOS)
 
+The actual permissions set depend on the value of the C<CYGWIN>
+in the SYSTEM environment settings.  (Cygwin)
+
 =item chown LIST
 
 Not implemented. (S<Mac OS>, Win32, Plan9, S<RISC OS>, VOS)
@@ -1582,14 +1642,6 @@ Not implemented. (S<Mac OS>, Win32, Plan9)
 
 Not implemented. (Win32, Plan9)
 
-=item setpwent
-
-Not implemented. (S<Mac OS>, Win32, S<RISC OS>)
-
-=item setgrent
-
-Not implemented. (S<Mac OS>, Win32, VMS, S<RISC OS>)
-
 =item sethostent STAYOPEN
 
 Not implemented. (S<Mac OS>, Win32, Plan9, S<RISC OS>)
@@ -1734,7 +1786,7 @@ Not implemented. (S<Mac OS>, Win32, VMS, S<RISC OS>, VOS)
 
 =item setgrent
 
-Not implemented. (MPE/iX, Win32)
+Not implemented. (S<Mac OS>, MPE/iX, VMS, Win32, VMS, S<RISC OS>)
 
 =item setpgrp PID,PGRP
 
@@ -1746,7 +1798,7 @@ Not implemented. (S<Mac OS>, Win32, VMS, S<RISC OS>, VOS)
 
 =item setpwent
 
-Not implemented. (MPE/iX, Win32)
+Not implemented. (S<Mac OS>, MPE/iX, Win32, S<RISC OS>)
 
 =item setsockopt SOCKET,LEVEL,OPTNAME,OPTVAL
 
@@ -1782,7 +1834,11 @@ as '', so numeric comparison or manipulation of these fields may cause
 'not numeric' warnings.
 
 mtime and atime are the same thing, and ctime is creation time instead of
-inode change time. (S<Mac OS>)
+inode change time. (S<Mac OS>).
+
+ctime not supported on UFS (S<Mac OS X>).
+
+ctime is creation time instead of inode change time  (Win32).
 
 device and inode are not meaningful.  (Win32)
 
@@ -1819,8 +1875,8 @@ C<$?> right by eight to get the exit value, or that C<$? & 127>
 would give you the number of the signal that terminated the program,
 or that C<$? & 128> would test true if the program was terminated by a
 coredump.  Instead, use the POSIX W*() interfaces: for example, use
-WIFEXITED($?) an WEXITVALUE($?) to test for a normal exit and the exit
-value, and WIFSIGNALED($?) and WTERMSIG($?)  for a signal exit and the
+WIFEXITED($?) and WEXITVALUE($?) to test for a normal exit and the exit
+value, WIFSIGNALED($?) and WTERMSIG($?) for a signal exit and the
 signal.  Core dumping is not a portable concept, so there's no portable
 way to test for that.
 
@@ -2015,7 +2071,7 @@ distribution available at http://www.cpan.org/src/index.html
 	DG/UX
 	DOS DJGPP 	1)
 	DYNIX/ptx
-	EPOC
+	EPOC R5
 	FreeBSD
 	HP-UX
 	IRIX
@@ -2133,7 +2189,7 @@ Support for the following platform is planned for a future Perl release:
 	Netware
 
 The following platforms have their own source code distributions and
-binaries available via http://www.cpan.org/ports/index.html:
+binaries available via http://www.cpan.org/ports/
 
 				Perl release
 
@@ -2187,7 +2243,7 @@ Andrew M. Langmead <aml@world.std.com>,
 Larry Moore <ljmoore@freespace.net>,
 Paul Moore <Paul.Moore@uk.origin-it.com>,
 Chris Nandor <pudge@pobox.com>,
-Matthias Neeracher <neeri@iis.ee.ethz.ch>,
+Matthias Neeracher <neeracher@mac.com>,
 Philip Newton <pne@cpan.org>,
 Gary Ng <71564.1743@CompuServe.COM>,
 Tom Phoenix <rootbeer@teleport.com>,
@@ -2200,6 +2256,3 @@ Michael G Schwern <schwern@pobox.com>,
 Dan Sugalski <dan@sidhe.org>,
 Nathan Torkington <gnat@frii.com>.
 
-=head1 VERSION
-
-Version 1.50, last modified 10 Jul 2001

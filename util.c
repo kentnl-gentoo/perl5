@@ -339,19 +339,19 @@ S_xstat(pTHX_ int flag)
 Malloc_t Perl_malloc (MEM_SIZE nbytes)
 {
     dTHXs;
-    return PerlMem_malloc(nbytes);
+    return (Malloc_t)PerlMem_malloc(nbytes);
 }
 
 Malloc_t Perl_calloc (MEM_SIZE elements, MEM_SIZE size)
 {
     dTHXs;
-    return PerlMem_calloc(elements, size);
+    return (Malloc_t)PerlMem_calloc(elements, size);
 }
 
 Malloc_t Perl_realloc (Malloc_t where, MEM_SIZE nbytes)
 {
     dTHXs;
-    return PerlMem_realloc(where, nbytes);
+    return (Malloc_t)PerlMem_realloc(where, nbytes);
 }
 
 Free_t   Perl_mfree (Malloc_t where)
@@ -546,7 +546,7 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
 	}
     }
     BmRARE(sv) = s[rarest];
-    BmPREVIOUS(sv) = rarest;
+    BmPREVIOUS(sv) = (U16)rarest;
     BmUSEFUL(sv) = 100;			/* Initial value */
     if (flags & FBMcf_TAIL)
 	SvTAIL_on(sv);
@@ -578,9 +578,9 @@ Perl_fbm_instr(pTHX_ unsigned char *big, register unsigned char *bigend, SV *lit
     register STRLEN littlelen = l;
     register I32 multiline = flags & FBMrf_MULTILINE;
 
-    if (bigend - big < littlelen) {
+    if ((STRLEN)(bigend - big) < littlelen) {
 	if ( SvTAIL(littlestr)
-	     && (bigend - big == littlelen - 1)
+	     && ((STRLEN)(bigend - big) == littlelen - 1)
 	     && (littlelen == 1
 		 || (*big == *little &&
 		     memEQ((char *)big, (char *)little, littlelen - 1))))
@@ -707,7 +707,7 @@ Perl_fbm_instr(pTHX_ unsigned char *big, register unsigned char *bigend, SV *lit
 	register unsigned char *table = little + littlelen + FBM_TABLE_OFFSET;
 	register unsigned char *oldlittle;
 
-	if (littlelen > bigend - big)
+	if (littlelen > (STRLEN)(bigend - big))
 	    return Nullch;
 	--littlelen;			/* Last char found by table lookup */
 
@@ -883,18 +883,21 @@ Perl_ibcmp_locale(pTHX_ const char *s1, const char *s2, register I32 len)
 
 =for apidoc savepv
 
-Copy a string to a safe spot.  This does not use an SV.
+Perl's version of C<strdup()>. Returns a pointer to a newly allocated
+string which is a duplicate of C<pv>. The size of the string is
+determined by C<strlen()>. The memory allocated for the new string can
+be freed with the C<Safefree()> function.
 
 =cut
 */
 
 char *
-Perl_savepv(pTHX_ const char *sv)
+Perl_savepv(pTHX_ const char *pv)
 {
     register char *newaddr = Nullch;
-    if (sv) {
-	New(902,newaddr,strlen(sv)+1,char);
-	(void)strcpy(newaddr,sv);
+    if (pv) {
+	New(902,newaddr,strlen(pv)+1,char);
+	(void)strcpy(newaddr,pv);
     }
     return newaddr;
 }
@@ -904,22 +907,23 @@ Perl_savepv(pTHX_ const char *sv)
 /*
 =for apidoc savepvn
 
-Copy a string to a safe spot.  The C<len> indicates number of bytes to
-copy. If pointer is NULL allocate space for a string of size specified.
-This does not use an SV.
+Perl's version of what C<strndup()> would be if it existed. Returns a
+pointer to a newly allocated string which is a duplicate of the first
+C<len> bytes from C<pv>. The memory allocated for the new string can be
+freed with the C<Safefree()> function.
 
 =cut
 */
 
 char *
-Perl_savepvn(pTHX_ const char *sv, register I32 len)
+Perl_savepvn(pTHX_ const char *pv, register I32 len)
 {
     register char *newaddr;
 
     New(903,newaddr,len+1,char);
     /* Give a meaning to NULL pointer mainly for the use in sv_magic() */
-    if (sv) {
-    	Copy(sv,newaddr,len,char);	/* might not be null terminated */
+    if (pv) {
+    	Copy(pv,newaddr,len,char);	/* might not be null terminated */
     	newaddr[len] = '\0';		/* is now */
     }
     else {
@@ -931,18 +935,18 @@ Perl_savepvn(pTHX_ const char *sv, register I32 len)
 /*
 =for apidoc savesharedpv
 
-Copy a string to a safe spot in memory shared between threads.
-This does not use an SV.
+A version of C<savepv()> which allocates the duplicate string in memory
+which is shared between threads.
 
 =cut
 */
 char *
-Perl_savesharedpv(pTHX_ const char *sv)
+Perl_savesharedpv(pTHX_ const char *pv)
 {
     register char *newaddr = Nullch;
-    if (sv) {
-	newaddr = PerlMemShared_malloc(strlen(sv)+1);
-    	(void)strcpy(newaddr,sv);
+    if (pv) {
+	newaddr = (char*)PerlMemShared_malloc(strlen(pv)+1);
+    	(void)strcpy(newaddr,pv);
     }
     return newaddr;
 }
@@ -1109,9 +1113,10 @@ Perl_vmess(pTHX_ const char *pat, va_list *args)
 	    bool line_mode = (RsSIMPLE(PL_rs) &&
 			      SvCUR(PL_rs) == 1 && *SvPVX(PL_rs) == '\n');
 	    Perl_sv_catpvf(aTHX_ sv, ", <%s> %s %"IVdf,
-		      PL_last_in_gv == PL_argvgv ? "" : GvNAME(PL_last_in_gv),
-		      line_mode ? "line" : "chunk",
-		      (IV)IoLINES(GvIOp(PL_last_in_gv)));
+			   PL_last_in_gv == PL_argvgv ?
+			   "" : GvNAME(PL_last_in_gv),
+			   line_mode ? "line" : "chunk",
+			   (IV)IoLINES(GvIOp(PL_last_in_gv)));
 	}
 #ifdef USE_5005THREADS
 	if (thr->tid)
@@ -1584,11 +1589,16 @@ Perl_vwarner(pTHX_ U32  err, const char* pat, va_list* args)
    *(s+(nlen+1+vlen)) = '\0'
 
 #ifdef USE_ENVIRON_ARRAY
-       /* VMS' and EPOC's my_setenv() is in vms.c and epoc.c */
+       /* VMS' my_setenv() is in vms.c */
 #if !defined(WIN32) && !defined(NETWARE)
 void
 Perl_my_setenv(pTHX_ char *nam, char *val)
 {
+#ifdef USE_ITHREADS
+  /* only parent thread can modify process environment */
+  if (PL_curinterp == aTHX)
+#endif
+  {
 #ifndef PERL_USE_SAFE_PUTENV
     /* most putenv()s leak, so we manipulate environ directly */
     register I32 i=setenv_getix(nam);		/* where does it go? */
@@ -1632,7 +1642,7 @@ Perl_my_setenv(pTHX_ char *nam, char *val)
     my_setenv_format(environ[i], nam, nlen, val, vlen);
 
 #else   /* PERL_USE_SAFE_PUTENV */
-#   if defined(__CYGWIN__)
+#   if defined(__CYGWIN__) || defined( EPOC)
     setenv(nam, val, 1);
 #   else
     char *new_env;
@@ -1647,6 +1657,7 @@ Perl_my_setenv(pTHX_ char *nam, char *val)
     (void)putenv(new_env);
 #   endif /* __CYGWIN__ */
 #endif  /* PERL_USE_SAFE_PUTENV */
+  }
 }
 
 #else /* WIN32 || NETWARE */
@@ -2085,6 +2096,7 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
     while ((pid = PerlProc_fork()) < 0) {
 	if (errno != EAGAIN) {
 	    PerlLIO_close(p[This]);
+	    PerlLIO_close(p[that]);
 	    if (did_pipes) {
 		PerlLIO_close(pp[0]);
 		PerlLIO_close(pp[1]);
@@ -2102,7 +2114,6 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 #undef THAT
 #define THIS that
 #define THAT This
-	PerlLIO_close(p[THAT]);
 	if (did_pipes) {
 	    PerlLIO_close(pp[0]);
 #if defined(HAS_FCNTL) && defined(F_SETFD)
@@ -2112,7 +2123,11 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 	if (p[THIS] != (*mode == 'r')) {
 	    PerlLIO_dup2(p[THIS], *mode == 'r');
 	    PerlLIO_close(p[THIS]);
+	    if (p[THAT] != (*mode == 'r'))	/* if dup2() didn't close it */
+		PerlLIO_close(p[THAT]);
 	}
+	else
+	    PerlLIO_close(p[THAT]);
 #ifndef OS2
 	if (doexec) {
 #if !defined(HAS_FCNTL) || !defined(F_SETFD)
@@ -2146,8 +2161,7 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 #undef THIS
 #undef THAT
     }
-    do_execfree();	/* free any memory malloced by child on fork */
-    PerlLIO_close(p[that]);
+    do_execfree();	/* free any memory malloced by child on vfork */
     if (did_pipes)
 	PerlLIO_close(pp[1]);
     if (p[that] < p[This]) {
@@ -2155,6 +2169,9 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 	PerlLIO_close(p[This]);
 	p[This] = p[that];
     }
+    else
+	PerlLIO_close(p[that]);
+
     LOCK_FDPID_MUTEX;
     sv = *av_fetch(PL_fdpid,p[This],TRUE);
     UNLOCK_FDPID_MUTEX;
@@ -2192,7 +2209,7 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
     return PerlIO_fdopen(p[This], mode);
 }
 #else
-#if defined(atarist)
+#if defined(atarist) || defined(EPOC)
 FILE *popen();
 PerlIO *
 Perl_my_popen(pTHX_ char *cmd, char *mode)
@@ -2275,7 +2292,7 @@ void
 Perl_dump_fds(pTHX_ char *s)
 {
     int fd;
-    struct stat tmpstatbuf;
+    Stat_t tmpstatbuf;
 
     PerlIO_printf(Perl_debug_log,"%s", s);
     for (fd = 0; fd < 32; fd++) {
@@ -2520,6 +2537,9 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
 
 	hv_iterinit(PL_pidstatus);
 	if ((entry = hv_iternext(PL_pidstatus))) {
+	    SV *sv;
+	    char spid[TYPE_CHARS(int)];
+
 	    pid = atoi(hv_iterkey(entry,(I32*)statusp));
 	    sv = hv_iterval(PL_pidstatus,entry);
 	    *statusp = SvIVX(sv);
@@ -2577,7 +2597,7 @@ Perl_pidgone(pTHX_ Pid_t pid, int status)
     return;
 }
 
-#if defined(atarist) || defined(OS2)
+#if defined(atarist) || defined(OS2) || defined(EPOC)
 int pclose();
 #ifdef HAS_FORK
 int					/* Cannot prototype with I32
@@ -2636,8 +2656,8 @@ Perl_same_dirent(pTHX_ char *a, char *b)
 {
     char *fa = strrchr(a,'/');
     char *fb = strrchr(b,'/');
-    struct stat tmpstatbuf1;
-    struct stat tmpstatbuf2;
+    Stat_t tmpstatbuf1;
+    Stat_t tmpstatbuf2;
     SV *tmpsv = sv_newmortal();
 
     if (fa)
@@ -3101,7 +3121,7 @@ Perl_new_struct_thread(pTHX_ struct perl_thread *t)
     SvCUR_set(sv, sizeof(struct perl_thread));
     thr = (Thread) SvPVX(sv);
 #ifdef DEBUGGING
-    memset(thr, 0xab, sizeof(struct perl_thread));
+    Poison(thr, 1, struct perl_thread);
     PL_markstack = 0;
     PL_scopestack = 0;
     PL_savestack = 0;
@@ -3438,32 +3458,30 @@ Perl_report_evil_fh(pTHX_ GV *gv, IO *io, I32 op)
     }
 
     if (gv && isGV(gv)) {
-	SV *sv = sv_newmortal();
-	gv_efullname4(sv, gv, Nullch, FALSE);
-	name = SvPVX(sv);
+	name = GvENAME(gv);
     }
 
     if (op == OP_phoney_OUTPUT_ONLY || op == OP_phoney_INPUT_ONLY) {
 	if (name && *name)
-	    Perl_warner(aTHX_ WARN_IO, "Filehandle %s opened only for %sput",
+	    Perl_warner(aTHX_ packWARN(WARN_IO), "Filehandle %s opened only for %sput",
 			name,
 			(op == OP_phoney_INPUT_ONLY ? "in" : "out"));
 	else
-	    Perl_warner(aTHX_ WARN_IO, "Filehandle opened only for %sput",
+	    Perl_warner(aTHX_ packWARN(WARN_IO), "Filehandle opened only for %sput",
 			(op == OP_phoney_INPUT_ONLY ? "in" : "out"));
     } else if (name && *name) {
-	Perl_warner(aTHX_ warn_type,
+	Perl_warner(aTHX_ packWARN(warn_type),
 		    "%s%s on %s %s %s", func, pars, vile, type, name);
 	if (io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
-	    Perl_warner(aTHX_ warn_type,
+	    Perl_warner(aTHX_ packWARN(warn_type),
 			"\t(Are you trying to call %s%s on dirhandle %s?)\n",
 			func, pars, name);
     }
     else {
-	Perl_warner(aTHX_ warn_type,
+	Perl_warner(aTHX_ packWARN(warn_type),
 		    "%s%s on %s %s", func, pars, vile, type);
 	if (gv && io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
-	    Perl_warner(aTHX_ warn_type,
+	    Perl_warner(aTHX_ packWARN(warn_type),
 			"\t(Are you trying to call %s%s on dirhandle?)\n",
 			func, pars);
     }
@@ -3509,30 +3527,32 @@ Perl_ebcdic_control(pTHX_ int ch)
 }
 #endif
 
-/* XXX struct tm on some systems (SunOS4/BSD) contains extra (non POSIX)
- * fields for which we don't have Configure support yet:
- *   char *tm_zone;   -- abbreviation of timezone name
- *   long tm_gmtoff;  -- offset from GMT in seconds
- * To workaround core dumps from the uninitialised tm_zone we get the
+/* To workaround core dumps from the uninitialised tm_zone we get the
  * system to give us a reasonable struct to copy.  This fix means that
  * strftime uses the tm_zone and tm_gmtoff values returned by
  * localtime(time()). That should give the desired result most of the
  * time. But probably not always!
  *
- * This is a temporary workaround to be removed once Configure
- * support is added and NETaa14816 is considered in full.
- * It does not address tzname aspects of NETaa14816.
+ * This does not address tzname aspects of NETaa14816.
+ *
  */
+
 #ifdef HAS_GNULIBC
 # ifndef STRUCT_TM_HASZONE
 #    define STRUCT_TM_HASZONE
 # endif
 #endif
 
+#ifdef STRUCT_TM_HASZONE /* Backward compat */
+# ifndef HAS_TM_TM_ZONE
+#    define HAS_TM_TM_ZONE
+# endif
+#endif
+
 void
 Perl_init_tm(pTHX_ struct tm *ptm)	/* see mktime, strftime and asctime */
 {
-#ifdef STRUCT_TM_HASZONE
+#ifdef HAS_TM_TM_ZONE
     Time_t now;
     (void)time(&now);
     Copy(localtime(&now), ptm, 1, struct tm);
@@ -3857,7 +3877,7 @@ Perl_getcwd_sv(pTHX_ register SV *sv)
 
 #else
 
-    struct stat statbuf;
+    Stat_t statbuf;
     int orig_cdev, orig_cino, cdev, cino, odev, oino, tdev, tino;
     int namelen, pathlen=0;
     DIR *dir;
@@ -3966,9 +3986,10 @@ Perl_getcwd_sv(pTHX_ register SV *sv)
         Perl_croak(aTHX_ "Unstable directory path, "
                    "current directory changed unexpectedly");
     }
-#endif
 
     return TRUE;
+#endif
+
 #else
     return FALSE;
 #endif
@@ -4015,7 +4036,7 @@ Perl_new_vstring(pTHX_ char *s, SV *sv)
 		 /* this is atoi() that tolerates underscores */
 		 char *end = pos;
 		 UV mult = 1;
-		 if ( *(s-1) == '_') {
+		 if ( s > pos && *(s-1) == '_') {
 		      mult = 10;
 		 }
 		 while (--end >= s) {
@@ -4024,7 +4045,7 @@ Perl_new_vstring(pTHX_ char *s, SV *sv)
 		      rev += (*end - '0') * mult;
 		      mult *= 10;
 		      if (orev > rev && ckWARN_d(WARN_OVERFLOW))
-			   Perl_warner(aTHX_ WARN_OVERFLOW,
+			   Perl_warner(aTHX_ packWARN(WARN_OVERFLOW),
 				       "Integer overflow in decimal number");
 		 }
 	    }
@@ -4052,7 +4073,7 @@ Perl_new_vstring(pTHX_ char *s, SV *sv)
     return s;
 }
 
-#if !defined(HAS_SOCKETPAIR) && defined(HAS_SOCKET) && defined(AF_INET) && defined(PF_INET) && defined(SOCK_DGRAM)
+#if !defined(HAS_SOCKETPAIR) && defined(HAS_SOCKET) && defined(AF_INET) && defined(PF_INET) && defined(SOCK_DGRAM) && defined(HAS_SELECT)
 #   define EMULATE_SOCKETPAIR_UDP
 #endif
 
@@ -4196,7 +4217,9 @@ S_socketpair_udp (int fd[2]) {
         return -1;
     }
 }
+#endif /*  EMULATE_SOCKETPAIR_UDP */
 
+#if !defined(HAS_SOCKETPAIR) && defined(HAS_SOCKET) && defined(AF_INET) && defined(PF_INET)
 int
 Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
     /* Stevens says that family must be AF_LOCAL, protocol 0.
@@ -4275,7 +4298,7 @@ Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
     return 0;
 
   abort_tidy_up_and_fail:
-    errno = ECONNABORTED; /* I hope this is portable and appropriate.  */
+  errno = ECONNABORTED; /* I hope this is portable and appropriate.  */
   tidy_up_and_fail:
     {
         int save_errno = errno;
@@ -4289,13 +4312,16 @@ Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
         return -1;
     }
 }
-#endif /* !defined(HAS_SOCKETPAIR) && defined(HAS_SOCKET) */
-#ifdef HAS_SOCKETPAIR
+#else
 /* In any case have a stub so that there's code corresponding
  * to the my_socketpair in global.sym. */
 int
 Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
+#ifdef HAS_SOCKETPAIR
     return socketpair(family, type, protocol, fd);
+#else
+    return -1;
+#endif
 }
 #endif
 
@@ -4346,42 +4372,3 @@ Perl_sv_nounlocking(pTHX_ SV *sv)
 {
 }
 
-/*
-=for apidoc memcmp_byte_utf8
-
-Similar to memcmp(), but the first string is with bytes, the second
-with utf8.  Takes into account that the lengths may be different.
-
-=cut
-*/
-
-int
-Perl_memcmp_byte_utf8(pTHX_ char *sb, STRLEN lbyte, char *su, STRLEN lutf)
-{
-    U8 *sbyte = (U8*)sb;
-    U8 *sutf  = (U8*)su;
-    U8 *ebyte = sbyte + lbyte;
-    U8 *eutf  = sutf  + lutf;
-
-    while (sbyte < ebyte) {
-	if (sutf >= eutf)
-	    return 1;			/* utf one shorter */
-	if (NATIVE_IS_INVARIANT(*sbyte)) {
-	    if (*sbyte != *sutf)
-		return *sbyte - *sutf;
-	    sbyte++; sutf++;	/* CONTINUE */
-	} else if ((*sutf & UTF_CONTINUATION_MASK) ==
-                   (*sbyte >> UTF_ACCUMULATION_SHIFT)) {
-	    if ((sutf[1] & UTF_CONTINUATION_MASK) !=
-                (*sbyte & UTF_CONTINUATION_MASK))
-		return (*sbyte & UTF_CONTINUATION_MASK) -
-                       (*sutf & UTF_CONTINUATION_MASK);
-	    sbyte++, sutf += 2;	/* CONTINUE */
-	} else
-	    return (*sbyte >> UTF_ACCUMULATION_SHIFT) -
-                   (*sutf & UTF_CONTINUATION_MASK);
-    }
-    if (sutf >= eutf)
-	return 0;
-    return -1;				/* byte one shorter */
-}

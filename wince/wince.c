@@ -352,6 +352,20 @@ win32_times(struct tms *timebuf)
   return -1;
 }
 
+/* TODO */
+bool
+win32_signal()
+{
+  Perl_croak_nocontext("signal() TBD on this platform");
+  return FALSE;
+}
+DllExport void
+win32_clearenv()
+{
+  return;
+}
+
+
 DllExport char ***
 win32_environ(void)
 {
@@ -483,6 +497,12 @@ win32_utime(const char *filename, struct utimbuf *times)
 }
 
 DllExport int
+win32_gettimeofday(struct timeval *tp, void *not_used)
+{
+    return xcegettimeofday(tp,not_used);
+}
+
+DllExport int
 win32_uname(struct utsname *name)
 {
     struct hostent *hep;
@@ -554,11 +574,7 @@ win32_uname(struct utsname *name)
 	char *arch;
 	GetSystemInfo(&info);
 
-#if defined(__BORLANDC__) || defined(__MINGW32__)
-	switch (info.u.s.wProcessorArchitecture) {
-#else
 	switch (info.wProcessorArchitecture) {
-#endif
 	case PROCESSOR_ARCHITECTURE_INTEL:
 	    arch = "x86"; break;
 	case PROCESSOR_ARCHITECTURE_MIPS:
@@ -931,12 +947,11 @@ win32_rename(const char *oname, const char *newname)
 DllExport int
 win32_setmode(int fd, int mode)
 {
-  if(mode != O_BINARY)
-    {
-      Perl_croak(aTHX_ PL_no_func, "setmode");
-      return -1;
-    }
-  return 0;
+    /* currently 'celib' seem to have this function in src, but not
+     * exported. When it will be, we'll uncomment following line.
+     */
+    /* return xcesetmode(fd, mode); */
+    return 0;
 }
 
 DllExport long
@@ -1616,3 +1631,121 @@ isnan(double d)
   return _isnan(d);
 }
 
+int
+win32_open_osfhandle(intptr_t osfhandle, int flags)
+{
+    int fh;
+    char fileflags=0;		/* _osfile flags */
+
+    XCEMessageBoxA(NULL, "NEED TO IMPLEMENT in wince/wince.c(win32_open_osfhandle)", "error", 0);
+    Perl_croak_nocontext("win32_open_osfhandle() TBD on this platform");
+    return 0;
+}
+
+int
+win32_get_osfhandle(intptr_t osfhandle, int flags)
+{
+    int fh;
+    char fileflags=0;		/* _osfile flags */
+
+    XCEMessageBoxA(NULL, "NEED TO IMPLEMENT in wince/wince.c(win32_get_osfhandle)", "error", 0);
+    Perl_croak_nocontext("win32_get_osfhandle() TBD on this platform");
+    return 0;
+}
+
+/*
+ * a popen() clone that respects PERL5SHELL
+ *
+ * changed to return PerlIO* rather than FILE * by BKS, 11-11-2000
+ */
+
+DllExport PerlIO*
+win32_popen(const char *command, const char *mode)
+{
+    XCEMessageBoxA(NULL, "NEED TO IMPLEMENT in wince/wince.c(win32_popen)", "error", 0);
+    Perl_croak_nocontext("win32_popen() TBD on this platform");
+}
+
+/*
+ * pclose() clone
+ */
+
+DllExport int
+win32_pclose(PerlIO *pf)
+{
+#ifdef USE_RTL_POPEN
+    return _pclose(pf);
+#else
+    dTHX;
+    int childpid, status;
+    SV *sv;
+
+    LOCK_FDPID_MUTEX;
+    sv = *av_fetch(w32_fdpid, PerlIO_fileno(pf), TRUE);
+
+    if (SvIOK(sv))
+	childpid = SvIVX(sv);
+    else
+	childpid = 0;
+
+    if (!childpid) {
+	errno = EBADF;
+        return -1;
+    }
+
+#ifdef USE_PERLIO
+    PerlIO_close(pf);
+#else
+    fclose(pf);
+#endif
+    SvIVX(sv) = 0;
+    UNLOCK_FDPID_MUTEX;
+
+    if (win32_waitpid(childpid, &status, 0) == -1)
+        return -1;
+
+    return status;
+
+#endif /* USE_RTL_POPEN */
+}
+
+FILE *
+win32_fdupopen(FILE *pf)
+{
+    FILE* pfdup;
+    fpos_t pos;
+    char mode[3];
+    int fileno = win32_dup(win32_fileno(pf));
+
+    XCEMessageBoxA(NULL, "NEED TO IMPLEMENT a place in .../wince/wince.c(win32_fdupopen)", "Perl(developer)", 0);
+    Perl_croak_nocontext("win32_fdupopen() TBD on this platform");
+
+#if 0
+    /* open the file in the same mode */
+    if((pf)->_flag & _IOREAD) {
+	mode[0] = 'r';
+	mode[1] = 0;
+    }
+    else if((pf)->_flag & _IOWRT) {
+	mode[0] = 'a';
+	mode[1] = 0;
+    }
+    else if((pf)->_flag & _IORW) {
+	mode[0] = 'r';
+	mode[1] = '+';
+	mode[2] = 0;
+    }
+
+    /* it appears that the binmode is attached to the
+     * file descriptor so binmode files will be handled
+     * correctly
+     */
+    pfdup = win32_fdopen(fileno, mode);
+
+    /* move the file pointer to the same position */
+    if (!fgetpos(pf, &pos)) {
+	fsetpos(pfdup, &pos);
+    }
+#endif
+    return pfdup;
+}

@@ -1,37 +1,52 @@
 package Encode::CN;
-our $VERSION = '0.02';
+BEGIN {
+    if (ord("A") == 193) {
+	die "Encode::CN not supported on EBCDIC\n";
+    }
+}
+our $VERSION = do { my @r = (q$Revision: 1.24 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 
 use Encode;
-use Encode::CN::HZ;
 use XSLoader;
-XSLoader::load('Encode::CN',$VERSION);
+XSLoader::load(__PACKAGE__,$VERSION);
 
-local $@;
-eval "use Encode::HanExtra"; # load extra encodings if they exist
+# Relocated from Encode.pm
+
+use Encode::CN::HZ;
+# use Encode::CN::2022_CN;
 
 1;
 __END__
+
 =head1 NAME
 
 Encode::CN - China-based Chinese Encodings
 
 =head1 SYNOPSIS
 
-    use Encode::CN;
-    $euc_cn = encode("euc-cn", $utf8);
-    $utf8   = encode("euc-cn", $euc_cn);
+    use Encode qw/encode decode/; 
+    $euc_cn = encode("euc-cn", $utf8);   # loads Encode::CN implicitly
+    $utf8   = decode("euc-cn", $euc_cn); # ditto
 
 =head1 DESCRIPTION
 
 This module implements China-based Chinese charset encodings.
 Encodings supported are as follows.
 
-  euc-cn	EUC (Extended Unix Character)
-  gb2312	The raw (low-bit) GB2312 character map
-  gb12345	Traditional chinese counterpart to GB2312 (raw)
-  iso-ir-165	GB2312 + GB6345 + GB8565 + additions
-  cp936		Code Page 936, also known as GBK (Extended GuoBiao)
-  hz		7-bit escaped GB2312 encoding
+  Canonical   Alias		Description
+  --------------------------------------------------------------------
+  euc-cn      /\beuc.*cn$/i	EUC (Extended Unix Character)
+	      /\bcn.*euc$/i
+              /\bGB[-_ ]?2312(?:\D.*$|$)/i (see below)
+  gb2312-raw			The raw (low-bit) GB2312 character map
+  gb12345-raw			Traditional chinese counterpart to 
+				GB2312 (raw)
+  iso-ir-165			GB2312 + GB6345 + GB8565 + additions
+  MacChineseSimp                GB2312 + Apple Additions
+  cp936				Code Page 936, also known as GBK 
+				(Extended GuoBiao)
+  hz				7-bit escaped GB2312 encoding
+  --------------------------------------------------------------------
 
 To find how to use this module in detail, see L<Encode>.
 
@@ -41,17 +56,18 @@ Due to size concerns, C<GB 18030> (an extension to C<GBK>) is distributed
 separately on CPAN, under the name L<Encode::HanExtra>. That module
 also contains extra Taiwan-based encodings.
 
-This module will automatically load L<Encode::HanExtra> if you have it on
-your machine.
-
 =head1 BUGS
 
-ASCII part (0x00-0x7f) is preserved for all encodings, even though it
-conflicts with mappings by the Unicode Consortium.  See
+When you see C<charset=gb2312> on mails and web pages, they really
+mean C<euc-cn> encodings.  To fix that, C<gb2312> is aliased to C<euc-cn>.
+Use C<gb2312-raw> when you really mean it.
 
-F<http://www.debian.or.jp/~kubota/unicode-symbols.html.en>
+The ASCII region (0x00-0x7f) is preserved for all encodings, even though
+this conflicts with mappings by the Unicode Consortium.  See
 
-to find why it is implemented that way.
+L<http://www.debian.or.jp/~kubota/unicode-symbols.html.en>
+
+to find out why it is implemented that way.
 
 =head1 SEE ALSO
 

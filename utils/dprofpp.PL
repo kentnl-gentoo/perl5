@@ -2,6 +2,7 @@
 
 use Config;
 use File::Basename qw(&basename &dirname);
+use File::Spec;
 
 # List explicitly here the variables you want Configure to
 # generate.  Metaconfig only looks for shell variables, so you
@@ -17,7 +18,7 @@ chdir(dirname($0));
 $file =~ s/\.pl$// if ($Config{'osname'} eq 'OS2');      # "case-forgiving"
 $file =~ s/\.pl$/.com/ if ($Config{'osname'} eq 'VMS');  # "case-forgiving"
 
-my $dprof_pm = '../ext/Devel/DProf/DProf.pm';
+my $dprof_pm = File::Spec->catfile(File::Spec->updir, 'ext', 'Devel', 'DProf', 'DProf.pm');
 my $VERSION = 0;
 open( PM, "<$dprof_pm" ) || die "Can't open $dprof_pm: $!";
 while(<PM>){
@@ -896,10 +897,12 @@ sub run_profiler {
 	my $script = shift;
 	my $profiler = shift;
 	my $startperl = shift;
+	my @script_parts = split /\s+/, $script;
 
-	system $startperl, "-d:$profiler", $script;
+	system $startperl, "-d:$profiler", @script_parts;
 	if( $? / 256 > 0 ){
-		die "Failed: $startperl -d:$profiler $script: $!";
+		my $cmd = join ' ', @script_parts;
+		die "Failed: $startperl -d:$profiler $cmd: $!";
 	}
 }
 

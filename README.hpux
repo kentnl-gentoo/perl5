@@ -97,7 +97,7 @@ The most recent upgrade to the PA-RISC design, it added support for
 64-bit integer data.
 
 As of the date of this document's last update, the following systems
-contain PA-RISC 2.0 chips (this is very likely to be out of date):
+contain PA-RISC 2.0 chips:
 
     700, 780, 781, 782, 783, 785, 802, 804, 810, 820, 861, 871, 879, 889,
     893, 895, 896, 898, 899, A400, A500, B1000, B2000, C130, C140, C160,
@@ -105,9 +105,9 @@ contain PA-RISC 2.0 chips (this is very likely to be out of date):
     D280, D370, D380, D390, D650, J220, J2240, J280, J282, J400, J410,
     J5000, J5500XM, J5600, J7000, J7600, K250, K260, K260-EG, K270, K360,
     K370, K380, K450, K460, K460-EG, K460-XP, K470, K570, K580, L1000,
-    L2000, L3000, N4000, R380, R390, RP5400, RP5430, RP5450, RP5470,
-    RP7400, RP8400, SD16000, SD32000, SD64000, T540, T600, V2000, V2200,
-    V2250, V2500, V2600
+    L2000, L3000, N4000, R380, R390, RP2400, RP2430, RP2450, RP2470,
+    RP5400, RP5430, RP5450, RP5470, RP7400, RP7410, RP8400, SD16000,
+    SD32000, SD64000, T540, T600, V2000, V2200, V2250, V2500, V2600
 
 =head2 Itanium
 
@@ -254,6 +254,22 @@ flag -Aa is added to the cpprun and cppstdin variables in the config.sh
 file (though see the section on 64-bit perl below). If you are using a
 recent version of the Perl distribution, these flags are set automatically.
 
+=head2 The GNU C Compiler
+
+When you are going to use the GNU C compiler (gcc), and you don't have
+gcc yet, you can either build it yourself from the sources (available
+from e.g. http://www.gnu.ai.mit.edu/software/gcc/releases.html) or fetch
+a prebuilt binary from the HP porting center. There are two places where
+gcc prebuilds can be fetched the first and best (for HP-UX 11 only) is
+http://h21007.www2.hp.com/dspp/tech/tech_TechSoftwareDetailPage_IDX/1,1703,547,00.html
+the second is http://hpux.cs.utah.edu/hppd/hpux/Gnu/ where you can also
+find the GNU binutils package. (Browse through the list, because there
+are often multiple versions of the same package available).
+
+Building a 64bit capable gcc from source is possible only when you have
+the HP C-ANSI C compiler available, which you should use anyway when
+building perl.
+
 =head2 Using Large Files with Perl on HP-UX
 
 Beginning with HP-UX version 10.20, files larger than 2GB (2^31 bytes)
@@ -263,7 +279,8 @@ using the -Duselargefiles flag to Configure.  This causes Perl to be
 compiled using structures and functions in which these are 64 bits wide,
 rather than 32 bits wide.  (Note that this will only work with HP's ANSI
 C compiler.  If you want to compile Perl using gcc, you will have to get
-a version of the compiler that support 64-bit operations.)
+a version of the compiler that support 64-bit operations. See above for
+where to find it.)
 
 There are some drawbacks to this approach.  One is that any extension
 which calls any file-manipulating C function will need to be recompiled
@@ -365,6 +382,21 @@ expected.
 compiler.  If you want to compile Perl using gcc, you will have to get a
 version of the compiler that support 64-bit operations.)
 
+=head2 Oracle on HP-UX
+
+Using perl to connect to Oracle databases through DBI and DBD::Oracle
+has caused a lot of people many headaches. Read README.hpux in the
+DBD::Oracle for much more information. The reason to mention it here
+is that Oracle requires a perl built with libcl and libpthread, the
+latter even when perl is build without threads. Building perl using
+all defaults, but still enabling to build DBD::Oracle later on can be
+achieved using
+
+  Configure -A prepend:libswanted='cl pthread ' ...
+
+Do not forget the space before the trailing quote. Also note that this
+does not (yet) work with 64bit versions of GCC.
+
 =head2 GDBM and Threads on HP-UX
 
 If you attempt to compile Perl with threads on an 11.X system and also
@@ -450,6 +482,6 @@ With much assistance regarding shared libraries from Marc Sabatella.
 
 =head1 DATE
 
-Version 0.6.5: 2002-02-27
+Version 0.6.6: 2002-05-30
 
 =cut

@@ -2,16 +2,14 @@ use ExtUtils::MakeMaker;
 # See lib/ExtUtils/MakeMaker.pm for details of how to influence
 # the contents of the Makefile that is written.
 
-use Config;
-
-
-unless($Config{'useithreads'} eq 'define') {
-    die "We need a perl that is built with USEITHREAD!\n";
-}
-
 WriteMakefile(
     'NAME'		=> 'threads::shared',
     'VERSION_FROM'	=> 'shared.pm', # finds $VERSION
+	      'PM' => {
+		  'shared.pm'    => '$(INST_LIBDIR)/shared.pm',
+		  'queue.pm'     => '$(INST_LIBDIR)/shared/queue.pm',
+		  'semaphore.pm' => '$(INST_LIBDIR)/shared/semaphore.pm',
+	      },
     'PREREQ_PM'		=> {}, # e.g., Module::Name => 1.1
     ($] >= 5.005 ?    ## Add these new keywords supported since 5.005
       (ABSTRACT_FROM => 'shared.pm', # retrieve abstract from module

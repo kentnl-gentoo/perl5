@@ -111,6 +111,8 @@
 
     Package `%s' not found (did you use the incorrect case?)
 
+    Use of /g modifier is meaningless in split
+
     Mandatory Warnings 
     ------------------
     Prototype mismatch:		[cv_ckproto]
@@ -128,10 +130,13 @@ __END__
 use warnings 'misc' ;
 my $x ;
 my $x ;
+my $y = my $y ;
 no warnings 'misc' ;
 my $x ;
+my $y ;
 EXPECT
 "my" variable $x masks earlier declaration in same scope at - line 4.
+"my" variable $y masks earlier declaration in same statement at - line 5.
 ########
 # op.c
 use warnings 'closure' ;
@@ -773,7 +778,7 @@ no warnings 'redefine' ;
 sub fred () { 1 }
 *fred = sub () { 2 };
 EXPECT
-Constant subroutine fred redefined at - line 4.
+Constant subroutine main::fred redefined at - line 4.
 ########
 # op.c
 use warnings 'redefine' ;
@@ -804,11 +809,20 @@ EXPECT
 Hash %FRED missing the % in argument 1 of keys() at - line 3.
 ########
 # op.c
+BEGIN {
+    if ($^O eq 'MacOS') {
+	print <<EOM;
+SKIPPED
+# no exec on Mac OS
+EOM
+	exit;
+    }
+}
 use warnings 'syntax' ;
 exec "$^X -e 1" ; 
 my $a
 EXPECT
-Statement unlikely to be reached at - line 4.
+Statement unlikely to be reached at - line 13.
 	(Maybe you meant system() when you said exec()?)
 ########
 # op.c
@@ -833,6 +847,15 @@ defined(%hash) is deprecated at - line 3.
 	(Maybe you should just omit the defined()?)
 ########
 # op.c
+BEGIN {
+    if ($^O eq 'MacOS') {
+	print <<EOM;
+SKIPPED
+# no exec on Mac OS
+EOM
+	exit;
+    }
+}
 no warnings 'syntax' ;
 exec "$^X -e 1" ; 
 my $a
@@ -952,3 +975,12 @@ EXPECT
 Use of "package" with no arguments is deprecated at - line 3.
 Global symbol "BEGIN" requires explicit package name at - line 4.
 BEGIN not safe after errors--compilation aborted at - line 4.
+########
+# op.c
+# 20020401 mjd@plover.com at suggestion of jfriedl@yahoo.com
+use warnings 'regexp';
+split /blah/g, "blah";
+no warnings 'regexp';
+split /blah/g, "blah";
+EXPECT
+Use of /g modifier is meaningless in split at - line 4.

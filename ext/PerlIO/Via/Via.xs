@@ -55,6 +55,14 @@ PerlIOVia_fetchmethod(pTHX_ PerlIOVia *s,char *method,CV **save)
   }
 }
 
+/*
+ * Try and call method, possibly via cached lookup.
+ * If method does not exist return Nullsv (caller may fallback to another approach
+ * If method does exist call it with flags passing variable number of args
+ * Last arg is a "filehandle" to layer below (if present)
+ * Returns scalar returned by method (if any) otherwise sv_undef
+ */
+
 SV *
 PerlIOVia_method(pTHX_ PerlIO *f,char *method,CV **save,int flags,...)
 {
@@ -68,7 +76,9 @@ PerlIOVia_method(pTHX_ PerlIO *f,char *method,CV **save,int flags,...)
    IV count;
    dSP;
    SV *arg;
+   PUSHSTACKi(PERLSI_MAGIC);
    ENTER;
+   SPAGAIN;
    PUSHMARK(sp);
    XPUSHs(s->obj);
    while ((arg = va_arg(ap,SV *)))
@@ -88,6 +98,10 @@ PerlIOVia_method(pTHX_ PerlIO *f,char *method,CV **save,int flags,...)
      IoOFP(s->io) = PerlIONext(f);
      XPUSHs(s->fh);
     }
+   else
+    {
+     PerlIO_debug("No next\n");
+    }
    PUTBACK;
    count = call_sv((SV *)cv,flags);
    if (count)
@@ -101,6 +115,7 @@ PerlIOVia_method(pTHX_ PerlIO *f,char *method,CV **save,int flags,...)
      result = &PL_sv_undef;
     }
    LEAVE;
+   POPSTACK;
   }
  va_end(ap);
  return result;
@@ -115,7 +130,9 @@ PerlIOVia_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg)
    PerlIOVia *s = PerlIOSelf(f,PerlIOVia);
    if (!arg)
     {
-     Perl_warn(aTHX_ "No package specified");
+     if (ckWARN(WARN_LAYER))
+      Perl_warner(aTHX_ packWARN(WARN_LAYER), "No package specified");
+     errno = EINVAL;
      code = -1;
     }
    else
@@ -145,7 +162,8 @@ PerlIOVia_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg)
       }
      else
       {
-       Perl_warn(aTHX_ "Cannot find package '%.*s'",(int) pkglen,pkg);
+       if (ckWARN(WARN_LAYER))
+         Perl_warner(aTHX_ packWARN(WARN_LAYER), "Cannot find package '%.*s'",(int) pkglen,pkg);
 #ifdef ENOSYS
        errno = ENOSYS;
 #else
@@ -161,7 +179,9 @@ PerlIOVia_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg)
 }
 
 PerlIO *
-PerlIOVia_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const char *mode, int fd, int imode, int perm, PerlIO *f, int narg, SV **args)
+PerlIOVia_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n,
+               const char *mode, int fd, int imode, int perm,
+               PerlIO *f, int narg, SV **args)
 {
  if (!f)
   {
@@ -169,6 +189,7 @@ PerlIOVia_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const char
   }
  else
   {
+   /* Reopen */
    if (!PerlIO_push(aTHX_ f,self,mode,PerlIOArg))
     return NULL;
   }
@@ -204,7 +225,44 @@ PerlIOVia_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const char
       }
     }
    else
-    return NULL;
+    {
+	/* Required open method not present */
+	PerlIO_funcs *tab = NULL;
+	IV m = n-1;
+	while (m >= 0) {
+	    PerlIO_funcs *t = PerlIO_layer_fetch(aTHX_ layers, m, NULL);
+	    if (t && t->Open) {
+		tab = t;
+		break;
+	    }
+	    n--;
+	}
+	if (tab) {
+	    if ((*tab->Open) (aTHX_ tab, layers, m, mode, fd, imode, perm,
+			      PerlIONext(f), narg, args)) {
+		PerlIO_debug("Opened with %s => %p->%p\n",tab->name,PerlIONext(f),*PerlIONext(f));
+		if (m + 1 < n) {
+		    /*
+		     * More layers above the one that we used to open -
+		     * apply them now
+		     */
+		    if (PerlIO_apply_layera(aTHX_ PerlIONext(f), mode, layers, m+1, n) != 0) {
+			/* If pushing layers fails close the file */
+			PerlIO_close(f);
+			f = NULL;
+		    }
+		}
+		return f;
+	    }
+	    else {
+		/* Sub-layer open failed */
+	    }
+	}
+	else {
+	    /* Nothing to do the open */
+	}
+     return NULL;
+    }
   }
  return f;
 }
@@ -492,7 +550,7 @@ PerlIO_funcs PerlIO_object = {
  PERLIO_K_BUFFERED|PERLIO_K_DESTRUCT,
  PerlIOVia_pushed,
  PerlIOVia_popped,
- NULL, /* PerlIOVia_open, */
+ PerlIOVia_open, /* NULL, */
  PerlIOVia_getarg,
  PerlIOVia_fileno,
  PerlIOVia_dup,

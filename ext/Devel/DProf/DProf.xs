@@ -3,14 +3,31 @@
 #include "perl.h"
 #include "XSUB.h"
 
+/* define DBG_SUB to cause a warning on each subroutine entry. */
 /*#define DBG_SUB 1      */
-/*#define DBG_TIMER 1    */
+
+/* define DBG_TIMER to cause a warning when the timer is turned on and off. */
+/*#define DBG_TIMER 1  */
 
 #ifdef DBG_SUB
-#  define DBG_SUB_NOTIFY(A,B) warn(A, B)
+#  define DBG_SUB_NOTIFY(A) dprof_dbg_sub_notify(A)
+void
+dprof_dbg_sub_notify(SV *Sub) {
+    CV   *cv = INT2PTR(CV*,SvIVX(Sub));
+    GV   *gv = cv ? CvGV(cv) : NULL;
+    if (cv && gv) {
+	warn("XS DBsub(%s::%s)\n",
+	     ((GvSTASH(gv) && HvNAME(GvSTASH(gv))) ?
+	      HvNAME(GvSTASH(gv)) : "(null)"),
+	     GvNAME(gv));
+    } else {
+	warn("XS DBsub(unknown) at %x", Sub);
+    }
+}
 #else
-#  define DBG_SUB_NOTIFY(A,B)  /* nothing */
+#  define DBG_SUB_NOTIFY(A)  /* nothing */
 #endif
+
 
 #ifdef DBG_TIMER
 #  define DBG_TIMER_NOTIFY(A) warn(A)
@@ -521,21 +538,21 @@ XS(XS_DB_sub)
     /* profile only the interpreter that loaded us */
     if (g_THX != aTHX) {
         PUSHMARK(ORIGMARK);
-        perl_call_sv(INT2PTR(SV*,SvIV(Sub)), GIMME | G_NODEBUG);
+        perl_call_sv(INT2PTR(SV*,SvIV(Sub)), GIMME_V | G_NODEBUG);
     }
     else
 #endif
     {
 	HV *oldstash = PL_curstash;
 
-        DBG_SUB_NOTIFY("XS DBsub(%s)\n", SvPV_nolen(Sub));
+        DBG_SUB_NOTIFY(Sub);
 
 	SAVEDESTRUCTOR_X(check_depth, INT2PTR(void*,g_depth));
 	g_depth++;
 
         prof_mark(aTHX_ OP_ENTERSUB);
         PUSHMARK(ORIGMARK);
-        perl_call_sv(INT2PTR(SV*,SvIV(Sub)), GIMME | G_NODEBUG);
+        perl_call_sv(INT2PTR(SV*,SvIV(Sub)), GIMME_V | G_NODEBUG);
         PL_curstash = oldstash;
         prof_mark(aTHX_ OP_LEAVESUB);
 	g_depth--;
@@ -568,7 +585,7 @@ XS(XS_DB_goto)
                 HV *oldstash = PL_curstash;
 		SV *Sub = GvSV(PL_DBsub);	/* name of current sub */
                 /* SP -= items;  added by xsubpp */
-                DBG_SUB_NOTIFY("XS DBsub(%s)\n", SvPV_nolen(Sub));
+                DBG_SUB_NOTIFY(Sub);
 
                 sv_setiv(PL_DBsingle, 0);	/* disable DB single-stepping */
 
@@ -576,7 +593,7 @@ XS(XS_DB_goto)
                 PUSHMARK(ORIGMARK);
 
                 PL_curstash = PL_debstash;	/* To disable debugging of perl_call_sv */
-                perl_call_sv(Sub, GIMME);
+                perl_call_sv(Sub, GIMME_V);
                 PL_curstash = oldstash;
 
                 prof_mark(aTHX_ OP_LEAVESUB);
@@ -632,7 +649,7 @@ BOOT:
          * while we do this.
          */
         {
-	    I32 warn_tmp = PL_dowarn;
+	    bool warn_tmp = PL_dowarn;
 	    PL_dowarn = 0;
 	    newXS("DB::sub", XS_DB_sub, file);
 	    newXS("DB::goto", XS_DB_goto, file);

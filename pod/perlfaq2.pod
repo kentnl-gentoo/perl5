@@ -1,6 +1,6 @@
 =head1 NAME
 
-perlfaq2 - Obtaining and Learning about Perl ($Revision: 1.8 $, $Date: 2002/02/08 22:31:57 $)
+perlfaq2 - Obtaining and Learning about Perl ($Revision: 1.13 $, $Date: 2002/04/26 16:56:35 $)
 
 =head1 DESCRIPTION
 
@@ -183,10 +183,10 @@ following groups:
 
     comp.infosystems.www.authoring.cgi 	Writing CGI scripts for the Web.
 
-There is also Usenet gateway to Perl mailing lists sponsored by perl.org at 
-nntp://nntp.perl.org, or a web interface to the same lists at
-http://nntp.perl.org/group/.  Other groups are listed at 
-http://lists.perl.org.
+There is also a Usenet gateway to Perl mailing lists sponsored by perl.org at 
+nntp://nntp.perl.org , or a web interface to the same lists at
+http://nntp.perl.org/group/ .  Other groups are listed at 
+http://lists.perl.org/ .
 
 =head2 Where should I post source code?
 
@@ -194,11 +194,11 @@ You should post source code to whichever group is most appropriate, but
 feel free to cross-post to comp.lang.perl.misc.  If you want to cross-post
 to alt.sources, please make sure it follows their posting standards,
 including setting the Followup-To header line to NOT include alt.sources;
-see their FAQ (http://www.faqs.org/faqs/alt-sources-intro/) for details.
+see their FAQ ( http://www.faqs.org/faqs/alt-sources-intro/ ) for details.
 
 If you're just looking for software, first use Google
-(http://www.google.com), Google's usenet search interface
-(http://groups.google.com),  and CPAN Search (http://search.cpan.org).  
+( http://www.google.com ), Google's usenet search interface
+( http://groups.google.com ),  and CPAN Search ( http://search.cpan.org ).  
 This is faster and more productive than just posting a request.
 
 =head2 Perl Books
@@ -255,8 +255,8 @@ If you are more at home in Windows the following is available
 	ISBN 1-56592-324-3 [1st edition August 1997]
 	http://www.oreilly.com/catalog/lperlwin/
 
-Addison-Wesley (http://www.awlonline.com/) and Manning
-(http://www.manning.com/) are also publishers of some fine Perl books
+Addison-Wesley ( http://www.awlonline.com/ ) and Manning
+( http://www.manning.com/ ) are also publishers of some fine Perl books
 such as I<Object Oriented Programming with Perl> by Damian Conway and
 I<Network Programming with Perl> by Lincoln Stein.
 
@@ -278,12 +278,12 @@ Recommended books on (or mostly on) Perl follow.
 	http://www.oreilly.com/catalog/pperl3/
 
     Perl 5 Pocket Reference
-        by Johan Vromans
+    by Johan Vromans
 	ISBN 0-596-00032-4 [3rd edition May 2000]
 	http://www.oreilly.com/catalog/perlpr3/
 
     Perl in a Nutshell
-        by Ellen Siever, Stephan Spainhour, and Nathan Patwardhan
+    by Ellen Siever, Stephan Spainhour, and Nathan Patwardhan
 	ISBN 1-56592-286-7 [1st edition December 1998]
 	http://www.oreilly.com/catalog/perlnut/
 
@@ -291,7 +291,7 @@ Recommended books on (or mostly on) Perl follow.
 
     Elements of Programming with Perl
 	by Andrew L. Johnson
-	ISBN 1884777805 [1st edition October 1999]
+	ISBN 1-884777-80-5 [1st edition October 1999]
 	http://www.manning.com/Johnson/
 
     Learning Perl
@@ -308,8 +308,8 @@ Recommended books on (or mostly on) Perl follow.
     Perl: The Programmer's Companion
 	by Nigel Chapman
 	ISBN 0-471-97563-X [1997, 3rd printing Spring 1998]
-        http://www.wiley.com/compbooks/catalog/97563-X.htm
-        http://www.wiley.com/compbooks/chapman/perl/perltpc.html (errata etc)
+    http://www.wiley.com/compbooks/catalog/97563-X.htm
+    http://www.wiley.com/compbooks/chapman/perl/perltpc.html (errata etc)
 
     Cross-Platform Perl
 	by Eric Foster-Johnson
@@ -351,18 +351,18 @@ Recommended books on (or mostly on) Perl follow.
     Object Oriented Perl
 	Damian Conway
 	    with foreword by Randal L. Schwartz
-	ISBN 1884777791 [1st edition August 1999]
+	ISBN 1-884777-79-1 [1st edition August 1999]
 	http://www.manning.com/Conway/
 
     Data Munging with Perl
-        Dave Cross
-        ISBN 1930110006 [1st edition 2001]
-        http://www.manning.com/cross
+	Dave Cross
+	ISBN 1-930110-00-6 [1st edition 2001]
+	http://www.manning.com/cross
 
-    Learning Perl/Tk
-        by Nancy Walsh
-	ISBN 1-56592-314-6 [1st edition January 1999]
-	http://www.oreilly.com/catalog/lperltk/
+	Mastering Perl/Tk
+	by Steve Lidie and Nancy Walsh
+	ISBN 1-56592-716-8 [1st edition January 2002]
+	http://www.oreilly.com/catalog/mastperltk/
 
 =back
 
@@ -375,11 +375,11 @@ development, databases, Win32 Perl, graphical programming, regular
 expressions, and networking, and sponsors the Obfuscated Perl Contest
 and the Perl Poetry Contests.  As of mid-2001, the dead tree version
 of TPJ will be published as a quarterly supplement of SysAdmin
-magazine ( http://www.sysadmin.com/ ) For more details on TPJ,
+magazine ( http://www.sysadminmag.com/ ) For more details on TPJ,
 see http://www.tpj.com/
 
 Beyond this, magazines that frequently carry quality articles on
-Perl are I<Web Techniques> ( http://www.webtechniques.com/ ),
+Perl are I<The Perl Review> ( http://www.theperlreview.com ),
 I<Unix Review> ( http://www.unixreview.com/ ),
 I<Linux Magazine> ( http://www.linuxmagazine.com/ ),
 and Usenix's newsletter/magazine to its members, I<login:>
@@ -394,7 +394,7 @@ http://www.stonehenge.com/merlyn/LinuxMag/ .
 
 To get the best performance, pick a site from
 the list below and use it to grab the complete list of mirror sites
-which is at /CPAN/MIRRORED.BY or at http://mirror.cpan.org/.
+which is at /CPAN/MIRRORED.BY or at http://mirror.cpan.org/ .
 From there you can find the quickest site for you.  Remember, the
 following list is I<not> the complete list of CPAN mirrors
 (the complete list contains 165 sites as of January 2001):
@@ -407,7 +407,6 @@ following list is I<not> the complete list of CPAN mirrors
   ftp://ftp.uvsq.fr/pub/perl/CPAN/
   ftp://ftp.funet.fi/pub/languages/perl/CPAN/
   ftp://ftp.dti.ad.jp/pub/lang/CPAN/
-  ftp://mirror.aarnet.edu.au/pub/perl/CPAN/
   ftp://cpan.if.usp.br/pub/mirror/CPAN/
 
 One may also use xx.cpan.org where "xx" is the 2-letter country code
@@ -420,7 +419,7 @@ Most of the major modules (Tk, CGI, libwww-perl) have their own
 mailing lists.  Consult the documentation that came with the module for
 subscription information.
 
-	http://lists.cpan.org/	
+	http://lists.cpan.org/
 
 =head2 Archives of comp.lang.perl.misc
 

@@ -127,16 +127,16 @@ DeadCode(pTHX)
 #endif /* !PURIFY */
 }
 
-#if defined(PERL_DEBUGGING_MSTATS) || defined(DEBUGGING_MSTATS) \
-	|| (defined(MYMALLOC) && !defined(PLAIN_MALLOC))
+#if (defined(PERL_DEBUGGING_MSTATS) || defined(DEBUGGING_MSTATS)) \
+	&& (defined(MYMALLOC) && !defined(PLAIN_MALLOC))
 #   define mstat(str) dump_mstats(str)
 #else
 #   define mstat(str) \
 	PerlIO_printf(Perl_debug_log, "%s: perl not compiled with DEBUGGING_MSTATS\n",str);
 #endif
 
-#if defined(PERL_DEBUGGING_MSTATS) || defined(DEBUGGING_MSTATS) \
-	|| (defined(MYMALLOC) && !defined(PLAIN_MALLOC))
+#if (defined(PERL_DEBUGGING_MSTATS) || defined(DEBUGGING_MSTATS)) \
+	&& (defined(MYMALLOC) && !defined(PLAIN_MALLOC))
 
 /* Very coarse overestimate, 2-per-power-of-2, one more to determine NBUCKETS. */
 #  define _NBUCKETS (2*8*IVSIZE+1)
@@ -342,7 +342,8 @@ PPCODE:
     SV *dumpop = perl_get_sv("Devel::Peek::dump_ops", FALSE);
     I32 save_dumpindent = PL_dumpindent;
     PL_dumpindent = 2;
-    do_sv_dump(0, Perl_debug_log, sv, 0, lim, dumpop && SvTRUE(dumpop), pv_lim);
+    do_sv_dump(0, Perl_debug_log, sv, 0, lim,
+	       (bool)(dumpop && SvTRUE(dumpop)), pv_lim);
     PL_dumpindent = save_dumpindent;
 }
 
@@ -360,7 +361,8 @@ PPCODE:
 
     for (i=1; i<items; i++) {
 	PerlIO_printf(Perl_debug_log, "Elt No. %ld  0x%"UVxf"\n", i - 1, PTR2UV(ST(i)));
-	do_sv_dump(0, Perl_debug_log, ST(i), 0, lim, dumpop && SvTRUE(dumpop), pv_lim);
+	do_sv_dump(0, Perl_debug_log, ST(i), 0, lim,
+		   (bool)(dumpop && SvTRUE(dumpop)), pv_lim);
     }
     PL_dumpindent = save_dumpindent;
 }

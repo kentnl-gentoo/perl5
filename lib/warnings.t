@@ -7,28 +7,39 @@ BEGIN {
     require Config; import Config;
 }
 
+use File::Path;
+use File::Spec::Functions;
+
 $| = 1;
 
 my $Is_VMS     = $^O eq 'VMS';
 my $Is_MSWin32 = $^O eq 'MSWin32';
 my $Is_NetWare = $^O eq 'NetWare';
+my $Is_MacOS   = $^O eq 'MacOS';
 my $tmpfile = "tmp0000";
 my $i = 0 ;
-1 while -f ++$tmpfile;
+1 while -e ++$tmpfile;
 END {  if ($tmpfile) { 1 while unlink $tmpfile} }
 
 my @prgs = () ;
 my @w_files = () ;
 
 if (@ARGV)
-  { print "ARGV = [@ARGV]\n" ; @w_files = map { s#^#./lib/warnings/#; $_ } @ARGV }
+  { print "ARGV = [@ARGV]\n" ;
+    if ($^O eq 'MacOS') {
+      @w_files = map { s#^#:lib:warnings:#; $_ } @ARGV
+    } else {
+      @w_files = map { s#^#./lib/warnings/#; $_ } @ARGV
+    }
+  }
 else
-  { @w_files = sort glob("lib/warnings/*") }
+  { @w_files = sort glob(catfile(curdir(), "lib", "warnings", "*")) }
 
 my $files = 0;
 foreach my $file (@w_files) {
 
     next if $file =~ /(~|\.orig|,v)$/;
+    next if $file =~ /perlio$/ && !(find PerlIO::Layer 'perlio');
 
     open F, "<$file" or die "Cannot open $file: $!\n" ;
     my $line = 0;
@@ -58,6 +69,7 @@ for (@prgs){
      }
     my $switch = "";
     my @temps = () ;
+    my @temp_path = () ;
     if (s/^\s*-\w+//){
         $switch = $&;
         $switch =~ s/(-\S*[A-Z]\S*)/"$1"/ if $Is_VMS; # protect uc switches
@@ -73,6 +85,10 @@ for (@prgs){
 	    my $filename = shift @files ;
 	    my $code = shift @files ;
     	    push @temps, $filename ;
+    	    if ($filename =~ m#(.*)/#) {
+                mkpath($1);
+                push(@temp_path, $1);
+    	    }
 	    open F, ">$filename" or die "Cannot open $filename: $!\n" ;
 	    print F $code ;
 	    close F or die "Cannot close $filename: $!\n";
@@ -80,6 +96,13 @@ for (@prgs){
 	shift @files ;
 	$prog = shift @files ;
     }
+
+    # fix up some paths
+    if ($^O eq 'MacOS') {
+	$prog =~ s|require "./abc(d)?";|require ":abc$1";|g;
+	$prog =~ s|"\."|":"|g;
+    }
+
     open TEST, ">$tmpfile" or die "Cannot open >$tmpfile: $!";
     print TEST q{
         BEGIN {
@@ -115,6 +138,13 @@ for (@prgs){
     $results =~ s/^(syntax|parse) error/syntax error/mig;
     # allow all tests to run when there are leaks
     $results =~ s/Scalars leaked: \d+\n//g;
+
+    # fix up some paths
+    if ($^O eq 'MacOS') {
+	$results =~ s|:abc\.pm\b|abc.pm|g;
+	$results =~ s|:abc(d)?\b|./abc$1|g;
+    }
+
     $expected =~ s/\n+$//;
     my $prefix = ($results =~ s#^PREFIX(\n|$)##) ;
     # any special options? (OPTIONS foo bar zap)
@@ -124,7 +154,7 @@ for (@prgs){
 	foreach my $option (split(' ', $1)) {
 	    if ($option eq 'regex') { # allow regular expressions
 		$option_regex = 1;
-	    } 
+	    }
 	    elsif ($option eq 'random') { # all lines match, but in any order
 		$option_random = 1;
 	    }
@@ -154,6 +184,8 @@ for (@prgs){
     print "ok ", ++$i, "\n";
     foreach (@temps)
 	{ unlink $_ if $_ }
+    foreach (@temp_path)
+	{ rmtree $_ if -d $_ }
 }
 
 sub randomMatch

@@ -2,12 +2,16 @@
 
 my $child;
 my $can_fork;
+my $has_perlio;
 
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require Config; import Config;
-    $can_fork = $Config{d_fork} || ($^O eq 'MSWin32' && $Config{useithreads});
+    $can_fork = $Config{'d_fork'}
+		|| ($^O eq 'MSWin32' && $Config{useithreads}
+		    && $Config{ccflags} =~ /-DPERL_IMPLICIT_SYS\b/);
+
 
     if ($^O eq "hpux" or $Config{'extensions'} !~ /\bSocket\b/ &&
         !(($^O eq 'VMS') && $Config{d_socket})) {
@@ -29,13 +33,18 @@ BEGIN {
         $SIG{INT} = sub {exit 0}; # You have 60 seconds. Your time starts now.
         my $must_finish_by = time + 60;
         my $remaining;
-        while ($remaining = time - $must_finish_by) {
+        while (($remaining = $must_finish_by - time) > 0) {
           sleep $remaining;
         }
         warn "Something unexpectedly hung during testing";
         kill "INT", $parent or die "Kill failed: $!";
         exit 1;
       }
+    }
+    unless ($has_perlio = find PerlIO::Layer 'perlio') {
+	print <<EOF;
+# Since you don't have perlio you might get failures with UTF-8 locales.
+EOF
     }
 }
 
@@ -54,7 +63,8 @@ if( !$Config{d_alarm} ) {
 } else {
   # This should fail but not die if there is real socketpair
   eval {socketpair LEFT, RIGHT, -1, -1, -1};
-  if ($@ =~ /^Unsupported socket function "socketpair" called/) {
+  if ($@ =~ /^Unsupported socket function "socketpair" called/ ||
+      $! =~ /^The operation requested is not supported./) { # Stratus VOS
     plan skip_all => 'No socketpair (real or emulated)';
   } else {
     eval {AF_UNIX};
@@ -72,6 +82,11 @@ $SIG{ALRM} = sub {die "Unexpected alarm during testing"};
 ok (socketpair (LEFT, RIGHT, AF_UNIX, SOCK_STREAM, PF_UNSPEC),
     "socketpair (LEFT, RIGHT, AF_UNIX, SOCK_STREAM, PF_UNSPEC)")
   or print "# \$\! = $!\n";
+
+if ($has_perlio) {
+    binmode(LEFT,  ":bytes");
+    binmode(RIGHT, ":bytes");
+}
 
 my @left = ("hello ", "world\n");
 my @right = ("perl ", "rules!"); # Not like I'm trying to bias any survey here.
@@ -102,7 +117,8 @@ ok (shutdown(LEFT, SHUT_WR), "shutdown left for writing");
 {
   local $SIG{ALRM} = sub { warn "EOF on right took over 3 seconds" };
   local $TODO = "Known problems with unix sockets on $^O"
-      if $^O eq 'hpux' || $^O eq 'unicosmk';
+      if $^O eq 'hpux'   || $^O eq 'super-ux' ||
+         $^O eq 'unicos' || $^O eq 'unicosmk';
   alarm 3;
   $! = 0;
   ok (eof RIGHT, "right is at EOF");
@@ -153,11 +169,16 @@ ok (close RIGHT, "close right");
 
 SKIP: {
   skip "No usable SOCK_DGRAM for socketpair", 24 if ($^O =~ /^(MSWin32|os2)\z/);
-
+  local $TODO = "socketpair not supported on $^O" if $^O eq 'nto';
 
 ok (socketpair (LEFT, RIGHT, AF_UNIX, SOCK_DGRAM, PF_UNSPEC),
     "socketpair (LEFT, RIGHT, AF_UNIX, SOCK_DGRAM, PF_UNSPEC)")
   or print "# \$\! = $!\n";
+
+if ($has_perlio) {
+    binmode(LEFT,  ":bytes");
+    binmode(RIGHT, ":bytes");
+}
 
 foreach (@left) {
   # is (syswrite (LEFT, $_), length $_, "write " . _qq ($_) . " to left");

@@ -174,7 +174,11 @@ typedef U64TYPE U64;
 
 #define I32_MAX INT32_MAX
 #define I32_MIN INT32_MIN
-#define U32_MAX UINT32_MAX
+#ifndef UINT32_MAX_BROKEN /* e.g. HP-UX with gcc messes this up */
+#  define U32_MAX UINT32_MAX
+#else
+#  define U32_MAX 4294967295U
+#endif
 #define U32_MIN UINT32_MIN
 
 #else
@@ -456,7 +460,10 @@ Converts the specified character to lowercase.
 #define isBLANK_LC_uni(c)	isBLANK(c) /* could be wrong */
 
 #define isALNUM_utf8(p)		is_utf8_alnum(p)
-#define isIDFIRST_utf8(p)	is_utf8_idfirst(p)
+/* The ID_Start of Unicode is quite limiting: it assumes a L-class
+ * character (meaning that you cannot have, say, a CJK character).
+ * Instead, let's allow ID_Continue but not digits. */
+#define isIDFIRST_utf8(p)	(is_utf8_idcont(p) && !is_utf8_digit(p))
 #define isALPHA_utf8(p)		is_utf8_alpha(p)
 #define isSPACE_utf8(p)		is_utf8_space(p)
 #define isDIGIT_utf8(p)		is_utf8_digit(p)
@@ -571,8 +578,12 @@ destination, C<nitems> is the number of items, and C<type> is the type.
 =for apidoc Am|void|StructCopy|type src|type dest|type
 This is an architecture-independent macro to copy one structure to another.
 
-=cut
-*/
+=for apidoc Am|void|Poison|void* dest|int nitems|type
+
+Fill up memory with a pattern (byte 0xAB over and over again) that
+hopefully catches attempts to access uninitialized memory.
+
+=cut */
 
 #ifndef lint
 
@@ -616,6 +627,8 @@ extern long lastxycount[MAXXCOUNT][MAXYCOUNT];
 #define Copy(s,d,n,t)	(void)memcpy((char*)(d),(char*)(s), (n) * sizeof(t))
 #define Zero(d,n,t)	(void)memzero((char*)(d), (n) * sizeof(t))
 
+#define Poison(d,n,t)	(void)memset((char*)(d), 0xAB, (n) * sizeof(t))
+
 #else /* lint */
 
 #define New(x,v,n,s)	(v = Null(s *))
@@ -625,6 +638,7 @@ extern long lastxycount[MAXXCOUNT][MAXYCOUNT];
 #define Move(s,d,n,t)
 #define Copy(s,d,n,t)
 #define Zero(d,n,t)
+#define Poison(d,n,t)
 #define Safefree(d)	(d) = (d)
 
 #endif /* lint */

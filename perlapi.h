@@ -504,6 +504,8 @@ END_EXTERN_C
 #define PL_sig_pending		(*Perl_Isig_pending_ptr(aTHX))
 #undef  PL_sighandlerp
 #define PL_sighandlerp		(*Perl_Isighandlerp_ptr(aTHX))
+#undef  PL_sort_RealCmp
+#define PL_sort_RealCmp		(*Perl_Isort_RealCmp_ptr(aTHX))
 #undef  PL_splitstr
 #define PL_splitstr		(*Perl_Isplitstr_ptr(aTHX))
 #undef  PL_srand_called
@@ -582,6 +584,10 @@ END_EXTERN_C
 #define PL_utf8_digit		(*Perl_Iutf8_digit_ptr(aTHX))
 #undef  PL_utf8_graph
 #define PL_utf8_graph		(*Perl_Iutf8_graph_ptr(aTHX))
+#undef  PL_utf8_idcont
+#define PL_utf8_idcont		(*Perl_Iutf8_idcont_ptr(aTHX))
+#undef  PL_utf8_idstart
+#define PL_utf8_idstart		(*Perl_Iutf8_idstart_ptr(aTHX))
 #undef  PL_utf8_lower
 #define PL_utf8_lower		(*Perl_Iutf8_lower_ptr(aTHX))
 #undef  PL_utf8_mark
@@ -606,6 +612,8 @@ END_EXTERN_C
 #define PL_utf8_xdigit		(*Perl_Iutf8_xdigit_ptr(aTHX))
 #undef  PL_uudmap
 #define PL_uudmap		(*Perl_Iuudmap_ptr(aTHX))
+#undef  PL_wantutf8
+#define PL_wantutf8		(*Perl_Iwantutf8_ptr(aTHX))
 #undef  PL_warnhook
 #define PL_warnhook		(*Perl_Iwarnhook_ptr(aTHX))
 #undef  PL_widesyscalls
@@ -966,6 +974,8 @@ END_EXTERN_C
 #define PL_sharehook		(*Perl_Gsharehook_ptr(NULL))
 #undef  PL_thr_key
 #define PL_thr_key		(*Perl_Gthr_key_ptr(NULL))
+#undef  PL_threadhook
+#define PL_threadhook		(*Perl_Gthreadhook_ptr(NULL))
 #undef  PL_unlockhook
 #define PL_unlockhook		(*Perl_Gunlockhook_ptr(NULL))
 

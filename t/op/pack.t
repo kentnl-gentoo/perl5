@@ -6,7 +6,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 5619;
+plan tests => 5816;
 
 use strict;
 use warnings;
@@ -26,12 +26,12 @@ sub encode_list {
 
 sub list_eq ($$) {
   my ($l, $r) = @_;
-  return unless @$l == @$r;
+  return 0 unless @$l == @$r;
   for my $i (0..$#$l) {
     if (defined $l->[$i]) {
-      return unless defined ($r->[$i]) && $l->[$i] eq $r->[$i];
+      return 0 unless defined ($r->[$i]) && $l->[$i] eq $r->[$i];
     } else {
-      return if defined $r->[$i]
+      return 0 if defined $r->[$i]
     }
   }
   return 1;
@@ -122,11 +122,28 @@ sub list_eq ($$) {
     $y = pack('w*', Math::BigInt::->new(5000000000));
     };
     is($x, $y);
+
+    $x = pack 'w', ~0;
+    $y = pack 'w', (~0).'';
+    is($x, $y);
+    is(unpack ('w',$x), ~0);
+    is(unpack ('w',$y), ~0);
+
+    $x = pack 'w', ~0 - 1;
+    $y = pack 'w', (~0) - 2;
+
+    if (~0 - 1 == (~0) - 2) {
+        is($x, $y, "NV arithmetic");
+    } else {
+        isnt($x, $y, "IV/NV arithmetic");
+    }
+    cmp_ok(unpack ('w',$x), '==', ~0 - 1);
+    cmp_ok(unpack ('w',$y), '==', ~0 - 2);
 }
 
 
 {
-  # test exeptions
+  # test exceptions
   my $x;
   eval { $x = unpack 'w', pack 'C*', 0xff, 0xff};
   like($@, qr/^Unterminated compressed integer/);
@@ -319,7 +336,7 @@ sub numbers_with_total {
     # UVs (in which case ~0 is NV, ~0-1 will be the same NV) then we can't
     # correctly in perl calculate UV totals for long checksums, as pp_unpack
     # is using UV maths, and we've only got NVs.
-    $skip_if_longer_than = $Config{d_nv_preserves_uv_bits};
+    $skip_if_longer_than = $Config{nv_preserves_uv_bits};
   }
 
   foreach ('', 1, 2, 3, 15, 16, 17, 31, 32, 33, 53, 54, 63, 64, 65) {
@@ -657,7 +674,7 @@ foreach (
   my ($template, $in, @out) = @$_;
   my @got = eval {unpack $template, $in};
   is($@, '');
-  list_eq (\@got, \@out) ||
+  ok (list_eq (\@got, \@out)) ||
     printf "# list unpack ('$template', %s) gave %s expected %s\n",
            _qq($in), encode_list (@got), encode_list (@out);
 
@@ -840,7 +857,9 @@ is(scalar unpack('A /A /A Z20', '3004bcde'), 'bcde');
   ok( length $p);
   my @b = unpack "$t X[$t] $t", $p;	# Extract, step back, extract again
   is(scalar @b, 2 * scalar @a);
-  is("@b", "@a @a");
+  $b = "@b";
+  $b =~ s/(?:17000+|16999+)\d+(e-45) /17$1 /gi; # stringification is gamble
+  is($b, "@a @a");
 
   my $warning;
   local $SIG{__WARN__} = sub {
@@ -850,7 +869,9 @@ is(scalar unpack('A /A /A Z20', '3004bcde'), 'bcde');
 
   is($warning, undef);
   is(scalar @b, scalar @a);
-  is("@b", "@a");
+  $b = "@b";
+  $b =~ s/(?:17000+|16999+)\d+(e-45) /17$1 /gi; # stringification is gamble
+  is($b, "@a");
 }
 
 is(length(pack("j", 0)), $Config{ivsize});
@@ -869,3 +890,50 @@ SKIP: {
     numbers ('D', -(2**34), -1, 0, 1, 2**34);
 }
 
+# Maybe this knowledge needs to be "global" for all of pack.t
+# Or a "can checksum" which would effectively be all the number types"
+my %cant_checksum = map {$_=> 1} qw(A Z u w);
+# not a b B h H
+foreach my $template (qw(A Z c C s S i I l L n N v V q Q j J f d F D u U w)) {
+  SKIP: {
+    my $packed = eval {pack "${template}4", 1, 4, 9, 16};
+    if ($@) {
+      die unless $@ =~ /Invalid type in pack: '$template'/;
+      skip ("$template not supported on this perl",
+            $cant_checksum{$template} ? 4 : 8);
+    }
+    my @unpack4 = unpack "${template}4", $packed;
+    my @unpack = unpack "${template}*", $packed;
+    my @unpack1 = unpack "${template}", $packed;
+    my @unpack1s = scalar unpack "${template}", $packed;
+    my @unpack4s = scalar unpack "${template}4", $packed;
+    my @unpacks = scalar unpack "${template}*", $packed;
+
+    my @tests = ( ["${template}4 vs ${template}*", \@unpack4, \@unpack],
+                  ["scalar ${template} ${template}", \@unpack1s, \@unpack1],
+                  ["scalar ${template}4 vs ${template}", \@unpack4s, \@unpack1],
+                  ["scalar ${template}* vs ${template}", \@unpacks, \@unpack1],
+                );
+
+    unless ($cant_checksum{$template}) {
+      my @unpack4_c = unpack "\%${template}4", $packed;
+      my @unpack_c = unpack "\%${template}*", $packed;
+      my @unpack1_c = unpack "\%${template}", $packed;
+      my @unpack1s_c = scalar unpack "\%${template}", $packed;
+      my @unpack4s_c = scalar unpack "\%${template}4", $packed;
+      my @unpacks_c = scalar unpack "\%${template}*", $packed;
+
+      push @tests,
+        ( ["% ${template}4 vs ${template}*", \@unpack4_c, \@unpack_c],
+          ["% scalar ${template} ${template}", \@unpack1s_c, \@unpack1_c],
+          ["% scalar ${template}4 vs ${template}*", \@unpack4s_c, \@unpack_c],
+          ["% scalar ${template}* vs ${template}*", \@unpacks_c, \@unpack_c],
+        );
+    }
+    foreach my $test (@tests) {
+      ok (list_eq ($test->[1], $test->[2]), $test->[0]) ||
+        printf "# unpack gave %s expected %s\n",
+          encode_list (@{$test->[1]}), encode_list (@{$test->[2]});
+    }
+  }
+}

@@ -369,6 +369,25 @@ sub pod2html {
     $/ = "";
     my @poddata  = <POD>;
     close(POD);
+
+    # be eol agnostic
+    for (@poddata) {
+	if (/\r/) {
+	    if (/\r\n/) {
+		@poddata = map { s/\r\n/\n/g;
+				 /\n\n/ ?
+				     map { "$_\n\n" } split /\n\n/ :
+				     $_ } @poddata;
+	    } else {
+		@poddata = map { s/\r/\n/g;
+				 /\n\n/ ?
+				     map { "$_\n\n" } split /\n\n/ :
+				     $_ } @poddata;
+	    }
+	    last;
+	}
+    }
+
     clean_data( \@poddata );
 
     # scan the pod for =head[1-6] directives and build an index
@@ -407,7 +426,7 @@ sub pod2html {
     if ($title) {
 	$title =~ s/\s*\(.*\)//;
     } else {
-	warn "$0: no title for $podfile" unless $quiet;
+	warn "$0: no title for $podfile.\n" unless $quiet;
 	$podfile =~ /^(.*)(\.[^.\/]+)?\z/s;
 	$title = ($podfile eq "-" ? 'No Title' : $1);
 	warn "using $title" if $verbose;
@@ -492,8 +511,6 @@ END_OF_HEAD
 		if (/^=(head[1-6])\s+(.*\S)/s) {	# =head[1-6] heading
 		    process_head( $1, $2, $doindex && $index );
 		} elsif (/^=item\s*(.*\S)?/sm) {	# =item text
-		    warn "$0: $podfile: =item without bullet, number or text"
-		       . " in paragraph $paragraph.\n" if !defined($1) or $1 eq '';
 		    $need_dd = process_item( $1 );
 		    $after_item = 1;
 		} elsif (/^=over\s*(.*)/) {		# =over N
@@ -1055,8 +1072,7 @@ sub process_head {
       print HTML "</p>\n";
     }
 
-    my $name = htmlify( depod( $heading ) );
-    $name =~ s/\s/_/g; # htmlify keeps spaces but we don't want them here...
+    my $name = anchorify( depod( $heading ) );
     my $convert = process_text( \$heading );
     print HTML "<h$level><a name=\"$name\">$convert</a></h$level>\n";
 }
@@ -1079,8 +1095,8 @@ sub emit_item_tag($$$){
     if ($items_named{$item}++) {
 	print HTML process_text( \$otext );
     } else {
-	my $name = 'item_' . $item;
-	$name =~ s/\s/_/g; # we don't want spaces here...
+        my $name = 'item_' . $item;
+        $name = anchorify($name);
 	print HTML qq{<a name="$name">}, process_text( \$otext ), '</a>';
     }
     print HTML "</strong><br />\n";
@@ -1258,9 +1274,9 @@ sub process_pre {
     $rest = $$text;
 
     # insert spaces in place of tabs
-    $rest =~ s#.*#
-	    my $line = $&;
-	    1 while $line =~ s/\t+/' ' x (length($&) * 8 - length($`) % 8)/e;
+    $rest =~ s#(.+)#
+	    my $line = $1;
+            1 while $line =~ s/(\t+)/' ' x ((length($1) * 8) - $-[0] % 8)/e;
 	    $line;
 	#eg;
 
@@ -1595,7 +1611,7 @@ sub process_text1($$;$$){
 
             # warning; show some text.
             $linktext = $opar unless defined $linktext;
-            warn "$0: $podfile: cannot resolve L<$opar> in paragraph $paragraph.";
+            warn "$0: $podfile: cannot resolve L<$opar> in paragraph $paragraph.\n";
         }
 
         # now we have a URL or just plain code
@@ -1617,7 +1633,7 @@ sub process_text1($$;$$){
 
     } elsif( $func eq 'Z' ){
 	# Z<> - empty
-	warn "$0: $podfile: invalid X<> in paragraph $paragraph."
+	warn "$0: $podfile: invalid X<> in paragraph $paragraph.\n"
 	    unless $$rstr =~ s/^>//;
 
     } else {
@@ -1636,7 +1652,7 @@ sub process_text1($$;$$){
 	if( $lev == 1 ){
 	    $res .= pure_text( $$rstr );
 	} else {
-	    warn "$0: $podfile: undelimited $func<> in paragraph $paragraph.";
+	    warn "$0: $podfile: undelimited $func<> in paragraph $paragraph.\n";
 	}
     }
     return $res;
@@ -1660,7 +1676,7 @@ sub go_ahead($$$){
 	}
 	$res .= $2;
     }
-    warn "$0: $podfile: undelimited $func<> in paragraph $paragraph.";
+    warn "$0: $podfile: undelimited $func<> in paragraph $paragraph.\n";
     return $res;
 }
 
@@ -1697,7 +1713,8 @@ sub html_escape {
     $rest   =~ s/</&lt;/g;
     $rest   =~ s/>/&gt;/g;
     $rest   =~ s/"/&quot;/g;
-    $rest   =~ s/'/&apos;/g;
+    # &apos; is only in XHTML, not HTML4.  Be conservative
+    #$rest   =~ s/'/&apos;/g;
     return $rest;
 }
 
@@ -1733,7 +1750,7 @@ sub page_sect($$) {
     $page83=dosify($page);
     $page=$page83 if (defined $pages{$page83});
     if ($page eq "") {
-	$link = "#" . htmlify( $section );
+        $link = "#" . anchorify( $section );
     } elsif ( $page =~ /::/ ) {
 	$page =~ s,::,/,g;
 	# Search page cache for an entry keyed under the html page name,
@@ -1760,11 +1777,11 @@ sub page_sect($$) {
 
 	}
 	$link = "$htmlroot/$page.html";
-	$link .= "#" . htmlify( $section ) if ($section);
+	$link .= "#" . anchorify( $section ) if ($section);
     } elsif (!defined $pages{$page}) {
 	$link = "";
     } else {
-	$section = htmlify( $section ) if $section ne "";
+	$section = anchorify( $section ) if $section ne "";
         ### print STDERR "...section=$section\n";
 
 	# if there is a directory by the name of the page, then assume that an
@@ -1944,6 +1961,16 @@ sub htmlify {
     $heading =~ s/[-"?]//g;
     $heading = lc( $heading );
     return $heading;
+}
+
+#
+# similar to htmlify, but turns spaces into underscores
+#
+sub anchorify {
+    my ($anchor) = @_;
+    $anchor = htmlify($anchor);
+    $anchor =~ s/\s/_/g; # fixup spaces left by htmlify
+    return $anchor;
 }
 
 #

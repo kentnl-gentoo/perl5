@@ -24,7 +24,7 @@ with all the defaults are:
 
 Each of these is explained in further detail below.
 
-B<NOTE>: starting from the release 5.6.0 Perl will use a version
+B<NOTE>: starting from the release 5.6.0, Perl will use a version
 scheme where even-numbered subreleases (like 5.6) are stable
 maintenance releases and odd-numbered subreleases (like 5.7) are
 unstable development releases.  Development releases should not be
@@ -88,8 +88,8 @@ that too.  Additional information is in the Porting/ directory.
 =head1 WARNING:  This version requires an extra step to build old extensions.
 
 5.005_53 and later releases do not export unadorned
-global symbols anymore.  This means you may need to build older
-extensions that have not been updated for the new naming convention
+global symbols anymore.  This means you may need to build rather old
+extensions that have not been updated for the current naming convention
 with:
 
 	perl Makefile.PL POLLUTE=1
@@ -99,19 +99,14 @@ building perl itself with:
 
 	sh Configure -Accflags=-DPERL_POLLUTE
 
-pod/perldelta.pod contains more details about this.
+pod/perl56delta.pod contains more details about this.
 
-=head1 WARNING:  This version may not be binary compatible with Perl 5.005.
+=head1 WARNING:  This version is not binary compatible with releases of
+Perl prior to 5.8.0.
 
-Using the default Configure options for building perl should get you
-a perl that will be binary compatible with the 5.005 release.
-
-However, if you run Configure with any custom options, such as
--Dusethreads, -Dusemultiplicity, -Dusemymalloc, -Ubincompat5005 etc.,
-the resulting perl will not be binary compatible.  Under these
-circumstances, if you have dynamically loaded extensions that were
-built under perl 5.005, you will need to rebuild and reinstall all
-those extensions to use them with 5.6.
+If you have built extensions (ie modules that include C code)
+using an earlier version of Perl, you will need to rebuild and reinstall
+those extensions.
 
 Pure perl modules without XS or C code should continue to work fine
 without reinstallation.  See the discussions below on
@@ -122,7 +117,7 @@ The standard extensions supplied with Perl will be handled automatically.
 
 On a related issue, old modules may possibly be affected by the
 changes in the Perl language in the current release.  Please see
-pod/perldelta.pod (and pod/perl500Xdelta.pod) for a description of
+pod/perldelta.pod (and the earlier pod/perl5Xdelta.pod) for a description of
 what's changed.  See your installed copy of the perllocal.pod
 file for a (possibly incomplete) list of locally installed modules.
 Also see CPAN::autobundle for one way to make a "bundle" of your
@@ -186,10 +181,10 @@ does not work with some C++ compilers.
 
 =head1 Space Requirements
 
-The complete perl5 source tree takes up about 40 MB of disk space.
-After completing make, it takes up roughly 60 MB, though the actual
+The complete perl5 source tree takes up about 50 MB of disk space.
+After completing make, it takes up roughly 100 MB, though the actual
 total is likely to be quite system-dependent.  The installation
-directories need something on the order of 35 MB, though again that
+directories need something on the order of 45 MB, though again that
 value is system-dependent.
 
 =head1 Start with a Fresh Distribution
@@ -220,7 +215,7 @@ the default directory for architecture-dependent library modules
 includes the version name.  By default, Configure will reuse your old
 name (e.g. /opt/perl/lib/i86pc-solaris/5.003) even if you're running
 Configure for a different version, e.g. 5.004.  Yes, Configure should
-probably check and correct for this, but it doesn't, presently.
+probably check and correct for this, but it doesn't.
 Similarly, if you used a shared libperl.so (see below) with version
 numbers, you will probably want to adjust them as well.
 
@@ -281,7 +276,7 @@ architectures.
 
 Starting from Perl 5.6.1 you can do this (if your file system supports
 symbolic links) by
-	
+
 	mkdir /tmp/perl/build/directory
 	cd /tmp/perl/build/directory
 	sh /path/to/perl/source/Configure -Dmksymlinks ...
@@ -328,7 +323,8 @@ If your prefix contains the string "perl", then the suggested
 directory structure is simplified.  For example, if you use
 prefix=/opt/perl, then Configure will suggest /opt/perl/lib instead of
 /opt/perl/lib/perl5/.  Again, see L<"Installation Directories"> below
-for more details.
+for more details.  Do not include a trailing slash, (i.e. /opt/perl/)
+or you may experience odd test failures.
 
 NOTE:  You must not specify an installation directory that is the same
 as or below your perl source directory.  If you do, installperl will
@@ -403,7 +399,8 @@ appropriate questions in Configure.  For convenience, all the
 installation questions are near the beginning of Configure.
 Further, there are a number of additions to the installation
 directories since 5.005, so reusing your old config.sh may not
-be sufficient to put everything where you want it.
+be sufficient to put everything where you want it.  Do not include
+trailing slashes on directory names.
 
 I highly recommend running Configure interactively to be sure it puts
 everything where you want it.  At any point during the Configure
@@ -465,10 +462,6 @@ be used for installing those add-on modules and scripts.
 By default, ExtUtils::MakeMaker will install architecture-independent
 modules into $sitelib and architecture-dependent modules into $sitearch.
 
-NOTE:  As of 5.6.0, ExtUtils::MakeMaker will use $sitelib and $sitearch,
-but will not use the other site-specific directories.  Volunteers to
-fix this are needed.
-
 =item Directories for vendor-supplied add-on files
 
 Lastly, if you are building a binary distribution of perl for
@@ -490,9 +483,9 @@ for you to use to distribute add-on modules.
 These are normally empty, but may be set as needed.  For example,
 a vendor might choose the following settings:
 
-	$prefix		/usr/bin
-	$siteprefix	/usr/local/bin
-	$vendorprefix	/usr/bin
+	$prefix		/usr
+	$siteprefix	/usr/local
+	$vendorprefix	/usr
 
 This would have the effect of setting the following:
 
@@ -520,9 +513,6 @@ This would have the effect of setting the following:
 Note how in this example, the vendor-supplied directories are in the
 /usr hierarchy, while the directories reserved for the end-user are in
 the /usr/local hierarchy.
-
-NOTE:  As of 5.6.0, ExtUtils::MakeMaker does not use these directories.
-Volunteers to fix this are needed.
 
 The entire installed library hierarchy is installed in locations with
 version numbers, keeping the installations of different versions distinct.
@@ -710,7 +700,7 @@ some of the main things you can change.
 
 On some platforms, perl5.005 and later can be compiled with
 experimental support for threads.  To enable this, read the file
-README.threads, and then try:
+ext/threads/threads.pm, and then try:
 
 	sh Configure -Dusethreads
 
@@ -719,29 +709,33 @@ line so that the hint files can make appropriate adjustments.
 
 The default is to compile without thread support.
 
-As of v5.5.64, perl has two different internal threads implementations.
-The 5.005 version (5005threads) and an interpreter-based implementation
-(ithreads) with one interpreter per thread.  By default, Configure selects
-ithreads if -Dusethreads is specified.  However, you can select the old
-5005threads behavior instead by either
+Perl has two different internal threads implementations.  The current
+model (available internally since 5.6, and as a user-level module
+since 5.8) is called interpreter-based implementation (ithreads),
+with one interpreter per thread, and explicit sharing of data.
+
+The 5.005 version (5005threads) is considered obsolete, buggy, and
+unmaintained.
+
+By default, Configure selects ithreads if -Dusethreads is specified.
+
+However, you can select the old 5005threads behavior
 
 	sh Configure -Dusethreads -Duse5005threads
 
-or by
-	sh Configure -Dusethreads -Uuseithreads
-
-Eventually (by perl v5.6.0) this internal confusion ought to disappear,
-and these options may disappear as well.
+If you decide to use ithreads, the 'threads' module allows their use,
+and the 'Thread' module offers an interface to both 5005threads and
+ithreads (whichever has been configured).
 
 =head2 Large file support.
 
-Since Perl 5.6.0 Perl has supported large files (files larger than
+Since Perl 5.6.0, Perl has supported large files (files larger than
 2 gigabytes), and in many common platforms like Linux or Solaris this
 support is on by default.
 
 This is both good and bad. It is good in that you can use large files,
-seek(), stat(), and -s them.  It is bad if you are interfacing Perl
-using some extension, also the components you are connecting to must
+seek(), stat(), and -s them.  It is bad in that if you are interfacing Perl
+using some extension, the components you are connecting to must also
 be large file aware: if Perl thinks files can be large but the other
 parts of the software puzzle do not understand the concept, bad things
 will happen.  One popular extension suffering from this ailment is the
@@ -800,33 +794,36 @@ and the long double support.
 
 =head2 Selecting File IO mechanisms
 
-Previous versions of perl used the standard IO mechanisms as defined in
-stdio.h.  Versions 5.003_02 and later of perl allow alternate IO
-mechanisms via a "PerlIO" abstraction, but the stdio mechanism is still
-the default and is the only supported mechanism.
+Executive summary: in Perl 5.8, you should use the default "PerlIO"
+as the IO mechanism unless you have a good reason not to.
 
-This PerlIO abstraction can be enabled either on the Configure command
+In more detail: previous versions of perl used the standard IO
+mechanisms as defined in stdio.h.  Versions 5.003_02 and later of perl
+introduced alternate IO mechanisms via a "PerlIO" abstraction, but up
+until and including Perl 5.6, the stdio mechanism was still the default
+and the only supported mechanism.
+
+Starting from Perl 5.8, the default mechanism is to use the PerlIO
+abstraction, because it allows better control of I/O mechanisms,
+instead of having to work with (often, work around) vendors' I/O
+implementations.
+
+This PerlIO abstraction can be (but again, unless you know what you
+are doing, should not be) disabled either on the Configure command
 line with
 
-	sh Configure -Duseperlio
+	sh Configure -Uuseperlio
 
 or interactively at the appropriate Configure prompt.
 
-If you choose to use the PerlIO abstraction layer, there are two
-(experimental) possibilities for the underlying IO calls.  These have been
-tested to some extent on some platforms, but are not guaranteed to work
-everywhere.
-
-=over 4
-
-=item 1.
-
-AT&T's "sfio".  This has superior performance to stdio.h in many
-cases, and is extensible by the use of "discipline" modules.  Sfio
-currently only builds on a subset of the UNIX platforms perl supports.
-Because the data structures are completely different from stdio, perl
-extension modules or external libraries may not work.  This
-configuration exists to allow these issues to be worked on.
+With the PerlIO abstraction layer, there is another possibility for
+the underlying IO calls, AT&T's "sfio".  This has superior performance
+to stdio.h in many cases, and is extensible by the use of "discipline"
+modules ("Native" PerlIO has them too).  Sfio currently only builds on
+a subset of the UNIX platforms perl supports.  Because the data
+structures are completely different from stdio, perl extension modules
+or external libraries may not work.  This configuration exists to
+allow these issues to be worked on.
 
 This option requires the 'sfio' package to have been built and installed.
 The latest sfio is available from http://www.research.att.com/sw/tools/sfio/
@@ -846,24 +843,6 @@ Configure should detect this problem and warn you about problems with
 _exit vs. exit.  If you have this problem, the fix is to go back to
 your sfio sources and correct iffe's guess about atexit.
 
-=item 2.
-
-Normal stdio IO, but with all IO going through calls to the PerlIO
-abstraction layer.  This configuration can be used to check that perl and
-extension modules have been correctly converted to use the PerlIO
-abstraction.
-
-This configuration should work on all platforms (but might not).
-
-You select this option via:
-
-	sh Configure -Duseperlio -Uusesfio
-
-If you have already selected -Duseperlio, and if Configure does not
-detect sfio, then this will be the default suggested by Configure.
-
-=back
-
 =head2 SOCKS
 
 Perl can be configured to be 'socksified', that is, to use the SOCKS
@@ -878,7 +857,7 @@ your system supports it.  If you want to force perl to be compiled
 statically, you can either choose this when Configure prompts you or
 you can use the Configure command line option -Uusedl.
 
-=head2 Building a shared libperl.so Perl library
+=head2 Building a shared Perl library
 
 Currently, for most systems, the main perl executable is built by
 linking the "perl library" libperl.a with perlmain.o, your static
@@ -922,7 +901,10 @@ NeXTSTEP/OPENSTEP/Darwin, LIBRARY_PATH for BeOS, LD_LIBRARY_PATH/SHLIB_PATH
 for HP-UX, LIBPATH for AIX, PATH for Cygwin) must be set up to include
 the Perl build directory because that's where the shared libperl will
 be created.  Configure arranges makefile to have the correct shared
-library search settings.
+library search settings.  You can find the name of the environment
+variable Perl thinks works in your your system by
+
+	grep ldlibpthname config.sh
 
 However, there are some special cases where manually setting the
 shared library path might be required.  For example, if you want to run
@@ -943,7 +925,8 @@ for Bourne-style shells, or
    setenv LD_LIBRARY_PATH `pwd`
 
 for Csh-style shells.  (This procedure may also be needed if for some
-unexpected reason Configure fails to set up makefile correctly.)
+unexpected reason Configure fails to set up makefile correctly.) (And
+again, it may be something other than LD_LIBRARY_PATH for you, see above.)
 
 You can often recognize failures to build/use a shared libperl from error
 messages complaining about a missing libperl.so (or libperl.sl in HP-UX),
@@ -996,25 +979,17 @@ or you can answer 'n' at the appropriate interactive Configure prompt.
 
 =item -DPERL_POLLUTE_MALLOC
 
-NOTE: This flag is enabled automatically on some platforms if you
-asked for binary compatibility with version 5.005, or if you just
-run Configure to accept all the defaults on those platforms.  You
-can refuse the automatic binary compatibility flags wholesale by
-running:
+NOTE: This flag is enabled automatically on some platforms if you just
+run Configure to accept all the defaults on those platforms.
 
-	sh Configure -Ubincompat5005
+Perl's malloc family of functions are normally called Perl_malloc(),
+Perl_realloc(), Perl_calloc() and Perl_mfree().
+These names do not clash with the system versions of these functions.
 
-or by answering 'n' at the appropriate prompt.
-
-Perl's malloc family of functions are called Perl_malloc(),
-Perl_realloc(), Perl_calloc() and Perl_mfree().  When this flag is
-not enabled, the names do not clash with the system versions of
-these functions.
-
-If enabled, Perl's malloc family of functions will have the same
-names as the system versions.  This may be sometimes required when you
-have libraries that like to free() data that may have been allocated
-by Perl_malloc() and vice versa.
+If this flag is enabled, however, Perl's malloc family of functions
+will have the same names as the system versions.  This may be required
+sometimes if you have libraries that like to free() data that may have
+been allocated by Perl_malloc() and vice versa.
 
 Note that enabling this option may sometimes lead to duplicate symbols
 from the linker for malloc et al.  In such cases, the system probably
@@ -1364,13 +1339,6 @@ system's peculiarities.  See Porting/pumpkin.pod for more information.
 You'll probably also have to extensively modify the extension building
 mechanism.
 
-=item Environment variable clashes
-
-Configure uses a CONFIG variable that is reported to cause trouble on
-ReliantUnix 5.44.  If your system sets this variable, you can try
-unsetting it before you run Configure.  Configure should eventually
-be fixed to avoid polluting the namespace of the environment.
-
 =item Digital UNIX/Tru64 UNIX and BIN_SH
 
 In Digital UNIX/Tru64 UNIX, Configure might abort with
@@ -1624,16 +1592,6 @@ to
 then propagate your changes with B<sh Configure -S> and rebuild
 with B<make depend; make>.
 
-=item CRIPPLED_CC
-
-If you still can't compile successfully, try:
-
-	sh Configure -Accflags=-DCRIPPLED_CC
-
-This flag simplifies some complicated expressions for compilers that get
-indigestion easily.  (Just because you get no errors doesn't mean it
-compiled right!)
-
 =item Missing functions
 
 If you have missing routines, you probably need to add some library or
@@ -1747,15 +1705,11 @@ Genix may need to use libc rather than libc_s, or #undef VARARGS.
 
 NCR Tower 32 (OS 2.01.01) may need -W2,-Sl,2000 and #undef MKDIR.
 
-UTS may need one or more of -DCRIPPLED_CC, -K or -g, and undef LSTAT.
+UTS may need one or more of -K or -g, and undef LSTAT.
 
 FreeBSD can fail the lib/ipc_sysv.t test if SysV IPC has not been
-configured to the kernel.  Perl tries to detect this, though, and
+configured in the kernel.  Perl tries to detect this, though, and
 you will get a message telling what to do.
-
-If you get syntax errors on '(', try -DCRIPPLED_CC.
-
-Machines with half-implemented dbm routines will need to #undef I_ODBM
 
 HP-UX 11 Y2K patch "Y2K-1100 B.11.00.B0125 HP-UX Core OS Year 2000
 Patch Bundle" has been reported to break the io/fs test #18 which
@@ -1893,10 +1847,23 @@ individual subtests is to cd to the t directory and run
 	./perl harness
 
 (this assumes that most basic tests succeed, since harness uses
-complicated constructs).
+complicated constructs).  For extension and library tests you
+need a little bit more: you need to setup your environment variable
+PERL_CORE to a true value (like "1"), and you need to supply the
+right Perl library path:
 
+	setenv PERL_CORE 1
+	./perl -I../lib ../ext/Socket/Socket.t
+	./perl -I../lib ../lib/less.t
+
+(For csh-like shells on UNIX; adjust appropriately for other platforms.)
 You should also read the individual tests to see if there are any helpful
-comments that apply to your system.
+comments that apply to your system.  You may also need to setup your
+shared library path if you get errors like:
+
+	/sbin/loader: Fatal Error: cannot map libperl.so
+
+See L</"Building a shared Perl library"> earlier in this document.
 
 =over 4
 
@@ -1929,10 +1896,12 @@ external program.
 
 Several tests in the test suite check timing functions, such as
 sleep(), and see if they return in a reasonable amount of time.
-If your system is quite busy and doesn't return quickly enough,
-these tests might fail.  If possible, try running the tests again with
-the system under a lighter load.  These tests include F<t/op/alarm.t>,
-F<ext/Time/HiRes/HiRes.t>, and F<lib/Benchmark.t>.
+If your system is quite busy and doesn't respond quickly enough,
+these tests might fail.  If possible, try running the tests again
+with the system under a lighter load.  These timing-sensitive
+and load-sensitive tests include F<t/op/alarm.t>,
+F<ext/Time/HiRes/HiRes.t>, F<lib/Benchmark.t>,
+F<lib/Memoize/t/expmod_t.t>, and F<lib/Memoize/t/speed.t>.
 
 =item Out of memory
 
@@ -1966,8 +1935,8 @@ happen if the Perl source code distribution is unpacked in a way that
 the user ids in the distribution package are used as-is.  Some tar
 programs do this.
 
-(2) If the directory the test are being run in is writable by group
-or by other (remember: with UNIX/POSIX semantics, write access to
+(2) If the directory the tests are being run in is writable by group
+or by others (remember: with UNIX/POSIX semantics, write access to
 a directory means the right to add/remove files in that directory),
 and there is no sticky bit set in the directory.  'Sticky bit' is
 a feature used in some UNIXes to give extra protection to files: if
@@ -1978,12 +1947,12 @@ directory simply are a bit too liberal for the tests' liking.  This
 may or may not be a real problem: it depends on the permissions policy
 used on this particular directory/project/system/site.  This failure
 can also happen if the system either doesn't support the sticky bit
-(this is the case with many non-UNIX platforms: in principle the
+(this is the case with many non-UNIX platforms: in principle
 File::Temp should know about these platforms and skip the tests), or
 if the system supports the sticky bit but for some reason or reasons
 it is not being used.  This is for example the case with HP-UX: as of
 HP-UX release 11.00, the sticky bit is very much supported, but HP-UX
-doesn't use it on its /tmp directory as shipped.  Also as with the
+doesn't use it on its /tmp directory as shipped.  Also, as with the
 permissions, some local policy might dictate that the stickiness is
 not used.
 
@@ -2019,9 +1988,9 @@ You can separately change the base used for versioned names (like
 
     make install PERLNAME=perl5 PERLNAME_VERBASE=perl
 
-This can be useful if you have to install perl as "perl5" (due to an
-ancient version in /usr/bin supplied by your vendor, eg).  Without this
-the versioned binary would be called "perl55.005".
+This can be useful if you have to install perl as "perl5" (e.g. to
+avoid conflicts with an ancient version in /usr/bin supplied by your vendor).
+Without this the versioned binary would be called "perl55.005".
 
 =head2 Installed files
 
@@ -2102,6 +2071,9 @@ See also L<"Maintaining completely separate versions"> for another
 approach.
 
 =head1 Coexistence with earlier versions of perl5
+
+Perl 5.8 is not binary compatible with earlier versions of Perl.
+In other words, you have to recompile your XS modules.
 
 In general, you can usually safely upgrade from one version of Perl (e.g.
 5.004_04) to another similar version (e.g. 5.004_05) without re-compiling
@@ -2287,6 +2259,13 @@ available in TeX format.  Type
 The following section is meant for people worrying about squeezing the
 Perl installation into minimal systems (for example when installing
 operating systems, or in really small filesystems).
+
+Leaving out as many extensions as possible is an obvious way:
+Encode, with its big conversion tables, consumes a lot of
+space.  On the other hand, you cannot throw away everything.  The
+Fcntl module is pretty essential.  If you need to do network
+programming, you'll appreciate the Socket module, and so forth: it all
+depends on what do you need to do.
 
 In the following we offer two different slimmed down installation
 recipes.  They are informative, not normative: the choice of files

@@ -1,14 +1,18 @@
 #!./perl
 
+my @WARN;
+
 BEGIN {
     unless(grep /blib/, @INC) {
 	chdir 't' if -d 't';
 	@INC = '../lib';
     }
+    $SIG{__WARN__} = sub { push @WARN, @_ };
 }
 
 $| = 1;
-print "1..25\n";
+
+print "1..46\n";
 
 use charnames ':full';
 
@@ -133,13 +137,14 @@ sub to_bytes {
     print "not " unless charnames::viacode(0x1234) eq "ETHIOPIC SYLLABLE SEE";
     print "ok 17\n";
 
-    print "not " if defined charnames::viacode(0x0590); # unused Hebrew
+    # Unused Hebrew.
+    print "not " if defined charnames::viacode(0x0590);
     print "ok 18\n";
 }
 
 {
     print "not " unless
-	sprintf "%04X\n", charnames::vianame("GOTHIC LETTER AHSA") eq "10330";
+	sprintf("%04X", charnames::vianame("GOTHIC LETTER AHSA")) eq "10330";
     print "ok 19\n";
 
     print "not " if
@@ -154,12 +159,12 @@ sub to_bytes {
     print "ok 21\n";
 
     print "not " unless
-	sprintf "%04X\n", charnames::vianame("GOTHIC LETTER AHSA") eq "10330";
+	sprintf("%04X", charnames::vianame("GOTHIC LETTER AHSA")) eq "10330";
     print "ok 22\n";
 
 }
 
-print "not " unless "\N{HORIZONTAL TABULATION}" eq "\t";
+print "not " unless "\N{CHARACTER TABULATION}" eq "\t";
 print "ok 23\n";
 
 print "not " unless "\N{ESCAPE}" eq "\e";
@@ -168,8 +173,94 @@ print "ok 24\n";
 print "not " unless "\N{NULL}" eq "\c@";
 print "ok 25\n";
 
-# TODO: when Unicode 3.2 comes along some names will change
-# HORIZONTAL TABULATION -> CHARACTER TABULATION (since ISO 6429
-# has been updated), and some names will have shorter aliases
-# LINEFEED (LF).  Update the tests, and also update the charnames
-# pragma to support the 3.1 names, and the shorter aliases.
+if ($^O eq 'MacOS')
+{
+	print "not " unless "\N{CARRIAGE RETURN (CR)}" eq "\n";
+	print "ok 26\n";
+
+	print "not " unless "\N{CARRIAGE RETURN}" eq "\n";
+	print "ok 27\n";
+
+	print "not " unless "\N{CR}" eq "\n";
+	print "ok 28\n";
+}
+else
+{
+	print "not " unless "\N{LINE FEED (LF)}" eq "\n";
+	print "ok 26\n";
+
+	print "not " unless "\N{LINE FEED}" eq "\n";
+	print "ok 27\n";
+
+	print "not " unless "\N{LF}" eq "\n";
+	print "ok 28\n";
+}
+
+my $nel = ord("A") == 193 ? qr/^(?:\x15|\x25)$/ : qr/^\x85$/;
+
+print "not " unless "\N{NEXT LINE (NEL)}" =~ $nel;
+print "ok 29\n";
+
+print "not " unless "\N{NEXT LINE}" =~ $nel;
+print "ok 30\n";
+
+print "not " unless "\N{NEL}" =~ $nel;
+print "ok 31\n";
+
+print "not " unless "\N{BYTE ORDER MARK}" eq chr(0xFEFF);
+print "ok 32\n";
+
+print "not " unless "\N{BOM}" eq chr(0xFEFF);
+print "ok 33\n";
+
+{
+    use warnings 'deprecated';
+
+    print "not " unless "\N{HORIZONTAL TABULATION}" eq "\t";
+    print "ok 34\n";
+
+    print "not " unless grep { /"HORIZONTAL TABULATION" is deprecated/ } @WARN;
+    print "ok 35\n";
+
+    no warnings 'deprecated';
+
+    print "not " unless "\N{VERTICAL TABULATION}" eq "\013";
+    print "ok 36\n";
+
+    print "not " if grep { /"VERTICAL TABULATION" is deprecated/ } @WARN;
+    print "ok 37\n";
+}
+
+print "not " unless charnames::viacode(0xFEFF) eq "ZERO WIDTH NO-BREAK SPACE";
+print "ok 38\n";
+
+{
+    use warnings;
+    print "not " unless ord("\N{BOM}") == 0xFEFF;
+    print "ok 39\n";
+}
+
+print "not " unless ord("\N{ZWNJ}") == 0x200C;
+print "ok 40\n";
+
+print "not " unless ord("\N{ZWJ}") == 0x200D;
+print "ok 41\n";
+
+print "not " unless "\N{U+263A}" eq "\N{WHITE SMILING FACE}";
+print "ok 42\n";
+
+{
+    print "not " unless
+	0x3093 == charnames::vianame("HIRAGANA LETTER N");
+    print "ok 43\n";
+
+    print "not " unless
+	0x0397 == charnames::vianame("GREEK CAPITAL LETTER ETA");
+    print "ok 44\n";
+}
+
+print "not " if defined charnames::viacode(0x110000);
+print "ok 45\n";
+
+print "not " if grep { /you asked for U+110000/ } @WARN;
+print "ok 46\n";

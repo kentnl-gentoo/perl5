@@ -57,16 +57,16 @@ please email me.
 Tom Spindler
 dogcow@isi.net
 
-=head2 Update 2002-03-02
+=head2 Update 2002-05-30
 
-The following tests fail on pre-5.8.0 Perl in BeOS Personal 5.0:
+The following tests fail on 5.8.0 Perl in BeOS Personal 5.03:
 
-        op/magic                        24-26
-        ext/POSIX/t/sigaction           13
-        ext/POSIX/t/waitpid             1
-        lib/ExtUtils/t/Installed        9-10 25-27 29-30 33-36
+  t/op/magic..........................FAILED at test 24
+  ext/File/Glob/t/basic...............FAILED at test 3
+  ext/POSIX/t/sigaction...............FAILED at test 13
+  ext/POSIX/t/waitpid.................FAILED at test 1
 
-None of the failures look too serious:
+The reasons for the failures are as follows: 
 
 =over 4
 
@@ -79,6 +79,11 @@ in ways that define logic.
 
 =item *
 
+The Glob/t/basic indicates a bug in the getpw*() functions of Perl:
+they do not always return the correct user db entries.
+
+=item *
+
 The sigaction #13 means that signal mask doesn't get properly restored
 if sigaction returns early.
 
@@ -87,10 +92,6 @@ if sigaction returns early.
 The waitpid failure means that after there are no more child
 processes, waitpid is supposed to start returning -1 (and set
 errno to ECHILD).  In BeOS, it doesn't seem to.
-
-=item *
-
-The Installed test has some filesystem portability assumptions.
 
 =back
 

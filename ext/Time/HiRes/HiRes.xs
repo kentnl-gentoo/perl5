@@ -618,8 +618,9 @@ sleep(...)
 	if (items > 0) {
 	    NV seconds  = SvNV(ST(0));
 	    if (seconds >= 0.0) {
-  	         UV useconds = 1E6 * (seconds - (UV)seconds);
-		 sleep((UV)seconds);
+	         UV useconds = (UV)(1E6 * (seconds - (UV)seconds));
+		 if (seconds >= 1.0)
+		     sleep((UV)seconds);
 		 usleep(useconds);
 	    } else
 	        croak("Time::HiRes::sleep(%"NVgf"): negative time not invented yet", seconds);
@@ -745,7 +746,7 @@ setitimer(which, seconds, interval = 0)
 	struct itimerval oldit;
     PPCODE:
 	if (seconds < 0.0 || interval < 0.0)
-	    croak("Time::HiRes::setitimer(%"IVdf", %"NVgf", %"NVgf"): negative time not invented yet", which, seconds, interval);
+	    croak("Time::HiRes::setitimer(%"IVdf", %"NVgf", %"NVgf"): negative time not invented yet", (IV)which, seconds, interval);
 	newit.it_value.tv_sec  = seconds;
 	newit.it_value.tv_usec =
 	  (seconds  - (NV)newit.it_value.tv_sec)    * 1000000.0;

@@ -261,7 +261,7 @@ Perl_gv_fetchmeth(pTHX_ HV *stash, const char *name, STRLEN len, I32 level)
 	    HV* basestash = gv_stashsv(sv, FALSE);
 	    if (!basestash) {
 		if (ckWARN(WARN_MISC))
-		    Perl_warner(aTHX_ WARN_MISC, "Can't locate package %s for @%s::ISA",
+		    Perl_warner(aTHX_ packWARN(WARN_MISC), "Can't locate package %s for @%s::ISA",
 			SvPVX(sv), HvNAME(stash));
 		continue;
 	    }
@@ -422,9 +422,17 @@ Perl_gv_fetchmethod_autoload(pTHX_ HV *stash, const char *name, I32 autoload)
 	    DEBUG_o( Perl_deb(aTHX_ "Treating %s as %s::%s\n",
 			 origname, HvNAME(stash), name) );
 	}
-	else
+	else {
             /* don't autovifify if ->NoSuchStash::method */
             stash = gv_stashpvn(origname, nsplit - origname, FALSE);
+
+	    /* however, explicit calls to Pkg::SUPER::method may
+	       happen, and may require autovivification to work */
+	    if (!stash && (nsplit - origname) >= 7 &&
+		strnEQ(nsplit - 7, "::SUPER", 7) &&
+		gv_stashpvn(origname, nsplit - origname - 7, FALSE))
+	      stash = gv_stashpvn(origname, nsplit - origname, TRUE);
+	}
     }
 
     gv = gv_fetchmeth(stash, name, nend - name, 0);
@@ -644,7 +652,7 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
 		char smallbuf[256];
 		char *tmpbuf;
 
-		if (len + 3 < sizeof smallbuf)
+		if (len + 3 < sizeof (smallbuf))
 		    tmpbuf = smallbuf;
 		else
 		    New(601, tmpbuf, len+3, char);
@@ -786,7 +794,7 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
     /* Adding a new symbol */
 
     if (add & GV_ADDWARN && ckWARN_d(WARN_INTERNAL))
-	Perl_warner(aTHX_ WARN_INTERNAL, "Had to create %s unexpectedly", nambeg);
+	Perl_warner(aTHX_ packWARN(WARN_INTERNAL), "Had to create %s unexpectedly", nambeg);
     gv_init(gv, stash, name, len, add & GV_ADDMULTI);
     gv_init_sv(gv, sv_type);
 
@@ -1173,7 +1181,7 @@ Perl_gv_check(pTHX_ HV *stash)
 #else
 		CopFILEGV(PL_curcop) = gv_fetchfile(file);
 #endif
-		Perl_warner(aTHX_ WARN_ONCE,
+		Perl_warner(aTHX_ packWARN(WARN_ONCE),
 			"Name \"%s::%s\" used only once: possible typo",
 			HvNAME(stash), GvNAME(gv));
 	    }
@@ -1220,7 +1228,7 @@ Perl_gp_free(pTHX_ GV *gv)
 	return;
     if (gp->gp_refcnt == 0) {
 	if (ckWARN_d(WARN_INTERNAL))
-	    Perl_warner(aTHX_ WARN_INTERNAL,
+	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
 			"Attempt to free unreferenced glob pointers");
         return;
     }
@@ -1244,30 +1252,6 @@ Perl_gp_free(pTHX_ GV *gv)
     Safefree(gp);
     GvGP(gv) = 0;
 }
-
-#if defined(CRIPPLED_CC) && (defined(iAPX286) || defined(M_I286) || defined(I80286))
-#define MICROPORT
-#endif
-
-#ifdef	MICROPORT	/* Microport 2.4 hack */
-AV *GvAVn(gv)
-register GV *gv;
-{
-    if (GvGP(gv)->gp_av)
-	return GvGP(gv)->gp_av;
-    else
-	return GvGP(gv_AVadd(gv))->gp_av;
-}
-
-HV *GvHVn(gv)
-register GV *gv;
-{
-    if (GvGP(gv)->gp_hv)
-	return GvGP(gv)->gp_hv;
-    else
-	return GvGP(gv_HVadd(gv))->gp_hv;
-}
-#endif			/* Microport 2.4 hack */
 
 int
 Perl_magic_freeovrld(pTHX_ SV *sv, MAGIC *mg)
@@ -1299,7 +1283,7 @@ Perl_Gv_AMupdate(pTHX_ HV *stash)
 
   if (mg && amtp->was_ok_am == PL_amagic_generation
       && amtp->was_ok_sub == PL_sub_generation)
-      return AMT_OVERLOADED(amtp);
+      return (bool)AMT_OVERLOADED(amtp);
   sv_unmagic((SV*)stash, PERL_MAGIC_overload_table);
 
   DEBUG_o( Perl_deb(aTHX_ "Recalcing overload magic in package %s\n",HvNAME(stash)) );
@@ -1412,6 +1396,7 @@ Perl_gv_handler(pTHX_ HV *stash, I32 id)
 {
     MAGIC *mg;
     AMT *amtp;
+    CV *ret;
 
     if (!stash)
         return Nullcv;
@@ -1425,8 +1410,21 @@ Perl_gv_handler(pTHX_ HV *stash, I32 id)
     if ( amtp->was_ok_am != PL_amagic_generation
 	 || amtp->was_ok_sub != PL_sub_generation )
 	goto do_update;
-    if (AMT_AMAGIC(amtp))
-	return amtp->table[id];
+    if (AMT_AMAGIC(amtp)) {
+	ret = amtp->table[id];
+	if (ret && isGV(ret)) {		/* Autoloading stab */
+	    /* Passing it through may have resulted in a warning
+	       "Inherited AUTOLOAD for a non-method deprecated", since
+	       our caller is going through a function call, not a method call.
+	       So return the CV for AUTOLOAD, setting $AUTOLOAD. */
+	    GV *gv = gv_fetchmethod(stash, (char*)PL_AMG_names[id]);
+
+	    if (gv && GvCV(gv))
+		return GvCV(gv);
+	}
+	return ret;
+    }
+    
     return Nullcv;
 }
 
@@ -1807,7 +1805,7 @@ Perl_is_gv_magical(pTHX_ char *name, STRLEN len, U32 flags)
 	break;
     case '\017':   /* $^O & $^OPEN */
 	if (len == 1
-	    || (len == 4 && strEQ(name, "\027PEN")))
+	    || (len == 4 && strEQ(name, "\017PEN")))
 	{
 	    goto yes;
 	}

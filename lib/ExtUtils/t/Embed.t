@@ -20,6 +20,7 @@ $| = 1;
 print "1..9\n";
 my $cc = $Config{'cc'};
 my $cl  = ($^O eq 'MSWin32' && $cc eq 'cl');
+my $borl  = ($^O eq 'MSWin32' && $cc eq 'bcc32');
 my $skip_exe = $^O eq 'os2' && $Config{ldflags} =~ /(?<!\S)-Zexe\b/;
 my $exe = 'embed_test';
 $exe .= $Config{'exe_ext'} unless $skip_exe;	# Linker will auto-append it
@@ -53,6 +54,9 @@ if ($^O eq 'VMS') {
    if ($cl) {
     push(@cmd,$cc,"-Fe$exe");
    }
+   elsif ($borl) {
+    push(@cmd,$cc,"-o$exe");
+   }
    else {
     push(@cmd,$cc,'-o' => $exe);
    }
@@ -63,22 +67,23 @@ if ($^O eq 'VMS') {
     $inc = File::Spec->catdir($inc,'include');
     push(@cmd,"-I$inc");
     if ($cc eq 'cl') {
-	push(@cmd,'-link',"-libpath:$lib",$Config{'libperl'},$Config{'libc'});
+	push(@cmd,'-link',"-libpath:$lib",$Config{'libperl'},$Config{'libs'});
     }
     else {
 	push(@cmd,"-L$lib",File::Spec->catfile($lib,$Config{'libperl'}),$Config{'libc'});
     }
    }
-   else {
+   else { # Not MSWin32.
     push(@cmd,"-L$lib",'-lperl');
-   }
-   {
     local $SIG{__WARN__} = sub {
-	warn $_[0] unless $_[0] =~ /No library found for -lperl/
+	warn $_[0] unless $_[0] =~ /No library found for .*perl/
     };
     push(@cmd, '-Zlinker', '/PM:VIO')	# Otherwise puts a warning to STDOUT!
 	if $^O eq 'os2' and $Config{ldflags} =~ /(?<!\S)-Zomf\b/;
     push(@cmd,ldopts());
+   }
+   if ($borl) {
+     @cmd = ($cmd[0],(grep{/^-[LI]/}@cmd[1..$#cmd]),(grep{!/^-[LI]/}@cmd[1..$#cmd]));
    }
 
    if ($^O eq 'aix') { # AIX needs an explicit symbol export list.
@@ -128,7 +133,7 @@ my $embed_test = File::Spec->catfile(File::Spec->curdir, $exe);
 $embed_test = "run/nodebug $exe" if $^O eq 'VMS';
 print "# embed_test = $embed_test\n";
 $status = system($embed_test);
-print (($status? 'not ':'')."ok 9 # $status\n");
+print (($status? 'not ':'')."ok 9 # system returned $status\n");
 unlink($exe,"embed_test.c",$obj);
 unlink("$exe$Config{exe_ext}") if $skip_exe;
 unlink("embed_test.map","embed_test.lis") if $^O eq 'VMS';
@@ -178,7 +183,3 @@ int main(int argc, char **argv, char **env)
 
     return 0;
 }
-
-
-
-

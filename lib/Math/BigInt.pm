@@ -18,7 +18,7 @@ package Math::BigInt;
 my $class = "Math::BigInt";
 require 5.005;
 
-$VERSION = '1.54';
+$VERSION = '1.57';
 use Exporter;
 @ISA =       qw( Exporter );
 @EXPORT_OK = qw( objectify _swap bgcd blcm); 
@@ -524,7 +524,6 @@ sub bnan
     # otherwise do our own thing
     $self->{value} = $CALC->_zero();
     }
-  $self->{value} = $CALC->_zero();
   $self->{sign} = $nan;
   delete $self->{_a}; delete $self->{_p};	# rounding NaN is silly
   return $self;
@@ -535,7 +534,7 @@ sub binf
   # create a bigint '+-inf', if given a BigInt, set it to '+-inf'
   # the sign is either '+', or if given, used from there
   my $self = shift;
-  my $sign = shift; $sign = '+' if !defined $sign || $sign ne '-';
+  my $sign = shift; $sign = '+' if !defined $sign || $sign !~ /^-(inf)?$/;
   $self = $class if !defined $self;
   if (!ref($self))
     {
@@ -554,7 +553,8 @@ sub binf
     # otherwise do our own thing
     $self->{value} = $CALC->_zero();
     }
-  $self->{sign} = $sign.'inf';
+  $sign = $sign . 'inf' if $sign !~ /inf$/;	# - => -inf
+  $self->{sign} = $sign;
   ($self->{_a},$self->{_p}) = @_;		# take over requested rounding
   return $self;
   }
@@ -657,7 +657,7 @@ sub bstr
   # make a string from bigint object
   my $x = shift; $class = ref($x) || $x; $x = $class->new(shift) if !ref($x); 
   # my ($self,$x) = ref($_[0]) ? (ref($_[0]),$_[0]) : objectify(1,@_); 
- 
+
   if ($x->{sign} !~ /^[+-]$/)
     {
     return $x->{sign} unless $x->{sign} eq '+inf';	# -inf, NaN
@@ -870,12 +870,11 @@ sub bcmp
   # post-normalized compare for internal use (honors signs)
   if ($x->{sign} eq '+') 
     {
-    return 1 if $y->{sign} eq '-'; # 0 check handled above
+    # $x and $y both > 0
     return $CALC->_acmp($x->{value},$y->{value});
     }
 
-  # $x->{sign} eq '-'
-  return -1 if $y->{sign} eq '+';
+  # $x && $y both < 0
   $CALC->_acmp($y->{value},$x->{value});	# swaped (lib does only 0,1,-1)
   }
 
@@ -903,12 +902,8 @@ sub badd
   my ($self,$x,$y,@r) = objectify(2,@_);
 
   return $x if $x->modify('badd');
-#  print "mbi badd ",join(' ',caller()),"\n";
-#  print "upgrade => ",$upgrade||'undef',
-#    " \$x (",ref($x),") \$y (",ref($y),")\n";
-#  return $upgrade->badd($x,$y,@r) if defined $upgrade &&
-#    ((ref($x) eq $upgrade) || (ref($y) eq $upgrade));
-#  print "still badd\n";
+  return $upgrade->badd($x,$y,@r) if defined $upgrade &&
+    ((!$x->isa($self)) || (!$y->isa($self)));
 
   $r[3] = $y;				# no push!
   # inf and NaN handling
@@ -969,8 +964,10 @@ sub bsub
   my ($self,$x,$y,@r) = objectify(2,@_);
 
   return $x if $x->modify('bsub');
+
+# upgrade done by badd():
 #  return $upgrade->badd($x,$y,@r) if defined $upgrade &&
-#    ((ref($x) eq $upgrade) || (ref($y) eq $upgrade));
+#   ((!$x->isa($self)) || (!$y->isa($self)));
 
   if ($y->is_zero())
     { 
@@ -1295,8 +1292,9 @@ sub bdiv
   return $self->_div_inf($x,$y)
    if (($x->{sign} !~ /^[+-]$/) || ($y->{sign} !~ /^[+-]$/) || $y->is_zero());
 
+  #print "mbi bdiv $x $y\n";
   return $upgrade->bdiv($upgrade->new($x),$y,@r)
-   if defined $upgrade && $y->isa($upgrade);
+   if defined $upgrade && !$y->isa($self);
 
   $r[3] = $y;					# no push!
 
@@ -1358,6 +1356,9 @@ sub bdiv
   $x->round(@r); 
   }
 
+###############################################################################
+# modulus functions
+
 sub bmod 
   {
   # modulus (or remainder)
@@ -1396,6 +1397,97 @@ sub bmod
     }
   $x;
   }
+
+sub bmodinv_not_yet_implemented
+  {
+  # modular inverse.  given a number which is (hopefully) relatively
+  # prime to the modulus, calculate its inverse using Euclid's
+  # alogrithm.  if the number is not relatively prime to the modulus
+  # (i.e. their gcd is not one) then NaN is returned.
+
+  my ($self,$num,$mod,@r) = objectify(2,@_);
+
+  return $num if $num->modify('bmodinv');
+
+  return $num->bnan()
+	if ($mod->{sign} ne '+'				# -, NaN, +inf, -inf
+         || $num->is_zero()				# or num == 0
+	 || $num->{sign} !~ /^[+-]$/			# or num NaN, inf, -inf
+        );
+#  return $num                        # i.e., NaN or some kind of infinity,
+#      if ($num->{sign} =~ /\w/);
+
+  # the remaining case, nonpositive case, $num < 0, is addressed below.
+
+  my ($u, $u1) = ($self->bzero(), $self->bone());
+  my ($a, $b) = ($mod->copy(), $num->copy());
+
+  # put least residue into $b if $num was negative
+  $b %= $mod if $b->{sign} eq '-';
+
+    # Euclid's Algorithm
+    while( ! $b->is_zero()) {
+      ($a, my $q, $b) = ($b, $self->bdiv( $a->copy(), $b));
+      ($u, $u1) = ($u1, $u - $u1 * $q);
+    }
+
+    # if the gcd is not 1, then return NaN!  It would be pointless to
+    # have called bgcd first, because we would then be performing the
+    # same Euclidean Algorithm *twice*
+    return $self->bnan() unless $a->is_one();
+
+    $u %= $mod;
+    return $u;
+  }
+
+sub bmodpow_not_yet_implemented
+  {
+  # takes a very large number to a very large exponent in a given very
+  # large modulus, quickly, thanks to binary exponentation.  supports
+  # negative exponents.
+  my ($self,$num,$exp,$mod,@r) = objectify(3,@_);
+
+  return $num if $num->modify('bmodpow');
+
+  # check modulus for valid values
+  return $num->bnan() if ($mod->{sign} ne '+'		# NaN, - , -inf, +inf
+                       || $mod->is_zero());
+
+  # check exponent for valid values
+  if ($exp->{sign} =~ /\w/) 
+    {
+    # i.e., if it's NaN, +inf, or -inf...
+    return $num->bnan();
+    }
+  elsif ($exp->{sign} eq '-')
+    {
+    $exp->babs();
+    $num->bmodinv ($mod);
+    return $num if $num->{sign} !~ /^[+-]/; 	# i.e. if there was no inverse
+    }
+
+    # check num for valid values
+    return $num->bnan() if $num->{sign} !~ /^[+-]$/;
+
+    # in the trivial case,
+    return $num->bzero() if $mod->is_one();
+    return $num->bone() if $num->is_zero() or $num->is_one();
+
+    my $acc = $num->copy(); $num->bone();	# keep ref to $num
+
+      print "$num $acc $exp\n";	
+    while( !$exp->is_zero() ) {
+      if( $exp->is_odd() ) {
+       $num->bmul($acc)->bmod($mod);
+      }
+      $acc->bmul($acc)->bmod($mod);
+      $exp->brsft( 1, 2);      		# remove last (binary) digit
+      print "$num $acc $exp\n";	
+    }
+  return $num;
+  }
+
+###############################################################################
 
 sub bfac
   {
@@ -1436,7 +1528,7 @@ sub bpow
   return $x if $x->modify('bpow');
 
   return $upgrade->bpow($upgrade->new($x),$y,@r)
-   if defined $upgrade && $y->isa($upgrade);
+   if defined $upgrade && !$y->isa($self);
 
   $r[3] = $y;					# no push!
   return $x if $x->{sign} =~ /^[+-]inf$/;	# -inf/+inf ** x
@@ -1487,7 +1579,7 @@ sub bpow
     $x->bmul($x);
     }
   $x->bmul($pow2) unless $pow2->is_one();
-  return $x->round(@r);
+  $x->round(@r);
   }
 
 sub blsft 
@@ -1539,7 +1631,7 @@ sub brsft
       $bin =~ s/^-0b//;			# strip '-0b' prefix
       $bin =~ tr/10/01/;		# flip bits
       # now shift
-      if (length($bin) <= $y)
+      if (CORE::length($bin) <= $y)
         {
 	$bin = '0'; 			# shifting to far right creates -1
 					# 0, because later increment makes 
@@ -1716,10 +1808,10 @@ sub length
 sub digit
   {
   # return the nth decimal digit, negative values count backward, 0 is right
-  my $x = shift;
-  my $n = shift || 0; 
+  my ($self,$x,$n) = ref($_[0]) ? (ref($_[0]),@_) : objectify(1,@_);
+  $n = 0 if !defined $n;
 
-  return $CALC->_digit($x->{value},$n);
+  $CALC->_digit($x->{value},$n);
   }
 
 sub _trailing_zeros
@@ -1789,7 +1881,7 @@ sub exponent
   my $e = $class->bzero();
   return $e->binc() if $x->is_zero();
   $e += $x->_trailing_zeros();
-  return $e;
+  $e;
   }
 
 sub mantissa
@@ -1804,8 +1896,9 @@ sub mantissa
   my $m = $x->copy();
   # that's inefficient
   my $zeros = $m->_trailing_zeros();
-  $m /= 10 ** $zeros if $zeros != 0;
-  return $m;
+  $m->brsft($zeros,10) if $zeros != 0;
+#  $m /= 10 ** $zeros if $zeros != 0;
+  $m;
   }
 
 sub parts
@@ -2073,7 +2166,6 @@ sub objectify
   # currently it tries 'Math::BigInt' + 1, which will not work.
 
   # some shortcut for the common cases
-
   # $x->unary_op();
   return (ref($_[1]),$_[1]) if (@_ == 2) && ($_[0]||0 == 1) && ref($_[1]);
 
@@ -2091,6 +2183,7 @@ sub objectify
     $a[0] = $class;
     $a[0] = shift if $_[0] =~ /^[A-Z].*::/;	# classname as first?
     }
+
   no strict 'refs';
   # disable downgrading, because Math::BigFLoat->foo('1.0','2.0') needs floats
   if (defined ${"$a[0]::downgrade"})
@@ -2099,6 +2192,7 @@ sub objectify
     ${"$a[0]::downgrade"} = undef;
     }
 
+  my $up = ${"$a[0]::upgrade"};
   # print "Now in objectify, my class is today $a[0]\n";
   if ($count == 0)
     {
@@ -2109,7 +2203,7 @@ sub objectify
         {
         $k = $a[0]->new($k);
         }
-      elsif (ref($k) ne $a[0])
+      elsif (!defined $up && ref($k) ne $a[0])
 	{
 	# foreign object, try to convert to integer
         $k->can('as_number') ?  $k = $k->as_number() : $k = $a[0]->new($k);
@@ -2127,7 +2221,7 @@ sub objectify
         {
         $k = $a[0]->new($k);
         }
-      elsif (ref($k) ne $a[0])
+      elsif (!defined $up && ref($k) ne $a[0])
 	{
 	# foreign object, try to convert to integer
         $k->can('as_number') ?  $k = $k->as_number() : $k = $a[0]->new($k);
@@ -2146,28 +2240,30 @@ sub import
   my $self = shift;
 
   $IMPORT++;
-  my @a = @_; my $l = scalar @_; my $j = 0;
-  for ( my $i = 0; $i < $l ; $i++,$j++ )
+  my @a; my $l = scalar @_;
+  for ( my $i = 0; $i < $l ; $i++ )
     {
     if ($_[$i] eq ':constant')
       {
       # this causes overlord er load to step in
       overload::constant integer => sub { $self->new(shift) };
-      splice @a, $j, 1; $j --;
+      overload::constant binary => sub { $self->new(shift) };
       }
     elsif ($_[$i] eq 'upgrade')
       {
       # this causes upgrading
       $upgrade = $_[$i+1];		# or undef to disable
-      my $s = 2; $s = 1 if @a-$j < 2;	# avoid "can not modify non-existant..."
-      splice @a, $j, $s; $j -= $s;
+      $i++;
       }
     elsif ($_[$i] =~ /^lib$/i)
       {
       # this causes a different low lib to take care...
       $CALC = $_[$i+1] || '';
-      my $s = 2; $s = 1 if @a-$j < 2;	# avoid "can not modify non-existant..."
-      splice @a, $j, $s; $j -= $s;
+      $i++;
+      }
+    else
+      {
+      push @a, $_[$i];
       }
     }
   # any non :constant stuff is handled by our parent, Exporter
@@ -2513,6 +2609,7 @@ Math::BigInt - Arbitrary size integer math package
 				# return (quo,rem) or quo if scalar
 
   $x->bmod($y);			# modulus (x % y)
+
   $x->bpow($y);			# power of arguments (x ** y)
   $x->blsft($y);		# left shift
   $x->brsft($y);		# right shift 
@@ -2555,6 +2652,8 @@ Math::BigInt - Arbitrary size integer math package
   $x->bsstr();			# normalized string in scientific notation
   $x->as_hex();			# as signed hexadecimal string with prefixed 0x
   $x->as_bin();			# as signed binary string with prefixed 0b
+  
+  Math::BigInt->config();	# return hash containing configuration/version
 
 =head1 DESCRIPTION
 
@@ -2609,6 +2708,15 @@ return either undef, <0, 0 or >0 and are suited for sort.
 Each of the methods below accepts three additional parameters. These arguments
 $A, $P and $R are accuracy, precision and round_mode. Please see more in the
 section about ACCURACY and ROUNDIND.
+
+=head2 config
+
+	use Data::Dumper;
+
+	print Dumper ( Math::BigInt->config() );
+
+Returns a hash containing the configuration, e.g. the version number, lib
+loaded etc.
 
 =head2 accuracy
 
@@ -2711,35 +2819,60 @@ If used on an object, it will set it to one:
 	$x->bone();		# +1
 	$x->bone('-');		# -1
 
-=head2 is_one() / is_zero() / is_nan() / is_positive() / is_negative() /
-is_inf() / is_odd() / is_even() / is_int()
+=head2 is_one()/is_zero()/is_nan()/is_inf()
+
   
 	$x->is_zero();			# true if arg is +0
 	$x->is_nan();			# true if arg is NaN
 	$x->is_one();			# true if arg is +1
 	$x->is_one('-');		# true if arg is -1
-	$x->is_odd();			# true if odd, false for even
-	$x->is_even();			# true if even, false for odd
-	$x->is_positive();		# true if >= 0
-	$x->is_negative();		# true if <  0
 	$x->is_inf();			# true if +inf
 	$x->is_inf('-');		# true if -inf (sign is default '+')
+
+These methods all test the BigInt for beeing one specific value and return
+true or false depending on the input. These are faster than doing something
+like:
+
+	if ($x == 0)
+
+=head2 is_positive()/is_negative()
+	
+	$x->is_positive();		# true if >= 0
+	$x->is_negative();		# true if <  0
+
+The methods return true if the argument is positive or negative, respectively.
+C<NaN> is neither positive nor negative, while C<+inf> counts as positive, and
+C<-inf> is negative. A C<zero> is positive.
+
+These methods are only testing the sign, and not the value.
+
+=head2 is_odd()/is_even()/is_int()
+
+	$x->is_odd();			# true if odd, false for even
+	$x->is_even();			# true if even, false for odd
 	$x->is_int();			# true if $x is an integer
 
-These methods all test the BigInt for one condition and return true or false
-depending on the input.
+The return true when the argument satisfies the condition. C<NaN>, C<+inf>,
+C<-inf> are not integers and are neither odd nor even.
 
 =head2 bcmp
 
-  $x->bcmp($y);			# compare numbers (undef,<0,=0,>0)
+	$x->bcmp($y);
+
+Compares $x with $y and takes the sign into account.
+Returns -1, 0, 1 or undef.
 
 =head2 bacmp
 
-  $x->bacmp($y);		# compare absolutely (undef,<0,=0,>0)
+	$x->bacmp($y);
+
+Compares $x with $y while ignoring their. Returns -1, 0, 1 or undef.
 
 =head2 sign
 
-  $x->sign();			# return the sign, either +,- or NaN
+	$x->sign();
+
+Return the sign, of $x, meaning either C<+>, C<->, C<-inf>, C<+inf> or NaN.
 
 =head2 bcmp
 
@@ -2796,6 +2929,39 @@ numbers.
 =head2 bmod
 
   $x->bmod($y);			# modulus (x % y)
+
+=head2 bmodinv
+
+Not yet implemented.
+
+  bmodinv($num,$mod);          # modular inverse (no OO style)
+
+Returns the inverse of C<$num> in the given modulus C<$mod>.  'C<NaN>' is
+returned unless C<$num> is relatively prime to C<$mod>, i.e. unless
+C<bgcd($num, $mod)==1>.
+
+=head2 bmodpow
+
+Not yet implemented.
+
+  bmodpow($num,$exp,$mod);     # modular exponentation ($num**$exp % $mod)
+
+Returns the value of C<$num> taken to the power C<$exp> in the modulus
+C<$mod> using binary exponentation.  C<bmodpow> is far superior to
+writing
+
+  $num ** $exp % $mod
+
+because C<bmodpow> is much faster--it reduces internal variables into
+the modulus whenever possible, so it operates on smaller numbers.
+
+C<bmodpow> also supports negative exponents.
+
+  bmodpow($num, -1, $mod)
+
+is exactly equivalent to
+
+  bmodinv($num, $mod)
 
 =head2 bpow
 
@@ -3381,15 +3547,15 @@ Examples for converting:
 
 =head1 Autocreating constants
 
-After C<use Math::BigInt ':constant'> all the B<integer> decimal constants
-in the given scope are converted to C<Math::BigInt>. This conversion
-happens at compile time.
+After C<use Math::BigInt ':constant'> all the B<integer> decimal, hexadecimal
+and binary constants in the given scope are converted to C<Math::BigInt>.
+This conversion happens at compile time. 
 
 In particular,
 
   perl -MMath::BigInt=:constant -e 'print 2**100,"\n"'
 
-prints the integer value of C<2**100>.  Note that without conversion of 
+prints the integer value of C<2**100>. Note that without conversion of 
 constants the expression 2**100 will be calculated as perl scalar.
 
 Please note that strings and floating point constants are not affected,
@@ -3412,6 +3578,16 @@ operands. You should also quote large constants to protect loss of precision:
 Without the quotes Perl would convert the large number to a floating point
 constant at compile time and then hand the result to BigInt, which results in
 an truncated result or a NaN.
+
+This also applies to integers that look like floating point constants:
+
+	use Math::BigInt ':constant';
+
+	print ref(123e2),"\n";
+	print ref(123.2e2),"\n";
+
+will print nothing but newlines. Use either L<bignum> or L<Math::BigFloat>
+to get this to work.
 
 =head1 PERFORMANCE
 

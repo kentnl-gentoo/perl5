@@ -35,7 +35,7 @@ utf8 - Perl pragma to enable/disable UTF-8 (or UTF-EBCDIC) in source code
 
 The C<use utf8> pragma tells the Perl parser to allow UTF-8 in the
 program text in the current lexical scope (allow UTF-EBCDIC on EBCDIC based
-platforms).  The C<no utf8> pragma tells Perl to switch back to treating 
+platforms).  The C<no utf8> pragma tells Perl to switch back to treating
 the source text as literal bytes in the current lexical scope.
 
 This pragma is primarily a compatibility device.  Perl versions
@@ -56,9 +56,9 @@ Enabling the C<utf8> pragma has the following effect:
 
 Bytes in the source text that have their high-bit set will be treated
 as being part of a literal UTF-8 character.  This includes most
-literals such as identifiers, string constants, constant regular
-expression patterns and package names.  On EBCDIC platforms characters
-in the Latin 1 character set are treated as being part of a literal
+literals such as identifier names, string constants, and constant
+regular expression patterns.  On EBCDIC platforms characters in
+the Latin 1 character set are treated as being part of a literal
 UTF-EBCDIC character.
 
 =back
@@ -77,32 +77,59 @@ The following functions are defined in the C<utf8::> package by the perl core.
 
 =item * $num_octets = utf8::upgrade($string);
 
-Converts internal representation of string to the Perl's internal
+Converts (in-place) internal representation of string to Perl's internal
 I<UTF-X> form.  Returns the number of octets necessary to represent
-the string as I<UTF-X>.
+the string as I<UTF-X>.  Can be used to make sure that the
+UTF-8 flag is on, so that C<\w> or C<lc()> work as expected on strings
+containing characters in the range 0x80-0xFF.  Note that this should
+not be used to convert
+a legacy byte encoding to Unicode: use Encode for that.  Affected
+by the encoding pragma.
 
-=item * utf8::downgrade($string[, CHECK])
+=item * utf8::downgrade($string[, FAIL_OK])
 
-Converts internal representation of string to be un-encoded bytes.
+Converts (in-place) internal representation of string to be un-encoded
+bytes.  Returns true on success. On failure dies or, if the value of
+FAIL_OK is true, returns false.  Can be used to make sure that the
+UTF-8 flag is off, e.g. when you want to make sure that the substr()
+or length() function works with the usually faster byte algorithm.
+Note that this should not be used to convert Unicode back to a legacy
+byte encoding: use Encode for that.  B<Not> affected by the encoding
+pragma.
 
 =item * utf8::encode($string)
 
-Converts (in-place) I<$string> from logical characters to octet sequence
-representing it in Perl's I<UTF-X> encoding.
+Converts (in-place) I<$string> from logical characters to octet
+sequence representing it in Perl's I<UTF-X> encoding. Same as
+Encode::encode_utf8(). Note that this should not be used to convert
+a legacy byte encoding to Unicode: use Encode for that.
 
 =item * $flag = utf8::decode($string)
 
 Attempts to convert I<$string> in-place from Perl's I<UTF-X> encoding
-into logical characters.
+into logical characters. Same as Encode::decode_utf8(). Note that this
+should not be used to convert Unicode back to a legacy byte encoding:
+use Encode for that.
+
+=item * $flag = utf8::valid(STRING)
+
+[INTERNAL] Test whether STRING is in a consistent state.  Will return
+true if string is held as bytes, or is well-formed UTF-8 and has the
+UTF-8 flag on.  Main reason for this routine is to allow Perl's
+testsuite to check that operations have left strings in a consistent
+state.
 
 =back
 
-C<utf8::encode> is like C<utf8::upgrade> but the UTF8 flag does not
-get turned on. See L<perlunicode> for more on the UTF8 flag and the C
-API functions C<sv_utf8_upgrade>, C<sv_utf8_downgrade>,
-C<sv_utf8_encode>, C<sv_utf8_decode> that are wrapped by the Perl
-functions C<utf8::upgrade>, C<utf8::downgrade>, C<utf8::encode> and
-C<utf8::decode>.
+C<utf8::encode> is like C<utf8::upgrade>, but the UTF8 flag is
+cleared.  See L<perlunicode> for more on the UTF8 flag and the C API
+functions C<sv_utf8_upgrade>, C<sv_utf8_downgrade>, C<sv_utf8_encode>,
+and C<sv_utf8_decode>, which are wrapped by the Perl functions
+C<utf8::upgrade>, C<utf8::downgrade>, C<utf8::encode> and
+C<utf8::decode>.  Note that in the Perl 5.8.0 implementation the
+functions utf8::valid, utf8::encode, utf8::decode, utf8::upgrade,
+and utf8::downgrade are always available, without a C<require utf8>
+statement-- this may change in future releases.
 
 =head1 SEE ALSO
 

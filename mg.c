@@ -400,7 +400,7 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
 	paren = mg->mg_len;
 	if (paren < 0)
 	    return 0;
-	if (paren <= rx->nparens &&
+	if (paren <= (I32)rx->nparens &&
 	    (s = rx->startp[paren]) != -1 &&
 	    (t = rx->endp[paren]) != -1)
 	    {
@@ -444,7 +444,7 @@ Perl_magic_len(pTHX_ SV *sv, MAGIC *mg)
 
 	    paren = atoi(mg->mg_ptr); /* $& is in [0] */
 	  getparen:
-	    if (paren <= rx->nparens &&
+	    if (paren <= (I32)rx->nparens &&
 		(s1 = rx->startp[paren]) != -1 &&
 		(t1 = rx->endp[paren]) != -1)
 	    {
@@ -454,7 +454,7 @@ Perl_magic_len(pTHX_ SV *sv, MAGIC *mg)
 		    char *s    = rx->subbeg + s1;
 		    char *send = rx->subbeg + t1;
 
-		    i = t1 - s1;
+                    i = t1 - s1;
 		    if (is_utf8_string((U8*)s, i))
 			i = Perl_utf8_length(aTHX_ (U8*)s, (U8*)send);
 		}
@@ -682,7 +682,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	     */
 	    paren = atoi(mg->mg_ptr); /* $& is in [0] */
 	  getparen:
-	    if (paren <= rx->nparens &&
+	    if (paren <= (I32)rx->nparens &&
 		(s1 = rx->startp[paren]) != -1 &&
 		(t1 = rx->endp[paren]) != -1)
 	    {
@@ -908,7 +908,7 @@ Perl_magic_setenv(pTHX_ SV *sv, MAGIC *mg)
 #ifdef VMS
 	if (s && klen == 8 && strEQ(ptr, "DCL$PATH")) {
 	    char pathbuf[256], eltbuf[256], *cp, *elt = s;
-	    struct stat sbuf;
+	    Stat_t sbuf;
 	    int i = 0, j = 0;
 
 	    do {          /* DCL$PATH may be a search list */
@@ -936,7 +936,7 @@ Perl_magic_setenv(pTHX_ SV *sv, MAGIC *mg)
 
 	    while (s < strend) {
 		char tmpbuf[256];
-		struct stat st;
+		Stat_t st;
 		I32 i;
 		s = delimcpy(tmpbuf, tmpbuf + sizeof tmpbuf,
 			     s, strend, ':', &i);
@@ -990,11 +990,16 @@ Perl_magic_clear_all_env(pTHX_ SV *sv, MAGIC *mg)
 #if defined(VMS) || defined(EPOC)
     Perl_die(aTHX_ "Can't make list assignment to %%ENV on this system");
 #else
-#   if defined(PERL_IMPLICIT_SYS) || defined(WIN32)
+#  if defined(PERL_IMPLICIT_SYS) || defined(WIN32)
     PerlEnv_clearenv();
-#   else
-#       ifdef USE_ENVIRON_ARRAY
-#	    ifndef PERL_USE_SAFE_PUTENV
+#  else
+#    ifdef USE_ENVIRON_ARRAY
+#      if defined(USE_ITHREADS)
+    /* only the parent thread can clobber the process environment */
+    if (PL_curinterp == aTHX)
+#      endif
+    {
+#      ifndef PERL_USE_SAFE_PUTENV
     I32 i;
 
     if (environ == PL_origenviron)
@@ -1002,11 +1007,11 @@ Perl_magic_clear_all_env(pTHX_ SV *sv, MAGIC *mg)
     else
 	for (i = 0; environ[i]; i++)
 	    safesysfree(environ[i]);
-#	    endif /* PERL_USE_SAFE_PUTENV */
+#      endif /* PERL_USE_SAFE_PUTENV */
 
     environ[0] = Nullch;
-
-#       endif /* USE_ENVIRON_ARRAY */
+    }
+#    endif /* USE_ENVIRON_ARRAY */
 #   endif /* PERL_IMPLICIT_SYS || WIN32 */
 #endif /* VMS || EPC */
     return 0;
@@ -1171,7 +1176,7 @@ Perl_magic_setsig(pTHX_ SV *sv, MAGIC *mg)
 	i = whichsig(s);	/* ...no, a brick */
 	if (!i) {
 	    if (ckWARN(WARN_SIGNAL))
-		Perl_warner(aTHX_ WARN_SIGNAL, "No such signal: SIG%s", s);
+		Perl_warner(aTHX_ packWARN(WARN_SIGNAL), "No such signal: SIG%s", s);
 	    return 0;
 	}
 #if defined(FAKE_PERSISTENT_SIGNAL_HANDLERS) || defined(FAKE_DEFAULT_SIGNAL_HANDLERS)
@@ -1439,7 +1444,7 @@ Perl_magic_setdbline(pTHX_ SV *sv, MAGIC *mg)
     svp = av_fetch(GvAV(gv),
 		     atoi(MgPV(mg,n_a)), FALSE);
     if (svp && SvIOKp(*svp) && (o = INT2PTR(OP*,SvIVX(*svp))))
-	o->op_private = i;
+	o->op_private = (U8)i;
     return 0;
 }
 
@@ -1513,7 +1518,7 @@ Perl_magic_setpos(pTHX_ SV *sv, MAGIC *mg)
 	if (pos < 0)
 	    pos = 0;
     }
-    else if (pos > len)
+    else if (pos > (SSize_t)len)
 	pos = len;
 
     if (ulen) {
@@ -1573,9 +1578,9 @@ Perl_magic_getsubstr(pTHX_ SV *sv, MAGIC *mg)
 
     if (SvUTF8(lsv))
 	sv_pos_u2b(lsv, &offs, &rem);
-    if (offs > len)
+    if (offs > (I32)len)
 	offs = len;
-    if (rem + offs > len)
+    if (rem + offs > (I32)len)
 	rem = len - offs;
     sv_setpvn(sv, tmps + offs, (STRLEN)rem);
     if (SvUTF8(lsv))
@@ -1840,7 +1845,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	sv_setsv(PL_bodytarget, sv);
 	break;
     case '\003':	/* ^C */
-	PL_minus_c = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
+	PL_minus_c = (bool)(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv));
 	break;
 
     case '\004':	/* ^D */
@@ -1959,7 +1964,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    }
 	}
 	else if (strEQ(mg->mg_ptr+1, "IDE_SYSTEM_CALLS"))
-	    PL_widesyscalls = SvTRUE(sv);
+	    PL_widesyscalls = (bool)SvTRUE(sv);
 	break;
     case '.':
 	if (PL_localizing) {
@@ -2239,7 +2244,12 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 		    break;
 	    }
 	    /* can grab env area too? */
-	    if (PL_origenviron && (PL_origenviron[0] == s + 1)) {
+	    if (PL_origenviron
+#ifdef USE_ITHREADS
+		&& PL_curinterp == aTHX
+#endif
+		&& (PL_origenviron[0] == s + 1))
+	    {
 		my_setenv("NoNe  SuCh", Nullch);
 					    /* force copy of environment */
 		for (i = 0; PL_origenviron[i]; i++)
@@ -2254,7 +2264,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	}
 	s = SvPV_force(sv,len);
 	i = len;
-	if (i >= PL_origalen) {
+	if (i >= (I32)PL_origalen) {
 	    i = PL_origalen;
 	    /* don't allow system to limit $0 seen by script */
 	    /* SvCUR_set(sv, i); *SvEND(sv) = '\0'; */
@@ -2266,9 +2276,8 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    Copy(s, PL_origargv[0], i, char);
 	    s = PL_origargv[0]+i;
 	    *s++ = '\0';
-	    while (++i < PL_origalen)
-		*s++ = ' ';
-	    s = PL_origargv[0]+i;
+	    while (++i < (I32)PL_origalen)
+		*s++ = '\0';
 	    for (i = 1; i < PL_origargc; i++)
 		PL_origargv[i] = Nullch;
 	}
@@ -2348,7 +2357,7 @@ Perl_sighandler(int sig)
 	flags |= 16;
 
     if (!PL_psig_ptr[sig]) {
-		Perl_warn(aTHX_ "Signal SIG%s received, but no signal handler set.\n",
+		PerlIO_printf(Perl_error_log, "Signal SIG%s received, but no signal handler set.\n",
 				 PL_sig_name[sig]);
 		exit(sig);
 	}
@@ -2374,7 +2383,7 @@ Perl_sighandler(int sig)
 
     if (!cv || !CvROOT(cv)) {
 	if (ckWARN(WARN_SIGNAL))
-	    Perl_warner(aTHX_ WARN_SIGNAL, "SIG%s handler \"%s\" not defined.\n",
+	    Perl_warner(aTHX_ packWARN(WARN_SIGNAL), "SIG%s handler \"%s\" not defined.\n",
 		PL_sig_name[sig], (gv ? GvENAME(gv)
 				: ((cv && CvGV(cv))
 				   ? GvENAME(CvGV(cv))

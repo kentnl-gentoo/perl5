@@ -174,6 +174,20 @@ BEGIN {++$ntests}
 mytest '', "@attrs", "locked method Z";
 BEGIN {++$ntests}
 
+# Test ability to modify existing sub's (or XSUB's) attributes.
+eval 'package A; sub X { $_[0] } sub X : lvalue';
+@attrs = eval 'attributes::get \&A::X';
+mytest '', "@attrs", "lvalue";
+BEGIN {++$ntests}
+
+# Above not with just 'pure' built-in attributes.
+sub Z::MODIFY_CODE_ATTRIBUTES { (); }
+eval 'package Z; sub L { $_[0] } sub L : Z lvalue';
+@attrs = eval 'attributes::get \&Z::L';
+mytest '', "@attrs", "lvalue Z";
+BEGIN {++$ntests}
+
+
 # Begin testing attributes that tie
 
 {

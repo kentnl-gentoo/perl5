@@ -1,6 +1,8 @@
 BEGIN {
-    chdir 't' if -d 't';
-    push @INC, '../lib';
+    if ($ENV{'PERL_CORE'}){
+        chdir 't';
+        unshift @INC, '../lib';
+    }
     require Config; import Config;
     if ($Config{'extensions'} !~ /\bEncode\b/) {
       print "1..0 # Skip: Encode was not built\n";

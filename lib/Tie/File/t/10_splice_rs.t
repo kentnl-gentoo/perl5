@@ -139,7 +139,7 @@ splice(@a, 0, 17);
 check_contents("");
 
 # (89-92) In the past, splicing past the end was not correctly detected
-# (1.14)
+# (0.14)
 splice(@a, 89, 3);
 check_contents("");
 splice(@a, @a, 3);
@@ -154,16 +154,17 @@ check_contents("Iblahlikeblahpieblahpie pie pieblah");
 
 # (97) Splicing with too large a negative number should be fatal
 # This test ignored because it causes 5.6.1 and 5.7.3 to dump core
+# It also garbles the stack under 5.005_03 (20020401)
 # NOT MY FAULT
-if ($] < 5.006 || $] > 5.007003) {
+if ($] > 5.007003) {
   eval { splice(@a, -7, 0) };
   print $@ =~ /^Modification of non-creatable array value attempted, subscript -7/
       ? "ok $N\n" : "not ok $N \# \$\@ was '$@'\n";
 } else { 
-  print "ok $N \# skipped (5.6.0 through 5.7.3 dump core here.)\n";
+  print "ok $N \# skipped (versions through 5.7.3 dump core here.)\n";
 }
 $N++;
-       
+
 # (98-101) Test default arguments
 splice @a, 0, 0, (0..11);
 splice @a, 4;
@@ -193,10 +194,17 @@ sub check_contents {
   if ($a eq $x) {
     print "ok $N\n";
   } else {
-    s{$/}{\\n}g for $a, $x;
-    print "not ok $N\n# expected <$x>, got <$a>\n";
+    ctrlfix(my $msg = "# expected <$x>, got <$a>");
+    print "not ok $N\n$msg\n";
   }
   $N++;
+}
+
+sub ctrlfix {
+  for (@_) {
+    s/\n/\\n/g;
+    s/\r/\\r/g;
+  }
 }
 
 END {

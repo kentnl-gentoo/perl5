@@ -1,5 +1,11 @@
 #
-use Config;
+BEGIN { warn "Running ".__FILE__."\n" };
+BEGIN 
+ {
+  require "Config.pm";
+  die "Config.pm:$@" if $@;
+  Config::->import;
+ }
 use File::Compare qw(compare);
 use File::Copy qw(copy);
 my $name = $0;
@@ -12,6 +18,9 @@ while (@ARGV && $ARGV[0] =~ /^([\w_]+)=(.*)$/)
  }
 
 $opt{CONFIG_H} ||= 'config.h';
+$opt{CORE_DIR} ||= '../lib/CORE';
+
+warn "Writing $opt{CONFIG_H}\n";
 
 my $patchlevel = $opt{INST_VER};
 $patchlevel =~ s|^[\\/]||;
@@ -44,7 +53,7 @@ eval $str;
 die "$str:$@" if $@;
 
 open(H,">$file.new") || die "Cannot open $file.new:$!";
-#binmode H;		# no CRs (which cause a spurious rebuild)
+binmode H;		# no CRs (which cause a spurious rebuild)
 while (<SH>)
  {
   last if /^$term$/o;
@@ -68,9 +77,9 @@ close(H);
 close(SH);
 
 
-chmod(0666,"config.h");
-copy("$file.new","config.h") || die "Cannot copy:$!";
-chmod(0444,"config.h");
+chmod(0666,"$opt{CORE_DIR}/$opt{CONFIG_H}");
+copy("$file.new","$opt{CORE_DIR}/$opt{CONFIG_H}") || die "Cannot copy:$!";
+chmod(0444,"$opt{CORE_DIR}/$opt{CONFIG_H}");
 
 if (compare("$file.new",$file))
  {

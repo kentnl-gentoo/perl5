@@ -258,7 +258,7 @@ if (($Is_W32 and ! $Is_NetWare)  or $Is_Cygwin) {
       chmod(0755, "$installbin/ld2");
     };
   } else {
-    $perldll = 'perl57.' . $dlext;
+    $perldll = 'perl58.' . $dlext;
   }
 
   if ($dlsrc ne "dl_none.xs") {
@@ -395,6 +395,10 @@ if (! $versiononly && ! samepath($installbin, '.') && ($^O ne 'dos') && ! $Is_VM
 	# MPE doesn't support hard links, so use a symlink.
 	# We don't want another cloned copy.
         symlink($Config{perlpath}, "$installbin/perl$exe_ext");
+    } elsif ($^O eq 'vos') {
+	# VOS doesn't support hard links, so use a symlink.
+        symlink("$installbin/$perl_verbase$ver$exe_ext",
+                "$installbin/$perl$exe_ext");
     } else {
 	link("$installbin/$perl_verbase$ver$exe_ext",
 		"$installbin/$perl$exe_ext");
@@ -413,6 +417,10 @@ if ($archname && ! samepath($installbin, '.') && ($^O ne 'dos') && ! $Is_VMS) {
 	# MPE doesn't support hard links, so use a symlink.
 	# We don't want another cloned copy.
         symlink($Config{perlpath}, "$installbin/$archperl");
+    } elsif ($^O eq 'vos') {
+	# VOS doesn't support hard links, so use a symlink.
+	symlink("$installbin/$perl_verbase$ver$exe_ext",
+		"$installbin/$archperl");
     } else {
 	link("$installbin/$perl_verbase$ver$exe_ext",
 		"$installbin/$archperl");
@@ -480,6 +488,9 @@ sub script_alias {
     if ($^O eq 'dos' or $Is_VMS or $^O eq 'transit') {
 	copy("$installscript/$orig$scr_ext",
 	     "$installscript/$alias$scr_ext");
+    } elsif ($^O eq 'vos') {
+	symlink("$installscript/$orig$scr_ext",
+	        "$installscript/$alias$scr_ext");
     } else {
 	link("$installscript/$orig$scr_ext",
 	     "$installscript/$alias$scr_ext");
@@ -733,7 +744,8 @@ sub installlib {
 
     # ignore patch backups, RCS files, emacs backup & temp files and the
     # .exists files, .PL files, and .t files.
-    return if $name =~ m{\.orig$|~$|^#.+#$|,v$|^\.exists|\.PL$|\.t$};
+    return if $name =~ m{\.orig$|~$|^#.+#$|,v$|^\.exists|\.PL$|\.t$} ||
+              $dir  =~ m{/t(?:/|$)};
 
     $name = "$dir/$name" if $dir ne '';
 

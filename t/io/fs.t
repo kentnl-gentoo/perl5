@@ -7,7 +7,9 @@ BEGIN {
 }
 
 use Config;
+use File::Spec::Functions;
 
+my $Is_MacOS  = ($^O eq 'MacOS');
 my $Is_VMSish = ($^O eq 'VMS');
 
 if (($^O eq 'MSWin32') || ($^O eq 'NetWare')) {
@@ -24,7 +26,8 @@ my $accurate_timestamps =
     !($^O eq 'MSWin32' || $^O eq 'NetWare' ||
       $^O eq 'dos'     || $^O eq 'os2'     ||
       $^O eq 'mint'    || $^O eq 'cygwin'  ||
-      $^O eq 'amigaos' || $wd =~ m#$Config{afsroot}/#
+      $^O eq 'amigaos' || $wd =~ m#$Config{afsroot}/# ||
+      $Is_MacOS
      );
 
 if (defined &Win32::IsWinNT && Win32::IsWinNT()) {
@@ -41,29 +44,36 @@ my $needs_fh_reopen =
 
 $needs_fh_reopen = 1 if (defined &Win32::IsWin95 && Win32::IsWin95());
 
-plan tests => 36;
+my $skip_mode_checks =
+    $^O eq 'cygwin' && $ENV{CYGWIN} !~ /ntsec/;
+
+plan tests => 32;
 
 
 if (($^O eq 'MSWin32') || ($^O eq 'NetWare')) {
     `rmdir /s /q tmp 2>nul`;
     `mkdir tmp`;
-} elsif ($^O eq 'VMS') {
+}
+elsif ($^O eq 'VMS') {
     `if f\$search("[.tmp]*.*") .nes. "" then delete/nolog/noconfirm [.tmp]*.*.*`;
     `if f\$search("tmp.dir") .nes. "" then delete/nolog/noconfirm tmp.dir;`;
     `create/directory [.tmp]`;
+}
+elsif ($Is_MacOS) {
+    rmdir "tmp"; mkdir "tmp";
 }
 else {
     `rm -f tmp 2>/dev/null; mkdir tmp 2>/dev/null`;
 }
 
-chdir './tmp';
+chdir catdir(curdir(), 'tmp');
 
 `/bin/rm -rf a b c x` if -x '/bin/rm';
 
 umask(022);
 
 SKIP: {
-    skip "bogus umask", 1 if ($^O eq 'MSWin32') || ($^O eq 'NetWare');
+    skip "bogus umask", 1 if ($^O eq 'MSWin32') || ($^O eq 'NetWare') || ($^O eq 'epoc') || $Is_MacOS;
 
     is((umask(0)&0777), 022, 'umask'),
 }
@@ -93,8 +103,13 @@ SKIP: {
 
     SKIP: {
         skip "hard links not that hard in $^O", 1 if $^O eq 'amigaos';
+	skip "no mode checks", 1 if $skip_mode_checks;
 
-        is($mode & 0777, 0666, "mode of triply-linked file");
+#      if ($^O eq 'cygwin') { # new files on cygwin get rwx instead of rw-
+#          is($mode & 0777, 0777, "mode of triply-linked file");
+#      } else {
+            is($mode & 0777, 0666, "mode of triply-linked file");
+#      }
     }
 }
 
@@ -108,7 +123,11 @@ SKIP: {
     ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
      $blksize,$blocks) = stat('c');
 
-    is($mode & 0777, $newmode, "chmod going through");
+    SKIP: {
+	skip "no mode checks", 1 if $skip_mode_checks;
+
+        is($mode & 0777, $newmode, "chmod going through");
+    }
 
     $newmode = 0700;
     chmod 0444, 'x';
@@ -119,12 +138,20 @@ SKIP: {
     ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
      $blksize,$blocks) = stat('c');
 
-    is($mode & 0777, $newmode, "chmod going through to c");
+    SKIP: {
+	skip "no mode checks", 1 if $skip_mode_checks;
+
+        is($mode & 0777, $newmode, "chmod going through to c");
+    }
 
     ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
      $blksize,$blocks) = stat('x');
 
-    is($mode & 0777, $newmode, "chmod going through to x");
+    SKIP: {
+	skip "no mode checks", 1 if $skip_mode_checks;
+
+        is($mode & 0777, $newmode, "chmod going through to x");
+    }
 
     is(unlink('b','x'), 2, "unlink two files");
 
@@ -241,6 +268,7 @@ close(IOFSCOM);
 # as per UNIX FAQ.
 
 SKIP: {
+# Check truncating a closed file.
     eval { truncate "Iofs.tmp", 5; };
 
     skip("no truncate - $@", 6) if $@;
@@ -257,8 +285,8 @@ SKIP: {
     print FH "x\n" x 200;
     close FH;
 
-
-       open(FH, ">>Iofs.tmp") or die "Can't open Iofs.tmp for appending";
+# Check truncating an open file.
+    open(FH, ">>Iofs.tmp") or die "Can't open Iofs.tmp for appending";
 
     binmode FH;
     select FH;
@@ -274,7 +302,11 @@ SKIP: {
     if ($needs_fh_reopen) {
 	close (FH); open (FH, ">>Iofs.tmp") or die "Can't reopen Iofs.tmp";
     }
-       
+
+    if ($^O eq 'vos') {
+        skip ("# TODO - hit VOS bug posix-973 - cannot resize an open file below the current file pos.", 3);
+    }
+
     is(-s "Iofs.tmp", 200, "fh resize to 200 working (filename check)");
 
     ok(truncate(FH, 0), "fh resize to zero");
@@ -285,11 +317,6 @@ SKIP: {
 
     ok(-z "Iofs.tmp", "fh resize to zero working (filename check)");
 
-       ok(truncate(FH, 200), "fh resize to 200");
-       is(-s FH, 200, "fh resize to 200 working (FH check)");
-
-       ok(truncate(FH, 0), "fh resize to 0");
-       ok(-z FH, "fh resize to 0 working (FH check)");
     close FH;
 }
 

@@ -81,14 +81,21 @@ Perl_new_stackinfo(pTHX_ I32 stitems, I32 cxitems)
     si->si_cxix = -1;
     si->si_type = PERLSI_UNDEF;
     New(56, si->si_cxstack, cxitems, PERL_CONTEXT);
+    /* Without any kind of initialising PUSHSUBST()
+     * in pp_subst() will read uninitialised heap. */
+    Poison(si->si_cxstack, cxitems, PERL_CONTEXT);
     return si;
 }
 
 I32
 Perl_cxinc(pTHX)
 {
+    IV old_max = cxstack_max;
     cxstack_max = GROW(cxstack_max);
     Renew(cxstack, cxstack_max + 1, PERL_CONTEXT);	/* XXX should fix CXINC macro */
+    /* Without any kind of initialising deep enough recursion
+     * will end up reading uninitialised PERL_CONTEXTs. */
+    Poison(cxstack + old_max + 1, cxstack_max - old_max, PERL_CONTEXT);
     return cxstack_ix + 1;
 }
 
@@ -587,23 +594,39 @@ Perl_save_destructor_x(pTHX_ DESTRUCTORFUNC_t f, void* p)
 void
 Perl_save_aelem(pTHX_ AV *av, I32 idx, SV **sptr)
 {
+    SV *sv;
     SSCHECK(4);
     SSPUSHPTR(SvREFCNT_inc(av));
     SSPUSHINT(idx);
     SSPUSHPTR(SvREFCNT_inc(*sptr));
     SSPUSHINT(SAVEt_AELEM);
     save_scalar_at(sptr);
+    sv = *sptr;
+    /* If we're localizing a tied array element, this new sv
+     * won't actually be stored in the array - so it won't get
+     * reaped when the localize ends. Ensure it gets reaped by
+     * mortifying it instead. DAPM */
+    if (SvTIED_mg(sv, PERL_MAGIC_tiedelem))
+	sv_2mortal(sv);
 }
 
 void
 Perl_save_helem(pTHX_ HV *hv, SV *key, SV **sptr)
 {
+    SV *sv;
     SSCHECK(4);
     SSPUSHPTR(SvREFCNT_inc(hv));
     SSPUSHPTR(SvREFCNT_inc(key));
     SSPUSHPTR(SvREFCNT_inc(*sptr));
     SSPUSHINT(SAVEt_HELEM);
     save_scalar_at(sptr);
+    sv = *sptr;
+    /* If we're localizing a tied hash element, this new sv
+     * won't actually be stored in the hash - so it won't get
+     * reaped when the localize ends. Ensure it gets reaped by
+     * mortifying it instead. DAPM */
+    if (SvTIED_mg(sv, PERL_MAGIC_tiedelem))
+	sv_2mortal(sv);
 }
 
 void
@@ -673,7 +696,11 @@ Perl_leave_scope(pTHX_ I32 base)
 	    str = (char*)SSPOPPTR;
 	    ptr = SSPOPPTR;
 	    if (*(char**)ptr != str) {
+#ifdef NETWARE
+		PerlMem_free(*(char**)ptr);
+#else
 		PerlMemShared_free(*(char**)ptr);
+#endif
 		*(char**)ptr = str;
 	    }
 	    break;
@@ -955,6 +982,10 @@ Perl_leave_scope(pTHX_ I32 base)
 	    PL_op = (OP*)SSPOPPTR;
 	    break;
 	case SAVEt_HINTS:
+	    if ((PL_hints & HINT_LOCALIZE_HH) && GvHV(PL_hintgv)) {
+		SvREFCNT_dec((SV*)GvHV(PL_hintgv));
+		GvHV(PL_hintgv) = NULL;
+	    }
 	    *(I32*)&PL_hints = (I32)SSPOPINT;
 	    break;
 	case SAVEt_COMPPAD:

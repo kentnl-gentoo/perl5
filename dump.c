@@ -75,8 +75,8 @@ Perl_dump_sub(pTHX_ GV *gv)
     gv_fullname3(sv, gv, Nullch);
     Perl_dump_indent(aTHX_ 0, Perl_debug_log, "\nSUB %s = ", SvPVX(sv));
     if (CvXSUB(GvCV(gv)))
-	Perl_dump_indent(aTHX_ 0, Perl_debug_log, "(xsub 0x%lx %d)\n",
-	    (long)CvXSUB(GvCV(gv)),
+	Perl_dump_indent(aTHX_ 0, Perl_debug_log, "(xsub 0x%"UVxf" %d)\n",
+	    PTR2UV(CvXSUB(GvCV(gv))),
 	    (int)CvXSUBANY(GvCV(gv)).any_i32);
     else if (CvROOT(GvCV(gv)))
 	op_dump(CvROOT(GvCV(gv)));
@@ -617,7 +617,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
     case OP_GVSV:
     case OP_GV:
 #ifdef USE_ITHREADS
-	Perl_dump_indent(aTHX_ level, file, "PADIX = %d\n", cPADOPo->op_padix);
+	Perl_dump_indent(aTHX_ level, file, "PADIX = %" IVdf "\n", (IV)cPADOPo->op_padix);
 #else
 	if (cSVOPo->op_sv) {
 	    SV *tmpsv = NEWSV(0,0);
@@ -731,7 +731,7 @@ Perl_gv_dump(pTHX_ GV *gv)
 }
 
 
-/* map magic types to the symbolic name
+/* map magic types to the symbolic names
  * (with the PERL_MAGIC_ prefixed stripped)
  */
 
@@ -747,6 +747,7 @@ static struct { char type; char *name; } magic_names[] = {
 	{ PERL_MAGIC_env,            "env(E)" },
 	{ PERL_MAGIC_isa,            "isa(I)" },
 	{ PERL_MAGIC_dbfile,         "dbfile(L)" },
+	{ PERL_MAGIC_shared,         "shared(N)" },
 	{ PERL_MAGIC_tied,           "tied(P)" },
 	{ PERL_MAGIC_sig,            "sig(S)" },
 	{ PERL_MAGIC_uvar,           "uvar(U)" },
@@ -760,12 +761,14 @@ static struct { char type; char *name; } magic_names[] = {
 	{ PERL_MAGIC_nkeys,          "nkeys(k)" },
 	{ PERL_MAGIC_dbline,         "dbline(l)" },
 	{ PERL_MAGIC_mutex,          "mutex(m)" },
+	{ PERL_MAGIC_shared_scalar,  "shared_scalar(n)" },
 	{ PERL_MAGIC_collxfrm,       "collxfrm(o)" },
 	{ PERL_MAGIC_tiedelem,       "tiedelem(p)" },
 	{ PERL_MAGIC_tiedscalar,     "tiedscalar(q)" },
 	{ PERL_MAGIC_qr,             "qr(r)" },
 	{ PERL_MAGIC_sigelem,        "sigelem(s)" },
 	{ PERL_MAGIC_taint,          "taint(t)" },
+	{ PERL_MAGIC_uvar_elem,      "uvar_elem(v)" },
 	{ PERL_MAGIC_vec,            "vec(v)" },
 	{ PERL_MAGIC_substr,         "substr(x)" },
 	{ PERL_MAGIC_defelem,        "defelem(y)" },
@@ -976,10 +979,12 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	if (SvCOMPILED(sv))	sv_catpv(d, "COMPILED,");
 	if (CvLVALUE(sv))	sv_catpv(d, "LVALUE,");
 	if (CvMETHOD(sv))	sv_catpv(d, "METHOD,");
+	if (CvLOCKED(sv))	sv_catpv(d, "LOCKED,");
 	break;
     case SVt_PVHV:
 	if (HvSHAREKEYS(sv))	sv_catpv(d, "SHAREKEYS,");
 	if (HvLAZYDEL(sv))	sv_catpv(d, "LAZYDEL,");
+	if (HvHASKFLAGS(sv))	sv_catpv(d, "HASKFLAGS,");
 	break;
     case SVt_PVGV:
 	if (GvINTRO(sv))	sv_catpv(d, "INTRO,");
@@ -1180,7 +1185,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 
 	    PerlIO_printf(file, "  (");
 	    Zero(freq, FREQ_MAX + 1, int);
-	    for (i = 0; i <= HvMAX(sv); i++) {
+	    for (i = 0; (STRLEN)i <= HvMAX(sv); i++) {
 		HE* h; int count = 0;
                 for (h = HvARRAY(sv)[i]; h; h = HeNEXT(h))
 		    count++;
@@ -1237,7 +1242,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	    int count = maxnest - nest;
 
 	    hv_iterinit(hv);
-	    while ((he = hv_iternext(hv)) && count--) {
+	    while ((he = hv_iternext_flags(hv, HV_ITERNEXT_WANTPLACEHOLDERS))
+                   && count--) {
 		SV *elt, *keysv;
 		char *keypv;
 		STRLEN len;
@@ -1373,7 +1379,7 @@ Perl_runops_debug(pTHX)
 {
     if (!PL_op) {
 	if (ckWARN_d(WARN_DEBUGGING))
-	    Perl_warner(aTHX_ WARN_DEBUGGING, "NULL OP IN RUN");
+	    Perl_warner(aTHX_ packWARN(WARN_DEBUGGING), "NULL OP IN RUN");
 	return 0;
     }
 
@@ -1439,7 +1445,7 @@ Perl_debop(pTHX_ OP *o)
            PerlIO_printf(Perl_debug_log, "[%"UVuf"]", (UV)o->op_targ);
         break;
     default:
-	return 0;
+	break;
     }
     PerlIO_printf(Perl_debug_log, "\n");
     return 0;

@@ -1,18 +1,15 @@
 #
-# $Id: H2Z.pm,v 0.77 2002/01/14 11:06:55 dankogai Exp $
+# $Id: H2Z.pm,v 1.2 2002/04/27 18:59:50 dankogai Exp $
 #
 
 package Encode::JP::H2Z;
 
 use strict;
-use vars qw($RCSID $VERSION);
 
-$RCSID = q$Id: H2Z.pm,v 0.77 2002/01/14 11:06:55 dankogai Exp $;
-$VERSION = do { my @r = (q$Revision: 0.77 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+our $RCSID = q$Id: H2Z.pm,v 1.2 2002/04/27 18:59:50 dankogai Exp $;
+our $VERSION = do { my @r = (q$Revision: 1.2 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 
-use Carp;
-
-use Encode::JP::Constants qw(:all);
+use Encode::CJKConstants qw(:all);
 
 use vars qw(%_D2Z  $_PAT_D2Z
 	    %_Z2D  $_PAT_Z2D
@@ -126,6 +123,7 @@ use vars qw(%_D2Z  $_PAT_D2Z
 #$_PAT_Z2D    = join("|", keys %_Z2D);
 
 sub h2z {
+    no warnings qw(uninitialized);
     my $r_str = shift;
     my ($keep_dakuten) = @_;
     my $n = 0;
@@ -166,3 +164,11 @@ sub z2h {
 }
 
 1;
+__END__
+
+
+=head1 NAME
+
+Encode::JP::H2Z -- internally used by Encode::JP::2022_JP*
+
+=cut

@@ -2,15 +2,17 @@
 
 my $file = "tf$$.txt";
 
-print "1..56\n";
+print "1..75\n";
 
 my $N = 1;
 use Tie::File;
 print "ok $N\n"; $N++;
 
-my $o = tie @a, 'Tie::File', $file;
+my $o = tie @a, 'Tie::File', $file, autochomp => 0, autodefer => 0;
 print $o ? "ok $N\n" : "not ok $N\n";
 $N++;
+
+$: = $o->{recsep};
 
 # 3-5 create
 $a[0] = 'rec0';
@@ -60,13 +62,59 @@ check_contents("sh0", "sh1", "short2", "", "rec4");
 $a[3] = 'rec3';
 check_contents("sh0", "sh1", "short2", "rec3", "rec4");
 
+# (57-59) zero out file
+@a = ();
+check_contents();
 
-# try inserting a record into the middle of an empty file
+# (60-62) insert into the middle of an empty file
+$a[3] = "rec3";
+check_contents("", "", "", "rec3");
+
+# (63-68) 20020326 You thought there would be a bug in STORE where if
+# a cached record was false, STORE wouldn't see it at all.  But you
+# forgot that records always come back from the cache with the record
+# separator attached, so they are unlikely to be false.  The only
+# really weird case is when the cached record is empty and the record
+# separator is "0".  Test that in 09_gen_rs.t.
+$a[1] = "0";
+check_contents("", "0", "", "rec3");
+$a[1] = "whoops";
+check_contents("", "whoops", "", "rec3");
+
+# (69-72) make sure that undefs are treated correctly---they should 
+# be converted to empty records, and should not raise any warnings.
+# (Some of these failed in 0.90.  The change to _fixrec fixed them.)
+# 20020331
+{
+  my $good = 1; my $warn;
+  # If any of these raise warnings, we have a problem.
+  local $SIG{__WARN__} = sub { $good = 0; $warn = shift(); ctrlfix($warn)};
+  local $^W = 1;
+  @a = (1);
+  $a[0] = undef;
+  print $good ? "ok $N\n" : "not ok $N # $warn\n";
+  $N++; $good = 1;
+  print defined($a[0]) ? "ok $N\n" : "not ok $N\n";
+  $N++; $good = 1;
+  $a[3] = '3';
+  print defined($a[1]) ? "ok $N\n" : "not ok $N\n";
+  $N++; $good = 1;
+  undef $a[3];
+  print $good ? "ok $N\n" : "not ok $N # $warn\n";
+  $N++; $good = 1;
+}
+
+# (73-75) What if the user has tampered with $\ ?
+{ {  local $\ = "stop messing with the funny variables!";
+     @a = (0..2);
+   }
+  check_contents(0..2);
+}
 
 use POSIX 'SEEK_SET';
 sub check_contents {
   my @c = @_;
-  my $x = join $/, @c, '';
+  my $x = join $:, @c, '';
   local *FH = $o->{fh};
   seek FH, 0, SEEK_SET;
 #  my $open = open FH, "< $file";
@@ -76,7 +124,7 @@ sub check_contents {
   if ($a eq $x) {
     print "ok $N\n";
   } else {
-    s{$/}{\\n}g for $a, $x;
+    ctrlfix($a, $x);
     print "not ok $N\n# expected <$x>, got <$a>\n";
   }
   $N++;
@@ -85,9 +133,10 @@ sub check_contents {
   my $good = 1;
   my $msg;
   for (0.. $#c) {
-    unless ($a[$_] eq "$c[$_]$/") {
-      $msg = "expected $c[$_]$/, got $a[$_]";
-      $msg =~ s{$/}{\\n}g;
+    my $aa = $a[$_];
+    unless ($aa eq "$c[$_]$:") {
+      $msg = "expected <$c[$_]$:>, got <$aa>";
+      ctrlfix($msg);
       $good = 0;
     }
   }
@@ -97,6 +146,13 @@ sub check_contents {
   print $o->_check_integrity($file, $ENV{INTEGRITY}) 
       ? "ok $N\n" : "not ok $N\n";
   $N++;
+}
+
+sub ctrlfix {
+  for (@_) {
+    s/\n/\\n/g;
+    s/\r/\\r/g;
+  }
 }
 
 END {

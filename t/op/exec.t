@@ -17,7 +17,9 @@ $ENV{LANGUAGE} = 'C';		# Ditto in GNU.
 my $Is_VMS   = $^O eq 'VMS';
 my $Is_Win32 = $^O eq 'MSWin32';
 
-plan(tests => 20);
+skip_all("Tests mostly usesless on MacOS") if $^O eq 'MacOS';
+
+plan(tests => 21);
 
 my $Perl = which_perl();
 
@@ -72,6 +74,12 @@ is( $echo_out, "ok\n", 'piped echo emulation');
 
     is( scalar `$Perl -le "print 'ok'" | $Perl -e "print <STDIN>"`, 
         "ok\n", 'extra newlines on outgoing pipes');
+
+    {
+	local($/) = \2;       
+	$out = runperl(prog => 'print q{1234}');
+	is($out, "1234", 'ignore $/ when capturing output in scalar context');
+    }
 }
 
 
@@ -81,9 +89,8 @@ my $exit_one = $Is_VMS ? 4 << 8 : 1 << 8;
 is( system(qq{$Perl "-I../lib" -e "use vmsish qw(hushed); exit 1"}), $exit_one,
     'Explicit exit of 1' );
 
-
-$rc = system "lskdfj";
-unless( ok($rc == 255 << 8 or $rc == -1 or $rc == 256) ) {
+$rc = system { "lskdfj" } "lskdfj";
+unless( ok($rc == 255 << 8 or $rc == -1 or $rc == 256 or $rc == 512) ) {
     print "# \$rc == $rc\n";
 }
 
