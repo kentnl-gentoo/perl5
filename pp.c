@@ -2913,13 +2913,13 @@ static const char uuemap[] =
 static char uudmap[256];        /* Initialised on first use */
 #if 'I' == 73 && 'J' == 74
 /* On an ASCII/ISO kind of system */
-#define ISUUCHAR(ch)    ((ch) > ' ' && (ch) < 'a')
+#define ISUUCHAR(ch)    ((ch) >= ' ' && (ch) < 'a')
 #else
 /*
   Some other sort of character set - use memchr() so we don't match
   the null byte.
  */
-#define ISUUCHAR(ch)    (memchr(uuemap, (ch), sizeof(uuemap)-1))
+#define ISUUCHAR(ch)    (memchr(uuemap, (ch), sizeof(uuemap)-1) || (ch) == ' ')
 #endif
 
 PP(pp_unpack)
@@ -3655,8 +3655,8 @@ doencodes(register SV *sv, register char *s, register I32 len)
     hunk[4] = '\0';
     while (len > 2) {
 	hunk[0] = uuemap[(077 & (*s >> 2))];
-	hunk[1] = uuemap[(077 & ((*s << 4) & 060 | (s[1] >> 4) & 017))];
-	hunk[2] = uuemap[(077 & ((s[1] << 2) & 074 | (s[2] >> 6) & 03))];
+	hunk[1] = uuemap[(077 & (((*s << 4) & 060) | ((s[1] >> 4) & 017)))];
+	hunk[2] = uuemap[(077 & (((s[1] << 2) & 074) | ((s[2] >> 6) & 03)))];
 	hunk[3] = uuemap[(077 & (s[2] & 077))];
 	sv_catpvn(sv, hunk, 4);
 	s += 3;
@@ -3665,7 +3665,7 @@ doencodes(register SV *sv, register char *s, register I32 len)
     if (len > 0) {
 	char r = (len > 1 ? s[1] : '\0');
 	hunk[0] = uuemap[(077 & (*s >> 2))];
-	hunk[1] = uuemap[(077 & ((*s << 4) & 060 | (r >> 4) & 017))];
+	hunk[1] = uuemap[(077 & (((*s << 4) & 060) | ((r >> 4) & 017)))];
 	hunk[2] = uuemap[(077 & ((r << 2) & 074))];
 	hunk[3] = uuemap[0];
 	sv_catpvn(sv, hunk, 4);
