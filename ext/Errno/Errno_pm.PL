@@ -5,53 +5,81 @@ use strict;
 
 use vars qw($VERSION);
 
-$VERSION = "1.04";
+$VERSION = "1.08";
 
-my @incpath = (split(/\s+/, $Config{usrinc}), split(/\s+/ ,$Config{locincpth}));
 my %err = ();
-my %done = ();
 
 unlink "Errno.pm" if -f "Errno.pm";
-open OUT, ">Errno.pm" or die $!;
+open OUT, ">Errno.pm" or die "Cannot open Errno.pm: $!";
 select OUT;
-process_file("errno.h");
+my $file;
+foreach $file (get_files()) {
+    process_file($file);
+}
 write_errno_pm();
-unlink "errno.i" if -f "errno.i";
+unlink "errno.c" if -f "errno.c";
 
 sub process_file {
     my($file) = @_;
 
     return unless defined $file;
 
-    my $path = undef;
-    my $dir;
-    foreach $dir (@incpath) {
-	my $tmp = MM->catfile($dir,$file);
-	next unless -r $tmp;
-	$path = $tmp;
-	last;
-    }
-
-    return if exists $done{$path};
-    $done{$path} = 1;
-
-    unless(defined $path) {
-	warn "Cannot find '$file'";
-	return;
-    }
-
     local *FH;
-    open(FH,"< $path") or return;
+    if (($^O eq 'VMS') && ($Config{vms_cc_type} ne 'gnuc')) {
+	unless(open(FH," LIBRARY/EXTRACT=ERRNO/OUTPUT=SYS\$OUTPUT $file |")) {
+            warn "Cannot open '$file'";
+            return;
+	}     
+    } else {
+	unless(open(FH,"< $file")) {
+            warn "Cannot open '$file'";
+            return;
+	}
+    }
     while(<FH>) {
-	s#/\*.*(\*/|$)##;
-
-	process_file($1)
-		if /^#\s*include\s*[<"]([^>"]+)[>"]/;
-
 	$err{$1} = 1
 	    if /^#\s*define\s+(E\w+)\s+/;
    }
    close(FH);
+}
+
+sub get_files {
+    my %file = ();
+    # VMS keeps its include files in system libraries (well, except for Gcc)
+    if ($^O eq 'VMS') {
+	if ($Config{vms_cc_type} eq 'decc') {
+	    $file{'Sys$Library:DECC$RTLDEF.TLB'} = 1;
+	} elsif ($Config{vms_cc_type} eq 'vaxc') {
+	    $file{'Sys$Library:vaxcdef.tlb'} = 1;
+	} elsif ($Config{vms_cc_type} eq 'gcc') {
+	    $file{'gnu_cc_include:[000000]errno.h'} = 1;
+	}
+    } else {
+	open(CPPI,"> errno.c") or
+	    die "Cannot open errno.c";
+
+	print CPPI "#include <errno.h>\n";
+
+	close(CPPI);
+
+	# invoke CPP and read the output
+
+	open(CPPO,"$Config{cpprun} $Config{cppflags} errno.c |") or
+	    die "Cannot exec $Config{cpprun}";
+
+	my $pat;
+	if ($^O eq 'MSWin32' and $Config{cc} =~ /^bcc/i) {
+	    $pat = '^/\*\s+(.+)\s+\d+\s*:\s+\*/';
+	}
+	else {
+	    $pat = '^#(?:line)?\s+\d+\s+"([^"]+)"';
+	}
+	while(<CPPO>) {
+	    $file{$1} = 1 if /$pat/o;
+	}
+	close(CPPO);
+    }
+    return keys %file;
 }
 
 sub write_errno_pm {
@@ -59,8 +87,8 @@ sub write_errno_pm {
 
     # create the CPP input
 
-    open(CPPI,"> errno.i") or
-	die "Cannot open errno.i";
+    open(CPPI,"> errno.c") or
+	die "Cannot open errno.c";
 
     print CPPI "#include <errno.h>\n";
 
@@ -71,15 +99,21 @@ sub write_errno_pm {
     close(CPPI);
 
     # invoke CPP and read the output
-
-    open(CPPO,"$Config{cppstdin} $Config{cppflags} $Config{cppminus}  <errno.i |") or
-	die "Cannot exec $Config{cppstdin}";
+    if ($^O eq 'VMS') {
+	my $cpp = "$Config{cppstdin} $Config{cppflags} $Config{cppminus}";
+	$cpp =~ s/sys\$input//i;
+	open(CPPO,"$cpp  errno.c |") or
+          die "Cannot exec $Config{cppstdin}";
+    } else {
+	open(CPPO,"$Config{cpprun} $Config{cppflags} errno.c |") or
+	    die "Cannot exec $Config{cpprun}";
+    }
 
     %err = ();
 
     while(<CPPO>) {
 	my($name,$expr);
-	next unless ($name, $expr) = /"(.*?)"\s*\[\[\s*(.*?)\s*\]\]/;
+	next unless ($name, $expr) = /"(.*?)"\s*\[\s*\[\s*(.*?)\s*\]\s*\]/;
 	next if $name eq $expr;
 	$err{$name} = eval $expr;
     }
@@ -147,7 +181,7 @@ sub TIEHASH { bless [] }
 
 sub FETCH {
     my ($self, $errname) = @_;
-    my $proto = prototype($errname);
+    my $proto = prototype("Errno::$errname");
     if (defined($proto) && $proto eq "") {
 	no strict 'refs';
         return $! == &$errname;
@@ -167,7 +201,7 @@ sub STORE {
 sub NEXTKEY {
     my($k,$v);
     while(($k,$v) = each %Errno::) {
-	my $proto = prototype($k);
+	my $proto = prototype("Errno::$k");
 	last if (defined($proto) && $proto eq "");
 	
     }
@@ -178,8 +212,6 @@ sub FIRSTKEY {
     my $s = scalar keys %Errno::;
     goto &NEXTKEY;
 }
-
-*DELETE = *CLEAR = \&STORE;
 
 sub EXISTS {
     my ($self, $errname) = @_;

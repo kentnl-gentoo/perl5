@@ -453,6 +453,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
     envgv = Nullgv;
     siggv = Nullgv;
     incgv = Nullgv;
+    hintgv = Nullgv;
     errgv = Nullgv;
     argvgv = Nullgv;
     argvoutgv = Nullgv;
@@ -1434,11 +1435,17 @@ perl_eval_pv(char *p, I32 croak_on_error)
 void
 perl_require_pv(char *pv)
 {
-    SV* sv = sv_newmortal();
+    SV* sv;
+    dSP;
+    PUSHSTACKi(SI_REQUIRE);
+    PUTBACK;
+    sv = sv_newmortal();
     sv_setpv(sv, "require '");
     sv_catpv(sv, pv);
     sv_catpv(sv, "'");
     perl_eval_sv(sv, G_DISCARD);
+    SPAGAIN;
+    POPSTACK;
 }
 
 void
@@ -1864,10 +1871,12 @@ init_main_stash(void)
     HvNAME(defstash) = savepv("main");
     incgv = gv_HVadd(gv_AVadd(gv_fetchpv("INC",TRUE, SVt_PVAV)));
     GvMULTI_on(incgv);
+    hintgv = gv_fetchpv("\010",TRUE, SVt_PV); /* ^H */
+    GvMULTI_on(hintgv);
     defgv = gv_fetchpv("_",TRUE, SVt_PVAV);
     errgv = gv_HVadd(gv_fetchpv("@", TRUE, SVt_PV));
     GvMULTI_on(errgv);
-    replgv = gv_HVadd(gv_fetchpv("\022", TRUE, SVt_PV)); /* ^R */
+    replgv = gv_fetchpv("\022", TRUE, SVt_PV); /* ^R */
     GvMULTI_on(replgv);
     (void)form("%240s","");	/* Preallocate temp - for immediate signals. */
     sv_grow(ERRSV, 240);	/* Preallocate - for immediate signals. */
@@ -1886,7 +1895,8 @@ open_script(char *scriptname, bool dosearch, SV *sv, int *fdscript)
     dTHR;
     register char *s;
 
-    scriptname = find_script(scriptname, dosearch, NULL, 0);
+    /* scriptname will be non-NULL if find_script() returns */
+    scriptname = find_script(scriptname, dosearch, NULL, 1);
 
     if (strnEQ(scriptname, "/dev/fd/", 8) && isDIGIT(scriptname[8]) ) {
 	char *s = scriptname + 8;
@@ -1898,7 +1908,7 @@ open_script(char *scriptname, bool dosearch, SV *sv, int *fdscript)
     }
     else
 	*fdscript = -1;
-    origfilename = savepv(e_script ? "-e" : scriptname);
+    origfilename = (e_script ? savepv("-e") : scriptname);
     curcop->cop_filegv = gv_fetchfile(origfilename);
     if (strEQ(origfilename,"-"))
 	scriptname = "";
@@ -1911,7 +1921,7 @@ open_script(char *scriptname, bool dosearch, SV *sv, int *fdscript)
     }
     else if (preprocess) {
 	char *cpp_cfg = CPPSTDIN;
-	SV *cpp = NEWSV(0,0);
+	SV *cpp = newSVpv("",0);
 	SV *cmd = NEWSV(0,0);
 
 	if (strEQ(cpp_cfg, "cppstdin"))
