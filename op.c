@@ -1,6 +1,6 @@
 /*    op.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -2228,8 +2228,11 @@ pmruntime(OP *o, OP *expr, OP *repl)
 
     if (repl) {
 	OP *curop;
-	if (pm->op_pmflags & PMf_EVAL)
+	if (pm->op_pmflags & PMf_EVAL) {
 	    curop = 0;
+	    if (PL_curcop->cop_line < PL_multi_end)
+		PL_curcop->cop_line = PL_multi_end;
+	}
 #ifdef USE_THREADS
 	else if (repl->op_type == OP_THREADSV
 		 && strchr("&`'123456789+",
@@ -4012,7 +4015,7 @@ newAVREF(OP *o)
 OP *
 newGVREF(I32 type, OP *o)
 {
-    if (type == OP_MAPSTART)
+    if (type == OP_MAPSTART || type == OP_GREPSTART)
 	return newUNOP(OP_NULL, 0, o);
     return ref(newUNOP(OP_RV2GV, OPf_REF, o), type);
 }
@@ -4809,6 +4812,11 @@ ck_sort(OP *o)
     if (o->op_flags & OPf_STACKED) {
 	OP *kid = cLISTOPo->op_first->op_sibling;	/* get past pushmark */
 	OP *k;
+
+	if (o->op_type == OP_SORT) {
+	    GvMULTI_on(gv_fetchpv("a", TRUE, SVt_PV));
+	    GvMULTI_on(gv_fetchpv("b", TRUE, SVt_PV));
+	}
 	kid = kUNOP->op_first;				/* get past rv2gv */
 
 	if (kid->op_type == OP_SCOPE || kid->op_type == OP_LEAVE) {

@@ -29,6 +29,7 @@ Porting/patchls		Flexible patch file listing utility
 Porting/pumpkin.pod	Guidelines and hints for Perl maintainers
 README			The Instructions
 README.amiga		Notes about AmigaOS port
+README.apollo		Notes about Apollo DomainOS port
 README.beos		Notes about BeOS port
 README.cygwin32		Notes about Cygwin32 port
 README.dos		Notes about dos/djgpp port
@@ -48,6 +49,7 @@ Todo			The Wishlist
 Todo-5.005		What needs doing before 5.005 release
 XSlock.h		Include file for extensions built with PERL_OBJECT defined
 XSUB.h			Include file for extension subroutines
+apollo/netinet/in.h	Apollo DomainOS port: C header file frontend
 av.c			Array value code
 av.h			Array value header
 beos/nm.c		BeOS port
@@ -927,6 +929,7 @@ t/op/fork.t		See if fork works
 t/op/glob.t		See if <*> works
 t/op/goto.t		See if goto works
 t/op/goto_xs.t		See if "goto &sub" works on XSUBs
+t/op/grep.t		See if grep() and map() work
 t/op/groups.t		See if $( works
 t/op/gv.t		See if typeglobs work
 t/op/hashwarn.t		See if warnings for bad hash assignments work

@@ -1,6 +1,6 @@
 /*    mg.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -363,6 +363,9 @@ magic_get(SV *sv, MAGIC *mg)
     switch (*mg->mg_ptr) {
     case '\001':		/* ^A */
 	sv_setsv(sv, PL_bodytarget);
+	break;
+    case '\003':		/* ^C */
+	sv_setiv(sv, (IV)PL_minus_c);
 	break;
     case '\004':		/* ^D */
 	sv_setiv(sv, (IV)(PL_debug & 32767));
@@ -1513,6 +1516,9 @@ magic_set(SV *sv, MAGIC *mg)
     switch (*mg->mg_ptr) {
     case '\001':	/* ^A */
 	sv_setsv(PL_bodytarget, sv);
+	break;
+    case '\003':	/* ^C */
+	PL_minus_c = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
 	break;
     case '\004':	/* ^D */
 	PL_debug = (SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv)) | 0x80000000;

@@ -1,6 +1,6 @@
 /*    gv.c
  *
- *    Copyright (c) 1991-1997, Larry Wall
+ *    Copyright (c) 1991-1999, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -616,12 +616,6 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
 	    IoFLAGS(GvIOn(gv)) |= IOf_ARGV|IOf_START;
 	}
 	break;
-
-    case 'a':
-    case 'b':
-	if (len == 1)
-	    GvMULTI_on(gv);
-	break;
     case 'E':
 	if (strnEQ(name, "EXPORT", 6))
 	    GvMULTI_on(gv);
@@ -749,6 +743,7 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
     case '/':
     case '|':
     case '\001':
+    case '\003':
     case '\004':
     case '\005':
     case '\006':
