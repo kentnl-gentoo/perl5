@@ -420,6 +420,7 @@ ext/I18N/Langinfo/Langinfo.t	I18N::Langinfo
 ext/I18N/Langinfo/Langinfo.xs	I18N::Langinfo
 ext/I18N/Langinfo/Makefile.PL	I18N::Langinfo
 ext/IO/ChangeLog		IO perl module change log
+ext/IO/hints/sco.pl		Hint for IO for named architecture
 ext/IO/IO.pm			Top-level interface to IO::* classes
 ext/IO/IO.xs			IO extension external subroutines
 ext/IO/lib/IO/Dir.pm		IO directory reading package
@@ -556,6 +557,7 @@ ext/POSIX/POSIX.pod		POSIX extension documentation
 ext/POSIX/POSIX.xs		POSIX extension external subroutines
 ext/POSIX/t/posix.t		See if POSIX works
 ext/POSIX/t/sigaction.t		See if POSIX::sigaction works
+ext/POSIX/t/taint.t		See if POSIX works with taint
 ext/POSIX/t/waitpid.t		See if waitpid works
 ext/POSIX/typemap		POSIX extension interface types
 ext/re/hints/mpeix.pl		Hints for re for named architecture
@@ -649,6 +651,7 @@ ext/Thread/Makefile.PL		Thread extension makefile writer
 ext/Thread/Notes		Thread notes
 ext/Thread/queue.tx		Test Thread::Queue module
 ext/Thread/README		Thread README
+ext/Thread/README.threads		Notes about multithreading
 ext/Thread/specific.tx		Test thread-specific user data
 ext/Thread/sync.tx		Test thread synchronisation
 ext/Thread/sync2.tx		Test thread synchronisation
@@ -712,6 +715,12 @@ ext/Unicode/Normalize/t/func.t	Unicode::Normalize
 ext/Unicode/Normalize/t/norm.t	Unicode::Normalize
 ext/Unicode/Normalize/t/test.t	Unicode::Normalize
 ext/util/make_ext		Used by Makefile to execute extension Makefiles
+ext/XS/APItest/APItest.pm	XS::APItest extension
+ext/XS/APItest/APItest.xs	XS::APItest extension
+ext/XS/APItest/MANIFEST		XS::APItest extension
+ext/XS/APItest/Makefile.PL	XS::APItest extension
+ext/XS/APItest/README		XS::APItest extension
+ext/XS/APItest/t/printf.t	XS::APItest extension
 ext/XS/Typemap/Makefile.PL	XS::Typemap extension
 ext/XS/Typemap/README		XS::Typemap extension
 ext/XS/Typemap/stdio.c		XS::Typemap extension
@@ -1102,14 +1111,13 @@ lib/File/Spec/Cygwin.pm		portable operations on Cygwin file names
 lib/File/Spec/Epoc.pm		portable operations on EPOC file names
 lib/File/Spec/Functions.pm	Function interface to File::Spec object methods
 lib/File/Spec/Mac.pm		portable operations on Mac file names
-lib/File/Spec/NW5.pm		portable operations on NetWare5 file names
 lib/File/Spec/OS2.pm		portable operations on OS2 file names
 lib/File/Spec/t/Functions.t	See if File::Spec::Functions works
 lib/File/Spec/t/rel2abs2rel.t	See if File::Spec->rel2abs/abs2rel works
 lib/File/Spec/t/Spec.t		See if File::Spec works
 lib/File/Spec/Unix.pm		portable operations on Unix file names
 lib/File/Spec/VMS.pm		portable operations on VMS file names
-lib/File/Spec/Win32.pm		portable operations on Win32 file names
+lib/File/Spec/Win32.pm		portable operations on Win32 and NetWare file names
 lib/File/stat.pm		By-name interface to Perl's builtin stat
 lib/File/stat.t			See if File::stat works
 lib/File/Temp.pm		create safe temporary files and file handles
@@ -1231,6 +1239,7 @@ lib/Math/BigInt/t/sub_mbi.t	Empty subclass test of BigInt
 lib/Math/BigInt/t/sub_mif.t	Test A & P with subclasses using mbimbf.inc
 lib/Math/BigInt/t/upgrade.inc	Actual tests for upgrade.t
 lib/Math/BigInt/t/upgrade.t	Test if use Math::BigInt(); under upgrade works
+lib/Math/BigInt/t/upgradef.t	Test if use Math::BigFloat(); under upgrade works
 lib/Math/BigInt/t/use.t		Test if use Math::BigInt(); works
 lib/Math/BigInt/t/use_lib1.t	Test combinations of Math::BigInt and BigFloat
 lib/Math/BigInt/t/use_lib2.t	Test combinations of Math::BigInt and BigFloat
@@ -1304,7 +1313,7 @@ lib/Net/netent.t		See if Net::netent works
 lib/Net/Netrc.pm		libnet
 lib/Net/NNTP.pm			libnet
 lib/Net/Ping.pm			Hello, anybody home?
-lib/Net/Ping/CHANGES		Net::Ping
+lib/Net/Ping/Changes		Net::Ping
 lib/Net/Ping/README		Net::Ping
 lib/Net/Ping/t/100_load.t		Ping Net::Ping
 lib/Net/Ping/t/110_icmp_inst.t		Ping Net::Ping
@@ -1447,6 +1456,7 @@ lib/Test/More.pm		More utilities for writing tests
 lib/Test/Simple.pm		Basic utility for writing tests
 lib/Test/Simple/Changes		Test::Simple changes
 lib/Test/Simple/README		Test::Simple README
+lib/Test/Simple/t/bad_plan.t    Test::Builder plan() test
 lib/Test/Simple/t/buffer.t	Test::Builder buffering test
 lib/Test/Simple/t/Builder.t	Test::Builder tests
 lib/Test/Simple/t/curr_test.t	Test::Builder->curr_test tests
@@ -1474,6 +1484,7 @@ lib/Test/Simple/t/simple.t	Test::Simple test, basic stuff
 lib/Test/Simple/t/skip.t	Test::More test, SKIP tests
 lib/Test/Simple/t/skipall.t	Test::More test, skip all tests
 lib/Test/Simple/t/strays.t	Test::Builder stray newline checks
+lib/Test/Simple/t/threads.t     Test::Builder thread-safe checks
 lib/Test/Simple/t/todo.t	Test::More test, TODO tests
 lib/Test/Simple/t/undef.t	Test::More test, undefs don't cause warnings
 lib/Test/Simple/t/useing.t	Test::More test, compile test
@@ -2245,8 +2256,10 @@ README.cygwin		Notes about Cygwin port
 README.dgux		Notes about DG/UX port
 README.dos		Notes about DOS/DJGPP port
 README.epoc		Notes about EPOC port
+README.freebsd		Notes about FreeBSD
 README.hpux		Notes about HP-UX port
 README.hurd		Notes about GNU/Hurd port
+README.irix		Notes about Irix port
 README.jp		About using Perl and Japanese
 README.ko		About using Perl and Korean
 README.machten		Notes about Power MachTen port
@@ -2260,7 +2273,6 @@ README.os390		Notes about OS/390 (nee MVS) port
 README.plan9		Notes about Plan9 port
 README.qnx		Notes about QNX port
 README.solaris		Notes about Solaris port
-README.threads		Notes about multithreading
 README.tru64		Notes about Tru64
 README.tw		About using Perl and Traditional Chinese
 README.uts		Notes about UTS

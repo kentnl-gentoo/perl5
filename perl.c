@@ -435,14 +435,15 @@ perl_destruct(pTHXx)
 
     if (CALL_FPTR(PL_threadhook)(aTHX)) {
         /* Threads hook has vetoed further cleanup */
-        return STATUS_NATIVE_EXPORT;;
+        return STATUS_NATIVE_EXPORT;
     }
 
     /* We must account for everything.  */
 
     /* Destroy the main CV and syntax tree */
     if (PL_main_root) {
-	PL_curpad = AvARRAY(PL_comppad);
+        /* If running under -d may not have PL_comppad. */
+        PL_curpad = PL_comppad ? AvARRAY(PL_comppad) : NULL;
 	op_free(PL_main_root);
 	PL_main_root = Nullop;
     }
@@ -490,7 +491,7 @@ perl_destruct(pTHXx)
 #endif
 
 	/* The exit() function will do everything that needs doing. */
-        return STATUS_NATIVE_EXPORT;;
+        return STATUS_NATIVE_EXPORT;
     }
 
     /* jettison our possibly duplicated environment */
@@ -1478,10 +1479,15 @@ print \"  \\@INC:\\n    @INC\\n\";");
     if (!PL_do_undump)
 	init_postdump_symbols(argc,argv,env);
 
+    /* PL_wantutf8 is conditionally turned on by
+     * locale.c:Perl_init_i18nl10n() if the environment
+     * look like the user wants to use UTF-8. */
     if (PL_wantutf8) { /* Requires init_predump_symbols(). */
 	 IO* io;
 	 PerlIO* fp;
 	 SV* sv;
+	 /* Turn on UTF-8-ness on STDIN, STDOUT, STDERR
+	  *  _and_ the default open discipline. */
 	 if (PL_stdingv  && (io = GvIO(PL_stdingv))  && (fp = IoIFP(io)))
 	      PerlIO_binmode(aTHX_ fp, IoTYPE(io), 0, ":utf8");
 	 if (PL_defoutgv && (io = GvIO(PL_defoutgv)) && (fp = IoOFP(io)))
@@ -2359,7 +2365,7 @@ Perl_moreswitches(pTHX_ char *s)
     }	
     case 'h':
 	usage(PL_origargv[0]);
-	PerlProc_exit(0);
+	my_exit(0);
     case 'i':
 	if (PL_inplace)
 	    Safefree(PL_inplace);
@@ -2597,7 +2603,7 @@ GNU General Public License, which may be found in the Perl 5 source kit.\n\n\
 Complete documentation for Perl, including FAQ lists, should be found on\n\
 this system using `man perl' or `perldoc perl'.  If you have access to the\n\
 Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
-	PerlProc_exit(0);
+	my_exit(0);
     case 'w':
 	if (! (PL_dowarn & G_WARN_ALL_MASK))
 	    PL_dowarn |= G_WARN_ON;
@@ -3523,6 +3529,17 @@ S_procself_val(pTHX_ SV *sv, char *arg0)
 {
     char buf[MAXPATHLEN];
     int len = readlink(PROCSELFEXE_PATH, buf, sizeof(buf) - 1);
+
+    /* On Playstation2 Linux V1.0 (kernel 2.2.1) readlink(/proc/self/exe)
+       includes a spurious NUL which will cause $^X to fail in system
+       or backticks (this will prevent extensions from being built and
+       many tests from working). readlink is not meant to add a NUL.
+       Normal readlink works fine.
+     */
+    if (len > 0 && buf[len-1] == '\0') {
+      len--;
+    }
+
     /* FreeBSD's implementation is acknowledged to be imperfect, sometimes
        returning the text "unknown" from the readlink rather than the path
        to the executable (or returning an error from the readlink).  Any valid

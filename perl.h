@@ -25,7 +25,11 @@
 #include <sys/fcntl.h>
 #endif
 
+#ifdef VOIDUSED
+#   undef VOIDUSED
+#endif 
 #define VOIDUSED 1
+
 #ifdef PERL_MICRO
 #   include "uconfig.h"
 #else
@@ -3828,9 +3832,8 @@ typedef struct am_table_short AMTS;
 #   define Atoul(s)	Strtoul(s, (char **)NULL, 10)
 #endif
 
-#if !defined(PERLIO_IS_STDIO) && defined(HASATTRIBUTE)
+#if !defined(PERLIO_IS_STDIO)
 /*
- * Now we have __attribute__ out of the way
  * Remap printf
  */
 #undef printf

@@ -132,7 +132,7 @@ operations.  Only one case remains where an explicit C<use utf8> is
 needed: if your Perl script itself is encoded in UTF-8, you can use
 UTF-8 in your identifier names, and in string and regular expression
 literals, by saying C<use utf8>.  This is not the default because
-scripts with legacy 8-bit data in them would break.
+scripts with legacy 8-bit data in them would break.  See L<utf8>.
 
 =head2 Perl's Unicode Model
 
@@ -180,6 +180,11 @@ this means that Perl expects other software to work, too: if Perl has
 been led to believe that STDIN should be UTF-8, but then STDIN coming
 in from another command is not UTF-8, Perl will complain about the
 malformed UTF-8.
+
+All features that combine Unicode and I/O also require using the new
+PerlIO feature.  Almost all Perl 5.8 platforms do use PerlIO, though:
+you can see whether yours is by running "perl -V" and looking for
+C<useperlio=define>.
 
 =head2 Unicode and EBCDIC
 
@@ -428,9 +433,7 @@ UTF-8 encoded.  A C<use open ':utf8'> would have avoided the bug, or
 explicitly opening also the F<file> for input as UTF-8.
 
 B<NOTE>: the C<:utf8> and C<:encoding> features work only if your
-Perl has been built with the new "perlio" feature.  Almost all 
-Perl 5.8 platforms do use "perlio", though: you can see whether
-yours is by running "perl -V" and looking for C<useperlio=define>.
+Perl has been built with the new PerlIO feature.
 
 =head2 Displaying Unicode As Text
 

@@ -2296,38 +2296,54 @@ $! Ask about threads, if appropriate
 $ IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
 $ THEN
 $   echo ""
-$   echo "This version of Perl can be built with threads. While really nifty,"
-$   echo "they are a beta feature, and there is a speed penalty for perl"
-$   echo "programs if you build with threads *even if you do not use them*."
+$   echo "Perl can be built to take advantage of threads on some systems."
+$   echo "To do so, configure.com can be run with -""Dusethreads""."
+$   echo ""
+$   echo "Note that Perl built with threading support runs slightly slower"
+$   echo "and uses more memory than plain Perl. The current implementation"
+$   echo "is believed to be stable, but it is fairly new, and so should be"
+$   echo "treated with caution."
+$   echo ""
 $   bool_dflt = "n"
 $   if f$type(usethreads) .nes. "" 
 $   then 
 $       if usethreads .or. usethreads .eqs. "define" then bool_dflt="y"
 $   endif
-$   rp = "Build with threads? [''bool_dflt'] "
+$!  Catch cases where user specified ithreads or 5005threads but
+$!  forgot -Dusethreads 
+$   if f$type(useithreads) .nes. ""
+$   then
+$         if useithreads .or. useithreads .eqs. "define" then bool_dflt="y"
+$   endif
+$   if f$type(use5005threads) .nes. ""
+$   then
+$         if use5005threads .or. use5005threads .eqs. "define" then bool_dflt="y"
+$   endif
+$   echo "If this doesn't make any sense to you, just accept the default '" + bool_dflt + "'."
+$   rp = "Build a threading Perl? [''bool_dflt'] "
 $   GOSUB myread
 $   if ans
 $   THEN
 $     use_threads="T"
-$     ! Shall we do the 5.005-stype threads, or IThreads?
-$     echo "As of 5.5.640, Perl has two different internal threading"
-$     echo "implementations, the 5.005 version (5005threads) and an"
-$     echo "interpreter-based version (ithreads) that has one"
-$     echo "interpreter per thread.  Both are very experimental.  This"
-$     echo "arrangement exists to help developers work out which one"
-$     echo "is better."
+$     ! Shall we do the 5.005-type threads, or IThreads?
+$     echo "Since release 5.6, Perl has had two different threading implementations,"
+$     echo "the newer interpreter-based version (ithreads) with one interpreter per"
+$     echo "thread, and the older 5.005 version (5005threads)."
+$     echo "The 5005threads version is effectively unmaintained and will probably be"
+$     echo "removed in Perl 5.10, so there should be no need to build a Perl using it"
+$     echo "unless needed for backwards compatibility with some existing 5.005threads"
+$     echo "code."
 $     echo ""
-$     echo "If you are a casual user, you probably do not want"
-$     echo "interpreter-threads at this time.  There doesn't yet exist"
-$     echo "a way to create threads from within Perl in this model,"
-$     echo "i.e., ""use Thread;"" will NOT work."
-$     echo ""
-$     bool_dflt = "n"
+$     bool_dflt = "y"
 $     if f$type(useithreads) .nes. ""
 $     then
-$         if useithreads .eqs. "define" then bool_dflt="y"
+$         if .not. useithreads .or. useithreads .eqs. "undef" then bool_dflt="n"
 $     endif
-$     rp = "Build with Interpreter threads? [''bool_dflt'] "
+$     if f$type(use5005threads) .nes. ""
+$     then
+$         if use5005threads .or. use5005threads .eqs. "define" then bool_dflt="n"
+$     endif
+$     rp = "Use the newer intepreter-based ithreads? [''bool_dflt'] "
 $     GOSUB myread
 $     use_ithreads=ans
 $     if use_ithreads 
@@ -2529,10 +2545,7 @@ $   IF F$EXTRACT(0,4,line) .EQS. "ext/" THEN -
 $   IF xxx .EQS. "DynaLoader" THEN goto ext_loop     ! omit
 $   IF xxx .EQS. "SDBM_File/sdbm" THEN goto ext_loop ! sub extension - omit
 $   IF xxx .EQS. "Devel/PPPort/harness" THEN goto ext_loop ! sub extension - omit
-$   IF xxx .EQS. "Encode/CN" THEN goto ext_loop  ! sub extension - omit
-$   IF xxx .EQS. "Encode/JP" THEN goto ext_loop  ! sub extension - omit
-$   IF xxx .EQS. "Encode/KR" THEN goto ext_loop  ! sub extension - omit
-$   IF xxx .EQS. "Encode/TW" THEN goto ext_loop  ! sub extension - omit
+$   IF F$EXTRACT(0,7,xxx) .EQS. "Encode/" THEN goto ext_loop  ! sub extension - omit
 $   IF xxx .EQS. "B/C" THEN goto ext_loop  ! sub extension - omit
 $   IF F$EXTRACT(0,8,line) .EQS. "vms/ext/" THEN -
       xxx = "VMS/" + F$EXTRACT(8,line_len - 20,line)
@@ -2970,24 +2983,12 @@ $!
 $ IF use64bitint .OR. use64bitint .EQS. "define"
 $ THEN
 $   d_PRId64 = "define"
-$   d_PRIEUldbl = "define"
-$   d_PRIFUldbl = "define"
-$   d_PRIGUldbl = "define"
-$   d_PRIeldbl = "define"
-$   d_PRIfldbl = "define"
-$   d_PRIgldbl = "define"
 $   d_PRIu64 = "define"
 $   d_PRIo64 = "define"
 $   d_PRIx64 = "define"
 $   d_PRIXU64 = "define"
 $   sPRId64 = """Ld"""
-$   sPRIEUldbl = """LE"""
-$   sPRIFUldbl = """LF"""
-$   sPRIGUldbl = """LG"""
 $   sPRIXU64 = """LX"""
-$   sPRIeldbl = """Le"""
-$   sPRIfldbl = """Lf"""
-$   sPRIgldbl = """Lg"""
 $   sPRIi64 = """Li"""
 $   sPRIo64 = """Lo"""
 $   sPRIu64 = """Lu"""
@@ -3002,24 +3003,12 @@ $   d_isnanl = "define"
 $   d_modfl = "define"
 $ ELSE
 $   d_PRId64 = "undef"
-$   d_PRIEUldbl = "define"
-$   d_PRIFUldbl = "define"
-$   d_PRIGUldbl = "define"
 $   d_PRIXU64 = "undef"
-$   d_PRIeldbl = "define"
-$   d_PRIfldbl = "undef"
-$   d_PRIgldbl = "undef"
 $   d_PRIu64 = "undef"
 $   d_PRIo64 = "undef"
 $   d_PRIx64 = "undef"
 $   sPRId64 = ""
-$   sPRIEUldbl = """E"""
-$   sPRIFUldbl = """F"""
-$   sPRIGUldbl = """G"""
 $   sPRIXU64 = """lX"""
-$   sPRIeldbl = """e"""
-$   sPRIfldbl = """f"""
-$   sPRIgldbl = """g"""
 $   sPRIi64 = ""
 $   sPRIo64 = ""
 $   sPRIu64 = ""
@@ -3033,8 +3022,6 @@ $   d_isnan = "undef"
 $   d_isnanl = "undef"
 $   d_modfl = "undef"
 $ ENDIF
-$ d_SCNfldbl = d_PRIfldbl
-$ sSCNfldbl = sPRIfldbl ! expect consistency
 $!
 $! Now some that we build up
 $!
@@ -3243,6 +3230,7 @@ $! Check for long double size
 $!
 $ OS
 $ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#pragma message disable ALL"  ! VAX compilers may have distracting informationals
 $ WS "#include <stdlib.h>"
 $ WS "#endif"
 $ WS "#include <stdio.h>"
@@ -3267,6 +3255,37 @@ $   longdblsize = tmp
 $   d_longdbl = "define"
 $   echo "Your long doubles are ''longdblsize' bytes long."
 $ ENDIF
+$!
+$ IF d_longdbl .OR. d_longdbl .EQS. "define"
+$ THEN
+$   d_PRIEUldbl = "define"
+$   d_PRIFUldbl = "define"
+$   d_PRIGUldbl = "define"
+$   d_PRIeldbl = "define"
+$   d_PRIfldbl = "define"
+$   d_PRIgldbl = "define"
+$   sPRIEUldbl = """LE"""
+$   sPRIFUldbl = """LF"""
+$   sPRIGUldbl = """LG"""
+$   sPRIeldbl = """Le"""
+$   sPRIfldbl = """Lf"""
+$   sPRIgldbl = """Lg"""
+$ ELSE
+$   d_PRIEUldbl = "undef"
+$   d_PRIFUldbl = "undef"
+$   d_PRIGUldbl = "undef"
+$   d_PRIeldbl = "undef"
+$   d_PRIfldbl = "undef"
+$   d_PRIgldbl = "undef"
+$   sPRIEUldbl = ""
+$   sPRIFUldbl = ""
+$   sPRIGUldbl = ""
+$   sPRIeldbl = ""
+$   sPRIfldbl = ""
+$   sPRIgldbl = ""
+$ ENDIF
+$ d_SCNfldbl = d_PRIfldbl
+$ sSCNfldbl = sPRIfldbl ! expect consistency
 $!
 $!: check for long long
 $ OS
@@ -4725,7 +4744,12 @@ $   d_wctomb="define"
 $   i_locale="define"
 $   i_langinfo="define"
 $   d_locconv="define"
-$   d_nl_langinfo="define"
+$   IF vms_ver .GES. "6.2"
+$   THEN
+$     d_nl_langinfo="define"
+$   ELSE
+$     d_nl_langinfo="undef"
+$   ENDIF
 $   d_setlocale="define"
 $   vms_cc_type="decc"
 $ ELSE
