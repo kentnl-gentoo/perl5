@@ -147,20 +147,24 @@ S_more_sv(pTHX)
     return sv;
 }
 
-STATIC void
+STATIC I32
 S_visit(pTHX_ SVFUNC_t f)
 {
     SV* sva;
     SV* sv;
     register SV* svend;
+    I32 visited = 0;
 
     for (sva = PL_sv_arenaroot; sva; sva = (SV*)SvANY(sva)) {
 	svend = &sva[SvREFCNT(sva)];
 	for (sv = sva + 1; sv < svend; ++sv) {
-	    if (SvTYPE(sv) != SVTYPEMASK)
+	    if (SvTYPE(sv) != SVTYPEMASK && SvREFCNT(sv)) {
 		(FCALL)(aTHXo_ sv);
+		++visited;
+	    }
 	}
     }
+    return visited;
 }
 
 void
@@ -181,12 +185,14 @@ Perl_sv_clean_objs(pTHX)
     PL_in_clean_objs = FALSE;
 }
 
-void
+I32
 Perl_sv_clean_all(pTHX)
 {
+    I32 cleaned;
     PL_in_clean_all = TRUE;
-    visit(do_clean_all);
+    cleaned = visit(do_clean_all);
     PL_in_clean_all = FALSE;
+    return cleaned;
 }
 
 void
@@ -1907,7 +1913,9 @@ Perl_looks_like_number(pTHX_ SV *sv)
     I32 numtype = 0;
     I32 sawinf  = 0;
     STRLEN len;
+#ifdef USE_LOCALE_NUMERIC
     bool specialradix = FALSE;
+#endif
 
     if (SvPOK(sv)) {
 	sbegin = SvPVX(sv); 
@@ -1952,9 +1960,11 @@ Perl_looks_like_number(pTHX_ SV *sv)
 	    || (specialradix = IS_NUMERIC_RADIX(s))
 #endif
 	    ) {
+#ifdef USE_LOCALE_NUMERIC
 	    if (specialradix)
 		s += SvCUR(PL_numeric_radix_sv);
 	    else
+#endif
 		s++;
 	    numtype |= IS_NUMBER_NOT_IV;
             while (isDIGIT(*s))  /* optional digits after the radix */
@@ -1966,9 +1976,11 @@ Perl_looks_like_number(pTHX_ SV *sv)
 	    || (specialradix = IS_NUMERIC_RADIX(s))
 #endif
 	    ) {
+#ifdef USE_LOCALE_NUMERIC
 	if (specialradix)
 	    s += SvCUR(PL_numeric_radix_sv);
 	else
+#endif
 	    s++;
 	numtype |= IS_NUMBER_TO_INT_BY_ATOL | IS_NUMBER_NOT_IV;
         /* no digits before the radix means we need digits after it */
@@ -3310,10 +3322,20 @@ Perl_sv_magic(pTHX_ register SV *sv, SV *obj, int how, const char *name, I32 nam
     }
     Newz(702,mg, 1, MAGIC);
     mg->mg_moremagic = SvMAGIC(sv);
-
     SvMAGIC(sv) = mg;
-    if (!obj || obj == sv || how == '#' || how == 'r')
+
+    /* Some magic sontains a reference loop, where the sv and object refer to
+       each other.  To prevent a avoid a reference loop that would prevent such
+       objects being freed, we look for such loops and if we find one we avoid
+       incrementing the object refcount. */
+    if (!obj || obj == sv || how == '#' || how == 'r' ||
+	(SvTYPE(obj) == SVt_PVGV &&
+	    (GvSV(obj) == sv || GvHV(obj) == (HV*)sv || GvAV(obj) == (AV*)sv ||
+	    GvCV(obj) == (CV*)sv || GvIOp(obj) == (IO*)sv ||
+	    GvFORM(obj) == (CV*)sv)))
+    {
 	mg->mg_obj = obj;
+    }
     else {
 	mg->mg_obj = SvREFCNT_inc(obj);
 	mg->mg_flags |= MGf_REFCOUNTED;
@@ -3696,7 +3718,7 @@ Perl_sv_clear(pTHX_ register SV *sv)
 
     if (SvOBJECT(sv)) {
 	if (PL_defstash) {		/* Still have a symbol table? */
-	    djSP;
+	    dSP;
 	    GV* destructor;
 	    SV tmpref;
 
@@ -4082,17 +4104,15 @@ Perl_sv_eq(pTHX_ register SV *sv1, register SV *sv2)
 
 	if (SvUTF8(sv1)) {
 	    char *pv = (char*)bytes_from_utf8((U8*)pv1, &cur1, &is_utf8);
-	    if (is_utf8)
-		return 0;
-	    pv1tmp = (pv != pv1);
-	    pv1 = pv;
+
+	    if ((pv1tmp = (pv != pv1)))
+		pv1 = pv;
 	}
 	else {
 	    char *pv = (char *)bytes_from_utf8((U8*)pv2, &cur2, &is_utf8);
-	    if (is_utf8)
-		return 0;
-	    pv2tmp = (pv != pv2);
-	    pv2 = pv;
+
+	    if ((pv2tmp = (pv != pv2)))
+		pv2 = pv;
 	}
     }
 
@@ -6878,6 +6898,51 @@ Perl_ptr_table_split(pTHX_ PTR_TBL_t *tbl)
     }
 }
 
+void
+Perl_ptr_table_clear(pTHX_ PTR_TBL_t *tbl)
+{
+    register PTR_TBL_ENT_t **array;
+    register PTR_TBL_ENT_t *entry;
+    register PTR_TBL_ENT_t *oentry = Null(PTR_TBL_ENT_t*);
+    UV riter = 0;
+    UV max;
+
+    if (!tbl || !tbl->tbl_items) {
+        return;
+    }
+
+    array = tbl->tbl_ary;
+    entry = array[0];
+    max = tbl->tbl_max;
+
+    for (;;) {
+        if (entry) {
+            oentry = entry;
+            entry = entry->next;
+            Safefree(oentry);
+        }
+        if (!entry) {
+            if (++riter > max) {
+                break;
+            }
+            entry = array[riter];
+        }
+    }
+
+    tbl->tbl_items = 0;
+}
+
+void
+Perl_ptr_table_free(pTHX_ PTR_TBL_t *tbl)
+{
+    if (!tbl) {
+        return;
+    }
+    ptr_table_clear(tbl);
+    Safefree(tbl->tbl_ary);
+    Safefree(tbl);
+}
+
 #ifdef DEBUGGING
 char *PL_watch_pvx;
 #endif
@@ -7161,7 +7226,7 @@ dup_pvcv:
 	CvROOT(dstr)	= OpREFCNT_inc(CvROOT(sstr));
 	CvXSUB(dstr)	= CvXSUB(sstr);
 	CvXSUBANY(dstr)	= CvXSUBANY(sstr);
-	CvGV(dstr)	= gv_dup_inc(CvGV(sstr));
+	CvGV(dstr)	= gv_dup(CvGV(sstr));
 	CvDEPTH(dstr)	= CvDEPTH(sstr);
 	if (CvPADLIST(sstr) && !AvREAL(CvPADLIST(sstr))) {
 	    /* XXX padlists are real, but pretend to be not */
@@ -7172,7 +7237,10 @@ dup_pvcv:
 	}
 	else
 	    CvPADLIST(dstr)	= av_dup_inc(CvPADLIST(sstr));
-	CvOUTSIDE(dstr)	= cv_dup_inc(CvOUTSIDE(sstr));
+	if (!CvANON(sstr) || CvCLONED(sstr))
+	    CvOUTSIDE(dstr)	= cv_dup_inc(CvOUTSIDE(sstr));
+	else
+	    CvOUTSIDE(dstr)	= cv_dup(CvOUTSIDE(sstr));
 	CvFLAGS(dstr)	= CvFLAGS(sstr);
 	break;
     default:
@@ -7226,7 +7294,7 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max)
 		ncx->blk_sub.argarray	= (cx->blk_sub.hasargs
 					   ? av_dup_inc(cx->blk_sub.argarray)
 					   : Nullav);
-		ncx->blk_sub.savearray	= av_dup(cx->blk_sub.savearray);
+		ncx->blk_sub.savearray	= av_dup_inc(cx->blk_sub.savearray);
 		ncx->blk_sub.olddepth	= cx->blk_sub.olddepth;
 		ncx->blk_sub.hasargs	= cx->blk_sub.hasargs;
 		ncx->blk_sub.lval	= cx->blk_sub.lval;
@@ -7809,7 +7877,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_defgv		= gv_dup(proto_perl->Idefgv);
     PL_argvgv		= gv_dup(proto_perl->Iargvgv);
     PL_argvoutgv	= gv_dup(proto_perl->Iargvoutgv);
-    PL_argvout_stack	= av_dup(proto_perl->Iargvout_stack);
+    PL_argvout_stack	= av_dup_inc(proto_perl->Iargvout_stack);
 
     /* shortcuts to regexp stuff */
     PL_replgv		= gv_dup(proto_perl->Ireplgv);
@@ -8021,7 +8089,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_numeric_name	= SAVEPV(proto_perl->Inumeric_name);
     PL_numeric_standard	= proto_perl->Inumeric_standard;
     PL_numeric_local	= proto_perl->Inumeric_local;
-    PL_numeric_radix_sv	= proto_perl->Inumeric_radix_sv;
+    PL_numeric_radix_sv	= sv_dup_inc(proto_perl->Inumeric_radix_sv);
 #endif /* !USE_LOCALE_NUMERIC */
 
     /* utf8 character classes */
@@ -8079,7 +8147,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     /* thrdvar.h stuff */
 
-    if (flags & 1) {
+    if (flags & CLONEf_COPY_STACKS) {
 	/* next allocation will be PL_tmps_stack[PL_tmps_ix+1] */
 	PL_tmps_ix		= proto_perl->Ttmps_ix;
 	PL_tmps_max		= proto_perl->Ttmps_max;
@@ -8265,6 +8333,11 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     PL_reginterp_cnt	= 0;
     PL_reg_starttry	= 0;
+
+    if (!(flags & CLONEf_KEEP_PTR_TABLE)) {
+        ptr_table_free(PL_ptr_table);
+        PL_ptr_table = NULL;
+    }
 
 #ifdef PERL_OBJECT
     return (PerlInterpreter*)pPerl;

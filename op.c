@@ -799,6 +799,7 @@ S_op_clear(pTHX_ OP *o)
 	cSVOPo->op_sv = Nullsv;
 #endif
 	break;
+    case OP_METHOD_NAMED:
     case OP_CONST:
 	SvREFCNT_dec(cSVOPo->op_sv);
 	cSVOPo->op_sv = Nullsv;
@@ -2678,7 +2679,7 @@ Perl_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 	    while (t < tend) {
 		cp[i++] = t;
 		t += UTF8SKIP(t);
-		if (*t == 0xff) {
+		if (t < tend && *t == 0xff) {
 		    t++;
 		    t += UTF8SKIP(t);
 		}
@@ -2686,7 +2687,7 @@ Perl_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 	    qsort(cp, i, sizeof(U8*), utf8compare);
 	    for (j = 0; j < i; j++) {
 		U8 *s = cp[j];
-		I32 cur = j < i ? cp[j+1] - s : tend - s;
+		I32 cur = j < i - 1 ? cp[j+1] - s : tend - s;
 		UV  val = utf8_to_uv(s, cur, &ulen, 0);
 		s += ulen;
 		diff = val - nextmin;
@@ -2699,7 +2700,7 @@ Perl_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 			sv_catpvn(transv, (char*)tmpbuf, t - tmpbuf);
 		    }
 	        }
-		if (*s == 0xff)
+		if (s < tend && *s == 0xff)
 		    val = utf8_to_uv(s+1, cur - 1, &ulen, 0);
 		if (val >= nextmin)
 		    nextmin = val + 1;
@@ -2712,6 +2713,7 @@ Perl_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 	    t = (U8*)SvPVX(transv);
 	    tlen = SvCUR(transv);
 	    tend = t + tlen;
+	    Safefree(cp);
 	}
 	else if (!rlen && !del) {
 	    r = t; rlen = tlen; rend = tend;
@@ -2804,6 +2806,7 @@ Perl_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
 	else
 	    bits = 8;
 
+	Safefree(cPVOPo->op_pv);
 	cSVOPo->op_sv = (SV*)swash_init("utf8", "", listsv, bits, none);
 	SvREFCNT_dec(listsv);
 	if (transv)
@@ -4121,16 +4124,19 @@ Perl_cv_undef(pTHX_ CV *cv)
 	SAVEVPTR(PL_curpad);
 	PL_curpad = 0;
 
-	if (!CvCLONED(cv))
-	    op_free(CvROOT(cv));
+	op_free(CvROOT(cv));
 	CvROOT(cv) = Nullop;
 	LEAVE;
     }
     SvPOK_off((SV*)cv);		/* forget prototype */
-    CvFLAGS(cv) = 0;
-    SvREFCNT_dec(CvGV(cv));
     CvGV(cv) = Nullgv;
-    SvREFCNT_dec(CvOUTSIDE(cv));
+    /* Since closure prototypes have the same lifetime as the containing
+     * CV, they don't hold a refcount on the outside CV.  This avoids
+     * the refcount loop between the outer CV (which keeps a refcount to
+     * the closure prototype in the pad entry for pp_anoncode()) and the
+     * closure prototype, and the ensuing memory leak.  --GSAR */
+    if (!CvANON(cv) || CvCLONED(cv))
+	SvREFCNT_dec(CvOUTSIDE(cv));
     CvOUTSIDE(cv) = Nullcv;
     if (CvPADLIST(cv)) {
 	/* may be during global destruction */
@@ -4153,6 +4159,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 	}
 	CvPADLIST(cv) = Nullav;
     }
+    CvFLAGS(cv) = 0;
 }
 
 STATIC void
@@ -4235,9 +4242,9 @@ S_cv_clone2(pTHX_ CV *proto, CV *outside)
     CvOWNER(cv)		= 0;
 #endif /* USE_THREADS */
     CvFILE(cv)		= CvFILE(proto);
-    CvGV(cv)		= (GV*)SvREFCNT_inc(CvGV(proto));
+    CvGV(cv)		= CvGV(proto);
     CvSTASH(cv)		= CvSTASH(proto);
-    CvROOT(cv)		= CvROOT(proto);
+    CvROOT(cv)		= OpREFCNT_inc(CvROOT(proto));
     CvSTART(cv)		= CvSTART(proto);
     if (outside)
 	CvOUTSIDE(cv)	= (CV*)SvREFCNT_inc(outside);
@@ -4498,8 +4505,11 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 		goto done;
 	    }
 	    /* ahem, death to those who redefine active sort subs */
-	    if (PL_curstackinfo->si_type == PERLSI_SORT && PL_sortcop == CvSTART(cv))
+	    if (PL_curstackinfo->si_type == PERLSI_SORT &&
+		PL_sortcop == CvSTART(cv)) {
+		op_free(block);
 		Perl_croak(aTHX_ "Can't redefine active sort subroutine %s", name);
+	    }
 	    if (!block)
 		goto withattrs;
 	    if ((const_sv = cv_const_sv(cv)))
@@ -4556,8 +4566,30 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	CvOUTSIDE(PL_compcv) = 0;
 	CvPADLIST(cv) = CvPADLIST(PL_compcv);
 	CvPADLIST(PL_compcv) = 0;
-	if (SvREFCNT(PL_compcv) > 1) /* XXX Make closures transit through stub. */
-	    CvOUTSIDE(PL_compcv) = (CV*)SvREFCNT_inc((SV*)cv);
+	/* inner references to PL_compcv must be fixed up ... */
+	{
+	    AV *padlist = CvPADLIST(cv);
+	    AV *comppad_name = (AV*)AvARRAY(padlist)[0];
+	    AV *comppad = (AV*)AvARRAY(padlist)[1];
+	    SV **namepad = AvARRAY(comppad_name);
+	    SV **curpad = AvARRAY(comppad);
+	    for (ix = AvFILLp(comppad_name); ix > 0; ix--) {
+		SV *namesv = namepad[ix];
+		if (namesv && namesv != &PL_sv_undef
+		    && *SvPVX(namesv) == '&')
+		{
+		    CV *innercv = (CV*)curpad[ix];
+		    if (CvOUTSIDE(innercv) == PL_compcv) {
+			CvOUTSIDE(innercv) = cv;
+			if (!CvANON(innercv) || CvCLONED(innercv)) {
+			    (void)SvREFCNT_inc(cv);
+			    SvREFCNT_dec(PL_compcv);
+			}
+		    }
+		}
+	    }
+	}
+	/* ... before we throw it away */
 	SvREFCNT_dec(PL_compcv);
     }
     else {
@@ -4568,7 +4600,7 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    PL_sub_generation++;
 	}
     }
-    CvGV(cv) = (GV*)SvREFCNT_inc(gv);
+    CvGV(cv) = gv;
     CvFILE(cv) = CopFILE(PL_curcop);
     CvSTASH(cv) = PL_curstash;
 #ifdef USE_THREADS
@@ -4661,6 +4693,13 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	}
     }
 
+    /* If a potential closure prototype, don't keep a refcount on outer CV.
+     * This is okay as the lifetime of the prototype is tied to the
+     * lifetime of the outer CV.  Avoids memory leak due to reference
+     * loop. --GSAR */
+    if (!name)
+	SvREFCNT_dec(CvOUTSIDE(cv));
+
     if (name || aname) {
 	char *s;
 	char *tname = (name ? name : aname);
@@ -4708,8 +4747,8 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    if (!PL_beginav)
 		PL_beginav = newAV();
 	    DEBUG_x( dump_sub(gv) );
-	    av_push(PL_beginav, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_push(PL_beginav, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	    call_list(oldscope, PL_beginav);
 
 	    PL_curcop = &PL_compiling;
@@ -4721,8 +4760,8 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 		PL_endav = newAV();
 	    DEBUG_x( dump_sub(gv) );
 	    av_unshift(PL_endav, 1);
-	    av_store(PL_endav, 0, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_store(PL_endav, 0, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	}
 	else if (strEQ(s, "CHECK") && !PL_error_count) {
 	    if (!PL_checkav)
@@ -4731,8 +4770,8 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    if (PL_main_start && ckWARN(WARN_VOID))
 		Perl_warner(aTHX_ WARN_VOID, "Too late to run CHECK block");
 	    av_unshift(PL_checkav, 1);
-	    av_store(PL_checkav, 0, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_store(PL_checkav, 0, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	}
 	else if (strEQ(s, "INIT") && !PL_error_count) {
 	    if (!PL_initav)
@@ -4740,8 +4779,8 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    DEBUG_x( dump_sub(gv) );
 	    if (PL_main_start && ckWARN(WARN_VOID))
 		Perl_warner(aTHX_ WARN_VOID, "Too late to run INIT block");
-	    av_push(PL_initav, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_push(PL_initav, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	}
     }
 
@@ -4842,7 +4881,7 @@ Perl_newXS(pTHX_ char *name, XSUBADDR_t subaddr, char *filename)
 	    PL_sub_generation++;
 	}
     }
-    CvGV(cv) = (GV*)SvREFCNT_inc(gv);
+    CvGV(cv) = gv;
 #ifdef USE_THREADS
     New(666, CvMUTEXP(cv), 1, perl_mutex);
     MUTEX_INIT(CvMUTEXP(cv));
@@ -4866,15 +4905,15 @@ Perl_newXS(pTHX_ char *name, XSUBADDR_t subaddr, char *filename)
 	if (strEQ(s, "BEGIN")) {
 	    if (!PL_beginav)
 		PL_beginav = newAV();
-	    av_push(PL_beginav, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_push(PL_beginav, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	}
 	else if (strEQ(s, "END")) {
 	    if (!PL_endav)
 		PL_endav = newAV();
 	    av_unshift(PL_endav, 1);
-	    av_store(PL_endav, 0, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_store(PL_endav, 0, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	}
 	else if (strEQ(s, "CHECK")) {
 	    if (!PL_checkav)
@@ -4882,16 +4921,16 @@ Perl_newXS(pTHX_ char *name, XSUBADDR_t subaddr, char *filename)
 	    if (PL_main_start && ckWARN(WARN_VOID))
 		Perl_warner(aTHX_ WARN_VOID, "Too late to run CHECK block");
 	    av_unshift(PL_checkav, 1);
-	    av_store(PL_checkav, 0, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_store(PL_checkav, 0, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	}
 	else if (strEQ(s, "INIT")) {
 	    if (!PL_initav)
 		PL_initav = newAV();
 	    if (PL_main_start && ckWARN(WARN_VOID))
 		Perl_warner(aTHX_ WARN_VOID, "Too late to run INIT block");
-	    av_push(PL_initav, SvREFCNT_inc(cv));
-	    GvCV(gv) = 0;
+	    av_push(PL_initav, (SV*)cv);
+	    GvCV(gv) = 0;		/* cv has been hijacked */
 	}
     }
     else
@@ -4928,7 +4967,7 @@ Perl_newFORM(pTHX_ I32 floor, OP *o, OP *block)
     }
     cv = PL_compcv;
     GvFORM(gv) = cv;
-    CvGV(cv) = (GV*)SvREFCNT_inc(gv);
+    CvGV(cv) = gv;
     CvFILE(cv) = CopFILE(PL_curcop);
 
     for (ix = AvFILLp(PL_comppad); ix > 0; ix--) {
@@ -5683,6 +5722,7 @@ Perl_ck_glob(pTHX_ OP *o)
     gv = newGVgen("main");
     gv_IOadd(gv);
     append_elem(OP_GLOB, o, newGVOP(OP_GV, 0, gv));
+    SvREFCNT_dec((SV*)gv); /* had excess refcnt */
     scalarkids(o);
     return o;
 }

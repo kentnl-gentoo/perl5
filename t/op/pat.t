@@ -4,16 +4,13 @@
 # the format supported by op/regexp.t.  If you want to add a test
 # that does fit that format, add it to op/re_tests, not here.
 
-print "1..224\n";
+print "1..231\n";
 
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }
 eval 'use Config';          #  Defaults assumed if this fails
-
-# XXX known to leak scalars
-$ENV{PERL_DESTRUCT_LEVEL} = 0 unless $ENV{PERL_DESTRUCT_LEVEL} > 3;
 
 $x = "abc\ndef\n";
 
@@ -545,10 +542,43 @@ $test++;
   print "ok $test\n";
   $test++;
 
+  local $lex_a = 2;
+  my $lex_a = 43;
+  my $lex_b = 17;
+  my $lex_c = 27;
+  my $lex_res = ($lex_b =~ qr/$lex_b(?{ $lex_c = $lex_a++ })/);
+  print "not " unless $lex_res eq '1';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_a eq '44';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_c eq '43';
+  print "ok $test\n";
+  $test++;
+
+
   no re "eval"; 
   $match = eval { /$a$c$a/ };
   print "not " 
     unless $b eq '14' and $@ =~ /Eval-group not allowed/ and not $match;
+  print "ok $test\n";
+  $test++;
+}
+
+{
+  local $lex_a = 2;
+  my $lex_a = 43;
+  my $lex_b = 17;
+  my $lex_c = 27;
+  my $lex_res = ($lex_b =~ qr/17(?{ $lex_c = $lex_a++ })/);
+  print "not " unless $lex_res eq '1';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_a eq '44';
+  print "ok $test\n";
+  $test++;
+  print "not " unless $lex_c eq '43';
   print "ok $test\n";
   $test++;
 }
@@ -1089,3 +1119,12 @@ $test++;
 print "not " unless undef =~ /^([^\/]*)(.*)$/;
 print "ok $test\n";
 $test++;
+
+{
+  # japhy -- added 03/03/2001
+  () = (my $str = "abc") =~ /(...)/;
+  $str = "def";
+  print "not " if $1 ne "abc";
+  print "ok $test\n";
+  $test++;
+}

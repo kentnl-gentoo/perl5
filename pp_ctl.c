@@ -47,7 +47,7 @@ static I32 sv_cmp_locale_static(pTHXo_ SV *a, SV *b);
 
 PP(pp_wantarray)
 {
-    djSP;
+    dSP;
     I32 cxix;
     EXTEND(SP, 1);
 
@@ -80,7 +80,7 @@ PP(pp_regcreset)
 
 PP(pp_regcomp)
 {
-    djSP;
+    dSP;
     register PMOP *pm = (PMOP*)cLOGOP->op_other;
     register char *t;
     SV *tmpstr;
@@ -149,7 +149,7 @@ PP(pp_regcomp)
 
 PP(pp_substcont)
 {
-    djSP;
+    dSP;
     register PMOP *pm = (PMOP*) cLOGOP->op_other;
     register PERL_CONTEXT *cx = &cxstack[cxstack_ix];
     register SV *dstr = cx->sb_dstr;
@@ -176,8 +176,9 @@ PP(pp_substcont)
 				      : (REXEC_COPY_STR|REXEC_IGNOREPOS|REXEC_NOT_FIRST))))
 	{
 	    SV *targ = cx->sb_targ;
-	    sv_catpvn(dstr, s, cx->sb_strend - s);
+	    bool isutf8;
 
+	    sv_catpvn(dstr, s, cx->sb_strend - s);
 	    cx->sb_rxtainted |= RX_MATCH_TAINTED(rx);
 
 	    (void)SvOOK_off(targ);
@@ -185,6 +186,7 @@ PP(pp_substcont)
 	    SvPVX(targ) = SvPVX(dstr);
 	    SvCUR_set(targ, SvCUR(dstr));
 	    SvLEN_set(targ, SvLEN(dstr));
+	    isutf8 = DO_UTF8(dstr);
 	    SvPVX(dstr) = 0;
 	    sv_free(dstr);
 
@@ -192,6 +194,8 @@ PP(pp_substcont)
 	    PUSHs(sv_2mortal(newSViv((I32)cx->sb_iters - 1)));
 
 	    (void)SvPOK_only(targ);
+	    if (isutf8)
+		SvUTF8_on(targ);
 	    TAINT_IF(cx->sb_rxtainted);
 	    SvSETMAGIC(targ);
 	    SvTAINT(targ);
@@ -294,7 +298,7 @@ Perl_rxres_free(pTHX_ void **rsp)
 
 PP(pp_formline)
 {
-    djSP; dMARK; dORIGMARK;
+    dSP; dMARK; dORIGMARK;
     register SV *tmpForm = *++MARK;
     register U16 *fpc;
     register char *t;
@@ -702,7 +706,7 @@ PP(pp_formline)
 
 PP(pp_grepstart)
 {
-    djSP;
+    dSP;
     SV *src;
 
     if (PL_stack_base + *PL_markstack_ptr == SP) {
@@ -739,7 +743,7 @@ PP(pp_mapstart)
 
 PP(pp_mapwhile)
 {
-    djSP;
+    dSP;
     I32 items = (SP - PL_stack_base) - *PL_markstack_ptr; /* how many new items */
     I32 count;
     I32 shift;
@@ -827,7 +831,7 @@ PP(pp_mapwhile)
 
 PP(pp_sort)
 {
-    djSP; dMARK; dORIGMARK;
+    dSP; dMARK; dORIGMARK;
     register SV **up;
     SV **myorigmark = ORIGMARK;
     register I32 max;
@@ -1012,7 +1016,7 @@ PP(pp_range)
 
 PP(pp_flip)
 {
-    djSP;
+    dSP;
 
     if (GIMME == G_ARRAY) {
 	RETURNOP(((LOGOP*)cUNOP->op_first)->op_other);
@@ -1051,7 +1055,7 @@ PP(pp_flip)
 
 PP(pp_flop)
 {
-    djSP;
+    dSP;
 
     if (GIMME == G_ARRAY) {
 	dPOPPOPssrl;
@@ -1332,41 +1336,6 @@ Perl_dounwind(pTHX_ I32 cxix)
     }
 }
 
-/*
- * Closures mentioned at top level of eval cannot be referenced
- * again, and their presence indirectly causes a memory leak.
- * (Note that the fact that compcv and friends are still set here
- * is, AFAIK, an accident.)  --Chip
- *
- * XXX need to get comppad et al from eval's cv rather than
- * relying on the incidental global values.
- */
-STATIC void
-S_free_closures(pTHX)
-{
-    SV **svp = AvARRAY(PL_comppad_name);
-    I32 ix;
-    for (ix = AvFILLp(PL_comppad_name); ix >= 0; ix--) {
-	SV *sv = svp[ix];
-	if (sv && sv != &PL_sv_undef && *SvPVX(sv) == '&') {
-	    SvREFCNT_dec(sv);
-	    svp[ix] = &PL_sv_undef;
-
-	    sv = PL_curpad[ix];
-	    if (CvCLONE(sv)) {
-		SvREFCNT_dec(CvOUTSIDE(sv));
-		CvOUTSIDE(sv) = Nullcv;
-	    }
-	    else {
-		SvREFCNT_dec(sv);
-		sv = NEWSV(0,0);
-		SvPADTMP_on(sv);
-		PL_curpad[ix] = sv;
-	    }
-	}
-    }
-}
-
 void
 Perl_qerror(pTHX_ SV *err)
 {
@@ -1481,7 +1450,7 @@ Perl_die_where(pTHX_ char *message, STRLEN msglen)
 
 PP(pp_xor)
 {
-    djSP; dPOPTOPssrl;
+    dSP; dPOPTOPssrl;
     if (SvTRUE(left) != SvTRUE(right))
 	RETSETYES;
     else
@@ -1490,7 +1459,7 @@ PP(pp_xor)
 
 PP(pp_andassign)
 {
-    djSP;
+    dSP;
     if (!SvTRUE(TOPs))
 	RETURN;
     else
@@ -1499,7 +1468,7 @@ PP(pp_andassign)
 
 PP(pp_orassign)
 {
-    djSP;
+    dSP;
     if (SvTRUE(TOPs))
 	RETURN;
     else
@@ -1508,7 +1477,7 @@ PP(pp_orassign)
 	
 PP(pp_caller)
 {
-    djSP;
+    dSP;
     register I32 cxix = dopoptosub(cxstack_ix);
     register PERL_CONTEXT *cx;
     register PERL_CONTEXT *ccstack = cxstack;
@@ -1651,7 +1620,7 @@ PP(pp_caller)
 
 PP(pp_reset)
 {
-    djSP;
+    dSP;
     char *tmps;
     STRLEN n_a;
 
@@ -1678,7 +1647,7 @@ PP(pp_dbstate)
 
     if (PL_op->op_private || SvIV(PL_DBsingle) || SvIV(PL_DBsignal) || SvIV(PL_DBtrace))
     {
-	djSP;
+	dSP;
 	register CV *cv;
 	register PERL_CONTEXT *cx;
 	I32 gimme = G_ARRAY;
@@ -1722,7 +1691,7 @@ PP(pp_scope)
 
 PP(pp_enteriter)
 {
-    djSP; dMARK;
+    dSP; dMARK;
     register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
     SV **svp;
@@ -1801,7 +1770,7 @@ PP(pp_enteriter)
 
 PP(pp_enterloop)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
 
@@ -1817,7 +1786,7 @@ PP(pp_enterloop)
 
 PP(pp_leaveloop)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;
@@ -1857,7 +1826,7 @@ PP(pp_leaveloop)
 
 PP(pp_return)
 {
-    djSP; dMARK;
+    dSP; dMARK;
     I32 cxix;
     register PERL_CONTEXT *cx;
     bool popsub2 = FALSE;
@@ -1897,8 +1866,6 @@ PP(pp_return)
 	POPEVAL(cx);
 	if (CxTRYBLOCK(cx))
 	    break;
-	if (AvFILLp(PL_comppad_name) >= 0)
-	    free_closures();
 	lex_end();
 	if (optype == OP_REQUIRE &&
 	    (MARK == SP || (gimme == G_SCALAR && !SvTRUE(*SP))) )
@@ -1968,7 +1935,7 @@ PP(pp_return)
 
 PP(pp_last)
 {
-    djSP;
+    dSP;
     I32 cxix;
     register PERL_CONTEXT *cx;
     I32 pop2 = 0;
@@ -2155,7 +2122,7 @@ PP(pp_dump)
 
 PP(pp_goto)
 {
-    djSP;
+    dSP;
     OP *retop = 0;
     I32 ix;
     register PERL_CONTEXT *cx;
@@ -2532,7 +2499,7 @@ PP(pp_goto)
 
 PP(pp_exit)
 {
-    djSP;
+    dSP;
     I32 anum;
 
     if (MAXARG < 1)
@@ -2553,7 +2520,7 @@ PP(pp_exit)
 #ifdef NOTYET
 PP(pp_nswitch)
 {
-    djSP;
+    dSP;
     NV value = SvNVx(GvSV(cCOP->cop_gv));
     register I32 match = I_32(value);
 
@@ -2572,7 +2539,7 @@ PP(pp_nswitch)
 
 PP(pp_cswitch)
 {
-    djSP;
+    dSP;
     register I32 match;
 
     if (PL_multiline)
@@ -2732,7 +2699,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, char *code, AV** avp)
     PL_op = &dummy;
     PL_op->op_type = OP_ENTEREVAL;
     PL_op->op_flags = 0;			/* Avoid uninit warning. */
-    PUSHBLOCK(cx, CXt_EVAL, SP);
+    PUSHBLOCK(cx, CXt_EVAL|(PL_curcop == &PL_compiling ? 0 : CXp_REAL), SP);
     PUSHEVAL(cx, 0, Nullgv);
     rop = doeval(G_SCALAR, startop);
     POPBLOCK(cx,PL_curpm);
@@ -2971,7 +2938,7 @@ S_doopen_pmc(pTHX_ const char *name, const char *mode)
 
 PP(pp_require)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     SV *sv;
     char *name;
@@ -3057,22 +3024,27 @@ PP(pp_require)
 
     /* prepare to compile file */
 
+#ifdef MACOS_TRADITIONAL
+    if (PERL_FILE_IS_ABSOLUTE(name)
+	|| (*name == ':' && name[1] != ':' && strchr(name+2, ':')))
+    {
+	tryname = name;
+	tryrsfp = doopen_pmc(name,PERL_SCRIPT_MODE);
+	/* We consider paths of the form :a:b ambiguous and interpret them first
+	   as global then as local
+	*/
+    	if (!tryrsfp && *name == ':' && name[1] != ':' && strchr(name+2, ':'))
+	    goto trylocal;
+    }
+    else 
+trylocal: {
+#else
     if (PERL_FILE_IS_ABSOLUTE(name)
 	|| (*name == '.' && (name[1] == '/' ||
 			     (name[1] == '.' && name[2] == '/'))))
     {
 	tryname = name;
 	tryrsfp = doopen_pmc(name,PERL_SCRIPT_MODE);
-#ifdef MACOS_TRADITIONAL
-	/* We consider paths of the form :a:b ambiguous and interpret them first
-	   as global then as local
-	*/
-    	if (!tryrsfp && name[0] == ':' && name[1] != ':' && strchr(name+2, ':'))
-	    goto trylocal;
-    }
-    else 
-trylocal: {
-#else
     }
     else {
 #endif
@@ -3108,7 +3080,10 @@ trylocal: {
 		    PUSHs(dirsv);
 		    PUSHs(sv);
 		    PUTBACK;
-		    count = call_sv(loader, G_ARRAY);
+		    if (sv_isobject(loader))
+			count = call_method("INC", G_ARRAY);
+		    else
+			count = call_sv(loader, G_ARRAY);
 		    SPAGAIN;
 
 		    if (count > 0) {
@@ -3317,7 +3292,7 @@ PP(pp_dofile)
 
 PP(pp_entereval)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     dPOPss;
     I32 gimme = GIMME_V, was = PL_sub_generation;
@@ -3394,7 +3369,7 @@ PP(pp_entereval)
 
 PP(pp_leaveeval)
 {
-    djSP;
+    dSP;
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
@@ -3436,9 +3411,6 @@ PP(pp_leaveeval)
     }
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
-    if (AvFILLp(PL_comppad_name) >= 0)
-	free_closures();
-
 #ifdef DEBUGGING
     assert(CvDEPTH(PL_compcv) == 1);
 #endif
@@ -3465,7 +3437,7 @@ PP(pp_leaveeval)
 
 PP(pp_entertry)
 {
-    djSP;
+    dSP;
     register PERL_CONTEXT *cx;
     I32 gimme = GIMME_V;
 
@@ -3485,7 +3457,7 @@ PP(pp_entertry)
 
 PP(pp_leavetry)
 {
-    djSP;
+    dSP;
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
@@ -4626,7 +4598,7 @@ run_user_filter(pTHXo_ int idx, SV *buf_sv, int maxlen)
     }
 
     if (filter_sub && len >= 0) {
-	djSP;
+	dSP;
 	int count;
 
 	ENTER;

@@ -705,6 +705,10 @@ typedef struct perl_mstats perl_mstats_t;
 
 #include <errno.h>
 
+#if defined(WIN32) && (defined(PERL_OBJECT) || defined(PERL_IMPLICIT_SYS) || defined(PERL_CAPI))
+#  define WIN32SCK_IS_STDSCK		/* don't pull in custom wsock layer */
+#endif
+
 #if defined(HAS_SOCKET) && !defined(VMS) /* VMS handles sockets via vmsish.h */
 # include <sys/socket.h>
 # if defined(USE_SOCKS) && defined(I_SOCKS)
@@ -1671,6 +1675,13 @@ typedef struct ptr_tbl PTR_TBL_t;
 #  define USE_ENVIRON_ARRAY
 #endif
 
+#ifdef JPL
+    /* E.g. JPL needs to operate on a copy of the real environment.
+     * JDK 1.2 and 1.3 seem to get upset if the original environment
+     * is diddled with. */
+#   define NEED_ENVIRON_DUP_FOR_MODIFY
+#endif
+
 #ifndef PERL_SYS_INIT3
 #  define PERL_SYS_INIT3(argvp,argcp,envp) PERL_SYS_INIT(argvp,argcp)
 #endif
@@ -2118,9 +2129,11 @@ Gid_t getegid (void);
 #  if defined(PERL_OBJECT)
 #    define DEBUG_m(a) if (PL_debug & 128)	a
 #  else
+     /* Temporarily turn off memory debugging in case the a
+      * does memory allocation, either directly or indirectly. */
 #    define DEBUG_m(a)  \
     STMT_START {							\
-	if (PERL_GET_INTERP) { dTHX; if (PL_debug & 128) { a; } }	\
+        if (PERL_GET_INTERP) { dTHX; if (PL_debug & 128) {PL_debug&=~128; a; PL_debug|=128;} } \
     } STMT_END
 #  endif
 #define DEBUG_f(a) if (PL_debug & 256)	a
@@ -3423,6 +3436,10 @@ typedef struct am_table_short AMTS;
 
 #ifdef I_LIBUTIL
 #   include <libutil.h>		/* setproctitle() in some FreeBSDs */
+#endif
+
+#ifndef EXEC_ARGV_CAST
+#define EXEC_ARGV_CAST(x) x
 #endif
 
 /* and finally... */

@@ -64,10 +64,27 @@ END_EXTERN_C
 
 #define UTF8_QUAD_MAX	UINT64_C(0x1000000000)
 
+/*
+ 
+ The following table is from Unicode 3.1.
+
+ Code Points		1st Byte  2nd Byte  3rd Byte  4th Byte
+
+   U+0000..U+007F	00..7F   
+   U+0080..U+07FF	C2..DF    80..BF   
+   U+0800..U+0FFF	E0        A0..BF    80..BF  
+   U+1000..U+FFFF	E1..EF    80..BF    80..BF  
+  U+10000..U+3FFFF	F0        90..BF    80..BF    80..BF
+  U+40000..U+FFFFF	F1..F3    80..BF    80..BF    80..BF
+ U+100000..U+10FFFF	F4        80..8F    80..BF    80..BF
+
+ */
+
 #define UTF8_IS_ASCII(c) 		(((U8)c) <  0x80)
 #define UTF8_IS_START(c)		(((U8)c) >= 0xc0 && (((U8)c) <= 0xfd))
 #define UTF8_IS_CONTINUATION(c)		(((U8)c) >= 0x80 && (((U8)c) <= 0xbf))
 #define UTF8_IS_CONTINUED(c) 		(((U8)c) &  0x80)
+#define UTF8_IS_DOWNGRADEABLE_START(c)	(((U8)c & 0xfc) != 0xc0)
 
 #define UTF8_CONTINUATION_MASK		((U8)0x3f)
 #define UTF8_ACCUMULATION_SHIFT		6

@@ -345,7 +345,7 @@ INST_LIB	= $(INST_TOP)$(INST_VER)\lib
 INST_ARCHLIB	= $(INST_LIB)$(INST_ARCH)
 INST_COREDIR	= $(INST_ARCHLIB)\CORE
 INST_POD	= $(INST_LIB)\pod
-INST_HTML	= $(INST_POD)\html
+INST_HTML	= $(INST_TOP)$(INST_VER)\html
 
 #
 # Programs to compile, build .lib files and link
@@ -998,13 +998,20 @@ utils: $(PERLEXE) $(X2P)
 	cd ..\utils
 	$(MAKE) PERL=$(MINIPERL)
 	cd ..\pod
+	copy ..\README.aix .\perlaix.pod
 	copy ..\README.amiga .\perlamiga.pod
 	copy ..\README.cygwin .\perlcygwin.pod
 	copy ..\README.dos .\perldos.pod
+	copy ..\README.epoc .\perlepoc.pod
 	copy ..\README.hpux .\perlhpux.pod
 	copy ..\README.machten .\perlmachten.pod
 	copy ..\README.os2 .\perlos2.pod
+	copy ..\README.os390 .\perlos390.pod
+	copy ..\README.vmesa .\perlvmesa.pod
+	copy ..\README.bs2000 .\perlbs2000.pod
+	copy ..\README.solaris .\perlsolaris.pod
 	copy ..\vms\perlvms.pod .\perlvms.pod
+	copy ..\README.vos ..\perlvos.pod
 	copy ..\README.win32 .\perlwin32.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\win32
@@ -1016,13 +1023,14 @@ distclean: clean
 	-del /f *.def *.map
 	-del /f $(EXTENSION_DLL) $(EXTENSION_PM)
 	-del /f $(EXTENSION_C) $(DYNALOADER).c $(ERRNO).pm
-	-del /f $(EXTDIR)\DynaLoader\dl_win32.xs
+	-del /f $(EXTDIR)\DynaLoader\dl_win32.xs $(EXTDIR)\DynaLoader\DynaLoader.pm
 	-del /f $(LIBDIR)\.exists $(LIBDIR)\attrs.pm $(LIBDIR)\DynaLoader.pm
-	-del /f $(LIBDIR)\XSLoader.pm
+	-del /f $(LIBDIR)\XSLoader.pm $(EXTDIR)\DynaLoader\XSLoader.pm
+	-del /f $(LIBDIR)\Devel\.exists $(LIBDIR)\File\.exists $(LIBDIR)\Sys\.exists
 	-del /f $(LIBDIR)\Fcntl.pm $(LIBDIR)\IO.pm $(LIBDIR)\Opcode.pm
 	-del /f $(LIBDIR)\ops.pm $(LIBDIR)\Safe.pm $(LIBDIR)\Thread.pm
 	-del /f $(LIBDIR)\SDBM_File.pm $(LIBDIR)\Socket.pm $(LIBDIR)\POSIX.pm
-	-del /f $(LIBDIR)\B.pm $(LIBDIR)\O.pm $(LIBDIR)\re.pm
+	-del /f $(LIBDIR)\B.pm $(EXTDIR)\B\defsubs.h $(LIBDIR)\O.pm $(LIBDIR)\re.pm
 	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
 	-del /f $(LIBDIR)\Devel\Peek.pm $(LIBDIR)\Devel\DProf.pm
 	-del /f $(LIBDIR)\File\Glob.pm
@@ -1031,11 +1039,14 @@ distclean: clean
 	-if exist $(LIBDIR)\Thread rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
 	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B
 	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data || rmdir /s $(LIBDIR)\Data
-	-del /f $(PODDIR)\*.html
-	-del /f $(PODDIR)\*.bat
+	cd $(PODDIR)
+	-del /f *.html *.bat checkpods perlamiga.pod perlcygwin.pod \
+	    perldos.pod perlhpux.pod perlmachten.pod perlos2.pod perlvms.pod \
+	    perlwin32.pod pod2html pod2latex pod2man pod2text pod2usage \
+	    podchecker podselect
 	cd ..\utils
-	-del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc dprofpp
-	-del /f *.bat
+	-del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc dprofpp \
+	    *.bat perlcc pstruct
 	cd ..\win32
 	cd ..\x2p
 	-del /f find2perl s2p

@@ -36,6 +36,7 @@ README.aix		Notes about AIX port
 README.amiga		Notes about AmigaOS port
 README.apollo		Notes about Apollo DomainOS port
 README.beos		Notes about BeOS port
+README.bs2000		Notes about BS2000 POSIX port
 README.cygwin		Notes about Cygwin port
 README.dos		Notes about dos/djgpp port
 README.epoc		Notes about EPOC port
@@ -47,7 +48,6 @@ README.mpeix		Notes about MPE/iX port
 README.os2		Notes about OS/2 port
 README.os390		Notes about OS/390 (nee MVS) port
 README.plan9		Notes about Plan9 port
-README.posix-bc		Notes about BS2000 POSIX port
 README.qnx		Notes about QNX port
 README.solaris		Notes about Solaris port
 README.threads		Notes about multithreading
@@ -85,7 +85,6 @@ doio.c			I/O operations
 doop.c			Support code for various operations
 dosish.h		Some defines for MS/DOSish machines
 dump.c			Debugging output
-ebcdic.c		EBCDIC support routines
 eg/ADB			An adb wrapper to put in your crash dir
 eg/README		Intro to example perl scripts
 eg/cgi/RunMeFirst		Setup script for CGI examples
@@ -238,6 +237,7 @@ ext/DynaLoader/XSLoader_pm.PL	Simple XS Loader perl module
 ext/DynaLoader/dl_aix.xs	AIX implementation
 ext/DynaLoader/dl_beos.xs	BeOS implementation
 ext/DynaLoader/dl_dld.xs	GNU dld style implementation
+ext/DynaLoader/dl_dllload.xs	S/390 dllload() style implementation
 ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
 ext/DynaLoader/dl_dyld.xs	NeXT/Apple dyld implementation
 ext/DynaLoader/dl_hpux.xs	HP-UX implementation
@@ -619,13 +619,13 @@ lib/File/DosGlob.pm	Win32 DOS-globbing module
 lib/File/Find.pm	Routines to do a find
 lib/File/Path.pm	Do things like `mkdir -p' and `rm -r'
 lib/File/Spec.pm	portable operations on file names
+lib/File/Spec/Epoc.pm	portable operations on EPOC file names
 lib/File/Spec/Functions.pm	Function interface to File::Spec object methods
 lib/File/Spec/Mac.pm	portable operations on Mac file names
 lib/File/Spec/OS2.pm	portable operations on OS2 file names
 lib/File/Spec/Unix.pm	portable operations on Unix file names
 lib/File/Spec/VMS.pm	portable operations on VMS file names
 lib/File/Spec/Win32.pm	portable operations on Win32 file names
-lib/File/Spec/Epoc.pm	portable operations on EPOC file names
 lib/File/Temp.pm	create safe temporary files and file handles
 lib/File/stat.pm	By-name interface to Perl's builtin stat
 lib/FileCache.pm	Keep more files open than the system permits
@@ -1093,6 +1093,7 @@ os2/dl_os2.c		Addon for dl_open
 os2/dlfcn.h		Addon for dl_open
 os2/os2.c		Additional code for OS/2
 os2/os2.sym		Additional symbols to export
+os2/os2add.sym		Overriding symbols to export
 os2/os2ish.h		Header for OS/2
 os2/os2thread.h		pthread-like typedefs
 os2/perl2cmd.pl		Corrects installed binaries under OS/2
@@ -1140,6 +1141,7 @@ pod/perlbook.pod	Perl book information
 pod/perlboot.pod	Beginner's Object-oriented Tutorial
 pod/perlbot.pod		Object-oriented Bag o' Tricks
 pod/perlcall.pod	Callback info
+pod/perlclib.pod	Internal replacements for standard C library functions
 pod/perlcompile.pod	Info on using the Compiler suite
 pod/perldata.pod	Data structure info
 pod/perldbmfilter.pod	Info about DBM Filters
@@ -1292,6 +1294,7 @@ t/lib/bigfloat.t	See if bigfloat.pl works
 t/lib/bigfltpm.t	See if BigFloat.pm works
 t/lib/bigint.t		See if bigint.pl works
 t/lib/bigintpm.t	See if BigInt.pm works
+t/lib/cgi-esc.t		See if CGI.pm works
 t/lib/cgi-form.t	See if CGI.pm works
 t/lib/cgi-function.t	See if CGI.pm works
 t/lib/cgi-html.t	See if CGI.pm works
@@ -1404,6 +1407,7 @@ t/lib/tie-substrhash.t	Test for Tie::SubstrHash
 t/lib/timelocal.t	See if Time::Local works
 t/lib/trig.t		See if Math::Trig works
 t/op/64bitint.t		See if 64 bit integers work
+t/op/anonsub.t		See if anonymous subroutines work
 t/op/append.t		See if . works
 t/op/args.t		See if operations on @_ work
 t/op/arith.t		See if arithmetic works
@@ -1586,6 +1590,7 @@ t/pragma/warn/universal	Tests for universal.c for warnings.t
 t/pragma/warn/utf8	Tests for utf8.c for warnings.t
 t/pragma/warn/util	Tests for util.c for warnings.t
 t/pragma/warnings.t	See if warning controls work
+t/run/runenv.t		Test if perl honors its environment variables.
 taint.c			Tainting code
 thrdvar.h		Per-thread variables
 thread.h		Threading header
@@ -1647,8 +1652,8 @@ vos/Changes		Changes made to port Perl to the VOS operating system
 vos/build.cm		VOS command macro to build Perl
 vos/compile_perl.cm	VOS command macro to build multiple version of Perl
 vos/config.alpha.def	definitions used by config.pl
-vos/config.ga.def	definitions used by config.pl
 vos/config.alpha.h	config.h for use with alpha VOS POSIX.1 support
+vos/config.ga.def	definitions used by config.pl
 vos/config.ga.h		config.h for use with generally-available VOS POSIX.1 support
 vos/config.pl		script to convert a config_h.SH to a config.h
 vos/configure_perl.cm	VOS command macro to configure perl before building
@@ -1686,6 +1691,7 @@ win32/perlhost.h	Perl "host" implementation
 win32/perllib.c		Win32 port
 win32/pod.mak		Win32 port
 win32/runperl.c		Win32 port
+win32/sncfnmcs.pl	Win32 port
 win32/splittree.pl	Win32 port
 win32/vdir.h		Perl "host" virtual directory manager
 win32/vmem.h		Perl "host" memory manager

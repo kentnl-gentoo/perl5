@@ -591,21 +591,19 @@ S_study_chunk(pTHX_ regnode **scanp, I32 *deltap, regnode *last, scan_data_t *da
 #endif 
 		    n = regnext(n);
 		}
-		else {
+		else if (stringok) {
 		    int oldl = STR_LEN(scan);
 		    regnode *nnext = regnext(n);
-		    
+
 		    if (oldl + STR_LEN(n) > U8_MAX) 
 			break;
 		    NEXT_OFF(scan) += NEXT_OFF(n);
 		    STR_LEN(scan) += STR_LEN(n);
 		    next = n + NODE_SZ_STR(n);
 		    /* Now we can overwrite *n : */
-		    Move(STRING(n), STRING(scan) + oldl,
-			 STR_LEN(n), char);
+		    Move(STRING(n), STRING(scan) + oldl, STR_LEN(n), char);
 #ifdef DEBUGGING
-		    if (stringok)
-			stop = next - 1;
+		    stop = next - 1;
 #endif 
 		    n = nnext;
 		}
@@ -1554,7 +1552,7 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
     else
 	PL_reg_flags = 0;
 
-    PL_regprecomp = savepvn(exp, xend - exp);
+    PL_regprecomp = exp;
     DEBUG_r(if (!PL_colorset) reginitcolors());
     DEBUG_r(PerlIO_printf(Perl_debug_log, "%sCompiling REx%s `%s%*s%s'\n",
 		      PL_colors[4],PL_colors[5],PL_colors[0],
@@ -1580,7 +1578,6 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
     REGC((U8)REG_MAGIC, (char*)PL_regcode);
 #endif
     if (reg(0, &flags) == NULL) {
-	Safefree(PL_regprecomp);
 	PL_regprecomp = Nullch;
 	return(NULL);
     }
@@ -1607,7 +1604,7 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
 #endif
     r->refcnt = 1;
     r->prelen = xend - exp;
-    r->precomp = PL_regprecomp;
+    r->precomp = savepvn(PL_regprecomp, r->prelen);
     r->subbeg = NULL;
     r->reganch = pm->op_pmflags & PMf_COMPILETIME;
     r->nparens = PL_regnpar - 1;	/* set early to validate backrefs */
@@ -4555,9 +4552,8 @@ Perl_save_re_context(pTHX)
     SAVEVPTR(PL_reglastparen);		/* Similarly for lastparen. */
     SAVEPPTR(PL_regtill);		/* How far we are required to go. */
     SAVEI8(PL_regprev);			/* char before regbol, \n if none */
-    SAVEVPTR(PL_reg_start_tmp);		/* from regexec.c */
+    SAVEGENERICPV(PL_reg_start_tmp);	/* from regexec.c */
     PL_reg_start_tmp = 0;
-    SAVEFREEPV(PL_reg_start_tmp);
     SAVEI32(PL_reg_start_tmpl);		/* from regexec.c */
     PL_reg_start_tmpl = 0;
     SAVEVPTR(PL_regdata);

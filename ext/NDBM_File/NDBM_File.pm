@@ -1,16 +1,13 @@
 package NDBM_File;
 
-BEGIN {
-    if ($] >= 5.002) {
-	use strict;
-    }
-}
+use strict;
+use warnings;
 
 require Tie::Hash;
 use XSLoader ();
 
 our @ISA = qw(Tie::Hash);
-our $VERSION = "1.03";
+our $VERSION = "1.04";
 
 XSLoader::load 'NDBM_File', $VERSION;
 

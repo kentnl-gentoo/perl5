@@ -188,6 +188,10 @@ S_do_trans_complex(pTHX_ SV *sv)/* SPC - NOT OK */
 	    d = s;
 	dstart = d;
 
+#ifdef MACOS_TRADITIONAL
+#define comp CoMP   /* "comp" is a keyword in some compilers ... */
+#endif
+
 	if (PL_op->op_private & OPpTRANS_SQUASH) {
 	    U8* p = send;
 	    UV pch = 0xfeedface;
@@ -1193,7 +1197,7 @@ finish:
 OP *
 Perl_do_kv(pTHX)
 {
-    djSP;
+    dSP;
     HV *hv = (HV*)POPs;
     HV *keys;
     register HE *entry;

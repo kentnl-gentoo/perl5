@@ -1135,7 +1135,7 @@ the code which implements the addition operator:
 
    1  PP(pp_add)
    2  {
-   3      djSP; dATARGET; tryAMAGICbin(add,opASSIGN);
+   3      dSP; dATARGET; tryAMAGICbin(add,opASSIGN);
    4      {
    5        dPOPTOPnnrl_ul;
    6        SETn( left + right );
@@ -1230,7 +1230,7 @@ Run the program with the given arguments.
 =item break source.c:xxx
 
 Tells the debugger that we'll want to pause execution when we reach
-either the named function (but see L</Function names>!) or the given
+either the named function (but see L<perlguts/Internal Functions>!) or the given
 line in the named source file.
 
 =item step
@@ -1288,7 +1288,7 @@ C<+> operator:
     (gdb) break Perl_pp_add
     Breakpoint 1 at 0x46249f: file pp_hot.c, line 309.
 
-Notice we use C<Perl_pp_add> and not C<pp_add> - see L<perlguts/Function Names>.
+Notice we use C<Perl_pp_add> and not C<pp_add> - see L<perlguts/Internal Functions>.
 With the breakpoint in place, we can run our program:
 
     (gdb) run -e '$b = "6XXXX"; $c = 2.3; $a = $b + $c'
@@ -1297,7 +1297,7 @@ Lots of junk will go past as gdb reads in the relevant source files and
 libraries, and then:
 
     Breakpoint 1, Perl_pp_add () at pp_hot.c:309
-    309         djSP; dATARGET; tryAMAGICbin(add,opASSIGN);
+    309         dSP; dATARGET; tryAMAGICbin(add,opASSIGN);
     (gdb) step
     311           dPOPTOPnnrl_ul;
     (gdb)

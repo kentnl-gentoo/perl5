@@ -242,14 +242,15 @@ operators, like C<-f>, C<-M>, etc.  See L<perlfunc>.
 If any list operator (print(), etc.) or any unary operator (chdir(), etc.)
 is followed by a left parenthesis as the next token, the operator and
 arguments within parentheses are taken to be of highest precedence,
-just like a normal function call.  Examples:
+just like a normal function call.  For example,
+because named unary operators are higher precedence than ||:
 
     chdir $foo    || die;	# (chdir $foo) || die
     chdir($foo)   || die;	# (chdir $foo) || die
     chdir ($foo)  || die;	# (chdir $foo) || die
     chdir +($foo) || die;	# (chdir $foo) || die
 
-but, because * is higher precedence than ||:
+but, because * is higher precedence than named operators:
 
     chdir $foo * 20;	# chdir ($foo * 20)
     chdir($foo) * 20;	# (chdir $foo) * 20
@@ -1562,19 +1563,19 @@ There are several I/O operators you should know about.
 A string enclosed by backticks (grave accents) first undergoes
 double-quote interpolation.  It is then interpreted as an external
 command, and the output of that command is the value of the
-pseudo-literal, j
-string consisting of all output is returned.  In list context, a
-list of values is returned, one per line of output.  (You can set
-C<$/> to use a different line terminator.)  The command is executed
-each time the pseudo-literal is evaluated.  The status value of the
-command is returned in C<$?> (see L<perlvar> for the interpretation
-of C<$?>).  Unlike in B<csh>, no translation is done on the return
-data--newlines remain newlines.  Unlike in any of the shells, single
-quotes do not hide variable names in the command from interpretation.
-To pass a literal dollar-sign through to the shell you need to hide
-it with a backslash.  The generalized form of backticks is C<qx//>.
-(Because backticks always undergo shell expansion as well, see
-L<perlsec> for security concerns.)
+backtick string, like in a shell.  In scalar context, a single string
+consisting of all output is returned.  In list context, a list of
+values is returned, one per line of output.  (You can set C<$/> to use
+a different line terminator.)  The command is executed each time the
+pseudo-literal is evaluated.  The status value of the command is
+returned in C<$?> (see L<perlvar> for the interpretation of C<$?>).
+Unlike in B<csh>, no translation is done on the return data--newlines
+remain newlines.  Unlike in any of the shells, single quotes do not
+hide variable names in the command from interpretation.  To pass a
+literal dollar-sign through to the shell you need to hide it with a
+backslash.  The generalized form of backticks is C<qx//>.  (Because
+backticks always undergo shell expansion as well, see L<perlsec> for
+security concerns.)
 
 In scalar context, evaluating a filehandle in angle brackets yields
 the next line from that file (the newline, if any, included), or
@@ -1589,7 +1590,7 @@ of a C<while> statement (even if disguised as a C<for(;;)> loop),
 the value is automatically assigned to the global variable $_,
 destroying whatever was there previously.  (This may seem like an
 odd thing to you, but you'll use the construct in almost every Perl
-script you write.)  The $_ variables is not implicitly localized.
+script you write.)  The $_ variable is not implicitly localized.
 You'll have to put a C<local $_;> before the loop if you want that
 to happen.
 
@@ -1734,7 +1735,7 @@ is roughly equivalent to:
 
     open(FOO, "echo *.c | tr -s ' \t\r\f' '\\012\\012\\012\\012'|");
     while (<FOO>) {
-	chop;
+	chomp;
 	chmod 0644, $_;
     }
 

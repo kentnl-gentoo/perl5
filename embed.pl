@@ -25,6 +25,7 @@ sub walk_table (&@) {
 	$F = $filename;
     }
     else {
+	unlink $filename;
 	open F, ">$filename" or die "Can't open $filename: $!";
 	$F = \*F;
     }
@@ -198,6 +199,7 @@ my @extvars = qw(sv_undef sv_yes sv_no na dowarn
 		 diehook
 		 dirty
 		 perl_destruct_level
+		 ppaddr
                 );
 
 sub readsyms (\%$) {
@@ -1067,6 +1069,16 @@ Perl_fprintf_nocontext(PerlIO *stream, const char *format, ...)
     return (*PL_StdIO->pVprintf)(PL_StdIO, stream, format, arglist);
 }
 
+#undef Perl_printf_nocontext
+int
+Perl_printf_nocontext(const char *format, ...)
+{
+    dTHXo;
+    va_list(arglist);
+    va_start(arglist, format);
+    return (*PL_StdIO->pVprintf)(PL_StdIO, PerlIO_stdout(), format, arglist);
+}
+
 END_EXTERN_C
 
 #endif /* PERL_OBJECT */
@@ -1438,6 +1450,7 @@ Afnp	|void	|sv_setpvf_nocontext|SV* sv|const char* pat|...
 Afnp	|void	|sv_catpvf_mg_nocontext|SV* sv|const char* pat|...
 Afnp	|void	|sv_setpvf_mg_nocontext|SV* sv|const char* pat|...
 Afnp	|int	|fprintf_nocontext|PerlIO* stream|const char* fmt|...
+Afnp	|int	|printf_nocontext|const char* fmt|...
 #endif
 p	|void	|cv_ckproto	|CV* cv|GV* gv|char* p
 p	|CV*	|cv_clone	|CV* proto
@@ -1985,7 +1998,7 @@ Apd	|void	|sv_catpv	|SV* sv|const char* ptr
 Apd	|void	|sv_catpvn	|SV* sv|const char* ptr|STRLEN len
 Apd	|void	|sv_catsv	|SV* dsv|SV* ssv
 Apd	|void	|sv_chop	|SV* sv|char* ptr
-p	|void	|sv_clean_all
+p	|I32	|sv_clean_all
 p	|void	|sv_clean_objs
 Apd	|void	|sv_clear	|SV* sv
 Apd	|I32	|sv_cmp		|SV* sv1|SV* sv2
@@ -2201,6 +2214,8 @@ Ap	|PTR_TBL_t*|ptr_table_new
 Ap	|void*	|ptr_table_fetch|PTR_TBL_t *tbl|void *sv
 Ap	|void	|ptr_table_store|PTR_TBL_t *tbl|void *oldsv|void *newsv
 Ap	|void	|ptr_table_split|PTR_TBL_t *tbl
+Ap	|void	|ptr_table_clear|PTR_TBL_t *tbl
+Ap	|void	|ptr_table_free|PTR_TBL_t *tbl
 #endif
 #if defined(HAVE_INTERP_INTERN)
 Ap	|void	|sys_intern_clear
@@ -2336,7 +2351,6 @@ s	|I32	|dopoptolabel	|char *label
 s	|I32	|dopoptoloop	|I32 startingblock
 s	|I32	|dopoptosub	|I32 startingblock
 s	|I32	|dopoptosub_at	|PERL_CONTEXT* cxstk|I32 startingblock
-s	|void	|free_closures
 s	|void	|save_lines	|AV *array|SV *sv
 s	|OP*	|doeval		|int gimme|OP** startop
 s	|PerlIO *|doopen_pmc	|const char *name|const char *mode
@@ -2462,7 +2476,7 @@ s	|void	|del_xpvbm	|XPVBM* p
 s	|void	|del_xrv	|XRV* p
 s	|void	|sv_unglob	|SV* sv
 s	|void	|not_a_number	|SV *sv
-s	|void	|visit		|SVFUNC_t f
+s	|I32	|visit		|SVFUNC_t f
 #  if defined(DEBUGGING)
 s	|void	|del_sv	|SV *p
 #  endif

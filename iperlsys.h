@@ -272,7 +272,7 @@ struct IPerlStdIOInfo
 #define PerlIO_setlinebuf(f)						\
 	(*PL_StdIO->pSetlinebuf)(PL_StdIO, (f))
 #define PerlIO_printf		Perl_fprintf_nocontext
-#define PerlIO_stdoutf		*PL_StdIO->pPrintf
+#define PerlIO_stdoutf		Perl_printf_nocontext
 #define PerlIO_vprintf(f,fmt,a)						\
 	(*PL_StdIO->pVprintf)(PL_StdIO, (f),(fmt),a)          
 #define PerlIO_tell(f)							\
@@ -472,10 +472,18 @@ extern PerlIO *	PerlIO_stdout	(void);
 extern PerlIO *	PerlIO_stderr	(void);
 #endif
 #ifndef PerlIO_getpos
+#ifdef USE_SFIO
+extern int	PerlIO_getpos		(PerlIO *,Off_t *);
+#else
 extern int	PerlIO_getpos		(PerlIO *,Fpos_t *);
 #endif
+#endif
 #ifndef PerlIO_setpos
+#ifdef USE_SFIO
+extern int	PerlIO_setpos		(PerlIO *,const Off_t *);
+#else
 extern int	PerlIO_setpos		(PerlIO *,const Fpos_t *);
+#endif
 #endif
 #ifndef PerlIO_fdupopen
 extern PerlIO *	PerlIO_fdupopen		(PerlIO *);

@@ -176,6 +176,11 @@ PERL_CALLCONV int	Perl_fprintf_nocontext(PerlIO* stream, const char* fmt, ...)
  __attribute__((format(printf,2,3)))
 #endif
 ;
+PERL_CALLCONV int	Perl_printf_nocontext(const char* fmt, ...)
+#ifdef CHECK_FORMAT
+ __attribute__((format(printf,1,2)))
+#endif
+;
 #endif
 PERL_CALLCONV void	Perl_cv_ckproto(pTHX_ CV* cv, GV* gv, char* p);
 PERL_CALLCONV CV*	Perl_cv_clone(pTHX_ CV* proto);
@@ -724,7 +729,7 @@ PERL_CALLCONV void	Perl_sv_catpv(pTHX_ SV* sv, const char* ptr);
 PERL_CALLCONV void	Perl_sv_catpvn(pTHX_ SV* sv, const char* ptr, STRLEN len);
 PERL_CALLCONV void	Perl_sv_catsv(pTHX_ SV* dsv, SV* ssv);
 PERL_CALLCONV void	Perl_sv_chop(pTHX_ SV* sv, char* ptr);
-PERL_CALLCONV void	Perl_sv_clean_all(pTHX);
+PERL_CALLCONV I32	Perl_sv_clean_all(pTHX);
 PERL_CALLCONV void	Perl_sv_clean_objs(pTHX);
 PERL_CALLCONV void	Perl_sv_clear(pTHX_ SV* sv);
 PERL_CALLCONV I32	Perl_sv_cmp(pTHX_ SV* sv1, SV* sv2);
@@ -949,6 +954,8 @@ PERL_CALLCONV PTR_TBL_t*	Perl_ptr_table_new(pTHX);
 PERL_CALLCONV void*	Perl_ptr_table_fetch(pTHX_ PTR_TBL_t *tbl, void *sv);
 PERL_CALLCONV void	Perl_ptr_table_store(pTHX_ PTR_TBL_t *tbl, void *oldsv, void *newsv);
 PERL_CALLCONV void	Perl_ptr_table_split(pTHX_ PTR_TBL_t *tbl);
+PERL_CALLCONV void	Perl_ptr_table_clear(pTHX_ PTR_TBL_t *tbl);
+PERL_CALLCONV void	Perl_ptr_table_free(pTHX_ PTR_TBL_t *tbl);
 #endif
 #if defined(HAVE_INTERP_INTERN)
 PERL_CALLCONV void	Perl_sys_intern_clear(pTHX);
@@ -1082,7 +1089,6 @@ STATIC I32	S_dopoptolabel(pTHX_ char *label);
 STATIC I32	S_dopoptoloop(pTHX_ I32 startingblock);
 STATIC I32	S_dopoptosub(pTHX_ I32 startingblock);
 STATIC I32	S_dopoptosub_at(pTHX_ PERL_CONTEXT* cxstk, I32 startingblock);
-STATIC void	S_free_closures(pTHX);
 STATIC void	S_save_lines(pTHX_ AV *array, SV *sv);
 STATIC OP*	S_doeval(pTHX_ int gimme, OP** startop);
 STATIC PerlIO *	S_doopen_pmc(pTHX_ const char *name, const char *mode);
@@ -1202,7 +1208,7 @@ STATIC void	S_del_xpvbm(pTHX_ XPVBM* p);
 STATIC void	S_del_xrv(pTHX_ XRV* p);
 STATIC void	S_sv_unglob(pTHX_ SV* sv);
 STATIC void	S_not_a_number(pTHX_ SV *sv);
-STATIC void	S_visit(pTHX_ SVFUNC_t f);
+STATIC I32	S_visit(pTHX_ SVFUNC_t f);
 #  if defined(DEBUGGING)
 STATIC void	S_del_sv(pTHX_ SV *p);
 #  endif

@@ -130,6 +130,7 @@
 #define sv_catpvf_mg_nocontext	Perl_sv_catpvf_mg_nocontext
 #define sv_setpvf_mg_nocontext	Perl_sv_setpvf_mg_nocontext
 #define fprintf_nocontext	Perl_fprintf_nocontext
+#define printf_nocontext	Perl_printf_nocontext
 #endif
 #define cv_ckproto		Perl_cv_ckproto
 #define cv_clone		Perl_cv_clone
@@ -849,6 +850,8 @@
 #define ptr_table_fetch		Perl_ptr_table_fetch
 #define ptr_table_store		Perl_ptr_table_store
 #define ptr_table_split		Perl_ptr_table_split
+#define ptr_table_clear		Perl_ptr_table_clear
+#define ptr_table_free		Perl_ptr_table_free
 #endif
 #if defined(HAVE_INTERP_INTERN)
 #define sys_intern_clear	Perl_sys_intern_clear
@@ -970,7 +973,6 @@
 #define dopoptoloop		S_dopoptoloop
 #define dopoptosub		S_dopoptosub
 #define dopoptosub_at		S_dopoptosub_at
-#define free_closures		S_free_closures
 #define save_lines		S_save_lines
 #define doeval			S_doeval
 #define doopen_pmc		S_doopen_pmc
@@ -2309,6 +2311,8 @@
 #define ptr_table_fetch(a,b)	Perl_ptr_table_fetch(aTHX_ a,b)
 #define ptr_table_store(a,b,c)	Perl_ptr_table_store(aTHX_ a,b,c)
 #define ptr_table_split(a)	Perl_ptr_table_split(aTHX_ a)
+#define ptr_table_clear(a)	Perl_ptr_table_clear(aTHX_ a)
+#define ptr_table_free(a)	Perl_ptr_table_free(aTHX_ a)
 #endif
 #if defined(HAVE_INTERP_INTERN)
 #define sys_intern_clear()	Perl_sys_intern_clear(aTHX)
@@ -2430,7 +2434,6 @@
 #define dopoptoloop(a)		S_dopoptoloop(aTHX_ a)
 #define dopoptosub(a)		S_dopoptosub(aTHX_ a)
 #define dopoptosub_at(a,b)	S_dopoptosub_at(aTHX_ a,b)
-#define free_closures()		S_free_closures(aTHX)
 #define save_lines(a,b)		S_save_lines(aTHX_ a,b)
 #define doeval(a,b)		S_doeval(aTHX_ a,b)
 #define doopen_pmc(a,b)		S_doopen_pmc(aTHX_ a,b)
@@ -3142,6 +3145,8 @@
 #define sv_setpvf_mg_nocontext	Perl_sv_setpvf_mg_nocontext
 #define Perl_fprintf_nocontext	CPerlObj::Perl_fprintf_nocontext
 #define fprintf_nocontext	Perl_fprintf_nocontext
+#define Perl_printf_nocontext	CPerlObj::Perl_printf_nocontext
+#define printf_nocontext	Perl_printf_nocontext
 #endif
 #define Perl_cv_ckproto		CPerlObj::Perl_cv_ckproto
 #define cv_ckproto		Perl_cv_ckproto
@@ -4526,6 +4531,10 @@
 #define ptr_table_store		Perl_ptr_table_store
 #define Perl_ptr_table_split	CPerlObj::Perl_ptr_table_split
 #define ptr_table_split		Perl_ptr_table_split
+#define Perl_ptr_table_clear	CPerlObj::Perl_ptr_table_clear
+#define ptr_table_clear		Perl_ptr_table_clear
+#define Perl_ptr_table_free	CPerlObj::Perl_ptr_table_free
+#define ptr_table_free		Perl_ptr_table_free
 #endif
 #if defined(HAVE_INTERP_INTERN)
 #define Perl_sys_intern_clear	CPerlObj::Perl_sys_intern_clear
@@ -4735,8 +4744,6 @@
 #define dopoptosub		S_dopoptosub
 #define S_dopoptosub_at		CPerlObj::S_dopoptosub_at
 #define dopoptosub_at		S_dopoptosub_at
-#define S_free_closures		CPerlObj::S_free_closures
-#define free_closures		S_free_closures
 #define S_save_lines		CPerlObj::S_save_lines
 #define save_lines		S_save_lines
 #define S_doeval		CPerlObj::S_doeval

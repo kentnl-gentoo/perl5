@@ -359,6 +359,8 @@ Perl_lex_start(pTHX_ SV *line)
     SAVEPPTR(PL_bufend);
     SAVEPPTR(PL_oldbufptr);
     SAVEPPTR(PL_oldoldbufptr);
+    SAVEPPTR(PL_last_lop);
+    SAVEPPTR(PL_last_uni);
     SAVEPPTR(PL_linestart);
     SAVESPTR(PL_linestr);
     SAVEPPTR(PL_lex_brackstack);
@@ -401,6 +403,7 @@ Perl_lex_start(pTHX_ SV *line)
     SvTEMP_off(PL_linestr);
     PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = PL_linestart = SvPVX(PL_linestr);
     PL_bufend = PL_bufptr + SvCUR(PL_linestr);
+    PL_last_lop = PL_last_uni = Nullch;
     SvREFCNT_dec(PL_rs);
     PL_rs = newSVpvn("\n", 1);
     PL_rsfp = 0;
@@ -444,7 +447,7 @@ S_incline(pTHX_ char *s)
 	s += 4;
     else
 	return;
-    if (*s == ' ' || *s == '\t')
+    if (SPACE_OR_TAB(*s))
 	s++;
     else
 	return;
@@ -546,6 +549,7 @@ S_skipspace(pTHX_ register char *s)
 	    PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = s = PL_linestart
 		= SvPVX(PL_linestr);
 	    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+	    PL_last_lop = PL_last_uni = Nullch;
 
 	    /* Close the filehandle.  Could be from -P preprocessor,
 	     * STDIN, or a regular file.  If we were reading code from
@@ -1002,6 +1006,8 @@ S_sublex_push(pTHX)
     SAVEPPTR(PL_bufptr);
     SAVEPPTR(PL_oldbufptr);
     SAVEPPTR(PL_oldoldbufptr);
+    SAVEPPTR(PL_last_lop);
+    SAVEPPTR(PL_last_uni);
     SAVEPPTR(PL_linestart);
     SAVESPTR(PL_linestr);
     SAVEPPTR(PL_lex_brackstack);
@@ -1013,6 +1019,7 @@ S_sublex_push(pTHX)
     PL_bufend = PL_bufptr = PL_oldbufptr = PL_oldoldbufptr = PL_linestart
 	= SvPVX(PL_linestr);
     PL_bufend += SvCUR(PL_linestr);
+    PL_last_lop = PL_last_uni = Nullch;
     SAVEFREESV(PL_linestr);
 
     PL_lex_dojoin = FALSE;
@@ -1064,6 +1071,7 @@ S_sublex_done(pTHX)
 	PL_lex_inpat = 0;
 	PL_bufend = PL_bufptr = PL_oldbufptr = PL_oldoldbufptr = PL_linestart = SvPVX(PL_linestr);
 	PL_bufend += SvCUR(PL_linestr);
+	PL_last_lop = PL_last_uni = Nullch;
 	SAVEFREESV(PL_linestr);
 	PL_lex_dojoin = FALSE;
 	PL_lex_brackets = 0;
@@ -2072,9 +2080,6 @@ S_find_in_my_stash(pTHX_ char *pkgname, I32 len)
 */
 
 #ifdef USE_PURE_BISON
-#ifdef __SC__
-#pragma segment Perl_yylex_r
-#endif
 int
 Perl_yylex_r(pTHX_ YYSTYPE *lvalp, int *lcharp)
 {
@@ -2522,6 +2527,7 @@ Perl_yylex(pTHX)
 	    sv_catpv(PL_linestr, "\n");
 	    PL_oldoldbufptr = PL_oldbufptr = s = PL_linestart = SvPVX(PL_linestr);
 	    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+	    PL_last_lop = PL_last_uni = Nullch;
 	    if (PERLDB_LINE && PL_curstash != PL_debstash) {
 		SV *sv = NEWSV(85,0);
 
@@ -2550,10 +2556,12 @@ Perl_yylex(pTHX)
 		    sv_catpv(PL_linestr,";}");
 		    PL_oldoldbufptr = PL_oldbufptr = s = PL_linestart = SvPVX(PL_linestr);
 		    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+		    PL_last_lop = PL_last_uni = Nullch;
 		    PL_minus_n = PL_minus_p = 0;
 		    goto retry;
 		}
 		PL_oldoldbufptr = PL_oldbufptr = s = PL_linestart = SvPVX(PL_linestr);
+		PL_last_lop = PL_last_uni = Nullch;
 		sv_setpv(PL_linestr,"");
 		TOKEN(';');	/* not infinite loop because rsfp is NULL now */
 	    }
@@ -2596,6 +2604,7 @@ Perl_yylex(pTHX)
 		    sv_setpv(PL_linestr, "");
 		    PL_oldoldbufptr = PL_oldbufptr = s = PL_linestart = SvPVX(PL_linestr);
 		    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+		    PL_last_lop = PL_last_uni = Nullch;
 		    PL_doextract = FALSE;
 		}
 	    }
@@ -2610,6 +2619,7 @@ Perl_yylex(pTHX)
 	    av_store(CopFILEAV(PL_curcop),(I32)CopLINE(PL_curcop),sv);
 	}
 	PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+	PL_last_lop = PL_last_uni = Nullch;
 	if (CopLINE(PL_curcop) == 1) {
 	    while (s < PL_bufend && isSPACE(*s))
 		s++;
@@ -2723,7 +2733,7 @@ Perl_yylex(pTHX)
 		    else
 			newargv = PL_origargv;
 		    newargv[0] = ipath;
-		    PerlProc_execv(ipath, newargv);
+		    PerlProc_execv(ipath, EXEC_ARGV_CAST(newargv));
 		    Perl_croak(aTHX_ "Can't exec %s", ipath);
 		}
 #endif
@@ -2753,6 +2763,7 @@ Perl_yylex(pTHX)
 			    sv_setpv(PL_linestr, "");
 			    PL_oldoldbufptr = PL_oldbufptr = s = PL_linestart = SvPVX(PL_linestr);
 			    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+			    PL_last_lop = PL_last_uni = Nullch;
 			    PL_preambled = FALSE;
 			    if (PERLDB_LINE)
 				(void)gv_fetchfile(PL_origfilename);
@@ -2995,10 +3006,6 @@ Perl_yylex(pTHX)
 		if (*d == '(') {
 		    d = scan_str(d,TRUE,TRUE);
 		    if (!d) {
-			if (PL_lex_stuff) {
-			    SvREFCNT_dec(PL_lex_stuff);
-			    PL_lex_stuff = Nullsv;
-			}
 			/* MUST advance bufptr here to avoid bogus
 			   "at end of line" context messages from yyerror().
 			 */
@@ -3635,7 +3642,7 @@ Perl_yylex(pTHX)
     case '\'':
 	s = scan_str(s,FALSE,FALSE);
         DEBUG_T( { PerlIO_printf(Perl_debug_log,
-                    "### Saw string in '%s'\n", s);
+                    "### Saw string before '%s'\n", s);
         } )
 	if (PL_expect == XOPERATOR) {
 	    if (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack) {
@@ -3654,7 +3661,7 @@ Perl_yylex(pTHX)
     case '"':
 	s = scan_str(s,FALSE,FALSE);
         DEBUG_T( { PerlIO_printf(Perl_debug_log,
-                    "### Saw string in '%s'\n", s);
+                    "### Saw string before '%s'\n", s);
         } )
 	if (PL_expect == XOPERATOR) {
 	    if (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack) {
@@ -3679,7 +3686,7 @@ Perl_yylex(pTHX)
     case '`':
 	s = scan_str(s,FALSE,FALSE);
         DEBUG_T( { PerlIO_printf(Perl_debug_log,
-                    "### Saw backtick string in '%s'\n", s);
+                    "### Saw backtick string before '%s'\n", s);
         } )
 	if (PL_expect == XOPERATOR)
 	    no_op("Backticks",s);
@@ -4693,9 +4700,10 @@ Perl_yylex(pTHX)
 		    force_next(THING);
 		}
 	    }
-	    if (PL_lex_stuff)
+	    if (PL_lex_stuff) {
 		SvREFCNT_dec(PL_lex_stuff);
-	    PL_lex_stuff = Nullsv;
+		PL_lex_stuff = Nullsv;
+	    }
 	    PL_expect = XTERM;
 	    TOKEN('(');
 
@@ -4963,12 +4971,8 @@ Perl_yylex(pTHX)
 		    char *p;
 
 		    s = scan_str(s,FALSE,FALSE);
-		    if (!s) {
-			if (PL_lex_stuff)
-			    SvREFCNT_dec(PL_lex_stuff);
-			PL_lex_stuff = Nullsv;
+		    if (!s)
 			Perl_croak(aTHX_ "Prototype not terminated");
-		    }
 		    /* strip spaces */
 		    d = SvPVX(PL_lex_stuff);
 		    tmp = 0;
@@ -6151,12 +6155,8 @@ S_scan_pat(pTHX_ char *start, I32 type)
     char *s;
 
     s = scan_str(start,FALSE,FALSE);
-    if (!s) {
-	if (PL_lex_stuff)
-	    SvREFCNT_dec(PL_lex_stuff);
-	PL_lex_stuff = Nullsv;
+    if (!s)
 	Perl_croak(aTHX_ "Search pattern not terminated");
-    }
 
     pm = (PMOP*)newPMOP(type, 0);
     if (PL_multi_open == '?')
@@ -6188,12 +6188,8 @@ S_scan_subst(pTHX_ char *start)
 
     s = scan_str(start,FALSE,FALSE);
 
-    if (!s) {
-	if (PL_lex_stuff)
-	    SvREFCNT_dec(PL_lex_stuff);
-	PL_lex_stuff = Nullsv;
+    if (!s)
 	Perl_croak(aTHX_ "Substitution pattern not terminated");
-    }
 
     if (s[-1] == PL_multi_open)
 	s--;
@@ -6201,12 +6197,10 @@ S_scan_subst(pTHX_ char *start)
     first_start = PL_multi_start;
     s = scan_str(s,FALSE,FALSE);
     if (!s) {
-	if (PL_lex_stuff)
+	if (PL_lex_stuff) {
 	    SvREFCNT_dec(PL_lex_stuff);
-	PL_lex_stuff = Nullsv;
-	if (PL_lex_repl)
-	    SvREFCNT_dec(PL_lex_repl);
-	PL_lex_repl = Nullsv;
+	    PL_lex_stuff = Nullsv;
+	}
 	Perl_croak(aTHX_ "Substitution replacement not terminated");
     }
     PL_multi_start = first_start;	/* so whole substitution is taken together */
@@ -6261,23 +6255,17 @@ S_scan_trans(pTHX_ char *start)
     yylval.ival = OP_NULL;
 
     s = scan_str(start,FALSE,FALSE);
-    if (!s) {
-	if (PL_lex_stuff)
-	    SvREFCNT_dec(PL_lex_stuff);
-	PL_lex_stuff = Nullsv;
+    if (!s)
 	Perl_croak(aTHX_ "Transliteration pattern not terminated");
-    }
     if (s[-1] == PL_multi_open)
 	s--;
 
     s = scan_str(s,FALSE,FALSE);
     if (!s) {
-	if (PL_lex_stuff)
+	if (PL_lex_stuff) {
 	    SvREFCNT_dec(PL_lex_stuff);
-	PL_lex_stuff = Nullsv;
-	if (PL_lex_repl)
-	    SvREFCNT_dec(PL_lex_repl);
-	PL_lex_repl = Nullsv;
+	    PL_lex_stuff = Nullsv;
+	}
 	Perl_croak(aTHX_ "Transliteration replacement not terminated");
     }
 
@@ -6438,6 +6426,7 @@ S_scan_heredoc(pTHX_ register char *s)
 	sv_setsv(PL_linestr,herewas);
 	PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = s = PL_linestart = SvPVX(PL_linestr);
 	PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+	PL_last_lop = PL_last_uni = Nullch;
     }
     else
 	sv_setpvn(tmpstr,"",0);   /* avoid "uninitialized" warning */
@@ -6449,6 +6438,7 @@ S_scan_heredoc(pTHX_ register char *s)
 	}
 	CopLINE_inc(PL_curcop);
 	PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+	PL_last_lop = PL_last_uni = Nullch;
 #ifndef PERL_STRICT_CR
 	if (PL_bufend - PL_linestart >= 2) {
 	    if ((PL_bufend[-2] == '\r' && PL_bufend[-1] == '\n') ||
@@ -6649,11 +6639,11 @@ S_scan_inputsymbol(pTHX_ char *start)
    delimiter.  It allows quoting of delimiters, and if the string has
    balanced delimiters ([{<>}]) it allows nesting.
 
-   The lexer always reads these strings into lex_stuff, except in the
-   case of the operators which take *two* arguments (s/// and tr///)
-   when it checks to see if lex_stuff is full (presumably with the 1st
-   arg to s or tr) and if so puts the string into lex_repl.
-
+   On success, the SV with the resulting string is put into lex_stuff or,
+   if that is already non-NULL, into lex_repl. The second case occurs only
+   when parsing the RHS of the special constructs s/// and tr/// (y///).
+   For convenience, the terminating delimiter character is stuffed into
+   SvIVX of the SV.
 */
 
 STATIC char *
@@ -6807,6 +6797,7 @@ S_scan_str(pTHX_ char *start, int keep_quoted, int keep_delims)
 
 	/* having changed the buffer, we must update PL_bufend */
 	PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+	PL_last_lop = PL_last_uni = Nullch;
     }
 
     /* at this point, we have successfully read the delimited string */
@@ -7323,6 +7314,7 @@ S_scan_formline(pTHX_ register char *s)
 	    s = filter_gets(PL_linestr, PL_rsfp, 0);
 	    PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = PL_linestart = SvPVX(PL_linestr);
 	    PL_bufend = PL_bufptr + SvCUR(PL_linestr);
+	    PL_last_lop = PL_last_uni = Nullch;
 	    if (!s) {
 		s = PL_bufptr;
 		yyerror("Format not terminated");
@@ -7418,6 +7410,9 @@ Perl_start_subparse(pTHX_ I32 is_format, U32 flags)
     return oldsavestack_ix;
 }
 
+#ifdef __SC__
+#pragma segment Perl_yylex
+#endif
 int
 Perl_yywarn(pTHX_ char *s)
 {
@@ -7506,6 +7501,9 @@ Perl_yyerror(pTHX_ char *s)
     PL_in_my_stash = Nullhv;
     return 0;
 }
+#ifdef __SC__
+#pragma segment Main
+#endif
 
 STATIC char*
 S_swallow_bom(pTHX_ U8 *s)

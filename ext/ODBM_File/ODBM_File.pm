@@ -1,12 +1,13 @@
 package ODBM_File;
 
 use strict;
+use warnings;
 
 require Tie::Hash;
 use XSLoader ();
 
 our @ISA = qw(Tie::Hash);
-our $VERSION = "1.02";
+our $VERSION = "1.03";
 
 XSLoader::load 'ODBM_File', $VERSION;
 

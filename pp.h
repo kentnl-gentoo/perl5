@@ -49,6 +49,7 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 =cut
 */
 
+#undef SP /* Solaris 2.7 i386 has this in /usr/include/sys/reg.h */
 #define SP sp
 #define MARK mark
 #define TARG targ
@@ -60,8 +61,8 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 #define TOPMARK		(*PL_markstack_ptr)
 #define POPMARK		(*PL_markstack_ptr--)
 
-#define djSP		register SV **sp = PL_stack_sp
-#define dSP		djSP
+#define dSP		register SV **sp = PL_stack_sp
+#define djSP		dSP
 #define dMARK		register SV **mark = PL_stack_base + POPMARK
 #define dORIGMARK	I32 origmark = mark - PL_stack_base
 #define SETORIGMARK	origmark = mark - PL_stack_base

@@ -1169,7 +1169,7 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 I32
 Perl_my_stat(pTHX)
 {
-    djSP;
+    dSP;
     IO *io;
     GV* gv;
 
@@ -1222,7 +1222,7 @@ Perl_my_stat(pTHX)
 I32
 Perl_my_lstat(pTHX)
 {
-    djSP;
+    dSP;
     SV *sv;
     STRLEN n_a;
     if (PL_op->op_flags & OPf_REF) {
@@ -1273,15 +1273,18 @@ Perl_do_aexec5(pTHX_ SV *really, register SV **mark, register SV **sp,
 		*a++ = "";
 	}
 	*a = Nullch;
-	if (*PL_Argv[0] != '/')	/* will execvp use PATH? */
+	if (really)
+	    tmps = SvPV(really, n_a);
+	if ((!really && *PL_Argv[0] != '/') ||
+	    (really && *tmps != '/'))		/* will execvp use PATH? */
 	    TAINT_ENV();		/* testing IFS here is overkill, probably */
-	if (really && *(tmps = SvPV(really, n_a)))
-	    PerlProc_execvp(tmps,PL_Argv);
+	if (really && *tmps)
+	    PerlProc_execvp(tmps,EXEC_ARGV_CAST(PL_Argv));
 	else
-	    PerlProc_execvp(PL_Argv[0],PL_Argv);
+	    PerlProc_execvp(PL_Argv[0],EXEC_ARGV_CAST(PL_Argv));
 	if (ckWARN(WARN_EXEC))
-	    Perl_warner(aTHX_ WARN_EXEC, "Can't exec \"%s\": %s", 
-		PL_Argv[0], Strerror(errno));
+	    Perl_warner(aTHX_ WARN_EXEC, "Can't exec \"%s\": %s",
+		(really ? tmps : PL_Argv[0]), Strerror(errno));
 	if (do_report) {
 	    int e = errno;
 

@@ -4,7 +4,6 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }
-$ENV{PERL_DESTRUCT_LEVEL} = 0 unless $ENV{PERL_DESTRUCT_LEVEL} > 3; 
 
 umask 0;
 $xref = \ "";
@@ -244,7 +243,7 @@ lc $cstr			# lc
 quotemeta $cstr			# quotemeta
 @$aref				# rv2av
 @$undefed			# rv2av undef
-each %h==1			# each
+(each %h) % 2 == 1		# each
 values %h			# values
 keys %h				# keys
 %$href				# rv2hv
