@@ -318,11 +318,14 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     DEBUG_r(
 	PerlIO_printf(Perl_debug_log, 
-		      "Matching `%.60s%s' against `%.*s%s'\n",
-		      prog->precomp, 
+		      "%sMatching%s `%s%.60s%s%s' against `%s%.*s%s%s'\n",
+		      PL_colors[4],PL_colors[5],PL_colors[0],
+		      prog->precomp,
+		      PL_colors[1],
 		      (strlen(prog->precomp) > 60 ? "..." : ""),
+		      PL_colors[0], 
 		      (strend - startpos > 60 ? 60 : strend - startpos),
-		      startpos, 
+		      startpos, PL_colors[1],
 		      (strend - startpos > 60 ? "..." : ""))
 	);
 
@@ -619,10 +622,13 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 	    } else {
 		STRLEN len;
 		char *little = SvPV(prog->float_substr, len);
-		last = rninstr(s, strend, little, little + len);
+		if (len) 
+		    last = rninstr(s, strend, little, little + len);
+		else
+		    last = strend;	/* matching `$' */
 	    }
 	    if (last == NULL) goto phooey; /* Should not happen! */
-	    dontbother = strend - last - 1;
+	    dontbother = strend - last + prog->float_min_offset;
 	}
 	if (minlen && (dontbother < minlen))
 	    dontbother = minlen - 1;
@@ -638,9 +644,8 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
     goto phooey;
 
 got_it:
-    strend += dontbother;	/* uncheat */
     prog->subbeg = strbeg;
-    prog->subend = strend;
+    prog->subend = PL_regeol;	/* strend may have been modified */
     RX_MATCH_TAINTED_set(prog, PL_reg_flags & RF_tainted);
 
     /* make sure $`, $&, $', and $digit will work later */
@@ -652,7 +657,7 @@ got_it:
 	    }
 	}
 	else {
-	    I32 i = strend - startpos + (stringarg - strbeg);
+	    I32 i = PL_regeol - startpos + (stringarg - strbeg);
 	    s = savepvn(strbeg, i);
 	    Safefree(prog->subbase);
 	    prog->subbase = s;
@@ -792,15 +797,21 @@ regmatch(regnode *prog)
 	    int l = (PL_regeol - locinput > taill ? taill : PL_regeol - locinput);
 	    int pref_len = (locinput - PL_bostr > (5 + taill) - l 
 			    ? (5 + taill) - l : locinput - PL_bostr);
+	    int pref0_len = pref_len  - (locinput - PL_reginput);
 
 	    if (l + pref_len < (5 + taill) && l < PL_regeol - locinput)
 		l = ( PL_regeol - locinput > (5 + taill) - pref_len 
 		      ? (5 + taill) - pref_len : PL_regeol - locinput);
+	    if (pref0_len < 0)
+		pref0_len = 0;
 	    regprop(prop, scan);
 	    PerlIO_printf(Perl_debug_log, 
-			  "%4i <%s%.*s%s%s%s%.*s%s>%*s|%3d:%*s%s\n",
+			  "%4i <%s%.*s%s%s%.*s%s%s%s%.*s%s>%*s|%3d:%*s%s\n",
 			  locinput - PL_bostr, 
-			  PL_colors[2], pref_len, locinput - pref_len, PL_colors[3],
+			  PL_colors[4], pref0_len, 
+			  locinput - pref_len, PL_colors[5],
+			  PL_colors[2], pref_len - pref0_len, 
+			  locinput - pref_len + pref0_len, PL_colors[3],
 			  (docolor ? "" : "> <"),
 			  PL_colors[0], l, locinput, PL_colors[1],
 			  15 - l - pref_len + 1,
@@ -1244,7 +1255,9 @@ regmatch(regnode *prog)
 		}
 		if (PL_dowarn && n >= REG_INFTY && !(PL_reg_flags & RF_warned)) {
 		    PL_reg_flags |= RF_warned;
-		    warn("count exceeded %d", REG_INFTY - 1);
+		    warn("%s limit (%d) exceeded",
+			 "Complex regular subexpression recursion",
+			 REG_INFTY - 1);
 		}
 
 		/* Failed deeper matches of scan, so see if this one works. */
