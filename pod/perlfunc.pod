@@ -830,7 +830,7 @@ from a Perl subroutine library.
 
 is just like
 
-    eval `cat stat.pl`;
+    scalar eval `cat stat.pl`;
 
 except that it's more efficient, more concise, keeps track of the
 current filename for error messages, and searches all the B<-I>

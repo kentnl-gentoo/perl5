@@ -1301,7 +1301,7 @@ char *name;
     /* This message really ought to be max 23 lines.
      * Removed -h because the user already knows that opton. Others? */
 
-    char *usage[] = {
+    static char *usage[] = {
 "-0[octal]       specify record separator (\\0, if no argument)",
 "-a              autosplit mode with -n or -p (splits $_ into @F)",
 "-c              check syntax only (runs BEGIN and END blocks)",
@@ -1511,11 +1511,22 @@ char *s;
 	s++;
 	return s;
     case 'v':
-#if defined(SUBVERSION) && SUBVERSION > 0
-	printf("\nThis is perl, version 5.%03d_%02d", PATCHLEVEL, SUBVERSION);
-#else
-	printf("\nThis is perl, version %s",patchlevel);
+	{
+	    char patches[80];
+	    patches[0] = '\0';
+#if defined(LOCAL_PATCH_COUNT)
+	    if (LOCAL_PATCH_COUNT > 0) {
+		sprintf(patches," (with %d registered patch%s)",
+		    LOCAL_PATCH_COUNT, (LOCAL_PATCH_COUNT!=1) ? "es" : "");
+	    }
 #endif
+#if defined(SUBVERSION) && SUBVERSION > 0
+	    printf("\nThis is perl, version 5.%03d_%02d%s",
+		PATCHLEVEL, SUBVERSION, patches);
+#else
+	    printf("\nThis is perl, version %s%s", patchlevel, patches);
+#endif
+	}
 
 	printf("\n\nCopyright 1987-1997, Larry Wall\n");
 #ifdef MSDOS

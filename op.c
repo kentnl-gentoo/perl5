@@ -3003,7 +3003,7 @@ CV* cv;
     SV** ppad;
     I32 ix;
 
-    PerlIO_printf(Perl_debug_log, "\tCV=0x%p (%s), OUTSIDE=0x%p (%s)\n",
+    PerlIO_printf(Perl_debug_log, "\tCV=0x%lx (%s), OUTSIDE=0x%lx (%s)\n",
 		  cv,
 		  (CvANON(cv) ? "ANON"
 		   : (cv == main_cv) ? "MAIN"
@@ -3026,7 +3026,7 @@ CV* cv;
 
     for (ix = 1; ix <= AvFILL(pad_name); ix++) {
 	if (SvPOK(pname[ix]))
-	    PerlIO_printf(Perl_debug_log, "\t%4d. 0x%p (%s\"%s\" %ld-%ld)\n",
+	    PerlIO_printf(Perl_debug_log, "\t%4d. 0x%lx (%s\"%s\" %ld-%ld)\n",
 			  ix, ppad[ix],
 			  SvFAKE(pname[ix]) ? "FAKE " : "",
 			  SvPVX(pname[ix]),

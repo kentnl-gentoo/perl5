@@ -4115,7 +4115,7 @@ PP(pp_split)
 	DIE("Split loop");
     
     /* keep field after final delim? */
-    if (s < strend || origlimit) {
+    if (s < strend || (iters && origlimit)) {
 	dstr = NEWSV(34, strend-s);
 	sv_setpvn(dstr, s, strend-s);
 	if (!realarray)

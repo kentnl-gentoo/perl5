@@ -110,7 +110,8 @@ sub runtests {
 		       : $wstatus >> 8);
 	if ($wstatus) {
 	    my ($failed, $canon, $percent) = ('??', '??');
-	    print "dubious\n\tTest returned status $estatus (wstat $wstatus)\n";
+	    printf "dubious\n\tTest returned status $estatus (wstat %d, 0x%x)\n",
+		    $wstatus,$wstatus;
 	    print "\t\t(VMS status is $estatus)\n" if $^O eq 'VMS';
 	    if (corestatus($wstatus)) { # until we have a wait module
 		if ($have_devel_corestack) {

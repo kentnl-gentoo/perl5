@@ -125,7 +125,7 @@ sub getcwd
 	    while ($dir eq '.' || $dir eq '..' || $tst[0] != $pst[0] ||
 		   $tst[1] != $pst[1]);
 	}
-	$cwd = "$dir/$cwd";
+	$cwd = (defined $dir ? "$dir" : "" ) . "/$cwd" ;
 	closedir(PARENT);
     } while (defined $dir);
     chop($cwd) unless $cwd eq '/'; # drop the trailing /

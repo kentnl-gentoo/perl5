@@ -1,7 +1,8 @@
 #
 # Complex numbers and associated mathematical functions
 # -- Raphael Manfredi	September 1996
-# -- Jarkko Hietaniemi	March-August 1997
+# -- Jarkko Hietaniemi	March-September 1997
+# -- Daniel S. Lewart	September 1997
 #
 
 require Exporter;
@@ -16,7 +17,7 @@ use vars qw($VERSION @ISA
 
 @ISA = qw(Exporter);
 
-$VERSION = 1.01;
+$VERSION = 1.02;
 
 my @trig = qw(
 	      pi
@@ -255,34 +256,13 @@ sub minus {
 #
 sub multiply {
         my ($z1, $z2, $regular) = @_;
-	my ($re1, $re2);
-	if (ref $z1) {
-	    unless ($z1->{c_dirty}) {
-		my ($re, $im) = @{$z1->cartesian};
-		$re1 = $re if $im == 0;
-	    }
-	} else {
-	    $re1 = $z1;
-	}
+	my ($x1, $y1) = @{$z1->cartesian};
 	if (ref $z2) {
-	    unless ($z2->{c_dirty}) {
-		my ($re, $im) = @{$z2->cartesian};
-		$re1 = $re if $im == 0;
-	    }
+	    my ($x2, $y2) = @{$z2->cartesian};
+	    return (ref $z1)->make($x1*$x2-$y1*$y2, $x1*$y2+$y1*$x2);
 	} else {
-	    $re2 = $z2;
+	    return (ref $z1)->make($x1*$z2, $y1*$z2);
 	}
-	if (defined $re1 and defined $re2) {
-	    return cplx($re1 * $re2, 0);
-	}
-	my ($r1, $t1) = @{$z1->polar};
-	$z2 = cplxe(abs($z2), $z2 >= 0 ? 0 : pi) unless ref $z2;
-	my ($r2, $t2) = @{$z2->polar};
-	unless (defined $regular) {
-		$z1->set_polar([$r1 * $r2, $t1 + $t2]);
-		return $z1;
-	}
-	return (ref $z1)->emake($r1 * $r2, $t1 + $t2);
 }
 
 #
@@ -300,7 +280,7 @@ sub _divbyzero {
     }
 
     my @up = caller(1);
-    
+
     $mess .= "Died at $up[1] line $up[2].\n";
 
     die $mess;
@@ -313,46 +293,24 @@ sub _divbyzero {
 #
 sub divide {
 	my ($z1, $z2, $inverted) = @_;
-	my ($re1, $re2);
-	if (ref $z1) {
-	    unless ($z1->{c_dirty}) {
-		my ($re, $im) = @{$z1->cartesian};
-		$re1 = $re if $im == 0;
-	    }
-	} else {
-	    $re1 = $z1;
-	}
-	if (ref $z2) {
-	    unless ($z2->{c_dirty}) {
-		my ($re, $im) = @{$z2->cartesian};
-		$re1 = $re if $im == 0;
-	    }
-	} else {
-	    $re2 = $z2;
-	}
-	if (defined $re1 and defined $re2) {
-	    if ($inverted) {
-		_divbyzero "$re2/0" if ($re1 == 0);
-		return cplx($re2 / $re1, 0);
-	    } else {
-		_divbyzero "$re1/0" if ($re2 == 0);
-		return cplx($re1 / $re2, 0);
-	    }
-	}
-	my ($r1, $t1) = @{$z1->polar};
-	$z2 = cplxe(abs($z2), $z2 >= 0 ? 0 : pi) unless ref $z2;
-	my ($r2, $t2) = @{$z2->polar};
-	unless (defined $inverted) {
-		_divbyzero "$z1/0" if ($r2 == 0);
-		$z1->set_polar([$r1 / $r2, $t1 - $t2]);
-		return $z1;
-	}
 	if ($inverted) {
-		_divbyzero "$z2/0" if ($r1 == 0);
-		return (ref $z1)->emake($r2 / $r1, $t2 - $t1);
+	    my ($x2, $y2) = @{$z1->cartesian};
+	    my $d = $x2*$x2 + $y2*$y2;
+	    _divbyzero "$z2/0" if $d == 0;
+	    return (ref $z1)->make(($x2*$z2)/$d, -($y2*$z2)/$d);
 	} else {
-		_divbyzero "$z1/0" if ($r2 == 0);
-		return (ref $z1)->emake($r1 / $r2, $t1 - $t2);
+	    my ($x1, $y1) = @{$z1->cartesian};
+	    if (ref $z2) {
+		my ($x2, $y2) = @{$z2->cartesian};
+		my $d = $x2*$x2 + $y2*$y2;
+		_divbyzero "$z1/0" if $d == 0;
+		my $u = ($x1*$x2 + $y1*$y2)/$d;
+		my $v = ($y1*$x2 - $x1*$y2)/$d;
+		return (ref $z1)->make($u, $v);
+	    } else {
+		_divbyzero "$z1/0" if $z2 == 0;
+		return (ref $z1)->make($x1/$z2, $y1/$z2);
+	    }
 	}
 }
 
@@ -365,7 +323,7 @@ sub _zerotozero {
     my $mess = "The zero raised to the zeroth power is not defined.\n";
 
     my @up = caller(1);
-    
+
     $mess .= "Died at $up[1] line $up[2].\n";
 
     die $mess;
@@ -450,20 +408,8 @@ sub conjugate {
 #
 sub abs {
 	my ($z) = @_;
-	return $z > 0 ? $z : -$z unless ref $z;
 	my ($r, $t) = @{$z->polar};
-	return $r > 0 ? $r : -$r;
-}
-
-#
-# sgn
-#
-# Compute _real's_ sign.
-#
-sub sgn {
-    return -1 if ($_[0] < 0);
-    return  1 if ($_[0] > 0);
-    return  0;
+	return $r;
 }
 
 #
@@ -519,7 +465,7 @@ sub _rootbad {
     my $mess = "Root $_[0] not defined, root must be positive integer.\n";
 
     my @up = caller(1);
-    
+
     $mess .= "Died at $up[1] line $up[2].\n";
 
     die $mess;
@@ -602,7 +548,7 @@ sub _logofzero {
     }
 
     my @up = caller(1);
-    
+
     $mess .= "Died at $up[1] line $up[2].\n";
 
     die $mess;
@@ -779,12 +725,7 @@ sub acos {
 	}
 	return atan2(sqrt(1 - $re * $re), $re)
 	    if $im == 0 and abs($re) <= 1.0;
-	my $log = log($z + sqrt($z*$z-1));
-	my ($logre, $logim) = @{$log->cartesian};
-	return cplx( $logim, $logre) if $logim ==  pi() or $logim == 0;
-	return cplx(-$logim, $logre) if $im == 0;
-	return  i * $log if sgn($im) * sgn($re) == -1;
-	return ~i * $log;
+	return ~i * log($z + i*sqrt(1 - $z*$z));
 }
 
 #
@@ -1239,7 +1180,7 @@ sub stringify_polar {
 
 	$nt -= pit2 if $nt > pi;
 	my ($n, $k, $kpi);
-	
+
 	for ($k = 1, $kpi = pi; $k < 10; $k++, $kpi += pi) {
 		$n = int($kpi / $nt + ($nt > 0 ? 1 : -1) * 0.5);
 		if (abs($kpi/$n - $nt) <= $eps) {
@@ -1270,7 +1211,7 @@ Math::Complex - complex numbers and associated mathematical functions
 =head1 SYNOPSIS
 
 	use Math::Complex;
-	
+
 	$z = Math::Complex->make(5, 6);
 	$t = 4 - 3*i + $z;
 	$j = cplxe(1, 2*pi/3);
@@ -1347,7 +1288,7 @@ between this form and the cartesian form C<a + bi> is immediate:
 
 which is also expressed by this formula:
 
-	z = rho * exp(i * theta) = rho * (cos theta + i * sin theta) 
+	z = rho * exp(i * theta) = rho * (cos theta + i * sin theta)
 
 In other words, it's the projection of the vector onto the I<x> and I<y>
 axes. Mathematicians call I<rho> the I<norm> or I<modulus> and I<theta>
@@ -1469,7 +1410,7 @@ numbers:
 	cot(z) = 1 / tan(z)
 
 	asin(z) = -i * log(i*z + sqrt(1-z*z))
-	acos(z) = -i * log(z + sqrt(z*z-1))
+	acos(z) = -i * log(z + i*sqrt(1-z*z))
 	atan(z) = i/2 * log((i+z) / (i-z))
 
 	acsc(z) = asin(1 / z)
@@ -1483,7 +1424,7 @@ numbers:
 	csch(z) = 1 / sinh(z)
 	sech(z) = 1 / cosh(z)
 	coth(z) = 1 / tanh(z)
-	
+
 	asinh(z) = log(z + sqrt(z*z+1))
 	acosh(z) = log(z + sqrt(z*z-1))
 	atanh(z) = 1/2 * log((1+z) / (1-z))
@@ -1660,6 +1601,8 @@ operation (for instance) between two overloaded entities.
 
 Raphael Manfredi <F<Raphael_Manfredi@grenoble.hp.com>> and
 Jarkko Hietaniemi <F<jhi@iki.fi>>.
+
+Patches by Daniel S. Lewart <F<d-lewart@uiuc.edu>>.
 
 =cut
 

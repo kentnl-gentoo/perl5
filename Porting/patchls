@@ -113,12 +113,12 @@ foreach my $argv (@ARGV) {
 	# Patch copes with this, so must we. It's also handy for
 	# documenting manual changes by simply adding Index: lines
 	# to the file which describes the problem bing fixed.
-	add_file($ls, $1), next if /^Index:\s+(.*)/;
+	add_file($ls, $1), next if /^Index:\s+(\S+)/;
 
 	if (	($type eq '---' and $prevtype eq '***')	# Style 1
 	    or	($type eq '+++' and $prevtype eq '---')	# Style 2
 	) {
-	    if (/^[-+*]{3} (\S+)\s+.*\d\d:\d\d:\d\d/) {	# double check
+	    if (/^[-+*]{3} (\S+)\s*(.*?\d\d:\d\d:\d\d)?/) {	# double check
 		add_file($ls, $1);
 	    }
 	    else {

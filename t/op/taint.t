@@ -534,7 +534,7 @@ else {
 	endpwent();
     } else {
 	print "# getpwent() is not available\n";
-	print "136 ok\n";
+	print "ok 136\n";
     }
 
     if ($Config{d_readdir}) { # pretty hard to imagine not
@@ -545,7 +545,7 @@ else {
 	closedir(OP);
     } else {
 	print "# readdir() is not available\n";
-	print "137 ok\n";
+	print "ok 137\n";
     }
 
     if ($Config{d_readlink} && $Config{d_symlink}) {

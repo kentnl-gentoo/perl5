@@ -482,11 +482,12 @@ _cleaner:
 lint: perly.c $(c)
 	lint $(lintflags) $(defs) perly.c $(c) > perl.fuzz
 
-# Need to unset during recursion to go out of loop
+# Need to unset during recursion to go out of loop.
+# The Configure below just ensures that the dependency list is never empty.
 
 MAKEDEPEND = Makefile makedepend
 
-$(FIRSTMAKEFILE):	$(MAKEDEPEND)
+$(FIRSTMAKEFILE):	Configure $(MAKEDEPEND)
 	$(MAKE) depend MAKEDEPEND=
 
 config.h: config_h.SH config.sh

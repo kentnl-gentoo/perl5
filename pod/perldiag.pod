@@ -594,7 +594,11 @@ for us to go to.  See L<perlfunc/goto>.
 the closing delimiter was omitted.  Because bracketed quotes count nesting
 levels, the following is missing its final parenthesis:
 
-    print q(The character '(' starts a side comment.)
+    print q(The character '(' starts a side comment.);
+
+If you're getting this error from a here-document, you may have 
+included unseen whitespace before or after your closing tag. A good 
+programmer's editor will have a way to help you find these characters.
 
 =item Can't fork
 

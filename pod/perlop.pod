@@ -567,6 +567,15 @@ the same character fore and aft, but the 4 sorts of brackets
 		 s{}{}	 Substitution	   yes
 		tr{}{}	 Translation	   no
 
+Note that there can be whitespace between the operator and the quoting
+characters, except when C<#> is being used as the quoting character.
+C<q#foo#> is parsed as being the string C<foo>, which C<q #foo#> is the
+operator C<q> followed by a comment. Its argument will be taken from the
+next line. This allows you to write:
+
+    s {foo}  # Replace foo
+      {bar}  # with bar.
+
 For constructs that do interpolation, variables beginning with "C<$>" or "C<@>"
 are interpolated, as are the following sequences:
 

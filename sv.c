@@ -3216,7 +3216,7 @@ thats_really_all_folks:
     SvCUR_set(sv, bp - (STDCHAR*)SvPVX(sv));	/* set length */
     DEBUG_P(PerlIO_printf(Perl_debug_log,
 	"Screamer: done, len=%ld, string=|%.*s|\n",
-	SvCUR(sv),(int)SvCUR(sv),SvPVX(sv)));
+	(long)SvCUR(sv),(int)SvCUR(sv),SvPVX(sv)));
     }
    else
     {

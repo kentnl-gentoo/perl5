@@ -637,7 +637,7 @@ to point to the perl build directory.
 
 The only reliable answer is that you should specify a different
 directory for the architecture-dependent library for your -DDEBUGGING
-version of perl.  You can do this with by changing all the *archlib*
+version of perl.  You can do this by changing all the *archlib*
 variables in config.sh, namely archlib, archlib_exp, and
 installarchlib, to point to your new architecture-dependent library.
 

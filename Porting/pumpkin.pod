@@ -75,7 +75,8 @@ features, and are subject to rapid change.  Such developer
 sub-versions are numbered with sub-version numbers.  For example,
 version 5.003_04 is the 4'th developer version built on top of
 5.003.  It might include the _01, _02, and _03 changes, but it
-also might not.  Sub-versions are allowed to be subversive.
+also might not.  Sub-versions are allowed to be subversive. (But see
+the next section for recent changes.)
 
 These sub-versions can also be used as floating point numbers, so
 you can do things such as
@@ -99,6 +100,11 @@ The separate bug-fix track is being established to allow us an easy
 way to distribute important bug fixes without waiting for the
 developers to untangle all the other problems in the current
 developer's release.
+
+Trial releases of bug-fix maintenance releases are announced on
+perl5-porters. Trial releases use the new subversion number (to avoid
+testers installing it over the previous release) and include a 'local
+patch' entry in patchlevel.h.
 
 Watch for announcements of maintenance subversions in
 comp.lang.perl.announce.

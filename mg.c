@@ -357,8 +357,15 @@ MAGIC *mg;
 	}
 #else
 #ifdef OS2
-	sv_setnv(sv, (double)Perl_rc);
-	sv_setpv(sv, os2error(Perl_rc));
+	if (!(_emx_env & 0x200)) {	/* Under DOS */
+	    sv_setnv(sv, (double)errno);
+	    sv_setpv(sv, errno ? Strerror(errno) : "");
+	} else {
+	    if (errno != errno_isOS2)
+		Perl_rc = _syserrno();
+	    sv_setnv(sv, (double)Perl_rc);
+	    sv_setpv(sv, os2error(Perl_rc));
+	}
 #else
 	sv_setnv(sv, (double)errno);
 	sv_setpv(sv, errno ? Strerror(errno) : "");
@@ -1609,16 +1616,28 @@ MAGIC* mg;
 	    s += strlen(s);
 	    /* See if all the arguments are contiguous in memory */
 	    for (i = 1; i < origargc; i++) {
-		if (origargv[i] == s + 1)
+		if (origargv[i] == s + 1
+#ifdef OS2
+		    || origargv[i] == s + 2
+#endif 
+		   )
 		    s += strlen(++s);	/* this one is ok too */
+		else
+		    break;
 	    }
 	    /* can grab env area too? */
-	    if (origenviron && origenviron[0] == s + 1) {
+	    if (origenviron && (origenviron[0] == s + 1
+#ifdef OS2
+				|| (origenviron[0] == s + 9 && (s += 8))
+#endif 
+	       )) {
 		my_setenv("NoNe  SuCh", Nullch);
 					    /* force copy of environment */
 		for (i = 0; origenviron[i]; i++)
 		    if (origenviron[i] == s + 1)
 			s += strlen(++s);
+		    else
+			break;
 	    }
 	    origalen = s - origargv[0];
 	}
