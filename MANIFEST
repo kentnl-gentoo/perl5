@@ -119,6 +119,7 @@ eg/van/vanish		A program to put files in a trashcan
 eg/who			A sample who program
 eg/wrapsuid		A setuid script wrapper generator
 emacs/cperl-mode.el	An alternate perl-mode
+emacs/e2ctags.pl	etags to ctags converter
 emacs/ptags		Creates smart TAGS file
 embed.h			Maps symbols to safer names
 embed.pl		Produces embed.h
@@ -762,8 +763,6 @@ t/op/hashwarn.t		See if warnings for bad hash assignments work
 t/op/inc.t		See if inc/dec of integers near 32 bit limit work
 t/op/index.t		See if index works
 t/op/int.t		See if int works
-t/op/ipcmsg.t		See if System V message queues work
-t/op/ipcsem.t		See if System V semaphores work
 t/op/join.t		See if join works
 t/op/list.t		See if array lists work
 t/op/local.t		See if local works
