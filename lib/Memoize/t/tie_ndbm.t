@@ -1,6 +1,10 @@
 #!/usr/bin/perl
 
-use lib qw(. ..);
+BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+}
+#use lib qw(. ..);
 use Memoize 0.45 qw(memoize unmemoize);
 use Fcntl;
 # use Memoize::NDBM_File;
@@ -36,9 +40,9 @@ if (eval {require File::Spec::Functions}) {
 }
 $tmpdir = $ENV{TMP} || $ENV{TMPDIR} ||  '/tmp';  
 $file = catfile($tmpdir, "md$$");
-1 while unlink $file, "$file.dir", "$file.pag";
+1 while unlink $file, "$file.dir", "$file.pag", "$file.db";
 tryout('Memoize::NDBM_File', $file, 1);  # Test 1..4
-1 while unlink $file, "$file.dir", "$file.pag";
+1 while unlink $file, "$file.dir", "$file.pag", "$file.db";  
 
 sub tryout {
   my ($tiepack, $file, $testno) = @_;

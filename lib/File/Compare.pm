@@ -1,6 +1,6 @@
 package File::Compare;
 
-use 5.6.0;
+use 5.006;
 use strict;
 use warnings;
 our($VERSION, @ISA, @EXPORT, @EXPORT_OK, $Too_Big);
@@ -14,11 +14,6 @@ $VERSION = '1.1003';
 @EXPORT_OK = qw(cmp compare_text);
 
 $Too_Big = 1024 * 1024 * 2;
-
-sub VERSION {
-    # Version of File::Compare
-    return $File::Compare::VERSION;
-}
 
 sub compare {
     croak("Usage: compare( file1, file2 [, buffersize]) ")

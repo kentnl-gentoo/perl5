@@ -79,17 +79,6 @@ USE_PERLIO	= define
 #USE_5005THREADS	= define
 
 #
-# WARNING! This option is deprecated and will eventually go away (enable
-# USE_MULTI instead).
-#
-# uncomment next line if you want to use the PERL_OBJECT build option.
-# DO NOT ENABLE unless you have legacy code that relies on the C++
-# CPerlObj class that was available in 5.005.  This cannot be enabled
-# if you ask for USE_5005THREADS above.
-#
-#USE_OBJECT	= define
-
-#
 # uncomment one of the following lines if you are using either
 # Visual C++ 2.x or Visual C++ 6.x (aka Visual Studio 98)
 #
@@ -105,7 +94,7 @@ USE_PERLIO	= define
 # uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
 # It has patches that fix known bugs in older versions of MSVCRT.DLL.
 # This currently requires VC 5.0 with Service Pack 3 or later.
-# Get it from CPAN at http://www.perl.com/CPAN/authors/id/D/DO/DOUGL/
+# Get it from CPAN at http://www.cpan.org/authors/id/D/DO/DOUGL/
 # and follow the directions in the package to install.
 #
 # Not recommended if you have VC 6.x and you're not running Windows 9x.
@@ -206,13 +195,6 @@ D_CRYPT		= define
 CRYPT_FLAG	= -DHAVE_DES_FCRYPT
 !ENDIF
 
-!IF "$(USE_OBJECT)" == "define"
-PERL_MALLOC	= undef
-USE_5005THREADS	= undef
-USE_MULTI	= undef
-USE_IMP_SYS	= define
-!ENDIF
-
 !IF "$(PERL_MALLOC)" == ""
 PERL_MALLOC	= undef
 !ENDIF
@@ -233,10 +215,6 @@ PERL_MALLOC	= undef
 USE_MULTI	= undef
 !ENDIF
 
-!IF "$(USE_OBJECT)" == ""
-USE_OBJECT	= undef
-!ENDIF
-
 !IF "$(USE_ITHREADS)" == ""
 USE_ITHREADS	= undef
 !ENDIF
@@ -253,16 +231,16 @@ USE_PERLIO	= undef
 USE_PERLCRT	= undef
 !ENDIF
 
-!IF "$(USE_IMP_SYS)$(USE_MULTI)$(USE_5005THREADS)$(USE_OBJECT)" == "defineundefundefundef"
+!IF "$(USE_IMP_SYS)$(USE_MULTI)$(USE_5005THREADS)" == "defineundefundef"
 USE_MULTI	= define
 !ENDIF
 
-!IF "$(USE_ITHREADS)$(USE_MULTI)$(USE_OBJECT)" == "defineundefundef"
+!IF "$(USE_ITHREADS)$(USE_MULTI)" == "defineundef"
 USE_MULTI	= define
 USE_5005THREADS	= undef
 !ENDIF
 
-!IF "$(USE_MULTI)$(USE_5005THREADS)$(USE_OBJECT)" != "undefundefundef"
+!IF "$(USE_MULTI)$(USE_5005THREADS)" != "undefundef"
 BUILDOPT	= $(BUILDOPT) -DPERL_IMPLICIT_CONTEXT
 !ENDIF
 
@@ -274,9 +252,6 @@ BUILDOPT	= $(BUILDOPT) -DPERL_IMPLICIT_SYS
 PROCESSOR_ARCHITECTURE	= x86
 !ENDIF
 
-!IF "$(USE_OBJECT)" == "define"
-ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-object
-!ELSE
 !IF "$(USE_5005THREADS)" == "define"
 ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-thread
 !ELSE
@@ -287,7 +262,6 @@ ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-multi
 ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-perlio
 !ELSE
 ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)
-!ENDIF
 !ENDIF
 !ENDIF
 !ENDIF
@@ -366,11 +340,6 @@ LINK_DBG	= -debug -pdb:none
 #OPTIMIZE	= -O2 -MD -DNDEBUG
 OPTIMIZE	= -O1 -MD -DNDEBUG
 LINK_DBG	= -release
-!ENDIF
-
-!IF "$(USE_OBJECT)" == "define"
-OPTIMIZE	= $(OPTIMIZE) $(CXX_FLAG)
-BUILDOPT	= $(BUILDOPT) -DPERL_OBJECT
 !ENDIF
 
 !IF "$(USE_PERLCRT)" != "define"
@@ -457,6 +426,8 @@ UTILS		=			\
 		..\utils\h2xs		\
 		..\utils\perldoc	\
 		..\utils\perlcc		\
+		..\utils\perlivp	\
+		..\utils\libnetcfg	\
 		..\pod\checkpods	\
 		..\pod\pod2html		\
 		..\pod\pod2latex	\
@@ -467,6 +438,7 @@ UTILS		=			\
 		..\pod\podselect	\
 		..\x2p\find2perl	\
 		..\x2p\s2p		\
+		..\lib\ExtUtils\xsubpp	\
 		bin\exetype.pl		\
 		bin\runperl.pl		\
 		bin\pl2bat.pl		\
@@ -512,6 +484,7 @@ MICROCORE_SRC	=		\
 		..\pp_ctl.c	\
 		..\pp_hot.c	\
 		..\pp_pack.c	\
+		..\pp_sort.c	\
 		..\pp_sys.c	\
 		..\regcomp.c	\
 		..\regexec.c	\
@@ -531,15 +504,16 @@ EXTRACORE_SRC	= $(EXTRACORE_SRC) perllib.c
 EXTRACORE_SRC	= $(EXTRACORE_SRC) ..\malloc.c
 !ENDIF
 
-!IF "$(USE_OBJECT)" != "define"
 EXTRACORE_SRC	= $(EXTRACORE_SRC) ..\perlio.c
-!ENDIF
 
 WIN32_SRC	=		\
 		.\win32.c	\
-		.\win32io.c	\
 		.\win32sck.c	\
 		.\win32thread.c
+
+!IF "$(USE_PERLIO)" == "define"
+WIN32_SRC	= $(WIN32_SRC) .\win32io.c
+!ENDIF
 
 !IF "$(CRYPT_SRC)" != ""
 WIN32_SRC	= $(WIN32_SRC) .\$(CRYPT_SRC)
@@ -617,65 +591,65 @@ PERLDLL_OBJ	= $(PERLDLL_OBJ) $(WIN32_OBJ) $(DLL_OBJ)
 SETARGV_OBJ	= setargv$(o)
 !ENDIF
 
-DYNALOADER	= $(EXTDIR)\DynaLoader\DynaLoader
-SOCKET		= $(EXTDIR)\Socket\Socket
-FCNTL		= $(EXTDIR)\Fcntl\Fcntl
-OPCODE		= $(EXTDIR)\Opcode\Opcode
-SDBM_FILE	= $(EXTDIR)\SDBM_File\SDBM_File
-IO		= $(EXTDIR)\IO\IO
-POSIX		= $(EXTDIR)\POSIX\POSIX
-ATTRS		= $(EXTDIR)\attrs\attrs
-THREAD		= $(EXTDIR)\Thread\Thread
-B		= $(EXTDIR)\B\B
-RE		= $(EXTDIR)\re\re
-DUMPER		= $(EXTDIR)\Data\Dumper\Dumper
-ERRNO		= $(EXTDIR)\Errno\Errno
-PEEK		= $(EXTDIR)\Devel\Peek\Peek
-BYTELOADER	= $(EXTDIR)\ByteLoader\ByteLoader
-DPROF		= $(EXTDIR)\Devel\DProf\DProf
-GLOB		= $(EXTDIR)\File\Glob\Glob
-HOSTNAME	= $(EXTDIR)\Sys\Hostname\Hostname
-STORABLE	= $(EXTDIR)\Storable\Storable
-FILTER		= $(EXTDIR)\Filter\Util\Call\Call
-ENCODE		= $(EXTDIR)\Encode\Encode
-MD5		= $(EXTDIR)\Digest\MD5\MD5
-PERLIOSCALAR	= $(EXTDIR)\PerlIO\Scalar\Scalar
-MIMEBASE64	= $(EXTDIR)\MIME\Base64\Base64
-TIMEHIRES	= $(EXTDIR)\Time\HiRes\HiRes
-TIMEPIECE	= $(EXTDIR)\Time\Piece\Piece
-CWD		= $(EXTDIR)\Cwd\Cwd
-LISTUTIL  	= $(EXTDIR)\List\Util\Util
-PERLIOVIA	= $(EXTDIR)\PerlIO\Via\Via
-XSTYPEMAP	= $(EXTDIR)\XS\Typemap\Typemap
+DYNALOADER		= $(EXTDIR)\DynaLoader\DynaLoader
+SOCKET			= $(EXTDIR)\Socket\Socket
+FCNTL			= $(EXTDIR)\Fcntl\Fcntl
+OPCODE			= $(EXTDIR)\Opcode\Opcode
+SDBM_FILE		= $(EXTDIR)\SDBM_File\SDBM_File
+IO			= $(EXTDIR)\IO\IO
+POSIX			= $(EXTDIR)\POSIX\POSIX
+ATTRS			= $(EXTDIR)\attrs\attrs
+THREAD			= $(EXTDIR)\Thread\Thread
+B			= $(EXTDIR)\B\B
+RE			= $(EXTDIR)\re\re
+DUMPER			= $(EXTDIR)\Data\Dumper\Dumper
+ERRNO			= $(EXTDIR)\Errno\Errno
+PEEK			= $(EXTDIR)\Devel\Peek\Peek
+BYTELOADER		= $(EXTDIR)\ByteLoader\ByteLoader
+DPROF			= $(EXTDIR)\Devel\DProf\DProf
+GLOB			= $(EXTDIR)\File\Glob\Glob
+HOSTNAME		= $(EXTDIR)\Sys\Hostname\Hostname
+STORABLE		= $(EXTDIR)\Storable\Storable
+FILTER			= $(EXTDIR)\Filter\Util\Call\Call
+ENCODE			= $(EXTDIR)\Encode\Encode
+MD5			= $(EXTDIR)\Digest\MD5\MD5
+PERLIOSCALAR		= $(EXTDIR)\PerlIO\Scalar\Scalar
+MIMEBASE64		= $(EXTDIR)\MIME\Base64\Base64
+TIMEHIRES		= $(EXTDIR)\Time\HiRes\HiRes
+CWD			= $(EXTDIR)\Cwd\Cwd
+LISTUTIL  		= $(EXTDIR)\List\Util\Util
+PERLIOVIA		= $(EXTDIR)\PerlIO\Via\Via
+XSTYPEMAP		= $(EXTDIR)\XS\Typemap\Typemap
+UNICODENORMALIZE	= $(EXTDIR)\Unicode\Normalize\Normalize
 
-SOCKET_DLL	= $(AUTODIR)\Socket\Socket.dll
-FCNTL_DLL	= $(AUTODIR)\Fcntl\Fcntl.dll
-OPCODE_DLL	= $(AUTODIR)\Opcode\Opcode.dll
-SDBM_FILE_DLL	= $(AUTODIR)\SDBM_File\SDBM_File.dll
-IO_DLL		= $(AUTODIR)\IO\IO.dll
-POSIX_DLL	= $(AUTODIR)\POSIX\POSIX.dll
-ATTRS_DLL	= $(AUTODIR)\attrs\attrs.dll
-THREAD_DLL	= $(AUTODIR)\Thread\Thread.dll
-B_DLL		= $(AUTODIR)\B\B.dll
-DUMPER_DLL	= $(AUTODIR)\Data\Dumper\Dumper.dll
-PEEK_DLL	= $(AUTODIR)\Devel\Peek\Peek.dll
-RE_DLL		= $(AUTODIR)\re\re.dll
-BYTELOADER_DLL	= $(AUTODIR)\ByteLoader\ByteLoader.dll
-DPROF_DLL	= $(AUTODIR)\Devel\DProf\DProf.dll
-GLOB_DLL	= $(AUTODIR)\File\Glob\Glob.dll
-HOSTNAME_DLL	= $(AUTODIR)\Sys\Hostname\Hostname.dll
-STORABLE_DLL	= $(AUTODIR)\Storable\Storable.dll
-FILTER_DLL	= $(AUTODIR)\Filter\Util\Call\Call.dll
-ENCODE_DLL	= $(AUTODIR)\Encode\Encode.dll
-MD5_DLL		= $(AUTODIR)\Digest\MD5\MD5.dll
-PERLIOSCALAR_DLL= $(AUTODIR)\PerlIO\Scalar\Scalar.dll
-MIMEBASE64_DLL	= $(AUTODIR)\MIME\Base64\Base64.dll
-TIMEHIRES_DLL	= $(AUTODIR)\Time\HiRes\HiRes.dll
-TIMEPIECE_DLL	= $(AUTODIR)\Time\Piece\Piece.dll
-CWD_DLL		= $(AUTODIR)\Cwd\Cwd.dll
-LISTUTIL_DLL	= $(AUTODIR)\List\Util\Util.dll
-PERLIOVIA_DLL	= $(AUTODIR)\PerlIO\Via\Via.dll
-XSTYPEMAP_DLL	= $(AUTODIR)\XS\Typemap\Typemap.dll
+SOCKET_DLL		= $(AUTODIR)\Socket\Socket.dll
+FCNTL_DLL		= $(AUTODIR)\Fcntl\Fcntl.dll
+OPCODE_DLL		= $(AUTODIR)\Opcode\Opcode.dll
+SDBM_FILE_DLL		= $(AUTODIR)\SDBM_File\SDBM_File.dll
+IO_DLL			= $(AUTODIR)\IO\IO.dll
+POSIX_DLL		= $(AUTODIR)\POSIX\POSIX.dll
+ATTRS_DLL		= $(AUTODIR)\attrs\attrs.dll
+THREAD_DLL		= $(AUTODIR)\Thread\Thread.dll
+B_DLL			= $(AUTODIR)\B\B.dll
+DUMPER_DLL		= $(AUTODIR)\Data\Dumper\Dumper.dll
+PEEK_DLL		= $(AUTODIR)\Devel\Peek\Peek.dll
+RE_DLL			= $(AUTODIR)\re\re.dll
+BYTELOADER_DLL		= $(AUTODIR)\ByteLoader\ByteLoader.dll
+DPROF_DLL		= $(AUTODIR)\Devel\DProf\DProf.dll
+GLOB_DLL		= $(AUTODIR)\File\Glob\Glob.dll
+HOSTNAME_DLL		= $(AUTODIR)\Sys\Hostname\Hostname.dll
+STORABLE_DLL		= $(AUTODIR)\Storable\Storable.dll
+FILTER_DLL		= $(AUTODIR)\Filter\Util\Call\Call.dll
+ENCODE_DLL		= $(AUTODIR)\Encode\Encode.dll
+MD5_DLL			= $(AUTODIR)\Digest\MD5\MD5.dll
+PERLIOSCALAR_DLL	= $(AUTODIR)\PerlIO\Scalar\Scalar.dll
+MIMEBASE64_DLL		= $(AUTODIR)\MIME\Base64\Base64.dll
+TIMEHIRES_DLL		= $(AUTODIR)\Time\HiRes\HiRes.dll
+CWD_DLL			= $(AUTODIR)\Cwd\Cwd.dll
+LISTUTIL_DLL		= $(AUTODIR)\List\Util\Util.dll
+PERLIOVIA_DLL		= $(AUTODIR)\PerlIO\Via\Via.dll
+XSTYPEMAP_DLL		= $(AUTODIR)\XS\Typemap\Typemap.dll
+UNICODENORMALIZE_DLL	= $(AUTODIR)\Unicode\Normalize\Normalize.dll
 
 EXTENSION_C	= 		\
 		$(SOCKET).c	\
@@ -701,11 +675,11 @@ EXTENSION_C	= 		\
 		$(PERLIOSCALAR).c	\
 		$(MIMEBASE64).c	\
 		$(TIMEHIRES).c	\
-		$(TIMEPIECE).c	\
 		$(CWD).c	\
 		$(LISTUTIL).c	\
 		$(PERLIOVIA).c	\
-		$(XSTYPEMAP).c
+		$(XSTYPEMAP).c	\
+		$(UNICODENORMALIZE).c
 
 EXTENSION_DLL	= 		\
 		$(SOCKET_DLL)	\
@@ -731,11 +705,11 @@ EXTENSION_DLL	= 		\
 		$(PERLIOSCALAR_DLL) \
 		$(MIMEBASE64_DLL) \
 		$(TIMEHIRES_DLL)  \
-		$(TIMEPIECE_DLL)  \
 		$(CWD_DLL)	\
 		$(LISTUTIL_DLL)	\
 		$(PERLIOVIA_DLL)	\
-		$(XSTYPEMAP_DLL)
+		$(XSTYPEMAP_DLL)	\
+		$(UNICODENORMALIZE_DLL)
 
 POD2HTML	= $(PODDIR)\pod2html
 POD2MAN		= $(PODDIR)\pod2man
@@ -838,7 +812,7 @@ $(MINIWIN32_OBJ) : $(CORE_NOCFG_H)
 
 # -DPERL_IMPLICIT_SYS needs C++ for perllib.c
 # This is the only file that depends on perlhost.h, vmem.h, and vdir.h
-!IF "$(USE_IMP_SYS)$(USE_OBJECT)" == "defineundef"
+!IF "$(USE_IMP_SYS)" == "define"
 perllib$(o)	: perllib.c .\perlhost.h .\vdir.h .\vmem.h
 	$(CC) -c -I. $(CFLAGS_O) $(CXX_FLAG) $(OBJOUT_FLAG)$@ perllib.c
 !ENDIF
@@ -941,6 +915,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.apollo   .\perlapollo.pod
 	copy ..\README.beos     .\perlbeos.pod
 	copy ..\README.bs2000   .\perlbs2000.pod
+	copy ..\README.ce	.\perlce.pod
 	copy ..\README.cygwin   .\perlcygwin.pod
 	copy ..\README.dgux     .\perldgux.pod
 	copy ..\README.dos      .\perldos.pod
@@ -979,7 +954,7 @@ distclean: clean
 	-del /f $(LIBDIR)\.exists $(LIBDIR)\attrs.pm $(LIBDIR)\DynaLoader.pm
 	-del /f $(LIBDIR)\XSLoader.pm
 	-del /f $(LIBDIR)\Fcntl.pm $(LIBDIR)\IO.pm $(LIBDIR)\Opcode.pm
-	-del /f $(LIBDIR)\ops.pm $(LIBDIR)\Safe.pm $(LIBDIR)\Thread.pm
+	-del /f $(LIBDIR)\ops.pm $(LIBDIR)\Safe.pm
 	-del /f $(LIBDIR)\SDBM_File.pm $(LIBDIR)\Socket.pm $(LIBDIR)\POSIX.pm
 	-del /f $(LIBDIR)\B.pm $(LIBDIR)\O.pm $(LIBDIR)\re.pm
 	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
@@ -995,8 +970,8 @@ distclean: clean
 	-del /f $(LIBDIR)\List\Util.pm
 	-del /f $(LIBDIR)\Scalar\Util.pm
 	-del /f $(LIBDIR)\Time\HiRes.pm
-	-del /f $(LIBDIR)\Time\Piece.pm
 	-del /f $(LIBDIR)\XS\Typemap.pm
+	-del /f $(LIBDIR)\Unicode\Normalize.pm
 	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO
 	-rmdir /s $(LIBDIR)\IO
 	-if exist $(LIBDIR)\Thread rmdir /s /q $(LIBDIR)\Thread
@@ -1019,7 +994,7 @@ distclean: clean
 	cd $(PODDIR)
 	-del /f *.html *.bat checkpods \
 	    perlaix.pod perlamiga.pod perlapollo.pod perlbeos.pod \
-	    perlbs2000.pod perlcygwin.pod perldgux.pod \
+	    perlbs2000.pod perlce.pod perlcygwin.pod perldgux.pod \
 	    perldos.pod perlepoc.pod perlhurd.pod \
 	    perlhpux.pod perlmachten.pod \
 	    perlmacos.pod perlmint.pod perlmpeix.pod perlnetware.pod \
@@ -1029,7 +1004,7 @@ distclean: clean
 	    perlwin32.pod pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
 	cd ..\utils
-	-del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc dprofpp
+	-del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc perlivp dprofpp
 	-del /f *.bat
 	cd ..\win32
 	cd ..\x2p

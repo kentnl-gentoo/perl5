@@ -9,12 +9,10 @@ BEGIN {
     }
 }
 
-no utf8; # so that the naked 8-bit chars won't gripe under use utf8
+no utf8; # needed for use utf8 not griping about the raw octets
 
 $| = 1;
-my $total_tests = 25;
-if (ord('A') == 193) { $total_tests = 24; } # EBCDIC platforms do not warn on UTF-8
-print "1..$total_tests\n";
+print "1..31\n";
 
 open(F,"+>:utf8",'a');
 print F chr(0x100).'£';
@@ -138,7 +136,11 @@ print "ok 21\n";
 # Now let's make it suffer.
 open F, ">", "a" or die $!;
 my $w;
-eval {local $SIG{__WARN__} = sub { $w = $_[0] };  print F $a; };
+{
+    use warnings 'utf8';
+    local $SIG{__WARN__} = sub { $w = $_[0] };
+    print F $a;
+}
 print "not " if ($@ || $w !~ /Wide character in print/i);
 print "ok 22\n";
 }
@@ -171,12 +173,99 @@ print "not " unless $x eq $chr;
 print "ok 24\n";
 
 # Now we have a deformed file.
-open F, "<:utf8", "a" or die $!;
-$x = <F>; chomp $x;
-{ local $SIG{__WARN__} = sub { print "ok 25\n"; };
-eval { sprintf "%vd\n", $x; }
+
+if (ord('A') == 193) {
+    print "ok 25 # Skip: EBCDIC\n"; # EBCDIC doesn't complain
+} else {
+    open F, "<:utf8", "a" or die $!;
+    $x = <F>; chomp $x;
+    local $SIG{__WARN__} = sub { print "ok 25\n" };
+    eval { sprintf "%vd\n", $x };
 }
 
 close F;
 unlink('a');
+
+open F, ">:utf8", "a";
+@a = map { chr(1 << ($_ << 2)) } 0..5; # 0x1, 0x10, .., 0x100000
+unshift @a, chr(0); # ... and a null byte in front just for fun
+print F @a;
+close F;
+
+my $c;
+
+# read() should work on characters, not bytes
+open F, "<:utf8", "a";
+$a = 0;
+for (@a) {
+    unless (($c = read(F, $b, 1) == 1)  &&
+            length($b)           == 1  &&
+            ord($b)              == ord($_) &&
+            tell(F)              == ($a += bytes::length($b))) {
+        print '# ord($_)           == ', ord($_), "\n";
+        print '# ord($b)           == ', ord($b), "\n";
+        print '# length($b)        == ', length($b), "\n";
+        print '# bytes::length($b) == ', bytes::length($b), "\n";
+        print '# tell(F)           == ', tell(F), "\n";
+        print '# $a                == ', $a, "\n";
+        print '# $c                == ', $c, "\n";
+        print "not ";
+        last;
+    }
+}
+close F;
+print "ok 26\n";
+
+{
+    # Check that warnings are on on I/O, and that they can be muffled.
+
+    local $SIG{__WARN__} = sub { $@ = shift };
+
+    undef $@;
+    open F, ">a";
+    print F chr(0x100);
+    close(F);
+
+    print $@ =~ /Wide character in print/ ? "ok 27\n" : "not ok 27\n";
+
+    undef $@;
+    open F, ">:utf8", "a";
+    print F chr(0x100);
+    close(F);
+
+    print defined $@ ? "not ok 28\n" : "ok 28\n";
+
+    undef $@;
+    open F, ">a";
+    binmode(F, ":utf8");
+    print F chr(0x100);
+    close(F);
+
+    print defined $@ ? "not ok 29\n" : "ok 29\n";
+
+    no warnings 'utf8';
+
+    undef $@;
+    open F, ">a";
+    print F chr(0x100);
+    close(F);
+
+    print defined $@ ? "not ok 30\n" : "ok 30\n";
+
+    use warnings 'utf8';
+
+    undef $@;
+    open F, ">a";
+    print F chr(0x100);
+    close(F);
+
+    print $@ =~ /Wide character in print/ ? "ok 31\n" : "not ok 31\n";
+}
+
+# sysread() and syswrite() tested in lib/open.t since Fnctl is used
+
+END {
+    1 while unlink "a";
+    1 while unlink "b";
+}
 

@@ -9,15 +9,17 @@ BEGIN {
     }
 }
 
-print "1..8\n";
+print "1..11\n";
 
 my $grk = "grk$$";
 my $utf = "utf$$";
+my $fail1 = "fail$$";
+my $russki = "koi8r$$";
 
 if (open(GRK, ">$grk")) {
     # alpha beta gamma in ISO 8859-7
     print GRK "\xe1\xe2\xe3";
-    close GRK;
+    close GRK or die "Could not close: $!";
 }
 
 {
@@ -28,15 +30,20 @@ if (open(GRK, ">$grk")) {
     print "ok 2\n";
     print $o readline($i);
     print "ok 3\n";
-    close($o);
+    close($o) or die "Could not close: $!";
     close($i);
 }
 
 if (open(UTF, "<$utf")) {
-    # alpha beta gamma in UTF-8 Unicode (0x3b1 0x3b2 0x3b3)
-    print "not " unless <UTF> eq "\xce\xb1\xce\xb2\xce\xb3";
+    if (ord('A') == 193) { # EBCDIC
+	# alpha beta gamma in UTF-EBCDIC Unicode (0x3b1 0x3b2 0x3b3)
+	print "not " unless <UTF> eq "\xb4\x58\xb4\x59\xb4\x62";
+    } else {
+	# alpha beta gamma in UTF-8 Unicode (0x3b1 0x3b2 0x3b3)
+	print "not " unless <UTF> eq "\xce\xb1\xce\xb2\xce\xb3";
+    }
     print "ok 4\n";
-    close $grk;
+    close UTF;
 }
 
 {
@@ -47,16 +54,57 @@ if (open(UTF, "<$utf")) {
     print "ok 6\n";
     print $o readline($i);
     print "ok 7\n";
-    close($o);
+    close($o) or die "Could not close: $!";
     close($i);
 }
 
 if (open(GRK, "<$grk")) {
     print "not " unless <GRK> eq "\xe1\xe2\xe3";
     print "ok 8\n";
-    close $grk;
+    close GRK;
+}
+
+$SIG{__WARN__} = sub {$warn = $_[0]};
+
+if (open(FAIL, ">:encoding(NoneSuch)", $fail1)) {
+    print "not ok 9 # Open should fail\n";
+} else {
+    print "ok 9\n";
+}
+if (!defined $warn) {
+    print "not ok 10 # warning is undef\n";
+} elsif ($warn =~ /^Cannot find encoding "NoneSuch" at/) {
+    print "ok 10\n";
+} else {
+    print "not ok 10 # warning is '$warn'";
+}
+
+if (open(RUSSKI, ">$russki")) {
+    print RUSSKI "\x3c\x3f\x78";
+    close RUSSKI or die "Could not close: $!";
+    open(RUSSKI, "$russki");
+    binmode(RUSSKI, ":raw");
+    my $buf1;
+    read(RUSSKI, $buf1, 1);
+    eof(RUSSKI);
+    binmode(RUSSKI, ":encoding(koi8-r)");
+    my $buf2;
+    read(RUSSKI, $buf2, 1);
+    my $offset = tell(RUSSKI);
+    if (ord($buf1) == 0x3c &&
+	ord($buf2) == (ord('A') == 193) ? 0x6f : 0x3f &&
+	$offset == 2) {
+	print "ok 11\n";
+    } else {
+	printf "not ok 11 # [%s] [%s] %d\n",
+	       join(" ", unpack("H*", $buf1)),
+	       join(" ", unpack("H*", $buf2)), $offset;
+    }
+    close(RUSSKI);
+} else {
+    print "not ok 11 # open failed: $!\n";
 }
 
 END {
-    unlink($grk, $utf);
+    unlink($grk, $utf, $fail1, $russki);
 }

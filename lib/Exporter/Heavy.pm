@@ -5,14 +5,14 @@ no strict 'refs';
 
 # On one line so MakeMaker will see it.
 require Exporter;  our $VERSION = $Exporter::VERSION;
-
+$Carp::Internal{"Exporter::Heavy"} = 1;
 our $Verbose;
 
 =head1 NAME
 
 Exporter::Heavy - Exporter guts
 
-=head1 SYNOPIS
+=head1 SYNOPSIS
 
 (internal use only)
 
@@ -109,10 +109,11 @@ sub heavy_export {
 	    @imports = keys %imports;
 	}
 
+        my @carp;
 	foreach $sym (@imports) {
 	    if (!$export_cache->{$sym}) {
 		if ($sym =~ m/^\d/) {
-		    $pkg->require_version($sym);
+		    $pkg->VERSION($sym); # inherit from UNIVERSAL
 		    # If the version number was the only thing specified
 		    # then we should act as if nothing was specified:
 		    if (@imports == 1) {
@@ -126,15 +127,16 @@ sub heavy_export {
 			last;
 		    }
 		} elsif ($sym !~ s/^&// || !$export_cache->{$sym}) {
-                    require Carp;
-		    Carp::carp(qq["$sym" is not exported by the $pkg module]);
+		    # accumulate the non-exports
+		    push @carp,
+		        qq["$sym" is not exported by the $pkg module\n];
 		    $oops++;
 		}
 	    }
 	}
 	if ($oops) {
 	    require Carp;
-	    Carp::croak("Can't continue after import errors");
+	    Carp::croak("@{carp}Can't continue after import errors");
 	}
     }
     else {
@@ -213,20 +215,18 @@ sub _push_tags {
     }
 }
 
-
-sub require_version {
+sub heavy_require_version {
     my($self, $wanted) = @_;
     my $pkg = ref $self || $self;
-    my $version = ${"${pkg}::VERSION"};
-    if (!defined $version or $version < $wanted) {
-	$version = defined $version ? $version : "(undef)";
-	    # %INC contains slashes, but $pkg contains double-colons.
-	my $file = (map {s,::,/,g; $INC{$_}} "$pkg.pm")[0];
-	$file = defined $file ? " ($file)" : '';
-	require Carp;
-	Carp::croak("$pkg $wanted required--this is only version $version$file")
-    }
-    $version;
+    return ${pkg}->VERSION($wanted);
+}
+
+sub heavy_export_tags {
+  _push_tags((caller)[0], "EXPORT",    \@_);
+}
+
+sub heavy_export_ok_tags {
+  _push_tags((caller)[0], "EXPORT_OK", \@_);
 }
 
 1;

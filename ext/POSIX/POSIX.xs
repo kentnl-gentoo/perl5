@@ -1,3 +1,5 @@
+#define PERL_EXT_POSIX
+
 #ifdef WIN32
 #define _POSIX_
 #endif
@@ -19,7 +21,7 @@
 #define PERLIO_NOT_STDIO 1
 #include "perl.h"
 #include "XSUB.h"
-#if defined(PERL_OBJECT) || defined(PERL_CAPI) || defined(PERL_IMPLICIT_SYS)
+#if defined(PERL_IMPLICIT_SYS)
 #  undef signal
 #  undef open
 #  undef setmode
@@ -168,6 +170,8 @@ char *tzname[] = { "" , "" };
 #  define sigfillset(a)		not_here("sigfillset")
 #  define sigismember(a,b)	not_here("sigismember")
 #ifndef NETWARE
+#  undef setuid
+#  undef setgid
 #  define setuid(a)		not_here("setuid")
 #  define setgid(a)		not_here("setgid")
 #endif	/* NETWARE */
@@ -226,9 +230,11 @@ typedef struct termios* POSIX__Termios;
 
 /* Possibly needed prototypes */
 char *cuserid (char *);
+#ifndef WIN32
 double strtod (const char *, char **);
 long strtol (const char *, char **, int);
 unsigned long strtoul (const char *, char **, int);
+#endif
 
 #ifndef HAS_CUSERID
 #define cuserid(a) (char *) not_here("cuserid")
@@ -345,6 +351,20 @@ unsigned long strtoul (const char *, char **, int);
 #endif
 #endif
 
+/* Background: in most systems the low byte of the wait status
+ * is the signal (the lowest 7 bits) and the coredump flag is
+ * the eight bit, and the second lowest byte is the exit status.
+ * BeOS bucks the trend and has the bytes in different order.
+ * See beos/beos.c for how the reality is bent even in BeOS
+ * to follow the traditional.  However, to make the POSIX
+ * wait W*() macros to work in BeOS, we need to unbend the
+ * reality back in place. --jhi */
+#ifdef __BEOS__
+#    define WMUNGE(x) (((x) & 0xFF00) >> 8 | ((x) & 0x00FF) << 8)
+#else
+#    define WMUNGE(x) (x)
+#endif
+
 static int
 not_here(char *s)
 {
@@ -352,7 +372,7 @@ not_here(char *s)
     return -1;
 }
 
-#include "constants.c"
+#include "const-c.inc"
 
 /* These were implemented in the old "constant" subroutine. They are actually
    macros that take an integer argument and return an integer result.  */
@@ -437,7 +457,7 @@ __END__
       if (memEQ(name, "WSTOPSIG", 8)) {
       /*                  ^          */
 #ifdef WSTOPSIG
-        *arg_result = WSTOPSIG(*arg_result);
+        *arg_result = WSTOPSIG(WMUNGE(*arg_result));
         return PERL_constant_ISIV;
 #else
         return PERL_constant_NOTDEF;
@@ -448,7 +468,7 @@ __END__
       if (memEQ(name, "WTERMSIG", 8)) {
       /*                  ^          */
 #ifdef WTERMSIG
-        *arg_result = WTERMSIG(*arg_result);
+        *arg_result = WTERMSIG(WMUNGE(*arg_result));
         return PERL_constant_ISIV;
 #else
         return PERL_constant_NOTDEF;
@@ -471,7 +491,7 @@ __END__
   case 9:
     if (memEQ(name, "WIFEXITED", 9)) {
 #ifdef WIFEXITED
-      *arg_result = WIFEXITED(*arg_result);
+      *arg_result = WIFEXITED(WMUNGE(*arg_result));
       return PERL_constant_ISIV;
 #else
       return PERL_constant_NOTDEF;
@@ -481,7 +501,7 @@ __END__
   case 10:
     if (memEQ(name, "WIFSTOPPED", 10)) {
 #ifdef WIFSTOPPED
-      *arg_result = WIFSTOPPED(*arg_result);
+      *arg_result = WIFSTOPPED(WMUNGE(*arg_result));
       return PERL_constant_ISIV;
 #else
       return PERL_constant_NOTDEF;
@@ -497,7 +517,7 @@ __END__
       if (memEQ(name, "WEXITSTATUS", 11)) {
       /*                ^                */
 #ifdef WEXITSTATUS
-        *arg_result = WEXITSTATUS(*arg_result);
+        *arg_result = WEXITSTATUS(WMUNGE(*arg_result));
         return PERL_constant_ISIV;
 #else
         return PERL_constant_NOTDEF;
@@ -508,7 +528,7 @@ __END__
       if (memEQ(name, "WIFSIGNALED", 11)) {
       /*                ^                */
 #ifdef WIFSIGNALED
-        *arg_result = WIFSIGNALED(*arg_result);
+        *arg_result = WIFSIGNALED(WMUNGE(*arg_result));
         return PERL_constant_ISIV;
 #else
         return PERL_constant_NOTDEF;
@@ -772,7 +792,7 @@ setcc(termios_ref, ccix, cc)
 
 MODULE = POSIX		PACKAGE = POSIX
 
-INCLUDE: constants.xs
+INCLUDE: const-xs.inc
 
 void
 int_macro_int(sv, iv)

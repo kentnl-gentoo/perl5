@@ -16,7 +16,7 @@ BEGIN {
 
 use strict;
 
-print "1..125\n";
+print "1..140\n";
 
 my $i = 1;
 
@@ -505,4 +505,70 @@ print "ok ", $i++, "\n";
 
 # recv takes a scalar reference for its second argument
 print "not " unless prototype "CORE::recv" eq '*\\$$$';
+print "ok ", $i++, "\n";
+
+{
+    my $myvar;
+    my @myarray;
+    my %myhash;
+    sub mysub { print "not calling mysub I hope\n" }
+    local *myglob;
+
+    sub myref (\[$@%&*]) { print "# $_[0]\n"; return "$_[0]" }
+
+    print "not " unless myref($myvar)   =~ /^SCALAR\(/;
+    print "ok ", $i++, "\n";
+    print "not " unless myref(@myarray) =~ /^ARRAY\(/;
+    print "ok ", $i++, "\n";
+    print "not " unless myref(%myhash)  =~ /^HASH\(/;
+    print "ok ", $i++, "\n";
+    print "not " unless myref(&mysub)   =~ /^CODE\(/;
+    print "ok ", $i++, "\n";
+    print "not " unless myref(*myglob)  =~ /^GLOB\(/;
+    print "ok ", $i++, "\n";
+
+    eval q/sub multi1 (\[%@]) { 1 } multi1 $myvar;/;
+    print "not " unless $@ =~ /Type of arg 1 to main::multi1 must be one of/;
+    print "ok ", $i++, "\n";
+    eval q/sub multi2 (\[$*&]) { 1 } multi2 @myarray;/;
+    print "not " unless $@ =~ /Type of arg 1 to main::multi2 must be one of/;
+    print "ok ", $i++, "\n";
+    eval q/sub multi3 (\[$@]) { 1 } multi3 %myhash;/;
+    print "not " unless $@ =~ /Type of arg 1 to main::multi3 must be one of/;
+    print "ok ", $i++, "\n";
+    eval q/sub multi4 ($\[%]) { 1 } multi4 1, &mysub;/;
+    print "not " unless $@ =~ /Type of arg 2 to main::multi4 must be one of/;
+    print "ok ", $i++, "\n";
+    eval q/sub multi5 (\[$@]$) { 1 } multi5 *myglob;/;
+    print "not " unless $@ =~ /Type of arg 1 to main::multi5 must be one of/
+		     && $@ =~ /Not enough arguments/;
+    print "ok ", $i++, "\n";
+}
+
+# check that obviously bad prototypes are getting warnings
+{
+  use warnings 'syntax';
+  my $warn = "";
+  local $SIG{__WARN__} = sub { $warn .= join("",@_) };
+  
+  eval 'sub badproto (@bar) { 1; }';
+  print "not " unless $warn =~ /Illegal character in prototype for main::badproto : \@bar/;
+  print "ok ", $i++, "\n";
+
+  eval 'sub badproto2 (bar) { 1; }';
+  print "not " unless $warn =~ /Illegal character in prototype for main::badproto2 : bar/;
+  print "ok ", $i++, "\n";
+  
+  eval 'sub badproto3 (&$bar$@) { 1; }';
+  print "not " unless $warn =~ /Illegal character in prototype for main::badproto3 : &\$bar\$\@/;
+  print "ok ", $i++, "\n";
+  
+  eval 'sub badproto4 (@ $b ar) { 1; }';
+  print "not " unless $warn =~ /Illegal character in prototype for main::badproto4 : \@\$bar/;
+  print "ok ", $i++, "\n";
+}
+
+# make sure whitespace in prototypes works
+eval "sub good (\$\t\$\n\$) { 1; }";
+print "not " if $@;
 print "ok ", $i++, "\n";

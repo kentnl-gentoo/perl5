@@ -4,6 +4,8 @@
  * modify it under the same terms as Perl itself.
  */
 
+#define PERL_EXT_IO
+
 #define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #define PERLIO_NOT_STDIO 1
@@ -24,6 +26,13 @@
 #endif
 
 #ifdef PerlIO
+#ifdef MACOS_TRADITIONAL
+#define PERLIO_IS_STDIO 1
+#undef setbuf
+#undef setvbuf
+#define setvbuf		_stdsetvbuf
+#define setbuf(f,b)	( __sf_setbuf(f,b) )
+#endif
 typedef int SysRet;
 typedef PerlIO * InputStream;
 typedef PerlIO * OutputStream;
@@ -53,7 +62,7 @@ not_here(char *s)
 #endif
 
 static int
-io_blocking(InputStream f, int block)
+io_blocking(pTHX_ InputStream f, int block)
 {
     int RETVAL;
     if(!f) {
@@ -259,7 +268,7 @@ io_blocking(handle,blk=-1)
 PROTOTYPE: $;$
 CODE:
 {
-    int ret = io_blocking(handle, items == 1 ? -1 : blk ? 1 : 0);
+    int ret = io_blocking(aTHX_ handle, items == 1 ? -1 : blk ? 1 : 0);
     if(ret >= 0)
 	XSRETURN_IV(ret);
     else
@@ -444,11 +453,11 @@ sockatmark (sock)
      {
        int flag = 0;
 #   ifdef SIOCATMARK
-	#ifdef NETWARE
+#     if defined(NETWARE) || defined(WIN32)
        if (ioctl(fd, SIOCATMARK, (void*)&flag) != 0)
-	#else
-	   if (ioctl(fd, SIOCATMARK, &flag) != 0)
-	#endif
+#     else
+       if (ioctl(fd, SIOCATMARK, &flag) != 0)
+#     endif
 	 XSRETURN_UNDEF;
 #   else
        not_here("IO::Socket::atmark");

@@ -74,7 +74,10 @@ proceeding.
 
 If you're building Perl on a non-Unix system, you should also read
 the README file specific to your operating system, since this may
-provide additional or different instructions for building Perl.
+provide additional or different instructions for building Perl. There
+are also README files for several flavors of Unix systems, such as
+Solaris, HP-UX, and AIX; if you have one of those systems, you should
+also read the README file specific to that system.
 
 If there is a hint file for your system (in the hints/ directory) you
 should also read that hint file for specific information for your
@@ -183,10 +186,10 @@ does not work with some C++ compilers.
 
 =head1 Space Requirements
 
-The complete perl5 source tree takes up about 35 MB of disk space.
-After completing make, it takes up roughly 50 MB, though the actual
+The complete perl5 source tree takes up about 40 MB of disk space.
+After completing make, it takes up roughly 60 MB, though the actual
 total is likely to be quite system-dependent.  The installation
-directories need something on the order of 30 MB, though again that
+directories need something on the order of 35 MB, though again that
 value is system-dependent.
 
 =head1 Start with a Fresh Distribution
@@ -1048,16 +1051,16 @@ versions of perl under L<Building a shared libperl.so Perl library>.
 
 =head2 Extensions
 
+Perl ships with a number of standard extensions.  These are contained
+in the ext/ subdirectory.
+
 By default, Configure will offer to build every extension which appears
 to be supported.  For example, Configure will offer to build GDBM_File
 only if it is able to find the gdbm library.  (See examples below.)
-B, DynaLoader, Fcntl, IO, and attrs are always built by default.
 Configure does not contain code to test for POSIX compliance, so POSIX
 is always built by default as well.  If you wish to skip POSIX, you can
 set the Configure variable useposix=false either in a hint file or from
-the Configure command line.  Similarly, the Opcode extension is always
-built by default, but you can skip it by setting the Configure variable
-useopcode=false either in a hint file for from the command line.
+the Configure command line.
 
 If you unpack any additional extensions in the ext/ directory before
 running Configure, then Configure will offer to build those additional
@@ -1078,22 +1081,17 @@ DynaLoader extension; you should just build the stub dl_none.xs
 version.  (Configure will suggest this as the default.)
 
 In summary, here are the Configure command-line variables you can set
-to turn off each extension:
+to turn off various extensions.  All others are included by default.
 
-    B			(Always included by default)
     DB_File		i_db
     DynaLoader		(Must always be included as a static extension)
-    Fcntl		(Always included by default)
     GDBM_File		i_gdbm
-    IO			(Always included by default)
     NDBM_File		i_ndbm
     ODBM_File		i_dbm
     POSIX		useposix
-    SDBM_File		(Always included by default)
     Opcode		useopcode
     Socket		d_socket
     Threads		use5005threads
-    attrs		(Always included by default)
 
 Thus to skip the NDBM_File extension, you can use
 
@@ -1115,7 +1113,7 @@ adding libgdbm) Configure will still offer your old choices of extensions
 for the default answer, but it will also point out the discrepancy to
 you.
 
-Finally, if you have dynamic loading (most modern Unix systems do)
+Finally, if you have dynamic loading (most modern systems do)
 remember that these extensions do not increase the size of your perl
 executable, nor do they impact start-up time, so you probably might as
 well build all the ones that will work on your system.
@@ -1317,12 +1315,18 @@ You will then have to rebuild by running
 	make depend
 	make
 
-=item config.over
+=item config.over and config.arch
 
-You can also supply a shell script config.over to over-ride Configure's
-guesses.  It will get loaded up at the very end, just before config.sh
-is created.  You have to be careful with this, however, as Configure
-does no checking that your changes make sense.
+You can also supply a shell script config.over to over-ride
+Configure's guesses.  It will get loaded up at the very end, just
+before config.sh is created.  You have to be careful with this,
+however, as Configure does no checking that your changes make sense.
+This file is usually good for site-specific customizations.
+
+There is also another file that, if it exists, is loaded before the
+config.over, called config.arch.  This file is intended to be per
+architecture, not per site, and usually it's the architecture-specific
+hints file that creates the config.arch.
 
 =item config.h
 
@@ -1404,7 +1408,7 @@ including a glossary of all those config.sh variables, is in the Porting
 subdirectory.  Especially Porting/Glossary should come in handy.
 
 Ports for other systems may also be available.  You should check out
-http://www.perl.com/CPAN/ports for current information on ports to
+http://www.cpan.org/ports for current information on ports to
 various other operating systems.
 
 If you plan to port Perl to a new architecture study carefully the
@@ -1413,6 +1417,30 @@ in the file Porting/pumpkin.pod and the file Porting/patching.pod.
 Study also how other non-UNIX ports have solved problems.
 
 =back
+
+=head1 Adding extra modules to the build
+
+You can specify extra modules or module bundles to be fetched from the
+CPAN and installed as part of the Perl build.  Either use the -Dextras=...
+command line parameter to Configure, for example like this:
+
+	Configure -Dextras="Compress::Zlib Bundle::LWP DBI"
+
+or answer first 'y' to the question 'Install any extra modules?' and
+then answer "Compress::Zlib Bundle::LWP DBI" to the 'Extras?' question.
+The module or the bundle names are as for the CPAN module 'install' command.
+
+Notice that because the CPAN module will be used to fetch the extra
+modules, you will need access to the CPAN, either via the Internet,
+or via a local copy such as a CD-ROM or a local CPAN mirror.  If you
+do not, using the extra modules option will die horribly.
+
+Also notice that you yourself are responsible for satisfying any extra
+dependencies such as external headers or libraries BEFORE trying the build.
+For example: you will need to have the zlib.h header and the libz
+library installed for the Compress::Zlib, or the Foo database specific
+headers and libraries installed for the DBD::Foo module.  The Configure
+process or the Perl build process will not help you with these.
 
 =head1 suidperl
 
@@ -1742,7 +1770,7 @@ break utime() so that over NFS the timestamps do not get changed
 Starting from Perl 5.8 Perl has the beginnings of cross-compilation
 support.  What is known to work is running Configure in a
 cross-compilation environment and building the miniperl executable.
-What is known not work work is building the perl executable because
+What is known not to work is building the perl executable because
 that would require building extensions: Dynaloader statically and
 File::Glob dynamically, for extensions one needs MakeMaker and
 MakeMaker is not yet cross-compilation aware, and neither is
@@ -1896,6 +1924,15 @@ shown above and see whether you can locate the program.  Look for
 things like:  exec, `backquoted command`, system, open("|...") or
 open("...|").  All these mean that Perl is trying to run some
 external program.
+
+=item Timing problems
+
+Several tests in the test suite check timing functions, such as
+sleep(), and see if they return in a reasonable amount of time.
+If your system is quite busy and doesn't return quickly enough,
+these tests might fail.  If possible, try running the tests again with
+the system under a lighter load.  These tests include F<t/op/alarm.t>,
+F<ext/Time/HiRes/HiRes.t>, and F<lib/Benchmark.t>.
 
 =item Out of memory
 
@@ -2245,6 +2282,132 @@ available in TeX format.  Type
 
 	(cd pod && make tex && <process the latex files>)
 
+=head1 Minimizing the Perl installation
+
+The following section is meant for people worrying about squeezing the
+Perl installation into minimal systems (for example when installing
+operating systems, or in really small filesystems).
+
+In the following we offer two different slimmed down installation
+recipes.  They are informative, not normative: the choice of files
+depends on what you need.
+
+Firstly, the bare minimum to run this script
+
+  use strict;
+  use warnings;
+  foreach my $f (</*>) {
+     print("$f\n");
+  }
+
+in Solaris is as follows (under $Config{prefix}):
+
+  ./bin/perl
+  ./lib/perl5/5.6.1/sun4-solaris-64int/auto/DynaLoader/autosplit.ix
+  ./lib/perl5/5.6.1/sun4-solaris-64int/auto/DynaLoader/dl_expandspec.al
+  ./lib/perl5/5.6.1/sun4-solaris-64int/auto/DynaLoader/dl_find_symbol_anywhere.al
+  ./lib/perl5/5.6.1/sun4-solaris-64int/auto/DynaLoader/dl_findfile.al
+  ./lib/perl5/5.6.1/sun4-solaris-64int/auto/File/Glob/Glob.so
+  ./lib/perl5/5.6.1/sun4-solaris-64int/auto/File/Glob/autosplit.ix
+  ./lib/perl5/5.6.1/sun4-solaris-64int/Config.pm
+  ./lib/perl5/5.6.1/sun4-solaris-64int/XSLoader.pm
+  ./lib/perl5/5.6.1/sun4-solaris-64int/DynaLoader.pm
+  ./lib/perl5/5.6.1/sun4-solaris-64int/CORE/libperl.so
+  ./lib/perl5/5.6.1/strict.pm
+  ./lib/perl5/5.6.1/warnings.pm
+  ./lib/perl5/5.6.1/Carp.pm
+  ./lib/perl5/5.6.1/Exporter.pm
+  ./lib/perl5/5.6.1/File/Glob.pm
+  ./lib/perl5/5.6.1/AutoLoader.pm
+  ./lib/perl5/5.6.1/vars.pm
+  ./lib/perl5/5.6.1/warnings/register.pm
+  ./lib/perl5/5.6.1/Carp/Heavy.pm
+  ./lib/perl5/5.6.1/Exporter/Heavy.pm
+
+Secondly, Debian perl-base package contains the following files,
+size about 1.2MB in its i386 version:
+
+  /usr/share/doc/perl/Documentation
+  /usr/share/doc/perl/README.Debian
+  /usr/share/doc/perl/copyright
+  /usr/share/doc/perl/AUTHORS.gz
+  /usr/share/doc/perl/changelog.Debian.gz
+  /usr/share/man/man1/perl.1.gz
+  /usr/share/perl/5.6.1/AutoLoader.pm
+  /usr/share/perl/5.6.1/Carp.pm
+  /usr/share/perl/5.6.1/Carp/Heavy.pm
+  /usr/share/perl/5.6.1/Cwd.pm
+  /usr/share/perl/5.6.1/Exporter.pm
+  /usr/share/perl/5.6.1/Exporter/Heavy.pm
+  /usr/share/perl/5.6.1/File/Spec.pm
+  /usr/share/perl/5.6.1/File/Spec/Unix.pm
+  /usr/share/perl/5.6.1/FileHandle.pm
+  /usr/share/perl/5.6.1/Getopt/Long.pm
+  /usr/share/perl/5.6.1/IO/Socket/INET.pm
+  /usr/share/perl/5.6.1/IO/Socket/UNIX.pm
+  /usr/share/perl/5.6.1/IPC/Open2.pm
+  /usr/share/perl/5.6.1/IPC/Open3.pm
+  /usr/share/perl/5.6.1/SelectSaver.pm
+  /usr/share/perl/5.6.1/Symbol.pm
+  /usr/share/perl/5.6.1/Text/Tabs.pm
+  /usr/share/perl/5.6.1/Text/Wrap.pm
+  /usr/share/perl/5.6.1/attributes.pm
+  /usr/share/perl/5.6.1/auto/Getopt/Long/GetOptions.al
+  /usr/share/perl/5.6.1/auto/Getopt/Long/FindOption.al
+  /usr/share/perl/5.6.1/auto/Getopt/Long/Configure.al
+  /usr/share/perl/5.6.1/auto/Getopt/Long/config.al
+  /usr/share/perl/5.6.1/auto/Getopt/Long/Croak.al
+  /usr/share/perl/5.6.1/auto/Getopt/Long/autosplit.ix
+  /usr/share/perl/5.6.1/base.pm
+  /usr/share/perl/5.6.1/constant.pm
+  /usr/share/perl/5.6.1/fields.pm
+  /usr/share/perl/5.6.1/integer.pm
+  /usr/share/perl/5.6.1/lib.pm
+  /usr/share/perl/5.6.1/locale.pm
+  /usr/share/perl/5.6.1/overload.pm
+  /usr/share/perl/5.6.1/strict.pm
+  /usr/share/perl/5.6.1/vars.pm
+  /usr/share/perl/5.6.1/warnings.pm
+  /usr/share/perl/5.6.1/warnings/register.pm
+  /usr/bin/perl
+  /usr/lib/perl/5.6.1/Config.pm
+  /usr/lib/perl/5.6.1/Data/Dumper.pm
+  /usr/lib/perl/5.6.1/DynaLoader.pm
+  /usr/lib/perl/5.6.1/Errno.pm
+  /usr/lib/perl/5.6.1/Fcntl.pm
+  /usr/lib/perl/5.6.1/File/Glob.pm
+  /usr/lib/perl/5.6.1/IO.pm
+  /usr/lib/perl/5.6.1/IO/File.pm
+  /usr/lib/perl/5.6.1/IO/Handle.pm
+  /usr/lib/perl/5.6.1/IO/Pipe.pm
+  /usr/lib/perl/5.6.1/IO/Seekable.pm
+  /usr/lib/perl/5.6.1/IO/Select.pm
+  /usr/lib/perl/5.6.1/IO/Socket.pm
+  /usr/lib/perl/5.6.1/POSIX.pm
+  /usr/lib/perl/5.6.1/Socket.pm
+  /usr/lib/perl/5.6.1/XSLoader.pm
+  /usr/lib/perl/5.6.1/auto/Data/Dumper/Dumper.so
+  /usr/lib/perl/5.6.1/auto/Data/Dumper/Dumper.bs
+  /usr/lib/perl/5.6.1/auto/DynaLoader/dl_findfile.al
+  /usr/lib/perl/5.6.1/auto/DynaLoader/dl_expandspec.al
+  /usr/lib/perl/5.6.1/auto/DynaLoader/dl_find_symbol_anywhere.al
+  /usr/lib/perl/5.6.1/auto/DynaLoader/autosplit.ix
+  /usr/lib/perl/5.6.1/auto/DynaLoader/DynaLoader.a
+  /usr/lib/perl/5.6.1/auto/DynaLoader/extralibs.ld
+  /usr/lib/perl/5.6.1/auto/Fcntl/Fcntl.so
+  /usr/lib/perl/5.6.1/auto/Fcntl/Fcntl.bs
+  /usr/lib/perl/5.6.1/auto/File/Glob/Glob.bs
+  /usr/lib/perl/5.6.1/auto/File/Glob/Glob.so
+  /usr/lib/perl/5.6.1/auto/File/Glob/autosplit.ix
+  /usr/lib/perl/5.6.1/auto/IO/IO.so
+  /usr/lib/perl/5.6.1/auto/IO/IO.bs
+  /usr/lib/perl/5.6.1/auto/POSIX/POSIX.bs
+  /usr/lib/perl/5.6.1/auto/POSIX/POSIX.so
+  /usr/lib/perl/5.6.1/auto/POSIX/autosplit.ix
+  /usr/lib/perl/5.6.1/auto/POSIX/load_imports.al
+  /usr/lib/perl/5.6.1/auto/Socket/Socket.so
+  /usr/lib/perl/5.6.1/auto/Socket/Socket.bs
+
 =head1 Reporting Problems
 
 If you have difficulty building perl, and none of the advice in this file
@@ -2309,4 +2472,3 @@ the same terms as perl itself, with the following additional request:
 If you are distributing a modified version of perl (perhaps as part of
 a larger package) please B<do> modify these installation instructions
 and the contact information to match your distribution.
-

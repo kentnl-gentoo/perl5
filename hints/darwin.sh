@@ -9,23 +9,32 @@
 
 # BSD paths
 case "$prefix" in
-'')	
+'')
+	# Default install; use non-system directories
 	prefix='/usr/local'; # Built-in perl uses /usr
 	siteprefix='/usr/local';
 	vendorprefix='/usr/local'; usevendorprefix='define';
 
-	# 4BSD uses ${prefix}/share/man, not ${prefix}/man.
-	# Don't put man pages in ${prefix}/lib; that's goofy.
-	man1dir="${prefix}/share/man/man1";
-	man3dir="${prefix}/share/man/man3";
+	# Where to put modules.
+	privlib='/Library/Perl'; # Built-in perl uses /System/Library/Perl
+	sitelib='/Library/Perl';
+	vendorlib='/Network/Library/Perl';
+	;;
+'/usr')
+	# We are building/replacing the built-in perl
+	siteprefix='/usr/local';
+	vendorprefix='/usr/local'; usevendorprefix='define';
 
 	# Where to put modules.
-	# Built-in perl uses /System/Library/Perl
-	privlib='/Library/Perl';
+	privlib='/System/Library/Perl';
 	sitelib='/Library/Perl';
 	vendorlib='/Network/Library/Perl';
 	;;
 esac
+
+# 4BSD uses ${prefix}/share/man, not ${prefix}/man.
+man1dir="${prefix}/share/man/man1";
+man3dir="${prefix}/share/man/man3";
 
 ##
 # Tool chain settings
@@ -37,14 +46,18 @@ archname='darwin';
 # nm works.
 usenm='true';
 
-# Libc is in libsystem.
-#libc='/usr/lib/libSystem.dylib';
-
 # Optimize.
-optimize='-O3';
+if [ "x$optimize" = 'x' ]; then
+    optimize='-O3'
+fi
 
-# We have a prototype for telldir.
-ccflags="${ccflags} -pipe -fno-common -DHAS_TELLDIR_PROTOTYPE";
+# -pipe: makes compilation go faster.
+# -fno-common: we don't like commons.  Common symbols are not allowed
+# in MH_DYLIB binaries, which is what libperl.dylib is.  You will fail
+# to link without that option, unless you otherwise eliminate all commons
+# by, for example, initializing all globals.
+# --Fred Sánchez
+ccflags="${ccflags} -pipe -fno-common"
 
 # At least on Darwin 1.3.x:
 #
@@ -65,8 +78,12 @@ ccflags="${ccflags} -pipe -fno-common -DHAS_TELLDIR_PROTOTYPE";
 #
 ccflags="${ccflags} -DINT32_MIN_BROKEN -DINT64_MIN_BROKEN"
 
-# cpp-precomp is problematic.
-cppflags='-traditional-cpp';
+# cppflags='-traditional-cpp';
+# avoid Apple's cpp precompiler, better for extensions
+cppflags="${cppflags} -no-cpp-precomp"
+# and ccflags needs them aswell since we don't use cpp directly
+ccflags="${ccflags} -no-cpp-precomp"
+
 
 # Shared library extension is .dylib.
 # Bundle extension is .bundle.
@@ -75,6 +92,13 @@ so='dylib';
 dlext='bundle';
 dlsrc='dl_dyld.xs'; usedl='define';
 cccdlflags=' '; # space, not empty, because otherwise we get -fpic
+# ldflag: -flat_namespace is only available since OS X 10.1 (Darwin 1.4.1)
+#    - but not in 10.0.x (Darwin 1.3.x)
+# -- Kay Roepke
+case "$osvers" in
+1.[0-3].*)	;;
+*)		ldflags="${ldflags} -flat_namespace" ;;
+esac
 lddlflags="${ldflags} -bundle -undefined suppress";
 ldlibpthname='DYLD_LIBRARY_PATH';
 useshrplib='true';
@@ -95,8 +119,30 @@ usemymalloc='n';
 
 # Locales aren't feeling well.
 LC_ALL=C; export LC_ALL;
+LANG=C; export LANG;
 
 # Case-insensitive filesystems don't get along with Makefile and
 # makefile in the same place.  Since Darwin uses GNU make, this dodges
 # the problem.
 firstmakefile=GNUmakefile;
+
+#
+# The libraries are not threadsafe as of OS X 10.1.
+# Better stop now.
+#
+# Fix when Apple fixes libc.
+#
+case "$usethreads$useithreads$use5005threads" in
+*define*)
+cat <<EOM >&4
+
+*** Warning, there might be problems with your libraries with
+*** regards to threading.
+
+EOM
+#*** You do not have threadsafe libraries, I cannot use threads.
+#*** Cannot continue, aborting.
+#EOM
+#	exit 1
+	;;
+esac

@@ -1,6 +1,6 @@
 /*    perly.y
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -41,7 +41,7 @@ struct ysv {
     YYSTYPE oldyylval;
 };
 
-static void yydestruct(pTHXo_ void *ptr);
+static void yydestruct(pTHX_ void *ptr);
 
 %}
 

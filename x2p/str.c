@@ -1,6 +1,6 @@
 /* $RCSfile: str.c,v $$Revision: 4.1 $$Date: 92/08/07 18:29:26 $
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -282,7 +282,7 @@ str_gets(register STR *str, register FILE *fp)
     if (str->str_len <= cnt)		/* make sure we have the room */
 	GROWSTR(&(str->str_ptr), &(str->str_len), cnt+1);
     bp = str->str_ptr;			/* move these two too to registers */
-    ptr = FILE_ptr(fp);
+    ptr = (STDCHAR*)FILE_ptr(fp);
     for (;;) {
 	while (--cnt >= 0) {
 	    if ((*bp++ = *ptr++) == newline) {
@@ -296,7 +296,7 @@ str_gets(register STR *str, register FILE *fp)
 	}
 	
 	FILE_cnt(fp) = cnt;		/* deregisterize cnt and ptr */
-	FILE_ptr(fp) = ptr;
+	FILE_ptr(fp) = (void*)ptr; /* LHS STDCHAR* cast non-portable */
 	i = getc(fp);		/* get more characters */
 	cnt = FILE_cnt(fp);
 	ptr = FILE_ptr(fp);		/* reregisterize cnt and ptr */
@@ -316,7 +316,7 @@ str_gets(register STR *str, register FILE *fp)
 
 thats_all_folks:
     FILE_cnt(fp) = cnt;			/* put these back or we're in trouble */
-    FILE_ptr(fp) = ptr;
+    FILE_ptr(fp) = (STDCHAR*)ptr;
     *bp = '\0';
     str->str_cur = bp - str->str_ptr;	/* set length */
 

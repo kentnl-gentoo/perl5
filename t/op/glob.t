@@ -5,13 +5,17 @@ BEGIN {
     @INC = '../lib';
 }
 
-print "1..10\n";
+print "1..9\n";
 
 @oops = @ops = <op/*>;
 
 if ($^O eq 'MSWin32') {
   map { $files{lc($_)}++ } <op/*>;
-  map { delete $files{"op/$_"} } split /[\s\n]/, `cmd /c "dir /b /l op & dir /b /l /ah op 2>nul"`,
+  map { delete $files{"op/$_"} } split /[\s\n]/, `dir /b /l op & dir /b /l /ah op 2>nul`,
+}
+elsif ($^O eq 'VMS') {
+  map { $files{lc($_)}++ } <[.op]*>;
+  map { s/;.*$//; delete $files{lc($_)}; } split /[\n]/, `directory/noheading/notrailing/versions=1 [.op]`,
 }
 else {
   map { $files{$_}++ } <op/*>;
@@ -49,10 +53,21 @@ for (1..2) {
 }
 print $i == 2 ? "ok 7\n" : "not ok 7\n";
 
-# [ID 20010526.001] localized glob loses value when assigned to
+# ... while ($var = glob(...)) should test definedness not truth
 
-$j=1; %j=(a=>1); @j=(1); local *j=*j; *j = sub{};
+if( $INC{'File/Glob.pm'} ) {
+    my $ok = "not ok 8\n";
+    $ok = "ok 8\n" while my $var = glob("0");
+    print $ok;
+}
+else {
+    print "ok 8 # skip: File::Glob emulated Unixism\n";
+}
 
-print $j    == 1 ? "ok 8\n"  : "not ok 8\n";
-print $j{a} == 1 ? "ok 9\n"  : "not ok 9\n";
-print $j[0] == 1 ? "ok 10\n" : "not ok 10\n";
+
+# The formerly-broken test for the situation above would accidentally
+# test definedness for an assignment with a LOGOP on the right:
+my $f=0;
+$ok="ok 9\n";
+$ok="not ok 9\n", undef $f while $x = $f||$f;
+print $ok

@@ -1,5 +1,5 @@
 
-# Time-stamp: "2001-06-21 22:50:34 MDT"
+# Time-stamp: "2002-02-02 20:43:03 MST"
 # Sean M. Burke <sburke@cpan.org>
 
 require 5.000;
@@ -17,7 +17,7 @@ require Exporter;
                );
 %EXPORT_TAGS = ('ALL' => \@EXPORT_OK);
 
-$VERSION = "0.26";
+$VERSION = "0.27";
 
 =head1 NAME
 

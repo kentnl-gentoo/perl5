@@ -1,11 +1,20 @@
 /*    utf8.h
  *
- *    Copyright (c) 1998-2001, Larry Wall
+ *    Copyright (c) 1998-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
  *
  */
+
+/* Use UTF-8 as the default script encoding?
+ * Turning this on will break scripts having non-UTF8 binary
+ * data (such as Latin-1) in string literals. */
+#ifdef USE_UTF8_SCRIPTS
+#    define USE_UTF8_IN_NAMES (!IN_BYTES)
+#else
+#    define USE_UTF8_IN_NAMES (PL_hints & HINT_UTF8)
+#endif
 
 #ifdef EBCDIC
 /* The equivalent of these macros but implementing UTF-EBCDIC
@@ -54,19 +63,42 @@ END_EXTERN_C
 
 /*
 
- The following table is from Unicode 3.1.
+ The following table is from Unicode 3.2.
 
  Code Points		1st Byte  2nd Byte  3rd Byte  4th Byte
 
    U+0000..U+007F	00..7F   
    U+0080..U+07FF	C2..DF    80..BF   
    U+0800..U+0FFF	E0        A0..BF    80..BF  
-   U+1000..U+FFFF	E1..EF    80..BF    80..BF  
+   U+1000..U+CFFF       E1..EC    80..BF    80..BF  
+   U+D000..U+D7FF       ED        80..9F    80..BF  
+   U+D800..U+DFFF       ******* ill-formed *******
+   U+E000..U+FFFF       EE..EF    80..BF    80..BF  
   U+10000..U+3FFFF	F0        90..BF    80..BF    80..BF
   U+40000..U+FFFFF	F1..F3    80..BF    80..BF    80..BF
  U+100000..U+10FFFF	F4        80..8F    80..BF    80..BF
 
+Note the A0..BF in U+0800..U+0FFF, the 80..9F in U+D000...U+D7FF,
+the 90..BF in U+10000..U+3FFFF, and the 80...8F in U+100000..U+10FFFF.
+
  */
+
+/*
+ Another way to look at it, as bits:
+
+ Code Points                    1st Byte   2nd Byte  3rd Byte  4th Byte
+
+                    0aaaaaaa     0aaaaaaa
+            00000bbbbbaaaaaa     110bbbbb  10aaaaaa
+            ccccbbbbbbaaaaaa     1110cccc  10bbbbbb  10aaaaaa
+  00000dddccccccbbbbbbaaaaaa     11110ddd  10cccccc  10bbbbbb  10aaaaaa
+
+As you can see, the continuation bytes all begin with C<10>, and the
+leading bits of the start byte tell how many bytes the are in the
+encoded character.
+
+*/
+
 
 #define UNI_IS_INVARIANT(c)		(((UV)c) <  0x80)
 #define UTF8_IS_INVARIANT(c)		UNI_IS_INVARIANT(NATIVE_TO_UTF(c))
@@ -126,9 +158,15 @@ END_EXTERN_C
 #define isIDFIRST_lazy(p)	isIDFIRST_lazy_if(p,1)
 #define isALNUM_lazy(p)		isALNUM_lazy_if(p,1)
 
-#define UTF8_MAXLEN 13 /* how wide can a single UTF8 encoded character become */
+/* how wide can a single UTF8 encoded character become */
+#define UTF8_MAXLEN 13
+/* how wide a character can become when upper/lowercased */
+#define UTF8_MAXLEN_UCLC_MULT 3
+#define UTF8_MAXLEN_UCLC (UTF8_MAXLEN*UTF8_MAXLEN_UCLC_MULT)
+/* how wide a character can become when casefolded */
+#define UTF8_MAXLEN_FOLD_MULT 3
+#define UTF8_MAXLEN_FOLD (UTF8_MAXLEN*UTF8_MAXLEN_FOLD_MULT)
 
-/* #define IN_UTF8 (PL_curcop->op_private & HINT_UTF8) */
 #define IN_BYTES (PL_curcop->op_private & HINT_BYTES)
 #define DO_UTF8(sv) (SvUTF8(sv) && !IN_BYTES)
 
@@ -145,13 +183,24 @@ END_EXTERN_C
 					 UTF8_ALLOW_SURROGATE|UTF8_ALLOW_BOM|\
 					 UTF8_ALLOW_FFFF|UTF8_ALLOW_LONG)
 #define UTF8_ALLOW_ANY			0x00ff
-#define UTF8_CHECK_ONLY			0x0100
+#define UTF8_CHECK_ONLY			0x0200
 
 #define UNICODE_SURROGATE_FIRST		0xd800
 #define UNICODE_SURROGATE_LAST		0xdfff
 #define UNICODE_REPLACEMENT		0xfffd
 #define UNICODE_BYTER_ORDER_MARK	0xfffe
 #define UNICODE_ILLEGAL			0xffff
+
+/* Though our UTF-8 encoding can go beyond this,
+ * let's be conservative. */
+#define PERL_UNICODE_MAX	0x10FFFF
+
+#define UNICODE_ALLOW_SURROGATE 0x0001	/* Allow UTF-16 surrogates (EVIL) */
+#define UNICODE_ALLOW_FDD0	0x0002	/* Allow the U+FDD0...U+FDEF */
+#define UNICODE_ALLOW_FFFE	0x0004	/* Allow 0xFFFE, 0x1FFFE, ... */
+#define UNICODE_ALLOW_FFFF	0x0008	/* Allow 0xFFFE, 0x1FFFE, ... */
+#define UNICODE_ALLOW_SUPER	0x0010	/* Allow past 10xFFFF */
+#define UNICODE_ALLOW_ANY	0xFFFF
 
 #define UNICODE_IS_SURROGATE(c)		((c) >= UNICODE_SURROGATE_FIRST && \
 					 (c) <= UNICODE_SURROGATE_LAST)
@@ -164,3 +213,34 @@ END_EXTERN_C
 #endif
 
 #define UTF8_IS_ASCII(c) UTF8_IS_INVARIANT(c)
+
+#define UNICODE_LATIN_SMALL_LETTER_SHARP_S	0x00DF
+#define UNICODE_GREEK_CAPITAL_LETTER_SIGMA	0x03A3
+#define UNICODE_GREEK_SMALL_LETTER_FINAL_SIGMA	0x03C2
+#define UNICODE_GREEK_SMALL_LETTER_SIGMA	0x03C3
+
+#define EBCDIC_LATIN_SMALL_LETTER_SHARP_S	0x0059
+
+#define UNI_DISPLAY_ISPRINT	0x0001
+#define UNI_DISPLAY_BACKSLASH	0x0002
+#define UNI_DISPLAY_QQ		(UNI_DISPLAY_ISPRINT|UNI_DISPLAY_BACKSLASH)
+#define UNI_DISPLAY_REGEX	(UNI_DISPLAY_ISPRINT|UNI_DISPLAY_BACKSLASH)
+
+#ifdef EBCDIC
+#   define ANYOF_FOLD_SHARP_S(node, input, end)	\
+	(ANYOF_BITMAP_TEST(node, EBCDIC_LATIN_SMALL_LETTER_SHARP_S) && \
+	 (ANYOF_FLAGS(node) & ANYOF_UNICODE) && \
+	 (ANYOF_FLAGS(node) & ANYOF_FOLD) && \
+	 ((end) > (input) + 1) && \
+	 toLOWER((input)[0]) == 's' && \
+	 toLOWER((input)[1]) == 's')
+#else
+#   define ANYOF_FOLD_SHARP_S(node, input, end)	\
+	(ANYOF_BITMAP_TEST(node, UNICODE_LATIN_SMALL_LETTER_SHARP_S) && \
+	 (ANYOF_FLAGS(node) & ANYOF_UNICODE) && \
+	 (ANYOF_FLAGS(node) & ANYOF_FOLD) && \
+	 ((end) > (input) + 1) && \
+	 toLOWER((input)[0]) == 's' && \
+	 toLOWER((input)[1]) == 's')
+#endif
+#define SHARP_S_SKIP 2

@@ -36,7 +36,7 @@ $Config{startperl}
 print OUT <<'!NO!SUBS!';
 
 # pod2man -- Convert POD data to formatted *roff input.
-# $Id: pod2man.PL,v 1.6 2001/07/10 11:23:46 eagle Exp $
+# $Id: pod2man.PL,v 1.9 2001/11/26 08:44:58 eagle Exp $
 #
 # Copyright 1999, 2000, 2001 by Russ Allbery <rra@stanford.edu>
 #
@@ -51,6 +51,9 @@ use Pod::Usage qw(pod2usage);
 
 use strict;
 
+# Silence -w warnings.
+use vars qw($running_under_some_shell);
+
 # Insert -- into @ARGV before any single dash argument to hide it from
 # Getopt::Long; we want to interpret it as meaning stdin (which Pod::Parser
 # does correctly).
@@ -63,8 +66,8 @@ my %options;
 Getopt::Long::config ('bundling_override');
 GetOptions (\%options, 'section|s=s', 'release|r=s', 'center|c=s',
             'date|d=s', 'fixed=s', 'fixedbold=s', 'fixeditalic=s',
-            'fixedbolditalic=s', 'official|o', 'quotes|q=s', 'lax|l',
-            'help|h') or exit 1;
+            'fixedbolditalic=s', 'name|n=s', 'official|o', 'quotes|q=s',
+            'lax|l', 'help|h', 'verbose|v') or exit 1;
 pod2usage (0) if $options{help};
 
 # Official sets --center, but don't override things explicitly set.
@@ -72,12 +75,21 @@ if ($options{official} && !defined $options{center}) {
     $options{center} = 'Perl Programmers Reference Guide';
 }
 
+# Verbose is only our flag, not a Pod::Man flag.
+my $verbose = $options{verbose};
+delete $options{verbose};
+
+# This isn't a valid Pod::Man option and is only accepted for backwards
+# compatibility.
+delete $options{lax};
+
 # Initialize and run the formatter, pulling a pair of input and output off at
 # a time.
 my $parser = Pod::Man->new (%options);
 my @files;
 do {
     @files = splice (@ARGV, 0, 2);
+    print "  $files[1]\n" if $verbose;
     $parser->parse_from_file (@files);
 } while (@ARGV);
 
@@ -92,8 +104,9 @@ pod2man - Convert POD data to formatted *roff input
 pod2man [B<--section>=I<manext>] [B<--release>=I<version>]
 [B<--center>=I<string>] [B<--date>=I<string>] [B<--fixed>=I<font>]
 [B<--fixedbold>=I<font>] [B<--fixeditalic>=I<font>]
-[B<--fixedbolditalic>=I<font>] [B<--official>] [B<--lax>]
-[B<--quotes>=I<quotes>] [I<input> [I<output>] ...]
+[B<--fixedbolditalic>=I<font>] [B<--name>=I<name>] [B<--official>]
+[B<--lax>] [B<--quotes>=I<quotes>] [B<--verbose>]
+[I<input> [I<output>] ...]
 
 pod2man B<--help>
 
@@ -174,8 +187,22 @@ Print out usage information.
 
 =item B<-l>, B<--lax>
 
-Don't complain when required sections are missing.  Not currently used, as
-POD checking functionality is not yet implemented in Pod::Man.
+No longer used.  B<pod2man> used to check its input for validity as a manual
+page, but this should now be done by L<podchecker(1)> instead.  Accepted for
+backwards compatibility; this option no longer does anything.
+
+=item B<-n> I<name>, B<--name>=I<name>
+
+Set the name of the manual page to I<name>.  Without this option, the manual
+name is set to the uppercased base name of the file being converted unless
+the manual section is 3, in which case the path is parsed to see if it is a
+Perl module path.  If it is, a path like C<.../lib/Pod/Man.pm> is converted
+into a name like C<Pod::Man>.  This option, if given, overrides any
+automatic determination of the name.
+
+Note that this option is probably not useful when converting multiple POD
+files at once.  The convention for Unix man pages for commands is for the
+man page title to be in all-uppercase even if the command isn't.
 
 =item B<-o>, B<--official>
 
@@ -217,6 +244,10 @@ that are reliably consistent are 1, 2, and 3.
 By default, section 1 will be used unless the file ends in .pm in which case
 section 3 will be selected.
 
+=item B<-v>, B<--verbose>
+
+Print out the name of each output file as it is being generated.
+
 =back
 
 =head1 DIAGNOSTICS
@@ -247,8 +278,6 @@ L<Pod::Man> for more details.
 =head1 BUGS
 
 Lots of this documentation is duplicated from L<Pod::Man>.
-
-POD checking and the corresponding B<--lax> option don't work yet.
 
 =head1 NOTES
 
@@ -486,16 +515,16 @@ to later edit the documentation.  Note that many existing translators
 or URLs when wrapped in LE<lt>E<gt>, so don't do that.
 
 For additional information that may be more accurate for your specific
-system, see either man(5) or man(7) depending on your system manual section
-numbering conventions.
+system, see either L<man(5)> or L<man(7)> depending on your system manual
+section numbering conventions.
 
 =head1 SEE ALSO
 
-L<Pod::Man|Pod::Man>, L<Pod::Parser|Pod::Parser>, man(1), nroff(1),
-troff(1), man(7)
+L<Pod::Man>, L<Pod::Parser>, L<man(1)>, L<nroff(1)>, L<podchecker(1)>,
+L<troff(1)>, L<man(7)>
 
-The man page documenting the an macro set may be man(5) instead of man(7) on
-your system.
+The man page documenting the an macro set may be L<man(5)> instead of
+L<man(7)> on your system.
 
 =head1 AUTHOR
 

@@ -1,4 +1,10 @@
 /*    regcomp.h
+ *
+ *    Copyright (c) 1997-2002, Larry Wall
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
  */
 
 typedef OP OP_4tree;			/* Will be redefined later. */
@@ -286,6 +292,14 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define ANYOF_BITMAP_CLEAR(p,c)	(ANYOF_BITMAP_BYTE(p, c) &= ~ANYOF_BIT(c))
 #define ANYOF_BITMAP_TEST(p, c)	(ANYOF_BITMAP_BYTE(p, c) &   ANYOF_BIT(c))
 
+#define ANYOF_BITMAP_SETALL(p)		\
+	memset (ANYOF_BITMAP(p), 255, ANYOF_BITMAP_SIZE)
+#define ANYOF_BITMAP_CLEARALL(p)	\
+	Zero (ANYOF_BITMAP(p), ANYOF_BITMAP_SIZE)
+/* Check that all 256 bits are all set.  Used in S_cl_is_anything()  */
+#define ANYOF_BITMAP_TESTALLSET(p)	\
+	memEQ (ANYOF_BITMAP(p), "\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377\377", ANYOF_BITMAP_SIZE)
+
 #define ANYOF_SKIP		((ANYOF_SIZE - 1)/sizeof(regnode))
 #define ANYOF_CLASS_SKIP	((ANYOF_CLASS_SIZE - 1)/sizeof(regnode))
 #define ANYOF_CLASS_ADD_SKIP	(ANYOF_CLASS_SKIP - ANYOF_SKIP)
@@ -309,7 +323,8 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define REG_SEEN_LOOKBEHIND	 2
 #define REG_SEEN_GPOS		 4
 #define REG_SEEN_EVAL		 8
-#define REG_SEEN_SANY		16
+#define REG_SEEN_CANY		16
+#define REG_SEEN_SANY		REG_SEEN_CANY /* src bckwrd cmpt */
 
 START_EXTERN_C
 
@@ -331,7 +346,7 @@ EXTCONST U8 PL_varies[] = {
 EXTCONST U8 PL_simple[];
 #else
 EXTCONST U8 PL_simple[] = {
-    REG_ANY,	SANY,
+    REG_ANY,	SANY,	CANY,
     ANYOF,
     ALNUM,	ALNUML,
     NALNUM,	NALNUML,
@@ -356,8 +371,11 @@ typedef struct re_scream_pos_data_s
  *   n - Root of op tree for (?{EVAL}) item
  *   o - Start op for (?{EVAL}) item
  *   p - Pad for (?{EVAL} item
- *   s - swash for unicode-style character class
+ *   s - swash for unicode-style character class, and the multicharacter
+ *       strings resulting from casefolding the single-character entries
+ *       in the character class
  * 20010712 mjd@plover.com
+ * (Remember to update re_dup() and pregfree() if you add any items.)
  */
 struct reg_data {
     U32 count;

@@ -6,7 +6,7 @@
 
 package IO::Pipe;
 
-require 5.005_64;
+use 5.006_001;
 
 use IO::Handle;
 use strict;
@@ -14,7 +14,7 @@ our($VERSION);
 use Carp;
 use Symbol;
 
-$VERSION = "1.121";
+$VERSION = "1.122";
 
 sub new {
     my $type = shift;
@@ -198,7 +198,7 @@ processes.
 
 =item new ( [READER, WRITER] )
 
-Creates a C<IO::Pipe>, which is a reference to a newly created symbol
+Creates an C<IO::Pipe>, which is a reference to a newly created symbol
 (see the C<Symbol> package). C<IO::Pipe::new> optionally takes two
 arguments, which should be objects blessed into C<IO::Handle>, or a
 subclass thereof. These two objects will be used for the system call

@@ -1,6 +1,6 @@
 package ExtUtils::Mksymlists;
 
-use 5.005_64;
+use 5.006_001;
 use strict qw[ subs refs ];
 # no strict 'vars';  # until filehandles are exempted
 
@@ -10,7 +10,7 @@ use Config;
 our(@ISA, @EXPORT, $VERSION);
 @ISA = 'Exporter';
 @EXPORT = '&Mksymlists';
-$VERSION = substr q$Revision: 1.18 $, 10;
+$VERSION = 1.18_00;
 
 sub Mksymlists {
     my(%spec) = @_;
@@ -82,7 +82,12 @@ sub _write_os2 {
     }
     my $distname = $data->{DISTNAME} || $data->{NAME};
     $distname = "Distribution $distname";
-    my $comment = "Perl (v$Config::Config{version}$threaded) module $data->{NAME}";
+    my $patchlevel = $Config{perl_patchlevel} || '';
+    $patchlevel = " pl$patchlevel" if $patchlevel;
+    my $comment = <<EOC;
+Perl (v$Config::Config{version}$threaded$patchlevel) module $data->{NAME}
+EOC
+    chomp $comment;
     if ($data->{INSTALLDIRS} and $data->{INSTALLDIRS} eq 'perl') {
 	$distname = 'perl5-porters@perl.org';
 	$comment = "Core $comment";

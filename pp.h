@@ -1,23 +1,25 @@
 /*    pp.h
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
  *
  */
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 #define ARGS thr
 #define dARGS struct perl_thread *thr;
 #else
 #define ARGS
 #define dARGS
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 
 #define PP(s) OP * Perl_##s(pTHX)
 
 /*
+=head1 Stack Manipulation Macros
+
 =for apidoc AmU||SP
 Stack pointer.  This is usually handled by C<xsubpp>.  See C<dSP> and
 C<SPAGAIN>.

@@ -1,6 +1,6 @@
 package Opcode;
 
-require 5.005_64;
+use 5.006_001;
 
 use strict;
 
@@ -414,6 +414,8 @@ These are a hotchpotch of opcodes still waiting to be considered
     getppid getpgrp setpgrp getpriority setpriority localtime gmtime
 
     entertry leavetry -- can be used to 'hide' fatal errors
+
+    custom -- where should this go
 
 =item :base_math
 

@@ -7,11 +7,6 @@
  * that can be #defined to the system-level function (or a wrapper
  * provided elsewhere).
  *
- * When using C++ with -DPERL_OBJECT, this definition is in the
- * form of a set of virtual base classes which must be subclassed to
- * provide a real implementation.  The Perl Object will use instances
- * of this implementation to use the system-level functionality.
- *
  * GSAR 21-JUN-98
  */
 
@@ -420,7 +415,7 @@ struct IPerlDirInfo
 
 #define PerlDir_mkdir(name, mode)	Mkdir((name), (mode))
 #ifdef VMS
-#  define PerlDir_chdir(n)		Chdir(((n) && *(n)) ? (n) : "SYS$LOGIN")
+#  define PerlDir_chdir(n)		Chdir((n))
 #else
 #  define PerlDir_chdir(name)		chdir((name))
 #endif
@@ -547,11 +542,6 @@ struct IPerlEnvInfo
 #define PerlEnv_putenv(str)		putenv((str))
 #define PerlEnv_getenv(str)		getenv((str))
 #define PerlEnv_getenv_len(str,l)	getenv_len((str), (l))
-#define PerlEnv_clearenv()		clearenv()
-#define PerlEnv_get_childenv()		get_childenv()
-#define PerlEnv_free_childenv(e)	free_childenv((e))
-#define PerlEnv_get_childdir()		get_childdir()
-#define PerlEnv_free_childdir(d)	free_childdir((d))
 #ifdef HAS_ENVGETENV
 #  define PerlEnv_ENVgetenv(str)	ENVgetenv((str))
 #  define PerlEnv_ENVgetenv_len(str,l)	ENVgetenv_len((str), (l))
@@ -567,6 +557,17 @@ struct IPerlEnvInfo
 #define PerlEnv_sitelib_path(str)	win32_get_sitelib(str)
 #define PerlEnv_vendorlib_path(str)	win32_get_vendorlib(str)
 #define PerlEnv_get_child_IO(ptr)	win32_get_child_IO(ptr)
+#define PerlEnv_clearenv()		win32_clearenv()
+#define PerlEnv_get_childenv()		win32_get_childenv()
+#define PerlEnv_free_childenv(e)	win32_free_childenv((e))
+#define PerlEnv_get_childdir()		win32_get_childdir()
+#define PerlEnv_free_childdir(d)	win32_free_childdir((d))
+#else
+#define PerlEnv_clearenv()		clearenv()
+#define PerlEnv_get_childenv()		get_childenv()
+#define PerlEnv_free_childenv(e)	free_childenv((e))
+#define PerlEnv_get_childdir()		get_childdir()
+#define PerlEnv_free_childdir(d)	free_childdir((d))
 #endif
 
 #endif	/* PERL_IMPLICIT_SYS */
@@ -1074,7 +1075,7 @@ struct IPerlProcInfo
 #define PerlProc_setjmp(b, n)	Sigsetjmp((b), (n))
 #define PerlProc_longjmp(b, n)	Siglongjmp((b), (n))
 #define PerlProc_signal(n, h)	signal((n), (h))
-#define PerlProc_fork()		fork()
+#define PerlProc_fork()		my_fork()
 #define PerlProc_getpid()	getpid()
 
 #ifdef WIN32

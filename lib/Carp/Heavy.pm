@@ -12,7 +12,7 @@ Carp heavy machinery - no user serviceable parts inside
 # On one line so MakeMaker will see it.
 use Carp;  our $VERSION = $Carp::VERSION;
 
-our ($CarpLevel, $MaxArgNums, $MaxEvalLen, $MaxLenArg, $Verbose);
+our ($CarpLevel, $MaxArgNums, $MaxEvalLen, $MaxArgLen, $Verbose);
 
 sub caller_info {
   my $i = shift(@_) + 1;
@@ -28,7 +28,7 @@ sub caller_info {
 
   my $sub_name = Carp::get_subname(\%call_info);
   if ($call_info{has_args}) {
-    my @args = map {Carp::format_arg($_)} @args;
+    my @args = map {Carp::format_arg($_)} @DB::args;
     if ($MaxArgNums and @args > $MaxArgNums) { # More than we want to show?
       $#args = $MaxArgNums;
       push @args, '...';
@@ -50,7 +50,7 @@ sub format_arg {
       $arg = defined($overload::VERSION) ? overload::StrVal($arg) : "$arg";
   }
   $arg =~ s/'/\\'/g;
-  $arg = str_len_trim($arg, $MaxLenArg);
+  $arg = str_len_trim($arg, $MaxArgLen);
   
   # Quote it?
   $arg = "'$arg'" unless $arg =~ /^-?[\d.]+\z/;
@@ -77,14 +77,14 @@ sub get_status {
 # the sub/require/eval
 sub get_subname {
   my $info = shift;
-  if (defined($info->{eval})) {
-    my $eval = $info->{eval};
+  if (defined($info->{evaltext})) {
+    my $eval = $info->{evaltext};
     if ($info->{is_require}) {
       return "require $eval";
     }
     else {
       $eval =~ s/([\\\'])/\\$1/g;
-      return str_len_trim($eval, $MaxEvalLen);
+      return "eval '" . str_len_trim($eval, $MaxEvalLen) . "'";
     }
   }
 
@@ -236,7 +236,11 @@ sub trusts {
 # Takes a package and gives a list of those trusted directly
 sub trusts_directly {
     my $class = shift;
-    return @{"$class\::ISA"};
+    no strict 'refs';
+    no warnings 'once'; 
+    return @{"$class\::CARP_NOT"}
+      ? @{"$class\::CARP_NOT"}
+      : @{"$class\::ISA"};
 }
 
 1;

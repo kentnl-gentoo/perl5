@@ -13,14 +13,20 @@ you need only say
 
     use English;
 
-at the top of your program.  This will alias all the short names to the
-long names in the current package.  Some even have medium names,
-generally borrowed from B<awk>.
+at the top of your program. This aliases all the short names to the long
+names in the current package. Some even have medium names, generally
+borrowed from B<awk>. In general, it's best to use the
 
-If you don't mind the performance hit, variables that depend on the
-currently selected filehandle may instead be set by calling an
-appropriate object method on the IO::Handle object.  (Summary lines
-below for this contain the word HANDLE.)  First you must say
+    use English '-no_match_vars';
+
+invocation if you don't need $PREMATCH, $MATCH, or $POSTMATCH, as it avoids
+a certain performance hit with the use of regular expressions. See
+L<English>.
+
+Variables that depend on the currently selected filehandle may be set by
+calling an appropriate object method on the IO::Handle object, although
+this is less efficient than using the regular built-in variables. (Summary
+lines below for this contain the word HANDLE.) First you must say
 
     use IO::Handle;
 
@@ -33,16 +39,82 @@ or more safely,
     HANDLE->method(EXPR)
 
 Each method returns the old value of the IO::Handle attribute.
-The methods each take an optional EXPR, which if supplied specifies the
+The methods each take an optional EXPR, which, if supplied, specifies the
 new value for the IO::Handle attribute in question.  If not supplied,
 most methods do nothing to the current value--except for
 autoflush(), which will assume a 1 for you, just to be different.
+
 Because loading in the IO::Handle class is an expensive operation, you should
 learn how to use the regular built-in variables.
 
 A few of these variables are considered "read-only".  This means that if
 you try to assign to this variable, either directly or indirectly through
 a reference, you'll raise a run-time exception.
+
+You should be very careful when modifying the default values of most
+special variables described in this document. In most cases you want
+to localize these variables before changing them, since if you don't,
+the change may affect other modules which rely on the default values
+of the special variables that you have changed. This is one of the
+correct ways to read the whole file at once:
+
+    open my $fh, "foo" or die $!;
+    local $/; # enable localized slurp mode
+    my $content = <$fh>;
+    close $fh;
+
+But the following code is quite bad:
+
+    open my $fh, "foo" or die $!;
+    undef $/; # enable slurp mode
+    my $content = <$fh>;
+    close $fh;
+
+since some other module, may want to read data from some file in the
+default "line mode", so if the code we have just presented has been
+executed, the global value of C<$/> is now changed for any other code
+running inside the same Perl interpreter.
+
+Usually when a variable is localized you want to make sure that this
+change affects the shortest scope possible. So unless you are already
+inside some short C<{}> block, you should create one yourself. For
+example:
+
+    my $content = '';
+    open my $fh, "foo" or die $!;
+    {
+        local $/;
+        $content = <$fh>;
+    }
+    close $fh;
+
+Here is an example of how your own code can go broken:
+
+    for (1..5){
+        nasty_break();
+        print "$_ ";
+    }
+    sub nasty_break {
+        $_ = 5;
+        # do something with $_
+    }
+
+You probably expect this code to print:
+
+    1 2 3 4 5
+
+but instead you get:
+
+    5 5 5 5 5
+
+Why? Because nasty_break() modifies C<$_> without localizing it
+first. The fix is to add local():
+
+        local $_ = 5;
+
+It's easy to notice the problem in such a short example, but in more
+complicated code you are looking for trouble if you don't localize
+changes to the special variables.
 
 The following list is ordered by scalar variables first, then the
 arrays, then the hashes.
@@ -144,7 +216,7 @@ BLOCK).  (Mnemonic: like & in some editors.)  This variable is read-only
 and dynamically scoped to the current BLOCK.
 
 The use of this variable anywhere in a program imposes a considerable
-performance penalty on all regular expression matches.  See L<BUGS>.
+performance penalty on all regular expression matches.  See L</BUGS>.
 
 =item $PREMATCH
 
@@ -156,7 +228,7 @@ enclosed by the current BLOCK).  (Mnemonic: C<`> often precedes a quoted
 string.)  This variable is read-only.
 
 The use of this variable anywhere in a program imposes a considerable
-performance penalty on all regular expression matches.  See L<BUGS>.
+performance penalty on all regular expression matches.  See L</BUGS>.
 
 =item $POSTMATCH
 
@@ -167,14 +239,14 @@ pattern match (not counting any matches hidden within a BLOCK or eval()
 enclosed by the current BLOCK).  (Mnemonic: C<'> often follows a quoted
 string.)  Example:
 
-    $_ = 'abcdefghi';
+    local $_ = 'abcdefghi';
     /def/;
     print "$`:$&:$'\n";  	# prints abc:def:ghi
 
 This variable is read-only and dynamically scoped to the current BLOCK.
 
 The use of this variable anywhere in a program imposes a considerable
-performance penalty on all regular expression matches.  See L<BUGS>.
+performance penalty on all regular expression matches.  See L</BUGS>.
 
 =item $LAST_PAREN_MATCH
 
@@ -196,7 +268,7 @@ with the rightmost closing parenthesis) of the last successful search
 pattern.  (Mnemonic: the (possibly) Nested parenthesis that most
 recently closed.)
 
-This is primarly used inside C<(?{...})> blocks for examining text
+This is primarily used inside C<(?{...})> blocks for examining text
 recently matched. For example, to effectively capture text to a variable
 (in addition to C<$1>, C<$2>, etc.), replace C<(...)> with
 
@@ -242,7 +314,7 @@ Assigning a non-numerical value to C<$*> triggers a warning (and makes
 C<$*> act if C<$* == 0>), while assigning a numerical value to C<$*>
 makes that an implicit C<int> is applied on the value.
 
-=item input_line_number HANDLE EXPR
+=item HANDLE->input_line_number(EXPR)
 
 =item $INPUT_LINE_NUMBER
 
@@ -250,20 +322,33 @@ makes that an implicit C<int> is applied on the value.
 
 =item $.
 
-The current input record number for the last file handle from which
-you just read() (or called a C<seek> or C<tell> on).  The value
-may be different from the actual physical line number in the file,
-depending on what notion of "line" is in effect--see C<$/> on how
-to change that.  An explicit close on a filehandle resets the line
-number.  Because C<< <> >> never does an explicit close, line
-numbers increase across ARGV files (but see examples in L<perlfunc/eof>).
-Consider this variable read-only: setting it does not reposition
-the seek pointer; you'll have to do that on your own.  Localizing C<$.>
-has the effect of also localizing Perl's notion of "the last read
-filehandle".  (Mnemonic: many programs use "." to mean the current line
-number.)
+Current line number for the last filehandle accessed. 
 
-=item input_record_separator HANDLE EXPR
+Each filehandle in Perl counts the number of lines that have been read
+from it.  (Depending on the value of C<$/>, Perl's idea of what
+constitutes a line may not match yours.)  When a line is read from a
+filehandle (via readline() or C<< <> >>), or when tell() or seek() is
+called on it, C<$.> becomes an alias to the line counter for that
+filehandle.
+
+You can adjust the counter by assigning to C<$.>, but this will not
+actually move the seek pointer.  I<Localizing C<$.> will not localize
+the filehandle's line count>.  Instead, it will localize perl's notion
+of which filehandle C<$.> is currently aliased to.
+
+C<$.> is reset when the filehandle is closed, but B<not> when an open
+filehandle is reopened without an intervening close().  For more
+details, see L<perlop/"IE<sol>O Operators">.  Because C<< <> >> never does
+an explicit close, line numbers increase across ARGV files (but see
+examples in L<perlfunc/eof>).
+
+You can also use C<< HANDLE->input_line_number(EXPR) >> to access the
+line counter for a given filehandle without having to worry about
+which handle you last accessed.
+
+(Mnemonic: many programs use "." to mean the current line number.)
+
+=item IO::Handle->input_record_separator(EXPR)
 
 =item $INPUT_RECORD_SEPARATOR
 
@@ -285,8 +370,8 @@ blindly assume that the next input character belongs to the next
 paragraph, even if it's a newline.  (Mnemonic: / delimits
 line boundaries when quoting poetry.)
 
-    undef $/;		# enable "slurp" mode
-    $_ = <FH>;		# whole file now here
+    local $/;           # enable "slurp" mode
+    local $_ = <FH>;    # whole file now here
     s/\n[ \t]+/ /g;
 
 Remember: the value of C<$/> is a string, not a regex.  B<awk> has to be
@@ -297,9 +382,9 @@ scalar that's convertible to an integer will attempt to read records
 instead of lines, with the maximum record size being the referenced
 integer.  So this:
 
-    $/ = \32768; # or \"32768", or \$var_containing_32768
-    open(FILE, $myfile);
-    $_ = <FILE>;
+    local $/ = \32768; # or \"32768", or \$var_containing_32768
+    open my $fh, $myfile or die $!;
+    local $_ = <$fh>;
 
 will read a record of no more than 32768 bytes from FILE.  If you're
 not reading from a record-oriented file (or your OS doesn't have
@@ -316,7 +401,7 @@ non-record reads of a file.
 
 See also L<perlport/"Newlines">.  Also see C<$.>.
 
-=item autoflush HANDLE EXPR
+=item HANDLE->autoflush(EXPR)
 
 =item $OUTPUT_AUTOFLUSH
 
@@ -334,7 +419,7 @@ a Perl program under B<rsh> and want to see the output as it's
 happening.  This has no effect on input buffering.  See L<perlfunc/getc>
 for that.  (Mnemonic: when you want your pipes to be piping hot.)
 
-=item output_field_separator HANDLE EXPR
+=item IO::Handle->output_field_separator EXPR
 
 =item $OUTPUT_FIELD_SEPARATOR
 
@@ -349,7 +434,7 @@ you would set B<awk>'s OFS variable to specify what is printed
 between fields.  (Mnemonic: what is printed when there is a "," in
 your print statement.)
 
-=item output_record_separator HANDLE EXPR
+=item IO::Handle->output_record_separator EXPR
 
 =item $OUTPUT_RECORD_SEPARATOR
 
@@ -420,7 +505,7 @@ explicitly to get B<awk>'s value.  (Mnemonic: # is the number sign.)
 
 Use of C<$#> is deprecated.
 
-=item format_page_number HANDLE EXPR
+=item HANDLE->format_page_number(EXPR)
 
 =item $FORMAT_PAGE_NUMBER
 
@@ -430,7 +515,7 @@ The current page number of the currently selected output channel.
 Used with formats.
 (Mnemonic: % is page number in B<nroff>.)
 
-=item format_lines_per_page HANDLE EXPR
+=item HANDLE->format_lines_per_page(EXPR)
 
 =item $FORMAT_LINES_PER_PAGE
 
@@ -441,7 +526,7 @@ output channel.  Default is 60.
 Used with formats.
 (Mnemonic: = has horizontal lines.)
 
-=item format_lines_left HANDLE EXPR
+=item HANDLE->format_lines_left(EXPR)
 
 =item $FORMAT_LINES_LEFT
 
@@ -472,10 +557,8 @@ This array holds the offsets of the beginnings of the last
 successful submatches in the currently active dynamic scope.
 C<$-[0]> is the offset into the string of the beginning of the
 entire match.  The I<n>th element of this array holds the offset
-of the I<n>th submatch, so C<$+[1]> is the offset where $1
-begins, C<$+[2]> the offset where $2 begins, and so on.
-You can use C<$#-> to determine how many subgroups were in the
-last successful match.  Compare with the C<@+> variable.
+of the I<n>th submatch, so C<$-[1]> is the offset where $1
+begins, C<$-[2]> the offset where $2 begins, and so on.
 
 After a match against some variable $var:
 
@@ -495,7 +578,7 @@ After a match against some variable $var:
 
 =back
 
-=item format_name HANDLE EXPR
+=item HANDLE->format_name(EXPR)
 
 =item $FORMAT_NAME
 
@@ -505,7 +588,7 @@ The name of the current report format for the currently selected output
 channel.  Default is the name of the filehandle.  (Mnemonic: brother to
 C<$^>.)
 
-=item format_top_name HANDLE EXPR
+=item HANDLE->format_top_name(EXPR)
 
 =item $FORMAT_TOP_NAME
 
@@ -515,7 +598,7 @@ The name of the current top-of-page format for the currently selected
 output channel.  Default is the name of the filehandle with _TOP
 appended.  (Mnemonic: points to top of page.)
 
-=item format_line_break_characters HANDLE EXPR
+=item IO::Handle->format_line_break_characters EXPR
 
 =item $FORMAT_LINE_BREAK_CHARACTERS
 
@@ -526,7 +609,7 @@ fill continuation fields (starting with ^) in a format.  Default is
 S<" \n-">, to break on whitespace or hyphens.  (Mnemonic: a "colon" in
 poetry is a part of a line.)
 
-=item format_formfeed HANDLE EXPR
+=item IO::Handle->format_formfeed EXPR
 
 =item $FORMAT_FORMFEED
 
@@ -574,9 +657,14 @@ change the exit status of your program.  For example:
 
 Under VMS, the pragma C<use vmsish 'status'> makes C<$?> reflect the
 actual VMS exit status, instead of the default emulation of POSIX
-status.
+status; see L<perlvms/$?> for details.
 
 Also see L<Error Indicators>.
+
+=item ${^ENCODING}
+
+The encoding used to interpret native eight-bit encodings to Unicode,
+see L<encode>.  An opaque C<Encode::XS> object.
 
 =item $OS_ERROR
 
@@ -768,10 +856,9 @@ of perl in the right bracket?)  Example:
 See also the documentation of C<use VERSION> and C<require VERSION>
 for a convenient way to fail if the running Perl interpreter is too old.
 
-The use of this variable is deprecated.  The floating point representation
-can sometimes lead to inaccurate numeric comparisons.  See C<$^V> for a
-more modern representation of the Perl version that allows accurate string
-comparisons.
+The floating point representation can sometimes lead to inaccurate
+numeric comparisons.  See C<$^V> for a more modern representation of
+the Perl version that allows accurate string comparisons.
 
 =item $COMPILING
 
@@ -885,6 +972,12 @@ built, as determined during the configuration process.  The value
 is identical to C<$Config{'osname'}>.  See also L<Config> and the 
 B<-V> command-line switch documented in L<perlrun>.
 
+=item ${^OPEN}
+
+An internal variable used by PerlIO.  A string in two parts, separated
+by a C<\0> byte, the first part is the input disciplines, the second
+part is the output disciplines.
+
 =item $PERLDB
 
 =item $^P
@@ -963,6 +1056,11 @@ The time at which the program began running, in seconds since the
 epoch (beginning of 1970).  The values returned by the B<-M>, B<-A>,
 and B<-C> filetests are based on this value.
 
+=item ${^TAINT}
+
+Reflects if taint mode is on or off (i.e. if the program was run with
+B<-T> or not).  True for on, false for off.
+
 =item $PERL_VERSION
 
 =item $^V
@@ -1019,6 +1117,17 @@ lexical scope.  See L<bytes>.
 The name that the Perl binary itself was executed as, from C's C<argv[0]>.
 This may not be a full pathname, nor even necessarily in your path.
 
+=item ARGV
+
+The special filehandle that iterates over command-line filenames in
+C<@ARGV>. Usually written as the null filehandle in the angle operator
+C<< <> >>. Note that currently C<ARGV> only has its magical effect
+within the C<< <> >> operator; elsewhere it is just a plain filehandle
+corresponding to the last file opened by C<< <> >>. In particular,
+passing C<\*ARGV> as a parameter to a function that expects a filehandle
+may not cause your function to automatically read the contents of all the
+files in C<@ARGV>.
+
 =item $ARGV
 
 contains the name of the current file when reading from <>.
@@ -1044,12 +1153,17 @@ C<require>, or C<use> constructs look for their library files.  It
 initially consists of the arguments to any B<-I> command-line
 switches, followed by the default Perl library, probably
 F</usr/local/lib/perl>, followed by ".", to represent the current
-directory.  If you need to modify this at runtime, you should use
+directory.  ("." will not be appended if taint checks are enabled, either by
+C<-T> or by C<-t>.)  If you need to modify this at runtime, you should use
 the C<use lib> pragma to get the machine-dependent library properly
 loaded also:
 
     use lib '/mypath/libdir/';
     use SomeMod;
+
+You can also insert hooks into the file inclusion system by putting Perl
+code directly into @INC.  Those hooks may be subroutine references, array
+references or blessed objects.  See L<perlfunc/require> for details.
 
 =item @_
 
@@ -1064,6 +1178,12 @@ you specified (with module names converted to pathnames), and the
 value is the location of the file found.  The C<require>
 operator uses this hash to determine whether a particular file has
 already been included.
+
+If the file was loaded via a hook (e.g. a subroutine reference, see
+L<perlfunc/require> for a description of these hooks), this hook is
+by default inserted into %INC in place of a filename.  Note, however,
+that the hook may have set the %INC entry by itself to provide some more
+specific info.
 
 =item %ENV
 
@@ -1184,9 +1304,9 @@ To illustrate the differences between these variables, consider the
 following Perl expression, which uses a single-quoted string:
 
     eval q{
-	open PIPE, "/cdrom/install |";
-	@res = <PIPE>;
-	close PIPE or die "bad pipe: $?, $!";
+	open my $pipe, "/cdrom/install |" or die $!;
+	my @res = <$pipe>;
+	close $pipe or die "bad pipe: $?, $!";
     };
 
 After execution of this statement all 4 variables may have been set.  
@@ -1275,7 +1395,7 @@ expression matches in a program, regardless of whether they occur
 in the scope of C<use English>.  For that reason, saying C<use
 English> in libraries is strongly discouraged.  See the
 Devel::SawAmpersand module documentation from CPAN
-(http://www.perl.com/CPAN/modules/by-module/Devel/)
+(http://www.cpan.org/modules/by-module/Devel/)
 for more information.
 
 Having to even think about the C<$^S> variable in your exception

@@ -8,8 +8,9 @@ BEGIN {
 }
 
 use strict;
-my ($Is_VMS, $Is_W32, $Is_OS2, $Is_Cygwin, $nonono, $dostrip,
-    $versiononly, $silent, $verbose, $otherperls, $archname,$Is_NetWare, $nwinstall);
+my ($Is_VMS, $Is_W32, $Is_OS2, $Is_Cygwin, $Is_Darwin,
+    $nonono, $dostrip, $versiononly, $silent, $verbose,
+    $otherperls, $archname,$Is_NetWare, $nwinstall, $nopods);
 use vars qw /$depth/;
 
 BEGIN {
@@ -17,6 +18,7 @@ BEGIN {
     $Is_W32 = $^O eq 'MSWin32';
     $Is_OS2 = $^O eq 'os2';
     $Is_Cygwin = $^O eq 'cygwin';
+    $Is_Darwin = $^O eq 'darwin';
     if ($Is_VMS) { eval 'use VMS::Filespec;' }
 }
 
@@ -70,6 +72,26 @@ while (@ARGV) {
     $verbose = 1 if $ARGV[0] eq '-V' || $ARGV [0] eq '-n';
     $archname = 1 if $ARGV[0] eq '-A';
 	$nwinstall = 1 if $ARGV[0] eq '-netware';
+    $nopods = 1 if $ARGV[0] eq '-p';
+    if ($ARGV[0] eq '-?' or $ARGV[0] =~ /^-?-h/) {
+      print <<"EOT";
+Usage $0: [switches]
+  -n	    Don't actually run any commands; just print them.
+  -s        Run strip on installed binaries.
+  -v        Only install perl as a binary with the version number in the name.
+            (Override whatever config.sh says)
+  +v        Install perl as "perl" and as a binary with the version number in
+            the name.  (Override whatever config.sh says)
+  -S        Silent mode.
+  -o        Skip checking for other copies of perl in your PATH.
+  -V        Verbose mode.
+  -A        Also install perl with the architecture's name in the perl binary's
+            name.
+  -p        Don't install the pod files. [This will break use diagnostics;]
+  -netware  Install correctly on a Netware server.
+EOT
+      exit;
+    }
     shift;
 }
 
@@ -91,17 +113,18 @@ close SCRIPTS;
 
 if ($scr_ext) { @scripts = map { "$_$scr_ext" } @scripts; }
 
-my @pods = (<pod/*.pod>);
+my @pods = $nopods ? () : (<pod/*.pod>);
 
 # Specify here any .pm files that are actually architecture-dependent.
 # (Those included with XS extensions under ext/ are automatically
 # added later.)
 # Now that the default privlib has the full perl version number included,
-# we no longer have to play the trick of sticking version-specific .pm 
+# we no longer have to play the trick of sticking version-specific .pm
 # files under the archlib directory.
 my %archpms = (
-    Config => 1, 
-    lib => 1, 
+    Config => 1,
+    lib => 1,
+    Cwd => 1,
 );
 
 if ($^O eq 'dos') {
@@ -211,7 +234,9 @@ if (($Is_W32 and ! $Is_NetWare)  or $Is_Cygwin) {
 
   if ($Is_Cygwin) {
     $perldll = $libperl;
-    $perldll =~ s/(\..*)?$/.$dlext/;
+    my $v_e_r_s = $ver; $v_e_r_s =~ tr/./_/;
+    $perldll =~ s/(\..*)?$/$v_e_r_s.$dlext/;
+    $perldll =~ s/^lib/cyg/;
     if ($Config{useshrplib} eq 'true') {
       # install ld2 and perlld as well
       foreach ('ld2', 'perlld') {
@@ -219,6 +244,18 @@ if (($Is_W32 and ! $Is_NetWare)  or $Is_Cygwin) {
         copy("$_", "$installbin/$_");
         chmod(0755, "$installbin/$_");
       };
+      { 
+		open (LD2, ">$installbin/ld2");
+		print LD2 "#!/bin/sh\n#\n# ld wrapper, passes all args to perlld;\n#\n"
+		          . "for trythis in $installbin/perl\ndo\n  if [ -x \$trythis ]\n"
+		          . "  then\n    \$trythis $installbin/perlld \"\$\@\"\n"
+		          . "    exit \$?\n  fi\ndone\n# hard luck!\necho i see no perl"
+		          . " executable around there\necho perl is required to build "
+		          . "dynamic libraries\necho look if the path to perl in /bin/ld2"
+		          . " is correct\nexit 1\n";
+		close LD2;
+      };
+      chmod(0755, "$installbin/ld2");
     };
   } else {
     $perldll = 'perl57.' . $dlext;
@@ -232,7 +269,7 @@ if (($Is_W32 and ! $Is_NetWare)  or $Is_Cygwin) {
   safe_unlink("$installbin/$perldll");
   copy("$perldll", "$installbin/$perldll");
   chmod(0755, "$installbin/$perldll");
-   
+
 } # if (($Is_W32 and ! $Is_NetWare) or $Is_Cygwin)
 
 # This will be used to store the packlist
@@ -294,7 +331,7 @@ if ($d_dosuid) {
 # Install library files.
 
 my ($do_installarchlib, $do_installprivlib) = (0, 0);
-    
+
 mkpath($installprivlib, $verbose, 0777);
 mkpath($installarchlib, $verbose, 0777);
 mkpath($installsitelib, $verbose, 0777) if ($installsitelib);
@@ -341,8 +378,8 @@ foreach my $file (@corefiles) {
     # on dynamically-loadable libraries. So we do it for all.
     if (copy_if_diff($file,"$installarchlib/CORE/$file")) {
 	if ($file =~ /\.(\Q$so\E|\Q$dlext\E)$/) {
-	    chmod(0555, "$installarchlib/CORE/$file");
 	    strip("-S", "$installarchlib/CORE/$file") if $^O =~ /^(rhapsody|darwin)$/;
+           chmod(0555, "$installarchlib/CORE/$file");
 	} else {
 	    chmod(0444, "$installarchlib/CORE/$file");
 	}
@@ -363,7 +400,7 @@ if (! $versiononly && ! samepath($installbin, '.') && ($^O ne 'dos') && ! $Is_VM
 		"$installbin/$perl$exe_ext");
     }
     link("$installbin/s$perl_verbase$ver$exe_ext",
-	    "$installbin/suid$perl$exe_ext") 
+	    "$installbin/suid$perl$exe_ext")
       if $d_dosuid;
 }
 
@@ -405,11 +442,7 @@ if ($Config{installusrbinperl} && $Config{installusrbinperl} eq 'define' &&
 	      (-l $usrbinperl) &&
 	      ((readlink $usrbinperl) eq $expinstperl));
     }
-    if ((! $mainperl_is_instperl) &&
-	(yn("Many scripts expect perl to be installed as $usrbinperl.\n" . 
-	     "Do you wish to have $usrbinperl be the same as\n" .
-	     "$expinstperl? [y] ")))
-    {
+    if (! $mainperl_is_instperl) {
 	unlink($usrbinperl);
 	( $Config{'d_link'} eq 'define' &&
 	  eval { CORE::link $instperl, $usrbinperl } )	||
@@ -425,6 +458,7 @@ if (!$Is_NetWare) {
 	if (!$versiononly && ! samepath($installbin, 'x2p')) {
 		safe_unlink("$installbin/a2p$exe_ext");
 		copy("x2p/a2p$exe_ext", "$installbin/a2p$exe_ext");
+               strip("$installbin/a2p$exe_ext");
 		chmod(0755, "$installbin/a2p$exe_ext");
 	}
 }
@@ -445,7 +479,7 @@ sub script_alias {
     safe_unlink("$installscript/$alias$scr_ext");
     if ($^O eq 'dos' or $Is_VMS or $^O eq 'transit') {
 	copy("$installscript/$orig$scr_ext",
-	     "$installscript/$alias$scr_ext"); 
+	     "$installscript/$alias$scr_ext");
     } else {
 	link("$installscript/$orig$scr_ext",
 	     "$installscript/$alias$scr_ext");
@@ -462,7 +496,7 @@ if ($versiononly) {
 	chmod(0755, "$installscript/$base");
     }
 
-    for (@tolink) { 
+    for (@tolink) {
         my ($from, $to) = map { "$_$ver" } @$_;
         (my $frbase = $from) =~ s#.*/##;
         (my $tobase = $to) =~ s#.*/##;
@@ -475,7 +509,7 @@ if ($versiononly) {
 	chmod(0755, "$installscript/$base");
     }
 
-    for (@tolink) { 
+    for (@tolink) {
         my ($from, $to) = @$_;
         (my $frbase = $from) =~ s#.*/##;
         (my $tobase = $to) =~ s#.*/##;
@@ -486,7 +520,7 @@ if ($versiononly) {
 # Install pod pages.  Where? I guess in $installprivlib/pod
 # ($installprivlib/pods for cygwin).
 
-my $pod = $Is_Cygwin ? 'pods' : 'pod';
+my $pod = ($Is_Cygwin || $Is_Darwin) ? 'pods' : 'pod';
 if ( !$versiononly || ($installprivlib =~ m/\Q$ver/)) {
     mkpath("${installprivlib}/$pod", $verbose, 0777);
 
@@ -582,7 +616,7 @@ sub unlink {
 	next unless -e $name;
 	chmod 0777, $name if ($Is_OS2 || $Is_W32 || $Is_Cygwin || $Is_NetWare);
 	print "  unlink $name\n" if $verbose;
-	( CORE::unlink($name) and ++$cnt 
+	( CORE::unlink($name) and ++$cnt
 	  or warn "Couldn't unlink $name: $!\n" ) unless $nonono;
     }
     return $cnt;
@@ -612,7 +646,7 @@ sub safe_rename {
 	for ($i = 1; $i < 50; $i++) {
 	    last if rename($to, "$to.$i");
 	}
-	warn("Cannot rename to `$to.$i': $!"), return 0 
+	warn("Cannot rename to `$to.$i': $!"), return 0
 	   if $i >= 50;	# Give up!
     }
     link($from,$to) || return 0;
@@ -696,7 +730,7 @@ sub installlib {
 	$File::Find::prune = 1;
 	return;
     }
-    
+
     # ignore patch backups, RCS files, emacs backup & temp files and the
     # .exists files, .PL files, and .t files.
     return if $name =~ m{\.orig$|~$|^#.+#$|,v$|^\.exists|\.PL$|\.t$};
@@ -729,21 +763,28 @@ sub installlib {
 	    mkpath("$installlib/$dir", $verbose, 0777);
 	    # HP-UX (at least) needs to maintain execute permissions
 	    # on dynamically-loaded libraries.
-		if ($Is_NetWare && !$nwinstall) {
-			# Don't copy .nlp,.nlm files, doesn't make sense on Windows and also
-			# if copied will give problems when building new extensions.
-			# Has to be copied if we are installing on a NetWare server and hence
-			# the check !$nwinstall
-			if (!(/\.(?:nlp|nlm|bs)$/)) {
-				copy_if_diff($_, "$installlib/$name")
-				and chmod($name =~ /\.(so|$dlext)$/o ? 0555 : 0444,
-			   "$installlib/$name");
-			}
-		} else {
-			copy_if_diff($_, "$installlib/$name")
+           if ($Is_NetWare && !$nwinstall) {
+               # Don't copy .nlp,.nlm files, doesn't make sense on Windows and also
+               # if copied will give problems when building new extensions.
+               # Has to be copied if we are installing on a NetWare server and hence
+               # the check !$nwinstall
+               if (!(/\.(?:nlp|nlm|bs)$/)) {
+                   copy_if_diff($_, "$installlib/$name")
 			and chmod($name =~ /\.(so|$dlext)$/o ? 0555 : 0444,
-			   "$installlib/$name");
-		} #if ($Is_NetWare)	    
+                                 "$installlib/$name");
+               }
+           } else {
+               if (copy_if_diff($_, "$installlib/$name")) {
+                   if ($name =~ /\.(so|$dlext)$/o) {
+                       strip("-S", "$installlib/$name") if $^O =~ /^(rhapsody|darwin)$/;
+                       chmod(0555, "$installlib/$name");
+                   } else {
+                       strip("-S", "$installlib/$name")
+                           if ($name =~ /\.a$/o and $^O =~ /^(rhapsody|darwin)$/);
+                       chmod(0444, "$installlib/$name");
+                   }
+               }
+           } #if ($Is_NetWare)
 	}
     }
 }
@@ -791,11 +832,14 @@ sub strip
 
     foreach my $file (@args) {
         if (-f $file) {
-            print "  strip $file\n" if $verbose;
+           if ($verbose) {
+               print "  strip " . join(' ', @opts);
+               print " " if (@opts);
+               print "$file\n";
+           }
             system("strip", @opts, $file);
         } else {
             print "# file '$file' skipped\n" if $verbose;
         }
     }
 }
-

@@ -42,7 +42,7 @@ number as reported by uname.  Here's a partial translation table:
     SunOS    5.8       Solaris 8       solaris    2.8
 
 The complete table can be found in the Sun Managers' FAQ
-L<ftp://ftp.cs.toronto.edu/pub/jdd/sun-managers/faq> under
+L<ftp://ftp.cs.toronto.edu/pub/jdd/sunmanagers/faq> under
 "9.1) Which Sun models run which versions of SunOS?".
 
 =head1 RESOURCES
@@ -58,7 +58,7 @@ The Solaris FAQ is available at
 L<http://www.science.uva.nl/pub/solaris/solaris2.html>.
 
 The Sun Managers' FAQ is available at
-L<ftp://ftp.cs.toronto.edu/pub/jdd/sun-managers/faq>
+L<ftp://ftp.cs.toronto.edu/pub/jdd/sunmanagers/faq>
 
 =item Precompiled Binaries
 
@@ -153,13 +153,30 @@ your Solaris release.
 
 =head3 GNU as and GNU ld
 
+The following information applies to gcc version 2.  Volunteers to
+update it as appropropriate for gcc version 3 would be appreciated.
+
 The versions of as and ld supplied with Solaris work fine for building
-perl.  There is normally no need to install the GNU versions.
+perl.  There is normally no need to install the GNU versions to
+compile perl.
 
 If you decide to ignore this advice and use the GNU versions anyway,
 then be sure that they are relatively recent.  Versions newer than 2.7
 are apparently new enough.  Older versions may have trouble with
 dynamic loading.
+
+If you wish to use GNU ld, then you need to pass it the -Wl,-E flag.
+The hints/solaris_2.sh file tries to do this automatically by executing
+the following commands:
+
+	ccdlflags="$ccdlflags -Wl,-E"
+	lddlflags="$lddlflags -Wl,-E -G"
+
+However, over the years, changes in gcc, GNU ld, and Solaris ld have made
+it difficult to automatically detect which ld ultimately gets called.
+You may have to manually edit config.sh and add the -Wl,-E flags
+yourself, or else run Configure interactively and add the flags at the
+appropriate prompts.
 
 If your gcc is configured to use GNU as and ld but you want to use the
 Solaris ones instead to build perl, then you'll need to add
@@ -381,7 +398,7 @@ need to use perl's malloc, you can rebuild Perl from the sources
 and Configure the build with 
 
 	sh Configure -Dusemymalloc
-  
+
 You should not use perl's malloc if you are building with gcc.  There
 are reports of core dumps, especially in the PDL module.  The problem
 appears to go away under -DDEBUGGING, so it has been difficult to
@@ -437,6 +454,10 @@ op/stat.t test 4 may fail if you are on a tmpfs of some sort.
 Building in /tmp sometimes shows this behavior.  The
 test suite detects if you are building in /tmp, but it may not be able
 to catch all tmpfs situations.
+
+=head2 nss_delete core dump from op/pwent or op/grent
+
+See L<perlhpux/"nss_delete core dump from op/pwent or op/grent">.
 
 =head1 PREBUILT BINARIES OF PERL FOR SOLARIS.
 

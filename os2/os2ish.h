@@ -99,7 +99,7 @@
 # undef I_SYS_UN
 #endif 
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 
 #define do_spawn(a)      os2_do_spawn(aTHX_ (a))
 #define do_aspawn(a,b,c) os2_do_aspawn(aTHX_ (a),(b),(c))
@@ -202,38 +202,63 @@ int pthread_create(pthread_t *tid, const pthread_attr_t *attr,
 
 #define THREADS_ELSEWHERE
 
-#else /* USE_THREADS */
+#else /* USE_5005THREADS */
 
 #define do_spawn(a)      os2_do_spawn(a)
 #define do_aspawn(a,b,c) os2_do_aspawn((a),(b),(c))
 
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
  
 void Perl_OS2_init(char **);
+void Perl_OS2_init3(char **envp, void **excH, int flags);
+void Perl_OS2_term(void **excH, int exitstatus, int flags);
 
-/* XXX This code hideously puts env inside: */
+/* The code without INIT3 hideously puts env inside: */
 
+/* These ones should be in the same block as PERL_SYS_TERM() */
 #ifdef PERL_CORE
-#  define PERL_SYS_INIT3(argcp, argvp, envp) STMT_START {	\
+
+#  define PERL_SYS_INIT3(argcp, argvp, envp)	\
+  { void *xreg[2];				\
     _response(argcp, argvp);			\
     _wildcard(argcp, argvp);			\
-    Perl_OS2_init(*envp);	} STMT_END
-#  define PERL_SYS_INIT(argcp, argvp) STMT_START {	\
+    Perl_OS2_init3(*envp, xreg, 0)
+
+#  define PERL_SYS_INIT(argcp, argvp)  {	\
+  { void *xreg[2];				\
     _response(argcp, argvp);			\
     _wildcard(argcp, argvp);			\
-    Perl_OS2_init(NULL);	} STMT_END
+    Perl_OS2_init3(NULL, xreg, 0)
+
 #else  /* Compiling embedded Perl or Perl extension */
-#  define PERL_SYS_INIT3(argcp, argvp, envp) STMT_START {	\
-    Perl_OS2_init(*envp);	} STMT_END
-#  define PERL_SYS_INIT(argcp, argvp) STMT_START {	\
-    Perl_OS2_init(NULL);	} STMT_END
+
+#  define PERL_SYS_INIT3(argcp, argvp, envp)	\
+  { void *xreg[2];				\
+    Perl_OS2_init3(*envp, xreg, 0)
+#  define PERL_SYS_INIT(argcp, argvp)	{	\
+  { void *xreg[2];				\
+    Perl_OS2_init3(NULL, xreg, 0)
 #endif
+
+#define FORCE_EMX_DEINIT_EXIT		1
+#define FORCE_EMX_DEINIT_CRT_TERM	2
+#define FORCE_EMX_DEINIT_RUN_ATEXIT	4
+
+#define PERL_SYS_TERM2(xreg,flags)					\
+  Perl_OS2_term(xreg, 0, flags);					\
+  MALLOC_TERM
+
+#define PERL_SYS_TERM1(xreg)						\
+     Perl_OS2_term(xreg, 0, FORCE_EMX_DEINIT_RUN_ATEXIT)
+
+/* This one should come in pair with PERL_SYS_INIT() and in the same block */
+#define PERL_SYS_TERM()							\
+     PERL_SYS_TERM1(xreg);						\
+  }
 
 #ifndef __EMX__
 #  define PERL_CALLCONV _System
 #endif
-
-#define PERL_SYS_TERM()		MALLOC_TERM
 
 /* #define PERL_SYS_TERM() STMT_START {	\
     if (Perl_HAB_set) WinTerminate(Perl_hab);	} STMT_END */
@@ -285,6 +310,7 @@ int my_rmdir (__const__ char *);
 struct passwd *my_getpwent (void);
 void my_setpwent (void);
 void my_endpwent (void);
+char *gcvt_os2(double value, int digits, char *buffer);
 
 struct group *getgrent (void);
 void setgrent (void);
@@ -454,15 +480,30 @@ void init_PMWIN_entries(void);
 /* INCL_DOSERRORS needed. rc should be declared outside. */
 #define CheckOSError(expr) (!(rc = (expr)) ? 0 : (FillOSError(rc), 1))
 /* INCL_WINERRORS needed. */
-#define SaveWinError(expr) ((expr) ? : (FillWinError, 0))
 #define CheckWinError(expr) ((expr) ? 0: (FillWinError, 1))
+
+/* This form propagates the return value, setting $^E if needed */
+#define SaveWinError(expr) ((expr) ? : (FillWinError, 0))
+
+/* This form propagates the return value, dieing with $^E if needed */
+#define SaveCroakWinError(expr,die,name1,name2)		\
+  ((expr) ? : (CroakWinError(die,name1 name2), 0))
+
 #define FillOSError(rc) (os2_setsyserrno(rc),				\
 			Perl_severity = SEVERITY_ERROR) 
 
+#define WinError_2_Perl_rc	\
+ (	init_PMWIN_entries(),	\
+	Perl_rc=(*PMWIN_entries.GetLastError)(perl_hab_GET()) )
+
+/* Calling WinGetLastError() resets the error code of the current thread.
+   Since for some Win* API return value 0 is normal, one needs to call
+   this before calling them to distinguish normal and anomalous returns.  */
+/*#define ResetWinError()	WinError_2_Perl_rc */
+
 /* At this moment init_PMWIN_entries() should be a nop (WinInitialize should
    be called already, right?), so we do not risk stepping over our own error */
-#define FillWinError (	init_PMWIN_entries(),				\
-			Perl_rc=(*PMWIN_entries.GetLastError)(perl_hab_GET()),\
+#define FillWinError (	WinError_2_Perl_rc,				\
 			Perl_severity = ERRORIDSEV(Perl_rc),		\
 			Perl_rc = ERRORIDERROR(Perl_rc),		\
 			os2_setsyserrno(Perl_rc))
@@ -533,6 +574,21 @@ enum entries_ordinals {
     ORD_WinWindowFromId,
     ORD_WinWindowFromPoint,
     ORD_WinPostMsg,
+    ORD_WinEnableWindow,
+    ORD_WinEnableWindowUpdate,
+    ORD_WinIsWindowEnabled,
+    ORD_WinIsWindowShowing,
+    ORD_WinIsWindowVisible,
+    ORD_WinQueryWindowPtr,
+    ORD_WinQueryWindowULong,
+    ORD_WinQueryWindowUShort,
+    ORD_WinSetWindowBits,
+    ORD_WinSetWindowPtr,
+    ORD_WinSetWindowULong,
+    ORD_WinSetWindowUShort,
+    ORD_WinQueryDesktopWindow,
+    ORD_WinSetActiveWindow,
+    ORD_DosQueryModFromEIP,
     ORD_NENTRIES
 };
 
@@ -550,6 +606,44 @@ enum entries_ordinals {
   ret name at { return SaveWinError(CallORD(ret,o,at,args)); }
 
 #define AssignFuncPByORD(p,o)	(*(Perl_PFN*)&(p) = (loadByOrdinal(o, 1)))
+
+/* This flavor caches the procedure pointer (named as p__Win#name) locally */
+#define DeclWinFuncByORD_CACHE(ret,name,o,at,args)	\
+	DeclWinFuncByORD_CACHE_r(ret,name,o,at,args,0,1)
+
+/* This flavor may reset the last error before the call (if ret=0 may be OK) */
+#define DeclWinFuncByORD_CACHE_resetError(ret,name,o,at,args)	\
+	DeclWinFuncByORD_CACHE_r(ret,name,o,at,args,1,1)
+
+/* Two flavors below do the same as above, but do not auto-croak */
+/* This flavor caches the procedure pointer (named as p__Win#name) locally */
+#define DeclWinFuncByORD_CACHE_survive(ret,name,o,at,args)	\
+	DeclWinFuncByORD_CACHE_r(ret,name,o,at,args,0,0)
+
+/* This flavor may reset the last error before the call (if ret=0 may be OK) */
+#define DeclWinFuncByORD_CACHE_resetError_survive(ret,name,o,at,args)	\
+	DeclWinFuncByORD_CACHE_r(ret,name,o,at,args,1,0)
+
+#define DeclWinFuncByORD_CACHE_r(ret,name,o,at,args,r,die)	\
+  static ret (*CAT2(p__Win,name)) at;				\
+  static ret name at {						\
+	if (!CAT2(p__Win,name))					\
+	    AssignFuncPByORD(CAT2(p__Win,name), o);		\
+	if (r) ResetWinError();					\
+	return SaveCroakWinError(CAT2(p__Win,name) args, die, "[Win]", STRINGIFY(name)); }
+
+/* These flavors additionally assume ORD is name with prepended ORD_Win  */
+#define DeclWinFunc_CACHE(ret,name,at,args)	\
+	DeclWinFuncByORD_CACHE(ret,name,CAT2(ORD_Win,name),at,args)
+#define DeclWinFunc_CACHE_resetError(ret,name,at,args)	\
+	DeclWinFuncByORD_CACHE_resetError(ret,name,CAT2(ORD_Win,name),at,args)
+#define DeclWinFunc_CACHE_survive(ret,name,at,args)	\
+	DeclWinFuncByORD_CACHE_survive(ret,name,CAT2(ORD_Win,name),at,args)
+#define DeclWinFunc_CACHE_resetError_survive(ret,name,at,args)	\
+	DeclWinFuncByORD_CACHE_resetError_survive(ret,name,CAT2(ORD_Win,name),at,args)
+
+void ResetWinError(void);
+void CroakWinError(int die, char *name);
 
 #define PERLLIB_MANGLE(s, n) perllib_mangle((s), (n))
 char *perllib_mangle(char *, unsigned int);

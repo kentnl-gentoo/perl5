@@ -6,6 +6,9 @@
 #      License or the Artistic License, as specified in the README file.
 #
 package B;
+
+our $VERSION = '1.00';
+
 use XSLoader ();
 require Exporter;
 @ISA = qw(Exporter);
@@ -18,7 +21,7 @@ require Exporter;
 		amagic_generation
 		walkoptree_slow walkoptree walkoptree_exec walksymtable
 		parents comppadlist sv_undef compile_stats timing_info
-		begin_av init_av end_av);
+		begin_av init_av end_av regex_padav);
 
 sub OPf_KIDS ();
 use strict;
@@ -208,18 +211,18 @@ sub walksymtable {
     my ($symref, $method, $recurse, $prefix) = @_;
     my $sym;
     my $ref;
-    no strict 'vars';
-    local(*glob);
+    my $fullname;
+    no strict 'refs';
     $prefix = '' unless defined $prefix;
     while (($sym, $ref) = each %$symref) {
-	*glob = "*main::".$prefix.$sym;
+        $fullname = "*main::".$prefix.$sym;
 	if ($sym =~ /::$/) {
 	    $sym = $prefix . $sym;
 	    if ($sym ne "main::" && $sym ne "<none>::" && &$recurse($sym)) {
-		walksymtable(\%glob, $method, $recurse, $sym);
+               walksymtable(\%$fullname, $method, $recurse, $sym);
 	    }
 	} else {
-	    svref_2object(\*glob)->EGV->$method();
+           svref_2object(\*$fullname)->$method();
 	}
     }
 }
@@ -408,6 +411,11 @@ string using the length and offset information in the struct:
 for ordinary scalars it will return the string that you'd see
 from Perl, even if it contains null characters.
 
+=item RV
+
+Same as B::RV::RV, except that it will die() if the PV isn't
+a reference.
+
 =item PVX
 
 This method is less often useful. It assumes that the string
@@ -437,6 +445,10 @@ are always stored with a null terminator, and the length field
 
 =item MOREMAGIC
 
+=item precomp
+
+Only valid on r-magic, returns the string that generated the regexp.
+
 =item PRIVATE
 
 =item TYPE
@@ -445,7 +457,14 @@ are always stored with a null terminator, and the length field
 
 =item OBJ
 
+Will die() if called on r-magic.
+
 =item PTR
+
+=item REGEX
+
+Only valid on r-magic, returns the integer value of the REGEX stored
+in the MAGIC.
 
 =back
 
@@ -562,6 +581,13 @@ If you're working with globs at runtime, and need to disambiguate
 
 =item IoFLAGS
 
+=item IsSTD
+
+Takes one arguments ( 'stdin' | 'stdout' | 'stderr' ) and returns true
+if the IoIFP of the object is equal to the handle whose name was
+passed as argument ( i.e. $io->IsSTD('stderr') is true if
+IoIFP($io) == PerlIO_stdin() ).
+
 =back
 
 =head2 B::AV METHODS
@@ -603,6 +629,8 @@ If you're working with globs at runtime, and need to disambiguate
 =item XSUB
 
 =item XSUBANY
+
+For constant subroutines, returns the constant SV returned by the subroutine.
 
 =item CvFLAGS
 
@@ -720,9 +748,15 @@ This returns the op description from the global C PL_op_desc array
 
 =item pmflags
 
+=item pmdynflags
+
 =item pmpermflags
 
 =item precomp
+
+=item pmoffet
+
+Only when perl was compiled with ithreads.
 
 =back
 
@@ -799,6 +833,14 @@ program.
 
 Returns the AV object (i.e. in class B::AV) representing INIT blocks.
 
+=item begin_av
+
+Returns the AV object (i.e. in class B::AV) representing BEGIN blocks.
+
+=item end_av
+
+Returns the AV object (i.e. in class B::AV) representing END blocks.
+
 =item main_root
 
 Returns the root op (i.e. an object in the appropriate B::OP-derived
@@ -811,6 +853,10 @@ Returns the starting op of the main part of the Perl program.
 =item comppadlist
 
 Returns the AV object (i.e. in class B::AV) of the global comppadlist.
+
+=item regex_padav
+
+Only when perl was compiled with ithreads.
 
 =item sv_undef
 
@@ -867,7 +913,7 @@ print_subs() is a B::GV method you have declared.
 Takes any Perl variable and turns it into an object in the
 appropriate B::OP-derived or B::SV-derived class. Apart from functions
 such as C<main_root>, this is the primary way to get an initial
-"handle" on a internal perl data structure which can then be followed
+"handle" on an internal perl data structure which can then be followed
 with the other access methods.
 
 =item ppname(OPNUM)

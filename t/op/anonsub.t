@@ -26,7 +26,7 @@ for (@prgs){
     my($prog,$expected) = split(/\nEXPECT\n/, $_);
     open TEST, ">$tmpfile";
     print TEST "$prog\n";
-    close TEST;
+    close TEST or die "Could not close: $!";
     my $results = $Is_VMS ?
 		`MCR $^X "-I[-.lib]" $switch $tmpfile 2>&1` :
 		  $Is_MSWin32 ?
@@ -95,5 +95,10 @@ sub X {
     Y(sub { print $n });
 }
 X();
+EXPECT
+ok 1
+########
+package;
+print sub { return "ok 1\n" } -> ();
 EXPECT
 ok 1

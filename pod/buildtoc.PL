@@ -65,6 +65,7 @@ if (-d "pod") {
     perlamiga          
     perlbeos
     perlbs2000
+    perlce
     perlcygwin          
     perldgux             
     perldos             
@@ -94,6 +95,7 @@ if (-d "pod") {
     qw(
 
     perl
+    perlintro
     perlfaq
     perltoc
     perlbook
@@ -107,6 +109,7 @@ if (-d "pod") {
     perldsc
     perlrequick
     perlpod
+    perlpodspec
     perlstyle
     perltrap
 
@@ -119,6 +122,7 @@ if (-d "pod") {
     perlvar
     perllol
     perlopentut
+    perlpacktut
     perlretut
 
     perlre
@@ -128,7 +132,7 @@ if (-d "pod") {
 
     perlboot
     perltoot
-    perltootc
+    perltooc
     perlobj
     perlbot
     perltie
@@ -136,18 +140,22 @@ if (-d "pod") {
     perlipc
     perlfork
     perlnumber
+
     perlthrtut
+    perlothrtut
 
     perlport
     perllocale
+    perluniintro
     perlunicode
     perlebcdic
 
     perlsec
 
     perlmod
-    perlmodlib
     perlmodinstall
+    perlmodlib
+    perlmodstyle
     perlnewmod
 
     perlfaq1            
@@ -184,6 +192,7 @@ if (-d "pod") {
     perl572delta         
     perl571delta         
     perl570delta         
+    perl561delta         
     perl56delta         
     perl5005delta       
     perl5004delta       
@@ -277,12 +286,12 @@ find \&getpods => qw(../lib ../ext);
 
 sub getpods {
     if (/\.p(od|m)$/) {
-	# Skip .pm files that have corresponding .pod files, and Functions.pm.
-	return if /(.*)\.pm$/ && -f "$1.pod";
 	my $file = $File::Find::name;
 	return if $file eq '../lib/Pod/Functions.pm'; # Used only by pod itself
         return if $file =~ m!lib/Attribute/Handlers/demo/!;
-
+	return if $file =~ m!lib/Net/FTP/.+\.pm!; # Hi, Graham! :-)
+        return if $file =~ m!lib/Math/BigInt/t/!;
+	return if $file =~ m!/Devel/PPPort/[Hh]arness|lib/Devel/Harness!i;
 	die "tut $name" if $file =~ /TUT/;
 	unless (open (F, "< $_\0")) {
 	    warn "bogus <$file>: $!";

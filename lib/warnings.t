@@ -1,4 +1,4 @@
-#!./perl 
+#!./perl
 
 BEGIN {
     chdir 't' if -d 't';
@@ -33,13 +33,13 @@ foreach my $file (@w_files) {
     open F, "<$file" or die "Cannot open $file: $!\n" ;
     my $line = 0;
     while (<F>) {
-        $line++; 
+        $line++;
 	last if /^__END__/ ;
     }
 
     {
         local $/ = undef;
-        $files++; 
+        $files++;
         @prgs = (@prgs, $file, split "\n########\n", <F>) ;
     }
     close F ;
@@ -48,13 +48,13 @@ foreach my $file (@w_files) {
 undef $/;
 
 print "1..", scalar(@prgs)-$files, "\n";
- 
- 
+
+
 for (@prgs){
     unless (/\n/)
      {
-      print "# From $_\n"; 
-      next; 
+      print "# From $_\n";
+      next;
      }
     my $switch = "";
     my @temps = () ;
@@ -66,7 +66,7 @@ for (@prgs){
     if ( $prog =~ /--FILE--/) {
         my(@files) = split(/\n--FILE--\s*([^\s\n]*)\s*\n/, $prog) ;
 	shift @files ;
-	die "Internal error test $i didn't split into pairs, got " . 
+	die "Internal error test $i didn't split into pairs, got " .
 		scalar(@files) . "[" . join("%%%%", @files) ."]\n"
 	    if @files % 2 ;
 	while (@files > 2) {
@@ -75,26 +75,41 @@ for (@prgs){
     	    push @temps, $filename ;
 	    open F, ">$filename" or die "Cannot open $filename: $!\n" ;
 	    print F $code ;
-	    close F ;
+	    close F or die "Cannot close $filename: $!\n";
 	}
 	shift @files ;
 	$prog = shift @files ;
     }
-    open TEST, ">$tmpfile";
+    open TEST, ">$tmpfile" or die "Cannot open >$tmpfile: $!";
+    print TEST q{
+        BEGIN {
+            open(STDERR, ">&STDOUT")
+              or die "Can't dup STDOUT->STDERR: $!;";
+        }
+    };
+    print TEST "\n#line 1\n";  # So the line numbers don't get messed up.
     print TEST $prog,"\n";
-    close TEST;
+    close TEST or die "Cannot close $tmpfile: $!";
     my $results = $Is_VMS ?
-                  `./perl "-I../lib" $switch $tmpfile 2>&1` :
+	              `./perl "-I../lib" $switch $tmpfile` :
 		  $Is_MSWin32 ?
-                  `.\\perl -I../lib $switch $tmpfile 2>&1` :
+		      `.\\perl -I../lib $switch $tmpfile` :
 		  $Is_NetWare ?
-                  `perl -I../lib $switch $tmpfile 2>&1` :
-                  `./perl -I../lib $switch $tmpfile 2>&1`;
+		      `perl -I../lib $switch $tmpfile` :
+		  $Is_MacOS ?
+		      `$^X -I::lib $switch -MMac::err=unix $tmpfile` :
+                  `./perl -I../lib $switch $tmpfile`;
     my $status = $?;
     $results =~ s/\n+$//;
     # allow expected output to be written as if $prog is on STDIN
     $results =~ s/tmp\d+/-/g;
-    $results =~ s/\n%[A-Z]+-[SIWEF]-.*$// if $Is_VMS;  # clip off DCL status msg
+    if ($^O eq 'VMS') {
+        # some tests will trigger VMS messages that won't be expected
+        $results =~ s/\n?%[A-Z]+-[SIWEF]-[A-Z]+,.*//;
+
+        # pipes double these sometimes
+        $results =~ s/\n\n/\n/g;
+    }
 # bison says 'parse error' instead of 'syntax error',
 # various yaccs may or may not capitalize 'syntax'.
     $results =~ s/^(syntax|parse) error/syntax error/mig;
@@ -104,17 +119,28 @@ for (@prgs){
     my $prefix = ($results =~ s#^PREFIX(\n|$)##) ;
     # any special options? (OPTIONS foo bar zap)
     my $option_regex = 0;
+    my $option_random = 0;
     if ($expected =~ s/^OPTIONS? (.+)\n//) {
 	foreach my $option (split(' ', $1)) {
 	    if ($option eq 'regex') { # allow regular expressions
 		$option_regex = 1;
-	    } else {
+	    } 
+	    elsif ($option eq 'random') { # all lines match, but in any order
+		$option_random = 1;
+	    }
+	    else {
 		die "$0: Unknown OPTION '$option'\n";
 	    }
 	}
     }
+    die "$0: can't have OPTION regex and random\n"
+        if $option_regex + option_random > 1;
     if ( $results =~ s/^SKIPPED\n//) {
 	print "$results\n" ;
+    }
+    elsif ($option_random)
+    {
+        print "not " if !randomMatch($results, $expected);
     }
     elsif (($prefix  && (( $option_regex && $results !~ /^$expected/) ||
 			 (!$option_regex && $results !~ /^\Q$expected/))) or
@@ -126,6 +152,18 @@ for (@prgs){
         print "not ";
     }
     print "ok ", ++$i, "\n";
-    foreach (@temps) 
-	{ unlink $_ if $_ } 
+    foreach (@temps)
+	{ unlink $_ if $_ }
+}
+
+sub randomMatch
+{
+    my $got = shift ;
+    my $expected = shift;
+
+    my @got = sort split "\n", $got ;
+    my @expected = sort split "\n", $expected ;
+
+   return "@got" eq "@expected";
+
 }

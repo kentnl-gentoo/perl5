@@ -1,12 +1,11 @@
 =head1 NAME
 
-perlfaq4 - Data Manipulation ($Revision: 1.49 $, $Date: 1999/05/23 20:37:49 $)
+perlfaq4 - Data Manipulation ($Revision: 1.14 $, $Date: 2002/02/08 22:30:23 $)
 
 =head1 DESCRIPTION
 
-The section of the FAQ answers questions related to the manipulation
-of data as numbers, dates, strings, arrays, hashes, and miscellaneous
-data issues.
+This section of the FAQ answers questions related to manipulating
+numbers, dates, strings, arrays, hashes, and miscellaneous data issues.
 
 =head1 Data: Numbers
 
@@ -123,24 +122,130 @@ Perl numbers whose absolute values are integers under 2**31 (on 32 bit
 machines) will work pretty much like mathematical integers.  Other numbers
 are not guaranteed.
 
-=head2 How do I convert bits into ints?
+=head2 How do I convert between numeric representations?
 
-To turn a string of 1s and 0s like C<10110110> into a scalar containing
-its binary value, use the pack() and unpack() functions (documented in
-L<perlfunc/"pack"> and L<perlfunc/"unpack">):
+As always with Perl there is more than one way to do it.  Below
+are a few examples of approaches to making common conversions
+between number representations.  This is intended to be representational
+rather than exhaustive.
 
-    $decimal = unpack('c', pack('B8', '10110110'));
+Some of the examples below use the Bit::Vector module from CPAN.
+The reason you might choose Bit::Vector over the perl built in
+functions is that it works with numbers of ANY size, that it is
+optimized for speed on some operations, and for at least some
+programmers the notation might be familiar.
 
-This packs the string C<10110110> into an eight bit binary structure.
-This is then unpacked as a character, which returns its ordinal value.
+=item B<How do I convert Hexadecimal into decimal:>
 
-This does the same thing:
+Using perl's built in conversion of 0x notation:
+
+    $int = 0xDEADBEEF;
+    $dec = sprintf("%d", $int);
+
+Using the hex function:
+
+    $int = hex("DEADBEEF");
+    $dec = sprintf("%d", $int);
+
+Using pack:
+
+    $int = unpack("N", pack("H8", substr("0" x 8 . "DEADBEEF", -8)));
+    $dec = sprintf("%d", $int);
+
+Using the CPAN module Bit::Vector:
+
+    use Bit::Vector;
+    $vec = Bit::Vector->new_Hex(32, "DEADBEEF");
+    $dec = $vec->to_Dec();
+
+=item B<How do I convert from decimal to hexadecimal:>
+
+Using sprint:
+
+    $hex = sprintf("%X", 3735928559);
+
+Using unpack
+
+    $hex = unpack("H*", pack("N", 3735928559));
+
+Using Bit::Vector
+
+    use Bit::Vector;
+    $vec = Bit::Vector->new_Dec(32, -559038737);
+    $hex = $vec->to_Hex();
+
+And Bit::Vector supports odd bit counts:
+
+    use Bit::Vector;
+    $vec = Bit::Vector->new_Dec(33, 3735928559);
+    $vec->Resize(32); # suppress leading 0 if unwanted
+    $hex = $vec->to_Hex();
+
+=item B<How do I convert from octal to decimal:>
+
+Using Perl's built in conversion of numbers with leading zeros:
+
+    $int = 033653337357; # note the leading 0!
+    $dec = sprintf("%d", $int);
+
+Using the oct function:
+
+    $int = oct("33653337357");
+    $dec = sprintf("%d", $int);
+
+Using Bit::Vector:
+
+    use Bit::Vector;
+    $vec = Bit::Vector->new(32);
+    $vec->Chunk_List_Store(3, split(//, reverse "33653337357"));
+    $dec = $vec->to_Dec();
+
+=item B<How do I convert from decimal to octal:>
+
+Using sprintf:
+
+    $oct = sprintf("%o", 3735928559);
+
+Using Bit::Vector
+
+    use Bit::Vector;
+    $vec = Bit::Vector->new_Dec(32, -559038737);
+    $oct = reverse join('', $vec->Chunk_List_Read(3));
+
+=item B<How do I convert from binary to decimal:>
+
+Using pack and ord
 
     $decimal = ord(pack('B8', '10110110'));
 
-Here's an example of going the other way:
+Using pack and unpack for larger strings
 
-    $binary_string = unpack('B*', "\x29");
+    $int = unpack("N", pack("B32",
+	substr("0" x 32 . "11110101011011011111011101111", -32)));
+    $dec = sprintf("%d", $int);
+
+    # substr() is used to left pad a 32 character string with zeros.
+
+Using Bit::Vector:
+
+    $vec = Bit::Vector->new_Bin(32, "11011110101011011011111011101111");
+    $dec = $vec->to_Dec();
+
+=item B<How do I convert from decimal to binary:>
+
+Using unpack;
+
+    $bin = unpack("B*", pack("N", 3735928559));
+
+Using Bit::Vector:
+
+    use Bit::Vector;
+    $vec = Bit::Vector->new_Dec(32, -559038737);
+    $bin = $vec->to_Bin();
+
+The remaining transformations (e.g. hex -> oct, bin -> hex, etc.)
+are left as an exercise to the inclined reader.
+
 
 =head2 Why doesn't & work the way I want it to?
 
@@ -216,7 +321,7 @@ will not create a list of 500,000 integers.
 
 =head2 How can I output Roman numerals?
 
-Get the http://www.perl.com/CPAN/modules/by-module/Roman module.
+Get the http://www.cpan.org/modules/by-module/Roman module.
 
 =head2 Why aren't my random numbers random?
 
@@ -227,10 +332,11 @@ call C<srand> more than once--you make your numbers less random, rather
 than more.
 
 Computers are good at being predictable and bad at being random
-(despite appearances caused by bugs in your programs :-).
-http://www.perl.com/CPAN/doc/FMTEYEWTK/random , courtesy of Tom
-Phoenix, talks more about this.  John von Neumann said, ``Anyone who
-attempts to generate random numbers by deterministic means is, of
+(despite appearances caused by bugs in your programs :-).  see the
+F<random> artitcle in the "Far More Than You Ever Wanted To Know"
+collection in http://www.cpan.org/olddoc/FMTEYEWTK.tgz , courtesy of
+Tom Phoenix, talks more about this.  John von Neumann said, ``Anyone
+who attempts to generate random numbers by deterministic means is, of
 course, living in a state of sin.''
 
 If you want numbers that are more random than C<rand> with C<srand>
@@ -248,23 +354,6 @@ The day of the year is in the array returned by localtime() (see
 L<perlfunc/"localtime">):
 
     $day_of_year = (localtime(time()))[7];
-
-or more legibly (in 5.7.1 or higher):
-
-    use Time::Piece;
-    $day_of_year = localtime->day_of_year();
-
-You can find the week of the year by using Time::Piece's strftime():
-
-    $week_of_year = localtime->strftime("%U");
-    $iso_week = localtime->strftime("%V");
-
-The difference between %U and %V is that %U assumes that the first day
-of week 1 is the first Sunday of the year, whereas ISO 8601:1988 uses
-the first week that has at least 4 days in the current year, and with
-Monday as the first day of the week. You can also use %W, which will
-return the week of the year with Monday as the first day of week 1. See
-your strftime(3) man page for more details.
 
 =head2 How do I find the current century or millennium?
 
@@ -295,10 +384,6 @@ your dates, then you should probably use either of the Date::Manip and
 Date::Calc modules from CPAN before you go hacking up your own parsing
 routine to handle arbitrary date formats.
 
-Also note that the core module Time::Piece overloads the addition and
-subtraction operators to provide date calculation options. See
-L<Time::Piece/Date Calculations>.
-
 =head2 How can I take a string and turn it into epoch seconds?
 
 If it's a regular enough string that it always has the same format,
@@ -308,19 +393,15 @@ and Date::Manip modules from CPAN.
 
 =head2 How can I find the Julian Day?
 
-Use Time::Piece as follows:
-
-    use Time::Piece;
-    my $julian_day = localtime->julian_day;
-    my $mjd = localtime->mjd; # modified julian day
+Use the Time::JulianDay module (part of the Time-modules bundle
+available from CPAN.)
 
 Before you immerse yourself too deeply in this, be sure to verify that
 it is the I<Julian> Day you really want.  Are you interested in a way
 of getting serial days so that you just can tell how many days they
 are apart or so that you can do also other date arithmetic?  If you
 are interested in performing date arithmetic, this can be done using
-Time::Piece (standard module since Perl 5.8), or by modules
-Date::Manip or Date::Calc.
+modules Date::Manip or Date::Calc.
 
 There is too many details and much confusion on this issue to cover in
 this FAQ, but the term is applied (correctly) to a calendar now
@@ -342,14 +423,6 @@ epoch.  Take twenty-four hours off that:
 
 Then you can pass this to C<localtime()> and get the individual year,
 month, day, hour, minute, seconds values.
-
-Alternatively, you can use Time::Piece to subtract a day from the value
-returned from C<localtime()>:
-
-    use Time::Piece;
-    use Time::Seconds; # imports seconds constants, like ONE_DAY
-    my $today = localtime();
-    my $yesterday = $today - ONE_DAY;
 
 Note very carefully that the code above assumes that your days are
 twenty-four hours each.  For most people, there are two days a year
@@ -508,7 +581,7 @@ really does work:
     @( = ('(','');
     @) = (')','');
     ($re=$_)=~s/((BEGIN)|(END)|.)/$)[!$3]\Q$1\E$([!$2]/gs;
-    @$ = (eval{/$re/},$@!~/unmatched/);
+    @$ = (eval{/$re/},$@!~/unmatched/i);
     print join("\n",@$[0..$#$]) if( $$[-1] );
 
 =head2 How do I reverse a string?
@@ -539,6 +612,15 @@ Use Text::Wrap (part of the standard Perl distribution):
 
 The paragraphs you give to Text::Wrap should not contain embedded
 newlines.  Text::Wrap doesn't justify the lines (flush-right).
+
+Or use the CPAN module Text::Autoformat.  Formatting files can be easily
+done by making a shell alias, like so:
+
+    alias fmt="perl -i -MText::Autoformat -n0777 \
+        -e 'print autoformat $_, {all=>1}' $*"
+
+See the documentation for Text::Autoformat to appreciate its many
+capabilities.
 
 =head2 How can I access/change the first N letters of a string?
 
@@ -616,7 +698,7 @@ To make the first letter of each word upper case:
 
 This has the strange effect of turning "C<don't do it>" into "C<Don'T
 Do It>".  Sometimes you might want this.  Other times you might need a
-more thorough solution (Suggested by brian d.  foy):
+more thorough solution (Suggested by brian d foy):
 
     $string =~ s/ (
                  (^\w)    #at the beginning of the line
@@ -893,7 +975,7 @@ in the indentation.
             would deliver us. You are a liar, Saruman, and a corrupter
             of men's hearts.  --Theoden in /usr/src/perl/taint.c
         FINIS
-    $quote =~ s/\s*--/\n--/;
+    $quote =~ s/\s+--/\n--/;
 
 A nice general-purpose fixer-upper function for indented here documents
 follows.  It expects to be called with a here document as its argument.
@@ -1231,20 +1313,40 @@ lists, or you could just do something like this with an array:
 
 =head2 How do I shuffle an array randomly?
 
-Use this:
+If you either have Perl 5.8.0 or later installed, or if you have
+Scalar-List-Utils 1.03 or later installed, you can say:
 
-    # fisher_yates_shuffle( \@array ) : 
-    # generate a random permutation of @array in place
+        use List::Util 'shuffle';
+
+	@shuffled = shuffle(@list);
+
+If not, you can use this:
+
+    # fisher_yates_shuffle
+    # generate a random permutation of an array in place
+    # As in shuffling a deck of cards
+    #
     sub fisher_yates_shuffle {
-        my $array = shift;
-        my $i;
-        for ($i = @$array; --$i; ) {
+        my $deck = shift;  # $deck is a reference to an array
+        my $i = @$deck;
+        while (--$i) {
             my $j = int rand ($i+1);
-            @$array[$i,$j] = @$array[$j,$i];
+            @$deck[$i,$j] = @$deck[$j,$i];
         }
     }
 
-    fisher_yates_shuffle( \@array );    # permutes @array in place
+And here is an example of using it:
+
+    #
+    # shuffle my mpeg collection
+    #
+    my @mpeg = <audio/*/*.mp3>;
+    fisher_yates_shuffle( \@mpeg );    # randomize @mpeg in place
+    print @mpeg;
+
+Note that the above implementation shuffles an array in place,
+unlike the List::Util::shuffle() which takes a list and returns
+a new shuffled list.
 
 You've probably seen shuffling algorithms that work using splice,
 randomly picking another element to swap the current element with
@@ -1324,6 +1426,12 @@ in the permute() function should work on any list:
 	}
     }
 
+Unfortunately, this algorithm is very inefficient. The Algorithm::Permute
+module from CPAN runs at least an order of magnitude faster. If you don't
+have a C compiler (or a binary distribution of Algorithm::Permute), then
+you can use List::Permutor which is written in pure Perl, and is still
+several times faster than the algorithm above.
+
 =head2 How do I sort an array by (anything)?
 
 Supply a comparison function to sort() (described in L<perlfunc/sort>):
@@ -1365,8 +1473,9 @@ If you need to sort on several fields, the following paradigm is useful.
 This can be conveniently combined with precalculation of keys as given
 above.
 
-See http://www.perl.com/CPAN/doc/FMTEYEWTK/sort.html for more about
-this approach.
+See the F<sort> artitcle article in the "Far More Than You Ever Wanted
+To Know" collection in http://www.cpan.org/olddoc/FMTEYEWTK.tgz for
+more about this approach.
 
 See also the question below on sorting hashes.
 
@@ -1379,7 +1488,7 @@ For example, this sets $vec to have bit N set if $ints[N] was set:
     $vec = '';
     foreach(@ints) { vec($vec,$_,1) = 1 }
 
-And here's how, given a vector in $vec, you can
+Here's how, given a vector in $vec, you can
 get those bits into your @ints array:
 
     sub bitvec_to_list {
@@ -1414,7 +1523,16 @@ get those bits into your @ints array:
 This method gets faster the more sparse the bit vector is.
 (Courtesy of Tim Bunce and Winfried Koenig.)
 
-Here's a demo on how to use vec():
+Or use the CPAN module Bit::Vector:
+
+    $vector = Bit::Vector->new($num_of_bits);
+    $vector->Index_List_Store(@ints);
+    @ints = $vector->Index_List_Read();
+
+Bit::Vector provides efficient methods for bit vector, sets of small integers
+and "big int" math. 
+
+Here's a more extensive illustration using vec():
 
     # vec demo
     $vector = "\xff\x0f\xef\xfe";
@@ -1518,13 +1636,13 @@ worry you, you can always reverse the hash into a hash of arrays instead:
 =head2 How can I know how many entries are in a hash?
 
 If you mean how many keys, then all you have to do is
-take the scalar sense of the keys() function:
+use the keys() function in a scalar context:
 
-    $num_keys = scalar keys %hash;
+    $num_keys = keys %hash;
 
-The keys() function also resets the iterator, which in void context is
-faster for tied hashes than would be iterating through the whole 
-hash, one key-value pair at a time.
+The keys() function also resets the iterator, which means that you may 
+see strange results if you use this between uses of other hash operators 
+such as each().
 
 =head2 How do I sort a hash (optionally by value instead of key)?
 
@@ -1732,7 +1850,7 @@ in L<perltoot>.
 
 =head2 How can I use a reference as a hash key?
 
-You can't do this directly, but you could use the standard Tie::Refhash
+You can't do this directly, but you could use the standard Tie::RefHash
 module distributed with Perl.
 
 =head1 Data: Misc
@@ -1802,10 +1920,10 @@ respectively.
 =head2 How do I keep persistent data across program calls?
 
 For some specific applications, you can use one of the DBM modules.
-See L<AnyDBM_File>.  More generically, you should consult the FreezeThaw,
-Storable, or Class::Eroot modules from CPAN.  Starting from Perl 5.8
-Storable is part of the standard distribution.  Here's one example using
-Storable's C<store> and C<retrieve> functions:
+See L<AnyDBM_File>.  More generically, you should consult the FreezeThaw
+or Storable modules from CPAN.  Starting from Perl 5.8 Storable is part
+of the standard distribution.  Here's one example using Storable's C<store>
+and C<retrieve> functions:
 
     use Storable; 
     store(\%hash, "filename");
@@ -1846,15 +1964,11 @@ the PDL module from CPAN instead--it makes number-crunching easy.
 
 =head1 AUTHOR AND COPYRIGHT
 
-Copyright (c) 1997-1999 Tom Christiansen and Nathan Torkington.
+Copyright (c) 1997-2002 Tom Christiansen and Nathan Torkington.
 All rights reserved.
 
-When included as part of the Standard Version of Perl, or as part of
-its complete documentation whether printed or otherwise, this work
-may be distributed only under the terms of Perl's Artistic License.
-Any distribution of this file or derivatives thereof I<outside>
-of that package require that special arrangements be made with
-copyright holder.
+This documentation is free; you can redistribute it and/or modify it
+under the same terms as Perl itself.
 
 Irrespective of its distribution, all code examples in this file
 are hereby placed into the public domain.  You are permitted and

@@ -1,6 +1,6 @@
 package ExtUtils::Command;
 
-use 5.005_64;
+use 5.006_001;
 use strict;
 # use AutoLoader;
 use Carp;
@@ -71,7 +71,7 @@ sub eqtime
  utime((stat($src))[8,9],$dst);
 }
 
-=item rm_f files....
+=item rm_rf files....
 
 Removes directories - recursively (even if readonly)
 
@@ -108,8 +108,8 @@ Makes files exist, with current timestamp
 
 sub touch
 {
- expand_wildcards();
  my $t    = time;
+ expand_wildcards();
  while (@ARGV)
   {
    my $file = shift(@ARGV);               

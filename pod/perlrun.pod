@@ -4,7 +4,7 @@ perlrun - how to execute the Perl interpreter
 
 =head1 SYNOPSIS
 
-B<perl>	S<[ B<-CsTuUWX> ]>
+B<perl>	S<[ B<-CsTtuUWX> ]>
 	S<[ B<-hv> ] [ B<-V>[:I<configvar>] ]>
 	S<[ B<-cw> ] [ B<-d>[:I<debugger>] ] [ B<-D>[I<number/list>] ]>
 	S<[ B<-pna> ] [ B<-F>I<pattern> ] [ B<-l>[I<octal>] ] [ B<-0>[I<octal>] ]>
@@ -301,9 +301,11 @@ See L<perldebug>.
 sets debugging flags.  To watch how it executes your program, use
 B<-Dtls>.  (This works only if debugging is compiled into your
 Perl.)  Another nice value is B<-Dx>, which lists your compiled
-syntax tree.  And B<-Dr> displays compiled regular expressions. As an
-alternative, specify a number instead of list of letters (e.g., B<-D14> is
-equivalent to B<-Dtls>):
+syntax tree.  And B<-Dr> displays compiled regular expressions;
+the format of the output is explained in L<perldebguts>. 
+
+As an alternative, specify a number instead of list of letters (e.g.,
+B<-D14> is equivalent to B<-Dtls>):
 
         1  p  Tokenizing and parsing
         2  s  Stack snapshots
@@ -311,7 +313,7 @@ equivalent to B<-Dtls>):
         8  t  Trace execution
        16  o  Method and overloading resolution
        32  c  String/numeric conversions
-       64  P  Print preprocessor command for -P, source file input state
+       64  P  Print profiling info, preprocessor command for -P, source file input state
       128  m  Memory allocation
       256  f  Format processing
       512  r  Regular expression parsing and execution
@@ -324,15 +326,20 @@ equivalent to B<-Dtls>):
     65536  S  Thread synchronization
    131072  T  Tokenising
    262144  R  Include reference counts of dumped variables (eg when using -Ds)
+   524288  J  Do not s,t,P-debug (Jump over) opcodes within package DB
 
 All these flags require B<-DDEBUGGING> when you compile the Perl
-executable.  See the F<INSTALL> file in the Perl source distribution 
+executable (but see L<Devel::Peek>, L<re> which may change this).
+See the F<INSTALL> file in the Perl source distribution 
 for how to do this.  This flag is automatically set if you include B<-g>
 option when C<Configure> asks you about optimizer/debugger flags.
 
 If you're just trying to get a print out of each line of Perl code
 as it executes, the way that C<sh -x> provides for shell scripts,
 you can't use Perl's B<-D> switch.  Instead do this 
+
+  # If you have "env" utility
+  env=PERLDB_OPTS="NonStop=1 AutoTrace=1 frame=2" perl -dS program
 
   # Bourne shell syntax
   $ PERLDB_OPTS="NonStop=1 AutoTrace=1 frame=2" perl -dS program
@@ -540,7 +547,7 @@ Here is an efficient way to delete all files older than a week:
 This is faster than using the B<-exec> switch of B<find> because you don't
 have to start a process on every filename found.  It does suffer from
 the bug of mishandling newlines in pathnames, which you can fix if
-you
+you follow the example under B<-0>. 
 
 C<BEGIN> and C<END> blocks may be used to capture control before or after
 the implicit program loop, just as in B<awk>.
@@ -569,12 +576,39 @@ the implicit loop, just as in B<awk>.
 
 =item B<-P>
 
-causes your program to be run through the C preprocessor before
+B<NOTE: Use of -P is strongly discouraged because of its inherent
+problems, including poor portability.>
+
+This option causes your program to be run through the C preprocessor before
 compilation by Perl.  Because both comments and B<cpp> directives begin
 with the # character, you should avoid starting comments with any words
 recognized by the C preprocessor such as C<"if">, C<"else">, or C<"define">.
-Also, in some platforms the C preprocessor knows too much: it knows
-about the C++ -style until-end-of-line comments starting with C<"//">.
+
+If you're considering using C<-P>, you might also want to look at the
+Filter::cpp module from CPAN.
+
+The problems of -P include, but are not limited to:
+
+=over 10
+
+=item *
+
+The C<#!> line is stripped, so any switches there don't apply.
+
+=item *
+
+A C<-P> on a C<#!> line doesn't work.
+
+=item *
+
+B<All> lines that begin with (whitespace and) a C<#> but
+do not look like cpp commands, are stripped, including anything
+inside Perl strings, regular expressions, and here-docs . 
+
+=item *
+
+In some platforms the C preprocessor knows too much: it knows about
+the C++ -style until-end-of-line comments starting with C<"//">.
 This will cause problems with common Perl constructs like
 
     s/foo//;
@@ -587,6 +621,23 @@ The workaround is to use some other quoting separator than C<"/">,
 like for example C<"!">:
 
     s!foo!!;
+
+
+
+=item *
+
+It requires not only a working C preprocessor but also a working
+F<sed>.  If not on UNIX, you are probably out of luck on this.
+
+=item *
+
+Script line numbers are not preserved.
+
+=item *
+
+The C<-x> does not work with C<-P>.
+
+=back
 
 =item B<-s>
 
@@ -652,6 +703,17 @@ On DOS-like platforms, if the program does not contain directory
 separators, it will first be searched for in the current directory
 before being searched for on the PATH.  On Unix platforms, the
 program will be searched for strictly on the PATH.
+
+=item B<-t>
+
+Like B<-T>, but taint checks will issue warnings rather than fatal
+errors.  These warnings can be controlled normally with C<no warnings
+qw(taint)>.
+
+B<NOTE: this is not a substitute for -T.> This is meant only to be
+used as a temporary development aid while securing legacy code:
+for real production code and for new secure code written from scratch
+always use the real B<-T>.
 
 =item B<-T>
 
@@ -785,7 +847,7 @@ The program should instead say:
 =item PERL5OPT
 
 Command-line options (switches).  Switches in this variable are taken
-as if they were on every Perl command line.  Only the B<-[DIMUdmw]>
+as if they were on every Perl command line.  Only the B<-[DIMUdmtw]>
 switches are allowed.  When running taint checks (because the program
 was running setuid or setgid, or the B<-T> switch was used), this
 variable is ignored.  If PERL5OPT begins with B<-T>, tainting will be
@@ -831,6 +893,11 @@ after compilation.
 Relevant only if your perl executable was built with B<-DDEBUGGING>,
 this controls the behavior of global destruction of objects and other
 references.  See L<perlhack/PERL_DESTRUCT_LEVEL> for more information.
+
+=item PERL_ENCODING
+
+If using the C<encoding> pragma without an explicit encoding name, the
+PERL_ENCODING environment variable is consulted for an encoding name.
 
 =item PERL_ROOT (specific to the VMS port)
 

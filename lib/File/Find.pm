@@ -1,25 +1,24 @@
 package File::Find;
+use 5.006;
 use strict;
 use warnings;
-use 5.6.0;
-our $VERSION = '1.01';
+use warnings::register;
+our $VERSION = '1.04';
 require Exporter;
 require Cwd;
 
 =head1 NAME
 
-find - traverse a file tree
-
-finddepth - traverse a directory structure depth-first
+File::Find - Traverse a directory tree.
 
 =head1 SYNOPSIS
 
     use File::Find;
-    find(\&wanted, '/foo', '/bar');
+    find(\&wanted, @directories_to_seach);
     sub wanted { ... }
 
     use File::Find;
-    finddepth(\&wanted, '/foo', '/bar');
+    finddepth(\&wanted, @directories_to_search);
     sub wanted { ... }
 
     use File::Find;
@@ -27,8 +26,40 @@ finddepth - traverse a directory structure depth-first
 
 =head1 DESCRIPTION
 
+These are functions for searching through directory trees doing work
+on each file found similar to the Unix I<find> command.  File::Find
+exports two functions, C<find> and C<finddepth>.  They work similarly
+but have subtle differences.
+
+=over 4
+
+=item B<find>
+
+  find(\&wanted,  @directories);
+  find(\%options, @directories);
+
+find() does a breadth-first search over the given @directories in the
+order they are given.  In essense, it works from the top down.
+
+For each file or directory found the &wanted subroutine is called (see
+below for details).  Additionally, for each directory found it will go
+into that directory and continue the search.
+
+=item B<finddepth>
+
+  finddepth(\&wanted,  @directories);
+  finddepth(\%options, @directories);
+
+finddepth() works just like find() except it does a depth-first search.
+It works from the bottom of the directory tree up.
+
+=back
+
+=head2 %options
+
 The first argument to find() is either a hash reference describing the
-operations to be performed for each file, or a code reference.
+operations to be performed for each file, or a code reference.  The
+code reference is described in L<The wanted function> below.
 
 Here are the possible keys for the hash:
 
@@ -36,14 +67,14 @@ Here are the possible keys for the hash:
 
 =item C<wanted>
 
-The value should be a code reference.  This code reference is called
-I<the wanted() function> below.
+The value should be a code reference.  This code reference is
+described in L<The wanted function> below.
 
 =item C<bydepth>
 
 Reports the name of a directory only AFTER all its entries
 have been reported.  Entry point finddepth() is a shortcut for
-specifying C<{ bydepth => 1 }> in the first argument of find().
+specifying C<{ bydepth =E<gt> 1 }> in the first argument of find().
 
 =item C<preprocess>
 
@@ -135,7 +166,7 @@ not in taint-mode, C<untaint> is a no-op.
 
 See above. This should be set using the C<qr> quoting operator.
 The default is set to  C<qr|^([-+@\w./]+)$|>. 
-Note that the parantheses are vital.
+Note that the parentheses are vital.
 
 =item C<untaint_skip>
 
@@ -144,12 +175,48 @@ including all its sub-directories. The default is to 'die' in such a case.
 
 =back
 
-The wanted() function does whatever verifications you want.
-C<$File::Find::dir> contains the current directory name, and C<$_> the
-current filename within that directory.  C<$File::Find::name> contains
-the complete pathname to the file. You are chdir()'d to
-C<$File::Find::dir> when the function is called, unless C<no_chdir>
-was specified.  When C<follow> or C<follow_fast> are in effect, there is
+=head2 The wanted function
+
+The wanted() function does whatever verifications you want on each
+file and directory.  It takes no arguments but rather does its work
+through a collection of variables.
+
+=over 4
+
+=item C<$File::Find::dir> is the current directory name,
+
+=item C<$_> is the current filename within that directory
+
+=item C<$File::Find::name> is the complete pathname to the file.
+
+=back
+
+Don't modify these variables.
+
+For example, when examining the file /some/path/foo.ext you will have:
+
+    $File::Find::dir  = /some/path/
+    $_                = foo.ext
+    $File::Find::name = /some/path/foo.ext
+
+You are chdir()'d toC<$File::Find::dir> when the function is called,
+unless C<no_chdir> was specified. Note that when changing to
+directories is in effect the root directory (F</>) is a somewhat
+special case inasmuch as the concatenation of C<$File::Find::dir>,
+C<'/'> and C<$_> is not literally equal to C<$File::Find::name>. The
+table below summarizes all variants:
+
+              $File::Find::name  $File::Find::dir  $_
+ default      /                  /                 .
+ no_chdir=>0  /etc               /                 etc
+              /etc/x             /etc              x
+
+ no_chdir=>1  /                  /                 /
+              /etc               /                 /etc
+              /etc/x             /etc              /etc/x
+
+
+When <follow> or <follow_fast> are in effect, there is
 also a C<$File::Find::fullname>.  The function may set
 C<$File::Find::prune> to prune the tree unless C<bydepth> was
 specified.  Unless C<follow> or C<follow_fast> is specified, for
@@ -176,12 +243,12 @@ produces something like:
         ($File::Find::prune = 1);
     }
 
-Set the variable C<$File::Find::dont_use_nlink> if you're using AFS,
-since AFS cheats.
+Notice the C<_> in the above C<int(-M _)>: the C<_> is a magical
+filehandle that caches the information from the preceding
+stat(), lstat(), or filetest.
 
-
-Here's another interesting wanted function.  It will find all symlinks
-that don't resolve:
+Here's another interesting wanted function.  It will find all symbolic
+links that don't resolve:
 
     sub wanted {
          -l && !-e && print "bogus link: $File::Find::name\n";
@@ -190,7 +257,36 @@ that don't resolve:
 See also the script C<pfind> on CPAN for a nice application of this
 module.
 
+=head1 WARNINGS
+
+If you run your program with the C<-w> switch, or if you use the
+C<warnings> pragma, File::Find will report warnings for several weird
+situations. You can disable these warnings by putting the statement
+
+    no warnings 'File::Find';
+
+in the appropriate scope. See L<perllexwarn> for more info about lexical
+warnings.
+
 =head1 CAVEAT
+
+=over 2
+
+=item $dont_use_nlink
+
+You can set the variable C<$File::Find::dont_use_nlink> to 1, if you want to
+force File::Find to always stat directories. This was used for file systems
+that do not have an C<nlink> count matching the number of sub-directories.
+Examples are ISO-9660 (CD-ROM), AFS, HPFS (OS/2 file system), FAT (DOS file
+system) and a couple of others.
+
+You shouldn't need to set this variable, since File::Find should now detect
+such file systems on-the-fly and switch itself to using stat. This works even
+for parts of your file system, like a mounted CD-ROM.
+
+If you do set C<$File::Find::dont_use_nlink> to 1, you will notice slow-downs.
+
+=item symlinks
 
 Be aware that the option to follow symbolic links can be dangerous.
 Depending on the structure of the directory tree (including symbolic
@@ -199,6 +295,8 @@ more than once (only if C<follow_fast> is in effect).
 Furthermore, deleting or changing files in a symbolically linked directory
 might cause very unpleasant surprises, since you delete or change files
 in an unknown directory.
+
+=back
 
 =head1 NOTES
 
@@ -244,7 +342,7 @@ directories (requires Mac::Files):
  use Mac::Files;
 
  # invisible() --  returns 1 if file/directory is invisible,  
- # 0 if it's visible or undef if an error occured
+ # 0 if it's visible or undef if an error occurred
 
  sub invisible($) { 
    my $file = shift;
@@ -433,7 +531,7 @@ sub Follow_SymLink($) {
 	return undef unless defined $DEV;  #  dangling symbolic link
     }
 
-    if ($full_check && $SLnkSeen{$DEV, $INO}++) {
+    if ($full_check && defined $DEV && $SLnkSeen{$DEV, $INO}++) {
 	if ( ($follow_skip < 1) || ((-d _) && ($follow_skip < 2)) ) {
 	    die "$AbsName encountered a second time";
 	}
@@ -472,7 +570,7 @@ sub _find_opt {
 	$pre_process, $post_process, $dangling_symlinks);
     local($dir, $name, $fullname, $prune);
 
-    my $cwd            = $wanted->{bydepth} ? Cwd::fastcwd() : Cwd::cwd();
+    my $cwd            = $wanted->{bydepth} ? Cwd::fastcwd() : Cwd::getcwd();
     my $cwd_untainted  = $cwd;
     my $check_t_cwd    = 1;
     $wanted_callback   = $wanted->{wanted};
@@ -488,7 +586,7 @@ sub _find_opt {
     $untaint_skip      = $wanted->{untaint_skip};
     $dangling_symlinks = $wanted->{dangling_symlinks};
 
-    # for compatability reasons (find.pl, find2perl)
+    # for compatibility reasons (find.pl, find2perl)
     local our ($topdir, $topdev, $topino, $topmode, $topnlink);
 
     # a symbolic link to a directory doesn't increase the link count
@@ -523,7 +621,7 @@ sub _find_opt {
 		else {
 		    $abs_dir = contract_name_Mac($cwd, $top_item);
 		    unless (defined $abs_dir) {
-			warn "Can't determine absolute path for $top_item (No such file or directory)\n" if $^W;
+			warnings::warnif "Can't determine absolute path for $top_item (No such file or directory)\n";
 			next Proc_Top_Item;
 		    }
 		}
@@ -546,7 +644,7 @@ sub _find_opt {
 		    if (ref $dangling_symlinks eq 'CODE') {
 			$dangling_symlinks->($top_item, $cwd);
 		    } else {
-			warn "$top_item is a dangling symbolic link\n" if $^W;
+			warnings::warnif "$top_item is a dangling symbolic link\n";
 		    }
 		}
 		next Proc_Top_Item;
@@ -560,7 +658,7 @@ sub _find_opt {
 	else { # no follow
 	    $topdir = $top_item;
 	    unless (defined $topnlink) {
-		warn "Can't stat $top_item: $!\n" if $^W;
+		warnings::warnif "Can't stat $top_item: $!\n";
 		next Proc_Top_Item;
 	    }
 	    if (-d _) {
@@ -597,13 +695,13 @@ sub _find_opt {
 	    }
 
 	    unless ($no_chdir || chdir $abs_dir) {
-		warn "Couldn't chdir $abs_dir: $!\n" if $^W;
+		warnings::warnif "Couldn't chdir $abs_dir: $!\n";
 		next Proc_Top_Item;
 	    }
 
 	    $name = $abs_dir . $_; # $File::Find::name
 
-	    { &$wanted_callback }; # protect against wild "next"
+	    { $wanted_callback->() }; # protect against wild "next"
 
 	}
 
@@ -638,16 +736,15 @@ sub _find_dir($$$) {
     my $SE= [];
     my $dir_name= $p_dir;
     my $dir_pref;
-    my $dir_rel;
+    my $dir_rel = $File::Find::current_dir;
     my $tainted = 0;
+    my $no_nlink;
 
     if ($Is_MacOS) {
 	$dir_pref= ($p_dir =~ /:$/) ? $p_dir : "$p_dir:"; # preface
-	$dir_rel= ':'; # directory name relative to current directory
     }
     else {
 	$dir_pref= ( $p_dir eq '/' ? '/' : "$p_dir/" );
-	$dir_rel= '.'; # directory name relative to current directory
     }
 
     local ($dir, $name, $prune, *DIR);
@@ -666,7 +763,7 @@ sub _find_dir($$$) {
 	    }
 	}
 	unless (chdir $udir) {
-	    warn "Can't cd to $udir: $!\n" if $^W;
+	    warnings::warnif "Can't cd to $udir: $!\n";
 	    return;
 	}
     }
@@ -685,7 +782,7 @@ sub _find_dir($$$) {
 	    $_= ($no_chdir ? $dir_name : $dir_rel ); # $_
 	    # prune may happen here
 	    $prune= 0;
-	    { &$wanted_callback };	# protect against wild "next"
+	    { $wanted_callback->() };	# protect against wild "next"
 	    next if $prune;
 	}
 
@@ -709,10 +806,11 @@ sub _find_dir($$$) {
 	    }
 	    unless (chdir $udir) {
 		if ($Is_MacOS) {
-		    warn "Can't cd to ($p_dir) $udir: $!\n" if $^W;
+		    warnings::warnif "Can't cd to ($p_dir) $udir: $!\n";
 		}
 		else {
-		    warn "Can't cd to (" . ($p_dir ne '/' ? $p_dir : '') . "/) $udir: $!\n" if $^W;
+		    warnings::warnif "Can't cd to (" .
+			($p_dir ne '/' ? $p_dir : '') . "/) $udir: $!\n";
 		}
 		next;
 	    }
@@ -727,22 +825,28 @@ sub _find_dir($$$) {
 
 	# Get the list of files in the current directory.
 	unless (opendir DIR, ($no_chdir ? $dir_name : $File::Find::current_dir)) {
-	    warn "Can't opendir($dir_name): $!\n" if $^W;
+	    warnings::warnif "Can't opendir($dir_name): $!\n";
 	    next;
 	}
 	@filenames = readdir DIR;
 	closedir(DIR);
-	@filenames = &$pre_process(@filenames) if $pre_process;
+	@filenames = $pre_process->(@filenames) if $pre_process;
 	push @Stack,[$CdLvl,$dir_name,"",-2]   if $post_process;
 
-	if ($nlink == 2 && !$avoid_nlink) {
+	# default: use whatever was specifid
+        # (if $nlink >= 2, and $avoid_nlink == 0, this will switch back)
+        $no_nlink = $avoid_nlink;
+        # if dir has wrong nlink count, force switch to slower stat method
+        $no_nlink = 1 if ($nlink < 2);
+
+	if ($nlink == 2 && !$no_nlink) {
 	    # This dir has no subdirectories.
 	    for my $FN (@filenames) {
 		next if $FN =~ $File::Find::skip_pattern;
 		
 		$name = $dir_pref . $FN; # $File::Find::name
 		$_ = ($no_chdir ? $name : $FN); # $_
-		{ &$wanted_callback }; # protect against wild "next"
+		{ $wanted_callback->() }; # protect against wild "next"
 	    }
 
 	}
@@ -752,7 +856,7 @@ sub _find_dir($$$) {
 
 	    for my $FN (@filenames) {
 		next if $FN =~ $File::Find::skip_pattern;
-		if ($subcount > 0 || $avoid_nlink) {
+		if ($subcount > 0 || $no_nlink) {
 		    # Seen all the subdirs?
 		    # check for directoriness.
 		    # stat is faster for a file in the current directory
@@ -766,13 +870,13 @@ sub _find_dir($$$) {
 		    else {
 			$name = $dir_pref . $FN; # $File::Find::name
 			$_= ($no_chdir ? $name : $FN); # $_
-			{ &$wanted_callback }; # protect against wild "next"
+			{ $wanted_callback->() }; # protect against wild "next"
 		    }
 		}
 		else {
 		    $name = $dir_pref . $FN; # $File::Find::name
 		    $_= ($no_chdir ? $name : $FN); # $_
-		    { &$wanted_callback }; # protect against wild "next"
+		    { $wanted_callback->() }; # protect against wild "next"
 		}
 	    }
 	}
@@ -806,13 +910,8 @@ sub _find_dir($$$) {
 
 	    if ( $nlink == -2 ) {
 		$name = $dir = $p_dir; # $File::Find::name / dir
-		if ($Is_MacOS) {
-		    $_ = ':'; # $_
-		}
-		else {
-		    $_ = '.';
-		}
-		&$post_process;		# End-of-directory processing
+                $_ = $File::Find::current_dir;
+		$post_process->();		# End-of-directory processing
 	    }
 	    elsif ( $nlink < 0 ) {  # must be finddepth, report dirname now
 		$name = $dir_name;
@@ -826,15 +925,15 @@ sub _find_dir($$$) {
 		}
 		else {
 		    if ( substr($name,-2) eq '/.' ) {
-			$name =~ s|/\.$||;
+			substr($name, length($name) == 2 ? -1 : -2) = '';
 		    }
 		    $dir = $p_dir;
 		    $_ = ($no_chdir ? $dir_name : $dir_rel );
 		    if ( substr($_,-2) eq '/.' ) {
-			s|/\.$||;
+			substr($_, length($_) == 2 ? -1 : -2) = '';
 		    }
 		}
-		{ &$wanted_callback }; # protect against wild "next"
+		{ $wanted_callback->() }; # protect against wild "next"
 	     }
 	     else {
 		push @Stack,[$CdLvl,$p_dir,$dir_rel,-1]  if  $bydepth;
@@ -862,7 +961,7 @@ sub _find_dir_symlnk($$$) {
     my $dir_name = $p_dir;
     my $dir_pref;
     my $loc_pref;
-    my $dir_rel;
+    my $dir_rel = $File::Find::current_dir;
     my $byd_flag; # flag for pending stack entry if $bydepth
     my $tainted = 0;
     my $ok = 1;
@@ -870,11 +969,9 @@ sub _find_dir_symlnk($$$) {
     if ($Is_MacOS) {
 	$dir_pref = ($p_dir =~ /:$/) ? "$p_dir" : "$p_dir:";
 	$loc_pref = ($dir_loc =~ /:$/) ? "$dir_loc" : "$dir_loc:";
-	$dir_rel  = ':'; # directory name relative to current directory
     } else {
 	$dir_pref = ( $p_dir   eq '/' ? '/' : "$p_dir/" );
 	$loc_pref = ( $dir_loc eq '/' ? '/' : "$dir_loc/" );
-	$dir_rel  = '.'; # directory name relative to current directory
     }
 
     local ($dir, $name, $fullname, $prune, *DIR);
@@ -897,7 +994,7 @@ sub _find_dir_symlnk($$$) {
 	}
 	$ok = chdir($updir_loc) unless ($p_dir eq $File::Find::current_dir);
 	unless ($ok) {
-	    warn "Can't cd to $updir_loc: $!\n" if $^W;
+	    warnings::warnif "Can't cd to $updir_loc: $!\n";
 	    return;
 	}
     }
@@ -914,7 +1011,7 @@ sub _find_dir_symlnk($$$) {
 	    # change (back) to parent directory (always untainted)
 	    unless ($no_chdir) {
 		unless (chdir $updir_loc) {
-		    warn "Can't cd to $updir_loc: $!\n" if $^W;
+		    warnings::warnif "Can't cd to $updir_loc: $!\n";
 		    next;
 		}
 	    }
@@ -925,7 +1022,7 @@ sub _find_dir_symlnk($$$) {
 	    # prune may happen here
 	    $prune= 0;
 	    lstat($_); # make sure  file tests with '_' work
-	    { &$wanted_callback }; # protect against wild "next"
+	    { $wanted_callback->() }; # protect against wild "next"
 	    next if $prune;
 	}
 
@@ -945,7 +1042,7 @@ sub _find_dir_symlnk($$$) {
 		}
 	    }
 	    unless (chdir $updir_loc) {
-		warn "Can't cd to $updir_loc: $!\n" if $^W;
+		warnings::warnif "Can't cd to $updir_loc: $!\n";
 		next;
 	    }
 	}
@@ -958,7 +1055,7 @@ sub _find_dir_symlnk($$$) {
 
 	# Get the list of files in the current directory.
 	unless (opendir DIR, ($no_chdir ? $dir_loc : $File::Find::current_dir)) {
-	    warn "Can't opendir($dir_loc): $!\n" if $^W;
+	    warnings::warnif "Can't opendir($dir_loc): $!\n";
 	    next;
 	}
 	@filenames = readdir DIR;
@@ -980,7 +1077,7 @@ sub _find_dir_symlnk($$$) {
 		$fullname = $new_loc; # $File::Find::fullname 
 		$name = $dir_pref . $FN; # $File::Find::name
 		$_ = ($no_chdir ? $name : $FN); # $_
-		{ &$wanted_callback }; # protect against wild "next"
+		{ $wanted_callback->() }; # protect against wild "next"
 	    }
 	}
 
@@ -1003,7 +1100,7 @@ sub _find_dir_symlnk($$$) {
 	    if ( $byd_flag < 0 ) {  # must be finddepth, report dirname now
 		unless ($no_chdir || ($dir_rel eq $File::Find::current_dir)) {
 		    unless (chdir $updir_loc) { # $updir_loc (parent dir) is always untainted 
-			warn "Can't cd to $updir_loc: $!\n" if $^W;
+			warnings::warnif "Can't cd to $updir_loc: $!\n";
 			next;
 		    }
 		}
@@ -1019,17 +1116,17 @@ sub _find_dir_symlnk($$$) {
 		}
 		else {
 		    if ( substr($name,-2) eq '/.' ) {
-			$name =~ s|/\.$||; # $File::Find::name
+			substr($name, length($name) == 2 ? -1 : -2) = ''; # $File::Find::name
 		    }
 		    $dir = $p_dir; # $File::Find::dir
 		    $_ = ($no_chdir ? $dir_name : $dir_rel); # $_
 		    if ( substr($_,-2) eq '/.' ) {
-			s|/\.$||;
+			substr($_, length($_) == 2 ? -1 : -2) = '';
 		    }
 		}
 
 		lstat($_); # make sure file tests with '_' work
-		{ &$wanted_callback }; # protect against wild "next"
+		{ $wanted_callback->() }; # protect against wild "next"
 	    }
 	    else {
 		push @Stack,[$dir_loc, $updir_loc, $p_dir, $dir_rel,-1]  if  $bydepth;
@@ -1091,7 +1188,7 @@ $File::Find::current_dir = File::Spec->curdir || '.';
 
 $File::Find::dont_use_nlink = 1
     if $^O eq 'os2' || $^O eq 'dos' || $^O eq 'amigaos' || $^O eq 'MSWin32' ||
-       $^O eq 'cygwin' || $^O eq 'epoc' || $^O eq 'NetWare';
+       $^O eq 'cygwin' || $^O eq 'epoc';
 
 # Set dont_use_nlink in your hint file if your system's stat doesn't
 # report the number of links in a directory as an indication

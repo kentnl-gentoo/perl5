@@ -44,7 +44,7 @@ L<fields>
 
 package base;
 
-use 5.005_64;
+use 5.006_001;
 our $VERSION = "1.02";
 
 sub import {

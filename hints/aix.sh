@@ -123,7 +123,7 @@ case "$osvers" in
     ccflags="$ccflags -D_ALL_SOURCE -D_ANSI_C_SOURCE -D_POSIX_SOURCE"
     case "$cc" in
      *gcc*) ;;
-     *) ccflags="$ccflags -qmaxmem=16384" ;;
+     *) ccflags="$ccflags -qmaxmem=16384 -qnoansialias" ;;
     esac
     nm_opt='-B'
     ;;
@@ -137,12 +137,32 @@ d_setreuid='undef'
 #
 # Tell perl which symbols to export for dynamic linking.
 cccdlflags='none'      # All AIX code is position independent
+cc_type=xlc
 case "$cc" in
-*gcc*) ccdlflags='-Xlinker' ;;
+*gcc*)
+   cc_type=gcc
+   ccdlflags='-Xlinker' ;;
 *) ccversion=`lslpp -L | grep 'C for AIX Compiler$' | awk '{print $2}'`
    case "$ccversion" in
      '') ccversion=`lslpp -L | grep 'IBM C and C++ Compilers LUM$' | awk '{print $2}'`
-	;;
+	 ;;
+     *.*.*.*.*.*.*)		# Ahhrgg, more than one C compiler installed
+	 first_cc_path=`which ${cc:-cc}`
+	 case "$first_cc_path" in
+	   *vac*)
+	     cc_type=vac ;;
+	   /usr/bin/cc)		# Check the symlink
+	     if [ -h $first_cc_path ] ; then
+	       ls -l $first_cc_path > reflect
+	       if grep -i vac reflect >/dev/null 2>&1 ; then
+		 cc_type=vac
+		 fi
+	       rm -f reflect
+	       fi
+	     ;;
+	   esac
+	 ccversion=`lslpp -L | grep 'C for AIX Compiler$' | grep -i $cc_type | awk '{print $2}' | head -1`
+	 ;;
      esac
    case "$ccversion" in
      3.6.6.0)
@@ -160,14 +180,14 @@ EOF
      5.0.0.0)
 	cat >&4 <<EOF
 ***
-*** This C compiler ($ccversion) is known to have optimizer problems
-*** when compiling perl.c.
+*** This C compiler ($ccversion) is known to have too many optimizer
+*** bugs to compile a working Perl.
 ***
-*** Disabling optimization for that file but consider upgrading
-*** your C compiler.
+*** Consider upgrading your C compiler, or getting the GNU cc (gcc).
 ***
+*** Cannot continue, aborting.
 EOF
-perl_cflags='optimize='
+	exit 1
 	;;
      5.0.1.0)
 	cat >&4 <<EOF
@@ -209,7 +229,7 @@ esac
 case "`oslevel`" in
     4.2.1.*)
       case "$ccversion" in    # Don't know if needed for gcc
-          3.1.4.*)    # libswanted "bind ... c ..." => "... c bind ..."
+          3.1.4.*|5.0.2.*)    # libswanted "bind ... c ..." => "... c bind ..."
               set `echo X "$libswanted "| sed -e 's/ bind\( .*\) \([cC]\) / \1 \2 bind /'`
               shift
               libswanted="$*"
@@ -452,18 +472,6 @@ EOM
 	    qalibs=''
 	    qacpuwidth=''
 	    ;;
-esac
-EOCBU
-
-cat > UU/uselongdouble.cbu <<'EOCBU'
-# This script UU/uselongdouble.cbu will get 'called-back' by Configure 
-# after it has prompted the user for whether to use long doubles.
-case "$uselongdouble" in
-$define|true|[yY]*)
-        # -qlongdouble for cc taken out on 20010522 cause it
-        # causes more trouble than it does any good --hmb
-        d_Gconvert='sprintf((b),"%.*llg",((int)(n)),(x))'
-	;;
 esac
 EOCBU
 

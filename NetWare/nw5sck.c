@@ -20,15 +20,15 @@
 #include "EXTERN.h"
 #include "perl.h"
 
-#if defined(PERL_OBJECT)
-#define NO_XSLOCKS
-#include "XSUB.h"
-#endif
-
 #include "nw5iop.h"
 #include "nw5sck.h"
 #include <fcntl.h>
 #include <sys/stat.h>
+
+// This is defined here since  arpa\inet.h  defines this array as an extern,
+// and  arpa\inet.h  gets included by the  inet_ntoa  call.
+char nwinet_scratch[18] = {'\0'};
+
 
 u_long
 nw_htonl(u_long hostlong)
@@ -228,6 +228,12 @@ unsigned long
 nw_inet_addr(const char *cp)
 {
     return inet_addr((char*)cp);
+}
+
+char *
+nw_inet_ntoa(struct in_addr in)
+{
+    return inet_ntoa(in);
 }
 
 SOCKET

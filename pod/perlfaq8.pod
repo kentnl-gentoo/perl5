@@ -1,6 +1,6 @@
 =head1 NAME
 
-perlfaq8 - System Interaction ($Revision: 1.39 $, $Date: 1999/05/23 18:37:57 $)
+perlfaq8 - System Interaction ($Revision: 1.6 $, $Date: 2002/01/28 04:17:27 $)
 
 =head1 DESCRIPTION
 
@@ -294,7 +294,7 @@ of code just because you're afraid of a little $| variable:
     DEV->autoflush(1);
 
 As mentioned in the previous item, this still doesn't work when using
-socket I/O between Unix and Macintosh.  You'll need to hardcode your
+socket I/O between Unix and Macintosh.  You'll need to hard code your
 line terminators, in that case.
 
 =item non-blocking input
@@ -435,7 +435,7 @@ program.  (There is no way to set the time and date on a per-process
 basis.)  This mechanism will work for Unix, MS-DOS, Windows, and NT;
 the VMS equivalent is C<set time>.
 
-However, if all you want to do is change your timezone, you can
+However, if all you want to do is change your time zone, you can
 probably get away with setting an environment variable:
 
     $ENV{TZ} = "MST7MDT";		   # unixish
@@ -634,9 +634,10 @@ STDOUT).
 
 Note that you I<must> use Bourne shell (sh(1)) redirection syntax in
 backticks, not csh(1)!  Details on why Perl's system() and backtick
-and pipe opens all use the Bourne shell are in
-http://www.perl.com/CPAN/doc/FMTEYEWTK/versus/csh.whynot .
-To capture a command's STDERR and STDOUT together:
+and pipe opens all use the Bourne shell are in the
+F<versus/csh.whynot> article in the "Far More Than You Ever Wanted To
+Know" collection in http://www.cpan.org/olddoc/FMTEYEWTK.tgz .  To
+capture a command's STDERR and STDOUT together:
 
     $output = `cmd 2>&1`;                       # either with backticks
     $pid = open(PH, "cmd 2>&1 |");              # or with an open pipe
@@ -811,7 +812,7 @@ causes many inefficiencies.
 =head2 Can I use perl to run a telnet or ftp session?
 
 Try the Net::FTP, TCP::Client, and Net::Telnet modules (available from
-CPAN).  http://www.perl.com/CPAN/scripts/netstuff/telnet.emul.shar
+CPAN).  http://www.cpan.org/scripts/netstuff/telnet.emul.shar
 will also help for emulating the telnet protocol, but Net::Telnet is
 quite probably easier to use..
 
@@ -953,9 +954,8 @@ in L<perlfunc/fork>.
 =head2 How do I use an SQL database?
 
 There are a number of excellent interfaces to SQL databases.  See the
-DBD::* modules available from http://www.perl.com/CPAN/modules/DBD .
-A lot of information on this can be found at 
-http://www.symbolstone.org/technology/perl/DBI/
+DBD::* modules available from http://www.cpan.org/modules/DBD .
+A lot of information on this can be found at http://dbi.perl.org/
 
 =head2 How do I make a system() exit on control-C?
 
@@ -1088,15 +1088,11 @@ but other times it is not.  Modern programs C<use Socket;> instead.
 
 =head1 AUTHOR AND COPYRIGHT
 
-Copyright (c) 1997-1999 Tom Christiansen and Nathan Torkington.
+Copyright (c) 1997-2002 Tom Christiansen and Nathan Torkington.
 All rights reserved.
 
-When included as part of the Standard Version of Perl, or as part of
-its complete documentation whether printed or otherwise, this work
-may be distributed only under the terms of Perl's Artistic License.
-Any distribution of this file or derivatives thereof I<outside>
-of that package require that special arrangements be made with
-copyright holder.
+This documentation is free; you can redistribute it and/or modify it
+under the same terms as Perl itself.
 
 Irrespective of its distribution, all code examples in this file
 are hereby placed into the public domain.  You are permitted and

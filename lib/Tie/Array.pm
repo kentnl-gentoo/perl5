@@ -1,6 +1,6 @@
 package Tie::Array;
 
-use 5.005_64;
+use 5.006_001;
 use strict;
 use Carp;
 our $VERSION = '1.02';
@@ -119,7 +119,7 @@ Tie::Array - base class for tied arrays
 
 =head1 SYNOPSIS
 
-    package NewArray;
+    package Tie::NewArray;
     use Tie::Array;
     @ISA = ('Tie::Array');
 
@@ -143,7 +143,7 @@ Tie::Array - base class for tied arrays
     sub EXTEND { ... }
     sub DESTROY { ... }
 
-    package NewStdArray;
+    package Tie::NewStdArray;
     use Tie::Array;
 
     @ISA = ('Tie::StdArray');

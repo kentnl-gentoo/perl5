@@ -25,7 +25,7 @@ sub writeFile
     binmode(F) if $filename =~ /bin$/i;
     foreach (@strings)
       { print F }
-    close F ;
+    close F or die "Could not close: $!" ;
 }
 
 sub ok
@@ -49,6 +49,7 @@ foreach (@INC)
 $Perl = '' ;
 $Perl = ($ENV{'FULLPERL'} or $^X or 'perl') ;
 
+$Perl = "$Perl -MMac::err=unix" if $^O eq 'MacOS';
 $Perl = "$Perl -w" ;
 
 1;

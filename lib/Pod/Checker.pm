@@ -10,7 +10,7 @@
 package Pod::Checker;
 
 use vars qw($VERSION);
-$VERSION = 1.2;  ## Current version of this package
+$VERSION = 1.3;  ## Current version of this package
 require  5.005;    ## requires this Perl version or later
 
 use Pod::ParseUtils; ## for hyperlinks and lists
@@ -290,7 +290,7 @@ LE<lt>...E<gt>.
 =item * (section) in '$page' deprecated
 
 There is a section detected in the page name of LE<lt>...E<gt>, e.g.
-C<LE<gt>passwd(2)E<gt>>. POD hyperlinks may point to POD documents only.
+C<LE<lt>passwd(2)E<gt>>. POD hyperlinks may point to POD documents only.
 Please write C<CE<lt>passwd(2)E<gt>> instead. Some formatters are able
 to expand this to appropriate code. For links to (builtin) functions,
 please say C<LE<lt>perlfunc/mkdirE<gt>>, without ().
@@ -695,7 +695,7 @@ sub idx {
 =item C<$checker-E<gt>hyperlink()>
 
 Add (if argument specified) and retrieve the hyperlinks (as defined by
-C<LE<lt>E<gt>>) of the current POD. They consist of an 2-item array: line
+C<LE<lt>E<gt>>) of the current POD. They consist of a 2-item array: line
 number and C<Pod::Hyperlink> object.
 
 =back

@@ -4,10 +4,17 @@
 
 #include "bsd_glob.h"
 
-/* XXX: need some thread awareness */
-static int GLOB_ERROR = 0;
+#define MY_CXT_KEY "File::Glob::_guts" XS_VERSION
 
-#include "constants.c"
+typedef struct {
+    int		x_GLOB_ERROR;
+} my_cxt_t;
+
+START_MY_CXT
+
+#define GLOB_ERROR	(MY_CXT.x_GLOB_ERROR)
+
+#include "const-c.inc"
 
 #ifdef WIN32
 #define errfunc		NULL
@@ -19,6 +26,11 @@ errfunc(const char *foo, int bar) {
 #endif
 
 MODULE = File::Glob		PACKAGE = File::Glob
+
+BOOT:
+{
+    MY_CXT_INIT;
+}
 
 void
 doglob(pattern,...)
@@ -32,6 +44,8 @@ PREINIT:
     SV *tmp;
 PPCODE:
     {
+	dMY_CXT;
+
 	/* allow for optional flags argument */
 	if (items > 1) {
 	    flags = (int) SvIV(ST(1));
@@ -55,4 +69,4 @@ PPCODE:
 	bsd_globfree(&pglob);
     }
 
-INCLUDE: constants.xs
+INCLUDE: const-xs.inc

@@ -70,7 +70,8 @@ bsd_realpath(path, resolved)
 	char *resolved;
 {
 #ifdef VMS
-       return Perl_rmsexpand((char*)path, resolved, NULL, 0);
+       dTHX;
+       return Perl_rmsexpand(aTHX_ (char*)path, resolved, NULL, 0);
 #else
 	struct stat sb;
 	int n, rootd, serrno;
@@ -226,22 +227,20 @@ PPCODE:
 {
     dXSTARG;
     char *path;
-    STRLEN len;
     char buf[MAXPATHLEN];
 
-    if (pathsv)
-      path = SvPV(pathsv, len);
-    else {
-        path = ".";
-        len  = 1;
-    }
+    path = pathsv ? SvPV_nolen(pathsv) : ".";
 
     if (bsd_realpath(path, buf)) {
         sv_setpvn(TARG, buf, strlen(buf));
         SvPOK_only(TARG);
+	SvTAINTED_on(TARG);
     }
     else
-      sv_setsv(TARG, &PL_sv_undef);
+        sv_setsv(TARG, &PL_sv_undef);
 
     XSprePUSH; PUSHTARG;
+#ifndef INCOMPLETE_TAINTS
+    SvTAINTED_on(TARG);
+#endif
 }

@@ -1,7 +1,6 @@
 package Encode;
 use strict;
-
-our $VERSION = '0.02';
+our $VERSION = '0.40';
 
 require DynaLoader;
 require Exporter;
@@ -42,61 +41,79 @@ use Carp;
 our %encoding;
 my @alias;  # ordered matching list
 my %alias;  # cached known aliases
+
                      # 0  1  2  3  4  5   6   7   8   9  10
 our @latin2iso_num = ( 0, 1, 2, 3, 4, 9, 10, 13, 14, 15, 16 );
 
+our %winlatin2cp   = (
+		      'Latin1'     => 1252,
+		      'Latin2'     => 1250,
+		      'Cyrillic'   => 1251,
+		      'Greek'      => 1253,
+		      'Turkish'    => 1254,
+		      'Hebrew'     => 1255,
+		      'Arabic'     => 1256,
+		      'Baltic'     => 1257,
+		      'Vietnamese' => 1258,
+		     );
 
 sub encodings
 {
  my ($class) = @_;
- return keys %encoding;
+ return
+     map { $_->[0] }
+         sort { $a->[1] cmp $b->[1] }
+               map { [$_, lc $_] }
+                   grep { $_ ne 'Internal' }
+                        keys %encoding;
 }
 
 sub findAlias
 {
- my $class = shift;
- local $_ = shift;
- unless (exists $alias{$_})
-  {
-   for (my $i=0; $i < @alias; $i += 2)
+    my $class = shift;
+    local $_ = shift;
+    # print "# findAlias $_\n";
+    unless (exists $alias{$_})
     {
-     my $alias = $alias[$i];
-     my $val   = $alias[$i+1];
-     my $new;
-     if (ref($alias) eq 'Regexp' && $_ =~ $alias)
-      {
-       $new = eval $val;
-      }
-     elsif (ref($alias) eq 'CODE')
-      {
-       $new = &{$alias}($val)
-      }
-     elsif (lc($_) eq lc($alias))
-      {
-       $new = $val;
-      }
-     if (defined($new))
-      {
-       next if $new eq $_; # avoid (direct) recursion on bugs
-       my $enc = (ref($new)) ? $new : find_encoding($new);
-       if ($enc)
-        {
-         $alias{$_} = $enc;
-         last;
-        }
-      }
+	for (my $i=0; $i < @alias; $i += 2)
+	{
+	    my $alias = $alias[$i];
+	    my $val   = $alias[$i+1];
+	    my $new;
+	    if (ref($alias) eq 'Regexp' && $_ =~ $alias)
+	    {
+		$new = eval $val;
+	    }
+	    elsif (ref($alias) eq 'CODE')
+	    {
+		$new = &{$alias}($val)
+		}
+	    elsif (lc($_) eq lc($alias))
+	    {
+		$new = $val;
+	    }
+	    if (defined($new))
+	    {
+		next if $new eq $_; # avoid (direct) recursion on bugs
+		my $enc = (ref($new)) ? $new : find_encoding($new);
+		if ($enc)
+		{
+		    $alias{$_} = $enc;
+		    last;
+		}
+	    }
+	}
     }
-  }
- return $alias{$_};
+    return $alias{$_};
 }
 
 sub define_alias
 {
- while (@_)
-  {
-   my ($alias,$name) = splice(@_,0,2);
-   push(@alias, $alias => $name);
-  }
+    while (@_)
+    {
+	my ($alias,$name) = splice(@_,0,2);
+	push(@alias, $alias => $name);
+    }
 }
 
 # Allow variants of iso-8859-1 etc.
@@ -104,6 +121,12 @@ define_alias( qr/^iso[-_]?(\d+)[-_](\d+)$/i => '"iso-$1-$2"' );
 
 # At least HP-UX has these.
 define_alias( qr/^iso8859(\d+)$/i => '"iso-8859-$1"' );
+
+# More HP stuff.
+define_alias( qr/^(?:hp-)?(arabic|greek|hebrew|kana|roman|thai|turkish)8$/i => '"${1}8"' );
+
+# The Official name of ASCII.
+define_alias( qr/^ANSI[-_]?X3\.4[-_]?1968$/i => '"ascii"' );
 
 # This is a font issue, not an encoding issue.
 # (The currency symbol of the Latin 1 upper half
@@ -113,258 +136,159 @@ define_alias( qr/^(.+)\@euro$/i => '"$1"' );
 # Allow latin-1 style names as well
 define_alias( qr/^(?:iso[-_]?)?latin[-_]?(\d+)$/i => '"iso-8859-$latin2iso_num[$1]"' );
 
+# Allow winlatin1 style names as well
+define_alias( qr/^win(latin[12]|cyrillic|baltic|greek|turkish|hebrew|arabic|baltic|vietnamese)$/i => '"cp$winlatin2cp{\u$1}"' );
+
 # Common names for non-latin prefered MIME names
 define_alias( 'ascii'    => 'US-ascii',
               'cyrillic' => 'iso-8859-5',
               'arabic'   => 'iso-8859-6',
               'greek'    => 'iso-8859-7',
-              'hebrew'   => 'iso-8859-8');
+              'hebrew'   => 'iso-8859-8',
+              'thai'     => 'iso-8859-11',
+              'tis620'   => 'iso-8859-11',
+	    );
 
 # At least AIX has IBM-NNN (surprisingly...) instead of cpNNN.
-define_alias( qr/^ibm[-_]?(\d\d\d\d?)$/i => '"cp$1"');
+# And Microsoft has their own naming (again, surprisingly).
+define_alias( qr/^(?:ibm|ms)[-_]?(\d\d\d\d?)$/i => '"cp$1"');
+
+# Sometimes seen with a leading zero.
+define_alias( qr/^cp037$/i => '"cp37"');
+
+# Ououououou.
+define_alias( qr/^macRomanian$/i => '"macRumanian"');
 
 # Standardize on the dashed versions.
 define_alias( qr/^utf8$/i  => 'utf-8' );
 define_alias( qr/^koi8r$/i => 'koi8-r' );
+define_alias( qr/^koi8u$/i => 'koi8-u' );
 
-# TODO: the HP-UX '8' encodings:  arabic8 greek8 hebrew8 roman8 turkish8
-# TODO: the Thai Encoding tis620
-# TODO: the Chinese Encoding gb18030
-# TODO: what is the Japanese 'ujis' encoding seen in some Linuxes?
+# Seen in some Linuxes.
+define_alias( qr/^ujis$/i => 'euc-jp' );
+
+# CP936 doesn't have vendor-addon for GBK, so they're identical.
+define_alias( qr/^gbk$/i => '"cp936"');
+
+# TODO: HP-UX '8' encodings arabic8 greek8 hebrew8 kana8 thai8 turkish8
+# TODO: HP-UX '15' encodings japanese15 korean15 roi15
+# TODO: Cyrillic encoding ISO-IR-111 (useful?)
+# TODO: Armenian encoding ARMSCII-8
+# TODO: Hebrew encoding ISO-8859-8-1
+# TODO: Thai encoding TCVN
+# TODO: Korean encoding Johab
+# TODO: Vietnamese encodings VPS
+# TODO: Japanese encoding JIS (not the same as SJIS)
+# TODO: Mac Asian+African encodings: Arabic Armenian Bengali Burmese
+#       ChineseSimp ChineseTrad Devanagari Ethiopic ExtArabic
+#       Farsi Georgian Gujarati Gurmukhi Hebrew Japanese
+#       Kannada Khmer Korean Laotian Malayalam Mongolian
+#       Oriya Sinhalese Symbol Tamil Telugu Tibetan Vietnamese
 
 # Map white space and _ to '-'
 define_alias( qr/^(\S+)[\s_]+(.*)$/i => '"$1-$2"' );
 
 sub define_encoding
 {
- my $obj  = shift;
- my $name = shift;
- $encoding{$name} = $obj;
- my $lc = lc($name);
- define_alias($lc => $obj) unless $lc eq $name;
- while (@_)
-  {
-   my $alias = shift;
-   define_alias($alias,$obj);
-  }
- return $obj;
+    my $obj  = shift;
+    my $name = shift;
+    $encoding{$name} = $obj;
+    my $lc = lc($name);
+    define_alias($lc => $obj) unless $lc eq $name;
+    while (@_)
+    {
+	my $alias = shift;
+	define_alias($alias,$obj);
+    }
+    return $obj;
 }
 
 sub getEncoding
 {
- my ($class,$name) = @_;
- my $enc;
- if (ref($name) && $name->can('new_sequence'))
-  {
-   return $name;
-  }
- if (exists $encoding{$name})
-  {
-   return $encoding{$name};
-  }
- else
-  {
-   return $class->findAlias($name);
-  }
+    my ($class,$name) = @_;
+    my $enc;
+    if (ref($name) && $name->can('new_sequence'))
+    {
+	return $name;
+    }
+    my $lc = lc $name;
+    if (exists $encoding{$name})
+    {
+	return $encoding{$name};
+    }
+    if (exists $encoding{$lc})
+    {
+	return $encoding{$lc};
+    }
+
+    my $oc = $class->findAlias($name);
+    return $oc if defined $oc;
+    return $class->findAlias($lc) if $lc ne $name;
+
+    return;
 }
 
 sub find_encoding
 {
- my ($name) = @_;
- return __PACKAGE__->getEncoding($name);
+    my ($name) = @_;
+    return __PACKAGE__->getEncoding($name);
 }
 
 sub encode
 {
- my ($name,$string,$check) = @_;
- my $enc = find_encoding($name);
- croak("Unknown encoding '$name'") unless defined $enc;
- my $octets = $enc->encode($string,$check);
- return undef if ($check && length($string));
- return $octets;
+    my ($name,$string,$check) = @_;
+    my $enc = find_encoding($name);
+    croak("Unknown encoding '$name'") unless defined $enc;
+    my $octets = $enc->encode($string,$check);
+    return undef if ($check && length($string));
+    return $octets;
 }
 
 sub decode
 {
- my ($name,$octets,$check) = @_;
- my $enc = find_encoding($name);
- croak("Unknown encoding '$name'") unless defined $enc;
- my $string = $enc->decode($octets,$check);
- return undef if ($check && length($octets));
- return $string;
+    my ($name,$octets,$check) = @_;
+    my $enc = find_encoding($name);
+    croak("Unknown encoding '$name'") unless defined $enc;
+    my $string = $enc->decode($octets,$check);
+    $_[1] = $octets if $check;
+    return $string;
 }
 
 sub from_to
 {
- my ($string,$from,$to,$check) = @_;
- my $f = find_encoding($from);
- croak("Unknown encoding '$from'") unless defined $f;
- my $t = find_encoding($to);
- croak("Unknown encoding '$to'") unless defined $t;
- my $uni = $f->decode($string,$check);
- return undef if ($check && length($string));
- $string = $t->encode($uni,$check);
- return undef if ($check && length($uni));
- return length($_[0] = $string);
+    my ($string,$from,$to,$check) = @_;
+    my $f = find_encoding($from);
+    croak("Unknown encoding '$from'") unless defined $f;
+    my $t = find_encoding($to);
+    croak("Unknown encoding '$to'") unless defined $t;
+    my $uni = $f->decode($string,$check);
+    return undef if ($check && length($string));
+    $string = $t->encode($uni,$check);
+    return undef if ($check && length($uni));
+    return length($_[0] = $string);
 }
 
 sub encode_utf8
 {
- my ($str) = @_;
- utf8::encode($str);
- return $str;
+    my ($str) = @_;
+  utf8::encode($str);
+    return $str;
 }
 
 sub decode_utf8
 {
- my ($str) = @_;
- return undef unless utf8::decode($str);
- return $str;
+    my ($str) = @_;
+    return undef unless utf8::decode($str);
+    return $str;
 }
 
-package Encode::Encoding;
-# Base class for classes which implement encodings
-
-sub Define
-{
- my $obj = shift;
- my $canonical = shift;
- $obj = bless { Name => $canonical },$obj unless ref $obj;
- # warn "$canonical => $obj\n";
- Encode::define_encoding($obj, $canonical, @_);
-}
-
-sub name { shift->{'Name'} }
-
-# Temporary legacy methods
-sub toUnicode    { shift->decode(@_) }
-sub fromUnicode  { shift->encode(@_) }
-
-sub new_sequence { return $_[0] }
-
-package Encode::XS;
-use base 'Encode::Encoding';
-
-package Encode::Internal;
-use base 'Encode::Encoding';
-
-# Dummy package that provides the encode interface but leaves data
-# as UTF-X encoded. It is here so that from_to() works.
-
-__PACKAGE__->Define('Internal');
-
-Encode::define_alias( 'Unicode' => 'Internal' ) if ord('A') == 65;
-
-sub decode
-{
- my ($obj,$str,$chk) = @_;
- utf8::upgrade($str);
- $_[1] = '' if $chk;
- return $str;
-}
-
-*encode = \&decode;
-
-package Encoding::Unicode;
-use base 'Encode::Encoding';
-
-__PACKAGE__->Define('Unicode') unless ord('A') == 65;
-
-sub decode
-{
- my ($obj,$str,$chk) = @_;
- my $res = '';
- for (my $i = 0; $i < length($str); $i++)
-  {
-   $res .= chr(utf8::unicode_to_native(ord(substr($str,$i,1))));
-  }
- $_[1] = '' if $chk;
- return $res;
-}
-
-sub encode
-{
- my ($obj,$str,$chk) = @_;
- my $res = '';
- for (my $i = 0; $i < length($str); $i++)
-  {
-   $res .= chr(utf8::native_to_unicode(ord(substr($str,$i,1))));
-  }
- $_[1] = '' if $chk;
- return $res;
-}
-
-
-package Encode::utf8;
-use base 'Encode::Encoding';
-# package to allow long-hand
-#   $octets = encode( utf8 => $string );
-#
-
-__PACKAGE__->Define(qw(UTF-8 utf8));
-
-sub decode
-{
- my ($obj,$octets,$chk) = @_;
- my $str = Encode::decode_utf8($octets);
- if (defined $str)
-  {
-   $_[1] = '' if $chk;
-   return $str;
-  }
- return undef;
-}
-
-sub encode
-{
- my ($obj,$string,$chk) = @_;
- my $octets = Encode::encode_utf8($string);
- $_[1] = '' if $chk;
- return $octets;
-}
-
-package Encode::iso10646_1;
-use base 'Encode::Encoding';
-# Encoding is 16-bit network order Unicode (no surogates)
-# Used for X font encodings
-
-__PACKAGE__->Define(qw(UCS-2 iso-10646-1));
-
-sub decode
-{
- my ($obj,$str,$chk) = @_;
- my $uni   = '';
- while (length($str))
-  {
-   my $code = unpack('n',substr($str,0,2,'')) & 0xffff;
-   $uni .= chr($code);
-  }
- $_[1] = $str if $chk;
- utf8::upgrade($uni);
- return $uni;
-}
-
-sub encode
-{
- my ($obj,$uni,$chk) = @_;
- my $str   = '';
- while (length($uni))
-  {
-   my $ch = substr($uni,0,1,'');
-   my $x  = ord($ch);
-   unless ($x < 32768)
-    {
-     last if ($chk);
-     $x = 0;
-    }
-   $str .= pack('n',$x);
-  }
- $_[1] = $uni if $chk;
- return $str;
-}
-
-# switch back to Encode package in case we ever add AutoLoader
-package Encode;
+require Encode::Encoding;
+require Encode::XS;
+require Encode::Internal;
+require Encode::Unicode;
+require Encode::utf8;
+require Encode::iso10646_1;
+require Encode::ucs2_le;
 
 1;
 
@@ -377,6 +301,11 @@ Encode - character encodings
 =head1 SYNOPSIS
 
     use Encode;
+
+    use Encode::TW; # for Taiwan-based Chinese encodings
+    use Encode::CN; # for China-based Chinese encodings
+    use Encode::JP; # for Japanese encodings
+    use Encode::KR; # for Korean encodings
 
 =head1 DESCRIPTION
 
@@ -400,6 +329,10 @@ of numbers, pixels in an image - or just about anything.
 When Perl is processing "binary data" the programmer wants Perl to process
 "sequences of bytes". This is not a problem for Perl - as a byte has 256
 possible values it easily fits in Perl's much larger "logical character".
+
+Due to size concerns, before using B<CJK> (Chinese, Japanese & Korean)
+encodings, you have to C<use> the corresponding
+B<Encode::>(B<TW>|B<CN>|B<JP>|B<KR>) modules first.
 
 =head2 TERMINOLOGY
 
@@ -509,17 +442,104 @@ the encoding by picking the first in the following sequence:
 
 =over 4
 
-=item * The MIME name as defined in IETF RFC-XXXX.
+=item * The MIME name as defined in IETF RFCs.
 
 =item * The name in the IANA registry.
 
-=item * The name used by the the organization that defined it.
+=item * The name used by the organization that defined it.
 
 =back
 
 Because of all the alias issues, and because in the general case
 encodings have state C<Encode> uses the encoding object internally
 once an operation is in progress.
+
+As of Perl 5.8.0, at least the following encodings are recognized
+(the => marks aliases):
+
+  ASCII
+
+  US-ASCII => ASCII
+
+The Unicode:
+
+  UTF-8
+  UTF-16
+  UCS-2
+
+  ISO 10646-1 => UCS-2
+
+The ISO 8859 and KOI:
+
+  ISO 8859-1  ISO 8859-6   ISO 8859-11         KOI8-F
+  ISO 8859-2  ISO 8859-7   (12 doesn't exist)  KOI8-R
+  ISO 8859-3  ISO 8859-8   ISO 8859-13         KOI8-U
+  ISO 8859-4  ISO 8859-9   ISO 8859-14
+  ISO 8859-5  ISO 8859-10  ISO 8859-15
+                           ISO 8859-16
+
+  Latin1  => 8859-1  Latin6  => 8859-10
+  Latin2  => 8859-2  Latin7  => 8859-13
+  Latin3  => 8859-3  Latin8  => 8859-14
+  Latin4  => 8859-4  Latin9  => 8859-15
+  Latin5  => 8859-9  Latin10 => 8859-16
+
+  Cyrillic => 8859-5
+  Arabic   => 8859-6
+  Greek    => 8859-7
+  Hebrew   => 8859-8
+  Thai     => 8859-11
+  TIS620   => 8859-11
+
+The CJKV: Chinese, Japanese, Korean, Vietnamese:
+
+  ISO 2022     ISO 2022 JP-1  JIS 0201  GB 1988   Big5       EUC-CN
+  ISO 2022 CN  ISO 2022 JP-2  JIS 0208  GB 2312   HZ         EUC-JP
+  ISO 2022 JP  ISO 2022 KR    JIS 0210  GB 12345  CNS 11643  EUC-JP-0212
+  Shift-JIS				GBK	  Big5-HKSCS EUC-KR
+  VISCII				ISO-IR-165
+
+(Due to size concerns, additional Chinese encodings including C<GB 18030>,
+C<EUC-TW> and C<BIG5PLUS> are distributed separately on CPAN, under the name
+L<Encode::HanExtra>.)
+
+The PC codepages:
+
+  CP37   CP852  CP861  CP866  CP949   CP1251  CP1256
+  CP424  CP855  CP862  CP869  CP950   CP1252  CP1257
+  CP737  CP856  CP863  CP874  CP1006  CP1253  CP1258
+  CP775  CP857  CP864  CP932  CP1047  CP1254
+  CP850  CP860  CP865  CP936  CP1250  CP1255
+
+  WinLatin1     => CP1252
+  WinLatin2     => CP1250
+  WinCyrillic   => CP1251
+  WinGreek      => CP1253
+  WinTurkiskh   => CP1254
+  WinHebrew     => CP1255
+  WinArabic     => CP1256
+  WinBaltic     => CP1257
+  WinVietnamese => CP1258
+
+(All the CPI<NNN...> are available also as IBMI<NNN...>.)
+
+The Mac codepages:
+
+  MacCentralEuropean   MacJapanese
+  MacCroatian          MacRoman
+  MacCyrillic          MacRomanian
+  MacDingbats          MacSami
+  MacGreek             MacThai
+  MacIcelandic         MacTurkish
+                       MacUkraine
+
+Miscellaneous:
+
+  7bit-greek  IR-197
+  7bit-kana   NeXTstep
+  7bit-latin1 POSIX-BC
+  DingBats    Roman8
+  GSM 0338    Symbol
 
 =head1 PERL ENCODING API
 
@@ -534,6 +554,11 @@ once an operation is in progress.
 Encodes string from Perl's internal form into I<ENCODING> and returns
 a sequence of octets.  For CHECK see L</"Handling Malformed Data">.
 
+For example to convert (internally UTF-8 encoded) Unicode data
+to octets:
+
+	$octets = encode("utf8", $unicode);
+
 =item *
 
         $string = decode(ENCODING, $bytes[, CHECK])
@@ -541,6 +566,10 @@ a sequence of octets.  For CHECK see L</"Handling Malformed Data">.
 Decode sequence of octets assumed to be in I<ENCODING> into Perl's
 internal form and returns the resulting string.  For CHECK see
 L</"Handling Malformed Data">.
+
+For example to convert ISO 8859-1 data to UTF-8:
+
+	$utf8 = decode("latin1", $latin1);
 
 =item *
 
@@ -655,8 +684,20 @@ For CHECK see L</"Handling Malformed Data">.
 =head2 Other Encodings of Unicode
 
 UTF-16 is similar to UCS-2, 16 bit or 2-byte chunks.  UCS-2 can only
-represent 0..0xFFFF, while UTF-16 has a "surrogate pair" scheme which
+represent 0..0xFFFF, while UTF-16 has a I<surrogate pair> scheme which
 allows it to cover the whole Unicode range.
+
+Surrogates are code points set aside to encode the 0x01000..0x10FFFF
+range of Unicode code points in pairs of 16-bit units.  The I<high
+surrogates> are the range 0xD800..0xDBFF, and the I<low surrogates>
+are the range 0xDC00..0xDFFFF.  The surrogate encoding is
+
+	$hi = ($uni - 0x10000) / 0x400 + 0xD800;
+	$lo = ($uni - 0x10000) % 0x400 + 0xDC00;
+
+and the decoding is
+
+	$uni = 0x10000 + ($hi - 0xD8000) * 0x400 + ($lo - 0xDC00);
 
 Encode implements big-endian UCS-2 aliased to "iso-10646-1" as that
 happens to be the name used by that representation when used with X11
@@ -667,13 +708,13 @@ can be considered as being in this form without encoding. An encoding
 to transfer strings in this form (e.g. to write them to a file) would
 need to
 
-     pack('L',map(chr($_),split(//,$string)));   # native
+     pack('L*', unpack('U*', $string));  # native
   or
-     pack('V',map(chr($_),split(//,$string)));   # little-endian
+     pack('V*', unpack('U*', $string));  # little-endian
   or
-     pack('N',map(chr($_),split(//,$string)));   # big-endian
+     pack('N*', unpack('U*', $string));  # big-endian
 
-depending on the endian required.
+depending on the endianness required.
 
 No UTF-32 encodings are implemented yet.
 
@@ -793,6 +834,9 @@ More examples:
     open(my $h, ">:encoding(latin9)")       # iso-8859-15
 
 See L<PerlIO> for more information.
+
+See also L<encoding> for how to change the default encoding of the
+data in your script.
 
 =head1 Encoding How to ...
 
@@ -1016,7 +1060,7 @@ to be rationalized.
 
 =head1 SEE ALSO
 
-L<perlunicode>, L<perlebcdic>, L<perlfunc/open>, L<PerlIO>
+L<perlunicode>, L<perlebcdic>, L<perlfunc/open>, L<PerlIO>, L<encoding>
 
 =cut
 

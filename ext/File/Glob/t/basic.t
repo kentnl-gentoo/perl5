@@ -49,9 +49,11 @@ if ($^O ne 'MSWin32' && $^O ne 'NetWare' && $^O ne 'VMS' && $^O ne 'os2') {
     ($name, $home) = (getpwuid($>))[0,7];
     1;
   } and do {
-    @a = bsd_glob("~$name", GLOB_TILDE);
-    if (scalar(@a) != 1 || $a[0] ne $home || GLOB_ERROR) {
-	print "not ";
+    if (defined $home && defined $name && -d $home) {
+	@a = bsd_glob("~$name", GLOB_TILDE);
+	if ((scalar(@a) != 1 || $a[0] ne $home || GLOB_ERROR)) {
+	    print "not ";
+	}
     }
   };
 }
@@ -90,9 +92,15 @@ else {
     #print "\@a = ", array(@a);
     rmdir $dir;
     if (scalar(@a) != 0 || GLOB_ERROR == 0) {
-	print "not ";
+	if ($^O eq 'vos') {
+	    print "not ok 6 # TODO hit VOS bug posix-956\n";
+	} else {
+	    print "not ok 6\n";
+	}
     }
-    print "ok 6\n";
+    else {
+	print "ok 6\n";
+    }
 }
 
 # check for csh style globbing
@@ -110,6 +118,7 @@ print "ok 7\n";
 # Working on t/TEST often causes this test to fail because it sees Emacs temp
 # and RCS files.  Filter them out, and .pm files too, and patch temp files.
 @a = grep !/(,v$|~$|\.(pm|ori?g|rej)$)/, @a;
+@a = (grep !/test.pl/, @a) if $^O eq 'VMS';
 
 print "# @a\n";
 
@@ -118,7 +127,7 @@ unless (@a == 3
         and $a[1] eq 'a'
         and $a[2] eq 'b')
 {
-    print "not ok 8 # @a";
+    print "not ok 8 # @a\n";
 } else {
     print "ok 8\n";
 }

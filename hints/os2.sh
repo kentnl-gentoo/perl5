@@ -108,6 +108,18 @@ exe_ext='.exe'
 # We provide it
 i_dlfcn='define'
 
+# The default one uses exponential notation between 0.0001 and 0.1
+d_Gconvert='gcvt_os2((x),(n),(b))'
+
+cat > UU/uselongdouble.cbu <<'EOCBU'
+# This script UU/uselongdouble.cbu will get 'called-back' by Configure
+# after it has prompted the user for whether to use long doubles.
+# If we will use them, let Configure choose us a Gconvert.
+case "$uselongdouble:$d_longdbl:$d_sqrtl:$d_modfl" in
+"$define:$define:$define:$define") d_Gconvert='' ;;
+esac
+EOCBU
+
 # -Zomf build has a problem with _exit() *flushing*, so the test
 # gets confused:
 fflushNULL="define"
@@ -280,6 +292,15 @@ else
 	    gnupatch="`./UU/loc patch.exe undef $pth`"
 	fi
     fi
+fi
+
+for f in less.exe less.sh less.ksh less.cmd more.exe more.sh more.ksh more.cmd ; do
+  if test -z "$pager"; then
+    pager="`./UU/loc $f '' $pth`"
+  fi
+done
+if test -z "$pager"; then
+  pager='cmd /c more'
 fi
 
 # Apply patches if needed
@@ -460,3 +481,4 @@ esac
 
 # Now go back
 cd ../..
+cp os2/*.t t/lib

@@ -7,8 +7,8 @@
 #  define END_EXTERN_C }
 #  define EXTERN_C extern "C"
 #else
-#  define START_EXTERN_C 
-#  define END_EXTERN_C 
+#  define START_EXTERN_C
+#  define END_EXTERN_C
 #  define EXTERN_C
 #endif
 #endif
@@ -145,7 +145,18 @@ DllExport  int		win32_getpid(void);
 
 DllExport char *	win32_crypt(const char *txt, const char *salt);
 
+DllExport void *	win32_get_childenv(void);
+DllExport void		win32_free_childenv(void* d);
+DllExport void		win32_clearenv(void);
+DllExport char *	win32_get_childdir(void);
+DllExport void		win32_free_childdir(char* d);
+DllExport Sighandler_t	win32_signal(int sig, Sighandler_t subcode);
+
+
 END_EXTERN_C
+
+#undef alarm
+#define alarm			win32_alarm
 
 /*
  * the following six(6) is #define in stdio.h
@@ -163,7 +174,6 @@ END_EXTERN_C
 #undef pause
 #undef sleep
 #undef times
-#undef alarm
 #undef ioctl
 #undef unlink
 #undef utime
@@ -277,7 +287,6 @@ END_EXTERN_C
 #define pause()			win32_sleep((32767L << 16) + 32767)
 #define sleep			win32_sleep
 #define times			win32_times
-#define alarm			win32_alarm
 #define ioctl			win32_ioctl
 #define link			win32_link
 #define unlink			win32_unlink
@@ -299,6 +308,17 @@ END_EXTERN_C
 #undef crypt
 #define crypt(t,s)		win32_crypt(t,s)
 
+#undef get_childenv
+#undef free_childenv
+#undef clearenv
+#undef get_childdir
+#undef free_childdir
+#define get_childenv()		win32_get_childenv()
+#define free_childenv(d)	win32_free_childenv(d)
+#define clearenv()		win32_clearenv()
+#define get_childdir()		win32_get_childdir()
+#define free_childdir(d)	win32_free_childdir(d)
+
 #undef getenv
 #define getenv win32_getenv
 #undef putenv
@@ -306,4 +326,3 @@ END_EXTERN_C
 
 #endif /* WIN32IO_IS_STDIO */
 #endif /* WIN32IOP_H */
-

@@ -15,11 +15,21 @@ BEGIN {
 use strict;
 use Config;
 
-$| = 1;
+my $test = 177;
+sub ok ($;$) {
+    my($ok, $name) = @_;
 
-# We do not want the whole taint.t to fail
-# just because Errno possibly failing.
-eval { require Errno; import Errno };
+    # You have to do it this way or VMS will get confused.
+    print $ok ? "ok $test - $name\n" : "not ok $test - $name\n";
+
+    printf "# Failed test at line %d\n", (caller)[2] unless $ok;
+
+    $test++;
+    return $ok;
+}
+
+
+$| = 1;
 
 use vars qw($ipcsysv); # did we manage to load IPC::SysV?
 
@@ -109,7 +119,7 @@ print PROG 'print "@ARGV\n"', "\n";
 close PROG;
 my $echo = "$Invoke_Perl $ECHO";
 
-print "1..174\n";
+print "1..203\n";
 
 # First, let's make sure that Perl is checking the dangerous
 # environment variables. Maybe they aren't set yet, so we'll
@@ -121,7 +131,7 @@ print "1..174\n";
     delete @ENV{@MoreEnv};
     $ENV{TERM} = 'dumb';
 
-    if ($Is_Cygwin) {
+    if ($Is_Cygwin && ! -f 'cygwin1.dll') {
 	system("/usr/bin/cp /usr/bin/cygwin1.dll .") &&
 	    die "$0: failed to cp cygwin1.dll: $!\n";
 	END { unlink "cygwin1.dll" } # yes, done for all platforms...
@@ -395,7 +405,9 @@ else {
     test 72, $@ eq '', $@;		# NB: This should be allowed
 
     # Try first new style but allow also old style.
-    test 73, $!{ENOENT} ||
+    # We do not want the whole taint.t to fail
+    # just because Errno possibly failing.
+    test 73, eval('$!{ENOENT}') ||
 	$! == 2 || # File not found
 	($Is_Dos && $! == 22) ||
 	($^O eq 'mint' && $! == 33);
@@ -563,7 +575,7 @@ else {
 # Test for system/library calls returning string data of dubious origin.
 {
     # No reliable %Config check for getpw*
-    if (eval { setpwent(); getpwent(); 1 }) {
+    if (eval { setpwent(); getpwent() }) {
 	setpwent();
 	my @getpwent = getpwent();
 	die "getpwent: $!\n" unless (@getpwent);
@@ -825,7 +837,7 @@ else {
 
     use warnings;
 
-    $SIG{__WARN__} = sub { print "not " };
+    local $SIG{__WARN__} = sub { print "not " };
 
     sub fmi {
 	my $divnum = shift()/1;
@@ -839,3 +851,111 @@ else {
     print "ok 174\n";
 }
 
+
+{
+    # Bug ID 20010730.010
+
+    my $i = 0;
+
+    sub Tie::TIESCALAR {
+        my $class =  shift;
+        my $arg   =  shift;
+
+        bless \$arg => $class;
+    }
+
+    sub Tie::FETCH {
+        $i ++;
+        ${$_ [0]}
+    }
+
+ 
+    package main;
+ 
+    my $bar = "The Big Bright Green Pleasure Machine";
+    taint_these $bar;
+    tie my ($foo), Tie => $bar;
+
+    my $baz = $foo;
+
+    print $i == 1 ? "ok 175\n" : "not ok 175\n"
+
+}
+
+{
+    # Check that all environment variables are tainted.
+    my @untainted;
+    while (my ($k, $v) = each %ENV) {
+	if (!tainted($v) &&
+	    # These we have untainted explicitly earlier.
+	    $k !~ /^(BASH_ENV|CDPATH|ENV|IFS|PATH|TEMP|TERM|TMP)$/) {
+	    push @untainted, "# '$k' = '$v'\n";
+	}
+    }
+    print @untainted == 0 ? "ok 176\n" : "not ok 176\n";
+    print "# untainted:\n", @untainted if @untainted; 
+}
+
+
+ok( ${^TAINT},  '$^TAINT is on' );
+
+eval { ${^TAINT} = 0 };
+ok( ${^TAINT},  '$^TAINT is not assignable' );
+ok( $@ =~ /^Modification of a read-only value attempted/,
+                                'Assigning to ${^TAINT} fails' );
+
+{
+    # bug 20011111.105
+    
+    my $re1 = qr/x$TAINT/;
+    test 180, tainted $re1;
+    
+    my $re2 = qr/^$re1\z/;
+    test 181, tainted $re2;
+    
+    my $re3 = "$re2";
+    test 182, tainted $re3;
+}
+
+if ($Is_MSWin32) {
+    print "ok 183 # Skipped: system {} has different semantics\n"; 
+}
+else
+{
+    # bug 20010221.005
+    local $ENV{PATH} .= $TAINT;
+    eval { system { "echo" } "/arg0", "arg1" };
+    test 183, $@ =~ /^Insecure \$ENV/;
+}
+if ($Is_VMS) {
+    for (184..203) {print "not ok $_ # TODO tainted %ENV warning occludes tainted arguments warning\n";}
+}
+else 
+{
+    # bug 20020208.005 plus some extras
+    # single arg exec/system are tests 80-83
+    use if $] lt '5.009', warnings => FATAL => 'taint';
+    my $err = $] ge '5.009' ? qr/^Insecure dependency/ 
+                            : qr/^Use of tainted arguments/;
+    test 184, eval { exec $TAINT, $TAINT } eq '', 'exec';
+    test 185, $@ =~ $err, $@;
+    test 186, eval { exec $TAINT $TAINT } eq '', 'exec';
+    test 187, $@ =~ $err, $@;
+    test 188, eval { exec $TAINT $TAINT, $TAINT } eq '', 'exec';
+    test 189, $@ =~ $err, $@;
+    test 190, eval { exec $TAINT 'notaint' } eq '', 'exec';
+    test 191, $@ =~ $err, $@;
+    test 192, eval { exec {'notaint'} $TAINT } eq '', 'exec';
+    test 193, $@ =~ $err, $@;
+
+    test 194, eval { system $TAINT, $TAINT } eq '', 'system';
+    test 195, $@ =~ $err, $@;
+    test 196, eval { system $TAINT $TAINT } eq '', 'exec';
+    test 197, $@ =~ $err, $@;
+    test 198, eval { system $TAINT $TAINT, $TAINT } eq '', 'exec';
+    test 199, $@ =~ $err, $@;
+    test 200, eval { system $TAINT 'notaint' } eq '', 'exec';
+    test 201, $@ =~ $err, $@;
+    test 202, eval { system {'notaint'} $TAINT } eq '', 'exec';
+    test 203, $@ =~ $err, $@;
+}

@@ -2,28 +2,25 @@ BEGIN {require 5.002;} # MakeMaker 5.17 was the last MakeMaker that was compatib
 
 package ExtUtils::MakeMaker;
 
-$VERSION = "5.46";
+$VERSION = "5.48_03";
 $Version_OK = "5.17";	# Makefiles older than $Version_OK will die
 			# (Will be checked from MakeMaker version 4.13 onwards)
-($Revision = substr(q$Revision: 1.222 $, 10)) =~ s/\s+$//;
+($Revision = substr(q$Revision: 1.4 $, 10)) =~ s/\s+$//;
 
 
 
 require Exporter;
 use Config;
 use Carp ();
-#use FileHandle ();
 
 use vars qw(
-
 	    @ISA @EXPORT @EXPORT_OK $AUTOLOAD
-	    $ISA_TTY $Is_Mac $Is_OS2 $Is_VMS $Revision
-	    $VERSION $Verbose $Version_OK %Config %Keep_after_flush
-	    %MM_Sections %Prepend_dot_dot %Recognized_Att_Keys
-	    @Get_from_Config @MM_Sections @Overridable @Parent
-
+	    $ISA_TTY $Revision $VERSION $Verbose $Version_OK %Config 
+            %Keep_after_flush %MM_Sections %Prepend_dot_dot 
+            %Recognized_Att_Keys @Get_from_Config @MM_Sections @Overridable 
+            @Parent $PACKNAME
 	   );
-# use strict;
+use strict;
 
 # &DynaLoader::mod2fname should be available to miniperl, thus 
 # should be a pseudo-builtin (cmp. os2.c).
@@ -66,12 +63,13 @@ package ExtUtils::MakeMaker;
 #
 # Now we can pull in the friends
 #
-$Is_VMS   = $^O eq 'VMS';
-$Is_OS2   = $^O eq 'os2';
-$Is_Mac   = $^O eq 'MacOS';
-$Is_Win32 = $^O eq 'MSWin32';
-$Is_Cygwin= $^O eq 'cygwin';
-$Is_NetWare = $Config{'osname'} eq 'NetWare';
+my $Is_VMS     = $^O eq 'VMS';
+my $Is_OS2     = $^O eq 'os2';
+my $Is_Mac     = $^O eq 'MacOS';
+my $Is_Win32   = $^O eq 'MSWin32';
+my $Is_Cygwin  = $^O eq 'cygwin';
+my $Is_NetWare = $Config{'osname'} eq 'NetWare'; # Config{'osname'} intentional
+my $Is_BeOS    = $^O =~ /beos/i;    # XXX should this be that loose?
 
 require ExtUtils::MM_Unix;
 
@@ -95,6 +93,9 @@ if ($Is_Win32) {
 }
 if ($Is_Cygwin) {
     require ExtUtils::MM_Cygwin;
+}
+if ($Is_BeOS) {
+    require ExtUtils::MM_BeOS;
 }
 
 full_setup();
@@ -139,7 +140,7 @@ sub prompt ($;$) {
     my $ans;
     local $|=1;
     print "$mess $dispdef";
-    if ($ISA_TTY) {
+    if ($ISA_TTY && !$ENV{PERL_MM_USE_DEFAULT}) {
 	chomp($ans = <STDIN>);
     } else {
 	print "$def\n";
@@ -149,11 +150,11 @@ sub prompt ($;$) {
 
 sub eval_in_subdirs {
     my($self) = @_;
-    my($dir);
-    use Cwd 'cwd';
+    use Cwd qw(cwd abs_path);
     my $pwd = cwd();
+    local @INC = map eval {abs_path($_) if -e} || $_, @INC;
 
-    foreach $dir (@{$self->{DIR}}){
+    foreach my $dir (@{$self->{DIR}}){
 	my($abs) = $self->catdir($pwd,$dir);
 	$self->eval_in_x($abs);
     }
@@ -164,16 +165,8 @@ sub eval_in_x {
     my($self,$dir) = @_;
     package main;
     chdir $dir or Carp::carp("Couldn't change to directory $dir: $!");
-#    use FileHandle ();
-#    my $fh = new FileHandle;
-#    $fh->open("Makefile.PL") or Carp::carp("Couldn't open Makefile.PL in $dir");
-    local *FH;
-    open(FH,"Makefile.PL") or Carp::carp("Couldn't open Makefile.PL in $dir");
-#    my $eval = join "", <$fh>;
-    my $eval = join "", <FH>;
-#    $fh->close;
-    close FH;
-    eval $eval;
+
+    eval { do './Makefile.PL' };
     if ($@) {
 # 	  if ($@ =~ /prerequisites/) {
 # 	      die "MakeMaker WARNING: $@";
@@ -190,7 +183,7 @@ sub full_setup {
     # package name for the classes into which the first object will be blessed
     $PACKNAME = "PACK000";
 
-    @Attrib_help = qw/
+    my @attrib_help = qw/
 
     AUTHOR ABSTRACT ABSTRACT_FROM BINARY_LOCATION
     C CAPI CCFLAGS CONFIG CONFIGURE DEFINE DIR DISTNAME DL_FUNCS DL_VARS
@@ -209,7 +202,8 @@ sub full_setup {
     PERL_LIB PERL_SRC PERM_RW PERM_RWX
     PL_FILES PM PM_FILTER PMLIBDIRS POLLUTE PPM_INSTALL_EXEC
     PPM_INSTALL_SCRIPT PREFIX
-    PREREQ_PM SKIP TEST_LIBS TYPEMAPS VERSION VERSION_FROM XS XSOPT XSPROTOARG
+    PREREQ_FATAL PREREQ_PM PREREQ_PRINT PRINT_PREREQ
+    SKIP TEST_LIBS TYPEMAPS VERSION VERSION_FROM XS XSOPT XSPROTOARG
     XS_VERSION clean depend dist dynamic_lib linkext macro realclean
     tool_autosplit
     MACPERL_SRC MACPERL_LIB MACLIBS_68K MACLIBS_PPC MACLIBS_SC MACLIBS_MRC
@@ -272,11 +266,10 @@ sub full_setup {
 	   exe_ext full_ar
 	  );
 
-    my $item;
-    foreach $item (@Attrib_help){
+    foreach my $item (@attrib_help){
 	$Recognized_Att_Keys{$item} = 1;
     }
-    foreach $item (@Get_from_Config) {
+    foreach my $item (@Get_from_Config) {
 	$Recognized_Att_Keys{uc $item} = $Config{$item};
 	print "Attribute '\U$item\E' => '$Config{$item}'\n"
 	    if ($Verbose >= 2);
@@ -326,6 +319,17 @@ sub ExtUtils::MakeMaker::new {
     my($class,$self) = @_;
     my($key);
 
+    if ("@ARGV" =~ /\bPREREQ_PRINT\b/) {
+	require Data::Dumper;
+        print Data::Dumper->Dump([$self->{PREREQ_PM}], [qw(PREREQ_PM)]);
+   }
+
+    # PRINT_PREREQ is RedHatism.
+    if ("@ARGV" =~ /\bPRINT_PREREQ\b/) {
+	print join(" ", map { "perl($_)>=$self->{PREREQ_PM}->{$_} " } sort keys %{$self->{PREREQ_PM}}), "\n";
+	exit 0;
+   }
+
     print STDOUT "MakeMaker (v$VERSION)\n" if $Verbose;
     if (-f "MANIFEST" && ! -f "Makefile"){
 	check_manifest();
@@ -335,27 +339,27 @@ sub ExtUtils::MakeMaker::new {
 
     check_hints($self);
 
+    my %configure_att;         # record &{$self->{CONFIGURE}} attributes
     my(%initial_att) = %$self; # record initial attributes
 
-    my($prereq);
-    foreach $prereq (sort keys %{$self->{PREREQ_PM}}) {
-	my $eval = "require $prereq";
-	eval $eval;
+    my(%unsatisfied) = ();
+    foreach my $prereq (sort keys %{$self->{PREREQ_PM}}) {
+	eval "require $prereq";
 
 	if ($@) {
-	    warn "Warning: prerequisite $prereq failed to load: $@";
-	}
-	elsif ($prereq->VERSION < $self->{PREREQ_PM}->{$prereq} ){
-	    warn "Warning: prerequisite $prereq $self->{PREREQ_PM}->{$prereq} not found";
-# Why is/was this 'delete' here?  We need PREREQ_PM later to make PPDs.
-#	} else {
-#	    delete $self->{PREREQ_PM}{$prereq};
+	    warn "Warning: prerequisite $prereq $self->{PREREQ_PM}->{$prereq} not found.\n" unless $self->{PREREQ_FATAL};
+	    $unsatisfied{$prereq} = 'not installed';
+	} elsif ($prereq->VERSION < $self->{PREREQ_PM}->{$prereq} ){
+	    warn "Warning: prerequisite $prereq $self->{PREREQ_PM}->{$prereq} not found. We have "
+               . ($prereq->VERSION || 'unknown version') unless $self->{PREREQ_FATAL};
+	    $unsatisfied{$prereq} = $self->{PREREQ_PM}->{$prereq} ? $self->{PREREQ_PM}->{$prereq} : 'unknown version' ;
 	}
     }
-#    if (@unsatisfied){
+    if (%unsatisfied && $self->{PREREQ_FATAL}){
 # 	  unless (defined $ExtUtils::MakeMaker::useCPAN) {
-# 	      print qq{MakeMaker WARNING: prerequisites not found (@unsatisfied)
-# Please install these modules first and rerun 'perl Makefile.PL'.\n};
+	my $failedprereqs = join ', ', map {"$_ $unsatisfied{$_}"} keys %unsatisfied;
+	die qq{MakeMaker FATAL: prerequisites not found ($failedprereqs)
+		 Please install these modules first and rerun 'perl Makefile.PL'.\n};
 # 	      if ($ExtUtils::MakeMaker::hasCPAN) {
 # 		  $ExtUtils::MakeMaker::useCPAN = prompt(qq{Should I try to use the CPAN module to fetch them for you?},"yes");
 # 	      } else {
@@ -367,14 +371,15 @@ sub ExtUtils::MakeMaker::new {
 # 	      require CPAN;
 # 	      CPAN->import(@unsatisfied);
 # 	  } else {
-# 	      die qq{prerequisites not found (@unsatisfied)};
+#	      die qq{prerequisites not found (@unsatisfied)};
 # 	  }
 #	warn qq{WARNING: prerequisites not found (@unsatisfied)};
-#    }
+    }
 
     if (defined $self->{CONFIGURE}) {
 	if (ref $self->{CONFIGURE} eq 'CODE') {
-	    $self = { %$self, %{&{$self->{CONFIGURE}}}};
+	    %configure_att = %{&{$self->{CONFIGURE}}};
+	    $self = { %$self, %configure_att };
 	} else {
 	    Carp::croak "Attribute 'CONFIGURE' to WriteMakefile() not a code reference\n";
 	}
@@ -388,7 +393,7 @@ sub ExtUtils::MakeMaker::new {
     my $newclass = ++$PACKNAME;
     local @Parent = @Parent;	# Protect against non-local exits
     {
-#	no strict;
+	no strict 'refs';
 	print "Blessing Object into class [$newclass]\n" if $Verbose>=2;
 	mv_all_methods("MY",$newclass);
 	bless $self, $newclass;
@@ -402,16 +407,24 @@ sub ExtUtils::MakeMaker::new {
 	for $key (keys %Prepend_dot_dot) {
 	    next unless defined $self->{PARENT}{$key};
 	    $self->{$key} = $self->{PARENT}{$key};
-		# PERL and FULLPERL may be command verbs instead of full
-		# file specifications under VMS.  If so, don't turn them
-		# into a filespec.
-	    $self->{$key} = $self->catdir("..",$self->{$key})
-		unless $self->file_name_is_absolute($self->{$key})
-		|| ($^O eq 'VMS' and ($key =~ /PERL$/ && $self->{$key} =~ /^[\w\-\$]+$/));
+	    unless ($^O eq 'VMS' && $key =~ /PERL$/) {
+	        $self->{$key} = $self->catdir("..",$self->{$key})
+		    unless $self->file_name_is_absolute($self->{$key});
+	    } else {
+		# PERL or FULLPERL will be a command verb or even a command with 
+		# an argument instead of a full file specification under VMS.  So, 
+		# don't turn the command into a filespec, but do add a level to the 
+		# path of the argument if not already absolute.
+
+		my @cmd = split /\s+/, $self->{$key};
+		$cmd[1] = $self->catfile('[-]',$cmd[1])
+		    unless (scalar(@cmd) < 2 || $self->file_name_is_absolute($cmd[1]));
+		$self->{$key} = join(' ', @cmd);
+	    }
 	}
 	if ($self->{PARENT}) {
 	    $self->{PARENT}->{CHILDREN}->{$newclass} = $self;
-	    foreach my $opt (qw(CAPI POLLUTE PERL_CORE)) {
+	    foreach my $opt (qw(POLLUTE PERL_CORE)) {
 		if (exists $self->{PARENT}->{$opt}
 		    and not exists $self->{$opt})
 		    {
@@ -420,6 +433,8 @@ sub ExtUtils::MakeMaker::new {
 		    }
 	    }
 	}
+	my @fm = grep /^FIRST_MAKEFILE=/, @ARGV;
+	parse_args($self,@fm) if @fm;
     } else {
 	parse_args($self,split(' ', $ENV{PERL_MM_OPT} || ''),@ARGV);
     }
@@ -474,11 +489,32 @@ END
 #   MakeMaker Parameters:
 END
 
-    foreach $key (sort keys %initial_att){
+    foreach my $key (sort keys %initial_att){
 	my($v) = neatvalue($initial_att{$key});
 	$v =~ s/(CODE|HASH|ARRAY|SCALAR)\([\dxa-f]+\)/$1\(...\)/;
 	$v =~ tr/\n/ /s;
 	push @{$self->{RESULT}}, "#	$key => $v";
+    }
+    undef %initial_att;        # free memory
+
+    if (defined $self->{CONFIGURE}) {
+       push @{$self->{RESULT}}, <<END;
+
+#   MakeMaker 'CONFIGURE' Parameters:
+END
+        if (scalar(keys %configure_att) > 0) {
+            foreach my $key (sort keys %configure_att){
+               my($v) = neatvalue($configure_att{$key});
+               $v =~ s/(CODE|HASH|ARRAY|SCALAR)\([\dxa-f]+\)/$1\(...\)/;
+               $v =~ tr/\n/ /s;
+               push @{$self->{RESULT}}, "#     $key => $v";
+            }
+        }
+        else
+        {
+           push @{$self->{RESULT}}, "# no values returned";
+        }
+        undef %configure_att;  # free memory
     }
 
     # turn the SKIP array into a SKIPHASH hash
@@ -500,8 +536,7 @@ END
 	$self->eval_in_subdirs if @{$self->{DIR}};
     }
 
-    my $section;
-    foreach $section ( @MM_Sections ){
+    foreach my $section ( @MM_Sections ){
 	print "Processing Makefile '$section' section\n" if ($Verbose >= 2);
 	my($skipit) = $self->skipcheck($section);
 	if ($skipit){
@@ -520,14 +555,20 @@ END
 }
 
 sub WriteEmptyMakefile {
-  if (-f 'Makefile.old') {
-    chmod 0666, 'Makefile.old';
-    unlink 'Makefile.old' or warn "unlink Makefile.old: $!";
-  }
-  rename 'Makefile', 'Makefile.old' or warn "rename Makefile Makefile.old: $!"
-    if -f 'Makefile';
-  open MF, '> Makefile' or die "open Makefile for write: $!";
-  print MF <<'EOP';
+    Carp::croak "WriteEmptyMakefile: Need even number of args" if @_ % 2;
+    local $SIG{__WARN__} = \&warnhandler;
+
+    my %att = @_;
+    my $self = MM->new(\%att);
+    if (-f "$self->{MAKEFILE}.old") {
+      chmod 0666, "$self->{MAKEFILE}.old";
+      unlink "$self->{MAKEFILE}.old" or warn "unlink $self->{MAKEFILE}.old: $!";
+    }
+    rename $self->{MAKEFILE}, "$self->{MAKEFILE}.old"
+      or warn "rename $self->{MAKEFILE} $self->{MAKEFILE}.old: $!"
+        if -f $self->{MAKEFILE};
+    open MF, '>', $self->{MAKEFILE} or die "open $self->{MAKEFILE} for write: $!";
+    print MF <<'EOP';
 all:
 
 clean:
@@ -539,15 +580,16 @@ makemakerdflt:
 test:
 
 EOP
-  close MF or die "close Makefile for write: $!";
+    close MF or die "close $self->{MAKEFILE} for write: $!";
 }
 
 sub check_manifest {
     print STDOUT "Checking if your kit is complete...\n";
     require ExtUtils::Manifest;
-    $ExtUtils::Manifest::Quiet=$ExtUtils::Manifest::Quiet=1; #avoid warning
-    my(@missed)=ExtUtils::Manifest::manicheck();
-    if (@missed){
+    # avoid warning
+    $ExtUtils::Manifest::Quiet = $ExtUtils::Manifest::Quiet = 1;
+    my(@missed) = ExtUtils::Manifest::manicheck();
+    if (@missed) {
 	print STDOUT "Warning: the following files are missing in your kit:\n";
 	print "\t", join "\n\t", @missed;
 	print STDOUT "\n";
@@ -559,14 +601,14 @@ sub check_manifest {
 
 sub parse_args{
     my($self, @args) = @_;
-    foreach (@args){
-	unless (m/(.*?)=(.*)/){
+    foreach (@args) {
+	unless (m/(.*?)=(.*)/) {
 	    help(),exit 1 if m/^help$/;
 	    ++$Verbose if m/^verb/;
 	    next;
 	}
 	my($name, $value) = ($1, $2);
-	if ($value =~ m/^~(\w+)?/){ # tilde with optional username
+	if ($value =~ m/^~(\w+)?/) { # tilde with optional username
 	    $value =~ s [^~(\w*)]
 		[$1 ?
 		 ((getpwnam($1))[7] || "~$1") :
@@ -616,8 +658,8 @@ sub parse_args{
     if (defined $self->{EXCLUDE_EXT} && ref \$self->{EXCLUDE_EXT} eq 'SCALAR') {
 	$self->{EXCLUDE_EXT} = [grep $_, split '\s+', $self->{EXCLUDE_EXT}];
     }
-    my $mmkey;
-    foreach $mmkey (sort keys %$self){
+
+    foreach my $mmkey (sort keys %$self){
 	print STDOUT "	$mmkey => ", neatvalue($self->{$mmkey}), "\n" if $Verbose;
 	print STDOUT "'$mmkey' is not a known MakeMaker parameter name.\n"
 	    unless exists $Recognized_Att_Keys{$mmkey};
@@ -632,7 +674,6 @@ sub check_hints {
     return unless -d "hints";
 
     # First we look for the best hintsfile we have
-    my(@goodhints);
     my($hint)="${^O}_$Config{osvers}";
     $hint =~ s/\./_/g;
     $hint =~ s/_$//;
@@ -644,35 +685,32 @@ sub check_hints {
     } continue {
 	last unless $hint =~ s/_[^_]*$//; # nothing to cut off
     }
-    return unless -f "hints/$hint.pl";    # really there
+    my $hint_file = "hints/$hint.pl";
+
+    return unless -f $hint_file;    # really there
 
     # execute the hintsfile:
-#    use FileHandle ();
-#    my $fh = new FileHandle;
-#    $fh->open("hints/$hint.pl");
-    local *FH;
-    open(FH,"hints/$hint.pl");
-#    @goodhints = <$fh>;
-    @goodhints = <FH>;
-#    $fh->close;
-    close FH;
-    print STDOUT "Processing hints file hints/$hint.pl\n";
-    eval join('',@goodhints);
-    print STDOUT $@ if $@;
+    print STDERR "Processing hints file $hint_file\n";
+    {
+        local *HINT;
+        open(HINT, $hint_file) || die "Can't open $hint_file: $!";
+        eval join '', <HINT>;
+        close HINT;
+    }
+    print STDERR $@ if $@;
 }
 
 sub mv_all_methods {
     my($from,$to) = @_;
-    my($method);
+    no strict 'refs';
     my($symtab) = \%{"${from}::"};
-#    no strict;
 
     # Here you see the *current* list of methods that are overridable
     # from Makefile.PL via MY:: subroutines. As of VERSION 5.07 I'm
     # still trying to reduce the list to some reasonable minimum --
     # because I want to make it easier for the user. A.K.
 
-    foreach $method (@Overridable) {
+    foreach my $method (@Overridable) {
 
 	# We cannot say "next" here. Nick might call MY->makeaperl
 	# which isn't defined right now
@@ -801,9 +839,9 @@ sub neatvalue {
     my($t) = ref $v;
     return "q[$v]" unless $t;
     if ($t eq 'ARRAY') {
-	my(@m, $elem, @neat);
+	my(@m, @neat);
 	push @m, "[";
-	foreach $elem (@$v) {
+	foreach my $elem (@$v) {
 	    push @neat, "q[$elem]";
 	}
 	push @m, join ", ", @neat;
@@ -824,7 +862,7 @@ sub selfdocument {
     my(@m);
     if ($Verbose){
 	push @m, "\n# Full list of MakeMaker attribute values:";
-	foreach $key (sort keys %$self){
+	foreach my $key (sort keys %$self){
 	    next if $key eq 'RESULT' || $key =~ /^[A-Z][a-z]/;
 	    my($v) = neatvalue($self->{$key});
 	    $v =~ s/(CODE|HASH|ARRAY|SCALAR)\([\dxa-f]+\)/$1\(...\)/;
@@ -1201,17 +1239,6 @@ located in the C<x86> directory relative to the PPD itself.
 Ref to array of *.c file names. Initialised from a directory scan
 and the values portion of the XS attribute hash. This is not
 currently used by MakeMaker but may be handy in Makefile.PLs.
-
-=item CAPI
-
-[This attribute is obsolete in Perl 5.6.  PERL_OBJECT builds are C-compatible
-by default.]
-
-Switch to force usage of the Perl C API even when compiling for PERL_OBJECT.
-
-Note that this attribute is passed through to any recursive build,
-but if and only if the submodule's Makefile.PL itself makes no mention
-of the 'CAPI' attribute.
 
 =item CCFLAGS
 
@@ -1766,6 +1793,37 @@ extension (e.g. Fcntl for SDBM_File) are the keys of the hash and the
 desired version is the value. If the required version number is 0, we
 only check if any version is installed already.
 
+=item PREREQ_FATAL
+
+Bool. If this parameter is true, failing to have the required modules
+(or the right versions thereof) will be fatal. perl Makefile.PL will die
+with the proper message.
+
+Note: see L<Test::Harness> for a shortcut for stopping tests early if
+you are missing dependencies.
+
+Do I<not> use this parameter for simple requirements, which could be resolved
+at a later time, e.g. after an unsuccessful B<make test> of your module.
+
+It is I<extremely> rare to have to use C<PREREQ_FATAL> at all!
+
+=item PREREQ_PRINT
+
+Bool.  If this parameter is true, the prerequisites will be printed to
+stdout and MakeMaker will exit.  The output format is
+
+$PREREQ_PM = {
+               'A::B' => Vers1,
+               'C::D' => Vers2,
+               ...
+             };
+
+=item PRINT_PREREQ
+
+RedHatism for C<PREREQ_PRINT>.  The output format is different, though:
+
+    perl(A::B)>=Vers1 perl(C::D)>=Vers2 ...
+
 =item SKIP
 
 Arrayref. E.g. [qw(name1 name2)] skip (do not write) sections of the
@@ -1808,7 +1866,7 @@ MakeMaker object. The following lines will be parsed o.k.:
 
     $VERSION = '1.00';
     *VERSION = \'1.01';
-    ( $VERSION ) = '$Revision: 1.222 $ ' =~ /\$Revision:\s+([^\s]+)/;
+    ( $VERSION ) = '$Revision: 1.4 $ ' =~ /\$Revision:\s+([^\s]+)/;
     $FOO::VERSION = '1.10';
     *FOO::VERSION = \'1.11';
     our $VERSION = 1.2.3;	# new for perl5.6.0 
@@ -2111,6 +2169,11 @@ Command line options used by C<MakeMaker-E<gt>new()>, and thus by
 C<WriteMakefile()>.  The string is split on whitespace, and the result
 is processed before any actual command line arguments are processed.
 
+=item PERL_MM_USE_DEFAULT
+
+If set to a true value then MakeMaker's prompt function will
+always return the default without waiting for user input.
+
 =back
 
 =head1 SEE ALSO
@@ -2124,6 +2187,9 @@ Andy Dougherty <F<doughera@lafcol.lafayette.edu>>, Andreas KE<ouml>nig
 <F<andreas.koenig@mind.de>>, Tim Bunce <F<Tim.Bunce@ig.co.uk>>.  VMS
 support by Charles Bailey <F<bailey@newman.upenn.edu>>.  OS/2 support
 by Ilya Zakharevich <F<ilya@math.ohio-state.edu>>.
+
+Contact the MakeMaker mailing list <F<makemaker@perl.org>> if you have
+any questions.
 
 Send patches and bug reports to <F<perlbug@perl.org>>.
 

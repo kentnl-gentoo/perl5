@@ -5,6 +5,7 @@ use strict;
 our $VERSION = "1.09_00";
 
 my %err = ();
+my %wsa = ();
 
 unlink "Errno.pm" if -f "Errno.pm";
 open OUT, ">Errno.pm" or die "Cannot open Errno.pm: $!";
@@ -12,6 +13,10 @@ select OUT;
 my $file;
 foreach $file (get_files()) {
     process_file($file);
+    if ($^O eq 'MSWin32') {
+      $file =~ s/errno/winsock/;
+      process_file($file);
+    }
 }
 write_errno_pm();
 unlink "errno.c" if -f "errno.c";
@@ -20,6 +25,7 @@ sub process_file {
     my($file) = @_;
 
     return unless defined $file and -f $file;
+#   warn "Processing $file\n";
 
     local *FH;
     if (($^O eq 'VMS') && ($Config{vms_cc_type} ne 'gnuc')) {
@@ -30,7 +36,7 @@ sub process_file {
     } elsif ($Config{gccversion} ne ''
              # OpenSTEP has gcc 2.7.2.1 which recognizes but
 	     # doesn't implement the -dM flag.
-	     && $^O ne 'openstep' && $^O ne 'next'
+	     && $^O ne 'openstep' && $^O ne 'next' && $^O ne 'darwin'
 	     ) { 
 	# With the -dM option, gcc outputs every #define it finds
 	unless(open(FH,"$Config{cc} -E -dM $Config{cppflags} $file |")) {
@@ -55,6 +61,10 @@ sub process_file {
 	while(<FH>) {
 	    $err{$1} = 1
 		if /^\s*#\s*define\s+(E\w+)\s+/;
+            if ($^O eq 'MSWin32') {
+	        $wsa{$1} = 1
+	    	    if /^\s*#\s*define\s+WSA(E\w+)\s+/;
+            }
 	}
     }
     close(FH);
@@ -97,8 +107,10 @@ sub get_files {
 	$file{'../../vmesa/errno.h'} = 1;
     } elsif ($Config{archname} eq 'epoc') {
 	# Watch out for cross compiling for EPOC (usually done on linux)
-	$file{'/usr/local/epoc/include/libc/sys/errno.h'} = 1;
-    } elsif ($^O eq 'linux') {
+	$file{'/usr/local/epocemx/epocsdk/include/libc/sys/errno.h'} = 1;
+    } elsif ($^O eq 'linux' &&
+	     $Config{gccversion} ne '' # might be using, say, Intel's icc
+	     ) {
 	# Some Linuxes have weird errno.hs which generate
 	# no #file or #line directives
 	$file{'/usr/include/errno.h'} = 1;
@@ -107,6 +119,13 @@ sub get_files {
 	# we might miss out on compiler-specific ones
 	$file{"$ENV{GUSI}include:sys:errno.h"} = 1;
 
+    } elsif ($^O eq 'beos') {
+	# hidden in a special place
+	$file{'/boot/develop/headers/posix/errno.h'} = 1;
+
+    } elsif ($^O eq 'vos') {
+	# avoid problem where cpp returns non-POSIX pathnames
+	$file{'/system/include_library/errno.h'} = 1;
     } else {
 	open(CPPI,"> errno.c") or
 	    die "Cannot open errno.c";
@@ -166,11 +185,21 @@ sub write_errno_pm {
 	die "Cannot open errno.c";
 
     if ($^O eq 'NetWare') {
-		print CPPI "#include <nwerrno.h>\n";
-	} else {
-		print CPPI "#include <errno.h>\n";
+	print CPPI "#include <nwerrno.h>\n";
+	} 
+    else {
+	print CPPI "#include <errno.h>\n";
+    }
+    if ($^O eq 'MSWin32') {
+	print CPPI "#include <winsock.h>\n";
+	foreach $err (keys %wsa) {
+	    print CPPI "#ifndef $err\n";
+	    print CPPI "#define $err WSA$err\n";
+	    print CPPI "#endif\n";
+	    $err{$err} = 1;
 	}
-
+    }
+ 
     foreach $err (keys %err) {
 	print CPPI '"',$err,'" [[',$err,']]',"\n";
     }
@@ -200,9 +229,44 @@ sub write_errno_pm {
 	    my($name,$expr);
 	    next unless ($name, $expr) = /"(.*?)"\s*\[\s*\[\s*(.*?)\s*\]\s*\]/;
 	    next if $name eq $expr;
+	    $expr =~ s/(\d+)[LU]+\b/$1/g; # 2147483647L et alia
 	    $err{$name} = eval $expr;
 	}
 	close(CPPO);
+    }
+
+    # Many of the E constants (including ENOENT, which is being
+    # used in the Perl test suite a lot), are available only as
+    # enums in BeOS, so compiling and executing some code is about
+    # only way to find out what the numeric Evalues are.
+
+    if ($^O eq 'beos') {
+	if (open(C, ">errno.c")) {
+	    my @zero = grep { !$err{$_} } keys %err;
+	    print C <<EOF;
+#include <errno.h>
+#include <stdio.h>
+int main() {
+EOF
+            for (@zero) {
+		print C qq[printf("$_ %d\n", $_);]
+	    }
+            print C "}\n";
+            close C;
+            system("cc -o errno errno.c");
+            unlink("errno.c");
+            if (open(C, "./errno|")) {
+		while (<C>) {
+		    if (/^(\w+) (-?\d+)$/) { $err{$1} = $2 }
+		}
+		close(C);
+	    } else {
+		die "failed to execute ./errno: $!\n";
+	    }
+            unlink("errno");
+        } else {
+	    die "failed to create errno.c: $!\n";
+	}
     }
 
     # Write Errno.pm

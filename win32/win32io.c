@@ -29,7 +29,7 @@ PerlIOWin32 *fdtable[256];
 IV max_open_fd = -1;
 
 IV
-PerlIOWin32_popped(PerlIO *f)
+PerlIOWin32_popped(pTHX_ PerlIO *f)
 {
  PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
  if (--s->refcnt > 0)
@@ -42,15 +42,15 @@ PerlIOWin32_popped(PerlIO *f)
 }
 
 IV
-PerlIOWin32_fileno(PerlIO *f)
+PerlIOWin32_fileno(pTHX_ PerlIO *f)
 {
  return PerlIOSelf(f,PerlIOWin32)->fd;
 }
 
 IV
-PerlIOWin32_pushed(PerlIO *f, const char *mode, SV *arg)
+PerlIOWin32_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg)
 {
- IV code = PerlIOBase_pushed(f,mode,arg);
+ IV code = PerlIOBase_pushed(aTHX_ f,mode,arg);
  if (*PerlIONext(f))
   {
    PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
@@ -69,7 +69,7 @@ PerlIOWin32_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const ch
   {
    /* Close if already open */
    if (PerlIOBase(f)->flags & PERLIO_F_OPEN)
-    (*PerlIOBase(f)->tab->Close)(f);
+    (*PerlIOBase(f)->tab->Close)(aTHX_ f);
   }
  if (narg > 0)
   {
@@ -189,12 +189,12 @@ PerlIOWin32_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const ch
    s->h      = h;
    s->fd     = fd;
    s->refcnt = 1;
-   if (fd >= 0) 
+   if (fd >= 0)
     {
-     fdtable[fd] = s; 
+     fdtable[fd] = s;
      if (fd > max_open_fd)
       max_open_fd = fd;
-    } 
+    }
    return f;
   }
  if (f)
@@ -205,7 +205,7 @@ PerlIOWin32_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers, IV n, const ch
 }
 
 SSize_t
-PerlIOWin32_read(PerlIO *f, void *vbuf, Size_t count)
+PerlIOWin32_read(pTHX_ PerlIO *f, void *vbuf, Size_t count)
 {
  PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
  DWORD len;
@@ -232,7 +232,7 @@ PerlIOWin32_read(PerlIO *f, void *vbuf, Size_t count)
 }
 
 SSize_t
-PerlIOWin32_write(PerlIO *f, const void *vbuf, Size_t count)
+PerlIOWin32_write(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
 {
  PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
  DWORD len;
@@ -248,7 +248,7 @@ PerlIOWin32_write(PerlIO *f, const void *vbuf, Size_t count)
 }
 
 IV
-PerlIOWin32_seek(PerlIO *f, Off_t offset, int whence)
+PerlIOWin32_seek(pTHX_ PerlIO *f, Off_t offset, int whence)
 {
  static const DWORD where[3] = { FILE_BEGIN, FILE_CURRENT, FILE_END };
  PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
@@ -266,7 +266,7 @@ PerlIOWin32_seek(PerlIO *f, Off_t offset, int whence)
 }
 
 Off_t
-PerlIOWin32_tell(PerlIO *f)
+PerlIOWin32_tell(pTHX_ PerlIO *f)
 {
  PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
  DWORD high = 0;
@@ -279,7 +279,7 @@ PerlIOWin32_tell(PerlIO *f)
 }
 
 IV
-PerlIOWin32_close(PerlIO *f)
+PerlIOWin32_close(pTHX_ PerlIO *f)
 {
  PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
  if (s->refcnt == 1)
@@ -294,6 +294,42 @@ PerlIOWin32_close(PerlIO *f)
  return 0;
 }
 
+PerlIO *
+PerlIOWin32_dup(pTHX_ PerlIO *f, PerlIO *o, CLONE_PARAMS *params, int flags)
+{
+ PerlIOWin32 *os = PerlIOSelf(f,PerlIOWin32);
+ HANDLE proc = GetCurrentProcess();
+ HANDLE new; 
+ if (DuplicateHandle(proc, os->h, proc, &new, 0, FALSE,  DUPLICATE_SAME_ACCESS))
+  {
+   char mode[8];
+   int fd = win32_open_osfhandle((long) new, PerlIOUnix_oflags(PerlIO_modestr(o,mode)));
+   if (fd >= 0) 
+    {
+     f = PerlIOBase_dup(aTHX_ f, o, params, flags);
+     if (f) 
+      {
+       PerlIOWin32 *fs = PerlIOSelf(f,PerlIOWin32);
+       fs->h  = new;
+       fs->fd = fd;
+       fs->refcnt = 1;
+       fdtable[fd] = fs;
+       if (fd > max_open_fd)
+        max_open_fd = fd;
+      }
+     else
+      {
+       win32_close(fd);
+      }
+    }
+   else
+    {
+     CloseHandle(new);
+    }
+  }
+ return f;
+}
+
 PerlIO_funcs PerlIO_win32 = {
  "win32",
  sizeof(PerlIOWin32),
@@ -303,6 +339,7 @@ PerlIO_funcs PerlIO_win32 = {
  PerlIOWin32_open,
  NULL,                 /* getarg */
  PerlIOWin32_fileno,
+ PerlIOWin32_dup,
  PerlIOWin32_read,
  PerlIOBase_unread,
  PerlIOWin32_write,
@@ -321,5 +358,6 @@ PerlIO_funcs PerlIO_win32 = {
  NULL, /* get_cnt */
  NULL, /* set_ptrcnt */
 };
+
 
 

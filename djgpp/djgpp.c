@@ -1,20 +1,5 @@
 #define PERLIO_NOT_STDIO 0
-#include <libc/stubs.h>
-#include <io.h>
-#include <errno.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <libc/file.h>
-#include <process.h>
-#include <fcntl.h>
-#include <glob.h>
-#include <sys/fsext.h>
-#include <crt0.h>
-#include "EXTERN.h"
-#include "perl.h"
-#include "XSUB.h"
+#include "djgpp.h"
 
 /* hold file pointer, command, mode, and the status of the command */
 struct pipe_list {
@@ -367,6 +352,9 @@ XS(dos_GetCwd)
         ST(0)=sv_newmortal ();
         if (getcwd (tmp,PATH_MAX+1)!=NULL)
             sv_setpv ((SV*)ST(0),tmp);
+#ifndef INCOMPLETE_TAINTS
+	SvTAINTED_on(ST(0));
+#endif
     }
     XSRETURN (1);
 }
@@ -378,6 +366,24 @@ XS(dos_UseLFN)
     XSRETURN_IV (_USE_LFN);
 }
 
+XS(XS_Cwd_sys_cwd)
+{
+    dXSARGS;
+    if (items != 0)
+	Perl_croak_nocontext("Usage: Cwd::sys_cwd()");
+    {
+	char p[MAXPATHLEN];
+	char *	RETVAL;
+	RETVAL = getcwd(p, MAXPATHLEN);
+	ST(0) = sv_newmortal();
+	sv_setpv((SV*)ST(0), RETVAL);
+#ifndef INCOMPLETE_TAINTS
+	SvTAINTED_on(ST(0));
+#endif
+    }
+    XSRETURN(1);
+}
+
 void
 Perl_init_os_extras(pTHX)
 {
@@ -387,6 +393,7 @@ Perl_init_os_extras(pTHX)
     
     newXS ("Dos::GetCwd",dos_GetCwd,file);
     newXS ("Dos::UseLFN",dos_UseLFN,file);
+    newXS ("Cwd::sys_cwd",XS_Cwd_sys_cwd,file);
 
     /* install my File System Extension for globbing */
     __FSEXT_add_open_handler (glob_handler);
@@ -397,7 +404,8 @@ static char *perlprefix;
 
 #define PERL5 "/perl5"
 
-char *djgpp_pathexp (const char *p)
+char *
+djgpp_pathexp (const char *p)
 {
     static char expp[PATH_MAX];
     strcpy (expp,perlprefix);
@@ -452,3 +460,16 @@ djgpp_fflush (FILE *fp)
 
     return res;
 }
+
+int djgpp_get_stream_mode(FILE *f)
+{
+    extern char *__file_handle_modes;
+
+    int mode = __file_handle_modes[fileno(f)];
+    if (f->_flag & _IORW)
+        return mode | O_RDWR;
+    if (f->_flag & _IOWRT)
+        return mode | O_WRONLY;
+    return mode | O_RDONLY;
+}
+

@@ -1,6 +1,6 @@
 /*    gv.c
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -15,6 +15,10 @@
  * history of Middle-earth and Over-heaven and of the Sundering Seas,'
  * laughed Pippin.
  */
+
+/*
+=head1 GV Functions
+*/
 
 #include "EXTERN.h"
 #define PERL_IN_GV_C
@@ -72,6 +76,7 @@ Perl_gv_fetchfile(pTHX_ const char *name)
 	tmpbuf = smallbuf;
     else
 	New(603, tmpbuf, tmplen + 1, char);
+    /* This is where the debugger's %{"::_<$filename"} hash is created */
     tmpbuf[0] = '_';
     tmpbuf[1] = '<';
     strcpy(tmpbuf + 2, name);
@@ -128,13 +133,13 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 	CvGV(GvCV(gv)) = gv;
 	CvFILE_set_from_cop(GvCV(gv), PL_curcop);
 	CvSTASH(GvCV(gv)) = PL_curstash;
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 	CvOWNER(GvCV(gv)) = 0;
 	if (!CvMUTEXP(GvCV(gv))) {
 	    New(666, CvMUTEXP(GvCV(gv)), 1, perl_mutex);
 	    MUTEX_INIT(CvMUTEXP(GvCV(gv)));
 	}
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 	if (proto) {
 	    sv_setpv((SV*)GvCV(gv), proto);
 	    Safefree(proto);
@@ -305,6 +310,50 @@ Perl_gv_fetchmeth(pTHX_ HV *stash, const char *name, STRLEN len, I32 level)
 }
 
 /*
+=for apidoc gv_fetchmeth_autoload
+
+Same as gv_fetchmeth(), but looks for autoloaded subroutines too.
+Returns a glob for the subroutine.
+
+For an autoloaded subroutine without a GV, will create a GV even
+if C<level < 0>.  For an autoloaded subroutine without a stub, GvCV()
+of the result may be zero.
+
+=cut
+*/
+
+GV *
+Perl_gv_fetchmeth_autoload(pTHX_ HV *stash, const char *name, STRLEN len, I32 level)
+{
+    GV *gv = gv_fetchmeth(stash, name, len, level);
+
+    if (!gv) {
+	char autoload[] = "AUTOLOAD";
+	STRLEN autolen = sizeof(autoload)-1;
+	CV *cv;
+	GV **gvp;
+
+	if (!stash)
+	    return Nullgv;	/* UNIVERSAL::AUTOLOAD could cause trouble */
+	if (len == autolen && strnEQ(name, autoload, autolen))
+	    return Nullgv;
+	if (!(gv = gv_fetchmeth(stash, autoload, autolen, FALSE)))
+	    return Nullgv;
+	cv = GvCV(gv);
+	if (!(CvROOT(cv) || CvXSUB(cv)))
+	    return Nullgv;
+	/* Have an autoload */
+	if (level < 0)	/* Cannot do without a stub */
+	    gv_fetchmeth(stash, name, len, 0);
+	gvp = (GV**)hv_fetch(stash, name, len, (level >= 0));
+	if (!gvp)
+	    return Nullgv;
+	return *gvp;
+    }
+    return gv;
+}
+
+/*
 =for apidoc gv_fetchmethod
 
 See L<gv_fetchmethod_autoload>.
@@ -411,8 +460,8 @@ Perl_gv_fetchmethod_autoload(pTHX_ HV *stash, const char *name, I32 autoload)
 GV*
 Perl_gv_autoload4(pTHX_ HV *stash, const char *name, STRLEN len, I32 method)
 {
-    static char autoload[] = "AUTOLOAD";
-    static STRLEN autolen = 8;
+    char autoload[] = "AUTOLOAD";
+    STRLEN autolen = sizeof(autoload)-1;
     GV* gv;
     CV* cv;
     HV* varstash;
@@ -433,13 +482,13 @@ Perl_gv_autoload4(pTHX_ HV *stash, const char *name, STRLEN len, I32 method)
     /*
      * Inheriting AUTOLOAD for non-methods works ... for now.
      */
-    if (ckWARN(WARN_DEPRECATED) && !method &&
+    if (ckWARN2(WARN_DEPRECATED, WARN_SYNTAX) && !method &&
 	(GvCVGEN(gv) || GvSTASH(gv) != stash))
-	Perl_warner(aTHX_ WARN_DEPRECATED,
+	Perl_warner(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX),
 	  "Use of inherited AUTOLOAD for non-method %s::%.*s() is deprecated",
 	     HvNAME(stash), (int)len, name);
 
-#ifndef USE_THREADS
+#ifndef USE_5005THREADS
     if (CvXSUB(cv)) {
         /* rather than lookup/init $AUTOLOAD here
          * only to have the XSUB do another lookup for $AUTOLOAD
@@ -463,14 +512,14 @@ Perl_gv_autoload4(pTHX_ HV *stash, const char *name, STRLEN len, I32 method)
     vargv = *(GV**)hv_fetch(varstash, autoload, autolen, TRUE);
     ENTER;
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
     sv_lock((SV *)varstash);
 #endif
     if (!isGV(vargv))
 	gv_init(vargv, varstash, autoload, autolen, FALSE);
     LEAVE;
     varsv = GvSV(vargv);
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
     sv_lock(varsv);
 #endif
     sv_setpv(varsv, HvNAME(stash));
@@ -493,7 +542,8 @@ S_require_errno(pTHX_ GV *gv)
 	PUTBACK;
 	ENTER;
 	save_scalar(gv); /* keep the value of $! */
-	require_pv("Errno.pm");
+        Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT,
+                         newSVpvn("Errno",5), Nullsv);
 	LEAVE;
 	SPAGAIN;
 	stash = gv_stashpvn("Errno",5,FALSE);
@@ -814,20 +864,16 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
 	break;
 
     case '&':
-	if (len > 1)
-	    break;
-	PL_sawampersand = TRUE;
-	goto ro_magicalize;
-
     case '`':
-	if (len > 1)
-	    break;
-	PL_sawampersand = TRUE;
-	goto ro_magicalize;
-
     case '\'':
-	if (len > 1)
-	    break;
+       if (
+           len > 1 ||
+           sv_type == SVt_PVAV ||
+           sv_type == SVt_PVHV ||
+           sv_type == SVt_PVCV ||
+           sv_type == SVt_PVFM ||
+           sv_type == SVt_PVIO
+       ) { break; }
 	PL_sawampersand = TRUE;
 	goto ro_magicalize;
 
@@ -872,8 +918,8 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
 	goto magicalize;
     case '#':
     case '*':
-	if (ckWARN(WARN_DEPRECATED) && len == 1 && sv_type == SVt_PV)
-	    Perl_warner(aTHX_ WARN_DEPRECATED, "Use of $%s is deprecated", name);
+	if (ckWARN2(WARN_DEPRECATED, WARN_SYNTAX) && len == 1 && sv_type == SVt_PV)
+	    Perl_warner(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX), "Use of $%s is deprecated", name);
 	/* FALL THROUGH */
     case '[':
     case '^':
@@ -891,13 +937,11 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
     case '\001':	/* $^A */
     case '\003':	/* $^C */
     case '\004':	/* $^D */
-    case '\005':	/* $^E */
     case '\006':	/* $^F */
     case '\010':	/* $^H */
     case '\011':	/* $^I, NOT \t in EBCDIC */
     case '\016':        /* $^N */
     case '\020':	/* $^P */
-    case '\024':	/* $^T */
 	if (len > 1)
 	    break;
 	goto magicalize;
@@ -906,6 +950,11 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
 	    break;
 	sv_setiv(GvSV(gv), (IV)(IoFLAGS(GvIOp(PL_defoutgv)) & IOf_FLUSH) != 0);
 	goto magicalize;
+    case '\005':	/* $^E && $^ENCODING */
+	if (len > 1 && strNE(name, "\005NCODING"))
+	    break;
+	goto magicalize;
+
     case '\017':	/* $^O & $^OPEN */
 	if (len > 1 && strNE(name, "\017PEN"))
 	    break;
@@ -914,6 +963,13 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
 	if (len > 1)
 	    break;
 	goto ro_magicalize;
+    case '\024':	/* $^T, ${^TAINT} */
+        if (len == 1)
+            goto magicalize;
+        else if (strEQ(name, "\024AINT"))
+            goto ro_magicalize;
+        else
+            break;
     case '\027':	/* $^W & $^WARNING_BITS */
 	if (len > 1 && strNE(name, "\027ARNING_BITS")
 	    && strNE(name, "\027IDE_SYSTEM_CALLS"))
@@ -938,6 +994,17 @@ Perl_gv_fetchpv(pTHX_ const char *nambeg, I32 add, I32 sv_type)
     case '7':
     case '8':
     case '9':
+	/* ensures variable is only digits */
+	/* ${"1foo"} fails this test (and is thus writeable) */
+	/* added by japhy, but borrowed from is_gv_magical */
+
+	if (len > 1) {
+	    const char *end = name + len;
+	    while (--end > name) {
+		if (!isDIGIT(*end)) return gv;
+	    }
+	}
+
       ro_magicalize:
 	SvREADONLY_on(GvSV(gv));
       magicalize:
@@ -1272,14 +1339,25 @@ Perl_Gv_AMupdate(pTHX_ HV *stash)
 
 	DEBUG_o( Perl_deb(aTHX_ "Checking overloading of `%s' in package `%.256s'\n",
 		     cp, HvNAME(stash)) );
-	/* don't fill the cache while looking up! */
-	gv = gv_fetchmeth(stash, cooky, l, -1);
+	/* don't fill the cache while looking up!
+	   Creation of inheritance stubs in intermediate packages may
+	   conflict with the logic of runtime method substitution.
+	   Indeed, for inheritance A -> B -> C, if C overloads "+0",
+	   then we could have created stubs for "(+0" in A and C too.
+	   But if B overloads "bool", we may want to use it for
+	   numifying instead of C's "+0". */
+	if (i >= DESTROY_amg)
+	    gv = Perl_gv_fetchmeth_autoload(aTHX_ stash, cooky, l, 0);
+	else				/* Autoload taken care of below */
+	    gv = Perl_gv_fetchmeth(aTHX_ stash, cooky, l, -1);
         cv = 0;
         if (gv && (cv = GvCV(gv))) {
 	    if (GvNAMELEN(CvGV(cv)) == 3 && strEQ(GvNAME(CvGV(cv)), "nil")
 		&& strEQ(HvNAME(GvSTASH(CvGV(cv))), "overload")) {
+		/* This is a hack to support autoloading..., while
+		   knowing *which* methods were declared as overloaded. */
 		/* GvSV contains the name of the method. */
-		GV *ngv;
+		GV *ngv = Nullgv;
 		
 		DEBUG_o( Perl_deb(aTHX_ "Resolving method `%.256s' for overloaded `%s' in package `%.256s'\n",
 			     SvPV_nolen(GvSV(gv)), cp, HvNAME(stash)) );
@@ -1305,6 +1383,9 @@ Perl_Gv_AMupdate(pTHX_ HV *stash)
 	    filled = 1;
 	    if (i < DESTROY_amg)
 		have_ovl = 1;
+	} else if (gv) {		/* Autoloaded... */
+	    cv = (CV*)gv;
+	    filled = 1;
 	}
 	amt.table[i]=(CV*)SvREFCNT_inc(cv);
     }
@@ -1777,11 +1858,14 @@ Perl_is_gv_magical(pTHX_ char *name, STRLEN len, U32 flags)
     case '\016':   /* $^N */
     case '\020':   /* $^P */
     case '\023':   /* $^S */
-    case '\024':   /* $^T */
     case '\026':   /* $^V */
 	if (len == 1)
 	    goto yes;
 	break;
+    case '\024':   /* $^T, ${^TAINT} */
+        if (len == 1 || strEQ(name, "\024AINT"))
+            goto yes;
+        break;
     case '1':
     case '2':
     case '3':

@@ -1,6 +1,6 @@
 /*    cop.h
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -30,13 +30,13 @@ struct cop {
 #  define CopFILE(c)		((c)->cop_file)
 #  define CopFILEGV(c)		(CopFILE(c) \
 				 ? gv_fetchfile(CopFILE(c)) : Nullgv)
-#  define CopFILE_set(c,pv)	((c)->cop_file = savepv(pv))
+#  define CopFILE_set(c,pv)	((c)->cop_file = savesharedpv(pv))
 #  define CopFILESV(c)		(CopFILE(c) \
 				 ? GvSV(gv_fetchfile(CopFILE(c))) : Nullsv)
 #  define CopFILEAV(c)		(CopFILE(c) \
 				 ? GvAV(gv_fetchfile(CopFILE(c))) : Nullav)
 #  define CopSTASHPV(c)		((c)->cop_stashpv)
-#  define CopSTASHPV_set(c,pv)	((c)->cop_stashpv = ((pv) ? savepv(pv) : Nullch))
+#  define CopSTASHPV_set(c,pv)	((c)->cop_stashpv = savesharedpv(pv))
 #  define CopSTASH(c)		(CopSTASHPV(c) \
 				 ? gv_stashpv(CopSTASHPV(c),GV_ADD) : Nullhv)
 #  define CopSTASH_set(c,hv)	CopSTASHPV_set(c, (hv) ? HvNAME(hv) : Nullch)
@@ -44,6 +44,8 @@ struct cop {
 				 && (CopSTASHPV(c) == HvNAME(hv)	\
 				     || (CopSTASHPV(c) && HvNAME(hv)	\
 					 && strEQ(CopSTASHPV(c), HvNAME(hv)))))
+#  define CopSTASH_free(c)	PerlMemShared_free(CopSTASHPV(c))      
+#  define CopFILE_free(c)	(PerlMemShared_free(CopFILE(c)),(CopFILE(c) = Nullch))      
 #else
 #  define CopFILEGV(c)		((c)->cop_filegv)
 #  define CopFILEGV_set(c,gv)	((c)->cop_filegv = (GV*)SvREFCNT_inc(gv))
@@ -57,6 +59,9 @@ struct cop {
    /* cop_stash is not refcounted */
 #  define CopSTASHPV_set(c,pv)	CopSTASH_set((c), gv_stashpv(pv,GV_ADD))
 #  define CopSTASH_eq(c,hv)	(CopSTASH(c) == (hv))
+#  define CopSTASH_free(c)	
+#  define CopFILE_free(c)	(SvREFCNT_dec(CopFILEGV(c)),(CopFILEGV(c) = Nullgv))
+
 #endif /* USE_ITHREADS */
 
 #define CopSTASH_ne(c,hv)	(!CopSTASH_eq(c,hv))
@@ -64,6 +69,13 @@ struct cop {
 #define CopLINE_inc(c)		(++CopLINE(c))
 #define CopLINE_dec(c)		(--CopLINE(c))
 #define CopLINE_set(c,l)	(CopLINE(c) = (l))
+
+/* OutCopFILE() is CopFILE for output (caller, die, warn, etc.) */
+#ifdef MACOS_TRADITIONAL
+#  define OutCopFILE(c) MacPerl_MPWFileName(CopFILE(c))
+#else
+#  define OutCopFILE(c) CopFILE(c)
+#endif
 
 /*
  * Here we have some enormously heavy (or at least ponderous) wizardry.
@@ -74,9 +86,9 @@ struct block_sub {
     CV *	cv;
     GV *	gv;
     GV *	dfoutgv;
-#ifndef USE_THREADS
+#ifndef USE_5005THREADS
     AV *	savearray;
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
     AV *	argarray;
     U16		olddepth;
     U8		hasargs;
@@ -98,7 +110,7 @@ struct block_sub {
 	cx->blk_sub.dfoutgv = PL_defoutgv;				\
 	(void)SvREFCNT_inc(cx->blk_sub.dfoutgv)
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 #  define POP_SAVEARRAY() NOOP
 #else
 #  define POP_SAVEARRAY()						\
@@ -106,7 +118,7 @@ struct block_sub {
 	SvREFCNT_dec(GvAV(PL_defgv));					\
 	GvAV(PL_defgv) = cx->blk_sub.savearray;				\
     } STMT_END
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 
 /* junk in @_ spells trouble when cloning CVs and in pp_caller(), so don't
  * leave any (a fast av_clear(ary), basically) */
@@ -202,7 +214,7 @@ struct block_loop {
 #  define CxITERVAR(c)							\
 	((c)->blk_loop.iterdata						\
 	 ? (CxPADLOOP(cx) 						\
-	    ? &((c)->blk_loop.oldcurpad)[(PADOFFSET)(c)->blk_loop.iterdata]	\
+	    ? &((c)->blk_loop.oldcurpad)[INT2PTR(PADOFFSET, (c)->blk_loop.iterdata)] \
 	    : &GvSV((GV*)(c)->blk_loop.iterdata))			\
 	 : (SV**)NULL)
 #  define CX_ITERDATA_SET(cx,idata)					\
@@ -388,7 +400,9 @@ struct context {
 
 #define CXINC (cxstack_ix < cxstack_max ? ++cxstack_ix : (cxstack_ix = cxinc()))
 
-/* "gimme" values */
+/* 
+=head1 "Gimme" Values
+*/
 
 /*
 =for apidoc AmU||G_SCALAR

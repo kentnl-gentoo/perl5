@@ -1,5 +1,5 @@
 use ExtUtils::MakeMaker;
-use ExtUtils::Constant 0.07 'WriteConstants';
+use ExtUtils::Constant 0.11 'WriteConstants';
 use Config;
 my @libs;
 if ($^O ne 'MSWin32') {
@@ -11,7 +11,6 @@ WriteMakefile(
     MAN3PODS 	=> {}, 	# Pods will be built by installman.
     XSPROTOARG => '-noprototypes', 		# XXX remove later?
     VERSION_FROM => 'POSIX.pm', 
-    realclean => {FILES=> 'constants.c constants.xs'},
 );
 
 my @names =
@@ -50,7 +49,8 @@ my @names =
       X_OK _PC_CHOWN_RESTRICTED _PC_LINK_MAX _PC_MAX_CANON _PC_MAX_INPUT
       _PC_NAME_MAX _PC_NO_TRUNC _PC_PATH_MAX _PC_PIPE_BUF _PC_VDISABLE
       _SC_ARG_MAX _SC_CHILD_MAX _SC_CLK_TCK _SC_JOB_CONTROL _SC_NGROUPS_MAX
-      _SC_OPEN_MAX _SC_SAVED_IDS _SC_STREAM_MAX _SC_TZNAME_MAX _SC_VERSION),
+      _SC_OPEN_MAX _SC_PAGESIZE _SC_SAVED_IDS _SC_STREAM_MAX _SC_TZNAME_MAX
+      _SC_VERSION),
    {name=>"EXIT_FAILURE", default=>["IV", "1"]},
    {name=>"EXIT_SUCCESS", default=>["IV", "0"]},
    {name=>"SIG_DFL", value=>"(IV)SIG_DFL"},

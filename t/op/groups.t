@@ -5,8 +5,25 @@ $ENV{PATH} ="/bin:/usr/bin:/usr/xpg4/bin:/usr/ucb" .
 $ENV{LC_ALL} = "C"; # so that external utilities speak English
 $ENV{LANGUAGE} = 'C'; # GNU locale extension
 
+BEGIN {
+    chdir 't';
+    @INC = '../lib';
+
+    require Config;
+    if ($@) {
+	print "1..0 # Skip: no Config\n";
+    } else {
+	Config->import;
+    }
+}
+
 sub quit {
     print "1..0 # Skip: no `id` or `groups`\n";
+    exit 0;
+}
+
+unless (eval { getgrgid(0); 1 }) {
+    print "1..0 # Skip: getgrgid() not implemented\n";
     exit 0;
 }
 
@@ -56,7 +73,7 @@ GROUPS: {
 #
 # If these tests fail, report the particular incantation you use
 # on this platform to find *all* the groups that an arbitrary
-# luser may belong to, using the 'perlbug' program.
+# user may belong to, using the 'perlbug' program.
 EOM
 	}
 	last GROUPS;
@@ -65,10 +82,9 @@ EOM
     quit();
 }
 
-unless (eval { getgrgid(0); 1 }) {
-    print "1..0 # Skip: getgrgid() not implemented\n";
-    exit 0;
-}
+chomp($groups);
+
+print "# groups = $groups\n";
 
 # Remember that group names can contain whitespace, '-', et cetera.
 # That is: do not \w, do not \S.
@@ -100,9 +116,9 @@ print "1..2\n";
 
 $pwgid = $( + 0;
 ($pwgnam) = getgrgid($pwgid);
-@basegroup{$pwgid,$pwgnam} = (1,1);
-
 $seen{$pwgid}++;
+
+print "# pwgid = $pwgid, pwgnam = $pwgnam\n";
 
 for (split(' ', $()) {
     next if $seen{$_}++;
@@ -115,6 +131,8 @@ for (split(' ', $()) {
     }
 } 
 
+print "# gr = @gr\n";
+
 if ($^O =~ /^(?:uwin|solaris)$/) {
 	# Or anybody else who can have spaces in group names.
 	$gr1 = join(' ', grep(!$did{$_}++, sort split(' ', join(' ', @gr))));
@@ -122,12 +140,28 @@ if ($^O =~ /^(?:uwin|solaris)$/) {
 	$gr1 = join(' ', sort @gr);
 }
 
+if ($Config{myuname} =~ /^cygwin_nt/i) { # basegroup on CYGWIN_NT has id = 0.
+    @basegroup{$pwgid,$pwgnam} = (0,0);
+} else {
+    @basegroup{$pwgid,$pwgnam} = (1,1);
+}
 $gr2 = join(' ', grep(!$basegroup{$_}++, sort split(' ',$groups)));
 
-if ($gr1 eq $gr2) {
+my $ok1 = 0;
+if ($gr1 eq $gr2 || ($gr1 eq '' && $gr2 eq $pwgid)) {
     print "ok 1\n";
+    $ok1++;
 }
-else {
+elsif ($Config{myuname} =~ /^cygwin_nt/i) { # basegroup on CYGWIN_NT has id = 0.
+    # Retry in default unix mode
+    %basegroup = ( $pwgid => 1, $pwgnam => 1 );
+    $gr2 = join(' ', grep(!$basegroup{$_}++, sort split(' ',$groups)));
+    if ($gr1 eq $gr2 || ($gr1 eq '' && $gr2 eq $pwgid)) {
+	print "ok 1 # This Cygwin behaves like Unix (Win2k?)\n";
+	$ok1++;
+    }
+}
+unless ($ok1) {
     print "#gr1 is <$gr1>\n";
     print "#gr2 is <$gr2>\n";
     print "not ok 1\n";

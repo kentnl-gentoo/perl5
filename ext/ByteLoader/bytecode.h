@@ -72,6 +72,14 @@ typedef IV IV64;
 	}						\
     } STMT_END
 
+#if IVSIZE == 4
+#   define BGET_IV(arg) BGET_I32(arg)
+#else
+#   if IVSIZE == 8
+#       define BGET_IV(arg) BGET_IV64(arg)
+#   endif
+#endif
+
 #define BGET_op_tr_array(arg) do {			\
 	unsigned short *ary;				\
 	New(666, ary, 256, unsigned short);		\
@@ -182,8 +190,6 @@ typedef IV IV64;
 	    ENTER;					\
 	    SAVECOPFILE(&PL_compiling);			\
 	    SAVECOPLINE(&PL_compiling);			\
-	    save_svref(&PL_rs);				\
-	    sv_setsv(PL_rs, PL_nrs);			\
 	    if (!PL_beginav)				\
 		PL_beginav = newAV();			\
 	    av_push(PL_beginav, cv);			\
@@ -204,10 +210,10 @@ typedef IV IV64;
 	} STMT_END
 #define BSET_OBJ_STORE(obj, ix)			\
 	(I32)ix > bstate->bs_obj_list_fill ?	\
-	bset_obj_store(aTHXo_ bstate, obj, (I32)ix) : (bstate->bs_obj_list[ix] = obj)
+	bset_obj_store(aTHX_ bstate, obj, (I32)ix) : (bstate->bs_obj_list[ix] = obj)
 
 /* NOTE: the bytecode header only sanity-checks the bytecode. If a script cares about
- * what version of Perl it's being called under, it should do a 'require 5.6.0' or
+ * what version of Perl it's being called under, it should do a 'use 5.006_001' or
  * equivalent. However, since the header includes checks requiring an exact match in
  * ByteLoader versions (we can't guarantee forward compatibility), you don't 
  * need to specify one:

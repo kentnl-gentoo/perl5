@@ -26,6 +26,15 @@ EXPECT
 
 # strict subs - error
 use strict 'subs' ;
+my @a = (1..2);
+my $b = xyz;
+EXPECT
+Bareword "xyz" not allowed while "strict subs" in use at - line 5.
+Execution of - aborted due to compilation errors.
+########
+
+# strict subs - error
+use strict 'subs' ;
 Fred ;
 EXPECT
 Bareword "Fred" not allowed while "strict subs" in use at - line 4.
@@ -317,3 +326,11 @@ Foo A 1
 Foo B 2
 Foo C 3
 Foo D 4
+########
+
+# Check that barewords on the RHS of a regex match are caught
+use strict;
+"" =~ foo;
+EXPECT
+Bareword "foo" not allowed while "strict subs" in use at - line 4.
+Execution of - aborted due to compilation errors.

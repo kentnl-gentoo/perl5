@@ -1,17 +1,17 @@
 package AutoSplit;
 
-use 5.005_64;
+use 5.006_001;
 use Exporter ();
 use Config qw(%Config);
 use Carp qw(carp);
 use File::Basename ();
 use File::Path qw(mkpath);
-use File::Spec::Functions qw(curdir catfile);
+use File::Spec::Functions qw(curdir catfile catdir);
 use strict;
 our($VERSION, @ISA, @EXPORT, @EXPORT_OK, $Verbose, $Keep, $Maxlen,
     $CheckForAutoloader, $CheckModTime);
 
-$VERSION = "1.0306";
+$VERSION = "1.0307";
 @ISA = qw(Exporter);
 @EXPORT = qw(&autosplit &autosplit_lib_modules);
 @EXPORT_OK = qw($Verbose $Keep $Maxlen $CheckForAutoloader $CheckModTime);
@@ -238,6 +238,7 @@ sub autosplit_file {
 	$in_pod = 1 if /^=\w/;
 	$in_pod = 0 if /^=cut/;
 	next if ($in_pod || /^=cut/);
+        next if /^\s*#/;
 
 	# record last package name seen
 	$def_package = $1 if (m/^\s*package\s+([\w:]+)\s*;/);
@@ -255,9 +256,6 @@ sub autosplit_file {
     $def_package or die "Can't find 'package Name;' in $filename\n";
 
     my($modpname) = _modpname($def_package); 
-    if ($Is_VMS) {
-	$modpname = VMS::Filespec::unixify($modpname); # may have dirs
-    }
 
     # this _has_ to match so we have a reasonable timestamp file
     die "Package $def_package ($modpname.pm) does not ".
@@ -278,7 +276,7 @@ sub autosplit_file {
 	}
     }
 
-    my($modnamedir) = catfile($autodir, $modpname);
+    my($modnamedir) = catdir($autodir, $modpname);
     print "AutoSplitting $filename ($modnamedir)\n"
 	if $Verbose;
 
@@ -326,7 +324,7 @@ sub autosplit_file {
 	    push(@subnames, $fq_subname);
 	    my($lname, $sname) = ($subname, substr($subname,0,$maxflen-3));
 	    $modpname = _modpname($this_package);
-    	    my($modnamedir) = catfile($autodir, $modpname);
+            my($modnamedir) = catdir($autodir, $modpname);
 	    mkpath($modnamedir,0,0777);
 	    my($lpath) = catfile($modnamedir, "$lname.al");
 	    my($spath) = catfile($modnamedir, "$sname.al");
@@ -435,9 +433,15 @@ sub _modpname ($) {
     if ($^O eq 'MSWin32') {
 	$modpname =~ s#::#\\#g; 
     } else {
-    	while ($modpname =~ m#(.*?[^:])::([^:].*)#) {
-	    $modpname = catfile($1, $2);
-	}
+	my @modpnames = ();
+	while ($modpname =~ m#(.*?[^:])::([^:].*)#) {
+	       push @modpnames, $1;
+	       $modpname = $2;
+         }
+	$modpname = catfile(@modpnames, $modpname);
+    }
+    if ($Is_VMS) {
+        $modpname = VMS::Filespec::unixify($modpname); # may have dirs
     }
     $modpname;
 }

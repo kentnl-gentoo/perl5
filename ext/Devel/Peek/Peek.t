@@ -12,7 +12,7 @@ BEGIN {
 
 use Devel::Peek;
 
-print "1..17\n";
+print "1..19\n";
 
 our $DEBUG = 0;
 open(SAVERR, ">&STDERR") or die "Can't dup STDERR: $!";
@@ -27,12 +27,14 @@ sub do_test {
 	if (open(IN, "peek$$")) {
 	    local $/;
 	    $pattern =~ s/\$ADDR/0x[[:xdigit:]]+/g;
+	    $pattern =~ s/\$FLOAT/(?:\\d*\\.\\d+(?:e[-+]\\d+)?|\\d+)/g;
 	    print $pattern, "\n" if $DEBUG;
 	    my $dump = <IN>;
 	    print $dump, "\n"    if $DEBUG;
 	    print "[$dump] vs [$pattern]\nnot " unless $dump =~ /$pattern/ms;
 	    print "ok $_[0]\n";
 	    close(IN);
+            return $1;
 	} else {
 	    die "$0: failed to open peek$$: !\n";
 	}
@@ -53,7 +55,7 @@ do_test( 1,
   FLAGS = \\(POK,pPOK\\)
   PV = $ADDR "foo"\\\0
   CUR = 3
-  LEN = 4'
+  LEN = \\d+'
        );
 
 do_test( 2,
@@ -63,7 +65,7 @@ do_test( 2,
   FLAGS = \\(.*POK,READONLY,pPOK\\)
   PV = $ADDR "bar"\\\0
   CUR = 3
-  LEN = 4');
+  LEN = \\d+');
 
 do_test( 3,
         $b = 123,
@@ -86,12 +88,17 @@ do_test( 5,
   FLAGS = \\(PADBUSY,PADMY,IOK,pIOK\\)
   IV = 456');
 
-do_test( 6,
+# If perl is built with PERL_PRESERVE_IVUV then maths is done as integers
+# where possible and this scalar will be an IV. If NO_PERL_PRESERVE_IVUV then
+# maths is done in floating point always, and this scalar will be an NV.
+# ([NI]) captures the type, referred to by \1 in this regexp and $type for
+# building subsequent regexps.
+my $type = do_test( 6,
         $c + $d,
-'SV = IV\\($ADDR\\) at $ADDR
+'SV = ([NI])V\\($ADDR\\) at $ADDR
   REFCNT = 1
-  FLAGS = \\(PADTMP,IOK,pIOK\\)
-  IV = 456');
+  FLAGS = \\(PADTMP,\1OK,p\1OK\\)
+  \1V = 456');
 
 ($d = "789") += 0.1;
 
@@ -104,7 +111,7 @@ do_test( 7,
   NV = 789\\.(?:1(?:000+\d+)?|0999+\d+)
   PV = $ADDR "789"\\\0
   CUR = 3
-  LEN = 4');
+  LEN = \\d+');
 
 do_test( 8,
         0xabcd,
@@ -130,8 +137,24 @@ do_test(10,
     FLAGS = \\(POK,pPOK\\)
     PV = $ADDR "foo"\\\0
     CUR = 3
-    LEN = 4');
+    LEN = \\d+');
 
+my $c_pattern;
+if ($type eq 'N') {
+  $c_pattern = '
+    SV = PVNV\\($ADDR\\) at $ADDR
+      REFCNT = 1
+      FLAGS = \\(IOK,NOK,pIOK,pNOK\\)
+      IV = 456
+      NV = 456
+      PV = 0';
+} else {
+  $c_pattern = '
+    SV = IV\\($ADDR\\) at $ADDR
+      REFCNT = 1
+      FLAGS = \\(IOK,pIOK\\)
+      IV = 456';
+}
 do_test(11,
        [$b,$c],
 'SV = RV\\($ADDR\\) at $ADDR
@@ -153,11 +176,7 @@ do_test(11,
       REFCNT = 1
       FLAGS = \\(IOK,pIOK\\)
       IV = 123
-    Elt No. 1
-    SV = IV\\($ADDR\\) at $ADDR
-      REFCNT = 1
-      FLAGS = \\(IOK,pIOK\\)
-      IV = 456');
+    Elt No. 1' . $c_pattern);
 
 do_test(12,
        {$b=>$c},
@@ -169,7 +188,7 @@ do_test(12,
     REFCNT = 2
     FLAGS = \\(SHAREKEYS\\)
     IV = 1
-    NV = 0
+    NV = $FLOAT
     ARRAY = $ADDR  \\(0:7, 1:1\\)
     hash quality = 100.0%
     KEYS = 1
@@ -177,11 +196,7 @@ do_test(12,
     MAX = 7
     RITER = -1
     EITER = 0x0
-    Elt "123" HASH = $ADDR
-    SV = IV\\($ADDR\\) at $ADDR
-      REFCNT = 1
-      FLAGS = \\(IOK,pIOK\\)
-      IV = 456');
+    Elt "123" HASH = $ADDR' . $c_pattern);
 
 do_test(13,
         sub(){@_},
@@ -302,6 +317,80 @@ do_test(17,
     FILE = ".*\\b(?i:peek\\.t)"
     FLAGS = $ADDR
     EGV = $ADDR\\t"a"');
+
+if (ord('A') == 193) {
+do_test(18,
+	chr(256).chr(0).chr(512),
+'SV = PV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\((?:PADBUSY,PADTMP,)?POK,READONLY,pPOK,UTF8\\)
+  PV = $ADDR "\\\214\\\101\\\0\\\235\\\101"\\\0 \[UTF8 "\\\x\{100\}\\\x\{0\}\\\x\{200\}"\]
+  CUR = 5
+  LEN = \\d+');
+} else {
+do_test(18,
+	chr(256).chr(0).chr(512),
+'SV = PV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\((?:PADBUSY,PADTMP,)?POK,READONLY,pPOK,UTF8\\)
+  PV = $ADDR "\\\304\\\200\\\0\\\310\\\200"\\\0 \[UTF8 "\\\x\{100\}\\\x\{0\}\\\x\{200\}"\]
+  CUR = 5
+  LEN = \\d+');
+}
+
+if (ord('A') == 193) {
+do_test(19,
+	{chr(256)=>chr(512)},
+'SV = RV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(ROK\\)
+  RV = $ADDR
+  SV = PVHV\\($ADDR\\) at $ADDR
+    REFCNT = 2
+    FLAGS = \\(SHAREKEYS\\)
+    IV = 1
+    NV = $FLOAT
+    ARRAY = $ADDR  \\(0:7, 1:1\\)
+    hash quality = 100.0%
+    KEYS = 1
+    FILL = 1
+    MAX = 7
+    RITER = -1
+    EITER = $ADDR
+    Elt "\\\214\\\101" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
+    SV = PV\\($ADDR\\) at $ADDR
+      REFCNT = 1
+      FLAGS = \\(POK,pPOK,UTF8\\)
+      PV = $ADDR "\\\235\\\101"\\\0 \[UTF8 "\\\x\{200\}"\]
+      CUR = 2
+      LEN = \\d+');
+} else {
+do_test(19,
+	{chr(256)=>chr(512)},
+'SV = RV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(ROK\\)
+  RV = $ADDR
+  SV = PVHV\\($ADDR\\) at $ADDR
+    REFCNT = 2
+    FLAGS = \\(SHAREKEYS\\)
+    IV = 1
+    NV = 0
+    ARRAY = $ADDR  \\(0:7, 1:1\\)
+    hash quality = 100.0%
+    KEYS = 1
+    FILL = 1
+    MAX = 7
+    RITER = -1
+    EITER = $ADDR
+    Elt "\\\304\\\200" \[UTF8 "\\\x\{100\}"\] HASH = $ADDR
+    SV = PV\\($ADDR\\) at $ADDR
+      REFCNT = 1
+      FLAGS = \\(POK,pPOK,UTF8\\)
+      PV = $ADDR "\\\310\\\200"\\\0 \[UTF8 "\\\x\{200\}"\]
+      CUR = 2
+      LEN = \\d+');
+}
 
 END {
   1 while unlink("peek$$");

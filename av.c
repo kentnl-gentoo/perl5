@@ -1,6 +1,6 @@
 /*    av.c
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -11,6 +11,10 @@
  * "...for the Entwives desired order, and plenty, and peace (by which they
  * meant that things should remain where they had set them)." --Treebeard
  */
+
+/*
+=head1 Array Manipulation Functions
+*/
 
 #include "EXTERN.h"
 #define PERL_IN_AV_C
@@ -510,8 +514,8 @@ Perl_av_pop(pTHX_ register AV *av)
     SV *retval;
     MAGIC* mg;
 
-    if (!av || AvFILL(av) < 0)
-	return &PL_sv_undef;
+    if (!av)
+      return &PL_sv_undef;
     if (SvREADONLY(av))
 	Perl_croak(aTHX_ PL_no_modify);
     if ((mg = SvTIED_mg((SV*)av, PERL_MAGIC_tied))) {
@@ -530,6 +534,8 @@ Perl_av_pop(pTHX_ register AV *av)
 	POPSTACK;
 	return retval;
     }
+    if (AvFILL(av) < 0)
+	return &PL_sv_undef;
     retval = AvARRAY(av)[AvFILLp(av)];
     AvARRAY(av)[AvFILLp(av)--] = &PL_sv_undef;
     if (SvSMAGICAL(av))
@@ -555,7 +561,7 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
     MAGIC* mg;
     I32 slide;
 
-    if (!av || num <= 0)
+    if (!av)
 	return;
     if (SvREADONLY(av))
 	Perl_croak(aTHX_ PL_no_modify);
@@ -577,6 +583,8 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
 	return;
     }
 
+    if (num <= 0)
+      return;
     if (!AvREAL(av) && AvREIFY(av))
 	av_reify(av);
     i = AvARRAY(av) - AvALLOC(av);
@@ -622,7 +630,7 @@ Perl_av_shift(pTHX_ register AV *av)
     SV *retval;
     MAGIC* mg;
 
-    if (!av || AvFILL(av) < 0)
+    if (!av)
 	return &PL_sv_undef;
     if (SvREADONLY(av))
 	Perl_croak(aTHX_ PL_no_modify);
@@ -642,6 +650,8 @@ Perl_av_shift(pTHX_ register AV *av)
 	POPSTACK;
 	return retval;
     }
+    if (AvFILL(av) < 0)
+      return &PL_sv_undef;
     retval = *AvARRAY(av);
     if (AvREAL(av))
 	*AvARRAY(av) = &PL_sv_undef;

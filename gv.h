@@ -1,6 +1,6 @@
 /*    gv.h
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -35,6 +35,8 @@ struct gp {
 #define GvFLAGS(gv)	(GvXPVGV(gv)->xgv_flags)
 
 /*
+=head1 GV Functions
+
 =for apidoc Am|SV*|GvSV|GV* gv
 
 Return the SV from the GV.

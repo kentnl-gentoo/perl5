@@ -88,12 +88,6 @@
 #define const
 #endif
 
-/* HAS_CRYPT:
- *	This symbol, if defined, indicates that the crypt routine is available
- *	to encrypt passwords and the like.
- */
-/*#define HAS_CRYPT		/ **/
-
 /* HAS_CUSERID:
  *	This symbol, if defined, indicates that the cuserid routine is
  *	available to get character login names.
@@ -510,20 +504,6 @@
  */
 /*#define HAS_SETSID	/ **/
 
-/* Shmat_t:
- *	This symbol holds the return type of the shmat() system call.
- *	Usually set to 'void *' or 'char *'.
- */
-/* HAS_SHMAT_PROTOTYPE:
- *	This symbol, if defined, indicates that the sys/shm.h includes
- *	a prototype for shmat().  Otherwise, it is up to the program to
- *	guess one.  Shmat_t shmat _((int, Shmat_t, int)) is a good guess,
- *	but not always right so it should be emitted by the program only
- *	when HAS_SHMAT_PROTOTYPE is not defined to avoid conflicting defs.
- */
-#define Shmat_t void *	/**/
-/*#define HAS_SHMAT_PROTOTYPE	/ **/
-
 /* HAS_STRCHR:
  *	This symbol is defined to indicate that the strchr()/strrchr()
  *	functions are available for string searching. If not, try the
@@ -739,12 +719,6 @@
  */
 /*#define I_MEMORY		/ **/
 
-/* I_NDBM:
- *	This symbol, if defined, indicates that <ndbm.h> exists and should
- *	be included.
- */
-/*#define I_NDBM	/ **/
-
 /* I_NET_ERRNO:
  *	This symbol, if defined, indicates that <net/errno.h> exists and 
  *	should be included.
@@ -903,33 +877,6 @@
  *	include vfork.h.
  */
 /*#define I_VFORK	/ **/
-
-/* CAN_PROTOTYPE:
- *	If defined, this macro indicates that the C compiler can handle
- *	function prototypes.
- */
-/* _:
- *	This macro is used to declare function parameters for folks who want
- *	to make declarations with prototypes using a different style than
- *	the above macros.  Use double parentheses.  For example:
- *
- *		int main _((int argc, char *argv[]));
- */
-/*#define	CAN_PROTOTYPE	/ **/
-#ifdef CAN_PROTOTYPE
-#define	_(args) args
-#else
-#define	_(args) ()
-#endif
-
-/* SH_PATH:
- *	This symbol contains the full pathname to the shell used on this
- *	on this system to execute Bourne shell scripts.  Usually, this will be
- *	/bin/sh, though it's possible that some systems will have /bin/ksh,
- *	/bin/pdksh, /bin/ash, /bin/bash, or even something such as
- *	D:/bin/sh.exe.
- */
-#define SH_PATH ""  /**/
 
 /* INTSIZE:
  *	This symbol contains the value of sizeof(int) so that the C
@@ -1206,6 +1153,24 @@
 /*#define	CASTNEGFLOAT		/ **/
 #define CASTFLAGS 0		/**/
 
+/* HAS_CLASS:
+ *	This symbol, if defined, indicates that the class routine is
+ *	available to classify doubles.  Available for example in AIX.
+ *	The returned values are defined in <float.h> and are:
+ *
+ *	FP_PLUS_NORM	Positive normalized, nonzero
+ *	FP_MINUS_NORM	Negative normalized, nonzero
+ *	FP_PLUS_DENORM	Positive denormalized, nonzero
+ *	FP_MINUS_DENORM	Negative denormalized, nonzero
+ *	FP_PLUS_ZERO	+0.0
+ *	FP_MINUS_ZERO	-0.0
+ *	FP_PLUS_INF	+INF
+ *	FP_MINUS_INF	-INF
+ *	FP_NANS		Signaling Not a Number (NaNS)
+ *	FP_NANQ		Quiet Not a Number (NaNQ)
+ */
+/*#define HAS_CLASS		/ **/
+
 /* VOID_CLOSEDIR:
  *	This symbol, if defined, indicates that the closedir() routine
  *	does not return a value.
@@ -1241,7 +1206,7 @@
  *	This symbol, if defined, indicates that the system provides
  *	a prototype for the drand48() function.  Otherwise, it is up
  *	to the program to supply one.  A good guess is
- *		extern double drand48 _((void));
+ *		extern double drand48(void);
  */
 /*#define	HAS_DRAND48_PROTO	/ **/
 
@@ -1300,11 +1265,74 @@
  */
 /*#define HAS_FD_SET	/ **/
 
+/* HAS_FINITE:
+ *	This symbol, if defined, indicates that the finite routine is
+ *	available to check whether a double is finite (non-infinity non-NaN).
+ */
+/*#define HAS_FINITE		/ **/
+
+/* HAS_FINITEL:
+ *	This symbol, if defined, indicates that the finitel routine is
+ *	available to check whether a long double is finite
+ *	(non-infinity non-NaN).
+ */
+/*#define HAS_FINITEL		/ **/
+
 /* FLEXFILENAMES:
  *	This symbol, if defined, indicates that the system supports filenames
  *	longer than 14 characters.
  */
 /*#define	FLEXFILENAMES		/ **/
+
+/* HAS_FP_CLASS:
+ *	This symbol, if defined, indicates that the fp_class routine is
+ *	available to classify doubles.  Available for example in Digital UNIX.
+ *	The returned values are defined in <math.h> and are:
+ *
+ *	FP_SNAN           Signaling NaN (Not-a-Number)
+ *	FP_QNAN           Quiet NaN (Not-a-Number)
+ *	FP_POS_INF        +infinity
+ *	FP_NEG_INF        -infinity
+ *	FP_POS_NORM       Positive normalized
+ *	FP_NEG_NORM       Negative normalized
+ *	FP_POS_DENORM     Positive denormalized
+ *	FP_NEG_DENORM     Negative denormalized
+ *	FP_POS_ZERO       +0.0 (positive zero)
+ *	FP_NEG_ZERO       -0.0 (negative zero)
+ */
+/*#define HAS_FP_CLASS		/ **/
+
+/* HAS_FPCLASS:
+ *	This symbol, if defined, indicates that the fpclass routine is
+ *	available to classify doubles.  Available for example in Solaris/SVR4.
+ *	The returned values are defined in <ieeefp.h> and are:
+ *
+ *	FP_SNAN		signaling NaN
+ *	FP_QNAN		quiet NaN
+ *	FP_NINF		negative infinity
+ *	FP_PINF		positive infinity
+ *	FP_NDENORM	negative denormalized non-zero
+ *	FP_PDENORM	positive denormalized non-zero
+ *	FP_NZERO	negative zero
+ *	FP_PZERO	positive zero
+ *	FP_NNORM	negative normalized non-zero
+ *	FP_PNORM	positive normalized non-zero
+ */
+/*#define HAS_FPCLASS		/ **/
+
+/* HAS_FPCLASSIFY:
+ *	This symbol, if defined, indicates that the fpclassify routine is
+ *	available to classify doubles.  Available for example in HP-UX.
+ *	The returned values are defined in <math.h> and are
+ *
+ *           FP_NORMAL     Normalized
+ *           FP_ZERO       Zero
+ *           FP_INFINITE   Infinity
+ *           FP_SUBNORMAL  Denormalized
+ *           FP_NAN        NaN
+ *
+ */
+/*#define HAS_FPCLASSIFY		/ **/
 
 /* HAS_FPOS64_T:
  *	This symbol will be defined if the C compiler supports fpos64_t.
@@ -1358,7 +1386,7 @@
  *	a macro using sprintf("%g") is used. Arguments for the Gconvert
  *	macro are: value, number of digits, whether trailing zeros should
  *	be retained, and the output buffer.
- *	Possible values are:
+ *	The usual values are:
  *		d_Gconvert='gconvert((x),(n),(t),(b))'
  *		d_Gconvert='gcvt((x),(n),(b))'
  *		d_Gconvert='sprintf((b),"%.*g",(n),(x))'
@@ -1615,12 +1643,6 @@
 /*#define HAS_NTOHL		/ **/
 /*#define HAS_NTOHS		/ **/
 
-/* HAS_ICONV:
- *	This symbol, if defined, indicates that the iconv routine is
- *	available to do character set conversions.
- */
-/*#define HAS_ICONV		/ **/
-
 /* HAS_INT64_T:
  *     This symbol will defined if the C compiler supports int64_t.
  *     Usually the <inttypes.h> needs to be included, but sometimes
@@ -1633,6 +1655,18 @@
  *	is available.
  */
 /*#define HAS_ISASCII		/ **/
+
+/* HAS_ISFINITE:
+ *	This symbol, if defined, indicates that the isfinite routine is
+ *	available to check whether a double is finite (non-infinity non-NaN).
+ */
+/*#define HAS_ISFINITE		/ **/
+
+/* HAS_ISINF:
+ *	This symbol, if defined, indicates that the isinf routine is
+ *	available to check whether a double is an infinity.
+ */
+/*#define HAS_ISINF		/ **/
 
 /* HAS_ISNAN:
  *	This symbol, if defined, indicates that the isnan routine is
@@ -1853,8 +1887,8 @@
  *	This symbol, if defined, indicates that the system provides
  *	a prototype for the sbrk() function.  Otherwise, it is up
  *	to the program to supply one.  Good guesses are
- *		extern void* sbrk _((int));
- *		extern void* sbrk _((size_t));
+ *		extern void* sbrk(int);
+ *		extern void* sbrk(size_t);
  */
 /*#define	HAS_SBRK_PROTO	/ **/
 
@@ -2212,7 +2246,7 @@
  *	This symbol, if defined, indicates that the system provides
  *	a prototype for the telldir() function.  Otherwise, it is up
  *	to the program to supply one.  A good guess is
- *		extern long telldir _((DIR*));
+ *		extern long telldir(DIR*);
  */
 /*#define	HAS_TELLDIR_PROTO	/ **/
 
@@ -2257,6 +2291,13 @@
 /*#define HAS_UNION_SEMUN	/ **/
 /*#define USE_SEMCTL_SEMUN	/ **/
 /*#define USE_SEMCTL_SEMID_DS	/ **/
+
+/* HAS_UNORDERED:
+ *	This symbol, if defined, indicates that the unordered routine is
+ *	available to check whether two doubles are unordered
+ *	(effectively: whether either of them is NaN)
+ */
+/*#define HAS_UNORDERED		/ **/
 
 /* HAS_USTAT:
  *	This symbol, if defined, indicates that the ustat system call is
@@ -2404,6 +2445,12 @@
 #define DB_VERSION_MINOR_CFG	  	/**/
 #define DB_VERSION_PATCH_CFG	  	/**/
 
+/* I_FP_CLASS:
+ *	This symbol, if defined, indicates that <fp_class.h> exists and
+ *	should be included.
+ */
+/*#define	I_FP_CLASS		/ **/
+
 /* I_GRP:
  *	This symbol, if defined, indicates to the C program that it should
  *	include <grp.h>.
@@ -2414,12 +2461,6 @@
  */
 /*#define I_GRP		/ **/
 /*#define GRPASSWD	/ **/
-
-/* I_ICONV:
- *	This symbol, if defined, indicates that <iconv.h> exists and
- *	should be included.
- */
-/*#define	I_ICONV		/ **/
 
 /* I_IEEEFP:
  *	This symbol, if defined, indicates that <ieeefp.h> exists and
@@ -3315,6 +3356,12 @@
 #define PERL_XS_APIVERSION "5.005"
 #define PERL_PM_APIVERSION "5.005"
 
+/* HAS_CRYPT:
+ *	This symbol, if defined, indicates that the crypt routine is available
+ *	to encrypt passwords and the like.
+ */
+/*#define HAS_CRYPT		/ **/
+
 /* SETUID_SCRIPTS_ARE_SECURE_NOW:
  *	This symbol, if defined, indicates that the bug that prevents
  *	setuid scripts from being secure is not present in this kernel.
@@ -3335,6 +3382,26 @@
 /*#define SETUID_SCRIPTS_ARE_SECURE_NOW	/ **/
 /*#define DOSUID		/ **/
 
+/* Shmat_t:
+ *	This symbol holds the return type of the shmat() system call.
+ *	Usually set to 'void *' or 'char *'.
+ */
+/* HAS_SHMAT_PROTOTYPE:
+ *	This symbol, if defined, indicates that the sys/shm.h includes
+ *	a prototype for shmat().  Otherwise, it is up to the program to
+ *	guess one.  Shmat_t shmat(int, Shmat_t, int) is a good guess,
+ *	but not always right so it should be emitted by the program only
+ *	when HAS_SHMAT_PROTOTYPE is not defined to avoid conflicting defs.
+ */
+#define Shmat_t void *	/**/
+/*#define HAS_SHMAT_PROTOTYPE	/ **/
+
+/* I_NDBM:
+ *	This symbol, if defined, indicates that <ndbm.h> exists and should
+ *	be included.
+ */
+/*#define I_NDBM	/ **/
+
 /* I_STDARG:
  *	This symbol, if defined, indicates that <stdarg.h> exists and should
  *	be included.
@@ -3345,6 +3412,33 @@
  */
 #define I_STDARG		/**/
 /*#define I_VARARGS	/ **/
+
+/* CAN_PROTOTYPE:
+ *	If defined, this macro indicates that the C compiler can handle
+ *	function prototypes.
+ */
+/* _:
+ *	This macro is used to declare function parameters for folks who want
+ *	to make declarations with prototypes using a different style than
+ *	the above macros.  Use double parentheses.  For example:
+ *
+ *		int main _((int argc, char *argv[]));
+ */
+/*#define	CAN_PROTOTYPE	/ **/
+#ifdef CAN_PROTOTYPE
+#define	_(args) args
+#else
+#define	_(args) ()
+#endif
+
+/* SH_PATH:
+ *	This symbol contains the full pathname to the shell used on this
+ *	on this system to execute Bourne shell scripts.  Usually, this will be
+ *	/bin/sh, though it's possible that some systems will have /bin/ksh,
+ *	/bin/pdksh, /bin/ash, /bin/bash, or even something such as
+ *	D:/bin/sh.exe.
+ */
+#define SH_PATH ""  /**/
 
 /* USE_CROSS_COMPILE:
  *	This symbol, if defined, indicates that Perl is being cross-compiled.
@@ -3366,6 +3460,12 @@
  */
 /*#define	HAS_DBMINIT_PROTO	/ **/
 
+/* HAS_DIRFD:
+ *	This manifest constant lets the C program know that dirfd
+ *	is available.
+ */
+/*#define HAS_DIRFD		/ **/
+
 /* HAS_FLOCK_PROTO:
  *	This symbol, if defined, indicates that the system provides
  *	a prototype for the flock() function.  Otherwise, it is up
@@ -3374,12 +3474,44 @@
  */
 /*#define	HAS_FLOCK_PROTO	/ **/
 
+/* HAS_FPCLASSL:
+ *	This symbol, if defined, indicates that the fpclassl routine is
+ *	available to classify long doubles.  Available for example in IRIX.
+ *	The returned values are defined in <ieeefp.h> and are:
+ *
+ *	FP_SNAN		signaling NaN
+ *	FP_QNAN		quiet NaN
+ *	FP_NINF		negative infinity
+ *	FP_PINF		positive infinity
+ *	FP_NDENORM	negative denormalized non-zero
+ *	FP_PDENORM	positive denormalized non-zero
+ *	FP_NZERO	negative zero
+ *	FP_PZERO	positive zero
+ *	FP_NNORM	negative normalized non-zero
+ *	FP_PNORM	positive normalized non-zero
+ */
+/*#define HAS_FPCLASSL		/ **/
+
 /* HAS_NL_LANGINFO:
  *	This symbol, if defined, indicates that the nl_langinfo routine is
  *	available to return local data.  You will also need <langinfo.h>
  *	and therefore I_LANGINFO.
  */
 /*#define HAS_NL_LANGINFO		/ **/
+
+/* HAS_PROCSELFEXE:
+ *	This symbol is defined if PROCSELFEXE_PATH is a symlink
+ *	to the absolute pathname of the executing program.
+ */
+/* PROCSELFEXE_PATH:
+ *	If HAS_PROCSELFEXE is defined this symbol is the filename
+ *	of the symbolic link pointing to the absolute pathname of
+ *	the executing program.
+ */
+/*#define HAS_PROCSELFEXE	/ **/
+#if defined(HAS_PROCSELFEXE) && !defined(PROCSELFEXE_PATH)
+#define PROCSELFEXE_PATH		/**/
+#endif
 
 /* HAS_SIGPROCMASK:
  *	This symbol, if defined, indicates that the sigprocmask
@@ -3398,7 +3530,7 @@
  *	This symbol, if defined, indicates that the system provides
  *	a prototype for the sockatmark() function.  Otherwise, it is up
  *	to the program to supply one.  A good guess is
- *		extern int sockatmark _((int));
+ *		extern int sockatmark(int);
  */
 /*#define	HAS_SOCKATMARK_PROTO	/ **/
 
@@ -3446,6 +3578,12 @@
  *		extern int usleep(useconds_t);
  */
 /*#define	HAS_USLEEP_PROTO	/ **/
+
+/* I_FP:
+ *	This symbol, if defined, indicates that <fp.h> exists and
+ *	should be included.
+ */
+/*#define	I_FP		/ **/
 
 /* I_LANGINFO:
  *	This symbol, if defined, indicates that <langinfo.h> exists and

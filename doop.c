@@ -1,6 +1,6 @@
 /*    doop.c
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -92,7 +92,7 @@ S_do_trans_simple(pTHX_ SV *sv)
 }
 
 STATIC I32
-S_do_trans_count(pTHX_ SV *sv)/* SPC - OK */
+S_do_trans_count(pTHX_ SV *sv)
 {
     U8 *s;
     U8 *send;
@@ -130,7 +130,7 @@ S_do_trans_count(pTHX_ SV *sv)/* SPC - OK */
 }
 
 STATIC I32
-S_do_trans_complex(pTHX_ SV *sv)/* SPC - NOT OK */
+S_do_trans_complex(pTHX_ SV *sv)
 {
     U8 *s;
     U8 *send;
@@ -292,7 +292,7 @@ S_do_trans_complex(pTHX_ SV *sv)/* SPC - NOT OK */
 }
 
 STATIC I32
-S_do_trans_simple_utf8(pTHX_ SV *sv)/* SPC - OK */
+S_do_trans_simple_utf8(pTHX_ SV *sv)
 {
     U8 *s;
     U8 *send;
@@ -386,15 +386,12 @@ S_do_trans_simple_utf8(pTHX_ SV *sv)/* SPC - OK */
     }
     SvSETMAGIC(sv);
     SvUTF8_on(sv);
-    /* Downgrading just 'cos it will is suspect - NI-S */
-    if (!isutf8 && !(PL_hints & HINT_UTF8))
-	sv_utf8_downgrade(sv, TRUE);
 
     return matches;
 }
 
 STATIC I32
-S_do_trans_count_utf8(pTHX_ SV *sv)/* SPC - OK */
+S_do_trans_count_utf8(pTHX_ SV *sv)
 {
     U8 *s;
     U8 *start = 0, *send;
@@ -434,7 +431,7 @@ S_do_trans_count_utf8(pTHX_ SV *sv)/* SPC - OK */
 }
 
 STATIC I32
-S_do_trans_complex_utf8(pTHX_ SV *sv) /* SPC - NOT OK */
+S_do_trans_complex_utf8(pTHX_ SV *sv)
 {
     U8 *s;
     U8 *start, *send;
@@ -590,8 +587,6 @@ S_do_trans_complex_utf8(pTHX_ SV *sv) /* SPC - NOT OK */
 	SvCUR_set(sv, d - dstart);
     }
     SvUTF8_on(sv);
-    if (!isutf8 && !(PL_hints & HINT_UTF8))
-	sv_utf8_downgrade(sv, TRUE);
     SvSETMAGIC(sv);
 
     return matches;
@@ -604,9 +599,12 @@ Perl_do_trans(pTHX_ SV *sv)
     I32 hasutf = (PL_op->op_private &
                     (OPpTRANS_FROM_UTF|OPpTRANS_TO_UTF));
 
-    if (SvREADONLY(sv) && !(PL_op->op_private & OPpTRANS_IDENTICAL))
-	Perl_croak(aTHX_ PL_no_modify);
-
+    if (SvREADONLY(sv)) {
+        if (SvFAKE(sv))
+            sv_force_normal(sv);
+        if (SvREADONLY(sv) && !(PL_op->op_private & OPpTRANS_IDENTICAL))
+            Perl_croak(aTHX_ PL_no_modify);
+    }
     (void)SvPV(sv, len);
     if (!len)
 	return 0;
@@ -699,6 +697,9 @@ Perl_do_sprintf(pTHX_ SV *sv, I32 len, SV **sarg)
     char *pat = SvPV(*sarg, patlen);
     bool do_taint = FALSE;
 
+    SvUTF8_off(sv);
+    if (DO_UTF8(*sarg))
+        SvUTF8_on(sv);
     sv_vsetpvfn(sv, pat, patlen, Null(va_list*), sarg + 1, len - 1, &do_taint);
     SvSETMAGIC(sv);
     if (do_taint)
@@ -871,7 +872,7 @@ Perl_do_vecset(pTHX_ SV *sv)
     lval = SvUV(sv);
     offset = LvTARGOFF(sv);
     if (offset < 0)
-	Perl_croak(aTHX_ "Assigning to negative offset in vec");
+	Perl_croak(aTHX_ "Negative offset to vec in lvalue context");
     size = LvTARGLEN(sv);
     if (size < 1 || (size & (size-1))) /* size < 1 or not a power of two */
 	Perl_croak(aTHX_ "Illegal number of bits in vec");
@@ -952,8 +953,14 @@ Perl_do_chop(pTHX_ register SV *astr, register SV *sv)
             do_chop(astr,hv_iterval(hv,entry));
         return;
     }
-    else if (SvREADONLY(sv))
-	Perl_croak(aTHX_ PL_no_modify);
+    else if (SvREADONLY(sv)) {
+        if (SvFAKE(sv)) {
+            /* SV is copy-on-write */
+	    sv_force_normal_flags(sv, 0);
+        }
+        if (SvREADONLY(sv))
+            Perl_croak(aTHX_ PL_no_modify);
+    }
     s = SvPV(sv, len);
     if (len && !SvPOK(sv))
 	s = SvPV_force(sv, len);
@@ -1022,8 +1029,14 @@ Perl_do_chomp(pTHX_ register SV *sv)
             count += do_chomp(hv_iterval(hv,entry));
         return count;
     }
-    else if (SvREADONLY(sv))
-	Perl_croak(aTHX_ PL_no_modify);
+    else if (SvREADONLY(sv)) {
+        if (SvFAKE(sv)) {
+            /* SV is copy-on-write */
+	    sv_force_normal_flags(sv, 0);
+        }
+        if (SvREADONLY(sv))
+            Perl_croak(aTHX_ PL_no_modify);
+    }
     s = SvPV(sv, len);
     if (s && len) {
 	s += --len;

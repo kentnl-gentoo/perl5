@@ -217,7 +217,9 @@ CGI::Response
 
 require 5.000;
 use Exporter;
-use Carp;
+#use Carp;
+BEGIN { require Carp; }
+use File::Spec;
 
 @ISA = qw(Exporter);
 @EXPORT = qw(confess croak carp);
@@ -225,7 +227,7 @@ use Carp;
 
 $main::SIG{__WARN__}=\&CGI::Carp::warn;
 $main::SIG{__DIE__}=\&CGI::Carp::die;
-$CGI::Carp::VERSION = '1.20';
+$CGI::Carp::VERSION = '1.22';
 $CGI::Carp::CUSTOM_MSG = undef;
 
 # fancy import routine detects and handles 'errorWrap' specially.
@@ -248,19 +250,19 @@ sub realdie { CORE::die(@_); }
 sub id {
     my $level = shift;
     my($pack,$file,$line,$sub) = caller($level);
-    my($id) = $file=~m|([^/]+)$|;
+    my($dev,$dirs,$id) = File::Spec->splitpath($file);
     return ($file,$line,$id);
 }
 
 sub stamp {
     my $time = scalar(localtime);
     my $frame = 0;
-    my ($id,$pack,$file);
+    my ($id,$pack,$file,$dev,$dirs);
     do {
 	$id = $file;
 	($pack,$file) = caller($frame++);
     } until !$file;
-    ($id) = $id=~m|([^/]+)$|;
+    ($dev,$dirs,$id) = File::Spec->splitpath($id);
     return "[$time] $id: ";
 }
 
@@ -288,7 +290,7 @@ sub _warn {
     }
 }
 
-sub ineval { _longmess() =~ /eval [\{\']/m }
+sub ineval { $^S }
 
 # The mod_perl package Apache::Registry loads CGI programs by calling
 # eval.  These evals don't count when looking at the stack backtrace.
@@ -316,18 +318,10 @@ sub set_message {
     return $CGI::Carp::CUSTOM_MSG;
 }
 
-# Avoid generating "subroutine redefined" warnings with the following
-# hack:
-{
-    local $^W=0;
-    eval <<EOF;
-sub confess { CGI::Carp::die Carp::longmess \@_; }
-sub croak   { CGI::Carp::die Carp::shortmess \@_; }
-sub carp    { CGI::Carp::warn Carp::shortmess \@_; }
-sub cluck   { CGI::Carp::warn Carp::longmess \@_; }
-EOF
-    ;
-}
+sub confess { CGI::Carp::die Carp::longmess @_; }
+sub croak   { CGI::Carp::die Carp::shortmess @_; }
+sub carp    { CGI::Carp::warn Carp::shortmess @_; }
+sub cluck   { CGI::Carp::warn Carp::longmess @_; }
 
 # We have to be ready to accept a filehandle as a reference
 # or a string.

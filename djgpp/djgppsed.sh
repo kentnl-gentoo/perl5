@@ -17,7 +17,7 @@ SCOR='s=c\\\.c|=c\_c|=g'
 SHSED='s=\.\(hsed\)=_\1=g'
 SDEPTMP='s=\.\(deptmp\)=_\1=g'
 SCPP='s=\.\(cpp\.\)=_\1=g'
-SARGV='s=\.\(argv\)\.=_\1_=g'
+SARGV='s=Io_argv\(.\)\.=i\1_=g'
 SABC='s=\.\([abc][^a]\)=_\1=g'
 SDBMX='s=\.\(dbmx\)=_\1=g'
 SDBHASH='s=dbhash\.tmp=dbhash_tmp=g'
@@ -44,5 +44,5 @@ sed -e 's=:^/:={^([a-z]:)?[\\\\/]}=g' lib/termcap.pl >s; mv -f s lib/termcap.pl
 sed -e $SPACKLIST installman >s; mv -f s installman
 sed -e $SPACKLIST lib/ExtUtils/Installed.pm >s; mv -f s lib/ExtUtils/Installed.pm
 sed -e $SPACKLIST lib/ExtUtils/Packlist.pm >s; mv -f s lib/ExtUtils/Packlist.pm
-sed -e $SPACKLIST lib/ExtUtils/inst >s; mv -f s lib/ExtUtils/inst
 sed -e $SABC t/io/iprefix.t >s; mv -f s t/io/iprefix.t
+sed -e 's=L_ctermid==g' ext/POSIX/Makefile.PL >s; mv -f s ext/POSIX/Makefile.PL

@@ -9,7 +9,7 @@
 #ifdef EBCDIC
 #undef YYDEBUG
 #endif
-#define dep() deprecate("\"do\" to call subroutines")
+#define dep() deprecate_old("\"do\" to call subroutines")
 
 /* stuff included here to make perly_c.diff apply better */
 
@@ -31,7 +31,7 @@ struct ysv {
     YYSTYPE oldyylval;
 };
 
-static void yydestruct(pTHXo_ void *ptr);
+static void yydestruct(pTHX_ void *ptr);
 
 #line 51 "perly.y"
 #if 0 /* get this from perly.h instead */
@@ -2528,12 +2528,8 @@ yyaccept:
     return retval;
 }
 
-#ifdef PERL_OBJECT
-#include "XSUB.h"
-#endif
-
 static void
-yydestruct(pTHXo_ void *ptr)
+yydestruct(pTHX_ void *ptr)
 {
     struct ysv* ysave = (struct ysv*)ptr;
     if (ysave->yyss) Safefree(ysave->yyss);

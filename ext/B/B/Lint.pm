@@ -1,5 +1,7 @@
 package B::Lint;
 
+our $VERSION = '1.00';
+
 =head1 NAME
 
 B::Lint - Perl lint
@@ -345,7 +347,7 @@ sub compile {
 	    %check = ();
 	}
 	else {
-	    if ($opt =~ s/^no-//) {
+	    if ($opt =~ s/^no_//) {
 		$check{$opt} = 0;
 	    }
 	    else {

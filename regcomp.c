@@ -69,7 +69,7 @@
  *
  ****    Alterations to Henry's code are...
  ****
- ****    Copyright (c) 1991-2001, Larry Wall
+ ****    Copyright (c) 1991-2002, Larry Wall
  ****
  ****    You may distribute under the terms of either the GNU General Public
  ****    License or the Artistic License, as specified in the README file.
@@ -83,11 +83,7 @@
 #define PERL_IN_REGCOMP_C
 #include "perl.h"
 
-#ifdef PERL_IN_XSUB_RE
-#  if defined(PERL_CAPI) || defined(PERL_OBJECT)
-#    include "XSUB.h"
-#  endif
-#else
+#ifndef PERL_IN_XSUB_RE
 #  include "INTERN.h"
 #endif
 
@@ -263,7 +259,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #define	FAIL(msg)                                                             \
     STMT_START {                                                             \
         char *ellipses = "";                                                 \
-        unsigned len = strlen(RExC_precomp);                                \
+        IV len = RExC_end - RExC_precomp;                                \
                                                                              \
 	if (!SIZE_ONLY)                                                      \
 	    SAVEDESTRUCTOR_X(clear_re,(void*)RExC_rx);                 \
@@ -285,7 +281,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #define	FAIL2(pat,msg)                                                        \
     STMT_START {                                                             \
         char *ellipses = "";                                                 \
-        unsigned len = strlen(RExC_precomp);                                \
+        IV len = RExC_end - RExC_precomp;                                \
                                                                              \
 	if (!SIZE_ONLY)                                                      \
 	    SAVEDESTRUCTOR_X(clear_re,(void*)RExC_rx);                 \
@@ -305,7 +301,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
  */
 #define	Simple_vFAIL(m)                                                      \
     STMT_START {                                                             \
-      unsigned offset = strlen(RExC_precomp)-(RExC_end-RExC_parse); \
+      IV offset = RExC_parse - RExC_precomp; \
                                                                              \
       Perl_croak(aTHX_ "%s" REPORT_LOCATION,               \
 		 m, (int)offset, RExC_precomp, RExC_precomp + offset);     \
@@ -326,7 +322,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
  */
 #define	Simple_vFAIL2(m,a1)                                                  \
     STMT_START {                                                             \
-      unsigned offset = strlen(RExC_precomp)-(RExC_end-RExC_parse); \
+      IV offset = RExC_parse - RExC_precomp; \
                                                                              \
       S_re_croak2(aTHX_ m, REPORT_LOCATION, a1,       \
 		  (int)offset, RExC_precomp, RExC_precomp + offset);       \
@@ -348,7 +344,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
  */
 #define	Simple_vFAIL3(m, a1, a2)                                             \
     STMT_START {                                                             \
-      unsigned offset = strlen(RExC_precomp)-(RExC_end-RExC_parse); \
+      IV offset = RExC_parse - RExC_precomp; \
                                                                              \
       S_re_croak2(aTHX_ m, REPORT_LOCATION, a1, a2,   \
 		  (int)offset, RExC_precomp, RExC_precomp + offset);       \
@@ -369,7 +365,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
  */
 #define	Simple_vFAIL4(m, a1, a2, a3)                                         \
     STMT_START {                                                             \
-      unsigned offset = strlen(RExC_precomp)-(RExC_end-RExC_parse); \
+      IV offset = RExC_parse - RExC_precomp; \
                                                                              \
       S_re_croak2(aTHX_ m, REPORT_LOCATION, a1, a2, a3,\
 		  (int)offset, RExC_precomp, RExC_precomp + offset);       \
@@ -380,7 +376,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
  */
 #define	Simple_vFAIL5(m, a1, a2, a3, a4)                                     \
     STMT_START {                                                             \
-      unsigned offset = strlen(RExC_precomp)-(RExC_end-RExC_parse); \
+      IV offset = RExC_parse - RExC_precomp; \
       S_re_croak2(aTHX_ m, REPORT_LOCATION, a1, a2, a3, a4,\
 		  (int)offset, RExC_precomp, RExC_precomp + offset);       \
     } STMT_END
@@ -388,23 +384,22 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 #define	vWARN(loc,m)                                                         \
     STMT_START {                                                             \
-        unsigned offset = strlen(RExC_precomp)-(RExC_end-(loc));          \
+        IV offset = loc - RExC_precomp;          \
 	Perl_warner(aTHX_ WARN_REGEXP, "%s" REPORT_LOCATION,\
 		 m, (int)offset, RExC_precomp, RExC_precomp + offset);          \
     } STMT_END                                                               \
 
 #define	vWARNdep(loc,m)                                                         \
     STMT_START {                                                             \
-        unsigned offset = strlen(RExC_precomp)-(RExC_end-(loc));          \
-        int warn_cat = ckWARN(WARN_REGEXP) ? WARN_REGEXP : WARN_DEPRECATED;  \
-	Perl_warner(aTHX_ warn_cat, "%s" REPORT_LOCATION,\
+        IV offset = loc - RExC_precomp;          \
+	Perl_warner(aTHX_ packWARN3(WARN_DEPRECATED, WARN_REGEXP, WARN_SYNTAX), "%s" REPORT_LOCATION,\
 		 m, (int)offset, RExC_precomp, RExC_precomp + offset);          \
     } STMT_END                                                               \
 
 
 #define	vWARN2(loc, m, a1)                                                   \
     STMT_START {                                                             \
-        unsigned offset = strlen(RExC_precomp)-(RExC_end-(loc));          \
+        IV offset = loc - RExC_precomp;          \
 	Perl_warner(aTHX_ WARN_REGEXP, m REPORT_LOCATION,\
                  a1,                                                         \
 		 (int)offset, RExC_precomp, RExC_precomp + offset);        \
@@ -412,7 +407,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 #define	vWARN3(loc, m, a1, a2)                                               \
     STMT_START {                                                             \
-      unsigned offset = strlen(RExC_precomp) - (RExC_end - (loc));        \
+      IV offset = loc - RExC_precomp;        \
 	Perl_warner(aTHX_ WARN_REGEXP, m REPORT_LOCATION,                    \
                  a1, a2,                                                     \
 		 (int)offset, RExC_precomp, RExC_precomp + offset);        \
@@ -420,7 +415,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 #define	vWARN4(loc, m, a1, a2, a3)                                           \
     STMT_START {                                                             \
-      unsigned offset = strlen(RExC_precomp)-(RExC_end-(loc));            \
+      IV offset = loc - RExC_precomp;            \
 	Perl_warner(aTHX_ WARN_REGEXP, m REPORT_LOCATION,\
                  a1, a2, a3,                                                 \
 		 (int)offset, RExC_precomp, RExC_precomp + offset);        \
@@ -429,7 +424,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 /* used for the parse_flags section for (?c) -- japhy */
 #define	vWARN5(loc, m, a1, a2, a3, a4)                                       \
   STMT_START {                                                   \
-      unsigned offset = strlen(RExC_precomp)-(RExC_end-(loc));   \
+      IV offset = loc - RExC_precomp;   \
         Perl_warner(aTHX_ WARN_REGEXP, m REPORT_LOCATION,      \
                  a1, a2, a3, a4,                                 \
                  (int)offset, RExC_precomp, RExC_precomp + offset);  \
@@ -483,7 +478,7 @@ static scan_data_t zero_scan_data = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 #define Node_Offset(n) (RExC_offsets[2*((n)-RExC_emit_start)-1])
 #define Node_Length(n) (RExC_offsets[2*((n)-RExC_emit_start)])
 
-static void clear_re(pTHXo_ void *r);
+static void clear_re(pTHX_ void *r);
 
 /* Mark that we cannot extend a found fixed substring at this point.
    Updata the longest found anchored substring and the longest found
@@ -526,11 +521,8 @@ S_scan_commit(pTHX_ RExC_state_t *pRExC_state, scan_data_t *data)
 STATIC void
 S_cl_anything(pTHX_ RExC_state_t *pRExC_state, struct regnode_charclass_class *cl)
 {
-    int value;
-
     ANYOF_CLASS_ZERO(cl);
-    for (value = 0; value < 256; ++value)
-	ANYOF_BITMAP_SET(cl, value);
+    ANYOF_BITMAP_SETALL(cl);
     cl->flags = ANYOF_EOS|ANYOF_UNICODE_ALL;
     if (LOC)
 	cl->flags |= ANYOF_LOCALE;
@@ -547,9 +539,8 @@ S_cl_is_anything(pTHX_ struct regnode_charclass_class *cl)
 	    return 1;
     if (!(cl->flags & ANYOF_UNICODE_ALL))
 	return 0;
-    for (value = 0; value < 256; ++value)
-	if (!ANYOF_BITMAP_TEST(cl, value))
-	    return 0;
+    if (!ANYOF_BITMAP_TESTALLSET(cl))
+	return 0;
     return 1;
 }
 
@@ -666,6 +657,17 @@ S_cl_or(pTHX_ RExC_state_t *pRExC_state, struct regnode_charclass_class *cl, str
     }
 }
 
+/*
+ * There are strange code-generation bugs caused on sparc64 by gcc-2.95.2.
+ * These need to be revisited when a newer toolchain becomes available.
+ */
+#if defined(__sparc64__) && defined(__GNUC__)
+#   if __GNUC__ < 2 || (__GNUC__ == 2 && __GNUC_MINOR__ < 96)
+#       undef  SPARC64_GCC_WORKAROUND
+#       define SPARC64_GCC_WORKAROUND 1
+#   endif
+#endif
+
 /* REx optimizer.  Converts nodes into quickier variants "in place".
    Finds fixed substrings.  */
 
@@ -733,6 +735,50 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp, I32 *deltap, reg
 		    n = nnext;
 		}
 	    }
+
+	    if (UTF && OP(scan) == EXACTF && STR_LEN(scan) >= 6) {
+/*
+  Two problematic code points in Unicode casefolding of EXACT nodes:
+
+   U+0390 - GREEK SMALL LETTER IOTA WITH DIALYTIKA AND TONOS
+   U+03B0 - GREEK SMALL LETTER UPSILON WITH DIALYTIKA AND TONOS
+
+   which casefold to
+
+   Unicode			UTF-8
+
+   U+03B9 U+0308 U+0301		0xCE 0xB9 0xCC 0x88 0xCC 0x81
+   U+03C5 U+0308 U+0301		0xCF 0x85 0xCC 0x88 0xCC 0x81
+
+   This means that in case-insensitive matching (or "loose matching",
+   as Unicode calls it), an EXACTF of length six (the UTF-8 encoded byte
+   length of the above casefolded versions) can match a target string
+   of length two (the byte length of UTF-8 encoded U+0390 or U+03B0).
+   This would rather mess up the minimum length computation.
+
+   What we'll do is to look for the tail four bytes, and then peek
+   at the preceding two bytes to see whether we need to decrease
+   the minimum length by four (six minus two).
+
+   Thanks to the design of UTF-8, there cannot be false matches:
+   A sequence of valid UTF-8 bytes cannot be a subsequence of
+   another valid sequence of UTF-8 bytes.
+
+*/
+		 char *s0 = STRING(scan), *s, *t;
+		 char *s1 = s0 + STR_LEN(scan) - 1, *s2 = s1 - 4;
+		 char *t0 = "\xcc\x88\xcc\x81";
+		 char *t1 = t0 + 3;
+		 
+		 for (s = s0 + 2;
+		      s < s2 && (t = ninstr(s, s1, t0, t1));
+		      s = t + 4) {
+		      if (((U8)t[-1] == 0xB9 && (U8)t[-2] == 0xCE) ||
+			  ((U8)t[-1] == 0x85 && (U8)t[-2] == 0xCF))
+			   min -= 4;
+		 }
+	    }
+
 #ifdef DEBUGGING
 	    /* Allow dumping */
 	    n = scan + NODE_SZ_STR(scan);
@@ -971,6 +1017,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp, I32 *deltap, reg
 	    regnode *oscan = scan;
 	    struct regnode_charclass_class this_class;
 	    struct regnode_charclass_class *oclass = NULL;
+	    I32 next_is_eval = 0;
 
 	    switch (PL_regkind[(U8)OP(scan)]) {
 	    case WHILEM:		/* End of (?:...)* . */
@@ -1016,6 +1063,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp, I32 *deltap, reg
 		    scan->flags = ((lp <= U8_MAX) ? lp : U8_MAX);
 		}
 		scan = NEXTOPER(scan) + EXTRA_STEP_2ARGS;
+		next_is_eval = (OP(scan) == EVAL);
 	      do_curly:
 		if (flags & SCF_DO_SUBSTR) {
 		    if (mincount == 0) scan_commit(pRExC_state,data); /* Cannot extend fixed substrings */
@@ -1077,6 +1125,8 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp, I32 *deltap, reg
 		if (!scan) 		/* It was not CURLYX, but CURLY. */
 		    scan = next;
 		if (ckWARN(WARN_REGEXP)
+		       /* ? quantifier ok, except for (?{ ... }) */
+		    && (next_is_eval || !(mincount == 0 && maxcount == 1))
 		    && (minnext == 0) && (deltanext == 0)
 		    && data && !(data->flags & (SF_HAS_PAR|SF_IN_PAR))
 		    && maxcount <= REG_INFTY/3) /* Complement check for big count */
@@ -1207,11 +1257,28 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp, I32 *deltap, reg
 		    int counted = mincount != 0;
 
 		    if (data->last_end > 0 && mincount != 0) { /* Ends with a string. */
+#if defined(SPARC64_GCC_WORKAROUND)
+			I32 b = 0;
+			STRLEN l = 0;
+			char *s = NULL;
+			I32 old = 0;
+
+			if (pos_before >= data->last_start_min)
+			    b = pos_before;
+			else
+			    b = data->last_start_min;
+
+			l = 0;
+			s = SvPV(data->last_found, l);
+			old = b - data->last_start_min;
+
+#else
 			I32 b = pos_before >= data->last_start_min
 			    ? pos_before : data->last_start_min;
 			STRLEN l;
 			char *s = SvPV(data->last_found, l);
 			I32 old = b - data->last_start_min;
+#endif
 
 			if (UTF)
 			    old = utf8_hop((U8*)s, old) - (U8*)s;
@@ -1666,17 +1733,15 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
     if (exp == NULL)
 	FAIL("NULL regexp argument");
 
-    /* XXXX This looks very suspicious... */
-    if (pm->op_pmdynflags & PMdf_CMP_UTF8)
-        RExC_utf8 = 1;
-    else
-        RExC_utf8 = 0;
+    RExC_utf8 = pm->op_pmdynflags & PMdf_CMP_UTF8;
 
     RExC_precomp = exp;
-    DEBUG_r(if (!PL_colorset) reginitcolors());
-    DEBUG_r(PerlIO_printf(Perl_debug_log, "%sCompiling REx%s `%s%*s%s'\n",
-		      PL_colors[4],PL_colors[5],PL_colors[0],
-		      (int)(xend - exp), RExC_precomp, PL_colors[1]));
+    DEBUG_r({
+	 if (!PL_colorset) reginitcolors();
+	 PerlIO_printf(Perl_debug_log, "%sCompiling REx%s `%s%*s%s'\n",
+		       PL_colors[4],PL_colors[5],PL_colors[0],
+		       (int)(xend - exp), RExC_precomp, PL_colors[1]);
+    });
     RExC_flags16 = pm->op_pmflags;
     RExC_sawback = 0;
 
@@ -1746,6 +1811,7 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
     RExC_rx = r;
 
     /* Second pass: emit code. */
+    RExC_flags16 = pm->op_pmflags;	/* don't let top level (?i) bleed */
     RExC_parse = exp;
     RExC_end = xend;
     RExC_naughty = 0;
@@ -1763,7 +1829,7 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
     r->reganch = pm->op_pmflags & PMf_COMPILETIME; /* Again? */
     pm->op_pmflags = RExC_flags16;
     if (UTF)
-	r->reganch |= ROPT_UTF8;
+        r->reganch |= ROPT_UTF8;	/* Unicode in it? */
     r->regstclass = NULL;
     if (RExC_naughty >= 10)	/* Probably an expensive pattern. */
 	r->reganch |= ROPT_NAUGHTY;
@@ -1825,7 +1891,7 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
 	    first = NEXTOPER(first);
 	    goto again;
 	}
-	else if ((OP(first) == STAR &&
+	else if (!sawopen && (OP(first) == STAR &&
 	    PL_regkind[(U8)OP(NEXTOPER(first))] == REG_ANY) &&
 	    !(r->reganch & ROPT_ANCH) )
 	{
@@ -2013,8 +2079,8 @@ Perl_pregcomp(pTHX_ char *exp, char *xend, PMOP *pm)
 	r->reganch |= ROPT_LOOKBEHIND_SEEN;
     if (RExC_seen & REG_SEEN_EVAL)
 	r->reganch |= ROPT_EVAL_SEEN;
-    if (RExC_seen & REG_SEEN_SANY)
-	r->reganch |= ROPT_SANY_SEEN;
+    if (RExC_seen & REG_SEEN_CANY)
+	r->reganch |= ROPT_CANY_SEEN;
     Newz(1002, r->startp, RExC_npar, I32);
     Newz(1002, r->endp, RExC_npar, I32);
     PL_regdata = r->data; /* for regprop() */
@@ -2096,11 +2162,13 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp)
 		*flagp = TRYAGAIN;
 		return NULL;
 	    case 'p':           /* (?p...) */
-		if (SIZE_ONLY && ckWARN2(WARN_DEPRECATED, WARN_REGEXP))
+		if (SIZE_ONLY && ckWARN3(WARN_DEPRECATED, WARN_REGEXP, WARN_SYNTAX))
 		    vWARNdep(RExC_parse, "(?p{}) is deprecated - use (??{})");
 		/* FALL THROUGH*/
 	    case '?':           /* (??...) */
 		logical = 1;
+		if (*RExC_parse != '{')
+		    goto unknown;
 		paren = *RExC_parse++;
 		/* FALL THROUGH */
 	    case '{':           /* (?{...}) */
@@ -2138,6 +2206,9 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp)
 		    ENTER;
 		    Perl_save_re_context(aTHX);
 		    rop = sv_compile_2op(sv, &sop, "re", &av);
+		    sop->op_private |= OPpREFCOUNTED;
+		    /* re_dup will OpREFCNT_inc */
+		    OpREFCNT_set(sop, 1);
 		    LEAVE;
 
 		    n = add_data(pRExC_state, 3, "nop");
@@ -2335,9 +2406,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp)
     }
     else if (paren != '?')		/* Not Conditional */
 	ret = br;
-    if (flags&HASWIDTH)
-	*flagp |= HASWIDTH;
-    *flagp |= flags&SPSTART;
+    *flagp |= flags & (SPSTART | HASWIDTH);
     lastbr = br;
     while (*RExC_parse == '|') {
 	if (!SIZE_ONLY && RExC_extralen) {
@@ -2791,6 +2860,7 @@ tryagain:
 	case 'Z':
 	    ret = reg_node(pRExC_state, SEOL);
 	    *flagp |= SIMPLE;
+	    RExC_seen_zerolen++;		/* Do not optimize RE away */
 	    nextchar(pRExC_state);
 	    break;
 	case 'z':
@@ -2801,8 +2871,8 @@ tryagain:
             Set_Node_Length(ret, 2); /* MJD */
 	    break;
 	case 'C':
-	    ret = reg_node(pRExC_state, SANY);
-	    RExC_seen |= REG_SEEN_SANY;
+	    ret = reg_node(pRExC_state, CANY);
+	    RExC_seen |= REG_SEEN_CANY;
 	    *flagp |= HASWIDTH|SIMPLE;
 	    nextchar(pRExC_state);
             Set_Node_Length(ret, 2); /* MJD */
@@ -2875,9 +2945,10 @@ tryagain:
 		  /* a lovely hack--pretend we saw [\pX] instead */
 		    RExC_end = strchr(RExC_parse, '}');
 		    if (!RExC_end) {
+		        U8 c = (U8)*RExC_parse;
 			RExC_parse += 2;
 			RExC_end = oldregxend;
-			vFAIL("Missing right brace on \\p{}");
+			vFAIL2("Missing right brace on \\%c{}", c);
 		    }
 		    RExC_end++;
 		}
@@ -2957,6 +3028,8 @@ tryagain:
 	    register char *p;
 	    char *oldp, *s;
 	    STRLEN numlen;
+	    STRLEN foldlen;
+	    U8 tmpbuf[UTF8_MAXLEN_FOLD+1], *foldbuf;
 
             parse_start = RExC_parse - 1;
 
@@ -2987,6 +3060,8 @@ tryagain:
 		case '\\':
 		    switch (*++p) {
 		    case 'A':
+		    case 'C':
+		    case 'X':
 		    case 'G':
 		    case 'Z':
 		    case 'z':
@@ -3035,8 +3110,10 @@ tryagain:
 				vFAIL("Missing right brace on \\x{}");
 			    }
 			    else {
-				numlen = 1;	/* allow underscores */
-				ender = (UV)scan_hex(p + 1, e - p - 1, &numlen);
+                                I32 flags = PERL_SCAN_ALLOW_UNDERSCORES
+                                    | PERL_SCAN_DISALLOW_PREFIX;
+                                numlen = e - p - 1;
+				ender = grok_hex(p + 1, &numlen, &flags, NULL);
 				if (ender > 0xff)
 				    RExC_utf8 = 1;
 				/* numlen is generous */
@@ -3048,8 +3125,9 @@ tryagain:
 			    }
 			}
 			else {
-			    numlen = 0;		/* disallow underscores */
-			    ender = (UV)scan_hex(p, 2, &numlen);
+                            I32 flags = PERL_SCAN_DISALLOW_PREFIX;
+			    numlen = 2;
+			    ender = grok_hex(p, &numlen, &flags, NULL);
 			    p += numlen;
 			}
 			break;
@@ -3062,8 +3140,9 @@ tryagain:
 		    case '5': case '6': case '7': case '8':case '9':
 			if (*p == '0' ||
 			  (isDIGIT(p[1]) && atoi(p) >= RExC_npar) ) {
-			    numlen = 0;		/* disallow underscores */
-			    ender = (UV)scan_oct(p, 3, &numlen);
+                            I32 flags = 0;
+			    numlen = 3;
+			    ender = grok_oct(p, &numlen, &flags, NULL);
 			    p += numlen;
 			}
 			else {
@@ -3077,7 +3156,7 @@ tryagain:
 			/* FALL THROUGH */
 		    default:
 			if (!SIZE_ONLY && ckWARN(WARN_REGEXP) && isALPHA(*p))
-			    vWARN2(p +1, "Unrecognized escape \\%c passed through", *p);
+			    vWARN2(p + 1, "Unrecognized escape \\%c passed through", UCHARAT(p));
 			goto normal_default;
 		    }
 		    break;
@@ -3095,18 +3174,42 @@ tryagain:
 		if (RExC_flags16 & PMf_EXTENDED)
 		    p = regwhite(p, RExC_end);
 		if (UTF && FOLD) {
-		    if (LOC)
-			ender = toLOWER_LC_uvchr(ender);
-		    else
-			ender = toLOWER_uni(ender);
+		    /* Prime the casefolded buffer. */
+		    ender = toFOLD_uni(ender, tmpbuf, &foldlen);
 		}
 		if (ISMULT2(p)) { /* Back off on ?+*. */
 		    if (len)
 			p = oldp;
-		    else if (!UNI_IS_INVARIANT(NATIVE_TO_UNI(ender)) && UTF) {
-			reguni(pRExC_state, ender, s, &numlen);
-			s += numlen;
-			len += numlen;
+		    else if (UTF) {
+		         STRLEN unilen;
+
+			 if (FOLD) {
+			      /* Emit all the Unicode characters. */
+			      for (foldbuf = tmpbuf;
+				   foldlen;
+				   foldlen -= numlen) {
+				   ender = utf8_to_uvchr(foldbuf, &numlen);
+				   if (numlen > 0) {
+					reguni(pRExC_state, ender, s, &unilen);
+					s       += unilen;
+					len     += unilen;
+					/* In EBCDIC the numlen
+					 * and unilen can differ. */
+					foldbuf += numlen;
+					if (numlen >= foldlen)
+					     break;
+				   }
+				   else
+					break; /* "Can't happen." */
+			      }
+			 }
+			 else {
+			      reguni(pRExC_state, ender, s, &unilen);
+			      if (unilen > 0) {
+				   s   += unilen;
+				   len += unilen;
+			      }
+			 }
 		    }
 		    else {
 			len++;
@@ -3114,10 +3217,37 @@ tryagain:
 		    }
 		    break;
 		}
-		if (!UNI_IS_INVARIANT(NATIVE_TO_UNI(ender)) && UTF) {
-		    reguni(pRExC_state, ender, s, &numlen);
-		    s += numlen;
-		    len += numlen - 1;
+		if (UTF) {
+		     STRLEN unilen;
+
+		     if (FOLD) {
+		          /* Emit all the Unicode characters. */
+			  for (foldbuf = tmpbuf;
+			       foldlen;
+			       foldlen -= numlen) {
+			       ender = utf8_to_uvchr(foldbuf, &numlen);
+			       if (numlen > 0) {
+				    reguni(pRExC_state, ender, s, &unilen);
+				    len     += unilen;
+				    s       += unilen;
+				    /* In EBCDIC the numlen
+				     * and unilen can differ. */
+				    foldbuf += numlen;
+				    if (numlen >= foldlen)
+					 break;
+			       }
+			       else
+				    break;
+			  }
+		     }
+		     else {
+			  reguni(pRExC_state, ender, s, &unilen);
+			  if (unilen > 0) {
+			       s   += unilen;
+			       len += unilen;
+			  }
+		     }
+		     len--;
 		}
 		else
 		    REGC(ender, s++);
@@ -3146,6 +3276,30 @@ tryagain:
 	break;
     }
 
+    /* If the encoding pragma is in effect recode the text of
+     * any EXACT-kind nodes. */
+    if (PL_encoding && PL_regkind[(U8)OP(ret)] == EXACT) {
+	 STRLEN oldlen = STR_LEN(ret);
+	 SV *sv        = sv_2mortal(newSVpvn(STRING(ret), oldlen));
+
+	 if (RExC_utf8)
+	      SvUTF8_on(sv);
+	 if (sv_utf8_downgrade(sv, TRUE)) {
+	      char *s       = Perl_sv_recode_to_utf8(aTHX_ sv, PL_encoding);
+	      STRLEN newlen = SvCUR(sv);
+	 
+	      if (!SIZE_ONLY) {
+		   DEBUG_r(PerlIO_printf(Perl_debug_log, "recode %*s to %*s\n",
+					 (int)oldlen, STRING(ret),
+					 (int)newlen, s));
+		   Copy(s, STRING(ret), newlen, char);
+		   STR_LEN(ret) += newlen - oldlen;
+		   RExC_emit += STR_SZ(newlen) - STR_SZ(oldlen);
+	      } else
+		   RExC_size += STR_SZ(newlen) - STR_SZ(oldlen);
+	 }
+    }
+
     return(ret);
 }
 
@@ -3170,7 +3324,12 @@ S_regwhite(pTHX_ char *p, char *e)
    Character classes ([:foo:]) can also be negated ([:^foo:]).
    Returns a named class id (ANYOF_XXX) if successful, -1 otherwise.
    Equivalence classes ([=foo=]) and composites ([.foo.]) are parsed,
-   but trigger warnings because they are currently unimplemented. */
+   but trigger failures because they are currently unimplemented. */
+
+#define POSIXCC_DONE(c)   ((c) == ':')
+#define POSIXCC_NOTYET(c) ((c) == '=' || (c) == '.')
+#define POSIXCC(c) (POSIXCC_DONE(c) || POSIXCC_NOTYET(c))
+
 STATIC I32
 S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
 {
@@ -3179,13 +3338,11 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
 
     if (value == '[' && RExC_parse + 1 < RExC_end &&
 	/* I smell either [: or [= or [. -- POSIX has been here, right? */
-	(*RExC_parse == ':' ||
-	 *RExC_parse == '=' ||
-	 *RExC_parse == '.')) {
-	char  c = *RExC_parse;
+	POSIXCC(UCHARAT(RExC_parse))) {
+	char  c = UCHARAT(RExC_parse);
 	char* s = RExC_parse++;
 	
-	while (RExC_parse < RExC_end && *RExC_parse != c)
+	while (RExC_parse < RExC_end && UCHARAT(RExC_parse) != c)
 	    RExC_parse++;
 	if (RExC_parse == RExC_end)
 	    /* Grandfather lone [:, [=, [. */
@@ -3193,7 +3350,7 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
 	else {
 	    char* t = RExC_parse++; /* skip over the c */
 
-  	    if (*RExC_parse == ']') {
+  	    if (UCHARAT(RExC_parse) == ']') {
   		RExC_parse++; /* skip over the ending ] */
   		posixcc = s + 1;
 		if (*s == ':') {
@@ -3282,7 +3439,7 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
 
 		    /* adjust RExC_parse so the warning shows after
 		       the class closes */
-		    while (*RExC_parse && *RExC_parse != ']')
+		    while (UCHARAT(RExC_parse) && UCHARAT(RExC_parse) != ']')
 			RExC_parse++;
 		    Simple_vFAIL3("POSIX syntax [%c %c] is reserved for future extensions", c, c);
 		}
@@ -3300,10 +3457,7 @@ S_regpposixcc(pTHX_ RExC_state_t *pRExC_state, I32 value)
 STATIC void
 S_checkposixcc(pTHX_ RExC_state_t *pRExC_state)
 {
-    if (!SIZE_ONLY && ckWARN(WARN_REGEXP) &&
-	(*RExC_parse == ':' ||
-	 *RExC_parse == '=' ||
-	 *RExC_parse == '.')) {
+    if (!SIZE_ONLY && POSIXCC(UCHARAT(RExC_parse))) {
 	char *s = RExC_parse;
  	char  c = *s++;
 
@@ -3313,11 +3467,10 @@ S_checkposixcc(pTHX_ RExC_state_t *pRExC_state)
 	    vWARN3(s+2, "POSIX syntax [%c %c] belongs inside character classes", c, c);
 
 	    /* [[=foo=]] and [[.foo.]] are still future. */
-	    if (c == '=' || c == '.')
-	    {
+	    if (POSIXCC_NOTYET(c)) {
 		/* adjust RExC_parse so the error shows after
 		   the class closes */
-		while (*RExC_parse && *RExC_parse++ != ']')
+		while (UCHARAT(RExC_parse) && UCHARAT(RExC_parse++) != ']')
 		    ;
 		Simple_vFAIL3("POSIX syntax [%c %c] is reserved for future extensions", c, c);
 	    }
@@ -3329,6 +3482,7 @@ STATIC regnode *
 S_regclass(pTHX_ RExC_state_t *pRExC_state)
 {
     register UV value;
+    register UV nextvalue;
     register IV prevvalue = OOB_UNICODE;
     register IV range = 0;
     register regnode *ret;
@@ -3339,14 +3493,15 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
     SV *listsv = Nullsv;
     register char *e;
     UV n;
-    bool optimize_invert = TRUE;
+    bool optimize_invert   = TRUE;
+    AV* unicode_alternate  = 0;
 
     ret = reganode(pRExC_state, ANYOF, 0);
 
     if (!SIZE_ONLY)
 	ANYOF_FLAGS(ret) = 0;
 
-    if (*RExC_parse == '^') {	/* Complement of range. */
+    if (UCHARAT(RExC_parse) == '^') {	/* Complement of range. */
 	RExC_naughty++;
 	RExC_parse++;
 	if (!SIZE_ONLY)
@@ -3365,13 +3520,16 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
 	listsv = newSVpvn("# comment\n", 10);
     }
 
-    if (!SIZE_ONLY && ckWARN(WARN_REGEXP))
+    nextvalue = RExC_parse < RExC_end ? UCHARAT(RExC_parse) : 0;
+
+    if (!SIZE_ONLY && POSIXCC(nextvalue))
 	checkposixcc(pRExC_state);
 
-    if (*RExC_parse == ']' || *RExC_parse == '-')
-	goto charclassloop;		/* allow 1st char to be ] or - */
+    /* allow 1st char to be ] (allowing it to be - is dealt with later) */
+    if (UCHARAT(RExC_parse) == ']')
+	goto charclassloop;
 
-    while (RExC_parse < RExC_end && *RExC_parse != ']') {
+    while (RExC_parse < RExC_end && UCHARAT(RExC_parse) != ']') {
 
     charclassloop:
 
@@ -3387,7 +3545,8 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
 	}
 	else
 	    value = UCHARAT(RExC_parse++);
-	if (value == '[')
+	nextvalue = RExC_parse < RExC_end ? UCHARAT(RExC_parse) : 0;
+	if (value == '[' && POSIXCC(nextvalue))
 	    namedclass = regpposixcc(pRExC_state, value);
 	else if (value == '\\') {
 	    if (UTF) {
@@ -3413,22 +3572,38 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
 	    case 'p':
 	    case 'P':
 		if (*RExC_parse == '{') {
+		    U8 c = (U8)value;
 		    e = strchr(RExC_parse++, '}');
                     if (!e)
-                        vFAIL("Missing right brace on \\p{}");
+                        vFAIL2("Missing right brace on \\%c{}", c);
+		    while (isSPACE(UCHARAT(RExC_parse)))
+		        RExC_parse++;
+                    if (e == RExC_parse)
+                        vFAIL2("Empty \\%c{}", c);
 		    n = e - RExC_parse;
+		    while (isSPACE(UCHARAT(RExC_parse + n - 1)))
+		        n--;
 		}
 		else {
 		    e = RExC_parse;
 		    n = 1;
 		}
 		if (!SIZE_ONLY) {
+		    if (UCHARAT(RExC_parse) == '^') {
+			 RExC_parse++;
+			 n--;
+			 value = value == 'p' ? 'P' : 'p'; /* toggle */
+			 while (isSPACE(UCHARAT(RExC_parse))) {
+			      RExC_parse++;
+			      n--;
+			 }
+		    }
 		    if (value == 'p')
-			Perl_sv_catpvf(aTHX_ listsv,
-				       "+utf8::%.*s\n", (int)n, RExC_parse);
+			 Perl_sv_catpvf(aTHX_ listsv,
+					"+utf8::%.*s\n", (int)n, RExC_parse);
 		    else
-			Perl_sv_catpvf(aTHX_ listsv,
-				       "!utf8::%.*s\n", (int)n, RExC_parse);
+			 Perl_sv_catpvf(aTHX_ listsv,
+					"!utf8::%.*s\n", (int)n, RExC_parse);
 		}
 		RExC_parse = e + 1;
 		ANYOF_FLAGS(ret) |= ANYOF_UNICODE;
@@ -3442,18 +3617,20 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
 	    case 'a':	value = ASCII_TO_NATIVE('\007');break;
 	    case 'x':
 		if (*RExC_parse == '{') {
+                    I32 flags = PERL_SCAN_ALLOW_UNDERSCORES
+                        | PERL_SCAN_DISALLOW_PREFIX;
 		    e = strchr(RExC_parse++, '}');
                     if (!e)
                         vFAIL("Missing right brace on \\x{}");
-		    numlen = 1;		/* allow underscores */
-		    value = (UV)scan_hex(RExC_parse,
-					 e - RExC_parse,
-					 &numlen);
+
+		    numlen = e - RExC_parse;
+		    value = grok_hex(RExC_parse, &numlen, &flags, NULL);
 		    RExC_parse = e + 1;
 		}
 		else {
-		    numlen = 0;		/* disallow underscores */
-		    value = (UV)scan_hex(RExC_parse, 2, &numlen);
+                    I32 flags = PERL_SCAN_DISALLOW_PREFIX;
+		    numlen = 2;
+		    value = grok_hex(RExC_parse, &numlen, &flags, NULL);
 		    RExC_parse += numlen;
 		}
 		break;
@@ -3463,10 +3640,13 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
 		break;
 	    case '0': case '1': case '2': case '3': case '4':
 	    case '5': case '6': case '7': case '8': case '9':
-		numlen = 0;		/* disallow underscores */
-		value = (UV)scan_oct(--RExC_parse, 3, &numlen);
+            {
+                I32 flags = 0;
+		numlen = 3;
+		value = grok_oct(--RExC_parse, &numlen, &flags, NULL);
 		RExC_parse += numlen;
 		break;
+            }
 	    default:
 		if (!SIZE_ONLY && ckWARN(WARN_REGEXP) && isALPHA(value))
 		    vWARN2(RExC_parse,
@@ -3892,17 +4072,71 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
 		}
 		else
 #endif
-		    for (i = prevvalue; i <= ceilvalue; i++)
-			ANYOF_BITMAP_SET(ret, i);
+		      for (i = prevvalue; i <= ceilvalue; i++)
+			  ANYOF_BITMAP_SET(ret, i);
 	  }
-	  if (value > 255) {
+	  if (value > 255 || UTF) {
+	        UV prevnatvalue  = NATIVE_TO_UNI(prevvalue);
+		UV natvalue      = NATIVE_TO_UNI(value);
+
 		ANYOF_FLAGS(ret) |= ANYOF_UNICODE;
-		if (prevvalue < value)
+		if (prevnatvalue < natvalue) { /* what about > ? */
 		    Perl_sv_catpvf(aTHX_ listsv, "%04"UVxf"\t%04"UVxf"\n",
-				   (UV)prevvalue, (UV)value);
-		else if (prevvalue == value)
-		    Perl_sv_catpvf(aTHX_ listsv, "%04"UVxf"\n",
-				   (UV)value);
+				   prevnatvalue, natvalue);
+		}
+		else if (prevnatvalue == natvalue) {
+		    Perl_sv_catpvf(aTHX_ listsv, "%04"UVxf"\n", natvalue);
+		    if (FOLD) {
+			 U8 foldbuf[UTF8_MAXLEN_FOLD+1];
+			 STRLEN foldlen;
+			 UV f = to_uni_fold(natvalue, foldbuf, &foldlen);
+
+			 /* If folding and foldable and a single
+			  * character, insert also the folded version
+			  * to the charclass. */
+			 if (f != value) {
+			      if (foldlen == UNISKIP(f))
+				  Perl_sv_catpvf(aTHX_ listsv,
+						 "%04"UVxf"\n", f);
+			      else {
+				  /* Any multicharacter foldings
+				   * require the following transform:
+				   * [ABCDEF] -> (?:[ABCabcDEFd]|pq|rst)
+				   * where E folds into "pq" and F folds
+				   * into "rst", all other characters
+				   * fold to single characters.  We save
+				   * away these multicharacter foldings,
+				   * to be later saved as part of the
+				   * additional "s" data. */
+				  SV *sv;
+
+				  if (!unicode_alternate)
+				      unicode_alternate = newAV();
+				  sv = newSVpvn((char*)foldbuf, foldlen);
+				  SvUTF8_on(sv);
+				  av_push(unicode_alternate, sv);
+			      }
+			 }
+
+			 /* If folding and the value is one of the Greek
+			  * sigmas insert a few more sigmas to make the
+			  * folding rules of the sigmas to work right.
+			  * Note that not all the possible combinations
+			  * are handled here: some of them are handled
+			  * by the standard folding rules, and some of
+			  * them (literal or EXACTF cases) are handled
+			  * during runtime in regexec.c:S_find_byclass(). */
+			 if (value == UNICODE_GREEK_SMALL_LETTER_FINAL_SIGMA) {
+			      Perl_sv_catpvf(aTHX_ listsv, "%04"UVxf"\n",
+					     (UV)UNICODE_GREEK_CAPITAL_LETTER_SIGMA);
+			      Perl_sv_catpvf(aTHX_ listsv, "%04"UVxf"\n",
+					     (UV)UNICODE_GREEK_SMALL_LETTER_SIGMA);
+			 }
+			 else if (value == UNICODE_GREEK_CAPITAL_LETTER_SIGMA)
+			      Perl_sv_catpvf(aTHX_ listsv, "%04"UVxf"\n",
+					     (UV)UNICODE_GREEK_SMALL_LETTER_SIGMA);
+		    }
+		}
 	    }
         }
 
@@ -3946,8 +4180,15 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state)
 	AV *av = newAV();
 	SV *rv;
 
+	/* The 0th element stores the character class description
+	 * in its textual form: used later (regexec.c:Perl_regclass_swatch())
+	 * to initialize the appropriate swash (which gets stored in
+	 * the 1st element), and also useful for dumping the regnode.
+	 * The 2nd element stores the multicharacter foldings,
+	 * used later (regexec.c:s_reginclasslen()). */
 	av_store(av, 0, listsv);
 	av_store(av, 1, NULL);
+	av_store(av, 2, (SV*)unicode_alternate);
 	rv = newRV_noinc((SV*)av);
 	n = add_data(pRExC_state, 1, "s");
 	RExC_rx->data->data[n] = (void*)rv;
@@ -4351,7 +4592,7 @@ Perl_regdump(pTHX_ regexp *r)
 STATIC void
 S_put_byte(pTHX_ SV *sv, int c)
 {
-    if (isCNTRL(c) || c == 127 || c == 255 || !isPRINT(c))
+    if (isCNTRL(c) || c == 255 || !isPRINT(c))
 	Perl_sv_catpvf(aTHX_ sv, "\\%o", c);
     else if (c == '-' || c == ']' || c == '\\' || c == '^')
 	Perl_sv_catpvf(aTHX_ sv, "\\%c", c);
@@ -4379,9 +4620,24 @@ Perl_regprop(pTHX_ SV *sv, regnode *o)
 
     k = PL_regkind[(U8)OP(o)];
 
-    if (k == EXACT)
-	Perl_sv_catpvf(aTHX_ sv, " <%s%.*s%s>", PL_colors[0],
-		       STR_LEN(o), STRING(o), PL_colors[1]);
+    if (k == EXACT) {
+        SV *dsv = sv_2mortal(newSVpvn("", 0));
+	/* Using is_utf8_string() is a crude hack but it may
+	 * be the best for now since we have no flag "this EXACTish
+	 * node was UTF-8" --jhi */
+	bool do_utf8 = is_utf8_string((U8*)STRING(o), STR_LEN(o));
+	char *s    = do_utf8 ?
+	  pv_uni_display(dsv, (U8*)STRING(o), STR_LEN(o), 60,
+			 UNI_DISPLAY_REGEX) :
+	  STRING(o);
+	int len = do_utf8 ?
+	  strlen(s) :
+	  STR_LEN(o);
+	Perl_sv_catpvf(aTHX_ sv, " <%s%.*s%s>",
+		       PL_colors[0],
+		       len, s,
+		       PL_colors[1]);
+    }
     else if (k == CURLY) {
 	if (OP(o) == CURLYM || OP(o) == CURLYN || OP(o) == CURLYX)
 	    Perl_sv_catpvf(aTHX_ sv, "[%d]", o->flags); /* Parenth number */
@@ -4462,11 +4718,11 @@ Perl_regprop(pTHX_ SV *sv, regnode *o)
 	if (flags & ANYOF_UNICODE)
 	    sv_catpv(sv, "{unicode}");
 	else if (flags & ANYOF_UNICODE_ALL)
-	    sv_catpv(sv, "{all-unicode}");
+	    sv_catpv(sv, "{unicode_all}");
 
 	{
 	    SV *lv;
-	    SV *sw = regclass_swash(o, FALSE, &lv);
+	    SV *sw = regclass_swash(o, FALSE, &lv, 0);
 	
 	    if (lv) {
 		if (sw) {
@@ -4555,16 +4811,25 @@ Perl_re_intuit_string(pTHX_ regexp *prog)
 void
 Perl_pregfree(pTHX_ struct regexp *r)
 {
-    DEBUG_r(if (!PL_colorset) reginitcolors());
+#ifdef DEBUGGING
+    SV *dsv = PERL_DEBUG_PAD_ZERO(0);
+#endif
 
     if (!r || (--r->refcnt > 0))
 	return;
-    DEBUG_r(PerlIO_printf(Perl_debug_log,
-		      "%sFreeing REx:%s `%s%.60s%s%s'\n",
-		      PL_colors[4],PL_colors[5],PL_colors[0],
-		      r->precomp,
-		      PL_colors[1],
-		      (strlen(r->precomp) > 60 ? "..." : "")));
+    DEBUG_r({
+         char *s = pv_uni_display(dsv, (U8*)r->precomp, r->prelen, 60,
+				  UNI_DISPLAY_REGEX);
+	 int len = SvCUR(dsv);
+	 if (!PL_colorset)
+	      reginitcolors();
+	 PerlIO_printf(Perl_debug_log,
+		       "%sFreeing REx:%s `%s%*.*s%s%s'\n",
+		       PL_colors[4],PL_colors[5],PL_colors[0],
+		       len, len, s,
+		       PL_colors[1],
+		       len > 60 ? "..." : "");
+    });
 
     if (r->precomp)
 	Safefree(r->precomp);
@@ -4609,14 +4874,18 @@ Perl_pregfree(pTHX_ struct regexp *r)
 		}
 		else
 		    PL_curpad = NULL;
-		op_free((OP_4tree*)r->data->data[n]);
+
+		if (!OpREFCNT_dec((OP_4tree*)r->data->data[n])) {
+                    op_free((OP_4tree*)r->data->data[n]);
+		}
+
 		PL_comppad = old_comppad;
 		PL_curpad = old_curpad;
 		SvREFCNT_dec((SV*)new_comppad);
 		new_comppad = NULL;
 		break;
 	    case 'n':
-		break;
+	        break;
 	    default:
 		Perl_croak(aTHX_ "panic: regfree data code '%c'", r->data->what[n]);
 	    }
@@ -4727,6 +4996,7 @@ Perl_save_re_context(pTHX)
     SAVEVPTR(PL_reg_re);		/* from regexec.c */
     SAVEPPTR(PL_reg_ganch);		/* from regexec.c */
     SAVESPTR(PL_reg_sv);		/* from regexec.c */
+    SAVEI8(PL_reg_match_utf8);		/* from regexec.c */
     SAVEVPTR(PL_reg_magic);		/* from regexec.c */
     SAVEI32(PL_reg_oldpos);			/* from regexec.c */
     SAVEVPTR(PL_reg_oldcurpm);		/* from regexec.c */
@@ -4738,14 +5008,8 @@ Perl_save_re_context(pTHX)
 #endif
 }
 
-#ifdef PERL_OBJECT
-#include "XSUB.h"
-#undef this
-#define this pPerl
-#endif
-
 static void
-clear_re(pTHXo_ void *r)
+clear_re(pTHX_ void *r)
 {
     ReREFCNT_dec((regexp *)r);
 }

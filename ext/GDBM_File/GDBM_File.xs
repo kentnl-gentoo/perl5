@@ -17,6 +17,7 @@ typedef struct {
 typedef GDBM_File_type * GDBM_File ;
 typedef datum datum_key ;
 typedef datum datum_value ;
+typedef datum datum_key_copy;
 
 #define ckFilter(arg,type,name)					\
 	if (db->type) {						\
@@ -76,11 +77,11 @@ output_datum(pTHX_ SV *arg, char *str, int size)
 #define gdbm_setopt(db,optflag,optval,optlen) not_here("gdbm_setopt")
 #endif
 
-#include "constants.c"
+#include "const-c.inc"
 
 MODULE = GDBM_File	PACKAGE = GDBM_File	PREFIX = gdbm_
 
-INCLUDE: constants.xs
+INCLUDE: const-xs.inc
 
 GDBM_File
 gdbm_TIEHASH(dbtype, name, read_write, mode, fatal_func = (FATALFUNC)croak)
@@ -122,7 +123,7 @@ gdbm_DESTROY(db)
 datum_value
 gdbm_FETCH(db, key)
 	GDBM_File	db
-	datum_key	key
+	datum_key_copy	key
 
 #define gdbm_STORE(db,key,value,flags)		gdbm_store(db->dbp,key,value,flags)
 int
@@ -154,7 +155,7 @@ gdbm_FIRSTKEY(db)
 datum_key
 gdbm_NEXTKEY(db, key)
 	GDBM_File	db
-	datum_key	key
+	datum_key	key 
 
 #define gdbm_reorganize(db)			gdbm_reorganize(db->dbp)
 int

@@ -1,6 +1,6 @@
 /*    handy.h
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -21,9 +21,10 @@
 #define Null(type) ((type)NULL)
 
 /*
-=for apidoc AmU||Nullch
-Null character pointer.
+=head1 Handy Values
 
+=for apidoc AmU||Nullch 
+Null character pointer.
 =for apidoc AmU||Nullsv
 Null SV pointer.
 
@@ -210,6 +211,8 @@ typedef U64TYPE U64;
 #define Ctl(ch) ((ch) & 037)
 
 /*
+=head1 Miscellaneous Functions
+
 =for apidoc Am|bool|strNE|char* s1|char* s2
 Test two strings to see if they are different.  Returns true or
 false.
@@ -283,6 +286,9 @@ C<strncmp>).
 #endif
 
 /*
+
+=head1 Character classes
+
 =for apidoc Am|bool|isALNUM|char ch
 Returns a boolean indicating whether the C C<char> is an ASCII alphanumeric
 character (including underscore) or digit.
@@ -341,7 +347,7 @@ Converts the specified character to lowercase.
 #   define isLOWER(c)	((c) >= 'a' && (c) <= 'z')
 #   define isALNUMC(c)	(isALPHA(c) || isDIGIT(c))
 #   define isASCII(c)	((c) <= 127)
-#   define isCNTRL(c)	((c) < ' ')
+#   define isCNTRL(c)	((c) < ' ' || (c) == 127)
 #   define isGRAPH(c)	(isALNUM(c) || isPUNCT(c))
 #   define isPRINT(c)	(((c) > 32 && (c) < 127) || (c) == ' ')
 #   define isPUNCT(c)	(((c) >= 33 && (c) <= 47) || ((c) >= 58 && (c) <= 64)  || ((c) >= 91 && (c) <= 96) || ((c) >= 123 && (c) <= 126))
@@ -425,9 +431,10 @@ Converts the specified character to lowercase.
 #define isPRINT_uni(c)		is_uni_print(c)
 #define isPUNCT_uni(c)		is_uni_punct(c)
 #define isXDIGIT_uni(c)		is_uni_xdigit(c)
-#define toUPPER_uni(c)		to_uni_upper(c)
-#define toTITLE_uni(c)		to_uni_title(c)
-#define toLOWER_uni(c)		to_uni_lower(c)
+#define toUPPER_uni(c,s,l)	to_uni_upper(c,s,l)
+#define toTITLE_uni(c,s,l)	to_uni_title(c,s,l)
+#define toLOWER_uni(c,s,l)	to_uni_lower(c,s,l)
+#define toFOLD_uni(c,s,l)	to_uni_fold(c,s,l)
 
 #define isPSXSPC_uni(c)		(isSPACE_uni(c) ||(c) == '\f')
 #define isBLANK_uni(c)		isBLANK(c) /* could be wrong */
@@ -444,9 +451,6 @@ Converts the specified character to lowercase.
 #define isGRAPH_LC_uvchr(c)	(c < 256 ? isGRAPH_LC(c) : is_uni_graph_lc(c))
 #define isPRINT_LC_uvchr(c)	(c < 256 ? isPRINT_LC(c) : is_uni_print_lc(c))
 #define isPUNCT_LC_uvchr(c)	(c < 256 ? isPUNCT_LC(c) : is_uni_punct_lc(c))
-#define toUPPER_LC_uvchr(c)	(c < 256 ? toUPPER_LC(c) : to_uni_upper_lc(c))
-#define toTITLE_LC_uvchr(c)	(c < 256 ? toUPPER_LC(c) : to_uni_title_lc(c))
-#define toLOWER_LC_uvchr(c)	(c < 256 ? toLOWER_LC(c) : to_uni_lower_lc(c))
 
 #define isPSXSPC_LC_uni(c)	(isSPACE_LC_uni(c) ||(c) == '\f')
 #define isBLANK_LC_uni(c)	isBLANK(c) /* could be wrong */
@@ -465,9 +469,9 @@ Converts the specified character to lowercase.
 #define isPRINT_utf8(p)		is_utf8_print(p)
 #define isPUNCT_utf8(p)		is_utf8_punct(p)
 #define isXDIGIT_utf8(p)	is_utf8_xdigit(p)
-#define toUPPER_utf8(p)		to_utf8_upper(p)
-#define toTITLE_utf8(p)		to_utf8_title(p)
-#define toLOWER_utf8(p)		to_utf8_lower(p)
+#define toUPPER_utf8(p,s,l)	to_utf8_upper(p,s,l)
+#define toTITLE_utf8(p,s,l)	to_utf8_title(p,s,l)
+#define toLOWER_utf8(p,s,l)	to_utf8_lower(p,s,l)
 
 #define isPSXSPC_utf8(c)	(isSPACE_utf8(c) ||(c) == '\f')
 #define isBLANK_utf8(c)		isBLANK(c) /* could be wrong */
@@ -484,9 +488,6 @@ Converts the specified character to lowercase.
 #define isGRAPH_LC_utf8(p)	isGRAPH_LC_uvchr(utf8_to_uvchr(p,  0))
 #define isPRINT_LC_utf8(p)	isPRINT_LC_uvchr(utf8_to_uvchr(p,  0))
 #define isPUNCT_LC_utf8(p)	isPUNCT_LC_uvchr(utf8_to_uvchr(p,  0))
-#define toUPPER_LC_utf8(p)	toUPPER_LC_uvchr(utf8_to_uvchr(p,  0))
-#define toTITLE_LC_utf8(p)	toTITLE_LC_uvchr(utf8_to_uvchr(p,  0))
-#define toLOWER_LC_utf8(p)	toLOWER_LC_uvchr(utf8_to_uvchr(p,  0))
 
 #define isPSXSPC_LC_utf8(c)	(isSPACE_LC_utf8(c) ||(c) == '\f')
 #define isBLANK_LC_utf8(c)	isBLANK(c) /* could be wrong */
@@ -520,12 +521,16 @@ typedef U16 line_t;
 */
 
 /*
+=head1 SV Manipulation Functions
+
 =for apidoc Am|SV*|NEWSV|int id|STRLEN len
 Creates a new SV.  A non-zero C<len> parameter indicates the number of
 bytes of preallocated string space the SV should have.  An extra byte for a
 tailing NUL is also reserved.  (SvPOK is not set for the SV even if string
 space is allocated.)  The reference count for the new SV is set to 1.
 C<id> is an integer id between 0 and 1299 (used to identify leaks).
+
+=head1 Memory Management
 
 =for apidoc Am|void|New|int id|void* ptr|int nitems|type
 The XSUB-writer's interface to the C C<malloc> function.
@@ -633,10 +638,12 @@ extern long lastxycount[MAXXCOUNT][MAXYCOUNT];
 #ifdef NEED_VA_COPY
 # ifdef va_copy
 #  define Perl_va_copy(s, d) va_copy(d, s)
-# elif defined(__va_copy)
-#  define Perl_va_copy(s, d) __va_copy(d, s)
 # else
-#  define Perl_va_copy(s, d) Copy(s, d, 1, va_list)
+#  if defined(__va_copy)
+#   define Perl_va_copy(s, d) __va_copy(d, s)
+#  else
+#   define Perl_va_copy(s, d) Copy(s, d, 1, va_list)
+#  endif
 # endif
 #endif
 

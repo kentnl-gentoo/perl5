@@ -8,11 +8,11 @@ BEGIN {
 }
 
 $| = 1;
-print "1..16\n";
+print "1..25\n";
 
 use charnames ':full';
 
-print "not " unless "Here\N{EXCLAMATION MARK}?" eq "Here\041?";
+print "not " unless "Here\N{EXCLAMATION MARK}?" eq "Here!?";
 print "ok 1\n";
 
 {
@@ -117,7 +117,7 @@ sub to_bytes {
 {
   # 20001114.001	
 
-  no utf8; # so that the naked 8-bit character won't gripe under use utf8
+  no utf8; # naked Latin-1
 
   if (ord("Ä") == 0xc4) { # Try to do this only on Latin-1.
       use charnames ':full';
@@ -129,3 +129,47 @@ sub to_bytes {
   }
 }
 
+{
+    print "not " unless charnames::viacode(0x1234) eq "ETHIOPIC SYLLABLE SEE";
+    print "ok 17\n";
+
+    print "not " if defined charnames::viacode(0x0590); # unused Hebrew
+    print "ok 18\n";
+}
+
+{
+    print "not " unless
+	sprintf "%04X\n", charnames::vianame("GOTHIC LETTER AHSA") eq "10330";
+    print "ok 19\n";
+
+    print "not " if
+	defined charnames::vianame("NONE SUCH");
+    print "ok 20\n";
+}
+
+{
+    # check that caching at least hasn't broken anything
+
+    print "not " unless charnames::viacode(0x1234) eq "ETHIOPIC SYLLABLE SEE";
+    print "ok 21\n";
+
+    print "not " unless
+	sprintf "%04X\n", charnames::vianame("GOTHIC LETTER AHSA") eq "10330";
+    print "ok 22\n";
+
+}
+
+print "not " unless "\N{HORIZONTAL TABULATION}" eq "\t";
+print "ok 23\n";
+
+print "not " unless "\N{ESCAPE}" eq "\e";
+print "ok 24\n";
+
+print "not " unless "\N{NULL}" eq "\c@";
+print "ok 25\n";
+
+# TODO: when Unicode 3.2 comes along some names will change
+# HORIZONTAL TABULATION -> CHARACTER TABULATION (since ISO 6429
+# has been updated), and some names will have shorter aliases
+# LINEFEED (LF).  Update the tests, and also update the charnames
+# pragma to support the 3.1 names, and the shorter aliases.

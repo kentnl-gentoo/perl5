@@ -2,8 +2,8 @@ package Attribute::Handlers;
 use 5.006;
 use Carp;
 use warnings;
-$VERSION = '0.70';
-$DB::single=1;
+$VERSION = '0.76';
+# $DB::single=1;
 
 my %symcache;
 sub findsym {
@@ -31,24 +31,35 @@ my @declarations;
 my %raw;
 my %phase;
 my %sigil = (SCALAR=>'$', ARRAY=>'@', HASH=>'%');
+my $global_phase = 0;
+my %global_phases = (
+	BEGIN	=> 0,
+	CHECK	=> 1,
+	INIT	=> 2,
+	END	=> 3,
+);
+my @global_phases = qw(BEGIN CHECK INIT END);
 
 sub _usage_AH_ {
 	croak "Usage: use $_[0] autotie => {AttrName => TieClassName,...}";
 }
+
+my $qual_id = qr/^[_a-z]\w*(::[_a-z]\w*)*$/i;
 
 sub import {
     my $class = shift @_;
     return unless $class eq "Attribute::Handlers";
     while (@_) {
 	my $cmd = shift;
-        if ($cmd eq 'autotie') {
+        if ($cmd =~ /^autotie((?:ref)?)$/) {
+	    my $tiedata = ($1 ? '$ref, ' : '') . '@$data';
             my $mapping = shift;
 	    _usage_AH_ $class unless ref($mapping) eq 'HASH';
 	    while (my($attr, $tieclass) = each %$mapping) {
-		$tieclass =~ s/^([_a-z]\w*(::[_a-z]\w*))(.*)/$1/is;
+                $tieclass =~ s/^([_a-z]\w*(::[_a-z]\w*)*)(.*)/$1/is;
 		my $args = $3||'()';
-		usage $class unless $attr =~ m/^[_a-z]\w*(::[_a-z]\w*)*$/i
-		                 && $tieclass =~ m/^[_a-z]\w*(::[_a-z]\w*)/i
+		_usage_AH_ $class unless $attr =~ $qual_id
+		                 && $tieclass =~ $qual_id
 		                 && eval "use base $tieclass; 1";
 	        if ($tieclass->isa('Exporter')) {
 		    local $Exporter::ExportLevel = 2;
@@ -59,14 +70,12 @@ sub import {
 	        eval qq{
 	            sub $attr : ATTR(VAR) {
 			my (\$ref, \$data) = \@_[2,4];
-			\$data = [ \$data ] unless ref \$data eq 'ARRAY';
-			# print \$ref, ": ";
-			# use Data::Dumper 'Dumper';
-			# print Dumper [ [\$ref, \$data] ];
+			my \$was_arrayref = ref \$data eq 'ARRAY';
+			\$data = [ \$data ] unless \$was_arrayref;
 			my \$type = ref(\$ref)||"value (".(\$ref||"<undef>").")";
-			 (\$type eq 'SCALAR')? tie \$\$ref,'$tieclass',\@\$data
-			:(\$type eq 'ARRAY') ? tie \@\$ref,'$tieclass',\@\$data
-			:(\$type eq 'HASH')  ? tie \%\$ref,'$tieclass',\@\$data
+			 (\$type eq 'SCALAR')? tie \$\$ref,'$tieclass',$tiedata
+			:(\$type eq 'ARRAY') ? tie \@\$ref,'$tieclass',$tiedata
+			:(\$type eq 'HASH')  ? tie \%\$ref,'$tieclass',$tiedata
 			: die "Can't autotie a \$type\n"
 	            } 1
 	        } or die "Internal error: $@";
@@ -91,10 +100,10 @@ sub _resolve_lastattr {
 }
 
 sub AUTOLOAD {
-	my ($class) = @_;
-	$AUTOLOAD =~ /_ATTR_(.*?)_(.*)/ or
+	my ($class) = $AUTOLOAD =~ m/(.*)::/g;
+	$AUTOLOAD =~ m/_ATTR_(.*?)_(.*)/ or
 	    croak "Can't locate class method '$AUTOLOAD' via package '$class'";
-	croak "Attribute handler '$2' doesn't handle $1 attributes";
+	croak "Attribute handler '$3' doesn't handle $2 attributes";
 }
 
 sub DESTROY {}
@@ -106,7 +115,7 @@ sub _gen_handler_AH_() {
 	    _resolve_lastattr;
 	    my ($pkg, $ref, @attrs) = @_;
 	    foreach (@attrs) {
-		my ($attr, $data) = /^([a-z_]\w*)(?:[(](.*)[)])?$/i or next;
+		my ($attr, $data) = /^([a-z_]\w*)(?:[(](.*)[)])?$/is or next;
 		if ($attr eq 'ATTR') {
 			$data ||= "ANY";
 			$raw{$ref} = $data =~ s/\s*,?\s*RAWDATA\s*,?\s*//;
@@ -119,6 +128,8 @@ sub _gen_handler_AH_() {
 			$phase{$ref}{CHECK} = 1
 				if $data =~ s/\s*,?\s*(CHECK)\s*,?\s*//
 				|| ! keys %{$phase{$ref}};
+			# Added for cleanup to not pollute next call.
+			(%lastattr = ()),
 			croak "Can't have two ATTR specifiers on one subroutine"
 				if keys %lastattr;
 			croak "Bad attribute type: ATTR($data)"
@@ -130,8 +141,22 @@ sub _gen_handler_AH_() {
 			next unless $handler;
 		        my $decl = [$pkg, $ref, $attr, $data,
 				    $raw{$handler}, $phase{$handler}];
-			_apply_handler_AH_($decl,'BEGIN');
-			push @declarations, $decl;
+			foreach my $gphase (@global_phases) {
+			    _apply_handler_AH_($decl,$gphase)
+				if $global_phases{$gphase} <= $global_phase;
+			}
+			if ($global_phase != 0) {
+				# if _gen_handler_AH_ is being called after 
+				# CHECK it's for a lexical, so make sure
+				# it didn't want to run anything later
+			
+				local $Carp::CarpLevel = 2;
+				carp "Won't be able to apply END handler"
+					if $phase{$handler}{END};
+			}
+			else {
+				push @declarations, $decl
+			}
 		}
 		$_ = undef;
 	    }
@@ -168,13 +193,14 @@ sub _apply_handler_AH_ {
 }
 
 CHECK {
+	$global_phase++;
 	_resolve_lastattr;
 	_apply_handler_AH_($_,'CHECK') foreach @declarations;
 }
 
-INIT { _apply_handler_AH_($_,'INIT') foreach @declarations }
+INIT { $global_phase++; _apply_handler_AH_($_,'INIT') foreach @declarations }
 
-END { _apply_handler_AH_($_,'END') foreach @declarations }
+END { $global_phase++; _apply_handler_AH_($_,'END') foreach @declarations }
 
 1;
 __END__
@@ -185,8 +211,8 @@ Attribute::Handlers - Simpler definition of attribute handlers
 
 =head1 VERSION
 
-This document describes version 0.70 of Attribute::Handlers,
-released June  3, 2001.
+This document describes version 0.76 of Attribute::Handlers,
+released November 15, 2001.
 
 =head1 SYNOPSIS
 
@@ -277,7 +303,7 @@ attribute C<:ATTR>. For example:
 			"in phase $phase\n";
 	}
 
-This creates an handler for the attribute C<:Loud> in the class LoudDecl.
+This creates a handler for the attribute C<:Loud> in the class LoudDecl.
 Thereafter, any subroutine declared with a C<:Loud> attribute in the class
 LoudDecl:
 
@@ -439,7 +465,7 @@ the data argument (C<$_[4]>) to a useable form before passing it to
 the handler get in the way.
 
 You can turn off that eagerness-to-help by declaring
-an attribute handler with the the keyword C<RAWDATA>. For example:
+an attribute handler with the keyword C<RAWDATA>. For example:
 
         sub Raw          : ATTR(RAWDATA) {...}
         sub Nekkid       : ATTR(SCALAR,RAWDATA) {...}
@@ -500,9 +526,28 @@ variables. For example:
                 print $next;
         }
 
-In fact, this pattern is so widely applicable that Attribute::Handlers
+Note that, because the C<Cycle> attribute receives its arguments in the
+C<$data> variable, if the attribute is given a list of arguments, C<$data>
+will consist of a single array reference; otherwise, it will consist of the
+single argument directly. Since Tie::Cycle requires its cycling values to
+be passed as an array reference, this means that we need to wrap
+non-array-reference arguments in an array constructor:
+
+        $data = [ $data ] unless ref $data eq 'ARRAY';
+
+Typically, however, things are the other way around: the tieable class expects
+its arguments as a flattened list, so the attribute looks like:
+
+        sub UNIVERSAL::Cycle : ATTR(SCALAR) {
+                my ($package, $symbol, $referent, $attr, $data, $phase) = @_;
+                my @data = ref $data eq 'ARRAY' ? @$data : $data;
+                tie $$referent, 'Tie::Whatever', @data;
+        }
+
+
+This software pattern is so widely applicable that Attribute::Handlers
 provides a way to automate it: specifying C<'autotie'> in the
-C<use Attribute::Handlers> statement. So, the previous example,
+C<use Attribute::Handlers> statement. So, the cycling example,
 could also be written:
 
         use Attribute::Handlers autotie => { Cycle => 'Tie::Cycle' };
@@ -511,10 +556,15 @@ could also be written:
 
         package main;
 
-        my $next : Cycle('A'..'Z');     # $next is now a tied variable
+        my $next : Cycle(['A'..'Z']);     # $next is now a tied variable
 
         while (<>) {
                 print $next;
+
+Note that we now have to pass the cycling values as an array reference,
+since the C<autotie> mechanism passes C<tie> a list of arguments as a list
+(as in the Tie::Whatever example), I<not> as an array reference (as in
+the original Tie::Cycle example at the start of this section).
 
 The argument after C<'autotie'> is a reference to a hash in which each key is
 the name of an attribute to be created, and each value is the class to which
@@ -546,10 +596,35 @@ C<__CALLER__>, which may be specified as the qualifier of an attribute:
 
         package Tie::Me::Kangaroo:Down::Sport;
 
-        use Attribute::Handler autotie => { __CALLER__::Roo => __PACKAGE__ };
+        use Attribute::Handlers autotie => { __CALLER__::Roo => __PACKAGE__ };
 
 This causes Attribute::Handlers to define the C<Roo> attribute in the package
 that imports the Tie::Me::Kangaroo:Down::Sport module.
+
+=head3 Passing the tied object to C<tie>
+
+Occasionally it is important to pass a reference to the object being tied
+to the TIESCALAR, TIEHASH, etc. that ties it. 
+
+The C<autotie> mechanism supports this too. The following code:
+
+	use Attribute::Handlers autotieref => { Selfish => Tie::Selfish };
+	my $var : Selfish(@args);
+
+has the same effect as:
+
+	tie my $var, 'Tie::Selfish', @args;
+
+But when C<"autotieref"> is used instead of C<"autotie">:
+
+	use Attribute::Handlers autotieref => { Selfish => Tie::Selfish };
+	my $var : Selfish(@args);
+
+the effect is to pass the C<tie> call an extra reference to the variable
+being tied:
+
+        tie my $var, 'Tie::Selfish', \$var, @args;
+
 
 
 =head1 EXAMPLES
@@ -728,7 +803,7 @@ in a single C<ATTR(I<specification>)>.
 =item C<Can't autotie a %s>
 
 You can only declare autoties for types C<"SCALAR">, C<"ARRAY">, and
-C<"SCALAR">. They're the only things (apart from typeglobs -- which are
+C<"HASH">. They're the only things (apart from typeglobs -- which are
 not declarable) that Perl can tie.
 
 =item C<Internal error: %s symbol went missing>
@@ -736,6 +811,12 @@ not declarable) that Perl can tie.
 Something is rotten in the state of the program. An attributed
 subroutine ceased to exist between the point it was declared and the point
 at which its attribute handler(s) would have been called.
+
+=item C<Won't be able to apply END handler>
+
+You have defined an END handler for an attribute that is being applied
+to a lexical variable.  Since the variable may not be available during END
+this won't happen.
 
 =back
 
@@ -752,5 +833,4 @@ Bug reports and other feedback are most welcome.
 
          Copyright (c) 2001, Damian Conway. All Rights Reserved.
        This module is free software. It may be used, redistributed
-      and/or modified under the terms of the Perl Artistic License
-            (see http://www.perl.com/perl/misc/Artistic.html)
+           and/or modified under the same terms as Perl itself.

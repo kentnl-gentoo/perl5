@@ -7,11 +7,12 @@
 
 package File::Copy;
 
-use 5.6.0;
+use 5.006;
 use strict;
 use warnings;
 use Carp;
 use File::Spec;
+use Config;
 our(@ISA, @EXPORT, @EXPORT_OK, $VERSION, $Too_Big, $Syscopy_is_copy);
 sub copy;
 sub syscopy;
@@ -23,7 +24,7 @@ sub mv;
 # package has not yet been updated to work with Perl 5.004, and so it
 # would be a Bad Thing for the CPAN module to grab it and replace this
 # module.  Therefore, we set this module's version higher than 2.0.
-$VERSION = '2.04';
+$VERSION = '2.05';
 
 require Exporter;
 @ISA = qw(Exporter);
@@ -64,6 +65,22 @@ sub copy {
 			    || UNIVERSAL::isa($to, 'GLOB')
                             || UNIVERSAL::isa($to, 'IO::Handle'))
 			 : (ref(\$to) eq 'GLOB'));
+
+    if ($from eq $to) { # works for references, too
+	croak("'$from' and '$to' are identical (not copied)");
+    }
+
+    if ($Config{d_symlink} && $Config{d_readlink} &&
+	!($^O eq 'Win32' || $^O eq 'os2' || $^O eq 'vms')) {
+	no warnings 'io'; # don't warn if -l on filehandle
+	if ((-e $from && -l $from) || (-e $to && -l $to)) {
+	    my @fs = stat($from);
+	    my @ts = stat($to);
+	    if (@fs && @ts && $fs[0] == $ts[0] && $fs[1] == $ts[1]) {
+		croak("'$from' and '$to' are identical (not copied)");
+	    }
+	}
+    }
 
     if (!$from_a_handle && !$to_a_handle && -d $to && ! -d $from) {
 	$to = _catname($from, $to);
@@ -112,8 +129,7 @@ sub copy {
 	$size = shift(@_) + 0;
 	croak("Bad buffer size for copy: $size\n") unless ($size > 0);
     } else {
-       no warnings 'uninitialized';
-       $size = -s $from_h;
+	$size = tied(*$from_h) ? 0 : -s $from_h || 0;
 	$size = 1024 if ($size < 512);
 	$size = $Too_Big if ($size > $Too_Big);
     }
@@ -275,7 +291,8 @@ argument may be a string, a FileHandle reference or a FileHandle
 glob. Obviously, if the first argument is a filehandle of some
 sort, it will be read from, and if it is a file I<name> it will
 be opened for reading. Likewise, the second argument will be
-written to (and created if need be).
+written to (and created if need be).  Trying to copy a file on top
+of itself is a fatal error.
 
 B<Note that passing in
 files as handles instead of names may lead to loss of information
@@ -316,9 +333,10 @@ File::Copy also provides the C<syscopy> routine, which copies the
 file specified in the first parameter to the file specified in the
 second parameter, preserving OS-specific attributes and file
 structure.  For Unix systems, this is equivalent to the simple
-C<copy> routine.  For VMS systems, this calls the C<rmscopy>
-routine (see below).  For OS/2 systems, this calls the C<syscopy>
-XSUB directly. For Win32 systems, this calls C<Win32::CopyFile>.
+C<copy> routine, which doesn't preserve OS-specific attributes.  For
+VMS systems, this calls the C<rmscopy> routine (see below).  For OS/2
+systems, this calls the C<syscopy> XSUB directly. For Win32 systems,
+this calls C<Win32::CopyFile>.
 
 =head2 Special behaviour if C<syscopy> is defined (OS/2, VMS and Win32)
 

@@ -1,3 +1,18 @@
+/*    universal.c
+ *
+ *    Copyright (c) 1997-2002, Larry Wall
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
+ */
+
+/*
+ * "The roots of those mountains must be roots indeed; there must be
+ * great secrets buried there which have not been discovered since the
+ * beginning." --Gandalf, relating Gollum's story
+ */
+
 #include "EXTERN.h"
 #define PERL_IN_UNIVERSAL_C
 #include "perl.h"
@@ -8,7 +23,8 @@
  */
 
 STATIC SV *
-S_isa_lookup(pTHX_ HV *stash, const char *name, int len, int level)
+S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
+             int len, int level)
 {
     AV* av;
     GV* gv;
@@ -16,8 +32,10 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, int len, int level)
     HV* hv = Nullhv;
     SV* subgen = Nullsv;
 
-    if (!stash)
-	return &PL_sv_undef;
+    /* A stash/class can go by many names (ie. User == main::User), so 
+       we compare the stash itself just in case */
+    if (name_stash && (stash == name_stash))
+        return &PL_sv_yes;
 
     if (strEQ(HvNAME(stash), name))
 	return &PL_sv_yes;
@@ -80,7 +98,8 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, int len, int level)
 			    SvPVX(sv), HvNAME(stash));
 		    continue;
 		}
-		if (&PL_sv_yes == isa_lookup(basestash, name, len, level + 1)) {
+		if (&PL_sv_yes == isa_lookup(basestash, name, name_stash, 
+                                             len, level + 1)) {
 		    (void)hv_store(hv,name,len,&PL_sv_yes,0);
 		    return &PL_sv_yes;
 		}
@@ -93,6 +112,8 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, int len, int level)
 }
 
 /*
+=head1 SV Manipulation Functions
+
 =for apidoc sv_derived_from
 
 Returns a boolean indicating whether the SV is derived from the specified
@@ -107,6 +128,7 @@ Perl_sv_derived_from(pTHX_ SV *sv, const char *name)
 {
     char *type;
     HV *stash;
+    HV *name_stash;
 
     stash = Nullhv;
     type = Nullch;
@@ -124,17 +146,20 @@ Perl_sv_derived_from(pTHX_ SV *sv, const char *name)
         stash = gv_stashsv(sv, FALSE);
     }
 
+    name_stash = gv_stashpv(name, FALSE);
+
     return (type && strEQ(type,name)) ||
-            (stash && isa_lookup(stash, name, strlen(name), 0) == &PL_sv_yes)
+            (stash && isa_lookup(stash, name, name_stash, strlen(name), 0) 
+             == &PL_sv_yes)
         ? TRUE
         : FALSE ;
 }
 
 #include "XSUB.h"
 
-void XS_UNIVERSAL_isa(pTHXo_ CV *cv);
-void XS_UNIVERSAL_can(pTHXo_ CV *cv);
-void XS_UNIVERSAL_VERSION(pTHXo_ CV *cv);
+void XS_UNIVERSAL_isa(pTHX_ CV *cv);
+void XS_UNIVERSAL_can(pTHX_ CV *cv);
+void XS_UNIVERSAL_VERSION(pTHX_ CV *cv);
 XS(XS_utf8_valid);
 XS(XS_utf8_encode);
 XS(XS_utf8_decode);
@@ -142,6 +167,7 @@ XS(XS_utf8_upgrade);
 XS(XS_utf8_downgrade);
 XS(XS_utf8_unicode_to_native);
 XS(XS_utf8_native_to_unicode);
+XS(XS_access_readonly);
 
 void
 Perl_boot_core_UNIVERSAL(pTHX)
@@ -158,6 +184,7 @@ Perl_boot_core_UNIVERSAL(pTHX)
     newXS("utf8::downgrade", XS_utf8_downgrade, file);
     newXS("utf8::native_to_unicode", XS_utf8_native_to_unicode, file);
     newXS("utf8::unicode_to_native", XS_utf8_unicode_to_native, file);
+    newXSproto("access::readonly",XS_access_readonly, file, "\\[$%@];$");
 }
 
 
@@ -263,10 +290,18 @@ XS(XS_UNIVERSAL_VERSION)
 	STRLEN len;
 	SV *req = ST(1);
 
-	if (undef)
-	    Perl_croak(aTHX_ "%s does not define $%s::VERSION--version check failed",
-		       HvNAME(pkg), HvNAME(pkg));
+	if (undef) {
+	     if (pkg)
+		  Perl_croak(aTHX_
+			     "%s does not define $%s::VERSION--version check failed",
+			     HvNAME(pkg), HvNAME(pkg));
+	     else {
+		  char *str = SvPVx(ST(0), len);
 
+		  Perl_croak(aTHX_
+			     "%s defines neither package nor VERSION--version check failed", str);
+	     }
+	}
 	if (!SvNIOK(sv) && SvPOK(sv)) {
 	    char *str = SvPVx(sv,len);
 	    while (len) {
@@ -425,4 +460,22 @@ XS(XS_utf8_unicode_to_native)
  XSRETURN(1);
 }
 
+XS(XS_access_readonly)
+{
+    dXSARGS;
+    SV *sv = SvRV(ST(0));
+    IV old = SvREADONLY(sv);
+    if (items == 2) {
+	if (SvTRUE(ST(1))) {
+	    SvREADONLY_on(sv);
+	}
+	else {
+	    SvREADONLY_off(sv);
+	}
+    }
+    if (old)
+	XSRETURN_YES;
+    else
+	XSRETURN_NO;
+}
 

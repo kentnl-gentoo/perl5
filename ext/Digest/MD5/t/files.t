@@ -15,13 +15,13 @@ my $EXPECT;
 
 if (ord('A') == 193) { # EBCDIC
 $EXPECT = <<EOT;
-95a81f17a8e6c2273aecac12d8c4cb90  ext/Digest/MD5/MD5.pm
-9cecc5dbb27bd64b98f61f558b4db378  ext/Digest/MD5/MD5.xs
+ee6a09094632cd610199278bbb0f910e  ext/Digest/MD5/MD5.pm
+491dfb1027eb154cff18beb609d6068a  ext/Digest/MD5/MD5.xs
 EOT
 } else { # ASCII
 $EXPECT = <<EOT;
-3d0146bf194e4fe68733d00fba02a49e  ext/Digest/MD5/MD5.pm
-5526659171a63f532d990dd73791b60e  ext/Digest/MD5/MD5.xs
+665ddc08b12d6b1bf85ac6dc5aae68b3  ext/Digest/MD5/MD5.pm
+95444a9c6ad17e443e4606c6c7fd9e28  ext/Digest/MD5/MD5.xs
 EOT
 }
 
@@ -126,7 +126,7 @@ sub digest_file
     #print "$file $method\n";
 
     open(FILE, $file) or die "Can't open $file: $!";
-# Digests avove are generated on UNIX without CRLF
+# Digests above are generated on UNIX without CRLF
 # so leave handles in text mode
 #    binmode(FILE);
     my $digest = Digest::MD5->new->addfile(*FILE)->$method();
@@ -140,7 +140,7 @@ sub cat_file
     my($file) = @_;
     local $/;  # slurp
     open(FILE, $file) or die "Can't open $file: $!";
-# Digests avove are generated on UNIX without CRLF
+# Digests above are generated on UNIX without CRLF
 # so leave handles in text mode
 #    binmode(FILE);
     my $tmp = <FILE>;

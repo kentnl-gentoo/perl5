@@ -1,0 +1,88 @@
+Unicode/Normalize version 0.14
+===================================
+
+Unicode::Normalize - normalized forms of Unicode text
+
+SYNOPSIS
+
+  use Unicode::Normalize;
+
+  $string_NFD  = NFD($string);  # Normalization Form D
+  $string_NFC  = NFC($string);  # Normalization Form C
+  $string_NFKD = NFKD($string); # Normalization Form KD
+  $string_NFKC = NFKC($string); # Normalization Form KC
+
+   or
+
+  use Unicode::Normalize 'normalize';
+
+  $string_NFD  = normalize('D',  $string);  # Normalization Form D
+  $string_NFC  = normalize('C',  $string);  # Normalization Form C
+  $string_NFKD = normalize('KD', $string);  # Normalization Form KD
+  $string_NFKC = normalize('KC', $string);  # Normalization Form KC
+
+INSTALLATION
+
+Perl 5.006 or later
+
+To install this module type the following:
+
+   perl Makefile.PL
+   make
+   make test
+   make install
+
+If you have a C compiler and want to use the XS version,
+type the following:
+
+   perl Makefile.PL xs
+   make
+   make test
+   make install
+
+If you decide to install the NoXS version after trying to build the XS,
+type the following:
+
+   make clean
+   perl Makefile.PL noxs
+   make
+   make test
+   make install
+
+DEPENDENCIES
+
+This module requires these other modules and libraries:
+
+Carp
+Exporter
+File::Copy
+File::Spec
+
+unicore/CombiningClass.pl
+  (or unicode/CombiningClass.pl)
+unicore/Decomposition.pl
+  (or unicode/Decomposition.pl)
+unicore/CompositionExclusions.txt
+  (or unicode/CompExcl.txt)
+
+# CAVEAT:
+# In bleadperl, unicore/CompExcl.txt is renamed
+# unicore/CompositionExclusions.txt.
+
+And for the NoXS version, in addition to the above,
+
+  Lingua::KO::Hangul::Util 0.06
+
+is required.
+
+COPYRIGHT AND LICENCE
+
+SADAHIRO Tomoyuki, E<lt>SADAHIRO@cpan.orgE<gt>
+
+  http://homepage1.nifty.com/nomenclator/perl/
+
+  Copyright(C) 2001-2002, SADAHIRO Tomoyuki. Japan. All rights reserved.
+
+  This program is free software; you can redistribute it and/or
+  modify it under the same terms as Perl itself.
+

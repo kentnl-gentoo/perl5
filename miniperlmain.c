@@ -1,3 +1,12 @@
+/*    miniperlmain.c
+ *
+ *    Copyright (c) 1997-2002, Larry Wall
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
+ */
+
 /*
  * "The Road goes ever on and on, down from the door where it began."
  */
@@ -48,7 +57,16 @@ main(int argc, char **argv, char **env)
 
     PERL_SYS_INIT3(&argc,&argv,&env);
 
-#ifdef USE_ITHREADS
+#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
+    /* XXX Ideally, this should really be happening in perl_alloc() or
+     * perl_construct() to keep libperl.a transparently fork()-safe.
+     * It is currently done here only because Apache/mod_perl have
+     * problems due to lack of a call to cancel pthread_atfork()
+     * handlers when shared objects that contain the handlers may
+     * be dlclose()d.  This forces applications that embed perl to
+     * call PTHREAD_ATFORK() explicitly, but if and only if it hasn't
+     * been called at least once before in the current process.
+     * --GSAR 2001-07-20 */
     PTHREAD_ATFORK(Perl_atfork_lock,
                    Perl_atfork_unlock,
                    Perl_atfork_unlock);
@@ -61,13 +79,13 @@ main(int argc, char **argv, char **env)
 	perl_construct(my_perl);
 	PL_perl_destruct_level = 0;
     }
-
+    PL_exit_flags |= PERL_EXIT_DESTRUCT_END;
     exitstatus = perl_parse(my_perl, xs_init, argc, argv, (char **)NULL);
-    if (!exitstatus) {
-	exitstatus = perl_run(my_perl);
-    }
+    if (!exitstatus)
+        perl_run(my_perl);
+      
+    exitstatus = perl_destruct(my_perl);
 
-    perl_destruct(my_perl);
     perl_free(my_perl);
 
     PERL_SYS_TERM();

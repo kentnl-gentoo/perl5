@@ -1,3 +1,13 @@
+BEGIN {
+    if( $ENV{PERL_CORE} ) {
+        chdir 't';
+        @INC = ('../lib', 'lib');
+    }
+    else {
+        unshift @INC, 't/lib';
+    }
+}
+
 # Can't use Test.pm, that's a 5.005 thing.
 package My::Test;
 
@@ -21,12 +31,12 @@ package main;
 
 require Test::Simple;
 
-@INC = ('../lib', 'lib/Test/Simple');
-require Catch;
-my($out, $err) = Catch::caught();
+require Test::Simple::Catch;
+my($out, $err) = Test::Simple::Catch::caught();
 
 Test::Simple->import(tests => 5);
 
+#line 30
 ok(1, 'Foo');
 ok(0, 'Bar');
 

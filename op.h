@@ -1,6 +1,6 @@
 /*    op.h
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -23,7 +23,13 @@
  *			which may or may not check number of children).
  */
 
-typedef U32 PADOFFSET;
+#if PTRSIZE == 4
+typedef U32TYPE PADOFFSET;
+#else
+#   if PTRSIZE == 8
+typedef U64TYPE PADOFFSET;
+#   endif
+#endif
 #define NOT_IN_PAD ((PADOFFSET) -1)
 
 #ifdef DEBUGGING_OPS
@@ -53,6 +59,8 @@ typedef U32 PADOFFSET;
 	 dfl)
 
 /*
+=head1 "Gimme" Values
+
 =for apidoc Amn|U32|GIMME_V
 The XSUB-writer's equivalent to Perl's C<wantarray>.  Returns C<G_VOID>,
 C<G_SCALAR> or C<G_ARRAY> for void, scalar or list context,
@@ -96,6 +104,7 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_ENTERITER, loop var is per-thread */
 				/*  On pushre, re is /\s+/ imp. by split " " */
 				/*  On regcomp, "use re 'eval'" was in scope */
+				/*  On OP_READLINE, was <$filehandle> */
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -147,6 +156,7 @@ Deprecated.  Use C<GIMME_V> instead.
   /* OP_ENTERSUB only */
 #define OPpENTERSUB_DB		16	/* Debug subroutine. */
 #define OPpENTERSUB_HASTARG	32	/* Called from OP tree. */
+#define OPpENTERSUB_NOMOD	64	/* Immune to mod() for :attrlist. */
   /* OP_RV2CV only */
 #define OPpENTERSUB_AMPER	8	/* Used & form to call. */
 #define OPpENTERSUB_NOPAREN	128	/* bare sub call (without parens) */
@@ -197,7 +207,8 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpOPEN_OUT_RAW		64	/* binmode(F,":raw") on output fh */
 #define OPpOPEN_OUT_CRLF	128	/* binmode(F,":crlf") on output fh */
 
-/* Private for OP_EXIT */
+/* Private for OP_EXIT, HUSH also for OP_DIE */
+#define OPpHUSH_VMSISH		64	/* hush DCL exit msg vmsish mode*/
 #define OPpEXIT_VMSISH		128	/* exit(0) vs. exit(1) vmsish mode*/
 
 struct op {
@@ -250,11 +261,15 @@ struct pmop {
 };
 
 #ifdef USE_ITHREADS
-#define PM_GETRE(o)     ((REGEXP*)SvIVX(PL_regex_pad[(o)->op_pmoffset]))
-#define PM_SETRE(o,r)   (sv_setiv(PL_regex_pad[(o)->op_pmoffset], (IV)r))
+#define PM_GETRE(o)     (INT2PTR(REGEXP*,SvIVX(PL_regex_pad[(o)->op_pmoffset])))
+#define PM_SETRE(o,r)   (sv_setiv(PL_regex_pad[(o)->op_pmoffset], PTR2IV(r)))
+#define PM_GETRE_SAFE(o) (PL_regex_pad ? PM_GETRE(o) : (REGEXP*)0)
+#define PM_SETRE_SAFE(o,r) if (PL_regex_pad) PM_SETRE(o,r)
 #else
 #define PM_GETRE(o)     ((o)->op_pmregexp)
 #define PM_SETRE(o,r)   ((o)->op_pmregexp = (r))
+#define PM_GETRE_SAFE PM_GETRE
+#define PM_SETRE_SAFE PM_SETRE
 #endif
 
 #define PMdf_USED	0x01		/* pm has been used once already */
@@ -285,17 +300,21 @@ struct pmop {
 #define PMf_COMPILETIME	(PMf_MULTILINE|PMf_SINGLELINE|PMf_LOCALE|PMf_FOLD|PMf_EXTENDED)
 
 #ifdef USE_ITHREADS
+
 #  define PmopSTASHPV(o)	((o)->op_pmstashpv)
-#  define PmopSTASHPV_set(o,pv)	((o)->op_pmstashpv = ((pv) ? savepv(pv) : Nullch))
+#  define PmopSTASHPV_set(o,pv)	(PmopSTASHPV(o) = savesharedpv(pv))
 #  define PmopSTASH(o)		(PmopSTASHPV(o) \
 				 ? gv_stashpv(PmopSTASHPV(o),GV_ADD) : Nullhv)
-#  define PmopSTASH_set(o,hv)	PmopSTASHPV_set(o, (hv) ? HvNAME(hv) : Nullch)
+#  define PmopSTASH_set(o,hv)	PmopSTASHPV_set(o, ((hv) ? HvNAME(hv) : Nullch))
+#  define PmopSTASH_free(o)	PerlMemShared_free(PmopSTASHPV(o))
+
 #else
 #  define PmopSTASH(o)		((o)->op_pmstash)
 #  define PmopSTASH_set(o,hv)	((o)->op_pmstash = (hv))
 #  define PmopSTASHPV(o)	(PmopSTASH(o) ? HvNAME(PmopSTASH(o)) : Nullch)
    /* op_pmstash is not refcounted */
 #  define PmopSTASHPV_set(o,pv)	PmopSTASH_set((o), gv_stashpv(pv,GV_ADD))
+#  define PmopSTASH_free(o)    
 #endif
 
 struct svop {
@@ -457,10 +476,25 @@ struct loop {
 #define PERL_LOADMOD_IMPORT_OPS		0x4
 
 #ifdef USE_REENTRANT_API
+
 typedef struct {
   struct tm* tmbuff;
 } REBUF;
-#define localtime(a)       localtime_r(a,PL_reentrant_buffer->tmbuff)
-#define gmtime(a)          gmtime_r(a,PL_reentrant_buffer->tmbuff)
+
+#define localtime(a)       (localtime_r((a),PL_reentrant_buffer->tmbuff) ? PL_reentrant_buffer->tmbuff : NULL)
+#define gmtime(a)          (gmtime_r((a),PL_reentrant_buffer->tmbuff) ?  PL_reentrant_buffer->tmbuff : NULL)
+
+#ifdef OLD_PTHREADS_API
+
+/* HP-UX 10.20 returns 0 on success, what it returns on failure is hidden
+   in the fog somewhere, possibly -1 which means the following should do 
+   the right thing - 20010816 sky */
+
+#undef localtime
+#undef gmtime
+#define localtime(a)       ((localtime_r((a),PL_reentrant_buffer->tmbuff) == 0) ? PL_reentrant_buffer->tmbuff : NULL)
+#define gmtime(a)          ((gmtime_r((a),PL_reentrant_buffer->tmbuff) == 0) ? PL_reentrant_buffer->tmbuff : NULL)
+#endif /* HP-UX 10.20 */
+
 #endif
 

@@ -1,6 +1,9 @@
 #!/usr/bin/perl
 
-use lib '..';
+BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+}
 use Memoize;
 use Config;
 
@@ -33,7 +36,7 @@ for $mod (qw(DB_File GDBM_File SDBM_File ODBM_File NDBM_File)) {
   };
   print $@ =~ /can only store scalars/
      || $@ =~ /Can't locate.*in \@INC/ ? "ok $n\n" : "not ok $n # $@\n";
-  1 while unlink $dummyfile;
+  1 while unlink $dummyfile, "$dummyfile.dir", "$dummyfile.pag";
   $n++;
 }
 

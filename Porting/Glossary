@@ -431,6 +431,10 @@ d_chsize (d_chsize.U):
 	indicates to the C program that the chsize() routine is available
 	to truncate files.  You might need a -lx to get this routine.
 
+d_class (d_class.U):
+	This variable conditionally defines the HAS_CLASS symbol, which
+	indicates to the C program that the class() routine is available.
+
 d_closedir (d_closedir.U):
 	This variable conditionally defines HAS_CLOSEDIR if closedir() is
 	available.
@@ -472,6 +476,11 @@ d_dbminitproto (d_dbminitproto.U):
 d_difftime (d_difftime.U):
 	This variable conditionally defines the HAS_DIFFTIME symbol, which
 	indicates to the C program that the difftime() routine is available.
+
+d_dirfd (d_dirfd.U):
+	This variable conditionally defines the HAS_DIRFD constant,
+	which indicates to the C program that dirfd() is available
+	to return the file descriptor of a directory stream.
 
 d_dirnamlen (i_dirent.U):
 	This variable conditionally defines DIRNAMLEN, which indicates
@@ -586,6 +595,14 @@ d_fgetpos (d_fgetpos.U):
 	This variable conditionally defines HAS_FGETPOS if fgetpos() is
 	available to get the file position indicator.
 
+d_finite (d_finite.U):
+	This variable conditionally defines the HAS_FINITE symbol, which
+	indicates to the C program that the finite() routine is available.
+
+d_finitel (d_finitel.U):
+	This variable conditionally defines the HAS_FINITEL symbol, which
+	indicates to the C program that the finitel() routine is available.
+
 d_flexfnam (d_flexfnam.U):
 	This variable conditionally defines the FLEXFILENAMES symbol, which
 	indicates that the system supports filenames longer than 14 characters.
@@ -604,11 +621,27 @@ d_fork (d_fork.U):
 	This variable conditionally defines the HAS_FORK symbol, which
 	indicates to the C program that the fork() routine is available.
 
+d_fp_class (d_fp_class.U):
+	This variable conditionally defines the HAS_FP_CLASS symbol, which
+	indicates to the C program that the fp_class() routine is available.
+
 d_fpathconf (d_pathconf.U):
 	This variable conditionally defines the HAS_FPATHCONF symbol, which
 	indicates to the C program that the pathconf() routine is available
 	to determine file-system related limits and options associated
 	with a given open file descriptor.
+
+d_fpclass (d_fpclass.U):
+	This variable conditionally defines the HAS_FPCLASS symbol, which
+	indicates to the C program that the fpclass() routine is available.
+
+d_fpclassify (d_fpclassify.U):
+	This variable conditionally defines the HAS_FPCLASSIFY symbol, which
+	indicates to the C program that the fpclassify() routine is available.
+
+d_fpclassl (d_fpclassl.U):
+	This variable conditionally defines the HAS_FPCLASSL symbol, which
+	indicates to the C program that the fpclassl() routine is available.
 
 d_fpos64_t (d_fpos64_t.U):
 	This symbol will be defined if the C compiler supports fpos64_t.
@@ -652,12 +685,23 @@ d_ftime (d_ftime.U):
 
 d_Gconvert (d_gconvert.U):
 	This variable holds what Gconvert is defined as to convert
-	floating point numbers into strings. It could be 'gconvert'
-	or a more complex macro emulating gconvert with gcvt() or sprintf.
-	Possible values are:
-	d_Gconvert='gconvert((x),(n),(t),(b))'
-	d_Gconvert='gcvt((x),(n),(b))'
-	d_Gconvert='sprintf((b),"%.*g",(n),(x))'
+	floating point numbers into strings.  By default, Configure
+	sets this macro to use the first of gconvert, gcvt, or sprintf
+	that pass sprintf-%g-like behaviour tests.  If perl is using
+	long doubles, the macro uses the first of the following
+	functions that pass Configure's tests: qgcvt, sprintf (if
+	Configure knows how to make sprintf format long doubles--see
+	sPRIgldbl), gconvert, gcvt, and sprintf (casting to double).  
+	The gconvert_preference and gconvert_ld_preference variables   
+	can be used to alter Configure's preferences, for doubles and
+	long doubles, respectively.  If present, they contain a       
+	space-separated list of one or more of the above function       
+	names in the order they should be tried.
+		d_Gconvert may be set to override Configure with a platform-
+	specific function.  If this function expects a double, a
+	different value may need to be set by the uselongdouble.cbu
+	call-back unit so that long doubles can be formatted without
+	loss of precision.
 
 d_getcwd (d_getcwd.U):
 	This variable conditionally defines the HAS_GETCWD symbol, which
@@ -851,10 +895,6 @@ d_htonl (d_htonl.U):
 	This variable conditionally defines HAS_HTONL if htonl() and its
 	friends are available to do network order byte swapping.
 
-d_iconv (d_iconv.U):
-	This variable conditionally defines the HAS_ICONV symbol, which
-	indicates to the C program that the iconv() routine is available.
-
 d_index (d_strchr.U):
 	This variable conditionally defines HAS_INDEX if index() and
 	rindex() are available for string searching.
@@ -870,6 +910,14 @@ d_int64_t (d_int64_t.U):
 d_isascii (d_isascii.U):
 	This variable conditionally defines the HAS_ISASCII constant,
 	which indicates to the C program that isascii() is available.
+
+d_isfinite (d_isfinite.U):
+	This variable conditionally defines the HAS_ISFINITE symbol, which
+	indicates to the C program that the isfinite() routine is available.
+
+d_isinf (d_isinf.U):
+	This variable conditionally defines the HAS_ISINF symbol, which
+	indicates to the C program that the isinf() routine is available.
 
 d_isnan (d_isnan.U):
 	This variable conditionally defines the HAS_ISNAN symbol, which
@@ -1208,6 +1256,10 @@ d_PRIXU64 (quadfio.U):
 	indiciates that stdio has a symbol to print 64-bit hExADECimAl numbers.
 	The 'U' in the name is to separate this from d_PRIx64 so that even
 	case-blind systems can see the difference.
+
+d_procselfexe (d_procselfexe.U):
+	Defined if $procselfexe is symlink to the absolute
+	pathname of the executing program.
 
 d_pthread_atfork (d_pthread_atfork.U):
 	This variable conditionally defines the HAS_PTHREAD_ATFORK symbol,
@@ -1773,6 +1825,10 @@ d_union_semun (d_union_semun.U):
 	This variable conditionally defines HAS_UNION_SEMUN if the
 	union semun is defined by including <sys/sem.h>.
 
+d_unordered (d_unordered.U):
+	This variable conditionally defines the HAS_UNORDERED symbol, which
+	indicates to the C program that the unordered() routine is available.
+
 d_usleep (d_usleep.U):
 	This variable conditionally defines HAS_USLEEP if usleep() is
 	available to do high granularity sleeps.
@@ -1955,6 +2011,9 @@ extensions (Extensions.U):
 	and is typically used to test whether a particular extesion 
 	is available.
 
+extras (Extras.U):
+	This variable holds a list of extra modules to install.
+
 fflushall (fflushall.U):
 	This symbol, if defined, tells that to flush
 	all pending stdio output one must loop through all
@@ -2045,6 +2104,11 @@ glibpth (libpth.U):
 	This variable holds the general path (space-separated) used to
 	find libraries.  It may contain directories that do not exist on
 	this platform, libpth is the cleaned-up version.
+
+gmake (Loc.U):
+	This variable is used internally by Configure to determine the
+	full pathname (if any) of the gmake program.  After Configure runs,
+	the value is reset to a plain "gmake" and is not useful.
 
 grep (Loc.U):
 	This variable is used internally by Configure to determine the
@@ -2153,6 +2217,14 @@ i_float (i_float.U):
 	whether a C program may include <float.h> to get symbols like DBL_MAX
 	or DBL_MIN, i.e. machine dependent floating point values.
 
+i_fp (i_fp.U):
+	This variable conditionally defines the I_FP symbol, and indicates
+	whether a C program should include <fp.h>.
+
+i_fp_class (i_fp_class.U):
+	This variable conditionally defines the I_FP_CLASS symbol, and indicates
+	whether a C program should include <fp_class.h>.
+
 i_gdbm (i_gdbm.U):
 	This variable conditionally defines the I_GDBM symbol, which
 	indicates to the C program that <gdbm.h> exists and should
@@ -2161,10 +2233,6 @@ i_gdbm (i_gdbm.U):
 i_grp (i_grp.U):
 	This variable conditionally defines the I_GRP symbol, and indicates
 	whether a C program should include <grp.h>.
-
-i_iconv (i_iconv.U):
-	This variable conditionally defines the I_ICONV symbol, and indicates
-	whether a C program should include <iconv.h>.
 
 i_ieeefp (i_ieeefp.U):
 	This variable conditionally defines the I_IEEEFP symbol, and indicates
@@ -3160,6 +3228,11 @@ privlibexp (privlib.U):
 	This variable is the ~name expanded version of privlib, so that you
 	may use it directly in Makefiles or shell scripts.
 
+procselfexe (d_procselfexe.U):
+	If d_procselfexe is defined, $procselfexe is the filename
+	of the symbolic link pointing to the absolute pathname of
+	the executing program.
+
 prototype (prototype.U):
 	This variable holds the eventual value of CAN_PROTOTYPE, which
 	indicates the C compiler can handle funciton prototypes.
@@ -3305,7 +3378,7 @@ shrpenv (libperl.U):
 	shrpenv=''
 	See the main perl Makefile.SH for actual working usage.
 	Alternatively, we might be able to use a command line option such
-	as -R $archlibexp/CORE (Solaris, NetBSD) or -Wl,-rpath
+	as -R $archlibexp/CORE (Solaris) or -Wl,-rpath
 	$archlibexp/CORE (Linux).
 
 shsharp (spitshell.U):

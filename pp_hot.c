@@ -1,6 +1,6 @@
 /*    pp_hot.c
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -21,9 +21,9 @@
 
 /* Hot code. */
 
-#ifdef USE_THREADS
-static void unset_cvowner(pTHXo_ void *cvarg);
-#endif /* USE_THREADS */
+#ifdef USE_5005THREADS
+static void unset_cvowner(pTHX_ void *cvarg);
+#endif /* USE_5005THREADS */
 
 PP(pp_const)
 {
@@ -72,14 +72,7 @@ PP(pp_pushmark)
 PP(pp_stringify)
 {
     dSP; dTARGET;
-    STRLEN len;
-    char *s;
-    s = SvPV(TOPs,len);
-    sv_setpvn(TARG,s,len);
-    if (SvUTF8(TOPs))
-	SvUTF8_on(TARG);
-    else
-	SvUTF8_off(TARG);
+    sv_copypv(TARG,TOPs);
     SETTARG;
     RETURN;
 }
@@ -237,7 +230,8 @@ PP(pp_eq)
     dSP; tryAMAGICbinSET(eq,0);
 #ifndef NV_PRESERVES_UV
     if (SvROK(TOPs) && SvROK(TOPm1s)) {
-	SETs(boolSV(SvRV(TOPs) == SvRV(TOPm1s)));
+        SP--;
+	SETs(boolSV(SvRV(TOPs) == SvRV(TOPp1s)));
 	RETURN;
     }
 #endif
@@ -252,53 +246,40 @@ PP(pp_eq)
 	    bool auvok = SvUOK(TOPm1s);
 	    bool buvok = SvUOK(TOPs);
 	
-	    if (!auvok && !buvok) { /* ## IV == IV ## */
-		IV aiv = SvIVX(TOPm1s);
-		IV biv = SvIVX(TOPs);
+	    if (auvok == buvok) { /* ## IV == IV or UV == UV ## */
+                /* Casting IV to UV before comparison isn't going to matter
+                   on 2s complement. On 1s complement or sign&magnitude
+                   (if we have any of them) it could to make negative zero
+                   differ from normal zero. As I understand it. (Need to
+                   check - is negative zero implementation defined behaviour
+                   anyway?). NWC  */
+		UV buv = SvUVX(POPs);
+		UV auv = SvUVX(TOPs);
 		
-		SP--;
-		SETs(boolSV(aiv == biv));
-		RETURN;
-	    }
-	    if (auvok && buvok) { /* ## UV == UV ## */
-		UV auv = SvUVX(TOPm1s);
-		UV buv = SvUVX(TOPs);
-		
-		SP--;
 		SETs(boolSV(auv == buv));
 		RETURN;
 	    }
 	    {			/* ## Mixed IV,UV ## */
+                SV *ivp, *uvp;
 		IV iv;
-		UV uv;
 		
-		/* == is commutative so swap if needed (save code) */
+		/* == is commutative so doesn't matter which is left or right */
 		if (auvok) {
-		    /* swap. top of stack (b) is the iv */
-		    iv = SvIVX(TOPs);
-		    SP--;
-		    if (iv < 0) {
-			/* As (a) is a UV, it's >0, so it cannot be == */
-			SETs(&PL_sv_no);
-			RETURN;
-		    }
-		    uv = SvUVX(TOPs);
-		} else {
-		    iv = SvIVX(TOPm1s);
-		    SP--;
-		    if (iv < 0) {
-			/* As (b) is a UV, it's >0, so it cannot be == */
-			SETs(&PL_sv_no);
-			RETURN;
-		    }
-		    uv = SvUVX(*(SP+1)); /* Do I want TOPp1s() ? */
-		}
+		    /* top of stack (b) is the iv */
+                    ivp = *SP;
+                    uvp = *--SP;
+                } else {
+                    uvp = *SP;
+                    ivp = *--SP;
+                }
+                iv = SvIVX(ivp);
+                if (iv < 0) {
+                    /* As uv is a UV, it's >0, so it cannot be == */
+                    SETs(&PL_sv_no);
+                    RETURN;
+                }
 		/* we know iv is >= 0 */
-		if (uv > (UV) IV_MAX) {
-		    SETs(&PL_sv_no);
-		    RETURN;
-		}
-		SETs(boolSV((UV)iv == uv));
+		SETs(boolSV((UV)iv == SvUVX(uvp)));
 		RETURN;
 	    }
 	}
@@ -314,10 +295,10 @@ PP(pp_eq)
 PP(pp_preinc)
 {
     dSP;
-    if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
+    if (SvTYPE(TOPs) > SVt_PVLV)
 	DIE(aTHX_ PL_no_modify);
-    if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
-    	SvIVX(TOPs) != IV_MAX)
+    if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
+        && SvIVX(TOPs) != IV_MAX)
     {
 	++SvIVX(TOPs);
 	SvFLAGS(TOPs) &= ~(SVp_NOK|SVp_POK);
@@ -558,7 +539,10 @@ PP(pp_print)
 	gv = (GV*)*++MARK;
     else
 	gv = PL_defoutgv;
-    if ((mg = SvTIED_mg((SV*)gv, PERL_MAGIC_tiedscalar))) {
+
+    if (gv && (io = GvIO(gv))
+	&& (mg = SvTIED_mg((SV*)io, PERL_MAGIC_tiedscalar)))
+    {
       had_magic:
 	if (MARK == ORIGMARK) {
 	    /* If using default handle then we need to make space to
@@ -570,7 +554,7 @@ PP(pp_print)
 	    ++SP;
 	}
 	PUSHMARK(MARK - 1);
-	*MARK = SvTIED_obj((SV*)gv, mg);
+	*MARK = SvTIED_obj((SV*)io, mg);
 	PUTBACK;
 	ENTER;
 	call_method("PRINT", G_SCALAR);
@@ -582,8 +566,8 @@ PP(pp_print)
 	RETURN;
     }
     if (!(io = GvIO(gv))) {
-        if ((GvEGV(gv))
-		&& (mg = SvTIED_mg((SV*)GvEGV(gv), PERL_MAGIC_tiedscalar)))
+        if ((GvEGV(gv)) && (io = GvIO(GvEGV(gv)))
+	    && (mg = SvTIED_mg((SV*)io, PERL_MAGIC_tiedscalar)))
             goto had_magic;
 	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
 	    report_evil_fh(gv, io, PL_op->op_type);
@@ -1190,6 +1174,8 @@ PP(pp_qr)
     register PMOP *pm = cPMOP;
     SV *rv = sv_newmortal();
     SV *sv = newSVrv(rv, "Regexp");
+    if (pm->op_pmdynflags & PMdf_TAINTED)
+        SvTAINTED_on(rv);
     sv_magic(sv,(SV*)ReREFCNT_inc(PM_GETRE(pm)), PERL_MAGIC_qr,0,0);
     RETURNX(PUSHs(rv));
 }
@@ -1219,7 +1205,7 @@ PP(pp_match)
 	TARG = DEFSV;
 	EXTEND(SP,1);
     }
-    PL_reg_sv = TARG;
+
     PUTBACK;				/* EVAL blocks need stack_sp. */
     s = SvPV(TARG, len);
     strend = s + len;
@@ -1228,6 +1214,8 @@ PP(pp_match)
     rxtainted = ((pm->op_pmdynflags & PMdf_TAINTED) ||
 		 (PL_tainted && (pm->op_pmflags & PMf_RETAINT)));
     TAINT_NOT;
+
+    PL_reg_match_utf8 = DO_UTF8(TARG);
 
     if (pm->op_pmdynflags & PMdf_USED) {
       failure:
@@ -1240,7 +1228,8 @@ PP(pp_match)
 	pm = PL_curpm;
 	rx = PM_GETRE(pm);
     }
-    if (rx->minlen > len) goto failure;
+    if (rx->minlen > len)
+      goto failure;
 
     truebase = t = s;
 
@@ -1326,13 +1315,32 @@ play_it_again:
 	    /*SUPPRESS 560*/
 	    if ((rx->startp[i] != -1) && rx->endp[i] != -1 ) {
 		len = rx->endp[i] - rx->startp[i];
+	        if (rx->endp[i] < 0 || rx->startp[i] < 0 ||
+		    len < 0 || len > strend - s)
+		    DIE(aTHX_ "panic: pp_match start/end pointers");
 		s = rx->startp[i] + truebase;
 		sv_setpvn(*SP, s, len);
-		if (DO_UTF8(TARG))
+		if (DO_UTF8(TARG) && is_utf8_string((U8*)s, len))
 		    SvUTF8_on(*SP);
 	    }
 	}
 	if (global) {
+	    if (pm->op_pmflags & PMf_CONTINUE) {
+		MAGIC* mg = 0;
+		if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG))
+		    mg = mg_find(TARG, PERL_MAGIC_regex_global);
+		if (!mg) {
+		    sv_magic(TARG, (SV*)0, PERL_MAGIC_regex_global, Nullch, 0);
+		    mg = mg_find(TARG, PERL_MAGIC_regex_global);
+		}
+		if (rx->startp[0] != -1) {
+		    mg->mg_len = rx->endp[0];
+		    if (rx->startp[0] == rx->endp[0])
+			mg->mg_flags |= MGf_MINMATCH;
+		    else
+			mg->mg_flags &= ~MGf_MINMATCH;
+		}
+	    }
 	    had_zerolen = (rx->startp[0] != -1
 			   && rx->startp[0] == rx->endp[0]);
 	    PUTBACK;			/* EVAL blocks may use stack */
@@ -1379,7 +1387,7 @@ yup:					/* Confirmed by INTUIT */
     if (global) {
 	rx->subbeg = truebase;
 	rx->startp[0] = s - truebase;
-	if (DO_UTF8(PL_reg_sv)) {
+	if (PL_reg_match_utf8) {
 	    char *t = (char*)utf8_hop((U8*)s, rx->minlen);
 	    rx->endp[0] = t - truebase;
 	}
@@ -1434,9 +1442,9 @@ Perl_do_readline(pTHX)
     I32 gimme = GIMME_V;
     MAGIC *mg;
 
-    if ((mg = SvTIED_mg((SV*)PL_last_in_gv, PERL_MAGIC_tiedscalar))) {
+    if (io && (mg = SvTIED_mg((SV*)io, PERL_MAGIC_tiedscalar))) {
 	PUSHMARK(SP);
-	XPUSHs(SvTIED_obj((SV*)PL_last_in_gv, mg));
+	XPUSHs(SvTIED_obj((SV*)io, mg));
 	PUTBACK;
 	ENTER;
 	call_method("READLINE", gimme);
@@ -1769,7 +1777,7 @@ PP(pp_iter)
 	    STRLEN maxlen;
 	    char *max = SvPV((SV*)av, maxlen);
 	    if (!SvNIOK(cur) && SvCUR(cur) <= maxlen) {
-#ifndef USE_THREADS			  /* don't risk potential race */
+#ifndef USE_5005THREADS			  /* don't risk potential race */
 		if (SvREFCNT(*itersvp) == 1 && !SvMAGICAL(*itersvp)) {
 		    /* safe to reuse old SV */
 		    sv_setsv(*itersvp, cur);
@@ -1795,7 +1803,7 @@ PP(pp_iter)
 	if (cx->blk_loop.iterix > cx->blk_loop.itermax)
 	    RETPUSHNO;
 
-#ifndef USE_THREADS			  /* don't risk potential race */
+#ifndef USE_5005THREADS			  /* don't risk potential race */
 	if (SvREFCNT(*itersvp) == 1 && !SvMAGICAL(*itersvp)) {
 	    /* safe to reuse old SV */
 	    sv_setiv(*itersvp, cx->blk_loop.iterix++);
@@ -1879,7 +1887,6 @@ PP(pp_subst)
     STRLEN len;
     int force_on_match = 0;
     I32 oldsave = PL_savestack_ix;
-    bool do_utf8;
     STRLEN slen;
 
     /* known replacement string? */
@@ -1890,8 +1897,7 @@ PP(pp_subst)
 	TARG = DEFSV;
 	EXTEND(SP,1);
     }
-    PL_reg_sv = TARG;
-    do_utf8 = DO_UTF8(PL_reg_sv);
+
     if (SvFAKE(TARG) && SvREADONLY(TARG))
 	sv_force_normal(TARG);
     if (SvREADONLY(TARG)
@@ -1909,12 +1915,14 @@ PP(pp_subst)
 	rxtainted |= 2;
     TAINT_NOT;
 
+    PL_reg_match_utf8 = DO_UTF8(TARG);
+
   force_it:
     if (!pm || !s)
 	DIE(aTHX_ "panic: pp_subst");
 
     strend = s + len;
-    slen = do_utf8 ? utf8_length((U8*)s, (U8*)strend) : len;
+    slen = PL_reg_match_utf8 ? utf8_length((U8*)s, (U8*)strend) : len;
     maxiters = 2 * slen + 10;	/* We can match twice at each
 				   position, once with zero-length,
 				   second time with non-zero. */
@@ -2444,6 +2452,8 @@ PP(pp_entersub)
 	    }
 	    if (SvGMAGICAL(sv)) {
 		mg_get(sv);
+		if (SvROK(sv))
+		    goto got_rv;
 		sym = SvPOKp(sv) ? SvPVX(sv) : Nullch;
 	    }
 	    else
@@ -2455,6 +2465,7 @@ PP(pp_entersub)
 	    cv = get_cv(sym, TRUE);
 	    break;
 	}
+  got_rv:
 	{
 	    SV **sp = &sv;		/* Used in tryAMAGICunDEREF macro. */
 	    tryAMAGICunDEREF(to_cv);
@@ -2523,7 +2534,7 @@ try_autoload:
 	    DIE(aTHX_ "No DBsub routine");
     }
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
     /*
      * First we need to check if the sub or method requires locking.
      * If so, we gain a lock on the CV, the first argument or the
@@ -2655,7 +2666,7 @@ try_autoload:
 	    SAVEDESTRUCTOR_X(unset_cvowner, (void*) cv);
 	}
     }
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 
     if (CvXSUB(cv)) {
 #ifdef PERL_XSUB_OLDSTYLE
@@ -2688,11 +2699,11 @@ try_autoload:
 		 * back. This would allow popping @_ in XSUB, e.g.. XXXX */
 		AV* av;
 		I32 items;
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 		av = (AV*)PL_curpad[0];
 #else
 		av = GvAV(PL_defgv);
-#endif /* USE_THREADS */		
+#endif /* USE_5005THREADS */		
 		items = AvFILLp(av) + 1;   /* @_ is not tieable */
 
 		if (items) {
@@ -2710,7 +2721,7 @@ try_autoload:
 		PL_curcopdb = NULL;
 	    }
 	    /* Do we need to open block here? XXXX */
-	    (void)(*CvXSUB(cv))(aTHXo_ cv);
+	    (void)(*CvXSUB(cv))(aTHX_ cv);
 
 	    /* Enforce some sanity in scalar context. */
 	    if (gimme == G_SCALAR && ++markix != PL_stack_sp - PL_stack_base ) {
@@ -2784,7 +2795,7 @@ try_autoload:
 		svp = AvARRAY(padlist);
 	    }
 	}
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 	if (!hasargs) {
 	    AV* av = (AV*)PL_curpad[0];
 
@@ -2797,12 +2808,12 @@ try_autoload:
 		PUTBACK ;		
 	    }
 	}
-#endif /* USE_THREADS */		
+#endif /* USE_5005THREADS */		
 	SAVEVPTR(PL_curpad);
     	PL_curpad = AvARRAY((AV*)svp[CvDEPTH(cv)]);
-#ifndef USE_THREADS
+#ifndef USE_5005THREADS
 	if (hasargs)
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 	{
 	    AV* av;
 	    SV** ary;
@@ -2819,10 +2830,10 @@ try_autoload:
 		AvREAL_off(av);
 		AvREIFY_on(av);
 	    }
-#ifndef USE_THREADS
+#ifndef USE_5005THREADS
 	    cx->blk_sub.savearray = GvAV(PL_defgv);
 	    GvAV(PL_defgv) = (AV*)SvREFCNT_inc(av);
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 	    cx->blk_sub.oldcurpad = PL_curpad;
 	    cx->blk_sub.argarray = av;
 	    ++MARK;
@@ -3105,9 +3116,9 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
     return isGV(gv) ? (SV*)GvCV(gv) : (SV*)gv;
 }
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 static void
-unset_cvowner(pTHXo_ void *cvarg)
+unset_cvowner(pTHX_ void *cvarg)
 {
     register CV* cv = (CV *) cvarg;
 
@@ -3122,4 +3133,4 @@ unset_cvowner(pTHXo_ void *cvarg)
     MUTEX_UNLOCK(CvMUTEXP(cv));
     SvREFCNT_dec(cv);
 }
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */

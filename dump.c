@@ -1,6 +1,6 @@
 /*    dump.c
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -104,42 +104,42 @@ Perl_dump_eval(pTHX)
 }
 
 char *
-Perl_pv_display(pTHX_ SV *sv, char *pv, STRLEN cur, STRLEN len, STRLEN pvlim)
+Perl_pv_display(pTHX_ SV *dsv, char *pv, STRLEN cur, STRLEN len, STRLEN pvlim)
 {
     int truncated = 0;
     int nul_terminated = len > cur && pv[cur] == '\0';
 
-    sv_setpvn(sv, "\"", 1);
+    sv_setpvn(dsv, "\"", 1);
     for (; cur--; pv++) {
-	if (pvlim && SvCUR(sv) >= pvlim) {
+	if (pvlim && SvCUR(dsv) >= pvlim) {
             truncated++;
 	    break;
         }
         if (isPRINT(*pv)) {
             switch (*pv) {
-	    case '\t': sv_catpvn(sv, "\\t", 2);  break;
-	    case '\n': sv_catpvn(sv, "\\n", 2);  break;
-	    case '\r': sv_catpvn(sv, "\\r", 2);  break;
-	    case '\f': sv_catpvn(sv, "\\f", 2);  break;
-	    case '"':  sv_catpvn(sv, "\\\"", 2); break;
-	    case '\\': sv_catpvn(sv, "\\\\", 2); break;
-	    default:   sv_catpvn(sv, pv, 1);     break;
+	    case '\t': sv_catpvn(dsv, "\\t", 2);  break;
+	    case '\n': sv_catpvn(dsv, "\\n", 2);  break;
+	    case '\r': sv_catpvn(dsv, "\\r", 2);  break;
+	    case '\f': sv_catpvn(dsv, "\\f", 2);  break;
+	    case '"':  sv_catpvn(dsv, "\\\"", 2); break;
+	    case '\\': sv_catpvn(dsv, "\\\\", 2); break;
+	    default:   sv_catpvn(dsv, pv, 1);     break;
             }
         }
 	else {
 	    if (cur && isDIGIT(*(pv+1)))
-		Perl_sv_catpvf(aTHX_ sv, "\\%03o", (U8)*pv);
+		Perl_sv_catpvf(aTHX_ dsv, "\\%03o", (U8)*pv);
 	    else
-		Perl_sv_catpvf(aTHX_ sv, "\\%o", (U8)*pv);
+		Perl_sv_catpvf(aTHX_ dsv, "\\%o", (U8)*pv);
         }
     }
-    sv_catpvn(sv, "\"", 1);
+    sv_catpvn(dsv, "\"", 1);
     if (truncated)
-	sv_catpvn(sv, "...", 3);
+	sv_catpvn(dsv, "...", 3);
     if (nul_terminated)
-	sv_catpvn(sv, "\\0", 2);
+	sv_catpvn(dsv, "\\0", 2);
 
-    return SvPVX(sv);
+    return SvPVX(dsv);
 }
 
 char *
@@ -194,7 +194,7 @@ Perl_sv_peek(pTHX_ SV *sv)
 	sv_catpv(t, "(");
 	unref++;
     }
-    else if (DEBUG_R_TEST && SvREFCNT(sv) > 1) {
+    else if (DEBUG_R_TEST_ && SvREFCNT(sv) > 1) {
 	Perl_sv_catpvf(aTHX_ t, "<%"UVuf">", (UV)SvREFCNT(sv));
     }
 
@@ -278,13 +278,15 @@ Perl_sv_peek(pTHX_ SV *sv)
 		Perl_sv_catpvf(aTHX_ t, "[%s]", pv_display(tmp, SvPVX(sv)-SvIVX(sv), SvIVX(sv), 0, 127));
 	    Perl_sv_catpvf(aTHX_ t, "%s)", pv_display(tmp, SvPVX(sv), SvCUR(sv), SvLEN(sv), 127));
 	    if (SvUTF8(sv))
-		Perl_sv_catpvf(aTHX_ t, " [UTF8]");
+		Perl_sv_catpvf(aTHX_ t, " [UTF8 \"%s\"]",
+			       sv_uni_display(tmp, sv, 8 * sv_len_utf8(sv),
+					      UNI_DISPLAY_QQ));
 	    SvREFCNT_dec(tmp);
 	}
     }
     else if (SvNOKp(sv)) {
 	STORE_NUMERIC_LOCAL_SET_STANDARD();
-	Perl_sv_catpvf(aTHX_ t, "(%g)",SvNVX(sv));
+	Perl_sv_catpvf(aTHX_ t, "(%"NVgf")",SvNVX(sv));
 	RESTORE_NUMERIC_LOCAL();
     }
     else if (SvIOKp(sv)) {
@@ -381,7 +383,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 	PerlIO_printf(file, "    ");
     PerlIO_printf(file,
 		  "%*sTYPE = %s  ===> ",
-		  (int)(PL_dumpindent*level-4), "", PL_op_name[o->op_type]);
+		  (int)(PL_dumpindent*level-4), "", OP_NAME(o));
     if (o->op_next) {
 	if (o->op_seq)
 	    PerlIO_printf(file, "%d\n", o->op_next->op_seq);
@@ -502,6 +504,8 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 		    sv_catpv(tmpsv, ",NOPAREN");
 		if (o->op_private & OPpENTERSUB_INARGS)
 		    sv_catpv(tmpsv, ",INARGS");
+		if (o->op_private & OPpENTERSUB_NOMOD)
+		    sv_catpv(tmpsv, ",NOMOD");
 	    }
 	    else {
 		switch (o->op_private & OPpDEREF) {
@@ -548,7 +552,8 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 	else if (o->op_type == OP_FLOP) {
 	    if (o->op_private & OPpFLIP_LINENUM)
 		sv_catpv(tmpsv, ",LINENUM");
-	} else if (o->op_type == OP_RV2CV) {
+	}
+	else if (o->op_type == OP_RV2CV) {
 	    if (o->op_private & OPpLVAL_INTRO)
 		sv_catpv(tmpsv, ",INTRO");
 	}
@@ -592,7 +597,13 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 	}
 	else if (o->op_type == OP_EXIT) {
 	    if (o->op_private & OPpEXIT_VMSISH)
-		sv_catpv(tmpsv, ",EXIST_VMSISH");
+		sv_catpv(tmpsv, ",EXIT_VMSISH");
+	    if (o->op_private & OPpHUSH_VMSISH)
+		sv_catpv(tmpsv, ",HUSH_VMSISH");
+	}
+	else if (o->op_type == OP_DIE) {
+	    if (o->op_private & OPpHUSH_VMSISH)
+		sv_catpv(tmpsv, ",HUSH_VMSISH");
 	}
 	if (o->op_flags & OPf_MOD && o->op_private & OPpLVAL_INTRO)
 	    sv_catpv(tmpsv, ",INTRO");
@@ -994,7 +1005,6 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
     default:
 	if (SvEVALED(sv))	sv_catpv(d, "EVALED,");
 	if (SvIsUV(sv))		sv_catpv(d, "IsUV,");
-	if (SvUTF8(sv))         sv_catpv(d, "UTF8");
 	break;
     case SVt_PVBM:
 	if (SvTAIL(sv))		sv_catpv(d, "TAIL,");
@@ -1005,6 +1015,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 				sv_catpv(d, "TYPED,");
 	break;
     }
+    if (SvPOK(sv) && SvUTF8(sv))
+        sv_catpv(d, "UTF8");
 
     if (*(SvEND(d) - 1) == ',')
 	SvPVX(d)[--SvCUR(d)] = '\0';
@@ -1102,7 +1114,10 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	    Perl_dump_indent(aTHX_ level, file,"  PV = 0x%"UVxf" ", PTR2UV(SvPVX(sv)));
 	    if (SvOOK(sv))
 		PerlIO_printf(file, "( %s . ) ", pv_display(d, SvPVX(sv)-SvIVX(sv), SvIVX(sv), 0, pvlim));
-	    PerlIO_printf(file, "%s\n", pv_display(d, SvPVX(sv), SvCUR(sv), SvLEN(sv), pvlim));
+	    PerlIO_printf(file, "%s", pv_display(d, SvPVX(sv), SvCUR(sv), SvLEN(sv), pvlim));
+	    if (SvUTF8(sv)) /* the 8?  \x{....} */
+	        PerlIO_printf(file, " [UTF8 \"%s\"]", sv_uni_display(d, sv, 8 * sv_len_utf8(sv), UNI_DISPLAY_QQ));
+	    PerlIO_printf(file, "\n");
 	    Perl_dump_indent(aTHX_ level, file, "  CUR = %"IVdf"\n", (IV)SvCUR(sv));
 	    Perl_dump_indent(aTHX_ level, file, "  LEN = %"IVdf"\n", (IV)SvLEN(sv));
 	}
@@ -1190,8 +1205,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	       to the expected number needed for a random hash.
 
 	       The total number of comparisons is equal to the sum of
-	       the squares of the number of entries in each backet.
-	       For a random hash of n keys into k backets, the expected
+	       the squares of the number of entries in each bucket.
+	       For a random hash of n keys into k buckets, the expected
 	       value is
 				n + n(n-1)/2k
 	    */
@@ -1223,14 +1238,18 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 
 	    hv_iterinit(hv);
 	    while ((he = hv_iternext(hv)) && count--) {
-		SV *elt;
-		char *key;
-		I32 len;
+		SV *elt, *keysv;
+		char *keypv;
+		STRLEN len;
 		U32 hash = HeHASH(he);
 
-		key = hv_iterkey(he, &len);
+		keysv = hv_iterkeysv(he);
+		keypv = SvPV(keysv, len);
 		elt = hv_iterval(hv, he);
-		Perl_dump_indent(aTHX_ level+1, file, "Elt %s HASH = 0x%"UVxf"\n", pv_display(d, key, len, 0, pvlim), (UV)hash);
+		Perl_dump_indent(aTHX_ level+1, file, "Elt %s ", pv_display(d, keypv, len, 0, pvlim));
+		if (SvUTF8(keysv))
+		    PerlIO_printf(file, "[UTF8 \"%s\"] ", sv_uni_display(d, keysv, 8 * sv_len_utf8(keysv), UNI_DISPLAY_QQ));
+		PerlIO_printf(file, "HASH = 0x%"UVxf"\n", (UV)hash);
 		do_sv_dump(level+1, file, elt, nest+1, maxnest, dumpops, pvlim);
 	    }
 	    hv_iterinit(hv);		/* Return to status quo */
@@ -1252,10 +1271,10 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
  	do_gvgv_dump(level, file, "  GVGV::GV", CvGV(sv));
 	Perl_dump_indent(aTHX_ level, file, "  FILE = \"%s\"\n", CvFILE(sv));
 	Perl_dump_indent(aTHX_ level, file, "  DEPTH = %"IVdf"\n", (IV)CvDEPTH(sv));
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 	Perl_dump_indent(aTHX_ level, file, "  MUTEXP = 0x%"UVxf"\n", PTR2UV(CvMUTEXP(sv)));
 	Perl_dump_indent(aTHX_ level, file, "  OWNER = 0x%"UVxf"\n",  PTR2UV(CvOWNER(sv)));
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 	Perl_dump_indent(aTHX_ level, file, "  FLAGS = 0x%"UVxf"\n", (UV)CvFLAGS(sv));
 	if (type == SVt_PVFM)
 	    Perl_dump_indent(aTHX_ level, file, "  LINES = %"IVdf"\n", (IV)FmLINES(sv));
@@ -1347,4 +1366,130 @@ void
 Perl_sv_dump(pTHX_ SV *sv)
 {
     do_sv_dump(0, Perl_debug_log, sv, 0, 0, 0, 0);
+}
+
+int
+Perl_runops_debug(pTHX)
+{
+    if (!PL_op) {
+	if (ckWARN_d(WARN_DEBUGGING))
+	    Perl_warner(aTHX_ WARN_DEBUGGING, "NULL OP IN RUN");
+	return 0;
+    }
+
+    do {
+	PERL_ASYNC_CHECK();
+	if (PL_debug) {
+	    if (PL_watchaddr != 0 && *PL_watchaddr != PL_watchok)
+		PerlIO_printf(Perl_debug_log,
+			      "WARNING: %"UVxf" changed from %"UVxf" to %"UVxf"\n",
+			      PTR2UV(PL_watchaddr), PTR2UV(PL_watchok),
+			      PTR2UV(*PL_watchaddr));
+	    if (DEBUG_s_TEST_) debstack();
+	    if (DEBUG_t_TEST_) debop(PL_op);
+	    if (DEBUG_P_TEST_) debprof(PL_op);
+	}
+    } while ((PL_op = CALL_FPTR(PL_op->op_ppaddr)(aTHX)));
+
+    TAINT_NOT;
+    return 0;
+}
+
+I32
+Perl_debop(pTHX_ OP *o)
+{
+    AV *padlist, *comppad;
+    CV *cv;
+    SV *sv;
+    STRLEN n_a;
+
+    if (CopSTASH_eq(PL_curcop, PL_debstash) && !DEBUG_J_TEST_)
+	return 0;
+
+    Perl_deb(aTHX_ "%s", OP_NAME(o));
+    switch (o->op_type) {
+    case OP_CONST:
+	PerlIO_printf(Perl_debug_log, "(%s)", SvPEEK(cSVOPo_sv));
+	break;
+    case OP_GVSV:
+    case OP_GV:
+	if (cGVOPo_gv) {
+	    sv = NEWSV(0,0);
+	    gv_fullname3(sv, cGVOPo_gv, Nullch);
+	    PerlIO_printf(Perl_debug_log, "(%s)", SvPV(sv, n_a));
+	    SvREFCNT_dec(sv);
+	}
+	else
+	    PerlIO_printf(Perl_debug_log, "(NULL)");
+	break;
+    case OP_PADSV:
+    case OP_PADAV:
+    case OP_PADHV:
+	/* print the lexical's name */
+        cv = deb_curcv(cxstack_ix);
+        if (cv) {
+            padlist = CvPADLIST(cv);
+            comppad = (AV*)(*av_fetch(padlist, 0, FALSE));
+            sv = *av_fetch(comppad, o->op_targ, FALSE);
+        } else
+            sv = Nullsv;
+        if (sv)
+           PerlIO_printf(Perl_debug_log, "(%s)", SvPV_nolen(sv));
+        else
+           PerlIO_printf(Perl_debug_log, "[%"UVuf"]", (UV)o->op_targ);
+        break;
+    default:
+	return 0;
+    }
+    PerlIO_printf(Perl_debug_log, "\n");
+    return 0;
+}
+
+STATIC CV*
+S_deb_curcv(pTHX_ I32 ix)
+{
+    PERL_CONTEXT *cx = &cxstack[ix];
+    if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT)
+        return cx->blk_sub.cv;
+    else if (CxTYPE(cx) == CXt_EVAL && !CxTRYBLOCK(cx))
+        return PL_compcv;
+    else if (ix == 0 && PL_curstackinfo->si_type == PERLSI_MAIN)
+        return PL_main_cv;
+    else if (ix <= 0)
+        return Nullcv;
+    else
+        return deb_curcv(ix - 1);
+}
+
+void
+Perl_watch(pTHX_ char **addr)
+{
+    PL_watchaddr = addr;
+    PL_watchok = *addr;
+    PerlIO_printf(Perl_debug_log, "WATCHING, %"UVxf" is currently %"UVxf"\n",
+	PTR2UV(PL_watchaddr), PTR2UV(PL_watchok));
+}
+
+STATIC void
+S_debprof(pTHX_ OP *o)
+{
+    if (CopSTASH_eq(PL_curcop, PL_debstash) && !DEBUG_J_TEST_)
+	return;
+    if (!PL_profiledata)
+	Newz(000, PL_profiledata, MAXO, U32);
+    ++PL_profiledata[o->op_type];
+}
+
+void
+Perl_debprofdump(pTHX)
+{
+    unsigned i;
+    if (!PL_profiledata)
+	return;
+    for (i = 0; i < MAXO; i++) {
+	if (PL_profiledata[i])
+	    PerlIO_printf(Perl_debug_log,
+			  "%5lu %s\n", (unsigned long)PL_profiledata[i],
+                                       PL_op_name[i]);
+    }
 }

@@ -1,7 +1,16 @@
+/*    nostdio.h
+ *
+ *    Copyright (c) 1987-2002, Larry Wall
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
+ */
+
 /*
  * Strong denial of stdio - make all stdio calls (we can think of) errors
  */
-/* This is an 1st attempt to stop other include files pulling
+/* This is a 1st attempt to stop other include files pulling
    in real <stdio.h>.
    A more ambitious set of possible symbols can be found in
    sfio.h (inside an _cplusplus gard).

@@ -4,13 +4,19 @@
 # doubles (if supported), of machine-specific short and long
 # integers, machine-specific floating point exceptions (infinity,
 # not-a-number ...), of the effects of locale, and of features
-# specific to multi-byte characters (under use utf8 and such).
+# specific to multi-byte characters (under the utf8 pragma and such).
 
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }   
 use warnings;
+# we do not load %Config since this test resides in op and needs
+# to run under the minitest target even without Config.pm working.
+
+# strictness
+my @tests = ();
+my ($i, $template, $data, $result, $comment, $w, $x, $evalData, $n, $p);
 
 while (<DATA>) {
     s/^\s*>//; s/<\s*$//;
@@ -29,6 +35,14 @@ $SIG{__WARN__} = sub {
     }
 };
 
+my $Is_VMS_VAX = 0;
+# We use HW_MODEL since ARCH_NAME was not in VMS V5.*
+if ($^O eq 'VMS') {
+    my $hw_model;
+    chomp($hw_model = `write sys\$output f\$getsyi("HW_MODEL")`);
+    $Is_VMS_VAX = $hw_model < 1024 ? 1 : 0;
+}
+
 for ($i = 1; @tests; $i++) {
     ($template, $data, $result, $comment) = @{shift @tests};
     if ($^O eq 'os390' || $^O eq 's390') { # non-IEEE (s390 is UTS)
@@ -36,6 +50,14 @@ for ($i = 1; @tests; $i++) {
         $result =~ s/([eE]\+)102$/${1}69/;   #  "       "
         $data   =~ s/([eE])\-101$/${1}-56/;  # larger exponents
         $result =~ s/([eE])\-102$/${1}-57/;  #  "       "
+    }
+    if ($Is_VMS_VAX) { # VAX DEC C 5.3 at least since there is no 
+                       # ccflags =~ /float=ieee/ on VAX.
+                       # AXP is unaffected whether or not it's using ieee.
+        $data   =~ s/([eE])96$/${1}26/;      # smaller exponents
+        $result =~ s/([eE]\+)102$/${1}32/;   #  "       "
+        $data   =~ s/([eE])\-101$/${1}-24/;  # larger exponents
+        $result =~ s/([eE])\-102$/${1}-25/;  #  "       "
     }
     $evalData = eval $data;
     $w = undef;
@@ -135,13 +157,13 @@ __END__
 >%L<        >''<          >%L INVALID<
 >%M<        >''<          >%M INVALID<
 >%N<        >''<          >%N INVALID<
->%O<        >2**32-1<     >37777777777<    >Synonum for %lo<
+>%O<        >2**32-1<     >37777777777<    >Synonym for %lo<
 >%P<        >''<          >%P INVALID<
 >%Q<        >''<          >%Q INVALID<
 >%R<        >''<          >%R INVALID<
 >%S<        >''<          >%S INVALID<
 >%T<        >''<          >%T INVALID<
->%U<        >2**32-1<     >4294967295<     >Synonum for %lu<
+>%U<        >2**32-1<     >4294967295<     >Synonym for %lu<
 >%V<        >''<          >%V INVALID<
 >%W<        >''<          >%W INVALID<
 >%X<        >2**32-1<     >FFFFFFFF<       >Like %x, but with u/c letters<
@@ -287,6 +309,9 @@ __END__
 >%o<        >2**32-1<     >37777777777<
 >%+o<       >2**32-1<     >37777777777<
 >%#o<       >2**32-1<     >037777777777<
+>%o<        >642<         >1202<          >check smaller octals across platforms<
+>%+o<       >642<         >1202<
+>%#o<       >642<         >01202<
 >%d< >$p=sprintf('%p',$p);$p=~/^[0-9a-f]+$/< >1< >Coarse hack: hex from %p?<
 >%#p<       >''<          >%#p INVALID<
 >%q<        >''<          >%q INVALID<

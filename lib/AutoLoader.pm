@@ -1,6 +1,6 @@
 package AutoLoader;
 
-use 5.6.0;
+use 5.006_001;
 our(@EXPORT, @EXPORT_OK, $VERSION);
 
 my $is_dosish;
@@ -16,7 +16,7 @@ BEGIN {
     $is_epoc = $^O eq 'epoc';
     $is_vms = $^O eq 'VMS';
     $is_macos = $^O eq 'MacOS';
-    $VERSION = '5.58';
+    $VERSION = '5.59';
 }
 
 AUTOLOAD {

@@ -6,7 +6,7 @@
 
 $| = 1;
 
-print "1..672\n";
+print "1..858\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -1287,7 +1287,7 @@ print "ok 247\n";
 	    "#latin[$latin]\nnot ok $test\n";
 	$test++;
 	$latin =~ s/stra\337e/straße/; # \303\237 after the 2nd a
-	use utf8;
+	use utf8; # needed for the raw UTF-8
 	$latin =~ s!(s)tr(?:aß|s+e)!$1tr.!; # \303\237 after the a
     }
 }
@@ -1422,16 +1422,21 @@ print "ok 247\n";
 	    print "ok $test\n"; $test++;
 	}
 	print "# IsASCII\n";
-	if ($code le '00007f') {
-	    print "not " unless $char =~ /\p{IsASCII}/;
-	    print "ok $test\n"; $test++;
-	    print "not " if     $char =~ /\P{IsASCII}/;
-	    print "ok $test\n"; $test++;
+	if (ord("A") == 193) {
+	    print "ok $test # Skip: in EBCDIC\n"; $test++;
+	    print "ok $test # Skip: in EBCDIC\n"; $test++;
 	} else {
-	    print "not " if     $char =~ /\p{IsASCII}/;
-	    print "ok $test\n"; $test++;
-	    print "not " unless $char =~ /\P{IsASCII}/;
-	    print "ok $test\n"; $test++;
+	    if ($code le '00007f') {
+		print "not " unless $char =~ /\p{IsASCII}/;
+		print "ok $test\n"; $test++;
+		print "not " if     $char =~ /\P{IsASCII}/;
+		print "ok $test\n"; $test++;
+	    } else {
+		print "not " if     $char =~ /\p{IsASCII}/;
+		print "ok $test\n"; $test++;
+		print "not " unless $char =~ /\P{IsASCII}/;
+		print "ok $test\n"; $test++;
+	    }
 	}
 	print "# IsCntrl\n";
 	if ($class =~ /^C/) {
@@ -1618,9 +1623,9 @@ EOT
 {
     # from Robin Houston
 
-    my $x = "\x{12345678}";
+    my $x = "\x{10FFFD}";
     $x =~ s/(.)/$1/g;
-    print "not " unless ord($x) == 0x12345678 && length($x) == 1;
+    print "not " unless ord($x) == 0x10FFFD && length($x) == 1;
     print "ok 587\n";
 }
 
@@ -1892,40 +1897,812 @@ $T="ok 660\n";if ($x =~ /(a([abcdefg]+)(?{$y=$^N})de)(?{$z=$^N})/ and $y eq "bc"
 
 # Test the Unicode script classes
 
-print "not " unless chr(0x100) =~ /\p{InLatin}/; # outside Latin-1
+print "not " unless chr(0x100) =~ /\p{IsLatin}/; # outside Latin-1
 print "ok 661\n";
 
-print "not " unless chr(0x212b) =~ /\p{InLatin}/; # Angstrom sign, very outside
+print "not " unless chr(0x212b) =~ /\p{IsLatin}/; # Angstrom sign, very outside
 print "ok 662\n";
 
-print "not " unless chr(0x5d0) =~ /\p{InHebrew}/; # inside HebrewBlock
+print "not " unless chr(0x5d0) =~ /\p{IsHebrew}/; # inside InHebrew
 print "ok 663\n";
 
-print "not " unless chr(0xfb4f) =~ /\p{InHebrew}/; # outside HebrewBlock
+print "not " unless chr(0xfb4f) =~ /\p{IsHebrew}/; # outside InHebrew
 print "ok 664\n";
 
-print "not " unless chr(0xb5) =~ /\p{InGreek}/; # singleton (not in a range)
+print "not " unless chr(0xb5) =~ /\p{IsGreek}/; # singleton (not in a range)
 print "ok 665\n";
 
-print "not " unless chr(0x37a) =~ /\p{InGreek}/; # singleton
+print "not " unless chr(0x37a) =~ /\p{IsGreek}/; # singleton
 print "ok 666\n";
 
-print "not " unless chr(0x386) =~ /\p{InGreek}/; # singleton
+print "not " unless chr(0x386) =~ /\p{IsGreek}/; # singleton
 print "ok 667\n";
 
-print "not " unless chr(0x387) =~ /\P{InGreek}/; # not there
+print "not " unless chr(0x387) =~ /\P{IsGreek}/; # not there
 print "ok 668\n";
 
-print "not " unless chr(0x388) =~ /\p{InGreek}/; # range
+print "not " unless chr(0x388) =~ /\p{IsGreek}/; # range
 print "ok 669\n";
 
-print "not " unless chr(0x38a) =~ /\p{InGreek}/; # range
+print "not " unless chr(0x38a) =~ /\p{IsGreek}/; # range
 print "ok 670\n";
 
-print "not " unless chr(0x38b) =~ /\P{InGreek}/; # not there
+print "not " unless chr(0x38b) =~ /\P{IsGreek}/; # not there
 print "ok 671\n";
 
-print "not " unless chr(0x38c) =~ /\p{InGreek}/; # singleton
+print "not " unless chr(0x38c) =~ /\p{IsGreek}/; # singleton
 print "ok 672\n";
 
+if (ord("A") == 65) {
+##
+## Test [:cntrl:]...
+##
+## Should probably put in tests for all the POSIX stuff, but not sure how to
+## guarantee a specific locale......
+##
+    $AllBytes = join('', map { chr($_) } 0..255);
+    ($x = $AllBytes) =~ s/[[:cntrl:]]//g;
+    if ($x ne join('', map { chr($_) } 0x20..0x7E, 0x80..0xFF)) {
+	print "not ";
+    }
+    print "ok 673\n";
 
+    ($x = $AllBytes) =~ s/[^[:cntrl:]]//g;
+    if ($x ne join('', map { chr($_) } 0..0x1F, 0x7F)) { print "not " }
+    print "ok 674\n";
+} else {
+    print "ok $_ # Skip: EBCDIC\n" for 673..674;
+}
+
+# With /s modifier UTF8 chars were interpreted as bytes
+{
+    my $a = "Hello \x{263A} World";
+    
+    my @a = ($a =~ /./gs);
+    
+    print "not " unless $#a == 12;
+    print "ok 675\n";
+}
+
+@a = ("foo\nbar" =~ /./g);
+print "ok 676\n" if @a == 6 && "@a" eq "f o o b a r";
+
+@a = ("foo\nbar" =~ /./gs);
+print "ok 677\n" if @a == 7 && "@a" eq "f o o \n b a r";
+
+@a = ("foo\nbar" =~ /\C/g);
+print "ok 678\n" if @a == 7 && "@a" eq "f o o \n b a r";
+
+@a = ("foo\nbar" =~ /\C/gs);
+print "ok 679\n" if @a == 7 && "@a" eq "f o o \n b a r";
+
+@a = ("foo\n\x{100}bar" =~ /./g);
+print "ok 680\n" if @a == 7 && "@a" eq "f o o \x{100} b a r";
+
+@a = ("foo\n\x{100}bar" =~ /./gs);
+print "ok 681\n" if @a == 8 && "@a" eq "f o o \n \x{100} b a r";
+
+($a, $b) = map { chr } ord('A') == 65 ? (0xc4, 0x80) : (0x8c, 0x41);
+
+@a = ("foo\n\x{100}bar" =~ /\C/g);
+print "ok 682\n" if @a == 9 && "@a" eq "f o o \n $a $b b a r";
+
+@a = ("foo\n\x{100}bar" =~ /\C/gs);
+print "ok 683\n" if @a == 9 && "@a" eq "f o o \n $a $b b a r";
+
+{
+    # [ID 20010814.004] pos() doesn't work when using =~m// in list context
+    $_ = "ababacadaea";
+    $a = join ":", /b./gc;
+    $b = join ":", /a./gc;
+    $c = pos;
+    print "$a $b $c" eq 'ba:ba ad:ae 10' ? "ok 684\n" : "not ok 684\t# $a $b $c\n";
+}
+
+{
+    # [ID 20010407.006] matching utf8 return values from functions does not work
+
+    package ID_20010407_006;
+
+    sub x {
+	"a\x{1234}";
+    }
+
+    my $x = x;
+    my $y;
+
+    $x =~ /(..)/; $y = $1;
+    print "not " unless length($y) == 2 && $y eq $x;
+    print "ok 685\n";
+
+    x  =~ /(..)/; $y = $1;
+    print "not " unless length($y) == 2 && $y eq $x;
+    print "ok 686\n";
+}
+
+
+my $test = 687;
+
+# Force scalar context on the patern match
+sub ok ($$) {
+    my($ok, $name) = @_;
+
+    printf "%sok %d - %s\n", ($ok ? "" : "not "), $test, $name;
+
+    printf "# Failed test at line %d\n", (caller)[2] unless $ok;
+
+    $test++;
+    return $ok;
+}
+
+{
+    # Check that \x## works. 5.6.1 and 5.005_03 fail some of these.
+    $x = "\x4e" . "E";
+    ok ($x =~ /^\x4EE$/, "Check only 2 bytes of hex are matched.");
+
+    $x = "\x4e" . "i";
+    ok ($x =~ /^\x4Ei$/, "Check that invalid hex digit stops it (2)");
+
+    $x = "\x4" . "j";
+    ok ($x =~ /^\x4j$/,  "Check that invalid hex digit stops it (1)");
+
+    $x = "\x0" . "k";
+    ok ($x =~ /^\xk$/,   "Check that invalid hex digit stops it (0)");
+
+    $x = "\x0" . "x";
+    ok ($x =~ /^\xx$/, "\\xx isn't to be treated as \\0");
+
+    $x = "\x0" . "xa";
+    ok ($x =~ /^\xxa$/, "\\xxa isn't to be treated as \\xa");
+
+    $x = "\x9" . "_b";
+    ok ($x =~ /^\x9_b$/, "\\x9_b isn't to be treated as \\x9b");
+
+    print "# and now again in [] ranges\n";
+
+    $x = "\x4e" . "E";
+    ok ($x =~ /^[\x4EE]{2}$/, "Check only 2 bytes of hex are matched.");
+
+    $x = "\x4e" . "i";
+    ok ($x =~ /^[\x4Ei]{2}$/, "Check that invalid hex digit stops it (2)");
+
+    $x = "\x4" . "j";
+    ok ($x =~ /^[\x4j]{2}$/,  "Check that invalid hex digit stops it (1)");
+
+    $x = "\x0" . "k";
+    ok ($x =~ /^[\xk]{2}$/,   "Check that invalid hex digit stops it (0)");
+
+    $x = "\x0" . "x";
+    ok ($x =~ /^[\xx]{2}$/, "\\xx isn't to be treated as \\0");
+
+    $x = "\x0" . "xa";
+    ok ($x =~ /^[\xxa]{3}$/, "\\xxa isn't to be treated as \\xa");
+
+    $x = "\x9" . "_b";
+    ok ($x =~ /^[\x9_b]{3}$/, "\\x9_b isn't to be treated as \\x9b");
+
+}
+
+{
+    # Check that \x{##} works. 5.6.1 fails quite a few of these.
+
+    $x = "\x9b";
+    ok ($x =~ /^\x{9_b}$/, "\\x{9_b} is to be treated as \\x9b");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^\x{9_b}y$/, "\\x{9_b} is to be treated as \\x9b (again)");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^\x{9b_}y$/, "\\x{9b_} is to be treated as \\x9b");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^\x{9_bq}y$/, "\\x{9_bc} is to be treated as \\x9b");
+
+    $x = "\x0" . "y";
+    ok ($x =~ /^\x{x9b}y$/, "\\x{x9b} is to be treated as \\x0");
+
+    $x = "\x0" . "y";
+    ok ($x =~ /^\x{0x9b}y$/, "\\x{0x9b} is to be treated as \\x0");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^\x{09b}y$/, "\\x{09b} is to be treated as \\x9b");
+
+    print "# and now again in [] ranges\n";
+
+    $x = "\x9b";
+    ok ($x =~ /^[\x{9_b}]$/, "\\x{9_b} is to be treated as \\x9b");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^[\x{9_b}y]{2}$/, "\\x{9_b} is to be treated as \\x9b (again)");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^[\x{9b_}y]{2}$/, "\\x{9b_} is to be treated as \\x9b");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^[\x{9_bq}y]{2}$/, "\\x{9_bc} is to be treated as \\x9b");
+
+    $x = "\x0" . "y";
+    ok ($x =~ /^[\x{x9b}y]{2}$/, "\\x{x9b} is to be treated as \\x0");
+
+    $x = "\x0" . "y";
+    ok ($x =~ /^[\x{0x9b}y]{2}$/, "\\x{0x9b} is to be treated as \\x0");
+
+    $x = "\x9b" . "y";
+    ok ($x =~ /^[\x{09b}y]{2}$/, "\\x{09b} is to be treated as \\x9b");
+}
+
+{
+    # high bit bug -- japhy
+    my $x = "ab\200d";
+    $x =~ /.*?\200/ or print "not ";
+    print "ok 715\n";
+}
+
+print "# some Unicode properties\n";
+
+{
+    # Dashes, underbars, case.
+    print "not " unless "\x80" =~ /\p{in-latin1_SUPPLEMENT}/;
+    print "ok 716\n";
+
+    # Complement, leading and trailing whitespace.
+    print "not " unless "\x80" =~ /\P{  ^  In Latin 1 Supplement  }/;
+    print "ok 717\n";
+
+    # No ^In, dashes, case, dash, any intervening (word-break) whitespace.
+    # (well, newlines don't work...)
+    print "not " unless "\x80" =~ /\p{latin-1   supplement}/;
+    print "ok 718\n";
+}
+
+{
+    print "not " unless "a" =~ /\pL/;
+    print "ok 719\n";
+
+    print "not " unless "a" =~ /\p{IsLl}/;
+    print "ok 720\n";
+
+    print "not " if     "a" =~ /\p{IsLu}/;
+    print "ok 721\n";
+
+    print "not " unless "a" =~ /\p{Ll}/;
+    print "ok 722\n";
+
+    print "not " if     "a" =~ /\p{Lu}/;
+    print "ok 723\n";
+
+    print "not " unless "A" =~ /\pL/;
+    print "ok 724\n";
+
+    print "not " unless "A" =~ /\p{IsLu}/;
+    print "ok 725\n";
+
+    print "not " if     "A" =~ /\p{IsLl}/;
+    print "ok 726\n";
+
+    print "not " unless "A" =~ /\p{Lu}/;
+    print "ok 727\n";
+
+    print "not " if     "A" =~ /\p{Ll}/;
+    print "ok 728\n";
+
+    print "not " if     "a" =~ /\PL/;
+    print "ok 729\n";
+
+    print "not " if     "a" =~ /\P{IsLl}/;
+    print "ok 730\n";
+
+    print "not " unless "a" =~ /\P{IsLu}/;
+    print "ok 731\n";
+
+    print "not " if     "a" =~ /\P{Ll}/;
+    print "ok 732\n";
+
+    print "not " unless "a" =~ /\P{Lu}/;
+    print "ok 733\n";
+
+    print "not " if     "A" =~ /\PL/;
+    print "ok 734\n";
+
+    print "not " if     "A" =~ /\P{IsLu}/;
+    print "ok 735\n";
+
+    print "not " unless "A" =~ /\P{IsLl}/;
+    print "ok 736\n";
+
+    print "not " if     "A" =~ /\P{Lu}/;
+    print "ok 737\n";
+
+    print "not " unless "A" =~ /\P{Ll}/;
+    print "ok 738\n";
+
+}
+
+{
+    print "not " if     "a" =~ /\p{Common}/;
+    print "ok 739\n";
+
+    print "not " unless "1" =~ /\p{Common}/;
+    print "ok 740\n";
+}
+
+{
+    print "not " if     "a"       =~ /\p{Inherited}/;
+    print "ok 741\n";
+
+    print "not " unless "\x{300}" =~ /\p{Inherited}/;
+    print "ok 742\n";
+}
+
+{
+    print "not " unless "a" =~ /\p{L&}/;
+    print "ok 743\n";
+
+    print "not " if     "1" =~ /\p{L&}/;
+    print "ok 744\n";
+}
+
+{
+    print "not " unless "a" =~ /\p{Lowercase Letter}/;
+    print "ok 745\n";
+
+    print "not " if     "A" =~ /\p{lowercaseletter}/;
+    print "ok 746\n";
+}
+
+{
+    print "not " unless "\x{AC00}" =~ /\p{HangulSyllables}/;
+    print "ok 747\n";
+}
+
+{
+    # Script=, Block=, Category=
+
+    print "not " unless "\x{0100}" =~ /\p{Script=Latin}/;
+    print "ok 748\n";
+
+    print "not " unless "\x{0100}" =~ /\p{Block=LatinExtendedA}/;
+    print "ok 749\n";
+
+    print "not " unless "\x{0100}" =~ /\p{Category=UppercaseLetter}/;
+    print "ok 750\n";
+}
+
+{
+    print "# the basic character classes and Unicode \n";
+
+    # 0100;LATIN CAPITAL LETTER A WITH MACRON;Lu;0;L;0041 0304;;;;N;LATIN CAPITAL LETTER A MACRON;;;0101;
+    print "not " unless "\x{0100}" =~ /\w/;
+    print "ok 751\n";
+
+    # 0660;ARABIC-INDIC DIGIT ZERO;Nd;0;AN;;0;0;0;N;;;;;
+    print "not " unless "\x{0660}" =~ /\d/;
+    print "ok 752\n";
+
+    # 1680;OGHAM SPACE MARK;Zs;0;WS;;;;;N;;;;;
+    print "not " unless "\x{1680}" =~ /\s/;
+    print "ok 753\n";
+}
+
+{
+    print "# folding matches and Unicode\n";
+
+    print "not " unless "a\x{100}" =~ /A/i;
+    print "ok 754\n";
+
+    print "not " unless "A\x{100}" =~ /a/i;
+    print "ok 755\n";
+
+    print "not " unless "a\x{100}" =~ /a/i;
+    print "ok 756\n";
+
+    print "not " unless "A\x{100}" =~ /A/i;
+    print "ok 757\n";
+
+    print "not " unless "\x{101}a" =~ /\x{100}/i;
+    print "ok 758\n";
+
+    print "not " unless "\x{100}a" =~ /\x{100}/i;
+    print "ok 759\n";
+
+    print "not " unless "\x{101}a" =~ /\x{101}/i;
+    print "ok 760\n";
+
+    print "not " unless "\x{100}a" =~ /\x{101}/i;
+    print "ok 761\n";
+
+    print "not " unless "a\x{100}" =~ /A\x{100}/i;
+    print "ok 762\n";
+
+    print "not " unless "A\x{100}" =~ /a\x{100}/i;
+    print "ok 763\n";
+
+    print "not " unless "a\x{100}" =~ /a\x{100}/i;
+    print "ok 764\n";
+
+    print "not " unless "A\x{100}" =~ /A\x{100}/i;
+    print "ok 765\n";
+
+    print "not " unless "a\x{100}" =~ /[A]/i;
+    print "ok 766\n";
+
+    print "not " unless "A\x{100}" =~ /[a]/i;
+    print "ok 767\n";
+
+    print "not " unless "a\x{100}" =~ /[a]/i;
+    print "ok 768\n";
+
+    print "not " unless "A\x{100}" =~ /[A]/i;
+    print "ok 769\n";
+
+    print "not " unless "\x{101}a" =~ /[\x{100}]/i;
+    print "ok 770\n";
+
+    print "not " unless "\x{100}a" =~ /[\x{100}]/i;
+    print "ok 771\n";
+
+    print "not " unless "\x{101}a" =~ /[\x{101}]/i;
+    print "ok 772\n";
+
+    print "not " unless "\x{100}a" =~ /[\x{101}]/i;
+    print "ok 773\n";
+
+}
+
+{
+    use charnames ':full';
+
+    print "# LATIN LETTER A WITH GRAVE\n";
+    my $lower = "\N{LATIN SMALL LETTER A WITH GRAVE}";
+    my $UPPER = "\N{LATIN CAPITAL LETTER A WITH GRAVE}";
+
+    print $lower =~ m/$UPPER/i   ? "ok 774\n" : "not ok 774\n";
+    print $UPPER =~ m/$lower/i   ? "ok 775\n" : "not ok 775\n";
+    print $lower =~ m/[$UPPER]/i ? "ok 776\n" : "not ok 776\n";
+    print $UPPER =~ m/[$lower]/i ? "ok 777\n" : "not ok 777\n";
+
+    print "# GREEK LETTER ALPHA WITH VRACHY\n";
+
+    $lower = "\N{GREEK CAPITAL LETTER ALPHA WITH VRACHY}";
+    $UPPER = "\N{GREEK SMALL LETTER ALPHA WITH VRACHY}";
+
+    print $lower =~ m/$UPPER/i   ? "ok 778\n" : "not ok 778\n";
+    print $UPPER =~ m/$lower/i   ? "ok 779\n" : "not ok 779\n";
+    print $lower =~ m/[$UPPER]/i ? "ok 780\n" : "not ok 780\n";
+    print $UPPER =~ m/[$lower]/i ? "ok 781\n" : "not ok 781\n";
+
+    print "# LATIN LETTER Y WITH DIAERESIS\n";
+
+    $lower = "\N{LATIN CAPITAL LETTER Y WITH DIAERESIS}";
+    $UPPER = "\N{LATIN SMALL LETTER Y WITH DIAERESIS}";
+    print $lower =~ m/$UPPER/i   ? "ok 782\n" : "not ok 782\n";
+    print $UPPER =~ m/$lower/i   ? "ok 783\n" : "not ok 783\n";
+    print $lower =~ m/[$UPPER]/i ? "ok 784\n" : "not ok 784\n";
+    print $UPPER =~ m/[$lower]/i ? "ok 785\n" : "not ok 785\n";
+}
+
+{
+    use warnings;
+    use charnames ':full';
+    
+    print "# GREEK CAPITAL LETTER SIGMA vs COMBINING GREEK PERISPOMENI\n";
+
+    my $SIGMA = "\N{GREEK CAPITAL LETTER SIGMA}";
+    my $char  = "\N{COMBINING GREEK PERISPOMENI}";
+
+    # Before #13843 this was failing by matching falsely.
+    print "_:$char:_" =~ m/_:$SIGMA:_/i ? "not ok 786\n" : "ok 786\n";
+}
+
+{
+    print "# \\X\n";
+
+    use charnames ':full';
+
+    print "a!"              =~ /^(\X)!/ && $1 eq "a" ?
+	"ok 787\n" : "not ok 787 # $1\n";
+    print "\xDF!"           =~ /^(\X)!/ && $1 eq "\xDF" ?
+	"ok 788\n" : "not ok 788 # $1\n";
+    print "\x{100}!"        =~ /^(\X)!/ && $1 eq "\x{100}" ?
+	"ok 789\n" : "not ok 789 # $1\n";
+    print "\x{100}\x{300}!" =~ /^(\X)!/ && $1 eq "\x{100}\x{300}" ?
+	"ok 790\n" : "not ok 790 # $1\n";
+    print "\N{LATIN CAPITAL LETTER E}!" =~ /^(\X)!/ &&
+	$1 eq "\N{LATIN CAPITAL LETTER E}" ?
+	"ok 791\n" : "not ok 791 # $1\n";
+    print "\N{LATIN CAPITAL LETTER E}\N{COMBINING GRAVE ACCENT}!" =~
+	/^(\X)!/ &&
+	$1 eq "\N{LATIN CAPITAL LETTER E}\N{COMBINING GRAVE ACCENT}" ?
+	"ok 792\n" : "not ok 792 # $1\n";
+}
+
+{
+    print "#\\C and \\X\n";
+
+    print "!abc!" =~ /a\Cc/ ? "ok 793\n" : "not ok 793\n";
+    print "!abc!" =~ /a\Xc/ ? "ok 794\n" : "not ok 794\n";
+}
+
+{
+    print "# FINAL SIGMA\n";
+
+    my $SIGMA = "\x{03A3}"; # CAPITAL
+    my $Sigma = "\x{03C2}"; # SMALL FINAL
+    my $sigma = "\x{03C3}"; # SMALL
+
+    print $SIGMA =~ /$SIGMA/i ? "ok 795\n" : "not ok 795\n";
+    print $SIGMA =~ /$Sigma/i ? "ok 796\n" : "not ok 796\n";
+    print $SIGMA =~ /$sigma/i ? "ok 797\n" : "not ok 797\n";
+
+    print $Sigma =~ /$SIGMA/i ? "ok 798\n" : "not ok 798\n";
+    print $Sigma =~ /$Sigma/i ? "ok 799\n" : "not ok 799\n";
+    print $Sigma =~ /$sigma/i ? "ok 800\n" : "not ok 800\n";
+
+    print $sigma =~ /$SIGMA/i ? "ok 801\n" : "not ok 801\n";
+    print $sigma =~ /$Sigma/i ? "ok 802\n" : "not ok 802\n";
+    print $sigma =~ /$sigma/i ? "ok 803\n" : "not ok 803\n";
+    
+    print $SIGMA =~ /[$SIGMA]/i ? "ok 804\n" : "not ok 804\n";
+    print $SIGMA =~ /[$Sigma]/i ? "ok 805\n" : "not ok 805\n";
+    print $SIGMA =~ /[$sigma]/i ? "ok 806\n" : "not ok 806\n";
+
+    print $Sigma =~ /[$SIGMA]/i ? "ok 807\n" : "not ok 807\n";
+    print $Sigma =~ /[$Sigma]/i ? "ok 808\n" : "not ok 808\n";
+    print $Sigma =~ /[$sigma]/i ? "ok 809\n" : "not ok 809\n";
+
+    print $sigma =~ /[$SIGMA]/i ? "ok 810\n" : "not ok 810\n";
+    print $sigma =~ /[$Sigma]/i ? "ok 811\n" : "not ok 811\n";
+    print $sigma =~ /[$sigma]/i ? "ok 812\n" : "not ok 812\n";
+}
+
+{
+    print "# parlez-vous?\n";
+
+    use charnames ':full';
+
+    print "fran\N{LATIN SMALL LETTER C}ais" =~
+	  /fran.ais/ &&
+	$& eq "francais" ?
+	"ok 813\n" : "not ok 813\n";
+
+    print "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" =~
+	  /fran.ais/ &&
+	$& eq "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" ?
+	"ok 814\n" : "not ok 814\n";
+
+    print "fran\N{LATIN SMALL LETTER C}ais" =~
+	   /fran\Cais/ &&
+        $& eq "francais" ?
+	"ok 815\n" : "not ok 815\n";
+
+    print "franc\N{COMBINING CEDILLA}ais" =~
+	  /franc\C\Cais/ ? # COMBINING CEDILLA is two bytes when encoded
+	"ok 816\n" : "not ok 816\n";
+
+    print "fran\N{LATIN SMALL LETTER C}ais" =~
+	  /fran\Xais/ &&
+	$& eq "francais" ?
+	"ok 817\n" : "not ok 817\n";
+
+    print "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" =~
+	  /fran\Xais/  &&
+        $& eq "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" ?
+	"ok 818\n" : "not ok 818\n";
+
+    print "franc\N{COMBINING CEDILLA}ais" =~
+	  /fran\Xais/ &&
+         $& eq "franc\N{COMBINING CEDILLA}ais" ?
+	 "ok 819\n" : "not ok 819\n";
+
+    print "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" =~
+	  /fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais/  &&
+        $& eq "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" ?
+	"ok 820\n" : "not ok 820\n";
+
+    print "franc\N{COMBINING CEDILLA}ais" =~
+	  /franc\N{COMBINING CEDILLA}ais/  &&
+        $& eq "franc\N{COMBINING CEDILLA}ais" ?
+	"ok 821\n" : "not ok 821\n";
+
+    print "fran\N{LATIN SMALL LETTER C}ais" =~
+	  /fran(?:c\N{COMBINING CEDILLA}?|\N{LATIN SMALL LETTER C WITH CEDILLA})ais/ &&
+	$& eq "francais" ?
+	"ok 822\n" : "not ok 822\n";
+
+    print "fran\N{LATIN SMALL LETTER C}ais" =~
+	  /fran(?:c\N{COMBINING CEDILLA}?|\N{LATIN SMALL LETTER C WITH CEDILLA})ais/ &&
+	$& eq "francais" ?
+	"ok 823\n" : "not ok 823\n";
+
+    print "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" =~
+	  /fran(?:c\N{COMBINING CEDILLA}?|\N{LATIN SMALL LETTER C WITH CEDILLA})ais/ &&
+	$& eq "fran\N{LATIN SMALL LETTER C WITH CEDILLA}ais" ?
+	"ok 824\n" : "not ok 824\n";
+
+    print "franc\N{COMBINING CEDILLA}ais" =~
+	  /fran(?:c\N{COMBINING CEDILLA}?|\N{LATIN SMALL LETTER C WITH CEDILLA})ais/ &&
+	$& eq "franc\N{COMBINING CEDILLA}ais" ?
+	"ok 825\n" : "not ok 825\n";
+}
+
+{
+    print "# Does lingering (and useless) UTF8 flag mess up /i matching?\n";
+
+    {
+	my $regex  = "ABcde";
+	my $string = "abcDE\x{100}";
+	chop($string);
+	if ($string =~ m/$regex/i) {
+	    print "ok 826\n";
+	} else {
+	    print "not ok 826\n";
+	}
+    }
+
+    {
+	my $regex  = "ABcde\x{100}";
+	my $string = "abcDE";
+	chop($regex);
+	if ($string =~ m/$regex/i) {
+	    print "ok 827\n";
+	} else {
+	    print "not ok 827\n";
+	}
+    }
+
+    {
+	my $regex  = "ABcde\x{100}";
+	my $string = "abcDE\x{100}";
+	chop($regex);
+	chop($string);
+	if ($string =~ m/$regex/i) {
+	    print "ok 828\n";
+	} else {
+	    print "not ok 828\n";
+	}
+    }
+}
+
+{
+    print "# more SIGMAs\n";
+
+    my $SIGMA = "\x{03A3}"; # CAPITAL
+    my $Sigma = "\x{03C2}"; # SMALL FINAL
+    my $sigma = "\x{03C3}"; # SMALL
+
+    my $S3 = "$SIGMA$Sigma$sigma";
+
+    print ":$S3:" =~ /:(($SIGMA)+):/i   && $1 eq $S3 && $2 eq $sigma ?
+	"ok 829\n" : "not ok 829\n";
+    print ":$S3:" =~ /:(($Sigma)+):/i   && $1 eq $S3 && $2 eq $sigma ?
+	"ok 830\n" : "not ok 830\n";
+    print ":$S3:" =~ /:(($sigma)+):/i   && $1 eq $S3 && $2 eq $sigma ?
+	"ok 831\n" : "not ok 831\n";
+
+    print ":$S3:" =~ /:(([$SIGMA])+):/i && $1 eq $S3 && $2 eq $sigma ?
+	"ok 832\n" : "not ok 832\n";
+    print ":$S3:" =~ /:(([$Sigma])+):/i && $1 eq $S3 && $2 eq $sigma ?
+	"ok 833\n" : "not ok 833\n";
+    print ":$S3:" =~ /:(([$sigma])+):/i && $1 eq $S3 && $2 eq $sigma ?
+	"ok 834\n" : "not ok 834\n";
+}
+
+{
+    print "# LATIN SMALL LETTER SHARP S\n";
+
+    use charnames ':full';
+
+    print "\N{LATIN SMALL LETTER SHARP S}" =~
+	/\N{LATIN SMALL LETTER SHARP S}/    ? "ok 835\n" : "not ok 835\n";
+
+    print "\N{LATIN SMALL LETTER SHARP S}" =~
+	/\N{LATIN SMALL LETTER SHARP S}/i   ? "ok 836\n" : "not ok 836\n";
+
+    print "\N{LATIN SMALL LETTER SHARP S}" =~
+	/[\N{LATIN SMALL LETTER SHARP S}]/  ? "ok 837\n" : "not ok 837\n";
+
+    print "\N{LATIN SMALL LETTER SHARP S}" =~
+	/[\N{LATIN SMALL LETTER SHARP S}]/i ? "ok 838\n" : "not ok 838\n";
+
+    print "ss" =~
+	/\N{LATIN SMALL LETTER SHARP S}/i   ? "ok 839\n" : "not ok 839\n";
+
+    print "SS" =~
+	/\N{LATIN SMALL LETTER SHARP S}/i   ? "ok 840\n" : "not ok 840\n";
+
+    print "ss" =~
+	/[\N{LATIN SMALL LETTER SHARP S}]/i ? "ok 841\n" : "not ok 841\n";
+
+    print "SS" =~
+	/[\N{LATIN SMALL LETTER SHARP S}]/i ? "ok 842\n" : "not ok 842\n";
+
+    print "\N{LATIN SMALL LETTER SHARP S}" =~ /ss/i ?
+	"ok 843\n" : "not ok 843\n";
+
+    print "\N{LATIN SMALL LETTER SHARP S}" =~ /SS/i ?
+	"ok 844\n" : "not ok 844\n";
+}
+
+{
+    print "# more whitespace: U+0085, U+2028, U+2029\n";
+
+    # U+0085 needs to be forced to be Unicode, the \x{100} does that.
+    print "<\x{100}\x{0085}>" =~ /<\x{100}\s>/ ? "ok 845\n" : "not ok 845\n";
+    print "<\x{2028}>" =~ /<\s>/ ? "ok 846\n" : "not ok 846\n";
+    print "<\x{2029}>" =~ /<\s>/ ? "ok 847\n" : "not ok 847\n";
+}
+
+{
+    print "# . with /s should work on characters, as opposed to bytes\n";
+
+    my $s = "\x{e4}\x{100}";
+
+    # This is not expected to match: the point is that
+    # neither should we get "Malformed UTF-8" warnings.
+    print $s =~ /\G(.+?)\n/gcs ?
+	"not ok 848\n" : "ok 848\n";
+
+    my @c;
+
+    while ($s =~ /\G(.)/gs) {
+	push @c, $1;
+    }
+
+    print join("", @c) eq $s ? "ok 849\n" : "not ok 849\n";
+
+    my $t1 = "Q003\n\n\x{e4}\x{f6}\n\nQ004\n\n\x{e7}"; # test only chars < 256
+    my $r1 = "";
+    while ($t1 =~ / \G ( .+? ) \n\s+ ( .+? ) ( $ | \n\s+ ) /xgcs) {
+	$r1 .= $1 . $2;
+    }
+
+    my $t2 = $t1 . "\x{100}"; # repeat with a larger char
+    my $r2 = "";
+    while ($t2 =~ / \G ( .+? ) \n\s+ ( .+? ) ( $ | \n\s+ ) /xgcs) {
+	$r2 .= $1 . $2;
+    }
+    $r2 =~ s/\x{100}//;
+    print $r1 eq $r2 ? "ok 850\n" : "not ok 850\n";
+}
+
+{
+    print "# Unicode lookbehind\n";
+
+    print "A\x{100}B"        =~ /(?<=A.)B/  ? "ok 851\n" : "not ok 851\n";
+    print "A\x{200}\x{300}B" =~ /(?<=A..)B/ ? "ok 852\n" : "not ok 852\n";
+    print "\x{400}AB"        =~ /(?<=\x{400}.)B/ ? "ok 853\n" : "not ok 853\n";
+    print "\x{500\x{600}}B"  =~ /(?<=\x{500}.)B/ ? "ok 854\n" : "not ok 854\n";
+}
+
+{
+    print "# [ID 20020124.005]\n";
+
+    # Fixed by #14795.
+
+    $char = "\x{f00f}";
+    $x = "$char b $char";
+
+    $x =~ s{($char)}{
+	"c" =~ /d/;
+	"x";
+    }ge;
+
+    print $x eq "x b x" ? "ok 855\n" : "not ok 855\n";
+}
+
+{
+    print "# UTF-8 hash keys and /\$/\n";
+    # http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2002-01/msg01327.html
+
+    my $u = "a\x{100}";
+    my $v = substr($u,0,1);
+    my $w = substr($u,1,1);
+    my %u = ( $u => $u, $v => $v, $w => $w );
+    my $i = 856; 
+    for (keys %u) {
+	my $m1 = /^\w*$/ ? 1 : 0;
+	my $m2 = $u{$_}=~/^\w*$/ ? 1 : 0;
+	print $m1 == $m2 ? "ok $i\n" : "not ok $i # $m1 $m2\n";
+	$i++;
+    }
+}

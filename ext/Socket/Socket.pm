@@ -1,7 +1,7 @@
 package Socket;
 
 our($VERSION, @ISA, @EXPORT, @EXPORT_OK, %EXPORT_TAGS);
-$VERSION = "1.74";
+$VERSION = "1.75";
 
 =head1 NAME
 
@@ -60,25 +60,30 @@ In addition, some structure manipulation functions are available:
 
 =item inet_aton HOSTNAME
 
-Takes a string giving the name of a host, and translates that
-to the 4-byte string (structure). Takes arguments of both
-the 'rtfm.mit.edu' type and '18.181.0.24'. If the host name
-cannot be resolved, returns undef. For multi-homed hosts (hosts
-with more than one address), the first address found is returned.
+Takes a string giving the name of a host, and translates that to an
+opaque string (if programming in C, struct in_addr). Takes arguments
+of both the 'rtfm.mit.edu' type and '18.181.0.24'. If the host name
+cannot be resolved, returns undef.  For multi-homed hosts (hosts with
+more than one address), the first address found is returned.
+
+For portability do not assume that the result of inet_aton() is 32
+bits wide, in other words, that it would contain only the IPv4 address
+in network order.
 
 =item inet_ntoa IP_ADDRESS
 
-Takes a four byte ip address (as returned by inet_aton())
-and translates it into a string of the form 'd.d.d.d'
-where the 'd's are numbers less than 256 (the normal
-readable four dotted number notation for internet addresses).
+Takes a string (an opaque string as returned by inet_aton(),
+or a v-string representing the four octets of the IPv4 address in
+network order) and translates it into a string of the form 'd.d.d.d'
+where the 'd's are numbers less than 256 (the normal human-readable
+four dotted number notation for Internet addresses).
 
 =item INADDR_ANY
 
 Note: does not return a number, but a packed string.
 
 Returns the 4-byte wildcard ip address which specifies any
-of the hosts ip addresses. (A particular machine can have
+of the hosts ip addresses.  (A particular machine can have
 more than one ip address, each address corresponding to
 a particular network interface. This wildcard address
 allows you to bind to all of them simultaneously.)
@@ -97,15 +102,24 @@ Normally equivalent to inet_aton('255.255.255.255').
 
 Note - does not return a number.
 
-Returns the 4-byte loopback address. Normally equivalent
+Returns the 4-byte loopback address.  Normally equivalent
 to inet_aton('localhost').
 
 =item INADDR_NONE
 
 Note - does not return a number.
 
-Returns the 4-byte 'invalid' ip address. Normally equivalent
+Returns the 4-byte 'invalid' ip address.  Normally equivalent
 to inet_aton('255.255.255.255').
+
+=item sockaddr_family SOCKADDR
+
+Takes a sockaddr structure (as returned by pack_sockaddr_in(),
+pack_sockaddr_un() or the perl builtin functions getsockname() and
+getpeername()) and returns the address family tag.  It will match the
+constant AF_INET for a sockaddr_in and AF_UNIX for a sockaddr_un.  It
+can be used to figure out what unpacker to use for a sockaddr of
+unknown type.
 
 =item sockaddr_in PORT, ADDRESS
 
@@ -118,18 +132,20 @@ use pack_sockaddr_in() and unpack_sockaddr_in() explicitly.
 
 =item pack_sockaddr_in PORT, IP_ADDRESS
 
-Takes two arguments, a port number and a 4 byte IP_ADDRESS (as returned by
-inet_aton()). Returns the sockaddr_in structure with those arguments
-packed in with AF_INET filled in.  For internet domain sockets, this
-structure is normally what you need for the arguments in bind(),
-connect(), and send(), and is also returned by getpeername(),
-getsockname() and recv().
+Takes two arguments, a port number and an opaque string, IP_ADDRESS
+(as returned by inet_aton(), or a v-string).  Returns the sockaddr_in
+structure with those arguments packed in with AF_INET filled in.  For
+Internet domain sockets, this structure is normally what you need for
+the arguments in bind(), connect(), and send(), and is also returned
+by getpeername(), getsockname() and recv().
 
 =item unpack_sockaddr_in SOCKADDR_IN
 
 Takes a sockaddr_in structure (as returned by pack_sockaddr_in()) and
-returns an array of two elements: the port and the 4-byte ip-address.
-Will croak if the structure does not have AF_INET in the right place.
+returns an array of two elements: the port and an opaque string
+representing the IP address (you can use inet_ntoa() to convert the
+address to the four-dotted numeric format).  Will croak if the
+structure does not have AF_INET in the right place.
 
 =item sockaddr_un PATHNAME
 
@@ -166,14 +182,18 @@ require Exporter;
 use XSLoader ();
 @ISA = qw(Exporter);
 @EXPORT = qw(
-	inet_aton inet_ntoa pack_sockaddr_in unpack_sockaddr_in
+	inet_aton inet_ntoa
+	sockaddr_family
+	pack_sockaddr_in unpack_sockaddr_in
 	pack_sockaddr_un unpack_sockaddr_un
 	sockaddr_in sockaddr_un
 	INADDR_ANY INADDR_BROADCAST INADDR_LOOPBACK INADDR_NONE
 	AF_802
+	AF_AAL
 	AF_APPLETALK
 	AF_CCITT
 	AF_CHAOS
+	AF_CTF
 	AF_DATAKIT
 	AF_DECnet
 	AF_DLI
@@ -182,7 +202,12 @@ use XSLoader ();
 	AF_HYLINK
 	AF_IMPLINK
 	AF_INET
+	AF_INET6
+	AF_ISO
+	AF_KEY
+	AF_LAST
 	AF_LAT
+	AF_LINK
 	AF_MAX
 	AF_NBS
 	AF_NIT
@@ -190,12 +215,16 @@ use XSLoader ();
 	AF_OSI
 	AF_OSINET
 	AF_PUP
+	AF_ROUTE
 	AF_SNA
 	AF_UNIX
 	AF_UNSPEC
+	AF_USER
+	AF_WAN
 	AF_X25
 	IOV_MAX
 	MSG_BCAST
+	MSG_BTAG
 	MSG_CTLFLAGS
 	MSG_CTLIGNORE
 	MSG_CTRUNC
@@ -204,6 +233,7 @@ use XSLoader ();
 	MSG_EOF
 	MSG_EOR
 	MSG_ERRQUEUE
+	MSG_ETAG
 	MSG_FIN
 	MSG_MAXIOVLEN
 	MSG_MCAST
@@ -216,10 +246,13 @@ use XSLoader ();
 	MSG_TRUNC
 	MSG_URG
 	MSG_WAITALL
+	MSG_WIRE
 	PF_802
+	PF_AAL
 	PF_APPLETALK
 	PF_CCITT
 	PF_CHAOS
+	PF_CTF
 	PF_DATAKIT
 	PF_DECnet
 	PF_DLI
@@ -228,7 +261,12 @@ use XSLoader ();
 	PF_HYLINK
 	PF_IMPLINK
 	PF_INET
+	PF_INET6
+	PF_ISO
+	PF_KEY
+	PF_LAST
 	PF_LAT
+	PF_LINK
 	PF_MAX
 	PF_NBS
 	PF_NIT
@@ -236,9 +274,12 @@ use XSLoader ();
 	PF_OSI
 	PF_OSINET
 	PF_PUP
+	PF_ROUTE
 	PF_SNA
 	PF_UNIX
 	PF_UNSPEC
+	PF_USER
+	PF_WAN
 	PF_X25
 	SCM_CONNECT
 	SCM_CREDENTIALS
@@ -256,24 +297,41 @@ use XSLoader ();
 	SOL_SOCKET
 	SOMAXCONN
 	SO_ACCEPTCONN
+	SO_ATTACH_FILTER
+	SO_BACKLOG
 	SO_BROADCAST
+	SO_CHAMELEON
 	SO_DEBUG
+	SO_DETACH_FILTER
+	SO_DGRAM_ERRIND
 	SO_DONTLINGER
 	SO_DONTROUTE
 	SO_ERROR
+	SO_FAMILY
 	SO_KEEPALIVE
 	SO_LINGER
 	SO_OOBINLINE
+	SO_PASSCRED
+	SO_PASSIFNAME
+	SO_PEERCRED
+	SO_PROTOCOL
+	SO_PROTOTYPE
 	SO_RCVBUF
 	SO_RCVLOWAT
 	SO_RCVTIMEO
 	SO_REUSEADDR
 	SO_REUSEPORT
+	SO_SECURITY_AUTHENTICATION
+	SO_SECURITY_ENCRYPTION_NETWORK
+	SO_SECURITY_ENCRYPTION_TRANSPORT
 	SO_SNDBUF
 	SO_SNDLOWAT
 	SO_SNDTIMEO
+	SO_STATE
 	SO_TYPE
 	SO_USELOOPBACK
+	SO_XOPEN
+	SO_XSE
 	UIO_MAXIOV
 );
 

@@ -1,6 +1,6 @@
 package ExtUtils::MM_Win32;
 
-our $VERSION = '1.00';
+our $VERSION = '1.00_02';
 
 =head1 NAME
 
@@ -23,6 +23,7 @@ the semantics.
 use Config;
 #use Cwd;
 use File::Basename;
+use File::Spec;
 require Exporter;
 
 require ExtUtils::MakeMaker;
@@ -36,7 +37,6 @@ $GCC     = 1 if $Config{'cc'} =~ /^gcc/i;
 $DMAKE = 1 if $Config{'make'} =~ /^dmake/i;
 $NMAKE = 1 if $Config{'make'} =~ /^nmake/i;
 $PERLMAKE = 1 if $Config{'make'} =~ /^pmake/i;
-$OBJ   = 1 if $Config{'ccflags'} =~ /PERL_OBJECT/i;
 
 # a few workarounds for command.com (very basic)
 {
@@ -96,8 +96,12 @@ sub dlsyms {
 $self->{BASEEXT}.def: Makefile.PL
 ",
      q!	$(PERL) "-I$(PERL_ARCHLIB)" "-I$(PERL_LIB)" -MExtUtils::Mksymlists \\
-     -e "Mksymlists('NAME' => '!, $self->{NAME},
-     q!', 'DLBASE' => '!,$self->{DLBASE},
+     -e "Mksymlists('NAME'=>\"!, $self->{NAME},
+     q!\", 'DLBASE' => '!,$self->{DLBASE},
+     # The above two lines quoted differently to work around
+     # a bug in the 4DOS/4NT command line interpreter.  The visible
+     # result of the bug was files named q('extension_name',) *with the
+     # single quotes and the comma* in the extension build directories.
      q!', 'DL_FUNCS' => !,neatvalue($funcs),
      q!, 'FUNCLIST' => !,neatvalue($funclist),
      q!, 'IMPORTS' => !,neatvalue($imports),
@@ -134,12 +138,14 @@ sub maybe_command {
 }
 
 sub file_name_is_absolute {
-    my($self,$file) = @_;
-    $file =~ m{^([a-z]:)?[\\/]}i ;
+    shift;
+    return File::Spec->file_name_is_absolute(@_);
 }
 
 sub find_perl {
     my($self, $ver, $names, $dirs, $trace) = @_;
+    $trace ||= 0;
+
     my($name, $dir);
     if ($trace >= 2){
 	print "Looking for perl $ver by these names:
@@ -152,12 +158,12 @@ in these dirs:
 	next unless defined $dir; # $self->{PERL_SRC} may be undefined
 	foreach $name (@$names){
 	    my ($abs, $val);
-	    if ($self->file_name_is_absolute($name)) { # /foo/bar
+	    if (File::Spec->file_name_is_absolute($name)) { # /foo/bar
 		$abs = $name;
-	    } elsif ($self->canonpath($name) eq $self->canonpath(basename($name))) { # foo
-		$abs = $self->catfile($dir, $name);
+	    } elsif (File::Spec->canonpath($name) eq File::Spec->canonpath(basename($name))) { # foo
+		$abs = File::Spec->catfile($dir, $name);
 	    } else { # foo/bar
-		$abs = $self->canonpath($self->catfile($self->curdir, $name));
+		$abs = File::Spec->canonpath(File::Spec->catfile(File::Spec->curdir, $name));
 	    }
 	    print "Checking $abs\n" if ($trace >= 2);
 	    next unless $self->maybe_command($abs);
@@ -176,14 +182,8 @@ in these dirs:
 }
 
 sub catdir {
-    my $self = shift;
-    my @args = @_;
-    for (@args) {
-	# append a slash to each argument unless it has one there
-	$_ .= "\\" if $_ eq '' or substr($_,-1) ne "\\";
-    }
-    my $result = $self->canonpath(join('', @args));
-    $result;
+    shift;
+    return File::Spec->catdir(@_);
 }
 
 =item catfile
@@ -194,13 +194,8 @@ complete path ending with a filename
 =cut
 
 sub catfile {
-    my $self = shift @_;
-    my $file = pop @_;
-    return $file unless @_;
-    my $dir = $self->catdir(@_);
-    $dir =~ s/(\\\.)$//;
-    $dir .= "\\" unless substr($dir,length($dir)-1,1) eq "\\";
-    return $dir.$file;
+    shift;
+    return File::Spec->catfile(@_);
 }
 
 sub init_others
@@ -270,7 +265,7 @@ XS_DEFINE_VERSION = -D\$(XS_VERSION_MACRO)=\\\"\$(XS_VERSION)\\\"
 };
 
     push @m, qq{
-MAKEMAKER = $INC{'ExtUtils\MakeMaker.pm'}
+MAKEMAKER = $INC{'ExtUtils/MakeMaker.pm'}
 MM_VERSION = $ExtUtils::MakeMaker::VERSION
 };
 
@@ -329,10 +324,10 @@ makemakerdflt: all
 
 .SUFFIXES: .xs .c .C .cpp .cxx .cc \$(OBJ_EXT)
 
-# Nick wanted to get rid of .PRECIOUS. I don't remember why. I seem to recall, that
-# some make implementations will delete the Makefile when we rebuild it. Because
-# we call false(1) when we rebuild it. So make(1) is not completely wrong when it
-# does so. Our milage may vary.
+# Nick wanted to get rid of .PRECIOUS. I don't remember why. I seem to 
+# recall, that some make implementations will delete the Makefile when we 
+# rebuild it. Because we call false(1) when we rebuild it. So make(1) is 
+# not completely wrong when it does so. Our milage may vary.
 # .PRECIOUS: Makefile    # seems to be not necessary anymore
 
 .PHONY: all config static dynamic test linkext manifest
@@ -344,11 +339,11 @@ CONFIGDEP = \$(PERL_ARCHLIB)\\Config.pm \$(PERL_INC)\\config.h
     my @parentdir = split(/::/, $self->{PARENT_NAME});
     push @m, q{
 # Where to put things:
-INST_LIBDIR      = }. $self->catdir('$(INST_LIB)',@parentdir)        .q{
-INST_ARCHLIBDIR  = }. $self->catdir('$(INST_ARCHLIB)',@parentdir)    .q{
+INST_LIBDIR      = }. File::Spec->catdir('$(INST_LIB)',@parentdir)        .q{
+INST_ARCHLIBDIR  = }. File::Spec->catdir('$(INST_ARCHLIB)',@parentdir)    .q{
 
-INST_AUTODIR     = }. $self->catdir('$(INST_LIB)','auto','$(FULLEXT)')       .q{
-INST_ARCHAUTODIR = }. $self->catdir('$(INST_ARCHLIB)','auto','$(FULLEXT)')   .q{
+INST_AUTODIR     = }. File::Spec->catdir('$(INST_LIB)','auto','$(FULLEXT)')       .q{
+INST_ARCHAUTODIR = }. File::Spec->catdir('$(INST_ARCHLIB)','auto','$(FULLEXT)')   .q{
 };
 
     if ($self->has_link_code()) {
@@ -391,11 +386,7 @@ PM_TO_BLIB = }.join(" \\\n\t", %{$self->{PM}}).q{
 
 
 sub path {
-    my($self) = @_;
-    my $path = $ENV{'PATH'} || $ENV{'Path'} || $ENV{'path'};
-    my @path = split(';',$path);
-    foreach(@path) { $_ = '.' if $_ eq '' }
-    @path;
+    return File::Spec->path();
 }
 
 =item static_lib (o)
@@ -605,7 +596,7 @@ destination and autosplits them. See L<ExtUtils::Install/DESCRIPTION>
 
 sub pm_to_blib {
     my $self = shift;
-    my($autodir) = $self->catdir('$(INST_LIB)','auto');
+    my($autodir) = File::Spec->catdir('$(INST_LIB)','auto');
     return q{
 pm_to_blib: $(TO_INST_PM)
 	}.$self->{NOECHO}.q{$(PERL) "-I$(INST_ARCHLIB)" "-I$(INST_LIB)" \
@@ -839,9 +830,9 @@ sub htmlifypods {
     my($dist);
     my($pod2html_exe);
     if (defined $self->{PERL_SRC}) {
-	$pod2html_exe = $self->catfile($self->{PERL_SRC},'pod','pod2html');
+	$pod2html_exe = File::Spec->catfile($self->{PERL_SRC},'pod','pod2html');
     } else {
-	$pod2html_exe = $self->catfile($Config{scriptdirexp},'pod2html');
+	$pod2html_exe = File::Spec->catfile($Config{scriptdirexp},'pod2html');
     }
     unless ($pod2html_exe = $self->perl_script($pod2html_exe)) {
 	# No pod2html but some HTMLxxxPODS to be installed

@@ -3,6 +3,8 @@
 #include "perl.h"
 #include "XSUB.h"
 
+#include <stddef.h>
+
 #ifndef VMS
 # ifdef I_SYS_TYPES
 #  include <sys/types.h>
@@ -87,7 +89,7 @@ my_inet_aton(register const char *cp, struct in_addr *addr)
 	unsigned int parts[4];
 	register unsigned int *pp = parts;
 
-	if (!cp)
+       if (!cp || !*cp)
 		return 0;
 	for (;;) {
 		/*
@@ -179,11 +181,41 @@ not_here(char *s)
     return -1;
 }
 
-#include "constants.c"
+#define PERL_IN_ADDR_S_ADDR_SIZE 4
+
+/*
+* Bad assumptions possible here.
+*
+* Bad Assumption 1: struct in_addr has no other fields
+* than the s_addr (which is the field we care about
+* in here, really). However, we can be fed either 4-byte
+* addresses (from pack("N", ...), or va.b.c.d, or ...),
+* or full struct in_addrs (from e.g. pack_sockaddr_in()),
+* which may or may not be 4 bytes in size.
+*
+* Bad Assumption 2: the s_addr field is a simple type
+* (such as an int, u_int32_t).  It can be a bit field,
+* in which case using & (address-of) on it or taking sizeof()
+* wouldn't go over too well.  (Those are not attempted
+* now but in case someone thinks to change the below code
+* to use addr.s_addr instead of addr, you have been warned.)
+*
+* Bad Assumption 3: the s_addr is the first field in
+* an in_addr, or that its bytes are the first bytes in
+* an in_addr.
+*
+* These bad assumptions are wrong in UNICOS which has
+* struct in_addr { struct { u_long  st_addr:32; } s_da };
+* #define s_addr s_da.st_addr
+* and u_long is 64 bits.
+*
+* --jhi */
+
+#include "const-c.inc"
 
 MODULE = Socket		PACKAGE = Socket
 
-INCLUDE: constants.xs
+INCLUDE: const-xs.inc
 
 void
 inet_aton(host)
@@ -192,7 +224,10 @@ inet_aton(host)
 	{
 	struct in_addr ip_address;
 	struct hostent * phe;
-	int ok = inet_aton(host, &ip_address);
+	int ok =
+		(host != NULL) &&
+		(*host != '\0') &&
+		inet_aton(host, &ip_address);
 
 	if (!ok && (phe = gethostbyname(host))) {
 		Copy( phe->h_addr, &ip_address, phe->h_length, char );
@@ -200,9 +235,8 @@ inet_aton(host)
 	}
 
 	ST(0) = sv_newmortal();
-	if (ok) {
+	if (ok)
 		sv_setpvn( ST(0), (char *)&ip_address, sizeof ip_address );
-	}
 	}
 
 void
@@ -213,18 +247,46 @@ inet_ntoa(ip_address_sv)
 	STRLEN addrlen;
 	struct in_addr addr;
 	char * addr_str;
-	char * ip_address = SvPV(ip_address_sv,addrlen);
-	if (addrlen != sizeof(addr)) {
-	    croak("Bad arg length for %s, length is %d, should be %d",
-			"Socket::inet_ntoa",
-			addrlen, sizeof(addr));
-	}
-
-	Copy( ip_address, &addr, sizeof addr, char );
-	addr_str = inet_ntoa(addr);
-
+	char * ip_address;
+	if (DO_UTF8(ip_address_sv) && !sv_utf8_downgrade(ip_address_sv, 1))
+	     croak("Wide character in Socket::inet_ntoa");
+	ip_address = SvPVbyte(ip_address_sv, addrlen);
+	if (addrlen == sizeof(addr) || addrlen == 4)
+	        addr.s_addr =
+		    (ip_address[0] & 0xFF) << 24 |
+		    (ip_address[1] & 0xFF) << 16 |
+		    (ip_address[2] & 0xFF) <<  8 |
+		    (ip_address[3] & 0xFF);
+	else
+	        croak("Bad arg length for %s, length is %d, should be %d",
+		      "Socket::inet_ntoa",
+		      addrlen, sizeof(addr));
+	/* We could use inet_ntoa() but that is broken
+	 * in HP-UX + GCC + 64bitint (returns "0.0.0.0"),
+	 * so let's use this sprintf() workaround everywhere. */
+	New(1138, addr_str, 4 * 3 + 3 + 1, char);
+	sprintf(addr_str, "%d.%d.%d.%d",
+		((addr.s_addr >> 24) & 0xFF),
+		((addr.s_addr >> 16) & 0xFF),
+		((addr.s_addr >>  8) & 0xFF),
+		( addr.s_addr        & 0xFF));
 	ST(0) = sv_2mortal(newSVpvn(addr_str, strlen(addr_str)));
+	Safefree(addr_str);
 	}
+
+void
+sockaddr_family(sockaddr)
+	SV *	sockaddr
+	PREINIT:
+	STRLEN sockaddr_len;
+	char *sockaddr_pv = SvPVbyte(sockaddr, sockaddr_len);
+	CODE:
+	if (sockaddr_len < offsetof(struct sockaddr, sa_data)) {
+	    croak("Bad arg length for %s, length is %d, should be at least %d",
+	          "Socket::sockaddr_family", sockaddr_len,
+		  offsetof(struct sockaddr, sa_data));
+	}
+	ST(0) = sv_2mortal(newSViv(((struct sockaddr*)sockaddr_pv)->sa_family));
 
 void
 pack_sockaddr_un(pathname)
@@ -281,7 +343,7 @@ unpack_sockaddr_un(sun_sv)
 #ifdef I_SYS_UN
 	struct sockaddr_un addr;
 	STRLEN sockaddrlen;
-	char * sun_ad = SvPV(sun_sv,sockaddrlen);
+	char * sun_ad = SvPVbyte(sun_sv,sockaddrlen);
 	char * e;
 #   ifndef __linux__
 	/* On Linux sockaddrlen on sockets returned by accept, recvfrom,
@@ -311,18 +373,32 @@ unpack_sockaddr_un(sun_sv)
 	}
 
 void
-pack_sockaddr_in(port,ip_address)
+pack_sockaddr_in(port, ip_address_sv)
 	unsigned short	port
-	char *	ip_address
+	SV *	ip_address_sv
 	CODE:
 	{
 	struct sockaddr_in sin;
-
+	struct in_addr addr;
+	STRLEN addrlen;
+	char * ip_address;
+	if (DO_UTF8(ip_address_sv) && !sv_utf8_downgrade(ip_address_sv, 1))
+	     croak("Wide character in Socket::pack_sockaddr_in");
+	ip_address = SvPVbyte(ip_address_sv, addrlen);
+	if (addrlen == sizeof(addr) || addrlen == 4)
+	        addr.s_addr =
+		    (ip_address[0] & 0xFF) << 24 |
+		    (ip_address[1] & 0xFF) << 16 |
+		    (ip_address[2] & 0xFF) <<  8 |
+		    (ip_address[3] & 0xFF);
+	else
+	        croak("Bad arg length for %s, length is %d, should be %d",
+		      "Socket::pack_sockaddr_in",
+		      addrlen, sizeof(addr));
 	Zero( &sin, sizeof sin, char );
 	sin.sin_family = AF_INET;
 	sin.sin_port = htons(port);
-	Copy( ip_address, &sin.sin_addr, sizeof sin.sin_addr, char );
-
+	sin.sin_addr.s_addr = htonl(addr.s_addr);
 	ST(0) = sv_2mortal(newSVpvn((char *)&sin, sizeof sin));
 	}
 
@@ -334,8 +410,8 @@ unpack_sockaddr_in(sin_sv)
 	STRLEN sockaddrlen;
 	struct sockaddr_in addr;
 	unsigned short	port;
-	struct in_addr	ip_address;
-	char *	sin = SvPV(sin_sv,sockaddrlen);
+	struct in_addr  ip_address;
+	char *	sin = SvPVbyte(sin_sv,sockaddrlen);
 	if (sockaddrlen != sizeof(addr)) {
 	    croak("Bad arg length for %s, length is %d, should be %d",
 			"Socket::unpack_sockaddr_in",
@@ -353,5 +429,5 @@ unpack_sockaddr_in(sin_sv)
 
 	EXTEND(SP, 2);
 	PUSHs(sv_2mortal(newSViv((IV) port)));
-	PUSHs(sv_2mortal(newSVpvn((char *)&ip_address,sizeof ip_address)));
+	PUSHs(sv_2mortal(newSVpvn((char *)&ip_address, sizeof ip_address)));
 	}

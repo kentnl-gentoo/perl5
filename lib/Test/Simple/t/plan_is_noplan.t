@@ -1,11 +1,26 @@
+BEGIN {
+    if( $ENV{PERL_CORE} ) {
+        chdir 't';
+        @INC = ('../lib', 'lib');
+    }
+    else {
+        unshift @INC, 't/lib';
+    }
+}
+
 # Can't use Test.pm, that's a 5.005 thing.
 package My::Test;
 
-# This feature requires a fairly new version of Test::Harness
 BEGIN {
+    if( !$ENV{HARNESS_ACTIVE} && $ENV{PERL_CORE} ) {
+        print "1..0 # Skipped: Won't work with t/TEST\n";
+        exit 0;
+    }
+
+    # This feature requires a fairly new version of Test::Harness
     require Test::Harness;
     if( $Test::Harness::VERSION < 1.20 ) {
-        print "1..0\n";
+        print "1..0 # Skipped: Need Test::Harness 1.20 or up\n";
         exit(0);
     }
 }
@@ -30,9 +45,8 @@ package main;
 
 require Test::Simple;
 
-@INC = ('../lib', 'lib/Test/Simple');
-require Catch;
-my($out, $err) = Catch::caught();
+require Test::Simple::Catch;
+my($out, $err) = Test::Simple::Catch::caught();
 
 
 Test::Simple->import('no_plan');

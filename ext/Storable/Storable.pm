@@ -1,4 +1,4 @@
-;# $Id: Storable.pm,v 1.0.1.11 2001/07/01 11:22:14 ram Exp $
+;# $Id: Storable.pm,v 1.0.1.13 2001/12/01 13:34:49 ram Exp $
 ;#
 ;#  Copyright (c) 1995-2000, Raphael Manfredi
 ;#  
@@ -6,6 +6,13 @@
 ;#  in the README file that comes with the distribution.
 ;#
 ;# $Log: Storable.pm,v $
+;# Revision 1.0.1.13  2001/12/01 13:34:49  ram
+;# patch14: avoid requiring Fcntl upfront, useful to embedded runtimes
+;# patch14: store_fd() will now correctly autoflush file if needed
+;#
+;# Revision 1.0.1.12  2001/08/28 21:51:51  ram
+;# patch13: fixed truncation race with lock_retrieve() in lock_store()
+;#
 ;# Revision 1.0.1.11  2001/07/01 11:22:14  ram
 ;# patch12: systematically use "=over 4" for POD linters
 ;# patch12: updated version number
@@ -63,7 +70,7 @@ package Storable; @ISA = qw(Exporter DynaLoader);
 use AutoLoader;
 use vars qw($forgive_me $VERSION);
 
-$VERSION = '1.012';
+$VERSION = '1.015';
 *AUTOLOAD = \&AutoLoader::AUTOLOAD;		# Grrr...
 
 #
@@ -90,8 +97,7 @@ unless (defined @Log::Agent::EXPORT) {
 #
 
 BEGIN {
-	require Fcntl;
-	if (exists $Fcntl::EXPORT_TAGS{'flock'}) {
+	if (eval { require Fcntl; 1 } && exists $Fcntl::EXPORT_TAGS{'flock'}) {
 		Fcntl->import(':flock');
 	} else {
 		eval q{
@@ -119,6 +125,28 @@ sub CAN_FLOCK {
 		$Config{'d_flock'} ||
 		$Config{'d_fcntl_can_lock'} ||
 		$Config{'d_lockf'};
+}
+
+sub show_file_magic {
+    print <<EOM;
+#
+# To recognize the data files of the Perl module Storable,
+# the following lines need to be added to the local magic(5) file,
+# usually either /usr/share/misc/magic or /etc/magic.
+#
+0	string	perl-store	perl Storable(v0.6) data
+>4	byte	>0	(net-order %d)
+>>4	byte	&01	(network-ordered)
+>>4	byte	=3	(major 1)
+>>4	byte	=2	(major 1)
+
+0	string	pst0	perl Storable(v0.7) data
+>4	byte	>0
+>>4	byte	&01	(network-ordered)
+>>4	byte	=5	(major 2)
+>>4	byte	=4	(major 2)
+>>5	byte	>0	(minor %d)
+EOM
 }
 
 bootstrap Storable;
@@ -172,9 +200,8 @@ sub _store {
 	logcroak "not a reference" unless ref($self);
 	logcroak "wrong argument number" unless @_ == 2;	# No @foo in arglist
 	local *FILE;
-	open(FILE, ">$file") || logcroak "can't create $file: $!";
-	binmode FILE;				# Archaic systems...
 	if ($use_locking) {
+		open(FILE, ">>$file") || logcroak "can't write into $file: $!";
 		unless (&CAN_FLOCK) {
 			logcarp "Storable::lock_store: fcntl/flock emulation broken on $^O";
 			return undef;
@@ -183,7 +210,10 @@ sub _store {
 			logcroak "can't get exclusive lock on $file: $!";
 		truncate FILE, 0;
 		# Unlocking will happen when FILE is closed
+	} else {
+		open(FILE, ">$file") || logcroak "can't create $file: $!";
 	}
+	binmode FILE;				# Archaic systems...
 	my $da = $@;				# Don't mess if called from exception handler
 	my $ret;
 	# Call C routine nstore or pstore, depending on network order
@@ -229,6 +259,7 @@ sub _store_fd {
 	# Call C routine nstore or pstore, depending on network order
 	eval { $ret = &$xsptr($file, $self) };
 	logcroak $@ if $@ =~ s/\.?\n$/,/;
+	local $\; print $file '';	# Autoflush the file if wanted
 	$@ = $da;
 	return $ret ? $ret : undef;
 }
@@ -664,6 +695,21 @@ There is a new Clone module available on CPAN which implements deep cloning
 natively, i.e. without freezing to memory and thawing the result.  It is
 aimed to replace Storable's dclone() some day.  However, it does not currently
 support Storable hooks to redefine the way deep cloning is performed.
+
+=head1 Storable magic
+
+Yes, there's a lot of that :-) But more precisely, in UNIX systems
+there's a utility called C<file>, which recognizes data files based on
+their contents (usually their first few bytes).  For this to work,
+a certain file called F<magic> needs to taught about the I<signature>
+of the data.  Where that configuration file lives depends on the UNIX
+flavour, often it's something like F</usr/share/misc/magic> or
+F</etc/magic>.  Your system administrator needs to do the updating of
+the F<magic> file.  The necessary signature information is output to
+stdout by invoking Storable::show_file_magic().  Note that the open
+source implementation of the C<file> utility 3.38 (or later)
+is expected to contain the support for recognising Storable files,
+in addition to other kinds of Perl files.
 
 =head1 EXAMPLES
 

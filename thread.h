@@ -1,4 +1,13 @@
-#if defined(USE_THREADS) || defined(USE_ITHREADS)
+/*    thread.h
+ *
+ *    Copyright (c) 1997-2002, Larry Wall
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
+ */
+
+#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
 
 #if defined(VMS)
 #include <builtins.h>
@@ -302,21 +311,13 @@
     } STMT_END
 #endif
 
-void Perl_atfork_lock(void);
-void Perl_atfork_unlock(void);
-
 #ifndef PTHREAD_ATFORK
 #  ifdef HAS_PTHREAD_ATFORK
 #    define PTHREAD_ATFORK(prepare,parent,child)		\
 	pthread_atfork(prepare,parent,child)
 #  else
-#    ifdef HAS_FORK
-#      define PTHREAD_ATFORK(prepare,parent,child)		\
-	 Perl_croak(aTHX_ "No pthread_atfork() -- fork() too unsafe");
-#    else
-#      define PTHREAD_ATFORK(prepare,parent,child)		\
-	 NOOP
-#    endif
+#    define PTHREAD_ATFORK(prepare,parent,child)		\
+	NOOP
 #  endif
 #endif
 
@@ -325,7 +326,7 @@ void Perl_atfork_unlock(void);
 #  define THREAD_RET_CAST(p)	((void *)(p))
 #endif /* THREAD_RET */
 
-#if defined(USE_THREADS)
+#if defined(USE_5005THREADS)
 
 /* Accessor for per-thread SVs */
 #  define THREADSV(i) (thr->threadsvp[i])
@@ -379,8 +380,8 @@ typedef struct condpair {
 #define MgCONDP(mg) (&((condpair_t *)(mg->mg_ptr))->cond)
 #define MgOWNER(mg) ((condpair_t *)(mg->mg_ptr))->owner
 
-#endif /* USE_THREADS */
-#endif /* USE_THREADS || USE_ITHREADS */
+#endif /* USE_5005THREADS */
+#endif /* USE_5005THREADS || USE_ITHREADS */
 
 #ifndef MUTEX_LOCK
 #  define MUTEX_LOCK(m)
@@ -473,8 +474,4 @@ typedef struct condpair {
 
 #ifndef INIT_THREADS
 #  define INIT_THREADS NOOP
-#endif
-
-#ifndef PTHREAD_ATFORK
-#  define PTHREAD_ATFORK(prepare,parent,child)	NOOP
 #endif

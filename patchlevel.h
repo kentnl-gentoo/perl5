@@ -1,3 +1,12 @@
+/*    patchlevel.h
+ *
+ *    Copyright (c) 1997-2002, Larry Wall
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
+ */
+
 #ifndef __PATCHLEVEL_H_INCLUDED__
 
 /* do not adjust the whitespace! Configure expects the numbers to be
@@ -5,7 +14,7 @@
 
 #define PERL_REVISION	5		/* age */
 #define PERL_VERSION	7		/* epoch */
-#define PERL_SUBVERSION	2		/* generation */
+#define PERL_SUBVERSION	3		/* generation */
 
 /* The following numbers describe the earliest compatible version of
    Perl ("compatibility" here being defined as sufficient binary/API

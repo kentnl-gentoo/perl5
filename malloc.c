@@ -3,6 +3,10 @@
  */
 
 /*
+ * "'The Chamber of Records,' said Gimli. 'I guess that is where we now stand.'"
+ */
+
+/*
   Here are some notes on configuring Perl's malloc.  (For non-perl
   usage see below.)
  
@@ -255,7 +259,6 @@
 #    include <stdlib.h>
 #    include <stdio.h>
 #    include <memory.h>
-#    define _(arg) arg
 #    ifndef Malloc_t
 #      define Malloc_t void *
 #    endif
@@ -1592,12 +1595,12 @@ Perl_mfree(void *mp)
 		{
 		    dTHX;
 		    if (!PERL_IS_ALIVE || !PL_curcop || ckWARN_d(WARN_MALLOC))
-			Perl_warner(aTHX_ WARN_MALLOC, "%s free() ignored",
+			Perl_warner(aTHX_ WARN_MALLOC, "%s free() ignored (RMAGIC, PERL_CORE)",
 				    ovp->ov_rmagic == RMAGIC - 1 ?
 				    "Duplicate" : "Bad");
 		}
 #else
-		warn("%s free() ignored",
+		warn("%s free() ignored (RMAGIC)",
 		    ovp->ov_rmagic == RMAGIC - 1 ? "Duplicate" : "Bad");
 #endif		
 #else
@@ -1605,7 +1608,7 @@ Perl_mfree(void *mp)
 		{
 		    dTHX;
 		    if (!PERL_IS_ALIVE || !PL_curcop || ckWARN_d(WARN_MALLOC))
-			Perl_warner(aTHX_ WARN_MALLOC, "%s", "Bad free() ignored");
+			Perl_warner(aTHX_ WARN_MALLOC, "%s", "Bad free() ignored (PERL_CORE)");
 		}
 #else
 		warn("%s", "Bad free() ignored");

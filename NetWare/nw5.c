@@ -17,7 +17,7 @@
 
 
 
-#include <perl.h>	// For dTHXo, etc.
+#include <perl.h>	// For dTHX, etc.
 #include "nwpipe.h"
 
 
@@ -211,8 +211,8 @@ nw_stdout()
 long
 nw_telldir(DIR *dirp)
 {
-	dTHXo;
-	Perl_croak(aTHX_ "telldir function is not implemented");
+	dTHX;
+	Perl_croak(aTHX_ "The telldir() function is not implemented on NetWare\n");
 	return 0l;
 }
 
@@ -292,13 +292,13 @@ nw_write(int fd, const void *buf, unsigned int cnt)
 char *
 nw_crypt(const char *txt, const char *salt)
 {
-	 dTHXo;
+	 dTHX;
 
 #ifdef HAVE_DES_FCRYPT
     dTHR;
     return des_fcrypt(txt, salt, w32_crypt_buffer);
 #else
-    Perl_croak(aTHX_ "The crypt() function is unimplemented due to excessive paranoia.");
+    Perl_croak(aTHX_ "The crypt() function is not implemented on NetWare\n");
     return Nullch;
 #endif
 }
@@ -394,6 +394,8 @@ nw_fileno(FILE *pf)
 int
 nw_flock(int fd, int oper)
 {
+	dTHX;
+	Perl_croak(aTHX_ "The flock() function is not implemented on NetWare\n");
 	return 0;
 }
 
@@ -752,8 +754,8 @@ nw_rename(const char *oname, const char *newname)
 void
 nw_rewinddir(DIR *dirp)
 {
-	dTHXo;
-	Perl_croak(aTHX_ "rewinddir function is not implemented");
+	dTHX;
+	Perl_croak(aTHX_ "The rewinddir() function is not implemented on NetWare\n");
 }
 
 void
@@ -766,8 +768,8 @@ nw_rewind(FILE *pf)
 void
 nw_seekdir(DIR *dirp, long loc)
 {
-	dTHXo;
-	Perl_croak(aTHX_ "seekdir function is not implemented");
+	dTHX;
+	Perl_croak(aTHX_ "The seekdir() function is not implemented on NetWare\n");
 }
 
 int *
@@ -879,7 +881,70 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
 	// This feature needs to be implemented.
 	// _asm is commented out since it goes into the internal debugger.
 //	_asm {int 3};
-	return(0);
+////	return(0);
+
+
+	// This below code is required for system() call.
+	// Otherwise system() does not work on NetWare.
+	// Ananth, 3 Sept 2001
+
+    dTHX;
+    SV *really = (SV*)vreally;
+    SV **mark = (SV**)vmark;
+    SV **sp = (SV**)vsp;
+    char **argv;
+    char *str;
+    int status;
+    int flag = P_WAIT;
+    int index = 0;
+
+
+    if (sp <= mark)
+	return -1;
+
+	nw_perlshell_items = 0;	// No Shell
+    New(1306, argv, (sp - mark) + nw_perlshell_items + 3, char*);
+
+    if (SvNIOKp(*(mark+1)) && !SvPOKp(*(mark+1))) {
+	++mark;
+	flag = SvIVx(*mark);
+    }
+
+    while (++mark <= sp) {
+	if (*mark && (str = (char *)SvPV_nolen(*mark)))
+	{
+	    argv[index] = str;
+		index++;
+	}
+	else
+	{
+		argv[index] = "";
+//		argv[index] = '\0';
+		index++;
+    }
+	}
+    argv[index] = '\0';
+	index++;
+
+    status = nw_spawnvp(flag,
+			   (char*)(really ? SvPV_nolen(really) : argv[0]),
+			   (char**)argv);
+
+
+    if (flag != P_NOWAIT) {
+	if (status < 0) {
+    	    dTHR;
+	    if (ckWARN(WARN_EXEC))
+		Perl_warner(aTHX_ WARN_EXEC, "Can't spawn \"%s\": %s", argv[0], strerror(errno));
+	    status = 255 * 256;
+	}
+	else
+	    status *= 256;
+	PL_statusvalue = status;
+    }
+
+    Safefree(argv);
+    return (status);
 }
 
 int

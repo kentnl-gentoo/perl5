@@ -151,7 +151,7 @@ my $lastnext;
 
 my %opclass = ('OP' => "0", 'UNOP' => "1", 'BINOP' => "2", 'LOGOP' => "|",
 	       'LISTOP' => "@", 'PMOP' => "/", 'SVOP' => "\$", 'GVOP' => "*",
-	       'PVOP' => '"', 'LOOP' => "{", 'COP' => ";");
+	       'PVOP' => '"', 'LOOP' => "{", 'COP' => ";", 'PADOP' => "#");
 
 no warnings 'qw'; # "Possible attempt to put comments..."
 my @linenoise =
@@ -499,10 +499,40 @@ sub tree {
            map(" " x (length($name)+$size) . $_, @lines));
 }
 
-# This is a bit of a hack; the 2 and 15 were determined empirically.
-# These need to stay the last things in the module.
-$cop_seq_base = svref_2object(eval 'sub{0;}')->START->cop_seq + 2;
-$seq_base = svref_2object(eval 'sub{}')->START->seq + 15;
+# *** Warning: fragile kludge ahead ***
+# Because the B::* modules run in the same interpreter as the code
+# they're compiling, their presence tends to distort the view we have
+# of the code we're looking at. In particular, perl gives sequence
+# numbers to both OPs in general and COPs in particular. If the
+# program we're looking at were run on its own, these numbers would
+# start at 1. Because all of B::Concise and all the modules it uses
+# are compiled first, though, by the time we get to the user's program
+# the sequence numbers are alreay at pretty high numbers, which would
+# be distracting if you're trying to tell OPs apart. Therefore we'd
+# like to subtract an offset from all the sequence numbers we display,
+# to restore the simpler view of the world. The trick is to know what
+# that offset will be, when we're still compiling B::Concise!  If we
+# hardcoded a value, it would have to change every time B::Concise or
+# other modules we use do. To help a little, what we do here is
+# compile a little code at the end of the module, and compute the base
+# sequence number for the user's program as being a small offset
+# later, so all we have to worry about are changes in the offset.
+
+# When you say "perl -MO=Concise -e '$a'", the output should look like:
+
+# 4  <@> leave[t1] vKP/REFC ->(end)
+# 1     <0> enter ->2
+ #^ smallest OP sequence number should be 1
+# 2     <;> nextstate(main 1 -e:1) v ->3
+ #                         ^ smallest COP sequence number should be 1
+# -     <1> ex-rv2sv vK/1 ->4
+# 3        <$> gvsv(*a) s ->4
+
+# If either of the marked numbers there aren't 1, it means you need to
+# update the corresponding magic number in the next two lines.
+# Reember, these need to stay the last things in the module.
+$cop_seq_base = svref_2object(eval 'sub{0;}')->START->cop_seq + 11;
+$seq_base = svref_2object(eval 'sub{}')->START->seq + 84;
 
 1;
 
@@ -528,6 +558,44 @@ in a text approximation to their tree structure, and the format of the
 information displyed is customizable. Its function is similar to that of
 perl's B<-Dx> debugging flag or the B<B::Terse> module, but it is more
 sophisticated and flexible.
+
+=head1 EXAMPLE
+
+Here's is a short example of output, using the default formatting
+conventions :
+
+    % perl -MO=Concise -e '$a = $b + 42'
+    8  <@> leave[t1] vKP/REFC ->(end)
+    1     <0> enter ->2
+    2     <;> nextstate(main 1 -e:1) v ->3
+    7     <2> sassign vKS/2 ->8
+    5        <2> add[t1] sK/2 ->6
+    -           <1> ex-rv2sv sK/1 ->4
+    3              <$> gvsv(*b) s ->4
+    4           <$> const(IV 42) s ->5
+    -        <1> ex-rv2sv sKRM*/1 ->7
+    6           <$> gvsv(*a) s ->7
+
+Each line corresponds to an operator. Null ops appear as C<ex-opname>,
+where I<opname> is the op that has been optimized away by perl.
+
+The number on the first row indicates the op's sequence number. It's
+given in base 36 by default.
+
+The symbol between angle brackets indicates the op's type : for example,
+<2> is a BINOP, <@> a LISTOP, etc. (see L</"OP class abbreviations">).
+
+The opname may be followed by op-specific information in parentheses
+(e.g. C<gvsv(*b)>), and by targ information in brackets (e.g.
+C<leave[t1]>).
+
+Next come the op flags. The common flags are listed below
+(L</"OP flags abbreviations">). The private flags follow, separated
+by a slash. For example, C<vKP/REFC> means that the leave op has
+public flags OPf_WANT_VOID, OPf_KIDS, and OPf_PARENS, and the private
+flag OPpREFCOUNTED.
+
+Finally an arrow points to the sequence number of the next op.
 
 =head1 OPTIONS
 
@@ -700,7 +768,7 @@ non-local exit pointers for a LOOP, etc.) enclosed in paretheses.
 
 The B-determined class of the OP, in all caps.
 
-=item B<#classym>
+=item B<#classsym>
 
 A single symbol abbreviating the class of the OP.
 
@@ -728,7 +796,7 @@ The OP's flags, abbreviated as a series of symbols.
 
 The numeric value of the OP's flags.
 
-=item B<#hyphenseq>
+=item B<#hyphseq>
 
 The sequence number of the OP, or a hyphen if it doesn't have one.
 
@@ -845,6 +913,7 @@ The numeric value of the OP's type, in decimal.
     "      PVOP             An OP with a string
     {      LOOP             An OP that holds pointers for a loop
     ;      COP              An OP that marks the start of a statement
+    #      PADOP            An OP with a GV on the pad
 
 =head1 Using B::Concise outside of the O framework
 

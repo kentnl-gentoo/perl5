@@ -13,10 +13,10 @@ on Cygwin.  This document also describes features of Cygwin that will
 affect how Perl behaves at runtime.
 
 B<NOTE:> There are pre-built Perl packages available for Cygwin and a
-version of Perl is provided on the Cygwin CD.  If you do not need to
-customize the configuration, consider using one of these packages:
+version of Perl is provided in the normal Cygwin install.  If you do
+not need to customize the configuration, consider using one of those
+packages.
 
-  http://cygutils.netpedia.net/
 
 =head1 PREREQUISITES FOR COMPILING PERL ON CYGWIN
 
@@ -31,15 +31,8 @@ about this project can be found at:
 
 A recent net or commercial release of Cygwin is required.
 
-At the time this document was last updated, Cygwin 1.1.5 was current.
+At the time this document was last updated, Cygwin 1.3.9 was current.
 
-B<NOTE:> At this point, minimal effort has been made to provide
-compatibility with old (beta) Cygwin releases.  The focus has been to
-provide a high quality release and not worry about working around old
-bugs.  If you wish to use Perl with Cygwin B20.1 or earlier, consider
-using perl5.005_03, which is available in source and binary form at
-C<http://cygutils.netpedia.net/>.  If there is significant demand,
-a patch kit can be developed to port back to earlier Cygwin versions.
 
 =head2 Cygwin Configuration
 
@@ -117,8 +110,8 @@ near the end of the file.
 Several Perl functions and modules depend on the existence of
 some optional libraries.  Configure will find them if they are
 installed in one of the directories listed as being used for library
-searches.  Pre-built packages for most of these are available at
-C<http://cygutils.netpedia.net/>.
+searches.  Pre-built packages for most of these are available from
+the Cygwin installer.
 
 =over 4
 
@@ -131,22 +124,18 @@ Alternatively, the crypt libraries in GNU libc have been ported to Cygwin.
 
 The DES based Ultra Fast Crypt port was done by Alexey Truhan:
 
-  ftp://ftp.franken.de/pub/win32/develop/gnuwin32/cygwin/porters/Okhapkin_Sergey/cw32crypt-dist-0.tgz
+  ftp://ftp.uni-erlangen.de/pub/pc/gnuwin32/cygwin/porters/Okhapkin_Sergey/cw32crypt-dist-0.tgz
 
 NOTE: There are various export restrictions on DES implementations,
 see the glibc README for more details.
 
 The MD5 port was done by Andy Piper:
 
-  ftp://ftp.franken.de/pub/win32/develop/gnuwin32/cygwin/porters/Okhapkin_Sergey/libcrypt.tgz
+  ftp://ftp.uni-erlangen.de/pub/pc/gnuwin32/cygwin/porters/Okhapkin_Sergey/libcrypt.tgz
 
 =item * C<-lgdbm> (C<use GDBM_File>)
 
-GDBM is available for Cygwin.  GDBM's ndbm/dbm compatibility feature
-also makes C<NDBM_File> and C<ODBM_File> possible (although they add
-little extra value).
-
-NOTE: The ndbm/dbm emulations only completely work on NTFS partitions.
+GDBM is available for Cygwin.
 
 =item * C<-ldb> (C<use DB_File>)
 
@@ -186,36 +175,43 @@ Undefining this symbol forces Perl to be compiled statically.
 By default Perl uses the malloc() included with the Perl source.  If you
 want to force Perl to build with the system malloc() undefine this symbol.
 
+=item * C<-Uuseperlio>
+
+Undefining this symbol disables the PerlIO abstraction, which is now the
+default.
+
 =item * C<-Dusemultiplicity>
 
 Multiplicity is required when embedding Perl in a C program and using
 more than one interpreter instance.  This works with the Cygwin port.
 
-=item * C<-Duseperlio>
-
-The PerlIO abstraction works with the Cygwin port.
-
 =item * C<-Duse64bitint>
 
-I<gcc> supports 64-bit integers.  However, several additional long long
-functions are necessary to use them within Perl (I<{strtol,strtoul}l>).
-These are B<not> yet available with Cygwin.
+By default Perl uses 32 bit integers.  If you want to use larger 64
+bit integers, define this symbol.  If there is trouble, check that
+your Cygwin installation is up to date.
 
 =item * C<-Duselongdouble>
 
 I<gcc> supports long doubles (12 bytes).  However, several additional
 long double math functions are necessary to use them within Perl
-(I<{atan2,cos,exp,floor,fmod,frexp,isnan,log,modf,pow,sin,sqrt}l,strtold>).
+(I<{atan2, cos, exp, floor, fmod, frexp, isnan, log, modf, pow, sin, sqrt}l, 
+strtold>).
 These are B<not> yet available with Cygwin.
 
 =item * C<-Dusethreads>
 
-POSIX threads are B<not> yet implemented in Cygwin.
+POSIX threads are B<not> yet implemented in Cygwin completely.
 
 =item * C<-Duselargefiles>
 
 Although Win32 supports large files, Cygwin currently uses 32-bit integers
 for internal size and position calculations.
+
+=item * C<-Dmksymlinks>
+
+Use this to build perl outside of the source tree.  This works with Cygwin.
+Details can be found in the F<INSTALL> document.
 
 =back
 
@@ -336,70 +332,6 @@ these options, these tests will fail:
   lib/sdbm.t            2
   op/stat.t             9, 20 (.tmp not an executable extension)
 
-=head2 Hard Links on Cygwin
-
-FAT partitions do not support hard links (whereas NTFS does), in which
-case Cygwin implements link() by copying the file.  On remote (network)
-drives Cygwin's stat() always sets C<st_nlink> to 1, so the link count
-for remote directories and files is not available.  In either case,
-these tests will fail:
-
-  Failed Test           List of failed
-  ------------------------------------
-  io/fs.t               4
-  op/stat.t             3
-
-=head2 Filetime Granularity on Cygwin
-
-On FAT partitions the filetime granularity is 2 seconds.  The following
-test will fail:
-
-  Failed Test           List of failed
-  ------------------------------------
-  io/fs.t               18
-
-=head2 Tainting Checks on Cygwin
-
-When Perl is running in taint mode, C<$ENV{PATH}> is considered tainted
-and not used, so DLLs not in the default system directories will not
-be found.  While the tests are running you will see warnings popup from
-the system with messages like:
-
-  Win9x
-    Error Starting Program
-    A required .DLL file, CYGWIN1.DLL, was not found
-
-  WinNT
-    perl.exe - Unable to Locate DLL
-    The dynamic link library cygwin1.dll could not be found in the
-      specified path ...
-
-Just click OK and ignore them.  When running `C<make test>', 2 popups
-occur.  During `C<./perl harness>', 4 popups occur.  Also, these tests
-will fail:
-
-  Failed Test           List of failed
-  ------------------------------------
-  op/taint.t            1, 3, 31, 37
-
-Alternatively, you can copy F<cygwin1.dll> into the directory where the
-tests run:
-
-  cp /bin/cygwin1.dll t
-
-or one of the Windows system directories (although, this is B<not>
-recommended).
-
-=head2 /etc/group on Cygwin
-
-Cygwin does not require F</etc/group>, in which case the F<op/grent.t>
-test will be skipped.  The check performed by F<op/grent.t> expects to
-see entries that use the members field, otherwise this test will fail:
-
-  Failed Test           List of failed
-  ------------------------------------
-  op/grent.t            1
-
 =head2 Script Portability on Cygwin
 
 Cygwin does an outstanding job of providing UNIX-like semantics on top of
@@ -411,7 +343,7 @@ to portability, more information can be found in the Cygwin documentation.
 
 =item * Pathnames
 
-Cygwin pathnames can be separated by forward (F</>) or backward (F<\>)
+Cygwin pathnames can be separated by forward (F</>) or backward (F<\\>)
 slashes.  They may also begin with drive letters (F<C:>) or Universal
 Naming Codes (F<//UNC>).  DOS device names (F<aux>, F<con>, F<prn>,
 F<com*>, F<lpt?>, F<nul>) are invalid as base filenames.  However, they
@@ -470,7 +402,7 @@ access by native Win32 programs).
 
 This will install Perl, including I<man> pages.
 
-  make install | tee log.make-install
+  make install 2>&1 | tee log.make-install
 
 NOTE: If C<STDERR> is redirected `C<make install>' will B<not> prompt
 you to install I<perl> into F</usr/bin>.
@@ -563,20 +495,10 @@ be kept as clean as possible.
 
 When I<make> starts, it warns about overriding commands for F<perlmain.o>.
 
-`C<make clean>' does not remove library F<.def> or F<.exe.stackdump>
-files.
-
-The I<ld2> script contains references to the source directory.  You should
-change these to $installbin after `C<make install>'.
-
 Support for swapping real and effective user and group IDs is incomplete.
 On WinNT Cygwin provides setuid(), seteuid(), setgid() and setegid().
 However, additional Cygwin calls for manipulating WinNT access tokens
 and security contexts are required.
-
-When building DLLs, `C<dllwrap --export-all-symbols>' is used to export
-global symbols.  It might be better to generate an explicit F<.def> file
-(see F<makedef.pl>).  Also, DLLs can now be build with `C<gcc -shared>'.
 
 =head1 AUTHORS
 
@@ -585,8 +507,9 @@ Eric Fifer <egf7@columbia.edu>,
 alexander smishlajev <als@turnhere.com>,
 Steven Morlock <newspost@morlock.net>,
 Sebastien Barre <Sebastien.Barre@utc.fr>,
-Teun Burgers <burgers@ecn.nl>.
+Teun Burgers <burgers@ecn.nl>,
+Gerrit Haase <gh@familiehaase.de>.
 
 =head1 HISTORY
 
-Last updated: 9 November 2000
+Last updated: 2002-02-27

@@ -41,11 +41,8 @@ sub _sock_info {
   $port = $1
 	if(defined $addr && $addr =~ s,:([\w\(\)/]+)$,,);
 
-  if(defined $proto) {
-    if (@proto = ( $proto =~ m,\D,
-		? getprotobyname($proto)
-		: getprotobynumber($proto))
-    ) {
+  if(defined $proto  && $proto =~ /\D/) {
+    if(@proto = getprotobyname($proto)) {
       $proto = $proto[2] || undef;
     }
     else {
@@ -55,9 +52,7 @@ sub _sock_info {
   }
 
   if(defined $port) {
-    $port =~ s,\((\d+)\)$,,;
-
-    my $defport = $1 || undef;
+    my $defport = ($port =~ s,\((\d+)\)$,,) ? $1 : undef;
     my $pnum = ($port =~ m,^(\d+)$,)[0];
 
     @serv = getservbyname($port, $proto[0] || "")
@@ -133,6 +128,8 @@ sub configure {
 					    $proto)
 			or return _error($sock, $!, $@);
     }
+
+    $sock->blocking($arg->{Blocking}) if defined $arg->{Blocking};
 
     $proto ||= (getprotobyname('tcp'))[2];
 
@@ -314,7 +311,7 @@ C<IO::Socket::INET> provides.
     ReusePort	Set SO_REUSEPORT before binding
     Timeout	Timeout	value for various operations
     MultiHomed  Try all adresses for multi-homed hosts
-
+    Blocking    Determine if connection will be blocking mode
 
 If C<Listen> is defined then a listen socket is created, else if the
 socket type, which is derived from the protocol, is SOCK_STREAM then
@@ -322,7 +319,7 @@ connect() is called.
 
 Although it is not illegal, the use of C<MultiHomed> on a socket
 which is in non-blocking mode is of little use. This is because the
-first connect will never fail with a timeout as the connaect call
+first connect will never fail with a timeout as the connect call
 will not block.
 
 The C<PeerAddr> can be a hostname or the IP-address on the
@@ -339,6 +336,9 @@ parameter will be deduced from C<Proto> if not specified.
 
 If the constructor is only passed a single argument, it is assumed to
 be a C<PeerAddr> specification.
+
+If C<Blocking> is set to 0, the connection will be in nonblocking mode.
+If not specified it defaults to 1 (blocking mode).
 
 Examples:
 

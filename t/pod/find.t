@@ -2,8 +2,12 @@
 # Author: Marek Rouchal <marek@saftsack.fs.uni-bayreuth.de>
 
 BEGIN {
-        chdir 't' if -d 't';
-        @INC = '../lib';
+    chdir 't' if -d 't';
+    # The ../../../../../lib is for finding lib/utf8.pm
+    # when running under all-utf8 settings (pod/find.t)
+    # does not directly require lib/utf8.pm but regular
+    # expressions will need that.
+    @INC = qw(../lib ../../../../../lib);
 }
 
 $| = 1;
@@ -48,6 +52,9 @@ if ($^O eq 'VMS') {
         $count += grep {/$_/} @result;
     }
     ok($count/($#result+1)-1,$#compare);
+}
+elsif ($^O eq 'dos') {
+    ok(lc $result,lc $compare);
 }
 else {
     ok($result,$compare);

@@ -7,7 +7,7 @@
 # but essentially none of his code remains.
 
 package B::Deparse;
-use Carp 'cluck', 'croak';
+use Carp;
 use B qw(class main_root main_start main_cv svref_2object opnumber cstring
 	 OPf_WANT OPf_WANT_VOID OPf_WANT_SCALAR OPf_WANT_LIST
 	 OPf_KIDS OPf_REF OPf_STACKED OPf_SPECIAL OPf_MOD
@@ -19,8 +19,9 @@ use B qw(class main_root main_start main_cv svref_2object opnumber cstring
          CVf_METHOD CVf_LOCKED CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE PMf_SKIPWHITE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = 0.61;
+$VERSION = 0.63;
 use strict;
+use vars qw/$AUTOLOAD/;
 use warnings ();
 
 # Changes between 0.50 and 0.51:
@@ -35,7 +36,7 @@ use warnings ();
 # - package declarations using cop_stash
 # - subs, formats and code sorted by cop_seq
 # Changes between 0.51 and 0.52:
-# - added pp_threadsv (special variables under USE_THREADS)
+# - added pp_threadsv (special variables under USE_5005THREADS)
 # - added documentation
 # Changes between 0.52 and 0.53:
 # - many changes adding precedence contexts and associativity
@@ -105,6 +106,10 @@ use warnings ();
 # - our() declarations
 # - *all* the known bugs are now listed in the BUGS section
 # - comprehensive test mechanism (TEST -deparse)
+# Changes between 0.62 and 0.63 (mostly by Rafael Garcia-Suarez)
+# - bug-fixes
+# - new switch -P
+# - support for command-line switches (-l, -0, etc.)
 
 # Todo:
 #  (See also BUGS section at the end of this file)
@@ -168,6 +173,9 @@ use warnings ();
 # subs_declared
 # keys are names of subs for which we've printed declarations.
 # That means we can omit parentheses from the arguments.
+#
+# subs_deparsed
+# Keeps track of fully qualified names of all deparsed subs.
 #
 # parens: -p
 # linenums: -l
@@ -252,6 +260,9 @@ sub todo {
 	$seq = 0;
     }
     push @{$self->{'subs_todo'}}, [$seq, $cv, $is_form];
+    unless ($is_form || class($cv->STASH) eq 'SPECIAL') {
+	$self->{'subs_deparsed'}{$cv->STASH->NAME."::".$cv->GV->NAME} = 1;
+    }
 }
 
 sub next_todo {
@@ -483,6 +494,8 @@ sub new {
 	    $self->{'files'}{$1} = 1;
 	} elsif ($arg eq "-p") {
 	    $self->{'parens'} = 1;
+	} elsif ($arg eq "-P") {
+	    $self->{'noproto'} = 1;
 	} elsif ($arg eq "-l") {
 	    $self->{'linenums'} = 1;
 	} elsif ($arg eq "-q") {
@@ -527,6 +540,18 @@ sub compile {
     my(@args) = @_;
     return sub { 
 	my $self = B::Deparse->new(@args);
+	# First deparse command-line args
+	if (defined $^I) { # deparse -i
+	    print q(BEGIN { $^I = ).cstring($^I).qq(; }\n);
+	}
+	if ($^W) { # deparse -w
+	    print qq(BEGIN { \$^W = $^W; }\n);
+	}
+	if ($/ ne "\n" or defined $O::savebackslash) { # deparse -l and -0
+	    my $fs = cstring($/) || 'undef';
+	    my $bs = cstring($O::savebackslash) || 'undef';
+	    print qq(BEGIN { \$/ = $fs; \$\\ = $bs; }\n);
+	}
 	my @BEGINs  = B::begin_av->isa("B::AV") ? B::begin_av->ARRAY : ();
 	my @INITs   = B::init_av->isa("B::AV") ? B::init_av->ARRAY : ();
 	my @ENDs    = B::end_av->isa("B::AV") ? B::end_av->ARRAY : ();
@@ -549,9 +574,11 @@ sub compile {
 
 	# Print __DATA__ section, if necessary
 	no strict 'refs';
-	if (defined *{$self->{'curstash'}."::DATA"}{IO}) {
+	my $laststash = defined $self->{'curcop'}
+	    ? $self->{'curcop'}->stash->NAME : $self->{'curstash'};
+	if (defined *{$laststash."::DATA"}{IO}) {
 	    print "__DATA__\n";
-	    print readline(*{$self->{'curstash'}."::DATA"});
+	    print readline(*{$laststash."::DATA"});
 	}
     }
 }
@@ -768,10 +795,13 @@ sub deparse_format {
     my @text;
     local($self->{'curcv'}) = $form;
     local($self->{'curcvlex'});
+    local($self->{'in_format'}) = 1;
     local(@$self{qw'curstash warnings hints'})
-		= @$self{'curstash warnings hints'};
+		= @$self{qw'curstash warnings hints'};
     my $op = $form->ROOT;
     my $kid;
+    return "\f." if $op->first->name eq 'stub'
+                || $op->first->name eq 'nextstate';
     $op = $op->first->first; # skip leavewrite, lineseq
     while (not null $op) {
 	$op = $op->sibling; # skip nextstate
@@ -928,92 +958,17 @@ sub maybe_my {
 # The following OPs don't have functions:
 
 # pp_padany -- does not exist after parsing
-# pp_rcatline -- does not exist
 
-sub pp_enter { # see also leave
-    cluck "unexpected OP_ENTER";
-    return "XXX";
+sub AUTOLOAD {
+    if ($AUTOLOAD =~ s/^.*::pp_//) {
+	warn "unexpected OP_".uc $AUTOLOAD;
+	return "XXX";
+    } else {
+	die "Undefined subroutine $AUTOLOAD called";
+    }
 }
 
-sub pp_pushmark { # see also list
-    cluck "unexpected OP_PUSHMARK";
-    return "XXX";
-}
-
-sub pp_leavesub { # see also deparse_sub
-    cluck "unexpected OP_LEAVESUB";
-    return "XXX";
-}
-
-sub pp_leavewrite { # see also deparse_format
-    cluck "unexpected OP_LEAVEWRITE";
-    return "XXX";
-}
-
-sub pp_method { # see also entersub
-    cluck "unexpected OP_METHOD";
-    return "XXX";
-}
-
-sub pp_regcmaybe { # see also regcomp
-    cluck "unexpected OP_REGCMAYBE";
-    return "XXX";
-}
-
-sub pp_regcreset { # see also regcomp
-    cluck "unexpected OP_REGCRESET";
-    return "XXX";
-}
-
-sub pp_substcont { # see also subst
-    cluck "unexpected OP_SUBSTCONT";
-    return "XXX";
-}
-
-sub pp_grepstart { # see also grepwhile
-    cluck "unexpected OP_GREPSTART";
-    return "XXX";
-}
-
-sub pp_mapstart { # see also mapwhile
-    cluck "unexpected OP_MAPSTART";
-    return "XXX";
-}
-
-sub pp_method_named {
-    cluck "unexpected OP_METHOD_NAMED";
-    return "XXX";
-}
-
-sub pp_flip { # see also flop
-    cluck "unexpected OP_FLIP";
-    return "XXX";
-}
-
-sub pp_iter { # see also leaveloop
-    cluck "unexpected OP_ITER";
-    return "XXX";
-}
-
-sub pp_enteriter { # see also leaveloop
-    cluck "unexpected OP_ENTERITER";
-    return "XXX";
-}
-
-sub pp_enterloop { # see also leaveloop
-    cluck "unexpected OP_ENTERLOOP";
-    return "XXX";
-}
-
-sub pp_leaveeval { # see also entereval
-    cluck "unexpected OP_LEAVEEVAL";
-    return "XXX";
-}
-
-sub pp_entertry { # see also leavetry
-    cluck "unexpected OP_ENTERTRY";
-    return "XXX";
-}
+sub DESTROY {}	#	Do not AUTOLOAD
 
 # $root should be the op which represents the root of whatever
 # we're sequencing here. If it's undefined, then we don't append
@@ -1064,7 +1019,7 @@ sub lineseq {
     }
     my $body = join(";\n", grep {length} @exprs);
     my $subs = "";
-    if (defined $root && defined $limit_seq) {
+    if (defined $root && defined $limit_seq && !$self->{'in_format'}) {
 	$subs = join "\n", $self->seq_subs($limit_seq);
     }
     return join(";\n", grep {length} $body, $subs);
@@ -1132,8 +1087,8 @@ Carp::confess() if $gv->isa("B::CV");
     } else {
 	$stash = $stash . "::";
     }
-    if ($name =~ /^\^../) {
-        $name = "{$name}";       # ${^WARNING_BITS} etc
+    if ($name =~ /^(\^..|{)/) {
+        $name = "{$name}";       # ${^WARNING_BITS}, etc and ${
     }
     return $stash . $name;
 }
@@ -1198,7 +1153,7 @@ sub find_scope_en { ((find_scope(@_))[1]); }
 # Recurses down the tree, looking for pad variable introductions and COPs
 sub find_scope {
     my ($self, $op, $scope_st, $scope_en) = @_;
-Carp::cluck() if !defined $op;
+    carp("Undefined op in find_scope") if !defined $op;
     return ($scope_st, $scope_en) unless $op->flags & OPf_KIDS;
 
     for (my $o=$op->first; $$o; $o=$o->sibling) {
@@ -1599,7 +1554,6 @@ sub pp_scalar {
 sub padval {
     my $self = shift;
     my $targ = shift;
-    #cluck "curcv was undef" unless $self->{curcv};
     return (($self->{'curcv'}->PADLIST->ARRAY)[1]->ARRAY)[$targ];
 }
 
@@ -1652,6 +1606,12 @@ sub pp_readline {
     $kid = $kid->first if $kid->name eq "rv2gv"; # <$fh>
     return "<" . $self->deparse($kid, 1) . ">" if is_scalar($kid);
     return $self->unop($op, $cx, "readline");
+}
+
+sub pp_rcatline {
+    my $self = shift;
+    my($op) = @_;
+    return "<" . $self->gv_name($op->gv) . ">";
 }
 
 # Unary operators that can occur as pseudo-listops inside double quotes
@@ -2016,6 +1976,7 @@ sub listop {
     my $kid = $op->first->sibling;
     return $name if null $kid;
     my $first;
+    $name = "socketpair" if $name eq "sockpair";
     if (defined prototype("CORE::$name")
 	&& prototype("CORE::$name") =~ /^;?\*/
 	&& $kid->name eq "rv2gv") {
@@ -2214,7 +2175,7 @@ sub mapop {
     $kid = $kid->sibling;
     for (; !null($kid); $kid = $kid->sibling) {
 	$expr = $self->deparse($kid, 6);
-	push @exprs, $expr if $expr;
+	push @exprs, $expr if defined $expr;
     }
     return $self->maybe_parens_func($name, $code . join(", ", @exprs), $cx, 5);
 }
@@ -2477,6 +2438,14 @@ sub pp_null {
 				   $cx, 20);
     } elsif ($op->flags & OPf_SPECIAL && $cx == 0 && !$op->targ) {
 	return "do {\n\t". $self->deparse($op->first, $cx) ."\n\b};";
+    } elsif (!null($op->first->sibling) and
+	     $op->first->sibling->name eq "null" and
+	     class($op->first->sibling) eq "UNOP" and
+	     $op->first->sibling->first->flags & OPf_STACKED and
+	     $op->first->sibling->first->name eq "rcatline") {
+	return $self->maybe_parens($self->deparse($op->first, 18) . " .= "
+				   . $self->deparse($op->first->sibling, 18),
+				   $cx, 18);
     } else {
 	return $self->deparse($op->first, $cx);
     }
@@ -2560,7 +2529,7 @@ sub rv2x {
     my($op, $cx, $type) = @_;
 
     if (class($op) eq 'NULL' || !$op->can("first")) {
-	Carp::cluck("Unexpected op in pp_rv2x");
+	carp("Unexpected op in pp_rv2x");
 	return 'XXX';
     }
     my $kid = $op->first;
@@ -2820,14 +2789,15 @@ sub method {
 # or ("", $args_after_prototype_demunging) if it does.
 sub check_proto {
     my $self = shift;
+    return "&" if $self->{'noproto'};
     my($proto, @args) = @_;
     my($arg, $real);
     my $doneok = 0;
     my @reals;
     # An unbackslashed @ or % gobbles up the rest of the args
-    $proto =~ s/([^\\]|^)([@%])(.*)$/$1$2/;
+    1 while $proto =~ s/(?<!\\)([@%])[^\]]+$/$1/;
     while ($proto) {
-	$proto =~ s/^ *([\\]?[\$\@&%*]|;)//;
+	$proto =~ s/^(\\?[\$\@&%*]|\\\[[\$\@&%*]+\]|;)//;
 	my $chr = $1;
 	if ($chr eq "") {
 	    return "&" if @args;
@@ -2865,19 +2835,21 @@ sub check_proto {
 		      return "&";
 		  }
 	    } elsif (substr($chr, 0, 1) eq "\\") {
-		$chr = substr($chr, 1);
+		$chr =~ tr/\\[]//d;
 		if ($arg->name =~ /^s?refgen$/ and
 		    !null($real = $arg->first) and
-		    ($chr eq "\$" && is_scalar($real->first)
-		     or ($chr eq "\@"
+		    ($chr =~ /\$/ && is_scalar($real->first)
+		     or ($chr =~ /@/
+			 && class($real->first->sibling) ne 'NULL'
 			 && $real->first->sibling->name
 			 =~ /^(rv2|pad)av$/)
-		     or ($chr eq "%"
+		     or ($chr =~ /%/
+			 && class($real->first->sibling) ne 'NULL'
 			 && $real->first->sibling->name
 			 =~ /^(rv2|pad)hv$/)
-		     #or ($chr eq "&" # This doesn't work
+		     #or ($chr =~ /&/ # This doesn't work
 		     #   && $real->first->name eq "rv2cv")
-		     or ($chr eq "*"
+		     or ($chr =~ /\*/
 			 && $real->first->name eq "rv2gv")))
 		  {
 		      push @reals, $self->deparse($real, 6);
@@ -2932,10 +2904,21 @@ sub pp_entersub {
 
     # Doesn't matter how many prototypes there are, if
     # they haven't happened yet!
-    my $declared = exists $self->{'subs_declared'}{$kid};
-    if (!$declared && defined($proto)) {
-	# Avoid "too early to check prototype" warning
-	($amper, $proto) = ('&');
+    my $declared;
+    {
+	no strict 'refs';
+	no warnings 'uninitialized';
+	$declared = exists $self->{'subs_declared'}{$kid}
+	    || ( 
+		 defined &{ %{$self->{'curstash'}."::"}->{$kid} }
+		 && !exists
+		     $self->{'subs_deparsed'}{$self->{'curstash'}."::".$kid}
+		 && defined prototype $self->{'curstash'}."::".$kid
+	       );
+	if (!$declared && defined($proto)) {
+	    # Avoid "too early to check prototype" warning
+	    ($amper, $proto) = ('&');
+	}
     }
 
     my $args;
@@ -2955,7 +2938,7 @@ sub pp_entersub {
 	}
     } else {
 	# glob() invocations can be translated into calls of
-	# CORE::GLOBAL::glob with an second parameter, a number.
+	# CORE::GLOBAL::glob with a second parameter, a number.
 	# Reverse this.
 	if ($kid eq "CORE::GLOBAL::glob") {
 	    $kid = "glob";
@@ -3050,7 +3033,7 @@ sub re_uninterp_extended {
             | \#[^\n]*            #     (skip over comments)
             )
           | [\$\@]
-            (?!\||\)|\(|$)
+            (?!\||\)|\(|$|\s)
           | \\[uUlLQE]
           )
 
@@ -3060,19 +3043,54 @@ sub re_uninterp_extended {
 }
 }
 
+my %unctrl = # portable to to EBCDIC
+    (
+     "\c@" => '\c@',	# unused
+     "\cA" => '\cA',
+     "\cB" => '\cB',
+     "\cC" => '\cC',
+     "\cD" => '\cD',
+     "\cE" => '\cE',
+     "\cF" => '\cF',
+     "\cG" => '\cG',
+     "\cH" => '\cH',
+     "\cI" => '\cI',
+     "\cJ" => '\cJ',
+     "\cK" => '\cK',
+     "\cL" => '\cL',
+     "\cM" => '\cM',
+     "\cN" => '\cN',
+     "\cO" => '\cO',
+     "\cP" => '\cP',
+     "\cQ" => '\cQ',
+     "\cR" => '\cR',
+     "\cS" => '\cS',
+     "\cT" => '\cT',
+     "\cU" => '\cU',
+     "\cV" => '\cV',
+     "\cW" => '\cW',
+     "\cX" => '\cX',
+     "\cY" => '\cY',
+     "\cZ" => '\cZ',
+     "\c[" => '\c[',	# unused
+     "\c\\" => '\c\\',	# unused
+     "\c]" => '\c]',	# unused
+     "\c_" => '\c_',	# unused
+    );
+
 # character escapes, but not delimiters that might need to be escaped
 sub escape_str { # ASCII, UTF8
     my($str) = @_;
-    $str =~ s/(.)/ord($1)>255 ? sprintf("\\x{%x}", ord($1)) : $1/eg;
+    $str =~ s/(.)/ord($1) > 255 ? sprintf("\\x{%x}", ord($1)) : $1/eg;
     $str =~ s/\a/\\a/g;
-#    $str =~ s/\cH/\\b/g; # \b means someting different in a regex 
+#    $str =~ s/\cH/\\b/g; # \b means something different in a regex 
     $str =~ s/\t/\\t/g;
     $str =~ s/\n/\\n/g;
     $str =~ s/\e/\\e/g;
     $str =~ s/\f/\\f/g;
     $str =~ s/\r/\\r/g;
-    $str =~ s/([\cA-\cZ])/'\\c' . chr(ord('@') + ord($1))/ge;
-    $str =~ s/([\0\033-\037\177-\377])/'\\' . sprintf("%03o", ord($1))/ge;
+    $str =~ s/([\cA-\cZ])/$unctrl{$1}/ge;
+    $str =~ s/([[:^print:]])/sprintf("\\%03o", ord($1))/ge;
     return $str;
 }
 
@@ -3080,8 +3098,9 @@ sub escape_str { # ASCII, UTF8
 # Leave whitespace unmangled.
 sub escape_extended_re {
     my($str) = @_;
-    $str =~ s/(.)/ord($1)>255 ? sprintf("\\x{%x}", ord($1)) : $1/eg;
-    $str =~ s/([\0\033-\037\177-\377])/'\\' . sprintf("%03o", ord($1))/ge;
+    $str =~ s/(.)/ord($1) > 255 ? sprintf("\\x{%x}", ord($1)) : $1/eg;
+    $str =~ s/([[:^print:]])/
+	($1 =~ y! \t\n!!) ? $1 : sprintf("\\%03o", ord($1))/ge;
     $str =~ s/\n/\n\f/g;
     return $str;
 }
@@ -3099,7 +3118,7 @@ sub re_unback {
     my($str) = @_;
 
     # the insane complexity here is due to the behaviour of "\c\"
-    $str =~ s/(^|[^\\]|\\c\\)(?<!\\c)\\(\\\\)*(?=[\0-\031\177-\377])/$1$2/g;
+    $str =~ s/(^|[^\\]|\\c\\)(?<!\\c)\\(\\\\)*(?=[[:^print:]])/$1$2/g;
     return $str;
 }
 
@@ -3131,10 +3150,11 @@ sub balanced_delim {
 sub single_delim {
     my($q, $default, $str) = @_;
     return "$default$str$default" if $default and index($str, $default) == -1;
-    my($succeed, $delim);
-    ($succeed, $str) = balanced_delim($str);
-    return "$q$str" if $succeed;
-    for $delim ('/', '"', '#') {
+    if ($q ne 'qr') {
+	(my $succeed, $str) = balanced_delim($str);
+	return "$q$str" if $succeed;
+    }
+    for my $delim ('/', '"', '#') {
 	return "$q$delim" . $str . $delim if index($str, $delim) == -1;
     }
     if ($default) {
@@ -3618,7 +3638,7 @@ sub matchop {
 	    $re = re_uninterp(escape_str(re_unback($op->precomp)));
 	}
     } elsif ($kid->name ne 'regcomp') {
-	Carp::cluck("found ".$kid->name." where regcomp expected");
+	carp("found ".$kid->name." where regcomp expected");
     } else {
 	($re, $quote) = $self->regcomp($kid, 1, $extended);
     }
@@ -3654,7 +3674,10 @@ sub pp_split {
     my($op, $cx) = @_;
     my($kid, @exprs, $ary, $expr);
     $kid = $op->first;
-    if ($ {$kid->pmreplroot}) {
+    # under ithreads pmreplroot is an integer, not an SV
+    my $replroot = $kid->pmreplroot;
+    if ( ( ref($replroot) && $$replroot ) ||
+         ( !ref($replroot) && $replroot ) ) {
 	$ary = $self->stash_variable('@', $self->gv_name($kid->pmreplroot));
     }
     for (; !null($kid); $kid = $kid->sibling) {
@@ -3804,6 +3827,22 @@ C<B::Deparse,-p> will print
 
 which probably isn't what you intended (the C<'???'> is a sign that
 perl optimized away a constant value).
+
+=item B<-P>
+
+Disable prototype checking. With this option, all function calls are
+deparsed as if no prototype was defined for them. In other words,
+
+    perl -MO=Deparse,-P -e 'sub foo (\@) { 1 } foo @x'
+
+will print
+
+    sub foo (\@) {
+	1;
+    }
+    &foo(\@x);
+
+making clear how the parameters are actually passed to C<foo>.
 
 =item B<-q>
 
@@ -4187,6 +4226,7 @@ There are probably many more bugs on non-ASCII platforms (EBCDIC).
 Stephen McCamant <smcc@CSUA.Berkeley.EDU>, based on an earlier
 version by Malcolm Beattie <mbeattie@sable.ox.ac.uk>, with
 contributions from Gisle Aas, James Duncan, Albert Dvornik, Robin
-Houston, Hugo van der Sanden, Gurusamy Sarathy, and Nick Ing-Simmons.
+Houston, Hugo van der Sanden, Gurusamy Sarathy, Nick Ing-Simmons,
+and Rafael Garcia-Suarez.
 
 =cut

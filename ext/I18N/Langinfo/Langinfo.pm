@@ -136,6 +136,10 @@ print something like:
 
     Sun? [yes/no] 
 
+but under a French locale
+
+    dim? [oui/non] 
+
 The usually available constants are
 
     ABDAY_1 ABDAY_2 ABDAY_3 ABDAY_4 ABDAY_5 ABDAY_6 ABDAY_7
@@ -150,7 +154,7 @@ for abbreviated and full length days of the week and months of the year,
     D_T_FMT D_FMT T_FMT
 
 for the date-time, date, and time formats used by the strftime() function
-(see L<POSIX>, and also L<Time::Piece>),
+(see L<POSIX>)
 
     AM_STR PM_STR T_FMT_AMPM
 
@@ -161,7 +165,8 @@ meridiem time formats,
 
 for the character code set being used (such as "ISO8859-1", "cp850",
 "koi8-r", "sjis", "utf8", etc.), for the currency string, for the
-radix character (yes, this is redundant with POSIX::localeconv())
+radix character used between the integer and the fractional part
+of decimal numbers (yes, this is redundant with POSIX::localeconv())
 
     YESSTR YESEXPR NOSTR NOEXPR
 
@@ -174,6 +179,17 @@ for the Japanese Emperor eras (naturally only defined under Japanese locales).
 See your L<langinfo(3)> for more information about the available
 constants.  (Often this means having to look directly at the
 F<langinfo.h> C header file.)
+
+Note that unfortunately none of the above constants are guaranteed
+to be available on a particular platform.  To be on the safe side
+you can wrap the import in an eval like this:
+
+    eval {
+        require I18N::Langinfo;
+        I18N::Langinfo->import(qw(langinfo CODESET));
+        $codeset = langinfo(CODESET()); # note the ()
+    };
+    if (!$@) { ... failed ... }
 
 =head2 EXPORT
 

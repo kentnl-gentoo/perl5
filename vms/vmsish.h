@@ -285,15 +285,23 @@
 #define COMPLEX_STATUS	1	/* We track both "POSIX" and VMS values */
 
 #define HINT_V_VMSISH		24
-#define HINT_M_VMSISH_HUSHED	0x20000000 /* stifle error msgs on exit */
 #define HINT_M_VMSISH_STATUS	0x40000000 /* system, $? return VMS status */
 #define HINT_M_VMSISH_TIME	0x80000000 /* times are local, not UTC */
 #define NATIVE_HINTS		(PL_hints >> HINT_V_VMSISH)  /* used in op.c */
 
 #define TEST_VMSISH(h)	(PL_curcop->op_private & ((h) >> HINT_V_VMSISH))
-#define VMSISH_HUSHED	TEST_VMSISH(HINT_M_VMSISH_HUSHED)
 #define VMSISH_STATUS	TEST_VMSISH(HINT_M_VMSISH_STATUS)
 #define VMSISH_TIME	TEST_VMSISH(HINT_M_VMSISH_TIME)
+
+/* VMS-specific data storage */
+
+#define HAVE_INTERP_INTERN
+struct interp_intern {
+    int    hushed;
+    double inv_rand_max;
+};
+#define VMSISH_HUSHED     (PL_sys_intern.hushed)
+#define MY_INV_RAND_MAX   (PL_sys_intern.inv_rand_max)
 
 /* Flags for vmstrnenv() */
 #define PERL__TRNENV_SECURE 0x01
@@ -501,6 +509,10 @@ struct utimbuf {
 #    define sigaction(a,b,c) Perl_my_sigaction(a,b,c)
 #  endif
 #endif
+#ifdef KILL_BY_SIGPRC
+#  define kill  Perl_my_kill
+#endif
+
 
 /* VMS doesn't use a real sys_nerr, but we need this when scanning for error
  * messages in text strings . . .
@@ -757,6 +769,11 @@ int	Perl_my_chdir (pTHX_ char *);
 FILE *	Perl_my_tmpfile ();
 #ifndef HOMEGROWN_POSIX_SIGNALS
 int	Perl_my_sigaction (pTHX_ int, const struct sigaction*, struct sigaction*);
+#endif
+#ifdef KILL_BY_SIGPRC
+unsigned int	Perl_sig_to_vmscondition (int);
+int	Perl_my_kill (int, int);
+void	Perl_csighandler_init (void);
 #endif
 int	Perl_my_utime (pTHX_ char *, struct utimbuf *);
 void	Perl_vms_image_init (int *, char ***);

@@ -31,6 +31,12 @@ else
 	sed -e 's/HP-//' -e 1q`;
     selecttype='int *'
     fi
+    # For some strange reason, the u32align test from Configure hangs in
+    # HP-UX 10.20 since the December 2001 patches.  So hint it to avoid
+    # the test.
+    if [ "$xxOsRevMajor" -le 10 ]; then
+	d_u32align=$define
+    fi
 
 echo "Archname is $archname"
 
@@ -69,11 +75,11 @@ case `$cc -v 2>&1`"" in
 		fi
 	    case "`getconf KERNEL_BITS 2>/dev/null`" in
 		*64*)
+		    echo "main(){}">try.c
 		    case "$gccversion" in
 			3*) ccflags="$ccflags -mpa-risc-2-0"
 			    ;;
-			*)  echo "main(){}">try.c
-			    # gcc with gas will not accept +DA2.0
+			*)  # gcc with gas will not accept +DA2.0
 			    case "`$cc -c -Wa,+DA2.0 try.c 2>&1`" in
 				*"+DA2.0"*)		# gas
 				    gnu_as=yes
@@ -98,20 +104,24 @@ case `$cc -v 2>&1`"" in
                                esac
 			    ;;
 			esac
+		    rm -f try.c
 		    ;;
 		esac
 	    ;;
     *)      ccisgcc=''
 	    ccversion=`which cc | xargs what | awk '/Compiler/{print $2}'`
-	    ccflags="-Ae $cc_cppflags -Wl,+vnocompatwarnings"
+	    case "$ccflags" in
+	    "-Ae "*) ;;
+	    *) ccflags="-Ae $cc_cppflags -Wl,+vnocompatwarnings" ;;
+	    esac
 	    # Needed because cpp does only support -Aa (not -Ae)
 	    cpplast='-'
 	    cppminus='-'
 	    cppstdin='cc -E -Aa -D__STDC_EXT__'
 	    cpprun=$cppstdin
-	    case "$d_casti32" in
-		"") d_casti32='undef' ;;
-		esac
+#	    case "$d_casti32" in
+#		"") d_casti32='undef' ;;
+#		esac
 	    ;;
     esac
 
@@ -125,7 +135,7 @@ toke_cflags='ccflags="$ccflags -DARG_ZERO_IS_SCRIPT"'
     gcc_64native=no
 case "$ccisgcc" in
     $define|true|[Yy])
-       echo 'int main(){long l;printf("%d\\n",sizeof(l));}'>try.c
+	echo 'int main(){long l;printf("%d\\n",sizeof(l));}'>try.c
 	$cc -o try $ccflags $ldflags try.c
 	if [ "`try`" = "8" ]; then
 	    cat <<EOM >&4
@@ -266,6 +276,7 @@ int main ()
 EOF
 $cc -o try $ccflags $ldflags try.c
 	maxdsiz=`try`
+rm -f try try.c core
 if [ $maxdsiz -le 64 ]; then
     # 64 Mb is probably not enough to optimize toke.c
     # and regexp.c with -O2
@@ -358,7 +369,10 @@ case "$uselargefiles" in
 	# but we cheat for now.  (Keep that in the left margin.)
 ccflags_uselargefiles="-D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
 
-	ccflags="$ccflags $ccflags_uselargefiles"
+	case "$ccflags" in
+	*" $ccflags_uselargefiles") ;;
+	*) ccflags="$ccflags $ccflags_uselargefiles" ;;
+	esac
 
         if test -z "$ccisgcc" -a -z "$gccversion"; then
 	    # The strict ANSI mode (-Aa) doesn't like large files.
@@ -394,6 +408,27 @@ EOM
 	    if [ -f /usr/include/pthread.h ]; then
 		if [ -f /usr/lib/libcma.sl ]; then
 		    # DCE (from Core OS CD) is installed
+
+                   # Check if it is pristine, or patched
+                   cmavsn=`what /usr/lib/libcma.sl 2>&1 | grep 1996`
+                   if [ ! -z "$cmavsn" ]; then
+                       cat <<EOM >&4
+
+***************************************************************************
+
+Perl will support threading through /usr/lib/libcma.sl from
+the HP DCE package, but the version found is too old to be
+reliable.
+
+If you are not depending on this specific version of the library,
+consider to upgrade using patch PHSS_23672 (read README.hpux)
+
+***************************************************************************
+
+(sleeping for 10 seconds...)
+EOM
+			  sleep 10
+                       fi
 
 		    # It needs # libcma and OLD_PTHREADS_API. Also
 		    # <pthread.h> needs to be #included before any
@@ -452,3 +487,6 @@ EOM
 	;;
     esac
 EOCBU
+
+# fpclassify() is a macro, the library call is Fpclassify
+d_fpclassify='define'

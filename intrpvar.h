@@ -4,6 +4,10 @@
 
 /* Don't forget to re-run embed.pl to propagate changes! */
 
+/* New variables must be added to the very end for binary compatibility.
+ * XSUB.h provides wrapper functions via perlapi.h that make this
+ * irrelevant, but not all code may be expected to #include XSUB.h. */
+
 /* The 'I' prefix is only needed for vars that need appropriate #defines
  * generated when built with or without MULTIPLICITY.  It is also used
  * to generate the appropriate export list for win32.
@@ -34,6 +38,8 @@ PERLVAR(Iminus_F,	bool)
 PERLVAR(Idoswitches,	bool)
 
 /*
+=head1 Global Variables
+
 =for apidoc mn|bool|PL_dowarn
 
 The C variable which corresponds to Perl's $^W warning variable.
@@ -78,7 +84,7 @@ PERLVAR(Iargvout_stack,	AV *)
 
 /* shortcuts to regexp stuff */
 /* this one needs to be moved to thrdvar.h and accessed via
- * find_threadsv() when USE_THREADS */
+ * find_threadsv() when USE_5005THREADS */
 PERLVAR(Ireplgv,	GV *)
 
 /* shortcuts to misc objects */
@@ -220,11 +226,11 @@ PERLVAR(Ilinestart,	char *)		/* beg. of most recently read line */
 PERLVAR(Ipending_ident,	char)		/* pending identifier lookup */
 PERLVAR(Isublex_info,	SUBLEXINFO)	/* from toke.c */
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 PERLVAR(Ithrsv,		SV *)		/* struct perl_thread for main thread */
 PERLVARI(Ithreadnum,	U32,	0)	/* incremented each thread creation */
 PERLVAR(Istrtab_mutex,	perl_mutex)	/* Mutex for string table access */
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 
 PERLVAR(Iuid,		Uid_t)		/* current real user id */
 PERLVAR(Ieuid,		Uid_t)		/* current effective user id */
@@ -385,6 +391,7 @@ PERLVAR(Iutf8_mark,	SV *)
 PERLVAR(Iutf8_toupper,	SV *)
 PERLVAR(Iutf8_totitle,	SV *)
 PERLVAR(Iutf8_tolower,	SV *)
+PERLVAR(Iutf8_tofold,	SV *)
 PERLVAR(Ilast_swash_hv,	HV *)
 PERLVAR(Ilast_swash_klen,	U32)
 PERLVARA(Ilast_swash_key,10,	U8)
@@ -404,7 +411,7 @@ PERLVAR(Isrand_called,	bool)
 PERLVARA(Iuudmap,256,	char)
 PERLVAR(Ibitcount,	char *)
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 PERLVAR(Isv_mutex,	perl_mutex)	/* Mutex for allocating SVs in sv.c */
 PERLVAR(Ieval_mutex,	perl_mutex)	/* Mutex for doeval */
 PERLVAR(Ieval_cond,	perl_cond)	/* Condition variable for doeval */
@@ -422,7 +429,7 @@ PERLVAR(Icurthr,	struct perl_thread *)
 
 PERLVAR(Icred_mutex,	perl_mutex)	/* altered credentials in effect */
 
-#endif /* USE_THREADS */
+#endif /* USE_5005THREADS */
 
 PERLVAR(Ipsig_ptr, SV**)
 PERLVAR(Ipsig_name, SV**)
@@ -444,7 +451,7 @@ PERLVAR(Iptr_table,	PTR_TBL_t*)
 #endif
 PERLVARI(Ibeginav_save, AV*, Nullav)	/* save BEGIN{}s when compiling */
 
-#ifdef USE_THREADS
+#ifdef USE_5005THREADS
 PERLVAR(Ifdpid_mutex,	perl_mutex)	/* mutex for fdpid array */
 PERLVAR(Isv_lock_mutex,	perl_mutex)	/* mutex for SvLOCK macro */
 #endif
@@ -476,18 +483,39 @@ PERLVAR(Inumeric_radix_sv,	SV *)	/* The radix separator if not '.' */
 #endif
 
 #if defined(USE_ITHREADS)
-PERLVAR(Iregex_pad,     SV**)    /* All regex objects */
-PERLVAR(Iregex_padav,   AV*)    /* All regex objects */
+PERLVAR(Iregex_pad,     SV**)		/* All regex objects */
+PERLVAR(Iregex_padav,   AV*)		/* All regex objects */
 
 #ifdef USE_REENTRANT_API
-PERLVAR(Ireentrant_buffer, REBUF*) /* were we store _r buffers */
+PERLVAR(Ireentrant_buffer, REBUF*)	/* here we store the _r buffers */
 #endif
 
+#endif
+
+PERLVAR(Isavebegin,     bool)	/* save BEGINs for compiler	*/
+
+PERLVAR(Icustom_op_names, HV*)  /* Names of user defined ops */
+PERLVAR(Icustom_op_descs, HV*)  /* Descriptions of user defined ops */
+
+#ifdef PERLIO_LAYERS
+PERLVARI(Iperlio, PerlIO *,NULL)
+PERLVARI(Iknown_layers, PerlIO_list_t *,NULL)
+PERLVARI(Idef_layerlist, PerlIO_list_t *,NULL)
+#endif
+
+PERLVARI(Iencoding,	SV*, Nullsv)		/* character encoding */
+
+PERLVAR(Idebug_pad,	struct perl_debug_pad)	/* always needed because of the re extension */
+
+PERLVAR(Itaint_warn, bool)      /* taint warns instead of dying */
+
+#ifdef PL_OP_SLAB_ALLOC
+PERLVAR(IOpPtr,I32 **)
+PERLVARI(IOpSpace,I32,0)
+PERLVAR(IOpSlab,I32 *)
 #endif
 
 /* New variables must be added to the very end for binary compatibility.
  * XSUB.h provides wrapper functions via perlapi.h that make this
  * irrelevant, but not all code may be expected to #include XSUB.h. */
-
-
 

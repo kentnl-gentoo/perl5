@@ -81,17 +81,6 @@ USE_PERLIO	= define
 #USE_5005THREADS	*= define
 
 #
-# WARNING! This option is deprecated and will eventually go away (enable
-# USE_MULTI instead).
-#
-# uncomment next line if you want to use the PERL_OBJECT build option.
-# DO NOT ENABLE unless you have legacy code that relies on the C++
-# CPerlObj class that was available in 5.005.  This cannot be enabled
-# if you ask for USE_5005THREADS above.
-#
-#USE_OBJECT	*= define
-
-#
 # uncomment exactly one of the following
 #
 # Visual C++ 2.x
@@ -107,7 +96,7 @@ CCTYPE		*= MSVC60
 
 #
 # uncomment this if your Borland compiler is older than v5.4.
-BCCOLD = define
+#BCCOLD = define
 #
 # uncomment this if you want to use Borland's VCL as your CRT
 #BCCVCL = define
@@ -128,7 +117,7 @@ CFG		*= Debug
 # uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
 # It has patches that fix known bugs in older versions of MSVCRT.DLL.
 # This currently requires VC 5.0 with Service Pack 3 or later.
-# Get it from CPAN at http://www.perl.com/CPAN/authors/id/D/DO/DOUGL/
+# Get it from CPAN at http://www.cpan.org/authors/id/D/DO/DOUGL/
 # and follow the directions in the package to install.
 #
 # Not recommended if you have VC 6.x and you're not running Windows 9x.
@@ -174,9 +163,13 @@ CFG		*= Debug
 # so you may have to set CCHOME explicitly (spaces in the path name should
 # not be quoted)
 #
-#CCHOME		*= F:\borland\bc5
+.IF "$(CCTYPE)" == "BORLAND"
+CCHOME		*= C:\borland\bcc55
+.ELIF "$(CCTYPE)" == "GCC"
+CCHOME		*= C:\MinGW
+.ELSE
 CCHOME		*= $(MSVCDIR)
-#CCHOME		*= c:\gcc-2.95.2
+.ENDIF
 CCINCDIR	*= $(CCHOME)\include
 CCLIBDIR	*= $(CCHOME)\lib
 
@@ -236,13 +229,6 @@ D_CRYPT		= define
 CRYPT_FLAG	= -DHAVE_DES_FCRYPT
 .ENDIF
 
-.IF "$(USE_OBJECT)" == "define"
-PERL_MALLOC	!= undef
-USE_5005THREADS	!= undef
-USE_MULTI	!= undef
-USE_IMP_SYS	!= define
-.ENDIF
-
 PERL_MALLOC	*= undef
 
 USE_5005THREADS	*= undef
@@ -256,22 +242,21 @@ PERL_MALLOC	!= undef
 .ENDIF
 
 USE_MULTI	*= undef
-USE_OBJECT	*= undef
 USE_ITHREADS	*= undef
 USE_IMP_SYS	*= undef
 USE_PERLIO	*= undef
 USE_PERLCRT	*= undef
 
-.IF "$(USE_IMP_SYS)$(USE_MULTI)$(USE_5005THREADS)$(USE_OBJECT)" == "defineundefundefundef"
+.IF "$(USE_IMP_SYS)$(USE_MULTI)$(USE_5005THREADS)" == "defineundefundef"
 USE_MULTI	!= define
 .ENDIF
 
-.IF "$(USE_ITHREADS)$(USE_MULTI)$(USE_OBJECT)" == "defineundefundef"
+.IF "$(USE_ITHREADS)$(USE_MULTI)" == "defineundef"
 USE_MULTI	!= define
 USE_5005THREADS	!= undef
 .ENDIF
 
-.IF "$(USE_MULTI)$(USE_5005THREADS)$(USE_OBJECT)" != "undefundefundef"
+.IF "$(USE_MULTI)$(USE_5005THREADS)" != "undefundef"
 BUILDOPT	+= -DPERL_IMPLICIT_CONTEXT
 .ENDIF
 
@@ -283,9 +268,7 @@ BUILDOPT	+= -DPERL_IMPLICIT_SYS
 
 PROCESSOR_ARCHITECTURE *= x86
 
-.IF "$(USE_OBJECT)" == "define"
-ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-object
-.ELIF "$(USE_5005THREADS)" == "define"
+.IF "$(USE_5005THREADS)" == "define"
 ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-thread
 .ELIF "$(USE_MULTI)" == "define"
 ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)-multi
@@ -356,7 +339,7 @@ RSC		= rc
 # Options
 #
 INCLUDES	= -I$(COREDIR) -I.\include -I. -I.. -I"$(CCINCDIR)"
-#PCHFLAGS	= -H -Hc -H=c:\temp\bcmoduls.pch 
+#PCHFLAGS	= -H -Hc -H=c:\temp\bcmoduls.pch
 DEFINES		= -DWIN32 $(CRYPT_FLAG)
 LOCDEFS		= -DPERLDLL -DPERL_CORE
 SUBSYS		= console
@@ -510,11 +493,6 @@ BUILDOPT	+= -DPERL_MSVCRT_READFIX
 
 .ENDIF
 
-.IF "$(USE_OBJECT)" == "define"
-OPTIMIZE	+= $(CXX_FLAG)
-BUILDOPT	+= -DPERL_OBJECT
-.ENDIF
-
 CFLAGS_O	= $(CFLAGS) $(BUILDOPT)
 
 # used to allow local linking flags that are not propogated into Config.pm,
@@ -593,6 +571,8 @@ UTILS		=			\
 		..\utils\h2xs		\
 		..\utils\perldoc	\
 		..\utils\perlcc		\
+		..\utils\perlivp	\
+		..\utils\libnetcfg	\
 		..\pod\checkpods	\
 		..\pod\pod2html		\
 		..\pod\pod2latex	\
@@ -603,6 +583,7 @@ UTILS		=			\
 		..\pod\podselect	\
 		..\x2p\find2perl	\
 		..\x2p\s2p		\
+		..\lib\ExtUtils\xsubpp	\
 		bin\exetype.pl		\
 		bin\runperl.pl		\
 		bin\pl2bat.pl		\
@@ -663,6 +644,7 @@ MICROCORE_SRC	=		\
 		..\pp_ctl.c	\
 		..\pp_hot.c	\
 		..\pp_pack.c	\
+		..\pp_sort.c	\
 		..\pp_sys.c	\
 		..\regcomp.c	\
 		..\regexec.c	\
@@ -682,15 +664,16 @@ EXTRACORE_SRC	+= perllib.c
 EXTRACORE_SRC	+= ..\malloc.c
 .ENDIF
 
-.IF "$(USE_OBJECT)" != "define"
 EXTRACORE_SRC	+= ..\perlio.c
-.ENDIF
 
 WIN32_SRC	=		\
 		.\win32.c	\
-		.\win32io.c	\
 		.\win32sck.c	\
 		.\win32thread.c
+
+.IF "$(USE_PERLIO)" == "define"
+WIN32_SRC	+= .\win32io.c
+.ENDIF
 
 .IF "$(CRYPT_SRC)" != ""
 WIN32_SRC	+= .\$(CRYPT_SRC)
@@ -768,7 +751,8 @@ SETARGV_OBJ	= setargv$(o)
 DYNAMIC_EXT	= Socket IO Fcntl Opcode SDBM_File POSIX attrs Thread B re \
 		Data/Dumper Devel/Peek ByteLoader Devel/DProf File/Glob \
 		Sys/Hostname Storable Filter/Util/Call Encode \
-		Digest/MD5 PerlIO/Scalar MIME/Base64 Time/HiRes Time/Piece
+		Digest/MD5 PerlIO/Scalar MIME/Base64 Time/HiRes \
+		Unicode/Normalize
 STATIC_EXT	= DynaLoader
 NONXS_EXT	= Errno
 
@@ -831,7 +815,7 @@ RIGHTMAKE	=
 
 all : .\config.h $(GLOBEXE) $(MINIPERL) $(MK2)		\
 	$(RIGHTMAKE) $(MINIMOD) $(CONFIGPM) $(PERLEXE)	\
-	$(X2P) Extensions 
+	$(X2P) Extensions
 
 $(DYNALOADER)$(o) : $(DYNALOADER).c $(CORE_H) $(EXTDIR)\DynaLoader\dlutils.c
 
@@ -915,10 +899,11 @@ regen_config_h:
 	perl config_sh.PL --cfgsh-option-file $(mktmp $(CFG_VARS)) \
 	    $(CFGSH_TMPL) > ..\config.sh
 	-cd .. && del /f perl.exe
+	-cd .. && del /f perl*.dll
 	cd .. && perl configpm
 	-del /f $(CFGH_TMPL)
 	-mkdir $(COREDIR)
-	-perl -I..\lib config_h.PL "INST_VER=$(INST_VER)"
+	-perl config_h.PL "INST_VER=$(INST_VER)"
 	rename config.h $(CFGH_TMPL)
 
 $(CONFIGPM) : $(MINIPERL) ..\config.sh config_h.PL ..\minimod.pl
@@ -958,7 +943,7 @@ $(MINIWIN32_OBJ) : $(CORE_NOCFG_H)
 # This is the only file that depends on perlhost.h, vmem.h, and vdir.h
 
 perllib$(o)	: perllib.c .\perlhost.h .\vdir.h .\vmem.h
-.IF "$(USE_IMP_SYS)$(USE_OBJECT)" == "defineundef"
+.IF "$(USE_IMP_SYS)" == "define"
 	$(CC) -c -I. $(CFLAGS_O) $(CXX_FLAG) $(OBJOUT_FLAG)$@ perllib.c
 .ELSE
 	$(CC) -c -I. $(CFLAGS_O) $(OBJOUT_FLAG)$@ perllib.c
@@ -1072,10 +1057,10 @@ $(EXTDIR)\DynaLoader\dl_win32.xs: dl_win32.xs
 	copy dl_win32.xs $(EXTDIR)\DynaLoader\dl_win32.xs
 
 #----------------------------------------------------------------------------------
-Extensions : buildext.pl $(PERLDEP) $(CONFIGPM) 
+Extensions : buildext.pl $(PERLDEP) $(CONFIGPM)
 	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR)
 
-Extensions_clean : 
+Extensions_clean :
 	-if exist $(MINIPERL) $(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) clean
 
 #----------------------------------------------------------------------------------
@@ -1093,6 +1078,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.apollo	..\pod\perlapollo.pod
 	copy ..\README.beos	..\pod\perlbeos.pod
 	copy ..\README.bs2000	..\pod\perlbs2000.pod
+	copy ..\README.ce	..\pod\perlce.pod
 	copy ..\README.cygwin	..\pod\perlcygwin.pod
 	copy ..\README.dgux	..\pod\perldgux.pod
 	copy ..\README.dos	..\pod\perldos.pod
@@ -1127,7 +1113,7 @@ distclean: clean
 	-del /f $(LIBDIR)\.exists $(LIBDIR)\attrs.pm $(LIBDIR)\DynaLoader.pm
 	-del /f $(LIBDIR)\XSLoader.pm
 	-del /f $(LIBDIR)\Fcntl.pm $(LIBDIR)\IO.pm $(LIBDIR)\Opcode.pm
-	-del /f $(LIBDIR)\ops.pm $(LIBDIR)\Safe.pm $(LIBDIR)\Thread.pm
+	-del /f $(LIBDIR)\ops.pm $(LIBDIR)\Safe.pm
 	-del /f $(LIBDIR)\SDBM_File.pm $(LIBDIR)\Socket.pm $(LIBDIR)\POSIX.pm
 	-del /f $(LIBDIR)\B.pm $(LIBDIR)\O.pm $(LIBDIR)\re.pm
 	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
@@ -1142,7 +1128,7 @@ distclean: clean
 	-del /f $(LIBDIR)\Time\HiRes.pm
 	-del /f $(LIBDIR)\List\Util.pm
 	-del /f $(LIBDIR)\Scalar\Util.pm
-	-del /f $(LIBDIR)\Time\Piece.pm
+	-del /f $(LIBDIR)\Unicode\Normalize.pm
 	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
 	-if exist $(LIBDIR)\Thread rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
 	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B
@@ -1155,7 +1141,7 @@ distclean: clean
 	-if exist $(LIBDIR)\Scalar rmdir /s /q $(LIBDIR)\Scalar || rmdir /s $(LIBDIR)\Scalar
 	-cd $(PODDIR) && del /f *.html *.bat checkpods \
 	    perlaix.pod perlamiga.pod perlapollo.pod \
-	    perlbeos.pod perlbs2000.pod perlcygwin.pod perldgux.pod \
+	    perlbeos.pod perlbs2000.pod perlce.pod perlcygwin.pod perldgux.pod \
 	    perldos.pod perlepoc.pod perlhpux.pod perlhurd.pod \
 	    perlmachten.pod perlmint.pod \
 	    perlmacos.pod perlmpeix.pod perlnetware.pod \
@@ -1166,7 +1152,7 @@ distclean: clean
 	    perlwin32.pod pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc \
-	    dprofpp *.bat
+	    perlivp dprofpp *.bat
 	-cd ..\x2p && del /f find2perl s2p *.bat
 	-del /f ..\config.sh ..\splittree.pl perlmain.c dlutils.c config.h.new
 	-del /f $(CONFIGPM)

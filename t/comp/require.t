@@ -27,7 +27,7 @@ sub write_file {
     binmode REQ;
     use bytes;
     print REQ @_;
-    close REQ;
+    close REQ or die "Could not close $f: $!";
 }
 
 eval {require 5.005};
@@ -86,7 +86,6 @@ print "not " unless 5.5.1 gt v5.5;
 print "ok ",$i++,"\n";
 
 {
-    use utf8;
     print "not " unless v5.5.640 eq "\x{5}\x{5}\x{280}";
     print "ok ",$i++,"\n";
 

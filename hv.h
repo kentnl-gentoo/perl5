@@ -1,6 +1,6 @@
 /*    hv.h
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2002, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -23,6 +23,8 @@ struct hek {
     U32		hek_hash;	/* hash of key */
     I32		hek_len;	/* length of hash key */
     char	hek_key[1];	/* variable-length hash key */
+    /* the hash-key is \0-terminated */
+    /* after the \0 there is a byte telling whether the key is UTF8 */
 };
 
 /* hash structure: */
@@ -33,6 +35,7 @@ struct xpvhv {
     STRLEN	xhv_max;	/* subscript of last element of xhv_array */
     IV		xhv_keys;	/* how many elements in the array */
     NV		xnv_nv;		/* numeric value, if any */
+#define xhv_placeholders xnv_nv
     MAGIC*	xmg_magic;	/* magic for scalar array */
     HV*		xmg_stash;	/* class package */
 
@@ -62,13 +65,19 @@ struct xpvhv {
     } STMT_END
 
 /*
+=head1 Hash Manipulation Functions
+
 =for apidoc AmU||HEf_SVKEY
 This flag, used in the length slot of hash entries and magic structures,
-specifies the structure contains a C<SV*> pointer where a C<char*> pointer
+specifies the structure contains an C<SV*> pointer where a C<char*> pointer
 is to be expected. (For information only--not to be used).
+
+=head1 Handy Values
 
 =for apidoc AmU||Nullhv
 Null HV pointer.
+
+=head1 Hash Manipulation Functions
 
 =for apidoc Am|char*|HvNAME|HV* stash
 Returns the package name of a stash.  See C<SvSTASH>, C<CvSTASH>.
@@ -119,18 +128,37 @@ C<SV*>.
 */
 
 /* these hash entry flags ride on hent_klen (for use only in magic/tied HVs) */
-#define HEf_SVKEY	-2	/* hent_key is a SV* */
+#define HEf_SVKEY	-2	/* hent_key is an SV* */
 
 
 #define Nullhv Null(HV*)
 #define HvARRAY(hv)	(*(HE***)&((XPVHV*)  SvANY(hv))->xhv_array)
 #define HvFILL(hv)	((XPVHV*)  SvANY(hv))->xhv_fill
 #define HvMAX(hv)	((XPVHV*)  SvANY(hv))->xhv_max
-#define HvKEYS(hv)	((XPVHV*)  SvANY(hv))->xhv_keys
 #define HvRITER(hv)	((XPVHV*)  SvANY(hv))->xhv_riter
 #define HvEITER(hv)	((XPVHV*)  SvANY(hv))->xhv_eiter
 #define HvPMROOT(hv)	((XPVHV*)  SvANY(hv))->xhv_pmroot
 #define HvNAME(hv)	((XPVHV*)  SvANY(hv))->xhv_name
+
+/* the number of keys (including any placeholers) */
+#define XHvTOTALKEYS(xhv)	((xhv)->xhv_keys)
+
+/* The number of placeholders in the enumerated-keys hash */
+#define XHvPLACEHOLDERS(xhv)	((xhv)->xhv_placeholders)
+
+/* the number of keys that exist() (i.e. excluding placeholders) */
+#define XHvUSEDKEYS(xhv)      (XHvTOTALKEYS(xhv) - (IV)XHvPLACEHOLDERS(xhv))
+
+/*
+ * HvKEYS gets the number of keys that actually exist(), and is provided
+ * for backwards compatibility with old XS code. The core uses HvUSEDKEYS
+ * (keys, excluding placeholdes) and HvTOTALKEYS (including placeholders)
+ */
+#define HvKEYS(hv)		XHvUSEDKEYS((XPVHV*)  SvANY(hv))
+#define HvUSEDKEYS(hv)		XHvUSEDKEYS((XPVHV*)  SvANY(hv))
+#define HvTOTALKEYS(hv)		XHvTOTALKEYS((XPVHV*)  SvANY(hv))
+#define HvPLACEHOLDERS(hv)	XHvPLACEHOLDERS((XPVHV*)  SvANY(hv))
+
 
 #define HvSHAREKEYS(hv)		(SvFLAGS(hv) & SVphv_SHAREKEYS)
 #define HvSHAREKEYS_on(hv)	(SvFLAGS(hv) |= SVphv_SHAREKEYS)
@@ -185,7 +213,7 @@ C<SV*>.
 #define HEK_HASH(hek)		(hek)->hek_hash
 #define HEK_LEN(hek)		(hek)->hek_len
 #define HEK_KEY(hek)		(hek)->hek_key
-#define HEK_UTF8(hek)  (*(HEK_KEY(hek)+HEK_LEN(hek)))
+#define HEK_UTF8(hek)		(*(HEK_KEY(hek)+HEK_LEN(hek)+1))
 
 /* calculate HV array allocation */
 #if defined(STRANGE_MALLOC) || defined(MYMALLOC)
@@ -197,3 +225,7 @@ C<SV*>.
 			 ? (size) * sizeof(HE*)				\
 			 : (size) * sizeof(HE*) * 2 - MALLOC_OVERHEAD)
 #endif
+
+/* available as a function in hv.c */
+#define Perl_sharepvn(sv, len, hash) HEK_KEY(share_hek(sv, len, hash))
+#define sharepvn(sv, len, hash)	     Perl_sharepvn(sv, len, hash)
