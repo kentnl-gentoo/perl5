@@ -100,7 +100,7 @@ assertref(o)
 OP *o;
 {
     int type = o->op_type;
-    if (type != OP_AELEM && type != OP_HELEM) {
+    if (type != OP_AELEM && type != OP_HELEM && type != OP_GELEM) {
 	yyerror(form("Can't use subscript on %s", op_desc[type]));
 	if (type == OP_ENTERSUB || type == OP_RV2HV || type == OP_PADHV) {
 	    dTHR;
@@ -140,10 +140,11 @@ char *name;
 	for (off = AvFILLp(comppad_name); off > comppad_name_floor; off--) {
 	    if ((sv = svp[off])
 		&& sv != &sv_undef
-		&& SvIVX(sv) == 999999999       /* var is in open scope */
+		&& (SvIVX(sv) == 999999999 || SvIVX(sv) == 0)
 		&& strEQ(name, SvPVX(sv)))
 	    {
-		warn("\"my\" variable %s masks earlier declaration in same scope", name);
+		warn("\"my\" variable %s masks earlier declaration in same %s",
+		    name, (SvIVX(sv) == 999999999 ? "scope" : "statement"));
 		break;
 	    }
 	}
@@ -3589,7 +3590,10 @@ OP *block;
 }
 
 void
-newCONSTSUB(HV *stash, char *name, SV *sv)
+newCONSTSUB(stash, name, sv)
+HV *stash;
+char *name;
+SV *sv;
 {
     dTHR;
     U32 oldhints = hints;

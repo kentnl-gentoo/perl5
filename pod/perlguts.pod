@@ -1701,7 +1701,7 @@ Used to indicate scalar context.  See C<GIMME_V>, C<GIMME>, and L<perlcall>.
 
 Returns the glob with the given C<name> and a defined subroutine or
 C<NULL>.  The glob lives in the given C<stash>, or in the stashes
-accessable via @ISA and @UNIVERSAL.
+accessible via @ISA and @UNIVERSAL.
 
 The argument C<level> should be either 0 or -1.  If C<level==0>, as a
 side-effect creates a glob with the given C<name> in the given
@@ -2820,7 +2820,7 @@ will return false.
 Returns the integer which is in the SV.
 
 	int SvIV (SV* sv)
-  
+
 =item SvIVX
 
 Returns the integer which is stored in the SV.
@@ -2938,7 +2938,7 @@ for the SvPVX.  This hack is used internally to speed up removal of
 characters from the beginning of a SvPV.  When SvOOK is true, then the
 start of the allocated string buffer is really (SvPVX - SvIVX).
 
-	int     SvOOK(Sv* sv)
+	int     SvOOK(SV* sv)
 
 =item SvPOK
 

@@ -1736,10 +1736,21 @@ PP(pp_goto)
 	    I32 items = 0;
 	    I32 oldsave;
 
+	retry:
 	    if (!CvROOT(cv) && !CvXSUB(cv)) {
-		if (CvGV(cv)) {
-		    SV *tmpstr = sv_newmortal();
-		    gv_efullname3(tmpstr, CvGV(cv), Nullch);
+		GV *gv = CvGV(cv);
+		GV *autogv;
+		if (gv) {
+		    SV *tmpstr;
+		    /* autoloaded stub? */
+		    if (cv != GvCV(gv) && (cv = GvCV(gv)))
+			goto retry;
+		    autogv = gv_autoload4(GvSTASH(gv), GvNAME(gv),
+					  GvNAMELEN(gv), FALSE);
+		    if (autogv && (cv = GvCV(autogv)))
+			goto retry;
+		    tmpstr = sv_newmortal();
+		    gv_efullname3(tmpstr, gv, Nullch);
 		    DIE("Goto undefined subroutine &%s",SvPVX(tmpstr));
 		}
 		DIE("Goto undefined subroutine");
@@ -2193,7 +2204,7 @@ int gimme;
     SAVEI32(max_intro_pending);
 
     caller = compcv;
-    for (i = cxstack_ix - 1; i >= 0; i--) {
+    for (i = cxstack_ix; i >= 0; i--) {
 	PERL_CONTEXT *cx = &cxstack[i];
 	if (cx->cx_type == CXt_EVAL)
 	    break;
@@ -2441,6 +2452,7 @@ PP(pp_require)
     PUSHBLOCK(cx, CXt_EVAL, SP);
     PUSHEVAL(cx, name, compiling.cop_filegv);
 
+    SAVEI16(compiling.cop_line);
     compiling.cop_line = 0;
 
     PUTBACK;
@@ -3034,7 +3046,7 @@ doqsort_all_asserts(
 
 /* ****************************************************************** qsort */
 
-void
+static void
 qsortsv(array, num_elts, compare)
    SV ** array;
    size_t num_elts;
