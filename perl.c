@@ -24,6 +24,13 @@
 char *getenv _((char *)); /* Usually in <stdlib.h> */
 #endif
 
+#ifdef I_FCNTL
+#include <fcntl.h>
+#endif
+#ifdef I_SYS_FILE
+#include <sys/file.h>
+#endif
+
 dEXTCONST char rcsid[] = "perl.c\nPatch level: ###\n";
 
 #ifdef IAMSUID
@@ -423,10 +430,6 @@ perl_destruct(register PerlInterpreter *sv_interp)
     endav = Nullav;
     initav = Nullav;
 
-    /* temp stack during pp_sort() */
-    SvREFCNT_dec(sortstack);
-    sortstack = Nullav;
-
     /* shortcuts just get cleared */
     envgv = Nullgv;
     siggv = Nullgv;
@@ -490,7 +493,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
 	    if (hent) {
 		warn("Unbalanced string table refcount: (%d) for \"%s\"",
 		     HeVAL(hent) - Nullsv, HeKEY(hent));
-		HeVAL(hent) = Nullsv;
+		HeVAL(hent) = &sv_undef;
 		hent = HeNEXT(hent);
 	    }
 	    if (!hent) {
@@ -679,21 +682,36 @@ setuid perl scripts securely.\n");
 	    if (euid != uid || egid != gid)
 		croak("No -e allowed in setuid scripts");
 	    if (!e_fp) {
+#ifdef HAS_UMASK
+		int oldumask = PerlLIO_umask(0177);
+#endif
 	        e_tmpname = savepv(TMPPATH);
 #ifdef HAS_MKSTEMP
 		e_tmpfd = PerlLIO_mkstemp(e_tmpname);
-
-		if (e_tmpfd < 0)
-		    croak("Can't mkstemp() temporary file \"%s\"", e_tmpname);
-		e_fp = PerlIO_fdopen(e_tmpfd,"w");
 #else /* use mktemp() */
 		(void)PerlLIO_mktemp(e_tmpname);
 		if (!*e_tmpname)
-		    croak("Can't mktemp() temporary file \"%s\"", e_tmpname);
+		    croak("Cannot generate temporary filename");
+# if defined(HAS_OPEN3) && defined(O_EXCL)
+		e_tmpfd = open(e_tmpname,
+			       O_WRONLY | O_CREAT | O_EXCL,
+			       0600);
+# else
+		(void)UNLINK(e_tmpname);
+		/* Yes, potential race.  But at least we can say we tried. */
 		e_fp = PerlIO_open(e_tmpname,"w");
-#endif /* HAS_MKSTEMP */
+# endif
+#endif /* ifdef HAS_MKSTEMP */
+#if defined(HAS_MKSTEMP) || (defined(HAS_OPEN3) && defined(O_EXCL))
+		if (e_tmpfd < 0)
+		    croak("Cannot create temporary file \"%s\"", e_tmpname);
+		e_fp = PerlIO_fdopen(e_tmpfd,"w");
+#endif
   		if (!e_fp)
- 		    croak("Cannot open temporary file \"%s\"", e_tmpname);
+ 		    croak("Cannot create temporary file \"%s\"", e_tmpname);
+#ifdef HAS_UMASK
+		(void)PerlLIO_umask(oldumask);
+#endif
 	    }
 	    if (*++s)
 		PerlIO_puts(e_fp,s);
@@ -955,7 +973,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
 int
 perl_run(PerlInterpreter *sv_interp)
 {
-    dTHR;
+    dSP;
     I32 oldscope;
     dJMPENV;
     int ret;
@@ -991,10 +1009,7 @@ perl_run(PerlInterpreter *sv_interp)
 	    JMPENV_POP;
 	    return 1;
 	}
-	if (curstack != mainstack) {
-	    dSP;
-	    SWITCHSTACK(curstack, mainstack);
-	}
+	POPSTACK_TO(mainstack);
 	break;
     }
 
@@ -1861,7 +1876,7 @@ open_script(char *scriptname, bool dosearch, SV *sv)
 #endif
 	    DEBUG_p(PerlIO_printf(Perl_debug_log,
 				  "Looking for %s\n",cur));
-	    if (Stat(cur,&statbuf) >= 0) {
+	    if (PerlLIO_stat(cur,&statbuf) >= 0) {
 		dosearch = 0;
 		scriptname = cur;
 #ifdef SEARCH_EXTS
@@ -1929,7 +1944,7 @@ open_script(char *scriptname, bool dosearch, SV *sv)
 	    do {
 #endif
 	    	DEBUG_p(PerlIO_printf(Perl_debug_log, "Looking for %s\n",tokenbuf));
-		retval = Stat(tokenbuf,&statbuf);
+		retval = PerlLIO_stat(tokenbuf,&statbuf);
 #ifdef SEARCH_EXTS
 	    } while (  retval < 0		/* not there */
 		    && extidx>=0 && ext[extidx]	/* try an extension? */
@@ -1952,7 +1967,7 @@ open_script(char *scriptname, bool dosearch, SV *sv)
 		xfailed = savepv(tokenbuf);
 	}
 #ifndef DOSISH
-	if (!xfound && !seen_dot && !xfailed && (Stat(scriptname,&statbuf) < 0))
+	if (!xfound && !seen_dot && !xfailed && (PerlLIO_stat(scriptname,&statbuf) < 0))
 #endif
 	    seen_dot = 1;			/* Disable message. */
 	if (!xfound)
@@ -2077,7 +2092,7 @@ sed %s -e \"/^[^#]/b\" \
     if (!rsfp) {
 #ifdef DOSUID
 #ifndef IAMSUID		/* in case script is not readable before setuid */
-	if (euid && Stat(SvPVX(GvSV(curcop->cop_filegv)),&statbuf) >= 0 &&
+	if (euid && PerlLIO_stat(SvPVX(GvSV(curcop->cop_filegv)),&statbuf) >= 0 &&
 	  statbuf.st_mode & (S_ISUID|S_ISGID)) {
 	    /* try again */
 	    PerlProc_execv(form("%s/sperl%s", BIN_EXP, patchlevel), origargv);
@@ -2155,7 +2170,7 @@ validate_suid(char *validarg, char *scriptname)
 #endif
 		|| getuid() != euid || geteuid() != uid)
 		croak("Can't swap uid and euid");	/* really paranoid */
-	    if (Stat(SvPVX(GvSV(curcop->cop_filegv)),&tmpstatbuf) < 0)
+	    if (PerlLIO_stat(SvPVX(GvSV(curcop->cop_filegv)),&tmpstatbuf) < 0)
 		croak("Permission denied");	/* testing full pathname here */
 	    if (tmpstatbuf.st_dev != statbuf.st_dev ||
 		tmpstatbuf.st_ino != statbuf.st_ino) {
@@ -2410,19 +2425,16 @@ init_debugger(void)
 void
 init_stacks(ARGSproto)
 {
-    curstack = newAV();
+    /* start with 128-item stack and 8K cxstack */
+    curstackinfo = new_stackinfo(REASONABLE(128),
+				 REASONABLE(8192/sizeof(PERL_CONTEXT) - 1));
+    curstackinfo->si_type = SI_MAIN;
+    curstack = curstackinfo->si_stack;
     mainstack = curstack;		/* remember in case we switch stacks */
-    AvREAL_off(curstack);		/* not a real array */
-    av_extend(curstack,REASONABLE(127));
 
     stack_base = AvARRAY(curstack);
     stack_sp = stack_base;
-    stack_max = stack_base + REASONABLE(127);
-
-    /* Use most of 8K. */
-    cxstack_max = REASONABLE(8192 / sizeof(PERL_CONTEXT) - 2);
-    New(50,cxstack,cxstack_max + 1,PERL_CONTEXT);
-    cxstack_ix	= -1;
+    stack_max = stack_base + AvMAX(curstack);
 
     New(50,tmps_stack,REASONABLE(128),SV*);
     tmps_floor = -1;
@@ -2441,6 +2453,8 @@ init_stacks(ARGSproto)
 	markstack_ptr = markstack;
 	markstack_max = markstack + REASONABLE(32);
     }
+
+    SET_MARKBASE;
 
     if (scopestack) {
 	scopestack_ix = 0;
@@ -2473,7 +2487,15 @@ static void
 nuke_stacks(void)
 {
     dTHR;
-    Safefree(cxstack);
+    while (curstackinfo->si_next)
+	curstackinfo = curstackinfo->si_next;
+    while (curstackinfo) {
+	PERL_SI *p = curstackinfo->si_prev;
+	SvREFCNT_dec(curstackinfo->si_stack);
+	Safefree(curstackinfo->si_cxstack);
+	Safefree(curstackinfo);
+	curstackinfo = p;
+    }
     Safefree(tmps_stack);
     DEBUG( {
 	Safefree(debname);
@@ -2749,7 +2771,7 @@ incpush(char *p, int addsubdirs)
 	    /* .../archname/version if -d .../archname/version/auto */
 	    sv_setsv(subdir, libdir);
 	    sv_catpv(subdir, archpat_auto);
-	    if (Stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
+	    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
 		  S_ISDIR(tmpstatbuf.st_mode))
 		av_push(GvAVn(incgv),
 			newSVpv(SvPVX(subdir), SvCUR(subdir) - sizeof "auto"));
@@ -2757,7 +2779,7 @@ incpush(char *p, int addsubdirs)
 	    /* .../archname if -d .../archname/auto */
 	    sv_insert(subdir, SvCUR(libdir) + sizeof(ARCHNAME),
 		      strlen(patchlevel) + 1, "", 0);
-	    if (Stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
+	    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
 		  S_ISDIR(tmpstatbuf.st_mode))
 		av_push(GvAVn(incgv),
 			newSVpv(SvPVX(subdir), SvCUR(subdir) - sizeof "auto"));

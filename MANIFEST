@@ -4,6 +4,7 @@ Changes5.000		Differences between 4.x and 5.000
 Changes5.001		Differences between 5.000 and 5.001
 Changes5.002		Differences between 5.001 and 5.002
 Changes5.003		Differences between 5.002 and 5.003
+Changes5.004		Differences between 5.003 and 5.004
 Configure		Portability tool
 Copying			The GNU General Public License
 EXTERN.h		Included before foreign .h files
@@ -267,6 +268,7 @@ ext/Thread/Thread.pm	Thread extension Perl module
 ext/Thread/Thread.xs	Thread extension external subroutines
 ext/Thread/Thread/Queue.pm	Thread synchronised queue objects
 ext/Thread/Thread/Semaphore.pm	Thread semaphore objects
+ext/Thread/Thread/Signal.pm	Start a thread to run signal handlers
 ext/Thread/Thread/Specific.pm	Thread specific data access
 ext/Thread/create.t	Test thread creation
 ext/Thread/die.t	Test thread die()
@@ -825,6 +827,7 @@ t/op/glob.t		See if <*> works
 t/op/goto.t		See if goto works
 t/op/groups.t		See if $( works
 t/op/gv.t		See if typeglobs work
+t/op/hashwarn.t		See if warnings for bad hash assignments work
 t/op/inc.t		See if inc/dec of integers near 32 bit limit work
 t/op/index.t		See if index works
 t/op/int.t		See if int works
