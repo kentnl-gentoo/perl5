@@ -29,7 +29,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.00551
+INST_VER	*= \5.00552
 
 #
 # uncomment to enable threads-capabilities
@@ -99,9 +99,11 @@ CCTYPE		*= BORLAND
 
 #
 # set the install locations of the compiler include/libraries
+# Some versions of Visual C don't define MSVCDIR in the environment,
+# so you may have to set CCHOME explicitly.
 #
-#CCHOME		*= f:\msdev\vc
 CCHOME		*= C:\bc5
+#CCHOME		*= $(MSVCDIR)
 #CCHOME		*= D:\packages\mingw32
 CCINCDIR	*= $(CCHOME)\include
 CCLIBDIR	*= $(CCHOME)\lib
@@ -395,7 +397,6 @@ UTILS		=			\
 		..\pod\pod2text		\
 		..\x2p\find2perl	\
 		..\x2p\s2p		\
-		bin\www.pl		\
 		bin\runperl.pl		\
 		bin\pl2bat.pl		\
 		bin\perlglob.pl		\
@@ -1032,7 +1033,6 @@ installbare : utils
 .ENDIF
 	$(XCOPY) $(GLOBEXE) $(INST_BIN)\*.*
 	$(XCOPY) bin\*.bat $(INST_SCRIPT)\*.*
-	$(XCOPY) bin\network.pl $(INST_LIB)\*.*
 
 installhtml : doc
 	$(RCOPY) html\*.* $(INST_HTML)\*.*

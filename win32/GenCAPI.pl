@@ -426,6 +426,7 @@ mess_sv
 ors
 opsave
 eval_mutex
+strtab_mutex
 orslen
 ofmt
 modcount
@@ -492,6 +493,7 @@ threads_mutex
 malloc_mutex
 svref_mutex
 sv_mutex
+cred_mutex
 nthreads_cond
 eval_cond
 cryptseen

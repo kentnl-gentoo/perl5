@@ -1874,10 +1874,21 @@ PP(pp_goto)
 	    I32 items = 0;
 	    I32 oldsave;
 
+	retry:
 	    if (!CvROOT(cv) && !CvXSUB(cv)) {
-		if (CvGV(cv)) {
-		    SV *tmpstr = sv_newmortal();
-		    gv_efullname3(tmpstr, CvGV(cv), Nullch);
+		GV *gv = CvGV(cv);
+		GV *autogv;
+		if (gv) {
+		    SV *tmpstr;
+		    /* autoloaded stub? */
+		    if (cv != GvCV(gv) && (cv = GvCV(gv)))
+			goto retry;
+		    autogv = gv_autoload4(GvSTASH(gv), GvNAME(gv),
+					  GvNAMELEN(gv), FALSE);
+		    if (autogv && (cv = GvCV(autogv)))
+			goto retry;
+		    tmpstr = sv_newmortal();
+		    gv_efullname3(tmpstr, gv, Nullch);
 		    DIE("Goto undefined subroutine &%s",SvPVX(tmpstr));
 		}
 		DIE("Goto undefined subroutine");
@@ -2674,6 +2685,8 @@ PP(pp_require)
 
 	RETPUSHUNDEF;
     }
+    else
+	errno = 0;
 
     /* Assume success here to prevent recursive requirement. */
     (void)hv_store(GvHVn(PL_incgv), name, strlen(name),
@@ -2702,6 +2715,7 @@ PP(pp_require)
     PUSHBLOCK(cx, CXt_EVAL, SP);
     PUSHEVAL(cx, name, PL_compiling.cop_filegv);
 
+    SAVEI16(PL_compiling.cop_line);
     PL_compiling.cop_line = 0;
 
     PUTBACK;

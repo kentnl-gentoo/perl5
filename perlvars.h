@@ -37,6 +37,9 @@ PERLVARI(Gthreadsv_names,char *,	THREADSV_NAMES)
 PERLVAR(Gcurthr,	struct perl_thread *)
 					/* Currently executing (fake) thread */
 #endif
+
+PERLVAR(Gcred_mutex,	perl_mutex)	/* altered credentials in effect */
+
 #endif /* USE_THREADS */
 
 PERLVAR(Gninterps,	int)		/* number of active interpreters */
@@ -171,22 +174,22 @@ PERLVARI(Gnumeric_local,	bool,	TRUE)
 #endif /* !USE_LOCALE_NUMERIC */
 
 /* utf8 character classes */
-PERLVAR(Gutf8_alnum, SV *)
-PERLVAR(Gutf8_alpha, SV *)
-PERLVAR(Gutf8_space, SV *)
-PERLVAR(Gutf8_digit, SV *)
-PERLVAR(Gutf8_upper, SV *)
-PERLVAR(Gutf8_lower, SV *)
-PERLVAR(Gutf8_print, SV *)
-PERLVAR(Gutf8_mark, SV *)
-PERLVAR(Gutf8_toupper, SV *)
-PERLVAR(Gutf8_totitle, SV *)
-PERLVAR(Gutf8_tolower, SV *)
-PERLVAR(Glast_swash_hv, HV *)
-PERLVAR(Glast_swash_klen, U32)
-PERLVAR(Glast_swash_key[10], U8)
-PERLVAR(Glast_swash_tmps, U8 *)
-PERLVAR(Glast_swash_slen, STRLEN)
+PERLVAR(Gutf8_alnum,	SV *)
+PERLVAR(Gutf8_alpha,	SV *)
+PERLVAR(Gutf8_space,	SV *)
+PERLVAR(Gutf8_digit,	SV *)
+PERLVAR(Gutf8_upper,	SV *)
+PERLVAR(Gutf8_lower,	SV *)
+PERLVAR(Gutf8_print,	SV *)
+PERLVAR(Gutf8_mark,	SV *)
+PERLVAR(Gutf8_toupper,	SV *)
+PERLVAR(Gutf8_totitle,	SV *)
+PERLVAR(Gutf8_tolower,	SV *)
+PERLVAR(Glast_swash_hv,	HV *)
+PERLVAR(Glast_swash_klen,	U32)
+PERLVAR(Glast_swash_key[10],	U8)
+PERLVAR(Glast_swash_tmps,	U8 *)
+PERLVAR(Glast_swash_slen,	STRLEN)
 
 /* constants (these are not literals to facilitate pointer comparisons) */
 PERLVARIC(GYes,		char *, "1")
@@ -196,3 +199,12 @@ PERLVARIC(Gpatleave,	char *, "\\.^$@dDwWsSbB+*?|()-nrtfeaxc0123456789[{]}")
 
 PERLVAR(Gspecialsv_list[4],SV *)	/* from byterun.h */
 
+/* perly.c globals */
+PERLVAR(Gyydebug,	int)
+PERLVAR(Gyynerrs,	int)
+PERLVAR(Gyyerrflag,	int)
+PERLVAR(Gyychar,	int)
+PERLVAR(Gyyssp,		short*)
+PERLVAR(Gyyvsp,		YYSTYPE*)
+PERLVAR(Gyyval,		YYSTYPE)
+PERLVAR(Gyylval,	YYSTYPE)

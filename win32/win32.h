@@ -27,7 +27,9 @@ typedef long long __int64;
 /* GCC does not do __declspec() - render it a nop 
  * and turn on options to avoid importing data 
  */
+#ifndef __declspec
 #  define __declspec(x)
+#endif
 #  ifndef PERL_OBJECT
 #    define PERL_GLOBAL_STRUCT
 #    define MULTIPLICITY
@@ -121,6 +123,14 @@ struct tms {
 #define FILE_SHARE_DELETE		0x00000004
 #endif
 
+/* access() mode bits */
+#ifndef R_OK
+#  define	R_OK	4
+#  define	W_OK	2
+#  define	X_OK	1
+#  define	F_OK	0
+#endif
+
 /* Compiler-specific stuff. */
 
 #ifdef __BORLANDC__		/* Borland C++ */
@@ -142,6 +152,7 @@ struct tms {
 #pragma warn -use	/* "'foo' is declared but never used" */
 #pragma warn -csu	/* "comparing signed and unsigned values" */
 #pragma warn -pro	/* "call to function with no prototype" */
+#pragma warn -stu	/* "undefined structure 'foo'" */
 
 #define USE_RTL_WAIT	/* Borland has a working wait() */
 
@@ -213,7 +224,9 @@ struct mgvtbl {								\
 
 typedef long		uid_t;
 typedef long		gid_t;
+#ifndef _environ
 #define _environ	environ
+#endif
 #define flushall	_flushall
 #define fcloseall	_fcloseall
 

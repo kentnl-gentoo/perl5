@@ -139,23 +139,17 @@ warn_reserved
 warn_uninit
 watchaddr
 watchok
-yychar
 yycheck
-yydebug
 yydefred
 yydgoto
-yyerrflag
 yygindex
 yylen
 yylhs
-yylval
 yyname
-yynerrs
 yyrindex
 yyrule
 yysindex
 yytable
-yyval
 
 # Functions
 
@@ -417,6 +411,8 @@ magic_getvec
 magic_len
 magic_mutexfree
 magic_nextpack
+magic_regdata_cnt
+magic_regdatum_get
 magic_set
 magic_set_all_env
 magic_setamagic
@@ -931,6 +927,7 @@ same_dirent
 save_I16
 save_I32
 save_aelem
+save_alloc
 save_aptr
 save_ary
 save_clearsv

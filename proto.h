@@ -118,15 +118,15 @@ VIRTUAL void	do_pipe _((SV* sv, GV* rgv, GV* wgv));
 VIRTUAL bool	do_print _((SV* sv, PerlIO* fp));
 VIRTUAL OP*	do_readline _((void));
 VIRTUAL I32	do_chomp _((SV* sv));
-VIRTUAL bool	do_seek _((GV* gv, long pos, int whence));
+VIRTUAL bool	do_seek _((GV* gv, Off_t pos, int whence));
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
 I32	do_semop _((SV** mark, SV** sp));
 I32	do_shmio _((I32 optype, SV** mark, SV** sp));
 #endif
 VIRTUAL void	do_sprintf _((SV* sv, I32 len, SV** sarg));
 VIRTUAL long	do_sysseek _((GV* gv, long pos, int whence));
-VIRTUAL long	do_tell _((GV* gv));
-VIRTUAL I32	do_trans _((SV* sv, OP* arg));
+VIRTUAL Off_t	do_tell _((GV* gv));
+VIRTUAL I32	do_trans _((SV* sv));
 VIRTUAL void	do_vecset _((SV* sv));
 VIRTUAL void	do_vop _((I32 optype, SV* sv, SV* left, SV* right));
 VIRTUAL I32	dowantarray _((void));
@@ -267,6 +267,8 @@ VIRTUAL U32	magic_len	_((SV* sv, MAGIC* mg));
 VIRTUAL int	magic_mutexfree	_((SV* sv, MAGIC* mg));
 #endif /* USE_THREADS */
 VIRTUAL int	magic_nextpack	_((SV* sv, MAGIC* mg, SV* key));
+VIRTUAL U32	magic_regdata_cnt	_((SV* sv, MAGIC* mg));
+VIRTUAL int	magic_regdatum_get	_((SV* sv, MAGIC* mg));
 VIRTUAL int	magic_set	_((SV* sv, MAGIC* mg));
 #ifdef OVERLOAD
 VIRTUAL int	magic_setamagic	_((SV* sv, MAGIC* mg));
@@ -496,6 +498,7 @@ VIRTUAL char*	savepv _((char* sv));
 VIRTUAL char*	savepvn _((char* sv, I32 len));
 VIRTUAL void	savestack_grow _((void));
 VIRTUAL void	save_aelem _((AV* av, I32 idx, SV **sptr));
+VIRTUAL I32	save_alloc _((I32 size, I32 pad));
 VIRTUAL void	save_aptr _((AV** aptr));
 VIRTUAL AV*	save_ary _((GV* gv));
 VIRTUAL void	save_clearsv _((SV** svp));
@@ -692,7 +695,7 @@ VIRTUAL struct perl_vars *Perl_GetVars _((void));
 protected:
 void hsplit _((HV *hv));
 void hfreeentries _((HV *hv));
-HE* more_he _((void));
+void more_he _((void));
 HE* new_he _((void));
 void del_he _((HE *p));
 HEK *save_hek _((char *str, I32 len, U32 hash));
@@ -702,10 +705,10 @@ SV *save_scalar_at _((SV **sptr));
 IV asIV _((SV* sv));
 UV asUV _((SV* sv));
 SV *more_sv _((void));
-XPVIV *more_xiv _((void));
-XPVNV *more_xnv _((void));
-XPV *more_xpv _((void));
-XRV *more_xrv _((void));
+void more_xiv _((void));
+void more_xnv _((void));
+void more_xpv _((void));
+void more_xrv _((void));
 XPVIV *new_xiv _((void));
 XPVNV *new_xnv _((void));
 XPV *new_xpv _((void));
@@ -732,7 +735,7 @@ void visit _((SVFUNC f));
 typedef I32 (CPerlObj::*SVCOMPARE) _((SV*, SV*));
 void qsortsv _((SV ** array, size_t num_elts, SVCOMPARE f));
 I32 sortcv _((SV *a, SV *b));
-void save_magic _((MGS *mgs, SV *sv));
+void save_magic _((I32 mgs_ix, SV *sv));
 int magic_methpack _((SV *sv, MAGIC *mg, char *meth));
 int magic_methcall _((MAGIC *mg, char *meth, I32 flags, int n, SV *val));
 OP * doform _((CV *cv, GV *gv, OP *retop));
@@ -829,6 +832,7 @@ void nuke_stacks _((void));
 void open_script _((char *, bool, SV *, int *fd));
 void usage _((char *));
 void validate_suid _((char *, char*, int));
+int emulate_eaccess _((const char* path, int mode));
 
 regnode *reg _((I32, I32 *));
 regnode *reganode _((U8, U32));
@@ -860,6 +864,8 @@ bool reginclass _((char *p, I32 c));
 bool reginclassutf8 _((regnode *f, U8* p));
 CHECKPOINT regcppush _((I32 parenfloor));
 char * regcppop _((void));
+char * regcp_set_to _((I32 ss));
+void cache_re _((regexp *prog));
 U8 * reghop _((U8 *pos, I32 off));
 U8 * reghopmaybe _((U8 *pos, I32 off));
 void dump _((char *pat,...));
@@ -874,6 +880,17 @@ void debprof _((OP *o));
 
 void *bset_obj_store _((void *obj, I32 ix));
 OP *new_logop _((I32 type, I32 flags, OP **firstp, OP **otherp));
+
+I32 do_trans_CC_simple _((SV *sv));
+I32 do_trans_CC_count _((SV *sv));
+I32 do_trans_CC_complex _((SV *sv));
+I32 do_trans_UU_simple _((SV *sv));
+I32 do_trans_UU_count _((SV *sv));
+I32 do_trans_UU_complex _((SV *sv));
+I32 do_trans_UC_simple _((SV *sv));
+I32 do_trans_CU_simple _((SV *sv));
+I32 do_trans_UC_trivial _((SV *sv));
+I32 do_trans_CU_trivial _((SV *sv));
 
 #define PPDEF(s) OP* CPerlObj::s _((ARGSproto));
 public:

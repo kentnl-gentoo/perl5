@@ -138,6 +138,8 @@ perl_construct(register PerlInterpreter *sv_interp)
 	MUTEX_INIT(&PL_svref_mutex);
 #endif /* EMULATE_ATOMIC_REFCOUNTS */
 	
+	MUTEX_INIT(&PL_cred_mutex);
+
 	thr = init_main_thread();
 #endif /* USE_THREADS */
 
@@ -553,8 +555,10 @@ perl_destruct(register PerlInterpreter *sv_interp)
     
     DEBUG_P(debprofdump());
 #ifdef USE_THREADS
+    MUTEX_DESTROY(&PL_strtab_mutex);
     MUTEX_DESTROY(&PL_sv_mutex);
     MUTEX_DESTROY(&PL_eval_mutex);
+    MUTEX_DESTROY(&PL_cred_mutex);
     COND_DESTROY(&PL_eval_cond);
 
     /* As the penultimate thing, free the non-arena SV for thrsv */
@@ -1742,6 +1746,9 @@ moreswitches(char *s)
 #ifdef OEMVS
 	printf("MVS (OS390) port by Mortice Kern Systems, 1997-1998\n");
 #endif
+#ifdef __VOS__
+	printf("Stratus VOS port by Paul_Green@stratus.com, 1997-1998\n");
+#endif
 #ifdef BINARY_BUILD_NOTICE
 	BINARY_BUILD_NOTICE;
 #endif
@@ -1774,7 +1781,7 @@ Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
 	break;
     case '-':
     case 0:
-#ifdef WIN32
+#if defined(WIN32) || !defined(PERL_STRICT_CR)
     case '\r':
 #endif
     case '\n':
@@ -1902,6 +1909,9 @@ init_main_stash(void)
        about not iterating on it, and not adding tie magic to it.
        It is properly deallocated in perl_destruct() */
     PL_strtab = newHV();
+#ifdef USE_THREADS
+    MUTEX_INIT(&PL_strtab_mutex);
+#endif
     HvSHAREKEYS_off(PL_strtab);			/* mandatory */
     hv_ksplit(PL_strtab, 512);
     

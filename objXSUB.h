@@ -19,6 +19,9 @@
 #define PL_colors				pPerl->PL_colors		
 #undef  PL_colorset		
 #define PL_colorset				pPerl->PL_colorset		
+#undef  PL_cred_mutex		
+#define PL_cred_mutex				pPerl->PL_cred_mutex		
+#undef  PL_sv_no		
 #undef  PL_curcop		
 #define PL_curcop				pPerl->PL_curcop		
 #undef  PL_curpad		
@@ -93,6 +96,10 @@
 #define PL_regbol				pPerl->PL_regbol		
 #undef  PL_regcc		
 #define PL_regcc				pPerl->PL_regcc		
+#undef  PL_reg_call_cc
+#define PL_reg_call_cc				pPerl->PL_reg_call_cc
+#undef  PL_reg_re
+#define PL_reg_re				pPerl->PL_reg_re
 #undef  PL_regcode		
 #define PL_regcode				pPerl->PL_regcode		
 #undef  PL_regcomp_parse	
@@ -443,6 +450,8 @@
 #define PL_strchop				pPerl->PL_strchop		
 #undef  PL_strtab		
 #define PL_strtab				pPerl->PL_strtab		
+#undef  PL_strtab_mutex
+#define PL_strtab_mutex				pPerl->PL_strtab_mutex
 #undef  PL_sub_generation	
 #define PL_sub_generation		pPerl->PL_sub_generation	
 #undef  PL_sublex_info		
@@ -1198,6 +1207,10 @@
 #define magic_mutexfree     pPerl->Perl_magic_mutexfree
 #undef  magic_nextpack
 #define magic_nextpack      pPerl->Perl_magic_nextpack
+#undef  magic_regdata_cnt
+#define magic_regdata_cnt   pPerl->Perl_magic_regdata_cnt
+#undef  magic_regdatum_get
+#define magic_regdatum_get  pPerl->Perl_magic_regdatum_get
 #undef  magic_set
 #define magic_set           pPerl->Perl_magic_set
 #undef  magic_set_all_env
@@ -1605,6 +1618,8 @@
 #define savestack_grow      pPerl->Perl_savestack_grow
 #undef  save_aelem
 #define save_aelem          pPerl->Perl_save_aelem
+#undef  save_alloc
+#define save_alloc          pPerl->Perl_save_alloc
 #undef  save_aptr
 #define save_aptr           pPerl->Perl_save_aptr
 #undef  save_ary
@@ -2077,8 +2092,8 @@
 #define signal PerlProc_signal
 #define htonl PerlSock_htonl
 #define htons PerlSock_htons
-#define ntohs PerlSock_ntohl
-#define ntohl PerlSock_ntohs
+#define ntohl PerlSock_ntohl
+#define ntohs PerlSock_ntohs
 #define accept PerlSock_accept
 #define bind PerlSock_bind
 #define connect PerlSock_connect

@@ -33,11 +33,11 @@ The symbols C<"%(-?@> sort before the letters, while C<[> and C<\> sort after.
 to try to declare one with a package qualifier on the front.  Use local()
 if you want to localize a package variable.
 
-=item "my" variable %s masks earlier declaration in same scope
+=item "my" variable %s masks earlier declaration in same %s
 
-(W) A lexical variable has been redeclared in the same scope, effectively
-eliminating all access to the previous instance.  This is almost always
-a typographical error.  Note that the earlier variable will still exist
+(W) A lexical variable has been redeclared in the current scope or statement,
+effectively eliminating all access to the previous instance.  This is almost
+always a typographical error.  Note that the earlier variable will still exist
 until the end of the scope or until all closure referents to it are
 destroyed.
 
@@ -1096,6 +1096,16 @@ unlikely to be what you want.
 (F) An untrapped exception was raised while executing an END subroutine.
 The interpreter is immediately exited.
 
+=item effective %s access is not implemented
+
+(F) We cannot switch the real and effective uids or gids.
+The C<filetest access> pragma is unavailable in this system.
+
+=item entering effective %s access failed
+
+(F) While under the C<filetest access> pragma, switching the real and
+effective uids or gids failed.
+
 =item Error converting file specification %s
 
 (F) An error peculiar to VMS.  Because Perl may have to deal with file
@@ -1162,7 +1172,7 @@ a return, a goto, or a loop control statement.
 (W) You are blessing a reference to a zero length string.  This has
 the effect of blessing the reference into the package main.  This is
 usually not what you want.  Consider providing a default target
-package, e.g. bless($ref, $p or 'MyPackage');
+package, e.g. bless($ref, $p || 'MyPackage');
 
 =item Fatal VMS error at %s, line %d
 
@@ -1257,7 +1267,6 @@ Did you forget to check the return value of your socket() call?
 
 (S) A warning peculiar to VMS.  The call to C<sys$getuai> underlying the
 C<getpwnam> operator returned an invalid UIC.
-
 
 =item Glob not terminated
 
@@ -1476,6 +1485,11 @@ L<perlfunc/last>.
 (F) You named a loop to restart, but you're not currently in a loop of
 that name, not even if you count where you were called from.  See
 L<perlfunc/last>.
+
+=item leaving effective %s access failed
+
+(F) While under the C<filetest access> pragma, switching the real and
+effective uids or gids failed.
 
 =item listen() on closed fd
 
@@ -1702,6 +1716,14 @@ an attempt to close an unopened filehandle.
 
 (W) You specified a signal name as a subscript to %SIG that was not recognized.
 Say C<kill -l> in your shell to see the valid signal names on your system.
+
+=item no UTC offset information; assuming local time is UTC
+
+(S) A warning peculiar to VMS.  Per was unable to find the local
+timezone offset, so it's assuming that local system time is equivalent
+to UTC.  If it's not, define the logical name F<SYS$TIMEZONE_DIFFERENTIAL>
+to translate to the number of seconds which need to be added to UTC to
+get local time.
 
 =item Not a CODE reference
 
@@ -2037,7 +2059,7 @@ anyway?  See L<perlfunc/require>.
 
 (F) The setuid emulator in suidperl decided you were up to no good.
 
-=item pid %d not a child
+=item pid %x not a child
 
 (W) A warning peculiar to VMS.  Waitpid() was asked to wait for a process which
 isn't a subprocess of the current process.  While this is fine from VMS'
@@ -2770,18 +2792,6 @@ least that's what Configure thought.
 a term, so it's looking for the corresponding right angle bracket, and not
 finding it.  Chances are you left some needed parentheses out earlier in
 the line, and you really meant a "less than".
-
-=item Use of "$$<digit>" to mean "${$}<digit>" is deprecated
-
-(D) Perl versions before 5.004 misinterpreted any type marker followed
-by "$" and a digit.  For example, "$$0" was incorrectly taken to mean
-"${$}0" instead of "${$0}".  This bug is (mostly) fixed in Perl 5.004.
-
-However, the developers of Perl 5.004 could not fix this bug completely,
-because at least two widely-used modules depend on the old meaning of
-"$$0" in a string.  So Perl 5.004 still interprets "$$<digit>" in the
-old (broken) way inside strings; but it generates this message as a
-warning.  And in Perl 5.005, this special treatment will cease.
 
 =item Use of $# is deprecated
 

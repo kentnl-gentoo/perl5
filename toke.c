@@ -14,6 +14,9 @@
 #include "EXTERN.h"
 #include "perl.h"
 
+#define yychar	PL_yychar
+#define yylval	PL_yylval
+
 #ifndef PERL_OBJECT
 static void check_uni _((void));
 static void  force_next _((I32 type));
@@ -904,6 +907,7 @@ scan_const(char *start)
 	    /* expand a range A-Z to the full set of characters.  AIE! */
 	    if (dorange) {
 		I32 i;				/* current expanded character */
+		I32 min;			/* first character in range */
 		I32 max;			/* last character in range */
 
 		i = d - SvPVX(sv);		/* remember current offset */
@@ -911,10 +915,26 @@ scan_const(char *start)
 		d = SvPVX(sv) + i;		/* restore d after the grow potentially has changed the ptr */
 		d -= 2;				/* eat the first char and the - */
 
-		max = (U8)d[1];			/* last char in range */
+		min = (U8)*d;			/* first char in range */
+		max = (U8)d[1];			/* last char in range  */
 
-		for (i = (U8)*d; i <= max; i++)
-		    *d++ = i;
+#ifndef ASCIIish
+		if ((isLOWER(min) && isLOWER(max)) ||
+		    (isUPPER(min) && isUPPER(max))) {
+		    if (isLOWER(min)) {
+			for (i = min; i <= max; i++)
+			    if (isLOWER(i))
+				*d++ = i;
+		    } else {
+			for (i = min; i <= max; i++)
+			    if (isUPPER(i))
+				*d++ = i;
+		    }
+		}
+		else
+#endif
+		    for (i = min; i <= max; i++)
+			*d++ = i;
 
 		/* mark the range as done, and continue */
 		dorange = FALSE;
@@ -935,14 +955,16 @@ scan_const(char *start)
 
 	/* if we get here, we're not doing a transliteration */
 
-	/* skip for regexp comments /(?#comment)/ */
+	/* skip for regexp comments /(?#comment)/ and code /(?{code})/,
+	   except for the last char, which will be done separately. */
 	else if (*s == '(' && PL_lex_inpat && s[1] == '?') {
 	    if (s[2] == '#') {
 		while (s < send && *s != ')')
 		    *d++ = *s++;
-	    } else if (s[2] == '{') {	/* This should march regcomp.c */
+	    } else if (s[2] == '{'
+		       || s[2] == 'p' && s[3] == '{') {	/* This should march regcomp.c */
 		I32 count = 1;
-		char *regparse = s + 3;
+		char *regparse = s + (s[2] == '{' ? 3 : 4);
 		char c;
 
 		while (count && (c = *regparse)) {
@@ -954,11 +976,11 @@ scan_const(char *start)
 			count--;
 		    regparse++;
 		}
-		if (*regparse == ')')
-		    regparse++;
-		else
+		if (*regparse != ')') {
+		    regparse--;		/* Leave one char for continuation. */
 		    yyerror("Sequence (?{...}) not terminated or not {}-balanced");
-		while (s < regparse && *s != ')')
+		}
+		while (s < regparse)
 		    *d++ = *s++;
 	    }
 	}
@@ -1414,7 +1436,7 @@ filter_del(filter_t funcp)
     if (!PL_rsfp_filters || AvFILLp(PL_rsfp_filters)<0)
 	return;
     /* if filter is on top of stack (usual case) just pop it off */
-    if (IoDIRP(FILTER_DATA(AvFILLp(PL_rsfp_filters))) == (void*)funcp){
+    if (IoDIRP(FILTER_DATA(AvFILLp(PL_rsfp_filters))) == (DIR*)funcp){
 	sv_free(av_pop(PL_rsfp_filters));
 
         return;
@@ -2550,7 +2572,11 @@ yylex(void)
 	}
 	if (PL_lex_brackets < PL_lex_formbrack) {
 	    char *t;
+#ifdef PERL_STRICT_CR
 	    for (t = s; *t == ' ' || *t == '\t'; t++) ;
+#else
+	    for (t = s; *t == ' ' || *t == '\t' || *t == '\r'; t++) ;
+#endif
 	    if (*t == '\n' || *t == '#') {
 		s--;
 		PL_expect = XBLOCK;
@@ -2612,7 +2638,7 @@ yylex(void)
 	    }
 	}
 
-	if (s[1] == '#' && (isALPHA(s[2]) || strchr("_{$:", s[2]))) {
+	if (s[1] == '#' && (isALPHA(s[2]) || strchr("_{$:+-", s[2]))) {
 	    if (PL_expect == XOPERATOR)
 		no_op("Array length", PL_bufptr);
 	    PL_tokenbuf[0] = '@';
@@ -2782,8 +2808,14 @@ yylex(void)
 	OPERATOR(tmp);
 
     case '.':
-	if (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack && s[1] == '\n' &&
-		(s == PL_linestart || s[-1] == '\n') ) {
+	if (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack
+#ifdef PERL_STRICT_CR
+	    && s[1] == '\n'
+#else
+	    && (s[1] == '\n' || (s[1] == '\r' && s[2] == '\n'))
+#endif
+	    && (s == PL_linestart || s[-1] == '\n') )
+	{
 	    PL_lex_formbrack = 0;
 	    PL_expect = XSTATE;
 	    goto rightbracket;
@@ -2979,7 +3011,8 @@ yylex(void)
 		tmp = -tmp;
 		gv = Nullgv;
 		gvp = 0;
-		if (ckWARN(WARN_AMBIGUOUS) && hgv)
+		if (ckWARN(WARN_AMBIGUOUS) && hgv
+		    && tmp != KEY_x && tmp != KEY_CORE)	/* never ambiguous */
 		    warner(WARN_AMBIGUOUS,
 		    	"Ambiguous call resolved as CORE::%s(), %s",
 			 GvENAME(hgv), "qualify as such or use &");
@@ -5044,12 +5077,9 @@ scan_ident(register char *s, register char *send, char *dest, STRLEN destlen, I3
 	return s;
     }
     if (*s == '$' && s[1] &&
-      (isALNUM(s[1]) || strchr("${", s[1]) || strnEQ(s+1,"::",2)) )
+	(isALNUM(s[1]) || strchr("${", s[1]) || strnEQ(s+1,"::",2)) )
     {
-	if (isDIGIT(s[1]) && PL_lex_state == LEX_INTERPNORMAL)
-	    deprecate("\"$$<digit>\" to mean \"${$}<digit>\"");
-	else
-	    return s;
+	return s;
     }
     if (*s == '{') {
 	bracket = s;
@@ -6077,7 +6107,11 @@ scan_formline(register char *s)
     while (!needargs) {
 	if (*s == '.' || *s == '}') {
 	    /*SUPPRESS 530*/
-	    for (t = s+1; *t == ' ' || *t == '\t'; t++) ;
+#ifdef PERL_STRICT_CR
+	    for (t = s+1;*t == ' ' || *t == '\t'; t++) ;
+#else
+	    for (t = s+1;*t == ' ' || *t == '\t' || *t == '\r'; t++) ;
+#endif
 	    if (*t == '\n')
 		break;
 	}

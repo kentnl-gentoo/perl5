@@ -59,8 +59,10 @@
 #define PL_ofslen		(PL_curinterp->Tofslen)
 #define PL_op			(PL_curinterp->Top)
 #define PL_opsave		(PL_curinterp->Topsave)
+#define PL_reg_call_cc		(PL_curinterp->Treg_call_cc)
 #define PL_reg_eval_set		(PL_curinterp->Treg_eval_set)
 #define PL_reg_flags		(PL_curinterp->Treg_flags)
+#define PL_reg_re		(PL_curinterp->Treg_re)
 #define PL_reg_start_tmp	(PL_curinterp->Treg_start_tmp)
 #define PL_reg_start_tmpl	(PL_curinterp->Treg_start_tmpl)
 #define PL_regbol		(PL_curinterp->Tregbol)
@@ -250,6 +252,7 @@
 #define PL_stdingv		(PL_curinterp->Istdingv)
 #define PL_strchop		(PL_curinterp->Istrchop)
 #define PL_strtab		(PL_curinterp->Istrtab)
+#define PL_strtab_mutex		(PL_curinterp->Istrtab_mutex)
 #define PL_sub_generation	(PL_curinterp->Isub_generation)
 #define PL_sublex_info		(PL_curinterp->Isublex_info)
 #define PL_sv_arenaroot		(PL_curinterp->Isv_arenaroot)
@@ -384,6 +387,7 @@
 #define PL_Istdingv		PL_stdingv
 #define PL_Istrchop		PL_strchop
 #define PL_Istrtab		PL_strtab
+#define PL_Istrtab_mutex	PL_strtab_mutex
 #define PL_Isub_generation	PL_sub_generation
 #define PL_Isublex_info		PL_sublex_info
 #define PL_Isv_arenaroot	PL_sv_arenaroot
@@ -438,8 +442,10 @@
 #define PL_Tofslen		PL_ofslen
 #define PL_Top			PL_op
 #define PL_Topsave		PL_opsave
+#define PL_Treg_call_cc		PL_reg_call_cc
 #define PL_Treg_eval_set	PL_reg_eval_set
 #define PL_Treg_flags		PL_reg_flags
+#define PL_Treg_re		PL_reg_re
 #define PL_Treg_start_tmp	PL_reg_start_tmp
 #define PL_Treg_start_tmpl	PL_reg_start_tmpl
 #define PL_Tregbol		PL_regbol
@@ -563,8 +569,10 @@
 #define PL_ofslen		(thr->Tofslen)
 #define PL_op			(thr->Top)
 #define PL_opsave		(thr->Topsave)
+#define PL_reg_call_cc		(thr->Treg_call_cc)
 #define PL_reg_eval_set		(thr->Treg_eval_set)
 #define PL_reg_flags		(thr->Treg_flags)
+#define PL_reg_re		(thr->Treg_re)
 #define PL_reg_start_tmp	(thr->Treg_start_tmp)
 #define PL_reg_start_tmpl	(thr->Treg_start_tmpl)
 #define PL_regbol		(thr->Tregbol)
@@ -647,6 +655,7 @@
 #define PL_collxfrm_base	(PL_Vars.Gcollxfrm_base)
 #define PL_collxfrm_mult	(PL_Vars.Gcollxfrm_mult)
 #define PL_cop_seqmax		(PL_Vars.Gcop_seqmax)
+#define PL_cred_mutex		(PL_Vars.Gcred_mutex)
 #define PL_cryptseen		(PL_Vars.Gcryptseen)
 #define PL_cshlen		(PL_Vars.Gcshlen)
 #define PL_cshname		(PL_Vars.Gcshname)
@@ -758,6 +767,14 @@
 #define PL_xnv_root		(PL_Vars.Gxnv_root)
 #define PL_xpv_root		(PL_Vars.Gxpv_root)
 #define PL_xrv_root		(PL_Vars.Gxrv_root)
+#define PL_yychar		(PL_Vars.Gyychar)
+#define PL_yydebug		(PL_Vars.Gyydebug)
+#define PL_yyerrflag		(PL_Vars.Gyyerrflag)
+#define PL_yylval		(PL_Vars.Gyylval)
+#define PL_yynerrs		(PL_Vars.Gyynerrs)
+#define PL_yyssp		(PL_Vars.Gyyssp)
+#define PL_yyval		(PL_Vars.Gyyval)
+#define PL_yyvsp		(PL_Vars.Gyyvsp)
 
 #else /* !PERL_GLOBAL_STRUCT */
 
@@ -773,6 +790,7 @@
 #define PL_Gcollxfrm_base	PL_collxfrm_base
 #define PL_Gcollxfrm_mult	PL_collxfrm_mult
 #define PL_Gcop_seqmax		PL_cop_seqmax
+#define PL_Gcred_mutex		PL_cred_mutex
 #define PL_Gcryptseen		PL_cryptseen
 #define PL_Gcshlen		PL_cshlen
 #define PL_Gcshname		PL_cshname
@@ -884,6 +902,14 @@
 #define PL_Gxnv_root		PL_xnv_root
 #define PL_Gxpv_root		PL_xpv_root
 #define PL_Gxrv_root		PL_xrv_root
+#define PL_Gyychar		PL_yychar
+#define PL_Gyydebug		PL_yydebug
+#define PL_Gyyerrflag		PL_yyerrflag
+#define PL_Gyylval		PL_yylval
+#define PL_Gyynerrs		PL_yynerrs
+#define PL_Gyyssp		PL_yyssp
+#define PL_Gyyval		PL_yyval
+#define PL_Gyyvsp		PL_yyvsp
 
 #ifdef EMBED
 

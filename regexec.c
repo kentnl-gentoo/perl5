@@ -73,6 +73,8 @@
  */
 #include "EXTERN.h"
 #include "perl.h"
+typedef MAGIC *my_magic;
+
 #include "regcomp.h"
 
 #define RF_tainted	1		/* tainted information used? */
@@ -105,6 +107,8 @@ static bool reginclass _((char *p, I32 c));
 static bool reginclassutf8 _((regnode *f, U8* p));
 static CHECKPOINT regcppush _((I32 parenfloor));
 static char * regcppop _((void));
+static char * regcp_set_to _((I32 ss));
+static void cache_re _((regexp *prog));
 #endif
 
 #define REGINCLASS(p,c)  (*(p) ? reginclass(p,c) : ANYOF_TEST(p,c))
@@ -201,6 +205,27 @@ regcppop(void)
     return input;
 }
 
+STATIC char *
+regcp_set_to(I32 ss)
+{
+    dTHR;
+    I32 tmp = PL_savestack_ix;
+
+    PL_savestack_ix = ss;
+    regcppop();
+    PL_savestack_ix = tmp;
+    return Nullch;
+}
+
+typedef struct re_cc_state
+{
+    I32 ss;
+    regnode *node;
+    struct re_cc_state *prev;
+    CURCUR *cc;
+    regexp *re;
+} re_cc_state;
+
 #define regcpblow(cp) LEAVE_SCOPE(cp)
 
 /*
@@ -221,6 +246,19 @@ pregexec(register regexp *prog, char *stringarg, register char *strend,
     return
 	regexec_flags(prog, stringarg, strend, strbeg, minend, screamer, NULL, 
 		      nosave ? 0 : REXEC_COPY_STR);
+}
+
+STATIC void
+cache_re(regexp *prog)
+{
+    dTHR;
+    PL_regprecomp = prog->precomp;		/* Needed for FAIL. */
+#ifdef DEBUGGING
+    PL_regprogram = prog->program;
+#endif
+    PL_regnpar = prog->nparens;
+    PL_regdata = prog->data;    
+    PL_reg_re = prog;    
 }
   
 /*
@@ -254,10 +292,9 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
     cc.oldcc = 0;
     PL_regcc = &cc;
 
-    PL_regprecomp = prog->precomp;		/* Needed for error messages. */
+    cache_re(prog);
 #ifdef DEBUGGING
     PL_regnarrate = PL_debug & 512;
-    PL_regprogram = prog->program;
 #endif
 
     /* Be paranoid... */
@@ -282,7 +319,6 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 	FAIL("corrupted regexp program");
     }
 
-    PL_regnpar = prog->nparens;
     PL_reg_flags = 0;
     PL_reg_eval_set = 0;
 
@@ -298,6 +334,9 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     /* see how far we have to get to not match where we matched before */
     PL_regtill = startpos+minend;
+
+    /* We start without call_cc context.  */
+    PL_reg_call_cc = 0;
 
     /* If there is a "must appear" string, look for it. */
     s = startpos;
@@ -352,15 +391,16 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     DEBUG_r(
 	PerlIO_printf(Perl_debug_log, 
-		      "Matching `%.60s%s' against `%.*s%s'\n",
-		      prog->precomp, 
+		      "%sMatching%s `%s%.60s%s%s' against `%s%.*s%s%s'\n",
+		      PL_colors[4],PL_colors[5],PL_colors[0],
+		      prog->precomp,
+		      PL_colors[1],
 		      (strlen(prog->precomp) > 60 ? "..." : ""),
+		      PL_colors[0], 
 		      (strend - startpos > 60 ? 60 : strend - startpos),
-		      startpos, 
+		      startpos, PL_colors[1],
 		      (strend - startpos > 60 ? "..." : ""))
 	);
-
-    PL_regdata = prog->data;
 
     /* Simplest case:  anchored match need be tried only once. */
     /*  [unless only anchor is BOL and multiline is set] */
@@ -1069,15 +1109,21 @@ regmatch(regnode *prog)
 	    int l = (PL_regeol - locinput > taill ? taill : PL_regeol - locinput);
 	    int pref_len = (locinput - PL_bostr > (5 + taill) - l 
 			    ? (5 + taill) - l : locinput - PL_bostr);
+	    int pref0_len = pref_len  - (locinput - PL_reginput);
 
 	    if (l + pref_len < (5 + taill) && l < PL_regeol - locinput)
 		l = ( PL_regeol - locinput > (5 + taill) - pref_len 
 		      ? (5 + taill) - pref_len : PL_regeol - locinput);
+	    if (pref0_len < 0)
+		pref0_len = 0;
 	    regprop(prop, scan);
 	    PerlIO_printf(Perl_debug_log, 
-			  "%4i <%s%.*s%s%s%s%.*s%s>%*s|%3d:%*s%s\n",
+			  "%4i <%s%.*s%s%s%.*s%s%s%s%.*s%s>%*s|%3d:%*s%s\n",
 			  locinput - PL_bostr, 
-			  PL_colors[2], pref_len, locinput - pref_len, PL_colors[3],
+			  PL_colors[4], pref0_len, 
+			  locinput - pref_len, PL_colors[5],
+			  PL_colors[2], pref_len - pref0_len, 
+			  locinput - pref_len + pref0_len, PL_colors[3],
 			  (docolor ? "" : "> <"),
 			  PL_colors[0], l, locinput, PL_colors[1],
 			  15 - l - pref_len + 1,
@@ -1552,15 +1598,92 @@ regmatch(regnode *prog)
 	    ret = POPs;
 	    PUTBACK;
 	    
-	    if (logical) {
-		logical = 0;
-		sw = SvTRUE(ret);
-	    }
-	    else
-		sv_setsv(save_scalar(PL_replgv), ret);
 	    PL_op = oop;
 	    PL_curpad = ocurpad;
 	    PL_curcop = ocurcop;
+	    if (logical) {
+		if (logical == 2) {	/* Postponed subexpression. */
+		    regexp *re;
+		    my_magic mg = Null(my_magic);
+		    re_cc_state state;
+		    CURCUR cctmp;
+		    CHECKPOINT cp, lastcp;
+
+		    if(SvROK(ret) || SvRMAGICAL(ret)) {
+			SV *sv = SvROK(ret) ? SvRV(ret) : ret;
+
+			if(SvMAGICAL(sv))
+			    mg = mg_find(sv, 'r');
+		    }
+		    if (mg) {
+			re = (regexp *)mg->mg_obj;
+			ReREFCNT_inc(re);
+		    }
+		    else {
+			STRLEN len;
+			char *t = SvPV(ret, len);
+			PMOP pm;
+			char *oprecomp = PL_regprecomp;
+			I32 osize = PL_regsize;
+			I32 onpar = PL_regnpar;
+
+			pm.op_pmflags = 0;
+			re = CALLREGCOMP(t, t + len, &pm);
+			if (!(SvFLAGS(ret) 
+			      & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)))
+			    sv_magic(ret,(SV*)ReREFCNT_inc(re),'r',0,0);
+			PL_regprecomp = oprecomp;
+			PL_regsize = osize;
+			PL_regnpar = onpar;
+		    }
+		    DEBUG_r(
+			PerlIO_printf(Perl_debug_log, 
+				      "Entering embedded `%s%.60s%s%s'\n",
+				      PL_colors[0],
+				      re->precomp,
+				      PL_colors[1],
+				      (strlen(re->precomp) > 60 ? "..." : ""))
+			);
+		    state.node = next;
+		    state.prev = PL_reg_call_cc;
+		    state.cc = PL_regcc;
+		    state.re = PL_reg_re;
+
+		    cctmp.cur = 0;
+		    cctmp.oldcc = 0;
+		    PL_regcc = &cctmp;
+		    
+		    cp = regcppush(0);	/* Save *all* the positions. */
+		    REGCP_SET;
+		    cache_re(re);
+		    state.ss = PL_savestack_ix;
+		    *PL_reglastparen = 0;
+		    PL_reg_call_cc = &state;
+		    PL_reginput = locinput;
+		    if (regmatch(re->program + 1)) {
+			ReREFCNT_dec(re);
+			regcpblow(cp);
+			sayYES;
+		    }
+		    DEBUG_r(
+			PerlIO_printf(Perl_debug_log,
+				      "%*s  failed...\n",
+				      REPORT_CODE_OFF+PL_regindent*2, "")
+			);
+		    ReREFCNT_dec(re);
+		    REGCP_UNWIND;
+		    regcppop();
+		    PL_reg_call_cc = state.prev;
+		    PL_regcc = state.cc;
+		    PL_reg_re = state.re;
+		    cache_re(PL_reg_re);
+		    sayNO;
+		}
+		sw = SvTRUE(ret);
+		logical = 0;
+	    }
+	    else
+		sv_setsv(save_scalar(PL_replgv), ret);
 	    break;
 	}
 	case OPEN:
@@ -1590,7 +1713,7 @@ regmatch(regnode *prog)
 	    }
 	    break;
 	case LOGICAL:
-	    logical = 1;
+	    logical = scan->flags;
 	    break;
 	case CURLYX: {
 		CURCUR cc;
@@ -2086,6 +2209,40 @@ regmatch(regnode *prog)
 	    sayNO;
 	    break;
 	case END:
+	    if (PL_reg_call_cc) {
+		re_cc_state *cur_call_cc = PL_reg_call_cc;
+		CURCUR *cctmp = PL_regcc;
+		regexp *re = PL_reg_re;
+		CHECKPOINT cp, lastcp;
+		
+		cp = regcppush(0);	/* Save *all* the positions. */
+		REGCP_SET;
+		regcp_set_to(PL_reg_call_cc->ss); /* Restore parens of
+						    the caller. */
+		PL_reginput = locinput;	/* Make position available to
+					   the callcc. */
+		cache_re(PL_reg_call_cc->re);
+		PL_regcc = PL_reg_call_cc->cc;
+		PL_reg_call_cc = PL_reg_call_cc->prev;
+		if (regmatch(cur_call_cc->node)) {
+		    PL_reg_call_cc = cur_call_cc;
+		    regcpblow(cp);
+		    sayYES;
+		}
+		REGCP_UNWIND;
+		regcppop();
+		PL_reg_call_cc = cur_call_cc;
+		PL_regcc = cctmp;
+		PL_reg_re = re;
+		cache_re(re);
+
+		DEBUG_r(
+		    PerlIO_printf(Perl_debug_log,
+				  "%*s  continuation failed...\n",
+				  REPORT_CODE_OFF+PL_regindent*2, "")
+		    );
+		sayNO;
+	    }
 	    if (locinput < PL_regtill)
 		sayNO;			/* Cannot match: too short. */
 	    /* Fall through */
@@ -2094,6 +2251,7 @@ regmatch(regnode *prog)
 	    sayYES;			/* Success! */
 	case SUSPEND:
 	    n = 1;
+	    PL_reginput = locinput;
 	    goto do_ifmatch;	    
 	case UNLESSM:
 	    n = 0;
@@ -2404,14 +2562,14 @@ regrepeat_hard(regnode *p, I32 max, I32 *lp)
     register char *start;
     register char *loceol = PL_regeol;
     I32 l = 0;
-    I32 count = 0;
+    I32 count = 0, res = 1;
 
     if (!max)
 	return 0;
 
     start = PL_reginput;
     if (UTF) {
-	while (PL_reginput < loceol && (scan = PL_reginput, regmatch(p))) {
+	while (PL_reginput < loceol && (scan = PL_reginput, res = regmatch(p))) {
 	    if (!count++) {
 		l = 0;
 		while (start < PL_reginput) {
@@ -2427,7 +2585,7 @@ regrepeat_hard(regnode *p, I32 max, I32 *lp)
 	}
     }
     else {
-	while (PL_reginput < loceol && (scan = PL_reginput, regmatch(p))) {
+	while (PL_reginput < loceol && (scan = PL_reginput, res = regmatch(p))) {
 	    if (!count++) {
 		*lp = l = PL_reginput - start;
 		if (max != REG_INFTY && l*max < loceol - scan)
@@ -2437,7 +2595,7 @@ regrepeat_hard(regnode *p, I32 max, I32 *lp)
 	    }
 	}
     }
-    if (PL_reginput < loceol)
+    if (!res)
 	PL_reginput = scan;
     
     return count;

@@ -319,6 +319,8 @@
 #define magic_len		Perl_magic_len
 #define magic_mutexfree		Perl_magic_mutexfree
 #define magic_nextpack		Perl_magic_nextpack
+#define magic_regdata_cnt	Perl_magic_regdata_cnt
+#define magic_regdatum_get	Perl_magic_regdatum_get
 #define magic_set		Perl_magic_set
 #define magic_set_all_env	Perl_magic_set_all_env
 #define magic_setamagic		Perl_magic_setamagic
@@ -876,6 +878,7 @@
 #define save_I16		Perl_save_I16
 #define save_I32		Perl_save_I32
 #define save_aelem		Perl_save_aelem
+#define save_alloc		Perl_save_alloc
 #define save_aptr		Perl_save_aptr
 #define save_ary		Perl_save_ary
 #define save_clearsv		Perl_save_clearsv
@@ -1109,27 +1112,21 @@
 #define watchaddr		Perl_watchaddr
 #define watchok			Perl_watchok
 #define whichsig		Perl_whichsig
-#define yychar			Perl_yychar
 #define yycheck			Perl_yycheck
-#define yydebug			Perl_yydebug
 #define yydefred		Perl_yydefred
 #define yydestruct		Perl_yydestruct
 #define yydgoto			Perl_yydgoto
-#define yyerrflag		Perl_yyerrflag
 #define yyerror			Perl_yyerror
 #define yygindex		Perl_yygindex
 #define yylen			Perl_yylen
 #define yylex			Perl_yylex
 #define yylhs			Perl_yylhs
-#define yylval			Perl_yylval
 #define yyname			Perl_yyname
-#define yynerrs			Perl_yynerrs
 #define yyparse			Perl_yyparse
 #define yyrindex		Perl_yyrindex
 #define yyrule			Perl_yyrule
 #define yysindex		Perl_yysindex
 #define yytable			Perl_yytable
-#define yyval			Perl_yyval
 #define yywarn			Perl_yywarn
 
 #endif /* EMBED */

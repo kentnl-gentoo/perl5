@@ -41,6 +41,7 @@ README.plan9		Notes about Plan9 port
 README.qnx		Notes about QNX port
 README.threads		Notes about multithreading
 README.vms		Notes about VMS port
+README.vos		Notes about Stratus VOS port
 README.win32		Notes about Win32 port
 Todo			The Wishlist
 Todo-5.005		What needs doing before 5.005 release
@@ -431,12 +432,12 @@ hints/unicosmk.sh	Hints for named architecture
 hints/unisysdynix.sh	Hints for named architecture
 hints/utekv.sh		Hints for named architecture
 hints/uts.sh		Hints for named architecture
+hints/uwin.sh		Hints for named architecture
 hv.c			Hash value code
 hv.h			Hash value header
 installhtml		Perl script to install html files for pods
 installman		Perl script to install man pages for pods
 installperl		Perl script to do "make install" dirty work
-interp.sym		Interpreter specific symbols to hide in a struct
 intrpvar.h		Variables held in each interpreter instance
 iperlsys.h		Perl's interface to the system
 keywords.h		The keyword numbers
@@ -565,6 +566,7 @@ lib/dumpvar.pl		A variable dumper
 lib/exceptions.pl	catch and throw routines
 lib/fastcwd.pl		a faster but more dangerous getcwd
 lib/fields.pm		Set up object field names for pseudo-hash-using classes
+lib/filetest.pm		For "use filetest"
 lib/find.pl		A find emulator--used by find2perl
 lib/finddepth.pl	A depth-first find emulator--used by find2perl
 lib/flush.pl		Routines to do single flush
@@ -1116,6 +1118,7 @@ t/op/tie.t		See if tie/untie functions work
 t/op/tiearray.t		See if tie for arrays works
 t/op/tiehandle.t	See if tie for handles works
 t/op/time.t		See if time functions work
+t/op/tr.t		See if tr works
 t/op/undef.t		See if undef works
 t/op/universal.t	See if UNIVERSAL class works
 t/op/unshift.t		See if unshift works
@@ -1130,28 +1133,28 @@ t/pragma/strict-subs	Tests of "use strict 'subs'" for strict.t
 t/pragma/strict-vars	Tests of "use strict 'vars'" for strict.t
 t/pragma/strict.t	See if strictures work
 t/pragma/subs.t		See if subroutine pseudo-importation works
-t/pragma/warn-1global	Tests of global warnings for warning.t
-t/pragma/warn-2use	Tests for "use warning" for warning.t
-t/pragma/warn-3both	Tests for interaction of $^W and "use warning"
-t/pragma/warn-4lint	Tests for -W switch
-t/pragma/warn-5nolint	Tests for -X switch
-t/pragma/warn-doio	Tests for doio.c for warning.t
-t/pragma/warn-gv	Tests for gv.c for warning.t
-t/pragma/warn-mg	Tests for mg.c for warning.t
-t/pragma/warn-op	Tests for op.c for warning.t
-t/pragma/warn-perl	Tests for perl.c for warning.t
-t/pragma/warn-perly	Tests for perly.y for warning.t
-t/pragma/warn-pp	Tests for pp.c for warning.t
-t/pragma/warn-pp_ctl	Tests for pp_ctl.c for warning.t
-t/pragma/warn-pp_hot	Tests for pp_hot.c for warning.t
-t/pragma/warn-pp_sys	Tests for pp_sys.c for warning.t
-t/pragma/warn-regcomp	Tests for regcomp.c for warning.t
-t/pragma/warn-regexec	Tests for regexec.c for warning.t
-t/pragma/warn-sv	Tests for sv.c for warning.t
-t/pragma/warn-taint	Tests for taint.c for warning.t
-t/pragma/warn-toke	Tests for toke.c for warning.t
-t/pragma/warn-universal	Tests for universal.c for warning.t
-t/pragma/warn-util	Tests for util.c for warning.t
+t/pragma/warn/1global	Tests of global warnings for warning.t
+t/pragma/warn/2use	Tests for "use warning" for warning.t
+t/pragma/warn/3both	Tests for interaction of $^W and "use warning"
+t/pragma/warn/4lint	Tests for -W switch
+t/pragma/warn/5nolint	Tests for -X switch
+t/pragma/warn/doio	Tests for doio.c for warning.t
+t/pragma/warn/gv	Tests for gv.c for warning.t
+t/pragma/warn/mg	Tests for mg.c for warning.t
+t/pragma/warn/op	Tests for op.c for warning.t
+t/pragma/warn/perl	Tests for perl.c for warning.t
+t/pragma/warn/perly	Tests for perly.y for warning.t
+t/pragma/warn/pp	Tests for pp.c for warning.t
+t/pragma/warn/pp_ctl	Tests for pp_ctl.c for warning.t
+t/pragma/warn/pp_hot	Tests for pp_hot.c for warning.t
+t/pragma/warn/pp_sys	Tests for pp_sys.c for warning.t
+t/pragma/warn/regcomp	Tests for regcomp.c for warning.t
+t/pragma/warn/regexec	Tests for regexec.c for warning.t
+t/pragma/warn/sv	Tests for sv.c for warning.t
+t/pragma/warn/taint	Tests for taint.c for warning.t
+t/pragma/warn/toke	Tests for toke.c for warning.t
+t/pragma/warn/universal	Tests for universal.c for warning.t
+t/pragma/warn/util	Tests for util.c for warning.t
 t/pragma/warning.t	See if warning controls work
 taint.c			Tainting code
 thrdvar.h		Per-thread variables
@@ -1194,7 +1197,7 @@ vms/genconfig.pl	retcon config.sh from config.h
 vms/genopt.com		hack to write options files in case of broken makes
 vms/make_command.com	record MM[SK] command used to build Perl
 vms/mms2make.pl		convert descrip.mms to make syntax
-vms/munchconfig.c   performs shell $var substitution for VMS
+vms/munchconfig.c	performs shell $var substitution for VMS
 vms/myconfig.com	record local configuration info for bug report
 vms/perlvms.pod		VMS-specific additions to Perl documentation
 vms/perly_c.vms		perly.c with fixed declarations for global syms
@@ -1207,19 +1210,25 @@ vms/vms.c		VMS-specific C code for Perl core
 vms/vms_yfix.pl		convert Unix perly.[ch] to VMS perly_[ch].vms
 vms/vmsish.h		VMS-specific C header for Perl core
 vms/writemain.pl	Generate perlmain.c from miniperlmain.c+extensions
+vos/build.cm		VOS command macro to build Perl
+vos/Changes		Changes made to port Perl to the VOS operating system
+vos/compile_perl.cm	VOS commnad macro to build multiple version of Perl
+vos/config.h		config.h for VOS
+vos/config_h.SH_orig	config_h.SH at the time config.h was created
+vos/perl.bind		VOS bind control file
+vos/test_vos_dummies.c	Test program for "vos_dummies.c"
+vos/vos_dummies.c	Wrappers to soak up undefined functions
+vos/vosish.h		VOS-specific header file
 warning.h		The warning numbers
 warning.pl		Program to write warning.h and lib/warning.pm
 win32/GenCAPI.pl	Win32 port for C API with PERL_OBJECT
 win32/Makefile		Win32 makefile for NMAKE (Visual C++ build)
 win32/TEST		Win32 port
 win32/autosplit.pl	Win32 port
-win32/bin/network.pl	Win32 port
 win32/bin/perlglob.pl	Win32 globbing
 win32/bin/pl2bat.pl	wrap perl scripts into batch files
 win32/bin/runperl.pl	run perl script via batch file namesake
 win32/bin/search.pl	Win32 port
-win32/bin/webget.pl	Win32 port
-win32/bin/www.pl	Win32 port
 win32/config.bc		Win32 base line config.sh (Borland C++ build)
 win32/config.gc		Win32 base line config.sh (mingw32/gcc build)
 win32/config.vc		Win32 base line config.sh (Visual C++ build)

@@ -399,6 +399,28 @@ checks, thus to allow $re in the above snippet to contain C<(?{})>
 I<with tainting enabled>, one needs both C<use re 'eval'> and untaint
 the $re.
 
+=item C<(?p{ code })>
+
+I<Very experimental> "postponed" regular subexpression.  C<code> is evaluated
+at runtime, at the moment this subexpression may match.  The result of
+evaluation is considered as a regular expression, and matched as if it
+were inserted instead of this construct.
+
+C<code> is not interpolated.  Currently the rules to
+determine where the C<code> ends are somewhat convoluted.
+
+The following regular expression matches matching parenthesized group:
+
+  $re = qr{
+	     \(
+	     (?:
+		(?> [^()]+ )	# Non-parens without backtracking
+	      |
+		(?p{ $re })	# Group with matching parens
+	     )*
+	     \)
+	  }x;
+
 =item C<(?E<gt>pattern)>
 
 An "independent" subexpression.  Matches the substring that a
@@ -463,7 +485,7 @@ the time when used on a similar string with 1000000 C<a>s.  Be aware,
 however, that this pattern currently triggers a warning message under
 B<-w> saying it C<"matches the null string many times">):
 
-On simple groups, such as the pattern C<(?> [^()]+ )>, a comparable
+On simple groups, such as the pattern C<(?E<gt> [^()]+ )>, a comparable
 effect may be achieved by negative lookahead, as in C<[^()]+ (?! [^()] )>.
 This was only 4 times slower on a string with 1000000 C<a>s.
 
@@ -734,6 +756,13 @@ at the start or end of the list, or escape it with a backslash.  (The
 following all specify the same class of three characters: C<[-az]>,
 C<[az-]>, and C<[a\-z]>.  All are different from C<[a-z]>, which
 specifies a class containing twenty-six characters.)
+
+Note also that the whole range idea is rather unportable between
+character sets--and even within character sets they may cause results
+you probably didn't expect.  A sound principle is to use only ranges
+that begin from and end at either alphabets of equal case ([a-e],
+[A-E]), or digits ([0-9]).  Anything else is unsafe.  If in doubt,
+spell out the character sets in full.
 
 Characters may be specified using a metacharacter syntax much like that
 used in C: "\n" matches a newline, "\t" a tab, "\r" a carriage return,

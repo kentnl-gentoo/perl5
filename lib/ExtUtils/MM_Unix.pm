@@ -84,10 +84,10 @@ sub canonpath {
     if ( $^O eq 'qnx' && $path =~ s|^(//\d+)/|/| ) {
       $node = $1;
     }
-    $path =~ s|/+|/|g ;                            # xx////xx  -> xx/xx
+    $path =~ s|(?<=[^/])/+|/|g ;                   # xx////xx  -> xx/xx
     $path =~ s|(/\.)+/|/|g ;                       # xx/././xx -> xx/xx
     $path =~ s|^(\./)+|| unless $path eq "./";     # ./xx      -> xx
-    $path =~ s|/$|| unless $path eq "/";           # xx/       -> xx
+    $path =~ s|(?<=[^/])/$|| ;                     # xx/       -> xx
     "$node$path";
 }
 
@@ -915,6 +915,7 @@ sub dlsyms {
 
     my($funcs) = $attribs{DL_FUNCS} || $self->{DL_FUNCS} || {};
     my($vars)  = $attribs{DL_VARS} || $self->{DL_VARS} || [];
+    my($funclist)  = $attribs{FUNCLIST} || $self->{FUNCLIST} || [];
     my(@m);
 
     push(@m,"
@@ -931,7 +932,8 @@ static :: $self->{BASEEXT}.exp
 $self->{BASEEXT}.exp: Makefile.PL
 ",'	$(PERL) "-I$(PERL_ARCHLIB)" "-I$(PERL_LIB)" -e \'use ExtUtils::Mksymlists; \\
 	Mksymlists("NAME" => "',$self->{NAME},'", "DL_FUNCS" => ',
-	neatvalue($funcs),', "DL_VARS" => ', neatvalue($vars), ');\'
+	neatvalue($funcs), ', "FUNCLIST" => ', neatvalue($funclist),
+	', "DL_VARS" => ', neatvalue($vars), ');\'
 ');
 
     join('',@m);
@@ -2018,7 +2020,7 @@ uninstall_from_sitedirs ::
 
 =item installbin (o)
 
-Defines targets to install EXE_FILES.
+Defines targets to make and to install EXE_FILES.
 
 =cut
 
@@ -2045,7 +2047,7 @@ EXE_FILES = @{$self->{EXE_FILES}}
 } : q{FIXIN = $(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) -MExtUtils::MakeMaker \
     -e "MY->fixin(shift)"
 }).qq{
-all :: @to
+pure_all :: @to
 	$self->{NOECHO}\$(NOOP)
 
 realclean ::
@@ -2943,7 +2945,11 @@ form Foo/Bar and replaces the slash with C<::>. Returns the replacement.
 
 sub replace_manpage_separator {
     my($self,$man) = @_;
-    $man =~ s,/+,::,g;
+	if ($^O eq 'uwin') {
+		$man =~ s,/+,.,g;
+	} else {
+		$man =~ s,/+,::,g;
+	}
     $man;
 }
 

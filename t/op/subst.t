@@ -1,5 +1,7 @@
 #!./perl
 
+BEGIN { @INC = ('../lib') }
+
 print "1..71\n";
 
 $x = 'foo';
@@ -182,6 +184,7 @@ print $_ eq 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789' ? "ok 52\n" : "not ok 52\n";
 
 # same as tr/A-Z/a-z/;
 if ($^O eq 'os390') {	# An EBCDIC variant.
+    no utf8;
     y[\301-\351][\201-\251];
 } else {		# Ye Olde ASCII.  Or something like it.
     y[\101-\132][\141-\172];

@@ -325,6 +325,8 @@
 #define dump_sub          CPerlObj::Perl_dump_sub
 #undef  dumpuntil
 #define dumpuntil         CPerlObj::dumpuntil
+#undef  emulate_eaccess
+#define emulate_eaccess   CPerlObj::emulate_eaccess
 #undef  fbm_compile
 #define fbm_compile       CPerlObj::Perl_fbm_compile
 #undef  fbm_instr
@@ -640,6 +642,10 @@
 #define magic_methpack    CPerlObj::magic_methpack
 #undef  magic_nextpack
 #define magic_nextpack    CPerlObj::Perl_magic_nextpack
+#undef  magic_regdata_cnt
+#define magic_regdata_cnt   CPerlObj::Perl_magic_regdata_cnt
+#undef  magic_regdatum_get
+#define magic_regdatum_get  CPerlObj::Perl_magic_regdatum_get
 #undef  magic_set
 #define magic_set         CPerlObj::Perl_magic_set
 #undef  magic_set_all_env
@@ -1060,6 +1066,10 @@
 #define regcppush         CPerlObj::regcppush
 #undef  regcppop
 #define regcppop          CPerlObj::regcppop
+#undef  regcp_set_to
+#define regcp_set_to      CPerlObj::regcp_set_to
+#undef  cache_re
+#define cache_re          CPerlObj::cache_re
 #undef  reghop
 #define reghop            CPerlObj::reghop
 #undef  reghopmaybe
@@ -1140,6 +1150,8 @@
 #define savestack_grow    CPerlObj::Perl_savestack_grow
 #undef  save_aelem
 #define save_aelem        CPerlObj::Perl_save_aelem
+#undef  save_alloc
+#define save_alloc        CPerlObj::Perl_save_alloc
 #undef  save_aptr
 #define save_aptr         CPerlObj::Perl_save_aptr
 #undef  save_ary
@@ -1497,6 +1509,27 @@
 #define to_utf8_title       CPerlObj::Perl_to_utf8_title
 #undef  to_utf8_upper
 #define to_utf8_upper       CPerlObj::Perl_to_utf8_upper
+
+#undef do_trans_CC_simple
+#define do_trans_CC_simple	CPerlObj::do_trans_CC_simple
+#undef do_trans_CC_count
+#define do_trans_CC_count	CPerlObj::do_trans_CC_count
+#undef do_trans_CC_complex
+#define do_trans_CC_complex	CPerlObj::do_trans_CC_complex
+#undef do_trans_UU_simple
+#define do_trans_UU_simple	CPerlObj::do_trans_UU_simple
+#undef do_trans_UU_count
+#define do_trans_UU_count	CPerlObj::do_trans_UU_count
+#undef do_trans_UU_complex
+#define do_trans_UU_complex	CPerlObj::do_trans_UU_complex
+#undef do_trans_UC_simple
+#define do_trans_UC_simple	CPerlObj::do_trans_UC_simple
+#undef do_trans_CU_simple
+#define do_trans_CU_simple	CPerlObj::do_trans_CU_simple
+#undef do_trans_UC_trivial
+#define do_trans_UC_trivial	CPerlObj::do_trans_UC_trivial
+#undef do_trans_CU_trivial
+#define do_trans_CU_trivial	CPerlObj::do_trans_CU_trivial
 
 #undef  too_few_arguments
 #define too_few_arguments CPerlObj::Perl_too_few_arguments

@@ -26,34 +26,37 @@
 #  endif
 #endif
 
+#ifdef PERL_OBJECT
+#  define VTBL            this->*vtbl
+#else
+#  define VTBL			*vtbl
+static void restore_magic _((void *p));
+#endif
+
 /*
  * Use the "DESTRUCTOR" scope cleanup to reinstate magic.
  */
 
-#ifdef PERL_OBJECT
-
-#define VTBL            this->*vtbl
-
-#else
 struct magic_state {
     SV* mgs_sv;
     U32 mgs_flags;
+    I32 mgs_ss_ix;
 };
-typedef struct magic_state MGS;
-
-static void restore_magic _((void *p));
-#define VTBL			*vtbl
-
-#endif
+/* MGS is typedef'ed to struct magic_state in perl.h */
 
 STATIC void
-save_magic(MGS *mgs, SV *sv)
+save_magic(I32 mgs_ix, SV *sv)
 {
+    dTHR;
+    MGS* mgs;
     assert(SvMAGICAL(sv));
 
+    SAVEDESTRUCTOR(restore_magic, (void*)mgs_ix);
+
+    mgs = SSPTR(mgs_ix, MGS*);
     mgs->mgs_sv = sv;
     mgs->mgs_flags = SvMAGICAL(sv) | SvREADONLY(sv);
-    SAVEDESTRUCTOR(restore_magic, mgs);
+    mgs->mgs_ss_ix = PL_savestack_ix;   /* points after the saved destructor */
 
     SvMAGICAL_off(sv);
     SvREADONLY_off(sv);
@@ -63,8 +66,12 @@ save_magic(MGS *mgs, SV *sv)
 STATIC void
 restore_magic(void *p)
 {
-    MGS* mgs = (MGS*)p;
+    dTHR;
+    MGS* mgs = SSPTR((I32)p, MGS*);
     SV* sv = mgs->mgs_sv;
+
+    if (!sv)
+        return;
 
     if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv))
     {
@@ -75,6 +82,24 @@ restore_magic(void *p)
 	if (SvGMAGICAL(sv))
 	    SvFLAGS(sv) &= ~(SVf_IOK|SVf_NOK|SVf_POK);
     }
+
+    mgs->mgs_sv = NULL;  /* mark the MGS structure as restored */
+
+    /* If we're still on top of the stack, pop us off.  (That condition
+     * will be satisfied if restore_magic was called explicitly, but *not*
+     * if it's being called via leave_scope.)
+     * The reason for doing this is that otherwise, things like sv_2cv()
+     * may leave alloc gunk on the savestack, and some code
+     * (e.g. sighandler) doesn't expect that...
+     */
+    if (PL_savestack_ix == mgs->mgs_ss_ix)
+    {
+        assert(SSPOPINT == SAVEt_DESTRUCTOR);
+        PL_savestack_ix -= 2;
+        assert(SSPOPINT == SAVEt_ALLOC);
+        PL_savestack_ix -= SSPOPINT;
+    }
+
 }
 
 void
@@ -97,13 +122,14 @@ mg_magical(SV *sv)
 int
 mg_get(SV *sv)
 {
-    MGS mgs;
+    dTHR;
+    I32 mgs_ix;
     MAGIC* mg;
     MAGIC** mgp;
     int mgp_valid = 0;
 
-    ENTER;
-    save_magic(&mgs, sv);
+    mgs_ix = SSNEW(sizeof(MGS));
+    save_magic(mgs_ix, sv);
 
     mgp = &SvMAGIC(sv);
     while ((mg = *mgp) != 0) {
@@ -113,7 +139,7 @@ mg_get(SV *sv)
 	    /* Ignore this magic if it's been deleted */
 	    if ((mg == (mgp_valid ? *mgp : SvMAGIC(sv))) &&
 		  (mg->mg_flags & MGf_GSKIP))
-		mgs.mgs_flags = 0;
+		(SSPTR(mgs_ix, MGS*))->mgs_flags = 0;
 	}
 	/* Advance to next magic (complicated by possible deletion) */
 	if (mg == (mgp_valid ? *mgp : SvMAGIC(sv))) {
@@ -124,32 +150,33 @@ mg_get(SV *sv)
 	    mgp = &SvMAGIC(sv);	/* Re-establish pointer after sv_upgrade */
     }
 
-    LEAVE;
+    restore_magic((void*)mgs_ix);
     return 0;
 }
 
 int
 mg_set(SV *sv)
 {
-    MGS mgs;
+    dTHR;
+    I32 mgs_ix;
     MAGIC* mg;
     MAGIC* nextmg;
 
-    ENTER;
-    save_magic(&mgs, sv);
+    mgs_ix = SSNEW(sizeof(MGS));
+    save_magic(mgs_ix, sv);
 
     for (mg = SvMAGIC(sv); mg; mg = nextmg) {
 	MGVTBL* vtbl = mg->mg_virtual;
 	nextmg = mg->mg_moremagic;	/* it may delete itself */
 	if (mg->mg_flags & MGf_GSKIP) {
 	    mg->mg_flags &= ~MGf_GSKIP;	/* setting requires another read */
-	    mgs.mgs_flags = 0;
+	    (SSPTR(mgs_ix, MGS*))->mgs_flags = 0;
 	}
 	if (vtbl && (vtbl->svt_set != NULL))
 	    (VTBL->svt_set)(sv, mg);
     }
 
-    LEAVE;
+    restore_magic((void*)mgs_ix);
     return 0;
 }
 
@@ -163,13 +190,13 @@ mg_length(SV *sv)
     for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
 	MGVTBL* vtbl = mg->mg_virtual;
 	if (vtbl && (vtbl->svt_len != NULL)) {
-	    MGS mgs;
+            I32 mgs_ix;
 
-	    ENTER;
-	    save_magic(&mgs, sv);
+	    mgs_ix = SSNEW(sizeof(MGS));
+	    save_magic(mgs_ix, sv);
 	    /* omit MGf_GSKIP -- not changed here */
 	    len = (VTBL->svt_len)(sv, mg);
-	    LEAVE;
+	    restore_magic((void*)mgs_ix);
 	    return len;
 	}
     }
@@ -187,11 +214,13 @@ mg_size(SV *sv)
     for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
 	MGVTBL* vtbl = mg->mg_virtual;
 	if (vtbl && (vtbl->svt_len != NULL)) {
-	    MGS mgs;
-	    ENTER;
+            I32 mgs_ix;
+
+	    mgs_ix = SSNEW(sizeof(MGS));
+	    save_magic(mgs_ix, sv);
 	    /* omit MGf_GSKIP -- not changed here */
 	    len = (VTBL->svt_len)(sv, mg);
-	    LEAVE;
+	    restore_magic((void*)mgs_ix);
 	    return len;
 	}
     }
@@ -212,11 +241,11 @@ mg_size(SV *sv)
 int
 mg_clear(SV *sv)
 {
-    MGS mgs;
+    I32 mgs_ix;
     MAGIC* mg;
 
-    ENTER;
-    save_magic(&mgs, sv);
+    mgs_ix = SSNEW(sizeof(MGS));
+    save_magic(mgs_ix, sv);
 
     for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
 	MGVTBL* vtbl = mg->mg_virtual;
@@ -226,7 +255,7 @@ mg_clear(SV *sv)
 	    (VTBL->svt_clear)(sv, mg);
     }
 
-    LEAVE;
+    restore_magic((void*)mgs_ix);
     return 0;
 }
 
@@ -281,6 +310,48 @@ mg_free(SV *sv)
 #if !defined(NSIG) || defined(M_UNIX) || defined(M_XENIX)
 #include <signal.h>
 #endif
+
+U32
+magic_regdata_cnt(SV *sv, MAGIC *mg)
+{
+    dTHR;
+    register char *s;
+    register I32 i;
+    register REGEXP *rx;
+    char *t;
+
+    if (PL_curpm && (rx = PL_curpm->op_pmregexp))
+	return rx->lastparen;
+    return (U32)-1;
+}
+
+int
+magic_regdatum_get(SV *sv, MAGIC *mg)
+{
+    dTHR;
+    register I32 paren;
+    register char *s;
+    register I32 i;
+    register REGEXP *rx;
+    char *t;
+
+    if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
+	paren = mg->mg_len;
+	if (paren < 0)
+	    return 0;
+	if (paren <= rx->nparens &&
+	    (s = rx->startp[paren]) &&
+	    (t = rx->endp[paren]))
+	    {
+		if (mg->mg_obj)		/* @+ */
+		    i = t - rx->subbase;
+		else			/* @- */
+		    i = s - rx->subbase;
+		sv_setiv(sv,i);
+	    }
+    }
+    return 0;
+}
 
 U32
 magic_len(SV *sv, MAGIC *mg)

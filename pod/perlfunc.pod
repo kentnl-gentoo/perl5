@@ -129,8 +129,9 @@ C<pack>, C<read>, C<syscall>, C<sysread>, C<syswrite>, C<unpack>, C<vec>
 =item Functions for filehandles, files, or directories
 
 C<-I<X>>, C<chdir>, C<chmod>, C<chown>, C<chroot>, C<fcntl>, C<glob>,
-C<ioctl>, C<link>, C<lstat>, C<mkdir>, C<open>, C<opendir>, C<readlink>,
-C<rename>, C<rmdir>, C<stat>, C<symlink>, C<umask>, C<unlink>, C<utime>
+C<ioctl>, C<link>, C<lstat>, C<mkdir>, C<open>, C<opendir>,
+C<readlink>, C<rename>, C<rmdir>, C<stat>, C<symlink>, C<umask>,
+C<unlink>, C<utime>
 
 =item Keywords related to the control flow of your perl program
 
@@ -262,15 +263,6 @@ X<-S>X<-b>X<-c>X<-t>X<-u>X<-g>X<-k>X<-T>X<-B>X<-M>X<-A>X<-C>
     -A	Same for access time.
     -C	Same for inode change time.
 
-The interpretation of the file permission operators C<-r>, C<-R>, C<-w>,
-C<-W>, C<-x>, and C<-X> is based solely on the mode of the file and the
-uids and gids of the user.  There may be other reasons you can't actually
-read, write, or execute the file, such as AFS access control lists.  Also note that, for the superuser,
-C<-r>, C<-R>, C<-w>, and C<-W> always return C<1>, and C<-x> and C<-X> return
-C<1> if any execute bit is set in the mode.  Scripts run by the superuser may
-thus need to do a C<stat()> to determine the actual mode of the
-file, or temporarily set the uid to something else.
-
 Example:
 
     while (<>) {
@@ -278,6 +270,31 @@ Example:
 	next unless -f $_;	# ignore specials
 	#...
     }
+
+The interpretation of the file permission operators C<-r>, C<-R>,
+C<-w>, C<-W>, C<-x>, and C<-X> is by default based solely on the mode
+of the file and the uids and gids of the user.  There may be other
+reasons you can't actually read, write, or execute the file.  Such
+reasons may be for example network filesystem access controls, ACLs
+(access control lists), read-only filesystems, and unrecognized
+executable formats.
+
+Also note that, for the superuser on the local filesystems, C<-r>,
+C<-R>, C<-w>, and C<-W> always return 1, and C<-x> and C<-X> return 1
+if any execute bit is set in the mode.  Scripts run by the superuser
+may thus need to do a stat() to determine the actual mode of the file,
+or temporarily set the uid to something else.
+
+If you are using ACLs, there is a pragma called C<filetest> that may
+produce more accurate results than the bare stat() mode bits.
+
+When under the C<use filetest 'access'> the above-mentioned filetests
+will test whether the permission can (not) be granted using the
+access() family of system calls.  Also note that the -x and -X may
+under this pragma return true even if there are no execute permission
+bits set (nor any extra execute permission ACLs).  This strangeness is
+due to the underlying system calls' definitions.  Read the
+documentation for the C<filetest> pragma for more information.
 
 Note that C<-s/a/b/> does not do a negated substitution.  Saying
 C<-exp($foo)> still works as expected, however--only single letters
@@ -675,19 +692,25 @@ eggs to make an omelette.  There is no (known) corresponding decrypt
 function.  As a result, this function isn't all that useful for
 cryptography.  (For that, see your nearby CPAN mirror.)
 
+When verifying an existing encrypted string you should use the encrypted
+text as the salt (like C<crypt($plain, $crypted) eq $crypted>).  This
+allows your code to work with the standard C<crypt()> and with more
+exotic implementations.  When choosing a new salt create a random two
+character string whose characters come from the set C<[./0-9A-Za-z]>
+(like C<join '', ('.', '/', 0..9, 'A'..'Z', 'a'..'z')[rand 64, rand 64]>).
+
 Here's an example that makes sure that whoever runs this program knows
 their own password:
 
     $pwd = (getpwuid($<))[1];
-    $salt = substr($pwd, 0, 2);
 
     system "stty -echo";
     print "Password: ";
-    chop($word = <STDIN>);
+    chomp($word = <STDIN>);
     print "\n";
     system "stty echo";
 
-    if (crypt($word, $salt) ne $pwd) {
+    if (crypt($word, $pwd) ne $pwd) {
 	die "Sorry...\n";
     } else {
 	print "ok\n";
@@ -893,6 +916,9 @@ Not really a function.  Returns the value of the last command in the
 sequence of commands indicated by BLOCK.  When modified by a loop
 modifier, executes the BLOCK once before testing the loop condition.
 (On other statements the loop modifiers test the conditional first.)
+
+C<do BLOCK> does I<not> count as a loop, so the loop control statements
+C<next>, C<last> or C<redo> cannot be used to leave or restart the block.
 
 =item do SUBROUTINE(LIST)
 
@@ -1151,6 +1177,10 @@ compile-time instead of at run-time.)  Case 5 is a place where
 normally you I<WOULD> like to use double quotes, except that in this
 particular situation, you can just use symbolic references instead, as
 in case 6.
+
+C<eval BLOCK> does I<not> count as a loop, so the loop control statements
+C<next>, C<last> or C<redo> cannot be used to leave or restart the block.
+
 
 =item exec LIST
 
@@ -1887,7 +1917,7 @@ or how about sorted by key:
 	print $key, '=', $ENV{$key}, "\n";
     }
 
-To sort an array by value, you'll need to use a C<sort()> function.
+To sort a hash by value, you'll need to use a C<sort()> function.
 Here's a descending numeric sort of a hash by its values:
 
     foreach $key (sort { $hash{$b} <=> $hash{$a} } keys %hash) {
@@ -1937,6 +1967,9 @@ C<continue> block, if any, is not executed:
 	last LINE if /^$/;	# exit when done with header
 	#...
     }
+
+C<last> cannot be used to exit a block which returns a value such as
+C<eval {}>, C<sub {}> or C<do {}>.
 
 See also L</continue> for an illustration of how C<last>, C<next>, and
 C<redo> work.
@@ -2077,9 +2110,16 @@ original list for which the BLOCK or EXPR evaluates to true.
 
 =item mkdir FILENAME,MODE
 
-Creates the directory specified by FILENAME, with permissions specified
-by MODE (as modified by umask).  If it succeeds it returns TRUE, otherwise
-it returns FALSE and sets C<$!> (errno).
+Creates the directory specified by FILENAME, with permissions
+specified by MODE (as modified by C<umask>).  If it succeeds it
+returns TRUE, otherwise it returns FALSE and sets C<$!> (errno).
+
+In general, it is better to create directories with permissive MODEs,
+and let the user modify that with their C<umask>, than it is to supply
+a restrictive MODE and give the user no way to be more permissive.
+The exceptions to this rule are when the file or directory should be
+kept private (mail files, for instance).  The perlfunc(1) entry on
+C<umask> discusses the choice of MODE in more detail.
 
 =item msgctl ID,CMD,ARG
 
@@ -2139,6 +2179,9 @@ Note that if there were a C<continue> block on the above, it would get
 executed even on discarded lines.  If the LABEL is omitted, the command
 refers to the innermost enclosing loop.
 
+C<next> cannot be used to exit a block which returns a value such as
+C<eval {}>, C<sub {}> or C<do {}>.
+
 See also L</continue> for an illustration of how C<last>, C<next>, and
 C<redo> work.
 
@@ -2183,7 +2226,8 @@ you want both read and write access to the file; thus C<'+E<lt>'> is almost
 always preferred for read/write updates--the C<'+E<gt>'> mode would clobber the
 file first.  You can't usually use either read-write mode for updating
 textfiles, since they have variable length records.  See the B<-i>
-switch in L<perlrun> for a better approach.
+switch in L<perlrun> for a better approach.  The file is created with
+permissions of C<0666> modified by the process' C<umask> value.
 
 The prefix and the filename may be separated with spaces.
 These various prefixes correspond to the fopen(3) modes of C<'r'>, C<'r+'>, C<'w'>,
@@ -2768,6 +2812,9 @@ themselves about what was just input:
 	}
 	print;
     }
+
+C<redo> cannot be used to retry a block which returns a value such as
+C<eval {}>, C<sub {}> or C<do {}>.
 
 See also L</continue> for an illustration of how C<last>, C<next>, and
 C<redo> work.
@@ -3596,7 +3643,8 @@ root of C<$_>.
 =item srand
 
 Sets the random number seed for the C<rand()> operator.  If EXPR is
-omitted, uses a semi-random value based on the current time and process
+omitted, uses a semi-random value supplied by the kernel (if it supports
+the F</dev/urandom> device) or based on the current time and process
 ID, among other things.  In versions of Perl prior to 5.004 the default
 seed was just the current C<time()>.  This isn't a particularly good seed,
 so many old programs supply their own seed value (often C<time ^ $$> or
@@ -3847,21 +3895,11 @@ it (typically because MODE includes the C<O_CREAT> flag), then the value of
 PERMS specifies the permissions of the newly created file.  If you omit
 the PERMS argument to C<sysopen()>, Perl uses the octal value C<0666>.
 These permission values need to be in octal, and are modified by your
-process's current C<umask>.  The C<umask> value is a number representing
-disabled permissions bits--if your C<umask> were C<027> (group can't write;
-others can't read, write, or execute), then passing C<sysopen()> C<0666> would
-create a file with mode C<0640> (C<0666 &~ 027> is C<0640>).
+process's current C<umask>.
 
-If you find this C<umask()> talk confusing, here's some advice: supply a
-creation mode of C<0666> for regular files and one of C<0777> for directories
-(in C<mkdir()>) and executable files.  This gives users the freedom of
-choice: if they want protected files, they might choose process umasks
-of C<022>, C<027>, or even the particularly antisocial mask of C<077>.  Programs
-should rarely if ever make policy decisions better left to the user.
-The exception to this is when writing files that should be kept private:
-mail files, web browser cookies, I<.rhosts> files, and so on.  In short,
-seldom if ever use C<0644> as argument to C<sysopen()> because that takes
-away the user's option to have a more permissive umask.  Better to omit it.
+Seldom if ever use C<0644> as argument to C<sysopen()> because that
+takes away the user's option to have a more permissive umask.  Better
+to omit it.  See the perlfunc(1) entry on C<umask> for more on this.
 
 The C<IO::File> module provides a more object-oriented approach, if you're
 into that kind of thing.
@@ -4099,6 +4137,28 @@ If EXPR is omitted, uses C<$_>.
 Sets the umask for the process to EXPR and returns the previous value.
 If EXPR is omitted, merely returns the current umask.
 
+The Unix permission C<rwxr-x---> is represented as three sets of three
+bits, or three octal digits: C<0750> (the leading 0 indicates octal
+and isn't one of the the digits).  The C<umask> value is such a number
+representing disabled permissions bits.  The permission (or "mode")
+values you pass C<mkdir> or C<sysopen> are modified by your umask, so
+even if you tell C<sysopen> to create a file with permissions C<0777>,
+if your umask is C<0022> then the file will actually be created with
+permissions C<0755>.  If your C<umask> were C<0027> (group can't
+write; others can't read, write, or execute), then passing
+C<sysopen()> C<0666> would create a file with mode C<0640> (C<0666 &~
+027> is C<0640>).
+
+Here's some advice: supply a creation mode of C<0666> for regular
+files (in C<sysopen()>) and one of C<0777> for directories (in
+C<mkdir()>) and executable files.  This gives users the freedom of
+choice: if they want protected files, they might choose process umasks
+of C<022>, C<027>, or even the particularly antisocial mask of C<077>.
+Programs should rarely if ever make policy decisions better left to
+the user.  The exception to this is when writing files that should be
+kept private: mail files, web browser cookies, I<.rhosts> files, and
+so on.
+
 If umask(2) is not implemented on your system and you are trying to
 restrict access for I<yourself> (i.e., (EXPR & 0700) > 0), produces a
 fatal error at run time.  If umask(2) is not implemented and you are
@@ -4106,6 +4166,8 @@ not trying to restrict access for yourself, returns C<undef>.
 
 Remember that a umask is a number, usually given in octal; it is I<not> a
 string of octal digits.  See also L</oct>, if all you have is a string.
+
+
 
 =item undef EXPR
 

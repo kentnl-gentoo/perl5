@@ -133,7 +133,7 @@ PERLVAR(Tseen_evals,	I32)		/* from regcomp.c */
 PERLVAR(Tregcomp_rx,	regexp *)	/* from regcomp.c */
 PERLVAR(Textralen,	I32)		/* from regcomp.c */
 PERLVAR(Tcolorset,	int)		/* from regcomp.c */
-PERLVAR(Tcolors[4],	char *)		/* from regcomp.c */
+PERLVAR(Tcolors[6],	char *)		/* from regcomp.c */
 PERLVAR(Treginput,	char *)		/* String-input pointer. */
 PERLVAR(Tregbol,	char *)		/* Beginning of input, for ^ check. */
 PERLVAR(Tregeol,	char *)		/* End of input, for $ check. */
@@ -153,6 +153,8 @@ PERLVAR(Tregnarrate,	I32)		/* from regexec.c */
 PERLVAR(Tregprogram,	regnode *)	/* from regexec.c */
 PERLVARI(Tregindent,	int,	    0)	/* from regexec.c */
 PERLVAR(Tregcc,		CURCUR *)	/* from regexec.c */
+PERLVAR(Treg_call_cc,	struct re_cc_state *)	/* from regexec.c */
+PERLVAR(Treg_re,	regexp *)	/* from regexec.c */
 
 PERLVARI(Tregcompp,	regcomp_t, FUNC_NAME_TO_PTR(pregcomp))
 					/* Pointer to RE compiler */

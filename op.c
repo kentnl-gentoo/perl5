@@ -131,12 +131,12 @@ pad_allocmy(char *name)
 	for (off = AvFILLp(PL_comppad_name); off > PL_comppad_name_floor; off--) {
 	    if ((sv = svp[off])
 		&& sv != &PL_sv_undef
-		&& SvIVX(sv) == 999999999       /* var is in open scope */
+		&& (SvIVX(sv) == 999999999 || SvIVX(sv) == 0)
 		&& strEQ(name, SvPVX(sv)))
 	    {
 		warner(WARN_UNSAFE,
-			"\"my\" variable %s masks earlier declaration in same scope", 
-			name);
+			"\"my\" variable %s masks earlier declaration in same %s", 
+			name, (SvIVX(sv) == 999999999 ? "scope" : "statement"));
 		break;
 	    }
 	}
@@ -1135,7 +1135,8 @@ mod(OP *o, I32 type)
 	if (type == OP_GREPSTART || type == OP_ENTERSUB || type == OP_REFGEN)
 	    break;
 	yyerror(form("Can't modify %s in %s",
-		     op_desc[o->op_type],
+		     (o->op_type == OP_NULL && (o->op_flags & OPf_SPECIAL)
+		      ? "do block" : op_desc[o->op_type]),
 		     type ? op_desc[type] : "local"));
 	return o;
 
@@ -1264,7 +1265,9 @@ mod(OP *o, I32 type)
 	break;
 
     case OP_NULL:
-	if (!(o->op_flags & OPf_KIDS))
+	if (o->op_flags & OPf_SPECIAL)		/* do BLOCK */
+	    goto nomod;
+	else if (!(o->op_flags & OPf_KIDS))
 	    break;
 	if (o->op_targ != OP_LIST) {
 	    mod(cBINOPo->op_first, type);
@@ -2156,8 +2159,17 @@ pmtrans(OP *o, OP *expr, OP *repl)
 	}
 	else if (!rlen && !del) {
 	    r = t; rlen = tlen; rend = tend;
-	    if (!squash && to_utf && from_utf)
-		o->op_private |= OPpTRANS_COUNTONLY;
+	}
+	if (!squash) {
+	    if (to_utf && from_utf) {	/* only counting characters */
+		if (t == r || (tlen == rlen && memEQ(t, r, tlen)))
+		    o->op_private |= OPpTRANS_IDENTICAL;
+	    }
+	    else {	/* straight latin-1 translation */
+		if (tlen == 4 && memEQ(t, "\0\377\303\277", 4) &&
+		    rlen == 4 && memEQ(r, "\0\377\303\277", 4))
+		    o->op_private |= OPpTRANS_IDENTICAL;
+	    }
 	}
 
 	while (t < tend || tfirst <= tlast) {
@@ -2286,7 +2298,7 @@ pmtrans(OP *o, OP *expr, OP *repl)
 	if (!rlen && !del) {
 	    r = t; rlen = tlen;
 	    if (!squash)
-		o->op_private |= OPpTRANS_COUNTONLY;
+		o->op_private |= OPpTRANS_IDENTICAL;
 	}
 	for (i = 0; i < 256; i++)
 	    tbl[i] = -1;
@@ -4010,6 +4022,7 @@ newXS(char *name, void (*subaddr) (CV * _CPERLproto), char *filename)
 	    if (!PL_initav)
 		PL_initav = newAV();
 	    av_push(PL_initav, (SV *)cv);
+	    GvCV(gv) = 0;
 	}
     }
     else
@@ -4686,6 +4699,8 @@ ck_index(OP *o)
 {
     if (o->op_flags & OPf_KIDS) {
 	OP *kid = cLISTOPo->op_first->op_sibling;	/* get past pushmark */
+	if (kid)
+	    kid = kid->op_sibling;			/* get past "big" */
 	if (kid && kid->op_type == OP_CONST)
 	    fbm_compile(((SVOP*)kid)->op_sv, 0);
     }
