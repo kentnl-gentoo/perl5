@@ -1183,7 +1183,7 @@ die(pat, va_alist)
 #else
     va_start(args);
 #endif
-    message = mess(pat, &args);
+    message = pat ? mess(pat, &args) : Nullch;
     va_end(args);
 
     if (diehook) {
@@ -1199,10 +1199,14 @@ die(pat, va_alist)
 	    SV *msg;
 
 	    ENTER;
-	    msg = newSVpv(message, 0);
-	    SvREADONLY_on(msg);
-	    SAVEFREESV(msg);
-
+	    if(message) {
+		msg = newSVpv(message, 0);
+		SvREADONLY_on(msg);
+		SAVEFREESV(msg);
+	    }
+	    else {
+		msg = GvSV(errgv);
+	    }
 	    PUSHMARK(sp);
 	    XPUSHs(msg);
 	    PUTBACK;
@@ -2008,6 +2012,7 @@ PerlIO *ptr;
     int status;
     SV **svp;
     int pid;
+    int pid2;
     bool close_failed;
     int saved_errno;
 #ifdef VMS
@@ -2042,8 +2047,8 @@ PerlIO *ptr;
     rsignal_save(SIGINT, SIG_IGN, &istat);
     rsignal_save(SIGQUIT, SIG_IGN, &qstat);
     do {
-	pid = wait4pid(pid, &status, 0);
-    } while (pid == -1 && errno == EINTR);
+	pid2 = wait4pid(pid, &status, 0);
+    } while (pid2 == -1 && errno == EINTR);
     rsignal_restore(SIGHUP, &hstat);
     rsignal_restore(SIGINT, &istat);
     rsignal_restore(SIGQUIT, &qstat);
@@ -2051,7 +2056,7 @@ PerlIO *ptr;
 	SETERRNO(saved_errno, saved_vaxc_errno);
 	return -1;
     }
-    return(pid < 0 ? pid : status == 0 ? 0 : (errno = 0, status));
+    return(pid2 < 0 ? pid2 : status == 0 ? 0 : (errno = 0, status));
 }
 #endif /* !DOSISH */
 

@@ -16,10 +16,12 @@ Makefile.SH		A script that generates Makefile
 Porting/Contract	Guidelines for creating patches to Perl
 Porting/Glossary	Glossary of config.sh variables
 Porting/makerel		Release making utility
+Porting/patching.pod	How to report changes made to Perl
 Porting/patchls		Flexible patch file listing utility
 Porting/pumpkin.pod	Guidelines and hints for Perl maintainers
 README			The Instructions
 README.amiga		Notes about AmigaOS port
+README.beos		Notes about BeOS port
 README.cygwin32		Notes about Cygwin32 port
 README.os2		Notes about OS/2 port
 README.plan9		Notes about Plan9 port
@@ -30,6 +32,7 @@ Todo			The Wishlist
 XSUB.h			Include file for extension subroutines
 av.c			Array value code
 av.h			Array value header
+beos/nm.c		BeOS port
 cflags.SH		A script that emits C compilation flags per file
 compat3.sym		List of symbols for binary-compatibility with 5.003
 config_H		Sample config.h
@@ -174,8 +177,12 @@ ext/POSIX/Makefile.PL		POSIX extension makefile writer
 ext/POSIX/POSIX.pm		POSIX extension Perl module
 ext/POSIX/POSIX.pod		POSIX extension documentation
 ext/POSIX/POSIX.xs		POSIX extension external subroutines
+ext/POSIX/hints/bsdos.pl	Hint for POSIX for named architecture
+ext/POSIX/hints/freebsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/linux.pl	Hint for POSIX for named architecture
+ext/POSIX/hints/netbsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/next_3.pl	Hint for POSIX for named architecture
+ext/POSIX/hints/openbsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/sunos_4.pl	Hint for POSIX for named architecture
 ext/POSIX/typemap		POSIX extension interface types
 ext/SDBM_File/Makefile.PL	SDBM extension makefile writer
@@ -238,6 +245,7 @@ hints/altos486.sh	Hints for named architecture
 hints/amigaos.sh	Hints for named architecture
 hints/apollo.sh		Hints for named architecture
 hints/aux_3.sh		Hints for named architecture
+hints/beos.sh		Hints for named architecture
 hints/broken-db.msg	Warning message for systems with broken DB library
 hints/bsdos.sh		Hints for named architecture
 hints/convexos.sh	Hints for named architecture
@@ -712,7 +720,9 @@ t/op/chop.t		See if chop works
 t/op/closure.t		See if closures work
 t/op/cmp.t		See if the various string and numeric compare work
 t/op/cond.t		See if conditional expressions work
+t/op/defins.t		See if auto-insert of defined() works
 t/op/delete.t		See if delete works
+t/op/die.t		See if die works
 t/op/die_exit.t		See if die and exit status interaction works
 t/op/do.t		See if subroutines work
 t/op/each.t		See if hash iterators work
@@ -725,12 +735,12 @@ t/op/glob.t		See if <*> works
 t/op/goto.t		See if goto works
 t/op/groups.t		See if $( works
 t/op/gv.t		See if typeglobs work
-t/op/hashwarn.t	See if hash warnings work
+t/op/hashwarn.t		See if hash warnings work
 t/op/inc.t		See if inc/dec of integers near 32 bit limit work
 t/op/index.t		See if index works
 t/op/int.t		See if int works
-t/op/ipcmsg.t	See if msg* ops work
-t/op/ipcsem.t	See if sem* ops work
+t/op/ipcmsg.t		See if msg* ops work
+t/op/ipcsem.t		See if sem* ops work
 t/op/join.t		See if join works
 t/op/list.t		See if array lists work
 t/op/local.t		See if local works

@@ -2648,7 +2648,7 @@ OP** otherp;
 	case OP_NULL:
 	    if (k2 && k2->op_type == OP_READLINE
 		  && (k2->op_flags & OPf_STACKED)
-		  && (k1->op_type == OP_RV2SV || k1->op_type == OP_PADSV))
+		  && ((k1->op_flags & OPf_WANT) == OPf_WANT_SCALAR)) 
 		warnop = k2->op_type;
 	    break;
 
@@ -2818,6 +2818,24 @@ OP *block;
 	    || (expr->op_type == OP_NULL && expr->op_targ == OP_GLOB)) {
 	    expr = newUNOP(OP_DEFINED, 0,
 		newASSIGNOP(0, newSVREF(newGVOP(OP_GV, 0, defgv)), 0, expr) );
+	} else if (expr->op_flags & OPf_KIDS) {
+	    OP *k1 = ((UNOP*)expr)->op_first;
+	    OP *k2 = (k1) ? k1->op_sibling : NULL;
+	    switch (expr->op_type) {
+	      case OP_NULL: 
+		if (k2 && k2->op_type == OP_READLINE
+		      && (k2->op_flags & OPf_STACKED)
+		      && ((k1->op_flags & OPf_WANT) == OPf_WANT_SCALAR)) 
+		    expr = newUNOP(OP_DEFINED, 0, expr);
+		break;                                
+
+	      case OP_SASSIGN:
+		if (k1->op_type == OP_READDIR
+		      || k1->op_type == OP_GLOB
+		      || k1->op_type == OP_EACH)
+		    expr = newUNOP(OP_DEFINED, 0, expr);
+		break;
+	    }
 	}
     }
 
@@ -2859,6 +2877,24 @@ OP *cont;
 		 || (expr->op_type == OP_NULL && expr->op_targ == OP_GLOB))) {
 	expr = newUNOP(OP_DEFINED, 0,
 	    newASSIGNOP(0, newSVREF(newGVOP(OP_GV, 0, defgv)), 0, expr) );
+    } else if (expr && (expr->op_flags & OPf_KIDS)) {
+	OP *k1 = ((UNOP*)expr)->op_first;
+	OP *k2 = (k1) ? k1->op_sibling : NULL;
+	switch (expr->op_type) {
+	  case OP_NULL: 
+	    if (k2 && k2->op_type == OP_READLINE
+		  && (k2->op_flags & OPf_STACKED)
+		  && ((k1->op_flags & OPf_WANT) == OPf_WANT_SCALAR)) 
+		expr = newUNOP(OP_DEFINED, 0, expr);
+	    break;                                
+
+	  case OP_SASSIGN:
+	    if (k1->op_type == OP_READDIR
+		  || k1->op_type == OP_GLOB
+		  || k1->op_type == OP_EACH)
+		expr = newUNOP(OP_DEFINED, 0, expr);
+	    break;
+	}
     }
 
     if (!block)
@@ -3292,7 +3328,8 @@ OP *proto;
 OP *block;
 {
     char *name = o ? SvPVx(cSVOPo->op_sv, na) : Nullch;
-    GV *gv = gv_fetchpv(name ? name : "__ANON__", GV_ADDMULTI, SVt_PVCV);
+    GV *gv = gv_fetchpv(name ? name : "__ANON__",
+			GV_ADDMULTI | (block ? 0 : GV_NOINIT), SVt_PVCV);
     char *ps = proto ? SvPVx(((SVOP*)proto)->op_sv, na) : Nullch;
     register CV *cv;
     I32 ix;
@@ -3301,6 +3338,23 @@ OP *block;
 	SAVEFREEOP(o);
     if (proto)
 	SAVEFREEOP(proto);
+
+    if (SvTYPE(gv) != SVt_PVGV) {	/* Prototype now, and had
+					   maximum a prototype before. */
+	if (SvTYPE(gv) > SVt_NULL) {
+	    if (!SvPOK((SV*)gv) && !(SvIOK((SV*)gv) && SvIVX((SV*)gv) == -1))
+		warn("Runaway prototype");
+	    cv_ckproto((CV*)gv, NULL, ps);
+	}
+	if (ps)
+	    sv_setpv((SV*)gv, ps);
+	else
+	    sv_setiv((SV*)gv, -1);
+	SvREFCNT_dec(compcv);
+	compcv = NULL;
+	sub_generation++;
+	goto noblock;
+    }
 
     if (!name || GvCVGEN(gv))
 	cv = Nullcv;
@@ -3378,6 +3432,7 @@ OP *block;
 	}
     }
     if (!block) {
+      noblock:
 	copline = NOLINE;
 	LEAVE_SCOPE(floor);
 	return cv;

@@ -863,7 +863,9 @@ is just like
 except that it's more efficient, more concise, keeps track of the
 current filename for error messages, and searches all the B<-I>
 libraries if the file isn't in the current directory (see also the @INC
-array in L<perlvar/Predefined Names>).  It's the same, however, in that it does
+array in L<perlvar/Predefined Names>).  It is also different in how
+code evaluated with C<do FILENAME> doesn't see lexicals in the enclosing
+scope like C<eval STRING> does.  It's the same, however, in that it does
 reparse the file every time you call it, so you probably don't want to
 do this inside a loop.
 
@@ -1080,6 +1082,15 @@ The exec() function executes a system command I<AND NEVER RETURNS> -
 use system() instead of exec() if you want it to return. It fails and
 returns FALSE only if the command does not exist I<and> it is executed
 directly instead of via your system's command shell (see below).
+
+Since it's a common mistake to use system() instead of exec(), Perl
+warns you if there is a following statement which isn't die(), warn()
+or exit() (if C<-w> is set  -  but you always do that).   If you
+I<really> want to follow an exec() with some other statement, you
+can use one of these styles to avoid the warning:
+
+    exec ('foo') or print STDERR "couldn't exec foo";
+    { exec ('foo') }; print STDERR "couldn't exec foo";
 
 If there is more than one argument in LIST, or if LIST is an array with
 more than one value, calls execvp(3) with the arguments in LIST.  If
@@ -1450,7 +1461,7 @@ system library.  Within a list context, the return values from the
 various get routines are as follows:
 
     ($name,$passwd,$uid,$gid,
-       $quota,$comment,$gcos,$dir,$shell) = getpw*
+       $quota,$comment,$gcos,$dir,$shell,$expire) = getpw*
     ($name,$passwd,$gid,$members) = getgr*
     ($name,$aliases,$addrtype,$length,@addrs) = gethost*
     ($name,$aliases,$addrtype,$net) = getnet*
@@ -1470,6 +1481,22 @@ lookup by name, in which case you get the other thing, whatever it is.
     $name = getgrgid
     $name = getgrent
     etc.
+
+In I<getpw*()> the fields $quota, $comment, and $expire are special
+cases in the sense that in many systems they are unsupported.  If the
+$quota is unsupported, it is an empty scalar.  If it is supported, it
+usually encodes the disk quota.  If the $comment field is unsupported,
+it is an empty scalar.  If it is supported it usually encodes some
+administrative comment about the user.  In some systems the $quota
+field may be $change or $age, fields that have to do with password
+aging.  In some systems the $comment field may be $class.  The $expire
+field, if present, encodes the expiration period of the account or the
+password.  For the availability and the exact meaning of these fields
+in your system, please consult your getpwnam(3) documentation and your
+<pwd.h> file.  You can also find out from within Perl which meaning
+your $quota and $comment fields have and whether you have the $expire
+field by using the Config module and the values d_pwquota, d_pwage,
+d_pwchange, d_pwcomment, and d_pwexpire.
 
 The $members value returned by I<getgr*()> is a space separated list of
 the login names of the members of the group.
@@ -2962,9 +2989,10 @@ function, or use this relation:
 =item sleep
 
 Causes the script to sleep for EXPR seconds, or forever if no EXPR.
-May be interrupted by sending the process a SIGALRM.  Returns the
-number of seconds actually slept.  You probably cannot mix alarm() and
-sleep() calls, because sleep() is often implemented using alarm().
+May be interrupted if the process receives a signal such as SIGALRM.
+Returns the number of seconds actually slept.  You probably cannot
+mix alarm() and sleep() calls, because sleep() is often implemented
+using alarm().
 
 On some older systems, it may sleep up to a full second less than what
 you requested, depending on how it counts seconds.  Most modern systems
@@ -3002,9 +3030,10 @@ specified, it gives the name of a subroutine that returns an integer
 less than, equal to, or greater than 0, depending on how the elements
 of the array are to be ordered.  (The C<E<lt>=E<gt>> and C<cmp>
 operators are extremely useful in such routines.)  SUBNAME may be a
-scalar variable name, in which case the value provides the name of the
-subroutine to use.  In place of a SUBNAME, you can provide a BLOCK as
-an anonymous, in-line sort subroutine.
+scalar variable name (unsubscripted), in which case the value provides
+the name of (or a reference to) the actual subroutine to use.  In place
+of a SUBNAME, you can provide a BLOCK as an anonymous, in-line sort
+subroutine.
 
 In the interests of efficiency the normal calling code for subroutines is
 bypassed, with the following effects: the subroutine may not be a
@@ -3640,7 +3669,7 @@ signals and core dumps.
 	# forked, so the errno value is not visible in the parent.
 	printf "command failed: %s\n", ($! || "Unknown system() error");
     }
-    elsif ($rc > 0x80) {
+    elsif (($rc & 0xff) == 0) {
 	$rc >>= 8;
 	print "ran with non-zero exit status $rc\n";
     }

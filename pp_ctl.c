@@ -1035,28 +1035,32 @@ char *message;
 	I32 gimme;
 	SV **newsp;
 
-	if (in_eval & 4) {
-	    SV **svp;
-	    STRLEN klen = strlen(message);
-	    
-	    svp = hv_fetch(GvHV(errgv), message, klen, TRUE);
-	    if (svp) {
-		if (!SvIOK(*svp)) {
-		    static char prefix[] = "\t(in cleanup) ";
-		    SV *err = GvSV(errgv);
-		    sv_upgrade(*svp, SVt_IV);
-		    (void)SvIOK_only(*svp);
-		    if (!SvPOK(err))
-			sv_setpv(err,"");
-		    SvGROW(err, SvCUR(err)+sizeof(prefix)+klen);
-		    sv_catpvn(err, prefix, sizeof(prefix)-1);
-		    sv_catpvn(err, message, klen);
+	if(message) {
+	    if (in_eval & 4) {
+		SV **svp;
+		STRLEN klen = strlen(message);
+
+		svp = hv_fetch(GvHV(errgv), message, klen, TRUE);
+		if (svp) {
+		    if (!SvIOK(*svp)) {
+			static char prefix[] = "\t(in cleanup) ";
+			SV *err = GvSV(errgv);
+			sv_upgrade(*svp, SVt_IV);
+			(void)SvIOK_only(*svp);
+			if (!SvPOK(err))
+			    sv_setpv(err,"");
+			SvGROW(err, SvCUR(err)+sizeof(prefix)+klen);
+			sv_catpvn(err, prefix, sizeof(prefix)-1);
+			sv_catpvn(err, message, klen);
+		    }
+		    sv_inc(*svp);
 		}
-		sv_inc(*svp);
 	    }
+	    else
+		sv_setpv(GvSV(errgv), message);
 	}
 	else
-	    sv_setpv(GvSV(errgv), message);
+	    message = SvPVx(GvSV(errgv),na);
 	
 	cxix = dopoptoeval(cxstack_ix);
 	if (cxix >= 0) {
@@ -2360,7 +2364,7 @@ PP(pp_require)
     SvREFCNT_dec(namesv);
     if (!tryrsfp) {
 	if (op->op_type == OP_REQUIRE) {
-	    SV *msg = sv_2mortal(newSVpvf("Can't locate file '%s' in @INC", name));
+	    SV *msg = sv_2mortal(newSVpvf("Can't locate '%s' in @INC", name));
 	    SV *dirmsgsv = NEWSV(0, 0);
 	    AV *ar = GvAVn(incgv);
 	    I32 i;
