@@ -653,6 +653,12 @@ Start with single-step on.
 Note that some bits may be relevent at compile-time only, some at
 run-time only. This is a new mechanism and the details may change.
 
+=item $^S
+
+Current state of the interpreter.  Undefined if parsing is active
+(may happen in $SIG{__DIE__} and $SIG{__WARN__} handlers).  True if
+inside an eval, othewise false.
+
 =item $BASETIME
 
 =item $^T
@@ -698,6 +704,11 @@ to get the machine-dependent library properly loaded also:
 
     use lib '/mypath/libdir/';
     use SomeMod;
+
+=item @_
+
+Within a subroutine the array @_ contains the parameters passed to that
+subroutine. See L<perlsub>.
 
 =item %INC
 

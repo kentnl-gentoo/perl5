@@ -15,15 +15,15 @@
 #include "EXTERN.h"
 #include "perl.h"
 
-static void	av_reify _((AV* av));
-
-static void
+void
 av_reify(av)
 AV* av;
 {
     I32 key;
     SV* sv;
-    
+
+    if (AvREAL(av))
+	return;
     key = AvMAX(av) + 1;
     while (key > AvFILL(av) + 1)
 	AvARRAY(av)[--key] = &sv_undef;

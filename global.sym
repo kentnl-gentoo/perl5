@@ -310,6 +310,7 @@ av_len
 av_make
 av_pop
 av_push
+av_reify
 av_shift
 av_store
 av_undef

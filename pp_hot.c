@@ -2089,6 +2089,14 @@ PP(pp_method)
     char* packname;
     STRLEN packlen;
 
+    if (SvROK(TOPs)) {
+	sv = SvRV(TOPs);
+	if (SvTYPE(sv) == SVt_PVCV) {
+	    SETs(sv);
+	    RETURN;
+	}
+    }
+
     name = SvPV(TOPs, na);
     sv = *(stack_base + TOPMARK + 1);
     

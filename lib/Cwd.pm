@@ -101,7 +101,7 @@ sub getcwd
 	}
 	if ($pst[0] == $cst[0] && $pst[1] == $cst[1])
 	{
-	    $dir = '';
+	    $dir = undef;
 	}
 	else
 	{
@@ -127,7 +127,7 @@ sub getcwd
 	}
 	$cwd = "$dir/$cwd";
 	closedir(PARENT);
-    } while ($dir);
+    } while (defined $dir);
     chop($cwd) unless $cwd eq '/'; # drop the trailing /
     $cwd;
 }

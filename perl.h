@@ -1578,6 +1578,8 @@ EXTCONST char* block_type[];
 
 #include "perly.h"
 
+#define LEX_NOTPARSING		11	/* borrowed from toke.c */
+
 typedef enum {
     XOPERATOR,
     XTERM,

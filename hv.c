@@ -962,7 +962,9 @@ register HE *entry;
 I32 *retlen;
 {
     if (HeKLEN(entry) == HEf_SVKEY) {
-	return SvPV(HeKEY_sv(entry), *(STRLEN*)retlen);
+	char *p = SvPV(HeKEY_sv(entry), na);
+	*retlen = na;
+	return p;
     }
     else {
 	*retlen = HeKLEN(entry);

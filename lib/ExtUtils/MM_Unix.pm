@@ -1127,7 +1127,12 @@ sub fixin { # stolen from the pink Camel book, more or less
 
 	# Now look (in reverse) for interpreter in absolute PATH (unless perl).
 	if ($cmd eq "perl") {
-	    $interpreter = $Config{perlpath};
+            if ($Config{startperl} =~ m,^\#!.*/perl,) {
+                $interpreter = $Config{startperl};
+                $interpreter =~ s,^\#!,,;
+            } else {
+                $interpreter = $Config{perlpath};
+            }
 	} else {
 	    my(@absdirs) = reverse grep {$self->file_name_is_absolute} $self->path;
 	    $interpreter = '';
@@ -1151,7 +1156,7 @@ sub fixin { # stolen from the pink Camel book, more or less
 	    }
 	    $shb .= qq{
 eval 'exec $interpreter $arg -S \$0 \${1+"\$\@"}'
-    if \$running_under_some_shell;
+    if 0; # not running under some shell
 };
 	} else {
 	    warn "Can't find $cmd in PATH, $file unchanged"

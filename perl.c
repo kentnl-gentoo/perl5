@@ -144,6 +144,7 @@ register PerlInterpreter *sv_interp;
 #endif
 
     init_ids();
+    lex_state = LEX_NOTPARSING;
 
     start_env.je_prev = NULL;
     start_env.je_ret = -1;
@@ -1299,30 +1300,39 @@ char *name;
 {
     /* This message really ought to be max 23 lines.
      * Removed -h because the user already knows that opton. Others? */
+
+    char *usage[] = {
+"-0[octal]       specify record separator (\\0, if no argument)",
+"-a              autosplit mode with -n or -p (splits $_ into @F)",
+"-c              check syntax only (runs BEGIN and END blocks)",
+"-d[:debugger]   run scripts under debugger",
+"-D[number/list] set debugging flags (argument is a bit mask or flags)",
+"-e 'command'    one line of script. Several -e's allowed. Omit [programfile].",
+"-F/pattern/     split() pattern for autosplit (-a). The //'s are optional.",
+"-i[extension]   edit <> files in place (make backup if extension supplied)",
+"-Idirectory     specify @INC/#include directory (may be used more than once)",
+"-l[octal]       enable line ending processing, specifies line terminator",
+"-[mM][-]module.. executes `use/no module...' before executing your script.",
+"-n              assume 'while (<>) { ... }' loop around your script",
+"-p              assume loop like -n but print line also like sed",
+"-P              run script through C preprocessor before compilation",
+"-s              enable some switch parsing for switches after script name",
+"-S              look for the script using PATH environment variable",
+"-T              turn on tainting checks",
+"-u              dump core after parsing script",
+"-U              allow unsafe operations",
+"-v              print version number and patchlevel of perl",
+"-V[:variable]   print perl configuration information",
+"-w              TURN WARNINGS ON FOR COMPILATION OF YOUR SCRIPT. Recommended.",
+"-x[directory]   strip off text before #!perl line and perhaps cd to directory",
+"\n",
+NULL
+};
+    char **p = usage;
+
     printf("\nUsage: %s [switches] [--] [programfile] [arguments]", name);
-    printf("\n  -0[octal]       specify record separator (\\0, if no argument)");
-    printf("\n  -a              autosplit mode with -n or -p (splits $_ into @F)");
-    printf("\n  -c              check syntax only (runs BEGIN and END blocks)");
-    printf("\n  -d[:debugger]   run scripts under debugger");
-    printf("\n  -D[number/list] set debugging flags (argument is a bit mask or flags)");
-    printf("\n  -e 'command'    one line of script. Several -e's allowed. Omit [programfile].");
-    printf("\n  -F/pattern/     split() pattern for autosplit (-a). The //'s are optional.");
-    printf("\n  -i[extension]   edit <> files in place (make backup if extension supplied)");
-    printf("\n  -Idirectory     specify @INC/#include directory (may be used more than once)");
-    printf("\n  -l[octal]       enable line ending processing, specifies line terminator");
-    printf("\n  -[mM][-]module.. executes `use/no module...' before executing your script.");
-    printf("\n  -n              assume 'while (<>) { ... }' loop around your script");
-    printf("\n  -p              assume loop like -n but print line also like sed");
-    printf("\n  -P              run script through C preprocessor before compilation");
-    printf("\n  -s              enable some switch parsing for switches after script name");
-    printf("\n  -S              look for the script using PATH environment variable");
-    printf("\n  -T              turn on tainting checks");
-    printf("\n  -u              dump core after parsing script");
-    printf("\n  -U              allow unsafe operations");
-    printf("\n  -v              print version number and patchlevel of perl");
-    printf("\n  -V[:variable]   print perl configuration information");
-    printf("\n  -w              TURN WARNINGS ON FOR COMPILATION OF YOUR SCRIPT. Recommended.");
-    printf("\n  -x[directory]   strip off text before #!perl line and perhaps cd to directory\n");
+    while (*p)
+	printf("\n  %s", *p++);
 }
 
 /* This routine handles any switches that can be given during run */
@@ -2334,6 +2344,7 @@ static void
 init_lexer()
 {
     tmpfp = rsfp;
+    rsfp = Nullfp;
     lex_start(linestr);
     rsfp = tmpfp;
     subname = newSVpv("main",4);

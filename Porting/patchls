@@ -21,9 +21,9 @@ sub usage {
 die q{
   patchls [options] patchfile [ ... ]
 
-    -i     Invert: for each patched file list which patch files patch it.
     -h     no filename headers (like grep), only the listing.
     -l     no listing (like grep), only the filename headers.
+    -i     Invert: for each patched file list which patch files patch it.
     -c     Categorise the patch and sort by category (perl specific).
     -m     print formatted Meta-information (Subject,From,Msg-ID etc).
     -p N   strip N levels of directory Prefix (like patch), else automatic.
@@ -57,7 +57,7 @@ my %cat_title = (
     'DOC'	=> 'DOCUMENTATION',
     'LIB'	=> 'LIBRARY AND EXTENSIONS',
     'PORT1'	=> 'PORTABILITY - WIN32',
-    'PORT2'	=> 'PORTABILITY - OTHER',
+    'PORT2'	=> 'PORTABILITY - GENERAL',
     'TEST'	=> 'TESTS',
     'UTIL'	=> 'UTILITIES',
     'OTHER'	=> 'OTHER CHANGES',
@@ -171,6 +171,8 @@ if ($::opt_I) {
     my @all_out = sort keys %all_out;
     my @missing = grep { ! -f $_ } @all_out;
     print "$n_patches patch files patch ".@all_out." files (".@missing." missing)\n";
+    print "(use -v to list patches which patch 'missing' files)\n"
+	    if @missing && !$::opt_v;
     if ($::opt_v and @missing) {
 	print "Missing files:\n";
 	foreach $out (@missing) {

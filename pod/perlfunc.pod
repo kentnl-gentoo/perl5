@@ -1532,8 +1532,10 @@ supported, it can cause bizarre results if the LIST is not a named
 array.  Similarly, grep returns aliases into the original list,
 much like the way that L<Foreach Loops>'s index variable aliases the list
 elements.  That is, modifying an element of a list returned by grep
+(for example, in a C<foreach>, C<map> or another C<grep>)
 actually modifies the element in the original list.
 
+See also L</map> for an array composed of the results of the BLOCK or EXPR.
 =item hex EXPR
 
 =item hex
@@ -1764,6 +1766,8 @@ In a scalar context, returns the ctime(3) value:
 
     $now_string = localtime;  # e.g., "Thu Oct 13 04:54:34 1994"
 
+This scalar value is B<not> locale dependent, see L<perllocale>,
+but instead a Perl builtin.
 Also see the Time::Local module, and the strftime(3) and mktime(3)
 function available via the POSIX module.
 
@@ -1811,6 +1815,12 @@ is just a funny way to write
     foreach $_ (@array) {
 	$hash{getkey($_)} = $_;
     }
+
+Note that, because $_ is a reference into the list value, it can be used
+to modify the elements of the array.  While this is useful and
+supported, it can cause bizarre results if the LIST is not a named
+array.  See also L</grep> for an array composed of those items of the 
+original list for which the BLOCK or EXPR evaluates to true.
 
 =item mkdir FILENAME,MODE
 
@@ -3411,6 +3421,17 @@ like numbers.
 
 Note that Perl supports passing of up to only 14 arguments to your system call,
 which in practice should usually suffice.
+
+Syscall returns whatever value returned by the system call it calls.
+If the system call fails, syscall returns -1 and sets C<$!> (errno).
+Note that some system calls can legitimately return -1.  The proper
+way to handle such calls is to assign C<$!=0;> before the call and
+check the value of <$!> if syscall returns -1.
+
+There's a problem with C<syscall(&SYS_pipe)>: it returns the file
+number of the read end of the pipe it creates.  There is no way
+to retrieve the file number of the other end.  You can avoid this 
+problem by using C<pipe> instead.
 
 =item sysopen FILEHANDLE,FILENAME,MODE
 

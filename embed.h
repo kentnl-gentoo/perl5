@@ -46,6 +46,7 @@
 #define av_make			Perl_av_make
 #define av_pop			Perl_av_pop
 #define av_push			Perl_av_push
+#define av_reify		Perl_av_reify
 #define av_shift		Perl_av_shift
 #define av_store		Perl_av_store
 #define av_undef		Perl_av_undef

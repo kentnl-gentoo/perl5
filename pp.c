@@ -2383,6 +2383,12 @@ PP(pp_splice)
 
     newlen = SP - MARK;
     diff = newlen - length;
+    if (newlen && !AvREAL(ary)) {
+	if (AvREIFY(ary))
+	    av_reify(ary);
+	else
+	    assert(AvREAL(ary));		/* would leak, so croak */
+    }
 
     if (diff < 0) {				/* shrinking the area */
 	if (newlen) {
@@ -2694,6 +2700,7 @@ PP(pp_unpack)
     register U32 culong;
     double cdouble;
     static char* bitcount = 0;
+    int commas = 0;
 
     if (gimme != G_ARRAY) {		/* arrange to do first one only */
 	/*SUPPRESS 530*/
@@ -2727,6 +2734,10 @@ PP(pp_unpack)
 	switch(datumtype) {
 	default:
 	    croak("Invalid type in unpack: '%c'", (int)datumtype);
+	case ',': /* grandfather in commas but with a warning */
+	    if (commas++ == 0 && dowarn)
+		warn("Invalid type in unpack: '%c'", (int)datumtype);
+	    break;
 	case '%':
 	    if (len == 1 && pat[-1] != '1')
 		len = 16;
@@ -3479,6 +3490,7 @@ PP(pp_pack)
     char *aptr;
     float afloat;
     double adouble;
+    int commas = 0;
 
     items = SP - MARK;
     MARK++;
@@ -3502,6 +3514,10 @@ PP(pp_pack)
 	switch(datumtype) {
 	default:
 	    croak("Invalid type in pack: '%c'", (int)datumtype);
+	case ',': /* grandfather in commas but with a warning */
+	    if (commas++ == 0 && dowarn)
+		warn("Invalid type in pack: '%c'", (int)datumtype);
+	    break;
 	case '%':
 	    DIE("%% may only be used in unpack");
 	case '@':
@@ -4099,7 +4115,7 @@ PP(pp_split)
 	DIE("Split loop");
     
     /* keep field after final delim? */
-    if (s < strend || (iters && origlimit)) {
+    if (s < strend || origlimit) {
 	dstr = NEWSV(34, strend-s);
 	sv_setpvn(dstr, s, strend-s);
 	if (!realarray)

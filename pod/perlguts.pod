@@ -1404,7 +1404,7 @@ extensions.
 
 =item AvFILL
 
-See C<av_len>.
+Same as C<av_len>.
 
 =item av_clear
 

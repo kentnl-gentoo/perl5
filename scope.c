@@ -165,7 +165,12 @@ save_gp(gv, empty)
 GV *gv;
 I32 empty;
 {
-    SSCHECK(3);
+    SSCHECK(6);
+    SSPUSHIV((IV)SvLEN(gv));
+    SvLEN(gv) = 0; /* forget that anything was allocated here */
+    SSPUSHIV((IV)SvCUR(gv));
+    SSPUSHPTR(SvPVX(gv));
+    SvPOK_off(gv);
     SSPUSHPTR(SvREFCNT_inc(gv));
     SSPUSHPTR(GvGP(gv));
     SSPUSHINT(SAVEt_GP);
@@ -512,11 +517,17 @@ I32 base;
 	    gv = (GV*)SSPOPPTR;
 	    (void)sv_clear((SV*)gv);
 	    break;
-        case SAVEt_GP:				/* scalar reference */
+	case SAVEt_GP:				/* scalar reference */
 	    ptr = SSPOPPTR;
 	    gv = (GV*)SSPOPPTR;
             gp_free(gv);
             GvGP(gv) = (GP*)ptr;
+            if (SvPOK(gv) && SvLEN(gv) > 0) {
+                Safefree(SvPVX(gv));
+            }
+            SvPVX(gv) = (char *)SSPOPPTR;
+            SvCUR(gv) = (STRLEN)SSPOPIV;
+            SvLEN(gv) = (STRLEN)SSPOPIV;
 	    SvREFCNT_dec(gv);
             break;
 	case SAVEt_FREESV:
@@ -615,7 +626,7 @@ void
 cx_dump(cx)
 CONTEXT* cx;
 {
-    PerlIO_printf(Perl_debug_log, "CX %d = %s\n", cx - cxstack, block_type[cx->cx_type]);
+    PerlIO_printf(Perl_debug_log, "CX %ld = %s\n", (long)(cx - cxstack), block_type[cx->cx_type]);
     if (cx->cx_type != CXt_SUBST) {
 	PerlIO_printf(Perl_debug_log, "BLK_OLDSP = %ld\n", (long)cx->blk_oldsp);
 	PerlIO_printf(Perl_debug_log, "BLK_OLDCOP = 0x%lx\n", (long)cx->blk_oldcop);

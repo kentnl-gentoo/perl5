@@ -38,6 +38,8 @@ Nick Ing-Simmons nik@tiuk.ti.com
 
 use Cwd;
 
+use vars qw($VERSION);
+$VERSION = '1.00';
 
 sub import
 {
@@ -45,7 +47,6 @@ sub import
  my $dir = getcwd;
  if (@_)
   {
-   print join(',',@_),"\n";
    $dir = shift;
    $dir =~ s/blib$//;
    $dir =~ s,/+$,,;

@@ -23,6 +23,7 @@ I32	av_len _((AV* ar));
 AV*	av_make _((I32 size, SV** svp));
 SV*	av_pop _((AV* ar));
 void	av_push _((AV* ar, SV* val));
+void	av_reify _((AV* ar));
 SV*	av_shift _((AV* ar));
 SV**	av_store _((AV* ar, I32 key, SV* val));
 void	av_undef _((AV* ar));
@@ -316,7 +317,8 @@ SV*	newSVpvf _((const char* pat, ...));
 SV*	newSVrv _((SV* rv, char* classname));
 SV*	newSVsv _((SV* old));
 OP*	newUNOP _((I32 type, I32 flags, OP* first));
-OP*	newWHILEOP _((I32 flags, I32 debuggable, LOOP* loop, OP* expr, OP* block, OP* cont));
+OP*	newWHILEOP _((I32 flags, I32 debuggable, LOOP* loop,
+		      I32 whileline, OP* expr, OP* block, OP* cont));
 PerlIO*	nextargv _((GV* gv));
 char*	ninstr _((char* big, char* bigend, char* little, char* lend));
 OP*	oopsCV _((OP* o));

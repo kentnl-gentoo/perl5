@@ -384,6 +384,14 @@ MAGIC *mg;
     case '\020':		/* ^P */
 	sv_setiv(sv, (IV)perldb);
 	break;
+    case '\023':		/* ^S */
+	if (lex_state != LEX_NOTPARSING)
+	    SvOK_off(sv);
+	else if (in_eval)
+	    sv_setiv(sv, 1);
+	else
+	    sv_setiv(sv, 0);
+	break;
     case '\024':		/* ^T */
 #ifdef BIG_TIME
  	sv_setnv(sv, basetime);

@@ -171,7 +171,11 @@ sub my_cmp {
     local(*F,*T);
     my $diff = 0;
     open T, $two or return 1;
+    # It only works under Win32 (probably DOSHISH, too)
+    # when in binary mode.
+    binmode(T) if $^O eq 'MSWin32'; # the 'if' is probably not needed
     open F, $one or Carp::croak("Couldn't open $one: $!");
+    binmode(F) if $^O eq 'MSWin32'; # the 'if' is probably not needed
     my($fr, $tr, $fbuf, $tbuf, $size);
     $size = 1024;
     # print "Reading $one\n";
