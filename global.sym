@@ -187,7 +187,6 @@ avhv_exists
 avhv_exists_ent
 avhv_fetch
 avhv_fetch_ent
-avhv_iterinit
 avhv_iternext
 avhv_iternextsv
 avhv_iterval
@@ -425,9 +424,9 @@ magic_settaint
 magic_setuvar
 magic_setvec
 magic_sizepack
-magic_unchain
 magic_wipepack
 magicname
+malloced_size
 markstack_grow
 mem_collxfrm
 mess

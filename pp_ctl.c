@@ -76,8 +76,8 @@ PP(pp_regcomp) {
     MAGIC *mg = Null(MAGIC*);
 
     tmpstr = POPs;
-    if(SvROK(tmpstr) || SvRMAGICAL(tmpstr)) {
-	SV *sv = SvROK(tmpstr) ? SvRV(tmpstr) : tmpstr;
+    if(SvROK(tmpstr)) {
+	SV *sv = SvRV(tmpstr);
 	if(SvMAGICAL(sv))
 	    mg = mg_find(sv, 'r');
     }
@@ -101,7 +101,6 @@ PP(pp_regcomp) {
 
 	    pm->op_pmflags = pm->op_pmpermflags;	/* reset case sensitivity */
 	    pm->op_pmregexp = pregcomp(t, t + len, pm);
-	    sv_magic(tmpstr,(SV*)ReREFCNT_inc(pm->op_pmregexp),'r',0,0);
 	}
     }
 
@@ -1487,10 +1486,22 @@ PP(pp_return)
 
     TAINT_NOT;
     if (gimme == G_SCALAR) {
-	if (MARK < SP)
-	    *++newsp = (popsub2 && SvTEMP(*SP))
-			? *SP : sv_mortalcopy(*SP);
-	else
+	if (MARK < SP) {
+	    if (popsub2) {
+		if (cxsub.cv && CvDEPTH(cxsub.cv) > 1) {
+		    if (SvTEMP(TOPs)) {
+			*++newsp = SvREFCNT_inc(*SP);
+			FREETMPS;
+			sv_2mortal(*newsp);
+		    } else {
+			FREETMPS;
+			*++newsp = sv_mortalcopy(*SP);
+		    }
+		} else
+		    *++newsp = (SvTEMP(*SP)) ? *SP : sv_mortalcopy(*SP);
+	    } else
+		*++newsp = sv_mortalcopy(*SP);
+	} else
 	    *++newsp = &sv_undef;
     }
     else if (gimme == G_ARRAY) {

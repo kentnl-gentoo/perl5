@@ -2168,7 +2168,7 @@ pmruntime(OP *o, OP *expr, OP *repl)
 #ifdef USE_THREADS
 		    if (curop->op_type == OP_THREADSV) {
 			repl_has_vars = 1;
-			if (strchr("&`'123456789+", curop->op_private)) {
+			if (strchr("&`'123456789+", curop->op_private))
 			    break;
 		    }
 #else
@@ -3383,7 +3383,7 @@ newSUB(I32 floor, OP *o, OP *proto, OP *block)
     GV *gv = gv_fetchpv(name ? name : "__ANON__",
 			GV_ADDMULTI | (block ? 0 : GV_NOINIT), SVt_PVCV);
     char *ps = proto ? SvPVx(((SVOP*)proto)->op_sv, na) : Nullch;
-    register CV *cv;
+    register CV *cv=0;
     I32 ix;
 
     if (o)
