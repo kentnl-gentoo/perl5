@@ -828,7 +828,12 @@ Perl_magic_clear_all_env(pTHX_ SV *sv, MAGIC *mg)
     }
     FreeEnvironmentStrings(envv);
 #  else
-#    ifndef PERL_USE_SAFE_PUTENV
+#    ifdef CYGWIN
+    I32 i;
+    for (i = 0; environ[i]; i++)
+       Safefree(environ[i]);
+#    else
+#      ifndef PERL_USE_SAFE_PUTENV
     I32 i;
 
     if (environ == PL_origenviron)
@@ -836,7 +841,8 @@ Perl_magic_clear_all_env(pTHX_ SV *sv, MAGIC *mg)
     else
 	for (i = 0; environ[i]; i++)
 	    safesysfree(environ[i]);
-#    endif /* PERL_USE_SAFE_PUTENV */
+#      endif /* PERL_USE_SAFE_PUTENV */
+#    endif /* CYGWIN */
 
     environ[0] = Nullch;
 
@@ -1878,7 +1884,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 
 	    while (isSPACE(*p))
 		++p;
-	    PL_egid = I_V(atol(p));
+	    PL_egid = I_V(Atol(p));
 	    for (i = 0; i < NGROUPS; ++i) {
 		while (*p && !isSPACE(*p))
 		    ++p;
@@ -1886,7 +1892,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 		    ++p;
 		if (!*p)
 		    break;
-		gary[i] = I_V(atol(p));
+		gary[i] = I_V(Atol(p));
 	    }
 	    if (i)
 		(void)setgroups(i, gary);

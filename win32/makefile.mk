@@ -33,7 +33,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.00558
+INST_VER	*= \5.00559
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -502,8 +502,8 @@ PERL95EXE	= ..\perl95.exe
 .ENDIF
 
 .IF "$(USE_OBJECT)" == "define"
-PERLIMPLIB	*= ..\perlcore$(a)
-PERLDLL		= ..\perlcore.dll
+PERLIMPLIB	*= ..\perl56$(a)
+PERLDLL		= ..\perl56.dll
 .ELSE
 PERLIMPLIB	*= ..\perl$(a)
 PERLDLL		= ..\perl.dll

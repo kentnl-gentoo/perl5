@@ -18,8 +18,11 @@ desperation):
 Optional warnings are enabled by using the B<-w> switch.  Warnings may
 be captured by setting C<$SIG{__WARN__}> to a reference to a routine that
 will be called on each warning instead of printing it.  See L<perlvar>.
+
 Trappable errors may be trapped using the eval operator.  See
-L<perlfunc/eval>.
+L<perlfunc/eval>.  In almost all cases, warnings may be selectively
+disabled or promoted to fatal errors using the C<warning> pragma.
+See L<warning>.
 
 Some of these messages are generic.  Spots that vary are denoted with a %s,
 just as in a printf format.  Note that some messages start with a %s!
@@ -466,6 +469,12 @@ implies a C<BEGIN {}>) after one or more compilation errors had
 already occurred.  Since the intended environment for the C<BEGIN {}>
 could not be guaranteed (due to the errors), and since subsequent code
 likely depends on its correct operation, Perl just gave up.
+
+=item Binary number > 0b11111111111111111111111111111111 non-portable
+
+(W) The binary number you specified is larger than 2**32-1
+(4294967295) and therefore non-portable between systems.  See
+L<perlport> for more on portability concerns.
 
 =item bind() on closed fd
 
@@ -1341,7 +1350,8 @@ the name.
 
 =item Format %s redefined
 
-(W) You redefined a format.  To suppress this warning, say
+(W) You redefined a format, perhaps accidentally.  To suppress this warning,
+say
 
     {
 	no warning;
@@ -1414,6 +1424,12 @@ an emergency basis to prevent a core dump.
 (D) Really old Perl let you omit the % on hash names in some spots.  This
 is now heavily deprecated.
 
+=item Hexadecimal number > 0xffffffff non-portable
+
+(W) The hexadecimal number you specified is larger than 2**32-1
+(4294967295) and therefore non-portable between systems.  See
+L<perlport> for more on portability concerns.
+
 =item Identifier too long
 
 (F) Perl limits identifiers (names for variables, functions, etc.) to
@@ -1483,8 +1499,8 @@ of the octal number stopped before the 8 or 9.
 
 =item Illegal hexadecimal digit %s ignored
 
-(W) You may have tried to use a character other than 0 - 9 or A - F in a
-hexadecimal number.  Interpretation of the hexadecimal number stopped
+(W) You may have tried to use a character other than 0 - 9 or A - F, a - f
+in a hexadecimal number.  Interpretation of the hexadecimal number stopped
 before the illegal character.
 
 =item Illegal switch in PERL5OPT: %s
@@ -1528,14 +1544,15 @@ known value, using trustworthy data.  See L<perlsec>.
 
 =item Integer overflow in %s number
 
-(S) The literal hexadecimal, octal or binary number you have specified
-is too big for your architecture. On a 32-bit architecture the largest
-literal hex, octal or binary number representable without overflow
-is 0xFFFFFFFF, 037777777777, or 0b11111111111111111111111111111111
-respectively.  Note that Perl transparently promotes decimal literals
-to a floating point representation internally--subject to loss of
-precision errors in subsequent operations--so this limit usually
-doesn't apply to decimal literals.
+(W) The hexadecimal, octal or binary number you have specified either
+as a literal in your code or as a scalar is too big for your
+architecture, and has been converted to a floating point number.  On a
+32-bit architecture the largest hexadecimal, octal or binary number
+representable without overflow is 0xFFFFFFFF, 037777777777, or
+0b11111111111111111111111111111111 respectively.  Note that Perl
+transparently promotes all numbers to a floating point representation
+internally--subject to loss of precision errors in subsequent
+operations.
 
 =item Internal inconsistency in tracking vforks
 
@@ -1959,6 +1976,12 @@ supplied it an uninitialized value.  See L<perlform>.
 about 250 characters.  You've exceeded that length.  Future versions of
 Perl are likely to eliminate this arbitrary limitation.  In the meantime,
 try using scientific notation (e.g. "1e6" instead of "1_000_000").
+
+=item Octal number > 037777777777 non-portable
+
+(W) The octal number you specified is larger than 2**32-1 (4294967295)
+and therefore non-portable between systems.  See L<perlport> for more
+on portability concerns.
 
 =item Odd number of elements in hash assignment
 
@@ -2593,7 +2616,8 @@ may break this.
 
 =item Subroutine %s redefined
 
-(W) You redefined a subroutine.  To suppress this warning, say
+(W) You redefined a subroutine, perhaps accidentally.  To suppress this
+warning, say
 
     {
 	no warning;

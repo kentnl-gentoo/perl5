@@ -11,6 +11,13 @@
  *   "It all comes from here, the stench and the peril."  --Frodo
  */
 
+/*
+ * This file is the lexer for Perl.  It's closely linked to the
+ * parser, perly.y.  
+ *
+ * The main routine is yylex(), which returns the next token.
+ */
+
 #include "EXTERN.h"
 #define PERL_IN_TOKE_C
 #include "perl.h"
@@ -42,7 +49,8 @@ static void restore_lex_expect(pTHXo_ void *e);
  * 1999-02-27 mjd-perl-patch@plover.com */
 #define isCONTROLVAR(x) (isUPPER(x) || strchr("[\\]^_?", (x)))
 
-/* The following are arranged oddly so that the guard on the switch statement
+/* LEX_* are values for PL_lex_state, the state of the lexer.
+ * They are arranged oddly so that the guard on the switch statement
  * can get by with a single comparison (if the compiler is smart enough).
  */
 
@@ -91,10 +99,40 @@ int* yychar_pointer = NULL;
 
 #include "keywords.h"
 
+/* CLINE is a macro that ensures PL_copline has a sane value */
+
 #ifdef CLINE
 #undef CLINE
 #endif
 #define CLINE (PL_copline = (PL_curcop->cop_line < PL_copline ? PL_curcop->cop_line : PL_copline))
+
+/*
+ * Convenience functions to return different tokens and prime the
+ * lexer for the next token.  They all take an argument.
+ *
+ * TOKEN        : generic token (used for '(', DOLSHARP, etc)
+ * OPERATOR     : generic operator
+ * AOPERATOR    : assignment operator
+ * PREBLOCK     : beginning the block after an if, while, foreach, ...
+ * PRETERMBLOCK : beginning a non-code-defining {} block (eg, hash ref)
+ * PREREF       : *EXPR where EXPR is not a simple identifier
+ * TERM         : expression term
+ * LOOPX        : loop exiting command (goto, last, dump, etc)
+ * FTST         : file test operator
+ * FUN0         : zero-argument function
+ * FUN1         : not used
+ * BOop         : bitwise or or xor
+ * BAop         : bitwise and
+ * SHop         : shift operator
+ * PWop         : power operator
+ * PMop         : pattern-matching operator
+ * Aop          : addition-level operator
+ * Mop          : multiplication-level operator
+ * Eop          : equality-testing operator
+ * Rop        : relational operator <= != gt
+ *
+ * Also see LOP and lop() below.
+ */
 
 #define TOKEN(retval) return (PL_bufptr = s,(int)retval)
 #define OPERATOR(retval) return (PL_expect = XTERM,PL_bufptr = s,(int)retval)
@@ -135,6 +173,13 @@ int* yychar_pointer = NULL;
 /* grandfather return to old style */
 #define OLDLOP(f) return(yylval.ival=f,PL_expect = XTERM,PL_bufptr = s,(int)LSTOP)
 
+/*
+ * S_ao
+ *
+ * This subroutine detects &&= and ||= and turns an ANDAND or OROR
+ * into an OP_ANDASSIGN or OP_ORASSIGN
+ */
+
 STATIC int
 S_ao(pTHX_ int toketype)
 {
@@ -148,6 +193,19 @@ S_ao(pTHX_ int toketype)
     }
     return toketype;
 }
+
+/*
+ * S_no_op
+ * When Perl expects an operator and finds something else, no_op
+ * prints the warning.  It always prints "<something> found where
+ * operator expected.  It prints "Missing semicolon on previous line?"
+ * if the surprise occurs at the start of the line.  "do you need to
+ * predeclare ..." is printed out for code like "sub bar; foo bar $x"
+ * where the compiler doesn't know if foo is a method call or a function.
+ * It prints "Missing operator before end of line" if there's nothing
+ * after the missing operator, or "... before <...>" if there is something
+ * after the missing operator.
+ */
 
 STATIC void
 S_no_op(pTHX_ char *what, char *s)
@@ -171,6 +229,15 @@ S_no_op(pTHX_ char *what, char *s)
 	Perl_warn(aTHX_ "\t(Missing operator before %.*s?)\n", s - oldbp, oldbp);
     PL_bufptr = oldbp;
 }
+
+/*
+ * S_missingterm
+ * Complain about missing quote/regexp/heredoc terminator.
+ * If it's called with (char *)NULL then it cauterizes the line buffer.
+ * If we're in a delimited string and the delimiter is a control
+ * character, it's reformatted into a two-char sequence like ^C.
+ * This is fatal.
+ */
 
 STATIC void
 S_missingterm(pTHX_ char *s)
@@ -204,6 +271,10 @@ S_missingterm(pTHX_ char *s)
     Perl_croak(aTHX_ "Can't find string terminator %c%s%c anywhere before EOF",q,s,q);
 }
 
+/*
+ * Perl_deprecate
+ */
+
 void
 Perl_deprecate(pTHX_ char *s)
 {
@@ -212,11 +283,21 @@ Perl_deprecate(pTHX_ char *s)
 	Perl_warner(aTHX_ WARN_DEPRECATED, "Use of %s is deprecated", s);
 }
 
+/*
+ * depcom
+ * Deprecate a comma-less variable list.
+ */
+
 STATIC void
 S_depcom(pTHX)
 {
     deprecate("comma-less variable list");
 }
+
+/*
+ * experimental text filters for win32 carriage-returns, utf16-to-utf8 and
+ * utf16-to-utf8-reversed.
+ */
 
 #ifdef WIN32
 
@@ -259,6 +340,12 @@ S_utf16rev_textfilter(pTHX_ int idx, SV *sv, int maxlen)
     }
     return count;
 }
+
+/*
+ * Perl_lex_start
+ * Initialize variables.  Uses the Perl save_stack to save its state (for
+ * recursive calls to the parser).
+ */
 
 void
 Perl_lex_start(pTHX_ SV *line)
@@ -325,11 +412,27 @@ Perl_lex_start(pTHX_ SV *line)
     PL_rsfp = 0;
 }
 
+/*
+ * Perl_lex_end
+ * Finalizer for lexing operations.  Must be called when the parser is
+ * done with the lexer.
+ */
+
 void
 Perl_lex_end(pTHX)
 {
     PL_doextract = FALSE;
 }
+
+/*
+ * S_incline
+ * This subroutine has nothing to do with tilting, whether at windmills
+ * or pinball tables.  Its name is short for "increment line".  It
+ * increments the current line number in PL_curcop->cop_line and checks
+ * to see whether the line starts with a comment of the form
+ *    # line 500 "foo.pm"
+ * If so, it sets the current line number and file to the values in the comment.
+ */
 
 STATIC void
 S_incline(pTHX_ char *s)
@@ -372,6 +475,12 @@ S_incline(pTHX_ char *s)
     PL_curcop->cop_line = atoi(n)-1;
 }
 
+/*
+ * S_skipspace
+ * Called to gobble the appropriate amount and type of whitespace.
+ * Skips comments as well.
+ */
+
 STATIC char *
 S_skipspace(pTHX_ register char *s)
 {
@@ -387,6 +496,8 @@ S_skipspace(pTHX_ register char *s)
 	    if (*s++ == '\n' && PL_in_eval && !PL_rsfp)
 		incline(s);
 	}
+
+	/* comment */
 	if (s < PL_bufend && *s == '#') {
 	    while (s < PL_bufend && *s != '\n')
 		s++;
@@ -398,9 +509,19 @@ S_skipspace(pTHX_ register char *s)
 		}
 	    }
 	}
+
+	/* only continue to recharge the buffer if we're at the end
+	 * of the buffer, we're not reading from a source filter, and
+	 * we're in normal lexing mode
+	 */
 	if (s < PL_bufend || !PL_rsfp || PL_lex_state != LEX_NORMAL)
 	    return s;
-	if ((s = filter_gets(PL_linestr, PL_rsfp, (prevlen = SvCUR(PL_linestr)))) == Nullch) {
+
+	/* try to recharge the buffer */
+	if ((s = filter_gets(PL_linestr, PL_rsfp,
+			     (prevlen = SvCUR(PL_linestr)))) == Nullch)
+	{
+	    /* end of file.  Add on the -p or -n magic */
 	    if (PL_minus_n || PL_minus_p) {
 		sv_setpv(PL_linestr,PL_minus_p ?
 			 ";}continue{print or die qq(-p destination: $!\\n)" :
@@ -410,8 +531,19 @@ S_skipspace(pTHX_ register char *s)
 	    }
 	    else
 		sv_setpv(PL_linestr,";");
-	    PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = s = PL_linestart = SvPVX(PL_linestr);
+
+	    /* reset variables for next time we lex */
+	    PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = s = PL_linestart
+		= SvPVX(PL_linestr);
 	    PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
+
+	    /* Close the filehandle.  Could be from -P preprocessor,
+	     * STDIN, or a regular file.  If we were reading code from
+	     * STDIN (because the commandline held no -e or filename)
+	     * then we don't close it, we reset it so the code can
+	     * read from STDIN too.
+	     */
+
 	    if (PL_preprocess && !PL_in_eval)
 		(void)PerlProc_pclose(PL_rsfp);
 	    else if ((PerlIO*)PL_rsfp == PerlIO_stdin())
@@ -421,10 +553,16 @@ S_skipspace(pTHX_ register char *s)
 	    PL_rsfp = Nullfp;
 	    return s;
 	}
+
+	/* not at end of file, so we only read another line */
 	PL_linestart = PL_bufptr = s + prevlen;
 	PL_bufend = s + SvCUR(PL_linestr);
 	s = PL_bufptr;
 	incline(s);
+
+	/* debugger active and we're not compiling the debugger code,
+	 * so store the line into the debugger's array of lines
+	 */
 	if (PERLDB_LINE && PL_curstash != PL_debstash) {
 	    SV *sv = NEWSV(85,0);
 
@@ -434,6 +572,15 @@ S_skipspace(pTHX_ register char *s)
 	}
     }
 }
+
+/*
+ * S_check_uni
+ * Check the unary operators to ensure there's no ambiguity in how they're
+ * used.  An ambiguous piece of code would be:
+ *     rand + 5
+ * This doesn't mean rand() + 5.  Because rand() is a unary operator,
+ * the +5 is its argument.
+ */
 
 STATIC void
 S_check_uni(pTHX)
@@ -459,6 +606,11 @@ S_check_uni(pTHX)
     }
 }
 
+/* workaround to replace the UNI() macro with a function.  Only the
+ * hints/uts.sh file mentions this.  Other comments elsewhere in the
+ * source indicate Microport Unix might need it too.
+ */
+
 #ifdef CRIPPLED_CC
 
 #undef UNI
@@ -483,7 +635,20 @@ S_uni(pTHX_ I32 f, char *s)
 
 #endif /* CRIPPLED_CC */
 
+/*
+ * LOP : macro to build a list operator.  Its behaviour has been replaced
+ * with a subroutine, S_lop() for which LOP is just another name.
+ */
+
 #define LOP(f,x) return lop(f,x,s)
+
+/*
+ * S_lop
+ * Build a list operator (or something that might be one).  The rules:
+ *  - if we have a next token, then it's a list operator [why?]
+ *  - if the next thing is an opening paren, then it's a function
+ *  - else it's a list operator
+ */
 
 STATIC I32
 S_lop(pTHX_ I32 f, expectation x, char *s)
@@ -506,6 +671,15 @@ S_lop(pTHX_ I32 f, expectation x, char *s)
 	return LSTOP;
 }
 
+/*
+ * S_force_next
+ * When the lexer realizes it knows the next token (for instance,
+ * it is reordering tokens for the parser) then it can call S_force_next
+ * to know what token to return the next time the lexer is called.  Caller
+ * will need to set PL_nextval[], and possibly PL_expect to ensure the lexer
+ * handles the token correctly.
+ */
+
 STATIC void 
 S_force_next(pTHX_ I32 type)
 {
@@ -517,6 +691,22 @@ S_force_next(pTHX_ I32 type)
 	PL_lex_state = LEX_KNOWNEXT;
     }
 }
+
+/*
+ * S_force_word
+ * When the lexer knows the next thing is a word (for instance, it has
+ * just seen -> and it knows that the next char is a word char, then
+ * it calls S_force_word to stick the next word into the PL_next lookahead.
+ *
+ * Arguments:
+ *   char *start : start of the buffer
+ *   int token   : PL_next will be this type of bare word (e.g., METHOD,WORD)
+ *   int check_keyword : if true, Perl checks to make sure the word isn't
+ *       a keyword (do this if the word is a label, e.g. goto FOO)
+ *   int allow_pack : if true, : characters will also be allowed (require,
+ *       use, etc. do this)
+ *   int allow_initial_tick : used by the "sub" lexer only.
+ */
 
 STATIC char *
 S_force_word(pTHX_ register char *start, int token, int check_keyword, int allow_pack, int allow_initial_tick)
@@ -548,6 +738,15 @@ S_force_word(pTHX_ register char *start, int token, int check_keyword, int allow
     return s;
 }
 
+/*
+ * S_force_ident
+ * Called when the lexer wants $foo *foo &foo etc, but the program
+ * text only contains the "foo" portion.  The first argument is a pointer
+ * to the "foo", and the second argument is the type symbol to prefix.
+ * Forces the next token to be a "WORD".
+ * Creates the symbol if it didn't already exist (via gv_fetchpv()).
+ */
+
 STATIC void
 S_force_ident(pTHX_ register char *s, int kind)
 {
@@ -570,6 +769,11 @@ S_force_ident(pTHX_ register char *s, int kind)
 	}
     }
 }
+
+/* 
+ * S_force_version
+ * Forces the next token to be a version number.
+ */
 
 STATIC char *
 S_force_version(pTHX_ char *s)
@@ -597,6 +801,14 @@ S_force_version(pTHX_ char *s)
 
     return (s);
 }
+
+/*
+ * S_tokeq
+ * Tokenize a quoted string passed in as an SV.  It finds the next
+ * chunk, up to end of string or a backslash.  It may make a new
+ * SV containing that chunk (if HINT_NEW_STRING is on).  It also
+ * turns \\ into \.
+ */
 
 STATIC SV *
 S_tokeq(pTHX_ SV *sv)
@@ -635,6 +847,38 @@ S_tokeq(pTHX_ SV *sv)
        return new_constant(NULL, 0, "q", sv, pv, "q");
     return sv;
 }
+
+/*
+ * Now come three functions related to double-quote context,
+ * S_sublex_start, S_sublex_push, and S_sublex_done.  They're used when
+ * converting things like "\u\Lgnat" into ucfirst(lc("gnat")).  They
+ * interact with PL_lex_state, and create fake ( ... ) argument lists
+ * to handle functions and concatenation.
+ * They assume that whoever calls them will be setting up a fake
+ * join call, because each subthing puts a ',' after it.  This lets
+ *   "lower \luPpEr"
+ * become
+ *  join($, , 'lower ', lcfirst( 'uPpEr', ) ,)
+ *
+ * (I'm not sure whether the spurious commas at the end of lcfirst's
+ * arguments and join's arguments are created or not).
+ */
+
+/*
+ * S_sublex_start
+ * Assumes that yylval.ival is the op we're creating (e.g. OP_LCFIRST).
+ *
+ * Pattern matching will set PL_lex_op to the pattern-matching op to
+ * make (we return THING if yylval.ival is OP_NULL, PMFUNC otherwise).
+ *
+ * OP_CONST and OP_READLINE are easy--just make the new op and return.
+ *
+ * Everything else becomes a FUNC.
+ *
+ * Sets PL_lex_state to LEX_INTERPPUSH unless (ival was OP_NULL or we
+ * had an OP_CONST or OP_READLINE).  This just sets us up for a
+ * call to S_sublex_push().
+ */
 
 STATIC I32
 S_sublex_start(pTHX)
@@ -680,6 +924,14 @@ S_sublex_start(pTHX)
 	return FUNC;
 }
 
+/*
+ * S_sublex_push
+ * Create a new scope to save the lexing state.  The scope will be
+ * ended in S_sublex_done.  Returns a '(', starting the function arguments
+ * to the uc, lc, etc. found before.
+ * Sets PL_lex_state to LEX_INTERPCONCAT.
+ */
+
 STATIC I32
 S_sublex_push(pTHX)
 {
@@ -707,7 +959,8 @@ S_sublex_push(pTHX)
     PL_linestr = PL_lex_stuff;
     PL_lex_stuff = Nullsv;
 
-    PL_bufend = PL_bufptr = PL_oldbufptr = PL_oldoldbufptr = PL_linestart = SvPVX(PL_linestr);
+    PL_bufend = PL_bufptr = PL_oldbufptr = PL_oldoldbufptr = PL_linestart
+	= SvPVX(PL_linestr);
     PL_bufend += SvCUR(PL_linestr);
     SAVEFREESV(PL_linestr);
 
@@ -733,6 +986,11 @@ S_sublex_push(pTHX)
     return '(';
 }
 
+/*
+ * S_sublex_done
+ * Restores lexer state after a S_sublex_push.
+ */
+
 STATIC I32
 S_sublex_done(pTHX)
 {
@@ -747,7 +1005,7 @@ S_sublex_done(pTHX)
 	return yylex();
     }
 
-    /* Is there a right-hand side to take care of? */
+    /* Is there a right-hand side to take care of? (s//RHS/ or tr//RHS/) */
     if (PL_lex_repl && (PL_lex_inwhat == OP_SUBST || PL_lex_inwhat == OP_TRANS)) {
 	PL_linestr = PL_lex_repl;
 	PL_lex_inpat = 0;
@@ -869,11 +1127,10 @@ S_scan_const(pTHX_ char *start)
 	? (PL_sublex_info.sub_op->op_private & (OPpTRANS_FROM_UTF|OPpTRANS_TO_UTF))
 	: UTF;
     I32 thisutf = (PL_lex_inwhat == OP_TRANS && PL_sublex_info.sub_op)
-	? (PL_sublex_info.sub_op->op_private & (PL_lex_repl ? OPpTRANS_FROM_UTF : OPpTRANS_TO_UTF))
+	? (PL_sublex_info.sub_op->op_private & (PL_lex_repl ?
+						OPpTRANS_FROM_UTF : OPpTRANS_TO_UTF))
 	: UTF;
-
-    /* leaveit is the set of acceptably-backslashed characters */
-    char *leaveit =
+    char *leaveit =			/* set of acceptably-backslashed characters */
 	PL_lex_inpat
 	    ? "\\.^$@AGZdDwWsSbBpPXC+*?|()-nrtfeaxcz0123456789[{]} \t\n\r\f\v#"
 	    : "";
@@ -888,8 +1145,8 @@ S_scan_const(pTHX_ char *start)
 		I32 max;			/* last character in range */
 
 		i = d - SvPVX(sv);		/* remember current offset */
-		SvGROW(sv, SvLEN(sv) + 256);	/* expand the sv -- there'll never be more'n 256 chars in a range for it to grow by */
-		d = SvPVX(sv) + i;		/* restore d after the grow potentially has changed the ptr */
+		SvGROW(sv, SvLEN(sv) + 256);	/* never more than 256 chars in a range */
+		d = SvPVX(sv) + i;		/* refresh d after realloc */
 		d -= 2;				/* eat the first char and the - */
 
 		min = (U8)*d;			/* first char in range */
@@ -1074,7 +1331,6 @@ S_scan_const(pTHX_ char *start)
 		    d = (char*)uv_to_utf8((U8*)d,
 					  scan_hex(s + 1, e - s - 1, &len));
 		    s = e + 1;
-			
 		}
 		else {
 		    UV uv = (UV)scan_hex(s, 2, &len);
@@ -1178,7 +1434,27 @@ S_scan_const(pTHX_ char *start)
     return s;
 }
 
+/* S_intuit_more
+ * Returns TRUE if there's more to the expression (e.g., a subscript),
+ * FALSE otherwise.
+ *
+ * It deals with "$foo[3]" and /$foo[3]/ and /$foo[0123456789$]+/
+ *
+ * ->[ and ->{ return TRUE
+ * { and [ outside a pattern are always subscripts, so return TRUE
+ * if we're outside a pattern and it's not { or [, then return FALSE
+ * if we're in a pattern and the first char is a {
+ *   {4,5} (any digits around the comma) returns FALSE
+ * if we're in a pattern and the first char is a [
+ *   [] returns FALSE
+ *   [SOMETHING] has a funky algorithm to decide whether it's a
+ *      character class or not.  It has to deal with things like
+ *      /$foo[-3]/ and /$foo[$bar]/ as well as /$foo[$\d]+/
+ * anything else returns TRUE
+ */
+
 /* This is the one truly awful dwimmer necessary to conflate C and sed. */
+
 STATIC int
 S_intuit_more(pTHX_ register char *s)
 {
@@ -1214,6 +1490,7 @@ S_intuit_more(pTHX_ register char *s)
     if (*s == ']' || *s == '^')
 	return FALSE;
     else {
+        /* this is terrifying, and it works */
 	int weight = 2;		/* let's weigh the evidence */
 	char seen[256];
 	unsigned char un_char = 255, last_un_char;
@@ -1309,6 +1586,27 @@ S_intuit_more(pTHX_ register char *s)
     return TRUE;
 }
 
+/*
+ * S_intuit_method
+ *
+ * Does all the checking to disambiguate
+ *   foo bar
+ * between foo(bar) and bar->foo.  Returns 0 if not a method, otherwise
+ * FUNCMETH (bar->foo(args)) or METHOD (bar->foo args).
+ *
+ * First argument is the stuff after the first token, e.g. "bar".
+ *
+ * Not a method if bar is a filehandle.
+ * Not a method if foo is a subroutine prototyped to take a filehandle.
+ * Not a method if it's really "Foo $bar"
+ * Method if it's "foo $bar"
+ * Not a method if it's really "print foo $bar"
+ * Method if it's really "foo package::" (interpreted as package->foo)
+ * Not a method if bar is known to be a subroutne ("sub bar; foo bar")
+ * Not a method if bar is a filehandle or package, but is quotd with
+ *   =>
+ */
+
 STATIC int
 S_intuit_method(pTHX_ char *start, GV *gv)
 {
@@ -1333,6 +1631,11 @@ S_intuit_method(pTHX_ char *start, GV *gv)
 	    gv = 0;
     }
     s = scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
+    /* start is the beginning of the possible filehandle/object,
+     * and s is the end of it
+     * tmpbuf is a copy of it
+     */
+
     if (*start == '$') {
 	if (gv || PL_last_lop_op == OP_PRINT || isUPPER(*PL_tokenbuf))
 	    return 0;
@@ -1367,6 +1670,13 @@ S_intuit_method(pTHX_ char *start, GV *gv)
     }
     return 0;
 }
+
+/*
+ * S_incl_perldb
+ * Return a string of Perl code to load the debugger.  If PERL5DB
+ * is set, it will return the contents of that, otherwise a
+ * compile-time require of perl5db.pl.
+ */
 
 STATIC char*
 S_incl_perldb(pTHX)
@@ -3252,8 +3562,13 @@ Perl_yylex(pTHX)
 	    TERM(THING);
 
 	case KEY___LINE__:
-	    yylval.opval = (OP*)newSVOP(OP_CONST, 0,
-				    Perl_newSVpvf(aTHX_ "%ld", (long)PL_curcop->cop_line));
+#ifdef IV_IS_QUAD
+            yylval.opval = (OP*)newSVOP(OP_CONST, 0,
+                                    Perl_newSVpvf(aTHX_ "%" PERL_PRId64, (IV)PL_curcop->cop_line));
+#else
+            yylval.opval = (OP*)newSVOP(OP_CONST, 0,
+                                    Perl_newSVpvf(aTHX_ "%ld", (long)PL_curcop->cop_line));
+#endif
 	    TERM(THING);
 
 	case KEY___PACKAGE__:
@@ -5947,10 +6262,10 @@ Perl_scan_num(pTHX_ char *start)
     register char *s = start;		/* current position in buffer */
     register char *d;			/* destination in temp buffer */
     register char *e;			/* end of temp buffer */
-    I32 tryiv;				/* used to see if it can be an int */
+    IV tryiv;				/* used to see if it can be an IV */
     NV value;				/* number read, as a double */
     SV *sv;				/* place to put the converted number */
-    I32 floatit;			/* boolean: int or float? */
+    bool floatit;			/* boolean: int or float? */
     char *lastub = 0;			/* position of last underbar */
     static char number_too_long[] = "Number too long";
 
@@ -5976,9 +6291,21 @@ Perl_scan_num(pTHX_ char *start)
 	     when in octal mode.
 	   */
     	    dTHR;
-	    UV u;
+	    NV n = 0.0;
+	    UV u = 0;
 	    I32 shift;
 	    bool overflowed = FALSE;
+	    static NV nvshift[5] = { 1.0, 2.0, 4.0, 8.0, 16.0 };
+	    static char* bases[5] = { "", "binary", "", "octal",
+				      "hexadecimal" };
+	    static char* Bases[5] = { "", "Binary", "", "Octal",
+				      "Hexadecimal" };
+	    static char *maxima[5] = { "",
+				       "0b11111111111111111111111111111111",
+				       "",
+				       "037777777777",
+				       "0xffffffff" };
+	    char *base, *Base, *max;
 
 	    /* check for hex */
 	    if (s[1] == 'x') {
@@ -5994,11 +6321,16 @@ Perl_scan_num(pTHX_ char *start)
 	    /* so it must be octal */
 	    else
 		shift = 3;
-	    u = 0;
+
+	    base = bases[shift];
+	    Base = Bases[shift];
+	    max  = maxima[shift];
 
 	    /* read the rest of the number */
 	    for (;;) {
-		UV n, b;	/* n is used in the overflow test, b is the digit we're adding on */
+		/* x is used in the overflow test,
+		   b is the digit we're adding on. */
+		UV x, b;
 
 		switch (*s) {
 
@@ -6044,18 +6376,34 @@ Perl_scan_num(pTHX_ char *start)
 		    */
 
 		  digit:
-		    n = u << shift;	/* make room for the digit */
-		    if (!overflowed && (n >> shift) != u
-			&& !(PL_hints & HINT_NEW_BINARY))
-		    {
-			if (ckWARN_d(WARN_UNSAFE))
-			    Perl_warner(aTHX_ WARN_UNSAFE,
-					"Integer overflow in %s number",
-					(shift == 4) ? "hex"
-					    : ((shift == 3) ? "octal" : "binary"));
-			overflowed = TRUE;
+		    if (!overflowed) {
+			x = u << shift;	/* make room for the digit */
+
+			if ((x >> shift) != u
+			    && !(PL_hints & HINT_NEW_BINARY)) {
+			    dTHR;
+			    overflowed = TRUE;
+			    n = (NV) u;
+			    if (ckWARN_d(WARN_UNSAFE))
+				Perl_warner(aTHX_ ((shift == 3) ?
+						   WARN_OCTAL : WARN_UNSAFE),
+					    "Integer overflow in %s number",
+					    base);
+			} else
+			    u = x | b;		/* add the digit to the end */
 		    }
-		    u = n | b;		/* add the digit to the end */
+		    if (overflowed) {
+			n *= nvshift[shift];
+			/* If an NV has not enough bits in its
+			 * mantissa to represent an UV this summing of
+			 * small low-order numbers is a waste of time
+			 * (because the NV cannot preserve the
+			 * low-order bits anyway): we could just
+			 * remember when did we overflow and in the
+			 * end just multiply n by the right
+			 * amount. */
+			n += (NV) b;
+		    }
 		    break;
 		}
 	    }
@@ -6065,8 +6413,25 @@ Perl_scan_num(pTHX_ char *start)
 	  */
 	  out:
 	    sv = NEWSV(92,0);
-	    sv_setuv(sv, u);
-	    if ( PL_hints & HINT_NEW_BINARY)
+	    if (overflowed) {
+		dTHR;
+		if (ckWARN(WARN_UNSAFE) && n > 4294967295.0)
+		    Perl_warner(aTHX_ WARN_UNSAFE,
+				"%s number > %s non-portable",
+				Base, max);
+		sv_setnv(sv, n);
+	    }
+	    else {
+#if UV_SIZEOF > 4
+		dTHR;
+		if (ckWARN(WARN_UNSAFE) && u > 0xffffffff)
+		    Perl_warner(aTHX_ WARN_UNSAFE,
+				"%s number > %s non-portable",
+				Base, max);
+#endif
+		sv_setuv(sv, u);
+	    }
+	    if (PL_hints & HINT_NEW_BINARY)
 		sv = new_constant(start, s - start, "binary", sv, Nullsv, NULL);
 	}
 	break;
@@ -6172,9 +6537,11 @@ Perl_scan_num(pTHX_ char *start)
 	    sv_setiv(sv, tryiv);
 	else
 	    sv_setnv(sv, value);
-	if ( floatit ? (PL_hints & HINT_NEW_FLOAT) : (PL_hints & HINT_NEW_INTEGER) )
+	if ( floatit ? (PL_hints & HINT_NEW_FLOAT) :
+	               (PL_hints & HINT_NEW_INTEGER) )
 	    sv = new_constant(PL_tokenbuf, d - PL_tokenbuf, 
-			      (floatit ? "float" : "integer"), sv, Nullsv, NULL);
+			      (floatit ? "float" : "integer"),
+			      sv, Nullsv, NULL);
 	break;
     }
 
@@ -6383,16 +6750,28 @@ Perl_yyerror(pTHX_ char *s)
 	where = SvPVX(where_sv);
     }
     msg = sv_2mortal(newSVpv(s, 0));
+#ifdef IV_IS_QUAD
+    Perl_sv_catpvf(aTHX_ msg, " at %_ line %" PERL_PRId64 ", ",
+              GvSV(PL_curcop->cop_filegv), (IV)PL_curcop->cop_line);
+#else
     Perl_sv_catpvf(aTHX_ msg, " at %_ line %ld, ",
-	      GvSV(PL_curcop->cop_filegv), (long)PL_curcop->cop_line);
+              GvSV(PL_curcop->cop_filegv), (long)PL_curcop->cop_line);
+#endif
     if (context)
 	Perl_sv_catpvf(aTHX_ msg, "near \"%.*s\"\n", contlen, context);
     else
 	Perl_sv_catpvf(aTHX_ msg, "%s\n", where);
     if (PL_multi_start < PL_multi_end && (U32)(PL_curcop->cop_line - PL_multi_end) <= 1) {
-	Perl_sv_catpvf(aTHX_ msg,
-	"  (Might be a runaway multi-line %c%c string starting on line %ld)\n",
-		(int)PL_multi_open,(int)PL_multi_close,(long)PL_multi_start);
+#ifdef IV_IS_QUAD
+        Perl_sv_catpvf(aTHX_ msg,
+        "  (Might be a runaway multi-line %c%c string starting on line %" PERL_\
+PRId64 ")\n",
+                (int)PL_multi_open,(int)PL_multi_close,(IV)PL_multi_start);
+#else
+        Perl_sv_catpvf(aTHX_ msg,
+        "  (Might be a runaway multi-line %c%c string starting on line %ld)\n",
+                (int)PL_multi_open,(int)PL_multi_close,(long)PL_multi_start);
+#endif
         PL_multi_end = 0;
     }
     if (PL_in_eval & EVAL_WARNONLY)
@@ -6414,6 +6793,11 @@ Perl_yyerror(pTHX_ char *s)
 #include "XSUB.h"
 #endif
 
+/*
+ * restore_rsfp
+ * Restore a source filter.
+ */
+
 static void
 restore_rsfp(pTHXo_ void *f)
 {
@@ -6426,6 +6810,12 @@ restore_rsfp(pTHXo_ void *f)
     PL_rsfp = fp;
 }
 
+/*
+ * restore_expect
+ * Restores the state of PL_expect when the lexing that begun with a
+ * start_lex() call has ended.
+ */ 
+
 static void
 restore_expect(pTHXo_ void *e)
 {
@@ -6433,10 +6823,15 @@ restore_expect(pTHXo_ void *e)
     PL_expect = (expectation)((char *)e - PL_tokenbuf);
 }
 
+/*
+ * restore_lex_expect
+ * Restores the state of PL_lex_expect when the lexing that begun with a
+ * start_lex() call has ended.
+ */ 
+
 static void
 restore_lex_expect(pTHXo_ void *e)
 {
     /* a safe way to store a small integer in a pointer */
     PL_lex_expect = (expectation)((char *)e - PL_tokenbuf);
 }
-

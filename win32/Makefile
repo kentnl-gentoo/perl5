@@ -29,7 +29,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	= \5.00558
+INST_VER	= \5.00559
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -341,8 +341,8 @@ EXTUTILSDIR	= $(LIBDIR)\extutils
 #
 # various targets
 !IF "$(USE_OBJECT)" == "define"
-PERLIMPLIB	= ..\perlcore.lib
-PERLDLL		= ..\perlcore.dll
+PERLIMPLIB	= ..\perl56.lib
+PERLDLL		= ..\perl56.dll
 !ELSE
 PERLIMPLIB	= ..\perl.lib
 PERLDLL		= ..\perl.dll

@@ -1885,14 +1885,14 @@ PP(pp_hex)
     STRLEN n_a;
 
     tmps = POPpx;
-    XPUSHu(scan_hex(tmps, 99, &argtype));
+    XPUSHn(scan_hex(tmps, 99, &argtype));
     RETURN;
 }
 
 PP(pp_oct)
 {
     djSP; dTARGET;
-    UV value;
+    NV value;
     I32 argtype;
     char *tmps;
     STRLEN n_a;
@@ -1908,7 +1908,7 @@ PP(pp_oct)
 	value = scan_bin(++tmps, 99, &argtype);
     else
 	value = scan_oct(tmps, 99, &argtype);
-    XPUSHu(value);
+    XPUSHn(value);
     RETURN;
 }
 

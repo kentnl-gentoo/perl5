@@ -32,7 +32,7 @@ particular, you can safely ignore any information that talks about
 "Configure".
 
 You may also want to look at two other options for building
-a perl that will work on Windows NT:  the README.cygwin32 and
+a perl that will work on Windows NT:  the README.cygwin and
 README.os2 files, which each give a different set of rules to build
 a Perl that will work on Win32 platforms.  Those two methods will
 probably enable you to build a more Unix-compatible perl, but you
@@ -206,7 +206,7 @@ instructions carefully.
 Type "dmake" (or "nmake" if you are using that make).
 
 This should build everything.  Specifically, it will create perl.exe,
-perl.dll (or perlcore.dll), and perlglob.exe at the perl toplevel, and
+perl.dll (or perl56.dll), and perlglob.exe at the perl toplevel, and
 various other extension dll's under the lib\auto directory.  If the build
 fails for any reason, make sure you have done the previous steps correctly.
 

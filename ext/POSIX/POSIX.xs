@@ -105,7 +105,7 @@
    }
 #  define times(t) vms_times(t)
 #else
-#if defined (CYGWIN32)
+#if defined (CYGWIN)
 #    define tzname _tzname
 #    undef MB_CUR_MAX          /* XXX: bug in b20.1 */
 #endif
@@ -358,7 +358,7 @@ not_here(char *s)
 }
 
 static
-#ifdef HAS_LONG_DOUBLE
+#if defined(HAS_LONG_DOUBLE) && (LONG_DOUBLESIZE > DOUBLESIZE)
 long double
 #else
 double

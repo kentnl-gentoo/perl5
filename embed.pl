@@ -1572,10 +1572,10 @@ p	|OP*	|scalar		|OP* o
 p	|OP*	|scalarkids	|OP* o
 p	|OP*	|scalarseq	|OP* o
 p	|OP*	|scalarvoid	|OP* o
-p	|UV	|scan_bin	|char* start|I32 len|I32* retlen
-p	|UV	|scan_hex	|char* start|I32 len|I32* retlen
+p	|NV	|scan_bin	|char* start|I32 len|I32* retlen
+p	|NV	|scan_hex	|char* start|I32 len|I32* retlen
 p	|char*	|scan_num	|char* s
-p	|UV	|scan_oct	|char* start|I32 len|I32* retlen
+p	|NV	|scan_oct	|char* start|I32 len|I32* retlen
 p	|OP*	|scope		|OP* o
 p	|char*	|screaminstr	|SV* bigsv|SV* littlesv|I32 start_shift \
 				|I32 end_shift|I32 *state|I32 last
@@ -1932,9 +1932,10 @@ s	|char*|regwhite	|char *|char *
 s	|char*|nextchar
 s	|regnode*|dumpuntil	|regnode *start|regnode *node \
 				|regnode *last|SV* sv|I32 l
-s	|void	|scan_commit	|scan_data_t *data
+s	|void	|scan_commit	|struct scan_data_t *data
 s	|I32	|study_chunk	|regnode **scanp|I32 *deltap \
-				|regnode *last|scan_data_t *data|U32 flags
+				|regnode *last|struct scan_data_t *data \
+				|U32 flags
 s	|I32	|add_data	|I32 n|char *s
 rs	|void|re_croak2	|const char* pat1|const char* pat2|...
 s	|I32	|regpposixcc	|I32 value

@@ -23,6 +23,9 @@
 #define VOIDUSED 1
 #include "config.h"
 
+/* See L<perlguts/"The Perl API"> for detailed notes on
+ * PERL_IMPLICIT_CONTEXT and PERL_IMPLICIT_SYS */
+
 /* XXXXXX testing threads via implicit pointer */
 #ifdef USE_THREADS
 #  ifndef PERL_IMPLICIT_CONTEXT
@@ -173,7 +176,9 @@ struct perl_thread;
 #    define dTHX	dTHXa(THR)
 #    define dTHR	dNOOP
 #  else
-#    define MULTIPLICITY
+#    ifndef MULTIPLICITY
+#      define MULTIPLICITY
+#    endif
 #    define pTHX	register PerlInterpreter *my_perl
 #    define aTHX	my_perl
 #    define dTHXa(a)	pTHX = (PerlInterpreter *)a
@@ -328,7 +333,7 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 # define STANDARD_C 1
 #endif
 
-#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(OS2) || defined(__DGUX) || defined( EPOC)
+#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(OS2) || defined(__DGUX) || defined( EPOC) || defined(__QNX__)
 # define DONT_DECLARE_STD 1
 #endif
 
@@ -502,12 +507,10 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 
 #ifdef MYMALLOC
 #  ifdef PERL_POLLUTE_MALLOC
-#   ifndef PERL_EXTMALLOC_DEF
 #    define Perl_malloc		malloc
 #    define Perl_calloc		calloc
 #    define Perl_realloc	realloc
 #    define Perl_mfree		free
-#   endif
 #  else
 #    define EMBEDMYMALLOC	/* for compatibility */
 #  endif
@@ -1022,6 +1025,10 @@ Free_t   Perl_mfree (Malloc_t where);
 #    define UV_MAX PERL_UQUAD_MAX
 #    define UV_MIN PERL_UQUAD_MIN
 #  endif
+#  define IV_SIZEOF 8
+#  define UV_SIZEOF 8
+#  define IV_IS_QUAD
+#  define UV_IS_QUAD
 #else
    typedef          long               IV;
    typedef	    unsigned long      UV;
@@ -1036,6 +1043,17 @@ Free_t   Perl_mfree (Malloc_t where);
 #    define UV_MAX PERL_ULONG_MAX
 #    define UV_MIN PERL_ULONG_MIN
 #  endif
+#  define UV_SIZEOF LONGSIZE
+#  define IV_SIZEOF LONGSIZE
+#  if LONGSIZE == 8
+#    define IV_IS_QUAD
+#    define UV_IS_QUAD
+#  else
+#    undef IV_IS_QUAD
+#    undef UV_IS_QUAD
+#  endif
+#  define UV_SIZEOF LONGSIZE
+#  define IV_SIZEOF LONGSIZE
 #endif
 
 #ifdef USE_LONG_DOUBLE
@@ -1057,7 +1075,6 @@ Free_t   Perl_mfree (Malloc_t where);
 #   define Perl_atan2 atan2l
 #   define Perl_pow powl
 #   define Perl_floor floorl
-#   define Perl_atof atof
 #   define Perl_fmod fmodl
 #else
     typedef double NV;
@@ -1071,8 +1088,13 @@ Free_t   Perl_mfree (Malloc_t where);
 #   define Perl_atan2 atan2
 #   define Perl_pow pow
 #   define Perl_floor floor
-#   define Perl_atof atof		/* At some point there may be an atolf */
 #   define Perl_fmod fmod
+#endif
+
+#if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE) && defined(HAS_ATOLF)
+#   define Perl_atof atolf
+#else
+#   define Perl_atof atof
 #endif
 
 /* Previously these definitions used hardcoded figures. 
@@ -1440,6 +1462,10 @@ typedef union any ANY;
 #   endif
 #endif
 
+#if defined(OS2)
+#  include "iperlsys.h"
+#endif
+
 #if defined(__OPEN_VM)
 # include "vmesa/vmesaish.h"
 #endif
@@ -1639,7 +1665,7 @@ typedef pthread_key_t	perl_key;
 #   endif
 #endif
 
-#if defined(CYGWIN32)
+#if defined(CYGWIN)
 /* USEMYBINMODE
  *   This symbol, if defined, indicates that the program should
  *   use the routine my_binmode(FILE *fp, char iotype) to insure
@@ -1648,7 +1674,7 @@ typedef pthread_key_t	perl_key;
  */
 #  define USEMYBINMODE / **/
 #  define my_binmode(fp, iotype) \
-            (PerlLIO_setmode(PerlIO_fileno(fp), O_BINARY) != -1 ? TRUE : NULL)
+            (PerlLIO_setmode(PerlIO_fileno(fp), O_BINARY) != -1 ? TRUE : FALSE)
 #endif
 
 #ifdef UNION_ANY_DEFINITION
@@ -1669,25 +1695,15 @@ union any {
 #define ARGSproto
 #endif /* USE_THREADS */
 
-#if defined(CYGWIN32)
-/* USEMYBINMODE
- *   This symbol, if defined, indicates that the program should
- *   use the routine my_binmode(FILE *fp, char iotype) to insure
- *   that a file is in "binary" mode -- that is, that no translation
- *   of bytes occurs on read or write operations.
- */
-#define USEMYBINMODE / **/
-#define my_binmode(fp, iotype) \
-        (PerlLIO_setmode(PerlIO_fileno(fp), O_BINARY) != -1 ? TRUE : FALSE)
-#endif
-
 typedef I32 (*filter_t) (pTHXo_ int, SV *, int);
 
 #define FILTER_READ(idx, sv, len)  filter_read(idx, sv, len)
 #define FILTER_DATA(idx)	   (AvARRAY(PL_rsfp_filters)[idx])
 #define FILTER_ISREADER(idx)	   (idx >= AvFILLp(PL_rsfp_filters))
 
-#include "iperlsys.h"
+#if !defined(OS2)
+#  include "iperlsys.h"
+#endif
 #include "regexp.h"
 #include "sv.h"
 #include "util.h"
@@ -1728,25 +1744,7 @@ struct _sublex_info {
 
 typedef struct magic_state MGS;	/* struct magic_state defined in mg.c */
 
-/* Length of a variant. */
-
-typedef struct {
-    I32 len_min;
-    I32 len_delta;
-    I32 pos_min;
-    I32 pos_delta;
-    SV *last_found;
-    I32 last_end;			/* min value, <0 unless valid. */
-    I32 last_start_min;
-    I32 last_start_max;
-    SV **longest;			/* Either &l_fixed, or &l_float. */
-    SV *longest_fixed;
-    I32 offset_fixed;
-    SV *longest_float;
-    I32 offset_float_min;
-    I32 offset_float_max;
-    I32 flags;
-} scan_data_t;
+struct scan_data_t;		/* Used in S_* functions in regcomp.c */
 
 typedef I32 CHECKPOINT;
 
@@ -2480,6 +2478,7 @@ public:
 	CPerlObj(IPerlMem*, IPerlEnv*, IPerlStdIO*, IPerlLIO*, IPerlDir*, IPerlSock*, IPerlProc*);
 	void Init(void);
 	void* operator new(size_t nSize, IPerlMem *pvtbl);
+	static void operator delete(void* pPerl, IPerlMem *pvtbl);
 #endif /* PERL_OBJECT */
 
 #ifdef PERL_GLOBAL_STRUCT
@@ -2491,7 +2490,7 @@ struct perl_vars {
 EXT struct perl_vars PL_Vars;
 EXT struct perl_vars *PL_VarsPtr INIT(&PL_Vars);
 #else /* PERL_CORE */
-#if !defined(__GNUC__) || !(defined(WIN32) || defined(CYGWIN32))
+#if !defined(__GNUC__) || !(defined(WIN32) || defined(CYGWIN))
 EXT
 #endif /* WIN32 */
 struct perl_vars *PL_VarsPtr;
@@ -2972,6 +2971,18 @@ typedef struct am_table_short AMTS;
 #define Atof				Perl_atof
 
 #endif /* !USE_LOCALE_NUMERIC */
+
+#if defined(USE_LONG_LONG) && defined(HAS_LONG_LONG) && defined(HAS_ATOLL)
+#define Atol atoll 
+#else
+#define Atol atol
+#endif
+
+#if defined(USE_LONG_LONG) && defined(HAS_LONG_LONG) && defined(HAS_STRTOULL)
+#define Strtoul strtoull
+#else
+#define Strtoul strtoul
+#endif
 
 #if !defined(PERLIO_IS_STDIO) && defined(HASATTRIBUTE)
 /* 

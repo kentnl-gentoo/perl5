@@ -303,7 +303,7 @@ ext.libs: $(static_ext)
 # Load up custom Makefile.SH fragment for shared loading and executables:
 case "$osname" in
 cygwin*)
-	Makefile_s="cygwin32/Makefile.SHs"
+	Makefile_s="cygwin/Makefile.SHs"
 	;;
 *)
 	Makefile_s="$osname/Makefile.SHs"
@@ -332,7 +332,7 @@ $(LIBPERL_NONSHR): perl$(OBJ_EXT) $(obj)
 	$(AR) rcu $(LIBPERL_NONSHR) perl$(OBJ_EXT) $(obj)
 
 $(MINIPERL_NONSHR): $(LIBPERL_NONSHR) miniperlmain$(OBJ_EXT)
-	$(CC) -o $(MINIPERL_NONSHR) miniperlmain$(OBJ_EXT) $(LIBPERL_NONSHR) $(LIBS)
+	$(CC) $(LDFLAGS) -o $(MINIPERL_NONSHR) miniperlmain$(OBJ_EXT) $(LIBPERL_NONSHR) $(LIBS)
 
 MINIPERLEXP		= $(MINIPERL_NONSHR)
 
@@ -354,6 +354,16 @@ PERLEXPORT		= perl.exp
 perl.exp: $(MINIPERLEXP) makedef.pl config.sh $(SYM) $(SYMH)
 	./$(MINIPERLEXP) makedef.pl PLATFORM=aix | sort -u | sort -f > perl.exp.tmp
 	sh mv-if-diff perl.exp.tmp perl.exp
+
+!NO!SUBS!
+	;;
+os2)
+	$spitshell >>Makefile <<'!NO!SUBS!'
+MINIPERLEXP		= miniperl
+
+perl5.def: $(MINIPERLEXP) makedef.pl config.sh $(SYM) $(SYMH) miniperl.map
+	./$(MINIPERLEXP) makedef.pl PLATFORM=os2 -DPERL_DLL=$(PERL_DLL) > perl.exp.tmp
+	sh mv-if-diff perl.exp.tmp perl5.def
 
 !NO!SUBS!
 	;;
@@ -611,7 +621,7 @@ _cleaner:
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	$(LDLIBPTH) sh ext/util/make_ext realclean $$x MAKE=$(MAKE) ; \
 	done
-	rm -f *.orig */*.orig *~ */*~ core core.perl.*.? core.miniperl.*.? perl.core miniperl.core t/core t/core.perl.*.? t/perl.core t/tmp???? t/c t/perl so_locations t/nonexistent1 so_locations $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
+	rm -f *.orig */*.orig *~ */*~ core core.perl.*.? core.miniperl.*.? perl.core miniperl.core t/core t/core.perl.*.? t/perl.core t/tmp???? t/c t/perl so_locations t/nonexistent1 $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
 	rm -rf $(addedbyconf)
 	rm -f $(FIRSTMAKEFILE) $(FIRSTMAKEFILE).old
 	rm -f $(private)
