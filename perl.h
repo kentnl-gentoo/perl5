@@ -1380,7 +1380,7 @@ typedef I32 (*filter_t) _((int, SV *, int));
 #      else
 #        ifdef I_MACH_CTHREADS
 #          include <mach/cthreads.h>
-#          ifdef NeXT
+#          if defined(__NeXT__) && defined(PERL_POLLUTE_MALLOC)
 #            define MUTEX_INIT_CALLS_MALLOC
 #          endif
 typedef cthread_t	perl_os_thread;
@@ -1613,7 +1613,7 @@ typedef I32 CHECKPOINT;
 # define HAS_VTOHS
 # define HAS_HTOVL
 # define HAS_HTOVS
-# if BYTEORDER == 0x4321
+# if BYTEORDER == 0x4321 || BYTEORDER == 0x87654321
 #  define vtohl(x)	((((x)&0xFF)<<24)	\
 			+(((x)>>24)&0xFF)	\
 			+(((x)&0x0000FF00)<<8)	\

@@ -1,6 +1,6 @@
 =head1 NAME
 
-perldelta - what's new for perl5.006 (as of 5.005_54)
+perldelta - what's new for perl5.006 (as of 5.005_56)
 
 =head1 DESCRIPTION
 
@@ -82,6 +82,17 @@ maintenance versions.
 
 =head1 Core Changes
 
+=head2 Unicode and UTF-8 support
+
+Perl can optionally use UTF-8 as its internal representation for character
+strings.  The C<use utf8> pragma enables this support in the current lexical
+scope.  See L<utf8> for more information.
+
+=head2 Lexically scoped warning categories
+
+You can now control the granularity of warnings emitted by perl at a finer
+level using the C<use warning> pragma.  See L<warning> for details.
+
 =head2 Binary numbers supported
 
 Binary numbers are now supported as literals, in s?printf formats, and
@@ -145,6 +156,33 @@ now correctly prints "3|a", instead of "2|a".
 The new format type 'Z' is useful for packing and unpacking null-terminated
 strings.  See L<perlfunc/"pack">.
 
+=head2 pack() format modifier '_' supported
+
+The new format type modifer '_' is useful for packing and unpacking
+native shorts, ints, and longs.  See L<perlfunc/"pack">.
+
+=head2 $^X variables may now have names longer than one character
+
+Formerly, $^X was synonymous with ${"\cX"}, but $^XY was a syntax
+error.  Now variable names that begin with a control character may be
+arbitrarily long.  However, for compatibility reasons, these variables
+I<must> be written with explicit braces, as C<${^XY}> for example.
+C<${^XYZ}> is synonymous with ${"\cXYZ"}. Variable names with more
+than one control character, such as C<${^XY^Z}>, are illegal.
+
+The old syntax has not changed.  As before, the `^X' may either be a
+literal control-X character or the two character sequence `caret' plus
+`X'.  When the braces are omitted, the variable name stops after the
+control character.  Thus C<"$^XYZ"> continues to be synonymous with
+C<$^X . "YZ"> as before.  
+
+As before, lexical variables may not have names beginning with control
+characters.  As before, variables whose names begin with a control
+character are always forced to be in package `main'.  These variables
+are all reserved for future extensions, except the ones that begin
+with C<^_>, which may be used by user programs and will not acquire a
+special meaning in any future version of Perl.
+
 =head1 Significant bug fixes
 
 =head2 E<lt>HANDLEE<gt> on empty files
@@ -164,11 +202,6 @@ Note that the behavior of:
 
 is unchanged (it continues to leave the file empty).
 
-=head2 pack() format modifier '_' supported
-
-The new format type modifer '_' is useful for packing and unpacking
-native shorts, ints, and longs.  See L<perlfunc/"pack">.
-
 =head1 Supported Platforms
 
 =over 4
@@ -179,11 +212,16 @@ VM/ESA is now supported.
 
 =item *
 
-Siemens BS200 is now supported.
+Siemens BS2000 is now supported under the POSIX Shell.
 
 =item *
 
-The Mach CThreads (NeXTstep) are now supported by the Thread extension.
+The Mach CThreads (NEXTSTEP, OPENSTEP) are now supported by the Thread
+extension.
+
+=item *
+
+GNU/Hurd is now supported.
 
 =back
 
@@ -264,9 +302,11 @@ consistently croak() if the date falls in an unsupported range.
 
 =head2 Pragmata
 
-Lexical warnings pragma, "use warning;", to control optional warnings.
+C<use utf8;>, to enable UTF-8 and Unicode support.
 
-Filetest pragma, to control the behaviour of filetests (C<-r> C<-w> ...).
+Lexical warnings pragma, C<use warning;>, to control optional warnings.
+
+C<use filetest;>, to control the behaviour of filetests (C<-r> C<-w> ...).
 Currently only one subpragma implemented, "use filetest 'access';",
 that enables the use of access(2) or equivalent to check the
 permissions instead of using stat(2) as usual.  This matters

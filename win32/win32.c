@@ -471,7 +471,6 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     int status;
     int flag = P_WAIT;
     int index = 0;
-    STRLEN n_a;
 
     if (sp <= mark)
 	return -1;
@@ -485,7 +484,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     }
 
     while (++mark <= sp) {
-	if (*mark && (str = SvPV(*mark, n_a)))
+	if (*mark && (str = SvPV_nolen(*mark)))
 	    argv[index++] = str;
 	else
 	    argv[index++] = "";
@@ -493,7 +492,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     argv[index++] = 0;
    
     status = win32_spawnvp(flag,
-			   (const char*)(really ? SvPV(really,n_a) : argv[0]),
+			   (const char*)(really ? SvPV_nolen(really) : argv[0]),
 			   (const char* const*)argv);
 
     if (status < 0 && (errno == ENOEXEC || errno == ENOENT)) {
@@ -506,7 +505,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
 	    argv[sh_items] = w32_perlshell_vec[sh_items];
    
 	status = win32_spawnvp(flag,
-			       (const char*)(really ? SvPV(really,n_a) : argv[0]),
+			       (const char*)(really ? SvPV_nolen(really) : argv[0]),
 			       (const char* const*)argv);
     }
 
@@ -2235,21 +2234,22 @@ XS(w32_GetCwd)
      *   then it worked, set PV valid, 
      *   else leave it 'undef' 
      */
-    if (SvCUR(sv))
-	SvPOK_on(sv);
     EXTEND(SP,1);
-    ST(0) = sv;
-    XSRETURN(1);
+    if (SvCUR(sv)) {
+	SvPOK_on(sv);
+	ST(0) = sv;
+	XSRETURN(1);
+    }
+    XSRETURN_UNDEF;
 }
 
 static
 XS(w32_SetCwd)
 {
     dXSARGS;
-    STRLEN n_a;
     if (items != 1)
 	croak("usage: Win32::SetCurrentDirectory($cwd)");
-    if (SetCurrentDirectory(SvPV(ST(0),n_a)))
+    if (SetCurrentDirectory(SvPV_nolen(ST(0))))
 	XSRETURN_YES;
 
     XSRETURN_NO;
@@ -2261,6 +2261,8 @@ XS(w32_GetNextAvailDrive)
     dXSARGS;
     char ix = 'C';
     char root[] = "_:\\";
+
+    EXTEND(SP,1);
     while (ix <= 'Z') {
 	root[0] = ix++;
 	if (GetDriveType(root) == 1) {
@@ -2275,6 +2277,7 @@ static
 XS(w32_GetLastError)
 {
     dXSARGS;
+    EXTEND(SP,1);
     XSRETURN_IV(GetLastError());
 }
 
@@ -2285,7 +2288,7 @@ XS(w32_SetLastError)
     if (items != 1)
 	croak("usage: Win32::SetLastError($error)");
     SetLastError(SvIV(ST(0)));
-    XSRETURN_UNDEF;
+    XSRETURN_EMPTY;
 }
 
 static
@@ -2294,6 +2297,7 @@ XS(w32_LoginName)
     dXSARGS;
     char *name = getlogin_buffer;
     DWORD size = sizeof(getlogin_buffer);
+    EXTEND(SP,1);
     if (GetUserName(name,&size)) {
 	/* size includes NULL */
 	ST(0) = sv_2mortal(newSVpv(name,size-1));
@@ -2308,6 +2312,7 @@ XS(w32_NodeName)
     dXSARGS;
     char name[MAX_COMPUTERNAME_LENGTH+1];
     DWORD size = sizeof(name);
+    EXTEND(SP,1);
     if (GetComputerName(name,&size)) {
 	/* size does NOT include NULL :-( */
 	ST(0) = sv_2mortal(newSVpv(name,size));
@@ -2325,6 +2330,7 @@ XS(w32_DomainName)
     /* mingw32 (and Win95) don't have NetWksta*(), so do it the old way */
     char name[256];
     DWORD size = sizeof(name);
+    EXTEND(SP,1);
     if (GetUserName(name,&size)) {
 	char sid[1024];
 	DWORD sidlen = sizeof(sid);
@@ -2343,6 +2349,7 @@ XS(w32_DomainName)
     char dname[256];
     DWORD dnamelen = sizeof(dname);
     PWKSTA_INFO_100 pwi;
+    EXTEND(SP,1);
     if (NERR_Success == NetWkstaGetInfo(NULL, 100, (LPBYTE*)&pwi)) {
 	if (pwi->wki100_langroup && *(pwi->wki100_langroup)) {
 	    WideCharToMultiByte(CP_ACP, NULL, pwi->wki100_langroup,
@@ -2367,16 +2374,17 @@ XS(w32_FsType)
     DWORD flags, filecomplen;
     if (GetVolumeInformation(NULL, NULL, 0, NULL, &filecomplen,
 			 &flags, fsname, sizeof(fsname))) {
-	if (GIMME == G_ARRAY) {
+	if (GIMME_V == G_ARRAY) {
 	    XPUSHs(sv_2mortal(newSVpv(fsname,0)));
 	    XPUSHs(sv_2mortal(newSViv(flags)));
 	    XPUSHs(sv_2mortal(newSViv(filecomplen)));
 	    PUTBACK;
 	    return;
 	}
+	EXTEND(SP,1);
 	XSRETURN_PV(fsname);
     }
-    XSRETURN_UNDEF;
+    XSRETURN_EMPTY;
 }
 
 static
@@ -2395,13 +2403,14 @@ XS(w32_GetOSVersion)
 	PUTBACK;
 	return;
     }
-    XSRETURN_UNDEF;
+    XSRETURN_EMPTY;
 }
 
 static
 XS(w32_IsWinNT)
 {
     dXSARGS;
+    EXTEND(SP,1);
     XSRETURN_IV(IsWinNT());
 }
 
@@ -2409,6 +2418,7 @@ static
 XS(w32_IsWin95)
 {
     dXSARGS;
+    EXTEND(SP,1);
     XSRETURN_IV(IsWin95());
 }
 
@@ -2438,13 +2448,12 @@ XS(w32_Spawn)
     PROCESS_INFORMATION stProcInfo;
     STARTUPINFO stStartInfo;
     BOOL bSuccess = FALSE;
-    STRLEN n_a;
 
     if (items != 3)
 	croak("usage: Win32::Spawn($cmdName, $args, $PID)");
 
-    cmd = SvPV(ST(0),n_a);
-    args = SvPV(ST(1), n_a);
+    cmd = SvPV_nolen(ST(0));
+    args = SvPV_nolen(ST(1));
 
     memset(&stStartInfo, 0, sizeof(stStartInfo));   /* Clear the block */
     stStartInfo.cb = sizeof(stStartInfo);	    /* Set the structure size */
@@ -2474,6 +2483,7 @@ static
 XS(w32_GetTickCount)
 {
     dXSARGS;
+    EXTEND(SP,1);
     XSRETURN_IV(GetTickCount());
 }
 
@@ -2498,10 +2508,9 @@ XS(w32_GetShortPathName)
     if (len) {
 	SvCUR_set(shortpath,len);
 	ST(0) = shortpath;
+	XSRETURN(1);
     }
-    else
-	ST(0) = &PL_sv_undef;
-    XSRETURN(1);
+    XSRETURN_UNDEF;
 }
 
 static
@@ -2528,16 +2537,15 @@ XS(w32_GetFullPathName)
     if (len) {
 	if (GIMME_V == G_ARRAY) {
 	    EXTEND(SP,1);
-	    ST(1) = sv_2mortal(newSVpv(filepart,0));
+	    XST_mPV(1,filepart);
 	    len = filepart - SvPVX(fullpath);
 	    items = 2;
 	}
 	SvCUR_set(fullpath,len);
 	ST(0) = fullpath;
+	XSRETURN(items);
     }
-    else
-	ST(0) = &PL_sv_undef;
-    XSRETURN(items);
+    XSRETURN_EMPTY;
 }
 
 static

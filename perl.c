@@ -563,6 +563,9 @@ perl_destruct(register PerlInterpreter *sv_interp)
     MUTEX_DESTROY(&PL_eval_mutex);
     MUTEX_DESTROY(&PL_cred_mutex);
     COND_DESTROY(&PL_eval_cond);
+#ifdef EMULATE_ATOMIC_REFCOUNTS
+    MUTEX_DESTROY(&PL_svref_mutex);
+#endif /* EMULATE_ATOMIC_REFCOUNTS */
 
     /* As the penultimate thing, free the non-arena SV for thrsv */
     Safefree(SvPVX(PL_thrsv));
@@ -2117,6 +2120,13 @@ sed %s -e \"/^[^#]/b\" \
 	  SvPVX(GvSV(PL_curcop->cop_filegv)), Strerror(errno));
     }
 }
+
+/* Mention
+ * I_SYSSTATVFS	HAS_FSTATVFS
+ * I_SYSMOUNT
+ * I_STATFS	HAS_FSTATFS
+ * I_MNTENT	HAS_GETMNTENT	HAS_HASMNTOPT
+ * here so that metaconfig picks them up. */
 
 #ifdef IAMSUID
 static int
