@@ -14,11 +14,12 @@
 #include "EXTERN.h"
 #include "perl.h"
 
+#ifndef PERL_OBJECT
 static void check_uni _((void));
 static void  force_next _((I32 type));
 static char *force_version _((char *start));
 static char *force_word _((char *start, int token, int check_keyword, int allow_pack, int allow_tick));
-static SV *q _((SV *sv));
+static SV *tokeq _((SV *sv));
 static char *scan_const _((char *start));
 static char *scan_formline _((char *s));
 static char *scan_heredoc _((char *s));
@@ -51,18 +52,9 @@ static char * filter_gets _((SV *sv, PerlIO *fp, STRLEN append));
 static void restore_rsfp _((void *f));
 static void restore_expect _((void *e));
 static void restore_lex_expect _((void *e));
+#endif /* PERL_OBJECT */
 
 static char ident_too_long[] = "Identifier too long";
-
-static char *linestart;		/* beg. of most recently read line */
-
-static char pending_ident;	/* pending identifier lookup */
-
-static struct {
-    I32 super_state;	/* lexer state to save */
-    I32 sub_inwhat;	/* "lex_inwhat" to use */
-    OP *sub_op;		/* "lex_op" to use */
-} sublex_info;
 
 /* The following are arranged oddly so that the guard on the switch statement
  * can get by with a single comparison (if the compiler is smart enough).
@@ -145,7 +137,7 @@ static struct {
 /* grandfather return to old style */
 #define OLDLOP(f) return(yylval.ival=f,expect = XTERM,bufptr = s,(int)LSTOP)
 
-static int
+STATIC int
 ao(int toketype)
 {
     if (*bufptr == '=') {
@@ -159,7 +151,7 @@ ao(int toketype)
     return toketype;
 }
 
-static void
+STATIC void
 no_op(char *what, char *s)
 {
     char *oldbp = bufptr;
@@ -182,14 +174,14 @@ no_op(char *what, char *s)
     bufptr = oldbp;
 }
 
-static void
+STATIC void
 missingterm(char *s)
 {
     char tmpbuf[3];
     char q;
     if (s) {
 	char *nl = strrchr(s,'\n');
-	if (nl) 
+	if (nl)
 	    *nl = '\0';
     }
     else if (multi_close < 32 || multi_close == 127) {
@@ -215,7 +207,7 @@ deprecate(char *s)
 	warn("Use of %s is deprecated", s);
 }
 
-static void
+STATIC void
 depcom(void)
 {
     deprecate("comma-less variable list");
@@ -223,7 +215,7 @@ depcom(void)
 
 #ifdef WIN32
 
-static I32
+STATIC I32
 win32_textfilter(int idx, SV *sv, int maxlen)
 {
  I32 count = FILTER_READ(idx+1, sv, maxlen);
@@ -305,7 +297,7 @@ lex_end(void)
     doextract = FALSE;
 }
 
-static void
+STATIC void
 restore_rsfp(void *f)
 {
     PerlIO *fp = (PerlIO*)f;
@@ -317,23 +309,21 @@ restore_rsfp(void *f)
     rsfp = fp;
 }
 
-static void
-restore_expect(e)
-void *e;
+STATIC void
+restore_expect(void *e)
 {
     /* a safe way to store a small integer in a pointer */
     expect = (expectation)((char *)e - tokenbuf);
 }
 
-static void
-restore_lex_expect(e)
-void *e;
+STATIC void
+restore_lex_expect(void *e)
 {
     /* a safe way to store a small integer in a pointer */
     lex_expect = (expectation)((char *)e - tokenbuf);
 }
 
-static void
+STATIC void
 incline(char *s)
 {
     dTHR;
@@ -374,7 +364,7 @@ incline(char *s)
     curcop->cop_line = atoi(n)-1;
 }
 
-static char *
+STATIC char *
 skipspace(register char *s)
 {
     dTHR;
@@ -413,8 +403,6 @@ skipspace(register char *s)
 		PerlIO_clearerr(rsfp);
 	    else
 		(void)PerlIO_close(rsfp);
-	    if (e_fp == rsfp)
-		e_fp = Nullfp;
 	    rsfp = Nullfp;
 	    return s;
 	}
@@ -432,7 +420,7 @@ skipspace(register char *s)
     }
 }
 
-static void
+STATIC void
 check_uni(void) {
     char *s;
     char ch;
@@ -456,7 +444,7 @@ check_uni(void) {
 #undef UNI
 #define UNI(f) return uni(f,s)
 
-static int
+STATIC int
 uni(I32 f, char *s)
 {
     yylval.ival = f;
@@ -477,7 +465,7 @@ uni(I32 f, char *s)
 
 #define LOP(f,x) return lop(f,x,s)
 
-static I32
+STATIC I32
 lop(I32 f, expectation x, char *s)
 {
     dTHR;
@@ -498,7 +486,7 @@ lop(I32 f, expectation x, char *s)
 	return LSTOP;
 }
 
-static void 
+STATIC void 
 force_next(I32 type)
 {
     nexttype[nexttoke] = type;
@@ -510,7 +498,7 @@ force_next(I32 type)
     }
 }
 
-static char *
+STATIC char *
 force_word(register char *start, int token, int check_keyword, int allow_pack, int allow_initial_tick)
 {
     register char *s;
@@ -542,7 +530,7 @@ force_word(register char *start, int token, int check_keyword, int allow_pack, i
     return s;
 }
 
-static void
+STATIC void
 force_ident(register char *s, int kind)
 {
     if (s && *s) {
@@ -565,7 +553,7 @@ force_ident(register char *s, int kind)
     }
 }
 
-static char *
+STATIC char *
 force_version(char *s)
 {
     OP *version = Nullop;
@@ -592,8 +580,8 @@ force_version(char *s)
     return (s);
 }
 
-static SV *
-q(SV *sv)
+STATIC SV *
+tokeq(SV *sv)
 {
     register char *s;
     register char *send;
@@ -625,7 +613,7 @@ q(SV *sv)
     return sv;
 }
 
-static I32
+STATIC I32
 sublex_start(void)
 {
     register I32 op_type = yylval.ival;
@@ -636,7 +624,7 @@ sublex_start(void)
 	return THING;
     }
     if (op_type == OP_CONST || op_type == OP_READLINE) {
-	SV *sv = q(lex_stuff);
+	SV *sv = tokeq(lex_stuff);
 	STRLEN len;
 	char *p = SvPV(sv, len);
 	yylval.opval = (OP*)newSVOP(op_type, 0, newSVpv(p, len));
@@ -660,7 +648,7 @@ sublex_start(void)
 	return FUNC;
 }
 
-static I32
+STATIC I32
 sublex_push(void)
 {
     dTHR;
@@ -713,7 +701,7 @@ sublex_push(void)
     return '(';
 }
 
-static I32
+STATIC I32
 sublex_done(void)
 {
     if (!lex_starts++) {
@@ -831,7 +819,7 @@ sublex_done(void)
 		  
 */
 
-static char *
+STATIC char *
 scan_const(char *start)
 {
     register char *send = bufend;		/* end of the constant */
@@ -1041,7 +1029,7 @@ scan_const(char *start)
 }
 
 /* This is the one truly awful dwimmer necessary to conflate C and sed. */
-static int
+STATIC int
 intuit_more(register char *s)
 {
     if (lex_brackets)
@@ -1078,7 +1066,7 @@ intuit_more(register char *s)
     else {
 	int weight = 2;		/* let's weigh the evidence */
 	char seen[256];
-	unsigned char un_char = 0, last_un_char;
+	unsigned char un_char = 255, last_un_char;
 	char *send = strchr(s,']');
 	char tmpbuf[sizeof tokenbuf * 4];
 
@@ -1144,6 +1132,8 @@ intuit_more(register char *s)
 		    weight += 30;
 		if (strchr("zZ79~",s[1]))
 		    weight += 30;
+		if (last_un_char == 255 && (isDIGIT(s[1]) || s[1] == '$'))
+		    weight -= 5;	/* cope with negative subscript */
 		break;
 	    default:
 		if (!isALNUM(last_un_char) && !strchr("$@&",last_un_char) &&
@@ -1169,7 +1159,7 @@ intuit_more(register char *s)
     return TRUE;
 }
 
-static int
+STATIC int
 intuit_method(char *start, GV *gv)
 {
     char *s = start + (*start == '$');
@@ -1228,7 +1218,7 @@ intuit_method(char *start, GV *gv)
     return 0;
 }
 
-static char*
+STATIC char*
 incl_perldb(void)
 {
     if (perldb) {
@@ -1357,10 +1347,10 @@ filter_read(int idx, SV *buf_sv, int maxlen)
     /* Call function. The function is expected to 	*/
     /* call "FILTER_READ(idx+1, buf_sv)" first.		*/
     /* Return: <0:error, =0:eof, >0:not eof 		*/
-    return (*funcp)(idx, buf_sv, maxlen);
+    return (*funcp)(THIS_ idx, buf_sv, maxlen);
 }
 
-static char *
+STATIC char *
 filter_gets(register SV *sv, register PerlIO *fp, STRLEN append)
 {
 #ifdef WIN32FILTER
@@ -1666,7 +1656,7 @@ yylex(void)
 	if (SvIVX(linestr) == '\'') {
 	    SV *sv = newSVsv(linestr);
 	    if (!lex_inpat)
-		sv = q(sv);
+		sv = tokeq(sv);
 	    yylval.opval = (OP*)newSVOP(OP_CONST, 0, sv);
 	    s = bufend;
 	}
@@ -1793,8 +1783,6 @@ yylex(void)
 			PerlIO_clearerr(rsfp);
 		    else
 			(void)PerlIO_close(rsfp);
-		    if (e_fp == rsfp)
-			e_fp = Nullfp;
 		    rsfp = Nullfp;
 		}
 		if (!in_eval && (minus_n || minus_p)) {
@@ -2233,13 +2221,8 @@ yylex(void)
 		else
 		    lex_brackstack[lex_brackets++] = XOPERATOR;
 		s = skipspace(s);
-		if (*s == '}') {
-		    if (expect == XSTATE) {
-			lex_brackstack[lex_brackets-1] = XSTATE;
-			break;
-		    }
+		if (*s == '}')
 		    OPERATOR(HASHBRACK);
-		}
 		/* This hack serves to disambiguate a pair of curlies
 		 * as being a block or an anon hash.  Normally, expectation
 		 * determines that, but in cases where we're not in a
@@ -3604,7 +3587,7 @@ yylex(void)
 		}
 	    }
 	    force_next(')');
-	    nextval[nexttoke].opval = (OP*)newSVOP(OP_CONST, 0, q(lex_stuff));
+	    nextval[nexttoke].opval = (OP*)newSVOP(OP_CONST, 0, tokeq(lex_stuff));
 	    lex_stuff = Nullsv;
 	    force_next(THING);
 	    force_next(',');
@@ -4658,7 +4641,7 @@ keyword(register char *d, I32 len)
     return 0;
 }
 
-static void
+STATIC void
 checkcomma(register char *s, char *name, char *what)
 {
     char *w;
@@ -4700,7 +4683,7 @@ checkcomma(register char *s, char *name, char *what)
     }
 }
 
-static char *
+STATIC char *
 scan_word(register char *s, char *dest, STRLEN destlen, int allow_package, STRLEN *slp)
 {
     register char *d = dest;
@@ -4727,7 +4710,7 @@ scan_word(register char *s, char *dest, STRLEN destlen, int allow_package, STRLE
     }
 }
 
-static char *
+STATIC char *
 scan_ident(register char *s, register char *send, char *dest, STRLEN destlen, I32 ck_uni)
 {
     register char *d;
@@ -4864,7 +4847,7 @@ void pmflag(U16 *pmfl, int ch)
 	*pmfl |= PMf_EXTENDED;
 }
 
-static char *
+STATIC char *
 scan_pat(char *start)
 {
     PMOP *pm;
@@ -4890,7 +4873,7 @@ scan_pat(char *start)
     return s;
 }
 
-static char *
+STATIC char *
 scan_subst(char *start)
 {
     register char *s;
@@ -4957,7 +4940,7 @@ scan_subst(char *start)
     return s;
 }
 
-static char *
+STATIC char *
 scan_trans(char *start)
 {
     register char* s;
@@ -5010,7 +4993,7 @@ scan_trans(char *start)
     return s;
 }
 
-static char *
+STATIC char *
 scan_heredoc(register char *s)
 {
     dTHR;
@@ -5090,7 +5073,7 @@ scan_heredoc(register char *s)
 	}
 	sv_setpvn(tmpstr,d+1,s-d);
 	s += len - 1;
-	curcop->cop_line++;     /* the preceding stmt passes a newline */
+	curcop->cop_line++;	/* the preceding stmt passes a newline */
 
 	sv_catpvn(herewas,s,bufend-s);
 	sv_setsv(linestr,herewas);
@@ -5154,7 +5137,7 @@ scan_heredoc(register char *s)
 
 */
 
-static char *
+STATIC char *
 scan_inputsymbol(char *start)
 {
     register char *s = start;		/* current position in buffer */
@@ -5290,7 +5273,7 @@ scan_inputsymbol(char *start)
 
 */
 
-static char *
+STATIC char *
 scan_str(char *start)
 {
     dTHR;
@@ -5679,7 +5662,7 @@ scan_num(char *start)
     return s;
 }
 
-static char *
+STATIC char *
 scan_formline(register char *s)
 {
     dTHR;
@@ -5749,7 +5732,7 @@ scan_formline(register char *s)
     return s;
 }
 
-static void
+STATIC void
 set_csh(void)
 {
 #ifdef CSH

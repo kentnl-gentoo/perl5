@@ -5,6 +5,13 @@
 #define PERLIO_NOT_STDIO 1
 #include "perl.h"
 #include "XSUB.h"
+#ifdef PERL_OBJECT	/* XXX _very_ temporary hacks */
+#  undef signal
+#  undef open
+#  define open PerlLIO_open3
+#  undef TAINT_PROPER
+#  define TAINT_PROPER(a)
+#endif
 #include <ctype.h>
 #ifdef I_DIRENT    /* XXX maybe better to just rely on perl.h? */
 #include <dirent.h>
@@ -23,9 +30,8 @@
 #endif
 #include <setjmp.h>
 #include <signal.h>
-#ifdef I_STDARG
 #include <stdarg.h>
-#endif
+
 #ifdef I_STDDEF
 #include <stddef.h>
 #endif
@@ -44,7 +50,7 @@
 #include <sys/types.h>
 #include <time.h>
 #ifdef I_UNISTD
-#include <unistd.h>	/* see hints/sunos_4_1.sh */
+#include <unistd.h>
 #endif
 #include <fcntl.h>
 
@@ -99,7 +105,7 @@
 #if defined (WIN32)
 #  undef mkfifo  /* #defined in perl.h */
 #  define mkfifo(a,b) not_here("mkfifo")
-#  define ttyname(a) not_here("ttyname")
+#  define ttyname(a) (char*)not_here("ttyname")
 #  define sigset_t long
 #  define pid_t long
 #  ifdef __BORLANDC__
@@ -107,6 +113,15 @@
 #  endif
 #  ifdef _MSC_VER
 #    define mode_t short
+#  endif
+#  ifdef __MINGW32__
+#    define mode_t short
+#    ifndef tzset
+#      define tzset()		not_here("tzset")
+#    endif
+#    ifndef _POSIX_OPEN_MAX
+#      define _POSIX_OPEN_MAX	FOPEN_MAX	/* XXX bogus ? */
+#    endif
 #  endif
 #  define sigaction(a,b,c)	not_here("sigaction")
 #  define sigpending(a)		not_here("sigpending")
@@ -255,12 +270,12 @@ unsigned long strtoul _((const char *, char **, int));
 #define localeconv() not_here("localeconv")
 #endif
 
-#ifndef WIN32
 #ifdef HAS_TZNAME
+#  ifndef WIN32
 extern char *tzname[];
+#  endif
 #else
 char *tzname[] = { "" , "" };
-#endif
 #endif
 
 /* XXX struct tm on some systems (SunOS4/BSD) contains extra (non POSIX)
