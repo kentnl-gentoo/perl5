@@ -14,6 +14,16 @@
 
 /* 
 =head1 Hash Manipulation Functions
+
+A HV structure represents a Perl hash. It consists mainly of an array
+of pointers, each of which points to a linked list of HE structures. The
+array is indexed by the hash function of the key, so each linked list
+represents all the hash entries with the same hash value. Each HE contains
+a pointer to the actual value, plus a pointer to a HEK structure which
+holds the key and hash value.
+
+=cut
+
 */
 
 #include "EXTERN.h"
@@ -218,7 +228,7 @@ Perl_hv_store(pTHX_ HV *hv, const char *key, I32 klen_i32, SV *val, U32 hash)
 	flags = 0;
     }
     hek = hv_fetch_common (hv, NULL, key, klen, flags,
-			   (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV), val, 0);
+			   (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV), val, hash);
     return hek ? &HeVAL(hek) : NULL;
 }
 
@@ -505,6 +515,7 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		key = (const char*)strupr((char*)key);
 		is_utf8 = 0;
 		hash = 0;
+		keysv = 0;
 
 		if (flags & HVhek_FREEKEY) {
 		    Safefree(keysave);
@@ -547,6 +558,7 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		    key = (const char*)strupr((char*)key);
 		    is_utf8 = 0;
 		    hash = 0;
+		    keysv = 0;
 
 		    if (flags & HVhek_FREEKEY) {
 			Safefree(keysave);

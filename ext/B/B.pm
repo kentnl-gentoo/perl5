@@ -7,7 +7,7 @@
 #
 package B;
 
-our $VERSION = '1.02';
+our $VERSION = '1.07';
 
 use XSLoader ();
 require Exporter;
@@ -36,7 +36,8 @@ use strict;
 @B::PVIV::ISA = qw(B::PV B::IV);
 @B::PVNV::ISA = qw(B::PV B::NV);
 @B::PVMG::ISA = 'B::PVNV';
-@B::PVLV::ISA = 'B::PVMG';
+# Change in the inheritance hierarchy post 5.8
+@B::PVLV::ISA = $] > 5.009 ? 'B::GV' : 'B::PVMG';
 @B::BM::ISA = 'B::PVMG';
 @B::AV::ISA = 'B::PVMG';
 @B::GV::ISA = 'B::PVMG';
@@ -177,7 +178,7 @@ sub walkoptree_exec {
 	$op->$method($level);
 	$ppname = $op->name;
 	if ($ppname =~
-	    /^(or(assign)?|and(assign)?|mapwhile|grepwhile|entertry|range|cond_expr)$/)
+	    /^(d?or(assign)?|and(assign)?|mapwhile|grepwhile|entertry|range|cond_expr)$/)
 	{
 	    print $prefix, uc($1), " => {\n";
 	    walkoptree_exec($op->other, $method, $level + 1);
@@ -529,7 +530,8 @@ using this module.
 B::IV, B::NV, B::RV, B::PV, B::PVIV, B::PVNV, B::PVMG, B::BM, B::PVLV,
 B::AV, B::HV, B::CV, B::GV, B::FM, B::IO. These classes correspond in
 the obvious way to the underlying C structures of similar names. The
-inheritance hierarchy mimics the underlying C "inheritance":
+inheritance hierarchy mimics the underlying C "inheritance". For 5.9 and
+later this is:
 
                              B::SV
                                |
@@ -544,6 +546,20 @@ inheritance hierarchy mimics the underlying C "inheritance":
                        \       /
                         B::PVNV
                            |
+                           |
+                        B::PVMG
+                           |
+                +-----+----+------+-----+-----+
+                |     |    |      |     |     |
+              B::BM B::AV B::GV B::HV B::CV B::IO
+                           |            |
+                        B::PVLV         |
+                                      B::FM
+
+
+For 5.8 and earlier, PVLV is a direct subclass of PVMG, so the base of this
+diagram is
+
                            |
                         B::PVMG
                            |
@@ -920,6 +936,9 @@ with the leading "class indication" prefix (C<"op_">) removed.
 
 =head2 B::OP Methods
 
+These methods get the values of similarly named fields within the OP
+data structure.  See top of C<op.h> for more info.
+
 =over 4
 
 =item next
@@ -944,11 +963,15 @@ This returns the op description from the global C PL_op_desc array
 
 =item type
 
-=item seq
+=item opt
+
+=item static
 
 =item flags
 
 =item private
+
+=item spare
 
 =back
 
