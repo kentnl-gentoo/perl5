@@ -45,6 +45,9 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
     if (strEQ(HvNAME(stash), name))
 	return &PL_sv_yes;
 
+    if (strEQ(name, "UNIVERSAL"))
+	return &PL_sv_yes;
+
     if (level > 100)
 	Perl_croak(aTHX_ "Recursive inheritance detected in package '%s'",
 		   HvNAME(stash));
@@ -112,8 +115,7 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
 	    (void)hv_store(hv,name,len,&PL_sv_no,0);
 	}
     }
-
-    return boolSV(strEQ(name, "UNIVERSAL"));
+    return &PL_sv_no;
 }
 
 /*
@@ -563,7 +565,7 @@ XS(XS_Internals_hv_clear_placehold)
             && items) {
             SV *val = hv_iterval(hv, entry);
 
-            if (val == &PL_sv_undef) {
+            if (val == &PL_sv_placeholder) {
 
                 /* It seems that I have to go back in the front of the hash
                    API to delete a hash, even though I have a HE structure

@@ -691,9 +691,12 @@ int usleep(unsigned int);
 #  define WIN32SCK_IS_STDSCK		/* don't pull in custom wsock layer */
 #endif
 
-/* In Tru64 use the 4.4BSD struct msghdr, not the 4.3 one */
-#if defined(__osf__) && defined(__alpha) && !defined(_SOCKADDR_LEN)
-#  define _SOCKADDR_LEN
+/* In Tru64 use the 4.4BSD struct msghdr, not the 4.3 one.
+ * This is important for using IPv6. 
+ * For OSF/1 3.2, however, defining _SOCKADDR_LEN would be
+ * a bad idea since it breaks send() and recv(). */
+#if defined(__osf__) && defined(__alpha) && !defined(_SOCKADDR_LEN) && !defined(DEC_OSF1_3_X)
+#   define _SOCKADDR_LEN
 #endif
 
 #if defined(HAS_SOCKET) && !defined(VMS) && !defined(WIN32) /* VMS/WIN32 handle sockets via vmsish.h/win32.h */
@@ -1971,7 +1974,7 @@ typedef struct clone_params CLONE_PARAMS;
 #    define PERL_FPU_INIT fpsetmask(0);
 #  else
 #    if defined(SIGFPE) && defined(SIG_IGN)
-#      define PERL_FPU_INIT       PL_sigfpe_saved = signal(SIGFPE, SIG_IGN)
+#      define PERL_FPU_INIT       PL_sigfpe_saved = signal(SIGFPE, SIG_IGN);
 #      define PERL_FPU_PRE_EXEC   { Sigsave_t xfpe; rsignal_save(SIGFPE, PL_sigfpe_saved, &xfpe);
 #      define PERL_FPU_POST_EXEC    rsignal_restore(SIGFPE, &xfpe); }
 #    else
@@ -2308,9 +2311,14 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 #  include "iperlsys.h"
 #endif
 
-/* [perl #22371] Algorimic Complexity Attack on Perl 5.6.1, 5.8.0 */
+/* [perl #22371] Algorimic Complexity Attack on Perl 5.6.1, 5.8.0.
+ * Note that the USE_HASH_SEED and USE_HASH_SEED_EXPLICIT are *NOT*
+ * defined by Configure, despite their names being similar to the
+ * other defines like USE_ITHREADS.  Configure in fact knows nothing
+ * about the randomised hashes.  Therefore to enable/disable the hash
+ * randomisation defines use the Configure -Accflags=... instead. */
 #if !defined(NO_HASH_SEED) && !defined(USE_HASH_SEED) && !defined(USE_HASH_SEED_EXPLICIT)
-#  define USE_HASH_SEED_EXPLICIT
+#  define USE_HASH_SEED
 #endif
 
 #include "regexp.h"

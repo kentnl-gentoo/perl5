@@ -219,6 +219,9 @@ perl_construct(pTHXx)
 	    SvNV(&PL_sv_yes);
 	    SvREADONLY_on(&PL_sv_yes);
 	    SvREFCNT(&PL_sv_yes) = (~(U32)0)/2;
+
+	    SvREADONLY_on(&PL_sv_placeholder);
+	    SvREFCNT(&PL_sv_placeholder) = (~(U32)0)/2;
 	}
 
 	PL_sighandlerp = Perl_sighandler;
@@ -896,6 +899,9 @@ perl_destruct(pTHXx)
     SvREFCNT(&PL_sv_undef) = 0;
     SvREADONLY_off(&PL_sv_undef);
 
+    SvREFCNT(&PL_sv_placeholder) = 0;
+    SvREADONLY_off(&PL_sv_placeholder);
+
     Safefree(PL_origfilename);
     Safefree(PL_reg_start_tmp);
     if (PL_reg_curpm)
@@ -1031,9 +1037,10 @@ setuid perl scripts securely.\n");
     /* [perl #22371] Algorimic Complexity Attack on Perl 5.6.1, 5.8.0
      * This MUST be done before any hash stores or fetches take place.
      * If you set PL_hash_seed (and assumedly also PL_hash_seed_set) yourself,
-     * it is your responsibility to provide a good random seed! */
+     * it is your responsibility to provide a good random seed!
+     * You can also define PERL_HASH_SEED in compile time, see hv.h. */
     if (!PL_hash_seed_set)
-	 PL_hash_seed = get_seed();
+	 PL_hash_seed = get_hash_seed();
     {
 	 char *s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG");
 
@@ -1058,7 +1065,7 @@ setuid perl scripts securely.\n");
 	 * the area we are able to modify is limited to the size of
 	 * the original argv[0].  (See below for 'contiguous', though.)
 	 * --jhi */
-	 char *s;
+	 char *s = NULL;
 	 int i;
 	 UV mask =
 	   ~(UV)(PTRSIZE == 4 ? 3 : PTRSIZE == 8 ? 7 : PTRSIZE == 16 ? 15 : 0);
@@ -1075,26 +1082,27 @@ setuid perl scripts securely.\n");
 	  * PTRSIZE bytes.  As long as no system has something bizarre
 	  * like the argv[] interleaved with some other data, we are
 	  * fine.  (Did I just evoke Murphy's Law?)  --jhi */
-	 s = PL_origargv[0];
-	 while (*s) s++;
-	 for (i = 1; i < PL_origargc; i++) {
-	      if ((PL_origargv[i] == s + 1
+	 if (PL_origargv && PL_origargc >= 1 && (s = PL_origargv[0])) {
+	      while (*s) s++;
+	      for (i = 1; i < PL_origargc; i++) {
+		   if ((PL_origargv[i] == s + 1
 #ifdef OS2
-		   || PL_origargv[i] == s + 2
+			|| PL_origargv[i] == s + 2
 #endif 
-		  )
-		  ||
-		  (aligned &&
-		   (PL_origargv[i] >  s &&
-		    PL_origargv[i] <=
-		    INT2PTR(char *, PTR2UV(s + PTRSIZE) & mask)))
-		 )
-	      {
-		   s = PL_origargv[i];
-		   while (*s) s++;
+			    )
+		       ||
+		       (aligned &&
+			(PL_origargv[i] >  s &&
+			 PL_origargv[i] <=
+			 INT2PTR(char *, PTR2UV(s + PTRSIZE) & mask)))
+			)
+		   {
+			s = PL_origargv[i];
+			while (*s) s++;
+		   }
+		   else
+			break;
 	      }
-	      else
-		   break;
 	 }
 	 /* Can we grab env area too to be used as the area for $0? */
 	 if (PL_origenviron) {

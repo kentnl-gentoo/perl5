@@ -104,6 +104,13 @@ true)
 
 	case "$osname" in
 	linux)
+	    # If there is a pre-existing $libperl from a previous
+	    # installation, Linux needs to use LD_PRELOAD to
+	    # override the LD_LIBRARY_PATH setting.  See the
+	    # INSTALL file, under "Building a shared perl library".
+	    # If there is no pre-existing $libperl, we don't need
+	    # to do anything further.
+	    if test -f $archlib/CORE/$libperl; then
 		rm -f preload
 		cat <<'EOT' > preload
 #! /bin/sh
@@ -114,7 +121,8 @@ exec "$@"
 EOT
 		chmod 755 preload
 		ldlibpth="$ldlibpth `pwd`/preload `pwd`/$libperl"
-		;;
+	    fi
+	    ;;
 	os390)	test -f /bin/env && ldlibpth="/bin/env $ldlibpth"
 		;;
 	esac
@@ -780,11 +788,11 @@ install.perl:	all installperl
 		cd ../pod; $(MAKE) compile; \
 	else :; \
 	fi
-	$(LDLIBPTH) ./perl installperl $(INSTALLFLAGS) $(STRIPFLAGS)
+	$(LDLIBPTH) ./perl installperl --destdir=$(DESTDIR) $(INSTALLFLAGS) $(STRIPFLAGS)
 	$(MAKE) extras.install
 
 install.man:	all installman
-	$(LDLIBPTH) ./perl installman $(INSTALLFLAGS)
+	$(LDLIBPTH) ./perl installman --destdir=$(DESTDIR) $(INSTALLFLAGS)
 
 # XXX Experimental. Hardwired values, but useful for testing.
 # Eventually Configure could ask for some of these values.
@@ -985,9 +993,9 @@ _cleaner2:
 	rm -f testcompile compilelog
 	-rmdir lib/B lib/Data lib/Digest
 	rm -rf lib/Encode
-	-rmdir lib/IO/Socket lib/IO/t lib/IO
-	-rmdir lib/Filter/Util lib/List lib/MIME lib/PerlIO lib/Scalar lib/Sys
-	-rmdir lib/Thread lib/XS lib/threads/shared lib/threads t/lib/B
+	-rmdir lib/Filter/Util lib/IO/Socket lib/IO
+	-rmdir lib/List lib/MIME lib/Scalar lib/Sys 
+	-rmdir lib/threads lib/XS
 
 _realcleaner:
 	@$(LDLIBPTH) $(MAKE) _cleaner1 CLEAN=realclean
@@ -1035,7 +1043,7 @@ makedepend: makedepend.SH config.sh
 	utest ucheck test.utf8 check.utf8 test.torture torturetest \
 	test.third check.third utest.third ucheck.third test_notty.third \
 	test.deparse test_notty.deparse test_harness test_harness_notty \
-	minitest coretest
+	test.bytecompile minitest coretest
 
 # Cannot delegate rebuilding of t/perl to make
 # to allow interlaced test and minitest
@@ -1107,6 +1115,11 @@ utest.third ucheck.third: test_prep.third perl.third
 
 test_notty.third: test_prep.third perl.third
 	PERL=./perl.third $(MAKE) PERL_DEBUG=PERL_3LOG=1 _test_notty
+
+# Targets for Bytecode/ByteLoader testing.
+
+test.bytecompile:	test_prep
+	PERL=./perl TEST_ARGS=-bytecompile $(MAKE) _test
 
 # Targets for Deparse testing.
 
@@ -1225,9 +1238,9 @@ $rm -f $firstmakefile
 # Now do any special processing required before building.
 
 case "$ebcdic" in
-$define)
+define)
     xxx=''
-    echo "This is an EBCDIC system, checking if any parser files need regenerating." >&4
+    echo "This is an EBCDIC system, checking if any parser files need regenerating." >&2
 case "$osname" in
 os390|posix-bc)
     rm -f y.tab.c y.tab.h

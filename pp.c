@@ -107,9 +107,6 @@ PP(pp_padhv)
     }
     else if (gimme == G_SCALAR) {
 	SV* sv = sv_newmortal();
-        if (SvRMAGICAL(TARG) && mg_find(TARG, PERL_MAGIC_tied))
-	     Perl_croak(aTHX_ "Can't provide tied hash usage; "
-			"use keys(%%hash) to test if empty");
 	if (HvFILL((HV*)TARG))
 	    Perl_sv_setpvf(aTHX_ sv, "%ld/%ld",
 		      (long)HvFILL((HV*)TARG), (long)HvMAX((HV*)TARG) + 1);
@@ -969,6 +966,7 @@ PP(pp_pow)
 		    register unsigned int highbit = 8 * sizeof(UV);
 		    register unsigned int lowbit = 0;
 		    register unsigned int diff;
+		    bool odd_power = (bool)(power & 1);
 		    while ((diff = (highbit - lowbit) >> 1)) {
 			if (baseuv & ~((1 << (lowbit + diff)) - 1))
 			    lowbit += diff;
@@ -991,7 +989,7 @@ PP(pp_pow)
 			    }
 			}
 			SP--;
-			if (baseuok || !(power & 1))
+			if (baseuok || !odd_power)
 			    /* answer is positive */
 			    SETu( result );
 			else if (result <= (UV)IV_MAX)

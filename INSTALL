@@ -650,6 +650,18 @@ Here's one way to do that:
     cd /opt/perl # Or wherever you specified as $prefix
     tar xvf perl5-archive.tar
 
+Alternatively, the DESTDIR variable is honored during C<make install>.
+The DESTDIR is automatically prepended to all the installation paths
+(and there is no need to edit anything).  With DESTDIR, the above
+example can we written as:
+
+    sh Configure -Dprefix=/opt/perl -des
+    make
+    make test
+    make install DESTDIR=/tmp/perl5
+    cd /tmp/perl5/opt/perl
+    tar cvf /tmp/perl5-archive.tar .
+
 =head2 Site-wide Policy settings
 
 After Configure runs, it stores a number of common site-wide "policy"
@@ -847,14 +859,16 @@ and web services, that process data originating from external sources.
 In Perl 5.8.1 a security feature was introduced to make it harder
 to create such degenerate hashes.
 
-Because of this feature the keys(), values(), and each() functions
-may return the hash elements in different order between different
-runs of Perl even with the same data.  The additional randomisation
-is enabled if the environment variable PERL_HASH_SEED is set, see
-perlrun for details.
-
-One make the randomisation default by adding -DUSE_HASH_SEED to the
-compilation flags, or completely disable it by adding -DNO_HASH_SEED.
+Because of this feature the keys(), values(), and each() functions may
+return the hash elements in different order between different runs of
+Perl even with the same data.  One can still revert to the old
+repeatable order by setting the environment variable PERL_HASH_SEED,
+see L<perlrun/PERL_HASH_SEED>.  Another option is to add
+-DUSE_HASH_SEED_EXPLICIT to the compilation flags (for example by
+using C<Configure -Accflags=-DUSE_HAS_SEED_EXPLICIT>), in which case
+one has to explicitly set the PERL_HASH_SEED environment variable to
+enable the security feature, or by adding -DNO_HASH_SEED to the compilation
+flags to completely disable the randomisation feature.
 
 B<Perl has never guaranteed any ordering of the hash keys>, and the
 ordering has already changed several times during the lifetime of
@@ -972,10 +986,14 @@ LD_PRELOAD, specifying the exact filename you wish to be used; and on
 Digital Unix, you can override LD_LIBRARY_PATH by setting the
 _RLD_ROOT environment variable to point to the perl build directory.
 
-The only reliable answer is that you should specify a different
-directory for the architecture-dependent library for your -DDEBUGGING
-version of perl.  You can do this by changing all the *archlib*
-variables in config.sh to point to your new architecture-dependent library.
+In other words, it is generally not a good idea to try to build a perl
+with a shared library if $archlib/CORE/$libperl already exists from a
+previous build.
+
+A good workaround is to specify a different directory for the
+architecture-dependent library for your -DDEBUGGING version of perl.
+You can do this by changing all the *archlib* variables in config.sh to
+point to your new architecture-dependent library.
 
 =head2 Malloc Issues
 

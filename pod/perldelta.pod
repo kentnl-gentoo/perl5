@@ -13,6 +13,55 @@ the L<perl58delta>, which describes differences between 5.6.0 and
 
 =head1 Incompatible Changes
 
+=head2 Hash Randomisation
+
+Mainly due to security reasons, the "random ordering" of hashes
+has been made even more random.  Previously while the order of hash
+elements from keys(), values(), and each() was essentially random,
+it was still repeatable.  Now, however, the order varies between
+different runs of Perl.
+
+B<Perl has never guaranteed any ordering of the hash keys>, and the
+ordering has already changed several times during the lifetime of
+Perl 5.  Also, the ordering of hash keys has always been, and
+continues to be, affected by the insertion order.
+
+The added randomness may affect applications.
+
+One possible scenario is when output of an application has included
+hash data.  For example, if you have used the Data::Dumper module to
+dump data into different files, and then compared the files to see
+whether the data has changed, now you will have false positives since
+the order in which hashes are dumped will vary.  In general the cure
+is to sort the keys (or the values); in particular for Data::Dumper to
+use the C<Sortkeys> option; or if some particular order is really
+important, use tied hashes.
+
+More subtle problem is reliance on the order of "global destruction".
+That is what happens at the end of execution: Perl destroys all data
+structures, including user data.  If your destructors (the DESTROY
+subroutines) have assumed any particular ordering to the global
+destruction, there might be problems ahead.  For example, in a
+destructor of one object you cannot assume that objects of any other
+class are still available, unless you hold a reference to them.
+If the environment variable PERL_DESTRUCT_LEVEL is set to a non-zero
+value, or if Perl is exiting a spawned thread, it will also destruct
+the ordinary references and the symbol tables that are no longer in use.
+You can't call a class method or an ordinary function on a class that
+has been collected that way.
+
+The hash randomisation is certain to reveal hidden assumptions about
+some particular ordering of hash elements, and outright bugs: it
+revealed a few bugs in the Perl core and core modules.
+
+To disable the hash randomisation in runtime, set the environment
+variable PERL_HASH_SEED to 0 (zero) before running Perl (for more
+information see L<perlrun/PERL_HASH_SEED>), or to disable the feature
+completely in compile time, compile with C<-DNO_HASH_SEED> (see F<INSTALL>).
+
+See L<perlsec/"Algorithmic Complexity Attacks"> for the original
+rationale behind this change.
+
 =head2 UTF-8 On Filehandles No Longer Activated By Locale
 
 In Perl 5.8.0 all filehandles, including the standard filehandles,
@@ -94,6 +143,9 @@ variable PERL_UNICODE can now be used to control how Perl and Unicode
 interact at interfaces like I/O and for example the command line
 arguments.  See L<perlrun> for more information.
 
+You can also now use safe signals with POSIX::SigAction.
+See L<POSIX/POSIX::SigAction>.
+
 =head2 Unsafe signals again available
 
 In Perl 5.8.0 the so-called "safe signals" were introduced.  This
@@ -135,63 +187,6 @@ The syntaxes
 
 now do localise variables, given that the $x is a valid variable name.
 
-=head2 Hash Randomisation
-
-A vulnerability was found in the "random ordering" of Perl hashes.
-By carefully crafting the hash keys one can cause the performance of
-hashes to degenerate considerably, enabling a denial-of-service attack.
-
-To make this malicious crafting harder, a new feature was added to
-Perl to allow randomising the hash ordering.  To activate this
-feature, set the environment variable PERL_HASH_SEED appropriately,
-see L<perlrun/PERL_HASH_SEED>.
-
-Previously while the order of hash elements from keys(), values(), and
-each() was essentially random, it was still repeatable.  Now, however,
-the order may vary between different runs of Perl.
-
-B<Perl has never guaranteed any ordering of the hash keys>, and the
-ordering has already changed several times during the lifetime of
-Perl 5.  Also, the ordering of hash keys has always been, and
-continues to be, affected by the insertion order.
-
-If the added randomness is used, existing applications may be affected.
-
-One possible scenario is when output of an application has included
-hash data.  For example, if you have used the Data::Dumper module to
-dump data into different files, and then compared the files to see
-whether the data has changed, now you will have false positives since
-the order in which hashes are dumped will vary.  In general the cure
-is to sort the keys (or the values); in particular for Data::Dumper to
-use the C<Sortkeys> option; or if some particular order is really
-important, use tied hashes.
-
-More subtle problem is reliance on the order of "global destruction".
-That is what happens at the end of execution: Perl destroys all data
-structures, including user data.  If your destructors (the DESTROY
-subroutines) have assumed any particular ordering to the global
-destruction, there might be problems ahead.  For example, in a
-destructor of one object you cannot assume that objects of any other
-class are still available, unless you hold a reference to them.
-If the environment variable PERL_DESTRUCT_LEVEL is set to a non-zero
-value, or if Perl is exiting a spawned thread, it will also destruct
-the ordinary references and the symbol tables that are no longer in use.
-You can't call a class method or an ordinary function on a class that
-has been collected that way.
-
-If the hash randomisation is used, it is certain to reveal hidden
-assumptions about some particular ordering of hash elements, and
-outright bugs: it revealed a few bugs in the Perl core and core
-modules.
-
-To disable the hash randomisation in runtime, just either don't set
-the environment variable PERL_HASH_SEED, or set it to 0 (zero) before
-running Perl (for more information see L<perlrun/PERL_HASH_SEED>),
-or to disable the feature completely in compile time, compile with
-C<-DNO_HASH_SEED> (see F<INSTALL>).
-
-See L<perlsec/"Algorithmic Complexity Attacks"> for the original rationale.
-
 =head2 Unicode Character Database 4.0.0
 
 Unicode Character Database has been updated to 4.0.0 from 3.2.0.
@@ -229,10 +224,10 @@ expect the data structures to be pseudohashes any more.
 =head3 (Reminder) 5.005-style threads really are deprecated
 
 5.005-style threads (activated by C<use Thread;>) were deprecated in
-5.Perl 8.0 and will be removed after Perl 5.8, see L<perl58delta> for
-5.details.  Each 5.005-style thread creation will trigger the warning
-5.C<5.005 threads are deprecated>.  If you really want to continue
-5.using the 5.005 threads but not to see the deprecation warnings, use:
+Perl 8.0 and will be removed after Perl 5.8, see L<perl58delta> for
+details.  Each 5.005-style thread creation will trigger the warning
+C<5.005 threads are deprecated>.  If you really want to continue
+using the 5.005 threads but not to see the deprecation warnings, use:
 
     no warnings 'deprecated';
 
@@ -285,7 +280,7 @@ Digest::MD5
 
 Encode - significant updates on the encoding pragma functionality
 (tr/// and the DATA filehandle, formats).  The ISO 8859-6 conversion
-table has been corrected (the 0x30..0x39 errorneously mapped to
+table has been corrected (the 0x30..0x39 erroneously mapped to
 U+0660..U+0669, instead of U+0030..U+0039), the UTF7 encoding has
 been added.
 
@@ -371,7 +366,12 @@ but simultaneously many system utilities may depend on that
 exact version of Perl, so better not to overwrite it.
 
 One can now specify installation directories for site and vendor man
-and HTML pages, and site and vendor scripts.  See F<INSTALL.>
+and HTML pages, and site and vendor scripts.  See F<INSTALL>.
+
+One can now specify a destination directory for Perl installation
+by specifying the DESTDIR variable for C<make install>.  (This feature
+is slightly different from the previous C<Configure -Dinstallprefix=...>.)
+See F<INSTALL>.
 
 gcc versions 3.x introduced a new warning that caused a lot of noise
 during Perl compilation: C<gcc -Ialreadyknowndirectory (warning:
@@ -379,16 +379,16 @@ changing search order)>.  This warning has now been avoided by
 Configure weeding out such directories before the compilation.
 
 One can now build subsets of Perl core modules by using the
-Configure flags C<-Dnoextensions=> and C<-Donlyextensions=>,
-see F<INSTALL>
+Configure flags C<-Dnoextensions=...> and C<-Donlyextensions=...>,
+see F<INSTALL>.
 
 =head2 Platform-specific enhancements
 
-In Cygwin Perl can now be built with threads (Configure -Duseithreads).
+In Cygwin Perl can now be built with threads (C<Configure -Duseithreads>).
 
 In newer FreeBSD releases Perl 5.8.0 compilation failed because of
-trying to use <malloc.h>, which in FreeBSD is just a dummy file, and
-a fatal error to even try to use.  Now <malloc.h> is not used.
+trying to use F<malloc.h>, which in FreeBSD is just a dummy file, and
+a fatal error to even try to use.  Now F<malloc.h> is not used.
 
 Perl is now known to build also in Hitachi HI-UXMPP.
 
@@ -398,14 +398,19 @@ Perl, and the installation directories in general are more standard.
 (In other words, the default installation no longer breaks the
 Apple-provided Perl.)
 
+Mac OS X now builds Perl statically by default.  This change was done
+mainly for faster startup times.  The Apple-provided Perl is still
+dynamically linked and shared, and you can enable the sharedness for
+your own Perl builds by C<Configure -Duseshrplib>.
+
 Perl has been ported to IBM's OS/400 PASE environment.  The best way
 to build a Perl for PASE is to use an AIX host as a cross-compilation
 environment.  See README.os400.
 
-Yet another cross-compilation option has been added, now Perl builds
-on OpenZaurus, see the Cross subdirectory.
+Yet another cross-compilation option has been added: now Perl builds
+on OpenZaurus.  See the Cross subdirectory.
 
-Tru64 gcc 3.2.1 -O3 toke.c dropped to -O2 because of gigantic
+Tru64 gcc 3.2.1 C<-O3 toke.c> dropped to C<-O2> because of gigantic
 memory use otherwise.
 
 Tru64 can now build Perl with the newer Berkeley DBs.
@@ -499,7 +504,42 @@ VMS
 
 =item *
 
-IO::Poll now works.
+Configuration now tests for the presence of C<poll()>, and IO::Poll
+now uses the vendor-supplied function if detected.
+
+=item *
+
+A rare access violation at Perl start-up could occur if the Perl image was
+installed with privileges or if there was an identifier with the
+subsystem attribute set in the process's rightslist.  Either of these
+circumstances triggered tainting code that contained a pointer bug. 
+The faulty pointer arithmetic has been fixed.
+
+=item *
+
+The length limit on values (not keys) in the %ENV hash has been raised
+from 255 bytes to 32640 bytes (except when the PERL_ENV_TABLES setting
+overrides the default use of logical names for %ENV).  If it is
+necessary to access these long values from outside Perl, be aware that
+they are implemented using search list logical names that store the
+value in pieces, each 255-byte piece (up to 128 of them) being an
+element in the search list. When doing a lookup in %ENV from within
+Perl, the elements are combined into a single value.  The existing
+VMS-specific ability to access individual elements of a search list
+logical name via the $ENV{'foo;N'} syntax (where N is the search list
+index) is unimpaired.
+
+=item *
+
+The piping implementation now uses local rather than global DCL
+symbols for inter-process communication.
+
+=item *
+
+File::Find could become confused when navigating to a relative
+directory whose name collided with a logical name.  This problem has
+been corrected by adding directory syntax to relative path names, thus
+preventing logical name translation.
 
 =back
 
@@ -553,13 +593,6 @@ the warning.
 
 It is not illegal to clear a restricted hash, so the warning
 was removed.
-
-=head2 New "Can't provide tied hash usage; use keys(%hash) to test if empty"
-
-Use of C<%hash> in scalar context (like for example as the test of C<if>)
-is not available for tied hashes.  Currently any tied hash, elements or not,
-returns a true value in scalar context.  This is probably not what you
-had in mind, so Perl aborts.
 
 =head2 New "Illegal declaration of anonymous subroutine"
 
@@ -639,7 +672,7 @@ UTF-8 length and position cache: to speed up the handling of Unicode
 extension bypasses the official APIs and directly modifies the PV
 of an SV: the UTF-8 cache does not get cleared as it should.
 
-APIs obsoleted in Perl 5.8.0s like sv_2pv, sv_catpvn, sv_catsv,
+APIs obsoleted in Perl 5.8.0, like sv_2pv, sv_catpvn, sv_catsv,
 sv_setsv, are again available.
 
 Certain Perl core C APIs like cxinc and regatom are no longer available.
@@ -647,15 +680,23 @@ They never should have been, and if you application depends on them,
 you should (be ashamed and) contact perl5-porters to discuss what are
 the proper APIs.
 
-Certain APIs like Perl_list are no longer available without their
-Perl_ prefix.  If your XS module stops working because some functions
-cannot be found, in many cases a simple fix is to add the C<Perl_>
-prefix to the function and the thread context C<aTHX_> as the first
-argument of the function call. For cleaner embedding you can also
-force this for all APIs by defining at compile time the cpp define
-PERL_NO_SHORT_NAMES.
+Certain APIs like C<Perl_list> are no longer available without their
+C<Perl_> prefix.  If your XS module stops working because some
+functions cannot be found, in many cases a simple fix is to add the
+C<Perl_> prefix to the function and the thread context C<aTHX_> as the
+first argument of the function call.  This is also how it should
+always have been done: letting the Perl_-less forms to leak from the
+core was an accident.  For cleaner embedding you can also force this
+for all APIs by defining at compile time the cpp define PERL_NO_SHORT_NAMES.
 
 Perl_save_bool() has been added.
+
+Regexp objects (those created with C<qr>) now have S-magic rather than
+R-magic.  This fixed regexps of the form /...(??{...;$x})/ to no
+longer ignore changes made to $x.  The S-magic avoids avoid dropping
+the caching optimization and making (??{...}) constructs obscenely
+slow (and consequently useless).  See also L<perlguts/"Magic Variables">.
+Regexp::Copy was affected by this change.
 
 C<-DL> removed (the leaktest had been broken and unsupported for years,
 use alternative debugging mallocs or tools like valgrind and Purify).
@@ -671,6 +712,14 @@ system platform.
 
 =head1 Known Problems
 
+The hash randomisation mentioned in L</Incompatible Changes> is definitely
+problematic: it will wake dormant bugs and shake out bad assumptions.
+
+If you want to use mod_perl 2.x with Perl 5.8.1, you will need
+mod_perl-1.99_10 or higher.  Earlier versions of mod_perl 2.x
+do not work with the randomised hashes.  (mod_perl 1.x works fine.)
+You will also need Apache::Test 1.04 or higher.
+
 Many of the rarer platforms that worked 100% or pretty close to it
 with perl 5.8.0 have been left a little bit untended since their
 maintainers have been otherwise busy lately, and therefore there will
@@ -679,6 +728,19 @@ Classic, IBM z/OS (and other EBCDIC platforms), and NetWare.  The most
 common Perl platforms (Unix and Unix-like, Microsoft platforms, and
 VMS) have large enough testing and expert population that they are
 doing well.
+
+=head2 tied hashes in scalar context
+
+Tied hashes do not currently return anything useful in scalar context,
+for example when used as boolean tests:
+
+	if (%tied_hash) { ... }
+
+The current nonsensical behaviour is always to return false,
+regardless of whether the hash is empty or has elements.
+
+The root cause is that there is no interface for the implementors of
+tied hashes to implement the behaviour of a hash in scalar context.
 
 =head2 lib/Net/Ping/t/510_ping_udp.t subtest 2
 
@@ -724,6 +786,13 @@ get many warnings like this:
 
 This warning, however, is not serious and can be ignored.
 
+=head2 IRIX: t/uni/tr_7jis.t falsely failing
+
+The test t/uni/tr_7jis.t is known to report failure under 'make test'
+or the test harness with certain releases of IRIX (at least IRIX 6.5
+and MIPSpro Compilers Version 7.3.1.1m), but if run manually the test
+fully passes.
+
 =head2 Tru64: No threaded builds with GNU cc (gcc)
 
 In the latest Tru64 releases (e.g. v5.1B) the gcc (3.3) cannot be
@@ -764,6 +833,33 @@ make PerlIO go even faster.
 A new feature called I<assertions> will be available.  This means that
 one can have code called assertions sprinkled in the code: usually
 they are optimised away, but they can be enabled with the C<-A> option.
+
+=item *
+
+A new operator C<//> (defined-or) will be available.  This means that
+one will be able to say
+
+    $a // $b
+
+instead of
+
+   defined $a ? $a : $b
+
+and
+
+   $c //= $d;
+
+instead of
+
+   $c = $d unless defined $c;
+
+The operator will have the same precedence and associativity as C<||>.
+A source code patch against the Perl 5.8.1 sources will be available
+in CPAN as F<authors/id/H/HM/HMBRAND/dor-5.8.1.diff>.
+
+=item *
+
+C<unpack()> can be default to unpacking the C<$_>.
 
 =item *
 

@@ -780,6 +780,8 @@ S_force_word(pTHX_ register char *start, int token, int check_keyword, int allow
 	}
 	PL_nextval[PL_nexttoke].opval = (OP*)newSVOP(OP_CONST,0, newSVpv(PL_tokenbuf,0));
 	PL_nextval[PL_nexttoke].opval->op_private |= OPpCONST_BARE;
+	if (UTF && !IN_BYTES && is_utf8_string((U8*)PL_tokenbuf, len))
+	    SvUTF8_on(((SVOP*)PL_nextval[PL_nexttoke].opval)->op_sv);
 	force_next(token);
     }
     return s;
@@ -7970,10 +7972,10 @@ Perl_scan_vstring(pTHX_ char *s, SV *sv)
 	pos++;
     if ( *pos != '.') {
 	/* this may not be a v-string if followed by => */
-	start = pos;
-	while (start < PL_bufend && isSPACE(*start))
-	    ++start;
-	if ((PL_bufend - start) >= 2 && *start == '=' && start[1] == '>' ) {
+	char *next = pos;
+	while (next < PL_bufend && isSPACE(*next))
+	    ++next;
+	if ((PL_bufend - next) >= 2 && *next == '=' && next[1] == '>' ) {
 	    /* return string not v-string */
 	    sv_setpvn(sv,(char *)s,pos-s);
 	    return pos;
@@ -7981,7 +7983,7 @@ Perl_scan_vstring(pTHX_ char *s, SV *sv)
     }
 
     if (ckWARN(WARN_DEPRECATED))
-	Perl_warner(aTHX_ packWARN(WARN_DEPRECATED), "v-strings are deprecated", s);
+	Perl_warner(aTHX_ packWARN(WARN_DEPRECATED), "v-strings are deprecated");
 
     if (!isALPHA(*pos)) {
 	UV rev;

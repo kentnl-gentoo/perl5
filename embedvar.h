@@ -1430,6 +1430,7 @@
 #define PL_patleave		(PL_Vars.Gpatleave)
 #define PL_sh_path		(PL_Vars.Gsh_path)
 #define PL_sigfpe_saved		(PL_Vars.Gsigfpe_saved)
+#define PL_sv_placeholder	(PL_Vars.Gsv_placeholder)
 #define PL_thr_key		(PL_Vars.Gthr_key)
 
 #else /* !PERL_GLOBAL_STRUCT */
@@ -1445,6 +1446,7 @@
 #define PL_Gpatleave		PL_patleave
 #define PL_Gsh_path		PL_sh_path
 #define PL_Gsigfpe_saved	PL_sigfpe_saved
+#define PL_Gsv_placeholder	PL_sv_placeholder
 #define PL_Gthr_key		PL_thr_key
 
 #endif /* PERL_GLOBAL_STRUCT */

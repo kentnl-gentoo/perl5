@@ -3088,7 +3088,11 @@ Perl_sv_2pv_flags(pTHX_ register SV *sv, STRLEN *lp, I32 flags)
 				    s = "REF";
 				else
 				    s = "SCALAR";		break;
-		case SVt_PVLV:	s = SvROK(sv) ? "REF":"LVALUE";	break;
+		case SVt_PVLV:	s = SvROK(sv) ? "REF"
+				/* tied lvalues should appear to be
+				 * scalars for backwards compatitbility */
+				: (LvTYPE(sv) == 't' || LvTYPE(sv) == 'T')
+				    ? "SCALAR" : "LVALUE";	break;
 		case SVt_PVAV:	s = "ARRAY";			break;
 		case SVt_PVHV:	s = "HASH";			break;
 		case SVt_PVCV:	s = "CODE";			break;
@@ -6330,15 +6334,23 @@ thats_really_all_folks:
     }
    else
     {
-#ifndef EPOC
-       /*The big, slow, and stupid way */
-	STDCHAR buf[8192];
+       /*The big, slow, and stupid way. */
+
+      /* Any stack-challenged places. */
+#if defined(EPOC)
+      /* EPOC: need to work around SDK features.         *
+       * On WINS: MS VC5 generates calls to _chkstk,     *
+       * if a "large" stack frame is allocated.          *
+       * gcc on MARM does not generate calls like these. */
+#   define USEHEAPINSTEADOFSTACK
+#endif
+
+#ifdef USEHEAPINSTEADOFSTACK
+	STDCHAR *buf = 0;
+	New(0, buf, 8192, STDCHAR);
+	assert(buf);
 #else
-	/* Need to work around EPOC SDK features          */
-	/* On WINS: MS VC5 generates calls to _chkstk,    */
-	/* if a `large' stack frame is allocated          */
-	/* gcc on MARM does not generate calls like these */
-	STDCHAR buf[1024];
+	STDCHAR buf[8192];
 #endif
 
 screamer2:
@@ -6387,6 +6399,10 @@ screamer2:
 	    if (!(cnt < sizeof(buf) && PerlIO_eof(fp)))
 		goto screamer2;
 	}
+
+#ifdef USEHEAPINSTEADOFSTACK
+	Safefree(buf);
+#endif
     }
 
     if (rspara) {		/* have to do this both before and after */
@@ -7556,7 +7572,12 @@ Perl_sv_reftype(pTHX_ SV *sv, int ob)
 				    return "REF";
 				else
 				    return "SCALAR";
-	case SVt_PVLV:		return SvROK(sv) ? "REF" : "LVALUE";
+				
+	case SVt_PVLV:		return SvROK(sv) ? "REF"
+				/* tied lvalues should appear to be
+				 * scalars for backwards compatitbility */
+				: (LvTYPE(sv) == 't' || LvTYPE(sv) == 'T')
+				    ? "SCALAR" : "LVALUE";
 	case SVt_PVAV:		return "ARRAY";
 	case SVt_PVHV:		return "HASH";
 	case SVt_PVCV:		return "CODE";
@@ -10412,7 +10433,7 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
 
 Create and return a new interpreter by cloning the current one.
 
-perl_clone takes these flags as paramters:
+perl_clone takes these flags as parameters:
 
 CLONEf_COPY_STACKS - is used to, well, copy the stacks also, 
 without it we only clone the data and zero the stacks, 
@@ -11188,6 +11209,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_regstartp	= (I32*)NULL;
     PL_regendp		= (I32*)NULL;
     PL_reglastparen	= (U32*)NULL;
+    PL_reglastcloseparen	= (U32*)NULL;
     PL_regtill		= Nullch;
     PL_reg_start_tmp	= (char**)NULL;
     PL_reg_start_tmpl	= 0;
