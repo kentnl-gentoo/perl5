@@ -1,3 +1,5 @@
+START_EXTERN_C
+
 #ifndef NEXT30_NO_ATTRIBUTE
 #ifndef HASATTRIBUTE       /* disable GNU-cc attribute checking? */
 #ifdef  __attribute__      /* Avoid possible redefinition errors */
@@ -46,7 +48,7 @@ I32	block_gimme _((void));
 int	block_start _((int full));
 void	boot_core_UNIVERSAL _((void));
 void	call_list _((I32 oldscope, AV* list));
-I32	cando _((I32 bit, I32 effective, struct stat* statbufp));
+I32	cando _((I32 bit, I32 effective, Stat_t* statbufp));
 #ifndef CASTNEGFLOAT
 U32	cast_ulong _((double f));
 #endif
@@ -70,6 +72,8 @@ void	cx_dump _((PERL_CONTEXT* cs));
 SV*	filter_add _((filter_t funcp, SV* datasv));
 void	filter_del _((filter_t funcp));
 I32	filter_read _((int idx, SV* buffer, int maxlen));
+char **	get_op_descs _((void));
+char **	get_op_names _((void));
 I32	cxinc _((void));
 void	deb _((const char* pat,...)) __attribute__((format(printf,1,2)));
 void	deb_growlevel _((void));
@@ -568,13 +572,6 @@ int	yylex _((void));
 int	yyparse _((void));
 int	yywarn _((char* s));
 
-#if defined(MYMALLOC) || !defined(STANDARD_C)
-Malloc_t malloc _((MEM_SIZE nbytes));
-Malloc_t calloc _((MEM_SIZE elements, MEM_SIZE size));
-Malloc_t realloc _((Malloc_t where, MEM_SIZE nbytes));
-Free_t   free _((Malloc_t where));
-#endif
-
 #ifndef MYMALLOC
 Malloc_t safemalloc _((MEM_SIZE nbytes));
 Malloc_t safecalloc _((MEM_SIZE elements, MEM_SIZE size));
@@ -588,3 +585,9 @@ Malloc_t safexcalloc _((I32 x, MEM_SIZE elements, MEM_SIZE size));
 Malloc_t safexrealloc _((Malloc_t where, MEM_SIZE size));
 void     safexfree _((Malloc_t where));
 #endif
+
+#ifdef PERL_GLOBAL_STRUCT
+struct perl_vars *Perl_GetVars _((void));
+#endif
+
+END_EXTERN_C

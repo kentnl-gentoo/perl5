@@ -297,7 +297,7 @@ PP(pp_print)
 	gv = defoutgv;
     if (SvMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
 	if (MARK == ORIGMARK) {
-	    EXTEND(SP, 1);
+	    MEXTEND(SP, 1);
 	    ++MARK;
 	    Move(MARK, MARK + 1, (SP - MARK) + 1, SV*);
 	    ++SP;
@@ -1106,9 +1106,14 @@ do_readline(void)
 		sv_catsv(tmpcmd, tmpglob);
 		sv_catpv(tmpcmd, "; do echo \"$a\\0\\c\"; done |");
 #else
+#ifdef DJGPP
+		sv_setpv(tmpcmd, "/dev/dosglob/"); /* File System Extension */
+		sv_catsv(tmpcmd, tmpglob);
+#else
 		sv_setpv(tmpcmd, "perlglob ");
 		sv_catsv(tmpcmd, tmpglob);
 		sv_catpv(tmpcmd, " |");
+#endif /* !DJGPP */
 #endif /* !OS2 */
 #else /* !DOSISH */
 #if defined(CSH)
@@ -1840,7 +1845,7 @@ PP(pp_entersub)
 
     if (!CvROOT(cv) && !CvXSUB(cv)) {
 	GV* autogv;
-	SV* subname;
+	SV* sub_name;
 
 	/* anonymous or undef'd function leaves us no recourse */
 	if (CvANON(cv) || !(gv = CvGV(cv)))
@@ -1858,9 +1863,9 @@ PP(pp_entersub)
 	    goto retry;
 	}
 	/* sorry */
-	subname = sv_newmortal();
-	gv_efullname3(subname, gv, Nullch);
-	DIE("Undefined subroutine &%s called", SvPVX(subname));
+	sub_name = sv_newmortal();
+	gv_efullname3(sub_name, gv, Nullch);
+	DIE("Undefined subroutine &%s called", SvPVX(sub_name));
     }
 
     gimme = GIMME_V;
@@ -2343,3 +2348,4 @@ PP(pp_method)
     SETs(isGV(gv) ? (SV*)GvCV(gv) : (SV*)gv);
     RETURN;
 }
+

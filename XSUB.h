@@ -6,6 +6,13 @@
 #define XS(name) void name(cv) CV* cv;
 #endif
 
+#if defined(WIN32) && defined(__GNUC__)
+#define STRINGIFY_THINGY(x) #x
+#define FORCE_ARG_STRING(x) STRINGIFY_THINGY(x)
+#else
+#define FORCE_ARG_STRING(x) x
+#endif
+
 #define dXSARGS				\
 	dSP; dMARK;		\
 	I32 ax = mark - stack_base + 1;	\
@@ -15,7 +22,11 @@
 
 #define dXSI32 I32 ix = XSANY.any_i32
 
-#define XSRETURN(off) stack_sp = stack_base + ax + ((off) - 1); return
+#define XSRETURN(off)					\
+    STMT_START {					\
+	stack_sp = stack_base + ax + ((off) - 1);	\
+	return;						\
+    } STMT_END
 
 /* Simple macros to put new mortal values onto the stack.   */
 /* Typically used to return values from XS functions.       */
@@ -39,6 +50,7 @@
 #ifdef XS_VERSION
 # define XS_VERSION_BOOTCHECK \
     STMT_START {							\
+        char *xs_version = FORCE_ARG_STRING(XS_VERSION);			\
 	char *vn = "", *module = SvPV(ST(0),na);			\
 	if (items >= 2)	 /* version supplied as bootstrap arg */	\
 	    Sv = ST(1);							\
@@ -50,9 +62,9 @@
 		Sv = perl_get_sv(form("%s::%s", module,			\
 				      vn = "VERSION"), FALSE);		\
 	}								\
-	if (Sv && (!SvOK(Sv) || strNE(XS_VERSION, SvPV(Sv, na))))	\
+	if (Sv && (!SvOK(Sv) || strNE(xs_version, SvPV(Sv, na))))	\
 	    croak("%s object version %s does not match $%s::%s %_",	\
-		  module, XS_VERSION, module, vn, Sv);			\
+		  module, xs_version, module, vn, Sv);			\
     } STMT_END
 #else
 # define XS_VERSION_BOOTCHECK

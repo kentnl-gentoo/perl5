@@ -600,7 +600,7 @@ magic_setenv(SV *sv, MAGIC *mg)
     }
 #endif
 
-#if !defined(OS2) && !defined(AMIGAOS) && !defined(WIN32)
+#if !defined(OS2) && !defined(AMIGAOS) && !defined(WIN32) && !defined(MSDOS)
 			    /* And you'll never guess what the dog had */
 			    /*   in its mouth... */
     if (tainting) {
@@ -649,7 +649,7 @@ magic_setenv(SV *sv, MAGIC *mg)
 	    }
 	}
     }
-#endif /* neither OS2 nor AMIGAOS nor WIN32 */
+#endif /* neither OS2 nor AMIGAOS nor WIN32 nor MSDOS */
 
     return 0;
 }
@@ -1733,10 +1733,10 @@ Signal_t
 sighandler(int sig)
 {
     dSP;
-    GV *gv;
+    GV *gv = Nullgv;
     HV *st;
     SV *sv, *tSv = Sv;
-    CV *cv;
+    CV *cv = Nullcv;
     AV *oldstack;
     OP *myop = op;
     U32 flags = 0;
@@ -1788,8 +1788,11 @@ sighandler(int sig)
     if (!cv || !CvROOT(cv)) {
 	if (dowarn)
 	    warn("SIG%s handler \"%s\" not defined.\n",
-		sig_name[sig], GvENAME(gv) );
-	return;
+		sig_name[sig], (gv ? GvENAME(gv)
+				: ((cv && CvGV(cv))
+				   ? GvENAME(CvGV(cv))
+				   : "__ANON__")));
+	goto cleanup;
     }
 
     oldstack = curstack;
@@ -1812,6 +1815,7 @@ sighandler(int sig)
     perl_call_sv((SV*)cv, G_DISCARD);
 
     SWITCHSTACK(signalstack, oldstack);
+cleanup:
     if (flags & 1)
 	savestack_ix -= 8; /* Unprotect save in progress. */
     if (flags & 2) {

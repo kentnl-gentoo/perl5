@@ -17,6 +17,7 @@ use Config;
 
 my $Is_VMS = $^O eq 'VMS';
 my $Is_MSWin32 = $^O eq 'MSWin32';
+my $Is_Dos = $^O eq 'dos';
 my $Invoke_Perl = $Is_VMS ? 'MCR Sys$Disk:[]Perl.' :
                   $Is_MSWin32 ? '.\perl' : './perl';
 my @MoreEnv = qw/IFS CDPATH ENV BASH_ENV/;
@@ -96,7 +97,7 @@ print "1..140\n";
 
     test 1, eval { `$echo 1` } eq "1\n";
 
-    if ($Is_MSWin32 || $Is_VMS) {
+    if ($Is_MSWin32 || $Is_VMS || $Is_Dos) {
 	print "# Environment tainting tests skipped\n";
 	for (2..5) { print "ok $_\n" }
     }
@@ -120,10 +121,7 @@ print "1..140\n";
     }
 
     my $tmp;
-    if ($^O eq 'os2' || $^O eq 'amigaos' || $Is_MSWin32) {
-	print "# all directories are writeable\n";
-    }
-    else {
+    unless ($^O eq 'os2' || $^O eq 'amigaos' || $Is_MSWin32 || $Is_Dos) {
 	$tmp = (grep { defined and -d and (stat _)[2] & 2 }
 		     qw(/tmp /var/tmp /usr/tmp /sys$scratch),
 		     @ENV{qw(TMP TEMP)})[0]
@@ -136,7 +134,7 @@ print "1..140\n";
 	test 7, $@ =~ /^Insecure directory in \$ENV{PATH}/, $@;
     }
     else {
-	for (6..7) { print "ok $_\n" }
+	for (6..7) { print "ok $_ # Skipped: all directories are writeable\n" }
     }
 
     if ($Is_VMS) {
@@ -149,14 +147,12 @@ print "1..140\n";
 	    test 11, $@ =~ /^Insecure directory in \$ENV{DCL\$PATH}/, $@;
 	}
 	else {
-	    print "# can't find world-writeable directory to test DCL\$PATH\n";
-	    for (10..11) { print "ok $_\n" }
+	    for (10..11) { print "ok $_ # Skipped: can't find world-writeable directory to test DCL\$PATH\n" }
 	}
 	$ENV{'DCL$PATH'} = '';
     }
     else {
-	print "# This is not VMS\n";
-	for (8..11) { print "ok $_\n"; }
+	for (8..11) { print "ok $_ # Skipped: This is not VMS\n"; }
     }
 }
 
@@ -292,8 +288,7 @@ else {
 	test 50, $@ =~ /^Insecure dependency/, $@;
     }
     else {
-	print "# chown() is not available\n";
-	for (49..50) { print "ok $_\n" }
+	for (49..50) { print "ok $_ # Skipped: chown() is not available\n" }
     }
 
     if ($Config{d_link}) {
@@ -301,8 +296,7 @@ else {
 	test 52, $@ =~ /^Insecure dependency/, $@;
     }
     else {
-	print "# link() is not available\n";
-	for (51..52) { print "ok $_\n" }
+	for (51..52) { print "ok $_ # Skipped: link() is not available\n" }
     }
 
     if ($Config{d_symlink}) {
@@ -310,8 +304,7 @@ else {
 	test 54, $@ =~ /^Insecure dependency/, $@;
     }
     else {
-	print "# symlink() is not available\n";
-	for (53..54) { print "ok $_\n" }
+	for (53..54) { print "ok $_ # Skipped: symlink() is not available\n" }
     }
 }
 
@@ -331,8 +324,7 @@ else {
 	test 62, $@ =~ /^Insecure dependency/, $@;
     }
     else {
-	print "# chroot() is not available\n";
-	for (61..62) { print "ok $_\n" }
+	for (61..62) { print "ok $_ # Skipped: chroot() is not available\n" }
     }
 }
 
@@ -349,7 +341,7 @@ else {
 
     test 65, eval { open FOO, $foo } eq '', 'open for read';
     test 66, $@ eq '', $@;		# NB: This should be allowed
-    test 67, $! == 2;			# File not found
+    test 67, $! == ($Config{"archname"} !~ "djgpp" ? 2 : 22); # File not found
 
     test 68, eval { open FOO, "> $foo" } eq '', 'open for write';
     test 69, $@ =~ /^Insecure dependency/, $@;
@@ -360,8 +352,7 @@ else {
     my $foo = $TAINT;
 
     if ($^O eq 'amigaos') {
-	print "# open(\"|\") is not available\n";
-	for (70..73) { print "ok $_\n" }
+	for (70..73) { print "ok $_ # Skipped: open('|') is not available\n" }
     }
     else {
 	test 70, eval { open FOO, "| $foo" } eq '', 'popen to';
@@ -388,7 +379,7 @@ else {
 	test 81, $@ eq '', $@;
     }
     else {
-	for (80..81) { print "ok $_\n"; }
+	for (80..81) { print "ok $_ # Skipped: this is not VMS\n"; }
     }
 }
 
@@ -402,8 +393,7 @@ else {
 	test 85, $@ =~ /^Insecure dependency/, $@;
     }
     else {
-	print "# setpgrp() is not available\n";
-	for (84..85) { print "ok $_\n" }
+	for (84..85) { print "ok $_ # Skipped: setpgrp() is not available\n" }
     }
 
     if ($Config{d_setprior}) {
@@ -411,8 +401,7 @@ else {
 	test 87, $@ =~ /^Insecure dependency/, $@;
     }
     else {
-	print "# setpriority() is not available\n";
-	for (86..87) { print "ok $_\n" }
+	for (86..87) { print "ok $_ # Skipped: setpriority() is not available\n" }
     }
 }
 
@@ -423,8 +412,7 @@ else {
 	test 89, $@ =~ /^Insecure dependency/, $@;
     }
     else {
-	print "# syscall() is not available\n";
-	for (88..89) { print "ok $_\n" }
+	for (88..89) { print "ok $_ # Skipped: syscall() is not available\n" }
     }
 
     {
@@ -443,8 +431,7 @@ else {
 	    test 94, $@ =~ /^Insecure dependency/, $@;
 	}
 	else {
-	    print "# fcntl() is not available\n";
-	    for (93..94) { print "ok $_\n" }
+	    for (93..94) { print "ok $_ # Skipped: fcntl() is not available\n" }
 	}
 
 	close FOO;
@@ -534,8 +521,7 @@ else {
 		  and not tainted $getpwent[8]);
 	endpwent();
     } else {
-	print "# getpwent() is not available\n";
-	print "ok 136\n";
+	print "ok 136 # Skipped: getpwent() is not available\n";
     }
 
     if ($Config{d_readdir}) { # pretty hard to imagine not
@@ -545,8 +531,7 @@ else {
 	test 137, tainted $readdir;
 	closedir(OP);
     } else {
-	print "# readdir() is not available\n";
-	print "ok 137\n";
+	print "ok 137 # Skipped: readdir() is not available\n";
     }
 
     if ($Config{d_readlink} && $Config{d_symlink}) {
@@ -557,8 +542,7 @@ else {
 	test 138, tainted $readlink;
 	unlink($symlink);
     } else {
-	print "# readlink() or symlink() is not available\n";
-	print "ok 138\n";
+	print "ok 138 # Skipped: readlink() or symlink() is not available\n";
     }
 }
 

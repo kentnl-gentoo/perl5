@@ -531,8 +531,7 @@ find_threadsv(char *name)
 	case '\'':
 	    sawampersand = TRUE;
 	    SvREADONLY_on(sv);
-	    sv_magic(sv, 0, 0, name, 1); 
-	    break;
+	    /* FALL THROUGH */
 	default:
 	    sv_magic(sv, 0, 0, name, 1); 
 	}
@@ -1994,12 +1993,13 @@ pmtrans(OP *o, OP *expr, OP *repl)
     register I32 j;
     I32 Delete;
     I32 complement;
+    I32 squash;
     register short *tbl;
 
     tbl = (short*)cPVOPo->op_pv;
     complement	= o->op_private & OPpTRANS_COMPLEMENT;
     Delete	= o->op_private & OPpTRANS_DELETE;
-    /* squash	= o->op_private & OPpTRANS_SQUASH; */
+    squash	= o->op_private & OPpTRANS_SQUASH;
 
     if (complement) {
 	Zero(tbl, 256, short);
@@ -2023,6 +2023,8 @@ pmtrans(OP *o, OP *expr, OP *repl)
     else {
 	if (!rlen && !Delete) {
 	    r = t; rlen = tlen;
+	    if (!squash)
+		o->op_private |= OPpTRANS_COUNTONLY;
 	}
 	for (i = 0; i < 256; i++)
 	    tbl[i] = -1;
@@ -3434,18 +3436,15 @@ newSUB(I32 floor, OP *o, OP *proto, OP *block)
 	if (PERLDB_SUBLINE && curstash != debstash) {
 	    SV *sv = NEWSV(0,0);
 	    SV *tmpstr = sv_newmortal();
-	    static GV *db_postponed;
+	    GV *db_postponed = gv_fetchpv("DB::postponed", GV_ADDMULTI, SVt_PVHV);
 	    CV *cv;
 	    HV *hv;
 
-	    sv_setpvf(sv, "%_:%ld-%ld", GvSV(curcop->cop_filegv),
-		    (long)(subline < 0 ? -subline : subline),
-		    (long)curcop->cop_line);
+	    sv_setpvf(sv, "%_:%ld-%ld",
+		    GvSV(curcop->cop_filegv),
+		    (long)subline, (long)curcop->cop_line);
 	    gv_efullname3(tmpstr, gv, Nullch);
 	    hv_store(GvHV(DBsub), SvPVX(tmpstr), SvCUR(tmpstr), sv, 0);
-	    if (!db_postponed) {
-		db_postponed = gv_fetchpv("DB::postponed", GV_ADDMULTI, SVt_PVHV);
-	    }
 	    hv = GvHVn(db_postponed);
 	    if (HvFILL(hv) > 0 && hv_exists(hv, SvPVX(tmpstr), SvCUR(tmpstr))
 		  && (cv = GvCV(db_postponed))) {
@@ -4414,7 +4413,7 @@ ck_shift(OP *o)
 	
 	op_free(o);
 #ifdef USE_THREADS
-	if (subline > 0) {
+	if (!CvUNIQUE(compcv)) {
 	    argop = newOP(OP_PADAV, OPf_REF);
 	    argop->op_targ = 0;		/* curpad[0] is @_ */
 	}
@@ -4425,7 +4424,7 @@ ck_shift(OP *o)
 	}
 #else
 	argop = newUNOP(OP_RV2AV, 0,
-	    scalar(newGVOP(OP_GV, 0, subline > 0 ?
+	    scalar(newGVOP(OP_GV, 0, !CvUNIQUE(compcv) ?
 			   defgv : gv_fetchpv("ARGV", TRUE, SVt_PVAV))));
 #endif /* USE_THREADS */
 	return newUNOP(type, 0, scalar(argop));

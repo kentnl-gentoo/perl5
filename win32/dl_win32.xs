@@ -18,6 +18,9 @@ calls.
 */
 
 #define WIN32_LEAN_AND_MEAN
+#ifdef __GNUC__
+#define Win32_Winsock
+#endif
 #include <windows.h>
 #include <string.h>
 
@@ -28,7 +31,7 @@ calls.
 #include "dlutils.c"	/* SaveError() etc	*/
 
 static void
-dl_private_init()
+dl_private_init(void)
 {
     (void)dl_generic_private_init();
 }

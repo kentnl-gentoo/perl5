@@ -27,8 +27,8 @@ $Dfile = "Op.dbmx.pag";
 if (! -e $Dfile) {
 	($Dfile) = <Op.dbmx*>;
 }
-if ($^O eq 'amigaos' || $^O eq 'os2' || $^O eq 'MSWin32') {
-    print "ok 2\n";
+if ($^O eq 'amigaos' || $^O eq 'os2' || $^O eq 'MSWin32' || $^O eq 'dos') {
+    print "ok 2 # Skipped: different file permission semantics\n";
 }
 else {
     ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
@@ -200,6 +200,8 @@ EOM
     main::ok(17, $@ eq "") ;
     main::ok(18, $ret eq "[[5]]") ;
 
+    undef $X;
+    untie(%h);
     unlink "SubDB.pm", <dbhash.tmp*> ;
 
 }
