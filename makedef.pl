@@ -136,7 +136,7 @@ elsif ($PLATFORM eq 'os2') {
 	last if /^\s*EXPORTS\b/;
       }
       while (<$fh>) {
-	$ordinal{$1} = $2 if /^\s*"(\w+)"\s*\@(\d+)\s*$/;
+	$ordinal{$1} = $2 if /^\s*"(\w+)"\s*(?:=\s*"\w+"\s*)?\@(\d+)\s*$/;
 	# This allows skipping ordinals which were used in older versions
 	$sym_ord = $1 if /^\s*;\s*LAST_ORDINAL\s*=\s*(\d+)\s*$/;
       }
@@ -254,7 +254,14 @@ if ($PLATFORM eq 'win32') {
 		     Perl_my_popen
 		     )];
 }
-elsif ($PLATFORM eq 'wince') {
+else {
+    skip_symbols [qw(
+		     Perl_do_spawn
+		     Perl_do_spawn_nowait
+		     Perl_do_aspawn
+		     )];
+}
+if ($PLATFORM eq 'wince') {
     skip_symbols [qw(
 		     PL_statusvalue_vms
 		     PL_archpat_auto
@@ -1315,8 +1322,6 @@ sub emit_symbol {
 
 sub output_symbol {
     my $symbol = shift;
-    $symbol = $exportperlmalloc{$symbol}
-        if $exportperlmalloc and exists $exportperlmalloc{$symbol};
     if ($PLATFORM =~ /^win(?:32|ce)$/) {
 	$symbol = "_$symbol" if $CCTYPE eq 'BORLAND';
 	print "\t$symbol\n";
@@ -1345,6 +1350,10 @@ sub output_symbol {
     elsif ($PLATFORM eq 'os2') {
 	printf qq(    %-31s \@%s\n),
 	  qq("$symbol"), $ordinal{$symbol} || ++$sym_ord;
+	printf qq(    %-31s \@%s\n),
+	  qq("$exportperlmalloc{$symbol}" = "$symbol"),
+	  $ordinal{$exportperlmalloc{$symbol}} || ++$sym_ord
+	  if $exportperlmalloc and exists $exportperlmalloc{$symbol};
     }
     elsif ($PLATFORM eq 'aix' || $PLATFORM eq 'MacOS') {
 	print "$symbol\n";
