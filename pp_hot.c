@@ -544,7 +544,8 @@ PP(pp_rv2hv)
     }
     else {
 	dTARGET;
-	/* This bit is OK even when hv is really an AV */
+	if (SvTYPE(hv) == SVt_PVAV)
+	    hv = avhv_keys((AV*)hv);
 	if (HvFILL(hv))
 	    sv_setpvf(TARG, "%ld/%ld",
 		      (long)HvFILL(hv), (long)HvMAX(hv) + 1);
@@ -880,7 +881,7 @@ play_it_again:
 		goto nope;
 	    else if ((rx->reganch & ROPT_CHECK_ALL) && !sawampersand)
 		goto yup;
-	    if (s && rx->check_offset_max < t - s) {
+	    if (s && rx->check_offset_max < s - t) {
 		++BmUSEFUL(rx->check_substr);
 		s -= rx->check_offset_max;
 	    }
@@ -904,7 +905,7 @@ play_it_again:
 	    rx->float_substr = Nullsv;
 	}
     }
-    if (regexec_flags(rx, s, strend, truebase, minmatch,
+    if (CALLREGEXEC(rx, s, strend, truebase, minmatch,
 		      screamer, NULL, safebase))
     {
 	curpm = pm;
@@ -1616,7 +1617,7 @@ PP(pp_subst)
     /* can do inplace substitution? */
     if (c && clen <= rx->minlen && (once || !(safebase & REXEC_COPY_STR))
 	&& !(rx->reganch & ROPT_LOOKBEHIND_SEEN)) {
-	if (!regexec_flags(rx, s, strend, orig, 0, screamer, NULL, safebase)) {
+	if (!CALLREGEXEC(rx, s, strend, orig, 0, screamer, NULL, safebase)) {
 	    SPAGAIN;
 	    PUSHs(&sv_no);
 	    LEAVE_SCOPE(oldsave);
@@ -1693,7 +1694,7 @@ PP(pp_subst)
 		    d += clen;
 		}
 		s = rx->endp[0];
-	    } while (regexec_flags(rx, s, strend, orig, s == m,
+	    } while (CALLREGEXEC(rx, s, strend, orig, s == m,
 			      Nullsv, NULL, 0)); /* don't match same null twice */
 	    if (s != d) {
 		i = strend - s;
@@ -1716,7 +1717,7 @@ PP(pp_subst)
 	RETURN;
     }
 
-    if (regexec_flags(rx, s, strend, orig, 0, screamer, NULL, safebase)) {
+    if (CALLREGEXEC(rx, s, strend, orig, 0, screamer, NULL, safebase)) {
 	if (force_on_match) {
 	    force_on_match = 0;
 	    s = SvPV_force(TARG, len);
@@ -1750,7 +1751,7 @@ PP(pp_subst)
 		sv_catpvn(dstr, c, clen);
 	    if (once)
 		break;
-	} while (regexec_flags(rx, s, strend, orig, s == m, Nullsv, NULL, safebase));
+	} while (CALLREGEXEC(rx, s, strend, orig, s == m, Nullsv, NULL, safebase));
 	sv_catpvn(dstr, s, strend - s);
 
 	(void)SvOOK_off(TARG);
@@ -2439,7 +2440,9 @@ PP(pp_method)
 	    !(ob=(SV*)GvIO(iogv)))
 	{
 	    if (!packname || !isIDFIRST(*packname))
-  DIE("Can't call method \"%s\" without a package or object reference", name);
+		DIE("Can't call method \"%s\" %s", name,
+		    SvOK(sv)? "without a package or object reference"
+			    : "on an undefined value");
 	    stash = gv_stashpvn(packname, packlen, TRUE);
 	    goto fetch;
 	}

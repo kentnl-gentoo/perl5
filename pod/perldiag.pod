@@ -207,6 +207,22 @@ L<perlfunc/grep> and L<perlfunc/map> for alternatives.
 you thought.  Normally it's pretty easy to disambiguate it by supplying
 a missing quote, operator, parenthesis pair or declaration.
 
+=item Ambiguous call resolved as CORE::%s(), qualify as such or use &
+
+(W) A subroutine you have declared has the same name as a Perl keyword,
+and you have used the name without qualification for calling one or the
+other.  Perl decided to call the builtin because the subroutine is
+not imported.
+
+To force interpretation as a subroutine call, either put an ampersand
+before the subroutine name, or qualify the name with its package.
+Alternatively, you can import the subroutine (or pretend that it's
+imported with the C<use subs> pragma).
+
+To silently interpret it as the Perl operator, use the C<CORE::> prefix
+on the operator (e.g. C<CORE::log($x)>) or by declaring the subroutine
+to be an object method (see L<attrs>).
+
 =item Args must match #! line
 
 (F) The setuid emulator requires that the arguments Perl was invoked
@@ -318,13 +334,9 @@ system malloc().
 
 =item Bad index while coercing array into hash
 
-(F) A field name of a typed variable was looked up in the %FIELDS
-hash, but the index found was not legal, i.e. less than 1.
-
-=item Bad index while coercing array into hash
-
-(F) The index looked up in the hash found as 0'th element of the array
-is not legal.  Index values must be at 1 or greater.
+(F) The index looked up in the hash found as the 0'th element of a
+pseudo-hash is not legal.  Index values must be at 1 or greater.
+See L<perlref>.
 
 =item Bad name after %s::
 
@@ -465,7 +477,17 @@ an object reference until it has been blessed.  See L<perlobj>.
 
 (F) You used the syntax of a method call, but the slot filled by the
 object reference or package name contains an expression that returns
-neither an object reference nor a package name.  (Perhaps it's null?)
+a defined value which is neither an object reference nor a package name.
+Something like this will reproduce the error:
+
+    $BADREF = 42;
+    process $BADREF 1,2,3;
+    $BADREF->process(1,2,3);
+
+=item Can't call method "%s" on an undefined value
+
+(F) You used the syntax of a method call, but the slot filled by the
+object reference or package name contains an undefined value.
 Something like this will reproduce the error:
 
     $BADREF = undef;
@@ -2378,21 +2400,6 @@ may break this.
 	local $^W = 0;
 	eval "sub name { ... }";
     }
-
-=item Subroutine %s hidden by keyword; use ampersand
-
-(W) You are trying to call a subroutine that has the same name as a
-keyword.  However, because the subroutine is not imported and
-you're not using an ampersand, Perl won't call the subroutine.
-
-To force a subroutine call, either put an ampersand before the
-subroutine name, or qualify the name with its package.  Alternatively,
-you can import the subroutine (or pretend that it's imported with the
-C<use subs> pragma).
-
-If the Perl operator is what you want, then eliminate this warning by
-using the CORE:: prefix on the operator (e.g. CORE::log($x)) or by
-declaring the subroutine to be an object method (see L<attrs>).
 
 =item Substitution loop
 

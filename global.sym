@@ -81,7 +81,6 @@ psig_name
 psig_ptr
 rcsid
 reall_srchlen
-regexec_flags
 regkind
 repeat_amg
 repeat_ass_amg
@@ -232,7 +231,6 @@ ck_spair
 ck_split
 ck_subr
 ck_svconst
-ck_sysread
 ck_trunc
 condpair_magic
 convert
@@ -684,7 +682,6 @@ pp_i_ne
 pp_i_negate
 pp_i_subtract
 pp_index
-pp_indread
 pp_int
 pp_interp
 pp_ioctl
@@ -885,6 +882,7 @@ q
 ref
 refkids
 regdump
+regexec_flags
 regnext
 regprop
 repeatcpy

@@ -1304,6 +1304,9 @@ scalar_mod_type(OP *o, I32 type)
     case OP_CONCAT:
     case OP_SUBST:
     case OP_TRANS:
+    case OP_READ:
+    case OP_SYSREAD:
+    case OP_RECV:
     case OP_ANDASSIGN:	/* may work later */
     case OP_ORASSIGN:	/* may work later */
 	return TRUE;
@@ -2137,7 +2140,7 @@ pmruntime(OP *o, OP *expr, OP *repl)
 	    p = SvPV(pat, plen);
 	    pm->op_pmflags |= PMf_SKIPWHITE;
 	}
-	pm->op_pmregexp = pregcomp(p, p + plen, pm);
+	pm->op_pmregexp = CALLREGCOMP(p, p + plen, pm);
 	if (strEQ("\\s+", pm->op_pmregexp->precomp))
 	    pm->op_pmflags |= PMf_WHITE;
 	op_free(expr);
@@ -3475,7 +3478,7 @@ newSUB(I32 floor, OP *o, OP *proto, OP *block)
 		goto done;
 	    }
 	    /* ahem, death to those who redefine active sort subs */
-	    if (curstackinfo->si_type == SI_SORT && sortcop == CvSTART(cv))
+	    if (curstackinfo->si_type == PERLSI_SORT && sortcop == CvSTART(cv))
 		croak("Can't redefine active sort subroutine %s", name);
 	    if(const_sv = cv_const_sv(cv))
 		const_changed = sv_cmp(const_sv, op_const_sv(block, Nullcv));
@@ -4860,29 +4863,6 @@ ck_svconst(OP *o)
 {
     SvREADONLY_on(cSVOPo->op_sv);
     return o;
-}
-
-OP *
-ck_sysread(OP *o)
-{
-    if (o->op_flags & OPf_KIDS) {
-	/* get past pushmark */
-	OP *kid = cLISTOPo->op_first->op_sibling;
-	if (kid && (kid = kid->op_sibling)) {
-	    switch (kid->op_type) {
-	    case OP_HELEM:
-	    case OP_AELEM:
-	    case OP_SASSIGN:
-	    case OP_AELEMFAST:
-	    case OP_RV2SV:
-	    case OP_PADSV:
-		break;
-	    default:
-		bad_type(2, "scalar", op_desc[o->op_type], kid);
-	    }
-	}
-    }
-    return ck_fun(o);
 }
 
 OP *

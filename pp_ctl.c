@@ -101,7 +101,7 @@ PP(pp_regcomp)
 	    }
 
 	    pm->op_pmflags = pm->op_pmpermflags;	/* reset case sensitivity */
-	    pm->op_pmregexp = pregcomp(t, t + len, pm);
+	    pm->op_pmregexp = CALLREGCOMP(t, t + len, pm);
 	}
     }
 
@@ -148,7 +148,7 @@ PP(pp_substcont)
 	sv_catsv(dstr, POPs);
 
 	/* Are we done */
-	if (cx->sb_once || !regexec_flags(rx, s, cx->sb_strend, orig,
+	if (cx->sb_once || !CALLREGEXEC(rx, s, cx->sb_strend, orig,
 				     s == m, Nullsv, NULL,
 				     cx->sb_safebase ? 0 : REXEC_COPY_STR))
 	{
@@ -729,7 +729,7 @@ PP(pp_sort)
 	    SAVEOP();
 
 	    CATCH_SET(TRUE);
-	    PUSHSTACKi(SI_SORT);
+	    PUSHSTACKi(PERLSI_SORT);
 	    if (sortstash != stash) {
 		firstgv = gv_fetchpv("a", TRUE, SVt_PV);
 		secondgv = gv_fetchpv("b", TRUE, SVt_PV);
@@ -1471,7 +1471,7 @@ PP(pp_return)
     PMOP *newpm;
     I32 optype = 0;
 
-    if (curstackinfo->si_type == SI_SORT) {
+    if (curstackinfo->si_type == PERLSI_SORT) {
 	if (cxstack_ix == sortcxix || dopoptosub(cxstack_ix) <= sortcxix) {
 	    if (cxstack_ix > sortcxix)
 		dounwind(sortcxix);

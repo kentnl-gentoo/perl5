@@ -19,6 +19,15 @@
  * with the POSIX routines of the same names.
 */
 
+#ifdef IN_XSUB_RE
+/* We *really* need to overwrite these symbols: */
+#  define Perl_regexec_flags my_regexec
+#  define Perl_regdump my_regdump
+#  define Perl_regprop my_regprop
+/* *These* symbols are masked to allow static link. */
+#  define Perl_pregexec my_pregexec
+#endif 
+
 /*SUPPRESS 112*/
 /*
  * pregcomp and pregexec -- regsub and regerror are not used in perl
@@ -782,7 +791,7 @@ regmatch(regnode *prog)
 
 	switch (OP(scan)) {
 	case BOL:
-	    if (locinput == regbol
+	    if (locinput == bostr
 		? regprev == '\n'
 		: (multiline && 
 		   (nextchr || locinput < regeol) && locinput[-1] == '\n') )
@@ -792,7 +801,7 @@ regmatch(regnode *prog)
 	    }
 	    sayNO;
 	case MBOL:
-	    if (locinput == regbol
+	    if (locinput == bostr
 		? regprev == '\n'
 		: ((nextchr || locinput < regeol) && locinput[-1] == '\n') )
 	    {

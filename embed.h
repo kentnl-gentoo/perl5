@@ -103,7 +103,6 @@
 #define ck_split		Perl_ck_split
 #define ck_subr			Perl_ck_subr
 #define ck_svconst		Perl_ck_svconst
-#define ck_sysread		Perl_ck_sysread
 #define ck_trunc		Perl_ck_trunc
 #define compl_amg		Perl_compl_amg
 #define concat_amg		Perl_concat_amg
@@ -616,7 +615,6 @@
 #define pp_i_negate		Perl_pp_i_negate
 #define pp_i_subtract		Perl_pp_i_subtract
 #define pp_index		Perl_pp_index
-#define pp_indread		Perl_pp_indread
 #define pp_int			Perl_pp_int
 #define pp_interp		Perl_pp_interp
 #define pp_ioctl		Perl_pp_ioctl
