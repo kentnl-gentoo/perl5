@@ -468,6 +468,10 @@ public:
     {
 	win32_abort();
     };
+    virtual char * Crypt(const char* clear, const char* salt)
+    {
+	return win32_crypt(clear, salt);
+    };
     virtual void Exit(int status)
     {
 	exit(status);
@@ -661,7 +665,7 @@ public:
     };
     virtual int GetBufsiz(PerlIO* pf, int &err)
     {
-#ifdef FILE_bufsize
+#ifdef FILE_bufsiz
 	FILE *f = (FILE*)pf;
 	return FILE_bufsiz(f);
 #else

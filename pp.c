@@ -2105,7 +2105,7 @@ PP(pp_crypt)
 #ifdef FCRYPT
     sv_setpv(TARG, fcrypt(tmps, SvPV(right, PL_na)));
 #else
-    sv_setpv(TARG, crypt(tmps, SvPV(right, PL_na)));
+    sv_setpv(TARG, PerlProc_crypt(tmps, SvPV(right, PL_na)));
 #endif
 #else
     DIE(
@@ -2413,6 +2413,9 @@ PP(pp_hslice)
     register HV *hv = (HV*)POPs;
     register I32 lval = PL_op->op_flags & OPf_MOD;
     I32 realhv = (SvTYPE(hv) == SVt_PVHV);
+
+    if (!realhv && PL_op->op_private & OPpLVAL_INTRO)
+	DIE("Can't localize pseudo-hash element");
 
     if (realhv || SvTYPE(hv) == SVt_PVAV) {
 	while (++MARK <= SP) {

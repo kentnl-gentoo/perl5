@@ -3669,6 +3669,7 @@ newSUB(I32 floor, OP *o, OP *proto, OP *block)
 	    if (!PL_initav)
 		PL_initav = newAV();
 	    av_push(PL_initav, SvREFCNT_inc(cv));
+	    GvCV(gv) = 0;
 	}
     }
 
@@ -4827,8 +4828,12 @@ ck_subr(OP *o)
 			bad_type(arg, "sub", gv_ename(namegv), o2);
 		    goto wrapref;
 		case '$':
-		    if (o2->op_type != OP_RV2SV && o2->op_type != OP_PADSV)
+		    if (o2->op_type != OP_RV2SV
+			&& o2->op_type != OP_PADSV
+			&& o2->op_type != OP_THREADSV)
+		    {
 			bad_type(arg, "scalar", gv_ename(namegv), o2);
+		    }
 		    goto wrapref;
 		case '@':
 		    if (o2->op_type != OP_RV2AV && o2->op_type != OP_PADAV)

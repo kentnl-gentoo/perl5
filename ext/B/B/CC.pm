@@ -1,6 +1,6 @@
 #      CC.pm
 #
-#      Copyright (c) 1996, 1997 Malcolm Beattie
+#      Copyright (c) 1996, 1997, 1998 Malcolm Beattie
 #
 #      You may distribute under the terms of either the GNU General Public
 #      License or the Artistic License, as specified in the README file.
@@ -332,7 +332,7 @@ sub reload_lexicals {
 }
 my $curcop = new B::Shadow (sub {
     my $opsym = shift->save;
-    runtime("curcop = (COP*)$opsym;");
+    runtime("PL_curcop = (COP*)$opsym;");
 });
 
 #
@@ -399,7 +399,7 @@ sub load_pad {
 	my $name = "tmp$ix";
 	my $class = class($namesv);
 	if (!defined($namesv) || $class eq "SPECIAL") {
-	    # temporaries have &sv_undef instead of a PVNV for a name
+	    # temporaries have &PL_sv_undef instead of a PVNV for a name
 	    $flags = VALID_SV|TEMPORARY|REGISTER;
 	} else {
 	    if ($namesv->PV =~ /^\$(.*)_([di])(r?)$/) {
@@ -418,7 +418,7 @@ sub load_pad {
 					    "i_$name", "d_$name");
 	declare("IV", $type == T_INT ? "i_$name = 0" : "i_$name");
 	declare("double", $type == T_DOUBLE ? "d_$name = 0" : "d_$name");
-	debug sprintf("curpad[$ix] = %s\n", $pad[$ix]->peek) if $debug_pad;
+	debug sprintf("PL_curpad[$ix] = %s\n", $pad[$ix]->peek) if $debug_pad;
     }
 }
 
@@ -445,7 +445,7 @@ sub write_label {
 sub loadop {
     my $op = shift;
     my $opsym = $op->save;
-    runtime("op = $opsym;") unless $know_op;
+    runtime("PL_op = $opsym;") unless $know_op;
     return $opsym;
 }
 
@@ -479,7 +479,7 @@ sub pp_stub {
     if ($gimme != 1) {
 	# XXX Change to push a constant sv_undef Stackobj onto @stack
 	write_back_stack();
-	runtime("if ($gimme != G_ARRAY) XPUSHs(&sv_undef);");
+	runtime("if ($gimme != G_ARRAY) XPUSHs(&PL_sv_undef);");
     }
     return $op->next;
 }
@@ -542,9 +542,9 @@ sub pp_padsv {
     if ($op->flags & OPf_MOD) {
 	my $private = $op->private;
 	if ($private & OPpLVAL_INTRO) {
-	    runtime("SAVECLEARSV(curpad[$ix]);");
+	    runtime("SAVECLEARSV(PL_curpad[$ix]);");
 	} elsif ($private & OPpDEREF) {
-	    runtime(sprintf("vivify_ref(curpad[%d], %d);",
+	    runtime(sprintf("vivify_ref(PL_curpad[%d], %d);",
 			    $ix, $private & OPpDEREF));
 	    $pad[$ix]->invalidate;
 	}
@@ -569,7 +569,7 @@ sub pp_nextstate {
     @stack = ();
     debug(sprintf("%s:%d\n", $op->filegv->SV->PV, $op->line)) if $debug_lineno;
     runtime("TAINT_NOT;") unless $omit_taint;
-    runtime("sp = stack_base + cxstack[cxstack_ix].blk_oldsp;");
+    runtime("sp = PL_stack_base + cxstack[cxstack_ix].blk_oldsp;");
     if ($freetmps_each_bblock || $freetmps_each_loop) {
 	$need_freetmps = 1;
     } else {
@@ -620,7 +620,7 @@ sub pp_aelemfast {
     my $flag = $op->flags & OPf_MOD;
     write_back_stack();
     runtime("svp = av_fetch(GvAV($gvsym), $ix, $flag);",
-	    "PUSHs(svp ? *svp : &sv_undef);");
+	    "PUSHs(svp ? *svp : &PL_sv_undef);");
     return $op->next;
 }
 
@@ -868,7 +868,7 @@ sub pp_sassign {
 	if ($backwards) {
 	    my $src = pop @stack;
 	    my $type = $src->{type};
-	    runtime("if (tainting && tainted) TAINT_NOT;");
+	    runtime("if (PL_tainting && PL_tainted) TAINT_NOT;");
 	    if ($type == T_INT) {
 		runtime sprintf("sv_setiv(TOPs, %s);", $src->as_int);
 	    } elsif ($type == T_DOUBLE) {
@@ -946,7 +946,7 @@ sub pp_entersub {
     write_back_lexicals(REGISTER|TEMPORARY);
     write_back_stack();
     my $sym = doop($op);
-    runtime("if (op != ($sym)->op_next) op = (*op->op_ppaddr)(ARGS);");
+    runtime("if (PL_op != ($sym)->op_next) PL_op = (*PL_op->op_ppaddr)(ARGS);");
     runtime("SPAGAIN;");
     $know_op = 0;
     invalidate_lexicals(REGISTER|TEMPORARY);
@@ -965,7 +965,7 @@ sub pp_leavewrite {
     my $sym = doop($op);
     # XXX Is this the right way to distinguish between it returning
     # CvSTART(cv) (via doform) and pop_return()?
-    runtime("if (op) op = (*op->op_ppaddr)(ARGS);");
+    runtime("if (PL_op) PL_op = (*PL_op->op_ppaddr)(ARGS);");
     runtime("SPAGAIN;");
     $know_op = 0;
     invalidate_lexicals(REGISTER|TEMPORARY);
@@ -1037,7 +1037,7 @@ sub pp_grepwhile {
     # around that, we hack op_next to be our own op (purely because we
     # know it's a non-NULL pointer and can't be the same as op_other).
     $init->add("((LOGOP*)$sym)->op_next = $sym;");
-    runtime(sprintf("if (op == ($sym)->op_next) goto %s;", label($next)));
+    runtime(sprintf("if (PL_op == ($sym)->op_next) goto %s;", label($next)));
     $know_op = 0;
     return $op->other;
 }
@@ -1074,7 +1074,7 @@ sub pp_range {
 	# We need to save our UNOP structure since pp_flop uses
 	# it to find and adjust out targ. We don't need it ourselves.
 	$op->save;
-	runtime sprintf("if (SvTRUE(curpad[%d])) goto %s;",
+	runtime sprintf("if (SvTRUE(PL_curpad[%d])) goto %s;",
 			$op->targ, label($op->false));
 	unshift(@bblock_todo, $op->false);
     }
@@ -1098,19 +1098,19 @@ sub pp_flip {
     my $ix = $op->targ;
     my $rangeix = $op->first->targ;
     runtime(($op->private & OPpFLIP_LINENUM) ?
-	    "if (last_in_gv && SvIV(TOPs) == IoLINES(GvIOp(last_in_gv))) {"
+	    "if (PL_last_in_gv && SvIV(TOPs) == IoLINES(GvIOp(PL_last_in_gv))) {"
 	  : "if (SvTRUE(TOPs)) {");
-    runtime("\tsv_setiv(curpad[$rangeix], 1);");
+    runtime("\tsv_setiv(PL_curpad[$rangeix], 1);");
     if ($op->flags & OPf_SPECIAL) {
-	runtime("sv_setiv(curpad[$ix], 1);");
+	runtime("sv_setiv(PL_curpad[$ix], 1);");
     } else {
-	runtime("\tsv_setiv(curpad[$ix], 0);",
+	runtime("\tsv_setiv(PL_curpad[$ix], 0);",
 		"\tsp--;",
 		sprintf("\tgoto %s;", label($op->first->false)));
     }
     runtime("}",
-	  qq{sv_setpv(curpad[$ix], "");},
-	    "SETs(curpad[$ix]);");
+	  qq{sv_setpv(PL_curpad[$ix], "");},
+	    "SETs(PL_curpad[$ix]);");
     $know_op = 0;
     return $op->next;
 }
@@ -1237,7 +1237,7 @@ sub pp_subst {
     my $sym = doop($op);
     my $replroot = $op->pmreplroot;
     if ($$replroot) {
-	runtime sprintf("if (op == ((PMOP*)(%s))->op_pmreplroot) goto %s;",
+	runtime sprintf("if (PL_op == ((PMOP*)(%s))->op_pmreplroot) goto %s;",
 			$sym, label($replroot));
 	$op->pmreplstart->save;
 	push(@bblock_todo, $replroot);
@@ -1257,7 +1257,7 @@ sub pp_substcont {
 #    my $pmopsym = objsym($pmop);
     my $pmopsym = $pmop->save; # XXX can this recurse?
     warn "pmopsym = $pmopsym\n";#debug
-    runtime sprintf("if (op == ((PMOP*)(%s))->op_pmreplstart) goto %s;",
+    runtime sprintf("if (PL_op == ((PMOP*)(%s))->op_pmreplstart) goto %s;",
 		    $pmopsym, label($pmop->pmreplstart));
     invalidate_lexicals();
     return $pmop->next;
@@ -1382,9 +1382,9 @@ sub cc_main {
 
     return if $errors;
     if (!defined($module)) {
-	$init->add(sprintf("main_root = s\\_%x;", ${main_root()}),
-		   "main_start = $start;",
-		   "curpad = AvARRAY($curpad_sym);");
+	$init->add(sprintf("PL_main_root = s\\_%x;", ${main_root()}),
+		   "PL_main_start = $start;",
+		   "PL_curpad = AvARRAY($curpad_sym);");
     }
     output_boilerplate();
     print "\n";
@@ -1404,14 +1404,14 @@ XS(boot_$cmodule)
     perl_init();
     ENTER;
     SAVETMPS;
-    SAVESPTR(curpad);
-    SAVESPTR(op);
-    curpad = AvARRAY($curpad_sym);
-    op = $start;
+    SAVESPTR(PL_curpad);
+    SAVESPTR(PL_op);
+    PL_curpad = AvARRAY($curpad_sym);
+    PL_op = $start;
     pp_main(ARGS);
     FREETMPS;
     LEAVE;
-    ST(0) = &sv_yes;
+    ST(0) = &PL_sv_yes;
     XSRETURN(1);
 }
 EOT
@@ -1539,7 +1539,193 @@ B::CC - Perl compiler's optimized C translation backend
 
 =head1 DESCRIPTION
 
-See F<ext/B/README>.
+This compiler backend takes Perl source and generates C source code
+corresponding to the flow of your program. In other words, this
+backend is somewhat a "real" compiler in the sense that many people
+think about compilers. Note however that, currently, it is a very
+poor compiler in that although it generates (mostly, or at least
+sometimes) correct code, it performs relatively few optimisations.
+This will change as the compiler develops. The result is that
+running an executable compiled with this backend may start up more
+quickly than running the original Perl program (a feature shared
+by the B<C> compiler backend--see F<B::C>) and may also execute
+slightly faster. This is by no means a good optimising compiler--yet.
+
+=head1 OPTIONS
+
+If there are any non-option arguments, they are taken to be
+names of objects to be saved (probably doesn't work properly yet).
+Without extra arguments, it saves the main program.
+
+=over 4
+
+=item B<-ofilename>
+
+Output to filename instead of STDOUT
+
+=item B<-v>
+
+Verbose compilation (currently gives a few compilation statistics).
+
+=item B<-->
+
+Force end of options
+
+=item B<-uPackname>
+
+Force apparently unused subs from package Packname to be compiled.
+This allows programs to use eval "foo()" even when sub foo is never
+seen to be used at compile time. The down side is that any subs which
+really are never used also have code generated. This option is
+necessary, for example, if you have a signal handler foo which you
+initialise with C<$SIG{BAR} = "foo">.  A better fix, though, is just
+to change it to C<$SIG{BAR} = \&foo>. You can have multiple B<-u>
+options. The compiler tries to figure out which packages may possibly
+have subs in which need compiling but the current version doesn't do
+it very well. In particular, it is confused by nested packages (i.e.
+of the form C<A::B>) where package C<A> does not contain any subs.
+
+=item B<-mModulename>
+
+Instead of generating source for a runnable executable, generate
+source for an XSUB module. The boot_Modulename function (which
+DynaLoader can look for) does the appropriate initialisation and runs
+the main part of the Perl source that is being compiled.
+
+
+=item B<-D>
+
+Debug options (concatenated or separate flags like C<perl -D>).
+
+=item B<-Dr>
+
+Writes debugging output to STDERR just as it's about to write to the
+program's runtime (otherwise writes debugging info as comments in
+its C output).
+
+=item B<-DO>
+
+Outputs each OP as it's compiled
+
+=item B<-Ds>
+
+Outputs the contents of the shadow stack at each OP
+
+=item B<-Dp>
+
+Outputs the contents of the shadow pad of lexicals as it's loaded for
+each sub or the main program.
+
+=item B<-Dq>
+
+Outputs the name of each fake PP function in the queue as it's about
+to process it.
+
+=item B<-Dl>
+
+Output the filename and line number of each original line of Perl
+code as it's processed (C<pp_nextstate>).
+
+=item B<-Dt>
+
+Outputs timing information of compilation stages.
+
+=item B<-f>
+
+Force optimisations on or off one at a time.
+
+=item B<-ffreetmps-each-bblock>
+
+Delays FREETMPS from the end of each statement to the end of the each
+basic block.
+
+=item B<-ffreetmps-each-loop>
+
+Delays FREETMPS from the end of each statement to the end of the group
+of basic blocks forming a loop. At most one of the freetmps-each-*
+options can be used.
+
+=item B<-fomit-taint>
+
+Omits generating code for handling perl's tainting mechanism.
+
+=item B<-On>
+
+Optimisation level (n = 0, 1, 2, ...). B<-O> means B<-O1>.
+Currently, B<-O1> sets B<-ffreetmps-each-bblock> and B<-O2>
+sets B<-ffreetmps-each-loop>.
+
+=back
+
+=head1 EXAMPLES
+
+        perl -MO=CC,-O2,-ofoo.c foo.pl
+        perl cc_harness -o foo foo.c
+
+Note that C<cc_harness> lives in the C<B> subdirectory of your perl
+library directory. The utility called C<perlcc> may also be used to
+help make use of this compiler.
+
+        perl -MO=CC,-mFoo,-oFoo.c Foo.pm
+        perl cc_harness -shared -c -o Foo.so Foo.c
+
+=head1 BUGS
+
+Plenty. Current status: experimental.
+
+=head1 DIFFERENCES
+
+These aren't really bugs but they are constructs which are heavily
+tied to perl's compile-and-go implementation and with which this
+compiler backend cannot cope.
+
+=head2 Loops
+
+Standard perl calculates the target of "next", "last", and "redo"
+at run-time. The compiler calculates the targets at compile-time.
+For example, the program
+
+    sub skip_on_odd { next NUMBER if $_[0] % 2 }
+    NUMBER: for ($i = 0; $i < 5; $i++) {
+        skip_on_odd($i);
+        print $i;
+    }
+
+produces the output
+
+    024
+
+with standard perl but gives a compile-time error with the compiler.
+
+=head2 Context of ".."
+
+The context (scalar or array) of the ".." operator determines whether
+it behaves as a range or a flip/flop. Standard perl delays until
+runtime the decision of which context it is in but the compiler needs
+to know the context at compile-time. For example,
+
+    @a = (4,6,1,0,0,1);
+    sub range { (shift @a)..(shift @a) }
+    print range();
+    while (@a) { print scalar(range()) }
+
+generates the output
+
+    456123E0
+
+with standard Perl but gives a compile-time error with compiled Perl.
+
+=head2 Arithmetic
+
+Compiled Perl programs use native C arithemtic much more frequently
+than standard perl. Operations on large numbers or on boundary
+cases may produce different behaviour.
+
+=head2 Deprecated features
+
+Features of standard perl such as C<$[> which have been deprecated
+in standard perl since Perl5 was released have not been implemented
+in the compiler.
 
 =head1 AUTHOR
 

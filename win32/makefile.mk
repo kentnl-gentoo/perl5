@@ -29,7 +29,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.00476
+INST_VER	*= \5.005
 
 #
 # uncomment to enable threads-capabilities
@@ -57,11 +57,10 @@ CCTYPE		*= BORLAND
 #CFG		*= Debug
 
 #
-# uncomment to enable linking with setargv.obj under the Visual C
-# compiler. Setting this options enables perl to expand wildcards in
-# arguments, but it may be harder to use alternate methods like
-# File::DosGlob that are more powerful.  This option is supported only with
-# Visual C.
+# uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
+# Highly recommended.  It has patches that fix known bugs in MSVCRT.DLL.
+# You will need to download it from: http://www.activestate.com/
+# and follow the directions in the package to install.
 #
 #USE_PERLCRT	*= define
 
@@ -77,7 +76,7 @@ CCTYPE		*= BORLAND
 #
 # if you have the source for des_fcrypt(), uncomment this and make sure the
 # file exists (see README.win32).  File should be located in the same
-# directory as this file.  Not (yet) supported with PERL_OBJECT.
+# directory as this file.
 #
 #CRYPT_SRC	*= des_fcrypt.c
 
