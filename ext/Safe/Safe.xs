@@ -82,13 +82,25 @@ ops_to_mask(...)
 void
 opname(...)
     PPCODE:
-	int i, opcode;
+	int i, myopcode;
 	for (i = 0; i < items; i++)
 	{
-	    opcode = SvIV(ST(i));
-	    if (opcode < 0 || opcode >= maxo)
+	    myopcode = SvIV(ST(i));
+	    if (myopcode < 0 || myopcode >= maxo)
 		croak("opcode out of range");
-	    XPUSHs(sv_2mortal(newSVpv(op_name[opcode], 0)));
+	    XPUSHs(sv_2mortal(newSVpv(op_name[myopcode], 0)));
+	}
+
+void
+opdesc(...)
+    PPCODE:
+	int i, myopcode;
+	for (i = 0; i < items; i++)
+	{
+	    myopcode = SvIV(ST(i));
+	    if (myopcode < 0 || myopcode >= maxo)
+		croak("opcode out of range");
+	    XPUSHs(sv_2mortal(newSVpv(op_desc[myopcode], 0)));
 	}
 
 void
@@ -99,7 +111,10 @@ opcode(...)
 	for (i = 0; i < items; i++)
 	{
 	    op = SvPV(ST(i), na);
-	    for (j = 0; j < maxo && strNE(op, op_name[j]); j++) /* nothing */ ;
+	    for (j = 0; j < maxo; j++) {
+		if (strEQ(op, op_name[j]) || strEQ(op, op_desc[j]))
+		    break;
+	    }
 	    if (j == maxo)
 		croak("bad op name \"%s\"", op);
 	    XPUSHs(sv_2mortal(newSViv(j)));

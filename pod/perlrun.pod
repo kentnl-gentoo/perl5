@@ -4,7 +4,10 @@ perlrun - how to execute the Perl interpreter
 
 =head1 SYNOPSIS
 
-B<perl> [switches] filename args
+B<perl>	[B<-acdhnpPsSTuUvw>] [B<-0[octal>]] [B<-D[number/list]>]
+	[B<-F regexp>] [B<-i[extension>]] [B<-I<lt>dir<gt>>]
+	[B<-l[octal]>] [B<-x[dir]>]
+	[programfile | B<-e command>] [argument ...]
 
 =head1 DESCRIPTION
 
@@ -131,6 +134,12 @@ your program.
 
 runs the script under the Perl debugger.  See L<perldebug>.
 
+=item B<-d:foo>
+
+runs the script under the control of a debugging or tracing module
+installed as Devel::foo. E.g., -d:DProf executes the script using the
+Devel::DProf profiler.  See L<perldebug>.
+
 =item B<-D>I<number>
 
 =item B<-D>I<list>
@@ -239,6 +248,22 @@ separator if the B<-l> switch is followed by a B<-0> switch:
     gnufind / -print0 | perl -ln0e 'print "found $_" if -p'
 
 This sets $\ to newline and then sets $/ to the null character.
+
+=item B<-m>I<module>
+
+=item B<-M>I<module>
+
+C<-m>I<module> executes C<use> I<module> C<();> before executing your
+script.
+
+C<-M>I<module> executes C<use> I<module> C<;> before executing your
+script.  You can use quotes to add extra code after the module name,
+e.g., C<-M'module qw(foo bar)'>.
+
+A little built-in syntactic sugar means you can also say
+C<-mmodule=foo> or C<-Mmodule=foo> as a shortcut for
+C<-M'module qw(foo)'>.  Note that using the C<=> form
+removes the distinction between -m and -M.
 
 =item B<-n>
 
@@ -357,6 +382,15 @@ warnings.
 =item B<-v>
 
 prints the version and patchlevel of your Perl executable.
+
+=item B<-V>
+
+prints summary of the major perl configuration values and the current
+value of @INC.
+
+=item B<-V:name>
+
+Prints to STDOUT the value of the named configuration variable.
 
 =item B<-w>
 

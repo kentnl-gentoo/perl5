@@ -32,22 +32,22 @@ SV *sv;
 OP *arg;
 {
     register short *tbl;
-    register char *s;
-    register I32 matches = 0;
+    register U8 *s;
+    register U8 *send;
+    register U8 *d;
     register I32 ch;
-    register char *send;
-    register char *d;
+    register I32 matches = 0;
     register I32 squash = op->op_private & OPpTRANS_SQUASH;
     STRLEN len;
 
     if (SvREADONLY(sv))
 	croak(no_modify);
-    tbl = (short*) cPVOP->op_pv;
-    s = SvPV(sv, len);
+    tbl = (short*)cPVOP->op_pv;
+    s = (U8*)SvPV(sv, len);
     if (!len)
 	return 0;
     if (!SvPOKp(sv))
-	s = SvPV_force(sv, len);
+	s = (U8*)SvPV_force(sv, len);
     (void)SvPOK_only(sv);
     send = s + len;
     if (!tbl || !s)
@@ -55,7 +55,7 @@ OP *arg;
     DEBUG_t( deb("2.TBL\n"));
     if (!op->op_private) {
 	while (s < send) {
-	    if ((ch = tbl[*s & 0377]) >= 0) {
+	    if ((ch = tbl[*s]) >= 0) {
 		matches++;
 		*s = ch;
 	    }
@@ -65,7 +65,7 @@ OP *arg;
     else {
 	d = s;
 	while (s < send) {
-	    if ((ch = tbl[*s & 0377]) >= 0) {
+	    if ((ch = tbl[*s]) >= 0) {
 		*d = ch;
 		if (matches++ && squash) {
 		    if (d[-1] == *d)
@@ -82,7 +82,7 @@ OP *arg;
 	}
 	matches += send - d;	/* account for disappeared chars */
 	*d = '\0';
-	SvCUR_set(sv, d - SvPVX(sv));
+	SvCUR_set(sv, d - (U8*)SvPVX(sv));
     }
     SvSETMAGIC(sv);
     return matches;
@@ -442,10 +442,13 @@ I32
 do_chomp(sv)
 register SV *sv;
 {
-    register I32 count = 0;
+    register I32 count;
     STRLEN len;
     char *s;
-    
+
+    if (RsSNARF(rs))
+	return 0;
+    count = 0;
     if (SvTYPE(sv) == SVt_PVAV) {
 	register I32 i;
         I32 max;
@@ -472,7 +475,7 @@ register SV *sv;
 	s = SvPV_force(sv, len);
     if (s && len) {
 	s += --len;
-	if (rspara) {
+	if (RsPARA(rs)) {
 	    if (*s != '\n')
 		goto nope;
 	    ++count;
@@ -482,21 +485,24 @@ register SV *sv;
 		++count;
 	    }
 	}
-	else if (rslen == 1) {
-	    if (*s != rschar)
-		goto nope;
-	    ++count;
-	} 
 	else {
-	    if (len < rslen - 1)
-		goto nope;
-	    len -= rslen - 1;
-	    s -= rslen - 1;
-	    if (bcmp(s, rs, rslen))
-		goto nope;
-	    count += rslen;
+	    STRLEN rslen;
+	    char *rsptr = SvPV(rs, rslen);
+	    if (rslen == 1) {
+		if (*s != *rsptr)
+		    goto nope;
+		++count;
+	    }
+	    else {
+		if (len < rslen)
+		    goto nope;
+		len -= rslen - 1;
+		s -= rslen - 1;
+		if (bcmp(s, rsptr, rslen))
+		    goto nope;
+		count += rslen;
+	    }
 	}
-
 	*s = '\0';
 	SvCUR_set(sv, len);
 	SvNIOK_off(sv);

@@ -1,6 +1,6 @@
 /*    perl.c
  *
- *    Copyright (c) 1987-1995 Larry Wall
+ *    Copyright (c) 1987-1996 Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -84,6 +84,9 @@ register PerlInterpreter *sv_interp;
 	SvNV(&sv_yes);
 	SvREADONLY_on(&sv_yes);
 
+	nrs = newSVpv("\n", 1);
+	rs = SvREFCNT_inc(nrs);
+
 #ifdef MSDOS
 	/*
 	 * There is no way we can refer to them from Perl so close them to save
@@ -99,18 +102,13 @@ register PerlInterpreter *sv_interp;
     chopset	= " \n-";
     copline	= NOLINE;
     curcop	= &compiling;
+    dbargs	= 0;
     dlmax	= 128;
     laststatval	= -1;
     laststype	= OP_STAT;
     maxscream	= -1;
     maxsysfd	= MAXSYSFD;
-    nrs		= "\n";
-    nrschar	= '\n';
-    nrslen	= 1;
-    rs		= "\n";
-    rschar	= '\n';
     rsfp	= Nullfp;
-    rslen	= 1;
     statname	= Nullsv;
     tmps_floor	= -1;
 #endif
@@ -227,7 +225,7 @@ char **env;
 {
     register SV *sv;
     register char *s;
-    char *scriptname;
+    char *scriptname = NULL;
     VOL bool dosearch = FALSE;
     char *validarg = "";
     AV* comppadlist;
@@ -307,6 +305,8 @@ setuid perl scripts securely.\n");
 	case 'h':
 	case 'i':
 	case 'l':
+	case 'M':
+	case 'm':
 	case 'n':
 	case 'p':
 	case 's':
@@ -362,6 +362,22 @@ setuid perl scripts securely.\n");
 	    dosearch = TRUE;
 	    s++;
 	    goto reswitch;
+	case 'V':
+	    if (!preambleav)
+		preambleav = newAV();
+	    av_push(preambleav, newSVpv("use Config qw(myconfig config_vars)",0));
+	    if (*++s != ':')  {
+		Sv = newSVpv("print myconfig(),'@INC: '.\"@INC\\n\"",0);
+	    }
+	    else {
+		Sv = newSVpv("config_vars(qw(",0);
+		sv_catpv(Sv, ++s);
+		sv_catpv(Sv, "))");
+		s += strlen(s);
+	    }
+	    av_push(preambleav, Sv);
+	    scriptname = BIT_BUCKET;	/* don't look for script or read stdin */
+	    goto reswitch;
 	case 'x':
 	    doextract = TRUE;
 	    s++;
@@ -378,7 +394,8 @@ setuid perl scripts securely.\n");
 	}
     }
   switch_end:
-    scriptname = argv[0];
+    if (!scriptname)
+	scriptname = argv[0];
     if (e_fp) {
 	if (fflush(e_fp) || ferror(e_fp) || fclose(e_fp))
 	    croak("Can't write to temp file for -e: %s", Strerror(errno));
@@ -453,12 +470,9 @@ setuid perl scripts securely.\n");
     }
 
     /* now that script is parsed, we can modify record separator */
-
-    rs = nrs;
-    rslen = nrslen;
-    rschar = nrschar;
-    rspara = (nrslen == 2);
-    sv_setpvn(GvSV(gv_fetchpv("/", TRUE, SVt_PV)), rs, rslen);
+    SvREFCNT_dec(rs);
+    rs = SvREFCNT_inc(nrs);
+    sv_setsv(GvSV(gv_fetchpv("/", TRUE, SVt_PV)), rs);
 
     if (do_undump)
 	my_unexec();
@@ -468,6 +482,12 @@ setuid perl scripts securely.\n");
 
     LEAVE;
     FREETMPS;
+
+#ifdef DEBUGGING_MSTATS
+    if ((s=getenv("PERL_DEBUG_MSTATS")) && atoi(s) >= 2)
+	dump_mstats("after compilation:");
+#endif
+
     ENTER;
     restartop = 0;
     return 0;
@@ -488,6 +508,10 @@ PerlInterpreter *sv_interp;
 	if (endav)
 	    calllist(endav);
 	FREETMPS;
+#ifdef DEBUGGING_MSTATS
+	if (getenv("PERL_DEBUG_MSTATS"))
+	    dump_mstats("after execution:  ");
+#endif
 	return(statusvalue);		/* my_exit() was called */
     case 3:
 	if (!restartop) {
@@ -927,14 +951,14 @@ char *p;
 }
 
 void
-usage(name)
+usage(name)		/* XXX move this out into a module ? */
 char *name;
 {
     printf("\nUsage: %s [switches] [filename] [arguments]\n",name);
     printf("\n  -0[octal]       specify record separator (\\0, if no argument)");
     printf("\n  -a              autosplit mode with -n or -p");
     printf("\n  -c              check syntax only (runs BEGIN and END blocks)");
-    printf("\n  -d              run scripts under debugger");
+    printf("\n  -d[:debugger]   run scripts under debugger");
     printf("\n  -D[number/list] set debugging flags (argument is a bit mask or flags)");
     printf("\n  -e command      one line of script, multiple -e options are allowed");
     printf("\n                  [filename] can be ommitted when -e is used");
@@ -954,6 +978,7 @@ char *name;
     printf("\n  -u              dump core after parsing script");
     printf("\n  -U              allow unsafe operations");
     printf("\n  -v              print version number and patchlevel of perl");
+    printf("\n  -V[:variable]   print perl configuration information");
     printf("\n  -w              turn warnings on for compilation of your script");
     printf("\n  -x[directory]   strip off text before #!perl line and perhaps cd to directory\n");
 }
@@ -965,20 +990,19 @@ moreswitches(s)
 char *s;
 {
     I32 numlen;
+    U32 rschar;
 
     switch (*s) {
     case '0':
-	nrschar = scan_oct(s, 4, &numlen);
-	nrs = savepvn("\n",1);
-	*nrs = nrschar;
-	if (nrschar > 0377) {
-	    nrslen = 0;
-	    nrs = "";
-	}
-	else if (!nrschar && numlen >= 2) {
-	    nrslen = 2;
-	    nrs = "\n\n";
-	    nrschar = '\n';
+	rschar = scan_oct(s, 4, &numlen);
+	SvREFCNT_dec(nrs);
+	if (rschar & ~((U8)~0))
+	    nrs = &sv_undef;
+	else if (!rschar && numlen >= 2)
+	    nrs = newSVpv("", 0);
+	else {
+	    char ch = rschar;
+	    nrs = newSVpv(&ch, 1);
 	}
 	return s + numlen;
     case 'F':
@@ -997,7 +1021,7 @@ char *s;
     case 'd':
 	taint_not("-d");
 	s++;
-	if (*s == ':')  {
+	if (*s == ':' || *s == '=')  {
 	    sprintf(buf, "use Devel::%s;", ++s);
 	    s += strlen(s);
 	    my_setenv("PERL5DB",buf);
@@ -1063,9 +1087,44 @@ char *s;
 	    s += numlen;
 	}
 	else {
-	    ors = savepvn(nrs,nrslen);
-	    orslen = nrslen;
+	    if (RsPARA(nrs)) {
+		ors = savepvn("\n\n", 2);
+		orslen = 2;
+	    }
+	    else
+		ors = SvPV(nrs, orslen);
 	}
+	return s;
+    case 'M':
+	taint_not("-M");	/* XXX ? */
+	/* FALL THROUGH */
+    case 'm':
+	taint_not("-m");	/* XXX ? */
+	if (*++s) {
+	    char *start = s;
+	    Sv = newSVpv("use ",4);
+	    /* We allow -M'Module qw(Foo Bar)'	*/
+	    while(isALNUM(*s) || *s==':') ++s;
+	    if (*s != '=') {
+		sv_catpv(Sv, start);
+		if (*(start-1) == 'm') {
+		    if (*s != '\0')
+			croak("Can't use '%c' after -mname", *s);
+		    sv_catpv( Sv, " ()");
+		}
+	    } else {
+		sv_catpvn(Sv, start, s-start);
+		sv_catpv(Sv, " qw(");
+		sv_catpv(Sv, ++s);
+		sv_catpv(Sv,    ")");
+	    }
+	    s += strlen(s);
+	    if (preambleav == NULL)
+		preambleav = newAV();
+	    av_push(preambleav, Sv);
+	}
+	else
+	    croak("No space allowed after -%c", *(s-1));
 	return s;
     case 'n':
 	minus_n = TRUE;
@@ -1093,23 +1152,36 @@ char *s;
 	s++;
 	return s;
     case 'v':
-	printf("\nThis is perl, version %s beta1h\n\n",patchlevel);
-	fputs("\nCopyright 1987-1995, Larry Wall\n",stdout);
+	printf("\nThis is perl, version %s beta3",patchlevel);
+
+#if defined(DEBUGGING) || defined(EMBED) || defined(MULTIPLICITY)
+	fputs(" with", stdout);
+#ifdef DEBUGGING
+	fputs(" DEBUGGING", stdout);
+#endif
+#ifdef EMBED
+	fputs(" EMBED", stdout);
+#endif
+#ifdef MULTIPLICITY
+	fputs(" MULTIPLICITY", stdout);
+#endif
+#endif
+
+	fputs("\n\nCopyright 1987-1996, Larry Wall\n",stdout);
 #ifdef MSDOS
 	fputs("MS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n",
 	stdout);
 #endif
 #ifdef OS2
-        fputs("OS/2 port Copyright (c) 1990, 1991, Raymond Chen, Kai Uwe Rommel\n"
-        	"Version 5 port Copyright (c) 1994-1995, Andreas Kaiser\n",
-        stdout);
+	fputs("OS/2 port Copyright (c) 1990, 1991, Raymond Chen, Kai Uwe Rommel\n"
+	    "Version 5 port Copyright (c) 1994-1995, Andreas Kaiser\n", stdout);
 #endif
 #ifdef atarist
-        fputs("atariST series port, ++jrb  bammi@cadence.com\n", stdout);
+	fputs("atariST series port, ++jrb  bammi@cadence.com\n", stdout);
 #endif
 	fputs("\n\
 Perl may be copied only under the terms of either the Artistic License or the\n\
-GNU General Public License, which may be found in the Perl 5.0 source kit.\n",stdout);
+GNU General Public License, which may be found in the Perl 5.0 source kit.\n\n",stdout);
 #ifdef MSDOS
         usage(origargv[0]);
 #endif
@@ -1200,6 +1272,13 @@ SV *sv;
     register char *s;
     I32 len;
 
+#ifdef VMS
+    if (dosearch && !strpbrk(scriptname,":[</") && (my_getenv("DCL$PATH"))) {
+	int idx = 0;
+
+	while (my_trnlnm("DCL$PATH",tokenbuf,idx++)) {
+	    strcat(tokenbuf,scriptname);
+#else  /* !VMS */
     if (dosearch && !strchr(scriptname, '/') && (s = getenv("PATH"))) {
 
 	bufend = s + strlen(s);
@@ -1228,6 +1307,7 @@ SV *sv;
 #endif
 		(void)strcat(tokenbuf+len,"/");
 	    (void)strcat(tokenbuf+len,scriptname);
+#endif  /* !VMS */
 	    DEBUG_p(fprintf(stderr,"Looking for %s\n",tokenbuf));
 	    if (Stat(tokenbuf,&statbuf) < 0)		/* not there? */
 		continue;
@@ -1606,8 +1686,11 @@ init_debugger()
     DBline = gv_fetchpv("dbline", GV_ADDMULTI, SVt_PVAV);
     DBsub = gv_HVadd(gv_fetchpv("sub", GV_ADDMULTI, SVt_PVHV));
     DBsingle = GvSV((gv_fetchpv("single", GV_ADDMULTI, SVt_PV)));
+    sv_setiv(DBsingle, 0); 
     DBtrace = GvSV((gv_fetchpv("trace", GV_ADDMULTI, SVt_PV)));
+    sv_setiv(DBtrace, 0); 
     DBsignal = GvSV((gv_fetchpv("signal", GV_ADDMULTI, SVt_PV)));
+    sv_setiv(DBsignal, 0); 
     curstash = defstash;
 }
 

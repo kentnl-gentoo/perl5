@@ -1,4 +1,5 @@
 # GDBM_File.pm -- Perl 5 interface to GNU gdbm library.
+
 =head1 NAME
 
 GDBM_File - Perl5 access to the gdbm library.
@@ -54,6 +55,8 @@ require DynaLoader;
 	GDBM_WRCREAT
 	GDBM_WRITER
 );
+
+$VERSION = $VERSION = "1.00";
 
 sub AUTOLOAD {
     local($constname);

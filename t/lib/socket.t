@@ -4,8 +4,9 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib' if -d '../lib';
     require Config; import Config;
-    if ($Config{'extensions'} !~ /\bSocket\b/ && $Config{'osname'} ne 'VMS') {
-	print STDERR "1..0\n";
+    if ($Config{'extensions'} !~ /\bSocket\b/ && 
+        !(($Config{'osname'} eq 'VMS') && $Config{d_has_socket})) {
+	print "1..0\n";
 	exit 0;
     }
 }

@@ -257,10 +257,8 @@ SV *line;
     SvTEMP_off(linestr);
     oldoldbufptr = oldbufptr = bufptr = SvPVX(linestr);
     bufend = bufptr + SvCUR(linestr);
-    rs = "\n";
-    rslen = 1;
-    rschar = '\n';
-    rspara = 0;
+    SvREFCNT_dec(rs);
+    rs = newSVpv("\n", 1);
     rsfp = 0;
 }
 
@@ -678,8 +676,8 @@ char *start;
 		SvGROW(sv, SvLEN(sv) + 256);
 		d = SvPVX(sv) + i;
 		d -= 2;
-		max = d[1] & 0377;
-		for (i = (*d & 0377); i <= max; i++)
+		max = (U8)d[1];
+		for (i = (U8)*d; i <= max; i++)
 		    *d++ = i;
 		dorange = FALSE;
 		continue;
@@ -1332,8 +1330,18 @@ yylex()
 	if (!in_eval && !preambled) {
 	    preambled = TRUE;
 	    sv_setpv(linestr,incl_perldb());
-	    if (autoboot_preamble)
-		sv_catpv(linestr, autoboot_preamble);
+	    if (SvCUR(linestr))
+		sv_catpv(linestr,";");
+	    if (preambleav){
+		while(AvFILL(preambleav) >= 0) {
+		    SV *tmpsv = av_shift(preambleav);
+		    sv_catsv(linestr, tmpsv);
+		    sv_catpv(linestr, ";");
+		    sv_free(tmpsv);
+		}
+		sv_free((SV*)preambleav);
+		preambleav = NULL;
+	    }
 	    if (minus_n || minus_p) {
 		sv_catpv(linestr, "LINE: while (<>) {");
 		if (minus_l)
@@ -1755,7 +1763,7 @@ yylex()
 		if (*s == '}')
 		    OPERATOR(HASHBRACK);
 		if (isALPHA(*s)) {
-		    for (t = s; t < bufend && isALPHA(*t); t++) ;
+		    for (t = s; t < bufend && isALNUM(*t); t++) ;
 		}
 		else if (*s == '\'' || *s == '"') {
 		    t = strchr(s+1,*s);
@@ -1830,6 +1838,7 @@ yylex()
 	}
 	else
 	    PREREF('&');
+	yylval.ival = (OPpENTERSUB_AMPER<<8);
 	TERM('&');
 
     case '|':
@@ -2019,6 +2028,19 @@ yylex()
 		    }
 		}
 		if (tmp = pad_findmy(tokenbuf)) {
+		    if (!tokenbuf[2] && *tokenbuf =='$' &&
+			tokenbuf[1] <= 'b' && tokenbuf[1] >= 'a')
+		    {
+			for (d = in_eval ? oldoldbufptr : SvPVX(linestr);
+			    d < bufend && *d != '\n';
+			    d++)
+			{
+			    if (strnEQ(d,"<=>",3) || strnEQ(d,"cmp",3)) {
+			        croak("Can't use \"my %s\" in sort comparison",
+				    tokenbuf);
+			    }
+			}
+		    }
 		    nextval[nexttoke].opval = newOP(OP_PADANY, 0);
 		    nextval[nexttoke].opval->op_targ = tmp;
 		    force_next(PRIVATEREF);
@@ -2358,6 +2380,7 @@ yylex()
 		    nextval[nexttoke].opval = yylval.opval;
 		    expect = XOPERATOR;
 		    force_next(WORD);
+		    yylval.ival = 0;
 		    TOKEN('&');
 		}
 
@@ -2382,6 +2405,7 @@ yylex()
 		    if (*s == '(') {
 			expect = XTERM;
 			force_next(WORD);
+			yylval.ival = 0;
 			TOKEN('&');
 		    }
 		    if (lastchar == '-')
@@ -2923,6 +2947,9 @@ yylex()
 	    checkcomma(s,tokenbuf,"filehandle");
 	    LOP(OP_PRTF,XREF);
 
+	case KEY_prototype:
+	    UNI(OP_PROTOTYPE);
+
 	case KEY_push:
 	    LOP(OP_PUSH,XTERM);
 
@@ -3243,6 +3270,9 @@ yylex()
 	case KEY_syscall:
 	    LOP(OP_SYSCALL,XTERM);
 
+	case KEY_sysopen:
+	    LOP(OP_SYSOPEN,XTERM);
+
 	case KEY_sysread:
 	    LOP(OP_SYSREAD,XTERM);
 
@@ -3261,6 +3291,9 @@ yylex()
 
 	case KEY_tie:
 	    LOP(OP_TIE,XTERM);
+
+	case KEY_tied:
+	    UNI(OP_TIED);
 
 	case KEY_time:
 	    FUN0(OP_TIME);
@@ -3734,6 +3767,8 @@ I32 len;
 	case 7:
 	    if (strEQ(d,"package"))		return KEY_package;
 	    break;
+	case 9:
+	    if (strEQ(d,"prototype"))		return KEY_prototype;
 	}
 	break;
     case 'q':
@@ -3876,6 +3911,7 @@ I32 len;
 		if (strEQ(d,"system"))		return -KEY_system;
 		break;
 	    case 7:
+		if (strEQ(d,"sysopen"))		return -KEY_sysopen;
 		if (strEQ(d,"sysread"))		return -KEY_sysread;
 		if (strEQ(d,"symlink"))		return -KEY_symlink;
 		if (strEQ(d,"syscall"))		return -KEY_syscall;
@@ -3897,6 +3933,7 @@ I32 len;
 	    break;
 	case 4:
 	    if (strEQ(d,"tell"))		return -KEY_tell;
+	    if (strEQ(d,"tied"))		return KEY_tied;
 	    if (strEQ(d,"time"))		return -KEY_time;
 	    break;
 	case 5:
@@ -4593,6 +4630,7 @@ char *start;
 
 	if (!rsfp ||
 	 !(oldoldbufptr = oldbufptr = s = filter_gets(linestr, rsfp))) {
+	    sv_free(sv);
 	    curcop->cop_line = multi_start;
 	    return Nullch;
 	}
