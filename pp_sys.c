@@ -46,7 +46,7 @@
 #endif
 #endif
 
-#ifdef HOST_NOT_FOUND
+#if defined(HOST_NOT_FOUND) && !defined(h_errno)
 extern int h_errno;
 #endif
 
@@ -349,11 +349,24 @@ PP(pp_close)
 {
     dSP;
     GV *gv;
+    MAGIC *mg;
 
     if (MAXARG == 0)
 	gv = defoutgv;
     else
 	gv = (GV*)POPs;
+
+    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+      PUSHMARK(SP);
+      XPUSHs(mg->mg_obj);
+      PUTBACK;
+      ENTER;
+      perl_call_method("CLOSE", G_SCALAR);
+      LEAVE;
+      SPAGAIN;
+      RETURN;
+    }  
+
     EXTEND(SP, 1);
     PUSHs(boolSV(do_close(gv, TRUE)));
     RETURN;
@@ -441,7 +454,7 @@ PP(pp_umask)
     TAINT_PROPER("umask");
     XPUSHi(anum);
 #else
-    DIE(no_func, "Unsupported function umask");
+    XPUSHs(&sv_undef)
 #endif
     RETURN;
 }
@@ -462,40 +475,10 @@ PP(pp_binmode)
     if (!(io = GvIO(gv)) || !(fp = IoIFP(io)))
 	RETPUSHUNDEF;
 
-#ifdef DOSISH
-#ifdef atarist
-    if (!PerlIO_flush(fp) && (fp->_flag |= _IOBIN))
+    if (do_binmode(fp,IoTYPE(io),TRUE)) 
 	RETPUSHYES;
     else
-	RETPUSHUNDEF;
-#else
-    if (setmode(PerlIO_fileno(fp), OP_BINARY) != -1) {
-#if defined(WIN32) && defined(__BORLANDC__)
-	/* The translation mode of the stream is maintained independent
-	 * of the translation mode of the fd in the Borland RTL (heavy
-	 * digging through their runtime sources reveal).  User has to
-	 * set the mode explicitly for the stream (though they don't
-	 * document this anywhere). GSAR 97-5-24
-	 */
-	PerlIO_seek(fp,0L,0);
-	fp->flags |= _F_BIN;
-#endif
-	RETPUSHYES;
-    }
-    else
-	RETPUSHUNDEF;
-#endif
-#else
-#if defined(USEMYBINMODE)
-    if (my_binmode(fp,IoTYPE(io)) != NULL)
-	RETPUSHYES;
-	else
-	RETPUSHUNDEF;
-#else
-    RETPUSHYES;
-#endif
-#endif
-
+	RETPUSHUNDEF;	
 }
 
 PP(pp_tie)
@@ -1110,7 +1093,7 @@ PP(pp_prtf)
 
     if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
 	if (MARK == ORIGMARK) {
-	    EXTEND(SP, 1);
+	    MEXTEND(SP, 1);
 	    ++MARK;
 	    Move(MARK, MARK + 1, (SP - MARK) + 1, SV*);
 	    ++SP;
@@ -1342,8 +1325,25 @@ PP(pp_send)
     char *buffer;
     int length;
     STRLEN blen;
+    MAGIC *mg;
 
     gv = (GV*)*++MARK;
+    if (op->op_type == OP_SYSWRITE &&
+	SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q')))
+    {
+	SV *sv;
+	
+	PUSHMARK(MARK-1);
+	*MARK = mg->mg_obj;
+	ENTER;
+	perl_call_method("WRITE", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	sv = POPs;
+	SP = ORIGMARK;
+	PUSHs(sv);
+	RETURN;
+    }
     if (!gv)
 	goto say_undef;
     bufsv = *++MARK;
@@ -2579,6 +2579,13 @@ PP(pp_chdir)
 	if (svp)
 	    tmps = SvPV(*svp, na);
     }
+#ifdef VMS
+    if (!tmps || !*tmps) {
+       svp = hv_fetch(GvHVn(envgv), "SYS$LOGIN", 9, FALSE);
+       if (svp)
+           tmps = SvPV(*svp, na);
+    }
+#endif
     TAINT_PROPER("chdir");
     PUSHi( chdir(tmps) >= 0 );
 #ifdef VMS

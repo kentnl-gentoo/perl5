@@ -328,8 +328,14 @@ int arg;
     case 'L':
 	break;
     case 'M':
+	if (strEQ(name, "MSG_CTRUNC"))
+#if defined(MSG_CTRUNC) || defined(__GLIBC__) /* XXX it's an enum */
+	    return MSG_CTRUNC;
+#else
+	    goto not_there;
+#endif
 	if (strEQ(name, "MSG_DONTROUTE"))
-#ifdef MSG_DONTROUTE
+#if defined(MSG_DONTROUTE) || defined(__GLIBC__) /* XXX it's an enum */
 	    return MSG_DONTROUTE;
 #else
 	    goto not_there;
@@ -341,14 +347,20 @@ int arg;
 	    goto not_there;
 #endif
 	if (strEQ(name, "MSG_OOB"))
-#ifdef MSG_OOB
+#if defined(MSG_OOB) || defined(__GLIBC__) /* XXX it's an enum */
 	    return MSG_OOB;
 #else
 	    goto not_there;
 #endif
 	if (strEQ(name, "MSG_PEEK"))
-#ifdef MSG_PEEK
+#if defined(MSG_PEEK) || defined(__GLIBC__) /* XXX it's an enum */
 	    return MSG_PEEK;
+#else
+	    goto not_there;
+#endif
+	if (strEQ(name, "MSG_PROXY"))
+#if defined(MSG_PROXY) || defined(__GLIBC__) /* XXX it's an enum */
+	    return MSG_PROXY;
 #else
 	    goto not_there;
 #endif
@@ -750,7 +762,10 @@ pack_sockaddr_un(pathname)
 	STRLEN len;
 	Zero( &sun_ad, sizeof sun_ad, char );
 	sun_ad.sun_family = AF_UNIX;
-	strncpy(sun_ad.sun_path, pathname, sizeof sun_ad.sun_path);
+	len = strlen(pathname);
+	if (len > sizeof(sun_ad.sun_path))
+	    len = sizeof(sun_ad.sun_path);
+	Copy( pathname, sun_ad.sun_path, len, char );
 	ST(0) = sv_2mortal(newSVpv((char *)&sun_ad, sizeof sun_ad));
 #else
 	ST(0) = (SV *) not_here("pack_sockaddr_un");
@@ -833,7 +848,7 @@ unpack_sockaddr_in(sin_sv)
 	port = ntohs(addr.sin_port);
 	ip_address = addr.sin_addr;
 
-	EXTEND(sp, 2);
+	EXTEND(SP, 2);
 	PUSHs(sv_2mortal(newSViv((IV) port)));
 	PUSHs(sv_2mortal(newSVpv((char *)&ip_address,sizeof ip_address)));
 	}

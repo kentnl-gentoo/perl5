@@ -1007,6 +1007,10 @@ $(INST_DYNAMIC): $(OBJECT) $(MYEXTLIB) $(BOOTSTRAP) $(INST_ARCHAUTODIR)/.exists 
     $ldrun = join ' ', map "-R$_", split /:/, $self->{LD_RUN_PATH}
        if ($^O eq 'solaris');
 
+    # The IRIX linker also doesn't use LD_RUN_PATH
+    $ldrun = "-rpath $self->{LD_RUN_PATH}"
+       if ($^O eq 'irix');
+
     push(@m,'	LD_RUN_PATH="$(LD_RUN_PATH)" $(LD) -o $@ '.$ldrun.' $(LDDLFLAGS) '.$ldfrom.
 		' $(OTHERLDFLAGS) $(MYEXTLIB) $(PERL_ARCHIVE) $(LDLOADLIBS) $(EXPORT_LIST)');
     push @m, '
@@ -1944,7 +1948,7 @@ pure_site_install ::
 		}.$self->catdir('$(PERL_ARCHLIB)','auto','$(FULLEXT)').q{
 
 doc_perl_install ::
-	}.$self->{NOECHO}.q{$(DOC_INSTALL) \
+	-}.$self->{NOECHO}.q{$(DOC_INSTALL) \
 		"Module" "$(NAME)" \
 		"installed into" "$(INSTALLPRIVLIB)" \
 		LINKTYPE "$(LINKTYPE)" \
@@ -1953,7 +1957,7 @@ doc_perl_install ::
 		>> }.$self->catfile('$(INSTALLARCHLIB)','perllocal.pod').q{
 
 doc_site_install ::
-	}.$self->{NOECHO}.q{$(DOC_INSTALL) \
+	-}.$self->{NOECHO}.q{$(DOC_INSTALL) \
 		"Module" "$(NAME)" \
 		"installed into" "$(INSTALLSITELIB)" \
 		LINKTYPE "$(LINKTYPE)" \
@@ -2315,7 +2319,7 @@ $tmp/perlmain.c: $makefilename}, q{
     push @m, q{
 doc_inst_perl:
 	}.$self->{NOECHO}.q{echo Appending installation info to $(INSTALLARCHLIB)/perllocal.pod
-	}.$self->{NOECHO}.q{$(DOC_INSTALL) \
+	-}.$self->{NOECHO}.q{$(DOC_INSTALL) \
 		"Perl binary" "$(MAP_TARGET)" \
 		MAP_STATIC "$(MAP_STATIC)" \
 		MAP_EXTRA "`cat $(INST_ARCHAUTODIR)/extralibs.all`" \

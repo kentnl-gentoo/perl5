@@ -78,7 +78,7 @@ print "\n";
 
 
 print "Creating $reldir release directory...\n";
-die "$reldir release directory already exists\n"   if -e "../$perl";
+die "$reldir release directory already exists\n"   if -e "../$reldir";
 die "$reldir.tar.gz release file already exists\n" if -e "../$reldir.tar.gz";
 mkdir($reldir, 0755) or die "mkdir $reldir: $!\n";
 print "\n";

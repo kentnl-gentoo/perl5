@@ -380,6 +380,10 @@ sv_free_arenas()
 	    Safefree((void *)sva);
     }
 
+    if (nice_chunk)
+	Safefree(nice_chunk);
+    nice_chunk = Nullch;
+    nice_chunk_size = 0;
     sv_arenaroot = 0;
     sv_root = 0;
 }
@@ -1889,8 +1893,11 @@ register SV *sstr;
 
     switch (stype) {
     case SVt_NULL:
-	(void)SvOK_off(dstr);
-	return;
+	if (dtype != SVt_PVGV) {
+	    (void)SvOK_off(dstr);
+	    return;
+	}
+	break;
     case SVt_IV:
 	if (dtype != SVt_IV && dtype < SVt_PVIV) {
 	    if (dtype < SVt_IV)
@@ -2061,9 +2068,14 @@ register SV *sstr;
 				if (cv_const_sv(cv))
 				    warn("Constant subroutine %s redefined",
 					 GvENAME((GV*)dstr));
-				else if (dowarn)
-				    warn("Subroutine %s redefined",
-					 GvENAME((GV*)dstr));
+				else if (dowarn) {
+				    if (!(CvGV(cv) && GvSTASH(CvGV(cv))
+					  && HvNAME(GvSTASH(CvGV(cv)))
+					  && strEQ(HvNAME(GvSTASH(CvGV(cv))),
+						   "autouse")))
+					warn("Subroutine %s redefined",
+					     GvENAME((GV*)dstr));
+				}
 			    }
 			    cv_ckproto(cv, (GV*)dstr,
 				       SvPOK(sref) ? SvPVX(sref) : Nullch);
@@ -2187,7 +2199,12 @@ register SV *sstr;
 	SvIVX(dstr) = SvIVX(sstr);
     }
     else {
-	(void)SvOK_off(dstr);
+	if (dtype == SVt_PVGV) {
+	    if (dowarn)
+		warn("Undefined value assigned to typeglob");
+	}
+	else
+	    (void)SvOK_off(dstr);
     }
     SvTAINT(dstr);
 }
@@ -2643,10 +2660,17 @@ STRLEN littlelen;
     register char *midend;
     register char *bigend;
     register I32 i;
+    STRLEN curlen;
+    
 
     if (!bigstr)
 	croak("Can't modify non-existent substring");
-    SvPV_force(bigstr, na);
+    SvPV_force(bigstr, curlen);
+    if (offset + len > curlen) {
+	SvGROW(bigstr, offset+len+1);
+	Zero(SvPVX(bigstr)+curlen, offset+len-curlen, char);
+	SvCUR_set(bigstr, offset+len);
+    }
 
     i = littlelen - len;
     if (i > 0) {			/* string might grow */
@@ -3725,7 +3749,7 @@ HV *stash;
 
     if (!*s) {		/* reset ?? searches */
 	for (pm = HvPMROOT(stash); pm; pm = pm->op_pmnext) {
-	    pm->op_pmflags &= ~PMf_USED;
+	    pm->op_pmdynflags &= ~PMdf_USED;
 	}
 	return;
     }
@@ -4174,6 +4198,10 @@ SV* sv;
     SvFAKE_off(sv);
     if (GvGP(sv))
 	gp_free((GV*)sv);
+    if (GvSTASH(sv)) {
+	SvREFCNT_dec(GvSTASH(sv));
+	GvSTASH(sv) = Nullhv;
+    }
     sv_unmagic(sv, '*');
     Safefree(GvNAME(sv));
     GvMULTI_off(sv);

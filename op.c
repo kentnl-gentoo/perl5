@@ -1124,7 +1124,7 @@ I32 type;
 	modcount++;
 	if (!type)
 	    croak("Can't localize lexical variable %s",
-		SvPV(*av_fetch(comppad_name, op->op_targ, 4), na));
+		SvPV(*av_fetch(comppad_name, o->op_targ, 4), na));
 	break;
 
     case OP_PUSHMARK:
@@ -1617,9 +1617,12 @@ register OP *o;
     if (type == OP_RV2GV)
 	return newGVOP(OP_GV, 0, (GV*)sv);
     else {
-	if ((SvFLAGS(sv) & (SVf_IOK|SVf_NOK|SVf_POK)) == SVf_NOK) {
+	/* try to smush double to int, but don't smush -2.0 to -2 */
+	if ((SvFLAGS(sv) & (SVf_IOK|SVf_NOK|SVf_POK)) == SVf_NOK &&
+	    type != OP_NEGATE)
+	{
 	    IV iv = SvIV(sv);
-	    if ((double)iv == SvNV(sv)) {	/* can we smush double to int */
+	    if ((double)iv == SvNV(sv)) {
 		SvREFCNT_dec(sv);
 		sv = newSViv(iv);
 	    }
@@ -3315,7 +3318,10 @@ OP *block;
 	    if (curstack == sortstack && sortcop == CvSTART(cv))
 		croak("Can't redefine active sort subroutine %s", name);
 	    const_sv = cv_const_sv(cv);
-	    if (const_sv || dowarn) {
+	    if (const_sv || dowarn && !(CvGV(cv) && GvSTASH(CvGV(cv))
+					&& HvNAME(GvSTASH(CvGV(cv)))
+					&& strEQ(HvNAME(GvSTASH(CvGV(cv))),
+						 "autouse"))) {
 		line_t oldline = curcop->cop_line;
 		curcop->cop_line = copline;
 		warn(const_sv ? "Constant subroutine %s redefined"
@@ -3456,7 +3462,6 @@ OP *block;
 	    ENTER;
 	    SAVESPTR(compiling.cop_filegv);
 	    SAVEI16(compiling.cop_line);
-	    SAVEI32(perldb);
 	    save_svref(&rs);
 	    sv_setsv(rs, nrs);
 
@@ -3517,7 +3522,9 @@ char *filename;
 	}
 	else if (CvROOT(cv) || CvXSUB(cv) || GvASSUMECV(gv)) {
 	    /* already defined (or promised) */
-	    if (dowarn) {
+	    if (dowarn && !(CvGV(cv) && GvSTASH(CvGV(cv))
+			    && HvNAME(GvSTASH(CvGV(cv)))
+			    && strEQ(HvNAME(GvSTASH(CvGV(cv))), "autouse"))) {
 		line_t oldline = curcop->cop_line;
 		curcop->cop_line = copline;
 		warn("Subroutine %s redefined",name);
@@ -4840,6 +4847,8 @@ register OP* o;
 	    o->op_seq = op_seqmax++;
 	    if (dowarn && o->op_next && o->op_next->op_type == OP_NEXTSTATE) {
 		if (o->op_next->op_sibling &&
+			o->op_next->op_sibling->op_type != OP_EXIT &&
+			o->op_next->op_sibling->op_type != OP_WARN &&
 			o->op_next->op_sibling->op_type != OP_DIE) {
 		    line_t oldline = curcop->cop_line;
 

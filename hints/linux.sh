@@ -30,7 +30,8 @@ esac
 ccflags="-Dbool=char -DHAS_BOOL $ccflags"
 
 # BSD compatability library no longer needed
-set `echo X "$libswanted "| sed -e 's/ bsd / /'`
+# 'kaffe' has a /usr/lib/libnet.so which is not at all relevent for perl.
+set `echo X "$libswanted "| sed -e 's/ bsd / /' -e 's/ net / /'`
 shift
 libswanted="$*"
 
@@ -186,11 +187,12 @@ fi
 # Shimpei Yamashita <shimpei@socrates.patnet.caltech.edu>
 # Message-Id: <33EF1634.B36B6500@pobox.com>
 # 
-# MkLinux (osname=linux,archname=ppc-linux), which differs slightly from other
-# linuces, needs special flags passed in order for dynamic loading to work.
-# instead of the recommended:
-# ccdlflags='-rdynamic'
-# 
-# it should be:
-# ccdlflags='-Wl,-E'
-
+# Date: Thu, 16 Oct 1997
+# From: Chris Nandor <pudge@pobox.com>
+#
+# MkLinux for PPC needs special flags passed in order for dynamic
+# loading to work. NOTE: Older versions of MkLinux might not
+# support dynamic loading at all.
+case "`uname -r | sed 's/^[0-9.-]*//'``arch`" in
+'osfmach3ppc') ccdlflags='-Wl,-E' ;;
+esac

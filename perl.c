@@ -208,6 +208,7 @@ register PerlInterpreter *sv_interp;
 	op_free(main_root);
 	main_root = Nullop;
     }
+    curcop = &compiling;
     main_start = Nullop;
     SvREFCNT_dec(main_cv);
     main_cv = Nullcv;
@@ -557,6 +558,7 @@ setuid perl scripts securely.\n");
 	s = argv[0]+1;
       reswitch:
 	switch (*s) {
+	case ' ':
 	case '0':
 	case 'F':
 	case 'a':
@@ -1018,6 +1020,8 @@ I32 flags;		/* See G_* flags in cop.h */
     XPUSHs(sv_2mortal(newSVpv(methname,0)));
     PUTBACK;
     pp_method();
+	if(op == &myop)
+		op = Nullop;
     return perl_call_sv(*stack_sp--, flags);
 }
 
@@ -1063,7 +1067,8 @@ I32 flags;		/* See G_* flags in cop.h */
 	  && (DBcv || (DBcv = GvCV(DBsub)))
 	   /* Try harder, since this may have been a sighandler, thus
 	    * curstash may be meaningless. */
-	  && (SvTYPE(sv) != SVt_PVCV || CvSTASH((CV*)sv) != debstash))
+	  && (SvTYPE(sv) != SVt_PVCV || CvSTASH((CV*)sv) != debstash)
+	  && !(flags & G_NODEBUG))
 	op->op_private |= OPpENTERSUB_DB;
 
     if (flags & G_EVAL) {
@@ -1418,8 +1423,11 @@ char *s;
 	inplace = savepv(s+1);
 	/*SUPPRESS 530*/
 	for (s = inplace; *s && !isSPACE(*s); s++) ;
-	if (*s)
+	if (*s) {
 	    *s++ = '\0';
+	    if (*s == '-')	/* Additional switches on #! line. */
+	        s++;
+	}
 	return s;
     case 'I':	/* -I handled both here and in parse_perl() */
 	forbid_setid("-I");
@@ -1585,6 +1593,7 @@ Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
 /* compliments of Tom Christiansen */
 
 /* unexec() can be found in the Gnu emacs distribution */
+/* Known to work with -DUNEXEC and using unexelf.c from GNU emacs-20.2 */
 
 void
 my_unexec()
@@ -1592,18 +1601,16 @@ my_unexec()
 #ifdef UNEXEC
     SV*    prog;
     SV*    file;
-    int    status;
+    int    status = 1;
     extern int etext;
 
-    prog = newSVpv(BIN_EXP);
+    prog = newSVpv(BIN_EXP, 0);
     sv_catpv(prog, "/perl");
-    file = newSVpv(origfilename);
+    file = newSVpv(origfilename, 0);
     sv_catpv(file, ".perldump");
 
-    status = unexec(SvPVX(file), SvPVX(prog), &etext, sbrk(0), 0);
-    if (status)
-	PerlIO_printf(PerlIO_stderr(), "unexec of %s into %s failed!\n",
-		      SvPVX(prog), SvPVX(file));
+    unexec(SvPVX(file), SvPVX(prog), &etext, sbrk(0), 0);
+    /* unexec prints msg to stderr in case of failure */
     exit(status);
 #else
 #  ifdef VMS
@@ -1661,192 +1668,9 @@ bool dosearch;
 SV *sv;
 #endif
 {
-    char *xfound = Nullch;
-    char *xfailed = Nullch;
     register char *s;
-    I32 len;
-    int retval;
-#if defined(DOSISH) && !defined(OS2) && !defined(atarist)
-#  define SEARCH_EXTS ".bat", ".cmd", NULL
-#  define MAX_EXT_LEN 4
-#endif
-#ifdef OS2
-#  define SEARCH_EXTS ".cmd", ".btm", ".bat", ".pl", NULL
-#  define MAX_EXT_LEN 4
-#endif
-#ifdef VMS
-#  define SEARCH_EXTS ".pl", ".com", NULL
-#  define MAX_EXT_LEN 4
-#endif
-    /* additional extensions to try in each dir if scriptname not found */
-#ifdef SEARCH_EXTS
-    char *ext[] = { SEARCH_EXTS };
-    int extidx = 0, i = 0;
-    char *curext = Nullch;
-#else
-#  define MAX_EXT_LEN 0
-#endif
 
-    /*
-     * If dosearch is true and if scriptname does not contain path
-     * delimiters, search the PATH for scriptname.
-     *
-     * If SEARCH_EXTS is also defined, will look for each
-     * scriptname{SEARCH_EXTS} whenever scriptname is not found
-     * while searching the PATH.
-     *
-     * Assuming SEARCH_EXTS is C<".foo",".bar",NULL>, PATH search
-     * proceeds as follows:
-     *   If DOSISH:
-     *     + look for ./scriptname{,.foo,.bar}
-     *     + search the PATH for scriptname{,.foo,.bar}
-     *
-     *   If !DOSISH:
-     *     + look *only* in the PATH for scriptname{,.foo,.bar} (note
-     *       this will not look in '.' if it's not in the PATH)
-     */
-
-#ifdef VMS
-    if (dosearch) {
-	int hasdir, idx = 0, deftypes = 1;
-	bool seen_dot = 1;
-
-	hasdir = (strpbrk(scriptname,":[</") != Nullch) ;
-	/* The first time through, just add SEARCH_EXTS to whatever we
-	 * already have, so we can check for default file types. */
-	while (deftypes ||
-	       (!hasdir && my_trnlnm("DCL$PATH",tokenbuf,idx++)) )
-	{
-	    if (deftypes) {
-		deftypes = 0;
-		*tokenbuf = '\0';
-	    }
-	    if ((strlen(tokenbuf) + strlen(scriptname)
-		 + MAX_EXT_LEN) >= sizeof tokenbuf)
-		continue;	/* don't search dir with too-long name */
-	    strcat(tokenbuf, scriptname);
-#else  /* !VMS */
-
-#ifdef DOSISH
-    if (strEQ(scriptname, "-"))
- 	dosearch = 0;
-    if (dosearch) {		/* Look in '.' first. */
-	char *cur = scriptname;
-#ifdef SEARCH_EXTS
-	if ((curext = strrchr(scriptname,'.')))	/* possible current ext */
-	    while (ext[i])
-		if (strEQ(ext[i++],curext)) {
-		    extidx = -1;		/* already has an ext */
-		    break;
-		}
-	do {
-#endif
-	    DEBUG_p(PerlIO_printf(Perl_debug_log,
-				  "Looking for %s\n",cur));
-	    if (Stat(cur,&statbuf) >= 0) {
-		dosearch = 0;
-		scriptname = cur;
-#ifdef SEARCH_EXTS
-		break;
-#endif
-	    }
-#ifdef SEARCH_EXTS
-	    if (cur == scriptname) {
-		len = strlen(scriptname);
-		if (len+MAX_EXT_LEN+1 >= sizeof(tokenbuf))
-		    break;
-		cur = strcpy(tokenbuf, scriptname);
-	    }
-	} while (extidx >= 0 && ext[extidx]	/* try an extension? */
-		 && strcpy(tokenbuf+len, ext[extidx++]));
-#endif
-    }
-#endif
-
-    if (dosearch && !strchr(scriptname, '/')
-#ifdef DOSISH
-		 && !strchr(scriptname, '\\')
-#endif
-		 && (s = getenv("PATH"))) {
-	bool seen_dot = 0;
-	
-	bufend = s + strlen(s);
-	while (s < bufend) {
-#if defined(atarist) || defined(DOSISH)
-	    for (len = 0; *s
-#  ifdef atarist
-		    && *s != ','
-#  endif
-		    && *s != ';'; len++, s++) {
-		if (len < sizeof tokenbuf)
-		    tokenbuf[len] = *s;
-	    }
-	    if (len < sizeof tokenbuf)
-		tokenbuf[len] = '\0';
-#else  /* ! (atarist || DOSISH) */
-	    s = delimcpy(tokenbuf, tokenbuf + sizeof tokenbuf, s, bufend,
-			':',
-			&len);
-#endif /* ! (atarist || DOSISH) */
-	    if (s < bufend)
-		s++;
-	    if (len + 1 + strlen(scriptname) + MAX_EXT_LEN >= sizeof tokenbuf)
-		continue;	/* don't search dir with too-long name */
-	    if (len
-#if defined(atarist) || defined(DOSISH)
-		&& tokenbuf[len - 1] != '/'
-		&& tokenbuf[len - 1] != '\\'
-#endif
-	       )
-		tokenbuf[len++] = '/';
-	    if (len == 2 && tokenbuf[0] == '.')
-		seen_dot = 1;
-	    (void)strcpy(tokenbuf + len, scriptname);
-#endif  /* !VMS */
-
-#ifdef SEARCH_EXTS
-	    len = strlen(tokenbuf);
-	    if (extidx > 0)	/* reset after previous loop */
-		extidx = 0;
-	    do {
-#endif
-	    	DEBUG_p(PerlIO_printf(Perl_debug_log, "Looking for %s\n",tokenbuf));
-		retval = Stat(tokenbuf,&statbuf);
-#ifdef SEARCH_EXTS
-	    } while (  retval < 0		/* not there */
-		    && extidx>=0 && ext[extidx]	/* try an extension? */
-		    && strcpy(tokenbuf+len, ext[extidx++])
-		);
-#endif
-	    if (retval < 0)
-		continue;
-	    if (S_ISREG(statbuf.st_mode)
-		&& cando(S_IRUSR,TRUE,&statbuf)
-#ifndef DOSISH
-		&& cando(S_IXUSR,TRUE,&statbuf)
-#endif
-		)
-	    {
-		xfound = tokenbuf;              /* bingo! */
-		break;
-	    }
-	    if (!xfailed)
-		xfailed = savepv(tokenbuf);
-	}
-#ifndef DOSISH
-	if (!xfound && !seen_dot && !xfailed && (Stat(scriptname,&statbuf) < 0))
-#endif
-	    seen_dot = 1;			/* Disable message. */
-	if (!xfound)
-	    croak("Can't %s %s%s%s",
-		  (xfailed ? "execute" : "find"),
-		  (xfailed ? xfailed : scriptname),
-		  (xfailed ? "" : " on PATH"),
-		  (xfailed || seen_dot) ? "" : ", '.' not in PATH");
-	if (xfailed)
-	    Safefree(xfailed);
-	scriptname = xfound;
-    }
+    scriptname = find_script(scriptname, dosearch, NULL, 0);
 
     if (strnEQ(scriptname, "/dev/fd/", 8) && isDIGIT(scriptname[8]) ) {
 	char *s = scriptname + 8;
@@ -2524,7 +2348,7 @@ init_perllib()
     ARCHLIB PRIVLIB SITEARCH SITELIB and OLDARCHLIB
 */
 #ifdef APPLLIB_EXP
-    incpush(APPLLIB_EXP, FALSE);
+    incpush(APPLLIB_EXP, TRUE);
 #endif
 
 #ifdef ARCHLIB_EXP
@@ -2760,10 +2584,16 @@ my_failure_exit()
 	    STATUS_NATIVE_SET(vaxc$errno);
     }
 #else
+    int exitstatus;
     if (errno & 255)
 	STATUS_POSIX_SET(errno);
-    else if (STATUS_POSIX == 0)
-	STATUS_POSIX_SET(255);
+    else {
+	exitstatus = STATUS_POSIX >> 8; 
+	if (exitstatus & 255)
+	    STATUS_POSIX_SET(exitstatus);
+	else
+	    STATUS_POSIX_SET(255);
+    }
 #endif
     my_exit_jump();
 }

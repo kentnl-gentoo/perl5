@@ -222,6 +222,7 @@ PP(pp_aelemfast)
     dSP;
     AV *av = GvAV((GV*)cSVOP->op_sv);
     SV** svp = av_fetch(av, op->op_private, op->op_flags & OPf_MOD);
+    EXTEND(SP, 1);
     PUSHs(svp ? *svp : &sv_undef);
     RETURN;
 }
@@ -271,7 +272,7 @@ PP(pp_print)
 	gv = defoutgv;
     if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
 	if (MARK == ORIGMARK) {
-	    EXTEND(SP, 1);
+	    MEXTEND(SP, 1);
 	    ++MARK;
 	    Move(MARK, MARK + 1, (SP - MARK) + 1, SV*);
 	    ++SP;
@@ -601,8 +602,15 @@ PP(pp_aassign)
 		    }
 		    TAINT_NOT;
 		}
-		if (relem == lastrelem && dowarn)
-		    warn("Odd number of elements in hash list");
+		if (relem == lastrelem && dowarn) {
+		    if (relem == firstrelem &&
+			SvROK(*relem) &&
+			( SvTYPE(SvRV(*relem)) == SVt_PVAV ||
+			  SvTYPE(SvRV(*relem)) == SVt_PVHV ) )
+			warn("Reference found where even-sized list expected");
+		    else
+			warn("Odd number of elements in hash assignment");
+		}
 	    }
 	    break;
 	default:
@@ -739,7 +747,7 @@ PP(pp_match)
 	DIE("panic: do_match");
     TAINT_NOT;
 
-    if (pm->op_pmflags & PMf_USED) {
+    if (pm->op_pmdynflags & PMdf_USED) {
 	if (gimme == G_ARRAY)
 	    RETURN;
 	RETPUSHNO;
@@ -817,7 +825,7 @@ play_it_again:
     {
 	curpm = pm;
 	if (pm->op_pmflags & PMf_ONCE)
-	    pm->op_pmflags |= PMf_USED;
+	    pm->op_pmdynflags |= PMdf_USED;
 	goto gotcha;
     }
     else
@@ -880,7 +888,7 @@ yup:
     ++BmUSEFUL(pm->op_pmshort);
     curpm = pm;
     if (pm->op_pmflags & PMf_ONCE)
-	pm->op_pmflags |= PMf_USED;
+	pm->op_pmdynflags |= PMdf_USED;
     Safefree(rx->subbase);
     rx->subbase = Nullch;
     if (global) {
@@ -1394,6 +1402,7 @@ PP(pp_subst)
     s = SvPV(TARG, len);
     if (!SvPOKp(TARG) || SvTYPE(TARG) == SVt_PVGV)
 	force_on_match = 1;
+    rxtainted = tainted << 1;
     TAINT_NOT;
 
   force_it:
@@ -1473,7 +1482,7 @@ PP(pp_subst)
 	curpm = pm;
 	SvSCREAM_off(TARG);	/* disable possible screamer */
 	if (once) {
-	    rxtainted = rx->exec_tainted;
+	    rxtainted |= rx->exec_tainted;
 	    m = rx->startp[0];
 	    d = rx->endp[0];
 	    s = orig;
@@ -1509,11 +1518,10 @@ PP(pp_subst)
 	    else {
 		sv_chop(TARG, d);
 	    }
-	    TAINT_IF(rxtainted);
+	    TAINT_IF(rxtainted & 1);
 	    PUSHs(&sv_yes);
 	}
 	else {
-	    rxtainted = 0;
 	    do {
 		if (iters++ > maxiters)
 		    DIE("Substitution loop");
@@ -1537,10 +1545,11 @@ PP(pp_subst)
 		SvCUR_set(TARG, d - SvPVX(TARG) + i);
 		Move(s, d, i+1, char);		/* include the NUL */
 	    }
-	    TAINT_IF(rxtainted);
+	    TAINT_IF(rxtainted & 1);
 	    PUSHs(sv_2mortal(newSViv((I32)iters)));
 	}
 	(void)SvPOK_only(TARG);
+	TAINT_IF(rxtainted);
 	SvSETMAGIC(TARG);
 	SvTAINT(TARG);
 	LEAVE_SCOPE(oldsave);
@@ -1554,7 +1563,7 @@ PP(pp_subst)
 	    s = SvPV_force(TARG, len);
 	    goto force_it;
 	}
-	rxtainted = rx->exec_tainted;
+	rxtainted |= rx->exec_tainted;
 	dstr = NEWSV(25, sv_len(TARG));
 	sv_setpvn(dstr, m, s-m);
 	curpm = pm;
@@ -1585,8 +1594,6 @@ PP(pp_subst)
 	} while (pregexec(rx, s, strend, orig, s == m, Nullsv, savematch));
 	sv_catpvn(dstr, s, strend - s);
 
-	TAINT_IF(rxtainted);
-
 	(void)SvOOK_off(TARG);
 	Safefree(SvPVX(TARG));
 	SvPVX(TARG) = SvPVX(dstr);
@@ -1595,10 +1602,13 @@ PP(pp_subst)
 	SvPVX(dstr) = 0;
 	sv_free(dstr);
 
+	TAINT_IF(rxtainted & 1);
+	PUSHs(sv_2mortal(newSViv((I32)iters)));
+
 	(void)SvPOK_only(TARG);
+	TAINT_IF(rxtainted);
 	SvSETMAGIC(TARG);
 	SvTAINT(TARG);
-	PUSHs(sv_2mortal(newSViv((I32)iters)));
 	LEAVE_SCOPE(oldsave);
 	RETURN;
     }
@@ -1780,23 +1790,33 @@ PP(pp_entersub)
 
     gimme = GIMME_V;
     if ((op->op_private & OPpENTERSUB_DB) && GvCV(DBsub) && !CvNODEBUG(cv)) {
-	SV *oldsv = sv;
-	sv = GvSV(DBsub);
-	save_item(sv);
-	gv = CvGV(cv);
-	if ( (CvFLAGS(cv) & (CVf_ANON | CVf_CLONED))
-	     || strEQ(GvNAME(gv), "END") 
-	     || ((GvCV(gv) != cv) && /* Could be imported, and old sub redefined. */
-		 !( (SvTYPE(oldsv) == SVt_PVGV) && (GvCV((GV*)oldsv) == cv)
-		    && (gv = (GV*)oldsv) ))) { /* Use GV from the stack as a fallback. */
-	    /* GV is potentially non-unique, or contain different CV. */
-	    sv_setsv(sv, newRV((SV*)cv));
+	SV *dbsv = GvSV(DBsub);
+
+	if (!PERLDB_SUB_NN) {
+	    GV *gv = CvGV(cv);
+
+	    save_item(dbsv);
+	    if ( (CvFLAGS(cv) & (CVf_ANON | CVf_CLONED))
+		 || strEQ(GvNAME(gv), "END") 
+		 || ((GvCV(gv) != cv) && /* Could be imported, and old sub redefined. */
+		     !( (SvTYPE(sv) == SVt_PVGV) && (GvCV((GV*)sv) == cv)
+			&& (gv = (GV*)sv) ))) {
+		/* Use GV from the stack as a fallback. */
+		/* GV is potentially non-unique, or contain different CV. */
+		sv_setsv(dbsv, newRV((SV*)cv));
+	    }
+	    else {
+		gv_efullname3(dbsv, gv, Nullch);
+	    }
+	} else {
+	    SvUPGRADE(dbsv, SVt_PVIV);
+	    SvIOK_on(dbsv);
+	    SAVEIV(SvIVX(dbsv));
+	    SvIVX(dbsv) = (IV)cv;		/* Do it the quickest way  */
 	}
-	else {
-	    gv_efullname3(sv, gv, Nullch);
-	}
+	if (CvXSUB(cv)) 
+	    curcopdb = curcop;
 	cv = GvCV(DBsub);
-	if (CvXSUB(cv)) curcopdb = curcop;
 	if (!cv)
 	    DIE("No DBsub routine");
     }

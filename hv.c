@@ -100,10 +100,11 @@ I32 lval;
 
     if (SvRMAGICAL(hv)) {
 	if (mg_find((SV*)hv,'P')) {
+	    static SV *mysv;
 	    sv = sv_newmortal();
 	    mg_copy((SV*)hv, sv, key, klen);
-	    Sv = sv;
-	    return &Sv;
+	    mysv = sv;
+	    return &mysv;
 	}
 #ifdef ENV_IS_CASELESS
 	else if (mg_find((SV*)hv,'E')) {
@@ -844,7 +845,7 @@ register HE *entry;
 {
     if (!entry)
 	return;
-    if (isGV(HeVAL(entry)) && GvCVu(HeVAL(entry)) && HvNAME(hv))
+    if (HeVAL(entry) && isGV(HeVAL(entry)) && GvCVu(HeVAL(entry)) && HvNAME(hv))
 	sub_generation++;	/* may be deletion of method from stash */
     SvREFCNT_dec(HeVAL(entry));
     if (HeKLEN(entry) == HEf_SVKEY) {
