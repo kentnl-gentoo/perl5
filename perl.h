@@ -146,7 +146,7 @@ struct perl_thread;
 #endif
 
 #ifdef HASATTRIBUTE
-#  if defined(__GNUC__) && defined(__cplusplus)
+#  if (defined(__GNUC__) && defined(__cplusplus)) || defined(__INTEL_COMPILER)
 #    define PERL_UNUSED_DECL
 #  else
 #    define PERL_UNUSED_DECL __attribute__((unused))
@@ -3298,6 +3298,16 @@ END_EXTERN_C
 /*****************************************************************************/
 /* XXX This needs to be revisited, since BEGIN makes yacc re-enter... */
 
+#ifdef __Lynx__
+/* LynxOS defines these in scsi.h which is included via ioctl.h */
+#ifdef FORMAT
+#undef FORMAT
+#endif
+#ifdef SPACE
+#undef SPACE
+#endif
+#endif
+
 #include "perly.h"
 
 #define LEX_NOTPARSING		11	/* borrowed from toke.c */
@@ -4202,6 +4212,10 @@ typedef struct am_table_short AMTS;
 #endif /* !defined(USE_ITHREADS) */
 
 #ifdef I_FCNTL
+#  include <fcntl.h>
+#endif
+
+#ifdef __Lynx__
 #  include <fcntl.h>
 #endif
 
