@@ -1,6 +1,6 @@
 /*    perl.c
  *
- *    Copyright (c) 1987-2001 Larry Wall
+ *    Copyright (c) 1987-2001, 2003 Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -2273,7 +2273,7 @@ Perl_moreswitches(pTHX_ char *s)
 #endif
 
 	PerlIO_printf(PerlIO_stdout(),
-		      "\n\nCopyright 1987-2001, Larry Wall\n");
+		      "\n\nCopyright 1987-2003, Larry Wall\n");
 #ifdef MACOS_TRADITIONAL
 	PerlIO_printf(PerlIO_stdout(),
 		      "\nMac OS port Copyright (c) 1991-2001, Matthias Neeracher\n");
@@ -2691,8 +2691,13 @@ sed %s -e \"/^[^#]/b\" \
 	}
 #endif
 #endif
+#ifdef IAMSUID
+	errno = EPERM;
+	Perl_croak(aTHX_ "Permission denied\n");
+#else
 	Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
 		   CopFILE(PL_curcop), Strerror(errno));
+#endif
     }
 }
 
@@ -3006,7 +3011,7 @@ FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!\n");
     else if (fdscript >= 0)
 	Perl_croak(aTHX_ "fd script not allowed in suidperl\n");
     else
-	Perl_croak(aTHX_ "Script is not setuid/setgid in suidperl\n");
+	Perl_croak(aTHX_ "Permission denied\n");
 
     /* We absolutely must clear out any saved ids here, so we */
     /* exec the real perl, substituting fd script for scriptname. */
@@ -3357,7 +3362,7 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 	    if (!(s = strchr(*env,'=')))
 		continue;
 	    *s++ = '\0';
-#if defined(MSDOS)
+#if defined(MSDOS) && !defined(DJGPP)
 	    (void)strupr(*env);
 #endif
 	    sv = newSVpv(s--,0);

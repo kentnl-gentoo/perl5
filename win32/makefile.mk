@@ -37,6 +37,9 @@ INST_TOP	*= $(INST_DRV)\perl
 #CCTYPE		*= BORLAND
 # mingw32+gcc-2.95.2 or better
 CCTYPE		*= GCC
+# Uncomment this if you are using the latest MinGW release (2.0.0)
+# with gcc3.2
+#USE_GCC_V3_2	*= define
 
 #
 # uncomment this if your Borland compiler is older than v5.4.
@@ -68,18 +71,17 @@ CCLIBDIR	*= $(CCHOME)\lib
 #IS_WIN95	*= define
 
 #
-# if you have the source for des_fcrypt(), uncomment CRYPT_SRC and make sure
-# the file exists (see README.win32).  File should be located in the same
-# directory as this makefile.
+# if you want to have the crypt() builtin function implemented, leave this or
+# CRYPT_LIB uncommented.  The fcrypt.c file named here contains a suitable
+# version of des_fcrypt().
 #
-# If you didn't set CRYPT_SRC and if you have des_fcrypt() available in a
-# library, uncomment CRYPT_LIB, and make sure the library exists (see
-# README.win32).  Specify the full pathname of the library.
+CRYPT_SRC	*= fcrypt.c
+
 #
-# If you don't enable one of these, the crypt() builtin will fail to work.
-# (Generally not critical.)
+# if you didn't set CRYPT_SRC and if you have des_fcrypt() available in a
+# library, uncomment this, and make sure the library exists (see README.win32)
+# Specify the full pathname of the library.
 #
-#CRYPT_SRC	*= fcrypt.c
 #CRYPT_LIB	*= fcrypt.lib
 
 #
@@ -111,7 +113,7 @@ CCLIBDIR	*= $(CCHOME)\lib
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.6.1
+INST_VER	*= \5.6.2
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -411,6 +413,9 @@ LINK_FLAGS	+= -L"$(CCLIBDIR)\Release"
 
 CC		= gcc
 LINK32		= gcc
+.IF "$(USE_GCC_V3_2)" == "define"
+LINK32		= g++
+.END
 LIB32		= ar rc
 IMPLIB		= dlltool
 RSC		= rc
@@ -1144,87 +1149,87 @@ $(EXTDIR)\DynaLoader\dl_win32.xs: dl_win32.xs
 
 $(DUMPER_DLL): $(PERLEXE) $(DUMPER).xs
 	cd $(EXTDIR)\Data\$(*B) && \
-	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\Data\$(*B) && $(MAKE)
 
 $(DPROF_DLL): $(PERLEXE) $(DPROF).xs
 	cd $(EXTDIR)\Devel\$(*B) && \
-	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\Devel\$(*B) && $(MAKE)
 
 $(GLOB_DLL): $(PERLEXE) $(GLOB).xs
 	cd $(EXTDIR)\File\$(*B) && \
-	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\File\$(*B) && $(MAKE)
 
 $(PEEK_DLL): $(PERLEXE) $(PEEK).xs
 	cd $(EXTDIR)\Devel\$(*B) && \
-	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\Devel\$(*B) && $(MAKE)
 
 $(RE_DLL): $(PERLEXE) $(RE).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(B_DLL): $(PERLEXE) $(B).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(THREAD_DLL): $(PERLEXE) $(THREAD).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(ATTRS_DLL): $(PERLEXE) $(ATTRS).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(POSIX_DLL): $(PERLEXE) $(POSIX).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(IO_DLL): $(PERLEXE) $(IO).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(SDBM_FILE_DLL) : $(PERLEXE) $(SDBM_FILE).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(FCNTL_DLL): $(PERLEXE) $(FCNTL).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(OPCODE_DLL): $(PERLEXE) $(OPCODE).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(SOCKET_DLL): $(PERLEXE) $(SOCKET).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(HOSTNAME_DLL): $(PERLEXE) $(HOSTNAME).xs
 	cd $(EXTDIR)\Sys\$(*B) && \
-	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\Sys\$(*B) && $(MAKE)
 
 $(BYTELOADER_DLL): $(PERLEXE) $(BYTELOADER).xs
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 $(ERRNO_PM): $(PERLEXE) $(ERRNO)_pm.PL
 	cd $(EXTDIR)\$(*B) && \
-	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
+	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl PERL_CORE=1
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 doc: $(PERLEXE)

@@ -1,6 +1,6 @@
 /* $RCSfile: a2py.c,v $$Revision: 4.1 $$Date: 92/08/07 18:29:14 $
  *
- *    Copyright (c) 1991-2001, Larry Wall
+ *    Copyright (c) 1991-2001, 2003 Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -61,7 +61,6 @@ main(register int argc, register char **argv, register char **env)
     for (argc--,argv++; argc; argc--,argv++) {
 	if (argv[0][0] != '-' || !argv[0][1])
 	    break;
-      reswitch:
 	switch (argv[0][1]) {
 #ifdef DEBUGGING
 	case 'D':
@@ -194,6 +193,8 @@ main(register int argc, register char **argv, register char **env)
 	  "The operation I've selected may be wrong for the operand types.\n");
     }
     exit(0);
+    /* by ANSI specs return is needed. This also shuts up VC++ and his warnings */
+    return(0);
 }
 
 #define RETURN(retval) return (bufptr = s,retval)

@@ -1,6 +1,6 @@
 /*    perl.h
  *
- *    Copyright (c) 1987-2001, Larry Wall
+ *    Copyright (c) 1987-2001, 2003 Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -20,7 +20,11 @@
 #define USE_STDIO
 #endif /* PERL_FOR_X2P */
 
+#ifdef VOIDUSED
+#   undef VOIDUSED
+#endif 
 #define VOIDUSED 1
+
 #include "config.h"
 
 #if defined(USE_ITHREADS) && defined(USE_5005THREADS)
@@ -3450,9 +3454,6 @@ typedef struct am_table_short AMTS;
 /* Mention
    
    NV_PRESERVES_UV
-
-   HAS_ICONV
-   I_ICONV
 
    HAS_MKSTEMP
    HAS_MKSTEMPS

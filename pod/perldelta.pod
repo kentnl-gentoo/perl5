@@ -4,8 +4,54 @@ perldelta - what's new for perl v5.6.x
 
 =head1 DESCRIPTION
 
-This document describes differences between the 5.005 release and the 5.6.1
+This document describes differences between the 5.005 release and the 5.6.2
 release.
+
+=head1 Summary of changes between 5.6.1 and 5.6.2
+
+The 5.6.2 release is aimed at providing only a minimal update to perl 5.6.1,
+which wasn't being compatible with some of the newest compilers (most
+notably gcc 3.x), libraries and operating systems that have appeared since
+5.6.1 was released.
+
+Note also that perl no longer installs itself as F</usr/bin/perl> by
+default if it exists. (see the F<INSTALL> file.)
+
+The following modules have been upgraded :
+
+=over
+
+=item Data::Dumper 2.121
+
+=item DB_File 1.806
+
+=item ExtUtils::MakeMaker 6.17
+
+=item File::Spec 0.86
+
+=item File::Temp 0.14
+
+=item Safe 2.10
+
+=item Test 1.24
+
+=item Test::Harness 2.30
+
+=back
+
+The following modules were added :
+
+=over
+
+=item Test::Builder 0.17
+
+=item Test::More 0.47
+
+=item Test::Simple 0.47
+
+=item if 0.03
+
+=back
 
 =head1 Summary of changes between 5.6.0 and 5.6.1
 
@@ -3617,8 +3663,7 @@ warning.  And in Perl 5.005, this special treatment will cease.
 
 If you find what you think is a bug, you might check the
 articles recently posted to the comp.lang.perl.misc newsgroup.
-There may also be information at http://www.perl.com/, the Perl
-Home Page.
+There may also be information at L<http://www.perl.org/>.
 
 If you believe you have an unreported bug, please run the B<perlbug>
 program included with your release.  Be sure to trim your bug down

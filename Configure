@@ -409,7 +409,6 @@ d_getsbyport=''
 d_gnulibc=''
 d_hasmntopt=''
 d_htonl=''
-d_iconv=''
 d_inetaton=''
 d_int64_t=''
 d_isascii=''
@@ -633,7 +632,6 @@ i_float=''
 i_gdbm=''
 d_grpasswd=''
 i_grp=''
-i_iconv=''
 i_ieeefp=''
 i_inttypes=''
 i_libutil=''
@@ -1033,7 +1031,7 @@ defvoidused=15
 libswanted='sfio socket bind inet nsl nm ndbm gdbm dbm db malloc dl'
 libswanted="$libswanted dld ld sun m c cposix posix"
 libswanted="$libswanted ndir dir crypt sec"
-libswanted="$libswanted ucb bsd BSD PW x iconv util"
+libswanted="$libswanted ucb bsd BSD PW x util"
 : We probably want to search /usr/shlib before most other libraries.
 : This is only used by the lib/ExtUtils/MakeMaker.pm routine extliblist.
 glibpth=`echo " $glibpth " | sed -e 's! /usr/shlib ! !'`
@@ -1808,7 +1806,8 @@ EOH
 	dflt='n'
 	. ./myread
 	case "$ans" in
-	[yY]) echo >&4 "Okay, continuing." ;;
+	[yY]) echo >&4 "Okay, continuing."
+	      usedevel="$define" ;;
 	*) echo >&4 "Okay, bye."
 	   exit 1
 	   ;;
@@ -1816,6 +1815,16 @@ EOH
 	;;
     esac
     ;;
+esac
+case "$usedevel" in
+$define|true|[yY]*)
+	case "$versiononly" in
+	'') versiononly="$define" ;;
+	esac
+	case "$installusrbinperl" in
+	'') installusrbinperl="$undef" ;;
+	esac
+	;;
 esac
 
 : general instructions
@@ -2577,7 +2586,7 @@ EOM
 			mips)	osname=mips_osf1 ;;
 			esac
 			;;
-		unixware) osname=svr5
+		openunix|unixware) osname=svr5
 			osvers="$4"
 			;;
 		uts) osname=uts
@@ -3613,6 +3622,18 @@ dflt="$orig_dflt"
 rm -f getfile.ok
 test "X$gfpthkeep" != Xy && gfpth=""
 EOSC
+
+# gcc 3.1 complains about adding -Idirectories that it already knows about,
+# so we will take those off from locincpth.
+case "$gccversion" in
+3*)
+    echo "main(){}">try.c
+    for incdir in `$cc -v -c try.c 2>&1 | \
+       sed '1,/^#include <\.\.\.>/d;/^End of search list/,$d;s/^ //'` ; do
+       locincpth=`echo $locincpth | sed s!$incdir!!`
+    done
+    $rm -f try try.*
+esac
 
 : What should the include directory be ?
 echo " "
@@ -5066,7 +5087,7 @@ nm_extract="$com"
 if $test -f /lib/syscalls.exp; then
 	echo " "
 	echo "Also extracting names from /lib/syscalls.exp for good ole AIX..." >&4
-	$sed -n 's/^\([^ 	]*\)[ 	]*syscall[0-9]*$/\1/p' /lib/syscalls.exp >>libc.list
+	$sed -n 's/^\([^ 	]*\)[ 	]*syscall[0-9]*[ 	]*$/\1/p' /lib/syscalls.exp >>libc.list
 fi
 ;;
 esac
@@ -5075,9 +5096,9 @@ $rm -f libnames libpath
 : is a C symbol defined?
 csym='tlook=$1;
 case "$3" in
--v) tf=libc.tmp; tc=""; tdc="";;
--a) tf=libc.tmp; tc="[0]"; tdc="[]";;
-*) tlook="^$1\$"; tf=libc.list; tc="()"; tdc="()";;
+-v) tf=libc.tmp; tdc="";;
+-a) tf=libc.tmp; tdc="[]";;
+*) tlook="^$1\$"; tf=libc.list; tdc="()";;
 esac;
 tx=yes;
 case "$reuseval-$4" in
@@ -5086,25 +5107,28 @@ true-*) tx=no; eval "tval=\$$4"; case "$tval" in "") tx=yes;; esac;;
 esac;
 case "$tx" in
 yes)
-	case "$runnm" in
-	true)
-		if $contains $tlook $tf >/dev/null 2>&1;
-		then tval=true;
-		else tval=false;
-		fi;;
-	*)
-		echo "int main() { extern short $1$tdc; printf(\"%hd\", $1$tc); }" > t.c;
-		if $cc -o t $optimize $ccflags $ldflags t.c $libs >/dev/null 2>&1;
-		then tval=true;
-		else tval=false;
+	tval=false;
+	if $test "$runnm" = true; then
+		if $contains $tlook $tf >/dev/null 2>&1; then
+			tval=true;
+		elif $test "$mistrustnm" = compile -o "$mistrustnm" = run; then
+			echo "void *(*(p()))$tdc { extern void *$1$tdc; return &$1; } int main() { if(p()) return(0); else return(1); }"> try.c;
+			$cc -o try $optimize $ccflags $ldflags try.c >/dev/null 2>&1 $libs && tval=true;
+			$test "$mistrustnm" = run -a -x try && { $run ./try$_exe >/dev/null 2>&1 || tval=false; };
+			$rm -f try$_exe try.c core core.* try.core;
 		fi;
-		$rm -f t t.c;;
-	esac;;
+	else
+		echo "void *(*(p()))$tdc { extern void *$1$tdc; return &$1; } int main() { if(p()) return(0); else return(1); }"> try.c;
+		$cc -o try $optimize $ccflags $ldflags try.c $libs >/dev/null 2>&1 && tval=true;
+		$rm -f try$_exe try.c;
+	fi;
+	;;
 *)
 	case "$tval" in
 	$define) tval=true;;
 	*) tval=false;;
-	esac;;
+	esac;
+	;;
 esac;
 eval "$2=$tval"'
 
@@ -5875,8 +5899,25 @@ do set $yyy; var=$2; eval "was=\$$2";
 done'
 
 : see if this is a malloc.h system
-set malloc.h i_malloc
-eval $inhdr
+: we want a real compile instead of Inhdr because some systems have a
+: malloc.h that just gives a compile error saying to use stdlib.h instead
+echo " "
+$cat >try.c <<EOCP
+#include <stdlib.h>
+#include <malloc.h>
+int main () { return 0; }
+EOCP
+set try
+if eval $compile; then
+    echo "<malloc.h> found." >&4
+    val="$define"
+else
+    echo "<malloc.h> NOT found." >&4
+    val="$undef"
+fi
+$rm -f try.c try
+set i_malloc
+eval $setvar
 
 : see if stdlib is available
 set stdlib.h i_stdlib
@@ -6404,13 +6445,33 @@ echo " "
 if $test -d /usr/bin -a "X$installbin" != X/usr/bin; then
 	$cat <<EOM
 Many scripts expect perl to be installed as /usr/bin/perl.
-I can install the perl you are about to compile also as /usr/bin/perl
-(in addition to $installbin/perl).
+
+If you want to, I can install the perl you are about to compile
+as /usr/bin/perl (in addition to $bin/perl).
 EOM
-	case "$installusrbinperl" in
-	"$undef"|[nN]*)	dflt='n';;
-	*)		dflt='y';;
-	esac
+	if test -f /usr/bin/perl; then
+	    $cat <<EOM
+
+However, please note that because you already have a /usr/bin/perl,
+overwriting that with a new Perl would very probably cause problems.
+Therefore I'm assuming you don't want to do that (unless you insist).
+
+EOM
+	    case "$installusrbinperl" in
+	    "$define"|[yY]*)	dflt='y';;
+	    *)		 	dflt='n';;
+	    esac
+	else
+	    $cat <<EOM
+
+Since you don't have a /usr/bin/perl I'm assuming creating one is okay. 
+
+EOM
+	    case "$installusrbinperl" in
+	    "$undef"|[nN]*)	dflt='n';;
+	    *)		 	dflt='y';;
+	    esac
+    	fi
 	rp="Do you want to install perl as /usr/bin/perl?"
 	. ./myread
 	case "$ans" in
@@ -9734,10 +9795,6 @@ EOM
 esac
 set d_htonl
 eval $setvar
-
-: see if iconv exists
-set iconv d_iconv
-eval $inlibc
 
 : index or strchr
 echo " "
@@ -14714,10 +14771,6 @@ esac
 set i_fcntl
 eval $setvar
 
-: see if this is a iconv.h system
-set iconv.h i_iconv
-eval $inhdr
-
 : see if this is a ieeefp.h system
 set ieeefp.h i_ieeefp
 eval $inhdr
@@ -15809,7 +15862,6 @@ d_gnulibc='$d_gnulibc'
 d_grpasswd='$d_grpasswd'
 d_hasmntopt='$d_hasmntopt'
 d_htonl='$d_htonl'
-d_iconv='$d_iconv'
 d_index='$d_index'
 d_inetaton='$d_inetaton'
 d_int64_t='$d_int64_t'
@@ -16061,7 +16113,6 @@ i_fcntl='$i_fcntl'
 i_float='$i_float'
 i_gdbm='$i_gdbm'
 i_grp='$i_grp'
-i_iconv='$i_iconv'
 i_ieeefp='$i_ieeefp'
 i_inttypes='$i_inttypes'
 i_libutil='$i_libutil'
