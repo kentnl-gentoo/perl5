@@ -145,7 +145,7 @@ Not being able to say "no diagnostics" is annoying, but may not be
 insurmountable.
 
 The C<-pretty> directive is called too late to affect matters.
-You have to to this instead, and I<before> you load the module.
+You have to do this instead, and I<before> you load the module.
 
     BEGIN { $diagnostics::PRETTY = 1 } 
 
@@ -451,6 +451,7 @@ sub death_trap {
 
 sub splainthis {
     local $_ = shift;
+    local $\;
     ### &finish_compilation unless %msg;
     s/\.?\n+$//;
     my $orig = $_;

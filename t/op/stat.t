@@ -1,8 +1,6 @@
 #!./perl
 
 # $RCSfile: stat.t,v $$Revision: 4.1 $$Date: 92/08/07 18:28:28 $
-# 950521 DFD    This version hacked to make test 39 succeed on MachTen
-#               though the O.S. wrongly thinks /dev/null is a terminal
 
 BEGIN {
     chdir 't' if -d 't';
@@ -27,7 +25,8 @@ $junk = `ls Op.stat.tmp` unless $Is_MSWin32;
 ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
     $blksize,$blocks) = stat(FOO);
 if ($nlink == 1) {print "ok 1\n";} else {print "not ok 1\n";}
-if ($mtime && $mtime == $ctime) {print "ok 2\n";} else {print "not ok 2\n";}
+if ($Is_MSWin32 || ($mtime && $mtime == $ctime)) {print "ok 2\n";}
+else {print "# |$mtime| vs |$ctime|\nnot ok 2\n";}
 
 print FOO "Now is the time for all good men to come to.\n";
 close(FOO);
@@ -42,16 +41,16 @@ else {
 ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,$ctime,
     $blksize,$blocks) = stat('Op.stat.tmp');
 
-if ($Config{dont_use_nlink} || $nlink == 2)
-    {print "ok 3\n";} else {print "not ok 3\n";}
+if ($Is_MSWin32 || $Config{dont_use_nlink} || $nlink == 2)
+    {print "ok 3\n";} else {print "# \$nlink is |$nlink|\nnot ok 3\n";}
 
-if (($mtime && $mtime != $ctime) || $cwd =~ m#/afs/# || $^O eq 'amigaos') {
+if ($Is_MSWin32 || ($mtime && $mtime != $ctime) || $cwd =~ m#/afs/# || $^O eq 'amigaos') {
     print "ok 4\n";
 }
 else {
     print "not ok 4\n";
-    print '#4 If test op/stat.t fails test 4, check if you are on a tmpfs';
-    print '#4 of some sort.  Building in /tmp sometimes has this problem.';
+    print "#4 If test op/stat.t fails test 4, check if you are on a tmpfs\n";
+    print "#4 of some sort.  Building in /tmp sometimes has this problem.\n";
 }
 print "#4	:$mtime: != :$ctime:\n";
 
@@ -84,7 +83,7 @@ foreach ((12,13,14,15,16,17)) {
 chmod 0700,'Op.stat.tmp';
 if (-r 'Op.stat.tmp') {print "ok 18\n";} else {print "not ok 18\n";}
 if (-w 'Op.stat.tmp') {print "ok 19\n";} else {print "not ok 19\n";}
-if (-x 'Op.stat.tmp') {print "ok 20\n";} else {print "not ok 20\n";}
+if ($Is_MSWin32 or -x 'Op.stat.tmp') {print "ok 20\n";} else {print "not ok 20\n";}
 
 if (-f 'Op.stat.tmp') {print "ok 21\n";} else {print "not ok 21\n";}
 if (! -d 'Op.stat.tmp') {print "ok 22\n";} else {print "not ok 22\n";}
@@ -140,7 +139,7 @@ if ($^O eq 'amigaos' or $Is_MSWin32) {print "ok 35\n"; goto tty_test;}
 $cnt = $uid = 0;
 
 die "Can't run op/stat.t test 35 without pwd working" unless $cwd;
-($bin) = grep {-d} qw(/bin /usr/bin)
+($bin) = grep {-d} ($^O eq 'machten' ? qw(/usr/bin /bin) : qw(/bin /usr/bin))
     or print ("not ok 35\n"), goto tty_test;
 opendir BIN, $bin or die "Can't opendir $bin: $!";
 while (defined($_ = readdir BIN)) {
@@ -173,7 +172,7 @@ else {
 }
 if (! -t tty) {print "ok 38\n";} else {print "not ok 38\n";}
 open(null,"/dev/null");
-if (! -t null || -e '/xenix' || -e '/MachTen' || $Is_MSWin32)
+if (! -t null || -e '/xenix' || $^O eq 'machten' || $Is_MSWin32)
 	{print "ok 39\n";} else {print "not ok 39\n";}
 close(null);
 if (-t) {print "ok 40\n";} else {print "not ok 40\n";}

@@ -4,12 +4,17 @@ specially designed to be readable as is.
 
 =head1 NAME
 
-perlwin32 - Perl under WindowsNT [XXX and perhaps under Windows95]
+perlwin32 - Perl under Win32
 
 =head1 SYNOPSIS
 
 These are instructions for building Perl under WindowsNT (versions
-3.51 or 4.0), using Visual C++.
+3.51 or 4.0), using Visual C++ (versions 2.0 through 5.0).  Currently,
+this port may also build under Windows95, but you can expect problems
+stemming from the unmentionable command shell that infests that
+platform.  Note this caveat is only about B<building> perl.  Once
+built, you should be able to B<use> it on either Win32 platform (modulo
+the problems arising from the inferior command shell).
 
 =head1 DESCRIPTION
 
@@ -37,7 +42,11 @@ port of Perl to Win32 platforms.  The resulting Perl requires no
 additional software to run (other than what came with your operating
 system).  Currently, this port is only capable of using Microsoft's
 Visual C++ compiler.  The ultimate goal is to support the other major
-compilers that can be used on the platforms.
+compilers that can be used to build Win32 applications.
+
+This port currently supports MakeMaker (the set of modules that
+is used to build extensions to perl).  Therefore, you should be
+able to build and install most extensions found in the CPAN sites.
 
 =head2 Setting Up
 
@@ -47,7 +56,8 @@ compilers that can be used on the platforms.
 
 Use the default "cmd" shell that comes with NT.  In particular, do
 *not* use the 4DOS/NT shell.  The Makefile has commands that are not
-compatible with that shell.
+compatible with that shell.  You are mostly on your own if you can
+muster the temerity to attempt this with Windows95.
 
 =item *
 
@@ -68,94 +78,50 @@ but it doesn't hurt to do so.
 
 =back
 
-=head2 Building and Installation
+=head2 Building
 
 =over 4
 
 =item *
 
-The "win32" directory contains *.mak files for use with the NMAKE that
-comes with Visual C++ ver. 4.0 and above.  If you wish to build perl
-using Visual C++ versions between 2.0 and 4.0, do the following two
-additional steps (these steps are not required if you are
-using Visual C++ versions 4.0 and above):
-
-=over 8
-
-=item 1.
-
-Overwrite the *.mak files in the win32 subdirectory with the versions
-in the win32\VC-2.0 directory.
-
-=item 2.
-
-Reset your INCLUDE environment variable to the MSVC include directory.
-For example:
-
-	set INCLUDE=E:\MSVC20\INCLUDE
-
-This must have only one directory (a list of directories will not work).
-VCVARS32.BAT may put multiple locations in there, which is why this step
-is required.
-
-=back
-
-=item * 
-
 Make sure you are in the "win32" subdirectory under the perl toplevel.
+This directory contains a "Makefile" that will work with
+versions of NMAKE that come with Visual C++ ver. 2.0 and above.
 
 =item *
 
-Type "nmake" while in the "win32" subdirectory.  This should build
-everything.  Specifically, it will create perl.exe, perl.dll, and
-perlglob.exe at the perl toplevel, and various other extension dll's
-under the lib\auto directory.  If the make fails for any reason, make
-sure you have done the previous steps correctly.
+Edit the Makefile and change the values of INST_DRV and INST_TOP
+if you want perl to be installed in a location other than "C:\PERL".
 
 =item *
 
-Type "nmake install".  This will put the newly built perl and the
-libraries under C:\PERL.  If you want to alter this location, to say,
-D:\FOO\PERL, you will have to say:
+If you are using Visual C++ ver. 4.0 and above: type "nmake".
+If you are using a Visual C++ ver. 2.0: type "nmake CCTYPE=MSVC20".
 
-	nmake install INST_TOP=D:\FOO\PERL
-
-instead.  To use the Perl you just installed, make sure you set your
-PATH environment variable to C:\PERL\BIN (or D:\FOO\PERL\BIN).
+This should build everything.  Specifically, it will create perl.exe,
+perl.dll, and perlglob.exe at the perl toplevel, and various other
+extension dll's under the lib\auto directory.  If the make fails for
+any reason, make sure you have done the previous steps correctly.
 
 =back
 
 =head2 Testing
 
 Type "nmake test".  This will run most of the tests from the
-testsuite (many tests will be skipped, and some tests will fail).
-Most failures are due to UNIXisms in the standard perl testsuite.
+testsuite (many tests will be skipped, and but no test should fail).
 
-To get a more detailed breakdown of the tests that failed, say:
+If some tests do fail, it may be because you are using a different command
+shell than the native "cmd.exe".
 
-       cd ..\t
-       .\perl harness
+Please report any failures as described under L<BUGS AND CAVEATS>.
 
-This should produce a summary very similar to the following:
+=head2 Installation
 
-    Failed Test  Status Wstat Total Fail  Failed  List of failed
-    ------------------------------------------------------------------------------
-    io/fs.t                      26   16  61.54%  1-5, 7-11, 16-18, 23-25
-    lib/anydbm.t                 12    1   8.33%  2
-    lib/findbin.t                 1    1 100.00%  1
-    lib/sdbm.t                   12    1   8.33%  2
-    op/magic.t                   28    1   3.57%  16
-    op/mkdir.t                    7    2  28.57%  3, 7
-    op/runlevel.t                 8    1  12.50%  4
-    op/stat.t                    56    3   5.36%  2-3, 20
-    op/taint.t                   98   20  20.41%  1-6, 14, 16, 19-21, 24, 26, 35-3
-    pragma/locale.t              98   40  40.82%  1, 13-14, 21-27, 33, 39, 45-53,
-    Failed 10/149 test scripts, 93.29% okay. 86/3871 subtests failed, 97.78% okay.
-
-
-Check if any additional tests other than the ones shown here
-failed.  The standard testsuite will ultimately be modified so
-that the testsuite avoids running irrelevant tests on Win32.
+Type "nmake install".  This will put the newly built perl and the
+libraries under "C:\PERL" (actually whatever you set INST_TOP to
+in the Makefile).  To use the Perl you just installed, set your
+PATH environment variable to "C:\PERL\BIN" (or $(INST_TOP)\BIN, if you
+changed the default as above).
 
 =head1 BUGS AND CAVEATS
 
@@ -163,12 +129,12 @@ This is still very much an experimental port, and should be considered
 alpha quality software.  You can expect changes in virtually all of
 these areas: build process, installation structure, supported
 utilities/modules, and supported perl functionality.  Specifically,
-functionality that supports the Win32 environment may ultimately
+functionality specific to the Win32 environment may ultimately
 be supported as either core modules or extensions.
 
-Many tests from the standard testsuite either fail or produce different
-results under this port.  Most of the problems fall under one of these
-categories
+If you have had prior exposure to Perl on Unix platforms, you will notice
+this port exhibits behavior different from what is documented.  Most of the
+differences fall under one of these categories.
 
 =over 8
 
@@ -181,9 +147,10 @@ platforms, and some fields may be completely bogus.
 =item *
 
 The following functions are currently unavailable: C<fork()>, C<exec()>,
-C<dump()>, C<kill()>, C<chown()>, C<link()>, C<symlink()>, C<chroot()>,
+C<dump()>, C<chown()>, C<link()>, C<symlink()>, C<chroot()>,
 C<setpgrp()>, C<getpgrp()>, C<setpriority()>, C<getpriority()>,
-C<syscall()>, C<fcntl()>, C<flock()>.  This list is possibly incomplete.
+C<syscall()>, C<fcntl()>, C<flock()>.  This list is possibly very
+incomplete.
 
 =item *
 
@@ -201,7 +168,10 @@ when used to call interactive commands, is ill-defined.
 
 =item *
 
-C<$!> doesn't work reliably yet.
+C<$?> ends up with the exitstatus of the subprocess (this is different
+from Unix, where the exitstatus is actually given by "$? >> 8").
+Failure to spawn() the subprocess is indicated by setting $? to 
+"255<<8".  This is subject to change.
 
 =item *
 
@@ -259,7 +229,6 @@ at the time.
 Nick Ing-Simmons and Gurusamy Sarathy have made numerous and
 sundry hacks since then.
 
-Last updated: 19 March 1997
+Last updated: 13 April 1997
 
 =cut
-

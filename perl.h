@@ -37,7 +37,7 @@
  * Trying to select a version that gives no warnings...
  */
 #if !(defined(STMT_START) && defined(STMT_END))
-# if defined(__GNUC__) && !defined(__STRICT_ANSI__)
+# if defined(__GNUC__) && !defined(__STRICT_ANSI__) && !defined(__cplusplus)
 #   define STMT_START	(void)(	/* gcc supports ``({ STATEMENTS; })'' */
 #   define STMT_END	)
 # else
@@ -983,6 +983,11 @@ union any {
     void	(*any_dptr) _((void*));
 };
 
+/* Work around some cygwin32 problems with importing global symbols */
+#if defined(CYGWIN32) && defined(DLLIMPORT) 
+#   include "cw32imp.h"
+#endif
+
 #include "regexp.h"
 #include "sv.h"
 #include "util.h"
@@ -1349,7 +1354,6 @@ EXT SV **	curpad;
 /* temp space */
 EXT SV *	Sv;
 EXT XPV *	Xpv;
-EXT char	buf[2048];	/* should be longer than PATH_MAX */
 EXT char	tokenbuf[256];
 EXT struct stat	statbuf;
 #ifdef HAS_TIMES
@@ -1874,6 +1878,7 @@ IEXT bool	Ipreambled;
 IEXT AV *	Ipreambleav;
 IEXT int	Ilaststatval IINIT(-1);
 IEXT I32	Ilaststype IINIT(OP_STAT);
+IEXT SV *	Imess_sv;
 
 #undef IEXT
 #undef IINIT

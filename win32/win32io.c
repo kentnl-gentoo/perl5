@@ -16,7 +16,7 @@ extern "C" {
 #include <assert.h>
 #include <errno.h>
 #include <process.h>
-
+#include <direct.h>
 #include "win32iop.h"
 
 /*
@@ -29,6 +29,12 @@ static int *
 dummy_errno(void)
 {
     return (&(errno));
+}
+
+static char ***
+dummy_environ(void)
+{
+    return (&(_environ));
 }
 
 /* the rest are the remapped stdio routines */
@@ -59,6 +65,12 @@ dummy_globalmode(int mode)
     return o;
 }
 
+#ifdef _DLL
+/* It may or may not be fixed (ok on NT), but DLL runtime
+   does not export the functions used in the workround
+*/
+#define WIN95_OSFHANDLE_FIXED
+#endif
 
 #if defined(_WIN32) && !defined(WIN95_OSFHANDLE_FIXED) && defined(_M_IX86)
 
@@ -166,7 +178,7 @@ my_open_osfhandle(long osfhandle, int flags)
 #else
 
 int __cdecl
-stolen_open_osfhandle(long osfhandle, int flags)
+my_open_osfhandle(long osfhandle, int flags)
 {
     return _open_osfhandle(osfhandle, flags);
 }
@@ -184,6 +196,7 @@ __declspec(dllexport)
 WIN32_IOSUBSYSTEM	win32stdio = {
     12345678L,		/* begin of structure; */
     dummy_errno,	/* (*pfunc_errno)(void); */
+    dummy_environ,	/* (*pfunc_environ)(void); */
     dummy_stdin,	/* (*pfunc_stdin)(void); */
     dummy_stdout,	/* (*pfunc_stdout)(void); */
     dummy_stderr,	/* (*pfunc_stderr)(void); */
@@ -231,6 +244,9 @@ WIN32_IOSUBSYSTEM	win32stdio = {
     my_open_osfhandle,
     my_get_osfhandle,
     spawnvpe,
+    _mkdir,
+    _rmdir,
+    _chdir,
     87654321L,		/* end of structure */
 };
 

@@ -27,7 +27,7 @@ operate on scalar values only, not array values.
     left	| ^
     left	&&
     left	||
-    nonassoc	..
+    nonassoc	..  ...
     right	?:
     right	= += -= *= etc.
     left	, =>
@@ -701,7 +701,10 @@ matches.  (In other words, it remembers where it left off last time and
 restarts the search at that point.  You can actually find the current
 match position of a string or set it using the pos() function--see
 L<perlfunc/pos>.)  Note that you can use this feature to stack C<m//g>
-matches or intermix C<m//g> matches with C<m/\G.../>.
+matches or intermix C<m//g> matches with C<m/\G.../g>.  Note that
+the C<\G> zero-width assertion is not supported without the C</g>
+modifier; currently, without C</g>, C<\G> behaves just like C<\A>, but
+that's accidental and may change in the future.
 
 If you modify the string in any way, the match position is reset to the
 beginning.  Examples:
@@ -719,12 +722,12 @@ beginning.  Examples:
     print "$sentences\n";
 
     # using m//g with \G
-    $_ = "ppooqppq";
+    $_ = "ppooqppqq";
     while ($i++ < 2) {
         print "1: '";
         print $1 while /(o)/g; print "', pos=", pos, "\n";
         print "2: '";
-        print $1 if /\G(q)/;   print "', pos=", pos, "\n";
+        print $1 if /\G(q)/g;  print "', pos=", pos, "\n";
         print "3: '";
         print $1 while /(p)/g; print "', pos=", pos, "\n";
     }
@@ -732,14 +735,11 @@ beginning.  Examples:
 The last example should print:
 
     1: 'oo', pos=4
-    2: 'q', pos=4
+    2: 'q', pos=5
     3: 'pp', pos=7
     1: '', pos=7
-    2: 'q', pos=7
-    3: '', pos=7
-
-Note how C<m//g> matches change the value reported by C<pos()>, but the
-non-global match doesn't.
+    2: 'q', pos=8
+    3: '', pos=8
 
 A useful idiom for C<lex>-like scanners is C</\G.../g>. You can
 combine several regexps like this to process a string part-by-part,
@@ -797,7 +797,7 @@ A double-quoted, interpolated string.
 
 A string which is interpolated and then executed as a system command.
 The collected standard output of the command is returned.  In scalar
-context, it comes back as a single (potentially multiline) string.
+context, it comes back as a single (potentially multi-line) string.
 In list context, returns a list of lines (however you've defined lines
 with $/ or $INPUT_RECORD_SEPARATOR).
 

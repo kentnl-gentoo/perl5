@@ -35,6 +35,29 @@ variable as if its contents had appeared on a "#!perl" line at the
 beginning of your script, except that hyphens are optional.  PERL5OPT
 may only be used to set the following switches: B<-[DIMUdmw]>.
 
+=head2 Limitations on B<-M>, and C<-m>, and B<-T> options
+
+The C<-M> and C<-m> options are no longer allowed on the C<#!> line of
+a script.  If a script needs a module, it should invoke it with the
+C<use> pragma.
+
+The B<-T> option is also forbidden on the C<#!> line of a script,
+unless it was present on the Perl command line.  Due to the way C<#!>
+works, this usually means that B<-T> must be in the first argument.
+Thus:
+
+    #!/usr/bin/perl -T -w
+
+will probably work for an executable script invoked as C<scriptname>,
+while:
+
+    #!/usr/bin/perl -w -T
+
+will probably fail under the same conditions.  (Non-Unix systems will
+probably not follow this rule.)  But C<perl scriptname> is guaranteed
+to fail, since then there is no chance of B<-T> being found on the
+command line before it is found on the C<#!> line.
+
 =head2 More precise warnings
 
 If you removed the B<-w> option from your Perl 5.003 scripts because it
@@ -84,13 +107,30 @@ After this code executes in Perl 5.004, $a{b} exists but $a[2] does
 not.  In Perl 5.002 and 5.003, both $a{b} and $a[2] would have existed
 (but $a[2]'s value would have been undefined).
 
+=head2 Group vector changeable with C<$)>
+
+The C<$)> special variable has always (well, in Perl 5, at least)
+reflected not only the current effective group, but also the group list
+as returned by the C<getgroups()> C function (if there is one).
+However, until this release, there has not been a way to call the
+C<setgroups()> C function from Perl.
+
+In Perl 5.004, assigning to C<$)> is exactly symmetrical with examining
+it: The first number in its string value is used as the effective gid;
+if there are any numbers after the first one, they are passed to the
+C<setgroups()> C function (if there is one).
+
 =head2 Fixed parsing of $$<digit>, &$<digit>, etc.
 
-A bug in previous versions of Perl 5.0 prevented proper parsing of
-numeric special variables as symbolic references.  That bug has been
-fixed.  As a result, the string "$$0" is no longer equivalent to
-C<$$."0">, but rather to C<${$0}>.  To get the old behavior, change
-"$$" followed by a digit to "${$}".
+Perl versions before 5.004 misinterpreted any type marker followed by
+"$" and a digit.  For example, "$$0" was incorrectly taken to mean
+"${$}0" instead of "${$0}".  This bug is (mostly) fixed in Perl 5.004.
+
+However, the developers of Perl 5.004 could not fix this bug completely,
+because at least two widely-used modules depend on the old meaning of
+"$$0" in a string.  So Perl 5.004 still interprets "$$<digit>" in the
+old (broken) way inside strings; but it generates this message as a
+warning.  And in Perl 5.005, this special treatment will cease.
 
 =head2 No resetting of $. on implicit close
 
@@ -110,9 +150,9 @@ calculation of a return value if it isn't going to be used.
 =head2 Changes to tainting checks
 
 A bug in previous versions may have failed to detect some insecure
-conditions when taint checks are turned on. (Taint checks are used
+conditions when taint checks are turned on.  (Taint checks are used
 in setuid or setgid scripts, or when explicitly turned on with the
-C<-T> invocation option.) Although it's unlikely, this may cause a
+C<-T> invocation option.)  Although it's unlikely, this may cause a
 previously-working script to now fail -- which should be construed
 as a blessing, since that indicates a potentially-serious security
 hole was just plugged.
@@ -251,13 +291,23 @@ the loop, but not beyond it.
 Note that you still cannot use my() on global punctuation variables
 such as $_ and the like.
 
-=item unpack() and pack()
+=item pack() and unpack()
 
 A new format 'w' represents a BER compressed integer (as defined in
 ASN.1).  Its format is a sequence of one or more bytes, each of which
 provides seven bits of the total value, with the most significant
 first.  Bit eight of each byte is set, except for the last byte, in
 which bit eight is clear.
+
+Both pack() and unpack() now fail when their templates contain invalid
+types.  (Invalid types used to be ignored.)
+
+=item sysseek()
+
+The new sysseek() operator is a variant of seek() that sets and gets the
+file's system read/write position, using the lseek(2) system call.  It is
+the only reliable way to seek before using sysread() or syswrite().  Its
+return value is the new position, or the undefined value on failure.
 
 =item use VERSION
 
@@ -310,15 +360,25 @@ of course, or if you want a seed other than the default.
 Functions documented in the Camel to default to $_ now in
 fact do, and all those that do are so documented in L<perlfunc>.
 
-=item C<m//g> does not trigger a pos() reset on failure
+=item C<m//g> does not reset search position on failure
 
-The C<m//g> match iteration construct used to reset the iteration
-when it failed to match (so that the next C<m//g> match would start at
-the beginning of the string).  You now have to explicitly do a
-C<pos $str = 0;> to reset the "last match" position, or modify the
-string in some way.  This change makes it practical to chain C<m//g>
-matches together in conjunction with ordinary matches using the C<\G>
-zero-width assertion.  See L<perlop> and L<perlre>.
+The C<m//g> match iteration construct used to reset its target string's
+search position (which is visible through the C<pos> operator) when a
+match failed; as a result, the next C<m//g> match would start at the
+beginning of the string).  With Perl 5.004, the search position must be
+reset explicitly, as with C<pos $str = 0;>, or by modifying the target
+string.  This change in Perl makes it possible to chain matches together
+in conjunction with the C<\G> zero-width assertion.  See L<perlop> and
+L<perlre>.
+
+Here is an illustration of what it takes to get the old behavior:
+
+    for ( qw(this and that are not what you think you got) ) {
+        while ( /(\w*t\w*)/g ) { print "t word is: $1\n" }
+        pos = 0;  # REQUIRED FOR 5.004
+        while ( /(\w*a\w*)/g ) { print "a word is: $1\n" }
+        print "\n";
+    }
 
 =item C<m//x> ignores whitespace before ?*+{}
 
@@ -428,6 +488,19 @@ the print function.
 	$r = shift;
 	$$r++;
 	return print join( $, => map {uc} @_), $\;
+    }
+
+=item PRINTF this, LIST
+
+This method will be triggered every time the tied handle is printed to
+with the C<printf()> function.
+Beyond its self reference it also expects the format and list that was
+passed to the printf function.
+
+    sub PRINTF {
+        shift;
+	  my $fmt = shift;
+        print sprintf($fmt, @_)."\n";
     }
 
 =item READ this LIST
@@ -600,6 +673,21 @@ relative to the local time zone, in the VMS tradition.
 
 =head1 Modules
 
+=head2 Required Updates
+
+Though Perl 5.004 is compatible with almost all modules that work
+with Perl 5.003, there are a few exceptions:
+
+    Module   Required Version for Perl 5.004
+    ------   -------------------------------
+    Filter   Filter-1.12
+    LWP      libwww-perl-5.08
+    Tk       Tk400.202 (-w makes noise)
+
+Also, the majordomo mailing list program, version 1.94.1, doesn't work
+with Perl 5.004 (nor with perl 4), because it executes an invalid
+regular expression.  This bug is fixed in majordomo version 1.94.2.
+
 =head2 Installation directories
 
 The I<installperl> script now places the Perl source files for
@@ -615,9 +703,16 @@ shared libraries.
 Brand new modules, arranged by topic rather than strictly
 alphabetically:
 
-    CPAN                 interface to Comprehensive Perl Archive Network
-    CPAN::FirstTime      create a CPAN configuration file
-    CPAN::Nox            run CPAN while avoiding compiled extensions
+    CGI.pm               Web server interface ("Common Gateway Interface")
+    CGI/Apache.pm        Support for Apache's Perl module
+    CGI/Carp.pm          Log server errors with helpful context
+    CGI/Fast.pm          Support for FastCGI (persistent server process)
+    CGI/Push.pm          Support for server push
+    CGI/Switch.pm        Simple interface for multiple server types
+
+    CPAN                 Interface to Comprehensive Perl Archive Network
+    CPAN::FirstTime      Utility for creating CPAN configuration file
+    CPAN::Nox            Runs CPAN while avoiding compiled extensions
 
     IO.pm                Top-level interface to IO::* classes
     IO/File.pm           IO::File extension Perl module
@@ -634,17 +729,17 @@ alphabetically:
 
     FindBin.pm           Find path of currently executing program
 
-    Class/Template.pm    Structure/member template builder
-    File/stat.pm         Object-oriented wrapper around CORE::stat
-    Net/hostent.pm       Object-oriented wrapper around CORE::gethost*
-    Net/netent.pm        Object-oriented wrapper around CORE::getnet*
-    Net/protoent.pm      Object-oriented wrapper around CORE::getproto*
-    Net/servent.pm       Object-oriented wrapper around CORE::getserv*
-    Time/gmtime.pm       Object-oriented wrapper around CORE::gmtime
-    Time/localtime.pm    Object-oriented wrapper around CORE::localtime
-    Time/tm.pm           Perl implementation of "struct tm" for {gm,local}time
-    User/grent.pm        Object-oriented wrapper around CORE::getgr*
-    User/pwent.pm        Object-oriented wrapper around CORE::getpw*
+    Class/Struct.pm      Declare struct-like datatypes as Perl classes
+    File/stat.pm         By-name interface to Perl's builtin stat
+    Net/hostent.pm       By-name interface to Perl's builtin gethost*
+    Net/netent.pm        By-name interface to Perl's builtin getnet*
+    Net/protoent.pm      By-name interface to Perl's builtin getproto*
+    Net/servent.pm       By-name interface to Perl's builtin getserv*
+    Time/gmtime.pm       By-name interface to Perl's builtin gmtime
+    Time/localtime.pm    By-name interface to Perl's builtin localtime
+    Time/tm.pm           Internal object for Time::{gm,local}time
+    User/grent.pm        By-name interface to Perl's builtin getgr*
+    User/pwent.pm        By-name interface to Perl's builtin getpw*
 
     Tie/RefHash.pm       Base class for tied hashes with references as keys
 
@@ -698,10 +793,21 @@ more operations.  These are overloaded:
 And these functions are now exported:
 
     pi i Re Im arg
-    log10 logn cbrt root
-    tan cotan asin acos atan acotan
-    sinh cosh tanh cotanh asinh acosh atanh acotanh
+    log10 logn ln cbrt root
+    tan
+    csc sec cot
+    asin acos atan
+    acsc asec acot
+    sinh cosh tanh
+    csch sech coth
+    asinh acosh atanh
+    acsch asech acoth
     cplx cplxe
+
+=head2 Math::Trig
+
+This new module provides a simpler interface to parts of Math::Complex for
+those who need trigonometric functions only for real numbers.
 
 =head2 DB_File
 
@@ -814,6 +920,13 @@ The most likely symptom of passing the result of C<gv_fetchmethod> to
 C<perl_call_sv> is Perl's producing an "Undefined subroutine called"
 error on the I<second> call to a given method (since there is no cache
 on the first call).
+
+=item C<perl_eval_pv>
+
+A new function handy for eval'ing strings of Perl code inside C code.
+This function returns the value from the eval statement, which can
+be used instead of fetching globals from the symbol table.  See
+L<perlguts>, L<perlembed> and L<perlcall> for details and examples.
 
 =item Extended API for manipulating hashes
 
@@ -966,6 +1079,13 @@ you called it with no args and both C<$@> and C<$_> were empty.
 subroutine) by unconventional means, such as a goto, or a loop control
 statement.  See L<perlfunc/sort>.
 
+=item Identifier too long
+
+(F) Perl limits identifiers (names for variables, functions, etc.) to
+252 characters for simple names, somewhat more for compound names (like
+C<$A::B>).  You've exceeded Perl's limits.  Future versions of Perl are
+likely to eliminate these arbitrary limitations.
+
 =item Illegal character %s (carriage return)
 
 (F) A carriage return character was found in the input.  This is an
@@ -988,6 +1108,25 @@ architecture. On a 32-bit architecture the largest hex literal is
 (S) The literal octal number you have specified is too big for your
 architecture. On a 32-bit architecture the largest octal literal is
 037777777777.
+
+=item internal error: glob failed
+
+(P) Something went wrong with the external program(s) used for C<glob>
+and C<E<lt>*.cE<gt>>.  This may mean that your csh (C shell) is
+broken.  If so, you should change all of the csh-related variables in
+config.sh:  If you have tcsh, make the variables refer to it as if it
+were csh (e.g. C<full_csh='/usr/bin/tcsh'>); otherwise, make them all
+empty (except that C<d_csh> should be C<'undef'>) so that Perl will
+think csh is missing.  In either case, after editing config.sh, run
+C<./Configure -S> and rebuild Perl.
+
+=item Invalid type in pack: '%s'
+
+(F) The given character is not a valid pack type.  See L<perlfunc/pack>.
+
+=item Invalid type in unpack: '%s'
+
+(F) The given character is not a valid unpack type.  See L<perlfunc/unpack>.
 
 =item Name "%s::%s" used only once: possible typo
 
@@ -1114,6 +1253,18 @@ script, a binary program, or a directory as a Perl program.
 Note that under some systems, like OS/2, there may be different flavors of
 Perl executables, some of which may support fork, some not. Try changing
 the name you call Perl by to C<perl_>, C<perl__>, and so on.
+
+=item Use of "$$<digit>" to mean "${$}<digit>" is deprecated
+
+(D) Perl versions before 5.004 misinterpreted any type marker followed
+by "$" and a digit.  For example, "$$0" was incorrectly taken to mean
+"${$}0" instead of "${$0}".  This bug is (mostly) fixed in Perl 5.004.
+
+However, the developers of Perl 5.004 could not fix this bug completely,
+because at least two widely-used modules depend on the old meaning of
+"$$0" in a string.  So Perl 5.004 still interprets "$$<digit>" in the
+old (broken) way inside strings; but it generates this message as a
+warning.  And in Perl 5.005, this special treatment will cease.
 
 =item Value of %s can be "0"; test with defined()
 

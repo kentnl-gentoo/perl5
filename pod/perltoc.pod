@@ -38,8 +38,8 @@ expression enhancements, Innumerable Unbundled Modules, Compilability
 
 =item NOTES
 
-=head2 perlfaq - frequently asked questions about Perl ($Date: 1997/03/25
-18:20:48 $)
+=head2 perlfaq - frequently asked questions about Perl ($Date: 1997/04/23
+18:11:06 $)
 
 =item DESCRIPTION
 
@@ -76,7 +76,8 @@ authors
 
 =item Changes
 
-25/March/97, 18/March/97, 17/March/97 Version, Initial Release: 11/March/97
+23/April/97, 25/March/97, 18/March/97, 17/March/97 Version, Initial
+Release: 11/March/97
 
 =head2 perlfaq1 - General Questions About Perl ($Revision: 1.11 $, $Date:
 1997/03/19 17:23:09 $)
@@ -119,8 +120,8 @@ Scheme, or Tcl?
 
 =item AUTHOR AND COPYRIGHT
 
-=head2 perlfaq2 - Obtaining and Learning about Perl ($Revision: 1.15 $,
-$Date: 1997/03/25 18:15:48 $)
+=head2 perlfaq2 - Obtaining and Learning about Perl ($Revision: 1.16 $,
+$Date: 1997/04/23 18:04:09 $)
 
 =item DESCRIPTION
 
@@ -175,8 +176,8 @@ MacPerl, Perl5-Porters, NTPerl, Perl-Packrats
 
 =item AUTHOR AND COPYRIGHT
 
-=head2 perlfaq3 - Programming Tools ($Revision: 1.20 $, $Date: 1997/03/19
-17:23:43 $)
+=head2 perlfaq3 - Programming Tools ($Revision: 1.21 $, $Date: 1997/04/23
+18:04:23 $)
 
 =item DESCRIPTION
 
@@ -226,11 +227,11 @@ MacPerl, Perl5-Porters, NTPerl, Perl-Packrats
 
 =item How can I compile my Perl program into byte code or C?
 
-=item How can I get '#!perl' to work on [MS-DOS,Windows NT,...]?
+=item How can I get '#!perl' to work on [MS-DOS,NT,...]?
 
 =item Can I write useful perl programs on the command line?
 
-=item Why don't perl one-liners work on my MS-DOS/Macintosh/VMS system?
+=item Why don't perl one-liners work on my DOS/Mac/VMS system?
 
 =item Where can I learn about CGI or Web programming in Perl?
 
@@ -250,14 +251,17 @@ mean?
 
 =item AUTHOR AND COPYRIGHT
 
-=head2 perlfaq4 - Data Manipulation ($Revision: 1.17 $, $Date: 1997/03/25
-18:16:24 $)
+=head2 perlfaq4 - Data Manipulation ($Revision: 1.18 $, $Date: 1997/04/23
+18:04:37 $)
 
 =item DESCRIPTION
 
 =item Data: Numbers
 
 =over
+
+=item Why am I getting long decimals (eg, 19.9499999999999) instead of the
+numbers I should be getting (eg, 19.95)?
 
 =item Why isn't my octal data interpreted correctly?
 
@@ -441,8 +445,8 @@ or array of hashes or arrays?
 
 =item AUTHOR AND COPYRIGHT
 
-=head2 perlfaq5 - Files and Formats ($Revision: 1.20 $, $Date: 1997/03/19
-17:24:51 $)
+=head2 perlfaq5 - Files and Formats ($Revision: 1.21 $, $Date: 1997/04/23
+18:05:19 $)
 
 =item DESCRIPTION
 
@@ -511,7 +515,7 @@ in the file.  How can I do this?
 
 =item How do I close a file descriptor by number?
 
-=item Why can't I use "C:\temp\foo" in MS-DOS paths?  What doesn't
+=item Why can't I use "C:\temp\foo" in DOS paths?  What doesn't
 `C:\temp\foo.exe` work?
 
 =item Why doesn't glob("*.*") get all the files?
@@ -619,6 +623,8 @@ commas?
 
 =item What's a closure?
 
+=item What is variable suicide and how can I prevent it?
+
 =item How can I pass/return a {Function, FileHandle, Array, Hash, Method,
 Regexp}?
 
@@ -649,12 +655,14 @@ is in scope?
 
 =item How can I find out my current package?
 
+=item How can I comment out a large block of perl code?
+
 =back
 
 =item AUTHOR AND COPYRIGHT
 
-=head2 perlfaq8 - System Interaction ($Revision: 1.17 $, $Date: 1997/03/25
-18:17:12 $)
+=head2 perlfaq8 - System Interaction ($Revision: 1.20 $, $Date: 1997/04/23
+18:11:50 $)
 
 =item DESCRIPTION
 
@@ -738,8 +746,6 @@ complete?
 
 =item How do I make my program run with sh and csh?
 
-=item How do I keep my own module/library directory?
-
 =item How do I find out if I'm running interactively or not?
 
 =item How do I timeout a slow event?
@@ -756,11 +762,18 @@ complete?
 
 =item How do I install a CPAN module?
 
+=item How do I keep my own module/library directory?
+
+=item How do I add the directory my program lives in to the module/library
+search path?
+
+=item How do I add a directory to my include path at runtime?
+
 =back
 
 =item AUTHOR AND COPYRIGHT
 
-=head2 perlfaq9 - Networking ($Revision: 1.15 $, $Date: 1997/03/25 18:17:20
+=head2 perlfaq9 - Networking ($Revision: 1.16 $, $Date: 1997/04/23 18:12:06
 $)
 
 =item DESCRIPTION
@@ -788,6 +801,9 @@ file on another machine?
 =item How do I put a password on my web pages?
 
 =item How do I edit my .htpasswd and .htgroup files with Perl?
+
+=item How do I make sure users can't enter values into a form that cause my
+CGI script to do bad things?
 
 =item How do I parse an email header?
 
@@ -827,11 +843,15 @@ file on another machine?
 
 =item $PERL5OPT environment variable
 
+=item Limitations on B<-M>, and C<-m>, and B<-T> options
+
 =item More precise warnings
 
 =item Deprecated: Inherited C<AUTOLOAD> for non-methods
 
 =item Subroutine arguments created only when they're modified
+
+=item Group vector changeable with C<$)>
 
 =item Fixed parsing of $$<digit>, &$<digit>, etc.
 
@@ -856,10 +876,10 @@ $^E, $^H, $^M
 =item New and changed builtin functions
 
 delete on slices, flock, printf and sprintf, keys as an lvalue, my() in
-Control Structures, unpack() and pack(), use VERSION, use Module VERSION
-LIST, prototype(FUNCTION), srand, $_ as Default, C<m//g> does not trigger a
-pos() reset on failure, C<m//x> ignores whitespace before ?*+{}, nested
-C<sub{}> closures work now, formats work right on changing lexicals
+Control Structures, pack() and unpack(), sysseek(), use VERSION, use Module
+VERSION LIST, prototype(FUNCTION), srand, $_ as Default, C<m//g> does not
+reset search position on failure, C<m//x> ignores whitespace before ?*+{},
+nested C<sub{}> closures work now, formats work right on changing lexicals
 
 =item New builtin methods
 
@@ -867,8 +887,8 @@ isa(CLASS), can(METHOD), VERSION( [NEED] )
 
 =item TIEHANDLE now supported
 
-TIEHANDLE classname, LIST, PRINT this, LIST, READ this LIST, READLINE this,
-GETC this, DESTROY this
+TIEHANDLE classname, LIST, PRINT this, LIST, PRINTF this, LIST, READ this
+LIST, READLINE this, GETC this, DESTROY this
 
 =item Malloc enhancements
 
@@ -887,6 +907,8 @@ constant NAME => VALUE, use locale, use ops, use vmsish
 
 =over
 
+=item Required Updates
+
 =item Installation directories
 
 =item Module information summary
@@ -896,6 +918,8 @@ constant NAME => VALUE, use locale, use ops, use vmsish
 =item IO
 
 =item Math::Complex
+
+=item Math::Trig
 
 =item DB_File
 
@@ -917,7 +941,8 @@ C<void> XSUBs now default to returning nothing
 
 =item C Language API Changes
 
-C<gv_fetchmethod> and C<perl_call_sv>, Extended API for manipulating hashes
+C<gv_fetchmethod> and C<perl_call_sv>, C<perl_eval_pv>, Extended API for
+manipulating hashes
 
 =item Documentation Changes
 
@@ -933,20 +958,22 @@ nonexistent shared string, Attempt to use reference as lvalue in substr,
 Can't use bareword ("%s") as %s ref while "strict refs" in use, Cannot
 resolve method `%s' overloading `%s' in package `%s', Constant subroutine
 %s redefined, Constant subroutine %s undefined, Copy method did not return
-a reference, Died, Exiting pseudo-block via %s, Illegal character %s
-(carriage return), Illegal switch in PERL5OPT: %s, Integer overflow in hex
-number, Integer overflow in octal number, Name "%s::%s" used only once:
-possible typo, Null picture in formline, Offset outside string, Out of
-memory!, Out of memory during request for %s, Possible attempt to put
-comments in qw() list, Possible attempt to separate words with commas,
-Scalar value @%s{%s} better written as $%s{%s}, Stub found while resolving
-method `%s' overloading `%s' in package `%s', Too late for "B<-T>" option,
-untie attempted while %d inner references still exist, Unrecognized
-character %s, Unsupported function fork, Value of %s can be "0"; test with
-defined(), Variable "%s" may be unavailable, Variable "%s" will not stay
-shared, Warning: something's wrong, Ill-formed logical name |%s| in
-prime_env_iter, Got an error from DosAllocMem, Malformed PERLLIB_PREFIX,
-PERL_SH_DIR too long, Process terminated by SIG%s
+a reference, Died, Exiting pseudo-block via %s, Identifier too long,
+Illegal character %s (carriage return), Illegal switch in PERL5OPT: %s,
+Integer overflow in hex number, Integer overflow in octal number, internal
+error: glob failed, Invalid type in pack: '%s', Invalid type in unpack:
+'%s', Name "%s::%s" used only once: possible typo, Null picture in
+formline, Offset outside string, Out of memory!, Out of memory during
+request for %s, Possible attempt to put comments in qw() list, Possible
+attempt to separate words with commas, Scalar value @%s{%s} better written
+as $%s{%s}, Stub found while resolving method `%s' overloading `%s' in
+package `%s', Too late for "B<-T>" option, untie attempted while %d inner
+references still exist, Unrecognized character %s, Unsupported function
+fork, Use of "$$<digit>" to mean "${$}<digit>" is deprecated, Value of %s
+can be "0"; test with defined(), Variable "%s" may be unavailable, Variable
+"%s" will not stay shared, Warning: something's wrong, Ill-formed logical
+name |%s| in prime_env_iter, Got an error from DosAllocMem, Malformed
+PERLLIB_PREFIX, PERL_SH_DIR too long, Process terminated by SIG%s
 
 =item BUGS
 
@@ -1164,26 +1191,26 @@ defined EXPR, defined, delete EXPR, die LIST, do BLOCK, do
 SUBROUTINE(LIST), do EXPR, dump LABEL, each HASH, eof FILEHANDLE, eof (),
 eof, eval EXPR, eval BLOCK, exec LIST, exists EXPR, exit EXPR, exp EXPR,
 exp, fcntl FILEHANDLE,FUNCTION,SCALAR, fileno FILEHANDLE, flock
-FILEHANDLE,OPERATION, fork, format, formline PICTURE, LIST, getc
-FILEHANDLE, getc, getlogin, getpeername SOCKET, getpgrp PID, getppid,
-getpriority WHICH,WHO, getpwnam NAME, getgrnam NAME, gethostbyname NAME,
-getnetbyname NAME, getprotobyname NAME, getpwuid UID, getgrgid GID,
-getservbyname NAME,PROTO, gethostbyaddr ADDR,ADDRTYPE, getnetbyaddr
-ADDR,ADDRTYPE, getprotobynumber NUMBER, getservbyport PORT,PROTO, getpwent,
-getgrent, gethostent, getnetent, getprotoent, getservent, setpwent,
-setgrent, sethostent STAYOPEN, setnetent STAYOPEN, setprotoent STAYOPEN,
-setservent STAYOPEN, endpwent, endgrent, endhostent, endnetent,
-endprotoent, endservent, getsockname SOCKET, getsockopt
-SOCKET,LEVEL,OPTNAME, glob EXPR, glob, gmtime EXPR, goto LABEL, goto EXPR,
-goto &NAME, grep BLOCK LIST, grep EXPR,LIST, hex EXPR, hex, import, index
-STR,SUBSTR,POSITION, index STR,SUBSTR, int EXPR, int, ioctl
-FILEHANDLE,FUNCTION,SCALAR, join EXPR,LIST, keys HASH, kill LIST, last
-LABEL, last, lc EXPR, lc, lcfirst EXPR, lcfirst, length EXPR, length, link
-OLDFILE,NEWFILE, listen SOCKET,QUEUESIZE, local EXPR, localtime EXPR, log
-EXPR, log, lstat FILEHANDLE, lstat EXPR, lstat, m//, map BLOCK LIST, map
-EXPR,LIST, mkdir FILENAME,MODE, msgctl ID,CMD,ARG, msgget KEY,FLAGS, msgsnd
-ID,MSG,FLAGS, msgrcv ID,VAR,SIZE,TYPE,FLAGS, my EXPR, next LABEL, next, no
-Module LIST, oct EXPR, oct, open FILEHANDLE,EXPR, open FILEHANDLE, opendir
+FILEHANDLE,OPERATION, fork, format, formline PICTURE,LIST, getc FILEHANDLE,
+getc, getlogin, getpeername SOCKET, getpgrp PID, getppid, getpriority
+WHICH,WHO, getpwnam NAME, getgrnam NAME, gethostbyname NAME, getnetbyname
+NAME, getprotobyname NAME, getpwuid UID, getgrgid GID, getservbyname
+NAME,PROTO, gethostbyaddr ADDR,ADDRTYPE, getnetbyaddr ADDR,ADDRTYPE,
+getprotobynumber NUMBER, getservbyport PORT,PROTO, getpwent, getgrent,
+gethostent, getnetent, getprotoent, getservent, setpwent, setgrent,
+sethostent STAYOPEN, setnetent STAYOPEN, setprotoent STAYOPEN, setservent
+STAYOPEN, endpwent, endgrent, endhostent, endnetent, endprotoent,
+endservent, getsockname SOCKET, getsockopt SOCKET,LEVEL,OPTNAME, glob EXPR,
+glob, gmtime EXPR, goto LABEL, goto EXPR, goto &NAME, grep BLOCK LIST, grep
+EXPR,LIST, hex EXPR, hex, import, index STR,SUBSTR,POSITION, index
+STR,SUBSTR, int EXPR, int, ioctl FILEHANDLE,FUNCTION,SCALAR, join
+EXPR,LIST, keys HASH, kill LIST, last LABEL, last, lc EXPR, lc, lcfirst
+EXPR, lcfirst, length EXPR, length, link OLDFILE,NEWFILE, listen
+SOCKET,QUEUESIZE, local EXPR, localtime EXPR, log EXPR, log, lstat
+FILEHANDLE, lstat EXPR, lstat, m//, map BLOCK LIST, map EXPR,LIST, mkdir
+FILENAME,MODE, msgctl ID,CMD,ARG, msgget KEY,FLAGS, msgsnd ID,MSG,FLAGS,
+msgrcv ID,VAR,SIZE,TYPE,FLAGS, my EXPR, next LABEL, next, no Module LIST,
+oct EXPR, oct, open FILEHANDLE,EXPR, open FILEHANDLE, opendir
 DIRHANDLE,EXPR, ord EXPR, ord, pack TEMPLATE,LIST, package NAMESPACE, pipe
 READHANDLE,WRITEHANDLE, pop ARRAY, pop, pos SCALAR, pos, print FILEHANDLE
 LIST, print LIST, print, printf FILEHANDLE FORMAT, LIST, printf FORMAT,
@@ -1210,16 +1237,16 @@ srand, stat FILEHANDLE, stat EXPR, stat, study SCALAR, study, sub BLOCK,
 sub NAME, sub NAME BLOCK, substr EXPR,OFFSET,LEN, substr EXPR,OFFSET,
 symlink OLDFILE,NEWFILE, syscall LIST, sysopen FILEHANDLE,FILENAME,MODE,
 sysopen FILEHANDLE,FILENAME,MODE,PERMS, sysread
-FILEHANDLE,SCALAR,LENGTH,OFFSET, sysread FILEHANDLE,SCALAR,LENGTH, system
-LIST, syswrite FILEHANDLE,SCALAR,LENGTH,OFFSET, syswrite
-FILEHANDLE,SCALAR,LENGTH, tell FILEHANDLE, tell, telldir DIRHANDLE, tie
-VARIABLE,CLASSNAME,LIST, tied VARIABLE, time, times, tr///, truncate
-FILEHANDLE,LENGTH, truncate EXPR,LENGTH, uc EXPR, uc, ucfirst EXPR,
-ucfirst, umask EXPR, umask, undef EXPR, undef, unlink LIST, unlink, unpack
-TEMPLATE,EXPR, untie VARIABLE, unshift ARRAY,LIST, use Module LIST, use
-Module, use Module VERSION LIST, use VERSION, utime LIST, values HASH, vec
-EXPR,OFFSET,BITS, wait, waitpid PID,FLAGS, wantarray, warn LIST, write
-FILEHANDLE, write EXPR, write, y///
+FILEHANDLE,SCALAR,LENGTH,OFFSET, sysread FILEHANDLE,SCALAR,LENGTH, sysseek
+FILEHANDLE,POSITION,WHENCE, system LIST, syswrite
+FILEHANDLE,SCALAR,LENGTH,OFFSET, syswrite FILEHANDLE,SCALAR,LENGTH, tell
+FILEHANDLE, tell, telldir DIRHANDLE, tie VARIABLE,CLASSNAME,LIST, tied
+VARIABLE, time, times, tr///, truncate FILEHANDLE,LENGTH, truncate
+EXPR,LENGTH, uc EXPR, uc, ucfirst EXPR, ucfirst, umask EXPR, umask, undef
+EXPR, undef, unlink LIST, unlink, unpack TEMPLATE,EXPR, untie VARIABLE,
+unshift ARRAY,LIST, use Module LIST, use Module, use Module VERSION LIST,
+use VERSION, utime LIST, values HASH, vec EXPR,OFFSET,BITS, wait, waitpid
+PID,FLAGS, wantarray, warn LIST, write FILEHANDLE, write EXPR, write, y///
 
 =back
 
@@ -1314,7 +1341,7 @@ strict, subs, vmsish, vars
 =item Standard Modules
 
 AnyDBM_File, AutoLoader, AutoSplit, Benchmark, CPAN, CPAN::FirstTime,
-CPAN::Nox, Carp, Class::Template, Config, Cwd, DB_File, Devel::SelfStubber,
+CPAN::Nox, Carp, Class::Struct, Config, Cwd, DB_File, Devel::SelfStubber,
 DirHandle, DynaLoader, English, Env, Exporter, ExtUtils::Embed,
 ExtUtils::Install, ExtUtils::Liblist, ExtUtils::MM_OS2, ExtUtils::MM_Unix,
 ExtUtils::MM_VMS, ExtUtils::MakeMaker, ExtUtils::Manifest,
@@ -1688,7 +1715,7 @@ more elaborate constructs
 
 =over
 
-=item Class::Template
+=item Class::Struct
 
 =item Data Members as Variables
 
@@ -1763,8 +1790,8 @@ this, NEXTKEY this, lastkey, DESTROY this
 
 =item Tying FileHandles
 
-TIEHANDLE classname, LIST, PRINT this, LIST, READ this LIST, READLINE this,
-GETC this, DESTROY this
+TIEHANDLE classname, LIST, PRINT this, LIST, PRINTF this, LIST, READ this
+LIST, READLINE this, GETC this, DESTROY this
 
 =item The C<untie> Gotcha
 
@@ -2329,27 +2356,28 @@ mg_get, mg_len, mg_magical, mg_set, Move, na, New, Newc, Newz, newAV,
 newHV, newRV_inc, newRV_noinc, newSV, newSViv, newSVnv, newSVpv, newSVrv,
 newSVsv, newXS, newXSproto, Nullav, Nullch, Nullcv, Nullhv, Nullsv,
 ORIGMARK, perl_alloc, perl_call_argv, perl_call_method, perl_call_pv,
-perl_call_sv, perl_construct, perl_destruct, perl_eval_sv, perl_free,
-perl_get_av, perl_get_cv, perl_get_hv, perl_get_sv, perl_parse,
+perl_call_sv, perl_construct, perl_destruct, perl_eval_sv, perl_eval_pv,
+perl_free, perl_get_av, perl_get_cv, perl_get_hv, perl_get_sv, perl_parse,
 perl_require_pv, perl_run, POPi, POPl, POPp, POPn, POPs, PUSHMARK, PUSHi,
 PUSHn, PUSHp, PUSHs, PUTBACK, Renew, Renewc, RETVAL, safefree, safemalloc,
 saferealloc, savepv, savepvn, SAVETMPS, SP, SPAGAIN, ST, strEQ, strGE,
 strGT, strLE, strLT, strNE, strnEQ, strnNE, sv_2mortal, sv_bless, sv_catpv,
-sv_catpvn, sv_catsv, sv_cmp, sv_cmp, SvCUR, SvCUR_set, sv_dec, sv_dec,
-SvEND, sv_eq, SvGROW, sv_grow, sv_inc, SvIOK, SvIOK_off, SvIOK_on,
+sv_catpvn, sv_catpvf, sv_catsv, sv_cmp, sv_cmp, SvCUR, SvCUR_set, sv_dec,
+sv_dec, SvEND, sv_eq, SvGROW, sv_grow, sv_inc, SvIOK, SvIOK_off, SvIOK_on,
 SvIOK_only, SvIOK_only, SvIOKp, sv_isa, SvIV, sv_isobject, SvIVX, SvLEN,
 sv_len, sv_len, sv_magic, sv_mortalcopy, SvOK, sv_newmortal, sv_no, SvNIOK,
 SvNIOK_off, SvNIOKp, SvNOK, SvNOK_off, SvNOK_on, SvNOK_only, SvNOK_only,
 SvNOKp, SvNV, SvNVX, SvPOK, SvPOK_off, SvPOK_on, SvPOK_only, SvPOK_only,
 SvPOKp, SvPV, SvPVX, SvREFCNT, SvREFCNT_dec, SvREFCNT_inc, SvROK,
 SvROK_off, SvROK_on, SvRV, sv_setiv, sv_setnv, sv_setpv, sv_setpvn,
-sv_setref_iv, sv_setref_nv, sv_setref_pv, sv_setref_pvn, sv_setsv, SvSTASH,
-SVt_IV, SVt_PV, SVt_PVAV, SVt_PVCV, SVt_PVHV, SVt_PVMG, SVt_NV, SvTRUE,
-SvTYPE, svtype, SvUPGRADE, sv_upgrade, sv_undef, sv_unref, sv_usepvn,
-sv_yes, THIS, toLOWER, toUPPER, warn, XPUSHi, XPUSHn, XPUSHp, XPUSHs, XS,
-XSRETURN, XSRETURN_EMPTY, XSRETURN_IV, XSRETURN_NO, XSRETURN_NV,
-XSRETURN_PV, XSRETURN_UNDEF, XSRETURN_YES, XST_mIV, XST_mNV, XST_mNO,
-XST_mPV, XST_mUNDEF, XST_mYES, XS_VERSION, XS_VERSION_BOOTCHECK, Zero
+sv_setpvf, sv_setref_iv, sv_setref_nv, sv_setref_pv, sv_setref_pvn,
+sv_setsv, SvSTASH, SVt_IV, SVt_PV, SVt_PVAV, SVt_PVCV, SVt_PVHV, SVt_PVMG,
+SVt_NV, SvTRUE, SvTYPE, svtype, SvUPGRADE, sv_upgrade, sv_undef, sv_unref,
+sv_usepvn, sv_yes, THIS, toLOWER, toUPPER, warn, XPUSHi, XPUSHn, XPUSHp,
+XPUSHs, XS, XSRETURN, XSRETURN_EMPTY, XSRETURN_IV, XSRETURN_NO,
+XSRETURN_NV, XSRETURN_PV, XSRETURN_UNDEF, XSRETURN_YES, XST_mIV, XST_mNV,
+XST_mNO, XST_mPV, XST_mUNDEF, XST_mYES, XS_VERSION, XS_VERSION_BOOTCHECK,
+Zero
 
 =item EDITOR
 
@@ -2426,6 +2454,8 @@ callbacks - hard wired limit, 3. Use a parameter to map to the Perl
 callback
 
 =item Alternate Stack Manipulation
+
+=item Creating and calling an anonymous subroutine in C
 
 =back
 
@@ -2681,7 +2711,7 @@ C<strict refs>, C<strict vars>, C<strict subs>
 
 =item SEE ALSO
 
-=head2 AutoLoader - load functions only on demand
+=head2 AutoLoader - load subroutines only on demand
 
 =item SYNOPSIS
 
@@ -2689,17 +2719,21 @@ C<strict refs>, C<strict vars>, C<strict subs>
 
 =over
 
-=item __END__
+=item Subroutine Stubs
 
-=item Loading Stubs
+=item Using B<AutoLoader>'s AUTOLOAD Subroutine
+
+=item Overriding B<AutoLoader>'s AUTOLOAD Subroutine
 
 =item Package Lexicals
 
-=item AutoLoader vs. SelfLoader
+=item B<AutoLoader> vs. B<SelfLoader>
 
 =back
 
-=item CAVEAT
+=item CAVEATS
+
+=item SEE ALSO
 
 =head2 AutoSplit - split a package for autoloading
 
@@ -2946,7 +2980,9 @@ Kevin B. Hendricks (kbhend@dogwood.tyler.wm.edu), Stephen Dahmen
 
 =item DESCRIPTION
 
-=item NOTE
+=item NOTE 1
+
+=item NOTE 2
 
 =item SEE ALSO
 
@@ -3098,17 +3134,28 @@ module
 
 =item DESCRIPTION
 
-=head2 Class::Template - struct/member template builder
+=head2 Class::Struct - declare struct-like datatypes as Perl classes
 
 =item SYNOPSIS
 
 =item DESCRIPTION
 
+=over
+
+=item The C<struct()> function
+
+=item Element Types and Accessor Methods
+
+Scalar (C<'$'> or C<'*$'>), Array (C<'@'> or C<'*@'>), Hash (C<'%'> or
+C<'*%'>), Class (C<'Class_Name'> or C<'*Class_Name'>)
+
+=back
+
 =item EXAMPLES
 
 Example 1, Example 2
 
-=item NOTES
+=item Author and Modification History
 
 =head2 Config - access Perl configuration information
 
@@ -3787,8 +3834,9 @@ new (), new_from_fd ( FD, MODE )
 
 =item METHODS
 
-$fh->getline, $fh->getlines, $fh->fdopen ( FD, MODE ), $fh->write ( BUF,
-LEN [, OFFSET }\] ), $fh->opened, $fh->untaint
+$fh->fdopen ( FD, MODE ), $fh->opened, $fh->getline, $fh->getlines,
+$fh->ungetc ( ORD ), $fh->write ( BUF, LEN [, OFFSET }\] ), $fh->flush,
+$fh->error, $fh->clearerr, $fh->untaint
 
 =item NOTE
 
@@ -3921,8 +3969,9 @@ new (), new_from_fd ( FD, MODE )
 
 =item METHODS
 
-$fh->getline, $fh->getlines, $fh->fdopen ( FD, MODE ), $fh->write ( BUF,
-LEN [, OFFSET }\] ), $fh->opened, $fh->untaint
+$fh->fdopen ( FD, MODE ), $fh->opened, $fh->getline, $fh->getlines,
+$fh->ungetc ( ORD ), $fh->write ( BUF, LEN [, OFFSET }\] ), $fh->flush,
+$fh->error, $fh->clearerr, $fh->untaint
 
 =item NOTE
 
@@ -4086,6 +4135,30 @@ functions
 =item STRINGIFICATION
 
 =item USAGE
+
+=item ERRORS DUE TO DIVISION BY ZERO
+
+=item BUGS
+
+=item AUTHORS
+
+=head2 Math::Trig - trigonometric functions
+
+=item SYNOPSIS
+
+=item DESCRIPTION
+
+=item TRIGONOMETRIC FUNCTIONS
+
+=over
+
+=item ERRORS DUE TO DIVISION BY ZERO
+
+=item SIMPLE (REAL) ARGUMENTS, COMPLEX RESULTS
+
+=back
+
+=item ANGLE CONVERSIONS
 
 =item BUGS
 

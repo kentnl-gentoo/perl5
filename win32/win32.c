@@ -54,22 +54,18 @@ IsWinNT(void) {
 void *
 SetIOSubSystem(void *p)
 {
+    PWIN32_IOSUBSYSTEM old = pIOSubSystem;
     if (p) {
 	PWIN32_IOSUBSYSTEM pio = (PWIN32_IOSUBSYSTEM)p;
-
 	if (pio->signature_begin == 12345678L
 	    && pio->signature_end == 87654321L) {
-	    PWIN32_IOSUBSYSTEM pold = pIOSubSystem;
 	    pIOSubSystem = pio;
-	    return pold;
 	}
     }
     else {
-	/* re-assign our stuff */
-/*	pIOSubSystem = &win32stdio; */
-	pIOSubSystem = NULL;
+	pIOSubSystem = &win32stdio;
     }
-    return pIOSubSystem;
+    return old;
 }
 
 char *
@@ -345,7 +341,7 @@ do_aspawn(void* really, void** mark, void** arglast)
     SV *sv = (SV*)really;
     SV** pSv = (SV**)mark;
 
-    New(1110, argv, (arglast - mark) + 3, char*);
+    New(1110, argv, (arglast - mark) + 4, char*);
 
     if(sv != Nullsv) {
 	cmd = SvPV(sv, length);
@@ -356,8 +352,8 @@ do_aspawn(void* really, void** mark, void** arglast)
 	argv[index++] = "/c";
     }
 
-    while(pSv <= (SV**)arglast) {
-	sv = *pSv++;
+    while(++pSv <= (SV**)arglast) {
+	sv = *pSv;
 	strPtr = SvPV(sv, length);
 	if(strPtr != NULL && *strPtr != '\0')
 	    argv[index++] = strPtr;
@@ -369,8 +365,12 @@ do_aspawn(void* really, void** mark, void** arglast)
 
     Safefree(argv);
 
-    /* set statusvalue the perl variable $? */
-    return (statusvalue = status*256);
+    if (status < 0) {
+	if (dowarn)
+	    warn("Can't spawn \"%s\": %s", cmd, strerror(errno));
+	status = 255 << 8;
+    }
+    return (status);
 }
 
 int
@@ -421,9 +421,13 @@ do_spawn(char *cmd)
 			       "/x",
 			       "/c", cmd, (char*)0, environ);
     }
-
-    /* set statusvalue the perl variable $? */
-    return (statusvalue = status*256);
+    if (status < 0) {
+	if (dowarn)
+	    warn("Can't spawn \"%s\": %s", needToTry ? shell : argv[0],
+		 strerror(errno));
+	status = 255 << 8;
+    }
+    return (status);
 }
 
 
@@ -748,6 +752,12 @@ win32_errno(void)
     return (pIOSubSystem->pfnerrno());
 }
 
+DllExport char ***
+win32_environ(void)
+{
+    return (pIOSubSystem->pfnenviron());
+}
+
 /* the rest are the remapped stdio routines */
 DllExport FILE *
 win32_stderr(void)
@@ -829,6 +839,12 @@ DllExport int
 win32_vfprintf(FILE *fp, const char *format, va_list args)
 {
     return (pIOSubSystem->pfnvfprintf(fp, format, args));
+}
+
+DllExport int
+win32_vprintf(const char *format, va_list args)
+{
+    return (pIOSubSystem->pfnvprintf(format, args));
 }
 
 DllExport size_t
@@ -988,6 +1004,18 @@ win32_setmode(int fd, int mode)
     return pIOSubSystem->pfnsetmode(fd, mode);
 }
 
+DllExport long
+win32_lseek(int fd, long offset, int origin)
+{
+    return pIOSubSystem->pfnlseek(fd, offset, origin);
+}
+
+DllExport long
+win32_tell(int fd)
+{
+    return pIOSubSystem->pfntell(fd);
+}
+
 DllExport int
 win32_open(const char *path, int flag, ...)
 {
@@ -1007,6 +1035,12 @@ DllExport int
 win32_close(int fd)
 {
     return pIOSubSystem->pfnclose(fd);
+}
+
+DllExport int
+win32_eof(int fd)
+{
+    return pIOSubSystem->pfneof(fd);
 }
 
 DllExport int
@@ -1031,6 +1065,24 @@ DllExport int
 win32_write(int fd, const char *buf, unsigned int cnt)
 {
     return pIOSubSystem->pfnwrite(fd, buf, cnt);
+}
+
+DllExport int
+win32_mkdir(const char *dir, int mode)
+{
+    return pIOSubSystem->pfnmkdir(dir); /* just ignore mode */
+}
+
+DllExport int
+win32_rmdir(const char *dir)
+{
+    return pIOSubSystem->pfnrmdir(dir);
+}
+
+DllExport int
+win32_chdir(const char *dir)
+{
+    return pIOSubSystem->pfnchdir(dir);
 }
 
 DllExport int

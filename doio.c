@@ -68,7 +68,7 @@
 
 /* Put this after #includes because <unistd.h> defines _XOPEN_*. */
 #ifndef Sock_size_t
-#  if _XOPEN_VERSION >= 5 || defined(_XOPEN_SOURCE_EXTENDED)
+#  if _XOPEN_VERSION >= 5 || defined(_XOPEN_SOURCE_EXTENDED) || defined(__GLIBC__)
 #    define Sock_size_t Size_t
 #  else
 #    define Sock_size_t int
@@ -660,22 +660,15 @@ do_tell(gv)
 GV *gv;
 {
     register IO *io;
+    register PerlIO *fp;
 
-    if (!gv)
-	goto phooey;
-
-    io = GvIO(gv);
-    if (!io || !IoIFP(io))
-	goto phooey;
-
+    if (gv && (io = GvIO(gv)) && (fp = IoIFP(io))) {
 #ifdef ULTRIX_STDIO_BOTCH
-    if (PerlIO_eof(IoIFP(io)))
-	(void)PerlIO_seek (IoIFP(io), 0L, 2);		/* ultrix 1.2 workaround */
+	if (PerlIO_eof(fp))
+	    (void)PerlIO_seek(fp, 0L, 2);	/* ultrix 1.2 workaround */
 #endif
-
-    return PerlIO_tell(IoIFP(io));
-
-phooey:
+	return PerlIO_tell(fp);
+    }
     if (dowarn)
 	warn("tell() on unopened file");
     SETERRNO(EBADF,RMS$_IFI);
@@ -689,26 +682,36 @@ long pos;
 int whence;
 {
     register IO *io;
+    register PerlIO *fp;
 
-    if (!gv)
-	goto nuts;
-
-    io = GvIO(gv);
-    if (!io || !IoIFP(io))
-	goto nuts;
-
+    if (gv && (io = GvIO(gv)) && (fp = IoIFP(io))) {
 #ifdef ULTRIX_STDIO_BOTCH
-    if (PerlIO_eof(IoIFP(io)))
-	(void)PerlIO_seek (IoIFP(io), 0L, 2);		/* ultrix 1.2 workaround */
+	if (PerlIO_eof(fp))
+	    (void)PerlIO_seek(fp, 0L, 2);	/* ultrix 1.2 workaround */
 #endif
-
-    return PerlIO_seek(IoIFP(io), pos, whence) >= 0;
-
-nuts:
+	return PerlIO_seek(fp, pos, whence) >= 0;
+    }
     if (dowarn)
 	warn("seek() on unopened file");
     SETERRNO(EBADF,RMS$_IFI);
     return FALSE;
+}
+
+long
+do_sysseek(gv, pos, whence)
+GV *gv;
+long pos;
+int whence;
+{
+    register IO *io;
+    register PerlIO *fp;
+
+    if (gv && (io = GvIO(gv)) && (fp = IoIFP(io)))
+	return lseek(PerlIO_fileno(fp), pos, whence);
+    if (dowarn)
+	warn("sysseek() on unopened file");
+    SETERRNO(EBADF,RMS$_IFI);
+    return -1L;
 }
 
 #if !defined(HAS_TRUNCATE) && !defined(HAS_CHSIZE) && defined(F_FREESP)

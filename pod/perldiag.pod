@@ -613,7 +613,7 @@ package name.
 
 =item Can't locate %s in @INC
 
-(F) You said to do (or require, or use) a file that couldn't be found in
+(F) You said to do (or require, or use) a file that couldn't be found
 in any of the libraries mentioned in @INC.  Perhaps you need to set the
 PERL5LIB or PERL5OPT environment variable to say where the extra library
 is, or maybe the script needs to add the library name to @INC.  Or maybe
@@ -841,6 +841,12 @@ to 01411.  Octal constants are introduced with a leading 0 in Perl, as in C.
 =item Close on unopened file E<lt>%sE<gt>
 
 (W) You tried to close a filehandle that was never opened.
+
+=item Compilation failed in require
+
+(F) Perl could not compile a file specified in a C<require> statement.
+Perl uses this generic message when none of the errors that it encountered
+were severe enough to halt compilation immediately.
 
 =item connect() on closed fd
 
@@ -1092,6 +1098,13 @@ an emergency basis to prevent a core dump.
 (D) Really old Perl let you omit the % on hash names in some spots.  This
 is now heavily deprecated.
 
+=item Identifier too long
+
+(F) Perl limits identifiers (names for variables, functions, etc.) to
+252 characters for simple names, somewhat more for compound names (like
+C<$A::B>).  You've exceeded Perl's limits.  Future versions of Perl are
+likely to eliminate these arbitrary limitations.
+
 =item Ill-formed logical name |%s| in prime_env_iter
 
 (W) A warning peculiar to VMS.  A logical name was encountered when preparing
@@ -1203,6 +1216,17 @@ and execute the specified command.
 
 (P) Something went badly wrong in the regular expression parser.
 
+=item internal error: glob failed
+
+(P) Something went wrong with the external program(s) used for C<glob>
+and C<E<lt>*.cE<gt>>.  This may mean that your csh (C shell) is
+broken.  If so, you should change all of the csh-related variables in
+config.sh:  If you have tcsh, make the variables refer to it as if it
+were csh (e.g. C<full_csh='/usr/bin/tcsh'>); otherwise, make them all
+empty (except that C<d_csh> should be C<'undef'>) so that Perl will
+think csh is missing.  In either case, after editing config.sh, run
+C<./Configure -S> and rebuild Perl.
+
 =item internal urp in regexp at /%s/
 
 (P) Something went badly awry in the regular expression parser.
@@ -1211,6 +1235,14 @@ and execute the specified command.
 
 (F) The range specified in a character class had a minimum character
 greater than the maximum character.  See L<perlre>.
+
+=item Invalid type in pack: '%s'
+
+(F) The given character is not a valid pack type.  See L<perlfunc/pack>.
+
+=item Invalid type in unpack: '%s'
+
+(F) The given character is not a valid unpack type.  See L<perlfunc/unpack>.
 
 =item ioctl is not implemented
 
@@ -1970,10 +2002,10 @@ or setgid bit set.  This doesn't make much sense.
 (F) The lexer couldn't find the final delimiter of a // or m{}
 construct.  Remember that bracketing delimiters count nesting level.
 
-=item seek() on unopened file
+=item %sseek() on unopened file
 
-(W) You tried to use the seek() function on a filehandle that was either
-never opened or has since been closed.
+(W) You tried to use the seek() or sysseek() function on a filehandle that
+was either never opened or has since been closed.
 
 =item select not implemented
 
@@ -2246,10 +2278,10 @@ system call to call, silly dilly.
 =item Too late for "B<-T>" option
 
 (X) The #! line (or local equivalent) in a Perl script contains the
-B<-T> option, but Perl was not invoked with B<-T> in its argument
-list.  This is an error because, by the time Perl discovers a B<-T> in
-a script, it's too late to properly taint everything from the
-environment.  So Perl gives up.
+B<-T> option, but Perl was not invoked with B<-T> in its command line.
+This is an error because, by the time Perl discovers a B<-T> in a
+script, it's too late to properly taint everything from the environment.
+So Perl gives up.
 
 If the Perl script is being executed as a command using the #!
 mechanism (or its local equivalent), this error can usually be fixed
@@ -2258,6 +2290,12 @@ first argument: e.g. change C<perl -n -T> to C<perl -T -n>.
 
 If the Perl script is being executed as C<perl scriptname>, then the
 B<-T> option must appear on the command line: C<perl -T scriptname>.
+
+=item Too late for "-%s" option
+
+(X) The #! line (or local equivalent) in a Perl script contains the
+B<-M> or B<-m> option.  This is an error because B<-M> and B<-m> options
+are not intended for use inside scripts.  Use the C<use> pragma instead.
 
 =item Too many ('s
 
@@ -2447,6 +2485,18 @@ a term, so it's looking for the corresponding right angle bracket, and not
 finding it.  Chances are you left some needed parentheses out earlier in
 the line, and you really meant a "less than".
 
+=item Use of "$$<digit>" to mean "${$}<digit>" is deprecated
+
+(D) Perl versions before 5.004 misinterpreted any type marker followed
+by "$" and a digit.  For example, "$$0" was incorrectly taken to mean
+"${$}0" instead of "${$0}".  This bug is (mostly) fixed in Perl 5.004.
+
+However, the developers of Perl 5.004 could not fix this bug completely,
+because at least two widely-used modules depend on the old meaning of
+"$$0" in a string.  So Perl 5.004 still interprets "$$<digit>" in the
+old (broken) way inside strings; but it generates this message as a
+warning.  And in Perl 5.005, this special treatment will cease.
+
 =item Use of $# is deprecated
 
 (D) This was an ill-advised attempt to emulate a poorly defined B<awk> feature.
@@ -2454,7 +2504,7 @@ Use an explicit printf() or sprintf() instead.
 
 =item Use of $* is deprecated
 
-(D) This variable magically turned on multiline pattern matching, both for
+(D) This variable magically turned on multi-line pattern matching, both for
 you and for any luckless subroutine that you happen to call.  You should
 use the new C<//m> and C<//s> modifiers now to do that without the dangerous
 action-at-a-distance effects of C<$*>.
@@ -2477,10 +2527,10 @@ a split() explicitly to an array (or list).
 
 =item Use of inherited AUTOLOAD for non-method %s() is deprecated
 
-As an (ahem) accidental feature, C<AUTOLOAD> subroutines are looked up
-as methods (using the C<@ISA> hierarchy) even when the subroutines to be
-autoloaded were called as plain functions (e.g. C<Foo::bar()>), not as
-methods (e.g. C<Foo->bar()> or C<$obj->bar()>).
+(D) As an (ahem) accidental feature, C<AUTOLOAD> subroutines are looked
+up as methods (using the C<@ISA> hierarchy) even when the subroutines to
+be autoloaded were called as plain functions (e.g. C<Foo::bar()>), not
+as methods (e.g. C<Foo->bar()> or C<$obj->bar()>).
 
 This bug will be rectified in Perl 5.005, which will use method lookup
 only for methods' C<AUTOLOAD>s.  However, there is a significant base

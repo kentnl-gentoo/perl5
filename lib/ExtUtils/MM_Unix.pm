@@ -5,7 +5,7 @@ use Config;
 use File::Basename qw(basename dirname fileparse);
 use DirHandle;
 use strict;
-use vars qw($VERSION $Is_Mac $Is_OS2 $Is_VMS
+use vars qw($VERSION $Is_Mac $Is_OS2 $Is_VMS $Is_Win32
 	    $Verbose %pm %static $Xsubpp_Version);
 
 $VERSION = substr q$Revision: 1.114 $, 10;
@@ -15,7 +15,8 @@ Exporter::import('ExtUtils::MakeMaker',
 	qw( $Verbose &neatvalue));
 
 $Is_OS2 = $^O eq 'os2';
-$Is_Mac = $^O eq "MacOS";
+$Is_Mac = $^O eq 'MacOS';
+$Is_Win32 = $^O eq 'MSWin32';
 
 if ($Is_VMS = $^O eq 'VMS') {
     require VMS::Filespec;
@@ -662,11 +663,17 @@ sub dir_target {
 # too often :)
 
     my($self,@dirs) = @_;
-    my(@m,$dir);
+    my(@m,$dir,$targdir);
     foreach $dir (@dirs) {
 	my($src) = $self->catfile($self->{PERL_INC},'perl.h');
 	my($targ) = $self->catfile($dir,'.exists');
-	my($targdir) = dirname($targ); # Necessary because catfile may have adapted syntax of $dir to target OS
+	# catfile may have adapted syntax of $dir to target OS, so...
+	if ($Is_VMS) { # Just remove file name; dirspec is often in macro
+	    ($targdir = $targ) =~ s:/?\.exists$::;
+	}
+	else { # while elsewhere we expect to see the dir separator in $targ
+	    $targdir = dirname($targ);
+	}
 	next if $self->{DIR_TARGET}{$self}{$targdir}++;
 	push @m, qq{
 $targ :: $src
@@ -1161,6 +1168,7 @@ sub init_dirscan {	# --- File and Directory Lists (.xs .pm .pod etc)
     $ignore{'test.pl'} = 1;
     $ignore{'makefile.pl'} = 1 if $Is_VMS;
     foreach $name ($self->lsdir($self->curdir)){
+	next if $name =~ /\#/;
 	next if $name eq $self->curdir or $name eq $self->updir or $ignore{$name};
 	next unless $self->libscan($name);
 	if (-d $name){
@@ -1236,6 +1244,7 @@ sub init_dirscan {	# --- File and Directory Lists (.xs .pm .pod etc)
 		}
 		return;
 	    }
+	    return if /\#/;
 	    my($path, $prefix) = ($File::Find::name, '$(INST_LIBDIR)');
 	    my($striplibpath,$striplibname);
 	    $prefix =  '$(INST_LIB)' if (($striplibpath = $path) =~ s:^(\W*)lib\W:$1:i);
@@ -1350,7 +1359,7 @@ sub init_dirscan {	# --- File and Directory Lists (.xs .pm .pod etc)
 
 Initializes NAME, FULLEXT, BASEEXT, PARENT_NAME, DLBASE, PERL_SRC,
 PERL_LIB, PERL_ARCHLIB, PERL_INC, INSTALLDIRS, INST_*, INSTALL*,
-PREFIX, CONFIG, AR, AR_STATIC_ARGS, LD, OBJ_EXT, LIB_EXT, MAP_TARGET,
+PREFIX, CONFIG, AR, AR_STATIC_ARGS, LD, OBJ_EXT, LIB_EXT, EXE_EXT, MAP_TARGET,
 LIBPERL_A, VERSION_FROM, VERSION, DISTNAME, VERSION_SYM.
 
 =cut
@@ -1423,9 +1432,9 @@ sub init_main {
     if ($self->{PERL_SRC}){
 	$self->{PERL_LIB}     ||= $self->catdir("$self->{PERL_SRC}","lib");
 	$self->{PERL_ARCHLIB} = $self->{PERL_LIB};
-	$self->{PERL_INC}     = $self->{PERL_SRC};
-	# catch a situation that has occurred a few times in the past:
+	$self->{PERL_INC}     = ($Is_Win32) ? $self->catdir($self->{PERL_LIB},"CORE") : $self->{PERL_SRC};
 
+	# catch a situation that has occurred a few times in the past:
 	unless (
 		-s $self->catfile($self->{PERL_SRC},'cflags')
 		or
@@ -1434,6 +1443,8 @@ sub init_main {
 		-s $self->catfile($self->{PERL_SRC},'perlshr_attr.opt')
 		or
 		$Is_Mac
+		or
+		$Is_Win32
 	       ){
 	    warn qq{
 You cannot build extensions below the perl source tree after executing
@@ -1539,7 +1550,7 @@ usually solves this kind of problem.
     # all the installation path variables to literally $(PREFIX), so
     # the user can still say make PREFIX=foo
     my($configure_prefix) = $Config{'prefix'};
-    $prefix = VMS::Filespec::unixify($prefix) if $Is_VMS;
+    $configure_prefix = VMS::Filespec::unixify($configure_prefix) if $Is_VMS;
     $self->{PREFIX} ||= $configure_prefix;
 
 
@@ -2717,14 +2728,14 @@ END
 
     push @m,
 q{	$(AR) $(AR_STATIC_ARGS) $@ $(OBJECT) && $(RANLIB) $@
-	}.$self->{NOECHO}.q{echo "$(EXTRALIBS)" > $(INST_ARCHAUTODIR)/extralibs.ld
 	$(CHMOD) 755 $@
+	}.$self->{NOECHO}.q{echo "$(EXTRALIBS)" > $(INST_ARCHAUTODIR)/extralibs.ld
 };
-
-# Old mechanism - still available:
-
-    push @m, "\t$self->{NOECHO}".q{echo "$(EXTRALIBS)" >> $(PERL_SRC)/ext.libs}."\n\n"
-	if $self->{PERL_SRC};
+    # Old mechanism - still available:
+    push @m,
+"\t$self->{NOECHO}".q{echo "$(EXTRALIBS)" >> $(PERL_SRC)/ext.libs
+}	if $self->{PERL_SRC} && $self->{EXTRALIBS};
+    push @m, "\n";
 
     push @m, $self->dir_target('$(INST_ARCHAUTODIR)');
     join('', "\n",@m);
@@ -2828,7 +2839,10 @@ sub test {
 # --- Test and Installation Sections ---
 
     my($self, %attribs) = @_;
-    my($tests) = $attribs{TESTS} || (-d "t" ? "t/*.t" : "");
+    my $tests = $attribs{TESTS};
+    if (!$tests && -d 't') {
+	$tests = $Is_Win32 ? join(' ', <t\\*.t>) : 't/*.t';
+    }
     my(@m);
     push(@m,"
 TEST_VERBOSE=0
@@ -2881,7 +2895,8 @@ Helper method to write the test targets
 
 sub test_via_harness {
     my($self, $perl, $tests) = @_;
-    "\tPERL_DL_NONLAZY=1 $perl".q! -I$(INST_ARCHLIB) -I$(INST_LIB) -I$(PERL_ARCHLIB) -I$(PERL_LIB) -e 'use Test::Harness qw(&runtests $$verbose); $$verbose=$(TEST_VERBOSE); runtests @ARGV;' !."$tests\n";
+    $perl = "PERL_DL_NONLAZY=1 $perl" unless $Is_Win32;
+    "\t$perl".q! -I$(INST_ARCHLIB) -I$(INST_LIB) -I$(PERL_ARCHLIB) -I$(PERL_LIB) -e 'use Test::Harness qw(&runtests $$verbose); $$verbose=$(TEST_VERBOSE); runtests @ARGV;' !."$tests\n";
 }
 
 =item test_via_script (o)
@@ -2892,7 +2907,8 @@ Other helper method for test.
 
 sub test_via_script {
     my($self, $perl, $script) = @_;
-    qq{\tPERL_DL_NONLAZY=1 $perl}.q{ -I$(INST_ARCHLIB) -I$(INST_LIB) -I$(PERL_ARCHLIB) -I$(PERL_LIB) }.qq{$script
+    $perl = "PERL_DL_NONLAZY=1 $perl" unless $Is_Win32;
+    qq{\t$perl}.q{ -I$(INST_ARCHLIB) -I$(INST_LIB) -I$(PERL_ARCHLIB) -I$(PERL_LIB) }.qq{$script
 };
 }
 

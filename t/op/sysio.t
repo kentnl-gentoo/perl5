@@ -1,6 +1,6 @@
 #!./perl
 
-print "1..30\n";
+print "1..36\n";
 
 chdir('op') || die "sysio.t: cannot look for myself: $!";
 
@@ -163,6 +163,25 @@ print "ok 29\n";
 # this we should have
 print 'not ' unless ($b eq '#!ererl');
 print "ok 30\n";
+
+# test sysseek
+
+print 'not ' unless sysseek(I, 2, 0) == 2;
+print "ok 31\n";
+sysread(I, $b, 3);
+print 'not ' unless $b eq 'ere';
+print "ok 32\n";
+
+print 'not ' unless sysseek(I, -2, 1) == 3;
+print "ok 33\n";
+sysread(I, $b, 4);
+print 'not ' unless $b eq 'rerl';
+print "ok 34\n";
+
+print 'not ' unless sysseek(I, 0, 0) eq '0 but true';
+print "ok 35\n";
+print 'not ' if defined sysseek(I, -1, 1);
+print "ok 36\n";
 
 close(I);
 

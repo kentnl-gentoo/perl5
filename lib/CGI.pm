@@ -28,8 +28,8 @@ $AUTOLOAD_DEBUG=0;
 #    3) print header(-nph=>1)
 $NPH=0;
 
-$CGI::revision = '$Id: CGI.pm,v 2.32 1997/3/19 10:10 lstein Exp $';
-$CGI::VERSION='2.3201';
+$CGI::revision = '$Id: CGI.pm,v 2.34 1997/4/7 7:23 lstein Exp $';
+$CGI::VERSION='2.3402';
 
 # OVERRIDE THE OS HERE IF CGI.pm GUESSES WRONG
 # $OS = 'UNIX';
@@ -87,9 +87,7 @@ $SL = {
 $NPH++ if defined($ENV{'SERVER_SOFTWARE'}) && $ENV{'SERVER_SOFTWARE'}=~/IIS/;
 
 # Turn on special checking for Doug MacEachern's modperl
-if (defined($MOD_PERL = $ENV{'GATEWAY_INTERFACE'}) &&
-    $MOD_PERL =~ /^CGI-Perl/)
-{
+if (defined($ENV{'GATEWAY_INTERFACE'}) && ($MOD_PERL = $ENV{'GATEWAY_INTERFACE'} =~ /^CGI-Perl/)) {
     $NPH++;
     $| = 1;
     $SEQNO = 1;
@@ -990,6 +988,13 @@ sub redirect {
     $url = $url || $self->self_url;
     my(@o);
     foreach (@other) { push(@o,split("=")); }
+    if($MOD_PERL or exists $self->{'.req'}) {
+	my $r = $self->{'.req'} || Apache->request;
+	$r->header_out(Location => $url);
+	$r->err_header_out(Location => $url);
+	$r->status(302);
+	return;
+    }
     push(@o,
 	 '-Status'=>'302 Found',
 	 '-Location'=>$url,
@@ -3135,7 +3140,7 @@ produce both the unofficial Location: header and the official URI:
 header.  This should satisfy most servers and browsers.
 
 One hint I can offer is that relative links may not work correctly
-when when you generate a redirection to another document on your site.
+when you generate a redirection to another document on your site.
 This is due to a well-intentioned optimization that some servers use.
 The solution to this is to use the full URL (including the http: part)
 of the document you are redirecting to.
@@ -3785,7 +3790,7 @@ list.  Otherwise, they will be strung together on a horizontal line.
 =item 4.
 
 The optional fifth argument is a pointer to an associative array
-relating the checkbox values to the user-visible labels that will will
+relating the checkbox values to the user-visible labels that will
 be printed next to them (-labels).  If not provided, the values will
 be used as the default.
 
@@ -4382,9 +4387,9 @@ You can pass a value of 'true' to dump() in order to get it to
 print the results out as plain text, suitable for incorporating
 into a <PRE> section.
 
-As a shortcut, as of version 1.56 you can interpolate the entire 
-CGI object into a string and it will be replaced with the
-the a nice HTML dump shown above:
+As a shortcut, as of version 1.56 you can interpolate the entire CGI
+object into a string and it will be replaced with the a nice HTML dump
+shown above:
 
     $query=new CGI;
     print "<H2>Current Values</H2> $query\n";

@@ -91,7 +91,7 @@ extern int h_errno;
 
 /* Put this after #includes because <unistd.h> defines _XOPEN_*. */
 #ifndef Sock_size_t
-#  if _XOPEN_VERSION >= 5 || defined(_XOPEN_SOURCE_EXTENDED)
+#  if _XOPEN_VERSION >= 5 || defined(_XOPEN_SOURCE_EXTENDED) || defined(__GLIBC__)
 #    define Sock_size_t Size_t
 #  else
 #    define Sock_size_t int
@@ -154,6 +154,16 @@ static int dooneliner _((char *cmd, char *filename));
 
 #endif /* no flock() */
 
+#ifndef MAXPATHLEN
+#  ifdef PATH_MAX
+#    define MAXPATHLEN PATH_MAX
+#  else
+#    define MAXPATHLEN 1024
+#  endif
+#endif
+
+#define ZBTLEN 10
+static char zero_but_true[ZBTLEN + 1] = "0 but true";
 
 /* Pushy I/O. */
 
@@ -168,7 +178,7 @@ PP(pp_backtick)
     fp = my_popen(tmps, "r");
     if (fp) {
 	if (gimme == G_VOID) {
-	    while (PerlIO_read(fp, buf, sizeof buf) > 0)
+	    while (PerlIO_read(fp, tokenbuf, sizeof tokenbuf) > 0)
 		/*SUPPRESS 530*/
 		;
 	}
@@ -968,16 +978,16 @@ PP(pp_leavewrite)
 	CV *cv;
 	if (!IoTOP_GV(io)) {
 	    GV *topgv;
-	    char tmpbuf[256];
+	    SV *topname;
 
 	    if (!IoTOP_NAME(io)) {
 		if (!IoFMT_NAME(io))
 		    IoFMT_NAME(io) = savepv(GvNAME(gv));
-		sprintf(tmpbuf, "%s_TOP", IoFMT_NAME(io));
-		topgv = gv_fetchpv(tmpbuf,FALSE, SVt_PVFM);
+		topname = sv_2mortal(newSVpvf("%s_TOP", IoFMT_NAME(io)));
+		topgv = gv_fetchpv(SvPVX(topname), FALSE, SVt_PVFM);
 		if ((topgv && GvFORM(topgv)) ||
 		  !gv_fetchpv("top",FALSE,SVt_PVFM))
-		    IoTOP_NAME(io) = savepv(tmpbuf);
+		    IoTOP_NAME(io) = savepv(SvPVX(topname));
 		else
 		    IoTOP_NAME(io) = savepv("top");
 	    }
@@ -1069,11 +1079,33 @@ PP(pp_prtf)
     IO *io;
     PerlIO *fp;
     SV *sv = NEWSV(0,0);
+    MAGIC *mg;
 
     if (op->op_flags & OPf_STACKED)
 	gv = (GV*)*++MARK;
     else
 	gv = defoutgv;
+
+    if (SvMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+	if (MARK == ORIGMARK) {
+	    EXTEND(SP, 1);
+	    ++MARK;
+	    Move(MARK, MARK + 1, (SP - MARK) + 1, SV*);
+	    ++SP;
+	}
+	PUSHMARK(MARK - 1);
+	*MARK = mg->mg_obj;
+	PUTBACK;
+	ENTER;
+	perl_call_method("PRINTF", G_SCALAR);
+	LEAVE;
+	SPAGAIN;
+	MARK = ORIGMARK + 1;
+	*MARK = *SP;
+	SP = MARK;
+	RETURN;
+    }
+
     if (!(io = GvIO(gv))) {
 	if (dowarn) {
 	    gv_fullname3(sv, gv, Nullch);
@@ -1155,14 +1187,16 @@ PP(pp_sysread)
     GV *gv;
     IO *io;
     char *buffer;
-    int length;
+    SSize_t length;
     Sock_size_t bufsize;
     SV *bufsv;
     STRLEN blen;
     MAGIC *mg;
 
     gv = (GV*)*++MARK;
-    if (SvMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (op->op_type == OP_READ &&
+	SvMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q')))
+    {
 	SV *sv;
 	
 	PUSHMARK(MARK-1);
@@ -1196,11 +1230,12 @@ PP(pp_sysread)
 	goto say_undef;
 #ifdef HAS_SOCKET
     if (op->op_type == OP_RECV) {
-	bufsize = sizeof buf;
+	char namebuf[MAXPATHLEN];
+	bufsize = sizeof namebuf;
 	buffer = SvGROW(bufsv, length+1);
 	/* 'offset' means 'flags' here */
 	length = recvfrom(PerlIO_fileno(IoIFP(io)), buffer, length, offset,
-	    (struct sockaddr *)buf, &bufsize);
+			  (struct sockaddr *)namebuf, &bufsize);
 	if (length < 0)
 	    RETPUSHUNDEF;
 	SvCUR_set(bufsv, length);
@@ -1211,7 +1246,7 @@ PP(pp_sysread)
 	if (!(IoFLAGS(io) & IOf_UNTAINT))
 	    SvTAINTED_on(bufsv);
 	SP = ORIGMARK;
-	sv_setpvn(TARG, buf, bufsize);
+	sv_setpvn(TARG, namebuf, bufsize);
 	PUSHs(TARG);
 	RETURN;
     }
@@ -1235,9 +1270,10 @@ PP(pp_sysread)
     else
 #ifdef HAS_SOCKET__bad_code_maybe
     if (IoTYPE(io) == 's') {
-	bufsize = sizeof buf;
+	char namebuf[MAXPATHLEN];
+	bufsize = sizeof namebuf;
 	length = recvfrom(PerlIO_fileno(IoIFP(io)), buffer+offset, length, 0,
-	    (struct sockaddr *)buf, &bufsize);
+			  (struct sockaddr *)namebuf, &bufsize);
     }
     else
 #endif
@@ -1368,13 +1404,25 @@ PP(pp_tell)
 
 PP(pp_seek)
 {
+    return pp_sysseek(ARGS);
+}
+
+PP(pp_sysseek)
+{
     dSP;
     GV *gv;
     int whence = POPi;
     long offset = POPl;
 
     gv = last_in_gv = (GV*)POPs;
-    PUSHs(boolSV(do_seek(gv, offset, whence)));
+    if (op->op_type == OP_SEEK)
+	PUSHs(boolSV(do_seek(gv, offset, whence)));
+    else {
+	long n = do_sysseek(gv, offset, whence);
+	PUSHs((n < 0) ? &sv_undef
+	      : sv_2mortal(n ? newSViv((IV)n)
+			   : newSVpv(zero_but_true, ZBTLEN)));
+    }
     RETURN;
 }
 
@@ -1515,7 +1563,7 @@ PP(pp_ioctl)
 	PUSHi(retval);
     }
     else {
-	PUSHp("0 but true", 10);
+	PUSHp(zero_but_true, ZBTLEN);
     }
     RETURN;
 }
@@ -2614,7 +2662,9 @@ PP(pp_readlink)
     dSP; dTARGET;
 #ifdef HAS_SYMLINK
     char *tmps;
+    char buf[MAXPATHLEN];
     int len;
+
     tmps = POPp;
     len = readlink(tmps, buf, sizeof buf);
     EXTEND(SP, 1);
@@ -2728,7 +2778,7 @@ PP(pp_mkdir)
 
     TAINT_PROPER("mkdir");
 #ifdef HAS_MKDIR
-    SETi( mkdir(tmps, mode) >= 0 );
+    SETi( Mkdir(tmps, mode) >= 0 );
 #else
     SETi( dooneliner("mkdir", tmps) );
     oldumask = umask(0);
@@ -3287,18 +3337,18 @@ PP(pp_gmtime)
     EXTEND_MORTAL(9);
     if (GIMME != G_ARRAY) {
 	dTARGET;
-	char mybuf[30];
+	SV *tsv;
 	if (!tmbuf)
 	    RETPUSHUNDEF;
-	sprintf(mybuf, "%s %s %2d %02d:%02d:%02d %d",
-	    dayname[tmbuf->tm_wday],
-	    monname[tmbuf->tm_mon],
-	    tmbuf->tm_mday,
-	    tmbuf->tm_hour,
-	    tmbuf->tm_min,
-	    tmbuf->tm_sec,
-	    tmbuf->tm_year + 1900);
-	PUSHp(mybuf, strlen(mybuf));
+	tsv = newSVpvf("%s %s %2d %02d:%02d:%02d %d",
+		       dayname[tmbuf->tm_wday],
+		       monname[tmbuf->tm_mon],
+		       tmbuf->tm_mday,
+		       tmbuf->tm_hour,
+		       tmbuf->tm_min,
+		       tmbuf->tm_sec,
+		       tmbuf->tm_year + 1900);
+	PUSHs(sv_2mortal(tsv));
     }
     else if (tmbuf) {
 	PUSHs(sv_2mortal(newSViv((I32)tmbuf->tm_sec)));
@@ -3447,7 +3497,7 @@ PP(pp_semctl)
 	PUSHi(anum);
     }
     else {
-	PUSHp("0 but true",10);
+	PUSHp(zero_but_true, ZBTLEN);
     }
     RETURN;
 #else
@@ -3991,7 +4041,7 @@ PP(pp_gpwent)
 PP(pp_spwent)
 {
     dSP;
-#ifdef HAS_PASSWD
+#if defined(HAS_PASSWD) && !defined(CYGWIN32)
     setpwent();
     RETPUSHYES;
 #else

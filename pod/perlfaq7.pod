@@ -298,6 +298,26 @@ E<lt>STDINE<gt>'>, there would have been no way for the hypothetical
 timeout() function to access the lexical variable $line back in its
 caller's scope.
 
+=head2 What is variable suicide and how can I prevent it?
+
+Variable suicide is when you (temporarily or permanently) lose the
+value of a variable.  It is caused by scoping through my() and local()
+interacting with either closures or aliased foreach() interator
+variables and subroutine arguments.  It used to be easy to
+inadvertently lose a variable's value this way, but now it's much
+harder.  Take this code:
+
+    my $f = "foo";
+    sub T {
+      while ($i++ < 3) { my $f = $f; $f .= "bar"; print $f, "\n" }
+    }
+    T;
+    print "Finally $f\n";
+
+The $f that has "bar" added to it three times should be a new C<$f>
+(C<my $f> should create a new local variable each time through the
+loop).  It isn't, however.  This is a bug, and will be fixed.
+
 =head2 How can I pass/return a {Function, FileHandle, Array, Hash, Method, Regexp}?
 
 With the exception of regexps, you need to pass references to these
@@ -576,7 +596,7 @@ how best to do this, so he left it out, even though it's been on the
 wish list since perl1.
 
 Here's a simple example of a switch based on pattern matching.  We'll
-do a multiway conditional based on the type of reference stored in
+do a multi-way conditional based on the type of reference stored in
 $whatchamacallit:
 
     SWITCH:
@@ -668,6 +688,26 @@ not necessarily the same as the one in which you were compiled):
 	my $class = ref($self) || $self;
 	warn "called me from a $class object";
     }
+
+=head2 How can I comment out a large block of perl code?
+
+Use embedded POD to discard it:
+
+    # program is here
+
+    =for nobody
+    This paragraph is commented out
+
+    # program continues
+
+    =begin comment text
+
+    all of this stuff
+
+    here will be ignored
+    by everyone
+
+    =end comment text
 
 =head1 AUTHOR AND COPYRIGHT
 

@@ -405,6 +405,9 @@ sub installlib {
 
     $name = "$dir/$name" if $dir ne '';
 
+    # ignore Chip-style patch backups.
+    return if grep(/^P\d+$/, split(m{/+}, $name));
+
     my $installlib = $installprivlib;
     if ($dir =~ /^auto/ ||
 	  ($name =~ /^(.*)\.(?:pm|pod)$/ && $archpms{$1})) {
@@ -415,7 +418,7 @@ sub installlib {
     }
 
     if (-f $_) {
-	if (/\.al$/ || /\.ix$/) {
+	if (/\.(?:al|ix)$/ && !($dir =~ m[^auto/(.*)$] && $archpms{$1})) {
 	    $installlib = $installprivlib;
 	    #We're installing *.al and *.ix files into $installprivlib,
 	    #but we have to delete old *.al and *.ix files from the 5.000

@@ -20,7 +20,7 @@
 # include <unistd.h>
 #endif
 
-#ifdef HAS_GETGROUPS
+#if defined(HAS_GETGROUPS) || defined(HAS_SETGROUPS)
 #  ifndef NGROUPS
 #    define NGROUPS 32
 #  endif
@@ -307,7 +307,7 @@ MAGIC *mg;
 	    if (rx->subend && (s = rx->endp[0])) {
 		i = rx->subend - s;
 		if (i >= 0)
-		    return 0;
+		    return i;
 	    }
 	}
 	return 0;
@@ -531,27 +531,20 @@ MAGIC *mg;
 	break;
     case '(':
 	sv_setiv(sv, (IV)gid);
-	s = buf;
-	(void)sprintf(s,"%d",(int)gid);
+	sv_setpvf(sv, "%vd", (IV)gid);
 	goto add_groups;
     case ')':
 	sv_setiv(sv, (IV)egid);
-	s = buf;
-	(void)sprintf(s,"%d",(int)egid);
+	sv_setpvf(sv, "%vd", (IV)egid);
       add_groups:
-	while (*s) s++;
 #ifdef HAS_GETGROUPS
 	{
 	    Groups_t gary[NGROUPS];
-
 	    i = getgroups(NGROUPS,gary);
-	    while (--i >= 0) {
-		(void)sprintf(s," %d", (int)gary[i]);
-		while (*s) s++;
-	    }
+	    while (--i >= 0)
+		sv_catpvf(sv, " %vd", (IV)gary[i]);
 	}
 #endif
-	sv_setpv(sv,buf);
 	SvIOK_on(sv);	/* what a wonderful hack! */
 	break;
     case '*':
@@ -581,27 +574,20 @@ MAGIC* mg;
 {
     register char *s;
     char *ptr;
-    STRLEN len;
+    STRLEN len, klen;
     I32 i;
 
     s = SvPV(sv,len);
-    ptr = MgPV(mg);
+    ptr = MgPV(mg,klen);
     my_setenv(ptr, s);
 
 #ifdef DYNAMIC_ENV_FETCH
      /* We just undefd an environment var.  Is a replacement */
      /* waiting in the wings? */
     if (!len) {
-	HE *envhe;
-	SV *keysv;
-	if (mg->mg_len == HEf_SVKEY)
-	    keysv = (SV *)mg->mg_ptr;
-	else
-	    keysv = newSVpv(mg->mg_ptr, mg->mg_len);
-	if ((envhe = hv_fetch_ent(GvHVn(envgv), keysv, FALSE, 0)))
-	    s = SvPV(HeVAL(envhe), len);
-	if (mg->mg_len != HEf_SVKEY)
-	    SvREFCNT_dec(keysv);
+	SV **valp;
+	if ((valp = hv_fetch(GvHVn(envgv), ptr, klen, FALSE)))
+	    s = SvPV(*valp, len);
     }
 #endif
 
@@ -611,7 +597,7 @@ MAGIC* mg;
     if (tainting) {
 	MgTAINTEDDIR_off(mg);
 #ifdef VMS
-	if (s && strnEQ(ptr, "DCL$PATH", 8)) {
+	if (s && klen == 8 && strEQ(ptr, "DCL$PATH")) {
 	    char pathbuf[256], eltbuf[256], *cp, *elt = s;
 	    struct stat sbuf;
 	    int i = 0, j = 0;
@@ -636,7 +622,7 @@ MAGIC* mg;
 	    } while (my_trnlnm(s, pathbuf, i++) && (elt = pathbuf));
 	}
 #endif /* VMS */
-	if (s && strEQ(ptr,"PATH")) {
+	if (s && klen == 4 && strEQ(ptr,"PATH")) {
 	    char *strend = s + len;
 
 	    while (s < strend) {
@@ -661,7 +647,7 @@ magic_clearenv(sv,mg)
 SV* sv;
 MAGIC* mg;
 {
-    my_setenv(MgPV(mg),Nullch);
+    my_setenv(MgPV(mg,na),Nullch);
     return 0;
 }
 
@@ -672,7 +658,7 @@ MAGIC* mg;
 {
     I32 i;
     /* Are we fetching a signal entry? */
-    i = whichsig(MgPV(mg));
+    i = whichsig(MgPV(mg,na));
     if (i) {
     	if(psig_ptr[i])
     	    sv_setsv(sv,psig_ptr[i]);
@@ -697,7 +683,7 @@ MAGIC* mg;
 {
     I32 i;
     /* Are we clearing a signal entry? */
-    i = whichsig(MgPV(mg));
+    i = whichsig(MgPV(mg,na));
     if (i) {
     	if(psig_ptr[i]) {
     	    SvREFCNT_dec(psig_ptr[i]);
@@ -720,7 +706,7 @@ MAGIC* mg;
     I32 i;
     SV** svp;
 
-    s = MgPV(mg);
+    s = MgPV(mg,na);
     if (*s == '_') {
 	if (strEQ(s,"__DIE__"))
 	    svp = &diehook;
@@ -771,12 +757,13 @@ MAGIC* mg;
 	    *svp = 0;
     }
     else {
-    	if(hints & HINT_STRICT_REFS)
-    		die(no_symref,s,"a subroutine");
-	if (!strchr(s,':') && !strchr(s,'\'')) {
-	    sprintf(tokenbuf, "main::%s",s);
-	    sv_setpv(sv,tokenbuf);
-	}
+	/*
+	 * We should warn if HINT_STRICT_REFS, but without
+	 * access to a known hint bit in a known OP, we can't
+	 * tell whether HINT_STRICT_REFS is in force or not.
+	 */
+	if (!strchr(s,':') && !strchr(s,'\''))
+	    sv_setpv(sv, form("main::%s", s));
 	if (i)
 	    (void)rsignal(i, sighandler);
 	else
@@ -958,7 +945,7 @@ MAGIC* mg;
     gv = DBline;
     i = SvTRUE(sv);
     svp = av_fetch(GvAV(gv),
-		     atoi(MgPV(mg)), FALSE);
+		     atoi(MgPV(mg,na)), FALSE);
     if (svp && SvIOKp(*svp) && (o = (OP*)SvSTASH(*svp)))
 	o->op_private = i;
     else
@@ -1200,7 +1187,7 @@ SV* sv;
     }
     else {
 	AV* av = (AV*)LvTARG(sv);
-	if (LvTARGLEN(sv) < 0 && (I32)LvTARGOFF(sv) > AvFILL(av))
+	if ((I32)LvTARGLEN(sv) < 0 && (I32)LvTARGOFF(sv) > AvFILL(av))
 	    LvTARG(sv) = Nullsv;	/* array can't be extended */
 	else {
 	    SV** svp = av_fetch(av, LvTARGOFF(sv), TRUE);
@@ -1522,7 +1509,30 @@ MAGIC* mg;
 	tainting |= (uid && (euid != uid || egid != gid));
 	break;
     case ')':
+#ifdef HAS_SETGROUPS
+	{
+	    char *p = SvPV(sv, na);
+	    Groups_t gary[NGROUPS];
+
+	    SET_NUMERIC_STANDARD();
+	    while (isSPACE(*p))
+		++p;
+	    egid = I_V(atof(p));
+	    for (i = 0; i < NGROUPS; ++i) {
+		while (*p && !isSPACE(*p))
+		    ++p;
+		while (isSPACE(*p))
+		    ++p;
+		if (!*p)
+		    break;
+		gary[i] = I_V(atof(p));
+	    }
+	    if (i)
+		(void)setgroups(i, gary);
+	}
+#else  /* HAS_SETGROUPS */
 	egid = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
+#endif /* HAS_SETGROUPS */
 	if (delaymagic) {
 	    delaymagic |= DM_EGID;
 	    break;				/* don't do magic till later */

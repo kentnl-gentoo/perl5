@@ -108,7 +108,7 @@ delete, each, exists, keys, values
 
 binmode, close, closedir, dbmclose, dbmopen, die, eof,
 fileno, flock, format, getc, print, printf, read, readdir,
-rewinddir, seek, seekdir, select, syscall, sysread,
+rewinddir, seek, seekdir, select, syscall, sysread, sysseek,
 syswrite, tell, telldir, truncate, warn, write
 
 =item Functions for fixed length data or records
@@ -1231,7 +1231,7 @@ example:
 See L<perlform> for many details and examples.
 
 
-=item formline PICTURE, LIST
+=item formline PICTURE,LIST
 
 This is an internal function used by C<format>s, though you may call it
 too.  It formats (see L<perlform>) a list of values according to the
@@ -2096,17 +2096,29 @@ follows:
 
     c	A signed char value.
     C	An unsigned char value.
+
     s	A signed short value.
     S	An unsigned short value.
+	  (This 'short' is _exactly_ 16 bits, which may differ from
+	   what a local C compiler calls 'short'.)
+
     i	A signed integer value.
     I	An unsigned integer value.
+	  (This 'integer' is _at_least_ 32 bits wide.  Its exact size
+	   depends on what a local C compiler calls 'int', and may
+	   even be larger than the 'long' described in the next item.)
+
     l	A signed long value.
     L	An unsigned long value.
+	  (This 'long' is _exactly_ 32 bits, which may differ from
+	   what a local C compiler calls 'long'.)
 
-    n	A short in "network" order.
-    N	A long in "network" order.
+    n	A short in "network" (big-endian) order.
+    N	A long in "network" (big-endian) order.
     v	A short in "VAX" (little-endian) order.
     V	A long in "VAX" (little-endian) order.
+	  (These 'shorts' and 'longs' are _exactly_ 16 bits and
+	   _exactly_ 32 bits, respectively.)
 
     f	A single-precision float in the native format.
     d	A double-precision float in the native format.
@@ -2116,10 +2128,10 @@ follows:
 
     u	A uuencoded string.
 
-    w A BER compressed integer.  Bytes give an unsigned integer base
-      128, most significant digit first, with as few digits as
-      possible, and with the bit 8 of each byte except the last set
-      to "1."
+    w	A BER compressed integer.  Its bytes represent an unsigned
+	integer in base 128, most significant digit first, with as few
+	digits as possible.  Bit eight (the high bit) is set on each
+	byte except the last.
 
     x	A null byte.
     X	Back up a byte.
@@ -2577,26 +2589,30 @@ C<(some expression)> suffices.
 
 =item seek FILEHANDLE,POSITION,WHENCE
 
-Randomly positions the file pointer for FILEHANDLE, just like the fseek()
-call of stdio.  FILEHANDLE may be an expression whose value gives the name
-of the filehandle.  The values for WHENCE are 0 to set the file pointer to
-POSITION, 1 to set the it to current plus POSITION, and 2 to set it to EOF
-plus offset.  You may use the values SEEK_SET, SEEK_CUR, and SEEK_END for
-this from the POSIX module.  Returns 1 upon success, 0 otherwise.
+Sets FILEHANDLE's position, just like the fseek() call of stdio.
+FILEHANDLE may be an expression whose value gives the name of the
+filehandle.  The values for WHENCE are 0 to set the new position to
+POSITION, 1 to set it to the current position plus POSITION, and 2 to
+set it to EOF plus POSITION (typically negative).  For WHENCE you may
+use the constants SEEK_SET, SEEK_CUR, and SEEK_END from either the
+IO::Seekable or the POSIX module.  Returns 1 upon success, 0 otherwise.
+
+If you want to position file for sysread() or syswrite(), don't use
+seek() -- buffering makes its effect on the file's system position
+unpredictable and non-portable.  Use sysseek() instead.
 
 On some systems you have to do a seek whenever you switch between reading
 and writing.  Amongst other things, this may have the effect of calling
-stdio's clearerr(3).  A "whence" of 1 (SEEK_CUR) is useful for not moving
-the file pointer:
+stdio's clearerr(3).  A WHENCE of 1 (SEEK_CUR) is useful for not moving
+the file position:
 
     seek(TEST,0,1);
 
 This is also useful for applications emulating C<tail -f>.  Once you hit
 EOF on your read, and then sleep for a while, you might have to stick in a
-seek() to reset things.  First the simple trick listed above to clear the
-filepointer.  The seek() doesn't change the current position, but it
-I<does> clear the end-of-file condition on the handle, so that the next
-C<E<lt>FILEE<gt>> makes Perl try again to read something.  We hope.
+seek() to reset things.  The seek() doesn't change the current position,
+but it I<does> clear the end-of-file condition on the handle, so that the
+next C<E<lt>FILEE<gt>> makes Perl try again to read something.  We hope.
 
 If that doesn't work (some stdios are particularly cantankerous), then
 you may need something more like this:
@@ -3325,11 +3341,12 @@ into that kind of thing.
 =item sysread FILEHANDLE,SCALAR,LENGTH
 
 Attempts to read LENGTH bytes of data into variable SCALAR from the
-specified FILEHANDLE, using the system call read(2).  It bypasses
-stdio, so mixing this with other kinds of reads may cause confusion.
-Returns the number of bytes actually read, or undef if there was an
-error.  SCALAR will be grown or shrunk so that the last byte actually
-read is the last byte of the scalar after the read.
+specified FILEHANDLE, using the system call read(2).  It bypasses stdio,
+so mixing this with other kinds of reads, print(), write(), seek(), or
+tell() can cause confusion.  Returns the number of bytes actually read,
+or undef if there was an error.  SCALAR will be grown or shrunk so that
+the last byte actually read is the last byte of the scalar after the
+read.
 
 An OFFSET may be specified to place the read data at some place in the
 string other than the beginning.  A negative OFFSET specifies
@@ -3337,6 +3354,23 @@ placement at that many bytes counting backwards from the end of the
 string.  A positive OFFSET greater than the length of SCALAR results
 in the string being padded to the required size with "\0" bytes before
 the result of the read is appended.
+
+=item sysseek FILEHANDLE,POSITION,WHENCE
+
+Sets FILEHANDLE's system position using the system call lseek(2).  It
+bypasses stdio, so mixing this with reads (other than sysread()),
+print(), write(), seek(), or tell() may cause confusion.  FILEHANDLE may
+be an expression whose value gives the name of the filehandle.  The
+values for WHENCE are 0 to set the new position to POSITION, 1 to set
+the it to the current position plus POSITION, and 2 to set it to EOF
+plus POSITION (typically negative).  For WHENCE, you may use the
+constants SEEK_SET, SEEK_CUR, and SEEK_END from either the IO::Seekable
+or the POSIX module.
+
+Returns the new position, or the undefined value on failure.  A position
+of zero is returned as the string "0 but true"; thus sysseek() returns
+TRUE on success and FALSE on failure, yet you can still easily determine
+the new position.
 
 =item system LIST
 
@@ -3388,10 +3422,11 @@ signals and core dumps.
 
 Attempts to write LENGTH bytes of data from variable SCALAR to the
 specified FILEHANDLE, using the system call write(2).  It bypasses
-stdio, so mixing this with prints may cause confusion.  Returns the
-number of bytes actually written, or undef if there was an error.
-If the length is greater than the available data, only as much data as
-is available will be written.
+stdio, so mixing this with reads (other than sysread()), print(),
+write(), seek(), or tell() may cause confusion.  Returns the number of
+bytes actually written, or undef if there was an error.  If the length
+is greater than the available data, only as much data as is available
+will be written.
 
 An OFFSET may be specified to write the data from some part of the
 string other than the beginning.  A negative OFFSET specifies writing
@@ -3401,7 +3436,7 @@ that many bytes counting backwards from the end of the string.
 
 =item tell
 
-Returns the current file position for FILEHANDLE.  FILEHANDLE may be an
+Returns the current position for FILEHANDLE.  FILEHANDLE may be an
 expression whose value gives the name of the actual filehandle.  If
 FILEHANDLE is omitted, assumes the file last read.
 
@@ -3805,7 +3840,7 @@ examples.
 
 =item write
 
-Writes a formatted record (possibly multiline) to the specified file,
+Writes a formatted record (possibly multi-line) to the specified file,
 using the format associated with that file.  By default the format for
 a file is the one having the same name as the filehandle, but the
 format for the current output channel (see the select() function) may be set

@@ -119,9 +119,6 @@ PP(pp_substcont)
 	if (!cx->sb_rxtainted)
 	    cx->sb_rxtainted = SvTAINTED(TOPs);
 	sv_catsv(dstr, POPs);
-	if (rx->subbase)
-	    Safefree(rx->subbase);
-	rx->subbase = cx->sb_subbase;
 
 	/* Are we done */
 	if (cx->sb_once || !pregexec(rx, s, cx->sb_strend, orig,
@@ -139,10 +136,10 @@ PP(pp_substcont)
 	    SvLEN_set(targ, SvLEN(dstr));
 	    SvPVX(dstr) = 0;
 	    sv_free(dstr);
-
 	    (void)SvPOK_only(targ);
 	    SvSETMAGIC(targ);
 	    SvTAINT(targ);
+
 	    PUSHs(sv_2mortal(newSViv((I32)cx->sb_iters - 1)));
 	    LEAVE_SCOPE(cx->sb_oldsave);
 	    POPSUBST(cx);
@@ -159,10 +156,7 @@ PP(pp_substcont)
     cx->sb_m = m = rx->startp[0];
     sv_catpvn(dstr, s, m-s);
     cx->sb_s = rx->endp[0];
-    cx->sb_subbase = rx->subbase;
     cx->sb_rxtainted |= rx->exec_tainted;
-
-    rx->subbase = Nullch;	/* so recursion works */
     RETURNOP(pm->op_pmreplstart);
 }
 
@@ -828,7 +822,7 @@ block_gimme()
 
     cxix = dopoptosub(cxstack_ix);
     if (cxix < 0)
-	return G_SCALAR;
+	return G_VOID;
 
     switch (cxstack[cxix].blk_gimme) {
     case G_VOID:
@@ -994,8 +988,10 @@ char *message;
 
 	    LEAVE;
 
-	    if (optype == OP_REQUIRE)
-		DIE("%s", SvPVx(GvSV(errgv), na));
+	    if (optype == OP_REQUIRE) {
+		char* msg = SvPVx(GvSV(errgv), na);
+		DIE("%s", *msg ? msg : "Compilation failed in require");
+	    }
 	    return pop_return();
 	}
     }
@@ -1963,14 +1959,14 @@ docatch(o)
 OP *o;
 {
     int ret;
-    int oldrunlevel = runlevel;
+    I32 oldrunlevel = runlevel;
     OP *oldop = op;
     dJMPENV;
 
     op = o;
 #ifdef DEBUGGING
     assert(CATCH_GET == TRUE);
-    DEBUG_l(deb("(Setting up local jumplevel, runlevel = %d)\n", runlevel+1));
+    DEBUG_l(deb("(Setting up local jumplevel, runlevel = %ld)\n", (long)runlevel+1));
 #endif
     JMPENV_PUSH(ret);
     switch (ret) {
@@ -2087,8 +2083,10 @@ int gimme;
 	pop_return();
 	lex_end();
 	LEAVE;
-	if (optype == OP_REQUIRE)
-	    DIE("%s", SvPVx(GvSV(errgv), na));
+	if (optype == OP_REQUIRE) {
+	    char* msg = SvPVx(GvSV(errgv), na);
+	    DIE("%s", *msg ? msg : "Compilation failed in require");
+	}
 	SvREFCNT_dec(rs);
 	rs = SvREFCNT_inc(nrs);
 	RETPUSHUNDEF;
@@ -2132,7 +2130,8 @@ PP(pp_require)
     register CONTEXT *cx;
     SV *sv;
     char *name;
-    char *tmpname;
+    char *tryname;
+    SV *namesv = Nullsv;
     SV** svp;
     I32 gimme = G_SCALAR;
     PerlIO *tryrsfp = 0;
@@ -2156,61 +2155,63 @@ PP(pp_require)
 
     /* prepare to compile file */
 
-    tmpname = savepv(name);
-    if (*tmpname == '/' ||
-	(*tmpname == '.' && 
-	    (tmpname[1] == '/' ||
-	     (tmpname[1] == '.' && tmpname[2] == '/')))
+    if (*name == '/' ||
+	(*name == '.' && 
+	    (name[1] == '/' ||
+	     (name[1] == '.' && name[2] == '/')))
 #ifdef DOSISH
-      || (tmpname[0] && tmpname[1] == ':')
+      || (name[0] && name[1] == ':')
 #endif
 #ifdef VMS
-	|| (strchr(tmpname,':')  || ((*tmpname == '[' || *tmpname == '<') &&
-	    (isALNUM(tmpname[1]) || strchr("$-_]>",tmpname[1]))))
+	|| (strchr(name,':')  || ((*name == '[' || *name == '<') &&
+	    (isALNUM(name[1]) || strchr("$-_]>",name[1]))))
 #endif
     )
     {
-	tryrsfp = PerlIO_open(tmpname,"r");
+	tryname = name;
+	tryrsfp = PerlIO_open(name,"r");
     }
     else {
 	AV *ar = GvAVn(incgv);
 	I32 i;
 #ifdef VMS
-	char unixified[256];
-	if (tounixspec_ts(tmpname,unixified) != NULL)
-	  for (i = 0; i <= AvFILL(ar); i++) {
-	    if (tounixpath_ts(SvPVx(*av_fetch(ar, i, TRUE), na),buf) == NULL)
-		continue;
-	    strcat(buf,unixified);
-#else
-	for (i = 0; i <= AvFILL(ar); i++) {
-	    (void)sprintf(buf, "%s/%s",
-		SvPVx(*av_fetch(ar, i, TRUE), na), name);
+	char *unixname;
+	if ((unixname = tounixspec(name, Nullch)) != Nullch)
 #endif
-	    tryrsfp = PerlIO_open(buf, "r");
-	    if (tryrsfp) {
-		char *s = buf;
-
-		if (*s == '.' && s[1] == '/')
-		    s += 2;
-		Safefree(tmpname);
-		tmpname = savepv(s);
-		break;
+	{
+	    namesv = NEWSV(806, 0);
+	    for (i = 0; i <= AvFILL(ar); i++) {
+		char *dir = SvPVx(*av_fetch(ar, i, TRUE), na);
+#ifdef VMS
+		char *unixdir;
+		if ((unixdir = tounixpath(dir, Nullch)) == Nullch)
+		    continue;
+		sv_setpv(namesv, unixdir);
+		sv_catpv(namesv, unixname);
+#else
+		sv_setpvf(namesv, "%s/%s", dir, name);
+#endif
+		tryname = SvPVX(namesv);
+		tryrsfp = PerlIO_open(tryname, "r");
+		if (tryrsfp) {
+		    if (tryname[0] == '.' && tryname[1] == '/')
+			tryname += 2;
+		    break;
+		}
 	    }
 	}
     }
     SAVESPTR(compiling.cop_filegv);
-    compiling.cop_filegv = gv_fetchfile(tmpname);
-    Safefree(tmpname);
-    tmpname = Nullch;
+    compiling.cop_filegv = gv_fetchfile(tryrsfp ? tryname : name);
+    SvREFCNT_dec(namesv);
     if (!tryrsfp) {
 	if (op->op_type == OP_REQUIRE) {
-	    sprintf(tokenbuf,"Can't locate %s in @INC", name);
-	    if (instr(tokenbuf,".h "))
-		strcat(tokenbuf," (change .h to .ph maybe?)");
-	    if (instr(tokenbuf,".ph "))
-		strcat(tokenbuf," (did you run h2ph?)");
-	    DIE("%s",tokenbuf);
+	    SV *msg = sv_2mortal(newSVpvf("Can't locate %s in @INC", name));
+	    if (instr(SvPVX(msg), ".h "))
+		sv_catpv(msg, " (change .h to .ph maybe?)");
+	    if (instr(SvPVX(msg), ".ph "))
+		sv_catpv(msg, " (did you run h2ph?)");
+	    DIE("%S", msg);
 	}
 
 	RETPUSHUNDEF;
@@ -2257,7 +2258,7 @@ PP(pp_entereval)
     register CONTEXT *cx;
     dPOPss;
     I32 gimme = GIMME_V, was = sub_generation;
-    char tmpbuf[32], *safestr;
+    char tmpbuf[sizeof(unsigned long) * 3 + 12], *safestr;
     STRLEN len;
     OP *ret;
 

@@ -8,43 +8,987 @@ or in the .../src/5/0/unsupported directory for sub-version
 releases.)
 
 
----------------
- Cast and Crew
----------------
+			   ---------------
+			    CAST AND CREW
+			   ---------------
 
-To save space, and to give due honor to those who have made Perl 5.004
-what is is today, here are some of the more common names in the Changes
-file, and their current addresses (as of March 1997):
+To give due honor to those who have made Perl 5.004 what is is today,
+here are some of the more common names in the Changes file, and their
+current addresses (as of March 1997):
 
-    Gisle Aas           <aas@aas.no>
+    Gisle Aas           <gisle@aas.no>
     Kenneth Albanowski  <kjahds@kjahds.com>
-    Charles Bailey      <bailey@hmivax.humgen.upenn.edu>
     Graham Barr         <gbarr@ti.com>
     Spider Boardman     <spider@orb.nashua.nh.us>
     Tim Bunce           <Tim.Bunce@ig.co.uk>
     Tom Christiansen    <tchrist@perl.com>
     Hallvard B Furuseth <h.b.furuseth@usit.uio.no>
+    M. J. T. Guy        <mjtg@cus.cam.ac.uk>
     Gurusamy Sarathy    <gsar@engin.umich.edu>
     Jarkko Hietaniemi   <jhi@iki.fi>
     Nick Ing-Simmons    <nik@tiuk.ti.com>
     Andreas Koenig      <a.koenig@mind.de>
+    Doug MacEachern     <dougm@opengroup.org>
     Paul Marquess       <pmarquess@bfsec.bt.co.uk>
     Jeff Okamoto        <okamoto@hpcc123.corp.hp.com>
     Ulrich Pfeifer      <pfeifer@charly.informatik.uni-dortmund.de>
     Tom Phoenix         <rootbeer@teleport.com>
     Norbert Pueschel    <pueschel@imsdd.meb.uni-bonn.de>
+    Dean Roehrich       <roehrich@cray.com>
     Roderick Schertler  <roderick@argon.org>
     Ilya Zakharevich    <ilya@math.ohio-state.edu>
 
 And the Keepers of the Patch Pumpkin:
 
+    Charles Bailey      <bailey@hmivax.humgen.upenn.edu>
     Andy Dougherty      <doughera@lafcol.lafayette.edu>
-    Chip Salzenberg     <chip@pobox.com>
+    Chip Salzenberg     <chip@perl.com>
 
 
-------------------
- Version 5.003_97
-------------------
+-----------------
+Version 5.003_97h
+-----------------
+
+This patch eliminates almost all possible sources of buffer overflow;
+in particular, there are no more sprintf() bugs.  (!!)  This patch
+also has a few other fixes.  With these changes in place, I can sleep
+at night.  (Because I've stopped hacking.  :-))
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "Support PRINTF for tied handles"
+   From:  Doug MacEachern
+ Msg-ID:  <199704202226.SAA08032@postman.osf.org>
+   Date:  Sun, 20 Apr 1997 18:26:13 -0400
+  Files:  pod/perldelta.pod pod/perltie.pod pp_sys.c t/op/misc.t
+
+ CORE PORTABILITY
+
+  Title:  "Fix bitwise shifts and pack('w') on Crays"
+   From:  Chip Salzenberg
+  Files:  pp.c
+
+  Title:  "Win32 update (two patches)"
+   From:  Gurusamy Sarathy
+  Files:  lib/AutoSplit.pm lib/ExtUtils/MM_Unix.pm win32/config.w32
+          win32/makedef.pl
+
+ OTHER CORE CHANGES
+
+  Title:  "Mondo Cool patch for buffer safety and convenience"
+   From:  Chip Salzenberg
+  Files:  XSUB.h doop.c dump.c ext/DynaLoader/dl_dlopen.xs
+          ext/DynaLoader/dl_hpux.xs ext/DynaLoader/dl_next.xs
+          ext/DynaLoader/dlutils.c ext/ODBM_File/ODBM_File.xs
+          global.sym gv.c interp.sym mg.c op.c perl.c perl.h
+          pod/perlguts.pod pp.c pp_ctl.c pp_hot.c pp_sys.c proto.h
+          regcomp.c regexec.c sv.c toke.c util.c
+
+  Title:  "Problems with glob"
+   From:  Ilya Zakharevich
+ Msg-ID:  <1997Apr20.024432.1941365@hmivax.humgen.upenn.edu>
+   Date:  Sun, 20 Apr 1997 02:44:32 -0400 (EDT)
+  Files:  op.c
+
+  Title:  "Fix scalar leak in closures"
+   From:  Chip Salzenberg
+  Files:  op.c scope.c
+
+  Title:  "Refine error messages re: anon subs' prototypes"
+   From:  Chip Salzenberg
+  Files:  op.c
+
+  Title:  "Outermost scope is void, not scalar"
+   From:  Chip Salzenberg
+  Files:  pp_ctl.c
+
+ BUILD PROCESS
+
+  Title:  "Fix up Linux hints for tcsh, and Configure patch"
+   From:  Andy Dougherty
+ Msg-ID:  <Pine.SOL.3.95q.970422101051.2506C-100000@fractal.lafayette.e
+   Date:  Tue, 22 Apr 1997 11:02:27 -0400 (EDT)
+  Files:  Configure hints/linux.sh
+
+  Title:  "There is no standard answer to 'Use suidperl?'"
+   From:  Chip Salzenberg
+  Files:  hints/bsdos.sh hints/freebsd.sh hints/linux.sh
+          hints/machten_2.sh
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "Math::Complex update"
+   From:  Jarkko Hietaniemi
+  Files:  lib/Math/Complex.pm t/lib/complex.t
+
+  Title:  "Croak on C<use autouse> without module name"
+   From:  Chip Salzenberg
+  Files:  lib/autouse.pm
+
+  Title:  "Silence warnings on simple C<use ops>"
+   From:  Roderick Schertler
+ Msg-ID:  <pzybafum6k.fsf@eeyore.ibcinc.com>
+   Date:  19 Apr 1997 10:22:43 -0400
+  Files:  ext/Opcode/ops.pm
+
+ TESTS
+
+  Title:  "Don't put leading newline on numeric strings"
+   From:  Andreas Koenig
+ Msg-ID:  <199704230847.KAA22752@anna.in-berlin.de>
+   Date:  Wed, 23 Apr 1997 10:47:00 +0200
+  Files:  t/pragma/constant.t
+
+ UTILITIES
+
+   (no changes)
+
+ DOCUMENTATION
+
+  Title:  "FAQ udpate (23-apr-97)"
+   From:  Nathan Torkington <gnat@prometheus.frii.com>
+ Msg-ID:  <199704231822.MAA05074@prometheus.frii.com>
+   Date:  Wed, 23 Apr 1997 12:22:55 -0600 (MDT)
+  Files:  pod/perlfaq*.pod
+
+  Title:  "Two doublewords less"
+   From:  Jarkko Hietaniemi
+ Msg-ID:  <199704201938.WAA07722@alpha.hut.fi>
+   Date:  Sun, 20 Apr 1997 22:38:13 +0300 (EET DST)
+  Files:  pod/perlrun.pod vms/perlvms.pod
+
+
+-----------------
+Version 5.003_97g
+-----------------
+
+This one has two security bug fixes for buffer overflows.  Perl has
+not yet been searched to see if more fixes are needed.
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "Improve sysseek(), remove systell(), fix Opcode"
+   From:  Chip Salzenberg
+  Files:  doio.c ext/Opcode/Makefile.PL ext/Opcode/Opcode.pm
+          ext/Opcode/Opcode.xs global.sym keywords.pl opcode.pl
+          pod/perldelta.pod pod/perldiag.pod pod/perlfunc.pod pp_sys.c
+          proto.h t/op/sysio.t toke.c
+
+  Title:  "Fix (and test) spaces in {,un}pack()"
+   From:  Chip Salzenberg
+  Files:  pp.c t/op/pack.t
+
+ CORE PORTABILITY
+
+  Title:  "Irix update"
+   From:  Scott Henry <scotth@sgi.com>
+ Msg-ID:  <yd8d8rsi0ln.fsf@hoshi.engr.sgi.com>
+   Date:  18 Apr 1997 12:37:24 -0700
+  Files:  MANIFEST hints/irix_6.sh hints/irix_6_0.sh hints/irix_6_1.sh
+
+  Title:  "ExtUtils/Miniperl.pm not built on Win32"
+   From:  Nick Ing-Simmons
+ Msg-ID:  <199704181742.SAA08407@ni-s.u-net.com>
+   Date:  Fri, 18 Apr 1997 18:42:32 +0100
+  Files:  win32/Makefile
+
+ OTHER CORE CHANGES
+
+  Title:  "SECURITY FIX: 'Identifier too long'"
+   From:  Chip Salzenberg
+  Files:  pod/perldelta.pod pod/perldiag.pod toke.c
+
+  Title:  "SECURITY FIX: Buffer overflow in gv_fetchfile()"
+   From:  Chip Salzenberg
+  Files:  gv.c
+
+  Title:  "Remove pp_method() inefficiency from last patch"
+   From:  Chip Salzenberg
+  Files:  pp_hot.c
+
+ BUILD PROCESS
+
+  Title:  "Fix unnecessary re-linking"
+   From:  Chip Salzenberg
+  Files:  lib/ExtUtils/MM_Unix.pm
+
+  Title:  "Fix tcsh hack in Configure"
+   From:  Chip Salzenberg
+  Files:  Configure
+
+  Title:  "Minor, optional patch to Makefile.SH"
+   From:  "Randy J. Ray" <rjray@uswest.com>
+ Msg-ID:  <rjray-9703180132.AA00374040@snakepit.ecte.uswc.uswest.com>
+   Date:  Thu, 17 Apr 1997 19:32:17 -0600
+  Files:  Makefile.SH
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "Patch to Getopt::Long"
+   From:  Johan Vromans <jvromans@squirrel.nl>
+ Msg-ID:  <m0wIKCO-00081IC@phoenix.squirrel.nl>
+   Date:  Fri, 18 Apr 97 22:24 MET DST
+  Files:  lib/Getopt/Long.pm
+
+  Title:  "Fix NAME in SDBM_File build"
+   From:  Chip Salzenberg
+  Files:  ext/SDBM_File/sdbm/Makefile.PL
+
+ TESTS
+
+   (no other changes)
+
+ UTILITIES
+
+  Title:  "Make h2ph generate constant subs"
+   From:  Roderick Schertler
+ Msg-ID:  <pz2088w5ot.fsf@eeyore.ibcinc.com>
+   Date:  18 Apr 1997 14:23:46 -0400
+  Files:  utils/h2ph.PL
+
+ DOCUMENTATION
+
+  Title:  "Document {,un}pack changes"
+   From:  Paul Marquess
+ Msg-ID:  <9704181249.AA11733@claudius.bfsec.bt.co.uk>
+   Date:  Fri, 18 Apr 97 13:49:39 BST
+  Files:  pod/perldelta.pod pod/perldiag.pod
+
+
+-----------------
+Version 5.003_97f
+-----------------
+
+This is it before _98.  No more last-minute features.  Really, I mean
+it this time.  No kidding.
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "New operator systell()"
+   From:  Chip Salzenberg
+  Files:  doio.c ext/Opcode/Opcode.pm keywords.pl opcode.pl
+          pod/perldelta.pod pod/perldiag.pod pod/perlfunc.pod pp_sys.c
+          t/op/sysio.t toke.c
+
+  Title:  "Allow constant sub to be optimized when called with parens"
+   From:  Chip Salzenberg
+  Files:  toke.c
+
+  Title:  "Make {,un}pack fail on invalid pack types"
+   From:  Chip Salzenberg
+  Files:  pod/perldiag.pod pp.c
+
+ CORE PORTABILITY
+
+  Title:  "Fix bitwise ops and {,un}pack() on Cray CPUs"
+   From:  Chip Salzenberg
+  Files:  pp.c
+
+  Title:  "VMS update"
+   From:  Charles Bailey
+  Files:  lib/Cwd.pm lib/File/Path.pm lib/FindBin.pm vms/perly_c.vms
+          vms/vms.c vms/writemain.pl
+
+  Title:  "Win32 update (three patches)"
+   From:  Gurusamy Sarathy and Nick Ing-Simmons
+  Files:  lib/Cwd.pm lib/ExtUtils/MM_Unix.pm lib/ExtUtils/MM_Win32.pm
+          lib/File/Basename.pm win32/Makefile win32/makedef.pl
+          win32/perllib.c win32/win32.c win32/win32iop.h
+
+ OTHER CORE CHANGES
+
+  Title:  "Fix error messages on method lookup failure"
+   From:  Chip Salzenberg
+  Files:  pp_hot.c
+
+  Title:  "Fix use of var before init in util.c"
+   From:  Gurusamy Sarathy
+ Msg-ID:  <199704162342.TAA20773@aatma.engin.umich.edu>
+   Date:  Wed, 16 Apr 1997 19:42:41 -0400
+  Files:  util.c
+
+ BUILD PROCESS
+
+  Title:  "Linux hints: Allow build w/o suidperl, prefer tcsh to csh"
+   From:  Michael De La Rue <mikedlr@tardis.ed.ac.uk>
+  Files:  Configure hints/linux.sh
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "Fix bug in Opcode when (maxo & 15) > 8"
+   From:  Chip Salzenberg
+  Files:  ext/Opcode/Makefile.PL ext/Opcode/Opcode.pm
+          ext/Opcode/Opcode.xs
+
+  Title:  "CGI.pm broke again"
+   From:  Andreas Koenig
+ Msg-ID:  <199704171136.NAA24859@anna.in-berlin.de>
+   Date:  Thu, 17 Apr 1997 13:36:28 +0200
+  Files:  lib/CGI.pm
+
+  Title:  "Revise quotewords()"
+   From:  Shishir Gundavaram <shishir@ruby.ora.com>
+  Files:  lib/Text/ParseWords.pm
+
+ TESTS
+
+   (no other changes)
+
+ UTILITIES
+
+   (no changes)
+
+ DOCUMENTATION
+
+  Title:  "Doc updates: INSTALL-1.13, pumpkin.pod-1.9"
+   From:  Andy Dougherty
+  Files:  INSTALL Porting/pumpkin.pod
+
+  Title:  "Document size restrictions for packed integers"
+   From:  Jarkko Hietaniemi
+  Files:  pod/perlfunc.pod
+
+
+-----------------
+Version 5.003_97e
+-----------------
+
+Y'know, I've heard of this "beta" thing, but it's been so long since
+I've seen one, I'm not sure it really exists...
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "New operator: sysseek()"
+   From:  Chip Salzenberg
+  Files:  doio.c ext/Opcode/Makefile.PL ext/Opcode/Opcode.pm global.sym
+          keywords.pl opcode.pl pod/perldelta.pod pod/perlfunc.pod
+          pp_sys.c t/op/sysio.t toke.c
+
+  Title:  "Allow recursive substitution again"
+   From:  Chip Salzenberg
+  Files:  pod/perldelta.pod pod/perldiag.pod pp_hot.c
+
+ CORE PORTABILITY
+
+  Title:  "Use size_t for socket size parameters of GNU libc"
+   From:  Chip Salzenberg
+  Files:  doio.c pp_sys.c
+
+  Title:  "Fix STMT_{START,END} under g++"
+   From:  Steven Parkes <parkes@sierravista.com>
+ Msg-ID:  <199704141935.MAA11240@monterey.sierravista.com>
+   Date:  Mon, 14 Apr 1997 12:35:34 -0700
+  Files:  perl.h
+
+  Title:  "Win32 update (four patches)"
+   From:  Gurusamy Sarathy and Nick Ing-Simmons
+  Files:  MANIFEST README.win32 dosish.h ext/SDBM_File/Makefile.PL
+          ext/SDBM_File/sdbm/Makefile.PL ext/SDBM_File/sdbm/sdbm.c
+          ext/SDBM_File/sdbm/sdbm.h lib/ExtUtils/MM_Unix.pm perl.c
+          utils/perlbug.PL utils/perldoc.PL win32/Makefile win32/TEST
+          win32/config.H win32/config.w32 win32/config_h.PL
+          win32/config_sh.PL win32/perllib.c win32/runperl.c
+          win32/win32.c win32/win32io.c win32/win32sck.c
+
+ OTHER CORE CHANGES
+
+  Title:  "New API function: perl_eval_pv()"
+   From:  Doug MacEachern
+ Msg-ID:  <199704142113.RAA06823@postman.osf.org>
+   Date:  Mon, 14 Apr 1997 17:13:41 -0400
+  Files:  perl.c pod/perlcall.pod pod/perldelta.pod pod/perlembed.pod
+          pod/perlguts.pod proto.h
+
+  Title:  "Fix C< s//whatever/ >, which reuses old pattern"
+   From:  Chip Salzenberg
+  Files:  pp_hot.c regexec.c
+
+  Title:  "Return a value from PerlIO_{,un}getc"
+   From:  Hallvard B Furuseth
+ Msg-ID:  <199704131228.OAA05695@bombur2.uio.no>
+   Date:  Sun, 13 Apr 1997 14:28:14 +0200 (MET DST)
+  Files:  perlio.c
+
+  Title:  "Fix for environment leak"
+   From:  skimo@breughel.ufsia.ac.be (Sven Verdoolaege)
+ Msg-ID:  <19970415103246.NN46698@breughel.ufsia.ac.be>
+   Date:  Tue, 15 Apr 1997 10:32:46 +0200
+  Files:  util.c
+
+  Title:  "Fix comments in seed()"
+   From:  Hallvard B Furuseth
+ Msg-ID:  <199704141758.TAA06895@bombur2.uio.no>
+   Date:  Mon, 14 Apr 1997 19:58:38 +0200 (MET DST)
+  Files:  pp.c
+
+ BUILD PROCESS
+
+  Title:  "Put extensions' autoload files in $archlib"
+   From:  Chip Salzenberg
+  Files:  installperl
+
+  Title:  "Use '-fPIC' for debugging compiles under Solaris with gcc"
+   From:  Hallvard B Furuseth
+  Files:  Configure
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "Refresh CGI to 2.34"
+   From:  Chip Salzenberg
+  Files:  eg/cgi/customize.cgi eg/cgi/tryit.cgi lib/CGI.pm
+          lib/CGI/Apache.pm
+
+  Title:  "Debugger update"
+   From:  Ilya Zakharevich
+ Msg-ID:  <199704142115.RAA09923@monk.mps.ohio-state.edu>
+   Date:  Mon, 14 Apr 1997 17:15:27 -0400 (EDT)
+  Files:  lib/perl5db.pl
+
+  Title:  "diagnostics: $/ gotcha"
+   From:  Andreas Koenig
+ Msg-ID:  <199704151814.UAA03404@anna.in-berlin.de>
+   Date:  Tue, 15 Apr 1997 20:14:01 +0200
+  Files:  lib/diagnostics.pm
+
+  Title:  "Update File::Path"
+   From:  Andreas Koenig
+ Msg-ID:  <199704151401.QAA02556@anna.in-berlin.de>
+   Date:  Tue, 15 Apr 1997 16:01:07 +0200
+  Files:  lib/File/Path.pm t/lib/filepath.t
+
+  Title:  "User::pwent.pm: g{,e}cos"
+   From:  Tom Christiansen
+ Msg-ID:  <199704130135.TAA23274@jhereg.perl.com>
+   Date:  Sat, 12 Apr 1997 19:35:54 -0600
+  Files:  lib/User/pwent.pm
+
+  Title:  "Sys::Syslog: hyphens in hostnames"
+   From:  Jarkko Hietaniemi
+ Msg-ID:  <199704151421.RAA19693@alpha.hut.fi>
+   Date:  Tue, 15 Apr 1997 17:21:53 +0300 (EET DST)
+  Files:  lib/Sys/Syslog.pm
+
+  Title:  "Clean up format of dlopen() debug info"
+   From:  Hallvard B Furuseth
+  Files:  ext/DynaLoader/dl_dlopen.xs
+
+ TESTS
+
+   (no changes)
+
+ UTILITIES
+
+  Title:  "xsubpp incorrectly handles 'class::newthing()'"
+   From:  "John Q. Linux" <jql@jql.accessone.com>
+ Msg-ID:  <199704122201.PAA01780@jql.accessone.com>
+   Date:  Sat, 12 Apr 1997 15:01:33 -0700
+  Files:  lib/ExtUtils/xsubpp
+
+ DOCUMENTATION
+
+  Title:  "Add CGI to perldelta.pod and improve its description in MANIFEST"
+   From:  Chip Salzenberg
+  Files:  MANIFEST pod/perldelta.pod
+
+  Title:  "Describe probs with majordomo 1.94.1"
+   From:  Chip Salzenberg
+  Files:  pod/perldelta.pod
+
+  Title:  "Fix description of /\G/g"
+   From:  Chip Salzenberg
+  Files:  pod/perlop.pod
+
+  Title:  "Mention '...' operator in precedence table"
+   From:  Tom Christiansen
+ Msg-ID:  <199704131724.LAA23120@jhereg.perl.com>
+   Date:  Sun, 13 Apr 1997 11:24:16 -0600
+  Files:  pod/perlop.pod
+
+
+-----------------
+Version 5.003_97d
+-----------------
+
+Any minute now... second public beta... no, really...
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "Fix for incorrect overloaded assignment"
+   From:  Ilya Zakharevich
+ Msg-ID:  <199704112225.SAA03482@monk.mps.ohio-state.edu>
+   Date:  Fri, 11 Apr 1997 18:25:33 -0400 (EDT)
+  Files:  gv.c
+
+  Title:  "Fix C< $x=''; pos($x)=0; $x=~/\G$/ >"
+   From:  Chip Salzenberg
+  Files:  pp_hot.c
+
+  Title:  "Fix label on C<for(;;)> statement"
+   From:  Chip Salzenberg
+  Files:  perly.c perly.y
+
+ CORE PORTABILITY
+
+  Title:  "update to 5.003_97b/hint/irix_6_2.sh"
+   From:  Scott Henry <scotth@sgi.com>
+ Msg-ID:  <yd8hghdjbk0.fsf@hoshi.engr.sgi.com>
+   Date:  11 Apr 1997 18:05:03 -0700
+  Files:  hints/irix_6_2.sh
+
+ OTHER CORE CHANGES
+
+  Title:  "Before 'BEGIN not safe', explain why"
+   From:  Chip Salzenberg
+  Files:  op.c
+
+  Title:  "New error msg for low-key failure of C<require>"
+   From:  Chip Salzenberg
+  Files:  pod/perldiag.pod pp_ctl.c t/pragma/strict-subs
+          t/pragma/strict-vars
+
+  Title:  "Put "dXSUB_SYS" last in declarations"
+   From:  Chip Salzenberg
+  Files:  win32/perllib.c
+
+  Title:  "Minor type cleanup"
+   From:  Chip Salzenberg
+  Files:  proto.h toke.c
+
+ BUILD PROCESS
+
+   (no changes)
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "win32: perl5db patch"
+   From:  Gurusamy Sarathy
+ Msg-ID:  <199704102142.RAA27396@aatma.engin.umich.edu>
+   Date:  Thu, 10 Apr 1997 17:42:13 -0400
+  Files:  lib/perl5db.pl
+
+  Title:  "Enhancements to debugger, Term::ReadLine, Term::Cap"
+   From:  Ilya Zakharevich
+ Msg-ID:  <199704101948.PAA01841@monk.mps.ohio-state.edu>
+   Date:  Thu, 10 Apr 1997 15:48:07 -0400 (EDT)
+  Files:  lib/Term/Cap.pm lib/Term/ReadLine.pm lib/perl5db.pl
+
+  Title:  "MM_Unix patch for use under CVS"
+   From:  Ulrich Pfeifer
+ Msg-ID:  <yfmd8s1vhpn.fsf@ls6.informatik.uni-dortmund.de>
+   Date:  11 Apr 1997 14:59:00 +0200
+  Files:  lib/ExtUtils/MM_Unix.pm
+
+  Title:  "Complex update (five patches)"
+   From:  Jarkko Hietaniemi
+  Files:  lib/Math/Complex.pm t/lib/complex.t
+
+  Title:  "Fix undef warning in Math::BigInt"
+   From:  Chip Salzenberg
+  Files:  lib/Math/BigInt.pm
+
+ TESTS
+
+   (no other changes)
+
+ UTILITIES
+
+  Title:  "Add B<-o> option to a2p, for old awk; make new the default"
+   From:  Chip Salzenberg
+  Files:  x2p/a2p.h x2p/a2p.pod x2p/a2py.c x2p/walk.c
+
+ DOCUMENTATION
+
+  Title:  "typo in lib/diagnostics.pm"
+   From:  barnett@grymoire.crd.ge.com (Bruce Barnett)
+ Msg-ID:  <199704111800.OAA27297@grymoire.crd.ge.com>
+   Date:  Fri, 11 Apr 1997 14:00:54 -0400
+  Files:  lib/diagnostics.pm
+
+  Title:  "Use B<> for options in Class::Struct pod"
+   From:  Hugo van der Sanden <hv@iii.co.uk>
+ Msg-ID:  <334D2E7B.67F0@iii.co.uk>
+   Date:  Thu, 10 Apr 1997 19:16:27 +0100
+  Files:  lib/Class/Struct.pm
+
+  Title:  "Explain //g and \G issues"
+   From:  Gurusamy Sarathy
+ Msg-ID:  <199704122048.QAA25060@aatma.engin.umich.edu>
+   Date:  Sat, 12 Apr 1997 16:48:41 -0400
+  Files:  pod/perldelta.pod pod/perlop.pod pod/perlre.pod
+
+  Title:  "more (err, less) doubled words"
+   From:  Jarkko Hietaniemi
+ Msg-ID:  <199704111931.WAA24460@alpha.hut.fi>
+   Date:  Fri, 11 Apr 1997 22:31:25 +0300 (EET DST)
+  Files:  ext/DB_File/DB_File.pm ext/DynaLoader/DynaLoader.pm
+          ext/IO/lib/IO/Pipe.pm lib/CGI.pm lib/Exporter.pm
+          lib/ExtUtils/MakeMaker.pm lib/IPC/Open2.pm lib/IPC/Open3.pm
+          lib/vars.pm pod/perlcall.pod pod/perldiag.pod
+          pod/perlfaq1.pod pod/perlfaq3.pod pod/perlfaq5.pod
+          pod/perlfaq7.pod pod/perlfaq8.pod pod/perlipc.pod
+
+  Title:  "Freudian slip error in perlsub.pod"
+   From:  barnett@grymoire.crd.ge.com (Bruce Barnett)
+ Msg-ID:  <199704111755.NAA27200@grymoire.crd.ge.com>
+   Date:  Fri, 11 Apr 1997 13:55:07 -0400
+  Files:  pod/perlsub.pod
+
+  Title:  "Little patch for perl5.003_97c/pod/perlpod.pod"
+   From:  rse@engelschall.com (Ralf S. Engelschall)
+ Msg-ID:  <199704112048.WAA08733@en1.engelschall.com>
+   Date:  Fri, 11 Apr 1997 22:48:37 +0200
+  Files:  pod/perlpod.pod
+
+
+-----------------
+Version 5.003_97c
+-----------------
+
+That second public beta will be Real Soon Now...
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "Refine setgroups() behavior of C<$)>"
+   From:  Chip Salzenberg
+  Files:  mg.c pod/perldelta.pod pod/perlvar.pod
+
+  Title:  "Forbid -[Mm] on #! line"
+   From:  Chip Salzenberg
+  Files:  pod/perldelta.pod pod/perldiag.pod toke.c
+
+ CORE PORTABILITY
+
+  Title:  "Fix dynamic loading (and argv[0]) under AmigaOS"
+   From:  Norbert Pueschel
+ Msg-ID:  <77724842@Armageddon.meb.uni-bonn.de>
+   Date:  Tue, 08 Apr 1997 22:01:45 +0200
+  Files:  hints/amigaos.sh
+
+  Title:  "Special mkdir() for VMS"
+   From:  Charles Bailey
+ Msg-ID:  <01IHGOXN6MZM0004K3@hmivax.humgen.upenn.edu>
+   Date:  Tue, 08 Apr 1997 12:33:56 -0400 (EDT)
+  Files:  dosish.h lib/ExtUtils/MM_Unix.pm lib/File/Path.pm os2/os2ish.h
+          plan9/plan9ish.h pp_sys.c unixish.h vms/vms.c vms/vmsish.h
+
+ OTHER CORE CHANGES
+
+  Title:  "Fix assignment from magic SV that becomes a glob"
+   From:  Chip Salzenberg
+  Files:  sv.c
+
+ BUILD PROCESS
+
+  Title:  "Fix syntax error in Configure comment(!)"
+   From:  Chip Salzenberg
+  Files:  Configure
+
+  Title:  "For Solaris, if -DDEBUGGING, default to '-KPIC', not '-Kpic'"
+   From:  Chip Salzenberg
+  Files:  Configure
+
+  Title:  "Fix usage of dXSUB_SYS, esp. in ExtUtils::Miniperl"
+   From:  Chip Salzenberg
+  Files:  dosish.h minimod.pl os2/os2ish.h plan9/plan9ish.h vms/vmsish.h
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "Replace Class::Template with improved Class::Struct"
+   From:  Jim Miner <jfm@winternet.com>
+  Files:  MANIFEST lib/Class/Struct.pm lib/Class/Template.pm
+          lib/File/stat.pm lib/Net/hostent.pm lib/Net/netent.pm
+          lib/Net/protoent.pm lib/Net/servent.pm lib/Time/gmtime.pm
+          lib/Time/localtime.pm lib/Time/tm.pm lib/User/grent.pm
+          lib/User/pwent.pm pod/perldelta.pod pod/perlfaq7.pod
+          pod/perlmod.pod pod/perltoot.pod
+
+  Title:  "MakeMaker pathname patch"
+   From:  Nick Ing-Simmons
+ Msg-ID:  <199704091908.UAA00877@ni-s.u-net.com>
+   Date:  Wed, 9 Apr 1997 20:08:23 +0100
+  Files:  lib/ExtUtils/MM_Unix.pm lib/ExtUtils/MakeMaker.pm
+
+  Title:  "Fix configuration of new socket"
+   From:  Chip Salzenberg
+  Files:  ext/IO/lib/IO/Socket.pm
+
+  Title:  "Improve IO::Handle docs; don't export _open_mode_string"
+   From:  Chip Salzenberg
+  Files:  ext/IO/lib/IO/File.pm ext/IO/lib/IO/Handle.pm
+
+  Title:  "Complex.pm: 0**0 sanity"
+   From:  Jarkko Hietaniemi
+ Msg-ID:  <199704091804.VAA13930@alpha.hut.fi>
+   Date:  Wed, 9 Apr 1997 21:04:23 +0300 (EET DST)
+  Files:  lib/Math/Complex.pm
+
+  Title:  "Fix typos in Math::Trig"
+   From:  Jarkko Hietaniemi
+  Files:  lib/Math/Trig.pm
+
+ TESTS
+
+  Title:  "Accommodate CodeBuilder variant of Machten 4.0.3"
+   From:  Dominic Dunlop <domo@slipper.ip.lu>
+ Msg-ID:  <v03020902af704d320f27@[194.51.248.88]>
+   Date:  Tue, 8 Apr 1997 22:15:15 +0200
+  Files:  t/io/fs.t t/op/stat.t
+
+ UTILITIES
+
+   (no changes)
+
+ DOCUMENTATION
+
+  Title:  "IO::Socket doc fix"
+   From:  Roderick Schertler
+ Msg-ID:  <28383.860527843@eeyore.ibcinc.com>
+   Date:  Tue, 08 Apr 1997 15:30:43 -0400
+  Files:  ext/IO/lib/IO/Socket.pm
+
+
+-----------------
+Version 5.003_97b
+-----------------
+
+Working on the second public beta...
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "Make assignment to C<$)> call setgroups()"
+   From:  Chip Salzenberg
+  Files:  Configure config_H config_h.SH mg.c plan9/config.plan9
+          pod/perldelta.pod vms/config.vms win32/config.H
+          win32/config.w32
+
+  Title:  "Grandfather "$$<digit>" in strings"
+   From:  Chip Salzenberg
+  Files:  pod/perldiag.pod toke.c
+
+  Title:  "Disconnect warn and die hooks _after_ object destruction"
+   From:  Chip Salzenberg
+  Files:  perl.c
+
+  Title:  "Forbid recursive substitutions"
+   From:  Chip Salzenberg
+  Files:  cop.h pod/perldelta.pod pod/perldiag.pod pp_ctl.c pp_hot.c
+
+ CORE PORTABILITY
+
+  Title:  "Use SSize_t for values of PerlIO_{read,write}"
+   From:  Chip Salzenberg
+  Files:  perlio.c perlio.h perlsdio.h pp_sys.c
+
+  Title:  "perlwin-97a_4: win32 environ fix"
+   From:  Gurusamy Sarathy
+ Msg-ID:  <199704060431.XAA23400@aatma.engin.umich.edu>
+   Date:  Sat, 05 Apr 1997 23:31:11 -0500
+  Files:  win32/win32.c win32/win32io.c win32/win32io.h win32/win32iop.h
+
+ OTHER CORE CHANGES
+
+  Title:  "length($') isn't"
+   From:  Gurusamy Sarathy
+ Msg-ID:  <199704070730.DAA07310@aatma.engin.umich.edu>
+   Date:  Mon, 07 Apr 1997 03:30:44 -0400
+  Files:  mg.c
+
+  Title:  "Fix obscure regex bug related to leading C<.*>"
+   From:  Chip Salzenberg
+  Files:  toke.c
+
+  Title:  "Add warning for glob failure"
+   From:  Chip Salzenberg
+  Files:  pod/perldelta.pod pod/perldiag.pod pp_hot.c
+
+  Title:  "Fix C<perl -V> in presence of local patches"
+   From:  Chip Salzenberg
+  Files:  perl.c
+
+ BUILD PROCESS
+
+  Title:  "Don't suggest 'Configure -der' in config.sh comments"
+   From:  Chip Salzenberg
+  Files:  Configure
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "CGI->redirect patch"
+   From:  Doug MacEachern
+ Msg-ID:  <199704051527.KAA11280@postman.osf.org>
+   Date:  Sat, 05 Apr 1997 10:27:52 -0500
+  Files:  lib/CGI.pm
+
+  Title:  "Updates to Math::Complex and Math::Trig"
+   From:  Jarkko Hietaniemi
+  Files:  lib/Math/Complex.pm lib/Math/Trig.pm pod/perldelta.pod
+          t/lib/complex.t
+
+  Title:  "Fix FindBin under Win32, and document success"
+   From:  Nick Ing-Simmons and Gurusamy Sarathy
+ Msg-ID:  <199704051504.QAA09507@ni-s.u-net.com>
+   Date:  Sat, 5 Apr 1997 16:04:52 +0100
+  Files:  README.win32 lib/Cwd.pm lib/FindBin.pm
+
+ TESTS
+
+   (no other changes)
+
+ UTILITIES
+
+  Title:  "Patch for 'perldoc -f'"
+   From:  Gisle Aas
+ Msg-ID:  <199704061732.TAA00353@bergen.sn.no>
+   Date:  Sun, 6 Apr 1997 19:32:04 +0200
+  Files:  utils/perldoc.PL
+
+ DOCUMENTATION
+
+  Title:  "Document required module versions"
+   From:  Chip Salzenberg
+  Files:  pod/perldelta.pod
+
+  Title:  "Document sample function perl_eval()"
+   From:  Doug MacEachern
+ Msg-ID:  <199704051524.KAA06090@postman.osf.org>
+   Date:  Sat, 05 Apr 1997 10:24:43 -0500
+  Files:  pod/perlcall.pod pod/perlembed.pod
+
+  Title:  "Make L<perltrap> refer to L<perldelta>"
+   From:  Chip Salzenberg
+  Files:  pod/perltrap.pod
+
+
+-----------------
+Version 5.003_97a
+-----------------
+
+This release gets a letter instead of a full subversion because I'm
+planning on making 5.003_98 the second public beta.
+
+ CORE LANGUAGE CHANGES
+
+  Title:  "Fix AUTOLOAD, or kill me"
+   From:  Chip Salzenberg
+  Files:  gv.c pp.c t/op/method.t
+
+ CORE PORTABILITY
+
+  Title:  "Add support for Cygwin32 (GNU-Win32) -- very low impact"
+   From:  John Cerney <j-cerney1@ti.com>
+ Msg-ID:  <199704030821.JAA08762@pluto.tiuk.ti.com>
+   Date:  Thu, 3 Apr 1997 09:21:17 +0100
+  Files:  MANIFEST README.cygwin32 cygwin32/cw32imp.h cygwin32/gcc2
+          cygwin32/ld2 cygwin32/perlgcc cygwin32/perlld
+          ext/DynaLoader/dl_cygwin32.xs hints/cygwin32.sh perl.h
+          pp_sys.c
+
+  Title:  "Win32 update (six patches)"
+   From:  Gurusamy Sarathy
+  Files:  MANIFEST README.win32 dosish.h t/io/fs.t t/io/tell.t
+          t/lib/io_tell.t t/op/magic.t t/op/mkdir.t t/op/runlevel.t
+          t/op/stat.t t/op/taint.t win32/Makefile win32/VC-2.0/pod.mak
+          win32/makedef.pl win32/pod.mak win32/win32.c win32/win32.h
+          win32/win32io.c win32/win32io.h win32/win32iop.h
+
+  Title:  "AmigaOS update"
+   From:  Norbert Pueschel
+ Msg-ID:  <77724828@Armageddon.meb.uni-bonn.de>
+   Date:  Thu, 03 Apr 1997 16:16:51 +0200
+  Files:  README.amiga hints/amigaos.sh
+
+ OTHER CORE CHANGES
+
+  Title:  "Fix const-sub-related panic on C<sub foo { my $x; 0 } foo>"
+   From:  Chip Salzenberg
+  Files:  op.c
+
+  Title:  "Fix warning for useless C<1..2>"
+   From:  Chip Salzenberg
+  Files:  op.c
+
+  Title:  "Minor cleanups"
+   From:  Gurusamy Sarathy
+ Msg-ID:  <199704040056.TAA22253@aatma.engin.umich.edu>
+   Date:  Thu, 03 Apr 1997 19:56:57 -0500
+  Files:  mg.c mg.h perl.c
+
+  Title:  "Eliminate unreliable warning with %SIG and strict refs"
+   From:  Chip Salzenberg
+  Files:  mg.c
+
+  Title:  "Fix impossible test in vivification"
+   From:  Chip Salzenberg
+  Files:  mg.c
+
+  Title:  "runlevel is I32, not int"
+   From:  Roderick Schertler
+ Msg-ID:  <2848.860109823@eeyore.ibcinc.com>
+   Date:  Thu, 03 Apr 1997 18:23:43 -0500
+  Files:  pp_ctl.c util.c
+
+ BUILD PROCESS
+
+  Title:  "Re: shared lib compilation problem with miniperl5.003_97"
+   From:  Andy Dougherty
+ Msg-ID:  <Pine.SOL.3.95q.970404124326.647K-100000@fractal.lafayette.ed
+   Date:  Fri, 04 Apr 1997 13:02:23 -0500 (EST)
+  Files:  Makefile.SH
+
+ LIBRARY AND EXTENSIONS
+
+  Title:  "Math::Trig, based on (and from an author of) Math::Complex"
+   From:  Chip Salzenberg
+  Files:  MANIFEST lib/Math/Complex.pm lib/Math/Trig.pm
+          pod/perldelta.pod t/lib/complex.t t/lib/trig.t
+
+  Title:  "Update AutoLoader and docs; support C<use AutoLoader 'AUTOLOAD'>"
+   From:  Chip Salzenberg and Tim Bunce
+  Files:  lib/AutoLoader.pm
+
+  Title:  "CPAN & TRL-Gnu"
+   From:  Achim Bohnet <ach@rosat.mpe-garching.mpg.de>
+ Msg-ID:  <9704040809.AA26143@o09.rosat.mpe-garching.mpg.de>
+   Date:  Fri, 04 Apr 1997 10:09:03 +0200
+  Files:  lib/CPAN.pm
+
+  Title:  "Limit @ISA to actual DBM in AnyDBM"
+   From:  Chip Salzenberg
+  Files:  lib/AnyDBM_File.pm
+
+  Title:  "Don't use $4 when it might be undef"
+   From:  Chip Salzenberg
+  Files:  lib/bigfloat.pl
+
+ TESTS
+
+  Title:  "Make *dbm tests work with Win32"
+   From:  Chip Salzenberg
+  Files:  t/lib/anydbm.t t/lib/gdbm.t t/lib/ndbm.t t/lib/odbm.t
+          t/lib/sdbm.t
+
+ UTILITIES
+
+   (no changes)
+
+ DOCUMENTATION
+
+  Title:  "Update INSTALL"
+   From:  Andy Dougherty
+  Files:  INSTALL
+
+  Title:  "Pod style"
+   From:  Nathan Torkington <gnat@prometheus.frii.com>
+  Files:  pod/perlcall.pod pod/perldata.pod pod/perldebug.pod
+          pod/perldiag.pod pod/perlform.pod pod/perlfunc.pod
+          pod/perlipc.pod pod/perllocale.pod pod/perlmod.pod
+          pod/perlop.pod pod/perlre.pod pod/perlrun.pod
+          pod/perlstyle.pod pod/perltoc.pod pod/perlvar.pod
+
+
+----------------
+Version 5.003_97
+----------------
 
  CORE LANGUAGE CHANGES
 
@@ -136,7 +1080,7 @@ And the Keepers of the Patch Pumpkin:
 
  TESTS
 
-   (no changes)
+   (no other changes)
 
  UTILITIES
 
@@ -165,9 +1109,9 @@ And the Keepers of the Patch Pumpkin:
   Files:  lib/CGI.pm lib/ExtUtils/Command.pm
 
 
-------------------
- Version 5.003_96
-------------------
+----------------
+Version 5.003_96
+----------------
 
  CORE LANGUAGE CHANGES
 
@@ -291,7 +1235,7 @@ And the Keepers of the Patch Pumpkin:
   Files:  perl.h pp_sys.c
 
   Title:  "Eliminate unused dummy variable"
-   From:  Doug MacEachern <dougm@opengroup.org>
+   From:  Doug MacEachern
  Msg-ID:  <199703270123.UAA25454@postman.osf.org>
    Date:  Wed, 26 Mar 1997 20:23:14 -0500
   Files:  lib/ExtUtils/Embed.pm unixish.h writemain.SH
@@ -356,7 +1300,7 @@ And the Keepers of the Patch Pumpkin:
 
  TESTS
 
-   (no changes)
+   (no other changes)
 
  UTILITIES
 
@@ -449,9 +1393,9 @@ And the Keepers of the Patch Pumpkin:
   Files:  pod/*.pod
 
 
-------------------
- Version 5.003_95
-------------------
+----------------
+Version 5.003_95
+----------------
 
  CORE LANGUAGE CHANGES
 
@@ -514,7 +1458,7 @@ And the Keepers of the Patch Pumpkin:
 
  BUILD PROCESS
 
-   (no changes)
+   (no other changes)
 
  LIBRARY AND EXTENSIONS
 
@@ -529,7 +1473,7 @@ And the Keepers of the Patch Pumpkin:
   Files:  lib/Pod/Text.pm
 
   Title:  "Exporting UNIVERSAL::can"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w9DwX-0000Zr-00@taurus.cus.cam.ac.uk>
    Date:  Mon, 24 Mar 1997 17:54:01 +0000
   Files:  lib/UNIVERSAL.pm
@@ -579,13 +1523,13 @@ And the Keepers of the Patch Pumpkin:
   Files:  pod/perldelta.pod
 
   Title:  "pods for subroutine argument autovivication"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w9489-0005YT-00@ursa.cus.cam.ac.uk>
    Date:  Mon, 24 Mar 1997 07:25:21 +0000
   Files:  pod/perldelta.pod pod/perlsub.pod
 
   Title:  "Missing item in perldiag"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w8jVZ-0005va-00@ursa.cus.cam.ac.uk>
    Date:  Sun, 23 Mar 1997 09:24:09 +0000
   Files:  pod/perldiag.pod
@@ -614,9 +1558,9 @@ And the Keepers of the Patch Pumpkin:
   Files:  pod/perlfaq*.pod
 
 
-------------------
- Version 5.003_94
-------------------
+----------------
+Version 5.003_94
+----------------
 
  CORE LANGUAGE CHANGES
 
@@ -756,7 +1700,7 @@ And the Keepers of the Patch Pumpkin:
           x2p/util.c
 
   Title:  "Warn about missing -DMULTIPLICITY if likely a problem"
-   From:  Doug MacEachern <dougm@opengroup.org>
+   From:  Doug MacEachern
  Msg-ID:  <199703192345.SAA15070@postman.osf.org>
    Date:  Wed, 19 Mar 1997 18:45:53 -0500
   Files:  perl.c
@@ -834,7 +1778,7 @@ And the Keepers of the Patch Pumpkin:
   Files:  lib/File/Path.pm
 
   Title:  "Fix typo in -l*perl* pattern"
-   From:  Doug MacEachern <dougm@opengroup.org>
+   From:  Doug MacEachern
  Msg-ID:  <199703110414.XAA12884@berlin.atlantic.net>
    Date:  Mon, 10 Mar 1997 22:58:38 -0500
   Files:  lib/ExtUtils/Embed.pm
@@ -865,7 +1809,7 @@ And the Keepers of the Patch Pumpkin:
   Files:  lib/Carp.pm
 
   Title:  "Re: NUL in die and other messages"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w815V-0005xs-00@ursa.cus.cam.ac.uk>
    Date:  Fri, 21 Mar 1997 09:58:17 +0000
   Files:  lib/Carp.pm
@@ -875,14 +1819,14 @@ And the Keepers of the Patch Pumpkin:
   Files:  lib/Pod/Functions.pm
 
   Title:  "Fix typos in IO::Socket documentation"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w75po-0003yh-00@taurus.cus.cam.ac.uk>
    Date:  Tue, 18 Mar 1997 20:50:16 +0000
   Files:  ext/IO/lib/IO/Socket.pm
 
  TESTS
 
-   (no changes)
+   (no other changes)
 
  UTILITIES
 
@@ -920,7 +1864,7 @@ And the Keepers of the Patch Pumpkin:
   Files:  pod/perldelta.pod
 
   Title:  "Re: Embedding success with _93 "
-   From:  Doug MacEachern <dougm@opengroup.org>
+   From:  Doug MacEachern
  Msg-ID:  <199703112255.RAA22775@postman.osf.org>
    Date:  Tue, 11 Mar 1997 17:55:05 -0500
   Files:  pod/perldelta.pod
@@ -968,7 +1912,7 @@ And the Keepers of the Patch Pumpkin:
   Files:  pod/perlcall.pod pod/perlguts.pod pod/perlxstut.pod
 
   Title:  "Document return from do FILE"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w70DK-0001yJ-00@ursa.cus.cam.ac.uk>
    Date:  Tue, 18 Mar 1997 14:50:10 +0000
   Files:  pod/perlfunc.pod
@@ -1003,9 +1947,9 @@ And the Keepers of the Patch Pumpkin:
   Files:  ext/DB_File/DB_File.pm
 
 
-------------------
- Version 5.003_93
-------------------
+----------------
+Version 5.003_93
+----------------
 
 Me, last time:
      "This release will be the public beta of 5.004,
@@ -1022,7 +1966,7 @@ Me, now:
   Files:  op.c pod/perldelta.pod pod/perlsub.pod pod/perltrap.pod
 
   Title:  "Support READ and GETC for tied handles"
-   From:  Doug MacEachern <dougm@opengroup.org>
+   From:  Doug MacEachern
  Msg-ID:  <199703090019.TAA32591@postman.osf.org>
    Date:  Sat, 08 Mar 1997 19:19:38 -0500
   Files:  pod/perldelta.pod pod/perltie.pod pp_sys.c t/op/misc.t
@@ -1096,7 +2040,7 @@ Me, now:
  LIBRARY AND EXTENSIONS
 
   Title:  "Carp with multiple arguments"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w3STZ-0007RW-00@taurus.cus.cam.ac.uk>
    Date:  Sat, 8 Mar 1997 20:12:17 +0000
   Files:  lib/Carp.pm
@@ -1167,9 +2111,9 @@ Me, now:
           pod/perlop.pod pod/perlsub.pod
 
 
-------------------
- Version 5.003_92
-------------------
+----------------
+Version 5.003_92
+----------------
 
 This release will be the public beta of 5.004, or my name isn't
 Larson T. Pettifogger.
@@ -1376,9 +2320,9 @@ Larson T. Pettifogger.
   Files:  pod/*.pod
 
 
-------------------
- Version 5.003_91
-------------------
+----------------
+Version 5.003_91
+----------------
 
 This is (should be?  must be!) the public beta of 5.004.
 
@@ -1501,7 +2445,7 @@ This is (should be?  must be!) the public beta of 5.004.
   Files:  lib/IPC/Open3.pm
 
   Title:  "Follow up on elimination of $` $& $' in libraries"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0w0Sqc-00046E-00@ursa.cus.cam.ac.uk>
    Date:  Fri, 28 Feb 1997 13:59:42 +0000
   Files:  lib/Getopt/Long.pm lib/diagnostics.pm
@@ -1513,7 +2457,7 @@ This is (should be?  must be!) the public beta of 5.004.
   Files:  lib/ExtUtils/MakeMaker.pm
 
   Title:  "Allow explicit '-lperl' in link arguments"
-   From:  Doug MacEachern <dougm@opengroup.org>
+   From:  Doug MacEachern
  Msg-ID:  <199702271625.LAA25402@postman.osf.org>
    Date:  Thu, 27 Feb 1997 11:25:04 -0500
   Files:  lib/ExtUtils/Embed.pm
@@ -1568,9 +2512,9 @@ This is (should be?  must be!) the public beta of 5.004.
           pod/perltoc.pod
 
 
-------------------
- Version 5.003_90
-------------------
+----------------
+Version 5.003_90
+----------------
 
 At last, a mil[le]stone:  The first beta of Perl 5.004.
 
@@ -1729,9 +2673,9 @@ At last, a mil[le]stone:  The first beta of Perl 5.004.
   Files:  pod/perldiag.pod pod/perlsec.pod
 
 
-------------------
- Version 5.003_28
-------------------
+----------------
+Version 5.003_28
+----------------
 
 This release is beta candidate #6.  If this isn't good enough to go beta,
 I'll eat a floppy disk.  (Okay, it's a chocolate floppy, but still....)
@@ -1908,9 +2852,9 @@ I'll eat a floppy disk.  (Okay, it's a chocolate floppy, but still....)
           pod/perltie.pod pod/perltoc.pod pod/perltrap.pod x2p/a2p.pod
 
 
-------------------
- Version 5.003_27
-------------------
+----------------
+Version 5.003_27
+----------------
 
 This release is beta candidate #5: Our last, best hope for a beta.
 
@@ -2086,9 +3030,9 @@ This release is beta candidate #5: Our last, best hope for a beta.
   Files:  pod/perldiag.pod
 
 
-------------------
- Version 5.003_26
-------------------
+----------------
+Version 5.003_26
+----------------
 
 This release is beta candidate #4.  "Once more, dear friends...."
 
@@ -2224,9 +3168,9 @@ This release is beta candidate #4.  "Once more, dear friends...."
   Files:  pod/perltie.pod
 
 
-------------------
- Version 5.003_25
-------------------
+----------------
+Version 5.003_25
+----------------
 
 This release is beta candidate #3.  Here's hoping...
 
@@ -2391,9 +3335,9 @@ This release is beta candidate #3.  Here's hoping...
   Files:  pod/perldiag.pod
 
 
-------------------
- Version 5.003_24
-------------------
+----------------
+Version 5.003_24
+----------------
 
 This release is the second candidate for a public beta test.
 It's, well, bunches better than _23.
@@ -2577,9 +3521,9 @@ It's, well, bunches better than _23.
   Files:  pod/perlsyn.pod
 
 
-------------------
- Version 5.003_23
-------------------
+----------------
+Version 5.003_23
+----------------
 
 This release is our first candidate for a public beta test.
 
@@ -2882,9 +3826,9 @@ This release is our first candidate for a public beta test.
   Files:  pod/perllocale.pod
 
 
-------------------
- Version 5.003_22
-------------------
+----------------
+Version 5.003_22
+----------------
 
 This release is primarily made up of bug fixes, the foremost among
 which repairs a showstopper memory corruption bug in formats.
@@ -2958,9 +3902,9 @@ which repairs a showstopper memory corruption bug in formats.
   Files:  configpm
 
 
-------------------
- Version 5.003_21
-------------------
+----------------
+Version 5.003_21
+----------------
 
 This release includes several important bug fixes, and a couple of
 minor but valuable language tweaks.  Please read on for a list of the
@@ -3227,7 +4171,7 @@ significant changes:
   Files:  MANIFEST pod/roffitall pod/rofftoc
 
   Title:  "Re: documentation correction (i.e. patch) for perlsyn.pod"
-   From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>
+   From:  "M.J.T. Guy"
  Msg-ID:  <E0vilLh-0000M6-00@ursa.cus.cam.ac.uk>
    Date:  Fri, 10 Jan 1997 18:06:37 +0000
   Files:  pod/perlsyn.pod
@@ -3256,9 +4200,9 @@ significant changes:
   Files:  pod/perlsub.pod pod/perltoc.pod pod/perlvar.pod
 
 
-------------------
- Version 5.003_20
-------------------
+----------------
+Version 5.003_20
+----------------
 
 The only language change in this release is the recension of support
 for named closures:  Now, no subroutine declared "sub foo {}" can be
@@ -3304,7 +4248,7 @@ updates, and expanded tests.  This is good stuff.  "I love you, man!"
   Files:  perly.c perly.c.diff perly.y
 
   Title:  "plug for safe/opcode leaks"
-   From:  Doug MacEachern <dougm@osf.org>
+   From:  Doug MacEachern
  Msg-ID:  <199701072220.RAA02117@postman.osf.org>
    Date:  Tue, 07 Jan 1997 17:20:46 -0500
   Files:  op.c
@@ -3424,9 +4368,9 @@ updates, and expanded tests.  This is good stuff.  "I love you, man!"
   Files:  pod/perlfunc.pod pod/perltoc.pod
 
 
-------------------
- Version 5.003_19
-------------------
+----------------
+Version 5.003_19
+----------------
 
 Lots of internal cleanup in this patch, especially plugged memory
 leaks when embedded Perl interpreters shut down and restart.  The
@@ -3485,7 +4429,7 @@ Here's a list of the more significant changes...
   Files:  op.c pod/perldiag.pod
 
   Title:  "5.003_18: perl_{con,des}truct fixes"
-   From:  Doug MacEachern <dougm@osf.org>
+   From:  Doug MacEachern
  Msg-ID:  <199701032042.PAA06766@postman.osf.org>
    Date:  Fri, 03 Jan 1997 15:42:04 -0500
   Files:  perl.c perl.h pod/perlembed.pod pod/perltoc.pod t/op/sysio.t
@@ -3557,9 +4501,9 @@ Here's a list of the more significant changes...
           vms/descrip.mms
 
 
-------------------
- Version 5.003_18
-------------------
+----------------
+Version 5.003_18
+----------------
 
 Yet further down the road to 5.004....
 
@@ -3667,9 +4611,9 @@ Yet further down the road to 5.004....
   Files:  pod/perldiag.pod
 
 
-------------------
- Version 5.003_17
-------------------
+----------------
+Version 5.003_17
+----------------
 
 The rate of patches is slowing down....  I see 5.004 at the end of the
 tunnel!  (Hey, what's that whistle?)
@@ -3753,9 +4697,9 @@ tunnel!  (Hey, what's that whistle?)
   Files:  pod/perllocale.pod
 
 
-------------------
- Version 5.003_16
-------------------
+----------------
+Version 5.003_16
+----------------
 
 This patch is all bug fixes, library updates, and documentation
 updates.  We'll get to 5.004 RSN, I promise.  :-)
@@ -3769,7 +4713,7 @@ updates.  We'll get to 5.004 RSN, I promise.  :-)
  CORE PORTABILITY
 
   Title:  "_13: patches for unicos/unicosmk"
-   From:  Dean Roehrich <roehrich@cray.com>
+   From:  Dean Roehrich
  Msg-ID:  <199612202038.OAA22805@poplar.cray.com>
    Date:  Fri, 20 Dec 1996 14:38:50 -0600
   Files:  Configure MANIFEST hints/unicos.sh hints/unicosmk.sh
@@ -3842,9 +4786,9 @@ updates.  We'll get to 5.004 RSN, I promise.  :-)
   Files:  pod/perllocale.pod
 
 
-------------------
- Version 5.003_15
-------------------
+----------------
+Version 5.003_15
+----------------
 
 As soon as I posted 5.003_14, I found a fatal error in it.  :-(
 
@@ -3852,9 +4796,9 @@ This release is strictly a bug fix -- it removes some function caching
 changes that were supposed to be improvements, but weren't.
 
 
-------------------
- Version 5.003_14
-------------------
+----------------
+Version 5.003_14
+----------------
 
 We seem to have achieved "release candidate" status.
 
@@ -4011,9 +4955,9 @@ We seem to have achieved "release candidate" status.
   Files:  lib/Class/Template.pm lib/Time/tm.pm
 
 
-------------------
- Version 5.003_13
-------------------
+----------------
+Version 5.003_13
+----------------
 
 The watchword here is "synchronization."  There were a couple of
 show-stopper bugs in 5.003_12, so I'm issuing this patch to bring
@@ -4101,9 +5045,9 @@ everyone up to a common working base.
   Files:  pod/perlpod.pod pod/pod2html.PL
 
 
-------------------
- Version 5.003_12
-------------------
+----------------
+Version 5.003_12
+----------------
 
 This patch is huge.  A multitude of bug fixes, new modules (especially
 CPAN and Net::FTP), a couple of new Configure variables, updated
@@ -4376,9 +5320,9 @@ the more significant changes in 5.003_12:
    Date:  Sat, 14 Dec 1996 18:56:33 -0700
   Files:  pod/*
 
-------------------
- Version 5.003_11
-------------------
+----------------
+Version 5.003_11
+----------------
 
 This patch is (still) closing in on 5.004.  Nothing dramatic, lots of
 value.
@@ -4543,9 +5487,9 @@ value.
   Files:  ext/DB_File/DB_File.pm ext/DB_File/DB_File.xs
 
 
-------------------
- Version 5.003_10
-------------------
+----------------
+Version 5.003_10
+----------------
 
 This patch is closing in on 5.004.  It contains lots of small and
 valuable changes, but nothing dramatic.
@@ -4685,9 +5629,9 @@ valuable changes, but nothing dramatic.
   Files:  pod/perlfunc.pod
 
 
-------------------
- Version 5.003_09
-------------------
+----------------
+Version 5.003_09
+----------------
 
 This patch was a compendium of various fixes and enhancements from
 many people, including some serious improvement in lexical variable
@@ -4873,9 +5817,9 @@ scoping and locale handling.
   Files:  x2p/util.c
 
 
-------------------
- Version 5.003_08
-------------------
+----------------
+Version 5.003_08
+----------------
 
 This patch was a compendium of various fixes and enhancements from
 many people.  Here are some of the more significant changes.
@@ -5024,9 +5968,9 @@ many people.  Here are some of the more significant changes.
   Files:  x2p/a2p.c x2p/a2p.y
 
 
-------------------
- Version 5.003_07
-------------------
+----------------
+Version 5.003_07
+----------------
 
 This patch was primarily to fix bugs or include little things I missed
 in 5.003_06.  5.003_07 is intended to be stable enough to merit serious
@@ -5675,9 +6619,9 @@ Index: x2p/cflags.SH
     pathname of the file being extracted.
 
 
-------------------
- Version 5.003_06
-------------------
+----------------
+Version 5.003_06
+----------------
 
 This patch was primarily to fix bugs, improve the documentation,
 and work towards restoring binary compatibility with 5.003.
@@ -7846,7 +8790,7 @@ Index: utils/h2ph.PL
 Index: utils/h2xs.PL
 
     Date: Sat, 21 Sep 1996 16:38:24 -0500
-    From: Dean Roehrich <roehrich@cray.com>
+    From: Dean Roehrich
     Subject: h2xs bug fix
 
     The h2xs that is in perl5.003_05 has a regexp bug which prevents it from
@@ -7924,9 +8868,9 @@ Index: x2p/s2p.PL
     I then embedded the pod into the s2p script.
 
 
-------------------
- Version 5.003_05
-------------------
+----------------
+Version 5.003_05
+----------------
 
 This patch was primarily to fix bugs and to clean up some of
 the remaining issues from in 5.003_04.  The details are described below.
@@ -8635,9 +9579,9 @@ Index: vms/vmsish.h
     VMS 5.003_05 Update.
 
 
-------------------
- Version 5.003_04
-------------------
+----------------
+Version 5.003_04
+----------------
 
 This patch was primarily to fix bugs and to clean up some of
 the changes made in 5.003_03.  The details are described below.
@@ -9160,9 +10104,9 @@ Index: utils/perldoc.PL
     doesn't support the -x option.)
 
 
-------------------
- Version 5.003_03
-------------------
+----------------
+Version 5.003_03
+----------------
 
 Most of the changes in 5.003_03 are to make the build and installation
 process more robust.  The details are described below.  A very brief
@@ -9772,9 +10716,9 @@ Index: x2p/str.c
 	Use Configure's FILE_filbuf macro instead of a raw _filbuf.
 
 
-------------------
- Version 5.003_02
-------------------
+----------------
+Version 5.003_02
+----------------
 
 o Visible Changes to Core Functionality
   - Redefining constant subs, or changing sub's prototype now give warnings.
@@ -9816,9 +10760,9 @@ o Changes in OS-specific and Build-time Support
   - Typo patch for VMS.
 
 
-------------------
- Version 5.003_01
-------------------
+----------------
+Version 5.003_01
+----------------
 
 Version 5.003_01 contains bugfixes and additions accumulated since
 version 5.002_01, since the patch to version 5.003 was deliberately

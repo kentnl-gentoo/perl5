@@ -529,18 +529,26 @@ got_it:
     prog->exec_tainted = regtainted;
 
     /* make sure $`, $&, $', and $digit will work later */
-    if (!safebase && (strbeg != prog->subbase)) {
-	I32 i = strend - startpos + (stringarg - strbeg);
-	s = savepvn(strbeg, i);
-	Safefree(prog->subbase);
-	prog->subbase = s;
-	prog->subbeg = prog->subbase;
-	prog->subend = prog->subbase + i;
-	s = prog->subbase + (stringarg - strbeg);
-	for (i = 0; i <= prog->nparens; i++) {
-	    if (prog->endp[i]) {
-		prog->startp[i] = s + (prog->startp[i] - startpos);
-		prog->endp[i] = s + (prog->endp[i] - startpos);
+    if (strbeg != prog->subbase) {
+	if (safebase) {
+	    if (prog->subbase) {
+		Safefree(prog->subbase);
+		prog->subbase = Nullch;
+	    }
+	}
+	else {
+	    I32 i = strend - startpos + (stringarg - strbeg);
+	    s = savepvn(strbeg, i);
+	    Safefree(prog->subbase);
+	    prog->subbase = s;
+	    prog->subbeg = prog->subbase;
+	    prog->subend = prog->subbase + i;
+	    s = prog->subbase + (stringarg - strbeg);
+	    for (i = 0; i <= prog->nparens; i++) {
+		if (prog->endp[i]) {
+		    prog->startp[i] = s + (prog->startp[i] - startpos);
+		    prog->endp[i] = s + (prog->endp[i] - startpos);
+		}
 	    }
 	}
     }
@@ -626,8 +634,11 @@ char *prog;
 #define sayNO goto no
 #define saySAME(x) if (x) goto yes; else goto no
 	if (regnarrate) {
-	    PerlIO_printf(Perl_debug_log, "%*s%2d%-8.8s\t<%.10s>\n", regindent*2, "",
-		scan - regprogram, regprop(scan), locinput);
+	    SV *prop = sv_newmortal();
+	    regprop(prop, scan);
+	    PerlIO_printf(Perl_debug_log, "%*s%2d%-8.8s\t<%.10s>\n",
+			  regindent*2, "", scan - regprogram,
+			  SvPVX(prop), locinput);
 	}
 #else
 #define sayYES return 1

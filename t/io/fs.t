@@ -9,6 +9,9 @@ BEGIN {
 
 use Config;
 
+# avoid win32 (for now)
+do { print "1..0\n"; exit(0); } if $^O eq 'MSWin32';
+
 print "1..26\n";
 
 $wd = (($^O eq 'MSWin32') ? `cd` : `pwd`);
@@ -113,8 +116,9 @@ else {
   if (-s "Iofs.tmp" == 5) {print "ok 23\n"} else {print "not ok 23\n"}
   truncate "Iofs.tmp", 0;
   if (-z "Iofs.tmp") {print "ok 24\n"} else {print "not ok 24\n"}
-  `echo helloworld > Iofs.tmp`;
   open(FH, ">Iofs.tmp") or die "Can't create Iofs.tmp";
+  { select FH; $| = 1; select STDOUT }
+  print FH "helloworld\n";
   truncate FH, 5;
   if (-s "Iofs.tmp" == 5) {print "ok 25\n"} else {print "not ok 25\n"}
   truncate FH, 0;

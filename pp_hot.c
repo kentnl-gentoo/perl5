@@ -564,10 +564,9 @@ PP(pp_rv2hv)
     }
     else {
 	dTARGET;
-	if (HvFILL(hv)) {
-	    sprintf(buf, "%ld/%ld", (long)HvFILL(hv), (long)HvMAX(hv)+1);
-	    sv_setpv(TARG, buf);
-	}
+	if (HvFILL(hv))
+	    sv_setpvf(TARG, "%ld/%ld",
+		      (long)HvFILL(hv), (long)HvMAX(hv) + 1);
 	else
 	    sv_setiv(TARG, 0);
 	SETTARG;
@@ -818,7 +817,8 @@ PP(pp_match)
     }
     if (!rx->nparens && !global)
 	gimme = G_SCALAR;			/* accidental array context? */
-    safebase = (((gimme == G_ARRAY) || global) && !sawampersand);
+    safebase = (((gimme == G_ARRAY) || global || !rx->nparens)
+		&& !sawampersand);
     if (pm->op_pmflags & (PMf_MULTILINE|PMf_SINGLELINE)) {
 	SAVEINT(multiline);
 	multiline = pm->op_pmflags & PMf_MULTILINE;
@@ -827,7 +827,7 @@ PP(pp_match)
 play_it_again:
     if (global && rx->startp[0]) {
 	t = s = rx->endp[0];
-	if (s >= strend)
+	if ((s + rx->minlen) > strend)
 	    goto nope;
 	if (update_minmatch++)
 	    minmatch = (s == rx->startp[0]);
@@ -1171,7 +1171,8 @@ do_readline()
 		IoFLAGS(io) |= IOf_START;
 	    }
 	    else if (type == OP_GLOB) {
-		(void)do_close(last_in_gv, FALSE);
+		if (do_close(last_in_gv, FALSE) & ~0xFF)
+		    warn("internal error: glob failed");
 	    }
 	    if (gimme == G_SCALAR) {
 		(void)SvOK_off(TARG);
@@ -1410,8 +1411,8 @@ PP(pp_subst)
     int force_on_match = 0;
     I32 oldsave = savestack_ix;
 
-    if (pm->op_pmflags & PMf_CONST)	/* known replacement string? */
-	dstr = POPs;
+    /* known replacement string? */
+    dstr = (pm->op_pmflags & PMf_CONST) ? POPs : Nullsv;
     if (op->op_flags & OPf_STACKED)
 	TARG = POPs;
     else {
@@ -1480,10 +1481,10 @@ PP(pp_subst)
     once = !(rpm->op_pmflags & PMf_GLOBAL);
 
     /* known replacement string? */
-    c = (rpm->op_pmflags & PMf_CONST) ? SvPV(dstr, clen) : Nullch;
+    c = dstr ? SvPV(dstr, clen) : Nullch;
 
     /* can do inplace substitution? */
-    if (c && clen <= rx->minlen) {
+    if (c && clen <= rx->minlen && safebase) {
 	if (! pregexec(rx, s, strend, orig, 0,
 		       SvSCREAM(TARG) ? TARG : Nullsv, safebase)) {
 	    PUSHs(&sv_no);
@@ -1495,8 +1496,6 @@ PP(pp_subst)
 	    s = SvPV_force(TARG, len);
 	    goto force_it;
 	}
-	if (rx->subbase) 	/* oops, no we can't */
-	    goto long_way;
 	d = s;
 	curpm = pm;
 	SvSCREAM_off(TARG);	/* disable possible screamer */
@@ -1577,7 +1576,6 @@ PP(pp_subst)
 
     if (pregexec(rx, s, strend, orig, 0,
 		 SvSCREAM(TARG) ? TARG : Nullsv, safebase)) {
-    long_way:
 	if (force_on_match) {
 	    force_on_match = 0;
 	    s = SvPV_force(TARG, len);
@@ -1630,13 +1628,12 @@ PP(pp_subst)
 	LEAVE_SCOPE(oldsave);
 	RETURN;
     }
-
-    PUSHs(&sv_no);
-    LEAVE_SCOPE(oldsave);
-    RETURN;
+    goto ret_no;
 
 nope:
     ++BmUSEFUL(pm->op_pmshort);
+
+ret_no:
     PUSHs(&sv_no);
     LEAVE_SCOPE(oldsave);
     RETURN;
@@ -2067,61 +2064,64 @@ PP(pp_method)
     SV* sv;
     SV* ob;
     GV* gv;
-    SV* nm;
+    HV* stash;
+    char* name;
+    char* packname;
+    STRLEN packlen;
 
-    nm = TOPs;
+    name = SvPV(TOPs, na);
     sv = *(stack_base + TOPMARK + 1);
     
-    gv = 0;
     if (SvGMAGICAL(sv))
         mg_get(sv);
     if (SvROK(sv))
 	ob = (SV*)SvRV(sv);
     else {
 	GV* iogv;
-	char* packname = 0;
-	STRLEN packlen;
 
+	packname = Nullch;
 	if (!SvOK(sv) ||
 	    !(packname = SvPV(sv, packlen)) ||
 	    !(iogv = gv_fetchpv(packname, FALSE, SVt_PVIO)) ||
 	    !(ob=(SV*)GvIO(iogv)))
 	{
-	    char *name = SvPV(nm, na);
-	    HV *stash;
-	    if (!packname || !isALPHA(*packname))
-DIE("Can't call method \"%s\" without a package or object reference", name);
-	    if (!(stash = gv_stashpvn(packname, packlen, FALSE))) {
-		if (gv_stashpvn("UNIVERSAL", 9, FALSE))
-		    stash = gv_stashpvn(packname, packlen, TRUE);
-		else
-		    DIE("Can't call method \"%s\" in empty package \"%s\"",
-			name, packname);
-	    }
-	    gv = gv_fetchmethod(stash,name);
-	    if (!gv)
-		DIE("Can't locate object method \"%s\" via package \"%s\"",
-		    name, packname);
-	    SETs(isGV(gv) ? (SV*)GvCV(gv) : (SV*)gv);
-	    RETURN;
+	    if (!packname || !isIDFIRST(*packname))
+  DIE("Can't call method \"%s\" without a package or object reference", name);
+	    stash = gv_stashpvn(packname, packlen, TRUE);
+	    goto fetch;
 	}
 	*(stack_base + TOPMARK + 1) = sv_2mortal(newRV((SV*)iogv));
     }
 
-    if (!ob || !SvOBJECT(ob)) {
-	char *name = SvPV(nm, na);
+    if (!ob || !SvOBJECT(ob))
 	DIE("Can't call method \"%s\" on unblessed reference", name);
-    }
 
-    if (!gv) {		/* nothing cached */
-	char *name = SvPV(nm, na);
-	gv = gv_fetchmethod(SvSTASH(ob),name);
-	if (!gv)
-	    DIE("Can't locate object method \"%s\" via package \"%s\"",
-		name, HvNAME(SvSTASH(ob)));
-    }
+    stash = SvSTASH(ob);
 
+  fetch:
+    gv = gv_fetchmethod(stash, name);
+    if (!gv) {
+	char* leaf = name;
+	char* sep = Nullch;
+	char* p;
+
+	for (p = name; *p; p++) {
+	    if (*p == '\'')
+		sep = p, leaf = p + 1;
+	    else if (*p == ':' && *(p + 1) == ':')
+		sep = p, leaf = p + 2;
+	}
+	if (!sep || ((sep - name) == 5 && strnEQ(name, "SUPER", 5))) {
+	    packname = HvNAME(sep ? curcop->cop_stash : stash);
+	    packlen = strlen(packname);
+	}
+	else {
+	    packname = name;
+	    packlen = sep - name;
+	}
+	DIE("Can't locate object method \"%s\" via package \"%.*s\"",
+	    leaf, (int)packlen, packname);
+    }
     SETs(isGV(gv) ? (SV*)GvCV(gv) : (SV*)gv);
     RETURN;
 }
-

@@ -23,11 +23,68 @@
  * floating-point type to use for NV that has adequate bits to fully
  * hold an IV/UV.  (In other words, sizeof(long) == sizeof(double).)
  *
- * It just so happens that "int" is the right size everywhere, at
- * least today.
+ * It just so happens that "int" is the right size almost everywhere.
  */
 typedef int IBW;
 typedef unsigned UBW;
+
+/*
+ * Mask used after bitwise operations.
+ *
+ * There is at least one realm (Cray word machines) that doesn't
+ * have an integral type (except char) small enough to be represented
+ * in a double without loss; that is, it has no 32-bit type.
+ */
+#if BYTEORDER > 0xFFFF && defined(_CRAY) && !defined(_CRAYMPP)
+#  define BW_BITS  32
+#  define BW_MASK  ((1 << BW_BITS) - 1)
+#  define BW_SIGN  (1 << (BW_BITS - 1))
+#  define BWi(i)  (((i) & BW_SIGN) ? ((i) | ~BW_MASK) : ((i) & BW_MASK))
+#  define BWu(u)  ((u) & BW_MASK)
+#else
+#  define BWi(i)  (i)
+#  define BWu(u)  (u)
+#endif
+
+/*
+ * Offset for integer pack/unpack.
+ *
+ * On architectures where I16 and I32 aren't really 16 and 32 bits,
+ * which for now are all Crays, pack and unpack have to play games.
+ */
+
+/*
+ * These values are required for portability of pack() output.
+ * If they're not right on your machine, then pack() and unpack()
+ * wouldn't work right anyway; you'll need to apply the Cray hack.
+ * (I'd like to check them with #if, but you can't use sizeof() in
+ * the preprocessor.)
+ */
+#define SIZE16 2
+#define SIZE32 4
+
+#if BYTEORDER > 0xFFFF && defined(_CRAY) && !defined(_CRAYMPP)
+#  if BYTEORDER == 0x12345678
+#    define OFF16(p)	(char*)(p)
+#    define OFF32(p)	(char*)(p)
+#  else
+#    if BYTEORDER == 0x87654321
+#      define OFF16(p)	((char*)(p) + (sizeof(U16) - SIZE16))
+#      define OFF32(p)	((char*)(p) + (sizeof(U32) - SIZE32))
+#    else
+       }}}} bad cray byte order
+#    endif
+#  endif
+#  define COPY16(s,p)  (*(p) = 0, Copy(s, OFF16(p), SIZE16, char))
+#  define COPY32(s,p)  (*(p) = 0, Copy(s, OFF32(p), SIZE32, char))
+#  define CAT16(sv,p)  sv_catpvn(sv, OFF16(p), SIZE16)
+#  define CAT32(sv,p)  sv_catpvn(sv, OFF32(p), SIZE32)
+#else
+#  define COPY16(s,p)  Copy(s, p, SIZE16, char)
+#  define COPY32(s,p)  Copy(s, p, SIZE32, char)
+#  define CAT16(sv,p)  sv_catpvn(sv, (char*)(p), SIZE16)
+#  define CAT32(sv,p)  sv_catpvn(sv, (char*)(p), SIZE32)
+#endif
 
 static void doencodes _((SV* sv, char* s, I32 len));
 static SV* refto _((SV* sv));
@@ -93,11 +150,9 @@ PP(pp_padhv)
     }
     else if (gimme == G_SCALAR) {
 	SV* sv = sv_newmortal();
-	if (HvFILL((HV*)TARG)) {
-	    sprintf(buf, "%ld/%ld",
-		    (long)HvFILL((HV*)TARG), (long)HvMAX((HV*)TARG)+1);
-	    sv_setpv(sv, buf);
-	}
+	if (HvFILL((HV*)TARG))
+	    sv_setpvf(sv, "%ld/%ld",
+		      (long)HvFILL((HV*)TARG), (long)HvMAX((HV*)TARG) + 1);
 	else
 	    sv_setiv(sv, 0);
 	SETs(sv);
@@ -557,7 +612,9 @@ PP(pp_undef)
 		 CvANON((CV*)sv) ? "(anonymous)" : GvENAME(CvGV((CV*)sv)));
 	/* FALL THROUGH */
     case SVt_PVFM:
-	cv_undef((CV*)sv);
+	{ GV* gv = (GV*)SvREFCNT_inc(CvGV((CV*)sv));
+	  cv_undef((CV*)sv);
+	  CvGV((CV*)sv) = gv; }   /* let user-undef'd sub keep its identity */
 	break;
     case SVt_PVGV:
 	if (SvFAKE(sv))
@@ -804,11 +861,13 @@ PP(pp_left_shift)
       IBW shift = POPi;
       if (op->op_private & HINT_INTEGER) {
 	IBW i = TOPi;
-	SETi( i << shift );
+	i = BWi(i) << shift;
+	SETi(BWi(i));
       }
       else {
 	UBW u = TOPu;
-	SETu( u << shift );
+	u <<= shift;
+	SETu(BWu(u));
       }
       RETURN;
     }
@@ -821,11 +880,13 @@ PP(pp_right_shift)
       IBW shift = POPi;
       if (op->op_private & HINT_INTEGER) {
 	IBW i = TOPi;
-	SETi( i >> shift );
+	i = BWi(i) >> shift;
+	SETi(BWi(i));
       }
       else {
 	UBW u = TOPu;
-	SETu( u >> shift );
+	u >>= shift;
+	SETu(BWu(u));
       }
       RETURN;
     }
@@ -996,11 +1057,11 @@ PP(pp_bit_and)
       if (SvNIOKp(left) || SvNIOKp(right)) {
 	if (op->op_private & HINT_INTEGER) {
 	  IBW value = SvIV(left) & SvIV(right); 
-	  SETi( value );
+	  SETi(BWi(value));
 	}
 	else {
 	  UBW value = SvUV(left) & SvUV(right); 
-	  SETu( value );
+	  SETu(BWu(value));
 	}
       }
       else {
@@ -1019,11 +1080,11 @@ PP(pp_bit_xor)
       if (SvNIOKp(left) || SvNIOKp(right)) {
 	if (op->op_private & HINT_INTEGER) {
 	  IBW value = (USE_LEFT(left) ? SvIV(left) : 0) ^ SvIV(right); 
-	  SETi( value );
+	  SETi(BWi(value));
 	}
 	else {
 	  UBW value = (USE_LEFT(left) ? SvUV(left) : 0) ^ SvUV(right); 
-	  SETu( value );
+	  SETu(BWu(value));
 	}
       }
       else {
@@ -1042,11 +1103,11 @@ PP(pp_bit_or)
       if (SvNIOKp(left) || SvNIOKp(right)) {
 	if (op->op_private & HINT_INTEGER) {
 	  IBW value = (USE_LEFT(left) ? SvIV(left) : 0) | SvIV(right); 
-	  SETi( value );
+	  SETi(BWi(value));
 	}
 	else {
 	  UBW value = (USE_LEFT(left) ? SvUV(left) : 0) | SvUV(right); 
-	  SETu( value );
+	  SETu(BWu(value));
 	}
       }
       else {
@@ -1106,11 +1167,11 @@ PP(pp_complement)
       if (SvNIOKp(sv)) {
 	if (op->op_private & HINT_INTEGER) {
 	  IBW value = ~SvIV(sv);
-	  SETi( value );
+	  SETi(BWi(value));
 	}
 	else {
 	  UBW value = ~SvUV(sv);
-	  SETu( value );
+	  SETu(BWu(value));
 	}
       }
       else {
@@ -1390,9 +1451,10 @@ seed()
     U32 u;
 #ifdef VMS
 #  include <starlet.h>
+    /* when[] = (low 32 bits, high 32 bits) of time since epoch
+     * in 100-ns units, typically incremented ever 10 ms.        */
     unsigned int when[2];
     _ckvmssts(sys$gettim(when));
-    /* Please tell us:  Which value is seconds and what is the other here? */
     u = (U32)SEED_C1 * when[0] + (U32)SEED_C2 * when[1];
 #else
 #  ifdef HAS_GETTIMEOFDAY
@@ -2618,7 +2680,9 @@ PP(pp_unpack)
     }
     while (pat < patend) {
       reparse:
-	datumtype = *pat++;
+	datumtype = *pat++ & 0xFF;
+	if (isSPACE(datumtype))
+	    continue;
 	if (pat >= patend)
 	    len = 1;
 	else if (*pat == '*') {
@@ -2634,7 +2698,7 @@ PP(pp_unpack)
 	    len = (datumtype != '@');
 	switch(datumtype) {
 	default:
-	    break;
+	    croak("Invalid type in unpack: '%c'", (int)datumtype);
 	case '%':
 	    if (len == 1 && pat[-1] != '1')
 		len = 16;
@@ -2826,13 +2890,13 @@ PP(pp_unpack)
 	    }
 	    break;
 	case 's':
-	    along = (strend - s) / sizeof(I16);
+	    along = (strend - s) / SIZE16;
 	    if (len > along)
 		len = along;
 	    if (checksum) {
 		while (len-- > 0) {
-		    Copy(s, &ashort, 1, I16);
-		    s += sizeof(I16);
+		    COPY16(s, &ashort);
+		    s += SIZE16;
 		    culong += ashort;
 		}
 	    }
@@ -2840,8 +2904,8 @@ PP(pp_unpack)
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
-		    Copy(s, &ashort, 1, I16);
-		    s += sizeof(I16);
+		    COPY16(s, &ashort);
+		    s += SIZE16;
 		    sv = NEWSV(38, 0);
 		    sv_setiv(sv, (IV)ashort);
 		    PUSHs(sv_2mortal(sv));
@@ -2851,13 +2915,13 @@ PP(pp_unpack)
 	case 'v':
 	case 'n':
 	case 'S':
-	    along = (strend - s) / sizeof(U16);
+	    along = (strend - s) / SIZE16;
 	    if (len > along)
 		len = along;
 	    if (checksum) {
 		while (len-- > 0) {
-		    Copy(s, &aushort, 1, U16);
-		    s += sizeof(U16);
+		    COPY16(s, &aushort);
+		    s += SIZE16;
 #ifdef HAS_NTOHS
 		    if (datumtype == 'n')
 			aushort = ntohs(aushort);
@@ -2873,8 +2937,8 @@ PP(pp_unpack)
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
-		    Copy(s, &aushort, 1, U16);
-		    s += sizeof(U16);
+		    COPY16(s, &aushort);
+		    s += SIZE16;
 		    sv = NEWSV(39, 0);
 #ifdef HAS_NTOHS
 		    if (datumtype == 'n')
@@ -2942,13 +3006,13 @@ PP(pp_unpack)
 	    }
 	    break;
 	case 'l':
-	    along = (strend - s) / sizeof(I32);
+	    along = (strend - s) / SIZE32;
 	    if (len > along)
 		len = along;
 	    if (checksum) {
 		while (len-- > 0) {
-		    Copy(s, &along, 1, I32);
-		    s += sizeof(I32);
+		    COPY32(s, &along);
+		    s += SIZE32;
 		    if (checksum > 32)
 			cdouble += (double)along;
 		    else
@@ -2959,8 +3023,8 @@ PP(pp_unpack)
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
-		    Copy(s, &along, 1, I32);
-		    s += sizeof(I32);
+		    COPY32(s, &along);
+		    s += SIZE32;
 		    sv = NEWSV(42, 0);
 		    sv_setiv(sv, (IV)along);
 		    PUSHs(sv_2mortal(sv));
@@ -2970,13 +3034,13 @@ PP(pp_unpack)
 	case 'V':
 	case 'N':
 	case 'L':
-	    along = (strend - s) / sizeof(U32);
+	    along = (strend - s) / SIZE32;
 	    if (len > along)
 		len = along;
 	    if (checksum) {
 		while (len-- > 0) {
-		    Copy(s, &aulong, 1, U32);
-		    s += sizeof(U32);
+		    COPY32(s, &aulong);
+		    s += SIZE32;
 #ifdef HAS_NTOHL
 		    if (datumtype == 'N')
 			aulong = ntohl(aulong);
@@ -2995,8 +3059,8 @@ PP(pp_unpack)
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0) {
-		    Copy(s, &aulong, 1, U32);
-		    s += sizeof(U32);
+		    COPY32(s, &aulong);
+		    s += SIZE32;
 #ifdef HAS_NTOHL
 		    if (datumtype == 'N')
 			aulong = ntohl(aulong);
@@ -3048,12 +3112,9 @@ PP(pp_unpack)
 			auv = 0;
 		    }
 		    else if (++bytes >= sizeof(UV)) {	/* promote to string */
-			char decn[sizeof(UV) * 3 + 1];
 			char *t;
 
-			(void) sprintf(decn, "%0*ld",
-				       (int)sizeof(decn) - 1, auv);
-			sv = newSVpv(decn, 0);
+			sv = newSVpvf("%0*vu", (int)(sizeof(UV) * 3), auv);
 			while (s < strend) {
 			    sv = mul128(sv, *s & 0x7f);
 			    if (!(*s++ & 0x80)) {
@@ -3099,7 +3160,10 @@ PP(pp_unpack)
 		    s += sizeof(Quad_t);
 		}
 		sv = NEWSV(42, 0);
-		sv_setiv(sv, (IV)aquad);
+		if (aquad >= IV_MIN && aquad <= IV_MAX)
+		    sv_setiv(sv, (IV)aquad);
+		else
+		    sv_setnv(sv, (double)aquad);
 		PUSHs(sv_2mortal(sv));
 	    }
 	    break;
@@ -3114,7 +3178,10 @@ PP(pp_unpack)
 		    s += sizeof(unsigned Quad_t);
 		}
 		sv = NEWSV(43, 0);
-		sv_setuv(sv, (UV)auquad);
+		if (aquad <= UV_MAX)
+		    sv_setuv(sv, (UV)auquad);
+		else
+		    sv_setnv(sv, (double)auquad);
 		PUSHs(sv_2mortal(sv));
 	    }
 	    break;
@@ -3235,10 +3302,10 @@ PP(pp_unpack)
 	    }
 	    else {
 		if (checksum < 32) {
-		    along = (1 << checksum) - 1;
-		    culong &= (U32)along;
+		    aulong = (1 << checksum) - 1;
+		    culong &= aulong;
 		}
-		sv_setnv(sv, (double)culong);
+		sv_setuv(sv, (UV)culong);
 	    }
 	    XPUSHs(sv_2mortal(sv));
 	    checksum = 0;
@@ -3390,7 +3457,9 @@ PP(pp_pack)
     sv_setpvn(cat, "", 0);
     while (pat < patend) {
 #define NEXTFROM (items-- > 0 ? *MARK++ : &sv_no)
-	datumtype = *pat++;
+	datumtype = *pat++ & 0xFF;
+	if (isSPACE(datumtype))
+	    continue;
 	if (*pat == '*') {
 	    len = strchr("@Xxu", datumtype) ? 0 : items;
 	    pat++;
@@ -3404,7 +3473,7 @@ PP(pp_pack)
 	    len = 1;
 	switch(datumtype) {
 	default:
-	    break;
+	    croak("Invalid type in pack: '%c'", (int)datumtype);
 	case '%':
 	    DIE("%% may only be used in unpack");
 	case '@':
@@ -3606,7 +3675,7 @@ PP(pp_pack)
 #ifdef HAS_HTONS
 		ashort = htons(ashort);
 #endif
-		sv_catpvn(cat, (char*)&ashort, sizeof(I16));
+		CAT16(cat, &ashort);
 	    }
 	    break;
 	case 'v':
@@ -3616,7 +3685,7 @@ PP(pp_pack)
 #ifdef HAS_HTOVS
 		ashort = htovs(ashort);
 #endif
-		sv_catpvn(cat, (char*)&ashort, sizeof(I16));
+		CAT16(cat, &ashort);
 	    }
 	    break;
 	case 'S':
@@ -3624,13 +3693,13 @@ PP(pp_pack)
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
 		ashort = (I16)SvIV(fromstr);
-		sv_catpvn(cat, (char*)&ashort, sizeof(I16));
+		CAT16(cat, &ashort);
 	    }
 	    break;
 	case 'I':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
-		auint = U_I(SvNV(fromstr));
+		auint = SvUV(fromstr);
 		sv_catpvn(cat, (char*)&auint, sizeof(unsigned int));
 	    }
 	    break;
@@ -3642,7 +3711,14 @@ PP(pp_pack)
 		if (adouble < 0)
 		    croak("Cannot compress negative numbers");
 
-		if (adouble <= UV_MAX) {
+		if (
+#ifdef BW_BITS
+		    adouble <= BW_MASK
+#else
+		    adouble <= UV_MAX
+#endif
+		    )
+		{
 		    char   buf[1 + sizeof(UV)];
 		    char  *in = buf + sizeof(buf);
 		    UV     auv = U_V(adouble);;
@@ -3703,35 +3779,35 @@ PP(pp_pack)
 	case 'N':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
-		aulong = U_L(SvNV(fromstr));
+		aulong = SvUV(fromstr);
 #ifdef HAS_HTONL
 		aulong = htonl(aulong);
 #endif
-		sv_catpvn(cat, (char*)&aulong, sizeof(U32));
+		CAT32(cat, &aulong);
 	    }
 	    break;
 	case 'V':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
-		aulong = U_L(SvNV(fromstr));
+		aulong = SvUV(fromstr);
 #ifdef HAS_HTOVL
 		aulong = htovl(aulong);
 #endif
-		sv_catpvn(cat, (char*)&aulong, sizeof(U32));
+		CAT32(cat, &aulong);
 	    }
 	    break;
 	case 'L':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
-		aulong = U_L(SvNV(fromstr));
-		sv_catpvn(cat, (char*)&aulong, sizeof(U32));
+		aulong = SvUV(fromstr);
+		CAT32(cat, &aulong);
 	    }
 	    break;
 	case 'l':
 	    while (len-- > 0) {
 		fromstr = NEXTFROM;
 		along = SvIV(fromstr);
-		sv_catpvn(cat, (char*)&along, sizeof(I32));
+		CAT32(cat, &along);
 	    }
 	    break;
 #ifdef HAS_QUAD

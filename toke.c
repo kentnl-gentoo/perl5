@@ -22,13 +22,15 @@ static SV *q _((SV *sv));
 static char *scan_const _((char *start));
 static char *scan_formline _((char *s));
 static char *scan_heredoc _((char *s));
-static char *scan_ident _((char *s, char *send, char *dest, I32 ck_uni));
+static char *scan_ident _((char *s, char *send, char *dest, STRLEN destlen,
+			   I32 ck_uni));
 static char *scan_inputsymbol _((char *start));
 static char *scan_pat _((char *start));
 static char *scan_str _((char *start));
 static char *scan_subst _((char *start));
 static char *scan_trans _((char *start));
-static char *scan_word _((char *s, char *dest, int allow_package, STRLEN *slp));
+static char *scan_word _((char *s, char *dest, STRLEN destlen,
+			  int allow_package, STRLEN *slp));
 static char *skipspace _((char *s));
 static void checkcomma _((char *s, char *name, char *what));
 static void force_ident _((char *s, int kind));
@@ -47,6 +49,8 @@ static int uni _((I32 f, char *s));
 #endif
 static char * filter_gets _((SV *sv, PerlIO *fp, STRLEN append));
 static void restore_rsfp _((void *f));
+
+static char too_long[] = "Identifier too long";
 
 static char *linestart;		/* beg. of most recently read line */
 
@@ -159,13 +163,9 @@ char *s;
 {
     char *oldbp = bufptr;
     bool is_first = (oldbufptr == linestart);
-    char *msg;
 
     bufptr = s;
-    New(890, msg, strlen(what) + 40, char);
-    sprintf(msg, "%s found where operator expected", what);
-    yywarn(msg);
-    Safefree(msg);
+    yywarn(form("%s found where operator expected", what));
     if (is_first)
 	warn("\t(Missing semicolon on previous line?)\n");
     else if (oldoldbufptr && isIDFIRST(*oldoldbufptr)) {
@@ -505,7 +505,7 @@ int allow_tick;
 	(allow_pack && *s == ':') ||
 	(allow_tick && *s == '\'') )
     {
-	s = scan_word(s, tokenbuf, allow_pack, &len);
+	s = scan_word(s, tokenbuf, sizeof tokenbuf, allow_pack, &len);
 	if (check_keyword && keyword(tokenbuf, len))
 	    return start;
 	if (token == METHOD) {
@@ -923,7 +923,7 @@ register char *s;
 	char seen[256];
 	unsigned char un_char = 0, last_un_char;
 	char *send = strchr(s,']');
-	char tmpbuf[512];
+	char tmpbuf[sizeof tokenbuf * 4];
 
 	if (!send)		/* has to be an expression */
 	    return TRUE;
@@ -948,7 +948,7 @@ register char *s;
 	    case '$':
 		weight -= seen[un_char] * 10;
 		if (isALNUM(s[1])) {
-		    scan_ident(s,send,tmpbuf,FALSE);
+		    scan_ident(s, send, tmpbuf, sizeof tmpbuf, FALSE);
 		    if ((int)strlen(tmpbuf) > 1 && gv_fetchpv(tmpbuf,FALSE, SVt_PV))
 			weight -= 100;
 		    else
@@ -1018,7 +1018,7 @@ char *start;
 GV *gv;
 {
     char *s = start + (*start == '$');
-    char tmpbuf[1024];
+    char tmpbuf[sizeof tokenbuf];
     STRLEN len;
     GV* indirgv;
 
@@ -1028,7 +1028,7 @@ GV *gv;
 	if (!GvCVu(gv))
 	    gv = 0;
     }
-    s = scan_word(s, tmpbuf, TRUE, &len);
+    s = scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
     if (*start == '$') {
 	if (gv || last_lop_op == OP_PRINT || isUPPER(*tokenbuf))
 	    return 0;
@@ -1268,12 +1268,9 @@ yylex()
 	/* Force them to make up their mind on "@foo". */
 	if (pit == '@' && lex_state != LEX_NORMAL && !lex_brackets) {
 	    GV *gv = gv_fetchpv(tokenbuf+1, FALSE, SVt_PVAV);
-	    if (!gv || ((tokenbuf[0] == '@') ? !GvAV(gv) : !GvHV(gv))) {
-		char tmpbuf[1024];
-		sprintf(tmpbuf, "In string, %s now must be written as \\%s",
-			tokenbuf, tokenbuf);
-		yyerror(tmpbuf);
-	    }
+	    if (!gv || ((tokenbuf[0] == '@') ? !GvAV(gv) : !GvHV(gv)))
+		yyerror(form("In string, %s now must be written as \\%s",
+			     tokenbuf, tokenbuf));
 	}
 
 	yylval.opval = (OP*)newSVOP(OP_CONST, 0, newSVpv(tokenbuf+1, 0));
@@ -1502,28 +1499,23 @@ yylex()
 		    if (gv)
 			GvIMPORTED_AV_on(gv);
 		    if (minus_F) {
-			char *tmpbuf1;
-			New(201, tmpbuf1, strlen(splitstr) * 2 + 20, char);
 			if (strchr("/'\"", *splitstr)
 			      && strchr(splitstr + 1, *splitstr))
-			    sprintf(tmpbuf1, "@F=split(%s);", splitstr);
+			    sv_catpvf(linestr, "@F=split(%s);", splitstr);
 			else {
 			    char delim;
 			    s = "'~#\200\1'"; /* surely one char is unused...*/
 			    while (s[1] && strchr(splitstr, *s))  s++;
 			    delim = *s;
-			    sprintf(tmpbuf1, "@F=split(%s%c",
-				    "q" + (delim == '\''), delim);
-			    d = tmpbuf1 + strlen(tmpbuf1);
-			    for (s = splitstr; *s; ) {
+			    sv_catpvf(linestr, "@F=split(%s%c",
+				      "q" + (delim == '\''), delim);
+			    for (s = splitstr; *s; s++) {
 				if (*s == '\\')
-				    *d++ = '\\';
-				*d++ = *s++;
+				    sv_catpvn(linestr, "\\", 1);
+				sv_catpvn(linestr, s, 1);
 			    }
-			    sprintf(d, "%c);", delim);
+			    sv_catpvf(linestr, "%c);", delim);
 			}
-			sv_catpv(linestr,tmpbuf1);
-			Safefree(tmpbuf1);
 		    }
 		    else
 		        sv_catpv(linestr,"@F=split(' ');");
@@ -1688,15 +1680,23 @@ yylex()
 		    croak("Can't exec %s", ipath);
 		}
 		if (d) {
-		    int oldpdb = perldb;
-		    int oldn = minus_n;
-		    int oldp = minus_p;
+		    U32 oldpdb = perldb;
+		    bool oldn = minus_n;
+		    bool oldp = minus_p;
 
 		    while (*d && !isSPACE(*d)) d++;
 		    while (*d == ' ' || *d == '\t') d++;
 
 		    if (*d++ == '-') {
-			while (d = moreswitches(d)) ;
+			do {
+			    if (*d == 'M' || *d == 'm') {
+				char *m = d;
+				while (*d && !isSPACE(*d)) d++;
+				croak("Too late for \"-%.*s\" option",
+				      (int)(d - m), m);
+			    }
+			    d = moreswitches(d);
+			} while (d);
 			if (perldb && !oldpdb ||
 			    ( minus_n || minus_p ) && !(oldn || oldp) )
 			      /* if we have already added "LINE: while (<>) {",
@@ -1845,7 +1845,7 @@ yylex()
 
     case '*':
 	if (expect != XOPERATOR) {
-	    s = scan_ident(s, bufend, tokenbuf, TRUE);
+	    s = scan_ident(s, bufend, tokenbuf, sizeof tokenbuf, TRUE);
 	    expect = XOPERATOR;
 	    force_ident(tokenbuf, '*');
 	    if (!*tokenbuf)
@@ -1865,7 +1865,7 @@ yylex()
 	    Mop(OP_MODULO);
 	}
 	tokenbuf[0] = '%';
-	s = scan_ident(s, bufend, tokenbuf+1, TRUE);
+	s = scan_ident(s, bufend, tokenbuf + 1, sizeof tokenbuf - 1, TRUE);
 	if (!tokenbuf[1]) {
 	    if (s == bufend)
 		yyerror("Final % should be \\% or %name");
@@ -1955,7 +1955,8 @@ yylex()
 		    d++;
 	    }
 	    if (d < bufend && isIDFIRST(*d)) {
-		d = scan_word(d, tokenbuf + 1, FALSE, &len);
+		d = scan_word(d, tokenbuf + 1, sizeof tokenbuf - 1,
+			      FALSE, &len);
 		while (d < bufend && (*d == ' ' || *d == '\t'))
 		    d++;
 		if (*d == '}') {
@@ -2060,7 +2061,7 @@ yylex()
 	    BAop(OP_BIT_AND);
 	}
 
-	s = scan_ident(s-1, bufend, tokenbuf, TRUE);
+	s = scan_ident(s - 1, bufend, tokenbuf, sizeof tokenbuf, TRUE);
 	if (*tokenbuf) {
 	    expect = XOPERATOR;
 	    force_ident(tokenbuf, '&');
@@ -2182,7 +2183,8 @@ yylex()
 	    if (expect == XOPERATOR)
 		no_op("Array length", bufptr);
 	    tokenbuf[0] = '@';
-	    s = scan_ident(s+1, bufend, tokenbuf+1, FALSE);
+	    s = scan_ident(s + 1, bufend, tokenbuf + 1, sizeof tokenbuf - 1,
+			   FALSE);
 	    if (!tokenbuf[1])
 		PREREF(DOLSHARP);
 	    expect = XOPERATOR;
@@ -2193,7 +2195,7 @@ yylex()
 	if (expect == XOPERATOR)
 	    no_op("Scalar", bufptr);
 	tokenbuf[0] = '$';
-	s = scan_ident(s, bufend, tokenbuf+1, FALSE);
+	s = scan_ident(s, bufend, tokenbuf + 1, sizeof tokenbuf - 1, FALSE);
 	if (!tokenbuf[1]) {
 	    if (s == bufend)
 		yyerror("Final $ should be \\$ or $name");
@@ -2234,11 +2236,11 @@ yylex()
 		if (dowarn && strEQ(tokenbuf+1, "SIG") &&
 		    (t = strchr(s, '}')) && (t = strchr(t, '=')))
 		{
-		    char tmpbuf[1024];
+		    char tmpbuf[sizeof tokenbuf];
 		    STRLEN len;
 		    for (t++; isSPACE(*t); t++) ;
 		    if (isIDFIRST(*t)) {
-			t = scan_word(t, tmpbuf, TRUE, &len);
+			t = scan_word(t, tmpbuf, sizeof tmpbuf, TRUE, &len);
 			if (*t != '(' && perl_get_cv(tmpbuf, FALSE))
 			    warn("You need to quote \"%s\"", tmpbuf);
 		    }
@@ -2256,8 +2258,8 @@ yylex()
 	    else if (strchr("&*<%", *s) && isIDFIRST(s[1]))
 		expect = XTERM;		/* e.g. print $fh &sub */
 	    else if (isIDFIRST(*s)) {
-		char tmpbuf[1024];
-		scan_word(s, tmpbuf, TRUE, &len);
+		char tmpbuf[sizeof tokenbuf];
+		scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
 		if (keyword(tmpbuf, len))
 		    expect = XTERM;	/* e.g. print $fh length() */
 		else {
@@ -2282,7 +2284,7 @@ yylex()
 	if (expect == XOPERATOR)
 	    no_op("Array", s);
 	tokenbuf[0] = '@';
-	s = scan_ident(s, bufend, tokenbuf+1, FALSE);
+	s = scan_ident(s, bufend, tokenbuf + 1, sizeof tokenbuf - 1, FALSE);
 	if (!tokenbuf[1]) {
 	    if (s == bufend)
 		yyerror("Final @ should be \\@ or @name");
@@ -2448,7 +2450,7 @@ yylex()
 
       keylookup:
 	bufptr = s;
-	s = scan_word(s, tokenbuf, FALSE, &len);
+	s = scan_word(s, tokenbuf, sizeof tokenbuf, FALSE, &len);
 
 	/* Some keywords can be followed by any delimiter, including ':' */
 	tmp = (len == 1 && strchr("msyq", tokenbuf[0]) ||
@@ -2506,12 +2508,14 @@ yylex()
 	default:			/* not a keyword */
 	  just_a_word: {
 		GV *gv;
+		SV *sv;
 		char lastchar = (bufptr == oldoldbufptr ? 0 : bufptr[-1]);
 
 		/* Get the rest if it looks like a package qualifier */
 
 		if (*s == '\'' || *s == ':' && s[1] == ':') {
-		    s = scan_word(s, tokenbuf + len, TRUE, &len);
+		    s = scan_word(s, tokenbuf + len, sizeof tokenbuf - len,
+				  TRUE, &len);
 		    if (!len)
 			croak("Bad name after %s::", tokenbuf);
 		}
@@ -2572,6 +2576,13 @@ yylex()
 		s = skipspace(s);
 		if (*s == '(') {
 		    CLINE;
+		    if (gv && GvCVu(gv)) {
+			for (d = s + 1; *d == ' ' || *d == '\t'; d++) ;
+			if (*d == ')' && (sv = cv_const_sv(GvCV(gv)))) {
+			    s = d + 1;
+			    goto its_constant;
+			}
+		    }
 		    nextval[nexttoke].opval = yylval.opval;
 		    expect = XOPERATOR;
 		    force_next(WORD);
@@ -2595,28 +2606,20 @@ yylex()
 		/* Not a method, so call it a subroutine (if defined) */
 
 		if (gv && GvCVu(gv)) {
-		    CV* cv = GvCV(gv);
-		    if (*s == '(') {
-			nextval[nexttoke].opval = yylval.opval;
-			expect = XTERM;
-			force_next(WORD);
-			yylval.ival = 0;
-			TOKEN('&');
-		    }
+		    CV* cv;
 		    if (lastchar == '-')
 			warn("Ambiguous use of -%s resolved as -&%s()",
 				tokenbuf, tokenbuf);
 		    last_lop = oldbufptr;
 		    last_lop_op = OP_ENTERSUB;
 		    /* Check for a constant sub */
-		    {
-			SV *sv = cv_const_sv(cv);
-			if (sv) {
-			    SvREFCNT_dec(((SVOP*)yylval.opval)->op_sv);
-			    ((SVOP*)yylval.opval)->op_sv = SvREFCNT_inc(sv);
-			    yylval.opval->op_private = 0;
-			    TOKEN(WORD);
-			}
+		    cv = GvCV(gv);
+		    if ((sv = cv_const_sv(cv))) {
+		  its_constant:
+			SvREFCNT_dec(((SVOP*)yylval.opval)->op_sv);
+			((SVOP*)yylval.opval)->op_sv = SvREFCNT_inc(sv);
+			yylval.opval->op_private = 0;
+			TOKEN(WORD);
 		    }
 
 		    /* Resolve to GV now. */
@@ -2675,12 +2678,13 @@ yylex()
 	    }
 
 	case KEY___FILE__:
+	    yylval.opval = (OP*)newSVOP(OP_CONST, 0,
+					newSVsv(GvSV(curcop->cop_filegv)));
+	    TERM(THING);
+
 	case KEY___LINE__:
-	    if (tokenbuf[2] == 'L')
-		(void)sprintf(tokenbuf,"%ld",(long)curcop->cop_line);
-	    else
-		strcpy(tokenbuf, SvPVX(GvSV(curcop->cop_filegv)));
-	    yylval.opval = (OP*)newSVOP(OP_CONST, 0, newSVpv(tokenbuf,0));
+	    yylval.opval = (OP*)newSVOP(OP_CONST, 0,
+				    newSVpvf("%ld", (long)curcop->cop_line));
 	    TERM(THING);
 
 	case KEY___PACKAGE__:
@@ -2696,12 +2700,10 @@ yylex()
 
 	    /*SUPPRESS 560*/
 	    if (rsfp && (!in_eval || tokenbuf[2] == 'D')) {
-		char dname[256];
 		char *pname = "main";
 		if (tokenbuf[2] == 'D')
 		    pname = HvNAME(curstash ? curstash : defstash);
-		sprintf(dname,"%s::DATA", pname);
-		gv = gv_fetchpv(dname,TRUE, SVt_PVIO);
+		gv = gv_fetchpv(form("%s::DATA", pname), TRUE, SVt_PVIO);
 		GvMULTI_on(gv);
 		if (!GvIO(gv))
 		    GvIOp(gv) = newIO();
@@ -2739,7 +2741,7 @@ yylex()
 	    if (*s == ':' && s[1] == ':') {
 		s += 2;
 		d = s;
-		s = scan_word(s, tokenbuf, FALSE, &len);
+		s = scan_word(s, tokenbuf, sizeof tokenbuf, FALSE, &len);
 		tmp = keyword(tokenbuf, len);
 		if (tmp < 0)
 		    tmp = -tmp;
@@ -3444,9 +3446,9 @@ yylex()
 	    s = skipspace(s);
 
 	    if (isIDFIRST(*s) || *s == '\'' || *s == ':') {
-		char tmpbuf[128];
+		char tmpbuf[sizeof tokenbuf];
 		expect = XBLOCK;
-		d = scan_word(s, tmpbuf, TRUE, &len);
+		d = scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
 		if (strchr(tmpbuf, ':'))
 		    sv_setpv(subname, tmpbuf);
 		else {
@@ -3521,6 +3523,9 @@ yylex()
 
 	case KEY_sysopen:
 	    LOP(OP_SYSOPEN,XTERM);
+
+	case KEY_sysseek:
+	    LOP(OP_SYSSEEK,XTERM);
 
 	case KEY_sysread:
 	    LOP(OP_SYSREAD,XTERM);
@@ -4172,10 +4177,11 @@ I32 len;
 		if (strEQ(d,"system"))		return -KEY_system;
 		break;
 	    case 7:
-		if (strEQ(d,"sysopen"))		return -KEY_sysopen;
-		if (strEQ(d,"sysread"))		return -KEY_sysread;
 		if (strEQ(d,"symlink"))		return -KEY_symlink;
 		if (strEQ(d,"syscall"))		return -KEY_syscall;
+		if (strEQ(d,"sysopen"))		return -KEY_sysopen;
+		if (strEQ(d,"sysread"))		return -KEY_sysread;
+		if (strEQ(d,"sysseek"))		return -KEY_sysseek;
 		break;
 	    case 8:
 		if (strEQ(d,"syswrite"))	return -KEY_syswrite;
@@ -4315,14 +4321,18 @@ char *what;
 }
 
 static char *
-scan_word(s, dest, allow_package, slp)
+scan_word(s, dest, destlen, allow_package, slp)
 register char *s;
 char *dest;
+STRLEN destlen;
 int allow_package;
 STRLEN *slp;
 {
     register char *d = dest;
+    register char *e = d + destlen - 3;  /* two-character token, ending NUL */
     for (;;) {
+	if (d >= e)
+	    croak(too_long);
 	if (isALNUM(*s))
 	    *d++ = *s++;
 	else if (*s == '\'' && allow_package && isIDFIRST(s[1])) {
@@ -4343,13 +4353,15 @@ STRLEN *slp;
 }
 
 static char *
-scan_ident(s,send,dest,ck_uni)
+scan_ident(s, send, dest, destlen, ck_uni)
 register char *s;
 register char *send;
 char *dest;
+STRLEN destlen;
 I32 ck_uni;
 {
     register char *d;
+    register char *e;
     char *bracket = 0;
     char funny = *s++;
 
@@ -4358,12 +4370,18 @@ I32 ck_uni;
     if (isSPACE(*s))
 	s = skipspace(s);
     d = dest;
+    e = d + destlen - 3;	/* two-character token, ending NUL */
     if (isDIGIT(*s)) {
-	while (isDIGIT(*s))
+	while (isDIGIT(*s)) {
+	    if (d >= e)
+		croak(too_long);
 	    *d++ = *s++;
+	}
     }
     else {
 	for (;;) {
+	    if (d >= e)
+		croak(too_long);
 	    if (isALNUM(*s))
 		*d++ = *s++;
 	    else if (*s == '\'' && isIDFIRST(s[1])) {
@@ -4388,7 +4406,12 @@ I32 ck_uni;
     }
     if (*s == '$' && s[1] &&
       (isALNUM(s[1]) || strchr("${", s[1]) || strnEQ(s+1,"::",2)) )
-	return s;
+    {
+	if (isDIGIT(s[1]) && lex_state == LEX_INTERPNORMAL)
+	    deprecate("\"$$<digit>\" to mean \"${$}<digit>\"");
+	else
+	    return s;
+    }
     if (*s == '{') {
 	bracket = s;
 	s++;
@@ -4589,7 +4612,8 @@ register PMOP *pm;
 	    }
 	}
 	/* promote the better string */
-	if ((!pm->op_pmshort && !(pm->op_pmregexp->reganch & ROPT_ANCH)) ||
+	if ((!pm->op_pmshort &&
+	     !(pm->op_pmregexp->reganch & ROPT_ANCH_GPOS)) ||
 	    ((pm->op_pmflags & PMf_SCANFIRST) &&
 	     (SvCUR(pm->op_pmshort) < SvCUR(pm->op_pmregexp->regmust)))) {
 	    SvREFCNT_dec(pm->op_pmshort);		/* ok if null */
@@ -5125,12 +5149,12 @@ set_csh()
 #endif
 }
 
-int
+I32
 start_subparse(is_format, flags)
 I32 is_format;
 U32 flags;
 {
-    int oldsavestack_ix = savestack_ix;
+    I32 oldsavestack_ix = savestack_ix;
     CV* outsidecv = compcv;
     AV* comppadlist;
 
@@ -5188,10 +5212,10 @@ int
 yyerror(s)
 char *s;
 {
-    char wbuf[40];
     char *where = NULL;
     char *context = NULL;
     int contlen = -1;
+    SV *msg;
 
     if (!yychar || (yychar == ';' && !rsfp))
 	where = "at EOF";
@@ -5220,35 +5244,37 @@ char *s;
 	else
 	    where = "within string";
     }
-    else if (yychar < 32)
-	(void)sprintf(where = wbuf, "next char ^%c", toCTRL(yychar));
-    else if (isPRINT_LC(yychar))
-	(void)sprintf(where = wbuf, "next char %c", yychar);
-    else
-	(void)sprintf(where = wbuf, "next char \\%03o", yychar & 255);
-    if (contlen == -1)
-	contlen = strlen(where);
-    (void)sprintf(buf, "%s at %s line %d, ",
-		  s, SvPVX(GvSV(curcop->cop_filegv)), curcop->cop_line);
+    else {
+	SV *where_sv = sv_2mortal(newSVpv("next char ", 0));
+	if (yychar < 32)
+	    sv_catpvf(where_sv, "^%c", toCTRL(yychar));
+	else if (isPRINT_LC(yychar))
+	    sv_catpvf(where_sv, "%c", yychar);
+	else
+	    sv_catpvf(where_sv, "\\%03o", yychar & 255);
+	where = SvPVX(where_sv);
+    }
+    msg = sv_2mortal(newSVpv(s, 0));
+    sv_catpvf(msg, " at %S line %ld, ",
+	      GvSV(curcop->cop_filegv), (long)curcop->cop_line);
     if (context)
-	(void)sprintf(buf+strlen(buf), "near \"%.*s\"\n", contlen, context);
+	sv_catpvf(msg, "near \"%.*s\"\n", contlen, context);
     else
-	(void)sprintf(buf+strlen(buf), "%s\n", where);
+	sv_catpvf(msg, "%s\n", where);
     if (multi_start < multi_end && (U32)(curcop->cop_line - multi_end) <= 1) {
-	sprintf(buf+strlen(buf),
+	sv_catpvf(msg,
 	"  (Might be a runaway multi-line %c%c string starting on line %ld)\n",
 		(int)multi_open,(int)multi_close,(long)multi_start);
         multi_end = 0;
     }
     if (in_eval & 2)
-	warn("%s",buf);
+	warn("%S", msg);
     else if (in_eval)
-	sv_catpv(GvSV(errgv),buf);
+	sv_catsv(GvSV(errgv), msg);
     else
-	PerlIO_printf(PerlIO_stderr(), "%s",buf);
+	PerlIO_write(PerlIO_stderr(), SvPVX(msg), SvCUR(msg));
     if (++error_count >= 10)
-	croak("%s has too many errors.\n",
-	SvPVX(GvSV(curcop->cop_filegv)));
+	croak("%S has too many errors.\n", GvSV(curcop->cop_filegv));
     in_my = 0;
     return 0;
 }

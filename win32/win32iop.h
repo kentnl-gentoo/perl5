@@ -10,6 +10,7 @@
  * function prototypes for our own win32io layer
  */
 EXT int * 	win32_errno();
+EXT char *** 	win32_environ();
 EXT FILE*	win32_stdin(void);
 EXT FILE*	win32_stdout(void);
 EXT FILE*	win32_stderr(void);
@@ -20,6 +21,7 @@ EXT char*	win32_strerror(int e);
 EXT int		win32_fprintf(FILE *pf, const char *format, ...);
 EXT int		win32_printf(const char *format, ...);
 EXT int		win32_vfprintf(FILE *pf, const char *format, va_list arg);
+EXT int		win32_vprintf(const char *format, va_list arg);
 EXT size_t	win32_fread(void *buf, size_t size, size_t count, FILE *pf);
 EXT size_t	win32_fwrite(const void *buf, size_t size, size_t count, FILE *pf);
 EXT FILE*	win32_fopen(const char *path, const char *mode);
@@ -58,6 +60,9 @@ EXT int		win32_write(int fd, const void *buf, unsigned int cnt);
 EXT int		win32_spawnvpe(int mode, const char *cmdname,
 			       const char *const *argv, const char *const *envp);
 EXT int		win32_spawnle(int mode, const char *cmdname, const char *,...);
+EXT int		win32_mkdir(const char *dir, int mode);
+EXT int		win32_rmdir(const char *dir);
+EXT int		win32_chdir(const char *dir);
 
 /*
  * these two are win32 specific but still io related
@@ -74,6 +79,7 @@ void *	SetIOSubSystem(void	*piosubsystem);
  */
 #ifndef WIN32IO_IS_STDIO
 #undef errno
+#undef environ
 #undef stderr
 #undef stdin
 #undef stdout
@@ -86,6 +92,7 @@ void *	SetIOSubSystem(void	*piosubsystem);
 #define feof(f)				win32_feof(f)
 #define ferror(f)			win32_ferror(f)
 #define errno 				(*win32_errno())
+#define environ				(*win32_environ())
 #define strerror			win32_strerror
 
 /*
@@ -94,6 +101,7 @@ void *	SetIOSubSystem(void	*piosubsystem);
 #define	fprintf			win32_fprintf
 #define	vfprintf		win32_vfprintf
 #define	printf			win32_printf
+#define	vprintf			win32_vprintf
 #define fread(buf,size,count,f)	win32_fread(buf,size,count,f)
 #define fwrite(buf,size,count,f)	win32_fwrite(buf,size,count,f)
 #define fopen			win32_fopen
@@ -129,6 +137,9 @@ void *	SetIOSubSystem(void	*piosubsystem);
 #define _get_osfhandle		stolen_get_osfhandle
 #define spawnvpe		win32_spawnvpe
 #define spawnle			win32_spawnle
+#define mkdir			win32_mkdir
+#define rmdir			win32_rmdir
+#define chdir			win32_chdir
 #endif /* WIN32IO_IS_STDIO */
 
 #endif /* WIN32IOP_H */
