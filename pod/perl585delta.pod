@@ -67,8 +67,6 @@ Pod::LaTeX upgraded to version 0.57
 
 Safe now works properly with Carp
 
-FIXME $VERSION
-
 =item *
 
 Scalar-List-Utils upgraded to version 1.14
@@ -114,10 +112,6 @@ F<h2ph> is now able to understand a very limited set of C inline functions
 been introduced to deal with some of the headers of the newest versions of
 the glibc. The standard warning still applies; to quote F<h2ph>'s
 documentation, I<you may need to dicker with the files produced>.
-
-=head1 New Documentation
-
-=head1 Performance Enhancements
 
 =head1 Installation and Configuration Improvements
 
@@ -169,6 +163,12 @@ Thread creation time could vary wildly between identical runs. This was caused
 by a poor hashing algorithm in the thread cloning routines, which has now
 been fixed.
 
+=item *
+
+The internals of the ithreads implementation were not checking if OS-level
+thread creation had failed. threads->create() now returns C<undef> in if
+thead creation fails instead of crashing perl.
+
 =back
 
 =head1 New or Changed Diagnostics
@@ -218,13 +218,17 @@ suggesting that the user use the C<-S> flag:
 The Unicode character class files used by the regular expression engine are
 now built at build time from the supplied Unicode consortium data files,
 instead of being shipped prebuilt. This makes the compressed Perl source
-tarball about 200K smaller.
-
-=head1 New Tests
+tarball about 200K smaller. A side effect is that the layout of files inside
+lib/unicore has changed.
 
 =head1 Known Problems
 
+The regression test F<t/uni/class.t> is now performing considerably more
+tests, and can take several minutes to run even on a fast machine.
+
 =head1 Platform Specific Problems
+
+This release is known not to build on Windows 95.
 
 =head1 Reporting Bugs
 
