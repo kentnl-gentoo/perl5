@@ -248,7 +248,7 @@ padav		private array		ck_null		d0
 padhv		private hash		ck_null		d0
 padany		private something	ck_null		d0
 
-pushre		push regexp		ck_null		/
+pushre		push regexp		ck_null		d/
 
 # References and stuff.
 
@@ -277,6 +277,7 @@ regcmaybe	regexp comp once	ck_fun		s1	S
 regcreset	regexp reset interpolation flag	ck_fun		s1	S
 regcomp		regexp compilation	ck_null		s|	S
 match		pattern match		ck_match	d/
+qr		pattern quote		ck_match	s0
 subst		substitution		ck_null		dis/	S
 substcont	substitution cont	ck_null		dis|	
 trans		character translation	ck_null		is"	S

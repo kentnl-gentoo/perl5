@@ -3,7 +3,7 @@
 # Supported compilers:
 #	Visual C++ 2.0 thro 5.0
 #	Borland C++ 5.02
-#	Mingw32 with gcc-2.8.1 or egcs-1.0.2
+#	Mingw32 with gcc-2.8.1 or egcs-1.0.2  **experimental**
 #
 # This is set up to build a perl.exe that runs off a shared library
 # (perl.dll).  Also makes individual DLLs for the XS extensions.
@@ -29,7 +29,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.00472
+INST_VER	*= \5.00473
 
 #
 # uncomment to enable threads-capabilities
@@ -46,7 +46,8 @@ CCTYPE		*= BORLAND
 
 #
 # uncomment next line if you want to use the perl object
-# Currently, this cannot be enabled if you ask for threads above
+# Currently, this cannot be enabled if you ask for threads above, or
+# if you are using GCC or EGCS.
 #
 #OBJECT		*= -DPERL_OBJECT
 
@@ -74,7 +75,7 @@ CCTYPE		*= BORLAND
 #
 # if you have the source for des_fcrypt(), uncomment this and make sure the
 # file exists (see README.win32).  File should be located in the same
-# directory as this file.
+# directory as this file.  Not (yet) supported with PERL_OBJECT.
 #
 #CRYPT_SRC	*= des_fcrypt.c
 
