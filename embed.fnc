@@ -1062,9 +1062,9 @@ s	|void	|init_postdump_symbols|int|char **|char **
 s	|void	|init_predump_symbols
 rs	|void	|my_exit_jump
 s	|void	|nuke_stacks
-s	|void	|open_script	|char *|bool|SV *|int *fd
+s	|void	|open_script	|char *|bool|SV *
 s	|void	|usage		|char *
-s	|void	|validate_suid	|char *|char*|int
+s	|void	|validate_suid	|char *|char*
 #  if defined(IAMSUID)
 s	|int	|fd_on_nosuid_fs|int fd
 #  endif
@@ -1107,7 +1107,8 @@ s	|void*	|docatch_body
 s	|void*	|vdocatch_body	|va_list args
 #endif
 s	|OP*	|dofindlabel	|OP *o|char *label|OP **opstack|OP **oplimit
-s	|void	|doparseform	|SV *sv
+s	|OP*	|doparseform	|SV *sv
+sn	|bool	|num_overflow	|NV value|I32 fldsize|I32 frcsize
 s	|I32	|dopoptoeval	|I32 startingblock
 s	|I32	|dopoptolabel	|char *label
 s	|I32	|dopoptoloop	|I32 startingblock

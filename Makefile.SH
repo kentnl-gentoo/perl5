@@ -9,6 +9,17 @@ case $PERL_CONFIG_SH in
 	. $TOP/config.sh
 	;;
 esac
+
+# H.Merijn Brand [17 Feb 2004]
+# This comment is just to ensure that Configure will find variables that
+# are removed/replaced in patches on blead, but are still needed in the
+# 5.8.x, 5.6.x and 5.005.x maintainance tracks.
+# metaconfig -m will scan all .SH files on this level (not deeper), and
+# not in x2p and other subfolders. This file is as good as any .SH
+# patch   references
+# #22227 $baserev
+# #22302 $yacc $byacc
+
 : This forces SH files to create target in same directory as SH file.
 : This is so that make depend always knows where to find SH derivatives.
 case "$0" in
@@ -762,7 +773,7 @@ extra.pods: miniperl$(EXE_EXT)
 	-@rm -f pod/perlvms.pod
 	-@test -f vms/perlvms.pod && cd pod && $(LNS) ../vms/perlvms.pod perlvms.pod && cd .. && echo "pod/perlvms.pod" >> extra.pods
 	-@rm -f pod/perldelta.pod
-	-@test -f pod/perl583delta.pod && cd pod && $(LNS) perl583delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods
+	-@test -f pod/perl584delta.pod && cd pod && $(LNS) perl584delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods
 
 extras.make: perl$(EXE_EXT)
 	-@test -s extras.lst && PATH="`pwd`:${PATH}" PERL5LIB="`pwd`/lib" $(LDLIBPTH) ./perl -Ilib -MCPAN -e '@ARGV&&make(@ARGV)' `cat extras.lst`
@@ -1175,7 +1186,7 @@ minitest: miniperl$(EXE_EXT) lib/re.pm
 	@echo "to build lib/Config.pm or lib/lib.pm."
 	@echo " "
 	- cd t && (rm -f perl$(EXE_EXT); $(LNS) ../miniperl$(EXE_EXT) perl$(EXE_EXT)) \
-		&& $(LDLIBPTH) ./perl TEST base/*.t comp/*.t cmd/*.t run/*.t io/*.t op/*.t uni/*.t </dev/tty
+		&& $(LDLIBPTH) ./perl TEST -minitest base/*.t comp/*.t cmd/*.t run/*.t io/*.t op/*.t uni/*.t </dev/tty
 
 # Test via harness
 

@@ -1,7 +1,7 @@
 /*    sv.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -403,6 +403,7 @@ do_clean_named_objs(pTHX_ SV *sv)
 	     (GvCV(sv) && SvOBJECT(GvCV(sv))) )
 	{
 	    DEBUG_D((PerlIO_printf(Perl_debug_log, "Cleaning named glob object:\n "), sv_dump(sv)));
+	    SvFLAGS(sv) |= SVf_BREAK;
 	    SvREFCNT_dec(sv);
 	}
     }
@@ -3471,7 +3472,8 @@ Perl_sv_utf8_upgrade_flags(pTHX_ register SV *sv, I32 flags)
 	 }
 	 if (hibit) {
 	      STRLEN len;
-	
+	      (void)SvOOK_off(sv);
+	      s = (U8*)SvPVX(sv);
 	      len = SvCUR(sv) + 1; /* Plus the \0 */
 	      SvPVX(sv) = (char*)bytes_to_utf8((U8*)s, &len);
 	      SvCUR(sv) = len - 1;
@@ -3542,6 +3544,12 @@ void
 Perl_sv_utf8_encode(pTHX_ register SV *sv)
 {
     (void) sv_utf8_upgrade(sv);
+    if (SvIsCOW(sv)) {
+        sv_force_normal_flags(sv, 0);
+    }
+    if (SvREADONLY(sv)) {
+	Perl_croak(aTHX_ PL_no_modify);
+    }
     SvUTF8_off(sv);
 }
 
@@ -9199,6 +9207,9 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 	    continue;	/* not "break" */
 	}
 
+	/* calculate width before utf8_upgrade changes it */
+	have = esignlen + zeros + elen;
+
 	if (is_utf8 != has_utf8) {
 	     if (is_utf8) {
 		  if (SvCUR(sv))
@@ -9222,7 +9233,6 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		"Newline in left-justified string for %sprintf",
 			(PL_op->op_type == OP_PRTF) ? "" : "s");
 	
-	have = esignlen + zeros + elen;
 	need = (have > width ? have : width);
 	gap = need - have;
 
@@ -9396,7 +9406,7 @@ Perl_re_dup(pTHX_ REGEXP *r, CLONE_PARAMS *param)
     New(0, ret->offsets, 2*len+1, U32);
     Copy(r->offsets, ret->offsets, 2*len+1, U32);
 
-    ret->precomp        = SAVEPV(r->precomp);
+    ret->precomp        = SAVEPVN(r->precomp, r->prelen);
     ret->refcnt         = r->refcnt;
     ret->minlen         = r->minlen;
     ret->prelen         = r->prelen;
@@ -9408,7 +9418,7 @@ Perl_re_dup(pTHX_ REGEXP *r, CLONE_PARAMS *param)
     ret->sublen         = r->sublen;
 
     if (RX_MATCH_COPIED(ret))
-	ret->subbeg  = SAVEPV(r->subbeg);
+	ret->subbeg  = SAVEPVN(r->subbeg, r->sublen);
     else
 	ret->subbeg = Nullch;
 
@@ -10085,7 +10095,10 @@ Perl_sv_dup(pTHX_ SV *sstr, CLONE_PARAMS* param)
                 SvREFCNT_inc(CvXSUBANY(sstr).any_ptr) :
                 sv_dup_inc(CvXSUBANY(sstr).any_ptr, param);
 	}
-	CvGV(dstr)	= gv_dup(CvGV(sstr), param);
+	/* don't dup if copying back - CvGV isn't refcounted, so the
+	 * duped GV may never be freed. A bit of a hack! DAPM */
+	CvGV(dstr)	= (param->flags & CLONEf_JOIN_IN) ?
+		Nullgv : gv_dup(CvGV(sstr), param) ;
 	if (param->flags & CLONEf_COPY_STACKS) {
 	  CvDEPTH(dstr)	= CvDEPTH(sstr);
 	} else {

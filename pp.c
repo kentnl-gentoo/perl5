@@ -1,7 +1,7 @@
 /*    pp.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1381,12 +1381,18 @@ PP(pp_repeat)
   dSP; dATARGET; tryAMAGICbin(repeat,opASSIGN);
   {
     register IV count = POPi;
+    if (count < 0)
+	count = 0;
     if (GIMME == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
 	dMARK;
 	I32 items = SP - MARK;
 	I32 max;
+	static const char list_extend[] = "panic: list extend";
 
 	max = items * count;
+	MEM_WRAP_CHECK_1(max, SV*, list_extend);
+	if (items > 0 && max > 0 && (max < items || max < count))
+	   Perl_croak(aTHX_ list_extend);
 	MEXTEND(MARK, max);
 	if (count > 1) {
 	    while (SP > MARK) {
@@ -1439,6 +1445,7 @@ PP(pp_repeat)
 	    if (count < 1)
 		SvCUR_set(TARG, 0);
 	    else {
+	        MEM_WRAP_CHECK_1(count, len, "panic: string extend");
 		SvGROW(TARG, (count * len) + 1);
 		repeatcpy(SvPVX(TARG) + len, SvPVX(TARG), len, count - 1);
 		SvCUR(TARG) *= count;
@@ -2359,6 +2366,7 @@ PP(pp_complement)
 	register I32 anum;
 	STRLEN len;
 
+	(void)SvPV_nomg(sv,len); /* force check for uninit var */
 	SvSetSV(TARG, sv);
 	tmps = (U8*)SvPV_force(TARG, len);
 	anum = len;
@@ -2406,6 +2414,7 @@ PP(pp_complement)
 	      *result = '\0';
 	      result -= nchar;
 	      sv_setpvn(TARG, (char*)result, nchar);
+	      SvUTF8_off(TARG);
 	  }
 	  Safefree(result);
 	  SETs(TARG);
@@ -3016,6 +3025,19 @@ PP(pp_substr)
 	if (utf8_curlen)
 	    sv_pos_u2b(sv, &pos, &rem);
 	tmps += pos;
+	/* we either return a PV or an LV. If the TARG hasn't been used
+	 * before, or is of that type, reuse it; otherwise use a mortal
+	 * instead. Note that LVs can have an extended lifetime, so also
+	 * dont reuse if refcount > 1 (bug #20933) */
+	if (SvTYPE(TARG) > SVt_NULL) {
+	    if ( (SvTYPE(TARG) == SVt_PVLV)
+		    ? (!lvalue || SvREFCNT(TARG) > 1)
+		    : lvalue)
+	    {
+		TARG = sv_newmortal();
+	    }
+	}
+
 	sv_setpvn(TARG, tmps, rem);
 #ifdef USE_LOCALE_COLLATE
 	sv_unmagic(TARG, PERL_MAGIC_collxfrm);
@@ -3052,8 +3074,6 @@ PP(pp_substr)
 		    sv_setpvn(sv,"",0);	/* avoid lexical reincarnation */
 	    }
 
-	    if (SvREFCNT(TARG) > 1)	/* don't share the TARG (#20933) */
-		TARG = sv_newmortal();
 	    if (SvTYPE(TARG) < SVt_PVLV) {
 		sv_upgrade(TARG, SVt_PVLV);
 		sv_magic(TARG, Nullsv, PERL_MAGIC_substr, Nullch, 0);

@@ -6,7 +6,7 @@
 
 $| = 1;
 
-print "1..1055\n";
+print "1..1056\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -1910,9 +1910,10 @@ print "ok 663\n";
 print "not " unless chr(0xfb4f) =~ /\p{IsHebrew}/; # outside InHebrew
 print "ok 664\n";
 
-# singleton (not in a range, this test must be ignored on EBCDIC)
-print "not " unless chr(0xb5) =~ /\p{IsGreek}/ or ord("A") == 193;
-print "ok 665\n";
+# # singleton (not in a range, this test must be ignored on EBCDIC)
+# print "not " unless chr(0xb5) =~ /\p{IsGreek}/ or ord("A") == 193;
+# print "ok 665\n";
+print "ok 665 # 0xb5 moved from Greek to Common with Unicode 4.0.1\n";
 
 print "not " unless chr(0x37a) =~ /\p{IsGreek}/; # singleton
 print "ok 666\n";
@@ -3255,5 +3256,11 @@ for (120 .. 130) {
     }
 }
 
-# last test 1055
+# perl #25269: panic: pp_match start/end pointers
+ok("a-bc" eq eval {
+	my($x, $y) = "bca" =~ /^(?=.*(a)).*(bc)/;
+	"$x-$y";
+}, 'captures can move backwards in string');
+
+# last test 1056
 

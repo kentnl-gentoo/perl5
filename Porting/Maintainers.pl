@@ -32,16 +32,16 @@ package Maintainers;
 	'lstein'	=> 'Lincoln D. Stein <lds@cpan.org>',
 	'marekr'	=> 'Marek Rouchal <marekr@cpan.org>',
 	'mhx'		=> 'Marcus Holland-Moritz <mhx@cpan.org>',
-	'mjd'		=> 'Mark-Jason Dominus <mjd@cpan.org>',
+	'mjd'		=> 'Mark-Jason Dominus <mjd@plover.com>',
 	'muir'		=> 'David Muir Sharnoff <muir@cpan.org>',
 	'neilb'		=> 'Neil Bowers <neilb@cpan.org>',
 	'ni-s'		=> 'Nick Ing-Simmons <nick@ing-simmons.net>',
 	'p5p'		=> 'perl5-porters <perl5-porters@perl.org>',
 	'perlfaq'	=> 'perlfaq-workers <perlfaq-workers@perl.org>',
-	'perlref'	=> 'Mark-Jason Dominus <mjd@cpan.org>',
 	'petdance'	=> 'Andy Lester <petdance@cpan.org>',
 	'pmqs'		=> 'Paul Marquess <pmqs@cpan.org>',
 	'pvhp'		=> 'Peter Prymmer <pvhp@best.com>',
+	'rgarcia'	=> 'Rafael Garcia-Suarez <rgarcia@cpan.org>',
 	'rmbarker'	=> 'Robin Barker <rmbarker@cpan.org>',
 	'rra'		=> 'Russ Allbery <rra@cpan.org>',
 	'sadahiro'	=> 'SADAHIRO Tomoyuki <SADAHIRO@cpan.org>',
@@ -78,6 +78,13 @@ package Maintainers;
 		'MAINTAINER'	=> 'smccam',
 		'FILES'		=> q[ext/B/B/Deparse.pm ext/B/t/deparse.t],
 		'CPAN'		=> 0,
+		},
+
+	'base' =>
+		{
+		'MAINTAINER'	=> 'mschwern',
+		'FILES'		=> q[lib/base.pm lib/fields.pm lib/base],
+		'CPAN'		=> 1,
 		},
 
 	'bignum' =>
@@ -139,7 +146,7 @@ package Maintainers;
 	'Digest' =>
 		{
 		'MAINTAINER'	=> 'gaas',
-		'FILES'		=> q[lib/Digest.pm lib/Digest/base.pm lib/Digest],
+		'FILES'		=> q[lib/Digest.pm lib/Digest],
 		'CPAN'		=> 1,
 		},
 
@@ -347,10 +354,10 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
-	'perlref' =>
+	'perlreftut' =>
 		{
 		'MAINTAINER'	=> 'mjd',
-		'FILES'		=> q[pod/perlref.pod],
+		'FILES'		=> q[pod/perlreftut.pod],
 		'CPAN'		=> 0,
 		},
 
@@ -425,7 +432,7 @@ package Maintainers;
 
 	'Switch' =>
 		{
-		'MAINTAINER'	=> 'dconway',
+		'MAINTAINER'	=> 'rgarcia',
 		'FILES'		=> q[lib/Switch.pm lib/Switch],
 		'CPAN'		=> 1,
 		},

@@ -34,7 +34,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.8.3
+INST_VER	*= \5.8.4
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -45,7 +45,7 @@ INST_VER	*= \5.8.3
 # the same location.  Commenting it out gives you a simpler
 # installation that is easier to understand for beginners.
 #
-INST_ARCH	*= \$(ARCHNAME)
+#INST_ARCH	*= \$(ARCHNAME)
 
 #
 # uncomment to enable multiple interpreters.  This is need for fork()
@@ -403,7 +403,7 @@ LINK32		= g++
 .END
 LIB32		= ar rc
 IMPLIB		= dlltool
-RSC		= rc
+RSC		= windres
 
 i = .i
 o = .o
@@ -432,8 +432,8 @@ LIBFILES	= $(CRYPT_LIB) $(LIBC) \
 OPTIMIZE	= -g -O2 -DDEBUGGING
 LINK_DBG	= -g
 .ELSE
-OPTIMIZE	= -g -O2
-LINK_DBG	= -g
+OPTIMIZE	= -s -O2
+LINK_DBG	= -s
 .ENDIF
 
 CFLAGS		= $(INCLUDES) $(DEFINES) $(LOCDEFS) $(OPTIMIZE)
@@ -469,9 +469,6 @@ LIBC	= msvcrt.lib
 LIBC	= PerlCRT.lib
 .ENDIF
 
-PERLEXE_RES	=
-PERLDLL_RES	=
-
 .IF  "$(CFG)" == "Debug"
 .IF "$(CCTYPE)" == "MSVC20"
 OPTIMIZE	= -Od -MD -Z7 -DDEBUGGING
@@ -480,8 +477,15 @@ OPTIMIZE	= -O1 -MD -Zi -DDEBUGGING
 .ENDIF
 LINK_DBG	= -debug
 .ELSE
-OPTIMIZE	= -MD -DNDEBUG
-LINK_DBG	= -release
+OPTIMIZE	= -MD -Zi -DNDEBUG
+# we enable debug symbols in release builds also
+LINK_DBG	= -debug -opt:ref,icf
+# you may want to enable this if you want COFF symbols in the executables
+# in addition to the PDB symbols.  The default Dr. Watson that ships with
+# Windows can use the the former but not latter.  The free WinDbg can be
+# installed to get better stack traces from just the PDB symbols, so we
+# avoid the bloat of COFF symbols by default.
+#LINK_DBG	= $(LINK_DBG) -debugtype:both
 .IF "$(WIN64)" == "define"
 # enable Whole Program Optimizations (WPO) and Link Time Code Generation (LTCG)
 OPTIMIZE	+= -Ox -GL
@@ -572,7 +576,11 @@ $(o).dll:
 .ENDIF
 
 .rc.res:
+.IF "$(CCTYPE)" == "GCC"
+	$(RSC) --use-temp-file -i $< -o $@
+.ELSE
 	$(RSC) -i.. $<
+.ENDIF
 
 #
 # various targets
@@ -584,6 +592,10 @@ GLOBEXE		= ..\perlglob.exe
 CONFIGPM	= ..\lib\Config.pm
 MINIMOD		= ..\lib\ExtUtils\Miniperl.pm
 X2P		= ..\x2p\a2p.exe
+
+PERLEXE_ICO	= .\perlexe.ico
+PERLEXE_RES	= .\perlexe.res
+PERLDLL_RES	=
 
 # Nominate a target which causes extensions to be re-built
 # This used to be $(PERLEXE), but at worst it is the .dll that they depend
@@ -801,7 +813,7 @@ DYNAMIC_EXT	= Socket IO Fcntl Opcode SDBM_File POSIX attrs Thread B re \
 		Data/Dumper Devel/Peek ByteLoader Devel/DProf File/Glob \
 		Sys/Hostname Storable Filter/Util/Call Encode \
 		Digest/MD5 PerlIO/scalar MIME/Base64 Time/HiRes \
-		Unicode/Normalize
+		Unicode/Normalize Win32
 STATIC_EXT	= DynaLoader
 NONXS_EXT	= Errno
 
@@ -1008,8 +1020,11 @@ perllib$(o)	: perllib.c .\perlhost.h .\vdir.h .\vmem.h
 $(MINI_OBJ)	: $(CORE_NOCFG_H)
 
 $(WIN32_OBJ)	: $(CORE_H)
+
 $(CORE_OBJ)	: $(CORE_H)
+
 $(DLL_OBJ)	: $(CORE_H)
+
 $(X2P_OBJ)	: $(CORE_H)
 
 perldll.def : $(MINIPERL) $(CONFIGPM) ..\global.sym ..\pp.sym ..\makedef.pl
@@ -1041,6 +1056,11 @@ $(PERLDLL): perldll.def $(PERLDLL_OBJ) $(PERLDLL_RES)
 	        $(PERLDLL_RES) $(PERLDLL_OBJ:s,\,\\))
 .ENDIF
 	$(XCOPY) $(PERLIMPLIB) $(COREDIR)
+
+$(PERLEXE_ICO): $(MINIPERL) makeico.pl
+	$(MINIPERL) makeico.pl > $@
+
+$(PERLEXE_RES): perlexe.rc $(PERLEXE_ICO)
 
 $(MINIMOD) : $(MINIPERL) ..\minimod.pl
 	cd .. && miniperl minimod.pl > lib\ExtUtils\Miniperl.pm
@@ -1113,9 +1133,20 @@ $(EXTDIR)\DynaLoader\dl_win32.xs: dl_win32.xs
 #----------------------------------------------------------------------------------
 Extensions : buildext.pl $(PERLDEP) $(CONFIGPM)
 	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR)
+	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext
+
+# Note: The next two targets explicitly remove a "blibdirs.exists" file that
+# currerntly gets left behind, until CPAN RT Ticket #5616 is resolved.
 
 Extensions_clean :
 	-if exist $(MINIPERL) $(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) clean
+	-if exist $(MINIPERL) $(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext clean
+	-if exist $(EXTDIR)\SDBM_File\sdbm\blibdirs.exists del /f $(EXTDIR)\SDBM_File\sdbm\blibdirs.exists
+
+Extensions_realclean :
+	-if exist $(MINIPERL) $(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) realclean
+	-if exist $(MINIPERL) $(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext realclean
+	-if exist $(EXTDIR)\SDBM_File\sdbm\blibdirs.exists del /f $(EXTDIR)\SDBM_File\sdbm\blibdirs.exists
 
 #----------------------------------------------------------------------------------
 
@@ -1166,7 +1197,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vms      ..\pod\perlvms.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl583delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl584delta.pod ..\pod\perldelta.pod
 	cd ..\pod && $(MAKE) -f ..\win32\pod.mak converters
 	cd ..\lib && $(PERLEXE) lib_pm.PL
 	$(PERLEXE) $(PL2BAT) $(UTILS)
@@ -1174,40 +1205,47 @@ utils: $(PERLEXE) $(X2P)
 # Note that the pod cleanup in this next section is parsed (and regenerated
 # by pod/buildtoc so please check that script before making changes here
 
-distclean: clean
+distclean: realclean
 	-del /f $(MINIPERL) $(PERLEXE) $(PERLDLL) $(GLOBEXE) \
 		$(PERLIMPLIB) ..\miniperl$(a) $(MINIMOD)
 	-del /f *.def *.map
+	-del /f $(DYNALOADER).c
 	-del /f $(EXTDIR)\DynaLoader\dl_win32.xs
+	-del /f $(EXTDIR)\DynaLoader\DynaLoader.pm
+	-del /f $(EXTDIR)\DynaLoader\XSLoader.pm
+	-del /f $(LIBDIR)\Encode.pm $(LIBDIR)\encoding.pm $(LIBDIR)\Errno.pm
+	-del /f $(LIBDIR)\Config.pod $(LIBDIR)\POSIX.pod $(LIBDIR)\threads.pm
 	-del /f $(LIBDIR)\.exists $(LIBDIR)\attrs.pm $(LIBDIR)\DynaLoader.pm
-	-del /f $(LIBDIR)\XSLoader.pm
+	-del /f $(LIBDIR)\XSLoader.pm $(LIBDIR)\lib.pm
 	-del /f $(LIBDIR)\Fcntl.pm $(LIBDIR)\IO.pm $(LIBDIR)\Opcode.pm
 	-del /f $(LIBDIR)\ops.pm $(LIBDIR)\Safe.pm
 	-del /f $(LIBDIR)\SDBM_File.pm $(LIBDIR)\Socket.pm $(LIBDIR)\POSIX.pm
 	-del /f $(LIBDIR)\B.pm $(LIBDIR)\O.pm $(LIBDIR)\re.pm
-	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
-	-del /f $(LIBDIR)\PerlIO\scalar.pm
+	-del /f $(LIBDIR)\ByteLoader.pm
 	-del /f $(LIBDIR)\Devel\Peek.pm $(LIBDIR)\Devel\DProf.pm
+	-del /f $(LIBDIR)\Devel\PPPort.pm
 	-del /f $(LIBDIR)\File\Glob.pm
 	-del /f $(LIBDIR)\Storable.pm
-	-del /f $(LIBDIR)\Filter\Util\Call.pm
 	-del /f $(LIBDIR)\Digest\MD5.pm
-	-del /f $(LIBDIR)\MIME\Base64.pm
-	-del /f $(LIBDIR)\MIME\QuotedPrint.pm
+	-del /f $(LIBDIR)\PerlIO\encoding.pm
+	-del /f $(LIBDIR)\PerlIO\scalar.pm
+	-del /f $(LIBDIR)\PerlIO\via.pm
+	-del /f $(LIBDIR)\Sys\Hostname.pm
+	-del /f $(LIBDIR)\Thread\Signal.pm $(LIBDIR)\Thread\Specific.pm
+	-del /f $(LIBDIR)\threads\shared.pm
 	-del /f $(LIBDIR)\Time\HiRes.pm
-	-del /f $(LIBDIR)\List\Util.pm
-	-del /f $(LIBDIR)\Scalar\Util.pm
 	-del /f $(LIBDIR)\Unicode\Normalize.pm
+	-del /f $(LIBDIR)\Win32.pm
 	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO
 	-if exist $(LIBDIR)\IO rmdir /s $(LIBDIR)\IO
 	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B
 	-if exist $(LIBDIR)\B rmdir /s $(LIBDIR)\B
 	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data
 	-if exist $(LIBDIR)\Data rmdir /s $(LIBDIR)\Data
+	-if exist $(LIBDIR)\Encode rmdir /s /q $(LIBDIR)\Encode
+	-if exist $(LIBDIR)\Encode rmdir /s $(LIBDIR)\Encode
 	-if exist $(LIBDIR)\Filter\Util rmdir /s /q $(LIBDIR)\Filter\Util
 	-if exist $(LIBDIR)\Filter\Util rmdir /s $(LIBDIR)\Filter\Util
-	-if exist $(LIBDIR)\Digest rmdir /s /q $(LIBDIR)\Digest
-	-if exist $(LIBDIR)\Digest rmdir /s $(LIBDIR)\Digest
 	-if exist $(LIBDIR)\MIME rmdir /s /q $(LIBDIR)\MIME
 	-if exist $(LIBDIR)\MIME rmdir /s $(LIBDIR)\MIME
 	-if exist $(LIBDIR)\List rmdir /s /q $(LIBDIR)\List
@@ -1225,8 +1263,7 @@ distclean: clean
 	    perlmacosx.pod perlmint.pod perlmpeix.pod perlnetware.pod \
 	    perlos2.pod perlos390.pod perlos400.pod perlplan9.pod \
 	    perlqnx.pod perlsolaris.pod perltru64.pod perltw.pod \
-	    perluts.pod perlvmesa.pod perlvms.pod perlvms.pod perlvos.pod \
-	    perlwin32.pod \
+	    perluts.pod perlvmesa.pod perlvms.pod perlvos.pod perlwin32.pod \
 	    pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
@@ -1236,6 +1273,7 @@ distclean: clean
 	-del /f ..\config.sh ..\splittree.pl perlmain.c dlutils.c config.h.new
 	-del /f $(CONFIGPM)
 	-del /f bin\*.bat
+	-del /f $(PERLEXE_ICO) perl.base
 	-cd .. && del /s *$(a) *.map *.pdb *.ilk *.bs *$(o) .exists pm_to_blib
 	-cd $(EXTDIR) && del /s *.def Makefile Makefile.old
 	-if exist $(AUTODIR) rmdir /s /q $(AUTODIR)
@@ -1249,6 +1287,8 @@ installbare : $(RIGHTMAKE) utils
 	$(PERLEXE) ..\installperl
 	if exist $(WPERLEXE) $(XCOPY) $(WPERLEXE) $(INST_BIN)\*.*
 	$(XCOPY) $(GLOBEXE) $(INST_BIN)\*.*
+	if exist ..\perl*.pdb $(XCOPY) ..\perl*.pdb $(INST_BIN)\*.*
+	if exist ..\x2p\a2p.pdb $(XCOPY) ..\x2p\a2p.pdb $(INST_BIN)\*.*
 	$(XCOPY) bin\*.bat $(INST_SCRIPT)\*.*
 
 installhtml : doc
@@ -1260,16 +1300,17 @@ inst_lib : $(CONFIGPM)
 	$(RCOPY) ..\lib $(INST_LIB)\*.*
 
 minitest : $(MINIPERL) $(GLOBEXE) $(CONFIGPM) utils
-	$(XCOPY) $(MINIPERL) ..\t\perl.exe
+	$(XCOPY) $(MINIPERL) ..\t\$(NULL)
+	if exist ..\t\perl.exe del /f ..\t\perl.exe
+	rename ..\t\miniperl.exe perl.exe
 .IF "$(CCTYPE)" == "BORLAND"
 	$(XCOPY) $(GLOBBAT) ..\t\$(NULL)
 .ELSE
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
 .ENDIF
 	attrib -r ..\t\*.*
-	copy test ..\t
 	cd ..\t && \
-	$(MINIPERL) -I..\lib test base/*.t comp/*.t cmd/*.t io/*.t op/*.t pragma/*.t
+	$(MINIPERL) -I..\lib harness base/*.t comp/*.t cmd/*.t io/*.t op/*.t pragma/*.t
 
 test-prep : all utils
 	$(XCOPY) $(PERLEXE) ..\t\$(NULL)
@@ -1297,7 +1338,7 @@ _test : $(RIGHTMAKE)
 .ENDIF
 	cd ..\t && $(PERLEXE) -I..\lib harness
 
-clean : Extensions_clean
+_clean :
 	-@erase miniperlmain$(o)
 	-@erase $(MINIPERL)
 	-@erase perlglob$(o)
@@ -1319,6 +1360,10 @@ clean : Extensions_clean
 	-@erase ..\x2p\*.exe ..\x2p\*.bat
 	-@erase *.ilk
 	-@erase *.pdb
+
+clean : Extensions_clean _clean
+
+realclean : Extensions_realclean _clean
 
 # Handy way to run perlbug -ok without having to install and run the
 # installed perlbug. We don't re-run the tests here - we trust the user.

@@ -1,7 +1,7 @@
 /*    sv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -457,13 +457,13 @@ Tells an SV that it is an integer and disables all other OK bits.
 =for apidoc Am|void|SvIOK_only_UV|SV* sv
 Tells and SV that it is an unsigned integer and disables all other OK bits.
 
-=for apidoc Am|void|SvIOK_UV|SV* sv
+=for apidoc Am|bool|SvIOK_UV|SV* sv
 Returns a boolean indicating whether the SV contains an unsigned integer.
 
 =for apidoc Am|void|SvUOK|SV* sv
 Returns a boolean indicating whether the SV contains an unsigned integer.
 
-=for apidoc Am|void|SvIOK_notUV|SV* sv
+=for apidoc Am|bool|SvIOK_notUV|SV* sv
 Returns a boolean indicating whether the SV contains a signed integer.
 
 =for apidoc Am|bool|SvNOK|SV* sv
@@ -603,7 +603,7 @@ Set the length of the string which is in the SV.  See C<SvCUR>.
 				    SvFLAGS(sv) |= (SVf_NOK|SVp_NOK))
 
 /*
-=for apidoc Am|void|SvUTF8|SV* sv
+=for apidoc Am|bool|SvUTF8|SV* sv
 Returns a boolean indicating whether the SV contains UTF-8 encoded data.
 
 =for apidoc Am|void|SvUTF8_on|SV *sv
@@ -761,22 +761,22 @@ and leaves the UTF-8 status as it was.
 		(void) SvIV(sv); } STMT_END
 #define SvIV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
-		(((XPVIV*)  SvANY(sv))->xiv_iv = val); } STMT_END
+		(SvIVX(sv) = (val)); } STMT_END
 #define SvNV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) == SVt_NV || SvTYPE(sv) >= SVt_PVNV); \
-		(((XPVNV*)  SvANY(sv))->xnv_nv = val); } STMT_END
+		(SvNVX(sv) = (val)); } STMT_END
 #define SvPV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_pv = val); } STMT_END
+		(SvPVX(sv) = (val)); } STMT_END
 #define SvCUR_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_cur = val); } STMT_END
+		(SvCUR(sv) = (val)); } STMT_END
 #define SvLEN_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_len = val); } STMT_END
+		(SvLEN(sv) = (val)); } STMT_END
 #define SvEND_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_cur = val - SvPVX(sv)); } STMT_END
+		(SvCUR(sv) = (val) - SvPVX(sv)); } STMT_END
 
 #define BmRARE(sv)	((XPVBM*)  SvANY(sv))->xbm_rare
 #define BmUSEFUL(sv)	((XPVBM*)  SvANY(sv))->xbm_useful
@@ -1006,7 +1006,7 @@ scalar.
 
 #define SvPVbyte_force(sv, lp) \
     ((SvFLAGS(sv) & (SVf_POK|SVf_UTF8|SVf_THINKFIRST)) == (SVf_POK) \
-     ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvbyte_force(sv, &lp))
+     ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvbyten_force(sv, &lp))
 
 #define SvPVbyte_nolen(sv) \
     ((SvFLAGS(sv) & (SVf_POK|SVf_UTF8)) == (SVf_POK)\

@@ -33,6 +33,11 @@
 ~FLAGS~
 
 #: >>>>> Architecture-specific options <<<<<
+.ifdef IXE
+O = .ibj
+OLB = .ilb
+E = .ixe
+.else
 .ifdef AXE
 # File type to use for object files
 O = .abj
@@ -48,13 +53,19 @@ OLB = .olb
 # File type to use for executable images
 E = .exe
 .endif
+.endif
 
+.ifdef __IA64__
+ARCH = VMS_IA64
+OBJVAL = $(O)
+.else
 .ifdef __AXP__
 ARCH = VMS_AXP
 OBJVAL = $(O)
 .else
 ARCH = VMS_VAX
 OBJVAL = $(MMS$TARGET_NAME)$(O)
+.endif
 .endif
 
 PERL_VERSION = ~PV~
@@ -323,7 +334,7 @@ LIBPREREQ = $(ARCHDIR)Config.pm [.lib.VMS]Filespec.pm [.lib]DynaLoader.pm [.lib]
 
 utils1 = [.lib.pod]perldoc.com [.lib.ExtUtils]Miniperl.pm [.utils]c2ph.com [.utils]h2ph.com 
 utils2 = [.utils]h2xs.com [.utils]libnetcfg.com [.lib]perlbug.com [.lib]perlcc.com [.utils]dprofpp.com 
-utils3 = [.utils]perlivp.com [.lib]splain.com [.utils]pl2pm.com [.lib.ExtUtils]xsubpp.com
+utils3 = [.utils]perlivp.com [.lib]splain.com [.utils]pl2pm.com [.utils]xsubpp.com [.utils]instmodsh.com
 utils4 = [.utils]enc2xs.com [.utils]piconv.com [.utils]cpan.com [.utils]prove.com
 
 .ifdef NOX2P
@@ -356,32 +367,32 @@ extra.pods : miniperl
 
 pod0 = [.lib.pod]perl.pod [.lib.pod]perl5004delta.pod [.lib.pod]perl5005delta.pod [.lib.pod]perl561delta.pod [.lib.pod]perl56delta.pod
 pod1 = [.lib.pod]perl570delta.pod [.lib.pod]perl571delta.pod [.lib.pod]perl572delta.pod [.lib.pod]perl573delta.pod [.lib.pod]perl581delta.pod
-pod2 = [.lib.pod]perl582delta.pod [.lib.pod]perl583delta.pod [.lib.pod]perl58delta.pod [.lib.pod]perlaix.pod [.lib.pod]perlamiga.pod [.lib.pod]perlapi.pod
-pod3 = [.lib.pod]perlapio.pod [.lib.pod]perlapollo.pod [.lib.pod]perlartistic.pod [.lib.pod]perlbeos.pod [.lib.pod]perlbook.pod [.lib.pod]perlboot.pod
-pod4 = [.lib.pod]perlbot.pod [.lib.pod]perlbs2000.pod [.lib.pod]perlcall.pod [.lib.pod]perlce.pod [.lib.pod]perlcheat.pod [.lib.pod]perlclib.pod
-pod5 = [.lib.pod]perlcn.pod [.lib.pod]perlcompile.pod [.lib.pod]perlcygwin.pod [.lib.pod]perldata.pod [.lib.pod]perldbmfilter.pod [.lib.pod]perldebguts.pod
-pod6 = [.lib.pod]perldebtut.pod [.lib.pod]perldebug.pod [.lib.pod]perldelta.pod [.lib.pod]perldgux.pod [.lib.pod]perldiag.pod [.lib.pod]perldoc.pod
-pod7 = [.lib.pod]perldos.pod [.lib.pod]perldsc.pod [.lib.pod]perlebcdic.pod [.lib.pod]perlembed.pod [.lib.pod]perlepoc.pod [.lib.pod]perlfaq.pod
-pod8 = [.lib.pod]perlfaq1.pod [.lib.pod]perlfaq2.pod [.lib.pod]perlfaq3.pod [.lib.pod]perlfaq4.pod [.lib.pod]perlfaq5.pod [.lib.pod]perlfaq6.pod
-pod9 = [.lib.pod]perlfaq7.pod [.lib.pod]perlfaq8.pod [.lib.pod]perlfaq9.pod [.lib.pod]perlfilter.pod [.lib.pod]perlfork.pod [.lib.pod]perlform.pod
-pod10 = [.lib.pod]perlfreebsd.pod [.lib.pod]perlfunc.pod [.lib.pod]perlgpl.pod [.lib.pod]perlguts.pod [.lib.pod]perlhack.pod [.lib.pod]perlhist.pod
-pod11 = [.lib.pod]perlhpux.pod [.lib.pod]perlhurd.pod [.lib.pod]perlintern.pod [.lib.pod]perlintro.pod [.lib.pod]perliol.pod [.lib.pod]perlipc.pod
-pod12 = [.lib.pod]perlirix.pod [.lib.pod]perljp.pod [.lib.pod]perlko.pod [.lib.pod]perllexwarn.pod [.lib.pod]perllocale.pod [.lib.pod]perllol.pod
-pod13 = [.lib.pod]perlmachten.pod [.lib.pod]perlmacos.pod [.lib.pod]perlmacosx.pod [.lib.pod]perlmint.pod [.lib.pod]perlmod.pod [.lib.pod]perlmodinstall.pod
-pod14 = [.lib.pod]perlmodlib.pod [.lib.pod]perlmodstyle.pod [.lib.pod]perlmpeix.pod [.lib.pod]perlnetware.pod [.lib.pod]perlnewmod.pod
-pod15 = [.lib.pod]perlnumber.pod [.lib.pod]perlobj.pod [.lib.pod]perlop.pod [.lib.pod]perlopentut.pod [.lib.pod]perlos2.pod [.lib.pod]perlos390.pod
-pod16 = [.lib.pod]perlos400.pod [.lib.pod]perlothrtut.pod [.lib.pod]perlpacktut.pod [.lib.pod]perlplan9.pod [.lib.pod]perlpod.pod [.lib.pod]perlpodspec.pod
-pod17 = [.lib.pod]perlport.pod [.lib.pod]perlqnx.pod [.lib.pod]perlre.pod [.lib.pod]perlref.pod [.lib.pod]perlreftut.pod [.lib.pod]perlrequick.pod
-pod18 = [.lib.pod]perlreref.pod [.lib.pod]perlretut.pod [.lib.pod]perlrun.pod [.lib.pod]perlsec.pod [.lib.pod]perlsolaris.pod [.lib.pod]perlstyle.pod
-pod19 = [.lib.pod]perlsub.pod [.lib.pod]perlsyn.pod [.lib.pod]perlthrtut.pod [.lib.pod]perltie.pod [.lib.pod]perltoc.pod [.lib.pod]perltodo.pod
-pod20 = [.lib.pod]perltooc.pod [.lib.pod]perltoot.pod [.lib.pod]perltrap.pod [.lib.pod]perltru64.pod [.lib.pod]perltw.pod [.lib.pod]perlunicode.pod
-pod21 = [.lib.pod]perluniintro.pod [.lib.pod]perlutil.pod [.lib.pod]perluts.pod [.lib.pod]perlvar.pod [.lib.pod]perlvmesa.pod [.lib.pod]perlvms.pod
-pod22 = [.lib.pod]perlvos.pod [.lib.pod]perlwin32.pod [.lib.pod]perlxs.pod [.lib.pod]perlxstut.pod
+pod2 = [.lib.pod]perl582delta.pod [.lib.pod]perl583delta.pod [.lib.pod]perl584delta.pod [.lib.pod]perl58delta.pod [.lib.pod]perlaix.pod
+pod3 = [.lib.pod]perlamiga.pod [.lib.pod]perlapi.pod [.lib.pod]perlapio.pod [.lib.pod]perlapollo.pod [.lib.pod]perlartistic.pod [.lib.pod]perlbeos.pod
+pod4 = [.lib.pod]perlbook.pod [.lib.pod]perlboot.pod [.lib.pod]perlbot.pod [.lib.pod]perlbs2000.pod [.lib.pod]perlcall.pod [.lib.pod]perlce.pod
+pod5 = [.lib.pod]perlcheat.pod [.lib.pod]perlclib.pod [.lib.pod]perlcn.pod [.lib.pod]perlcompile.pod [.lib.pod]perlcygwin.pod [.lib.pod]perldata.pod
+pod6 = [.lib.pod]perldbmfilter.pod [.lib.pod]perldebguts.pod [.lib.pod]perldebtut.pod [.lib.pod]perldebug.pod [.lib.pod]perldelta.pod [.lib.pod]perldgux.pod
+pod7 = [.lib.pod]perldiag.pod [.lib.pod]perldoc.pod [.lib.pod]perldos.pod [.lib.pod]perldsc.pod [.lib.pod]perlebcdic.pod [.lib.pod]perlembed.pod
+pod8 = [.lib.pod]perlepoc.pod [.lib.pod]perlfaq.pod [.lib.pod]perlfaq1.pod [.lib.pod]perlfaq2.pod [.lib.pod]perlfaq3.pod [.lib.pod]perlfaq4.pod
+pod9 = [.lib.pod]perlfaq5.pod [.lib.pod]perlfaq6.pod [.lib.pod]perlfaq7.pod [.lib.pod]perlfaq8.pod [.lib.pod]perlfaq9.pod [.lib.pod]perlfilter.pod
+pod10 = [.lib.pod]perlfork.pod [.lib.pod]perlform.pod [.lib.pod]perlfreebsd.pod [.lib.pod]perlfunc.pod [.lib.pod]perlgpl.pod [.lib.pod]perlguts.pod
+pod11 = [.lib.pod]perlhack.pod [.lib.pod]perlhist.pod [.lib.pod]perlhpux.pod [.lib.pod]perlhurd.pod [.lib.pod]perlintern.pod [.lib.pod]perlintro.pod
+pod12 = [.lib.pod]perliol.pod [.lib.pod]perlipc.pod [.lib.pod]perlirix.pod [.lib.pod]perljp.pod [.lib.pod]perlko.pod [.lib.pod]perllexwarn.pod
+pod13 = [.lib.pod]perllocale.pod [.lib.pod]perllol.pod [.lib.pod]perlmachten.pod [.lib.pod]perlmacos.pod [.lib.pod]perlmacosx.pod [.lib.pod]perlmint.pod
+pod14 = [.lib.pod]perlmod.pod [.lib.pod]perlmodinstall.pod [.lib.pod]perlmodlib.pod [.lib.pod]perlmodstyle.pod [.lib.pod]perlmpeix.pod
+pod15 = [.lib.pod]perlnetware.pod [.lib.pod]perlnewmod.pod [.lib.pod]perlnumber.pod [.lib.pod]perlobj.pod [.lib.pod]perlop.pod [.lib.pod]perlopentut.pod
+pod16 = [.lib.pod]perlos2.pod [.lib.pod]perlos390.pod [.lib.pod]perlos400.pod [.lib.pod]perlothrtut.pod [.lib.pod]perlpacktut.pod [.lib.pod]perlplan9.pod
+pod17 = [.lib.pod]perlpod.pod [.lib.pod]perlpodspec.pod [.lib.pod]perlport.pod [.lib.pod]perlqnx.pod [.lib.pod]perlre.pod [.lib.pod]perlref.pod
+pod18 = [.lib.pod]perlreftut.pod [.lib.pod]perlrequick.pod [.lib.pod]perlreref.pod [.lib.pod]perlretut.pod [.lib.pod]perlrun.pod [.lib.pod]perlsec.pod
+pod19 = [.lib.pod]perlsolaris.pod [.lib.pod]perlstyle.pod [.lib.pod]perlsub.pod [.lib.pod]perlsyn.pod [.lib.pod]perlthrtut.pod [.lib.pod]perltie.pod
+pod20 = [.lib.pod]perltoc.pod [.lib.pod]perltodo.pod [.lib.pod]perltooc.pod [.lib.pod]perltoot.pod [.lib.pod]perltrap.pod [.lib.pod]perltru64.pod
+pod21 = [.lib.pod]perltw.pod [.lib.pod]perlunicode.pod [.lib.pod]perluniintro.pod [.lib.pod]perlutil.pod [.lib.pod]perluts.pod [.lib.pod]perlvar.pod
+pod22 = [.lib.pod]perlvmesa.pod [.lib.pod]perlvms.pod [.lib.pod]perlvos.pod [.lib.pod]perlwin32.pod [.lib.pod]perlxs.pod [.lib.pod]perlxstut.pod
 pod = $(pod0) $(pod1) $(pod2) $(pod3) $(pod4) $(pod5) $(pod6) $(pod7) $(pod8) $(pod9) $(pod10) $(pod11) $(pod12) $(pod13) $(pod14) $(pod15) $(pod16) $(pod17) $(pod18) $(pod19) $(pod20) $(pod21) $(pod22)
 
 # Would be useful to automate the generation of this rule from pod/buildtoc
 # Plus its corresponding delete in the clean target.
-[.pod]perldelta.pod : [.pod]perl583delta.pod
+[.pod]perldelta.pod : [.pod]perl584delta.pod
 	Copy/NoConfirm/Log $(MMS$SOURCE) $(MMS$TARGET)
 
 perlpods : $(pod)
@@ -536,6 +547,9 @@ dynext : $(LIBPREREQ) $(DBG)perlshr$(E) preplibrary
 [.utils]h2xs.com : [.utils]h2xs.PL $(ARCHDIR)Config.pm
 	$(MINIPERL) $(MMS$SOURCE)
 
+[.utils]instmodsh.com : [.utils]instmodsh.PL $(ARCHDIR)Config.pm
+	$(MINIPERL) $(MMS$SOURCE)
+
 [.utils]libnetcfg.com : [.utils]libnetcfg.PL $(ARCHDIR)Config.pm
        $(MINIPERL) $(MMS$SOURCE)
 
@@ -563,8 +577,8 @@ dynext : $(LIBPREREQ) $(DBG)perlshr$(E) preplibrary
 [.x2p]s2p.com : [.x2p]s2p.PL $(ARCHDIR)Config.pm
 	$(MINIPERL) $(MMS$SOURCE)
 
-[.lib.ExtUtils]xsubpp.com : [.lib.ExtUtils]xsubpp 
-	Copy/NoConfirm/Log $(MMS$SOURCE) [.lib.ExtUtils]xsubpp.com
+[.utils]xsubpp.com : [.utils]xsubpp.PL $(ARCHDIR)Config.pm
+	$(MINIPERL) $(MMS$SOURCE)
 
 # Rename catches problem with some DECC versions in which object file is
 # placed in current default dir, not same one as source file.
@@ -680,6 +694,10 @@ preplibrary : $(MINIPERL_EXE) $(LIBPREREQ)
 	Copy/NoConfirm/Log $(MMS$SOURCE) [.lib.pod]
 
 [.lib.pod]perl583delta.pod : [.pod]perl583delta.pod
+	@ If F$Search("[.lib]pod.dir").eqs."" Then Create/Directory [.lib.pod]
+	Copy/NoConfirm/Log $(MMS$SOURCE) [.lib.pod]
+
+[.lib.pod]perl584delta.pod : [.pod]perl584delta.pod
 	@ If F$Search("[.lib]pod.dir").eqs."" Then Create/Directory [.lib.pod]
 	Copy/NoConfirm/Log $(MMS$SOURCE) [.lib.pod]
 
@@ -1579,8 +1597,6 @@ tidy : cleanlis
 	- If F$Search("[...]*$(E);-1").nes."" Then Purge/NoConfirm/Log [...]*$(E)
 	- If F$Search("Config.H;-1").nes."" Then Purge/NoConfirm/Log Config.H
 	- If F$Search("Config.SH;-1").nes."" Then Purge/NoConfirm/Log Config.SH
-	- If F$Search("perly.c;-1").nes."" Then Purge/NoConfirm/Log perly.c
-	- If F$Search("perly.h;-1").nes."" Then Purge/NoConfirm/Log perly.h
 	- If F$Search("VMSish.H;-1").nes."" Then Purge/NoConfirm/Log VMSish.H
 	- If F$Search("VMS.C;-1")   .nes."" Then Purge/NoConfirm/Log VMS.C
 	- If F$Search("Perlmain.C;-1")   .nes."" Then Purge/NoConfirm/Log Perlmain.C
@@ -1613,10 +1629,6 @@ clean : tidy cleantest
 	- If F$Search("[...]*$(O);*") .nes."" Then Delete/NoConfirm/Log [...]*$(O);*
 	- If F$Search(F$Parse("Sys$Disk:[]","$(SOCKH)")).nes."" Then Delete/NoConfirm/Log $(SOCKH);*
 	- If F$Search(F$Parse("Sys$Disk:[]","$(SOCKC)")).nes."" Then Delete/NoConfirm/Log $(SOCKC);*
-	- If F$Search("perly.c").nes."" Then Delete/NoConfirm/Log perly.c;*
-	- Copy [.vms]perly_c.vms []perly.c
-	- If F$Search("perly.h").nes."" Then Delete/NoConfirm/Log perly.h;*
-	- Copy [.vms]perly_h.vms []perly.h
 	- If F$Search("VMSish.H").nes."" Then Delete/NoConfirm/Log VMSish.H;*
 	- If F$Search("VMS.C")   .nes."" Then Delete/NoConfirm/Log VMS.C;*
 	- If F$Search("Perlmain.C")   .nes."" Then Delete/NoConfirm/Log Perlmain.C;*

@@ -1361,8 +1361,8 @@ See L<perlfunc/pack>.
 
 =item (Do you need to predeclare %s?)
 
-(S) This is an educated guess made in conjunction with the message "%s
-found where operator expected".  It often means a subroutine or module
+(S syntax) This is an educated guess made in conjunction with the message
+"%s found where operator expected".  It often means a subroutine or module
 name is being referenced that hasn't been declared yet.  This may be
 because of ordering problems in your file, or because of a missing
 "sub", "package", "require", or "use" statement.  If you're referencing
@@ -1382,8 +1382,8 @@ already been freed.
 
 =item elseif should be elsif
 
-(S) There is no keyword "elseif" in Perl because Larry thinks it's ugly.
-Your code will be interpreted as an attempt to call a method named
+(S syntax) There is no keyword "elseif" in Perl because Larry thinks it's
+ugly. Your code will be interpreted as an attempt to call a method named
 "elseif" for the class returned by the following block.  This is
 unlikely to be what you want.
 
@@ -1575,8 +1575,8 @@ when you meant
 
 =item %s found where operator expected
 
-(S) The Perl lexer knows whether to expect a term or an operator.  If it
-sees what it knows to be a term when it was expecting to see an
+(S syntax) The Perl lexer knows whether to expect a term or an operator.
+If it sees what it knows to be a term when it was expecting to see an
 operator, it gives you this warning.  Usually it indicates that an
 operator or delimiter was omitted, such as a semicolon.
 
@@ -2096,8 +2096,8 @@ can vary from one line to the next.
 
 =item (Missing operator before %s?)
 
-(S) This is an educated guess made in conjunction with the message "%s
-found where operator expected".  Often the missing operator is a comma.
+(S syntax) This is an educated guess made in conjunction with the message
+"%s found where operator expected".  Often the missing operator is a comma.
 
 =item Missing right brace on %s
 
@@ -2111,8 +2111,8 @@ were last editing.
 
 =item (Missing semicolon on previous line?)
 
-(S) This is an educated guess made in conjunction with the message "%s
-found where operator expected".  Don't automatically put a semicolon on
+(S syntax) This is an educated guess made in conjunction with the message
+"%s found where operator expected".  Don't automatically put a semicolon on
 the previous line just because you saw this message.
 
 =item Modification of a read-only value attempted
@@ -2658,6 +2658,11 @@ page.  See L<perlform>.
 
 (P) An internal error.
 
+=item panic: array extend
+
+(P) An attempt was made to extend an array beyond the largest possible
+memory allocation.
+
 =item panic: ck_grep
 
 (P) Failed an internal consistency check trying to compile a grep.
@@ -2734,6 +2739,11 @@ scope.
 (P) The savestack probably got out of sync.  At least, there was an
 invalid enum on the top of it.
 
+=item panic: list extend
+
+(P) An attempt was made to extend a list beyond the largest possible
+memory allocation.
+
 =item panic: magic_killbackrefs
 
 (P) Failed an internal consistency check while trying to reset all weak
@@ -2746,6 +2756,10 @@ references to an object.
 =item panic: mapstart
 
 (P) The compiler is screwed up with respect to the map() function.
+
+=item panic: memory wrap
+
+(P) Something tried to allocate more memory than possible.
 
 =item panic: null array
 
@@ -2813,6 +2827,11 @@ then discovered it wasn't a subroutine or eval context.
 =item panic: scan_num
 
 (P) scan_num() got called on something that wasn't a number.
+
+=item panic: string extend
+
+(P) An attempt was made to extend a string beyond the largest possible
+memory allocation.
 
 =item panic: sv_insert
 
@@ -3209,6 +3228,12 @@ expression compiler gave it.
 
 (P) A "can't happen" error, because safemalloc() should have caught it
 earlier.
+
+=item Repeated format line will never terminate (~~ and @# incompatible)
+
+(F) Your format containes the ~~ repeat-until-blank sequence and a
+numeric field that will never go blank so that the repetition never
+terminates. You might use ^# instead.  See L<perlform>.
 
 =item Reversed %s= operator
 
@@ -3656,6 +3681,11 @@ to the probings of Configure.
 linkhood if the last stat that wrote to the stat buffer already went
 past the symlink to get to the real file.  Use an actual filename
 instead.
+
+=item The 'unique' attribute may only be applied to 'our' variables
+
+(F) Currently this attribute is not supported on C<my> or C<sub>
+declarations.  See L<perlfunc/our>.
 
 =item This Perl can't reset CRTL environ elements (%s)
 
