@@ -40,6 +40,7 @@ case "$cc" in
     *) test -f /usr/lib32/libm.so && cc='cc -n32' ;;
     esac    	
 esac
+test -z "$cc" && cc=cc
 
 case "$use64bitint" in
 $define|true|[yY]*)
@@ -141,8 +142,17 @@ case "$cc" in
 	ld=$cc
 
 	# perl's malloc can return improperly aligned buffer
-	# usemymalloc='undef'
-malloc_cflags='ccflags="-DSTRICT_ALIGNMENT $ccflags"'
+	# which (under 5.6.0RC1) leads into really bizarre bus errors
+	# and freak test failures (lib/safe1 #18, for example),
+	# even more so with -Duse64bitall: for example lib/io_linenumtb.
+	# fails under the harness but succeeds when run separately,
+	# under make test pragma/warnings #98 fails, and lib/io_dir
+	# apparently coredumps (the last two don't happen under
+    	# the harness.  Helmut Jarausch is seeing bus errors from
+        # miniperl, as was Scott Henry with snapshots from just before
+	# the RC1. --jhi
+	usemymalloc='undef'
+#malloc_cflags='ccflags="-DSTRICT_ALIGNMENT $ccflags"'
 
 	nm_opt='-p'
 	nm_so_opt='-p'
@@ -205,6 +215,10 @@ esac
 
 # Don't groan about unused libraries.
 ldflags="$ldflags -Wl,-woff,84"
+
+case "`$cc -version 2>&1`" in
+*7.2.*) op_cflags='optimize=-O1' ;; # workaround for an optimizer bug
+esac
 
 # We don't want these libraries.
 # Socket networking is in libc, these are not installed by default,

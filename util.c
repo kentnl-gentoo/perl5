@@ -154,7 +154,9 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 Free_t
 Perl_safesysfree(Malloc_t where)
 {
+#ifdef PERL_IMPLICIT_SYS
     dTHX;
+#endif
     DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%"UVxf": (%05ld) free\n",PTR2UV(where),(long)PL_an++));
     if (where) {
 	/*SUPPRESS 701*/
@@ -699,8 +701,8 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
     if (setlocale_failure) {
 	char *p;
 	bool locwarn = (printwarn > 1 || 
-			printwarn &&
-			(!(p = PerlEnv_getenv("PERL_BADLANG")) || atoi(p)));
+			(printwarn &&
+			 (!(p = PerlEnv_getenv("PERL_BADLANG")) || atoi(p))));
 
 	if (locwarn) {
 #ifdef LC_ALL
@@ -995,17 +997,15 @@ Perl_fbm_instr(pTHX_ unsigned char *big, register unsigned char *bigend, SV *lit
     register I32 multiline = flags & FBMrf_MULTILINE;
 
     if (bigend - big < littlelen) {
-      check_tail:
 	if ( SvTAIL(littlestr) 
 	     && (bigend - big == littlelen - 1)
 	     && (littlelen == 1 
-		 || *big == *little && memEQ(big, little, littlelen - 1)))
+		 || (*big == *little && memEQ(big, little, littlelen - 1))))
 	    return (char*)big;
 	return Nullch;
     }
 
     if (littlelen <= 2) {		/* Special-cased */
-	register char c;
 
 	if (littlelen == 1) {
 	    if (SvTAIL(littlestr) && !multiline) { /* Anchor only! */
@@ -1157,7 +1157,6 @@ Perl_fbm_instr(pTHX_ unsigned char *big, register unsigned char *bigend, SV *lit
 		while (tmp--) {
 		    if (*--s == *--little)
 			continue;
-		  differ:
 		    s = olds + 1;	/* here we pay the price for failure */
 		    little = oldlittle;
 		    if (s < bigend)	/* fake up continue to outer loop */
@@ -1516,6 +1515,7 @@ Perl_vdie(pTHX_ const char* pat, va_list *args)
 	    SV *msg;
 
 	    ENTER;
+	    save_re_context();
 	    if (message) {
 		msg = newSVpvn(message, msglen);
 		SvREADONLY_on(msg);
@@ -1605,6 +1605,7 @@ Perl_vcroak(pTHX_ const char* pat, va_list *args)
 	    SV *msg;
 
 	    ENTER;
+	    save_re_context();
 	    msg = newSVpvn(message, msglen);
 	    SvREADONLY_on(msg);
 	    SAVEFREESV(msg);
@@ -1698,6 +1699,7 @@ Perl_vwarn(pTHX_ const char* pat, va_list *args)
 	    SV *msg;
 
 	    ENTER;
+	    save_re_context();
 	    msg = newSVpvn(message, msglen);
 	    SvREADONLY_on(msg);
 	    SAVEFREESV(msg);
@@ -1811,15 +1813,17 @@ Perl_vwarner(pTHX_ U32  err, const char* pat, va_list* args)
                 SV *msg;
  
                 ENTER;
+		save_re_context();
                 msg = newSVpvn(message, msglen);
                 SvREADONLY_on(msg);
                 SAVEFREESV(msg);
  
+		PUSHSTACKi(PERLSI_DIEHOOK);
                 PUSHMARK(sp);
                 XPUSHs(msg);
                 PUTBACK;
                 call_sv((SV*)cv, G_DISCARD);
- 
+		POPSTACK;
                 LEAVE;
             }
         }
@@ -1844,21 +1848,23 @@ Perl_vwarner(pTHX_ U32  err, const char* pat, va_list* args)
             SAVESPTR(PL_warnhook);
             PL_warnhook = Nullsv;
             cv = sv_2cv(oldwarnhook, &stash, &gv, 0);
-                LEAVE;
+	    LEAVE;
             if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
                 dSP;
                 SV *msg;
  
                 ENTER;
+		save_re_context();
                 msg = newSVpvn(message, msglen);
                 SvREADONLY_on(msg);
                 SAVEFREESV(msg);
  
+		PUSHSTACKi(PERLSI_WARNHOOK);
                 PUSHMARK(sp);
                 XPUSHs(msg);
                 PUTBACK;
                 call_sv((SV*)cv, G_DISCARD);
- 
+		POPSTACK;
                 LEAVE;
                 return;
             }
@@ -2356,7 +2362,7 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 	}
 #endif	/* defined OS2 */
 	/*SUPPRESS 560*/
-	if (tmpgv = gv_fetchpv("$",TRUE, SVt_PV))
+	if ((tmpgv = gv_fetchpv("$",TRUE, SVt_PV)))
 	    sv_setiv(GvSV(tmpgv), PerlProc_getpid());
 	PL_forkprocess = 0;
 	hv_clear(PL_pidstatus);	/* we have no children */
@@ -2651,7 +2657,7 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
 	HE *entry;
 
 	hv_iterinit(PL_pidstatus);
-	if (entry = hv_iternext(PL_pidstatus)) {
+	if ((entry = hv_iternext(PL_pidstatus))) {
 	    pid = atoi(hv_iterkey(entry,(I32*)statusp));
 	    sv = hv_iterval(PL_pidstatus,entry);
 	    *statusp = SvIVX(sv);
@@ -3818,6 +3824,6 @@ Perl_report_closed_fh(pTHX_ GV *gv, IO *io, const char *func, const char *obj)
 
     if (io && IoDIRP(io))
 	Perl_warner(aTHX_ WARN_CLOSED,
-		    "(Are you trying to call %s() on dirhandle %s?)\n",
+		    "\t(Are you trying to call %s() on dirhandle %s?)\n",
 		    func, name);
 }

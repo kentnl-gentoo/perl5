@@ -19,7 +19,7 @@
 
 /* USEMYBINMODE
  *	This symbol, if defined, indicates that the program should
- *	use the routine my_binmode(FILE *fp, char iotype) to insure
+ *	use the routine my_binmode(FILE *fp, char iotype, int mode) to insure
  *	that a file is in "binary" mode -- that is, that no translation
  *	of bytes occurs on read or write operations.
  */
@@ -238,6 +238,9 @@ PerlIO *my_syspopen(char *cmd, char *mode);
 int my_syspclose(PerlIO *f);
 FILE *my_tmpfile (void);
 char *my_tmpnam (char *);
+
+#undef L_tmpnam
+#define L_tmpnam MAXPATHLEN
 
 #define tmpfile	my_tmpfile
 #define tmpnam	my_tmpnam

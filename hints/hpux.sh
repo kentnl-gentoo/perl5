@@ -21,8 +21,10 @@
 # Don't assume every OS != 10 is < 10, (e.g., 11).
 # From: Chuck Phillips <cdp@fc.hp.com>
 # HP-UX 10 pthreads hints: Matthew T Harden <mthard@mthard1.monsanto.com>
+# From: Dominic Dunlop <domo@computer.org>
+# Abort and offer advice if bundled (non-ANSI) C compiler selected
 
-# This version: August 15, 1997
+# This version: March 8, 2000
 # Current maintainer: Jeff Okamoto <okamoto@corp.hp.com>
 
 #--------------------------------------------------------------------
@@ -64,21 +66,19 @@
 ccflags="$ccflags -D_HPUX_SOURCE"
 
 # Check if you're using the bundled C compiler.  This compiler doesn't support
-# ANSI C (the -Aa flag) nor can it produce shared libraries.  Thus we have
-# to turn off dynamic loading.
+# ANSI C (the -Aa flag) and so is not suitable for perl 5.5 and later.
 case "$cc" in
 '') if cc $ccflags -Aa 2>&1 | $contains 'option' >/dev/null
     then
-	case "$usedl" in
-	 '') usedl="$undef"
 	     cat <<'EOM' >&4
 
-The bundled C compiler can not produce shared libraries, so you will
-not be able to use dynamic loading. 
+The bundled C compiler is not ANSI-compliant, and so cannot be used to
+build perl.  Please see the file README.hpux for advice on alternative
+compilers.
 
+Cannot continue, aborting.
 EOM
-	     ;;
-	esac
+	exit 1
     else
 	ccflags="$ccflags -Aa"	# The add-on compiler supports ANSI C
 	# cppstdin and cpprun need the -Aa option if you use the unbundled 
@@ -92,12 +92,15 @@ EOM
 	cppminus='-'
 	cpplast='-'
     fi
-    # For HP's ANSI C compiler, up to "+O3" is safe for everything
-    # except shared libraries (PIC code).  Max safe for PIC is "+O2".
-    # Setting both causes innocuous warnings.
-    #optimize='+O3'
-    #cccdlflags='+z +O2'
-    optimize='-O'
+    case "$optimize" in
+	# For HP's ANSI C compiler, up to "+O3" is safe for everything
+	# except shared libraries (PIC code).  Max safe for PIC is "+O2".
+	# Setting both causes innocuous warnings.
+	'')	optimize='-O'
+		#optimize='+O3'
+		#cccdlflags='+z +O2'
+		;;
+    esac
     cc=cc
     ;;
 esac
@@ -140,6 +143,9 @@ else
 fi
 
 # Do this right now instead of the delayed callback unit approach.
+case "$use64bitall" in
+$define|true|[yY]*) use64bitint="$define" ;;
+esac
 case "$use64bitint" in
 $define|true|[yY]*)
     if [ "$xxOsRevMajor" -lt 11 ]; then
@@ -154,12 +160,13 @@ EOM
     fi
 
     # Without the 64-bit libc we cannot do much.
-    if [ ! -f /lib/pa20_64/libc.sl ]; then
+    libc='/lib/pa20_64/libc.sl'
+    if [ ! -f "$libc" ]; then
 		cat <<EOM >&4
 
-You do not seem to have the 64-bit libraries in /lib/pa20_64.
-Most importantly, I cannot find /lib/pa20_64/libc.sl.
-Cannot continue, aborting.
+*** You do not seem to have the 64-bit libraries in /lib/pa20_64.
+*** Most importantly, I cannot find the $libc.
+*** Cannot continue, aborting.
 
 EOM
 		exit 1
@@ -172,32 +179,26 @@ EOM
 *LP64*|*PA-RISC2.0*) ;;
 *) xxx=/no/64-bit$xxx ;;
 esac'
-    case "$ccisgcc" in
-    "$define") ld=$cc ;;
-    *) ld=/usr/bin/ld ;;
-    esac
+    if test -n "$ccisgcc" -o -n "$gccversion"; then
+	ld="$cc"
+    else	
+	ld=/usr/bin/ld
+    fi
     ar=/usr/bin/ar
     full_ar=$ar
 
-    case "$ccisgcc" in
-    "$define") ;;
-    *) # The strict ANSI mode (-Aa) doesn't like the LL suffixes.
+    if test -z "$ccisgcc" -a -z "$gccversion"; then
+       # The strict ANSI mode (-Aa) doesn't like the LL suffixes.
+       ccflags=`echo " $ccflags "|sed 's@ -Aa @ @g'`
        case "$ccflags" in
-       *-Aa*)
-	    echo "(Changing from strict ANSI compilation to extended because of 64-bitness)"
-	    ccflags=`echo $ccflags|sed 's@ -Aa @ -Ae @'`
-	    ;;
+       *-Ae*) ;;
        *) ccflags="$ccflags -Ae" ;;
        esac
-       ;;
-    esac    
+    fi
 
     set `echo " $libswanted " | sed -e 's@ dl @ @'`
     libswanted="$*"
 
-    case "$ccisgcc" in
-    "$define") ;;
-    esac
     ;;
 esac
 
@@ -206,7 +207,6 @@ case "$ccisgcc" in
 "$define") test -d /lib/pa1.1 && ccflags="$ccflags -L/lib/pa1.1" ;;
 esac
     
-
 case "$ccisgcc" in
 "$define") ;;
 *)  case "`getconf KERNEL_BITS 2>/dev/null`" in
@@ -240,7 +240,10 @@ libswanted="$*"
 # ccdlflags="-Wl,-E -Wl,-B,immediate,-B,nonfatal $ccdlflags"
 ccdlflags="-Wl,-E -Wl,-B,deferred $ccdlflags"
 
-usemymalloc='y'
+case "$usemymalloc" in
+'') usemymalloc='y' ;;
+esac
+
 alignbytes=8
 # For native nm, you need "-p" to produce BSD format output.
 nm_opt='-p'
@@ -378,8 +381,8 @@ EOM
     ;;
 esac
 
-cat > UU/uselfs.cbu <<'EOCBU'
-# This script UU/uselfs.cbu will get 'called-back' by Configure 
+cat > UU/uselargefiles.cbu <<'EOCBU'
+# This script UU/uselargefiles.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use large files.
 case "$uselargefiles" in
 ''|$define|true|[yY]*)
@@ -387,14 +390,15 @@ case "$uselargefiles" in
 	# but we cheat for now.
 	ccflags="$ccflags -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
 
-        # The strict ANSI mode (-Aa) doesn't like large files.
-	case "$ccflags" in
-	-Aa*)
-	    echo "(Changing from strict ANSI compilation to extended because of large files)"
-	    ccflags=`echo $ccflags|sed 's@ -Aa @ -Ae @'`
-	    ;;
-	*)  ccflags="$ccflags -Ae" ;;
-	esac
+        if test -z "$ccisgcc" -a -z "$gccversion"; then
+           # The strict ANSI mode (-Aa) doesn't like large files.
+           ccflags=`echo " $ccflags "|sed 's@ -Aa @ @g'`
+           case "$ccflags" in
+           *-Ae*) ;;
+           *) ccflags="$ccflags -Ae" ;;
+           esac
+	fi
+
 	;;
 esac
 EOCBU

@@ -25,6 +25,7 @@
 #  endif
 #  define win32_get_privlib PerlEnv_lib_path
 #  define win32_get_sitelib PerlEnv_sitelib_path
+#  define win32_get_vendorlib PerlEnv_vendorlib_path
 #endif
 
 #ifdef __GNUC__
@@ -211,10 +212,6 @@ typedef long		gid_t;
 #define flushall	_flushall
 #define fcloseall	_fcloseall
 
-#ifndef CP_UTF8
-#  define CP_UTF8	65001
-#endif
-
 #ifdef PERL_OBJECT
 #  define MEMBER_TO_FPTR(name)	&(name)
 #endif
@@ -227,6 +224,11 @@ typedef long		gid_t;
 #endif
 
 #endif /* __MINGW32__ */
+
+/* both GCC/Mingw32 and MSVC++ 4.0 are missing this, so we put it here */
+#ifndef CP_UTF8
+#  define CP_UTF8	65001
+#endif
 
 /* compatibility stuff for other compilers goes here */
 
@@ -300,6 +302,23 @@ typedef struct {
     HANDLE	childStdIn;
     HANDLE	childStdOut;
     HANDLE	childStdErr;
+    /*
+     * the following correspond to the fields of the same name
+     * in the STARTUPINFO structure. Embedders can use these to
+     * control the spawning process' look.
+     * Example - to hide the window of the spawned process:
+     *    dwFlags = STARTF_USESHOWWINDOW;
+     *	  wShowWindow = SW_HIDE;
+     */
+    DWORD	dwFlags;
+    DWORD	dwX; 
+    DWORD	dwY; 
+    DWORD	dwXSize; 
+    DWORD	dwYSize; 
+    DWORD	dwXCountChars; 
+    DWORD	dwYCountChars; 
+    DWORD	dwFillAttribute;
+    WORD	wShowWindow; 
 } child_IO_table;
 
 DllExport void		win32_get_child_IO(child_IO_table* ptr);
@@ -311,11 +330,16 @@ extern int		my_fclose(FILE *);
 extern int		do_aspawn(void *really, void **mark, void **sp);
 extern int		do_spawn(char *cmd);
 extern int		do_spawn_nowait(char *cmd);
-extern char *		win32_get_privlib(char *pl);
-extern char *		win32_get_sitelib(char *pl);
+extern char *		win32_get_privlib(const char *pl);
+extern char *		win32_get_sitelib(const char *pl);
+extern char *		win32_get_vendorlib(const char *pl);
 extern int		IsWin95(void);
 extern int		IsWinNT(void);
 extern void		win32_argv2utf8(int argc, char** argv);
+
+#ifdef PERL_IMPLICIT_SYS
+extern void		win32_delete_internal_host(void *h);
+#endif
 
 extern char *		staticlinkmodules[];
 

@@ -17,8 +17,9 @@
 #if !defined(PERL_OBJECT)
 START_EXTERN_C
 #endif
-extern char *		g_win32_get_privlib(char *pl);
-extern char *		g_win32_get_sitelib(char *pl);
+extern char *		g_win32_get_privlib(const char *pl);
+extern char *		g_win32_get_sitelib(const char *pl);
+extern char *		g_win32_get_vendorlib(const char *pl);
 extern char *		g_getlogin(void);
 extern int		do_spawn2(char *cmd, int exectype);
 #if !defined(PERL_OBJECT)
@@ -475,15 +476,21 @@ PerlEnvOsId(struct IPerlEnv* piPerl)
 }
 
 char*
-PerlEnvLibPath(struct IPerlEnv* piPerl, char *pl)
+PerlEnvLibPath(struct IPerlEnv* piPerl, const char *pl)
 {
     return g_win32_get_privlib(pl);
 }
 
 char*
-PerlEnvSiteLibPath(struct IPerlEnv* piPerl, char *pl)
+PerlEnvSiteLibPath(struct IPerlEnv* piPerl, const char *pl)
 {
     return g_win32_get_sitelib(pl);
+}
+
+char*
+PerlEnvVendorLibPath(struct IPerlEnv* piPerl, const char *pl)
+{
+    return g_win32_get_vendorlib(pl);
 }
 
 void
@@ -506,6 +513,7 @@ struct IPerlEnv perlEnv =
     PerlEnvOsId,
     PerlEnvLibPath,
     PerlEnvSiteLibPath,
+    PerlEnvVendorLibPath,
     PerlEnvGetChildIO,
 };
 
@@ -1709,6 +1717,13 @@ restart:
 
 	/* XXX hack to avoid perl_destruct() freeing optree */
 	PL_main_root = Nullop;
+    }
+
+    /* close the std handles to avoid fd leaks */
+    {
+	do_close(gv_fetchpv("STDIN", TRUE, SVt_PVIO), FALSE);
+	do_close(gv_fetchpv("STDOUT", TRUE, SVt_PVIO), FALSE);
+	do_close(gv_fetchpv("STDERR", TRUE, SVt_PVIO), FALSE);
     }
 
     /* destroy everything (waits for any pseudo-forked children) */

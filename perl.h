@@ -1135,6 +1135,9 @@ typedef UVTYPE UV;
 
 typedef NVTYPE NV;
 
+#ifdef I_IEEEFP
+#   include <ieeefp.h>
+#endif
 
 #ifdef USE_LONG_DOUBLE
 #   ifdef I_SUNMATH
@@ -1142,8 +1145,15 @@ typedef NVTYPE NV;
 #   endif
 #   define NV_DIG LDBL_DIG
 #   ifdef HAS_SQRTL
-#       define Perl_modf modfl
-#       define Perl_frexp frexpl
+        /* libsunmath doesn't have modfl and frexpl as of mid-March 2000 */
+	/* XXX Configure probe for modfl and frexpl needed XXX */
+#       if defined(__sun) && defined(__svr4)
+#           define Perl_modf(x,y) ((long double)modf((double)(x),(double*)(y)))
+#           define Perl_frexp(x) ((long double)frexp((double)(x)))
+#       else
+#           define Perl_modf modfl
+#           define Perl_frexp frexpl
+#       endif
 #       define Perl_cos cosl
 #       define Perl_sin sinl
 #       define Perl_sqrt sqrtl
@@ -1170,7 +1180,7 @@ typedef NVTYPE NV;
 #endif
 
 #if !defined(Perl_atof) && defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
-#   if !defined(Perl_atof) && defined(HAS_STRTOLD)
+#   if !defined(Perl_atof) && defined(HAS_STRTOLD) 
 #       define Perl_atof(s) strtold(s, (char**)NULL)
 #   endif
 #   if !defined(Perl_atof) && defined(HAS_ATOLF)
@@ -1642,7 +1652,7 @@ typedef pthread_key_t	perl_key;
 #ifdef VMS
 #   define STATUS_NATIVE	PL_statusvalue_vms
 #   define STATUS_NATIVE_EXPORT \
-	((I32)PL_statusvalue_vms == -1 ? 44 : PL_statusvalue_vms)
+	(((I32)PL_statusvalue_vms == -1 ? 44 : PL_statusvalue_vms) | (VMSISH_HUSHED ? 0x10000000 : 0))
 #   define STATUS_NATIVE_SET(n)						\
 	STMT_START {							\
 	    PL_statusvalue_vms = (n);					\
@@ -1775,13 +1785,13 @@ typedef pthread_key_t	perl_key;
 #if defined(__CYGWIN__)
 /* USEMYBINMODE
  *   This symbol, if defined, indicates that the program should
- *   use the routine my_binmode(FILE *fp, char iotype) to insure
+ *   use the routine my_binmode(FILE *fp, char iotype, int mode) to insure
  *   that a file is in "binary" mode -- that is, that no translation
  *   of bytes occurs on read or write operations.
  */
 #  define USEMYBINMODE / **/
-#  define my_binmode(fp, iotype) \
-            (PerlLIO_setmode(PerlIO_fileno(fp), O_BINARY) != -1 ? TRUE : FALSE)
+#  define my_binmode(fp, iotype, mode) \
+            (PerlLIO_setmode(PerlIO_fileno(fp), mode) != -1 ? TRUE : FALSE)
 #endif
 
 #ifdef UNION_ANY_DEFINITION
@@ -3072,30 +3082,46 @@ typedef struct am_table_short AMTS;
 
 #endif /* !USE_LOCALE_NUMERIC */
 
-#if !defined(Atol) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
-#   if !defined(Atol) && defined(HAS_STRTOLL)
-#       define Atol(s) strtoll(s, (char**)NULL, 10)
-#   endif
-#   if !defined(Atol) && defined(HAS_ATOLL)
-#       define Atol atoll
+#if !defined(Strtol) && defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
+#    ifdef __hpux
+#        define strtoll __strtoll	/* secret handshake */
+#    endif
+#   if !defined(Strtol) && defined(HAS_STRTOLL)
+#       define Strtol	strtoll
 #   endif
 /* is there atoq() anywhere? */
 #endif
-#if !defined(Atol)
-#   define Atol atol /* we assume atol being available anywhere */
+#if !defined(Strtol) && defined(HAS_STRTOL)
+#   define Strtol	strtol
+#endif
+#ifndef Atol
+/* It would be more fashionable to use Strtol() to define atol()
+ * (as is done for Atoul(), see below) but for backward compatibility
+ * we just assume atol(). */
+#   if defined(USE_64_BIT_INT) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG && defined(HAS_ATOLL)
+#       define Atol	atoll
+#   else
+#       define Atol	atol
+#   endif
 #endif
 
-#if !defined(Strtoul) && defined(UV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
-#    if !defined(Strtoul) && defined(HAS_STRTOULL)
-#       define Strtoul strtoull
+#if !defined(Strtoul) && defined(USE_64_BIT_INT) && defined(UV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
+#    ifdef __hpux
+#        define strtoull __strtoull	/* secret handshake */
 #    endif
-#endif
+#    if !defined(Strtoul) && defined(HAS_STRTOULL)
+#       define Strtoul	strtoull
+#    endif
+#    if !defined(Strtoul) && defined(HAS_STRTOUQ)
+#       define Strtoul	strtouq
+#    endif
 /* is there atouq() anywhere? */
-#if !defined(Strtoul) && defined(HAS_STRTOUQ)
-#   define Strtoul strtouq
 #endif
-#if !defined(Strtoul)
-#   define Strtoul strtoul /* we assume strtoul being available anywhere */
+#if !defined(Strtoul) && defined(HAS_STRTOUL)
+#   define Strtoul	strtoul
+#endif
+#ifndef Atoul
+#   define Atoul(s)	Strtoul(s, (char **)NULL, 10)
 #endif
 
 #if !defined(PERLIO_IS_STDIO) && defined(HASATTRIBUTE)
@@ -3195,7 +3221,11 @@ typedef struct am_table_short AMTS;
 #       define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun)
 #   else
 #       ifdef USE_SEMCTL_SEMID_DS
-#           define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun.buf)
+#           ifdef EXTRA_F_IN_SEMUN_BUF
+#               define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun.buff)
+#           else
+#               define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun.buf)
+#           endif
 #       endif
 #   endif
 #endif
@@ -3214,6 +3244,14 @@ typedef struct am_table_short AMTS;
 #    define O_WRONLY	0001
 #    define O_RDWR	0002
 #    define O_CREAT	0100
+#endif
+
+#ifndef O_BINARY
+#  define O_BINARY 0
+#endif
+
+#ifndef O_TEXT
+#  define O_TEXT 0
 #endif
 
 #ifdef IAMSUID

@@ -377,7 +377,7 @@ bless		bless			ck_fun		s@	S S?
 
 # Pushy I/O.
 
-backtick	quoted execution (``, qx)	ck_null		t%	
+backtick	quoted execution (``, qx)	ck_open		t%	
 # glob defaults its first arg to $_
 glob		glob			ck_glob		t@	S?
 readline	<HANDLE>		ck_null		t%	
@@ -597,7 +597,7 @@ next		next			ck_null		ds}
 redo		redo			ck_null		ds}	
 dump		dump			ck_null		ds}	
 goto		goto			ck_null		ds}	
-exit		exit			ck_fun		ds%	S?
+exit		exit			ck_exit		ds%	S?
 # continued below
 
 #nswitch	numeric switch		ck_null		d	
@@ -605,13 +605,13 @@ exit		exit			ck_fun		ds%	S?
 
 # I/O.
 
-open		open			ck_fun		ist@	F S? S?
+open		open			ck_open		ist@	F S? L
 close		close			ck_fun		is%	F?
 pipe_op		pipe			ck_fun		is@	F F
 
 fileno		fileno			ck_fun		ist%	F
 umask		umask			ck_fun		ist%	S?
-binmode		binmode			ck_fun		s%	F
+binmode		binmode			ck_fun		s@	F S?
 
 tie		tie			ck_fun		idms@	R S L
 untie		untie			ck_fun		is%	R

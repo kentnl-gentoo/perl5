@@ -11,7 +11,11 @@ my $PLATFORM;
 my $CCTYPE;
 
 my %bincompat5005 =
-      (Perl_call_argv		=>	"perl_call_argv",
+      (
+       Perl_call_atexit		=>	"perl_atexit",
+       Perl_eval_sv		=>	"perl_eval_sv",
+       Perl_eval_pv		=>	"perl_eval_pv",
+       Perl_call_argv		=>	"perl_call_argv",
        Perl_call_method		=>	"perl_call_method",
        Perl_call_pv		=>	"perl_call_pv",
        Perl_call_sv		=>	"perl_call_sv",
@@ -34,7 +38,8 @@ my %bincompat5005 =
        Perl_malloc		=>	"malloc",
        Perl_mfree		=>	"free",
        Perl_realloc		=>	"realloc",
-       Perl_calloc		=>	"calloc",);
+       Perl_calloc		=>	"calloc",
+      );
 
 my $bincompat5005 = join("|", keys %bincompat5005);
 
@@ -103,14 +108,14 @@ close(CFG);
 # perl.h logic duplication begins
 
 if ($define{USE_ITHREADS}) {
-    if (!$define{MULTIPLICITY} && !defined{PERL_OBJECT}) {
+    if (!$define{MULTIPLICITY} && !$define{PERL_OBJECT}) {
         $define{MULTIPLICITY} = 1;
     }
 }
 
 $define{PERL_IMPLICIT_CONTEXT} ||=
     $define{USE_ITHREADS} ||
-    $define{USE_THREADS}  ||
+    $define{USE_5005THREADS}  ||
     $define{MULTIPLICITY} ;
 
 if ($define{PERL_CAPI}) {
@@ -270,6 +275,7 @@ elsif ($PLATFORM eq 'os2') {
 		    dlopen
 		    dlsym
 		    dlerror
+		    dlclose
 		    my_tmpfile
 		    my_tmpnam
 		    my_flock
@@ -382,9 +388,14 @@ else {
 		    )];
 }
 
-unless ($define{'USE_5005THREADS'}) {
+unless ($define{'USE_5005THREADS'} || $define{'USE_ITHREADS'}) {
     skip_symbols [qw(
 		    PL_thr_key
+		    )];
+}
+
+unless ($define{'USE_5005THREADS'}) {
+    skip_symbols [qw(
 		    PL_sv_mutex
 		    PL_strtab_mutex
 		    PL_svref_mutex
@@ -412,6 +423,7 @@ unless ($define{'USE_5005THREADS'}) {
 unless ($define{'USE_ITHREADS'}) {
     skip_symbols [qw(
 		    PL_ptr_table
+		    PL_op_mutex
 		    Perl_dirp_dup
 		    Perl_cx_dup
 		    Perl_si_dup
@@ -439,6 +451,7 @@ unless ($define{'PERL_IMPLICIT_CONTEXT'}) {
 		    Perl_die_nocontext
 		    Perl_deb_nocontext
 		    Perl_form_nocontext
+		    Perl_load_module_nocontext
 		    Perl_mess_nocontext
 		    Perl_warn_nocontext
 		    Perl_warner_nocontext

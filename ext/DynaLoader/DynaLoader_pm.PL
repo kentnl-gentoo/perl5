@@ -77,8 +77,8 @@ $Is_MacOS  = $^O eq 'MacOS';
 @dl_require_symbols = ();       # names of symbols we need
 @dl_resolve_using   = ();       # names of files to link with
 @dl_library_path    = ();       # path to look for files
-@dl_librefs         = ();       # things we have loaded
-@dl_modules         = ();       # Modules we have loaded
+#@dl_librefs         = ();       # things we have loaded
+#@dl_modules         = ();       # Modules we have loaded
 
 # This is a fix to support DLD's unfortunate desire to relink -lc
 @dl_resolve_using = dl_findfile('-lc') if $dlsrc eq "dl_dld.xs";
@@ -654,8 +654,7 @@ This function is optional and may not necessarily be provided on all platforms.
 If it is defined, it is called automatically when the interpreter exits for
 every shared object or library loaded by DynaLoader::bootstrap.  All such
 library references are stored in @dl_librefs by DynaLoader::Bootstrap as it
-loads the libraries.  The files are unloaded in the reverse order in to they
-were initially loaded.
+loads the libraries.  The files are unloaded in last-in, first-out order.
 
 This unloading is usually necessary when embedding a shared-object perl (e.g.
 one configured with -Duseshrplib) within a larger application, and the perl

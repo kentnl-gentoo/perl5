@@ -30,8 +30,7 @@ $! with much valuable help from Charles Bailey &
 $! the whole VMSPerl crew.
 $! Extended and messed about with by Dan Sugalski
 $!
-$! SET NOVERIFY
-$ sav_ver = F$VERIFY(sav_ver)
+$ sav_ver = F$VERIFY(0)
 $!
 $! VMS-isms we will need:
 $ echo = "write sys$output "
@@ -39,9 +38,8 @@ $ cat  = "type"
 $ gcc_symbol = "gcc"
 $ ans = ""
 $ macros = ""
-$ extra_fags = ""
+$ extra_flags = ""
 $ user_c_flags = ""
-$ use_debugging_perl = "y"
 $ use_ieee_math = "n"
 $ be_case_sensitive = "n"
 $ use_vmsdebug_perl = "n"
@@ -128,7 +126,6 @@ $ extractsh=""
 $ override=""
 $ knowitall=""
 $ Using_Dec_C = ""
-$ Using_Vax_C = ""
 $ Using_Gnu_C = ""
 $ Dec_C_Version = ""
 $ use_threads = "F"
@@ -136,12 +133,17 @@ $ use_5005_threads = "N"
 $ use_ithreads = "N"
 $!
 $!: option parsing
+$ config_args = ""
 $ IF (P1 .NES. "")
 $ THEN            !one or more switches was thrown
 $   i = 1
 $   bang = 0
 $Param_loop:
-$   IF (P'i'.NES."") THEN bang = bang + 1
+$   IF (P'i'.NES."") 
+$   THEN
+$     bang = bang + 1
+$     config_args = config_args + F$FAO(" !AS",P'i')
+$   ENDIF
 $   i = i + 1
 $   IF (i.LT.9) THEN GOTO Param_loop !DCL allows P1..P8
 $!
@@ -302,6 +304,7 @@ $   i = i + 1
 $   IF (i .LT. (bang + 1)) THEN GOTO Opt_loop
 $!
 $ ENDIF  ! (P1 .NES. "")
+$ config_args = F$EDIT(config_args,"TRIM")
 $!
 $ IF (error)
 $ THEN
@@ -339,11 +342,19 @@ $!
 $ GOTO Check_silence
 $!
 $Shut_up:
-$ STDOUT = F$TRNLNM("SYS$OUTPUT")
+$ IF F$Mode() .eqs. "BATCH"
+$ THEN
+$   STDOUT = F$GetQuI("DISPLAY_JOB","LOG_SPECIFICATION",,"THIS_JOB")
+$   WRITE SYS$OUTPUT "Warning: Executing in batch mode.  To avoid file locking conflicts,"
+$   WRITE SYS$OUTPUT "output intended for SYS$OUTPUT will be sent to a new version"
+$   WRITE SYS$OUTPUT STDOUT
+$ ELSE
+$   STDOUT = F$TRNLNM("SYS$OUTPUT")
+$ ENDIF
 $ DEFINE SYS$OUTPUT "_NLA0:"
 $ echo4 = "write STDOUT "
 $ cat4 = "TYPE/OUTPUT=''STDOUT'"
-$ open/write STDOUT 'STDOUT'
+$ open/write/share=read STDOUT 'STDOUT'
 $ RETURN
 $!
 $Check_silence:
@@ -760,7 +771,7 @@ $!: who configured the system
 $! see 'user' above.
 $ cf_by = F$EDIT(user,"LOWERCASE")
 $! cf_time = F$CVTIME()                 !superceded by procedure below
-$ osvers = F$GETSYI("VERSION")
+$ osvers = F$EDIT(F$GETSYI("VERSION"),"TRIM")
 $!
 $! Peter Prymmer has seen:
 $!  "SYS$TIMEZONE_DIFFERENTIAL" = "-46800"  (sic)
@@ -893,9 +904,13 @@ $ IF (F$GETSYI("HW_MODEL") .LT. 1024)
 $ THEN 
 $   archname = "VMS_VAX"
 $   otherarch = "an Alpha"
+$   alignbytes="8"
+$   arch_type = "ARCH-TYPE=__VAX__"
 $ ELSE
 $   archname = "VMS_AXP"
 $   otherarch = "a VAX"
+$   alignbytes="8"
+$   arch_type = "ARCH-TYPE=__AXP__"
 $ ENDIF
 $ rp = "What is your architecture name? [''archname'] "
 $ GOSUB myread
@@ -964,7 +979,7 @@ $!
 $ vms_skip_install = "true"
 $ dflt = "y"
 $! echo ""
-$ rp = "%Config-I-VMS, Do you wish to skip the remaining """"where install"""" questions? [''dflt'] "
+$ rp = "%Config-I-VMS, Skip the remaining """"where install"""" questions? [''dflt'] "
 $ GOSUB myread
 $ IF (.NOT.ans).AND.(ans.NES."") THEN vms_skip_install = "false"
 $ IF (.NOT.vms_skip_install)
@@ -992,8 +1007,42 @@ $   ENDIF
 $!
 $ ENDIF !%Config-I-VMS, skip remaining "where install" questions
 $!
+$ perl_symbol = "true"
+$ perl_verb = ""
+$ dflt = "y"
+$ IF .NOT.silent 
+$ THEN 
+$   echo ""
+$   echo "%Config-I-VMS, You may choose to write ''packageup'_SETUP.COM to assign a foreign"
+$   echo "-Config-I-VMS, symbol to invoke ''package', which is the usual method."
+$   echO "-Config-I-VMS, If you do not do so then you would need a DCL command verb at the"
+$   echo "-Config-I-VMS, process or the system wide level."
+$ ENDIF
+$ rp = "Invoke perl as a global symbol foreign command [''dflt'] "
+$ GOSUB myread
+$ IF (.NOT.ans).AND.(ans.NES."") THEN perl_symbol = "false"
+$!
+$ IF (.NOT.perl_symbol)
+$ THEN
+$   dflt = "y"
+$   IF .NOT.silent 
+$   THEN 
+$     echo ""
+$     echo "%Config-I-VMS, Since you won't be using a symbol you must choose to put the ''packageup'"
+$     echo "-Config-I-VMS, verb in a per-process table or in the system wide DCLTABLES (which"
+$     echo "-Config-I-VMS, would require write privilege)."
+$   ENDIF
+$   rp = "Invoke perl as a per process command verb [ ''dflt' ] "
+$   GOSUB myread
+$   IF (.NOT.ans).AND.(ans.NES."")
+$   THEN perl_verb = "DCLTABLES"
+$   ELSE perl_verb = "PROCESS"
+$   ENDIF
+$ ENDIF ! (.NOT.perl_symbol)
+$!
 $!: set the base revision
-$ baserev="5"
+$ baserev="5.0"
+$ revision = baserev - ".0"
 $!: get the patchlevel
 $ echo ""
 $ echo4 "Getting the current patchlevel..." !>&4
@@ -1002,6 +1051,9 @@ $ IF (patchlevel_h.NES."")
 $ THEN
 $   got_patch = "false"
 $   got_sub   = "false"
+$   got_api_revision   = "false"
+$   got_api_version    = "false"
+$   got_api_subversion = "false"
 $   OPEN/READONLY CONFIG 'patchlevel_h' 
 $Patchlevel_h_loop:
 $   READ/END_Of_File=Close_patch CONFIG line
@@ -1017,6 +1069,24 @@ $     line = F$EDIT(line,"COMPRESS, TRIM")
 $     subversion = F$ELEMENT(2," ",line)
 $     got_sub = "true"
 $   ENDIF
+$   IF ((F$LOCATE("#define PERL_API_REVISION",line).NE.F$LENGTH(line)).AND.(.NOT.got_api_revision))
+$   THEN
+$     line = F$EDIT(line,"COMPRESS, TRIM")
+$     api_revision = F$ELEMENT(2," ",line)
+$     got_api_revision = "true"
+$   ENDIF
+$   IF ((F$LOCATE("#define PERL_API_VERSION",line).NE.F$LENGTH(line)).AND.(.NOT.got_api_version))
+$   THEN
+$     line = F$EDIT(line,"COMPRESS, TRIM")
+$     api_version = F$ELEMENT(2," ",line)
+$     got_api_version = "true"
+$   ENDIF
+$   IF ((F$LOCATE("#define PERL_API_SUBVERSION",line).NE.F$LENGTH(line)).AND.(.NOT.got_api_subversion))
+$   THEN
+$     line = F$EDIT(line,"COMPRESS, TRIM")
+$     api_subversion = F$ELEMENT(2," ",line)
+$     got_api_subversion = "true"
+$   ENDIF
 $   IF (.NOT.got_patch).OR.(.NOT.got_sub) THEN GOTO Patchlevel_h_loop
 $Close_patch:
 $   CLOSE CONFIG
@@ -1024,24 +1094,14 @@ $   ELSE
 $     patchlevel="0"
 $     subversion="0"
 $ ENDIF
-$ echo "(You have ''package' ''baserev' PL''patchlevel' sub''subversion'.)"
-$! This whole thing needs replacing w/ F$FAO() calls:
-$ patchlevel = F$INTEGER(patchlevel)
-$ IF patchlevel.LT.10
-$ THEN patchlevel = "00" + F$STRING(patchlevel)
-$ ELSE patchlevel = "0" + F$STRING(patchlevel)
-$ ENDIF
-$ subversion = F$INTEGER(subversion)
-$ IF subversion.GT.0
+$ IF (F$STRING(subversion) .NES. "0")
 $ THEN
-$   IF subversion.LT.10
-$   THEN subversion = "0" + F$STRING(subversion)
-$   ELSE subversion = F$STRING(subversion)
-$   ENDIF
-$ ELSE subversion = ""
+$   echo "(You have ''package' revision ''revision' patchlevel ''patchlevel' subversion ''subversion'.)"
+$ ELSE
+$   echo "(You have ''package' revision ''revision' patchlevel ''patchlevel'.)"
 $ ENDIF
 $!
-$ version = baserev + "_" + patchlevel + "_" + subversion
+$ version = revision + "_" + patchlevel + "_" + subversion
 $!
 $ IF (.NOT.vms_skip_install)
 $ THEN
@@ -1142,7 +1202,7 @@ $!
 $ ENDIF !%Config-I-VMS, skip "where install" questions
 $!
 $!: see if we need a special compiler
-$! cc_list = "cc/vaxc|cc/decc|gcc" !%Config-I-VMS, compiler symbols/commands
+$! cc_list = "cc/decc|gcc" !%Config-I-VMS, compiler symbols/commands
 $!
 $ nocc = "f"
 $ vms_cc_dflt = ""
@@ -1184,8 +1244,6 @@ $ IF .NOT.silent THEN echo ""
 $ echo "%Config-I-VMS, Default ""cc"" is ''line' ''archsufx' ''F$GETSYI("VERSION")'" 
 $ IF F$LOCATE("VAX",line).NE.F$LENGTH(line) 
 $ THEN 
-$   vms_cc_dflt = "/vaxc"
-$   vms_cc_available = vms_cc_available + "cc/vaxc "
 $   IF .NOT.silent
 $   THEN 
 $     echo "%Config-I-VMS, Will try cc/decc..."
@@ -1212,24 +1270,6 @@ $   IF (F$LOCATE("DEC",line).NE.F$LENGTH(line)).or.(F$LOCATE("Compaq",line).NE.F
 $   THEN 
 $     vms_cc_dflt = "/decc"
 $     vms_cc_available = vms_cc_available + "cc/decc "
-$     echo "%Config-I-VMS, Will try cc/vaxc..."
-$     DEFINE SYS$ERROR _NLA0:
-$     DEFINE SYS$OUTPUT _NLA0:
-$     SET NOON
-$     cc/vaxc/NoObj/list=ccvms.lis ccvms.c
-$     tmp = $status
-$     DEASSIGN SYS$OUTPUT
-$     DEASSIGN SYS$ERROR
-$     SET ON
-$     IF (silent) THEN GOSUB Shut_up
-$     IF tmp.NE.%X10B90001
-$     THEN
-$       echo "%Config-I-VMS, Apparently you don't have that one."
-$     ELSE
-$       GOSUB List_parse
-$       echo "%Config-I-VMS, You also have: ''line' ''archsufx' ''F$GETSYI("VERSION")'"
-$       vms_cc_available = vms_cc_available + "cc/vaxc "
-$     ENDIF
 $   ENDIF
 $ ENDIF
 $!
@@ -1284,12 +1324,6 @@ $     Mcc = "cc/decc"
 $     Using_Dec_C = "Yes"
 $     C_COMPILER_Replace = "CC=cc=''Mcc'"
 $   ENDIF
-$   IF F$LOCATE("vax",ans).NE.F$LENGTH(ans)
-$   THEN
-$     Mcc = "cc/vaxc"
-$     Using_Vax_C = "Yes"
-$     C_COMPILER_Replace = "CC=cc=''Mcc'"
-$   ENDIF
 $   IF Mcc.NES.dflt
 $   THEN
 $     IF (F$LOCATE("dec",dflt).NE.F$LENGTH(dflt)).or(F$LOCATE("compaq",dflt).NE.F$LENGTH(dflt))
@@ -1297,10 +1331,6 @@ $     THEN
 $       C_COMPILER_Replace = "CC=cc=''Mcc'"
 $     ELSE
 $       Using_Dec_C = "Yes"
-$       IF F$LOCATE("vax",dflt).NE.F$LENGTH(dflt) 
-$       THEN
-$         C_COMPILER_Replace = "CC=cc=''Mcc'"
-$       ENDIF
 $     ENDIF
 $   ELSE
 $     IF Mcc .EQS. "cc/decc"
@@ -1314,11 +1344,6 @@ $   Mcc = dflt
 $   IF Mcc .EQS. "cc/decc"
 $   THEN
 $     Using_Dec_C = "Yes"
-$     C_COMPILER_Replace = "CC=cc=''Mcc'"
-$   ENDIF
-$   IF Mcc .EQS. "cc/vaxc"
-$   THEN
-$     Using_Vax_C = "Yes"
 $     C_COMPILER_Replace = "CC=cc=''Mcc'"
 $   ENDIF
 $   IF Mcc .EQS. "gcc"
@@ -1378,36 +1403,6 @@ $   echo "You are using Dec C ''line'"
 $   Dec_C_Version = line
 $   Dec_C_Version = Dec_C_Version + 0
 $   if Dec_C_Version.ge.60200000 THEN CC_FLAGS = CC_FLAGS + "/NOANSI_ALIAS"
-$ ENDIF
-$Vaxc_Invoke_check:
-$ IF "''Using_Vax_C'".EQS."Yes"
-$ THEN
-$   echo ""
-$   echo4 "Checking to see how to invoke Vax C..."
-$   OPEN/WRITE CONFIG vaxcchk.c
-$   WRITE CONFIG "#include <stdio.h>"
-$   WRITE CONFIG "int main() {"
-$   WRITE CONFIG "        printf(""%i\n"", ""1"");"
-$   WRITE CONFIG "        exit(0);"
-$   WRITE CONFIG "}"
-$   CLOSE CONFIG
-$   DEFINE SYS$ERROR _NLA0:
-$   DEFINE SYS$OUTPUT _NLA0:
-$   SET NOON
-$   cc/vaxc/NoObj vaxcchk.c
-$   tmp = $status
-$   DEASSIGN SYS$OUTPUT
-$   DEASSIGN SYS$ERROR
-$   SET ON
-$   IF (silent) THEN GOSUB Shut_up
-$   IF tmp.NE.%X10B90001
-$   THEN
-$     Mcc = "cc"
-$   ELSE
-$     Mcc = "cc/vaxc"
-$   ENDIF
-$Vax_c_cleanup:
-$   DELETE/NOLOG/NOCONFIRM vaxcchk.*;
 $ ENDIF
 $Gcc_check:
 $ if "''using_gnu_c'" .eqs. "Yes"
@@ -1726,6 +1721,24 @@ $ ELSE
 $   use_vmsdebug_perl = "N"
 $ ENDIF
 $!
+$! Ask if they want to build with DEBUGGING
+$ echo ""
+$ echo "Perl can be built with extra runtime debugging enabled. This
+$ echo "enables the -D switch, at the cost of some performance. It
+$ echo "was mandatory on perl 5.005 and before on VMS, but is now
+$ echo "optional. If you don't generally use it you should probably
+$ echo "leave this off and gain a bit of extra speed.
+$ dflt = "y"
+$ rp = "Build a DEBUGGING version of Perl? [''dflt'] "
+$ GOSUB myread
+$ IF ans.eqs."" then ans = dflt
+$ IF F$EXTRACT(0, 1, F$EDIT(ans,"COLLAPSE,UPCASE")) .eqs. "Y"
+$ THEN
+$   use_debugging_perl = "Y"
+$ ELSE
+$   use_debugging_perl = "N"
+$ ENDIF
+$!
 $! Ask if they want to build with MULTIPLICITY
 $ echo ""
 $ echo "The perl interpreter engine can be built in a way that makes it
@@ -1818,10 +1831,11 @@ $     echo "
 $     echo "If you're a casual user, you probably don't want
 $     echo "interpreter-threads at this time.  There doesn't yet exist
 $     echo "a way to create threads from within Perl in this model,
-$     echo "i.e., "use Thread;" will NOT work.
+$     echo "i.e., ""use Thread;"" will NOT work.
 $     echo "
 $     dflt = "n"
 $     rp = "Build with Interpreter threads? [''dflt']
+$     GOSUB myread
 $     if ans.eqs."" then ans = dflt
 $     if (f$extract(0, 1, "''ans'").eqs."Y").or.(f$extract(0, 1, "''ans'").eqs."y")
 $     THEN
@@ -1912,7 +1926,7 @@ $ echo "This restriction does not apply to the %ENV hash or to implicit"
 $ echo "logical name translation during parsing of file specifications;"
 $ echo "these always use the normal sequence of access modes for logical"
 $ echo "name translation."
-$ dflt = "n"
+$ dflt = "y"
 $ rp = "Use secure logical name translation? [''dflt'] "
 $ GOSUB myread
 $ if ans.eqs."" then ans="''dflt'"
@@ -1927,7 +1941,10 @@ $ echo "default file types, however, you can configure Perl to try default"
 $ echo "file types of nothing, .pl, and .com, in that order (e.g. typing"
 $ echo """$ perl foo"" would cause Perl to look for foo., then foo.pl, and"
 $ echo "finally foo.com)."
-$ dflt = "n"
+$ echo ""
+$ echo "This is currently broken in some configurations. Only enable it if
+$ echo "you know what you're doing. "
+$ dflt = "N"
 $ rp = "Always use default file types? [''dflt'] "
 $ GOSUB myread
 $ if ans.eqs."" then ans="''dflt'"
@@ -1994,6 +2011,40 @@ $ ENDIF
 $ rp = "[''dflt'] "
 $ GOSUB myread
 $ if ans.eqs."" then ans = "''dflt'"
+$ a = ""
+$ j = 0
+$ xloop1:
+$   x = f$elem(j," ",ans)
+$   j = j + 1
+$   if x .eqs. " " then goto exloop1
+$   xloop2:
+$       k = f$locate("::",x)
+$       if k .ge. f$len(x) then goto exloop2
+$       x = f$extract(0,k,x) + "/" + f$extract(k+2,f$len(x)-2,x)
+$   goto xloop2
+$   exloop2:
+$   a = a + " " + x
+$ goto xloop1
+$ exloop1:
+$ ans = f$edit(a,"trim")
+$!
+$ a = ""
+$ j = 0
+$ xloop3:
+$   x = f$elem(j," ",dflt)
+$   j = j + 1
+$   if x .eqs. " " then goto exloop3
+$   xloop4:
+$       k = f$locate("::",x)
+$       if k .ge. f$len(x) then goto exloop4
+$       x = f$extract(0,k,x) + "/" + f$extract(k+2,f$len(x)-2,x)
+$   goto xloop4
+$   exloop4:
+$   a = a + " " + x
+$ goto xloop3
+$ exloop3:
+$ dflt = f$edit(a,"trim")
+$!
 $ extensions = "''ans'"
 $ perl_known_extensions = "''dflt'"
 $!
@@ -2113,13 +2164,13 @@ $! echo4 "Updating makefile..."
 $!
 $ IF (make .EQS. "MMS").OR.(make .EQS. "MMK")
 $ THEN 
-$   makefile    = "" 		 !wrt MANIFEST dir
-$   UUmakefile  = "DESCRIP.MMS"  !wrt CWD dir
-$   DEFmakefile = "DESCRIP.MMS"  !wrt DEF dir (?)
+$   makefile    = "" 		   !wrt MANIFEST dir
+$   UUmakefile  = "[-]DESCRIP.MMS" !wrt CWD dir
+$   DEFmakefile = "DESCRIP.MMS"    !wrt DEF dir (?)
 $ ELSE
-$   makefile    = " -f [.VMS]Makefile." !wrt MANIFEST dir
-$   UUmakefile  = "[-.VMS]Makefile."    !wrt CWD dir
-$   DEFmakefile = "[-.VMS]Makefile."    !wrt DEF dir (?)
+$   makefile    = " -f Makefile."  !wrt MANIFEST dir
+$   UUmakefile  = "[-]Makefile."   !wrt CWD dir
+$   DEFmakefile = "Makefile."      !wrt DEF dir (?)
 $ ENDIF
 $!
 $ IF macros.NES."" 
@@ -2203,6 +2254,30 @@ $ IF f$search("config.msg") .eqs. "" THEN echo "OK."
 $!
 $! %Config-I-VMS, write perl_setup.com here
 $!
+$ IF (.NOT.perl_symbol)
+$ THEN
+$   file_2_find = "[-]''packageup'.cld"
+$   echo ""
+$   echo4 "%Config-I-VMS, The perl.cld file is now being written..."
+$   OPEN/WRITE CONFIG 'file_2_find'
+$   ext = ".exe"
+$   IF ((sharedperl) .AND. (f$getsyi("ARCH_NAME") .NES. "VAX")) THEN ext := .AXE
+$   IF (use_vmsdebug_perl)
+$   THEN
+$     WRITE CONFIG "define verb dbgperl"
+$     WRITE CONFIG F$FAO("!_!AS","image ''packageup'_root:[000000]dbgperl''ext'")
+$     WRITE CONFIG F$FAO("!_!AS","cliflags (foreign)")
+$     WRITE CONFIG ""
+$     WRITE CONFIG "define verb perl"
+$     WRITE CONFIG F$FAO("!_!AS","image ''packageup'_root:[000000]ndbgPerl''ext'")
+$     WRITE CONFIG F$FAO("!_!AS","cliflags (foreign)")
+$   ELSE
+$     WRITE CONFIG "define verb perl"
+$     WRITE CONFIG F$FAO("!_!AS","image ''packageup'_root:[000000]perl''ext'")
+$     WRITE CONFIG F$FAO("!_!AS","cliflags (foreign)")
+$   ENDIF
+$   CLOSE CONFIG
+$ ENDIF ! (.NOT.perl_symbol)
 $ echo ""
 $ echo4 "%Config-I-VMS, The perl_setup.com file is now being written..."
 $ file_2_find = "[-]perl_setup.com"
@@ -2220,20 +2295,34 @@ $ prefix = prefix - "000000."
 $ IF F$LOCATE(".]",prefix) .EQ. F$LENGTH(prefix) THEN -
     prefix = prefix - "]" + ".]" 
 $ WRITE CONFIG "$ define/translation=concealed Perl_Root ''prefix'"
-$ write config "$ ext = "".exe"""
-$ if sharedperl .eqs. "Y"
-$ then
+$ WRITE CONFIG "$ ext = "".exe"""
+$ IF sharedperl .EQS. "Y"
+$ THEN
 $   write config "$ if f$getsyi(""ARCH_NAME"") .nes. ""VAX"" then ext = "".AXE"""
-$ endif
-$ IF use_vmsdebug_perl .eqs. "Y"
-$ then
-$   WRITE CONFIG "$ dbgperl :== $Perl_Root:[000000]dbgPerl'ext'"
-$   WRITE CONFIG "$ perl    :== $Perl_Root:[000000]ndbgPerl'ext'"
-$   WRITE CONFIG "$ define dbgPerlShr Perl_Root:[000000]dbgPerlShr'ext'"
-$ else
-$   WRITE CONFIG "$ perl :== $Perl_Root:[000000]Perl'ext'"
-$   WRITE CONFIG "$ define PerlShr Perl_Root:[000000]PerlShr'ext'"
-$ endif
+$ ENDIF
+$ IF (perl_symbol)
+$ THEN
+$   IF (use_vmsdebug_perl)
+$   THEN
+$     WRITE CONFIG "$ dbgperl :== $Perl_Root:[000000]dbgPerl'ext'"
+$     WRITE CONFIG "$ perl    :== $Perl_Root:[000000]ndbgPerl'ext'"
+$     WRITE CONFIG "$ define dbgPerlShr Perl_Root:[000000]dbgPerlShr'ext'"
+$   ELSE
+$     WRITE CONFIG "$ perl :== $Perl_Root:[000000]Perl'ext'"
+$     WRITE CONFIG "$ define PerlShr Perl_Root:[000000]PerlShr'ext'"
+$   ENDIF
+$ ELSE ! .NOT.perl_symbol
+$   IF (use_vmsdebug_perl)
+$   THEN
+$     WRITE CONFIG "$ define dbgPerlShr Perl_Root:[000000]dbgPerlShr'ext'"
+$   ELSE
+$     WRITE CONFIG "$ define PerlShr Perl_Root:[000000]PerlShr'ext'"
+$   ENDIF
+$   IF perl_verb .EQS. "PROCESS"
+$   THEN
+$     WRITE CONFIG "$ set command ''packagup'_ROOT:[000000]''packageup'.CLD"
+$   ENDIF
+$ ENDIF !  perl_symbol
 $ WRITE CONFIG "$ define/nolog pod2text Perl_Root:[lib.pod]pod2text.com"
 $ WRITE CONFIG "$ define/nolog pod2html Perl_Root:[lib.pod]pod2html.com"
 $ WRITE CONFIG "$ define/nolog pod2man  Perl_Root:[lib.pod]pod2man.com"
@@ -2247,14 +2336,40 @@ $ ENDIF
 $ WRITE CONFIG "$!"
 $ WRITE CONFIG "$! Symbols for commonly used scripts:"
 $ WRITE CONFIG "$!"
-$ WRITE CONFIG "$ Perldoc  == ""'"+"'Perl' Perl_Root:[lib.pod]Perldoc.com -t"""
-$ WRITE CONFIG "$ pod2text == ""'"+"'Perl' pod2text"""
-$ WRITE CONFIG "$ pod2html == ""'"+"'Perl' pod2html"""
-$ WRITE CONFIG "$!pod2man  == ""'"+"'Perl' pod2man"""
-$ WRITE CONFIG "$!Perlbug  == ""'"+"'Perl' Perl_Root:[lib]Perlbug.com"""
-$ WRITE CONFIG "$!c2ph == ""'"+"'Perl' c2ph"""
-$ WRITE CONFIG "$!h2ph == ""'"+"'Perl' h2ph"""
-$ WRITE CONFIG "$!h2xs == ""'"+"'Perl' h2xs"""
+$ IF (perl_symbol)
+$ THEN
+$   WRITE CONFIG "$ Perldoc  == ""'"+"'Perl' Perl_Root:[lib.pod]Perldoc.com -t"""
+$   WRITE CONFIG "$ pod2text == ""'"+"'Perl' pod2text"""
+$   WRITE CONFIG "$ pod2html == ""'"+"'Perl' pod2html"""
+$   WRITE CONFIG "$ pod2latex == ""'"+"'Perl' Perl_Root:[lib.pod]pod2latex.com"""
+$   WRITE CONFIG "$!pod2man  == ""'"+"'Perl' pod2man"""
+$   WRITE CONFIG "$!Perlbug  == ""'"+"'Perl' Perl_Root:[lib]Perlbug.com"""
+$   WRITE CONFIG "$ c2ph     == ""'"+"'Perl' Perl_Root:[utils]c2ph.com"""
+$   IF F$LOCATE("Devel::DProf",extensions) .LT. F$LENGTH(extensions)
+$   THEN
+$     WRITE CONFIG "$ dprofpp     == ""'"+"'Perl' Perl_Root:[utils]dprofpp.com"""
+$   ENDIF 
+$   WRITE CONFIG "$ h2ph     == ""'"+"'Perl' Perl_Root:[utils]h2ph.com"""
+$   WRITE CONFIG "$ h2xs     == ""'"+"'Perl' Perl_Root:[utils]h2xs.com"""
+$   WRITE CONFIG "$!perlcc   == ""'"+"'Perl' Perl_Root:[utils]perlcc.com"""
+$   WRITE CONFIG "$ splain   == ""'"+"'Perl' Perl_Root:[utils]splain.com"""
+$ ELSE
+$   WRITE CONFIG "$ Perldoc  == ""Perl Perl_Root:[lib.pod]Perldoc.com -t"""
+$   WRITE CONFIG "$ pod2text == ""Perl pod2text"""
+$   WRITE CONFIG "$ pod2html == ""Perl pod2html"""
+$   WRITE CONFIG "$ pod2latex == ""Perl Perl_Root:[lib.pod]pod2latex.com"""
+$   WRITE CONFIG "$!pod2man  == ""Perl pod2man"""
+$   WRITE CONFIG "$!Perlbug  == ""Perl Perl_Root:[lib]Perlbug.com"""
+$   WRITE CONFIG "$ c2ph     == ""Perl Perl_Root:[utils]c2ph.com"""
+$   IF F$LOCATE("Devel::DProf",extensions) .LT. F$LENGTH(extensions)
+$   THEN
+$     WRITE CONFIG "$ dprofpp     == ""Perl Perl_Root:[utils]dprofpp.com"""
+$   ENDIF 
+$   WRITE CONFIG "$ h2ph     == ""Perl Perl_Root:[utils]h2ph.com"""
+$   WRITE CONFIG "$ h2xs     == ""Perl Perl_Root:[utils]h2xs.com"""
+$   WRITE CONFIG "$!perlcc   == ""Perl Perl_Root:[utils]perlcc.com"""
+$   WRITE CONFIG "$ splain   == ""Perl Perl_Root:[utils]splain.com"""
+$ ENDIF
 $ CLOSE CONFIG
 $!
 $ echo  ""
@@ -2264,6 +2379,20 @@ $ echo  "-Config-I-VMS, Add that file (or an @ call to it) to your [SY]LOGIN.COM
 $ echo  "-Config-I-VMS, when you are satisfied with a successful compilation,"
 $ echo  "-Config-I-VMS, testing, and installation of your perl."
 $ echo  ""
+$ IF ((.NOT.perl_symbol) .AND. (perl_verb .EQS. "DCLTABLES"))
+$ THEN
+$   file_2_find = "[-]''packageup'_install.com"
+$   OPEN/WRITE CONFIG 'file_2_find
+$   WRITE CONFIG "$ set command perl /table=sys$common:[syslib]dcltables.exe -"
+$   WRITE CONFIG "    /output=sys$common:[syslib]dcltables.exe"
+$   WRITE CONFIG "$ install replace sys$common:[syslib]dcltables.exe"
+$   CLOSE CONFIG
+$   echo4 ""
+$   echo4 "%Config-I-VMS, In order to install the ''packageup' verb into DCLTABLES run:"
+$   echo4 "-Config-I-VMS, @ ''F$SEARCH(file_2_find)'"
+$   echo4 "-Config-I-VMS, after a successful build, test, and install.  Do so with CMKRNL privilege."
+$   echo4 ""
+$ ENDIF
 $!
 $!figure out where we "are" by parsing 'vms_default_directory_name' 
 $!

@@ -13,7 +13,6 @@
 
 static void xs_init (pTHX);
 static PerlInterpreter *my_perl;
-static struct perl_thread *thr;		/* XXXXXX testing */
 
 #if defined (__MINT__) || defined (atarist)
 /* The Atari operating system doesn't have a dynamic stack.  The
@@ -44,21 +43,21 @@ main(int argc, char **argv, char **env)
 	my_perl = perl_alloc();
 	if (!my_perl)
 	    exit(1);
-	perl_construct( my_perl );
+	perl_construct(my_perl);
 	PL_perl_destruct_level = 0;
     }
 
-    exitstatus = perl_parse( my_perl, xs_init, argc, argv, (char **) NULL );
+    exitstatus = perl_parse(my_perl, xs_init, argc, argv, (char **)NULL);
     if (!exitstatus) {
-	exitstatus = perl_run( my_perl );
+	exitstatus = perl_run(my_perl);
     }
 
-    perl_destruct( my_perl );
-    perl_free( my_perl );
+    perl_destruct(my_perl);
+    perl_free(my_perl);
 
     PERL_SYS_TERM();
 
-    exit( exitstatus );
+    exit(exitstatus);
     return exitstatus;
 }
 
@@ -69,5 +68,5 @@ main(int argc, char **argv, char **env)
 static void
 xs_init(pTHX)
 {
-  dXSUB_SYS;
+    dXSUB_SYS;
 }

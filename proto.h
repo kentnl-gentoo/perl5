@@ -64,6 +64,7 @@ PERL_CALLCONV I32	Perl_apply(pTHX_ I32 type, SV** mark, SV** sp);
 PERL_CALLCONV SV*	Perl_avhv_delete_ent(pTHX_ AV *ar, SV* keysv, I32 flags, U32 hash);
 PERL_CALLCONV bool	Perl_avhv_exists_ent(pTHX_ AV *ar, SV* keysv, U32 hash);
 PERL_CALLCONV SV**	Perl_avhv_fetch_ent(pTHX_ AV *ar, SV* keysv, I32 lval, U32 hash);
+PERL_CALLCONV SV**	Perl_avhv_store_ent(pTHX_ AV *ar, SV* keysv, SV* val, U32 hash);
 PERL_CALLCONV HE*	Perl_avhv_iternext(pTHX_ AV *ar);
 PERL_CALLCONV SV*	Perl_avhv_iterval(pTHX_ AV *ar, HE* entry);
 PERL_CALLCONV HV*	Perl_avhv_keys(pTHX_ AV *ar);
@@ -126,6 +127,11 @@ PERL_CALLCONV void	Perl_deb_nocontext(const char* pat, ...)
 PERL_CALLCONV char*	Perl_form_nocontext(const char* pat, ...)
 #ifdef CHECK_FORMAT
  __attribute__((format(printf,1,2)))
+#endif
+;
+PERL_CALLCONV void	Perl_load_module_nocontext(U32 flags, SV* name, SV* ver, ...)
+#ifdef CHECK_FORMAT
+ __attribute__((format(printf,3,4)))
 #endif
 ;
 PERL_CALLCONV SV*	Perl_mess_nocontext(const char* pat, ...)
@@ -359,6 +365,7 @@ PERL_CALLCONV bool	Perl_is_uni_xdigit_lc(pTHX_ U32 c);
 PERL_CALLCONV U32	Perl_to_uni_upper_lc(pTHX_ U32 c);
 PERL_CALLCONV U32	Perl_to_uni_title_lc(pTHX_ U32 c);
 PERL_CALLCONV U32	Perl_to_uni_lower_lc(pTHX_ U32 c);
+PERL_CALLCONV int	Perl_is_utf8_char(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_alnum(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_alnumc(pTHX_ U8 *p);
 PERL_CALLCONV bool	Perl_is_utf8_idfirst(pTHX_ U8 *p);
@@ -382,6 +389,12 @@ PERL_CALLCONV void	Perl_lex_start(pTHX_ SV* line);
 PERL_CALLCONV OP*	Perl_linklist(pTHX_ OP* o);
 PERL_CALLCONV OP*	Perl_list(pTHX_ OP* o);
 PERL_CALLCONV OP*	Perl_listkids(pTHX_ OP* o);
+PERL_CALLCONV void	Perl_load_module(pTHX_ U32 flags, SV* name, SV* ver, ...)
+#ifdef CHECK_FORMAT
+ __attribute__((format(printf,pTHX_3,pTHX_4)))
+#endif
+;
+PERL_CALLCONV void	Perl_vload_module(pTHX_ U32 flags, SV* name, SV* ver, va_list* args);
 PERL_CALLCONV OP*	Perl_localize(pTHX_ OP* arg, I32 lexical);
 PERL_CALLCONV I32	Perl_looks_like_number(pTHX_ SV* sv);
 PERL_CALLCONV int	Perl_magic_clearenv(pTHX_ SV* sv, MAGIC* mg);
@@ -456,6 +469,7 @@ PERL_CALLCONV void	Perl_mg_magical(pTHX_ SV* sv);
 PERL_CALLCONV int	Perl_mg_set(pTHX_ SV* sv);
 PERL_CALLCONV I32	Perl_mg_size(pTHX_ SV* sv);
 PERL_CALLCONV OP*	Perl_mod(pTHX_ OP* o, I32 type);
+PERL_CALLCONV int	Perl_mode_from_discipline(pTHX_ SV* discp);
 PERL_CALLCONV char*	Perl_moreswitches(pTHX_ char* s);
 PERL_CALLCONV OP*	Perl_my(pTHX_ OP* o);
 PERL_CALLCONV NV	Perl_my_atof(pTHX_ const char *s);
@@ -527,6 +541,7 @@ PERL_CALLCONV SV*	Perl_newSV(pTHX_ STRLEN len);
 PERL_CALLCONV OP*	Perl_newSVREF(pTHX_ OP* o);
 PERL_CALLCONV OP*	Perl_newSVOP(pTHX_ I32 type, I32 flags, SV* sv);
 PERL_CALLCONV SV*	Perl_newSViv(pTHX_ IV i);
+PERL_CALLCONV SV*	Perl_newSVuv(pTHX_ UV u);
 PERL_CALLCONV SV*	Perl_newSVnv(pTHX_ NV n);
 PERL_CALLCONV SV*	Perl_newSVpv(pTHX_ const char* s, STRLEN len);
 PERL_CALLCONV SV*	Perl_newSVpvn(pTHX_ const char* s, STRLEN len);
@@ -932,6 +947,7 @@ END_EXTERN_C
 
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
 STATIC I32	S_avhv_index_sv(pTHX_ SV* sv);
+STATIC I32	S_avhv_index(pTHX_ AV* av, SV* sv, U32 hash);
 #endif
 
 #if defined(PERL_IN_DOOP_C) || defined(PERL_DECL_PROT)
@@ -1000,7 +1016,7 @@ STATIC void*	S_Slab_Alloc(pTHX_ int m, size_t sz);
 #if defined(PERL_IN_PERL_C) || defined(PERL_DECL_PROT)
 STATIC void	S_find_beginning(pTHX);
 STATIC void	S_forbid_setid(pTHX_ char *);
-STATIC void	S_incpush(pTHX_ char *, int);
+STATIC void	S_incpush(pTHX_ char *, int, int);
 STATIC void	S_init_interp(pTHX);
 STATIC void	S_init_ids(pTHX);
 STATIC void	S_init_lexer(pTHX);
@@ -1061,6 +1077,8 @@ STATIC void	S_qsortsv(pTHX_ SV ** array, size_t num_elts, SVCOMPARE_t f);
 #endif
 
 #if defined(PERL_IN_PP_HOT_C) || defined(PERL_DECL_PROT)
+STATIC int	S_do_maybe_phash(pTHX_ AV *ary, SV **lelem, SV **firstlelem, SV **relem, SV **lastrelem);
+STATIC void	S_do_oddball(pTHX_ HV *hash, SV **relem, SV **firstrelem);
 STATIC CV*	S_get_db_sub(pTHX_ SV **svp, CV *cv);
 STATIC SV*	S_method_common(pTHX_ SV* meth, U32* hashp);
 #endif
@@ -1213,8 +1231,10 @@ STATIC SV*	S_new_constant(pTHX_ char *s, STRLEN len, const char *key, SV *sv, SV
 STATIC int	S_ao(pTHX_ int toketype);
 STATIC void	S_depcom(pTHX);
 STATIC char*	S_incl_perldb(pTHX);
+#if 0
 STATIC I32	S_utf16_textfilter(pTHX_ int idx, SV *sv, int maxlen);
 STATIC I32	S_utf16rev_textfilter(pTHX_ int idx, SV *sv, int maxlen);
+#endif
 #  if defined(CRIPPLED_CC)
 STATIC int	S_uni(pTHX_ I32 f, char *s);
 #  endif

@@ -108,9 +108,6 @@ sub getcwd
 # This is a faster version of getcwd.  It's also more dangerous because
 # you might chdir out of a directory that you can't chdir back into.
     
-# List of metachars taken from do_exec() in doio.c
-my $quoted_shell_meta = quotemeta('$&*(){}[]";\\|?<>~`'."'\n");
-
 sub fastcwd {
     my($odev, $oino, $cdev, $cino, $tdev, $tino);
     my(@path, $path);
@@ -142,7 +139,7 @@ sub fastcwd {
     if ($^O eq 'apollo') { $path = "/".$path; }
     # At this point $path may be tainted (if tainting) and chdir would fail.
     # To be more useful we untaint it then check that we landed where we started.
-    $path = $1 if $path =~ /^(.*)$/;	# untaint
+    $path = $1 if $path =~ /^(.*)\z/s;	# untaint
     CORE::chdir($path) || return undef;
     ($cdev, $cino) = stat('.');
     die "Unstable directory path, current directory changed unexpectedly"
@@ -170,7 +167,7 @@ sub chdir_init {
 	$ENV{'PWD'} = cwd();
     }
     # Strip an automounter prefix (where /tmp_mnt/foo/bar == /foo/bar)
-    if ($ENV{'PWD'} =~ m|(/[^/]+(/[^/]+/[^/]+))(.*)|) {
+    if ($ENV{'PWD'} =~ m|(/[^/]+(/[^/]+/[^/]+))(.*)|s) {
 	my($pd,$pi) = stat($2);
 	my($dd,$di) = stat($1);
 	if (defined $pd and defined $dd and $di == $pi and $dd == $pd) {
@@ -187,7 +184,7 @@ sub chdir {
     return 0 unless CORE::chdir $newdir;
     if ($^O eq 'VMS') { return $ENV{'PWD'} = $ENV{'DEFAULT'} }
 
-    if ($newdir =~ m#^/#) {
+    if ($newdir =~ m#^/#s) {
 	$ENV{'PWD'} = $newdir;
     } else {
 	my @curdir = split(m#/#,$ENV{'PWD'});

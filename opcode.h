@@ -1118,7 +1118,7 @@ EXT OP * (CPERLscope(*PL_check)[]) (pTHX_ OP *op) = {
 	MEMBER_TO_FPTR(Perl_ck_null),	/* srefgen */
 	MEMBER_TO_FPTR(Perl_ck_fun),	/* ref */
 	MEMBER_TO_FPTR(Perl_ck_fun),	/* bless */
-	MEMBER_TO_FPTR(Perl_ck_null),	/* backtick */
+	MEMBER_TO_FPTR(Perl_ck_open),	/* backtick */
 	MEMBER_TO_FPTR(Perl_ck_glob),	/* glob */
 	MEMBER_TO_FPTR(Perl_ck_null),	/* readline */
 	MEMBER_TO_FPTR(Perl_ck_null),	/* rcatline */
@@ -1284,8 +1284,8 @@ EXT OP * (CPERLscope(*PL_check)[]) (pTHX_ OP *op) = {
 	MEMBER_TO_FPTR(Perl_ck_null),	/* redo */
 	MEMBER_TO_FPTR(Perl_ck_null),	/* dump */
 	MEMBER_TO_FPTR(Perl_ck_null),	/* goto */
-	MEMBER_TO_FPTR(Perl_ck_fun),	/* exit */
-	MEMBER_TO_FPTR(Perl_ck_fun),	/* open */
+	MEMBER_TO_FPTR(Perl_ck_exit),	/* exit */
+	MEMBER_TO_FPTR(Perl_ck_open),	/* open */
 	MEMBER_TO_FPTR(Perl_ck_fun),	/* close */
 	MEMBER_TO_FPTR(Perl_ck_fun),	/* pipe_op */
 	MEMBER_TO_FPTR(Perl_ck_fun),	/* fileno */
@@ -1643,12 +1643,12 @@ EXT U32 PL_opargs[] = {
 	0x00001a44,	/* dump */
 	0x00001a44,	/* goto */
 	0x00013644,	/* exit */
-	0x0132c81c,	/* open */
+	0x0052c81c,	/* open */
 	0x0001d614,	/* close */
 	0x000cc814,	/* pipe_op */
 	0x0000d61c,	/* fileno */
 	0x0001361c,	/* umask */
-	0x0000d604,	/* binmode */
+	0x0012c804,	/* binmode */
 	0x0042e855,	/* tie */
 	0x0000f614,	/* untie */
 	0x0000f604,	/* tied */

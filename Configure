@@ -20,7 +20,7 @@
 
 # $Id: Head.U,v 3.0.1.9 1997/02/28 15:02:09 ram Exp $
 #
-# Generated on Wed Mar  1 01:33:58 EET 2000 [metaconfig 3.0 PL70]
+# Generated on Wed Mar 22 19:13:31 EET 2000 [metaconfig 3.0 PL70]
 # (with additional metaconfig patches by perlbug@perl.com)
 
 cat >/tmp/c1$$ <<EOF
@@ -618,6 +618,7 @@ i_gdbm=''
 d_grpasswd=''
 i_grp=''
 i_iconv=''
+i_ieeefp=''
 i_inttypes=''
 i_limits=''
 i_locale=''
@@ -863,9 +864,11 @@ sitebin=''
 sitebinexp=''
 installsitelib=''
 sitelib=''
+sitelib_stem=''
 sitelibexp=''
 siteprefix=''
 siteprefixexp=''
+sizesize=''
 sizetype=''
 so=''
 socksizetype=''
@@ -905,6 +908,10 @@ usethreads=''
 incpath=''
 mips_type=''
 usrinc=''
+d_vendorarch=''
+installvendorarch=''
+vendorarch=''
+vendorarchexp=''
 d_vendorbin=''
 installvendorbin=''
 vendorbin=''
@@ -912,6 +919,7 @@ vendorbinexp=''
 d_vendorlib=''
 installvendorlib=''
 vendorlib=''
+vendorlib_stem=''
 vendorlibexp=''
 usevendorprefix=''
 vendorprefix=''
@@ -3304,13 +3312,15 @@ while test "$type"; do
 			Directory)
 				for fp in $gfpth; do
 					if test "X$fp" = X.; then
-					    pf="$ansexp"
+					    dir="$ans"
+					    direxp="$ansexp"
 					else    
-					    pf="$fp/$ansexp"
+					    dir="$fp/$ansexp"
+					    direxp="$fp/$ansexp"
 					fi
-					if test -d "$pf"; then
+					if test -d "$direxp"; then
 						type=''
-						value="$pf"
+						value="$dir"
 						break
 					fi
 				done
@@ -4337,9 +4347,9 @@ case "$uselargefiles" in
 : Look for a hint-file generated 'call-back-unit'.  If the
 : user has specified that a large files perl is to be built,
 : we may need to set or change some other defaults.
-	if $test -f uselfs.cbu; then
+	if $test -f uselargefiles.cbu; then
 		echo "Your platform has some specific hints for large file builds, using them..."
-		. ./uselfs.cbu
+		. ./uselargefiles.cbu
 		echo " "
 		echo "Rechecking to see how big your file offsets are..." >&4
 		$cat >try.c <<EOCP
@@ -4505,6 +4515,14 @@ esac
 set use64bitint
 eval $setvar
 
+case "$use64bitall" in
+"$define"|true|[yY]*) dflt='y' ;;
+*) case "$longsize" in
+   8) dflt='y' ;;
+   *) dflt='n' ;;
+   esac
+   ;;
+esac	
 cat <<EOM
 
 You may also choose to try maximal 64-bitness.  It means using as much
@@ -4515,14 +4533,6 @@ have any more 64-bitness available than what you already have chosen.
 If this doesn't make any sense to you, just accept the default '$dflt'.
 EOM
 rp='Try to use maximal 64-bit support, if available?'
-case "$use64bitall" in
-"$define"|true|[yY]*) dflt='y' ;;
-*) case "$longsize" in
-   8) dflt='y' ;;
-   *) dflt='n' ;;
-   esac
-   ;;
-esac	
 . ./myread
 case "$ans" in
 [yY]*) val="$define" ;;
@@ -4817,7 +4827,7 @@ case "$installstyle" in
 		*) dflt='lib/perl5' ;;
 	esac
 	;;
-*)	dflt='lib/perl5' ;;
+*)	dflt="$installstyle" ;;
 esac
 : Probably not worth prompting for this since we prompt for all
 : the directories individually, and the prompt would be too long and
@@ -4907,9 +4917,9 @@ case "$usethreads$usemultiplicity" in
 	;;
 *)	$cat <<EOM
 
-Perl 5.006 can be compiled for binary compatibility with 5.005.
-If you decide to do so, you will be able to continue using most
-of the extensions that were compiled for Perl 5.005.
+This version of Perl can be compiled for binary compatibility with 5.005.
+If you decide to do so, you will be able to continue using most of the
+extensions that were compiled for Perl 5.005.
 
 EOM
 	case "$bincompat5005$d_bincompat5005" in
@@ -5313,11 +5323,42 @@ case "$vendorprefix" in
 	vendorlibexp="$ansexp"
 	;;
 esac
+vendorlib_stem=`echo "$vendorlibexp" | sed "s,/$version$,,"`
 : Change installation prefix, if necessary.
 if $test X"$prefix" != X"$installprefix"; then
 	installvendorlib=`echo $vendorlibexp | $sed "s#^$prefix#$installprefix#"`
 else
 	installvendorlib="$vendorlibexp"
+fi
+
+case "$vendorprefix" in
+'')	d_vendorarch="$undef"
+	vendorarch=''
+	vendorarchexp=''
+	;;
+*)	d_vendorarch="$define"
+	: determine where vendor-supplied architecture-dependent libraries go.
+	: vendorlib  default is /usr/local/lib/perl5/vendor_perl/$version
+	: vendorarch default is /usr/local/lib/perl5/vendor_perl/$version/$archname
+	: vendorlib may have an optional trailing /share.
+	case "$vendorarch" in
+	'')	dflt=`echo $vendorlib | $sed 's,/share$,,'`
+		dflt="$dflt/$archname"
+		;;
+	*)	dflt="$vendorarch" ;;
+	esac
+	fn=d~+
+	rp='Pathname for vendor-supplied architecture-dependent files?'
+	. ./getfile
+	vendorarch="$ans"
+	vendorarchexp="$ansexp"
+	;;
+esac
+: Change installation prefix, if necessary.
+if $test X"$prefix" != X"$installprefix"; then
+	installvendorarch=`echo $vendorarchexp | sed "s#^$prefix#$installprefix#"`
+else
+	installvendorarch="$vendorarchexp"
 fi
 
 : Cruising for prototypes
@@ -5466,6 +5507,7 @@ rp='Pathname for the site-specific library files?'
 . ./getfile
 sitelib="$ans"
 sitelibexp="$ansexp"
+sitelib_stem=`echo "$sitelibexp" | sed "s,/$version$,,"`
 : Change installation prefix, if necessary.
 if $test X"$prefix" != X"$installprefix"; then
 	installsitelib=`echo $sitelibexp | $sed "s#^$prefix#$installprefix#"`
@@ -5504,10 +5546,10 @@ else {
 foreach $d (@candidates) {
     if ($d lt $version) {
 	if ($d ge $api_versionstring) {
-	    unshift(@inc_version_list, "$d/$archname", $d);
+	    unshift(@inc_version_list, grep { -d } "$d/$archname", $d);
 	}
 	elsif ($d ge "5.005") {
-	    unshift(@inc_version_list, $d);
+	    unshift(@inc_version_list, grep { -d } $d);
 	}
     }
     else {
@@ -5572,7 +5614,7 @@ $rm -f getverlist
 echo " "
 if $test -d /usr/bin -a "X$installbin" != X/usr/bin; then
 	$cat <<EOM
-Many scripts expect to perl to be installed as /usr/bin/perl.
+Many scripts expect perl to be installed as /usr/bin/perl.
 I can install the perl you are about to compile also as /usr/bin/perl
 (in addition to $installbin/perl).
 EOM
@@ -6577,46 +6619,26 @@ esac
 
 : see if we can have long filenames
 echo " "
-rmlist="$rmlist /tmp/cf$$"
-$test -d /tmp/cf$$ || mkdir /tmp/cf$$
 first=123456789abcdef
-second=/tmp/cf$$/$first
-$rm -f $first $second
+$rm -f $first
 if (echo hi >$first) 2>/dev/null; then
 	if $test -f 123456789abcde; then
 		echo 'You cannot have filenames longer than 14 characters.  Sigh.' >&4
 		val="$undef"
 	else
-		if (echo hi >$second) 2>/dev/null; then
-			if $test -f /tmp/cf$$/123456789abcde; then
-				$cat <<'EOM'
-That's peculiar... You can have filenames longer than 14 characters, but only
-on some of the filesystems.  Maybe you are using NFS.  Anyway, to avoid problems
-I shall consider your system cannot support long filenames at all.
-EOM
-				val="$undef"
-			else
-				echo 'You can have filenames longer than 14 characters.' >&4
-				val="$define"
-			fi
-		else
-			$cat <<'EOM'
-How confusing! Some of your filesystems are sane enough to allow filenames
-longer than 14 characters but some others like /tmp can't even think about them.
-So, for now on, I shall assume your kernel does not allow them at all.
-EOM
-			val="$undef"
-		fi
+ 		echo 'You can have filenames longer than 14 characters.'>&4
+ 		val="$define"
 	fi
 else
 	$cat <<'EOM'
-You can't have filenames longer than 14 chars.  You can't even think about them!
+You can't have filenames longer than 14 chars.
+You can't even think about them!
 EOM
 	val="$undef"
 fi 
 set d_flexfnam
 eval $setvar
-$rm -rf /tmp/cf$$ 123456789abcde*
+$rm -rf 123456789abcde*
 
 : determine where library module manual pages go
 set man3dir man3dir none
@@ -6649,7 +6671,7 @@ esac
 echo "If you don't want the manual sources installed, answer 'none'."
 prog=`echo $package | $sed 's/-*[0-9.]*$//'`
 case "$man3dir" in
-'')	dflt=`echo $man1dir | $sed -e 's/man1/man3/g' -e 's/man\.1/man\.3/g'`
+'')	dflt=`echo "$man1dir" | $sed -e 's/man1/man3/g' -e 's/man\.1/man\.3/g'`
 	if $test -d "$privlib/man/man3"; then
 		cat <<EOM >&4
 
@@ -6667,8 +6689,10 @@ EOM
 		esac
     fi
 	;;
-' ') dflt=none;;
 *)	dflt="$man3dir" ;;
+esac
+case "$dflt" in
+' ') dflt=none ;;
 esac
 echo " "
 fn=dn+~
@@ -6676,7 +6700,7 @@ rp="Where do the $package library man pages (source) go?"
 . ./getfile
 man3dir="$ans"
 man3direxp="$ansexp"
-case "$man1dir" in
+case "$man3dir" in
 '')	man3dir=' '
 	installman3dir='';;
 esac
@@ -8597,7 +8621,8 @@ extern int errno;
 #ifdef I_UNISTD
 #include <unistd.h>
 #endif
-#ifdef $i_string
+#$i_string I_STRING
+#ifdef I_STRING
 #include <string.h>
 #else
 #include <strings.h>
@@ -11455,6 +11480,54 @@ eval $inlibc
 set strtoll d_strtoll
 eval $inlibc
 
+case "$d_longlong-$d_strtoll" in
+"$define-$define")
+	$cat <<EOM
+Checking whether your strtoll() works okay...
+EOM
+	$cat >try.c <<'EOCP'
+#include <errno.h>
+#ifdef __hpux
+#define strtoll __strtoll
+#endif
+#include <stdio.h>
+extern long long int strtoll(char *s, char **, int); 
+static int bad = 0;
+int check(char *s, long long ell, int een) {
+	long long gll;
+	errno = 0;
+	gll = strtoll(s, 0, 10);
+	if (!((gll == ell) && (errno == een)))
+		bad++;
+}
+int main() {
+	check(" 1",                                      1LL, 0);
+	check(" 0",                                      0LL, 0);
+	check("-1",                                     -1LL, 0);
+	check("-9223372036854775808", -9223372036854775808LL, 0);
+	check("-9223372036854775808", -9223372036854775808LL, 0);
+	check(" 9223372036854775807",  9223372036854775807LL, 0);
+	check("-9223372036854775808", -9223372036854775808LL, 0);
+	check(" 9223372036854775808",  9223372036854775807LL, ERANGE);
+	check("-9223372036854775809", -9223372036854775808LL, ERANGE);
+	if (!bad)
+		printf("ok\n");
+}
+EOCP
+	set try
+	if eval $compile; then
+		case "`./try`" in
+		ok) echo "Your strtoll() seems to be working okay." ;;
+		*) cat <<EOM >&4
+Your strtoll() doesn't seem to be working okay.
+EOM
+		   d_strtoll="$undef"
+		   ;;
+		esac
+	fi
+	;;
+esac
+
 : see if strtoul exists
 set strtoul d_strtoul
 eval $inlibc
@@ -11462,6 +11535,49 @@ eval $inlibc
 : see if strtoull exists
 set strtoull d_strtoull
 eval $inlibc
+
+case "$d_longlong-$d_strtoull" in
+"$define-$define")
+	$cat <<EOM
+Checking whether your strtoull() works okay...
+EOM
+	$cat >try.c <<'EOCP'
+#include <errno.h>
+#ifdef __hpux
+#define strtoull __strtoull
+#endif
+#include <stdio.h>
+extern unsigned long long int strtoull(char *s, char **, int); 
+static int bad = 0;
+int check(char *s, long long eull, int een) {
+	long long gull;
+	errno = 0;
+	gull = strtoull(s, 0, 10);
+	if (!((gull == eull) && (errno == een)))
+		bad++;
+}
+int main() {
+	check(" 1",                                       1LL, 0);
+	check(" 0",                                       0LL, 0);
+	check("18446744073709551615", 18446744073709551615ULL, 0);
+	check("18446744073709551616", 18446744073709551615ULL, ERANGE);
+	if (!bad)
+		printf("ok\n");
+}
+EOCP
+	set try
+	if eval $compile; then
+		case "`./try`" in
+		ok) echo "Your strtoull() seems to be working okay." ;;
+		*) cat <<EOM >&4
+Your strtoull() doesn't seem to be working okay.
+EOM
+		   d_strtoull="$undef"
+		   ;;
+		esac
+	fi
+	;;
+esac
 
 : see if strtouq exists
 set strtouq d_strtouq
@@ -12423,9 +12539,52 @@ EOM
 	$rm -f core try.core core.try.*
 	case "$fflushNULL" in
 	x)	$cat >&4 <<EOM
-Your fflush(NULL) works okay.
+Your fflush(NULL) works okay for output streams.
+Let's see if it clobbers input pipes...
 EOM
-		fflushNULL="$define"
+# As of mid-March 2000 all versions of Solaris appear to have a stdio
+# bug that improperly flushes the input end of pipes.  So we avoid the
+# autoflush on fork/system/exec support for now. :-(
+$cat >tryp.c <<EOCP
+#include <stdio.h>
+int
+main(int argc, char **argv)
+{
+    char buf[1024];
+    int i;
+    char *bp = buf;
+    while (1) {
+        while ((i = getc(stdin)) != -1
+               && (*bp++ = i) != '\n'
+               && bp < &buf[1024])
+    	/* DO NOTHING */ ;
+        *bp = '\0';
+        fprintf(stdout, "%s", buf);
+        fflush(NULL);
+        if (i == -1)
+	    return 0;
+        bp = buf;
+    }
+}
+EOCP
+                fflushNULL="$define"
+                set tryp
+                if eval $compile; then
+                    $rm -f tryp.out
+                    $cat tryp.c | ./tryp$exe_ext 2>/dev/null > tryp.out
+                    if cmp tryp.c tryp.out >/dev/null 2>&1; then
+                       $cat >&4 <<EOM
+fflush(NULL) seems to behave okay with input streams.
+EOM
+			fflushNULL="$define"
+                    else
+			$cat >&4 <<EOM
+Ouch, fflush(NULL) clobbers input pipes!  We will not use it.
+EOM
+                        fflushNULL="$undef"
+                    fi
+                fi
+	        $rm -f core tryp.c tryp.core core.tryp.*
 		;;
 	'')	$cat >&4 <<EOM
 Your fflush(NULL) isn't working (contrary to ANSI C).
@@ -12447,57 +12606,100 @@ $define|true|[yY]*)
 	fflushNULL="$undef"
 	;;
 esac
-: check explicit looping only if NULL did not work
+: check explicit looping only if NULL did not work, and if the pipe
+: bug does not show up on an explicit flush too
 case "$fflushNULL" in
 "$undef")
-	: check for fflush all behaviour
-	case "$fflushall" in
-	'') 	set try -DTRY_FFLUSH_ALL $output
-		if eval $compile; then
-		        $cat >&4 <<EOM
-(Now testing the other method--but note that also this may fail.)
+	$cat >tryp.c <<EOCP
+#include <stdio.h>
+int
+main(int argc, char **argv)
+{
+    char buf[1024];
+    int i;
+    char *bp = buf;
+    while (1) {
+	while ((i = getc(stdin)) != -1
+	       && (*bp++ = i) != '\n'
+	       && bp < &buf[1024])
+	/* DO NOTHING */ ;
+	*bp = '\0';
+	fprintf(stdout, "%s", buf);
+	fflush(stdin);
+	if (i == -1)
+	    return 0;
+	bp = buf;
+    }
+}
+EOCP
+	set tryp
+	if eval $compile; then
+	    $rm -f tryp.out
+	    $cat tryp.c | ./tryp$exe_ext 2>/dev/null > tryp.out
+	    if cmp tryp.c tryp.out >/dev/null 2>&1; then
+	       $cat >&4 <<EOM
+Good, at least fflush(stdin) seems to behave okay when stdin is a pipe.
 EOM
-			$rm -f try.out
-		    	./try$exe_ext 2>/dev/null
-			if $test -s try.out -a "X$?" = X42; then
-				fflushall="`$cat try.out`"
-			fi
-		fi
-		$rm -f core try.core core.try.*
+		: now check for fflushall behaviour
 		case "$fflushall" in
-		x)	$cat >&4 <<EOM
+		'') 	set try -DTRY_FFLUSH_ALL $output
+			if eval $compile; then
+				$cat >&4 <<EOM
+(Now testing the other method--but note that this also may fail.)
+EOM
+				$rm -f try.out
+				./try$exe_ext 2>/dev/null
+				if $test -s try.out -a "X$?" = X42; then
+					fflushall="`$cat try.out`"
+				fi
+			fi
+			$rm -f core try.core core.try.*
+			case "$fflushall" in
+			x)	$cat >&4 <<EOM
 Whew. Flushing explicitly all the stdio streams works.
 EOM
-			fflushall="$define"
-			;;
-		'')	$cat >&4 <<EOM
+				fflushall="$define"
+				;;
+			'')	$cat >&4 <<EOM
 Sigh. Flushing explicitly all the stdio streams doesn't work.
 EOM
-			fflushall="$undef"
-			;;
-		*)	$cat >&4 <<EOM
+				fflushall="$undef"
+				;;
+			*)	$cat >&4 <<EOM
 Cannot figure out whether flushing stdio streams explicitly works or not.
 I'm assuming it doesn't.
 EOM
+				fflushall="$undef"
+				;;
+			esac
+			;;
+		"$define"|true|[yY]*)
+			fflushall="$define"
+			;;
+		*)
 			fflushall="$undef"
 			;;
 		esac
-		;;
-	"$define"|true|[yY]*)
-		fflushall="$define"
-		;;
-	*)
+	    else
+		$cat >&4 <<EOM
+All is futile.  Even fflush(stdin) clobbers input pipes!
+EOM
 		fflushall="$undef"
-		;;
-	esac
+	    fi
+	else
+	    fflushall="$undef"
+	fi
+	$rm -f core tryp.c tryp.core core.tryp.*
 	;;
-*)	fflushall="$undef"	
+*)	fflushall="$undef"
 	;;
 esac
+
 case "$fflushNULL$fflushall" in
 undefundef)
 	$cat <<EOM
-I cannot figure out how to flush pending stdio output.
+OK, I give up.  I cannot figure out how to flush pending stdio output.
+We won't be flushing handles at all before fork/exec/popen.
 EOM
 	;;
 esac
@@ -13589,6 +13791,37 @@ echo $sig_name | $awk \
 }'
 $rm -f signal signal.c signal.awk signal.lst signal_cmd 
 
+echo " "
+case "$sizetype" in
+*_t) zzz="$sizetype"	;;
+*)   zzz="filesize"	;;
+esac
+echo "Checking the size of $zzz..." >&4 
+cat > try.c <<EOCP
+#include <sys/types.h>
+#include <stdio.h>
+int main() {
+    printf("%d\n", (int)sizeof($sizetype));
+    exit(0);
+}
+EOCP
+set try
+if eval $compile_ok; then
+	yyy=`./try`
+	case "$yyy" in
+	'')	sizesize=4
+		echo "(I can't execute the test program--guessing $sizesize.)" >&4
+		;;
+	*)	sizesize=$yyy
+		echo "Your $zzz size is $sizesize bytes."
+		;;
+	esac
+else
+	sizesize=4
+	echo "(I can't compile the test program--guessing $sizesize.)" >&4
+fi
+
+
 : check for socklen_t
 echo " "
 echo "Checking to see if you have socklen_t..." >&4
@@ -13608,7 +13841,7 @@ else
 	val="$undef"
 	echo "You do not have socklen_t."
 	case "$sizetype" in
-	size_t) echo "(You do have size_t, that might work.)" ;;
+	size_t) echo "(You do have size_t, that might work. Some people are happy with just an int.)" ;;
 	esac
 fi
 $rm -f try try.*
@@ -13627,7 +13860,7 @@ EOM
 	case "$d_socklen_t" in
 	"$define") yyy="$yyy socklen_t"
 	esac
-	yyy="$yyy $sizetype int long"
+	yyy="$yyy $sizetype int long unsigned"
 	for xxx in $yyy; do
 		case "$socksizetype" in
 		'')	try="extern int accept(int, struct sockaddr *, $xxx *);"
@@ -13647,8 +13880,8 @@ EOM
 		;;
 	esac
 	;;
-*)	: no sockets, so pick relatively harmless defaults
-	socksizetype='char *'
+*)	: no sockets, so pick relatively harmless default
+	socksizetype='int'
 	;;
 esac
 
@@ -13936,6 +14169,10 @@ eval $setvar
 
 : see if this is a iconv.h system
 set iconv.h i_iconv
+eval $inhdr
+
+: see if this is a ieeefp.h system
+set ieeefp.h i_ieeefp
 eval $inhdr
 
 : see if locale.h is available
@@ -15149,6 +15386,7 @@ d_umask='$d_umask'
 d_uname='$d_uname'
 d_union_semun='$d_union_semun'
 d_ustat='$d_ustat'
+d_vendorarch='$d_vendorarch'
 d_vendorbin='$d_vendorbin'
 d_vendorlib='$d_vendorlib'
 d_vfork='$d_vfork'
@@ -15227,6 +15465,7 @@ i_float='$i_float'
 i_gdbm='$i_gdbm'
 i_grp='$i_grp'
 i_iconv='$i_iconv'
+i_ieeefp='$i_ieeefp'
 i_inttypes='$i_inttypes'
 i_limits='$i_limits'
 i_locale='$i_locale'
@@ -15309,6 +15548,7 @@ installsitebin='$installsitebin'
 installsitelib='$installsitelib'
 installstyle='$installstyle'
 installusrbinperl='$installusrbinperl'
+installvendorarch='$installvendorarch'
 installvendorbin='$installvendorbin'
 installvendorlib='$installvendorlib'
 intsize='$intsize'
@@ -15464,9 +15704,11 @@ sitearchexp='$sitearchexp'
 sitebin='$sitebin'
 sitebinexp='$sitebinexp'
 sitelib='$sitelib'
+sitelib_stem='$sitelib_stem'
 sitelibexp='$sitelibexp'
 siteprefix='$siteprefix'
 siteprefixexp='$siteprefixexp'
+sizesize='$sizesize'
 sizetype='$sizetype'
 sleep='$sleep'
 smail='$smail'
@@ -15548,9 +15790,12 @@ uvsize='$uvsize'
 uvtype='$uvtype'
 uvuformat='$uvuformat'
 uvxformat='$uvxformat'
+vendorarch='$vendorarch'
+vendorarchexp='$vendorarchexp'
 vendorbin='$vendorbin'
 vendorbinexp='$vendorbinexp'
 vendorlib='$vendorlib'
+vendorlib_stem='$vendorlib_stem'
 vendorlibexp='$vendorlibexp'
 vendorprefix='$vendorprefix'
 vendorprefixexp='$vendorprefixexp'

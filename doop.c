@@ -924,7 +924,7 @@ Perl_do_chop(pTHX_ register SV *astr, register SV *sv)
 	HE* entry;
         (void)hv_iterinit(hv);
         /*SUPPRESS 560*/
-        while (entry = hv_iternext(hv))
+        while ((entry = hv_iternext(hv)))
             do_chop(astr,hv_iterval(hv,entry));
         return;
     }
@@ -994,7 +994,7 @@ Perl_do_chomp(pTHX_ register SV *sv)
 	HE* entry;
         (void)hv_iterinit(hv);
         /*SUPPRESS 560*/
-        while (entry = hv_iternext(hv))
+        while ((entry = hv_iternext(hv)))
             count += do_chomp(hv_iterval(hv,entry));
         return count;
     }
@@ -1097,6 +1097,9 @@ Perl_do_vop(pTHX_ I32 optype, SV *sv, SV *left, SV *right)
 	STRLEN rulen = rightlen;
 	STRLEN dulen = 0;
 	I32 ulen;
+
+	if (optype != OP_BIT_AND)
+	    dc = SvGROW(sv, leftlen+rightlen+1);
 
 	switch (optype) {
 	case OP_BIT_AND:
@@ -1290,7 +1293,7 @@ Perl_do_kv(pTHX)
     EXTEND(SP, HvKEYS(keys) * (dokeys + dovalues));
 
     PUTBACK;	/* hv_iternext and hv_iterval might clobber stack_sp */
-    while (entry = hv_iternext(keys)) {
+    while ((entry = hv_iternext(keys))) {
 	SPAGAIN;
 	if (dokeys)
 	    XPUSHs(hv_iterkeysv(entry));	/* won't clobber stack_sp */

@@ -23,8 +23,7 @@ BEGIN {
 # These constants are common to all tests.
 # Later the sem* tests will import more for themselves.
 
-use IPC::SysV qw(IPC_PRIVATE IPC_NOWAIT IPC_STAT IPC_RMID
-		 S_IRWXU S_IRWXG S_IRWXO S_IWGRP S_IROTH S_IWOTH);
+use IPC::SysV qw(IPC_PRIVATE IPC_NOWAIT IPC_STAT IPC_RMID S_IRWXU);
 use strict;
 
 print "1..16\n";
@@ -55,12 +54,7 @@ EOM
     exit(1);
 };
 
-my $perm;
-
-$perm = S_IRWXU | S_IRWXG | S_IRWXO | S_IWGRP | S_IROTH | S_IWOTH
-    if $^O eq 'vmesa';
-
-$perm = S_IRWXU | S_IRWXG | S_IRWXO unless defined $perm;
+my $perm = S_IRWXU;
 
 if ($Config{'d_msgget'} eq 'define' &&
     $Config{'d_msgctl'} eq 'define' &&
@@ -81,16 +75,9 @@ if ($Config{'d_msgget'} eq 'define' &&
     my $test5bad;
     my $test6bad;
 
-    if ($Config{'use64bitall'} eq 'define') {
-      unless (msgsnd($msg,pack("L L a*",0,$msgtype,$msgtext),IPC_NOWAIT)) {
+    unless (msgsnd($msg,pack("L! a*",$msgtype,$msgtext),IPC_NOWAIT)) {
 	print "not ";
 	$test2bad = 1;
-      }
-    } else {
-      unless (msgsnd($msg,pack("L a*",$msgtype,$msgtext),IPC_NOWAIT)) {
-	print "not ";
-	$test2bad = 1;
-      }
     }
     print "ok 2\n";
     if ($test2bad) {
@@ -135,12 +122,8 @@ EOM
     }
 
     my($rmsgtype,$rmsgtext);
-    if ($Config{'use64bitall'} eq 'define') {
-      (undef,$rmsgtype,$rmsgtext) = unpack("L L a*",$msgbuf)
-    } else {
-      ($rmsgtype,$rmsgtext) = unpack("L a*",$msgbuf)
-    }
-    unless($rmsgtype == $msgtype && $rmsgtext eq $msgtext) {
+    ($rmsgtype,$rmsgtext) = unpack("L! a*",$msgbuf);
+    unless ($rmsgtype == $msgtype && $rmsgtext eq $msgtext) {
 	print "not ";
 	$test6bad = 1;
     }

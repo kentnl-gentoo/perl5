@@ -146,11 +146,17 @@ sub Names {
 
 sub DESTROY {}
 
+sub Dump {
+    return &Dumpxs
+	unless $Data::Dumper::Useqq || (ref($_[0]) && $_[0]->{useqq});
+    return &Dumpperl;
+}
+
 #
 # dump the refs in the current dumper object.
 # expects same args as new() if called via package name.
 #
-sub Dump {
+sub Dumpperl {
   my($s) = shift;
   my(@out, $val, $name);
   my($i) = 0;
@@ -440,9 +446,7 @@ sub Dumper {
   return Data::Dumper->Dump([@_]);
 }
 
-#
-# same, only calls the XS version
-#
+# compat stub
 sub DumperX {
   return Data::Dumper->Dumpxs([@_], []);
 }
@@ -687,12 +691,6 @@ of strings corresponding to the supplied values.
 The second form, for convenience, simply calls the C<new> method on its
 arguments before dumping the object immediately.
 
-=item I<$OBJ>->Dumpxs  I<or>  I<PACKAGE>->Dumpxs(I<ARRAYREF [>, I<ARRAYREF]>)
-
-This method is available if you were able to compile and install the XSUB
-extension to C<Data::Dumper>. It is exactly identical to the C<Dump> method 
-above, only about 4 to 5 times faster, since it is written entirely in C.
-
 =item I<$OBJ>->Seen(I<[HASHREF]>)
 
 Queries or adds to the internal table of already encountered references.
@@ -735,12 +733,6 @@ Returns the stringified form of the values in the list, subject to the
 configuration options below.  The values will be named C<$VAR>I<n> in the
 output, where I<n> is a numeric suffix.  Will return a list of strings
 in an array context.
-
-=item DumperX(I<LIST>)
-
-Identical to the C<Dumper()> function above, but this calls the XSUB 
-implementation.  Only available if you were able to compile and install
-the XSUB extensions in C<Data::Dumper>.
 
 =back
 
@@ -797,8 +789,8 @@ When set, enables the use of double quotes for representing string values.
 Whitespace other than space will be represented as C<[\n\t\r]>, "unsafe"
 characters will be backslashed, and unprintable characters will be output as
 quoted octal integers.  Since setting this variable imposes a performance
-penalty, the default is 0.  The C<Dumpxs()> method does not honor this
-flag yet.
+penalty, the default is 0.  C<Dump()> will run slower if this flag is set,
+since the fast XSUB implementation doesn't support it yet.
 
 =item $Data::Dumper::Terse  I<or>  I<$OBJ>->Terse(I<[NEWVAL]>)
 
@@ -889,7 +881,7 @@ distribution for more examples.)
     $boo = [ 1, [], "abcd", \*foo,
              {1 => 'a', 023 => 'b', 0x45 => 'c'}, 
              \\"p\q\'r", $foo, $fuz];
-    
+
     ########
     # simple usage
     ########
@@ -910,12 +902,12 @@ distribution for more examples.)
 
     $Data::Dumper::Useqq = 1;          # print strings in double quotes
     print Dumper($boo);
-    
-    
+
+
     ########
     # recursive structures
     ########
-    
+
     @c = ('c');
     $c = \@c;
     $b = {};
@@ -924,24 +916,24 @@ distribution for more examples.)
     $b->{b} = $a->[1];
     $b->{c} = $a->[2];
     print Data::Dumper->Dump([$a,$b,$c], [qw(a b c)]);
-    
-    
+
+
     $Data::Dumper::Purity = 1;         # fill in the holes for eval
     print Data::Dumper->Dump([$a, $b], [qw(*a b)]); # print as @a
     print Data::Dumper->Dump([$b, $a], [qw(*b a)]); # print as %b
-    
-    
+
+
     $Data::Dumper::Deepcopy = 1;       # avoid cross-refs
     print Data::Dumper->Dump([$b, $a], [qw(*b a)]);
-    
-    
+
+
     $Data::Dumper::Purity = 0;         # avoid cross-refs
     print Data::Dumper->Dump([$b, $a], [qw(*b a)]);
-    
+
     ########
     # deep structures
     ########
-    
+
     $a = "pearl";
     $b = [ $a ];
     $c = { 'b' => $b };
@@ -953,23 +945,23 @@ distribution for more examples.)
     $Data::Dumper::Maxdepth = 3;       # no deeper than 3 refs down
     print Data::Dumper->Dump([$f], [qw(f)]);
 
-    
+
     ########
     # object-oriented usage
     ########
-    
+
     $d = Data::Dumper->new([$a,$b], [qw(a b)]);
     $d->Seen({'*c' => $c});            # stash a ref without printing it
     $d->Indent(3);
     print $d->Dump;
     $d->Reset->Purity(0);              # empty the seen cache
     print join "----\n", $d->Dump;
-    
-    
+
+
     ########
     # persistence
     ########
-    
+
     package Foo;
     sub new { bless { state => 'awake' }, shift }
     sub Freeze {
@@ -978,7 +970,7 @@ distribution for more examples.)
 	$s->{state} = 'asleep';
 	return bless $s, 'Foo::ZZZ';
     }
-    
+
     package Foo::ZZZ;
     sub Thaw {
         my $s = shift;
@@ -986,7 +978,7 @@ distribution for more examples.)
 	$s->{state} = 'awake';
 	return bless $s, 'Foo';
     }
-    
+
     package Foo;
     use Data::Dumper;
     $a = Foo->new;
@@ -997,12 +989,12 @@ distribution for more examples.)
     print $c;
     $d = eval $c;
     print Data::Dumper->Dump([$d], ['d']);
-    
-    
+
+
     ########
     # symbol substitution (useful for recreating CODE refs)
     ########
-    
+
     sub foo { print "foo speaking\n" }
     *other = \&foo;
     $bar = [ \&other ];
@@ -1031,8 +1023,8 @@ to have, you can use the C<Seen> method to pre-seed the internal reference
 table and make the dumped output point to them, instead.  See L<EXAMPLES>
 above.
 
-The C<Useqq> flag is not honored by C<Dumpxs()> (it always outputs
-strings in single quotes).
+The C<Useqq> flag makes Dump() run slower, since the XSUB implementation
+does not support it.
 
 SCALAR objects have the weirdest looking C<bless> workaround.
 

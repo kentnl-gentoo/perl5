@@ -223,14 +223,14 @@
 #define COMPLEX_STATUS	1	/* We track both "POSIX" and VMS values */
 
 #define HINT_V_VMSISH		24
-#define HINT_M_VMSISH_STATUS	0x20000000 /* system, $? return VMS status */
-#define HINT_M_VMSISH_EXIT	0x40000000 /* exit(1) ==> SS$_NORMAL */
+#define HINT_M_VMSISH_HUSHED	0x20000000 /* stifle error msgs on exit */
+#define HINT_M_VMSISH_STATUS	0x40000000 /* system, $? return VMS status */
 #define HINT_M_VMSISH_TIME	0x80000000 /* times are local, not UTC */
 #define NATIVE_HINTS		(PL_hints >> HINT_V_VMSISH)  /* used in op.c */
 
 #define TEST_VMSISH(h)	(PL_curcop->op_private & ((h) >> HINT_V_VMSISH))
+#define VMSISH_HUSHED	TEST_VMSISH(HINT_M_VMSISH_HUSHED)
 #define VMSISH_STATUS	TEST_VMSISH(HINT_M_VMSISH_STATUS)
-#define VMSISH_EXIT	TEST_VMSISH(HINT_M_VMSISH_EXIT)
 #define VMSISH_TIME	TEST_VMSISH(HINT_M_VMSISH_TIME)
 
 /* Flags for vmstrnenv() */
@@ -257,12 +257,16 @@
 
 #define BIT_BUCKET "_NLA0:"
 #define PERL_SYS_INIT(c,v)	vms_image_init((c),(v)); MALLOC_INIT
-#define PERL_SYS_TERM()		MALLOC_TERM
+#define PERL_SYS_TERM()		OP_REFCNT_TERM; MALLOC_TERM
 #define dXSUB_SYS
 #define HAS_KILL
 #define HAS_WAIT
 
 #define PERL_FS_VER_FMT		"%d_%d_%d"
+/* Temporary; we need to add support for this to Configure.Com */
+#ifdef PERL_INC_VERSION_LIST
+#  undef PERL_INC_VERSION_LIST
+#endif
 
 /* VMS:
  *	This symbol, if defined, indicates that the program is running under
@@ -303,7 +307,7 @@
   
 /* USEMYBINMODE
  *	This symbol, if defined, indicates that the program should
- *	use the routine my_binmode(FILE *fp, char iotype) to insure
+ *	use the routine my_binmode(FILE *fp, char iotype, int mode) to insure
  *	that a file is in "binary" mode -- that is, that no translation
  *	of bytes occurs on read or write operations.
  */
@@ -712,5 +716,10 @@ typedef char __VMS_SEPYTOTORP__;
 #undef HAS_HTONL
 #undef HAS_NTOHL
 #endif
+
+/* The C RTL manual says to undef the macro for DEC C 5.2 and lower. */
+#if defined(fileno) && defined(__DECC_VER) && __DECC_VER < 50300000
+#  undef fileno 
+#endif 
 
 #endif  /* __vmsish_h_included */

@@ -63,10 +63,9 @@ open(FOO, ">&STDOUT") and print <FOO>;
 print getc(STDERR);
 print getc(FOO);
 ####################################################################
-# The next test is known to fail on some systems (Linux/BSD+glibc, #
-# NeXT among others.  glibc should be fixed in the next version,   #
-# but it appears other platforms have little hope.  We skip it for #
-# now (on the grounds that it is "just" a warning).                #
+# The next test is known to fail on some systems (Linux+old glibc, #
+# old *BSDs, and NeXT, among others.                               #
+# We skip it for now (on the grounds that it is "just" a warning). #
 ####################################################################
 #read(FOO,$_,1);
 no warnings 'io' ;
@@ -93,7 +92,7 @@ print STDIN "anc";
 EXPECT
 print() on closed filehandle main::STDIN at - line 4.
 print() on closed filehandle main::STDIN at - line 6.
-(Are you trying to call print() on dirhandle main::STDIN?)
+	(Are you trying to call print() on dirhandle main::STDIN?)
 ########
 # pp_hot.c [pp_rv2av]
 use warnings 'uninitialized' ;
@@ -140,7 +139,7 @@ $a = <STDIN> ;
 EXPECT
 readline() on closed filehandle main::STDIN at - line 3.
 readline() on closed filehandle main::STDIN at - line 4.
-(Are you trying to call readline() on dirhandle main::STDIN?)
+	(Are you trying to call readline() on dirhandle main::STDIN?)
 ########
 # pp_hot.c [Perl_do_readline]
 use warnings 'io' ;

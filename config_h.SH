@@ -189,12 +189,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_fgetpos HAS_FGETPOS	/**/
 
-/* FLEXFILENAMES:
- *	This symbol, if defined, indicates that the system supports filenames
- *	longer than 14 characters.
- */
-#$d_flexfnam	FLEXFILENAMES		/**/
-
 /* HAS_FLOCK:
  *	This symbol, if defined, indicates that the flock routine is
  *	available to do file locking.
@@ -1147,7 +1141,7 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #define BIN_EXP "$binexp"	/**/
 
 /* PERL_BINCOMPAT_5005:
- *	This symbol, if defined, indicates that Perl 5.006 should be
+ *	This symbol, if defined, indicates that this version of Perl should be
  *	binary-compatible with Perl 5.005.  This is impossible for builds
  *	that use features like threads and multiplicity it is always $undef
  *	for those versions.
@@ -1204,14 +1198,18 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	This macro surrounds its token with double quotes.
  */
 #if $cpp_stuff == 1
-#define CAT2(a,b)a/**/b
-#define STRINGIFY(a)"a"
+#  define CAT2(a,b)	a/**/b
+#  define STRINGIFY(a)	"a"
 		/* If you can get stringification with catify, tell me how! */
 #endif
 #if $cpp_stuff == 42
-#define CAT2(a,b)a ## b
-#define StGiFy(a)# a
-#define STRINGIFY(a)StGiFy(a)
+#  define PeRl_CaTiFy(a, b)	a ## b	
+#  define PeRl_StGiFy(a)	#a
+/* the additional level of indirection enables these macros to be
+ * used as arguments to other macros.  See K&R 2nd ed., page 231. */
+#  define CAT2(a,b)	PeRl_CaTiFy(a,b)
+#  define StGiFy(a)	PeRl_StGiFy(a)
+#  define STRINGIFY(a)	PeRl_StGiFy(a)
 #endif
 #if $cpp_stuff != 1 && $cpp_stuff != 42
 #include "Bletch: How does this C preprocessor catenate tokens?"
@@ -1407,6 +1405,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	available to get the current working directory.
  */
 #$d_getcwd HAS_GETCWD		/**/
+
+/* HAS_GETFSSTAT:
+ *	This symbol, if defined, indicates that the getfsstat routine is
+ *	available to stat filesystems in bulk.
+ */
+#$d_getfsstat HAS_GETFSSTAT		/**/
 
 /* HAS_GETGRENT:
  *	This symbol, if defined, indicates that the getgrent routine is
@@ -1634,13 +1638,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_isascii HAS_ISASCII		/**/
 
-/* HAS_LCHOWN:
- *	This symbol, if defined, indicates that the lchown routine is
- *	available to operate on a symbolic link (instead of following the
- *	link).
- */
-#$d_lchown HAS_LCHOWN		/**/
-
 /* HAS_LDBL_DIG:
  *	This symbol, if defined, indicates that this system's <float.h>
  *	or <limits.h> defines the symbol LDBL_DIG, which is the number
@@ -1675,6 +1672,14 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #ifdef HAS_LONG_LONG
 #define LONGLONGSIZE $longlongsize		/**/
 #endif
+
+/* HAS_LSEEK_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the lseek() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern off_t lseek(int, off_t, int);
+ */
+#$d_lseekproto	HAS_LSEEK_PROTO	/**/
 
 /* HAS_MADVISE:
  *	This symbol, if defined, indicates that the madvise system call is
@@ -2213,6 +2218,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #define	Gid_t_f		$gidformat		/**/
 
+/* Gid_t_sign:
+ *	This symbol holds the signedess of a Gid_t.
+ *	1 for unsigned, -1 for signed.
+ */
+#define Gid_t_sign	$gidsign		/* GID sign */
+
 /* Gid_t_size:
  *	This symbol holds the size of a Gid_t in bytes.
  */
@@ -2222,19 +2233,19 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	This symbol holds the return type of getgid() and the type of
  *	argument to setrgid() and related functions.  Typically,
  *	it is the type of group ids in the kernel. It can be int, ushort,
- *	uid_t, etc... It may be necessary to include <sys/types.h> to get
+ *	gid_t, etc... It may be necessary to include <sys/types.h> to get
  *	any typedef'ed information.
  */
 #define Gid_t $gidtype		/* Type for getgid(), etc... */
 
 /* Groups_t:
  *	This symbol holds the type used for the second argument to
- *	getgroups() and setgropus().  Usually, this is the same as
+ *	getgroups() and setgroups().  Usually, this is the same as
  *	gidtype (gid_t) , but sometimes it isn't.
- *	It can be int, ushort, uid_t, etc... 
+ *	It can be int, ushort, gid_t, etc... 
  *	It may be necessary to include <sys/types.h> to get any 
  *	typedef'ed information.  This is only required if you have
- *	getgroups() or setgropus()..
+ *	getgroups() or setgroups()..
  */
 #if defined(HAS_GETGROUPS) || defined(HAS_SETGROUPS)
 #define Groups_t $groupstype	/* Type for 2nd arg to [sg]etgroups() */
@@ -2269,6 +2280,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	should be included.
  */
 #$i_iconv	I_ICONV		/**/
+
+/* I_IEEEFP:
+ *	This symbol, if defined, indicates that <ieeefp.h> exists and
+ *	should be included.
+ */
+#$i_ieeefp	I_IEEEFP		/**/
 
 /* I_INTTYPES:
  *     This symbol, if defined, indicates to the C program that it should
@@ -2806,8 +2823,19 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	This symbol contains the ~name expanded version of SITELIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
+/* SITELIB_STEM:
+ *	This define is SITELIB_EXP with any trailing version-specific component
+ *	removed.  The elements in inc_version_list (inc_version_list.U) can
+ *	be tacked onto this variable to generate a list of directories to search.
+ */
 #define SITELIB "$sitelib"		/**/
 #define SITELIB_EXP "$sitelibexp"		/**/
+#define SITELIB_STEM "$sitelib_stem"		/**/
+
+/* Size_t_size:
+ *	This symbol holds the size of a Size_t in bytes.
+ */
+#define Size_t_size $sizesize		/* */
 
 /* Size_t:
  *	This symbol holds the type used to declare length parameters
@@ -2816,6 +2844,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	<sys/types.h> to get any typedef'ed information.
  */
 #define Size_t $sizetype	 /* length paramater for string functions */
+
+/* Sock_size_t:
+ *	This symbol holds the type used for the size argument of
+ *	various socket calls (just the base type, not the pointer-to).
+ */
+#define Sock_size_t		$socksizetype /**/
 
 /* SSize_t:
  *	This symbol holds the type used by functions that return
@@ -2849,6 +2883,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	This symbol defines the format string used for printing a Uid_t.
  */
 #define	Uid_t_f		$uidformat		/**/
+
+/* Uid_t_sign:
+ *	This symbol holds the signedess of a Uid_t.
+ *	1 for unsigned, -1 for signed.
+ */
+#define Uid_t_sign	$uidsign		/* UID sign */
 
 /* Uid_t_size:
  *	This symbol holds the size of a Uid_t in bytes.
@@ -2956,11 +2996,35 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #endif
 #$d_oldpthreads	OLD_PTHREADS_API		/**/
 
+/* PERL_VENDORARCH:
+ *	If defined, this symbol contains the name of a private library.
+ *	The library is private in the sense that it needn't be in anyone's
+ *	execution path, but it should be accessible by the world.
+ *	It may have a ~ on the front. 
+ *	The standard distribution will put nothing in this directory.
+ *	Vendors who distribute perl may wish to place their own
+ *	architecture-dependent modules and extensions in this directory with
+ *		MakeMaker Makefile.PL INSTALLDIRS=vendor 
+ *	or equivalent.  See INSTALL for details.
+ */
+/* PERL_VENDORARCH_EXP:
+ *	This symbol contains the ~name expanded version of PERL_VENDORARCH, to be used
+ *	in programs that are not prepared to deal with ~ expansion at run-time.
+ */
+#$d_vendorarch PERL_VENDORARCH "$vendorarch"		/**/
+#$d_vendorarch PERL_VENDORARCH_EXP "$vendorarchexp"		/**/
+
 /* PERL_VENDORLIB_EXP:
  *	This symbol contains the ~name expanded version of VENDORLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
+/* PERL_VENDORLIB_STEM:
+ *	This define is PERL_VENDORLIB_EXP with any trailing version-specific component
+ *	removed.  The elements in inc_version_list (inc_version_list.U) can
+ *	be tacked onto this variable to generate a list of directories to search.
+ */
 #$d_vendorlib PERL_VENDORLIB_EXP "$vendorlibexp"		/**/
+#$d_vendorlib PERL_VENDORLIB_STEM "$vendorlib_stem"		/**/
 
 /* VOIDFLAGS:
  *	This symbol indicates how much support of the void type is given by this
@@ -3022,25 +3086,18 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #define PERL_XS_APIVERSION "$xs_apiversion"
 #define PERL_PM_APIVERSION "$pm_apiversion"
 
-/* HAS_GETFSSTAT:
- *	This symbol, if defined, indicates that the getfsstat routine is
- *	available to stat filesystems in bulk.
+/* HAS_LCHOWN:
+ *	This symbol, if defined, indicates that the lchown routine is
+ *	available to operate on a symbolic link (instead of following the
+ *	link).
  */
-#$d_getfsstat HAS_GETFSSTAT		/**/
+#$d_lchown HAS_LCHOWN		/**/
 
-/* HAS_LSEEK_PROTO:
- *	This symbol, if defined, indicates that the system provides
- *	a prototype for the lseek() function.  Otherwise, it is up
- *	to the program to supply one.  A good guess is
- *		extern off_t lseek(int, off_t, int);
+/* FLEXFILENAMES:
+ *	This symbol, if defined, indicates that the system supports filenames
+ *	longer than 14 characters.
  */
-#$d_lseekproto	HAS_LSEEK_PROTO	/**/
-
-/* Sock_size_t:
- *	This symbol holds the type used for the size argument of
- *	various socket calls (just the base type, not the pointer-to).
- */
-#define Sock_size_t		$socksizetype /**/
+#$d_flexfnam	FLEXFILENAMES		/**/
 
 #endif
 !GROK!THIS!

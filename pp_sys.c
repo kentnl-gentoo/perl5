@@ -304,9 +304,14 @@ PP(pp_backtick)
     STRLEN n_a;
     char *tmps = POPpx;
     I32 gimme = GIMME_V;
+    char *mode = "r";
 
     TAINT_PROPER("``");
-    fp = PerlProc_popen(tmps, "r");
+    if (PL_op->op_private & OPpOPEN_IN_RAW)
+	mode = "rb";
+    else if (PL_op->op_private & OPpOPEN_IN_CRLF)
+	mode = "rt";
+    fp = PerlProc_popen(tmps, mode);
     if (fp) {
 	if (gimme == G_VOID) {
 	    char tmpbuf[256];
@@ -465,7 +470,7 @@ PP(pp_die)
 		GV *gv = gv_fetchmethod(stash, "PROPAGATE");
 		if (gv) {
 		    SV *file = sv_2mortal(newSVpv(CopFILE(PL_curcop),0));
-		    SV *line = sv_2mortal(newSViv(CopLINE(PL_curcop)));
+		    SV *line = sv_2mortal(newSVuv(CopLINE(PL_curcop)));
 		    EXTEND(SP, 3);
 		    PUSHMARK(SP);
 		    PUSHs(error);
@@ -521,7 +526,7 @@ PP(pp_open)
     if (GvIOp(gv))
 	IoFLAGS(GvIOp(gv)) &= ~IOf_UNTAINT;
 
-    if (mg = SvTIED_mg((SV*)gv, 'q')) {
+    if ((mg = SvTIED_mg((SV*)gv, 'q'))) {
 	PUSHMARK(SP);
 	XPUSHs(SvTIED_obj((SV*)gv, mg));
 	XPUSHs(sv);
@@ -556,7 +561,7 @@ PP(pp_close)
     else
 	gv = (GV*)POPs;
 
-    if (mg = SvTIED_mg((SV*)gv, 'q')) {
+    if ((mg = SvTIED_mg((SV*)gv, 'q'))) {
 	PUSHMARK(SP);
 	XPUSHs(SvTIED_obj((SV*)gv, mg));
 	PUTBACK;
@@ -687,15 +692,20 @@ PP(pp_binmode)
     IO *io;
     PerlIO *fp;
     MAGIC *mg;
+    SV *discp = Nullsv;
 
     if (MAXARG < 1)
 	RETPUSHUNDEF;
+    if (MAXARG > 1)
+	discp = POPs;
 
     gv = (GV*)POPs; 
 
     if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
 	PUSHMARK(SP);
 	XPUSHs(SvTIED_obj((SV*)gv, mg));
+	if (discp)
+	    XPUSHs(discp);
 	PUTBACK;
 	ENTER;
 	call_method("BINMODE", G_SCALAR);
@@ -708,12 +718,11 @@ PP(pp_binmode)
     if (!(io = GvIO(gv)) || !(fp = IoIFP(io)))
 	RETPUSHUNDEF;
 
-    if (do_binmode(fp,IoTYPE(io),TRUE)) 
+    if (do_binmode(fp,IoTYPE(io),mode_from_discipline(discp))) 
 	RETPUSHYES;
     else
 	RETPUSHUNDEF;
 }
-
 
 PP(pp_tie)
 {
@@ -797,7 +806,7 @@ PP(pp_untie)
 
     if (ckWARN(WARN_UNTIE)) {
         MAGIC * mg ;
-        if (mg = SvTIED_mg(sv, how)) {
+        if ((mg = SvTIED_mg(sv, how))) {
             if (mg && SvREFCNT(SvRV(mg->mg_obj)) > 1)  
 		Perl_warner(aTHX_ WARN_UNTIE,
 		    "untie attempted while %"UVuf" inner references still exist",
@@ -816,7 +825,7 @@ PP(pp_tied)
     char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV) ? 'P' : 'q';
     MAGIC *mg;
 
-    if (mg = SvTIED_mg(sv, how)) {
+    if ((mg = SvTIED_mg(sv, how))) {
 	SV *osv = SvTIED_obj(sv, mg);
 	if (osv == mg->mg_obj)
 	    osv = sv_mortalcopy(osv);
@@ -855,9 +864,9 @@ PP(pp_dbmopen)
     PUSHs(sv);
     PUSHs(left);
     if (SvIV(right))
-	PUSHs(sv_2mortal(newSViv(O_RDWR|O_CREAT)));
+	PUSHs(sv_2mortal(newSVuv(O_RDWR|O_CREAT)));
     else
-	PUSHs(sv_2mortal(newSViv(O_RDWR)));
+	PUSHs(sv_2mortal(newSVuv(O_RDWR)));
     PUSHs(right);
     PUTBACK;
     call_sv((SV*)GvCV(gv), G_SCALAR);
@@ -868,7 +877,7 @@ PP(pp_dbmopen)
 	PUSHMARK(SP);
 	PUSHs(sv);
 	PUSHs(left);
-	PUSHs(sv_2mortal(newSViv(O_RDONLY)));
+	PUSHs(sv_2mortal(newSVuv(O_RDONLY)));
 	PUSHs(right);
 	PUTBACK;
 	call_sv((SV*)GvCV(gv), G_SCALAR);
@@ -1085,7 +1094,7 @@ PP(pp_getc)
     else
 	gv = (GV*)POPs;
 
-    if (mg = SvTIED_mg((SV*)gv, 'q')) {
+    if ((mg = SvTIED_mg((SV*)gv, 'q'))) {
 	I32 gimme = GIMME_V;
 	PUSHMARK(SP);
 	XPUSHs(SvTIED_obj((SV*)gv, mg));
@@ -1309,7 +1318,7 @@ PP(pp_prtf)
     else
 	gv = PL_defoutgv;
 
-    if (mg = SvTIED_mg((SV*)gv, 'q')) {
+    if ((mg = SvTIED_mg((SV*)gv, 'q'))) {
 	if (MARK == ORIGMARK) {
 	    MEXTEND(SP, 1);
 	    ++MARK;
@@ -1579,10 +1588,11 @@ PP(pp_send)
     djSP; dMARK; dORIGMARK; dTARGET;
     GV *gv;
     IO *io;
-    Off_t offset;
     SV *bufsv;
     char *buffer;
-    Off_t length;
+    Size_t length;
+    SSize_t retval;
+    IV offset;
     STRLEN blen;
     MAGIC *mg;
 
@@ -1605,17 +1615,17 @@ PP(pp_send)
 	goto say_undef;
     bufsv = *++MARK;
     buffer = SvPV(bufsv, blen);
-#if Off_t_SIZE > IVSIZE
-    length = SvNVx(*++MARK);
+#if Size_t_size > IVSIZE
+    length = (Size_t)SvNVx(*++MARK);
 #else
-    length = SvIVx(*++MARK);
+    length = (Size_t)SvIVx(*++MARK);
 #endif
-    if (length < 0)
+    if ((SSize_t)length < 0)
 	DIE(aTHX_ "Negative length");
     SETERRNO(0,0);
     io = GvIO(gv);
     if (!io || !IoIFP(io)) {
-	length = -1;
+	retval = -1;
 	if (ckWARN(WARN_CLOSED)) {
 	    if (PL_op->op_type == OP_SYSWRITE)
 		report_closed_fh(gv, io, "syswrite", "filehandle");
@@ -1625,11 +1635,7 @@ PP(pp_send)
     }
     else if (PL_op->op_type == OP_SYSWRITE) {
 	if (MARK < SP) {
-#if Off_t_SIZE > IVSIZE
-	    offset = SvNVx(*++MARK);
-#else
 	    offset = SvIVx(*++MARK);
-#endif
 	    if (offset < 0) {
 		if (-offset > blen)
 		    DIE(aTHX_ "Offset outside string");
@@ -1642,14 +1648,14 @@ PP(pp_send)
 	    length = blen - offset;
 #ifdef PERL_SOCK_SYSWRITE_IS_SEND
 	if (IoTYPE(io) == 's') {
-	    length = PerlSock_send(PerlIO_fileno(IoIFP(io)),
+	    retval = PerlSock_send(PerlIO_fileno(IoIFP(io)),
 				   buffer+offset, length, 0);
 	}
 	else
 #endif
 	{
 	    /* See the note at doio.c:do_print about filesize limits. --jhi */
-	    length = PerlLIO_write(PerlIO_fileno(IoIFP(io)),
+	    retval = PerlLIO_write(PerlIO_fileno(IoIFP(io)),
 				   buffer+offset, length);
 	}
     }
@@ -1658,20 +1664,24 @@ PP(pp_send)
 	char *sockbuf;
 	STRLEN mlen;
 	sockbuf = SvPVx(*++MARK, mlen);
-	length = PerlSock_sendto(PerlIO_fileno(IoIFP(io)), buffer, blen, length,
-				(struct sockaddr *)sockbuf, mlen);
+	retval = PerlSock_sendto(PerlIO_fileno(IoIFP(io)), buffer, blen,
+				 length, (struct sockaddr *)sockbuf, mlen);
     }
     else
-	length = PerlSock_send(PerlIO_fileno(IoIFP(io)), buffer, blen, length);
+	retval = PerlSock_send(PerlIO_fileno(IoIFP(io)), buffer, blen, length);
 
 #else
     else
 	DIE(aTHX_ PL_no_sock_func, "send");
 #endif
-    if (length < 0)
+    if (retval < 0)
 	goto say_undef;
     SP = ORIGMARK;
-    PUSHi(length);
+#if Size_t_size > IVSIZE
+    PUSHn(retval);
+#else
+    PUSHi(retval);
+#endif
     RETURN;
 
   say_undef:
@@ -1783,9 +1793,9 @@ PP(pp_sysseek)
 #if LSEEKSIZE > IVSIZE
 	XPUSHs(sv_2mortal(newSVnv((NV) offset)));
 #else
-	XPUSHs(sv_2mortal(newSViv((IV) offset)));
+	XPUSHs(sv_2mortal(newSViv(offset)));
 #endif
-	XPUSHs(sv_2mortal(newSViv((IV) whence)));
+	XPUSHs(sv_2mortal(newSViv(whence)));
 	PUTBACK;
 	ENTER;
 	call_method("SEEK", G_SCALAR);
@@ -1797,15 +1807,15 @@ PP(pp_sysseek)
     if (PL_op->op_type == OP_SEEK)
 	PUSHs(boolSV(do_seek(gv, offset, whence)));
     else {
-	Off_t n = do_sysseek(gv, offset, whence);
-        if (n < 0)
+	Off_t sought = do_sysseek(gv, offset, whence);
+        if (sought < 0)
             PUSHs(&PL_sv_undef);
         else {
-            SV* sv = n ?
+            SV* sv = sought ?
 #if LSEEKSIZE > IVSIZE
-                newSVnv((NV)n)
+                newSVnv((NV)sought)
 #else
-                newSViv((IV)n)
+                newSViv(sought)
 #endif
                 : newSVpvn(zero_but_true, ZBTLEN);
             PUSHs(sv_2mortal(sv));
@@ -1817,11 +1827,24 @@ PP(pp_sysseek)
 PP(pp_truncate)
 {
     djSP;
-    Off_t len = (Off_t)POPn;
+    /* There seems to be no consensus on the length type of truncate()
+     * and ftruncate(), both off_t and size_t have supporters. In
+     * general one would think that when using large files, off_t is
+     * at least as wide as size_t, so using an off_t should be okay. */
+    /* XXX Configure probe for the length type of *truncate() needed XXX */
+    Off_t len;
     int result = 1;
     GV *tmpgv;
     STRLEN n_a;
 
+#if Size_t_size > IVSIZE
+    len = (Off_t)POPn;
+#else
+    len = (Off_t)POPi;
+#endif
+    /* Checking for length < 0 is problematic as the type might or
+     * might not be signed: if it is not, clever compilers will moan. */ 
+    /* XXX Configure probe for the signedness of the length type of *truncate() needed? XXX */
     SETERRNO(0,0);
 #if defined(HAS_TRUNCATE) || defined(HAS_CHSIZE) || defined(F_FREESP)
     if (PL_op->op_flags & OPf_SPECIAL) {
@@ -2518,17 +2541,25 @@ PP(pp_stat)
 	EXTEND_MORTAL(max);
 	PUSHs(sv_2mortal(newSViv(PL_statcache.st_dev)));
 	PUSHs(sv_2mortal(newSViv(PL_statcache.st_ino)));
-	PUSHs(sv_2mortal(newSViv(PL_statcache.st_mode)));
-	PUSHs(sv_2mortal(newSViv(PL_statcache.st_nlink)));
+	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_mode)));
+	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_nlink)));
 #if Uid_t_size > IVSIZE
 	PUSHs(sv_2mortal(newSVnv(PL_statcache.st_uid)));
 #else
+#   if Uid_t_sign <= 0
 	PUSHs(sv_2mortal(newSViv(PL_statcache.st_uid)));
+#   else
+	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_uid)));
+#   endif
 #endif
 #if Gid_t_size > IVSIZE 
 	PUSHs(sv_2mortal(newSVnv(PL_statcache.st_gid)));
 #else
+#   if Gid_t_sign <= 0
 	PUSHs(sv_2mortal(newSViv(PL_statcache.st_gid)));
+#   else
+	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_gid)));
+#   endif
 #endif
 #ifdef USE_STAT_RDEV
 	PUSHs(sv_2mortal(newSViv(PL_statcache.st_rdev)));
@@ -2550,8 +2581,8 @@ PP(pp_stat)
 	PUSHs(sv_2mortal(newSViv(PL_statcache.st_ctime)));
 #endif
 #ifdef USE_STAT_BLOCKS
-	PUSHs(sv_2mortal(newSViv(PL_statcache.st_blksize)));
-	PUSHs(sv_2mortal(newSViv(PL_statcache.st_blocks)));
+	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_blksize)));
+	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_blocks)));
 #else
 	PUSHs(sv_2mortal(newSVpvn("", 0)));
 	PUSHs(sv_2mortal(newSVpvn("", 0)));
@@ -3078,9 +3109,26 @@ PP(pp_fttext)
 #else
 	else if (*s & 128) {
 #ifdef USE_LOCALE
-	    if (!(PL_op->op_private & OPpLOCALE) || !isALPHA_LC(*s))
+	    if ((PL_op->op_private & OPpLOCALE) && isALPHA_LC(*s))
+		continue;
 #endif
-		odd++;
+	    /* utf8 characters don't count as odd */
+	    if (*s & 0x40) {
+		int ulen = UTF8SKIP(s);
+		if (ulen < len - i) {
+		    int j;
+		    for (j = 1; j < ulen; j++) {
+			if ((s[j] & 0xc0) != 0x80)
+			    goto not_utf8;
+		    }
+		    --ulen;	/* loop does extra increment */
+		    s += ulen;
+		    i += ulen;
+		    continue;
+		}
+	    }
+	  not_utf8:
+	    odd++;
 	}
 	else if (*s < 32 &&
 	  *s != '\n' && *s != '\r' && *s != '\b' &&
@@ -3459,7 +3507,7 @@ PP(pp_readdir)
 
     if (GIMME == G_ARRAY) {
 	/*SUPPRESS 560*/
-	while (dp = (Direntry_t *)PerlDir_read(IoDIRP(io))) {
+	while ((dp = (Direntry_t *)PerlDir_read(IoDIRP(io)))) {
 #ifdef DIRNAMLEN
 	    sv = newSVpvn(dp->d_name, dp->d_namlen);
 #else
@@ -3618,7 +3666,7 @@ PP(pp_fork)
 	RETSETUNDEF;
     if (!childpid) {
 	/*SUPPRESS 560*/
-	if (tmpgv = gv_fetchpv("$", TRUE, SVt_PV))
+	if ((tmpgv = gv_fetchpv("$", TRUE, SVt_PV)))
 	    sv_setiv(GvSV(tmpgv), (IV)PerlProc_getpid());
 	hv_clear(PL_pidstatus);	/* no kids, so don't wait for 'em */
     }
@@ -4035,7 +4083,6 @@ PP(pp_gmtime)
     EXTEND(SP, 9);
     EXTEND_MORTAL(9);
     if (GIMME != G_ARRAY) {
-	dTARGET;
 	SV *tsv;
 	if (!tmbuf)
 	    RETPUSHUNDEF;
@@ -4762,7 +4809,11 @@ PP(pp_gpwent)
 	PUSHs(sv = sv_newmortal());
 	if (pwent) {
 	    if (which == OP_GPWNAM)
+#if Uid_t_sign <= 0
 		sv_setiv(sv, (IV)pwent->pw_uid);
+#else
+		sv_setuv(sv, (UV)pwent->pw_uid);
+#endif
 	    else
 		sv_setpv(sv, pwent->pw_name);
 	}
@@ -4784,13 +4835,24 @@ PP(pp_gpwent)
 	sv_setpv(sv, pwent->pw_passwd);
 #   endif
 #endif
+#ifndef INCOMPLETE_TAINTS
+	/* passwd is tainted because user himself can diddle with it. */
+	SvTAINTED_on(sv);
+#endif
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
+#if Uid_t_sign <= 0
 	sv_setiv(sv, (IV)pwent->pw_uid);
+#else
+	sv_setuv(sv, (UV)pwent->pw_uid);
+#endif
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
+#if Uid_t_sign <= 0
 	sv_setiv(sv, (IV)pwent->pw_gid);
-
+#else
+	sv_setuv(sv, (UV)pwent->pw_gid);
+#endif
 	/* pw_change, pw_quota, and pw_age are mutually exclusive. */
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
 #ifdef PWCHANGE
@@ -4829,6 +4891,10 @@ PP(pp_gpwent)
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
 	sv_setpv(sv, pwent->pw_shell);
+#ifndef INCOMPLETE_TAINTS
+	/* pw_shell is tainted because user himself can diddle with it. */
+	SvTAINTED_on(sv);
+#endif
 
 #ifdef PWEXPIRE
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
@@ -4993,7 +5059,6 @@ PP(pp_syscall)
     unsigned long a[20];
     register I32 i = 0;
     I32 retval = -1;
-    MAGIC *mg;
     STRLEN n_a;
 
     if (PL_tainting) {

@@ -64,8 +64,12 @@ static I32 read_e_script(pTHXo_ int idx, SV *buf_sv, int maxlen);
 	    PERL_SET_INTERP(my_perl);		\
 	    INIT_THREADS;			\
 	    ALLOC_THREAD_KEY;			\
+	    PERL_SET_THX(my_perl);		\
+	    OP_REFCNT_INIT;			\
 	}					\
-	PERL_SET_THX(my_perl);			\
+	else {					\
+	    PERL_SET_THX(my_perl);		\
+	}					\
     } STMT_END
 #  else
 #  define INIT_TLS_AND_INTERP \
@@ -243,7 +247,7 @@ perl_construct(pTHXx)
     {
 	U8 *s;
 	PL_patchlevel = NEWSV(0,4);
-	SvUPGRADE(PL_patchlevel, SVt_PVNV);
+	(void)SvUPGRADE(PL_patchlevel, SVt_PVNV);
 	if (PERL_REVISION > 127 || PERL_VERSION > 127 || PERL_SUBVERSION > 127)
 	    SvGROW(PL_patchlevel, UTF8_MAXLEN*3+1);
 	s = (U8*)SvPVX(PL_patchlevel);
@@ -373,7 +377,7 @@ perl_destruct(pTHXx)
 #ifdef DEBUGGING
     {
 	char *s;
-	if (s = PerlEnv_getenv("PERL_DESTRUCT_LEVEL")) {
+	if ((s = PerlEnv_getenv("PERL_DESTRUCT_LEVEL"))) {
 	    int i = atoi(s);
 	    if (destruct_level < i)
 		destruct_level = i;
@@ -591,6 +595,10 @@ perl_destruct(pTHXx)
     if (!specialWARN(PL_compiling.cop_warnings))
 	SvREFCNT_dec(PL_compiling.cop_warnings);
     PL_compiling.cop_warnings = Nullsv;
+#ifndef USE_ITHREADS
+    SvREFCNT_dec(CopFILEGV(&PL_compiling));
+    CopFILEGV_set(&PL_compiling, Nullgv);
+#endif
 
     /* Prepare to destruct main symbol table.  */
 
@@ -675,10 +683,15 @@ perl_destruct(pTHXx)
     SvREFCNT(&PL_sv_yes) = 0;
     sv_clear(&PL_sv_yes);
     SvANY(&PL_sv_yes) = NULL;
+    SvFLAGS(&PL_sv_yes) = 0;
 
     SvREFCNT(&PL_sv_no) = 0;
     sv_clear(&PL_sv_no);
     SvANY(&PL_sv_no) = NULL;
+    SvFLAGS(&PL_sv_no) = 0;
+
+    SvREFCNT(&PL_sv_undef) = 0;
+    SvREADONLY_off(&PL_sv_undef);
 
     if (PL_sv_count != 0 && ckWARN_d(WARN_INTERNAL))
 	Perl_warner(aTHX_ WARN_INTERNAL,"Scalars leaked: %ld\n", (long)PL_sv_count);
@@ -729,7 +742,7 @@ perl_destruct(pTHXx)
 	    }
 	}
 	/* we know that type >= SVt_PV */
-	SvOOK_off(PL_mess_sv);
+	(void)SvOOK_off(PL_mess_sv);
 	Safefree(SvPVX(PL_mess_sv));
 	Safefree(SvANY(PL_mess_sv));
 	Safefree(PL_mess_sv);
@@ -751,7 +764,13 @@ perl_free(pTHXx)
 #if defined(PERL_OBJECT)
     PerlMem_free(this);
 #else
+#  if defined(PERL_IMPLICIT_SYS) && defined(WIN32)
+    void *host = w32_internal_host;
     PerlMem_free(aTHXx);
+    win32_delete_internal_host(host);
+#  else
+    PerlMem_free(aTHXx);
+#  endif
 #endif
 }
 
@@ -935,7 +954,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	case 'W':
 	case 'X':
 	case 'w':
-	    if (s = moreswitches(s))
+	    if ((s = moreswitches(s)))
 		goto reswitch;
 	    break;
 
@@ -971,7 +990,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 		char *p;
 		STRLEN len = strlen(s);
 		p = savepvn(s, len);
-		incpush(p, TRUE);
+		incpush(p, TRUE, TRUE);
 		sv_catpvn(sv, "-I", 2);
 		sv_catpvn(sv, p, len);
 		sv_catpvn(sv, " ", 1);
@@ -1632,7 +1651,7 @@ Perl_call_sv(pTHX_ SV *sv, I32 flags)
 	    SAVETMPS;
 	    
 	    push_return(PL_op->op_next);
-	    PUSHBLOCK(cx, CXt_EVAL, PL_stack_sp);
+	    PUSHBLOCK(cx, (CXt_EVAL|CXp_TRYBLOCK), PL_stack_sp);
 	    PUSHEVAL(cx, 0, 0);
 	    PL_eval_root = PL_op;             /* Only needed so that goto works right. */
 	    
@@ -1905,7 +1924,7 @@ Perl_magicname(pTHX_ char *sym, char *name, I32 namlen)
 {
     register GV *gv;
 
-    if (gv = gv_fetchpv(sym,TRUE, SVt_PV))
+    if ((gv = gv_fetchpv(sym,TRUE, SVt_PV)))
 	sv_magic(GvSV(gv), (SV*)gv, 0, name, namlen);
 }
 
@@ -2062,7 +2081,7 @@ Perl_moreswitches(pTHX_ char *s)
 		    p++;
 	    } while (*p && *p != '-');
 	    e = savepvn(s, e-s);
-	    incpush(e, TRUE);
+	    incpush(e, TRUE, TRUE);
 	    Safefree(e);
 	    s = p;
 	    if (*s == '-')
@@ -2220,12 +2239,12 @@ Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
 	return s;
     case 'W':
 	PL_dowarn = G_WARN_ALL_ON|G_WARN_ON; 
-	PL_compiling.cop_warnings = WARN_ALL ;
+	PL_compiling.cop_warnings = pWARN_ALL ;
 	s++;
 	return s;
     case 'X':
 	PL_dowarn = G_WARN_ALL_OFF; 
-	PL_compiling.cop_warnings = WARN_NONE ;
+	PL_compiling.cop_warnings = pWARN_NONE ;
 	s++;
 	return s;
     case '*':
@@ -2414,7 +2433,6 @@ STATIC void
 S_open_script(pTHX_ char *scriptname, bool dosearch, SV *sv, int *fdscript)
 {
     dTHR;
-    register char *s;
 
     *fdscript = -1;
 
@@ -2666,7 +2684,9 @@ S_fd_on_nosuid_fs(pTHX_ int fd)
 STATIC void
 S_validate_suid(pTHX_ char *validarg, char *scriptname, int fdscript)
 {
+#ifdef IAMSUID
     int which;
+#endif
 
     /* do we need to emulate setuid on scripts? */
 
@@ -2933,7 +2953,8 @@ S_find_beginning(pTHX)
 		while (isDIGIT(s2[-1]) || strchr("-._", s2[-1])) s2--;
 		if (strnEQ(s2-4,"perl",4))
 		    /*SUPPRESS 530*/
-		    while (s = moreswitches(s)) ;
+		    while ((s = moreswitches(s)))
+			;
 	    }
 	}
     }
@@ -3073,7 +3094,6 @@ S_init_predump_symbols(pTHX)
 {
     dTHR;
     GV *tmpgv;
-    GV *othergv;
     IO *io;
 
     sv_setpvn(get_sv("\"", TRUE), " ", 1);
@@ -3125,7 +3145,7 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 		argc--,argv++;
 		break;
 	    }
-	    if (s = strchr(argv[0], '=')) {
+	    if ((s = strchr(argv[0], '='))) {
 		*s++ = '\0';
 		sv_setpv(GvSV(gv_fetchpv(argv[0]+1,TRUE, SVt_PV)),s);
 	    }
@@ -3142,17 +3162,17 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
     PL_formtarget = PL_bodytarget;
 
     TAINT;
-    if (tmpgv = gv_fetchpv("0",TRUE, SVt_PV)) {
+    if ((tmpgv = gv_fetchpv("0",TRUE, SVt_PV))) {
 	sv_setpv(GvSV(tmpgv),PL_origfilename);
 	magicname("0", "0", 1);
     }
-    if (tmpgv = gv_fetchpv("\030",TRUE, SVt_PV))
+    if ((tmpgv = gv_fetchpv("\030",TRUE, SVt_PV)))
 #ifdef OS2
 	sv_setpv(GvSV(tmpgv), os2_execname());
 #else
 	sv_setpv(GvSV(tmpgv),PL_origargv[0]);
 #endif
-    if (PL_argvgv = gv_fetchpv("ARGV",TRUE, SVt_PVAV)) {
+    if ((PL_argvgv = gv_fetchpv("ARGV",TRUE, SVt_PVAV))) {
 	GvMULTI_on(PL_argvgv);
 	(void)gv_AVadd(PL_argvgv);
 	av_clear(GvAVn(PL_argvgv));
@@ -3163,7 +3183,7 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 		sv_utf8_upgrade(sv);
 	}
     }
-    if (PL_envgv = gv_fetchpv("ENV",TRUE, SVt_PVHV)) {
+    if ((PL_envgv = gv_fetchpv("ENV",TRUE, SVt_PVHV))) {
 	HV *hv;
 	GvMULTI_on(PL_envgv);
 	hv = GvHVn(PL_envgv);
@@ -3199,7 +3219,7 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 #endif
     }
     TAINT_NOT;
-    if (tmpgv = gv_fetchpv("$",TRUE, SVt_PV))
+    if ((tmpgv = gv_fetchpv("$",TRUE, SVt_PV)))
 	sv_setiv(GvSV(tmpgv), (IV)PerlProc_getpid());
 }
 
@@ -3211,9 +3231,9 @@ S_init_perllib(pTHX)
 #ifndef VMS
 	s = PerlEnv_getenv("PERL5LIB");
 	if (s)
-	    incpush(s, TRUE);
+	    incpush(s, TRUE, TRUE);
 	else
-	    incpush(PerlEnv_getenv("PERLLIB"), FALSE);
+	    incpush(PerlEnv_getenv("PERLLIB"), FALSE, FALSE);
 #else /* VMS */
 	/* Treat PERL5?LIB as a possible search list logical name -- the
 	 * "natural" VMS idiom for a Unix path string.  We allow each
@@ -3222,57 +3242,73 @@ S_init_perllib(pTHX)
 	char buf[256];
 	int idx = 0;
 	if (my_trnlnm("PERL5LIB",buf,0))
-	    do { incpush(buf,TRUE); } while (my_trnlnm("PERL5LIB",buf,++idx));
+	    do { incpush(buf,TRUE,TRUE); } while (my_trnlnm("PERL5LIB",buf,++idx));
 	else
-	    while (my_trnlnm("PERLLIB",buf,idx++)) incpush(buf,FALSE);
+	    while (my_trnlnm("PERLLIB",buf,idx++)) incpush(buf,FALSE,FALSE);
 #endif /* VMS */
     }
 
 /* Use the ~-expanded versions of APPLLIB (undocumented),
-    ARCHLIB PRIVLIB SITEARCH and SITELIB 
+    ARCHLIB PRIVLIB SITEARCH SITELIB VENDORARCH and VENDORLIB
 */
 #ifdef APPLLIB_EXP
-    incpush(APPLLIB_EXP, TRUE);
+    incpush(APPLLIB_EXP, TRUE, TRUE);
 #endif
 
 #ifdef ARCHLIB_EXP
-    incpush(ARCHLIB_EXP, FALSE);
+    incpush(ARCHLIB_EXP, FALSE, FALSE);
 #endif
 #ifndef PRIVLIB_EXP
-#define PRIVLIB_EXP "/usr/local/lib/perl5:/usr/local/lib/perl"
+#  define PRIVLIB_EXP "/usr/local/lib/perl5:/usr/local/lib/perl"
 #endif
 #if defined(WIN32) 
-    incpush(PRIVLIB_EXP, TRUE);
+    incpush(PRIVLIB_EXP, TRUE, FALSE);
 #else
-    incpush(PRIVLIB_EXP, FALSE);
+    incpush(PRIVLIB_EXP, FALSE, FALSE);
 #endif
 
-#if defined(WIN32)
-    incpush(SITELIB_EXP, TRUE);	/* XXX Win32 needs inc_version_list support */
-#else
+#ifdef SITEARCH_EXP
+    /* sitearch is always relative to sitelib on Windows for
+     * DLL-based path intuition to work correctly */
+#  if !defined(WIN32)
+    incpush(SITEARCH_EXP, FALSE, FALSE);
+#  endif
+#endif
+
 #ifdef SITELIB_EXP
-    {
-	char *path = SITELIB_EXP;
+#  if defined(WIN32)
+    incpush(SITELIB_EXP, TRUE, FALSE);	/* this picks up sitearch as well */
+#  else
+    incpush(SITELIB_EXP, FALSE, FALSE);
+#  endif
+#endif
 
-	if (path) {
-	    char buf[1024];
-	    strcpy(buf,path);
-	    if (strrchr(buf,'/'))	/* XXX Hack, Configure var needed */
-		*strrchr(buf,'/') = '\0';
-	    incpush(buf, TRUE);
-	}
-    }
+#ifdef SITELIB_STEM /* Search for version-specific dirs below here */
+    incpush(SITELIB_STEM, FALSE, TRUE);
 #endif
+
+#ifdef PERL_VENDORARCH_EXP
+    /* vendorarch is always relative to vendorlib on Windows for
+     * DLL-based path intuition to work correctly */
+#  if !defined(WIN32)
+    incpush(PERL_VENDORARCH_EXP, FALSE, FALSE);
+#  endif
 #endif
-#if defined(PERL_VENDORLIB_EXP)
-#if defined(WIN32) 
-    incpush(PERL_VENDORLIB_EXP, TRUE);
-#else
-    incpush(PERL_VENDORLIB_EXP, FALSE);
+
+#ifdef PERL_VENDORLIB_EXP
+#  if defined(WIN32)
+    incpush(PERL_VENDORLIB_EXP, TRUE, FALSE);	/* this picks up vendorarch as well */
+#  else
+    incpush(PERL_VENDORLIB_EXP, FALSE, FALSE);
+#  endif
 #endif
+
+#ifdef PERL_VENDORLIB_STEM /* Search for version-specific dirs below here */
+    incpush(PERL_VENDORLIB_STEM, FALSE, TRUE);
 #endif
+
     if (!PL_tainting)
-	incpush(".", FALSE);
+	incpush(".", FALSE, FALSE);
 }
 
 #if defined(DOSISH)
@@ -3289,14 +3325,14 @@ S_init_perllib(pTHX)
 #endif 
 
 STATIC void
-S_incpush(pTHX_ char *p, int addsubdirs)
+S_incpush(pTHX_ char *p, int addsubdirs, int addoldvers)
 {
     SV *subdir = Nullsv;
 
-    if (!p)
+    if (!p || !*p)
 	return;
 
-    if (addsubdirs) {
+    if (addsubdirs || addoldvers) {
 	subdir = sv_newmortal();
     }
 
@@ -3326,7 +3362,7 @@ S_incpush(pTHX_ char *p, int addsubdirs)
 	 * BEFORE pushing libdir onto @INC we may first push version- and
 	 * archname-specific sub-directories.
 	 */
-	if (addsubdirs) {
+	if (addsubdirs || addoldvers) {
 #ifdef PERL_INC_VERSION_LIST
 	    /* Configure terminates PERL_INC_VERSION_LIST with a NULL */
 	    const char *incverlist[] = { PERL_INC_VERSION_LIST };
@@ -3347,35 +3383,40 @@ S_incpush(pTHX_ char *p, int addsubdirs)
 		              "Failed to unixify @INC element \"%s\"\n",
 			      SvPV(libdir,len));
 #endif
-	    /* .../version/archname if -d .../version/archname */
-	    Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/"PERL_FS_VER_FMT"/%s", libdir,
-			   (int)PERL_REVISION, (int)PERL_VERSION,
-			   (int)PERL_SUBVERSION, ARCHNAME);
-	    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
-		  S_ISDIR(tmpstatbuf.st_mode))
-		av_push(GvAVn(PL_incgv), newSVsv(subdir));
-
-	    /* .../version if -d .../version */
-	    Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/"PERL_FS_VER_FMT, libdir,
-			   (int)PERL_REVISION, (int)PERL_VERSION,
-			   (int)PERL_SUBVERSION);
-	    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
-		  S_ISDIR(tmpstatbuf.st_mode))
-		av_push(GvAVn(PL_incgv), newSVsv(subdir));
-
-	    /* .../archname if -d .../archname */
-	    Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/%s", libdir, ARCHNAME);
-	    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
-		  S_ISDIR(tmpstatbuf.st_mode))
-		av_push(GvAVn(PL_incgv), newSVsv(subdir));
-
-#ifdef PERL_INC_VERSION_LIST
-	    for (incver = incverlist; *incver; incver++) {
-		/* .../xxx if -d .../xxx */
-		Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/%s", libdir, *incver);
+	    if (addsubdirs) {
+		/* .../version/archname if -d .../version/archname */
+		Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/"PERL_FS_VER_FMT"/%s", 
+				libdir,
+			       (int)PERL_REVISION, (int)PERL_VERSION,
+			       (int)PERL_SUBVERSION, ARCHNAME);
 		if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
 		      S_ISDIR(tmpstatbuf.st_mode))
 		    av_push(GvAVn(PL_incgv), newSVsv(subdir));
+
+		/* .../version if -d .../version */
+		Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/"PERL_FS_VER_FMT, libdir,
+			       (int)PERL_REVISION, (int)PERL_VERSION,
+			       (int)PERL_SUBVERSION);
+		if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
+		      S_ISDIR(tmpstatbuf.st_mode))
+		    av_push(GvAVn(PL_incgv), newSVsv(subdir));
+
+		/* .../archname if -d .../archname */
+		Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/%s", libdir, ARCHNAME);
+		if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
+		      S_ISDIR(tmpstatbuf.st_mode))
+		    av_push(GvAVn(PL_incgv), newSVsv(subdir));
+	    }
+
+#ifdef PERL_INC_VERSION_LIST
+	    if (addoldvers) {
+		for (incver = incverlist; *incver; incver++) {
+		    /* .../xxx if -d .../xxx */
+		    Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/%s", libdir, *incver);
+		    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
+			  S_ISDIR(tmpstatbuf.st_mode))
+			av_push(GvAVn(PL_incgv), newSVsv(subdir));
+		}
 	    }
 #endif
 	}

@@ -24,6 +24,7 @@ Perl_Gv_AMupdate
 Perl_avhv_delete_ent
 Perl_avhv_exists_ent
 Perl_avhv_fetch_ent
+Perl_avhv_store_ent
 Perl_avhv_iternext
 Perl_avhv_iterval
 Perl_avhv_keys
@@ -57,6 +58,7 @@ Perl_croak_nocontext
 Perl_die_nocontext
 Perl_deb_nocontext
 Perl_form_nocontext
+Perl_load_module_nocontext
 Perl_mess_nocontext
 Perl_warn_nocontext
 Perl_warner_nocontext
@@ -66,6 +68,8 @@ Perl_sv_setpvf_nocontext
 Perl_sv_catpvf_mg_nocontext
 Perl_sv_setpvf_mg_nocontext
 Perl_fprintf_nocontext
+Perl_cv_const_sv
+Perl_cv_undef
 Perl_cx_dump
 Perl_filter_add
 Perl_filter_del
@@ -83,6 +87,7 @@ Perl_delimcpy
 Perl_die
 Perl_dounwind
 Perl_do_binmode
+Perl_do_close
 Perl_do_open
 Perl_do_open9
 Perl_dowantarray
@@ -178,6 +183,7 @@ Perl_is_uni_xdigit_lc
 Perl_to_uni_upper_lc
 Perl_to_uni_title_lc
 Perl_to_uni_lower_lc
+Perl_is_utf8_char
 Perl_is_utf8_alnum
 Perl_is_utf8_alnumc
 Perl_is_utf8_idfirst
@@ -194,6 +200,8 @@ Perl_is_utf8_punct
 Perl_is_utf8_xdigit
 Perl_is_utf8_mark
 Perl_leave_scope
+Perl_load_module
+Perl_vload_module
 Perl_looks_like_number
 Perl_markstack_grow
 Perl_mess
@@ -264,6 +272,7 @@ Perl_newSV
 Perl_newSVREF
 Perl_newSVOP
 Perl_newSViv
+Perl_newSVuv
 Perl_newSVnv
 Perl_newSVpv
 Perl_newSVpvn

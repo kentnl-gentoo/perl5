@@ -63,7 +63,7 @@ ignore_versioned_solibs='y'
 # intending to replace /usr/bin/perl (at least just yet).
 # This change makes linux consistent with most other unix platforms
 # in having a default of prefix=/usr/local.
-# These notes can probably safely be removed in 5.006_50 and beyond.
+# These notes can probably safely be removed in 5.005_50 and beyond.
 #
 #	9 April 1999  Andy Dougherty  <doughera@lafayette.edu>
 #
@@ -273,6 +273,16 @@ $define|true|[yY]*)
         set `echo X "$libswanted "| sed -e 's/ c / pthread c /'`
         shift
         libswanted="$*"
+	;;
+esac
+EOCBU
+
+cat > UU/uselargefiles.cbu <<'EOCBU'
+# This script UU/uselargefiles.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use large files.
+case "$uselargefiles" in
+''|$define|true|[yY]*)
+	ccflags="$ccflags -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64"
 	;;
 esac
 EOCBU

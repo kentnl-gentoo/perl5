@@ -45,15 +45,51 @@ case "$archname" in
     ;;
 esac
 
+test -z "`${cc:-cc} -V 2>&1|grep -i workshop`" || ccisworkshop="$define"
+test -z "`${cc:-cc} -v 2>&1|grep -i gcc`"      || ccisgcc="$define"
+
+cat >UU/workshoplibpth.cbu<<'EOCBU'
+case "$workshoplibpth_done" in
+'')	case "$use64bitall" in
+	"$define"|true|[yY]*)
+            loclibpth="$loclibpth /usr/lib/sparcv9"
+            if test -n "$workshoplibs"; then
+                loclibpth=`echo $loclibpth | sed -e "s% $workshoplibs%%" `
+                for lib in $workshoplibs; do
+                    # Logically, it should be sparcv9.
+                    # But the reality fights back, it's v9.
+                    loclibpth="$loclibpth $lib/sparcv9 $lib/v9"
+                done
+            fi 
+	    ;;
+	*)  loclibpth="$loclibpth $workshoplibs"  
+	    ;;
+	esac
+	workshoplibpth_done="$define"
+	;;
+esac
+EOCBU
+
+case "$ccisworkshop" in
+"$define")
+	cat >try.c <<EOF
+#include <sunmath.h>
+int main() { return(0); }
+EOF
+	workshoplibs=`cc -### try.c -lsunmath -o try 2>&1|grep " -Y "|sed 's%.* -Y "P,\(.*\)".*%\1%'|tr ':' '\n'|grep '/SUNWspro/'`
+	. ./UU/workshoplibpth.cbu
+	;;
+esac
+
 ######################################################
 # General sanity testing.  See below for excerpts from the Solaris FAQ.
-
+#
 # From roehrich@ironwood-fddi.cray.com Wed Sep 27 12:51:46 1995
 # Date: Thu, 7 Sep 1995 16:31:40 -0500
 # From: Dean Roehrich <roehrich@ironwood-fddi.cray.com>
 # To: perl5-porters@africa.nicoh.com
 # Subject: Re: On perl5/solaris/gcc
-
+#
 # Here's another draft of the perl5/solaris/gcc sanity-checker. 
 
 case `type ${cc:-cc}` in
@@ -366,11 +402,11 @@ EOCBU
 cat > UU/use64bitall.cbu <<'EOCBU'
 # This script UU/use64bitall.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to be maximally 64 bitty.
-case "$use64bitall" in
-"$define"|true|[yY]*)
+case "$use64bitall-$use64bitall_done" in
+"$define-"|true-|[yY]*-)
 	    libc='/usr/lib/sparcv9/libc.so'
 	    if test ! -f $libc; then
-		cat <<EOM
+		cat >&4 <<EOM
 
 I do not see the 64-bit libc, $libc.
 Cannot continue, aborting.
@@ -378,32 +414,48 @@ Cannot continue, aborting.
 EOM
 		exit 1
 	    fi 
-	    loclibpth="$loclibpth /usr/lib/sparcv9"
+	    . ./UU/workshoplibpth.cbu
 	    case "$cc -v 2>/dev/null" in
 	    *gcc*)
-		# I don't know what are the flags to make gcc sparcv9-aware,
-	        # I'm just guessing. --jhi
-		ccflags="$ccflags -mv9"
-		ldflags="$ldflags -mv9"
-		lddlflags="$lddlflags -G -mv9"
+		echo 'main() { return 0; }' > try.c
+		if ${cc:-cc} -mcpu=v9 -m64 -S try.c 2>&1 | grep -e \
+		    '-m64 is not supported by this configuration'; then
+		    cat >&4 <<EOM
+
+Full 64-bit build not supported by this configuration.
+Cannot continue, aborting.
+
+EOM
+		    exit 1
+		fi
+		ccflags="$ccflags -mcpu=v9 -m64"
+		if test X`getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null` != X; then
+		    ccflags="$ccflags -Wa,`getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null`"
+		fi
+		# no changes to ld flags, as (according to man ld):
+		#
+   		# There is no specific option that tells ld to link 64-bit
+		# objects; the class of the first object that gets processed
+		# by ld determines whether it is to perform a 32-bit or a
+		# 64-bit link edit.
 		;;
 	    *)
 		ccflags="$ccflags `getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null`"
 		ldflags="$ldflags `getconf XBS5_LP64_OFF64_LDFLAGS 2>/dev/null`"
 		lddlflags="$lddlflags -G `getconf XBS5_LP64_OFF64_LDFLAGS 2>/dev/null`"
-		test -d /opt/SUNWspro/lib && loclibpth="$loclibpth /opt/SUNWspro/lib"
 		;;
 	    esac	
 	    libscheck='case "`/usr/bin/file $xxx`" in
 *64-bit*|*SPARCV9*) ;;
 *) xxx=/no/64-bit$xxx ;;
 esac'
+	    use64bitall_done=yes
 	    ;;
 esac
 EOCBU
  
 # Actually, we want to run this already now, if so requested,
-# because we need to fix up the flags right now.
+# because we need to fix up things right now.
 case "$use64bitall" in
 "$define"|true|[yY]*)
 	. ./UU/use64bitall.cbu
@@ -413,22 +465,38 @@ esac
 cat > UU/uselongdouble.cbu <<'EOCBU'
 # This script UU/uselongdouble.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use long doubles.
-case "$uselongdouble" in
-"$define"|true|[yY]*)
-	if test ! -f /opt/SUNWspro/lib/libsunmath.so; then
-		cat <<EOM
+case "$uselongdouble-$uselongdouble_done" in
+"$define-"|true-|[yY]*-)
+	case "$ccisworkshop" in
+	'')	cat >&4 <<EOM
 
-I do not see the libsunmath.so in /opt/SUNWspro/lib;
-therefore I cannot do long doubles, sorry.
-
+I do not see the Sun Workshop compiler; therefore I do not see
+the libsunmath; therefore I do not know how to do long doubles, sorry.
+I'm disabling the use of long doubles.
 EOM
-		exit 1
-	fi
-	libswanted="$libswanted sunmath"
-	loclibpth="$loclibpth /opt/SUNWspro/lib"
+		uselongdouble="$undef"
+		;;
+	*)	libswanted="$libswanted sunmath"
+		loclibpth="$loclibpth /opt/SUNWspro/lib"
+		;;
+	esac
+	uselongdouble_done=yes
 	;;
 esac
 EOCBU
+
+# Actually, we want to run this already now, if so requested,
+# because we need to fix up things right now.
+case "$uselongdouble" in
+"$define"|true|[yY]*)
+	. ./UU/uselongdouble.cbu
+	;;
+esac
+
+rm -f try.c try.o try
+# keep that leading tab
+	ccisworkshop=''
+	ccisgcc=''
 
 # This is just a trick to include some useful notes.
 cat > /dev/null <<'End_of_Solaris_Notes'

@@ -18,7 +18,7 @@ finddepth - traverse a directory structure depth-first
     use File::Find;
     finddepth(\&wanted, '/foo', '/bar');
     sub wanted { ... }
-    
+
     use File::Find;
     find({ wanted => \&process, follow => 1 }, '.');
 
@@ -349,7 +349,7 @@ sub _find_opt {
 
         unless ($Is_Dir) {
 	    unless (($_,$dir) = File::Basename::fileparse($abs_dir)) {
-		($dir,$_) = ('.', $top_item);
+		($dir,$_) = ('./', $top_item);
 	    }
 
             $abs_dir = $dir;
@@ -370,9 +370,9 @@ sub _find_opt {
                 warn "Couldn't chdir $abs_dir: $!\n";
                 next Proc_Top_Item;
             }
-            
-            $name = $abs_dir;
-            
+
+            $name = $abs_dir . $_;
+
             &$wanted_callback;
 
         }
@@ -520,8 +520,14 @@ sub _find_dir($$$) {
 	    $dir_pref = "$dir_name/";
             if ( $nlink < 0 ) {  # must be finddepth, report dirname now
                 $name = $dir_name;
+                if ( substr($name,-2) eq '/.' ) {
+                  $name =~ s|/\.$||;
+                }
                 $dir = $p_dir;
                 $_ = ($no_chdir ? $dir_name : $dir_rel );
+                if ( substr($_,-2) eq '/.' ) {
+                  s|/\.$||;
+                }
                 &$wanted_callback;
             } else {
                 push @Stack,[$CdLvl,$p_dir,$dir_rel,-1]  if  $bydepth;
@@ -658,8 +664,15 @@ sub _find_dir_symlnk($$$) {
 	        }
 	        $fullname = $dir_loc;
 	        $name = $dir_name;
+                if ( substr($name,-2) eq '/.' ) {
+                  $name =~ s|/\.$||;
+                }
                 $dir = $p_dir;
 	        $_ = ($no_chdir ? $dir_name : $dir_rel);
+                if ( substr($_,-2) eq '/.' ) {
+                  s|/\.$||;
+                }
+
 	        &$wanted_callback;
             } else {
                 push @Stack,[$dir_loc, $pdir_loc, $p_dir, $dir_rel,-1]  if  $bydepth;

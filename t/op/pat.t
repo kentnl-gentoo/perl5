@@ -4,7 +4,7 @@
 # the format supported by op/regexp.t.  If you want to add a test
 # that does fit that format, add it to op/re_tests, not here.
 
-print "1..210\n";
+print "1..211\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -369,8 +369,12 @@ print "# ans='@ans'\n# expect='$expect'\nnot " if "@ans" ne $expect;
 print "ok $test\n";
 $test++;
 
+print "not " unless "abc" =~ /^(??{"a"})b/;
+print "ok $test\n";
+$test++;
+
 my $matched;
-$matched = qr/\((?:(?>[^()]+)|(?p{$matched}))*\)/;
+$matched = qr/\((?:(?>[^()]+)|(??{$matched}))*\)/;
 
 @ans = @ans1 = ();
 push(@ans, $res), push(@ans1, $&) while $res = m/$matched/g;
@@ -569,8 +573,8 @@ sub must_warn_pat {
 
 sub must_warn {
     my ($warn_pat, $code) = @_;
-    local $^W; local %SIG;
-    eval 'BEGIN { $^W = 1; $SIG{__WARN__} = $warn_pat };' . $code;
+    local %SIG;
+    eval 'BEGIN { use warnings; $SIG{__WARN__} = $warn_pat };' . $code;
     print "ok $test\n";
     $test++;
 }
@@ -866,7 +870,7 @@ print "ok $test\n";
 $test++;
 
 $brackets = qr{
-	         {  (?> [^{}]+ | (?p{ $brackets }) )* }
+	         {  (?> [^{}]+ | (??{ $brackets }) )* }
 	      }x;
 
 "{{}" =~ $brackets;
@@ -877,7 +881,7 @@ $test++;
 print "ok $test\n";		# Did we survive?
 $test++;
 
-"something { long { and } hairy" =~ m/((?p{ $brackets }))/;
+"something { long { and } hairy" =~ m/((??{ $brackets }))/;
 print "not " unless $1 eq "{ and }";
 print "ok $test\n";
 $test++;

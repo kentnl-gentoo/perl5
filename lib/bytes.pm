@@ -1,11 +1,13 @@
 package bytes;
 
+$bytes::hint_bits = 0x00000008;
+
 sub import {
-    $^H |= 0x00000008;
+    $^H |= $bytes::hint_bits;
 }
 
 sub unimport {
-    $^H &= ~0x00000008;
+    $^H &= ~$bytes::hint_bits;
 }
 
 sub AUTOLOAD {
@@ -30,7 +32,7 @@ bytes - Perl pragma to force byte semantics rather than character semantics
 =head1 DESCRIPTION
 
 WARNING: The implementation of Unicode support in Perl is incomplete.
-Expect sudden and unannounced changes!
+See L<perlunicode> for the exact details.
 
 The C<use bytes> pragma disables character semantics for the rest of the
 lexical scope in which it appears.  C<no bytes> can be used to reverse

@@ -122,7 +122,7 @@ sub AUTOLOAD {
     our $AUTOLOAD;
     ($constname = $AUTOLOAD) =~ s/.*:://;
     croak "& not defined" if $constname eq 'constant';
-    my $val = constant($constname, @_ ? $_[0] : 0);
+    my $val = constant($constname);
     if ($! != 0) {
 	croak "Your vendor has not defined Sys::Syslog macro $constname";
     }
@@ -242,10 +242,11 @@ sub syslog {
 		}
 	    }
 	    else {
-		open(CONS,">/dev/console");
-		print CONS "<$facility.$priority>$whoami: $message\r";
-		exit if defined $pid;		# if fork failed, we're parent
-		close CONS;
+		if (open(CONS,">/dev/console")) {
+		    print CONS "<$facility.$priority>$whoami: $message\r";
+		    exit if defined $pid;		# if fork failed, we're parent
+		    close CONS;
+		}
 	    }
 	}
     }

@@ -47,6 +47,10 @@
 #define Perl_avhv_fetch_ent	pPerl->Perl_avhv_fetch_ent
 #undef  avhv_fetch_ent
 #define avhv_fetch_ent		Perl_avhv_fetch_ent
+#undef  Perl_avhv_store_ent
+#define Perl_avhv_store_ent	pPerl->Perl_avhv_store_ent
+#undef  avhv_store_ent
+#define avhv_store_ent		Perl_avhv_store_ent
 #undef  Perl_avhv_iternext
 #define Perl_avhv_iternext	pPerl->Perl_avhv_iternext
 #undef  avhv_iternext
@@ -184,6 +188,10 @@
 #define Perl_form_nocontext	pPerl->Perl_form_nocontext
 #undef  form_nocontext
 #define form_nocontext		Perl_form_nocontext
+#undef  Perl_load_module_nocontext
+#define Perl_load_module_nocontext	pPerl->Perl_load_module_nocontext
+#undef  load_module_nocontext
+#define load_module_nocontext	Perl_load_module_nocontext
 #undef  Perl_mess_nocontext
 #define Perl_mess_nocontext	pPerl->Perl_mess_nocontext
 #undef  mess_nocontext
@@ -221,6 +229,14 @@
 #undef  fprintf_nocontext
 #define fprintf_nocontext	Perl_fprintf_nocontext
 #endif
+#undef  Perl_cv_const_sv
+#define Perl_cv_const_sv	pPerl->Perl_cv_const_sv
+#undef  cv_const_sv
+#define cv_const_sv		Perl_cv_const_sv
+#undef  Perl_cv_undef
+#define Perl_cv_undef		pPerl->Perl_cv_undef
+#undef  cv_undef
+#define cv_undef		Perl_cv_undef
 #undef  Perl_cx_dump
 #define Perl_cx_dump		pPerl->Perl_cx_dump
 #undef  cx_dump
@@ -289,6 +305,10 @@
 #define Perl_do_binmode		pPerl->Perl_do_binmode
 #undef  do_binmode
 #define do_binmode		Perl_do_binmode
+#undef  Perl_do_close
+#define Perl_do_close		pPerl->Perl_do_close
+#undef  do_close
+#define do_close		Perl_do_close
 #if !defined(WIN32)
 #endif
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
@@ -679,6 +699,10 @@
 #define Perl_to_uni_lower_lc	pPerl->Perl_to_uni_lower_lc
 #undef  to_uni_lower_lc
 #define to_uni_lower_lc		Perl_to_uni_lower_lc
+#undef  Perl_is_utf8_char
+#define Perl_is_utf8_char	pPerl->Perl_is_utf8_char
+#undef  is_utf8_char
+#define is_utf8_char		Perl_is_utf8_char
 #undef  Perl_is_utf8_alnum
 #define Perl_is_utf8_alnum	pPerl->Perl_is_utf8_alnum
 #undef  is_utf8_alnum
@@ -743,6 +767,14 @@
 #define Perl_leave_scope	pPerl->Perl_leave_scope
 #undef  leave_scope
 #define leave_scope		Perl_leave_scope
+#undef  Perl_load_module
+#define Perl_load_module	pPerl->Perl_load_module
+#undef  load_module
+#define load_module		Perl_load_module
+#undef  Perl_vload_module
+#define Perl_vload_module	pPerl->Perl_vload_module
+#undef  vload_module
+#define vload_module		Perl_vload_module
 #undef  Perl_looks_like_number
 #define Perl_looks_like_number	pPerl->Perl_looks_like_number
 #undef  looks_like_number
@@ -1041,6 +1073,10 @@
 #define Perl_newSViv		pPerl->Perl_newSViv
 #undef  newSViv
 #define newSViv			Perl_newSViv
+#undef  Perl_newSVuv
+#define Perl_newSVuv		pPerl->Perl_newSVuv
+#undef  newSVuv
+#define newSVuv			Perl_newSVuv
 #undef  Perl_newSVnv
 #define Perl_newSVnv		pPerl->Perl_newSVnv
 #undef  newSVnv
@@ -2186,6 +2222,8 @@
 #  endif
 #endif
 #if defined(PERL_IN_TOKE_C) || defined(PERL_DECL_PROT)
+#if 0
+#endif
 #  if defined(CRIPPLED_CC)
 #  endif
 #  if defined(PERL_CR_FILTER)

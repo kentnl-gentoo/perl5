@@ -1938,11 +1938,9 @@ Perl_sv_2pv_nolen(pTHX_ register SV *sv)
 static char *
 uiv_2buf(char *buf, IV iv, UV uv, int is_uv, char **peob)
 {
-    STRLEN len;
     char *ptr = buf + TYPE_CHARS(UV);
     char *ebuf = ptr;
     int sign;
-    char *p;
 
     if (is_uv)
 	sign = 0;
@@ -2033,7 +2031,7 @@ Perl_sv_2pv(pTHX_ register SV *sv, STRLEN *lp)
 			    int right = 4;
  			    U16 reganch = (re->reganch & PMf_COMPILETIME) >> 12;
 
- 			    while(ch = *fptr++) {
+ 			    while((ch = *fptr++)) {
  				if(reganch & 1) {
  				    reflags[left++] = ch;
  				}
@@ -2613,7 +2611,7 @@ Perl_sv_setsv(pTHX_ SV *dstr, register SV *sstr)
 		    else
 			dref = (SV*)GvAV(dstr);
 		    GvAV(dstr) = (AV*)sref;
-		    if (GvIMPORTED_AV_off(dstr)
+		    if (!GvIMPORTED_AV(dstr)
 			&& CopSTASH_ne(PL_curcop, GvSTASH(dstr)))
 		    {
 			GvIMPORTED_AV_on(dstr);
@@ -2625,7 +2623,7 @@ Perl_sv_setsv(pTHX_ SV *dstr, register SV *sstr)
 		    else
 			dref = (SV*)GvHV(dstr);
 		    GvHV(dstr) = (HV*)sref;
-		    if (GvIMPORTED_HV_off(dstr)
+		    if (!GvIMPORTED_HV(dstr)
 			&& CopSTASH_ne(PL_curcop, GvSTASH(dstr)))
 		    {
 			GvIMPORTED_HV_on(dstr);
@@ -2676,7 +2674,7 @@ Perl_sv_setsv(pTHX_ SV *dstr, register SV *sstr)
 			GvASSUMECV_on(dstr);
 			PL_sub_generation++;
 		    }
-		    if (GvIMPORTED_CV_off(dstr)
+		    if (!GvIMPORTED_CV(dstr)
 			&& CopSTASH_ne(PL_curcop, GvSTASH(dstr)))
 		    {
 			GvIMPORTED_CV_on(dstr);
@@ -2695,7 +2693,7 @@ Perl_sv_setsv(pTHX_ SV *dstr, register SV *sstr)
 		    else
 			dref = (SV*)GvSV(dstr);
 		    GvSV(dstr) = sref;
-		    if (GvIMPORTED_SV_off(dstr)
+		    if (!GvIMPORTED_SV(dstr)
 			&& CopSTASH_ne(PL_curcop, GvSTASH(dstr)))
 		    {
 			GvIMPORTED_SV_on(dstr);
@@ -3091,7 +3089,7 @@ Perl_sv_catsv(pTHX_ SV *dstr, register SV *sstr)
     STRLEN len;
     if (!sstr)
 	return;
-    if (s = SvPV(sstr, len)) {
+    if ((s = SvPV(sstr, len))) {
 	if (SvUTF8(sstr))
 	    sv_utf8_upgrade(dstr);
 	sv_catpvn(dstr,s,len);
@@ -3502,7 +3500,7 @@ Perl_sv_insert(pTHX_ SV *bigstr, STRLEN offset, STRLEN len, char *little, STRLEN
 	SvCUR_set(bigstr, mid - big);
     }
     /*SUPPRESS 560*/
-    else if (i = mid - big) {	/* faster from front */
+    else if ((i = mid - big)) {	/* faster from front */
 	midend -= littlelen;
 	mid = midend;
 	sv_chop(bigstr,midend-i);
@@ -3949,7 +3947,6 @@ Perl_sv_cmp(pTHX_ register SV *str1, register SV *str2)
     STRLEN cur1, cur2;
     char *pv1, *pv2;
     I32 retval;
-    bool utf1;
 
     if (str1) {
         pv1 = SvPV(str1, cur1);
@@ -4746,6 +4743,25 @@ Perl_newSViv(pTHX_ IV i)
 }
 
 /*
+=for apidoc newSVuv
+
+Creates a new SV and copies an unsigned integer into it.
+The reference count for the SV is set to 1.
+
+=cut
+*/
+
+SV *
+Perl_newSVuv(pTHX_ UV u)
+{
+    register SV *sv;
+
+    new_SV(sv);
+    sv_setuv(sv,u);
+    return sv;
+}
+
+/*
 =for apidoc newRV_noinc
 
 Creates an RV wrapper for an SV.  The reference count for the original
@@ -5171,6 +5187,7 @@ Perl_sv_reftype(pTHX_ SV *sv, int ob)
 	case SVt_PVCV:		return "CODE";
 	case SVt_PVGV:		return "GLOB";
 	case SVt_PVFM:		return "FORMAT";
+	case SVt_PVIO:		return "IO";
 	default:		return "UNKNOWN";
 	}
     }
@@ -5471,7 +5488,7 @@ Perl_sv_tainted(pTHX_ SV *sv)
 {
     if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv)) {
 	MAGIC *mg = mg_find(sv, 't');
-	if (mg && ((mg->mg_len & 1) || (mg->mg_len & 2) && mg->mg_obj == sv))
+	if (mg && ((mg->mg_len & 1) || ((mg->mg_len & 2) && mg->mg_obj == sv)))
 	    return TRUE;
     }
     return FALSE;
@@ -5812,6 +5829,8 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		    vecsv = va_arg(*args, SV*);
 		else if (svix < svmax)
 		    vecsv = svargs[svix++];
+		else
+		    continue;
 		dotstr = SvPVx(vecsv,dotstrlen);
 		if (DO_UTF8(vecsv))
 		    is_utf = TRUE;
@@ -5824,6 +5843,11 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		    vecsv = va_arg(*args, SV*);
 		else if (svix < svmax)
 		    vecsv = svargs[svix++];
+		else {
+		    vecstr = (U8*)"";
+		    veclen = 0;
+		    continue;
+		}
 		vecstr = (U8*)SvPVx(vecsv,veclen);
 		utf = DO_UTF8(vecsv);
 		continue;
@@ -6230,8 +6254,9 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 	    *--eptr = c;
 #ifdef USE_LONG_DOUBLE
 	    {
-		char* p = PERL_PRIfldbl + sizeof(PERL_PRIfldbl) - 3;
-		while (p >= PERL_PRIfldbl) { *--eptr = *p--; }
+		static char const my_prifldbl[] = PERL_PRIfldbl;
+		char const *p = my_prifldbl + sizeof my_prifldbl - 3;
+		while (p >= my_prifldbl) { *--eptr = *p--; }
 	    }
 #endif
 	    if (has_precis) {
@@ -6375,10 +6400,6 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 
 #if defined(USE_THREADS)
 #  include "error: USE_THREADS and USE_ITHREADS are incompatible"
-#endif
-
-#ifndef OpREFCNT_inc
-#  define OpREFCNT_inc(o)	((o) ? (++(o)->op_targ, (o)) : Nullop)
 #endif
 
 #ifndef GpREFCNT_inc
@@ -6609,9 +6630,6 @@ char *PL_watch_pvx;
 SV *
 Perl_sv_dup(pTHX_ SV *sstr)
 {
-    U32 sflags;
-    int dtype;
-    int stype;
     SV *dstr;
 
     if (!sstr || SvTYPE(sstr) == SVTYPEMASK)
@@ -6846,7 +6864,6 @@ Perl_sv_dup(pTHX_ SV *sstr)
 	SvSTASH(dstr)	= hv_dup_inc(SvSTASH(sstr));
 	HvRITER((HV*)dstr)	= HvRITER((HV*)sstr);
 	if (HvARRAY((HV*)sstr)) {
-	    HE *entry;
 	    STRLEN i = 0;
 	    XPVHV *dxhv = (XPVHV*)SvANY(dstr);
 	    XPVHV *sxhv = (XPVHV*)SvANY(sstr);
@@ -6975,6 +6992,9 @@ Perl_cx_dup(pTHX_ PERL_CONTEXT *cxs, I32 ix, I32 max)
 		ncx->blk_loop.iterdata	= (CxPADLOOP(cx)
 					   ? cx->blk_loop.iterdata
 					   : gv_dup((GV*)cx->blk_loop.iterdata));
+		ncx->blk_loop.oldcurpad
+		    = (SV**)ptr_table_fetch(PL_ptr_table,
+					    cx->blk_loop.oldcurpad);
 		ncx->blk_loop.itersave	= sv_dup_inc(cx->blk_loop.itersave);
 		ncx->blk_loop.iterlval	= sv_dup_inc(cx->blk_loop.iterlval);
 		ncx->blk_loop.iterary	= av_dup_inc(cx->blk_loop.iterary);
@@ -7086,6 +7106,7 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl)
     char *c;
     void (*dptr) (void*);
     void (*dxptr) (pTHXo_ void*);
+    OP *o;
 
     Newz(54, nss, max, ANY);
 
@@ -7212,7 +7233,9 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl)
 		case OP_LEAVE:
 		case OP_SCOPE:
 		case OP_LEAVEWRITE:
-		    TOPPTR(nss,ix) = any_dup(ptr, proto_perl);
+		    TOPPTR(nss,ix) = ptr;
+		    o = (OP*)ptr;
+		    OpREFCNT_inc(o);
 		    break;
 		default:
 		    TOPPTR(nss,ix) = Nullop;
@@ -7333,8 +7356,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
      * their pointers copied. */
 
     IV i;
-    SV *sv;
-    SV **svp;
 #  ifdef PERL_OBJECT
     CPerlObj *pPerl = new(ipM) CPerlObj(ipM, ipMS, ipMP, ipE, ipStd, ipLIO,
 					ipD, ipS, ipP);
@@ -7366,8 +7387,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 #  endif	/* PERL_OBJECT */
 #else		/* !PERL_IMPLICIT_SYS */
     IV i;
-    SV *sv;
-    SV **svp;
     PerlInterpreter *my_perl = (PerlInterpreter*)PerlMem_malloc(sizeof(PerlInterpreter));
     PERL_SET_THX(my_perl);
 
@@ -7559,7 +7578,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_main_cv		= cv_dup_inc(proto_perl->Imain_cv);
     PL_main_root	= OpREFCNT_inc(proto_perl->Imain_root);
     PL_main_start	= proto_perl->Imain_start;
-    PL_eval_root	= OpREFCNT_inc(proto_perl->Ieval_root);
+    PL_eval_root	= proto_perl->Ieval_root;
     PL_eval_start	= proto_perl->Ieval_start;
 
     /* runtime control stuff */
@@ -8010,10 +8029,10 @@ do_clean_named_objs(pTHXo_ SV *sv)
 {
     if (SvTYPE(sv) == SVt_PVGV && GvGP(sv)) {
 	if ( SvOBJECT(GvSV(sv)) ||
-	     GvAV(sv) && SvOBJECT(GvAV(sv)) ||
-	     GvHV(sv) && SvOBJECT(GvHV(sv)) ||
-	     GvIO(sv) && SvOBJECT(GvIO(sv)) ||
-	     GvCV(sv) && SvOBJECT(GvCV(sv)) )
+	     (GvAV(sv) && SvOBJECT(GvAV(sv))) ||
+	     (GvHV(sv) && SvOBJECT(GvHV(sv))) ||
+	     (GvIO(sv) && SvOBJECT(GvIO(sv))) ||
+	     (GvCV(sv) && SvOBJECT(GvCV(sv))) )
 	{
 	    DEBUG_D((PerlIO_printf(Perl_debug_log, "Cleaning named glob object:\n "), sv_dump(sv));)
 	    SvREFCNT_dec(sv);

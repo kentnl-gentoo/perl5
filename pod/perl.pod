@@ -35,6 +35,7 @@ sections:
     perlmodlib		Perl modules: how to write and use
     perlmodinstall	Perl modules: how to install from CPAN
     perlform		Perl formats
+    perlunicode		Perl unicode support
     perllocale		Perl locale support
 
     perlreftut		Perl references short introduction
@@ -50,7 +51,9 @@ sections:
     perlipc		Perl interprocess communication
     perlfork		Perl fork() information
     perlthrtut		Perl threads tutorial
-    perldbmfilter	Perl DBM Filters
+    perllexwarn		Perl warnings and their control
+    perlfilter		Perl source filters
+    perldbmfilter	Perl DBM filters
 
     perlcompile		Perl compiler suite intro
     perldebug		Perl debugging
@@ -66,6 +69,7 @@ sections:
 
     perlembed		Perl ways to embed perl in your C or C++ application
     perlapio		Perl internal IO abstraction interface
+    perldebguts		Perl debugging guts and tips
     perlxs		Perl XS application programming interface
     perlxstut		Perl XS tutorial
     perlguts		Perl internal functions for those doing extensions
@@ -76,6 +80,16 @@ sections:
     perltodo		Perl things to do
     perlhack		Perl hackers guide
     perlhist		Perl history records
+
+    perlamiga		Perl notes for Amiga
+    perlcygwin		Perl notes for Cygwin
+    perldos		Perl notes for DOS
+    perlhpux		Perl notes for HP-UX
+    perlmachten		Perl notes for Power MachTen
+    perlos2		Perl notes for OS/2
+    perlos390		Perl notes for OS/390
+    perlvms		Perl notes for VMS
+    perlwin32		Perl notes for Windows
 
 (If you're intending to read these straight through for the first time,
 the suggested order will tend to reduce the number of forward references.)
@@ -210,73 +224,8 @@ Okay, that's I<definitely> enough hype.
 =head1 AVAILABILITY
 
 Perl is available for most operating systems, including virtually
-all Unix-like platforms.
-
-As of May 1999, the following platforms are able to build Perl
-from the standard source code distribution available at
-http://www.perl.com/CPAN/src/index.html
-
-        AIX             Linux           SCO ODT/OSR
-        A/UX            MachTen         Solaris
-        BeOS            MPE/iX          SunOS
-        BSD/OS          NetBSD          SVR4
-        DG/UX           NextSTEP        Tru64 UNIX      3)
-        DomainOS        OpenBSD         Ultrix                  
-        DOS DJGPP 1)    OpenSTEP        UNICOS                  
-        DYNIX/ptx       OS/2            VMS                     
-        FreeBSD         OS390     2)    VOS 
-        HP-UX           PowerMAX        Windows 3.1     1)      
-        Hurd            QNX             Windows 95      1) 4)   
-        IRIX                            Windows 98      1) 4)   
-                                        Windows NT      1) 4)
-
-        1) in DOS mode either the DOS or OS/2 ports can be used
-        2) formerly known as MVS
-        3) formerly known as Digital UNIX and before that DEC OSF/1     
-        4) compilers: Borland, Cygwin, Mingw32 EGCS/GCC, VC++
-                                        
-The following platforms have been known to build Perl from source,
-but we haven't been able to verify their status for the current release,
-either because the hardware/software platforms are rare or
-because we don't have an active champion on these platforms--or both.
-					
-        3b1             FPS             Plan 9
-        AmigaOS         GENIX           PowerUX
-        ConvexOS        Greenhills      RISC/os         
-        CX/UX           ISC             Stellar         
-        DC/OSx          MachTen 68k     SVR2            
-        DDE SMES        MiNT            TI1500          
-        DOS EMX         MPC             TitanOS         
-        Dynix           NEWS-OS         UNICOS/mk       
-        EP/IX           Opus            Unisys Dynix    
-        ESIX    			Unixware        
-
-Support for the following platforms is planned for the next major
-Perl release.
-
-        BS2000
-	Netware
-	Rhapsody
-        VM/ESA
-
-The following platforms have their own source code distributions and
-binaries available via http://www.perl.com/CPAN/ports/index.html.
-
-				Perl release
-
-	AS/400			5.003
-	MacOS			5.004
-	Netware			5.003_07
-	Tandem Guardian		5.004
-
-The following platforms have only binaries available via
-http://www.perl.com/CPAN/ports/index.html.
-
-				Perl release
-
-	Acorn RISCOS		5.005_02
-	AOS			5.002
-	LynxOS			5.004_02
+all Unix-like platforms.  See L<perlport/"Supported Platforms">
+for a listing.
 
 =head1 ENVIRONMENT
 
@@ -305,7 +254,8 @@ Perl developers, please write to perl-thanks@perl.org .
 
 =head1 DIAGNOSTICS
 
-The B<-w> switch produces some lovely diagnostics.
+The C<use warnings> pragma (and the B<-w> switch) produces some 
+lovely diagnostics.
 
 See L<perldiag> for explanations of all Perl's diagnostics.  The C<use
 diagnostics> pragma automatically turns Perl's normally terse warnings
@@ -344,7 +294,7 @@ affected by wraparound).
 You may mail your bug reports (be sure to include full configuration
 information as output by the myconfig program in the perl source
 tree, or by C<perl -V>) to perlbug@perl.com .  If you've succeeded
-in compiling perl, the perlbug script in the utils/ subdirectory
+in compiling perl, the B<perlbug> script in the F<utils/> subdirectory
 can be used to help mail in a bug report.
 
 Perl actually stands for Pathologically Eclectic Rubbish Lister, but

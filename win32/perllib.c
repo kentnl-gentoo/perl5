@@ -143,6 +143,13 @@ perl_alloc(void)
     return my_perl;
 }
 
+EXTERN_C void
+win32_delete_internal_host(void *h)
+{
+    CPerlHost *host = (CPerlHost*)h;
+    delete host;
+}
+
 #ifdef PERL_OBJECT
 
 EXTERN_C void
@@ -157,10 +164,7 @@ perl_construct(PerlInterpreter* my_perl)
     {
 	win32_fprintf(stderr, "%s\n",
 		      "Error: Unable to construct data structures");
-	CPerlHost* pHost = (CPerlHost*)w32_internal_host;
-	Perl_free();
-	delete pHost;
-	PERL_SET_THX(NULL);
+	perl_free(my_perl);
     }
 }
 
@@ -185,21 +189,19 @@ EXTERN_C void
 perl_free(PerlInterpreter* my_perl)
 {
     CPerlObj* pPerl = (CPerlObj*)my_perl;
+    void *host = w32_internal_host;
 #ifdef DEBUGGING
-    CPerlHost* pHost = (CPerlHost*)w32_internal_host;
     Perl_free();
-    delete pHost;
 #else
     try
     {
-	CPerlHost* pHost = (CPerlHost*)w32_internal_host;
 	Perl_free();
-	delete pHost;
     }
     catch(...)
     {
     }
 #endif
+    win32_delete_internal_host(host);
     PERL_SET_THX(NULL);
 }
 
@@ -207,10 +209,10 @@ EXTERN_C int
 perl_run(PerlInterpreter* my_perl)
 {
     CPerlObj* pPerl = (CPerlObj*)my_perl;
-#ifdef DEBUGGING
-    return Perl_run();
-#else
     int retVal;
+#ifdef DEBUGGING
+    retVal = Perl_run();
+#else
     try
     {
 	retVal = Perl_run();
@@ -220,8 +222,8 @@ perl_run(PerlInterpreter* my_perl)
 	win32_fprintf(stderr, "Error: Runtime exception\n");
 	retVal = -1;
     }
-    return retVal;
 #endif
+    return retVal;
 }
 
 EXTERN_C int
@@ -259,7 +261,6 @@ RunPerl(int argc, char **argv, char **env)
 {
     int exitstatus;
     PerlInterpreter *my_perl, *new_perl = NULL;
-    struct perl_thread *thr;
 
 #ifndef __BORLANDC__
     /* XXX this _may_ be a problem on some compilers (e.g. Borland) that
@@ -289,7 +290,7 @@ RunPerl(int argc, char **argv, char **env)
 
     if (!(my_perl = perl_alloc()))
 	return (1);
-    perl_construct( my_perl );
+    perl_construct(my_perl);
     PL_perl_destruct_level = 0;
 
     exitstatus = perl_parse(my_perl, xs_init, argc, argv, env);
@@ -312,15 +313,15 @@ RunPerl(int argc, char **argv, char **env)
 #  else
 	new_perl = perl_clone(my_perl, 1);
 #  endif
-	exitstatus = perl_run( new_perl );
+	exitstatus = perl_run(new_perl);
 	PERL_SET_THX(my_perl);
 #else
-	exitstatus = perl_run( my_perl );
+	exitstatus = perl_run(my_perl);
 #endif
     }
 
-    perl_destruct( my_perl );
-    perl_free( my_perl );
+    perl_destruct(my_perl);
+    perl_free(my_perl);
 #ifdef USE_ITHREADS
     if (new_perl) {
 	PERL_SET_THX(new_perl);
@@ -337,6 +338,9 @@ RunPerl(int argc, char **argv, char **env)
 EXTERN_C void
 set_w32_module_name(void);
 
+#ifdef __MINGW32__
+EXTERN_C		/* GCC in C++ mode mangles the name, otherwise */
+#endif
 BOOL APIENTRY
 DllMain(HANDLE hModule,		/* DLL module handle */
 	DWORD fdwReason,	/* reason called */

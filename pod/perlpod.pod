@@ -154,10 +154,11 @@ It will be filled, and maybe even
 justified.  Certain interior sequences are recognized both
 here and in commands:
 
-    I<text>     italicize text, used for emphasis or variables
-    B<text>     embolden text, used for switches and programs
-    S<text>     text contains non-breaking spaces
-    C<code>	literal code
+    I<text>     Italicize text, used for emphasis or variables
+    B<text>     Embolden text, used for switches and programs
+    S<text>     Text contains non-breaking spaces
+    C<code>     Render code in a typewriter font, or give some other
+                indication that this represents program text
     L<name>     A link (cross reference) to name
 		    L<name>		manual page
 		    L<name/ident>	item in manual page
@@ -173,7 +174,7 @@ here and in commands:
 		    L<text|name/"sec">
 		    L<text|"sec">
 		    L<text|/"sec">
-		
+
     F<file>	Used for filenames
     X<index>	An index entry
     Z<>		A zero-width character
@@ -289,16 +290,15 @@ B<pod2man> for details).  Thus, you shouldn't write things like C<the
 LE<lt>fooE<gt> manpage>, if you want the translated document to read
 sensibly.
 
-If you don need or want total control of the text used for a
-link in the output use the form LE<lt>show this text|fooE<gt>
-instead.
+If you need total control of the text used for a link in the output
+use the form LE<lt>show this text|fooE<gt> instead.
 
 =item *
 
-The script F<pod/checkpods.PL> in the Perl source distribution
-provides skeletal checking for lines that look empty but aren't
-B<only>, but is there as a placeholder until someone writes
-Pod::Checker.  The best way to check your pod is to pass it through
+The B<podchecker> command is provided to check pod syntax
+for errors and warnings. For example, it checks for completely
+blank lines in pod segments and for unknown escape sequences.
+It is still advised to pass it through
 one or more translators and proofread the result, or print out the
 result and proofread that.  Some of the problems found may be bugs in
 the translators, which you may or may not wish to work around.
@@ -307,7 +307,8 @@ the translators, which you may or may not wish to work around.
 
 =head1 SEE ALSO
 
-L<pod2man> and L<perlsyn/"PODs: Embedded Documentation">
+L<pod2man>, L<perlsyn/"PODs: Embedded Documentation">,
+L<podchecker>
 
 =head1 AUTHOR
 

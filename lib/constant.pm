@@ -2,9 +2,10 @@ package constant;
 
 use strict;
 use 5.005_64;
+use warnings::register;
 
 our($VERSION, %declared);
-$VERSION = '1.01';
+$VERSION = '1.02';
 
 #=======================================================================
 
@@ -35,7 +36,7 @@ sub import {
     my $pkg = caller;
 
     # Normal constant name
-    if ($name =~ /^(?:[A-Z]\w|_[A-Z])\w*\z/ and !$forbidden{$name}) {
+    if ($name =~ /^_?[^\W_0-9]\w*\z/ and !$forbidden{$name}) {
         # Everything is okay
 
     # Name forced into main, but we're not in main. Fatal.
@@ -51,23 +52,17 @@ sub import {
     # Maybe the name is tolerable
     } elsif ($name =~ /^[A-Za-z_]\w*\z/) {
 	# Then we'll warn only if you've asked for warnings
-	if ($^W) {
-	    require Carp;
+	if (warnings::enabled()) {
 	    if ($keywords{$name}) {
-		Carp::carp("Constant name '$name' is a Perl keyword");
+		warnings::warn("Constant name '$name' is a Perl keyword");
 	    } elsif ($forced_into_main{$name}) {
-		Carp::carp("Constant name '$name' is " .
+		warnings::warn("Constant name '$name' is " .
 		    "forced into package main::");
-	    } elsif (1 == length $name) {
-		Carp::carp("Constant name '$name' is too short");
-	    } elsif ($name =~ /^_?[a-z\d]/) {
-		Carp::carp("Constant name '$name' should " .
-		    "have an initial capital letter");
 	    } else {
 		# Catch-all - what did I miss? If you get this error,
 		# please let me know what your constant's name was.
 		# Write to <rootbeer@redcat.com>. Thanks!
-		Carp::carp("Constant name '$name' has unknown problems");
+		warnings::warn("Constant name '$name' has unknown problems");
 	    }
 	}
 

@@ -18,10 +18,10 @@ By default, optional warnings are disabled, so any legacy code that
 doesn't attempt to control the warnings will work unchanged.
 
 All warnings are enabled in a block by either of these:
- 
+
     use warnings ;
     use warnings 'all' ;
- 
+
 Similarly all warnings are disabled in a block by either of these:
 
     no warnings ;
@@ -138,7 +138,7 @@ will enable warnings everywhere. See L<Backward Compatibility> for
 details of how this flag interacts with lexical warnings.
 
 =item B<-W>
- 
+
 If the B<-W> flag is used on the command line, it will enable all warnings
 throughout the program regardless of whether warnings were disabled
 locally using C<no warnings> or C<$^W =0>. This includes all files that get
@@ -177,19 +177,19 @@ means that any legacy code that currently relies on manipulating C<$^W>
 to control warning behavior will still work as is. 
 
 =item 3.
- 
+
 Apart from now being a boolean, the C<$^W> variable operates in exactly
 the same horrible uncontrolled global way, except that it cannot
 disable/enable default warnings.
 
 =item 4.
- 
+
 If a piece of code is under the control of the C<warnings> pragma,
 both the C<$^W> variable and the B<-w> flag will be ignored for the
 scope of the lexical warning.
 
 =item 5.
- 
+
 The only way to override a lexical warnings setting is with the B<-W>
 or B<-X> command line flags.
 
@@ -200,7 +200,7 @@ the C<warnings> pragma to control the warning behavior of $^W-type
 code (using a C<local $^W=0>) if it really wants to, but not vice-versa.
 
 =head2 Category Hierarchy
- 
+
 A hierarchy of "categories" have been defined to allow groups of warnings
 to be enabled/disabled in isolation.
 
@@ -318,7 +318,7 @@ To determine which category a specific warning has been assigned to see
 L<perldiag>.
 
 =head2 Fatal Warnings
- 
+
 The presence of the word "FATAL" in the category list will escalate any
 warnings detected from the categories specified in the lexical scope
 into fatal errors. In the code below, there are 3 places where a
@@ -327,32 +327,61 @@ fatal error.
 
 
     use warnings ;
- 
+
     $a = 1 if $a EQ $b ;
- 
+
     {
         use warnings FATAL => qw(deprecated) ;
         $a = 1 if $a EQ $b ;
     }
- 
+
     $a = 1 if $a EQ $b ;
 
 =head2 Reporting Warnings from a Module
 
-The C<warnings> pragma provides two functions, namely C<warnings::enabled>
-and C<warnings::warn>, that are useful for module authors. They are
-used when you want to report a module-specific warning, but only when
-the calling module has enabled warnings via the C<warnings> pragma.
+The C<warnings> pragma provides a number of functions that are useful for
+module authors. These are used when you want to report a module-specific
+warning when the calling module has enabled warnings via the C<warnings>
+pragma.
 
-Consider the module C<abc> below.
+Consider the module C<MyMod::Abc> below.
 
-    package abc;
+    package MyMod::Abc;
 
-    sub open
-    {
+    use warnings::register;
+
+    sub open {
+        my $path = shift ;
+        if (warnings::enabled() && $path !~ m#^/#) {
+            warnings::warn("changing relative path to /tmp/");
+            $path = "/tmp/$path" ; 
+        }
+    }
+
+    1 ;
+
+The call to C<warnings::register> will create a new warnings category
+called "MyMod::abc", i.e. the new category name matches the module
+name. The C<open> function in the module will display a warning message
+if it gets given a relative path as a parameter. This warnings will only
+be displayed if the code that uses C<MyMod::Abc> has actually enabled
+them with the C<warnings> pragma like below.
+
+    use MyMod::Abc;
+    use warnings 'MyMod::Abc';
+    ...
+    abc::open("../fred.txt");
+
+It is also possible to test whether the pre-defined warnings categories are
+set in the calling module with the C<warnings::enabled> function. Consider
+this snippet of code:
+
+    package MyMod::Abc;
+
+    sub open {
         if (warnings::enabled("deprecated")) {
             warnings::warn("deprecated", 
-                           "abc::open is deprecated. Use abc:new") ;
+                           "open is deprecated, use new instead") ;
         }
         new(@_) ;
     }
@@ -366,24 +395,24 @@ display a warning message whenever the calling module has (at least) the
 "deprecated" warnings category enabled. Something like this, say.
 
     use warnings 'deprecated';
-    use abc;
+    use MyMod::Abc;
     ...
-    abc::open($filename) ;
+    MyMod::Abc::open($filename) ;
 
+The C<warnings::warn> function should be used to actually display the
+warnings message. This is because they can make use of the feature that
+allows warnings to be escalated into fatal errors. So in this case
 
-If the calling module has escalated the "deprecated" warnings category
-into a fatal error like this:
-
-    use warnings 'FATAL deprecated';
-    use abc;
+    use MyMod::Abc;
+    use warnings FATAL => 'MyMod::Abc';
     ...
-    abc::open($filename) ;
+    MyMod::Abc::open('../fred.txt');
 
-then C<warnings::warn> will detect this and die after displaying the
-warning message.
+the C<warnings::warn> function will detect this and die after
+displaying the warning message.
 
 =head1 TODO
- 
+
   perl5db.pl
     The debugger saves and restores C<$^W> at runtime. I haven't checked
     whether the debugger will still work with the lexical warnings
@@ -398,7 +427,7 @@ warning message.
 =head1 SEE ALSO
 
 L<warnings>, L<perldiag>.
- 
+
 =head1 AUTHOR
- 
+
 Paul Marquess

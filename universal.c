@@ -86,7 +86,6 @@ for class names as well as for objects.
 bool
 Perl_sv_derived_from(pTHX_ SV *sv, const char *name)
 {
-    SV *rv;
     char *type;
     HV *stash;
   
@@ -110,7 +109,6 @@ Perl_sv_derived_from(pTHX_ SV *sv, const char *name)
             (stash && isa_lookup(stash, name, strlen(name), 0) == &PL_sv_yes)
         ? TRUE
         : FALSE ;
- 
 }
 
 void XS_UNIVERSAL_isa(pTHXo_ CV *cv);
@@ -141,7 +139,10 @@ XS(XS_UNIVERSAL_isa)
 
     sv = ST(0);
 
-    if (!SvOK(sv) || !(SvROK(sv) || SvCUR(sv)))
+    if (SvGMAGICAL(sv))
+	mg_get(sv);
+
+    if (!SvOK(sv) || !(SvROK(sv) || (SvPOK(sv) && SvCUR(sv))))
 	XSRETURN_UNDEF;
 
     name = (char *)SvPV(ST(1),n_a);
@@ -164,7 +165,10 @@ XS(XS_UNIVERSAL_can)
 
     sv = ST(0);
 
-    if (!SvOK(sv) || !(SvROK(sv) || SvCUR(sv)))
+    if (SvGMAGICAL(sv))
+	mg_get(sv);
+
+    if (!SvOK(sv) || !(SvROK(sv) || (SvPOK(sv) && SvCUR(sv))))
 	XSRETURN_UNDEF;
 
     name = (char *)SvPV(ST(1),n_a);
@@ -242,15 +246,15 @@ XS(XS_UNIVERSAL_VERSION)
 		    /* they said C<use Foo v1.2.3> and $Foo::VERSION
 		     * doesn't look like a float: do string compare */
 		    if (sv_cmp(req,sv) == 1) {
-			Perl_croak(aTHX_ "%s version v%vd required--"
-				   "this is only version v%vd",
+			Perl_croak(aTHX_ "%s v%vd required--"
+				   "this is only v%vd",
 				   HvNAME(pkg), req, sv);
 		    }
 		    goto finish;
 		}
 		/* they said C<use Foo 1.002_003> and $Foo::VERSION
 		 * doesn't look like a float: force numeric compare */
-		SvUPGRADE(sv, SVt_PVNV);
+		(void)SvUPGRADE(sv, SVt_PVNV);
 		SvNVX(sv) = str_to_version(sv);
 		SvPOK_off(sv);
 		SvNOK_on(sv);

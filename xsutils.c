@@ -48,7 +48,7 @@ modify_SV_attributes(pTHXo_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 
     for (nret = 0 ; numattrs && (attr = *attrlist++); numattrs--) {
 	name = SvPV(attr, len);
-	if (negated = (*name == '-')) {
+	if ((negated = (*name == '-'))) {
 	    name++;
 	    len--;
 	}
@@ -253,11 +253,7 @@ usage:
 
     rv = ST(0);
     ST(0) = TARG;
-    if (!SvOK(rv)) {
-	ST(0) = &PL_sv_no;
-	XSRETURN(1);
-    }
-    if (!SvROK(rv))
+    if (!(SvOK(rv) && SvROK(rv)))
 	goto usage;
     sv = SvRV(rv);
     sv_setpv(TARG, sv_reftype(sv, 0));
@@ -271,7 +267,6 @@ usage:
 XS(XS_attributes__warn_reserved)
 {
     dXSARGS;
-    SV *rv, *sv;
 #ifdef dXSTARGET
     dXSTARGET;
 #else

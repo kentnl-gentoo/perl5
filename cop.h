@@ -181,6 +181,7 @@ struct block_loop {
     OP *	last_op;
 #ifdef USE_ITHREADS
     void *	iterdata;
+    SV **	oldcurpad;
 #else
     SV **	itervar;
 #endif
@@ -195,16 +196,17 @@ struct block_loop {
 #  define CxITERVAR(c)							\
 	((c)->blk_loop.iterdata						\
 	 ? (CxPADLOOP(cx) 						\
-	    ? &PL_curpad[(PADOFFSET)(c)->blk_loop.iterdata]		\
+	    ? &((c)->blk_loop.oldcurpad)[(PADOFFSET)(c)->blk_loop.iterdata]	\
 	    : &GvSV((GV*)(c)->blk_loop.iterdata))			\
 	 : (SV**)NULL)
 #  define CX_ITERDATA_SET(cx,idata)					\
-	if (cx->blk_loop.iterdata = (idata))				\
+	cx->blk_loop.oldcurpad = PL_curpad;				\
+	if ((cx->blk_loop.iterdata = (idata)))				\
 	    cx->blk_loop.itersave = SvREFCNT_inc(*CxITERVAR(cx));
 #else
 #  define CxITERVAR(c)		((c)->blk_loop.itervar)
 #  define CX_ITERDATA_SET(cx,ivar)					\
-	if (cx->blk_loop.itervar = (SV**)(ivar))			\
+	if ((cx->blk_loop.itervar = (SV**)(ivar)))			\
 	    cx->blk_loop.itersave = SvREFCNT_inc(*CxITERVAR(cx));
 #endif
 
@@ -361,6 +363,7 @@ struct context {
 
 /* private flags for CXt_EVAL */
 #define CXp_REAL	0x00000100	/* truly eval'', not a lookalike */
+#define CXp_TRYBLOCK	0x00000200	/* eval{}, not eval'' or similar */
 
 #ifdef USE_ITHREADS
 /* private flags for CXt_LOOP */
@@ -374,6 +377,8 @@ struct context {
 #define CxTYPE(c)	((c)->cx_type & CXTYPEMASK)
 #define CxREALEVAL(c)	(((c)->cx_type & (CXt_EVAL|CXp_REAL))		\
 			 == (CXt_EVAL|CXp_REAL))
+#define CxTRYBLOCK(c)	(((c)->cx_type & (CXt_EVAL|CXp_TRYBLOCK))	\
+			 == (CXt_EVAL|CXp_TRYBLOCK))
 
 #define CXINC (cxstack_ix < cxstack_max ? ++cxstack_ix : (cxstack_ix = cxinc()))
 

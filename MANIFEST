@@ -40,6 +40,7 @@ README.dos		Notes about dos/djgpp port
 README.epoc		Notes about EPOC port
 README.hpux		Notes about HP-UX port
 README.hurd		Notes about GNU/Hurd port
+README.machten		Notes about Power MachTen port
 README.mint		Notes about Atari MiNT port
 README.mpeix		Notes about MPE/iX port
 README.os2		Notes about OS/2 port
@@ -641,6 +642,7 @@ lib/Pod/InputObjects.pm	Pod-Parser - define objects for input streams
 lib/Pod/Man.pm		Convert POD data to *roff
 lib/Pod/ParseUtils.pm	Pod-Parser - pod utility functions
 lib/Pod/Parser.pm	Pod-Parser - define base class for parsing POD
+lib/Pod/Plainer.pm	Pod migration utility module
 lib/Pod/Select.pm	Pod-Parser - select portions of POD docs
 lib/Pod/Text.pm		Pod-Parser - convert POD data to formatted ASCII text
 lib/Pod/Text/Color.pm	Convert POD data to color ASCII text
@@ -651,6 +653,7 @@ lib/SelectSaver.pm	Enforce proper select scoping
 lib/SelfLoader.pm	Load functions only on demand
 lib/Shell.pm		Make AUTOLOADed system() calls
 lib/Symbol.pm		Symbol table manipulation routines
+lib/Term/ANSIColor.pm	Perl module supporting termcap usage
 lib/Term/Cap.pm		Perl module supporting termcap usage
 lib/Term/Complete.pm	A command completion subroutine
 lib/Term/ReadLine.pm	Stub readline library
@@ -937,6 +940,7 @@ lib/utf8_heavy.pl				Support routines for utf8 pragma
 lib/validate.pl		Perl library supporting wholesale file mode validation
 lib/vars.pm		Declare pseudo-imported global variables
 lib/warnings.pm		For "use warnings"
+lib/warnings/register.pm	For "use warnings::register"
 makeaperl.SH		perl script that produces a new perl binary
 makedef.pl		Create symbol export lists for linking
 makedepend.SH		Precursor to makedepend
@@ -1062,6 +1066,7 @@ pod/perlcall.pod	Callback info
 pod/perlcompile.pod	Info on using the Compiler suite
 pod/perldata.pod	Data structure info
 pod/perldbmfilter.pod	Info about DBM Filters
+pod/perldebguts.pod	Debugger guts info
 pod/perldebug.pod	Debugger info
 pod/perldelta.pod	Changes since last version
 pod/perldiag.pod	Diagnostic info
@@ -1193,6 +1198,7 @@ t/io/print.t		See if print commands work
 t/io/read.t		See if read works
 t/io/tell.t		See if file seeking works
 t/lib/abbrev.t		See if Text::Abbrev works
+t/lib/ansicolor.t	See if Term::ANSIColor works
 t/lib/anydbm.t		See if AnyDBM_File works
 t/lib/attrs.t		See if attrs works with C<sub : attrs>
 t/lib/autoloader.t	See if AutoLoader works
@@ -1231,6 +1237,7 @@ t/lib/dumper-ovl.t	See if Data::Dumper works for overloaded data
 t/lib/dumper.t		See if Data::Dumper works
 t/lib/english.t		See if English works
 t/lib/env.t		See if Env works
+t/lib/env-array.t	See if Env works for arrays
 t/lib/errno.t		See if Errno works
 t/lib/fatal.t           See if Fatal works
 t/lib/fields.t          See if base/fields works
@@ -1291,14 +1298,14 @@ t/lib/syslfs.t		See if large files work for sysio
 t/lib/textfill.t	See if Text::Wrap::fill works
 t/lib/texttabs.t	See if Text::Tabs works
 t/lib/textwrap.t	See if Text::Wrap::wrap works
-t/lib/thread.t		Basic test of threading (skipped if no threads) 
+t/lib/thr5005.t		Test 5.005-style threading (skipped if no use5005threads) 
 t/lib/tie-push.t	Test for Tie::Array
 t/lib/tie-stdarray.t	Test for Tie::StdArray
 t/lib/tie-stdhandle.t	Test for Tie::StdHandle
 t/lib/tie-stdpush.t	Test for Tie::StdArray
 t/lib/timelocal.t	See if Time::Local works
 t/lib/trig.t		See if Math::Trig works
-t/op/64bit.t		See if 64 bitness works
+t/op/64bitint.t		See if 64 bit integers work
 t/op/append.t		See if . works
 t/op/args.t		See if operations on @_ work
 t/op/arith.t		See if arithmetic works
@@ -1350,7 +1357,7 @@ t/op/method.t		See if method calls work
 t/op/misc.t		See if miscellaneous bugs have been fixed
 t/op/mkdir.t		See if mkdir works
 t/op/my.t		See if lexical scoping works
-t/op/nothread.t		local @_ test which does not work threaded 
+t/op/nothr5005.t	local @_ test which does not work under use5005threads
 t/op/numconvert.t	See if accessing fields does not change numeric values
 t/op/oct.t		See if oct and hex work
 t/op/ord.t		See if ord works

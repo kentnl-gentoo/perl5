@@ -1,4 +1,7 @@
-$! SUBCONFIGURE.COM - build a config.sh for VMS Perl.
+$! SUBCONFIGURE.COM
+$!  - build a config.sh for VMS Perl.
+$!  - use built config.sh to take config_h.SH -> config.h
+$!  - also take vms/descrip_mms.template -> descrip.mms (VMS Makefile)
 $!
 $! Note for folks from other platforms changing things in here:
 $!   Fancy changes (based on compiler capabilities or VMS version or
@@ -21,12 +24,15 @@ $!
 $! This .COM file expects to be called by configure.com, and thus expects
 $! a few symbols in the environment. Notably:
 $!
-$!  One of: Using_Dec_C, Using_Vax_C, Using_Gnu_C set to "YES"
+$!  One of: Using_Dec_C, Using_Gnu_C set to "YES"
 $!  Dec_C_Version set to the Dec C version (defaults to 0 if not specified)
 $!  Has_Socketshr set to "T" if using socketshr
 $!  Has_Dec_C_Sockets set to "T" if using Dec C sockets
 $!  Use_Threads set to "T" if they're using threads
 $!  C_Compiler_Invoke is the command needed to invoke the C compiler
+$!
+$! We'll be playing with Sys$Output; don't clutter it
+$ Set NoVerify
 $!
 $! Set Dec_C_Version to something
 $ WRITE_RESULT := "WRITE SYS$OUTPUT ""%CONFIG-I-RESULT "" + "
@@ -35,35 +41,45 @@ $ Dec_C_Version := "''Dec_C_Version'"
 $ Dec_C_Version = Dec_C_Version + 0
 $ Vms_Ver := "''f$extract(1,3, f$getsyi(""version""))'"
 $ perl_extensions := "''extensions'"
-$ if f$length(Mcc) .eq. 0 then Mcc := "cc"
+$ IF F$LENGTH(Mcc) .EQ. 0 THEN Mcc := "cc"
 $ MCC = f$edit(mcc, "UPCASE")
 $ C_Compiler_Replace := "CC=CC=''Mcc'''CC_flags'"
-$ if "''Using_Dec_C'" .eqs. "Yes"
+$ IF Using_Dec_C
 $ THEN
 $   Checkcc := "''Mcc'/prefix=all"
 $ ELSE
 $   Checkcc := "''Mcc'"
 $ ENDIF
 $ cc_flags = cc_flags + extra_flags
-$ if be_case_sensitive
-$ then
-$ d_vms_be_case_sensitive = "define"
-$ else
-$ d_vms_be_case_sensitive = "undef"
-$ endif
-$ if use_multiplicity .eqs. "Y"
+$ IF be_case_sensitive
+$ THEN
+$   d_vms_be_case_sensitive = "define"
+$ ELSE
+$   d_vms_be_case_sensitive = "undef"
+$ ENDIF
+$ IF use_multiplicity
 $ THEN
 $   perl_usemultiplicity = "define"
 $ ELSE
 $   perl_usemultiplicity = "undef"
 $ ENDIF
 $! Some constant defaults.
-$
 $ hwname = f$getsyi("HW_NAME")
 $ myname = myhostname
-$ if "''myname'" .eqs. "" THEN myname = f$trnlnm("SYS$NODE")
+$ IF myname .EQS. "" THEN myname = F$TRNLNM("SYS$NODE")
 $!
 $! ##ADD NEW CONSTANTS HERE##
+$ perl_sizesize = "4"
+$ perl_shmattype = ""
+$ perl_mmaptype = ""
+$ perl_gidformat = "lu"
+$ perl_gidsize = "4"
+$ perl_gidsign = "1"
+$ perl_groupstype = "Gid_t"
+$ perl_stdio_stream_array = ""
+$ perl_uidformat = "lu"
+$ perl_uidsize = "4"
+$ perl_uidsign = "1"
 $ perl_d_getcwd = "undef"
 $ perl_d_nv_preserves_uv = "define"
 $ perl_d_fs_data_s = "undef"
@@ -72,6 +88,7 @@ $ perl_d_sqrtl = "define"
 $ perl_d_statfs_f_flags = "undef"
 $ perl_d_statfs_s = "undef"
 $ perl_d_ustat = "undef"
+$ perl_i_ieeefp = "undef"
 $ perl_i_sunmath = "undef"
 $ perl_i_sysstatfs = "undef"
 $ perl_i_sysvfs = "undef"
@@ -79,7 +96,9 @@ $ perl_i_ustat = "undef"
 $ perl_d_llseek="undef"
 $ perl_d_iconv="undef"
 $ perl_d_madvise="undef"
-$ perl_selectminbits=32
+$ perl_selectminbits="32"
+$ perl_d_vendorarch="undef"
+$ perl_vendorarchexp=""
 $ perl_d_msync="undef"
 $ perl_d_mprotect="undef"
 $ perl_d_munmap="undef"
@@ -102,6 +121,7 @@ $ perl_d_fstatvfs="undef"
 $ perl_usesocks="undef"
 $ perl_d_vendorlib="undef"
 $ perl_vendorlibexp=""
+$ perl_vendorlib_stem=""
 $ perl_d_statfsflags="undef"
 $ perl_i_sysstatvfs="undef"
 $ perl_i_mntent="undef"
@@ -120,7 +140,6 @@ $ perl_d_writev="undef"
 $ perl_i_machcthr="undef"
 $ perl_i_netdb="undef"
 $ perl_d_gnulibc="undef"
-$ perl_cf_by="unknown"
 $ perl_ccdlflags=""
 $ perl_cccdlflags=""
 $ perl_mab=""
@@ -206,7 +225,7 @@ $ perl_d_mknod="undef"
 $ perl_d_union_semun="undef"
 $ perl_d_semctl_semun="undef"
 $ perl_d_semctl_semid_ds="undef"
-$ IF (sharedperl.EQS."Y" .AND. F$GETSYI("HW_MODEL").GE.1024)
+$ IF (sharedperl .AND. F$GETSYI("HW_MODEL") .GE. 1024)
 $ THEN
 $ perl_obj_ext=".abj"
 $ perl_so="axe"
@@ -226,6 +245,9 @@ $ perl_d_archlib="define"
 $ perl_d_bincompat3="undef"
 $ perl_cppstdin="''Perl_CC'/noobj/preprocess=sys$output sys$input"
 $ perl_cppminus=" "
+$ perl_cpprun="''Perl_CC'/noobj/preprocess=sys$output sys$input"
+$ perl_cpplast=" "
+$ perl_aphostname=""
 $ perl_d_castneg="define"
 $ perl_castflags="0"
 $ perl_d_chsize="undef"
@@ -378,12 +400,12 @@ $ perl_lseektype="int"
 $ perl_i_values="undef"
 $ perl_malloctype="void *"
 $ perl_freetype="void"
-$ if "''mymalloc'".eqs."Y"
+$ IF mymalloc
 $ THEN
 $ perl_d_mymalloc="define"
 $ ELSE
 $ perl_d_mymalloc="undef"
-$ENDIF
+$ ENDIF
 $ perl_sh="MCR"
 $ perl_modetype="unsigned int"
 $ perl_ssizetype="int"
@@ -396,6 +418,7 @@ $ perl_privlibexp="''perl_prefix':[lib]"
 $ perl_privlib="''perl_prefix':[lib]"
 $ perl_sitelibexp="''perl_prefix':[lib.site_perl]"
 $ perl_sitelib="''perl_prefix':[lib.site_perl]"
+$ perl_sitelib_stem="''perl_prefix':[lib.site_perl]"
 $ perl_sizetype="size_t"
 $ perl_i_sysparam="undef"
 $ perl_d_void_closedir="define"
@@ -429,25 +452,23 @@ $ perl_defvoidused="15"
 $ perl_voidflags="15"
 $ perl_d_eunice="undef"
 $ perl_d_pwgecos="define"
-$ IF ("''Use_Threads'".eqs."T").and.("''VMS_VER'".LES."6.2")
+$ IF ((Use_Threads) .AND. (VMS_VER .LES. "6.2"))
 $ THEN
 $ perl_libs="SYS$SHARE:CMA$LIB_SHR.EXE/SHARE SYS$SHARE:CMA$RTL.EXE/SHARE SYS$SHARE:CMA$OPEN_LIB_SHR.exe/SHARE SYS$SHARE:CMA$OPEN_RTL.exe/SHARE"
 $ ELSE
 $ perl_libs=" "
 $ ENDIF
-$ IF ("''Using_Dec_C'".eqs."Yes")
+$ IF Using_Dec_C
 $ THEN
-$ perl_libc="(DECCRTL)"
+$   perl_libc="(DECCRTL)"
 $ ELSE
-$ perl_libc=" "
+$   perl_libc=" "
 $ ENDIF
-$ perl_PATCHLEVEL="''patchlevel'"
-$ perl_SUBVERSION="''subversion'"
 $ perl_pager="most"
 $!
 $! Are we 64 bit?
 $!
-$ if (use64bitint)
+$ IF (use64bitint)
 $ THEN
 $   perl_d_PRIfldbl = "define"
 $   perl_d_PRIgldbl = "define"
@@ -464,6 +485,7 @@ $   perl_sPRIx64 = """Lx"""
 $   perl_d_quad = "define"
 $   perl_quadtype = "long long"
 $   perl_uquadtype = "unsigned long long"
+$   perl_quadkind  = "QUAD_IS_LONG_LONG"
 $ ELSE
 $   perl_d_PRIfldbl = "undef"
 $   perl_d_PRIgldbl = "undef"
@@ -478,38 +500,26 @@ $   perl_sPRIu64 = ""
 $   perl_sPRIo64 = ""
 $   perl_sPRIx64 = ""
 $   perl_d_quad = "undef"
+$   perl_quadtype = "long"
+$   perl_uquadtype = "unsigned long"
+$   perl_quadkind  = "QUAD_IS_LONG"
 $ ENDIF
 $!
 $! Now some that we build up
 $!
-$ LocalTime = f$time()
-$ perl_cf_time= f$extract(0, 3, f$cvtime(LocalTime,, "WEEKDAY")) + " " + - 
-                f$edit(f$cvtime(LocalTime, "ABSOLUTE", "MONTH"), "LOWERCASE") + -
-                " " + f$cvtime(LocalTime,, "DAY") + " " + f$cvtime(LocalTime,, "TIME") + -
-                " " + f$cvtime(LocalTime,, "YEAR")
-$ if f$getsyi("HW_MODEL").ge.1024
-$ THEN
-$ perl_arch="VMS_AXP"
-$ perl_archname="VMS_AXP"
-$ perl_alignbytes="8"
-$ ELSE
-$ perl_arch="VMS_VAX"
-$ perl_archname="VMS_VAX"
-$ perl_alignbytes="8"
-$ ENDIF
-$ if ("''Use_Threads'".eqs."T")
+$ IF Use_Threads
 $ THEN
 $   if use_5005_threads
 $   THEN
-$     perl_arch = "''perl_arch'-thread"
-$     perl_archname = "''perl_archname'-thread"
+$     arch = "''arch'-thread"
+$     archname = "''archname'-thread"
 $     perl_d_old_pthread_create_joinable = "undef"
 $     perl_old_pthread_create_joinable = " "
 $     perl_use5005threads = "define"
 $     perl_useithreads = "undef"
 $   ELSE
-$     perl_arch = "''perl_arch'-ithread"
-$     perl_archname = "''perl_archname'-ithread"
+$     arch = "''arch'-ithread"
+$     archname = "''archname'-ithread"
 $     perl_d_old_pthread_create_joinable = "undef"
 $     perl_old_pthread_create_joinable = " "
 $     perl_use5005threads = "undef"
@@ -521,30 +531,20 @@ $   perl_old_pthread_create_joinable = " "
 $   perl_use5005threads = "undef"
 $   perl_useithreads = "undef"
 $ ENDIF
-$ perl_osvers=f$edit(osvers, "TRIM")
-$ if (perl_subversion + 0).eq.0
-$ THEN
-$ LocalPerlVer = "5_" + Perl_PATCHLEVEL
-$ ELSE
-$ LocalPerlVer = "5_" + Perl_PATCHLEVEL + perl_subversion
-$ ENDIF
 $!
 $! Some that we need to invoke the compiler for
 $ OS := "open/write SOURCECHAN []temp.c"
 $ WS := "write SOURCECHAN"
 $ CS := "close SOURCECHAN"
 $ DS := "delete/nolog []temp.*;*"
-$ Needs_Opt := "No"
-$ if ("''using_vax_c'".eqs."Yes").or.("''using_gnu_c'".eqs."Yes")
+$ Needs_Opt := N
+$ IF using_gnu_c
 $ THEN
 $   open/write OPTCHAN []temp.opt
-$   IF ("''using_gnu_c'".eqs."Yes")
-$   THEN
-$     write OPTCHAN "Gnu_CC:[000000]gcclib.olb/library"
-$   endif
+$   write OPTCHAN "Gnu_CC:[000000]gcclib.olb/library"
 $   write OPTCHAN "Sys$Share:VAXCRTL/Share"
 $   Close OPTCHAN
-$   Needs_Opt := "Yes"
+$   Needs_Opt := Y
 $ ENDIF
 $!
 $! Check for __STDC__
@@ -569,7 +569,7 @@ $   DEFINE SYS$OUTPUT _NLA0:
 $   ON ERROR THEN CONTINUE
 $   ON WARNING THEN CONTINUE
 $   'Checkcc' temp.c
-$   If (Needs_Opt.eqs."Yes")
+$   If Needs_Opt
 $   THEN
 $     link temp.obj,temp.opt/opt
 $   else
@@ -588,7 +588,6 @@ $   OPEN/READ TEMPOUT [-.uu]tempout.lis
 $   READ TEMPOUT line
 $   CLOSE TEMPOUT
 $   DELETE/NOLOG [-.uu]tempout.lis;
-$ 
 $ perl_cpp_stuff=line
 $ WRITE_RESULT "cpp_stuff is ''perl_cpp_stuff'"
 $!
@@ -612,7 +611,7 @@ $   DEFINE SYS$OUTPUT _NLA0:
 $   ON ERROR THEN CONTINUE
 $   ON WARNING THEN CONTINUE
 $   'Checkcc' temp.c
-$   If (Needs_Opt.eqs."Yes")
+$   If Needs_Opt
 $   THEN
 $     link temp.obj,temp.opt/opt
 $   else
@@ -661,16 +660,16 @@ $     perl_d_longdbl="undef"
 $   ELSE
 $     ON ERROR THEN CONTINUE
 $     ON WARNING THEN CONTINUE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
-$     link temp.obj,temp.opt/opt
-$     else
+$       link temp.obj,temp.opt/opt
+$     ELSE
 $       link temp.obj
-$     endif
+$     ENDIF
 $     teststatus = f$extract(9,1,$status)
 $     DEASSIGN SYS$OUTPUT
 $     DEASSIGN SYS$ERROR
-$     if (teststatus.nes."1")
+$     IF (teststatus.nes."1")
 $     THEN
 $       perl_longdblsize="0"
 $       perl_d_longdbl="undef"
@@ -686,7 +685,6 @@ $       OPEN/READ TEMPOUT [-.uu]tempout.lis
 $       READ TEMPOUT line
 $       CLOSE TEMPOUT
 $       DELETE/NOLOG [-.uu]tempout.lis;
-$ 
 $       perl_longdblsize=line
 $       perl_d_longdbl="define"
 $     ENDIF
@@ -712,12 +710,12 @@ $   DEFINE SYS$OUTPUT _NLA0:
 $   on error then continue
 $   on warning then continue
 $   'Checkcc' temp.c
-$   If (Needs_Opt.eqs."Yes")
+$   IF Needs_Opt
 $   THEN
 $     link temp.obj,temp.opt/opt
-$   else
+$   ELSE
 $     link temp.obj
-$   endif
+$   ENDIF
 $   teststatus = f$extract(9,1,$status)
 $   DEASSIGN SYS$OUTPUT
 $   DEASSIGN SYS$ERROR
@@ -833,7 +831,6 @@ $!   Okay, failed. Must not have it
 $     perl_i_unistd = "undef"
 $   ELSE
 $     perl_i_unistd = "define"
-
 $   ENDIF
 $ WRITE_RESULT "i_unistd is ''perl_i_unistd'"
 $!
@@ -863,7 +860,6 @@ $!   Okay, failed. Must not have it
 $     perl_i_shadow = "undef"
 $   ELSE
 $     perl_i_shadow = "define"
-
 $   ENDIF
 $ WRITE_RESULT "i_shadow is ''perl_i_shadow'"
 $!
@@ -893,13 +889,12 @@ $!   Okay, failed. Must not have it
 $     perl_i_socks = "undef"
 $   ELSE
 $     perl_i_socks = "define"
-
 $   ENDIF
 $ WRITE_RESULT "i_socks is ''perl_i_socks'"
 $!
 $! Check the prototype for select
 $!
-$ if ("''Has_Dec_C_Sockets'".eqs."T").or.("''Has_Socketshr'".eqs."T")
+$ IF Has_Dec_C_Sockets .OR. Has_Socketshr
 $ THEN
 $ OS
 $ WS "#ifdef __DECC
@@ -908,13 +903,13 @@ $ WS "#endif
 $ WS "#include <stdio.h>
 $ WS "#include <types.h>
 $ WS "#include <unistd.h>
-$ if ("''Has_Socketshr'".eqs."T")
+$ IF Has_Socketshr
 $ THEN
-$  WS "#include <socketshr.h>"
-$ else
-$  WS "#include <time.h>
-$  WS "#include <socket.h>
-$ endif
+$   WS "#include <socketshr.h>"
+$ ELSE
+$   WS "#include <time.h>
+$   WS "#include <socket.h>
+$ ENDIF
 $ WS "int main()
 $ WS "{"
 $ WS "fd_set *foo;
@@ -954,15 +949,15 @@ $ WS "#endif
 $ WS "#include <stdio.h>
 $ WS "#include <types.h>
 $ WS "#include <unistd.h>
-$ if ("''Has_Socketshr'".eqs."T")
+$ IF Has_Socketshr
 $ THEN
-$  WS "#include <socketshr.h>"
+$   WS "#include <socketshr.h>"
 $ ENDIF
-$ IF ("''Has_Dec_C_Sockets'".eqs."T")
+$ IF Has_Dec_C_Sockets
 $ THEN
-$  WS "#include <time.h>
-$  WS "#include <socket.h>
-$ endif
+$   WS "#include <time.h>
+$   WS "#include <socket.h>
+$ ENDIF
 $ WS "int main()
 $ WS "{"
 $ WS "fd_set *foo;
@@ -1014,12 +1009,12 @@ $     perl_i_inttypes="undef"
 $     DEASSIGN SYS$OUTPUT
 $     DEASSIGN SYS$ERROR
 $   ELSE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
 $       link temp.obj,temp.opt/opt
-$     else
+$     ELSE
 $       link temp.obj
-$     endif
+$     ENDIF
 $     savedstatus = $status
 $     teststatus = f$extract(9,1,savedstatus)
 $     DEASSIGN SYS$OUTPUT
@@ -1032,6 +1027,53 @@ $       perl_i_inttypes="define"
 $     ENDIF
 $   ENDIF
 $ WRITE_RESULT "i_inttypes is ''perl_i_inttypes'"
+$!
+$! Check for h_errno
+$!
+$ OS
+$ WS "#ifdef __DECC
+$ WS "#include <stdlib.h>
+$ WS "#endif
+$ WS "#include <stdio.h>
+$ WS "#include <unistd.h>
+$ WS "#include <netdb.h>
+$ WS "int main()
+$ WS "{"
+$ WS "h_errno = 3;
+$ WS "exit(0);
+$ WS "}"
+$ CS
+$   DEFINE SYS$ERROR _NLA0:
+$   DEFINE SYS$OUTPUT _NLA0:
+$   on error then continue
+$   on warning then continue
+$   'Checkcc' temp.c
+$   savedstatus = $status
+$   teststatus = f$extract(9,1,savedstatus)
+$   if (teststatus.nes."1")
+$   THEN
+$     perl_d_herrno="undef"
+$     DEASSIGN SYS$OUTPUT
+$     DEASSIGN SYS$ERROR
+$   ELSE
+$     IF Needs_Opt
+$     THEN
+$       link temp.obj,temp.opt/opt
+$     ELSE
+$       link temp.obj
+$     ENDIF
+$     savedstatus = $status
+$     teststatus = f$extract(9,1,savedstatus)
+$     DEASSIGN SYS$OUTPUT
+$     DEASSIGN SYS$ERROR
+$     if (teststatus.nes."1")
+$     THEN
+$       perl_d_herrno="undef"
+$     ELSE
+$       perl_d_herrno="define"
+$     ENDIF
+$   ENDIF
+$ WRITE_RESULT "d_herrno is ''perl_d_herrno'"
 $!
 $! Check to see if int64_t exists
 $!
@@ -1143,7 +1185,7 @@ $ WRITE_RESULT "d_fpos64_t is ''perl_d_fpos64_t'"
 $!
 $! Check to see if gethostname exists
 $!
-$ if ("''Has_Dec_C_Sockets'".eqs."T").or.("''Has_Socketshr'".eqs."T")
+$ IF (Has_Dec_C_Sockets .OR. Has_Socketshr)
 $ THEN
 $ OS
 $ WS "#ifdef __DECC
@@ -1152,13 +1194,13 @@ $ WS "#endif
 $ WS "#include <stdio.h>
 $ WS "#include <types.h>
 $ WS "#include <unistd.h>
-$ if ("''Has_Socketshr'".eqs."T")
+$ IF Has_Socketshr
 $ THEN
-$  WS "#include <socketshr.h>"
-$ else
-$  WS "#include <time.h>
-$  WS "#include <socket.h>
-$ endif
+$   WS "#include <socketshr.h>"
+$ ELSE
+$   WS "#include <time.h>
+$   WS "#include <socket.h>
+$ ENDIF
 $ WS "int main()
 $ WS "{"
 $ WS "char name[100];
@@ -1179,14 +1221,14 @@ $   DEASSIGN SYS$ERROR
 $   if (teststatus.nes."1")
 $   THEN
 $!   Okay, compile failed. Must not have it
-$     perl_dgethname = "undef"
+$     perl_d_gethname = "undef"
 $   ELSE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
 $       link temp.obj,temp.opt/opt
-$     else
+$     ELSE
 $       link temp.obj
-$     endif
+$     ENDIF
 $     savedstatus = $status
 $     teststatus = f$extract(9,1,savedstatus)
 $     if (teststatus.nes."1")
@@ -1229,12 +1271,12 @@ $     perl_i_sysfile="undef"
 $     DEASSIGN SYS$OUTPUT
 $     DEASSIGN SYS$ERROR
 $   ELSE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
 $       link temp.obj,temp.opt/opt
-$     else
+$     ELSE
 $       link temp.obj
-$     endif
+$     ENDIF
 $     savedstatus = $status
 $     teststatus = f$extract(9,1,savedstatus)
 $     DEASSIGN SYS$OUTPUT
@@ -1275,12 +1317,12 @@ $     perl_i_sysutsname="undef"
 $     DEASSIGN SYS$OUTPUT
 $     DEASSIGN SYS$ERROR
 $   ELSE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
 $       link temp.obj,temp.opt/opt
-$     else
+$     ELSE
 $       link temp.obj
-$     endif
+$     ENDIF
 $     savedstatus = $status
 $     teststatus = f$extract(9,1,savedstatus)
 $     DEASSIGN SYS$OUTPUT
@@ -1321,12 +1363,12 @@ $     perl_i_syslog="undef"
 $     DEASSIGN SYS$OUTPUT
 $     DEASSIGN SYS$ERROR
 $   ELSE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
 $       link temp.obj,temp.opt/opt
-$     else
+$     ELSE
 $       link temp.obj
-$     endif
+$     ENDIF
 $     savedstatus = $status
 $     teststatus = f$extract(9,1,savedstatus)
 $     DEASSIGN SYS$OUTPUT
@@ -1367,12 +1409,12 @@ $     perl_i_poll="undef"
 $     DEASSIGN SYS$OUTPUT
 $     DEASSIGN SYS$ERROR
 $   ELSE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
 $       link temp.obj,temp.opt/opt
-$     else
+$     ELSE
 $       link temp.obj
-$     endif
+$     ENDIF
 $     savedstatus = $status
 $     teststatus = f$extract(9,1,savedstatus)
 $     DEASSIGN SYS$OUTPUT
@@ -1413,7 +1455,7 @@ $     perl_i_sysuio="undef"
 $     DEASSIGN SYS$OUTPUT
 $     DEASSIGN SYS$ERROR
 $   ELSE
-$     If (Needs_Opt.eqs."Yes")
+$     IF Needs_Opt
 $     THEN
 $       link temp.obj,temp.opt/opt
 $     else
@@ -3166,6 +3208,49 @@ $
 $ perl_ptrsize=line
 $ WRITE_RESULT "ptrsize is ''perl_ptrsize'"
 $!
+$! Check for size_t size
+$!
+$ OS
+$ WS "#ifdef __DECC
+$ WS "#include <stdlib.h>
+$ WS "#endif
+$ WS "#include <stdio.h>
+$ WS "int main()
+$ WS "{"
+$ WS "int foo;
+$ WS "foo = sizeof(size_t);
+$ WS "printf(""%d\n"", foo);
+$ WS "exit(0);
+$ WS "}"
+$ CS
+$   DEFINE SYS$ERROR _NLA0:
+$   DEFINE SYS$OUTPUT _NLA0:
+$   ON ERROR THEN CONTINUE
+$   ON WARNING THEN CONTINUE
+$   'Checkcc' temp.c
+$   If Needs_Opt
+$   THEN
+$     link temp.obj,temp.opt/opt
+$   else
+$     link temp.obj
+$   endif
+$   OPEN/WRITE TEMPOUT [-.uu]tempout.lis
+$   DEASSIGN SYS$OUTPUT
+$   DEASSIGN SYS$ERROR
+$   DEFINE SYS$ERROR TEMPOUT
+$   DEFINE SYS$OUTPUT TEMPOUT
+$   mcr []temp
+$   CLOSE TEMPOUT
+$   DEASSIGN SYS$OUTPUT
+$   DEASSIGN SYS$ERROR
+$   OPEN/READ TEMPOUT [-.uu]tempout.lis
+$   READ TEMPOUT line
+$   CLOSE TEMPOUT
+$ DELETE/NOLOG [-.uu]tempout.lis;
+$ 
+$ perl_sizesize=line
+$ WRITE_RESULT "sizesize is ''perl_sizesize'"
+$!
 $! Check rand48 and its ilk
 $!
 $ OS
@@ -3256,7 +3341,7 @@ $   perl_d_attribut="undef"
 $ ENDIF
 $
 $! Dec C >= 5.2 and VMS ver >= 7.0
-$ IF ("''Using_Dec_C'".EQS."Yes").AND.(F$INTEGER(Dec_C_Version).GE.50200000).AND.("''VMS_VER'".GES."7.0")
+$ IF (Using_Dec_C).AND.(F$INTEGER(Dec_C_Version).GE.50200000).AND.(VMS_VER .GES. "7.0")
 $ THEN
 $ perl_d_bcmp="define"
 $ perl_d_gettimeod="define"
@@ -3339,12 +3424,6 @@ $ perl_d_locconv="undef"
 $ perl_d_setlocale="undef"
 $ ENDIF
 $!
-$! Vax C stuff
-$ if ("''Using_Vax_C'".EQS."Yes")
-$ THEN
-$ perl_vms_cc_type="vaxc"
-$ ENDIF
-$!
 $! Sockets?
 $ if ("''Has_Socketshr'".EQS."T").OR.("''Has_Dec_C_Sockets'".EQS."T")
 $ THEN
@@ -3398,11 +3477,11 @@ $ perl_d_getservprotos="undef"
 $ perl_socksizetype="undef"
 $ ENDIF
 $! Threads
-$ if ("''use_threads'".eqs."T")
+$ IF use_threads
 $ THEN
 $   perl_usethreads="define"
 $   perl_d_pthreads_created_joinable="define"
-$   if ("''VMS_VER'".ges."7.0")
+$   if (VMS_VER .GES. "7.0")
 $   THEN
 $     perl_d_oldpthreads="undef"
 $   ELSE
@@ -3541,15 +3620,24 @@ $ size_name = "u32size"
 $ gosub type_size_check
 $ perl_u32size="''line'"
 $
-$ type = "''perl_i64type'"
-$ size_name = "i64size"
-$ gosub type_size_check
-$ perl_i64size="''line'"
+$ If use64bitint
+$ Then
+$   type = "''perl_i64type'"
+$   size_name = "i64size"
+$   gosub type_size_check
+$   perl_i64size="''line'"
+$   perl_ivtype="''perl_i64type'"
 $
-$ type = "''perl_u64type'"
-$ size_name = "u64size"
-$ gosub type_size_check
-$ perl_u64size="''line'"
+$   type = "''perl_u64type'"
+$   size_name = "u64size"
+$   gosub type_size_check
+$   perl_u64size="''line'"
+$   perl_uvtype="''perl_u64type'"
+$   perl_nvtype="long double"
+$ Else
+$   perl_i64size="undef"
+$   perl_u64size="undef"
+$ EndIf
 $!
 $ perl_ivdformat="""ld"""
 $ perl_uvuformat="""lu"""
@@ -3557,27 +3645,21 @@ $ perl_uvoformat="""lo"""
 $ perl_uvxformat="""lx"""
 $! 
 $! Finally the composite ones. All config
-$ perl_installarchlib="''perl_prefix':[lib.''perl_arch'.''localperlver']"
-$ perl_installsitearch="''perl_prefix':[lib.site_perl.''perl_arch']"
+$ perl_installarchlib="''perl_prefix':[lib.''archname'.''version']"
+$ perl_installsitearch="''perl_prefix':[lib.site_perl.''archname']"
 $ perl_myhostname="''myhostname'"
 $ perl_mydomain="''mydomain'"
 $ perl_perladmin="''perladmin'"
-$ perl_cf_email="''cf_email'"
-$ perl_myuname:="VMS ''myname' ''f$edit(perl_osvers, "TRIM")' ''f$edit(hwname, "TRIM")'"
-$ perl_archlibexp="''perl_prefix':[lib.''perl_arch'.''localperlver']"
-$ perl_archlib="''perl_prefix':[lib.''perl_arch'.''lovalperlver']"
-$ perl_oldarchlibexp="''perl_prefix':[lib.''perl_arch']"
-$ perl_oldarchlib="''perl_prefix':[lib.''perl_arch']"
-$ perl_sitearchexp="''perl_prefix':[lib.site_perl.''perl_arch']"
-$ perl_sitearch="''perl_prefix':[lib.site_perl.''perl_arch']"
-$ if "''Using_Dec_C'" .eqs. "Yes"
+$ perl_myuname:="''osname' ''myname' ''osvers' ''f$edit(hwname, "TRIM")'"
+$ perl_archlibexp="''perl_prefix':[lib.''archname'.''version']"
+$ perl_archlib="''perl_prefix':[lib.''archname'.''version']"
+$ perl_oldarchlibexp="''perl_prefix':[lib.''archname']"
+$ perl_oldarchlib="''perl_prefix':[lib.''archname']"
+$ perl_sitearchexp="''perl_prefix':[lib.site_perl.''archname']"
+$ perl_sitearch="''perl_prefix':[lib.site_perl.''archname']"
+$ IF Using_Dec_C
 $ THEN
 $ perl_ccflags="/Include=[]/Standard=Relaxed_ANSI/Prefix=All/Obj=''perl_obj_ext'/NoList''cc_flags'"
-$ ELSE
-$   IF "''Using_Vax_C'" .eqs. "Yes"
-$   THEN
-$     perl_ccflags="/Include=[]/Obj=''perl_obj_ext'/NoList''cc_flags'"
-$   ENDIF
 $ ENDIF
 $ if use_vmsdebug_perl .eqs. "Y"
 $ then
@@ -3588,25 +3670,23 @@ $     perl_optimize= ""
 $     perl_dbgprefix = ""
 $ endif
 $!
-$! Finally clean off any leading zeros from the patchlevel or subversion
-$ perl_patchlevel = perl_patchlevel + 0
-$ perl_subversion = perl_subversion + 0
-$!
 $! Okay, we've got everything configured. Now go write out a config.sh.
-$ open/write CONFIGSH [-]config.sh
-$ WC := "write CONFIGSH"
+$ echo4 "Creating config.sh..."
+$ open/write CONFIG [-]config.sh
+$ WC := "write CONFIG"
 $!
 $ WC "# This file generated by Configure.COM on a VMS system."
-$ WC "# Time: " + perl_cf_time
+$ WC "# Time: " + cf_time
 $ WC ""
 $ WC "CONFIGDOTSH=true"
 $ WC "package='" + perl_package + "'"
+$ WC "config_args='" + config_args + "'"
 $ WC "d_nv_preserves_uv='" + perl_d_nv_preserves_uv + "'"
 $ WC "use5005threads='" + perl_use5005threads + "'"
 $ WC "useithreads='" + perl_useithreads + "'"
 $ WC "CONFIG='" + perl_config + "'"
-$ WC "cf_time='" + perl_cf_time + "'"
-$ WC "cf_by='" + perl_cf_by+ "'"
+$ WC "cf_time='" + cf_time + "'"
+$ WC "cf_by='" + cf_by + "'"
 $ WC "cpp_stuff='" + perl_cpp_stuff + "'"
 $ WC "ccdlflags='" + perl_ccdlflags + "'"
 $ WC "cccdlflags='" + perl_cccdlflags + "'"
@@ -3629,9 +3709,8 @@ $ WC "dlsrc='dl_vms.c'"
 $ WC "binexp='" + perl_binexp + "'"
 $ WC "man1ext='" + perl_man1ext + "'"
 $ WC "man3ext='" + perl_man3ext + "'"
-$ WC "arch='" + perl_arch + "'"
-$ WC "archname='" + perl_archname + "'"
-$ WC "osvers='" + perl_osvers + "'"
+$ WC "archname='" + archname + "'"
+$ WC "osvers='" + osvers + "'"
 $ WC "prefix='" + perl_prefix + "'"
 $ WC "builddir='" + perl_builddir + "'"
 $ WC "installbin='" + perl_installbin + "'"
@@ -3684,17 +3763,19 @@ $ WC "lib_ext='" + perl_lib_ext + "'"
 $ WC "myhostname='" + perl_myhostname + "'"
 $ WC "mydomain='" + perl_mydomain + "'"
 $ WC "perladmin='" + perl_perladmin + "'"
-$ WC "cf_email='" + perl_cf_email + "'"
+$ WC "cf_email='" + cf_email + "'"
 $ WC "myuname='" + perl_myuname + "'"
-$ WC "alignbytes='" + perl_alignbytes + "'"
+$ WC "alignbytes='" + alignbytes + "'"
 $ WC "osname='" + perl_osname + "'"
 $ WC "d_archlib='" + perl_d_archlib + "'"
 $ WC "archlibexp='" + perl_archlibexp + "'"
 $ WC "archlib='" + perl_archlib + "'"
-$ WC "archname='" + perl_archname + "'"
+$ WC "archname='" + archname + "'"
 $ WC "d_bincompat3='" + perl_d_bincompat3 + "'"
 $ WC "cppstdin='" + perl_cppstdin + "'"
 $ WC "cppminus='" + perl_cppminus + "'"
+$ WC "cpprun='" + perl_cpprun + "'"
+$ WC "cpplast='" + perl_cpplast + "'"
 $ WC "d_bcmp='" + perl_d_bcmp + "'"
 $ WC "d_bcopy='" + perl_d_bcopy + "'"
 $ WC "d_bzero='" + perl_d_bzero + "'"
@@ -3717,6 +3798,7 @@ $ WC "d_fsetpos='" + perl_d_fsetpos + "'"
 $ WC "d_gettimeod='" + perl_d_gettimeod + "'"
 $ WC "d_getgrps='" + perl_d_getgrps + "'"
 $ WC "d_setgrps='" + perl_d_setgrps + "'"
+$ WC "groupstype='" + perl_groupstype + "'"
 $ WC "d_uname='" + perl_d_uname + "'"
 $ WC "d_getprior='" + perl_d_getprior + "'"
 $ WC "d_killpg='" + perl_d_killpg + "'"
@@ -3750,6 +3832,7 @@ $ WC "d_setruid='" + perl_d_setruid + "'"
 $ WC "d_setsid='" + perl_d_setsid + "'"
 $ WC "d_shm='" + perl_d_shm + "'"
 $ WC "d_shmatprototype='" + perl_d_shmatprototype + "'"
+$ WC "shmattype='" + perl_shmattype + "'"
 $ WC "d_sigaction='" + perl_d_sigaction + "'"
 $ WC "d_statblks='" + perl_d_statblks + "'"
 $ WC "stdio_ptr='" + perl_stdio_ptr + "'"
@@ -3818,6 +3901,7 @@ $ WC "i_vfork='" + perl_i_vfork + "'"
 $ WC "prototype='" + perl_prototype + "'"
 $ WC "randbits='" + perl_randbits +"'"
 $ WC "selecttype='" + perl_selecttype + "'"
+$ WC "selectminbits='" + perl_selectminbits + "'"
 $ WC "stdchar='" + perl_stdchar + "'"
 $ WC "d_unlink_all_versions='" + perl_d_unlink_all_versions + "'"
 $ WC "full_sed='" + perl_full_sed + "'"
@@ -3881,6 +3965,7 @@ $ WC "privlibexp='" + perl_privlibexp + "'"
 $ WC "privlib='" + perl_privlib + "'"
 $ WC "sitelibexp='" + perl_sitelibexp + "'"
 $ WC "sitelib='" + perl_sitelib + "'"
+$ WC "sitelib_stem='" + perl_sitelib_stem + "'"
 $ WC "sitearchexp='" + perl_sitearchexp + "'"
 $ WC "sitearch='" + perl_sitearch + "'"
 $ WC "sizetype='" + perl_sizetype + "'"
@@ -3922,17 +4007,19 @@ $ WC "voidflags='" + perl_voidflags + "'"
 $ WC "d_eunice='" + perl_d_eunice + "'"
 $ WC "libs='" + perl_libs + "'"
 $ WC "libc='" + perl_libc + "'"
-$ tempstring = "PERL_VERSION='" + "''perl_patchlevel'" + "'"
-$ WC tempstring
-$ tempstring = "PERL_SUBVERSION='" + "''perl_patchlevel'" + "'"
-$ WC tempstring
-$ tempstring = "PATCHLEVEL='" + "''perl_patchlevel'" + "'"
-$ WC tempstring
-$ tempstring = "SUBVERSION='" + "''perl_SUBVERSION'" + "'"
-$ WC tempstring
+$ WC "xs_apiversion='" + version + "'"
+$ WC "pm_apiversion='" + version + "'"
+$ WC "PERL_VERSION='" + patchlevel + "'"
+$ WC "PERL_SUBVERSION='" + subversion + "'"
 $ WC "pager='" + perl_pager + "'"
 $ WC "uidtype='" + perl_uidtype + "'"
+$ WC "uidformat='" + perl_uidformat + "'"
+$ WC "uidsize='" + perl_uidsize + "'"
+$ WC "uidsign='" + perl_uidsign + "'"
 $ WC "gidtype='" + perl_gidtype + "'"
+$ WC "gidformat='" + perl_gidformat + "'"
+$ WC "gidsize='" + perl_gidsize + "'"
+$ WC "gidsign='" + perl_gidsign + "'"
 $ WC "usethreads='" + perl_usethreads + "'"
 $ WC "d_pthread_yield='" + perl_d_pthread_yield + "'"
 $ WC "d_pthreads_created_joinable='" + perl_d_pthreads_created_joinable + "'"
@@ -4006,8 +4093,10 @@ $ WC "d_mknod='" + perl_d_mknod + "'"
 $ WC "devtype='" + perl_devtype + "'"
 $ WC "d_gethname='" + perl_d_gethname + "'"
 $ WC "d_phostname='" + perl_d_phostname + "'"
+$ WC "aphostname='" + perl_aphostname + "'"
 $ WC "d_accessx='" + perl_d_accessx + "'"
 $ WC "d_eaccess='" + perl_d_eaccess + "'"
+$ WC "i_ieeefp='" + perl_i_ieeefp + "'"
 $ WC "i_sunmath='" + perl_i_sunmath + "'"
 $ WC "i_sysaccess='" + perl_i_sysaccess + "'"
 $ WC "i_syssecrt='" + perl_i_syssecrt + "'"
@@ -4053,6 +4142,7 @@ $ WC "d_statfsflags='" + perl_d_statfsflags + "'"
 $ WC "fflushNULL='define'"
 $ WC "fflushall='undef'"
 $ WC "d_stdio_stream_array='undef'"
+$ WC "stdio_stream_array='" + perl_stdio_stream_array + "'"
 $ WC "i_sysstatvfs='" + perl_i_sysstatvfs + "'"
 $ WC "i_syslog='" + perl_i_syslog + "'"
 $ WC "i_sysmode='" + perl_i_sysmode + "'"
@@ -4069,6 +4159,7 @@ $ WC "d_msync='" + perl_d_msync + "'"
 $ WC "d_mprotect='" + perl_d_mprotect + "'"
 $ WC "d_munmap='" + perl_d_munmap + "'"
 $ WC "d_mmap='" + perl_d_mmap + "'"
+$ WC "mmaptype='" + perl_mmaptype + "'"
 $ WC "i_sysmman='" + perl_i_sysmman + "'"
 $ WC "installusrbinperl='" + perl_installusrbinperl + "'"
 $! WC "selectminbits='" + perl_selectminbits + "'"
@@ -4082,6 +4173,7 @@ $ WC "d_strtold='" + perl_d_strtold + "'"
 $ WC "usesocks='" + perl_usesocks + "'"
 $ WC "d_vendorlib='" + perl_d_vendorlib + "'"
 $ WC "vendorlibexp='" + perl_vendorlibexp + "'"
+$ WC "vendorlib_stem='" + perl_vendorlib_stem + "'"
 $ WC "d_atolf='" + perl_d_atolf + "'"
 $ WC "d_atoll='" + perl_d_atoll + "'"
 $ WC "d_bincompat5005='" + perl_d_bincompat + "'"
@@ -4106,16 +4198,15 @@ $ WC "sPRIx64='" + perl_sPRIx64 + "'"
 $ WC "d_llseek='" + perl_d_llseek + "'"
 $ WC "d_iconv='" + perl_d_iconv +"'"
 $ WC "i_iconv='" + perl_i_iconv +"'"
-$ WC "inc_version_list_init='""""'"
+$ WC "inc_version_list='0'"
+$ WC "inc_version_list_init='0'"
 $ WC "uselargefiles='" + perl_uselargefiles + "'"
 $ WC "uselongdouble='" + perl_uselongdouble + "'"
 $ WC "usemorebits='" + perl_usemorebits + "'"
 $ WC "d_quad='" + perl_d_quad + "'"
-$ IF (use64bitint)
-$ THEN
-$   WC "quadtype='" + perl_quadtype + "'" 
-$   WC "uquadtype='" + perl_uquadtype + "'" 
-$ ENDIF
+$ WC "quadtype='" + perl_quadtype + "'" 
+$ WC "uquadtype='" + perl_uquadtype + "'" 
+$ WC "quadkind='" + perl_quadkind + "'"
 $ WC "d_fs_data_s='" + perl_d_fs_data_s + "'" 
 $ WC "d_getcwd='" + perl_d_getcwd + "'"
 $ WC "d_getmnt='" + perl_d_getmnt + "'"
@@ -4123,6 +4214,8 @@ $ WC "d_sqrtl='" + perl_d_sqrtl + "'"
 $ WC "d_statfs_f_flags='" + perl_d_statfs_f_flags + "'"
 $ WC "d_statfs_s='" + perl_d_statfs_s + "'"
 $ WC "d_ustat='" + perl_d_ustat + "'"
+$ WC "d_vendorarch='" + perl_d_vendorarch + "'"
+$ WC "vendorarchexp='" + perl_vendorarchexp + "'"
 $ WC "i_sysstatfs='" + perl_i_sysstatfs + "'"
 $ WC "i_sysvfs='" + perl_i_sysvfs + "'"
 $ WC "i_ustat='" + perl_i_ustat + "'"
@@ -4152,10 +4245,11 @@ $ WC "uvuformat='" + perl_uvuformat + "'"
 $ WC "uvoformat='" + perl_uvoformat + "'"
 $ WC "uvxformat='" + perl_uvxformat + "'"
 $ WC "d_vms_case_sensitive_symbols='" + d_vms_be_case_sensitive + "'"
+$ WC "sizesize='" + perl_sizesize + "'"
 $!
 $! ##WRITE NEW CONSTANTS HERE##
 $!
-$ Close CONFIGSH
+$ Close CONFIG
 $
 $! Okay, we've gotten here. Build munchconfig and run it
 $ 'Perl_CC' munchconfig.c
@@ -4174,7 +4268,8 @@ $ else
 $   link munchconfig.obj
 $ endif
 $ echo ""
-$ echo "Writing config.h"
+$ echo "Doing variable substitutions on .SH files..."
+$ echo "Extracting config.h (with variable substitutions)"
 $ !
 $ ! we need an fdl file
 $ CREATE [-]CONFIG.FDL
@@ -4184,68 +4279,36 @@ $ CREATE /FDL=[-]CONFIG.FDL [-]CONFIG.LOCAL
 $ ! First spit out the header info with the local defines (to get
 $ ! around the 255 character command line limit)
 $ OPEN/APPEND CONFIG [-]config.local
-$ if use_debugging_perl.eqs."Y"
+$ IF use_debugging_perl THEN WC "#define DEBUGGING"
+$ IF use_two_pot_malloc THEN WC "#define TWO_POT_OPTIMIZE"
+$ IF mymalloc THEN WC "#define EMBEDMYMALLOC"
+$ IF use_pack_malloc THEN WC "#define PACK_MALLOC"
+$ IF use_debugmalloc THEN WC "#define DEBUGGING_MSTATS"
+$ IF Using_Gnu_C THEN WC "#define GNUC_ATTRIBUTE_CHECK"
+$ IF (Has_Dec_C_Sockets)
 $ THEN
-$   WRITE CONFIG "#define DEBUGGING"
-$ ENDIF
-$ if use_two_pot_malloc.eqs."Y"
-$ THEN
-$    WRITE CONFIG "#define TWO_POT_OPTIMIZE"
-$ endif
-$ if mymalloc.eqs."Y"
-$ THEN
-$    WRITE CONFIG "#define EMBEDMYMALLOC"
-$ ENDIF
-$ if use_pack_malloc.eqs."Y"
-$ THEN
-$    WRITE CONFIG "#define PACK_MALLOC"
-$ endif
-$ if use_debugmalloc.eqs."Y"
-$ THEN
-$    write config "#define DEBUGGING_MSTATS"
-$ ENDIF
-$ if "''Using_Gnu_C'" .eqs."Yes"
-$ THEN
-$   WRITE CONFIG "#define GNUC_ATTRIBUTE_CHECK"
-$ ENDIF
-$ if "''Has_Dec_C_Sockets'".eqs."T"
-$ THEN
-$    WRITE CONFIG "#define VMS_DO_SOCKETS"
-$    WRITE CONFIG "#define DECCRTL_SOCKETS"
-$ ENDIF
-$ if "''Has_Socketshr'".eqs."T"
-$ THEN
-$    WRITE CONFIG "#define VMS_DO_SOCKETS"
+$    WC "#define VMS_DO_SOCKETS"
+$    WC "#define DECCRTL_SOCKETS"
+$ ELSE
+$    IF Has_Socketshr THEN WC "#define VMS_DO_SOCKETS"
 $ ENDIF
 $! This is VMS-specific for now
-$ WRITE CONFIG "#''perl_d_setenv' HAS_SETENV"
-$ if d_alwdeftype.eqs."Y"
-$ THEN
-$    WRITE CONFIG "#define SECURE_INTERNAL_GETENV"
-$ ELSE
-$    WRITE CONFIG "#undef SECURE_INTERNAL_GETENV"
-$ ENDIF
-$ if d_secintgenv.eqs."Y"
-$ THEN
-$    WRITE CONFIG "#define ALWAYS_DEFTYPES"
-$ ELSE
-$    WRITE CONFIG "#undef ALWAYS_DEFTYPES"
-$ ENDIF
+$ WC "#''perl_d_setenv' HAS_SETENV"
+$ IF d_secintgenv THEN WC "#define SECURE_INTERNAL_GETENV"
+$ if d_alwdeftype THEN WC "#define ALWAYS_DEFTYPES"
 $ IF (use64bitint)
 $ THEN
-$    WRITE CONFIG "#define USE_64_BIT_INT"
-$    WRITE CONFIG "#define USE_LONG_DOUBLE"
+$    WC "#define USE_64_BIT_INT"
+$    WC "#define USE_LONG_DOUBLE"
 $ ENDIF
-$ IF (use64bitall)
+$ IF use64bitall THEN WC "#define USE_64_BIT_ALL"
+$ IF be_case_sensitive THEN WC "#define VMS_WE_ARE_CASE_SENSITIVE"
+$ if perl_d_herrno .eqs. "undef"
 $ THEN
-$    WRITE CONFIG "#define USE_64_BIT_ALL"
+$    WC "#define NEED_AN_H_ERRNO"
 $ ENDIF
-$ if be_case_sensitive
-$ then
-$    write config "#define VMS_WE_ARE_CASE_SENSITIVE"
-$ endif
-$ WRITE CONFIG "#define HAS_ENVGETENV"
-$ WRITE CONFIG "#define PERL_EXTERNAL_GLOB"
+$ WC "#define HAS_ENVGETENV"
+$ WC "#define PERL_EXTERNAL_GLOB"
 $ CLOSE CONFIG
 $!
 $! Now build the normal config.h
@@ -4258,32 +4321,32 @@ $ DELETE/NOLOG [-]CONFIG.MAIN;*
 $ DELETE/NOLOG [-]CONFIG.LOCAL;*
 $ DELETE/NOLOG [-]CONFIG.FDL;*
 $!
-$ if "''Using_Dec_C'" .eqs."Yes"
+$ IF Using_Dec_C
 $ THEN
-$ DECC_REPLACE = "DECC=decc=1"
+$   DECC_REPLACE = "DECC=decc=1"
 $ ELSE
-$ DECC_REPLACE = "DECC=" 
+$   DECC_REPLACE = "DECC=" 
 $ ENDIF
-$ if "''Using_Gnu_C'" .eqs."Yes"
+$ IF Using_Gnu_C
 $ THEN
-$ GNUC_REPLACE = "GNUC=gnuc=1"
+$   GNUC_REPLACE = "GNUC=gnuc=1"
 $ ELSE
-$ GNUC_REPLACE = "GNUC=" 
+$   GNUC_REPLACE = "GNUC=" 
 $ ENDIF
-$ if "''Has_Dec_C_Sockets'" .eqs."T"
+$ IF Has_Dec_C_Sockets
 $ THEN
 $   SOCKET_REPLACE = "SOCKET=DECC_SOCKETS=1"
 $ ELSE
-$   if "''Has_Socketshr'" .eqs."T"
+$   IF Has_Socketshr
 $   THEN
 $     SOCKET_REPLACE = "SOCKET=SOCKETSHR_SOCKETS=1"
 $   ELSE
 $     SOCKET_REPLACE = "SOCKET="
 $   ENDIF
 $ ENDIF
-$ IF ("''Use_Threads'".eqs."T")
+$ IF (Use_Threads)
 $ THEN
-$   if ("''VMS_VER'".LES."6.2")
+$   IF (VMS_VER .LES. "6.2")
 $   THEN
 $     THREAD_REPLACE = "THREAD=OLDTHREADED=1"
 $   ELSE
@@ -4292,24 +4355,18 @@ $   ENDIF
 $ ELSE
 $   THREAD_REPLACE = "THREAD="
 $ ENDIF
-$ if mymalloc.eqs."Y"
+$ IF mymalloc
 $ THEN
 $   MALLOC_REPLACE = "MALLOC=MALLOC=1"
 $ ELSE
 $   MALLOC_REPLACE = "MALLOC="
 $ ENDIF
-$ if f$getsyi("HW_MODEL").ge.1024
-$ THEN
-$ ARCH_TYPE = "ARCH-TYPE=__AXP__"
-$ ELSE
-$ ARCH_TYPE = "ARCH-TYPE=__VAX__"
-$ ENDIF
-$ echo "Writing DESCRIP.MMS"
+$ echo "Extracting ''defmakefile' (with variable substitutions)"
 $!set ver
-$ define/user sys$output [-]descrip.mms
+$ define/user sys$output 'UUmakefile 
 $ mcr []munchconfig [-]config.sh descrip_mms.template "''DECC_REPLACE'" "''ARCH_TYPE'" "''GNUC_REPLACE'" "''SOCKET_REPLACE'" "''THREAD_REPLACE'" -
-"''C_Compiler_Replace'" "''MALLOC_REPLACE'" "''Thread_Live_Dangerously'" "PV=''LocalPerlVer'" "FLAGS=FLAGS=''extra_flags'"
-$ echo "Extracting Build_Ext.Com"
+"''C_Compiler_Replace'" "''MALLOC_REPLACE'" "''Thread_Live_Dangerously'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'"
+$ echo "Extracting Build_Ext.Com (without variable substitutions)"
 $ Create Sys$Disk:[-]Build_Ext.Com
 $ Deck/Dollar="$EndOfTpl$"
 $!++ Build_Ext.Com
@@ -4331,6 +4388,7 @@ $    If ext .eqs. " " Then Goto done
 $    Define/User Perl_Env_Tables CLISYM_LOCAL
 $    miniperl
      ($extdir = $ENV{'ext'}) =~ s/::/./g;
+     $extdir =~ s#/#.#g;
      if ($extdir =~ /^vms/i) { $extdir =~ s/vms/.vms.ext/i; }
      else                    { $extdir = ".ext.$extdir";   }
      ($ENV{'extdir'} = "[$extdir]");
@@ -4368,5 +4426,5 @@ $
 $! set nover
 $!
 $! Clean up after ourselves
-$ delete/nolog munchconfig.exe;*
-$ delete/nolog munchconfig.obj;*
+$ DELETE/NOLOG/NOCONFIRM munchconfig.exe;
+$ DELETE/NOLOG/NOCONFIRM munchconfig.obj;

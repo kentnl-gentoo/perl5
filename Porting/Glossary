@@ -131,8 +131,8 @@ bin (bin.U):
 	this variable must be prepared to deal with ~name substitution.
 
 bincompat5005 (bincompat5005.U):
-	This variable contains y if Perl 5.006 should be binary-compatible
-	with Perl 5.005.
+	This variable contains y if this version of Perl should be
+	binary-compatible with Perl 5.005.
 
 binexp (bin.U):
 	This is the same as the bin variable, but is filename expanded at
@@ -194,6 +194,8 @@ ccflags (ccflags.U):
 
 ccsymbols (Cppsym.U):
 	The variable contains the symbols defined by the C compiler alone.
+	The symbols defined by cpp or by cc when it calls cpp are not in
+	this list, see cppsymbols and cppccsymbols.
 	The list is a space-separated list of symbol=value tokens.
 
 cf_by (cf_who.U):
@@ -267,9 +269,9 @@ cpp_stuff (cpp_stuff.U):
 	used by the C preprocessor.
 
 cppccsymbols (Cppsym.U):
-	The variable contains the symbols defined by both
-	the bare C compiler and during a compilation that
-	includes stdio.h.
+	The variable contains the symbols defined by the C compiler
+	when it calls cpp.  The symbols defined by the cc alone or cpp
+	alone are not in this list, see ccsymbols and cppsymbols.
 	The list is a space-separated list of symbol=value tokens.
 
 cppflags (ccflags.U):
@@ -301,8 +303,9 @@ cppstdin (cppstdin.U):
 	preprocessor symbols.
 
 cppsymbols (Cppsym.U):
-	The variable contains the symbols during a compilation
-	that includes stdio.h.
+	The variable contains the symbols defined by the C preprocessor
+	alone.  The symbols defined by cc or by cc when it calls cpp are
+	not in this list, see ccsymbols and cppccsymbols.
 	The list is a space-separated list of symbol=value tokens.
 
 crosscompile (crosscompile.U):
@@ -360,9 +363,10 @@ d_bcopy (d_bcopy.U):
 
 d_bincompat5005 (bincompat5005.U):
 	This variable conditionally defines BINCOMPAT5005 so that embed.h
-	can take special action if Perl 5.006 should be binary-compatible
-	with Perl 5.005.  This is impossible for builds that use features
-	like threads and multiplicity it is always $undef for those versions.
+	can take special action if this version of Perl should be
+	binary-compatible with Perl 5.005.  This is impossible for builds
+	that use features like threads and multiplicity it is always $undef
+	for those versions.
 
 d_bsd (Guess.U):
 	This symbol conditionally defines the symbol BSD when running on a
@@ -852,6 +856,10 @@ d_lstat (d_lstat.U):
 	This variable conditionally defines HAS_LSTAT if lstat() is
 	available to do file stats on symbolic links.
 
+d_madvise (d_madvise.U):
+	This variable conditionally defines HAS_MADVISE if madvise() is
+	available to map a file into memory.
+
 d_mblen (d_mblen.U):
 	This variable conditionally defines the HAS_MBLEN symbol, which
 	indicates to the C program that the mblen() routine is available
@@ -1133,6 +1141,10 @@ d_pwpasswd (i_pwd.U):
 d_pwquota (i_pwd.U):
 	This variable conditionally defines PWQUOTA, which indicates
 	that struct passwd contains pw_quota.
+
+d_qgcvt (d_qgcvt.U):
+	This variable conditionally defines the HAS_QGCVT symbol, which
+	indicates to the C program that the qgcvt() routine is available.
 
 d_quad (quadtype.U):
 	This variable, if defined, tells that there's a 64-bit integer type,
@@ -1565,6 +1577,9 @@ d_ustat (d_ustat.U):
 	This variable conditionally defines HAS_USTAT if ustat() is
 	available to query file system statistics by dev_t.
 
+d_vendorarch (vendorarch.U):
+	This variable conditionally defined PERL_VENDORARCH.
+
 d_vendorbin (vendorbin.U):
 	This variable conditionally defines PERL_VENDORBIN.
 
@@ -1918,6 +1933,10 @@ i_iconv (i_iconv.U):
 	This variable conditionally defines the I_ICONV symbol, and indicates
 	whether a C program should include <iconv.h>.
 
+i_ieeefp (i_ieeefp.U):
+	This variable conditionally defines the I_IEEEFP symbol, and indicates
+	whether a C program should include <ieeefp.h>.
+
 i_inttypes (i_inttypes.U):
 	This variable conditionally defines the I_INTTYPES symbol,
 	and indicates whether a C program should include <inttypes.h>.
@@ -2026,6 +2045,10 @@ i_stdlib (i_stdlib.U):
 i_string (i_string.U):
 	This variable conditionally defines the I_STRING symbol, which
 	indicates that <string.h> should be included rather than <strings.h>.
+
+i_sunmath (i_sunmath.U):
+	This variable conditionally defines the I_SUNMATH symbol, and indicates
+	whether a C program should include <sunmath.h>.
 
 i_sysaccess (i_sysaccess.U):
 	This variable conditionally defines the I_SYS_ACCESS symbol,
@@ -2299,6 +2322,11 @@ installusrbinperl (instubperl.U):
 	This variable tells whether Perl should be installed also as
 	/usr/bin/perl in addition to
 	$installbin/perl
+
+installvendorarch (vendorarch.U):
+	This variable is really the same as vendorarchexp but may differ on
+	those systems using AFS. For extra portability, only this variable
+	should be used in makefiles.
 
 installvendorbin (vendorbin.U):
 	This variable is really the same as vendorbinexp but may differ on
@@ -3052,6 +3080,11 @@ sitelib (sitelib.U):
 	MakeMaker Makefile.PL
 	or equivalent.  See INSTALL for details.
 
+sitelib_stem (sitelib.U):
+	This variable is $sitelibexp with any trailing version-specific component
+	removed.  The elements in inc_version_list (inc_version_list.U) can
+	be tacked onto this variable to generate a list of directories to search.
+
 sitelibexp (sitelib.U):
 	This variable is the ~name expanded version of sitelib, so that you
 	may use it directly in Makefiles or shell scripts.
@@ -3064,6 +3097,9 @@ siteprefix (siteprefix.U):
 siteprefixexp (siteprefix.U):
 	This variable holds the full absolute path of the directory below
 	which the user will install add-on packages.  Derived from siteprefix.
+
+sizesize (sizesize.U):
+	This variable contains the size of a sizetype in bytes.
 
 sizetype (sizetype.U):
 	This variable defines sizetype to be something like size_t, 
@@ -3487,6 +3523,19 @@ uvxformat (perlxvf.U):
 	This variable contains the format string used for printing
 	a Perl UV as an unsigned hexadecimal integer. 
 
+vendorarch (vendorarch.U):
+	This variable contains the value of the PERL_VENDORARCH symbol.
+	It may have a ~ on the front. 
+	The standard distribution will put nothing in this directory.
+	Vendors who distribute perl may wish to place their own
+	architecture-dependent modules and extensions in this directory with
+	MakeMaker Makefile.PL INSTALLDIRS=vendor 
+	or equivalent.  See INSTALL for details.
+
+vendorarchexp (vendorarch.U):
+	This variable is the ~name expanded version of vendorarch, so that you
+	may use it directly in Makefiles or shell scripts.
+
 vendorbin (vendorbin.U):
 	This variable contains the eventual value of the VENDORBIN symbol.
 	It may have a ~ on the front.
@@ -3508,6 +3557,11 @@ vendorlib (vendorlib.U):
 	modules in this directory with
 	MakeMaker Makefile.PL INSTALLDIRS=vendor 
 	or equivalent.  See INSTALL for details.
+
+vendorlib_stem (vendorlib.U):
+	This variable is $vendorlibexp with any trailing version-specific component
+	removed.  The elements in inc_version_list (inc_version_list.U) can
+	be tacked onto this variable to generate a list of directories to search.
 
 vendorlibexp (vendorlib.U):
 	This variable is the ~name expanded version of vendorlib, so that you

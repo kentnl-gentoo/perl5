@@ -68,6 +68,9 @@
 #  define prv$v_sysprv  prv$r_prvdef_bits0.prv$v_sysprv
 #endif
 
+#if defined(NEED_AN_H_ERRNO)
+dEXT int h_errno;
+#endif
 
 struct itmlst_3 {
   unsigned short int buflen;
@@ -103,7 +106,7 @@ int
 vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
   struct dsc$descriptor_s **tabvec, unsigned long int flags)
 {
-    char uplnm[LNM$C_NAMLENGTH], *cp1, *cp2;
+    char uplnm[LNM$C_NAMLENGTH+1], *cp1, *cp2;
     unsigned short int eqvlen, curtab, ivlnm = 0, ivsym = 0, ivenv = 0, secure;
     unsigned long int retsts, attr = LNM$M_CASE_BLIND;
     unsigned char acmode;
@@ -138,6 +141,7 @@ vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
     }
     lnmdsc.dsc$w_length = cp1 - lnm;
     lnmdsc.dsc$a_pointer = uplnm;
+    uplnm[lnmdsc.dsc$w_length] = '\0';
     secure = flags & PERL__TRNENV_SECURE;
     acmode = secure ? PSL$C_EXEC : PSL$C_USER;
     if (!tabvec || !*tabvec) tabvec = env_tables;
@@ -207,6 +211,19 @@ vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
         retsts = sys$trnlnm(&attr,tabvec[curtab],&lnmdsc,&acmode,lnmlst);
         if (retsts == SS$_IVLOGNAM) { ivlnm = 1; continue; }
         if (retsts == SS$_NOLOGNAM) continue;
+        /* PPFs have a prefix */
+        if (
+#if INTSIZE == 4
+             *((int *)uplnm) == *((int *)"SYS$")                    &&
+#endif
+             eqvlen >= 4 && eqv[0] == 0x1b && eqv[1] == 0x00        &&
+             ( (uplnm[4] == 'O' && !strcmp(uplnm,"SYS$OUTPUT"))  ||
+               (uplnm[4] == 'I' && !strcmp(uplnm,"SYS$INPUT"))   ||
+               (uplnm[4] == 'E' && !strcmp(uplnm,"SYS$ERROR"))   ||
+               (uplnm[4] == 'C' && !strcmp(uplnm,"SYS$COMMAND")) )  ) {
+          memcpy(eqv,eqv+4,eqvlen-4);
+          eqvlen -= 4;
+        }
         break;
       }
     }
@@ -619,8 +636,7 @@ vmssetenv(char *lnm, char *eqv, struct dsc$descriptor_s **tabvec)
 	  if (eqvdsc.dsc$w_length > LNM$C_NAMLENGTH) {
 	    eqvdsc.dsc$w_length = LNM$C_NAMLENGTH;
 	    if (ckWARN(WARN_MISC)) {
-	      Perl_warner(aTHX_ WARN_MISC,"Value of logical \"%s\" too long. "
-			  "Truncating to %i bytes",lnm, LNM$C_NAMLENGTH);
+	      Perl_warner(aTHX_ WARN_MISC,"Value of logical \"%s\" too long. Truncating to %i bytes",lnm, LNM$C_NAMLENGTH);
 	    }
 	  }
           retsts = lib$set_logical(&lnmdsc,&eqvdsc,tabvec[0],0,0);
@@ -988,7 +1004,11 @@ pipe_exit_routine()
     info = open_pipes;
 
     while (info) {
-      if (info->mode != 'r' && !info->done) {
+      int need_eof;
+      _ckvmssts(sys$setast(0));
+      need_eof = info->mode != 'r' && !info->done;
+      _ckvmssts(sys$setast(1));
+      if (need_eof) {
         if (pipe_eof(info->fp, 1) & 1) did_stuff = 1;
       }
       info = info->next;
@@ -998,22 +1018,26 @@ pipe_exit_routine()
     did_stuff = 0;
     info = open_pipes;
     while (info) {
+      _ckvmssts(sys$setast(0));
       if (!info->done) { /* Tap them gently on the shoulder . . .*/
         sts = sys$forcex(&info->pid,0,&abort);
         if (!(sts&1) && sts != SS$_NONEXPR) _ckvmssts(sts); 
         did_stuff = 1;
       }
+      _ckvmssts(sys$setast(1));
       info = info->next;
     }
     if (did_stuff) sleep(1);    /* wait for them to respond */
 
     info = open_pipes;
     while (info) {
+      _ckvmssts(sys$setast(0));
       if (!info->done) {  /* We tried to be nice . . . */
         sts = sys$delprc(&info->pid,0);
         if (!(sts&1) && sts != SS$_NONEXPR) _ckvmssts(sts); 
         info->done = 1; /* so my_pclose doesn't try to write EOF */
       }
+      _ckvmssts(sys$setast(1));
       info = info->next;
     }
 
@@ -1117,6 +1141,7 @@ I32 Perl_my_pclose(pTHX_ FILE *fp)
 {
     struct pipe_details *info, *last = NULL;
     unsigned long int retsts;
+    int need_eof;
     
     for (info = open_pipes; info != NULL; last = info, info = info->next)
         if (info->fp == fp) break;
@@ -1130,15 +1155,20 @@ I32 Perl_my_pclose(pTHX_ FILE *fp)
     /* If we were writing to a subprocess, insure that someone reading from
      * the mailbox gets an EOF.  It looks like a simple fclose() doesn't
      * produce an EOF record in the mailbox.  */
-    if (info->mode != 'r' && !info->done) pipe_eof(info->fp,1);
+    _ckvmssts(sys$setast(0));
+    need_eof = info->mode != 'r' && !info->done;
+    _ckvmssts(sys$setast(1));
+    if (need_eof) pipe_eof(info->fp,0);
     PerlIO_close(info->fp);
 
     if (info->done) retsts = info->completion;
     else waitpid(info->pid,(int *) &retsts,0);
 
     /* remove from list of open pipes */
+    _ckvmssts(sys$setast(0));
     if (last) last->next = info->next;
     else open_pipes = info->next;
+    _ckvmssts(sys$setast(1));
     Safefree(info);
 
     return retsts;
@@ -2147,12 +2177,16 @@ static char *do_tovmsspec(char *path, char *buf, int ts) {
     else if (!infront && *cp2 == '.') {
       if (cp2+1 == dirend || *(cp2+1) == '\0') { cp2++; break; }
       else if (*(cp2+1) == '/') cp2++;   /* skip over "./" - it's redundant */
-      else if (*(cp2+1) == '.' && (*(cp2+2) == '/' || *(cp2+2) == '\0')) { /* handle "../" */
-        if (*(cp1-1) == '-' || *(cp1-1) == '[') *(cp1++) = '-'; 
+      else if (*(cp2+1) == '.' && (*(cp2+2) == '/' || *(cp2+2) == '\0')) {
+        if (*(cp1-1) == '-' || *(cp1-1) == '[') *(cp1++) = '-'; /* handle "../" */
         else if (*(cp1-2) == '[') *(cp1-1) = '-';
-        else {
-/*          if (*(cp1-1) != '.') *(cp1++) = '.'; */
-          *(cp1++) = '-';
+        else {  /* back up over previous directory name */
+          cp1--;
+          while (*(cp1-1) != '.' && *(cp1-1) != '[') cp1--;
+          if (*(cp1-1) == '[') {
+            memcpy(cp1,"000000.",7);
+            cp1 += 7;
+          }
         }
         cp2 += 2;
         if (cp2 == dirend) break;
@@ -2506,6 +2540,9 @@ getredirection(int *ac, char ***av)
 	exit(vaxc$errno);
 	}
     if (err != NULL) {
+        if (strcmp(err,"&1") == 0) {
+            dup2(fileno(stdout), fileno(Perl_debug_log));
+        } else {
 	FILE *tmperr;
 	if (NULL == (tmperr = fopen(err, errmode, "mbc=32", "mbf=2")))
 	    {
@@ -2518,6 +2555,7 @@ getredirection(int *ac, char ***av)
 		exit(vaxc$errno);
 		}
 	}
+        }
 #ifdef ARGPROC_DEBUG
     PerlIO_printf(Perl_debug_log, "Arglist:\n");
     for (j = 0; j < *ac;  ++j)
@@ -3376,6 +3414,7 @@ setup_cmddsc(char *cmd, int check_img)
 {
   char vmsspec[NAM$C_MAXRSS+1], resspec[NAM$C_MAXRSS+1];
   $DESCRIPTOR(defdsc,".EXE");
+  $DESCRIPTOR(defdsc2,".");
   $DESCRIPTOR(resdsc,resspec);
   struct dsc$descriptor_s imgdsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
   unsigned long int cxt = 0, flags = 1, retsts = SS$_NORMAL;
@@ -3431,18 +3470,44 @@ setup_cmddsc(char *cmd, int check_img)
     imgdsc.dsc$a_pointer = s;
     imgdsc.dsc$w_length = wordbreak - s;
     retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc,0,0,&flags);
+    if (!(retsts&1)) {
+        _ckvmssts(lib$find_file_end(&cxt));
+        retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc2,0,0,&flags);
     if (!(retsts & 1) && *s == '$') {
+          _ckvmssts(lib$find_file_end(&cxt));
       imgdsc.dsc$a_pointer++; imgdsc.dsc$w_length--;
       retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc,0,0,&flags);
+          if (!(retsts&1)) {
       _ckvmssts(lib$find_file_end(&cxt));
+            retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc2,0,0,&flags);
+          }
     }
+    }
+    _ckvmssts(lib$find_file_end(&cxt));
+
     if (retsts & 1) {
+      FILE *fp;
       s = resspec;
       while (*s && !isspace(*s)) s++;
       *s = '\0';
+
+      /* check that it's really not DCL with no file extension */
+      fp = fopen(resspec,"r","ctx=bin,shr=get");
+      if (fp) {
+        char b[4] = {0,0,0,0};
+        read(fileno(fp),b,4);
+        isdcl = isprint(b[0]) && isprint(b[1]) && isprint(b[2]) && isprint(b[3]);
+        fclose(fp);
+      }
+      if (check_img && isdcl) return RMS$_FNF;
+
       if (cando_by_name(S_IXUSR,0,resspec)) {
         New(402,VMScmd.dsc$a_pointer,7 + s - resspec + (rest ? strlen(rest) : 0),char);
+        if (!isdcl) {
         strcpy(VMScmd.dsc$a_pointer,"$ MCR ");
+        } else {
+            strcpy(VMScmd.dsc$a_pointer,"@");
+        }
         strcat(VMScmd.dsc$a_pointer,resspec);
         if (rest) strcat(VMScmd.dsc$a_pointer,rest);
         VMScmd.dsc$w_length = strlen(VMScmd.dsc$a_pointer);

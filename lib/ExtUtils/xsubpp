@@ -70,6 +70,14 @@ affected is the use of I<target>s by the output C code (see L<perlguts>).
 This may significantly slow down the generated code, but this is the way
 B<xsubpp> of 5.005 and earlier operated.
 
+=item B<-noinout>
+
+Disable recognition of C<IN>, C<OUT_LIST> and C<INOUT_LIST> declarations.
+
+=item B<-noargtypes>
+
+Disable recognition of ANSI-like descriptions of function signature.
+
 =back
 
 =head1 ENVIRONMENT
@@ -114,7 +122,7 @@ if ($^O eq 'VMS') {
 
 $FH = 'File0000' ;
 
-$usage = "Usage: xsubpp [-v] [-C++] [-except] [-prototypes] [-noversioncheck] [-nolinenumbers] [-nooptimize] [-s pattern] [-typemap typemap]... file.xs\n";
+$usage = "Usage: xsubpp [-v] [-C++] [-except] [-prototypes] [-noversioncheck] [-nolinenumbers] [-nooptimize] [-noinout] [-noargtypes] [-s pattern] [-typemap typemap]... file.xs\n";
 
 $proto_re = "[" . quotemeta('\$%&*@;') . "]" ;
 # mjn
@@ -126,6 +134,10 @@ $WantVersionChk = 1 ;
 $ProtoUsed = 0 ;
 $WantLineNumbers = 1 ;
 $WantOptimize = 1 ;
+
+my $process_inout = 1;
+my $process_argtypes = 1;
+
 SWITCH: while (@ARGV and $ARGV[0] =~ /^-./) {
     $flag = shift @ARGV;
     $flag =~ s/^-// ;
@@ -143,6 +155,10 @@ SWITCH: while (@ARGV and $ARGV[0] =~ /^-./) {
     $WantLineNumbers = 1, next SWITCH	if $flag eq 'linenumbers';
     $WantOptimize = 0, next SWITCH	if $flag eq 'nooptimize';
     $WantOptimize = 1, next SWITCH	if $flag eq 'optimize';
+    $process_inout = 0, next SWITCH	if $flag eq 'noinout';
+    $process_inout = 1, next SWITCH	if $flag eq 'inout';
+    $process_argtypes = 0, next SWITCH	if $flag eq 'noargtypes';
+    $process_argtypes = 1, next SWITCH	if $flag eq 'argtypes';
     (print "xsubpp version $XSUBPP_version\n"), exit
 	if $flag eq 'v';
     die $usage;
@@ -249,9 +265,9 @@ foreach $key (keys %input_expr) {
     $input_expr{$key} =~ s/\n+$//;
 }
 
-$bal = qr[(?:(?>[^()]+)|\((?p{ $bal })\))*];	# ()-balanced
+$bal = qr[(?:(?>[^()]+)|\((??{ $bal })\))*];	# ()-balanced
 $cast = qr[(?:\(\s*SV\s*\*\s*\)\s*)?];		# Optional (SV*) cast
-$size = qr[,\s* (?p{ $bal }) ]x;		# Third arg (to setpvn)
+$size = qr[,\s* (??{ $bal }) ]x;		# Third arg (to setpvn)
 
 foreach $key (keys %output_expr) {
     use re 'eval';
@@ -260,8 +276,8 @@ foreach $key (keys %output_expr) {
       ($output_expr{$key} =~
 	 m[^ \s+ sv_set ( [iunp] ) v (n)? 	# Type, is_setpvn
 	     \s* \( \s* $cast \$arg \s* ,
-	     \s* ( (?p{ $bal }) )		# Set from
-	     ( (?p{ $size }) )?			# Possible sizeof set-from
+	     \s* ( (??{ $bal }) )		# Set from
+	     ( (??{ $size }) )?			# Possible sizeof set-from
 	     \) \s* ; \s* $
 	  ]x);
     $targetable{$key} = [$t, $with_size, $arg, $sarg] if $t;
@@ -273,7 +289,7 @@ $END = "!End!\n\n";		# "impossible" keyword (multiple newline)
 $BLOCK_re= '\s*(' . join('|', qw(
 	REQUIRE BOOT CASE PREINIT INPUT INIT CODE PPCODE OUTPUT 
 	CLEANUP ALIAS PROTOTYPES PROTOTYPE VERSIONCHECK INCLUDE
-	SCOPE INTERFACE INTERFACE_MACRO C_ARGS POST_CALL
+	SCOPE INTERFACE INTERFACE_MACRO C_ARGS POSTCALL
 	)) . "|$END)\\s*:";
 
 # Input:  ($_, @line) == unparsed input.
@@ -287,11 +303,11 @@ sub check_keyword {
 my ($C_group_rex, $C_arg);
 # Group in C (no support for comments or literals)
 $C_group_rex = qr/ [({\[]
-		   (?: (?> [^()\[\]{}]+ ) | (?p{ $C_group_rex }) )*
+		   (?: (?> [^()\[\]{}]+ ) | (??{ $C_group_rex }) )*
 		   [)}\]] /x ;
 # Chunk in C without comma at toplevel (no comments):
 $C_arg = qr/ (?: (?> [^()\[\]{},"']+ )
-	     |   (?p{ $C_group_rex })
+	     |   (??{ $C_group_rex })
 	     |   " (?: (?> [^\\"]+ )
 		   |   \\.
 		   )* "		# String literal
@@ -385,9 +401,6 @@ sub CASE_handler {
     $_ = '' ;
 }
 
-my $process_inout = 1;
-my $process_argtypes = 1;
-
 sub INPUT_handler {
     for (;  !/^$BLOCK_re/o;  $_ = shift(@line)) {
 	last if /^\s*NOT_IMPLEMENTED_YET/;
@@ -436,7 +449,7 @@ sub INPUT_handler {
 	    $func_args =~ s/\b($var_name)\b/&$1/;
 	}
 	if ($var_init =~ /^[=;]\s*NO_INIT\s*;?\s*$/
-	    or $in_out{$var_name} and $in_out{$var_name} eq 'outlist'
+	    or $in_out{$var_name} and $in_out{$var_name} eq 'OUTLIST'
 	    and $var_init !~ /\S/) {
 	  if ($name_printed) {
 	    print ";\n";
@@ -522,7 +535,7 @@ EOF
 
 sub CLEANUP_handler() { print_section() } 
 sub PREINIT_handler() { print_section() } 
-sub POST_CALL_handler() { print_section() } 
+sub POSTCALL_handler() { print_section() } 
 sub INIT_handler()    { print_section() } 
 
 sub GetAliases
@@ -997,6 +1010,11 @@ while (fetch_para()) {
     ($ret_type) = TidyType($_);
     $RETVAL_no_return = 1 if $ret_type =~ s/^NO_OUTPUT\s+//;
 
+    # Allow one-line ANSI-like declaration
+    unshift @line, $2
+      if $process_argtypes
+	and $ret_type =~ s/^(.*?\w.*?)\s*\b(\w+\s*\(.*)/$1/s;
+
     # a function definition needs at least 2 lines
     blurt ("Error: Function definition too short '$ret_type'"), next PARAGRAPH
 	unless @line ;
@@ -1029,8 +1047,8 @@ while (fetch_para()) {
     my %out_vars;
     if ($process_argtypes and $orig_args =~ /\S/) {
 	my $args = "$orig_args ,";
-	if ($args =~ /^( (?p{ $C_arg }) , )* $ /x) {
-	    @args = ($args =~ /\G ( (?p{ $C_arg }) ) , /xg);
+	if ($args =~ /^( (??{ $C_arg }) , )* $ /x) {
+	    @args = ($args =~ /\G ( (??{ $C_arg }) ) , /xg);
 	    for ( @args ) {
 		s/^\s+//;
 		s/\s+$//;
@@ -1041,10 +1059,10 @@ while (fetch_para()) {
 		next unless length $pre;
 		my $out_type;
 		my $inout_var;
-		if ($process_inout and s/^(in|in_outlist|outlist)\s+//) {
+		if ($process_inout and s/^(IN|IN_OUTLIST|OUTLIST)\s+//) {
 		    my $type = $1;
-		    $out_type = $type if $type ne 'in';
-		    $arg =~ s/^(in|in_outlist|outlist)\s+//;
+		    $out_type = $type if $type ne 'IN';
+		    $arg =~ s/^(IN|IN_OUTLIST|OUTLIST)\s+//;
 		}
 		if (/\W/) {	# Has a type
 		    push @arg_with_types, $arg;
@@ -1052,7 +1070,7 @@ while (fetch_para()) {
 		    $arg_types{$name} = $arg;
 		    $_ = "$name$default";
 		}
-		$out_vars{$_} = 1 if $out_type eq 'outlist';
+		$out_vars{$_} = 1 if $out_type eq 'OUTLIST';
 		push @in_out, $name if $out_type;
 		$in_out{$name} = $out_type if $out_type;
 	    }
@@ -1063,10 +1081,10 @@ while (fetch_para()) {
     } else {
 	@args = split(/\s*,\s*/, $orig_args);
 	for (@args) {
-	    if ($process_inout and s/^(in|in_outlist|outlist)\s+//) {
+	    if ($process_inout and s/^(IN|IN_OUTLIST|OUTLIST)\s+//) {
 		my $out_type = $1;
-		next if $out_type eq 'in';
-		$out_vars{$_} = 1 if $out_type eq 'outlist';
+		next if $out_type eq 'IN';
+		$out_vars{$_} = 1 if $out_type eq 'OUTLIST';
 		push @in_out, $name;
 		$in_out{$_} = $out_type;
 	    }
@@ -1278,7 +1296,7 @@ EOF
 	# $wantRETVAL set if 'RETVAL =' autogenerated
 	($wantRETVAL, $ret_type) = (0, 'void') if $RETVAL_no_return;
 	undef %outargs ;
-	process_keyword("POST_CALL|OUTPUT|ALIAS|PROTOTYPE"); 
+	process_keyword("POSTCALL|OUTPUT|ALIAS|PROTOTYPE"); 
 
 	# all OUTPUT done, so now push the return value on the stack
 	if ($gotRETVAL && $RETVAL_code) {
@@ -1548,13 +1566,13 @@ sub generate_init {
     $tk = $type_kind{$type};
     $tk =~ s/OBJ$/REF/ if $func_name =~ /DESTROY$/;
     $type =~ tr/:/_/;
-    blurt("Error: No INPUT definition for type '$type' found"), return
+    blurt("Error: No INPUT definition for type '$type', typekind '$type_kind{$type}' found"), return
         unless defined $input_expr{$tk} ;
     $expr = $input_expr{$tk};
     if ($expr =~ /DO_ARRAY_ELEM/) {
         blurt("Error: '$subtype' not in typemap"), return 
 	    unless defined($type_kind{$subtype});
-        blurt("Error: No INPUT definition for type '$subtype' found"), return
+        blurt("Error: No INPUT definition for type '$subtype', typekind '$type_kind{$subtype}' found"), return
             unless defined $input_expr{$type_kind{$subtype}} ;
 	$subexpr = $input_expr{$type_kind{$subtype}};
 	$subexpr =~ s/ntype/subtype/g;
@@ -1612,7 +1630,7 @@ sub generate_output {
     } else {
 	    blurt("Error: '$type' not in typemap"), return
 		unless defined($type_kind{$type});
-            blurt("Error: No OUTPUT definition for type '$type' found"), return
+            blurt("Error: No OUTPUT definition for type '$type', typekind '$type_kind{$type}' found"), return
                 unless defined $output_expr{$type_kind{$type}} ;
 	    ($ntype = $type) =~ s/\s*\*/Ptr/g;
 	    $ntype =~ s/\(\)//g;
@@ -1621,7 +1639,7 @@ sub generate_output {
 	    if ($expr =~ /DO_ARRAY_ELEM/) {
 	        blurt("Error: '$subtype' not in typemap"), return
 		    unless defined($type_kind{$subtype});
-                blurt("Error: No OUTPUT definition for type '$subtype' found"), return
+                blurt("Error: No OUTPUT definition for type '$subtype', typekind '$type_kind{$subtype}' found"), return
                     unless defined $output_expr{$type_kind{$subtype}} ;
 		$subexpr = $output_expr{$type_kind{$subtype}};
 		$subexpr =~ s/ntype/subtype/g;

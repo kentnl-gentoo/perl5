@@ -339,10 +339,7 @@ U32
 Perl_magic_regdata_cnt(pTHX_ SV *sv, MAGIC *mg)
 {
     dTHR;
-    register char *s;
-    register I32 i;
     register REGEXP *rx;
-    char *t;
 
     if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
 	if (mg->mg_obj)		/* @+ */
@@ -387,16 +384,14 @@ Perl_magic_len(pTHX_ SV *sv, MAGIC *mg)
 {
     dTHR;
     register I32 paren;
-    register char *s;
     register I32 i;
     register REGEXP *rx;
-    char *t;
+    I32 s1, t1;
 
     switch (*mg->mg_ptr) {
     case '1': case '2': case '3': case '4':
     case '5': case '6': case '7': case '8': case '9': case '&':
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
-	    I32 s1, t1;
 
 	    paren = atoi(mg->mg_ptr);
 	  getparen:
@@ -405,6 +400,16 @@ Perl_magic_len(pTHX_ SV *sv, MAGIC *mg)
 		(t1 = rx->endp[paren]) != -1)
 	    {
 		i = t1 - s1;
+	      getlen:
+		if (i > 0 && (PL_curpm->op_pmdynflags & PMdf_UTF8) && !IN_BYTE) {
+		    char *s = rx->subbeg + s1;
+		    char *send = rx->subbeg + t1;
+		    i = 0;
+		    while (s < send) {
+			s += UTF8SKIP(s);
+			i++;
+		    }
+		}
 		if (i >= 0)
 		    return i;
 	    }
@@ -421,8 +426,11 @@ Perl_magic_len(pTHX_ SV *sv, MAGIC *mg)
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
 	    if (rx->startp[0] != -1) {
 		i = rx->startp[0];
-		if (i >= 0)
-		    return i;
+		if (i > 0) {
+		    s1 = 0;
+		    t1 = i;
+		    goto getlen;
+		}
 	    }
 	}
 	return 0;
@@ -430,8 +438,11 @@ Perl_magic_len(pTHX_ SV *sv, MAGIC *mg)
 	if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
 	    if (rx->endp[0] != -1) {
 		i = rx->sublen - rx->endp[0];
-		if (i >= 0)
-		    return i;
+		if (i > 0) {
+		    s1 = rx->endp[0];
+		    t1 = rx->sublen;
+		    goto getlen;
+		}
 	    }
 	}
 	return 0;
@@ -458,7 +469,6 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
     register char *s;
     register I32 i;
     register REGEXP *rx;
-    char *t;
 
     switch (*mg->mg_ptr) {
     case '\001':		/* ^A */
@@ -553,7 +563,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	{
 	    dTHR;
 	    if (PL_lex_state != LEX_NOTPARSING)
-		SvOK_off(sv);
+		(void)SvOK_off(sv);
 	    else if (PL_in_eval)
 		sv_setiv(sv, 1);
 	    else
@@ -571,17 +581,18 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	if (*(mg->mg_ptr+1) == '\0')
 	    sv_setiv(sv, (IV)((PL_dowarn & G_WARN_ON) ? TRUE : FALSE));
 	else if (strEQ(mg->mg_ptr, "\027ARNING_BITS")) {
-	    if (PL_compiling.cop_warnings == WARN_NONE ||
-	        PL_compiling.cop_warnings == WARN_STD)
+	    if (PL_compiling.cop_warnings == pWARN_NONE ||
+	        PL_compiling.cop_warnings == pWARN_STD)
 	    {
 	        sv_setpvn(sv, WARN_NONEstring, WARNsize) ;
             }
-            else if (PL_compiling.cop_warnings == WARN_ALL) {
+            else if (PL_compiling.cop_warnings == pWARN_ALL) {
 	        sv_setpvn(sv, WARN_ALLstring, WARNsize) ;
 	    }    
             else {
 	        sv_setsv(sv, PL_compiling.cop_warnings);
 	    }    
+	    SvPOK_only(sv);
 	}
 	else if (strEQ(mg->mg_ptr, "\027IDE_SYSTEM_CALLS"))
 	    sv_setiv(sv, (IV)PL_widesyscalls);
@@ -756,7 +767,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 		Perl_sv_catpvf(aTHX_ sv, " %"Gid_t_f, gary[i]);
 	}
 #endif
-	SvIOK_on(sv);	/* what a wonderful hack! */
+	(void)SvIOK_on(sv);	/* what a wonderful hack! */
 	break;
     case '*':
 	break;
@@ -879,7 +890,7 @@ Perl_magic_set_all_env(pTHX_ SV *sv, MAGIC *mg)
 	STRLEN n_a;
 	magic_clear_all_env(sv,mg);
 	hv_iterinit((HV*)sv);
-	while (entry = hv_iternext((HV*)sv)) {
+	while ((entry = hv_iternext((HV*)sv))) {
 	    I32 keylen;
 	    my_setenv(hv_iterkey(entry, &keylen),
 		      SvPV(hv_iterval((HV*)sv, entry), n_a));
@@ -1085,7 +1096,7 @@ Perl_magic_getnkeys(pTHX_ SV *sv, MAGIC *mg)
 	    i = HvKEYS(hv);
 	else {
 	    /*SUPPRESS 560*/
-	    while (entry = hv_iternext(hv)) {
+	    while ((entry = hv_iternext(hv))) {
 		i++;
 	    }
 	}
@@ -1420,7 +1431,7 @@ Perl_magic_gettaint(pTHX_ SV *sv, MAGIC *mg)
 {
     dTHR;
     TAINT_IF((mg->mg_len & 1) ||
-	     (mg->mg_len & 2) && mg->mg_obj == sv);	/* kludge */
+	     ((mg->mg_len & 2) && mg->mg_obj == sv));	/* kludge */
     return 0;
 }
 
@@ -1447,7 +1458,7 @@ Perl_magic_getvec(pTHX_ SV *sv, MAGIC *mg)
     SV *lsv = LvTARG(sv);
 
     if (!lsv) {
-	SvOK_off(sv);
+	(void)SvOK_off(sv);
 	return 0;
     }
 
@@ -1570,7 +1581,7 @@ Perl_magic_killbackrefs(pTHX_ SV *sv, MAGIC *mg)
 		Perl_croak(aTHX_ "panic: magic_killbackrefs");
 	    /* XXX Should we check that it hasn't changed? */
 	    SvRV(svp[i]) = 0;
-	    SvOK_off(svp[i]);
+	    (void)SvOK_off(svp[i]);
 	    SvWEAKREF_off(svp[i]);
 	    svp[i] = &PL_sv_undef;
 	}
@@ -1721,23 +1732,30 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    if ( ! (PL_dowarn & G_WARN_ALL_MASK)) {
 		if (!SvPOK(sv) && PL_localizing) {
 	            sv_setpvn(sv, WARN_NONEstring, WARNsize);
-	            PL_compiling.cop_warnings = WARN_NONE;
+	            PL_compiling.cop_warnings = pWARN_NONE;
 		    break;
 		}
-                if (memEQ(SvPVX(sv), WARN_ALLstring, WARNsize)) {
-	            PL_compiling.cop_warnings = WARN_ALL;
+                if (isWARN_on(sv, WARN_ALL)) {
+	            PL_compiling.cop_warnings = pWARN_ALL;
 	            PL_dowarn |= G_WARN_ONCE ;
 	        }	
-	        else if (memEQ(SvPVX(sv), WARN_NONEstring, WARNsize))
-	            PL_compiling.cop_warnings = WARN_NONE;
-                else {
-	            if (specialWARN(PL_compiling.cop_warnings))
-		        PL_compiling.cop_warnings = newSVsv(sv) ;
-	            else
-	                sv_setsv(PL_compiling.cop_warnings, sv);
-	            if (isWARN_on(PL_compiling.cop_warnings, WARN_ONCE))
-	                PL_dowarn |= G_WARN_ONCE ;
-	        }
+		else {
+		    STRLEN len, i;
+		    int accumulate = 0 ;
+		    char * ptr = (char*)SvPV(sv, len) ;
+		    for (i = 0 ; i < len ; ++i) 
+		        accumulate += ptr[i] ;
+		    if (!accumulate)
+	                PL_compiling.cop_warnings = pWARN_NONE;
+                    else {
+	                if (specialWARN(PL_compiling.cop_warnings))
+		            PL_compiling.cop_warnings = newSVsv(sv) ;
+	                else
+	                    sv_setsv(PL_compiling.cop_warnings, sv);
+	                if (isWARN_on(PL_compiling.cop_warnings, WARN_ONCE))
+	                    PL_dowarn |= G_WARN_ONCE ;
+	            }
+		}
 	    }
 	}
 	else if (strEQ(mg->mg_ptr, "\027IDE_SYSTEM_CALLS"))
@@ -2090,7 +2108,7 @@ Perl_sighandler(int sig)
     CV *cv = Nullcv;
     OP *myop = PL_op;
     U32 flags = 0;
-    I32 o_save_i = PL_savestack_ix, type;
+    I32 o_save_i = PL_savestack_ix;
     XPV *tXpv = PL_Xpv;
     
     if (PL_savestack_ix + 15 <= PL_savestack_max)

@@ -128,6 +128,9 @@ If you succeed in automatically converting the sources to a K&R compatible
 form, be sure to email perlbug@perl.com to let us know the steps you
 followed.  This will enable us to officially support this option.
 
+Although Perl can be compiled using a C++ compiler, the Configure script
+does not work with some C++ compilers.
+
 =head1 Space Requirements
 
 The complete perl5 source tree takes up about 20 MB of disk space.
@@ -380,6 +383,10 @@ be used for installing those add-on modules and scripts.
 By default, ExtUtils::MakeMaker will install architecture-independent
 modules into $sitelib and architecture-dependent modules into $sitearch.
 
+NOTE:  As of 5.6.0, ExtUtils::MakeMaker will use $sitelib and $sitearch,
+but will not use the other site-specific directories.  Volunteers to
+fix this are needed.
+
 =item Directories for vendor-supplied add-on files
 
 Lastly, if you are building a binary distribution of perl for
@@ -431,6 +438,9 @@ This would have the effect of setting the following:
 Note how in this example, the vendor-supplied directories are in the
 /usr hierarchy, while the directories reserved for the end-user are in
 the /usr/local hierarchy.
+
+NOTE:  As of 5.6.0, ExtUtils::MakeMaker does not use these directories.
+Volunteers to fix this are needed.
 
 The entire installed library hierarchy is installed in locations with
 version numbers, keeping the installations of different versions distinct.
@@ -1594,10 +1604,8 @@ external program.
 
 On some systems, particularly those with smaller amounts of RAM, some
 of the tests in t/op/pat.t may fail with an "Out of memory" message.
-Specifically, in perl5.004_64, tests 74 and 78 have been reported to
-fail on some systems.  On my SparcStation IPC with 8 MB of RAM, test 78
-will fail if the system is running any other significant tasks at the
-same time.
+For example, on my SparcStation IPC with 12 MB of RAM, in perl5.5.670,
+test 85 will fail if run under either t/TEST or t/harness.
 
 Try stopping other jobs on the system and then running the test by itself:
 

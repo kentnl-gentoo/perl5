@@ -1129,7 +1129,7 @@
 #define BIN_EXP "/system/ported/command_library"	/**/
 
 /* PERL_BINCOMPAT_5005:
- *	This symbol, if defined, indicates that Perl 5.006 should be
+ *	This symbol, if defined, indicates that this version of Perl should be
  *	binary-compatible with Perl 5.005.  This is impossible for builds
  *	that use features like threads and multiplicity it is always $undef
  *	for those versions.
@@ -1186,14 +1186,18 @@
  *	This macro surrounds its token with double quotes.
  */
 #if 42 == 1
-#define CAT2(a,b)a/**/b
-#define STRINGIFY(a)"a"
+#  define CAT2(a,b)	a/**/b
+#  define STRINGIFY(a)	"a"
 		/* If you can get stringification with catify, tell me how! */
 #endif
 #if 42 == 42
-#define CAT2(a,b)a ## b
-#define StGiFy(a)# a
-#define STRINGIFY(a)StGiFy(a)
+#  define PeRl_CaTiFy(a, b)	a ## b	
+#  define PeRl_StGiFy(a)	#a
+/* the additional level of indirection enables these macros to be
+ * used as arguments to other macros.  See K&R 2nd ed., page 231. */
+#  define CAT2(a,b)	PeRl_CaTiFy(a,b)
+#  define StGiFy(a)	PeRl_StGiFy(a)
+#  define STRINGIFY(a)	PeRl_StGiFy(a)
 #endif
 #if 42 != 1 && 42 != 42
 #include "Bletch: How does this C preprocessor catenate tokens?"
@@ -1608,7 +1612,7 @@
  *     Usually the <inttypes.h> needs to be included, but sometimes
  *	<sys/types.h> is enough.
  */
-#     HAS_INT64_T               /**/
+/*#define     HAS_INT64_T               /**/
 
 /* HAS_ISASCII:
  *	This manifest constant lets the C program know that isascii 
@@ -1658,6 +1662,12 @@
 #define LONGLONGSIZE _error_		/**/
 #endif
 
+/* HAS_MADVISE:
+ *	This symbol, if defined, indicates that the madvise system call is
+ *	available to map a file into memory.
+ */
+/*#define HAS_MADVISE		/**/
+
 /* HAS_MEMCHR:
  *	This symbol, if defined, indicates that the memchr routine is available
  *	to locate characters within a C string.
@@ -1668,21 +1678,21 @@
  *	This symbol, if defined, indicates that the mkdtemp routine is
  *	available to exclusively create a uniquely named temporary directory.
  */
-# HAS_MKDTEMP		/**/
+/*#define HAS_MKDTEMP		/**/
 
 /* HAS_MKSTEMP:
  *	This symbol, if defined, indicates that the mkstemp routine is
  *	available to exclusively create and open a uniquely named
  *	temporary file.
  */
-# HAS_MKSTEMP		/**/
+/*#define HAS_MKSTEMP		/**/
 
 /* HAS_MKSTEMPS:
  *	This symbol, if defined, indicates that the mkstemps routine is
  *	available to excluslvely create and open a uniquely named
  *	(with a suffix) temporary file.
  */
-# HAS_MKSTEMPS		/**/
+/*#define HAS_MKSTEMPS		/**/
 
 /* HAS_MMAP:
  *	This symbol, if defined, indicates that the mmap system call is
@@ -2189,6 +2199,12 @@
  */
 #define	Gid_t_f		"d"		/**/
 
+/* Gid_t_sign:
+ *	This symbol holds the signedess of a Gid_t.
+ *	1 for unsigned, -1 for signed.
+ */
+#define Gid_t_sign	-1		/* GID sign */
+
 /* Gid_t_size:
  *	This symbol holds the size of a Gid_t in bytes.
  */
@@ -2198,19 +2214,19 @@
  *	This symbol holds the return type of getgid() and the type of
  *	argument to setrgid() and related functions.  Typically,
  *	it is the type of group ids in the kernel. It can be int, ushort,
- *	uid_t, etc... It may be necessary to include <sys/types.h> to get
+ *	gid_t, etc... It may be necessary to include <sys/types.h> to get
  *	any typedef'ed information.
  */
 #define Gid_t gid_t		/* Type for getgid(), etc... */
 
 /* Groups_t:
  *	This symbol holds the type used for the second argument to
- *	getgroups() and setgropus().  Usually, this is the same as
+ *	getgroups() and setgroups().  Usually, this is the same as
  *	gidtype (gid_t) , but sometimes it isn't.
- *	It can be int, ushort, uid_t, etc... 
+ *	It can be int, ushort, gid_t, etc... 
  *	It may be necessary to include <sys/types.h> to get any 
  *	typedef'ed information.  This is only required if you have
- *	getgroups() or setgropus()..
+ *	getgroups() or setgroups()..
  */
 #if defined(HAS_GETGROUPS) || defined(HAS_SETGROUPS)
 #define Groups_t gid_t	/* Type for 2nd arg to [sg]etgroups() */
@@ -2346,17 +2362,23 @@
  */
 /*#define	I_SOCKS		/**/
 
+/* I_SUNMATH:
+ *	This symbol, if defined, indicates that <sunmath.h> exists and
+ *	should be included.
+ */
+/*#define	I_SUNMATH		/**/
+
 /* I_SYSLOG:
  *	This symbol, if defined, indicates that <syslog.h> exists and
  *	should be included.
  */
-#	I_SYSLOG		/**/
+/*#define	I_SYSLOG		/**/
 
 /* I_SYSMODE:
  *	This symbol, if defined, indicates that <sys/mode.h> exists and
  *	should be included.
  */
-#	I_SYSMODE		/**/
+/*#define	I_SYSMODE		/**/
 
 /* I_SYS_MOUNT:
  *	This symbol, if defined, indicates that <sys/mount.h> exists and
@@ -2385,7 +2407,7 @@
  *	This symbol, if defined, indicates that <sys/utsname.h> exists and
  *	should be included.
  */
-#	I_SYSUTSNAME		/**/
+#define	I_SYSUTSNAME		/**/
 
 /* I_SYS_VFS:
  *	This symbol, if defined, indicates that <sys/vfs.h> exists and
@@ -2422,7 +2444,7 @@
  *	for a C initialization string.  See the inc_version_list entry
  *	in Porting/Glossary for more details.
  */
-#define PERL_INC_VERSION_LIST 		/**/
+#define PERL_INC_VERSION_LIST 0		/**/
 
 /* INSTALL_USR_BIN_PERL:
  *	This symbol, if defined, indicates that Perl is to be installed
@@ -2758,8 +2780,8 @@
  *	This symbol contains the ~name expanded version of SITEARCH, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-#define SITEARCH ""		/**/
-#define SITEARCH_EXP ""		/**/
+/*#define SITEARCH ""		/**/
+/*#define SITEARCH_EXP ""		/**/
 
 /* SITELIB:
  *	This symbol contains the name of the private library for this package.
@@ -2776,8 +2798,19 @@
  *	This symbol contains the ~name expanded version of SITELIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
+/* SITELIB_STEM:
+ *	This define is SITELIB_EXP with any trailing version-specific component
+ *	removed.  The elements in inc_version_list (inc_version_list.U) can
+ *	be tacked onto this variable to generate a list of directories to search.
+ */
 #define SITELIB "/system/ported/perl/lib/site/5.005"		/**/
 #define SITELIB_EXP "/system/ported/perl/lib/site/5.005"		/**/
+#define SITELIB_STEM "/system/ported/perl/lib/site"		/**/
+
+/* Size_t_size:
+ *	This symbol holds the size of a Size_t in bytes.
+ */
+#define Size_t_size 4		/* */
 
 /* Size_t:
  *	This symbol holds the type used to declare length parameters
@@ -2819,6 +2852,12 @@
  *	This symbol defines the format string used for printing a Uid_t.
  */
 #define	Uid_t_f		"d"		/**/
+
+/* Uid_t_sign:
+ *	This symbol holds the signedess of a Uid_t.
+ *	1 for unsigned, -1 for signed.
+ */
+#define Uid_t_sign	-1		/* UID sign */
 
 /* Uid_t_size:
  *	This symbol holds the size of a Uid_t in bytes.
@@ -2920,17 +2959,29 @@
  *	be built to use the old draft POSIX threads API.
  */
 /*#define	USE_5005THREADS		/**/
-#	USE_ITHREADS		/**/
+/*#define	USE_ITHREADS		/**/
 #if defined(USE_5005THREADS) && !defined(USE_ITHREADS)
 #define		USE_THREADS		/* until src is revised*/
 #endif
 /*#define	OLD_PTHREADS_API		/**/
 
+/* PERL_VENDORARCH_EXP:
+ *	This symbol contains the ~name expanded version of PERL_VENDORARCH, to be used
+ *	in programs that are not prepared to deal with ~ expansion at run-time.
+ */
+#define PERL_VENDORARCH_EXP ""		/**/
+
 /* PERL_VENDORLIB_EXP:
  *	This symbol contains the ~name expanded version of VENDORLIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
+/* PERL_VENDORLIB_STEM:
+ *	This define is PERL_VENDORLIB_EXP with any trailing version-specific component
+ *	removed.  The elements in inc_version_list (inc_version_list.U) can
+ *	be tacked onto this variable to generate a list of directories to search.
+ */
 #define PERL_VENDORLIB_EXP ""		/**/
+#define PERL_VENDORLIB_STEM ""		/**/
 
 /* VOIDFLAGS:
  *	This symbol indicates how much support of the void type is given by this
@@ -2997,6 +3048,12 @@
  *	available to stat filesystems in bulk.
  */
 /*#define HAS_GETFSSTAT		/**/
+
+/* I_IEEEFP:
+ *	This symbol, if defined, indicates that <ieeefp.h> exists and
+ *	should be included.
+ */
+/*#define	I_IEEEFP		/**/
 
 /* HAS_LSEEK_PROTO:
  *	This symbol, if defined, indicates that the system provides

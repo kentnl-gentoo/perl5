@@ -114,6 +114,7 @@ The file Mytest.pm should start with something like this:
 	package Mytest;
 
 	use strict;
+        use warnings;
 
 	require Exporter;
 	require DynaLoader;
@@ -201,11 +202,11 @@ example only, we'll create our own test script.  Create a file called hello
 that looks like this:
 
 	#! /opt/perl5/bin/perl
-	
+
 	use ExtUtils::testlib;
-	
+
 	use Mytest;
-	
+
 	Mytest::hello();
 
 Now we make the script executable (C<chmod -x hello>), run the script
@@ -504,7 +505,7 @@ Also create a file mylib.c that looks like this:
 
 	#include <stdlib.h>
 	#include "./mylib.h"
-	
+
 	double
 	foo(int a, long b, const char *c)
 	{
@@ -905,7 +906,7 @@ to assist in making the interface between Perl and your extension simpler
 or easier to understand.  These routines should live in the .pm file.
 Whether they are automatically loaded when the extension itself is loaded
 or only loaded when called depends on where in the .pm file the subroutine
-definition is placed.  You can also consult L<Autoloader> for an alternate
+definition is placed.  You can also consult L<AutoLoader> for an alternate
 way to store and load your extra subroutines.
 
 =head2 Documenting your Extension

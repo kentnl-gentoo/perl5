@@ -103,6 +103,13 @@ Perl_avhv_fetch_ent(pTHXo_ AV *ar, SV* keysv, I32 lval, U32 hash)
     return ((CPerlObj*)pPerl)->Perl_avhv_fetch_ent(ar, keysv, lval, hash);
 }
 
+#undef  Perl_avhv_store_ent
+SV**
+Perl_avhv_store_ent(pTHXo_ AV *ar, SV* keysv, SV* val, U32 hash)
+{
+    return ((CPerlObj*)pPerl)->Perl_avhv_store_ent(ar, keysv, val, hash);
+}
+
 #undef  Perl_avhv_iternext
 HE*
 Perl_avhv_iternext(pTHXo_ AV *ar)
@@ -364,6 +371,17 @@ Perl_form_nocontext(const char* pat, ...)
 
 }
 
+#undef  Perl_load_module_nocontext
+void
+Perl_load_module_nocontext(U32 flags, SV* name, SV* ver, ...)
+{
+    dTHXo;
+    va_list args;
+    va_start(args, ver);
+    ((CPerlObj*)pPerl)->Perl_vload_module(flags, name, ver, &args);
+    va_end(args);
+}
+
 #undef  Perl_mess_nocontext
 SV*
 Perl_mess_nocontext(const char* pat, ...)
@@ -460,6 +478,20 @@ Perl_sv_setpvf_mg_nocontext(SV* sv, const char* pat, ...)
 
 #undef  Perl_fprintf_nocontext
 #endif
+
+#undef  Perl_cv_const_sv
+SV*
+Perl_cv_const_sv(pTHXo_ CV* cv)
+{
+    return ((CPerlObj*)pPerl)->Perl_cv_const_sv(cv);
+}
+
+#undef  Perl_cv_undef
+void
+Perl_cv_undef(pTHXo_ CV* cv)
+{
+    ((CPerlObj*)pPerl)->Perl_cv_undef(cv);
+}
 
 #undef  Perl_cx_dump
 void
@@ -587,6 +619,13 @@ int
 Perl_do_binmode(pTHXo_ PerlIO *fp, int iotype, int flag)
 {
     return ((CPerlObj*)pPerl)->Perl_do_binmode(fp, iotype, flag);
+}
+
+#undef  Perl_do_close
+bool
+Perl_do_close(pTHXo_ GV* gv, bool not_implicit)
+{
+    return ((CPerlObj*)pPerl)->Perl_do_close(gv, not_implicit);
 }
 #if !defined(WIN32)
 #endif
@@ -1270,6 +1309,13 @@ Perl_to_uni_lower_lc(pTHXo_ U32 c)
     return ((CPerlObj*)pPerl)->Perl_to_uni_lower_lc(c);
 }
 
+#undef  Perl_is_utf8_char
+int
+Perl_is_utf8_char(pTHXo_ U8 *p)
+{
+    return ((CPerlObj*)pPerl)->Perl_is_utf8_char(p);
+}
+
 #undef  Perl_is_utf8_alnum
 bool
 Perl_is_utf8_alnum(pTHXo_ U8 *p)
@@ -1380,6 +1426,23 @@ void
 Perl_leave_scope(pTHXo_ I32 base)
 {
     ((CPerlObj*)pPerl)->Perl_leave_scope(base);
+}
+
+#undef  Perl_load_module
+void
+Perl_load_module(pTHXo_ U32 flags, SV* name, SV* ver, ...)
+{
+    va_list args;
+    va_start(args, ver);
+    ((CPerlObj*)pPerl)->Perl_vload_module(flags, name, ver, &args);
+    va_end(args);
+}
+
+#undef  Perl_vload_module
+void
+Perl_vload_module(pTHXo_ U32 flags, SV* name, SV* ver, va_list* args)
+{
+    ((CPerlObj*)pPerl)->Perl_vload_module(flags, name, ver, args);
 }
 
 #undef  Perl_looks_like_number
@@ -1898,6 +1961,13 @@ SV*
 Perl_newSViv(pTHXo_ IV i)
 {
     return ((CPerlObj*)pPerl)->Perl_newSViv(i);
+}
+
+#undef  Perl_newSVuv
+SV*
+Perl_newSVuv(pTHXo_ UV u)
+{
+    return ((CPerlObj*)pPerl)->Perl_newSVuv(u);
 }
 
 #undef  Perl_newSVnv
@@ -3902,6 +3972,8 @@ Perl_ptr_table_split(pTHXo_ PTR_TBL_t *tbl)
 #  endif
 #endif
 #if defined(PERL_IN_TOKE_C) || defined(PERL_DECL_PROT)
+#if 0
+#endif
 #  if defined(CRIPPLED_CC)
 #  endif
 #  if defined(PERL_CR_FILTER)

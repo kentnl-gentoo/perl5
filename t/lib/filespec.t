@@ -181,37 +181,33 @@ BEGIN {
 [ "Win32->rel2abs('../','//prague_main/work')",         '\\\\prague_main\\work\\..'       ],
 
 [ "VMS->splitpath('file')",                                       ',,file'                                   ],
-[ "VMS->splitpath('[d1.d2.d3]')",                                 ',d1.d2.d3,'                               ],
-[ "VMS->splitpath('[.d1.d2.d3]')",                                ',.d1.d2.d3,'                              ],
-[ "VMS->splitpath('[d1.d2.d3]file')",                             ',d1.d2.d3,file'                           ],
-[ "VMS->splitpath('d1/d2/d3/file')",                              ',d1/d2/d3/,file'                          ],
-[ "VMS->splitpath('/d1/d2/d3/file')",                             '/d1,/d2/d3/,file'                         ],
-[ "VMS->splitpath('[.d1.d2.d3]file')",                            ',.d1.d2.d3,file'                          ],
-[ "VMS->splitpath('node::volume:[d1.d2.d3]')",                    'node::volume:,d1.d2.d3,'                  ],
-[ "VMS->splitpath('node::volume:[d1.d2.d3]file')",                'node::volume:,d1.d2.d3,file'              ],
-[ "VMS->splitpath('node\"access_spec\"::volume:[d1.d2.d3]')",     'node"access_spec"::volume:,d1.d2.d3,'     ],
-[ "VMS->splitpath('node\"access_spec\"::volume:[d1.d2.d3]file')", 'node"access_spec"::volume:,d1.d2.d3,file' ],
+[ "VMS->splitpath('[d1.d2.d3]')",                                 ',[d1.d2.d3],'                               ],
+[ "VMS->splitpath('[.d1.d2.d3]')",                                ',[.d1.d2.d3],'                              ],
+[ "VMS->splitpath('[d1.d2.d3]file')",                             ',[d1.d2.d3],file'                           ],
+[ "VMS->splitpath('d1/d2/d3/file')",                              ',[.d1.d2.d3],file'                          ],
+[ "VMS->splitpath('/d1/d2/d3/file')",                             'd1:,[d2.d3],file'                         ],
+[ "VMS->splitpath('[.d1.d2.d3]file')",                            ',[.d1.d2.d3],file'                          ],
+[ "VMS->splitpath('node::volume:[d1.d2.d3]')",                    'node::volume:,[d1.d2.d3],'                  ],
+[ "VMS->splitpath('node::volume:[d1.d2.d3]file')",                'node::volume:,[d1.d2.d3],file'              ],
+[ "VMS->splitpath('node\"access_spec\"::volume:[d1.d2.d3]')",     'node"access_spec"::volume:,[d1.d2.d3],'     ],
+[ "VMS->splitpath('node\"access_spec\"::volume:[d1.d2.d3]file')", 'node"access_spec"::volume:,[d1.d2.d3],file' ],
 
 [ "VMS->catpath('','','file')",                                       'file'                                     ],
 [ "VMS->catpath('','[d1.d2.d3]','')",                                 '[d1.d2.d3]'                               ],
 [ "VMS->catpath('','[.d1.d2.d3]','')",                                '[.d1.d2.d3]'                              ],
 [ "VMS->catpath('','[d1.d2.d3]','file')",                             '[d1.d2.d3]file'                           ],
 [ "VMS->catpath('','[.d1.d2.d3]','file')",                            '[.d1.d2.d3]file'                          ],
-[ "VMS->catpath('','d1/d2/d3','file')",                               'd1/d2/d3/file'                            ],
-[ "VMS->catpath('v','d1/d2/d3','file')",                              'd1/d2/d3/file'                            ],
+[ "VMS->catpath('','d1/d2/d3','file')",                               '[.d1.d2.d3]file'                            ],
+[ "VMS->catpath('v','d1/d2/d3','file')",                              'v:[.d1.d2.d3]file'                            ],
 [ "VMS->catpath('node::volume:','[d1.d2.d3]','')",                    'node::volume:[d1.d2.d3]'                  ],
 [ "VMS->catpath('node::volume:','[d1.d2.d3]','file')",                'node::volume:[d1.d2.d3]file'              ],
 [ "VMS->catpath('node\"access_spec\"::volume:','[d1.d2.d3]','')",     'node"access_spec"::volume:[d1.d2.d3]'     ],
 [ "VMS->catpath('node\"access_spec\"::volume:','[d1.d2.d3]','file')", 'node"access_spec"::volume:[d1.d2.d3]file' ],
 
 [ "VMS->canonpath('')",                                    ''                        ],
-# There's no VMS specific canonpath
-#[ "VMS->canonpath('volume:[d1]file')",                     'volume:[d1]file'         ],
-#[ "VMS->canonpath('LOGICAL:[LOGICAL]LOGICAL')",            'LOGICAL:[VULCAN]LOGICAL' ],
-#[ "VMS->canonpath('volume:[d1]d2.dir')",                   'volume:[d1.d2]'          ],
-#[ "VMS->canonpath('volume:[d1]d2.dir;1')",                 'volume:[d1.d2]'          ],
-#[ "VMS->canonpath('volume:[d1.d2.--]file')",               'volume:[d1.d2.-.-]file'  ],
-[ "VMS->canonpath('///../../..//./././a//b/.././c/././')", '/a/b/../c'               ],
+[ "VMS->canonpath('volume:[d1]file')",                     'volume:[d1]file'         ],
+[ "VMS->canonpath('volume:[d1.-.d2.][d3.d4.-]')",              'volume:[d2.d3]'          ],
+[ "VMS->canonpath('volume:[000000.d1]d2.dir;1')",                 'volume:[d1]d2.dir;1'   ],
 
 [ "VMS->splitdir('')",            ''          ],
 [ "VMS->splitdir('[]')",          ''          ],
@@ -222,20 +218,15 @@ BEGIN {
 [ "VMS->splitdir('.-.d2.d3')",    ',-,d2,d3'  ],
 [ "VMS->splitdir('[.-.d2.d3]')",  ',-,d2,d3'  ],
 
-[ "VMS->catdir('')",                                                      '[]'                 ],
-[ "VMS->catdir('d1','d2','d3')",                                          '[d1.d2.d3]'         ],
-[ "VMS->catdir('d1','d2/','d3')",                                         '[d1.d2.d3]'         ],
+[ "VMS->catdir('')",                                                      ''                 ],
+[ "VMS->catdir('d1','d2','d3')",                                          '[.d1.d2.d3]'         ],
+[ "VMS->catdir('d1','d2/','d3')",                                         '[.d1.d2.d3]'         ],
 [ "VMS->catdir('','d1','d2','d3')",                                       '[.d1.d2.d3]'        ],
-[ "VMS->catdir('','-','d2','d3')",                                        '[.-.d2.d3]'         ],
-[ "VMS->catdir('','-','d2','d3')",                                        '[.-.d2.d3]'         ],
-[ "VMS->catdir('','-','','d3')",                                          '[.-.d3]'            ],
-[ "VMS->catdir('[]','<->','[]','[d3]')",                                  '[.-.d3]'            ],
-[ "VMS->catdir('dir.dir','d2.dir','d3.dir')",                             '[dir.d2.d3]'        ],
+[ "VMS->catdir('','-','d2','d3')",                                        '[-.d2.d3]'         ],
+[ "VMS->catdir('','-','','d3')",                                          '[-.d3]'            ],
+[ "VMS->catdir('dir.dir','d2.dir','d3.dir')",                             '[.dir.d2.d3]'        ],
 [ "VMS->catdir('[.name]')",                                               '[.name]'            ],
 [ "VMS->catdir('[.name]','[.name]')",                                     '[.name.name]'],    
-[ "VMS->catdir('a:[.name]','b:[.name]')",                                 '[.name.name]'],    
-[ "VMS->catdir('LOGICAL:[.LOGICAL]LOGICAL','LOGICAL:[.LOGICAL]LOGICAL')", '[.LOGICAL.LOGICAL]'],
-[ "VMS->catdir('LOGICAL','LOGICAL')",                                     '[VULCAN.VULCAN]'], 
 
 [  "VMS->abs2rel('node::volume:[t1.t2.t3]','[t1.t2.t3]')", ''                 ],
 [  "VMS->abs2rel('node::volume:[t1.t2.t4]','[t1.t2.t3]')", '[-.t4]'           ],
@@ -244,19 +235,16 @@ BEGIN {
 [  "VMS->abs2rel('[t1.t2.t4]','[t1.t2.t3]')",              '[-.t4]'           ],
 [  "VMS->abs2rel('[t1.t2]file','[t1.t2.t3]')",             '[-]file'          ],
 [  "VMS->abs2rel('[t1.t2.t3.t4]','[t1.t2.t3]')",           '[t4]'             ],
-[  "VMS->abs2rel('[t4.t5.t6]','[t1.t2.t3]')",              '[-.-.-.t4.t5.t6]' ],
-#[ "VMS->abs2rel('[]','[t1.t2.t3]')",                      '[-.-.-]'          ],
-#[ "VMS->abs2rel('[..]','[t1.t2.t3]')",                    '[-.-.-]'          ],
-#[ "VMS->abs2rel('[.]','[t1.t2.t3]')",                     '[-.-.-]'          ],
-#[ "VMS->abs2rel('[..]','[t1.t2.t3]')",                    '[-.-.-]'          ],
-#[ "VMS->abs2rel('a:[t1.t2.t4]','[t1.t2.t3]')",            '[-.t4]'           ],
-#[ "VMS->abs2rel('[a.-.b.c.-]','[t1.t2.t3]')",             '[-.-.-.b]'        ],
+[  "VMS->abs2rel('[t4.t5.t6]','[t1.t2.t3]')",              '[---.t4.t5.t6]'   ],
+[ "VMS->abs2rel('[000000]','[t1.t2.t3]')",                 '[---.000000]'     ],
+[ "VMS->abs2rel('a:[t1.t2.t4]','[t1.t2.t3]')",             '[-.t4]'           ],
+[ "VMS->abs2rel('[a.-.b.c.-]','[t1.t2.t3]')",              '[---.b]'          ],
 
 [ "VMS->rel2abs('[.t4]','[t1.t2.t3]')",          '[t1.t2.t3.t4]'    ],
 [ "VMS->rel2abs('[.t4.t5]','[t1.t2.t3]')",       '[t1.t2.t3.t4.t5]' ],
 [ "VMS->rel2abs('[]','[t1.t2.t3]')",             '[t1.t2.t3]'       ],
-[ "VMS->rel2abs('[-]','[t1.t2.t3]')",            '[t1.t2.t3.-]'     ],
-[ "VMS->rel2abs('[-.t4]','[t1.t2.t3]')",         '[t1.t2.t3.-.t4]'  ],
+[ "VMS->rel2abs('[-]','[t1.t2.t3]')",            '[t1.t2]'          ],
+[ "VMS->rel2abs('[-.t4]','[t1.t2.t3]')",         '[t1.t2.t4]'       ],
 [ "VMS->rel2abs('[t1]','[t1.t2.t3]')",           '[t1]'             ],
 
 [ "OS2->catdir('A:/d1','B:/d2','d3','')", 'A:/d1/B:/d2/d3' ],
@@ -316,15 +304,18 @@ eval {
    require VMS::Filespec ;
 } ;
 
+my $skip_exception = "Install VMS::Filespec (from vms/ext)" ;
+
 if ( $@ ) {
    # Not pretty, but it allows testing of things not implemented soley
    # on VMS.  It might be better to change File::Spec::VMS to do this,
    # making it more usable when running on (say) Unix but working with
    # VMS paths.
-   eval {
-      sub File::Spec::VMS::unixify { die "unixify() only provided on VMS" } ;
-      sub File::Spec::VMS::vmspath { die "vmspath() only provided on VMS" } ;
-   } ;
+   eval qq-
+      sub File::Spec::VMS::vmsify  { die "$skip_exception" }
+      sub File::Spec::VMS::unixify { die "$skip_exception" }
+      sub File::Spec::VMS::vmspath { die "$skip_exception" }
+   - ;
    $INC{"VMS/Filespec.pm"} = 1 ;
 }
 require File::Spec::VMS ;
@@ -335,9 +326,6 @@ require File::Spec::Mac ;
 print "1..", scalar( @tests ), "\n" ;
 
 my $current_test= 1 ;
-
-# Set up for logical interpolation in ::VMS->canonpath() and ::VMS->catdir()
-%ENV = ( 'LOGICAL' => 'VULCAN' ) ;
 
 # Test out the class methods
 for ( @tests ) {
@@ -353,6 +341,13 @@ for ( @tests ) {
 sub tryfunc {
     my $function = shift ;
     my $expected = shift ;
+    my $platform = shift ;
+
+    if ($platform && $^O ne $platform) {
+	print "ok $current_test # skipped: $function\n" ;
+	++$current_test ;
+	return;
+    }
 
     $function =~ s#\\#\\\\#g ;
 
@@ -365,8 +360,9 @@ sub tryfunc {
     }
 
     if ( $@ ) {
-	if ( $@ =~ /only provided on VMS/ ) {
-	    print "ok $current_test # skip $function \n" ;
+        if ( substr( $@, 0, length $skip_exception ) eq $skip_exception ) {
+	    chomp $@ ;
+	    print "ok $current_test # skip $function: $@\n" ;
 	}
 	else {
 	    chomp $@ ;

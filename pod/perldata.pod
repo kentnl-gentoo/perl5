@@ -109,14 +109,14 @@ list context to each of its arguments.  For example, if you say
 
     int( <STDIN> )
 
-the integer operation provides scalar context for the E<lt><gt>
+the integer operation provides scalar context for the <>
 operator, which responds by reading one line from STDIN and passing it
 back to the integer operation, which will then find the integer value
 of that line and return that.  If, on the other hand, you say
 
     sort( <STDIN> )
 
-then the sort operation provides list context for E<lt><gt>, which
+then the sort operation provides list context for <>, which
 will proceed to read every line available up to the end of file, and
 pass that list of lines back to the sort routine, which will then
 sort those lines and return them as a list to whatever the context
@@ -129,7 +129,8 @@ assignment to an array or hash evaluates the righthand side in list
 context.  Assignment to a list (or slice, which is just a list
 anyway) also evaluates the righthand side in list context.
 
-When you use Perl's B<-w> command-line option, you may see warnings
+When you use the C<use warnings> pragma or Perl's B<-w> command-line 
+option, you may see warnings
 about useless uses of constants or functions in "void context".
 Void context just means the value has been discarded, such as a
 statement containing only C<"fred";> or C<getpwuid(0);>.  It still
@@ -281,7 +282,7 @@ double-quoted string literals are subject to backslash and variable
 substitution; single-quoted strings are not (except for C<\'> and
 C<\\>).  The usual C-style backslash rules apply for making
 characters such as newline, tab, etc., as well as some more exotic
-forms.  See L<perlop/"Quote and Quotelike Operators"> for a list.
+forms.  See L<perlop/"Quote and Quote-like Operators"> for a list.
 
 Hexadecimal, octal, or binary, representations in string literals
 (e.g. '0xff') are not automatically converted to their integer
@@ -323,6 +324,23 @@ C<$days{Feb}> and the quotes will be assumed automatically.  But
 anything more complicated in the subscript will be interpreted as
 an expression.
 
+A literal of the form C<v1.20.300.4000> is parsed as a string composed
+of characters with the specified ordinals.  This provides an alternative,
+more readable way to construct strings, rather than use the somewhat less
+readable interpolation form C<"\x{1}\x{14}\x{12c}\x{fa0}">.  This is useful
+for representing Unicode strings, and for comparing version "numbers"
+using the string comparison operators, C<cmp>, C<gt>, C<lt> etc.
+If there are two or more dots in the literal, the leading C<v> may be
+omitted.
+
+    print v9786;              # prints UTF-8 encoded SMILEY, "\x{263a}"
+    print v102.111.111;       # prints "foo"
+    print 102.111.111;        # same
+
+Such literals are accepted by both C<require> and C<use> for
+doing a version check.  The C<$^V> special variable also contains the
+running Perl interpreter's version in this form.  See L<perlvar/$^V>.
+
 The special literals __FILE__, __LINE__, and __PACKAGE__
 represent the current filename, line number, and package name at that
 point in your program.  They may be used only as separate tokens; they
@@ -354,7 +372,8 @@ A word that has no other interpretation in the grammar will
 be treated as if it were a quoted string.  These are known as
 "barewords".  As with filehandles and labels, a bareword that consists
 entirely of lowercase letters risks conflict with future reserved
-words, and if you use the B<-w> switch, Perl will warn you about any
+words, and if you use the C<use warnings> pragma or the B<-w> switch, 
+Perl will warn you about any
 such words.  Some people may wish to outlaw barewords entirely.  If you
 say
 
@@ -386,13 +405,13 @@ plain paranoid, you can force the correct interpretation with curly
 braces as above.
 
 A line-oriented form of quoting is based on the shell "here-document"
-syntax.  Following a C<E<lt>E<lt>> you specify a string to terminate
+syntax.  Following a C<< << >> you specify a string to terminate
 the quoted material, and all lines following the current line down to
 the terminating string are the value of the item.  The terminating
 string may be either an identifier (a word), or some quoted text.  If
 quoted, the type of quotes you use determines the treatment of the
 text, just as in regular quoting.  An unquoted identifier works like
-double quotes.  There must be no space between the C<E<lt>E<lt>> and
+double quotes.  There must be no space between the C<< << >> and
 the identifier.  (If you put a space it will be treated as a null
 identifier, which is valid, and matches the first empty line.)  The
 terminating string must appear by itself (unquoted and with no
@@ -564,8 +583,8 @@ hash.  Likewise, hashes included as parts of other lists (including
 parameters lists and return lists from functions) always flatten out into
 key/value pairs.  That's why it's good to use references sometimes.
 
-It is often more readable to use the C<=E<gt>> operator between key/value
-pairs.  The C<=E<gt>> operator is mostly just a more visually distinctive
+It is often more readable to use the C<< => >> operator between key/value
+pairs.  The C<< => >> operator is mostly just a more visually distinctive
 synonym for a comma, but it also arranges for its left-hand operand to be
 interpreted as a string--if it's a bareword that would be a legal identifier.
 This makes it nice for initializing hashes:
@@ -730,6 +749,28 @@ new file and directory handles into or out of functions. That's because
 C<*HANDLE{IO}> only works if HANDLE has already been used as a handle.
 In other words, C<*FH> must be used to create new symbol table entries;
 C<*foo{THING}> cannot.  When in doubt, use C<*FH>.
+
+All functions that are capable of creating filehandles (open(),
+opendir(), pipe(), socketpair(), sysopen(), socket(), and accept())
+automatically create an anonymous filehandle if the handle passed to
+them is an uninitialized scalar variable. This allows the constructs
+such as C<open(my $fh, ...)> and C<open(local $fh,...)> to be used to
+create filehandles that will conveniently be closed automatically when
+the scope ends, provided there are no other references to them. This
+largely eliminates the need for typeglobs when opening filehandles
+that must be passed around, as in the following example:
+
+    sub myopen {
+        open my $fh, "@_"
+	     or die "Can't open '@_': $!";
+	return $fh;
+    }
+
+    {
+        my $f = myopen("</etc/motd");
+	print <$f>;
+	# $f implicitly closed here
+    }
 
 Another way to create anonymous filehandles is with the Symbol
 module or with the IO::Handle module and its ilk.  These modules

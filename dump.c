@@ -370,7 +370,6 @@ void
 Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 {
     dTHR;
-    STRLEN n_a;
     Perl_dump_indent(aTHX_ level, file, "{\n");
     level++;
     if (o->op_seq)
@@ -430,9 +429,15 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
     }
     if (o->op_private) {
 	SV *tmpsv = newSVpvn("", 0);
+	if (PL_opargs[o->op_type] & OA_TARGLEX) {
+	    if (o->op_private & OPpTARGET_MY)
+		sv_catpv(tmpsv, ",TARGET_MY");
+	}
 	if (o->op_type == OP_AASSIGN) {
 	    if (o->op_private & OPpASSIGN_COMMON)
 		sv_catpv(tmpsv, ",COMMON");
+	    if (o->op_private & OPpASSIGN_HASH)
+		sv_catpv(tmpsv, ",HASH");
 	}
 	else if (o->op_type == OP_SASSIGN) {
 	    if (o->op_private & OPpASSIGN_BACKWARDS)
@@ -522,6 +527,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 #else
 	if (cSVOPo->op_sv) {
 	    SV *tmpsv = NEWSV(0,0);
+	    STRLEN n_a;
 	    ENTER;
 	    SAVEFREESV(tmpsv);
 	    gv_fullname3(tmpsv, (GV*)cSVOPo->op_sv, Nullch);
@@ -1030,7 +1036,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	    for (i = max; i > 0; i--) { /* Precision: count down. */
 		sum += freq[i] * i * i;
             }
-	    while (keys = keys >> 1)
+	    while ((keys = keys >> 1))
 		pow2 = pow2 << 1;
 	    /* Approximate by Poisson distribution */
 	    theoret = HvKEYS(sv);

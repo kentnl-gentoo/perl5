@@ -9,6 +9,9 @@
 
 /* provide binary compatible (but inconsistent) names */
 #if defined(PERL_BINCOMPAT_5005)
+#  define  Perl_call_atexit		perl_atexit
+#  define  Perl_eval_sv			perl_eval_sv
+#  define  Perl_eval_pv			perl_eval_pv
 #  define  Perl_call_argv		perl_call_argv
 #  define  Perl_call_method		perl_call_method
 #  define  Perl_call_pv			perl_call_pv
@@ -71,6 +74,7 @@
 #define avhv_delete_ent		Perl_avhv_delete_ent
 #define avhv_exists_ent		Perl_avhv_exists_ent
 #define avhv_fetch_ent		Perl_avhv_fetch_ent
+#define avhv_store_ent		Perl_avhv_store_ent
 #define avhv_iternext		Perl_avhv_iternext
 #define avhv_iterval		Perl_avhv_iterval
 #define avhv_keys		Perl_avhv_keys
@@ -115,6 +119,7 @@
 #define die_nocontext		Perl_die_nocontext
 #define deb_nocontext		Perl_deb_nocontext
 #define form_nocontext		Perl_form_nocontext
+#define load_module_nocontext	Perl_load_module_nocontext
 #define mess_nocontext		Perl_mess_nocontext
 #define warn_nocontext		Perl_warn_nocontext
 #define warner_nocontext	Perl_warner_nocontext
@@ -298,6 +303,7 @@
 #define to_uni_upper_lc		Perl_to_uni_upper_lc
 #define to_uni_title_lc		Perl_to_uni_title_lc
 #define to_uni_lower_lc		Perl_to_uni_lower_lc
+#define is_utf8_char		Perl_is_utf8_char
 #define is_utf8_alnum		Perl_is_utf8_alnum
 #define is_utf8_alnumc		Perl_is_utf8_alnumc
 #define is_utf8_idfirst		Perl_is_utf8_idfirst
@@ -321,6 +327,8 @@
 #define linklist		Perl_linklist
 #define list			Perl_list
 #define listkids		Perl_listkids
+#define load_module		Perl_load_module
+#define vload_module		Perl_vload_module
 #define localize		Perl_localize
 #define looks_like_number	Perl_looks_like_number
 #define magic_clearenv		Perl_magic_clearenv
@@ -391,6 +399,7 @@
 #define mg_set			Perl_mg_set
 #define mg_size			Perl_mg_size
 #define mod			Perl_mod
+#define mode_from_discipline	Perl_mode_from_discipline
 #define moreswitches		Perl_moreswitches
 #define my			Perl_my
 #define my_atof			Perl_my_atof
@@ -462,6 +471,7 @@
 #define newSVREF		Perl_newSVREF
 #define newSVOP			Perl_newSVOP
 #define newSViv			Perl_newSViv
+#define newSVuv			Perl_newSVuv
 #define newSVnv			Perl_newSVnv
 #define newSVpv			Perl_newSVpv
 #define newSVpvn		Perl_newSVpvn
@@ -825,6 +835,7 @@
 #endif
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
 #define avhv_index_sv		S_avhv_index_sv
+#define avhv_index		S_avhv_index
 #endif
 #if defined(PERL_IN_DOOP_C) || defined(PERL_DECL_PROT)
 #define do_trans_CC_simple	S_do_trans_CC_simple
@@ -945,6 +956,8 @@
 #define qsortsv			S_qsortsv
 #endif
 #if defined(PERL_IN_PP_HOT_C) || defined(PERL_DECL_PROT)
+#define do_maybe_phash		S_do_maybe_phash
+#define do_oddball		S_do_oddball
 #define get_db_sub		S_get_db_sub
 #define method_common		S_method_common
 #endif
@@ -1090,8 +1103,10 @@
 #define ao			S_ao
 #define depcom			S_depcom
 #define incl_perldb		S_incl_perldb
+#if 0
 #define utf16_textfilter	S_utf16_textfilter
 #define utf16rev_textfilter	S_utf16rev_textfilter
+#endif
 #  if defined(CRIPPLED_CC)
 #define uni			S_uni
 #  endif
@@ -1119,6 +1134,7 @@
 #define ck_eval			Perl_ck_eval
 #define ck_exec			Perl_ck_exec
 #define ck_exists		Perl_ck_exists
+#define ck_exit			Perl_ck_exit
 #define ck_ftst			Perl_ck_ftst
 #define ck_fun			Perl_ck_fun
 #define ck_fun_locale		Perl_ck_fun_locale
@@ -1132,6 +1148,7 @@
 #define ck_match		Perl_ck_match
 #define ck_method		Perl_ck_method
 #define ck_null			Perl_ck_null
+#define ck_open			Perl_ck_open
 #define ck_repeat		Perl_ck_repeat
 #define ck_require		Perl_ck_require
 #define ck_rfun			Perl_ck_rfun
@@ -1522,6 +1539,7 @@
 #define avhv_delete_ent(a,b,c,d)	Perl_avhv_delete_ent(aTHX_ a,b,c,d)
 #define avhv_exists_ent(a,b,c)	Perl_avhv_exists_ent(aTHX_ a,b,c)
 #define avhv_fetch_ent(a,b,c,d)	Perl_avhv_fetch_ent(aTHX_ a,b,c,d)
+#define avhv_store_ent(a,b,c,d)	Perl_avhv_store_ent(aTHX_ a,b,c,d)
 #define avhv_iternext(a)	Perl_avhv_iternext(aTHX_ a)
 #define avhv_iterval(a,b)	Perl_avhv_iterval(aTHX_ a,b)
 #define avhv_keys(a)		Perl_avhv_keys(aTHX_ a)
@@ -1732,6 +1750,7 @@
 #define to_uni_upper_lc(a)	Perl_to_uni_upper_lc(aTHX_ a)
 #define to_uni_title_lc(a)	Perl_to_uni_title_lc(aTHX_ a)
 #define to_uni_lower_lc(a)	Perl_to_uni_lower_lc(aTHX_ a)
+#define is_utf8_char(a)		Perl_is_utf8_char(aTHX_ a)
 #define is_utf8_alnum(a)	Perl_is_utf8_alnum(aTHX_ a)
 #define is_utf8_alnumc(a)	Perl_is_utf8_alnumc(aTHX_ a)
 #define is_utf8_idfirst(a)	Perl_is_utf8_idfirst(aTHX_ a)
@@ -1755,6 +1774,7 @@
 #define linklist(a)		Perl_linklist(aTHX_ a)
 #define list(a)			Perl_list(aTHX_ a)
 #define listkids(a)		Perl_listkids(aTHX_ a)
+#define vload_module(a,b,c,d)	Perl_vload_module(aTHX_ a,b,c,d)
 #define localize(a,b)		Perl_localize(aTHX_ a,b)
 #define looks_like_number(a)	Perl_looks_like_number(aTHX_ a)
 #define magic_clearenv(a,b)	Perl_magic_clearenv(aTHX_ a,b)
@@ -1824,6 +1844,7 @@
 #define mg_set(a)		Perl_mg_set(aTHX_ a)
 #define mg_size(a)		Perl_mg_size(aTHX_ a)
 #define mod(a,b)		Perl_mod(aTHX_ a,b)
+#define mode_from_discipline(a)	Perl_mode_from_discipline(aTHX_ a)
 #define moreswitches(a)		Perl_moreswitches(aTHX_ a)
 #define my(a)			Perl_my(aTHX_ a)
 #define my_atof(a)		Perl_my_atof(aTHX_ a)
@@ -1895,6 +1916,7 @@
 #define newSVREF(a)		Perl_newSVREF(aTHX_ a)
 #define newSVOP(a,b,c)		Perl_newSVOP(aTHX_ a,b,c)
 #define newSViv(a)		Perl_newSViv(aTHX_ a)
+#define newSVuv(a)		Perl_newSVuv(aTHX_ a)
 #define newSVnv(a)		Perl_newSVnv(aTHX_ a)
 #define newSVpv(a,b)		Perl_newSVpv(aTHX_ a,b)
 #define newSVpvn(a,b)		Perl_newSVpvn(aTHX_ a,b)
@@ -2249,6 +2271,7 @@
 #endif
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
 #define avhv_index_sv(a)	S_avhv_index_sv(aTHX_ a)
+#define avhv_index(a,b,c)	S_avhv_index(aTHX_ a,b,c)
 #endif
 #if defined(PERL_IN_DOOP_C) || defined(PERL_DECL_PROT)
 #define do_trans_CC_simple(a)	S_do_trans_CC_simple(aTHX_ a)
@@ -2311,7 +2334,7 @@
 #if defined(PERL_IN_PERL_C) || defined(PERL_DECL_PROT)
 #define find_beginning()	S_find_beginning(aTHX)
 #define forbid_setid(a)		S_forbid_setid(aTHX_ a)
-#define incpush(a,b)		S_incpush(aTHX_ a,b)
+#define incpush(a,b,c)		S_incpush(aTHX_ a,b,c)
 #define init_interp()		S_init_interp(aTHX)
 #define init_ids()		S_init_ids(aTHX)
 #define init_lexer()		S_init_lexer(aTHX)
@@ -2369,6 +2392,8 @@
 #define qsortsv(a,b,c)		S_qsortsv(aTHX_ a,b,c)
 #endif
 #if defined(PERL_IN_PP_HOT_C) || defined(PERL_DECL_PROT)
+#define do_maybe_phash(a,b,c,d,e)	S_do_maybe_phash(aTHX_ a,b,c,d,e)
+#define do_oddball(a,b,c)	S_do_oddball(aTHX_ a,b,c)
 #define get_db_sub(a,b)		S_get_db_sub(aTHX_ a,b)
 #define method_common(a,b)	S_method_common(aTHX_ a,b)
 #endif
@@ -2513,8 +2538,10 @@
 #define ao(a)			S_ao(aTHX_ a)
 #define depcom()		S_depcom(aTHX)
 #define incl_perldb()		S_incl_perldb(aTHX)
+#if 0
 #define utf16_textfilter(a,b,c)	S_utf16_textfilter(aTHX_ a,b,c)
 #define utf16rev_textfilter(a,b,c)	S_utf16rev_textfilter(aTHX_ a,b,c)
+#endif
 #  if defined(CRIPPLED_CC)
 #define uni(a,b)		S_uni(aTHX_ a,b)
 #  endif
@@ -2542,6 +2569,7 @@
 #define ck_eval(a)		Perl_ck_eval(aTHX_ a)
 #define ck_exec(a)		Perl_ck_exec(aTHX_ a)
 #define ck_exists(a)		Perl_ck_exists(aTHX_ a)
+#define ck_exit(a)		Perl_ck_exit(aTHX_ a)
 #define ck_ftst(a)		Perl_ck_ftst(aTHX_ a)
 #define ck_fun(a)		Perl_ck_fun(aTHX_ a)
 #define ck_fun_locale(a)	Perl_ck_fun_locale(aTHX_ a)
@@ -2555,6 +2583,7 @@
 #define ck_match(a)		Perl_ck_match(aTHX_ a)
 #define ck_method(a)		Perl_ck_method(aTHX_ a)
 #define ck_null(a)		Perl_ck_null(aTHX_ a)
+#define ck_open(a)		Perl_ck_open(aTHX_ a)
 #define ck_repeat(a)		Perl_ck_repeat(aTHX_ a)
 #define ck_require(a)		Perl_ck_require(aTHX_ a)
 #define ck_rfun(a)		Perl_ck_rfun(aTHX_ a)
@@ -2958,6 +2987,8 @@
 #define avhv_exists_ent		Perl_avhv_exists_ent
 #define Perl_avhv_fetch_ent	CPerlObj::Perl_avhv_fetch_ent
 #define avhv_fetch_ent		Perl_avhv_fetch_ent
+#define Perl_avhv_store_ent	CPerlObj::Perl_avhv_store_ent
+#define avhv_store_ent		Perl_avhv_store_ent
 #define Perl_avhv_iternext	CPerlObj::Perl_avhv_iternext
 #define avhv_iternext		Perl_avhv_iternext
 #define Perl_avhv_iterval	CPerlObj::Perl_avhv_iterval
@@ -3041,6 +3072,8 @@
 #define deb_nocontext		Perl_deb_nocontext
 #define Perl_form_nocontext	CPerlObj::Perl_form_nocontext
 #define form_nocontext		Perl_form_nocontext
+#define Perl_load_module_nocontext	CPerlObj::Perl_load_module_nocontext
+#define load_module_nocontext	Perl_load_module_nocontext
 #define Perl_mess_nocontext	CPerlObj::Perl_mess_nocontext
 #define mess_nocontext		Perl_mess_nocontext
 #define Perl_warn_nocontext	CPerlObj::Perl_warn_nocontext
@@ -3396,6 +3429,8 @@
 #define to_uni_title_lc		Perl_to_uni_title_lc
 #define Perl_to_uni_lower_lc	CPerlObj::Perl_to_uni_lower_lc
 #define to_uni_lower_lc		Perl_to_uni_lower_lc
+#define Perl_is_utf8_char	CPerlObj::Perl_is_utf8_char
+#define is_utf8_char		Perl_is_utf8_char
 #define Perl_is_utf8_alnum	CPerlObj::Perl_is_utf8_alnum
 #define is_utf8_alnum		Perl_is_utf8_alnum
 #define Perl_is_utf8_alnumc	CPerlObj::Perl_is_utf8_alnumc
@@ -3442,6 +3477,10 @@
 #define list			Perl_list
 #define Perl_listkids		CPerlObj::Perl_listkids
 #define listkids		Perl_listkids
+#define Perl_load_module	CPerlObj::Perl_load_module
+#define load_module		Perl_load_module
+#define Perl_vload_module	CPerlObj::Perl_vload_module
+#define vload_module		Perl_vload_module
 #define Perl_localize		CPerlObj::Perl_localize
 #define localize		Perl_localize
 #define Perl_looks_like_number	CPerlObj::Perl_looks_like_number
@@ -3576,6 +3615,8 @@
 #define mg_size			Perl_mg_size
 #define Perl_mod		CPerlObj::Perl_mod
 #define mod			Perl_mod
+#define Perl_mode_from_discipline	CPerlObj::Perl_mode_from_discipline
+#define mode_from_discipline	Perl_mode_from_discipline
 #define Perl_moreswitches	CPerlObj::Perl_moreswitches
 #define moreswitches		Perl_moreswitches
 #define Perl_my			CPerlObj::Perl_my
@@ -3706,6 +3747,8 @@
 #define newSVOP			Perl_newSVOP
 #define Perl_newSViv		CPerlObj::Perl_newSViv
 #define newSViv			Perl_newSViv
+#define Perl_newSVuv		CPerlObj::Perl_newSVuv
+#define newSVuv			Perl_newSVuv
 #define Perl_newSVnv		CPerlObj::Perl_newSVnv
 #define newSVnv			Perl_newSVnv
 #define Perl_newSVpv		CPerlObj::Perl_newSVpv
@@ -4404,6 +4447,8 @@
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
 #define S_avhv_index_sv		CPerlObj::S_avhv_index_sv
 #define avhv_index_sv		S_avhv_index_sv
+#define S_avhv_index		CPerlObj::S_avhv_index
+#define avhv_index		S_avhv_index
 #endif
 #if defined(PERL_IN_DOOP_C) || defined(PERL_DECL_PROT)
 #define S_do_trans_CC_simple	CPerlObj::S_do_trans_CC_simple
@@ -4616,6 +4661,10 @@
 #define qsortsv			S_qsortsv
 #endif
 #if defined(PERL_IN_PP_HOT_C) || defined(PERL_DECL_PROT)
+#define S_do_maybe_phash	CPerlObj::S_do_maybe_phash
+#define do_maybe_phash		S_do_maybe_phash
+#define S_do_oddball		CPerlObj::S_do_oddball
+#define do_oddball		S_do_oddball
 #define S_get_db_sub		CPerlObj::S_get_db_sub
 #define get_db_sub		S_get_db_sub
 #define S_method_common		CPerlObj::S_method_common
@@ -4888,10 +4937,12 @@
 #define depcom			S_depcom
 #define S_incl_perldb		CPerlObj::S_incl_perldb
 #define incl_perldb		S_incl_perldb
+#if 0
 #define S_utf16_textfilter	CPerlObj::S_utf16_textfilter
 #define utf16_textfilter	S_utf16_textfilter
 #define S_utf16rev_textfilter	CPerlObj::S_utf16rev_textfilter
 #define utf16rev_textfilter	S_utf16rev_textfilter
+#endif
 #  if defined(CRIPPLED_CC)
 #define S_uni			CPerlObj::S_uni
 #define uni			S_uni
@@ -4933,6 +4984,8 @@
 #define ck_exec			Perl_ck_exec
 #define Perl_ck_exists		CPerlObj::Perl_ck_exists
 #define ck_exists		Perl_ck_exists
+#define Perl_ck_exit		CPerlObj::Perl_ck_exit
+#define ck_exit			Perl_ck_exit
 #define Perl_ck_ftst		CPerlObj::Perl_ck_ftst
 #define ck_ftst			Perl_ck_ftst
 #define Perl_ck_fun		CPerlObj::Perl_ck_fun
@@ -4959,6 +5012,8 @@
 #define ck_method		Perl_ck_method
 #define Perl_ck_null		CPerlObj::Perl_ck_null
 #define ck_null			Perl_ck_null
+#define Perl_ck_open		CPerlObj::Perl_ck_open
+#define ck_open			Perl_ck_open
 #define Perl_ck_repeat		CPerlObj::Perl_ck_repeat
 #define ck_repeat		Perl_ck_repeat
 #define Perl_ck_require		CPerlObj::Perl_ck_require
@@ -5729,6 +5784,7 @@
 #  define deb				Perl_deb_nocontext
 #  define die				Perl_die_nocontext
 #  define form				Perl_form_nocontext
+#  define load_module			Perl_load_module_nocontext
 #  define mess				Perl_mess_nocontext
 #  define newSVpvf			Perl_newSVpvf_nocontext
 #  define sv_catpvf			Perl_sv_catpvf_nocontext
@@ -5747,6 +5803,7 @@
 #  define Perl_die_nocontext		Perl_die
 #  define Perl_deb_nocontext		Perl_deb
 #  define Perl_form_nocontext		Perl_form
+#  define Perl_load_module_nocontext	Perl_load_module
 #  define Perl_mess_nocontext		Perl_mess
 #  define Perl_newSVpvf_nocontext	Perl_newSVpvf
 #  define Perl_sv_catpvf_nocontext	Perl_sv_catpvf

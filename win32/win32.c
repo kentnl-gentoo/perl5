@@ -15,7 +15,11 @@
 #define Win32_Winsock
 #endif
 #include <windows.h>
-#include <shellapi.h>
+#ifndef __MINGW32__	/* GCC/Mingw32-2.95.2 forgot the WINAPI on CommandLineToArgvW() */
+#  include <shellapi.h>
+#else
+   LPWSTR* WINAPI CommandLineToArgvW(LPCWSTR lpCommandLine, int * pNumArgs);
+#endif
 #include <winnt.h>
 #include <io.h>
 
@@ -58,7 +62,12 @@ int _CRT_glob = 0;
 #endif
 
 #if defined(__MINGW32__)
-#  define _stat stat
+/* Mingw32 is missing some prototypes */
+FILE * _wfopen(LPCWSTR wszFileName, LPCWSTR wszMode);
+FILE * _wfdopen(int nFd, LPCWSTR wszMode);
+FILE * _freopen(LPCWSTR wszFileName, LPCWSTR wszMode, FILE * pOldStream);
+int _flushall();
+int _fcloseall();
 #endif
 
 #if defined(__BORLANDC__)
@@ -75,6 +84,8 @@ int _CRT_glob = 0;
 #  define win32_get_privlib g_win32_get_privlib
 #  undef win32_get_sitelib
 #  define win32_get_sitelib g_win32_get_sitelib
+#  undef win32_get_vendorlib
+#  define win32_get_vendorlib g_win32_get_vendorlib
 #  undef do_spawn
 #  define do_spawn g_do_spawn
 #  undef getlogin
@@ -98,6 +109,9 @@ static char *		get_emd_part(SV **leading, char *trailing, ...);
 static void		remove_dead_process(long deceased);
 static long		find_pid(int pid);
 static char *		qualified_path(const char *cmd);
+static char *		win32_get_xlib(const char *pl, const char *xlib,
+				       const char *libname);
+
 #ifdef USE_ITHREADS
 static void		remove_dead_pseudo_process(long child);
 static long		find_pseudo_pid(int pid);
@@ -256,7 +270,7 @@ get_emd_part(SV **prev_pathp, char *trailing_path, ...)
 }
 
 char *
-win32_get_privlib(char *pl)
+win32_get_privlib(const char *pl)
 {
     dTHXo;
     char *stdlib = "lib";
@@ -272,11 +286,10 @@ win32_get_privlib(char *pl)
     return get_emd_part(&sv, stdlib, ARCHNAME, "bin", Nullch);
 }
 
-char *
-win32_get_sitelib(char *pl)
+static char *
+win32_get_xlib(const char *pl, const char *xlib, const char *libname)
 {
     dTHXo;
-    char *sitelib = "sitelib";
     char regstr[40];
     char pathstr[MAX_PATH+1];
     DWORD datalen;
@@ -284,21 +297,22 @@ win32_get_sitelib(char *pl)
     SV *sv1 = Nullsv;
     SV *sv2 = Nullsv;
 
-    /* $HKCU{"sitelib-$]"} || $HKLM{"sitelib-$]"} . ---; */
-    sprintf(regstr, "%s-%s", sitelib, pl);
+    /* $HKCU{"$xlib-$]"} || $HKLM{"$xlib-$]"} . ---; */
+    sprintf(regstr, "%s-%s", xlib, pl);
     (void)get_regstr(regstr, &sv1);
 
-    /* $sitelib .=
-     * ";$EMD/" . ((-d $EMD/../../../$]) ? "../../.." : "../.."). "/site/$]/lib";  */
-    sprintf(pathstr, "site/%s/lib", pl);
+    /* $xlib .=
+     * ";$EMD/" . ((-d $EMD/../../../$]) ? "../../.." : "../.."). "/$libname/$]/lib";  */
+    sprintf(pathstr, "%s/%s/lib", libname, pl);
     (void)get_emd_part(&sv1, pathstr, ARCHNAME, "bin", pl, Nullch);
 
-    /* $HKCU{'sitelib'} || $HKLM{'sitelib'} . ---; */
-    (void)get_regstr(sitelib, &sv2);
+    /* $HKCU{$xlib} || $HKLM{$xlib} . ---; */
+    (void)get_regstr(xlib, &sv2);
 
-    /* $sitelib .=
-     * ";$EMD/" . ((-d $EMD/../../../$]) ? "../../.." : "../.."). "/site/lib";  */
-    (void)get_emd_part(&sv2, "site/lib", ARCHNAME, "bin", pl, Nullch);
+    /* $xlib .=
+     * ";$EMD/" . ((-d $EMD/../../../$]) ? "../../.." : "../.."). "/$libname/lib";  */
+    sprintf(pathstr, "%s/lib", libname);
+    (void)get_emd_part(&sv2, pathstr, ARCHNAME, "bin", pl, Nullch);
 
     if (!sv1 && !sv2)
 	return Nullch;
@@ -313,6 +327,21 @@ win32_get_sitelib(char *pl)
     return SvPVX(sv1);
 }
 
+char *
+win32_get_sitelib(const char *pl)
+{
+    return win32_get_xlib(pl, "sitelib", "site");
+}
+
+#ifndef PERL_VENDORLIB_NAME
+#  define PERL_VENDORLIB_NAME	"vendor"
+#endif
+
+char *
+win32_get_vendorlib(const char *pl)
+{
+    return win32_get_xlib(pl, "vendorlib", PERL_VENDORLIB_NAME);
+}
 
 static BOOL
 has_shell_metachars(char *ptr)
@@ -3174,10 +3203,20 @@ win32_spawnvp(int mode, const char *cmdname, const char *const *argv)
     }
     memset(&StartupInfo,0,sizeof(StartupInfo));
     StartupInfo.cb = sizeof(StartupInfo);
+    memset(&tbl,0,sizeof(tbl));
     PerlEnv_get_child_IO(&tbl);
-    StartupInfo.hStdInput  = tbl.childStdIn;
-    StartupInfo.hStdOutput = tbl.childStdOut;
-    StartupInfo.hStdError  = tbl.childStdErr;
+    StartupInfo.dwFlags		= tbl.dwFlags;
+    StartupInfo.dwX		= tbl.dwX; 
+    StartupInfo.dwY		= tbl.dwY; 
+    StartupInfo.dwXSize		= tbl.dwXSize; 
+    StartupInfo.dwYSize		= tbl.dwYSize; 
+    StartupInfo.dwXCountChars	= tbl.dwXCountChars; 
+    StartupInfo.dwYCountChars	= tbl.dwYCountChars; 
+    StartupInfo.dwFillAttribute	= tbl.dwFillAttribute; 
+    StartupInfo.wShowWindow	= tbl.wShowWindow; 
+    StartupInfo.hStdInput	= tbl.childStdIn;
+    StartupInfo.hStdOutput	= tbl.childStdOut;
+    StartupInfo.hStdError	= tbl.childStdErr;
     if (StartupInfo.hStdInput != INVALID_HANDLE_VALUE &&
 	StartupInfo.hStdOutput != INVALID_HANDLE_VALUE &&
 	StartupInfo.hStdError != INVALID_HANDLE_VALUE)

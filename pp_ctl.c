@@ -859,7 +859,7 @@ PP(pp_sort)
     up = myorigmark + 1;
     while (MARK < SP) {	/* This may or may not shift down one here. */
 	/*SUPPRESS 560*/
-	if (*up = *++MARK) {			/* Weed out nulls. */
+	if ((*up = *++MARK)) {			/* Weed out nulls. */
 	    SvTEMP_off(*up);
 	    if (!PL_sortcop && !SvPOK(*up)) {
 		STRLEN n_a;
@@ -1238,7 +1238,6 @@ Perl_dounwind(pTHX_ I32 cxix)
 {
     dTHR;
     register PERL_CONTEXT *cx;
-    SV **newsp;
     I32 optype;
 
     while (cxstack_ix > cxix) {
@@ -1322,7 +1321,6 @@ Perl_qerror(pTHX_ SV *err)
 OP *
 Perl_die_where(pTHX_ char *message, STRLEN msglen)
 {
-    dSP;
     STRLEN n_a;
     if (PL_in_eval) {
 	I32 cxix;
@@ -1564,9 +1562,9 @@ PP(pp_caller)
     {
 	SV * mask ;
 	SV * old_warnings = cx->blk_oldcop->cop_warnings ;
-	if  (old_warnings == WARN_NONE || old_warnings == WARN_STD)
+	if  (old_warnings == pWARN_NONE || old_warnings == pWARN_STD)
             mask = newSVpvn(WARN_NONEstring, WARNsize) ;
-        else if (old_warnings == WARN_ALL)
+        else if (old_warnings == pWARN_ALL)
             mask = newSVpvn(WARN_ALLstring, WARNsize) ;
         else
             mask = newSVsv(old_warnings);
@@ -1786,6 +1784,7 @@ PP(pp_return)
     I32 cxix;
     register PERL_CONTEXT *cx;
     bool popsub2 = FALSE;
+    bool clear_errsv = FALSE;
     I32 gimme;
     SV **newsp;
     PMOP *newpm;
@@ -1816,7 +1815,11 @@ PP(pp_return)
 	popsub2 = TRUE;
 	break;
     case CXt_EVAL:
+	if (!(PL_in_eval & EVAL_KEEPERR))
+	    clear_errsv = TRUE;
 	POPEVAL(cx);
+	if (CxTRYBLOCK(cx))
+	    break;
 	if (AvFILLp(PL_comppad_name) >= 0)
 	    free_closures();
 	lex_end();
@@ -1845,15 +1848,21 @@ PP(pp_return)
 			*++newsp = SvREFCNT_inc(*SP);
 			FREETMPS;
 			sv_2mortal(*newsp);
-		    } else {
-			FREETMPS;
-			*++newsp = sv_mortalcopy(*SP);
 		    }
-		} else
+		    else {
+			sv = SvREFCNT_inc(*SP);	/* FREETMPS could clobber it */
+			FREETMPS;
+			*++newsp = sv_mortalcopy(sv);
+			SvREFCNT_dec(sv);
+		    }
+		}
+		else
 		    *++newsp = (SvTEMP(*SP)) ? *SP : sv_mortalcopy(*SP);
-	    } else
+	    }
+	    else
 		*++newsp = sv_mortalcopy(*SP);
-	} else
+	}
+	else
 	    *++newsp = &PL_sv_undef;
     }
     else if (gimme == G_ARRAY) {
@@ -1875,6 +1884,8 @@ PP(pp_return)
 
     LEAVE;
     LEAVESUB(sv);
+    if (clear_errsv)
+	sv_setpv(ERRSV,"");
     return pop_return();
 }
 
@@ -2053,7 +2064,7 @@ S_dofindlabel(pTHX_ OP *o, char *label, OP **opstack, OP **oplimit)
 		 (ops[-1]->op_type != OP_NEXTSTATE &&
 		  ops[-1]->op_type != OP_DBSTATE)))
 		*ops++ = kid;
-	    if (o = dofindlabel(kid, label, ops, oplimit))
+	    if ((o = dofindlabel(kid, label, ops, oplimit)))
 		return o;
 	}
     }
@@ -2147,7 +2158,6 @@ PP(pp_goto)
 	    }
 	    else if (CvXSUB(cv)) {	/* put GvAV(defgv) back onto stack */
 		AV* av;
-		int i;
 #ifdef USE_THREADS
 		av = (AV*)PL_curpad[0];
 #else
@@ -2388,10 +2398,12 @@ PP(pp_goto)
 		gotoprobe = PL_main_root;
 		break;
 	    }
-	    retop = dofindlabel(gotoprobe, label,
-				enterops, enterops + GOTO_DEPTH);
-	    if (retop)
-		break;
+	    if (gotoprobe) {
+		retop = dofindlabel(gotoprobe, label,
+				    enterops, enterops + GOTO_DEPTH);
+		if (retop)
+		    break;
+	    }
 	    PL_lastgotoprobe = gotoprobe;
 	}
 	if (!retop)
@@ -2451,8 +2463,8 @@ PP(pp_exit)
 	anum = 0;
     else {
 	anum = SvIVx(POPs);
-#ifdef VMSISH_EXIT
-	if (anum == 1 && VMSISH_EXIT)
+#ifdef VMS
+        if (anum == 1 && (PL_op->op_private & OPpEXIT_VMSISH))
 	    anum = 0;
 #endif
     }
@@ -2600,7 +2612,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, char *code, AV** avp)
     I32 gimme = 0;   /* SUSPECT - INITIALZE TO WHAT?  NI-S */
     I32 optype;
     OP dummy;
-    OP *oop = PL_op, *rop;
+    OP *rop;
     char tbuf[TYPE_DIGITS(long) + 12 + 10];
     char *tmpbuf = tbuf;
     char *safestr;
@@ -2728,8 +2740,11 @@ S_doeval(pTHX_ int gimme, OP** startop)
     av_store(comppadlist, 1, (SV*)PL_comppad);
     CvPADLIST(PL_compcv) = comppadlist;
 
-    if (!saveop || saveop->op_type != OP_REQUIRE)
+    if (!saveop ||
+	(saveop->op_type != OP_REQUIRE && saveop->op_type != OP_DOFILE))
+    {
 	CvOUTSIDE(PL_compcv) = (CV*)SvREFCNT_inc(caller);
+    }
 
     SAVEFREESV(PL_compcv);
 
@@ -2922,7 +2937,7 @@ PP(pp_require)
 			|| (PERL_VERSION == ver
 			    && PERL_SUBVERSION < sver))))
 	    {
-		DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--this is only version "
+		DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--this is only "
 		    "v%d.%d.%d, stopped", rev, ver, sver, PERL_REVISION,
 		    PERL_VERSION, PERL_SUBVERSION);
 	    }
@@ -2939,9 +2954,20 @@ PP(pp_require)
 		NV nsver = (nver - ver) * 1000;
 		UV sver = (UV)(nsver + 0.0009);
 
-		DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--this is only version "
-		    "v%d.%d.%d, stopped", rev, ver, sver, PERL_REVISION,
-		    PERL_VERSION, PERL_SUBVERSION);
+		/* help out with the "use 5.6" confusion */
+		if (sver == 0 && (rev > 5 || (rev == 5 && ver >= 100))) {
+		    DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--"
+			"this is only v%d.%d.%d, stopped"
+			" (did you mean v%"UVuf".%"UVuf".0?)",
+			rev, ver, sver, PERL_REVISION, PERL_VERSION,
+			PERL_SUBVERSION, rev, ver/100);
+		}
+		else {
+		    DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--"
+			"this is only v%d.%d.%d, stopped",
+			rev, ver, sver, PERL_REVISION, PERL_VERSION,
+			PERL_SUBVERSION);
+		}
 	    }
 	}
 	RETPUSHYES;
@@ -3152,11 +3178,11 @@ PP(pp_require)
     PL_hints = 0;
     SAVESPTR(PL_compiling.cop_warnings);
     if (PL_dowarn & G_WARN_ALL_ON)
-        PL_compiling.cop_warnings = WARN_ALL ;
+        PL_compiling.cop_warnings = pWARN_ALL ;
     else if (PL_dowarn & G_WARN_ALL_OFF)
-        PL_compiling.cop_warnings = WARN_NONE ;
+        PL_compiling.cop_warnings = pWARN_NONE ;
     else 
-        PL_compiling.cop_warnings = WARN_STD ;
+        PL_compiling.cop_warnings = pWARN_STD ;
 
     if (filter_sub || filter_child_proc) {
 	SV *datasv = filter_add(run_user_filter, Nullsv);
@@ -3346,7 +3372,7 @@ PP(pp_entertry)
     SAVETMPS;
 
     push_return(cLOGOP->op_other->op_next);
-    PUSHBLOCK(cx, CXt_EVAL, SP);
+    PUSHBLOCK(cx, (CXt_EVAL|CXp_TRYBLOCK), SP);
     PUSHEVAL(cx, 0, 0);
     PL_eval_root = PL_op;		/* Only needed so that goto works right. */
 
@@ -3997,7 +4023,7 @@ S_qsortsv(pTHX_ SV ** array, size_t num_elts, SVCOMPARE_t compare)
                on the correct side of the partition. If I find a greater
                value, then stop the scan.
             */
-            while (still_work_on_left = (u_right >= part_left)) {
+            while ((still_work_on_left = (u_right >= part_left))) {
                s = qsort_cmp(u_right, pc_left);
                if (s < 0) {
                   --u_right;
@@ -4018,7 +4044,7 @@ S_qsortsv(pTHX_ SV ** array, size_t num_elts, SVCOMPARE_t compare)
 
             /* Do a mirror image scan of uncompared values on the right
             */
-            while (still_work_on_right = (u_left <= part_right)) {
+            while ((still_work_on_right = (u_left <= part_right))) {
                s = qsort_cmp(pc_right, u_left);
                if (s < 0) {
                   ++u_left;
