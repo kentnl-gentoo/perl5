@@ -9,9 +9,13 @@ sub devnull {
     return "/dev/nul";
 }
 
+sub case_tolerant {
+    return 1;
+}
+
 sub file_name_is_absolute {
     my ($self,$file) = @_;
-    return scalar($file =~ m{^([a-z]:)?[\\/]}i);
+    return scalar($file =~ m{^([a-z]:)?[\\/]}is);
 }
 
 sub path {

@@ -8,7 +8,7 @@ use strict;
 use vars qw($VERSION $Is_Mac $Is_OS2 $Is_VMS $Is_Win32 $Is_Dos $Is_PERL_OBJECT
 	    $Verbose %pm %static $Xsubpp_Version);
 
-$VERSION = substr q$Revision: 1.12602 $, 10;
+$VERSION = substr q$Revision: 1.12603 $, 10;
 # $Id: MM_Unix.pm,v 1.126 1998/06/28 21:32:49 k Exp k $
 
 Exporter::import('ExtUtils::MakeMaker', qw($Verbose &neatvalue));
@@ -2883,16 +2883,53 @@ $(PERL_ARCHLIB)/Config.pm: $(PERL_SRC)/config.sh
 
     push @m, q{
 PERL_HDRS = \
-$(PERL_INC)/EXTERN.h       $(PERL_INC)/gv.h           $(PERL_INC)/pp.h       \
-$(PERL_INC)/INTERN.h       $(PERL_INC)/handy.h        $(PERL_INC)/proto.h    \
-$(PERL_INC)/XSUB.h         $(PERL_INC)/hv.h           $(PERL_INC)/regcomp.h  \
-$(PERL_INC)/av.h           $(PERL_INC)/keywords.h     $(PERL_INC)/regexp.h   \
-$(PERL_INC)/config.h       $(PERL_INC)/mg.h           $(PERL_INC)/scope.h    \
-$(PERL_INC)/cop.h          $(PERL_INC)/op.h           $(PERL_INC)/sv.h	     \
-$(PERL_INC)/cv.h           $(PERL_INC)/opcode.h       $(PERL_INC)/unixish.h  \
-$(PERL_INC)/dosish.h       $(PERL_INC)/patchlevel.h   $(PERL_INC)/util.h     \
-$(PERL_INC)/embed.h        $(PERL_INC)/perl.h         $(PERL_INC)/iperlsys.h \
-$(PERL_INC)/form.h         $(PERL_INC)/perly.h
+	$(PERL_INC)/EXTERN.h		\
+	$(PERL_INC)/INTERN.h		\
+	$(PERL_INC)/XSUB.h		\
+	$(PERL_INC)/av.h		\
+	$(PERL_INC)/cc_runtime.h	\
+	$(PERL_INC)/config.h		\
+	$(PERL_INC)/cop.h		\
+	$(PERL_INC)/cv.h		\
+	$(PERL_INC)/dosish.h		\
+	$(PERL_INC)/embed.h		\
+	$(PERL_INC)/embedvar.h		\
+	$(PERL_INC)/fakethr.h		\
+	$(PERL_INC)/form.h		\
+	$(PERL_INC)/gv.h		\
+	$(PERL_INC)/handy.h		\
+	$(PERL_INC)/hv.h		\
+	$(PERL_INC)/intrpvar.h		\
+	$(PERL_INC)/iperlsys.h		\
+	$(PERL_INC)/keywords.h		\
+	$(PERL_INC)/mg.h		\
+	$(PERL_INC)/nostdio.h		\
+	$(PERL_INC)/objXSUB.h		\
+	$(PERL_INC)/op.h		\
+	$(PERL_INC)/opcode.h		\
+	$(PERL_INC)/opnames.h		\
+	$(PERL_INC)/patchlevel.h	\
+	$(PERL_INC)/perl.h		\
+	$(PERL_INC)/perlapi.h		\
+	$(PERL_INC)/perlio.h		\
+	$(PERL_INC)/perlsdio.h		\
+	$(PERL_INC)/perlsfio.h		\
+	$(PERL_INC)/perlvars.h		\
+	$(PERL_INC)/perly.h		\
+	$(PERL_INC)/pp.h		\
+	$(PERL_INC)/pp_proto.h		\
+	$(PERL_INC)/proto.h		\
+	$(PERL_INC)/regcomp.h		\
+	$(PERL_INC)/regexp.h		\
+	$(PERL_INC)/regnodes.h		\
+	$(PERL_INC)/scope.h		\
+	$(PERL_INC)/sv.h		\
+	$(PERL_INC)/thrdvar.h		\
+	$(PERL_INC)/thread.h		\
+	$(PERL_INC)/unixish.h		\
+	$(PERL_INC)/utf8.h		\
+	$(PERL_INC)/util.h		\
+	$(PERL_INC)/warnings.h
 
 $(OBJECT) : $(PERL_HDRS)
 } if $self->{OBJECT};

@@ -118,15 +118,6 @@ extern int h_errno;
 #   define vfork fork
 #endif
 
-/* Put this after #includes because <unistd.h> defines _XOPEN_*. */
-#ifndef Sock_size_t
-#  if _XOPEN_VERSION >= 5 || defined(_XOPEN_SOURCE_EXTENDED) || defined(__GLIBC__)
-#    define Sock_size_t Size_t
-#  else
-#    define Sock_size_t int
-#  endif
-#endif
-
 #ifdef HAS_CHSIZE
 # ifdef my_chsize  /* Probably #defined to Perl_my_chsize in embed.h */
 #   undef my_chsize
@@ -364,6 +355,10 @@ PP(pp_glob)
 {
     OP *result;
     tryAMAGICunTARGET(iter, -1);
+
+    /* Note that we only ever get here if File::Glob fails to load
+     * without at the same time croaking, for some reason, or if
+     * perl was built with PERL_EXTERNAL_GLOB */
 
     ENTER;
 
@@ -937,7 +932,7 @@ PP(pp_sselect)
     /* If SELECT_MIN_BITS is greater than one we most probably will want
      * to align the sizes with SELECT_MIN_BITS/8 because for example
      * in many little-endian (Intel, Alpha) systems (Linux, OS/2, Digital
-     * UNIX, Solaris, NeXT, Rhapsody) the smallest quantum select() operates
+     * UNIX, Solaris, NeXT, Darwin) the smallest quantum select() operates
      * on (sets/tests/clears bits) is 32 bits.  */
     growsize = maxlen + (SELECT_MIN_BITS/8 - (maxlen % (SELECT_MIN_BITS/8)));
 #  else
@@ -1085,7 +1080,7 @@ PP(pp_getc)
     GV *gv;
     MAGIC *mg;
 
-    if (MAXARG <= 0)
+    if (MAXARG == 0)
 	gv = PL_stdingv;
     else
 	gv = (GV*)POPs;
@@ -1695,7 +1690,7 @@ PP(pp_eof)
     GV *gv;
     MAGIC *mg;
 
-    if (MAXARG <= 0) {
+    if (MAXARG == 0) {
 	if (PL_op->op_flags & OPf_SPECIAL) {	/* eof() */
 	    IO *io;
 	    gv = PL_last_in_gv = PL_argvgv;
@@ -1739,7 +1734,7 @@ PP(pp_tell)
     GV *gv;     
     MAGIC *mg;
 
-    if (MAXARG <= 0)
+    if (MAXARG == 0)
 	gv = PL_last_in_gv;
     else
 	gv = PL_last_in_gv = (GV*)POPs;
@@ -1974,7 +1969,7 @@ PP(pp_flock)
 
 #ifdef FLOCK
     argtype = POPi;
-    if (MAXARG <= 0)
+    if (MAXARG == 0)
 	gv = PL_last_in_gv;
     else
 	gv = (GV*)POPs;
@@ -3471,7 +3466,8 @@ PP(pp_readdir)
 	    sv = newSVpv(dp->d_name, 0);
 #endif
 #ifndef INCOMPLETE_TAINTS
-  	    SvTAINTED_on(sv);
+	    if (!(IoFLAGS(io) & IOf_UNTAINT))
+		SvTAINTED_on(sv);
 #endif
 	    XPUSHs(sv_2mortal(sv));
 	}
@@ -3485,7 +3481,8 @@ PP(pp_readdir)
 	sv = newSVpv(dp->d_name, 0);
 #endif
 #ifndef INCOMPLETE_TAINTS
-	SvTAINTED_on(sv);
+	if (!(IoFLAGS(io) & IOf_UNTAINT))
+	    SvTAINTED_on(sv);
 #endif
 	XPUSHs(sv_2mortal(sv));
     }
@@ -4723,7 +4720,7 @@ PP(pp_gpwuid)
 PP(pp_gpwent)
 {
     djSP;
-#if defined(HAS_PASSWD) && defined(HAS_GETPWENT)
+#ifdef HAS_PASSWD
     I32 which = PL_op->op_type;
     register SV *sv;
     struct passwd *pwent;
@@ -4737,7 +4734,11 @@ PP(pp_gpwent)
     else if (which == OP_GPWUID)
 	pwent = getpwuid(POPi);
     else
+#ifdef HAS_GETPWENT
 	pwent = (struct passwd *)getpwent();
+#else
+	DIE(aTHX_ PL_no_func, "getpwent");
+#endif
 
 #ifdef HAS_GETSPNAM
     if (which == OP_GPWNAM) {
@@ -4889,7 +4890,7 @@ PP(pp_ggrgid)
 PP(pp_ggrent)
 {
     djSP;
-#if defined(HAS_GROUP) && defined(HAS_GETGRENT)
+#ifdef HAS_GROUP
     I32 which = PL_op->op_type;
     register char **elem;
     register SV *sv;
@@ -4901,7 +4902,11 @@ PP(pp_ggrent)
     else if (which == OP_GGRGID)
 	grent = (struct group *)getgrgid(POPi);
     else
+#ifdef HAS_GETGRENT
 	grent = (struct group *)getgrent();
+#else
+        DIE(aTHX_ PL_no_func, "getgrent");
+#endif
 
     EXTEND(SP, 4);
     if (GIMME != G_ARRAY) {

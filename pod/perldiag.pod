@@ -576,7 +576,7 @@ so it was truncated to the string shown.
 
 =item Callback called exit
 
-(F) A subroutine invoked from an external package via perl_call_sv()
+(F) A subroutine invoked from an external package via call_sv()
 exited by calling exit.
 
 =item Can't "goto" out of a pseudo block
@@ -2445,7 +2445,7 @@ when you meant
 
     my ($foo, $bar) = @_;
 
-Remember that "my", "our" and "local" bind closer than comma.
+Remember that "my", "our", and "local" bind tighter than comma.
 
 =item Perl %3.3f required--this is only version %s, stopped
 

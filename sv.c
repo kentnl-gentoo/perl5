@@ -2758,6 +2758,11 @@ Perl_sv_setsv(pTHX_ SV *dstr, register SV *sstr)
 	    SvPV_set(dstr, SvPVX(sstr));
 	    SvLEN_set(dstr, SvLEN(sstr));
 	    SvCUR_set(dstr, SvCUR(sstr));
+	    if (SvUTF8(sstr))
+		SvUTF8_on(dstr);
+	    else
+		SvUTF8_off(dstr);
+
 	    SvTEMP_off(dstr);
 	    (void)SvOK_off(sstr);
 	    SvPV_set(sstr, Nullch);
@@ -5741,7 +5746,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 	bool is_utf = FALSE;
 
 	char esignbuf[4];
-	U8 utf8buf[10];
+	U8 utf8buf[UTF8_MAXLEN];
 	STRLEN esignlen = 0;
 
 	char *eptr = Nullch;
@@ -6202,7 +6207,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 	    need = 0;
 	    if (c != 'e' && c != 'E') {
 		i = PERL_INT_MIN;
-		(void)frexp(nv, &i);
+		(void)Perl_frexp(nv, &i);
 		if (i == PERL_INT_MIN)
 		    Perl_die(aTHX_ "panic: frexp");
 		if (i > 0)
@@ -7237,13 +7242,13 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl)
 	    ptr = POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = any_dup(ptr, proto_perl);	/* XXX quite arbitrary */
 	    dptr = POPDPTR(ss,ix);
-	    TOPDPTR(nss,ix) = (void (*)(void*))any_dup(dptr, proto_perl);
+	    TOPDPTR(nss,ix) = (void (*)(void*))any_dup((void *)dptr, proto_perl);
 	    break;
 	case SAVEt_DESTRUCTOR_X:
 	    ptr = POPPTR(ss,ix);
 	    TOPPTR(nss,ix) = any_dup(ptr, proto_perl);	/* XXX quite arbitrary */
 	    dxptr = POPDXPTR(ss,ix);
-	    TOPDXPTR(nss,ix) = (void (*)(pTHXo_ void*))any_dup(dxptr, proto_perl);
+	    TOPDXPTR(nss,ix) = (void (*)(pTHXo_ void*))any_dup((void *)dxptr, proto_perl);
 	    break;
 	case SAVEt_REGCONTEXT:
 	case SAVEt_ALLOC:
@@ -7333,10 +7338,10 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 #  ifdef PERL_OBJECT
     CPerlObj *pPerl = new(ipM) CPerlObj(ipM, ipMS, ipMP, ipE, ipStd, ipLIO,
 					ipD, ipS, ipP);
-    PERL_SET_INTERP(pPerl);
+    PERL_SET_THX(pPerl);
 #  else		/* !PERL_OBJECT */
     PerlInterpreter *my_perl = (PerlInterpreter*)(*ipM->pMalloc)(ipM, sizeof(PerlInterpreter));
-    PERL_SET_INTERP(my_perl);
+    PERL_SET_THX(my_perl);
 
 #    ifdef DEBUGGING
     memset(my_perl, 0xab, sizeof(PerlInterpreter));
@@ -7364,7 +7369,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     SV *sv;
     SV **svp;
     PerlInterpreter *my_perl = (PerlInterpreter*)PerlMem_malloc(sizeof(PerlInterpreter));
-    PERL_SET_INTERP(my_perl);
+    PERL_SET_THX(my_perl);
 
 #    ifdef DEBUGGING
     memset(my_perl, 0xab, sizeof(PerlInterpreter));

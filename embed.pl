@@ -1293,9 +1293,8 @@ Ajno	|PerlInterpreter*	|perl_alloc_using \
 				|struct IPerlStdIO* io|struct IPerlLIO* lio \
 				|struct IPerlDir* d|struct IPerlSock* s \
 				|struct IPerlProc* p
-#else
-Ajnod	|PerlInterpreter*	|perl_alloc
 #endif
+Ajnod	|PerlInterpreter*	|perl_alloc
 Ajnod	|void	|perl_construct	|PerlInterpreter* interp
 Ajnod	|void	|perl_destruct	|PerlInterpreter* interp
 Ajnod	|void	|perl_free	|PerlInterpreter* interp
@@ -1322,6 +1321,9 @@ Ajnop	|Malloc_t|realloc	|Malloc_t where|MEM_SIZE nbytes
 Ajnop	|Free_t	|mfree		|Malloc_t where
 jnp	|MEM_SIZE|malloced_size	|void *p
 #endif
+
+Ajnp	|void*	|get_context
+Ajnp	|void	|set_context	|void *thx
 
 END_EXTERN_C
 
@@ -2005,6 +2007,7 @@ Apd	|void	|sv_vcatpvfn	|SV* sv|const char* pat|STRLEN patlen \
 Apd	|void	|sv_vsetpvfn	|SV* sv|const char* pat|STRLEN patlen \
 				|va_list* args|SV** svargs|I32 svmax \
 				|bool *maybe_tainted
+Ap	|NV	|str_to_version	|SV *sv
 Ap	|SV*	|swash_init	|char* pkg|char* name|SV* listsv \
 				|I32 minbits|I32 none
 Ap	|UV	|swash_fetch	|SV *sv|U8 *ptr

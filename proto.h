@@ -10,9 +10,8 @@ START_EXTERN_C
 
 #if defined(PERL_IMPLICIT_SYS)
 PERL_CALLCONV PerlInterpreter*	perl_alloc_using(struct IPerlMem* m, struct IPerlMem* ms, struct IPerlMem* mp, struct IPerlEnv* e, struct IPerlStdIO* io, struct IPerlLIO* lio, struct IPerlDir* d, struct IPerlSock* s, struct IPerlProc* p);
-#else
-PERL_CALLCONV PerlInterpreter*	perl_alloc(void);
 #endif
+PERL_CALLCONV PerlInterpreter*	perl_alloc(void);
 PERL_CALLCONV void	perl_construct(PerlInterpreter* interp);
 PERL_CALLCONV void	perl_destruct(PerlInterpreter* interp);
 PERL_CALLCONV void	perl_free(PerlInterpreter* interp);
@@ -32,6 +31,9 @@ PERL_CALLCONV Malloc_t	Perl_realloc(Malloc_t where, MEM_SIZE nbytes);
 PERL_CALLCONV Free_t	Perl_mfree(Malloc_t where);
 PERL_CALLCONV MEM_SIZE	Perl_malloced_size(void *p);
 #endif
+
+PERL_CALLCONV void*	Perl_get_context(void);
+PERL_CALLCONV void	Perl_set_context(void *thx);
 
 END_EXTERN_C
 
@@ -769,6 +771,7 @@ PERL_CALLCONV bool	Perl_sv_upgrade(pTHX_ SV* sv, U32 mt);
 PERL_CALLCONV void	Perl_sv_usepvn(pTHX_ SV* sv, char* ptr, STRLEN len);
 PERL_CALLCONV void	Perl_sv_vcatpvfn(pTHX_ SV* sv, const char* pat, STRLEN patlen, va_list* args, SV** svargs, I32 svmax, bool *maybe_tainted);
 PERL_CALLCONV void	Perl_sv_vsetpvfn(pTHX_ SV* sv, const char* pat, STRLEN patlen, va_list* args, SV** svargs, I32 svmax, bool *maybe_tainted);
+PERL_CALLCONV NV	Perl_str_to_version(pTHX_ SV *sv);
 PERL_CALLCONV SV*	Perl_swash_init(pTHX_ char* pkg, char* name, SV* listsv, I32 minbits, I32 none);
 PERL_CALLCONV UV	Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr);
 PERL_CALLCONV void	Perl_taint_env(pTHX);

@@ -4,12 +4,12 @@ $!
 $! For example, if you unpacked perl into: [USER.PERL5_00n...] then you will 
 $! want to cd into the tree and execute Configure:
 $!
-$! $ SET DEFAULT [USER.PERL5_00n]
+$! $ SET DEFAULT [USER.PERL5_xxx]
 $! $ @Configure 
 $!
 $! or
 $!
-$! $ SET DEFAULT [USER.PERL5_00n]
+$! $ SET DEFAULT [USER.PERL5_xxx]
 $! $ @Configure "-des"
 $!
 $! That's it. If you get into a bind trying to build perl on VMS then 
@@ -19,7 +19,7 @@ $!
 $! ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 $!
 $! send suggestions to: 
-$!  Dan Sugalski <sugalskd@ous.edu>
+$!  Dan Sugalski <dan@sidhe.org>
 $! Thank you!!!!
 $!
 $! Adapted and converted from Larry Wall & Andy Dougherty's
@@ -39,19 +39,25 @@ $ cat  = "type"
 $ gcc_symbol = "gcc"
 $ ans = ""
 $ macros = ""
-$ use_vmsdebug_perl = "N"
-$ use_debugging_perl = "Y"
-$ use_64bit = "n"
+$ extra_fags = ""
+$ user_c_flags = ""
+$ use_debugging_perl = "y"
+$ use_ieee_math = "n"
+$ be_case_sensitive = "n"
+$ use_vmsdebug_perl = "n"
+$ use64bitall = "n"
+$ use64bitint = "n"
 $ C_Compiler_Replace = "CC="
 $ Thread_Live_Dangerously = "MT="
 $ use_two_pot_malloc = "N"
 $ use_pack_malloc = "N"
 $ use_debugmalloc = "N"
 $ d_secintgenv = "N"
+$ cc_flags = ""
 $ use_multiplicity = "N"
 $ vms_default_directory_name = F$ENVIRONMENT("DEFAULT")
-$ max_allowed_dir_depth = 3  ! e.g. [A.B.PERL5_00n] not [A.B.C.PERL5_00n]
-$! max_allowed_dir_depth = 2  ! e.g. [FOO.PERL5_00n] not [FOO.BAR.PERL5_00n]
+$ max_allowed_dir_depth = 3  ! e.g. [A.B.PERL5_xxx] not [A.B.C.PERL5_xxx]
+$! max_allowed_dir_depth = 2  ! e.g. [A.PERL5_xxx] not [A.B.PERL5_xxx]
 $!
 $ vms_filcnt = F$GETJPI ("","FILCNT")
 $!
@@ -126,6 +132,8 @@ $ Using_Vax_C = ""
 $ Using_Gnu_C = ""
 $ Dec_C_Version = ""
 $ use_threads = "F"
+$ use_5005_threads = "N"
+$ use_ithreads = "N"
 $!
 $!: option parsing
 $ IF (P1 .NES. "")
@@ -166,8 +174,8 @@ $     P'i' = P'i' - "f"
 $     config_sh = P'i'
 $     IF (F$SEARCH(config_sh).NES."")
 $     THEN
-$       test = F$FILE_ATTRIBUTES(config_sh,"PRO")
-$       IF (F$LOCATE("R",test).NE.F$LENGTH(test)) 
+$       test_config_sh = F$FILE_ATTRIBUTES(config_sh,"PRO")
+$       IF (F$LOCATE("R",test_config_sh).NE.F$LENGTH(test_config_sh)) 
 $       THEN
 $         CONTINUE !at this point check UIC && if test allows...
 $                  !to be continued ?
@@ -353,6 +361,7 @@ $! maybe someday
 $!
 $!: set package name
 $ package = "perl5"
+$ packageup = F$EDIT((package - "5"),"UPCASE")
 $!
 $!: Eunice requires " " instead of "", can you believe it
 $ echo ""
@@ -394,7 +403,7 @@ $ ELSE
 $! MANIFEST. has been found and we have set def'ed there - 
 $! time to bail out before it's too late.
 $ tmp = f$extract(1,3,f$edit(f$getsyi("VERSION"),"TRIM,COLLAPSE"))
-$ IF tmp .GES. "7.2" THEN GOTO Beyond_depth_check
+$ IF (tmp .GES. "7.2") .AND. (F$GETSYI("HW_MODEL") .GE. 1024) THEN GOTO Beyond_depth_check
 $   IF (F$ELEMENT(max_allowed_dir_depth,".",F$ENVIRONMENT("Default")).nes.".")
 $   THEN
 $     TYPE SYS$INPUT:
@@ -523,7 +532,7 @@ THIS PACKAGE SEEMS TO BE INCOMPLETE.
 You have the option of continuing the configuration process, despite the
 distinct possibility that your kit is damaged, by typing 'y'es.  If you
 do, don't blame me if something goes wrong.  I advise you to type 'n'o
-and contact the author (sugalskd@ous.edu).
+and contact the author (dan@sidhe.org)
 
 $     READ SYS$COMMAND/PROMPT="Continue? [n] " ans
 $     IF ans
@@ -589,7 +598,7 @@ $ user = F$EDIT(F$GETJPI("","USERNAME"),"TRIM,COLLAPSE")
 $ IF .NOT.(F$SEARCH("[-.CONFIG]INSTRUCT.").EQS."")
 $ THEN
 $   messages = F$ENVIRONMENT("MESSAGE")
-$   SET MESSAGE/NOFAC/NOSEV/NOIDENT/NOTEXT !sorry :-(
+$   SET MESSAGE/NOFAC/NOSEV/NOIDENT/NOTEXT
 $   contains /NOOUTPUT [-.CONFIG]INSTRUCT. 'user'
 $   IF .NOT.($status.EQ.%X08D78053)
 $   THEN
@@ -599,7 +608,7 @@ $     rp = "Would you like to see the instructions? [''dflt'] "
 $     GOSUB myread
 $     if .NOT.ans THEN needman=""
 $   ENDIF
-$   SET MESSAGE 'messages'                 !hope you made it here :-)
+$   SET MESSAGE 'messages'
 $ ENDIF
 $ if (fastread.AND.silent.AND.(alldone.eqs."cont")) THEN needman=""
 $!
@@ -617,9 +626,9 @@ brackets; typing carriage return will give you the default.
 $   READ SYS$COMMAND/PROMPT="Type carriage return to continue " ans
 $   TYPE SYS$INPUT:
 
-In a hurry? You may run '@Configure -d'.  This will bypass nearly all
+In a hurry? You may run '@Configure "-d"'.  This will bypass nearly all
 the questions and use the computed defaults (or the previous answers provided 
-there was already a config.sh file). Type '@Configure -h' for a list of 
+there was already a config.sh file). Type '@Configure "-h"' for a list of 
 options.
 
 $   READ SYS$COMMAND/PROMPT="Type carriage return to continue " ans
@@ -628,7 +637,7 @@ $   TYPE SYS$INPUT:
 Much effort has been expended to ensure that this shell script will
 run on any VMS system.  If despite that it blows up on yours, your
 best bet is to edit Configure.com and @ it again.  Whatever problems
-you have with Configure.com, let me (sugalskd@ous.edu) know how I blew
+you have with Configure.com, let me (dan@sidhe.org) know how I blew
 it.
 
 $!This installation script affects things in two ways:
@@ -922,44 +931,44 @@ $!: set up shell script to do ~ expansion !sfn
 $!: expand filename                       !sfn
 $!: now set up to get a file name         !sfn
 $!
+$ prefix = F$ENVIRONMENT("DEFAULT") - ".UU]" + "]"
+$ prefix = F$PARSE(prefix,,,,"NO_CONCEAL") - "][" - ".;"
+$ prefixbase = prefix - "]"
+$ prefix = prefixbase + ".]"
+$!: determine root of directory hierarchy where package will be installed.
+$ dflt = prefix
+$ IF .NOT.silent 
+$ THEN 
+$   echo ""
+$   echo "By default, ''package' will be installed in ''dflt', pod"
+$   echo "pages under ''prefixbase'LIB.POD], etc..., i.e. with ''dflt' as prefix for"
+$   echo "all installation directories."
+$   echo "On ''osname' the ''prefix' is used to DEFINE the ''packageup'_ROOT prior to installation"
+$   echo "as well as during subsequent use of ''package' via ''packageup'_SETUP.COM."
+$ ENDIF
+$ rp = "Installation prefix to use (for ''packageup'_ROOT)? [ ''dflt' ] "
+$ GOSUB myread
+$ IF ans.NES.""
+$ THEN 
+$   prefix = ans
+$   IF F$LOCATE(".]",ans) .EQ. F$LENGTH(ans) THEN prefix = prefix - "]" + ".]"
+$ ELSE 
+$   prefix = dflt
+$ ENDIF
+$!
+$! Check here for pre-existing PERL_ROOT.
+$!  -> ask if removal desired.
+$! Check here for writability of requested PERL_ROOT if it is not the default (cwd).
+$!  -> recommend letting PERL_ROOT be PERL_SRC if requested PERL_ROOT is not writable.
+$!
 $ vms_skip_install = "true"
 $ dflt = "y"
 $! echo ""
-$ rp = "%Config-I-VMS, Do you wish to skip the """"where install"""" questions? [''dflt'] "
+$ rp = "%Config-I-VMS, Do you wish to skip the remaining """"where install"""" questions? [''dflt'] "
 $ GOSUB myread
 $ IF (.NOT.ans).AND.(ans.NES."") THEN vms_skip_install = "false"
-$ prefix = F$ENVIRONMENT("DEFAULT") - ".UU]" + "]"
-$ prefix = f$parse(prefix,,,,"NO_CONCEAL") - "][" - ".;"
-$ prefix = prefix - "]" + ".]"
 $ IF (.NOT.vms_skip_install)
 $ THEN
-$!: determine root of directory hierarchy where package will be installed.
-$   dflt = "default"
-$   IF .NOT.silent 
-$   THEN 
-$     echo ""
-$     echo "By default, ''package' will be installed in ''dflt'/bin, manual"
-$     echo "pages under ''dflt'/man, etc..., i.e. with ''dflt' as prefix for"
-$     echo "all installation directories. Typically set to /usr/local, but you"
-$     echo "may choose /usr if you wish to install ''package' among your system
-$   ENDIF
-$   IF .NOT.silent 
-$   THEN TYPE SYS$INPUT:
-binaries. If you wish to have binaries under /bin but manual pages
-under /usr/local/man, that's ok: you will be prompted separately
-for each of the installation directories, the prefix being only used
-to set the defaults.
-$   ENDIF
-$   dflt = prefix
-$   rp = "Installation prefix to use? [ ''dflt' ] "
-$   GOSUB myread
-$   IF ans.NES.""
-$   THEN 
-$     prefix = ans
-$     IF F$LOCATE(".]",ans) .EQ. F$LENGTH(ans) THEN prefix = prefix - "]" + ".]"
-$   ELSE 
-$     prefix = dflt
-$   ENDIF
 $!
 $!: set the prefixit variable, to compute a suitable default value
 $!
@@ -981,7 +990,7 @@ $   THEN privlib = ans
 $   ELSE privlib = dflt
 $   ENDIF
 $!
-$ ENDIF !%Config-I-VMS, skip "where install" questions
+$ ENDIF !%Config-I-VMS, skip remaining "where install" questions
 $!
 $!: set the base revision
 $ baserev="5"
@@ -1152,12 +1161,12 @@ $ WRITE CONFIG "        exit(0);"
 $ WRITE CONFIG "}"
 $ CLOSE CONFIG
 $!
-$ DEFINE SYS$ERROR _NLA0:
-$ DEFINE SYS$OUTPUT _NLA0:
+$! DEFINE SYS$ERROR _NLA0:
+$! DEFINE SYS$OUTPUT _NLA0:
 $ cc/NoObj/list=ccvms.lis ccvms.c
 $ tmp = $status
-$ DEASSIGN SYS$OUTPUT
-$ DEASSIGN SYS$ERROR
+$! DEASSIGN SYS$OUTPUT
+$! DEASSIGN SYS$ERROR
 $ IF (silent) THEN GOSUB Shut_up
 $! echo "%Config-I-VMS, After cc compile $status = >''tmp'<" !diagnostic
 $!
@@ -1199,7 +1208,7 @@ $     echo "%Config-I-VMS, You also have: ''line' ''archsufx' ''F$GETSYI("VERSIO
 $     vms_cc_available = vms_cc_available + "cc/decc "
 $   ENDIF
 $ ELSE
-$   IF F$LOCATE("DEC",line).NE.F$LENGTH(line) 
+$   IF (F$LOCATE("DEC",line).NE.F$LENGTH(line)).or.(F$LOCATE("Compaq",line).NE.F$LENGTH(line))
 $   THEN 
 $     vms_cc_dflt = "/decc"
 $     vms_cc_available = vms_cc_available + "cc/decc "
@@ -1269,7 +1278,7 @@ $ IF ans.NES.""
 $ THEN
 $   ans = F$EDIT(ans,"TRIM, COMPRESS, LOWERCASE")
 $   Mcc = ans
-$   IF F$LOCATE("dec",ans).NE.F$LENGTH(ans)
+$   IF (F$LOCATE("dec",ans).NE.F$LENGTH(ans)).or.(F$LOCATE("compaq",ans).NE.F$LENGTH(ans))
 $   THEN
 $     Mcc = "cc/decc"
 $     Using_Dec_C = "Yes"
@@ -1283,7 +1292,7 @@ $     C_COMPILER_Replace = "CC=cc=''Mcc'"
 $   ENDIF
 $   IF Mcc.NES.dflt
 $   THEN
-$     IF F$LOCATE("dec",dflt).NE.F$LENGTH(dflt) 
+$     IF (F$LOCATE("dec",dflt).NE.F$LENGTH(dflt)).or(F$LOCATE("compaq",dflt).NE.F$LENGTH(dflt))
 $     THEN 
 $       C_COMPILER_Replace = "CC=cc=''Mcc'"
 $     ELSE
@@ -1367,6 +1376,8 @@ $   CLOSE CONFIG
 $!   DELETE/NOLOG/NOCONFIRM deccvers.*;
 $   echo "You are using Dec C ''line'"
 $   Dec_C_Version = line
+$   Dec_C_Version = Dec_C_Version + 0
+$   if Dec_C_Version.ge.60200000 THEN CC_FLAGS = CC_FLAGS + "/NOANSI_ALIAS"
 $ ENDIF
 $Vaxc_Invoke_check:
 $ IF "''Using_Vax_C'".EQS."Yes"
@@ -1735,25 +1746,51 @@ $   use_multiplicity="N"
 $ ENDIF
 $!
 $! Ask if they want to build with 64-bit support
-$ if (Archname.eqs."VMS_AXP").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
+$ IF (Archname.eqs."VMS_AXP").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
 $ THEN
+$   dflt = use64bitint
 $   echo ""
-$   echo "This version of perl has experimental support for building with
-$   echo "64 bit integers and 128 bit floating point variables. This gives
-$   echo "a much larger range for perl's mathematical operations. (Note that
-$   echo "does *not* enable 64-bit fileops at the moment, as Dec C doesn't
-$   echo "do that yet)"
-$   dflt = use_64bit
-$   rp = "Build with 64 bits? [''dflt'] "
+$   echo "You can have native 64-bit long integers.
+$   echo ""
+$   echo "Perl can be built to take advantage of 64-bit integer types
+$   echo "on some systems, which provide a much larger range for perl's 
+$   echo "mathematical operations.  (Note that does *not* enable 64-bit 
+$   echo "fileops at the moment, as Dec C doesn't do that yet)."
+$   echo "Choosing this option will most probably introduce binary incompatibilities.
+$   echo ""
+$   echo "If this doesn't make any sense to you, just accept the default ''dflt'.
+$   rp = "Try to use 64-bit integers, if available? [''dflt'] "
 $   GOSUB myread
-$   if ans.eqs."" then ans = dflt
-$   if (f$extract(0, 1, "''ans'").eqs."Y").or.(f$extract(0, 1, "''ans'").eqs."y")
+$   IF ans .EQS. "" THEN ans = dflt
+$   IF (f$extract(0, 1, f$edit(ans,"COLLAPSE,UPCASE")) .EQS. "Y")
 $   THEN
-$     use_64bit="Y"
+$     use64bitint="Y"
 $   ELSE
-$     use_64bit="N"
+$     use64bitint="N"
 $   ENDIF
-$ ENDIF
+$   IF (use64bitint)
+$   THEN
+$     dflt = use64bitall
+$     echo ""
+$     echo "Since you chose 64-bitness you may want to try maximal 64-bitness.
+$     echo "What you have chosen is minimal 64-bitness which means just enough
+$     echo "to get 64-bit integers.  The maximal means using as much 64-bitness
+$     echo "as is possible on the platform.  This in turn means even more binary
+$     echo "incompatibilities.  On the other hand, your platform may not have
+$     echo "any more maximal 64-bitness than what you already have chosen.
+$     echo ""
+$     echo "If this doesn't make any sense to you, just accept the default ''dflt'.
+$     rp = "Try to use full 64-bit support, if available? [''dflt'] "
+$     GOSUB myread
+$     IF ans .EQS. "" THEN ans = dflt
+$     IF (f$extract(0, 1, f$edit(ans,"COLLAPSE,UPCASE")) .EQS. "Y")
+$     THEN
+$       use64bitall="Y"
+$     ELSE
+$       use64bitall="N"
+$     ENDIF
+$   ENDIF
+$ ENDIF ! AXP && >= 7.1
 $!
 $! Ask about threads, if appropriate
 $ if (Using_Dec_C.eqs."Yes")
@@ -1769,6 +1806,31 @@ $   if ans.eqs."" then ans = dflt
 $   if (f$extract(0, 1, "''ans'").eqs."Y").or.(f$extract(0, 1, "''ans'").eqs."y")
 $   THEN
 $     use_threads="T"
+$!
+$     ! Shall we do the 5.005-stype threads, or IThreads?
+$     echo "As of 5.5.640, Perl has two different internal threading
+$     echo "implementations, the 5.005 version (5005threads) and an
+$     echo "interpreter-based version (ithreads) that has one
+$     echo "interpreter per thread.  Both are very experimental.  This
+$     echo "arrangement exists to help developers work out which one
+$     echo "is better.
+$     echo "
+$     echo "If you're a casual user, you probably don't want
+$     echo "interpreter-threads at this time.  There doesn't yet exist
+$     echo "a way to create threads from within Perl in this model,
+$     echo "i.e., "use Thread;" will NOT work.
+$     echo "
+$     dflt = "n"
+$     rp = "Build with Interpreter threads? [''dflt']
+$     if ans.eqs."" then ans = dflt
+$     if (f$extract(0, 1, "''ans'").eqs."Y").or.(f$extract(0, 1, "''ans'").eqs."y")
+$     THEN
+$       use_ithreads="Y"
+$       use_5005_threads="N"
+$     ELSE
+$       use_ithreads="N"
+$       use_5005_threads="Y"
+$     ENDIF
 $     ! Are they on VMS 7.1 on an alpha?
 $     if (Archname.eqs."VMS_AXP").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
 $     THEN
@@ -1792,6 +1854,48 @@ $       ENDIF
 $     ENDIF
 $   ENDIF
 $ ENDIF
+$ if archname .eqs. "VMS_AXP"
+$ then
+$!
+$! Case sensitive?
+$ echo ""
+$ echo "By default, perl (and pretty much everything else on VMS) uses
+$ echo "case-insensitive linker symbols. Which is to say, when the
+$ echo "underlying C code makes a call to a routine called Perl_foo in
+$ echo "the source, the name in the object modules or shareable images
+$ echo "is really PERL_FOO. There are some packages that use an
+$ echo "embedded perl interpreter that instead require case-sensitive
+$ echo "linker symbols.
+$ echo ""
+$ echo "If you have no idea what this means, and don't have
+$ echo "any program requiring anything, choose the default.
+$ dflt = be_case_sensitive
+$ rp = "Case-sensitive symbols [''dflt'] "
+$ gosub myread
+$ if ans.eqs."" then ans="''dflt'"
+$ be_case_sensitive = "''ans'"
+$!
+$! IEEE math?
+$ echo ""
+$ echo "Perl normally uses G_FLOAT format floating point numbers
+$ echo "internally, as do most things on VMS. You can, however, build
+$ echo "with IEEE floating point numbers instead if you need to.
+$ dflt = use_ieee_math
+$ rp = "Use IEEE math [''dflt'] "
+$ gosub myread
+$ if ans.eqs."" then ans="''dflt'"
+$ use_ieee_math = "''ans'"
+$ endif
+$! CC Flags
+$ echo ""
+$ echo "You can, if you need to, pass extra flags on to the C
+$ echo "compiler. In general you should only do this if you really,
+$ echo "really know what you're doing.
+$ dflt = user_c_flags
+$ rp = "Extra C flags [''dflt'] "
+$ gosub myread
+$ if ans.eqs."" then ans="''dflt'"
+$ user_c_flags = "''ans'"
 $!
 $! Ask whether they want to use secure logical translation when tainting
 $ echo ""
@@ -1882,19 +1986,16 @@ $ echo "break badly"
 $ echo "
 $ echo "Which modules do you want to build into perl?"
 $! dflt = "Fcntl Errno File::Glob IO Opcode Byteloader Devel::Peek Devel::DProf Data::Dumper attrs re VMS::Stdio VMS::DCLsym B SDBM_File"
-$ dflt = "re Fcntl Errno File::Glob IO Opcode Devel::Peek Devel::DProf Data::Dumper attrs VMS::Stdio VMS::DCLsym B SDBM_File"
+$ dflt = "re Fcntl Errno File::Glob IO Opcode Devel::Peek Devel::DProf Data::Dumper attrs VMS::Stdio VMS::DCLsym B SDBM_File Thread Sys::Hostname"
 $ if Using_Dec_C.eqs."Yes"
 $ THEN
 $   dflt = dflt + " POSIX"
-$   if Use_Threads.eqs."T"
-$   THEN
-$     dflt = dflt + " Thread"
-$   ENDIF
 $ ENDIF
 $ rp = "[''dflt'] "
 $ GOSUB myread
 $ if ans.eqs."" then ans = "''dflt'"
 $ extensions = "''ans'"
+$ perl_known_extensions = "''dflt'"
 $!
 $! %Config-I-VMS, determine build/make utility here (make gmake mmk mms)
 $ echo ""
@@ -1921,9 +2022,9 @@ $Build_probe:
 $ build = F$ELEMENT(n,"/",builders)
 $ probe  = F$ELEMENT(n,"!",probers)
 $ echo "Testing whether you have ''build' on your system..."
-$ SET NOON                                        !sorry :-(
-$ ON CONTROL_Y THEN GOTO Reenable_messages_build  !sorry :-(
-$ SET MESSAGE/NOFAC/NOSEV/NOIDENT/NOTEXT          !sorry :-(
+$ SET NOON
+$ ON CONTROL_Y THEN GOTO Reenable_messages_build
+$ SET MESSAGE/NOFAC/NOSEV/NOIDENT/NOTEXT
 $ 'build' 'probe'
 $ IF ($SEVERITY .EQ. 1)
 $ THEN 
@@ -1938,9 +2039,9 @@ $   IF (.NOT. default_set) THEN dflt = build
 $ ELSE 
 $   echo "Nope."
 $ ENDIF
-$Reenable_messages_build:                         !hope you made it here :-)
-$ SET MESSAGE 'messages'                          !hope you made it here :-)
-$ SET ON                                          !hope you made it here :-)
+$Reenable_messages_build:
+$ SET MESSAGE 'messages'
+$ SET ON
 $ n = n + 1
 $ IF (n .LT. max_build) THEN GOTO Build_probe
 $!
@@ -2027,6 +2128,17 @@ $   tmp = F$LENGTH(macros)
 $   macros = F$EXTRACT(0,(tmp-1),macros) !miss trailing comma
 $   macros = "/macro=(" + macros  + ")"
 $ ENDIF
+$! Build up the extra C flags
+$!
+$ if use_ieee_math
+$ then
+$   extra_flags = "''extra_flags'" + "/float=ieee/ieee=denorm_results"
+$ endif
+$ if be_case_sensitive
+$ then
+$   extra_flags = "''extra_flags'" + "/Names=As_Is"
+$ endif
+$ extra_flags = "''extra_flags'" + "''user_c_flags'"
 $!
 $! Invoke the subconfig piece
 $!
@@ -2080,7 +2192,7 @@ $   ENDIF
 $ EXIT
 $ ENDSUBROUTINE ! Bad_environment
 $ echo ""
-$ echo4 "%Config-I-VMS, Checking for dangerous pre extant global symbols and logical names."
+$ echo4 "%Config-I-VMS, Checking for dangerous pre-existing global symbols and logical names."
 $ CALL Bad_environment "TMP"
 $ CALL Bad_environment "LIB"
 $ CALL Bad_environment "T"
@@ -2093,7 +2205,7 @@ $! %Config-I-VMS, write perl_setup.com here
 $!
 $ echo ""
 $ echo4 "%Config-I-VMS, The perl_setup.com file is now being written..."
-$ file_2_find = "[-.vms]perl_setup.com"
+$ file_2_find = "[-]perl_setup.com"
 $ OPEN/WRITE CONFIG 'file_2_find'
 $ WRITE CONFIG "$!"
 $ WRITE CONFIG "$! Perl_Setup.com    ''cf_time'"
@@ -2122,6 +2234,9 @@ $ else
 $   WRITE CONFIG "$ perl :== $Perl_Root:[000000]Perl'ext'"
 $   WRITE CONFIG "$ define PerlShr Perl_Root:[000000]PerlShr'ext'"
 $ endif
+$ WRITE CONFIG "$ define/nolog pod2text Perl_Root:[lib.pod]pod2text.com"
+$ WRITE CONFIG "$ define/nolog pod2html Perl_Root:[lib.pod]pod2html.com"
+$ WRITE CONFIG "$ define/nolog pod2man  Perl_Root:[lib.pod]pod2man.com"
 $!
 $ IF (tzneedset)
 $ THEN
@@ -2132,7 +2247,14 @@ $ ENDIF
 $ WRITE CONFIG "$!"
 $ WRITE CONFIG "$! Symbols for commonly used scripts:"
 $ WRITE CONFIG "$!"
-$ WRITE CONFIG "$ Perldoc == ""'"+"'Perl' Perl_Root:[lib.pod]Perldoc.com -t"""
+$ WRITE CONFIG "$ Perldoc  == ""'"+"'Perl' Perl_Root:[lib.pod]Perldoc.com -t"""
+$ WRITE CONFIG "$ pod2text == ""'"+"'Perl' pod2text"""
+$ WRITE CONFIG "$ pod2html == ""'"+"'Perl' pod2html"""
+$ WRITE CONFIG "$!pod2man  == ""'"+"'Perl' pod2man"""
+$ WRITE CONFIG "$!Perlbug  == ""'"+"'Perl' Perl_Root:[lib]Perlbug.com"""
+$ WRITE CONFIG "$!c2ph == ""'"+"'Perl' c2ph"""
+$ WRITE CONFIG "$!h2ph == ""'"+"'Perl' h2ph"""
+$ WRITE CONFIG "$!h2xs == ""'"+"'Perl' h2xs"""
 $ CLOSE CONFIG
 $!
 $ echo  ""

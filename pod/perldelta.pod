@@ -4,10 +4,11 @@ perldelta - what's new for perl v5.6 (as of v5.005_64)
 
 =head1 DESCRIPTION
 
-This is an unsupported alpha release, meant for intrepid Perl developers
-only.  The included sources may not even build correctly on some platforms.
-Subscribing to perl5-porters is the best way to monitor and contribute
-to the progress of development releases (see www.perl.org for info).
+This is an unsupported alpha release, meant for intrepid Perl
+developers only.  The included sources may not even build correctly on
+some platforms.  Subscribing to perl5-porters is the best way to
+monitor and contribute to the progress of development releases (see
+http://www.hut.fi/~jhi/perl5-porters.html for info).
 
 This document describes differences between the 5.005 release and this one.
 
@@ -83,6 +84,18 @@ than v5.6 have been incrementing the subversion component in multiples of
 notation, 5.005_03 is the same as v5.5.30, and the first maintenance
 version following v5.6.0 will be v5.6.1, which amounts to a floating point
 value of 5.006_001).
+
+=item Literals of the form C<1.2.3> parse differently
+
+Previously, numeric literals with more than one dot in them were
+interpreted as a floating point number concatenated with one or more
+numbers.  Such "numbers" are now parsed as strings composed of the
+specified ordinals.
+
+For example, C<print 97.98.99> used to output C<97.9899> in earlier
+versions, but now prints C<abc>.
+
+See L<Support for strings represented as a vector of ordinals> below.
 
 =item Possibly changed pseudo-random number generator
 
@@ -185,6 +198,18 @@ as either a simple scalar or as a reference to a typeglob.  Perl 5.005
 always coerced simple scalar arguments to a typeglob, which wasn't useful
 in situations where the subroutine must distinguish between a simple
 scalar and a typeglob.  See L<perlsub/Prototypes>.
+
+=head2 On 64-bit platforms the semantics of bit operators have changed
+
+If your platform is either natively 64-bit or your Perl has been
+configured to used 64-bit integers (say C<perl -V> and see what is
+your ivsize: if it is 8, you are 64-bit) , be warned that the
+semantics of all the bitwise numeric operators (& | ^ ~ << >>) have
+been changed.  They used to be forced to be 32 bits wide, but now in
+the aforementioned platforms they are 64 bits wide.  Most dramatically
+this affects the unary ~: what used to be 32 bits wide, is now 64 bits
+wide.  If you depend on your integers being 32 bits wide, mask off the
+excess bits with C<& 0xffffffff>.
 
 =back
 
@@ -306,12 +331,12 @@ Interfaces and implementation are subject to sudden and drastic changes.
 
 The -Dusethreads flag now enables the experimental interpreter-based thread
 support by default.  To get the flavor of experimental threads that was in
-5.005 instead, you need to ask for -Duse5005threads.
+5.005 instead, you need to run Configure with "-Dusethreads -Duse5005threads".
 
 As of v5.5.640, interpreter-threads support is still lacking a way to
 create new threads from Perl (i.e., C<use Thread;> will not work with
 interpreter threads).  C<use Thread;> continues to be available when you
-ask for -Duse5005threads, bugs and all.
+ask for use5005threads, bugs and all.
 
 =head2 New Configure flags
 
@@ -319,13 +344,18 @@ The following new flags may be enabled on the Configure command line
 by running Configure with C<-Dflag>.
 
     usemultiplicity
-    use5005threads
+    usethreads useithreads	(new interpreter threads: no Perl API yet)
+    usethreads use5005threads	(threads as they were in 5.005)
+
+    use64bitint			(equal to now deprecated 'use64bits')
+    use64bitall
 
     uselongdouble
     usemorebits
     uselargefiles
+    usesocks			(only SOCKS v5 supported)
 
-=head2 -Dusethreads and -Duse64bits now more daring
+=head2 Threadedness and 64-bitness now more daring
 
 The Configure options enabling the use of threads and the use of
 64-bitness are now more daring in the sense that they no more have an
@@ -333,7 +363,7 @@ explicit list of operating systems of known threads/64-bit
 capabilities.  In other words: if your operating system has the
 necessary APIs and datatypes, you should be able just to go ahead and
 use them, for threads by Configure -Dusethreads, and for 64 bits
-either explicitly by Configure -Duse64bits or implicitly if your
+either explicitly by Configure -Duse64bitint or implicitly if your
 system has 64 bit wide datatypes.  See also L<"64-bit support">.
 
 =head2 Long Doubles
@@ -344,7 +374,7 @@ Perl's scalars, use -Duselongdouble.
 
 =head2 -Dusemorebits
 
-You can enable both -Duse64bits and -Dlongdouble by -Dusemorebits.
+You can enable both -Duse64bitint and -Dlongdouble by -Dusemorebits.
 See also L<"64-bit support">.
 
 =head2 -Duselargefiles
@@ -374,12 +404,20 @@ process starts.  Run C<Configure -h> to find out the full C<-A> syntax.
 
 =head2 Enhanced Installation Directories
 
-The installation structure has been enriched to improve the support for 
-maintaining multiple versions of perl, to provide locations for
-vendor-supplied modules and scripts, and to ease maintenance of
-locally-added modules and scripts.  See the section on Installation 
-Directories in the INSTALL file for complete details.  For most users
-building and installing from source, the defaults should be fine.
+The installation structure has been enriched to improve the support
+for maintaining multiple versions of perl, to provide locations for
+vendor-supplied modules, scripts, and manpages, and to ease maintenance
+of locally-added modules, scripts, and manpages.  See the section on
+Installation Directories in the INSTALL file for complete details.
+For most users building and installing from source, the defaults should
+be fine.
+
+If you previously used C<Configure -Dsitelib> or C<-Dsitearch> to set
+special values for library directories, you might wish to consider using
+the new C<-Dsiteprefix> setting instead.  Also, if you wish to re-use a
+config.sh file from an earlier version of perl, you should be sure to
+check that Configure makes sensible choices for the new directories.
+See INSTALL for complete details.
 
 =head1 Core Changes
 
@@ -461,10 +499,12 @@ variables.  See L<perlfunc/our>.
 
 =head2 Support for strings represented as a vector of ordinals
 
-Literals of the form v1.2.3.4 are now parsed as a string comprised of
+Literals of the form C<v1.2.3.4> are now parsed as a string composed of
 of characters with the specified ordinals.  This is an alternative, more
 readable way to construct (possibly unicode) strings instead of
-interpolating characters, as in C<"\x{1}\x{2}\x{3}\x{4}">.
+interpolating characters, as in C<"\x{1}\x{2}\x{3}\x{4}">.  The leading
+C<v> may be omitted if there are more than two ordinals, so C<1.2.3> is
+parsed the same as C<v1.2.3>.
 
 Strings written in this form are also useful to represent version "numbers".
 It is easy to compare such version "numbers" (which are really just plain
@@ -487,12 +527,17 @@ They will be interpreted as a version rather than as a module name:
     require v5.6.0;		# croak if $^V lt v5.6.0
     use v5.6.0;			# same, but croaks at compile-time
 
+Alternatively, the C<v> may be omitted if there is more than one dot:
+
+    require 5.6.0;
+    use 5.6.0;
+
 Also, C<sprintf> and C<printf> support the Perl-specific format flag C<%v>
 to print ordinals of characters in arbitrary strings:
 
     printf "v%vd", $^V;		# prints current version, such as "v5.5.650"
     printf "%*vX", ":", $addr;	# formats IPv6 address
-    printf "%*vb", "", $bits;	# displays bitstring as contiguous 0's and 1's
+    printf "%*vb", " ", $bits;	# displays bitstring
 
 See L<perlop/"Strings of Character"> for additional information.
 
@@ -607,8 +652,11 @@ filehandles that must be passed around, as in the following example:
 
 =head2 64-bit support
 
-All platforms that have 64-bit integers either (a) natively as longs
-or ints (b) via special compiler flags (c) using long long are able to
+	NOTE:	The Configure flags -Duselonglong and -Duse64bits
+		have been deprecated.  Use -Duse64bitint instead.
+
+Any platform that has 64-bit integers either (a) natively as longs or
+ints (b) via special compiler flags (c) using long long are able to
 use "quads" (64-integers) as follows:
 
 =over 4
@@ -635,23 +683,38 @@ pack() and unpack() "q" and "Q" formats
 
 =item *
 
-in basic arithmetics: + - * / %
+in basic arithmetics: + - * / % (NOTE: operating close to the limits
+of the integer values may produce surprising results)
 
 =item *
 
-vec() (but see the below note about bit arithmetics)
+in bit arithmetics: & | ^ ~ << >> (NOTE: these used to be forced 
+to be 32 bits wide.)
+
+=item *
+
+vec()
 
 =back
 
 Note that unless you have the case (a) you will have to configure
-and compile Perl using the -Duse64bits Configure flag.
+and compile Perl using the -Duse64bitint Configure flag.
 
-Unfortunately bit arithmetics (&, |, ^, ~, <<, >>) for numbers are not
-64-bit clean, they are explictly forced to be 32-bit because of
-tangled backward compatibility issues.  This limitation is subject to
-change.  Bit arithmetics for bit vector scalars (created by vec()) are
-not limited in their width, you can use the & | ^ ~ operators on such
-scalars.
+There are actually two modes of 64-bitness: the first one is achieved
+using Configure -Duse64bitint and the second one using Configure
+-Duse64bitall.  The difference is that the first one is minimal and
+the second one maximal.  The first one does only as much as is
+required to get 64-bit integers into Perl (this may mean, for example,
+using "long longs") while your memory may still be limited to 2
+gigabytes (because your pointers most likely are 32-bit); the second
+one goes all the way by attempting to switch also longs (and pointers)
+being 64-bit.  This may create an even more binary incompatible Perl
+than -Duse64bitint: the resulting executable may not run at all in a
+CPU-bit box, or you may have to reboot/reconfigure/rebuild your
+operating system to be 64-bit aware.
+
+Natively 64-bit systems like Alpha and Cray need neither -Duse64bitint
+nor -Duse64bitall.
 
 Last but not least: note that due to Perl's habit of always using
 floating point numbers the quads are still not true integers.
@@ -861,7 +924,7 @@ only during normal running are warranted.  See L<perlvar>.
 
 =head2 New variable $^V contains Perl version in v5.6.0 format
 
-C<$^V> contains the Perl version number as a string comprised of
+C<$^V> contains the Perl version number as a string composed of
 characters whose ordinals match the version numbers, so that it may
 be used in string comparisons.
 
@@ -991,6 +1054,12 @@ the specified value exists, not merely if the key is valid.
 delete() now works on pseudo-hashes.  When given a pseudo-hash element
 or slice it deletes the values corresponding to the keys (but not the keys
 themselves).  See L<perlref/"Pseudo-hashes: Using an array as a hash">.
+
+Pseudo-hash slices with constant keys are now optimized to array lookups
+at compile-time.
+
+The C<fields> pragma now provides ways to create pseudo-hashes, via
+fields::new() and fields::phash().  See L<fields>.
 
 =head2 C<goto &sub> and AUTOLOAD
 
@@ -1218,6 +1287,9 @@ system(1,...) now returns true process IDs rather than process
 handles.  kill() accepts any real process id, rather than strictly
 return values from system(1,...).
 
+For better compatibility with Unix, C<kill(0, $pid)> can now be used to
+test whether a process exists.
+
 The C<Shell> module is supported.
 
 Rudimentary support for building under command.com in Windows 95
@@ -1230,7 +1302,7 @@ detected at the end of the line containing the __END__ or __DATA__
 token; if not, the DATA filehandle will be left open in binary mode.
 Earlier versions always opened the DATA filehandle in text mode.
 
-The glob() operator is implemented via the L<File::Glob> extension,
+The glob() operator is implemented via the C<File::Glob> extension,
 which supports glob syntax of the C shell.  This increases the flexibility
 of the glob() operator, but there may be compatibility issues for
 programs that relied on the older globbing syntax.  If you want to
@@ -1771,6 +1843,10 @@ A tutorial on using open() effectively.
 
 A tutorial that introduces the essentials of references.
 
+=item perlboot.pod
+
+A tutorial for beginners on object-oriented Perl.
+
 =item perltootc.pod
 
 A tutorial on managing class data for object modules.
@@ -2260,7 +2336,7 @@ when you meant
 
     my ($foo, $bar) = @_;
 
-Remember that "my", "our" and "local" bind closer than comma.
+Remember that "my", "our", and "local" bind tighter than comma.
 
 =item Possible Y2K bug: %s
 

@@ -45,6 +45,14 @@ true)
 		-compatibility_version 1 -current_version $patchlevel \
 		-prebind -seg1addr 0x27000000 -install_name \$(shrpdir)/\$@"
 		;;
+	rhapsody*|darwin*)
+		shrpldflags="${ldflags} -dynamiclib \
+			     -compatibility_version 1 \
+			     -current_version \
+				${api_version}.${api_subversion} \
+			     -image_base 0x4be00000 \
+			     -install_name \$(shrpdir)/\$@"
+		;;
 	cygwin*)
 		linklibperl="-lperl"
 		;;
@@ -76,9 +84,6 @@ true)
 	    os2)
 	        ldlibpth=''
 	        ;;
-	    rhapsody)
-		eval "ldlibpth=\"$ldlibpthname=`pwd`/Perl:\$$ldlibpthname\""
-		;;
 	    *)
 		eval "ldlibpth=\"$ldlibpthname=`pwd`:\$$ldlibpthname\""
 		;;
@@ -320,9 +325,6 @@ ext.libs: $(static_ext)
 # How to build libperl.  This is still rather convoluted.
 # Load up custom Makefile.SH fragment for shared loading and executables:
 case "$osname" in
-cygwin*)
-	Makefile_s="cygwin/Makefile.SHs"
-	;;
 *)
 	Makefile_s="$osname/Makefile.SHs"
 	;;
@@ -532,8 +534,10 @@ extra.pods: miniperl
 	    $(LNS) ../$$x "pod/perl"$$nx".pod" ; \
 	    echo "pod/perl"$$nx".pod" >> extra.pods ; \
 	done
-	-@test -f README.vms && $(LNS) ../README.vms pod/README_vms.pod && echo "pod/README_vms.pod" >> extra.pods
 	-@test -f vms/perlvms.pod && $(LNS) ../vms/perlvms.pod pod/perlvms.pod && echo "pod/perlvms.pod" >> extra.pods
+
+install-strip:
+	$(MAKE) STRIPFLAGS=-s install
 
 install: all install.perl install.man
 
@@ -545,7 +549,7 @@ install.perl:	all installperl
 		cd ../pod; $(MAKE) compile; \
 	else :; \
 	fi
-	$(LDLIBPTH) ./perl installperl
+	$(LDLIBPTH) ./perl installperl $(STRIPFLAGS)
 
 install.man:	all installman
 	$(LDLIBPTH) ./perl installman
@@ -553,9 +557,7 @@ install.man:	all installman
 # XXX Experimental. Hardwired values, but useful for testing.
 # Eventually Configure could ask for some of these values.
 install.html: all installhtml
-	-@test -f pod/README_vms.pod && rm -f pod/README_vms.pod
 	-@test -f README.vms && $(LNS) ../README.vms vms/README_vms.pod
-	-@test -f pod/perlvms.pod && rm -f pod/perlvms.pod
 	$(LDLIBPTH) ./perl installhtml                   \
       --podroot=. --podpath=. --recurse  \
       --htmldir=$(privlib)/html     \
@@ -617,20 +619,21 @@ CHMOD_W = chmod +w
 # To force them to be regenerated, type
 #	make regen_headers
 
-AUTOGEN_FILES = keywords.h opcode.h opnames.h pp_proto.h pp.sym embed.h \
-		embedvar.h global.sym pod/perlintern.pod pod/perlapi.pod \
+AUTOGEN_FILES = keywords.h opcode.h opnames.h pp_proto.h pp.sym proto.h \
+		embed.h embedvar.h global.sym \
+		pod/perlintern.pod pod/perlapi.pod \
 		objXSUB.h perlapi.h perlapi.c ext/ByteLoader/byterun.h \
 		ext/ByteLoader/byterun.c ext/B/B/Asmdata.pm regnodes.h \
 		warnings.h lib/warnings.pm
 
 regen_headers:	FORCE
-	$(CHMOD_W) $(AUTOGEN_FILES)
-	perl keywords.pl
-	perl opcode.pl
-	perl embed.pl
-	perl bytecode.pl
-	perl regcomp.pl
-	perl warnings.pl
+	-$(CHMOD_W) $(AUTOGEN_FILES)
+	-perl keywords.pl
+	-perl opcode.pl
+	-perl embed.pl
+	-perl bytecode.pl
+	-perl regcomp.pl
+	-perl warnings.pl
 
 # Extensions:
 # Names added to $(dynamic_ext) or $(static_ext) or $(nonxs_ext) will

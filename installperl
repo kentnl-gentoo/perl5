@@ -8,7 +8,7 @@ BEGIN {
 }
 
 use strict;
-use vars qw($Is_VMS $Is_W32 $Is_OS2 $Is_Cygwin $nonono $versiononly $depth);
+use vars qw($Is_VMS $Is_W32 $Is_OS2 $Is_Cygwin $nonono $dostrip $versiononly $depth);
 
 BEGIN {
     $Is_VMS = $^O eq 'VMS';
@@ -50,6 +50,7 @@ my $perl_verbase = defined($ENV{PERLNAME_VERBASE})
 
 while (@ARGV) {
     $nonono = 1 if $ARGV[0] eq '-n';
+    $dostrip = 1 if $ARGV[0] eq '-s';
     $versiononly = 1 if $ARGV[0] eq '-v';
     shift;
 }
@@ -196,7 +197,7 @@ elsif ($^O eq 'mpeix') {
 elsif ($^O ne 'dos') {
     safe_unlink("$installbin/$perl_verbase$ver$exe_ext");
     copy("perl$exe_ext", "$installbin/$perl_verbase$ver$exe_ext");
-    strip("$installbin/$perl_verbase$ver$exe_ext") if $^O =~ /^(rhapsody)$/;
+    strip("$installbin/$perl_verbase$ver$exe_ext");
     chmod(0755, "$installbin/$perl_verbase$ver$exe_ext");
 }
 else {
@@ -239,7 +240,7 @@ my @corefiles;
 if ($Is_VMS) {  # We did core file selection during build
     my $coredir = "lib/$Config{'arch'}/$ver";
     $coredir =~ tr/./_/;
-    @corefiles = <$coredir/*.*>;
+    @corefiles = map { s|^$coredir/||i; } <$coredir/*.*>;
 }
 else {
     # [als] hard-coded 'libperl' name... not good!
@@ -259,9 +260,9 @@ foreach my $file (@corefiles) {
     # HP-UX (at least) needs to maintain execute permissions
     # on dynamically-loadable libraries. So we do it for all.
     if (copy_if_diff($file,"$installarchlib/CORE/$file")) {
-	if ($file =~ /\.(so|\Q$dlext\E)$/) {
+	if ($file =~ /\.(\Q$so\E|\Q$dlext\E)$/) {
 	    chmod(0555, "$installarchlib/CORE/$file");
-	    strip("-S", "$installarchlib/CORE/$file") if $^O =~ /^(rhapsody)$/;
+	    strip("-S", "$installarchlib/CORE/$file") if $^O =~ /^(rhapsody|darwin)$/;
 	} else {
 	    chmod(0444, "$installarchlib/CORE/$file");
 	}
@@ -630,7 +631,7 @@ sub installlib {
 sub copy_if_diff {
     my($from,$to)=@_;
     return 1 if (($^O eq 'VMS') && (-d $from));
-    -f $from || die "$0: $from not found";
+    -f $from || warn "$0: $from not found";
     $packlist->{$to} = { type => 'file' };
     if (compare($from, $to) || $nonono) {
 	safe_unlink($to);   # In case we don't have write permissions.
@@ -650,6 +651,8 @@ sub copy_if_diff {
 sub strip
 {
     my(@args) = @_;
+
+    return unless $dostrip;
 
     my @opts;
     while (@args && $args[0] =~ /^(-\w+)$/) {

@@ -285,9 +285,9 @@ rm -f core
 # XXX
 EOSH
 
+cat > UU/usethreads.cbu <<'EOCBU'
 # This script UU/usethreads.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use threads.
-cat > UU/usethreads.cbu <<'EOCBU'
 case "$usethreads" in
 $define|true|[yY]*)
         ccflags="-D_REENTRANT $ccflags"
@@ -333,39 +333,23 @@ EOM
 esac
 EOCBU
 
-# This script UU/uselfs.cbu will get 'called-back' by Configure 
+cat > UU/uselargefiles.cbu <<'EOCBU'
+# This script UU/uselargefiles.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use large files.
-cat > UU/uselfs.cbu <<'EOCBU'
 case "$uselargefiles" in
-$define|true|[yY]*)
-	lfcflags="`getconf LFS_CFLAGS 2>/dev/null`"
-	lfldflags="`getconf LFS_LDFLAGS 2>/dev/null`"
-	lflibs="`getconf LFS_LIBS 2>/dev/null|sed -e 's@^-l@@' -e 's@ -l@ @g`"
-	case "$lfcflags$lfldflags$lflibs" in
-	'');;
-	*) use64bits="$define"
-           echo "(Large files in Solaris require also using long longs...)"
-	   case "$ccflags" in
-	   *-DUSE_64_BITS*) ;;
-	   *) ccflags="$ccflags -DUSE_64_BITS" ;;
-	   esac
-	   ccflags="$ccflags $lfcflags"
-	   ldflags="$ldflags $lfldflags"
-	   libswanted="$libswanted $lflibs"
-	   ;;
-	esac
-	lfcflags=''
-	lfldflags=''
-	lflibs=''
-	;;
+''|$define|true|[yY]*)
+    ccflags="$ccflags `getconf LFS_CFLAGS 2>/dev/null`"
+    ldflags="$ldflags `getconf LFS_LDFLAGS 2>/dev/null`"
+    libswanted="$libswanted `getconf LFS_LIBS 2>/dev/null|sed -e 's@^-l@@' -e 's@ -l@ @g`"
+    ;;
 esac
 EOCBU
 
-# This script UU/use64bits.cbu will get 'called-back' by Configure 
-# after it has prompted the user for whether to use 64 bits.
-cat > UU/use64bits.cbu <<'EOCBU'
-case "$use64bits" in
-$define|true|[yY]*)
+cat > UU/use64bitint.cbu <<'EOCBU'
+# This script UU/use64bitint.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use 64 bit integers.
+case "$use64bitint" in
+"$define"|true|[yY]*)
 	    case "`uname -r`" in
 	    2.[1-6])
 		cat >&4 <<EOM
@@ -375,13 +359,74 @@ EOM
 		exit 1
 		;;
 	    esac
-	    case "$ccflags" in
-	    *-DUSE_64_BITS*) ;;
-	    *) ccflags="$ccflags -DUSE_64_BITS" ;;
-	    esac
-	    # When a 64-bit cc becomes available $archname64
-	    # may need setting so that $archname gets it attached.
 	    ;;
+esac
+EOCBU
+
+cat > UU/use64bitall.cbu <<'EOCBU'
+# This script UU/use64bitall.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to be maximally 64 bitty.
+case "$use64bitall" in
+"$define"|true|[yY]*)
+	    libc='/usr/lib/sparcv9/libc.so'
+	    if test ! -f $libc; then
+		cat <<EOM
+
+I do not see the 64-bit libc, $libc.
+Cannot continue, aborting.
+
+EOM
+		exit 1
+	    fi 
+	    loclibpth="$loclibpth /usr/lib/sparcv9"
+	    case "$cc -v 2>/dev/null" in
+	    *gcc*)
+		# I don't know what are the flags to make gcc sparcv9-aware,
+	        # I'm just guessing. --jhi
+		ccflags="$ccflags -mv9"
+		ldflags="$ldflags -mv9"
+		lddlflags="$lddlflags -G -mv9"
+		;;
+	    *)
+		ccflags="$ccflags `getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null`"
+		ldflags="$ldflags `getconf XBS5_LP64_OFF64_LDFLAGS 2>/dev/null`"
+		lddlflags="$lddlflags -G `getconf XBS5_LP64_OFF64_LDFLAGS 2>/dev/null`"
+		test -d /opt/SUNWspro/lib && loclibpth="$loclibpth /opt/SUNWspro/lib"
+		;;
+	    esac	
+	    libscheck='case "`/usr/bin/file $xxx`" in
+*64-bit*|*SPARCV9*) ;;
+*) xxx=/no/64-bit$xxx ;;
+esac'
+	    ;;
+esac
+EOCBU
+ 
+# Actually, we want to run this already now, if so requested,
+# because we need to fix up the flags right now.
+case "$use64bitall" in
+"$define"|true|[yY]*)
+	. ./UU/use64bitall.cbu
+	;;
+esac
+
+cat > UU/uselongdouble.cbu <<'EOCBU'
+# This script UU/uselongdouble.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use long doubles.
+case "$uselongdouble" in
+"$define"|true|[yY]*)
+	if test ! -f /opt/SUNWspro/lib/libsunmath.so; then
+		cat <<EOM
+
+I do not see the libsunmath.so in /opt/SUNWspro/lib;
+therefore I cannot do long doubles, sorry.
+
+EOM
+		exit 1
+	fi
+	libswanted="$libswanted sunmath"
+	loclibpth="$loclibpth /opt/SUNWspro/lib"
+	;;
 esac
 EOCBU
 

@@ -812,6 +812,31 @@ S_force_ident(pTHX_ register char *s, int kind)
     }
 }
 
+NV
+Perl_str_to_version(pTHX_ SV *sv)
+{
+    NV retval = 0.0;
+    NV nshift = 1.0;
+    STRLEN len;
+    char *start = SvPVx(sv,len);
+    bool utf = SvUTF8(sv);
+    char *end = start + len;
+    while (start < end) {
+	I32 skip;
+	UV n;
+	if (utf)
+	    n = utf8_to_uv((U8*)start, &skip);
+	else {
+	    n = *(U8*)start;
+	    skip = 1;
+	}
+	retval += ((NV)n)/nshift;
+	start += skip;
+	nshift *= 1000;
+    }
+    return retval;
+}
+
 /* 
  * S_force_version
  * Forces the next token to be a version number.
@@ -821,26 +846,24 @@ STATIC char *
 S_force_version(pTHX_ char *s)
 {
     OP *version = Nullop;
-    bool is_vstr = FALSE;
     char *d;
 
     s = skipspace(s);
 
     d = s;
-    if (*d == 'v') {
-	is_vstr = TRUE;
+    if (*d == 'v')
 	d++;
-    }
     if (isDIGIT(*d)) {
         for (; isDIGIT(*d) || *d == '_' || *d == '.'; d++);
         if (*d == ';' || isSPACE(*d) || *d == '}' || !*d) {
+	    SV *ver;
             s = scan_num(s);
-            /* real VERSION number -- GBARR */
             version = yylval.opval;
-	    if (is_vstr) {
-		SV *ver = cSVOPx(version)->op_sv;
-		SvUPGRADE(ver, SVt_PVIV);
-		SvIOKp_on(ver);		/* hint that it is a version */
+	    ver = cSVOPx(version)->op_sv;
+	    if (SvPOK(ver) && !SvNIOK(ver)) {
+		SvUPGRADE(ver, SVt_PVNV);
+		SvNVX(ver) = str_to_version(ver);
+		SvNOK_on(ver);		/* hint that it is a version */
 	    }
         }
     }
@@ -1298,9 +1321,9 @@ S_scan_const(pTHX_ char *start)
 	   (void)utf8_to_uv((U8*)s, &len);
 	   if (len == 1) {
 	       /* illegal UTF8, make it valid */
-	       /* need to grow with 1 char to be safe */
 	       char *old_pvx = SvPVX(sv);
-	       d = SvGROW(sv, SvCUR(sv)+2) + (d - old_pvx);
+	       /* need space for one extra char (NOTE: SvCUR() not set here) */
+	       d = SvGROW(sv, SvLEN(sv) + 1) + (d - old_pvx);
 	       d = (char*)uv_to_utf8((U8*)d, (U8)*s++);
 	   }
 	   else {
@@ -3499,7 +3522,7 @@ Perl_yylex(pTHX)
 	    char *start = s;
 	    start++;
 	    start++;
-	    while (isDIGIT(*start))
+	    while (isDIGIT(*start) || *start == '_')
 		start++;
 	    if (*start == '.' && isDIGIT(start[1])) {
 		s = scan_num(s);
@@ -6886,6 +6909,11 @@ Perl_scan_num(pTHX_ char *start)
 		if (*s != '_')
 		    *d++ = *s;
 	    }
+	    if (*s == '.' && isDIGIT(s[1])) {
+		/* oops, it's really a v-string, but without the "v" */
+		s = start - 1;
+		goto vstring;
+	    }
 	}
 
 	/* read exponent part, if present */
@@ -6939,10 +6967,11 @@ Perl_scan_num(pTHX_ char *start)
 	break;
     /* if it starts with a v, it could be a version number */
     case 'v':
+vstring:
 	{
 	    char *pos = s;
 	    pos++;
-	    while (isDIGIT(*pos))
+	    while (isDIGIT(*pos) || *pos == '_')
 		pos++;
 	    if (!isALPHA(*pos)) {
 		UV rev;
@@ -6957,7 +6986,23 @@ Perl_scan_num(pTHX_ char *start)
 		for (;;) {
 		    if (*s == '0' && isDIGIT(s[1]))
 			yyerror("Octal number in vector unsupported");
-		    rev = atoi(s);
+		    rev = 0;
+		    {
+			/* this is atoi() that tolerates underscores */
+			char *end = pos;
+			UV mult = 1;
+			while (--end >= s) {
+			    UV orev;
+			    if (*end == '_')
+				continue;
+			    orev = rev;
+			    rev += (*end - '0') * mult;
+			    mult *= 10;
+			    if (orev > rev && ckWARN_d(WARN_OVERFLOW))
+				Perl_warner(aTHX_ WARN_OVERFLOW,
+					    "Integer overflow in decimal number");
+			}
+		    }
 		    tmpend = uv_to_utf8(tmpbuf, rev);
 		    utf8 = utf8 || rev > 127;
 		    sv_catpvn(sv, (const char*)tmpbuf, tmpend - tmpbuf);
@@ -6967,7 +7012,7 @@ Perl_scan_num(pTHX_ char *start)
 			s = pos;
 			break;
 		    }
-		    while (isDIGIT(*pos))
+		    while (isDIGIT(*pos) || *pos == '_')
 			pos++;
 		}
 

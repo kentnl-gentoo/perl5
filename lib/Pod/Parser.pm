@@ -10,7 +10,7 @@
 package Pod::Parser;
 
 use vars qw($VERSION);
-$VERSION = 1.093;  ## Current version of this package
+$VERSION = 1.11;  ## Current version of this package
 require  5.004;    ## requires this Perl version or later
 
 #############################################################################
@@ -196,6 +196,7 @@ use strict;
 use Pod::InputObjects;
 use Carp;
 use Exporter;
+require VMS::Filespec if $^O eq 'VMS';
 @ISA = qw(Exporter);
 
 ## These "variables" are used as local "glob aliases" for performance
@@ -764,13 +765,13 @@ sub parse_text {
     my @seq_stack = ($seq);
     my ($ldelim, $rdelim) = ('', '');
 
-    ## Iterate over all sequence starts/stops, newlines, & text
-    ## (NOTE: split with capturing parens keeps the delimiters)
+    ## Iterate over all sequence starts text (NOTE: split with
+    ## capturing parens keeps the delimiters)
     $_ = $text;
     my @tokens = split /([A-Z]<(?:<+\s+)?)/;
     while ( @tokens ) {
         $_ = shift @tokens;
-        ## Look for the beginning of a sequencd
+        ## Look for the beginning of a sequence
         if ( /^([A-Z])(<(?:<+\s+)?)$/ ) {
             ## Push a new sequence onto the stack of those "in-progress"
             ($cmd, $ldelim) = ($1, $2);
@@ -832,6 +833,7 @@ sub parse_text {
     my $errorsub = (@seq_stack > 1) ? $self->errorsub() : undef;
     while (@seq_stack > 1) {
        ($cmd, $file, $line) = ($seq->name, $seq->file_line);
+       $file = VMS::Filespec::unixify($file) if $^O eq 'VMS';
        $ldelim  = $seq->ldelim;
        ($rdelim = $ldelim) =~ tr/</>/;
        $rdelim  =~ s/^(\S+)(\s*)$/$2$1/;
@@ -1062,9 +1064,10 @@ sub parse_from_filehandle {
         next unless (($textline =~ /^(\s*)$/) && (length $paragraph));
 
         ## Issue a warning about any non-empty blank lines
-        if ( length($1) > 1 ) {
+        if (length($1) > 1  and  ! $self->{_CUTTING}) {
             my $errorsub = $self->errorsub();
             my $file = $self->input_file();
+            $file = VMS::Filespec::unixify($file) if $^O eq 'VMS';
             my $errmsg = "*** WARNING: line containing nothing but whitespace".
                          " in paragraph at line $nlines in file $file\n";
             (ref $errorsub) and &{$errorsub}($errmsg)

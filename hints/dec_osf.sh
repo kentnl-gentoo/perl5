@@ -151,7 +151,7 @@ case "`uname -r`" in
 *)            if $test "X$optimize" = "X$undef"; then
                       lddlflags="$lddlflags -msym"
               else
-		  case "`sizer -v`" in
+		  case "`/usr/sbin/sizer -v`" in
 		  *4.0D*)
 		      # QAR 56761: -O4 + .so may produce broken code,
 		      # fixed in 4.0E or better.
@@ -162,7 +162,7 @@ case "`uname -r`" in
 		  esac
 		  # -msym: If using a sufficiently recent /sbin/loader,
 		  # keep the module symbols with the modules.
-                  lddlflags="$lddlflags -msym"
+                  lddlflags="$lddlflags -msym -std"
               fi
 		;;
 esac
@@ -202,13 +202,22 @@ esac
 # please adjust this appropriately.  See also pp_sys.c just before the
 # emulate_eaccess().
 
+# Fixed in V5.0A.
+case "`/usr/sbin/sizer -v`" in
+*5.0[A-Z]*|*5.[1-9]*|*[6-9].[0-9]*)
+	: ok
+	;;
+*)
+# V5.0 or previous
 pp_sys_cflags='ccflags="$ccflags -DNO_EFF_ONLY_OK"'
+	;;
+esac
 
 # The off_t is already 8 bytes, so we do have largefileness.
 
+cat > UU/usethreads.cbu <<'EOCBU'
 # This script UU/usethreads.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use threads.
-cat > UU/usethreads.cbu <<'EOCBU'
 case "$usethreads" in
 $define|true|[yY]*)
 	# Threads interfaces changed with V4.0.
@@ -225,8 +234,20 @@ $define|true|[yY]*)
 	*)        libswanted="$libswanted pthread exc" ;;
 	esac
 
-        usemymalloc='n'
+	case "$usemymalloc" in
+	'')
+		usemymalloc='n'
+		;;
+	esac
 	;;
+esac
+EOCBU
+
+cat > UU/uselongdouble.cbu <<'EOCBU'
+# This script UU/uselongdouble.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use long doubles.
+case "$uselongdouble" in
+$define|true|[yY]*) d_Gconvert='sprintf((b),"%.*Lg",(n),(x))' ;;
 esac
 EOCBU
 

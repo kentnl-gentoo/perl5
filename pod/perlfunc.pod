@@ -335,7 +335,7 @@ following a minus are interpreted as file tests.
 
 The C<-T> and C<-B> switches work as follows.  The first block or so of the
 file is examined for odd characters such as strange control codes or
-characters with the high bit set.  If too many strange characters (E<gt>30%)
+characters with the high bit set.  If too many strange characters (>30%)
 are found, it's a C<-B> file, otherwise it's a C<-T> file.  Also, any file
 containing null in the first block is considered a binary file.  If C<-T>
 or C<-B> is used on a filehandle, the current stdio buffer is examined
@@ -442,44 +442,51 @@ L<perlipc/"Sockets: Client/Server Communication">.
 =item binmode FILEHANDLE
 
 Arranges for FILEHANDLE to be read or written in "binary" mode on
-systems whose run-time libraries force the programmer to guess
-between binary and text files.  If FILEHANDLE is an expression, the
-value is taken as the name of the filehandle.  binmode() should be
-called after the C<open> but before any I/O is done on the filehandle.
-The only way to reset binary mode on a filehandle is to reopen the
-file.
+systems where the run-time libraries distinguish between binary and
+text files.  If FILEHANDLE is an expression, the value is taken as the
+name of the filehandle.  binmode() should be called after open() but
+before any I/O is done on the filehandle.  The only way to reset
+binary mode on a filehandle is to reopen the file.
+
+On many systems binmode() has no effect, and on some systems it is
+necessary when you're not working with a text file.  For the sake of
+portability it is a good idea to always use it when appropriate, and
+to never use it when it isn't appropriate.
+
+In other words:  Regardless of platform, use binmode() on binary
+files, and do not use binmode() on text files.
 
 The operating system, device drivers, C libraries, and Perl run-time
-system all conspire to let the programmer conveniently treat a
-simple, one-byte C<\n> as the line terminator, irrespective of its
-external representation.  On Unix and its brethren, the native file
-representation exactly matches the internal representation, making
-everyone's lives unbelievably simpler.  Consequently, L<binmode>
-has no effect under Unix, Plan9, or Mac OS, all of which use C<\n>
-to end each line.  (Unix and Plan9 think C<\n> means C<\cJ> and
-C<\r> means C<\cM>, whereas the Mac goes the other way--it uses
-C<\cM> for c<\n> and C<\cJ> to mean C<\r>.  But that's ok, because
-it's only one byte, and the internal and external representations
-match.)
+system all work together to let the programmer treat a single
+character (C<\n>) as the line terminator, irrespective of the external
+representation.  On many operating systems, the native text file
+representation matches the internal representation, but on some
+platforms the external representation of C<\n> is made up of more than
+one character.
 
-In legacy systems like MS-DOS and its embellishments, your program
-sees a C<\n> as a simple C<\cJ> (just as in Unix), but oddly enough,
-that's not what's physically stored on disk.  What's worse, these
-systems refuse to help you with this; it's up to you to remember
-what to do.  And you mustn't go applying binmode() with wild abandon,
-either, because if your system does care about binmode(), then using
-it when you shouldn't is just as perilous as failing to use it when
-you should.
+Mac OS and all variants of Unix use a single character to end each line
+in the external representation of text (even though that single
+character is not necessarily the same across these platforms).
+Consequently binmode() has no effect on these operating systems.  In
+other systems like VMS, MS-DOS and the various flavors of MS-Windows
+your program sees a C<\n> as a simple C<\cJ>, but what's stored in text
+files are the two characters C<\cM\cJ>.  That means that, if you don't
+use binmode() on these systems, C<\cM\cJ> sequences on disk will be
+converted to C<\n> on input, and any C<\n> in your program will be
+converted back to C<\cM\cJ> on output.  This is what you want for text
+files, but it can be disastrous for binary files.
 
-That means that on any version of Microsoft WinXX that you might
-care to name (or not), binmode() causes C<\cM\cJ> sequences on disk
-to be converted to C<\n> when read into your program, and causes
-any C<\n> in your program to be converted back to C<\cM\cJ> on
-output to disk.  This sad discrepancy leads to no end of
-problems in not just the readline operator, but also when using
-seek(), tell(), and read() calls.  See L<perlport> for other painful
-details.  See the C<$/> and C<$\> variables in L<perlvar> for how
-to manually set your input and output line-termination sequences.
+Another consequence of using binmode() (on some systems) is that
+special end-of-file markers will be seen as part of the data stream.
+For systems from the Microsoft family this means that if your binary
+data contains C<\cZ>, the I/O subsystem will ragard it as the end of
+the file, unless you use binmode().
+
+binmode() is not only important for readline() and print() operations,
+but also when using read(), seek(), sysread(), syswrite() and tell()
+(see L<perlport> for more details).  See the C<$/> and C<$\> variables
+in L<perlvar> for how to manually set your input and output
+line-termination sequences.
 
 =item bless REF,CLASSNAME
 
@@ -537,7 +544,7 @@ arguments with which the subroutine was invoked.
 Be aware that the optimizer might have optimized call frames away before
 C<caller> had a chance to get the information.  That means that C<caller(N)>
 might not return information about the call frame you expect it do, for
-C<N E<gt> 1>.  In particular, C<@DB::args> might have information from the 
+C<< N > 1 >>.  In particular, C<@DB::args> might have information from the 
 previous time C<caller> was called.
 
 =item chdir EXPR
@@ -995,8 +1002,8 @@ lookup:
 
 Outside an C<eval>, prints the value of LIST to C<STDERR> and
 exits with the current value of C<$!> (errno).  If C<$!> is C<0>,
-exits with the value of C<($? E<gt>E<gt> 8)> (backtick `command`
-status).  If C<($? E<gt>E<gt> 8)> is C<0>, exits with C<255>.  Inside
+exits with the value of C<<< ($? >> 8) >>> (backtick `command`
+status).  If C<<< ($? >> 8) >>> is C<0>, exits with C<255>.  Inside
 an C<eval(),> the error message is stuffed into C<$@> and the
 C<eval> is terminated with the undefined value.  This makes
 C<die> the way to raise an exception.
@@ -1210,12 +1217,12 @@ as terminals may lose the end-of-file condition if you do.
 An C<eof> without an argument uses the last file read.  Using C<eof()>
 with empty parentheses is very different.  It refers to the pseudo file
 formed from the files listed on the command line and accessed via the
-C<E<lt>E<gt>> operator.  Since C<E<lt>E<gt>> isn't explicitly opened,
-as a normal filehandle is, an C<eof()> before C<E<lt>E<gt>> has been
+C<< <> >> operator.  Since C<< <> >> isn't explicitly opened,
+as a normal filehandle is, an C<eof()> before C<< <> >> has been
 used will cause C<@ARGV> to be examined to determine if input is
 available.
 
-In a C<while (E<lt>E<gt>)> loop, C<eof> or C<eof(ARGV)> can be used to
+In a C<< while (<>) >> loop, C<eof> or C<eof(ARGV)> can be used to
 detect the end of each file, C<eof()> will only detect the end of the
 last file.  Examples:
 
@@ -1458,7 +1465,7 @@ operation is a hash or array key lookup or subroutine name:
 
 Although the deepest nested array or hash will not spring into existence
 just because its existence was tested, any intervening ones will.
-Thus C<$ref-E<gt>{"A"}> and C<$ref-E<gt>{"A"}-E<gt>{"B"}> will spring
+Thus C<< $ref->{"A"} >> and C<< $ref->{"A"}->{"B"} >> will spring
 into existence due to the existence test for the $key element above.
 This happens anywhere the arrow operator is used, including even:
 
@@ -1470,8 +1477,8 @@ This surprising autovivification in what does not at first--or even
 second--glance appear to be an lvalue context may be fixed in a future
 release.
 
-See L<perlref/"Pseudo-hashes"> for specifics on how exists() acts when
-used on a pseudo-hash.
+See L<perlref/"Pseudo-hashes: Using an array as a hash"> for specifics
+on how exists() acts when used on a pseudo-hash.
 
 Use of a subroutine call, rather than a subroutine name, as an argument
 to exists() is an error.
@@ -1926,9 +1933,12 @@ Returns the socket option requested, or undef if there is an error.
 
 Returns the value of EXPR with filename expansions such as the
 standard Unix shell F</bin/csh> would do.  This is the internal function
-implementing the C<E<lt>*.cE<gt>> operator, but you can use it directly.
-If EXPR is omitted, C<$_> is used.  The C<E<lt>*.cE<gt>> operator is
+implementing the C<< <*.c> >> operator, but you can use it directly.
+If EXPR is omitted, C<$_> is used.  The C<< <*.c> >> operator is
 discussed in more detail in L<perlop/"I/O Operators">.
+
+Beginning with v5.6.0, this operator is implemented using the standard
+C<File::Glob> extension.  See L<File::Glob> for details.
 
 =item gmtime EXPR
 
@@ -2099,7 +2109,7 @@ Implements the ioctl(2) function.  You'll probably first have to say
 
 to get the correct function definitions.  If F<ioctl.ph> doesn't
 exist or doesn't have the correct definitions you'll have to roll your
-own, based on your C header files such as F<E<lt>sys/ioctl.hE<gt>>.
+own, based on your C header files such as F<< <sys/ioctl.h> >>.
 (There is a Perl script called B<h2ph> that comes with the Perl kit that
 may help you in this, but it's nontrivial.)  SCALAR will be read and/or
 written depending on the FUNCTION--a pointer to the string value of SCALAR
@@ -2543,24 +2553,24 @@ for this purpose; so if you're using C<my>, specify EXPR in your call
 to open.)  See L<perlopentut> for a kinder, gentler explanation of opening
 files.
 
-If MODE is C<'E<lt>'> or nothing, the file is opened for input.
-If MODE is C<'E<gt>'>, the file is truncated and opened for
-output, being created if necessary.  If MODE is C<'E<gt>E<gt>'>,
+If MODE is C<< '<' >> or nothing, the file is opened for input.
+If MODE is C<< '>' >>, the file is truncated and opened for
+output, being created if necessary.  If MODE is C<<< '>>' >>>,
 the file is opened for appending, again being created if necessary. 
-You can put a C<'+'> in front of the C<'E<gt>'> or C<'E<lt>'> to indicate that
-you want both read and write access to the file; thus C<'+E<lt>'> is almost
-always preferred for read/write updates--the C<'+E<gt>'> mode would clobber the
+You can put a C<'+'> in front of the C<< '>' >> or C<< '<' >> to indicate that
+you want both read and write access to the file; thus C<< '+<' >> is almost
+always preferred for read/write updates--the C<< '+>' >> mode would clobber the
 file first.  You can't usually use either read-write mode for updating
 textfiles, since they have variable length records.  See the B<-i>
 switch in L<perlrun> for a better approach.  The file is created with
 permissions of C<0666> modified by the process' C<umask> value.
 
-These various prefixes correspond to the fopen(3) modes of C<'r'>, C<'r+'>, C<'w'>,
-C<'w+'>, C<'a'>, and C<'a+'>.
+These various prefixes correspond to the fopen(3) modes of C<'r'>, C<'r+'>,
+C<'w'>, C<'w+'>, C<'a'>, and C<'a+'>.
 
 In the 2-arguments (and 1-argument) form of the call the mode and
 filename should be concatenated (in this order), possibly separated by
-spaces.  It is possible to omit the mode if the mode is C<'E<lt>'>.
+spaces.  It is possible to omit the mode if the mode is C<< '<' >>.
 
 If the filename begins with C<'|'>, the filename is interpreted as a
 command to which output is to be piped, and if the filename ends with a
@@ -2580,7 +2590,7 @@ that pipes both in I<and> out, but see L<IPC::Open2>, L<IPC::Open3>,
 and L<perlipc/"Bidirectional Communication"> for alternatives.)
 
 In the 2-arguments (and 1-argument) form opening C<'-'> opens STDIN
-and opening C<'E<gt>-'> opens STDOUT.  
+and opening C<< '>-' >> opens STDOUT.  
 
 Open returns
 nonzero upon success, the undefined value otherwise.  If the C<open>
@@ -2652,10 +2662,10 @@ Examples:
     }
 
 You may also, in the Bourne shell tradition, specify an EXPR beginning
-with C<'E<gt>&'>, in which case the rest of the string is interpreted as the
+with C<< '>&' >>, in which case the rest of the string is interpreted as the
 name of a filehandle (or file descriptor, if numeric) to be
-duped and opened.  You may use C<&> after C<E<gt>>, C<E<gt>E<gt>>,
-C<E<lt>>, C<+E<gt>>, C<+E<gt>E<gt>>, and C<+E<lt>>.  The
+duped and opened.  You may use C<&> after C<< > >>, C<<< >> >>>,
+C<< < >>, C<< +> >>, C<<< +>> >>>, and C<< +< >>.  The
 mode you specify should match the mode of the original filehandle.
 (Duping a filehandle does not take into account any existing contents of
 stdio buffers.)  Duping file handles is not yet supported for 3-argument
@@ -2686,7 +2696,7 @@ STDERR:
     print STDOUT "stdout 2\n";
     print STDERR "stderr 2\n";
 
-If you specify C<'E<lt>&=N'>, where C<N> is a number, then Perl will do an
+If you specify C<< '<&=N' >>, where C<N> is a number, then Perl will do an
 equivalent of C's C<fdopen> of that file descriptor; this is more
 parsimonious of file descriptors.  For example:
 
@@ -3082,10 +3092,10 @@ are inherently non-portable between processors and operating systems
 because they obey the native byteorder and endianness.  For example a
 4-byte integer 0x12345678 (305419896 decimal) be ordered natively
 (arranged in and handled by the CPU registers) into bytes as
- 
+
  	0x12 0x34 0x56 0x78	# little-endian
  	0x78 0x56 0x34 0x12	# big-endian
- 
+
 Basically, the Intel, Alpha, and VAX CPUs are little-endian, while
 everybody else, for example Motorola m68k/88k, PPC, Sparc, HP PA,
 Power, and Cray are big-endian.  MIPS can be either: Digital used it
@@ -3095,12 +3105,12 @@ The names `big-endian' and `little-endian' are comic references to
 the classic "Gulliver's Travels" (via the paper "On Holy Wars and a
 Plea for Peace" by Danny Cohen, USC/ISI IEN 137, April 1, 1980) and
 the egg-eating habits of the Lilliputians.
- 
+
 Some systems may have even weirder byte orders such as
- 
+
  	0x56 0x78 0x12 0x34
  	0x34 0x12 0x78 0x56
- 
+
 You can see your system's preference with
 
  	print join(" ", map { sprintf "%#02x", $_ }
@@ -3422,8 +3432,8 @@ When C<$/> is set to C<undef>, when readline() is in scalar
 context (i.e. file slurp mode), and when an empty file is read, it
 returns C<''> the first time, followed by C<undef> subsequently.
 
-This is the internal function implementing the C<E<lt>EXPRE<gt>>
-operator, but you can use it directly.  The C<E<lt>EXPRE<gt>>
+This is the internal function implementing the C<< <EXPR> >>
+operator, but you can use it directly.  The C<< <EXPR> >>
 operator is discussed in more detail in L<perlop/"I/O Operators">.
 
     $line = <STDIN>;
@@ -3551,15 +3561,16 @@ rename(2) manpage or equivalent system documentation for details.
 Demands some semantics specified by EXPR, or by C<$_> if EXPR is not
 supplied.
 
-If a VERSION is specified as a literal of the form v5.6.0,
+If a VERSION is specified as a literal of the form v5.6.1,
 demands that the current version of Perl (C<$^V> or $PERL_VERSION) be
 at least as recent as that version, at run time.  (For compatibility
 with older versions of Perl, a numeric argument will also be interpreted
 as VERSION.)  Compare with L</use>, which can do a similar check at
 compile time.
 
-    require v5.6.0;	# run time version check
-    require 5.005_03;	# same, number still supported for compatibility
+    require v5.6.1;	# run time version check
+    require 5.6.1;	# ditto
+    require 5.005_03;	# float version allowed for compatibility
 
 Otherwise, demands that a library file be included if it hasn't already
 been included.  The file is included via the do-FILE mechanism, which is
@@ -3758,7 +3769,7 @@ This is also useful for applications emulating C<tail -f>.  Once you hit
 EOF on your read, and then sleep for a while, you might have to stick in a
 seek() to reset things.  The C<seek> doesn't change the current position,
 but it I<does> clear the end-of-file condition on the handle, so that the
-next C<E<lt>FILEE<gt>> makes Perl try again to read something.  We hope.
+next C<< <FILE> >> makes Perl try again to read something.  We hope.
 
 If that doesn't work (some stdios are particularly cantankerous), then
 you may need something more like this:
@@ -3852,7 +3863,7 @@ You can effect a sleep of 250 milliseconds this way:
     select(undef, undef, undef, 0.25);
 
 B<WARNING>: One should not attempt to mix buffered I/O (like C<read>
-or E<lt>FHE<gt>) with C<select>, except as permitted by POSIX, and even
+or <FH>) with C<select>, except as permitted by POSIX, and even
 then only on POSIX systems.  You have to use C<sysread> instead.
 
 =item semctl ID,SEMNUM,CMD,ARG
@@ -4061,7 +4072,7 @@ Sorts the LIST and returns the sorted list value.  If SUBNAME or BLOCK
 is omitted, C<sort>s in standard string comparison order.  If SUBNAME is
 specified, it gives the name of a subroutine that returns an integer
 less than, equal to, or greater than C<0>, depending on how the elements
-of the list are to be ordered.  (The C<E<lt>=E<gt>> and C<cmp>
+of the list are to be ordered.  (The C<< <=> >> and C<cmp>
 operators are extremely useful in such routines.)  SUBNAME may be a
 scalar variable name (unsubscripted), in which case the value provides
 the name of (or a reference to) the actual subroutine to use.  In place
@@ -4157,7 +4168,7 @@ Examples:
                            ||
                   $a->[2] cmp $b->[2]
            } map { [$_, /=(\d+)/, uc($_)] } @old;
-    
+
     # using a prototype allows you to use any comparison subroutine
     # as a sort subroutine (including other package's subroutines)
     package other;
@@ -4389,7 +4400,7 @@ in arbitrary strings:
 
     printf "version is v%vd\n", $^V;		# Perl's version
     printf "address is %*vX\n", ":", $addr;	# IPv6 address
-    printf "bits are %*vb\n", "", $bits;	# random bitstring
+    printf "bits are %*vb\n", " ", $bits;	# random bitstring
 
 If C<use locale> is in effect, the character used for the decimal
 point in formatted real numbers is affected by the LC_NUMERIC locale.
@@ -4412,7 +4423,7 @@ For example
 You can find out whether your Perl supports quads via L<Config>:
 
 	use Config;
-	($Config{use64bits} eq 'define' || $Config{longsize} == 8) &&
+	($Config{use64bitint} eq 'define' || $Config{longsize} == 8) &&
 		print "quads\n";
 
 If Perl understands "long doubles" (this requires that the platform
@@ -4454,7 +4465,7 @@ the F</dev/urandom> device) or based on the current time and process
 ID, among other things.  In versions of Perl prior to 5.004 the default
 seed was just the current C<time>.  This isn't a particularly good seed,
 so many old programs supply their own seed value (often C<time ^ $$> or
-C<time ^ ($$ + ($$ E<lt>E<lt> 15))>), but that isn't necessary any more.
+C<time ^ ($$ + ($$ << 15))>), but that isn't necessary any more.
 
 In fact, it's usually not necessary to call C<srand> at all, because if
 it is not called explicitly, it is called implicitly at the first use of
@@ -4576,7 +4587,7 @@ The commonly available S_IF* constants are
     S_IRWXU S_IRUSR S_IWUSR S_IXUSR
     S_IRWXG S_IRGRP S_IWGRP S_IXGRP
     S_IRWXO S_IROTH S_IWOTH S_IXOTH
-    
+
     # Setuid/Setgid/Stickiness.
 
     S_ISUID S_ISGID S_ISVTX S_ISTXT
@@ -5192,8 +5203,8 @@ and then there's
     sub ordinal { unpack("c",$_[0]); } # same as ord()
 
 In addition to fields allowed in pack(), you may prefix a field with
-a %E<lt>numberE<gt> to indicate that
-you want a E<lt>numberE<gt>-bit checksum of the items instead of the items
+a %<number> to indicate that
+you want a <number>-bit checksum of the items instead of the items
 themselves.  Default is a 16-bit checksum.  Checksum is calculated by
 summing numeric values of expanded values (for string fields the sum of
 C<ord($char)> is taken, for bit fields the sum of zeroes and ones).
@@ -5255,7 +5266,7 @@ package.  It is exactly equivalent to
 
 except that Module I<must> be a bareword.
 
-VERSION, which can be specified as a literal of the form v5.6.0, demands
+VERSION, which can be specified as a literal of the form v5.6.1, demands
 that the current version of Perl (C<$^V> or $PERL_VERSION) be at least
 as recent as that version.  (For compatibility with older versions of Perl,
 a numeric literal will also be interpreted as VERSION.)  If the version
@@ -5264,8 +5275,9 @@ message is printed and Perl exits immediately without attempting to
 parse the rest of the file.  Compare with L</require>, which can do a
 similar check at run time.
 
-    use v5.6.0;		# compile time version check
-    use 5.005_03;	# same, number still supported for compatibility
+    use v5.6.1;		# compile time version check
+    use 5.6.1;		# ditto
+    use 5.005_03;	# float version allowed for compatibility
 
 This is often useful if you need to check the current Perl version before
 C<use>ing library modules that have changed in incompatible ways from

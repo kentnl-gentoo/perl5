@@ -125,6 +125,9 @@
      # Type of size argument for allocation functions
      MEM_SIZE				unsigned long
 
+     # size of void*
+     PTRSIZE				4
+
      # Maximal value in LONG
      LONG_MAX				0x7FFFFFFF
 
@@ -244,6 +247,9 @@
 #    define _(arg) arg
 #    ifndef Malloc_t
 #      define Malloc_t void *
+#    endif
+#    ifndef PTRSIZE
+#      define PTRSIZE 4
 #    endif
 #    ifndef MEM_SIZE
 #      define MEM_SIZE unsigned long
@@ -435,8 +441,8 @@ union	overhead {
 	double	strut;			/* alignment problems */
 #endif
 	struct {
-		u_char	ovu_magic;	/* magic number */
 		u_char	ovu_index;	/* bucket # */
+		u_char	ovu_magic;	/* magic number */
 #ifdef RCHECK
 		u_short	ovu_size;	/* actual block size */
 		u_int	ovu_rmagic;	/* range magic number */
@@ -822,6 +828,16 @@ static char bucket_of[] =
 #  define SBRK_FAILURE_PRICE 50
 #endif 
 
+static void	morecore	(register int bucket);
+#  if defined(DEBUGGING)
+static void	botch		(char *diag, char *s);
+#  endif
+static void	add_to_chain	(void *p, MEM_SIZE size, MEM_SIZE chip);
+static void*	get_from_chain	(MEM_SIZE size);
+static void*	get_from_bigger_buckets(int bucket, MEM_SIZE size);
+static union overhead *getpages	(MEM_SIZE needed, int *nblksp, int bucket);
+static int	getpages_adjacent(MEM_SIZE require);
+
 #if defined(PERL_EMERGENCY_SBRK) && defined(PERL_CORE)
 
 #  ifndef BIG_SIZE
@@ -837,18 +853,6 @@ static char bucket_of[] =
 
 static char *emergency_buffer;
 static MEM_SIZE emergency_buffer_size;
-
-static int	findbucket	(union overhead *freep, int srchlen);
-static void	morecore	(register int bucket);
-#  if defined(DEBUGGING)
-static void	botch		(char *diag, char *s);
-#  endif
-static void	add_to_chain	(void *p, MEM_SIZE size, MEM_SIZE chip);
-static Malloc_t	emergency_sbrk	(MEM_SIZE size);
-static void*	get_from_chain	(MEM_SIZE size);
-static void*	get_from_bigger_buckets(int bucket, MEM_SIZE size);
-static union overhead *getpages	(int needed, int *nblksp, int bucket);
-static int	getpages_adjacent(int require);
 
 static Malloc_t
 emergency_sbrk(MEM_SIZE size)
@@ -915,12 +919,16 @@ emergency_sbrk(MEM_SIZE size)
 #  define emergency_sbrk(size)	-1
 #endif /* !(defined(PERL_EMERGENCY_SBRK) && defined(PERL_CORE)) */
 
+#ifndef BITS_IN_PTR
+#  define BITS_IN_PTR (8*PTRSIZE)
+#endif
+
 /*
  * nextf[i] is the pointer to the next free block of size 2^i.  The
  * smallest allocatable block is 8 bytes.  The overhead information
  * precedes the data area returned to the user.
  */
-#define	NBUCKETS (32*BUCKETS_PER_POW2 + 1)
+#define	NBUCKETS (BITS_IN_PTR*BUCKETS_PER_POW2 + 1)
 static	union overhead *nextf[NBUCKETS];
 
 #if defined(PURIFY) && !defined(USE_PERL_SBRK)
@@ -1190,14 +1198,14 @@ get_from_bigger_buckets(int bucket, MEM_SIZE size)
 }
 
 static union overhead *
-getpages(int needed, int *nblksp, int bucket)
+getpages(MEM_SIZE needed, int *nblksp, int bucket)
 {
     /* Need to do (possibly expensive) system call. Try to
        optimize it for rare calling. */
     MEM_SIZE require = needed - sbrked_remains;
     char *cp;
     union overhead *ovp;
-    int slack = 0;
+    MEM_SIZE slack = 0;
 
     if (sbrk_good > 0) {
 	if (!last_sbrk_top && require < FIRST_SBRK) 
@@ -1343,7 +1351,7 @@ getpages(int needed, int *nblksp, int bucket)
 }
 
 static int
-getpages_adjacent(int require)
+getpages_adjacent(MEM_SIZE require)
 {	    
     if (require <= sbrked_remains) {
 	sbrked_remains -= require;
@@ -1766,28 +1774,6 @@ Perl_realloc(void *mp, size_t nbytes)
   	return ((Malloc_t)res);
 }
 
-/*
- * Search ``srchlen'' elements of each free list for a block whose
- * header starts at ``freep''.  If srchlen is -1 search the whole list.
- * Return bucket number, or -1 if not found.
- */
-static int
-findbucket(union overhead *freep, int srchlen)
-{
-	register union overhead *p;
-	register int i, j;
-
-	for (i = 0; i < NBUCKETS; i++) {
-		j = 0;
-		for (p = nextf[i]; p && j != srchlen; p = p->ov_next) {
-			if (p == freep)
-				return (i);
-			j++;
-		}
-	}
-	return (-1);
-}
-
 Malloc_t
 Perl_calloc(register size_t elements, register size_t size)
 {
@@ -1992,17 +1978,6 @@ Perl_dump_mstats(pTHX_ char *s)
 
 #   if defined(__MACHTEN_PPC__) || defined(NeXT) || defined(__NeXT__) || defined(PURIFY)
 #      define PERL_SBRK_VIA_MALLOC
-/*
- * MachTen's malloc() returns a buffer aligned on a two-byte boundary.
- * While this is adequate, it may slow down access to longer data
- * types by forcing multiple memory accesses.  It also causes
- * complaints when RCHECK is in force.  So we allocate six bytes
- * more than we need to, and return an address rounded up to an
- * eight-byte boundary.
- *
- * 980701 Dominic Dunlop <domo@computer.org>
- */
-#      define SYSTEM_ALLOC_ALIGNMENT 2
 #   endif
 
 #   ifdef PERL_SBRK_VIA_MALLOC

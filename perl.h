@@ -906,12 +906,30 @@ struct perl_mstats {
 #	define S_IWUSR 0200
 #	define S_IXUSR 0100
 #   endif
-#   define S_IRGRP (S_IRUSR>>3)
-#   define S_IWGRP (S_IWUSR>>3)
-#   define S_IXGRP (S_IXUSR>>3)
-#   define S_IROTH (S_IRUSR>>6)
-#   define S_IWOTH (S_IWUSR>>6)
-#   define S_IXOTH (S_IXUSR>>6)
+#endif
+
+#ifndef S_IRGRP
+#   ifdef S_IRUSR
+#       define S_IRGRP (S_IRUSR>>3)
+#       define S_IWGRP (S_IWUSR>>3)
+#       define S_IXGRP (S_IXUSR>>3)
+#   else
+#       define S_IRGRP 0040
+#       define S_IWGRP 0020
+#       define S_IXGRP 0010
+#   endif
+#endif
+
+#ifndef S_IROTH
+#   ifdef S_IRUSR
+#       define S_IROTH (S_IRUSR>>6)
+#       define S_IWOTH (S_IWUSR>>6)
+#       define S_IXOTH (S_IXUSR>>6)
+#   else
+#       define S_IROTH 0040
+#       define S_IWOTH 0020
+#       define S_IXOTH 0010
+#   endif
 #endif
 
 #ifndef S_ISUID
@@ -967,7 +985,7 @@ struct perl_mstats {
 typedef IVTYPE IV;
 typedef UVTYPE UV;
 
-#if defined(USE_64_BITS) && defined(HAS_QUAD)
+#if defined(USE_64_BIT_INT) && defined(HAS_QUAD)
 #  if QUADKIND == QUAD_IS_INT64_T && defined(INT64_MAX)
 #    define IV_MAX INT64_MAX
 #    define IV_MIN INT64_MIN
@@ -1117,7 +1135,11 @@ typedef UVTYPE UV;
 
 typedef NVTYPE NV;
 
+
 #ifdef USE_LONG_DOUBLE
+#   ifdef I_SUNMATH
+#       include <sunmath.h>
+#   endif
 #   define NV_DIG LDBL_DIG
 #   ifdef HAS_SQRTL
 #       define Perl_modf modfl
@@ -1400,12 +1422,7 @@ typedef struct ptr_tbl PTR_TBL_t;
 
 #include "handy.h"
 
-#ifndef NO_LARGE_FILES
-#   define USE_LARGE_FILES	/* If available. */
-#endif
-
 #if defined(USE_LARGE_FILES) && !defined(NO_64_BIT_RAWIO)
-#   define USE_64_BIT_RAWIO	/* explicit */
 #   if LSEEKSIZE == 8 && !defined(USE_64_BIT_RAWIO)
 #       define USE_64_BIT_RAWIO	/* implicit */
 #   endif
@@ -1423,7 +1440,6 @@ typedef struct ptr_tbl PTR_TBL_t;
 #endif
 
 #if defined(USE_LARGE_FILES) && !defined(NO_64_BIT_STDIO)
-#   define USE_64_BIT_STDIO	/* explicit */
 #   if FSEEKSIZE == 8 && !defined(USE_64_BIT_STDIO)
 #       define USE_64_BIT_STDIO /* implicit */
 #   endif
@@ -1704,10 +1720,7 @@ typedef pthread_key_t	perl_key;
 #  define PERL_WAIT_FOR_CHILDREN	NOOP
 #endif
 
-/* the traditional thread-unsafe notion of "current interpreter".
- * XXX todo: a thread-safe version that fetches it from TLS (akin to THR)
- * needs to be defined elsewhere (conditional on pthread_getspecific()
- * availability). */
+/* the traditional thread-unsafe notion of "current interpreter". */
 #ifndef PERL_SET_INTERP
 #  define PERL_SET_INTERP(i)		(PL_curinterp = (PerlInterpreter*)(i))
 #endif
@@ -1718,18 +1731,17 @@ typedef pthread_key_t	perl_key;
 
 #if defined(PERL_IMPLICIT_CONTEXT) && !defined(PERL_GET_THX)
 #  ifdef USE_THREADS
-#    define PERL_GET_THX		THR
+#    define PERL_GET_THX		((struct perl_thread *)PERL_GET_CONTEXT)
 #  else
 #  ifdef MULTIPLICITY
-#    define PERL_GET_THX		PERL_GET_INTERP
+#    define PERL_GET_THX		((PerlInterpreter *)PERL_GET_CONTEXT)
 #  else
 #  ifdef PERL_OBJECT
-#    define PERL_GET_THX		((CPerlObj*)PERL_GET_INTERP)
-#  else
-#    define PERL_GET_THX		((void*)0)
+#    define PERL_GET_THX		((CPerlObj *)PERL_GET_CONTEXT)
 #  endif
 #  endif
 #  endif
+#  define PERL_SET_THX(t)		PERL_SET_CONTEXT(t)
 #endif
 
 #ifndef SVf
@@ -2090,7 +2102,7 @@ char *crypt (const char*, const char*);
 #    ifndef getenv
 char *getenv (const char*);
 #    endif /* !getenv */
-#    if !defined(EPOC) && !(defined(__hpux) && defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64)
+#    if !defined(EPOC) && !(defined(__hpux) && defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64) && !defined(HAS_LSEEK_PROTO)
 Off_t lseek (int,Off_t,int);
 #    endif
 #  endif /* !DONT_DECLARE_STD */
@@ -3095,6 +3107,23 @@ typedef struct am_table_short AMTS;
 #define printf PerlIO_stdoutf
 #endif
 
+/* if these never got defined, they need defaults */
+#ifndef PERL_SET_CONTEXT
+#  define PERL_SET_CONTEXT(i)		PERL_SET_INTERP(i)
+#endif
+
+#ifndef PERL_GET_CONTEXT
+#  define PERL_GET_CONTEXT		PERL_GET_INTERP
+#endif
+
+#ifndef PERL_GET_THX
+#  define PERL_GET_THX			((void*)NULL)
+#endif
+
+#ifndef PERL_SET_THX
+#  define PERL_SET_THX(t)		NOOP
+#endif
+
 #ifndef PERL_SCRIPT_MODE
 #define PERL_SCRIPT_MODE "r"
 #endif
@@ -3250,7 +3279,7 @@ typedef struct am_table_short AMTS;
    HAS_MMAP
    HAS_MPROTECT
    HAS_MSYNC
-   HAS_MADVSISE
+   HAS_MADVISE
    HAS_MUNMAP
    I_SYSMMAN
    Mmap_t

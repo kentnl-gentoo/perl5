@@ -53,7 +53,6 @@ START_EXTERN_C
 /* C-API layer for PERL_OBJECT */
 
 #if defined(PERL_IMPLICIT_SYS)
-#else
 #endif
 #if defined(USE_ITHREADS)
 #  if defined(PERL_IMPLICIT_SYS)
@@ -3139,6 +3138,13 @@ void
 Perl_sv_vsetpvfn(pTHXo_ SV* sv, const char* pat, STRLEN patlen, va_list* args, SV** svargs, I32 svmax, bool *maybe_tainted)
 {
     ((CPerlObj*)pPerl)->Perl_sv_vsetpvfn(sv, pat, patlen, args, svargs, svmax, maybe_tainted);
+}
+
+#undef  Perl_str_to_version
+NV
+Perl_str_to_version(pTHXo_ SV *sv)
+{
+    return ((CPerlObj*)pPerl)->Perl_str_to_version(sv);
 }
 
 #undef  Perl_swash_init

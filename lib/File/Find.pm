@@ -135,7 +135,7 @@ This library is useful for the C<find2perl> tool, which when fed,
 produces something like:
 
     sub wanted {
-        /^\.nfs.*$/ &&
+        /^\.nfs.*\z/s &&
         (($dev, $ino, $mode, $nlink, $uid, $gid) = lstat($_)) &&
         int(-M _) > 7 &&
         unlink($_)
@@ -306,7 +306,7 @@ sub _find_opt {
     Proc_Top_Item:
     foreach my $TOP (@_) {
         my $top_item = $TOP;
-        $top_item =~ s|/$||  unless $top_item eq '/';
+        $top_item =~ s|/\z|| unless $top_item eq '/';
         $Is_Dir= 0;
         
         ($topdev,$topino,$topmode,$topnlink) = stat $top_item;
@@ -338,7 +338,7 @@ sub _find_opt {
                 next Proc_Top_Item;
             }
             if (-d _) {
-		$top_item =~ s/\.dir$// if $Is_VMS;
+		$top_item =~ s/\.dir\z// if $Is_VMS;
 		_find_dir($wanted, $top_item, $topnlink);
 		$Is_Dir= 1;
             }
@@ -419,6 +419,8 @@ sub _find_dir($$$) {
 	    return;
 	}
     }
+    
+    push @Stack,[$CdLvl,$p_dir,$dir_rel,-1]  if  $bydepth;
 
     while (defined $SE) {
 	unless ($bydepth) {
@@ -466,7 +468,7 @@ sub _find_dir($$$) {
 	if ($nlink == 2 && !$avoid_nlink) {
 	    # This dir has no subdirectories.
 	    for my $FN (@filenames) {
-		next if $FN =~ /^\.{1,2}$/;
+		next if $FN =~ /^\.{1,2}\z/;
 		
 		$name = $dir_pref . $FN;
 		$_ = ($no_chdir ? $name : $FN);
@@ -479,7 +481,7 @@ sub _find_dir($$$) {
 	    $subcount = $nlink - 2;
 
 	    for my $FN (@filenames) {
-		next if $FN =~ /^\.{1,2}$/;
+		next if $FN =~ /^\.{1,2}\z/;
 		if ($subcount > 0 || $avoid_nlink) {
 		    # Seen all the subdirs?
 		    # check for directoriness.
@@ -488,7 +490,7 @@ sub _find_dir($$$) {
 
 		    if (-d _) {
 			--$subcount;
-			$FN =~ s/\.dir$// if $Is_VMS;
+			$FN =~ s/\.dir\z// if $Is_VMS;
 			push @Stack,[$CdLvl,$dir_name,$FN,$sub_nlink];
 		    }
 		    else {
@@ -504,23 +506,27 @@ sub _find_dir($$$) {
 		}
 	    }
 	}
-	if ($bydepth) {
-            $name = $dir_name;
-            $dir = $p_dir;
-            $_ = ($no_chdir ? $dir_name : $dir_rel );
-            &$wanted_callback;
-	}
     }
     continue {
-	if ( defined ($SE = pop @Stack) ) {
+	while ( defined ($SE = pop @Stack) ) {
 	    ($Level, $p_dir, $dir_rel, $nlink) = @$SE;
 	    if ($CdLvl > $Level && !$no_chdir) {
-		die "Can't cd to $dir_name" . '../' x ($CdLvl-$Level)
-		    unless  chdir '../' x ($CdLvl-$Level);
+                my $tmp = join('/',('..') x ($CdLvl-$Level));
+                die "Can't cd to $dir_name" . $tmp
+                    unless chdir ($tmp);
 		$CdLvl = $Level;
 	    }
 	    $dir_name = ($p_dir eq '/' ? "/$dir_rel" : "$p_dir/$dir_rel");
 	    $dir_pref = "$dir_name/";
+            if ( $nlink < 0 ) {  # must be finddepth, report dirname now
+                $name = $dir_name;
+                $dir = $p_dir;
+                $_ = ($no_chdir ? $dir_name : $dir_rel );
+                &$wanted_callback;
+            } else {
+                push @Stack,[$CdLvl,$p_dir,$dir_rel,-1]  if  $bydepth;
+                last;
+            }
 	}
     }
 }
@@ -538,11 +544,13 @@ sub _find_dir_symlnk($$$) {
     my @Stack;
     my @filenames;
     my $new_loc;
+    my $pdir_loc = $dir_loc;
     my $SE = [];
     my $dir_name = $p_dir;
     my $dir_pref = ( $p_dir   eq '/' ? '/' : "$p_dir/" );
     my $loc_pref = ( $dir_loc eq '/' ? '/' : "$dir_loc/" );
     my $dir_rel = '.';		# directory name relative to current directory
+    my $byd_flag;               # flag for pending stack entry if $bydepth
 
     local ($dir, $name, $fullname, $prune, *DIR);
     
@@ -564,6 +572,8 @@ sub _find_dir_symlnk($$$) {
 	    return;
 	}
     }
+
+    push @Stack,[$dir_loc,$pdir_loc,$p_dir,$dir_rel,-1]  if  $bydepth;
 
     while (defined $SE) {
 
@@ -609,7 +619,7 @@ sub _find_dir_symlnk($$$) {
 	closedir(DIR);
 
 	for my $FN (@filenames) {
-	    next if $FN =~ /^\.{1,2}$/;
+	    next if $FN =~ /^\.{1,2}\z/;
 
 	    # follow symbolic links / do an lstat
 	    $new_loc = Follow_SymLink($loc_pref.$FN);
@@ -618,7 +628,7 @@ sub _find_dir_symlnk($$$) {
 	    next unless defined $new_loc;
      
 	    if (-d _) {
-		push @Stack,[$new_loc,$dir_name,$FN];
+		push @Stack,[$new_loc,$dir_loc,$dir_name,$FN,1];
 	    }
 	    else {
 		$fullname = $new_loc;
@@ -628,19 +638,33 @@ sub _find_dir_symlnk($$$) {
 	    }
 	}
 
-	if ($bydepth) {
-	    $fullname = $dir_loc;
-	    $name = $dir_name;
-	    $_ = ($no_chdir ? $dir_name : $dir_rel);
-	    &$wanted_callback;
-	}
     }
     continue {
-	if (defined($SE = pop @Stack)) {
-	    ($dir_loc, $p_dir, $dir_rel) = @$SE;
+	while (defined($SE = pop @Stack)) {
+	    ($dir_loc, $pdir_loc, $p_dir, $dir_rel, $byd_flag) = @$SE;
 	    $dir_name = ($p_dir eq '/' ? "/$dir_rel" : "$p_dir/$dir_rel");
 	    $dir_pref = "$dir_name/";
 	    $loc_pref = "$dir_loc/";
+            if ( $byd_flag < 0 ) {  # must be finddepth, report dirname now
+	        unless ($no_chdir or $dir_rel eq '.') {
+	            my $udir = $pdir_loc;
+	            if ($untaint) {
+		        $udir = $1 if $dir_loc =~ m|$untaint_pat|;
+	            }
+	            unless (chdir $udir) {
+		        warn "Can't cd to $udir: $!\n";
+		        next;
+	            }
+	        }
+	        $fullname = $dir_loc;
+	        $name = $dir_name;
+                $dir = $p_dir;
+	        $_ = ($no_chdir ? $dir_name : $dir_rel);
+	        &$wanted_callback;
+            } else {
+                push @Stack,[$dir_loc, $pdir_loc, $p_dir, $dir_rel,-1]  if  $bydepth;
+                last;
+            }
 	}
     }
 }
