@@ -204,6 +204,7 @@
 #define get_op_names		Perl_get_op_names
 #define get_opargs		Perl_get_opargs
 #define get_specialsv_list	Perl_get_specialsv_list
+#define get_vtbl		Perl_get_vtbl
 #define gp_free			Perl_gp_free
 #define gp_ref			Perl_gp_ref
 #define gt_amg			Perl_gt_amg
@@ -859,6 +860,7 @@
 #define save_freeop		Perl_save_freeop
 #define save_freepv		Perl_save_freepv
 #define save_freesv		Perl_save_freesv
+#define save_generic_svref	Perl_save_generic_svref
 #define save_gp			Perl_save_gp
 #define save_hash		Perl_save_hash
 #define save_helem		Perl_save_helem

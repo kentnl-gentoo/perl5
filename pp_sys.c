@@ -56,7 +56,10 @@ extern "C" int syscall(unsigned long,...);
 
 /* XXX Configure test needed.
    h_errno might not be a simple 'int', especially for multi-threaded
-   applications.  HOST_NOT_FOUND is typically defined in <netdb.h>.
+   applications, see "extern int errno in perl.h".  Creating such
+   a test requires taking into account the differences between
+   compiling multithreaded and singlethreaded ($ccflags et al).
+   HOST_NOT_FOUND is typically defined in <netdb.h>.
 */
 #if defined(HOST_NOT_FOUND) && !defined(h_errno)
 extern int h_errno;
@@ -402,9 +405,9 @@ PP(pp_close)
     else
 	gv = (GV*)POPs;
 
-    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	PUSHMARK(SP);
-	XPUSHs(mg->mg_obj);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
 	PUTBACK;
 	ENTER;
 	perl_call_method("CLOSE", G_SCALAR);
@@ -459,7 +462,10 @@ PP(pp_pipe_op)
 	else PerlLIO_close(fd[1]);
 	goto badexit;
     }
-
+#if defined(HAS_FCNTL) && defined(F_SETFD)
+    fcntl(fd[0],F_SETFD,fd[0] > PL_maxsysfd);	/* ensure close-on-exec */
+    fcntl(fd[1],F_SETFD,fd[1] > PL_maxsysfd);	/* ensure close-on-exec */
+#endif
     RETPUSHYES;
 
 badexit:
@@ -596,8 +602,8 @@ PP(pp_tie)
     sv = TOPs;
     POPSTACK;
     if (sv_isobject(sv)) {
-	sv_unmagic(varsv, how);            
-	sv_magic(varsv, sv, how, Nullch, 0);
+	sv_unmagic(varsv, how);
+	sv_magic(varsv, (SvRV(sv) == varsv ? Nullsv : sv), how, Nullch, 0);
     }
     LEAVE;
     SP = PL_stack_base + markoff;
@@ -608,48 +614,35 @@ PP(pp_tie)
 PP(pp_untie)
 {
     djSP;
-    SV * sv ;
-
-    sv = POPs;
+    SV *sv = POPs;
+    char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV) ? 'P' : 'q';
 
     if (PL_dowarn) {
-        MAGIC * mg ;
-        if (SvMAGICAL(sv)) {
-            if (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
-                mg = mg_find(sv, 'P') ;
-            else
-                mg = mg_find(sv, 'q') ;
-    
-            if (mg && SvREFCNT(SvRV(mg->mg_obj)) > 1)  
+        MAGIC *mg;
+        if (mg = SvTIED_mg(sv, how)) {
+            if (mg->mg_obj && SvREFCNT(SvRV(mg->mg_obj)) > 1)  
 		warn("untie attempted while %lu inner references still exist",
 			(unsigned long)SvREFCNT(SvRV(mg->mg_obj)) - 1 ) ;
         }
     }
  
-    if (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
-	sv_unmagic(sv, 'P');
-    else
-	sv_unmagic(sv, 'q');
+    sv_unmagic(sv, how);
     RETPUSHYES;
 }
 
 PP(pp_tied)
 {
     djSP;
-    SV * sv ;
-    MAGIC * mg ;
+    SV *sv = POPs;
+    char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV) ? 'P' : 'q';
+    MAGIC *mg;
 
-    sv = POPs;
-    if (SvMAGICAL(sv)) {
-        if (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV)
-            mg = mg_find(sv, 'P') ;
-        else
-            mg = mg_find(sv, 'q') ;
-
-        if (mg)  {
-            PUSHs(sv_2mortal(newSVsv(mg->mg_obj))) ; 
-            RETURN ;
-	}
+    if (mg = SvTIED_mg(sv, how)) {
+	SV *osv = SvTIED_obj(sv, mg);
+	if (osv == mg->mg_obj)
+	    osv = sv_mortalcopy(osv);
+	PUSHs(osv);
+	RETURN;
     }
     RETPUSHUNDEF;
 }
@@ -753,12 +746,17 @@ PP(pp_sselect)
 	    maxlen = j;
     }
 
+/* little endians can use vecs directly */
 #if BYTEORDER == 0x1234 || BYTEORDER == 0x12345678
-/* XXX Configure test needed. */
-#if defined(__linux__) || defined(OS2) || defined(NeXT) || defined(__osf__) || defined(sun)
-    growsize = sizeof(fd_set);
+#  if SELECT_MIN_BITS > 1
+    /* If SELECT_MIN_BITS is greater than one we most probably will want
+     * to align the sizes with SELECT_MIN_BITS/8 because for example
+     * in many little-endian (Intel, Alpha) systems (Linux, OS/2, Digital
+     * UNIX, Solaris, NeXT) the smallest quantum select() operates on
+     * (sets bit) is 32 bits.  */
+    growsize = maxlen + (SELECT_MIN_BITS/8 - (maxlen % (SELECT_MIN_BITS/8)));
 #else
-    growsize = maxlen;		/* little endians can use vecs directly */
+    growsize = sizeof(fd_set);
 #endif
 #else
 #ifdef NFDBITS
@@ -909,10 +907,10 @@ PP(pp_getc)
     if (!gv)
 	gv = PL_argvgv;
 
-    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	I32 gimme = GIMME_V;
 	PUSHMARK(SP);
-	XPUSHs(mg->mg_obj);
+	XPUSHs(SvTIED_obj((SV*)gv, mg));
 	PUTBACK;
 	ENTER;
 	perl_call_method("GETC", gimme);
@@ -1127,7 +1125,7 @@ PP(pp_prtf)
     else
 	gv = PL_defoutgv;
 
-    if (SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q'))) {
+    if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	if (MARK == ORIGMARK) {
 	    MEXTEND(SP, 1);
 	    ++MARK;
@@ -1135,7 +1133,7 @@ PP(pp_prtf)
 	    ++SP;
 	}
 	PUSHMARK(MARK - 1);
-	*MARK = mg->mg_obj;
+	*MARK = SvTIED_obj((SV*)gv, mg);
 	PUTBACK;
 	ENTER;
 	perl_call_method("PRINTF", G_SCALAR);
@@ -1237,12 +1235,12 @@ PP(pp_sysread)
 
     gv = (GV*)*++MARK;
     if ((PL_op->op_type == OP_READ || PL_op->op_type == OP_SYSREAD) &&
-	SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q')))
+	(mg = SvTIED_mg((SV*)gv, 'q')))
     {
 	SV *sv;
 	
 	PUSHMARK(MARK-1);
-	*MARK = mg->mg_obj;
+	*MARK = SvTIED_obj((SV*)gv, mg);
 	ENTER;
 	perl_call_method("READ", G_SCALAR);
 	LEAVE;
@@ -1353,6 +1351,15 @@ PP(pp_sysread)
 
 PP(pp_syswrite)
 {
+    djSP;
+    int items = (SP - PL_stack_base) - TOPMARK;
+    if (items == 2) {
+	SV *sv;
+        EXTEND(SP, 1);
+	sv = sv_2mortal(newSViv(sv_len(*SP)));
+        PUSHs(sv);
+        PUTBACK;
+    }
     return pp_send(ARGS);
 }
 
@@ -1369,13 +1376,11 @@ PP(pp_send)
     MAGIC *mg;
 
     gv = (GV*)*++MARK;
-    if (PL_op->op_type == OP_SYSWRITE &&
-	SvRMAGICAL(gv) && (mg = mg_find((SV*)gv, 'q')))
-    {
+    if (PL_op->op_type == OP_SYSWRITE && (mg = SvTIED_mg((SV*)gv, 'q'))) {
 	SV *sv;
 	
 	PUSHMARK(MARK-1);
-	*MARK = mg->mg_obj;
+	*MARK = SvTIED_obj((SV*)gv, mg);
 	ENTER;
 	perl_call_method("WRITE", G_SCALAR);
 	LEAVE;

@@ -248,7 +248,9 @@ mg_copy(SV *sv, SV *nsv, char *key, I32 klen)
     MAGIC* mg;
     for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
 	if (isUPPER(mg->mg_type)) {
-	    sv_magic(nsv, mg->mg_obj, toLOWER(mg->mg_type), key, klen);
+	    sv_magic(nsv,
+		     mg->mg_type == 'P' ? SvTIED_obj(sv, mg) : mg->mg_obj,
+		     toLOWER(mg->mg_type), key, klen);
 	    count++;
 	}
     }
@@ -382,8 +384,11 @@ magic_get(SV *sv, MAGIC *mg)
 	    sv_setnv(sv, (double)errno);
 	    sv_setpv(sv, errno ? Strerror(errno) : "");
 	} else {
-	    if (errno != errno_isOS2)
-		Perl_rc = _syserrno();
+	    if (errno != errno_isOS2) {
+		int tmp = _syserrno();
+		if (tmp)	/* 2nd call to _syserrno() makes it 0 */
+		    Perl_rc = tmp;
+	    }
 	    sv_setnv(sv, (double)Perl_rc);
 	    sv_setpv(sv, os2error(Perl_rc));
 	}
@@ -922,7 +927,7 @@ magic_getnkeys(SV *sv, MAGIC *mg)
 
     if (hv) {
 	(void) hv_iterinit(hv);
-	if (!SvRMAGICAL(hv) || !mg_find((SV*)hv,'P'))
+	if (! SvTIED_mg((SV*)hv, 'P'))
 	    i = HvKEYS(hv);
 	else {
 	    /*SUPPRESS 560*/
@@ -947,13 +952,13 @@ magic_setnkeys(SV *sv, MAGIC *mg)
 
 /* caller is responsible for stack switching/cleanup */
 STATIC int
-magic_methcall(MAGIC *mg, char *meth, I32 flags, int n, SV *val)
+magic_methcall(SV *sv, MAGIC *mg, char *meth, I32 flags, int n, SV *val)
 {
     dSP;
 
     PUSHMARK(SP);
     EXTEND(SP, n);
-    PUSHs(mg->mg_obj);
+    PUSHs(SvTIED_obj(sv, mg));
     if (n > 1) { 
 	if (mg->mg_ptr) {
 	    if (mg->mg_len >= 0)
@@ -982,7 +987,7 @@ magic_methpack(SV *sv, MAGIC *mg, char *meth)
     SAVETMPS;
     PUSHSTACKi(PERLSI_MAGIC);
 
-    if (magic_methcall(mg, meth, G_SCALAR, 2, NULL)) {
+    if (magic_methcall(sv, mg, meth, G_SCALAR, 2, NULL)) {
 	sv_setsv(sv, *PL_stack_sp--);
     }
 
@@ -1007,7 +1012,7 @@ magic_setpack(SV *sv, MAGIC *mg)
     dSP;
     ENTER;
     PUSHSTACKi(PERLSI_MAGIC);
-    magic_methcall(mg, "STORE", G_SCALAR|G_DISCARD, 3, sv);
+    magic_methcall(sv, mg, "STORE", G_SCALAR|G_DISCARD, 3, sv);
     POPSTACK;
     LEAVE;
     return 0;
@@ -1029,7 +1034,7 @@ magic_sizepack(SV *sv, MAGIC *mg)
     ENTER;
     SAVETMPS;
     PUSHSTACKi(PERLSI_MAGIC);
-    if (magic_methcall(mg, "FETCHSIZE", G_SCALAR, 2, NULL)) {
+    if (magic_methcall(sv, mg, "FETCHSIZE", G_SCALAR, 2, NULL)) {
 	sv = *PL_stack_sp--;
 	retval = (U32) SvIV(sv)-1;
     }
@@ -1046,7 +1051,7 @@ int magic_wipepack(SV *sv, MAGIC *mg)
     ENTER;
     PUSHSTACKi(PERLSI_MAGIC);
     PUSHMARK(SP);
-    XPUSHs(mg->mg_obj);
+    XPUSHs(SvTIED_obj(sv, mg));
     PUTBACK;
     perl_call_method("CLEAR", G_SCALAR|G_DISCARD);
     POPSTACK;
@@ -1065,7 +1070,7 @@ magic_nextpack(SV *sv, MAGIC *mg, SV *key)
     PUSHSTACKi(PERLSI_MAGIC);
     PUSHMARK(SP);
     EXTEND(SP, 2);
-    PUSHs(mg->mg_obj);
+    PUSHs(SvTIED_obj(sv, mg));
     if (SvOK(key))
 	PUSHs(key);
     PUTBACK;
@@ -1790,7 +1795,10 @@ magic_set(SV *sv, MAGIC *mg)
 		    || PL_origargv[i] == s + 2
 #endif 
 		   )
-		    s += strlen(++s);	/* this one is ok too */
+		{
+		    ++s;
+		    s += strlen(s);	/* this one is ok too */
+		}
 		else
 		    break;
 	    }
@@ -1803,8 +1811,10 @@ magic_set(SV *sv, MAGIC *mg)
 		my_setenv("NoNe  SuCh", Nullch);
 					    /* force copy of environment */
 		for (i = 0; PL_origenviron[i]; i++)
-		    if (PL_origenviron[i] == s + 1)
-			s += strlen(++s);
+		    if (PL_origenviron[i] == s + 1) {
+			++s;
+			s += strlen(s);
+		    }
 		    else
 			break;
 	    }
@@ -1851,7 +1861,6 @@ magic_mutexfree(SV *sv, MAGIC *mg)
 	croak("panic: magic_mutexfree");
     MUTEX_DESTROY(MgMUTEXP(mg));
     COND_DESTROY(MgCONDP(mg));
-    SvREFCNT_dec(sv);
     return 0;
 }
 #endif /* USE_THREADS */

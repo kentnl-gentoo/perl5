@@ -529,7 +529,13 @@ PP(pp_formline)
 	    break;
 
 	case FF_MORE:
-	    if (itemsize) {
+	    s = chophere;
+	    send = item + len;
+	    if (chopspace) {
+		while (*s && isSPACE(*s) && s < send)
+		    s++;
+	    }
+	    if (s < send) {
 		arg = fieldsize - itemsize;
 		if (arg) {
 		    fieldsize -= arg;
@@ -891,7 +897,7 @@ dopoptolabel(char *label)
 
     for (i = cxstack_ix; i >= 0; i--) {
 	cx = &cxstack[i];
-	switch (cx->cx_type) {
+	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	    if (PL_dowarn)
 		warn("Exiting substitution via %s", op_name[PL_op->op_type]);
@@ -968,7 +974,7 @@ dopoptosub_at(PERL_CONTEXT *cxstk, I32 startingblock)
     register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
 	cx = &cxstk[i];
-	switch (cx->cx_type) {
+	switch (CxTYPE(cx)) {
 	default:
 	    continue;
 	case CXt_EVAL:
@@ -988,7 +994,7 @@ dopoptoeval(I32 startingblock)
     register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
 	cx = &cxstack[i];
-	switch (cx->cx_type) {
+	switch (CxTYPE(cx)) {
 	default:
 	    continue;
 	case CXt_EVAL:
@@ -1007,7 +1013,7 @@ dopoptoloop(I32 startingblock)
     register PERL_CONTEXT *cx;
     for (i = startingblock; i >= 0; i--) {
 	cx = &cxstack[i];
-	switch (cx->cx_type) {
+	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	    if (PL_dowarn)
 		warn("Exiting substitution via %s", op_name[PL_op->op_type]);
@@ -1043,9 +1049,9 @@ dounwind(I32 cxix)
     while (cxstack_ix > cxix) {
 	cx = &cxstack[cxstack_ix];
 	DEBUG_l(PerlIO_printf(Perl_debug_log, "Unwinding block %ld, type %s\n",
-			      (long) cxstack_ix, block_type[cx->cx_type]));
+			      (long) cxstack_ix, block_type[CxTYPE(cx)]));
 	/* Note: we don't need to restore the base context info till the end. */
-	switch (cx->cx_type) {
+	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	    POPSUBST(cx);
 	    continue;  /* not break */
@@ -1114,7 +1120,7 @@ die_where(char *message)
 		dounwind(cxix);
 
 	    POPBLOCK(cx,PL_curpm);
-	    if (cx->cx_type != CXt_EVAL) {
+	    if (CxTYPE(cx) != CXt_EVAL) {
 		PerlIO_printf(PerlIO_stderr(), "panic: die %s", message);
 		my_exit(1);
 	    }
@@ -1133,6 +1139,8 @@ die_where(char *message)
 	    return pop_return();
 	}
     }
+    if(!message)
+	message = SvPVx(ERRSV, PL_na);
     PerlIO_printf(PerlIO_stderr(), "%s",message);
     PerlIO_flush(PerlIO_stderr());
     my_failure_exit();
@@ -1204,7 +1212,7 @@ PP(pp_caller)
     }
 
     cx = &ccstack[cxix];
-    if (ccstack[cxix].cx_type == CXt_SUB) {
+    if (CxTYPE(cx) == CXt_SUB) {
         dbcxix = dopoptosub_at(ccstack, cxix - 1);
 	/* We expect that ccstack[dbcxix] is CXt_SUB, anyway, the
 	   field below is defined for any cx. */
@@ -1233,7 +1241,7 @@ PP(pp_caller)
     PUSHs(sv_2mortal(newSViv((I32)cx->blk_oldcop->cop_line)));
     if (!MAXARG)
 	RETURN;
-    if (cx->cx_type == CXt_SUB) { /* So is ccstack[dbcxix]. */
+    if (CxTYPE(cx) == CXt_SUB) { /* So is ccstack[dbcxix]. */
 	sv = NEWSV(49, 0);
 	gv_efullname3(sv, CvGV(ccstack[cxix].blk_sub.cv), Nullch);
 	PUSHs(sv_2mortal(sv));
@@ -1248,7 +1256,7 @@ PP(pp_caller)
 	PUSHs(&PL_sv_undef);
     else
 	PUSHs(sv_2mortal(newSViv(gimme & G_ARRAY)));
-    if (cx->cx_type == CXt_EVAL) {
+    if (CxTYPE(cx) == CXt_EVAL) {
 	if (cx->blk_eval.old_op_type == OP_ENTEREVAL) {
 	    PUSHs(cx->blk_eval.cur_text);
 	    PUSHs(&PL_sv_no);
@@ -1259,7 +1267,7 @@ PP(pp_caller)
 	    PUSHs(&PL_sv_yes);
 	}
     }
-    else if (cx->cx_type == CXt_SUB &&
+    else if (CxTYPE(cx) == CXt_SUB &&
 	    cx->blk_sub.hasargs &&
 	    PL_curcop->cop_stash == PL_debstash)
     {
@@ -1516,7 +1524,7 @@ PP(pp_return)
 	dounwind(cxix);
 
     POPBLOCK(cx,newpm);
-    switch (cx->cx_type) {
+    switch (CxTYPE(cx)) {
     case CXt_SUB:
 	POPSUB1(cx);	/* Delay POPSUB2 until stack values are safe */
 	popsub2 = TRUE;
@@ -1604,7 +1612,7 @@ PP(pp_last)
 	dounwind(cxix);
 
     POPBLOCK(cx,newpm);
-    switch (cx->cx_type) {
+    switch (CxTYPE(cx)) {
     case CXt_LOOP:
 	POPLOOP1(cx);	/* Delay POPLOOP2 until stack values are safe */
 	pop2 = CXt_LOOP;
@@ -1779,11 +1787,23 @@ PP(pp_goto)
 	    SV** mark;
 	    I32 items = 0;
 	    I32 oldsave;
+	    int arg_was_real = 0;
 
+	retry:
 	    if (!CvROOT(cv) && !CvXSUB(cv)) {
-		if (CvGV(cv)) {
-		    SV *tmpstr = sv_newmortal();
-		    gv_efullname3(tmpstr, CvGV(cv), Nullch);
+		GV *gv = CvGV(cv);
+		GV *autogv;
+		if (gv) {
+		    SV *tmpstr;
+		    /* autoloaded stub? */
+		    if (cv != GvCV(gv) && (cv = GvCV(gv)))
+			goto retry;
+		    autogv = gv_autoload4(GvSTASH(gv), GvNAME(gv),
+					  GvNAMELEN(gv), FALSE);
+		    if (autogv && (cv = GvCV(autogv)))
+			goto retry;
+		    tmpstr = sv_newmortal();
+		    gv_efullname3(tmpstr, gv, Nullch);
 		    DIE("Goto undefined subroutine &%s",SvPVX(tmpstr));
 		}
 		DIE("Goto undefined subroutine");
@@ -1796,10 +1816,10 @@ PP(pp_goto)
 	    if (cxix < cxstack_ix)
 		dounwind(cxix);
 	    TOPBLOCK(cx);
-	    if (cx->cx_type == CXt_EVAL && cx->blk_eval.old_op_type == OP_ENTEREVAL) 
+	    if (CxTYPE(cx) == CXt_EVAL && cx->blk_eval.old_op_type == OP_ENTEREVAL) 
 		DIE("Can't goto subroutine from an eval-string");
 	    mark = PL_stack_sp;
-	    if (cx->cx_type == CXt_SUB &&
+	    if (CxTYPE(cx) == CXt_SUB &&
 		cx->blk_sub.hasargs) {   /* put @_ back onto stack */
 		AV* av = cx->blk_sub.argarray;
 		
@@ -1812,7 +1832,10 @@ PP(pp_goto)
 		SvREFCNT_dec(GvAV(PL_defgv));
 		GvAV(PL_defgv) = cx->blk_sub.savearray;
 #endif /* USE_THREADS */
-		AvREAL_off(av);
+		if (AvREAL(av)) {
+		    arg_was_real = 1;
+		    AvREAL_off(av);	/* so av_clear() won't clobber elts */
+		}
 		av_clear(av);
 	    }
 	    else if (CvXSUB(cv)) {	/* put GvAV(defgv) back onto stack */
@@ -1829,7 +1852,7 @@ PP(pp_goto)
 		Copy(AvARRAY(av), PL_stack_sp, items, SV*);
 		PL_stack_sp += items;
 	    }
-	    if (cx->cx_type == CXt_SUB &&
+	    if (CxTYPE(cx) == CXt_SUB &&
 		!(CvDEPTH(cx->blk_sub.cv) = cx->blk_sub.olddepth))
 		SvREFCNT_dec(cx->blk_sub.cv);
 	    oldsave = PL_scopestack[PL_scopestack_ix - 1];
@@ -1868,7 +1891,7 @@ PP(pp_goto)
 	    else {
 		AV* padlist = CvPADLIST(cv);
 		SV** svp = AvARRAY(padlist);
-		if (cx->cx_type == CXt_EVAL) {
+		if (CxTYPE(cx) == CXt_EVAL) {
 		    PL_in_eval = cx->blk_eval.old_in_eval;
 		    PL_eval_root = cx->blk_eval.old_eval_root;
 		    cx->cx_type = CXt_SUB;
@@ -1968,7 +1991,11 @@ PP(pp_goto)
 		    }
 		    Copy(mark,AvARRAY(av),items,SV*);
 		    AvFILLp(av) = items - 1;
-		    
+		    /* preserve @_ nature */
+		    if (arg_was_real) {
+			AvREIFY_off(av);
+			AvREAL_on(av);
+		    }
 		    while (items--) {
 			if (*mark)
 			    SvTEMP_off(*mark);
@@ -2018,7 +2045,7 @@ PP(pp_goto)
 	*enterops = 0;
 	for (ix = cxstack_ix; ix >= 0; ix--) {
 	    cx = &cxstack[ix];
-	    switch (cx->cx_type) {
+	    switch (CxTYPE(cx)) {
 	    case CXt_EVAL:
 		gotoprobe = PL_eval_root; /* XXX not good for nested eval */
 		break;
@@ -2097,11 +2124,6 @@ PP(pp_goto)
 
 	PL_restartop = 0;		/* hmm, must be GNU unexec().. */
 	PL_do_undump = FALSE;
-    }
-
-    if (PL_top_env->je_prev) {
-        PL_restartop = retop;
-        JMPENV_JUMP(3);
     }
 
     RETURNOP(retop);
@@ -2208,15 +2230,14 @@ docatch(OP *o)
     JMPENV_PUSH(ret);
     switch (ret) {
     default:				/* topmost level handles it */
+pass_the_buck:
 	JMPENV_POP;
 	PL_op = oldop;
 	JMPENV_JUMP(ret);
 	/* NOTREACHED */
     case 3:
-	if (!PL_restartop) {
-	    PerlIO_printf(PerlIO_stderr(), "panic: restartop\n");
-	    break;
-	}
+	if (!PL_restartop)
+	    goto pass_the_buck;
 	PL_op = PL_restartop;
 	PL_restartop = 0;
 	/* FALL THROUGH */
@@ -2320,11 +2341,11 @@ doeval(int gimme, OP** startop)
     SAVEI32(PL_max_intro_pending);
 
     caller = PL_compcv;
-    for (i = cxstack_ix; i >= 0; i--) {
+    for (i = cxstack_ix - 1; i >= 0; i--) {
 	PERL_CONTEXT *cx = &cxstack[i];
-	if (cx->cx_type == CXt_EVAL)
+	if (CxTYPE(cx) == CXt_EVAL)
 	    break;
-	else if (cx->cx_type == CXt_SUB) {
+	else if (CxTYPE(cx) == CXt_SUB) {
 	    caller = cx->blk_sub.cv;
 	    break;
 	}
@@ -2542,6 +2563,7 @@ PP(pp_require)
 #else
 		sv_setpvf(namesv, "%s/%s", dir, name);
 #endif
+		TAINT_PROPER("require");
 		tryname = SvPVX(namesv);
 		tryrsfp = PerlIO_open(tryname, PERL_SCRIPT_MODE);
 		if (tryrsfp) {
@@ -2578,6 +2600,8 @@ PP(pp_require)
 
 	RETPUSHUNDEF;
     }
+    else
+	SETERRNO(0, SS$_NORMAL);
 
     /* Assume success here to prevent recursive requirement. */
     (void)hv_store(GvHVn(PL_incgv), name, strlen(name),
@@ -2586,10 +2610,8 @@ PP(pp_require)
     ENTER;
     SAVETMPS;
     lex_start(sv_2mortal(newSVpv("",0)));
-    if (PL_rsfp_filters){
- 	save_aptr(&PL_rsfp_filters);
-	PL_rsfp_filters = NULL;
-    }
+    SAVEGENERICSV(PL_rsfp_filters);
+    PL_rsfp_filters = Nullav;
 
     PL_rsfp = tryrsfp;
     name = savepv(name);
@@ -2603,6 +2625,7 @@ PP(pp_require)
     PUSHBLOCK(cx, CXt_EVAL, SP);
     PUSHEVAL(cx, name, PL_compiling.cop_filegv);
 
+    SAVEI16(PL_compiling.cop_line);
     PL_compiling.cop_line = 0;
 
     PUTBACK;
@@ -2658,7 +2681,7 @@ PP(pp_entereval)
     PL_hints = PL_op->op_targ;
 
     push_return(PL_op->op_next);
-    PUSHBLOCK(cx, CXt_EVAL, SP);
+    PUSHBLOCK(cx, (CXt_EVAL|CXp_REAL), SP);
     PUSHEVAL(cx, 0, PL_compiling.cop_filegv);
 
     /* prepare to compile string */

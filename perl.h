@@ -209,6 +209,12 @@ register struct op *op asm(stringify(OP_IN_REGISTER));
 #   define LIBERAL 1
 #endif
 
+#if 'A' == 65 && 'I' == 73 && 'J' == 74 && 'Z' == 90
+#define ASCIIish
+#else
+#undef  ASCIIish
+#endif
+
 /*
  * The following contortions are brought to you on behalf of all the
  * standards, semi-standards, de facto standards, not-so-de-facto standards
@@ -585,7 +591,7 @@ Free_t   Perl_free _((Malloc_t where));
 	    set_vaxc_errno(vmserrcode);	\
 	} STMT_END
 #else
-#   define SETERRNO(errcode,vmserrcode) errno = (errcode)
+#   define SETERRNO(errcode,vmserrcode) (errno = (errcode))
 #endif
 
 #ifdef USE_THREADS
@@ -1109,7 +1115,11 @@ typedef I32 (*filter_t) _((int, SV *, int));
 #     if defined(MPE)
 #       include "mpeix/mpeixish.h"
 #     else
-#       include "unixish.h"
+#       if defined(__VOS__)
+#         include "vosish.h"
+#       else
+#         include "unixish.h"
+#       endif
 #     endif
 #   endif
 # endif
@@ -1902,6 +1912,39 @@ typedef enum {
     XBLOCK,
     XTERMBLOCK
 } expectation;
+
+enum {		/* pass one of these to get_vtbl */
+    want_vtbl_sv,
+    want_vtbl_env,
+    want_vtbl_envelem,
+    want_vtbl_sig,
+    want_vtbl_sigelem,
+    want_vtbl_pack,
+    want_vtbl_packelem,
+    want_vtbl_dbline,
+    want_vtbl_isa,
+    want_vtbl_isaelem,
+    want_vtbl_arylen,
+    want_vtbl_glob,
+    want_vtbl_mglob,
+    want_vtbl_nkeys,
+    want_vtbl_taint,
+    want_vtbl_substr,
+    want_vtbl_vec,
+    want_vtbl_pos,
+    want_vtbl_bm,
+    want_vtbl_fm,
+    want_vtbl_uvar,
+    want_vtbl_defelem,
+    want_vtbl_regexp,
+    want_vtbl_collxfrm,
+    want_vtbl_amagic,
+    want_vtbl_amagicelem
+#ifdef USE_THREADS
+    ,
+    want_vtbl_mutex
+#endif
+};
 
 
 				/* Note: the lowest 8 bits are reserved for

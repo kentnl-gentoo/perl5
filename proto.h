@@ -645,7 +645,7 @@ VIRTUAL struct perl_vars *Perl_GetVars _((void));
 protected:
 void hsplit _((HV *hv));
 void hfreeentries _((HV *hv));
-HE* more_he _((void));
+void more_he _((void));
 HE* new_he _((void));
 void del_he _((HE *p));
 HEK *save_hek _((char *str, I32 len, U32 hash));
@@ -655,10 +655,10 @@ SV *save_scalar_at _((SV **sptr));
 IV asIV _((SV* sv));
 UV asUV _((SV* sv));
 SV *more_sv _((void));
-XPVIV *more_xiv _((void));
-XPVNV *more_xnv _((void));
-XPV *more_xpv _((void));
-XRV *more_xrv _((void));
+void more_xiv _((void));
+void more_xnv _((void));
+void more_xpv _((void));
+void more_xrv _((void));
 XPVIV *new_xiv _((void));
 XPVNV *new_xnv _((void));
 XPV *new_xpv _((void));
@@ -896,6 +896,9 @@ VIRTUAL void	sv_setpvn_mg _((SV *sv, const char *ptr, STRLEN len));
 VIRTUAL void	sv_setsv_mg _((SV *dstr, SV *sstr));
 VIRTUAL void	sv_usepvn_mg _((SV *sv, char *ptr, STRLEN len));
 
+VIRTUAL MGVTBL*	get_vtbl _((int vtbl_id));
+
+VIRTUAL void	save_generic_svref _((SV** sptr));
 /* New virtual functions must be added here to maintain binary
  * compatablity with PERL_OBJECT
  */

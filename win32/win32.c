@@ -38,6 +38,8 @@
 #include "EXTERN.h"
 #include "perl.h"
 
+#include "patchlevel.h"
+
 #define NO_XSLOCKS
 #ifdef PERL_OBJECT
 extern CPerlObj* pPerl;
@@ -91,7 +93,7 @@ static DWORD		os_id(void);
 static void		get_shell(void);
 static long		tokenize(char *str, char **dest, char ***destv);
 	int		do_spawn2(char *cmd, int exectype);
-static BOOL		has_redirection(char *ptr);
+static BOOL		has_shell_metachars(char *ptr);
 static long		filetime_to_clock(PFILETIME ft);
 static BOOL		filetime_from_time(PFILETIME ft, time_t t);
 static char *		get_emd_part(char *leading, char *trailing, ...);
@@ -145,7 +147,7 @@ GetRegStrFromKey(HKEY hkey, const char *lpszValueName, char** ptr, DWORD* lpData
     if (retval == ERROR_SUCCESS){
 	retval = RegQueryValueEx(handle, lpszValueName, 0, &type, NULL, lpDataLen);
 	if (retval == ERROR_SUCCESS && type == REG_SZ) {
-	    if (*ptr != NULL) {
+	    if (*ptr) {
 		Renew(*ptr, *lpDataLen, char);
 	    }
 	    else {
@@ -154,7 +156,7 @@ GetRegStrFromKey(HKEY hkey, const char *lpszValueName, char** ptr, DWORD* lpData
 	    retval = RegQueryValueEx(handle, lpszValueName, 0, NULL, (PBYTE)*ptr, lpDataLen);
 	    if (retval != ERROR_SUCCESS) {
 		Safefree(*ptr);
-		*ptr = NULL;
+		*ptr = Nullch;
 	    }
 	}
 	RegCloseKey(handle);
@@ -166,7 +168,7 @@ char*
 GetRegStr(const char *lpszValueName, char** ptr, DWORD* lpDataLen)
 {
     *ptr = GetRegStrFromKey(HKEY_CURRENT_USER, lpszValueName, ptr, lpDataLen);
-    if (*ptr == NULL)
+    if (*ptr == Nullch)
     {
 	*ptr = GetRegStrFromKey(HKEY_LOCAL_MACHINE, lpszValueName, ptr, lpDataLen);
     }
@@ -176,6 +178,7 @@ GetRegStr(const char *lpszValueName, char** ptr, DWORD* lpDataLen)
 static char *
 get_emd_part(char *prev_path, char *trailing_path, ...)
 {
+    char base[10];
     va_list ap;
     char mod_name[MAX_PATH+1];
     char *ptr;
@@ -185,6 +188,8 @@ get_emd_part(char *prev_path, char *trailing_path, ...)
 
     va_start(ap, trailing_path);
     strip = va_arg(ap, char *);
+
+    sprintf(base, "%5.3f", (double) 5 + ((double) PATCHLEVEL / (double) 1000));
 
     GetModuleFileName((w32_perldll_handle == INVALID_HANDLE_VALUE)
 		      ? GetModuleHandle(NULL)
@@ -209,17 +214,21 @@ get_emd_part(char *prev_path, char *trailing_path, ...)
     va_end(ap);
     strcpy(++ptr, trailing_path);
 
-    newsize = strlen(mod_name) + 1;
-    if (prev_path) {
-	oldsize = strlen(prev_path) + 1;
-	newsize += oldsize;			/* includes plus 1 for ';' */
-	Renew(prev_path, newsize, char);
-	prev_path[oldsize-1] = ';';
-	strcpy(&prev_path[oldsize], mod_name);
-    }
-    else {
-	New(1311, prev_path, newsize, char);
-	strcpy(prev_path, mod_name);
+    /* only add directory if it exists */
+    if(GetFileAttributes(mod_name) != (DWORD) -1) {
+	/* directory exists */
+	newsize = strlen(mod_name) + 1;
+	if (prev_path) {
+	    oldsize = strlen(prev_path) + 1;
+	    newsize += oldsize;			/* includes plus 1 for ';' */
+	    Renew(prev_path, newsize, char);
+	    prev_path[oldsize-1] = ';';
+	    strcpy(&prev_path[oldsize], mod_name);
+	}
+	else {
+	    New(1311, prev_path, newsize, char);
+	    strcpy(prev_path, mod_name);
+	}
     }
 
     return prev_path;
@@ -236,7 +245,7 @@ win32_get_privlib(char *pl)
     /* $stdlib = $HKCU{"lib-$]"} || $HKLM{"lib-$]"} || $HKCU{"lib"} || $HKLM{"lib"} || "";  */
     sprintf(buffer, "%s-%s", stdlib, pl);
     path = GetRegStr(buffer, &path, &datalen);
-    if (path == NULL)
+    if (!path)
 	path = GetRegStr(stdlib, &path, &datalen);
 
     /* $stdlib .= ";$EMD/../../lib" */
@@ -289,17 +298,20 @@ win32_get_sitelib(char *pl)
 
 
 static BOOL
-has_redirection(char *ptr)
+has_shell_metachars(char *ptr)
 {
     int inquote = 0;
     char quote = '\0';
 
     /*
      * Scan string looking for redirection (< or >) or pipe
-     * characters (|) that are not in a quoted string
+     * characters (|) that are not in a quoted string.
+     * Shell variable interpolation (%VAR%) can also happen inside strings.
      */
     while (*ptr) {
 	switch(*ptr) {
+	case '%':
+	    return TRUE;
 	case '\'':
 	case '\"':
 	    if (inquote) {
@@ -521,7 +533,7 @@ do_spawn2(char *cmd, int exectype)
 
     /* Save an extra exec if possible. See if there are shell
      * metacharacters in it */
-    if (!has_redirection(cmd)) {
+    if (!has_shell_metachars(cmd)) {
 	New(1301,argv, strlen(cmd) / 2 + 2, char*);
 	New(1302,cmd2, strlen(cmd) + 1, char);
 	strcpy(cmd2, cmd);
@@ -636,12 +648,8 @@ win32_opendir(char *filename)
 	return NULL;
 
     /* check to see if filename is a directory */
-    if (win32_stat(filename, &sbuf) < 0 || (sbuf.st_mode & S_IFDIR) == 0) {
-	/* CRT is buggy on sharenames, so make sure it really isn't */
-	DWORD r = GetFileAttributes(filename);
-	if (r == 0xffffffff || !(r & FILE_ATTRIBUTE_DIRECTORY))
-	    return NULL;
-    }
+    if (win32_stat(filename, &sbuf) < 0 || !S_ISDIR(sbuf.st_mode))
+	return NULL;
 
     /* Get us a DIR structure */
     Newz(1303, p, 1, DIR);
@@ -658,6 +666,10 @@ win32_opendir(char *filename)
     /* do the FindFirstFile call */
     fh = FindFirstFile(scanname, &FindData);
     if (fh == INVALID_HANDLE_VALUE) {
+	/* FindFirstFile() fails on empty drives! */
+	if (GetLastError() == ERROR_FILE_NOT_FOUND)
+	    return p;
+	Safefree( p);
 	return NULL;
     }
 
@@ -881,7 +893,7 @@ win32_sleep(unsigned int t)
 DllExport int
 win32_stat(const char *path, struct stat *buffer)
 {
-    char		t[MAX_PATH+1]; 
+    char	t[MAX_PATH+1]; 
     const char	*p = path;
     int		l = strlen(path);
     int		res;
@@ -898,8 +910,31 @@ win32_stat(const char *path, struct stat *buffer)
 	}
     }
     res = stat(p,buffer);
+    if (res < 0) {
+	/* CRT is buggy on sharenames, so make sure it really isn't.
+	 * XXX using GetFileAttributesEx() will enable us to set
+	 * buffer->st_*time (but note that's not available on the
+	 * Windows of 1995) */
+	DWORD r = GetFileAttributes(p);
+	if (r != 0xffffffff && (r & FILE_ATTRIBUTE_DIRECTORY)) {
+	    buffer->st_mode |= S_IFDIR | S_IREAD;
+	    errno = 0;
+	    if (!(r & FILE_ATTRIBUTE_READONLY))
+		buffer->st_mode |= S_IWRITE | S_IEXEC;
+	    return 0;
+	}
+    }
+    else {
+	if (l == 3 && path[l-2] == ':'
+	    && (path[l-1] == '\\' || path[l-1] == '/'))
+	{
+	    /* The drive can be inaccessible, some _stat()s are buggy */
+	    if (!GetVolumeInformation(path,NULL,0,NULL,NULL,NULL,NULL,0)) {
+		errno = ENOENT;
+		return -1;
+	    }
+	}
 #ifdef __BORLANDC__
-    if (res == 0) {
 	if (S_ISDIR(buffer->st_mode))
 	    buffer->st_mode |= S_IWRITE | S_IEXEC;
 	else if (S_ISREG(buffer->st_mode)) {
@@ -916,8 +951,8 @@ win32_stat(const char *path, struct stat *buffer)
 	    else
 		buffer->st_mode &= ~S_IEXEC;
 	}
-    }
 #endif
+    }
     return res;
 }
 
@@ -926,11 +961,13 @@ win32_stat(const char *path, struct stat *buffer)
 DllExport char *
 win32_getenv(const char *name)
 {
-    static char *curitem = Nullch;
-    static DWORD curlen = 512;
+    static char *curitem = Nullch;	/* XXX threadead */
+    static DWORD curlen = 0;		/* XXX threadead */
     DWORD needlen;
-    if (!curitem)
+    if (!curitem) {
+	curlen = 512;
 	New(1305,curitem,curlen,char);
+    }
 
     needlen = GetEnvironmentVariable(name,curitem,curlen);
     if (needlen != 0) {
@@ -940,23 +977,22 @@ win32_getenv(const char *name)
 	    needlen = GetEnvironmentVariable(name,curitem,curlen);
 	}
     }
-    else
-    {
+    else {
 	/* allow any environment variables that begin with 'PERL'
-	   to be stored in the registry
-	*/
-	if(curitem != NULL)
+	   to be stored in the registry */
+	if (curitem)
 	    *curitem = '\0';
 
 	if (strncmp(name, "PERL", 4) == 0) {
-	    if (curitem != NULL) {
+	    if (curitem) {
 		Safefree(curitem);
-		curitem = NULL;
+		curitem = Nullch;
+		curlen = 0;
 	    }
 	    curitem = GetRegStr(name, &curitem, &curlen);
 	}
     }
-    if(curitem != NULL && *curitem == '\0')
+    if (curitem && *curitem == '\0')
 	return Nullch;
 
     return curitem;
@@ -1068,10 +1104,10 @@ win32_waitpid(int pid, int *status, int flags)
       return win32_wait(status);
     else {
       rc = cwait(status, pid, WAIT_CHILD);
-    /* cwait() returns differently on Borland */
-#ifdef __BORLANDC__
+    /* cwait() returns "correctly" on Borland */
+#ifndef __BORLANDC__
     if (status)
-	*status =  (((*status >> 8) & 0xff) | ((*status << 8) & 0xff00));
+	*status *= 256;
 #endif
       remove_dead_process((HANDLE)pid);
     }
@@ -1724,12 +1760,11 @@ win32_pclose(FILE *pf)
     /* wait for the child */
     if (cwait(&status, childpid, WAIT_CHILD) == -1)
         return (-1);
-    /* cwait() returns differently on Borland */
-#ifdef __BORLANDC__
-    return (((status >> 8) & 0xff) | ((status << 8) & 0xff00));
-#else
-    return (status);
+    /* cwait() returns "correctly" on Borland */
+#ifndef __BORLANDC__
+    status *= 256;
 #endif
+    return (status);
 
 #endif /* USE_RTL_POPEN */
 }

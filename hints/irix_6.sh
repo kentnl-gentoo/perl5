@@ -53,11 +53,11 @@ case "$cc" in
 	case "`$cc -version 2>&1`" in
 	*7.0*)                        # Mongoose 7.0
 	     ccflags="$ccflags -D_BSD_TYPES -D_BSD_TIME -woff 1009,1042,1048,1110,1116,1184 -OPT:Olimit=0"
-	     optimize='none'	  
+	     optimize='none'
 	     ;;
 	*7.1*|*7.2|*7.20)             # Mongoose 7.1+
 	     ccflags="$ccflags -D_BSD_TYPES -D_BSD_TIME -woff 1009,1110,1184 -OPT:Olimit=0"
-	     optimize='-O3'	  
+	     optimize='-O3'
 # This is a temporary fix for 5.005.
 # Leave pp_ctl_cflags  line at left margin for Configure.  See 
 # hints/README.hints, especially the section 
@@ -65,12 +65,12 @@ case "$cc" in
 pp_ctl_cflags='optimize=-O'
 	     ;;
 	*7.*)                         # Mongoose 7.2.1+
-	     ccflags="$ccflags -D_BSD_TYPES -D_BSD_TIME -woff 1009,1110,1184 -OPT:Olimit=0:space=on"
-	     optimize='-O3'	  
+	     ccflags="$ccflags -D_BSD_TYPES -D_BSD_TIME -woff 1009,1110,1184 -OPT:Olimit=0:space=ON"
+	     optimize='-O3'
 	     ;;
 	*6.2*)                        # Ragnarok 6.2
 	     ccflags="$ccflags -D_BSD_TYPES -D_BSD_TIME -woff 1009,1110,1184"
-	     optimize='none'	  
+	     optimize='none'
 	     ;;
 	*)                            # Be safe and not optimize
 	     ccflags="$ccflags -D_BSD_TYPES -D_BSD_TIME -woff 1009,1110,1184 -OPT:Olimit=0"
@@ -78,9 +78,30 @@ pp_ctl_cflags='optimize=-O'
 	     ;;
 	esac
 
-	ld=ld
+# this is to accommodate the 'modules' capability of the 
+# 7.2 MIPSPro compilers, which allows for the compilers to be installed
+# in a nondefault location.  Almost everything works as expected, but
+# /usr/include isn't caught properly.  Hence see the /usr/include/pthread.h
+# change below to include TOOLROOT (a modules environment variable),
+# and the following code.  Additional
+# code to accommodate the 'modules' environment should probably be added
+# here if possible, or be inserted as a ${TOOLROOT} reference before
+# absolute paths (again, see the pthread.h change below). 
+# -- krishna@sgi.com, 8/23/98
+
+if [ "X${TOOLROOT}" != "X" ]; then
+# we cant set cppflags because it gets overwritten
+# we dont actually need $TOOLROOT/usr/include on the cc line cuz the 
+# modules functionality already includes it but
+# XXX - how do I change cppflags in the hints file?
+	ccflags="$ccflags -I${TOOLROOT}/usr/include"
+	usrinc="${TOOLROOT}/usr/include"
+fi
+
+	ld=$cc
 	# perl's malloc can return improperly aligned buffer
-	usemymalloc='undef'
+	# usemymalloc='undef'
+malloc_cflags='ccflags="-DSTRICT_ALIGNMENT $ccflags"'
 	# NOTE: -L/usr/lib32 -L/lib32 are automatically selected by the linker
 	ldflags=' -L/usr/local/lib32 -L/usr/local/lib'
 	cccdlflags=' '
@@ -139,7 +160,7 @@ shift
 libswanted="$*"
 
 if [ "X$usethreads" = "X$define" -o "X$usethreads" = "Xy" ]; then
-    if test ! -f /usr/include/pthread.h -o ! -f /usr/lib/libpthread.so; then
+    if test ! -f ${TOOLROOT}/usr/include/pthread.h -o ! -f /usr/lib/libpthread.so; then
 	uname_r=`uname -r`
 	case "`uname -r`" in
 	5*|6.0|6.1)

@@ -551,6 +551,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
     
     DEBUG_P(debprofdump());
 #ifdef USE_THREADS
+    MUTEX_DESTROY(&PL_strtab_mutex);
     MUTEX_DESTROY(&PL_sv_mutex);
     MUTEX_DESTROY(&PL_eval_mutex);
     COND_DESTROY(&PL_eval_cond);
@@ -1737,6 +1738,9 @@ moreswitches(char *s)
 #ifdef OEMVS
 	printf("MVS (OS390) port by Mortice Kern Systems, 1997-1998\n");
 #endif
+#ifdef __VOS__
+	printf("Stratus VOS port by Paul_Green@stratus.com, 1997-1998\n");
+#endif
 #ifdef BINARY_BUILD_NOTICE
 	BINARY_BUILD_NOTICE;
 #endif
@@ -1758,7 +1762,7 @@ Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
 	break;
     case '-':
     case 0:
-#ifdef WIN32
+#if defined(WIN32) || !defined(PERL_STRICT_CR)
     case '\r':
 #endif
     case '\n':
@@ -1886,6 +1890,9 @@ init_main_stash(void)
        about not iterating on it, and not adding tie magic to it.
        It is properly deallocated in perl_destruct() */
     PL_strtab = newHV();
+#ifdef USE_THREADS
+    MUTEX_INIT(&PL_strtab_mutex);
+#endif
     HvSHAREKEYS_off(PL_strtab);			/* mandatory */
     hv_ksplit(PL_strtab, 512);
     
@@ -1913,7 +1920,7 @@ init_main_stash(void)
     PL_debstash = GvHV(gv_fetchpv("DB::", GV_ADDMULTI, SVt_PVHV));
     PL_globalstash = GvHV(gv_fetchpv("CORE::GLOBAL::", GV_ADDMULTI, SVt_PVHV));
     /* We must init $/ before switches are processed. */
-    sv_setpvn(GvSV(gv_fetchpv("/", TRUE, SVt_PV)), "\n", 1);
+    sv_setpvn(perl_get_sv("/", TRUE), "\n", 1);
 }
 
 STATIC void

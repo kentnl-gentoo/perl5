@@ -716,11 +716,11 @@ PP(pp_defined)
 	RETPUSHNO;
     switch (SvTYPE(sv)) {
     case SVt_PVAV:
-	if (AvMAX(sv) >= 0 || SvGMAGICAL(sv))
+	if (AvMAX(sv) >= 0 || SvGMAGICAL(sv) || (SvRMAGICAL(sv) && mg_find(sv,'P')))
 	    RETPUSHYES;
 	break;
     case SVt_PVHV:
-	if (HvARRAY(sv) || SvGMAGICAL(sv))
+	if (HvARRAY(sv) || SvGMAGICAL(sv) || (SvRMAGICAL(sv) && mg_find(sv,'P')))
 	    RETPUSHYES;
 	break;
     case SVt_PVCV:
@@ -751,8 +751,11 @@ PP(pp_undef)
 	RETPUSHUNDEF;
 
     if (SvTHINKFIRST(sv)) {
-	if (SvREADONLY(sv))
-	    RETPUSHUNDEF;
+	if (SvREADONLY(sv)) {
+	    dTHR;
+	    if (PL_curcop != &PL_compiling)
+		croak(no_modify);
+	}
 	if (SvROK(sv))
 	    sv_unref(sv);
     }
@@ -1634,21 +1637,50 @@ seed(void)
 #define   SEED_C5	26107
 
     dTHR;
+#ifndef PERL_NO_DEV_RANDOM
+    int fd;
+#endif
     U32 u;
 #ifdef VMS
 #  include <starlet.h>
     /* when[] = (low 32 bits, high 32 bits) of time since epoch
      * in 100-ns units, typically incremented ever 10 ms.        */
     unsigned int when[2];
+#else
+#  ifdef HAS_GETTIMEOFDAY
+    struct timeval when;
+#  else
+    Time_t when;
+#  endif
+#endif
+
+/* This test is an escape hatch, this symbol isn't set by Configure. */
+#ifndef PERL_NO_DEV_RANDOM
+#ifndef PERL_RANDOM_DEVICE
+   /* /dev/random isn't used by default because reads from it will block
+    * if there isn't enough entropy available.  You can compile with
+    * PERL_RANDOM_DEVICE to it if you'd prefer Perl to block until there
+    * is enough real entropy to fill the seed. */
+#  define PERL_RANDOM_DEVICE "/dev/urandom"
+#endif
+    fd = PerlLIO_open(PERL_RANDOM_DEVICE, 0);
+    if (fd != -1) {
+    	if (PerlLIO_read(fd, &u, sizeof u) != sizeof u)
+	    u = 0;
+	PerlLIO_close(fd);
+	if (u)
+	    return u;
+    }
+#endif
+
+#ifdef VMS
     _ckvmssts(sys$gettim(when));
     u = (U32)SEED_C1 * when[0] + (U32)SEED_C2 * when[1];
 #else
 #  ifdef HAS_GETTIMEOFDAY
-    struct timeval when;
     gettimeofday(&when,(struct timezone *) 0);
     u = (U32)SEED_C1 * when.tv_sec + (U32)SEED_C2 * when.tv_usec;
 #  else
-    Time_t when;
     (void)time(&when);
     u = (U32)SEED_C1 * when;
 #  endif
@@ -2561,8 +2593,8 @@ PP(pp_splice)
     SV **tmparyval = 0;
     MAGIC *mg;
 
-    if (SvRMAGICAL(ary) && (mg = mg_find((SV*)ary,'P'))) {
-	*MARK-- = mg->mg_obj;
+    if (mg = SvTIED_mg((SV*)ary, 'P')) {
+	*MARK-- = SvTIED_obj((SV*)ary, mg);
 	PUSHMARK(MARK);
 	PUTBACK;
 	ENTER;
@@ -2759,8 +2791,8 @@ PP(pp_push)
     register SV *sv = &PL_sv_undef;
     MAGIC *mg;
 
-    if (SvRMAGICAL(ary) && (mg = mg_find((SV*)ary,'P'))) {
-	*MARK-- = mg->mg_obj;
+    if (mg = SvTIED_mg((SV*)ary, 'P')) {
+	*MARK-- = SvTIED_obj((SV*)ary, mg);
 	PUSHMARK(MARK);
 	PUTBACK;
 	ENTER;
@@ -2815,8 +2847,8 @@ PP(pp_unshift)
     register I32 i = 0;
     MAGIC *mg;
 
-    if (SvRMAGICAL(ary) && (mg = mg_find((SV*)ary,'P'))) {
-	*MARK-- = mg->mg_obj;
+    if (mg = SvTIED_mg((SV*)ary, 'P')) {
+	*MARK-- = SvTIED_obj((SV*)ary, mg);
 	PUSHMARK(MARK);
 	PUTBACK;
 	ENTER;
@@ -3574,7 +3606,7 @@ PP(pp_unpack)
 		char hunk[4];
 
 		hunk[3] = '\0';
-		len = (*s++ - ' ') & 077;
+		len = uudmap[*s++] & 077;
 		while (len > 0) {
 		    if (s < strend && ISUUCHAR(*s))
 			a = uudmap[*s++] & 077;
@@ -4271,9 +4303,9 @@ PP(pp_split)
 	av_extend(ary,0);
 	av_clear(ary);
 	SPAGAIN;
-	if (SvRMAGICAL(ary) && (mg = mg_find((SV *) ary, 'P'))) {
+	if (mg = SvTIED_mg((SV*)ary, 'P')) {
 	    PUSHMARK(SP);
-	    XPUSHs(mg->mg_obj);
+	    XPUSHs(SvTIED_obj((SV*)ary, mg));
 	}
 	else {
 	    if (!AvREAL(ary)) {
@@ -4522,7 +4554,6 @@ PP(pp_lock)
 	DEBUG_S(PerlIO_printf(PerlIO_stderr(), "0x%lx: pp_lock lock 0x%lx\n",
 			      (unsigned long)thr, (unsigned long)sv);)
 	MUTEX_UNLOCK(MgMUTEXP(mg));
-	SvREFCNT_inc(sv);	/* keep alive until magic_mutexfree */
 	save_destructor(unlock_condpair, sv);
     }
 #endif /* USE_THREADS */

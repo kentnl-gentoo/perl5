@@ -142,7 +142,7 @@ struct block_loop {
 #define POPLOOP2()							\
 	SvREFCNT_dec(cxloop.iterlval);					\
 	if (cxloop.itervar) {						\
-	    SvREFCNT_dec(*cxloop.itervar);				\
+	    sv_2mortal(*cxloop.itervar);				\
 	    *cxloop.itervar = cxloop.itersave;				\
 	}								\
 	if (cxloop.iterary && cxloop.iterary != PL_curstack)		\
@@ -198,14 +198,15 @@ struct block {
 	pm		 = cx->blk_oldpm,				\
 	gimme		 = cx->blk_gimme;				\
 	DEBUG_l( PerlIO_printf(PerlIO_stderr(), "Leaving block %ld, type %s\n",		\
-		    (long)cxstack_ix+1,block_type[cx->cx_type]); )
+		    (long)cxstack_ix+1,block_type[CxTYPE(cx)]); )
 
 /* Continue a block elsewhere (NEXT and REDO). */
 #define TOPBLOCK(cx) cx  = &cxstack[cxstack_ix],			\
 	PL_stack_sp	 = PL_stack_base + cx->blk_oldsp,			\
 	PL_markstack_ptr = PL_markstack + cx->blk_oldmarksp,		\
 	PL_scopestack_ix = cx->blk_oldscopesp,				\
-	PL_retstack_ix	 = cx->blk_oldretsp
+	PL_retstack_ix	 = cx->blk_oldretsp,				\
+	PL_curpm         = cx->blk_oldpm
 
 /* substitution context */
 struct subst {
@@ -261,18 +262,26 @@ struct subst {
 	rxres_free(&cx->sb_rxres)
 
 struct context {
-    I32		cx_type;	/* what kind of context this is */
+    U32		cx_type;	/* what kind of context this is */
     union {
 	struct block	cx_blk;
 	struct subst	cx_subst;
     } cx_u;
 };
+
+#define CXTYPEMASK	0xff
 #define CXt_NULL	0
 #define CXt_SUB		1
 #define CXt_EVAL	2
 #define CXt_LOOP	3
 #define CXt_SUBST	4
 #define CXt_BLOCK	5
+
+/* private flags for CXt_EVAL */
+#define CXp_REAL	0x00000100	/* truly eval'', not a lookalike */
+
+#define CxTYPE(c)	((c)->cx_type & CXTYPEMASK)
+#define CxREALEVAL(c)	(((c)->cx_type & (CXt_EVAL|CXp_REAL)) == (CXt_EVAL|CXp_REAL))
 
 #define CXINC (cxstack_ix < cxstack_max ? ++cxstack_ix : (cxstack_ix = cxinc()))
 

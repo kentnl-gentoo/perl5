@@ -643,7 +643,7 @@ descriptors are not.  Also, during an open(), system file descriptors are
 preserved even if the open() fails.  (Ordinary file descriptors are
 closed before the open() is attempted.)  Note that the close-on-exec
 status of a file descriptor will be decided according to the value of
-C<$^F> at the time of the open, not the time of the exec.
+C<$^F> when the open() or pipe() was called, not the time of the exec().
 
 =item $^H
 
@@ -810,6 +810,10 @@ signals.  Example:
     ...
     $SIG{'INT'} = 'DEFAULT';	# restore default action
     $SIG{'QUIT'} = 'IGNORE';	# ignore SIGQUIT
+
+Using a value of C<'IGNORE'> usually has the effect of ignoring the
+signal, except for the C<CHLD> signal.  See L<perlipc> for more about
+this special case.
 
 The %SIG array contains values for only the signals actually set within
 the Perl script.  Here are some other examples:

@@ -862,6 +862,7 @@ scan_const(char *start)
 	    /* expand a range A-Z to the full set of characters.  AIE! */
 	    if (dorange) {
 		I32 i;				/* current expanded character */
+		I32 min;			/* first character in range */
 		I32 max;			/* last character in range */
 
 		i = d - SvPVX(sv);		/* remember current offset */
@@ -869,10 +870,26 @@ scan_const(char *start)
 		d = SvPVX(sv) + i;		/* restore d after the grow potentially has changed the ptr */
 		d -= 2;				/* eat the first char and the - */
 
-		max = (U8)d[1];			/* last char in range */
+		min = (U8)*d;			/* first char in range */
+		max = (U8)d[1];			/* last char in range  */
 
-		for (i = (U8)*d; i <= max; i++)
-		    *d++ = i;
+#ifndef ASCIIish
+		if ((isLOWER(min) && isLOWER(max)) ||
+		    (isUPPER(min) && isUPPER(max))) {
+		    if (isLOWER(min)) {
+			for (i = min; i <= max; i++)
+			    if (isLOWER(i))
+				*d++ = i;
+		    } else {
+			for (i = min; i <= max; i++)
+			    if (isUPPER(i))
+				*d++ = i;
+		    }
+		}
+		else
+#endif
+		    for (i = min; i <= max; i++)
+			*d++ = i;
 
 		/* mark the range as done, and continue */
 		dorange = FALSE;
@@ -1317,7 +1334,7 @@ filter_del(filter_t funcp)
     if (!PL_rsfp_filters || AvFILLp(PL_rsfp_filters)<0)
 	return;
     /* if filter is on top of stack (usual case) just pop it off */
-    if (IoDIRP(FILTER_DATA(AvFILLp(PL_rsfp_filters))) == (void*)funcp){
+    if (IoDIRP(FILTER_DATA(AvFILLp(PL_rsfp_filters))) == (DIR*)funcp){
 	sv_free(av_pop(PL_rsfp_filters));
 
         return;
@@ -2443,7 +2460,11 @@ yylex(void)
 	}
 	if (PL_lex_brackets < PL_lex_formbrack) {
 	    char *t;
+#ifdef PERL_STRICT_CR
 	    for (t = s; *t == ' ' || *t == '\t'; t++) ;
+#else
+	    for (t = s; *t == ' ' || *t == '\t' || *t == '\r'; t++) ;
+#endif
 	    if (*t == '\n' || *t == '#') {
 		s--;
 		PL_expect = XBLOCK;
@@ -2567,7 +2588,8 @@ yylex(void)
 		    for (t++; isSPACE(*t); t++) ;
 		    if (isIDFIRST(*t)) {
 			t = scan_word(t, tmpbuf, sizeof tmpbuf, TRUE, &len);
-			if (*t != '(' && perl_get_cv(tmpbuf, FALSE))
+		        for (; isSPACE(*t); t++) ;
+			if (*t == ';' && perl_get_cv(tmpbuf, FALSE))
 			    warn("You need to quote \"%s\"", tmpbuf);
 		    }
 		}
@@ -2613,9 +2635,9 @@ yylex(void)
 		PL_expect = XTERM;		/* e.g. print $fh 3 */
 	    else if (*s == '.' && isDIGIT(s[1]))
 		PL_expect = XTERM;		/* e.g. print $fh .3 */
-	    else if (strchr("/?-+", *s) && !isSPACE(s[1]))
+	    else if (strchr("/?-+", *s) && !isSPACE(s[1]) && s[1] != '=')
 		PL_expect = XTERM;		/* e.g. print $fh -1 */
-	    else if (*s == '<' && s[1] == '<' && !isSPACE(s[2]))
+	    else if (*s == '<' && s[1] == '<' && !isSPACE(s[2]) && s[2] != '=')
 		PL_expect = XTERM;		/* print $fh <<"EOF" */
 	}
 	PL_pending_ident = '$';
@@ -2672,8 +2694,14 @@ yylex(void)
 	OPERATOR(tmp);
 
     case '.':
-	if (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack && s[1] == '\n' &&
-		(s == PL_linestart || s[-1] == '\n') ) {
+	if (PL_lex_formbrack && PL_lex_brackets == PL_lex_formbrack
+#ifdef PERL_STRICT_CR
+	    && s[1] == '\n'
+#else
+	    && (s[1] == '\n' || (s[1] == '\r' && s[2] == '\n'))
+#endif
+	    && (s == PL_linestart || s[-1] == '\n') )
+	{
 	    PL_lex_formbrack = 0;
 	    PL_expect = XSTATE;
 	    goto rightbracket;
@@ -2868,7 +2896,8 @@ yylex(void)
 		tmp = -tmp;
 		gv = Nullgv;
 		gvp = 0;
-		if (PL_dowarn && hgv)
+		if (PL_dowarn && hgv
+		    && tmp != KEY_x && tmp != KEY_CORE) /* never ambiguous */
 		    warn("Ambiguous call resolved as CORE::%s(), %s",
 			 GvENAME(hgv), "qualify as such or use &");
 	    }
@@ -2985,8 +3014,11 @@ yylex(void)
 		if (*s == '(') {
 		    CLINE;
 		    if (gv && GvCVu(gv)) {
+			CV *cv;
+			if ((cv = GvCV(gv)) && SvPOK(cv))
+			    PL_last_proto = SvPV((SV*)cv, PL_na);
 			for (d = s + 1; *d == ' ' || *d == '\t'; d++) ;
-			if (*d == ')' && (sv = cv_const_sv(GvCV(gv)))) {
+			if (*d == ')' && (sv = cv_const_sv(cv))) {
 			    s = d + 1;
 			    goto its_constant;
 			}
@@ -2995,6 +3027,7 @@ yylex(void)
 		    PL_expect = XOPERATOR;
 		    force_next(WORD);
 		    yylval.ival = 0;
+		    PL_last_lop_op = OP_ENTERSUB;
 		    TOKEN('&');
 		}
 
@@ -3033,6 +3066,7 @@ yylex(void)
 		    /* Resolve to GV now. */
 		    op_free(yylval.opval);
 		    yylval.opval = newCVREF(0, newGVOP(OP_GV, 0, gv));
+		    PL_last_lop_op = OP_ENTERSUB;
 		    /* Is there a prototype? */
 		    if (SvPOK(cv)) {
 			STRLEN len;
@@ -3059,7 +3093,10 @@ yylex(void)
 		    PL_last_lop_op != OP_TRUNCATE &&  /* S/F prototype in opcode.pl */
 		    PL_last_lop_op != OP_ACCEPT &&
 		    PL_last_lop_op != OP_PIPE_OP &&
-		    PL_last_lop_op != OP_SOCKPAIR)
+		    PL_last_lop_op != OP_SOCKPAIR &&
+		    !(PL_last_lop_op == OP_ENTERSUB 
+			 && PL_last_proto 
+			 && PL_last_proto[PL_last_proto[0] == ';' ? 1 : 0] == '*'))
 		{
 		    warn(
 		     "Bareword \"%s\" not allowed while \"strict subs\" in use",
@@ -5887,8 +5924,12 @@ scan_formline(register char *s)
     while (!needargs) {
 	if (*s == '.' || *s == '}') {
 	    /*SUPPRESS 530*/
-	    for (t = s+1; *t == ' ' || *t == '\t'; t++) ;
-	    if (*t == '\n')
+#ifdef PERL_STRICT_CR
+	    for (t = s+1;*t == ' ' || *t == '\t'; t++) ;
+#else
+	    for (t = s+1;*t == ' ' || *t == '\t' || *t == '\r'; t++) ;
+#endif
+	    if (*t == '\n' || t == PL_bufend)
 		break;
 	}
 	if (PL_in_eval && !PL_rsfp) {

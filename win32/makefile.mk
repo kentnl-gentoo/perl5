@@ -10,6 +10,10 @@
 #
 
 ##
+## Make sure you read README.win32 *before* you mess with anything here!
+##
+
+##
 ## Build configuration.  Edit the values below to suit your needs.
 ##
 
@@ -29,12 +33,17 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.00502
+INST_VER	*= \5.00503
 
 #
 # uncomment to enable threads-capabilities
 #
 #USE_THREADS	*= define
+
+#
+# uncomment to enable multiple interpreters
+#
+#USE_MULTI	*= define
 
 #
 # uncomment one
@@ -55,6 +64,18 @@ CCTYPE		*= BORLAND
 # uncomment next line if you want debug version of perl (big,slow)
 #
 #CFG		*= Debug
+
+#
+# uncomment next option if you want to use the VC++ compiler optimization.
+# This option is only relevant for the Microsoft compiler; we automatically
+# use maximum optimization with the other compilers (unless you specify a
+# DEBUGGING build).
+# Warning: This is known to produce incorrect code for compiler versions
+# earlier than VC++ 98 (Visual Studio 6.0). VC++ 98 generates code that
+# successfully passes the Perl regression test suite. It hasn't yet been
+# widely tested with real applications though.
+#
+#CFG		*= Optimize
 
 #
 # uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
@@ -99,6 +120,9 @@ CCTYPE		*= BORLAND
 
 #
 # set the install locations of the compiler include/libraries
+# Running VCVARS32.BAT is *required* when using Visual C.
+# Some versions of Visual C don't define MSVCDIR in the environment,
+# so you may have to set CCHOME explicitly.
 #
 #CCHOME		*= f:\msdev\vc
 CCHOME		*= C:\bc5
@@ -138,14 +162,16 @@ CRYPT_FLAG	= -DHAVE_DES_FCRYPT
 
 .IF "$(OBJECT)" != ""
 PERL_MALLOC	!= undef
+USE_THREADS	!= undef
+USE_MULTI	!= undef
 .ENDIF
 
 PERL_MALLOC	*= undef
 
 USE_THREADS	*= undef
+USE_MULTI	*= undef
 
-#BUILDOPT	*= -DMULTIPLICITY 
-#BUILDOPT	*= -DPERL_GLOBAL_STRUCT -DMULTIPLICITY 
+#BUILDOPT	*= -DPERL_GLOBAL_STRUCT
 # -DUSE_PERLIO -D__STDC__=1 -DUSE_SFIO -DI_SFIO -I\sfio97\include
 
 .IMPORT .IGNORE : PROCESSOR_ARCHITECTURE
@@ -199,7 +225,7 @@ OPTIMIZE	= -O2 $(RUNTIME)
 LINK_DBG	= 
 .ENDIF
 
-CFLAGS		= -w -d -tWM -tWD $(INCLUDES) $(DEFINES) $(LOCDEFS) \
+CFLAGS		= -w -g0 -tWM -tWD $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
 LINK_FLAGS	= $(LINK_DBG) -L$(CCLIBDIR) $(EXTRALIBDIRS:^"-L")
 OBJOUT_FLAG	= -o
@@ -290,8 +316,8 @@ OPTIMIZE	= -Od $(RUNTIME)d -Zi -D_DEBUG -DDEBUGGING
 .ENDIF
 LINK_DBG	= -debug -pdb:none
 .ELSE
-.IF "$(CCTYPE)" == "MSVC20"
-OPTIMIZE	= -Od $(RUNTIME) -DNDEBUG
+.IF "$(CFG)" == "Optimize"
+OPTIMIZE	= -O2 $(RUNTIME) -DNDEBUG
 .ELSE
 OPTIMIZE	= -Od $(RUNTIME) -DNDEBUG
 .ENDIF
@@ -676,6 +702,7 @@ CFG_VARS	=					\
 		"dynamic_ext=$(DYNAMIC_EXT)"		\
 		"nonxs_ext=$(NONXS_EXT)"		\
 		"usethreads=$(USE_THREADS)"		\
+		"usemultiplicity=$(USE_MULTI)"		\
 		"LINK_FLAGS=$(LINK_FLAGS)"		\
 		"optimize=$(OPTIMIZE)"
 
@@ -1008,7 +1035,8 @@ distclean: clean
 	-rmdir /s /q $(LIBDIR)\Data || rmdir /s $(LIBDIR)\Data
 	-del /f $(PODDIR)\*.html
 	-del /f $(PODDIR)\*.bat
-	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc pstruct *.bat
+	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc \
+	    pstruct *.bat
 	-cd ..\x2p && del /f find2perl s2p *.bat
 	-del /f ..\config.sh ..\splittree.pl perlmain.c dlutils.c config.h.new
 	-del /f $(CONFIGPM)
@@ -1016,7 +1044,8 @@ distclean: clean
 	-del /f perl95.c
 .ENDIF
 	-del /f bin\*.bat
-	-cd $(EXTDIR) && del /s *$(a) *.def *.map *.bs Makefile *$(o) pm_to_blib
+	-cd $(EXTDIR) && del /s *$(a) *.def *.map *.pdb *.bs Makefile *$(o) \
+	    pm_to_blib
 	-rmdir /s /q $(AUTODIR) || rmdir /s $(AUTODIR)
 	-rmdir /s /q $(COREDIR) || rmdir /s $(COREDIR)
 

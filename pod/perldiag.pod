@@ -33,11 +33,11 @@ The symbols C<"%(-?@> sort before the letters, while C<[> and C<\> sort after.
 to try to declare one with a package qualifier on the front.  Use local()
 if you want to localize a package variable.
 
-=item "my" variable %s masks earlier declaration in same scope
+=item "my" variable %s masks earlier declaration in same %s
 
-(W) A lexical variable has been redeclared in the same scope, effectively
-eliminating all access to the previous instance.  This is almost always
-a typographical error.  Note that the earlier variable will still exist
+(W) A lexical variable has been redeclared in the current scope or statement,
+effectively eliminating all access to the previous instance.  This is almost
+always a typographical error.  Note that the earlier variable will still exist
 until the end of the scope or until all closure referents to it are
 destroyed.
 
@@ -1002,6 +1002,14 @@ for information on I<Mastering Regular Expressions>.)
 (W) You tried to do a connect on a closed socket.  Did you forget to check
 the return value of your socket() call?  See L<perlfunc/connect>.
 
+=item Constant is not %s reference
+
+(F) A constant value (perhaps declared using the C<use constant> pragma)
+is being dereferenced, but it amounts to the wrong type of reference.  The
+message indicates the type of reference that was expected. This usually
+indicates a syntax error in dereferencing the constant value.
+See L<perlsub/"Constant Functions"> and L<constant>.
+
 =item Constant subroutine %s redefined
 
 (S) You redefined a subroutine which had previously been eligible for
@@ -1413,16 +1421,19 @@ and execute the specified command.
 
 (P) Something went badly wrong in the regular expression parser.
 
-=item internal error: glob failed
+=item =item glob failed (%s)
 
-(P) Something went wrong with the external program(s) used for C<glob>
-and C<E<lt>*.cE<gt>>.  This may mean that your csh (C shell) is
-broken.  If so, you should change all of the csh-related variables in
-config.sh:  If you have tcsh, make the variables refer to it as if it
-were csh (e.g. C<full_csh='/usr/bin/tcsh'>); otherwise, make them all
-empty (except that C<d_csh> should be C<'undef'>) so that Perl will
-think csh is missing.  In either case, after editing config.sh, run
-C<./Configure -S> and rebuild Perl.
+(W) Something went wrong with the external program(s) used for C<glob>
+and C<E<lt>*.cE<gt>>.  Usually, this means that you supplied a C<glob>
+pattern that caused the external program to fail and exit with a nonzero
+status.  If the message indicates that the abnormal exit resulted in a
+coredump, this may also mean that your csh (C shell) is broken.  If so,
+you should change all of the csh-related variables in config.sh:  If you
+have tcsh, make the variables refer to it as if it were csh (e.g.
+C<full_csh='/usr/bin/tcsh'>); otherwise, make them all empty (except that
+C<d_csh> should be C<'undef'>) so that Perl will think csh is missing.
+In either case, after editing config.sh, run C<./Configure -S> and
+rebuild Perl.
 
 =item internal urp in regexp at /%s/
 
@@ -2404,6 +2415,14 @@ This is almost always an error, because exec() never returns unless
 there was a failure.  You probably wanted to use system() instead,
 which does return.  To suppress this warning, put the exec() in a block
 by itself.
+
+=item Strange *+?{} on zero-length expression
+
+(W) You applied a regular expression quantifier in a place where it
+makes no sense, such as on a zero-width assertion.
+Try putting the quantifier inside the assertion instead.  For example,
+the way to match "abc" provided that it is followed by three
+repetitions of "xyz" is C</abc(?=(?:xyz){3})/>, not C</abc(?=xyz){3}/>.
 
 =item Stub found while resolving method `%s' overloading `%s' in package `%s'
 

@@ -122,9 +122,10 @@ gv_init(GV *gv, HV *stash, char *name, STRLEN len, int multi)
 	CvSTASH(GvCV(gv)) = PL_curstash;
 #ifdef USE_THREADS
 	CvOWNER(GvCV(gv)) = 0;
-	if (!CvMUTEXP(GvCV(gv)))
+	if (!CvMUTEXP(GvCV(gv))) {
 	    New(666, CvMUTEXP(GvCV(gv)), 1, perl_mutex);
-	MUTEX_INIT(CvMUTEXP(GvCV(gv)));
+	    MUTEX_INIT(CvMUTEXP(GvCV(gv)));
+	}
 #endif /* USE_THREADS */
 	if (proto) {
 	    sv_setpv((SV*)GvCV(gv), proto);
@@ -850,7 +851,8 @@ newIO(void)
     SvREFCNT(io) = 1;
     SvOBJECT_on(io);
     iogv = gv_fetchpv("FileHandle::", FALSE, SVt_PVHV);
-    if (!iogv)
+    /* unless exists($main::{FileHandle}) and defined(%main::FileHandle::) */
+    if (!(iogv && GvHV(iogv) && HvARRAY(GvHV(iogv))))
       iogv = gv_fetchpv("IO::Handle::", TRUE, SVt_PVHV);
     SvSTASH(io) = (HV*)SvREFCNT_inc(GvHV(iogv));
     return io;

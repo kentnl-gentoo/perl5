@@ -641,65 +641,53 @@ perl_init_i18nl10n(int printwarn)
 	else
 	    setlocale_failure = TRUE;
     }
-    if (!setlocale_failure)
-#endif /* LC_ALL */
-    {
+    if (!setlocale_failure) {
 #ifdef USE_LOCALE_CTYPE
-	if (! (curctype = setlocale(LC_CTYPE,
-				    (!done && (lang || PerlEnv_getenv("LC_CTYPE")))
+	if (! (curctype =
+	       setlocale(LC_CTYPE,
+			 (!done && (lang || PerlEnv_getenv("LC_CTYPE")))
 				    ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_CTYPE */
 #ifdef USE_LOCALE_COLLATE
-	if (! (curcoll = setlocale(LC_COLLATE,
-				   (!done && (lang || PerlEnv_getenv("LC_COLLATE")))
+	if (! (curcoll =
+	       setlocale(LC_COLLATE,
+			 (!done && (lang || PerlEnv_getenv("LC_COLLATE")))
 				   ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_COLLATE */
 #ifdef USE_LOCALE_NUMERIC
-	if (! (curnum = setlocale(LC_NUMERIC,
-				  (!done && (lang || PerlEnv_getenv("LC_NUMERIC")))
+	if (! (curnum =
+	       setlocale(LC_NUMERIC,
+			 (!done && (lang || PerlEnv_getenv("LC_NUMERIC")))
 				  ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_NUMERIC */
     }
 
-#else /* !LOCALE_ENVIRON_REQUIRED */
-
-#ifdef LC_ALL
-
-    if (! setlocale(LC_ALL, ""))
-	setlocale_failure = TRUE;
-    else {
-#ifdef USE_LOCALE_CTYPE
-	curctype = setlocale(LC_CTYPE, Nullch);
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-	curcoll = setlocale(LC_COLLATE, Nullch);
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-	curnum = setlocale(LC_NUMERIC, Nullch);
-#endif /* USE_LOCALE_NUMERIC */
-    }
-
-#else /* !LC_ALL */
-
-#ifdef USE_LOCALE_CTYPE
-    if (! (curctype = setlocale(LC_CTYPE, "")))
-	setlocale_failure = TRUE;
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-    if (! (curcoll = setlocale(LC_COLLATE, "")))
-	setlocale_failure = TRUE;
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-    if (! (curnum = setlocale(LC_NUMERIC, "")))
-	setlocale_failure = TRUE;
-#endif /* USE_LOCALE_NUMERIC */
-
 #endif /* LC_ALL */
 
 #endif /* !LOCALE_ENVIRON_REQUIRED */
+
+#ifdef LC_ALL
+    if (! setlocale(LC_ALL, ""))
+	setlocale_failure = TRUE;
+#endif /* LC_ALL */
+
+    if (!setlocale_failure) {
+#ifdef USE_LOCALE_CTYPE
+	if (! (curctype = setlocale(LC_CTYPE, "")))
+	    setlocale_failure = TRUE;
+#endif /* USE_LOCALE_CTYPE */
+#ifdef USE_LOCALE_COLLATE
+	if (! (curcoll = setlocale(LC_COLLATE, "")))
+	    setlocale_failure = TRUE;
+#endif /* USE_LOCALE_COLLATE */
+#ifdef USE_LOCALE_NUMERIC
+	if (! (curnum = setlocale(LC_NUMERIC, "")))
+	    setlocale_failure = TRUE;
+#endif /* USE_LOCALE_NUMERIC */
+    }
 
     if (setlocale_failure) {
 	char *p;
@@ -897,14 +885,15 @@ mem_collxfrm(const char *s, STRLEN len, STRLEN *xlen)
 void
 fbm_compile(SV *sv, U32 flags /* not used yet */)
 {
-    register unsigned char *s;
-    register unsigned char *table;
+    register U8 *s;
+    register U8 *table;
     register U32 i;
-    register U32 len = SvCUR(sv);
+    STRLEN len;
     I32 rarest = 0;
     U32 frequency = 256;
 
-    sv_upgrade(sv, SVt_PVBM);
+    s = (U8*)SvPV_force(sv, len);
+    (void)SvUPGRADE(sv, SVt_PVBM);
     if (len > 255 || len == 0)	/* TAIL might be on on a zero-length string. */
 	return;			/* can't have offsets that big */
     if (len > 2) {
@@ -2354,18 +2343,26 @@ scan_hex(char *start, I32 len, I32 *retlen)
     register UV retval = 0;
     bool overflowed = FALSE;
     char *tmp = s;
+    register UV n;
 
-    while (len-- && *s && (tmp = strchr((char *) PL_hexdigit, *s))) {
-	register UV n = retval << 4;
+    while (len-- && *s) {
+	tmp = strchr((char *) PL_hexdigit, *s++);
+	if (!tmp) {
+	    if (*(s-1) == '_' || (*(s-1) == 'x' && retval == 0))
+		continue;
+	    else {
+		--s;
+		if (PL_dowarn)
+		    warn("Illegal hex digit ignored");
+		break;
+	    }
+	}
+	n = retval << 4;
 	if (!overflowed && (n >> 4) != retval) {
 	    warn("Integer overflow in hex number");
 	    overflowed = TRUE;
 	}
 	retval = n | ((tmp - PL_hexdigit) & 15);
-	s++;
-    }
-    if (PL_dowarn && !tmp) {
-	warn("Illegal hex digit ignored");
     }
     *retlen = s - start;
     return retval;
@@ -2469,7 +2466,8 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
 #endif
 	    DEBUG_p(PerlIO_printf(Perl_debug_log,
 				  "Looking for %s\n",cur));
-	    if (PerlLIO_stat(cur,&PL_statbuf) >= 0) {
+	    if (PerlLIO_stat(cur,&PL_statbuf) >= 0
+		&& !S_ISDIR(PL_statbuf.st_mode)) {
 		dosearch = 0;
 		scriptname = cur;
 #ifdef SEARCH_EXTS
@@ -2538,6 +2536,9 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
 #endif
 	    	DEBUG_p(PerlIO_printf(Perl_debug_log, "Looking for %s\n",tmpbuf));
 		retval = PerlLIO_stat(tmpbuf,&PL_statbuf);
+		if (S_ISDIR(PL_statbuf.st_mode)) {
+		    retval = -1;
+		}
 #ifdef SEARCH_EXTS
 	    } while (  retval < 0		/* not there */
 		    && extidx>=0 && ext[extidx]	/* try an extension? */
@@ -2560,7 +2561,9 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
 		xfailed = savepv(tmpbuf);
 	}
 #ifndef DOSISH
-	if (!xfound && !seen_dot && !xfailed && (PerlLIO_stat(scriptname,&PL_statbuf) < 0))
+	if (!xfound && !seen_dot && !xfailed &&
+	    (PerlLIO_stat(scriptname,&PL_statbuf) < 0 
+	     || S_ISDIR(PL_statbuf.st_mode)))
 #endif
 	    seen_dot = 1;			/* Disable message. */
 	if (!xfound) {
@@ -2729,7 +2732,7 @@ new_struct_thread(struct perl_thread *t)
     SvGROW(sv, sizeof(struct perl_thread) + 1);
     SvCUR_set(sv, sizeof(struct perl_thread));
     thr = (Thread) SvPVX(sv);
-    /* debug */
+#ifdef DEBUGGING
     memset(thr, 0xab, sizeof(struct perl_thread));
     PL_markstack = 0;
     PL_scopestack = 0;
@@ -2737,7 +2740,10 @@ new_struct_thread(struct perl_thread *t)
     PL_retstack = 0;
     PL_dirty = 0;
     PL_localizing = 0;
-    /* end debug */
+    Zero(&PL_hv_fetch_ent_mh, 1, HE);
+#else
+    Zero(thr, 1, struct perl_thread);
+#endif
 
     thr->oursv = sv;
     init_stacks(ARGS);
@@ -2877,3 +2883,98 @@ get_specialsv_list(void)
 {
  return PL_specialsv_list;
 }
+
+
+MGVTBL*
+get_vtbl(int vtbl_id)
+{
+    MGVTBL* result = Null(MGVTBL*);
+
+    switch(vtbl_id) {
+    case want_vtbl_sv:
+	result = &vtbl_sv;
+	break;
+    case want_vtbl_env:
+	result = &vtbl_env;
+	break;
+    case want_vtbl_envelem:
+	result = &vtbl_envelem;
+	break;
+    case want_vtbl_sig:
+	result = &vtbl_sig;
+	break;
+    case want_vtbl_sigelem:
+	result = &vtbl_sigelem;
+	break;
+    case want_vtbl_pack:
+	result = &vtbl_pack;
+	break;
+    case want_vtbl_packelem:
+	result = &vtbl_packelem;
+	break;
+    case want_vtbl_dbline:
+	result = &vtbl_dbline;
+	break;
+    case want_vtbl_isa:
+	result = &vtbl_isa;
+	break;
+    case want_vtbl_isaelem:
+	result = &vtbl_isaelem;
+	break;
+    case want_vtbl_arylen:
+	result = &vtbl_arylen;
+	break;
+    case want_vtbl_glob:
+	result = &vtbl_glob;
+	break;
+    case want_vtbl_mglob:
+	result = &vtbl_mglob;
+	break;
+    case want_vtbl_nkeys:
+	result = &vtbl_nkeys;
+	break;
+    case want_vtbl_taint:
+	result = &vtbl_taint;
+	break;
+    case want_vtbl_substr:
+	result = &vtbl_substr;
+	break;
+    case want_vtbl_vec:
+	result = &vtbl_vec;
+	break;
+    case want_vtbl_pos:
+	result = &vtbl_pos;
+	break;
+    case want_vtbl_bm:
+	result = &vtbl_bm;
+	break;
+    case want_vtbl_fm:
+	result = &vtbl_fm;
+	break;
+    case want_vtbl_uvar:
+	result = &vtbl_uvar;
+	break;
+#ifdef USE_THREADS
+    case want_vtbl_mutex:
+	result = &vtbl_mutex;
+	break;
+#endif
+    case want_vtbl_defelem:
+	result = &vtbl_defelem;
+	break;
+    case want_vtbl_regexp:
+	result = &vtbl_regexp;
+	break;
+    case want_vtbl_collxfrm:
+	result = &vtbl_collxfrm;
+	break;
+    case want_vtbl_amagic:
+	result = &vtbl_amagic;
+	break;
+    case want_vtbl_amagicelem:
+	result = &vtbl_amagicelem;
+	break;
+    }
+    return result;
+}
+
