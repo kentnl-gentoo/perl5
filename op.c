@@ -169,7 +169,7 @@ char *name;
 
 static PADOFFSET
 #ifndef CAN_PROTOTYPE
-pad_findlex(name, newoff, seq, startcv, cx_ix)
+pad_findlex(name, newoff, seq, startcv, cx_ix, saweval)
 char *name;
 PADOFFSET newoff;
 U32 seq;
@@ -2285,6 +2285,7 @@ OP *o;
 	sv_setpv(curstname,"<none>");
 	curstash = Nullhv;
     }
+    hints |= HINT_BLOCK_SCOPE;
     copline = NOLINE;
     expect = XSTATE;
 }
