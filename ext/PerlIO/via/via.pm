@@ -1,35 +1,63 @@
-package PerlIO::Via;
+package PerlIO::via;
 our $VERSION = '0.01';
 use XSLoader ();
-XSLoader::load 'PerlIO::Via';
+XSLoader::load 'PerlIO::via';
 1;
 __END__
 
 =head1 NAME
 
-PerlIO::Via - Helper class for PerlIO layers implemented in perl
+PerlIO::via - Helper class for PerlIO layers implemented in perl
 
 =head1 SYNOPSIS
 
-   use Some::Package;
+   use PerlIO::via::Layer;
+   open($fh,"<:via(Layer)",...);
 
-   open($fh,"<:Via(Some::Package)",...);
+   use Some::Other::Package;
+   open($fh,">:via(Some::Other::Package)",...);
 
 =head1 DESCRIPTION
 
-The package to be used as a layer should implement at least some of the
-following methods. In the method descriptions below I<$fh> will be
+The PerlIO::via module allows you to develop PerlIO layers in Perl, without
+having to go into the nitty gritty of programming C with XS as the interface
+to Perl.
+
+One example module, L<PerlIO::via::QuotedPrint>, is included with Perl
+5.8.0, and more example modules are available from CPAN, such as
+L<PerlIO::via::StripHTML> and L<PerlIO::via::Base64>.  The
+PerlIO::via::StripHTML module for instance, allows you to say:
+
+	use PerlIO::via::StripHTML;
+	open( my $fh, "<:via(StripHTML)", "index.html" );
+        my @line = <$fh>;
+
+to obtain the text of an HTML-file in an array with all the HTML-tags
+automagically removed.
+
+Please note that if the layer is created in the PerlIO::via:: namespace, it
+does B<not> have to be fully qualified.  The PerlIO::via module will prefix
+the PerlIO::via:: namespace if the specified modulename does not exist as a
+fully qualified module name.
+
+=head1 EXPECTED METHODS
+
+To create a Perl module that implements a PerlIO layer in Perl (as opposed to
+in C using XS as the interface to Perl), you need to supply some of the
+following subroutines.  It is recommended to create these Perl modules in the
+PerlIO::via:: namespace, so that they can easily be located on CPAN and use
+the default namespace feature of the PerlIO::via module itself.
+
+Please note that this is an area of recent development in Perl and that the
+interface described here is therefore still subject to change (and hopefully
+will have better documentation and more examples).
+
+In the method descriptions below I<$fh> will be
 a reference to a glob which can be treated as a perl file handle.
 It refers to the layer below. I<$fh> is not passed if the layer
 is at the bottom of the stack, for this reason and to maintain
 some level of "compatibility" with TIEHANDLE classes it is passed last.
-
-As an example, in Perl release 5.8.0 the included MIME::QuotedPrint
-module defines the required TIEHANDLE methods so that you can say
-
-	use MIME::QuotedPrint;
-	open(my $fh, ">Via(MIME::QuotedPrint)", "qp");
-
+  
 =over 4
 
 =item $class->PUSHED([$mode[,$fh]])
@@ -38,13 +66,20 @@ Should return an object or the class, or -1 on failure.  (Compare
 TIEHANDLE.)  The arguments are an optional mode string ("r", "w",
 "w+", ...) and a filehandle for the PerlIO layer below.  Mandatory.
 
+When layer is pushed as part of an C<open> call, C<PUSHED> will be called 
+I<before> the actual open occurs whether than be via C<OPEN>, C<SYSOPEN>,
+C<FDOPEN> or by letting lower layer do the open. 
+
 =item $obj->POPPED([$fh])
 
 Optional - layer is about to be removed.
 
-=item $class->OPEN($path,$mode[,$fh])
+=item $obj->OPEN($path,$mode[,$fh])
 
-Not yet in use.
+Optional - if not present lower layer does open.
+If present called for normal opens after layer is pushed.
+This function is subject to change as there is no easy way 
+to get lower layer to do open and then regain control.
 
 =item $obj->BINMODE([,$fh])
 
@@ -52,13 +87,21 @@ Optional - if not available layer is popped on binmode($fh) or when C<:raw>
 is pushed. If present it should return 0 on success -1 on error and undef
 to pop the layer.
 
-=item $class->FDOPEN($fd)
+=item $obj->FDOPEN($fd[,$fh])
 
-Not yet in use.
+Optional - if not present lower layer does open.
+If present called for opens which pass a numeric file 
+descriptor after layer is pushed. 
+This function is subject to change as there is no easy way 
+to get lower layer to do open and then regain control.
 
-=item $class->SYSOPEN($path,$imode,$perm,$fh)
+=item $obj->SYSOPEN($path,$imode,$perm,[,$fh])
 
-Not yet in use.
+Optional - if not present lower layer does open.
+If present called for sysopen style opens which pass a numeric mode 
+and permissions after layer is pushed.
+This function is subject to change as there is no easy way 
+to get lower layer to do open and then regain control.
 
 =item $obj->FILENO($fh)
 
@@ -127,11 +170,17 @@ value of FILL or READ.
 
 =back
 
+=head1 EXAMPLES
+
+Check the PerlIO::via:: namespace on CPAN for examples of PerlIO layers
+implemented in Perl.  To give you an idea how simple the implementation of
+a PerlIO layer can look, as simple example is included here.
+
 =head2 Example - a Hexadecimal Handle
 
-Given the following module, Hex.pm:
+Given the following module, PerlIO::via::Hex :
 
-    package Hex;
+    package PerlIO::via::Hex;
 
     sub PUSHED
     {
@@ -170,14 +219,12 @@ output to hexadecimal dump of the output bytes: for example "A" will
 be converted to "41" (on ASCII-based machines, on EBCDIC platforms
 the "A" will become "c1")
 
-    use Hex;
-    open(my $fh, ">:Via(Hex)", "foo.hex");
+    use PerlIO::via::Hex;
+    open(my $fh, ">:via(Hex)", "foo.hex");
 
 and the following code will read the hexdump in and convert it
 on the fly back into bytes:
 
-    open(my $fh, "<:Via(Hex)", "foo.hex");
+    open(my $fh, "<:via(Hex)", "foo.hex");
 
 =cut
-
-
