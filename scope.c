@@ -25,18 +25,28 @@ stack_grow(SV **sp, SV **p, int n)
       abort();
 #endif
     stack_sp = sp;
+#ifndef STRESS_REALLOC
     av_extend(curstack, (p - stack_base) + (n) + 128);
+#else
+    av_extend(curstack, (p - stack_base) + (n) + 1);
+#endif
 #if defined(DEBUGGING) && !defined(USE_THREADS)
     growing--;
 #endif
     return stack_sp;
 }
 
+#ifndef STRESS_REALLOC
+#define GROW(old) ((old) * 3 / 2)
+#else
+#define GROW(old) ((old) + 1)
+#endif
+
 I32
 cxinc(void)
 {
     dTHR;
-    cxstack_max = cxstack_max * 3 / 2;
+    cxstack_max = GROW(cxstack_max);
     Renew(cxstack, cxstack_max + 1, PERL_CONTEXT);	/* XXX should fix CXINC macro */
     return cxstack_ix + 1;
 }
@@ -46,7 +56,7 @@ push_return(OP *retop)
 {
     dTHR;
     if (retstack_ix == retstack_max) {
-	retstack_max = retstack_max * 3 / 2;
+	retstack_max = GROW(retstack_max);
 	Renew(retstack, retstack_max, OP*);
     }
     retstack[retstack_ix++] = retop;
@@ -67,7 +77,7 @@ push_scope(void)
 {
     dTHR;
     if (scopestack_ix == scopestack_max) {
-	scopestack_max = scopestack_max * 3 / 2;
+	scopestack_max = GROW(scopestack_max);
 	Renew(scopestack, scopestack_max, I32);
     }
     scopestack[scopestack_ix++] = savestack_ix;
@@ -87,7 +97,7 @@ markstack_grow(void)
 {
     dTHR;
     I32 oldmax = markstack_max - markstack;
-    I32 newmax = oldmax * 3 / 2;
+    I32 newmax = GROW(oldmax);
 
     Renew(markstack, newmax, I32);
     markstack_ptr = markstack + oldmax;
@@ -98,9 +108,11 @@ void
 savestack_grow(void)
 {
     dTHR;
-    savestack_max = savestack_max * 3 / 2;
+    savestack_max = GROW(savestack_max) + 4; 
     Renew(savestack, savestack_max, ANY);
 }
+
+#undef GROW
 
 void
 free_tmps(void)
@@ -155,11 +167,12 @@ SV *
 save_scalar(GV *gv)
 {
     dTHR;
+    SV **sptr = &GvSV(gv);
     SSCHECK(3);
-    SSPUSHPTR(gv);
-    SSPUSHPTR(GvSV(gv));
+    SSPUSHPTR(SvREFCNT_inc(gv));
+    SSPUSHPTR(SvREFCNT_inc(*sptr));
     SSPUSHINT(SAVEt_SV);
-    return save_scalar_at(&GvSV(gv));
+    return save_scalar_at(sptr);
 }
 
 SV*
@@ -168,7 +181,7 @@ save_svref(SV **sptr)
     dTHR;
     SSCHECK(3);
     SSPUSHPTR(sptr);
-    SSPUSHPTR(*sptr);
+    SSPUSHPTR(SvREFCNT_inc(*sptr));
     SSPUSHINT(SAVEt_SVREF);
     return save_scalar_at(sptr);
 }
@@ -428,32 +441,8 @@ save_delete(HV *hv, char *key, I32 klen)
     SSCHECK(4);
     SSPUSHINT(klen);
     SSPUSHPTR(key);
-    SSPUSHPTR(hv);
+    SSPUSHPTR(SvREFCNT_inc(hv));
     SSPUSHINT(SAVEt_DELETE);
-}
-
-void
-save_aelem(AV *av, I32 idx, SV **sptr)
-{
-    dTHR;
-    SSCHECK(4);
-    SSPUSHPTR(av);
-    SSPUSHINT(idx);
-    SSPUSHPTR(*sptr);
-    SSPUSHINT(SAVEt_AELEM);
-    save_scalar_at(sptr);
-}
-
-void
-save_helem(HV *hv, SV *key, SV **sptr)
-{
-    dTHR;
-    SSCHECK(4);
-    SSPUSHPTR(hv);
-    SSPUSHPTR(key);
-    SSPUSHPTR(*sptr);
-    SSPUSHINT(SAVEt_HELEM);
-    save_scalar_at(sptr);
 }
 
 void
@@ -481,6 +470,30 @@ save_destructor(void (*f) (void *), void *p)
     SSPUSHDPTR(f);
     SSPUSHPTR(p);
     SSPUSHINT(SAVEt_DESTRUCTOR);
+}
+
+void
+save_aelem(AV *av, I32 idx, SV **sptr)
+{
+    dTHR;
+    SSCHECK(4);
+    SSPUSHPTR(SvREFCNT_inc(av));
+    SSPUSHINT(idx);
+    SSPUSHPTR(SvREFCNT_inc(*sptr));
+    SSPUSHINT(SAVEt_AELEM);
+    save_scalar_at(sptr);
+}
+
+void
+save_helem(HV *hv, SV *key, SV **sptr)
+{
+    dTHR;
+    SSCHECK(4);
+    SSPUSHPTR(SvREFCNT_inc(hv));
+    SSPUSHPTR(SvREFCNT_inc(key));
+    SSPUSHPTR(SvREFCNT_inc(*sptr));
+    SSPUSHINT(SAVEt_HELEM);
+    save_scalar_at(sptr);
 }
 
 void
@@ -520,6 +533,7 @@ leave_scope(I32 base)
 	    value = (SV*)SSPOPPTR;
 	    gv = (GV*)SSPOPPTR;
 	    ptr = &GvSV(gv);
+	    SvREFCNT_dec(gv);
 	    goto restore_sv;
         case SAVEt_SVREF:			/* scalar reference */
 	    value = (SV*)SSPOPPTR;
@@ -551,6 +565,7 @@ leave_scope(I32 base)
 	    localizing = 2;
 	    SvSETMAGIC(value);
 	    localizing = 0;
+	    SvREFCNT_dec(value);
             break;
         case SAVEt_AV:				/* array reference */
 	    av = (AV*)SSPOPPTR;
@@ -707,6 +722,7 @@ leave_scope(I32 base)
 	    hv = (HV*)ptr;
 	    ptr = SSPOPPTR;
 	    (void)hv_delete(hv, (char*)ptr, (U32)SSPOPINT, G_DISCARD);
+	    SvREFCNT_dec(hv);
 	    Safefree(ptr);
 	    break;
 	case SAVEt_DESTRUCTOR:
@@ -726,14 +742,38 @@ leave_scope(I32 base)
 	    i = SSPOPINT;
 	    av = (AV*)SSPOPPTR;
 	    ptr = av_fetch(av,i,1);
-	    goto restore_sv;
+	    if (ptr) {
+		sv = *(SV**)ptr;
+		if (sv && sv != &sv_undef) {
+		    if (SvRMAGICAL(av) && mg_find((SV*)av, 'P'))
+			(void)SvREFCNT_inc(sv);
+		    SvREFCNT_dec(av);
+		    goto restore_sv;
+		}
+	    }
+	    SvREFCNT_dec(av);
+	    SvREFCNT_dec(value);
+	    break;
 	case SAVEt_HELEM:		/* hash element */
 	    value = (SV*)SSPOPPTR;
 	    sv = (SV*)SSPOPPTR;
 	    hv = (HV*)SSPOPPTR;
 	    ptr = hv_fetch_ent(hv, sv, 1, 0);
-	    ptr = &HeVAL((HE*)ptr);
-	    goto restore_sv;
+	    if (ptr) {
+		SV *oval = HeVAL((HE*)ptr);
+		if (oval && oval != &sv_undef) {
+		    ptr = &HeVAL((HE*)ptr);
+		    if (SvRMAGICAL(hv) && mg_find((SV*)hv, 'P'))
+			(void)SvREFCNT_inc(*(SV**)ptr);
+		    SvREFCNT_dec(hv);
+		    SvREFCNT_dec(sv);
+		    goto restore_sv;
+		}
+	    }
+	    SvREFCNT_dec(hv);
+	    SvREFCNT_dec(sv);
+	    SvREFCNT_dec(value);
+	    break;
 	case SAVEt_OP:
 	    op = (OP*)SSPOPPTR;
 	    break;

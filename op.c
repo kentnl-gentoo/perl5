@@ -1573,7 +1573,7 @@ newPROG(OP *o)
 	    CV *cv = perl_get_cv("DB::postponed", FALSE);
 	    if (cv) {
 		dSP;
-		PUSHMARK(sp);
+		PUSHMARK(SP);
 		XPUSHs((SV*)compiling.cop_filegv);
 		PUTBACK;
 		perl_call_sv((SV*)cv, G_DISCARD);
@@ -3466,7 +3466,7 @@ newSUB(I32 floor, OP *o, OP *proto, OP *block)
 	    if (HvFILL(hv) > 0 && hv_exists(hv, SvPVX(tmpstr), SvCUR(tmpstr))
 		  && (cv = GvCV(db_postponed))) {
 		dSP;
-		PUSHMARK(sp);
+		PUSHMARK(SP);
 		XPUSHs(tmpstr);
 		PUTBACK;
 		perl_call_sv((SV*)cv, G_DISCARD);
@@ -3514,6 +3514,33 @@ newSUB(I32 floor, OP *o, OP *proto, OP *block)
     copline = NOLINE;
     LEAVE_SCOPE(floor);
     return cv;
+}
+
+void
+newCONSTSUB(HV *stash, char *name, SV *sv)
+{
+    dTHR;
+    U32 oldhints = hints;
+    HV *old_cop_stash = curcop->cop_stash;
+    HV *old_curstash = curstash;
+    line_t oldline = curcop->cop_line;
+    curcop->cop_line = copline;
+
+    hints &= ~HINT_BLOCK_SCOPE;
+    if(stash)
+	curstash = curcop->cop_stash = stash;
+
+    newSUB(
+	start_subparse(FALSE, 0),
+	newSVOP(OP_CONST, 0, newSVpv(name,0)),
+	newSVOP(OP_CONST, 0, &sv_no),	/* SvPV(&sv_no) == "" -- GMB */
+	newSTATEOP(0, Nullch, newSVOP(OP_CONST, 0, sv))
+    );
+
+    hints = oldhints;
+    curcop->cop_stash = old_cop_stash;
+    curstash = old_curstash;
+    curcop->cop_line = oldline;
 }
 
 CV *

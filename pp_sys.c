@@ -648,9 +648,9 @@ PP(pp_dbmopen)
     }
 
     ENTER;
-    PUSHMARK(sp);
+    PUSHMARK(SP);
 
-    EXTEND(sp, 5);
+    EXTEND(SP, 5);
     PUSHs(sv);
     PUSHs(left);
     if (SvIV(right))
@@ -663,8 +663,8 @@ PP(pp_dbmopen)
     SPAGAIN;
 
     if (!sv_isobject(TOPs)) {
-	sp--;
-	PUSHMARK(sp);
+	SP--;
+	PUSHMARK(SP);
 	PUSHs(sv);
 	PUSHs(left);
 	PUSHs(sv_2mortal(newSViv(O_RDONLY)));
@@ -3795,11 +3795,23 @@ PP(pp_gprotoent)
     struct protoent *pent;
 
     if (which == OP_GPBYNAME)
+#ifdef HAS_GETPROTOBYNAME
 	pent = PerlSock_getprotobyname(POPp);
+#else
+	DIE(no_sock_func, "getprotobyname");
+#endif
     else if (which == OP_GPBYNUMBER)
+#ifdef HAS_GETPROTOBYNUMBER
 	pent = PerlSock_getprotobynumber(POPi);
+#else
+    DIE(no_sock_func, "getprotobynumber");
+#endif
     else
+#ifdef HAS_GETPROTOENT
 	pent = PerlSock_getprotoent();
+#else
+	DIE(no_sock_func, "getprotoent");
+#endif
 
     EXTEND(SP, 3);
     if (GIMME != G_ARRAY) {
@@ -3834,7 +3846,7 @@ PP(pp_gprotoent)
 
 PP(pp_gsbyname)
 {
-#ifdef HAS_GETSERVICEBYNAME
+#ifdef HAS_GETSERVBYNAME
     return pp_gservent(ARGS);
 #else
     DIE(no_sock_func, "getservbyname");
@@ -3843,7 +3855,7 @@ PP(pp_gsbyname)
 
 PP(pp_gsbyport)
 {
-#ifdef HAS_GETSERVICEBYPORT
+#ifdef HAS_GETSERVBYPORT
     return pp_gservent(ARGS);
 #else
     DIE(no_sock_func, "getservbyport");
@@ -3885,7 +3897,11 @@ PP(pp_gservent)
 	sent = PerlSock_getservbyport(port, proto);
     }
     else
+#ifdef HAS_GETSERVENT
 	sent = PerlSock_getservent();
+#else
+	DIE(no_sock_func, "getservent");
+#endif
 
     EXTEND(SP, 4);
     if (GIMME != G_ARRAY) {
@@ -3978,7 +3994,7 @@ PP(pp_ehostent)
     djSP;
 #ifdef HAS_ENDHOSTENT
     endhostent();
-    EXTEND(sp,1);
+    EXTEND(SP,1);
     RETPUSHYES;
 #else
     DIE(no_sock_func, "endhostent");
@@ -3990,7 +4006,7 @@ PP(pp_enetent)
     djSP;
 #ifdef HAS_ENDNETENT
     endnetent();
-    EXTEND(sp,1);
+    EXTEND(SP,1);
     RETPUSHYES;
 #else
     DIE(no_sock_func, "endnetent");
@@ -4002,7 +4018,7 @@ PP(pp_eprotoent)
     djSP;
 #ifdef HAS_ENDPROTOENT
     endprotoent();
-    EXTEND(sp,1);
+    EXTEND(SP,1);
     RETPUSHYES;
 #else
     DIE(no_sock_func, "endprotoent");
@@ -4014,7 +4030,7 @@ PP(pp_eservent)
     djSP;
 #ifdef HAS_ENDSERVENT
     endservent();
-    EXTEND(sp,1);
+    EXTEND(SP,1);
     RETPUSHYES;
 #else
     DIE(no_sock_func, "endservent");
