@@ -46,18 +46,18 @@ been updated to 4.0.1 from 4.0.0.
 =head2 suidperl less insecure
 
 Paul Szabo has analysed and patched C<suidperl> to remove existing known
-insecurities. Currently there are no known holes in C<suidperl>, but
-previous experience shows that we cannot be confident that these were the
-last.  You may no longer invoke the set uid perl directly, so to preserve
-backwards compatibility with scripts that invoke #!/usr/bin/suidperl
-the set uid binary is now called C<setuidperl>, with C<suidperl> installed
-as a hard link to C<perl>. Both C<suidperl> and C<perl> will invoke
-C<setuidperl> automatically on a set uid script, so this change should be
-completely transparent.
+insecurities. Currently there are no known holes in C<suidperl>, but previous
+experience shows that we cannot be confident that these were the last. You may
+no longer invoke the set uid perl directly, so to preserve backwards
+compatibility with scripts that invoke #!/usr/bin/suidperl the only set uid
+binary is now C<sperl5.8.>I<n> (C<sperl5.8.4> for this release). C<suidperl>
+is installed as a hard link to C<perl>; both C<suidperl> and C<perl> will
+invoke C<sperl5.8.4> automatically the set uid binary, so this change should
+be completely transparent.
 
-For new projects the core perl team would strongly recommend that you
-use dedicated, single purpose security tools such as C<sudo> in preference
-to C<suidperl>.
+For new projects the core perl team would strongly recommend that you use
+dedicated, single purpose security tools such as C<sudo> in preference to
+C<suidperl>.
 
 =head2 format
 
@@ -178,7 +178,7 @@ Optimised C<map> in scalar context
 =head1 Utility Changes
 
 The Perl debugger (F<lib/perl5db.pl>) can now save all debugger commands for
-sourcing later, and can display the parent inheritence tree of a given class.
+sourcing later, and can display the parent inheritance tree of a given class.
 
 =head1 Installation and Configuration Improvements
 
@@ -202,7 +202,7 @@ More utf8 bugs fixed, notably in how C<chomp>, C<chop>, C<send>, and
 C<syswrite> and interact with utf8 data. Concatenation now works correctly
 when C<use bytes;> is in scope.
 
-Pragmta are now correctly propagated into (?{...}) constructions in regexps.
+Pragmata are now correctly propagated into (?{...}) constructions in regexps.
 Code such as
 
    my $x = qr{ ... (??{ $x }) ... };
