@@ -54,7 +54,7 @@ And the Keepers of the Patch Pumpkin:
     Tim Bunce           <Tim.Bunce@ig.co.uk>
     Andy Dougherty      <doughera@lafcol.lafayette.edu>
     Gurusamy Sarathy    <gsar@umich.edu>
-    Chip Salzenberg     <chip@perl.com>
+    Chip Salzenberg     <chip@pobox.com>
 
 And, of course, the Author of Perl:
 
@@ -72,6 +72,111 @@ indicator:
     	    +>	    branched (from elsewhere)
     	    !>	    merged changes (from elsewhere)
 
+
+----------------
+Version 5.005_04-tobe        Fourth maintenance release of 5.005
+----------------
+
+____________________________________________________________________________
+[ 22178] By: acme                                  on 2004/01/19  20:30:12
+        Log: Integrated the FreeBSD hints file from 5.6.2,
+             thanks to Nicholas Clark
+     Branch: maint-5.005/perl
+          !> hints/freebsd.sh
+____________________________________________________________________________
+[ 22157] By: acme                                  on 2004/01/15  17:04:55
+        Log: Integrate stat.t from blead (suggested by Abe Timmerman),
+             slightly modified
+     Branch: maint-5.005/perl
+           + t/test.pl
+           ! MANIFEST t/op/stat.t
+____________________________________________________________________________
+[ 22156] By: acme                                  on 2004/01/15  16:59:52
+        Log: Integrate the OpenBSD hints from blead
+     Branch: maint-5.005/perl
+           ! hints/openbsd.sh
+____________________________________________________________________________
+[ 22130] By: acme                                  on 2004/01/13  20:13:10
+        Log: 
+             Remove ext/DB_File/Makefile.old as spotted by Abe Timmerman
+     Branch: maint-5.005/perl
+           - ext/DB_File/Makefile.old
+____________________________________________________________________________
+[ 22065] By: acme                                  on 2004/01/05  21:33:04
+        Log: Work around bug where Linux libc's have Berekeley DB 2 in them
+             Patch by Paul Marquess <Paul.Marquess@btinternet.com>,
+             DB_File's maintainer. His description:
+             
+             The patch is to work around a problem where some versions of
+             Linux have a C library with Berkeley DB version 2 embedded in
+             it. This makes life difficult if you want to build with a
+             version of Berkeley DB other than the one embedded in
+             libc. This problem is compounded by the way Perl used to
+             *always* include the Berkeley DB library when it was being
+             built. The DB_File patches solves the latter problem, by
+             retrofitting the fix to Configure et al that was included from
+             perl 5.6 on. I think your best course of action is to just
+             apply the 5.00503 patch to the 5.00504 source. I just tried
+             applying it and it seems ok.
+     Branch: maint-5.005/perl
+           ! Configure Makefile.SH lib/ExtUtils/Embed.pm
+           ! lib/ExtUtils/Liblist.pm lib/ExtUtils/MM_Unix.pm
+____________________________________________________________________________
+[ 22062] By: acme                                  on 2004/01/05  21:11:24
+        Log: Fix locale-dependant test failures
+             From: "Marcus Holland-Moritz" <mhx-perl@gmx.net>
+             Subject: [PATCH perl-5.005xx] Locale-dependant test failures
+     Branch: maint-5.005/perl
+           ! t/lib/safe2.t t/op/mkdir.t
+__________________________________________________________________________
+[ 22060] By: acme                                  on 2004/01/05  20:50:07
+        Log: Remove test files from DB_File's MANIFEST as they are in t/ now
+     Branch: maint-5.005/perl
+           ! ext/DB_File/MANIFEST
+____________________________________________________________________________
+[ 21792] By: acme                                  on 2003/11/28  11:47:18
+        Log: Merge in DB_File-1.807 from CPAN
+             Also, alphabetically sort MANIFEST
+     Branch: maint-5.005/perl
+           + ext/DB_File/MANIFEST ext/DB_File/META.yml
+           + ext/DB_File/Makefile.old ext/DB_File/README
+           + ext/DB_File/config.in ext/DB_File/fallback.h
+           + ext/DB_File/fallback.xs ext/DB_File/hints/sco.pl
+           + ext/DB_File/patches/5.004 ext/DB_File/patches/5.004_01
+           + ext/DB_File/patches/5.004_02 ext/DB_File/patches/5.004_03
+           + ext/DB_File/patches/5.004_04 ext/DB_File/patches/5.004_05
+           + ext/DB_File/patches/5.005 ext/DB_File/patches/5.005_01
+           + ext/DB_File/patches/5.005_02 ext/DB_File/patches/5.005_03
+           + ext/DB_File/patches/5.6.0 ext/DB_File/ppport.h
+           + ext/DB_File/version.c
+           ! MANIFEST ext/DB_File/Changes ext/DB_File/DB_File.pm
+           ! ext/DB_File/DB_File.xs ext/DB_File/DB_File_BS
+           ! ext/DB_File/Makefile.PL ext/DB_File/dbinfo
+           ! ext/DB_File/hints/dynixptx.pl ext/DB_File/typemap
+           ! t/lib/db-btree.t t/lib/db-hash.t t/lib/db-recno.t
+____________________________________________________________________________
+[ 21790] By: acme                                  on 2003/11/28  08:41:42
+        Log: Subject: [PATCH perl5.005_03] low hanging fruit.  bring
+             perl5.005_03 up to compiling on a modern linux system From:
+             Richard Clamp <richardc@unixbeard.net> To:
+             perl5-porters@perl.org, Chip Salzenberg <chip@pobox.com> Date:
+             Sun, 4 May 2003 20:53:33 +0100
+             First part: Teach makedepend about ggc3's extra output that
+             needs stripping (stolen from bleadperls makedepend.SH)
+     Branch: maint-5.005/perl
+           ! makedepend.SH
+____________________________________________________________________________
+[ 17647] By: chip                                  on 2002/07/19  22:47:57
+        Log: ensure that hashes never attempt to malloc with a negative size
+             From: Hugo <hv@crypt.compulink.co.uk>
+             Subject: Re: [ID 20000421.002] Math::BigInt out of memory?
+     Branch: maint-5.005/perl
+	   ! hv.c
+____________________________________________________________________________
+[ 17646] By: chip                                  on 2002/07/19  20:15:23
+        Log: Update Changes in preparation for 5.005_04.
+     Branch: maint-5.005/perl
+	   ! Changes
 
 ----------------
 Version 5.005_03        Third maintenance release of 5.005
