@@ -36,11 +36,14 @@ print OUT <<'EOH';
 static void
 xs_init()
 {
+    dXSUB_SYS;
 EOH
 
 if (@ARGV) {
+  $names = join(' ',@ARGV);
+  $names =~ tr/"//d;  # Plan9 doesn't remove "" on command line
   # Allow for multiple names in one quoted group
-  @exts = split(/\s+/, join(' ',@ARGV));
+  @exts = split(/\s+/,$names);
 }
 
 if (@exts) {

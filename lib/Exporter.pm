@@ -91,6 +91,12 @@ sub export {
 			@imports = @exports;
 			last;
 		    }
+		    # We need a way to emulate 'use Foo ()' but still
+		    # allow an easy version check: "use Foo 1.23, ''";
+		    if (@imports == 2 and !$imports[1]) {
+			@imports = ();
+			last;
+		    }
 		} elsif ($sym !~ s/^&// || !$exports{$sym}) {
 		    warn qq["$sym" is not exported by the $pkg module];
 		    $oops++;
@@ -176,9 +182,13 @@ sub export_fail {
 sub require_version {
     my($self, $wanted) = @_;
     my $pkg = ref $self || $self;
-    my $version = ${"${pkg}::VERSION"} || "(undef)";
-    Carp::croak("$pkg $wanted required--this is only version $version")
-		if $version < $wanted;
+    my $version = ${"${pkg}::VERSION"};
+    if (!$version or $version < $wanted) {
+	$version ||= "(undef)";
+	my $file = $INC{"$pkg.pm"};
+	$file &&= " ($file)";
+	Carp::croak("$pkg $wanted required--this is only version $version$file")
+    }
     $version;
 }
 
@@ -326,9 +336,9 @@ The Exporter module supplies a default require_version method which
 checks the value of $VERSION in the exporting module.
 
 Since the default require_version method treats the $VERSION number as
-a simple numeric value it will regard version 1.10 and being lower
-than 1.9. For this reason it is strongly recommended that you use
-numbers with at least two decimal places, e.g., 1.09.
+a simple numeric value it will regard version 1.10 as lower than
+1.9. For this reason it is strongly recommended that you use numbers
+with at least two decimal places, e.g., 1.09.
 
 =head2 Managing Unknown Symbols
 
@@ -370,7 +380,7 @@ you to easily add tagged sets of symbols to @EXPORT or @EXPORT_OK:
   Exporter::export_ok_tags('bar');  # add aa, cc and dd to @EXPORT_OK
 
 Any names which are not tags are added to @EXPORT or @EXPORT_OK
-unchanged but will trigger a warning (with -w) to avoid misspelt tags
+unchanged but will trigger a warning (with C<-w>) to avoid misspelt tags
 names being silently added to @EXPORT or @EXPORT_OK. Future versions
 may make this a fatal error.
 

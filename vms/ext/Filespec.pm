@@ -12,6 +12,7 @@ VMS::Filespec - convert between VMS and Unix file specification syntax
 =head1 SYNOPSIS
 
 use VMS::Filespec;
+$fullspec = rmsexpand('[.VMS]file.specification');
 $vmsspec = vmsify('/my/Unix/file/specification');
 $unixspec = unixify('my:[VMS]file.specification');
 $path = pathify('my:[VMS.or.Unix.directory]specification.dir');
@@ -25,7 +26,7 @@ candelete('my:[VMS.or.Unix]file.specification');
 This package provides routines to simplify conversion between VMS and
 Unix syntax when processing file specifications.  This is useful when
 porting scripts designed to run under either OS, and also allows you
-to take advantage of conveniences provided by either syntax (e.g.
+to take advantage of conveniences provided by either syntax (I<e.g.>
 ability to easily concatenate Unix-style specifications).  In
 addition, it provides an additional file test routine, C<candelete>,
 which determines whether you have delete access to a file.
@@ -53,7 +54,21 @@ directory path (e.g [---.foo] when in dev:[dir.sub]) will cause
 errors.  In general, any legal file specification will be converted
 properly, but garbage input tends to produce garbage output.  
 
+Each of these routines is prototyped as taking a single scalar
+argument, so you can use them as unary operators in complex
+expressions (as long as you don't use the C<&> form of
+subroutine call, which bypasses prototype checking).
+
+
 The routines provided are:
+
+=head2 rmsexpand
+
+Uses the RMS $PARSE and $SEARCH services to expand the input
+specification to its fully qualified form.  (If the file does
+not exist, the input specification is expanded as much as
+possible.)  If an error occurs, returns C<undef> and sets C<$!>
+and C<$^E>.
 
 =head2 vmsify
 
@@ -104,11 +119,13 @@ C<candelete> becomes part of the Perl core.
 
 =head1 REVISION
 
-This document was last revised 08-Dec-1995, for Perl 5.002.
+This document was last revised 22-Feb-1996, for Perl 5.002.
 
 =cut
 
 package VMS::Filespec;
+require 5.002;
+
 
 # If you want to use this package on a non-VMS system,
 # uncomment the following line.
@@ -116,10 +133,9 @@ package VMS::Filespec;
 require Exporter;
 
 @ISA = qw( Exporter );
-@EXPORT = qw( &vmsify &unixify &pathify  &fileify
-              &vmspath &unixpath &candelete);
+@EXPORT = qw( &vmsify &unixify &pathify &fileify
+              &vmspath &unixpath &candelete &rmsexpand );
 
-@EXPORT_OK = qw( &rmsexpand );
 1;
 
 
@@ -134,7 +150,7 @@ __END__
 # should be adequate for most purposes.
 
 # A sort-of sys$parse() replacement
-sub rmsexpand {
+sub rmsexpand ($;$) {
   my($fspec,$defaults) = @_;
   if (!$fspec) { return undef }
   my($node,$dev,$dir,$name,$type,$ver,$dnode,$ddev,$ddir,$dname,$dtype,$dver);
@@ -182,7 +198,7 @@ sub rmsexpand {
   $fspec;
 }  
 
-sub vmsify {
+sub vmsify ($) {
   my($fspec) = @_;
   my($hasdev,$dev,$defdirs,$dir,$base,@dirs,@realdirs);
 
@@ -215,7 +231,7 @@ sub vmsify {
   }
 }
 
-sub unixify {
+sub unixify ($) {
   my($fspec) = @_;
 
   return $fspec if $fspec !~ m#[:>\]]#;
@@ -244,7 +260,7 @@ sub unixify {
 }
 
 
-sub fileify {
+sub fileify ($) {
   my($path) = @_;
 
   if (!$path) { return undef }
@@ -279,7 +295,7 @@ sub fileify {
   }
 }
 
-sub pathify {
+sub pathify ($) {
   my($fspec) = @_;
 
   if (!$fspec) { return undef }
@@ -304,15 +320,15 @@ sub pathify {
   }
 }
 
-sub vmspath {
+sub vmspath ($) {
   pathify(vmsify($_[0]));
 }
 
-sub unixpath {
+sub unixpath ($) {
   pathify(unixify($_[0]));
 }
 
-sub candelete {
+sub candelete ($) {
   my($fspec) = @_;
   my($parent);
 

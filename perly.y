@@ -267,8 +267,8 @@ package :	PACKAGE WORD ';'
 			{ package(Nullop); }
 	;
 
-use	:	USE startsub WORD listexpr ';'
-			{ utilize($1, $2, $3, $4); }
+use	:	USE startsub WORD WORD listexpr ';'
+			{ utilize($1, $2, $3, $4, $5); }
 	;
 
 expr	:	expr ANDOP expr
@@ -453,8 +453,7 @@ term	:	term ASSIGNOP term
 			    append_elem(OP_LIST, $3, scalar($1))); }
 	|	NOAMP WORD listexpr
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
-			    append_elem(OP_LIST,
-				$3, newCVREF(0,scalar($2)))); }
+			    append_elem(OP_LIST, $3, scalar($2))); }
 	|	DO term	%prec UNIOP
 			{ $$ = newUNOP(OP_DOFILE, 0, scalar($2)); }
 	|	DO block	%prec '('

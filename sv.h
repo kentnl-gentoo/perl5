@@ -129,11 +129,7 @@ struct io {
 #define SVpbm_CASEFOLD	0x40000000
 #define SVpbm_TAIL	0x20000000
 
-#define SVpgv_MULTI	0x80000000
-
-#define SVpcv_CLONE	0x80000000	/* anon CV uses external lexicals */
-#define SVpcv_CLONED	0x40000000	/* a clone of one of those */
-#define SVpcv_ANON	0x20000000	/* CvGV() can't be trusted */
+#define SVphv_SHAREKEYS 0x20000000	/* keys live on shared string table */
 
 #ifdef OVERLOAD
 #define SVpgv_AM        0x40000000
@@ -203,6 +199,7 @@ struct xpvgv {
     char*	xgv_name;
     STRLEN	xgv_namelen;
     HV*		xgv_stash;
+    U8		xgv_flags;
 };
 
 struct xpvbm {
@@ -250,8 +247,8 @@ struct xpvio {
     MAGIC*	xmg_magic;	/* linked list of magicalness */
     HV*		xmg_stash;	/* class package */
 
-    FILE *	xio_ifp;	/* ifp and ofp are normally the same */
-    FILE *	xio_ofp;	/* but sockets need separate streams */
+    PerlIO *	xio_ifp;	/* ifp and ofp are normally the same */
+    PerlIO *	xio_ofp;	/* but sockets need separate streams */
     DIR *	xio_dirp;	/* for opendir, readdir, etc */
     long	xio_lines;	/* $. */
     long	xio_page;	/* $% */
@@ -301,7 +298,7 @@ struct xpvio {
 #define SvIOK_on(sv)		(SvOOK_off(sv), \
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
 #define SvIOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_IOK|SVp_IOK))
-#define SvIOK_only(sv)		(SvOK_off(sv), \
+#define SvIOK_only(sv)		(SvOOK_off(sv), SvOK_off(sv), \
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
 
 #define SvNOK(sv)		(SvFLAGS(sv) & SVf_NOK)
@@ -411,10 +408,6 @@ struct xpvio {
 #define SvVALID_on(sv)		(SvFLAGS(sv) |= SVpbm_VALID)
 #define SvVALID_off(sv)		(SvFLAGS(sv) &= ~SVpbm_VALID)
 
-#define SvMULTI(sv)		(SvFLAGS(sv) & SVpgv_MULTI)
-#define SvMULTI_on(sv)		(SvFLAGS(sv) |= SVpgv_MULTI)
-#define SvMULTI_off(sv)		(SvFLAGS(sv) &= ~SVpgv_MULTI)
-
 #define SvRV(sv) ((XRV*)  SvANY(sv))->xrv_rv
 #define SvRVx(sv) SvRV(sv)
 
@@ -433,23 +426,23 @@ struct xpvio {
 #define SvSTASH(sv)	((XPVMG*)  SvANY(sv))->xmg_stash
 
 #define SvIV_set(sv, val) \
-	do { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
-		(((XPVIV*)  SvANY(sv))->xiv_iv = val); } while (0)
+	STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
+		(((XPVIV*)  SvANY(sv))->xiv_iv = val); } STMT_END
 #define SvNV_set(sv, val) \
-	do { assert(SvTYPE(sv) == SVt_NV || SvTYPE(sv) >= SVt_PVNV); \
-		(((XPVNV*)  SvANY(sv))->xnv_nv = val); } while (0)
+	STMT_START { assert(SvTYPE(sv) == SVt_NV || SvTYPE(sv) >= SVt_PVNV); \
+		(((XPVNV*)  SvANY(sv))->xnv_nv = val); } STMT_END
 #define SvPV_set(sv, val) \
-	do { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_pv = val); } while (0)
+	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
+		(((XPV*)  SvANY(sv))->xpv_pv = val); } STMT_END
 #define SvCUR_set(sv, val) \
-	do { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_cur = val); } while (0)
+	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
+		(((XPV*)  SvANY(sv))->xpv_cur = val); } STMT_END
 #define SvLEN_set(sv, val) \
-	do { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_len = val); } while (0)
+	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
+		(((XPV*)  SvANY(sv))->xpv_len = val); } STMT_END
 #define SvEND_set(sv, val) \
-	do { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_cur = val - SvPVX(sv)); } while (0)
+	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
+		(((XPV*)  SvANY(sv))->xpv_cur = val - SvPVX(sv)); } STMT_END
 
 #define BmRARE(sv)	((XPVBM*)  SvANY(sv))->xbm_rare
 #define BmUSEFUL(sv)	((XPVBM*)  SvANY(sv))->xbm_useful

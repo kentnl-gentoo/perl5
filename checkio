@@ -1,0 +1,43 @@
+#!/usr/local/bin/perl -w
+
+@snags = ();
+
+my $changes = 0;
+my @stdio   = qw(
+fprintf stdin stdout stderr tmpfile fclose fflush fopen
+freopen setbuf setvbuf fscanf vfprintf fgetc fgets
+fputc fputs getc putc ungetc fread fwrite fgetpos
+fseek fsetpos ftell rewind clearerr feof ferror __filbuf
+__flsbuf _filbuf _flsbuf fdopen fileno flockfile ftrylockfile funlockfile
+getc_unlocked putc_unlocked popen getw putw pclose
+);
+
+my $exp = join('|',@stdio);
+
+@ARGV = grep(!/perlio/,@ARGV);
+
+while (<>)
+ {
+  if (/(.)\b($exp)\b(.)/o)
+   {
+    unless ($1 eq '"' && $3 eq $1)
+     {
+      warn "$ARGV:$.:$2:$_"; 
+      $changes++;
+     }
+   }
+  if (eof)
+   {
+    if ($changes)
+     {
+      warn "$changes problems in $ARGV\n";
+      push(@snags,$ARGV);
+     }
+    $changes = 0;
+    $. = 0;
+   }
+ }
+
+print join(' ',@snags),"\n";
+
+

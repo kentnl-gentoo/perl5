@@ -21,6 +21,7 @@ echo "Extracting x2p/cflags (with variable substitutions)"
 : Move anything that needs config subs from !NO!SUBS! section to !GROK!THIS!.
 : Protect any dollar signs and backticks that you do not want interpreted
 : by putting a backslash in front.  You may delete these comments.
+rm -f cflags
 $spitshell >cflags <<!GROK!THIS!
 !GROK!THIS!
 
@@ -74,7 +75,7 @@ for file do
     *) ;;
     esac
 
-    ccflags="`echo $ccflags | sed -e 's/-DEMBED//'`"
+    ccflags="`echo $ccflags | sed -e 's/-DMULTIPLICITY//'`"
 
     echo "$cc -c $ccflags $optimize $large $split"
     eval "$also "'"$cc -c $ccflags $optimize $large $split"'

@@ -1,53 +1,23 @@
 #! /bin/sh
-# Problems:
-# a) warning from fcntl: Third argument is int in emx - patched
-# b) gr_password is not a structure in struct group - patched
-# c) (gone)
-# d) Makefile needs sh before ./makedir
-# e) (gone)
-# f) (gone)
-# g) (gone)
-# h) (gone)
-# i) (gone)
-# j) the rule true in Makefile should become sh -c true
-# k) Cwd does not work. ===> the extensions cannot be compiled - patched
-# l) TEST expects to get -e 'perl' - patched
-# m) (gone)
-
-# Tests failing with .o compile (this is probably obsolete, but now it is .obj):
-
-# comp/cpp (because of sed above)
-# io/fs.t : (patched) 2..5 7..11 18 (why 11?)
-# io/inplace.t ???? (ak works)
-# io/tell.t 10 ????
-# op/exec.t 1 ???? 4 ????
-# op/glob.t 1 (bug in sh)
-# op/magic.t 4 1/2 (????) adding sleep 5 does not help
-# op/readdir.t 3 (same bug in ksh)
-# op/stat.t 3 4 9 10 20 >34
-
-# Newer results with .obj without i/o optimization, fail:
-
-# io/fs.t	: 2+
-# io/pipe.t	: 1+
-# io/tell.t	: 8, 10
-# op/exec.t	: 4, 6 (ok 1 comes as "ok \1")
-# op/fork.t	: 1+
-# op/misc.t	: 9
-# op/pack.t	: 8
-# op/stat.t	: 3 4 9 10 20 >34
-# lib/sdbm.t	: sdbm store returned -1, errno 0, key "21" at lib/sdbm.t line 112.
-# lib/posix.t	: coredump on 3
-
-# If compiled with i/o optimization, then 15% speedup on input, and
-# io/tell.t	: 11 only
-# no coredump in posix.t
+# hints/os2.sh
+# This file reflects the tireless work of
+# Ilya Zakharevich <ilya@math.ohio-state.edu>
+#
+# Trimmed and comments added by 
+#     Andy Dougherty  <doughera@lafcol.lafayette.edu>
+#     Exactly what is required beyond a standard OS/2 installation?
+#     There are notes about "patched pdksh" I do not understand.
 
 # Note that symbol extraction code gives wrong answers (sometimes?) on
 # gethostent and setsid.
 
 # Note that during the .obj compile you need to move the perl.dll file
 # to LIBPATH :-(
+
+bin_sh=`../UU/loc sh.exe /bin c:/bin d:/bin e:/bin f:/bin g:/bin h:/bin /bin`
+echo "####### Shell found at $bin_sh #############" >&4
+sh="$bin_sh"
+startsh="#!$bin_sh"
 
 #osname="OS/2"
 sysman=`../UU/loc . /man/man1 c:/man/man1 c:/usr/man/man1 d:/man/man1 d:/usr/man/man1 e:/man/man1 e:/usr/man/man1 f:/man/man1 f:/usr/man/man1 g:/man/man1 g:/usr/man/man1 /usr/man/man1`
@@ -66,17 +36,39 @@ so='dll'
 firstmakefile='GNUmakefile'
 exe_ext='.exe'
 
+# We provide it
+i_dlfcn='define'
+
+aout_d_shrplib='undef'
+aout_obj_ext='.o'
+aout_lib_ext='.a'
+aout_ar='ar'
+aout_plibext='.a'
+aout_d_fork='define'
+aout_lddlflags='-Zdll'
+aout_ldflags='-Zexe'
+aout_ccflags='-DDOSISH -DPERL_IS_AOUT -DOS2=2 -DEMBED -I. -DPACK_MALLOC -DDEBUGGING_MSTATS'
+aout_cppflags='-DDOSISH -DPERL_IS_AOUT -DOS2=2 -DEMBED -I. -DPACK_MALLOC =DDEBUGGING_MSTATS'
+aout_use_clib='c'
+aout_usedl='undef'
+aout_archobjs="os2.o dl_os2.o"
+
+# variable which have different values for aout compile
+used_aout='d_shrplib plibext lib_ext obj_ext ar plibext d_fork lddlflags ldflags ccflags use_clib usedl archobjs cppflags'
+
 if [ "$emxaout" != "" ]; then
-    d_shrplib='undef'
-    obj_ext='.o'
-    lib_ext='.a'
-    ar='ar'
-    plibext='.a'
-    d_fork='define'
-    lddlflags='-Zdll'
-    ldflags='-Zexe'
-    ccflags='-DDOSISH -DOS2=2 -DEMBED -I.'
-    use_clib='c'
+    d_shrplib="$aout_d_shrplib"
+    obj_ext="$aout_obj_ext"
+    lib_ext="$aout_lib_ext"
+    ar="$aout_ar"
+    plibext="$aout_plibext"
+    d_fork="$aout_d_fork"
+    lddlflags="$aout_lddlflags"
+    ldflags="$aout_ldflags"
+    ccflags="$aout_ccflags"
+    cppflags="$aout_cppflags"
+    use_clib="$aout_use_clib"
+    usedl="$aout_usedl"
 else
     d_shrplib='define'
     obj_ext='.obj'
@@ -84,13 +76,16 @@ else
     ar='emxomfar'
     plibext='.lib'
     d_fork='undef'
-    lddlflags='-Zdll -Zomf -Zcrtdll'
-    ldflags='-Zexe -Zomf -Zcrtdll'
-    ccflags='-Zomf -DDOSISH -DOS2=2 -DEMBED -I.'
+    lddlflags='-Zdll -Zomf -Zmt -Zcrtdll'
+    # Recursive regmatch may eat 2.5M of stack alone.
+    ldflags='-Zexe -Zomf -Zmt -Zcrtdll -Zstack 32000'
+    ccflags='-Zomf -Zmt -DDOSISH -DOS2=2 -DEMBED -I. -DPACK_MALLOC -DDEBUGGING_MSTATS'
     use_clib='c_import'
+    usedl='define'
 fi
 
 # To get into config.sh (should start at the beginning of line)
+# or you can put it into config.over.
 plibext="$plibext"
 
 #libc="/emx/lib/st/c_import$lib_ext"
@@ -99,26 +94,24 @@ libc="$libemx/st/$use_clib$lib_ext"
 if test -r "$libemx/c_alias$lib_ext"; then 
     libnames="$libemx/c_alias$lib_ext"
 fi
-
 # otherwise puts -lc ???
 
+# [Maybe we should just remove c from $libswanted ?]
+
 libs='-lsocket -lm'
-archobjs="os2$obj_ext"
+archobjs="os2$obj_ext dl_os2$obj_ext"
 
 # Run files without extension with sh - feature of patched ksh
-NOHASHBANG=sh
+# [???]
+# NOHASHBANG=sh
 # Same with newer ksh
 EXECSHELL=sh
 
 cccdlflags='-Zdll'
-dlsrc='dl_os2.xs'
+dlsrc='dl_dlopen.xs'
 ld='gcc'
-usedl='define'
 
 #cppflags='-DDOSISH -DOS2=2 -DEMBED -I.'
-
-# This variables taken from recommended config.sh
-alignbytes='8'
 
 # for speedup: (some patches to ungetc are also needed):
 # Note that without this guy tests 8 and 10 of io/tell.t fail, with it 11 fails
@@ -158,77 +151,12 @@ lns='cp'
 
 nm_opt='-p'
 
+####### We define these functions ourselves
+
+d_getprior='define'
+d_setprior='define'
+
 ####### All the rest is commented
-
-# I do not have these:
-#dynamic_ext='Fcntl GDBM_File SDBM_File POSIX Socket UPM REXXCALL'
-#dynamic_ext='Fcntl POSIX Socket SDBM_File Devel/DProf'
-#extensions='Fcntl GDBM_File SDBM_File POSIX Socket UPM REXXCALL'
-#extensions='Fcntl SDBM_File POSIX Socket Devel/DProf'
-
-# Unknown reasons for:
-#cpio='cpio'
-#csh=''
-#date=''
-#byacc=''
-#d_charsprf='undef'
-#d_drem='undef'
-#d_fmod='define'
-#d_linuxstd='undef'
-#d_socket='define'
-#gcc='gcc'
-#gidtype='gid_t'
-#glibpth='c:/usr/lib/emx h:/emx/lib /emx/lib'
-#groupstype='gid_t'
-#h_fcntl='true'
-#i_time='define'
-#line=''
-#lseektype='off_t'
-#man1ext='1'
-#man3ext='3'
-#modetype='mode_t'
-#more='more'
-#mv='mv'
-#sleep='sleep'
-#socketlib='-lsocket'
-#ssizetype='ssize_t'
-#tar='tar'
-#timetype='time_t'
-#uidtype='uid_t'
-#uname=''
-#uniq=''
-#xlibpth=''
-#yacc='yacc'
-#yaccflags=''
-#zcat='zcat'
-#orderlib='false'
-#pg='pg'
-#pr='pr'
-#ranlib=':'
-
-# Misfound by configure:
-
-#gcc='gcc'
-#more='more'
-#mv='mv'
-#pr='pr'
-#sleep='sleep'
-#tar='tar'
-
-#xlibpth=''
-
-# I cannot stand it, but did not test with:
-# d_dirnamlen='undef'
-
-# I try to do without these:
-
-#d_pwage='undef'
-#d_pwcomment='undef'
-
-# ????
-#mallocobj=''
-#mallocsrc=''
-#usemymalloc='false'
 
 # The next two are commented. pdksh handles #!
 # sharpbang='extproc '
@@ -236,3 +164,35 @@ nm_opt='-p'
 
 # Commented:
 #startsh='extproc ksh\\n#! sh'
+
+# Now install the external modules. We are in the ./hints directory.
+
+cd ../os2/OS2
+
+if ! test -d ../../ext/OS2 ; then
+   mkdir ../../ext/OS2
+fi
+
+cp -rfu * ../../ext/OS2/
+
+# Install tests:
+
+for xxx in * ; do
+	if $test -d $xxx/t; then
+		cp -uf $xxx/t/*.t ../../t/lib
+	else
+		if $test -d $xxx; then
+			cd $xxx
+			for yyy in * ; do
+				if $test -d $yyy/t; then
+				    cp -uf $yyy/t/*.t ../../t/lib
+				fi
+			done
+			cd ..
+		fi
+	fi
+done
+
+
+# Now go back
+cd ../../hints

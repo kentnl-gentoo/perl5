@@ -9,43 +9,50 @@ use Carp;
 @EXPORT = qw(shellwords quotewords);
 @EXPORT_OK = qw(old_shellwords);
 
-# This code needs updating to use new Perl 5 features (regexp etc).
+=head1 NAME
 
-# ParseWords.pm
-#
-# Usage:
-#	use ParseWords;
-#	@words = &quotewords($delim, $keep, @lines);
-#	@words = &shellwords(@lines);
-#	@words = &old_shellwords(@lines);
+Text::ParseWords - parse text into an array of tokens
 
-# Hal Pomeranz (pomeranz@netcom.com), 23 March 1994
-# Permission to use and distribute under the same terms as Perl.
-# No warranty expressed or implied.
+=head1 SYNOPSIS
 
-# Basically an update and generalization of the old shellwords.pl.
-# Much code shamelessly stolen from the old version (author unknown).
-#
-# &quotewords() accepts a delimiter (which can be a regular expression)
-# and a list of lines and then breaks those lines up into a list of
-# words ignoring delimiters that appear inside quotes.
-#
-# The $keep argument is a boolean flag.  If true, the quotes are kept
-# with each word, otherwise quotes are stripped in the splitting process.
-# $keep also defines whether unprotected backslashes are retained.
-#
+  use Text::ParseWords;
+  @words = &quotewords($delim, $keep, @lines);
+  @words = &shellwords(@lines);
+  @words = &old_shellwords(@lines);
+
+=head1 DESCRIPTION
+
+&quotewords() accepts a delimiter (which can be a regular expression)
+and a list of lines and then breaks those lines up into a list of
+words ignoring delimiters that appear inside quotes.
+
+The $keep argument is a boolean flag.  If true, the quotes are kept
+with each word, otherwise quotes are stripped in the splitting process.
+$keep also defines whether unprotected backslashes are retained.
+
+A &shellwords() replacement is included to demonstrate the new package.
+This version differs from the original in that it will _NOT_ default
+to using $_ if no arguments are given.  I personally find the old behavior
+to be a mis-feature.
+
+
+&quotewords() works by simply jamming all of @lines into a single
+string in $_ and then pulling off words a bit at a time until $_
+is exhausted.
+
+=head1 AUTHORS
+
+Hal Pomeranz (pomeranz@netcom.com), 23 March 1994
+
+Basically an update and generalization of the old shellwords.pl.
+Much code shamelessly stolen from the old version (author unknown).
+
+=cut
 
 1;
 __END__
 
-
 sub shellwords {
-
-    # A &shellwords() replacement is included to demonstrate the new package.
-    # This version differs from the original in that it will _NOT_ default
-    # to using $_ if no arguments are given.  I personally find the old behavior
-    # to be a mis-feature.
-
     local(@lines) = @_;
     $lines[$#lines] =~ s/\s+$//;
     &quotewords('\s+', 0, @lines);
@@ -55,10 +62,6 @@ sub shellwords {
 
 sub quotewords {
 
-# &quotewords() works by simply jamming all of @lines into a single
-# string in $_ and then pulling off words a bit at a time until $_
-# is exhausted.
-#
 # The inner "for" loop builds up each word (or $field) one $snippet
 # at a time.  A $snippet is a quoted string, a backslashed character,
 # or an unquoted string.  We fall out of the "for" loop when we reach
@@ -89,7 +92,7 @@ sub quotewords {
     local(@words,$snippet,$field,$_);
 
     $_ = join('', @lines);
-    while ($_) {
+    while (length($_)) {
 	$field = '';
 	for (;;) {
             $snippet = '';
@@ -108,7 +111,7 @@ sub quotewords {
                 $snippet = $1;
                 $snippet = "\\$snippet" if ($keep);
             }
-	    elsif (!$_ || s/^$delim//) {
+	    elsif (!length($_) || s/^$delim//) {
                last;
 	    }
 	    else {

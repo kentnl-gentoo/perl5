@@ -29,10 +29,6 @@
 #  include <vfork.h>
 #endif
 
-#ifdef I_LIMITS  /* Needed for cast_xxx() functions below. */
-#  include <limits.h>
-#endif
-
 /* Put this after #includes because fork and vfork prototypes may
    conflict.
 */
@@ -73,7 +69,7 @@ MEM_SIZE size;
     char  *ptr;
 #ifdef MSDOS
 	if (size > 0xffff) {
-		fprintf(stderr, "Allocation too large: %lx\n", size) FLUSH;
+		PerlIO_printf(PerlIO_stderr(), "Allocation too large: %lx\n", size) FLUSH;
 		my_exit(1);
 	}
 #endif /* MSDOS */
@@ -83,16 +79,16 @@ MEM_SIZE size;
 #endif
     ptr = malloc(size?size:1);	/* malloc(0) is NASTY on our system */
 #if !(defined(I286) || defined(atarist))
-    DEBUG_m(fprintf(stderr,"0x%x: (%05d) malloc %ld bytes\n",ptr,an++,(long)size));
+    DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%x: (%05d) malloc %ld bytes\n",ptr,an++,(long)size));
 #else
-    DEBUG_m(fprintf(stderr,"0x%lx: (%05d) malloc %ld bytes\n",ptr,an++,(long)size));
+    DEBUG_m(PerlIO_printf(Perl_debug_log, "0x%lx: (%05d) malloc %ld bytes\n",ptr,an++,(long)size));
 #endif
     if (ptr != Nullch)
 	return ptr;
     else if (nomemok)
 	return Nullch;
     else {
-	fputs(no_mem,stderr) FLUSH;
+	PerlIO_fputs(PerlIO_stderr(),no_mem) FLUSH;
 	my_exit(1);
     }
     /*NOTREACHED*/
@@ -116,7 +112,7 @@ unsigned long size;
 
 #ifdef MSDOS
 	if (size > 0xffff) {
-		fprintf(stderr, "Reallocation too large: %lx\n", size) FLUSH;
+		PerlIO_printf(PerlIO_stderr(), "Reallocation too large: %lx\n", size) FLUSH;
 		my_exit(1);
 	}
 #endif /* MSDOS */
@@ -130,13 +126,13 @@ unsigned long size;
 
 #if !(defined(I286) || defined(atarist))
     DEBUG_m( {
-	fprintf(stderr,"0x%x: (%05d) rfree\n",where,an++);
-	fprintf(stderr,"0x%x: (%05d) realloc %ld bytes\n",ptr,an++,(long)size);
+	PerlIO_printf(Perl_debug_log, "0x%x: (%05d) rfree\n",where,an++);
+	PerlIO_printf(Perl_debug_log, "0x%x: (%05d) realloc %ld bytes\n",ptr,an++,(long)size);
     } )
 #else
     DEBUG_m( {
-	fprintf(stderr,"0x%lx: (%05d) rfree\n",where,an++);
-	fprintf(stderr,"0x%lx: (%05d) realloc %ld bytes\n",ptr,an++,(long)size);
+	PerlIO_printf(Perl_debug_log, "0x%lx: (%05d) rfree\n",where,an++);
+	PerlIO_printf(Perl_debug_log, "0x%lx: (%05d) realloc %ld bytes\n",ptr,an++,(long)size);
     } )
 #endif
 
@@ -145,7 +141,7 @@ unsigned long size;
     else if (nomemok)
 	return Nullch;
     else {
-	fputs(no_mem,stderr) FLUSH;
+	PerlIO_puts(PerlIO_stderr(),no_mem) FLUSH;
 	my_exit(1);
     }
     /*NOTREACHED*/
@@ -158,14 +154,53 @@ safefree(where)
 char *where;
 {
 #if !(defined(I286) || defined(atarist))
-    DEBUG_m( fprintf(stderr,"0x%x: (%05d) free\n",where,an++));
+    DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%x: (%05d) free\n",where,an++));
 #else
-    DEBUG_m( fprintf(stderr,"0x%lx: (%05d) free\n",where,an++));
+    DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%lx: (%05d) free\n",where,an++));
 #endif
     if (where) {
 	/*SUPPRESS 701*/
 	free(where);
     }
+}
+
+/* safe version of calloc */
+
+char *
+safecalloc(count, size)
+MEM_SIZE count;
+MEM_SIZE size;
+{
+    char  *ptr;
+
+#ifdef MSDOS
+	if (size * count > 0xffff) {
+		PerlIO_printf(PerlIO_stderr(), "Allocation too large: %lx\n", size * count) FLUSH;
+		my_exit(1);
+	}
+#endif /* MSDOS */
+#ifdef DEBUGGING
+    if ((long)size < 0 || (long)count < 0)
+	croak("panic: calloc");
+#endif
+#if !(defined(I286) || defined(atarist))
+    DEBUG_m(PerlIO_printf(PerlIO_stderr(), "0x%x: (%05d) calloc %ld  x %ld bytes\n",ptr,an++,(long)count,(long)size));
+#else
+    DEBUG_m(PerlIO_printf(PerlIO_stderr(), "0x%lx: (%05d) calloc %ld x %ld bytes\n",ptr,an++,(long)count,(long)size));
+#endif
+    size *= count;
+    ptr = malloc(size?size:1);	/* malloc(0) is NASTY on our system */
+    if (ptr != Nullch) {
+	memset((void*)ptr, 0, size);
+	return ptr;
+    }
+    else if (nomemok)
+	return Nullch;
+    else {
+	PerlIO_fputs(PerlIO_stderr(),no_mem) FLUSH;
+	my_exit(1);
+    }
+    /*NOTREACHED*/
 }
 
 #endif /* !safemalloc */
@@ -211,6 +246,22 @@ char *where;
     safefree(where);
 }
 
+char *
+safexcalloc(x,count,size)
+I32 x;
+MEM_SIZE count;
+MEM_SIZE size;
+{
+    register char *where;
+
+    where = safexmalloc(x, size * count + ALIGN);
+    xcount[x]++;
+    memset((void*)where + ALIGN, 0, size * count);
+    where[0] = x % 100;
+    where[1] = x / 100;
+    return where + ALIGN;
+}
+
 static void
 xstat()
 {
@@ -218,7 +269,7 @@ xstat()
 
     for (i = 0; i < MAXXCOUNT; i++) {
 	if (xcount[i] > lastxcount[i]) {
-	    fprintf(stderr,"%2d %2d\t%ld\n", i / 100, i % 100, xcount[i]);
+	    PerlIO_printf(PerlIO_stderr(),"%2d %2d\t%ld\n", i / 100, i % 100, xcount[i]);
 	    lastxcount[i] = xcount[i];
 	}
     }
@@ -353,6 +404,48 @@ char *lend;
     return Nullch;
 }
 
+/* Initialize locale (and the fold[] array).*/
+int
+perl_init_i18nl10n(printwarn)	
+    int printwarn;
+{
+    int ok = 1;
+    /* returns
+     *    1 = set ok or not applicable,
+     *    0 = fallback to C locale,
+     *   -1 = fallback to C locale failed
+     */
+#if defined(HAS_SETLOCALE) && defined(LC_CTYPE)
+    char * lang     = getenv("LANG");
+    char * lc_all   = getenv("LC_ALL");
+    char * lc_ctype = getenv("LC_CTYPE");
+    int i;
+
+    if (setlocale(LC_CTYPE, "") == NULL && (lc_all || lc_ctype || lang)) {
+	if (printwarn) {
+	    PerlIO_printf(PerlIO_stderr(), "warning: setlocale(LC_CTYPE, \"\") failed.\n");
+	    PerlIO_printf(PerlIO_stderr(),
+	      "warning: LC_ALL = \"%s\", LC_CTYPE = \"%s\", LANG = \"%s\",\n",
+	      lc_all   ? lc_all   : "(null)",
+	      lc_ctype ? lc_ctype : "(null)",
+	      lang     ? lang     : "(null)"
+	      );
+	    PerlIO_printf(PerlIO_stderr(), "warning: falling back to the \"C\" locale.\n");
+	}
+	ok = 0;
+	if (setlocale(LC_CTYPE, "C") == NULL)
+	    ok = -1;
+    }
+
+    for (i = 0; i < 256; i++) {
+	if (isUPPER(i)) fold[i] = toLOWER(i);
+	else if (isLOWER(i)) fold[i] = toUPPER(i);
+	else fold[i] = i;
+    }
+#endif
+    return ok;
+}
+
 void
 fbm_compile(sv, iflag)
 SV *sv;
@@ -421,7 +514,7 @@ I32 iflag;
     }
     BmRARE(sv) = s[rarest];
     BmPREVIOUS(sv) = rarest;
-    DEBUG_r(fprintf(stderr,"rarest char %c at %d\n",BmRARE(sv),BmPREVIOUS(sv)));
+    DEBUG_r(PerlIO_printf(Perl_debug_log, "rarest char %c at %d\n",BmRARE(sv),BmPREVIOUS(sv)));
 }
 
 char *
@@ -703,10 +796,11 @@ char *pat;
 long a1, a2, a3, a4;
 {
     char *s;
+    char *s_start;
     I32 usermess = strEQ(pat,"%s");
     SV *tmpstr;
 
-    s = buf;
+    s = s_start = buf;
     if (usermess) {
 	tmpstr = sv_newmortal();
 	sv_setpv(tmpstr, (char*)a1);
@@ -735,9 +829,19 @@ long a1, a2, a3, a4;
 		s += strlen(s);
 	    }
 	    (void)strcpy(s,".\n");
+	    s += 2;
 	}
 	if (usermess)
 	    sv_catpv(tmpstr,buf+1);
+    }
+
+    if (s - s_start >= sizeof(buf)) {	/* Ooops! */
+	if (usermess)
+	    PerlIO_puts(PerlIO_stderr(), SvPVX(tmpstr));
+	else
+	    PerlIO_puts(PerlIO_stderr(), buf);
+	PerlIO_puts(PerlIO_stderr(),"panic: message overflow - memory corrupted!\n");
+	my_exit(1);
     }
     if (usermess)
 	return SvPVX(tmpstr);
@@ -768,12 +872,19 @@ long a1, a2, a3, a4;
     }
     if (in_eval) {
 	restartop = die_where(message);
-	longjmp(top_env, 3);
+	Siglongjmp(top_env, 3);
     }
-    fputs(message,stderr);
-    (void)fflush(stderr);
-    if (e_fp)
+    PerlIO_puts(PerlIO_stderr(),message);
+    (void)PerlIO_flush(PerlIO_stderr());
+    if (e_tmpname) {
+	if (e_fp) {
+	    PerlIO_close(e_fp);
+	    e_fp = Nullfp;
+	}
 	(void)UNLINK(e_tmpname);
+	Safefree(e_tmpname);
+	e_tmpname = Nullch;
+    }
     statusvalue = SHIFTSTATUS(statusvalue);
 #ifdef VMS
     my_exit((U32)vaxc$errno?vaxc$errno:errno?errno:statusvalue?statusvalue:SS$_ABORT);
@@ -804,11 +915,11 @@ long a1, a2, a3, a4;
 	perl_call_sv((SV*)cv, G_DISCARD);
     }
     else {
-	fputs(message,stderr);
+	PerlIO_puts(PerlIO_stderr(),message);
 #ifdef LEAKTEST
 	DEBUG_L(xstat());
 #endif
-	(void)fflush(stderr);
+	(void)Fflush(PerlIO_stderr());
     }
 }
 
@@ -826,6 +937,7 @@ mess(pat, args)
 #endif
 {
     char *s;
+    char *s_start;
     SV *tmpstr;
     I32 usermess;
 #ifndef HAS_VPRINTF
@@ -836,7 +948,7 @@ mess(pat, args)
 #endif
 #endif
 
-    s = buf;
+    s = s_start = buf;
     usermess = strEQ(pat, "%s");
     if (usermess) {
 	tmpstr = sv_newmortal();
@@ -868,11 +980,20 @@ mess(pat, args)
 		s += strlen(s);
 	    }
 	    (void)strcpy(s,".\n");
+	    s += 2;
 	}
 	if (usermess)
 	    sv_catpv(tmpstr,buf+1);
     }
 
+    if (s - s_start >= sizeof(buf)) {	/* Ooops! */
+	if (usermess)
+	    PerlIO_puts(PerlIO_stderr(), SvPVX(tmpstr));
+	else
+	    PerlIO_puts(PerlIO_stderr(), buf);
+	PerlIO_puts(PerlIO_stderr(), "panic: message overflow - memory corrupted!\n");
+	my_exit(1);
+    }
     if (usermess)
 	return SvPVX(tmpstr);
     else
@@ -914,12 +1035,19 @@ croak(pat, va_alist)
     }
     if (in_eval) {
 	restartop = die_where(message);
-	longjmp(top_env, 3);
+	Siglongjmp(top_env, 3);
     }
-    fputs(message,stderr);
-    (void)fflush(stderr);
-    if (e_fp)
+    PerlIO_puts(PerlIO_stderr(),message);
+    (void)PerlIO_flush(PerlIO_stderr());
+    if (e_tmpname) {
+	if (e_fp) {
+	    PerlIO_close(e_fp);
+	    e_fp = Nullfp;
+	}
 	(void)UNLINK(e_tmpname);
+	Safefree(e_tmpname);
+	e_tmpname = Nullch;
+    }
     statusvalue = SHIFTSTATUS(statusvalue);
 #ifdef VMS
     my_exit((U32)(vaxc$errno?vaxc$errno:(statusvalue?statusvalue:44)));
@@ -962,11 +1090,11 @@ warn(pat,va_alist)
 	perl_call_sv((SV*)cv, G_DISCARD);
     }
     else {
-	fputs(message,stderr);
+	PerlIO_puts(PerlIO_stderr(),message);
 #ifdef LEAKTEST
 	DEBUG_L(xstat());
 #endif
-	(void)fflush(stderr);
+	(void)PerlIO_flush(PerlIO_stderr());
     }
 }
 #endif /* !defined(I_STDARG) && !defined(I_VARARGS) */
@@ -1126,14 +1254,6 @@ char *dest, *pat, *args;
 #endif
 }
 
-int
-vfprintf(fd, pat, args)
-FILE *fd;
-char *pat, *args;
-{
-    _doprnt(pat, args, fd);
-    return 0;		/* wrong, but perl doesn't use the return value */
-}
 #endif /* HAS_VPRINTF */
 #endif /* I_VARARGS || I_STDARGS */
 
@@ -1287,8 +1407,9 @@ VTOH(vtohs,short)
 VTOH(vtohl,long)
 #endif
 
-#if  !defined(DOSISH) && !defined(VMS)  /* VMS' my_popen() is in VMS.c */
-FILE *
+#if  (!defined(DOSISH) || defined(HAS_FORK)) && !defined(VMS)  /* VMS' my_popen() is in
+					   VMS.c, same with OS/2. */
+PerlIO *
 my_popen(cmd,mode)
 char	*cmd;
 char	*mode;
@@ -1361,17 +1482,18 @@ char	*mode;
     (void)SvUPGRADE(sv,SVt_IV);
     SvIVX(sv) = pid;
     forkprocess = pid;
-    return fdopen(p[this], mode);
+    return PerlIO_fdopen(p[this], mode);
 }
 #else
-#if defined(atarist) || defined(OS2)
+#if defined(atarist)
 FILE *popen();
-FILE *
+PerlIO *
 my_popen(cmd,mode)
 char	*cmd;
 char	*mode;
 {
-    return popen(cmd, mode);
+    /* Needs work for PerlIO ! */
+    return popen(PerlIO_exportFILE(cmd), mode);
 }
 #endif
 
@@ -1384,12 +1506,12 @@ char *s;
     int fd;
     struct stat tmpstatbuf;
 
-    fprintf(stderr,"%s", s);
+    PerlIO_printf(PerlIO_stderr(),"%s", s);
     for (fd = 0; fd < 32; fd++) {
 	if (Fstat(fd,&tmpstatbuf) >= 0)
-	    fprintf(stderr," %d",fd);
+	    PerlIO_printf(PerlIO_stderr()," %d",fd);
     }
-    fprintf(stderr,"\n");
+    PerlIO_printf(PerlIO_stderr(),"\n");
 }
 #endif
 
@@ -1421,21 +1543,21 @@ int newfd;
 }
 #endif
 
-#if  !defined(DOSISH) && !defined(VMS)  /* VMS' my_popen() is in VMS.c */
+#if  (!defined(DOSISH) || defined(HAS_FORK)) && !defined(VMS)  /* VMS' my_popen() is in VMS.c */
 I32
 my_pclose(ptr)
-FILE *ptr;
+PerlIO *ptr;
 {
     Signal_t (*hstat)(), (*istat)(), (*qstat)();
     int status;
     SV **svp;
     int pid;
 
-    svp = av_fetch(fdpid,fileno(ptr),TRUE);
+    svp = av_fetch(fdpid,PerlIO_fileno(ptr),TRUE);
     pid = (int)SvIVX(*svp);
     SvREFCNT_dec(*svp);
     *svp = &sv_undef;
-    fclose(ptr);
+    PerlIO_close(ptr);
 #ifdef UTS
     if(kill(pid, 0) < 0) { return(pid); }   /* HOM 12/23/91 */
 #endif
@@ -1526,13 +1648,17 @@ int status;
     return;
 }
 
-#if defined(atarist) || defined(OS2)
+#if defined(atarist) || (defined(OS2) && !defined(HAS_FORK))
 int pclose();
 I32
 my_pclose(ptr)
-FILE *ptr;
+PerlIO *ptr;
 {
-    return pclose(ptr);
+    /* Needs work for PerlIO ! */
+    FILE *f = PerlIO_findFILE(ptr);
+    I32 result = pclose(f);
+    PerlIO_releaseFILE(ptr,f);
+    return result;
 }
 #endif
 
@@ -1581,29 +1707,6 @@ double f;
 #endif
 
 #ifndef CASTI32
-
-/* Look for MAX and MIN integral values.  If we can't find them,
-   we'll use 32-bit two's complement defaults.
-*/
-#ifndef LONG_MAX
-#  ifdef MAXLONG    /* Often used in <values.h> */
-#    define LONG_MAX MAXLONG
-#  else
-#    define LONG_MAX        2147483647L
-#  endif
-#endif
-
-#ifndef LONG_MIN
-#    define LONG_MIN        (-LONG_MAX - 1)
-#endif
-
-#ifndef ULONG_MAX
-#  ifdef MAXULONG 
-#    define LONG_MAX MAXULONG
-#  else
-#    define ULONG_MAX       4294967295L
-#  endif
-#endif
 
 /* Unfortunately, on some systems the cast_uv() function doesn't
    work with the system-supplied definition of ULONG_MAX.  The
@@ -1732,3 +1835,17 @@ I32 *retlen;
     *retlen = s - start;
     return retval;
 }
+
+
+#ifdef HUGE_VAL
+/*
+ * This hack is to force load of "huge" support from libm.a
+ * So it is in perl for (say) POSIX to use. 
+ * Needed for SunOS with Sun's 'acc' for example.
+ */
+double 
+Perl_huge()
+{
+ return HUGE_VAL;
+}
+#endif

@@ -30,13 +30,14 @@ void	av_unshift _((AV* ar, I32 num));
 OP*	bind_match _((I32 type, OP* left, OP* pat));
 OP*	block_end _((int line, int floor, OP* seq));
 int	block_start _((void));
+void	boot_core_UNIVERSAL _((void));
 void	calllist _((AV* list));
 I32	cando _((I32 bit, I32 effective, struct stat* statbufp));
 #ifndef CASTNEGFLOAT
 U32	cast_ulong _((double f));
 #endif
 #if !defined(HAS_TRUNCATE) && !defined(HAS_CHSIZE) && defined(F_FREESP)
-I32	chsize _((int fd, Off_t length));
+I32	my_chsize _((int fd, Off_t length));
 #endif
 OP *	ck_gvconst _((OP * o));
 OP *	ck_retarget _((OP *op));
@@ -45,6 +46,7 @@ char*	cpytill _((char* to, char* from, char* fromend, int delim, I32* retlen));
 void	croak _((char* pat,...)) __attribute__((format(printf,1,2),noreturn));
 CV*	cv_clone _((CV* proto));
 void	cv_undef _((CV* cv));
+SV*	cv_const_sv _((CV* cv));
 #ifdef DEBUGGING
 void	cx_dump _((CONTEXT* cs));
 #endif
@@ -66,7 +68,7 @@ OP*	die_where _((char* message));
 void	dounwind _((I32 cxix));
 bool	do_aexec _((SV* really, SV** mark, SV** sp));
 void    do_chop _((SV* asv, SV* sv));
-bool	do_close _((GV* gv, bool explicit));
+bool	do_close _((GV* gv, bool not_implicit));
 bool	do_eof _((GV* gv));
 bool	do_exec _((char* cmd));
 void	do_execfree _((void));
@@ -81,9 +83,9 @@ I32	do_msgrcv _((SV** mark, SV** sp));
 I32	do_msgsnd _((SV** mark, SV** sp));
 #endif
 bool	do_open _((GV* gv, char* name, I32 len,
-		   int as_raw, int rawmode, int rawperm, FILE* supplied_fp));
+		   int as_raw, int rawmode, int rawperm, PerlIO* supplied_fp));
 void	do_pipe _((SV* sv, GV* rgv, GV* wgv));
-bool	do_print _((SV* sv, FILE* fp));
+bool	do_print _((SV* sv, PerlIO* fp));
 OP *	do_readline _((void));
 I32	do_chomp _((SV* sv));
 bool	do_seek _((GV* gv, long pos, int whence));
@@ -104,7 +106,9 @@ int	dump_fds _((char* s));
 #endif
 void	dump_form _((GV* gv));
 void	dump_gv _((GV* gv));
+#ifdef MYMALLOC
 void	dump_mstats _((char* s));
+#endif
 void	dump_op _((OP* arg));
 void	dump_pm _((PMOP* pm));
 void	dump_packsubs _((HV* stash));
@@ -129,25 +133,32 @@ GV*	gv_fetchpv _((char* name, I32 add, I32 sv_type));
 void	gv_fullname _((SV* sv, GV* gv));
 void	gv_init _((GV *gv, HV *stash, char *name, STRLEN len, int multi));
 HV*	gv_stashpv _((char* name, I32 create));
+HV*	gv_stashpvn _((char* name, U32 namelen, I32 create));
 HV*	gv_stashsv _((SV* sv, I32 create));
-void	he_delayfree _((HE* hent));
-void	he_free _((HE* hent));
+void	he_delayfree _((HE* hent, I32 shared));
+void	he_free _((HE* hent, I32 shared));
 void	hoistmust _((PMOP* pm));
 void	hv_clear _((HV* tb));
 SV*	hv_delete _((HV* tb, char* key, U32 klen, I32 flags));
+SV*	hv_delete_ent _((HV* tb, SV* key, I32 flags, U32 hash));
 bool	hv_exists _((HV* tb, char* key, U32 klen));
+bool	hv_exists_ent _((HV* tb, SV* key, U32 hash));
 SV**	hv_fetch _((HV* tb, char* key, U32 klen, I32 lval));
+HE*	hv_fetch_ent _((HV* tb, SV* key, I32 lval, U32 hash));
 I32	hv_iterinit _((HV* tb));
 char*	hv_iterkey _((HE* entry, I32* retlen));
+SV*	hv_iterkeysv _((HE* entry));
 HE*	hv_iternext _((HV* tb));
-SV *	hv_iternextsv _((HV* hv, char** key, I32* retlen));
+SV*	hv_iternextsv _((HV* hv, char** key, I32* retlen));
 SV*	hv_iterval _((HV* tb, HE* entry));
 void	hv_magic _((HV* hv, GV* gv, int how));
 SV**	hv_store _((HV* tb, char* key, U32 klen, SV* val, U32 hash));
+HE*	hv_store_ent _((HV* tb, SV* key, SV* val, U32 hash));
 void	hv_undef _((HV* tb));
 I32	ibcmp _((U8* a, U8* b, I32 len));
 I32	ingroup _((I32 testgid, I32 effective));
 char*	instr _((char* big, char* little));
+bool	io_close _((IO* io));
 OP*	invert _((OP* cmd));
 OP*	jmaybe _((OP* arg));
 I32	keyword _((char* d, I32 len));
@@ -161,12 +172,14 @@ OP*	localize _((OP* arg, I32 lexical));
 I32	looks_like_number _((SV* sv));
 int	magic_clearenv	_((SV* sv, MAGIC* mg));
 int	magic_clearpack	_((SV* sv, MAGIC* mg));
+int	magic_clearsig	_((SV* sv, MAGIC* mg));
 int	magic_existspack	_((SV* sv, MAGIC* mg));
 int	magic_get	_((SV* sv, MAGIC* mg));
 int	magic_getarylen	_((SV* sv, MAGIC* mg));
 int	magic_getpack	_((SV* sv, MAGIC* mg));
 int	magic_getglob	_((SV* sv, MAGIC* mg));
 int	magic_getpos	_((SV* sv, MAGIC* mg));
+int	magic_getsig	_((SV* sv, MAGIC* mg));
 int	magic_gettaint	_((SV* sv, MAGIC* mg));
 int	magic_getuvar	_((SV* sv, MAGIC* mg));
 U32	magic_len	_((SV* sv, MAGIC* mg));
@@ -199,11 +212,12 @@ Malloc_t	malloc _((MEM_SIZE nbytes));
 extern Malloc_t malloc _((MEM_SIZE nbytes));
 extern Malloc_t realloc _((Malloc_t, MEM_SIZE));
 extern Free_t   free _((Malloc_t));
+extern Malloc_t calloc _((MEM_SIZE, MEM_SIZE));
 #endif
 void	markstack_grow _((void));
 char*	mess _((char* pat, va_list* args));
 int	mg_clear _((SV* sv));
-int	mg_copy _((SV *, SV *, char *, STRLEN));
+int	mg_copy _((SV *, SV *, char *, I32));
 MAGIC*	mg_find _((SV* sv, int type));
 int	mg_free _((SV* sv));
 int	mg_get _((SV* sv));
@@ -222,8 +236,8 @@ I32	my_lstat _((void));
 #ifndef HAS_MEMCMP
 I32	my_memcmp _((unsigned char* s1, unsigned char* s2, I32 len));
 #endif
-I32	my_pclose _((FILE* ptr));
-FILE*	my_popen _((char* cmd, char* mode));
+I32	my_pclose _((PerlIO* ptr));
+PerlIO*	my_popen _((char* cmd, char* mode));
 void	my_setenv _((char* nam, char* val));
 I32	my_stat _((void));
 #ifdef MYSWAP
@@ -281,7 +295,7 @@ SV*	newSVrv _((SV* rv, char* classname));
 SV*	newSVsv _((SV* old));
 OP*	newUNOP _((I32 type, I32 flags, OP* first));
 OP *	newWHILEOP _((I32 flags, I32 debuggable, LOOP* loop, OP* expr, OP* block, OP* cont));
-FILE*	nextargv _((GV* gv));
+PerlIO*	nextargv _((GV* gv));
 char*	ninstr _((char* big, char* bigend, char* little, char* lend));
 OP *	oopsCV _((OP* o));
 void	op_free _((OP* arg));
@@ -310,6 +324,7 @@ SV*	perl_get_sv _((char* name, I32 create));
 AV*	perl_get_av _((char* name, I32 create));
 HV*	perl_get_hv _((char* name, I32 create));
 CV*	perl_get_cv _((char* name, I32 create));
+int	perl_init_i18nl10n _((int printwarn));
 int	perl_parse _((PerlInterpreter* sv_interp, void(*xsinit)(void), int argc, char** argv, char** env));
 void	perl_require_pv _((char* pv));
 #define perl_requirepv perl_require_pv
@@ -321,6 +336,7 @@ OP*	pmtrans _((OP* op, OP* expr, OP* repl));
 OP*	pop_return _((void));
 void	pop_scope _((void));
 OP*	prepend_elem _((I32 optype, OP* head, OP* tail));
+void	provide_ref _((OP* op, SV* sv));
 void	push_return _((OP* op));
 void	push_scope _((void));
 regexp*	pregcomp _((char* exp, char* xend, PMOP* pm));
@@ -333,7 +349,7 @@ char*	regnext _((char* p));
 char*	regprop _((char* op));
 void	repeatcpy _((char* to, char* from, I32 len, I32 count));
 char*	rninstr _((char* big, char* bigend, char* little, char* lend));
-int	run _((void));
+int	runops _((void));
 #ifndef safemalloc
 void	safefree _((char* where));
 char*	safemalloc _((MEM_SIZE size));
@@ -342,17 +358,21 @@ char*	saferealloc _((char* where, MEM_SIZE size));
 #else
 char*	saferealloc _((char* where, unsigned long size));
 #endif
+char*	safecalloc _((MEM_SIZE cnt, MEM_SIZE size));
 #endif
 #ifdef LEAKTEST
 void	safexfree _((char* where));
 char*	safexmalloc _((I32 x, MEM_SIZE size));
 char*	safexrealloc _((char* where, MEM_SIZE size));
+char*	safexcalloc _((I32 x, MEM_SIZE size, MEM_SIZE size));
 #endif
 #ifndef HAS_RENAME
 I32	same_dirent _((char* a, char* b));
 #endif
 char*	savepv _((char* sv));
 char*	savepvn _((char* sv, I32 len));
+char*	sharepvn _((char* sv, I32 len, U32 hash));
+void	unsharepvn _((char* sv, I32 len, U32 hash));
 void	savestack_grow _((void));
 void	save_aptr _((AV** aptr));
 AV*	save_ary _((GV* gv));
@@ -416,7 +436,7 @@ void	sv_dump _((SV* sv));
 I32	sv_eq _((SV* sv1, SV* sv2));
 void	sv_free _((SV* sv));
 void	sv_free_arenas _((void));
-char*	sv_gets _((SV* sv, FILE* fp, I32 append));
+char*	sv_gets _((SV* sv, PerlIO* fp, I32 append));
 #ifndef DOSISH
 char*	sv_grow _((SV* sv, I32 newlen));
 #else
@@ -456,7 +476,7 @@ void	taint_proper _((char* f, char* s));
 #ifdef UNLINK_ALL_VERSIONS
 I32	unlnk _((char* f));
 #endif
-void	utilize _((int aver, I32 floor, OP* id, OP* arg));
+void	utilize _((int aver, I32 floor, OP* version, OP* id, OP* arg));
 I32	wait4pid _((int pid, int* statusp, int flags));
 void	warn _((char* pat,...)) __attribute__((format(printf,1,2)));
 void	watch _((char **addr));

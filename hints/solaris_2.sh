@@ -1,16 +1,18 @@
 # hints/solaris_2.sh
-# Last modified:  27 September 1995 by
+# Last modified:  Thu Feb  8 11:38:12 EST 1996
 # Andy Dougherty  <doughera@lafcol.lafayette.edu>
 # Based on input from lots of folks, especially
 # Dean Roehrich <roehrich@ironwood-fddi.cray.com>
-# 
+ 
 # See man vfork.
 usevfork=false
-#
+
 d_suidsafe=define
+
 # Avoid all libraries in /usr/ucblib.
 set `echo $glibpth | sed -e 's@/usr/ucblib@@'`
 glibpth="$*"
+
 # Remove bad libraries.  -lucb contains incompatible routines.
 # -lld doesn't do anything useful.
 # -lmalloc can cause a problem with GNU CC & Solaris.  Specifically,
@@ -20,8 +22,7 @@ glibpth="$*"
 set `echo " $libswanted " | sed -e 's@ ld @ @' -e 's@ malloc @ @' -e 's@ ucb @ @'`
 libswanted="$*"
 
-# Look for architecture name.  We want to suggest a useful default
-# for archlib and also warn about possible -x486 flags needed.
+# Look for architecture name.  We want to suggest a useful default.
 case "$archname" in
 '')
     if test -f /usr/bin/arch; then
@@ -33,12 +34,20 @@ case "$archname" in
     fi
     ;;
 esac
-case "$archname" in
-*86*) echo "For an Intel platform you might need to add -x486 to ccflags" >&4;;
-*) ;;
-esac
 
-# See below for excerpts from the Solaris FAQ.
+# Solaris 2.5 has reintroduced some BSD-ish functions into libc.
+# This is no problem unless you compile perl under Solaris 2.5 but
+# try to run the binary on 2.4.  Here, we take the easy way out by
+# claiming we don't have these functions.  perl.h works around all of
+# these anyway.
+# XXX Eventually, I should fix perl.h to prefer the POSIX versions.
+d_bcmp='undef'
+d_bcopy='undef'
+d_safebcpy='undef'
+d_index='undef'
+
+######################################################
+# General sanity testing.  See below for excerpts from the Solaris FAQ.
 
 # From roehrich@ironwood-fddi.cray.com Wed Sep 27 12:51:46 1995
 # Date: Thu, 7 Sep 1995 16:31:40 -0500
@@ -133,19 +142,7 @@ case "`${cc:-cc} -v 2>&1`" in
 		awk '{print $NF}'  | sed 's/specs$/include/'`
 
 	# Determine if the fixed-includes look like they'll work.
-	sed 1q $tmp/stdarg.h 2>&1 | grep 'stdarg.h for GNU' 2>&1 >/dev/null
-	case $? in
-	0) ;;
-	*)
-		cat <<END
-
-NOTE: The fixincludes or just-fixinc script for gcc was not run
-properly.  Your gcc may not be able to compile Perl.  Inform your system
-administrator that ${cc:-cc} is not properly installed.
-
-END
-		;;
-	esac
+	# Doesn't work anymore for gcc-2.7.2.
 
 	# See if as(1) is GNU as(1).  GNU as(1) won't work for this job.
 	case $verbose in
@@ -155,7 +152,7 @@ END
 
 NOTE: You are using GNU as(1).  GNU as(1) will not build Perl.
 You must arrange to use /usr/ccs/bin/as, perhaps by setting
-GCC_EXEC_PREFIX.
+GCC_EXEC_PREFIX or by including -B/usr/ccs/bin/ in your cc command.
 
 END
 	;;
@@ -169,7 +166,7 @@ END
 
 NOTE: You are using GNU ld(1).  GNU ld(1) will not build Perl.
 You must arrange to use /usr/ccs/bin/ld, perhaps by setting
-GCC_EXEC_PREFIX.
+GCC_EXEC_PREFIX or by including -B/usr/ccs/bin/ in your cc command.
 
 END
 	;;

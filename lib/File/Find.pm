@@ -1,7 +1,7 @@
 package File::Find;
 require 5.000;
 require Exporter;
-require Config;
+use Config;
 require Cwd;
 require File::Basename;
 
@@ -82,7 +82,8 @@ sub find {
 		&$wanted;
 		my $fixtopdir = $topdir;
 	        $fixtopdir =~ s,/$,, ;
-		$fixtopdir =~ s/\.dir$// if $Is_VMS; ;
+		$fixtopdir =~ s/\.dir$// if $Is_VMS;
+		$fixtopdir =~ s/\\dir$// if $Is_NT;
 		&finddir($wanted,$fixtopdir,$topnlink);
 	    }
 	    else {
@@ -90,7 +91,7 @@ sub find {
 	    }
 	}
 	else {
-	    unless (($dir,$_) = File::Basename::fileparse($topdir)) {
+	    unless (($_,$dir) = File::Basename::fileparse($topdir)) {
 		($dir,$_) = ('.', $topdir);
 	    }
 	    $name = $topdir;
@@ -133,8 +134,8 @@ sub finddir {
 
 		# Get link count and check for directoriness.
 
-		($dev,$ino,$mode,$nlink) = ($Is_VMS ? stat($_) : lstat($_))
-		    unless ($nlink || $dont_use_nlink);
+		($dev,$ino,$mode,$nlink) = ($Is_VMS ? stat($_) : lstat($_));
+		    # unless ($nlink || $dont_use_nlink);
 		
 		if (-d _) {
 
@@ -142,6 +143,7 @@ sub finddir {
 
 		    if (!$prune && chdir $_) {
 			$name =~ s/\.dir$// if $Is_VMS;
+			$name =~ s/\\dir$// if $Is_NT;
 			&finddir($wanted,$name,$nlink);
 			chdir '..';
 		    }
@@ -167,6 +169,7 @@ sub finddepth {
 		my $fixtopdir = $topdir;
 		$fixtopdir =~ s,/$,, ;
 		$fixtopdir =~ s/\.dir$// if $Is_VMS;
+		$fixtopdir =~ s/\\dir$// if $Is_NT;
 		&finddepthdir($wanted,$fixtopdir,$topnlink);
 		($dir,$_) = ($fixtopdir,'.');
 		$name = $fixtopdir;
@@ -177,7 +180,7 @@ sub finddepth {
 	    }
 	}
 	else {
-	    unless (($dir,$_) = File::Basename::fileparse($topdir)) {
+	    unless (($_,$dir) = File::Basename::fileparse($topdir)) {
 		($dir,$_) = ('.', $topdir);
 	    }
 	    chdir $dir && &$wanted;
@@ -225,6 +228,7 @@ sub finddepthdir {
 
 		    if (chdir $_) {
 			$name =~ s/\.dir$// if $Is_VMS;
+			$name =~ s/\\dir$// if $Is_NT;
 			&finddepthdir($wanted,$name,$nlink);
 			chdir '..';
 		    }
@@ -243,13 +247,16 @@ sub finddepthdir {
 $dont_use_nlink = 1 if ($Config::Config{'dont_use_nlink'});
 
 # These are hard-coded for now, but may move to hint files.
-if ($Config::Config{'osname'} eq 'VMS') {
+if ($^O eq 'VMS') {
   $Is_VMS = 1;
   $dont_use_nlink = 1;
 }
+if ($^O =~ m:^mswin32:i) {
+  $Is_NT = 1;
+  $dont_use_nlink = 1;
+}
 
-$dont_use_nlink = 1 if $Config::Config{'osname'} =~ m:^os/?2$:i ;
-$dont_use_nlink = 1 if $Config::Config{'osname'} =~ m:^mswin32$:i ;
+$dont_use_nlink = 1 if $^O eq 'os2';
 
 1;
 

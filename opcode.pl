@@ -452,7 +452,7 @@ binmode		binmode			ck_fun		s	F
 
 tie		tie			ck_fun		idms	R S L
 untie		untie			ck_fun		is	R
-tied		tied			ck_fun		st	R
+tied		tied			ck_fun		s	R
 dbmopen		dbmopen			ck_fun		is	H S S
 dbmclose	dbmclose		ck_fun		is	H
 
@@ -467,7 +467,7 @@ leavewrite	write exit		ck_null		0
 prtf		printf			ck_listiob	ims	F? L
 print		print			ck_listiob	ims	F? L
 
-sysopen		sysopen			ck_fun		st	F S S S?
+sysopen		sysopen			ck_fun		s	F S S S?
 sysread		sysread			ck_fun		imst	F R S S?
 syswrite	syswrite		ck_fun		imst	F S S S?
 
@@ -477,7 +477,7 @@ recv		recv			ck_fun		imst	F R S S
 eof		eof			ck_eof		is	F?
 tell		tell			ck_fun		st	F?
 seek		seek			ck_fun		s	F S S
-truncate	truncate		ck_trunc	is	S S
+truncate	truncate		ck_trunc	is	F S
 
 fcntl		fcntl			ck_fun		st	F S S
 ioctl		ioctl			ck_fun		st	F S S

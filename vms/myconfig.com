@@ -2,7 +2,7 @@ $! #!/bin/sh  ---> MYCONFIG.COM
 
 $! # This script is designed to provide a handy summary of the configuration
 $! # information being used to build perl. This is especially useful if you
-$! # are requesting help from comp.lang.perl on usenet or via mail.
+$! # are requesting help from comp.lang.perl.misc on usenet or via mail.
 
 $! DCL-ified by Peter Prymmer <pvhp@lns62.lns.cornell.edu> 22-DEC-1995
 $! DCL usage (choose one):
@@ -124,7 +124,13 @@ $ if f$locate("PATCHLEVEL",line).ne.f$length(line)
 $   then
 $     line = f$edit(line,"TRIM,COMPRESS")
 $     $PATCHLEVEL = f$element(2," ",line)
-$     goto patchlevel_h_Done
+$     if f$type($SUBVERSION).nes."" then goto patchlevel_h_Done
+$ endif
+$ if f$locate("SUBVERSION",line).ne.f$length(line)
+$   then
+$     line = f$edit(line,"TRIM,COMPRESS")
+$     $SUBVERSION = f$element(2," ",line)
+$     if f$type($PATCHLEVEL).nes."" then goto patchlevel_h_Done
 $ endif
 $ goto read_patchlevel_h
 
@@ -291,11 +297,11 @@ $ endif
 $spit_it_out:
 $! $spitshell = ECHO !<<!GROK!THIS! 
 $ ECHO " "
-$ ECHO "Summary of my ''$package' (patchlevel ''$PATCHLEVEL') configuration:"
+$ ECHO "Summary of my ''$package' (patchlevel ''$PATCHLEVEL' subversion ''$SUBVERSION') configuration:"
 $ ECHO "  Platform:"
-$ ECHO "    osname=''$osname', osver=''$osvers', archname=''$archname'"
+$ ECHO "    osname=''$osname', osvers=''$osvers', archname=''$archname'"
 $ ECHO "     uname=''$myuname'"                             !->d_has_uname?
-$ ECHO "     hint=''$hint'"                                 !->hintfile?
+$ ECHO "     hint=''$hint' d_sigaction='undef'"             !->hintfile?
 $ ECHO "     static exts=''$staticexts'"                    ! added for VMS
 $ ECHO "   Compiler:"
 $ ECHO "     cc=''$cc', optimize=''$optimize', ld=''$ld'"

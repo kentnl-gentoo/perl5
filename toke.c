@@ -16,6 +16,7 @@
 
 static void check_uni _((void));
 static void  force_next _((I32 type));
+static char *force_version _((char *start));
 static char *force_word _((char *start, int token, int check_keyword, int allow_pack, int allow_tick));
 static SV *q _((SV *sv));
 static char *scan_const _((char *start));
@@ -43,7 +44,8 @@ static I32 sublex_start _((void));
 #ifdef CRIPPLED_CC
 static int uni _((I32 f, char *s));
 #endif
-static char * filter_gets _((SV *sv, FILE *fp));
+static char * filter_gets _((SV *sv, PerlIO *fp));
+static void restore_rsfp _((void *f));
 
 /* The following are arranged oddly so that the guard on the switch statement
  * can get by with a single comparison (if the compiler is smart enough).
@@ -222,7 +224,7 @@ SV *line;
     SAVESPTR(linestr);
     SAVEPPTR(lex_brackstack);
     SAVEPPTR(lex_casestack);
-    SAVESPTR(rsfp);
+    SAVEDESTRUCTOR(restore_rsfp, rsfp);
 
     lex_state = LEX_NORMAL;
     lex_defer = 0;
@@ -265,6 +267,19 @@ SV *line;
 void
 lex_end()
 {
+}
+
+static void
+restore_rsfp(f)
+void *f;
+{
+    PerlIO *fp = (PerlIO*)f;
+
+    if (rsfp == PerlIO_stdin())
+	PerlIO_clearerr(rsfp);
+    else if (rsfp && (rsfp != fp))
+	PerlIO_close(rsfp);
+    rsfp = fp;
 }
 
 static void
@@ -340,10 +355,10 @@ register char *s;
 	    bufend = SvPVX(linestr) + SvCUR(linestr);
 	    if (preprocess && !in_eval)
 		(void)my_pclose(rsfp);
-	    else if ((FILE*)rsfp == stdin)
-		clearerr(stdin);
+	    else if ((PerlIO*)rsfp == PerlIO_stdin())
+		PerlIO_clearerr(rsfp);
 	    else
-		(void)fclose(rsfp);
+		(void)PerlIO_close(rsfp);
 	    rsfp = Nullfp;
 	    return s;
 	}
@@ -499,6 +514,34 @@ int kind;
 		);
 	}
     }
+}
+
+static char *
+force_version(s)
+char *s;
+{
+    OP *version = Nullop;
+
+    s = skipspace(s);
+
+    /* default VERSION number -- GBARR */
+
+    if(isDIGIT(*s)) {
+        char *d;
+        int c;
+        for( d=s, c = 1; isDIGIT(*d) || (*d == '.' && c--); d++);
+        if((*d == ';' || isSPACE(*d)) && *(skipspace(d)) != ',') {
+            s = scan_num(s);
+            /* real VERSION number -- GBARR */
+            version = yylval.opval;
+        }
+    }
+
+    /* NOTE: The parser sees the package name and the VERSION swapped */
+    nextval[nexttoke].opval = version;
+    force_next(WORD); 
+
+    return (s);
 }
 
 static SV *
@@ -951,7 +994,7 @@ GV *gv;
 	if (indirgv && GvCV(indirgv))
 	    return 0;
 	/* filehandle or package name makes it a method */
-	if (!gv || GvIO(indirgv) || gv_stashpv(tmpbuf, FALSE)) {
+	if (!gv || GvIO(indirgv) || gv_stashpvn(tmpbuf, len, FALSE)) {
 	    s = skipspace(s);
 	    nextval[nexttoke].opval =
 		(OP*)newSVOP(OP_CONST, 0,
@@ -1067,8 +1110,8 @@ filter_read(idx, buf_sv, maxlen)
 
 	    /* ensure buf_sv is large enough */
 	    SvGROW(buf_sv, old_len + maxlen) ;
-	    if ((len = fread(SvPVX(buf_sv) + old_len, 1, maxlen, rsfp)) <= 0){
-		if (ferror(rsfp))
+	    if ((len = PerlIO_read(rsfp, SvPVX(buf_sv) + old_len, maxlen)) <= 0){
+		if (PerlIO_error(rsfp))
 	            return -1;		/* error */
 	        else
 		    return 0 ;		/* end of file */
@@ -1077,7 +1120,7 @@ filter_read(idx, buf_sv, maxlen)
 	} else {
 	    /* Want a line */
             if (sv_gets(buf_sv, rsfp, SvCUR(buf_sv)) == NULL) {
-		if (ferror(rsfp))
+		if (PerlIO_error(rsfp))
 	            return -1;		/* error */
 	        else
 		    return 0 ;		/* end of file */
@@ -1105,7 +1148,7 @@ filter_read(idx, buf_sv, maxlen)
 static char *
 filter_gets(sv,fp)
 register SV *sv;
-register FILE *fp;
+register PerlIO *fp;
 {
     if (rsfp_filters) {
 
@@ -1185,7 +1228,7 @@ yylex()
 		return ')';
 	    }
 	    if (lex_casemods > 10) {
-		char* newlb = (char*)realloc(lex_casestack, lex_casemods + 2);
+		char* newlb = Renew(lex_casestack, lex_casemods + 2, char);
 		if (newlb != lex_casestack) {
 		    SAVEFREEPV(newlb);
 		    lex_casestack = newlb;
@@ -1306,7 +1349,7 @@ yylex()
     oldoldbufptr = oldbufptr;
     oldbufptr = s;
     DEBUG_p( {
-	fprintf(stderr,"### Tokener expecting %s at %s\n", exp_name[expect], s);
+	PerlIO_printf(PerlIO_stderr(), "### Tokener expecting %s at %s\n", exp_name[expect], s);
     } )
 
   retry:
@@ -1379,10 +1422,10 @@ yylex()
 		if (rsfp) {
 		    if (preprocess && !in_eval)
 			(void)my_pclose(rsfp);
-		    else if ((FILE*)rsfp == stdin)
-			clearerr(stdin);
+		    else if ((PerlIO *)rsfp == PerlIO_stdin())
+			PerlIO_clearerr(rsfp);
 		    else
-			(void)fclose(rsfp);
+			(void)PerlIO_close(rsfp);
 		    rsfp = Nullfp;
 		}
 		if (!in_eval && (minus_n || minus_p)) {
@@ -1466,13 +1509,14 @@ yylex()
 		    int oldp = minus_p;
 
 		    while (*d && !isSPACE(*d)) d++;
-		    while (*d == ' ') d++;
+		    while (*d == ' ' || *d == '\t') d++;
 
 		    if (*d++ == '-') {
 			while (d = moreswitches(d)) ;
 			if (perldb && !oldpdb ||
-			    minus_n && !oldn ||
-			    minus_p && !oldp)
+			    ( minus_n || minus_p ) && !(oldn || oldp) )
+			      /* if we have already added "LINE: while (<>) {",
+			         we must not do it again */
 			{
 			    sv_setpv(linestr, "");
 			    oldoldbufptr = oldbufptr = s = SvPVX(linestr);
@@ -1710,7 +1754,7 @@ yylex()
       leftbracket:
 	s++;
 	if (lex_brackets > 100) {
-	    char* newlb = (char*)realloc(lex_brackstack, lex_brackets + 1);
+	    char* newlb = Renew(lex_brackstack, lex_brackets + 1, char);
 	    if (newlb != lex_brackstack) {
 		SAVEFREEPV(newlb);
 		lex_brackstack = newlb;
@@ -1731,7 +1775,7 @@ yylex()
 	case XOPERATOR:
 	    while (s < bufend && (*s == ' ' || *s == '\t'))
 		s++;
-	    if (s < bufend && isALPHA(*s)) {
+	    if (s < bufend && (isALPHA(*s) || *s == '_')) {
 		d = scan_word(s, tokenbuf, FALSE, &len);
 		while (d < bufend && (*d == ' ' || *d == '\t'))
 		    d++;
@@ -1863,6 +1907,24 @@ yylex()
 	if (expect == XSTATE && isALPHA(tmp) &&
 		(s == SvPVX(linestr)+1 || s[-2] == '\n') )
 	{
+	    if (in_eval && !rsfp) {
+		d = bufend;
+		while (s < d) {
+		    if (*s++ == '\n') {
+			incline(s);
+			if (strnEQ(s,"=cut",4)) {
+			    s = strchr(s,'\n');
+			    if (s)
+				s++;
+			    else
+				s = d;
+			    incline(s);
+			    goto retry;
+			}
+		    }
+		}
+		goto retry;
+	    }
 	    s = bufend;
 	    doextract = TRUE;
 	    goto retry;
@@ -2283,10 +2345,9 @@ yylex()
 	if (tmp < 0) {			/* second-class keyword? */
 	    GV* gv;
 	    if (expect != XOPERATOR &&
-	      (*s != ':' || s[1] != ':') &&
-	      (gv = gv_fetchpv(tokenbuf,FALSE, SVt_PVCV)) &&
-	      (GvFLAGS(gv) & GVf_IMPORTED) &&
-	      GvCV(gv))
+		(*s != ':' || s[1] != ':') &&
+		(gv = gv_fetchpv(tokenbuf, FALSE, SVt_PVCV)) &&
+		GvIMPORTED_CV(gv))
 	    {
 		tmp = 0;
 	    }
@@ -2401,8 +2462,8 @@ yylex()
 
 		if (gv && GvCV(gv)) {
 		    CV* cv = GvCV(gv);
-		    nextval[nexttoke].opval = yylval.opval;
 		    if (*s == '(') {
+			nextval[nexttoke].opval = yylval.opval;
 			expect = XTERM;
 			force_next(WORD);
 			yylval.ival = 0;
@@ -2413,6 +2474,20 @@ yylex()
 				tokenbuf, tokenbuf);
 		    last_lop = oldbufptr;
 		    last_lop_op = OP_ENTERSUB;
+		    /* Check for a constant sub */
+		    {
+			SV *sv = cv_const_sv(cv);
+			if (sv) {
+			    SvREFCNT_dec(((SVOP*)yylval.opval)->op_sv);
+			    ((SVOP*)yylval.opval)->op_sv = SvREFCNT_inc(sv);
+			    yylval.opval->op_private = 0;
+			    TOKEN(WORD);
+			}
+		    }
+
+		    /* Resolve to GV now. */
+		    op_free(yylval.opval);
+		    yylval.opval = newCVREF(0, newGVOP(OP_GV, 0, gv));
 		    /* Is there a prototype? */
 		    if (SvPOK(cv)) {
 			STRLEN len;
@@ -2426,6 +2501,7 @@ yylex()
 			    PREBLOCK(LSTOPSUB);
 			}
 		    }
+		    nextval[nexttoke].opval = yylval.opval;
 		    expect = XTERM;
 		    force_next(WORD);
 		    TOKEN(NOAMP);
@@ -2478,26 +2554,26 @@ yylex()
 	    GV *gv;
 
 	    /*SUPPRESS 560*/
-	    if (!in_eval || tokenbuf[2] == 'D') {
+	    if (rsfp && (!in_eval || tokenbuf[2] == 'D')) {
 		char dname[256];
 		char *pname = "main";
 		if (tokenbuf[2] == 'D')
 		    pname = HvNAME(curstash ? curstash : defstash);
 		sprintf(dname,"%s::DATA", pname);
 		gv = gv_fetchpv(dname,TRUE, SVt_PVIO);
-		SvMULTI_on(gv);
+		GvMULTI_on(gv);
 		if (!GvIO(gv))
 		    GvIOp(gv) = newIO();
 		IoIFP(GvIOp(gv)) = rsfp;
 #if defined(HAS_FCNTL) && defined(F_SETFD)
 		{
-		    int fd = fileno(rsfp);
+		    int fd = PerlIO_fileno(rsfp);
 		    fcntl(fd,F_SETFD,fd >= 3);
 		}
 #endif
 		if (preprocess)
 		    IoTYPE(GvIOp(gv)) = '|';
-		else if ((FILE*)rsfp == stdin)
+		else if ((PerlIO*)rsfp == PerlIO_stdin())
 		    IoTYPE(GvIOp(gv)) = '-';
 		else
 		    IoTYPE(GvIOp(gv)) = '<';
@@ -2908,6 +2984,7 @@ yylex()
 	    if (expect != XSTATE)
 		yyerror("\"no\" not allowed in expression");
 	    s = force_word(s,WORD,FALSE,TRUE,FALSE);
+	    s = force_version(s);
 	    yylval.ival = 0;
 	    OPERATOR(USE);
 
@@ -3023,7 +3100,7 @@ yylex()
 	    *tokenbuf = '\0';
 	    s = force_word(s,WORD,TRUE,TRUE,FALSE);
 	    if (isIDFIRST(*tokenbuf))
-		gv_stashpv(tokenbuf, TRUE);
+		gv_stashpvn(tokenbuf, strlen(tokenbuf), TRUE);
 	    else if (*s == '<')
 		yyerror("<> should be quotes");
 	    UNI(OP_REQUIRE);
@@ -3347,7 +3424,18 @@ yylex()
 	case KEY_use:
 	    if (expect != XSTATE)
 		yyerror("\"use\" not allowed in expression");
-	    s = force_word(s,WORD,FALSE,TRUE,FALSE);
+	    s = skipspace(s);
+	    if(isDIGIT(*s)) {
+		s = force_version(s);
+		if(*s == ';' || (s = skipspace(s), *s == ';')) {
+		    nextval[nexttoke].opval = Nullop;
+		    force_next(WORD);
+		}
+	    }
+	    else {
+		s = force_word(s,WORD,FALSE,TRUE,FALSE);
+		s = force_version(s);
+	    }
 	    yylval.ival = 1;
 	    OPERATOR(USE);
 
@@ -4858,9 +4946,11 @@ start_subparse()
     CV* outsidecv = compcv;
     AV* comppadlist;
 
+#ifndef __QNX__
     if (compcv) {
 	assert(SvTYPE(compcv) == SVt_PVCV);
     }
+#endif
     save_I32(&subline);
     save_item(subname);
     SAVEINT(padix);
@@ -4956,7 +5046,7 @@ char *s;
     else if (in_eval)
 	sv_catpv(GvSV(errgv),buf);
     else
-	fputs(buf,stderr);
+	PerlIO_printf(PerlIO_stderr(), "%s",buf);
     if (++error_count >= 10)
 	croak("%s has too many errors.\n",
 	SvPVX(GvSV(curcop->cop_filegv)));

@@ -73,7 +73,8 @@ than VMS is settled. (defaults to FALSE)
 
 =back
 
-It returns the number of files successfully deleted.
+It returns the number of files successfully deleted. Symlinks are
+treated as ordinary files.
 
 =head1 AUTHORS
 
@@ -82,20 +83,22 @@ Charles Bailey <bailey@genetics.upenn.edu>
 
 =head1 REVISION
 
-This document was last revised 25-Aug-1995, for perl 5.002
+This module was last revised 14-Feb-1996, for perl 5.002. $VERSION is
+1.01.
 
 =cut
 
+$VERSION = "1.01"; # That's my hobby-horse, A.K.
+
 require 5.000;
-use Config;
 use Carp;
 require Exporter;
 @ISA = qw( Exporter );
 @EXPORT = qw( mkpath rmtree );
 
-$Is_VMS = $Config{'osname'} eq 'VMS';
+$Is_VMS = $^O eq 'VMS';
 
-sub mkpath{
+sub mkpath {
     my($paths, $verbose, $mode) = @_;
     # $paths   -- either a path string or ref to list of paths
     # $verbose -- optional print "mkdir $path" for each directory created
@@ -120,12 +123,13 @@ sub mkpath{
 
 sub rmtree {
     my($roots, $verbose, $safe) = @_;
-    my(@files,$count);
+    my(@files);
+    my($count) = 0;
     $roots = [$roots] unless ref $roots;
 
     foreach $root (@{$roots}) {
        $root =~ s#/$##;
-       if (-d $root) { 
+       if (not -l $root and -d _) { 
            opendir(D,$root);
            ($root = VMS::Filespec::unixify($root)) =~ s#\.dir$## if $Is_VMS;
            @files = map("$root/$_", grep $_!~/^\.{1,2}$/, readdir(D));
@@ -146,7 +150,7 @@ sub rmtree {
                next;
            }
            print "unlink $root\n" if $verbose;
-           while (-e $root) { # delete all versions under VMS
+           while (-e $root || -l $root) { # delete all versions under VMS
                (unlink($root) && ++$count)
                    or carp "Can't unlink file $root: $!";
            }

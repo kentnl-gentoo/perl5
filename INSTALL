@@ -14,10 +14,26 @@ The basic steps to build and install perl5 are:
 
 Each of these is explained in further detail below.
 
-=head1 BUILDING PERL5
+You should probably at least skim through this entire document before
+proceeding.  Special notes specific to this release are identified
+by B<NOTE>.
+
+If you're building Perl on a non-Unix system, you should also read
+the README file specific to your operating system, since this may
+provide additional or different instructions for building Perl.
+
+=head1 DESCRIPTION
+
+The following is the procedures you need to follow in order to successfully
+build perl.
 
 =head1 Start with a Fresh Distribution.
 
+If you have built perl before, you should clean out the build directory
+with the command
+
+	make realclean
+	
 The results of a Configure run are stored in the config.sh file.  If
 you are upgrading from a previous version of perl, or if you change
 systems or compilers or make other significant changes, or if you are
@@ -74,15 +90,15 @@ using the Configure command line option -Uusedl.
 
 =head2 Extensions
 
-By default, Configure will offer to build every extension which
-appears to be supported.  For example, Configure will offer to build
-GDBM_File only if it is able to find the gdbm library.  (See examples
-below.)  DynaLoader and Fcntl are always built by default.  Configure
-does not contain code to test for POSIX compliance, so POSIX is always
-built by default as well.  If you wish to skip POSIX, you can set the
-Configure variable useposix=false either in a hint file or from the
-Configure command line.  Similarly, the Safe extension is always built
-by default, but you can skip it by setting the Configure variable
+By default, Configure will offer to build every extension which appears
+to be supported.  For example, Configure will offer to build GDBM_File
+only if it is able to find the gdbm library.  (See examples below.)
+DynaLoader, Fcntl and FileHandle are always built by default.
+Configure does not contain code to test for POSIX compliance, so POSIX
+is always built by default as well.  If you wish to skip POSIX, you can
+set the Configure variable useposix=false either in a hint file or from
+the Configure command line.  Similarly, the Safe extension is always
+built by default, but you can skip it by setting the Configure variable
 usesafe=false either in a hint file for from the command line.
 
 In summary, here are the Configure command-line variables you can set
@@ -91,6 +107,7 @@ to turn off each extension:
     DB_File		i_db
     DynaLoader		(Must always be included)
     Fcntl		(Always included by default)
+    FileHandle		(Always included by default)
     GDBM_File		i_gdbm
     NDBM_File		i_ndbm
     ODBM_File		i_dbm
@@ -302,6 +319,7 @@ directory of your choice):
     installscript=`echo $installscript | sed "s!$prefix!$installprefix!"`
     installsitelib=`echo $installsitelib | sed "s!$prefix!$installprefix!"`
     installsitearch=`echo $installsitearch | sed "s!$prefix!$installprefix!"`
+    shrpdir=`echo $shrpdir | sed "s!$prefix!$installprefix!"`
 
 Then, you can Configure and install in the usual way:
 
@@ -340,7 +358,7 @@ guesses.
 
 All the installation questions have been moved to the top, so you don't
 have to wait for them.  Once you've handled them (and your C compiler &
-flags) you can type   '&-d'  at the next Configure prompt and Configure
+flags) you can type C<&-d> at the next Configure prompt and Configure
 will use the defaults from then on.
 
 If you find yourself trying obscure command line incantations and
@@ -357,6 +375,39 @@ Several of the hint files contain additional important information.
 If you have any problems, it is a good idea to read the relevant hint
 file for further information.  See F<hints/solaris_2.sh> for an
 extensive example.
+
+=item *** WHOA THERE!!! ***
+
+Occasionally, Configure makes a wrong guess.  For example, on SunOS
+4.1.3, Configure incorrectly concludes that tzname[] is in the
+standard C library.  The hint file is set up to correct for this.  You
+will see a message:
+
+    *** WHOA THERE!!! ***
+	The recommended value for $d_tzname on this machine was "undef"!
+	Keep the recommended value? [y]
+
+You should always keep the recommended value unless, after reading the
+relevant section of the hint file, you are sure you want to try
+overriding it.
+
+If you are re-using an old config.sh, the word "previous" will be
+used instead of "recommended".  Again, you will almost always want
+to keep the previous value, unless you have changed something on your
+system.
+
+For example, suppose you have added libgdbm.a to your system
+and you decide to reconfigure perl to use GDBM_File.  When you run
+Configure again, you will need to add -lgdbm to the list of libraries.
+Now, Configure will find your gdbm library and will issue a message:
+
+    *** WHOA THERE!!! ***
+	The previous value for $i_gdbm on this machine was "undef"!
+	Keep the previous value? [y]
+
+In this case, you do I<not> want to keep the previous value, so you
+should answer 'n'.  (You'll also have to manuually add GDBM_File to
+the list of dynamic extensions to build.)
 
 =item Changing Compilers
 
@@ -378,7 +429,8 @@ them to all the .SH files by running  B<sh Configure -S>.
 You can also supply a shell script config.over to over-ride Configure's
 guesses.  It will get loaded up at the very end, just before config.sh
 is created.  You have to be careful with this, however, as Configure
-does no checking that your changes make sense.
+does no checking that your changes make sense.  See the section on
+changing the installation directory for an example.
 
 =item config.h
 
@@ -492,9 +544,10 @@ correctly.  When using gcc, you should probably have i_stdarg='define'
 and i_varags='undef' in config.sh.  The problem is usually solved
 by running fixincludes correctly.
 
-If you wish to use dynamic loading on SunOS or Solaris, and you
-have GNU as and GNU ld installed, you may need to add B<-B/bin/> to
-your $ccflags and $ldflags so that the system's versions of as
+If you have problems with dynamic loading using gcc on SunOS or
+Solaris, and you are using GNU as and GNU ld, you may need to add
+B<-B/bin/> (for SunOS) or B<-B/usr/ccs/bin/> (for Solaris) to your
+$ccflags, $ldflags, and $lddlflags so that the system's versions of as
 and ld are used.
 
 If you run into dynamic loading problems, check your setting of
@@ -522,7 +575,7 @@ If individual tests bomb, you can run them by hand, e.g.,
 
 	./perl op/groups.t
 
-B<NOTE>: one possible reason for errors is that some external programs
+B<Note>: one possible reason for errors is that some external programs
 may be broken due to the combination of your environment and the way
 C<make test> exercises them. This may happen for example if you have
 one or more of these environment variables set:
@@ -537,6 +590,7 @@ by hand as shown above and see whether you can locate the program.
 Look for things like:
 C<exec, `backquoted command`, system, open("|...")> or C<open("...|")>.
 All these mean that Perl is trying to run some external program.
+
 =head1 INSTALLING PERL5
 
 =head1 make install
@@ -547,6 +601,11 @@ to put the man pages in a reasonable place.  It will not nroff the man
 page, however.  You may need to be root to run B<make install>.  If you
 are not root, you must own the directories in question and you should
 ignore any messages about chown not working.
+
+B<NOTE:>  In the 5.002 release, you will see some harmless error
+messages and warnings from pod2man.  You may safely ignore them.  (Yes,
+they should be fixed, but they didn't seem important enough to warrant
+holding up the entire 5.002 release.)
 
 If you want to see exactly what will happen without installing
 anything, you can run
@@ -611,12 +670,32 @@ to generate the html versions, and
 
 to generate the LaTeX versions.
 
+=head1 cd /usr/include; h2ph *.h sys/*.h
+
+Some of the perl library files need to be able to obtain information from
+the system header files.  This command will convert the most commonly used
+header files in F</usr/include> into files that can be easily interpreted
+by perl.  These files will be placed in architectural library directory
+you specified to B<Configure>; by default this is
+F</usr/local/lib/perl5/ARCH/VERSION>, where B<ARCH> is your architecture
+(such as C<sun4-solaris>) and B<VERSION> is the version of perl you are
+building (for example, C<5.003>).
+
+B<NOTE:> Due to differences in the C and perl languages, the conversion of
+the header files in not perfect.  You may have to hand edit some of the 
+converted files to get them to parse correctly.  For example, it breaks
+spectacularly on type casting and certain structures.
+ 
 =head1 Coexistence with earlier versions of perl5.
 
-You can safely install the current version of perl5 and still run
-scripts under the old binaries.  Instead of starting your script with
-#!/usr/local/bin/perl, just start it with #!/usr/local/bin/perl5.001
-(or whatever version you want to run.)
+You can safely install the current version of perl5 and still run scripts
+under the old binaries for versions 5.002 and later ONLY.  Instead of
+starting your script with #!/usr/local/bin/perl, just start it with
+#!/usr/local/bin/perl5.001 (or whatever version you want to run.)
+If you want to retain a version of perl5 prior to perl5.002, you'll
+need to install the current version in a separate directory tree,
+since some of the architecture-independent library files have changed
+in incompatible ways.
 
 The architecture-dependent files are stored in a version-specific
 directory (such as F</usr/local/lib/perl5/sun4-sunos/5.002>) so that
@@ -627,15 +706,37 @@ you will not be using 5.000 or 5.001, you may safely remove those
 files.
 
 The standard library files in F</usr/local/lib/perl5>
-should be useable by all versions of perl5.
+should be useable by all versions of perl5 since perl5.002.
 
-Most extensions will not need to be recompiled to use with a newer
+Most extensions will probably not need to be recompiled to use with a newer
 version of perl.  If you do run into problems, and you want to continue
 to use the old version of perl along with your extension, simply move
 those extension files to the appropriate version directory, such as
 F</usr/local/lib/perl/archname/5.002>.  Then perl5.002 will find your
 files in the 5.002 directory, and newer versions of perl will find your
 newer extension in the site_perl directory.
+
+Some users may prefer to keep all versions of perl in completely
+separate directories.  One convenient way to do this is by
+using a separate prefix for each version, such as
+
+	sh Configure -Dprefix=/opt/perl5.002
+
+and adding /opt/perl5.002/bin to the shell PATH variable.  Such users
+may also wish to add a symbolic link /usr/local/bin/perl so that
+scripts can still start with #!/usr/local/bin/perl.
+
+B<NOTE>: Starting with 5.002_01, all functions in the perl C source
+code are protected by default by the prefix Perl_ (or perl_) so that
+you may link with third-party libraries without fear of namespace
+collisons.  This breaks compatability with the initially released
+version of 5.002, so once you install 5.002_01 (or higher) you will
+need to re-build and install all of your dynamically loadable
+extensions.  (The standard extensions supplied with Perl are handled
+automatically).  You can turn off this namespace protection by adding
+-DNO_EMBED to your ccflags variable in config.sh.  This is a one-time
+change.  In the future, we certainly hope that most extensions won't
+need to be recompiled for use with a newer version of perl.
 
 =head1 Coexistence with perl4
 
@@ -649,7 +750,8 @@ F<perl4.036>.  That will not be touched by the perl5 installation
 process.  Most perl4 scripts should run just fine under perl5.
 However, if you have any scripts that require perl4, you can replace
 the C<#!> line at the top of them by C<#!/usr/local/bin/perl4.036>
-(or whatever the appropriate pathname is).
+(or whatever the appropriate pathname is).  See pod/perltrap.pod
+for possible problems running perl4 scripts under perl5.
 
 =head1 DOCUMENTATION
 
@@ -664,6 +766,6 @@ is sometimes useful for finding things in the library modules.
 Andy Dougherty <doughera@lafcol.lafayette.edu>, borrowing I<very> heavily
 from the original README by Larry Wall.
 
-=head 2 LAST MODIFIED
+=head1 LAST MODIFIED
 
-04 January 1996
+07 July 1996

@@ -46,7 +46,7 @@ which are qualified by their nature.
 
 =cut
 
-require 5.002;
+use 5.002;
 
 require Exporter;
 @ISA = qw(Exporter);
@@ -61,6 +61,7 @@ while (<DATA>) {
     chomp;
     $global{$_} = 1;
 }
+close DATA;
 
 sub gensym () {
     my $name = "GEN" . $genseq++;
@@ -72,7 +73,7 @@ sub ungensym ($) {}
 
 sub qualify ($;$) {
     my ($name) = @_;
-    if (! ref($name) && $name !~ /::/) {
+    if (!ref($name) && index($name, '::') == -1 && index($name, "'") == -1) {
 	my $pkg;
 	# Global names: special character, "^x", or other. 
 	if ($name =~ /^([^a-z])|(\^[a-z])$/i || $global{$name}) {

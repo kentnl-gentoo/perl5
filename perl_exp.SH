@@ -9,19 +9,24 @@
 # with all of the global symbols that a dynamicly link library
 # might want to access.
 
+# All symbols have a Perl_ prefix because that's what embed.h
+# sticks in front of them.
+
 echo "Extracting perl.exp"
 
+rm -f perl.exp
 echo "#!" > perl.exp
 
-sed -n "/^[A-Za-z]/ p" global.sym >> perl.exp
+sed -n '/^[A-Za-z]/ s/^/Perl_/p' global.sym >> perl.exp
 
 # also add symbols from interp.sym
 # They are only needed if -DMULTIPLICITY is not set but it
 # doesn't hurt to include them anyway.
-sed -n "/^[A-Za-z]/ p" interp.sym >> perl.exp
+sed -n '/^[A-Za-z]/ p' interp.sym >> perl.exp
 
 # extra globals not included above.
 cat <<END >> perl.exp
+perl_init_i18nl14n
 perl_init_ext
 perl_alloc
 perl_construct
@@ -38,6 +43,7 @@ perl_call_pv
 perl_call_method
 perl_call_sv
 perl_requirepv
+safecalloc
 safemalloc
 saferealloc
 safefree

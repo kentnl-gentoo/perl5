@@ -1,0 +1,32 @@
+: This file was created by running packinit on Sat Nov 18 16:00:33 EST 1995.
+: Do not hand edit; run packinit again if changes are to be made.
+packver='3.036'
+: Basic variables
+package=perl5
+baserev=5.0
+patchbranch=1
+copyright=' '
+mydiff=''
+maintname='Larry Wall'
+maintloc='lwall@sems.com'
+ftpsite=''
+orgname='NetLabs, Inc.'
+newsgroups='comp.lang.perl.misc'
+recipients='source-archives@mirror.TMC.COM'
+ftpdir=''
+mailagent='false'
+changelog=' '
+changercs=0
+: File lookup extensions
+cext='.xs'
+shext='.PL'
+: Mailing list variables
+list_users='false'
+list_name=''
+list_addr=''
+list_request=''
+list_manager=''
+list_sub=''
+list_unsub=''
+: Derivative variables -- do not change
+revbranch="$baserev.$patchbranch"

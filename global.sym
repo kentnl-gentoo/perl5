@@ -28,6 +28,7 @@ compcv
 comppad
 comppad_name
 comppad_name_fill
+comppad_name_floor
 concat_amg
 concat_ass_amg
 cop_seqmax
@@ -36,13 +37,17 @@ cryptseen
 cshlen
 cshname
 curcop
+curcopdb
 curinterp
 curpad
+cv_const_sv
 dc
+debug
 dec_amg
 di
 div_amg
 div_ass_amg
+do_undump
 ds
 egid
 envgv
@@ -66,6 +71,7 @@ hexdigit
 hints
 in_my
 inc_amg
+io_close
 know_next
 last_lop
 last_lop_op
@@ -139,12 +145,16 @@ op_seqmax
 opargs
 origalen
 origenviron
+osname
 padix
 patleave
 pow_amg
 pow_ass_amg
 ppaddr
 profiledata
+provide_ref
+psig_ptr
+psig_name
 qrt_amg
 rcsid
 reall_srchlen
@@ -156,6 +166,7 @@ regendp
 regeol
 regfold
 reginput
+regkind
 reglastparen
 regmyendp
 regmyp_size
@@ -202,7 +213,6 @@ sin_amg
 sle_amg
 slt_amg
 sne_amg
-stack
 stack_base
 stack_max
 stack_sp
@@ -296,9 +306,9 @@ cando
 cast_ulong
 check_uni
 checkcomma
-chsize
 ck_aelem
 ck_concat
+ck_delete
 ck_eof
 ck_eval
 ck_exec
@@ -315,7 +325,9 @@ ck_listiob
 ck_match
 ck_null
 ck_repeat
+ck_require
 ck_retarget
+ck_rfun
 ck_rvconst
 ck_select
 ck_shift
@@ -323,6 +335,7 @@ ck_sort
 ck_spair
 ck_split
 ck_subr
+ck_svconst
 ck_trunc
 convert
 cpytill
@@ -408,6 +421,7 @@ gv_fetchpv
 gv_fullname
 gv_init
 gv_stashpv
+gv_stashpvn
 gv_stashsv
 he_delayfree
 he_free
@@ -415,16 +429,21 @@ he_root
 hoistmust
 hv_clear
 hv_delete
+hv_delete_ent
 hv_exists
+hv_exists_ent
 hv_fetch
+hv_fetch_ent
 hv_iterinit
 hv_iterkey
+hv_iterkeysv
 hv_iternext
 hv_iternextsv
 hv_iterval
 hv_magic
 hv_stashpv
 hv_store
+hv_store_ent
 hv_undef
 ibcmp
 ingroup
@@ -443,12 +462,14 @@ localize
 looks_like_number
 magic_clearenv
 magic_clearpack
+magic_clearsig
 magic_existspack
 magic_get
 magic_getarylen
 magic_getglob
 magic_getpack
 magic_getpos
+magic_getsig
 magic_gettaint
 magic_getuvar
 magic_len
@@ -488,6 +509,7 @@ mstats
 my
 my_bcopy
 my_bzero
+my_chsize
 my_exit
 my_htonl
 my_lstat
@@ -567,6 +589,7 @@ pmtrans
 pop_return
 pop_scope
 pp_aassign
+pp_abs
 pp_accept
 pp_add
 pp_aelem
@@ -574,6 +597,7 @@ pp_aelemfast
 pp_alarm
 pp_and
 pp_andassign
+pp_anoncode
 pp_anonhash
 pp_anonlist
 pp_aslice
@@ -584,6 +608,7 @@ pp_bind
 pp_binmode
 pp_bit_and
 pp_bit_or
+pp_bit_xor
 pp_bless
 pp_caller
 pp_chdir
@@ -591,6 +616,7 @@ pp_chmod
 pp_chomp
 pp_chop
 pp_chown
+pp_chr
 pp_chroot
 pp_close
 pp_closedir
@@ -668,6 +694,7 @@ pp_fttext
 pp_fttty
 pp_ftzero
 pp_ge
+pp_gelem
 pp_getc
 pp_getlogin
 pp_getpeername
@@ -705,6 +732,19 @@ pp_gvsv
 pp_helem
 pp_hex
 pp_hslice
+pp_i_add
+pp_i_divide
+pp_i_eq
+pp_i_ge
+pp_i_gt
+pp_i_le
+pp_i_lt
+pp_i_modulo
+pp_i_multiply
+pp_i_ncmp
+pp_i_ne
+pp_i_negate
+pp_i_subtract
 pp_index
 pp_indread
 pp_int
@@ -736,6 +776,8 @@ pp_lslice
 pp_lstat
 pp_lt
 pp_map
+pp_mapstart
+pp_mapwhile
 pp_match
 pp_method
 pp_mkdir
@@ -760,6 +802,7 @@ pp_or
 pp_orassign
 pp_ord
 pp_pack
+pp_padany
 pp_padav
 pp_padhv
 pp_padsv
@@ -777,6 +820,7 @@ pp_prtf
 pp_push
 pp_pushmark
 pp_pushre
+pp_quotemeta
 pp_rand
 pp_range
 pp_rcatline
@@ -852,6 +896,7 @@ pp_sselect
 pp_sservent
 pp_ssockopt
 pp_stat
+pp_stringify
 pp_stub
 pp_study
 pp_subst
@@ -860,6 +905,7 @@ pp_substr
 pp_subtract
 pp_symlink
 pp_syscall
+pp_sysopen
 pp_sysread
 pp_system
 pp_syswrite
@@ -902,7 +948,7 @@ regnext
 regprop
 repeatcpy
 rninstr
-run
+runops
 same_dirent
 save_I32
 save_aptr
@@ -950,6 +996,7 @@ scope
 screaminstr
 setdefout
 setenv_getix
+sharepvn
 sighandler
 skipspace
 stack_grow
@@ -1017,6 +1064,7 @@ taint_proper
 too_few_arguments
 too_many_arguments
 unlnk
+unsharepvn
 utilize
 wait4pid
 warn

@@ -32,10 +32,15 @@ FileHandle - supply object methods for filehandles
         undef $fh;       # automatically closes the file
     }
 
+    $pos = $fh->getpos;
+    $fh->setpos $pos;
+
+    $fh->setvbuf($buffer_var, _IOLBF, 1024);
+
     ($readfh, $writefh) = FileHandle::pipe;
 
     autoflush STDOUT 1;
-  
+
 =head1 DESCRIPTION
 
 C<FileHandle::new> creates a C<FileHandle>, which is a reference to a
@@ -59,6 +64,21 @@ the open mode in either Perl form (">", "+<", etc.) or POSIX form
 C<FileHandle::fdopen> is like C<open> except that its first parameter
 is not a filename but rather a file handle name, a FileHandle object,
 or a file descriptor number.
+
+If the C functions fgetpos() and fsetpos() are available, then
+C<FileHandle::getpos> returns an opaque value that represents the
+current position of the FileHandle, and C<FileHandle::setpos> uses
+that value to return to a previously visited position.
+
+If the C function setvbuf() is available, then C<FileHandle::setvbuf>
+sets the buffering policy for the FileHandle.  The calling sequence
+for the Perl function is the same as its C counterpart, including the
+macros C<_IOFBF>, C<_IOLBF>, and C<_IONBF>, except that the buffer
+parameter specifies a scalar variable to use as a buffer.  WARNING: A
+variable used as a buffer by C<FileHandle::setvbuf> must not be
+modified in any way until the FileHandle is closed or until
+C<FileHandle::setvbuf> is called again, or memory corruption may
+result!
 
 See L<perlfunc> for complete descriptions of each of the following
 supported C<FileHandle> methods, which are just front ends for the
@@ -131,18 +151,18 @@ class from C<FileHandle> and inherit those methods.
 =cut
 
 require 5.000;
+use vars qw($VERSION @EXPORT @EXPORT_OK $AUTOLOAD);
 use Carp;
-use Fcntl;
 use Symbol;
-use English;
 use SelectSaver;
 
 require Exporter;
 require DynaLoader;
 @ISA = qw(Exporter DynaLoader);
 
-@EXPORT = (@Fcntl::EXPORT,
-	   qw(_IOFBF _IOLBF _IONBF));
+$VERSION = "1.00" ;
+
+@EXPORT = qw(_IOFBF _IOLBF _IONBF);
 
 @EXPORT_OK = qw(
     autoflush
@@ -166,10 +186,31 @@ require DynaLoader;
 
 
 ################################################
+## If the Fcntl extension is available,
+##  export its constants.
+##
+
+sub import {
+    my $pkg = shift;
+    my $callpkg = caller;
+    Exporter::export $pkg, $callpkg;
+    eval {
+	require Fcntl;
+	Exporter::export 'Fcntl', $callpkg;
+    };
+};
+
+
+################################################
 ## Interaction with the XS.
 ##
 
-bootstrap FileHandle;
+eval {
+    bootstrap FileHandle;
+};
+if ($@) {
+    *constant = sub { undef };
+}
 
 sub AUTOLOAD {
     if ($AUTOLOAD =~ /::(_?[a-z])/) {
@@ -211,7 +252,19 @@ sub new_from_fd {
 
 sub DESTROY {
     my ($fh) = @_;
-    close($fh);
+
+   # During global object destruction, this function may be called
+   # on FILEHANDLEs as well as on the GLOBs that contains them.
+   # Thus the following trickery.  If only the CORE file operators
+   # could deal with FILEHANDLEs, it wouldn't be necessary...
+
+   if ($fh =~ /=FILEHANDLE\(/) {
+     local *TMP = $fh;
+     close(TMP) if fileno(TMP);
+   }
+   else {
+     close($fh) if fileno($fh);
+   }
 }
 
 ################################################
@@ -341,85 +394,85 @@ sub getlines {
 
 sub autoflush {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $OUTPUT_AUTOFLUSH;
-    $OUTPUT_AUTOFLUSH = @_ > 1 ? $_[1] : 1;
+    my $prev = $|;
+    $| = @_ > 1 ? $_[1] : 1;
     $prev;
 }
 
 sub output_field_separator {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $OUTPUT_FIELD_SEPARATOR;
-    $OUTPUT_FIELD_SEPARATOR = $_[1] if @_ > 1;
+    my $prev = $,;
+    $, = $_[1] if @_ > 1;
     $prev;
 }
 
 sub output_record_separator {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $OUTPUT_RECORD_SEPARATOR;
-    $OUTPUT_RECORD_SEPARATOR = $_[1] if @_ > 1;
+    my $prev = $\;
+    $\ = $_[1] if @_ > 1;
     $prev;
 }
 
 sub input_record_separator {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $INPUT_RECORD_SEPARATOR;
-    $INPUT_RECORD_SEPARATOR = $_[1] if @_ > 1;
+    my $prev = $/;
+    $/ = $_[1] if @_ > 1;
     $prev;
 }
 
 sub input_line_number {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $INPUT_LINE_NUMBER;
-    $INPUT_LINE_NUMBER = $_[1] if @_ > 1;
+    my $prev = $.;
+    $. = $_[1] if @_ > 1;
     $prev;
 }
 
 sub format_page_number {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $FORMAT_PAGE_NUMBER;
-    $FORMAT_PAGE_NUMBER = $_[1] if @_ > 1;
+    my $prev = $%;
+    $% = $_[1] if @_ > 1;
     $prev;
 }
 
 sub format_lines_per_page {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $FORMAT_LINES_PER_PAGE;
-    $FORMAT_LINES_PER_PAGE = $_[1] if @_ > 1;
+    my $prev = $=;
+    $= = $_[1] if @_ > 1;
     $prev;
 }
 
 sub format_lines_left {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $FORMAT_LINES_LEFT;
-    $FORMAT_LINES_LEFT = $_[1] if @_ > 1;
+    my $prev = $-;
+    $- = $_[1] if @_ > 1;
     $prev;
 }
 
 sub format_name {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $FORMAT_NAME;
-    $FORMAT_NAME = qualify($_[1], caller) if @_ > 1;
+    my $prev = $~;
+    $~ = qualify($_[1], caller) if @_ > 1;
     $prev;
 }
 
 sub format_top_name {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $FORMAT_TOP_NAME;
-    $FORMAT_TOP_NAME = qualify($_[1], caller) if @_ > 1;
+    my $prev = $^;
+    $^ = qualify($_[1], caller) if @_ > 1;
     $prev;
 }
 
 sub format_line_break_characters {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $FORMAT_LINE_BREAK_CHARACTERS;
-    $FORMAT_LINE_BREAK_CHARACTERS = $_[1] if @_ > 1;
+    my $prev = $:;
+    $: = $_[1] if @_ > 1;
     $prev;
 }
 
 sub format_formfeed {
     my $old = new SelectSaver qualify($_[0], caller);
-    my $prev = $FORMAT_FORMFEED;
-    $FORMAT_FORMFEED = $_[1] if @_ > 1;
+    my $prev = $^L;
+    $^L = $_[1] if @_ > 1;
     $prev;
 }
 

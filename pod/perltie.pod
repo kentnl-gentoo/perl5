@@ -6,6 +6,8 @@ perltie - how to hide an object class in a simple variable
 
  tie VARIABLE, CLASSNAME, LIST
 
+ $object = tied VARIABLE
+
  untie VARIABLE
 
 =head1 DESCRIPTION
@@ -36,8 +38,8 @@ passed to the dbminit() function of C.) The object returned by the "new"
 method is also returned by the tie() function, which would be useful if
 you wanted to access other methods in C<CLASSNAME>. (You don't actually
 have to return a reference to a right "type" (e.g. HASH or C<CLASSNAME>)
-so long as it's a properly blessed object.)
-
+so long as it's a properly blessed object.)  You can also retrieve
+a reference to the underlying object using the tied() function.
 
 Unlike dbmopen(), the tie() function will not C<use> or C<require> a module
 for you--you need to do that explicitly yourself.
@@ -81,12 +83,12 @@ expected to return a blessed reference to a new scalar
         my $pid = shift || $$; # 0 means me
 
         if ($pid !~ /^\d+$/) {
-            carp "Nice::TieScalar got non-numeric pid $pid" if $^W;
+            carp "Nice::Tie::Scalar got non-numeric pid $pid" if $^W;
             return undef;
         }
 
         unless (kill 0, $pid) { # EPERM or ERSCH, no doubt
-            carp "Nice::TieScalar got bad pid $pid: $!" if $^W;
+            carp "Nice::Tie::Scalar got bad pid $pid: $!" if $^W;
             return undef;
         }
 
@@ -190,7 +192,7 @@ take an exception.  (Well, if you access an individual element; an
 aggregate assignment would be missed.) For example:
 
     require Bounded_Array;
-    tie @ary, Bounded_Array, 2;
+    tie @ary, 'Bounded_Array', 2;
     $| = 1;
     for $i (0 .. 10) {
         print "setting index $i: ";
@@ -216,7 +218,7 @@ anonymous ARRAY ref) will be accessed.
 In our example, just to show you that you don't I<really> have to return an
 ARRAY reference, we'll choose a HASH reference to represent our object.
 A HASH works out well as a generic record type: the C<{BOUND}> field will
-store the maximum bound allowed, and the C<{ARRAY} field will hold the
+store the maximum bound allowed, and the C<{ARRAY}> field will hold the
 true ARRAY ref.  If someone outside the class tries to dereference the
 object returned (doubtless thinking it an ARRAY ref), they'll blow up.
 This just goes to show you that you should respect an object's privacy.
@@ -301,8 +303,8 @@ functions to iterate over all the keys.  And DESTROY is called when the
 tied variable is garbage collected.
 
 If this seems like a lot, then feel free to merely inherit
-from the standard TieHash module for most of your methods, redefining only
-the interesting ones.  See L<TieHash> for details.
+from the standard Tie::Hash module for most of your methods, redefining only
+the interesting ones.  See L<Tie::Hash> for details.
 
 Remember that Perl distinguishes between a key not existing in the hash,
 and the key existing in the hash but having a corresponding value of
@@ -315,7 +317,7 @@ with the name of the file (minus the dot) and you get back that dotfile's
 contents.  For example:
 
     use DotFiles;
-    tie %dot, DotFiles;
+    tie %dot, 'DotFiles';
     if ( $dot{profile} =~ /MANPATH/ ||
          $dot{login}   =~ /MANPATH/ ||
          $dot{cshrc}   =~ /MANPATH/    )
@@ -325,7 +327,7 @@ contents.  For example:
 
 Or here's another sample of using our tied class:
 
-    tie %him, DotFiles, 'daemon';
+    tie %him, 'DotFiles', 'daemon';
     foreach $f ( keys %him ) {
 	printf "daemon dot file %s is size %d\n",
 	    $f, length $him{$f};
@@ -478,7 +480,14 @@ If they wanted to clobber something, they might say:
     $ob->clobber(1);
     $daemon_dots{signature} = "A true daemon\n";
 
-Where the clobber method is simply:
+Another way to lay hands on a reference to the underlying object is to
+use the tied() function, so they might alternately have set clobber
+using:
+
+    tie %daemon_dots, 'daemon';
+    tied(%daemon_dots)->clobber(1);
+
+The clobber method is simply:
 
     sub clobber {
 	my $self = shift;
@@ -500,8 +509,16 @@ be careful to check whether they really want to clobber files.
 	croak "@{[&whowasi]}: won't remove file $file"
 	    unless $self->{CLOBBER};
 	delete $self->{LIST}->{$dot};
-	unlink($file) || carp "@{[&whowasi]}: can't unlink $file: $!";
+	my $success = unlink($file);
+	carp "@{[&whowasi]}: can't unlink $file: $!" unless $success;
+	$success;
     }
+
+The value returned by DELETE becomes the return value of the call
+to delete().  If you want to emulate the normal behavior of delete(),
+you should return whatever FETCH would have returned for this key.
+In this example, we have chosen instead to return a value which tells
+the caller whether the file was successfully deleted.
 
 =item CLEAR this
 
@@ -545,7 +562,7 @@ call.
     sub FIRSTKEY {
 	carp &whowasi if $DEBUG;
 	my $self = shift;
-	my $a = keys %{$self->{LIST}};
+	my $a = keys %{$self->{LIST}};		# reset each() iterator
 	each %{$self->{LIST}}
     }
 
@@ -583,7 +600,7 @@ use the each() function to iterate over such.  Example:
 
     # print out history file offsets
     use NDBM_File;
-    tie(%HIST, NDBM_File, '/usr/lib/news/history', 1, 0);
+    tie(%HIST, 'NDBM_File', '/usr/lib/news/history', 1, 0);
     while (($key,$val) = each %HIST) {
         print $key, ' = ', unpack('L',$val), "\n";
     }

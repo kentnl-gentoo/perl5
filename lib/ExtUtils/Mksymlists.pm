@@ -3,16 +3,15 @@ use strict qw[ subs refs ];
 # no strict 'vars';  # until filehandles are exempted
 
 use Carp;
-use Config;
 use Exporter;
-# mention vars twice to prevent single-use warnings
-@ExtUtils::Mksymlists::ISA = @ExtUtils::Mksymlists::ISA = 'Exporter';
-@ExtUtils::Mksymlists::EXPORT = @ExtUtils::Mksymlists::EXPORT = '&Mksymlists';
-$ExtUtils::Mksymlists::VERSION = $ExtUtils::Mksymlists::VERSION = '1.00';
+use vars qw( @ISA @EXPORT $VERSION );
+@ISA = 'Exporter';
+@EXPORT = '&Mksymlists';
+$VERSION = '1.03';
 
 sub Mksymlists {
     my(%spec) = @_;
-    my($osname) = $Config{'osname'};
+    my($osname) = $^O;
 
     croak("Insufficient information specified to Mksymlists")
         unless ( $spec{NAME} or
@@ -41,14 +40,15 @@ sub Mksymlists {
     }
 
 #    We'll need this if we ever add any OS which uses mod2fname
+#    not as pseudo-builtin.
 #    require DynaLoader;
-#    if (defined &DynaLoader::mod2fname and not $spec{DLBASE}) {
-#        $spec{DLBASE} = DynaLoader::mod2fname([ split(/::/,$spec{NAME}) ]);
-#    }
+    if (defined &DynaLoader::mod2fname and not $spec{DLBASE}) {
+        $spec{DLBASE} = DynaLoader::mod2fname([ split(/::/,$spec{NAME}) ]);
+    }
 
     if    ($osname eq 'aix') { _write_aix(\%spec); }
     elsif ($osname eq 'VMS') { _write_vms(\%spec) }
-    elsif ($osname eq 'OS2') { _write_os2(\%spec) }
+    elsif ($osname =~ m|^os/?2$|i) { _write_os2(\%spec) }
     else { croak("Don't know how to create linker option file for $osname\n"); }
 }
 
@@ -80,16 +80,26 @@ sub _write_os2 {
     print DEF "LIBRARY '$data->{DLBASE}' INITINSTANCE TERMINSTANCE\n";
     print DEF "CODE LOADONCALL\n";
     print DEF "DATA LOADONCALL NONSHARED MULTIPLE\n";
-    print DEF "EXPORTS\n";
-    print DEF join("\n",@{$data->{DL_VARS}}, "\n") if @{$data->{DL_VARS}};
-    print DEF join("\n",@{$data->{FUNCLIST}}, "\n") if @{$data->{FUNCLIST}};
+    print DEF "EXPORTS\n  ";
+    print DEF join("\n  ",@{$data->{DL_VARS}}, "\n") if @{$data->{DL_VARS}};
+    print DEF join("\n  ",@{$data->{FUNCLIST}}, "\n") if @{$data->{FUNCLIST}};
+    if (%{$data->{IMPORTS}}) {
+        print DEF "IMPORTS\n";
+my ($name, $exp);
+while (($name, $exp)= each %{$data->{IMPORTS}}) {
+  print DEF "  $name=$exp\n";
+}
+    }
     close DEF;
 }
 
 
 sub _write_vms {
     my($data) = @_;
-    my($isvax) = $Config{'arch'} =~ /VAX/i;
+
+    require Config; # a reminder for once we do $^O
+
+    my($isvax) = $Config::Config{'arch'} =~ /VAX/i;
     my($sym);
 
     rename "$data->{FILE}.opt", "$data->{FILE}.opt_old";
@@ -120,7 +130,7 @@ sub _write_vms {
     # extliblist routine.
     open OPT,'>rtls.opt';
     print OPT "PerlShr/Share\n";
-    foreach $rtl (split(/\s+/,$Config{'libs'})) { print OPT "$rtl\n"; }
+    foreach $rtl (split(/\s+/,$Config::Config{'libs'})) { print OPT "$rtl\n"; }
     close OPT;
 }
 
@@ -162,7 +172,7 @@ from which it is usually taken.  Its value is a reference to an
 associative array, in which each key is the name of a package, and
 each value is an a reference to an array of function names which
 should be exported by the extension.  For instance, one might say
-C<DL_FUNCS =E<gt> { Homer::Iliad =E<gt> [ qw(trojans greeks) ],
+C<DL_FUNCS =E<gt> { Homer::Iliad   =E<gt> [ qw(trojans greeks) ],
 Homer::Odyssey =E<gt> [ qw(travellers family suitors) ] }>.  The
 function names should be identical to those in the XSUB code;
 C<Mksymlists> will alter the names written to the linker option
@@ -214,4 +224,4 @@ Charles Bailey I<E<lt>bailey@genetics.upenn.eduE<gt>>
 
 =head1 REVISION
 
-Last revised 14-Jan-1996, for Perl 5.002.
+Last revised 14-Feb-1996, for Perl 5.002.

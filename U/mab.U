@@ -1,0 +1,15 @@
+?RCS: $Id: mab.U,v $
+?RCS:
+?RCS: $Log: mab.U,v $
+?RCS:
+?X: 
+?X: Place holder for real thing - mab is "Multi Architecture Binaries"
+?X: or some such on NeXT
+?X:
+?MAKE:mab: Myinit Oldconfig
+?MAKE:	-pick add $@ %<
+?S:mab:
+?S:	Something for Multi Architecture Binaries...
+?S:.
+?INIT:mab=''
+?LINT:set mab

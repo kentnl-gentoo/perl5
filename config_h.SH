@@ -212,26 +212,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  */
 #$d_dlerror HAS_DLERROR	/**/
 
-/* SETUID_SCRIPTS_ARE_SECURE_NOW:
- *	This symbol, if defined, indicates that the bug that prevents
- *	setuid scripts from being secure is not present in this kernel.
- */
-/* DOSUID:
- *	This symbol, if defined, indicates that the C program should
- *	check the script that it is executing for setuid/setgid bits, and
- *	attempt to emulate setuid/setgid on systems that have disabled
- *	setuid #! scripts because the kernel can't do it securely.
- *	It is up to the package designer to make sure that this emulation
- *	is done securely.  Among other things, it should do an fstat on
- *	the script it just opened to make sure it really is a setuid/setgid
- *	script, it should make sure the arguments passed correspond exactly
- *	to the argument on the #! line, and it should not trust any
- *	subprocesses to which it must pass the filename rather than the
- *	file descriptor of the script to be executed.
- */
-#$d_suidsafe SETUID_SCRIPTS_ARE_SECURE_NOW	/**/
-#$d_dosuid DOSUID		/**/
-
 /* HAS_DUP2:
  *	This symbol, if defined, indicates that the dup2 routine is
  *	available to duplicate file descriptors.
@@ -1243,17 +1223,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  */
 #$i_utime I_UTIME		/**/
 
-/* I_STDARG:
- *	This symbol, if defined, indicates that <stdarg.h> exists and should
- *	be included.
- */
-/* I_VARARGS:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <varargs.h>.
- */
-#$i_stdarg I_STDARG		/**/
-#$i_varargs I_VARARGS	/**/
-
 /* I_VFORK:
  *	This symbol, if defined, indicates to the C program that it should
  *	include vfork.h.
@@ -1274,33 +1243,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  *	to get any typedef'ed information.
  */
 #define Mode_t $modetype	 /* file mode parameter for system calls */
-
-/* VAL_O_NONBLOCK:
- *	This symbol is to be used during open() or fcntl(F_SETFL) to turn on
- *	non-blocking I/O for the file descriptor. Note that there is no way
- *	back, i.e. you cannot turn it blocking again this way. If you wish to
- *	alternatively switch between blocking and non-blocking, use the
- *	ioctl(FIOSNBIO) call instead, but that is not supported by all devices.
- */
-/* VAL_EAGAIN:
- *	This symbol holds the errno error code set by read() when no data was
- *	present on the non-blocking file descriptor.
- */
-/* RD_NODATA:
- *	This symbol holds the return code from read() when no data is present
- *	on the non-blocking file descriptor. Be careful! If EOF_NONBLOCK is
- *	not defined, then you can't distinguish between no data and EOF by
- *	issuing a read(). You'll have to find another way to tell for sure!
- */
-/* EOF_NONBLOCK:
- *	This symbol, if defined, indicates to the C program that a read() on
- *	a non-blocking file descriptor will return 0 on EOF, and not the value
- *	held in RD_NODATA (-1 usually, in that case!).
- */
-#define VAL_O_NONBLOCK $o_nonblock
-#define VAL_EAGAIN $eagain
-#define RD_NODATA $rd_nodata
-#$d_eofnblk EOF_NONBLOCK
 
 /* CAN_PROTOTYPE:
  *	If defined, this macro indicates that the C compiler can handle
@@ -1350,16 +1292,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  */
 #define Size_t $sizetype	 /* length paramater for string functions */
 
-/* SSize_t:
- *	This symbol holds the type used by functions that return
- *	a count of bytes or an error condition.  It must be a signed type.
- *	It is usually ssize_t, but may be long or int, etc.
- *	It may be necessary to include <sys/types.h> or <unistd.h>
- *	to get any typedef'ed information.
- *	We will pick a type such that sizeof(SSize_t) == sizeof(Size_t).
- */
-#define SSize_t $ssizetype	 /* signed count of bytes */
-
 /* STDCHAR:
  *	This symbol is defined to be the type of char used in stdio.h.
  *	It has the values "unsigned char" or "char".
@@ -1373,23 +1305,23 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  */
 #define Uid_t $uidtype		/* UID type */
 
-/* UNLINK_ALL_VERSIONS:
- *	This symbol, if defined, indicates that the program should arrange
- *	ro remove all versions of a file if unlink() is called.
- */
-#$d_unlnkallvers UNLINK_ALL_VERSIONS		/**/
-
 /* VMS:
  *	This symbol, if defined, indicates that the program is running under
- *	VMS.  It is currently automatically set by cpps running under VMS,
- *	and is included here for completeness only.
+ *	VMS.  It is currently only set in conjunction with the EUNICE symbol.
  */
-#$d_vms VMS		/**/
+#$d_eunice VMS		/**/
 
 /* LOC_SED:
  *	This symbol holds the complete pathname to the sed program.
  */
 #define LOC_SED 	"$full_sed"	/**/
+
+/* OSNAME:
+ *	This symbol contains the name of the operating system, as determined
+ *	by Configure.  You shouldn't rely on it too much; the specific
+ *	feature tests from Configure are generally more reliable.
+ */
+#define OSNAME "$osname"		/**/
 
 /* ARCHLIB_EXP:
  *	This symbol contains the ~name expanded version of ARCHLIB, to be used
@@ -1397,11 +1329,23 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  */
 #$d_archlib ARCHLIB_EXP "$archlibexp"		/**/
 
+/* BIN_SH:
+ *	Pathname to /bin/sh equivalent
+ */
+#define BIN_SH "$bin_sh"	/**/
 /* BYTEORDER:
  *	This symbol hold the hexadecimal constant defined in byteorder,
  *	i.e. 0x1234 or 0x4321, etc...
  */
+#ifndef NeXT
 #define BYTEORDER 0x$byteorder	/* large digits for MSB */
+#else  /* NeXT */
+#ifdef __LITTLE_ENDIAN__
+#define BYTEORDER 0x1234
+#else /* __BIG_ENDIAN__ */
+#define BYTEORDER 0x4321
+#endif /* ENDIAN CHECK */
+#endif /* NeXT */
 
 /* CSH:
  *	This symbol, if defined, indicates that the C-shell exists.
@@ -1416,6 +1360,26 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  *	case if you're using dl_dlopen.xs.
  */
 #$d_dlsymun 	DLSYM_NEEDS_UNDERSCORE 	/* */
+
+/* SETUID_SCRIPTS_ARE_SECURE_NOW:
+ *	This symbol, if defined, indicates that the bug that prevents
+ *	setuid scripts from being secure is not present in this kernel.
+ */
+/* DOSUID:
+ *	This symbol, if defined, indicates that the C program should
+ *	check the script that it is executing for setuid/setgid bits, and
+ *	attempt to emulate setuid/setgid on systems that have disabled
+ *	setuid #! scripts because the kernel can't do it securely.
+ *	It is up to the package designer to make sure that this emulation
+ *	is done securely.  Among other things, it should do an fstat on
+ *	the script it just opened to make sure it really is a setuid/setgid
+ *	script, it should make sure the arguments passed correspond exactly
+ *	to the argument on the #! line, and it should not trust any
+ *	subprocesses to which it must pass the filename rather than the
+ *	file descriptor of the script to be executed.
+ */
+#$d_suidsafe SETUID_SCRIPTS_ARE_SECURE_NOW	/**/
+#$d_dosuid DOSUID		/**/
 
 /* Gconvert:
  *	This preprocessor macro is defined to convert a floating point
@@ -1433,6 +1397,42 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  *	The last two assume trailing zeros should not be kept.
  */
 #define Gconvert(x,n,t,b) $d_Gconvert
+
+/* PERLIO_IS_STDIO:
+ *	This symbol, if defined, indicates that stdio should
+ *	be used in a fully backward compatible manner.
+ */
+#$d_perlstdio	PERLIO_IS_STDIO		/**/
+
+/* USE_SFIO:
+ *	This symbol, if defined, indicates that sfio should
+ *	be used.
+ */
+#$d_sfio	USE_SFIO		/**/
+
+/* Sigjmp_buf:
+ *	This is the buffer type to be used with Sigsetjmp and Siglongjmp.
+ */
+/* Sigsetjmp:
+ *	This macro is used in the same way as sigsetjmp(), but will invoke
+ *	traditional setjmp() if sigsetjmp isn't available.
+ *	See HAS_SIGSETJMP.
+ */
+/* Siglongjmp:
+ *	This macro is used in the same way as siglongjmp(), but will invoke
+ *	traditional longjmp() if siglongjmp isn't available.
+ *	See HAS_SIGSETJMP.
+ */
+#$d_sigsetjmp HAS_SIGSETJMP	/**/
+#ifdef HAS_SIGSETJMP
+#define Sigjmp_buf sigjmp_buf
+#define Sigsetjmp(buf,save_mask) sigsetjmp((buf),(save_mask))
+#define Siglongjmp(buf,retval) siglongjmp((buf),(retval))
+#else
+#define Sigjmp_buf jmp_buf
+#define Sigsetjmp(buf,save_mask) setjmp((buf))
+#define Siglongjmp(buf,retval) longjmp((buf),(retval))
+#endif
 
 /* USE_DYNAMIC_LOADING:
  *	This symbol, if defined, indicates that dynamic loading of
@@ -1457,11 +1457,30 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  */
 #$i_locale	I_LOCALE		/**/
 
+/* I_SFIO:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <sfio.h>.
+ */
+#$i_sfio	I_SFIO		/**/
+
 /* I_SYS_STAT:
  *	This symbol, if defined, indicates to the C program that it should
  *	include <sys/stat.h>.
  */
 #$i_sysstat	I_SYS_STAT		/**/
+
+#$i_values I_LIMITS		/**/
+
+/* I_STDARG:
+ *	This symbol, if defined, indicates that <stdarg.h> exists and should
+ *	be included.
+ */
+/* I_VARARGS:
+ *	This symbol, if defined, indicates to the C program that it should
+ *	include <varargs.h>.
+ */
+#$i_stdarg I_STDARG		/**/
+#$i_varargs I_VARARGS	/**/
 
 /* INTSIZE:
  *	This symbol contains the size of an int, so that the C preprocessor
@@ -1483,6 +1502,33 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  *	This symbol, if defined, indicates that we're using our own malloc.
  */
 #$d_mymalloc MYMALLOC			/**/
+
+/* VAL_O_NONBLOCK:
+ *	This symbol is to be used during open() or fcntl(F_SETFL) to turn on
+ *	non-blocking I/O for the file descriptor. Note that there is no way
+ *	back, i.e. you cannot turn it blocking again this way. If you wish to
+ *	alternatively switch between blocking and non-blocking, use the
+ *	ioctl(FIOSNBIO) call instead, but that is not supported by all devices.
+ */
+/* VAL_EAGAIN:
+ *	This symbol holds the errno error code set by read() when no data was
+ *	present on the non-blocking file descriptor.
+ */
+/* RD_NODATA:
+ *	This symbol holds the return code from read() when no data is present
+ *	on the non-blocking file descriptor. Be careful! If EOF_NONBLOCK is
+ *	not defined, then you can't distinguish between no data and EOF by
+ *	issuing a read(). You'll have to find another way to tell for sure!
+ */
+/* EOF_NONBLOCK:
+ *	This symbol, if defined, indicates to the C program that a read() on
+ *	a non-blocking file descriptor will return 0 on EOF, and not the value
+ *	held in RD_NODATA (-1 usually, in that case!).
+ */
+#define VAL_O_NONBLOCK $o_nonblock
+#define VAL_EAGAIN $eagain
+#define RD_NODATA $rd_nodata
+#$d_eofnblk EOF_NONBLOCK
 
 /* OLDARCHLIB_EXP:
  *	This symbol contains the ~name expanded version of OLDARCHLIB, to be
@@ -1539,6 +1585,16 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
 #define SITELIB_EXP "$sitelibexp"		/**/
+
+/* SSize_t:
+ *	This symbol holds the type used by functions that return
+ *	a count of bytes or an error condition.  It must be a signed type.
+ *	It is usually ssize_t, but may be long or int, etc.
+ *	It may be necessary to include <sys/types.h> or <unistd.h>
+ *	to get any typedef'ed information.
+ *	We will pick a type such that sizeof(SSize_t) == sizeof(Size_t).
+ */
+#define SSize_t $ssizetype	 /* signed count of bytes */
 
 /* STARTPERL:
  *	This variable contains the string to put in front of a perl

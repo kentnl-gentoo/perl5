@@ -2,15 +2,17 @@ package ExtUtils::Liblist;
 
 # Broken out of MakeMaker from version 4.11
 
+$ExtUtils::Liblist::VERSION = substr q$Revision: 1.20 $, 10;
+
 use Config;
-use Cwd;
+use Cwd 'cwd';
 use File::Basename;
 
 my $Config_libext = $Config{lib_ext} || ".a";
 
 sub ext {
-    my($potential_libs, $Verbose) = @_;
-    if ($Config{'osname'} eq 'os2' and $Config{libs}) { 
+    my($self,$potential_libs, $Verbose) = @_;
+    if ($^O =~ 'os2' and $Config{libs}) { 
 	# Dynamic libraries are not transitive, so we may need including
 	# the libraries linked against perl.dll again.
 
@@ -32,7 +34,7 @@ sub ext {
     my(@libpath) = split " ", $Config{'libpth'};
     my(@ldloadlibs, @bsloadlibs, @extralibs, @ld_run_path, %ld_run_path_seen);
     my($fullname, $thislib, $thispth, @fullname);
-    my($pwd) = fastcwd(); # from Cwd.pm
+    my($pwd) = cwd(); # from Cwd.pm
     my($found) = 0;
 
     foreach $thislib (split ' ', $potential_libs){
@@ -45,9 +47,9 @@ sub ext {
 			if $Verbose;
 		next;
 	    }
-	    if ($thislib !~ m|^/|) {
+	    unless ($self->file_name_is_absolute($thislib)) {
 	      print STDOUT "Warning: $ptype$thislib changed to $ptype$pwd/$thislib\n";
-	      $thislib = "$pwd/$thislib";
+	      $thislib = $self->catdir($pwd,$thislib);
 	    }
 	    push(@searchpath, $thislib);
 	    push(@extralibs,  "$ptype$thislib");
@@ -70,7 +72,7 @@ sub ext {
 		# For gcc-2.6.2 on linux (March 1995), DLD can not load
 		# .sa libraries, with the exception of libm.sa, so we
 		# deliberately skip them.
-	    if (@fullname = lsdir($thispth,"^lib$thislib\.$so\.[0-9]+")){
+	    if (@fullname = $self->lsdir($thispth,"^lib$thislib\.$so\.[0-9]+")){
 		# Take care that libfoo.so.10 wins against libfoo.so.9.
 		# Compare two libraries to find the most recent version
 		# number.  E.g.  if you have libfoo.so.9.0.7 and
@@ -104,7 +106,7 @@ sub ext {
 	    } elsif (-f ($fullname="$thispth/lib$thislib$Config_libext")){
 	    } elsif (-f ($fullname="$thispth/$thislib$Config_libext")){
 	    } elsif (-f ($fullname="$thispth/Slib$thislib$Config_libext")){
-	    } elsif ($Config{'osname'} eq 'dgux'
+	    } elsif ($^O eq 'dgux'
 		 && -l ($fullname="$thispth/lib$thislib$Config_libext")
 		 && readlink($fullname) =~ /^elink:/) {
 		 # Some of DG's libraries look like misconnected symbolic
@@ -133,15 +135,18 @@ sub ext {
 
 	    # Do not add it into the list if it is already linked in
 	    # with the main perl executable.
-	    # We have to special-case the NeXT, because all the math 
-	    # is also in libsys_s
+	    # We have to special-case the NeXT, because math and ndbm 
+	    # are both in libsys_s
 	    unless ($in_perl || 
-		    ($Config{'osname'} eq 'next' && $thislib eq 'm') ){
+		($Config{'osname'} eq 'next' &&
+		    ($thislib eq 'm' || $thislib eq 'ndbm')) ){
 		push(@extralibs, "-l$thislib");
 	    }
 
 	    # We might be able to load this archive file dynamically
-	    if ( $Config{'dlsrc'} =~ /dl_next|dl_dld/){
+	    if ( ($Config{'dlsrc'} =~ /dl_next/ && $Config{'osvers'} lt '4_0')
+	    ||   ($Config{'dlsrc'} =~ /dl_dld/) )
+	    {
 		# We push -l$thislib instead of $fullname because
 		# it avoids hardwiring a fixed path into the .bs file.
 		# Mkbootstrap will automatically add dl_findfile() to
@@ -155,7 +160,7 @@ sub ext {
                     # For SunOS4, do not add in this shared library if
                     # it is already linked in the main perl executable
 		    push(@ldloadlibs, "-l$thislib")
-			unless ($in_perl and $Config{'osname'} eq 'sunos');
+			unless ($in_perl and $^O eq 'sunos');
 		} else {
 		    push(@ldloadlibs, "-l$thislib");
 		}
@@ -169,18 +174,8 @@ sub ext {
     ("@extralibs", "@bsloadlibs", "@ldloadlibs",join(":",@ld_run_path));
 }
 
-sub lsdir { #yes, duplicate code seems less hassle than having an
-            #extra file with only lsdir
-    my($dir, $regex) = @_;
-    local(*DIR, @ls);
-    opendir(DIR, $dir || ".") or return ();
-    @ls = readdir(DIR);
-    closedir(DIR);
-    @ls = grep(/$regex/, @ls) if $regex;
-    @ls;
-}
-
 1;
+
 __END__
 
 =head1 NAME

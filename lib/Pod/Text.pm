@@ -87,7 +87,7 @@ $DEF_INDENT = 4;
 $indent = $DEF_INDENT;
 $needspace = 0;
 
-open(IN, shift) || die "Couldn't open file!\n";
+open(IN, $file) || die "Couldn't open $file: $!";
 
 POD_DIRECTIVE: while (<IN>) {
     if ($cutting) {
@@ -213,7 +213,7 @@ sub prepare_for_output {
 	    {
 		if (length() + 3 < $indent) {
 		    my $paratag = $_;
-		    $_ = <>;
+		    $_ = <IN>;
 		    if (/^=/) {  # tricked!
 			local($indent) = $indent[$#index - 1] || $DEF_INDENT;
 			output($paratag);
@@ -357,9 +357,8 @@ sub noremap {
 
 sub init_noremap {
     die "unmatched init" if $mapready++;
-    if ( /[\200-\377]/ ) {
-	warn "hit bit char in input stream";
-    }
+    #mask off high bit characters in input stream
+    s/([\200-\377])/"E<".ord($1).">"/ge;
 }
 
 sub clear_noremap {
@@ -370,13 +369,19 @@ sub clear_noremap {
     # otherwise the interative \w<> processing would have
     # been hosed by the E<gt>
     s {
-	    E<	
-	    ( [A-Za-z]+ )	
+	    E<
+	    (
+	    	( \d+ )
+	    	| ( [A-Za-z]+ )
+	    )
 	    >	
     } {
 	 do {
-	     defined $HTML_Escapes{$1}
-		? do { $HTML_Escapes{$1} }
+	 	defined $2
+	 	? chr($2)
+	 	:
+	     defined $HTML_Escapes{$3}
+		? do { $HTML_Escapes{$3} }
 		: do {
 		    warn "Unknown escape: $& in $_";
 		    "E<$1>";

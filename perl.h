@@ -10,6 +10,41 @@
 #define H_PERL 1
 #define OVERLOAD
 
+#ifdef PERL_FOR_X2P
+/*
+ * This file is being used for x2p stuff. 
+ * Above symbol is defined via -D in 'x2p/Makefile.SH'
+ * Decouple x2p stuff from some of perls more extreme eccentricities. 
+ */
+#undef MULTIPLICITY
+#undef EMBED
+#undef USE_STDIO
+#define USE_STDIO
+#endif /* PERL_FOR_X2P */
+
+/*
+ * STMT_START { statements; } STMT_END;
+ * can be used as a single statement, as in
+ * if (x) STMT_START { ... } STMT_END; else ...
+ *
+ * Trying to select a version that gives no warnings...
+ */
+#if !(defined(STMT_START) && defined(STMT_END))
+# if defined(__GNUC__) && !defined(__STRICT_ANSI__)
+#   define STMT_START	(void)(	/* gcc supports ``({ STATEMENTS; })'' */
+#   define STMT_END	)
+# else
+   /* Now which other defined()s do we need here ??? */
+#  if (VOIDFLAGS) && (defined(sun) || defined(__sun__))
+#   define STMT_START	if (1)
+#   define STMT_END	else (void)0
+#  else
+#   define STMT_START	do
+#   define STMT_END	while (0)
+#  endif
+# endif
+#endif
+
 #include "embed.h"
 
 #define VOIDUSED 1
@@ -56,30 +91,63 @@
 #define TAINT_PROPER(s)	if (tainting) taint_proper(no_security, s)
 #define TAINT_ENV()	if (tainting) taint_env()
 
-#if defined(HAS_GETPGRP2) && defined(HAS_SETPGRP2)
-#   define getpgrp getpgrp2
-#   define setpgrp setpgrp2
-#   ifndef HAS_GETPGRP
-#	define HAS_GETPGRP
+#ifdef USE_BSDPGRP
+#   ifdef HAS_GETPGRP
+#       define BSD_GETPGRP(pid) getpgrp((pid))
 #   endif
-#   ifndef HAS_SETPGRP
-#	define HAS_SETPGRP
-#   endif
-#   ifndef USE_BSDPGRP
-#	define USE_BSDPGRP
+#   ifdef HAS_SETPGRP
+#       define BSD_SETPGRP(pid, pgrp) setpgrp((pid), (pgrp))
 #   endif
 #else
-#   if defined(HAS_GETPGRP2) || defined(HAS_SETPGRP2)
-	#include "Gack, you have one but not both of getpgrp2() and setpgrp2()."
+#   ifdef HAS_GETPGRP2
+#       define BSD_GETPGRP(pid) getpgrp2((pid))
+#       ifndef HAS_GETPGRP
+#    	    define HAS_GETPGRP
+#    	endif
+#   endif
+#   ifdef HAS_SETPGRP2
+#       define BSD_SETPGRP(pid, pgrp) setpgrp2((pid), (pgrp))
+#       ifndef HAS_SETPGRP
+#    	    define HAS_SETPGRP
+#    	endif
 #   endif
 #endif
 
-#include <stdio.h>
-#ifdef USE_NEXT_CTYPE
-#include <appkit/NXCType.h>
-#else
-#include <ctype.h>
+#ifndef _TYPES_		/* If types.h defines this it's easy. */
+#   ifndef major		/* Does everyone's types.h define this? */
+#	include <sys/types.h>
+#   endif
 #endif
+
+#ifdef __cplusplus
+#  ifndef I_STDARG
+#    define I_STDARG 1
+#  endif
+#endif
+
+#ifdef I_STDARG
+#  include <stdarg.h>
+#else
+#  ifdef I_VARARGS
+#    include <varargs.h>
+#  endif
+#endif
+
+
+
+#include "perlio.h"
+
+#ifdef USE_NEXT_CTYPE
+
+#if NX_CURRENT_COMPILER_RELEASE >= 400
+#include <objc/NXCType.h>
+#else /*  NX_CURRENT_COMPILER_RELEASE < 400 */
+#include <appkit/NXCType.h>
+#endif /*  NX_CURRENT_COMPILER_RELEASE >= 400 */
+
+#else /* !USE_NEXT_CTYPE */
+#include <ctype.h>
+#endif /* USE_NEXT_CTYPE */
 
 #ifdef I_LOCALE
 #include <locale.h>
@@ -110,13 +178,15 @@
 */
 #ifdef MYMALLOC
 #   ifdef HIDEMYMALLOC
-#	define malloc Mymalloc
-#	define realloc Myremalloc
-#	define free Myfree
+#	define malloc Perl_malloc
+#	define realloc Perl_realloc
+#	define free Perl_free
+#	define calloc Perl_calloc
 #   endif
 #   define safemalloc malloc
 #   define saferealloc realloc
 #   define safefree free
+#   define safecalloc calloc
 #endif
 
 #define MEM_SIZE Size_t
@@ -185,7 +255,7 @@
 #   endif
 #endif /* HAS_MEMCMP */
 
-/* we prefer bcmp slightly for comparisons that don't care about ordering */
+/* XXX we prefer bcmp slightly for comparisons that don't care about ordering */
 #ifndef HAS_BCMP
 #   ifndef bcmp
 #	define bcmp(s1,s2,l) memcmp(s1,s2,l)
@@ -201,12 +271,6 @@
 #	else
 #	    define memmove(d,s,l) my_bcopy(s,d,l)
 #	endif
-#   endif
-#endif
-
-#ifndef _TYPES_		/* If types.h defines this it's easy. */
-#   ifndef major		/* Does everyone's types.h define this? */
-#	include <sys/types.h>
 #   endif
 #endif
 
@@ -279,7 +343,7 @@
 #else
 #   define FIXSTATUS(sts)  (U_L(sts))
 #   define SHIFTSTATUS(sts) (sts)
-#   define SETERRNO(errcode,vmserrcode) {set_errno(errcode); set_vaxc_errno(vmserrcode);}
+#   define SETERRNO(errcode,vmserrcode) STMT_START {set_errno(errcode); set_vaxc_errno(vmserrcode);} STMT_END
 #endif
 
 #ifndef MSDOS
@@ -466,7 +530,7 @@
 #   define SLOPPYDIVIDE
 #endif
 
-#if defined(cray) || defined(convex) || defined (uts) || BYTEORDER > 0xffff
+#if defined(cray) || defined(convex) || BYTEORDER > 0xffff
 #   define HAS_QUAD
 #endif
 
@@ -478,7 +542,7 @@
 #   ifdef cray
 #	define Quad_t int
 #   else
-#	if defined(convex) || defined (uts)
+#	if defined(convex)
 #	    define Quad_t long long
 #	else
 #	    define Quad_t long
@@ -489,6 +553,50 @@
 #else
     typedef long IV;
     typedef unsigned long UV;
+#endif
+
+/* Previously these definitions used hardcoded figures. 
+ * It is hoped these formula are more portable, although
+ * no data one way or another is presently known to me. - kja
+ *    define LONG_MAX        2147483647L
+ *    define LONG_MIN        (-LONG_MAX - 1)
+ *    define ULONG_MAX       4294967295L
+ */
+
+#ifdef I_LIMITS  /* Needed for cast_xxx() functions below. */
+#  include <limits.h>
+#else
+#ifdef I_VALUES
+#  include <values.h>
+#endif
+#endif
+
+#ifndef LONG_MAX
+#  ifdef MAXLONG    /* Often used in <values.h> */
+#    define LONG_MAX MAXLONG
+#  else
+#    define LONG_MAX        ((long) ((~(unsigned long)0) >> 1))
+#  endif
+#endif
+
+#ifndef LONG_MIN
+#  ifdef MINLONG
+#    define LONG_MIN MINLONG
+#  else
+#    define LONG_MIN        (-LONG_MAX - ((3 & -1) == 3))
+#  endif
+#endif
+
+#ifndef ULONG_MAX
+#  ifdef MAXULONG
+#    define ULONG_MAX MAXULONG
+#  else
+#    define ULONG_MAX       (~(unsigned long)0)
+#  endif
+#endif
+
+#ifndef ULONG_MIN
+#  define ULONG_MIN	    0L
 #endif
 
 typedef MEM_SIZE STRLEN;
@@ -515,7 +623,7 @@ typedef struct hv HV;
 typedef struct cv CV;
 typedef struct regexp REGEXP;
 typedef struct gp GP;
-typedef struct sv GV;
+typedef struct gv GV;
 typedef struct io IO;
 typedef struct context CONTEXT;
 typedef struct block BLOCK;
@@ -554,8 +662,19 @@ typedef I32 (*filter_t) _((int, SV *, int));
 # if defined(VMS)
 #   include "vmsish.h"
 # else
-#   include "unixish.h"
+#   if defined(PLAN9)
+#     include "./plan9/plan9ish.h"
+#   else
+#     include "unixish.h"
+#   endif
 # endif
+#endif
+
+#ifndef SH_PATH			/* May be a variable. */
+#   define SH_PATH BIN_SH
+#ifndef BIN_SH
+#   define BIN_SH "/bin/sh"
+#endif
 #endif
 
 #ifndef HAS_PAUSE
@@ -691,14 +810,8 @@ struct Outrec {
 #   define MAXSYSFD 2
 #endif
 
-#ifdef DOSISH
-#define TMPPATH "plXXXXXX"
-#else
-#ifdef VMS
-#define TMPPATH "sys$scratch:perl-eXXXXXX"
-#else
-#define TMPPATH "/tmp/perl-eXXXXXX"
-#endif
+#ifndef TMPPATH
+#  define TMPPATH "/tmp/perl-eXXXXXX"
 #endif
 
 #ifndef __cplusplus
@@ -709,6 +822,9 @@ Gid_t getegid _((void));
 #endif
 
 #ifdef DEBUGGING
+#ifndef Perl_debug_log
+#define Perl_debug_log	PerlIO_stderr()
+#endif
 #define YYDEBUG 1
 #define DEB(a)     			a
 #define DEBUG(a)   if (debug)		a
@@ -719,7 +835,7 @@ Gid_t getegid _((void));
 #define DEBUG_o(a) if (debug & 16)	a
 #define DEBUG_c(a) if (debug & 32)	a
 #define DEBUG_P(a) if (debug & 64)	a
-#define DEBUG_m(a) if (debug & 128)	a
+#define DEBUG_m(a) if (curinterp && debug & 128)	a
 #define DEBUG_f(a) if (debug & 256)	a
 #define DEBUG_r(a) if (debug & 512)	a
 #define DEBUG_x(a) if (debug & 1024)	a
@@ -828,12 +944,15 @@ I32 unlnk _((char*));
 #define SCAN_TR 1
 #define SCAN_REPL 2
 
+#ifdef MYMALLOC
+# ifndef DEBUGGING_MSTATS
+#  define DEBUGGING_MSTATS
+# endif
+#endif
+
 #ifdef DEBUGGING
 # ifndef register
 #  define register
-# endif
-# ifdef MYMALLOC
-# define DEBUGGING_MSTATS
 # endif
 # define PAD_SV(po) pad_sv(po)
 #else
@@ -846,9 +965,18 @@ I32 unlnk _((char*));
 
 /* global state */
 EXT PerlInterpreter *	curinterp;	/* currently running interpreter */
-#ifndef VMS  /* VMS doesn't use environ array */
+/* VMS doesn't use environ array and NeXT has problems with crt0.o globals */
+#if !defined(VMS) && !(defined(NeXT) && defined(__DYNAMIC__))
 extern char **	environ;	/* environment variables supplied via exec */
-#endif
+#else
+#  if defined(NeXT) && defined(__DYNAMIC__)
+
+#  include <mach-o/dyld.h>
+EXT char *** environ_pointer;
+#  define environ (*environ_pointer)
+#  endif
+#endif /* environ processing */
+
 EXT int		uid;		/* current real user id */
 EXT int		euid;		/* current effective user id */
 EXT int		gid;		/* current real group id */
@@ -863,6 +991,7 @@ EXT char **	origenviron;
 EXT U32		origalen;
 EXT U32 *	profiledata;
 EXT int		maxo INIT(MAXO);/* Number of ops */
+EXT char *	osname;		/* operating system */
 
 EXT XPV*	xiv_arenaroot;	/* list of allocated xiv areas */
 EXT IV **	xiv_root;	/* free xiv list--shared by interpreters */
@@ -903,7 +1032,7 @@ EXT SV **	curpad;
 /* temp space */
 EXT SV *	Sv;
 EXT XPV *	Xpv;
-EXT char	buf[1024];
+EXT char	buf[2048];	/* should be longer than PATH_MAX */
 EXT char	tokenbuf[256];
 EXT struct stat	statbuf;
 #ifdef HAS_TIMES
@@ -967,9 +1096,13 @@ EXT SV		sv_yes;
 #ifdef DOINIT
 EXT char *sig_name[] = { SIG_NAME };
 EXT int   sig_num[]  = { SIG_NUM };
+EXT SV	* psig_ptr[sizeof(sig_num)/sizeof(*sig_num)];
+EXT SV  * psig_name[sizeof(sig_num)/sizeof(*sig_num)];
 #else
 EXT char *sig_name[];
 EXT int   sig_num[];
+EXT SV  * psig_ptr[];
+EXT SV  * psig_name[];
 #endif
 
 #ifdef DOINIT
@@ -1103,7 +1236,7 @@ EXT YYSTYPE	nextval[5];	/* value of next token, if any */
 EXT I32		nexttype[5];	/* type of next token */
 EXT I32		nexttoke;
 
-EXT FILE * VOL	rsfp INIT(Nullfp);
+EXT PerlIO * VOL	rsfp INIT(Nullfp);
 EXT SV *	linestr;
 EXT char *	bufptr;
 EXT char *	oldbufptr;
@@ -1126,6 +1259,7 @@ EXT CV *	compcv;		/* currently compiling subroutine */
 EXT AV *	comppad;	/* storage for lexically scoped temporaries */
 EXT AV *	comppad_name;	/* variable names for "my" variables */
 EXT I32		comppad_name_fill;/* last "introduced" variable offset */
+EXT I32		comppad_name_floor;/* start of vars in innermost block */
 EXT I32		min_intro_pending;/* start of vars to introduce */
 EXT I32		max_intro_pending;/* end of vars to introduce */
 EXT I32		padix;		/* max used index in current "register" pad */
@@ -1152,6 +1286,7 @@ EXT U32		hints;		/* various compilation flags */
 #define HINT_BLOCK_SCOPE	0x00000100
 #define HINT_STRICT_SUBS	0x00000200
 #define HINT_STRICT_VARS	0x00000400
+#define HINT_STRICT_UNTIE	0x00000800
 
 /**************************************************************************/
 /* This regexp stuff is global since it always happens within 1 expr eval */
@@ -1175,6 +1310,9 @@ EXT U32 *	reglastparen;	/* Similarly for lastparen. */
 EXT char *	regtill;	/* How far we are required to go. */
 EXT U16		regflags;	/* are we folding, multilining? */
 EXT char	regprev;	/* char before regbol, \n if none */
+
+EXT bool	do_undump;	/* -u or dump seen? */
+EXT VOL U32	debug;
 
 /***********************************************/
 /* Global only to current interpreter instance */
@@ -1208,7 +1346,8 @@ IEXT SV *	Iparsehook;
 /* switches */
 IEXT char *	Icddir;
 IEXT bool	Iminus_c;
-IEXT char	Ipatchlevel[6];
+IEXT char	Ipatchlevel[10];
+IEXT char **	Ilocalpatches;
 IEXT SV *	Inrs;
 IEXT char *	Isplitstr IINIT(" ");
 IEXT bool	Ipreprocess;
@@ -1225,11 +1364,9 @@ IEXT bool	Isawstudy;	/* do fbm_instr on all strings */
 IEXT bool	Isawi;		/* study must assume case insensitive */
 IEXT bool	Isawvec;
 IEXT bool	Iunsafe;
-IEXT bool	Ido_undump;		/* -u or dump seen? */
 IEXT char *	Iinplace;
 IEXT char *	Ie_tmpname;
-IEXT FILE *	Ie_fp;
-IEXT VOL U32	Idebug;
+IEXT PerlIO *	Ie_fp;
 IEXT U32	Iperldb;
 	/* This value may be raised by extensions for testing purposes */
 IEXT int	Iperl_destruct_level;	/* 0=none, 1=full, 2=full with checks */
@@ -1290,8 +1427,7 @@ IEXT HV *	Idebstash;	/* symbol table for perldb package */
 IEXT SV *	Icurstname;	/* name of current package */
 IEXT AV *	Ibeginav;	/* names of BEGIN subroutines */
 IEXT AV *	Iendav;		/* names of END subroutines */
-IEXT AV *	Ipad;		/* storage for lexically scoped temporaries */
-IEXT AV *	Ipadname;	/* variable names for "my" variables */
+IEXT HV *	Istrtab;	/* shared string table */
 
 /* memory management */
 IEXT SV **	Itmps_stack;
@@ -1337,15 +1473,16 @@ IEXT OP *	Ieval_start;
 
 /* runtime control stuff */
 IEXT COP * VOL	Icurcop IINIT(&compiling);
+IEXT COP *	Icurcopdb IINIT(NULL);
 IEXT line_t	Icopline IINIT(NOLINE);
 IEXT CONTEXT *	Icxstack;
 IEXT I32	Icxstack_ix IINIT(-1);
 IEXT I32	Icxstack_max IINIT(128);
-IEXT jmp_buf	Itop_env;
+IEXT Sigjmp_buf	Itop_env;
 IEXT I32	Irunlevel;
 
 /* stack stuff */
-IEXT AV *	Istack;		/* THE STACK */
+IEXT AV *	Icurstack;		/* THE STACK */
 IEXT AV *	Imainstack;	/* the stack when nothing funny is happening */
 IEXT SV **	Imystack_base;	/* stack->array_ary */
 IEXT SV **	Imystack_sp;	/* stack pointer now */
@@ -1395,20 +1532,6 @@ struct interpreter {
 extern "C" {
 #endif
 
-#ifdef __cplusplus
-#  ifndef I_STDARG
-#    define I_STDARG 1
-#  endif
-#endif
-
-#ifdef I_STDARG
-#  include <stdarg.h>
-#else
-#  ifdef I_VARARGS
-#    include <varargs.h>
-#  endif
-#endif
-
 #include "proto.h"
 
 #ifdef EMBED
@@ -1435,8 +1558,10 @@ EXT MGVTBL vtbl_envelem =	{0,	magic_setenv,
 					0,	magic_clearenv,
 							0};
 EXT MGVTBL vtbl_sig =	{0,	0,		 0, 0, 0};
-EXT MGVTBL vtbl_sigelem =	{0,	magic_setsig,
-					0,	0,	0};
+EXT MGVTBL vtbl_sigelem =	{magic_getsig,
+					magic_setsig,
+					0,	magic_clearsig,
+							0};
 EXT MGVTBL vtbl_pack =	{0,	0,	0,	magic_wipepack,
 							0};
 EXT MGVTBL vtbl_packelem =	{magic_getpack,
@@ -1591,5 +1716,13 @@ enum {
   copy_amg,	neg_amg
 };
 #endif /* OVERLOAD */
+
+#if !defined(PERLIO_IS_STDIO) && defined(HAS_ATTRIBUTE)
+/* 
+ * New we have __attribute__ out of the way 
+ * Remap printf 
+ */
+#define printf PerlIO_stdoutf
+#endif
 
 #endif /* Include guard */

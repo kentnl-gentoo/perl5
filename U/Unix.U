@@ -1,0 +1,68 @@
+?RCS: $Id$
+?RCS:
+?RCS: @COPYRIGHT@
+?RCS:
+?RCS: $Log$
+?MAKE:Unix ar exe_ext lib_ext obj_ext path_sep \
+	firstmakefile archobjs: Oldconfig
+?MAKE:	-pick add $@ %<
+?S:ar:
+?S:	This variable defines the command to use to create an archive 
+?S:	library.  For unix, it is 'ar'.
+?S:.
+?S:exe_ext:
+?S:	This variable defines the extension used for executable files.
+?S:	For unix it is empty.  Other possible values include '.exe'.
+?S:.
+?S:lib_ext:
+?S:	This variable defines the extension used for ordinary libraries.
+?S:	For unix, it is '.a'.  The '.' is included.  Other possible
+?S:	values include '.lib'.
+?S:.
+?S:obj_ext:	
+?S:	This variable defines the extension used for object files.
+?S:	For unix, it is '.o'.  The '.' is included.  Other possible
+?S:	values include '.obj'.
+?S:.
+?S:path_sep:
+?S:	This variable defines the character used to separate elements in
+?S:	the shell's PATH environment variable.  On Unix, it is ':'.
+?S:	This is probably identical to Head.U's p_ variable and can
+?S:	probably be dropped.
+?S:.
+?S:firstmakefile:
+?S:	This variable defines the first file searched by make.  On unix,
+?S:	it is makefile (then Makefile).  On case-insensitive systems,
+?S:	it might be something else.  This is only used to deal with
+?S:	convoluted make depend tricks.
+?S:.
+?S:archobjs:
+?S:	This variable defines any additional objects that must be linked
+?S:	in with the program on this architecture.  On unix, it is usually
+?S:	empty.  It is typically used to include emulations of unix calls
+?S:	or other facilities.  For perl on OS/2, for example, this would
+?S:	include os2/os2.obj.
+?S:.
+?INIT:: Define several unixisms.  These can be used in hint files.
+?INIT:exe_ext='' 
+?INIT:: Extra object files, if any, needed on this platform.
+?INIT:archobjs=''
+: Define several unixisms. Hints files or command line options
+: can be used to override them.
+case "$ar" in
+'') ar='ar';;
+esac
+case "$lib_ext" in
+'') lib_ext='.a';;
+esac
+case "$obj_ext" in
+'') obj_ext='.o';;
+esac
+case "$path_sep" in
+'') path_sep=':';;
+esac
+: Which makefile gets called first.  This is used by make depend.
+case "$firstmakefile" in
+'') firstmakefile='makefile';;
+esac
+

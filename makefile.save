@@ -1,0 +1,2810 @@
+# Makefile.SH
+# This file is derived from Makefile.SH.  Any changes made here will
+# be lost the next time you run Configure.
+#  Makefile is used to generate makefile.  The only difference
+#  is that makefile has the dependencies filled in at the end.
+#
+#
+# I now supply perly.c with the kits, so don't remake perly.c without byacc
+BYACC = byacc
+CC = gcc
+LD = gcc
+
+LDFLAGS =  -L/usr/local/lib
+CLDFLAGS =  -L/usr/local/lib
+
+SMALL = 
+LARGE =  
+MAB = 
+mallocsrc = malloc.c
+mallocobj = malloc.o
+LNS = /usr/bin/ln -s
+RMS = rm -f
+ranlib = :
+
+# The following are mentioned only to make metaconfig include the
+# appropriate questions in Configure.  If you want to change these,
+# edit config.sh instead, or specify --man1dir=/wherever on
+# installman commandline.
+bin = /usr/local/bin/new
+scriptdir = /usr/local/bin/new
+shrpdir = none
+privlib = /usr/local/lib/perl5.new
+man1dir = /usr/local/man/man1
+man1ext = 1
+man3dir = /usr/local/lib/perl5.new/man/man3
+man3ext = 3
+
+# The following are used to build and install shared libraries for
+# dynamic loading.
+LDDLFLAGS = -G -L/usr/local/lib
+CCDLFLAGS =  
+DLSUFFIX = .so
+PLDLFLAGS = 
+PLIBSUF = .a
+SHRPENV = 
+
+dynamic_ext =   lib/auto/DB_File/DB_File.so lib/auto/DynaLoader/DynaLoader.so lib/auto/Fcntl/Fcntl.so lib/auto/FileHandle/FileHandle.so lib/auto/GDBM_File/GDBM_File.so lib/auto/IO/IO.so lib/auto/NDBM_File/NDBM_File.so lib/auto/ODBM_File/ODBM_File.so lib/auto/Opcode/Opcode.so lib/auto/POSIX/POSIX.so lib/auto/SDBM_File/SDBM_File.so lib/auto/Socket/Socket.so
+static_ext =  
+ext = $(dynamic_ext) $(static_ext)
+DYNALOADER = lib/auto/DynaLoader/DynaLoader$(LIB_EXT)
+
+libs = -lsfio -lsocket -lnsl -lgdbm -ldb -ldl -lm -lc -lcrypt 
+
+public = perl  utilities translators
+
+shellflags = 
+
+## To use an alternate make, set $altmake in config.sh.
+MAKE = make
+
+# These variables will be used in a future version to make
+# the make file more portable to non-unix systems.
+AR = ar
+EXE_EXT = 
+LIB_EXT = .a
+OBJ_EXT = .o
+PATH_SEP = :
+
+FIRSTMAKEFILE = makefile
+
+# Any special object files needed by this architecture, e.g. os2/os2.obj
+ARCHOBJS = 
+
+.SUFFIXES: .c $(OBJ_EXT)
+
+SHELL = /bin/sh
+
+
+CCCMD = `sh $(shellflags) cflags $(perllib) $@`
+
+private = preplibrary lib/ExtUtils/Miniperl.pm lib/Config.pm
+
+# Files to be built with variable substitution before miniperl
+# is available.
+sh = Makefile.SH cflags.SH config_h.SH makeaperl.SH makedepend.SH \
+	makedir.SH perl_exp.SH writemain.SH
+
+shextract = Makefile cflags config.h makeaperl makedepend \
+	makedir perl.exp writemain
+
+# Files to be built with variable substitution after miniperl is
+# available.  Dependencies handled manually below (for now).
+
+pl = pod/pod2html.PL pod/pod2latex.PL pod/pod2man.PL pod/pod2text.PL
+
+plextract = pod/pod2html pod/pod2latex pod/pod2man pod/pod2text
+
+addedbyconf = UU $(shextract) $(plextract) pstruct
+
+h1 = EXTERN.h INTERN.h XSUB.h av.h config.h cop.h cv.h dosish.h
+h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h
+h3 = opcode.h patchlevel.h perl.h perly.h pp.h proto.h regcomp.h
+h4 = regexp.h scope.h sv.h unixish.h util.h perlio.h 
+h = $(h1) $(h2) $(h3) $(h4)
+
+c1 = $(mallocsrc) av.c scope.c op.c doop.c doio.c dump.c hv.c mg.c
+c2 = perl.c perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c
+c3 = gv.c sv.c taint.c toke.c util.c deb.c run.c universal.c globals.c perlio.c
+
+c = $(c1) $(c2) $(c3) miniperlmain.c perlmain.c
+
+obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT)
+obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
+obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT)
+
+obj = $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
+
+# Once perl has been Configure'd and built ok you build different
+# perl variants (Debugging, Embedded, Multiplicity etc) by saying:
+#	make clean; make perllib=libperl<type>.a
+# where <type> is some combination of 'd' and(or) 'e' or 'm'.
+# See cflags to understand how this works.
+#
+# Eventually some form of 'make-a-perl' script will automate this
+# together with linking a perl executable with any desired
+# static modules.
+perllib = libperl$(PLIBSUF)
+
+lintflags = -hbvxac
+
+.c$(OBJ_EXT):
+	$(CCCMD) $(MAB) $(PLDLFLAGS) $*.c
+
+all: $(FIRSTMAKEFILE) miniperl $(private) $(plextract) $(public) $(dynamic_ext)
+	@echo " "; echo "	Everything is up to date."
+
+translators:	miniperl lib/Config.pm FORCE
+	@echo " "; echo "	Making x2p stuff"; cd x2p; $(MAKE) all
+
+utilities:	miniperl lib/Config.pm FORCE
+	@echo " "; echo "	Making utilities"; cd utils; $(MAKE) all
+
+
+# This is now done by installman only if you actually want the man pages.
+#	@echo " "; echo "	Making docs"; cd pod; $(MAKE) all;
+
+# Phony target to force checking subdirectories.
+# Apparently some makes require an action for the FORCE target.
+FORCE:
+	@sh -c true
+
+# The $& notation tells Sequent machines that it can do a parallel make,
+# and is harmless otherwise.
+# The miniperl -w -MExporter line is a basic cheap test to catch errors
+# before make goes on to run preplibrary and then MakeMaker on extensions.
+# This is very handy because later errors are often caused by miniperl
+# build problems but that's not obvious to the novice.
+# The Module used here must not depend on Config or any extensions.
+
+miniperl: $& miniperlmain$(OBJ_EXT) $(perllib)
+	$(CC) $(LARGE) $(MAB) $(CLDFLAGS) -o miniperl miniperlmain$(OBJ_EXT) $(perllib) $(libs)
+	@./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
+
+miniperlmain$(OBJ_EXT): miniperlmain.c
+	$(CCCMD) $(MAB) $(PLDLFLAGS) $*.c
+
+perlmain.c: miniperlmain.c config.sh $(FIRSTMAKEFILE)
+	sh writemain $(DYNALOADER) $(static_ext) > tmp
+	sh mv-if-diff tmp perlmain.c
+
+perlmain$(OBJ_EXT): perlmain.c
+	$(CCCMD) $(MAB) $(PLDLFLAGS) $*.c
+
+# The file ext.libs is a list of libraries that must be linked in
+# for static extensions, e.g. -lm -lgdbm, etc.  The individual
+# static extension Makefile's add to it.
+ext.libs: $(static_ext)
+	-@test -f ext.libs || touch ext.libs
+
+perl: $& perlmain$(OBJ_EXT) $(perllib) $(DYNALOADER) $(static_ext) ext.libs
+	$(SHRPENV) $(CC) $(LARGE) $(MAB) $(CLDFLAGS) $(CCDLFLAGS) -o perl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(perllib) `cat ext.libs` $(libs)
+
+pureperl: $& perlmain$(OBJ_EXT) $(perllib) $(DYNALOADER) $(static_ext) ext.libs
+	purify $(CC) $(LARGE) $(MAB) $(CLDFLAGS) $(CCDLFLAGS) -o pureperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(perllib) `cat ext.libs` $(libs)
+
+quantperl: $& perlmain$(OBJ_EXT) $(perllib) $(DYNALOADER) $(static_ext) ext.libs
+	quantify $(CC) $(LARGE) $(MAB) $(CLDFLAGS) $(CCDLFLAGS) -o quantperl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(perllib) `cat ext.libs` $(libs)
+
+$(perllib): $& perl$(OBJ_EXT) $(obj)
+	rm -f $(perllib)
+	$(AR) rcu $(perllib) perl$(OBJ_EXT) $(obj)
+	@$(ranlib) $(perllib)
+
+# This version, if specified in Configure, does ONLY those scripts which need
+# set-id emulation.  Suidperl must be setuid root.  It contains the "taint"
+# checks as well as the special code to validate that the script in question
+# has been invoked correctly.
+
+suidperl: $& sperl$(OBJ_EXT) perlmain$(OBJ_EXT) $(perllib) $(DYNALOADER) $(static_ext) ext.libs
+	$(CC) $(LARGE) $(MAB) $(CLDFLAGS) $(CCDLFLAGS) -o suidperl perlmain$(OBJ_EXT) sperl$(OBJ_EXT) $(perllib) $(DYNALOADER) $(static_ext) `cat ext.libs` $(libs)
+
+sperl$(OBJ_EXT): perl.c perly.h patchlevel.h $(h)
+	$(RMS) sperl.c
+	$(LNS) perl.c sperl.c
+	$(CCCMD) $(MAB) -DIAMSUID sperl.c
+	$(RMS) sperl.c
+
+# We have to call our ./makedir because Ultrix 4.3 make can't handle the line
+#	test -d lib/auto || mkdir lib/auto
+#
+preplibrary: miniperl lib/Config.pm $(plextract)
+	@sh ./makedir lib/auto
+	@echo "	AutoSplitting perl library"
+	@./miniperl -Ilib -e 'use AutoSplit; \
+		autosplit_lib_modules(@ARGV)' lib/*.pm lib/*/*.pm
+
+# Take care to avoid modifying lib/Config.pm without reason
+lib/Config.pm: config.sh miniperl configpm
+	./miniperl configpm tmp
+	sh mv-if-diff tmp lib/Config.pm
+
+lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl minimod.pl lib/Config.pm
+	./miniperl minimod.pl > tmp && mv tmp $@
+
+$(plextract):	miniperl lib/Config.pm
+	./miniperl -Ilib $@.PL
+
+install: all install.perl install.man
+
+install.perl:	all installperl
+	./perl installperl
+
+install.man:	all installman
+	./perl installman
+
+# Not implemented yet.
+#install.html:	all installhtml
+#	./perl installhtml
+
+# I now supply perly.c with the kits, so the following section is
+# used only if you force byacc to run by saying
+# 	make run_byacc
+# Since we patch up the byacc output, the perly.fixer script needs
+# to run with precisely the same version of byacc as I use.  You
+# normally shouldn't remake perly.[ch].
+
+run_byacc:	FORCE
+	@ echo 'Expect' 130 shift/reduce and 1 reduce/reduce conflict
+	$(BYACC) -d perly.y
+	sh $(shellflags) ./perly.fixer y.tab.c perly.c
+	sed -e 's/fprintf *( *stderr *,/PerlIO_printf(Perl_debug_log,/g' perly.c >perly.tmp && mv perly.tmp perly.c
+	mv y.tab.h perly.h
+	echo 'extern YYSTYPE yylval;' >>perly.h
+	- perl vms/vms_yfix.pl perly.c perly.h vms/perly_c.vms vms/perly_h.vms
+
+# We don't want to regenerate perly.c and perly.h, but they might
+# appear out-of-date after a patch is applied or a new distribution is
+# made.
+perly.c: perly.y
+	-@sh -c true
+
+perly.h: perly.y
+	-@sh -c true
+
+# The following three header files are generated automatically
+#	keywords.h:	keywords.pl
+#	opcode.h:	opcode.pl
+#	embed.h:  	embed.pl global.sym interp.sym
+# The correct versions should be already supplied with the perl kit,
+# in case you don't have perl available.
+# To force them to run, type
+#	make regen_headers
+regen_headers:	FORCE
+	perl keywords.pl
+	perl opcode.pl
+	perl embed.pl
+
+# Extensions:
+# Names added to $(dynamic_ext) or $(static_ext) will automatically
+# get built.  There should ordinarily be no need to change any of
+# this part of makefile.
+#
+# The dummy dependency is a place holder in case $(dynamic_ext) or
+# $(static_ext) is empty.
+#
+# DynaLoader may be needed for extensions that use Makefile.PL.
+
+$(DYNALOADER):	miniperl preplibrary FORCE
+	@sh ext/util/make_ext static $@ LIBPERL_A=$(perllib)
+
+d_dummy $(dynamic_ext):	miniperl preplibrary $(DYNALOADER) FORCE
+	@sh ext/util/make_ext dynamic $@ LIBPERL_A=$(perllib)
+
+s_dummy $(static_ext):	miniperl preplibrary $(DYNALOADER) FORCE
+	@sh ext/util/make_ext static $@ LIBPERL_A=$(perllib)
+
+clean:
+	rm -f *$(OBJ_EXT) *$(LIB_EXT) all perlmain.c
+	rm -f perl.exp ext.libs
+	-rm perl.export perl.dll perl.libexp perl.map perl.def
+	-cd pod; $(MAKE) clean
+	-cd utils; $(MAKE) clean
+	-cd x2p; $(MAKE) clean
+	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) ; do \
+	sh ext/util/make_ext clean $$x ; \
+	done
+	rm -f perl suidperl miniperl $(perllib)
+
+realclean: clean
+	-cd os2; rm -f Makefile
+	-cd pod; $(MAKE) realclean
+	-cd utils; $(MAKE) realclean
+	-cd x2p; $(MAKE) realclean
+	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) ; do \
+	sh ext/util/make_ext realclean $$x ; \
+	done
+	rm -f *.orig */*.orig *~ */*~ core t/core t/c t/perl
+	rm -rf $(addedbyconf)
+	rm -f $(FIRSTMAKEFILE) $(FIRSTMAKEFILE).old
+	rm -f $(private)
+	rm -rf lib/auto
+	rm -f lib/.exists
+	rm -f h2ph.man pstruct
+	rm -rf .config
+	@echo "Note that make realclean does not delete config.sh"
+
+clobber:	realclean
+	rm -f config.sh cppstdin
+
+distclean:	clobber
+
+# The following lint has practically everything turned on.  Unfortunately,
+# you have to wade through a lot of mumbo jumbo that can't be suppressed.
+# If the source file has a /*NOSTRICT*/ somewhere, ignore the lint message
+# for that spot.
+
+lint: perly.c $(c)
+	lint $(lintflags) $(defs) perly.c $(c) > perl.fuzz
+
+# Need to unset during recursion to go out of loop
+
+MAKEDEPEND = makedepend
+
+$(FIRSTMAKEFILE):	Makefile $(MAKEDEPEND)
+	$(MAKE) depend MAKEDEPEND=
+
+config.h: config.sh
+	$(SHELL) config_h.SH
+
+perl.exp: perl_exp.SH config.sh
+	$(SHELL) perl_exp.SH
+
+# When done, touch perlmain.c so that it doesn't get remade each time.
+depend: makedepend
+	sh ./makedepend
+	- test -s perlmain.c && touch perlmain.c
+	cd x2p; $(MAKE) depend
+
+# Cannot postpone this until $firstmakefile is ready ;-)
+makedepend: makedepend.SH config.sh
+	sh ./makedepend.SH
+
+test: miniperl perl preplibrary $(dynamic_ext)
+	- cd t && (rm -f perl$(EXE_EXT); $(LNS) ../perl$(EXE_EXT) perl$(EXE_EXT)) && ./perl TEST </dev/tty
+
+minitest: miniperl lib/Config.pm
+	- cd t && (rm -f perl$(EXE_EXT); $(LNS) ../miniperl$(EXE_EXT) perl$(EXE_EXT)) \
+		&& ./perl TEST base/*.t comp/*.t cmd/*.t io/*.t op/*.t </dev/tty
+
+clist:	$(c)
+	echo $(c) | tr ' ' '\012' >.clist
+
+hlist:  $(h)
+	echo $(h) | tr ' ' '\012' >.hlist
+
+shlist: $(sh)
+	echo $(sh) | tr ' ' '\012' >.shlist
+
+pllist: $(pl)
+	echo $(pl) | tr ' ' '\012' >.pllist
+
+Makefile: Makefile.SH ./config.sh 
+	$(SHELL) Makefile.SH
+
+distcheck : FORCE
+	perl '-MExtUtils::Manifest=&fullcheck' -e 'fullcheck()'
+
+manifest  : 
+	perl '-MExtUtils::Manifest=&mkmanifest' -e 'mkmanifest()'
+
+# AUTOMATICALLY GENERATED MAKE DEPENDENCIES--PUT NOTHING BELOW THIS LINE
+# If this runs make out of memory, delete /usr/include lines.
+malloc$(OBJ_EXT): 
+malloc$(OBJ_EXT): /usr/include/libintl.h
+malloc$(OBJ_EXT): /usr/include/netinet/in.h
+malloc$(OBJ_EXT): /usr/include/sys/condvar.h
+malloc$(OBJ_EXT): /usr/include/sys/cred.h
+malloc$(OBJ_EXT): /usr/include/sys/dirent.h
+malloc$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+malloc$(OBJ_EXT): /usr/include/sys/dl.h
+malloc$(OBJ_EXT): /usr/include/sys/errno.h
+malloc$(OBJ_EXT): /usr/include/sys/feature_tests.h
+malloc$(OBJ_EXT): /usr/include/sys/ioctl.h
+malloc$(OBJ_EXT): /usr/include/sys/machlock.h
+malloc$(OBJ_EXT): /usr/include/sys/machsig.h
+malloc$(OBJ_EXT): /usr/include/sys/machtypes.h
+malloc$(OBJ_EXT): /usr/include/sys/mutex.h
+malloc$(OBJ_EXT): /usr/include/sys/pirec.h
+malloc$(OBJ_EXT): /usr/include/sys/poll.h
+malloc$(OBJ_EXT): /usr/include/sys/procset.h
+malloc$(OBJ_EXT): /usr/include/sys/rwlock.h
+malloc$(OBJ_EXT): /usr/include/sys/select.h
+malloc$(OBJ_EXT): /usr/include/sys/semaphore.h
+malloc$(OBJ_EXT): /usr/include/sys/siginfo.h
+malloc$(OBJ_EXT): /usr/include/sys/sleepq.h
+malloc$(OBJ_EXT): /usr/include/sys/stream.h
+malloc$(OBJ_EXT): /usr/include/sys/strmdep.h
+malloc$(OBJ_EXT): /usr/include/sys/t_lock.h
+malloc$(OBJ_EXT): /usr/include/sys/time.h
+malloc$(OBJ_EXT): /usr/include/sys/times.h
+malloc$(OBJ_EXT): /usr/include/sys/turnstile.h
+malloc$(OBJ_EXT): /usr/include/sys/uio.h
+malloc$(OBJ_EXT): /usr/include/sys/unistd.h
+malloc$(OBJ_EXT): /usr/include/sys/vnode.h
+malloc$(OBJ_EXT): /usr/include/vm/seg_enum.h
+malloc$(OBJ_EXT): /usr/local/include/sfio.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+malloc$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+malloc$(OBJ_EXT): EXTERN.h
+malloc$(OBJ_EXT): av.h
+malloc$(OBJ_EXT): config.h
+malloc$(OBJ_EXT): cop.h
+malloc$(OBJ_EXT): cv.h
+malloc$(OBJ_EXT): embed.h
+malloc$(OBJ_EXT): form.h
+malloc$(OBJ_EXT): gv.h
+malloc$(OBJ_EXT): handy.h
+malloc$(OBJ_EXT): hv.h
+malloc$(OBJ_EXT): malloc.c
+malloc$(OBJ_EXT): mg.h
+malloc$(OBJ_EXT): nostdio.h
+malloc$(OBJ_EXT): op.h
+malloc$(OBJ_EXT): opcode.h
+malloc$(OBJ_EXT): perl.h
+malloc$(OBJ_EXT): perlio.h
+malloc$(OBJ_EXT): perly.h
+malloc$(OBJ_EXT): pp.h
+malloc$(OBJ_EXT): proto.h
+malloc$(OBJ_EXT): regexp.h
+malloc$(OBJ_EXT): scope.h
+malloc$(OBJ_EXT): sv.h
+malloc$(OBJ_EXT): unixish.h
+malloc$(OBJ_EXT): util.h
+av$(OBJ_EXT): 
+av$(OBJ_EXT): /usr/include/libintl.h
+av$(OBJ_EXT): /usr/include/netinet/in.h
+av$(OBJ_EXT): /usr/include/sys/condvar.h
+av$(OBJ_EXT): /usr/include/sys/cred.h
+av$(OBJ_EXT): /usr/include/sys/dirent.h
+av$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+av$(OBJ_EXT): /usr/include/sys/dl.h
+av$(OBJ_EXT): /usr/include/sys/errno.h
+av$(OBJ_EXT): /usr/include/sys/feature_tests.h
+av$(OBJ_EXT): /usr/include/sys/ioctl.h
+av$(OBJ_EXT): /usr/include/sys/machlock.h
+av$(OBJ_EXT): /usr/include/sys/machsig.h
+av$(OBJ_EXT): /usr/include/sys/machtypes.h
+av$(OBJ_EXT): /usr/include/sys/mutex.h
+av$(OBJ_EXT): /usr/include/sys/pirec.h
+av$(OBJ_EXT): /usr/include/sys/poll.h
+av$(OBJ_EXT): /usr/include/sys/procset.h
+av$(OBJ_EXT): /usr/include/sys/rwlock.h
+av$(OBJ_EXT): /usr/include/sys/select.h
+av$(OBJ_EXT): /usr/include/sys/semaphore.h
+av$(OBJ_EXT): /usr/include/sys/siginfo.h
+av$(OBJ_EXT): /usr/include/sys/sleepq.h
+av$(OBJ_EXT): /usr/include/sys/stream.h
+av$(OBJ_EXT): /usr/include/sys/strmdep.h
+av$(OBJ_EXT): /usr/include/sys/t_lock.h
+av$(OBJ_EXT): /usr/include/sys/time.h
+av$(OBJ_EXT): /usr/include/sys/times.h
+av$(OBJ_EXT): /usr/include/sys/turnstile.h
+av$(OBJ_EXT): /usr/include/sys/uio.h
+av$(OBJ_EXT): /usr/include/sys/unistd.h
+av$(OBJ_EXT): /usr/include/sys/vnode.h
+av$(OBJ_EXT): /usr/include/vm/seg_enum.h
+av$(OBJ_EXT): /usr/local/include/sfio.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+av$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+av$(OBJ_EXT): EXTERN.h
+av$(OBJ_EXT): av.c
+av$(OBJ_EXT): av.h
+av$(OBJ_EXT): config.h
+av$(OBJ_EXT): cop.h
+av$(OBJ_EXT): cv.h
+av$(OBJ_EXT): embed.h
+av$(OBJ_EXT): form.h
+av$(OBJ_EXT): gv.h
+av$(OBJ_EXT): handy.h
+av$(OBJ_EXT): hv.h
+av$(OBJ_EXT): mg.h
+av$(OBJ_EXT): nostdio.h
+av$(OBJ_EXT): op.h
+av$(OBJ_EXT): opcode.h
+av$(OBJ_EXT): perl.h
+av$(OBJ_EXT): perlio.h
+av$(OBJ_EXT): perly.h
+av$(OBJ_EXT): pp.h
+av$(OBJ_EXT): proto.h
+av$(OBJ_EXT): regexp.h
+av$(OBJ_EXT): scope.h
+av$(OBJ_EXT): sv.h
+av$(OBJ_EXT): unixish.h
+av$(OBJ_EXT): util.h
+scope$(OBJ_EXT): 
+scope$(OBJ_EXT): /usr/include/libintl.h
+scope$(OBJ_EXT): /usr/include/netinet/in.h
+scope$(OBJ_EXT): /usr/include/sys/condvar.h
+scope$(OBJ_EXT): /usr/include/sys/cred.h
+scope$(OBJ_EXT): /usr/include/sys/dirent.h
+scope$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+scope$(OBJ_EXT): /usr/include/sys/dl.h
+scope$(OBJ_EXT): /usr/include/sys/errno.h
+scope$(OBJ_EXT): /usr/include/sys/feature_tests.h
+scope$(OBJ_EXT): /usr/include/sys/ioctl.h
+scope$(OBJ_EXT): /usr/include/sys/machlock.h
+scope$(OBJ_EXT): /usr/include/sys/machsig.h
+scope$(OBJ_EXT): /usr/include/sys/machtypes.h
+scope$(OBJ_EXT): /usr/include/sys/mutex.h
+scope$(OBJ_EXT): /usr/include/sys/pirec.h
+scope$(OBJ_EXT): /usr/include/sys/poll.h
+scope$(OBJ_EXT): /usr/include/sys/procset.h
+scope$(OBJ_EXT): /usr/include/sys/rwlock.h
+scope$(OBJ_EXT): /usr/include/sys/select.h
+scope$(OBJ_EXT): /usr/include/sys/semaphore.h
+scope$(OBJ_EXT): /usr/include/sys/siginfo.h
+scope$(OBJ_EXT): /usr/include/sys/sleepq.h
+scope$(OBJ_EXT): /usr/include/sys/stream.h
+scope$(OBJ_EXT): /usr/include/sys/strmdep.h
+scope$(OBJ_EXT): /usr/include/sys/t_lock.h
+scope$(OBJ_EXT): /usr/include/sys/time.h
+scope$(OBJ_EXT): /usr/include/sys/times.h
+scope$(OBJ_EXT): /usr/include/sys/turnstile.h
+scope$(OBJ_EXT): /usr/include/sys/uio.h
+scope$(OBJ_EXT): /usr/include/sys/unistd.h
+scope$(OBJ_EXT): /usr/include/sys/vnode.h
+scope$(OBJ_EXT): /usr/include/vm/seg_enum.h
+scope$(OBJ_EXT): /usr/local/include/sfio.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+scope$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+scope$(OBJ_EXT): EXTERN.h
+scope$(OBJ_EXT): av.h
+scope$(OBJ_EXT): config.h
+scope$(OBJ_EXT): cop.h
+scope$(OBJ_EXT): cv.h
+scope$(OBJ_EXT): embed.h
+scope$(OBJ_EXT): form.h
+scope$(OBJ_EXT): gv.h
+scope$(OBJ_EXT): handy.h
+scope$(OBJ_EXT): hv.h
+scope$(OBJ_EXT): mg.h
+scope$(OBJ_EXT): nostdio.h
+scope$(OBJ_EXT): op.h
+scope$(OBJ_EXT): opcode.h
+scope$(OBJ_EXT): perl.h
+scope$(OBJ_EXT): perlio.h
+scope$(OBJ_EXT): perly.h
+scope$(OBJ_EXT): pp.h
+scope$(OBJ_EXT): proto.h
+scope$(OBJ_EXT): regexp.h
+scope$(OBJ_EXT): scope.c
+scope$(OBJ_EXT): scope.h
+scope$(OBJ_EXT): sv.h
+scope$(OBJ_EXT): unixish.h
+scope$(OBJ_EXT): util.h
+op$(OBJ_EXT): 
+op$(OBJ_EXT): /usr/include/libintl.h
+op$(OBJ_EXT): /usr/include/netinet/in.h
+op$(OBJ_EXT): /usr/include/sys/condvar.h
+op$(OBJ_EXT): /usr/include/sys/cred.h
+op$(OBJ_EXT): /usr/include/sys/dirent.h
+op$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+op$(OBJ_EXT): /usr/include/sys/dl.h
+op$(OBJ_EXT): /usr/include/sys/errno.h
+op$(OBJ_EXT): /usr/include/sys/feature_tests.h
+op$(OBJ_EXT): /usr/include/sys/ioctl.h
+op$(OBJ_EXT): /usr/include/sys/machlock.h
+op$(OBJ_EXT): /usr/include/sys/machsig.h
+op$(OBJ_EXT): /usr/include/sys/machtypes.h
+op$(OBJ_EXT): /usr/include/sys/mutex.h
+op$(OBJ_EXT): /usr/include/sys/pirec.h
+op$(OBJ_EXT): /usr/include/sys/poll.h
+op$(OBJ_EXT): /usr/include/sys/procset.h
+op$(OBJ_EXT): /usr/include/sys/rwlock.h
+op$(OBJ_EXT): /usr/include/sys/select.h
+op$(OBJ_EXT): /usr/include/sys/semaphore.h
+op$(OBJ_EXT): /usr/include/sys/siginfo.h
+op$(OBJ_EXT): /usr/include/sys/sleepq.h
+op$(OBJ_EXT): /usr/include/sys/stream.h
+op$(OBJ_EXT): /usr/include/sys/strmdep.h
+op$(OBJ_EXT): /usr/include/sys/t_lock.h
+op$(OBJ_EXT): /usr/include/sys/time.h
+op$(OBJ_EXT): /usr/include/sys/times.h
+op$(OBJ_EXT): /usr/include/sys/turnstile.h
+op$(OBJ_EXT): /usr/include/sys/uio.h
+op$(OBJ_EXT): /usr/include/sys/unistd.h
+op$(OBJ_EXT): /usr/include/sys/vnode.h
+op$(OBJ_EXT): /usr/include/vm/seg_enum.h
+op$(OBJ_EXT): /usr/local/include/sfio.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+op$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+op$(OBJ_EXT): EXTERN.h
+op$(OBJ_EXT): av.h
+op$(OBJ_EXT): config.h
+op$(OBJ_EXT): cop.h
+op$(OBJ_EXT): cv.h
+op$(OBJ_EXT): embed.h
+op$(OBJ_EXT): form.h
+op$(OBJ_EXT): gv.h
+op$(OBJ_EXT): handy.h
+op$(OBJ_EXT): hv.h
+op$(OBJ_EXT): mg.h
+op$(OBJ_EXT): nostdio.h
+op$(OBJ_EXT): op.c
+op$(OBJ_EXT): op.h
+op$(OBJ_EXT): opcode.h
+op$(OBJ_EXT): perl.h
+op$(OBJ_EXT): perlio.h
+op$(OBJ_EXT): perly.h
+op$(OBJ_EXT): pp.h
+op$(OBJ_EXT): proto.h
+op$(OBJ_EXT): regexp.h
+op$(OBJ_EXT): scope.h
+op$(OBJ_EXT): sv.h
+op$(OBJ_EXT): unixish.h
+op$(OBJ_EXT): util.h
+doop$(OBJ_EXT): 
+doop$(OBJ_EXT): /usr/include/libintl.h
+doop$(OBJ_EXT): /usr/include/netinet/in.h
+doop$(OBJ_EXT): /usr/include/sys/condvar.h
+doop$(OBJ_EXT): /usr/include/sys/cred.h
+doop$(OBJ_EXT): /usr/include/sys/dirent.h
+doop$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+doop$(OBJ_EXT): /usr/include/sys/dl.h
+doop$(OBJ_EXT): /usr/include/sys/errno.h
+doop$(OBJ_EXT): /usr/include/sys/feature_tests.h
+doop$(OBJ_EXT): /usr/include/sys/ioctl.h
+doop$(OBJ_EXT): /usr/include/sys/machlock.h
+doop$(OBJ_EXT): /usr/include/sys/machsig.h
+doop$(OBJ_EXT): /usr/include/sys/machtypes.h
+doop$(OBJ_EXT): /usr/include/sys/mutex.h
+doop$(OBJ_EXT): /usr/include/sys/pirec.h
+doop$(OBJ_EXT): /usr/include/sys/poll.h
+doop$(OBJ_EXT): /usr/include/sys/procset.h
+doop$(OBJ_EXT): /usr/include/sys/rwlock.h
+doop$(OBJ_EXT): /usr/include/sys/select.h
+doop$(OBJ_EXT): /usr/include/sys/semaphore.h
+doop$(OBJ_EXT): /usr/include/sys/siginfo.h
+doop$(OBJ_EXT): /usr/include/sys/sleepq.h
+doop$(OBJ_EXT): /usr/include/sys/stream.h
+doop$(OBJ_EXT): /usr/include/sys/strmdep.h
+doop$(OBJ_EXT): /usr/include/sys/t_lock.h
+doop$(OBJ_EXT): /usr/include/sys/time.h
+doop$(OBJ_EXT): /usr/include/sys/times.h
+doop$(OBJ_EXT): /usr/include/sys/turnstile.h
+doop$(OBJ_EXT): /usr/include/sys/uio.h
+doop$(OBJ_EXT): /usr/include/sys/unistd.h
+doop$(OBJ_EXT): /usr/include/sys/vnode.h
+doop$(OBJ_EXT): /usr/include/vm/seg_enum.h
+doop$(OBJ_EXT): /usr/local/include/sfio.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+doop$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+doop$(OBJ_EXT): EXTERN.h
+doop$(OBJ_EXT): av.h
+doop$(OBJ_EXT): config.h
+doop$(OBJ_EXT): cop.h
+doop$(OBJ_EXT): cv.h
+doop$(OBJ_EXT): doop.c
+doop$(OBJ_EXT): embed.h
+doop$(OBJ_EXT): form.h
+doop$(OBJ_EXT): gv.h
+doop$(OBJ_EXT): handy.h
+doop$(OBJ_EXT): hv.h
+doop$(OBJ_EXT): mg.h
+doop$(OBJ_EXT): nostdio.h
+doop$(OBJ_EXT): op.h
+doop$(OBJ_EXT): opcode.h
+doop$(OBJ_EXT): perl.h
+doop$(OBJ_EXT): perlio.h
+doop$(OBJ_EXT): perly.h
+doop$(OBJ_EXT): pp.h
+doop$(OBJ_EXT): proto.h
+doop$(OBJ_EXT): regexp.h
+doop$(OBJ_EXT): scope.h
+doop$(OBJ_EXT): sv.h
+doop$(OBJ_EXT): unixish.h
+doop$(OBJ_EXT): util.h
+doio$(OBJ_EXT): 
+doio$(OBJ_EXT): /usr/include/fcntl.h
+doio$(OBJ_EXT): /usr/include/libintl.h
+doio$(OBJ_EXT): /usr/include/netdb.h
+doio$(OBJ_EXT): /usr/include/netinet/in.h
+doio$(OBJ_EXT): /usr/include/sys/condvar.h
+doio$(OBJ_EXT): /usr/include/sys/cred.h
+doio$(OBJ_EXT): /usr/include/sys/dirent.h
+doio$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+doio$(OBJ_EXT): /usr/include/sys/dl.h
+doio$(OBJ_EXT): /usr/include/sys/errno.h
+doio$(OBJ_EXT): /usr/include/sys/fcntl.h
+doio$(OBJ_EXT): /usr/include/sys/feature_tests.h
+doio$(OBJ_EXT): /usr/include/sys/ioctl.h
+doio$(OBJ_EXT): /usr/include/sys/ipc.h
+doio$(OBJ_EXT): /usr/include/sys/machlock.h
+doio$(OBJ_EXT): /usr/include/sys/machsig.h
+doio$(OBJ_EXT): /usr/include/sys/machtypes.h
+doio$(OBJ_EXT): /usr/include/sys/mutex.h
+doio$(OBJ_EXT): /usr/include/sys/netconfig.h
+doio$(OBJ_EXT): /usr/include/sys/pirec.h
+doio$(OBJ_EXT): /usr/include/sys/poll.h
+doio$(OBJ_EXT): /usr/include/sys/procset.h
+doio$(OBJ_EXT): /usr/include/sys/rwlock.h
+doio$(OBJ_EXT): /usr/include/sys/select.h
+doio$(OBJ_EXT): /usr/include/sys/sem.h
+doio$(OBJ_EXT): /usr/include/sys/semaphore.h
+doio$(OBJ_EXT): /usr/include/sys/shm.h
+doio$(OBJ_EXT): /usr/include/sys/siginfo.h
+doio$(OBJ_EXT): /usr/include/sys/sleepq.h
+doio$(OBJ_EXT): /usr/include/sys/socket.h
+doio$(OBJ_EXT): /usr/include/sys/stream.h
+doio$(OBJ_EXT): /usr/include/sys/strmdep.h
+doio$(OBJ_EXT): /usr/include/sys/t_lock.h
+doio$(OBJ_EXT): /usr/include/sys/time.h
+doio$(OBJ_EXT): /usr/include/sys/times.h
+doio$(OBJ_EXT): /usr/include/sys/turnstile.h
+doio$(OBJ_EXT): /usr/include/sys/uio.h
+doio$(OBJ_EXT): /usr/include/sys/unistd.h
+doio$(OBJ_EXT): /usr/include/sys/utime.h
+doio$(OBJ_EXT): /usr/include/sys/vnode.h
+doio$(OBJ_EXT): /usr/include/utime.h
+doio$(OBJ_EXT): /usr/include/vm/seg_enum.h
+doio$(OBJ_EXT): /usr/local/include/sfio.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/msg.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+doio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+doio$(OBJ_EXT): EXTERN.h
+doio$(OBJ_EXT): av.h
+doio$(OBJ_EXT): config.h
+doio$(OBJ_EXT): cop.h
+doio$(OBJ_EXT): cv.h
+doio$(OBJ_EXT): doio.c
+doio$(OBJ_EXT): embed.h
+doio$(OBJ_EXT): form.h
+doio$(OBJ_EXT): gv.h
+doio$(OBJ_EXT): handy.h
+doio$(OBJ_EXT): hv.h
+doio$(OBJ_EXT): mg.h
+doio$(OBJ_EXT): nostdio.h
+doio$(OBJ_EXT): op.h
+doio$(OBJ_EXT): opcode.h
+doio$(OBJ_EXT): perl.h
+doio$(OBJ_EXT): perlio.h
+doio$(OBJ_EXT): perly.h
+doio$(OBJ_EXT): pp.h
+doio$(OBJ_EXT): proto.h
+doio$(OBJ_EXT): regexp.h
+doio$(OBJ_EXT): scope.h
+doio$(OBJ_EXT): sv.h
+doio$(OBJ_EXT): unixish.h
+doio$(OBJ_EXT): util.h
+dump$(OBJ_EXT): 
+dump$(OBJ_EXT): /usr/include/libintl.h
+dump$(OBJ_EXT): /usr/include/netinet/in.h
+dump$(OBJ_EXT): /usr/include/sys/condvar.h
+dump$(OBJ_EXT): /usr/include/sys/cred.h
+dump$(OBJ_EXT): /usr/include/sys/dirent.h
+dump$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+dump$(OBJ_EXT): /usr/include/sys/dl.h
+dump$(OBJ_EXT): /usr/include/sys/errno.h
+dump$(OBJ_EXT): /usr/include/sys/feature_tests.h
+dump$(OBJ_EXT): /usr/include/sys/ioctl.h
+dump$(OBJ_EXT): /usr/include/sys/machlock.h
+dump$(OBJ_EXT): /usr/include/sys/machsig.h
+dump$(OBJ_EXT): /usr/include/sys/machtypes.h
+dump$(OBJ_EXT): /usr/include/sys/mutex.h
+dump$(OBJ_EXT): /usr/include/sys/pirec.h
+dump$(OBJ_EXT): /usr/include/sys/poll.h
+dump$(OBJ_EXT): /usr/include/sys/procset.h
+dump$(OBJ_EXT): /usr/include/sys/rwlock.h
+dump$(OBJ_EXT): /usr/include/sys/select.h
+dump$(OBJ_EXT): /usr/include/sys/semaphore.h
+dump$(OBJ_EXT): /usr/include/sys/siginfo.h
+dump$(OBJ_EXT): /usr/include/sys/sleepq.h
+dump$(OBJ_EXT): /usr/include/sys/stream.h
+dump$(OBJ_EXT): /usr/include/sys/strmdep.h
+dump$(OBJ_EXT): /usr/include/sys/t_lock.h
+dump$(OBJ_EXT): /usr/include/sys/time.h
+dump$(OBJ_EXT): /usr/include/sys/times.h
+dump$(OBJ_EXT): /usr/include/sys/turnstile.h
+dump$(OBJ_EXT): /usr/include/sys/uio.h
+dump$(OBJ_EXT): /usr/include/sys/unistd.h
+dump$(OBJ_EXT): /usr/include/sys/vnode.h
+dump$(OBJ_EXT): /usr/include/vm/seg_enum.h
+dump$(OBJ_EXT): /usr/local/include/sfio.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+dump$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+dump$(OBJ_EXT): EXTERN.h
+dump$(OBJ_EXT): av.h
+dump$(OBJ_EXT): config.h
+dump$(OBJ_EXT): cop.h
+dump$(OBJ_EXT): cv.h
+dump$(OBJ_EXT): dump.c
+dump$(OBJ_EXT): embed.h
+dump$(OBJ_EXT): form.h
+dump$(OBJ_EXT): gv.h
+dump$(OBJ_EXT): handy.h
+dump$(OBJ_EXT): hv.h
+dump$(OBJ_EXT): mg.h
+dump$(OBJ_EXT): nostdio.h
+dump$(OBJ_EXT): op.h
+dump$(OBJ_EXT): opcode.h
+dump$(OBJ_EXT): perl.h
+dump$(OBJ_EXT): perlio.h
+dump$(OBJ_EXT): perly.h
+dump$(OBJ_EXT): pp.h
+dump$(OBJ_EXT): proto.h
+dump$(OBJ_EXT): regexp.h
+dump$(OBJ_EXT): scope.h
+dump$(OBJ_EXT): sv.h
+dump$(OBJ_EXT): unixish.h
+dump$(OBJ_EXT): util.h
+hv$(OBJ_EXT): 
+hv$(OBJ_EXT): /usr/include/libintl.h
+hv$(OBJ_EXT): /usr/include/netinet/in.h
+hv$(OBJ_EXT): /usr/include/sys/condvar.h
+hv$(OBJ_EXT): /usr/include/sys/cred.h
+hv$(OBJ_EXT): /usr/include/sys/dirent.h
+hv$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+hv$(OBJ_EXT): /usr/include/sys/dl.h
+hv$(OBJ_EXT): /usr/include/sys/errno.h
+hv$(OBJ_EXT): /usr/include/sys/feature_tests.h
+hv$(OBJ_EXT): /usr/include/sys/ioctl.h
+hv$(OBJ_EXT): /usr/include/sys/machlock.h
+hv$(OBJ_EXT): /usr/include/sys/machsig.h
+hv$(OBJ_EXT): /usr/include/sys/machtypes.h
+hv$(OBJ_EXT): /usr/include/sys/mutex.h
+hv$(OBJ_EXT): /usr/include/sys/pirec.h
+hv$(OBJ_EXT): /usr/include/sys/poll.h
+hv$(OBJ_EXT): /usr/include/sys/procset.h
+hv$(OBJ_EXT): /usr/include/sys/rwlock.h
+hv$(OBJ_EXT): /usr/include/sys/select.h
+hv$(OBJ_EXT): /usr/include/sys/semaphore.h
+hv$(OBJ_EXT): /usr/include/sys/siginfo.h
+hv$(OBJ_EXT): /usr/include/sys/sleepq.h
+hv$(OBJ_EXT): /usr/include/sys/stream.h
+hv$(OBJ_EXT): /usr/include/sys/strmdep.h
+hv$(OBJ_EXT): /usr/include/sys/t_lock.h
+hv$(OBJ_EXT): /usr/include/sys/time.h
+hv$(OBJ_EXT): /usr/include/sys/times.h
+hv$(OBJ_EXT): /usr/include/sys/turnstile.h
+hv$(OBJ_EXT): /usr/include/sys/uio.h
+hv$(OBJ_EXT): /usr/include/sys/unistd.h
+hv$(OBJ_EXT): /usr/include/sys/vnode.h
+hv$(OBJ_EXT): /usr/include/vm/seg_enum.h
+hv$(OBJ_EXT): /usr/local/include/sfio.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+hv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+hv$(OBJ_EXT): EXTERN.h
+hv$(OBJ_EXT): av.h
+hv$(OBJ_EXT): config.h
+hv$(OBJ_EXT): cop.h
+hv$(OBJ_EXT): cv.h
+hv$(OBJ_EXT): embed.h
+hv$(OBJ_EXT): form.h
+hv$(OBJ_EXT): gv.h
+hv$(OBJ_EXT): handy.h
+hv$(OBJ_EXT): hv.c
+hv$(OBJ_EXT): hv.h
+hv$(OBJ_EXT): mg.h
+hv$(OBJ_EXT): nostdio.h
+hv$(OBJ_EXT): op.h
+hv$(OBJ_EXT): opcode.h
+hv$(OBJ_EXT): perl.h
+hv$(OBJ_EXT): perlio.h
+hv$(OBJ_EXT): perly.h
+hv$(OBJ_EXT): pp.h
+hv$(OBJ_EXT): proto.h
+hv$(OBJ_EXT): regexp.h
+hv$(OBJ_EXT): scope.h
+hv$(OBJ_EXT): sv.h
+hv$(OBJ_EXT): unixish.h
+hv$(OBJ_EXT): util.h
+mg$(OBJ_EXT): 
+mg$(OBJ_EXT): /usr/include/libintl.h
+mg$(OBJ_EXT): /usr/include/netinet/in.h
+mg$(OBJ_EXT): /usr/include/sys/condvar.h
+mg$(OBJ_EXT): /usr/include/sys/cred.h
+mg$(OBJ_EXT): /usr/include/sys/dirent.h
+mg$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+mg$(OBJ_EXT): /usr/include/sys/dl.h
+mg$(OBJ_EXT): /usr/include/sys/errno.h
+mg$(OBJ_EXT): /usr/include/sys/feature_tests.h
+mg$(OBJ_EXT): /usr/include/sys/ioctl.h
+mg$(OBJ_EXT): /usr/include/sys/machlock.h
+mg$(OBJ_EXT): /usr/include/sys/machsig.h
+mg$(OBJ_EXT): /usr/include/sys/machtypes.h
+mg$(OBJ_EXT): /usr/include/sys/mutex.h
+mg$(OBJ_EXT): /usr/include/sys/pirec.h
+mg$(OBJ_EXT): /usr/include/sys/poll.h
+mg$(OBJ_EXT): /usr/include/sys/procset.h
+mg$(OBJ_EXT): /usr/include/sys/rwlock.h
+mg$(OBJ_EXT): /usr/include/sys/select.h
+mg$(OBJ_EXT): /usr/include/sys/semaphore.h
+mg$(OBJ_EXT): /usr/include/sys/siginfo.h
+mg$(OBJ_EXT): /usr/include/sys/sleepq.h
+mg$(OBJ_EXT): /usr/include/sys/stream.h
+mg$(OBJ_EXT): /usr/include/sys/strmdep.h
+mg$(OBJ_EXT): /usr/include/sys/t_lock.h
+mg$(OBJ_EXT): /usr/include/sys/time.h
+mg$(OBJ_EXT): /usr/include/sys/times.h
+mg$(OBJ_EXT): /usr/include/sys/turnstile.h
+mg$(OBJ_EXT): /usr/include/sys/uio.h
+mg$(OBJ_EXT): /usr/include/sys/unistd.h
+mg$(OBJ_EXT): /usr/include/sys/vnode.h
+mg$(OBJ_EXT): /usr/include/vm/seg_enum.h
+mg$(OBJ_EXT): /usr/local/include/sfio.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/unistd.h
+mg$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+mg$(OBJ_EXT): EXTERN.h
+mg$(OBJ_EXT): av.h
+mg$(OBJ_EXT): config.h
+mg$(OBJ_EXT): cop.h
+mg$(OBJ_EXT): cv.h
+mg$(OBJ_EXT): embed.h
+mg$(OBJ_EXT): form.h
+mg$(OBJ_EXT): gv.h
+mg$(OBJ_EXT): handy.h
+mg$(OBJ_EXT): hv.h
+mg$(OBJ_EXT): mg.c
+mg$(OBJ_EXT): mg.h
+mg$(OBJ_EXT): nostdio.h
+mg$(OBJ_EXT): op.h
+mg$(OBJ_EXT): opcode.h
+mg$(OBJ_EXT): perl.h
+mg$(OBJ_EXT): perlio.h
+mg$(OBJ_EXT): perly.h
+mg$(OBJ_EXT): pp.h
+mg$(OBJ_EXT): proto.h
+mg$(OBJ_EXT): regexp.h
+mg$(OBJ_EXT): scope.h
+mg$(OBJ_EXT): sv.h
+mg$(OBJ_EXT): unixish.h
+mg$(OBJ_EXT): util.h
+perl$(OBJ_EXT): 
+perl$(OBJ_EXT): /usr/include/libintl.h
+perl$(OBJ_EXT): /usr/include/netinet/in.h
+perl$(OBJ_EXT): /usr/include/sys/condvar.h
+perl$(OBJ_EXT): /usr/include/sys/cred.h
+perl$(OBJ_EXT): /usr/include/sys/dirent.h
+perl$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+perl$(OBJ_EXT): /usr/include/sys/dl.h
+perl$(OBJ_EXT): /usr/include/sys/errno.h
+perl$(OBJ_EXT): /usr/include/sys/feature_tests.h
+perl$(OBJ_EXT): /usr/include/sys/ioctl.h
+perl$(OBJ_EXT): /usr/include/sys/machlock.h
+perl$(OBJ_EXT): /usr/include/sys/machsig.h
+perl$(OBJ_EXT): /usr/include/sys/machtypes.h
+perl$(OBJ_EXT): /usr/include/sys/mutex.h
+perl$(OBJ_EXT): /usr/include/sys/pirec.h
+perl$(OBJ_EXT): /usr/include/sys/poll.h
+perl$(OBJ_EXT): /usr/include/sys/procset.h
+perl$(OBJ_EXT): /usr/include/sys/rwlock.h
+perl$(OBJ_EXT): /usr/include/sys/select.h
+perl$(OBJ_EXT): /usr/include/sys/semaphore.h
+perl$(OBJ_EXT): /usr/include/sys/siginfo.h
+perl$(OBJ_EXT): /usr/include/sys/sleepq.h
+perl$(OBJ_EXT): /usr/include/sys/stream.h
+perl$(OBJ_EXT): /usr/include/sys/strmdep.h
+perl$(OBJ_EXT): /usr/include/sys/t_lock.h
+perl$(OBJ_EXT): /usr/include/sys/time.h
+perl$(OBJ_EXT): /usr/include/sys/times.h
+perl$(OBJ_EXT): /usr/include/sys/turnstile.h
+perl$(OBJ_EXT): /usr/include/sys/uio.h
+perl$(OBJ_EXT): /usr/include/sys/unistd.h
+perl$(OBJ_EXT): /usr/include/sys/vnode.h
+perl$(OBJ_EXT): /usr/include/vm/seg_enum.h
+perl$(OBJ_EXT): /usr/local/include/sfio.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/unistd.h
+perl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+perl$(OBJ_EXT): EXTERN.h
+perl$(OBJ_EXT): av.h
+perl$(OBJ_EXT): config.h
+perl$(OBJ_EXT): cop.h
+perl$(OBJ_EXT): cv.h
+perl$(OBJ_EXT): embed.h
+perl$(OBJ_EXT): form.h
+perl$(OBJ_EXT): gv.h
+perl$(OBJ_EXT): handy.h
+perl$(OBJ_EXT): hv.h
+perl$(OBJ_EXT): mg.h
+perl$(OBJ_EXT): nostdio.h
+perl$(OBJ_EXT): op.h
+perl$(OBJ_EXT): opcode.h
+perl$(OBJ_EXT): patchlevel.h
+perl$(OBJ_EXT): perl.c
+perl$(OBJ_EXT): perl.h
+perl$(OBJ_EXT): perlio.h
+perl$(OBJ_EXT): perly.h
+perl$(OBJ_EXT): pp.h
+perl$(OBJ_EXT): proto.h
+perl$(OBJ_EXT): regexp.h
+perl$(OBJ_EXT): scope.h
+perl$(OBJ_EXT): sv.h
+perl$(OBJ_EXT): unixish.h
+perl$(OBJ_EXT): util.h
+perly$(OBJ_EXT): 
+perly$(OBJ_EXT): /usr/include/libintl.h
+perly$(OBJ_EXT): /usr/include/netinet/in.h
+perly$(OBJ_EXT): /usr/include/sys/condvar.h
+perly$(OBJ_EXT): /usr/include/sys/cred.h
+perly$(OBJ_EXT): /usr/include/sys/dirent.h
+perly$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+perly$(OBJ_EXT): /usr/include/sys/dl.h
+perly$(OBJ_EXT): /usr/include/sys/errno.h
+perly$(OBJ_EXT): /usr/include/sys/feature_tests.h
+perly$(OBJ_EXT): /usr/include/sys/ioctl.h
+perly$(OBJ_EXT): /usr/include/sys/machlock.h
+perly$(OBJ_EXT): /usr/include/sys/machsig.h
+perly$(OBJ_EXT): /usr/include/sys/machtypes.h
+perly$(OBJ_EXT): /usr/include/sys/mutex.h
+perly$(OBJ_EXT): /usr/include/sys/pirec.h
+perly$(OBJ_EXT): /usr/include/sys/poll.h
+perly$(OBJ_EXT): /usr/include/sys/procset.h
+perly$(OBJ_EXT): /usr/include/sys/rwlock.h
+perly$(OBJ_EXT): /usr/include/sys/select.h
+perly$(OBJ_EXT): /usr/include/sys/semaphore.h
+perly$(OBJ_EXT): /usr/include/sys/siginfo.h
+perly$(OBJ_EXT): /usr/include/sys/sleepq.h
+perly$(OBJ_EXT): /usr/include/sys/stream.h
+perly$(OBJ_EXT): /usr/include/sys/strmdep.h
+perly$(OBJ_EXT): /usr/include/sys/t_lock.h
+perly$(OBJ_EXT): /usr/include/sys/time.h
+perly$(OBJ_EXT): /usr/include/sys/times.h
+perly$(OBJ_EXT): /usr/include/sys/turnstile.h
+perly$(OBJ_EXT): /usr/include/sys/uio.h
+perly$(OBJ_EXT): /usr/include/sys/unistd.h
+perly$(OBJ_EXT): /usr/include/sys/vnode.h
+perly$(OBJ_EXT): /usr/include/vm/seg_enum.h
+perly$(OBJ_EXT): /usr/local/include/sfio.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+perly$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+perly$(OBJ_EXT): EXTERN.h
+perly$(OBJ_EXT): av.h
+perly$(OBJ_EXT): config.h
+perly$(OBJ_EXT): cop.h
+perly$(OBJ_EXT): cv.h
+perly$(OBJ_EXT): embed.h
+perly$(OBJ_EXT): form.h
+perly$(OBJ_EXT): gv.h
+perly$(OBJ_EXT): handy.h
+perly$(OBJ_EXT): hv.h
+perly$(OBJ_EXT): mg.h
+perly$(OBJ_EXT): nostdio.h
+perly$(OBJ_EXT): op.h
+perly$(OBJ_EXT): opcode.h
+perly$(OBJ_EXT): perl.h
+perly$(OBJ_EXT): perlio.h
+perly$(OBJ_EXT): perly.c
+perly$(OBJ_EXT): perly.h
+perly$(OBJ_EXT): pp.h
+perly$(OBJ_EXT): proto.h
+perly$(OBJ_EXT): regexp.h
+perly$(OBJ_EXT): scope.h
+perly$(OBJ_EXT): sv.h
+perly$(OBJ_EXT): unixish.h
+perly$(OBJ_EXT): util.h
+pp$(OBJ_EXT): 
+pp$(OBJ_EXT): /usr/include/libintl.h
+pp$(OBJ_EXT): /usr/include/netinet/in.h
+pp$(OBJ_EXT): /usr/include/sys/condvar.h
+pp$(OBJ_EXT): /usr/include/sys/cred.h
+pp$(OBJ_EXT): /usr/include/sys/dirent.h
+pp$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+pp$(OBJ_EXT): /usr/include/sys/dl.h
+pp$(OBJ_EXT): /usr/include/sys/errno.h
+pp$(OBJ_EXT): /usr/include/sys/feature_tests.h
+pp$(OBJ_EXT): /usr/include/sys/ioctl.h
+pp$(OBJ_EXT): /usr/include/sys/machlock.h
+pp$(OBJ_EXT): /usr/include/sys/machsig.h
+pp$(OBJ_EXT): /usr/include/sys/machtypes.h
+pp$(OBJ_EXT): /usr/include/sys/mutex.h
+pp$(OBJ_EXT): /usr/include/sys/pirec.h
+pp$(OBJ_EXT): /usr/include/sys/poll.h
+pp$(OBJ_EXT): /usr/include/sys/procset.h
+pp$(OBJ_EXT): /usr/include/sys/rwlock.h
+pp$(OBJ_EXT): /usr/include/sys/select.h
+pp$(OBJ_EXT): /usr/include/sys/semaphore.h
+pp$(OBJ_EXT): /usr/include/sys/siginfo.h
+pp$(OBJ_EXT): /usr/include/sys/sleepq.h
+pp$(OBJ_EXT): /usr/include/sys/stream.h
+pp$(OBJ_EXT): /usr/include/sys/strmdep.h
+pp$(OBJ_EXT): /usr/include/sys/t_lock.h
+pp$(OBJ_EXT): /usr/include/sys/time.h
+pp$(OBJ_EXT): /usr/include/sys/times.h
+pp$(OBJ_EXT): /usr/include/sys/turnstile.h
+pp$(OBJ_EXT): /usr/include/sys/uio.h
+pp$(OBJ_EXT): /usr/include/sys/unistd.h
+pp$(OBJ_EXT): /usr/include/sys/vnode.h
+pp$(OBJ_EXT): /usr/include/vm/seg_enum.h
+pp$(OBJ_EXT): /usr/local/include/sfio.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+pp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+pp$(OBJ_EXT): EXTERN.h
+pp$(OBJ_EXT): av.h
+pp$(OBJ_EXT): config.h
+pp$(OBJ_EXT): cop.h
+pp$(OBJ_EXT): cv.h
+pp$(OBJ_EXT): embed.h
+pp$(OBJ_EXT): form.h
+pp$(OBJ_EXT): gv.h
+pp$(OBJ_EXT): handy.h
+pp$(OBJ_EXT): hv.h
+pp$(OBJ_EXT): mg.h
+pp$(OBJ_EXT): nostdio.h
+pp$(OBJ_EXT): op.h
+pp$(OBJ_EXT): opcode.h
+pp$(OBJ_EXT): perl.h
+pp$(OBJ_EXT): perlio.h
+pp$(OBJ_EXT): perly.h
+pp$(OBJ_EXT): pp.c
+pp$(OBJ_EXT): pp.h
+pp$(OBJ_EXT): proto.h
+pp$(OBJ_EXT): regexp.h
+pp$(OBJ_EXT): scope.h
+pp$(OBJ_EXT): sv.h
+pp$(OBJ_EXT): unixish.h
+pp$(OBJ_EXT): util.h
+pp_hot$(OBJ_EXT): 
+pp_hot$(OBJ_EXT): /usr/include/libintl.h
+pp_hot$(OBJ_EXT): /usr/include/netinet/in.h
+pp_hot$(OBJ_EXT): /usr/include/sys/condvar.h
+pp_hot$(OBJ_EXT): /usr/include/sys/cred.h
+pp_hot$(OBJ_EXT): /usr/include/sys/dirent.h
+pp_hot$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+pp_hot$(OBJ_EXT): /usr/include/sys/dl.h
+pp_hot$(OBJ_EXT): /usr/include/sys/errno.h
+pp_hot$(OBJ_EXT): /usr/include/sys/feature_tests.h
+pp_hot$(OBJ_EXT): /usr/include/sys/ioctl.h
+pp_hot$(OBJ_EXT): /usr/include/sys/machlock.h
+pp_hot$(OBJ_EXT): /usr/include/sys/machsig.h
+pp_hot$(OBJ_EXT): /usr/include/sys/machtypes.h
+pp_hot$(OBJ_EXT): /usr/include/sys/mutex.h
+pp_hot$(OBJ_EXT): /usr/include/sys/pirec.h
+pp_hot$(OBJ_EXT): /usr/include/sys/poll.h
+pp_hot$(OBJ_EXT): /usr/include/sys/procset.h
+pp_hot$(OBJ_EXT): /usr/include/sys/rwlock.h
+pp_hot$(OBJ_EXT): /usr/include/sys/select.h
+pp_hot$(OBJ_EXT): /usr/include/sys/semaphore.h
+pp_hot$(OBJ_EXT): /usr/include/sys/siginfo.h
+pp_hot$(OBJ_EXT): /usr/include/sys/sleepq.h
+pp_hot$(OBJ_EXT): /usr/include/sys/stream.h
+pp_hot$(OBJ_EXT): /usr/include/sys/strmdep.h
+pp_hot$(OBJ_EXT): /usr/include/sys/t_lock.h
+pp_hot$(OBJ_EXT): /usr/include/sys/time.h
+pp_hot$(OBJ_EXT): /usr/include/sys/times.h
+pp_hot$(OBJ_EXT): /usr/include/sys/turnstile.h
+pp_hot$(OBJ_EXT): /usr/include/sys/uio.h
+pp_hot$(OBJ_EXT): /usr/include/sys/unistd.h
+pp_hot$(OBJ_EXT): /usr/include/sys/vnode.h
+pp_hot$(OBJ_EXT): /usr/include/vm/seg_enum.h
+pp_hot$(OBJ_EXT): /usr/local/include/sfio.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+pp_hot$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+pp_hot$(OBJ_EXT): EXTERN.h
+pp_hot$(OBJ_EXT): av.h
+pp_hot$(OBJ_EXT): config.h
+pp_hot$(OBJ_EXT): cop.h
+pp_hot$(OBJ_EXT): cv.h
+pp_hot$(OBJ_EXT): embed.h
+pp_hot$(OBJ_EXT): form.h
+pp_hot$(OBJ_EXT): gv.h
+pp_hot$(OBJ_EXT): handy.h
+pp_hot$(OBJ_EXT): hv.h
+pp_hot$(OBJ_EXT): mg.h
+pp_hot$(OBJ_EXT): nostdio.h
+pp_hot$(OBJ_EXT): op.h
+pp_hot$(OBJ_EXT): opcode.h
+pp_hot$(OBJ_EXT): perl.h
+pp_hot$(OBJ_EXT): perlio.h
+pp_hot$(OBJ_EXT): perly.h
+pp_hot$(OBJ_EXT): pp.h
+pp_hot$(OBJ_EXT): pp_hot.c
+pp_hot$(OBJ_EXT): proto.h
+pp_hot$(OBJ_EXT): regexp.h
+pp_hot$(OBJ_EXT): scope.h
+pp_hot$(OBJ_EXT): sv.h
+pp_hot$(OBJ_EXT): unixish.h
+pp_hot$(OBJ_EXT): util.h
+pp_ctl$(OBJ_EXT): 
+pp_ctl$(OBJ_EXT): /usr/include/libintl.h
+pp_ctl$(OBJ_EXT): /usr/include/netinet/in.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/condvar.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/cred.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/dirent.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/dl.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/errno.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/feature_tests.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/ioctl.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/machlock.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/machsig.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/machtypes.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/mutex.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/pirec.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/poll.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/procset.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/rwlock.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/select.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/semaphore.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/siginfo.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/sleepq.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/stream.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/strmdep.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/t_lock.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/time.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/times.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/turnstile.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/uio.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/unistd.h
+pp_ctl$(OBJ_EXT): /usr/include/sys/vnode.h
+pp_ctl$(OBJ_EXT): /usr/include/vm/seg_enum.h
+pp_ctl$(OBJ_EXT): /usr/local/include/sfio.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+pp_ctl$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+pp_ctl$(OBJ_EXT): EXTERN.h
+pp_ctl$(OBJ_EXT): av.h
+pp_ctl$(OBJ_EXT): config.h
+pp_ctl$(OBJ_EXT): cop.h
+pp_ctl$(OBJ_EXT): cv.h
+pp_ctl$(OBJ_EXT): embed.h
+pp_ctl$(OBJ_EXT): form.h
+pp_ctl$(OBJ_EXT): gv.h
+pp_ctl$(OBJ_EXT): handy.h
+pp_ctl$(OBJ_EXT): hv.h
+pp_ctl$(OBJ_EXT): mg.h
+pp_ctl$(OBJ_EXT): nostdio.h
+pp_ctl$(OBJ_EXT): op.h
+pp_ctl$(OBJ_EXT): opcode.h
+pp_ctl$(OBJ_EXT): perl.h
+pp_ctl$(OBJ_EXT): perlio.h
+pp_ctl$(OBJ_EXT): perly.h
+pp_ctl$(OBJ_EXT): pp.h
+pp_ctl$(OBJ_EXT): pp_ctl.c
+pp_ctl$(OBJ_EXT): proto.h
+pp_ctl$(OBJ_EXT): regexp.h
+pp_ctl$(OBJ_EXT): scope.h
+pp_ctl$(OBJ_EXT): sv.h
+pp_ctl$(OBJ_EXT): unixish.h
+pp_ctl$(OBJ_EXT): util.h
+pp_sys$(OBJ_EXT): 
+pp_sys$(OBJ_EXT): /usr/include/fcntl.h
+pp_sys$(OBJ_EXT): /usr/include/libintl.h
+pp_sys$(OBJ_EXT): /usr/include/netdb.h
+pp_sys$(OBJ_EXT): /usr/include/netinet/in.h
+pp_sys$(OBJ_EXT): /usr/include/sys/condvar.h
+pp_sys$(OBJ_EXT): /usr/include/sys/cred.h
+pp_sys$(OBJ_EXT): /usr/include/sys/dirent.h
+pp_sys$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+pp_sys$(OBJ_EXT): /usr/include/sys/dl.h
+pp_sys$(OBJ_EXT): /usr/include/sys/errno.h
+pp_sys$(OBJ_EXT): /usr/include/sys/fcntl.h
+pp_sys$(OBJ_EXT): /usr/include/sys/feature_tests.h
+pp_sys$(OBJ_EXT): /usr/include/sys/ioctl.h
+pp_sys$(OBJ_EXT): /usr/include/sys/machlock.h
+pp_sys$(OBJ_EXT): /usr/include/sys/machsig.h
+pp_sys$(OBJ_EXT): /usr/include/sys/machtypes.h
+pp_sys$(OBJ_EXT): /usr/include/sys/mutex.h
+pp_sys$(OBJ_EXT): /usr/include/sys/netconfig.h
+pp_sys$(OBJ_EXT): /usr/include/sys/pirec.h
+pp_sys$(OBJ_EXT): /usr/include/sys/poll.h
+pp_sys$(OBJ_EXT): /usr/include/sys/procset.h
+pp_sys$(OBJ_EXT): /usr/include/sys/rwlock.h
+pp_sys$(OBJ_EXT): /usr/include/sys/select.h
+pp_sys$(OBJ_EXT): /usr/include/sys/semaphore.h
+pp_sys$(OBJ_EXT): /usr/include/sys/siginfo.h
+pp_sys$(OBJ_EXT): /usr/include/sys/sleepq.h
+pp_sys$(OBJ_EXT): /usr/include/sys/socket.h
+pp_sys$(OBJ_EXT): /usr/include/sys/stream.h
+pp_sys$(OBJ_EXT): /usr/include/sys/strmdep.h
+pp_sys$(OBJ_EXT): /usr/include/sys/t_lock.h
+pp_sys$(OBJ_EXT): /usr/include/sys/time.h
+pp_sys$(OBJ_EXT): /usr/include/sys/times.h
+pp_sys$(OBJ_EXT): /usr/include/sys/turnstile.h
+pp_sys$(OBJ_EXT): /usr/include/sys/uio.h
+pp_sys$(OBJ_EXT): /usr/include/sys/unistd.h
+pp_sys$(OBJ_EXT): /usr/include/sys/utime.h
+pp_sys$(OBJ_EXT): /usr/include/sys/vnode.h
+pp_sys$(OBJ_EXT): /usr/include/utime.h
+pp_sys$(OBJ_EXT): /usr/include/vm/seg_enum.h
+pp_sys$(OBJ_EXT): /usr/local/include/sfio.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/grp.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/pwd.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+pp_sys$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+pp_sys$(OBJ_EXT): EXTERN.h
+pp_sys$(OBJ_EXT): av.h
+pp_sys$(OBJ_EXT): config.h
+pp_sys$(OBJ_EXT): cop.h
+pp_sys$(OBJ_EXT): cv.h
+pp_sys$(OBJ_EXT): embed.h
+pp_sys$(OBJ_EXT): form.h
+pp_sys$(OBJ_EXT): gv.h
+pp_sys$(OBJ_EXT): handy.h
+pp_sys$(OBJ_EXT): hv.h
+pp_sys$(OBJ_EXT): mg.h
+pp_sys$(OBJ_EXT): nostdio.h
+pp_sys$(OBJ_EXT): op.h
+pp_sys$(OBJ_EXT): opcode.h
+pp_sys$(OBJ_EXT): perl.h
+pp_sys$(OBJ_EXT): perlio.h
+pp_sys$(OBJ_EXT): perly.h
+pp_sys$(OBJ_EXT): pp.h
+pp_sys$(OBJ_EXT): pp_sys.c
+pp_sys$(OBJ_EXT): proto.h
+pp_sys$(OBJ_EXT): regexp.h
+pp_sys$(OBJ_EXT): scope.h
+pp_sys$(OBJ_EXT): sv.h
+pp_sys$(OBJ_EXT): unixish.h
+pp_sys$(OBJ_EXT): util.h
+regcomp$(OBJ_EXT): 
+regcomp$(OBJ_EXT): /usr/include/libintl.h
+regcomp$(OBJ_EXT): /usr/include/netinet/in.h
+regcomp$(OBJ_EXT): /usr/include/sys/condvar.h
+regcomp$(OBJ_EXT): /usr/include/sys/cred.h
+regcomp$(OBJ_EXT): /usr/include/sys/dirent.h
+regcomp$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+regcomp$(OBJ_EXT): /usr/include/sys/dl.h
+regcomp$(OBJ_EXT): /usr/include/sys/errno.h
+regcomp$(OBJ_EXT): /usr/include/sys/feature_tests.h
+regcomp$(OBJ_EXT): /usr/include/sys/ioctl.h
+regcomp$(OBJ_EXT): /usr/include/sys/machlock.h
+regcomp$(OBJ_EXT): /usr/include/sys/machsig.h
+regcomp$(OBJ_EXT): /usr/include/sys/machtypes.h
+regcomp$(OBJ_EXT): /usr/include/sys/mutex.h
+regcomp$(OBJ_EXT): /usr/include/sys/pirec.h
+regcomp$(OBJ_EXT): /usr/include/sys/poll.h
+regcomp$(OBJ_EXT): /usr/include/sys/procset.h
+regcomp$(OBJ_EXT): /usr/include/sys/rwlock.h
+regcomp$(OBJ_EXT): /usr/include/sys/select.h
+regcomp$(OBJ_EXT): /usr/include/sys/semaphore.h
+regcomp$(OBJ_EXT): /usr/include/sys/siginfo.h
+regcomp$(OBJ_EXT): /usr/include/sys/sleepq.h
+regcomp$(OBJ_EXT): /usr/include/sys/stream.h
+regcomp$(OBJ_EXT): /usr/include/sys/strmdep.h
+regcomp$(OBJ_EXT): /usr/include/sys/t_lock.h
+regcomp$(OBJ_EXT): /usr/include/sys/time.h
+regcomp$(OBJ_EXT): /usr/include/sys/times.h
+regcomp$(OBJ_EXT): /usr/include/sys/turnstile.h
+regcomp$(OBJ_EXT): /usr/include/sys/uio.h
+regcomp$(OBJ_EXT): /usr/include/sys/unistd.h
+regcomp$(OBJ_EXT): /usr/include/sys/vnode.h
+regcomp$(OBJ_EXT): /usr/include/vm/seg_enum.h
+regcomp$(OBJ_EXT): /usr/local/include/sfio.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+regcomp$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+regcomp$(OBJ_EXT): EXTERN.h
+regcomp$(OBJ_EXT): INTERN.h
+regcomp$(OBJ_EXT): av.h
+regcomp$(OBJ_EXT): config.h
+regcomp$(OBJ_EXT): cop.h
+regcomp$(OBJ_EXT): cv.h
+regcomp$(OBJ_EXT): embed.h
+regcomp$(OBJ_EXT): form.h
+regcomp$(OBJ_EXT): gv.h
+regcomp$(OBJ_EXT): handy.h
+regcomp$(OBJ_EXT): hv.h
+regcomp$(OBJ_EXT): mg.h
+regcomp$(OBJ_EXT): nostdio.h
+regcomp$(OBJ_EXT): op.h
+regcomp$(OBJ_EXT): opcode.h
+regcomp$(OBJ_EXT): perl.h
+regcomp$(OBJ_EXT): perlio.h
+regcomp$(OBJ_EXT): perly.h
+regcomp$(OBJ_EXT): pp.h
+regcomp$(OBJ_EXT): proto.h
+regcomp$(OBJ_EXT): regcomp.c
+regcomp$(OBJ_EXT): regcomp.h
+regcomp$(OBJ_EXT): regexp.h
+regcomp$(OBJ_EXT): scope.h
+regcomp$(OBJ_EXT): sv.h
+regcomp$(OBJ_EXT): unixish.h
+regcomp$(OBJ_EXT): util.h
+regexec$(OBJ_EXT): 
+regexec$(OBJ_EXT): /usr/include/libintl.h
+regexec$(OBJ_EXT): /usr/include/netinet/in.h
+regexec$(OBJ_EXT): /usr/include/sys/condvar.h
+regexec$(OBJ_EXT): /usr/include/sys/cred.h
+regexec$(OBJ_EXT): /usr/include/sys/dirent.h
+regexec$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+regexec$(OBJ_EXT): /usr/include/sys/dl.h
+regexec$(OBJ_EXT): /usr/include/sys/errno.h
+regexec$(OBJ_EXT): /usr/include/sys/feature_tests.h
+regexec$(OBJ_EXT): /usr/include/sys/ioctl.h
+regexec$(OBJ_EXT): /usr/include/sys/machlock.h
+regexec$(OBJ_EXT): /usr/include/sys/machsig.h
+regexec$(OBJ_EXT): /usr/include/sys/machtypes.h
+regexec$(OBJ_EXT): /usr/include/sys/mutex.h
+regexec$(OBJ_EXT): /usr/include/sys/pirec.h
+regexec$(OBJ_EXT): /usr/include/sys/poll.h
+regexec$(OBJ_EXT): /usr/include/sys/procset.h
+regexec$(OBJ_EXT): /usr/include/sys/rwlock.h
+regexec$(OBJ_EXT): /usr/include/sys/select.h
+regexec$(OBJ_EXT): /usr/include/sys/semaphore.h
+regexec$(OBJ_EXT): /usr/include/sys/siginfo.h
+regexec$(OBJ_EXT): /usr/include/sys/sleepq.h
+regexec$(OBJ_EXT): /usr/include/sys/stream.h
+regexec$(OBJ_EXT): /usr/include/sys/strmdep.h
+regexec$(OBJ_EXT): /usr/include/sys/t_lock.h
+regexec$(OBJ_EXT): /usr/include/sys/time.h
+regexec$(OBJ_EXT): /usr/include/sys/times.h
+regexec$(OBJ_EXT): /usr/include/sys/turnstile.h
+regexec$(OBJ_EXT): /usr/include/sys/uio.h
+regexec$(OBJ_EXT): /usr/include/sys/unistd.h
+regexec$(OBJ_EXT): /usr/include/sys/vnode.h
+regexec$(OBJ_EXT): /usr/include/vm/seg_enum.h
+regexec$(OBJ_EXT): /usr/local/include/sfio.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+regexec$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+regexec$(OBJ_EXT): EXTERN.h
+regexec$(OBJ_EXT): av.h
+regexec$(OBJ_EXT): config.h
+regexec$(OBJ_EXT): cop.h
+regexec$(OBJ_EXT): cv.h
+regexec$(OBJ_EXT): embed.h
+regexec$(OBJ_EXT): form.h
+regexec$(OBJ_EXT): gv.h
+regexec$(OBJ_EXT): handy.h
+regexec$(OBJ_EXT): hv.h
+regexec$(OBJ_EXT): mg.h
+regexec$(OBJ_EXT): nostdio.h
+regexec$(OBJ_EXT): op.h
+regexec$(OBJ_EXT): opcode.h
+regexec$(OBJ_EXT): perl.h
+regexec$(OBJ_EXT): perlio.h
+regexec$(OBJ_EXT): perly.h
+regexec$(OBJ_EXT): pp.h
+regexec$(OBJ_EXT): proto.h
+regexec$(OBJ_EXT): regcomp.h
+regexec$(OBJ_EXT): regexec.c
+regexec$(OBJ_EXT): regexp.h
+regexec$(OBJ_EXT): scope.h
+regexec$(OBJ_EXT): sv.h
+regexec$(OBJ_EXT): unixish.h
+regexec$(OBJ_EXT): util.h
+gv$(OBJ_EXT): 
+gv$(OBJ_EXT): /usr/include/libintl.h
+gv$(OBJ_EXT): /usr/include/netinet/in.h
+gv$(OBJ_EXT): /usr/include/sys/condvar.h
+gv$(OBJ_EXT): /usr/include/sys/cred.h
+gv$(OBJ_EXT): /usr/include/sys/dirent.h
+gv$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+gv$(OBJ_EXT): /usr/include/sys/dl.h
+gv$(OBJ_EXT): /usr/include/sys/errno.h
+gv$(OBJ_EXT): /usr/include/sys/feature_tests.h
+gv$(OBJ_EXT): /usr/include/sys/ioctl.h
+gv$(OBJ_EXT): /usr/include/sys/machlock.h
+gv$(OBJ_EXT): /usr/include/sys/machsig.h
+gv$(OBJ_EXT): /usr/include/sys/machtypes.h
+gv$(OBJ_EXT): /usr/include/sys/mutex.h
+gv$(OBJ_EXT): /usr/include/sys/pirec.h
+gv$(OBJ_EXT): /usr/include/sys/poll.h
+gv$(OBJ_EXT): /usr/include/sys/procset.h
+gv$(OBJ_EXT): /usr/include/sys/rwlock.h
+gv$(OBJ_EXT): /usr/include/sys/select.h
+gv$(OBJ_EXT): /usr/include/sys/semaphore.h
+gv$(OBJ_EXT): /usr/include/sys/siginfo.h
+gv$(OBJ_EXT): /usr/include/sys/sleepq.h
+gv$(OBJ_EXT): /usr/include/sys/stream.h
+gv$(OBJ_EXT): /usr/include/sys/strmdep.h
+gv$(OBJ_EXT): /usr/include/sys/t_lock.h
+gv$(OBJ_EXT): /usr/include/sys/time.h
+gv$(OBJ_EXT): /usr/include/sys/times.h
+gv$(OBJ_EXT): /usr/include/sys/turnstile.h
+gv$(OBJ_EXT): /usr/include/sys/uio.h
+gv$(OBJ_EXT): /usr/include/sys/unistd.h
+gv$(OBJ_EXT): /usr/include/sys/vnode.h
+gv$(OBJ_EXT): /usr/include/vm/seg_enum.h
+gv$(OBJ_EXT): /usr/local/include/sfio.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+gv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+gv$(OBJ_EXT): EXTERN.h
+gv$(OBJ_EXT): av.h
+gv$(OBJ_EXT): config.h
+gv$(OBJ_EXT): cop.h
+gv$(OBJ_EXT): cv.h
+gv$(OBJ_EXT): embed.h
+gv$(OBJ_EXT): form.h
+gv$(OBJ_EXT): gv.c
+gv$(OBJ_EXT): gv.h
+gv$(OBJ_EXT): handy.h
+gv$(OBJ_EXT): hv.h
+gv$(OBJ_EXT): mg.h
+gv$(OBJ_EXT): nostdio.h
+gv$(OBJ_EXT): op.h
+gv$(OBJ_EXT): opcode.h
+gv$(OBJ_EXT): perl.h
+gv$(OBJ_EXT): perlio.h
+gv$(OBJ_EXT): perly.h
+gv$(OBJ_EXT): pp.h
+gv$(OBJ_EXT): proto.h
+gv$(OBJ_EXT): regexp.h
+gv$(OBJ_EXT): scope.h
+gv$(OBJ_EXT): sv.h
+gv$(OBJ_EXT): unixish.h
+gv$(OBJ_EXT): util.h
+sv$(OBJ_EXT): 
+sv$(OBJ_EXT): /usr/include/libintl.h
+sv$(OBJ_EXT): /usr/include/netinet/in.h
+sv$(OBJ_EXT): /usr/include/sys/condvar.h
+sv$(OBJ_EXT): /usr/include/sys/cred.h
+sv$(OBJ_EXT): /usr/include/sys/dirent.h
+sv$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+sv$(OBJ_EXT): /usr/include/sys/dl.h
+sv$(OBJ_EXT): /usr/include/sys/errno.h
+sv$(OBJ_EXT): /usr/include/sys/feature_tests.h
+sv$(OBJ_EXT): /usr/include/sys/ioctl.h
+sv$(OBJ_EXT): /usr/include/sys/machlock.h
+sv$(OBJ_EXT): /usr/include/sys/machsig.h
+sv$(OBJ_EXT): /usr/include/sys/machtypes.h
+sv$(OBJ_EXT): /usr/include/sys/mutex.h
+sv$(OBJ_EXT): /usr/include/sys/pirec.h
+sv$(OBJ_EXT): /usr/include/sys/poll.h
+sv$(OBJ_EXT): /usr/include/sys/procset.h
+sv$(OBJ_EXT): /usr/include/sys/rwlock.h
+sv$(OBJ_EXT): /usr/include/sys/select.h
+sv$(OBJ_EXT): /usr/include/sys/semaphore.h
+sv$(OBJ_EXT): /usr/include/sys/siginfo.h
+sv$(OBJ_EXT): /usr/include/sys/sleepq.h
+sv$(OBJ_EXT): /usr/include/sys/stream.h
+sv$(OBJ_EXT): /usr/include/sys/strmdep.h
+sv$(OBJ_EXT): /usr/include/sys/t_lock.h
+sv$(OBJ_EXT): /usr/include/sys/time.h
+sv$(OBJ_EXT): /usr/include/sys/times.h
+sv$(OBJ_EXT): /usr/include/sys/turnstile.h
+sv$(OBJ_EXT): /usr/include/sys/uio.h
+sv$(OBJ_EXT): /usr/include/sys/unistd.h
+sv$(OBJ_EXT): /usr/include/sys/vnode.h
+sv$(OBJ_EXT): /usr/include/vm/seg_enum.h
+sv$(OBJ_EXT): /usr/local/include/sfio.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/float.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+sv$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+sv$(OBJ_EXT): EXTERN.h
+sv$(OBJ_EXT): av.h
+sv$(OBJ_EXT): config.h
+sv$(OBJ_EXT): cop.h
+sv$(OBJ_EXT): cv.h
+sv$(OBJ_EXT): embed.h
+sv$(OBJ_EXT): form.h
+sv$(OBJ_EXT): gv.h
+sv$(OBJ_EXT): handy.h
+sv$(OBJ_EXT): hv.h
+sv$(OBJ_EXT): mg.h
+sv$(OBJ_EXT): nostdio.h
+sv$(OBJ_EXT): op.h
+sv$(OBJ_EXT): opcode.h
+sv$(OBJ_EXT): perl.h
+sv$(OBJ_EXT): perlio.h
+sv$(OBJ_EXT): perly.h
+sv$(OBJ_EXT): pp.h
+sv$(OBJ_EXT): proto.h
+sv$(OBJ_EXT): regexp.h
+sv$(OBJ_EXT): scope.h
+sv$(OBJ_EXT): sv.c
+sv$(OBJ_EXT): sv.h
+sv$(OBJ_EXT): unixish.h
+sv$(OBJ_EXT): util.h
+taint$(OBJ_EXT): 
+taint$(OBJ_EXT): /usr/include/libintl.h
+taint$(OBJ_EXT): /usr/include/netinet/in.h
+taint$(OBJ_EXT): /usr/include/sys/condvar.h
+taint$(OBJ_EXT): /usr/include/sys/cred.h
+taint$(OBJ_EXT): /usr/include/sys/dirent.h
+taint$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+taint$(OBJ_EXT): /usr/include/sys/dl.h
+taint$(OBJ_EXT): /usr/include/sys/errno.h
+taint$(OBJ_EXT): /usr/include/sys/feature_tests.h
+taint$(OBJ_EXT): /usr/include/sys/ioctl.h
+taint$(OBJ_EXT): /usr/include/sys/machlock.h
+taint$(OBJ_EXT): /usr/include/sys/machsig.h
+taint$(OBJ_EXT): /usr/include/sys/machtypes.h
+taint$(OBJ_EXT): /usr/include/sys/mutex.h
+taint$(OBJ_EXT): /usr/include/sys/pirec.h
+taint$(OBJ_EXT): /usr/include/sys/poll.h
+taint$(OBJ_EXT): /usr/include/sys/procset.h
+taint$(OBJ_EXT): /usr/include/sys/rwlock.h
+taint$(OBJ_EXT): /usr/include/sys/select.h
+taint$(OBJ_EXT): /usr/include/sys/semaphore.h
+taint$(OBJ_EXT): /usr/include/sys/siginfo.h
+taint$(OBJ_EXT): /usr/include/sys/sleepq.h
+taint$(OBJ_EXT): /usr/include/sys/stream.h
+taint$(OBJ_EXT): /usr/include/sys/strmdep.h
+taint$(OBJ_EXT): /usr/include/sys/t_lock.h
+taint$(OBJ_EXT): /usr/include/sys/time.h
+taint$(OBJ_EXT): /usr/include/sys/times.h
+taint$(OBJ_EXT): /usr/include/sys/turnstile.h
+taint$(OBJ_EXT): /usr/include/sys/uio.h
+taint$(OBJ_EXT): /usr/include/sys/unistd.h
+taint$(OBJ_EXT): /usr/include/sys/vnode.h
+taint$(OBJ_EXT): /usr/include/vm/seg_enum.h
+taint$(OBJ_EXT): /usr/local/include/sfio.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+taint$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+taint$(OBJ_EXT): EXTERN.h
+taint$(OBJ_EXT): av.h
+taint$(OBJ_EXT): config.h
+taint$(OBJ_EXT): cop.h
+taint$(OBJ_EXT): cv.h
+taint$(OBJ_EXT): embed.h
+taint$(OBJ_EXT): form.h
+taint$(OBJ_EXT): gv.h
+taint$(OBJ_EXT): handy.h
+taint$(OBJ_EXT): hv.h
+taint$(OBJ_EXT): mg.h
+taint$(OBJ_EXT): nostdio.h
+taint$(OBJ_EXT): op.h
+taint$(OBJ_EXT): opcode.h
+taint$(OBJ_EXT): perl.h
+taint$(OBJ_EXT): perlio.h
+taint$(OBJ_EXT): perly.h
+taint$(OBJ_EXT): pp.h
+taint$(OBJ_EXT): proto.h
+taint$(OBJ_EXT): regexp.h
+taint$(OBJ_EXT): scope.h
+taint$(OBJ_EXT): sv.h
+taint$(OBJ_EXT): taint.c
+taint$(OBJ_EXT): unixish.h
+taint$(OBJ_EXT): util.h
+toke$(OBJ_EXT): 
+toke$(OBJ_EXT): /usr/include/fcntl.h
+toke$(OBJ_EXT): /usr/include/libintl.h
+toke$(OBJ_EXT): /usr/include/netinet/in.h
+toke$(OBJ_EXT): /usr/include/sys/condvar.h
+toke$(OBJ_EXT): /usr/include/sys/cred.h
+toke$(OBJ_EXT): /usr/include/sys/dirent.h
+toke$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+toke$(OBJ_EXT): /usr/include/sys/dl.h
+toke$(OBJ_EXT): /usr/include/sys/errno.h
+toke$(OBJ_EXT): /usr/include/sys/fcntl.h
+toke$(OBJ_EXT): /usr/include/sys/feature_tests.h
+toke$(OBJ_EXT): /usr/include/sys/ioctl.h
+toke$(OBJ_EXT): /usr/include/sys/machlock.h
+toke$(OBJ_EXT): /usr/include/sys/machsig.h
+toke$(OBJ_EXT): /usr/include/sys/machtypes.h
+toke$(OBJ_EXT): /usr/include/sys/mutex.h
+toke$(OBJ_EXT): /usr/include/sys/pirec.h
+toke$(OBJ_EXT): /usr/include/sys/poll.h
+toke$(OBJ_EXT): /usr/include/sys/procset.h
+toke$(OBJ_EXT): /usr/include/sys/rwlock.h
+toke$(OBJ_EXT): /usr/include/sys/select.h
+toke$(OBJ_EXT): /usr/include/sys/semaphore.h
+toke$(OBJ_EXT): /usr/include/sys/siginfo.h
+toke$(OBJ_EXT): /usr/include/sys/sleepq.h
+toke$(OBJ_EXT): /usr/include/sys/stream.h
+toke$(OBJ_EXT): /usr/include/sys/strmdep.h
+toke$(OBJ_EXT): /usr/include/sys/t_lock.h
+toke$(OBJ_EXT): /usr/include/sys/time.h
+toke$(OBJ_EXT): /usr/include/sys/times.h
+toke$(OBJ_EXT): /usr/include/sys/turnstile.h
+toke$(OBJ_EXT): /usr/include/sys/uio.h
+toke$(OBJ_EXT): /usr/include/sys/unistd.h
+toke$(OBJ_EXT): /usr/include/sys/vnode.h
+toke$(OBJ_EXT): /usr/include/vm/seg_enum.h
+toke$(OBJ_EXT): /usr/local/include/sfio.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+toke$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+toke$(OBJ_EXT): EXTERN.h
+toke$(OBJ_EXT): av.h
+toke$(OBJ_EXT): config.h
+toke$(OBJ_EXT): cop.h
+toke$(OBJ_EXT): cv.h
+toke$(OBJ_EXT): embed.h
+toke$(OBJ_EXT): form.h
+toke$(OBJ_EXT): gv.h
+toke$(OBJ_EXT): handy.h
+toke$(OBJ_EXT): hv.h
+toke$(OBJ_EXT): keywords.h
+toke$(OBJ_EXT): mg.h
+toke$(OBJ_EXT): nostdio.h
+toke$(OBJ_EXT): op.h
+toke$(OBJ_EXT): opcode.h
+toke$(OBJ_EXT): perl.h
+toke$(OBJ_EXT): perlio.h
+toke$(OBJ_EXT): perly.h
+toke$(OBJ_EXT): pp.h
+toke$(OBJ_EXT): proto.h
+toke$(OBJ_EXT): regexp.h
+toke$(OBJ_EXT): scope.h
+toke$(OBJ_EXT): sv.h
+toke$(OBJ_EXT): toke.c
+toke$(OBJ_EXT): unixish.h
+toke$(OBJ_EXT): util.h
+util$(OBJ_EXT): 
+util$(OBJ_EXT): /usr/include/fcntl.h
+util$(OBJ_EXT): /usr/include/libintl.h
+util$(OBJ_EXT): /usr/include/netinet/in.h
+util$(OBJ_EXT): /usr/include/sys/condvar.h
+util$(OBJ_EXT): /usr/include/sys/cred.h
+util$(OBJ_EXT): /usr/include/sys/dirent.h
+util$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+util$(OBJ_EXT): /usr/include/sys/dl.h
+util$(OBJ_EXT): /usr/include/sys/errno.h
+util$(OBJ_EXT): /usr/include/sys/fcntl.h
+util$(OBJ_EXT): /usr/include/sys/feature_tests.h
+util$(OBJ_EXT): /usr/include/sys/ioctl.h
+util$(OBJ_EXT): /usr/include/sys/machlock.h
+util$(OBJ_EXT): /usr/include/sys/machsig.h
+util$(OBJ_EXT): /usr/include/sys/machtypes.h
+util$(OBJ_EXT): /usr/include/sys/mutex.h
+util$(OBJ_EXT): /usr/include/sys/pirec.h
+util$(OBJ_EXT): /usr/include/sys/poll.h
+util$(OBJ_EXT): /usr/include/sys/procset.h
+util$(OBJ_EXT): /usr/include/sys/rwlock.h
+util$(OBJ_EXT): /usr/include/sys/select.h
+util$(OBJ_EXT): /usr/include/sys/semaphore.h
+util$(OBJ_EXT): /usr/include/sys/siginfo.h
+util$(OBJ_EXT): /usr/include/sys/sleepq.h
+util$(OBJ_EXT): /usr/include/sys/stream.h
+util$(OBJ_EXT): /usr/include/sys/strmdep.h
+util$(OBJ_EXT): /usr/include/sys/t_lock.h
+util$(OBJ_EXT): /usr/include/sys/time.h
+util$(OBJ_EXT): /usr/include/sys/times.h
+util$(OBJ_EXT): /usr/include/sys/turnstile.h
+util$(OBJ_EXT): /usr/include/sys/uio.h
+util$(OBJ_EXT): /usr/include/sys/unistd.h
+util$(OBJ_EXT): /usr/include/sys/vnode.h
+util$(OBJ_EXT): /usr/include/vm/seg_enum.h
+util$(OBJ_EXT): /usr/local/include/sfio.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/unistd.h
+util$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+util$(OBJ_EXT): EXTERN.h
+util$(OBJ_EXT): av.h
+util$(OBJ_EXT): config.h
+util$(OBJ_EXT): cop.h
+util$(OBJ_EXT): cv.h
+util$(OBJ_EXT): embed.h
+util$(OBJ_EXT): form.h
+util$(OBJ_EXT): gv.h
+util$(OBJ_EXT): handy.h
+util$(OBJ_EXT): hv.h
+util$(OBJ_EXT): mg.h
+util$(OBJ_EXT): nostdio.h
+util$(OBJ_EXT): op.h
+util$(OBJ_EXT): opcode.h
+util$(OBJ_EXT): perl.h
+util$(OBJ_EXT): perlio.h
+util$(OBJ_EXT): perly.h
+util$(OBJ_EXT): pp.h
+util$(OBJ_EXT): proto.h
+util$(OBJ_EXT): regexp.h
+util$(OBJ_EXT): scope.h
+util$(OBJ_EXT): sv.h
+util$(OBJ_EXT): unixish.h
+util$(OBJ_EXT): util.c
+util$(OBJ_EXT): util.h
+deb$(OBJ_EXT): 
+deb$(OBJ_EXT): /usr/include/libintl.h
+deb$(OBJ_EXT): /usr/include/netinet/in.h
+deb$(OBJ_EXT): /usr/include/sys/condvar.h
+deb$(OBJ_EXT): /usr/include/sys/cred.h
+deb$(OBJ_EXT): /usr/include/sys/dirent.h
+deb$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+deb$(OBJ_EXT): /usr/include/sys/dl.h
+deb$(OBJ_EXT): /usr/include/sys/errno.h
+deb$(OBJ_EXT): /usr/include/sys/feature_tests.h
+deb$(OBJ_EXT): /usr/include/sys/ioctl.h
+deb$(OBJ_EXT): /usr/include/sys/machlock.h
+deb$(OBJ_EXT): /usr/include/sys/machsig.h
+deb$(OBJ_EXT): /usr/include/sys/machtypes.h
+deb$(OBJ_EXT): /usr/include/sys/mutex.h
+deb$(OBJ_EXT): /usr/include/sys/pirec.h
+deb$(OBJ_EXT): /usr/include/sys/poll.h
+deb$(OBJ_EXT): /usr/include/sys/procset.h
+deb$(OBJ_EXT): /usr/include/sys/rwlock.h
+deb$(OBJ_EXT): /usr/include/sys/select.h
+deb$(OBJ_EXT): /usr/include/sys/semaphore.h
+deb$(OBJ_EXT): /usr/include/sys/siginfo.h
+deb$(OBJ_EXT): /usr/include/sys/sleepq.h
+deb$(OBJ_EXT): /usr/include/sys/stream.h
+deb$(OBJ_EXT): /usr/include/sys/strmdep.h
+deb$(OBJ_EXT): /usr/include/sys/t_lock.h
+deb$(OBJ_EXT): /usr/include/sys/time.h
+deb$(OBJ_EXT): /usr/include/sys/times.h
+deb$(OBJ_EXT): /usr/include/sys/turnstile.h
+deb$(OBJ_EXT): /usr/include/sys/uio.h
+deb$(OBJ_EXT): /usr/include/sys/unistd.h
+deb$(OBJ_EXT): /usr/include/sys/vnode.h
+deb$(OBJ_EXT): /usr/include/vm/seg_enum.h
+deb$(OBJ_EXT): /usr/local/include/sfio.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+deb$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+deb$(OBJ_EXT): EXTERN.h
+deb$(OBJ_EXT): av.h
+deb$(OBJ_EXT): config.h
+deb$(OBJ_EXT): cop.h
+deb$(OBJ_EXT): cv.h
+deb$(OBJ_EXT): deb.c
+deb$(OBJ_EXT): embed.h
+deb$(OBJ_EXT): form.h
+deb$(OBJ_EXT): gv.h
+deb$(OBJ_EXT): handy.h
+deb$(OBJ_EXT): hv.h
+deb$(OBJ_EXT): mg.h
+deb$(OBJ_EXT): nostdio.h
+deb$(OBJ_EXT): op.h
+deb$(OBJ_EXT): opcode.h
+deb$(OBJ_EXT): perl.h
+deb$(OBJ_EXT): perlio.h
+deb$(OBJ_EXT): perly.h
+deb$(OBJ_EXT): pp.h
+deb$(OBJ_EXT): proto.h
+deb$(OBJ_EXT): regexp.h
+deb$(OBJ_EXT): scope.h
+deb$(OBJ_EXT): sv.h
+deb$(OBJ_EXT): unixish.h
+deb$(OBJ_EXT): util.h
+run$(OBJ_EXT): 
+run$(OBJ_EXT): /usr/include/libintl.h
+run$(OBJ_EXT): /usr/include/netinet/in.h
+run$(OBJ_EXT): /usr/include/sys/condvar.h
+run$(OBJ_EXT): /usr/include/sys/cred.h
+run$(OBJ_EXT): /usr/include/sys/dirent.h
+run$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+run$(OBJ_EXT): /usr/include/sys/dl.h
+run$(OBJ_EXT): /usr/include/sys/errno.h
+run$(OBJ_EXT): /usr/include/sys/feature_tests.h
+run$(OBJ_EXT): /usr/include/sys/ioctl.h
+run$(OBJ_EXT): /usr/include/sys/machlock.h
+run$(OBJ_EXT): /usr/include/sys/machsig.h
+run$(OBJ_EXT): /usr/include/sys/machtypes.h
+run$(OBJ_EXT): /usr/include/sys/mutex.h
+run$(OBJ_EXT): /usr/include/sys/pirec.h
+run$(OBJ_EXT): /usr/include/sys/poll.h
+run$(OBJ_EXT): /usr/include/sys/procset.h
+run$(OBJ_EXT): /usr/include/sys/rwlock.h
+run$(OBJ_EXT): /usr/include/sys/select.h
+run$(OBJ_EXT): /usr/include/sys/semaphore.h
+run$(OBJ_EXT): /usr/include/sys/siginfo.h
+run$(OBJ_EXT): /usr/include/sys/sleepq.h
+run$(OBJ_EXT): /usr/include/sys/stream.h
+run$(OBJ_EXT): /usr/include/sys/strmdep.h
+run$(OBJ_EXT): /usr/include/sys/t_lock.h
+run$(OBJ_EXT): /usr/include/sys/time.h
+run$(OBJ_EXT): /usr/include/sys/times.h
+run$(OBJ_EXT): /usr/include/sys/turnstile.h
+run$(OBJ_EXT): /usr/include/sys/uio.h
+run$(OBJ_EXT): /usr/include/sys/unistd.h
+run$(OBJ_EXT): /usr/include/sys/vnode.h
+run$(OBJ_EXT): /usr/include/vm/seg_enum.h
+run$(OBJ_EXT): /usr/local/include/sfio.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+run$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+run$(OBJ_EXT): EXTERN.h
+run$(OBJ_EXT): av.h
+run$(OBJ_EXT): config.h
+run$(OBJ_EXT): cop.h
+run$(OBJ_EXT): cv.h
+run$(OBJ_EXT): embed.h
+run$(OBJ_EXT): form.h
+run$(OBJ_EXT): gv.h
+run$(OBJ_EXT): handy.h
+run$(OBJ_EXT): hv.h
+run$(OBJ_EXT): mg.h
+run$(OBJ_EXT): nostdio.h
+run$(OBJ_EXT): op.h
+run$(OBJ_EXT): opcode.h
+run$(OBJ_EXT): perl.h
+run$(OBJ_EXT): perlio.h
+run$(OBJ_EXT): perly.h
+run$(OBJ_EXT): pp.h
+run$(OBJ_EXT): proto.h
+run$(OBJ_EXT): regexp.h
+run$(OBJ_EXT): run.c
+run$(OBJ_EXT): scope.h
+run$(OBJ_EXT): sv.h
+run$(OBJ_EXT): unixish.h
+run$(OBJ_EXT): util.h
+universal$(OBJ_EXT): 
+universal$(OBJ_EXT): /usr/include/libintl.h
+universal$(OBJ_EXT): /usr/include/netinet/in.h
+universal$(OBJ_EXT): /usr/include/sys/condvar.h
+universal$(OBJ_EXT): /usr/include/sys/cred.h
+universal$(OBJ_EXT): /usr/include/sys/dirent.h
+universal$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+universal$(OBJ_EXT): /usr/include/sys/dl.h
+universal$(OBJ_EXT): /usr/include/sys/errno.h
+universal$(OBJ_EXT): /usr/include/sys/feature_tests.h
+universal$(OBJ_EXT): /usr/include/sys/ioctl.h
+universal$(OBJ_EXT): /usr/include/sys/machlock.h
+universal$(OBJ_EXT): /usr/include/sys/machsig.h
+universal$(OBJ_EXT): /usr/include/sys/machtypes.h
+universal$(OBJ_EXT): /usr/include/sys/mutex.h
+universal$(OBJ_EXT): /usr/include/sys/pirec.h
+universal$(OBJ_EXT): /usr/include/sys/poll.h
+universal$(OBJ_EXT): /usr/include/sys/procset.h
+universal$(OBJ_EXT): /usr/include/sys/rwlock.h
+universal$(OBJ_EXT): /usr/include/sys/select.h
+universal$(OBJ_EXT): /usr/include/sys/semaphore.h
+universal$(OBJ_EXT): /usr/include/sys/siginfo.h
+universal$(OBJ_EXT): /usr/include/sys/sleepq.h
+universal$(OBJ_EXT): /usr/include/sys/stream.h
+universal$(OBJ_EXT): /usr/include/sys/strmdep.h
+universal$(OBJ_EXT): /usr/include/sys/t_lock.h
+universal$(OBJ_EXT): /usr/include/sys/time.h
+universal$(OBJ_EXT): /usr/include/sys/times.h
+universal$(OBJ_EXT): /usr/include/sys/turnstile.h
+universal$(OBJ_EXT): /usr/include/sys/uio.h
+universal$(OBJ_EXT): /usr/include/sys/unistd.h
+universal$(OBJ_EXT): /usr/include/sys/vnode.h
+universal$(OBJ_EXT): /usr/include/vm/seg_enum.h
+universal$(OBJ_EXT): /usr/local/include/sfio.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+universal$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+universal$(OBJ_EXT): EXTERN.h
+universal$(OBJ_EXT): XSUB.h
+universal$(OBJ_EXT): av.h
+universal$(OBJ_EXT): config.h
+universal$(OBJ_EXT): cop.h
+universal$(OBJ_EXT): cv.h
+universal$(OBJ_EXT): embed.h
+universal$(OBJ_EXT): form.h
+universal$(OBJ_EXT): gv.h
+universal$(OBJ_EXT): handy.h
+universal$(OBJ_EXT): hv.h
+universal$(OBJ_EXT): mg.h
+universal$(OBJ_EXT): nostdio.h
+universal$(OBJ_EXT): op.h
+universal$(OBJ_EXT): opcode.h
+universal$(OBJ_EXT): perl.h
+universal$(OBJ_EXT): perlio.h
+universal$(OBJ_EXT): perly.h
+universal$(OBJ_EXT): pp.h
+universal$(OBJ_EXT): proto.h
+universal$(OBJ_EXT): regexp.h
+universal$(OBJ_EXT): scope.h
+universal$(OBJ_EXT): sv.h
+universal$(OBJ_EXT): universal.c
+universal$(OBJ_EXT): unixish.h
+universal$(OBJ_EXT): util.h
+globals$(OBJ_EXT): 
+globals$(OBJ_EXT): /usr/include/libintl.h
+globals$(OBJ_EXT): /usr/include/netinet/in.h
+globals$(OBJ_EXT): /usr/include/sys/condvar.h
+globals$(OBJ_EXT): /usr/include/sys/cred.h
+globals$(OBJ_EXT): /usr/include/sys/dirent.h
+globals$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+globals$(OBJ_EXT): /usr/include/sys/dl.h
+globals$(OBJ_EXT): /usr/include/sys/errno.h
+globals$(OBJ_EXT): /usr/include/sys/feature_tests.h
+globals$(OBJ_EXT): /usr/include/sys/ioctl.h
+globals$(OBJ_EXT): /usr/include/sys/machlock.h
+globals$(OBJ_EXT): /usr/include/sys/machsig.h
+globals$(OBJ_EXT): /usr/include/sys/machtypes.h
+globals$(OBJ_EXT): /usr/include/sys/mutex.h
+globals$(OBJ_EXT): /usr/include/sys/pirec.h
+globals$(OBJ_EXT): /usr/include/sys/poll.h
+globals$(OBJ_EXT): /usr/include/sys/procset.h
+globals$(OBJ_EXT): /usr/include/sys/rwlock.h
+globals$(OBJ_EXT): /usr/include/sys/select.h
+globals$(OBJ_EXT): /usr/include/sys/semaphore.h
+globals$(OBJ_EXT): /usr/include/sys/siginfo.h
+globals$(OBJ_EXT): /usr/include/sys/sleepq.h
+globals$(OBJ_EXT): /usr/include/sys/stream.h
+globals$(OBJ_EXT): /usr/include/sys/strmdep.h
+globals$(OBJ_EXT): /usr/include/sys/t_lock.h
+globals$(OBJ_EXT): /usr/include/sys/time.h
+globals$(OBJ_EXT): /usr/include/sys/times.h
+globals$(OBJ_EXT): /usr/include/sys/turnstile.h
+globals$(OBJ_EXT): /usr/include/sys/uio.h
+globals$(OBJ_EXT): /usr/include/sys/unistd.h
+globals$(OBJ_EXT): /usr/include/sys/vnode.h
+globals$(OBJ_EXT): /usr/include/vm/seg_enum.h
+globals$(OBJ_EXT): /usr/local/include/sfio.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+globals$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+globals$(OBJ_EXT): INTERN.h
+globals$(OBJ_EXT): av.h
+globals$(OBJ_EXT): config.h
+globals$(OBJ_EXT): cop.h
+globals$(OBJ_EXT): cv.h
+globals$(OBJ_EXT): embed.h
+globals$(OBJ_EXT): form.h
+globals$(OBJ_EXT): globals.c
+globals$(OBJ_EXT): gv.h
+globals$(OBJ_EXT): handy.h
+globals$(OBJ_EXT): hv.h
+globals$(OBJ_EXT): mg.h
+globals$(OBJ_EXT): nostdio.h
+globals$(OBJ_EXT): op.h
+globals$(OBJ_EXT): opcode.h
+globals$(OBJ_EXT): perl.h
+globals$(OBJ_EXT): perlio.h
+globals$(OBJ_EXT): perly.h
+globals$(OBJ_EXT): pp.h
+globals$(OBJ_EXT): proto.h
+globals$(OBJ_EXT): regexp.h
+globals$(OBJ_EXT): scope.h
+globals$(OBJ_EXT): sv.h
+globals$(OBJ_EXT): unixish.h
+globals$(OBJ_EXT): util.h
+perlio$(OBJ_EXT): 
+perlio$(OBJ_EXT): /usr/include/libintl.h
+perlio$(OBJ_EXT): /usr/include/netinet/in.h
+perlio$(OBJ_EXT): /usr/include/sys/condvar.h
+perlio$(OBJ_EXT): /usr/include/sys/cred.h
+perlio$(OBJ_EXT): /usr/include/sys/dirent.h
+perlio$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+perlio$(OBJ_EXT): /usr/include/sys/dl.h
+perlio$(OBJ_EXT): /usr/include/sys/errno.h
+perlio$(OBJ_EXT): /usr/include/sys/feature_tests.h
+perlio$(OBJ_EXT): /usr/include/sys/ioctl.h
+perlio$(OBJ_EXT): /usr/include/sys/machlock.h
+perlio$(OBJ_EXT): /usr/include/sys/machsig.h
+perlio$(OBJ_EXT): /usr/include/sys/machtypes.h
+perlio$(OBJ_EXT): /usr/include/sys/mutex.h
+perlio$(OBJ_EXT): /usr/include/sys/pirec.h
+perlio$(OBJ_EXT): /usr/include/sys/poll.h
+perlio$(OBJ_EXT): /usr/include/sys/procset.h
+perlio$(OBJ_EXT): /usr/include/sys/rwlock.h
+perlio$(OBJ_EXT): /usr/include/sys/select.h
+perlio$(OBJ_EXT): /usr/include/sys/semaphore.h
+perlio$(OBJ_EXT): /usr/include/sys/siginfo.h
+perlio$(OBJ_EXT): /usr/include/sys/sleepq.h
+perlio$(OBJ_EXT): /usr/include/sys/stream.h
+perlio$(OBJ_EXT): /usr/include/sys/strmdep.h
+perlio$(OBJ_EXT): /usr/include/sys/t_lock.h
+perlio$(OBJ_EXT): /usr/include/sys/time.h
+perlio$(OBJ_EXT): /usr/include/sys/times.h
+perlio$(OBJ_EXT): /usr/include/sys/turnstile.h
+perlio$(OBJ_EXT): /usr/include/sys/uio.h
+perlio$(OBJ_EXT): /usr/include/sys/unistd.h
+perlio$(OBJ_EXT): /usr/include/sys/vnode.h
+perlio$(OBJ_EXT): /usr/include/vm/seg_enum.h
+perlio$(OBJ_EXT): /usr/local/include/sfio.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+perlio$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+perlio$(OBJ_EXT): EXTERN.h
+perlio$(OBJ_EXT): av.h
+perlio$(OBJ_EXT): config.h
+perlio$(OBJ_EXT): cop.h
+perlio$(OBJ_EXT): cv.h
+perlio$(OBJ_EXT): embed.h
+perlio$(OBJ_EXT): form.h
+perlio$(OBJ_EXT): gv.h
+perlio$(OBJ_EXT): handy.h
+perlio$(OBJ_EXT): hv.h
+perlio$(OBJ_EXT): mg.h
+perlio$(OBJ_EXT): op.h
+perlio$(OBJ_EXT): opcode.h
+perlio$(OBJ_EXT): perl.h
+perlio$(OBJ_EXT): perlio.c
+perlio$(OBJ_EXT): perlio.h
+perlio$(OBJ_EXT): perly.h
+perlio$(OBJ_EXT): pp.h
+perlio$(OBJ_EXT): proto.h
+perlio$(OBJ_EXT): regexp.h
+perlio$(OBJ_EXT): scope.h
+perlio$(OBJ_EXT): sv.h
+perlio$(OBJ_EXT): unixish.h
+perlio$(OBJ_EXT): util.h
+miniperlmain$(OBJ_EXT): 
+miniperlmain$(OBJ_EXT): /usr/include/libintl.h
+miniperlmain$(OBJ_EXT): /usr/include/netinet/in.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/condvar.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/cred.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/dirent.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/dl.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/errno.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/feature_tests.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/ioctl.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/machlock.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/machsig.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/machtypes.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/mutex.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/pirec.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/poll.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/procset.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/rwlock.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/select.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/semaphore.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/siginfo.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/sleepq.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/stream.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/strmdep.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/t_lock.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/time.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/times.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/turnstile.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/uio.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/unistd.h
+miniperlmain$(OBJ_EXT): /usr/include/sys/vnode.h
+miniperlmain$(OBJ_EXT): /usr/include/vm/seg_enum.h
+miniperlmain$(OBJ_EXT): /usr/local/include/sfio.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+miniperlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+miniperlmain$(OBJ_EXT): EXTERN.h
+miniperlmain$(OBJ_EXT): av.h
+miniperlmain$(OBJ_EXT): config.h
+miniperlmain$(OBJ_EXT): cop.h
+miniperlmain$(OBJ_EXT): cv.h
+miniperlmain$(OBJ_EXT): embed.h
+miniperlmain$(OBJ_EXT): form.h
+miniperlmain$(OBJ_EXT): gv.h
+miniperlmain$(OBJ_EXT): handy.h
+miniperlmain$(OBJ_EXT): hv.h
+miniperlmain$(OBJ_EXT): mg.h
+miniperlmain$(OBJ_EXT): miniperlmain.c
+miniperlmain$(OBJ_EXT): nostdio.h
+miniperlmain$(OBJ_EXT): op.h
+miniperlmain$(OBJ_EXT): opcode.h
+miniperlmain$(OBJ_EXT): perl.h
+miniperlmain$(OBJ_EXT): perlio.h
+miniperlmain$(OBJ_EXT): perly.h
+miniperlmain$(OBJ_EXT): pp.h
+miniperlmain$(OBJ_EXT): proto.h
+miniperlmain$(OBJ_EXT): regexp.h
+miniperlmain$(OBJ_EXT): scope.h
+miniperlmain$(OBJ_EXT): sv.h
+miniperlmain$(OBJ_EXT): unixish.h
+miniperlmain$(OBJ_EXT): util.h
+perlmain$(OBJ_EXT): 
+perlmain$(OBJ_EXT): /usr/include/libintl.h
+perlmain$(OBJ_EXT): /usr/include/netinet/in.h
+perlmain$(OBJ_EXT): /usr/include/sys/condvar.h
+perlmain$(OBJ_EXT): /usr/include/sys/cred.h
+perlmain$(OBJ_EXT): /usr/include/sys/dirent.h
+perlmain$(OBJ_EXT): /usr/include/sys/dki_lkinfo.h
+perlmain$(OBJ_EXT): /usr/include/sys/dl.h
+perlmain$(OBJ_EXT): /usr/include/sys/errno.h
+perlmain$(OBJ_EXT): /usr/include/sys/feature_tests.h
+perlmain$(OBJ_EXT): /usr/include/sys/ioctl.h
+perlmain$(OBJ_EXT): /usr/include/sys/machlock.h
+perlmain$(OBJ_EXT): /usr/include/sys/machsig.h
+perlmain$(OBJ_EXT): /usr/include/sys/machtypes.h
+perlmain$(OBJ_EXT): /usr/include/sys/mutex.h
+perlmain$(OBJ_EXT): /usr/include/sys/pirec.h
+perlmain$(OBJ_EXT): /usr/include/sys/poll.h
+perlmain$(OBJ_EXT): /usr/include/sys/procset.h
+perlmain$(OBJ_EXT): /usr/include/sys/rwlock.h
+perlmain$(OBJ_EXT): /usr/include/sys/select.h
+perlmain$(OBJ_EXT): /usr/include/sys/semaphore.h
+perlmain$(OBJ_EXT): /usr/include/sys/siginfo.h
+perlmain$(OBJ_EXT): /usr/include/sys/sleepq.h
+perlmain$(OBJ_EXT): /usr/include/sys/stream.h
+perlmain$(OBJ_EXT): /usr/include/sys/strmdep.h
+perlmain$(OBJ_EXT): /usr/include/sys/t_lock.h
+perlmain$(OBJ_EXT): /usr/include/sys/time.h
+perlmain$(OBJ_EXT): /usr/include/sys/times.h
+perlmain$(OBJ_EXT): /usr/include/sys/turnstile.h
+perlmain$(OBJ_EXT): /usr/include/sys/uio.h
+perlmain$(OBJ_EXT): /usr/include/sys/unistd.h
+perlmain$(OBJ_EXT): /usr/include/sys/vnode.h
+perlmain$(OBJ_EXT): /usr/include/vm/seg_enum.h
+perlmain$(OBJ_EXT): /usr/local/include/sfio.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/ctype.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/dirent.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/errno.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/floatingpoint.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/limits.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/locale.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/math.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/setjmp.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/signal.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdarg.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdio.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/stdlib.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/string.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/byteorder.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/ieeefp.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/isa_defs.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/param.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/signal.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/stat.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/sys/types.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/syslimits.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/time.h
+perlmain$(OBJ_EXT): /usr/local/lib/gcc-lib/sparc-sun-solaris2.5/2.7.2/include/va-sparc.h
+perlmain$(OBJ_EXT): EXTERN.h
+perlmain$(OBJ_EXT): av.h
+perlmain$(OBJ_EXT): config.h
+perlmain$(OBJ_EXT): cop.h
+perlmain$(OBJ_EXT): cv.h
+perlmain$(OBJ_EXT): embed.h
+perlmain$(OBJ_EXT): form.h
+perlmain$(OBJ_EXT): gv.h
+perlmain$(OBJ_EXT): handy.h
+perlmain$(OBJ_EXT): hv.h
+perlmain$(OBJ_EXT): mg.h
+perlmain$(OBJ_EXT): nostdio.h
+perlmain$(OBJ_EXT): op.h
+perlmain$(OBJ_EXT): opcode.h
+perlmain$(OBJ_EXT): perl.h
+perlmain$(OBJ_EXT): perlio.h
+perlmain$(OBJ_EXT): perlmain.c
+perlmain$(OBJ_EXT): perly.h
+perlmain$(OBJ_EXT): pp.h
+perlmain$(OBJ_EXT): proto.h
+perlmain$(OBJ_EXT): regexp.h
+perlmain$(OBJ_EXT): scope.h
+perlmain$(OBJ_EXT): sv.h
+perlmain$(OBJ_EXT): unixish.h
+perlmain$(OBJ_EXT): util.h
+cflags: cflags.SH ./config.sh ; /bin/sh cflags.SH
+config_h: config_h.SH ./config.sh ; /bin/sh config_h.SH
+makeaperl: makeaperl.SH ./config.sh ; /bin/sh makeaperl.SH
+makedir: makedir.SH ./config.sh ; /bin/sh makedir.SH
+perl_exp: perl_exp.SH ./config.sh ; /bin/sh perl_exp.SH
+writemain: writemain.SH ./config.sh ; /bin/sh writemain.SH
+# WARNING: Put nothing here or make depend will gobble it up!

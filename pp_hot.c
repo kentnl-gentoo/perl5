@@ -226,20 +226,8 @@ PP(pp_padsv)
     if (op->op_flags & OPf_MOD) {
 	if (op->op_private & OPpLVAL_INTRO)
 	    SAVECLEARSV(curpad[op->op_targ]);
-        else if (op->op_private & (OPpDEREF_HV|OPpDEREF_AV)) {
-	    SV* sv = curpad[op->op_targ];
-            if (SvGMAGICAL(sv))
-                mg_get(sv);
-            if (!SvOK(sv)) {
-                if (SvREADONLY(sv))
-                    croak(no_modify);
-                (void)SvUPGRADE(sv, SVt_RV);
-                SvRV(sv) = (op->op_private & OPpDEREF_HV ?
-                            (SV*)newHV() : (SV*)newAV());
-                SvROK_on(sv);
-                SvSETMAGIC(sv);
-            }
-        }
+        else if (op->op_private & (OPpDEREF_HV|OPpDEREF_AV))
+	    provide_ref(op, curpad[op->op_targ]);
     }
     RETURN;
 }
@@ -264,8 +252,13 @@ PP(pp_preinc)
 {
     dSP;
     if (SvIOK(TOPs)) {
-	++SvIVX(TOPs);
-	SvFLAGS(TOPs) &= ~(SVf_NOK|SVf_POK|SVp_NOK|SVp_POK);
+    	if (SvIVX(TOPs) == LONG_MAX) {
+    	    sv_setnv(TOPs, (double)(SvIVX(TOPs)) + 1.0 );
+    	}
+    	else {
+	    ++SvIVX(TOPs);
+	    SvFLAGS(TOPs) &= ~(SVf_NOK|SVf_POK|SVp_NOK|SVp_POK);
+	}
     }
     else
 	sv_inc(TOPs);
@@ -327,7 +320,7 @@ PP(pp_print)
     dSP; dMARK; dORIGMARK;
     GV *gv;
     IO *io;
-    register FILE *fp;
+    register PerlIO *fp;
 
     if (op->op_flags & OPf_STACKED)
 	gv = (GV*)*++MARK;
@@ -363,7 +356,7 @@ PP(pp_print)
 		    break;
 		MARK++;
 		if (MARK <= SP) {
-		    if (fwrite1(ofs, 1, ofslen, fp) == 0 || ferror(fp)) {
+		    if (PerlIO_write(fp, ofs, ofslen) == 0 || PerlIO_error(fp)) {
 			MARK--;
 			break;
 		    }
@@ -381,11 +374,11 @@ PP(pp_print)
 	    goto just_say_no;
 	else {
 	    if (orslen)
-		if (fwrite1(ors, 1, orslen, fp) == 0 || ferror(fp))
+		if (PerlIO_write(fp, ors, orslen) == 0 || PerlIO_error(fp))
 		    goto just_say_no;
 
 	    if (IoFLAGS(io) & IOf_FLUSH)
-		if (fflush(fp) == EOF)
+		if (PerlIO_flush(fp) == EOF)
 		    goto just_say_no;
 	}
     }
@@ -426,6 +419,8 @@ PP(pp_rv2av)
 	    }
 	}
 	else {
+	    GV *gv;
+	    
 	    if (SvTYPE(sv) != SVt_PVGV) {
 		char *sym;
 
@@ -445,11 +440,13 @@ PP(pp_rv2av)
 		sym = SvPV(sv,na);
 		if (op->op_private & HINT_STRICT_REFS)
 		    DIE(no_symref, sym, "an ARRAY");
-		sv = (SV*)gv_fetchpv(sym, TRUE, SVt_PVAV);
+		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVAV);
+	    } else {
+		gv = (GV*)sv;
 	    }
-	    av = GvAVn(sv);
+	    av = GvAVn(gv);
 	    if (op->op_private & OPpLVAL_INTRO)
-		av = save_ary(sv);
+		av = save_ary(gv);
 	    if (op->op_flags & OPf_REF) {
 		PUSHs((SV*)av);
 		RETURN;
@@ -499,6 +496,8 @@ PP(pp_rv2hv)
 	    }
 	}
 	else {
+	    GV *gv;
+	    
 	    if (SvTYPE(sv) != SVt_PVGV) {
 		char *sym;
 
@@ -520,11 +519,13 @@ PP(pp_rv2hv)
 		sym = SvPV(sv,na);
 		if (op->op_private & HINT_STRICT_REFS)
 		    DIE(no_symref, sym, "a HASH");
-		sv = (SV*)gv_fetchpv(sym, TRUE, SVt_PVHV);
+		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVHV);
+	    } else {
+		gv = (GV*)sv;
 	    }
-	    hv = GvHVn(sv);
+	    hv = GvHVn(gv);
 	    if (op->op_private & OPpLVAL_INTRO)
-		hv = save_hash(sv);
+		hv = save_hash(gv);
 	    if (op->op_flags & OPf_REF) {
 		SETs((SV*)hv);
 		RETURN;
@@ -607,7 +608,6 @@ PP(pp_aassign)
 	    }
 	    break;
 	case SVt_PVHV: {
-		char *tmps;
 		SV *tmpstr;
 
 		hash = (HV*)sv;
@@ -620,16 +620,17 @@ PP(pp_aassign)
 			sv = *(relem++);
 		    else
 			sv = &sv_no, relem++;
-		    tmps = SvPV(sv, len);
 		    tmpstr = NEWSV(29,0);
 		    if (*relem)
 			sv_setsv(tmpstr,*relem);	/* value */
 		    *(relem++) = tmpstr;
-		    (void)hv_store(hash,tmps,len,tmpstr,0);
+		    (void)hv_store_ent(hash,sv,tmpstr,0);
 		    if (magic)
 			mg_set(tmpstr);
 		    tainted = 0;
 		}
+		if (relem == lastrelem)
+		    warn("Odd number of elements in hash list");
 	    }
 	    break;
 	default:
@@ -948,7 +949,7 @@ do_readline()
     register SV *sv;
     STRLEN tmplen = 0;
     STRLEN offset;
-    FILE *fp;
+    PerlIO *fp;
     register IO *io = GvIO(last_in_gv);
     register I32 type = op->op_type;
 
@@ -988,7 +989,7 @@ do_readline()
 		    char *rstr = rslt + sizeof(unsigned short int), *begin, *end, *cp;
 		    char tmpfnam[L_tmpnam] = "SYS$SCRATCH:";
 		    $DESCRIPTOR(dfltdsc,"SYS$DISK:[]*.*;");
-		    FILE *tmpfp;
+		    PerlIO *tmpfp;
 		    STRLEN i;
 		    struct dsc$descriptor_s wilddsc
 		       = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
@@ -1018,7 +1019,7 @@ do_readline()
 		           break;
 		       }
 		    }
-		    if ((tmpfp = fopen(tmpfnam,"w+","fop=dlt")) != NULL) {
+		    if ((tmpfp = PerlIO_open(tmpfnam,"w+","fop=dlt")) != NULL) {
 		        ok = ((wilddsc.dsc$a_pointer = tovmsspec(SvPVX(tmpglob),vmsspec)) != NULL);
 		        if (ok) wilddsc.dsc$w_length = (unsigned short int) strlen(wilddsc.dsc$a_pointer);
 		        while (ok && ((sts = lib$find_file(&wilddsc,&rsdsc,&cxt,
@@ -1028,7 +1029,7 @@ do_readline()
 		            *(end++) = '\n';  *end = '\0';
 		            for (cp = rstr; *cp; cp++) *cp = _tolower(*cp);
 		            if (hasdir) {
-		              if (isunix) trim_unixpath(SvPVX(tmpglob),rstr);
+		              if (isunix) trim_unixpath(rstr,SvPVX(tmpglob));
 		              begin = rstr;
 		            }
 		            else {
@@ -1036,7 +1037,7 @@ do_readline()
 		                while (*(--begin) != ']' && *begin != '>') ;
 		                ++begin;
 		            }
-		            ok = (fputs(begin,tmpfp) != EOF);
+		            ok = (PerlIO_puts(tmpfp,begin) != EOF);
 		        }
 		        if (cxt) (void)lib$find_file_end(&cxt);
 		        if (ok && sts != RMS$_NMF &&
@@ -1045,11 +1046,11 @@ do_readline()
 		            if (!(sts & 1)) {
 		              SETERRNO((sts == RMS$_SYN ? EINVAL : EVMSERR),sts);
 		            }
-		            fclose(tmpfp);
+		            PerlIO_close(tmpfp);
 		            fp = NULL;
 		        }
 		        else {
-		           rewind(tmpfp);
+		           PerlIO_rewind(tmpfp);
 		           IoTYPE(io) = '<';
 		           IoIFP(io) = fp = tmpfp;
 		        }
@@ -1057,11 +1058,17 @@ do_readline()
 		}
 #else /* !VMS */
 #ifdef DOSISH
+#ifdef OS2
+		sv_setpv(tmpcmd, "for a in ");
+		sv_catsv(tmpcmd, tmpglob);
+		sv_catpv(tmpcmd, "; do echo \"$a\\0\\c\"; done |");
+#else
 		sv_setpv(tmpcmd, "perlglob ");
 		sv_catsv(tmpcmd, tmpglob);
 		sv_catpv(tmpcmd, " |");
-#else
-#ifdef CSH
+#endif /* !OS2 */
+#else /* !DOSISH */
+#if defined(CSH)
 		sv_setpvn(tmpcmd, cshname, cshlen);
 		sv_catpv(tmpcmd, " -cf 'set nonomatch; glob ");
 		sv_catsv(tmpcmd, tmpglob);
@@ -1075,7 +1082,7 @@ do_readline()
 		sv_catpv(tmpcmd, "|tr -s ' \t\f\r' '\\n\\n\\n\\n'|");
 #endif
 #endif /* !CSH */
-#endif /* !MSDOS */
+#endif /* !DOSISH */
 		(void)do_open(last_in_gv, SvPVX(tmpcmd), SvCUR(tmpcmd),
 			      FALSE, 0, 0, Nullfp);
 		fp = IoIFP(io);
@@ -1112,7 +1119,7 @@ do_readline()
     }
     for (;;) {
 	if (!sv_gets(sv, fp, offset)) {
-	    clearerr(fp);
+	    PerlIO_clearerr(fp);
 	    if (IoFLAGS(io) & IOf_ARGV) {
 		fp = nextargv(last_in_gv);
 		if (fp)
@@ -1204,34 +1211,23 @@ PP(pp_helem)
 {
     dSP;
     SV** svp;
+    HE* he;
     SV *keysv = POPs;
-    STRLEN keylen;
-    char *key = SvPV(keysv, keylen);
     HV *hv = (HV*)POPs;
     I32 lval = op->op_flags & OPf_MOD;
 
     if (SvTYPE(hv) != SVt_PVHV)
 	RETPUSHUNDEF;
-    svp = hv_fetch(hv, key, keylen, lval);
+    he = hv_fetch_ent(hv, keysv, lval, 0);
     if (lval) {
-	if (!svp || *svp == &sv_undef)
-	    DIE(no_helem, key);
+	if (!he || HeVAL(he) == &sv_undef)
+	    DIE(no_helem, SvPV(keysv, na));
 	if (op->op_private & OPpLVAL_INTRO)
-	    save_svref(svp);
-	else if (op->op_private & (OPpDEREF_HV|OPpDEREF_AV)) {
-	    SV* sv = *svp;
-	    if (SvGMAGICAL(sv))
-		mg_get(sv);
-	    if (!SvOK(sv)) {
-		(void)SvUPGRADE(sv, SVt_RV);
-		SvRV(sv) = (op->op_private & OPpDEREF_HV ?
-			    (SV*)newHV() : (SV*)newAV());
-		SvROK_on(sv);
-		SvSETMAGIC(sv);
-	    }
-	}
+	    save_svref(&HeVAL(he));
+	else if (op->op_private & (OPpDEREF_HV|OPpDEREF_AV))
+	    provide_ref(op, HeVAL(he));
     }
-    PUSHs(svp ? *svp : &sv_undef);
+    PUSHs(he ? HeVAL(he) : &sv_undef);
     RETURN;
 }
 
@@ -1300,7 +1296,7 @@ PP(pp_iter)
     if (cx->cx_type != CXt_LOOP)
 	DIE("panic: pp_iter");
     av = cx->blk_loop.iterary;
-    if (av == stack && cx->blk_loop.iterix >= cx->blk_oldsp)
+    if (av == curstack && cx->blk_loop.iterix >= cx->blk_oldsp)
 	RETPUSHNO;
 
     if (cx->blk_loop.iterix >= AvFILL(av))
@@ -1669,6 +1665,7 @@ PP(pp_entersub)
     register CV *cv;
     register CONTEXT *cx;
     I32 gimme;
+    I32 hasargs = (op->op_flags & OPf_STACKED) != 0;
 
     if (!sv)
 	DIE("Not a CODE reference");
@@ -1739,16 +1736,20 @@ PP(pp_entersub)
     }
 
     gimme = GIMME;
-    if ((op->op_private & OPpENTERSUB_DB) && !CvXSUB(cv)) {
+    if ((op->op_private & OPpENTERSUB_DB)) {
 	sv = GvSV(DBsub);
 	save_item(sv);
-	if (SvFLAGS(cv) & (SVpcv_ANON | SVpcv_CLONED)) /* Is GV potentially non-unique? */
+	gv = CvGV(cv);
+	if ( CvFLAGS(cv) & (CVf_ANON | CVf_CLONED)
+	     || strEQ(GvNAME(gv), "END") ) {
+	    /* GV is potentially non-unique */
 	    sv_setsv(sv, newRV((SV*)cv));
+	}
 	else {
-	    gv = CvGV(cv);
 	    gv_efullname(sv,gv);
 	}
 	cv = GvCV(DBsub);
+	if (CvXSUB(cv)) curcopdb = curcop;
 	if (!cv)
 	    DIE("No DBsub routine");
     }
@@ -1758,6 +1759,7 @@ PP(pp_entersub)
 	    I32 (*fp3)_((int,int,int));
 	    dMARK;
 	    register I32 items = SP - MARK;
+					/* We dont worry to copy from @_. */
 	    while (sp > mark) {
 		sp[1] = sp[0];
 		sp--;
@@ -1773,6 +1775,30 @@ PP(pp_entersub)
 	    I32 markix = TOPMARK;
 
 	    PUTBACK;
+
+	    if (!hasargs) {
+		/* Need to copy @_ to stack. Alternative may be to
+		 * switch stack to @_, and copy return values
+		 * back. This would allow popping @_ in XSUB, e.g.. XXXX */
+		AV* av = GvAV(defgv);
+		I32 items = AvFILL(av) + 1;
+
+		if (items) {
+		    /* Mark is at the end of the stack. */
+		    EXTEND(sp, items);
+		    Copy(AvARRAY(av), sp + 1, items, SV*);
+		    sp += items;
+		    PUTBACK ;		    
+		}
+	    }
+	    if (curcopdb) {		/* We assume that the first
+					   XSUB in &DB::sub is the
+					   called one. */
+		SAVESPTR(curcop);
+		curcop = curcopdb;
+		curcopdb = NULL;
+	    }
+	    /* Do we need to open block here? XXXX */
 	    (void)(*CvXSUB(cv))(cv);
 
 	    /* Enforce some sanity in scalar context. */
@@ -1790,7 +1816,6 @@ PP(pp_entersub)
     else {
 	dMARK;
 	register I32 items = SP - MARK;
-	I32 hasargs = (op->op_flags & OPf_STACKED) != 0;
 	AV* padlist = CvPADLIST(cv);
 	SV** svp = AvARRAY(padlist);
 	push_return(op->op_next);
@@ -1898,21 +1923,29 @@ PP(pp_aelem)
 	    DIE(no_aelem, elem);
 	if (op->op_private & OPpLVAL_INTRO)
 	    save_svref(svp);
-	else if (op->op_private & (OPpDEREF_HV|OPpDEREF_AV)) {
-	    SV* sv = *svp;
-	    if (SvGMAGICAL(sv))
-		mg_get(sv);
-	    if (!SvOK(sv)) {
-		(void)SvUPGRADE(sv, SVt_RV);
-		SvRV(sv) = (op->op_private & OPpDEREF_HV ?
-			    (SV*)newHV() : (SV*)newAV());
-		SvROK_on(sv);
-		SvSETMAGIC(sv);
-	    }
-	}
+	else if (op->op_private & (OPpDEREF_HV|OPpDEREF_AV))
+	    provide_ref(op, *svp);
     }
     PUSHs(svp ? *svp : &sv_undef);
     RETURN;
+}
+
+void
+provide_ref(op, sv)
+OP* op;
+SV* sv;
+{
+    if (SvGMAGICAL(sv))
+	mg_get(sv);
+    if (!SvOK(sv)) {
+	if (SvREADONLY(sv))
+	    croak(no_modify);
+	(void)SvUPGRADE(sv, SVt_RV);
+	SvRV(sv) = (op->op_private & OPpDEREF_HV ?
+		    (SV*)newHV() : (SV*)newAV());
+	SvROK_on(sv);
+	SvSETMAGIC(sv);
+    }
 }
 
 PP(pp_method)
@@ -1934,9 +1967,10 @@ PP(pp_method)
     else {
 	GV* iogv;
 	char* packname = 0;
+	STRLEN packlen;
 
 	if (!SvOK(sv) ||
-	    !(packname = SvPV(sv, na)) ||
+	    !(packname = SvPV(sv, packlen)) ||
 	    !(iogv = gv_fetchpv(packname, FALSE, SVt_PVIO)) ||
 	    !(ob=(SV*)GvIO(iogv)))
 	{
@@ -1944,9 +1978,9 @@ PP(pp_method)
 	    HV *stash;
 	    if (!packname || !isALPHA(*packname))
 DIE("Can't call method \"%s\" without a package or object reference", name);
-	    if (!(stash = gv_stashpv(packname, FALSE))) {
-		if (gv_stashpv("UNIVERSAL", FALSE))
-		    stash = gv_stashpv(packname, TRUE);
+	    if (!(stash = gv_stashpvn(packname, packlen, FALSE))) {
+		if (gv_stashpvn("UNIVERSAL", 9, FALSE))
+		    stash = gv_stashpvn(packname, packlen, TRUE);
 		else
 		    DIE("Can't call method \"%s\" in empty package \"%s\"",
 			name, packname);
@@ -1955,10 +1989,10 @@ DIE("Can't call method \"%s\" without a package or object reference", name);
 	    if (!gv)
 		DIE("Can't locate object method \"%s\" via package \"%s\"",
 		    name, packname);
-	    SETs(gv);
+	    SETs((SV*)gv);
 	    RETURN;
 	}
-	*(stack_base + TOPMARK + 1) = sv_2mortal(newRV(iogv));
+	*(stack_base + TOPMARK + 1) = sv_2mortal(newRV((SV*)iogv));
     }
 
     if (!ob || !SvOBJECT(ob)) {
@@ -1974,7 +2008,7 @@ DIE("Can't call method \"%s\" without a package or object reference", name);
 		name, HvNAME(SvSTASH(ob)));
     }
 
-    SETs(gv);
+    SETs((SV*)gv);
     RETURN;
 }
 

@@ -16,8 +16,7 @@ use File::Basename qw(&basename &dirname);
 chdir(dirname($0));
 ($file = basename($0)) =~ s/\.PL$//;
 $file =~ s/\.pl$//
-	if ($Config{'osname'} eq 'VMS' or
-	    $Config{'osname'} eq 'OS2');  # "case-forgiving"
+	if ($^O eq 'VMS' or $^O eq 'os2');  # "case-forgiving"
 
 open OUT,">$file" or die "Can't create $file: $!";
 
@@ -35,7 +34,7 @@ $Config{'startperl'}
 'ds 00 \"';
 'ig 00 ';
 
-\$perlincl = "$Config{archlibexp}";
+\$perlincl = "$Config{archlibexp}";  # or  {sitearchexp}
 
 !GROK!THIS!
 
@@ -187,7 +186,7 @@ sub expr {
     while ($_ ne '') {
 	s/^(\s+)//		&& do {$new .= ' '; next;};
 	s/^(0x[0-9a-fA-F]+)//	&& do {$new .= $1; next;};
-	s/^(\d+)//		&& do {$new .= $1; next;};
+	s/^(\d+)[LlUu]*//	&& do {$new .= $1; next;};
 	s/^("(\\"|[^"])*")//	&& do {$new .= $1; next;};
 	s/^'((\\"|[^"])*)'//	&& do {
 	    if ($curargs{$1}) {
@@ -198,7 +197,7 @@ sub expr {
 	    }
 	    next;
 	};
-	s/^sizeof\s*\(([^)]+\))\)/{$1}/ && do {
+	s/^sizeof\s*\(([^)]+)\)/{$1}/ && do {
 	    $new .= '$sizeof';
 	    next;
 	};
@@ -233,7 +232,7 @@ sub expr {
 		    s/^[\s*]*\)//;
 		}
 		else {
-		    $new .= $id;
+		    $new .= q(').$id.q(');
 		}
 	    }
 	    else {

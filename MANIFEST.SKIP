@@ -1,0 +1,13 @@
+[%~]$
+\.(bak|o|a|so|old|save)$
+\bpatches/\b
+\bU/\b
+\.package
+Wanted
+Obsolete
+Configure.log
+nickhack.h
+checkio
+mungeio
+MANIFEST.new
+MANIFEST.SKIP

@@ -1,3 +1,4 @@
+#! /bin/sh
 case $CONFIG in
 '')
 	if test -f config.sh; then TOP=.;
@@ -16,6 +17,9 @@ esac
 case "$0" in
 */*) cd `expr X$0 : 'X\(.*\)/'` ;;
 esac
+
+: ${bin_sh=/bin/sh}
+
 echo "Extracting makedepend (with variable substitutions)"
 rm -f makedepend
 $spitshell >makedepend <<!GROK!THIS!
@@ -53,17 +57,18 @@ export PATH
 $cat /dev/null >.deptmp
 $rm -f *.c.c c/*.c.c
 if test -f Makefile; then
-    cp Makefile makefile
+    rm -f $firstmakefile
+    cp Makefile $firstmakefile
 fi
-mf=makefile
+mf=$firstmakefile
 if test -f $mf; then
     defrule=`<$mf sed -n		\
-	-e '/^\.c\.o:.*;/{'		\
+	-e '/^\.c\(\$(OBJ_EXT)\|\.o\):.*;/{'	\
 	-e    's/\$\*\.c//'		\
 	-e    's/^[^;]*;[	 ]*//p'	\
 	-e    q				\
 	-e '}'				\
-	-e '/^\.c\.o: *$/{'		\
+	-e '/^\.c\(\$(OBJ_EXT)\|\.o\): *$/{'	\
 	-e    N				\
 	-e    's/\$\*\.c//'		\
 	-e    's/^.*\n[	 ]*//p'		\
@@ -91,7 +96,7 @@ for file in `$cat .clist`; do
     */*) finc="-I`echo $file | sed 's#/[^/]*$##`" ;;
     *)   finc= ;;
     esac
-    $echo "Finding dependencies for $filebase.o."
+    $echo "Finding dependencies for $filebase$obj_ext."
     ( $echo "#line 1 \"$file\""; \
       $sed -n <$file \
 	-e "/^${filebase}_init(/q" \
@@ -107,8 +112,8 @@ for file in `$cat .clist`; do
 	-e 's#\.[0-9][0-9]*\.c#'"$file.c#" \
 	-e 's/^[	 ]*#[	 ]*line/#/' \
 	-e '/^# *[0-9][0-9]* *[".\/]/!d' \
-	-e 's/^.*"\(.*\)".*$/'$filebase'.o: \1/' \
-	-e 's/^# *[0-9][0-9]* \(.*\)$/'$filebase'.o: \1/' \
+	-e 's/^.*"\(.*\)".*$/'$filebase'\$(OBJ_EXT): \1/' \
+	-e 's/^# *[0-9][0-9]* \(.*\)$/'$filebase'\$(OBJ_EXT): \1/' \
 	-e 's|: \./|: |' \
 	-e 's|\.c\.c|.c|' | \
     $uniq | $sort | $uniq >> .deptmp
@@ -118,15 +123,24 @@ $sed <$mf >$mf.new -e '1,/^# AUTOMATICALLY/!d'
 
 $MAKE shlist || ($echo "Searching for .SH files..."; \
 	$echo *.SH | $tr ' ' '\012' | $egrep -v '\*' >.shlist)
+
+# Now extract the dependencies on makedepend.SH and Makefile.SH
+# (they should reside in the main Makefile):
+mv .shlist .shlist.old
+$egrep -v '^makedepend\.SH' <.shlist.old >.shlist
+mv .shlist .shlist.old
+$egrep -v '^Makefile\.SH' <.shlist.old >.shlist
+rm .shlist.old
+
 if $test -s .deptmp; then
     for file in `cat .shlist`; do
 	$echo `$expr X$file : 'X\(.*\).SH'`: $file $TOP/config.sh \; \
-	    /bin/sh $file >> .deptmp
+	    $bin_sh $file >> .deptmp
     done
     $echo "Updating $mf..."
     $echo "# If this runs make out of memory, delete /usr/include lines." \
 	>> $mf.new
-    $sed 's|^\(.*\.o:\) *\(.*/.*\.c\) *$|\1 \2; '"$defrule \2|" .deptmp \
+    $sed 's|^\(.*\(\$(OBJ_EXT)\|\.o\):\) *\(.*/.*\.c\) *$|\1 \3; '"$defrule \2|" .deptmp \
        >>$mf.new
 else
     $MAKE hlist || ($echo "Searching for .h files..."; \
@@ -136,10 +150,10 @@ else
     $echo "Updating $mf..."
     <.clist $sed -n							\
 	-e '/\//{'							\
-	-e   's|^\(.*\)/\(.*\)\.c|\2.o: \1/\2.c; '"$defrule \1/\2.c|p"	\
+	-e   's|^\(.*\)/\(.*\)\.c|\2\$(OBJ_EXT): \1/\2.c; '"$defrule \1/\2.c|p"	\
 	-e   d								\
 	-e '}'								\
-	-e 's|^\(.*\)\.c|\1.o: \1.c|p' >> $mf.new
+	-e 's|^\(.*\)\.c|\1\$(OBJ_EXT): \1.c|p' >> $mf.new
     <.hlist $sed -n 's|\(.*/\)\(.*\)|s= \2= \1\2=|p' >.hsed
     <.deptmp $sed -n 's|c:#include "\(.*\)".*$|o: \1|p' | \
        $sed 's|^[^;]*/||' | \
@@ -148,11 +162,12 @@ else
        $sed -f .hsed >> $mf.new
     for file in `$cat .shlist`; do
 	$echo `$expr X$file : 'X\(.*\).SH'`: $file $TOP/config.sh \; \
-	    /bin/sh $file >> $mf.new
+	    $bin_sh $file >> $mf.new
     done
 fi
 $rm -f $mf.old
 $cp $mf $mf.old
+$rm -f $mf
 $cp $mf.new $mf
 $rm $mf.new
 $echo "# WARNING: Put nothing here or make depend will gobble it up!" >> $mf

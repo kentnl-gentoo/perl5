@@ -251,8 +251,8 @@ This example demonstrates an interface for the SDBM class.  This creates a
 	package Mydbm;
 
 	require SDBM_File;
-	require TieHash;
-	@ISA = qw( TieHash );
+	require Tie::Hash;
+	@ISA = qw( Tie::Hash );
 
 	sub TIEHASH {
 	    my $type = shift;
@@ -277,11 +277,11 @@ This example demonstrates an interface for the SDBM class.  This creates a
 	package main;
 	use Fcntl qw( O_RDWR O_CREAT );
 
-	tie %foo, Mydbm, "Sdbm", O_RDWR|O_CREAT, 0640;
+	tie %foo, "Mydbm", "Sdbm", O_RDWR|O_CREAT, 0640;
 	$foo{'bar'} = 123;
 	print "foo-bar = $foo{'bar'}\n";
 
-	tie %bar, Mydbm, "Sdbm2", O_RDWR|O_CREAT, 0640;
+	tie %bar, "Mydbm", "Sdbm2", O_RDWR|O_CREAT, 0640;
 	$bar{'Cathy'} = 456;
 	print "bar-Cathy = $bar{'Cathy'}\n";
 
@@ -494,8 +494,8 @@ behavior by adding custom FETCH() and STORE() methods, if this is desired.
 	package Mydbm;
 
 	require SDBM_File;
-	require TieHash;
-	@ISA = qw(TieHash);
+	require Tie::Hash;
+	@ISA = qw(Tie::Hash);
 
 	sub TIEHASH {
 		my $type = shift;
@@ -522,6 +522,6 @@ behavior by adding custom FETCH() and STORE() methods, if this is desired.
 	package main;
 	use Fcntl qw( O_RDWR O_CREAT );
 
-	tie %foo, Mydbm, "adbm", O_RDWR|O_CREAT, 0640;
+	tie %foo, "Mydbm", "adbm", O_RDWR|O_CREAT, 0640;
 	$foo{'bar'} = 123;
 	print "foo-bar = $foo{'bar'}\n";

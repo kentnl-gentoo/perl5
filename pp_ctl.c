@@ -212,9 +212,9 @@ PP(pp_formline)
 	    case FF_END:	name = "END";		break;
 	    }
 	    if (arg >= 0)
-		fprintf(stderr, "%-16s%ld\n", name, (long) arg);
+		PerlIO_printf(PerlIO_stderr(), "%-16s%ld\n", name, (long) arg);
 	    else
-		fprintf(stderr, "%-16s\n", name);
+		PerlIO_printf(PerlIO_stderr(), "%-16s\n", name);
 	} )
 	switch (*fpc++) {
 	case FF_LINEMARK:
@@ -621,13 +621,13 @@ PP(pp_sort)
 	    SAVETMPS;
 	    SAVESPTR(op);
 
-	    oldstack = stack;
+	    oldstack = curstack;
 	    if (!sortstack) {
 		sortstack = newAV();
 		AvREAL_off(sortstack);
 		av_extend(sortstack, 32);
 	    }
-	    SWITCHSTACK(stack, sortstack);
+	    SWITCHSTACK(curstack, sortstack);
 	    if (sortstash != stash) {
 		firstgv = gv_fetchpv("a", TRUE, SVt_PV);
 		secondgv = gv_fetchpv("b", TRUE, SVt_PV);
@@ -881,7 +881,7 @@ I32 cxix;
 
     while (cxstack_ix > cxix) {
 	cx = &cxstack[cxstack_ix--];
-	DEBUG_l(fprintf(stderr, "Unwinding block %ld, type %s\n", (long) cxstack_ix+1,
+	DEBUG_l(PerlIO_printf(Perl_debug_log, "Unwinding block %ld, type %s\n", (long) cxstack_ix+1,
 		    block_type[cx->cx_type]));
 	/* Note: we don't need to restore the base context info till the end. */
 	switch (cx->cx_type) {
@@ -919,6 +919,13 @@ die(pat, va_alist)
     GV *gv;
     CV *cv;
 
+    /* We have to switch back to mainstack or die_where may try to pop
+     * the eval block from the wrong stack if die is being called from a
+     * signal handler.  - dkindred@cs.cmu.edu */
+    if (curstack != mainstack) {
+        dSP;
+        SWITCHSTACK(curstack, mainstack);
+    }
 #ifdef I_STDARG
     va_start(args, pat);
 #else
@@ -937,7 +944,7 @@ die(pat, va_alist)
     }
     restartop = die_where(message);
     if ((!restartop && was_in_eval) || oldrunlevel > 1)
-	longjmp(top_env, 3);
+	Siglongjmp(top_env, 3);
     return restartop;
 }
 
@@ -980,7 +987,7 @@ char *message;
 
 	    POPBLOCK(cx,curpm);
 	    if (cx->cx_type != CXt_EVAL) {
-		fprintf(stderr, "panic: die %s", message);
+		PerlIO_printf(PerlIO_stderr(), "panic: die %s", message);
 		my_exit(1);
 	    }
 	    POPEVAL(cx);
@@ -996,10 +1003,17 @@ char *message;
 	    return pop_return();
 	}
     }
-    fputs(message, stderr);
-    (void)fflush(stderr);
-    if (e_fp)
+    PerlIO_printf(PerlIO_stderr(), "%s",message);
+    PerlIO_flush(PerlIO_stderr());
+    if (e_tmpname) {
+	if (e_fp) {
+	    PerlIO_close(e_fp);
+	    e_fp = Nullfp;
+	}
 	(void)UNLINK(e_tmpname);
+	Safefree(e_tmpname);
+	e_tmpname = Nullch;
+    }
     statusvalue = SHIFTSTATUS(statusvalue);
 #ifdef VMS
     my_exit((U32)vaxc$errno?vaxc$errno:errno?errno:statusvalue?statusvalue:SS$_ABORT);
@@ -1131,7 +1145,7 @@ PP(pp_caller)
 	    GV* tmpgv;
 	    dbargs = GvAV(gv_AVadd(tmpgv = gv_fetchpv("DB::args", TRUE,
 				SVt_PVAV)));
-	    SvMULTI_on(tmpgv);
+	    GvMULTI_on(tmpgv);
 	    AvREAL_off(dbargs);		/* XXX Should be REIFY */
 	}
 
@@ -1157,7 +1171,7 @@ const void *b;
     GvSV(secondgv) = *str2;
     stack_sp = stack_base;
     op = sortcop;
-    run();
+    runops();
     if (stack_sp != stack_base + 1)
 	croak("Sort subroutine didn't return single value");
     if (!SvNIOKp(*stack_sp))
@@ -1301,8 +1315,8 @@ PP(pp_enteriter)
 	cx->blk_loop.iterix = -1;
     }
     else {
-	cx->blk_loop.iterary = stack;
-	AvFILL(stack) = sp - stack_base;
+	cx->blk_loop.iterary = curstack;
+	AvFILL(curstack) = sp - stack_base;
 	cx->blk_loop.iterix = MARK - stack_base;
     }
 
@@ -1369,11 +1383,11 @@ PP(pp_return)
     PMOP *newpm;
     I32 optype = 0;
 
-    if (stack == sortstack) {
+    if (curstack == sortstack) {
 	if (cxstack_ix == sortcxix || dopoptosub(cxstack_ix) < sortcxix) {
 	    if (cxstack_ix > sortcxix)
 		dounwind(sortcxix);
-	    AvARRAY(stack)[1] = *SP;
+	    AvARRAY(curstack)[1] = *SP;
 	    stack_sp = stack_base + 1;
 	    return 0;
 	}
@@ -1627,7 +1641,9 @@ PP(pp_goto)
 		AV* av = cx->blk_sub.argarray;
 		
 		items = AvFILL(av) + 1;
-		Copy(AvARRAY(av), ++stack_sp, items, SV*);
+		stack_sp++;
+		EXTEND(stack_sp, items); /* @_ could have been extended. */
+		Copy(AvARRAY(av), stack_sp, items, SV*);
 		stack_sp += items;
 		GvAV(defgv) = cx->blk_sub.savearray;
 		AvREAL_off(av);
@@ -1654,6 +1670,7 @@ PP(pp_goto)
 		    sp = stack_base + items;
 		}
 		else {
+		    stack_sp--;		/* There is no cv arg. */
 		    (void)(*CvXSUB(cv))(cv);
 		}
 		LEAVE;
@@ -1743,6 +1760,13 @@ PP(pp_goto)
 			mark++;
 		    }
 		}
+		if (perldb && curstash != debstash) { /* &xsub is not copying @_ */
+		    SV *sv = GvSV(DBsub);
+		    save_item(sv);
+		    gv_efullname(sv, CvGV(cv)); /* We do not care about
+						 * using sv to call CV,
+						 * just for info. */
+		}
 		RETURNOP(CvSTART(cv));
 	    }
 	}
@@ -1824,6 +1848,9 @@ PP(pp_goto)
     }
 
     if (do_dump) {
+#ifdef VMS
+	if (!retop) retop = main_start;
+#endif
 	restartop = retop;
 	do_undump = TRUE;
 
@@ -1833,9 +1860,9 @@ PP(pp_goto)
 	do_undump = FALSE;
     }
 
-    if (stack == signalstack) {
+    if (curstack == signalstack) {
         restartop = retop;
-        longjmp(top_env, 3);
+        Siglongjmp(top_env, 3);
     }
 
     RETURNOP(retop);
@@ -1934,6 +1961,8 @@ int gimme;
 
     in_eval = 1;
 
+    PUSHMARK(SP);
+
     /* set up a scratch pad */
 
     SAVEINT(padix);
@@ -1982,7 +2011,10 @@ int gimme;
     curcop->cop_arybase = 0;
     SvREFCNT_dec(rs);
     rs = newSVpv("\n", 1);
-    sv_setpv(GvSV(errgv),"");
+    if (saveop->op_flags & OPf_SPECIAL)
+	in_eval |= 4;
+    else
+	sv_setpv(GvSV(errgv),"");
     if (yyparse() || error_count || !eval_root) {
 	SV **newsp;
 	I32 gimme;
@@ -1994,6 +2026,7 @@ int gimme;
 	    op_free(eval_root);
 	    eval_root = Nullop;
 	}
+	SP = stack_base + POPMARK;		/* pop original mark */
 	POPBLOCK(cx,curpm);
 	POPEVAL(cx);
 	pop_return();
@@ -2018,6 +2051,7 @@ int gimme;
 
     /* compiled okay, so do it */
 
+    SP = stack_base + POPMARK;		/* pop original mark */
     RETURNOP(eval_start);
 }
 
@@ -2030,13 +2064,13 @@ PP(pp_require)
     char *tmpname;
     SV** svp;
     I32 gimme = G_SCALAR;
-    FILE *tryrsfp = 0;
+    PerlIO *tryrsfp = 0;
 
     sv = POPs;
     if (SvNIOKp(sv) && !SvPOKp(sv)) {
-	if (atof(patchlevel) + 0.000999 < SvNV(sv))
-	    DIE("Perl %3.3f required--this is only version %s, stopped",
-		SvNV(sv),patchlevel);
+	if (atof(patchlevel) + 0.00000999 < SvNV(sv))
+	    DIE("Perl %s required--this is only version %s, stopped",
+		SvPV(sv,na),patchlevel);
 	RETPUSHYES;
     }
     name = SvPV(sv, na);
@@ -2064,7 +2098,7 @@ PP(pp_require)
 #endif
     )
     {
-	tryrsfp = fopen(tmpname,"r");
+	tryrsfp = PerlIO_open(tmpname,"r");
     }
     else {
 	AV *ar = GvAVn(incgv);
@@ -2079,7 +2113,7 @@ PP(pp_require)
 	    (void)sprintf(buf, "%s/%s",
 		SvPVx(*av_fetch(ar, i, TRUE), na), name);
 #endif
-	    tryrsfp = fopen(buf, "r");
+	    tryrsfp = PerlIO_open(buf, "r");
 	    if (tryrsfp) {
 		char *s = buf;
 
@@ -2191,6 +2225,7 @@ PP(pp_leaveeval)
     I32 gimme;
     register CONTEXT *cx;
     OP *retop;
+    U8 save_flags = op -> op_flags;
     I32 optype;
 
     POPBLOCK(cx,newpm);
@@ -2217,27 +2252,25 @@ PP(pp_leaveeval)
     }
     else {
 	for (mark = newsp + 1; mark <= SP; mark++)
-	    if (!(SvFLAGS(TOPs) & SVs_TEMP))
+	    if (!(SvFLAGS(*mark) & SVs_TEMP))
 		*mark = sv_mortalcopy(*mark);
 		/* in case LEAVE wipes old return values */
     }
     curpm = newpm;	/* Don't pop $1 et al till now */
 
-    if (optype != OP_ENTEREVAL) {
+    if (optype == OP_REQUIRE &&
+	!(gimme == G_SCALAR ? SvTRUE(*sp) : sp > newsp)) {
 	char *name = cx->blk_eval.old_name;
 
-	if (!(gimme == G_SCALAR ? SvTRUE(*sp) : sp > newsp)) {
-	    /* Unassume the success we assumed earlier. */
-	    (void)hv_delete(GvHVn(incgv), name, strlen(name), G_DISCARD);
-
-	    if (optype == OP_REQUIRE)
-		retop = die("%s did not return a true value", name);
-	}
+	/* Unassume the success we assumed earlier. */
+	(void)hv_delete(GvHVn(incgv), name, strlen(name), G_DISCARD);
+	retop = die("%s did not return a true value", name);
     }
 
     lex_end();
     LEAVE;
-    sv_setpv(GvSV(errgv),"");
+    if (!(save_flags & OPf_SPECIAL))
+	sv_setpv(GvSV(errgv),"");
 
     RETURNOP(retop);
 }
@@ -2295,7 +2328,7 @@ PP(pp_leavetry)
     }
     else {
 	for (mark = newsp + 1; mark <= SP; mark++)
-	    if (!(SvFLAGS(TOPs) & (SVs_PADTMP|SVs_TEMP)))
+	    if (!(SvFLAGS(*mark) & (SVs_PADTMP|SVs_TEMP)))
 		*mark = sv_mortalcopy(*mark);
 		/* in case LEAVE wipes old return values */
     }

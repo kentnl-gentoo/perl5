@@ -4,22 +4,23 @@ perl - Practical Extraction and Report Language
 
 =head1 SYNOPSIS
 
-B<perl>	[ B<-acdhnpPsSTuUvw> ] 
-[ S<B<-0>[I<octal>]> ] 
-[ S<B<-D>I<number/list>]> ]
-[ S<B<-F>I<string>> ] 
-[ S<B<-i>[I<extension>]> ] 
-[ S<B<-I>I<dir>> ]
-[ S<B<-l>I<octal>> ] 
-[ S<B<-x>I<dir>> ]
-[ I<programfile> | S<B<-e> I<command>> ] 
-[ I<argument> ... ]
+B<perl>	S<[ B<-sTuU> ]>
+	S<[ B<-hv> ] [ B<-V>[:I<configvar>] ]>
+	S<[ B<-cw> ] [ B<-d>[:I<debugger>] ] [ B<-D>[I<number/list>] ]>
+	S<[ B<-pna> ] [ B<-F>I<pattern> ] [ B<-l>[I<octal>] ] [ B<-0>[I<octal>] ]>
+	S<[ B<-I>I<dir> ] [ B<-m>[B<->]I<module> ] [ B<-M>[B<->]I<'module...'> ]>
+	S<[ B<-P> ]>
+	S<[ B<-S> ]>
+	S<[ B<-x>[I<dir>] ]>
+	S<[ B<-i>[I<extension>] ]>
+	S<[ B<-e> I<'command'> ] [ B<--> ] [ I<programfile> ] [ I<argument> ]...>
 
 For ease of access, the Perl manual has been split up into a number
 of sections:
 
     perl	Perl overview (this section)
     perltoc	Perl documentation table of contents
+
     perldata	Perl data structures
     perlsyn	Perl syntax
     perlop	Perl operators and precedence
@@ -29,26 +30,31 @@ of sections:
     perlvar	Perl predefined variables
     perlsub	Perl subroutines
     perlmod	Perl modules
+    perlform	Perl formats
+
     perlref	Perl references 
     perldsc	Perl data structures intro
     perllol	Perl data structures: lists of lists
     perlobj	Perl objects
     perltie	Perl objects hidden behind simple variables
     perlbot	Perl OO tricks and examples
+    perlipc	Perl interprocess communication
+
     perldebug	Perl debugging
     perldiag	Perl diagnostic messages
-    perlform	Perl formats
-    perlipc	Perl interprocess communication
     perlsec	Perl security
     perltrap	Perl traps for the unwary
     perlstyle	Perl style guide
+
+    perlpod	Perl plain old documentation
+    perlbook	Perl book information
+
+    perlembed	Perl how to embed perl in your C or C++ app
+    perlapio	Perl internal IO abstraction interface
     perlxs	Perl XS application programming interface
     perlxstut	Perl XS tutorial
     perlguts	Perl internal functions for those doing extensions 
     perlcall	Perl calling conventions from C
-    perlembed	Perl how to embed perl in your C or C++ app
-    perlpod	Perl plain old documentation
-    perlbook	Perl book information
 
 (If you're intending to read these straight through for the first time,
 the suggested order will tend to reduce the number of forward references.)
@@ -59,7 +65,7 @@ Perl, but you'll also find third-party modules there.  You should be able
 to view this with your man(1) program by including the proper directories
 in the appropriate start-up files.  To find out where these are, type:
 
-    perl -le 'use Config; print "@Config{man1dir,man3dir}"'
+    perl -V:man.dir
 
 If the directories were F</usr/local/man/man1> and F</usr/local/man/man3>,
 you would only need to add F</usr/local/man> to your MANPATH.  If 
@@ -80,7 +86,9 @@ text files, extracting information from those text files, and printing
 reports based on that information.  It's also a good language for many
 system management tasks.  The language is intended to be practical
 (easy to use, efficient, complete) rather than beautiful (tiny,
-elegant, minimal).  It combines (in the author's opinion, anyway) some
+elegant, minimal).
+
+Perl combines (in the author's opinion, anyway) some
 of the best features of C, B<sed>, B<awk>, and B<sh>, so people
 familiar with those languages should have little difficulty with it.
 (Language historians will also note some vestiges of B<csh>, Pascal,
@@ -250,7 +258,7 @@ honest:
 
 =head1 AUTHOR
 
-Larry Wall E<lt><F<lwall@sems.com>E<gt>, with the help of oodles of other folks.
+Larry Wall E<lt>F<lwall@sems.com>E<gt>, with the help of oodles of other folks.
 
 =head1 FILES
 
@@ -294,11 +302,11 @@ and syswrite().)
 
 While none of the built-in data types have any arbitrary size limits
 (apart from memory size), there are still a few arbitrary limits:  a
-given identifier may not be longer than 255 characters, and no
+given variable name may not be longer than 255 characters, and no
 component of your PATH may be longer than 255 if you use B<-S>.  A regular
 expression may not compile to more than 32767 bytes internally.
 
-See the perl bugs database at F<http://perl.com/perl/bugs/>.  You may
+See the perl bugs database at F< http://perl.com/perl/bugs/ >.  You may
 mail your bug reports (be sure to include full configuration information
 as output by the myconfig program in the perl source tree) to
 F<perlbug@perl.com>.

@@ -2325,7 +2325,7 @@ EXT U32 opargs[] = {
 	0x00000604,	/* binmode */
 	0x00021755,	/* tie */
 	0x00000714,	/* untie */
-	0x0000070c,	/* tied */
+	0x00000704,	/* tied */
 	0x00011414,	/* dbmopen */
 	0x00000414,	/* dbmclose */
 	0x00111108,	/* sselect */
@@ -2336,7 +2336,7 @@ EXT U32 opargs[] = {
 	0x00000000,	/* leavewrite */
 	0x00002e15,	/* prtf */
 	0x00002e15,	/* print */
-	0x0091160c,	/* sysopen */
+	0x00911604,	/* sysopen */
 	0x0091761d,	/* sysread */
 	0x0091161d,	/* syswrite */
 	0x0091161d,	/* send */
@@ -2344,7 +2344,7 @@ EXT U32 opargs[] = {
 	0x00000e14,	/* eof */
 	0x00000e0c,	/* tell */
 	0x00011604,	/* seek */
-	0x00001114,	/* truncate */
+	0x00001614,	/* truncate */
 	0x0001160c,	/* fcntl */
 	0x0001160c,	/* ioctl */
 	0x0000161c,	/* flock */

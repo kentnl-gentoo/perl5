@@ -24,7 +24,7 @@ ldflags="$ldflags"
 # ANSI C (the -Aa flag) nor can it produce shared libraries.  Thus we have
 # to turn off dynamic loading.
 case "$cc" in
-'') if cc $ccflags -Aa 2>&1 | $contains 'Unknown option "A"' >/dev/null
+'') if cc $ccflags -Aa 2>&1 | $contains 'option' >/dev/null
     then
 	case "$usedl" in
 	 '') usedl="$undef"
@@ -88,17 +88,20 @@ fi
 # -ldbm is obsolete and should not be used
 # -lBSD contains BSD-style duplicates of SVR4 routines that cause confusion
 # -lPW is obsolete and should not be used
-# Although -lndbm should be included, it will make perl blow up if you should
-# copy the binary to a system without libndbm.sl.
 # The libraries crypt, malloc, ndir, and net are empty.
-set `echo " $libswanted " | sed -e 's@ ndbm @ @' -e 's@ ld @ @' -e 's@ dbm @ @' -e 's@ BSD @ @' -e 's@ PW @ @'`
+# Although -lndbm should be included, it will make perl blow up if you should
+# copy the binary to a system without libndbm.sl.  See ccdlflags below.
+set `echo " $libswanted " | sed  -e 's@ ld @ @' -e 's@ dbm @ @' -e 's@ BSD @ @' -e 's@ PW @ @'`
 libswanted="$*"
 
-# If you copy the perl binaries to other systems and the dynamic loader
-# complains about missing libraries, you can either copy the shared libraries
-# or switch the comments to recompile perl to use archive libraries
-# ccdlflags="-Wl,-E -Wl,-a,archive $ccdlflags"
-ccdlflags="-Wl,-E $ccdlflags"
+# By setting the deferred flag below, this means that if you run perl on a
+# system that does not have the required shared library that you linked it
+# with, it will die when you try to access a symbol in the (missing) shared
+# library.  If you would rather know at perl startup time that you are
+# missing an important shared library, switch the comments so that immediate,
+# rather than deferred loading is performed.
+# ccdlflags="-Wl,-E $ccdlflags"
+ccdlflags="-Wl,-E -Wl,-B,deferred $ccdlflags"
 
 usemymalloc='y'
 alignbytes=8

@@ -34,11 +34,24 @@
 #     (i.e. /Define=DEBUGGING,EMBED,MULTIPLICITY)?
 #
 # Author: Charles Bailey  bailey@genetics.upenn.edu
-# Revised:  4-Dec-1995
+# Revised: 20-Feb-1996
 
 require 5.000;
 
 $debug = $ENV{'GEN_SHRFLS_DEBUG'};
+
+if ($ARGV[0] eq '-f') {
+  open(INP,$ARGV[1]) or die "Can't read input file $ARGV[1]: $!\n";
+  print "Input taken from file $ARGV[1]\n" if $debug;
+  @ARGV = ();
+  while (<INP>) {
+    chomp;
+    push(@ARGV,split(/\|/,$_));
+  }
+  close INP;
+  print "Read input data | ",join(' | ',@ARGV)," |\n" if $debug > 1;
+}
+
 $cc_cmd = shift @ARGV;
 
 # Someday, we'll have $GetSyI built into perl . . .
@@ -75,10 +88,10 @@ if ($docc) {
   else { die "$0: Can't find perl.h\n"; }
 }
 else { 
-  ($ccvers,$cpp_file) = ($cc_cmd =~ /^~~(\w+)~~(.*)/);
-  $isgcc = $ccvers =~ /GCC/
+  ($junk,$junk,$cpp_file,$cc_cmd) = split(/~~/,$cc_cmd,4);
+  $isgcc = $cc_cmd =~ /case_hack/i
            or 0;  # for nice debug output
-  $isvaxc = (!$isgcc && $ccvers =~ /VAXC/)
+  $isvaxc = (!$isgcc && $cc_cmd !~ /standard=/i)
             or 0;  # again, for nice debug output
   print "\$isgcc: \\$isgcc\\\n" if $debug;
   print "\$isvaxc: \\$isvaxc\\\n" if $debug;
@@ -143,7 +156,7 @@ sub scan_func {
   my($line) = @_;
 
   print "\tchecking for global routine\n" if $debug > 1;
-  if ( /(\w+)\s+\(/ ) {
+  if ( $line =~ /(\w+)\s+\(/ ) {
     print "\troutine name is \\$1\\\n" if $debug > 1;
     if ($1 eq 'main' || $1 eq 'perl_init_ext') {
       print "\tskipped\n" if $debug > 1;
@@ -158,14 +171,14 @@ if ($docc) {
     or die "$0: Can't preprocess ${dir}perl.h: $!\n";
 }
 else {
-  open(CPP,"$cpp_file") or die "$0: Can't read $cpp_file: $!\n";
+  open(CPP,"$cpp_file") or die "$0: Can't read preprocessed file $cpp_file: $!\n";
 }
 LINE: while (<CPP>) {
   while (/^#.*vmsish\.h/i .. /^#.*perl\.h/i) {
     while (/__VMS_PROTOTYPES__/i .. /__VMS_SEPYTOTORP__/i) {
       print "vms_proto>> $_" if $debug > 2;
-      &scan_func($_);
-      if (/^EXT/) { &scan_var($_); }
+      if (/^EXT/) { &scan_var($_);  }
+      else        { &scan_func($_); }
       last LINE unless $_ = <CPP>;
     }
     print "vmsish.h>> $_" if $debug > 2;
@@ -186,8 +199,8 @@ LINE: while (<CPP>) {
   }
   while (/^#.*proto\.h/i .. /^#.*perl\.h/i) {
     print "proto.h>> $_" if $debug > 2;
-    &scan_func($_);
-    if (/^EXT/) { &scan_var($_); }
+    if (/^EXT/) { &scan_var($_);  }
+    else        { &scan_func($_); }
     last LINE unless $_ = <CPP>;
   }
   print $_ if $debug > 3;
@@ -206,11 +219,19 @@ LINE: while (<CPP>) {
   }
 }
 close CPP;
+
+
+# Kluge to determine whether we need to add EMBED prefix to
+# symbols read from local list.  init_os_extras() is a VMS-
+# specific function whose Perl_ prefix is added in vmsish.h
+# if EMBED is #defined.
+$embed = exists($fcns{'Perl_init_os_extras'}) ? 'Perl_' : '';
 while (<DATA>) {
   next if /^#/;
   s/\s+#.*\n//;
   next if /^\s*$/;
   ($key,$array) = split('=',$_);
+  $key = "$embed$key";
   print "Adding $key to \%$array list\n" if $debug > 1;
   ${$array}{$key}++;
 }
@@ -235,6 +256,14 @@ if ($isvaxc) {
     }
     print STDERR "Unrecognized enum constant \"$_\" ignored\n";
   }
+}
+elsif ($isgcc) {
+  # gcc creates this as a SHR,WRT psect in globals.c, but we
+  # don't see it in the perl.h scan, since it's only declared
+  # if DOINIT is #defined.  Bleah.  It's cheaper to just add
+  # it by hand than to add /Define=DOINIT to the preprocessing
+  # run and wade through all the extra junk.
+  $vars{'Error'}++;
 }
 
 # Eventually, we'll check against existing copies here, so we can add new
@@ -320,7 +349,7 @@ if ($isvax) {
 # Linker wants /Include and /Library on different lines
 print OPTBLD "$libperl/Include=($incstr)\n";
 print OPTBLD "$libperl/Library\n";
-open(RTLOPT,$rtlopt) or die "$0: Can't read $rtlopt: $!\n";
+open(RTLOPT,$rtlopt) or die "$0: Can't read options file $rtlopt: $!\n";
 while (<RTLOPT>) { print OPTBLD; }
 close RTLOPT;
 close OPTBLD;
@@ -331,7 +360,6 @@ exec "\$ \@$drvrname" if $isvax;
 __END__
 
 # Oddball cases, so we can keep the perl.h scan above simple
-error=vars      # declared in perl.h only when DOINIT defined by INTERN.h
 rcsid=vars      # declared in perl.c
 regarglen=vars  # declared in regcomp.h
 regdummy=vars   # declared in regcomp.h

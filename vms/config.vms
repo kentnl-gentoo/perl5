@@ -8,10 +8,10 @@
  * GenConfig.pl when producing Config.pm.
  *
  * config.h for VMS
- * Version: 5.2.b1
+ * Version: 5.002_01
  */                 
 
-/* Configuration time:  4-Dec-1995 17:00
+/* Configuration time: 22-Mar-1996 14:45
  * Configured by: Charles Bailey  bailey@genetics.upenn.edu
  * Target system: VMS
  */
@@ -52,6 +52,12 @@
  */
 #define MEM_ALIGNBYTES 8	/**/
 
+/* OSNAME:
+ *	This symbol contains the name of the operating system, as determined
+ *	by Configure.
+ */
+#define OSNAME "VMS"		/**/
+
 /* ARCHLIB_EXP:
  *	This variable, if defined, holds the name of the directory in
  *	which the user wants to put architecture-dependent public
@@ -61,11 +67,12 @@
  *	same as PRIVLIB_EXP, it is not defined, since presumably the
  *	program already searches PRIVLIB_EXP.
  */
-#ifdef __ALPHA
-#define ARCHLIB_EXP "/perl_root/lib/VMS_AXP"  /* config-skip */
-#else
-#define ARCHLIB_EXP "/perl_root/lib/VMS_VAX" /* config-skip */
-#endif
+/*     ==> NOTE <==
+ * This value is automatically updated by FndVers.Com
+ * when Perl is built.  Please do not change it by hand; make
+ * any changes to FndVers.Com instead.
+ */
+#define ARCHLIB_EXP "/perl_root/lib/VMS_VAX/5_00301"  /**/
 
 /* CPPSTDIN:
  *	This symbol contains the first part of the string which will invoke
@@ -127,9 +134,6 @@
  *	trigger the necessary tests.
  */
 #define HASCONST	/**/
-#ifndef HASCONST
-#define const
-#endif
 
 /* HAS_CRYPT:
  *	This symbol, if defined, indicates that the crypt routine is available
@@ -559,11 +563,7 @@
  */
 #define HAS_STRERROR		/**/
 #undef HAS_SYS_ERRLIST	/**/
-#ifdef HAS_STRERROR
-#  define Strerror(e) strerror((e),vaxc$errno)
-#else
-#define Strerror(e) ((e)<0||(e)>=sys_nerr?"unknown":sys_errlist[e]) /**/ /* config-skip */
-#endif
+#define Strerror(e) strerror((e),vaxc$errno)
 
 /* HAS_SYMLINK:
  *	This symbol, if defined, indicates that the symlink routine is available
@@ -1190,12 +1190,6 @@
  */
 #undef	I_LOCALE		/**/
 
-/* I_SYS_STAT:
- *	This symbol, if defined, indicates to the C program that it should
- *	include <sys/stat.h>.
- */
-#define I_SYS_STAT		/**/
-
 /* INTSIZE:
  *	This symbol contains the size of an int, so that the C preprocessor
  *	can make decisions based on it.
@@ -1295,9 +1289,9 @@
  *	a non-blocking file descriptor will return 0 on EOF, and not the value
  *	held in RD_NODATA (-1 usually, in that case!).
  */
-#define VAL_O_NONBLOCK
-#define VAL_EAGAIN
-#define RD_NODATA
+#undef VAL_O_NONBLOCK
+#undef VAL_EAGAIN
+#undef RD_NODATA
 #undef EOF_NONBLOCK
 
 /* OLDARCHLIB_EXP:
@@ -1305,7 +1299,12 @@
  *	used in programs that are not prepared to deal with ~ expansion at 
  *	run-time.
  */
-#define OLDARCHLIB_EXP "/perl_root/lib"		/**/
+/*     ==> NOTE <==
+ * This value is automatically updated by FndVers.Com
+ * when Perl is built.  Please do not change it by hand; make
+ * any changes to FndVers.Com instead.
+ */
+#define OLDARCHLIB_EXP "/perl_root/lib/VMS_VAX"  /**/
 
 /* PRIVLIB_EXP:
  *	This symbol contains the name of the private library for this package.
@@ -1319,13 +1318,18 @@
  *	This symbol contains the ~name expanded version of SITELIB, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-#undef SITELIB_EXP		/**/
+#define SITELIB_EXP	"/perl_root/lib/site_perl"	/**/
 
 /* SITEARCH_EXP:
  *	This symbol contains the ~name expanded version of SITEARCH, to be used
  *	in programs that are not prepared to deal with ~ expansion at run-time.
  */
-#undef SITEARCH_EXP		/**/
+/*     ==> NOTE <==
+ * This value is automatically updated by FndVers.Com
+ * when Perl is built.  Please do not change it by hand; make
+ * any changes to FndVers.Com instead.
+ */
+#define SITEARCH_EXP "/perl_root/lib/site_perl/VMS_VAX"  /**/
 
 /* SCRIPTDIR:
  *	This symbol holds the name of the directory in which the user wants
@@ -1348,22 +1352,17 @@
  *	It can be int, ushort, uid_t, etc... It may be necessary to include
  *	<sys/types.h> to get any typedef'ed information.
  */
-#define Uid_t unsigned int		/* UID type */
+#if defined(__DECC) && defined(__DECC_VER) && (__DECC_VER >= 500000)
+#  define Uid_t uid_t		/* config-skip */
+#else
+#  define Uid_t unsigned int	/* config-skip */
+#endif
 
 /* I_SYS_PARAM:
  *	This symbol, if defined, indicates to the C program that it should
  *	include <sys/param.h>.
  */
 #undef I_SYS_PARAM
-
-/* GNUC_ATTRIBUTE_CHECK:
- *	This symbol indicates the C compiler can check for function attributes,
- *	such as printf formats.
- */
-/* VMS: true for gcc, undef for VAXC/DECC.  This is handled in Descrip.MMS
- * C. Bailey  26-Aug-1994
- */
-/*#define 	GNUC_ATTRIBUTE_CHECK 	/**/
 
 /* VOID_CLOSEDIR:
  *	This symbol, if defined, indicates that the closedir() routine
@@ -1486,6 +1485,28 @@
  */
 #define Gconvert(x,n,t,b) my_gconvert(x,n,t,b)
 
+/* Sigjmp_buf:
+ * This is the buffer type to be used with Sigsetjmp and Siglongjmp.
+ */
+/* Sigsetjmp:
+ * This macro is used in the same way as sigsetjmp(), but will invoke
+ * traditional setjmp() if sigsetjmp isn't available.
+ */
+/* Siglongjmp:
+ * This macro is used in the same way as siglongjmp(), but will invoke
+ * traditional longjmp() if siglongjmp isn't available.
+ */
+#undef HAS_SIGSETJMP	/**/
+#ifdef HAS_SIGSETJMP
+#define Sigjmp_buf sigjmp_buf	/* config-skip */
+#define Sigsetjmp(buf,save_mask) sigsetjmp(buf,save_mask)	/* config-skip */
+#define Siglongjmp(buf,retval) siglongjmp(buf,retval)	/* config-skip */
+#else
+#define Sigjmp_buf jmp_buf	/* config-skip */
+#define Sigsetjmp(buf,save_mask) setjmp(buf)	/* config-skip */
+#define Siglongjmp(buf,retval) longjmp(buf,retval)	/* config-skip */
+#endif
+
 /* USE_DYNAMIC_LOADING:
  *	This symbol, if defined, indicates that dynamic loading of
  *	some sort is available.
@@ -1498,6 +1519,36 @@
  *	some shell.
  */
 #define STARTPERL ""		/**/
+
+/* Groups_t:
+ *	This symbol holds the type used for the second argument to
+ *	getgroups().  Usually, this is the same of gidtype, but
+ *	sometimes it isn't.  It can be int, ushort, uid_t, etc... 
+ *	It may be necessary to include <sys/types.h> to get any 
+ *	typedef'ed information.  This is only required if you have
+ *	getgroups().
+ */
+#ifdef HAS_GETGROUPS
+#define Groups_t unsigned int	/* Type for 2nd arg to getgroups() */  /* config-skip */
+#endif
+
+/* DB_Prefix_t:
+ *	This symbol contains the type of the prefix structure element
+ *	in the <db.h> header file.  In older versions of DB, it was
+ *	int, while in newer ones it is u_int32_t.
+ */
+/* DB_Hash_t:
+ *	This symbol contains the type of the prefix structure element
+ *	in the <db.h> header file.  In older versions of DB, it was
+ *	int, while in newer ones it is size_t.
+ */
+#undef DB_Hash_t	/**/
+#undef DB_Prefix_t	/**/
+
+/* BIN_SH:
+ *	This variable contains the path to the shell.
+ */
+#define BIN_SH "MCR"		/**/
 
 /* VOIDFLAGS:
  *	This symbol indicates how much support of the void type is given by this
@@ -1551,31 +1602,6 @@
  *	include <netinet/in.h>. Otherwise, you may try <sys/in.h>.
  */
 #undef I_NETINET_IN	/**/              /* config-skip */
-
-/* Groups_t:
- *	This symbol holds the type used for the second argument to
- *	getgroups().  Usually, this is the same of gidtype, but
- *	sometimes it isn't.  It can be int, ushort, uid_t, etc... 
- *	It may be necessary to include <sys/types.h> to get any 
- *	typedef'ed information.  This is only required if you have
- *	getgroups().
- */
-#ifdef HAS_GETGROUPS
-#define Groups_t unsigned int	/* Type for 2nd arg to getgroups() */  /* config-skip */
-#endif
-
-/* DB_Prefix_t:
- *	This symbol contains the type of the prefix structure element
- *	in the <db.h> header file.  In older versions of DB, it was
- *	int, while in newer ones it is u_int32_t.
- */
-/* DB_Hash_t:
- *	This symbol contains the type of the prefix structure element
- *	in the <db.h> header file.  In older versions of DB, it was
- *	int, while in newer ones it is size_t.
- */
-#undef DB_Hash_t	/**/
-#undef DB_Prefix_t	/**/
 
 /* I_NET_ERRNO:
  *	This symbol, if defined, indicates that <net/errno.h> exists and 

@@ -1,0 +1,52 @@
+?RCS: $Id: d_perlstdio.U,v $
+?RCS:
+?RCS: $Log: d_perlstdio.U,v $
+?RCS:
+?MAKE:d_perlstdio: Myread Oldconfig Setvar
+?MAKE:	-pick add $@ %<
+?Y:TOP
+?S:d_perlstdio:
+?S:	This variable conditionally defines the PERLIO_IS_STDIO symbol,
+?S:	and indicates that stdio should be used throughout.
+?S:.
+?C:PERLIO_IS_STDIO:
+?C:	This symbol, if defined, indicates that stdio should
+?C:	be used in a fully backward compatible manner.
+?C:.
+?H:#$d_perlstdio	PERLIO_IS_STDIO		/**/
+?H:.
+?LINT:extern usestdio 
+?LINT:change usestdio 
+?LINT:set d_perlstdio
+
+case "$usestdio" in
+false) dflt='n';;
+*) dflt='y';;
+esac
+echo "$package can now use alternate file IO mechanisms to ANSI stdio."
+echo "However these are experimental and may cause problems with some"
+echo "extension modules"
+rp="Use stdio as with previous versions?"
+. ./myread
+case "$ans" in
+y|Y) 
+	echo "Ok, doing things the stdio way"
+	val="$define"
+	;;     
+*)      
+	val="$undef"
+	;;
+esac
+?X:
+?X: Only set d_perlstdio when final value is known to avoid spurious Whoas
+?X: Then set useperlio accordingly to the current value, for next run
+?X:
+set d_perlstdio 
+eval $setvar 
+case "$d_perlstdio" in
+$define) usestdio='true';;
+*) usestdio='false';;
+esac
+
+
+

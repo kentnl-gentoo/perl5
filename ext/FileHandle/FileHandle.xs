@@ -1,11 +1,23 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#include <stdio.h>
+
+/* This is to catch case with no stdio */
+#ifndef BUFSIZ
+#define BUFSIZ 1024
+#endif
 
 typedef int SysRet;
-typedef FILE * InputStream;
-typedef FILE * OutputStream;
+typedef PerlIO * InputStream;
+typedef PerlIO * OutputStream;
+
+static int
+not_here(s)
+char *s;
+{
+    croak("FileHandle::%s not implemented on this architecture", s);
+    return -1;
+}
 
 static bool
 constant(name, pval)
@@ -59,7 +71,7 @@ fgetpos(handle)
     CODE:
 	if (handle) {
 	    Fpos_t pos;
-	    fgetpos(handle, &pos);
+	    PerlIO_getpos(handle, &pos);
 	    ST(0) = sv_2mortal(newSVpv((char*)&pos, sizeof(Fpos_t)));
 	}
 	else {
@@ -73,7 +85,7 @@ fsetpos(handle, pos)
 	SV *		pos
     CODE:
 	if (handle)
-	    RETVAL = fsetpos(handle, (Fpos_t*)SvPVX(pos));
+	    RETVAL = PerlIO_setpos(handle, (Fpos_t*)SvPVX(pos));
 	else {
 	    RETVAL = -1;
 	    errno = EINVAL;
@@ -87,7 +99,7 @@ ungetc(handle, c)
 	int		c
     CODE:
 	if (handle)
-	    RETVAL = ungetc(c, handle);
+	    RETVAL = PerlIO_ungetc(handle, c);
 	else {
 	    RETVAL = -1;
 	    errno = EINVAL;
@@ -99,7 +111,7 @@ OutputStream
 new_tmpfile(packname = "FileHandle")
     char *		packname
     CODE:
-	RETVAL = tmpfile();
+	RETVAL = PerlIO_tmpfile();
     OUTPUT:
 	RETVAL
 
@@ -108,7 +120,7 @@ ferror(handle)
 	InputStream	handle
     CODE:
 	if (handle)
-	    RETVAL = ferror(handle);
+	    RETVAL = PerlIO_error(handle);
 	else {
 	    RETVAL = -1;
 	    errno = EINVAL;
@@ -121,7 +133,7 @@ fflush(handle)
 	OutputStream	handle
     CODE:
 	if (handle)
-	    RETVAL = fflush(handle);
+	    RETVAL = PerlIO_flush(handle);
 	else {
 	    RETVAL = -1;
 	    errno = EINVAL;
@@ -134,11 +146,13 @@ setbuf(handle, buf)
 	OutputStream	handle
 	char *		buf = SvPOK(ST(1)) ? sv_grow(ST(1), BUFSIZ) : 0;
     CODE:
+#ifdef PERLIO_IS_STDIO
 	if (handle)
 	    setbuf(handle, buf);
+#else
+	not_here("setbuf");
+#endif
 
-
-#ifdef _IOFBF
 
 SysRet
 setvbuf(handle, buf, type, size)
@@ -147,13 +161,20 @@ setvbuf(handle, buf, type, size)
 	int		type
 	int		size
     CODE:
+#ifdef PERLIO_IS_STDIO
+#ifdef _IOFBF   /* Should be HAS_SETVBUF once Configure tests for that */
 	if (handle)
 	    RETVAL = setvbuf(handle, buf, type, size);
 	else {
 	    RETVAL = -1;
 	    errno = EINVAL;
 	}
+#else
+	    RETVAL = (SysRet) not_here("setvbuf");
+#endif /* _IOFBF */
+#else
+	RETVAL = (SysRet) not_here("setvbuf");
+#endif
     OUTPUT:
 	RETVAL
 
-#endif /* _IOFBF */

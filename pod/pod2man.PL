@@ -15,8 +15,7 @@ use File::Basename qw(&basename &dirname);
 chdir(dirname($0));
 ($file = basename($0)) =~ s/\.PL$//;
 $file =~ s/\.pl$//
-	if ($Config{'osname'} eq 'VMS' or
-	    $Config{'osname'} eq 'OS2');  # "case-forgiving"
+	if ($^O eq 'VMS' or $^O eq 'os2');  # "case-forgiving"
 
 open OUT,">$file" or die "Can't create $file: $!";
 
@@ -226,12 +225,6 @@ as bold, italic, or code.
 
 (F) The input file wasn't available for the given reason.
 
-=item high bit char in input stream
-
-(W) You can't use high-bit characters in the input stream,
-because the translator uses them for its own nefarious purposes.
-Use an HTML entity in angle brackets instead.
-
 =item Improper man page - no dash in NAME header in paragraph %d of %s
 
 (W) The NAME header did not have an isolated dash in it.  This is
@@ -293,8 +286,7 @@ directives.
 
 =head1 RESTRICTIONS
 
-You shouldn't use 8-bit characters in the input stream, as these
-will be used by the translator.
+None at this time.
 
 =head1 BUGS
 
@@ -312,7 +304,15 @@ Tom Christiansen such that Larry probably doesn't recognize it anymore.
 $/ = "";
 $cutting = 1;
 
-($version,$patch) = `\PATH=.:..:\$PATH; perl -v` =~ /version (\d\.\d{3}(?: +)(?:\S+)?)(?:.*patchlevel (\d\S*))?/s;
+# We try first to get the version number from a local binary, in case we're
+# running an installed version of Perl to produce documentation from an
+# uninstalled newer version's pod files.
+if ($^O ne 'plan9') {
+  ($version,$patch) =
+    `\PATH=.:..:\$PATH; perl -v` =~ /version (\d\.\d{3})(?:_(\d{2}))?/;
+}
+# No luck; we'll just go with the running Perl's version
+($version,$patch) = $] =~ /^(.{5})(\d{2})?/ unless $version;
 $DEF_RELEASE  = "perl $version";
 $DEF_RELEASE .= ", patch $patch" if $patch;
 
@@ -389,23 +389,26 @@ $wanna_see{SYNOPSIS}++ if $section =~ /^3/;
 $name = @ARGV ? $ARGV[0] : "<STDIN>";
 $Filename = $name;
 $name = uc($name) if $section =~ /^1/;
-$name =~ s/\..*//;
+$name =~ s/\.[^.]*$//;
 
 if ($name ne 'something') {
     FCHECK: {
 	open(F, "< $ARGV[0]") || die "can't open $ARGV[0]: $!";
 	while (<F>) {
+	    next unless /^=\b/;
 	    if (/^=head1\s+NAME\s*$/) {  # an /m would forgive mistakes
 		$_ = <F>;
 		unless (/\s*-+\s+/) {
 		    $oops++;
-		    warn "$0: Improper man page - no dash in NAME header in paragraph $. of $ARGV[0]:\n"
+		    warn "$0: Improper man page - no dash in NAME header in paragraph $. of $ARGV[0]\n"
 		}
 		%namedesc = split /\s+-\s+/;
 		last FCHECK;
 	    }
+	    next if /^=cut\b/;	# DB_File and Net::Ping have =cut before NAME
+	    die "$0: Invalid man page - 1st pod line is not NAME in $ARGV[0]\n";
 	}
-	die "$0: Invalid man page - no NAME line in $ARGV[0]\n";
+	die "$0: Invalid man page - no documentation in $ARGV[0]\n";
     }
     close F;
 }
@@ -519,7 +522,7 @@ print <<'END';
 ..
 .\" @(#)ms.acc 1.5 88/02/08 SMI; from UCB 4.2
 .	\" AM - accent mark definitions
-.bd S B 3
+.bd B 3
 .	\" fudge factors for nroff and troff
 .if n \{\
 .	ds #H 0
@@ -793,7 +796,7 @@ while (<>) {
 	}
 	elsif ($Cmd eq 'back') {
 	    $indent = pop(@indent);
-	    warn "Unmatched =back\n" unless defined $indent;
+	    warn "$0: Unmatched =back in paragraph $. of $ARGV\n" unless defined $indent;
 	    $needspace = 1;
 	}
 	elsif ($Cmd eq 'item') {
@@ -805,7 +808,7 @@ while (<>) {
 	    # this is just a comment
 	} 
 	else {
-	    warn "Unrecognized pod directive: $Cmd\n";
+	    warn "$0: Unrecognized pod directive in paragraph $. of $ARGV: $Cmd\n";
 	}
     }
     else {
@@ -950,9 +953,8 @@ sub noremap {
 }
 
 sub init_noremap {
-    if ( /[\200-\377]/ ) {
-	warn "high bit char in input stream";
-    }
+	# escape high bit characters in input stream
+	s/([\200-\377])/"E<".ord($1).">"/ge;
 }
 
 sub clear_noremap {
@@ -967,15 +969,21 @@ sub clear_noremap {
     # otherwise the interative \w<> processing would have
     # been hosed by the E<gt>
     s {
-	    E<	
-	    ( [A-Za-z]+ )	
+	    E<
+	    (
+	        ( \d + ) 
+	        | ( [A-Za-z]+ )	
+	    )
 	    >	
     } {
-	 do {	
-	     exists $HTML_Escapes{$1}
-		? do { $HTML_Escapes{$1} }
+	 do {
+	     defined $2
+		? chr($2)
+		:	
+	     exists $HTML_Escapes{$3}
+		? do { $HTML_Escapes{$3} }
 		: do {
-		    warn "Unknown escape: $& in $_";
+		    warn "$0: Unknown escape in paragraph $. of $ARGV: ``$&''\n";
 		    "E<$1>";
 		}
 	 }
