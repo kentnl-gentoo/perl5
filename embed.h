@@ -788,10 +788,10 @@
 #define rxres_free		Perl_rxres_free
 #define rxres_restore		Perl_rxres_restore
 #define rxres_save		Perl_rxres_save
-#define safecalloc		Perl_safecalloc
-#define safefree		Perl_safefree
-#define safemalloc		Perl_safemalloc
-#define saferealloc		Perl_saferealloc
+#define safesyscalloc		Perl_safesyscalloc
+#define safesysfree		Perl_safesysfree
+#define safesysmalloc		Perl_safesysmalloc
+#define safesysrealloc		Perl_safesysrealloc
 #define safexcalloc		Perl_safexcalloc
 #define safexfree		Perl_safexfree
 #define safexmalloc		Perl_safexmalloc
@@ -836,6 +836,7 @@
 #define scalarkids		Perl_scalarkids
 #define scalarseq		Perl_scalarseq
 #define scalarvoid		Perl_scalarvoid
+#define scan_bin		Perl_scan_bin
 #define scan_const		Perl_scan_const
 #define scan_formline		Perl_scan_formline
 #define scan_heredoc		Perl_scan_heredoc
@@ -868,6 +869,7 @@
 #define sv_2mortal		Perl_sv_2mortal
 #define sv_2nv			Perl_sv_2nv
 #define sv_2pv			Perl_sv_2pv
+#define sv_2pv_nolen		Perl_sv_2pv_nolen
 #define sv_2uv			Perl_sv_2uv
 #define sv_add_arena		Perl_sv_add_arena
 #define sv_backoff		Perl_sv_backoff
@@ -911,6 +913,7 @@
 #define sv_peek			Perl_sv_peek
 #define sv_pos_b2u		Perl_sv_pos_b2u
 #define sv_pos_u2b		Perl_sv_pos_u2b
+#define sv_pv			Perl_sv_pv
 #define sv_pvn			Perl_sv_pvn
 #define sv_pvn_force		Perl_sv_pvn_force
 #define sv_ref			Perl_sv_ref
@@ -997,6 +1000,8 @@
 #define amagic_call		CPerlObj::Perl_amagic_call
 #define amagic_cmp		CPerlObj::Perl_amagic_cmp
 #define amagic_cmp_locale	CPerlObj::Perl_amagic_cmp_locale
+#define amagic_i_ncmp		CPerlObj::Perl_amagic_i_ncmp
+#define amagic_ncmp		CPerlObj::Perl_amagic_ncmp
 #define ao			CPerlObj::Perl_ao
 #define append_elem		CPerlObj::Perl_append_elem
 #define append_list		CPerlObj::Perl_append_list
@@ -1077,6 +1082,7 @@
 #define ck_subr			CPerlObj::Perl_ck_subr
 #define ck_svconst		CPerlObj::Perl_ck_svconst
 #define ck_trunc		CPerlObj::Perl_ck_trunc
+#define clear_re		CPerlObj::Perl_clear_re
 #define condpair_magic		CPerlObj::Perl_condpair_magic
 #define convert			CPerlObj::Perl_convert
 #define croak			CPerlObj::Perl_croak
@@ -1284,6 +1290,7 @@
 #define invert			CPerlObj::Perl_invert
 #define io_close		CPerlObj::Perl_io_close
 #define is_an_int		CPerlObj::Perl_is_an_int
+#define is_handle_constructor	CPerlObj::Perl_is_handle_constructor
 #define is_uni_alnum		CPerlObj::Perl_is_uni_alnum
 #define is_uni_alnum_lc		CPerlObj::Perl_is_uni_alnum_lc
 #define is_uni_alpha		CPerlObj::Perl_is_uni_alpha
@@ -1916,6 +1923,7 @@
 #define regnext			CPerlObj::Perl_regnext
 #define regoptail		CPerlObj::Perl_regoptail
 #define regpiece		CPerlObj::Perl_regpiece
+#define regpposixcc		CPerlObj::Perl_regpposixcc
 #define regprop			CPerlObj::Perl_regprop
 #define regrepeat		CPerlObj::Perl_regrepeat
 #define regrepeat_hard		CPerlObj::Perl_regrepeat_hard
@@ -1942,10 +1950,10 @@
 #define rxres_free		CPerlObj::Perl_rxres_free
 #define rxres_restore		CPerlObj::Perl_rxres_restore
 #define rxres_save		CPerlObj::Perl_rxres_save
-#define safecalloc		CPerlObj::Perl_safecalloc
-#define safefree		CPerlObj::Perl_safefree
-#define safemalloc		CPerlObj::Perl_safemalloc
-#define saferealloc		CPerlObj::Perl_saferealloc
+#define safesyscalloc		CPerlObj::Perl_safesyscalloc
+#define safesysfree		CPerlObj::Perl_safesysfree
+#define safesysmalloc		CPerlObj::Perl_safesysmalloc
+#define safesysrealloc		CPerlObj::Perl_safesysrealloc
 #define safexcalloc		CPerlObj::Perl_safexcalloc
 #define safexfree		CPerlObj::Perl_safexfree
 #define safexmalloc		CPerlObj::Perl_safexmalloc
@@ -1995,6 +2003,7 @@
 #define scalarkids		CPerlObj::Perl_scalarkids
 #define scalarseq		CPerlObj::Perl_scalarseq
 #define scalarvoid		CPerlObj::Perl_scalarvoid
+#define scan_bin		CPerlObj::Perl_scan_bin
 #define scan_commit		CPerlObj::Perl_scan_commit
 #define scan_const		CPerlObj::Perl_scan_const
 #define scan_const		CPerlObj::Perl_scan_const
@@ -2029,6 +2038,7 @@
 #define share_hek		CPerlObj::Perl_share_hek
 #define sharepvn		CPerlObj::Perl_sharepvn
 #define sighandler		CPerlObj::Perl_sighandler
+#define simplify_sort		CPerlObj::Perl_simplify_sort
 #define skipspace		CPerlObj::Perl_skipspace
 #define skipspace		CPerlObj::Perl_skipspace
 #define sortcv			CPerlObj::Perl_sortcv
@@ -2046,6 +2056,7 @@
 #define sv_2mortal		CPerlObj::Perl_sv_2mortal
 #define sv_2nv			CPerlObj::Perl_sv_2nv
 #define sv_2pv			CPerlObj::Perl_sv_2pv
+#define sv_2pv_nolen		CPerlObj::Perl_sv_2pv_nolen
 #define sv_2uv			CPerlObj::Perl_sv_2uv
 #define sv_add_arena		CPerlObj::Perl_sv_add_arena
 #define sv_backoff		CPerlObj::Perl_sv_backoff
@@ -2075,6 +2086,7 @@
 #define sv_free_arenas		CPerlObj::Perl_sv_free_arenas
 #define sv_gets			CPerlObj::Perl_sv_gets
 #define sv_grow			CPerlObj::Perl_sv_grow
+#define sv_i_ncmp		CPerlObj::Perl_sv_i_ncmp
 #define sv_inc			CPerlObj::Perl_sv_inc
 #define sv_insert		CPerlObj::Perl_sv_insert
 #define sv_isa			CPerlObj::Perl_sv_isa
@@ -2085,12 +2097,14 @@
 #define sv_magic		CPerlObj::Perl_sv_magic
 #define sv_mortalcopy		CPerlObj::Perl_sv_mortalcopy
 #define sv_mortalgrow		CPerlObj::Perl_sv_mortalgrow
+#define sv_ncmp			CPerlObj::Perl_sv_ncmp
 #define sv_newmortal		CPerlObj::Perl_sv_newmortal
 #define sv_newref		CPerlObj::Perl_sv_newref
 #define sv_nv			CPerlObj::Perl_sv_nv
 #define sv_peek			CPerlObj::Perl_sv_peek
 #define sv_pos_b2u		CPerlObj::Perl_sv_pos_b2u
 #define sv_pos_u2b		CPerlObj::Perl_sv_pos_u2b
+#define sv_pv			CPerlObj::Perl_sv_pv
 #define sv_pvn			CPerlObj::Perl_sv_pvn
 #define sv_pvn_force		CPerlObj::Perl_sv_pvn_force
 #define sv_ref			CPerlObj::Perl_sv_ref

@@ -173,14 +173,6 @@ static int dooneliner _((char *cmd, char *filename));
 
 #endif /* no flock() */
 
-#ifndef MAXPATHLEN
-#  ifdef PATH_MAX
-#    define MAXPATHLEN PATH_MAX
-#  else
-#    define MAXPATHLEN 1024
-#  endif
-#endif
-
 #define ZBTLEN 10
 static char zero_but_true[ZBTLEN + 1] = "0 but true";
 
@@ -195,24 +187,32 @@ static char zero_but_true[ZBTLEN + 1] = "0 but true";
 /* F_OK unused: if stat() cannot find it... */
 
 #if !defined(PERL_EFF_ACCESS_R_OK) && defined(HAS_ACCESS) && defined(EFF_ONLY_OK) && !defined(NO_EFF_ONLY_OK)
-/* Digital UNIX (when the EFF_ONLY_OK gets fixed), UnixWare */
+    /* Digital UNIX (when the EFF_ONLY_OK gets fixed), UnixWare */
 #   define PERL_EFF_ACCESS_R_OK(p) (access((p), R_OK | EFF_ONLY_OK))
 #   define PERL_EFF_ACCESS_W_OK(p) (access((p), W_OK | EFF_ONLY_OK))
 #   define PERL_EFF_ACCESS_X_OK(p) (access((p), X_OK | EFF_ONLY_OK))
 #endif
 
 #if !defined(PERL_EFF_ACCESS_R_OK) && defined(HAS_EACCESS)
-/* HP SecureWare */
 #   if defined(I_SYS_SECURITY)
 #       include <sys/security.h>
 #   endif
-#   define PERL_EFF_ACCESS_R_OK(p) (eaccess((p), R_OK, ACC_SELF))
-#   define PERL_EFF_ACCESS_W_OK(p) (eaccess((p), W_OK, ACC_SELF))
-#   define PERL_EFF_ACCESS_X_OK(p) (eaccess((p), X_OK, ACC_SELF))
+    /* XXX Configure test needed for eaccess */
+#   ifdef ACC_SELF
+        /* HP SecureWare */
+#       define PERL_EFF_ACCESS_R_OK(p) (eaccess((p), R_OK, ACC_SELF))
+#       define PERL_EFF_ACCESS_W_OK(p) (eaccess((p), W_OK, ACC_SELF))
+#       define PERL_EFF_ACCESS_X_OK(p) (eaccess((p), X_OK, ACC_SELF))
+#   else
+        /* SCO */
+#       define PERL_EFF_ACCESS_R_OK(p) (eaccess((p), R_OK))
+#       define PERL_EFF_ACCESS_W_OK(p) (eaccess((p), W_OK))
+#       define PERL_EFF_ACCESS_X_OK(p) (eaccess((p), X_OK))
+#   endif
 #endif
 
 #if !defined(PERL_EFF_ACCESS_R_OK) && defined(HAS_ACCESSX) && defined(ACC_SELF)
-/* AIX */
+    /* AIX */
 #   define PERL_EFF_ACCESS_R_OK(p) (accessx((p), R_OK, ACC_SELF))
 #   define PERL_EFF_ACCESS_W_OK(p) (accessx((p), W_OK, ACC_SELF))
 #   define PERL_EFF_ACCESS_X_OK(p) (accessx((p), X_OK, ACC_SELF))
@@ -3276,7 +3276,11 @@ PP(pp_telldir)
 {
     djSP; dTARGET;
 #if defined(HAS_TELLDIR) || defined(telldir)
-# ifdef NEED_TELLDIR_PROTO /* XXX does _anyone_ need this? --AD 2/20/1998 */
+ /* XXX does _anyone_ need this? --AD 2/20/1998 */
+ /* XXX netbsd still seemed to.
+    XXX HAS_TELLDIR_PROTO is new style, NEED_TELLDIR_PROTO is old style.
+    --JHI 1999-Feb-02 */
+# if !defined(HAS_TELLDIR_PROTO) || defined(NEED_TELLDIR_PROTO)
     long telldir _((DIR *));
 # endif
     GV *gv = (GV*)POPs;

@@ -4,11 +4,11 @@
 # the format supported by op/regexp.t.  If you want to add a test
 # that does fit that format, add it to op/re_tests, not here.
 
-print "1..177\n";
+print "1..185\n";
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = "../lib" if -d "../lib";
+    unshift @INC, "../lib" if -d "../lib";
 }
 eval 'use Config';          #  Defaults assumed if this fails
 
@@ -697,6 +697,13 @@ print "#$#-..$#+\nnot " if $#+ != 2 or $#- != 1;
 print "ok $test\n";
 $test++;
 
+$_ = 'aaa';
+pos = 1;
+@a = /\Ga/g;
+print "not " unless "@a" eq "a a";
+print "ok $test\n";
+$test++;
+
 $str = 'abcde';
 pos $str = 2;
 
@@ -793,6 +800,52 @@ print "#'@res' '$_'\nnot "
   "'abcd' 'e|' 'abcde' " .
   "'abcde|' 'ab' 'cde' " .
   "'abcde|' 'abc' 'de'" ;
+print "ok $test\n";
+$test++;
+
+#Some more \G anchor checks
+$foo='aabbccddeeffgg';
+
+pos($foo)=1;
+
+$foo=~/.\G(..)/g;
+print "not " unless($1 eq 'ab');
+print "ok $test\n";
+$test++;
+
+pos($foo) += 1;
+$foo=~/.\G(..)/g;
+print "not " unless($1 eq 'cc');
+print "ok $test\n";
+$test++;
+
+pos($foo) += 1;
+$foo=~/.\G(..)/g;
+print "not " unless($1 eq 'de');
+print "ok $test\n";
+$test++;
+
+undef pos $foo;
+
+$foo=~/\G(..)/g;
+print "not " unless($1  eq 'aa');
+print "ok $test\n";
+$test++;
+
+$foo=~/\G(..)/g;
+print "not " unless($1  eq 'bb');
+print "ok $test\n";
+$test++;
+
+pos($foo)=5;
+$foo=~/\G(..)/g;
+print "not " unless($1  eq 'cd');
+print "ok $test\n";
+$test++;
+
+$_='123x123'; 
+@res = /(\d*|x)/g;
+print "not " unless('123||x|123|' eq join '|', @res);
 print "ok $test\n";
 $test++;
 

@@ -51,11 +51,22 @@ no useful value.  See L<perlmod>.
 (F) The "use" keyword is recognized and executed at compile time, and returns
 no useful value.  See L<perlmod>.
 
+=item '_' allowed only after types %s
+
+(F) The '_' is allowed in pack() and unpack() only after certain types.
+See L<perlfunc>.
+
 =item % may only be used in unpack
 
 (F) You can't pack a string by supplying a checksum, because the
 checksumming process loses information, and you can't go the other
 way.  See L<perlfunc/unpack>.
+
+=item /%s/: Unrecognized escape \\%c passed through
+
+(W) You used a backslash-character combination which is not recognized
+by Perl.  This combination appears in an interpolated variable or a 
+C<'>-delimited regular expression.
 
 =item %s (...) interpreted as function
 
@@ -511,6 +522,10 @@ Something like this will reproduce the error:
 (F) You called C<perl -x/foo/bar>, but C</foo/bar> is not a directory
 that you can chdir to, possibly because it doesn't exist.
 
+=item Can't check filesystem of script "%s"
+
+(P) For some reason you can't check the filesystem of the script for nosuid.
+
 =item Can't coerce %s to integer in %s
 
 (F) Certain types of SVs, in particular real symbol table entries
@@ -889,6 +904,12 @@ You mentioned $a or $b in the same line as the E<lt>=E<gt> or cmp operator,
 and the variable had earlier been declared as a lexical variable.
 Either qualify the sort variable with the package name, or rename the
 lexical variable.
+
+=item Bad evalled substitution pattern
+
+(F) You've used the /e switch to evaluate the replacement for a
+substitution, but perl found a syntax error in the code to evaluate,
+most likely an unexpected right brace '}'.
 
 =item Can't use %s for loop variable
 
@@ -1428,7 +1449,7 @@ architecture. On a 32-bit architecture the largest octal literal is
 (S) A warning peculiar to VMS.  Perl keeps track of the number
 of times you've called C<fork> and C<exec>, to determine
 whether the current call to C<exec> should affect the current
-script or a subprocess (see L<perlvms/exec>).  Somehow, this count
+script or a subprocess (see L<perlvms/"exec LIST">).  Somehow, this count
 has become scrambled, so Perl is making a guess and treating
 this C<exec> as a request to terminate the Perl script
 and execute the specified command.
@@ -1539,6 +1560,11 @@ one line to the next.
 
 (F) While certain functions allow you to specify a filehandle or an
 "indirect object" before the argument list, this ain't one of them.
+
+=item Missing command in piped open
+
+(W) You used the C<open(FH, "| command")> or C<open(FH, "command |")>
+construction, but the command was missing or blank.
 
 =item Missing operator before %s?
 
@@ -2241,14 +2267,6 @@ expression compiler gave it.
 
 (P) A "can't happen" error, because safemalloc() should have caught it earlier.
 
-=item regexp too big
-
-(F) The current implementation of regular expressions uses shorts as
-address offsets within a string.  Unfortunately this means that if
-the regular expression compiles to longer than 32767, it'll blow up.
-Usually when you want a regular expression this big, there is a better
-way to do it with multiple statements.  See L<perlre>.
-
 =item Reversed %s= operator
 
 (W) You wrote your assignment operator backwards.  The = must always
@@ -2362,11 +2380,13 @@ from the user it isn't running under, and isn't in a location where the CGI
 server can't find it, basically, more or less.  Please see the following
 for more information:
 
-	http://www.perl.com/perl/faq/idiots-guide.html
-	http://www.perl.com/perl/faq/perl-cgi-faq.html
+	http://www.perl.com/CPAN/doc/FAQs/cgi/idiots-guide.html
+	http://www.perl.com/CPAN/doc/FAQs/cgi/perl-cgi-faq.html
 	ftp://rtfm.mit.edu/pub/usenet/news.answers/www/cgi-faq
 	http://hoohoo.ncsa.uiuc.edu/cgi/interface.html
 	http://www-genome.wi.mit.edu/WWW/faqs/www-security-faq.html
+
+You should also look at L<perlfaq9>.
 
 =item setegid() not implemented
 
@@ -2777,6 +2797,11 @@ an underbar into it.  You might also declare it as a subroutine.
 (F) The Perl parser has no idea what to do with the specified character
 in your Perl script (or eval).  Perhaps you tried to run a compressed
 script, a binary program, or a directory as a Perl program.
+
+=item Unrecognized escape \\%c passed through
+
+(W) You used a backslash-character combination which is not recognized
+by Perl.
 
 =item Unrecognized signal name "%s"
 

@@ -15,8 +15,7 @@
 #include "EXTERN.h"
 #include "perl.h"
 
-/* XXX Configure test needed */
-#if !defined(NSIG) || defined(M_UNIX) || defined(M_XENIX) || defined(__NetBSD__)
+#if !defined(NSIG) || defined(M_UNIX) || defined(M_XENIX)
 #include <signal.h>
 #endif
 
@@ -63,9 +62,7 @@ long lastxycount[MAXXCOUNT][MAXYCOUNT];
 
 #endif
 
-#ifndef MYMALLOC
-
-/* paranoid version of malloc */
+/* paranoid version of system's malloc() */
 
 /* NOTE:  Do not call the next three routines directly.  Use the macros
  * in handy.h, so that we can easily redefine everything to do tracking of
@@ -74,7 +71,7 @@ long lastxycount[MAXXCOUNT][MAXYCOUNT];
  */
 
 Malloc_t
-safemalloc(MEM_SIZE size)
+safesysmalloc(MEM_SIZE size)
 {
     Malloc_t ptr;
 #ifdef HAS_64K_LIMIT
@@ -105,10 +102,10 @@ safemalloc(MEM_SIZE size)
     /*NOTREACHED*/
 }
 
-/* paranoid version of realloc */
+/* paranoid version of system's realloc() */
 
 Malloc_t
-saferealloc(Malloc_t where,MEM_SIZE size)
+safesysrealloc(Malloc_t where,MEM_SIZE size)
 {
     Malloc_t ptr;
 #if !defined(STANDARD_C) && !defined(HAS_REALLOC_PROTOTYPE)
@@ -123,12 +120,12 @@ saferealloc(Malloc_t where,MEM_SIZE size)
     }
 #endif /* HAS_64K_LIMIT */
     if (!size) {
-	safefree(where);
+	safesysfree(where);
 	return NULL;
     }
 
     if (!where)
-	return safemalloc(size);
+	return safesysmalloc(size);
 #ifdef DEBUGGING
     if ((long)size < 0)
 	croak("panic: realloc");
@@ -159,10 +156,10 @@ saferealloc(Malloc_t where,MEM_SIZE size)
     /*NOTREACHED*/
 }
 
-/* safe version of free */
+/* safe version of system's free() */
 
 Free_t
-safefree(Malloc_t where)
+safesysfree(Malloc_t where)
 {
 #if !(defined(I286) || defined(atarist))
     DEBUG_m( PerlIO_printf(Perl_debug_log, "0x%x: (%05d) free\n",(char *) where,PL_an++));
@@ -175,10 +172,10 @@ safefree(Malloc_t where)
     }
 }
 
-/* safe version of calloc */
+/* safe version of system's calloc() */
 
 Malloc_t
-safecalloc(MEM_SIZE count, MEM_SIZE size)
+safesyscalloc(MEM_SIZE count, MEM_SIZE size)
 {
     Malloc_t ptr;
 
@@ -213,8 +210,6 @@ safecalloc(MEM_SIZE count, MEM_SIZE size)
     }
     /*NOTREACHED*/
 }
-
-#endif /* !MYMALLOC */
 
 #ifdef LEAKTEST
 
@@ -390,16 +385,16 @@ delimcpy(register char *to, register char *toend, register char *from, register 
 /* This routine was donated by Corey Satten. */
 
 char *
-instr(register char *big, register char *little)
+instr(register const char *big, register const char *little)
 {
-    register char *s, *x;
+    register const char *s, *x;
     register I32 first;
 
     if (!little)
-	return big;
+	return (char*)big;
     first = *little++;
     if (!first)
-	return big;
+	return (char*)big;
     while (*big) {
 	if (*big++ != first)
 	    continue;
@@ -412,7 +407,7 @@ instr(register char *big, register char *little)
 	    }
 	}
 	if (!*s)
-	    return big-1;
+	    return (char*)(big-1);
     }
     return Nullch;
 }
@@ -420,14 +415,14 @@ instr(register char *big, register char *little)
 /* same as instr but allow embedded nulls */
 
 char *
-ninstr(register char *big, register char *bigend, char *little, char *lend)
+ninstr(register const char *big, register const char *bigend, const char *little, const char *lend)
 {
-    register char *s, *x;
+    register const char *s, *x;
     register I32 first = *little;
-    register char *littleend = lend;
+    register const char *littleend = lend;
 
     if (!first && little >= littleend)
-	return big;
+	return (char*)big;
     if (bigend - big < littleend - little)
 	return Nullch;
     bigend -= littleend - little++;
@@ -441,7 +436,7 @@ ninstr(register char *big, register char *bigend, char *little, char *lend)
 	    }
 	}
 	if (s >= littleend)
-	    return big-1;
+	    return (char*)(big-1);
     }
     return Nullch;
 }
@@ -449,15 +444,15 @@ ninstr(register char *big, register char *bigend, char *little, char *lend)
 /* reverse of the above--find last substring */
 
 char *
-rninstr(register char *big, char *bigend, char *little, char *lend)
+rninstr(register const char *big, const char *bigend, const char *little, const char *lend)
 {
-    register char *bigbeg;
-    register char *s, *x;
+    register const char *bigbeg;
+    register const char *s, *x;
     register I32 first = *little;
-    register char *littleend = lend;
+    register const char *littleend = lend;
 
     if (!first && little >= littleend)
-	return bigend;
+	return (char*)bigend;
     bigbeg = big;
     big = bigend - (littleend - little++);
     while (big >= bigbeg) {
@@ -470,7 +465,7 @@ rninstr(register char *big, char *bigend, char *little, char *lend)
 	    }
 	}
 	if (s >= littleend)
-	    return big+1;
+	    return (char*)(big+1);
     }
     return Nullch;
 }
@@ -479,7 +474,7 @@ rninstr(register char *big, char *bigend, char *little, char *lend)
  * Set up for a new ctype locale.
  */
 void
-perl_new_ctype(char *newctype)
+perl_new_ctype(const char *newctype)
 {
 #ifdef USE_LOCALE_CTYPE
 
@@ -501,7 +496,7 @@ perl_new_ctype(char *newctype)
  * Set up for a new collation locale.
  */
 void
-perl_new_collate(char *newcoll)
+perl_new_collate(const char *newcoll)
 {
 #ifdef USE_LOCALE_COLLATE
 
@@ -545,7 +540,7 @@ perl_new_collate(char *newcoll)
  * Set up for a new numeric locale.
  */
 void
-perl_new_numeric(char *newnum)
+perl_new_numeric(const char *newnum)
 {
 #ifdef USE_LOCALE_NUMERIC
 
@@ -622,6 +617,9 @@ perl_init_i18nl10n(int printwarn)
 #ifdef USE_LOCALE_NUMERIC
     char *curnum     = NULL;
 #endif /* USE_LOCALE_NUMERIC */
+#ifdef __GLIBC__
+    char *language   = PerlEnv_getenv("LANGUAGE");
+#endif
     char *lc_all     = PerlEnv_getenv("LC_ALL");
     char *lang       = PerlEnv_getenv("LANG");
     bool setlocale_failure = FALSE;
@@ -724,6 +722,14 @@ perl_init_i18nl10n(int printwarn)
 
 	    PerlIO_printf(PerlIO_stderr(),
 		"perl: warning: Please check that your locale settings:\n");
+
+#ifdef __GLIBC__
+	    PerlIO_printf(PerlIO_stderr(),
+			  "\tLANGUAGE = %c%s%c,\n",
+			  language ? '"' : '(',
+			  language ? language : "unset",
+			  language ? '"' : ')');
+#endif
 
 	    PerlIO_printf(PerlIO_stderr(),
 			  "\tLC_ALL = %c%s%c,\n",
@@ -1121,7 +1127,7 @@ screaminstr(SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift, I32 *old_
 }
 
 I32
-ibcmp(char *s1, char *s2, register I32 len)
+ibcmp(const char *s1, const char *s2, register I32 len)
 {
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
@@ -1134,7 +1140,7 @@ ibcmp(char *s1, char *s2, register I32 len)
 }
 
 I32
-ibcmp_locale(char *s1, char *s2, register I32 len)
+ibcmp_locale(const char *s1, const char *s2, register I32 len)
 {
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
@@ -1149,7 +1155,7 @@ ibcmp_locale(char *s1, char *s2, register I32 len)
 /* copy a string to a safe spot */
 
 char *
-savepv(char *sv)
+savepv(const char *sv)
 {
     register char *newaddr;
 
@@ -1161,7 +1167,7 @@ savepv(char *sv)
 /* same thing but with a known length */
 
 char *
-savepvn(char *sv, register I32 len)
+savepvn(const char *sv, register I32 len)
 {
     register char *newaddr;
 
@@ -1494,6 +1500,8 @@ warner(U32  err, const char* pat,...)
 void
 my_setenv(char *nam, char *val)
 {
+#ifndef PERL_USE_SAFE_PUTENV
+    /* most putenv()s leak, so we manipulate environ directly */
     register I32 i=setenv_getix(nam);		/* where does it go? */
 
     if (environ == PL_origenviron) {	/* need we copy environment? */
@@ -1503,14 +1511,16 @@ my_setenv(char *nam, char *val)
 
 	/*SUPPRESS 530*/
 	for (max = i; environ[max]; max++) ;
-	New(901,tmpenv, max+2, char*);
-	for (j=0; j<max; j++)		/* copy environment */
-	    tmpenv[j] = savepv(environ[j]);
+	tmpenv = (char**)safesysmalloc((max+2) * sizeof(char*));
+	for (j=0; j<max; j++) {		/* copy environment */
+	    tmpenv[j] = (char*)safesysmalloc((strlen(environ[j])+1)*sizeof(char));
+	    strcpy(tmpenv[j], environ[j]);
+	}
 	tmpenv[max] = Nullch;
 	environ = tmpenv;		/* tell exec where it is now */
     }
     if (!val) {
-	Safefree(environ[i]);
+	safesysfree(environ[i]);
 	while (environ[i]) {
 	    environ[i] = environ[i+1];
 	    i++;
@@ -1518,12 +1528,13 @@ my_setenv(char *nam, char *val)
 	return;
     }
     if (!environ[i]) {			/* does not exist yet */
-	Renew(environ, i+2, char*);	/* just expand it a bit */
+	environ = (char**)safesysrealloc(environ, (i+2) * sizeof(char*));
 	environ[i+1] = Nullch;	/* make sure it's null terminated */
     }
     else
-	Safefree(environ[i]);
-    New(904, environ[i], strlen(nam) + strlen(val) + 2, char);
+	safesysfree(environ[i]);
+    environ[i] = (char*)safesysmalloc((strlen(nam)+strlen(val)+2) * sizeof(char));
+
 #ifndef MSDOS
     (void)sprintf(environ[i],"%s=%s",nam,val);/* all that work just for this */
 #else
@@ -1535,6 +1546,19 @@ my_setenv(char *nam, char *val)
     strcpy(environ[i],nam); strupr(environ[i]);
     (void)sprintf(environ[i] + strlen(nam),"=%s",val);
 #endif /* MSDOS */
+
+#else   /* PERL_USE_SAFE_PUTENV */
+    char *new_env;
+
+    new_env = (char*)safesysmalloc((strlen(nam) + strlen(val) + 2) * sizeof(char));
+#ifndef MSDOS
+    (void)sprintf(new_env,"%s=%s",nam,val);/* all that work just for this */
+#else
+    strcpy(new_env,nam); strupr(new_env);
+    (void)sprintf(new_env + strlen(nam),"=%s",val);
+#endif
+    (void)putenv(new_env);
+#endif  /* PERL_USE_SAFE_PUTENV */
 }
 
 #else /* if WIN32 */
@@ -1572,32 +1596,27 @@ my_setenv(char *nam,char *val)
     }
     else
 	vallen = strlen(val);
-    New(904, envstr, namlen + vallen + 3, char);
+    envstr = (char*)safesysmalloc((namlen + vallen + 3) * sizeof(char));
     (void)sprintf(envstr,"%s=%s",nam,val);
     (void)PerlEnv_putenv(envstr);
     if (oldstr)
-	Safefree(oldstr);
+	safesysfree(oldstr);
 #ifdef _MSC_VER
-    Safefree(envstr);		/* MSVCRT leaks without this */
+    safesysfree(envstr);	/* MSVCRT leaks without this */
 #endif
 
 #else /* !USE_WIN32_RTL_ENV */
 
-    /* The sane way to deal with the environment.
-     * Has these advantages over putenv() & co.:
-     *  * enables us to store a truly empty value in the
-     *    environment (like in UNIX).
-     *  * we don't have to deal with RTL globals, bugs and leaks.
-     *  * Much faster.
-     * Why you may want to enable USE_WIN32_RTL_ENV:
-     *  * environ[] and RTL functions will not reflect changes,
-     *    which might be an issue if extensions want to access
-     *    the env. via RTL.  This cuts both ways, since RTL will
-     *    not see changes made by extensions that call the Win32
-     *    functions directly, either.
-     * GSAR 97-06-07
-     */
-    SetEnvironmentVariable(nam,val);
+    register char *envstr;
+    STRLEN len = strlen(nam) + 3;
+    if (!val) {
+	val = "";
+    }
+    len += strlen(val);
+    New(904, envstr, len, char);
+    (void)sprintf(envstr,"%s=%s",nam,val);
+    (void)PerlEnv_putenv(envstr);
+    Safefree(envstr);
 
 #endif
 }
@@ -1638,7 +1657,7 @@ char *f;
 
 #if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
 char *
-my_bcopy(register char *from,register char *to,register I32 len)
+my_bcopy(register const char *from,register char *to,register I32 len)
 {
     char *retval = to;
 
@@ -1658,10 +1677,7 @@ my_bcopy(register char *from,register char *to,register I32 len)
 
 #ifndef HAS_MEMSET
 void *
-my_memset(loc,ch,len)
-register char *loc;
-register I32 ch;
-register I32 len;
+my_memset(register char *loc, register I32 ch, register I32 len)
 {
     char *retval = loc;
 
@@ -1673,9 +1689,7 @@ register I32 len;
 
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
 char *
-my_bzero(loc,len)
-register char *loc;
-register I32 len;
+my_bzero(register char *loc, register I32 len)
 {
     char *retval = loc;
 
@@ -1687,10 +1701,7 @@ register I32 len;
 
 #if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
 I32
-my_memcmp(s1,s2,len)
-char *s1;
-char *s2;
-register I32 len;
+my_memcmp(const char *s1, const char *s2, register I32 len)
 {
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
@@ -1711,10 +1722,7 @@ char *
 #else
 int
 #endif
-vsprintf(dest, pat, args)
-char *dest;
-const char *pat;
-char *args;
+vsprintf(char *dest, const char *pat, char *args)
 {
     FILE fakebuf;
 
@@ -2274,15 +2282,15 @@ PerlIO *ptr;
 #endif
 
 void
-repeatcpy(register char *to, register char *from, I32 len, register I32 count)
+repeatcpy(register char *to, register const char *from, I32 len, register I32 count)
 {
     register I32 todo;
-    register char *frombase = from;
+    register const char *frombase = from;
 
     if (len == 1) {
-	todo = *from;
+	register const char c = *from;
 	while (count-- > 0)
-	    *to++ = todo;
+	    *to++ = c;
 	return;
     }
     while (count-- > 0) {
@@ -2396,6 +2404,29 @@ same_dirent(char *a, char *b)
 #endif /* !HAS_RENAME */
 
 UV
+scan_bin(char *start, I32 len, I32 *retlen)
+{
+    register char *s = start;
+    register UV retval = 0;
+    bool overflowed = FALSE;
+    while (len && *s >= '0' && *s <= '1') {
+      register UV n = retval << 1;
+      if (!overflowed && (n >> 1) != retval) {
+          warn("Integer overflow in binary number");
+          overflowed = TRUE;
+      }
+      retval = n | (*s++ - '0');
+      len--;
+    }
+    if (len && (*s >= '2' || *s <= '9')) {
+      dTHR;
+      if (ckWARN(WARN_UNSAFE))
+          warner(WARN_UNSAFE, "Illegal binary digit ignored");
+    }
+    *retlen = s - start;
+    return retval;
+}
+UV
 scan_oct(char *start, I32 len, I32 *retlen)
 {
     register char *s = start;
@@ -2459,7 +2490,7 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
     dTHR;
     char *xfound = Nullch;
     char *xfailed = Nullch;
-    char tmpbuf[512];
+    char tmpbuf[MAXPATHLEN];
     register char *s;
     I32 len;
     int retval;
@@ -2602,7 +2633,7 @@ find_script(char *scriptname, bool dosearch, char **search_ext, I32 flags)
 	    if (len + 1 + strlen(scriptname) + MAX_EXT_LEN >= sizeof tmpbuf)
 		continue;	/* don't search dir with too-long name */
 	    if (len
-#if defined(atarist) || defined(DOSISH)
+#if defined(atarist) || defined(__MINT__) || defined(DOSISH)
 		&& tmpbuf[len - 1] != '/'
 		&& tmpbuf[len - 1] != '\\'
 #endif
@@ -3056,9 +3087,11 @@ get_vtbl(int vtbl_id)
     case want_vtbl_regdatum:
 	result = &PL_vtbl_regdatum;
 	break;
+#ifdef USE_LOCALE_COLLATE
     case want_vtbl_collxfrm:
 	result = &PL_vtbl_collxfrm;
 	break;
+#endif
     case want_vtbl_amagic:
 	result = &PL_vtbl_amagic;
 	break;

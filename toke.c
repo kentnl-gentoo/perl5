@@ -199,6 +199,8 @@ no_op(char *what, char *s)
 		t - PL_oldoldbufptr, PL_oldoldbufptr);
 
     }
+    else if (s <= oldbp)
+	warn("\t(Missing operator before end of line?)\n");
     else
 	warn("\t(Missing operator before %.*s?)\n", s - oldbp, oldbp);
     PL_bufptr = oldbp;
@@ -596,8 +598,6 @@ force_word(register char *start, int token, int check_keyword, int allow_pack, i
 		PL_expect = XTERM;
 	    else {
 		PL_expect = XOPERATOR;
-		force_next(')');
-		force_next('(');
 	    }
 	}
 	PL_nextval[PL_nexttoke].opval = (OP*)newSVOP(OP_CONST,0, newSVpv(PL_tokenbuf,0));
@@ -822,10 +822,15 @@ sublex_done(void)
 	if (SvCOMPILED(PL_lex_repl)) {
 	    PL_lex_state = LEX_INTERPNORMAL;
 	    PL_lex_starts++;
+	    /*	we don't clear PL_lex_repl here, so that we can check later
+		whether this is an evalled subst; that means we rely on the
+		logic to ensure sublex_done() is called again only via the
+		branch (in yylex()) that clears PL_lex_repl, else we'll loop */
 	}
-	else
+	else {
 	    PL_lex_state = LEX_INTERPCONCAT;
-	PL_lex_repl = Nullsv;
+	    PL_lex_repl = Nullsv;
+	}
 	return ',';
     }
     else {
@@ -1056,7 +1061,7 @@ scan_const(char *start)
 	    s++;
 
 	    /* some backslashes we leave behind */
-	    if (*s && strchr(leaveit, *s)) {
+	    if (*leaveit && *s && strchr(leaveit, *s)) {
 		*d++ = '\\';
 		*d++ = *s++;
 		continue;
@@ -1089,10 +1094,17 @@ scan_const(char *start)
 		    continue;
 		}
 		/* FALL THROUGH */
-	    /* default action is to copy the quoted character */
 	    default:
-		*d++ = *s++;
-		continue;
+	        {
+		    dTHR;
+		    if (ckWARN(WARN_UNSAFE) && isALPHA(*s))
+			warner(WARN_UNSAFE, 
+			       "Unrecognized escape \\%c passed through",
+			       *s);
+		    /* default action is to copy the quoted character */
+		    *d++ = *s++;
+		    continue;
+		}
 
 	    /* \132 indicates an octal constant */
 	    case '0': case '1': case '2': case '3':
@@ -1436,13 +1448,12 @@ incl_perldb(void)
  * Note that IoTOP_NAME, IoFMT_NAME, IoBOTTOM_NAME, if set for
  * private use must be set using malloc'd pointers.
  */
-static int filter_debug = 0;
 
 SV *
 filter_add(filter_t funcp, SV *datasv)
 {
     if (!funcp){ /* temporary handy debugging hack to be deleted */
-	filter_debug = atoi((char*)datasv);
+	PL_filter_debug = atoi((char*)datasv);
 	return NULL;
     }
     if (!PL_rsfp_filters)
@@ -1452,7 +1463,7 @@ filter_add(filter_t funcp, SV *datasv)
     if (!SvUPGRADE(datasv, SVt_PVIO))
         die("Can't upgrade filter_add data to SVt_PVIO");
     IoDIRP(datasv) = (DIR*)funcp; /* stash funcp into spare field */
-    if (filter_debug) {
+    if (PL_filter_debug) {
 	STRLEN n_a;
 	warn("filter_add func %p (%s)", funcp, SvPV(datasv, n_a));
     }
@@ -1466,7 +1477,7 @@ filter_add(filter_t funcp, SV *datasv)
 void
 filter_del(filter_t funcp)
 {
-    if (filter_debug)
+    if (PL_filter_debug)
 	warn("filter_del func %p", funcp);
     if (!PL_rsfp_filters || AvFILLp(PL_rsfp_filters)<0)
 	return;
@@ -1496,7 +1507,7 @@ filter_read(int idx, SV *buf_sv, int maxlen)
     if (idx > AvFILLp(PL_rsfp_filters)){       /* Any more filters?	*/
 	/* Provide a default input filter to make life easy.	*/
 	/* Note that we append to the line. This is handy.	*/
-	if (filter_debug)
+	if (PL_filter_debug)
 	    warn("filter_read %d: from rsfp\n", idx);
 	if (maxlen) { 
  	    /* Want a block */
@@ -1525,13 +1536,13 @@ filter_read(int idx, SV *buf_sv, int maxlen)
     }
     /* Skip this filter slot if filter has been deleted	*/
     if ( (datasv = FILTER_DATA(idx)) == &PL_sv_undef){
-	if (filter_debug)
+	if (PL_filter_debug)
 	    warn("filter_read %d: skipped (filter deleted)\n", idx);
 	return FILTER_READ(idx+1, buf_sv, maxlen); /* recurse */
     }
     /* Get function pointer hidden within datasv	*/
     funcp = (filter_t)IoDIRP(datasv);
-    if (filter_debug) {
+    if (PL_filter_debug) {
 	STRLEN n_a;
 	warn("filter_read %d: via function %p (%s)\n",
 		idx, funcp, SvPV(datasv,n_a));
@@ -1838,6 +1849,13 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 	    PL_lex_state = LEX_INTERPCONCAT;
 	    return ')';
 	}
+	if (PL_lex_inwhat == OP_SUBST && PL_linestr == PL_lex_repl
+	    && SvCOMPILED(PL_lex_repl))
+	{
+	    if (PL_bufptr != PL_bufend)
+		croak("Bad evalled substitution pattern");
+	    PL_lex_repl = Nullsv;
+	}
 	/* FALLTHROUGH */
     case LEX_INTERPCONCAT:
 #ifdef DEBUGGING
@@ -2115,7 +2133,7 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 		    else
 			newargv = PL_origargv;
 		    newargv[0] = ipath;
-		    execv(ipath, newargv);
+		    PerlProc_execv(ipath, newargv);
 		    croak("Can't exec %s", ipath);
 		}
 		if (d) {
@@ -3822,36 +3840,46 @@ int yylex(PERL_YYLEX_PARAM_DECL)
 	    s = scan_str(s);
 	    if (!s)
 		missingterm((char*)0);
-	    if (ckWARN(WARN_SYNTAX) && SvLEN(PL_lex_stuff)) {
+	    force_next(')');
+	    if (SvCUR(PL_lex_stuff)) {
+		OP *words = Nullop;
+		int warned = 0;
 		d = SvPV_force(PL_lex_stuff, len);
-		for (; len; --len, ++d) {
-		    if (*d == ',') {
-			warner(WARN_SYNTAX,
-			    "Possible attempt to separate words with commas");
-			break;
-		    }
-		    if (*d == '#') {
-			warner(WARN_SYNTAX,
-			    "Possible attempt to put comments in qw() list");
-			break;
+		while (len) {
+		    for (; isSPACE(*d) && len; --len, ++d) ;
+		    if (len) {
+			char *b = d;
+			if (!warned && ckWARN(WARN_SYNTAX)) {
+			    for (; !isSPACE(*d) && len; --len, ++d) {
+				if (*d == ',') {
+				    warner(WARN_SYNTAX,
+					"Possible attempt to separate words with commas");
+				    ++warned;
+				}
+				else if (*d == '#') {
+				    warner(WARN_SYNTAX,
+					"Possible attempt to put comments in qw() list");
+				    ++warned;
+				}
+			    }
+			}
+			else {
+			    for (; !isSPACE(*d) && len; --len, ++d) ;
+			}
+			words = append_elem(OP_LIST, words,
+					    newSVOP(OP_CONST, 0, newSVpvn(b, d-b)));
 		    }
 		}
+		if (words) {
+		    PL_nextval[PL_nexttoke].opval = words;
+		    force_next(THING);
+		}
 	    }
-	    force_next(')');
-	    PL_nextval[PL_nexttoke].opval = (OP*)newSVOP(OP_CONST, 0, tokeq(PL_lex_stuff));
+	    if (PL_lex_stuff)
+		SvREFCNT_dec(PL_lex_stuff);
 	    PL_lex_stuff = Nullsv;
-	    force_next(THING);
-	    force_next(',');
-	    PL_nextval[PL_nexttoke].opval = (OP*)newSVOP(OP_CONST, 0, newSVpv(" ",1));
-	    force_next(THING);
-	    force_next('(');
-	    yylval.ival = OP_SPLIT;
-	    CLINE;
 	    PL_expect = XTERM;
-	    PL_bufptr = s;
-	    PL_last_lop = PL_oldbufptr;
-	    PL_last_lop_op = OP_SPLIT;
-	    return FUNC;
+	    TOKEN('(');
 
 	case KEY_qq:
 	    s = scan_str(s);
@@ -4964,7 +4992,6 @@ new_constant(char *s, STRLEN len, char *key, SV *sv, SV *pv, char *type)
     bool oldcatch = CATCH_GET;
     SV **cvp;
     SV *cv, *typesv;
-    char buf[128];
 	    
     if (!table) {
 	yyerror("%^H is not defined");
@@ -4972,6 +4999,7 @@ new_constant(char *s, STRLEN len, char *key, SV *sv, SV *pv, char *type)
     }
     cvp = hv_fetch(table, key, strlen(key), FALSE);
     if (!cvp || !SvOK(*cvp)) {
+	char buf[128];
 	sprintf(buf,"$^H{%s} is not defined", key);
 	yyerror(buf);
 	return sv;
@@ -5017,6 +5045,7 @@ new_constant(char *s, STRLEN len, char *key, SV *sv, SV *pv, char *type)
     POPSTACK;
 
     if (!SvOK(res)) {
+	char buf[128];
 	sprintf(buf,"Call to &{$^H{%s}} did not return a defined value", key);
 	yyerror(buf);
     }
@@ -5894,7 +5923,7 @@ scan_str(char *start)
 
   Read a number in any of the formats that Perl accepts:
 
-  0(x[0-7A-F]+)|([0-7]+)
+  0(x[0-7A-F]+)|([0-7]+)|(b[01])
   [\d_]+(\.[\d_]*)?[Ee](\d+)
 
   Underbars (_) are allowed in decimal numbers.  If -w is on,
@@ -5928,18 +5957,19 @@ scan_num(char *start)
       croak("panic: scan_num");
       
     /* if it starts with a 0, it could be an octal number, a decimal in
-       0.13 disguise, or a hexadecimal number.
+       0.13 disguise, or a hexadecimal number, or a binary number.
     */
     case '0':
 	{
 	  /* variables:
 	     u		holds the "number so far"
-	     shift	the power of 2 of the base (hex == 4, octal == 3)
+	     shift	the power of 2 of the base
+			(hex == 4, octal == 3, binary == 1)
 	     overflowed	was the number more than we can hold?
 
 	     Shift is used when we add a digit.  It also serves as an "are
-	     we in octal or hex?" indicator to disallow hex characters when
-	     in octal mode.
+	     we in octal/hex/binary?" indicator to disallow hex characters
+	     when in octal mode.
 	   */
 	    UV u;
 	    I32 shift;
@@ -5948,6 +5978,9 @@ scan_num(char *start)
 	    /* check for hex */
 	    if (s[1] == 'x') {
 		shift = 4;
+		s += 2;
+	    } else if (s[1] == 'b') {
+		shift = 1;
 		s += 2;
 	    }
 	    /* check for a decimal in disguise */
@@ -5958,7 +5991,7 @@ scan_num(char *start)
 		shift = 3;
 	    u = 0;
 
-	    /* read the rest of the octal number */
+	    /* read the rest of the number */
 	    for (;;) {
 		UV n, b;	/* n is used in the overflow test, b is the digit we're adding on */
 
@@ -5975,13 +6008,21 @@ scan_num(char *start)
 
 		/* 8 and 9 are not octal */
 		case '8': case '9':
-		    if (shift != 4)
+		    if (shift == 3)
 			yyerror("Illegal octal digit");
+		    else
+			if (shift == 1)
+			    yyerror("Illegal binary digit");
 		    /* FALL THROUGH */
 
 	        /* octal digits */
-		case '0': case '1': case '2': case '3': case '4':
+		case '2': case '3': case '4':
 		case '5': case '6': case '7':
+		    if (shift == 1)
+			yyerror("Illegal binary digit");
+		    /* FALL THROUGH */
+
+		case '0': case '1':
 		    b = *s++ & 15;		/* ASCII digit -> value of digit */
 		    goto digit;
 
@@ -6002,7 +6043,8 @@ scan_num(char *start)
 		    if (!overflowed && (n >> shift) != u
 			&& !(PL_hints & HINT_NEW_BINARY)) {
 			warn("Integer overflow in %s number",
-			     (shift == 4) ? "hex" : "octal");
+			     (shift == 4) ? "hex"
+			     : ((shift == 3) ? "octal" : "binary"));
 			overflowed = TRUE;
 		    }
 		    u = n | b;		/* add the digit to the end */

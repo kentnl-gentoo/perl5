@@ -8,7 +8,6 @@
  */
 #ifndef H_PERL
 #define H_PERL 1
-#define OVERLOAD
 
 #ifdef PERL_FOR_X2P
 /*
@@ -385,47 +384,30 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
  * library prototypes; we'll use our own in proto.h instead. */
 
 #ifdef MYMALLOC
-
-#   ifdef HIDEMYMALLOC
-#	define malloc  Mymalloc
-#	define calloc  Mycalloc
-#	define realloc Myrealloc
-#	define free    Myfree
-Malloc_t Mymalloc _((MEM_SIZE nbytes));
-Malloc_t Mycalloc _((MEM_SIZE elements, MEM_SIZE size));
-Malloc_t Myrealloc _((Malloc_t where, MEM_SIZE nbytes));
-Free_t   Myfree _((Malloc_t where));
-#   endif
-#   ifdef EMBEDMYMALLOC
-#	define malloc  Perl_malloc
-#	define calloc  Perl_calloc
-#	define realloc Perl_realloc
-/* VMS' external symbols are case-insensitive, and there's already a */
-/* perl_free in perl.h */
-#ifdef VMS
-#	define free    Perl_myfree
-#else
-#	define free    Perl_free
-#endif
+#  ifdef PERL_POLLUTE_MALLOC
+#    define Perl_malloc		malloc
+#    define Perl_calloc		calloc
+#    define Perl_realloc	realloc
+#    define Perl_mfree		free
+#  else
+#    define EMBEDMYMALLOC	/* for compatibility */
+#  endif
 Malloc_t Perl_malloc _((MEM_SIZE nbytes));
 Malloc_t Perl_calloc _((MEM_SIZE elements, MEM_SIZE size));
 Malloc_t Perl_realloc _((Malloc_t where, MEM_SIZE nbytes));
-#ifdef VMS
-Free_t   Perl_myfree _((Malloc_t where));
-#else
-Free_t   Perl_free _((Malloc_t where));
-#endif
-#   endif
+/* 'mfree' rather than 'free', since there is already a 'perl_free'
+ * that causes clashes with case-insensitive linkers */
+Free_t   Perl_mfree _((Malloc_t where));
 
-#   undef safemalloc
-#   undef safecalloc
-#   undef saferealloc
-#   undef safefree
-#   define safemalloc  malloc
-#   define safecalloc  calloc
-#   define saferealloc realloc
-#   define safefree    free
-
+#  define safemalloc  Perl_malloc
+#  define safecalloc  Perl_calloc
+#  define saferealloc Perl_realloc
+#  define safefree    Perl_mfree
+#else  /* MYMALLOC */
+#  define safemalloc  safesysmalloc
+#  define safecalloc  safesyscalloc
+#  define saferealloc safesysrealloc
+#  define safefree    safesysfree
 #endif /* MYMALLOC */
 
 #if defined(STANDARD_C) && defined(I_STDDEF)
@@ -1349,6 +1331,28 @@ typedef I32 (*filter_t) _((int, SV *, int));
 # endif
 #endif         
 
+#ifndef MAXPATHLEN
+#  ifdef PATH_MAX
+#    ifdef _POSIX_PATH_MAX
+#       if PATH_MAX > _POSIX_PATH_MAX
+/* MAXPATHLEN is supposed to include the final null character,
+ * as opposed to PATH_MAX and _POSIX_PATH_MAX. */
+#         define MAXPATHLEN (PATH_MAX+1)
+#       else
+#         define MAXPATHLEN (_POSIX_PATH_MAX+1)
+#       endif
+#    else
+#      define MAXPATHLEN (PATH_MAX+1)
+#    endif
+#  else
+#    ifdef _POSIX_PATH_MAX
+#       define MAXPATHLEN (_POSIX_PATH_MAX+1)
+#    else
+#       define MAXPATHLEN 1024	/* Err on the large side. */
+#    endif
+#  endif
+#endif
+
 #ifndef FUNC_NAME_TO_PTR
 #define FUNC_NAME_TO_PTR(name)		name
 #endif
@@ -1483,8 +1487,19 @@ union any {
 #endif /* USE_THREADS */
 
 /* Work around some cygwin32 problems with importing global symbols */
-#if defined(CYGWIN32) && defined(DLLIMPORT) 
+#if defined(CYGWIN32)
+#  if defined(DLLIMPORT) 
 #   include "cw32imp.h"
+#  endif
+/* USEMYBINMODE
+ *   This symbol, if defined, indicates that the program should
+ *   use the routine my_binmode(FILE *fp, char iotype) to insure
+ *   that a file is in "binary" mode -- that is, that no translation
+ *   of bytes occurs on read or write operations.
+ */
+#  define USEMYBINMODE / **/
+#  define my_binmode(fp, iotype) \
+            (PerlLIO_setmode(PerlIO_fileno(fp), O_BINARY) != -1 ? TRUE : NULL)
 #endif
 
 #include "regexp.h"
@@ -1784,7 +1799,7 @@ char *getlogin _((void));
 #define UNLINK unlnk
 I32 unlnk _((char*));
 #else
-#define UNLINK unlink
+#define UNLINK PerlLIO_unlink
 #endif
 
 #ifndef HAS_SETREUID
@@ -1913,6 +1928,10 @@ EXTCONST char PL_no_func[]
   INIT("The %s function is unimplemented");
 EXTCONST char PL_no_myglob[]
   INIT("\"my\" variable %s can't be in a package");
+
+EXTCONST char PL_uuemap[65]
+  INIT("`!\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_");
+
 
 #ifdef DOINIT
 EXT char *PL_sig_name[] = { SIG_NAME };
@@ -2475,12 +2494,10 @@ EXT MGVTBL PL_vtbl_collxfrm = {0,
 					0,	0,	0};
 #endif
 
-#ifdef OVERLOAD
 EXT MGVTBL PL_vtbl_amagic =       {0,     magic_setamagic,
                                         0,      0,      magic_setamagic};
 EXT MGVTBL PL_vtbl_amagicelem =   {0,     magic_setamagic,
                                         0,      0,      magic_setamagic};
-#endif /* OVERLOAD */
 
 #else /* !DOINIT */
 
@@ -2519,14 +2536,10 @@ EXT MGVTBL PL_vtbl_regdatum;
 EXT MGVTBL PL_vtbl_collxfrm;
 #endif
 
-#ifdef OVERLOAD
 EXT MGVTBL PL_vtbl_amagic;
 EXT MGVTBL PL_vtbl_amagicelem;
-#endif /* OVERLOAD */
 
 #endif /* !DOINIT */
-
-#ifdef OVERLOAD
 
 enum {
   fallback_amg,        abs_amg,
@@ -2662,8 +2675,6 @@ typedef struct am_table_short AMTS;
 #   endif
 #endif /* _FASTMATH */
 
-#endif /* OVERLOAD */
-
 #define PERLDB_ALL	0x3f		/* No _NONAME, _GOTO */
 #define PERLDBf_SUB	0x01		/* Debug sub enter/exit. */
 #define PERLDBf_LINE	0x02		/* Keep line #. */
@@ -2755,5 +2766,38 @@ typedef struct am_table_short AMTS;
 #       define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun)
 #   endif
 #endif
+
+/* Mention
+
+   INSTALL_USR_BIN_PERL
+
+   I_SYS_MMAN
+   HAS_MMAP
+   HAS_MUNMAP
+   HAS_MPROTECT
+   HAS_MSYNC
+   HAS_MADVISE
+   Mmap_t
+
+   here so that Configure picks them up. */
+
+#ifdef IAMSUID
+
+#ifdef I_SYS_STATVFS
+#   include <sys/statvfs.h>     /* for f?statvfs() */
+#endif
+#ifdef I_SYS_MOUNT
+#   include <sys/mount.h>       /* for *BSD f?statfs() */
+#endif
+#ifdef I_MNTENT
+#   include <mntent.h>          /* for getmntent() */
+#endif
+
+#endif /* IAMSUID */
+
+/* and finally... */
+#define PERL_PATCHLEVEL_H_IMPLICIT
+#include "patchlevel.h"
+#undef PERL_PATCHLEVEL_H_IMPLICIT
 
 #endif /* Include guard */

@@ -18,12 +18,11 @@
 #include "perl.h"
 
 #if defined(HAS_MSG) || defined(HAS_SEM) || defined(HAS_SHM)
+#ifndef HAS_SEM
 #include <sys/ipc.h>
+#endif
 #ifdef HAS_MSG
 #include <sys/msg.h>
-#endif
-#ifdef HAS_SEM
-#include <sys/sem.h>
 #endif
 #ifdef HAS_SHM
 #include <sys/shm.h>
@@ -188,6 +187,13 @@ do_open(GV *gv, register char *name, I32 len, int as_raw, int rawmode, int rawpe
 	if (*name == '|') {
 	    /*SUPPRESS 530*/
 	    for (name++; isSPACE(*name); name++) ;
+	    if (*name == '\0') { /* command is missing 19990114 */
+		dTHR;
+		if (ckWARN(WARN_PIPE))
+		    warner(WARN_PIPE, "Missing command in piped open");
+		errno = EPIPE;
+		goto say_false;
+	    }
 	    if (strNE(name,"-"))
 		TAINT_ENV();
 	    TAINT_PROPER("piped open");
@@ -285,6 +291,13 @@ do_open(GV *gv, register char *name, I32 len, int as_raw, int rawmode, int rawpe
 		name[--len] = '\0';
 	    /*SUPPRESS 530*/
 	    for (; isSPACE(*name); name++) ;
+	    if (*name == '\0') { /* command is missing 19990114 */
+		dTHR;
+		if (ckWARN(WARN_PIPE))
+		    warner(WARN_PIPE, "Missing command in piped open");
+		errno = EPIPE;
+		goto say_false;
+	    }
 	    if (strNE(name,"-"))
 		TAINT_ENV();
 	    TAINT_PROPER("piped open");
@@ -470,7 +483,7 @@ nextargv(register GV *gv)
                       || (_djstat_fail_bits & _STFAIL_TRUENAME)!=0
 #endif
                       ) {
-			warn("Can't do inplace edit: %s would not be uniq",
+			warn("Can't do inplace edit: %s would not be unique",
 			  SvPVX(sv) );
 			do_close(gv,FALSE);
 			continue;
@@ -781,7 +794,7 @@ do_binmode(PerlIO *fp, int iotype, int flag)
     if (flag != TRUE)
 	croak("panic: unsetting binmode"); /* Not implemented yet */
 #ifdef DOSISH
-#ifdef atarist
+#if defined(atarist) || defined(__MINT__)
     if (!PerlIO_flush(fp) && (fp->_flag |= _IOBIN))
 	return 1;
     else
@@ -1153,7 +1166,7 @@ apply(I32 type, register SV **mark, register SV **sp)
 
 #define APPLY_TAINT_PROPER() \
     STMT_START {							\
-	if (PL_tainting && PL_tainted) { goto taint_proper_label; }	\
+	if (PL_tainted) { TAINT_PROPER(what); }				\
     } STMT_END
 
     /* This is a first heuristic; it doesn't catch tainting magic. */
@@ -1339,10 +1352,6 @@ nothing in the core.
 #endif
     }
     return tot;
-
-  taint_proper_label:
-    TAINT_PROPER(what);
-    return 0;	/* this should never happen */
 
 #undef APPLY_TAINT_PROPER
 }

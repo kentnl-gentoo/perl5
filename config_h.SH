@@ -408,6 +408,18 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_mktime HAS_MKTIME		/**/
 
+/* HAS_MSYNC:
+ *	This symbol, if defined, indicates that the msync system call is
+ *	available to synchronize a mapped file.
+ */
+#$d_msync HAS_MSYNC		/**/
+
+/* HAS_MUNMAP:
+ *	This symbol, if defined, indicates that the munmap system call is
+ *	available to unmap a region, usually mapped by mmap().
+ */
+#$d_munmap HAS_MUNMAP		/**/
+
 /* HAS_NICE:
  *	This symbol, if defined, indicates that the nice routine is
  *	available.
@@ -1655,6 +1667,18 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #define LONGLONGSIZE $longlongsize		/**/
 #endif
 
+/* HAS_MMAP:
+ *	This symbol, if defined, indicates that the mmap system call is
+ *	available to map a file into memory.
+ */
+/* Mmap_t:
+ *	This symbol holds the return type of the mmap() system call
+ *	(and simultaneously the type of the first argument).
+ *	Usually set to 'void *' or 'cadd_t'.
+ */
+#$d_mmap HAS_MMAP		/**/
+#define Mmap_t $mmaptype	/**/
+
 /* HAS_MSG:
  *	This symbol, if defined, indicates that the entire msg*(2) library is
  *	supported (IPC mechanism based on message queues).
@@ -2038,6 +2062,18 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_ftello HAS_FTELLO		/**/
 
+/* HAS_MADVISE:
+ *	This symbol, if defined, indicates that the madvise system call is
+ *	available to map a file into memory.
+ */
+#$d_madvise HAS_MADVISE		/**/
+
+/* HAS_MPROTECT:
+ *	This symbol, if defined, indicates that the mprotect system call is
+ *	available to modify the access protection of a memory mapped file.
+ */
+#$d_mprotect HAS_MPROTECT		/**/
+
 /* HAS_READV:
  *	This symbol, if defined, indicates that the readv routine is
  *	available to do gather reads.  You will also need <sys/uio.h>
@@ -2050,6 +2086,34 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	be used.
  */
 #$d_sfio	USE_SFIO		/**/
+
+/* HAS_FSTATFS:
+ *	This symbol, if defined, indicates that the fstatfs routine is
+ *	available to do stat filesystems of file descriptors.
+ */
+/* HAS_STRUCT_STATFS_FLAGS:
+ *	This symbol, if defined, indicates that the struct statfs
+ *	does have the f_flags member containing the mount flags of
+ *	the filesystem holding the file.
+ *	This kind of struct statfs is coming from sys/mount.h (BSD)
+ *	and not from sys/statfs.h (SYSV).
+ */
+#$d_fstatfs HAS_FSTATFS		/**/
+#$d_statfsflags HAS_STRUCT_STATFS_FLAGS		/**/
+
+/* HAS_FSTATVFS:
+ *	This symbol, if defined, indicates that the fstatvfs routine is
+ *	available to do stat filesystems of file descriptors.
+ */
+#$d_fstatvfs HAS_FSTATVFS		/**/
+
+/* HAS_TELLDIR_PROTO:
+ *	This symbol, if defined, indicates that the system provides
+ *	a prototype for the telldir() function.  Otherwise, it is up
+ *	to the program to supply one.  A good guess is
+ *		extern long telldir _((DIR*));
+ */
+#$d_telldirproto	HAS_TELLDIR_PROTO	/**/
 
 /* HAS_WRITEV:
  *	This symbol, if defined, indicates that the writev routine is
@@ -2124,11 +2188,41 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$i_inttypes   I_INTTYPES                /**/
 #$d_int64t     HAS_INT64_T               /**/
 
+/* I_MNTENT:
+ *	This symbol, if defined, indicates that <mntent.h> exists and
+ *	should be included.
+ */
+#$i_mntent	I_MNTENT		/**/
+
 /* I_POLL:
  *	This symbol, if defined, indicates that <poll.h> exists and
  *	should be included.
  */
 #$i_poll	I_POLL		/**/
+
+/* I_SYS_MMAN:
+ *	This symbol, if defined, indicates that <sys/mman.h> exists and
+ *	should be included.
+ */
+#$i_sysmman	I_SYS_MMAN		/**/
+
+/* I_SYS_MOUNT:
+ *	This symbol, if defined, indicates that <sys/mount.h> exists and
+ *	should be included.
+ */
+#$i_sysmount	I_SYS_MOUNT		/**/
+
+/* I_SYS_STATVFS:
+ *	This symbol, if defined, indicates that <sys/statvfs.h> exists and
+ *	should be included.
+ */
+#$i_sysstatvfs	I_SYS_STATVFS		/**/
+
+/* INSTALL_USR_BIN_PERL:
+ *	This symbol, if defined, indicates that Perl is to be installed
+ * 	also as /usr/bin/perl.
+ */
+#$installusrbinperl INSTALL_USR_BIN_PERL	/**/
 
 /* HAS_FSTAT64:
  *	This symbol, if defined, indicates that the fstat64 routine is
@@ -2308,6 +2402,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$use64bits	USE_64_BITS		/**/
 
+/* MULTIPLICITY:
+ *	This symbol, if defined, indicates that Perl should
+ *	be built to use multiplicity.
+ */
+#$usemultiplicity	MULTIPLICITY		/**/
+
 /* USE_PERLIO:
  *	This symbol, if defined, indicates that the PerlIO abstraction should
  *	be used throughout.  If not defined, stdio should be
@@ -2392,14 +2492,15 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #define ARCHNAME "$archname"		/**/
 
-/* PTHREAD_CREATE_JOINABLE:
+/* OLD_PTHREAD_CREATE_JOINABLE:
  *	This symbol, if defined, indicates how to create pthread
- *	in joinable (aka undetached) state.  Not defined here if
- *	pthread.h already has defined PTHREAD_CREATE_JOINABLE.
- *	If defined, possible values are PTHREAD_CREATE_UNDETACHED
+ *	in joinable (aka undetached) state.  NOTE: not defined
+ *	if pthread.h already has defined PTHREAD_CREATE_JOINABLE
+ *	(the new version of the constant).
+ *	If defined, known values are PTHREAD_CREATE_UNDETACHED
  *	and __UNDETACHED.
  */
-#$d_pthread_create_joinable PTHREAD_CREATE_JOINABLE $pthread_create_joinable /**/
+#$d_old_pthread_create_joinable OLD_PTHREAD_CREATE_JOINABLE $old_pthread_create_joinable /**/
 
 /* HAS_PTHREAD_YIELD:
  *	This symbol, if defined, indicates that the pthread_yield 
@@ -2425,12 +2526,6 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *     include <mach/cthreads.h>.
  */
 #$i_machcthr   I_MACH_CTHREADS	/**/
-
-/* MULTIPLICITY:
- *	This symbol, if defined, indicates that Perl should
- *	be built to use multiplicity.
- */
-#$usemultiplicity	MULTIPLICITY		/**/
 
 /* USE_THREADS:
  *	This symbol, if defined, indicates that Perl should

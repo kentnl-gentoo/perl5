@@ -147,11 +147,7 @@ struct io {
 #define SVf_OK		(SVf_IOK|SVf_NOK|SVf_POK|SVf_ROK| \
 			 SVp_IOK|SVp_NOK|SVp_POK)
 
-#ifdef OVERLOAD
-#define SVf_AMAGIC    0x10000000      /* has magical overloaded methods */
-#else
-#define SVf_AMAGIC    0               /* can be or-ed without effect */
-#endif /* OVERLOAD */
+#define SVf_AMAGIC	0x10000000      /* has magical overloaded methods */
 
 #define PRIVSHIFT 8
 
@@ -317,6 +313,7 @@ struct xpvio {
 #define IOf_FLUSH 4	/* this fp wants a flush after write op */
 #define IOf_DIDTOP 8	/* just did top of form */
 #define IOf_UNTAINT 16  /* consider this fp (and its data) "safe" */
+#define IOf_NOLINE  32	/* slurped a pseudo-line from empty file */
 
 /* The following macros define implementation-independent predicates on SVs. */
 
@@ -384,10 +381,9 @@ struct xpvio {
 #define SvRMAGICAL_on(sv)	(SvFLAGS(sv) |= SVs_RMG)
 #define SvRMAGICAL_off(sv)	(SvFLAGS(sv) &= ~SVs_RMG)
 
-#ifdef OVERLOAD
-#define SvAMAGIC(sv)         (SvFLAGS(sv) & SVf_AMAGIC)
-#define SvAMAGIC_on(sv)      (SvFLAGS(sv) |= SVf_AMAGIC)
-#define SvAMAGIC_off(sv)     (SvFLAGS(sv) &= ~SVf_AMAGIC)
+#define SvAMAGIC(sv)		(SvFLAGS(sv) & SVf_AMAGIC)
+#define SvAMAGIC_on(sv)		(SvFLAGS(sv) |= SVf_AMAGIC)
+#define SvAMAGIC_off(sv)	(SvFLAGS(sv) &= ~SVf_AMAGIC)
 
 /*
 #define Gv_AMG(stash) \
@@ -395,7 +391,6 @@ struct xpvio {
          ((!HV_AMAGICbad(stash) && HV_AMAGIC(stash)) || Gv_AMupdate(stash)))
 */
 #define Gv_AMG(stash)           (PL_amagic_generation && Gv_AMupdate(stash))
-#endif /* OVERLOAD */
 
 #define SvTHINKFIRST(sv)	(SvFLAGS(sv) & SVf_THINKFIRST)
 
@@ -517,6 +512,7 @@ struct xpvio {
 
 #define SvPV_force(sv, lp) sv_pvn_force(sv, &lp)
 #define SvPV(sv, lp) sv_pvn(sv, &lp)
+#define SvPV_nolen(sv) sv_pv(sv)
 #define SvIVx(sv) sv_iv(sv)
 #define SvUVx(sv) sv_uv(sv)
 #define SvNVx(sv) sv_nv(sv)
@@ -549,6 +545,10 @@ struct xpvio {
 #define SvPV_force(sv, lp) \
     ((SvFLAGS(sv) & (SVf_POK|SVf_THINKFIRST)) == SVf_POK \
      ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvn_force(sv, &lp))
+
+#undef SvPV_nolen
+#define SvPV_nolen(sv) \
+    (SvPOK(sv) ? SvPVX(sv) : sv_2pv_nolen(sv))
 
 #ifdef __GNUC__
 #  undef SvIVx

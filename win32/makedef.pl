@@ -181,14 +181,9 @@ PL_opsave
 
 if ($define{'MYMALLOC'})
  {
-  skip_symbols [qw(
-    Perl_safefree
-    Perl_safemalloc
-    Perl_saferealloc
-    Perl_safecalloc)];
   emit_symbols [qw(
     Perl_malloc
-    Perl_free
+    Perl_mfree
     Perl_realloc
     Perl_calloc)];
  }
@@ -502,6 +497,7 @@ win32_setnetent
 win32_setprotoent
 win32_setservent
 win32_getenv
+win32_putenv
 win32_perror
 win32_setbuf
 win32_setvbuf

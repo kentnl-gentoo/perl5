@@ -435,7 +435,12 @@ MODULE = B	PACKAGE = B	PREFIX = B_
 PROTOTYPES: DISABLE
 
 BOOT:
+{
+    HV *stash = gv_stashpvn("B", 1, TRUE);
+    AV *export_ok = perl_get_av("B::EXPORT_OK",TRUE);
     INIT_SPECIALSV_LIST;
+#include "defsubs.h"
+}
 
 #define B_main_cv()	PL_main_cv
 #define B_init_av()	PL_initav
@@ -514,7 +519,28 @@ svref_2object(sv)
 	    croak("argument is not a reference");
 	RETVAL = (SV*)SvRV(sv);
     OUTPUT:
-	RETVAL
+	RETVAL              
+
+void
+opnumber(name)
+char *	name
+CODE:
+{
+ int i; 
+ IV  result = -1;
+ ST(0) = sv_newmortal();
+ if (strncmp(name,"pp_",3) == 0)
+   name += 3;
+ for (i = 0; i < PL_maxo; i++)
+  {
+   if (strcmp(name, PL_op_name[i]) == 0)
+    {
+     result = i;
+     break;
+    }
+  }
+ sv_setiv(ST(0),result);
+}
 
 void
 ppname(opnum)
@@ -533,10 +559,9 @@ hash(sv)
 	char *s;
 	STRLEN len;
 	U32 hash = 0;
-	char hexhash[11]; /* must fit "0xffffffff" plus trailing \0 */
+	char hexhash[19]; /* must fit "0xffffffff" plus trailing \0 */
 	s = SvPV(sv, len);
-	while (len--)
-	    hash = hash * 33 + *s++;
+	PERL_HASH(hash, s, len);
 	sprintf(hexhash, "0x%x", hash);
 	ST(0) = sv_2mortal(newSVpv(hexhash, 0));
 
@@ -898,6 +923,7 @@ SvSTASH(sv)
 #define MgTYPE(mg) mg->mg_type
 #define MgFLAGS(mg) mg->mg_flags
 #define MgOBJ(mg) mg->mg_obj
+#define MgLENGTH(mg) mg->mg_len
 
 MODULE = B	PACKAGE = B::MAGIC	PREFIX = Mg	
 
@@ -921,13 +947,23 @@ B::SV
 MgOBJ(mg)
 	B::MAGIC	mg
 
+I32 
+MgLENGTH(mg)
+	B::MAGIC	mg
+ 
 void
 MgPTR(mg)
 	B::MAGIC	mg
     CODE:
 	ST(0) = sv_newmortal();
-	if (mg->mg_ptr)
-	    sv_setpvn(ST(0), mg->mg_ptr, mg->mg_len);
+ 	if (mg->mg_ptr){
+		if (mg->mg_len >= 0){
+	    		sv_setpvn(ST(0), mg->mg_ptr, mg->mg_len);
+		} else {
+			if (mg->mg_len == HEf_SVKEY)	
+				sv_setsv(ST(0),newRV((SV*)mg->mg_ptr));
+		}
+	}
 
 MODULE = B	PACKAGE = B::PVLV	PREFIX = Lv
 

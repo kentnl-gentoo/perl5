@@ -52,6 +52,8 @@
 #define PL_basetime		pPerl->PL_basetime
 #undef  PL_beginav
 #define PL_beginav		pPerl->PL_beginav
+#undef  PL_bitcount
+#define PL_bitcount		pPerl->PL_bitcount
 #undef  PL_bodytarget
 #define PL_bodytarget		pPerl->PL_bodytarget
 #undef  PL_bostr
@@ -170,6 +172,10 @@
 #define PL_dumpindent		pPerl->PL_dumpindent
 #undef  PL_e_script
 #define PL_e_script		pPerl->PL_e_script
+#undef  PL_efloatbuf
+#define PL_efloatbuf		pPerl->PL_efloatbuf
+#undef  PL_efloatsize
+#define PL_efloatsize		pPerl->PL_efloatsize
 #undef  PL_egid
 #define PL_egid			pPerl->PL_egid
 #undef  PL_endav
@@ -206,6 +212,8 @@
 #define PL_fdpid		pPerl->PL_fdpid
 #undef  PL_filemode
 #define PL_filemode		pPerl->PL_filemode
+#undef  PL_filter_debug
+#define PL_filter_debug		pPerl->PL_filter_debug
 #undef  PL_firstgv
 #define PL_firstgv		pPerl->PL_firstgv
 #undef  PL_forkprocess
@@ -220,6 +228,8 @@
 #define PL_gensym		pPerl->PL_gensym
 #undef  PL_gid
 #define PL_gid			pPerl->PL_gid
+#undef  PL_glob_index
+#define PL_glob_index		pPerl->PL_glob_index
 #undef  PL_globalstash
 #define PL_globalstash		pPerl->PL_globalstash
 #undef  PL_he_root
@@ -638,6 +648,8 @@
 #define PL_specialsv_list	pPerl->PL_specialsv_list
 #undef  PL_splitstr
 #define PL_splitstr		pPerl->PL_splitstr
+#undef  PL_srand_called
+#define PL_srand_called		pPerl->PL_srand_called
 #undef  PL_stack_base
 #define PL_stack_base		pPerl->PL_stack_base
 #undef  PL_stack_max
@@ -752,6 +764,8 @@
 #define PL_utf8_toupper		pPerl->PL_utf8_toupper
 #undef  PL_utf8_upper
 #define PL_utf8_upper		pPerl->PL_utf8_upper
+#undef  PL_uudmap
+#define PL_uudmap		pPerl->PL_uudmap
 #undef  PL_warnhook
 #define PL_warnhook		pPerl->PL_warnhook
 #undef  PL_watchaddr
@@ -793,6 +807,10 @@
 #define amagic_cmp		pPerl->Perl_amagic_cmp
 #undef  amagic_cmp_locale
 #define amagic_cmp_locale	pPerl->Perl_amagic_cmp_locale
+#undef  amagic_i_ncmp
+#define amagic_i_ncmp		pPerl->Perl_amagic_i_ncmp
+#undef  amagic_ncmp
+#define amagic_ncmp		pPerl->Perl_amagic_ncmp
 #undef  ao
 #define ao			pPerl->Perl_ao
 #undef  append_elem
@@ -953,6 +971,8 @@
 #define ck_svconst		pPerl->Perl_ck_svconst
 #undef  ck_trunc
 #define ck_trunc		pPerl->Perl_ck_trunc
+#undef  clear_re
+#define clear_re		pPerl->Perl_clear_re
 #undef  condpair_magic
 #define condpair_magic		pPerl->Perl_condpair_magic
 #undef  convert
@@ -1367,6 +1387,8 @@
 #define io_close		pPerl->Perl_io_close
 #undef  is_an_int
 #define is_an_int		pPerl->Perl_is_an_int
+#undef  is_handle_constructor
+#define is_handle_constructor	pPerl->Perl_is_handle_constructor
 #undef  is_uni_alnum
 #define is_uni_alnum		pPerl->Perl_is_uni_alnum
 #undef  is_uni_alnum_lc
@@ -2631,6 +2653,8 @@
 #define regoptail		pPerl->Perl_regoptail
 #undef  regpiece
 #define regpiece		pPerl->Perl_regpiece
+#undef  regpposixcc
+#define regpposixcc		pPerl->Perl_regpposixcc
 #undef  regprop
 #define regprop			pPerl->Perl_regprop
 #undef  regrepeat
@@ -2683,14 +2707,14 @@
 #define rxres_restore		pPerl->Perl_rxres_restore
 #undef  rxres_save
 #define rxres_save		pPerl->Perl_rxres_save
-#undef  safecalloc
-#define safecalloc		pPerl->Perl_safecalloc
-#undef  safefree
-#define safefree		pPerl->Perl_safefree
-#undef  safemalloc
-#define safemalloc		pPerl->Perl_safemalloc
-#undef  saferealloc
-#define saferealloc		pPerl->Perl_saferealloc
+#undef  safesyscalloc
+#define safesyscalloc		pPerl->Perl_safesyscalloc
+#undef  safesysfree
+#define safesysfree		pPerl->Perl_safesysfree
+#undef  safesysmalloc
+#define safesysmalloc		pPerl->Perl_safesysmalloc
+#undef  safesysrealloc
+#define safesysrealloc		pPerl->Perl_safesysrealloc
 #undef  safexcalloc
 #define safexcalloc		pPerl->Perl_safexcalloc
 #undef  safexfree
@@ -2789,6 +2813,8 @@
 #define scalarseq		pPerl->Perl_scalarseq
 #undef  scalarvoid
 #define scalarvoid		pPerl->Perl_scalarvoid
+#undef  scan_bin
+#define scan_bin		pPerl->Perl_scan_bin
 #undef  scan_commit
 #define scan_commit		pPerl->Perl_scan_commit
 #undef  scan_const
@@ -2857,6 +2883,8 @@
 #define sharepvn		pPerl->Perl_sharepvn
 #undef  sighandler
 #define sighandler		pPerl->Perl_sighandler
+#undef  simplify_sort
+#define simplify_sort		pPerl->Perl_simplify_sort
 #undef  skipspace
 #define skipspace		pPerl->Perl_skipspace
 #undef  skipspace
@@ -2891,6 +2919,8 @@
 #define sv_2nv			pPerl->Perl_sv_2nv
 #undef  sv_2pv
 #define sv_2pv			pPerl->Perl_sv_2pv
+#undef  sv_2pv_nolen
+#define sv_2pv_nolen		pPerl->Perl_sv_2pv_nolen
 #undef  sv_2uv
 #define sv_2uv			pPerl->Perl_sv_2uv
 #undef  sv_add_arena
@@ -2949,6 +2979,8 @@
 #define sv_gets			pPerl->Perl_sv_gets
 #undef  sv_grow
 #define sv_grow			pPerl->Perl_sv_grow
+#undef  sv_i_ncmp
+#define sv_i_ncmp		pPerl->Perl_sv_i_ncmp
 #undef  sv_inc
 #define sv_inc			pPerl->Perl_sv_inc
 #undef  sv_insert
@@ -2969,6 +3001,8 @@
 #define sv_mortalcopy		pPerl->Perl_sv_mortalcopy
 #undef  sv_mortalgrow
 #define sv_mortalgrow		pPerl->Perl_sv_mortalgrow
+#undef  sv_ncmp
+#define sv_ncmp			pPerl->Perl_sv_ncmp
 #undef  sv_newmortal
 #define sv_newmortal		pPerl->Perl_sv_newmortal
 #undef  sv_newref
@@ -2981,6 +3015,8 @@
 #define sv_pos_b2u		pPerl->Perl_sv_pos_b2u
 #undef  sv_pos_u2b
 #define sv_pos_u2b		pPerl->Perl_sv_pos_u2b
+#undef  sv_pv
+#define sv_pv			pPerl->Perl_sv_pv
 #undef  sv_pvn
 #define sv_pvn			pPerl->Perl_sv_pvn
 #undef  sv_pvn_force

@@ -603,7 +603,7 @@ more_xpv(void)
 
 #ifdef PURIFY
 #  define my_safemalloc(s) safemalloc(s)
-#  define my_safefree(s) free(s)
+#  define my_safefree(s) safefree(s)
 #else
 STATIC void* 
 my_safemalloc(MEM_SIZE size)
@@ -1173,11 +1173,9 @@ sv_2iv(register SV *sv)
     }
     if (SvTHINKFIRST(sv)) {
 	if (SvROK(sv)) {
-#ifdef OVERLOAD
 	  SV* tmpstr;
 	  if (SvAMAGIC(sv) && (tmpstr=AMG_CALLun(sv, numer)))
-	    return SvIV(tmpstr);
-#endif /* OVERLOAD */
+	      return SvIV(tmpstr);
 	  return (IV)SvRV(sv);
 	}
 	if (SvREADONLY(sv)) {
@@ -1254,11 +1252,9 @@ sv_2uv(register SV *sv)
     }
     if (SvTHINKFIRST(sv)) {
 	if (SvROK(sv)) {
-#ifdef OVERLOAD
 	  SV* tmpstr;
 	  if (SvAMAGIC(sv) && (tmpstr=AMG_CALLun(sv, numer)))
-	    return SvUV(tmpstr);
-#endif /* OVERLOAD */
+	      return SvUV(tmpstr);
 	  return (UV)SvRV(sv);
 	}
 	if (SvREADONLY(sv)) {
@@ -1336,11 +1332,9 @@ sv_2nv(register SV *sv)
     }
     if (SvTHINKFIRST(sv)) {
 	if (SvROK(sv)) {
-#ifdef OVERLOAD
 	  SV* tmpstr;
 	  if (SvAMAGIC(sv) && (tmpstr=AMG_CALLun(sv,numer)))
-	    return SvNV(tmpstr);
-#endif /* OVERLOAD */
+	      return SvNV(tmpstr);
 	  return (double)(unsigned long)SvRV(sv);
 	}
 	if (SvREADONLY(sv)) {
@@ -1513,6 +1507,13 @@ looks_like_number(SV *sv)
 }
 
 char *
+sv_2pv_nolen(register SV *sv)
+{
+    STRLEN n_a;
+    return sv_2pv(sv, &n_a);
+}
+
+char *
 sv_2pv(register SV *sv, STRLEN *lp)
 {
     register char *s;
@@ -1553,11 +1554,9 @@ sv_2pv(register SV *sv, STRLEN *lp)
     }
     if (SvTHINKFIRST(sv)) {
 	if (SvROK(sv)) {
-#ifdef OVERLOAD
 	    SV* tmpstr;
 	    if (SvAMAGIC(sv) && (tmpstr=AMG_CALLun(sv,string)))
-	      return SvPV(tmpstr,*lp);
-#endif /* OVERLOAD */
+		return SvPV(tmpstr,*lp);
 	    sv = (SV*)SvRV(sv);
 	    if (!sv)
 		s = "NULLREF";
@@ -1762,14 +1761,10 @@ sv_2bool(register SV *sv)
     if (!SvOK(sv))
 	return 0;
     if (SvROK(sv)) {
-#ifdef OVERLOAD
-      {
 	dTHR;
 	SV* tmpsv;
 	if (SvAMAGIC(sv) && (tmpsv = AMG_CALLun(sv,bool_)))
-	  return SvTRUE(tmpsv);
-      }
-#endif /* OVERLOAD */
+	    return SvTRUE(tmpsv);
       return SvRV(sv) != 0;
     }
     if (SvPOKp(sv)) {
@@ -1822,9 +1817,8 @@ sv_setsv(SV *dstr, register SV *sstr)
         dtype = SvTYPE(dstr);
     }
 
-#ifdef OVERLOAD
     SvAMAGIC_off(dstr);
-#endif /* OVERLOAD */
+
     /* There's a lot of redundancy below but we're going for speed here */
 
     switch (stype) {
@@ -2093,11 +2087,9 @@ sv_setsv(SV *dstr, register SV *sstr)
 	    (void)SvIOK_on(dstr);
 	    SvIVX(dstr) = SvIVX(sstr);
 	}
-#ifdef OVERLOAD
 	if (SvAMAGIC(sstr)) {
 	    SvAMAGIC_on(dstr);
 	}
-#endif /* OVERLOAD */
     }
     else if (sflags & SVp_POK) {
 
@@ -2312,7 +2304,7 @@ sv_chop(register SV *sv, register char *ptr)	/* like set but assuming ptr is in 
 }
 
 void
-sv_catpvn(register SV *sv, register char *ptr, register STRLEN len)
+sv_catpvn(register SV *sv, register const char *ptr, register STRLEN len)
 {
     STRLEN tlen;
     char *junk;
@@ -2329,7 +2321,7 @@ sv_catpvn(register SV *sv, register char *ptr, register STRLEN len)
 }
 
 void
-sv_catpvn_mg(register SV *sv, register char *ptr, register STRLEN len)
+sv_catpvn_mg(register SV *sv, register const char *ptr, register STRLEN len)
 {
     sv_catpvn(sv,ptr,len);
     SvSETMAGIC(sv);
@@ -2354,7 +2346,7 @@ sv_catsv_mg(SV *dstr, register SV *sstr)
 }
 
 void
-sv_catpv(register SV *sv, register char *ptr)
+sv_catpv(register SV *sv, register const char *ptr)
 {
     register STRLEN len;
     STRLEN tlen;
@@ -2374,7 +2366,7 @@ sv_catpv(register SV *sv, register char *ptr)
 }
 
 void
-sv_catpv_mg(register SV *sv, register char *ptr)
+sv_catpv_mg(register SV *sv, register const char *ptr)
 {
     sv_catpv(sv,ptr);
     SvSETMAGIC(sv);
@@ -2399,7 +2391,7 @@ newSV(STRLEN len)
 /* name is assumed to contain an SV* if (name && namelen == HEf_SVKEY) */
 
 void
-sv_magic(register SV *sv, SV *obj, int how, char *name, I32 namlen)
+sv_magic(register SV *sv, SV *obj, int how, const char *name, I32 namlen)
 {
     MAGIC* mg;
     
@@ -2441,7 +2433,6 @@ sv_magic(register SV *sv, SV *obj, int how, char *name, I32 namlen)
     case 0:
 	mg->mg_virtual = &PL_vtbl_sv;
 	break;
-#ifdef OVERLOAD
     case 'A':
         mg->mg_virtual = &PL_vtbl_amagic;
         break;
@@ -2451,7 +2442,6 @@ sv_magic(register SV *sv, SV *obj, int how, char *name, I32 namlen)
     case 'c':
         mg->mg_virtual = 0;
         break;
-#endif /* OVERLOAD */
     case 'B':
 	mg->mg_virtual = &PL_vtbl_bm;
 	break;
@@ -3453,9 +3443,8 @@ sv_inc(register SV *sv)
 	}
 	if (SvROK(sv)) {
 	    IV i;
-#ifdef OVERLOAD
-	    if (SvAMAGIC(sv) && AMG_CALLun(sv,inc)) return;
-#endif /* OVERLOAD */
+	    if (SvAMAGIC(sv) && AMG_CALLun(sv,inc))
+		return;
 	    i = (IV)SvRV(sv);
 	    sv_unref(sv);
 	    sv_setiv(sv, i);
@@ -3547,9 +3536,8 @@ sv_dec(register SV *sv)
 	}
 	if (SvROK(sv)) {
 	    IV i;
-#ifdef OVERLOAD
-	    if (SvAMAGIC(sv) && AMG_CALLun(sv,dec)) return;
-#endif /* OVERLOAD */
+	    if (SvAMAGIC(sv) && AMG_CALLun(sv,dec))
+		return;
 	    i = (IV)SvRV(sv);
 	    sv_unref(sv);
 	    sv_setiv(sv, i);
@@ -3646,7 +3634,7 @@ sv_2mortal(register SV *sv)
 }
 
 SV *
-newSVpv(char *s, STRLEN len)
+newSVpv(const char *s, STRLEN len)
 {
     register SV *sv;
 
@@ -3661,7 +3649,7 @@ newSVpv(char *s, STRLEN len)
 }
 
 SV *
-newSVpvn(char *s, STRLEN len)
+newSVpvn(const char *s, STRLEN len)
 {
     register SV *sv;
 
@@ -3995,6 +3983,17 @@ sv_nv(register SV *sv)
 }
 
 char *
+sv_pv(SV *sv)
+{
+    STRLEN n_a;
+
+    if (SvPOK(sv))
+	return SvPVX(sv);
+
+    return sv_2pv(sv, &n_a);
+}
+
+char *
 sv_pvn(SV *sv, STRLEN *lp)
 {
     if (SvPOK(sv)) {
@@ -4101,7 +4100,7 @@ sv_isobject(SV *sv)
 }
 
 int
-sv_isa(SV *sv, char *name)
+sv_isa(SV *sv, const char *name)
 {
     if (!sv)
 	return 0;
@@ -4117,7 +4116,7 @@ sv_isa(SV *sv, char *name)
 }
 
 SV*
-newSVrv(SV *rv, char *classname)
+newSVrv(SV *rv, const char *classname)
 {
     dTHR;
     SV *sv;
@@ -4128,9 +4127,7 @@ newSVrv(SV *rv, char *classname)
     SvFLAGS(sv) = 0;
 
     SV_CHECK_THINKFIRST(rv);
-#ifdef OVERLOAD
     SvAMAGIC_off(rv);
-#endif /* OVERLOAD */
 
     if (SvTYPE(rv) < SVt_RV)
       sv_upgrade(rv, SVt_RV);
@@ -4147,7 +4144,7 @@ newSVrv(SV *rv, char *classname)
 }
 
 SV*
-sv_setref_pv(SV *rv, char *classname, void *pv)
+sv_setref_pv(SV *rv, const char *classname, void *pv)
 {
     if (!pv) {
 	sv_setsv(rv, &PL_sv_undef);
@@ -4159,21 +4156,21 @@ sv_setref_pv(SV *rv, char *classname, void *pv)
 }
 
 SV*
-sv_setref_iv(SV *rv, char *classname, IV iv)
+sv_setref_iv(SV *rv, const char *classname, IV iv)
 {
     sv_setiv(newSVrv(rv,classname), iv);
     return rv;
 }
 
 SV*
-sv_setref_nv(SV *rv, char *classname, double nv)
+sv_setref_nv(SV *rv, const char *classname, double nv)
 {
     sv_setnv(newSVrv(rv,classname), nv);
     return rv;
 }
 
 SV*
-sv_setref_pvn(SV *rv, char *classname, char *pv, I32 n)
+sv_setref_pvn(SV *rv, const char *classname, char *pv, I32 n)
 {
     sv_setpvn(newSVrv(rv,classname), pv, n);
     return rv;
@@ -4202,12 +4199,10 @@ sv_bless(SV *sv, HV *stash)
     (void)SvUPGRADE(tmpRef, SVt_PVMG);
     SvSTASH(tmpRef) = (HV*)SvREFCNT_inc(stash);
 
-#ifdef OVERLOAD
     if (Gv_AMG(stash))
 	SvAMAGIC_on(sv);
     else
 	SvAMAGIC_off(sv);
-#endif /* OVERLOAD */
 
     return sv;
 }
@@ -4413,10 +4408,6 @@ sv_vcatpvfn(SV *sv, const char *pat, STRLEN patlen, va_list *args, SV **svargs, 
 	char *eptr = Nullch;
 	STRLEN elen = 0;
 	char ebuf[TYPE_DIGITS(int) * 2 + 16]; /* large enough for "%#.#f" */
-
-	static char *efloatbuf = Nullch;
-	static STRLEN efloatsize = 0;
-
 	char c;
 	int i;
 	unsigned base;
@@ -4645,6 +4636,10 @@ sv_vcatpvfn(SV *sv, const char *pat, STRLEN patlen, va_list *args, SV **svargs, 
 	    base = 10;
 	    goto uns_integer;
 
+	case 'b':
+	    base = 2;
+	    goto uns_integer;
+
 	case 'O':
 	    intsize = 'l';
 	    /* FALL THROUGH */
@@ -4700,6 +4695,14 @@ sv_vcatpvfn(SV *sv, const char *pat, STRLEN patlen, va_list *args, SV **svargs, 
 		if (alt && *eptr != '0')
 		    *--eptr = '0';
 		break;
+	    case 2:
+		do {
+		    dig = uv & 1;
+		    *--eptr = '0' + dig;
+		} while (uv >>= 1);
+		if (alt && *eptr != '0')
+		    *--eptr = '0';
+		break;
 	    default:		/* it had better be ten or less */
 		do {
 		    dig = uv % base;
@@ -4746,10 +4749,10 @@ sv_vcatpvfn(SV *sv, const char *pat, STRLEN patlen, va_list *args, SV **svargs, 
 		need = width;
 
 	    need += 20; /* fudge factor */
-	    if (efloatsize < need) {
-		Safefree(efloatbuf);
-		efloatsize = need + 20; /* more fudge */
-		New(906, efloatbuf, efloatsize, char);
+	    if (PL_efloatsize < need) {
+		Safefree(PL_efloatbuf);
+		PL_efloatsize = need + 20; /* more fudge */
+		New(906, PL_efloatbuf, PL_efloatsize, char);
 	    }
 
 	    eptr = ebuf + sizeof ebuf;
@@ -4774,10 +4777,10 @@ sv_vcatpvfn(SV *sv, const char *pat, STRLEN patlen, va_list *args, SV **svargs, 
 		*--eptr = '#';
 	    *--eptr = '%';
 
-	    (void)sprintf(efloatbuf, eptr, nv);
+	    (void)sprintf(PL_efloatbuf, eptr, nv);
 
-	    eptr = efloatbuf;
-	    elen = strlen(efloatbuf);
+	    eptr = PL_efloatbuf;
+	    elen = strlen(PL_efloatbuf);
 
 #ifdef LC_NUMERIC
 	    /*

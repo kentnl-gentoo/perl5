@@ -261,25 +261,26 @@ rm -f core
 # XXX
 EOSH
 
-if [ "X$usethreads" = "X$define" ]; then
-    ccflags="-D_REENTRANT $ccflags"
-    # -lpthread needs to come before -lc but after other libraries such
-    # as -lgdbm and such like. We assume here that -lc is present in
-    # libswanted. If that fails to be true in future, then this can be
-    # changed to add pthread to the very end of libswanted.
-    # sched_yield is in -lposix4
-    set `echo X "$libswanted "| sed -e 's/ c / posix4 pthread c /'`
-    shift
-    libswanted="$*"
+# This script UU/usethreads.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use threads.
+cat > UU/usethreads.cbu <<'EOCBU'
+case "$usethreads" in
+$define|true|[yY]*)
+        ccflags="-D_REENTRANT $ccflags"
 
-    # On Solaris 2.6 x86 there is a bug with sigsetjmp() and siglongjmp()
-    # when linked with the threads library, such that whatever positive value
-    # you pass to siglongjmp(), sigsetjmp() returns 1.
-    # Thanks to Simon Parsons <S.Parsons@ftel.co.uk> for this report.
-    # Sun BugID is 4117946, "sigsetjmp always returns 1 when called by
-    # siglongjmp in a MT program". As of 19980622, there is no patch
-    # available.
-    cat >try.c <<'EOM'
+        # sched_yield is in -lposix4
+        set `echo X "$libswanted "| sed -e 's/ c / posix4 pthread c /'`
+        shift
+        libswanted="$*"
+
+        # On Solaris 2.6 x86 there is a bug with sigsetjmp() and siglongjmp()
+        # when linked with the threads library, such that whatever positive
+        # value you pass to siglongjmp(), sigsetjmp() returns 1.
+        # Thanks to Simon Parsons <S.Parsons@ftel.co.uk> for this report.
+        # Sun BugID is 4117946, "sigsetjmp always returns 1 when called by
+        # siglongjmp in a MT program". As of 19980622, there is no patch
+        # available.
+        cat >try.c <<'EOM'
 	/* Test for sig(set|long)jmp bug. */
 	#include <setjmp.h>
 	 
@@ -293,37 +294,43 @@ if [ "X$usethreads" = "X$define" ]; then
 	    siglongjmp(env, 2);
 	}
 EOM
-    if test "`arch`" = i86pc -a "$osvers" = 2.6 \
-    && ${cc:-cc} try.c -lpthread >/dev/null 2>&1 && ./a.out; then
-	d_sigsetjmp=$undef
-	cat << 'EOM' >&2
+        if test "`arch`" = i86pc -a "$osvers" = 2.6 && \
+           ${cc:-cc} try.c -lpthread >/dev/null 2>&1 && ./a.out; then
+ 	    d_sigsetjmp=$undef
+	    cat << 'EOM' >&2
 
 You will see a *** WHOA THERE!!! ***  message from Configure for
 d_sigsetjmp.  Keep the recommended value.  See hints/solaris_2.sh
 for more information.
 
 EOM
-    fi
-fi
-
-# 64-bitness
-# jhi@iki.fi, inspired by Alan Burlison.
-
-if [ "X$use64bits" = "X$define" ]; then
-    uname_r=`uname -r`
-    case "$uname_r" in
-    1.*|2.[1-5])
-	echo >&4 "Solaris $uname_r does not support 64-bit types."
-	echo >&4 "You should upgrade to at least Solaris 2.6."
-	exit 1
+        fi
 	;;
-    esac
-    ccflags="$ccflags `getconf LFS_CFLAGS` -DUSE_LONG_LONG"
-    ldflags="$ldflags `getconf LFS_LDFLAGS`"
-    libswanted="$libswanted `getconf LFS_LIBS`"
-    # When a 64-bit cc becomes available $archname64 may need setting
-    # so that $archname gets it attached.
-fi
+esac
+EOCBU
+
+# This script UU/use64bits.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use 64 bits.
+cat > UU/use64bits.cbu <<'EOCBU'
+case "$use64bits" in
+$define|true|[yY]*)
+	    case "`uname -r`" in
+	    2.[1-5])
+		cat >&4 <<EOM
+Solaris `uname -r` does not support 64-bit interfaces.
+You should upgrade to at least Solaris 2.6.
+EOM
+		exit 1
+		;;
+	    esac
+	    ccflags="$ccflags `getconf LFS_CFLAGS` -DUSE_LONG_LONG"
+	    ldflags="$ldflags `getconf LFS_LDFLAGS`"
+	    libswanted="$libswanted `getconf LFS_LIBS`"
+	    # When a 64-bit cc becomes available $archname64
+	    # may need setting so that $archname gets it attached.
+	    ;;
+esac
+EOCBU
 
 # This is just a trick to include some useful notes.
 cat > /dev/null <<'End_of_Solaris_Notes'

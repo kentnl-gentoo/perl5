@@ -199,7 +199,7 @@ pre-defined things are C<BEGIN>, C<END>, C<AUTOLOAD>, and C<DESTROY>--plus all t
 functions mentioned in L<perltie>.  The 5.005 release adds C<INIT>
 to this list.
 
-=head2 Private Variables via C<my()>
+=head2 Private Variables via my()
 
 Synopsis:
 
@@ -381,7 +381,7 @@ unqualified and unqualifiable.
 This does not work with object methods, however; all object methods have
 to be in the symbol table of some package to be found.
 
-=head2 Peristent Private Variables
+=head2 Persistent Private Variables
 
 Just because a lexical variable is lexically (also called statically)
 scoped to its enclosing block, C<eval>, or C<do> FILE, this doesn't mean that
@@ -825,7 +825,8 @@ if you call it like a builtin function, then it behaves like a builtin
 function.  If you call it like an old-fashioned subroutine, then it
 behaves like an old-fashioned subroutine.  It naturally falls out from
 this rule that prototypes have no influence on subroutine references
-like C<\&foo> or on indirect subroutine calls like C<&{$subref}>.
+like C<\&foo> or on indirect subroutine calls like C<&{$subref}> or
+C<$subref-E<gt>()>. 
 
 Method calls are not influenced by prototypes either, because the
 function to be called is indeterminate at compile time, because it depends

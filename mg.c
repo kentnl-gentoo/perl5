@@ -275,7 +275,7 @@ mg_find(SV *sv, int type)
 }
 
 int
-mg_copy(SV *sv, SV *nsv, char *key, I32 klen)
+mg_copy(SV *sv, SV *nsv, const char *key, I32 klen)
 {
     int count = 0;
     MAGIC* mg;
@@ -880,7 +880,7 @@ magic_clear_all_env(SV *sv, MAGIC *mg)
 #if defined(VMS)
     die("Can't make list assignment to %%ENV on this system");
 #else
-#ifdef WIN32
+#  ifdef WIN32
     char *envv = GetEnvironmentStrings();
     char *cur = envv;
     STRLEN len;
@@ -890,24 +890,27 @@ magic_clear_all_env(SV *sv, MAGIC *mg)
 	    *end = '\0';
 	    my_setenv(cur,Nullch);
 	    *end = '=';
-	    cur += strlen(end+1)+1;
+	    cur = end + strlen(end+1)+2;
 	}
 	else if ((len = strlen(cur)))
 	    cur += len+1;
     }
     FreeEnvironmentStrings(envv);
-#else
+#  else
+#    ifndef PERL_USE_SAFE_PUTENV
     I32 i;
 
     if (environ == PL_origenviron)
-	New(901, environ, 1, char*);
+	environ = (char**)safesysmalloc(sizeof(char*));
     else
 	for (i = 0; environ[i]; i++)
-	    Safefree(environ[i]);
+	    safesysfree(environ[i]);
+#    endif /* PERL_USE_SAFE_PUTENV */
+
     environ[0] = Nullch;
 
-#endif
-#endif
+#  endif /* WIN32 */
+#endif /* VMS */
     return 0;
 }
 
@@ -1037,8 +1040,6 @@ magic_setisa(SV *sv, MAGIC *mg)
     return 0;
 }
 
-#ifdef OVERLOAD
-
 int
 magic_setamagic(SV *sv, MAGIC *mg)
 {
@@ -1047,7 +1048,6 @@ magic_setamagic(SV *sv, MAGIC *mg)
 
     return 0;
 }
-#endif /* OVERLOAD */
 
 int
 magic_getnkeys(SV *sv, MAGIC *mg)

@@ -4,7 +4,7 @@
 # separate executable and can't simply use eval.
 
 chdir 't' if -d 't';
-@INC = "../lib";
+unshift @INC, "../lib";
 $ENV{PERL5LIB} = "../lib";
 
 $|=1;
@@ -25,22 +25,25 @@ for (@prgs){
 	$switch = $1;
     }
     my($prog,$expected) = split(/\nEXPECT\n/, $_);
+    open TEST, ">$tmpfile" or die "Cannot open $tmpfile: $!";
+    print TEST $prog, "\n";
+    close TEST or die "Cannot close $tmpfile: $!";
+
     if ($^O eq 'MSWin32') {
-      open TEST, "| .\\perl -I../lib $switch >$tmpfile 2>&1";
+      $results = `.\\perl -I../lib $switch $tmpfile 2>&1`;
     }
     else {
-      open TEST, "| sh -c './perl $switch' >$tmpfile 2>&1";
+      $results = `./perl $switch $tmpfile 2>&1`;
     }
-    print TEST $prog, "\n";
-    close TEST;
     $status = $?;
-    $results = `$CAT $tmpfile`;
     $results =~ s/\n+$//;
+    $results =~ s/at\s+misctmp\d+\s+line/at - line/g;
+    $results =~ s/of\s+misctmp\d+\s+aborted/of - aborted/g;
 # bison says 'parse error' instead of 'syntax error',
 # various yaccs may or may not capitalize 'syntax'.
     $results =~ s/^(syntax|parse) error/syntax error/mig;
     $expected =~ s/\n+$//;
-    if ( $results ne $expected){
+    if ( $results ne $expected ) {
 	print STDERR "PROG: $switch\n$prog\n";
 	print STDERR "EXPECTED:\n$expected\n";
 	print STDERR "GOT:\n$results\n";
@@ -77,7 +80,7 @@ $x=0x0eabcd; print $x->ref;
 EXPECT
 Can't call method "ref" without a package or object reference at - line 1.
 ########
-chop ($str .= <STDIN>);
+chop ($str .= <DATA>);
 ########
 close ($banana);
 ########
@@ -89,7 +92,7 @@ eval {sub bar {print "In bar";}}
 ########
 system './perl -ne "print if eof" /dev/null'
 ########
-chop($file = <>);
+chop($file = <DATA>);
 ########
 package N;
 sub new {my ($obj,$n)=@_; bless \$n}  
@@ -432,3 +435,44 @@ EXPECT
 foo
 bar
 BEGIN failed--compilation aborted at - line 8.
+########
+package X;
+@ISA='Y';
+sub new {
+    my $class = shift;
+    my $self = { };
+    bless $self, $class;
+    my $init = shift;
+    $self->foo($init);
+    print "new", $init;
+    return $self;
+}
+sub DESTROY {
+    my $self = shift;
+    print "DESTROY", $self->foo;
+}
+package Y;
+sub attribute {
+    my $self = shift;
+    my $var = shift;
+    if (@_ == 0) {
+	return $self->{$var};
+    } elsif (@_ == 1) {
+	$self->{$var} = shift;
+    }
+}
+sub AUTOLOAD {
+    $AUTOLOAD =~ /::([^:]+)$/;
+    my $method = $1;
+    splice @_, 1, 0, $method;
+    goto &attribute;
+}
+package main;
+my $x = X->new(1);
+for (2..3) {
+    my $y = X->new($_);
+    print $y->foo;
+}
+print $x->foo;
+EXPECT
+new1new22DESTROY2new33DESTROY31DESTROY1

@@ -377,7 +377,7 @@ sub cflags {
 
     if ($self->{CAPI} && $Is_PERL_OBJECT) {
         $self->{CCFLAGS} =~ s/-DPERL_OBJECT(\s|$)//;
-        $self->{CCFLAGS} .= '-DPERL_CAPI';
+        $self->{CCFLAGS} .= ' -DPERL_CAPI ';
         if ($Is_Win32 && $Config{'cc'} =~ /^cl.exe/i) {
             # Turn off C++ mode of the MSC compiler
             $self->{CCFLAGS} =~ s/-TP(\s|$)//;
@@ -819,7 +819,7 @@ ci :
 
 =item dist_core (o)
 
-Defeines the targets dist, tardist, zipdist, uutardist, shdist
+Defines the targets dist, tardist, zipdist, uutardist, shdist
 
 =cut
 
@@ -2763,9 +2763,11 @@ sub ppd {
     foreach $prereq (sort keys %{$self->{PREREQ_PM}}) {
         my $pre_req = $prereq;
         $pre_req =~ s/::/-/g;
-        push(@m, ". qq{\\t\\t<DEPENDENCY NAME=\\\"$pre_req\\\" />\\n}");
+        my ($dep_ver) = join ",", (split (/\./, $self->{PREREQ_PM}{$prereq}), (0) x 4) [0 .. 3];
+        push(@m, ". qq{\\t\\t<DEPENDENCY NAME=\\\"$pre_req\\\" VERSION=\\\"$dep_ver\\\" />\\n}");
     }
     push(@m, ". qq{\\t\\t<OS NAME=\\\"\$(OSNAME)\\\" />\\n}");
+    push(@m, ". qq{\\t\\t<ARCHITECTURE NAME=\\\"$Config{'archname'}\\\" />\\n}");
     my ($bin_location) = $self->{BINARY_LOCATION};
     $bin_location =~ s/\\/\\\\/g;
     if ($self->{PPM_INSTALL_SCRIPT}) {
@@ -2789,7 +2791,7 @@ Returns the attribute C<PERM_RW> or the string C<644>.
 Used as the string that is passed
 to the C<chmod> command to set the permissions for read/writeable files.
 MakeMaker chooses C<644> because it has turned out in the past that
-relying on the umask provokes hard-to-track bugreports.
+relying on the umask provokes hard-to-track bug reports.
 When the return value is used by the perl function C<chmod>, it is
 interpreted as an octal value.
 
@@ -3469,7 +3471,7 @@ Version_check:
 
 =item writedoc
 
-Obsolete, depecated method. Not used since Version 5.21.
+Obsolete, deprecated method. Not used since Version 5.21.
 
 =cut
 
@@ -3539,6 +3541,7 @@ and Win32 do.
 
 sub perl_archive
 {
+ return '$(PERL_INC)' . "/$Config{libperl}" if $^O eq "beos";
  return "";
 }
 

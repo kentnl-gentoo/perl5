@@ -1,3 +1,4 @@
+AUTHORS			Contact info for contributors
 Artistic		The "Artistic License"
 Changes			Differences from previous version
 Changes5.000		Differences between 4.x and 5.000
@@ -11,6 +12,7 @@ Copying			The GNU General Public License
 EXTERN.h		Included before foreign .h files
 INSTALL			Detailed installation instructions
 INTERN.h		Included before domestic .h files
+MAINTAIN		Who maintains which files
 MANIFEST		This list of files
 Makefile.SH		A script that generates Makefile
 objXSUB.h		Scoping macros for Perl Object in extensions
@@ -35,6 +37,7 @@ README.beos		Notes about BeOS port
 README.cygwin32		Notes about Cygwin32 port
 README.dos		Notes about dos/djgpp port
 README.lexwarn		Notes about lexical warnings
+README.mint		Notes about Atari MiNT port
 README.mpeix		Notes about MPE/iX port
 README.os2		Notes about OS/2 port
 README.os390		Notes about OS/390 (nee MVS) port
@@ -147,6 +150,7 @@ eg/van/vanish		A program to put files in a trashcan
 eg/who			A sample who program
 eg/wrapsuid		A setuid script wrapper generator
 emacs/cperl-mode.el	An alternate perl-mode
+emacs/e2ctags.pl	etags to ctags converter
 emacs/ptags		Creates smart TAGS file
 embed.h			Maps symbols to safer names
 embed.pl		Produces embed.h
@@ -178,6 +182,7 @@ ext/B/README		Compiler backend README
 ext/B/TESTS		Compiler backend test data
 ext/B/Todo		Compiler backend Todo list
 ext/B/byteperl.c	Bytecode runner
+ext/B/defsubs.h.PL	Generator for constant subroutines
 ext/B/ramblings/cc.notes	Compiler ramblings: notes on CC backend
 ext/B/ramblings/curcop.runtime	Compiler ramblings: notes on curcop use
 ext/B/ramblings/flip-flop	Compiler ramblings: notes on flip-flop
@@ -206,6 +211,7 @@ ext/DynaLoader/DynaLoader_pm.PL	Dynamic Loader perl module
 ext/DynaLoader/Makefile.PL	Dynamic Loader makefile writer
 ext/DynaLoader/README		Dynamic Loader notes and intro
 ext/DynaLoader/dl_aix.xs	AIX implementation
+ext/DynaLoader/dl_beos.xs	BeOS implementation
 ext/DynaLoader/dl_cygwin32.xs	Cygwin32 implementation
 ext/DynaLoader/dl_dld.xs	GNU dld style implementation
 ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
@@ -216,6 +222,7 @@ ext/DynaLoader/dl_none.xs	Stub implementation
 ext/DynaLoader/dl_vms.xs	VMS implementation
 ext/DynaLoader/dl_vmesa.xs	VM/ESA implementation
 ext/DynaLoader/dlutils.c	Dynamic loader utilities for dl_*.xs files
+ext/DynaLoader/hints/linux.pl	Hint for DynaLoader for named architecture
 ext/Errno/ChangeLog		Errno perl module change log
 ext/Errno/Errno_pm.PL		Errno perl module create script
 ext/Errno/Makefile.PL		Errno extension makefile writer
@@ -226,6 +233,7 @@ ext/GDBM_File/GDBM_File.pm	GDBM extension Perl module
 ext/GDBM_File/GDBM_File.xs	GDBM extension external subroutines
 ext/GDBM_File/Makefile.PL	GDBM extension makefile writer
 ext/GDBM_File/typemap		GDBM extension interface types
+ext/GDBM_File/hints/sco.pl	Hint for GDBM_File for named architecture
 ext/IO/ChangeLog		IO perl module change log
 ext/IO/IO.pm			Top-level interface to IO::* classes
 ext/IO/IO.xs			IO extension external subroutines
@@ -283,10 +291,11 @@ ext/POSIX/POSIX.pod		POSIX extension documentation
 ext/POSIX/POSIX.xs		POSIX extension external subroutines
 ext/POSIX/hints/bsdos.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/dynixptx.pl	Hint for POSIX for named architecture
-ext/POSIX/hints/freebsd.pl	Hint for POSIX for named architecture
-ext/POSIX/hints/linux.pl	Hint for POSIX for named architecture
-ext/POSIX/hints/netbsd.pl	Hint for POSIX for named architecture
-ext/POSIX/hints/next_3.pl	Hint for POSIX for named architecture
+ext/POSIX/hints/freebsd.pl      Hint for POSIX for named architecture
+ext/POSIX/hints/linux.pl        Hint for POSIX for named architecture
+ext/POSIX/hints/mint.pl         Hint for POSIX for named architecture
+ext/POSIX/hints/netbsd.pl       Hint for POSIX for named architecture
+ext/POSIX/hints/next_3.pl       Hint for POSIX for named architecture
 ext/POSIX/hints/openbsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/sunos_4.pl	Hint for POSIX for named architecture
 ext/POSIX/typemap		POSIX extension interface types
@@ -402,6 +411,7 @@ hints/esix4.sh		Hints for named architecture
 hints/fps.sh		Hints for named architecture
 hints/freebsd.sh	Hints for named architecture
 hints/genix.sh		Hints for named architecture
+hints/gnu.sh		Hints for named architecture
 hints/greenhills.sh	Hints for named architecture
 hints/hpux.sh		Hints for named architecture
 hints/i386.sh		Hints for named architecture
@@ -416,6 +426,7 @@ hints/linux.sh		Hints for named architecture
 hints/lynxos.sh		Hints for named architecture
 hints/machten.sh	Hints for named architecture
 hints/machten_2.sh	Hints for named architecture
+hints/mint.sh		Hints for named architecture
 hints/mips.sh		Hints for named architecture
 hints/mpc.sh		Hints for named architecture
 hints/mpeix.sh		Hints for named architecture
@@ -508,10 +519,13 @@ lib/CPAN/Nox.pm		Runs CPAN while avoiding compiled extensions
 lib/Carp.pm		Error message base class
 lib/Class/Struct.pm	Declare struct-like datatypes as Perl classes
 lib/Cwd.pm		Various cwd routines (getcwd, fastcwd, chdir)
+lib/DB.pm		Debugger API (draft)
 lib/Devel/SelfStubber.pm Generate stubs for SelfLoader.pm
 lib/DirHandle.pm	like FileHandle only for directories
+lib/Dumpvalue.pm	Screen dump of perl values
 lib/English.pm		Readable aliases for short variables
 lib/Env.pm		Map environment into ordinary variables
+lib/Exporter/Heavy.pm	Complicated routines for Exporter
 lib/Exporter.pm		Exporter base class
 lib/ExtUtils/Command.pm	Utilities for Make on non-UNIX platforms
 lib/ExtUtils/Embed.pm	Utilities for embedding Perl in C programs
@@ -815,6 +829,13 @@ mg.c			Magic code
 mg.h			Magic header
 minimod.pl		Writes lib/ExtUtils/Miniperl.pm
 miniperlmain.c		Basic perl w/o dynamic loading or extensions
+mint/errno.h		MiNT port
+mint/Makefile		MiNT port
+mint/pwd.c		MiNT port
+mint/README		MiNT port
+mint/stdio.h		MiNT port
+mint/sys/time.h		MiNT port
+mint/time.h		MiNT port
 mpeix/mpeixish.h	MPE/iX port
 mpeix/nm		MPE/iX port
 mpeix/relink		MPE/iX port
@@ -938,6 +959,7 @@ pod/perlmodinstall.pod	Installing CPAN Modules
 pod/perlmodlib.pod	Module policy info
 pod/perlobj.pod		Object info
 pod/perlop.pod		Operator info
+pod/perlopentut.pod	open() tutorial
 pod/perlpod.pod		Pod info
 pod/perlport.pod	Portability guide
 pod/perlre.pod		Regular expression info
@@ -948,8 +970,10 @@ pod/perlsec.pod		Security info
 pod/perlstyle.pod	Style info
 pod/perlsub.pod		Subroutine info
 pod/perlsyn.pod		Syntax info
+pod/perlthrtut.pod	Threads tutorial
 pod/perltie.pod		Tieing an object class into a simple variable
 pod/perltoc.pod		Table of Contents info
+pod/perltodo.pod	Todo list explained
 pod/perltoot.pod	Tom's object-oriented tutorial
 pod/perltrap.pod	Trap info
 pod/perlvar.pod		Variable info
@@ -1000,6 +1024,7 @@ t/cmd/mod.t		See if statement modifiers work
 t/cmd/subval.t		See if subroutine values work
 t/cmd/switch.t		See if switch optimizations work
 t/cmd/while.t		See if while loops work
+t/comp/bproto.t		See if builtins conform to their prototypes
 t/comp/cmdopt.t		See if command optimization works
 t/comp/colon.t		See if colons are parsed correctly
 t/comp/cpp.aux		main file for cpp.t
@@ -1027,6 +1052,8 @@ t/lib/abbrev.t		See if Text::Abbrev works
 t/lib/anydbm.t		See if AnyDBM_File works
 t/lib/autoloader.t	See if AutoLoader works
 t/lib/basename.t	See if File::Basename works
+t/lib/bigfloat.t	See if bigfloat.pl works
+t/lib/bigfloatpm.t	See if BigFloat.pm works
 t/lib/bigint.t		See if bigint.pl works
 t/lib/bigintpm.t	See if BigInt.pm works
 t/lib/cgi-form.t	See if CGI.pm works
@@ -1120,6 +1147,7 @@ t/op/each.t		See if hash iterators work
 t/op/eval.t		See if eval operator works
 t/op/exec.t		See if exec and system work
 t/op/exp.t		See if math functions work
+t/op/fh.t		See if filehandles work
 t/op/filetest.t		See if file tests work
 t/op/flip.t		See if range operator works
 t/op/fork.t		See if fork works
@@ -1137,6 +1165,7 @@ t/op/join.t		See if join works
 t/op/lex_assign.t	See if ops involving lexicals or pad temps work
 t/op/list.t		See if array lists work
 t/op/local.t		See if local works
+t/op/lop.t		See if logical operators work
 t/op/magic.t		See if magic variables work
 t/op/method.t		See if method calls work
 t/op/misc.t		See if miscellaneous bugs have been fixed
@@ -1170,6 +1199,8 @@ t/op/sprintf.t		See if sprintf works
 t/op/stat.t		See if stat works
 t/op/study.t		See if study works
 t/op/subst.t		See if substitution works
+t/op/subst_amp.t	See if $&-related substitution works
+t/op/subst_wamp.t	See if substitution works with $& present
 t/op/substr.t		See if substr works
 t/op/sysio.t		See if sysread and syswrite work
 t/op/taint.t		See if tainting works

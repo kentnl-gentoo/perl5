@@ -468,10 +468,20 @@ PP(pp_rv2av)
 		    RETSETUNDEF;
 		}
 		sym = SvPV(sv,n_a);
-		if (PL_op->op_private & HINT_STRICT_REFS)
-		    DIE(PL_no_symref, sym, "an ARRAY");
-		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVAV);
-	    } else {
+		if ((PL_op->op_flags & OPf_SPECIAL) &&
+		    !(PL_op->op_flags & OPf_MOD))
+		{
+		    gv = (GV*)gv_fetchpv(sym, FALSE, SVt_PVAV);
+		    if (!gv)
+			RETSETUNDEF;
+		}
+		else {
+		    if (PL_op->op_private & HINT_STRICT_REFS)
+			DIE(PL_no_symref, sym, "an ARRAY");
+		    gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVAV);
+		}
+	    }
+	    else {
 		gv = (GV*)sv;
 	    }
 	    av = GvAVn(gv);
@@ -558,10 +568,20 @@ PP(pp_rv2hv)
 		    RETSETUNDEF;
 		}
 		sym = SvPV(sv,n_a);
-		if (PL_op->op_private & HINT_STRICT_REFS)
-		    DIE(PL_no_symref, sym, "a HASH");
-		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVHV);
-	    } else {
+		if ((PL_op->op_flags & OPf_SPECIAL) &&
+		    !(PL_op->op_flags & OPf_MOD))
+		{
+		    gv = (GV*)gv_fetchpv(sym, FALSE, SVt_PVHV);
+		    if (!gv)
+			RETSETUNDEF;
+		}
+		else {
+		    if (PL_op->op_private & HINT_STRICT_REFS)
+			DIE(PL_no_symref, sym, "a HASH");
+		    gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVHV);
+		}
+	    }
+	    else {
 		gv = (GV*)sv;
 	    }
 	    hv = GvHVn(gv);
@@ -655,7 +675,7 @@ PP(pp_aassign)
 		    if (SvSMAGICAL(sv))
 			mg_set(sv);
 		    if (!didstore)
-			SvREFCNT_dec(sv);
+			sv_2mortal(sv);
 		}
 		TAINT_NOT;
 	    }
@@ -682,7 +702,7 @@ PP(pp_aassign)
 			if (SvSMAGICAL(tmpstr))
 			    mg_set(tmpstr);
 			if (!didstore)
-			    SvREFCNT_dec(tmpstr);
+			    sv_2mortal(tmpstr);
 		    }
 		    TAINT_NOT;
 		}
@@ -704,7 +724,7 @@ PP(pp_aassign)
 			    if (SvSMAGICAL(tmpstr))
 				mg_set(tmpstr);
 			    if (!didstore)
-				SvREFCNT_dec(tmpstr);
+				sv_2mortal(tmpstr);
 			}
 			TAINT_NOT;
 		    }
@@ -844,6 +864,7 @@ PP(pp_match)
     I32 minmatch = 0;
     I32 oldsave = PL_savestack_ix;
     I32 update_minmatch = 1;
+    I32 had_zerolen = 0;
 
     if (PL_op->op_flags & OPf_STACKED)
 	TARG = POPs;
@@ -874,12 +895,15 @@ PP(pp_match)
     if (rx->minlen > len) goto failure;
 
     truebase = t = s;
+
+    /* XXXX What part of this is needed with true \G-support? */
     if (global = pm->op_pmflags & PMf_GLOBAL) {
 	rx->startp[0] = 0;
 	if (SvTYPE(TARG) >= SVt_PVMG && SvMAGIC(TARG)) {
 	    MAGIC* mg = mg_find(TARG, 'g');
 	    if (mg && mg->mg_len >= 0) {
-		rx->endp[0] = rx->startp[0] = s + mg->mg_len; 
+		if (!(rx->reganch & ROPT_GPOS_SEEN))
+		    rx->endp[0] = rx->startp[0] = s + mg->mg_len; 
 		minmatch = (mg->mg_flags & MGf_MINMATCH);
 		update_minmatch = 0;
 	    }
@@ -904,7 +928,7 @@ play_it_again:
 	if ((s + rx->minlen) > strend)
 	    goto nope;
 	if (update_minmatch++)
-	    minmatch = (s == rx->startp[0]);
+	    minmatch = had_zerolen;
     }
     if (rx->check_substr) {
 	if (!(rx->reganch & ROPT_NOSCAN)) { /* Floating checkstring. */
@@ -990,9 +1014,9 @@ play_it_again:
 	if (global) {
 	    truebase = rx->subbeg;
 	    strend = rx->subend;
-	    if (rx->startp[0] && rx->startp[0] == rx->endp[0])
-		++rx->endp[0];
+	    had_zerolen = (rx->startp[0] && rx->startp[0] == rx->endp[0]);
 	    PUTBACK;			/* EVAL blocks may use stack */
+	    r_flags |= REXEC_IGNOREPOS;
 	    goto play_it_again;
 	}
 	else if (!iters)
@@ -1273,8 +1297,18 @@ do_readline(void)
 	sv = sv_2mortal(NEWSV(57, 80));
 	offset = 0;
     }
+
+/* flip-flop EOF state for a snarfed empty file */
+#define SNARF_EOF(gimme,rs,io,sv) \
+    ((gimme != G_SCALAR || SvCUR(sv)					\
+      || (IoFLAGS(io) & IOf_NOLINE) || IoLINES(io) || !RsSNARF(rs))	\
+	? ((IoFLAGS(io) &= ~IOf_NOLINE), TRUE)				\
+	: ((IoFLAGS(io) |= IOf_NOLINE), FALSE))
+
     for (;;) {
-	if (!sv_gets(sv, fp, offset)) {
+	if (!sv_gets(sv, fp, offset)
+	    && (type == OP_GLOB || SNARF_EOF(gimme, PL_rs, io, sv)))
+	{
 	    PerlIO_clearerr(fp);
 	    if (IoFLAGS(io) & IOf_ARGV) {
 		fp = nextargv(PL_last_in_gv);
@@ -1827,6 +1861,7 @@ PP(pp_subst)
 	    PUSHSUBST(cx);
 	    RETURNOP(cPMOP->op_pmreplroot);
 	}
+	r_flags |= REXEC_IGNOREPOS;
 	do {
 	    if (iters++ > maxiters)
 		DIE("Substitution loop");
@@ -1845,7 +1880,7 @@ PP(pp_subst)
 		sv_catpvn(dstr, c, clen);
 	    if (once)
 		break;
-	} while (CALLREGEXEC(rx, s, strend, orig, s == m, Nullsv, NULL, r_flags));
+	} while (CALLREGEXEC(rx, s, strend, orig, s == m, TARG, NULL, r_flags));
 	sv_catpvn(dstr, s, strend - s);
 
 	(void)SvOOK_off(TARG);

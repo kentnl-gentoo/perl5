@@ -130,7 +130,7 @@ PERLVAR(Gthisexpr,	I32)		/* name id for nothing_in_common() */
 PERLVAR(Glast_uni,	char *)		/* position of last named-unary op */
 PERLVAR(Glast_lop,	char *)		/* position of last list operator */
 PERLVAR(Glast_lop_op,	OPCODE)		/* last list operator */
-PERLVAR(Gin_my,	bool)			/* we're compiling a "my" declaration */
+PERLVAR(Gin_my,		bool)		/* we're compiling a "my" declaration */
 PERLVAR(Gin_my_stash,	HV *)		/* declared class of this "my" declaration */
 #ifdef FCRYPT
 PERLVAR(Gcryptseen,	I32)		/* has fast crypt() been initialized? */
@@ -141,12 +141,7 @@ PERLVAR(Ghints,	U32)			/* pragma-tic compile-time flags */
 PERLVAR(Gdo_undump,	bool)		/* -u or dump seen? */
 PERLVAR(Gdebug,		VOL U32)	/* flags given to -D switch */
 
-
-#ifdef OVERLOAD
-
 PERLVAR(Gamagic_generation,	long)
-
-#endif
 
 #ifdef USE_LOCALE_COLLATE
 PERLVAR(Gcollation_ix,	U32)		/* Collation generation index */
@@ -200,3 +195,12 @@ PERLVAR(Gyyerrflag,	int)
 PERLVAR(Gyychar,	int)
 PERLVAR(Gyyval,		YYSTYPE)
 PERLVAR(Gyylval,	YYSTYPE)
+
+PERLVAR(Gglob_index,	int)
+PERLVAR(Gefloatbuf,	char*)
+PERLVAR(Gefloatsize,	STRLEN)
+PERLVAR(Gsrand_called,	bool)
+PERLVAR(Guudmap[256],	char)
+PERLVAR(Gbitcount,	char *)
+PERLVAR(Gfilter_debug,	int)
+

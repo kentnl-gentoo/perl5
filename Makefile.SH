@@ -46,8 +46,11 @@ true)
 	os2*)	# OS/2 doesn't need anything special for LD_LIBRARY_PATH.
 		ldlibpth=''
 		;;
-	sunos*|freebsd[23]*|netbsd*)
+	sunos*)
 		linklibperl="-lperl"
+		;;
+	netbsd*|freebsd[234]*)
+		linklibperl="-L. -lperl"
 		;;
 	aix*)
 		shrpldflags="-H512 -T512 -bhalt:4 -bM:SRE -bE:perl.exp"
@@ -62,8 +65,10 @@ true)
 		aixinstdir=`pwd | sed 's/\/UU$//'`
 		linklibperl="-L $archlibexp/CORE -L $aixinstdir -lperl"
 		;;
-	hpux10*)
+	hpux10*|hpux11*)
 		linklibperl="-L `pwd | sed 's/\/UU$//'` -Wl,+b$archlibexp/CORE -lperl"
+		;;
+	beos*)	ldlibpth="LIBRARY_PATH=`pwd`:$LIBRARY_PATH"
 		;;
 	esac
 	;;
@@ -538,12 +543,12 @@ _cleaner:
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	sh ext/util/make_ext realclean $$x MAKE=$(MAKE) ; \
 	done
-	rm -f *.orig */*.orig *~ */*~ core core.perl.*.? core.miniperl.*.? perl.core miniperl.core t/core t/core.perl.*.? t/perl.core t/tmp???? t/c t/perl
+	rm -f *.orig */*.orig *~ */*~ core core.perl.*.? core.miniperl.*.? perl.core miniperl.core t/core t/core.perl.*.? t/perl.core t/tmp???? t/c t/perl so_locations t/nonexistent1
 	rm -rf $(addedbyconf)
 	rm -f $(FIRSTMAKEFILE) $(FIRSTMAKEFILE).old
 	rm -f $(private)
 	rm -rf lib/auto
-	rm -f lib/.exists
+	rm -f lib/.exists lib/*/.exists
 	rm -f h2ph.man pstruct
 	rm -rf .config
 	rm -f testcompile compilelog
@@ -608,13 +613,13 @@ minitest: miniperl lib/re.pm
 # Please *don't* use this unless all tests pass.
 # If you want to report test failures, use "make nok" instead.
 ok:	utilities
-	$(LBLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
+	$(LDLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
 
 okfile:	utilities
-	$(LBLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)' -F perl.ok
+	$(LDLIBPTH) ./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)' -F perl.ok
 
 nok:	utilities
-	$(LBLIBPTH) ./perl -Ilib utils/perlbug -nok -s '(UNINSTALLED)'
+	$(LDLIBPTH) ./perl -Ilib utils/perlbug -nok -s '(UNINSTALLED)'
 
 clist:	$(c)
 	echo $(c) | tr ' ' $(TRNL) >.clist
@@ -641,6 +646,9 @@ emacs/cperl-mode.elc: emacs/cperl-mode.el
 
 etags:	emacs/cperl-mode.elc
 	sh emacs/ptags
+	perl emacs/e2ctags.pl TAGS > tags
+
+ctags:	etags
 
 # AUTOMATICALLY GENERATED MAKE DEPENDENCIES--PUT NOTHING BELOW THIS LINE
 # If this runs make out of memory, delete /usr/include lines.

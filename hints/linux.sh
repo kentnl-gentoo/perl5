@@ -208,29 +208,31 @@ fi
 # Shimpei Yamashita <shimpei@socrates.patnet.caltech.edu>
 # Message-Id: <33EF1634.B36B6500@pobox.com>
 # 
-# MkLinux (osname=linux,archname=ppc-linux), which differs slightly from other
-# linuces, needs special flags passed in order for dynamic loading to work.
+# The DR2 of MkLinux (osname=linux,archname=ppc-linux) may need
+# special flags passed in order for dynamic loading to work.
 # instead of the recommended:
+#
 # ccdlflags='-rdynamic'
 # 
 # it should be:
 # ccdlflags='-Wl,-E'
+#
+# So if your DR2 (DR3 came out summer 1998, consider upgrading)
+# has problems with dynamic loading, uncomment the
+# following three lines, make distclean, and re-Configure:
+#case "`uname -r | sed 's/^[0-9.-]*//'``arch`" in
+#'osfmach3ppc') ccdlflags='-Wl,-E' ;;
+#esac
 
-# XXX EXPERIMENTAL  A.D.  2/27/1998
-# XXX This script UU/usethreads.cbu will get 'called-back' by Configure 
-# XXX after it has prompted the user for whether to use threads.
-cat > UU/usethreads.cbu <<'EOSH'
+# This script UU/usethreads.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use threads.
+cat > UU/usethreads.cbu <<'EOCBU'
 case "$usethreads" in
 $define|true|[yY]*)
-    ccflags="-D_REENTRANT $ccflags"
-    # -lpthread needs to come before -lc but after other libraries such
-    # as -lgdbm and such like. We assume here that -lc is present in
-    # libswanted. If that fails to be true in future, then this can be
-    # changed to add pthread to the very end of libswanted.
-    set `echo X "$libswanted "| sed -e 's/ c / pthread c /'`
-    shift
-    libswanted="$*"
-    ;;
+        ccflags="-D_REENTRANT $ccflags"
+        set `echo X "$libswanted "| sed -e 's/ c / pthread c /'`
+        shift
+        libswanted="$*"
+	;;
 esac
-EOSH
-# XXX EXPERIMENTAL  --end of call-back
+EOCBU

@@ -9,6 +9,7 @@ require 5.003;
 my @extvars = qw(sv_undef sv_yes sv_no na dowarn
                  curcop compiling 
                  tainting tainted stack_base stack_sp sv_arenaroot
+		 no_modify
                  curstash DBsub DBsingle debstash
                  rsfp 
                  stdingv
@@ -255,6 +256,10 @@ my @staticfuncs = qw(
     dopoptosub_at
     save_lines
     doeval
+    sv_ncmp
+    sv_i_ncmp
+    amagic_ncmp
+    amagic_i_ncmp
     amagic_cmp
     amagic_cmp_locale
     mul128
@@ -350,6 +355,8 @@ my @staticfuncs = qw(
     study_chunk
     add_data
     re_croak2
+    regpposixcc
+    clear_re
     regmatch
     regrepeat
     regrepeat_hard
@@ -368,6 +375,8 @@ my @staticfuncs = qw(
     debprof
     bset_obj_store
     new_logop
+    simplify_sort
+    is_handle_constructor
     do_trans_CC_simple
     do_trans_CC_count
     do_trans_CC_complex

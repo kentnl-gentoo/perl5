@@ -41,6 +41,10 @@ static void save_lines _((AV *array, SV *sv));
 static I32 sortcv _((SV *a, SV *b));
 static void qsortsv _((SV **array, size_t num_elts, I32 (*fun)(SV *a, SV *b)));
 static OP *doeval _((int gimme, OP** startop));
+static I32 sv_ncmp _((SV *a, SV *b));
+static I32 sv_i_ncmp _((SV *a, SV *b));
+static I32 amagic_ncmp _((SV *a, SV *b));
+static I32 amagic_i_ncmp _((SV *a, SV *b));
 static I32 amagic_cmp _((SV *str1, SV *str2));
 static I32 amagic_cmp_locale _((SV *str1, SV *str2));
 #endif
@@ -166,7 +170,8 @@ PP(pp_substcont)
 	if (cx->sb_once || !CALLREGEXEC(rx, s, cx->sb_strend, orig,
 				     s == m, cx->sb_targ, NULL,
 				     ((cx->sb_rflags & REXEC_COPY_STR)
-				      ? 0 : REXEC_COPY_STR)))
+				      ? REXEC_IGNOREPOS 
+				      : (REXEC_COPY_STR|REXEC_IGNOREPOS))))
 	{
 	    SV *targ = cx->sb_targ;
 	    sv_catpvn(dstr, s, cx->sb_strend - s);
@@ -752,6 +757,20 @@ PP(pp_mapwhile)
     }
 }
 
+STATIC I32
+sv_ncmp (SV *a, SV *b)
+{
+    double nv1 = SvNV(a);
+    double nv2 = SvNV(b);
+    return nv1 < nv2 ? -1 : nv1 > nv2 ? 1 : 0;
+}
+STATIC I32
+sv_i_ncmp (SV *a, SV *b)
+{
+    IV iv1 = SvIV(a);
+    IV iv2 = SvIV(b);
+    return iv1 < iv2 ? -1 : iv1 > iv2 ? 1 : 0;
+}
 #define tryCALL_AMAGICbin(left,right,meth,svp) STMT_START { \
 	  *svp = Nullsv;				\
           if (PL_amagic_generation) { \
@@ -762,6 +781,50 @@ PP(pp_mapwhile)
 				   0); \
 	  } \
 	} STMT_END
+
+STATIC I32
+amagic_ncmp(register SV *a, register SV *b)
+{
+    SV *tmpsv;
+    tryCALL_AMAGICbin(a,b,ncmp,&tmpsv);
+    if (tmpsv) {
+    	double d;
+    	
+        if (SvIOK(tmpsv)) {
+            I32 i = SvIVX(tmpsv);
+            if (i > 0)
+               return 1;
+            return i? -1 : 0;
+        }
+        d = SvNV(tmpsv);
+        if (d > 0)
+           return 1;
+        return d? -1 : 0;
+     }
+     return sv_ncmp(a, b);
+}
+
+STATIC I32
+amagic_i_ncmp(register SV *a, register SV *b)
+{
+    SV *tmpsv;
+    tryCALL_AMAGICbin(a,b,ncmp,&tmpsv);
+    if (tmpsv) {
+    	double d;
+    	
+        if (SvIOK(tmpsv)) {
+            I32 i = SvIVX(tmpsv);
+            if (i > 0)
+               return 1;
+            return i? -1 : 0;
+        }
+        d = SvNV(tmpsv);
+        if (d > 0)
+           return 1;
+        return d? -1 : 0;
+    }
+    return sv_i_ncmp(a, b);
+}
 
 STATIC I32
 amagic_cmp(register SV *str1, register SV *str2)
@@ -924,13 +987,30 @@ PP(pp_sort)
 	if (max > 1) {
 	    MEXTEND(SP, 20);	/* Can't afford stack realloc on signal. */
 	    qsortsv(ORIGMARK+1, max,
-		    (PL_op->op_private & OPpLOCALE)
-		    ? ( overloading
-		        ? FUNC_NAME_TO_PTR(amagic_cmp_locale)
-		        : FUNC_NAME_TO_PTR(sv_cmp_locale))
-		    : ( overloading 
-		        ? FUNC_NAME_TO_PTR(amagic_cmp)
-		        : FUNC_NAME_TO_PTR(sv_cmp) ));
+ 		    (PL_op->op_private & OPpSORT_NUMERIC)
+			? ( (PL_op->op_private & OPpSORT_INTEGER)
+			    ? ( overloading
+				? FUNC_NAME_TO_PTR(amagic_i_ncmp)
+				: FUNC_NAME_TO_PTR(sv_i_ncmp))
+			    : ( overloading
+				? FUNC_NAME_TO_PTR(amagic_ncmp)
+				: FUNC_NAME_TO_PTR(sv_ncmp)))
+			: ( (PL_op->op_private & OPpLOCALE)
+			    ? ( overloading
+				? FUNC_NAME_TO_PTR(amagic_cmp_locale)
+				: FUNC_NAME_TO_PTR(sv_cmp_locale))
+			    : ( overloading
+				? FUNC_NAME_TO_PTR(amagic_cmp)
+		    : FUNC_NAME_TO_PTR(sv_cmp) )));
+	    if (PL_op->op_private & OPpSORT_REVERSE) {
+		SV **p = ORIGMARK+1;
+		SV **q = ORIGMARK+max;
+		while (p < q) {
+		    SV *tmp = *p;
+		    *p++ = *q;
+		    *q-- = tmp;
+		}
+	    }
 	}
     }
     LEAVE;
@@ -985,22 +1065,30 @@ PP(pp_flop)
 
     if (GIMME == G_ARRAY) {
 	dPOPPOPssrl;
-	register I32 i;
+	register I32 i, j;
 	register SV *sv;
 	I32 max;
+
+	if (SvGMAGICAL(left))
+	    mg_get(left);
+	if (SvGMAGICAL(right))
+	    mg_get(right);
 
 	if (SvNIOKp(left) || !SvPOKp(left) ||
 	  (looks_like_number(left) && *SvPVX(left) != '0') )
 	{
-	    if (SvNV(left) < IV_MIN || SvNV(right) >= IV_MAX)
+	    if (SvNV(left) < IV_MIN || SvNV(right) > IV_MAX)
 		croak("Range iterator outside integer range");
 	    i = SvIV(left);
 	    max = SvIV(right);
 	    if (max >= i) {
-		EXTEND_MORTAL(max - i + 1);
-		EXTEND(SP, max - i + 1);
+		j = max - i + 1;
+		EXTEND_MORTAL(j);
+		EXTEND(SP, j);
 	    }
-	    while (i <= max) {
+	    else
+		j = 0;
+	    while (j--) {
 		sv = sv_2mortal(newSViv(i++));
 		PUSHs(sv);
 	    }
@@ -1560,8 +1648,12 @@ PP(pp_enteriter)
     SAVETMPS;
 
 #ifdef USE_THREADS
-    if (PL_op->op_flags & OPf_SPECIAL)
-	svp = save_threadsv(PL_op->op_targ);	/* per-thread variable */
+    if (PL_op->op_flags & OPf_SPECIAL) {
+	dTHR;
+	svp = &THREADSV(PL_op->op_targ);	/* per-thread variable */
+	SAVEGENERICSV(*svp);
+	*svp = NEWSV(0,0);
+    }
     else
 #endif /* USE_THREADS */
     if (PL_op->op_targ) {
@@ -1569,9 +1661,9 @@ PP(pp_enteriter)
 	SAVESPTR(*svp);
     }
     else {
-	GV *gv = (GV*)POPs;
-	(void)save_scalar(gv);
-	svp = &GvSV(gv);			/* symbol table variable */
+	svp = &GvSV((GV*)POPs);			/* symbol table variable */
+	SAVEGENERICSV(*svp);
+	*svp = NEWSV(0,0);
     }
 
     ENTER;
@@ -1939,6 +2031,7 @@ PP(pp_goto)
     OP *enterops[GOTO_DEPTH];
     char *label;
     int do_dump = (PL_op->op_type == OP_DUMP);
+    static char must_have_label[] = "goto must have label";
 
     label = 0;
     if (PL_op->op_flags & OPf_STACKED) {
@@ -2192,12 +2285,15 @@ PP(pp_goto)
 		RETURNOP(CvSTART(cv));
 	    }
 	}
-	else
+	else {
 	    label = SvPV(sv,n_a);
+	    if (!(do_dump || *label))
+		DIE(must_have_label);
+	}
     }
     else if (PL_op->op_flags & OPf_SPECIAL) {
 	if (! do_dump)
-	    DIE("goto must have label");
+	    DIE(must_have_label);
     }
     else
 	label = cPVOP->op_pv;

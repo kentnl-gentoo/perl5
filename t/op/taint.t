@@ -9,7 +9,7 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    @INC = '../lib' if -d '../lib';
+    unshift @INC, '../lib' if -d '../lib';
 }
 
 use strict;
@@ -366,7 +366,10 @@ else {
     test 72, $@ eq '', $@;		# NB: This should be allowed
 
     # Try first new style but allow also old style.
-    test 73, $!{ENOENT} || $! == 2 || ($Is_Dos && $! == 22); # File not found
+    test 73, $!{ENOENT} ||
+	$! == 2 || # File not found
+	($Is_Dos && $! == 22) ||
+	($^O eq 'mint' && $! == 33);
 
     test 74, eval { open FOO, "> $foo" } eq '', 'open for write';
     test 75, $@ =~ /^Insecure dependency/, $@;
@@ -380,10 +383,10 @@ else {
 	for (76..79) { print "ok $_ # Skipped: open('|') is not available\n" }
     }
     else {
-	test 76, eval { open FOO, "| $foo" } eq '', 'popen to';
+	test 76, eval { open FOO, "| x$foo" } eq '', 'popen to';
 	test 77, $@ =~ /^Insecure dependency/, $@;
 
-	test 78, eval { open FOO, "$foo |" } eq '', 'popen from';
+	test 78, eval { open FOO, "x$foo |" } eq '', 'popen from';
 	test 79, $@ =~ /^Insecure dependency/, $@;
     }
 

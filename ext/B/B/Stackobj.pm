@@ -5,7 +5,7 @@
 #      You may distribute under the terms of either the GNU General Public
 #      License or the Artistic License, as specified in the README file.
 #
-package B::Stackobj;
+package B::Stackobj;  
 use Exporter ();
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(set_callback T_UNKNOWN T_DOUBLE T_INT
@@ -16,16 +16,13 @@ use Exporter ();
 
 use Carp qw(confess);
 use strict;
-use B qw(class);
-
-# Perl internal constants that I should probably define elsewhere.
-sub SVf_IOK () { 0x10000 }
-sub SVf_NOK () { 0x20000 }
+use B qw(class SVf_IOK SVf_NOK);
 
 # Types
 sub T_UNKNOWN () { 0 }
 sub T_DOUBLE ()  { 1 }
 sub T_INT ()     { 2 }
+sub T_SPECIAL () { 3 }
 
 # Flags
 sub VALID_INT ()	{ 0x01 }
@@ -79,6 +76,17 @@ sub as_double {
 sub as_numeric {
     my $obj = shift;
     return $obj->{type} == T_INT ? $obj->as_int : $obj->as_double;
+}
+
+sub as_bool {
+	my $obj=shift;
+	if ($obj->{flags} & VALID_INT ){
+		return $obj->{iv}; 
+	}
+	if ($obj->{flags} & VALID_DOUBLE ){
+		return $obj->{nv}; 
+	}
+	return sprintf("(SvTRUE(%s))", $obj->as_sv) ;
 }
 
 #
@@ -213,17 +221,21 @@ sub B::Stackobj::Const::new {
 	flags => 0,
 	sv => $sv    # holds the SV object until write_back happens
     }, $class;
-    my $svflags = $sv->FLAGS;
-    if ($svflags & SVf_IOK) {
-	$obj->{flags} = VALID_INT|VALID_DOUBLE;
-	$obj->{type} = T_INT;
-	$obj->{nv} = $obj->{iv} = $sv->IV;
-    } elsif ($svflags & SVf_NOK) {
-	$obj->{flags} = VALID_INT|VALID_DOUBLE;
-	$obj->{type} = T_DOUBLE;
-	$obj->{iv} = $obj->{nv} = $sv->NV;
-    } else {
-	$obj->{type} = T_UNKNOWN;
+    if ( ref($sv) eq  "B::SPECIAL" ){
+	$obj->{type}= T_SPECIAL;	
+    }else{
+    	my $svflags = $sv->FLAGS;
+    	if ($svflags & SVf_IOK) {
+		$obj->{flags} = VALID_INT|VALID_DOUBLE;
+		$obj->{type} = T_INT;
+		$obj->{nv} = $obj->{iv} = $sv->IV;
+    	} elsif ($svflags & SVf_NOK) {
+		$obj->{flags} = VALID_INT|VALID_DOUBLE;
+		$obj->{type} = T_DOUBLE;
+		$obj->{iv} = $obj->{nv} = $sv->NV;
+    	} else {
+		$obj->{type} = T_UNKNOWN;
+    	}
     }
     return $obj;
 }

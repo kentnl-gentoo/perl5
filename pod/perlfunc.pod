@@ -15,7 +15,7 @@ operator.  A unary operator generally provides a scalar context to its
 argument, while a list operator may provide either scalar and list
 contexts for its arguments.  If it does both, the scalar arguments will
 be first, and the list argument will follow.  (Note that there can ever
-be only one list argument.)  For instance, splice() has three scalar
+be only one such list argument.)  For instance, splice() has three scalar
 arguments followed by a list.
 
 In the syntax descriptions that follow, list operators that expect a
@@ -135,10 +135,8 @@ C<unlink>, C<utime>
 
 =item Keywords related to the control flow of your perl program
 
-C<caller>, C<continue>, C<die>, C<do>, C<dump>, C<else>, C<elsif>,
-C<eval>, C<exit>, C<for>, C<foreach>, C<goto>, C<if>, C<last>,
-C<next>, C<redo>, C<return>, C<sub>, C<unless>, C<wantarray>,
-C<while>, C<until>
+C<caller>, C<continue>, C<die>, C<do>, C<dump>, C<eval>, C<exit>,
+C<goto>, C<last>, C<next>, C<redo>, C<return>, C<sub>, C<wantarray>
 
 =item Keywords related to scoping
 
@@ -680,14 +678,14 @@ L<perlipc/"Sockets: Client/Server Communication">.
 =item continue BLOCK
 
 Actually a flow control statement rather than a function.  If there is a
-C<continue> BLOCK attached to a BLOCK (typically in a L</while> or
-L</foreach>), it is always executed just before the conditional is about to
-be evaluated again, just like the third part of a L</for> loop in C.  Thus
+C<continue> BLOCK attached to a BLOCK (typically in a C<while> or
+C<foreach>), it is always executed just before the conditional is about to
+be evaluated again, just like the third part of a C<for> loop in C.  Thus
 it can be used to increment a loop variable, even when the loop has been
 continued via the C<next> statement (which is similar to the C C<continue>
 statement).
 
-L</last>, L</next>, or L</redo> may appear within a C<continue>
+C<last>, C<next>, or C<redo> may appear within a C<continue>
 block. C<last> and C<redo> will behave as if they had been executed within
 the main block. So will C<next>, but since it will execute a C<continue>
 block, it may be more entertaining.
@@ -705,8 +703,6 @@ block, it may be more entertaining.
 Omitting the C<continue> section is semantically equivalent to using an
 empty one, logically enough. In that case, C<next> goes directly back
 to check the condition at the top of the loop.
-
-See also L<perlsyn>.
 
 =item cos EXPR
 
@@ -912,7 +908,12 @@ Equivalent examples:
 
 If the value of EXPR does not end in a newline, the current script line
 number and input line number (if any) are also printed, and a newline
-is supplied.  Hint: sometimes appending C<", stopped"> to your message
+is supplied.  Note that the "input line number" (also known as "chunk")
+is subject to whatever notion of "line" happens to be currently in
+effect, and is also available as the special variable C<$.>.
+See L<perlvar/"$/"> and L<perlvar/"$.">.
+
+Hint: sometimes appending C<", stopped"> to your message
 will cause it to make better sense when the string C<"at foo line 123"> is
 appended.  Suppose you are running script "canasta".
 
@@ -953,12 +954,11 @@ as the first line of the handler (see L<perlvar/$^S>).
 
 Not really a function.  Returns the value of the last command in the
 sequence of commands indicated by BLOCK.  When modified by a loop
-modifier such as L</while> or L</until>, executes the BLOCK once
-before testing the loop condition.  (On other statements the loop
-modifiers test the conditional first.)
+modifier, executes the BLOCK once before testing the loop condition.
+(On other statements the loop modifiers test the conditional first.)
 
 C<do BLOCK> does I<not> count as a loop, so the loop control statements
-L</next>, L</last> or L</redo> cannot be used to leave or restart the block.
+C<next>, C<last> or C<redo> cannot be used to leave or restart the block.
 
 =item do SUBROUTINE(LIST)
 
@@ -1009,6 +1009,8 @@ file.  Manual error checking can be done this way:
     }
 
 =item dump LABEL
+
+=item dump
 
 This causes an immediate core dump.  Primarily this is so that you can
 use the B<undump> program to turn your core dump into an executable binary
@@ -1076,12 +1078,6 @@ only in a different order:
     }
 
 See also C<keys()>, C<values()> and C<sort()>.
-
-=item else BLOCK
-
-=item elsif (EXPR) BLOCK
-
-See L</if>.
 
 =item eof FILEHANDLE
 
@@ -1454,38 +1450,6 @@ Here's a mailbox appender for BSD systems.
 
 See also L<DB_File> for other flock() examples.
 
-=item for (INITIAL; WHILE; EACH) BLOCK
-
-Do INITIAL, enter BLOCK while EXPR is true, at the end of each round
-do EACH. For example:
-
-	for ($i = 0, $j = 0; $i < 10; $i++) {
-		if ($i % 3 == 0) { $j++ }
-		print "i = $i, j = $j\n";
-	}
-
-See L<perlsyn> for more details.  See also L</foreach>, a twin of
-C<for>, L</while> and L</until>, close cousins of L<for>, and
-L</last>, L</next>, and L</redo> for additional control flow.
-
-=item foreach LOOPVAR (LIST) BLOCK
-
-Enter BLOCK as LOOPVAR set in turn to each element of LIST.
-For example:
-
-	foreach $rolling (@stones) { print "rolling $stone\n" }
-
-	foreach my $file (@files)  { print "file $file\n" }
-
-The LOOPVAR is optional and defaults to C<$_>.  If the elements are
-modifiable (as opposed to constants or tied variables) you can modify them.
-
-	foreach (@words) { tr/abc/xyz/ }
-
-See L<perlsyn> for more details.  See also L</for>, a twin of
-C<foreach>, L</while> and L</until>, close cousins of L<for>, and
-L</last>, L</next>, and L</redo> for additional control flow.
-
 =item fork
 
 Does a fork(2) system call.  Returns the child pid to the parent process,
@@ -1592,7 +1556,7 @@ is left as an exercise to the reader.
 The C<POSIX::getattr()> function can do this more portably on systems
 purporting POSIX compliance.
 See also the C<Term::ReadKey> module from your nearest CPAN site;
-details on CPAN can be found on L<perlmod/CPAN>.
+details on CPAN can be found on L<perlmodlib/CPAN>.
 
 =item getlogin
 
@@ -1892,24 +1856,6 @@ see L</oct>.)  If EXPR is omitted, uses C<$_>.
     print hex '0xAf'; # prints '175'
     print hex 'aF';   # same
 
-=item if (EXPR) BLOCK
-
-=item if (EXPR) BLOCK else BLOCK2
-
-=item if (EXPR) BLOCK elsif (EXPR2) BLOCK2
-
-Enter BLOCKs conditionally.  The first EXPR to return true
-causes the corresponding BLOCK to be entered, or, in the case
-of C<else>, the fall-through default BLOCK.
-
-Note 1: Perl wants BLOCKS, expressions won't do (like they do
-e.g. in C, C++, Java, Pascal).
-
-Note 2: It's C<elsif>, not C<elseif>.  You can have as many
-C<elsif>s as you want.
-
-See L<perlsyn> for more details.  See also C<unless>.
-
 =item import
 
 There is no builtin C<import()> function.  It is just an ordinary
@@ -1982,7 +1928,7 @@ system:
     ($retval = ioctl(...)) || ($retval = -1);
     printf "System returned %d\n", $retval;
 
-The special string "C<0> but true" is excempt from B<-w> complaints
+The special string "C<0> but true" is exempt from B<-w> complaints
 about improper numeric conversions.
 
 =item join EXPR,LIST
@@ -2075,10 +2021,8 @@ C<continue> block, if any, is not executed:
 C<last> cannot be used to exit a block which returns a value such as
 C<eval {}>, C<sub {}> or C<do {}>.
 
-See also L</continue> for an illustration of how C<last>, L</next>, and
-L</redo> work.
-
-See also L<perlsyn>.
+See also L</continue> for an illustration of how C<last>, C<next>, and
+C<redo> work.
 
 =item lc EXPR
 
@@ -2288,10 +2232,8 @@ refers to the innermost enclosing loop.
 C<next> cannot be used to exit a block which returns a value such as
 C<eval {}>, C<sub {}> or C<do {}>.
 
-See also L</continue> for an illustration of how L</last>, C<next>, and
-L</redo> work.
-
-See also L<perlsyn>.
+See also L</continue> for an illustration of how C<last>, C<next>, and
+C<redo> work.
 
 =item no Module LIST
 
@@ -2302,8 +2244,9 @@ See the L</use> function, which C<no> is the opposite of.
 =item oct
 
 Interprets EXPR as an octal string and returns the corresponding
-value.  (If EXPR happens to start off with C<0x>, interprets it as
-a hex string instead.)  The following will handle decimal, octal, and
+value.  (If EXPR happens to start off with C<0x>, interprets it as a
+hex string.  If EXPR starts off with C<0b>, it is interpreted as a
+binary string.)  The following will handle decimal, binary, octal, and
 hex in the standard Perl or C notation:
 
     $val = oct($val) if $val =~ /^0/;
@@ -2343,7 +2286,8 @@ C<'w+'>, C<'a'>, and C<'a+'>.
 
 If the filename begins with C<'|'>, the filename is interpreted as a
 command to which output is to be piped, and if the filename ends with a
-C<'|'>, the filename is interpreted See L<perlipc/"Using open() for IPC">
+C<'|'>, the filename is interpreted as a command which pipes output to
+us.  See L<perlipc/"Using open() for IPC">
 for more examples of this.  (You are not allowed to C<open()> to a command
 that pipes both in I<and> out, but see L<IPC::Open2>, L<IPC::Open3>,
 and L<perlipc/"Bidirectional Communication"> for alternatives.)
@@ -2526,7 +2470,7 @@ them, and automatically close whenever and however you leave that scope:
 	$first;					# Or here.
     }
 
-See L</seek()> for some details about mixing reading and writing.
+See L</seek> for some details about mixing reading and writing.
 
 =item opendir DIRHANDLE,EXPR
 
@@ -2548,8 +2492,10 @@ returning the string containing the structure.  The TEMPLATE is a
 sequence of characters that give the order and type of values, as
 follows:
 
+    a	A string with arbitrary binary data, will be null padded.
     A	An ascii string, will be space padded.
-    a	An ascii string, will be null padded.
+    Z	A null terminated (asciz) string, will be null padded.
+
     b	A bit string (ascending bit order, like vec()).
     B	A bit string (descending bit order).
     h	A hex string (low nybble first).
@@ -2607,30 +2553,116 @@ follows:
     X	Back up a byte.
     @	Null fill to absolute position.
 
+The following rules apply:
+
+=over 8
+
+=item *
+
 Each letter may optionally be followed by a number giving a repeat
-count.  With all types except C<"a">, C<"A">, C<"b">, C<"B">, C<"h">, C<"H">, and C<"P"> the
-pack function will gobble up that many values from the LIST.  A C<*> for the
-repeat count means to use however many items are left.  The C<"a"> and C<"A">
-types gobble just one value, but pack it as a string of length count,
-padding with nulls or spaces as necessary.  (When unpacking, C<"A"> strips
-trailing spaces and nulls, but C<"a"> does not.)  Likewise, the C<"b"> and C<"B">
-fields pack a string that many bits long.  The C<"h"> and C<"H"> fields pack a
-string that many nybbles long.  The C<"p"> type packs a pointer to a null-
-terminated string.  You are responsible for ensuring the string is not a
-temporary value (which can potentially get deallocated before you get
-around to using the packed result).  The C<"P"> packs a pointer to a structure
-of the size indicated by the length. A NULL pointer is created if the 
-corresponding value for C<"p"> or C<"P"> is C<undef>.
-Real numbers (floats and doubles) are
-in the native machine format only; due to the multiplicity of floating
-formats around, and the lack of a standard "network" representation, no
-facility for interchange has been made.  This means that packed floating
-point data written on one machine may not be readable on another - even if
-both use IEEE floating point arithmetic (as the endian-ness of the memory
-representation is not part of the IEEE spec).  Note that Perl uses doubles
-internally for all numeric calculation, and converting from double into
-float and thence back to double again will lose precision (i.e.,
-C<unpack("f", pack("f", $foo)>) will not in general equal C<$foo>).
+count.  With all types except C<"a">, C<"A">, C<"Z">, C<"b">, C<"B">, C<"h">,
+C<"H">, and C<"P"> the pack function will gobble up that many values from
+the LIST.  A C<*> for the repeat count means to use however many items are
+left.
+
+=item *
+
+The C<"a">, C<"A"> and C<"Z"> types gobble just one value, but pack it as a
+string of length count, padding with nulls or spaces as necessary.  When
+unpacking, C<"A"> strips trailing spaces and nulls, C<"Z"> strips everything
+after the first null, and C<"a"> returns data verbatim.
+
+=item *
+
+Likewise, the C<"b"> and C<"B"> fields pack a string that many bits long.
+
+=item *
+
+The C<"h"> and C<"H"> fields pack a string that many nybbles long.
+
+=item *
+
+The C<"p"> type packs a pointer to a null-terminated string.  You are
+responsible for ensuring the string is not a temporary value (which can
+potentially get deallocated before you get around to using the packed result).
+The C<"P"> type packs a pointer to a structure of the size indicated by the
+length. A NULL pointer is created if the corresponding value for C<"p"> or
+C<"P"> is C<undef>.
+
+=item *
+
+The integer types C<"s">, C<"S">, C<"l">, and C<"L"> may be
+immediately followed by a C<"_"> to signify native shorts or longs--as
+you can see from above for example a bare C<"l"> does mean exactly 32
+bits, the native C<long> (as seen by the local C compiler) may be
+larger.  This is an issue mainly in 64-bit platforms.  You can see
+whether using C<"_"> makes any difference by
+
+	print length(pack("s")), " ", length(pack("s_")), "\n";
+	print length(pack("l")), " ", length(pack("l_")), "\n";
+
+C<"i_"> and C<"I_"> also work but only because of completeness;
+they are identical to C<"i"> and C<"I">.
+
+The actual sizes (in bytes) of native shorts, ints, and longs on
+the platform where Perl was built are available via L<Config>:
+
+	use Config;
+	print $Config{shortsize}, "\n";
+	print $Config{intsize}, "\n";
+	print $Config{longsize}, "\n";
+
+=item *
+
+The integer formats C<"s">, C<"S">, C<"i">, C<"I">, C<"l">, and C<"L">
+are inherently non-portable between processors and operating systems
+because they obey the native byteorder and endianness.  For example a
+4-byte integer 0x12345678 (305419896 decimal) be ordered natively
+(arranged in and handled by the CPU registers) into bytes as
+ 
+ 	0x12 0x34 0x56 0x78	# big-endian
+ 	0x78 0x56 0x34 0x12	# little-endian
+ 
+The names `big-endian' and `little-endian' are joking references to
+the classic "Gulliver's Travels" (via the paper "On Holy Wars and a
+Plea for Peace" by Danny Cohen, USC/ISI IEN 137, April 1, 1980) and
+the egg-eating habits of the lilliputs.
+ 
+Some systems may even have weird byte orders such as
+ 
+ 	0x56 0x78 0x12 0x34
+ 	0x34 0x12 0x78 0x56
+ 
+You can see your system's preference with
+
+ 	print join(" ", map { sprintf "%#02x", $_ }
+                            unpack("C*",pack("L",0x12345678))), "\n";
+
+The actual byteorder on the platform where Perl was built is available
+via L<Config>:
+
+	use Config;
+	print $Config{byteorder}, "\n";
+
+If you want portable integers use the formats C<"n">, C<"N">, C<"v">, and
+"V", their byte endianness and size is known.
+
+=item *
+
+Real numbers (floats and doubles) are in the native machine format only;
+due to the multiplicity of floating formats around, and the lack of a
+standard "network" representation, no facility for interchange has been
+made.  This means that packed floating point data written on one machine
+may not be readable on another - even if both use IEEE floating point
+arithmetic (as the endian-ness of the memory representation is not part
+of the IEEE spec).
+
+Note that Perl uses doubles internally for all numeric calculation, and
+converting from double into float and thence back to double again will
+lose precision (i.e., C<unpack("f", pack("f", $foo)>) will not in general
+equal C<$foo>).
+
+=back
 
 Examples:
 
@@ -2660,11 +2692,18 @@ Examples:
     $foo = pack("i9pl", gmtime);
     # a real struct tm (on my system anyway)
 
+    $utmp_template = "Z8 Z8 Z16 L";
+    $utmp = pack($utmp_template, @utmp1);
+    # a struct utmp (BSDish)
+
+    @utmp2 = unpack($utmp_template, $utmp);
+    # "@utmp1" eq "@utmp2"
+
     sub bintodec {
 	unpack("N", pack("B32", substr("0" x 32 . shift, -32)));
     }
 
-The same template may generally also be used in the unpack function.
+The same template may generally also be used in unpack().
 
 =item package 
 
@@ -2865,10 +2904,17 @@ C<chdir()> there, it would have been testing the wrong file.
 
 =item readline EXPR
 
-Reads from the filehandle whose typeglob is contained in EXPR.  In scalar context, a single line
-is read and returned.  In list context, reads until end-of-file is
-reached and returns a list of lines (however you've defined lines
-with C<$/> or C<$INPUT_RECORD_SEPARATOR>).
+Reads from the filehandle whose typeglob is contained in EXPR.  In scalar
+context, each call reads and returns the next line, until end-of-file is
+reached, whereupon the subsequent call returns undef.  In list context,
+reads until end-of-file is reached and returns a list of lines.  Note that
+the notion of "line" used here is however you may have defined it
+with C<$/> or C<$INPUT_RECORD_SEPARATOR>).  See L<perlvar/"$/">.
+
+When C<$/> is set to C<undef> and when readline() is in a scalar
+context (i.e. file slurp mode), it returns C<''> the first time,
+followed by C<undef> subsequently.
+
 This is the internal function implementing the C<E<lt>EXPRE<gt>>
 operator, but you can use it directly.  The C<E<lt>EXPRE<gt>>
 operator is discussed in more detail in L<perlop/"I/O Operators">.
@@ -2911,7 +2957,7 @@ See L<perlipc/"UDP: Message Passing"> for examples.
 =item redo
 
 The C<redo> command restarts the loop block without evaluating the
-conditional again.  The L</continue> block, if any, is not executed.  If
+conditional again.  The C<continue> block, if any, is not executed.  If
 the LABEL is omitted, the command refers to the innermost enclosing
 loop.  This command is normally used by programs that want to lie to
 themselves about what was just input:
@@ -2936,10 +2982,8 @@ themselves about what was just input:
 C<redo> cannot be used to retry a block which returns a value such as
 C<eval {}>, C<sub {}> or C<do {}>.
 
-See also L</continue> for an illustration of how L</last>, L</next>, and
+See also L</continue> for an illustration of how C<last>, C<next>, and
 C<redo> work.
-
-See also L<perlsyn>.
 
 =item ref EXPR
 
@@ -3133,6 +3177,23 @@ be interpolated in list context because it's in practice never
 needed.  If you really wanted to do so, however, you could use
 the construction C<@{[ (some expression) ]}>, but usually a simple
 C<(some expression)> suffices.
+
+Though C<scalar> can be considered in general to be a unary operator,
+EXPR is also allowed to be a parenthesized list.  The list in fact
+behaves as a scalar comma expression, evaluating all but the last
+element in void context and returning the final element evaluated in
+a scalar context.
+
+The following single statement:
+
+	print uc(scalar(&foo,$bar)),$baz;
+
+is the moral equivalent of these two:
+
+	&foo;
+	print(uc($bar),$baz);
+
+See L<perlop> for more details on unary operators and the comma operator.
 
 =item seek FILEHANDLE,POSITION,WHENCE
 
@@ -3410,7 +3471,7 @@ busy multitasking system.
 
 For delays of finer granularity than one second, you may use Perl's
 C<syscall()> interface to access setitimer(2) if your system supports it,
-or else see L</select()> above.
+or else see L</select> above.
 
 See also the POSIX module's C<sigpause()> function.
 
@@ -3711,6 +3772,7 @@ In addition, Perl permits the following widely-supported conversions:
    %X	like %x, but using upper-case letters
    %E	like %e, but using an upper-case "E"
    %G	like %g, but with an upper-case "E" (if applicable)
+   %b	an unsigned integer, in binary
    %p	a pointer (outputs the Perl value's address in hexadecimal)
    %n	special: *stores* the number of characters output so far
         into the next variable in the parameter list 
@@ -4221,7 +4283,7 @@ Unlike C<dbmopen()>, the C<tie()> function will not use or require a module
 for you--you need to do that explicitly yourself.  See L<DB_File>
 or the F<Config> module for interesting C<tie()> implementations.
 
-For further details see L<perltie>, L<tied VARIABLE>.
+For further details see L<perltie>, L<"tied VARIABLE">.
 
 =item tied VARIABLE
 
@@ -4289,7 +4351,7 @@ If EXPR is omitted, merely returns the current umask.
 
 The Unix permission C<rwxr-x---> is represented as three sets of three
 bits, or three octal digits: C<0750> (the leading 0 indicates octal
-and isn't one of the the digits).  The C<umask> value is such a number
+and isn't one of the digits).  The C<umask> value is such a number
 representing disabled permissions bits.  The permission (or "mode")
 values you pass C<mkdir> or C<sysopen> are modified by your umask, so
 even if you tell C<sysopen> to create a file with permissions C<0777>,
@@ -4317,6 +4379,8 @@ not trying to restrict access for yourself, returns C<undef>.
 Remember that a umask is a number, usually given in octal; it is I<not> a
 string of octal digits.  See also L</oct>, if all you have is a string.
 
+
+
 =item undef EXPR
 
 =item undef
@@ -4342,13 +4406,6 @@ parameter.  Examples:
     ($a, $b, undef, $c) = &foo;       # Ignore third value returned
 
 Note that this is a unary operator, not a list operator.
-
-=item unless (EXPR) BLOCK
-
-The negative counterpart of L</if>.  If the EXPR returns false the
-BLOCK is entered.
-
-See also L<perlsyn>.
 
 =item unlink LIST
 
@@ -4391,13 +4448,19 @@ themselves.  Default is a 16-bit checksum.  For example, the following
 computes the same number as the System V sum program:
 
     while (<>) {
-	$checksum += unpack("%16C*", $_);
+	$checksum += unpack("%32C*", $_);
     }
-    $checksum %= 65536;
+    $checksum %= 65535;
 
 The following efficiently counts the number of set bits in a bit vector:
 
     $setbits = unpack("%32b*", $selectmask);
+
+See L</pack> for more examples.
+
+=item untie VARIABLE
+
+Breaks the binding between a variable and a package.  (See C<tie()>.)
 
 =item unshift ARRAY,LIST
 
@@ -4410,21 +4473,6 @@ array, and returns the new number of elements in the array.
 Note the LIST is prepended whole, not one element at a time, so the
 prepended elements stay in the same order.  Use C<reverse()> to do the
 reverse.
-
-=item until (EXPR) BLOCK
-
-=item do BLOCK until (EXPR)
-
-Enter BLOCK until EXPR returns false.  The first form may avoid entering
-the BLOCK, the second form enters the BLOCK at least once.
-
-See L</do>, L</while>, and L</for>.
-
-See also L<perlsyn>.
-
-=item untie VARIABLE
-
-Breaks the binding between a variable and a package.  (See C<tie()>.)
 
 =item use Module LIST
 
@@ -4644,15 +4692,6 @@ warnings (even the so-called mandatory ones).  An example:
 
 See L<perlvar> for details on setting C<%SIG> entries, and for more
 examples.
-
-=item while (EXPR) BLOCK
-
-=item do BLOCK while (EXPR)
-
-Enter BLOCK while EXPR is true.  The first form may avoid entering the
-BLOCK, the second form enters the BLOCK at least once.
-
-See also L<perlsyn>, L</for>, L</until>, and L</continue>.
 
 =item write FILEHANDLE
 

@@ -8,34 +8,19 @@
 package B::CC;
 use strict;
 use B qw(main_start main_root class comppadlist peekop svref_2object
-	timing_info);
-use B::C qw(save_unused_subs objsym init_sections
+	timing_info init_av  
+	OPf_WANT_LIST OPf_WANT OPf_MOD OPf_STACKED OPf_SPECIAL
+	OPpASSIGN_BACKWARDS OPpLVAL_INTRO OPpDEREF_AV OPpDEREF_HV
+	OPpDEREF OPpFLIP_LINENUM G_ARRAY     
+	CXt_NULL CXt_SUB CXt_EVAL CXt_LOOP CXt_SUBST CXt_BLOCK
+	);
+use B::C qw(save_unused_subs objsym init_sections mark_unused
 	    output_all output_boilerplate output_main);
 use B::Bblock qw(find_leaders);
 use B::Stackobj qw(:types :flags);
 
 # These should probably be elsewhere
 # Flags for $op->flags
-sub OPf_LIST () { 1 }
-sub OPf_KNOW () { 2 }
-sub OPf_MOD () { 32 }
-sub OPf_STACKED () { 64 }
-sub OPf_SPECIAL () { 128 }
-# op-specific flags for $op->private 
-sub OPpASSIGN_BACKWARDS () { 64 }
-sub OPpLVAL_INTRO () { 128 }
-sub OPpDEREF_AV () { 32 }
-sub OPpDEREF_HV () { 64 }
-sub OPpDEREF () { OPpDEREF_AV|OPpDEREF_HV }
-sub OPpFLIP_LINENUM () { 64 }
-sub G_ARRAY () { 1 }
-# cop.h
-sub CXt_NULL () { 0 }
-sub CXt_SUB () { 1 }
-sub CXt_EVAL () { 2 }
-sub CXt_LOOP () { 3 }
-sub CXt_SUBST () { 4 }
-sub CXt_BLOCK () { 5 }
 
 my $module;		# module name (when compiled with -m)
 my %done;		# hash keyed by $$op of leaders of basic blocks
@@ -66,17 +51,13 @@ my %skip_stack;		# Hash of PP names which don't need write_back_stack
 my %skip_lexicals;	# Hash of PP names which don't need write_back_lexicals
 my %skip_invalidate;	# Hash of PP names which don't need invalidate_lexicals
 my %ignore_op;		# Hash of ops which do nothing except returning op_next
+my %need_curcop;	# Hash of ops which need PL_curcop
 
 BEGIN {
     foreach (qw(pp_scalar pp_regcmaybe pp_lineseq pp_scope pp_null)) {
 	$ignore_op{$_} = 1;
     }
 }
-
-my @unused_sub_packages; # list of packages (given by -u options) to search
-			 # explicitly and save every sub we find there, even
-			 # if apparently unused (could be only referenced from
-			 # an eval "" or from a $SIG{FOO} = "bar").
 
 my ($module_name);
 my ($debug_op, $debug_stack, $debug_cxstack, $debug_pad, $debug_runtime,
@@ -111,6 +92,7 @@ sub init_hash { map { $_ => 1 } @_ }
 #
 %skip_lexicals = init_hash qw(pp_enter pp_enterloop);
 %skip_invalidate = init_hash qw(pp_enter pp_enterloop);
+%need_curcop = init_hash qw(pp_rv2gv  pp_bless pp_repeat pp_sort pp_caller pp_reset pp_rv2cv pp_entereval pp_require pp_dofile pp_entertry pp_enterloop pp_enteriter );
 
 sub debug {
     if ($debug_runtime) {
@@ -200,7 +182,7 @@ sub top_int { @stack ? $stack[-1]->as_int : "TOPi" }
 sub top_double { @stack ? $stack[-1]->as_double : "TOPn" }
 sub top_numeric { @stack ? $stack[-1]->as_numeric : "TOPn" }
 sub top_sv { @stack ? $stack[-1]->as_sv : "TOPs" }
-sub top_bool { @stack ? $stack[-1]->as_numeric : "SvTRUE(TOPs)" }
+sub top_bool { @stack ? $stack[-1]->as_bool : "SvTRUE(TOPs)" }
 
 sub pop_int { @stack ? (pop @stack)->as_int : "POPi" }
 sub pop_double { @stack ? (pop @stack)->as_double : "POPn" }
@@ -208,7 +190,7 @@ sub pop_numeric { @stack ? (pop @stack)->as_numeric : "POPn" }
 sub pop_sv { @stack ? (pop @stack)->as_sv : "POPs" }
 sub pop_bool {
     if (@stack) {
-	return ((pop @stack)->as_numeric);
+	return ((pop @stack)->as_bool);
     } else {
 	# Careful: POPs has an auto-decrement and SvTRUE evaluates
 	# its argument more than once.
@@ -350,8 +332,9 @@ sub dopoptoloop {
 sub dopoptolabel {
     my $label = shift;
     my $cxix = $#cxstack;
-    while ($cxix >= 0 && $cxstack[$cxix]->{type} != CXt_LOOP
-	   && $cxstack[$cxix]->{label} ne $label) {
+    while ($cxix >= 0 &&
+	   ($cxstack[$cxix]->{type} != CXt_LOOP ||
+	    $cxstack[$cxix]->{label} ne $label)) {
 	$cxix--;
     }
     debug "dopoptolabel: returning $cxix" if $debug_cxstack;
@@ -461,7 +444,7 @@ sub doop {
 sub gimme {
     my $op = shift;
     my $flags = $op->flags;
-    return (($flags & OPf_KNOW) ? ($flags & OPf_LIST) : "dowantarray()");
+    return (($flags & OPf_WANT) ? ($flags & OPf_WANT_LIST) : "dowantarray()");
 }
 
 #
@@ -499,7 +482,7 @@ sub pp_and {
     if (@stack >= 1) {
 	my $bool = pop_bool();
 	write_back_stack();
-	runtime(sprintf("if (!$bool) goto %s;", label($next)));
+	runtime(sprintf("if (!$bool) {XPUSHs(&PL_sv_no); goto %s;}", label($next)));
     } else {
 	runtime(sprintf("if (!%s) goto %s;", top_bool(), label($next)),
 		"*sp--;");
@@ -513,10 +496,10 @@ sub pp_or {
     reload_lexicals();
     unshift(@bblock_todo, $next);
     if (@stack >= 1) {
-	my $obj = pop @stack;
+	my $bool = pop_bool @stack;
 	write_back_stack();
-	runtime(sprintf("if (%s) { XPUSHs(%s); goto %s; }",
-			$obj->as_numeric, $obj->as_sv, label($next)));
+	runtime(sprintf("if (%s) { XPUSHs(&PL_sv_yes); goto %s; }",
+			$bool, label($next)));
     } else {
 	runtime(sprintf("if (%s) goto %s;", top_bool(), label($next)),
 		"*sp--;");
@@ -584,14 +567,15 @@ sub pp_dbstate {
     return default_pp($op);
 }
 
-sub pp_rv2gv { $curcop->write_back; default_pp(@_) }
-sub pp_bless { $curcop->write_back; default_pp(@_) }
-sub pp_repeat { $curcop->write_back; default_pp(@_) }
+#default_pp will handle this:
+#sub pp_rv2gv { $curcop->write_back; default_pp(@_) }
+#sub pp_bless { $curcop->write_back; default_pp(@_) }
+#sub pp_repeat { $curcop->write_back; default_pp(@_) }
 # The following subs need $curcop->write_back if we decide to support arybase:
 # pp_pos, pp_substr, pp_index, pp_rindex, pp_aslice, pp_lslice, pp_splice
-sub pp_sort { $curcop->write_back; default_pp(@_) }
-sub pp_caller { $curcop->write_back; default_pp(@_) }
-sub pp_reset { $curcop->write_back; default_pp(@_) }
+#sub pp_sort { $curcop->write_back; default_pp(@_) }
+#sub pp_caller { $curcop->write_back; default_pp(@_) }
+#sub pp_reset { $curcop->write_back; default_pp(@_) }
 
 sub pp_gv {
     my $op = shift;
@@ -666,11 +650,15 @@ sub numeric_binop {
 	    }
 	} else {
 	    if ($force_int) {
+	        my $rightruntime = new B::Pseudoreg ("IV", "riv");
+	    	runtime(sprintf("$$rightruntime = %s;",$right));
 		runtime(sprintf("sv_setiv(TOPs, %s);",
-				&$operator("TOPi", $right)));
+				&$operator("TOPi", $$rightruntime)));
 	    } else {
+	    	my $rightruntime = new B::Pseudoreg ("double", "rnv");
+	    	runtime(sprintf("$$rightruntime = %s;",$right));
 		runtime(sprintf("sv_setnv(TOPs, %s);",
-				&$operator("TOPn", $right)));
+				&$operator("TOPn",$$rightruntime)));
 	    }
 	}
     } else {
@@ -1021,7 +1009,13 @@ sub pp_grepstart {
 	$need_freetmps = 0;
     }
     write_back_stack();
-    doop($op);
+    my $sym= doop($op);
+    my $next=$op->next;
+    $next->save;
+    my $nexttonext=$next->next;
+    $nexttonext->save;
+    runtime(sprintf("if (PL_op == (($sym)->op_next)->op_next) goto %s;",
+		    label($nexttonext)));
     return $op->next->other;
 }
 
@@ -1032,7 +1026,15 @@ sub pp_mapstart {
 	$need_freetmps = 0;
     }
     write_back_stack();
-    doop($op);
+    # pp_mapstart can return either op_next->op_next or op_next->op_other and
+    # we need to be able to distinguish the two at runtime. 
+    my $sym= doop($op);
+    my $next=$op->next;
+    $next->save;
+    my $nexttonext=$next->next;
+    $nexttonext->save;
+    runtime(sprintf("if (PL_op == (($sym)->op_next)->op_next) goto %s;",
+		    label($nexttonext)));
     return $op->next->other;
 }
 
@@ -1063,7 +1065,7 @@ sub pp_return {
     write_back_lexicals(REGISTER|TEMPORARY);
     write_back_stack();
     doop($op);
-    runtime("PUTBACK;", "return (PL_op)?PL_op->op_next:0;");
+    runtime("PUTBACK;", "return PL_op;");
     $know_op = 0;
     return $op->next;
 }
@@ -1077,12 +1079,12 @@ sub nyi {
 sub pp_range {
     my $op = shift;
     my $flags = $op->flags;
-    if (!($flags & OPf_KNOW)) {
+    if (!($flags & OPf_WANT)) {
 	error("context of range unknown at compile-time");
     }
     write_back_lexicals();
     write_back_stack();
-    if (!($flags & OPf_LIST)) {
+    if (!($flags & OPf_WANT_LIST)) {
 	# We need to save our UNOP structure since pp_flop uses
 	# it to find and adjust out targ. We don't need it ourselves.
 	$op->save;
@@ -1096,10 +1098,10 @@ sub pp_range {
 sub pp_flip {
     my $op = shift;
     my $flags = $op->flags;
-    if (!($flags & OPf_KNOW)) {
+    if (!($flags & OPf_WANT)) {
 	error("context of flip unknown at compile-time");
     }
-    if ($flags & OPf_LIST) {
+    if ($flags & OPf_WANT_LIST) {
 	return $op->first->false;
     }
     write_back_lexicals();
@@ -1264,11 +1266,11 @@ sub pp_substcont {
     write_back_stack();
     doop($op);
     my $pmop = $op->other;
-    warn sprintf("substcont: op = %s, pmop = %s\n",
-		 peekop($op), peekop($pmop));#debug
-#    my $pmopsym = objsym($pmop);
+    # warn sprintf("substcont: op = %s, pmop = %s\n",
+    # 		 peekop($op), peekop($pmop));#debug
+#   my $pmopsym = objsym($pmop);
     my $pmopsym = $pmop->save; # XXX can this recurse?
-    warn "pmopsym = $pmopsym\n";#debug
+#   warn "pmopsym = $pmopsym\n";#debug
     runtime sprintf("if (PL_op == ((PMOP*)(%s))->op_pmreplstart) goto %s;",
 		    $pmopsym, label($pmop->pmreplstart));
     invalidate_lexicals();
@@ -1278,6 +1280,9 @@ sub pp_substcont {
 sub default_pp {
     my $op = shift;
     my $ppname = $op->ppaddr;
+    if ($curcop and $need_curcop{$ppname}){
+	$curcop->write_back;
+    }
     write_back_lexicals() unless $skip_lexicals{$ppname};
     write_back_stack() unless $skip_stack{$ppname};
     doop($op);
@@ -1356,7 +1361,7 @@ sub cc {
 	    $need_freetmps = 0;
 	}
 	if (!$$op) {
-	    runtime("PUTBACK;","return (PL_op)?PL_op->op_next:0;");
+	    runtime("PUTBACK;","return PL_op;");
 	} elsif ($done{$$op}) {
 	    runtime(sprintf("goto %s;", label($op)));
 	}
@@ -1387,10 +1392,13 @@ sub cc_obj {
 
 sub cc_main {
     my @comppadlist = comppadlist->ARRAY;
-    my $curpad_nam = $comppadlist[0]->save;
-    my $curpad_sym = $comppadlist[1]->save;
+    my $curpad_nam  = $comppadlist[0]->save;
+    my $curpad_sym  = $comppadlist[1]->save;
+    my $init_av     = init_av->save; 
+    my $inc_hv      = svref_2object(\%INC)->save;
+    my $inc_av      = svref_2object(\@INC)->save;
     my $start = cc_recurse("pp_main", main_root, main_start, @comppadlist);
-    save_unused_subs(@unused_sub_packages);
+    save_unused_subs();
     cc_recurse();
 
     return if $errors;
@@ -1398,9 +1406,15 @@ sub cc_main {
 	$init->add(sprintf("PL_main_root = s\\_%x;", ${main_root()}),
 		   "PL_main_start = $start;",
 		   "PL_curpad = AvARRAY($curpad_sym);",
+		   "PL_initav = $init_av;",
+		   "GvHV(PL_incgv) = $inc_hv;",
+		   "GvAV(PL_incgv) = $inc_av;",
 		   "av_store(CvPADLIST(PL_main_cv),0,SvREFCNT_inc($curpad_nam));",
-		   "av_store(CvPADLIST(PL_main_cv),1,SvREFCNT_inc($curpad_sym));");
+		   "av_store(CvPADLIST(PL_main_cv),1,SvREFCNT_inc($curpad_sym));",
+		     );
+                 
     }
+    seek(STDOUT,0,0); #prevent print statements from BEGIN{} into the output
     output_boilerplate();
     print "\n";
     output_all("perl_init");
@@ -1459,7 +1473,7 @@ sub compile {
 	    $module_name = $arg;
 	} elsif ($opt eq "u") {
 	    $arg ||= shift @options;
-	    push(@unused_sub_packages, $arg);
+	    mark_unused($arg,undef);
 	} elsif ($opt eq "f") {
 	    $arg ||= shift @options;
 	    my $value = $arg !~ s/^no-//;
@@ -1485,7 +1499,7 @@ sub compile {
 	} elsif ($opt eq "m") {
 	    $arg ||= shift @options;
 	    $module = $arg;
-	    push(@unused_sub_packages, $arg);
+	    mark_unused($arg,undef);
 	} elsif ($opt eq "p") {
 	    $arg ||= shift @options;
 	    $patchlevel = $arg;

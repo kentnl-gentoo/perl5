@@ -23,6 +23,28 @@ macros for extension source compatibility.  As of release 5.006, these
 preprocessor definitions are not available by default.  You need to explicitly
 compile perl with C<-DPERL_POLLUTE> in order to get these definitions.
 
+=item C<PERL_POLLUTE_MALLOC>
+
+Enabling the use of Perl's malloc in release 5.005 and earlier caused
+the namespace of system versions of the malloc family of functions to
+be usurped by the Perl versions of these functions, since they used the
+same names by default.
+
+Besides causing problems on platforms that do not allow these functions to
+be cleanly replaced, this also meant that the system versions could not
+be called in programs that used Perl's malloc.  Previous versions of Perl
+have allowed this behavior to be suppressed with the HIDEMYMALLOC and
+EMBEDMYMALLOC preprocessor definitions.
+
+As of release 5.006, Perl's malloc family of functions have default names
+distinct from the system versions.  You need to explicitly compile perl with
+C<-DPERL_POLLUTE_MALLOC> in order to get the older behavior.  HIDEMYMALLOC
+and EMBEDMYMALLOC have no effect, since the behavior they enabled is now
+the default.
+
+Note that these functions do B<not> constitute Perl's memory allocation API.
+See L<perlguts/"Memory Allocation"> for further information about that.
+
 =item C<PL_na> and C<dTHR> Issues
 
 The C<PL_na> global is now thread local, so a C<dTHR> declaration is needed
@@ -33,6 +55,26 @@ a C<dTHR>.
 
 =back
 
+=head2 Compatible C Source API Changes
+
+=over
+
+=item C<PATCHLEVEL> is now C<PERL_VERSION>
+
+The cpp macros C<PERL_REVISION>, C<PERL_VERSION> and C<PERL_SUBVERSION>
+are now available by default from perl.h, and reflect the base revision,
+patchlevel and subversion respectively.  C<PERL_REVISION> had no
+prior equivalent, while C<PERL_VERSION> and C<PERL_SUBVERSION> were
+previously available as C<PATCHLEVEL> and C<SUBVERSION>.
+
+The new names cause less pollution of the cpp namespace, and reflect what
+the numbers have come to stand for in common practice.  For compatibility,
+the old names are still supported when patchlevel.h is explicitly
+included (as required before), so there is no source incompatibility
+due to the change.
+
+=back
+
 =head2 Binary Incompatibilities
 
 This release is not binary compatible with the 5.005 release and its
@@ -40,15 +82,196 @@ maintenance versions.
 
 =head1 Core Changes
 
-Todo.
+=head2 Binary numbers supported
+
+Binary numbers are now supported as literals, in s?printf formats, and
+C<oct()>:
+
+	$answer = 0b101010;
+	printf "The answer is: %b\n", oct("0b101010");
+
+=head2 syswrite() ease-of-use
+
+The length argument of C<syswrite()> is now optional.
+
+=head2 64-bit support
+
+Better 64-bit support -- but full support still a distant goal.  One
+must Configure with -Duse64bits to get Configure to probe for the
+extent of 64-bit support.  Depending on the platform (hints file) more
+or less 64-awareness becomes available.  As of 5.005_54 at least
+somewhat 64-bit aware platforms are HP-UX 11 or better, Solaris 2.6 or
+better, IRIX 6.2 or better.  Naturally 64-bit platforms like Digital
+UNIX and UNICOS also have 64-bit support.
+
+=head2 Better syntax checks on parenthesized unary operators
+
+Expressions such as:
+
+	print defined(&foo,&bar,&baz);
+	print uc("foo","bar","baz");
+	undef($foo,&bar);
+
+used to be accidentally allowed in earlier versions, and produced 
+unpredictable behavior.  Some of them produced ancillary warnings
+when used in this way, while others silently did the wrong thing.
+
+The parenthesized forms of most unary operators that expect a single
+argument will now ensure that they are not called with more than one
+argument, making the above cases syntax errors.  Note that the usual
+behavior of:
+
+	print defined &foo, &bar, &baz;
+	print uc "foo", "bar", "baz";
+	undef $foo, &bar;
+
+remains unchanged.  See L<perlop>.
+
+=head2 Improved C<qw//> operator
+
+The C<qw//> operator is now evaluated at compile time into a true list
+instead of being replaced with a run time call to C<split()>.  This
+removes the confusing behavior of C<qw//> in scalar context stemming from
+the older implementation, which inherited the behavior from split().  
+
+Thus:
+
+    $foo = ($bar) = qw(a b c); print "$foo|$bar\n";
+
+now correctly prints "3|a", instead of "2|a".
+
+=head2 pack() format 'Z' supported
+
+The new format type 'Z' is useful for packing and unpacking null-terminated
+strings.  See L<perlfunc/"pack">.
+
+=head1 Significant bug fixes
+
+=head2 E<lt>HANDLEE<gt> on empty files
+
+With C<$/> set to C<undef>, slurping an empty file returns a string of
+zero length (instead of C<undef>, as it used to) for the first time the
+HANDLE is read.  Subsequent reads yield C<undef>.
+
+This means that the following will append "foo" to an empty file (it used
+to not do anything before):
+
+    perl -0777 -pi -e 's/^/foo/' empty_file
+
+Note that the behavior of:
+
+    perl -pi -e 's/^/foo/' empty_file
+
+is unchanged (it continues to leave the file empty).
+
+=head2 pack() format modifier '_' supported
+
+The new format type modifer '_' is useful for packing and unpacking
+native shorts, ints, and longs.  See L<perlfunc/"pack">.
 
 =head1 Supported Platforms
 
-Todo.
+=over 4
+
+=item *
+
+VM/ESA is now supported.
+
+=item *
+
+Siemens BS200 is now supported.
+
+=item *
+
+The Mach CThreads (NeXTstep) are now supported by the Thread extension.
+
+=back
+
+=head1 New tests
+
+=over 4
+
+=item	op/io_const
+
+IO constants (SEEK_*, _IO*).
+	
+=item	op/io_dir
+
+Directory-related IO methods (new, read, close, rewind, tied delete).
+
+=item	op/io_multihomed
+
+INET sockets with multi-homed hosts.
+
+=item	op/io_poll
+
+IO poll().
+
+=item	op/io_unix
+
+UNIX sockets.
+
+=item	op/filetest
+
+File test operators.
+
+=item	op/lex_assign
+
+Verify operations that access pad objects (lexicals and temporaries).
+
+=back
 
 =head1 Modules and Pragmata
 
-Todo.
+=head2 Modules
+
+=over 4
+
+=item Dumpvalue
+
+Added Dumpvalue module provides screen dumps of Perl data.
+
+=item Benchmark
+
+You can now run tests for I<x> seconds instead of guessing the right
+number of tests to run.
+
+=item Fcntl
+
+More Fcntl constants added: F_SETLK64, F_SETLKW64, O_LARGEFILE for
+large (more than 4G) file access (the 64-bit support is not yet
+working, though, so no need to get overly excited), Free/Net/OpenBSD
+locking behaviour flags F_FLOCK, F_POSIX, Linux F_SHLCK, and
+O_ACCMODE: the mask of O_RDONLY, O_WRONLY, and O_RDWR.
+
+=item Math::Complex
+ 
+The accessors methods Re, Im, arg, abs, rho, theta, methods can
+($z->Re()) now also act as mutators ($z->Re(3)).
+
+=item Math::Trig
+
+A little bit of radial trigonometry (cylindrical and spherical) added,
+for example the great circle distance.
+
+=item Time::Local
+
+The timelocal() and timegm() functions used to silently return bogus
+results when the date exceeded the machine's integer range.  They
+consistently croak() if the date falls in an unsupported range.
+
+=back
+
+=head2 Pragmata
+
+Lexical warnings pragma, "use warning;", to control optional warnings.
+
+Filetest pragma, to control the behaviour of filetests (C<-r> C<-w> ...).
+Currently only one subpragma implemented, "use filetest 'access';",
+that enables the use of access(2) or equivalent to check the
+permissions instead of using stat(2) as usual.  This matters
+in filesystems where there are ACLs (access control lists), the
+stat(2) might lie, while access(2) knows better.
 
 =head1 Utility Changes
 
@@ -56,15 +279,46 @@ Todo.
 
 =head1 Documentation Changes
 
-Todo.
+=over 4
+
+=item perlopentut.pod
+
+A tutorial on using open() effectively.
+
+=item perlreftut.pod
+
+A tutorial that introduces the essentials of references.
+
+=back
 
 =head1 New Diagnostics
 
-Todo.
+=item /%s/: Unrecognized escape \\%c passed through
+
+(W) You used a backslash-character combination which is not recognized
+by Perl.  This combination appears in an interpolated variable or a 
+C<'>-delimited regular expression.
+
+=item Unrecognized escape \\%c passed through
+
+(W) You used a backslash-character combination which is not recognized
+by Perl.
+
+=item Missing command in piped open
+
+(W) You used the C<open(FH, "| command")> or C<open(FH, "command |")>
+construction, but the command was missing or blank.
 
 =head1 Obsolete Diagnostics
 
 Todo.
+
+=head1 Configuration Changes
+
+You can use "Configure -Uinstallusrbinperl" which causes installperl
+to skip installing perl also as /usr/bin/perl.  This is useful if you
+prefer not to modify /usr/bin for some reason or another but harmful
+because many scripts assume to find Perl in /usr/bin/perl.
 
 =head1 BUGS
 

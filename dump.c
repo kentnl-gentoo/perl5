@@ -632,10 +632,8 @@ do_magic_dump(I32 level, PerlIO *file, MAGIC *mg, I32 nest, I32 maxnest, bool du
 #ifdef USE_LOCALE_COLLATE
 	    else if (v == &PL_vtbl_collxfrm)   s = "collxfrm";
 #endif
-#ifdef OVERLOAD
 	    else if (v == &PL_vtbl_amagic)     s = "amagic";
 	    else if (v == &PL_vtbl_amagicelem) s = "amagicelem";
-#endif
 	    if (s)
 	        dump_indent(level, file, "    MG_VIRTUAL = &PL_vtbl_%s\n", s);
 	    else
@@ -769,9 +767,7 @@ do_sv_dump(I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops,
     if (flags & SVf_FAKE)	sv_catpv(d, "FAKE,");
     if (flags & SVf_READONLY)	sv_catpv(d, "READONLY,");
 
-#ifdef OVERLOAD
     if (flags & SVf_AMAGIC)	sv_catpv(d, "OVERLOAD,");
-#endif /* OVERLOAD */
     if (flags & SVp_IOK)	sv_catpv(d, "pIOK,");
     if (flags & SVp_NOK)	sv_catpv(d, "pNOK,");
     if (flags & SVp_POK)	sv_catpv(d, "pPOK,");
@@ -896,8 +892,8 @@ do_sv_dump(I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops,
 	    if (SvOOK(sv))
 		PerlIO_printf(file, "( %s . ) ", pv_display(d, SvPVX(sv)-SvIVX(sv), SvIVX(sv), 0, pvlim));
 	    PerlIO_printf(file, "%s\n", pv_display(d, SvPVX(sv), SvCUR(sv), SvLEN(sv), pvlim));
-	    dump_indent(level, file, "  CUR = 0\n", (long)SvCUR(sv));
-	    dump_indent(level, file, "  LEN = 0\n", (long)SvLEN(sv));
+	    dump_indent(level, file, "  CUR = %ld\n", (long)SvCUR(sv));
+	    dump_indent(level, file, "  LEN = %ld\n", (long)SvLEN(sv));
 	}
 	else
 	    dump_indent(level, file, "  PV = 0\n");

@@ -161,22 +161,23 @@ set `echo X "$libswanted "|sed -e 's/ sun / /' -e 's/ crypt / /' -e 's/ bsd / /'
 shift
 libswanted="$*"
 
-if [ "X$usethreads" = "X$define" -o "X$usethreads" = "Xy" ]; then
-    if test ! -f ${TOOLROOT}/usr/include/pthread.h -o ! -f /usr/lib/libpthread.so; then
-	uname_r=`uname -r`
-	case "`uname -r`" in
-	5*|6.0|6.1)
-	    echo >&4 "IRIX $uname_r does not have the POSIX threads."
-	    echo >&4 "You should upgrade to at least IRIX 6.2 with pthread patches."
-	    echo >&4 "Cannot continue, aborting."
-	    exit 1
-	    ;;
-	6.2)
-	    echo >&4 ""
-cat >&4 <<EOF
-IRIX 6.2 $uname_r can have the POSIX threads.
-The following IRIX patches (or their replacements) must, however, be installed:
-
+# This script UU/usethreads.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use threads.
+cat > UU/usethreads.cbu <<'EOCBU'
+case "$usethreads" in
+$define|true|[yY]*)
+        if test ! -f ${TOOLROOT}/usr/include/pthread.h -o ! -f /usr/lib/libpthread.so; then
+            case "`uname -r`" in
+            [1-5].*|6.[01])
+ 	        cat >&4 <<EOM
+IRIX `uname -r` does not support POSIX threads.
+You should upgrade to at least IRIX 6.2 with pthread patches.
+EOM
+	        ;;
+	    6.2)
+ 	        cat >&4 <<EOM
+IRIX 6.2 can have the POSIX threads.
+However, the following IRIX patches (or their replacements) MUST be installed:
         1404 Irix 6.2 Posix 1003.1b man pages
         1645 IRIX 6.2 & 6.3 POSIX header file updates
         2000 Irix 6.2 Posix 1003.1b support modules
@@ -186,61 +187,62 @@ IMPORTANT:
 	Without patch 2401, a kernel bug in IRIX 6.2 will
 	cause your machine to panic and crash when running
 	threaded perl. IRIX 6.3 and up should be OK.
-
-
+EOM
+	        ;;
+  	    [67].*)
+	        cat >&4 <<EOM
+IRIX `uname -r` should have the POSIX threads.
+But, somehow, you do not seem to have them installed.
+EOM
+	        ;;
+	    esac
+            cat >&4 <<EOM
 Cannot continue, aborting.
-EOF
-	    exit 1
-	    ;;
-	6.*|7.*)
-	    echo >&4 "IRIX $uname_r should have the POSIX threads."
-	    echo >&4 "But somehow you do not seem to have them installed."
-	    echo >&4 "Cannot continue, aborting."
-	    exit 1
-	    ;;
-	esac
-	unset uname_r
-    fi
-    # -lpthread needs to come before -lc but after other libraries such
-    # as -lgdbm and such like. We assume here that -lc is present in
-    # libswanted. If that fails to be true in future, then this can be
-    # changed to add pthread to the very end of libswanted.
-    set `echo X "$libswanted "| sed -e 's/ c / pthread /'`
-    ld="${cc:-cc}"
-    shift
-    libswanted="$*"
-    usemymalloc='n'
-fi
+EOM
+            exit 1
+        fi
+        set `echo X "$libswanted "| sed -e 's/ c / pthread /'`
+        ld="${cc:-cc}"
+        shift
+        libswanted="$*"
 
-# 64-bitness.
-# jhi@iki.fi, inspired by Scott Henry.
-
-if [ "X$use64bits" = "X$define" ]; then
-    uname_r=`uname -r`
-    case "$uname_r" in
-    [1-5]*|6.[01])
-	echo >&4 "IRIX $uname_r does not support 64-bit types."
-	echo >&4 "You should upgrade to at least IRIX 6.2."
-	exit 1
+        usemymalloc='n'
 	;;
-    esac
-    case "$ccflags" in
-    *-n32*)
-        ccflags="$ccflags -DUSE_LONG_LONG"
-	archname64="-n32"
-	d_open64="$undef"
-	# In -n32 mode (ILP32LL64) we use the standard open().
-	# In -64 we will use the open64().
-	cat << 'EOM' >&2
+esac
+EOCBU
+
+# This script UU/use64bits.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use 64 bits.
+cat > UU/use64bits.cbu <<'EOCBU'
+case "$use64bits" in
+$define|true|[yY]*)
+	    case "`uname -r`" in
+	    [1-5]*|6.[01])
+		cat >&4 <<EOM
+IRIX `uname -r` does not support 64-bit types.
+You should upgrade to at least IRIX 6.2.
+Cannot continue, aborting.
+EOM
+		exit 1
+		;;
+	    esac
+	    case "$ccflags" in
+	    *-n32*)
+		ccflags="$ccflags -DUSE_LONG_LONG"
+		archname64="-n32"
+		d_open64="$undef"
+		# In -n32 mode (ILP32LL64) we use the standard open().
+		# In -64 we will use the open64().
+		cat << 'EOM' >&2
 
 You will see a *** WHOA THERE!!! ***  message from Configure for
 d_open64.  Keep the recommended value.  See hints/irix6.sh
 for more information.
 
 EOM
-        ;;
-    *-64*)
-	;;
-    esac
-    ccflags="$ccflags -DUSE_64_BIT_FILES"
-fi
+		;;
+	    esac
+	    ccflags="$ccflags -DUSE_64_BIT_FILES"
+	    ;;
+esac
+EOCBU

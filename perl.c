@@ -13,7 +13,6 @@
 
 #include "EXTERN.h"
 #include "perl.h"
-#include "patchlevel.h"
 
 /* XXX If this causes problems, set i_unistd=undef in the hint file.  */
 #ifdef I_UNISTD
@@ -64,6 +63,9 @@ static void my_exit_jump _((void)) __attribute__((noreturn));
 static void nuke_stacks _((void));
 static void open_script _((char *, bool, SV *, int *fd));
 static void usage _((char *));
+#ifdef IAMSUID
+static int  fd_on_nosuid_fs _((int));
+#endif
 static void validate_suid _((char *, char*, int));
 static I32 read_e_script _((int idx, SV *buf_sv, int maxlen));
 #endif
@@ -207,13 +209,13 @@ perl_construct(register PerlInterpreter *sv_interp)
     STATUS_ALL_SUCCESS;
 
     SET_NUMERIC_STANDARD();
-#if defined(SUBVERSION) && SUBVERSION > 0
-    sprintf(PL_patchlevel, "%7.5f",   (double) 5 
-				+ ((double) PATCHLEVEL / (double) 1000)
-				+ ((double) SUBVERSION / (double) 100000));
+#if defined(PERL_SUBVERSION) && PERL_SUBVERSION > 0
+    sprintf(PL_patchlevel, "%7.5f",   (double) PERL_REVISION
+				+ ((double) PERL_VERSION / (double) 1000)
+				+ ((double) PERL_SUBVERSION / (double) 100000));
 #else
-    sprintf(PL_patchlevel, "%5.3f", (double) 5 +
-				((double) PATCHLEVEL / (double) 1000));
+    sprintf(PL_patchlevel, "%5.3f", (double) PERL_REVISION +
+				((double) PERL_VERSION / (double) 1000));
 #endif
 
 #if defined(LOCAL_PATCH_COUNT)
@@ -888,19 +890,25 @@ print \"  \\@INC:\\n    @INC\\n\";");
   switch_end:
 
     if (!PL_tainting && (s = PerlEnv_getenv("PERL5OPT"))) {
-	while (s && *s) {
-	    while (isSPACE(*s))
-		s++;
-	    if (*s == '-') {
-		s++;
-		if (isSPACE(*s))
-		    continue;
+	while (isSPACE(*s))
+	    s++;
+	if (*s == '-' && *(s+1) == 'T')
+	    PL_tainting = TRUE;
+	else {
+	    while (s && *s) {
+		while (isSPACE(*s))
+		    s++;
+		if (*s == '-') {
+		    s++;
+		    if (isSPACE(*s))
+			continue;
+		}
+		if (!*s)
+		    break;
+		if (!strchr("DIMUdmw", *s))
+		    croak("Illegal switch in PERL5OPT: -%c", *s);
+		s = moreswitches(s);
 	    }
-	    if (!*s)
-		break;
-	    if (!strchr("DIMUdmw", *s))
-		croak("Illegal switch in PERL5OPT: -%c", *s);
-	    s = moreswitches(s);
 	}
     }
 
@@ -1101,7 +1109,7 @@ perl_run(PerlInterpreter *sv_interp)
 }
 
 SV*
-perl_get_sv(char *name, I32 create)
+perl_get_sv(const char *name, I32 create)
 {
     GV *gv;
 #ifdef USE_THREADS
@@ -1120,7 +1128,7 @@ perl_get_sv(char *name, I32 create)
 }
 
 AV*
-perl_get_av(char *name, I32 create)
+perl_get_av(const char *name, I32 create)
 {
     GV* gv = gv_fetchpv(name, create, SVt_PVAV);
     if (create)
@@ -1131,7 +1139,7 @@ perl_get_av(char *name, I32 create)
 }
 
 HV*
-perl_get_hv(char *name, I32 create)
+perl_get_hv(const char *name, I32 create)
 {
     GV* gv = gv_fetchpv(name, create, SVt_PVHV);
     if (create)
@@ -1142,7 +1150,7 @@ perl_get_hv(char *name, I32 create)
 }
 
 CV*
-perl_get_cv(char *name, I32 create)
+perl_get_cv(const char *name, I32 create)
 {
     GV* gv = gv_fetchpv(name, create, SVt_PVCV);
     /* XXX unsafe for threads if eval_owner isn't held */
@@ -1159,7 +1167,7 @@ perl_get_cv(char *name, I32 create)
 /* Be sure to refetch the stack pointer after calling these routines. */
 
 I32
-perl_call_argv(char *sub_name, I32 flags, register char **argv)
+perl_call_argv(const char *sub_name, I32 flags, register char **argv)
               
           		/* See G_* flags in cop.h */
                      	/* null terminated arg list */
@@ -1178,7 +1186,7 @@ perl_call_argv(char *sub_name, I32 flags, register char **argv)
 }
 
 I32
-perl_call_pv(char *sub_name, I32 flags)
+perl_call_pv(const char *sub_name, I32 flags)
               		/* name of the subroutine */
           		/* See G_* flags in cop.h */
 {
@@ -1186,7 +1194,7 @@ perl_call_pv(char *sub_name, I32 flags)
 }
 
 I32
-perl_call_method(char *methname, I32 flags)
+perl_call_method(const char *methname, I32 flags)
                		/* name of the subroutine */
           		/* See G_* flags in cop.h */
 {
@@ -1435,7 +1443,7 @@ perl_eval_sv(SV *sv, I32 flags)
 }
 
 SV*
-perl_eval_pv(char *p, I32 croak_on_error)
+perl_eval_pv(const char *p, I32 croak_on_error)
 {
     dSP;
     SV* sv = newSVpv(p, 0);
@@ -1459,7 +1467,7 @@ perl_eval_pv(char *p, I32 croak_on_error)
 /* Require a module. */
 
 void
-perl_require_pv(char *pv)
+perl_require_pv(const char *pv)
 {
     SV* sv;
     dSP;
@@ -1710,9 +1718,9 @@ moreswitches(char *s)
 	s++;
 	return s;
     case 'v':
-#if defined(SUBVERSION) && SUBVERSION > 0
-	printf("\nThis is perl, version 5.%03d_%02d built for %s",
-	    PATCHLEVEL, SUBVERSION, ARCHNAME);
+#if defined(PERL_SUBVERSION) && PERL_SUBVERSION > 0
+	printf("\nThis is perl, version %d.%03d_%02d built for %s",
+	    PERL_REVISION, PERL_VERSION, PERL_SUBVERSION, ARCHNAME);
 #else
 	printf("\nThis is perl, version %s built for %s",
 		PL_patchlevel, ARCHNAME);
@@ -1755,6 +1763,9 @@ moreswitches(char *s)
 #endif
 #ifdef POSIX_BC
 	printf("BS2000 (POSIX) port by Start Amadeus GmbH, 1998\n");
+#endif
+#ifdef __MINT__
+	printf("MiNT port by Guido Flohr, 1997\n");
 #endif
 #ifdef BINARY_BUILD_NOTICE
 	BINARY_BUILD_NOTICE;
@@ -2107,6 +2118,70 @@ sed %s -e \"/^[^#]/b\" \
     }
 }
 
+#ifdef IAMSUID
+static int
+fd_on_nosuid_fs(int fd)
+{
+    int on_nosuid  = 0;
+    int check_okay = 0;
+/*
+ * Preferred order: fstatvfs(), fstatfs(), getmntent().
+ * fstatvfs() is UNIX98.
+ * fstatfs() is BSD.
+ * getmntent() is O(number-of-mounted-filesystems) and can hang.
+ */
+
+#   ifdef HAS_FSTATVFS
+    struct statvfs stfs;
+    check_okay = fstatvfs(fd, &stfs) == 0;
+    on_nosuid  = check_okay && (stfs.f_flag  & ST_NOSUID);
+#   else
+#       if defined(HAS_FSTATFS) && defined(HAS_STRUCT_STATFS_FLAGS)
+    struct statfs  stfs;
+    check_okay = fstatfs(fd, &stfs)  == 0;
+#           undef PERL_MOUNT_NOSUID
+#           if !defined(PERL_MOUNT_NOSUID) && defined(MNT_NOSUID)
+#              define PERL_MOUNT_NOSUID MNT_NOSUID
+#           endif
+#           if !defined(PERL_MOUNT_NOSUID) && defined(MS_NOSUID)
+#              define PERL_MOUNT_NOSUID MS_NOSUID
+#           endif
+#           if !defined(PERL_MOUNT_NOSUID) && defined(M_NOSUID)
+#              define PERL_MOUNT_NOSUID M_NOSUID
+#           endif
+#           ifdef PERL_MOUNT_NOSUID
+    on_nosuid  = check_okay && (stfs.f_flags & PERL_MOUNT_NOSUID);
+#           endif
+#       else
+#           if defined(HAS_GETMNTENT) && defined(HAS_HASMNTOPT) && defined(MNTOPT_NOSUID)
+    FILE		*mtab = fopen("/etc/mtab", "r");
+    struct mntent	*entry;
+    struct stat		stb, fsb;
+
+    if (mtab && (fstat(fd, &stb) == 0)) {
+	while (entry = getmntent(mtab)) {
+	    if (stat(entry->mnt_dir, &fsb) == 0
+		&& fsb.st_dev == stb.st_dev)
+	    {
+		/* found the filesystem */
+		check_okay = 1;
+		if (hasmntopt(entry, MNTOPT_NOSUID))
+		    on_nosuid = 1;
+		break;
+	    } /* A single fs may well fail its stat(). */
+	}
+    }
+    if (mtab)
+	fclose(mtab);
+#           endif /* mntent */
+#       endif /* statfs */
+#   endif /* statvfs */
+    if (!check_okay) 
+	croak("Can't check filesystem of script \"%s\"", PL_origfilename);
+    return on_nosuid;
+}
+#endif /* IAMSUID */
+
 STATIC void
 validate_suid(char *validarg, char *scriptname, int fdscript)
 {
@@ -2175,6 +2250,10 @@ validate_suid(char *validarg, char *scriptname, int fdscript)
 		croak("Can't swap uid and euid");	/* really paranoid */
 	    if (PerlLIO_stat(SvPVX(GvSV(PL_curcop->cop_filegv)),&tmpstatbuf) < 0)
 		croak("Permission denied");	/* testing full pathname here */
+#if defined(IAMSUID) && !defined(NO_NOSUID_CHECK)
+	    if (fd_on_nosuid_fs(PerlIO_fileno(PL_rsfp)))
+		croak("Permission denied");
+#endif
 	    if (tmpstatbuf.st_dev != PL_statbuf.st_dev ||
 		tmpstatbuf.st_ino != PL_statbuf.st_ino) {
 		(void)PerlIO_close(PL_rsfp);

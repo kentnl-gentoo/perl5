@@ -2,9 +2,9 @@
 
  DB_File.xs -- Perl 5 interface to Berkeley DB 
 
- written by Paul Marquess (pmarquess@bfsec.bt.co.uk)
+ written by Paul Marquess <Paul.Marquess@btinternet.com>
  last modified 19th November 1998
- version 1.61
+ version 1.63
 
  All comments/suggestions/problems are welcome
 
@@ -58,6 +58,9 @@
         1.60 -  Some code tidy up
         1.61 -  added flagSet macro for DB 2.5.x
 		fixed typo in O_RDONLY test.
+        1.62 -  No change to DB_File.xs
+        1.63 -  Fix to alllow DB 2.6.x to build.
+
 
 
 
@@ -66,6 +69,11 @@
 #include "EXTERN.h"  
 #include "perl.h"
 #include "XSUB.h"
+
+#ifndef PERL_VERSION
+#include "patchlevel.h"
+#define PERL_VERSION PATCHLEVEL
+#endif
 
 /* Being the Berkeley DB we prefer the <sys/cdefs.h> (which will be
  * shortly #included by the <db.h>) __attribute__ to the possibly
@@ -332,7 +340,7 @@ GetVersionInfo()
 	croak("DB_File needs Berkeley DB 2.0.5 or greater, you have %d.%d.%d\n",
 		 Major, Minor, Patch) ;
  
-#if PATCHLEVEL > 3
+#if PERL_VERSION > 3
     sv_setpvf(ver_sv, "%d.%d", Major, Minor) ;
 #else
     {
@@ -836,7 +844,12 @@ SV *   sv ;
 
         status = db_open(name, RETVAL->type, Flags, mode, NULL, openinfo, &RETVAL->dbp) ; 
         if (status == 0)
+#if DB_VERSION_MAJOR == 2 && DB_VERSION_MINOR < 6
             status = (RETVAL->dbp->cursor)(RETVAL->dbp, NULL, &RETVAL->cursor) ;
+#else
+            status = (RETVAL->dbp->cursor)(RETVAL->dbp, NULL, &RETVAL->cursor,
+			0) ;
+#endif
 
         if (status)
 	    RETVAL->dbp = NULL ;

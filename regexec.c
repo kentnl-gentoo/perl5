@@ -329,7 +329,7 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     /* Check validity of program. */
     if (UCHARAT(prog->program) != REG_MAGIC) {
-	FAIL("corrupted regexp program");
+	croak("corrupted regexp program");
     }
 
     PL_reg_flags = 0;
@@ -418,12 +418,12 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     if (prog->reganch & ROPT_GPOS_SEEN) {
 	MAGIC *mg;
-	int pos = 0;
 
-	if (SvTYPE(sv) >= SVt_PVMG && SvMAGIC(sv) 
-	    && (mg = mg_find(sv, 'g')) && mg->mg_len >= 0)
-	    pos = mg->mg_len;
-	PL_reg_ganch = startpos + pos;
+	if (!(flags & REXEC_IGNOREPOS) && sv && SvTYPE(sv) >= SVt_PVMG
+	    && SvMAGIC(sv) && (mg = mg_find(sv, 'g')) && mg->mg_len >= 0)
+	    PL_reg_ganch = strbeg + mg->mg_len;
+	else
+	    PL_reg_ganch = startpos;
     }
 
     /* Simplest case:  anchored match need be tried only once. */
@@ -1172,6 +1172,12 @@ regmatch(regnode *prog)
 	    int docolor = *PL_colors[0];
 	    int taill = (docolor ? 10 : 7); /* 3 chars for "> <" */
 	    int l = (PL_regeol - locinput > taill ? taill : PL_regeol - locinput);
+	    /* The part of the string before starttry has one color
+	       (pref0_len chars), between starttry and current
+	       position another one (pref_len - pref0_len chars),
+	       after the current position the third one.
+	       We assume that pref0_len <= pref_len, otherwise we
+	       decrease pref0_len.  */
 	    int pref_len = (locinput - PL_bostr > (5 + taill) - l 
 			    ? (5 + taill) - l : locinput - PL_bostr);
 	    int pref0_len = pref_len  - (locinput - PL_reg_starttry);
@@ -1181,6 +1187,8 @@ regmatch(regnode *prog)
 		      ? (5 + taill) - pref_len : PL_regeol - locinput);
 	    if (pref0_len < 0)
 		pref0_len = 0;
+	    if (pref0_len > pref_len)
+		pref0_len = pref_len;
 	    regprop(prop, scan);
 	    PerlIO_printf(Perl_debug_log, 
 			  "%4i <%s%.*s%s%s%.*s%s%s%s%.*s%s>%*s|%3d:%*s%s\n",
@@ -2196,6 +2204,50 @@ regmatch(regnode *prog)
 		    sayNO;
 		locinput = PL_reginput;
 		REGCP_SET;
+		if (c1 != -1000) {
+		    char *e = locinput + n - ln; /* Should not check after this */
+		    char *old = locinput;
+
+		    if (e >= PL_regeol || (n == REG_INFTY))
+			e = PL_regeol - 1;
+		    while (1) {
+			/* Find place 'next' could work */
+			if (c1 == c2) {
+			    while (locinput <= e && *locinput != c1)
+				locinput++;
+			} else {
+			    while (locinput <= e 
+				   && *locinput != c1
+				   && *locinput != c2)
+				locinput++;			    
+			}
+			if (locinput > e) 
+			    sayNO;
+			/* PL_reginput == old now */
+			if (locinput != old) {
+			    ln = 1;	/* Did some */
+			    if (regrepeat(scan, locinput - old) <
+				 locinput - old)
+				sayNO;
+			}
+			/* PL_reginput == locinput now */
+			if (paren) {
+			    if (ln) {
+				PL_regstartp[paren] = HOPc(locinput, -1);
+				PL_regendp[paren] = locinput;
+			    }
+			    else
+				PL_regendp[paren] = NULL;
+			}
+			if (regmatch(next))
+			    sayYES;
+			PL_reginput = locinput;	/* Could be reset... */
+			REGCP_UNWIND;
+			/* Couldn't or didn't -- move forward. */
+			old = locinput++;
+		    }
+		}
+		else
 		while (n >= ln || (n == REG_INFTY && ln > 0)) { /* ln overflow ? */
 		    /* If it could work, try it. */
 		    if (c1 == -1000 ||
@@ -2323,10 +2375,20 @@ regmatch(regnode *prog)
 	case UNLESSM:
 	    n = 0;
 	    if (scan->flags) {
-		s = HOPMAYBEc(locinput, -scan->flags);
-		if (!s)
-		    goto say_yes;
-		PL_reginput = s;
+		if (UTF) {		/* XXXX This is absolutely
+					   broken, we read before
+					   start of string. */
+		    s = HOPMAYBEc(locinput, -scan->flags);
+		    if (!s)
+			goto say_yes;
+		    PL_reginput = s;
+		}
+		else {
+		    if (locinput < PL_bostr + scan->flags) 
+			goto say_yes;
+		    PL_reginput = locinput - scan->flags;
+		    goto do_ifmatch;
+		}
 	    }
 	    else
 		PL_reginput = locinput;
@@ -2334,10 +2396,20 @@ regmatch(regnode *prog)
 	case IFMATCH:
 	    n = 1;
 	    if (scan->flags) {
-		s = HOPMAYBEc(locinput, -scan->flags);
-		if (!s || s < PL_bostr)
-		    goto say_no;
-		PL_reginput = s;
+		if (UTF) {		/* XXXX This is absolutely
+					   broken, we read before
+					   start of string. */
+		    s = HOPMAYBEc(locinput, -scan->flags);
+		    if (!s || s < PL_bostr)
+			goto say_no;
+		    PL_reginput = s;
+		}
+		else {
+		    if (locinput < PL_bostr + scan->flags) 
+			goto say_no;
+		    PL_reginput = locinput - scan->flags;
+		    goto do_ifmatch;
+		}
 	    }
 	    else
 		PL_reginput = locinput;
@@ -2373,7 +2445,7 @@ regmatch(regnode *prog)
 	default:
 	    PerlIO_printf(PerlIO_stderr(), "%lx %d\n",
 			  (unsigned long)scan, OP(scan));
-	    FAIL("regexp memory corruption");
+	    croak("regexp memory corruption");
 	}
 	scan = next;
     }
@@ -2382,7 +2454,7 @@ regmatch(regnode *prog)
     * We get here only if there's trouble -- normally "case END" is
     * the terminating point.
     */
-    FAIL("corrupted regexp pointers");
+    croak("corrupted regexp pointers");
     /*NOTREACHED*/
     sayNO;
 
@@ -2669,7 +2741,7 @@ regrepeat_hard(regnode *p, I32 max, I32 *lp)
 }
 
 /*
- - regclass - determine if a character falls into a character class
+ - reginclass - determine if a character falls into a character class
  */
 
 STATIC bool
