@@ -467,6 +467,9 @@ I32 *flagp;
 		nextchar();
 		*flagp = TRYAGAIN;
 		return NULL;
+            case 0:
+                croak("Sequence (? incomplete");
+                break;
 	    default:
 		--regparse;
 		while (*regparse && strchr("iogcmsx", *regparse))
@@ -903,7 +906,9 @@ tryagain:
 		    goto defchar;
 		else {
 		    regsawback = 1;
-		    ret = reganode(REF, num);
+		    ret = reganode((regflags & PMf_FOLD)
+				   ? ((regflags & PMf_LOCALE) ? REFFL : REFF)
+				   : REF, num);
 		    *flagp |= HASWIDTH;
 		    while (isDIGIT(*regparse))
 			regparse++;
@@ -1666,6 +1671,12 @@ char *op;
 	break;
     case REF:
 	sv_catpvf(sv, "REF%d", ARG1(op));
+	break;
+    case REFF:
+	sv_catpvf(sv, "REFF%d", ARG1(op));
+	break;
+    case REFFL:
+	sv_catpvf(sv, "REFFL%d", ARG1(op));
 	break;
     case OPEN:
 	sv_catpvf(sv, "OPEN%d", ARG1(op));

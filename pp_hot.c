@@ -426,8 +426,6 @@ PP(pp_rv2av)
 	av = (AV*)SvRV(sv);
 	if (SvTYPE(av) != SVt_PVAV)
 	    DIE("Not an ARRAY reference");
-	if (op->op_private & OPpLVAL_INTRO)
-	    av = (AV*)save_svref((SV**)sv);
 	if (op->op_flags & OPf_REF) {
 	    PUSHs((SV*)av);
 	    RETURN;
@@ -503,8 +501,6 @@ PP(pp_rv2hv)
 	hv = (HV*)SvRV(sv);
 	if (SvTYPE(hv) != SVt_PVHV)
 	    DIE("Not a HASH reference");
-	if (op->op_private & OPpLVAL_INTRO)
-	    hv = (HV*)save_svref((SV**)sv);
 	if (op->op_flags & OPf_REF) {
 	    SETs((SV*)hv);
 	    RETURN;
@@ -625,13 +621,17 @@ PP(pp_aassign)
 	    av_extend(ary, lastrelem - relem);
 	    i = 0;
 	    while (relem <= lastrelem) {	/* gobble up all the rest */
+		SV **didstore;
 		sv = NEWSV(28,0);
 		assert(*relem);
 		sv_setsv(sv,*relem);
 		*(relem++) = sv;
-		(void)av_store(ary,i++,sv);
-		if (magic)
+		didstore = av_store(ary,i++,sv);
+		if (magic) {
 		    mg_set(sv);
+		    if (!didstore)
+			SvREFCNT_dec(sv);
+		}
 		TAINT_NOT;
 	    }
 	    break;
@@ -644,6 +644,7 @@ PP(pp_aassign)
 
 		while (relem < lastrelem) {	/* gobble up all the rest */
 		    STRLEN len;
+		    HE *didstore;
 		    if (*relem)
 			sv = *(relem++);
 		    else
@@ -652,9 +653,12 @@ PP(pp_aassign)
 		    if (*relem)
 			sv_setsv(tmpstr,*relem);	/* value */
 		    *(relem++) = tmpstr;
-		    (void)hv_store_ent(hash,sv,tmpstr,0);
-		    if (magic)
+		    didstore = hv_store_ent(hash,sv,tmpstr,0);
+		    if (magic) {
 			mg_set(tmpstr);
+			if (!didstore)
+			    SvREFCNT_dec(tmpstr);
+		    }
 		    TAINT_NOT;
 		}
 		if (relem == lastrelem)
@@ -1909,7 +1913,7 @@ PP(pp_entersub)
 	    (void)SvREFCNT_inc(cv);
 	else {	/* save temporaries on recursion? */
 	    if (CvDEPTH(cv) == 100 && dowarn 
-		  && !(perldb && cv == GvCV(DBsub)))
+		  && !(PERLDB_SUB && cv == GvCV(DBsub)))
 		sub_crush_depth(cv);
 	    if (CvDEPTH(cv) > AvFILL(padlist)) {
 		AV *av;

@@ -724,7 +724,7 @@ PP(pp_sort)
 		cx->blk_gimme = G_SCALAR;
 		PUSHSUB(cx);
 		if (!CvDEPTH(cv))
-		    SvREFCNT_inc(cv);	/* in preparation for POPSUB */
+		    (void)SvREFCNT_inc(cv); /* in preparation for POPSUB */
 	    }
 	    sortcxix = cxstack_ix;
 
@@ -773,6 +773,7 @@ PP(pp_flip)
 	    sv_setiv(PAD_SV(cUNOP->op_first->op_targ), 1);
 	    if (op->op_flags & OPf_SPECIAL) {
 		sv_setiv(targ, 1);
+		SETs(targ);
 		RETURN;
 	    }
 	    else {
@@ -1851,7 +1852,7 @@ PP(pp_goto)
 			mark++;
 		    }
 		}
-		if (perldb && curstash != debstash) {
+		if (PERLDB_SUB && curstash != debstash) {
 		    /*
 		     * We do not care about using sv to call CV;
 		     * it's for informational purposes only.
@@ -1939,6 +1940,11 @@ PP(pp_goto)
 	    OP *oldop = op;
 	    for (ix = 1; enterops[ix]; ix++) {
 		op = enterops[ix];
+		/* Eventually we may want to stack the needed arguments
+		 * for each op.  For now, we punt on the hard ones. */
+		if (op->op_type == OP_ENTERITER)
+		    DIE("Can't \"goto\" into the middle of a foreach loop",
+			label);
 		(*op->op_ppaddr)();
 	    }
 	    op = oldop;
@@ -2204,7 +2210,7 @@ int gimme;
     DEBUG_x(dump_eval());
 
     /* Register with debugger: */
-    if (perldb && saveop->op_type == OP_REQUIRE) {
+    if (PERLDB_INTER && saveop->op_type == OP_REQUIRE) {
 	CV *cv = perl_get_cv("DB::postponed", FALSE);
 	if (cv) {
 	    dSP;
@@ -2261,6 +2267,9 @@ PP(pp_require)
 #ifdef DOSISH
       || (name[0] && name[1] == ':')
 #endif
+#ifdef WIN32
+      || (name[0] == '\\' && name[1] == '\\')	/* UNC path */
+#endif
 #ifdef VMS
 	|| (strchr(name,':')  || ((*name == '[' || *name == '<') &&
 	    (isALNUM(name[1]) || strchr("$-_]>",name[1]))))
@@ -2306,10 +2315,21 @@ PP(pp_require)
     if (!tryrsfp) {
 	if (op->op_type == OP_REQUIRE) {
 	    SV *msg = sv_2mortal(newSVpvf("Can't locate %s in @INC", name));
+	    SV *dirmsgsv = NEWSV(0, 0);
+	    AV *ar = GvAVn(incgv);
+	    I32 i;
 	    if (instr(SvPVX(msg), ".h "))
 		sv_catpv(msg, " (change .h to .ph maybe?)");
 	    if (instr(SvPVX(msg), ".ph "))
 		sv_catpv(msg, " (did you run h2ph?)");
+	    sv_catpv(msg, " (@INC contains:");
+	    for (i = 0; i <= AvFILL(ar); i++) {
+		char *dir = SvPVx(*av_fetch(ar, i, TRUE), na);
+		sv_setpvf(dirmsgsv, " %s", dir);
+	        sv_catsv(msg, dirmsgsv);
+	    }
+	    sv_catpvn(msg, ")", 1);
+    	    SvREFCNT_dec(dirmsgsv);
 	    DIE("%_", msg);
 	}
 
@@ -2392,11 +2412,12 @@ PP(pp_entereval)
 
     /* prepare to compile string */
 
-    if (perldb && curstash != debstash)
+    if (PERLDB_LINE && curstash != debstash)
 	save_lines(GvAV(compiling.cop_filegv), linestr);
     PUTBACK;
     ret = doeval(gimme);
-    if (perldb && was != sub_generation) { /* Some subs defined here. */
+    if (PERLDB_INTER && was != sub_generation /* Some subs defined here. */
+	&& ret != op->op_next) {	/* Successive compilation. */
 	strcpy(safestr, "_<(eval )");	/* Anything fake and short. */
     }
     return DOCATCH(ret);
@@ -2444,6 +2465,36 @@ PP(pp_leaveeval)
 	}
     }
     curpm = newpm;	/* Don't pop $1 et al till now */
+
+    /*
+     * Closures mentioned at top level of eval cannot be referenced
+     * again, and their presence indirectly causes a memory leak.
+     * (Note that the fact that compcv and friends are still set here
+     * is, AFAIK, an accident.)  --Chip
+     */
+    if (AvFILL(comppad_name) >= 0) {
+	SV **svp = AvARRAY(comppad_name);
+	I32 ix;
+	for (ix = AvFILL(comppad_name); ix >= 0; ix--) {
+	    SV *sv = svp[ix];
+	    if (sv && sv != &sv_undef && *SvPVX(sv) == '&') {
+		SvREFCNT_dec(sv);
+		svp[ix] = &sv_undef;
+
+		sv = curpad[ix];
+		if (CvCLONE(sv)) {
+		    SvREFCNT_dec(CvOUTSIDE(sv));
+		    CvOUTSIDE(sv) = Nullcv;
+		}
+		else {
+		    SvREFCNT_dec(sv);
+		    sv = NEWSV(0,0);
+		    SvPADTMP_on(sv);
+		    curpad[ix] = sv;
+		}
+	    }
+	}
+    }
 
 #ifdef DEBUGGING
     assert(CvDEPTH(compcv) == 1);

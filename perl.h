@@ -361,8 +361,14 @@
 #   include <netinet/in.h>
 #endif
 
+#if defined(SF_APPEND) && defined(USE_SFIO) && defined(I_SFIO)
+/* <sfio.h> defines SF_APPEND and <sys/stat.h> might define SF_APPEND
+ * (the neo-BSD seem to do this).  */
+#   undef SF_APPEND
+#endif
+
 #ifdef I_SYS_STAT
-#include <sys/stat.h>
+#   include <sys/stat.h>
 #endif
 
 /* The stat macros for Amdahl UTS, Unisoft System V/88 (and derivatives
@@ -856,7 +862,9 @@ typedef struct loop LOOP;
 
 typedef struct Outrec Outrec;
 typedef struct interpreter PerlInterpreter;
-typedef struct ff FF;
+#ifndef __BORLANDC__
+typedef struct ff FF;		/* XXX not defined anywhere, should go? */
+#endif
 typedef struct sv SV;
 typedef struct av AV;
 typedef struct hv HV;
@@ -1275,11 +1283,6 @@ typedef Sighandler_t Sigsave_t;
 # ifndef register
 #  define register
 # endif
-# ifdef MYMALLOC
-#  ifndef DEBUGGING_MSTATS
-#   define DEBUGGING_MSTATS
-#  endif
-# endif
 # define PAD_SV(po) pad_sv(po)
 #else
 # define PAD_SV(po) curpad[po]
@@ -1381,37 +1384,37 @@ EXTCONST char *	hexdigit INIT("0123456789abcdef0123456789ABCDEFx");
 EXTCONST char *	patleave INIT("\\.^$@dDwWsSbB+*?|()-nrtfeaxc0123456789[{]}");
 EXTCONST char *	vert INIT("|");
 
-EXTCONST char	warn_uninit[]
+EXTCONST char warn_uninit[]
   INIT("Use of uninitialized value");
-EXTCONST char	warn_nosemi[]
+EXTCONST char warn_nosemi[]
   INIT("Semicolon seems to be missing");
-EXTCONST char	warn_reserved[]
+EXTCONST char warn_reserved[]
   INIT("Unquoted string \"%s\" may clash with future reserved word");
-EXTCONST char	warn_nl[]
+EXTCONST char warn_nl[]
   INIT("Unsuccessful %s on filename containing newline");
-EXTCONST char	no_wrongref[]
+EXTCONST char no_wrongref[]
   INIT("Can't use %s ref as %s ref");
-EXTCONST char	no_symref[]
+EXTCONST char no_symref[]
   INIT("Can't use string (\"%.32s\") as %s ref while \"strict refs\" in use");
-EXTCONST char	no_usym[]
+EXTCONST char no_usym[]
   INIT("Can't use an undefined value as %s reference");
-EXTCONST char	no_aelem[]
+EXTCONST char no_aelem[]
   INIT("Modification of non-creatable array value attempted, subscript %d");
-EXTCONST char	no_helem[]
+EXTCONST char no_helem[]
   INIT("Modification of non-creatable hash value attempted, subscript \"%s\"");
-EXTCONST char	no_modify[]
+EXTCONST char no_modify[]
   INIT("Modification of a read-only value attempted");
-EXTCONST char	no_mem[]
+EXTCONST char no_mem[]
   INIT("Out of memory!\n");
-EXTCONST char	no_security[]
+EXTCONST char no_security[]
   INIT("Insecure dependency in %s%s");
-EXTCONST char	no_sock_func[]
+EXTCONST char no_sock_func[]
   INIT("Unsupported socket function \"%s\" called");
-EXTCONST char	no_dir_func[]
+EXTCONST char no_dir_func[]
   INIT("Unsupported directory function \"%s\" called");
-EXTCONST char	no_func[]
+EXTCONST char no_func[]
   INIT("The %s function is unimplemented");
-EXTCONST char	no_myglob[]
+EXTCONST char no_myglob[]
   INIT("\"my\" variable %s can't be in a package");
 
 EXT SV		sv_undef;
@@ -1927,7 +1930,8 @@ EXT MGVTBL vtbl_sv =	{magic_get,
 				magic_set,
 					magic_len,
 						0,	0};
-EXT MGVTBL vtbl_env =	{0,	0,	0,	0,	0};
+EXT MGVTBL vtbl_env =	{0,	0,	0,	magic_clear_all_env,
+							0};
 EXT MGVTBL vtbl_envelem =	{0,	magic_setenv,
 					0,	magic_clearenv,
 							0};
@@ -2155,6 +2159,22 @@ enum {
 #endif /* _FASTMATH */
 
 #endif /* OVERLOAD */
+
+#define PERLDB_ALL	0xff
+#define PERLDBf_SUB	0x01		/* Debug sub enter/exit. */
+#define PERLDBf_LINE	0x02		/* Keep line #. */
+#define PERLDBf_NOOPT	0x04		/* Switch off optimizations. */
+#define PERLDBf_INTER	0x08		/* Preserve more data for
+					   later inspections.  */
+#define PERLDBf_SUBLINE	0x10		/* Keep subr source lines. */
+#define PERLDBf_SINGLE	0x20		/* Start with single-step on. */
+
+#define PERLDB_SUB	(perldb && (perldb & PERLDBf_SUB))
+#define PERLDB_LINE	(perldb && (perldb & PERLDBf_LINE))
+#define PERLDB_NOOPT	(perldb && (perldb & PERLDBf_NOOPT))
+#define PERLDB_INTER	(perldb && (perldb & PERLDBf_INTER))
+#define PERLDB_SUBLINE	(perldb && (perldb & PERLDBf_SUBLINE))
+#define PERLDB_SINGLE	(perldb && (perldb & PERLDBf_SINGLE))
 
 #ifdef USE_LOCALE_COLLATE
 EXT U32		collation_ix;		/* Collation generation index */
