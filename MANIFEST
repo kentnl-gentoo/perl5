@@ -1262,7 +1262,7 @@ lib/I18N/LangTags/List.pm	List of tags for human languages
 lib/I18N/LangTags.pm		I18N::LangTags
 lib/I18N/LangTags/README	I18N::LangTags
 lib/I18N/LangTags/t/01test.t	See whether I18N::LangTags works
-lib/I18N/LangTags/t/02decency.t See if I18N::LangTags::List::is_decent works
+lib/I18N/LangTags/t/02decency.t	See if I18N::LangTags::List::is_decent works
 lib/if.pm			For "use if"
 lib/if.t			Tests for "use if"
 lib/importenv.pl		Perl routine to get environment into variables
@@ -2500,6 +2500,7 @@ README.win32			Perl notes for Windows
 README.Y2K		Notes about Year 2000 concerns
 reentr.c			Reentrant interfaces
 reentr.h			Reentrant interfaces
+reentr.inc			Reentrant interfaces
 reentr.pl			Reentrant interfaces
 regcomp.c			Regular expression compiler
 regcomp.h			Private declarations for above
@@ -2733,6 +2734,7 @@ t/op/grent.t			See if getgr*() functions work
 t/op/grep.t			See if grep() and map() work
 t/op/groups.t			See if $( works
 t/op/gv.t			See if typeglobs work
+t/op/hash.t			See if the complexity attackers are repelled
 t/op/hashassign.t		See if hash assignments work
 t/op/hashwarn.t			See if warnings for bad hash assignments work
 t/op/inccode.t			See if coderefs work in @INC
@@ -2792,6 +2794,7 @@ t/op/srand.t			See if srand works
 t/op/stash.t			See if %:: stashes work
 t/op/stat.t			See if stat works
 t/op/study.t			See if study works
+t/op/sub.t			See if subroutines work
 t/op/sub_lval.t			See if lvalue subroutines work
 t/op/subst_amp.t		See if $&-related substitution works
 t/op/substr.t			See if substr works
