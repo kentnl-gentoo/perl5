@@ -86,7 +86,10 @@ PATH=.$p_$PATH
 export PATH
 
 : This should not matter in scripts, but apparently it does, sometimes
-CDPATH='.' 
+case "$CDPATH" in
+'')  ;;
+*)   CDPATH='.' ;;
+esac
 
 : Sanity checks
 if test ! -t 0; then
@@ -405,6 +408,13 @@ d_sockpair=''
 sockethdr=''
 socketlib=''
 d_statblks=''
+d_fstatfs=''
+d_statfs=''
+d_statfsflags=''
+d_fstatvfs=''
+d_statvfs=''
+d_getmntent=''
+d_hasmntopt=''
 d_stdio_cnt_lval=''
 d_stdio_ptr_lval=''
 d_stdiobase=''
@@ -480,6 +490,7 @@ i_locale=''
 i_malloc=''
 i_math=''
 i_memory=''
+i_mntent=''
 i_ndbm=''
 i_neterrno=''
 i_niin=''
@@ -504,11 +515,13 @@ i_bsdioctl=''
 i_sysfilio=''
 i_sysioctl=''
 i_syssockio=''
+i_sysmount=''
 i_sysndir=''
 i_sysparam=''
 i_sysresrc=''
 i_sysselct=''
 i_sysstat=''
+i_sysstatvfs=''
 i_systimes=''
 i_systypes=''
 i_sysun=''
@@ -539,6 +552,7 @@ libpth=''
 loclibpth=''
 plibpth=''
 xlibpth=''
+ignore_versioned_solibs=''
 libs=''
 lns=''
 lseektype=''
@@ -638,6 +652,8 @@ undef='undef'
 smallmach='pdp11 i8086 z8000 i80286 iAPX286'
 rmlist=''
 
+installusrbinperl=''
+
 : We must find out about Eunice early
 eunicefix=':'
 if test -f /etc/unixtovms; then
@@ -716,6 +732,8 @@ groupstype=''
 i_whoami=''
 : default library list
 libswanted=''
+: some systems want only to use the non-versioned libso:s
+ignore_versioned_solibs=''
 : set useposix=false in your hint file to disable the POSIX extension.
 useposix=true
 : set useopcode=false in your hint file to disable the Opcode extension.
@@ -2976,6 +2994,31 @@ else
 	installbin="$binexp"
 fi
 
+echo " "
+case "$installusrbinperl" in
+'') if test -d /usr/bin -a "X$installbin" != X/usr/bin; then
+	$cat <<EOM
+Many scripts expect to perl to be installed as /usr/bin/perl.
+I can install the perl you are about to compile also as /usr/bin/perl
+(in addition to $installbin/perl).
+EOM
+	dflt='y'
+	rp="Do you want to install perl as /usr/bin/perl?"
+	. ./myread
+	case "$ans" in
+	[yY]*)	val="$define";;
+	*)	val="$undef";;
+	esac
+    fi
+    ;;
+esac
+case "$installusrbinperl" in
+"$undef"|[nN]*)	val="$undef";;
+*)		val="$define";;
+esac
+set installusrbinperl
+eval $setvar
+
 : determine where manual pages are on this system
 echo " "
 case "$sysman" in
@@ -3361,7 +3404,8 @@ case "$libswanted" in
 esac
 for thislib in $libswanted; do
 	
-	if xxx=`./loc lib$thislib.$so.[0-9]'*' X $libpth`; $test -f "$xxx"; then
+	if xxx=`./loc lib$thislib.$so.[0-9]'*' X $libpth`;
+		$test -f "$xxx" -a "X$ignore_versioned_solibs" = "X"; then
 		echo "Found -l$thislib (shared)."
 		case " $dflt " in
 		*"-l$thislib "*);;
@@ -3842,14 +3886,18 @@ $rm -f try try.* core
 echo " "
 echo "Checking for GNU C Library..." >&4
 cat >gnulibc.c <<EOM
-int
-main()
+#include <stdio.h>
+int main()
 {
-  return __libc_main();
+#ifdef __GLIBC__
+    exit(0);
+#else
+    exit(1);
+#endif
 }
 EOM
 if $cc $ccflags $ldflags -o gnulibc gnulibc.c $libs >/dev/null 2>&1 && \
-    ./gnulibc | $contains '^GNU C Library' >/dev/null 2>&1; then
+    ./gnulibc ; then
 	val="$define"
 	echo "You are using the GNU C Library"
 else
@@ -4626,27 +4674,7 @@ EOM
 	. ./myread
 	case "$ans" in
 	true|$define|[Yy]*)
-		useshrplib='true'
-		# Why does next4 have to be so different?
-		case "${osname}${osvers}" in
-		next4*)	xxx='DYLD_LIBRARY_PATH' ;;
-		os2*)	xxx='' ;; # Nothing special needed.
-		*)	xxx='LD_LIBRARY_PATH' ;;
-		esac
-		if test X"$xxx" != "X"; then
-			$cat <<EOM  | $tee -a ../config.msg >&4
-
-To build perl, you must add the current working directory to your
-$xxx environment variable before running make.  You can do
-this with
-   $xxx=\`pwd\`:\$$xxx; export $xxx
-for Bourne-style shells, or
-   setenv $xxx \`pwd\`
-for Csh-style shells.  You *MUST* do this before running make.
-
-EOM
-		fi
-		;;
+		useshrplib='true' ;;
 	*)	useshrplib='false' ;;
 	esac
 	;;
@@ -6065,6 +6093,23 @@ eval $inlibc
 : see if chsize exists
 set chsize d_chsize
 eval $inlibc
+
+hasfield='varname=$1; struct=$2; field=$3; shift; shift; shift;
+while $test $# -ge 2; do
+	case "$1" in
+	$define) echo "#include <$2>";;
+	esac ;
+    shift 2;
+done > try.c;
+echo "int main () { struct $struct foo; foo.$field = 0; }" >> try.c;
+if eval $cc $optimize $ccflags -c try.c >/dev/null 2>&1; then
+	val="$define";
+else
+	val="$undef";
+fi;
+set $varname;
+eval $setvar;
+$rm -f try.c try.o'
 
 : check for const keyword
 echo " "
@@ -9530,6 +9575,10 @@ eval $inhdr
 set math.h i_math
 eval $inhdr
 
+: see if this is a mntent.h system
+set mntent.h i_mntent
+eval $inhdr
+
 : see if ndbm.h is available
 set ndbm.h t_ndbm
 eval $inhdr
@@ -9868,6 +9917,38 @@ eval $setvar
 set sys/param.h i_sysparam
 eval $inhdr
 
+: see if this is a sys/mount.h system
+set sys/mount.h i_sysmount
+eval $inhdr
+
+: see if statfs exists
+set statfs d_statfs
+eval $inlibc
+
+: see if fstatfs exists
+set fstatfs d_fstatfs
+eval $inlibc
+
+: see if statfs knows about mount flags
+set d_statfsflags statfs f_flags $i_sysparam sys/param.h $i_sysmount sys/mount.h
+eval $hasfield
+
+: see if statvfs exists
+set statvfs d_statvfs
+eval $inlibc
+
+: see if fstatvfs exists
+set fstatvfs d_fstatvfs
+eval $inlibc
+
+: see if getmntent exists
+set getmntent d_getmntent
+eval $inlibc
+
+: see if hasmntopt exists
+set hasmntopt d_hasmntopt
+eval $inlibc
+
 : see if sys/resource.h has to be included
 set sys/resource.h i_sysresrc
 eval $inhdr
@@ -9878,6 +9959,10 @@ eval $inhdr
 
 : see if sys/types.h has to be included
 set sys/types.h i_systypes
+eval $inhdr
+
+: see if this is a sys/statvfs.h system
+set sys/statvfs.h i_sysstatvfs
 eval $inhdr
 
 : see if this is a sys/un.h system
@@ -10245,12 +10330,16 @@ d_flock='$d_flock'
 d_fork='$d_fork'
 d_fpathconf='$d_fpathconf'
 d_fsetpos='$d_fsetpos'
+d_fstatfs='$d_fstatfs'
+d_fstatvfs='$d_fstatvfs'
 d_ftime='$d_ftime'
 d_getgrps='$d_getgrps'
 d_setgrps='$d_setgrps'
 d_gethent='$d_gethent'
 d_gethname='$d_gethname'
 d_getlogin='$d_getlogin'
+d_getmntent='$d_getmntent'
+d_hasmntopt='$d_hasmntopt'
 d_getpgid='$d_getpgid'
 d_getpgrp2='$d_getpgrp2'
 d_getpgrp='$d_getpgrp'
@@ -10344,6 +10433,9 @@ d_sigsetjmp='$d_sigsetjmp'
 d_socket='$d_socket'
 d_sockpair='$d_sockpair'
 d_statblks='$d_statblks'
+d_statfs='$d_statfs'
+d_statfsflags='$d_statfsflags'
+d_statvfs='$d_statvfs'
 d_stdio_cnt_lval='$d_stdio_cnt_lval'
 d_stdio_ptr_lval='$d_stdio_ptr_lval'
 d_stdiobase='$d_stdiobase'
@@ -10435,6 +10527,7 @@ i_locale='$i_locale'
 i_malloc='$i_malloc'
 i_math='$i_math'
 i_memory='$i_memory'
+i_mntent='$i_mntent'
 i_ndbm='$i_ndbm'
 i_neterrno='$i_neterrno'
 i_niin='$i_niin'
@@ -10451,12 +10544,14 @@ i_sysfile='$i_sysfile'
 i_sysfilio='$i_sysfilio'
 i_sysin='$i_sysin'
 i_sysioctl='$i_sysioctl'
+i_sysmount='$i_sysmount'
 i_sysndir='$i_sysndir'
 i_sysparam='$i_sysparam'
 i_sysresrc='$i_sysresrc'
 i_sysselct='$i_sysselct'
 i_syssockio='$i_syssockio'
 i_sysstat='$i_sysstat'
+i_sysstatvfs='$i_sysstatvfs'
 i_systime='$i_systime'
 i_systimek='$i_systimek'
 i_systimes='$i_systimes'
@@ -10472,6 +10567,7 @@ i_values='$i_values'
 i_varargs='$i_varargs'
 i_varhdr='$i_varhdr'
 i_vfork='$i_vfork'
+ignore_versioned_solibs='$ignore_versioned_solibs'
 incpath='$incpath'
 inews='$inews'
 installarchlib='$installarchlib'
@@ -10482,6 +10578,7 @@ installprivlib='$installprivlib'
 installscript='$installscript'
 installsitearch='$installsitearch'
 installsitelib='$installsitelib'
+installusrbinperl='$installusrbinperl'
 intsize='$intsize'
 known_extensions='$known_extensions'
 ksh='$ksh'

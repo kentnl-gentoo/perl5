@@ -18,6 +18,27 @@
 # No version of Linux supports setuid scripts.
 d_suidsafe='undef'
 
+# Debian and Red Hat, and perhaps other vendors, provide both runtime and
+# development packages for some libraries.  The runtime packages contain shared
+# libraries with version information in their names (e.g., libgdbm.so.1.7.3);
+# the development packages supplement this with versionless shared libraries
+# (e.g., libgdbm.so).
+#
+# If you want to link against such a library, you must install the development
+# version of the package.
+#
+# These packages use a -dev naming convention in both Debian and Red Hat:
+#   libgdbmg1  (non-development version of GNU libc 2-linked GDBM library)
+#   libgdbmg1-dev (development version of GNU libc 2-linked GDBM library)
+# So make sure that for any libraries you wish to link Perl with under
+# Debian or Red Hat you have the -dev packages installed.
+#
+# Some operating systems (e.g., Solaris 2.6) will link to a versioned shared
+# library implicitly.  For example, on Solaris, `ld foo.o -lgdbm' will find an
+# appropriate version of libgdbm, if one is available; Linux, however, doesn't
+# do the implicit mapping.
+ignore_versioned_solibs='y'
+
 # perl goes into the /usr tree.  See the Filesystem Standard
 # available via anonymous FTP at tsx-11.mit.edu in
 # /pub/linux/docs/linux-standards/fsstnd.
@@ -34,6 +55,19 @@ ccflags="-Dbool=char -DHAS_BOOL $ccflags"
 set `echo X "$libswanted "| sed -e 's/ bsd / /' -e 's/ net / /'`
 shift
 libswanted="$*"
+
+# If you have glibc, then report the version for ./myconfig bug reporting.
+# (Configure doesn't need to know the specific version since it just uses
+# gcc to load the library for all tests.)
+# Is this sufficiently robust for libc5 systems as well as
+# glibc-2.1.x systems?
+# We don't use __GLIBC__ and  __GLIBC_MINOR__ because they 
+# are insufficiently precise to distinguish things like
+# libc-2.0.6 and libc-2.0.7.
+if test -L /lib/libc.so.6; then
+    libc=`ls -l /lib/libc.so.6 | awk '{print $NF}'`
+    libc=/lib/$libc
+fi
 
 # Configure may fail to find lstat() since it's a static/inline
 # function in <sys/stat.h>.

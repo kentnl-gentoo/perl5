@@ -45,7 +45,7 @@ And the Keepers of the Patch Pumpkin:
     Tim Bunce           <Tim.Bunce@ig.co.uk>
     Andy Dougherty      <doughera@lafcol.lafayette.edu>
     Gurusamy Sarathy    <gsar@engin.umich.edu>
-    Chip Salzenberg     <chip@perl.com>
+    Chip Salzenberg     <chip@perlsupport.com>
 
 And, of course, the Author of Perl:
 
@@ -69,14 +69,14 @@ Version 5.004_05        Maintenance release 5 for 5.004
   HEADLINES FOR THIS MAINTENANCE RELEASE
 
     Better security
-      - tainting bugs fixed.
-      - "perl -e" no longer uses a temporary file.
+      - Tainting bugs fixed.
+      - Temporary file not created for "perl -e".
     Better documentation
-      - many significant updates and clarifications.
+      - Many significant updates and clarifications.
     Better performance
-      - many improvements including a very fast/safe built-in qsort.
+      - Many improvements including a very fast/safe built-in qsort.
     Better perl portability
-      - builds more easily on more systems.
+      - Easier builds on more systems.
     Better script portability
       - Scripts with CR LF line endings (Win32) work on UNIX.
     Better version portability
@@ -85,13 +85,192 @@ Version 5.004_05        Maintenance release 5 for 5.004
       - Some 5.005 internals/XS features added such as
         new ERRSV, ERRHV, DEFSV, SAVE_DEFSV and dTHR macros.
     Better utilities
-      - many enhancements for h2ph, perldoc, perlbug etc.
+      - Many enhancements for h2ph, perldoc, perlbug etc.
     Better warnings / fewer warnings
-      - No longer warns for $x{shift}, ne => 1, or -f => 1.
-      - No longer warns for while($x=<>) (implicit defined added).
+      - No more warnings on $x{shift}, ne => 1, or -f => 1.
+      - Implicit defined() added in while($x=<>).
     Better code
-      - many bugs and all known run-time memory leaks fixed.
+      - Almost all known run-time memory leaks fixed.
+      - Many other bugs fixed.
 
+
+Change 3283 by chip@perlsupport.com on 1999/04/26 23:20:47
+
+	Tweak ordering of Porting/makerel.
+	Update MANIFEST and, yet again, Changes.
+
+Change 3282 by chip@perlsupport.com on 1999/04/26 23:13:39
+
+	Update Changes again for last few patches.
+
+Change 3281 by chip@perlsupport.com on 1999/04/26 23:12:28
+
+	Update OpenBSD hints.
+	(from Todd Miller <Todd.Miller@courtesan.com>)
+
+Change 3280 by chip@perlsupport.com on 1999/04/26 23:11:10
+
+	Allow AIX to use Perl's malloc if user insists on it.
+	(from Kurt Starsinic)
+
+Change 3279 by chip@perlsupport.com on 1999/04/26 23:09:26
+
+	Make &AutoLoad::AUTOLOAD reentrant.
+
+Change 3278 by chip@perlsupport.com on 1999/04/26 23:08:29
+
+	Refresh AutoLoader to 5.55.
+
+Change 3277 by chip@perlsupport.com on 1999/04/26 22:54:27
+
+	Update Changes and patchlevel.h for maint trial 9.
+
+Change 3276 by chip@perlsupport.com on 1999/04/26 22:34:36
+
+	Make porting scripts executable.
+
+Change 3275 by chip@perlsupport.com on 1999/04/26 22:21:43
+
+	Merge most of Porting directory from mainline.
+
+Change 3253 by chip@perlsupport.com on 1999/04/13 04:57:52
+
+	Explain next/last/redo a bit more in perlfunc.
+	(from M.J.T. Guy <mjtg@cus.cam.ac.uk>)
+
+Change 3252 by chip@perlsupport.com on 1999/04/13 04:33:25
+
+	Rebuild embed.h.  (Forgot.)
+
+Change 3251 by chip@perlsupport.com on 1999/04/13 04:31:50
+
+	Eliminate false Configure warning about LD_LIBRARY_PATH.
+	(It's now set automatically during the build process.)
+
+Change 3250 by chip@perlsupport.com on 1999/04/13 04:30:57
+
+	Fix check for glibc, so it'll work with 2.1.
+	(back-formation from 5.006-to-be)
+
+Change 3249 by chip@perlsupport.com on 1999/04/13 04:30:22
+
+	Refresh hints for FreeBSD.
+
+Change 3248 by chip@perlsupport.com on 1999/04/13 04:29:59
+
+	Automatically set LD_LIBRARY_PATH (or equivalent) during the
+	build process.  (back-formation from 5.006-to-be)
+
+Change 3247 by chip@perlsupport.com on 1999/04/13 04:29:08
+
+	New config variable $ignore_versioned_solibs, for Linux.
+
+Change 3246 by chip@perlsupport.com on 1999/04/13 04:28:17
+
+	Don't use 'nm' under AIX.
+
+Change 3245 by chip@perlsupport.com on 1999/04/13 04:27:49
+
+	Make AutoSplit harder to fool.
+
+Change 3244 by chip@perlsupport.com on 1999/04/13 04:27:17
+
+	Fix some broken document links.  (from Tom Christiansen)
+
+Change 3243 by chip@perlsupport.com on 1999/04/13 04:26:21
+
+	Refresh Text::Wrap to 98.112902.
+
+Change 3242 by chip@perlsupport.com on 1999/04/13 04:25:10
+
+	Use locale in Pod::Html and Pod::Text.
+	Fix typos in Pod::Text.
+
+Change 3241 by chip@perlsupport.com on 1999/04/13 04:21:49
+
+	Revert argument list change in export_to_level.
+
+Change 3240 by chip@perlsupport.com on 1999/04/13 04:21:18
+
+	Add 'no_modify' to list of variables in 5.005.
+
+Change 3239 by chip@perlsupport.com on 1999/04/13 04:20:23
+
+	Refresh perlport to 1.39.  (from Chris Nandor)
+
+Change 3238 by chip@perlsupport.com on 1999/04/13 04:19:38
+
+	Fix typo in perlxstut.
+
+Change 3237 by chip@perlsupport.com on 1999/04/13 04:19:10
+
+	Clear errno on successful C<require>.
+
+Change 3236 by chip@perlsupport.com on 1999/04/13 04:17:50
+
+	Add test of C<goto> interaction with AUTOLOAD.
+
+Change 3235 by chip@perlsupport.com on 1999/04/13 04:15:51
+
+	Make Text::ParseWords handle some delimiters with spaces.
+	(The full fix, using /(?-x:$foo)/, can't work in 5.004.)
+
+Change 3234 by chip@perlsupport.com on 1999/04/13 04:14:22
+
+	Properly handle tainted operations when -U is set.
+
+Change 3233 by chip@perlsupport.com on 1999/04/13 04:13:02
+
+	New config variable $installusrbinperl, defaulting 'undef'
+	for NetBSD.  (from Jarkko)
+
+Change 3232 by chip@perlsupport.com on 1999/04/13 04:09:05
+
+	Update NetBSD hints.
+
+Change 3231 by chip@perlsupport.com on 1999/04/13 04:07:41
+
+	Refresh Getopt::Long to 2.19.
+
+Change 3230 by chip@perlsupport.com on 1999/04/13 04:06:19
+
+	Properly diagnose missing roots in rmtree().
+
+Change 3229 by chip@perlsupport.com on 1999/04/13 04:04:14
+
+	Preserve errno from importunities of sfio.
+
+Change 3228 by chip@perlsupport.com on 1999/04/13 04:02:33
+
+	Fix longstanding bug: searches for lexicals originating within
+	eval'' weren't stopping at the subroutine boundary correctly.
+	(back-formation from change 3037)
+
+Change 3227 by chip@perlsupport.com on 1999/04/13 04:00:47
+
+	Record Linux libc version.
+
+Change 3222 by chip@perlsupport.com on 1999/04/06 19:32:40
+
+	Disable setuid execution if 'nosuid' mount option specified.
+	(Original fix from Jarkko; hand-hackery of Configure by Chip.)
+
+Change 3221 by chip@perlsupport.com on 1999/04/06 19:27:50
+
+	Set CDPATH="." only if it's already set to something else.
+
+Change 2447 by gsar@aatma on 1998/12/04 03:47:42
+
+	Update README.win32 in maint-5.004.
+
+Change 2446 by TimBunce@ig.co.uk on 1998/12/03 15:52:59
+
+	Update MANIFEST for dna.small.gif.uu (change 2445)
+
+Change 2445 by TimBunce@ig.co.uk on 1998/12/03 15:49:32
+
+	Ship dna.small.gif uuencoded.
+	Update Changes and patchlevel.h for maint trial 8.
 
 Change 2442 on 1998/12/03 by TimBunce@ig.co.uk
 
@@ -955,7 +1134,8 @@ Change 1521 on 1998/07/16 by TimBunce@ig.co.uk
 	Assorted patches:
 	
 	 Title:  "Allow $SIG{CHLD}='IGNORE' to work (reap zombies) on Solaris"
-	  From:  Albert Dvornik <bert@genscan.com>, Chip Salzenberg <chip@perl.org>
+	  From:  Albert Dvornik <bert@genscan.com>,
+                 Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <19980708181055.A8005@perlsupport.com>,
 	         <tqn2adkvge.fsf@puma.genscan.com>
 	 Files:  util.c
@@ -1143,7 +1323,7 @@ Change 1423 on 1998/07/11 by TimBunce@ig.co.uk
 	Assorted patches:
 	
 	 Title:  "umask: die if EXPR & 0700 else return undef"
-	  From:  Chip Salzenberg <chip@perl.org>, Jarkko Hietaniemi <jhi@cc.hut.fi>,
+	  From:  Chip Salzenberg <chip@perlsupport.com>, Jarkko Hietaniemi <jhi@cc.hut.fi>,
 	         Jarkko Hietaniemi <jhi@iki.fi>, Malcolm Beattie
 	         <mbeattie@sable.ox.ac.uk>, Tim.Bunce@ig.co.uk (Tim Bunce),
 	         kstar@chapin.ed, kstar@chapin.edu@ig.co.uk ()
@@ -1337,7 +1517,7 @@ Change 1211 on 1998/06/23 by TimBunce@ig.co.uk
 Change 1210 on 1998/06/23 by TimBunce@ig.co.uk
 
 	 Title:  "Add C<use re 'taint'> pragma to propagate tainting in m// and s///"
-	  From:  Chip Salzenberg <chip@perl.org>, Gurusamy Sarathy
+	  From:  Chip Salzenberg <chip@perlsupport.com>, Gurusamy Sarathy
 	         <gsar@engin.umich.edu>, Tim.Bunce@ig.co.uk (Tim Bunce)
 	Msg-ID:  <19980525155222.A18445@perlsupport.com>,
 	         <199805261143.MAA04260@toad.ig.co.uk>,
@@ -1370,7 +1550,7 @@ Change 1155 on 1998/06/19 by TimBunce@ig.co.uk
 	 Files:  pp_hot.c
 	
 	 Title:  "Invalidate method cache on C<local *subname>"
-	  From:  Chip Salzenberg <chip@perl.org>
+	  From:  Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <19980604134731.D24343@perlsupport.com>
 	 Files:  scope.c t/op/method.t
 	
@@ -1385,7 +1565,7 @@ Change 1155 on 1998/06/19 by TimBunce@ig.co.uk
 	 Files:  pp_sys.c
 	
 	 Title:  "Fix -i when @ARGV is empty"
-	  From:  Chip Salzenberg <chip@perl.org>, Gurusamy Sarathy
+	  From:  Chip Salzenberg <chip@perlsupport.com>, Gurusamy Sarathy
 	         <gsar@engin.umich.edu>, Ilya Zakharevich
 	         <ilya@math.ohio-state.edu>, Tim.Bunce@ig.co.uk (Tim Bunce)
 	Msg-ID:  <19980606184942.A4583@perlsupport.com>,
@@ -1500,7 +1680,7 @@ Change 1038 on 1998/05/27 by TimBunce@ig.co.uk
 	 Files:  perl.c
 	
 	 Title:  "Don't mung $! on implicit close"
-	  From:  Chip Salzenberg <chip@perl.org>
+	  From:  Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <19980525113309.A15845@perlsupport.com>
 	 Files:  doio.c
 	
@@ -2096,13 +2276,14 @@ Change 905 on 1998/04/28 by TimBunce@ig.co.uk
 	Regexp patches
 	
 	 Title:  "New regex flag //t to leave $1 etc. tainted"
-	  From:  Chip Salzenberg <chip@pobox.com>, Tim Bunce <Tim.Bunce@ig.co.uk>
+	  From:  Chip Salzenberg <chip@perlsupport.com>,
+                 Tim Bunce <Tim.Bunce@ig.co.uk>
 	Msg-ID:  <19980310192640.37826@cyprus>
 	 Files:  pod/perlop.pod pod/perlre.pod op.h dump.c mg.c pp_hot.c sv.c
 	         t/op/taint.t toke.c
 	
 	 Title:  "Don't accidentally untaint target of s///"
-	  From:  Chip Salzenberg <chip@pobox.com>
+	  From:  Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <19980310151756.24767@cyprus>
 	 Files:  pp_ctl.c pp_hot.c t/op/taint.t
 	
@@ -2139,7 +2320,7 @@ Change 904 on 1998/04/27 by TimBunce@ig.co.uk
 	 Files:  sv.c
 	
 	 Title:  "-2.0 vs. -2 (was Number representations)"
-	  From:  Chip Salzenberg <chip@pobox.com>
+	  From:  Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <19980309185652.11231@cyprus>
 	 Files:  op.c
 	
@@ -2421,12 +2602,12 @@ Change 896 on 1998/04/22 by TimBunce@ig.co.uk
 	 ------  CORE LANGUAGE  ------
 	
 	 Title:  "Additional regex-cache patch"
-	  From:  Chip Salzenberg <chip@atlantic.net>
+	  From:  Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <19980305104831.38100@cyprus>
 	 Files:  pp_ctl.c
 	
 	 Title:  "Conservative C<*x = undef> patch"
-	  From:  Chip Salzenberg <chip@atlantic.net>
+	  From:  Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <19980310163310.48509@cyprus>
 	 Files:  pod/perldiag.pod pod/perlfunc.pod pp.c sv.c t/op/gv.t
 	
@@ -2476,7 +2657,7 @@ Change 896 on 1998/04/22 by TimBunce@ig.co.uk
 	 Files:  pp_sys.c
 	
 	 Title:  "Revised taint hole closer", "Revised taint hole closer"
-	  From:  Chip Salzenberg <chip@atlantic.net>, Ilya Zakharevich
+	  From:  Chip Salzenberg <chip@perlsupport.com>, Ilya Zakharevich
 	         <ilya@math.ohio-state.edu>
 	Msg-ID:  <19980310222127.09350@cyprus>,
 	         <199803110554.AAA29157@monk.mps.ohio-state.edu>
@@ -2542,8 +2723,9 @@ Change 896 on 1998/04/22 by TimBunce@ig.co.uk
 	 Files:  ext/Socket/Socket.xs
 	
 	 Title:  "Warning on mis-use of 'use lib'"
-	  From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>, Tom Phoenix
-	         <rootbeer@teleport.com>, chip@atlantic.net
+	  From:  "M.J.T. Guy" <mjtg@cus.cam.ac.uk>,
+                 Tom Phoenix <rootbeer@teleport.com>,
+                 Chip Salzenberg <chip@perlsupport.com>
 	Msg-ID:  <199801270435.XAA14147@cyprus.atlantic.net>,
 	         <E0xx9x4-0006jc-00@ursa.cus.cam.ac.uk>,
 	         <Pine.GSO.3.96.980126192445.22284N-100000@user2.teleport.com>
@@ -3634,7 +3816,7 @@ Change 670 on 1998/03/03 by TimBunce@ig.co.uk
 Change 669 on 1998/03/03 by TimBunce@ig.co.uk
 
      Title:  "Make Configure less negative about PerlIO", #F036
-      From:  chip@atlantic.net
+      From:  Chip Salzenberg <chip@perlsupport.com>
     Msg-ID:  <199801312323.SAA15237@cyprus.atlantic.net>
      Files:  Configure
 
@@ -3899,7 +4081,7 @@ Version 5.004_04        Maintenance release 4 for 5.004
   Files:  MANIFEST lib/ExtUtils/Liblist.pm
 
   Title:  "Set LD_RUN_PATH when building suidperl"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Tony Sanders
+   From:  Chip Salzenberg <chip@perlsupport.com>, Tony Sanders
           <sanders@bsdi.com>
  Msg-ID:  <199708272226.QAA10206@austin.bsdi.com>
   Files:  Makefile.SH
@@ -3970,32 +4152,32 @@ Version 5.004_04        Maintenance release 4 for 5.004
   Files:  scope.c t/op/ref.t
 
   Title:  "Avoid assumption that STRLEN == I32"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Hallvard B Furuseth
+   From:  Chip Salzenberg <chip@perlsupport.com>, Hallvard B Furuseth
           <h.b.furuseth@usit.uio.no>
  Msg-ID:  <199708242310.BAA05497@bombur2.uio.no>
   Files:  hv.c
 
   Title:  "Fix memory leak in splice(@_)"
    From:  "Tuomas J. Lukka" <tjl@fkfuga.pc.helsinki.fi>, Chip Salzenberg
-          <chip@rio.atlantic.net>
+          <chip@perlsupport.com>
  Msg-ID:  <m0x3iQE-000CBrC@lukka.student.harvard.edu>
   Files:  proto.h av.c global.sym pp.c
 
   Title:  "Fix line number of warnings in while() conditional", "misleading
           uninit value warning"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Greg Bacon
+   From:  Chip Salzenberg <chip@perlsupport.com>, Greg Bacon
           <gbacon@crp-201.adtran.com>
  Msg-ID:  <199708271607.LAA01403@crp-201.adtran.com>
   Files:  proto.h op.c perly.c perly.y
 
   Title:  "-t and POSIX::isatty on IO::Handle objects", "Fix C<-t $handle>"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Greg Ward
+   From:  Chip Salzenberg <chip@perlsupport.com>, Greg Ward
           <greg@bic.mni.mcgill.ca>
  Msg-ID:  <199708261754.NAA24826@bottom.bic.mni.mcgill.ca>
   Files:  pp_sys.c
 
   Title:  "Fix output of invalid printf formats"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Hugo van der Sanden
+   From:  Chip Salzenberg <chip@perlsupport.com>, Hugo van der Sanden
           <hv@crypt.compulink.co.uk>
  Msg-ID:  <199708241529.QAA02457@crypt.compulink.co.uk>
   Files:  sv.c t/op/sprintf.t
@@ -4039,7 +4221,7 @@ Version 5.004_04        Maintenance release 4 for 5.004
           toke.c
 
   Title:  "Reverse previous "Fix C<qq #hi#>" patch"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Kenneth Albanowski
+   From:  Chip Salzenberg <chip@perlsupport.com>, Kenneth Albanowski
           <kjahds@kjahds.com>, Tom Christiansen
           <tchrist@jhereg.perl.com>
  Msg-ID:  <199707050155.VAA27394@rio.atlantic.net>,
@@ -4063,7 +4245,7 @@ Version 5.004_04        Maintenance release 4 for 5.004
   Title:  "unpack now allows commas but -w warns", "unpack() difference
           5.003->5.004"
    From:  "John L. Allen" <allen@gateway.grumman.com>, Chip Salzenberg
-          <chip@rio.atlantic.net>, Jarkko Hietaniemi <jhi@iki.fi>,
+          <chip@perlsupport.com>, Jarkko Hietaniemi <jhi@iki.fi>,
           Jim Esten <jesten@wdynamic.com>, Jim Esten
           <jesten@wepco.com>, timbo (Tim Bunce)
  Msg-ID:  <199709031632.LAA29584@wepco.com>,
@@ -4124,7 +4306,7 @@ Version 5.004_04        Maintenance release 4 for 5.004
   Files:  op.c t/comp/proto.t
 
   Title:  "Fix bugs with magical arrays and hashes (@ISA)"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>
+   From:  Chip Salzenberg <chip@perlsupport.com>
  Msg-ID:  <199709232148.RAA29967@rio.atlantic.net>
   Files:  perl.h proto.h av.c global.sym gv.c mg.c pp.c pp_hot.c scope.c
           t/op/method.t
@@ -4135,7 +4317,7 @@ Version 5.004_04        Maintenance release 4 for 5.004
   Files:  perl.c taint.c util.c
 
   Title:  "Tainting bitwise vector ops"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>
+   From:  Chip Salzenberg <chip@perlsupport.com>
  Msg-ID:  <199710061726.NAA16438@rio.atlantic.net>
   Files:  doop.c t/op/taint.t
 
@@ -4164,7 +4346,7 @@ Version 5.004_04        Maintenance release 4 for 5.004
   Files:  pp.c pp_hot.c
 
   Title:  "Fix defined() bug in m4t3 affecting LWP"
-   From:  chip@atlantic.net@ig.co.uk ()
+   From:  Chip Salzenberg <chip@perlsupport.com>
  Msg-ID:  <199710101822.OAA14249@cyprus.atlantic.net>
   Files:  pp.c
 
@@ -4288,7 +4470,7 @@ Version 5.004_04        Maintenance release 4 for 5.004
   Files:  pod/perlop.pod
 
   Title:  "repeating #! switches"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Robin Barker
+   From:  Chip Salzenberg <chip@perlsupport.com>, Robin Barker
           <rmb1@cise.npl.co.uk>
  Msg-ID:  <199709241736.NAA25855@rio.atlantic.net>,
           <24778.9709241501@tempest.cise.npl.co.uk>
@@ -4965,7 +5147,7 @@ Version 5.004_02        Maintenance release 2 for 5.004
   Files:  t/comp/term.t toke.c
 
   Title:  "Fix memory leak on eval 'sub {}'"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>
+   From:  Chip Salzenberg <chip@perlsupport.com>
   Files:  pp_ctl.c
 
   Title:  "stringify looses integerness"
@@ -4997,16 +5179,16 @@ Version 5.004_02        Maintenance release 2 for 5.004
 
   Title:  "Forbid negative splice offset beyond array start"
    From:  "John L. Allen" <allen@gateway.grumman.com>, Chip Salzenberg
-          <chip@rio.atlantic.net>
+          <chip@perlsupport.com>
  Msg-ID:  <Pine.SOL.3.91.970625111744.19300A-100000@gateway>
   Files:  pp.c
 
   Title:  "Forbid "goto" into middle of foreach loop"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>
+   From:  Chip Salzenberg <chip@perlsupport.com>
   Files:  pod/perldiag.pod pp_ctl.c
 
   Title:  "Fix C<qq #hi#>"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>
+   From:  Chip Salzenberg <chip@perlsupport.com>
   Files:  toke.c
 
   Title:  "bless file handles as FileHandle if loaded else IO::Handle"
@@ -5025,36 +5207,36 @@ Version 5.004_02        Maintenance release 2 for 5.004
   Files:  sv.c
 
   Title:  "Fix '-' flag on sprintf() of floats"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Jarkko Hietaniemi
+   From:  Chip Salzenberg <chip@perlsupport.com>, Jarkko Hietaniemi
           <jhi@iki.fi>
  Msg-ID:  <199705270646.JAA02510@alpha.hut.fi>
   Files:  sv.c
 
   Title:  "Free temps before calling END blocks", "Too late destruction"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>
+   From:  Chip Salzenberg <chip@perlsupport.com>
  Msg-ID:  <m33erfv5hx.fsf@chany-p100.emwp.com>
   Files:  perl.c
 
   Title:  "Fix C<print $foo x 2> parsing"
    From:  "Chuck D. Phillips (NON-HP Employee)" <cdp@hpescdp.fc.hp.com>, Chip
-          Salzenberg <chip@rio.atlantic.net>
+          Salzenberg <chip@perlsupport.com>
  Msg-ID:  <199706121737.KAA00503@palrel3.hp.com>
   Files:  toke.c
 
   Title:  "Fix lockf_emulate_flock() positioning"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, gen@atd.rdc.ricoh.co.jp
+   From:  Chip Salzenberg <chip@perlsupport.com>, gen@atd.rdc.ricoh.co.jp
  Msg-ID:  <199706091132.UAA00895@wampa.atd.rdc.ricoh.co.jp>
   Files:  pp_sys.c
 
   Title:  "Don't use atol() for unsigned values", "signedness problem in
           pack("N", "value");"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Roger Espel Llima
+   From:  Chip Salzenberg <chip@perlsupport.com>, Roger Espel Llima
           <espel@llaic.univ-bpclermont.fr>
  Msg-ID:  <19970531200007.40218@llaic.univ-bpclermont.fr>
   Files:  sv.c
 
   Title:  "Don't warn about "${foo}" in string, even if &foo exists"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>
+   From:  Chip Salzenberg <chip@perlsupport.com>
   Files:  toke.c
 
   Title:  "[PATCH] -p does not check for failure of implicit print"
@@ -5117,7 +5299,7 @@ Version 5.004_02        Maintenance release 2 for 5.004
 
   Title:  "Faster int to string conversion", "[PATCH} Re: memory leak in buffer
           safety code"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Hugo van der Sanden
+   From:  Chip Salzenberg <chip@perlsupport.com>, Hugo van der Sanden
           <hv@crypt.compulink.co.uk>, Tim Bunce <Tim.Bunce@ig.co.uk>
  Msg-ID:  <199707140912.KAA09935@crypt.compulink.co.uk>,
           <199707142050.QAA20976@rio.atlantic.net>,
@@ -5302,7 +5484,7 @@ Version 5.004_02        Maintenance release 2 for 5.004
   Files:  lib/Shell.pm
 
   Title:  "confessing a carp"
-   From:  Chip Salzenberg <chip@rio.atlantic.net>, Hugo van der Sanden
+   From:  Chip Salzenberg <chip@perlsupport.com>, Hugo van der Sanden
           <hv@crypt.compulink.co.uk>, Nick Ing-Simmons
           <nick@ni-s.u-net.com>, Tim Bunce <Tim.Bunce@ig.co.uk>
  Msg-ID:  <199708052155.WAA25393@crypt.compulink.co.uk>,
@@ -5747,7 +5929,7 @@ Version 5.004_01        Maintenance release 1 for 5.004
 
   Title:  "Regex Bug in 5.003_26 thru 003_99a"
    From:  Andreas Karrer <karrer@ife.ee.ethz.ch>, Chip Salzenberg
-          <chip@atlantic.net>
+          <chip@perlsupport.com>
  Msg-ID:  <199705152303.BAA08890@kuru.ee.ethz.ch>,
           <199705161915.PAA18721@rio.atlantic.net>
   Files:  regcomp.h regcomp.c regexec.c

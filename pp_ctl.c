@@ -1109,8 +1109,17 @@ char *message;
     }
     if(!message)
 	message = SvPVx(ERRSV, na);
-    PerlIO_printf(PerlIO_stderr(), "%s",message);
-    PerlIO_flush(PerlIO_stderr());
+    {
+#ifdef USE_SFIO
+	/* SFIO can really mess with your errno */
+	int e = errno;
+#endif
+	PerlIO_puts(PerlIO_stderr(), message);
+	(void)PerlIO_flush(PerlIO_stderr());
+#ifdef USE_SFIO
+	errno = e;
+#endif
+    }
     my_failure_exit();
     /* NOTREACHED */
     return 0;
@@ -2437,6 +2446,8 @@ PP(pp_require)
 
 	RETPUSHUNDEF;
     }
+    else
+	SETERRNO(0, SS$_NORMAL);
 
     /* Assume success here to prevent recursive requirement. */
     (void)hv_store(GvHVn(incgv), name, strlen(name),
