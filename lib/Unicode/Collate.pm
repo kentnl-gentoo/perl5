@@ -14,7 +14,7 @@ use File::Spec;
 
 require Exporter;
 
-our $VERSION = '0.25';
+our $VERSION = '0.28';
 our $PACKAGE = __PACKAGE__;
 
 our @ISA = qw(Exporter);
@@ -53,7 +53,7 @@ use constant NOMATCHPOS => -1;
 # A coderef to get combining class imported from Unicode::Normalize
 # (i.e. \&Unicode::Normalize::getCombinClass).
 # This is also used as a HAS_UNICODE_NORMALIZE flag.
-our $getCombinClass;
+our $CVgetCombinClass;
 
 # Supported Levels
 use constant MinLevel => 1;
@@ -225,17 +225,17 @@ sub checkCollator {
 	croak "Unicode/Normalize.pm is required to normalize strings: $@"
 	    if $@;
 
-	Unicode::Normalize->import();
-	$getCombinClass = \&Unicode::Normalize::getCombinClass
-	    if ! $getCombinClass;
+	$CVgetCombinClass = \&Unicode::Normalize::getCombinClass
+	    if ! $CVgetCombinClass;
 
-	$self->{normCode} =
-	    $self->{normalization} =~ /^(?:NF)?C$/  ? \&NFC :
-	    $self->{normalization} =~ /^(?:NF)?D$/  ? \&NFD :
-	    $self->{normalization} =~ /^(?:NF)?KC$/ ? \&NFKC :
-	    $self->{normalization} =~ /^(?:NF)?KD$/ ? \&NFKD :
-	  croak "$PACKAGE unknown normalization form name: "
-		. $self->{normalization};
+	if ($self->{normalization} ne 'prenormalized') {
+	    my $norm = $self->{normalization};
+	    $self->{normCode} = sub {
+		Unicode::Normalize::normalize($norm, shift);
+	    };
+	    eval { $self->{normCode}->("") }; # try
+	    $@ and croak "$PACKAGE unknown normalization form name: $norm";
+	}
     }
     return;
 }
@@ -260,7 +260,7 @@ sub new
 	if ! exists $self->{overrideHangul};
     $self->{overrideCJK} = ''
 	if ! exists $self->{overrideCJK};
-    $self->{normalization} = 'D'
+    $self->{normalization} = 'NFD'
 	if ! exists $self->{normalization};
     $self->{alternate} = $self->{alternateTable} || 'shifted'
 	if ! exists $self->{alternate};
@@ -350,16 +350,18 @@ sub parseEntry
     $k = '[.0000.0000.0000.0000]'
 	if defined $self->{ignoreName} && $name =~ /$self->{ignoreName}/;
 
-    my $is_L3_ignorable;
+    my $is_L3_ignorable = TRUE;
 
     foreach my $arr ($k =~ /\[([^\[\]]+)\]/g) { # SPACEs allowed
 	my $var = $arr =~ /\*/; # exactly /^\*/ but be lenient.
 	my @wt = _getHexArray($arr);
 	push @key, pack(VCE_TEMPLATE, $var, @wt);
-	$is_L3_ignorable = TRUE
-	    if $wt[0] + $wt[1] + $wt[2] == 0;
+	$is_L3_ignorable = FALSE
+	    if $wt[0] + $wt[1] + $wt[2] != 0;
 	  # if $arr !~ /[1-9A-Fa-f]/; NG
 	  # Conformance Test shows L3-ignorable is completely ignorable.
+	# For expansion, an entry $is_L3_ignorable
+	# if and only if "all" CEs are [.0000.0000.0000].
     }
 
     $self->{entries}{$entry} = \@key;
@@ -475,28 +477,43 @@ sub splitCE
 
 	if ($max->{$ce}) { # contract
 	    my $temp_ce = $ce;
+	    my $ceLen = 1;
+	    my $maxLen = $max->{$ce};
 
-	    for (my $p = $i + 1; $p < @src; $p++) {
+	    for (my $p = $i + 1; $ceLen < $maxLen && $p < @src; $p++) {
 		next if ! defined $src[$p];
 		$temp_ce .= CODE_SEP . $src[$p];
+		$ceLen++;
 		if ($ent->{$temp_ce}) {
 		    $ce = $temp_ce;
 		    $i = $p;
 		}
 	    }
-	}
 
-	# with Combining Char (UTS#10, 4.2.1).
-	# requires Unicode::Normalize.
-	# Not be $wLen, as not croaked due to $norm.
-	if ($getCombinClass) {
-	    for (my $p = $i + 1; $p < @src; $p++) {
-		next if ! defined $src[$p];
-		last unless $getCombinClass->($src[$p]);
-		my $tail = CODE_SEP . $src[$p];
-		if ($ent->{$ce.$tail}) {
-		    $ce .= $tail;
-		    $src[$p] = undef;
+	# not-contiguous contraction with Combining Char (cf. UTS#10, S2.1).
+	# This process requires Unicode::Normalize.
+	# If "normalize" is undef, here should be skipped *always*
+	# (in spite of bool value of $CVgetCombinClass),
+	# since canonical ordering cannot be expected.
+	# Blocked combining character should not be contracted.
+
+	    if ($self->{normalization})
+	    # $self->{normCode} is false in the case of "prenormalized".
+	    {
+		my $preCC = 0;
+		my $curCC = 0;
+
+		for (my $p = $i + 1; $p < @src; $p++) {
+		    next if ! defined $src[$p];
+		    $curCC = $CVgetCombinClass->($src[$p]);
+		    last unless $curCC;
+		    my $tail = CODE_SEP . $src[$p];
+		    if ($preCC != $curCC && $ent->{$ce.$tail}) {
+			$ce .= $tail;
+			$src[$p] = undef;
+		    } else {
+			$preCC = $curCC;
+		    }
 		}
 	    }
 	}
@@ -522,8 +539,6 @@ sub getWt
     my $self = shift;
     my $ce   = shift;
     my $ent  = $self->{entries};
-    my $cjk  = $self->{overrideCJK};
-    my $hang = $self->{overrideHangul};
     my $der  = $self->{derivCode};
 
     return if !defined $ce;
@@ -534,18 +549,50 @@ sub getWt
     my $u = $ce;
 
     if (0xAC00 <= $u && $u <= 0xD7A3) { # is Hangul Syllale
-	return map $self->altCE($_),
-	    $hang
-		? map(pack(VCE_TEMPLATE, NON_VAR, @$_), &$hang($u))
-		: defined $hang
-		    ? map({
-			    $ent->{$_} ? @{ $ent->{$_} } : $der->($_);
-			} _decompHangul($u))
-		    : $der->($u);
+	my $hang = $self->{overrideHangul};
+	my @hangulCE;
+	if ($hang) {
+	    @hangulCE = map(pack(VCE_TEMPLATE, NON_VAR, @$_), &$hang($u));
+	}
+	elsif (!defined $hang) {
+	    @hangulCE = $der->($u);
+	}
+	else {
+	    my $max  = $self->{maxlength};
+	    my @decH = _decompHangul($u);
+
+	    if (@decH == 2) {
+		my $contract = join(CODE_SEP, @decH);
+		@decH = ($contract) if $ent->{$contract};
+	    } else { # must be <@decH == 3>
+		if ($max->{$decH[0]}) {
+		    my $contract = join(CODE_SEP, @decH);
+		    if ($ent->{$contract}) {
+			@decH = ($contract);
+		    } else {
+			$contract = join(CODE_SEP, @decH[0,1]);
+		        $ent->{$contract} and @decH = ($contract, $decH[2]);
+		    }
+		    # even if V's ignorable, LT contraction is not supported.
+		    # If such a situatution were required, NFD should be used.
+		}
+		if (@decH == 3 && $max->{$decH[1]}) {
+		    my $contract = join(CODE_SEP, @decH[1,2]);
+		    $ent->{$contract} and @decH = ($decH[0], $contract);
+		}
+	    }
+
+	    @hangulCE = map({
+		    $ent->{$_} ? @{ $ent->{$_} } : $der->($_);
+		} @decH);
+	}
+	return map $self->altCE($_), @hangulCE;
     }
     elsif (0x3400 <= $u && $u <= 0x4DB5 ||
 	   0x4E00 <= $u && $u <= 0x9FA5 ||
-	   0x20000 <= $u && $u <= 0x2A6D6) { # CJK Ideograph
+	   0x20000 <= $u && $u <= 0x2A6D6) # CJK Ideograph
+    {
+	my $cjk  = $self->{overrideCJK};
 	return map $self->altCE($_),
 	    $cjk
 		? map(pack(VCE_TEMPLATE, NON_VAR, @$_), &$cjk($u))
@@ -1090,20 +1137,39 @@ If omitted, the maximum is the 4th.
 If specified, strings are normalized before preparation of sort keys
 (the normalization is executed after preprocess).
 
-As a form name, one of the following names must be used.
+A form name C<Unicode::Normalize::normalize()> accepts will be applied
+as C<$normalization_form>.
+Acceptable names include C<'NFD'>, C<'NFC'>, C<'NFKD'>, and C<'NFKC'>.
+See C<Unicode::Normalize::normalize()> for detail.
+If omitted, C<'NFD'> is used.
 
-  'C'  or 'NFC'  for Normalization Form C
-  'D'  or 'NFD'  for Normalization Form D
-  'KC' or 'NFKC' for Normalization Form KC
-  'KD' or 'NFKD' for Normalization Form KD
+L<normalization> is performed after L<preprocess> (if defined).
 
-If omitted, the string is put into Normalization Form D.
+Furthermore, special values, C<undef> and C<"prenormalized">, can be used,
+though they are not concerned with C<Unicode::Normalize::normalize()>.
 
-If C<undef> is passed explicitly as the value for this key,
+If C<undef> (not a string C<"undef">) is passed explicitly
+as the value for this key,
 any normalization is not carried out (this may make tailoring easier
 if any normalization is not desired).
+Under C<(normalization =E<gt> undef)>, only contiguous contractions
+are resolved; e.g. C<A-cedilla-ring> would be primary equal to C<A>,
+even if C<A-ring> (and C<A-ring-cedilla>) is ordered after C<Z>.
+In this point,
+C<(normalization =E<gt> undef, preprocess =E<gt> sub { NFD(shift) })>
+B<is not> equivalent to C<(normalization =E<gt> 'NFD')>.
 
-see B<CAVEAT>.
+In the case of C<(normalization =E<gt> "prenormalized")>,
+any normalization is not performed, but
+non-contiguous contractions with combining characters are performed.
+Therefore
+C<(normalization =E<gt> 'prenormalized', preprocess =E<gt> sub { NFD(shift) })>
+B<is> equivalent to C<(normalization =E<gt> 'NFD')>.
+If source strings are finely prenormalized,
+C<(normalization =E<gt> 'prenormalized')> may save time for normalization.
+
+Except C<(normalization =E<gt> undef)>,
+B<Unicode::Normalize> is required (see also B<CAVEAT>).
 
 =item overrideCJK
 
@@ -1167,8 +1233,10 @@ Then, "the pen" is before "a pencil".
      preprocess => sub {
            my $str = shift;
            $str =~ s/\b(?:an?|the)\s+//gi;
-           $str;
+           return $str;
         },
+
+L<preprocess> is performed before L<normalization> (if defined).
 
 =item rearrange
 
@@ -1503,7 +1571,7 @@ B<Unicode::Normalize is required to try The Conformance Test.>
 
 =head1 AUTHOR
 
-SADAHIRO Tomoyuki, E<lt>SADAHIRO@cpan.orgE<gt>
+SADAHIRO Tomoyuki, <SADAHIRO@cpan.org>
 
   http://homepage1.nifty.com/nomenclator/perl/
 

@@ -85,10 +85,10 @@ esac
 
 # -pipe: makes compilation go faster.
 # -fno-common because common symbols are not allowed in MH_DYLIB
-# -DDARWIN: apparently the __APPLE__ is not sanctioned by Apple
+# -DPERL_DARWIN: apparently the __APPLE__ is not sanctioned by Apple
 # as the way to differentiate Mac OS X.  (The official line is that
 # *no* cpp symbol does differentiate Mac OS X.)
-ccflags="${ccflags} -pipe -fno-common -DDARWIN"
+ccflags="${ccflags} -pipe -fno-common -DPERL_DARWIN"
 
 # At least on Darwin 1.3.x:
 #
@@ -177,8 +177,10 @@ EOCBU
 # vfork works
 usevfork='true';
 
-# malloc works
-usemymalloc='n';
+# our malloc works (but allow users to override)
+case "$usemymalloc" in
+'') usemymalloc='n' ;;
+esac
 
 # Locales aren't feeling well.
 LC_ALL=C; export LC_ALL;
@@ -206,6 +208,11 @@ EOM
   esac
 
 esac
+
+# Fink can install a GDBM library that claims to have the ODBM interfaces
+# but Perl dynaloader cannot for some reason use that library.  We don't
+# really need ODBM_FIle, though, so let's just hint ODBM away.
+i_dbm=undef;
 
 ##
 # Build process

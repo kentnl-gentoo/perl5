@@ -15,7 +15,10 @@ BEGIN {
 }
 
 use Test;
-BEGIN { plan tests => 194 };
+BEGIN { plan tests => 200 };
+
+use strict;
+use warnings;
 use Unicode::Collate;
 
 our $IsEBCDIC = ord("A") != 0x41;
@@ -83,7 +86,8 @@ eval { require Unicode::Normalize };
 
 if (!$@ && !$IsEBCDIC) {
   my $NFD = Unicode::Collate->new(
-    table => undef,
+    table => 'keys.txt',
+    level => 1,
     entry => <<'ENTRIES',
 0430  ; [.0CB5.0020.0002.0430] # CYRILLIC SMALL LETTER A
 0410  ; [.0CB5.0020.0008.0410] # CYRILLIC CAPITAL LETTER A
@@ -98,11 +102,8 @@ ENTRIES
   ok($NFD->eq("\x{4D3}\x{325}", "\x{430}\x{308}\x{325}"));
   ok($NFD->lt("\x{430}\x{308}A", "\x{430}\x{308}B"));
   ok($NFD->lt("\x{430}\x{3099}B", "\x{430}\x{308}\x{3099}A"));
-  ok($NFD->eq("\x{0430}\x{3099}\x{309A}\x{0308}",
-              "\x{0430}\x{309A}\x{3099}\x{0308}") );
 }
 else {
-  ok(1);
   ok(1);
   ok(1);
   ok(1);
@@ -114,7 +115,7 @@ my $trad = Unicode::Collate->new(
   table => 'keys.txt',
   normalization => undef,
   ignoreName => qr/HANGUL|HIRAGANA|KATAKANA|BOPOMOFO/,
-  level => 4,
+  level => 3,
   entry => << 'ENTRIES',
  0063 0068 ; [.0A3F.0020.0002.0063] % "ch" in traditional Spanish
  0043 0068 ; [.0A3F.0020.0008.0043] # "Ch" in traditional Spanish
@@ -135,6 +136,8 @@ ok(
 );
 ok($trad->eq("ocho", "oc\cAho")); # UCA v9
 ok($trad->eq("ocho", "oc\0\cA\0\cBho")); # UCA v9
+ok($trad->eq("-", "")); # also UCA v8
+ok($trad->lt("oc-ho", "ocho")); # also UCA v8
 
 my $hiragana = "\x{3042}\x{3044}";
 my $katakana = "\x{30A2}\x{30A4}";
@@ -594,6 +597,7 @@ $Collator->change(alternate => 'Shifted', level => 4);
 
 my $L3ignorable = Unicode::Collate->new(
   alternate => 'Non-ignorable',
+  level => 3,
   table => undef,
   normalization => undef,
   entry => <<'ENTRIES',
@@ -606,6 +610,10 @@ my $L3ignorable = Unicode::Collate->new(
 09C7  ; [.1157.0020.0002.09C7] # BENGALI VOWEL SIGN E
 09CB  ; [.1159.0020.0002.09CB] # BENGALI VOWEL SIGN O
 09C7 09BE ; [.1159.0020.0002.09CB] # BENGALI VOWEL SIGN O
+1D1B9 ; [*098A.0020.0002.1D1B9] # MUSICAL SYMBOL SEMIBREVIS WHITE
+1D1BA ; [*098B.0020.0002.1D1BA] # MUSICAL SYMBOL SEMIBREVIS BLACK
+1D1BB ; [*098A.0020.0002.1D1B9][.0000.0000.0000.1D165] # M.S. MINIMA
+1D1BC ; [*098B.0020.0002.1D1BA][.0000.0000.0000.1D165] # M.S. MINIMA BLACK
 ENTRIES
 );
 
@@ -616,3 +624,8 @@ ok($L3ignorable->eq("\x{09C7}\x{09BE}A", "\x{09C7}\cA\x{09BE}A"));
 ok($L3ignorable->eq("\x{09C7}\x{09BE}A", "\x{09C7}\x{0591}\x{09BE}A"));
 ok($L3ignorable->eq("\x{09C7}\x{09BE}A", "\x{09C7}\x{1D165}\x{09BE}A"));
 ok($L3ignorable->eq("\x{09C7}\x{09BE}A", "\x{09CB}A"));
+ok($L3ignorable->lt("\x{1D1BB}", "\x{1D1BC}"));
+ok($L3ignorable->eq("\x{1D1BB}", "\x{1D1B9}"));
+ok($L3ignorable->eq("\x{1D1BC}", "\x{1D1BA}"));
+ok($L3ignorable->eq("\x{1D1BB}", "\x{1D1B9}\x{1D165}"));
+ok($L3ignorable->eq("\x{1D1BC}", "\x{1D1BA}\x{1D165}"));

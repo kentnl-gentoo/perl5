@@ -2662,12 +2662,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_msghdr_s HAS_STRUCT_MSGHDR	/**/
 
-/* HAS_NANOSLEEP:
- *	This symbol, if defined, indicates that the nanosleep
- *	system call is available to sleep with 1E-9 sec accuracy.
- */
-#$d_nanosleep HAS_NANOSLEEP		/**/
-
 /* HAS_NL_LANGINFO:
  *	This symbol, if defined, indicates that the nl_langinfo routine is
  *	available to return local data.  You will also need <langinfo.h>
@@ -3234,6 +3228,19 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define	NVSIZE		$nvsize		/**/
 #$d_nv_preserves_uv	NV_PRESERVES_UV
 #define	NV_PRESERVES_UV_BITS	$nv_preserves_uv_bits
+#if UVSIZE == 8
+#   ifdef BYTEORDER
+#       if BYTEORDER == 0x1234
+#           undef BYTEORDER
+#           define BYTEORDER 0x12345678
+#       else
+#           if BYTEORDER == 0x4321
+#               undef BYTEORDER
+#               define BYTEORDER 0x87654321
+#           endif
+#       endif
+#   endif
+#endif
 
 /* IVdf:
  *	This symbol defines the format string used for printing a Perl IV

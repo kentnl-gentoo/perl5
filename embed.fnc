@@ -19,7 +19,7 @@
 :	x		not exported
 :	X		explicitly exported
 :	M		may change
-:	E		visible to Perl core extensions
+:	E		visible to extensions included in the Perl core
 :	b		binary backward compatibility; function is a macro
 :			but has also Perl_ implementation (which is exported)
 :
@@ -350,6 +350,7 @@ Ap	|bool	|is_uni_punct_lc|UV c
 Ap	|bool	|is_uni_xdigit_lc|UV c
 Apd	|STRLEN	|is_utf8_char	|U8 *p
 Apd	|bool	|is_utf8_string	|U8 *s|STRLEN len
+Apd	|bool	|is_utf8_string_loc|U8 *s|STRLEN len|U8 **p
 Ap	|bool	|is_utf8_alnum	|U8 *p
 Ap	|bool	|is_utf8_alnumc	|U8 *p
 Ap	|bool	|is_utf8_idfirst|U8 *p
@@ -1044,10 +1045,10 @@ s	|OP *	|my_kid		|OP *o|OP *attrs|OP **imopsp
 s	|OP *	|dup_attrlist	|OP *o
 s	|void	|apply_attrs	|HV *stash|SV *target|OP *attrs|bool for_my
 s	|void	|apply_attrs_my	|HV *stash|OP *target|OP *attrs|OP **imopsp
-#  if defined(PL_OP_SLAB_ALLOC)
-s	|void*	|Slab_Alloc	|int m|size_t sz
-s	|void	|Slab_Free	|void *op
-#  endif
+#endif
+#if defined(PL_OP_SLAB_ALLOC)
+Ap	|void*	|Slab_Alloc	|int m|size_t sz
+Ap	|void	|Slab_Free	|void *op
 #endif
 
 #if defined(PERL_IN_PERL_C) || defined(PERL_DECL_PROT)

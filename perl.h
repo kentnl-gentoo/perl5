@@ -83,18 +83,18 @@
 
 /* Use the reentrant APIs like localtime_r and getpwent_r */
 /* Win32 has naturally threadsafe libraries, no need to use any _r variants. */
-#if defined(USE_ITHREADS) && !defined(USE_REENTRANT_API) && !defined(NETWARE) && !defined(WIN32) && !defined(DARWIN)
+#if defined(USE_ITHREADS) && !defined(USE_REENTRANT_API) && !defined(NETWARE) && !defined(WIN32) && !defined(PERL_DARWIN)
 #   define USE_REENTRANT_API
 #endif
 
 /* <--- here ends the logic shared by perl.h and makedef.pl */
 
 /*
- * DARWIN for MacOSX (__APPLE__ exists but is not officially sanctioned)
- * (The -DDARWIN comes from the hints/darwin.sh.)
+ * PERL_DARWIN for MacOSX (__APPLE__ exists but is not officially sanctioned)
+ * (The -DPERL_DARWIN comes from the hints/darwin.sh.)
  * __bsdi__ for BSD/OS
  */
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(DARWIN) || defined(__bsdi__) || defined(BSD41) || defined(BSD42) || defined(BSD43) || defined(BSD44)
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(PERL_DARWIN) || defined(__bsdi__) || defined(BSD41) || defined(BSD42) || defined(BSD43) || defined(BSD44)
 #   ifndef BSDish
 #       define BSDish
 #   endif
@@ -225,6 +225,10 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #  endif
 #endif
 
+#if defined(__STRICT_ANSI__) && defined(PERL_GCC_PEDANTIC)
+#   define PERL_GCC_BRACE_GROUPS_FORBIDDEN
+#endif
+
 /*
  * STMT_START { statements; } STMT_END;
  * can be used as a single statement, as in
@@ -233,7 +237,7 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
  * Trying to select a version that gives no warnings...
  */
 #if !(defined(STMT_START) && defined(STMT_END))
-# if defined(__GNUC__) && !defined(__STRICT_ANSI__) && !defined(PERL_GCC_PEDANTIC) && !defined(__cplusplus)
+# if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN) && !defined(__cplusplus)
 #   define STMT_START	(void)(	/* gcc supports ``({ STATEMENTS; })'' */
 #   define STMT_END	)
 # else
@@ -293,7 +297,7 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 # define STANDARD_C 1
 #endif
 
-#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(OS2) || defined(__DGUX) || defined( EPOC) || defined(__QNX__) || defined(NETWARE)
+#if defined(__cplusplus) || defined(WIN32) || defined(__sgi) || defined(__EMX__) || defined(__DGUX) || defined( EPOC) || defined(__QNX__) || defined(NETWARE) || defined(PERL_MICRO)
 # define DONT_DECLARE_STD 1
 #endif
 
@@ -615,10 +619,12 @@ int usleep(unsigned int);
 #   endif
 #endif
 
+#ifndef PERL_MICRO
 #ifndef memchr
 #   ifndef HAS_MEMCHR
 #       define memchr(s,c,n) ninstr((char*)(s), ((char*)(s)) + n, &(c), &(c) + 1)
 #   endif
+#endif
 #endif
 
 #ifndef HAS_BCMP
@@ -737,9 +743,14 @@ int usleep(unsigned int);
 #endif
 
 /* sockatmark() is so new (2001) that many places might have it hidden
- * behind some -D_BLAH_BLAH_SOURCE guard. */
+ * behind some -D_BLAH_BLAH_SOURCE guard.  The __THROW magic is required
+ * e.g. in Gentoo, see http://bugs.gentoo.org/show_bug.cgi?id=12605 */
 #if defined(HAS_SOCKATMARK) && !defined(HAS_SOCKATMARK_PROTO)
+# if defined(__THROW) && defined(__GLIBC__)
+int sockatmark(int) __THROW;
+# else
 int sockatmark(int);
+# endif
 #endif
 
 #ifdef SETERRNO
@@ -1973,12 +1984,13 @@ typedef struct clone_params CLONE_PARAMS;
 #    endif
 #    define PERL_FPU_INIT fpsetmask(0);
 #  else
-#    if defined(SIGFPE) && defined(SIG_IGN)
+#    if defined(SIGFPE) && defined(SIG_IGN) && !defined(PERL_MICRO)
 #      define PERL_FPU_INIT       PL_sigfpe_saved = signal(SIGFPE, SIG_IGN);
 #      define PERL_FPU_PRE_EXEC   { Sigsave_t xfpe; rsignal_save(SIGFPE, PL_sigfpe_saved, &xfpe);
 #      define PERL_FPU_POST_EXEC    rsignal_restore(SIGFPE, &xfpe); }
 #    else
 #      define PERL_FPU_INIT
+
 #    endif
 #  endif
 #endif
@@ -2603,8 +2615,8 @@ Gid_t getegid (void);
 #  define DEBUG_J_TEST DEBUG_J_TEST_
 #  define DEBUG_v_TEST DEBUG_v_TEST_
 
-#  define DEB(a)     a
-#  define DEBUG(a)   if (PL_debug)   a
+#  define PERL_DEB(a)                  a
+#  define PERL_DEBUG(a) if (PL_debug)  a
 #  define DEBUG_p(a) if (DEBUG_p_TEST) a
 #  define DEBUG_s(a) if (DEBUG_s_TEST) a
 #  define DEBUG_l(a) if (DEBUG_l_TEST) a
@@ -2668,8 +2680,8 @@ Gid_t getegid (void);
 #  define DEBUG_J_TEST (0)
 #  define DEBUG_v_TEST (0)
 
-#  define DEB(a)
-#  define DEBUG(a)
+#  define PERL_DEB(a)
+#  define PERL_DEBUG(a)
 #  define DEBUG_p(a)
 #  define DEBUG_s(a)
 #  define DEBUG_l(a)
@@ -2755,14 +2767,14 @@ Gid_t getegid (void);
 
 #ifndef assert  /* <assert.h> might have been included somehow */
 #ifdef DEBUGGING
-#define assert(what)	DEB( {						\
+#define assert(what)	PERL_DEB( {					\
 	if (!(what)) {							\
 	    Perl_croak(aTHX_ "Assertion " STRINGIFY(what) " failed: file \"%s\", line %d",	\
 		__FILE__, __LINE__);					\
 	    PerlProc_exit(1);						\
 	}})
 #else
-#define assert(what)	DEB( {						\
+#define assert(what)	PERL_DEB( {					\
 	if (!(what)) {							\
 	    Perl_croak(aTHX_ "Assertion failed: file \"%s\", line %d",	\
 		__FILE__, __LINE__);					\
@@ -2998,13 +3010,13 @@ typedef OP* (CPERLscope(*PPADDR_t)[]) (pTHX);
 
 /* NeXT has problems with crt0.o globals */
 #if defined(__DYNAMIC__) && \
-    (defined(NeXT) || defined(__NeXT__) || defined(DARWIN))
+    (defined(NeXT) || defined(__NeXT__) || defined(PERL_DARWIN))
 #  if defined(NeXT) || defined(__NeXT)
 #    include <mach-o/dyld.h>
 #    define environ (*environ_pointer)
 EXT char *** environ_pointer;
 #  else
-#    if defined(DARWIN) && defined(PERL_CORE)
+#    if defined(PERL_DARWIN) && defined(PERL_CORE)
 #      include <crt_externs.h>	/* for the env array */
 #      define environ (*_NSGetEnviron())
 #    endif
@@ -3913,7 +3925,7 @@ typedef struct am_table_short AMTS;
 #define IN_LOCALE_COMPILETIME	(PL_hints & HINT_LOCALE)
 
 #define IN_LOCALE \
-	(PL_curcop == &PL_compiling ? IN_LOCALE_COMPILETIME : IN_LOCALE_RUNTIME)
+	(IN_PERL_COMPILETIME ? IN_LOCALE_COMPILETIME : IN_LOCALE_RUNTIME)
 
 #define STORE_NUMERIC_LOCAL_SET_STANDARD() \
 	bool was_local = PL_numeric_local && IN_LOCALE; \
@@ -3994,6 +4006,9 @@ typedef struct am_table_short AMTS;
 #endif
 #if !defined(Strtoul) && defined(HAS_STRTOUL)
 #   define Strtoul	strtoul
+#endif
+#if !defined(Strtoul) && defined(HAS_STRTOL) /* Last resort. */
+#   define Strtoul(s, e, b)	strchr((s), '-') ? ULONG_MAX : (unsigned long)strtol((s), (e), (b))
 #endif
 #ifndef Atoul
 #   define Atoul(s)	Strtoul(s, (char **)NULL, 10)

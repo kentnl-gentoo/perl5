@@ -2250,7 +2250,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp)
 		}
 		else {						/* First pass */
 		    if (PL_reginterp_cnt < ++RExC_seen_evals
-			&& PL_curcop != &PL_compiling)
+			&& IN_PERL_RUNTIME)
 			/* No compiled RE interpolated, has runtime
 			   components ===> unsafe.  */
 			FAIL("Eval-group not allowed at runtime, use re 'eval'");
@@ -3157,11 +3157,6 @@ tryagain:
 				ender = grok_hex(p + 1, &numlen, &flags, NULL);
 				if (ender > 0xff)
 				    RExC_utf8 = 1;
-				/* numlen is generous */
-				if (numlen + len >= 127) {
-				    p--;
-				    goto loopdone;
-				}
 				p = e + 1;
 			    }
 			}
@@ -3305,7 +3300,7 @@ tryagain:
 	    }
 	    if (len > 0)
 		*flagp |= HASWIDTH;
-	    if (len == 1)
+	    if (len == 1 && UNI_IS_INVARIANT(ender))
 		*flagp |= SIMPLE;
 	    if (!SIZE_ONLY)
 		STR_LEN(ret) = len;
@@ -4267,8 +4262,11 @@ S_nextchar(pTHX_ RExC_state_t *pRExC_state)
     for (;;) {
 	if (*RExC_parse == '(' && RExC_parse[1] == '?' &&
 		RExC_parse[2] == '#') {
-	    while (*RExC_parse && *RExC_parse != ')')
+	    while (*RExC_parse != ')') {
+		if (RExC_parse == RExC_end)
+		    FAIL("Sequence (?#... not terminated");
 		RExC_parse++;
+	    }
 	    RExC_parse++;
 	    continue;
 	}
@@ -4278,9 +4276,8 @@ S_nextchar(pTHX_ RExC_state_t *pRExC_state)
 		continue;
 	    }
 	    else if (*RExC_parse == '#') {
-		while (*RExC_parse && *RExC_parse != '\n')
-		    RExC_parse++;
-		RExC_parse++;
+		while (RExC_parse < RExC_end)
+		    if (*RExC_parse++ == '\n') break;
 		continue;
 	    }
 	}

@@ -338,7 +338,8 @@ EOD
 	    $has_nanosleep++;
 	    $DEFINE .= ' -DTIME_HIRES_NANOSLEEP';
 	}
-    } elsif (has_x ("nanosleep (NULL, NULL)")) {
+    } elsif ($^O ne 'mpeix' && # MPE/iX falsely finds nanosleep.
+             has_x ("nanosleep (NULL, NULL)")) {
 	$has_nanosleep++;
 	$DEFINE .= ' -DTIME_HIRES_NANOSLEEP';
     }
@@ -444,7 +445,18 @@ sub main {
     unless ($ENV{PERL_CORE}) {
 	print  <<EOM;
 Now you may issue '$make'.  Do not forget also '$make test'.
+
 EOM
+       if ($ENV{LC_ALL}   =~ /utf-?8/i ||
+           $ENV{LC_CTYPE} =~ /utf-?8/i ||
+           $ENV{LANG}     =~ /utf-?8/i) {
+            print  <<EOM;
+NOTE: if you get an error like this (the line number may vary):
+Makefile:91: *** missing separator
+then set the environment variable LC_ALL to "C" and retry.
+
+EOM
+        }
     }
 }
 

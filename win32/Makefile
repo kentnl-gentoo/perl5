@@ -32,7 +32,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER = \5.8.0
+#INST_VER = \5.8.1
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -124,11 +124,11 @@ CCTYPE		= MSVC60
 #USE_SETARGV	= define
 
 #
-# if you have the source for des_fcrypt(), uncomment this and make sure the
-# file exists (see README.win32).  File should be located in the same
-# directory as this file.
+# if you want to have the crypt() builtin function implemented, leave this or
+# CRYPT_LIB uncommented.  The fcrypt.c file named here contains a suitable
+# version of des_fcrypt().
 #
-#CRYPT_SRC	= fcrypt.c
+CRYPT_SRC	= fcrypt.c
 
 #
 # if you didn't set CRYPT_SRC and if you have des_fcrypt() available in a
@@ -998,15 +998,18 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.apollo   .\perlapollo.pod
 	copy ..\README.beos     .\perlbeos.pod
 	copy ..\README.bs2000   .\perlbs2000.pod
-	copy ..\README.ce	.\perlce.pod
+	copy ..\README.ce       .\perlce.pod
+	copy ..\README.cn       .\perlcn.pod
 	copy ..\README.cygwin   .\perlcygwin.pod
 	copy ..\README.dgux     .\perldgux.pod
 	copy ..\README.dos      .\perldos.pod
 	copy ..\README.epoc     .\perlepoc.pod
-	copy ..\README.freebsd     .\perlfreebsd.pod
-	copy ..\README.hurd     .\perlhurd.pod
+	copy ..\README.freebsd  .\perlfreebsd.pod
 	copy ..\README.hpux     .\perlhpux.pod
+	copy ..\README.hurd     .\perlhurd.pod
 	copy ..\README.irix     .\perlirix.pod
+	copy ..\README.jp       .\perljp.pod
+	copy ..\README.ko       .\perlko.pod
 	copy ..\README.machten  .\perlmachten.pod
 	copy ..\README.macos    .\perlmacos.pod
 	copy ..\README.macosx   .\perlmacosx.pod
@@ -1020,11 +1023,13 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.qnx      .\perlqnx.pod
 	copy ..\README.solaris  .\perlsolaris.pod
 	copy ..\README.tru64    .\perltru64.pod
+	copy ..\README.tw       .\perltw.pod
 	copy ..\README.uts      .\perluts.pod
 	copy ..\README.vmesa    .\perlvmesa.pod
-	copy ..\vms\perlvms.pod .\perlvms.pod
+	copy ..\README.vms      .\perlvms.pod
 	copy ..\README.vos      .\perlvos.pod
 	copy ..\README.win32    .\perlwin32.pod
+	copy ..\vms\perlvms.pod .\perlvms.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\lib
 	$(PERLEXE) lib_pm.PL
@@ -1152,19 +1157,6 @@ test : test-prep
 
 test-notty : test-prep
 	set PERL_SKIP_TTY_TEST=1
-	cd ..\t
-	$(PERLEXE) -I..\lib harness
-	cd ..\win32
-
-test-wide : test-prep
-	set HARNESS_PERL_SWITCHES=-C
-	cd ..\t
-	$(PERLEXE) -I..\lib harness
-	cd ..\win32
-
-test-wide-notty : test-prep
-	set PERL_SKIP_TTY_TEST=1
-	set HARNESS_PERL_SWITCHES=-C
 	cd ..\t
 	$(PERLEXE) -I..\lib harness
 	cd ..\win32

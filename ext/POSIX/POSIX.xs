@@ -61,7 +61,9 @@
 #ifdef I_STDLIB
 #include <stdlib.h>
 #endif
+#ifndef __ultrix__
 #include <string.h>
+#endif
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <time.h>
@@ -1293,7 +1295,7 @@ sigaction(sig, optaction, oldaction = 0)
 
 		/* Get back whether the old handler used safe signals. */
 		svp = hv_fetch(oldaction, "SAFE", 4, TRUE);
-		sv_setiv(*svp, oact.sa_handler == Perl_csighandler);
+		sv_setiv(*svp, oact.sa_handler == PL_csighandlerp);
 	    }
 
 	    if (action) {
@@ -1302,7 +1304,7 @@ sigaction(sig, optaction, oldaction = 0)
 		   (BTW, "csighandler" is very different from "sighandler".) */
 		svp = hv_fetch(action, "SAFE", 4, FALSE);
 		act.sa_handler = (*svp && SvTRUE(*svp))
-				 ? Perl_csighandler : PL_sighandlerp;
+				 ? PL_csighandlerp : PL_sighandlerp;
 
 		/* Vector new Perl handler through %SIG.
 		   (The core signal handlers read %SIG to dispatch.) */

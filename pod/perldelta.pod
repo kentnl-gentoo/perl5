@@ -92,8 +92,7 @@ more natural interpretation
 	%h = ( 'v65' => 42 );
 
 The multi-number v-strings like v65.66 and 65.66.67 still continue to
-be v-strings in Perl 5.8.  Note, however, that v-strings as a whole
-are now deprecated, see L</"Deprecation Warnings">.
+be v-strings in Perl 5.8.
 
 =head2 (Win32) The -C Switch Has Been Repurposed
 
@@ -202,17 +201,6 @@ There is one new feature deprecation.  Perl 5.8.0 forgot to add
 some deprecation warnings, these warnings have now been added.
 Finally, a reminder of an impending feature removal.
 
-=head3 (New) Version strings (v-strings) are deprecated
-
-Version Strings (v-strings) have been deprecated and they will be
-removed in some future release of Perl.  Each v-string will trigger
-the warning C<v-strings are deprecated>.   The marginal benefits of
-v-strings were greatly outweighed by the potential for Surprise and
-Confusion.  If you really want to continue using v-strings but not to
-see the deprecation warnings, use:
-
-    no warnings 'deprecated';
-
 =head3 (Reminder) Pseudo-hashes are deprecated (really)
 
 Pseudo-hashes were deprecated in Perl 5.8.0 and will be removed in
@@ -250,15 +238,28 @@ the deprecation warnings, use:
 
 =head2 Miscellaneous Enhancements
 
+If a socket gets closed by the server while printing to it, the client
+now gets a SIGPIPE.  While this new feature was not planned, it fell
+naturally out of PerlIO changes, and is to be considered an accidental
+feature.
+
 PerlIO::get_layers(FH) returns the names of the PerlIO layers
 active on a filehandle.
+
+PerlIO::via layers can now have an optional UTF8 method to
+indicate whether the layer wants to "auto-:utf8" the stream.
 
 utf8::is_utf8() has been added as a quick way to test whether
 a scalar is encoded internally in UTF-8 (Unicode).
 
 =head1 Modules and Pragmata
 
-=head2 Updated Modules
+=head2 Updated Modules And Pragmata
+
+base
+
+B::Bytecode - in much better shape than it used to be.  Still far
+from perfect, but maybe worth a try.
 
 B::Concise
 
@@ -266,6 +267,10 @@ B::Deparse
 
 Benchmark - an optional feature, C<:hireswallclock>, now allows
 for high resolution wall clock times (uses Time::HiRes).
+
+ByteLoader - see B::Bytecode.
+
+bytes - now has bytes::substr.
 
 CGI
 
@@ -286,8 +291,8 @@ Digest::MD5
 Encode - significant updates on the encoding pragma functionality
 (tr/// and the DATA filehandle, formats).  The ISO 8859-6 conversion
 table has been corrected (the 0x30..0x39 erroneously mapped to
-U+0660..U+0669, instead of U+0030..U+0039), the UTF7 encoding has
-been added.
+U+0660..U+0669, instead of U+0030..U+0039).  The UTF-7 encoding has
+been added (making Encode feature-complete with Unicode::String).
 
 libnet
 
@@ -295,7 +300,7 @@ Math::BigInt
 
 MIME::Base64
 
-NEXT - diamond inheritance now works
+NEXT - diamond inheritance now works.
 
 Net::Ping
 
@@ -305,7 +310,8 @@ Pod::LaTeX
 
 PodParsers
 
-Pod::Perldoc - complete rewrite
+Pod::Perldoc - complete rewrite.  As a side-effect, no more refuses
+to startup when run by root.
 
 Scalar::Util - new utilities: refaddr, isvstring, looks_like_number,
 set_prototype.
@@ -328,7 +334,7 @@ Time::HiRes - use of nanosleep(), if available, allows mixing
 subsecond sleeps with alarms.
 
 threads - several fixes, for example for join() problems and memory
-leaks.  In some platforms (like Linux) that use glibc the memory
+leaks.  In some platforms (like Linux) that use glibc the minimum memory
 footprint of one ithread has been reduced by several hundred kilobytes.
 
 threads::shared - many memory leaks have been fixed.
@@ -343,11 +349,20 @@ Win32::GetOSVersion - now returns extra information
 
 =head1 Utility Changes
 
+The C<h2xs> utility now produces a more modern layout:
+F<Foo-Bar/lib/Foo/Bar.pm> instead of F<Foo/Bar/Bar.pm>.
+Also, the boilerplate test is now called F<t/Foo-Bar.t>
+instead of F<t/1.t>.
+
 The Perl debugger (F<lib/perl5db.pl>) has now been extensively
 documented and bugs found while documenting have been fixed.
 
-perldoc has been rewritten from scratch to be more robust and
+C<perldoc> has been rewritten from scratch to be more robust and
 featureful.
+
+C<perlcc -B> works now at least somewhat better, while C<perlcc -c>
+is rather more broken.  (The Perl compiler suite as a whole continues
+to be experimental.)
 
 =head1 New Documentation
 
@@ -360,6 +375,8 @@ the differences between 5.6.0 and 5.8.0.
 perlartistic has been added: it is the Artistic License in pod format,
 making it easier for modules to refer to it.
 
+perlcheat has been added: it is a Perl cheat sheet.
+
 perlgpl has been added: it is the GNU General Public License in pod
 format, making it easier for modules to refer to it.
 
@@ -368,6 +385,8 @@ of Perl in Mac OS X.
 
 perlos400 has been added to tell about the installation and use
 of Perl in OS/400 PASE.
+
+perlreref has been added: it is a regular expressions quick reference.
 
 =head1 Installation and Configuration Improvements
 
@@ -397,10 +416,12 @@ see F<INSTALL>.
 =head2 Platform-specific enhancements
 
 In Cygwin Perl can now be built with threads (C<Configure -Duseithreads>).
+This works with both Cygwin 1.3.22 and Cygwin 1.5.3.
 
 In newer FreeBSD releases Perl 5.8.0 compilation failed because of
 trying to use F<malloc.h>, which in FreeBSD is just a dummy file, and
-a fatal error to even try to use.  Now F<malloc.h> is not used.
+a fatal error to even try to use.  Now F<malloc.h> is not used,
+but see L</"FreeBSD: malloc dilemma">.
 
 Perl is now known to build also in Hitachi HI-UXMPP.
 
@@ -421,21 +442,23 @@ to build a Perl for PASE is to use an AIX host as a cross-compilation
 environment.  See README.os400.
 
 Yet another cross-compilation option has been added: now Perl builds
-on OpenZaurus.  See the Cross subdirectory.
+on OpenZaurus, an Linux distribution based on Mandrake + Embedix for
+the Sharp Zaurus PDA.  See the Cross/README file.
 
-Tru64 gcc 3.2.1 C<-O3 toke.c> dropped to C<-O2> because of gigantic
-memory use otherwise.
+Tru64 when using gcc 3 drops the optimisation for F<toke.c> to C<-O2>
+because of gigantic memory use with the default <-O3>.
 
 Tru64 can now build Perl with the newer Berkeley DBs.
 
-Building Perl on WinCE has been much enhanced, see the wince subdirectory.
+Building Perl on WinCE has been much enhanced, see F<README.ce>
+and F<README.perlce>.
 
 =head1 Selected Bug Fixes
 
 =head2 Closures, eval and lexicals
 
 There have been many fixes in the area of anonymous subs, lexicals and
-closures. Although this means that Perl is now more "correct", it is
+closures.  Although this means that Perl is now more "correct", it is
 possible that some existing code will break that happens to rely on
 the faulty behaviour.  In practice this is unlikely unless your code
 contains a very complex nesting of anonymous subs, evals and lexicals.
@@ -479,14 +502,53 @@ your code a bit, such Perl scripts do exist, for example as results
 from generated code.  Now linenumbers can go all the way to
 4294967296, or 2**32.
 
-=head2 Module-specific fixes
+=head2 Module and pragma specific fixes
 
-Encode: if a filehandle has been marked as to have an encoding,
-unmappable characters are detected already during input, not later
-(when the corrupted data is being used).
+=over 4
 
-PerlIO::scalar; reading from non-string scalars (like the special
-variables, see L<perlvar>) now works.
+=item Encode
+
+If a filehandle has been marked as to have an encoding, unmappable
+characters are detected already during input, not later (when the
+corrupted data is being used).
+
+=item PerlIO::scalar
+
+Reading from non-string scalars (like the special variables, see
+L<perlvar>) now works.
+
+=item strict
+
+Earlier versions of the strict pragma did not check the parameters
+implicitly passed to its "import" (use) and "unimport" (no) routine.
+This caused the false idiom such as:
+
+        use strict qw(@ISA);
+        @ISA = qw(Foo);
+
+This however (probably) raised the false expectation that the strict
+refs, vars and subs were being enforced (and that @ISA was somehow
+"declared").  But the strict refs, vars, and subs are B<not> enforced
+when using this false idiom.
+
+Starting from Perl 5.8.1, the above B<will> cause an error to be
+raised.  This may cause programs which used to execute seemingly
+correctly without warnings and errors to fail when run under 5.8.1.
+This happens because
+
+        use strict qw(@ISA);
+
+will now fail with the error:
+
+        Unknown 'strict' tag(s) '@ISA'
+
+The remedy to this problem is to replace this code with the correct idiom:
+
+        use strict;
+        use vars qw(@ISA);
+        @ISA = qw(Foo);
+
+=back
 
 =head2 Platform-specific fixes
 
@@ -586,6 +648,11 @@ Pipes and sockets are now automatically in binary mode.
 The four-argument form of select() did not preserve $! (errno) properly
 when there were errors in the underlying call.  This is now fixed.
 
+=item *
+
+The "CR CR LF" problem of has been fixed, binmode(FH, ":crlf")
+is now effectively a no-op.
+
 =back
 
 =head1 New or Changed Diagnostics
@@ -662,11 +729,6 @@ An illegal user-defined Unicode casemapping was specified.
 
 Something modified the values being iterated over.  This is not good.
 
-=head2 New "v-strings are deprecated"
-
-The marginal benefits of v-strings were greatly outweighed by the
-potential for Surprise and Confusion.
-
 =head1 Changed Internals
 
 These news matter to you only if you either write XS code or like to
@@ -677,7 +739,8 @@ The embedding examples of L<perlembed> have been reviewed to be
 uptodate and consistent: for example, the correct use of
 PERL_SYS_INIT3() and PERL_SYS_TERM().
 
-Extensive reworking of the pad code has been conducted by Dave Mitchell.
+Extensive reworking of the pad code (the code responsible
+for lexical variables) has been conducted by Dave Mitchell.
 
 Extensive work on the v-strings by John Peacock.
 
@@ -708,10 +771,13 @@ Perl_save_bool() has been added.
 
 Regexp objects (those created with C<qr>) now have S-magic rather than
 R-magic.  This fixed regexps of the form /...(??{...;$x})/ to no
-longer ignore changes made to $x.  The S-magic avoids avoid dropping
+longer ignore changes made to $x.  The S-magic avoids dropping
 the caching optimization and making (??{...}) constructs obscenely
 slow (and consequently useless).  See also L<perlguts/"Magic Variables">.
 Regexp::Copy was affected by this change.
+
+The Perl internal debugging macros DEBUG() and DEB() have been renamed
+to PERL_DEBUG() and PERL_DEB() to avoid namespace conflicts.
 
 C<-DL> removed (the leaktest had been broken and unsupported for years,
 use alternative debugging mallocs or tools like valgrind and Purify).
@@ -721,7 +787,7 @@ Verbose modifier C<v> added for C<-DXv> and C<-Dsv>, see L<perlrun>.
 =head1 New Tests
 
 In Perl 5.8.0 there were about 69000 separate tests in about 700 test files,
-in Perl 5.8.1 there are about 75000 separate tests in about 750 test files.
+in Perl 5.8.1 there are about 77000 separate tests in about 780 test files.
 The exact numbers depend on the Perl configuration and on the operating
 system platform.
 
@@ -763,12 +829,32 @@ The subtest 2 of lib/Net/Ping/t/510_ping_udp.t might fail if you have
 an unusual networking setup.  The test is trying to send a UDP ping to
 the IP address 127.0.0.1.
 
+=head2 B::C
+
+The C-generating compiler backend B::C (the frontend being
+C<perlcc -c>) is even more broken than it used to be because of
+the extenstive lexical variable changes.  (The good news is that
+B::Bytecode and ByteLoader are better than they used to be.)
+
 =head1 Platform Specific Problems
 
 =head2 EBCDIC Platforms
 
 IBM z/OS and other EBCDIC platforms continue to be problematic
-regarding Unicode support.
+regarding Unicode support.  Many Unicode tests are skipped when
+they really should be fixed.
+
+=head2 Cygwin 1.5 sysio.t
+
+The one test
+
+  op/sysio.t                                39    1   2.56%  39
+
+is failing in 1.5.3s for some yet unknown reason.
+
+Perl 5.8.1 does build and work well with Cygwin 1.3: with (uname -a)
+C<CYGWIN_NT-5.0 ... 1.3.22(0.78/3/2) 2003-03-18 09:20 i686 ...>
+a 100% "make test"  was achieved with C<Configure -des -Duseithreads>.
 
 =head2 FreeBSD: malloc dilemma
 
@@ -787,19 +873,23 @@ the Perl malloc.
 
 One could use Perl's malloc (Configure -Dusemymalloc), but that
 was found to cause random core dumps in FreeBSD with multithreaded
-programs.  No such problems were found in other platforms, however.
+programs.  No such problems were found in other multithreaded platforms,
+however.
 
 A decision was made to stick with the system malloc, regardless
 of the performance problems.
 
-=head2 HP-UX: HP cc warnings about sendfile
+=head2 HP-UX: HP cc warnings about sendfile and sendpath
 
 With certain HP C compiler releases (e.g. B.11.11.02) you will
 get many warnings like this:
 
     cc: "/usr/include/sys/socket.h", line 504: warning 562: Redeclaration of "sendfile" with a different storage class specifier: "sendfile" will have internal linkage.
+    cc: "/usr/include/sys/socket.h", line 505: warning 562: Redeclaration of "sendfile" with a different storage class specifier: "sendfile" will have internal linkage.
 
-This warning, however, is not serious and can be ignored.
+The warnings show up both during the build of Perl and during certain
+lib/ExtUtils tests that invoke the C compiler.  The warning, however,
+is not serious and can be ignored.
 
 =head2 IRIX: t/uni/tr_7jis.t falsely failing
 
@@ -807,6 +897,12 @@ The test t/uni/tr_7jis.t is known to report failure under 'make test'
 or the test harness with certain releases of IRIX (at least IRIX 6.5
 and MIPSpro Compilers Version 7.3.1.1m), but if run manually the test
 fully passes.
+
+=head2 Mac OS X: no usemymalloc
+
+The Perl malloc (C<-Dusemymalloc>) does not work at all in Mac OS X.
+This is not that serious, though, since the native malloc works just
+fine.
 
 =head2 Tru64: No threaded builds with GNU cc (gcc)
 
@@ -887,15 +983,33 @@ CPANPLUS, Inline, and Module::Build will become core modules.
 
 =item *
 
+The ability to write true lexically scoped pragmas will be introduced.
+
+=item *
+
+Work will continue on the bytecompiler and byteloader.
+
+=item *
+
+The v-strings as such may be removed.  What will keep working is
+the v-less form (1.2.3) when used with C<use>, C<require>, and
+C<$VERSION>.  The v-ful version (v1.2.3) may become obsolete.
+The equivalence of strings and v-strings (e.g. that currently 5.8.0
+is equal to "\5\8\0") will go away, and instead the 1.2.3 will be a
+"version object", as will be the C<$^V>.  B<There is no deprecation
+warning for v-strings>, though: it is quite hard to detect when
+v-strings are being used safely, and when they are not.  Therefore
+to avoid false warnings, or miss needed ones it was decided that
+deprecation warnings will not be be given.
+
+=item *
+
 5.005 Threads Will Be Removed
 
 =item *
 
-V-strings (Version Strings) Will Be Removed
-
-=item *
-
 The C<$*> Variable Will Be Removed
+(it was deprecated a long time ago)
 
 =item *
 

@@ -1315,7 +1315,7 @@ S_scan_const(pTHX_ char *start)
 	   except for the last char, which will be done separately. */
 	else if (*s == '(' && PL_lex_inpat && s[1] == '?') {
 	    if (s[2] == '#') {
-		while (s < send && *s != ')')
+		while (s+1 < send && *s != ')')
 		    *d++ = NATIVE_TO_NEED(has_utf8,*s++);
 	    }
 	    else if (s[2] == '{' /* This should match regcomp.c */
@@ -1334,10 +1334,8 @@ S_scan_const(pTHX_ char *start)
 			count--;
 		    regparse++;
 		}
-		if (*regparse != ')') {
+		if (*regparse != ')')
 		    regparse--;		/* Leave one char for continuation. */
-		    yyerror("Sequence (?{...}) not terminated or not {}-balanced");
-		}
 		while (s < regparse)
 		    *d++ = NATIVE_TO_NEED(has_utf8,*s++);
 	    }
@@ -3032,10 +3030,12 @@ Perl_yylex(pTHX)
 			CvLOCKED_on(PL_compcv);
 		    else if (!PL_in_my && len == 6 && strnEQ(s, "method", len))
 			CvMETHOD_on(PL_compcv);
-#ifdef USE_ITHREADS
 		    else if (PL_in_my == KEY_our && len == 6 &&
 			     strnEQ(s, "unique", len))
+#ifdef USE_ITHREADS
 			GvUNIQUE_on(cGVOPx_gv(yylval.opval));
+#else
+			; /* skip that case to avoid loading attributes.pm */
 #endif
 		    /* After we've set the flags, it could be argued that
 		       we don't need to do the attributes.pm-based setting
@@ -3553,9 +3553,7 @@ Perl_yylex(pTHX)
 		    }
 		}
 		else {
-		    GV *gv = gv_fetchpv(tmpbuf, FALSE, SVt_PVCV);
-		    if (gv && GvCVu(gv))
-			PL_expect = XTERM;	/* e.g. print $fh subr() */
+		    PL_expect = XTERM;		/* e.g. print $fh subr() */
 		}
 	    }
 	    else if (isDIGIT(*s))
@@ -6976,7 +6974,7 @@ S_scan_str(pTHX_ char *start, int keep_quoted, int keep_delims)
 		    goto read_more_line;
 		else {
 		    /* handle quoted delimiters */
-		    if (*(svlast-1) == '\\') {
+		    if (SvCUR(sv) > 1 && *(svlast-1) == '\\') {
 			char *t;
 			for (t = svlast-2; t >= SvPVX(sv) && *t == '\\';)
 			    t--;
@@ -7981,9 +7979,6 @@ Perl_scan_vstring(pTHX_ char *s, SV *sv)
 	    return pos;
 	}
     }
-
-    if (ckWARN(WARN_DEPRECATED))
-	Perl_warner(aTHX_ packWARN(WARN_DEPRECATED), "v-strings are deprecated");
 
     if (!isALPHA(*pos)) {
 	UV rev;

@@ -163,6 +163,15 @@ error.
 that expected a numeric value instead.  If you're fortunate the message
 will identify which operator was so unfortunate.
 
+=item Argument list not closed for PerlIO layer "%s"
+
+(W layer) When pushing a layer with arguments onto the Perl I/O system you
+forgot the ) that closes the argument list.  (Layers take care of transforming
+data between external and internal representations.)  Perl stopped parsing
+the layer list at this point and did not attempt to push this layer.
+If your program didn't explicitly request the failing operation, it may be
+the result of the value of the environment variable PERLIO.
+
 =item Array @%s missing the @ in argument %d of %s()
 
 (D deprecated) Really old Perl let you omit the @ on array names in some
@@ -911,7 +920,7 @@ the command line for writing.
 redirection, and couldn't open the pipe into which to send data destined
 for stdout.
 
-=item Can't open perl script%s: %s
+=item Can't open perl script%s
 
 (F) The script you specified can't be opened for the indicated reason.
 
@@ -1861,6 +1870,13 @@ elements of an attribute list.  If the previous attribute had a
 parenthesised parameter list, perhaps that list was terminated too soon.
 See L<attributes>.
 
+=item Invalid separator character %s in PerlIO layer specification %s
+
+(W layer) When pushing layers onto the Perl I/O system, something other than a
+colon or whitespace was seen between the elements of a layer list.
+If the previous attribute had a parenthesised parameter list, perhaps that
+list was terminated too soon.
+
 =item Invalid type '%s' in %s
 
 (F) The given character is not a valid pack or unpack type.
@@ -1877,6 +1893,12 @@ strange for a machine that supports C.
 
 (W unopened) You tried ioctl() on a filehandle that was never opened.
 Check you control flow and number of arguments.
+
+=item IO layers (like "%s") unavailable
+
+(F) Your Perl has not been configured to have PerlIO, and therefore
+you cannot use IO layers.  To have PerlIO Perl must be configured
+with 'useperlio'.
 
 =item IO::Socket::atmark not implemented on this architecture
 
@@ -2172,6 +2194,11 @@ local() if you want to localize a package variable.
 If you had a good reason for having a unique name, then just mention it
 again somehow to suppress the message.  The C<our> declaration is
 provided for this purpose.
+
+NOTE: This warning detects symbols that have been used only once so $c, @c,
+%c, *c, &c, sub c{}, c(), and c (the filehandle or format) are considered
+the same; if a program uses $c only once but also uses any of the others it
+will not trigger this warning.
 
 =item Negative '/' count in unpack
 
@@ -2822,31 +2849,6 @@ redirected it with select().)
 (F) This is an educated guess made in conjunction with the message
 "Can't locate object method \"%s\" via package \"%s\"".  It often means
 that a method requires a package that has not been loaded.
-
-=item perlio: argument list not closed for layer "%s"
-
-(W layer) When pushing a layer with arguments onto the Perl I/O system you
-forgot the ) that closes the argument list.  (Layers take care of transforming
-data between external and internal representations.)  Perl stopped parsing
-the layer list at this point and did not attempt to push this layer.
-If your program didn't explicitly request the failing operation, it may be
-the result of the value of the environment variable PERLIO.
-
-=item perlio: invalid separator character %s in layer specification list %s
-
-(W layer) When pushing layers onto the Perl I/O system, something other than a
-colon or whitespace was seen between the elements of a layer list.
-If the previous attribute had a parenthesised parameter list, perhaps that
-list was terminated too soon.
-
-=item perlio: unknown layer "%s"
-
-(W layer) An attempt was made to push an unknown layer onto the Perl I/O
-system.  (Layers take care of transforming data between external and
-internal representations.)  Note that some layers, such as C<mmap>,
-are not supported in all environments.  If your program didn't
-explicitly request the failing operation, it may be the result of the
-value of the environment variable PERLIO.
 
 =item Perl %s required--this is only version %s, stopped
 
@@ -3665,17 +3667,17 @@ target of the change to
 
 (F) The entry point function of threads->create() failed for some reason.
 
-=item Tied variable freed while still in use
-
-(F) An access method for a tied variable (e.g. FETCH) did something to
-free the variable.  Since continuing the current operation is likely
-to result in a coredump, Perl is bailing out instead.
-
 =item 5.005 threads are deprecated
 
 (D deprecated)  The 5.005-style threads (activated by C<use Thread;>)
 are deprecated and one should use the new ithreads instead,
 see L<perl58delta> for more details.
+
+=item Tied variable freed while still in use
+
+(F) An access method for a tied variable (e.g. FETCH) did something to
+free the variable.  Since continuing the current operation is likely
+to result in a coredump, Perl is bailing out instead.
 
 =item times not implemented
 
@@ -3870,6 +3872,15 @@ order.
 (F) The second argument of 3-argument open() is not among the list
 of valid modes: C<< < >>, C<< > >>, C<<< >> >>>, C<< +< >>,
 C<< +> >>, C<<< +>> >>>, C<-|>, C<|->, C<< <& >>, C<< >& >>.
+
+=item Unknown PerlIO layer "%s"
+
+(W layer) An attempt was made to push an unknown layer onto the Perl I/O
+system.  (Layers take care of transforming data between external and
+internal representations.)  Note that some layers, such as C<mmap>,
+are not supported in all environments.  If your program didn't
+explicitly request the failing operation, it may be the result of the
+value of the environment variable PERLIO.
 
 =item Unknown process %x sent message to prime_env_iter: %s
 
@@ -4419,21 +4430,6 @@ are automatically rebound to the current values of such variables.
 its equivalent C<BEGIN> block found an internal inconsistency with
 the version number.
 
-=item v-string in use/require is non-portable
-
-(W portable) The use of v-strings is non-portable to older, pre-5.6, Perls.
-If you want your scripts to be backward portable, use the floating
-point version number: for example, instead of C<use 5.6.1> say
-C<use 5.006_001>.  This of course won't help: the older Perls
-won't suddenly start understanding newer features, but at least
-they will show a sensible error message indicating the required
-minimum version.
-
-=item v-strings are deprecated
-
-(D deprecated) v-strings are deprecated.  Their semantics and use were
-overly confusing.
-
 =item Warning: something's wrong
 
 (W) You passed warn() an empty string (the equivalent of C<warn "">) or
@@ -4467,9 +4463,12 @@ So put in parentheses to say what you really mean.
 =item Wide character in %s
 
 (W utf8) Perl met a wide character (>255) when it wasn't expecting
-one.  This warning is by default on for I/O (like print) but can be
-turned off by C<no warnings 'utf8';>.  You are supposed to explicitly
-mark the filehandle with an encoding, see L<open> and L<perlfunc/binmode>.
+one.  This warning is by default on for I/O (like print).  The easiest
+way to quiet this warning is simply to add the C<:utf8> layer to the
+output, e.g. C<binmode STDOUT, ':utf8'>.  Another way to turn off the
+warning is to add C<no warnings 'utf8';> but that is often closer to
+cheating.  In general, you are supposed to explicitly mark the
+filehandle with an encoding, see L<open> and L<perlfunc/binmode>.
 
 =item Within []-length '%c' not allowed
 
@@ -4482,6 +4481,16 @@ of the codes @, /, U, u, w or a *-length. Redesign the template.
 
 (W closed) The filehandle you're writing to got itself closed sometime
 before now.  Check your control flow.
+
+=item %s "\x%s" does not map to Unicode
+
+When reading in different encodings Perl tries to map everything
+into Unicode characters.  The bytes you read in are not legal in
+this encoding, for example
+
+    utf8 "\xE4" does not map to Unicode
+
+if you try to read in the a-diaereses Latin-1 as UTF-8.
 
 =item 'X' outside of string
 
@@ -4517,6 +4526,12 @@ Unfortunately, you already have a subroutine of that name declared,
 which means that Perl 5 will try to call the subroutine when the
 assignment is executed, which is probably not what you want.  (If it IS
 what you want, put an & in front.)
+
+=item Your random numbers are not that random
+
+(F) When trying to initialise the random seed for hashes, Perl could
+not get any randomness out of your system.  This usually indicates
+Something Very Wrong.
 
 =back
 

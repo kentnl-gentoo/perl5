@@ -145,7 +145,7 @@ PP(pp_concat)
 
     if (TARG == right && right != left) {
 	right = sv_2mortal(newSVpvn(rpv, rlen));
-	rpv = SvPV(right, rlen);	/* no point setting UTF8 here */
+	rpv = SvPV(right, rlen);	/* no point setting UTF-8 here */
 	rcopied = TRUE;
     }
 
@@ -1611,6 +1611,17 @@ Perl_do_readline(pTHX)
 		(void)POPs;		/* Unmatched wildcard?  Chuck it... */
 		continue;
 	    }
+	} else if (SvUTF8(sv)) { /* OP_READLINE, OP_RCATLINE */
+	     U8 *s = (U8*)SvPVX(sv) + offset;
+	     STRLEN len = SvCUR(sv) - offset;
+	     U8 *f;
+	     
+	     if (ckWARN(WARN_UTF8) &&
+		 !Perl_is_utf8_string_loc(aTHX_ s, len, &f))
+		  /* Emulate :encoding(utf8) warning in the same case. */
+		  Perl_warner(aTHX_ packWARN(WARN_UTF8),
+			      "utf8 \"\\x%02X\" does not map to Unicode",
+			      f < (U8*)SvEND(sv) ? *f : 0);
 	}
 	if (gimme == G_ARRAY) {
 	    if (SvLEN(sv) - SvCUR(sv) > 20) {
@@ -2312,10 +2323,10 @@ PP(pp_leavesub)
     }
     PUTBACK;
 
-    LEAVE;
     POPSUB(cx,sv);	/* Stack values are safe: release CV and @_ ... */
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
+    LEAVE;
     LEAVESUB(sv);
     return pop_return();
 }
@@ -2368,9 +2379,9 @@ PP(pp_leavesublv)
 	 * the refcounts so the caller gets a live guy. Cannot set
 	 * TEMP, so sv_2mortal is out of question. */
 	if (!CvLVALUE(cx->blk_sub.cv)) {
-	    LEAVE;
 	    POPSUB(cx,sv);
 	    PL_curpm = newpm;
+	    LEAVE;
 	    LEAVESUB(sv);
 	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
 	}
@@ -2379,9 +2390,9 @@ PP(pp_leavesublv)
 	    EXTEND_MORTAL(1);
 	    if (MARK == SP) {
 		if (SvFLAGS(TOPs) & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)) {
-		    LEAVE;
 		    POPSUB(cx,sv);
 		    PL_curpm = newpm;
+		    LEAVE;
 		    LEAVESUB(sv);
 		    DIE(aTHX_ "Can't return %s from lvalue subroutine",
 			SvREADONLY(TOPs) ? (TOPs == &PL_sv_undef) ? "undef"
@@ -2394,9 +2405,9 @@ PP(pp_leavesublv)
 		}
 	    }
 	    else {			/* Should not happen? */
-		LEAVE;
 		POPSUB(cx,sv);
 		PL_curpm = newpm;
+		LEAVE;
 		LEAVESUB(sv);
 		DIE(aTHX_ "%s returned from lvalue subroutine in scalar context",
 		    (MARK > SP ? "Empty array" : "Array"));
@@ -2410,9 +2421,9 @@ PP(pp_leavesublv)
 		    && SvFLAGS(*mark) & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)) {
 		    /* Might be flattened array after $#array =  */
 		    PUTBACK;
-		    LEAVE;
 		    POPSUB(cx,sv);
 		    PL_curpm = newpm;
+		    LEAVE;
 		    LEAVESUB(sv);
 		    DIE(aTHX_ "Can't return a %s from lvalue subroutine",
 			SvREADONLY(TOPs) ? "readonly value" : "temporary");
@@ -2464,10 +2475,10 @@ PP(pp_leavesublv)
     }
     PUTBACK;
 
-    LEAVE;
     POPSUB(cx,sv);	/* Stack values are safe: release CV and @_ ... */
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
+    LEAVE;
     LEAVESUB(sv);
     return pop_return();
 }

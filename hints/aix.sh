@@ -142,10 +142,10 @@ case "$cc" in
    ccdlflags='-Xlinker'
    if [ "X$gccversion" = "X" ]; then
      # Done too late in Configure if hinted
-     gccversion=`$cc --version | sed 's/.*(GCC) *//`
+     gccversion=`$cc --version | sed 's/.*(GCC) *//'`
      fi
    ;;
-*) ccversion=`lslpp -L | grep 'C for AIX Compiler$' | grep -v '\.msg\.[A-Za-z_]*\.' | awk '{print $1,$2}'`
+*) ccversion=`lslpp -L | grep 'C for AIX Compiler$' | grep -v '\.msg\.[A-Za-z_]*\.' | head -1 | awk '{print $1,$2}'`
    case "$ccversion" in
      '') ccversion=`lslpp -L | grep 'IBM C and C++ Compilers LUM$'`
 	 ;;

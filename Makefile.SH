@@ -310,13 +310,11 @@ shextract = Makefile cflags config.h makeaperl makedepend \
 # available.  Dependencies handled manually below (for now).
 
 pl = pod/pod2html.PL pod/pod2latex.PL pod/pod2man.PL pod/pod2text.PL \
-	pod/pod2usage.PL pod/podchecker.PL pod/podselect.PL \
-	pod/buildtoc.PL
+	pod/pod2usage.PL pod/podchecker.PL pod/podselect.PL
 
 # lib/lib.pm is not listed here because it has a rule of its own.
 plextract = pod/pod2html pod/pod2latex pod/pod2man pod/pod2text \
-	pod/pod2usage pod/podchecker pod/podselect \
-	pod/buildtoc
+	pod/pod2usage pod/podchecker pod/podselect
 
 addedbyconf = UU $(shextract) $(plextract) lib/lib.pm pstruct
 
@@ -579,7 +577,7 @@ miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 		$spitshell >>Makefile <<'!NO!SUBS!'
 miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 	-@rm -f miniperl.xok
-	$(CC) $(CLDFLAGS) -o miniperl \
+	$(LDLIBPTH) $(CC) $(CLDFLAGS) -o miniperl \
 	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL) $(libs)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
@@ -590,18 +588,29 @@ miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 
 perl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
 	-@rm -f miniperl.xok
-	$(SHRPENV) $(CC) -o perl$(PERL_SUFFIX) $(PERL_PROFILE_LDFLAGS) $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(SHRPENV) $(LDLIBPTH) $(CC) -o perl$(PERL_SUFFIX) $(PERL_PROFILE_LDFLAGS) $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 # Purify/Quantify Perls.
 
 pureperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) purify $(CC) -o pureperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(SHRPENV) $(LDLIBPTH) purify $(CC) -o pureperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 purecovperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) purecov $(CC) -o purecovperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(SHRPENV) $(LDLIBPTH) purecov $(CC) -o purecovperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 quantperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) quantify $(CC) -o quantperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(SHRPENV) $(LDLIBPTH) quantify $(CC) -o quantperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+
+# Valgrind perl (currently Linux only)
+
+perl.valgrind.config: config.sh
+	@echo "To build perl.valgrind you must Configure -Doptimize=-g -Uusemymalloc, checking..."
+	@$(MAKE) perl.config.dashg
+	@echo "Checking usemymalloc='n' in config.sh..."
+	@grep "^usemymalloc="    config.sh
+	@grep "^usemymalloc='n'" config.sh >/dev/null || exit 1
+	@echo "And of course you have to have valgrind..."
+	valgrind ./perl -e 1 2>/dev/null || exit 1
 
 # Third Degree Perl (Tru64 only)
 
@@ -688,7 +697,7 @@ microperl:
 # has been invoked correctly.
 
 suidperl$(EXE_EXT): $& sperl$(OBJ_EXT) perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) $(CC) -o suidperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) sperl$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(SHRPENV) $(LDLIBPTH) $(CC) -o suidperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) sperl$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 !NO!SUBS!
 
@@ -764,6 +773,9 @@ extras.install: perl$(EXE_EXT)
 
 .PHONY: install install-strip install-all install-verbose install-silent \
 	no-install install.perl install.man install.html
+
+META.yml:	Porting/makemeta Porting/Maintainers.pl Porting/Maintainers.pm
+	$(LDLIBPTH) ./miniperl -Ilib Porting/makemeta
 
 install-strip:
 	$(MAKE) STRIPFLAGS=-s install
@@ -892,8 +904,8 @@ regen_all: $(PERLYVMS) regen regen_pods
 .PHONY:	manisort manicheck
 
 manisort:	FORCE
-	LC_ALL=C sort -fc MANIFEST || (echo "WARNING: re-sorting MANIFEST"; \
-		LC_ALL=C sort -fo MANIFEST MANIFEST)
+	LC_ALL=C sort -fdc MANIFEST || (echo "WARNING: re-sorting MANIFEST"; \
+		LC_ALL=C sort -fdo MANIFEST MANIFEST)
 
 manicheck:	FORCE
 	perl Porting/manicheck
@@ -1101,6 +1113,20 @@ test-notty:	test_notty
 
 test.torture torturetest:	test_prep
 	PERL=./perl TEST_ARGS=-torture $(MAKE) _test
+
+# Targets for valgrind testing:
+
+test_prep.valgrind: test_prep perl.valgrind
+	PERL=./perl $(MAKE) _test_prep
+
+test.valgrind check.valgrind:	test_prep perl.valgrind.config
+	PERL=./perl PERL_DEBUG=PERL_VALGRIND=1 $(MAKE) _test
+
+utest.valgrind ucheck.valgrind: test_prep.valgrind perl.valgrind
+	PERL=./perl PERL_DEBUG=PERL_VALGRIND=1 TEST_ARGS=-utf8 $(MAKE) _test
+
+test_notty.valgrind: test_prep.valgrind perl.valgrind
+	PERL=./perl $(MAKE) PERL_DEBUG=PERL_VALGRIND=1 _test_notty
 
 # Targets for Third Degree testing.
 

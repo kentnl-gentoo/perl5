@@ -288,7 +288,7 @@ PerlIO_openn(pTHX_ const char *layers, const char *mode, int fd,
 	    return PerlIO_tmpfile();
 	else {
 	    char *name = SvPV_nolen(*args);
-	    if (*mode == '#') {
+	    if (*mode == IoTYPE_NUMERIC) {
 		fd = PerlLIO_open3(name, imode, perm);
 		if (fd >= 0)
 		    return PerlIO_fdopen(fd, (char *) mode + 1);
@@ -735,7 +735,7 @@ PerlIO_find_layer(pTHX_ const char *name, STRLEN len, int load)
 	len = strlen(name);
     for (i = 0; i < PL_known_layers->cur; i++) {
 	PerlIO_funcs *f = PL_known_layers->array[i].funcs;
-	if (memEQ(f->name, name, len)) {
+	if (memEQ(f->name, name, len) && f->name[len] == 0) {
 	    PerlIO_debug("%.*s => %p\n", (int) len, name, (void*)f);
 	    return f;
 	}
@@ -916,7 +916,7 @@ PerlIO_parse_layers(pTHX_ PerlIO_list_t *av, const char *names)
 		    char q = ((*s == '\'') ? '"' : '\'');
 		    if (ckWARN(WARN_LAYER))
 			Perl_warner(aTHX_ packWARN(WARN_LAYER),
-			      "perlio: invalid separator character %c%c%c in layer specification list %s",
+			      "Invalid separator character %c%c%c in PerlIO layer specification %s",
 			      q, *s, q, s);
 		    SETERRNO(EINVAL, LIB_INVARG);
 		    return -1;
@@ -953,7 +953,7 @@ PerlIO_parse_layers(pTHX_ PerlIO_list_t *av, const char *names)
 			    e--;
 			    if (ckWARN(WARN_LAYER))
 				Perl_warner(aTHX_ packWARN(WARN_LAYER),
-				      "perlio: argument list not closed for layer \"%.*s\"",
+				      "Argument list not closed for PerlIO layer \"%.*s\"",
 				      (int) (e - s), s);
 			    return -1;
 			default:
@@ -976,7 +976,7 @@ PerlIO_parse_layers(pTHX_ PerlIO_list_t *av, const char *names)
 		    }
 		    else {
 			if (warn_layer)
-			    Perl_warner(aTHX_ packWARN(WARN_LAYER), "perlio: unknown layer \"%.*s\"",
+			    Perl_warner(aTHX_ packWARN(WARN_LAYER), "Unknown PerlIO layer \"%.*s\"",
 				  (int) llen, s);
 			return -1;
 		    }
@@ -1960,7 +1960,7 @@ PerlIOBase_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab)
     if (tab->Set_ptrcnt != NULL)
 	l->flags |= PERLIO_F_FASTGETS;
     if (mode) {
-	if (*mode == '#' || *mode == 'I')
+	if (*mode == IoTYPE_NUMERIC || *mode == IoTYPE_IMPLICIT)
 	    mode++;
 	switch (*mode++) {
 	case 'r':
@@ -2276,7 +2276,7 @@ int
 PerlIOUnix_oflags(const char *mode)
 {
     int oflags = -1;
-    if (*mode == 'I' || *mode == '#')
+    if (*mode == IoTYPE_IMPLICIT || *mode == IoTYPE_NUMERIC)
 	mode++;
     switch (*mode) {
     case 'r':
@@ -2375,6 +2375,28 @@ PerlIOUnix_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab)
     return code;
 }
 
+IV
+PerlIOUnix_seek(pTHX_ PerlIO *f, Off_t offset, int whence)
+{
+    int fd = PerlIOSelf(f, PerlIOUnix)->fd;
+    Off_t new;
+    if (PerlIOBase(f)->flags & PERLIO_F_NOTREG) {
+#ifdef  ESPIPE
+	SETERRNO(ESPIPE, LIB_INVARG);
+#else
+	SETERRNO(EINVAL, LIB_INVARG);
+#endif
+	return -1;
+    }
+    new  = PerlLIO_lseek(fd, offset, whence);
+    if (new == (Off_t) - 1)
+     {
+      return -1;
+     }
+    PerlIOBase(f)->flags &= ~PERLIO_F_EOF;
+    return  0;
+}
+
 PerlIO *
 PerlIOUnix_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 		IV n, const char *mode, int fd, int imode,
@@ -2386,7 +2408,7 @@ PerlIOUnix_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
     }
     if (narg > 0) {
 	char *path = SvPV_nolen(*args);
-	if (*mode == '#')
+	if (*mode == IoTYPE_NUMERIC)
 	    mode++;
 	else {
 	    imode = PerlIOUnix_oflags(mode);
@@ -2397,7 +2419,7 @@ PerlIOUnix_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 	}
     }
     if (fd >= 0) {
-	if (*mode == 'I')
+	if (*mode == IoTYPE_IMPLICIT)
 	    mode++;
 	if (!f) {
 	    f = PerlIO_allocate(aTHX);
@@ -2409,6 +2431,8 @@ PerlIOUnix_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 	}
         PerlIOUnix_setfd(aTHX_ f, fd, imode);
 	PerlIOBase(f)->flags |= PERLIO_F_OPEN;
+	if (*mode == IoTYPE_APPEND)
+	    PerlIOUnix_seek(aTHX_ f, 0, SEEK_END);
 	return f;
     }
     else {
@@ -2483,28 +2507,6 @@ PerlIOUnix_write(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
 	}
 	PERL_ASYNC_CHECK();
     }
-}
-
-IV
-PerlIOUnix_seek(pTHX_ PerlIO *f, Off_t offset, int whence)
-{
-    int fd = PerlIOSelf(f, PerlIOUnix)->fd;
-    Off_t new;
-    if (PerlIOBase(f)->flags & PERLIO_F_NOTREG) {
-#ifdef  ESPIPE
-	SETERRNO(ESPIPE, LIB_INVARG);
-#else
-	SETERRNO(EINVAL, LIB_INVARG);
-#endif
-	return -1;
-    }
-    new  = PerlLIO_lseek(fd, offset, whence);
-    if (new == (Off_t) - 1)
-     {
-      return -1;
-     }
-    PerlIOBase(f)->flags &= ~PERLIO_F_EOF;
-    return  0;
 }
 
 Off_t
@@ -2609,7 +2611,7 @@ PerlIOStdio_mode(const char *mode, char *tmode)
     while (*mode) {
 	*tmode++ = *mode++;
     }
-#ifdef PERLIO_USING_CRLF
+#if defined(PERLIO_USING_CRLF) || defined(__CYGWIN__)
     *tmode++ = 'b';
 #endif
     *tmode = '\0';
@@ -2705,20 +2707,28 @@ PerlIOStdio_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
     else {
 	if (narg > 0) {
 	    char *path = SvPV_nolen(*args);
-	    if (*mode == '#') {
+	    if (*mode == IoTYPE_NUMERIC) {
 		mode++;
 		fd = PerlLIO_open3(path, imode, perm);
 	    }
 	    else {
-		FILE *stdio = PerlSIO_fopen(path, mode);
+	        FILE *stdio;
+	        bool appended = FALSE;
+#ifdef __CYGWIN__
+		/* Cygwin wants its 'b' early. */
+		appended = TRUE;
+		mode = PerlIOStdio_mode(mode, tmode);
+#endif
+		stdio = PerlSIO_fopen(path, mode);
 		if (stdio) {
 		    PerlIOStdio *s;
 		    if (!f) {
 			f = PerlIO_allocate(aTHX);
 		    }
-		    if ((f = PerlIO_push(aTHX_ f, self,
-				    (mode = PerlIOStdio_mode(mode, tmode)),
-				    PerlIOArg))) {
+		    if (!appended)
+		        mode = PerlIOStdio_mode(mode, tmode);
+		    f = PerlIO_push(aTHX_ f, self, mode, PerlIOArg);
+		    if (f) {
 			s = PerlIOSelf(f, PerlIOStdio);
 			s->stdio = stdio;
 			PerlIOUnix_refcnt_inc(fileno(s->stdio));
@@ -2733,7 +2743,7 @@ PerlIOStdio_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 	if (fd >= 0) {
 	    FILE *stdio = NULL;
 	    int init = 0;
-	    if (*mode == 'I') {
+	    if (*mode == IoTYPE_IMPLICIT) {
 		init = 1;
 		mode++;
 	    }
@@ -2980,6 +2990,8 @@ PerlIOStdio_read(pTHX_ PerlIO *f, void *vbuf, Size_t count)
 	}
 	else
 	    got = PerlSIO_fread(vbuf, 1, count, s);
+	if (got == 0 && PerlSIO_ferror(s))
+	    got = -1;
 	if (got >= 0 || errno != EINTR)
 	    break;
 	PERL_ASYNC_CHECK();
@@ -3421,7 +3433,7 @@ PerlIOBuf_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
     else {
 	PerlIO_funcs *tab = PerlIO_layer_fetch(aTHX_ layers, n - 1, PerlIO_default_btm());
 	int init = 0;
-	if (*mode == 'I') {
+	if (*mode == IoTYPE_IMPLICIT) {
 	    init = 1;
 	    /*
 	     * mode++;
@@ -4036,6 +4048,23 @@ PerlIOCrlf_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab)
 		 f, PerlIOBase(f)->tab->name, (mode) ? mode : "(Null)",
 		 PerlIOBase(f)->flags);
 #endif
+    {
+      /* Enable the first CRLF capable layer you can find, but if none
+       * found, the one we just pushed is fine.  This results in at
+       * any given moment at most one CRLF-capable layer being enabled
+       * in the whole layer stack. */
+	 PerlIO *g = PerlIONext(f);
+	 while (g && *g) {
+	      PerlIOl *b = PerlIOBase(g);
+	      if (b && b->tab == &PerlIO_crlf) {
+		   if (!(b->flags & PERLIO_F_CRLF))
+			b->flags |= PERLIO_F_CRLF;
+		   PerlIO_pop(aTHX_ f);
+		   return code;
+	      }		  
+	      g = PerlIONext(g);
+	 }
+    }
     return code;
 }
 
@@ -4832,7 +4861,7 @@ PerlIO_tmpfile(void)
      if (fd >= 0)
 	  f = PerlIO_fdopen(fd, "w+b");
 #else /* WIN32 */
-#    ifdef HAS_MKSTEMP
+#    if defined(HAS_MKSTEMP) && ! defined(VMS)
      SV *sv = newSVpv("/tmp/PerlIO_XXXXXX", 0);
 
      /*

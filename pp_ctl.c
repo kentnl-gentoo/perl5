@@ -866,6 +866,7 @@ PP(pp_mapstart)
 PP(pp_mapwhile)
 {
     dSP;
+    I32 gimme = GIMME_V;
     I32 items = (SP - PL_stack_base) - *PL_markstack_ptr; /* how many new items */
     I32 count;
     I32 shift;
@@ -876,7 +877,7 @@ PP(pp_mapwhile)
     ++PL_markstack_ptr[-1];
 
     /* if there are new items, push them into the destination list */
-    if (items) {
+    if (items && gimme != G_VOID) {
 	/* might need to make room back there first */
 	if (items > PL_markstack_ptr[-1] - PL_markstack_ptr[-2]) {
 	    /* XXX this implementation is very pessimal because the stack
@@ -920,7 +921,6 @@ PP(pp_mapwhile)
 
     /* All done yet? */
     if (PL_markstack_ptr[-1] > *PL_markstack_ptr) {
-	I32 gimme = GIMME_V;
 
 	(void)POPMARK;				/* pop top */
 	LEAVE;					/* exit outer scope */
@@ -1875,7 +1875,6 @@ PP(pp_return)
     }
     PL_stack_sp = newsp;
 
-    LEAVE;
     /* Stack values are safe: */
     if (popsub2) {
 	POPSUB(cx,sv);	/* release CV and @_ ... */
@@ -1884,6 +1883,7 @@ PP(pp_return)
 	sv = Nullsv;
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
+    LEAVE;
     LEAVESUB(sv);
     if (clear_errsv)
 	sv_setpv(ERRSV,"");
@@ -1959,7 +1959,6 @@ PP(pp_last)
     SP = newsp;
     PUTBACK;
 
-    LEAVE;
     /* Stack values are safe: */
     switch (pop2) {
     case CXt_LOOP:
@@ -1972,6 +1971,7 @@ PP(pp_last)
     }
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
+    LEAVE;
     LEAVESUB(sv);
     return nextop;
 }
@@ -2630,7 +2630,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, char *code, PAD** padp)
     SAVETMPS;
     /* switch to eval mode */
 
-    if (PL_curcop == &PL_compiling) {
+    if (IN_PERL_COMPILETIME) {
 	SAVECOPSTASH_FREE(&PL_compiling);
 	CopSTASH_set(&PL_compiling, PL_curstash);
     }
@@ -2663,14 +2663,14 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, char *code, PAD** padp)
     PL_hints &= HINT_UTF8;
 
     /* we get here either during compilation, or via pp_regcomp at runtime */
-    runtime = PL_op && (PL_op->op_type == OP_REGCOMP);
+    runtime = IN_PERL_RUNTIME;
     if (runtime)
 	runcv = find_runcv(NULL);
 
     PL_op = &dummy;
     PL_op->op_type = OP_ENTEREVAL;
     PL_op->op_flags = 0;			/* Avoid uninit warning. */
-    PUSHBLOCK(cx, CXt_EVAL|(PL_curcop == &PL_compiling ? 0 : CXp_REAL), SP);
+    PUSHBLOCK(cx, CXt_EVAL|(IN_PERL_COMPILETIME ? 0 : CXp_REAL), SP);
     PUSHEVAL(cx, 0, Nullgv);
 
     if (runtime)
@@ -2686,7 +2686,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, char *code, PAD** padp)
     /* XXX DAPM do this properly one year */
     *padp = (AV*)SvREFCNT_inc(PL_comppad);
     LEAVE;
-    if (PL_curcop == &PL_compiling)
+    if (IN_PERL_COMPILETIME)
 	PL_compiling.op_private = (U8)(PL_hints & HINT_PRIVATE_MASK);
 #ifdef OP_IN_REGISTER
     op = PL_opsave;
@@ -2980,9 +2980,6 @@ PP(pp_require)
 		    "v%d.%d.%d, stopped", rev, ver, sver, PERL_REVISION,
 		    PERL_VERSION, PERL_SUBVERSION);
 	    }
-	    if (ckWARN(WARN_PORTABLE))
-		Perl_warner(aTHX_ packWARN(WARN_PORTABLE),
-                        "v-string in use/require non-portable");
 	    RETPUSHYES;
 	}
 	else if (!SvPOKp(sv)) {			/* require 5.005_03 */

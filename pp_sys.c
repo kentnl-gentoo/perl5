@@ -861,7 +861,7 @@ PP(pp_untie)
 	RETPUSHYES;
 
     if ((mg = SvTIED_mg(sv, how))) {
-	SV *obj = SvRV(mg->mg_obj);
+	SV *obj = SvRV(SvTIED_obj(sv, mg));
 	GV *gv;
 	CV *cv = NULL;
         if (obj) {
@@ -1024,15 +1024,19 @@ PP(pp_sselect)
     Zero(&fd_sets[0], 4, char*);
 #endif
 
-#  if SELECT_MIN_BITS > 1
+#  if SELECT_MIN_BITS == 1
+    growsize = sizeof(fd_set);
+#  else
+#   if defined(__GLIBC__) && defined(__FD_SETSIZE)
+#      undef SELECT_MIN_BITS
+#      define SELECT_MIN_BITS __FD_SETSIZE
+#   endif
     /* If SELECT_MIN_BITS is greater than one we most probably will want
      * to align the sizes with SELECT_MIN_BITS/8 because for example
      * in many little-endian (Intel, Alpha) systems (Linux, OS/2, Digital
      * UNIX, Solaris, NeXT, Darwin) the smallest quantum select() operates
      * on (sets/tests/clears bits) is 32 bits.  */
     growsize = maxlen + (SELECT_MIN_BITS/8 - (maxlen % (SELECT_MIN_BITS/8)));
-#  else
-    growsize = sizeof(fd_set);
 #  endif
 
     sv = SP[4];
@@ -1575,7 +1579,7 @@ PP(pp_sysread)
     }
     if ((fp_utf8 = PerlIO_isutf8(IoIFP(io))) && !IN_BYTES) {
 	buffer = SvPVutf8_force(bufsv, blen);
-	/* UTF8 may not have been set if they are all low bytes */
+	/* UTF-8 may not have been set if they are all low bytes */
 	SvUTF8_on(bufsv);
     }
     else {
@@ -1807,9 +1811,12 @@ PP(pp_send)
 	buffer = SvPVutf8(bufsv, blen);
     }
     else {
-	if (DO_UTF8(bufsv))
-	    sv_utf8_downgrade(bufsv, FALSE);
-	buffer = SvPV(bufsv, blen);
+	 if (DO_UTF8(bufsv)) {
+	      /* Not modifying source SV, so making a temporary copy. */
+	      bufsv = sv_2mortal(newSVsv(bufsv));
+	      sv_utf8_downgrade(bufsv, FALSE);
+	 }
+	 buffer = SvPV(bufsv, blen);
     }
 
     if (PL_op->op_type == OP_SYSWRITE) {
@@ -3077,7 +3084,7 @@ PP(pp_ftmtime)
     dSP; dTARGET;
     if (result < 0)
 	RETPUSHUNDEF;
-    PUSHn( (PL_basetime - PL_statcache.st_mtime) / 86400.0 );
+    PUSHn( (((NV)PL_basetime - PL_statcache.st_mtime)) / 86400.0 );
     RETURN;
 }
 
@@ -3087,7 +3094,7 @@ PP(pp_ftatime)
     dSP; dTARGET;
     if (result < 0)
 	RETPUSHUNDEF;
-    PUSHn( (PL_basetime - PL_statcache.st_atime) / 86400.0 );
+    PUSHn( (((NV)PL_basetime - PL_statcache.st_atime)) / 86400.0 );
     RETURN;
 }
 
@@ -3097,7 +3104,7 @@ PP(pp_ftctime)
     dSP; dTARGET;
     if (result < 0)
 	RETPUSHUNDEF;
-    PUSHn( (PL_basetime - PL_statcache.st_ctime) / 86400.0 );
+    PUSHn( (((NV)PL_basetime - PL_statcache.st_ctime)) / 86400.0 );
     RETURN;
 }
 
@@ -3789,48 +3796,43 @@ nope:
 
 PP(pp_readdir)
 {
-#if defined(Direntry_t) && defined(HAS_READDIR)
-    dSP;
+#if !defined(Direntry_t) || !defined(HAS_READDIR)
+    DIE(aTHX_ PL_no_dir_func, "readdir");
+#else
 #if !defined(I_DIRENT) && !defined(VMS)
     Direntry_t *readdir (DIR *);
 #endif
-    register Direntry_t *dp;
-    GV *gv = (GV*)POPs;
-    register IO *io = GvIOn(gv);
+    dSP;
+
     SV *sv;
+    I32 gimme = GIMME;
+    GV *gv = (GV *)POPs;
+    register Direntry_t *dp;
+    register IO *io = GvIOn(gv);
 
     if (!io || !IoDIRP(io))
 	goto nope;
 
-    if (GIMME == G_ARRAY) {
-	/*SUPPRESS 560*/
-	while ((dp = (Direntry_t *)PerlDir_read(IoDIRP(io)))) {
+    do {
+        dp = (Direntry_t *)PerlDir_read(IoDIRP(io));
+        if (!dp)
+            break;
 #ifdef DIRNAMLEN
-	    sv = newSVpvn(dp->d_name, dp->d_namlen);
+        sv = newSVpvn(dp->d_name, dp->d_namlen);
 #else
-	    sv = newSVpv(dp->d_name, 0);
+        sv = newSVpv(dp->d_name, 0);
 #endif
 #ifndef INCOMPLETE_TAINTS
-	    if (!(IoFLAGS(io) & IOf_UNTAINT))
-		SvTAINTED_on(sv);
+        if (!(IoFLAGS(io) & IOf_UNTAINT))
+            SvTAINTED_on(sv);
 #endif
-	    XPUSHs(sv_2mortal(sv));
-	}
+        XPUSHs(sv_2mortal(sv));
     }
-    else {
-	if (!(dp = (Direntry_t *)PerlDir_read(IoDIRP(io))))
-	    goto nope;
-#ifdef DIRNAMLEN
-	sv = newSVpvn(dp->d_name, dp->d_namlen);
-#else
-	sv = newSVpv(dp->d_name, 0);
-#endif
-#ifndef INCOMPLETE_TAINTS
-	if (!(IoFLAGS(io) & IOf_UNTAINT))
-	    SvTAINTED_on(sv);
-#endif
-	XPUSHs(sv_2mortal(sv));
-    }
+    while (gimme == G_ARRAY);
+
+    if (!dp && gimme != G_ARRAY)
+        goto nope;
+
     RETURN;
 
 nope:
@@ -3840,8 +3842,6 @@ nope:
 	RETURN;
     else
 	RETPUSHUNDEF;
-#else
-    DIE(aTHX_ PL_no_dir_func, "readdir");
 #endif
 }
 
@@ -4382,7 +4382,19 @@ PP(pp_tms)
     }
     RETURN;
 #else
+#   ifdef PERL_MICRO
+    dSP;
+    PUSHs(sv_2mortal(newSVnv((NV)0.0)));
+    EXTEND(SP, 4);
+    if (GIMME == G_ARRAY) {
+	 PUSHs(sv_2mortal(newSVnv((NV)0.0)));
+	 PUSHs(sv_2mortal(newSVnv((NV)0.0)));
+	 PUSHs(sv_2mortal(newSVnv((NV)0.0)));
+    }
+    RETURN;
+#   else
     DIE(aTHX_ "times not implemented");
+#   endif
 #endif /* HAS_TIMES */
 }
 
@@ -5146,7 +5158,7 @@ PP(pp_gpwent)
      * AIX getpwnam() is clever enough to return the encrypted password
      * only if the caller (euid?) is root.
      *
-     * There are at least two other shadow password APIs.  Many platforms
+     * There are at least three other shadow password APIs.  Many platforms
      * seem to contain more than one interface for accessing the shadow
      * password databases, possibly for compatibility reasons.
      * The getsp*() is by far he simplest one, the other two interfaces
@@ -5167,6 +5179,12 @@ PP(pp_gpwent)
      * The password is in
      * char *(getespw*(...).ufld.fd_encrypt)
      * Mention HAS_GETESPWNAM here so that Configure probes for it.
+     *
+     * <userpw.h> (AIX)
+     * struct userpw *getuserpw();
+     * The password is in
+     * char *(getuserpw(...)).spw_upw_passwd
+     * (but the de facto standard getpwnam() should work okay)
      *
      * Mention I_PROT here so that Configure probes for it.
      *
@@ -5189,6 +5207,12 @@ PP(pp_gpwent)
      *
      * --jhi
      */
+
+#   if defined(__CYGWIN__) && defined(USE_REENTRANT_API)
+    /* Cygwin 1.5.3-1 has buggy getpwnam_r() and getpwuid_r():
+     * the pw_comment is left uninitialized. */
+    PL_reentrant_buffer->_pwent_struct.pw_comment = NULL;
+#   endif
 
     switch (which) {
     case OP_GPWNAM:
@@ -5253,7 +5277,9 @@ PP(pp_gpwent)
 	 * Divert the urge to writing an extension instead.
 	 *
 	 * --jhi */
-#   ifdef HAS_GETSPNAM
+	/* Some AIX setups falsely(?) detect some getspnam(), which
+	 * has a different API than the Solaris/IRIX one. */
+#   if defined(HAS_GETSPNAM) && !defined(_AIX)
 	{
 	    struct spwd *spwent;
 	    int saverrno; /* Save and restore errno so that

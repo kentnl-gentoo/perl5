@@ -30,7 +30,7 @@
 # if defined(__sgi) && !defined(AF_LINK) && defined(PF_LINK) && PF_LINK == AF_LNK
 #  undef PF_LINK
 # endif
-# ifdef I_NETINET_IN
+# if defined(I_NETINET_IN) || defined(__ultrix__)
 #  include <netinet/in.h>
 # endif
 # ifdef I_NETDB
@@ -371,10 +371,10 @@ unpack_sockaddr_un(sun_sv)
 			addr.sun_family,
 			AF_UNIX);
 	}
-	e = addr.sun_path;
-	while (*e && e < addr.sun_path + sizeof addr.sun_path)
+	e = (char*)addr.sun_path;
+	while (*e && e < (char*)addr.sun_path + sizeof addr.sun_path)
 	    ++e;
-	ST(0) = sv_2mortal(newSVpvn(addr.sun_path, e - addr.sun_path));
+	ST(0) = sv_2mortal(newSVpvn(addr.sun_path, e - (char*)addr.sun_path));
 #else
 	ST(0) = (SV *) not_here("unpack_sockaddr_un");
 #endif

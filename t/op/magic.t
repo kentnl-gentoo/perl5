@@ -125,7 +125,8 @@ END
 END
     close CMDPIPE;
     $? >>= 8 if $^O eq 'VMS'; # POSIX status hiding in 2nd byte
-    print $? & 0xFF ? "ok 6\n" : "not ok 6\n";
+    my $todo = ($^O eq 'os2' ? ' # TODO: EMX v0.9d_fix4 bug: wrong nibble? ' : '');
+    print $? & 0xFF ? "ok 6$todo\n" : "not ok 6$todo\n";
 
     $test += 4;
 }
@@ -267,14 +268,18 @@ if ($Is_VMS || $Is_Dos || $Is_MacOS) {
     skip("%ENV manipulations fail or aren't safe on $^O") for 1..4;
 }
 else {
-	$PATH = $ENV{PATH};
-	$PDL = $ENV{PERL_DESTRUCT_LEVEL} || 0;
-	$ENV{foo} = "bar";
-	%ENV = ();
-	$ENV{PATH} = $PATH;
-	$ENV{PERL_DESTRUCT_LEVEL} = $PDL || 0;
-	ok ($Is_MSWin32 ? (`set foo 2>NUL` eq "")
-				: (`echo \$foo` eq "\n") );
+	if ($ENV{PERL_VALGRIND}) {
+	    skip("clearing \%ENV is not safe when running under valgrind");
+	} else {
+	    $PATH = $ENV{PATH};
+	    $PDL = $ENV{PERL_DESTRUCT_LEVEL} || 0;
+	    $ENV{foo} = "bar";
+	    %ENV = ();
+	    $ENV{PATH} = $PATH;
+	    $ENV{PERL_DESTRUCT_LEVEL} = $PDL || 0;
+	    ok ($Is_MSWin32 ? (`set foo 2>NUL` eq "")
+			    : (`echo \$foo` eq "\n") );
+	}
 
 	$ENV{__NoNeSuCh} = "foo";
 	$0 = "bar";
