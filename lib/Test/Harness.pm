@@ -1,5 +1,5 @@
 # -*- Mode: cperl; cperl-indent-level: 4 -*-
-# $Id: Harness.pm,v 1.38 2002/06/19 21:01:01 schwern Exp $
+# $Id: Harness.pm,v 1.47 2003/04/24 19:33:05 andy Exp $
 
 package Test::Harness;
 
@@ -13,16 +13,16 @@ use strict;
 
 use vars qw($VERSION $Verbose $Switches $Have_Devel_Corestack $Curtest
             $Columns $verbose $switches $ML $Strap
-            @ISA @EXPORT @EXPORT_OK
+            @ISA @EXPORT @EXPORT_OK $Last_ML_Print
            );
 
 # Backwards compatibility for exportable variable names.
-*verbose  = \$Verbose;
-*switches = \$Switches;
+*verbose  = *Verbose;
+*switches = *Switches;
 
 $Have_Devel_Corestack = 0;
 
-$VERSION = '2.26';
+$VERSION = '2.28';
 
 $ENV{HARNESS_ACTIVE} = 1;
 
@@ -35,6 +35,8 @@ END {
 my $Ignore_Exitcode = $ENV{HARNESS_IGNORE_EXITCODE};
 
 my $Files_In_Dir = $ENV{HARNESS_FILELEAK_IN_DIR};
+
+my $Ok_Slow = $ENV{HARNESS_OK_SLOW};
 
 $Strap = Test::Harness::Straps->new;
 
@@ -328,6 +330,7 @@ It returns true if everything was ok.  Otherwise it will die() with
 one of the messages in the DIAGNOSTICS section.
 
 =for _private
+
 This is just _run_all_tests() plus _show_results()
 
 =cut
@@ -448,7 +451,7 @@ sub _run_all_tests {
 
     my $width = _leader_width(@tests);
     foreach my $tfile (@tests) {
-
+        $Last_ML_Print = 0;  # so each test prints at least once
         my($leader, $ml) = _mk_leader($tfile, $width);
         local $ML = $ml;
         print $leader;
@@ -469,7 +472,7 @@ sub _run_all_tests {
                     failed      => \@failed,
                     bonus       => $results{bonus},
                     skipped     => $results{skip},
-                    skip_reason => $Strap->{_skip_reason},
+                    skip_reason => $results{skip_reason},
                     skip_all    => $Strap->{skip_all},
                     ml          => $ml,
                    );
@@ -482,12 +485,7 @@ sub _run_all_tests {
 
         my($estatus, $wstatus) = @results{qw(exit wait)};
 
-        if ($wstatus) {
-            $failedtests{$tfile} = _dubious_return(\%test, \%tot, 
-                                                  $estatus, $wstatus);
-            $failedtests{$tfile}{name} = $tfile;
-        }
-        elsif ($results{passing}) {
+        if ($results{passing}) {
             if ($test{max} and $test{skipped} + $test{bonus}) {
                 my @msg;
                 push(@msg, "$test{skipped}/$test{max} skipped: $test{skip_reason}")
@@ -507,11 +505,27 @@ sub _run_all_tests {
             $tot{good}++;
         }
         else {
-            if ($test{max}) {
-                if ($test{'next'} <= $test{max}) {
-                    push @{$test{failed}}, $test{'next'}..$test{max};
+            # List unrun tests as failures.
+            if ($test{'next'} <= $test{max}) {
+                push @{$test{failed}}, $test{'next'}..$test{max};
+            }
+            # List overruns as failures.
+            else {
+                my $details = $results{details};
+                foreach my $overrun ($test{max}+1..@$details)
+                {
+                    next unless ref $details->[$overrun-1];
+                    push @{$test{failed}}, $overrun
                 }
-                if (@{$test{failed}}) {
+            }
+
+            if ($wstatus) {
+                $failedtests{$tfile} = _dubious_return(\%test, \%tot, 
+                                                       $estatus, $wstatus);
+                $failedtests{$tfile}{name} = $tfile;
+            }
+            elsif($results{seen}) {
+                if (@{$test{failed}} and $test{max}) {
                     my ($txt, $canon) = canonfailed($test{max},$test{skipped},
                                                     @{$test{failed}});
                     print "$test{ml}$txt";
@@ -536,7 +550,7 @@ sub _run_all_tests {
                                            };
                 }
                 $tot{bad}++;
-            } elsif ($test{'next'} == 0) {
+            } else {
                 print "FAILED before any test output arrived\n";
                 $tot{bad}++;
                 $failedtests{$tfile} = { canon       => '??',
@@ -694,13 +708,13 @@ $Handlers{test} = sub {
     my $detail = $totals->{details}[-1];
 
     if( $detail->{ok} ) {
-        _print_ml("ok $curr/$max");
+        _print_ml_less("ok $curr/$max");
 
         if( $detail->{type} eq 'skip' ) {
-            $self->{_skip_reason} = $detail->{reason}
-              unless defined $self->{_skip_reason};
-            $self->{_skip_reason} = 'various reasons'
-              if $self->{_skip_reason} ne $detail->{reason};
+            $totals->{skip_reason} = $detail->{reason}
+              unless defined $totals->{skip_reason};
+            $totals->{skip_reason} = 'various reasons'
+              if $totals->{skip_reason} ne $detail->{reason};
         }
     }
     else {
@@ -729,6 +743,15 @@ sub _print_ml {
     print join '', $ML, @_ if $ML;
 }
 
+
+# For slow connections, we save lots of bandwidth by printing only once
+# per second.
+sub _print_ml_less {
+    if( !$Ok_Slow || $Last_ML_Print != time ) {
+        _print_ml(@_);
+        $Last_ML_Print = time;
+    }
+}
 
 sub _bonusmsg {
     my($tot) = @_;
@@ -858,12 +881,15 @@ sub _create_fmts {
     sub corestatus {
         my($st) = @_;
 
-        eval {
+        my $did_core;
+        eval { # we may not have a WCOREDUMP
             local $^W = 0;  # *.ph files are often *very* noisy
-            require 'wait.ph'
+            require 'wait.ph';
+            $did_core = WCOREDUMP($st);
         };
-        return if $@;
-        my $did_core = defined &WCOREDUMP ? WCOREDUMP($st) : $st & 0200;
+        if( $@ ) {
+            $did_core = $st & 0200;
+        }
 
         eval { require Devel::CoreStack; $Have_Devel_Corestack++ } 
           unless $tried_devel_corestack++;
@@ -903,13 +929,23 @@ sub canonfailed ($@) {
     }
 
     push @result, "\tFailed $failed/$max tests, ";
-    push @result, sprintf("%.2f",100*(1-$failed/$max)), "% okay";
+    if ($max) {
+	push @result, sprintf("%.2f",100*(1-$failed/$max)), "% okay";
+    } else {
+	push @result, "?% okay";
+    }
     my $ender = 's' x ($skipped > 1);
     my $good = $max - $failed - $skipped;
-    my $goodper = sprintf("%.2f",100*($good/$max));
-    push @result, " (less $skipped skipped test$ender: $good okay, ".
-                  "$goodper%)"
-         if $skipped;
+    if ($skipped) {
+	my $skipmsg = " (less $skipped skipped test$ender: $good okay, ";
+	if ($max) {
+	    my $goodper = sprintf("%.2f",100*($good/$max));
+	    $skipmsg .= "$goodper%)";
+	} else {
+	    $skipmsg .= "?%)";
+	}
+	push @result, $skipmsg;
+    }
     push @result, "\n";
     my $txt = join "", @result;
     ($txt, $canon);
@@ -928,7 +964,7 @@ __END__
 
 =head1 EXPORT
 
-C<&runtests> is exported by Test::Harness per default.
+C<&runtests> is exported by Test::Harness by default.
 
 C<$verbose> and C<$switches> are exported upon request.
 
@@ -1014,6 +1050,12 @@ output more frequent progress messages using carriage returns.  Some
 consoles may not handle carriage returns properly (which results in a
 somewhat messy output).
 
+=item C<HARNESS_OK_SLOW>
+
+If true, the C<ok> messages are printed out only every second.
+This reduces output and therefore may for example help testing
+over slow connections.
+
 =item C<HARNESS_PERL_SWITCHES>
 
 Its value will be prepended to the switches used to invoke perl on
@@ -1057,6 +1099,14 @@ with perl distributions for ages. Numerous anonymous contributors
 exist.  Andreas Koenig held the torch for many years.
 
 Current maintainer is Michael G Schwern E<lt>schwern@pobox.comE<gt>
+
+=head1 LICENSE
+
+This program is free software; you can redistribute it and/or 
+modify it under the same terms as Perl itself.
+
+See F<http://www.perl.com/perl/misc/Artistic.html>
+
 
 =head1 TODO
 

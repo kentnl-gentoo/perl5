@@ -212,6 +212,12 @@ while (<DATA>)
   } # endwhile data tests
 close DATA;
 
+my $warn = ''; $SIG{__WARN__} = sub { $warn = shift; };
+
+# these should not warn
+$warn = ''; eval "\$z = 3.17 <= \$y"; ok ($z, 1); ok ($warn, '');
+$warn = ''; eval "\$z = \$y >= 3.17"; ok ($z, 1); ok ($warn, '');
+
 # all tests done
 
 1;
@@ -1333,7 +1339,8 @@ abc:12:NaN
 -2:NaN
 -123:NaN
 Nan:NaN
-+inf:NaN
++inf:inf
+-inf:NaN
 &bround
 $round_mode('trunc')
 0:12:0

@@ -53,9 +53,9 @@ PerlIOWin32_fileno(pTHX_ PerlIO *f)
 }
 
 IV
-PerlIOWin32_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg)
+PerlIOWin32_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab)
 {
- IV code = PerlIOBase_pushed(aTHX_ f,mode,arg);
+ IV code = PerlIOBase_pushed(aTHX_ f,mode,arg,tab);
  if (*PerlIONext(f))
   {
    PerlIOWin32 *s = PerlIOSelf(f,PerlIOWin32);
@@ -338,12 +338,14 @@ PerlIOWin32_dup(pTHX_ PerlIO *f, PerlIO *o, CLONE_PARAMS *params, int flags)
 }
 
 PerlIO_funcs PerlIO_win32 = {
+ sizeof(PerlIO_funcs),
  "win32",
  sizeof(PerlIOWin32),
  PERLIO_K_RAW,
  PerlIOWin32_pushed,
  PerlIOWin32_popped,
  PerlIOWin32_open,
+ PerlIOBase_binmode,
  NULL,                 /* getarg */
  PerlIOWin32_fileno,
  PerlIOWin32_dup,
@@ -365,6 +367,5 @@ PerlIO_funcs PerlIO_win32 = {
  NULL, /* get_cnt */
  NULL, /* set_ptrcnt */
 };
-
 
 #endif

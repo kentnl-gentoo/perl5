@@ -2,10 +2,11 @@ package Pod::Html;
 use strict;
 require Exporter;
 
-use vars qw($VERSION @ISA @EXPORT);
-$VERSION = 1.04;
+use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
+$VERSION = 1.05;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
+@EXPORT_OK = qw(anchorify);
 
 use Carp;
 use Config;
@@ -1336,23 +1337,25 @@ sub process_pre {
     my $any  = "${ltrs}${gunk}${punc}";
 
     $rest =~ s{
-        \b                          # start at word boundary
-        (                           # begin $1  {
-          $urls     :               # need resource and a colon
-	  (?!:)                     # Ignore File::, among others.
-          [$any] +?                 # followed by one or more of any valid
-                                    #   character, but be conservative and
-                                    #   take only what you need to....
-        )                           # end   $1  }
-        (?=                         # look-ahead non-consumptive assertion
-                [$punc]*            # either 0 or more punctuation
-                (?:                 #   followed
-                    [^$any]         #   by a non-url char
-                    |               #   or
-                    $               #   end of the string
-                )                   #
-            |                       # or else
-                $                   #   then end of the string
+	\b			# start at word boundary
+	(			# begin $1  {
+	    $urls :		# need resource and a colon
+	    (?!:)		# Ignore File::, among others.
+	    [$any] +?		# followed by one or more of any valid
+				#   character, but be conservative and
+				#   take only what you need to....
+	)			# end   $1  }
+	(?=
+	    &quot; &gt;		# maybe pre-quoted '<a href="...">'
+	|			# or:
+	    [$punc]*		# 0 or more punctuation
+	    (?:			#   followed
+		[^$any]		#   by a non-url char
+	    |			#   or
+		$		#   end of the string
+	    )			#
+	|			# or else
+	    $			#   then end of the string
         )
       }{<a href="$1">$1</a>}igox;
 
@@ -1963,12 +1966,12 @@ sub htmlify {
 }
 
 #
-# similar to htmlify, but turns spaces into underscores
+# similar to htmlify, but turns non-alphanumerics into underscores
 #
 sub anchorify {
     my ($anchor) = @_;
     $anchor = htmlify($anchor);
-    $anchor =~ s/\s/_/g; # fixup spaces left by htmlify
+    $anchor =~ s/\W/_/g;
     return $anchor;
 }
 

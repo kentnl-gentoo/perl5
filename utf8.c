@@ -1,6 +1,6 @@
 /*    utf8.c
  *
- *    Copyright (c) 1998-2002, Larry Wall
+ *    Copyright (C) 2000, 2001, 2002, 2003, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -217,10 +217,10 @@ Perl_is_utf8_char(pTHX_ U8 *s)
 /*
 =for apidoc A|bool|is_utf8_string|U8 *s|STRLEN len
 
-Returns true if first C<len> bytes of the given string form a valid UTF8
-string, false otherwise.  Note that 'a valid UTF8 string' does not mean
-'a string that contains UTF8' because a valid ASCII string is a valid
-UTF8 string.
+Returns true if first C<len> bytes of the given string form a valid
+UTF8 string, false otherwise.  Note that 'a valid UTF8 string' does
+not mean 'a string that contains code points above 0x7F encoded in
+UTF8' because a valid ASCII string is a valid UTF8 string.
 
 =cut
 */
@@ -770,6 +770,9 @@ Converts a string C<s> of length C<len> from ASCII into UTF8 encoding.
 Returns a pointer to the newly-created string, and sets C<len> to
 reflect the new length.
 
+If you want to convert to UTF8 from other encodings than ASCII,
+see sv_recode_to_utf8().
+
 =cut
 */
 
@@ -1232,7 +1235,7 @@ Perl_is_utf8_upper(pTHX_ U8 *p)
     if (!is_utf8_char(p))
 	return FALSE;
     if (!PL_utf8_upper)
-	PL_utf8_upper = swash_init("utf8", "IsUpper", &PL_sv_undef, 0, 0);
+	PL_utf8_upper = swash_init("utf8", "IsUppercase", &PL_sv_undef, 0, 0);
     return swash_fetch(PL_utf8_upper, p, TRUE) != 0;
 }
 
@@ -1242,7 +1245,7 @@ Perl_is_utf8_lower(pTHX_ U8 *p)
     if (!is_utf8_char(p))
 	return FALSE;
     if (!PL_utf8_lower)
-	PL_utf8_lower = swash_init("utf8", "IsLower", &PL_sv_undef, 0, 0);
+	PL_utf8_lower = swash_init("utf8", "IsLowercase", &PL_sv_undef, 0, 0);
     return swash_fetch(PL_utf8_lower, p, TRUE) != 0;
 }
 
@@ -1542,6 +1545,7 @@ Perl_swash_init(pTHX_ char* pkg, char* name, SV *listsv, I32 minbits, I32 none)
     if (PL_curcop == &PL_compiling) {
 	/* XXX ought to be handled by lex_start */
 	SAVEI32(PL_in_my);
+	PL_in_my = 0;
 	sv_setpv(tokenbufsv, PL_tokenbuf);
     }
     errsv_save = newSVsv(ERRSV);
@@ -1563,8 +1567,8 @@ Perl_swash_init(pTHX_ char* pkg, char* name, SV *listsv, I32 minbits, I32 none)
     }
     if (!SvROK(retval) || SvTYPE(SvRV(retval)) != SVt_PVHV) {
         if (SvPOK(retval))
-	    Perl_croak(aTHX_ "Can't find Unicode property definition \"%s\"",
-		       SvPV_nolen(retval));
+	    Perl_croak(aTHX_ "Can't find Unicode property definition \"%"SVf"\"",
+		       retval);
 	Perl_croak(aTHX_ "SWASHNEW didn't return an HV ref");
     }
     return retval;

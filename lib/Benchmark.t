@@ -8,7 +8,7 @@ BEGIN {
 use warnings;
 use strict;
 use vars qw($foo $bar $baz $ballast);
-use Test::More tests => 159;
+use Test::More tests => 173;
 
 use Benchmark qw(:all);
 
@@ -292,8 +292,8 @@ sub check_graph_consistency {
     (my $fastslow = $fastslowt) =~ s!%!!;
     if ($slowrate < $fastrate) {
         pass ("slow rate is less than fast rate");
-        unless (ok ($slowfast < 0 && $slowfast >= -100,
-                    "slowfast should be less than zero, and >= -100")) {
+        unless (ok ($slowfast <= 0 && $slowfast >= -100,
+                    "slowfast should be less than or equal to zero, and >= -100")) {
           print STDERR "# slowfast $slowfast\n";
           $all_passed = 0;
         }
@@ -305,10 +305,12 @@ sub check_graph_consistency {
         $all_passed
           &= is ($slowrate, $fastrate,
                  "slow rate isn't less than fast rate, so should be the same");
+	# In OpenBSD the $slowfast is sometimes a really, really, really
+	# small number less than zero, and this gets stringified as -0.
         $all_passed
-          &= is ($slowfast, 0, "slowfast should be zero");
+          &= like ($slowfast, qr/^-?0$/, "slowfast should be zero");
         $all_passed
-          &= is ($fastslow, 0, "fastslow should be zero");
+          &= like ($fastslow, qr/^-?0$/, "fastslow should be zero");
     }
     return $all_passed;
 }
@@ -346,7 +348,7 @@ sub check_graph {
 {
     select(OUT);
     my $start = times;
-    my $chart = cmpthese( -0.1, { a => "++\$i", b => "\$i = sqrt(\$i++)" } ) ;
+    my $chart = cmpthese( -0.1, { a => "++\$i", b => "\$i = sqrt(\$i++)" }, "auto" ) ;
     my $end = times;
     select(STDOUT);
     ok (($end - $start) > 0.05, "benchmarked code ran for over 0.05 seconds");
@@ -360,6 +362,28 @@ sub check_graph {
     # Remove the title
     $got =~ s/.*\.\.\.//s;
     like ($got, $default_pattern, 'should find default format somewhere');
+    like ($got, $graph_dissassembly, "Should find the output graph somewhere");
+    check_graph_vs_output ($chart, $got);
+}
+
+# Not giving auto should suppress timethese results.
+{
+    select(OUT);
+    my $start = times;
+    my $chart = cmpthese( -0.1, { a => "++\$i", b => "\$i = sqrt(\$i++)" } ) ;
+    my $end = times;
+    select(STDOUT);
+    ok (($end - $start) > 0.05, "benchmarked code ran for over 0.05 seconds");
+
+    $got = $out->read();
+    # Remove any warnings about having too few iterations.
+    $got =~ s/\(warning:[^\)]+\)//gs;
+
+    unlike ($got, qr/running\W+a\W+b.*?for at least 0\.1 CPU second/s,
+          'should not have title');
+    # Remove the title
+    $got =~ s/.*\.\.\.//s;
+    unlike ($got, $default_pattern, 'should not find default format somewhere');
     like ($got, $graph_dissassembly, "Should find the output graph somewhere");
     check_graph_vs_output ($chart, $got);
 }

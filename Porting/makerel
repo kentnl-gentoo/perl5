@@ -1,4 +1,4 @@
-#!/bin/env perl -w
+#!/usr/bin/perl -w
 
 # A first attempt at some automated support for making a perl release.
 # Very basic but functional - if you're on a unix system.
@@ -154,6 +154,7 @@ my @crlf = qw(
     win32/Makefile
     win32/makefile.mk
     wince/Makefile.ce
+    wince/compile-all.bat
     wince/README.compile
     wince/README.perlce
     wince/registry.bat

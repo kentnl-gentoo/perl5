@@ -8,6 +8,8 @@
  * XSUB.h provides wrapper functions via perlapi.h that make this
  * irrelevant, but not all code may be expected to #include XSUB.h. */
 
+/* Don't forget to add your variable also to perl_clone()! */
+
 /* The 'I' prefix is only needed for vars that need appropriate #defines
  * generated when built with or without MULTIPLICITY.  It is also used
  * to generate the appropriate export list for win32.
@@ -48,7 +50,7 @@ The C variable which corresponds to Perl's $^W warning variable.
 */
 
 PERLVAR(Idowarn,	U8)
-PERLVAR(Iwidesyscalls,	bool)		/* wide system calls */
+PERLVAR(Iwidesyscalls,	bool)		/* unused since 5.8.1 */
 PERLVAR(Idoextract,	bool)
 PERLVAR(Isawampersand,	bool)		/* must save all match strings */
 PERLVAR(Iunsafe,	bool)
@@ -205,7 +207,7 @@ PERLVARI(Irsfp_filters,	AV *,	Nullav)	/* keeps active source filters */
 PERLVAR(Icompiling,	COP)		/* compiling/done executing marker */
 
 PERLVAR(Icompcv,	CV *)		/* currently compiling subroutine */
-PERLVAR(Icomppad,	AV *)		/* storage for lexically scoped temporaries */
+PERLVAR(IBINCOMPAT0,	AV *)		/* filler for binary compatibility */
 PERLVAR(Icomppad_name,	AV *)		/* variable names for "my" variables */
 PERLVAR(Icomppad_name_fill,	I32)	/* last "introduced" variable offset */
 PERLVAR(Icomppad_name_floor,	I32)	/* start of vars in innermost block */
@@ -246,7 +248,10 @@ PERLVAR(Iorigalen,	U32)
 PERLVAR(Ipidstatus,	HV *)		/* pid-to-status mappings for waitpid */
 PERLVARI(Imaxo,	int,	MAXO)		/* maximum number of ops */
 PERLVAR(Iosname,	char *)		/* operating system */
-PERLVARI(Ish_path,	char *,	SH_PATH)/* full path of shell */
+
+/* For binary compatibility with older versions only */
+PERLVARI(Ish_path_compat,	char *,	SH_PATH)/* full path of shell */
+
 PERLVAR(Isighandlerp,	Sighandler_t)
 
 PERLVAR(Ixiv_arenaroot,	XPV*)		/* list of allocated xiv areas */
@@ -515,14 +520,48 @@ PERLVARI(IOpSpace,I32,0)
 PERLVAR(IOpSlab,I32 *)
 #endif
 
-PERLVAR(Iwantutf8, bool)	/* want utf8 as the default discipline */
+PERLVAR(Iutf8locale,	bool)		/* utf8 locale detected */
 
 PERLVAR(Iutf8_idstart,	SV *)
 PERLVAR(Iutf8_idcont,	SV *)
 
 PERLVAR(Isort_RealCmp,  SVCOMPARE_t)
 
-/* New variables must be added to the very end for binary compatibility.
+PERLVARI(Icheckav_save, AV*, Nullav)	/* save CHECK{}s when compiling */
+
+PERLVARI(Iclocktick, long, 0)	/* this many times() ticks in a second */
+
+PERLVARI(Iin_load_module, int, 0)	/* to prevent recursions in PerlIO_find_layer */
+
+PERLVAR(Iunicode, U32)	/* Unicode features: $ENV{PERL_UNICODE} or -C */
+
+PERLVAR(Isignals, U32)	/* Using which pre-5.8 signals */
+
+PERLVAR(Istashcache,	HV *)		/* Cache to speed up S_method_common */
+
+PERLVAR(Ireentrant_retint, int)	/* Integer return value from reentrant functions */
+
+/* Hooks to shared SVs and locks. */
+PERLVARI(Isharehook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
+PERLVARI(Ilockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nolocking))
+PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nounlocking))
+PERLVARI(Ithreadhook,	thrhook_proc_t,	MEMBER_TO_FPTR(Perl_nothreadhook))
+
+/* Force inclusion of both runops options */
+PERLVARI(Irunops_std,	runops_proc_t,	MEMBER_TO_FPTR(Perl_runops_standard))
+PERLVARI(Irunops_dbg,	runops_proc_t,	MEMBER_TO_FPTR(Perl_runops_debug))
+
+/* Stores the PPID */
+#ifdef THREADS_HAVE_PIDS
+PERLVARI(Ippid,		IV,		0)
+#endif
+
+PERLVARI(Ihash_seed, UV, 0)		/* Hash initializer */
+
+/* New variables must be added to the very end, before this comment,
+ * for binary compatibility (the offsets of the old members must not change).
+ * (Don't forget to add your variable also to perl_clone()!)
  * XSUB.h provides wrapper functions via perlapi.h that make this
- * irrelevant, but not all code may be expected to #include XSUB.h. */
+ * irrelevant, but not all code may be expected to #include XSUB.h.
+ */
 

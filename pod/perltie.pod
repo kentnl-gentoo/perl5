@@ -258,7 +258,9 @@ index whose value we're trying to fetch.
 
 If a negative array index is used to read from an array, the index
 will be translated to a positive one internally by calling FETCHSIZE
-before being passed to FETCH.
+before being passed to FETCH.  You may disable this feature by
+assigning a true value to the variable C<$NEGATIVE_INDICES> in the
+tied array class.
 
 As you may have noticed, the name of the FETCH method (et al.) is the same
 for all accesses, even though the constructors differ in names (TIESCALAR
@@ -359,7 +361,7 @@ C<$self-E<gt>{ELEMSIZE}> spaces only, it does not exist:
 
 Delete the element at index I<key> from the tied array I<this>.
 
-In our example, a deleted item is C<$self->{ELEMSIZE}> spaces:
+In our example, a deleted item is C<$self-E<gt>{ELEMSIZE}> spaces:
 
     sub DELETE {
       my $self  = shift;
@@ -792,9 +794,16 @@ READ, and possibly CLOSE, UNTIE and DESTROY.  The class can also provide: BINMOD
 OPEN, EOF, FILENO, SEEK, TELL - if the corresponding perl operators are
 used on the handle.
 
-It is especially useful when perl is embedded in some other program,
-where output to STDOUT and STDERR may have to be redirected in some
-special way. See nvi and the Apache module for examples.
+When STDERR is tied, its PRINT method will be called to issue warnings
+and error messages.  This feature is temporarily disabled during the call, 
+which means you can use C<warn()> inside PRINT without starting a recursive
+loop.  And just like C<__WARN__> and C<__DIE__> handlers, STDERR's PRINT
+method may be called to report parser errors, so the caveats mentioned under 
+L<perlvar/%SIG> apply.
+
+All of this is especially useful when perl is embedded in some other 
+program, where output to STDOUT and STDERR may have to be redirected 
+in some special way.  See nvi and the Apache module for examples.
 
 In our example we're going to create a shouting handle.
 
@@ -1073,6 +1082,14 @@ source code to MLDBM.
 
 Tied filehandles are still incomplete.  sysopen(), truncate(),
 flock(), fcntl(), stat() and -X can't currently be trapped.
+
+The bucket usage information provided by C<scalar(%hash)> is not
+available.  If C<%hash> is tied, this will currently result in a
+fatal error.
+
+Counting the number of entries in a hash via C<scalar(keys(%hash))> or
+C<scalar(values(%hash)>) is inefficient since it needs to iterate
+through all the entries with FIRSTKEY/NEXTKEY.
 
 =head1 AUTHOR
 

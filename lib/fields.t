@@ -10,7 +10,7 @@ BEGIN {
            $w++;
            return;
        }
-       print $_[0];
+       print STDERR $_[0];
    };
 }
 
@@ -70,6 +70,7 @@ package main;
 sub fstr {
    my $h = shift;
    my @tmp;
+   no warnings 'deprecated';
    for my $k (sort {$h->{$a} <=> $h->{$b}} keys %$h) {
 	my $v = $h->{$k};
         push(@tmp, "$k:$v");
@@ -90,8 +91,10 @@ my %expect = (
     'Foo::Bar::Baz' => 'b1:1,b2:2,b3:3,foo:4,bar:5,baz:6',
 );
 
-print "1..", int(keys %expect)+21, "\n";
+print "1..", int(keys %expect)+25, "\n";
+
 my $testno = 0;
+
 while (my($class, $exp) = each %expect) {
    no strict 'refs';
    my $fstr = fstr(\%{$class."::FIELDS"});
@@ -133,9 +136,12 @@ $ph = fields::phash([qw/a b c/], [1, 2, 3]);
 print "not " unless fstr($ph) eq 'a:1,b:2,c:3';
 print "ok ", ++$testno, "\n";
 
-$ph = fields::phash([qw/a b c/], [1]);
-print "not " if exists $ph->{b} or exists $ph->{c} or !exists $ph->{a};
-print "ok ", ++$testno, "\n";
+{
+    no warnings 'deprecated';
+    $ph = fields::phash([qw/a b c/], [1]);
+    print "not " if exists $ph->{b} or exists $ph->{c} or !exists $ph->{a};
+    print "ok ", ++$testno, "\n";
+}
 
 eval '$ph = fields::phash("odd")';
 print "not " unless $@ && $@ =~ /^Odd number of/;
@@ -235,4 +241,32 @@ package Test::Version3;
 use base qw(Has::Version_0);
 print "#$Has::Version_0::VERSION\nnot " unless $Has::Version_0::VERSION == 0;
 print "ok ", ++$testno ," # Version_0\n";
+
+package Test::FooBar;
+
+use fields qw(a b c);
+
+sub new {
+    my $self = fields::new(shift);
+    %$self = @_ if @_;
+    $self;
+}
+
+package main;
+
+{
+    my $x = Test::FooBar->new( a => 1, b => 2);
+
+    $testno++;
+    print ref $x eq 'Test::FooBar' ? "ok $testno\n" : "not ok $testno\n";
+
+    $testno++;
+    print exists $x->{a} ? "ok $testno\n" : "not ok $testno\n";
+	
+    $testno++;
+    print exists $x->{b} ? "ok $testno\n" : "not ok $testno\n";
+
+    $testno++;
+    print keys %$x == 3 ? "ok $testno\n" : "not ok $testno\n";
+}
 

@@ -1,6 +1,7 @@
 /*    doop.c
  *
- *    Copyright (c) 1991-2002, Larry Wall
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -608,10 +609,11 @@ Perl_do_trans(pTHX_ SV *sv)
     (void)SvPV(sv, len);
     if (!len)
 	return 0;
-    if (!SvPOKp(sv))
-	(void)SvPV_force(sv, len);
-    if (!(PL_op->op_private & OPpTRANS_IDENTICAL))
+    if (!(PL_op->op_private & OPpTRANS_IDENTICAL)) {
+	if (!SvPOKp(sv))
+	    (void)SvPV_force(sv, len);
 	(void)SvPOK_only_UTF8(sv);
+    }
 
     DEBUG_t( Perl_deb(aTHX_ "2.TBL\n"));
 

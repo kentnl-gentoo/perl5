@@ -1,6 +1,7 @@
 /*    hv.c
  *
- *    Copyright (c) 1991-2002, Larry Wall
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -89,6 +90,22 @@ S_save_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
     return hek;
 }
 
+/* free the pool of temporary HE/HEK pairs retunrned by hv_fetch_ent
+ * for tied hashes */
+
+void
+Perl_free_tied_hv_pool(pTHX)
+{
+    HE *ohe;
+    HE *he = PL_hv_fetch_ent_mh;
+    while (he) {
+	Safefree(HeKEY_hek(he));
+	ohe = he;
+	he = HeNEXT(he);
+	del_HE(ohe);
+    }
+}
+
 #if defined(USE_ITHREADS)
 HE *
 Perl_he_dup(pTHX_ HE *e, bool shared, CLONE_PARAMS* param)
@@ -107,8 +124,12 @@ Perl_he_dup(pTHX_ HE *e, bool shared, CLONE_PARAMS* param)
     ptr_table_store(PL_ptr_table, e, ret);
 
     HeNEXT(ret) = he_dup(HeNEXT(e),shared, param);
-    if (HeKLEN(e) == HEf_SVKEY)
+    if (HeKLEN(e) == HEf_SVKEY) {
+	char *k;
+	New(54, k, HEK_BASESIZE + sizeof(SV*), char);
+	HeKEY_hek(ret) = (HEK*)k;
 	HeKEY_sv(ret) = SvREFCNT_inc(sv_dup(HeKEY_sv(e), param));
+    }
     else if (shared)
 	HeKEY_hek(ret) = share_hek_flags(HeKEY(e), HeKLEN(e), HeHASH(e),
                                          HeKFLAGS(e));
@@ -130,7 +151,7 @@ S_hv_notallowed(pTHX_ int flags, const char *key, I32 klen,
     }
     else {
 	/* Need to free saved eventually assign to mortal SV */
-	SV *sv = sv_newmortal();
+	/* XXX is this line an error ???:  SV *sv = sv_newmortal(); */
 	sv_usepvn(sv, (char *) key, klen);
     }
     if (flags & HVhek_UTF8) {
@@ -208,11 +229,13 @@ S_hv_fetch_flags(pTHX_ HV *hv, const char *key, I32 klen, I32 lval, int flags)
         */
 	if (mg_find((SV*)hv, PERL_MAGIC_tied) || SvGMAGICAL((SV*)hv)) {
 	    sv = sv_newmortal();
+	    sv_upgrade(sv, SVt_PVLV);
 	    mg_copy((SV*)hv, sv, key, klen);
             if (flags & HVhek_FREEKEY)
                 Safefree(key);
-	    PL_hv_fetch_sv = sv;
-	    return &PL_hv_fetch_sv;
+	    LvTYPE(sv) = 't';
+	    LvTARG(sv) = sv; /* fake (SV**) */
+	    return &(LvTARG(sv));
 	}
 #ifdef ENV_IS_CASELESS
 	else if (mg_find((SV*)hv, PERL_MAGIC_env)) {
@@ -356,17 +379,26 @@ Perl_hv_fetch_ent(pTHX_ HV *hv, SV *keysv, I32 lval, register U32 hash)
     if (SvRMAGICAL(hv)) {
 	if (mg_find((SV*)hv, PERL_MAGIC_tied) || SvGMAGICAL((SV*)hv)) {
 	    sv = sv_newmortal();
-	    keysv = sv_2mortal(newSVsv(keysv));
+	    keysv = newSVsv(keysv);
 	    mg_copy((SV*)hv, sv, (char*)keysv, HEf_SVKEY);
-	    if (!HeKEY_hek(&PL_hv_fetch_ent_mh)) {
+	    /* grab a fake HE/HEK pair from the pool or make a new one */
+	    entry = PL_hv_fetch_ent_mh;
+	    if (entry)
+		PL_hv_fetch_ent_mh = HeNEXT(entry);
+	    else {
 		char *k;
+		entry = new_HE();
 		New(54, k, HEK_BASESIZE + sizeof(SV*), char);
-		HeKEY_hek(&PL_hv_fetch_ent_mh) = (HEK*)k;
+		HeKEY_hek(entry) = (HEK*)k;
 	    }
-	    HeSVKEY_set(&PL_hv_fetch_ent_mh, keysv);
-	    HeVAL(&PL_hv_fetch_ent_mh) = sv;
-	    return &PL_hv_fetch_ent_mh;
-	}
+	    HeNEXT(entry) = Nullhe;
+	    HeSVKEY_set(entry, keysv);
+	    HeVAL(entry) = sv;
+	    sv_upgrade(sv, SVt_PVLV);
+	    LvTYPE(sv) = 'T';
+	    LvTARG(sv) = (SV*)entry; /* so we can free entry when freeing sv */
+	    return entry;
+ 	}
 #ifdef ENV_IS_CASELESS
 	else if (mg_find((SV*)hv, PERL_MAGIC_env)) {
 	    U32 i;
@@ -384,6 +416,7 @@ Perl_hv_fetch_ent(pTHX_ HV *hv, SV *keysv, I32 lval, register U32 hash)
 #endif
     }
 
+    keysave = key = SvPV(keysv, klen);
     xhv = (XPVHV*)SvANY(hv);
     if (!xhv->xhv_array /* !HvARRAY(hv) */) {
 	if (lval
@@ -398,7 +431,6 @@ Perl_hv_fetch_ent(pTHX_ HV *hv, SV *keysv, I32 lval, register U32 hash)
 	    return 0;
     }
 
-    keysave = key = SvPV(keysv, klen);
     is_utf8 = (SvUTF8(keysv)!=0);
 
     if (is_utf8) {
@@ -501,7 +533,15 @@ NULL if the operation failed or if the value did not need to be actually
 stored within the hash (as in the case of tied hashes).  Otherwise it can
 be dereferenced to get the original C<SV*>.  Note that the caller is
 responsible for suitably incrementing the reference count of C<val> before
-the call, and decrementing it if the function returned NULL.
+the call, and decrementing it if the function returned NULL.  Effectively
+a successful hv_store takes ownership of one reference to C<val>.  This is
+usually what you want; a newly created SV has a reference count of one, so
+if all your code does is create SVs then store them in a hash, hv_store
+will own the only reference to the new SV, and your code doesn't need to do
+anything further to tidy up.  hv_store is not implemented as a call to
+hv_store_ent, and does not create a temporary SV for the key, so if your
+key data is not already in SV form then use hv_store in preference to
+hv_store_ent.
 
 See L<perlguts/"Understanding the Magic of Tied Hashes and Arrays"> for more
 information on how to use this function on tied hashes.
@@ -658,8 +698,8 @@ Perl_hv_store_flags(pTHX_ HV *hv, const char *key, I32 klen, SV *val,
     xhv->xhv_keys++; /* HvKEYS(hv)++ */
     if (i) {				/* initial entry? */
 	xhv->xhv_fill++; /* HvFILL(hv)++ */
-	if (xhv->xhv_keys > (IV)xhv->xhv_max /* HvKEYS(hv) > HvMAX(hv) */)
-	    hsplit(hv);
+    } else if (xhv->xhv_keys > (IV)xhv->xhv_max /* HvKEYS(hv) > HvMAX(hv) */) {
+        hsplit(hv);
     }
 
     return &HeVAL(entry);
@@ -676,7 +716,17 @@ stored within the hash (as in the case of tied hashes).  Otherwise the
 contents of the return value can be accessed using the C<He?> macros
 described here.  Note that the caller is responsible for suitably
 incrementing the reference count of C<val> before the call, and
-decrementing it if the function returned NULL.
+decrementing it if the function returned NULL.  Effectively a successful
+hv_store_ent takes ownership of one reference to C<val>.  This is
+usually what you want; a newly created SV has a reference count of one, so
+if all your code does is create SVs then store them in a hash, hv_store
+will own the only reference to the new SV, and your code doesn't need to do
+anything further to tidy up.  Note that hv_store_ent only reads the C<key>;
+unlike C<val> it does not take ownership of it, so maintaining the correct
+reference count on C<key> is entirely the caller's responsibility.  hv_store
+is not implemented as a call to hv_store_ent, and does not create a temporary
+SV for the key, so if your key data is not already in SV form then use
+hv_store in preference to hv_store_ent.
 
 See L<perlguts/"Understanding the Magic of Tied Hashes and Arrays"> for more
 information on how to use this function on tied hashes.
@@ -840,8 +890,8 @@ Perl_hv_delete(pTHX_ HV *hv, const char *key, I32 klen, I32 flags)
     if (!hv)
 	return Nullsv;
     if (klen < 0) {
-      klen = -klen;
-      is_utf8 = TRUE;
+	klen = -klen;
+	is_utf8 = TRUE;
     }
     if (SvRMAGICAL(hv)) {
 	bool needs_copy;
@@ -850,7 +900,9 @@ Perl_hv_delete(pTHX_ HV *hv, const char *key, I32 klen, I32 flags)
 
 	if (needs_copy && (svp = hv_fetch(hv, key, klen, TRUE))) {
 	    sv = *svp;
-	    mg_clear(sv);
+	    if (SvMAGICAL(sv)) {
+	        mg_clear(sv);
+	    }
 	    if (!needs_store) {
 		if (mg_find(sv, PERL_MAGIC_tiedelem)) {
 		    /* No longer an element */
@@ -1003,7 +1055,9 @@ Perl_hv_delete_ent(pTHX_ HV *hv, SV *keysv, I32 flags, U32 hash)
 
 	if (needs_copy && (entry = hv_fetch_ent(hv, keysv, TRUE, hash))) {
 	    sv = HeVAL(entry);
-	    mg_clear(sv);
+	    if (SvMAGICAL(sv)) {
+		mg_clear(sv);
+	    }
 	    if (!needs_store) {
 		if (mg_find(sv, PERL_MAGIC_tiedelem)) {
 		    /* No longer an element */
@@ -1637,14 +1691,33 @@ Perl_hv_clear(pTHX_ HV *hv)
     if (!hv)
 	return;
 
-    if(SvREADONLY(hv)) {
-        Perl_croak(aTHX_ "Attempt to clear a restricted hash");
+    xhv = (XPVHV*)SvANY(hv);
+
+    if (SvREADONLY(hv)) {
+	/* restricted hash: convert all keys to placeholders */
+	I32 i;
+	HE* entry;
+	for (i = 0; i <= (I32) xhv->xhv_max; i++) {
+	    entry = ((HE**)xhv->xhv_array)[i];
+	    for (; entry; entry = HeNEXT(entry)) {
+		/* not already placeholder */
+		if (HeVAL(entry) != &PL_sv_undef) {
+		    if (HeVAL(entry) && SvREADONLY(HeVAL(entry))) {
+			SV* keysv = hv_iterkeysv(entry);
+			Perl_croak(aTHX_
+	"Attempt to delete readonly key '%"SVf"' from a restricted hash",
+				   keysv);
+		    }
+		    SvREFCNT_dec(HeVAL(entry));
+		    HeVAL(entry) = &PL_sv_undef;
+		    xhv->xhv_placeholders++; /* HvPLACEHOLDERS(hv)++ */
+		}
+	    }
+	}
+	return;
     }
 
-    xhv = (XPVHV*)SvANY(hv);
     hfreeentries(hv);
-    xhv->xhv_fill = 0; /* HvFILL(hv) = 0 */
-    xhv->xhv_keys = 0; /* HvKEYS(hv) = 0 */
     xhv->xhv_placeholders = 0; /* HvPLACEHOLDERS(hv) = 0 */
     if (xhv->xhv_array /* HvARRAY(hv) */)
 	(void)memzero(xhv->xhv_array /* HvARRAY(hv) */,
@@ -1673,6 +1746,12 @@ S_hfreeentries(pTHX_ HV *hv)
     riter = 0;
     max = HvMAX(hv);
     array = HvARRAY(hv);
+    /* make everyone else think the array is empty, so that the destructors
+     * called for freed entries can't recusively mess with us */
+    HvARRAY(hv) = Null(HE**); 
+    HvFILL(hv) = 0;
+    ((XPVHV*) SvANY(hv))->xhv_keys = 0;
+
     entry = array[0];
     for (;;) {
 	if (entry) {
@@ -1686,6 +1765,7 @@ S_hfreeentries(pTHX_ HV *hv)
 	    entry = array[riter];
 	}
     }
+    HvARRAY(hv) = array;
     (void)hv_iterinit(hv);
 }
 
@@ -1707,13 +1787,13 @@ Perl_hv_undef(pTHX_ HV *hv)
     hfreeentries(hv);
     Safefree(xhv->xhv_array /* HvARRAY(hv) */);
     if (HvNAME(hv)) {
+        if(PL_stashcache)
+	    hv_delete(PL_stashcache, HvNAME(hv), strlen(HvNAME(hv)), G_DISCARD);
 	Safefree(HvNAME(hv));
 	HvNAME(hv) = 0;
     }
     xhv->xhv_max   = 7;	/* HvMAX(hv) = 7 (it's a normal hash) */
     xhv->xhv_array = 0;	/* HvARRAY(hv) = 0 */
-    xhv->xhv_fill  = 0;	/* HvFILL(hv) = 0 */
-    xhv->xhv_keys  = 0;	/* HvKEYS(hv) = 0 */
     xhv->xhv_placeholders = 0; /* HvPLACEHOLDERS(hv) = 0 */
 
     if (SvRMAGICAL(hv))
@@ -1845,6 +1925,7 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
 	Newz(506, xhv->xhv_array /* HvARRAY(hv) */,
 	     PERL_HV_ARRAY_ALLOC_BYTES(xhv->xhv_max+1 /* HvMAX(hv)+1 */),
 	     char);
+    /* At start of hash, entry is NULL.  */
     if (entry)
     {
 	entry = HeNEXT(entry);
@@ -1859,8 +1940,11 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
 	}
     }
     while (!entry) {
+	/* OK. Come to the end of the current list.  Grab the next one.  */
+
 	xhv->xhv_riter++; /* HvRITER(hv)++ */
 	if (xhv->xhv_riter > (I32)xhv->xhv_max /* HvRITER(hv) > HvMAX(hv) */) {
+	    /* There is no next one.  End of the hash.  */
 	    xhv->xhv_riter = -1; /* HvRITER(hv) = -1 */
 	    break;
 	}
@@ -1868,10 +1952,14 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
 	entry = ((HE**)xhv->xhv_array)[xhv->xhv_riter];
 
         if (!(flags & HV_ITERNEXT_WANTPLACEHOLDERS)) {
-            /* if we have an entry, but it's a placeholder, don't count it */
-            if (entry && HeVAL(entry) == &PL_sv_undef)
-                entry = 0;
-        }
+            /* If we have an entry, but it's a placeholder, don't count it.
+	       Try the next.  */
+	    while (entry && HeVAL(entry) == &PL_sv_undef)
+		entry = HeNEXT(entry);
+	}
+	/* Will loop again if this linked list starts NULL
+	   (for HV_ITERNEXT_WANTPLACEHOLDERS)
+	   or if we run through it and find only placeholders.  */
     }
 
     if (oldentry && HvLAZYDEL(hv)) {		/* was deleted earlier? */

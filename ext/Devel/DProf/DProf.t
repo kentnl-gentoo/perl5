@@ -58,7 +58,7 @@ sub profile {
 		print @results
 	}
 
-        print '# ',timestr( $t_total, 'nop' ), "\n";
+        print '# ' . timestr( $t_total, 'nop' ), "\n";
 }
 
 
@@ -73,7 +73,7 @@ sub verify {
 
 
 $| = 1;
-print "1..18\n";
+print "1..20\n";
 while( @tests ){
 	$test = shift @tests;
         $test =~ s/\.$// if $^O eq 'VMS';

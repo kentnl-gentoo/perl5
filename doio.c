@@ -1,6 +1,7 @@
 /*    doio.c
  *
- *    Copyright (c) 1991-2002, Larry Wall
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -218,7 +219,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 		if (ckWARN(WARN_IO))
 		    Perl_warner(aTHX_ packWARN(WARN_IO),
 			    "Can't open a reference");
-		SETERRNO(EINVAL, LIB$_INVARG);
+		SETERRNO(EINVAL, LIB_INVARG);
 		goto say_false;
 	    }
 #endif /* USE_STDIO */
@@ -323,12 +324,13 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 		    if (num_svs > 1) {
 			Perl_croak(aTHX_ "More than one argument to '%c&' open",IoTYPE(io));
 		    }
+		    /*SUPPRESS 530*/
+		    for (; isSPACE(*type); type++) ;
 		    if (num_svs && (SvIOK(*svp) || (SvPOK(*svp) && looks_like_number(*svp)))) {
 			fd = SvUV(*svp);
+			num_svs = 0;
 		    }
 		    else if (isDIGIT(*type)) {
-			/*SUPPRESS 530*/
-			for (; isSPACE(*type); type++) ;
 			fd = atoi(type);
 		    }
 		    else {
@@ -338,14 +340,12 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 			}
 			else {
 			    GV *thatgv;
-			    /*SUPPRESS 530*/
-			    for (; isSPACE(*type); type++) ;
 			    thatgv = gv_fetchpv(type,FALSE,SVt_PVIO);
 			    thatio = GvIO(thatgv);
 			}
 			if (!thatio) {
 #ifdef EINVAL
-			    SETERRNO(EINVAL,SS$_IVCHAN);
+			    SETERRNO(EINVAL,SS_IVCHAN);
 #endif
 			    goto say_false;
 			}
@@ -536,12 +536,14 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	if ((IoTYPE(io) == IoTYPE_RDONLY) &&
 	    (fp == PerlIO_stdout() || fp == PerlIO_stderr())) {
 		Perl_warner(aTHX_ packWARN(WARN_IO),
-			    "Filehandle STD%s opened only for input",
-			    (fp == PerlIO_stdout()) ? "OUT" : "ERR");
+			    "Filehandle STD%s reopened as %s only for input",
+			    ((fp == PerlIO_stdout()) ? "OUT" : "ERR"),
+			    GvENAME(gv));
 	}
 	else if ((IoTYPE(io) == IoTYPE_WRONLY) && fp == PerlIO_stdin()) {
 		Perl_warner(aTHX_ packWARN(WARN_IO),
-			    "Filehandle STDIN opened only for output");
+			    "Filehandle STDIN reopened as %s only for output",
+			    GvENAME(gv));
 	}
     }
 
@@ -639,8 +641,16 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
                 /* need to close fp without closing underlying fd */
                 int ofd = PerlIO_fileno(fp);
                 int dupfd = PerlLIO_dup(ofd);
+#if defined(HAS_FCNTL) && defined(F_SETFD)
+		/* Assume if we have F_SETFD we have F_GETFD */
+                int coe = fcntl(ofd,F_GETFD);
+#endif
                 PerlIO_close(fp);
                 PerlLIO_dup2(dupfd,ofd);
+#if defined(HAS_FCNTL) && defined(F_SETFD)
+		/* The dup trick has lost close-on-exec on ofd */
+		fcntl(ofd,F_SETFD, coe);
+#endif
                 PerlLIO_close(dupfd);
 	    }
             else
@@ -716,6 +726,8 @@ Perl_nextargv(pTHX_ register GV *gv)
 #endif
     }
     PL_filemode = 0;
+    if (!GvAV(gv))
+        return Nullfp;
     while (av_len(GvAV(gv)) >= 0) {
 	STRLEN oldlen;
 	sv = av_shift(GvAV(gv));
@@ -772,8 +784,8 @@ Perl_nextargv(pTHX_ register GV *gv)
 		    {
 			if (ckWARN_d(WARN_INPLACE))	
 			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
-			      "Can't do inplace edit: %s would not be unique",
-			      SvPVX(sv));
+			      "Can't do inplace edit: %"SVf" would not be unique",
+			      sv);
 			do_close(gv,FALSE);
 			continue;
 		    }
@@ -783,8 +795,8 @@ Perl_nextargv(pTHX_ register GV *gv)
 		    if (PerlLIO_rename(PL_oldname,SvPVX(sv)) < 0) {
 		        if (ckWARN_d(WARN_INPLACE))	
 			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
-			      "Can't rename %s to %s: %s, skipping file",
-			      PL_oldname, SvPVX(sv), Strerror(errno) );
+			      "Can't rename %s to %"SVf": %s, skipping file",
+			      PL_oldname, sv, Strerror(errno) );
 			do_close(gv,FALSE);
 			continue;
 		    }
@@ -799,8 +811,8 @@ Perl_nextargv(pTHX_ register GV *gv)
 		    if (link(PL_oldname,SvPVX(sv)) < 0) {
 		        if (ckWARN_d(WARN_INPLACE))	
 			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
-			      "Can't rename %s to %s: %s, skipping file",
-			      PL_oldname, SvPVX(sv), Strerror(errno) );
+			      "Can't rename %s to %"SVf": %s, skipping file",
+			      PL_oldname, sv, Strerror(errno) );
 			do_close(gv,FALSE);
 			continue;
 		    }
@@ -920,8 +932,8 @@ Perl_do_pipe(pTHX_ SV *sv, GV *rgv, GV *wgv)
 
     if (PerlProc_pipe(fd) < 0)
 	goto badexit;
-    IoIFP(rstio) = PerlIO_fdopen(fd[0], "r");
-    IoOFP(wstio) = PerlIO_fdopen(fd[1], "w");
+    IoIFP(rstio) = PerlIO_fdopen(fd[0], "r"PIPESOCK_MODE);
+    IoOFP(wstio) = PerlIO_fdopen(fd[1], "w"PIPESOCK_MODE);
     IoOFP(rstio) = IoIFP(rstio);
     IoIFP(wstio) = IoOFP(wstio);
     IoTYPE(rstio) = IoTYPE_RDONLY;
@@ -954,7 +966,7 @@ Perl_do_close(pTHX_ GV *gv, bool not_implicit)
 	gv = PL_argvgv;
     if (!gv || SvTYPE(gv) != SVt_PVGV) {
 	if (not_implicit)
-	    SETERRNO(EBADF,SS$_IVCHAN);
+	    SETERRNO(EBADF,SS_IVCHAN);
 	return FALSE;
     }
     io = GvIO(gv);
@@ -962,7 +974,7 @@ Perl_do_close(pTHX_ GV *gv, bool not_implicit)
 	if (not_implicit) {
 	    if (ckWARN(WARN_UNOPENED)) /* no check for closed here */
 		report_evil_fh(gv, io, PL_op->op_type);
-	    SETERRNO(EBADF,SS$_IVCHAN);
+	    SETERRNO(EBADF,SS_IVCHAN);
 	}
 	return FALSE;
     }
@@ -1006,7 +1018,7 @@ Perl_io_close(pTHX_ IO *io, bool not_implicit)
 	IoOFP(io) = IoIFP(io) = Nullfp;
     }
     else if (not_implicit) {
-	SETERRNO(EBADF,SS$_IVCHAN);
+	SETERRNO(EBADF,SS_IVCHAN);
     }
 
     return retval;
@@ -1026,17 +1038,21 @@ Perl_do_eof(pTHX_ GV *gv)
 	report_evil_fh(gv, io, OP_phoney_OUTPUT_ONLY);
 
     while (IoIFP(io)) {
+        int saverrno;
 
         if (PerlIO_has_cntptr(IoIFP(io))) {	/* (the code works without this) */
 	    if (PerlIO_get_cnt(IoIFP(io)) > 0)	/* cheat a little, since */
 		return FALSE;			/* this is the most usual case */
         }
 
+	saverrno = errno; /* getc and ungetc can stomp on errno */
 	ch = PerlIO_getc(IoIFP(io));
 	if (ch != EOF) {
 	    (void)PerlIO_ungetc(IoIFP(io),ch);
+	    errno = saverrno;
 	    return FALSE;
 	}
+	errno = saverrno;
 
         if (PerlIO_has_cntptr(IoIFP(io)) && PerlIO_canset_cnt(IoIFP(io))) {
 	    if (PerlIO_get_cnt(IoIFP(io)) < -1)
@@ -1067,7 +1083,7 @@ Perl_do_tell(pTHX_ GV *gv)
     }
     if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
 	report_evil_fh(gv, io, PL_op->op_type);
-    SETERRNO(EBADF,RMS$_IFI);
+    SETERRNO(EBADF,RMS_IFI);
     return (Off_t)-1;
 }
 
@@ -1086,7 +1102,7 @@ Perl_do_seek(pTHX_ GV *gv, Off_t pos, int whence)
     }
     if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
 	report_evil_fh(gv, io, PL_op->op_type);
-    SETERRNO(EBADF,RMS$_IFI);
+    SETERRNO(EBADF,RMS_IFI);
     return FALSE;
 }
 
@@ -1100,7 +1116,7 @@ Perl_do_sysseek(pTHX_ GV *gv, Off_t pos, int whence)
 	return PerlLIO_lseek(PerlIO_fileno(fp), pos, whence);
     if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
 	report_evil_fh(gv, io, PL_op->op_type);
-    SETERRNO(EBADF,RMS$_IFI);
+    SETERRNO(EBADF,RMS_IFI);
     return (Off_t)-1;
 }
 
@@ -1265,7 +1281,8 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
     default:
 	if (PerlIO_isutf8(fp)) {
 	    if (!SvUTF8(sv))
-		sv_utf8_upgrade(sv = sv_mortalcopy(sv));
+		sv_utf8_upgrade_flags(sv = sv_mortalcopy(sv),
+				      SV_GMAGIC|SV_UTF8_NO_ENCODING);
 	}
 	else if (DO_UTF8(sv)) {
 	    if (!sv_utf8_downgrade((sv = sv_mortalcopy(sv)), TRUE)
@@ -1319,7 +1336,7 @@ Perl_my_stat(pTHX)
     else {
 	SV* sv = POPs;
 	char *s;
-	STRLEN n_a;
+	STRLEN len;
 	PUTBACK;
 	if (SvTYPE(sv) == SVt_PVGV) {
 	    gv = (GV*)sv;
@@ -1330,9 +1347,10 @@ Perl_my_stat(pTHX)
 	    goto do_fstat;
 	}
 
-	s = SvPV(sv, n_a);
+	s = SvPV(sv, len);
 	PL_statgv = Nullgv;
-	sv_setpv(PL_statname, s);
+	sv_setpvn(PL_statname, s, len);
+	s = SvPVX(PL_statname);		/* s now NUL-terminated */
 	PL_laststype = OP_STAT;
 	PL_laststatval = PerlLIO_stat(s, &PL_statcache);
 	if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(s, '\n'))
@@ -1377,11 +1395,13 @@ Perl_my_lstat(pTHX)
     return PL_laststatval;
 }
 
+#ifndef OS2
 bool
 Perl_do_aexec(pTHX_ SV *really, register SV **mark, register SV **sp)
 {
     return do_aexec5(really, mark, sp, 0, 0);
 }
+#endif
 
 bool
 Perl_do_aexec5(pTHX_ SV *really, register SV **mark, register SV **sp,
@@ -1639,10 +1659,10 @@ nothing in the core.
 	if (mark == sp)
 	    break;
 	s = SvPVx(*++mark, n_a);
-	if (isUPPER(*s)) {
+	if (isALPHA(*s)) {
 	    if (*s == 'S' && s[1] == 'I' && s[2] == 'G')
 		s += 3;
-	    if (!(val = whichsig(s)))
+	    if ((val = whichsig(s)) < 0)
 		Perl_croak(aTHX_ "Unrecognized signal name \"%s\"",s);
 	}
 	else
@@ -1742,22 +1762,23 @@ nothing in the core.
            SV* modified = *++mark;
            void * utbufp = &utbuf;
 
-           /* be like C, and if both times are undefined, let the C
-              library figure out what to do.  This usually means
-              "current time" */
+           /* Be like C, and if both times are undefined, let the C
+            * library figure out what to do.  This usually means
+            * "current time". */
 
            if ( accessed == &PL_sv_undef && modified == &PL_sv_undef )
-             utbufp = NULL;
-
-	    Zero(&utbuf, sizeof utbuf, char);
+                utbufp = NULL;
+           else {
+                Zero(&utbuf, sizeof utbuf, char);
 #ifdef BIG_TIME
-           utbuf.actime = (Time_t)SvNVx(accessed);     /* time accessed */
-           utbuf.modtime = (Time_t)SvNVx(modified);    /* time modified */
+                utbuf.actime = (Time_t)SvNVx(accessed);  /* time accessed */
+                utbuf.modtime = (Time_t)SvNVx(modified); /* time modified */
 #else
-           utbuf.actime = (Time_t)SvIVx(accessed);     /* time accessed */
-           utbuf.modtime = (Time_t)SvIVx(modified);    /* time modified */
+                utbuf.actime = (Time_t)SvIVx(accessed);  /* time accessed */
+                utbuf.modtime = (Time_t)SvIVx(modified); /* time modified */
 #endif
-	    APPLY_TAINT_PROPER();
+            }
+            APPLY_TAINT_PROPER();
 	    tot = sp - mark;
 	    while (++mark <= sp) {
 		char *name = SvPVx(*mark, n_a);
@@ -2089,7 +2110,7 @@ Perl_do_semop(pTHX_ SV **mark, SV **sp)
     opbuf = SvPV(opstr, opsize);
     if (opsize < 3 * SHORTSIZE
 	|| (opsize % (3 * SHORTSIZE))) {
-	SETERRNO(EINVAL,LIB$_INVARG);
+	SETERRNO(EINVAL,LIB_INVARG);
 	return -1;
     }
     SETERRNO(0,0);
@@ -2146,7 +2167,7 @@ Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
     if (shmctl(id, IPC_STAT, &shmds) == -1)
 	return -1;
     if (mpos < 0 || msize < 0 || mpos + msize > shmds.shm_segsz) {
-	SETERRNO(EFAULT,SS$_ACCVIO);		/* can't do as caller requested */
+	SETERRNO(EFAULT,SS_ACCVIO);		/* can't do as caller requested */
 	return -1;
     }
     shm = (char *)shmat(id, (char*)NULL, (optype == OP_SHMREAD) ? SHM_RDONLY : 0);
@@ -2273,7 +2294,7 @@ Perl_start_glob (pTHX_ SV *tmpglob, IO *io)
 	    }
 	    if (cxt) (void)lib$find_file_end(&cxt);
 	    if (ok && sts != RMS$_NMF &&
-		sts != RMS$_DNF && sts != RMS$_FNF) ok = 0;
+		sts != RMS$_DNF && sts != RMS_FNF) ok = 0;
 	    if (!ok) {
 		if (!(sts & 1)) {
 		    SETERRNO((sts == RMS$_SYN ? EINVAL : EVMSERR),sts);

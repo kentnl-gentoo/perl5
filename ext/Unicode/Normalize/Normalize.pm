@@ -1,8 +1,8 @@
 package Unicode::Normalize;
 
 BEGIN {
-    if (ord("A") == 193) {
-	die "Unicode::Normalize not ported to EBCDIC\n";
+    unless ("A" eq pack('U', 0x41)) {
+	die "Unicode::Normalize cannot stringify a Unicode code point\n";
     }
 }
 
@@ -11,7 +11,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.17';
+our $VERSION = '0.23';
 our $PACKAGE = __PACKAGE__;
 
 require Exporter;
@@ -34,6 +34,14 @@ our %EXPORT_TAGS = (
 );
 
 bootstrap Unicode::Normalize $VERSION;
+
+sub pack_U {
+    return pack('U*', @_);
+}
+
+sub unpack_U {
+    return unpack('U*', pack('U*').shift);
+}
 
 use constant COMPAT => 1;
 
@@ -95,6 +103,19 @@ Unicode::Normalize - Unicode Normalization Forms
 
 =head1 DESCRIPTION
 
+Parameters:
+
+C<$string> is used as a string under character semantics
+(see F<perlunicode>).
+
+C<$codepoint> should be an unsigned integer
+representing a Unicode code point.
+
+Note: Between XS edition and pure Perl edition,
+interpretation of C<$codepoint> as a decimal number has incompatibility.
+XS converts C<$codepoint> to an unsigned integer, but pure Perl does not.
+Do not use a floating point nor a negative sign in C<$codepoint>.
+
 =head2 Normalization Forms
 
 =over 4
@@ -136,7 +157,7 @@ As C<$form_name>, one of the following names must be given.
 
 =item C<$decomposed_string = decompose($string, $useCompatMapping)>
 
-Decompose the specified string and returns the result.
+Decomposes the specified string and returns the result.
 
 If the second parameter (a boolean) is omitted or false, decomposes it
 using the Canonical Decomposition Mapping.
@@ -150,7 +171,7 @@ Reordering may be required.
 
 =item C<$reordered_string  = reorder($string)>
 
-Reorder the combining characters and the like in the canonical ordering
+Reorders the combining characters and the like in the canonical ordering
 and returns the result.
 
 E.g., when you have a list of NFD/NFKD strings,
@@ -173,7 +194,7 @@ you can get its NFC/NFKC string, saying
 
 =head2 Quick Check
 
-(see Annex 8, UAX #15; F<DerivedNormalizationProps.txt>)
+(see Annex 8, UAX #15, and F<DerivedNormalizationProps.txt>)
 
 The following functions check whether the string is in that normalization form.
 
@@ -275,7 +296,7 @@ is a composition exclusion.
 Returns a boolean whether the character of the specified codepoint is
 a singleton.
 
-=item C<$is_non_startar_decomposition = isNonStDecomp($codepoint)>
+=item C<$is_non_starter_decomposition = isNonStDecomp($codepoint)>
 
 Returns a boolean whether the canonical decomposition
 of the character of the specified codepoint
@@ -302,10 +323,10 @@ SADAHIRO Tomoyuki, E<lt>SADAHIRO@cpan.orgE<gt>
 
   http://homepage1.nifty.com/nomenclator/perl/
 
-  Copyright(C) 2001-2002, SADAHIRO Tomoyuki. Japan. All rights reserved.
+  Copyright(C) 2001-2003, SADAHIRO Tomoyuki. Japan. All rights reserved.
 
-  This program is free software; you can redistribute it and/or 
-  modify it under the same terms as Perl itself.
+  This module is free software; you can redistribute it
+  and/or modify it under the same terms as Perl itself.
 
 =head1 SEE ALSO
 

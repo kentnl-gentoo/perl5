@@ -1,7 +1,7 @@
 package File::Spec::Unix;
 
 use strict;
-our($VERSION);
+use vars qw($VERSION);
 
 $VERSION = '1.4';
 
@@ -88,7 +88,7 @@ complete path ending with a filename
 
 sub catfile {
     my $self = shift;
-    my $file = pop @_;
+    my $file = $self->canonpath(pop @_);
     return $file unless @_;
     my $dir = $self->catdir(@_);
     $dir .= "/" unless substr($dir,-1) eq "/";
@@ -127,8 +127,9 @@ sub rootdir {
 
 =item tmpdir
 
-Returns a string representation of the first writable directory
-from the following list or "" if none are writable:
+Returns a string representation of the first writable directory from
+the following list or the current directory if none from the list are
+writable:
 
     $ENV{TMPDIR}
     /tmp
@@ -139,14 +140,15 @@ is tainted, it is not used.
 =cut
 
 my $tmpdir;
-sub tmpdir {
+sub _tmpdir {
     return $tmpdir if defined $tmpdir;
-    my @dirlist = ($ENV{TMPDIR}, "/tmp");
+    my $self = shift;
+    my @dirlist = @_;
     {
 	no strict 'refs';
 	if (${"\cTAINT"}) { # Check for taint mode on perl >= 5.8.0
             require Scalar::Util;
-	    shift @dirlist if Scalar::Util::tainted($ENV{TMPDIR});
+	    @dirlist = grep { ! Scalar::Util::tainted($_) } @dirlist;
 	}
     }
     foreach (@dirlist) {
@@ -154,8 +156,15 @@ sub tmpdir {
 	$tmpdir = $_;
 	last;
     }
-    $tmpdir = '' unless defined $tmpdir;
+    $tmpdir = $self->curdir unless defined $tmpdir;
+    $tmpdir = defined $tmpdir && $self->canonpath($tmpdir);
     return $tmpdir;
+}
+
+sub tmpdir {
+    return $tmpdir if defined $tmpdir;
+    my $self = shift;
+    $tmpdir = $self->_tmpdir( $ENV{TMPDIR}, "/tmp" );
 }
 
 =item updir
@@ -213,6 +222,7 @@ Takes no argument, returns the environment variable PATH as an array.
 =cut
 
 sub path {
+    return () unless exists $ENV{PATH};
     my @path = split(':', $ENV{PATH});
     foreach (@path) { $_ = '.' if $_ eq '' }
     return @path;
@@ -234,8 +244,8 @@ sub join {
     ($volume,$directories,$file) = File::Spec->splitpath( $path );
     ($volume,$directories,$file) = File::Spec->splitpath( $path, $no_file );
 
-Splits a path in to volume, directory, and filename portions. On systems
-with no concept of volume, returns undef for volume. 
+Splits a path into volume, directory, and filename portions. On systems
+with no concept of volume, returns '' for volume. 
 
 For systems with no syntax differentiating filenames from directories, 
 assumes that the last file is a path unless $no_file is true or a 
@@ -316,7 +326,7 @@ sub splitdir {
 =item catpath()
 
 Takes volume, directory and file portions and returns an entire path. Under
-Unix, $volume is ignored, and directory and file are catenated.  A '/' is
+Unix, $volume is ignored, and directory and file are concatenated.  A '/' is
 inserted if needed (though if the directory portion doesn't start with
 '/' it is not added).  On other OSs, $volume is significant.
 

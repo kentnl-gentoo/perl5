@@ -1,12 +1,13 @@
 BEGIN {
   push @INC, './lib';
+  require 'regen_lib.pl';
 }
 use strict;
 my %alias_to = (
-    U32 => [qw(PADOFFSET STRLEN)],
+    U32 => [qw(PADOFFSET STRLEN line_t)],
     I32 => [qw(SSize_t long)],
-    U16 => [qw(OPCODE line_t short)],
-    U8 => [qw(char)],
+    U16 => [qw(OPCODE short)],
+    U8  => [qw(char)],
 );
 
 my @optype= qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP);
@@ -36,7 +37,7 @@ EOT
 my $perl_header;
 ($perl_header = $c_header) =~ s{[/ ]?\*/?}{#}g;
 
-unlink "ext/ByteLoader/byterun.c", "ext/ByteLoader/byterun.h", "ext/B/B/Asmdata.pm";
+safer_unlink "ext/ByteLoader/byterun.c", "ext/ByteLoader/byterun.h", "ext/B/B/Asmdata.pm";
 
 #
 # Start with boilerplate for Asmdata.pm
@@ -312,6 +313,11 @@ Malcolm Beattie, C<mbeattie@sable.ox.ac.uk>
 =cut
 EOT
 
+
+close ASMDATA_PM or die "Error closing ASMDATA_PM: $!";
+close BYTERUN_H or die "Error closing BYTERUN_H: $!";
+close BYTERUN_C or die "Error closing BYTERUN_C: $!";
+
 __END__
 # First set instruction ord("#") to read comment to end-of-line (sneaky)
 %number 35
@@ -376,6 +382,7 @@ xcv_file	CvFILE(bstate->bs_sv)			pvindex
 xcv_depth	CvDEPTH(bstate->bs_sv)			long
 xcv_padlist	*(SV**)&CvPADLIST(bstate->bs_sv)	svindex
 xcv_outside	*(SV**)&CvOUTSIDE(bstate->bs_sv)	svindex
+xcv_outside_seq	CvOUTSIDE_SEQ(bstate->bs_sv)		U32
 xcv_flags	CvFLAGS(bstate->bs_sv)			U16
 av_extend	bstate->bs_sv				SSize_t		x
 av_push		bstate->bs_sv				svindex		x

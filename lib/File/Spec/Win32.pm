@@ -2,10 +2,11 @@ package File::Spec::Win32;
 
 use strict;
 use Cwd;
+
 use vars qw(@ISA $VERSION);
 require File::Spec::Unix;
 
-$VERSION = '1.3';
+$VERSION = '1.4';
 
 @ISA = qw(File::Spec::Unix);
 
@@ -48,7 +49,8 @@ from the following list:
     /tmp
     /
 
-The SYS:/temp is preferred in Novell NetWare.
+The SYS:/temp is preferred in Novell NetWare (the File::Spec::Win32
+is used also for NetWare).
 
 Since Perl 5.8.0, if running under taint mode, and if the environment
 variables are tainted, they are not used.
@@ -59,22 +61,11 @@ my $tmpdir;
 sub tmpdir {
     return $tmpdir if defined $tmpdir;
     my $self = shift;
-    my @dirlist = (@ENV{qw(TMPDIR TEMP TMP)}, qw(C:/temp /tmp /));
-    {
-	no strict 'refs';
-	if (${"\cTAINT"}) { # Check for taint mode on perl >= 5.8.0
-	    require Scalar::Util;
-	    @dirlist = grep { ! Scalar::Util::tainted $_ } @dirlist;
-	}
-    }
-    foreach (@dirlist) {
-	next unless defined && -d;
-	$tmpdir = $_;
-	last;
-    }
-    $tmpdir = '' unless defined $tmpdir;
-    $tmpdir = $self->canonpath($tmpdir);
-    return $tmpdir;
+    $tmpdir = $self->_tmpdir( @ENV{qw(TMPDIR TEMP TMP)},
+			      'SYS:/temp',
+			      'C:/temp',
+			      '/tmp',
+			      '/'  );
 }
 
 sub case_tolerant {
@@ -95,7 +86,7 @@ complete path ending with a filename
 
 sub catfile {
     my $self = shift;
-    my $file = pop @_;
+    my $file = $self->canonpath(pop @_);
     return $file unless @_;
     my $dir = $self->catdir(@_);
     $dir .= "\\" unless substr($dir,-1) eq "\\";
@@ -113,11 +104,16 @@ sub path {
 
 No physical check on the filesystem, but a logical cleanup of a
 path. On UNIX eliminated successive slashes and successive "/.".
+On Win32 makes 
+
+	dir1\dir2\dir3\..\..\dir4 -> \dir\dir4 and even
+	dir1\dir2\dir3\...\dir4   -> \dir\dir4
 
 =cut
 
 sub canonpath {
     my ($self,$path) = @_;
+    my $orig_path = $path;
     $path =~ s/^([a-z]:)/\u$1/s;
     $path =~ s|/|\\|g;
     $path =~ s|([^\\])\\+|$1\\|g;                  # xx\\\\xx  -> xx\xx
@@ -125,6 +121,38 @@ sub canonpath {
     $path =~ s|^(\.\\)+||s unless $path eq ".\\";  # .\xx      -> xx
     $path =~ s|\\\Z(?!\n)||
              unless $path =~ m#^([A-Z]:)?\\\Z(?!\n)#s;   # xx\       -> xx
+	# xx1/xx2/xx3/../../xx -> xx1/xx
+	$path =~ s|\\\.\.\.\\|\\\.\.\\\.\.\\|g; # \...\ is 2 levels up
+	$path =~ s|^\.\.\.\\|\.\.\\\.\.\\|g;    # ...\ is 2 levels up
+	return $path if $path =~ m|^\.\.|;      # skip relative paths
+	return $path unless $path =~ /\.\./;    # too few .'s to cleanup
+	return $path if $path =~ /\.\.\.\./;    # too many .'s to cleanup
+	return $path if $orig_path =~ m|^\Q/../\E|
+			        and $orig_path =~ m|\/$|;  # don't do /../dirs/ 
+			        						   # when called from rel2abs()
+			        						   # for ../dirs/
+	my ($vol,$dirs,$file) = $self->splitpath($path);
+	my @dirs = $self->splitdir($dirs);
+	my (@base_dirs, @path_dirs);
+	my $dest = \@base_dirs;
+	for my $dir (@dirs){
+		$dest = \@path_dirs if $dir eq $self->updir;
+		push @$dest, $dir;
+	}
+	# for each .. in @path_dirs pop one item from 
+	# @base_dirs
+	while (my $dir = shift @path_dirs){ 
+		unless ($dir eq $self->updir){
+			unshift @path_dirs, $dir;
+			last;
+		}
+		pop @base_dirs;
+	}
+	$path = $self->catpath( 
+		$vol, 
+		$self->catdir(@base_dirs, @path_dirs), 
+		$file
+    );
     return $path;
 }
 
@@ -133,10 +161,10 @@ sub canonpath {
     ($volume,$directories,$file) = File::Spec->splitpath( $path );
     ($volume,$directories,$file) = File::Spec->splitpath( $path, $no_file );
 
-Splits a path in to volume, directory, and filename portions. Assumes that 
+Splits a path into volume, directory, and filename portions. Assumes that 
 the last file is a path unless the path ends in '\\', '\\.', '\\..'
 or $no_file is true.  On Win32 this means that $no_file true makes this return 
-( $volume, $path, undef ).
+( $volume, $path, '' ).
 
 Separators accepted are \ and /.
 

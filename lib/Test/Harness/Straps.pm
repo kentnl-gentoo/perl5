@@ -1,5 +1,5 @@
 # -*- Mode: cperl; cperl-indent-level: 4 -*-
-# $Id: Straps.pm,v 1.13 2002/06/19 21:01:04 schwern Exp $
+# $Id: Straps.pm,v 1.17 2003/04/03 17:47:25 andy Exp $
 
 package Test::Harness::Straps;
 
@@ -93,7 +93,8 @@ Initialize the internal state of a strap to make it ready for parsing.
 sub _init {
     my($self) = shift;
 
-    $self->{_is_vms} = $^O eq 'VMS';
+    $self->{_is_vms}   = $^O eq 'VMS';
+    $self->{_is_win32} = $^O eq 'Win32';
 }
 
 =end _private
@@ -150,10 +151,10 @@ sub _analyze_iterator {
 
     $totals{skip_all} = $self->{skip_all} if defined $self->{skip_all};
 
-    my $passed = !$totals{max} ||
-                  ($totals{max} && $totals{seen} &&
-                   $totals{max} == $totals{seen} && 
-                   $totals{max} == $totals{ok});
+    my $passed = ($totals{max} == 0 && defined $totals{skip_all}) ||
+                 ($totals{max} && $totals{seen} &&
+                  $totals{max} == $totals{seen} && 
+                  $totals{max} == $totals{ok});
     $totals{passing} = $passed ? 1 : 0;
 
     return %totals;
@@ -206,7 +207,7 @@ sub _analyze_line {
 
         $totals->{ok}++ if $pass;
 
-        if( $result{number} > 100000 ) {
+        if( $result{number} > 100000 && $result{number} > $self->{max} ) {
             warn "Enormous test number seen [test $result{number}]\n";
             warn "Can't detailize, too big.\n";
         }
@@ -269,8 +270,9 @@ sub analyze_file {
 
     local $ENV{PERL5LIB} = $self->_INC2PERL5LIB;
 
-    # Is this necessary anymore?
-    my $cmd = $self->{_is_vms} ? "MCR $^X" : $^X;
+    my $cmd = $self->{_is_vms}   ? "MCR $^X" :
+              $self->{_is_win32} ? Win32::GetShortPathName($^X)
+                                 : $^X;
 
     my $switches = $self->_switches($file);
 
@@ -322,7 +324,7 @@ sub _switches {
     local *TEST;
     open(TEST, $file) or print "can't open $file. $!\n";
     my $first = <TEST>;
-    my $s = '';
+    my $s = $Test::Harness::Switches || '';
     $s .= " $ENV{'HARNESS_PERL_SWITCHES'}"
       if exists $ENV{'HARNESS_PERL_SWITCHES'};
 
@@ -356,7 +358,13 @@ sub _INC2PERL5LIB {
 
     $self->{_old5lib} = $ENV{PERL5LIB};
 
-    return join $Config{path_sep}, $self->_filtered_INC;
+    my @filtered_inc = $self->_filtered_INC;
+    my @clean_inc   = grep !/\Q$Config{path_sep}/, @filtered_inc;
+    my @naughty_inc = grep /\Q$Config{path_sep}/, @filtered_inc;
+    warn "Test::Harness can't handle \@INC directories with ".
+	"'$Config{path_sep}': @naughty_inc\n" if @naughty_inc;
+
+    return join $Config{path_sep}, @clean_inc;
 }
 
 =item B<_filtered_INC>
@@ -467,7 +475,11 @@ sub _is_header {
 
             $self->{todo} = { map { $_ => 1 } split /\s+/, $todo } if $todo;
 
-            $self->{skip_all} = $reason if defined $skip and $skip =~ /^Skip/i;
+            if( $self->{max} == 0 ) {
+                $reason = '' unless defined $skip and $skip =~ /^Skip/i;
+            }
+
+            $self->{skip_all} = $reason;
         }
 
         return $YES;

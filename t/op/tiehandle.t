@@ -77,7 +77,7 @@ package main;
 
 use Symbol;
 
-print "1..39\n";
+print "1..41\n";
 
 my $fh = gensym;
 
@@ -228,5 +228,22 @@ ok($r == 1);
     @expect = (PRINT => $ob,"sometext\n");
 
     Implement::compare(PRINT => @received);
+
+    use warnings;
+    print undef;
+
+    ok($received[1] =~ /Use of uninitialized value/);
 }
 
+{
+    # [ID 20020713.001] chomp($data=<tied_fh>)
+    local *TEST;
+    tie *TEST, 'CHOMP';
+    my $data;
+    chomp($data = <TEST>);
+    ok($data eq 'foobar');
+
+    package CHOMP;
+    sub TIEHANDLE { bless {}, $_[0] }
+    sub READLINE { "foobar\n" }
+}

@@ -10,11 +10,6 @@ print "1..5\n";
 use strict;
 use Digest::MD5 qw(md5 md5_hex md5_base64);
 
-#
-# This is the output of: 'md5sum Changes README MD5.pm MD5.xs rfc1321.txt'
-#
-my $EXPECT;
-
 # To update the EBCDIC section even on a Latin 1 platform,
 # run this script with $ENV{EBCDIC_MD5SUM} set to a true value.
 # (You'll need to have Perl 5.7.3 or later, to have the Encode installed.)
@@ -22,28 +17,30 @@ my $EXPECT;
 #  also have the $ENV{PERL_CORE} set to a true value.)
 # Similarly, to update MacOS section, run with $ENV{MAC_MD5SUM} set.
 
+my $EXPECT;
 if (ord "A" == 193) { # EBCDIC
     $EXPECT = <<EOT;
-b362148b17a451f0d81e0ebb2487756e  Changes
-5a591a47e8c40fe4b78c744111511c45  README
-3157e2d2e27dacddea7c54efddc32520  MD5.pm
-4850753428db9422e8e5f97b401d5a13  MD5.xs
+fcc48d6bb88ca8065bf9ddfcb9e7483e  Changes
+0565ec21b15c0f23f4c51fb327c8926d  README
+1965beb0e48253b694220fbb5d6230f5  MD5.pm
+5b3c24da3f70f3c0938cc7c205a28ab7  MD5.xs
 276da0aa4e9a08b7fe09430c9c5690aa  rfc1321.txt
 EOT
 } elsif ("\n" eq "\015") { # MacOS
     $EXPECT = <<EOT;
-cc90a85f89b397341f97c9279640fbf5  Changes
-127952946201e6afc19eb41250c56871  README
-d87ec77c963d27198b7427156167a5b3  MD5.pm
-5be7049479ea47d7c257dabcae835720  MD5.xs
-f9a35714ee1d1d0c5a3a80f4dbea956a  rfc1321.txt
+f161f474603c54a0093ad2f6f93be33b  Changes
+6c950a0211a5a28f023bb482037698cd  README
+18178c90bc13d6824f6c96973b6e9433  MD5.pm
+2c7fdb2ffa3840dc4f8dcdcf13241015  MD5.xs
+754b9db19f79dbc4992f7166eb0f37ce  rfc1321.txt
 EOT
 } else {
+    # This is the output of: 'md5sum Changes README MD5.pm MD5.xs rfc1321.txt'
     $EXPECT = <<EOT;
-0106b67df0dbf9f4d65e9fc04907745b  Changes
-3519f3d02c7c91158f732f0f00064657  README
-88c35ca46c7e8069fb5ae00c091c98d6  MD5.pm
-1be293491bba726810f8e87671ee0328  MD5.xs
+029fa5059ba0b2175cee09ab5d9b7b73  Changes
+6c950a0211a5a28f023bb482037698cd  README
+18178c90bc13d6824f6c96973b6e9433  MD5.pm
+2c7fdb2ffa3840dc4f8dcdcf13241015  MD5.xs
 754b9db19f79dbc4992f7166eb0f37ce  rfc1321.txt
 EOT
 }
@@ -64,6 +61,7 @@ if ($@) {
 for (split /^/, $EXPECT) {
      my($md5hex, $file) = split ' ';
      my $base = $file;
+#     print "# $base\n";
      if ($ENV{PERL_CORE}) {
          if ($file eq 'rfc1321.txt') { # Don't have it in core.
 	     print "ok ", ++$testno, " # Skip: PERL_CORE\n";
@@ -90,7 +88,9 @@ for (split /^/, $EXPECT) {
 	 next;
      }
      if ($ENV{MAC_MD5SUM}) {
+         require Encode;
 	 my $data = cat_file($file);	
+	 Encode::from_to($data, 'latin1', 'MacRoman');
 	 print md5_hex($data), "  $base\n";
 	 next;
      }
@@ -187,8 +187,8 @@ sub cat_file
     local $/;  # slurp
     open(FILE, $file) or die "Can't open $file: $!";
 
-    # For PerlIO (Perl 5.8.0 and later) in case of UTF-8 locales.
-    eval { binmode(FILE, ":bytes"); };
+    # For PerlIO in case of UTF-8 locales.
+    eval 'binmode(FILE, ":bytes")' if $] >= 5.008;
 
     my $tmp = <FILE>;
     close(FILE);

@@ -172,14 +172,15 @@ To output UTF-8, use the C<:utf8> output layer.  Prepending
 to this sample program ensures that the output is completely UTF-8,
 and removes the program's warning.
 
-If your locale environment variables (C<LANGUAGE>, C<LC_ALL>,
-C<LC_CTYPE>, C<LANG>) contain the strings 'UTF-8' or 'UTF8',
-regardless of case, then the default encoding of your STDIN, STDOUT,
-and STDERR and of B<any subsequent file open>, is UTF-8.  Note that
-this means that Perl expects other software to work, too: if Perl has
-been led to believe that STDIN should be UTF-8, but then STDIN coming
-in from another command is not UTF-8, Perl will complain about the
-malformed UTF-8.
+You can enable automatic UTF-8-ification of your standard file
+handles, default C<open()> layer, and C<@ARGV> by using either
+the C<-C> command line switch or the C<PERL_UNICODE> environment
+variable, see L<perlrun> for the documentation of the C<-C> switch.
+
+Note that this means that Perl expects other software to work, too:
+if Perl has been led to believe that STDIN should be UTF-8, but then
+STDIN coming in from another command is not UTF-8, Perl will complain
+about the malformed UTF-8.
 
 All features that combine Unicode and I/O also require using the new
 PerlIO feature.  Almost all Perl 5.8 platforms do use PerlIO, though:
@@ -361,7 +362,7 @@ the C<open> pragma.  See L<open>, or look at the following example.
 
 With the C<open> pragma you can use the C<:locale> layer
 
-    $ENV{LC_ALL} = $ENV{LANG} = 'ru_RU.KOI8-R';
+    BEGIN { $ENV{LC_ALL} = $ENV{LANG} = 'ru_RU.KOI8-R' }
     # the :locale will probe the locale environment variables like LC_ALL
     use open OUT => ':locale'; # russki parusski
     open(O, ">koi8");
@@ -398,9 +399,9 @@ written to the stream. For example, the following snippet copies the
 contents of the file "text.jis" (encoded as ISO-2022-JP, aka JIS) to
 the file "text.utf8", encoded as UTF-8:
 
-    open(my $nihongo, '<:encoding(iso2022-jp)', 'text.jis');
-    open(my $unicode, '>:utf8',                 'text.utf8');
-    while (<$nihongo>) { print $unicode }
+    open(my $nihongo, '<:encoding(iso-2022-jp)', 'text.jis');
+    open(my $unicode, '>:utf8',                  'text.utf8');
+    while (<$nihongo>) { print $unicode $_ }
 
 The naming of encodings, both by the C<open()> and by the C<open>
 pragma, is similar to the C<encoding> pragma in that it allows for
@@ -433,7 +434,8 @@ UTF-8 encoded.  A C<use open ':utf8'> would have avoided the bug, or
 explicitly opening also the F<file> for input as UTF-8.
 
 B<NOTE>: the C<:utf8> and C<:encoding> features work only if your
-Perl has been built with the new PerlIO feature.
+Perl has been built with the new PerlIO feature (which is the default
+on most systems).
 
 =head2 Displaying Unicode As Text
 
@@ -449,7 +451,7 @@ displayed as C<\x..>, and the rest of the characters as themselves:
                sprintf("\\x{%04X}", $_) :  # \x{...}
                chr($_) =~ /[[:cntrl:]]/ ?  # else if control character ...
                sprintf("\\x%02X", $_) :    # \x..
-               chr($_)                     # else as themselves
+               quotemeta(chr($_))          # else quoted or as themselves
          } unpack("U*", $_[0]));           # unpack Unicode characters
    }
 
@@ -457,9 +459,11 @@ For example,
 
    nice_string("foo\x{100}bar\n")
 
-returns:
+returns the string
 
-   "foo\x{0100}bar\x0A"
+   'foo\x{0100}bar\x0A'
+
+which is ready to be printed.
 
 =head2 Special Cases
 
@@ -500,7 +504,7 @@ Yet another way would be to use the Devel::Peek module:
 
 That shows the UTF8 flag in FLAGS and both the UTF-8 bytes
 and Unicode characters in C<PV>.  See also later in this document
-the discussion about the C<is_utf8> function of the C<Encode> module.
+the discussion about the C<utf8::is_utf8()> function.
 
 =back
 
@@ -621,8 +625,7 @@ didn't get the transparency of Unicode quite right.
 
 Okay, if you insist:
 
-    use Encode 'is_utf8';
-    print is_utf8($string) ? 1 : 0, "\n";
+    print utf8::is_utf8($string) ? 1 : 0, "\n";
 
 But note that this doesn't mean that any of the characters in the
 string are necessary UTF-8 encoded, or that any of the characters have
@@ -862,7 +865,7 @@ If you have the GNU recode installed, you can also use the
 Perl front-end C<Convert::Recode> for character conversions.
 
 The following are fast conversions from ISO 8859-1 (Latin-1) bytes
-to UTF-8 bytes, the code works even with older Perl 5 versions.
+to UTF-8 bytes and back, the code works even with older Perl 5 versions.
 
     # ISO 8859-1 to UTF-8
     s/([\x80-\xFF])/chr(0xC0|ord($1)>>6).chr(0x80|ord($1)&0x3F)/eg;

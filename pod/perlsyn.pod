@@ -79,7 +79,7 @@ like an ordinary statement, and is elaborated within the sequence of
 statements as if it were an ordinary statement.  That means it actually
 has both compile-time and run-time effects.
 
-=head2 Simple statements
+=head2 Simple Statements
 
 The only kind of simple statement is an expression evaluated for its
 side effects.  Every simple statement must be terminated with a
@@ -134,7 +134,14 @@ For C<last>, you have to be more elaborate:
 	    } while $x++ <= $z;
     }
 
-=head2 Compound statements
+B<NOTE:> The behaviour of a C<my> statement modified with a statement
+modifier conditional or loop construct (e.g. C<my $x if ...>) is
+B<undefined>.  The value of the C<my> variable may be C<undef>, any
+previously assigned value, or possibly anything else.  Don't rely on
+it.  Future versions of perl might do something different from the
+version of perl you try it out on.  Here be dragons.
+
+=head2 Compound Statements
 
 In Perl, a sequence of statements that defines a scope is called a block.
 Sometimes a block is delimited by the file containing it (in the case
@@ -183,27 +190,22 @@ refers to the innermost enclosing loop.  This may include dynamically
 looking back your call-stack at run time to find the LABEL.  Such
 desperate behavior triggers a warning if you use the C<use warnings>
 pragma or the B<-w> flag.
-Unlike a C<foreach> statement, a C<while> statement never implicitly
-localises any variables.
 
 If there is a C<continue> BLOCK, it is always executed just before the
-conditional is about to be evaluated again, just like the third part of a
-C<for> loop in C.  Thus it can be used to increment a loop variable, even
-when the loop has been continued via the C<next> statement (which is
-similar to the C C<continue> statement).
+conditional is about to be evaluated again.  Thus it can be used to
+increment a loop variable, even when the loop has been continued via
+the C<next> statement.
 
 =head2 Loop Control
 
-The C<next> command is like the C<continue> statement in C; it starts
-the next iteration of the loop:
+The C<next> command starts the next iteration of the loop:
 
     LINE: while (<STDIN>) {
 	next LINE if /^#/;	# discard comments
 	...
     }
 
-The C<last> command is like the C<break> statement in C (as used in
-loops); it immediately exits the loop in question.  The
+The C<last> command immediately exits the loop in question.  The
 C<continue> block, if any, is not executed:
 
     LINE: while (<STDIN>) {
@@ -310,6 +312,14 @@ hang.
 	# do something
     }
 
+Using C<readline> (or the operator form, C<< <EXPR> >>) as the
+conditional of a C<for> loop is shorthand for the following.  This
+behaviour is the same as a C<while> loop conditional.
+
+    for ( prompt(); defined( $_ = <STDIN> ); prompt() ) {
+        # do something
+    }
+
 =head2 Foreach Loops
 
 The C<foreach> loop iterates over a normal list value and sets the
@@ -319,7 +329,8 @@ is therefore visible only within the loop.  Otherwise, the variable is
 implicitly local to the loop and regains its former value upon exiting
 the loop.  If the variable was previously declared with C<my>, it uses
 that variable instead of the global one, but it's still localized to
-the loop.  
+the loop.  This implicit localisation occurs I<only> in a C<foreach>
+loop.
 
 The C<foreach> keyword is actually a synonym for the C<for> keyword, so
 you can use C<foreach> for readability or C<for> for brevity.  (Or because
@@ -428,8 +439,8 @@ In addition to the above BLOCK construct, you could write
     }
 
 (That's actually not as strange as it looks once you realize that you can
-use loop control "operators" within an expression,  That's just the normal
-C comma operator.)
+use loop control "operators" within an expression.  That's just the binary
+comma operator in scalar context.  See L<perlop/"Comma Operator">.)
 
 or
 
@@ -618,14 +629,20 @@ of code.
 
 =head2 Plain Old Comments (Not!)
 
-Much like the C preprocessor, Perl can process line directives.  Using
+Perl can process line directives, much like the C preprocessor.  Using
 this, one can control Perl's idea of filenames and line numbers in
 error or warning messages (especially for strings that are processed
 with C<eval()>).  The syntax for this mechanism is the same as for most
 C preprocessors: it matches the regular expression
-C</^#\s*line\s+(\d+)\s*(?:\s"([^"]+)")?\s*$/> with C<$1> being the line
-number for the next line, and C<$2> being the optional filename
-(specified within quotes).
+
+    # example: '# line 42 "new_filename.plx"'
+    /^\#   \s*
+      line \s+ (\d+)   \s*
+      (?:\s("?)([^"]+)\2)? \s*
+     $/x
+
+with C<$1> being the line number for the next line, and C<$3> being
+the optional filename (specified with or without quotes).
 
 There is a fairly obvious gotcha included with the line directive:
 Debuggers and profilers will only show the last source line to appear

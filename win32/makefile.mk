@@ -34,7 +34,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.8.0
+INST_VER	*= \5.9.0
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -73,7 +73,13 @@ USE_IMP_SYS	*= define
 # then get a number of fails from make test i.e. bugs - complain to them not us ;-). 
 # You will also be unable to take full advantage of perl5.8's support for multiple 
 # encodings and may see lower IO performance. You have been warned.
-USE_PERLIO	= define
+USE_PERLIO	*= define
+
+#
+# Comment this out if you don't want to enable large file support for
+# some reason.  Should normally only be changed to maintain compatibility
+# with an older release of perl.
+USE_LARGE_FILES *= define
 
 #
 # WARNING! This option is deprecated and will eventually go away (enable
@@ -98,6 +104,9 @@ CCTYPE		*= MSVC60
 #CCTYPE		*= BORLAND
 # mingw32+gcc-2.95.2 or better
 #CCTYPE		*= GCC
+# Uncomment this if you are using the latest MinGW release (2.0.0)
+# with gcc3.2
+#USE_GCC_V3_2	*= define
 
 #
 # uncomment this if your Borland compiler is older than v5.4.
@@ -246,6 +255,7 @@ USE_MULTI	*= undef
 USE_ITHREADS	*= undef
 USE_IMP_SYS	*= undef
 USE_PERLIO	*= undef
+USE_LARGE_FILES	*= undef
 USE_PERLCRT	*= undef
 
 .IF "$(USE_IMP_SYS)$(USE_MULTI)$(USE_5005THREADS)" == "defineundefundef"
@@ -388,6 +398,9 @@ LINK_FLAGS	+= -L"$(CCLIBDIR)\Release"
 
 CC		= gcc
 LINK32		= gcc
+.IF "$(USE_GCC_V3_2)" == "define"
+LINK32		= g++
+.END
 LIB32		= ar rc
 IMPLIB		= dlltool
 RSC		= rc
@@ -597,6 +610,7 @@ UTILS		=			\
 		..\utils\libnetcfg	\
 		..\utils\enc2xs		\
 		..\utils\piconv		\
+		..\utils\cpan		\
 		..\pod\checkpods	\
 		..\pod\pod2html		\
 		..\pod\pod2latex	\
@@ -666,6 +680,7 @@ MICROCORE_SRC	=		\
 		..\mg.c		\
 		..\numeric.c	\
 		..\op.c		\
+		..\pad.c	\
 		..\perl.c	\
 		..\perlapi.c	\
 		..\perly.c	\
@@ -822,12 +837,14 @@ CFG_VARS	=					\
 		_a=$(a)				~	\
 		lib_ext=$(a)			~	\
 		static_ext=$(STATIC_EXT)	~	\
+		usethreads=$(USE_ITHREADS)	~	\
 		use5005threads=$(USE_5005THREADS)	~	\
 		useithreads=$(USE_ITHREADS)	~	\
 		usethreads=$(USE_5005THREADS)	~	\
 		usemultiplicity=$(USE_MULTI)	~	\
 		useperlio=$(USE_PERLIO)		~	\
-		LINK_FLAGS=$(LINK_FLAGS:s/\/\\/)		~	\
+		uselargefiles=$(USE_LARGE_FILES)	~	\
+		LINK_FLAGS=$(LINK_FLAGS:s/\/\\/)	~	\
 		optimize=$(OPTIMIZE)
 
 #
@@ -1128,6 +1145,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.netware	..\pod\perlnetware.pod
 	copy ..\README.os2	..\pod\perlos2.pod
 	copy ..\README.os390	..\pod\perlos390.pod
+	copy ..\README.os400	..\pod\perlos400.pod
 	copy ..\README.plan9	..\pod\perlplan9.pod
 	copy ..\README.qnx	..\pod\perlqnx.pod
 	copy ..\README.solaris	..\pod\perlsolaris.pod
@@ -1165,37 +1183,48 @@ distclean: clean
 	-del /f $(LIBDIR)\List\Util.pm
 	-del /f $(LIBDIR)\Scalar\Util.pm
 	-del /f $(LIBDIR)\Unicode\Normalize.pm
-	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
-	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B
-	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data || rmdir /s $(LIBDIR)\Data
-	-if exist $(LIBDIR)\Filter\Util\Call rmdir /s /q $(LIBDIR)\Filter\Util\Call || rmdir /s $(LIBDIR)\Filter
-	-if exist $(LIBDIR)\Filter\Util rmdir /s /q $(LIBDIR)\Filter\Util || rmdir /s $(LIBDIR)\Filter
-	-if exist $(LIBDIR)\Digest rmdir /s /q $(LIBDIR)\Digest || rmdir /s $(LIBDIR)\Digest
-	-if exist $(LIBDIR)\MIME rmdir /s /q $(LIBDIR)\MIME || rmdir /s $(LIBDIR)\MIME
-	-if exist $(LIBDIR)\List rmdir /s /q $(LIBDIR)\List || rmdir /s $(LIBDIR)\List
-	-if exist $(LIBDIR)\Scalar rmdir /s /q $(LIBDIR)\Scalar || rmdir /s $(LIBDIR)\Scalar
+	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO
+	-if exist $(LIBDIR)\IO rmdir /s $(LIBDIR)\IO
+	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B
+	-if exist $(LIBDIR)\B rmdir /s $(LIBDIR)\B
+	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data
+	-if exist $(LIBDIR)\Data rmdir /s $(LIBDIR)\Data
+	-if exist $(LIBDIR)\Filter\Util rmdir /s /q $(LIBDIR)\Filter\Util
+	-if exist $(LIBDIR)\Filter\Util rmdir /s $(LIBDIR)\Filter\Util
+	-if exist $(LIBDIR)\Digest rmdir /s /q $(LIBDIR)\Digest
+	-if exist $(LIBDIR)\Digest rmdir /s $(LIBDIR)\Digest
+	-if exist $(LIBDIR)\MIME rmdir /s /q $(LIBDIR)\MIME
+	-if exist $(LIBDIR)\MIME rmdir /s $(LIBDIR)\MIME
+	-if exist $(LIBDIR)\List rmdir /s /q $(LIBDIR)\List
+	-if exist $(LIBDIR)\List rmdir /s $(LIBDIR)\List
+	-if exist $(LIBDIR)\Scalar rmdir /s /q $(LIBDIR)\Scalar
+	-if exist $(LIBDIR)\Scalar rmdir /s $(LIBDIR)\Scalar
+	-if exist $(LIBDIR)\XS rmdir /s /q $(LIBDIR)\XS
+	-if exist $(LIBDIR)\XS rmdir /s $(LIBDIR)\XS
 	-cd $(PODDIR) && del /f *.html *.bat checkpods \
 	    perlaix.pod perlamiga.pod perlapollo.pod \
 	    perlbeos.pod perlbs2000.pod perlce.pod perlcygwin.pod perldgux.pod \
 	    perldos.pod perlepoc.pod perlfreebsd.pod perlhpux.pod perlhurd.pod \
 	    perlirix.pod perlmachten.pod perlmint.pod \
 	    perlmacos.pod perlmpeix.pod perlnetware.pod \
-	    perlos2.pod perlos390.pod \
+	    perlos2.pod perlos390.pod perlos400.pod \
 	    perlplan9.pod perlqnx.pod \
 	    perlsolaris.pod perltru64.pod perluts.pod \
 	    perlvmesa.pod perlvms.pod perlvos.pod \
 	    perlwin32.pod pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
-	    perldoc perlivp dprofpp perlcc libnetcfg enc2xs piconv *.bat
+	    perldoc perlivp dprofpp perlcc libnetcfg enc2xs piconv cpan *.bat
 	-cd ..\x2p && del /f find2perl s2p psed *.bat
 	-del /f ..\config.sh ..\splittree.pl perlmain.c dlutils.c config.h.new
 	-del /f $(CONFIGPM)
 	-del /f bin\*.bat
 	-cd .. && del /s *$(a) *.map *.pdb *.ilk *.bs *$(o) .exists pm_to_blib
 	-cd $(EXTDIR) && del /s *.def Makefile Makefile.old
-	-if exist $(AUTODIR) rmdir /s /q $(AUTODIR) || rmdir /s $(AUTODIR)
-	-if exist $(COREDIR) rmdir /s /q $(COREDIR) || rmdir /s $(COREDIR)
+	-if exist $(AUTODIR) rmdir /s /q $(AUTODIR)
+	-if exist $(AUTODIR) rmdir /s $(AUTODIR)
+	-if exist $(COREDIR) rmdir /s /q $(COREDIR)
+	-if exist $(COREDIR) rmdir /s $(COREDIR)
 
 install : all installbare installhtml
 
@@ -1272,7 +1301,8 @@ clean : Extensions_clean
 	-@erase $(WPERLEXE)
 	-@erase $(PERLDLL)
 	-@erase $(CORE_OBJ)
-	-if exist $(MINIDIR) rmdir /s /q $(MINIDIR) || rmdir /s $(MINIDIR)
+	-if exist $(MINIDIR) rmdir /s /q $(MINIDIR)
+	-if exist $(MINIDIR) rmdir /s $(MINIDIR)
 	-@erase $(WIN32_OBJ)
 	-@erase $(DLL_OBJ)
 	-@erase $(X2P_OBJ)

@@ -1,6 +1,7 @@
 /*    XSUB.h
  *
- *    Copyright (c) 1997-2002, Larry Wall
+ *    Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -103,7 +104,7 @@ handled automatically by C<xsubpp>.
 #define dXSFUNCTION(ret)		XSINTERFACE_CVT(ret,XSFUNCTION)
 #define XSINTERFACE_FUNC(ret,cv,f)     ((XSINTERFACE_CVT(ret,))(f))
 #define XSINTERFACE_FUNC_SET(cv,f)	\
-		CvXSUBANY(cv).any_dptr = (void (*) (pTHX_ void*))(f)
+		CvXSUBANY(cv).any_dxptr = (void (*) (pTHX_ void*))(f)
 
 /* Simple macros to put new mortal values onto the stack.   */
 /* Typically used to return values from XS functions.       */
@@ -228,6 +229,49 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #  define XS_VERSION_BOOTCHECK
 #endif
 
+/* 
+   The DBM_setFilter & DBM_ckFilter macros are only used by 
+   the *DB*_File modules 
+*/
+
+#define DBM_setFilter(db_type,code)				\
+	{							\
+	    if (db_type)					\
+	        RETVAL = sv_mortalcopy(db_type) ;		\
+	    ST(0) = RETVAL ;					\
+	    if (db_type && (code == &PL_sv_undef)) {		\
+                SvREFCNT_dec(db_type) ;				\
+	        db_type = NULL ;				\
+	    }							\
+	    else if (code) {					\
+	        if (db_type)					\
+	            sv_setsv(db_type, code) ;			\
+	        else						\
+	            db_type = newSVsv(code) ;			\
+	    }	    						\
+	}
+
+#define DBM_ckFilter(arg,type,name)				\
+	if (db->type) {						\
+	    if (db->filtering) {				\
+	        croak("recursion detected in %s", name) ;	\
+	    }                     				\
+	    ENTER ;						\
+	    SAVETMPS ;						\
+	    SAVEINT(db->filtering) ;				\
+	    db->filtering = TRUE ;				\
+	    SAVESPTR(DEFSV) ;					\
+	    DEFSV = arg ;					\
+	    SvTEMP_off(arg) ;					\
+	    PUSHMARK(SP) ;					\
+	    PUTBACK ;						\
+	    (void) perl_call_sv(db->type, G_DISCARD); 		\
+	    SPAGAIN ;						\
+	    PUTBACK ;						\
+	    FREETMPS ;						\
+	    LEAVE ;						\
+	}
+
 #if 1		/* for compatibility */
 #  define VTBL_sv		&PL_vtbl_sv
 #  define VTBL_env		&PL_vtbl_env
@@ -339,35 +383,35 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #    define putenv		PerlEnv_putenv
 #    define getenv		PerlEnv_getenv
 #    define uname		PerlEnv_uname
-#    define stdin		PerlSIO_stdin()
-#    define stdout		PerlSIO_stdout()
-#    define stderr		PerlSIO_stderr()
-#    define fopen		PerlIO_open
-#    define fclose		PerlIO_close
-#    define feof		PerlIO_eof
-#    define ferror		PerlIO_error
-#    define fclearerr		PerlIO_clearerr
-#    define getc		PerlIO_getc
-#    define fputc(c, f)		PerlIO_putc(f,c)
-#    define fputs(s, f)		PerlIO_puts(f,s)
-#    define fflush		PerlIO_flush
-#    define ungetc(c, f)	PerlIO_ungetc((f),(c))
-#    define fileno		PerlIO_fileno
-#    define fdopen		PerlIO_fdopen
-#    define freopen		PerlIO_reopen
-#    define fread(b,s,c,f)	PerlIO_read((f),(b),(s*c))
-#    define fwrite(b,s,c,f)	PerlIO_write((f),(b),(s*c))
+#    define stdin		PerlSIO_stdin
+#    define stdout		PerlSIO_stdout
+#    define stderr		PerlSIO_stderr
+#    define fopen		PerlSIO_fopen
+#    define fclose		PerlSIO_fclose
+#    define feof		PerlSIO_feof
+#    define ferror		PerlSIO_ferror
+#    define clearerr		PerlSIO_clearerr
+#    define getc		PerlSIO_getc
+#    define fputc		PerlSIO_fputc
+#    define fputs		PerlSIO_fputs
+#    define fflush		PerlSIO_fflush
+#    define ungetc		PerlSIO_ungetc
+#    define fileno		PerlSIO_fileno
+#    define fdopen		PerlSIO_fdopen
+#    define freopen		PerlSIO_freopen
+#    define fread		PerlSIO_fread
+#    define fwrite		PerlSIO_fwrite
 #    define setbuf		PerlSIO_setbuf
 #    define setvbuf		PerlSIO_setvbuf
 #    define setlinebuf		PerlSIO_setlinebuf
-#    define stdoutf		PerlIO_stdoutf
-#    define vfprintf		PerlIO_vprintf
-#    define ftell		PerlIO_tell
-#    define fseek		PerlIO_seek
-#    define fgetpos		PerlIO_getpos
-#    define fsetpos		PerlIO_setpos
-#    define frewind		PerlIO_rewind
-#    define tmpfile		PerlIO_tmpfile
+#    define stdoutf		PerlSIO_stdoutf
+#    define vfprintf		PerlSIO_vprintf
+#    define ftell		PerlSIO_ftell
+#    define fseek		PerlSIO_fseek
+#    define fgetpos		PerlSIO_fgetpos
+#    define fsetpos		PerlSIO_fsetpos
+#    define frewind		PerlSIO_rewind
+#    define tmpfile		PerlSIO_tmpfile
 #    define access		PerlLIO_access
 #    define chmod		PerlLIO_chmod
 #    define chsize		PerlLIO_chsize

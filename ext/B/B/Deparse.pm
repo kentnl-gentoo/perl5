@@ -15,7 +15,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 OPpTRANS_SQUASH OPpTRANS_DELETE OPpTRANS_COMPLEMENT OPpTARGET_MY
 	 OPpCONST_ARYBASE OPpEXISTS_SUB OPpSORT_NUMERIC OPpSORT_INTEGER
 	 OPpSORT_REVERSE
-	 SVf_IOK SVf_NOK SVf_ROK SVf_POK SVpad_OUR
+	 SVf_IOK SVf_NOK SVf_ROK SVf_POK SVpad_OUR SVf_FAKE SVs_RMG
          CVf_METHOD CVf_LOCKED CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE PMf_SKIPWHITE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
@@ -289,7 +289,17 @@ sub next_todo {
 	    my $file = $gv->FILE;
 	    $l = "\n\f#line $line \"$file\"\n";
 	}
-        return "${l}sub $name " . $self->deparse_sub($cv);
+	my $p = '';
+	if (class($cv->STASH) ne "SPECIAL") {
+	    my $stash = $cv->STASH->NAME;
+	    if ($stash ne $self->{'curstash'}) {
+		$p = "package $stash;\n";
+		$name = "$self->{'curstash'}::$name" unless $name =~ /::/;
+		$self->{'curstash'} = $stash;
+	    }
+	    $name =~ s/^\Q$stash\E:://;
+	}
+        return "${p}${l}sub $name " . $self->deparse_sub($cv);
     }
 }
 
@@ -326,7 +336,14 @@ sub begin_is_use {
 
 	return unless $self->const_sv($constop)->PV eq $module;
 	$constop = $constop->sibling;
-	$version = $self->const_sv($constop)->int_value;
+	$version = $self->const_sv($constop);
+	if (class($version) ne "PVMG") {
+	    # version is either an integer or a double
+	    $version = $version->PV;
+	} else {
+	    # version specified as a v-string
+	    $version = 'v'.join '.', map ord, split //, $version->PV;
+	}
 	$constop = $constop->sibling;
 	return if $constop->name ne "method_named";
 	return if $self->const_sv($constop)->PV ne "VERSION";
@@ -553,9 +570,10 @@ sub compile {
 	    print qq(BEGIN { \$/ = $fs; \$\\ = $bs; }\n);
 	}
 	my @BEGINs  = B::begin_av->isa("B::AV") ? B::begin_av->ARRAY : ();
+	my @CHECKs  = B::check_av->isa("B::AV") ? B::check_av->ARRAY : ();
 	my @INITs   = B::init_av->isa("B::AV") ? B::init_av->ARRAY : ();
 	my @ENDs    = B::end_av->isa("B::AV") ? B::end_av->ARRAY : ();
-	for my $block (@BEGINs, @INITs, @ENDs) {
+	for my $block (@BEGINs, @CHECKs, @INITs, @ENDs) {
 	    $self->todo($block, 0);
 	}
 	$self->stash_subs();
@@ -577,6 +595,8 @@ sub compile {
 	my $laststash = defined $self->{'curcop'}
 	    ? $self->{'curcop'}->stash->NAME : $self->{'curstash'};
 	if (defined *{$laststash."::DATA"}{IO}) {
+	    print "package $laststash;\n"
+		unless $laststash eq $self->{'curstash'};
 	    print "__DATA__\n";
 	    print readline(*{$laststash."::DATA"});
 	}
@@ -913,6 +933,10 @@ sub maybe_local {
     if ($op->private & (OPpLVAL_INTRO|$our_intro)
 	and not $self->{'avoid_local'}{$$op}) {
 	my $our_local = ($op->private & OPpLVAL_INTRO) ? "local" : "our";
+	if( $our_local eq 'our' ) {
+	    die "Unexpected our($text)\n" unless $text =~ /^\W(\w+::)*\w+\z/;
+	    $text =~ s/(\w+::)+//; 
+	}
         if (want_scalar($op)) {
 	    return "$our_local $text";
 	} else {
@@ -1129,7 +1153,10 @@ sub lex_in_scope {
 sub populate_curcvlex {
     my $self = shift;
     for (my $cv = $self->{'curcv'}; class($cv) eq "CV"; $cv = $cv->OUTSIDE) {
-	my @padlist = $cv->PADLIST->ARRAY;
+	my $padlist = $cv->PADLIST;
+	# an undef CV still in lexical chain
+	next if class($padlist) eq "SPECIAL";
+	my @padlist = $padlist->ARRAY;
 	my @ns = $padlist[0]->ARRAY;
 
 	for (my $i=0; $i<@ns; ++$i) {
@@ -1140,8 +1167,10 @@ sub populate_curcvlex {
 		next;
 	    }
             my $name = $ns[$i]->PVX;
-	    my $seq_st = $ns[$i]->NVX;
-	    my $seq_en = int($ns[$i]->IVX);
+	    my ($seq_st, $seq_en) =
+		($ns[$i]->FLAGS & SVf_FAKE)
+		    ? (0, 999999)
+		    : ($ns[$i]->NVX, $ns[$i]->IVX);
 
 	    push @{$self->{'curcvlex'}{$name}}, [$seq_st, $seq_en];
 	}
@@ -1585,7 +1614,7 @@ sub pp_refgen {
             {
                 # The @a in \(@a) isn't in ref context, but only when the
                 # parens are there.
-                return "\\(" . $self->deparse($kid->sibling, 1) . ")";
+		return "\\(" . $self->pp_list($op->first) . ")";
             } elsif ($sib_name eq 'entersub') {
                 my $text = $self->deparse($kid->sibling, 1);
                 # Always show parens for \(&func()), but only with -p otherwise
@@ -2303,7 +2332,7 @@ sub loop_common {
     my $body;
     my $cond = undef;
     if ($kid->name eq "lineseq") { # bare or infinite loop 
-	if (is_state $kid->last) { # infinite
+	if ($kid->last->name eq "unstack") { # infinite
 	    $head = "while (1) "; # Can't use for(;;) if there's a continue
 	    $cond = "";
 	} else {
@@ -2326,17 +2355,14 @@ sub loop_common {
 		$var = $self->pp_threadsv($enter, 1);
 	    } else { # regular my() variable
 		$var = $self->pp_padsv($enter, 1);
-		if ($self->padname_sv($enter->targ)->IVX ==
-		    $kid->first->first->sibling->last->cop_seq)
-		{
-		    # If the scope of this variable closes at the last
-		    # statement of the loop, it must have been
-		    # declared here.
-		    $var = "my " . $var;
-		}
 	    }
 	} elsif ($var->name eq "rv2gv") {
 	    $var = $self->pp_rv2sv($var, 1);
+	    if ($enter->private & OPpOUR_INTRO) {
+		# our declarations don't have package names
+		$var =~ s/^(.).*::/$1/;
+		$var = "our $var";
+	    }
 	} elsif ($var->name eq "gv") {
 	    $var = "\$" . $self->deparse($var, 1);
 	}
@@ -2352,18 +2378,18 @@ sub loop_common {
 	return "{;}"; # {} could be a hashref
     }
     # If there isn't a continue block, then the next pointer for the loop
-    # will point to the unstack, which is kid's penultimate child, except
+    # will point to the unstack, which is kid's last child, except
     # in a bare loop, when it will point to the leaveloop. When neither of
-    # these conditions hold, then the third-to-last child in the continue
+    # these conditions hold, then the second-to-last child is the continue
     # block (or the last in a bare loop).
     my $cont_start = $enter->nextop;
     my $cont;
-    if ($$cont_start != $$op && ${$cont_start->sibling} != ${$body->last}) {
+    if ($$cont_start != $$op && ${$cont_start} != ${$body->last}) {
 	if ($bare) {
 	    $cont = $body->last;
 	} else {
 	    $cont = $body->first;
-	    while (!null($cont->sibling->sibling->sibling)) {
+	    while (!null($cont->sibling->sibling)) {
 		$cont = $cont->sibling;
 	    }
 	}
@@ -2415,7 +2441,7 @@ BEGIN { eval "sub OP_LIST () {" . opnumber("list") . "}" }
 
 sub pp_null {
     my $self = shift;
-    my($op, $cx) = @_;
+    my($op, $cx, $flags) = @_;
     if (class($op) eq "OP") {
 	# old value is lost
 	return $self->{'ex_const'} if $op->targ == OP_CONST;
@@ -2438,7 +2464,12 @@ sub pp_null {
 				   . $self->deparse($op->first->sibling, 20),
 				   $cx, 20);
     } elsif ($op->flags & OPf_SPECIAL && $cx == 0 && !$op->targ) {
-	return "do {\n\t". $self->deparse($op->first, $cx) ."\n\b};";
+	if ($flags) {
+	    return $self->deparse($op->first, $cx);
+	}
+	else {
+	    return "do {\n\t". $self->deparse($op->first, $cx) ."\n\b};";
+	}
     } elsif (!null($op->first->sibling) and
 	     $op->first->sibling->name eq "null" and
 	     class($op->first->sibling) eq "UNOP" and
@@ -2574,7 +2605,14 @@ sub pp_rv2av {
     my $kid = $op->first;
     if ($kid->name eq "const") { # constant list
 	my $av = $self->const_sv($kid);
-	return "(" . join(", ", map(const($_), $av->ARRAY)) . ")";
+	my @a = map const($_), $av->ARRAY;
+	if ( @a > 2 and !grep(!/^-?\d+$/, @a)) {
+	    # collapse (-1,0,1,2) into (-1..2)
+	    my ($s, $e) = @a[0,-1];
+	    my $i = $s;
+	    return "($s..$e)" unless grep $i++ != $_, @a;
+	}
+	return "(" . join(", ", @a) . ")";
     } else {
 	return $self->maybe_local($op, $cx, $self->rv2x($op, $cx, "\@"));
     }
@@ -3010,7 +3048,7 @@ sub re_uninterp {
           | \\[uUlLQE]
           )
 
-	/length($4) ? "$1$2$4" : "$1$2\\$3"/xeg;
+	/defined($4) && length($4) ? "$1$2$4" : "$1$2\\$3"/xeg;
 
     return $str;
 }
@@ -3038,7 +3076,7 @@ sub re_uninterp_extended {
           | \\[uUlLQE]
           )
 
-	/length($4) ? "$1$2$4" : "$1$2\\$3"/xeg;
+	/defined($4) && length($4) ? "$1$2$4" : "$1$2\\$3"/xeg;
 
     return $str;
 }
@@ -3170,10 +3208,18 @@ sub single_delim {
 sub const {
     my $sv = shift;
     if (class($sv) eq "SPECIAL") {
-	return ('undef', '1', '0')[$$sv-1]; # sv_undef, sv_yes, sv_no
+	return ('undef', '1', '(!1)')[$$sv-1]; # sv_undef, sv_yes, sv_no
     } elsif (class($sv) eq "NULL") {
        return 'undef';
-    } elsif ($sv->FLAGS & SVf_IOK) {
+    }
+    # convert a version object into the "v1.2.3" string in its V magic
+    if ($sv->FLAGS & SVs_RMG) {
+	for (my $mg = $sv->MAGIC; $mg; $mg = $mg->MOREMAGIC) {
+	    return $mg->PTR if $mg->TYPE eq 'V';
+	}
+    }
+
+    if ($sv->FLAGS & SVf_IOK) {
 	return $sv->int_value;
     } elsif ($sv->FLAGS & SVf_NOK) {
 	# try the default stringification
@@ -3232,10 +3278,10 @@ sub dq {
 	my $first = $self->dq($op->first);
 	my $last  = $self->dq($op->last);
 
-	# Disambiguate "${foo}bar", "${foo}{bar}", "${foo}[1]"
+	# Disambiguate "${foo}bar", "${foo}{bar}", "${foo}[1]", "$foo\::bar"
 	($last =~ /^[A-Z\\\^\[\]_?]/ &&
 	    $first =~ s/([\$@])\^$/${1}{^}/)  # "${^}W" etc
-	    || ($last =~ /^[{\[\w_]/ &&
+	    || ($last =~ /^[:'{\[\w_]/ &&
 		$first =~ s/([\$@])([A-Za-z_]\w*)$/${1}{$2}/);
 
 	return $first . $last;
@@ -3564,6 +3610,7 @@ sub re_dq {
 
 sub pure_string {
     my ($self, $op) = @_;
+    return 0 if null $op;
     my $type = $op->name;
 
     if ($type eq 'const') {
@@ -3732,7 +3779,7 @@ sub pp_subst {
 	    $flags .= "e";
 	}
 	if ($op->pmflags & PMf_EVAL) {
-	    $repl = $self->deparse($repl, 0);
+	    $repl = $self->deparse($repl, 0, 1);
 	} else {
 	    $repl = $self->dq($repl);	
 	}

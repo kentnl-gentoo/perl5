@@ -4,7 +4,7 @@ use strict;
 use vars qw(@ISA $VERSION);
 require File::Spec::Unix;
 
-$VERSION = '1.2';
+$VERSION = '1.4';
 
 @ISA = qw(File::Spec::Unix);
 
@@ -164,6 +164,7 @@ sub canonpath {
       $path =~ s/([\[<])(-+)/$1 . "\cx" x length($2)/e; # encode leading '-'s
       $path =~ s/([\[<\.])([^\[<\.\cx]+)\.-\.?/$1/g;    # bar.-.foo       ==> foo
       $path =~ s/([\[<])(\cx+)/$1 . '-' x length($2)/e; # then decode
+      $path =~ s/^[\[<\]>]{2}//;                        # []foo           ==> foo
       return $path;
     }
 }
@@ -211,7 +212,7 @@ VMS-syntax file specification.
 
 sub catfile {
     my ($self,@files) = @_;
-    my $file = pop @files;
+    my $file = $self->canonpath(pop @files);
     @files = grep($_,@files);
     my $rslt;
     if (@files) {
@@ -277,21 +278,8 @@ is tainted, it is not used.
 my $tmpdir;
 sub tmpdir {
     return $tmpdir if defined $tmpdir;
-    my @dirlist = ('sys$scratch:', $ENV{TMPDIR});
-    {
-	no strict 'refs';
-	if (${"\cTAINT"}) { # Check for taint mode on perl >= 5.8.0
-            require Scalar::Util;
-	    pop @dirlist if Scalar::Util::tainted($ENV{TMPDIR});
-	}
-    }
-    foreach (@dirlist) {
-	next unless defined && -d && -w _;
-	$tmpdir = $_;
-	last;
-    }
-    $tmpdir = '' unless defined $tmpdir;
-    return $tmpdir;
+    my $self = shift;
+    $tmpdir = $self->_tmpdir( 'sys$scratch:', $ENV{TMPDIR} );
 }
 
 =item updir (override)

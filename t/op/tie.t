@@ -183,7 +183,7 @@ die "self-tied scalar not DESTROYed" unless $destroyed == 1;
 EXPECT
 ########
 
-# TODO Allowed glob self-ties
+# Allowed glob self-ties
 my $destroyed = 0;
 my $printed   = 0;
 sub Self2::TIEHANDLE { bless $_[1], $_[0] }
@@ -204,12 +204,31 @@ EXPECT
 my $destroyed = 0;
 sub Self3::TIEHANDLE { bless $_[1], $_[0] }
 sub Self3::DESTROY   { $destroyed = 1; }
+sub Self3::PRINT     { $printed = 1; }
 {
     use Symbol 'geniosym';
     my $c = geniosym;
     tie *$c, 'Self3', $c;
+    print $c 'Hello';
 }
+die "self-tied IO not PRINTed" unless $printed == 1;
 die "self-tied IO not DESTROYed" unless $destroyed == 1;
+EXPECT
+########
+
+# TODO IO "self-tie" via TEMP glob
+my $destroyed = 0;
+sub Self3::TIEHANDLE { bless $_[1], $_[0] }
+sub Self3::DESTROY   { $destroyed = 1; }
+sub Self3::PRINT     { $printed = 1; }
+{
+    use Symbol 'geniosym';
+    my $c = geniosym;
+    tie *$c, 'Self3', \*$c;
+    print $c 'Hello';
+}
+die "IO tied to TEMP glob not PRINTed" unless $printed == 1;
+die "IO tied to TEMP glob not DESTROYed" unless $destroyed == 1;
 EXPECT
 ########
 
@@ -267,3 +286,60 @@ EXPECT
 7
 8
 0
+########
+#
+# FETCH freeing tie'd SV
+sub TIESCALAR { bless [] }
+sub FETCH { *a = \1; 1 }
+tie $a, 'main';
+print $a;
+EXPECT
+Tied variable freed while still in use at - line 6.
+########
+
+#  [20020716.007] - nested FETCHES
+
+sub F1::TIEARRAY { bless [], 'F1' }
+sub F1::FETCH { 1 }
+my @f1;
+tie @f1, 'F1';
+
+sub F2::TIEARRAY { bless [2], 'F2' }
+sub F2::FETCH { my $self = shift; my $x = $f1[3]; $self }
+my @f2;
+tie @f2, 'F2';
+
+print $f2[4][0],"\n";
+
+sub F3::TIEHASH { bless [], 'F3' }
+sub F3::FETCH { 1 }
+my %f3;
+tie %f3, 'F3';
+
+sub F4::TIEHASH { bless [3], 'F4' }
+sub F4::FETCH { my $self = shift; my $x = $f3{3}; $self }
+my %f4;
+tie %f4, 'F4';
+
+print $f4{'foo'}[0],"\n";
+
+EXPECT
+2
+3
+########
+# test untie() from within FETCH
+package Foo;
+sub TIESCALAR { my $pkg = shift; return bless [@_], $pkg; }
+sub FETCH {
+  my $self = shift;
+  my ($obj, $field) = @$self;
+  untie $obj->{$field};
+  $obj->{$field} = "Bar";
+}
+package main;
+tie $a->{foo}, "Foo", $a, "foo";
+$a->{foo}; # access once
+# the hash element should not be tied anymore
+print defined tied $a->{foo} ? "not ok" : "ok";
+EXPECT
+ok

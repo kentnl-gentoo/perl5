@@ -1,9 +1,9 @@
 package File::Spec;
 
 use strict;
-our(@ISA, $VERSION);
+use vars qw(@ISA $VERSION);
 
-$VERSION = 0.83 ;
+$VERSION = 0.84 ;
 
 my %module = (MacOS   => 'Mac',
 	      MSWin32 => 'Win32',
@@ -125,10 +125,10 @@ Returns a string representation of the root directory.
 =item tmpdir
 
 Returns a string representation of the first writable directory from a
-list of possible temporary directories.  Returns "" if no writable
-temporary directories are found.  The list of directories checked
-depends on the platform; e.g. File::Spec::Unix checks $ENV{TMPDIR} and
-/tmp.
+list of possible temporary directories.  Returns the current directory
+if no writable temporary directories are found.  The list of directories
+checked depends on the platform; e.g. File::Spec::Unix checks $ENV{TMPDIR}
+(unless taint is on) and /tmp.
 
     $tmpdir = File::Spec->tmpdir();
 
@@ -175,7 +175,7 @@ join is the same as catfile.
 =item splitpath
 
 Splits a path in to volume, directory, and filename portions. On systems
-with no concept of volume, returns undef for volume. 
+with no concept of volume, returns '' for volume. 
 
     ($volume,$directories,$file) = File::Spec->splitpath( $path );
     ($volume,$directories,$file) = File::Spec->splitpath( $path, $no_file );
@@ -207,7 +207,7 @@ on some OSs.
 =item catpath()
 
 Takes volume, directory and file portions and returns an entire path. Under
-Unix, $volume is ignored, and directory and file are catenated.  A '/' is
+Unix, $volume is ignored, and directory and file are concatenated.  A '/' is
 inserted if need be.  On other OSs, $volume is significant.
 
     $full_path = File::Spec->catpath( $volume, $directory, $file );
@@ -281,7 +281,7 @@ L<ExtUtils::MakeMaker>
 =head1 AUTHORS
 
 Kenneth Albanowski <kjahds@kjahds.com>, Andy Dougherty
-<doughera@lafcol.lafayette.edu>, Andreas KE<ouml>nig
+<doughera@lafayette.edu>, Andreas KE<ouml>nig
 <A.Koenig@franz.ww.TU-Berlin.DE>, Tim Bunce <Tim.Bunce@ig.co.uk.
 VMS support by Charles Bailey <bailey@newman.upenn.edu>.
 OS/2 support by Ilya Zakharevich <ilya@math.ohio-state.edu>.

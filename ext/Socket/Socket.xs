@@ -9,7 +9,9 @@
 # ifdef I_SYS_TYPES
 #  include <sys/types.h>
 # endif
-# include <sys/socket.h>
+# if !defined(ultrix) /* Avoid double definition. */
+#   include <sys/socket.h>
+# endif
 # if defined(USE_SOCKS) && defined(I_SOCKS)
 #   include <socks.h>
 # endif
@@ -25,11 +27,16 @@
 # if defined(NeXT) || defined(__NeXT__)
 #  include <netinet/in_systm.h>
 # endif
+# if defined(__sgi) && !defined(AF_LINK) && defined(PF_LINK) && PF_LINK == AF_LNK
+#  undef PF_LINK
+# endif
 # ifdef I_NETINET_IN
 #  include <netinet/in.h>
 # endif
 # ifdef I_NETDB
-#  include <netdb.h>
+#  if !defined(ultrix)  /* Avoid double definition. */
+#   include <netdb.h>
+#  endif
 # endif
 # ifdef I_ARPA_INET
 #  include <arpa/inet.h>

@@ -1,12 +1,12 @@
 /*    dosish.h
  *
- *    Copyright (c) 1997-2002, Larry Wall
+ *    Copyright (C) 1993, 1994, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
  *
  */
-
 #define ABORT() abort();
 
 #ifndef SH_PATH
@@ -16,7 +16,7 @@
 #ifdef DJGPP
 #  define BIT_BUCKET "nul"
 #  define OP_BINARY O_BINARY
-#  define PERL_SYS_INIT(c,v) Perl_DJGPP_init(c,v)
+#  define PERL_SYS_INIT(c,v) MALLOC_CHECK_TAINT2(*c,*v) Perl_DJGPP_init(c,v)
 #  define init_os_extras Perl_init_os_extras
 #  include <signal.h>
 #  define HAS_UTIME
@@ -32,20 +32,23 @@
 #  define PERL_FS_VER_FMT	"%d_%d_%d"
 #else	/* DJGPP */
 #  ifdef WIN32
-#    define PERL_SYS_INIT(c,v)	Perl_win32_init(c,v)
+#    define PERL_SYS_INIT(c,v)	MALLOC_CHECK_TAINT2(*c,*v) Perl_win32_init(c,v)
+#    define PERL_SYS_TERM()	Perl_win32_term()
 #    define BIT_BUCKET "nul"
 #  else
 #	 ifdef NETWARE
-#      define PERL_SYS_INIT(c,v)	Perl_nw5_init(c,v)
+#      define PERL_SYS_INIT(c,v)	MALLOC_CHECK_TAINT2(*c,*v) Perl_nw5_init(c,v)
 #      define BIT_BUCKET "nwnul"
 #    else
-#      define PERL_SYS_INIT(c,v)
+#      define PERL_SYS_INIT(c,v)	MALLOC_CHECK_TAINT2(*c,*v)
 #      define BIT_BUCKET "\\dev\\nul" /* "wanna be like, umm, Newlined, or somethin?" */
 #    endif /* NETWARE */
 #  endif
 #endif	/* DJGPP */
 
-#define PERL_SYS_TERM() OP_REFCNT_TERM; MALLOC_TERM
+#ifndef PERL_SYS_TERM
+#  define PERL_SYS_TERM() OP_REFCNT_TERM; MALLOC_TERM
+#endif
 #define dXSUB_SYS
 
 /*
@@ -82,7 +85,11 @@
 #if defined(WIN64) || defined(USE_LARGE_FILES)
 #define Stat_t struct _stati64
 #else
+#if defined(UNDER_CE)
+#define Stat_t struct xcestat
+#else
 #define Stat_t struct stat
+#endif
 #endif
 
 /* USE_STAT_RDEV:
