@@ -461,6 +461,7 @@ lib/Class/Struct.pm	Declare struct-like datatypes as Perl classes
 lib/Cwd.pm		Various cwd routines (getcwd, fastcwd, chdir)
 lib/Devel/SelfStubber.pm	Generate stubs for SelfLoader.pm
 lib/DirHandle.pm	like FileHandle only for directories
+lib/Dumpvalue.pm	Screen dump of perl values
 lib/English.pm		Readable aliases for short variables
 lib/Env.pm		Map environment into ordinary variables
 lib/Exporter.pm		Exporter base class
@@ -728,6 +729,7 @@ pod/perlmodinstall.pod	Installing CPAN Modules
 pod/perlmodlib.pod	Module policy info
 pod/perlobj.pod		Object info
 pod/perlop.pod		Operator info
+pod/perlopentut.pod	open() tutorial
 pod/perlpod.pod		Pod info
 pod/perlport.pod	Portability guide
 pod/perlre.pod		Regular expression info
