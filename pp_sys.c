@@ -22,6 +22,11 @@
 /* Shadow password support for solaris - pdo@cs.umd.edu
  * Not just Solaris: at least HP-UX, IRIX, Linux.
  * the API is from SysV. --jhi */
+#ifdef __hpux__
+/* There is a MAXINT coming from <shadow.h> <- <hpsecurity.h> <- <values.h>
+ * and another MAXINT from "perl.h" <- <sys/param.h>. */ 
+#undef MAXINT
+#endif
 #include <shadow.h>
 #endif
 
@@ -185,6 +190,10 @@ static char zero_but_true[ZBTLEN + 1] = "0 but true";
 
 #if defined(I_SYS_ACCESS) && !defined(R_OK)
 #  include <sys/access.h>
+#endif
+
+#if defined(HAS_FCNTL) && defined(F_SETFD) && !defined(FD_CLOEXEC)
+#  define FD_CLOEXEC 1		/* NeXT needs this */
 #endif
 
 #undef PERL_EFF_ACCESS_R_OK	/* EFFective uid/gid ACCESS R_OK */
@@ -523,22 +532,6 @@ PP(pp_open)
     if (GvIOp(gv))
 	IoFLAGS(GvIOp(gv)) &= ~IOf_UNTAINT;
 
-#if 0 /* no undef means tmpfile() yet */
-    if (sv == &PL_sv_undef) {
-#ifdef PerlIO
-	PerlIO *fp = PerlIO_tmpfile();
-#else
-	PerlIO *fp = tmpfile();
-#endif                   
-	if (fp != Nullfp && do_open(gv, "+>&", 3, FALSE, 0, 0, fp)) 
-	    PUSHi( (I32)PL_forkprocess );
-	else
-	    RETPUSHUNDEF;
-	RETURN;
-    }   
-#endif /* no undef means tmpfile() yet */
-
-
     if (mg = SvTIED_mg((SV*)gv, 'q')) {
 	PUSHMARK(SP);
 	XPUSHs(SvTIED_obj((SV*)gv, mg));
@@ -816,17 +809,10 @@ PP(pp_untie)
     if (ckWARN(WARN_UNTIE)) {
         MAGIC * mg ;
         if (mg = SvTIED_mg(sv, how)) {
-#ifdef IV_IS_QUAD
             if (mg && SvREFCNT(SvRV(mg->mg_obj)) > 1)  
 		Perl_warner(aTHX_ WARN_UNTIE,
-		    "untie attempted while %" PERL_PRIu64 " inner references still exist",
+		    "untie attempted while %"UVuf" inner references still exist",
 		    (UV)SvREFCNT(SvRV(mg->mg_obj)) - 1 ) ;
-#else
-            if (mg && SvREFCNT(SvRV(mg->mg_obj)) > 1)  
-		Perl_warner(aTHX_ WARN_UNTIE,
-		    "untie attempted while %lu inner references still exist",
-		    (unsigned long)SvREFCNT(SvRV(mg->mg_obj)) - 1 ) ;
-#endif
         }
     }
  
@@ -1561,8 +1547,8 @@ PP(pp_sysread)
 	    length = -1;
     }
     if (length < 0) {
-	if (IoTYPE(io) == '>' || IoIFP(io) == PerlIO_stdout()
-	    || IoIFP(io) == PerlIO_stderr())
+	if ((IoTYPE(io) == '>' || IoIFP(io) == PerlIO_stdout()
+	    || IoIFP(io) == PerlIO_stderr()) && ckWARN(WARN_IO))
 	{
 	    SV* sv = sv_newmortal();
 	    gv_efullname3(sv, gv, Nullch);
@@ -1894,7 +1880,7 @@ PP(pp_ioctl)
     }
     else {
 	retval = SvIV(argsv);
-	s = (char*)retval;		/* ouch */
+	s = INT2PTR(char*,retval);		/* ouch */
     }
 
     TAINT_PROPER(optype == OP_IOCTL ? "ioctl" : "fcntl");
@@ -3648,7 +3634,7 @@ PP(pp_system)
 	    PerlLIO_close(pp[0]);
 	    if (n) {			/* Error */
 		if (n != sizeof(int))
-		    Perl_croak(aTHX_ "panic: kid popen errno read");
+		    DIE(aTHX_ "panic: kid popen errno read");
 		errno = errkid;		/* Propagate errno from kid */
 		STATUS_CURRENT = -1;
 	    }
@@ -3806,7 +3792,7 @@ PP(pp_setpgrp)
     SETi( BSD_SETPGRP(pid, pgrp) >= 0 );
 #else
     if ((pgrp != 0 && pgrp != getpid()) || (pid != 0 && pid != getpid()))
-	DIE(aTHX_ "POSIX setpgrp can't take an argument");
+	DIE(aTHX_ "setpgrp can't take arguments");
     SETi( setpgrp() >= 0 );
 #endif /* USE_BSDPGRP */
     RETURN;
@@ -3940,13 +3926,13 @@ PP(pp_gmtime)
 	if (!tmbuf)
 	    RETPUSHUNDEF;
 	tsv = Perl_newSVpvf(aTHX_ "%s %s %2d %02d:%02d:%02d %d",
-		       dayname[tmbuf->tm_wday],
-		       monname[tmbuf->tm_mon],
-		       tmbuf->tm_mday,
-		       tmbuf->tm_hour,
-		       tmbuf->tm_min,
-		       tmbuf->tm_sec,
-		       tmbuf->tm_year + 1900);
+			    dayname[tmbuf->tm_wday],
+			    monname[tmbuf->tm_mon],
+			    tmbuf->tm_mday,
+			    tmbuf->tm_hour,
+			    tmbuf->tm_min,
+			    tmbuf->tm_sec,
+			    tmbuf->tm_year + 1900);
 	PUSHs(sv_2mortal(tsv));
     }
     else if (tmbuf) {
@@ -4740,7 +4726,7 @@ PP(pp_gpwent)
 PP(pp_spwent)
 {
     djSP;
-#if defined(HAS_PASSWD) && defined(HAS_SETPWENT) && !defined(CYGWIN)
+#if defined(HAS_PASSWD) && defined(HAS_SETPWENT)
     setpwent();
 #   ifdef HAS_SETSPENT
     setspent();

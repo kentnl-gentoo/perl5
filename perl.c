@@ -14,6 +14,7 @@
 #include "EXTERN.h"
 #define PERL_IN_PERL_C
 #include "perl.h"
+#include "patchlevel.h"			/* for local_patches */
 
 /* XXX If this causes problems, set i_unistd=undef in the hint file.  */
 #ifdef I_UNISTD
@@ -74,7 +75,7 @@ perl_construct(pTHXx)
 #ifdef USE_THREADS
     int i;
 #ifndef FAKE_THREADS
-    struct perl_thread *thr;
+    struct perl_thread *thr = NULL;
 #endif /* FAKE_THREADS */
 #endif /* USE_THREADS */
     
@@ -219,7 +220,7 @@ perl_destruct(pTHXx)
     /* Pass 1 on any remaining threads: detach joinables, join zombies */
   retry_cleanup:
     MUTEX_LOCK(&PL_threads_mutex);
-    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+    DEBUG_S(PerlIO_printf(Perl_debug_log,
 			  "perl_destruct: waiting for %d threads...\n",
 			  PL_nthreads - 1));
     for (t = thr->next; t != thr; t = t->next) {
@@ -227,7 +228,7 @@ perl_destruct(pTHXx)
 	switch (ThrSTATE(t)) {
 	    AV *av;
 	case THRf_ZOMBIE:
-	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 				  "perl_destruct: joining zombie %p\n", t));
 	    ThrSETSTATE(t, THRf_DEAD);
 	    MUTEX_UNLOCK(&t->mutex);
@@ -241,11 +242,11 @@ perl_destruct(pTHXx)
 	    MUTEX_UNLOCK(&PL_threads_mutex);
 	    JOIN(t, &av);
 	    SvREFCNT_dec((SV*)av);
-	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 				  "perl_destruct: joined zombie %p OK\n", t));
 	    goto retry_cleanup;
 	case THRf_R_JOINABLE:
-	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 				  "perl_destruct: detaching thread %p\n", t));
 	    ThrSETSTATE(t, THRf_R_DETACHED);
 	    /* 
@@ -259,7 +260,7 @@ perl_destruct(pTHXx)
 	    MUTEX_UNLOCK(&t->mutex);
 	    goto retry_cleanup;
 	default:
-	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 				  "perl_destruct: ignoring %p (state %u)\n",
 				  t, ThrSTATE(t)));
 	    MUTEX_UNLOCK(&t->mutex);
@@ -271,14 +272,14 @@ perl_destruct(pTHXx)
     /* Pass 2 on remaining threads: wait for the thread count to drop to one */
     while (PL_nthreads > 1)
     {
-	DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	DEBUG_S(PerlIO_printf(Perl_debug_log,
 			      "perl_destruct: final wait for %d threads\n",
 			      PL_nthreads - 1));
 	COND_WAIT(&PL_nthreads_cond, &PL_threads_mutex);
     }
     /* At this point, we're the last thread */
     MUTEX_UNLOCK(&PL_threads_mutex);
-    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "perl_destruct: armageddon has arrived\n"));
+    DEBUG_S(PerlIO_printf(Perl_debug_log, "perl_destruct: armageddon has arrived\n"));
     MUTEX_DESTROY(&PL_threads_mutex);
     COND_DESTROY(&PL_nthreads_cond);
 #endif /* !defined(FAKE_THREADS) */
@@ -327,8 +328,6 @@ perl_destruct(pTHXx)
     PL_warnhook = Nullsv;
     SvREFCNT_dec(PL_diehook);
     PL_diehook = Nullsv;
-    SvREFCNT_dec(PL_parsehook);
-    PL_parsehook = Nullsv;
 
     /* call exit list functions */
     while (PL_exitlistlen-- > 0)
@@ -408,6 +407,11 @@ perl_destruct(pTHXx)
     Safefree(PL_screamnext);
     PL_screamnext  = 0;
 
+    /* float buffer */
+    Safefree(PL_efloatbuf);
+    PL_efloatbuf = Nullch;
+    PL_efloatsize = 0;
+
     /* startup and shutdown function lists */
     SvREFCNT_dec(PL_beginav);
     SvREFCNT_dec(PL_endav);
@@ -425,6 +429,7 @@ perl_destruct(pTHXx)
     PL_argvgv = Nullgv;
     PL_argvoutgv = Nullgv;
     PL_stdingv = Nullgv;
+    PL_stderrgv = Nullgv;
     PL_last_in_gv = Nullgv;
     PL_replgv = Nullgv;
 
@@ -436,6 +441,10 @@ perl_destruct(pTHXx)
     hv = PL_defstash;
     PL_defstash = 0;
     SvREFCNT_dec(hv);
+
+    /* clear queued errors */
+    SvREFCNT_dec(PL_errors);
+    PL_errors = Nullsv;
 
     FREETMPS;
     if (destruct_level >= 2 && ckWARN_d(WARN_INTERNAL)) {
@@ -581,6 +590,7 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
     dTHR;
     I32 oldscope;
     int ret;
+    dJMPENV;
 #ifdef USE_THREADS
     dTHX;
 #endif
@@ -629,7 +639,8 @@ setuid perl scripts securely.\n");
     oldscope = PL_scopestack_ix;
     PL_dowarn = G_WARN_OFF;
 
-    CALLPROTECT(aTHX_ &ret, MEMBER_TO_FPTR(S_parse_body), env, xsinit);
+    CALLPROTECT(aTHX_ pcur_env, &ret, MEMBER_TO_FPTR(S_parse_body),
+		env, xsinit);
     switch (ret) {
     case 0:
 	return 0;
@@ -642,11 +653,11 @@ setuid perl scripts securely.\n");
 	    LEAVE;
 	FREETMPS;
 	PL_curstash = PL_defstash;
-	if (PL_endav)
+	if (PL_endav && !PL_minus_c)
 	    call_list(oldscope, PL_endav);
 	return STATUS_NATIVE_EXPORT;
     case 3:
-	PerlIO_printf(PerlIO_stderr(), "panic: top_env\n");
+	PerlIO_printf(Perl_error_log, "panic: top_env\n");
 	return 1;
     }
     return 0;
@@ -926,6 +937,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
     CvPADLIST(PL_compcv) = comppadlist;
 
     boot_core_UNIVERSAL();
+    boot_core_xsutils();
 
     if (xsinit)
 	(*xsinit)(aTHXo);	/* in case linked C routines want magical variables */
@@ -995,6 +1007,7 @@ perl_run(pTHXx)
     dTHR;
     I32 oldscope;
     int ret;
+    dJMPENV;
 #ifdef USE_THREADS
     dTHX;
 #endif
@@ -1002,7 +1015,7 @@ perl_run(pTHXx)
     oldscope = PL_scopestack_ix;
 
  redo_body:
-    CALLPROTECT(aTHX_ &ret, MEMBER_TO_FPTR(S_run_body), oldscope);
+    CALLPROTECT(aTHX_ pcur_env, &ret, MEMBER_TO_FPTR(S_run_body), oldscope);
     switch (ret) {
     case 1:
 	cxstack_ix = -1;		/* start context stack again */
@@ -1013,7 +1026,7 @@ perl_run(pTHXx)
 	    LEAVE;
 	FREETMPS;
 	PL_curstash = PL_defstash;
-	if (PL_endav)
+	if (PL_endav && !PL_minus_c)
 	    call_list(oldscope, PL_endav);
 #ifdef MYMALLOC
 	if (PerlEnv_getenv("PERL_DEBUG_MSTATS"))
@@ -1025,7 +1038,7 @@ perl_run(pTHXx)
 	    POPSTACK_TO(PL_mainstack);
 	    goto redo_body;
 	}
-	PerlIO_printf(PerlIO_stderr(), "panic: restartop\n");
+	PerlIO_printf(Perl_error_log, "panic: restartop\n");
 	FREETMPS;
 	return 1;
     }
@@ -1050,7 +1063,7 @@ S_run_body(pTHX_ va_list args)
 			      (unsigned long) thr));
 
 	if (PL_minus_c) {
-	    PerlIO_printf(PerlIO_stderr(), "%s syntax OK\n", PL_origfilename);
+	    PerlIO_printf(Perl_error_log, "%s syntax OK\n", PL_origfilename);
 	    my_exit(0);
 	}
 	if (PERLDB_SINGLE && PL_DBsingle)
@@ -1196,6 +1209,7 @@ Perl_call_sv(pTHX_ SV *sv, I32 flags)
     bool oldcatch = CATCH_GET;
     int ret;
     OP* oldop = PL_op;
+    dJMPENV;
 
     if (flags & G_DISCARD) {
 	ENTER;
@@ -1227,16 +1241,10 @@ Perl_call_sv(pTHX_ SV *sv, I32 flags)
 	PL_op->op_private |= OPpENTERSUB_DB;
 
     if (!(flags & G_EVAL)) {
-        /* G_NOCATCH is a hack for perl_vdie using this path to call
-	   a __DIE__ handler */
-        if (!(flags & G_NOCATCH)) {
-	    CATCH_SET(TRUE);
-	}
+	CATCH_SET(TRUE);
 	call_xbody((OP*)&myop, FALSE);
 	retval = PL_stack_sp - (PL_stack_base + oldmark);
-        if (!(flags & G_NOCATCH)) {
-	    CATCH_SET(FALSE);
-	}
+	CATCH_SET(FALSE);
     }
     else {
 	cLOGOP->op_other = PL_op;
@@ -1263,7 +1271,8 @@ Perl_call_sv(pTHX_ SV *sv, I32 flags)
 	PL_markstack_ptr++;
 
   redo_body:
-	CALLPROTECT(aTHX_ &ret, MEMBER_TO_FPTR(S_call_body), (OP*)&myop, FALSE);
+	CALLPROTECT(aTHX_ pcur_env, &ret, MEMBER_TO_FPTR(S_call_body),
+		    (OP*)&myop, FALSE);
 	switch (ret) {
 	case 0:
 	    retval = PL_stack_sp - (PL_stack_base + oldmark);
@@ -1361,6 +1370,7 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
     I32 oldscope;
     int ret;
     OP* oldop = PL_op;
+    dJMPENV;
 
     if (flags & G_DISCARD) {
 	ENTER;
@@ -1385,7 +1395,8 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 	myop.op_flags |= OPf_SPECIAL;
 
  redo_body:
-    CALLPROTECT(aTHX_ &ret, MEMBER_TO_FPTR(S_call_body), (OP*)&myop, TRUE);
+    CALLPROTECT(aTHX_ pcur_env, &ret, MEMBER_TO_FPTR(S_call_body),
+		(OP*)&myop, TRUE);
     switch (ret) {
     case 0:
 	retval = PL_stack_sp - (PL_stack_base + oldmark);
@@ -2627,9 +2638,9 @@ S_init_predump_symbols(pTHX)
     GvMULTI_on(tmpgv);
     GvIOp(tmpgv) = (IO*)SvREFCNT_inc(io);
 
-    othergv = gv_fetchpv("STDERR",TRUE, SVt_PVIO);
-    GvMULTI_on(othergv);
-    io = GvIOp(othergv);
+    PL_stderrgv = gv_fetchpv("STDERR",TRUE, SVt_PVIO);
+    GvMULTI_on(PL_stderrgv);
+    io = GvIOp(PL_stderrgv);
     IoOFP(io) = IoIFP(io) = PerlIO_stderr();
     tmpgv = gv_fetchpv("stderr",TRUE, SVt_PV);
     GvMULTI_on(tmpgv);
@@ -2868,7 +2879,7 @@ S_incpush(pTHX_ char *p, int addsubdirs)
 		sv_usepvn(libdir,unix,len);
 	    }
 	    else
-		PerlIO_printf(PerlIO_stderr(),
+		PerlIO_printf(Perl_error_log,
 		              "Failed to unixify @INC element \"%s\"\n",
 			      SvPV(libdir,len));
 #endif
@@ -2910,7 +2921,6 @@ S_init_main_thread(pTHX)
     thr->threadsv = newAV();
     /* thr->threadsvp is set when find_threadsv is called */
     thr->specific = newAV();
-    thr->errhv = newHV();
     thr->flags = THRf_R_JOINABLE;
     MUTEX_INIT(&thr->mutex);
     /* Handcraft thrsv similarly to mess_sv */
@@ -2981,11 +2991,12 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
     CV *cv;
     STRLEN len;
     int ret;
+    dJMPENV;
 
     while (AvFILL(paramList) >= 0) {
 	cv = (CV*)av_shift(paramList);
 	SAVEFREESV(cv);
-	CALLPROTECT(aTHX_ &ret, MEMBER_TO_FPTR(S_call_list_body), cv);
+	CALLPROTECT(aTHX_ pcur_env, &ret, MEMBER_TO_FPTR(S_call_list_body), cv);
 	switch (ret) {
 	case 0:
 	    (void)SvPV(atsv, len);
@@ -3010,7 +3021,7 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 		LEAVE;
 	    FREETMPS;
 	    PL_curstash = PL_defstash;
-	    if (PL_endav)
+	    if (PL_endav && !PL_minus_c)
 		call_list(oldscope, PL_endav);
 	    PL_curcop = &PL_compiling;
 	    PL_curcop->cop_line = oldline;
@@ -3028,7 +3039,7 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 		PL_curcop->cop_line = oldline;
 		JMPENV_JUMP(3);
 	    }
-	    PerlIO_printf(PerlIO_stderr(), "panic: restartop\n");
+	    PerlIO_printf(Perl_error_log, "panic: restartop\n");
 	    FREETMPS;
 	    break;
 	}

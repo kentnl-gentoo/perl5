@@ -130,10 +130,6 @@
 #define PL_dowarn		(*Perl_Idowarn_ptr(aTHXo))
 #undef  PL_e_script
 #define PL_e_script		(*Perl_Ie_script_ptr(aTHXo))
-#undef  PL_efloatbuf
-#define PL_efloatbuf		(*Perl_Iefloatbuf_ptr(aTHXo))
-#undef  PL_efloatsize
-#define PL_efloatsize		(*Perl_Iefloatsize_ptr(aTHXo))
 #undef  PL_egid
 #define PL_egid			(*Perl_Iegid_ptr(aTHXo))
 #undef  PL_endav
@@ -376,8 +372,6 @@
 #define PL_padix		(*Perl_Ipadix_ptr(aTHXo))
 #undef  PL_padix_floor
 #define PL_padix_floor		(*Perl_Ipadix_floor_ptr(aTHXo))
-#undef  PL_parsehook
-#define PL_parsehook		(*Perl_Iparsehook_ptr(aTHXo))
 #undef  PL_patchlevel
 #define PL_patchlevel		(*Perl_Ipatchlevel_ptr(aTHXo))
 #undef  PL_pending_ident
@@ -426,6 +420,8 @@
 #define PL_statusvalue		(*Perl_Istatusvalue_ptr(aTHXo))
 #undef  PL_statusvalue_vms
 #define PL_statusvalue_vms	(*Perl_Istatusvalue_vms_ptr(aTHXo))
+#undef  PL_stderrgv
+#define PL_stderrgv		(*Perl_Istderrgv_ptr(aTHXo))
 #undef  PL_stdingv
 #define PL_stdingv		(*Perl_Istdingv_ptr(aTHXo))
 #undef  PL_strchop
@@ -528,6 +524,22 @@
 #define PL_xnv_root		(*Perl_Ixnv_root_ptr(aTHXo))
 #undef  PL_xpv_root
 #define PL_xpv_root		(*Perl_Ixpv_root_ptr(aTHXo))
+#undef  PL_xpvav_root
+#define PL_xpvav_root		(*Perl_Ixpvav_root_ptr(aTHXo))
+#undef  PL_xpvbm_root
+#define PL_xpvbm_root		(*Perl_Ixpvbm_root_ptr(aTHXo))
+#undef  PL_xpvcv_root
+#define PL_xpvcv_root		(*Perl_Ixpvcv_root_ptr(aTHXo))
+#undef  PL_xpvhv_root
+#define PL_xpvhv_root		(*Perl_Ixpvhv_root_ptr(aTHXo))
+#undef  PL_xpviv_root
+#define PL_xpviv_root		(*Perl_Ixpviv_root_ptr(aTHXo))
+#undef  PL_xpvlv_root
+#define PL_xpvlv_root		(*Perl_Ixpvlv_root_ptr(aTHXo))
+#undef  PL_xpvmg_root
+#define PL_xpvmg_root		(*Perl_Ixpvmg_root_ptr(aTHXo))
+#undef  PL_xpvnv_root
+#define PL_xpvnv_root		(*Perl_Ixpvnv_root_ptr(aTHXo))
 #undef  PL_xrv_root
 #define PL_xrv_root		(*Perl_Ixrv_root_ptr(aTHXo))
 #undef  PL_yychar
@@ -580,6 +592,12 @@
 #define PL_dirty		(*Perl_Tdirty_ptr(aTHXo))
 #undef  PL_dumpindent
 #define PL_dumpindent		(*Perl_Tdumpindent_ptr(aTHXo))
+#undef  PL_efloatbuf
+#define PL_efloatbuf		(*Perl_Tefloatbuf_ptr(aTHXo))
+#undef  PL_efloatsize
+#define PL_efloatsize		(*Perl_Tefloatsize_ptr(aTHXo))
+#undef  PL_errors
+#define PL_errors		(*Perl_Terrors_ptr(aTHXo))
 #undef  PL_extralen
 #define PL_extralen		(*Perl_Textralen_ptr(aTHXo))
 #undef  PL_firstgv
@@ -1004,6 +1022,10 @@
 #define Perl_form_nocontext	pPerl->Perl_form_nocontext
 #undef  form_nocontext
 #define form_nocontext		Perl_form_nocontext
+#undef  Perl_mess_nocontext
+#define Perl_mess_nocontext	pPerl->Perl_mess_nocontext
+#undef  mess_nocontext
+#define mess_nocontext		Perl_mess_nocontext
 #undef  Perl_warn_nocontext
 #define Perl_warn_nocontext	pPerl->Perl_warn_nocontext
 #undef  warn_nocontext
@@ -2015,6 +2037,14 @@
 #define Perl_mess		pPerl->Perl_mess
 #undef  mess
 #define mess			Perl_mess
+#undef  Perl_vmess
+#define Perl_vmess		pPerl->Perl_vmess
+#undef  vmess
+#define vmess			Perl_vmess
+#undef  Perl_qerror
+#define Perl_qerror		pPerl->Perl_qerror
+#undef  qerror
+#define qerror			Perl_qerror
 #undef  Perl_mg_clear
 #define Perl_mg_clear		pPerl->Perl_mg_clear
 #undef  mg_clear
@@ -2676,6 +2706,10 @@
 #define Perl_save_destructor	pPerl->Perl_save_destructor
 #undef  save_destructor
 #define save_destructor		Perl_save_destructor
+#undef  Perl_save_destructor_x
+#define Perl_save_destructor_x	pPerl->Perl_save_destructor_x
+#undef  save_destructor_x
+#define save_destructor_x	Perl_save_destructor_x
 #undef  Perl_save_freesv
 #define Perl_save_freesv	pPerl->Perl_save_freesv
 #undef  save_freesv
@@ -3509,6 +3543,26 @@
 #define Perl_magic_killbackrefs	pPerl->Perl_magic_killbackrefs
 #undef  magic_killbackrefs
 #define magic_killbackrefs	Perl_magic_killbackrefs
+#undef  Perl_newANONATTRSUB
+#define Perl_newANONATTRSUB	pPerl->Perl_newANONATTRSUB
+#undef  newANONATTRSUB
+#define newANONATTRSUB		Perl_newANONATTRSUB
+#undef  Perl_newATTRSUB
+#define Perl_newATTRSUB		pPerl->Perl_newATTRSUB
+#undef  newATTRSUB
+#define newATTRSUB		Perl_newATTRSUB
+#undef  Perl_newMYSUB
+#define Perl_newMYSUB		pPerl->Perl_newMYSUB
+#undef  newMYSUB
+#define newMYSUB		Perl_newMYSUB
+#undef  Perl_my_attrs
+#define Perl_my_attrs		pPerl->Perl_my_attrs
+#undef  my_attrs
+#define my_attrs		Perl_my_attrs
+#undef  Perl_boot_core_xsutils
+#define Perl_boot_core_xsutils	pPerl->Perl_boot_core_xsutils
+#undef  boot_core_xsutils
+#define boot_core_xsutils	Perl_boot_core_xsutils
 #if defined(PERL_OBJECT)
 #endif
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
@@ -3628,6 +3682,10 @@
 #define Perl_ck_index		pPerl->Perl_ck_index
 #undef  ck_index
 #define ck_index		Perl_ck_index
+#undef  Perl_ck_join
+#define Perl_ck_join		pPerl->Perl_ck_join
+#undef  ck_join
+#define ck_join			Perl_ck_join
 #undef  Perl_ck_lengthconst
 #define Perl_ck_lengthconst	pPerl->Perl_ck_lengthconst
 #undef  ck_lengthconst
@@ -4384,6 +4442,10 @@
 #define Perl_pp_leavesub	pPerl->Perl_pp_leavesub
 #undef  pp_leavesub
 #define pp_leavesub		Perl_pp_leavesub
+#undef  Perl_pp_leavesublv
+#define Perl_pp_leavesublv	pPerl->Perl_pp_leavesublv
+#undef  pp_leavesublv
+#define pp_leavesublv		Perl_pp_leavesublv
 #undef  Perl_pp_leavetry
 #define Perl_pp_leavetry	pPerl->Perl_pp_leavetry
 #undef  pp_leavetry

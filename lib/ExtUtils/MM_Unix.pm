@@ -377,7 +377,7 @@ sub cflags {
 
     if ($Is_PERL_OBJECT) {
         $self->{CCFLAGS} =~ s/-DPERL_OBJECT(\b|$)/-DPERL_CAPI/g;
-        if ($Is_Win32 && $Config{'cc'} =~ /^cl.exe/i) {
+        if ($Is_Win32 && $Config{'cc'} =~ /^cl/i) {
             # Turn off C++ mode of the MSC compiler
             $self->{CCFLAGS} =~ s/-TP(\s|$)//;
             $self->{OPTIMIZE} =~ s/-TP(\s|$)//;
@@ -425,7 +425,19 @@ clean ::
 ');
     # clean subdirectories first
     for $dir (@{$self->{DIR}}) {
-	push @m, "\t-cd $dir && \$(TEST_F) $self->{MAKEFILE} && \$(MAKE) clean\n";
+	if ($Is_Win32  &&  Win32::IsWin95()) {
+	    push @m, <<EOT;
+	cd $dir
+	\$(TEST_F) $self->{MAKEFILE}
+	\$(MAKE) clean
+	cd ..
+EOT
+	}
+	else {
+	    push @m, <<EOT;
+	-cd $dir && \$(TEST_F) $self->{MAKEFILE} && \$(MAKE) clean
+EOT
+	}
     }
 
     my(@otherfiles) = values %{$self->{XS}}; # .c files from *.xs files
@@ -1391,9 +1403,9 @@ sub init_dirscan {	# --- File and Directory Lists (.xs .pm .pod etc)
 	    $h{$name} = 1;
 	} elsif ($name =~ /\.PL$/) {
 	    ($pl_files{$name} = $name) =~ s/\.PL$// ;
-	} elsif ($Is_VMS && $name =~ /[._]pl$/i) {
+	} elsif (($Is_VMS || $Is_Dos) && $name =~ /[._]pl$/i) {
 	    # case-insensitive filesystem, one dot per name, so foo.h.PL
-	    # under Unix appears as foo.h_pl under VMS
+	    # under Unix appears as foo.h_pl under VMS or fooh.pl on Dos
 	    local($/); open(PL,$name); my $txt = <PL>; close PL;
 	    if ($txt =~ /Extracting \S+ \(with variable substitutions/) {
 		($pl_files{$name} = $name) =~ s/[._]pl$//i ;
@@ -1674,10 +1686,34 @@ from the perl source tree.
 	}
     } else {
 	# we should also consider $ENV{PERL5LIB} here
+        my $old = $self->{PERL_LIB} || $self->{PERL_ARCHLIB} || $self->{PERL_INC};
 	$self->{PERL_LIB}     ||= $Config::Config{privlibexp};
 	$self->{PERL_ARCHLIB} ||= $Config::Config{archlibexp};
 	$self->{PERL_INC}     = $self->catdir("$self->{PERL_ARCHLIB}","CORE"); # wild guess for now
 	my $perl_h;
+
+	if (not -f ($perl_h = $self->catfile($self->{PERL_INC},"perl.h"))
+	    and not $old){
+	    # Maybe somebody tries to build an extension with an
+	    # uninstalled Perl outside of Perl build tree
+	    my $found;
+	    for my $dir (@INC) {
+	      $found = $dir, last if -e $self->catdir($dir, "Config.pm");
+	    }
+	    if ($found) {
+	      my $inc = dirname $found;
+	      if (-e $self->catdir($inc, "perl.h")) {
+		$self->{PERL_LIB}	   = $found;
+		$self->{PERL_ARCHLIB}	   = $found;
+		$self->{PERL_INC}	   = $inc;
+		$self->{UNINSTALLED_PERL}  = 1;
+		print STDOUT <<EOP;
+... Detected uninstalled Perl.  Trying to continue.
+EOP
+	      }
+	    }
+	}
+	
 	unless (-f ($perl_h = $self->catfile($self->{PERL_INC},"perl.h"))){
 	    die qq{
 Error: Unable to locate installed Perl libraries or Perl source code.
@@ -2099,6 +2135,7 @@ pure_site_install ::
 		}.$self->catdir('$(PERL_ARCHLIB)','auto','$(FULLEXT)').q{
 
 doc_perl_install ::
+	-}.$self->{NOECHO}.q{$(MKPATH) $(INSTALLARCHLIB)
 	-}.$self->{NOECHO}.q{$(DOC_INSTALL) \
 		"Module" "$(NAME)" \
 		"installed into" "$(INSTALLPRIVLIB)" \
@@ -2108,6 +2145,7 @@ doc_perl_install ::
 		>> }.$self->catfile('$(INSTALLARCHLIB)','perllocal.pod').q{
 
 doc_site_install ::
+	-}.$self->{NOECHO}.q{$(MKPATH) $(INSTALLARCHLIB)
 	-}.$self->{NOECHO}.q{$(DOC_INSTALL) \
 		"Module" "$(NAME)" \
 		"installed into" "$(INSTALLSITELIB)" \
@@ -2474,6 +2512,7 @@ $tmp/perlmain.c: $makefilename}, q{
     push @m, q{
 doc_inst_perl:
 	}.$self->{NOECHO}.q{echo Appending installation info to $(INSTALLARCHLIB)/perllocal.pod
+	-}.$self->{NOECHO}.q{$(MKPATH) $(INSTALLARCHLIB)
 	-}.$self->{NOECHO}.q{$(DOC_INSTALL) \
 		"Perl binary" "$(MAP_TARGET)" \
 		MAP_STATIC "$(MAP_STATIC)" \
@@ -2554,6 +2593,10 @@ sub manifypods {
 	$pod2man_exe = $self->catfile($self->{PERL_SRC},'pod','pod2man');
     } else {
 	$pod2man_exe = $self->catfile($Config{scriptdirexp},'pod2man');
+    }
+    unless ($pod2man_exe = $self->perl_script($pod2man_exe)) {
+      # Maybe a build by uninstalled Perl?
+      $pod2man_exe = $self->catfile($self->{PERL_INC}, "pod", "pod2man");
     }
     unless ($pod2man_exe = $self->perl_script($pod2man_exe)) {
 	# No pod2man but some MAN3PODS to be installed
@@ -3043,7 +3086,9 @@ sub realclean {
 realclean purge ::  clean
 ');
     # realclean subdirectories first (already cleaned)
-    my $sub = "\t-cd %s && \$(TEST_F) %s && \$(MAKE) %s realclean\n";
+    my $sub = ($Is_Win32  &&  Win32::IsWin95()) ?
+      "\tcd %s\n\t\$(TEST_F) %s\n\t\$(MAKE) %s realclean\n\tcd ..\n" :
+      "\t-cd %s && \$(TEST_F) %s && \$(MAKE) %s realclean\n";
     foreach(@{$self->{DIR}}){
 	push(@m, sprintf($sub,$_,"$self->{MAKEFILE}.old","-f $self->{MAKEFILE}.old"));
 	push(@m, sprintf($sub,$_,"$self->{MAKEFILE}",''));
@@ -3187,12 +3232,22 @@ Helper subroutine for subdirs
 sub subdir_x {
     my($self, $subdir) = @_;
     my(@m);
-    qq{
+    if ($Is_Win32 && Win32::IsWin95()) {
+	return <<EOT;
+subdirs ::
+	cd $subdir
+	\$(MAKE) all \$(PASTHRU)
+	cd ..
+EOT
+    }
+    else {
+	return <<EOT;
 
 subdirs ::
 	$self->{NOECHO}cd $subdir && \$(MAKE) all \$(PASTHRU)
 
-};
+EOT
+    }
 }
 
 =item subdirs (o)

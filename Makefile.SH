@@ -226,18 +226,19 @@ h1 = EXTERN.h INTERN.h XSUB.h av.h config.h cop.h cv.h dosish.h
 h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h
 h3 = opcode.h patchlevel.h perl.h perly.h pp.h proto.h regcomp.h
 h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
-h5 = utf8.h warning.h
+h5 = utf8.h warnings.h
 h = $(h1) $(h2) $(h3) $(h4) $(h5)
 
 c1 = $(mallocsrc) av.c scope.c op.c doop.c doio.c dump.c hv.c mg.c
 c2 = perl.c perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c
-c3 = gv.c sv.c taint.c toke.c util.c deb.c run.c universal.c globals.c perlio.c
+c3 = gv.c sv.c taint.c toke.c util.c deb.c run.c universal.c xsutils.c
+c4 = globals.c perlio.c
 
-c = $(c1) $(c2) $(c3) miniperlmain.c perlmain.c
+c = $(c1) $(c2) $(c3) $(c4) miniperlmain.c perlmain.c
 
 obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
-obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT)
+obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) xsutils$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT)
 
 obj = $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 
@@ -256,7 +257,7 @@ lintflags = -hbvxac
 .c$(OBJ_EXT):
 	$(CCCMD) $(PLDLFLAGS) $*.c
 
-all: $(FIRSTMAKEFILE) miniperl $(private) $(plextract) $(public) $(dynamic_ext) $(nonxs_ext)
+all: $(FIRSTMAKEFILE) miniperl $(private) $(public) $(dynamic_ext) $(nonxs_ext)
 	@echo " ";
 	@echo "	Everything is up to date. 'make test' to run test suite."
 
@@ -269,7 +270,7 @@ compile: all
 translators:	miniperl lib/Config.pm FORCE
 	@echo " "; echo "	Making x2p stuff"; cd x2p; $(LDLIBPTH) $(MAKE) all
 
-utilities:	miniperl lib/Config.pm FORCE
+utilities:	miniperl lib/Config.pm $(plextract) FORCE
 	@echo " "; echo "	Making utilities"; cd utils; $(LDLIBPTH) $(MAKE) all
 
 
@@ -332,7 +333,9 @@ $(LIBPERL_NONSHR): perl$(OBJ_EXT) $(obj)
 	$(AR) rcu $(LIBPERL_NONSHR) perl$(OBJ_EXT) $(obj)
 
 $(MINIPERL_NONSHR): $(LIBPERL_NONSHR) miniperlmain$(OBJ_EXT)
-	$(CC) $(LDFLAGS) -o $(MINIPERL_NONSHR) miniperlmain$(OBJ_EXT) $(LIBPERL_NONSHR) $(LIBS)
+	$(CCCMD) $(PLDLFLAGS) -DMINIPERL_BUILD -o opmini$(OBJ_EXT) op.c
+	$(CC) $(LDFLAGS) -o $(MINIPERL_NONSHR) miniperlmain$(OBJ_EXT) \
+	    opmini$(OBJ_EXT) $(LIBPERL_NONSHR) $(LIBS)
 
 MINIPERLEXP		= $(MINIPERL_NONSHR)
 
@@ -415,7 +418,9 @@ $(LIBPERL): $& perl$(OBJ_EXT) $(obj) $(LIBPERLEXPORT)
 # The Module used here must not depend on Config or any extensions.
 
 miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)
-	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl miniperlmain$(OBJ_EXT) $(LLIBPERL) $(libs)
+	$(CCCMD) $(PLDLFLAGS) -DMINIPERL_BUILD -o opmini$(OBJ_EXT) op.c
+	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl \
+	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL) $(libs)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
 
 perl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
@@ -453,7 +458,7 @@ sperl$(OBJ_EXT): perl.c perly.h patchlevel.h $(h)
 # We have to call our ./makedir because Ultrix 4.3 make can't handle the line
 #	test -d lib/auto || mkdir lib/auto
 #
-preplibrary: miniperl lib/Config.pm $(plextract)
+preplibrary: miniperl lib/Config.pm
 	@sh ./makedir lib/auto
 	@echo "	AutoSplitting perl library"
 	$(LDLIBPTH) ./miniperl -Ilib -e 'use AutoSplit; \
@@ -538,6 +543,8 @@ SYM  = global.sym globvar.sym perlio.sym pp.sym
 
 SYMH = perlvars.h intrpvar.h thrdvar.h
 
+CHMOD_W = chmod +w
+
 # The following files are generated automatically
 #	keywords.h:	keywords.pl
 #	opcode.h:	opcode.pl
@@ -550,18 +557,19 @@ SYMH = perlvars.h intrpvar.h thrdvar.h
 #	ext/B/Asmdata.pm:	bytecode.pl
 #	global.sym:	embed.pl
 #	regnodes.h:	regcomp.pl
-#	warning.h lib/warning.pm:	warning.pl
+#	warnings.h lib/warnings.pm:	warnings.pl
 # The correct versions should be already supplied with the perl kit,
 # in case you don't have perl available.
 # To force them to run, type
 #	make regen_headers
 regen_headers:	FORCE
+	$(CHMOD_W) proto.h warning.h lib/warning.pm 
 	perl keywords.pl
 	perl opcode.pl
 	perl embed.pl
 	perl bytecode.pl
 	perl regcomp.pl
-	perl warning.pl
+	perl warnings.pl
 
 # Extensions:
 # Names added to $(dynamic_ext) or $(static_ext) or $(nonxs_ext) will
@@ -622,7 +630,7 @@ _cleaner:
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	$(LDLIBPTH) sh ext/util/make_ext realclean $$x MAKE=$(MAKE) ; \
 	done
-	rm -f *.orig */*.orig *~ */*~ core core.*perl.*.? *perl.core t/core t/core.perl.*.? t/*perl.core t/misctmp* t/tmp* t/Io.dup t/tmon.out t/big t/c t/perl t/nonexistent1 so_locations $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
+	rm -f *.orig */*.orig *~ */*~ core core.*perl.*.? *perl.core t/core t/core.perl.*.? t/*perl.core t/misctmp* t/tmp* t/c t/perl so_locations $(LIBPERL_NONSHR) $(MINIPERL_NONSHR)
 	rm -rf $(addedbyconf)
 	rm -f $(FIRSTMAKEFILE) $(FIRSTMAKEFILE).old
 	rm -f $(private)

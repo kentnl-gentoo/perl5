@@ -164,8 +164,21 @@ PP(pp_concat)
 	s = SvPV_force(TARG, len);
     }
     s = SvPV(right,len);
-    if (SvOK(TARG))
+    if (SvOK(TARG)) {
+#if defined(PERL_Y2KWARN)
+	if ((SvIOK(right) || SvNOK(right)) && ckWARN(WARN_MISC)) {
+	    STRLEN n;
+	    char *s = SvPV(TARG,n);
+	    if (n >= 2 && s[n-2] == '1' && s[n-1] == '9'
+		&& (n == 2 || !isDIGIT(s[n-3])))
+	    {
+		Perl_warner(aTHX_ WARN_MISC, "Possible Y2K bug: %s",
+			    "about to append an integer to '19'");
+	    }
+	}
+#endif
 	sv_catpvn(TARG,s,len);
+    }
     else
 	sv_setpvn(TARG,s,len);	/* suppress warning */
     SETTARG;
@@ -221,7 +234,7 @@ PP(pp_preinc)
 {
     djSP;
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
-	Perl_croak(aTHX_ PL_no_modify);
+	DIE(aTHX_ PL_no_modify);
     if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MAX)
     {
@@ -588,15 +601,9 @@ PP(pp_rv2hv)
 	dTARGET;
 	if (SvTYPE(hv) == SVt_PVAV)
 	    hv = avhv_keys((AV*)hv);
-#ifdef IV_IS_QUAD
 	if (HvFILL(hv))
-            Perl_sv_setpvf(aTHX_ TARG, "%" PERL_PRId64 "/%" PERL_PRId64,
-                      (Quad_t)HvFILL(hv), (Quad_t)HvMAX(hv) + 1);
-#else
-	if (HvFILL(hv))
-            Perl_sv_setpvf(aTHX_ TARG, "%ld/%ld",
-                      (long)HvFILL(hv), (long)HvMAX(hv) + 1);
-#endif
+            Perl_sv_setpvf(aTHX_ TARG, "%"IVdf"/%"IVdf,
+			   (IV)HvFILL(hv), (IV)HvMAX(hv) + 1);
 	else
 	    sv_setiv(TARG, 0);
 	
@@ -1588,7 +1595,7 @@ PP(pp_iter)
 	}
 	LvTARG(lv) = SvREFCNT_inc(av);
 	LvTARGOFF(lv) = cx->blk_loop.iterix;
-	LvTARGLEN(lv) = (UV) -1;
+	LvTARGLEN(lv) = (STRLEN)UV_MAX;
 	sv = (SV*)lv;
     }
 
@@ -1632,7 +1639,7 @@ PP(pp_subst)
     if (SvREADONLY(TARG)
 	|| (SvTYPE(TARG) > SVt_PVLV
 	    && !(SvTYPE(TARG) == SVt_PVGV && SvFAKE(TARG))))
-	Perl_croak(aTHX_ PL_no_modify);
+	DIE(aTHX_ PL_no_modify);
     PUTBACK;
 
     s = SvPV(TARG, len);
@@ -1907,27 +1914,29 @@ PP(pp_leavesub)
     PMOP *newpm;
     I32 gimme;
     register PERL_CONTEXT *cx;
-    struct block_sub cxsub;
+    SV *sv;
 
     POPBLOCK(cx,newpm);
-    POPSUB1(cx);	/* Delay POPSUB2 until stack values are safe */
  
     TAINT_NOT;
     if (gimme == G_SCALAR) {
 	MARK = newsp + 1;
 	if (MARK <= SP) {
-	    if (cxsub.cv && CvDEPTH(cxsub.cv) > 1) {
+	    if (cx->blk_sub.cv && CvDEPTH(cx->blk_sub.cv) > 1) {
 		if (SvTEMP(TOPs)) {
 		    *MARK = SvREFCNT_inc(TOPs);
 		    FREETMPS;
 		    sv_2mortal(*MARK);
-		} else {
+		}
+		else {
 		    FREETMPS;
 		    *MARK = sv_mortalcopy(TOPs);
 		}
-	    } else
+	    }
+	    else
 		*MARK = SvTEMP(TOPs) ? TOPs : sv_mortalcopy(TOPs);
-	} else {
+	}
+	else {
 	    MEXTEND(MARK, 0);
 	    *MARK = &PL_sv_undef;
 	}
@@ -1943,12 +1952,166 @@ PP(pp_leavesub)
     }
     PUTBACK;
     
-    POPSUB2();		/* Stack values are safe: release CV and @_ ... */
+    POPSUB(cx,sv);	/* Stack values are safe: release CV and @_ ... */
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
     LEAVE;
+    LEAVESUB(sv);
     return pop_return();
 }
+
+/* This duplicates the above code because the above code must not
+ * get any slower by more conditions */
+PP(pp_leavesublv)
+{
+    djSP;
+    SV **mark;
+    SV **newsp;
+    PMOP *newpm;
+    I32 gimme;
+    register PERL_CONTEXT *cx;
+    SV *sv;
+
+    POPBLOCK(cx,newpm);
+ 
+    TAINT_NOT;
+
+    if (cx->blk_sub.lval & OPpENTERSUB_INARGS) {
+	/* We are an argument to a function or grep().
+	 * This kind of lvalueness was legal before lvalue
+	 * subroutines too, so be backward compatible:
+	 * cannot report errors.  */
+
+	/* Scalar context *is* possible, on the LHS of -> only,
+	 * as in f()->meth().  But this is not an lvalue. */
+	if (gimme == G_SCALAR)
+	    goto temporise;
+	if (gimme == G_ARRAY) {
+	    if (!CvLVALUE(cx->blk_sub.cv))
+		goto temporise_array;
+	    EXTEND_MORTAL(SP - newsp);
+	    for (mark = newsp + 1; mark <= SP; mark++) {
+		if (SvTEMP(*mark))
+		    /* empty */ ;
+		else if (SvFLAGS(*mark) & (SVs_PADTMP | SVf_READONLY))
+		    *mark = sv_mortalcopy(*mark);
+		else {
+		    /* Can be a localized value subject to deletion. */
+		    PL_tmps_stack[++PL_tmps_ix] = *mark;
+		    (void)SvREFCNT_inc(*mark);
+		}
+	    }
+	}
+    }
+    else if (cx->blk_sub.lval) {     /* Leave it as it is if we can. */
+	/* Here we go for robustness, not for speed, so we change all
+	 * the refcounts so the caller gets a live guy. Cannot set
+	 * TEMP, so sv_2mortal is out of question. */
+	if (!CvLVALUE(cx->blk_sub.cv)) {
+	    POPSUB(cx,sv);
+	    PL_curpm = newpm;
+	    LEAVE;
+	    LEAVESUB(sv);
+	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
+	}
+	if (gimme == G_SCALAR) {
+	    MARK = newsp + 1;
+	    EXTEND_MORTAL(1);
+	    if (MARK == SP) {
+		if (SvFLAGS(TOPs) & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)) {
+		    POPSUB(cx,sv);
+		    PL_curpm = newpm;
+		    LEAVE;
+		    LEAVESUB(sv);
+		    DIE(aTHX_ "Can't return a %s from lvalue subroutine",
+			SvREADONLY(TOPs) ? "readonly value" : "temporary");
+		}
+		else {                  /* Can be a localized value
+					 * subject to deletion. */
+		    PL_tmps_stack[++PL_tmps_ix] = *mark;
+		    (void)SvREFCNT_inc(*mark);
+		}
+	    }
+	    else {			/* Should not happen? */
+		POPSUB(cx,sv);
+		PL_curpm = newpm;
+		LEAVE;
+		LEAVESUB(sv);
+		DIE(aTHX_ "%s returned from lvalue subroutine in scalar context",
+		    (MARK > SP ? "Empty array" : "Array"));
+	    }
+	    SP = MARK;
+	}
+	else if (gimme == G_ARRAY) {
+	    EXTEND_MORTAL(SP - newsp);
+	    for (mark = newsp + 1; mark <= SP; mark++) {
+		if (SvFLAGS(*mark) & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)) {
+		    /* Might be flattened array after $#array =  */
+		    PUTBACK;
+		    POPSUB(cx,sv);
+		    PL_curpm = newpm;
+		    LEAVE;
+		    LEAVESUB(sv);
+		    DIE(aTHX_ "Can't return %s from lvalue subroutine",
+			(*mark != &PL_sv_undef)
+			? (SvREADONLY(TOPs)
+			    ? "a readonly value" : "a temporary")
+			: "an uninitialized value");
+		}
+		else {
+		    mortalize:
+		    /* Can be a localized value subject to deletion. */
+		    PL_tmps_stack[++PL_tmps_ix] = *mark;
+		    (void)SvREFCNT_inc(*mark);
+		}
+	    }
+	}
+    }
+    else {
+	if (gimme == G_SCALAR) {
+	  temporise:
+	    MARK = newsp + 1;
+	    if (MARK <= SP) {
+		if (cx->blk_sub.cv && CvDEPTH(cx->blk_sub.cv) > 1) {
+		    if (SvTEMP(TOPs)) {
+			*MARK = SvREFCNT_inc(TOPs);
+			FREETMPS;
+			sv_2mortal(*MARK);
+		    }
+		    else {
+			FREETMPS;
+			*MARK = sv_mortalcopy(TOPs);
+		    }
+		}
+		else
+		    *MARK = SvTEMP(TOPs) ? TOPs : sv_mortalcopy(TOPs);
+	    }
+	    else {
+		MEXTEND(MARK, 0);
+		*MARK = &PL_sv_undef;
+	    }
+	    SP = MARK;
+	}
+	else if (gimme == G_ARRAY) {
+	  temporise_array:
+	    for (MARK = newsp + 1; MARK <= SP; MARK++) {
+		if (!SvTEMP(*MARK)) {
+		    *MARK = sv_mortalcopy(*MARK);
+		    TAINT_NOT;  /* Each item is independent */
+		}
+	    }
+	}
+    }
+    PUTBACK;
+    
+    POPSUB(cx,sv);	/* Stack values are safe: release CV and @_ ... */
+    PL_curpm = newpm;	/* ... and pop $1 et al */
+
+    LEAVE;
+    LEAVESUB(sv);
+    return pop_return();
+}
+
 
 STATIC CV *
 S_get_db_sub(pTHX_ SV **svp, CV *cv)
@@ -1977,7 +2140,7 @@ S_get_db_sub(pTHX_ SV **svp, CV *cv)
 	SvUPGRADE(dbsv, SVt_PVIV);
 	SvIOK_on(dbsv);
 	SAVEIV(SvIVX(dbsv));
-	SvIVX(dbsv) = (IV)cv;		/* Do it the quickest way  */
+	SvIVX(dbsv) = PTR2IV(cv);	/* Do it the quickest way  */
     }
 
     if (CvXSUB(cv))
@@ -2110,7 +2273,7 @@ try_autoload:
 		    || !(sv = AvARRAY(av)[0]))
 		{
 		    MUTEX_UNLOCK(CvMUTEXP(cv));
-		    Perl_croak(aTHX_ "no argument for locked method call");
+		    DIE(aTHX_ "no argument for locked method call");
 		}
 	    }
 	    if (SvROK(sv))
@@ -2133,10 +2296,10 @@ try_autoload:
 	    while (MgOWNER(mg))
 		COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
 	    MgOWNER(mg) = thr;
-	    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "%p: pp_entersub lock %p\n",
+	    DEBUG_S(PerlIO_printf(Perl_debug_log, "%p: pp_entersub lock %p\n",
 				  thr, sv);)
 	    MUTEX_UNLOCK(MgMUTEXP(mg));
-	    SAVEDESTRUCTOR(Perl_unlock_condpair, sv);
+	    SAVEDESTRUCTOR_X(Perl_unlock_condpair, sv);
 	}
 	MUTEX_LOCK(CvMUTEXP(cv));
     }
@@ -2175,13 +2338,13 @@ try_autoload:
 	    /* We already have a clone to use */
 	    MUTEX_UNLOCK(CvMUTEXP(cv));
 	    cv = *(CV**)svp;
-	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 				  "entersub: %p already has clone %p:%s\n",
 				  thr, cv, SvPEEK((SV*)cv)));
 	    CvOWNER(cv) = thr;
 	    SvREFCNT_inc(cv);
 	    if (CvDEPTH(cv) == 0)
-		SAVEDESTRUCTOR(unset_cvowner, (void*) cv);
+		SAVEDESTRUCTOR_X(unset_cvowner, (void*) cv);
 	}
 	else {
 	    /* (2) => grab ownership of cv. (3) => make clone */
@@ -2189,16 +2352,17 @@ try_autoload:
 		CvOWNER(cv) = thr;
 		SvREFCNT_inc(cv);
 		MUTEX_UNLOCK(CvMUTEXP(cv));
-		DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+		DEBUG_S(PerlIO_printf(Perl_debug_log,
 			    "entersub: %p grabbing %p:%s in stash %s\n",
 			    thr, cv, SvPEEK((SV*)cv), CvSTASH(cv) ?
 	    			HvNAME(CvSTASH(cv)) : "(none)"));
-	    } else {
+	    }
+	    else {
 		/* Make a new clone. */
 		CV *clonecv;
 		SvREFCNT_inc(cv); /* don't let it vanish from under us */
 		MUTEX_UNLOCK(CvMUTEXP(cv));
-		DEBUG_S((PerlIO_printf(PerlIO_stderr(),
+		DEBUG_S((PerlIO_printf(Perl_debug_log,
 				       "entersub: %p cloning %p:%s\n",
 				       thr, cv, SvPEEK((SV*)cv))));
 		/*
@@ -2216,9 +2380,9 @@ try_autoload:
 		SvREFCNT_inc(cv);
 	    }
 	    DEBUG_S(if (CvDEPTH(cv) != 0)
-			PerlIO_printf(PerlIO_stderr(), "depth %ld != 0\n",
+			PerlIO_printf(Perl_debug_log, "depth %ld != 0\n",
 				      CvDEPTH(cv)););
-	    SAVEDESTRUCTOR(unset_cvowner, (void*) cv);
+	    SAVEDESTRUCTOR_X(unset_cvowner, (void*) cv);
 	}
     }
 #endif /* USE_THREADS */
@@ -2369,14 +2533,11 @@ try_autoload:
 	    SV** ary;
 
 #if 0
-	    DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 	    			  "%p entersub preparing @_\n", thr));
 #endif
 	    av = (AV*)PL_curpad[0];
-	    if (AvREAL(av)) {
-		av_clear(av);
-		AvREAL_off(av);
-	    }
+	    assert(!AvREAL(av));
 #ifndef USE_THREADS
 	    cx->blk_sub.savearray = GvAV(PL_defgv);
 	    GvAV(PL_defgv) = (AV*)SvREFCNT_inc(av);
@@ -2414,7 +2575,7 @@ try_autoload:
 	    && !(PERLDB_SUB && cv == GvCV(PL_DBsub)))
 	    sub_crush_depth(cv);
 #if 0
-	DEBUG_S(PerlIO_printf(PerlIO_stderr(),
+	DEBUG_S(PerlIO_printf(Perl_debug_log,
 			      "%p entersub returning %p\n", thr, CvSTART(cv)));
 #endif
 	RETURNOP(CvSTART(cv));
@@ -2633,11 +2794,11 @@ unset_cvowner(pTHXo_ void *cvarg)
     dTHR;
 #endif /* DEBUGGING */
 
-    DEBUG_S((PerlIO_printf(PerlIO_stderr(), "%p unsetting CvOWNER of %p:%s\n",
+    DEBUG_S((PerlIO_printf(Perl_debug_log, "%p unsetting CvOWNER of %p:%s\n",
 			   thr, cv, SvPEEK((SV*)cv))));
     MUTEX_LOCK(CvMUTEXP(cv));
     DEBUG_S(if (CvDEPTH(cv) != 0)
-		PerlIO_printf(PerlIO_stderr(), "depth %ld != 0\n",
+		PerlIO_printf(Perl_debug_log, "depth %ld != 0\n",
 			      CvDEPTH(cv)););
     assert(thr == CvOWNER(cv));
     CvOWNER(cv) = 0;

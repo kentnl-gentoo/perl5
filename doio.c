@@ -134,14 +134,14 @@ Perl_do_open9(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	else
 	    result = PerlIO_close(IoIFP(io));
 	if (result == EOF && fd > PL_maxsysfd)
-	    PerlIO_printf(PerlIO_stderr(),
+	    PerlIO_printf(Perl_error_log,
 			  "Warning: unable to close filehandle %s properly.\n",
 			  GvENAME(gv));
 	IoOFP(io) = IoIFP(io) = Nullfp;
     }
 
     if (as_raw) {
-#if defined(USE_64_BIT_OFFSETS) && defined(O_LARGEFILE)
+#if defined(USE_64_BIT_RAWIO) && defined(O_LARGEFILE)
 	rawmode |= O_LARGEFILE;
 #endif
 
@@ -1013,17 +1013,10 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 	if (SvIOK(sv)) {
 	    if (SvGMAGICAL(sv))
 		mg_get(sv);
-#ifdef IV_IS_QUAD
 	    if (SvIsUV(sv))
-		PerlIO_printf(fp, "%" PERL_PRIu64, (UV)SvUVX(sv));
+		PerlIO_printf(fp, "%"UVuf, (UV)SvUVX(sv));
 	    else
-		PerlIO_printf(fp, "%" PERL_PRId64, (IV)SvIVX(sv));
-#else
-	    if (SvIsUV(sv))
-		PerlIO_printf(fp, "%lu", (unsigned long)SvUVX(sv));
-	    else
-		PerlIO_printf(fp, "%ld", (long)SvIVX(sv));
-#endif
+		PerlIO_printf(fp, "%"IVdf, (IV)SvIVX(sv));
 	    return !PerlIO_error(fp);
 	}
 	/* FALL THROUGH */
@@ -1696,7 +1689,7 @@ Perl_do_ipcctl(pTHX_ I32 optype, SV **mark, SV **sp)
     else
     {
 	IV i = SvIV(astr);
-	a = (char *)i;		/* ouch */
+	a = INT2PTR(char *,i);		/* ouch */
     }
     SETERRNO(0,0);
     switch (optype)

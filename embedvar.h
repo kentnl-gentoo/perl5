@@ -49,6 +49,9 @@
 #define PL_delaymagic		(vTHX->Tdelaymagic)
 #define PL_dirty		(vTHX->Tdirty)
 #define PL_dumpindent		(vTHX->Tdumpindent)
+#define PL_efloatbuf		(vTHX->Tefloatbuf)
+#define PL_efloatsize		(vTHX->Tefloatsize)
+#define PL_errors		(vTHX->Terrors)
 #define PL_extralen		(vTHX->Textralen)
 #define PL_firstgv		(vTHX->Tfirstgv)
 #define PL_formtarget		(vTHX->Tformtarget)
@@ -229,8 +232,6 @@
 #define PL_doswitches		(PERL_GET_INTERP->Idoswitches)
 #define PL_dowarn		(PERL_GET_INTERP->Idowarn)
 #define PL_e_script		(PERL_GET_INTERP->Ie_script)
-#define PL_efloatbuf		(PERL_GET_INTERP->Iefloatbuf)
-#define PL_efloatsize		(PERL_GET_INTERP->Iefloatsize)
 #define PL_egid			(PERL_GET_INTERP->Iegid)
 #define PL_endav		(PERL_GET_INTERP->Iendav)
 #define PL_envgv		(PERL_GET_INTERP->Ienvgv)
@@ -352,7 +353,6 @@
 #define PL_pad_reset_pending	(PERL_GET_INTERP->Ipad_reset_pending)
 #define PL_padix		(PERL_GET_INTERP->Ipadix)
 #define PL_padix_floor		(PERL_GET_INTERP->Ipadix_floor)
-#define PL_parsehook		(PERL_GET_INTERP->Iparsehook)
 #define PL_patchlevel		(PERL_GET_INTERP->Ipatchlevel)
 #define PL_pending_ident	(PERL_GET_INTERP->Ipending_ident)
 #define PL_perl_destruct_level	(PERL_GET_INTERP->Iperl_destruct_level)
@@ -377,6 +377,7 @@
 #define PL_srand_called		(PERL_GET_INTERP->Isrand_called)
 #define PL_statusvalue		(PERL_GET_INTERP->Istatusvalue)
 #define PL_statusvalue_vms	(PERL_GET_INTERP->Istatusvalue_vms)
+#define PL_stderrgv		(PERL_GET_INTERP->Istderrgv)
 #define PL_stdingv		(PERL_GET_INTERP->Istdingv)
 #define PL_strchop		(PERL_GET_INTERP->Istrchop)
 #define PL_strtab		(PERL_GET_INTERP->Istrtab)
@@ -428,6 +429,14 @@
 #define PL_xiv_root		(PERL_GET_INTERP->Ixiv_root)
 #define PL_xnv_root		(PERL_GET_INTERP->Ixnv_root)
 #define PL_xpv_root		(PERL_GET_INTERP->Ixpv_root)
+#define PL_xpvav_root		(PERL_GET_INTERP->Ixpvav_root)
+#define PL_xpvbm_root		(PERL_GET_INTERP->Ixpvbm_root)
+#define PL_xpvcv_root		(PERL_GET_INTERP->Ixpvcv_root)
+#define PL_xpvhv_root		(PERL_GET_INTERP->Ixpvhv_root)
+#define PL_xpviv_root		(PERL_GET_INTERP->Ixpviv_root)
+#define PL_xpvlv_root		(PERL_GET_INTERP->Ixpvlv_root)
+#define PL_xpvmg_root		(PERL_GET_INTERP->Ixpvmg_root)
+#define PL_xpvnv_root		(PERL_GET_INTERP->Ixpvnv_root)
 #define PL_xrv_root		(PERL_GET_INTERP->Ixrv_root)
 #define PL_yychar		(PERL_GET_INTERP->Iyychar)
 #define PL_yydebug		(PERL_GET_INTERP->Iyydebug)
@@ -500,8 +509,6 @@
 #define PL_doswitches		(vTHX->Idoswitches)
 #define PL_dowarn		(vTHX->Idowarn)
 #define PL_e_script		(vTHX->Ie_script)
-#define PL_efloatbuf		(vTHX->Iefloatbuf)
-#define PL_efloatsize		(vTHX->Iefloatsize)
 #define PL_egid			(vTHX->Iegid)
 #define PL_endav		(vTHX->Iendav)
 #define PL_envgv		(vTHX->Ienvgv)
@@ -623,7 +630,6 @@
 #define PL_pad_reset_pending	(vTHX->Ipad_reset_pending)
 #define PL_padix		(vTHX->Ipadix)
 #define PL_padix_floor		(vTHX->Ipadix_floor)
-#define PL_parsehook		(vTHX->Iparsehook)
 #define PL_patchlevel		(vTHX->Ipatchlevel)
 #define PL_pending_ident	(vTHX->Ipending_ident)
 #define PL_perl_destruct_level	(vTHX->Iperl_destruct_level)
@@ -648,6 +654,7 @@
 #define PL_srand_called		(vTHX->Isrand_called)
 #define PL_statusvalue		(vTHX->Istatusvalue)
 #define PL_statusvalue_vms	(vTHX->Istatusvalue_vms)
+#define PL_stderrgv		(vTHX->Istderrgv)
 #define PL_stdingv		(vTHX->Istdingv)
 #define PL_strchop		(vTHX->Istrchop)
 #define PL_strtab		(vTHX->Istrtab)
@@ -699,6 +706,14 @@
 #define PL_xiv_root		(vTHX->Ixiv_root)
 #define PL_xnv_root		(vTHX->Ixnv_root)
 #define PL_xpv_root		(vTHX->Ixpv_root)
+#define PL_xpvav_root		(vTHX->Ixpvav_root)
+#define PL_xpvbm_root		(vTHX->Ixpvbm_root)
+#define PL_xpvcv_root		(vTHX->Ixpvcv_root)
+#define PL_xpvhv_root		(vTHX->Ixpvhv_root)
+#define PL_xpviv_root		(vTHX->Ixpviv_root)
+#define PL_xpvlv_root		(vTHX->Ixpvlv_root)
+#define PL_xpvmg_root		(vTHX->Ixpvmg_root)
+#define PL_xpvnv_root		(vTHX->Ixpvnv_root)
 #define PL_xrv_root		(vTHX->Ixrv_root)
 #define PL_yychar		(vTHX->Iyychar)
 #define PL_yydebug		(vTHX->Iyydebug)
@@ -773,8 +788,6 @@
 #define PL_Idoswitches		PL_doswitches
 #define PL_Idowarn		PL_dowarn
 #define PL_Ie_script		PL_e_script
-#define PL_Iefloatbuf		PL_efloatbuf
-#define PL_Iefloatsize		PL_efloatsize
 #define PL_Iegid		PL_egid
 #define PL_Iendav		PL_endav
 #define PL_Ienvgv		PL_envgv
@@ -896,7 +909,6 @@
 #define PL_Ipad_reset_pending	PL_pad_reset_pending
 #define PL_Ipadix		PL_padix
 #define PL_Ipadix_floor		PL_padix_floor
-#define PL_Iparsehook		PL_parsehook
 #define PL_Ipatchlevel		PL_patchlevel
 #define PL_Ipending_ident	PL_pending_ident
 #define PL_Iperl_destruct_level	PL_perl_destruct_level
@@ -921,6 +933,7 @@
 #define PL_Isrand_called	PL_srand_called
 #define PL_Istatusvalue		PL_statusvalue
 #define PL_Istatusvalue_vms	PL_statusvalue_vms
+#define PL_Istderrgv		PL_stderrgv
 #define PL_Istdingv		PL_stdingv
 #define PL_Istrchop		PL_strchop
 #define PL_Istrtab		PL_strtab
@@ -972,6 +985,14 @@
 #define PL_Ixiv_root		PL_xiv_root
 #define PL_Ixnv_root		PL_xnv_root
 #define PL_Ixpv_root		PL_xpv_root
+#define PL_Ixpvav_root		PL_xpvav_root
+#define PL_Ixpvbm_root		PL_xpvbm_root
+#define PL_Ixpvcv_root		PL_xpvcv_root
+#define PL_Ixpvhv_root		PL_xpvhv_root
+#define PL_Ixpviv_root		PL_xpviv_root
+#define PL_Ixpvlv_root		PL_xpvlv_root
+#define PL_Ixpvmg_root		PL_xpvmg_root
+#define PL_Ixpvnv_root		PL_xpvnv_root
 #define PL_Ixrv_root		PL_xrv_root
 #define PL_Iyychar		PL_yychar
 #define PL_Iyydebug		PL_yydebug
@@ -1002,6 +1023,9 @@
 #define PL_delaymagic		(aTHX->Tdelaymagic)
 #define PL_dirty		(aTHX->Tdirty)
 #define PL_dumpindent		(aTHX->Tdumpindent)
+#define PL_efloatbuf		(aTHX->Tefloatbuf)
+#define PL_efloatsize		(aTHX->Tefloatsize)
+#define PL_errors		(aTHX->Terrors)
 #define PL_extralen		(aTHX->Textralen)
 #define PL_firstgv		(aTHX->Tfirstgv)
 #define PL_formtarget		(aTHX->Tformtarget)
@@ -1136,6 +1160,9 @@
 #define PL_Tdelaymagic		PL_delaymagic
 #define PL_Tdirty		PL_dirty
 #define PL_Tdumpindent		PL_dumpindent
+#define PL_Tefloatbuf		PL_efloatbuf
+#define PL_Tefloatsize		PL_efloatsize
+#define PL_Terrors		PL_errors
 #define PL_Textralen		PL_extralen
 #define PL_Tfirstgv		PL_firstgv
 #define PL_Tformtarget		PL_formtarget

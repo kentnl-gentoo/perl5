@@ -33,7 +33,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.00561
+INST_VER	*= \5.00562
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -82,6 +82,11 @@ INST_ARCH	*= \$(ARCHNAME)
 CCTYPE		*= BORLAND
 # mingw32/egcs or mingw32/gcc
 #CCTYPE		*= GCC
+
+#
+# uncomment this if you are compiling under Windows 95/98 and command.com
+# (not needed if you're running under 4DOS/NT 6.01 or later)
+#IS_WIN95	*= define
 
 #
 # uncomment next line if you want debug version of perl (big,slow)
@@ -154,6 +159,11 @@ CCLIBDIR	*= $(CCHOME)\lib
 # instead of clinging to shortcuts like this one.
 #
 #BUILDOPT	+= -DPERL_POLLUTE
+
+#
+# enable this to test the File::Glob implementation of CORE::glob
+#
+#BUILDOPT	+= -DPERL_INTERNAL_GLOB
 
 #
 # specify semicolon-separated list of extra directories that modules will
@@ -229,8 +239,22 @@ DELAYLOAD	*= -DELAYLOAD:wsock32.dll delayimp.lib
 CFG		*= Optimize
 .ENDIF
 
+ARCHDIR		= ..\lib\$(ARCHNAME)
 COREDIR		= ..\lib\CORE
 AUTODIR		= ..\lib\auto
+LIBDIR		= ..\lib
+EXTDIR		= ..\ext
+PODDIR		= ..\pod
+EXTUTILSDIR	= $(LIBDIR)\ExtUtils
+
+#
+INST_SCRIPT	= $(INST_TOP)$(INST_VER)\bin
+INST_BIN	= $(INST_SCRIPT)$(INST_ARCH)
+INST_LIB	= $(INST_TOP)$(INST_VER)\lib
+INST_ARCHLIB	= $(INST_LIB)$(INST_ARCH)
+INST_COREDIR	= $(INST_ARCHLIB)\CORE
+INST_POD	= $(INST_LIB)\pod
+INST_HTML	= $(INST_POD)\html
 
 #
 # Programs to compile, build .lib files and link
@@ -269,7 +293,7 @@ LINK_DBG	=
 
 CFLAGS		= -w -g0 -tWM -tWD $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
-LINK_FLAGS	= $(LINK_DBG) -L"$(CCLIBDIR)"
+LINK_FLAGS	= $(LINK_DBG) -L"$(INST_COREDIR)" -L"$(CCLIBDIR)"
 OBJOUT_FLAG	= -o
 EXEOUT_FLAG	= -e
 LIBOUT_FLAG	= 
@@ -294,7 +318,9 @@ LOCDEFS		= -DPERLDLL -DPERL_CORE
 SUBSYS		= console
 CXX_FLAG	= -xc++
 
-LIBC		= -lcrtdll
+# crtdll doesn't define _wopen and friends
+#LIBC		= -lcrtdll
+LIBC		= -lmsvcrt
 LIBFILES	= $(CRYPT_LIB) -ladvapi32 -luser32 -lnetapi32 -lwsock32 \
 		-lmingw32 -lgcc -lmoldname $(LIBC) -lkernel32
 
@@ -307,15 +333,15 @@ LINK_DBG	=
 .ENDIF
 
 CFLAGS		= $(INCLUDES) $(DEFINES) $(LOCDEFS) $(OPTIMIZE)
-LINK_FLAGS	= $(LINK_DBG) -L"$(CCLIBDIR)"
+LINK_FLAGS	= $(LINK_DBG) -L"$(INST_COREDIR)" -L"$(CCLIBDIR)"
 OBJOUT_FLAG	= -o
 EXEOUT_FLAG	= -o
 LIBOUT_FLAG	= 
 
 .ELSE
 
-CC		= cl.exe
-LINK32		= link.exe
+CC		= cl
+LINK32		= link
 LIB32		= $(LINK32) -lib
 
 #
@@ -379,7 +405,9 @@ LIBFILES	= $(LIBBASEFILES) $(LIBC)
 
 CFLAGS		= -nologo -Gf -W3 $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
-LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) -machine:$(PROCESSOR_ARCHITECTURE)
+LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
+		-libpath:"$(INST_COREDIR)" \
+		-machine:$(PROCESSOR_ARCHITECTURE)
 OBJOUT_FLAG	= -Fo
 EXEOUT_FLAG	= -Fe
 LIBOUT_FLAG	= /out:
@@ -425,17 +453,6 @@ $(o).dll:
 	$(LINK32) -dll -subsystem:windows -implib:$(*B).lib -def:$(*B).def \
 	    -out:$@ $(LINK_FLAGS) $(LIBFILES) $< $(LIBPERL)  
 .ENDIF
-
-#
-INST_BIN	= $(INST_TOP)$(INST_VER)\bin$(INST_ARCH)
-INST_SCRIPT	= $(INST_TOP)$(INST_VER)\bin
-INST_LIB	= $(INST_TOP)$(INST_VER)\lib
-INST_POD	= $(INST_LIB)\pod
-INST_HTML	= $(INST_POD)\html
-LIBDIR		= ..\lib
-EXTDIR		= ..\ext
-PODDIR		= ..\pod
-EXTUTILSDIR	= $(LIBDIR)\extutils
 
 #
 # various targets
@@ -546,7 +563,8 @@ MICROCORE_SRC	=		\
 		..\toke.c	\
 		..\universal.c	\
 		..\utf8.c	\
-		..\util.c
+		..\util.c	\
+		..\xsutils.c
 
 EXTRACORE_SRC	+= perllib.c
 
@@ -617,7 +635,7 @@ CORE_NOCFG_H	=		\
 		..\unixish.h	\
 		..\utf8.h	\
 		..\util.h	\
-		..\warning.h	\
+		..\warnings.h	\
 		..\XSUB.h	\
 		..\EXTERN.h	\
 		..\perlvars.h	\
@@ -650,7 +668,7 @@ SETARGV_OBJ	= setargv$(o)
 .ENDIF
 
 DYNAMIC_EXT	= Socket IO Fcntl Opcode SDBM_File POSIX attrs Thread B re \
-		Data/Dumper Devel/Peek ByteLoader Devel/DProf
+		Data/Dumper Devel/Peek ByteLoader Devel/DProf File/Glob
 STATIC_EXT	= DynaLoader
 NONXS_EXT	= Errno
 
@@ -670,6 +688,7 @@ ERRNO		= $(EXTDIR)\Errno\Errno
 PEEK		= $(EXTDIR)\Devel\Peek\Peek
 BYTELOADER	= $(EXTDIR)\ByteLoader\ByteLoader
 DPROF		= $(EXTDIR)\Devel\DProf\DProf
+GLOB		= $(EXTDIR)\File\Glob\Glob
 
 SOCKET_DLL	= $(AUTODIR)\Socket\Socket.dll
 FCNTL_DLL	= $(AUTODIR)\Fcntl\Fcntl.dll
@@ -685,6 +704,7 @@ PEEK_DLL	= $(AUTODIR)\Devel\Peek\Peek.dll
 RE_DLL		= $(AUTODIR)\re\re.dll
 BYTELOADER_DLL	= $(AUTODIR)\ByteLoader\ByteLoader.dll
 DPROF_DLL	= $(AUTODIR)\Devel\DProf\DProf.dll
+GLOB_DLL	= $(AUTODIR)\File\Glob\Glob.dll
 
 ERRNO_PM	= $(LIBDIR)\Errno.pm
 
@@ -702,7 +722,8 @@ EXTENSION_C	=		\
 		$(PEEK).c	\
 		$(B).c		\
 		$(BYTELOADER).c	\
-		$(DPROF).c
+		$(DPROF).c	\
+		$(GLOB).c
 
 EXTENSION_DLL	=		\
 		$(SOCKET_DLL)	\
@@ -718,7 +739,8 @@ EXTENSION_DLL	=		\
 		$(RE_DLL)	\
 		$(THREAD_DLL)	\
 		$(BYTELOADER_DLL)	\
-		$(DPROF_DLL)
+		$(DPROF_DLL)	\
+		$(GLOB_DLL)
 
 EXTENSION_PM	=		\
 		$(ERRNO_PM)
@@ -759,12 +781,27 @@ CFG_VARS	=					\
 # Top targets
 #
 
+.IF "$(IS_WIN95)" != ""
+MK2		= .\makew95.mk
+
+all : .\config.h $(GLOBEXE) $(MINIMOD) $(MK2)
+all2 : $(CONFIGPM) $(PERLEXE) $(PERL95EXE) $(X2P) $(EXTENSION_DLL) \
+	$(EXTENSIOM_PM)
+.ELSE
 all : .\config.h $(GLOBEXE) $(MINIMOD) $(CONFIGPM) $(PERLEXE) $(PERL95EXE) \
 	$(X2P) $(EXTENSION_DLL) $(EXTENSION_PM)
+.ENDIF
 
 $(DYNALOADER)$(o) : $(DYNALOADER).c $(CORE_H) $(EXTDIR)\DynaLoader\dlutils.c
 
 #------------------------------------------------------------
+
+# This target is used to generate the makew95.mk for Win95
+.IF "$(IS_WIN95)" != ""
+$(MK2): makefile.mk
+	$(MINIPERL) genmk95.pl makefile.mk $(MK2)
+	$(MAKE) -f $(MK2) all2
+.ENDIF
 
 $(GLOBEXE) : perlglob$(o)
 .IF "$(CCTYPE)" == "BORLAND"
@@ -977,6 +1014,11 @@ $(DPROF_DLL): $(PERLEXE) $(DPROF).xs
 	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
 	cd $(EXTDIR)\Devel\$(*B) && $(MAKE)
 
+$(GLOB_DLL): $(PERLEXE) $(GLOB).xs
+	cd $(EXTDIR)\File\$(*B) && \
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	cd $(EXTDIR)\File\$(*B) && $(MAKE)
+
 $(PEEK_DLL): $(PERLEXE) $(PEEK).xs
 	cd $(EXTDIR)\Devel\$(*B) && \
 	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
@@ -1067,6 +1109,7 @@ distclean: clean
 	-del /f $(LIBDIR)\B.pm $(LIBDIR)\O.pm $(LIBDIR)\re.pm
 	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
 	-del /f $(LIBDIR)\Devel\Peek.pm $(LIBDIR)\Devel\DProf.pm
+	-del /f $(LIBDIR)\File\Glob.pm
 	-rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
 	-rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
 	-rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B

@@ -302,9 +302,14 @@ print EM <<'END';
 #  define  Perl_safesysrealloc		Perl_saferealloc
 #  define  Perl_set_numeric_local	perl_set_numeric_local
 #  define  Perl_set_numeric_standard	perl_set_numeric_standard
-#  define  PERL_POLLUTE
-#  ifndef EMBEDMYMALLOC
-#    define  PERL_POLLUTE_MALLOC
+/* malloc() pollution was the default in earlier versions, so enable
+ * it for bincompat; but not for systems that used to do prevent that,
+ * or when they ask for {HIDE,EMBED}MYMALLOC */
+#  if !defined(EMBEDMYMALLOC) && !defined(HIDEMYMALLOC)
+#    if !defined(NeXT) && !defined(__NeXT) && !defined(__MACHTEN__) && \
+        !defined(__QNX__)
+#      define  PERL_POLLUTE_MALLOC
+#    endif
 #  endif
 #endif
 
@@ -446,8 +451,8 @@ print EM <<'END';
  */
 
 #if !defined(PERL_CORE)
-#  define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,(IV)ptr)
-#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,(IV)ptr)
+#  define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,PTR2IV(ptr))
+#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,PTR2IV(ptr))
 #endif
 
 #if !defined(PERL_CORE) && !defined(PERL_NOCOMPAT) && !defined(PERL_BINCOMPAT_5005)
@@ -458,23 +463,23 @@ print EM <<'END';
    The following are not like that, but since they had a "perl_"
    prefix in previous versions, we provide compatibility macros.
  */
-#  define perl_atexit			call_atexit
-#  define perl_call_argv		call_argv
-#  define perl_call_pv			call_pv
-#  define perl_call_method		call_method
-#  define perl_call_sv			call_sv
-#  define perl_eval_sv			eval_sv
-#  define perl_eval_pv			eval_pv
-#  define perl_require_pv		require_pv
-#  define perl_get_sv			get_sv
-#  define perl_get_av			get_av
-#  define perl_get_hv			get_hv
-#  define perl_get_cv			get_cv
-#  define perl_init_i18nl10n		init_i18nl10n
-#  define perl_init_i18nl14n		init_i18nl14n
-#  define perl_new_ctype		new_ctype
-#  define perl_new_collate		new_collate
-#  define perl_new_numeric		new_numeric
+#  define perl_atexit(a,b)		call_atexit(a,b)
+#  define perl_call_argv(a,b,c)		call_argv(a,b,c)
+#  define perl_call_pv(a,b)		call_pv(a,b)
+#  define perl_call_method(a,b)		call_method(a,b)
+#  define perl_call_sv(a,b)		call_sv(a,b)
+#  define perl_eval_sv(a,b)		eval_sv(a,b)
+#  define perl_eval_pv(a,b)		eval_pv(a,b)
+#  define perl_require_pv(a)		require_pv(a)
+#  define perl_get_sv(a,b)		get_sv(a,b)
+#  define perl_get_av(a,b)		get_av(a,b)
+#  define perl_get_hv(a,b)		get_hv(a,b)
+#  define perl_get_cv(a,b)		get_cv(a,b)
+#  define perl_init_i18nl10n(a)		init_i18nl10n(a)
+#  define perl_init_i18nl14n(a)		init_i18nl14n(a)
+#  define perl_new_ctype(a)		new_ctype(a)
+#  define perl_new_collate(a)		new_collate(a)
+#  define perl_new_numeric(a)		new_numeric(a)
 
 /* varargs functions can't be handled with CPP macros. :-(
    This provides a set of compatibility functions that don't take
@@ -486,6 +491,7 @@ print EM <<'END';
 #  define deb				Perl_deb_nocontext
 #  define die				Perl_die_nocontext
 #  define form				Perl_form_nocontext
+#  define mess				Perl_mess_nocontext
 #  define newSVpvf			Perl_newSVpvf_nocontext
 #  define sv_catpvf			Perl_sv_catpvf_nocontext
 #  define sv_setpvf			Perl_sv_setpvf_nocontext
@@ -503,6 +509,7 @@ print EM <<'END';
 #  define Perl_die_nocontext		Perl_die
 #  define Perl_deb_nocontext		Perl_deb
 #  define Perl_form_nocontext		Perl_form
+#  define Perl_mess_nocontext		Perl_mess
 #  define Perl_newSVpvf_nocontext	Perl_newSVpvf
 #  define Perl_sv_catpvf_nocontext	Perl_sv_catpvf
 #  define Perl_sv_setpvf_nocontext	Perl_sv_setpvf
@@ -756,8 +763,6 @@ print CAPIH <<'EOT';
 #  define aTHXo			pPerl
 #  undef  aTHXo_
 #  define aTHXo_		aTHXo,
-#  undef  _aTHXo
-#  define _aTHXo		,aTHXo
 #endif /* PERL_OBJECT */
 
 START_EXTERN_C
@@ -833,12 +838,14 @@ START_EXTERN_C
 EOT
 
 # functions that take va_list* for implementing vararg functions
+# NOTE: makedef.pl must be updated if you add symbols to %vfuncs
 my %vfuncs = qw(
     Perl_croak			Perl_vcroak
     Perl_warn			Perl_vwarn
     Perl_warner			Perl_vwarner
     Perl_die			Perl_vdie
     Perl_form			Perl_vform
+    Perl_mess			Perl_vmess
     Perl_deb			Perl_vdeb
     Perl_newSVpvf		Perl_vnewSVpvf
     Perl_sv_setpvf		Perl_sv_vsetpvf
@@ -867,7 +874,6 @@ sub emit_func {
 		  ? '' : 'return ');
     my $emitval = '';
     if (@args and $args[$#args] =~ /\.\.\./) {
-	pop @args;
 	pop @aargs;
 	my $retarg = '';
 	my $ctxfunc = $func;
@@ -970,9 +976,9 @@ EOT
 __END__
 
 # Lines are of the form:
-#    flags|return_type|function_name|return_type|arg1|arg2|...|argN
+#    flags|return_type|function_name|arg1|arg2|...|argN
 #
-# They may continue on multiple lines when \w| begins the next line.
+# A line may be continued on another by ending it with a backslash.
 # Leading and trailing whitespace will be ignored in each component.
 #
 # flags are single letters with following meanings:
@@ -1045,6 +1051,7 @@ npr	|void	|croak_nocontext|const char* pat|...
 np	|OP*	|die_nocontext	|const char* pat|...
 np	|void	|deb_nocontext	|const char* pat|...
 np	|char*	|form_nocontext	|const char* pat|...
+np	|SV*	|mess_nocontext	|const char* pat|...
 np	|void	|warn_nocontext	|const char* pat|...
 np	|void	|warner_nocontext|U32 err|const char* pat|...
 np	|SV*	|newSVpvf_nocontext|const char* pat|...
@@ -1322,7 +1329,9 @@ p	|void	|markstack_grow
 #if defined(USE_LOCALE_COLLATE)
 p	|char*	|mem_collxfrm	|const char* s|STRLEN len|STRLEN* xlen
 #endif
-p	|SV*	|mess		|const char* pat|va_list* args
+p	|SV*	|mess		|const char* pat|...
+p	|SV*	|vmess		|const char* pat|va_list* args
+p	|void	|qerror		|SV* err
 p	|int	|mg_clear	|SV* sv
 p	|int	|mg_copy	|SV* sv|SV* nsv|const char* key|I32 klen
 p	|MAGIC*	|mg_find	|SV* sv|int type
@@ -1520,7 +1529,8 @@ p	|void	|save_aptr	|AV** aptr
 p	|AV*	|save_ary	|GV* gv
 p	|void	|save_clearsv	|SV** svp
 p	|void	|save_delete	|HV* hv|char* key|I32 klen
-p	|void	|save_destructor|DESTRUCTORFUNC_t f|void* p
+p	|void	|save_destructor|DESTRUCTORFUNC_NOCONTEXT_t f|void* p
+p	|void	|save_destructor_x|DESTRUCTORFUNC_t f|void* p
 p	|void	|save_freesv	|SV* sv
 p	|void	|save_freeop	|OP* o
 p	|void	|save_freepv	|char* pv
@@ -1649,10 +1659,10 @@ p	|bool	|sv_upgrade	|SV* sv|U32 mt
 p	|void	|sv_usepvn	|SV* sv|char* ptr|STRLEN len
 p	|void	|sv_vcatpvfn	|SV* sv|const char* pat|STRLEN patlen \
 				|va_list* args|SV** svargs|I32 svmax \
-				|bool *used_locale
+				|bool *maybe_tainted
 p	|void	|sv_vsetpvfn	|SV* sv|const char* pat|STRLEN patlen \
 				|va_list* args|SV** svargs|I32 svmax \
-				|bool *used_locale
+				|bool *maybe_tainted
 p	|SV*	|swash_init	|char* pkg|char* name|SV* listsv \
 				|I32 minbits|I32 none
 p	|UV	|swash_fetch	|SV *sv|U8 *ptr
@@ -1746,8 +1756,10 @@ p	|void	|do_pmop_dump	|I32 level|PerlIO *file|PMOP *pm
 p	|void	|do_sv_dump	|I32 level|PerlIO *file|SV *sv|I32 nest \
 				|I32 maxnest|bool dumpops|STRLEN pvlim
 p	|void	|magic_dump	|MAGIC *mg
-p	|void*	|default_protect|int *excpt|protect_body_t body|...
-p	|void*	|vdefault_protect|int *excpt|protect_body_t body|va_list *args
+p	|void*	|default_protect|volatile JMPENV *je|int *excpt \
+				|protect_body_t body|...
+p	|void*	|vdefault_protect|volatile JMPENV *je|int *excpt \
+				|protect_body_t body|va_list *args
 p	|void	|reginitcolors
 p	|char*	|sv_2pv_nolen	|SV* sv
 p	|char*	|sv_pv		|SV *sv
@@ -1755,6 +1767,11 @@ p	|void	|sv_force_normal|SV *sv
 p	|void	|tmps_grow	|I32 n
 p	|SV*	|sv_rvweaken	|SV *sv
 p	|int	|magic_killbackrefs|SV *sv|MAGIC *mg
+p	|OP*	|newANONATTRSUB	|I32 floor|OP *proto|OP *attrs|OP *block
+p	|CV*	|newATTRSUB	|I32 floor|OP *o|OP *proto|OP *attrs|OP *block
+p	|void	|newMYSUB	|I32 floor|OP *o|OP *proto|OP *attrs|OP *block
+p	|OP *	|my_attrs	|OP *o|OP *attrs
+p	|void	|boot_core_xsutils
 
 #if defined(PERL_OBJECT)
 protected:
@@ -1818,6 +1835,9 @@ s	|bool	|is_handle_constructor	|OP *o|I32 argnum
 s	|char*	|gv_ename	|GV *gv
 s	|CV*	|cv_clone2	|CV *proto|CV *outside
 s	|bool	|scalar_mod_type|OP *o|I32 type
+s	|OP *	|my_kid		|OP *o|OP *attrs
+s	|OP *	|dup_attrlist	|OP *o
+s	|void	|apply_attrs	|HV *stash|SV *target|OP *attrs
 #  if defined(PL_OP_SLAB_ALLOC)
 s	|void*	|Slab_Alloc	|int m|size_t sz
 #  endif
@@ -1949,14 +1969,38 @@ s	|SV*	|more_sv
 s	|void	|more_xiv
 s	|void	|more_xnv
 s	|void	|more_xpv
+s	|void	|more_xpviv
+s	|void	|more_xpvnv
+s	|void	|more_xpvcv
+s	|void	|more_xpvav
+s	|void	|more_xpvhv
+s	|void	|more_xpvmg
+s	|void	|more_xpvlv
+s	|void	|more_xpvbm
 s	|void	|more_xrv
 s	|XPVIV*	|new_xiv
 s	|XPVNV*	|new_xnv
 s	|XPV*	|new_xpv
+s	|XPVIV*	|new_xpviv
+s	|XPVNV*	|new_xpvnv
+s	|XPVCV*	|new_xpvcv
+s	|XPVAV*	|new_xpvav
+s	|XPVHV*	|new_xpvhv
+s	|XPVMG*	|new_xpvmg
+s	|XPVLV*	|new_xpvlv
+s	|XPVBM*	|new_xpvbm
 s	|XRV*	|new_xrv
 s	|void	|del_xiv	|XPVIV* p
 s	|void	|del_xnv	|XPVNV* p
 s	|void	|del_xpv	|XPV* p
+s	|void	|del_xpviv	|XPVIV* p
+s	|void	|del_xpvnv	|XPVNV* p
+s	|void	|del_xpvcv	|XPVCV* p
+s	|void	|del_xpvav	|XPVAV* p
+s	|void	|del_xpvhv	|XPVHV* p
+s	|void	|del_xpvmg	|XPVMG* p
+s	|void	|del_xpvlv	|XPVLV* p
+s	|void	|del_xpvbm	|XPVBM* p
 s	|void	|del_xrv	|XRV* p
 s	|void	|sv_unglob	|SV* sv
 s	|void	|not_a_number	|SV *sv
@@ -1988,7 +2032,7 @@ s	|char*	|scan_ident	|char *s|char *send|char *dest \
 				|STRLEN destlen|I32 ck_uni
 s	|char*	|scan_inputsymbol|char *start
 s	|char*	|scan_pat	|char *start|I32 type
-s	|char*	|scan_str	|char *start
+s	|char*	|scan_str	|char *start|int keep_quoted|int keep_delims
 s	|char*	|scan_subst	|char *start
 s	|char*	|scan_trans	|char *start
 s	|char*	|scan_word	|char *s|char *dest|STRLEN destlen \

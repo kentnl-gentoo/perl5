@@ -23,7 +23,6 @@ PERLVAR(Ihintgv,	GV *)
 PERLVAR(Iorigfilename,	char *)
 PERLVAR(Idiehook,	SV *)
 PERLVAR(Iwarnhook,	SV *)
-PERLVAR(Iparsehook,	SV *)
 PERLVAR(Icddir,		char *)		/* switches */
 PERLVAR(Iminus_c,	bool)
 PERLVARA(Ipatchlevel,10,char)
@@ -65,6 +64,7 @@ PERLVAR(Istatusvalue_vms,U32)
 
 /* shortcuts to various I/O objects */
 PERLVAR(Istdingv,	GV *)
+PERLVAR(Istderrgv,	GV *)
 PERLVAR(Idefgv,		GV *)
 PERLVAR(Iargvgv,	GV *)
 PERLVAR(Iargvoutgv,	GV *)
@@ -222,6 +222,14 @@ PERLVAR(Ixiv_root,	IV *)		/* free xiv list--shared by interpreters */
 PERLVAR(Ixnv_root,	NV *)		/* free xnv list--shared by interpreters */
 PERLVAR(Ixrv_root,	XRV *)		/* free xrv list--shared by interpreters */
 PERLVAR(Ixpv_root,	XPV *)		/* free xpv list--shared by interpreters */
+PERLVAR(Ixpviv_root,	XPVIV *)	/* free xpviv list--shared by interpreters */
+PERLVAR(Ixpvnv_root,	XPVNV *)	/* free xpvnv list--shared by interpreters */
+PERLVAR(Ixpvcv_root,	XPVCV *)	/* free xpvcv list--shared by interpreters */
+PERLVAR(Ixpvav_root,	XPVAV *)	/* free xpvav list--shared by interpreters */
+PERLVAR(Ixpvhv_root,	XPVHV *)	/* free xpvhv list--shared by interpreters */
+PERLVAR(Ixpvmg_root,	XPVMG *)	/* free xpvmg list--shared by interpreters */
+PERLVAR(Ixpvlv_root,	XPVLV *)	/* free xpvlv list--shared by interpreters */
+PERLVAR(Ixpvbm_root,	XPVBM *)	/* free xpvbm list--shared by interpreters */
 PERLVAR(Ihe_root,	HE *)		/* free he list--shared by interpreters */
 PERLVAR(Inice_chunk,	char *)		/* a nice chunk of memory to reuse */
 PERLVAR(Inice_chunk_size,	U32)	/* how nice the chunk of memory is */
@@ -287,7 +295,7 @@ PERLVAR(Ithisexpr,	I32)		/* name id for nothing_in_common() */
 PERLVAR(Ilast_uni,	char *)		/* position of last named-unary op */
 PERLVAR(Ilast_lop,	char *)		/* position of last list operator */
 PERLVAR(Ilast_lop_op,	OPCODE)		/* last list operator */
-PERLVAR(Iin_my,		bool)		/* we're compiling a "my" declaration */
+PERLVAR(Iin_my,		I32)		/* we're compiling a "my" (or "our") declaration */
 PERLVAR(Iin_my_stash,	HV *)		/* declared class of this "my" declaration */
 #ifdef FCRYPT
 PERLVAR(Icryptseen,	I32)		/* has fast crypt() been initialized? */
@@ -353,8 +361,6 @@ PERLVAR(Iyyval,		YYSTYPE)
 PERLVAR(Iyylval,	YYSTYPE)
 
 PERLVAR(Iglob_index,	int)
-PERLVAR(Iefloatbuf,	char*)
-PERLVAR(Iefloatsize,	STRLEN)
 PERLVAR(Isrand_called,	bool)
 PERLVARA(Iuudmap,256,	char)
 PERLVAR(Ibitcount,	char *)

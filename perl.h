@@ -146,22 +146,17 @@ class CPerlObj;
 
 #define pTHXo			CPerlObj *pPerl
 #define pTHXo_			pTHXo,
-#define _pTHXo			,pTHXo
 #define aTHXo			this
 #define aTHXo_			this,
-#define _aTHXo			,this
 #define PERL_OBJECT_THIS	aTHXo
 #define PERL_OBJECT_THIS_	aTHXo_
-#define _PERL_OBJECT_THIS	_aTHXo
 #define dTHXoa(a)		pTHXo = a
 #define dTHXo			dTHXoa(PERL_GET_THX)
 
 #define pTHXx		void
 #define pTHXx_
-#define _pTHXx
 #define aTHXx
 #define aTHXx_
-#define _aTHXx
 
 #else /* !PERL_OBJECT */
 
@@ -181,9 +176,7 @@ struct perl_thread;
 #  define dTHXa(a)	pTHX = a
 #  define dTHX		dTHXa(PERL_GET_THX)
 #  define pTHX_		pTHX,
-#  define _pTHX		,pTHX
 #  define aTHX_		aTHX,
-#  define _aTHX		,aTHX
 #endif
 
 #define STATIC static
@@ -212,10 +205,8 @@ struct perl_thread;
 #ifndef pTHX
 #  define pTHX		void
 #  define pTHX_
-#  define _pTHX
 #  define aTHX
 #  define aTHX_
-#  define _aTHX
 #  define dTHXa(a)	dNOOP
 #  define dTHX		dNOOP
 #endif
@@ -223,20 +214,16 @@ struct perl_thread;
 #ifndef pTHXo
 #  define pTHXo		pTHX
 #  define pTHXo_	pTHX_
-#  define _pTHXo	_pTHX
 #  define aTHXo		aTHX
 #  define aTHXo_	aTHX_
-#  define _aTHXo	_aTHX
 #  define dTHXo		dTHX
 #endif
 
 #ifndef pTHXx
 #  define pTHXx		register PerlInterpreter *my_perl
 #  define pTHXx_	pTHXx,
-#  define _pTHXx	,pTHXx
 #  define aTHXx		my_perl
 #  define aTHXx_	aTHXx,
-#  define _aTHXx	,aTHXx
 #  define dTHXx		dTHX
 #endif
 
@@ -402,7 +389,7 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 /* HP-UX 10.X CMA (Common Multithreaded Architecure) insists that
    pthread.h must be included before all other header files.
 */
-#if defined(USE_THREADS) && defined(PTHREAD_H_FIRST)
+#if defined(USE_THREADS) && defined(PTHREAD_H_FIRST) && defined(I_PTHREAD)
 #  include <pthread.h>
 #endif
 
@@ -697,15 +684,15 @@ Free_t   Perl_mfree (Malloc_t where);
 
 #ifdef USE_THREADS
 #  define ERRSV (thr->errsv)
-#  define ERRHV (thr->errhv)
 #  define DEFSV THREADSV(0)
 #  define SAVE_DEFSV save_threadsv(0)
 #else
 #  define ERRSV GvSV(PL_errgv)
-#  define ERRHV GvHV(PL_errgv)
 #  define DEFSV GvSV(PL_defgv)
 #  define SAVE_DEFSV SAVESPTR(GvSV(PL_defgv))
 #endif /* USE_THREADS */
+
+#define ERRHV GvHV(PL_errgv)	/* XXX unused, here for compatibility */
 
 #ifndef errno
 	extern int errno;     /* ANSI allows errno to be an lvalue expr.
@@ -904,21 +891,14 @@ Free_t   Perl_mfree (Malloc_t where);
 #include <inttypes.h>
 #endif
 
-/*  XXX QUAD stuff is not currently supported on most systems.
-    Specifically, perl internals don't support long long.  Among
-    the many problems is that some compilers support long long,
-    but the underlying library functions (such as sprintf) don't.
-    Some things do work (such as quad pack/unpack on convex);
-    also some systems use long long for the fpos_t typedef.  That
-    seems to work too.
-
+/*
     The IV type is supposed to be long enough to hold any integral
     value or a pointer.
     --Andy Dougherty	August 1996
 */
 
-/*  Much more 64-bit probing added.  Now we should get Quad_t
-    in most systems: int64_t, long long, long, int, will do.
+/*  We should be able to get Quad_t in most systems:
+    all of int64_t, long long, long, int, will work.
 
     Beware of LP32 systems (ILP32, ILP32LL64).  Such systems have been
     used to sizeof(long) == sizeof(foo*).  This is a bad assumption
@@ -930,9 +910,11 @@ Free_t   Perl_mfree (Malloc_t where);
     Summary: a long long system needs to add -DUSE_LONG_LONG to $ccflags
     to get quads -- and if its pointers are still 32 bits, this will break
     binary compatibility.  Casting an IV (a long long) to a pointer will
-    truncate half of the IV away.
+    truncate half of the IV away.  Most systems can just use
+    Configure -Duse64bits to get the -DUSE_LONG_LONG added either by
+    their hints files, or directly by Configure if they are using gcc.
 
-    --jhi		September 1998 */
+    --jhi		September 1999 */
 
 #if INTSIZE == 4 && LONGSIZE == 4 && PTRSIZE == 4
 #   define PERL_ILP32
@@ -1016,6 +998,9 @@ Free_t   Perl_mfree (Malloc_t where);
 #    define IV_MAX INT64_MAX
 #    define IV_MIN INT64_MIN
 #    define UV_MAX UINT64_MAX
+#    ifndef UINT64_MIN
+#      define UINT64_MIN 0
+#    endif
 #    define UV_MIN UINT64_MIN
 #  else
 #    define IV_MAX PERL_QUAD_MAX
@@ -1023,7 +1008,7 @@ Free_t   Perl_mfree (Malloc_t where);
 #    define UV_MAX PERL_UQUAD_MAX
 #    define UV_MIN PERL_UQUAD_MIN
 #  endif
-#  define IVSIZF 8
+#  define IVSIZE 8
 #  define UVSIZE 8
 #  define IV_IS_QUAD
 #  define UV_IS_QUAD
@@ -1033,7 +1018,14 @@ Free_t   Perl_mfree (Malloc_t where);
 #  if defined(INT32_MAX) && LONGSIZE == 4
 #    define IV_MAX INT32_MAX
 #    define IV_MIN INT32_MIN
-#    define UV_MAX UINT32_MAX
+#    ifndef UINT32_MAX_BROKEN /* e.g. HP-UX with gcc messes this up */
+#        define UV_MAX UINT32_MAX
+#    else
+#        define UV_MAX 4294967295U
+#    endif
+#    ifndef UINT32_MIN
+#      define UINT32_MIN 0
+#    endif
 #    define UV_MIN UINT32_MIN
 #  else
 #    define IV_MAX PERL_LONG_MAX
@@ -1051,9 +1043,35 @@ Free_t   Perl_mfree (Malloc_t where);
 #  define UVSIZE LONGSIZE
 #  define IVSIZE LONGSIZE
 #endif
-#define IV_DIG (BIT_DIGITS(IVSIZE * 8) + 1)
-#define UV_DIG (BIT_DIGITS(IVSIZE * 8) + 1)
+#define IV_DIG (BIT_DIGITS(IVSIZE * 8))
+#define UV_DIG (BIT_DIGITS(UVSIZE * 8))
 
+/*   
+ *  The macros INT2PTR and NUM2PTR are (despite their names)
+ *  bi-directional: they will convert int/float to or from pointers.
+ *  However the conversion to int/float are named explicitly:
+ *  PTR2IV, PTR2UV, PTR2NV.
+ *
+ *  For int conversions we do not need two casts if pointers are
+ *  the same size as IV and UV.   Otherwise we need an explicit
+ *  cast (PTRV) to avoid compiler warnings.
+ */
+#if (IVSIZE == PTRSIZE) && (UVSIZE == PTRSIZE)
+#  define PTRV			UV
+#  define INT2PTR(any,d)	(any)(d)
+#else
+#  if PTRSIZE == LONGSIZE 
+#    define PTRV		unsigned long
+#  else
+#    define PTRV		unsigned
+#  endif
+#  define INT2PTR(any,d)	(any)(PTRV)(d)
+#endif
+#define NUM2PTR(any,d)	(any)(PTRV)(d)
+#define PTR2IV(p)	INT2PTR(IV,p)
+#define PTR2UV(p)	INT2PTR(UV,p)
+#define PTR2NV(p)	NUM2PTR(NV,p)
+  
 #ifdef USE_LONG_DOUBLE
 #  if defined(HAS_LONG_DOUBLE) && (LONG_DOUBLESIZE > DOUBLESIZE)
 #    define LDoub_t long double
@@ -1082,6 +1100,12 @@ Free_t   Perl_mfree (Malloc_t where);
 #ifndef HAS_DBL_DIG
 #define DBL_DIG	15   /* A guess that works lots of places */
 #endif
+#endif
+#ifdef I_FLOAT
+#include <float.h>
+#endif
+#ifndef HAS_DBL_DIG
+#define DBL_DIG	15   /* A guess that works lots of places */
 #endif
 
 #ifdef OVR_LDBL_DIG
@@ -1398,14 +1422,16 @@ typedef union any ANY;
 
 #include "handy.h"
 
-#ifdef USE_64_BITS
-#   define USE_64_BIT_FILES
-#endif
-
-#if defined(USE_64_BIT_FILES) || defined(USE_LARGE_FILES)
-#   define USE_64_BIT_OFFSETS
+#if defined(USE_LARGE_FILES)
+#   define USE_64_BIT_RAWIO /* Explicit */
 #   define USE_64_BIT_STDIO
 #endif
+
+#if LSEEKSIZE == 8 && !defined(USE_64_BIT_RAWIO)
+#   define USE_64_BIT_RAWIO /* Implicit */
+#endif
+
+/* Do we need FSEEKSIZE? */
 
 /* I couldn't find any -Ddefine or -flags in IRIX 6.5 that would
  * have done the necessary symbol renaming using cpp. --jhi */
@@ -1419,7 +1445,7 @@ typedef union any ANY;
 #define USE_FREOPEN64
 #endif
 
-#ifdef USE_64_BIT_OFFSETS
+#ifdef USE_64_BIT_RAWIO
 #   ifdef HAS_OFF64_T
 #       undef Off_t
 #       define Off_t off64_t
@@ -1428,7 +1454,7 @@ typedef union any ANY;
 #   endif
 /* Most 64-bit environments have defines like _LARGEFILE_SOURCE that
  * will trigger defines like the ones below.  Some 64-bit environments,
- * however, do not. */
+ * however, do not.  Therefore we have to explicitly mix and match. */
 #   if defined(USE_OPEN64)
 #       define open open64
 #   endif
@@ -1586,7 +1612,9 @@ typedef mutex_t		perl_mutex;
 typedef condition_t	perl_cond;
 typedef void *		perl_key;
 #        else /* Posix threads */
-#          include <pthread.h>
+#          ifdef I_PTHREAD
+#            include <pthread.h>
+#          endif
 typedef pthread_t	perl_os_thread;
 typedef pthread_mutex_t	perl_mutex;
 typedef pthread_cond_t	perl_cond;
@@ -1738,7 +1766,8 @@ union any {
     I32		any_i32;
     IV		any_iv;
     long	any_long;
-    void	(*any_dptr) (pTHXo_ void*);
+    void	(*any_dptr) (void*);
+    void	(*any_dxptr) (pTHXo_ void*);
 };
 #endif
 
@@ -1770,7 +1799,7 @@ typedef I32 (*filter_t) (pTHXo_ int, SV *, int);
 #include "hv.h"
 #include "mg.h"
 #include "scope.h"
-#include "warning.h"
+#include "warnings.h"
 #include "utf8.h"
 
 /* Current curly descriptor */
@@ -1888,10 +1917,10 @@ typedef I32 CHECKPOINT;
 #define IV_FITS_IN_NV
 /* Doubt. */
 #if defined(USE_LONG_DOUBLE) && \
-	defined(LDBL_MANT_DIG) && IVSIZE*8 >= LDBL_MANT_DIG
+	defined(LDBL_MANT_DIG) && IV_DIG >= LDBL_MANT_DIG
 #   undef IV_FITS_IN_NV
 #else
-#   if defined(DBL_MANT_DIG) && IVSIZE*8 >= DBL_MANT_DIG
+#   if defined(DBL_MANT_DIG) && IV_DIG >= DBL_MANT_DIG
 #       undef IV_FITS_IN_NV
 #   else
 #       if IV_DIG >= NV_DIG
@@ -1901,6 +1930,22 @@ typedef I32 CHECKPOINT;
 #               undef IV_FITS_IN_NV
 #           endif
 #       endif
+#   endif
+#endif
+
+#ifdef IV_IS_QUAD
+#  define UVuf PERL_PRIu64
+#  define IVdf PERL_PRId64
+#  define UVof PERL_PRIo64
+#  define UVxf PERL_PRIx64
+#else
+#   if LONGSIZE == 4
+#       define UVuf "lu"
+#       define IVdf "ld"
+#       define UVof "lo"
+#       define UVxf "lx"
+#   else
+        /* Any good ideas? */
 #   endif
 #endif
 
@@ -1931,7 +1976,13 @@ Gid_t getegid (void);
 #endif
 
 #ifndef Perl_debug_log
-#define Perl_debug_log	PerlIO_stderr()
+#  define Perl_debug_log	PerlIO_stderr()
+#endif
+
+#ifndef Perl_error_log
+#  define Perl_error_log	(PL_stderrgv			\
+				 ? IoOFP(GvIOp(PL_stderrgv))	\
+				 : PerlIO_stderr())
 #endif
 
 #ifdef DEBUGGING
@@ -2008,7 +2059,9 @@ struct ufuncs {
 /* Fix these up for __STDC__ */
 #ifndef DONT_DECLARE_STD
 char *mktemp (char*);
+#ifndef atof
 double atof (const char*);
+#endif
 #endif
 
 #ifndef STANDARD_C
@@ -2436,6 +2489,8 @@ typedef enum {
     XREF,
     XSTATE,
     XBLOCK,
+    XATTRBLOCK,
+    XATTRTERM,
     XTERMBLOCK
 } expectation;
 
@@ -2523,6 +2578,7 @@ typedef void	(CPERLscope(*regfree_t)) (pTHX_ struct regexp* r);
 int Perl_yylex(pTHX_ YYSTYPE *lvalp, int *lcharp);
 #endif
 
+typedef void (*DESTRUCTORFUNC_NOCONTEXT_t) (void*);
 typedef void (*DESTRUCTORFUNC_t) (pTHXo_ void*);
 typedef void (*SVFUNC_t) (pTHXo_ SV*);
 typedef I32  (*SVCOMPARE_t) (pTHXo_ SV*, SV*);
@@ -2571,7 +2627,7 @@ struct perl_vars {
 EXT struct perl_vars PL_Vars;
 EXT struct perl_vars *PL_VarsPtr INIT(&PL_Vars);
 #else /* PERL_CORE */
-#if !defined(__GNUC__) || !(defined(WIN32) || defined(CYGWIN))
+#if !defined(__GNUC__) || !defined(WIN32)
 EXT
 #endif /* WIN32 */
 struct perl_vars *PL_VarsPtr;
@@ -3100,12 +3156,21 @@ typedef struct am_table_short AMTS;
 #   include <sys/sem.h>
 #   ifndef HAS_UNION_SEMUN	/* Provide the union semun. */
     union semun {
-	int val;
-	struct semid_ds *buf;
-	unsigned short *array;
+	int		val;
+	struct semid_ds	*buf;
+	unsigned short	*array;
     };
 #   endif
 #   ifdef USE_SEMCTL_SEMUN
+#	ifdef IRIX32_SEMUN_BROKEN_BY_GCC
+            union gccbug_semun {
+		int             val;
+		struct semid_ds *buf;
+		unsigned short  *array;
+		char            __dummy[5];
+	    };
+#           define semun gccbug_semun
+#	endif
 #       define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun)
 #   else
 #       ifdef USE_SEMCTL_SEMID_DS

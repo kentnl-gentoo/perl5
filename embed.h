@@ -29,9 +29,14 @@
 #  define  Perl_safesysrealloc		Perl_saferealloc
 #  define  Perl_set_numeric_local	perl_set_numeric_local
 #  define  Perl_set_numeric_standard	perl_set_numeric_standard
-#  define  PERL_POLLUTE
-#  ifndef EMBEDMYMALLOC
-#    define  PERL_POLLUTE_MALLOC
+/* malloc() pollution was the default in earlier versions, so enable
+ * it for bincompat; but not for systems that used to do prevent that,
+ * or when they ask for {HIDE,EMBED}MYMALLOC */
+#  if !defined(EMBEDMYMALLOC) && !defined(HIDEMYMALLOC)
+#    if !defined(NeXT) && !defined(__NeXT) && !defined(__MACHTEN__) && \
+        !defined(__QNX__)
+#      define  PERL_POLLUTE_MALLOC
+#    endif
 #  endif
 #endif
 
@@ -91,6 +96,7 @@
 #define die_nocontext		Perl_die_nocontext
 #define deb_nocontext		Perl_deb_nocontext
 #define form_nocontext		Perl_form_nocontext
+#define mess_nocontext		Perl_mess_nocontext
 #define warn_nocontext		Perl_warn_nocontext
 #define warner_nocontext	Perl_warner_nocontext
 #define newSVpvf_nocontext	Perl_newSVpvf_nocontext
@@ -358,6 +364,8 @@
 #define mem_collxfrm		Perl_mem_collxfrm
 #endif
 #define mess			Perl_mess
+#define vmess			Perl_vmess
+#define qerror			Perl_qerror
 #define mg_clear		Perl_mg_clear
 #define mg_copy			Perl_mg_copy
 #define mg_find			Perl_mg_find
@@ -532,6 +540,7 @@
 #define save_clearsv		Perl_save_clearsv
 #define save_delete		Perl_save_delete
 #define save_destructor		Perl_save_destructor
+#define save_destructor_x	Perl_save_destructor_x
 #define save_freesv		Perl_save_freesv
 #define save_freeop		Perl_save_freeop
 #define save_freepv		Perl_save_freepv
@@ -749,6 +758,11 @@
 #define tmps_grow		Perl_tmps_grow
 #define sv_rvweaken		Perl_sv_rvweaken
 #define magic_killbackrefs	Perl_magic_killbackrefs
+#define newANONATTRSUB		Perl_newANONATTRSUB
+#define newATTRSUB		Perl_newATTRSUB
+#define newMYSUB		Perl_newMYSUB
+#define my_attrs		Perl_my_attrs
+#define boot_core_xsutils	Perl_boot_core_xsutils
 #if defined(PERL_OBJECT)
 #endif
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
@@ -803,6 +817,9 @@
 #define gv_ename		S_gv_ename
 #define cv_clone2		S_cv_clone2
 #define scalar_mod_type		S_scalar_mod_type
+#define my_kid			S_my_kid
+#define dup_attrlist		S_dup_attrlist
+#define apply_attrs		S_apply_attrs
 #  if defined(PL_OP_SLAB_ALLOC)
 #define Slab_Alloc		S_Slab_Alloc
 #  endif
@@ -875,7 +892,6 @@
 #define reganode		S_reganode
 #define regatom			S_regatom
 #define regbranch		S_regbranch
-#define regc			S_regc
 #define reguni			S_reguni
 #define regclass		S_regclass
 #define regclassutf8		S_regclassutf8
@@ -922,14 +938,38 @@
 #define more_xiv		S_more_xiv
 #define more_xnv		S_more_xnv
 #define more_xpv		S_more_xpv
+#define more_xpviv		S_more_xpviv
+#define more_xpvnv		S_more_xpvnv
+#define more_xpvcv		S_more_xpvcv
+#define more_xpvav		S_more_xpvav
+#define more_xpvhv		S_more_xpvhv
+#define more_xpvmg		S_more_xpvmg
+#define more_xpvlv		S_more_xpvlv
+#define more_xpvbm		S_more_xpvbm
 #define more_xrv		S_more_xrv
 #define new_xiv			S_new_xiv
 #define new_xnv			S_new_xnv
 #define new_xpv			S_new_xpv
+#define new_xpviv		S_new_xpviv
+#define new_xpvnv		S_new_xpvnv
+#define new_xpvcv		S_new_xpvcv
+#define new_xpvav		S_new_xpvav
+#define new_xpvhv		S_new_xpvhv
+#define new_xpvmg		S_new_xpvmg
+#define new_xpvlv		S_new_xpvlv
+#define new_xpvbm		S_new_xpvbm
 #define new_xrv			S_new_xrv
 #define del_xiv			S_del_xiv
 #define del_xnv			S_del_xnv
 #define del_xpv			S_del_xpv
+#define del_xpviv		S_del_xpviv
+#define del_xpvnv		S_del_xpvnv
+#define del_xpvcv		S_del_xpvcv
+#define del_xpvav		S_del_xpvav
+#define del_xpvhv		S_del_xpvhv
+#define del_xpvmg		S_del_xpvmg
+#define del_xpvlv		S_del_xpvlv
+#define del_xpvbm		S_del_xpvbm
 #define del_xrv			S_del_xrv
 #define sv_unglob		S_sv_unglob
 #define not_a_number		S_not_a_number
@@ -1013,6 +1053,7 @@
 #define ck_glob			Perl_ck_glob
 #define ck_grep			Perl_ck_grep
 #define ck_index		Perl_ck_index
+#define ck_join			Perl_ck_join
 #define ck_lengthconst		Perl_ck_lengthconst
 #define ck_lfun			Perl_ck_lfun
 #define ck_listiob		Perl_ck_listiob
@@ -1202,6 +1243,7 @@
 #define pp_leaveeval		Perl_pp_leaveeval
 #define pp_leaveloop		Perl_pp_leaveloop
 #define pp_leavesub		Perl_pp_leavesub
+#define pp_leavesublv		Perl_pp_leavesublv
 #define pp_leavetry		Perl_pp_leavetry
 #define pp_leavewrite		Perl_pp_leavewrite
 #define pp_left_shift		Perl_pp_left_shift
@@ -1683,7 +1725,8 @@
 #if defined(USE_LOCALE_COLLATE)
 #define mem_collxfrm(a,b,c)	Perl_mem_collxfrm(aTHX_ a,b,c)
 #endif
-#define mess(a,b)		Perl_mess(aTHX_ a,b)
+#define vmess(a,b)		Perl_vmess(aTHX_ a,b)
+#define qerror(a)		Perl_qerror(aTHX_ a)
 #define mg_clear(a)		Perl_mg_clear(aTHX_ a)
 #define mg_copy(a,b,c,d)	Perl_mg_copy(aTHX_ a,b,c,d)
 #define mg_find(a,b)		Perl_mg_find(aTHX_ a,b)
@@ -1857,6 +1900,7 @@
 #define save_clearsv(a)		Perl_save_clearsv(aTHX_ a)
 #define save_delete(a,b,c)	Perl_save_delete(aTHX_ a,b,c)
 #define save_destructor(a,b)	Perl_save_destructor(aTHX_ a,b)
+#define save_destructor_x(a,b)	Perl_save_destructor_x(aTHX_ a,b)
 #define save_freesv(a)		Perl_save_freesv(aTHX_ a)
 #define save_freeop(a)		Perl_save_freeop(aTHX_ a)
 #define save_freepv(a)		Perl_save_freepv(aTHX_ a)
@@ -2058,7 +2102,7 @@
 #define do_pmop_dump(a,b,c)	Perl_do_pmop_dump(aTHX_ a,b,c)
 #define do_sv_dump(a,b,c,d,e,f,g)	Perl_do_sv_dump(aTHX_ a,b,c,d,e,f,g)
 #define magic_dump(a)		Perl_magic_dump(aTHX_ a)
-#define vdefault_protect(a,b,c)	Perl_vdefault_protect(aTHX_ a,b,c)
+#define vdefault_protect(a,b,c,d)	Perl_vdefault_protect(aTHX_ a,b,c,d)
 #define reginitcolors()		Perl_reginitcolors(aTHX)
 #define sv_2pv_nolen(a)		Perl_sv_2pv_nolen(aTHX_ a)
 #define sv_pv(a)		Perl_sv_pv(aTHX_ a)
@@ -2066,6 +2110,11 @@
 #define tmps_grow(a)		Perl_tmps_grow(aTHX_ a)
 #define sv_rvweaken(a)		Perl_sv_rvweaken(aTHX_ a)
 #define magic_killbackrefs(a,b)	Perl_magic_killbackrefs(aTHX_ a,b)
+#define newANONATTRSUB(a,b,c,d)	Perl_newANONATTRSUB(aTHX_ a,b,c,d)
+#define newATTRSUB(a,b,c,d,e)	Perl_newATTRSUB(aTHX_ a,b,c,d,e)
+#define newMYSUB(a,b,c,d,e)	Perl_newMYSUB(aTHX_ a,b,c,d,e)
+#define my_attrs(a,b)		Perl_my_attrs(aTHX_ a,b)
+#define boot_core_xsutils()	Perl_boot_core_xsutils(aTHX)
 #if defined(PERL_OBJECT)
 #endif
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
@@ -2120,6 +2169,9 @@
 #define gv_ename(a)		S_gv_ename(aTHX_ a)
 #define cv_clone2(a,b)		S_cv_clone2(aTHX_ a,b)
 #define scalar_mod_type(a,b)	S_scalar_mod_type(aTHX_ a,b)
+#define my_kid(a,b)		S_my_kid(aTHX_ a,b)
+#define dup_attrlist(a)		S_dup_attrlist(aTHX_ a)
+#define apply_attrs(a,b,c)	S_apply_attrs(aTHX_ a,b,c)
 #  if defined(PL_OP_SLAB_ALLOC)
 #define Slab_Alloc(a,b)		S_Slab_Alloc(aTHX_ a,b)
 #  endif
@@ -2192,7 +2244,6 @@
 #define reganode(a,b)		S_reganode(aTHX_ a,b)
 #define regatom(a)		S_regatom(aTHX_ a)
 #define regbranch(a,b)		S_regbranch(aTHX_ a,b)
-#define regc(a,b)		S_regc(aTHX_ a,b)
 #define reguni(a,b,c)		S_reguni(aTHX_ a,b,c)
 #define regclass()		S_regclass(aTHX)
 #define regclassutf8()		S_regclassutf8(aTHX)
@@ -2238,14 +2289,38 @@
 #define more_xiv()		S_more_xiv(aTHX)
 #define more_xnv()		S_more_xnv(aTHX)
 #define more_xpv()		S_more_xpv(aTHX)
+#define more_xpviv()		S_more_xpviv(aTHX)
+#define more_xpvnv()		S_more_xpvnv(aTHX)
+#define more_xpvcv()		S_more_xpvcv(aTHX)
+#define more_xpvav()		S_more_xpvav(aTHX)
+#define more_xpvhv()		S_more_xpvhv(aTHX)
+#define more_xpvmg()		S_more_xpvmg(aTHX)
+#define more_xpvlv()		S_more_xpvlv(aTHX)
+#define more_xpvbm()		S_more_xpvbm(aTHX)
 #define more_xrv()		S_more_xrv(aTHX)
 #define new_xiv()		S_new_xiv(aTHX)
 #define new_xnv()		S_new_xnv(aTHX)
 #define new_xpv()		S_new_xpv(aTHX)
+#define new_xpviv()		S_new_xpviv(aTHX)
+#define new_xpvnv()		S_new_xpvnv(aTHX)
+#define new_xpvcv()		S_new_xpvcv(aTHX)
+#define new_xpvav()		S_new_xpvav(aTHX)
+#define new_xpvhv()		S_new_xpvhv(aTHX)
+#define new_xpvmg()		S_new_xpvmg(aTHX)
+#define new_xpvlv()		S_new_xpvlv(aTHX)
+#define new_xpvbm()		S_new_xpvbm(aTHX)
 #define new_xrv()		S_new_xrv(aTHX)
 #define del_xiv(a)		S_del_xiv(aTHX_ a)
 #define del_xnv(a)		S_del_xnv(aTHX_ a)
 #define del_xpv(a)		S_del_xpv(aTHX_ a)
+#define del_xpviv(a)		S_del_xpviv(aTHX_ a)
+#define del_xpvnv(a)		S_del_xpvnv(aTHX_ a)
+#define del_xpvcv(a)		S_del_xpvcv(aTHX_ a)
+#define del_xpvav(a)		S_del_xpvav(aTHX_ a)
+#define del_xpvhv(a)		S_del_xpvhv(aTHX_ a)
+#define del_xpvmg(a)		S_del_xpvmg(aTHX_ a)
+#define del_xpvlv(a)		S_del_xpvlv(aTHX_ a)
+#define del_xpvbm(a)		S_del_xpvbm(aTHX_ a)
 #define del_xrv(a)		S_del_xrv(aTHX_ a)
 #define sv_unglob(a)		S_sv_unglob(aTHX_ a)
 #define not_a_number(a)		S_not_a_number(aTHX_ a)
@@ -2274,7 +2349,7 @@
 #define scan_ident(a,b,c,d,e)	S_scan_ident(aTHX_ a,b,c,d,e)
 #define scan_inputsymbol(a)	S_scan_inputsymbol(aTHX_ a)
 #define scan_pat(a,b)		S_scan_pat(aTHX_ a,b)
-#define scan_str(a)		S_scan_str(aTHX_ a)
+#define scan_str(a,b,c)		S_scan_str(aTHX_ a,b,c)
 #define scan_subst(a)		S_scan_subst(aTHX_ a)
 #define scan_trans(a)		S_scan_trans(aTHX_ a)
 #define scan_word(a,b,c,d,e)	S_scan_word(aTHX_ a,b,c,d,e)
@@ -2329,6 +2404,7 @@
 #define ck_glob(a)		Perl_ck_glob(aTHX_ a)
 #define ck_grep(a)		Perl_ck_grep(aTHX_ a)
 #define ck_index(a)		Perl_ck_index(aTHX_ a)
+#define ck_join(a)		Perl_ck_join(aTHX_ a)
 #define ck_lengthconst(a)	Perl_ck_lengthconst(aTHX_ a)
 #define ck_lfun(a)		Perl_ck_lfun(aTHX_ a)
 #define ck_listiob(a)		Perl_ck_listiob(aTHX_ a)
@@ -2518,6 +2594,7 @@
 #define pp_leaveeval()		Perl_pp_leaveeval(aTHX)
 #define pp_leaveloop()		Perl_pp_leaveloop(aTHX)
 #define pp_leavesub()		Perl_pp_leavesub(aTHX)
+#define pp_leavesublv()		Perl_pp_leavesublv(aTHX)
 #define pp_leavetry()		Perl_pp_leavetry(aTHX)
 #define pp_leavewrite()		Perl_pp_leavewrite(aTHX)
 #define pp_left_shift()		Perl_pp_left_shift(aTHX)
@@ -2794,6 +2871,8 @@
 #define deb_nocontext		Perl_deb_nocontext
 #define Perl_form_nocontext	CPerlObj::Perl_form_nocontext
 #define form_nocontext		Perl_form_nocontext
+#define Perl_mess_nocontext	CPerlObj::Perl_mess_nocontext
+#define mess_nocontext		Perl_mess_nocontext
 #define Perl_warn_nocontext	CPerlObj::Perl_warn_nocontext
 #define warn_nocontext		Perl_warn_nocontext
 #define Perl_warner_nocontext	CPerlObj::Perl_warner_nocontext
@@ -3309,6 +3388,10 @@
 #endif
 #define Perl_mess		CPerlObj::Perl_mess
 #define mess			Perl_mess
+#define Perl_vmess		CPerlObj::Perl_vmess
+#define vmess			Perl_vmess
+#define Perl_qerror		CPerlObj::Perl_qerror
+#define qerror			Perl_qerror
 #define Perl_mg_clear		CPerlObj::Perl_mg_clear
 #define mg_clear		Perl_mg_clear
 #define Perl_mg_copy		CPerlObj::Perl_mg_copy
@@ -3649,6 +3732,8 @@
 #define save_delete		Perl_save_delete
 #define Perl_save_destructor	CPerlObj::Perl_save_destructor
 #define save_destructor		Perl_save_destructor
+#define Perl_save_destructor_x	CPerlObj::Perl_save_destructor_x
+#define save_destructor_x	Perl_save_destructor_x
 #define Perl_save_freesv	CPerlObj::Perl_save_freesv
 #define save_freesv		Perl_save_freesv
 #define Perl_save_freeop	CPerlObj::Perl_save_freeop
@@ -4074,6 +4159,16 @@
 #define sv_rvweaken		Perl_sv_rvweaken
 #define Perl_magic_killbackrefs	CPerlObj::Perl_magic_killbackrefs
 #define magic_killbackrefs	Perl_magic_killbackrefs
+#define Perl_newANONATTRSUB	CPerlObj::Perl_newANONATTRSUB
+#define newANONATTRSUB		Perl_newANONATTRSUB
+#define Perl_newATTRSUB		CPerlObj::Perl_newATTRSUB
+#define newATTRSUB		Perl_newATTRSUB
+#define Perl_newMYSUB		CPerlObj::Perl_newMYSUB
+#define newMYSUB		Perl_newMYSUB
+#define Perl_my_attrs		CPerlObj::Perl_my_attrs
+#define my_attrs		Perl_my_attrs
+#define Perl_boot_core_xsutils	CPerlObj::Perl_boot_core_xsutils
+#define boot_core_xsutils	Perl_boot_core_xsutils
 #if defined(PERL_OBJECT)
 #endif
 #if defined(PERL_IN_AV_C) || defined(PERL_DECL_PROT)
@@ -4169,6 +4264,12 @@
 #define cv_clone2		S_cv_clone2
 #define S_scalar_mod_type	CPerlObj::S_scalar_mod_type
 #define scalar_mod_type		S_scalar_mod_type
+#define S_my_kid		CPerlObj::S_my_kid
+#define my_kid			S_my_kid
+#define S_dup_attrlist		CPerlObj::S_dup_attrlist
+#define dup_attrlist		S_dup_attrlist
+#define S_apply_attrs		CPerlObj::S_apply_attrs
+#define apply_attrs		S_apply_attrs
 #  if defined(PL_OP_SLAB_ALLOC)
 #define S_Slab_Alloc		CPerlObj::S_Slab_Alloc
 #define Slab_Alloc		S_Slab_Alloc
@@ -4293,8 +4394,6 @@
 #define regatom			S_regatom
 #define S_regbranch		CPerlObj::S_regbranch
 #define regbranch		S_regbranch
-#define S_regc			CPerlObj::S_regc
-#define regc			S_regc
 #define S_reguni		CPerlObj::S_reguni
 #define reguni			S_reguni
 #define S_regclass		CPerlObj::S_regclass
@@ -4379,6 +4478,22 @@
 #define more_xnv		S_more_xnv
 #define S_more_xpv		CPerlObj::S_more_xpv
 #define more_xpv		S_more_xpv
+#define S_more_xpviv		CPerlObj::S_more_xpviv
+#define more_xpviv		S_more_xpviv
+#define S_more_xpvnv		CPerlObj::S_more_xpvnv
+#define more_xpvnv		S_more_xpvnv
+#define S_more_xpvcv		CPerlObj::S_more_xpvcv
+#define more_xpvcv		S_more_xpvcv
+#define S_more_xpvav		CPerlObj::S_more_xpvav
+#define more_xpvav		S_more_xpvav
+#define S_more_xpvhv		CPerlObj::S_more_xpvhv
+#define more_xpvhv		S_more_xpvhv
+#define S_more_xpvmg		CPerlObj::S_more_xpvmg
+#define more_xpvmg		S_more_xpvmg
+#define S_more_xpvlv		CPerlObj::S_more_xpvlv
+#define more_xpvlv		S_more_xpvlv
+#define S_more_xpvbm		CPerlObj::S_more_xpvbm
+#define more_xpvbm		S_more_xpvbm
 #define S_more_xrv		CPerlObj::S_more_xrv
 #define more_xrv		S_more_xrv
 #define S_new_xiv		CPerlObj::S_new_xiv
@@ -4387,6 +4502,22 @@
 #define new_xnv			S_new_xnv
 #define S_new_xpv		CPerlObj::S_new_xpv
 #define new_xpv			S_new_xpv
+#define S_new_xpviv		CPerlObj::S_new_xpviv
+#define new_xpviv		S_new_xpviv
+#define S_new_xpvnv		CPerlObj::S_new_xpvnv
+#define new_xpvnv		S_new_xpvnv
+#define S_new_xpvcv		CPerlObj::S_new_xpvcv
+#define new_xpvcv		S_new_xpvcv
+#define S_new_xpvav		CPerlObj::S_new_xpvav
+#define new_xpvav		S_new_xpvav
+#define S_new_xpvhv		CPerlObj::S_new_xpvhv
+#define new_xpvhv		S_new_xpvhv
+#define S_new_xpvmg		CPerlObj::S_new_xpvmg
+#define new_xpvmg		S_new_xpvmg
+#define S_new_xpvlv		CPerlObj::S_new_xpvlv
+#define new_xpvlv		S_new_xpvlv
+#define S_new_xpvbm		CPerlObj::S_new_xpvbm
+#define new_xpvbm		S_new_xpvbm
 #define S_new_xrv		CPerlObj::S_new_xrv
 #define new_xrv			S_new_xrv
 #define S_del_xiv		CPerlObj::S_del_xiv
@@ -4395,6 +4526,22 @@
 #define del_xnv			S_del_xnv
 #define S_del_xpv		CPerlObj::S_del_xpv
 #define del_xpv			S_del_xpv
+#define S_del_xpviv		CPerlObj::S_del_xpviv
+#define del_xpviv		S_del_xpviv
+#define S_del_xpvnv		CPerlObj::S_del_xpvnv
+#define del_xpvnv		S_del_xpvnv
+#define S_del_xpvcv		CPerlObj::S_del_xpvcv
+#define del_xpvcv		S_del_xpvcv
+#define S_del_xpvav		CPerlObj::S_del_xpvav
+#define del_xpvav		S_del_xpvav
+#define S_del_xpvhv		CPerlObj::S_del_xpvhv
+#define del_xpvhv		S_del_xpvhv
+#define S_del_xpvmg		CPerlObj::S_del_xpvmg
+#define del_xpvmg		S_del_xpvmg
+#define S_del_xpvlv		CPerlObj::S_del_xpvlv
+#define del_xpvlv		S_del_xpvlv
+#define S_del_xpvbm		CPerlObj::S_del_xpvbm
+#define del_xpvbm		S_del_xpvbm
 #define S_del_xrv		CPerlObj::S_del_xrv
 #define del_xrv			S_del_xrv
 #define S_sv_unglob		CPerlObj::S_sv_unglob
@@ -4543,6 +4690,8 @@
 #define ck_grep			Perl_ck_grep
 #define Perl_ck_index		CPerlObj::Perl_ck_index
 #define ck_index		Perl_ck_index
+#define Perl_ck_join		CPerlObj::Perl_ck_join
+#define ck_join			Perl_ck_join
 #define Perl_ck_lengthconst	CPerlObj::Perl_ck_lengthconst
 #define ck_lengthconst		Perl_ck_lengthconst
 #define Perl_ck_lfun		CPerlObj::Perl_ck_lfun
@@ -4921,6 +5070,8 @@
 #define pp_leaveloop		Perl_pp_leaveloop
 #define Perl_pp_leavesub	CPerlObj::Perl_pp_leavesub
 #define pp_leavesub		Perl_pp_leavesub
+#define Perl_pp_leavesublv	CPerlObj::Perl_pp_leavesublv
+#define pp_leavesublv		Perl_pp_leavesublv
 #define Perl_pp_leavetry	CPerlObj::Perl_pp_leavetry
 #define pp_leavetry		Perl_pp_leavetry
 #define Perl_pp_leavewrite	CPerlObj::Perl_pp_leavewrite
@@ -5283,8 +5434,8 @@
  */
 
 #if !defined(PERL_CORE)
-#  define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,(IV)ptr)
-#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,(IV)ptr)
+#  define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,PTR2IV(ptr))
+#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,PTR2IV(ptr))
 #endif
 
 #if !defined(PERL_CORE) && !defined(PERL_NOCOMPAT) && !defined(PERL_BINCOMPAT_5005)
@@ -5295,23 +5446,23 @@
    The following are not like that, but since they had a "perl_"
    prefix in previous versions, we provide compatibility macros.
  */
-#  define perl_atexit			call_atexit
-#  define perl_call_argv		call_argv
-#  define perl_call_pv			call_pv
-#  define perl_call_method		call_method
-#  define perl_call_sv			call_sv
-#  define perl_eval_sv			eval_sv
-#  define perl_eval_pv			eval_pv
-#  define perl_require_pv		require_pv
-#  define perl_get_sv			get_sv
-#  define perl_get_av			get_av
-#  define perl_get_hv			get_hv
-#  define perl_get_cv			get_cv
-#  define perl_init_i18nl10n		init_i18nl10n
-#  define perl_init_i18nl14n		init_i18nl14n
-#  define perl_new_ctype		new_ctype
-#  define perl_new_collate		new_collate
-#  define perl_new_numeric		new_numeric
+#  define perl_atexit(a,b)		call_atexit(a,b)
+#  define perl_call_argv(a,b,c)		call_argv(a,b,c)
+#  define perl_call_pv(a,b)		call_pv(a,b)
+#  define perl_call_method(a,b)		call_method(a,b)
+#  define perl_call_sv(a,b)		call_sv(a,b)
+#  define perl_eval_sv(a,b)		eval_sv(a,b)
+#  define perl_eval_pv(a,b)		eval_pv(a,b)
+#  define perl_require_pv(a)		require_pv(a)
+#  define perl_get_sv(a,b)		get_sv(a,b)
+#  define perl_get_av(a,b)		get_av(a,b)
+#  define perl_get_hv(a,b)		get_hv(a,b)
+#  define perl_get_cv(a,b)		get_cv(a,b)
+#  define perl_init_i18nl10n(a)		init_i18nl10n(a)
+#  define perl_init_i18nl14n(a)		init_i18nl14n(a)
+#  define perl_new_ctype(a)		new_ctype(a)
+#  define perl_new_collate(a)		new_collate(a)
+#  define perl_new_numeric(a)		new_numeric(a)
 
 /* varargs functions can't be handled with CPP macros. :-(
    This provides a set of compatibility functions that don't take
@@ -5323,6 +5474,7 @@
 #  define deb				Perl_deb_nocontext
 #  define die				Perl_die_nocontext
 #  define form				Perl_form_nocontext
+#  define mess				Perl_mess_nocontext
 #  define newSVpvf			Perl_newSVpvf_nocontext
 #  define sv_catpvf			Perl_sv_catpvf_nocontext
 #  define sv_setpvf			Perl_sv_setpvf_nocontext
@@ -5340,6 +5492,7 @@
 #  define Perl_die_nocontext		Perl_die
 #  define Perl_deb_nocontext		Perl_deb
 #  define Perl_form_nocontext		Perl_form
+#  define Perl_mess_nocontext		Perl_mess
 #  define Perl_newSVpvf_nocontext	Perl_newSVpvf
 #  define Perl_sv_catpvf_nocontext	Perl_sv_catpvf
 #  define Perl_sv_setpvf_nocontext	Perl_sv_setpvf

@@ -48,6 +48,7 @@ Perl_croak_nocontext
 Perl_die_nocontext
 Perl_deb_nocontext
 Perl_form_nocontext
+Perl_mess_nocontext
 Perl_warn_nocontext
 Perl_warner_nocontext
 Perl_newSVpvf_nocontext
@@ -296,6 +297,8 @@ Perl_malloced_size
 Perl_markstack_grow
 Perl_mem_collxfrm
 Perl_mess
+Perl_vmess
+Perl_qerror
 Perl_mg_clear
 Perl_mg_copy
 Perl_mg_find
@@ -462,6 +465,7 @@ Perl_save_ary
 Perl_save_clearsv
 Perl_save_delete
 Perl_save_destructor
+Perl_save_destructor_x
 Perl_save_freesv
 Perl_save_freeop
 Perl_save_freepv
@@ -666,3 +670,8 @@ Perl_sv_force_normal
 Perl_tmps_grow
 Perl_sv_rvweaken
 Perl_magic_killbackrefs
+Perl_newANONATTRSUB
+Perl_newATTRSUB
+Perl_newMYSUB
+Perl_my_attrs
+Perl_boot_core_xsutils

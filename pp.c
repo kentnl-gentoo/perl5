@@ -406,6 +406,8 @@ PP(pp_rv2cv)
     if (cv) {
 	if (CvCLONE(cv))
 	    cv = (CV*)sv_2mortal((SV*)cv_clone(cv));
+	if ((PL_op->op_private & OPpLVAL_INTRO) && !CvLVALUE(cv))
+	    DIE(aTHX_ "Can't modify non-lvalue subroutine call");
     }
     else
 	cv = (CV*)&PL_sv_undef;
@@ -467,7 +469,7 @@ PP(pp_prototype)
 		goto set;
 	    else {			/* None such */
 	      nonesuch:
-		Perl_croak(aTHX_ "Can't find an opnumber for \"%s\"", s+6);
+		DIE(aTHX_ "Can't find an opnumber for \"%s\"", s+6);
 	    }
 	}
     }
@@ -527,6 +529,12 @@ S_refto(pTHX_ SV *sv)
 	    sv = &PL_sv_undef;
 	else
 	    (void)SvREFCNT_inc(sv);
+    }
+    else if (SvTYPE(sv) == SVt_PVAV) {
+	if (!AvREAL((AV*)sv) && AvREIFY((AV*)sv))
+	    av_reify((AV*)sv);
+	SvTEMP_off(sv);
+	(void)SvREFCNT_inc(sv);
     }
     else if (SvPADTMP(sv))
 	sv = newSVsv(sv);
@@ -863,7 +871,7 @@ PP(pp_predec)
 {
     djSP;
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
-	Perl_croak(aTHX_ PL_no_modify);
+	DIE(aTHX_ PL_no_modify);
     if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MIN)
     {
@@ -880,7 +888,7 @@ PP(pp_postinc)
 {
     djSP; dTARGET;
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
-	Perl_croak(aTHX_ PL_no_modify);
+	DIE(aTHX_ PL_no_modify);
     sv_setsv(TARG, TOPs);
     if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MAX)
@@ -901,7 +909,7 @@ PP(pp_postdec)
 {
     djSP; dTARGET;
     if (SvREADONLY(TOPs) || SvTYPE(TOPs) > SVt_PVLV)
-	Perl_croak(aTHX_ PL_no_modify);
+	DIE(aTHX_ PL_no_modify);
     sv_setsv(TARG, TOPs);
     if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs) &&
     	SvIVX(TOPs) != IV_MIN)
@@ -1776,9 +1784,9 @@ S_seed(pTHX)
 #  endif
 #endif
     u += SEED_C3 * (U32)getpid();
-    u += SEED_C4 * (U32)(UV)PL_stack_sp;
+    u += SEED_C4 * (U32)PTR2UV(PL_stack_sp);
 #ifndef PLAN9           /* XXX Plan9 assembler chokes on this; fix needed  */
-    u += SEED_C5 * (U32)(UV)&when;
+    u += SEED_C5 * (U32)PTR2UV(&when);
 #endif
     return u;
 }
@@ -3256,6 +3264,7 @@ PP(pp_unpack)
     register U32 culong;
     NV cdouble;
     int commas = 0;
+    int star;
 #ifdef PERL_NATINT_PACK
     int natint;		/* native integer */
     int unatint;	/* unsigned native integer */
@@ -3280,6 +3289,11 @@ PP(pp_unpack)
 #endif
 	if (isSPACE(datumtype))
 	    continue;
+	if (datumtype == '#') {
+	    while (pat < patend && *pat != '\n')
+		pat++;
+	    continue;
+	}
 	if (*pat == '!') {
 	    char *natstr = "sSiIlL";
 
@@ -3290,30 +3304,34 @@ PP(pp_unpack)
 		pat++;
 	    }
 	    else
-		Perl_croak(aTHX_ "'!' allowed only after types %s", natstr);
+		DIE(aTHX_ "'!' allowed only after types %s", natstr);
 	}
+	star = 0;
 	if (pat >= patend)
 	    len = 1;
 	else if (*pat == '*') {
 	    len = strend - strbeg;	/* long enough */
 	    pat++;
+	    star = 1;
 	}
 	else if (isDIGIT(*pat)) {
 	    len = *pat++ - '0';
 	    while (isDIGIT(*pat)) {
 		len = (len * 10) + (*pat++ - '0');
 		if (len < 0)
-		    Perl_croak(aTHX_ "Repeat count in unpack overflows");
+		    DIE(aTHX_ "Repeat count in unpack overflows");
 	    }
 	}
 	else
 	    len = (datumtype != '@');
+      redo_switch:
 	switch(datumtype) {
 	default:
-	    Perl_croak(aTHX_ "Invalid type in unpack: '%c'", (int)datumtype);
+	    DIE(aTHX_ "Invalid type in unpack: '%c'", (int)datumtype);
 	case ',': /* grandfather in commas but with a warning */
 	    if (commas++ == 0 && ckWARN(WARN_UNSAFE))
-		Perl_warner(aTHX_ WARN_UNSAFE, "Invalid type in unpack: '%c'", (int)datumtype);
+		Perl_warner(aTHX_ WARN_UNSAFE,
+			    "Invalid type in unpack: '%c'", (int)datumtype);
 	    break;
 	case '%':
 	    if (len == 1 && pat[-1] != '1')
@@ -3339,18 +3357,17 @@ PP(pp_unpack)
 		DIE(aTHX_ "x outside of string");
 	    s += len;
 	    break;
-	case '#':
+	case '/':
 	    if (oldsp >= SP)
-		DIE(aTHX_ "# must follow a numeric type");
-	    if (*pat != 'a' && *pat != 'A' && *pat != 'Z')
-		DIE(aTHX_ "# must be followed by a, A or Z");
+		DIE(aTHX_ "/ must follow a numeric type");
 	    datumtype = *pat++;
 	    if (*pat == '*')
 		pat++;		/* ignore '*' for compatibility with pack */
 	    if (isDIGIT(*pat))
-		DIE(aTHX_ "# cannot take a count" );
+		DIE(aTHX_ "/ cannot take a count" );
 	    len = POPi;
-	    /* drop through */
+	    star = 0;
+	    goto redo_switch;
 	case 'A':
 	case 'Z':
 	case 'a':
@@ -3381,7 +3398,7 @@ PP(pp_unpack)
 	    break;
 	case 'B':
 	case 'b':
-	    if (pat[-1] == '*' || len > (strend - s) * 8)
+	    if (star || len > (strend - s) * 8)
 		len = (strend - s) * 8;
 	    if (checksum) {
 		if (!PL_bitcount) {
@@ -3449,7 +3466,7 @@ PP(pp_unpack)
 	    break;
 	case 'H':
 	case 'h':
-	    if (pat[-1] == '*' || len > (strend - s) * 2)
+	    if (star || len > (strend - s) * 2)
 		len = (strend - s) * 2;
 	    sv = NEWSV(35, len + 1);
 	    SvCUR_set(sv, len);
@@ -3979,7 +3996,7 @@ PP(pp_unpack)
 		    }
 		}
 		if ((s >= strend) && bytes)
-		    Perl_croak(aTHX_ "Unterminated compressed integer");
+		    DIE(aTHX_ "Unterminated compressed integer");
 	    }
 	    break;
 	case 'P':
@@ -4337,6 +4354,11 @@ PP(pp_pack)
 #endif
 	if (isSPACE(datumtype))
 	    continue;
+	if (datumtype == '#') {
+	    while (pat < patend && *pat != '\n')
+		pat++;
+	    continue;
+	}
         if (*pat == '!') {
 	    char *natstr = "sSiIlL";
 
@@ -4347,7 +4369,7 @@ PP(pp_pack)
 		pat++;
 	    }
 	    else
-		Perl_croak(aTHX_ "'!' allowed only after types %s", natstr);
+		DIE(aTHX_ "'!' allowed only after types %s", natstr);
 	}
 	if (*pat == '*') {
 	    len = strchr("@Xxu", datumtype) ? 0 : items;
@@ -4358,21 +4380,21 @@ PP(pp_pack)
 	    while (isDIGIT(*pat)) {
 		len = (len * 10) + (*pat++ - '0');
 		if (len < 0)
-		    Perl_croak(aTHX_ "Repeat count in pack overflows");
+		    DIE(aTHX_ "Repeat count in pack overflows");
 	    }
 	}
 	else
 	    len = 1;
-	if (*pat == '#') {
+	if (*pat == '/') {
 	    ++pat;
 	    if (*pat != 'a' && *pat != 'A' && *pat != 'Z' || pat[1] != '*')
-		DIE(aTHX_ "# must be followed by a*, A* or Z*");
+		DIE(aTHX_ "/ must be followed by a*, A* or Z*");
 	    lengthcode = sv_2mortal(newSViv(sv_len(items > 0
 						   ? *MARK : &PL_sv_no)));
 	}
 	switch(datumtype) {
 	default:
-	    Perl_croak(aTHX_ "Invalid type in pack: '%c'", (int)datumtype);
+	    DIE(aTHX_ "Invalid type in pack: '%c'", (int)datumtype);
 	case ',': /* grandfather in commas but with a warning */
 	    if (commas++ == 0 && ckWARN(WARN_UNSAFE))
 		Perl_warner(aTHX_ WARN_UNSAFE,
@@ -4408,10 +4430,16 @@ PP(pp_pack)
 	case 'a':
 	    fromstr = NEXTFROM;
 	    aptr = SvPV(fromstr, fromlen);
-	    if (pat[-1] == '*')
+	    if (pat[-1] == '*') {
 		len = fromlen;
-	    if (fromlen > len)
+		if (datumtype == 'Z')
+		    ++len;
+	    }
+	    if (fromlen >= len) {
 		sv_catpvn(cat, aptr, len);
+		if (datumtype == 'Z')
+		    *(SvEND(cat)-1) = '\0';
+	    }
 	    else {
 		sv_catpvn(cat, aptr, fromlen);
 		len -= fromlen;
@@ -4661,7 +4689,7 @@ PP(pp_pack)
 		adouble = Perl_floor(SvNV(fromstr));
 
 		if (adouble < 0)
-		    Perl_croak(aTHX_ "Cannot compress negative numbers");
+		    DIE(aTHX_ "Cannot compress negative numbers");
 
 		if (
 #ifdef BW_BITS
@@ -4695,7 +4723,7 @@ PP(pp_pack)
 		    /* Copy string and check for compliance */
 		    from = SvPV(fromstr, len);
 		    if ((norm = is_an_int(from, len)) == NULL)
-			Perl_croak(aTHX_ "can compress only unsigned integer");
+			DIE(aTHX_ "can compress only unsigned integer");
 
 		    New('w', result, len, char);
 		    in = result + len;
@@ -4715,14 +4743,14 @@ PP(pp_pack)
 			double next = floor(adouble / 128);
 			*--in = (unsigned char)(adouble - (next * 128)) | 0x80;
 			if (--in < buf)  /* this cannot happen ;-) */
-			    Perl_croak(aTHX_ "Cannot compress integer");
+			    DIE(aTHX_ "Cannot compress integer");
 			adouble = next;
 		    } while (adouble > 0);
 		    buf[sizeof(buf) - 1] &= 0x7f; /* clear continue bit */
 		    sv_catpvn(cat, in, (buf + sizeof(buf)) - in);
 		}
 		else
-		    Perl_croak(aTHX_ "Cannot compress non integer");
+		    DIE(aTHX_ "Cannot compress non integer");
 	    }
             break;
 	case 'i':
@@ -4927,6 +4955,7 @@ PP(pp_split)
 	else {
 	    if (!AvREAL(ary)) {
 		AvREAL_on(ary);
+		AvREIFY_off(ary);
 		for (i = AvFILLp(ary); i >= 0; i--)
 		    AvARRAY(ary)[i] = &PL_sv_undef;	/* don't free mere refs */
 	    }
@@ -4977,14 +5006,7 @@ PP(pp_split)
 		++s;
 	}
     }
-    else if (rx->prelen == 1 && *rx->precomp == '^') {
-	if (!(pm->op_pmflags & PMf_MULTILINE)
-	    && !(pm->op_pmregexp->reganch & ROPT_WARNED)) {
-	    if (ckWARN(WARN_DEPRECATED))
-		Perl_warner(aTHX_ WARN_DEPRECATED,
-			    "split /^/ better written as split /^/m");
-	    pm->op_pmregexp->reganch |= ROPT_WARNED;
-	}	
+    else if (strEQ("^", rx->precomp)) {
 	while (--limit) {
 	    /*SUPPRESS 530*/
 	    for (m = s; m < strend && *m != '\n'; m++) ;
@@ -5157,7 +5179,7 @@ Perl_unlock_condpair(pTHX_ void *svv)
 	Perl_croak(aTHX_ "panic: unlock_condpair unlocking mutex that we don't own");
     MgOWNER(mg) = 0;
     COND_SIGNAL(MgOWNERCONDP(mg));
-    DEBUG_S(PerlIO_printf(PerlIO_stderr(), "0x%lx: unlock 0x%lx\n",
+    DEBUG_S(PerlIO_printf(Perl_debug_log, "0x%lx: unlock 0x%lx\n",
 			  (unsigned long)thr, (unsigned long)svv);)
     MUTEX_UNLOCK(MgMUTEXP(mg));
 }
@@ -5182,10 +5204,10 @@ PP(pp_lock)
 	while (MgOWNER(mg))
 	    COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
 	MgOWNER(mg) = thr;
-	DEBUG_S(PerlIO_printf(PerlIO_stderr(), "0x%lx: pp_lock lock 0x%lx\n",
+	DEBUG_S(PerlIO_printf(Perl_debug_log, "0x%lx: pp_lock lock 0x%lx\n",
 			      (unsigned long)thr, (unsigned long)sv);)
 	MUTEX_UNLOCK(MgMUTEXP(mg));
-	SAVEDESTRUCTOR(Perl_unlock_condpair, sv);
+	SAVEDESTRUCTOR_X(Perl_unlock_condpair, sv);
     }
 #endif /* USE_THREADS */
     if (SvTYPE(retsv) == SVt_PVAV || SvTYPE(retsv) == SVt_PVHV

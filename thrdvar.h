@@ -101,6 +101,7 @@ PERLVAR(Tmainstack,	AV *)		/* the stack when nothing funny is happening */
 PERLVAR(Ttop_env,	JMPENV *)	/* ptr. to current sigjmp() environment */
 PERLVAR(Tstart_env,	JMPENV)		/* empty startup sigjmp() environment */
 PERLVARI(Tprotect,	protect_proc_t,	MEMBER_TO_FPTR(Perl_default_protect))
+PERLVARI(Terrors,	SV *, Nullsv)	/* outstanding queued errors */
 
 /* statics "owned" by various functions */
 PERLVAR(Tav_fetch_sv,	SV *)		/* owned by av_fetch() */
@@ -118,6 +119,10 @@ PERLVAR(Tsortstash,	HV *)		/* which is in some package or other */
 PERLVAR(Tfirstgv,	GV *)		/* $a */
 PERLVAR(Tsecondgv,	GV *)		/* $b */
 PERLVAR(Tsortcxix,	I32)		/* from pp_ctl.c */
+
+/* float buffer */
+PERLVAR(Tefloatbuf,	char*)
+PERLVAR(Tefloatsize,	STRLEN)
 
 /* regex stuff */
 
@@ -208,7 +213,6 @@ PERLVAR(threadsv,	AV *)		/* Per-thread SVs ($_, $@ etc.) */
 PERLVAR(threadsvp,	SV **)		/* AvARRAY(threadsv) */
 PERLVAR(specific,	AV *)		/* Thread-specific user data */
 PERLVAR(errsv,		SV *)		/* Backing SV for $@ */
-PERLVAR(errhv,		HV *)		/* HV for what was %@ in pp_ctl.c */
 PERLVAR(mutex,		perl_mutex)	/* For the fields others can change */
 PERLVAR(tid,		U32)
 PERLVAR(prev,		struct perl_thread *)

@@ -128,7 +128,7 @@ sdbm_prep(char *dirname, char *pagname, int flags, int mode)
  * open the files in sequence, and stat the dirfile.
  * If we fail anywhere, undo everything, return NULL.
  */
-#if defined(OS2) || defined(MSDOS) || defined(WIN32)
+#if defined(OS2) || defined(MSDOS) || defined(WIN32) || defined(CYGWIN)
 	flags |= O_BINARY;
 #	endif
 	if ((db->pagf = open(pagname, flags, mode)) > -1) {
@@ -431,9 +431,12 @@ getdbit(register DBM *db, register long int dbit)
 	dirb = c / DBLKSIZ;
 
 	if (dirb != db->dirbno) {
+		int got;
 		if (lseek(db->dirf, OFF_DIR(dirb), SEEK_SET) < 0
-		    || read(db->dirf, db->dirbuf, DBLKSIZ) < 0)
+		    || (got=read(db->dirf, db->dirbuf, DBLKSIZ)) < 0)
 			return 0;
+		if (got==0) 
+			memset(db->dirbuf,0,DBLKSIZ);
 		db->dirbno = dirb;
 
 		debug(("dir read: %d\n", dirb));
@@ -452,10 +455,12 @@ setdbit(register DBM *db, register long int dbit)
 	dirb = c / DBLKSIZ;
 
 	if (dirb != db->dirbno) {
-		(void) memset(db->dirbuf, 0, DBLKSIZ);
+		int got;
 		if (lseek(db->dirf, OFF_DIR(dirb), SEEK_SET) < 0
-		    || read(db->dirf, db->dirbuf, DBLKSIZ) < 0)
+		    || (got=read(db->dirf, db->dirbuf, DBLKSIZ)) < 0)
 			return 0;
+		if (got==0) 
+			memset(db->dirbuf,0,DBLKSIZ);
 		db->dirbno = dirb;
 
 		debug(("dir read: %d\n", dirb));
@@ -463,8 +468,13 @@ setdbit(register DBM *db, register long int dbit)
 
 	db->dirbuf[c % DBLKSIZ] |= (1 << dbit % BYTESIZ);
 
+#if 0
 	if (dbit >= db->maxbno)
 		db->maxbno += DBLKSIZ * BYTESIZ;
+#else
+	if (OFF_DIR((dirb+1))*BYTESIZ > db->maxbno) 
+		db->maxbno=OFF_DIR((dirb+1))*BYTESIZ;
+#endif
 
 	if (lseek(db->dirf, OFF_DIR(dirb), SEEK_SET) < 0
 	    || write(db->dirf, db->dirbuf, DBLKSIZ) < 0)

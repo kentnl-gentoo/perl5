@@ -14,8 +14,13 @@ Perl_taint_proper(pTHX_ const char *f, char *s)
     dTHR;	/* just for taint */
     char *ug;
 
+#if Uid_t_SIGN == -1
     DEBUG_u(PerlIO_printf(Perl_debug_log,
-            "%s %d %d %d\n", s, PL_tainted, PL_uid, PL_euid));
+            "%s %d %"IVdf" %"IVdf"\n", s, PL_tainted, (IV)PL_uid, (IV)PL_euid));
+#else
+    DEBUG_u(PerlIO_printf(Perl_debug_log,
+            "%s %d %"UVuf" %"UVuf"\n", s, PL_tainted, (UV)PL_uid, (UV)PL_euid));
+#endif
 
     if (PL_tainted) {
 	if (!f)

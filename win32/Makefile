@@ -29,7 +29,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	= \5.00561
+INST_VER	= \5.00562
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -141,6 +141,11 @@ CCLIBDIR	= $(CCHOME)\lib
 #BUILDOPT	= $(BUILDOPT) -DPERL_POLLUTE
 
 #
+# enable this to test the File::Glob implementation of CORE::glob
+#
+#BUILDOPT	= $(BUILDOPT) -DPERL_INTERNAL_GLOB
+
+#
 # specify semicolon-separated list of extra directories that modules will
 # look for libraries (spaces in path names need not be quoted)
 #
@@ -223,15 +228,29 @@ CFG		= Optimize
 !ENDIF
 !ENDIF
 
+ARCHDIR		= ..\lib\$(ARCHNAME)
 COREDIR		= ..\lib\CORE
 AUTODIR		= ..\lib\auto
+LIBDIR		= ..\lib
+EXTDIR		= ..\ext
+PODDIR		= ..\pod
+EXTUTILSDIR	= $(LIBDIR)\ExtUtils
+
+#
+INST_SCRIPT	= $(INST_TOP)$(INST_VER)\bin
+INST_BIN	= $(INST_SCRIPT)$(INST_ARCH)
+INST_LIB	= $(INST_TOP)$(INST_VER)\lib
+INST_ARCHLIB	= $(INST_LIB)$(INST_ARCH)
+INST_COREDIR	= $(INST_ARCHLIB)\CORE
+INST_POD	= $(INST_LIB)\pod
+INST_HTML	= $(INST_POD)\html
 
 #
 # Programs to compile, build .lib files and link
 #
 
-CC		= cl.exe
-LINK32		= link.exe
+CC		= cl
+LINK32		= link
 LIB32		= $(LINK32) -lib
 
 #
@@ -300,7 +319,9 @@ LIBFILES	= $(LIBBASEFILES) $(LIBC)
 
 CFLAGS		= -nologo -Gf -W3 $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
-LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) -machine:$(PROCESSOR_ARCHITECTURE)
+LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
+		-libpath:"$(INST_COREDIR)" \
+		-machine:$(PROCESSOR_ARCHITECTURE)
 OBJOUT_FLAG	= -Fo
 EXEOUT_FLAG	= -Fe
 
@@ -326,17 +347,6 @@ o = .obj
 $(o).dll:
 	$(LINK32) -dll -subsystem:windows -implib:$(*B).lib -def:$(*B).def \
 	    -out:$@ $(LINK_FLAGS) $(LIBFILES) $< $(LIBPERL)  
-
-#
-INST_BIN	= $(INST_TOP)$(INST_VER)\bin$(INST_ARCH)
-INST_SCRIPT	= $(INST_TOP)$(INST_VER)\bin
-INST_LIB	= $(INST_TOP)$(INST_VER)\lib
-INST_POD	= $(INST_LIB)\pod
-INST_HTML	= $(INST_POD)\html
-LIBDIR		= ..\lib
-EXTDIR		= ..\ext
-PODDIR		= ..\pod
-EXTUTILSDIR	= $(LIBDIR)\extutils
 
 #
 # various targets
@@ -432,7 +442,8 @@ MICROCORE_SRC	=		\
 		..\toke.c	\
 		..\universal.c	\
 		..\utf8.c	\
-		..\util.c
+		..\util.c	\
+		..\xsutils.c
 
 EXTRACORE_SRC	= $(EXTRACORE_SRC) perllib.c
 
@@ -503,7 +514,7 @@ CORE_NOCFG_H	=		\
 		..\unixish.h	\
 		..\utf8.h	\
 		..\util.h	\
-		..\warning.h	\
+		..\warnings.h	\
 		..\XSUB.h	\
 		..\EXTERN.h	\
 		..\perlvars.h	\
@@ -540,7 +551,7 @@ SETARGV_OBJ	= setargv$(o)
 !ENDIF
 
 DYNAMIC_EXT	= Socket IO Fcntl Opcode SDBM_File POSIX attrs Thread B re \
-		Data/Dumper Devel/Peek ByteLoader Devel/DProf
+		Data/Dumper Devel/Peek ByteLoader Devel/DProf File/Glob
 STATIC_EXT	= DynaLoader
 NONXS_EXT	= Errno
 
@@ -560,6 +571,7 @@ ERRNO		= $(EXTDIR)\Errno\Errno
 PEEK		= $(EXTDIR)\Devel\Peek\Peek
 BYTELOADER	= $(EXTDIR)\ByteLoader\ByteLoader
 DPROF		= $(EXTDIR)\Devel\DProf\DProf
+GLOB		= $(EXTDIR)\File\Glob\Glob
 
 SOCKET_DLL	= $(AUTODIR)\Socket\Socket.dll
 FCNTL_DLL	= $(AUTODIR)\Fcntl\Fcntl.dll
@@ -575,6 +587,7 @@ PEEK_DLL	= $(AUTODIR)\Devel\Peek\Peek.dll
 RE_DLL		= $(AUTODIR)\re\re.dll
 BYTELOADER_DLL	= $(AUTODIR)\ByteLoader\ByteLoader.dll
 DPROF_DLL	= $(AUTODIR)\Devel\DProf\DProf.dll
+GLOB_DLL	= $(AUTODIR)\File\Glob\Glob.dll
 
 ERRNO_PM	= $(LIBDIR)\Errno.pm
 
@@ -592,7 +605,8 @@ EXTENSION_C	= 		\
 		$(PEEK).c	\
 		$(B).c		\
 		$(BYTELOADER).c	\
-		$(DPROF).c
+		$(DPROF).c	\
+		$(GLOB).c
 
 EXTENSION_DLL	= 		\
 		$(SOCKET_DLL)	\
@@ -608,7 +622,8 @@ EXTENSION_DLL	= 		\
 		$(RE_DLL)	\
 		$(THREAD_DLL)	\
 		$(BYTELOADER_DLL)	\
-		$(DPROF_DLL)
+		$(DPROF_DLL)	\
+		$(GLOB_DLL)
 
 EXTENSION_PM	=		\
 		$(ERRNO_PM)
@@ -817,6 +832,12 @@ $(DPROF_DLL): $(PERLEXE) $(DPROF).xs
 	$(MAKE)
 	cd ..\..\..\win32
 
+$(GLOB_DLL): $(PERLEXE) $(GLOB).xs
+	cd $(EXTDIR)\File\$(*B)
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	$(MAKE)
+	cd ..\..\..\win32
+
 $(PEEK_DLL): $(PERLEXE) $(PEEK).xs
 	cd $(EXTDIR)\Devel\$(*B)
 	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
@@ -923,6 +944,7 @@ distclean: clean
 	-del /f $(LIBDIR)\B.pm $(LIBDIR)\O.pm $(LIBDIR)\re.pm
 	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
 	-del /f $(LIBDIR)\Devel\Peek.pm $(LIBDIR)\Devel\DProf.pm
+	-del /f $(LIBDIR)\File\Glob.pm
 	-rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
 	-rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
 	-rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B

@@ -10,7 +10,7 @@ sub quit {
     exit 0;
 }
 
-quit() if $^O eq 'MSWin32';
+quit() if $^O eq 'MSWin32' or $^O =~ /lynxos/i;
 
 # We have to find a command that prints all (effective
 # and real) group names (not ids).  The known commands are:
@@ -79,11 +79,11 @@ if ($groups =~ /groups=(.+)( [ug]id=|$)/) {
     # prefer names over numbers
     for (@g0) {
         # 42(zot me)
-	if (/^(\d+)(?:\(([^)]+)\))?$/) {
+	if (/^(\d+)(?:\(([^)]+)\))?/) {
 	    push @g1, ($2 || $1);
 	}
         # zot me(42)
-	elsif (/^([^(]*)\((\d+)\)$/) {
+	elsif (/^([^(]*)\((\d+)\)/) {
 	    push @g1, ($1 || $2);
 	}
 	else {

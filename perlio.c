@@ -385,14 +385,22 @@ PerlIO_vprintf(PerlIO *f, const char *fmt, va_list ap)
 Off_t
 PerlIO_tell(PerlIO *f)
 {
+#if defined(USE_64_BIT_STDIO) && defined(HAS_FTELLO) && !defined(USE_FTELL64)
+ return ftello(f);
+#else
  return ftell(f);
+#endif
 }
 
 #undef PerlIO_seek
 int
 PerlIO_seek(PerlIO *f, Off_t offset, int whence)
 {
+#if defined(USE_64_BIT_STDIO) && defined(HAS_FSEEKO) && !defined(USE_FSEEK64)
+ return fseeko(f,offset,whence);
+#else
  return fseek(f,offset,whence);
+#endif
 }
 
 #undef PerlIO_rewind
@@ -545,11 +553,9 @@ PerlIO_vsprintf(char *s, int n, const char *fmt, va_list ap)
   {
    if (strlen(s) >= (STRLEN)n)
     {
-     PerlIO_puts(PerlIO_stderr(),"panic: sprintf overflow - memory corrupted!\n");
-     {
-      dTHX;
-      my_exit(1);
-     }
+     dTHX;
+     PerlIO_puts(Perl_error_log,"panic: sprintf overflow - memory corrupted!\n");
+     my_exit(1);
     }
   }
  return val;
