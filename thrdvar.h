@@ -1,6 +1,6 @@
 /*    thdrvar.h
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, by Larry Wall and others
+ *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -56,10 +56,6 @@ PERLVAR(Tmarkstack,	I32 *)		/* stack_sp locations we're remembering */
 PERLVAR(Tmarkstack_ptr,	I32 *)
 PERLVAR(Tmarkstack_max,	I32 *)
 
-PERLVAR(Tretstack,	OP **)		/* OPs we have postponed executing */
-PERLVAR(Tretstack_ix,	I32)
-PERLVAR(Tretstack_max,	I32)
-
 PERLVAR(TSv,		SV *)		/* used to hold temporary values */
 PERLVAR(TXpv,		XPV *)		/* used to hold temporary values */
 
@@ -112,7 +108,7 @@ PERLVAR(Trs,		SV *)		/* input record separator $/ */
 PERLVAR(Tlast_in_gv,	GV *)		/* GV used in last <FH> */
 PERLVAR(Tofs_sv,	SV *)		/* output field separator $, */
 PERLVAR(Tdefoutgv,	GV *)		/* default FH for output */
-PERLVARI(Tchopset,	char *,	" \n-")	/* $: */
+PERLVARI(Tchopset,	const char *,	" \n-")	/* $: */
 PERLVAR(Tformtarget,	SV *)
 PERLVAR(Tbodytarget,	SV *)
 PERLVAR(Ttoptarget,	SV *)
@@ -134,9 +130,6 @@ PERLVAR(Tmainstack,	AV *)		/* the stack when nothing funny is happening */
 
 PERLVAR(Ttop_env,	JMPENV *)	/* ptr. to current sigjmp() environment */
 PERLVAR(Tstart_env,	JMPENV)		/* empty startup sigjmp() environment */
-#ifdef PERL_FLEXIBLE_EXCEPTIONS
-PERLVARI(Tprotect,	protect_proc_t,	MEMBER_TO_FPTR(Perl_default_protect))
-#endif
 PERLVARI(Terrors,	SV *, Nullsv)	/* outstanding queued errors */
 
 /* statics "owned" by various functions */

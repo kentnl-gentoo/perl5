@@ -12,6 +12,12 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
+    # FIXME (or rather FIXh2xs)
+    require Config;
+    if (($Config::Config{'extensions'} !~ m!\bDevel/PPPort\b!) ){
+	print "1..0 # Skip -- Perl configured without Devel::PPPort module\n";
+	exit 0;
+    }
 }
 
 # use strict; # we are not really testing this
@@ -50,6 +56,9 @@ if ($^O eq 'MacOS') {
 my $name = 'h2xst';
 my $header = "$name.h";
 my $thisversion = sprintf "%vd", $^V;
+
+# If this test has failed previously a copy may be left.
+rmtree($name);
 
 my @tests = (
 "-f -n $name", $], <<"EOXSFILES",
@@ -117,7 +126,7 @@ Writing $name/Changes
 Writing $name/MANIFEST
 EONOXSFILES
 
-"-f -n $name $header -b $thisversion", $], <<"EOXSFILES",
+"-f -n $name -b $thisversion $header", $], <<"EOXSFILES",
 Writing $name/ppport.h
 Writing $name/lib/$name.pm
 Writing $name/$name.xs

@@ -6,7 +6,7 @@
 
 package warnings;
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 =head1 NAME
 
@@ -131,9 +131,7 @@ See L<perlmodlib/Pragmatic Modules> and L<perllexwarn>.
 
 =cut
 
-use Carp ();
-
-our %Offsets : unique = (
+our %Offsets = (
 
     # Warnings Categories added in Perl 5.008
 
@@ -190,7 +188,7 @@ our %Offsets : unique = (
     'assertions'	=> 94,
   );
 
-our %Bits : unique = (
+our %Bits = (
     'all'		=> "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55", # [0..47]
     'ambiguous'		=> "\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00", # [29]
     'assertions'	=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x40", # [47]
@@ -241,7 +239,7 @@ our %Bits : unique = (
     'y2k'		=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10", # [46]
   );
 
-our %DeadBits : unique = (
+our %DeadBits = (
     'all'		=> "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa", # [0..47]
     'ambiguous'		=> "\x00\x00\x00\x00\x00\x00\x00\x08\x00\x00\x00\x00", # [29]
     'assertions'	=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80", # [47]
@@ -300,6 +298,7 @@ $All = "" ; vec($All, $Offsets{'all'}, 2) = 3 ;
 
 sub Croaker
 {
+    require Carp;
     delete $Carp::CarpInternal{'warnings'};
     Carp::croak(@_);
 }
@@ -402,6 +401,8 @@ sub unimport
     ${^WARNING_BITS} = $mask ;
 }
 
+my %builtin_type; @builtin_type{qw(SCALAR ARRAY HASH CODE REF GLOB LVALUE Regexp)} = ();
+
 sub __chk
 {
     my $category ;
@@ -411,10 +412,10 @@ sub __chk
     if (@_) {
         # check the category supplied.
         $category = shift ;
-        if (ref $category) {
-            Croaker ("not an object")
-                if $category !~ /^([^=]+)=/ ;
-	    $category = $1 ;
+        if (my $type = ref $category) {
+            Croaker("not an object")
+                if exists $builtin_type{$type};
+	    $category = $type;
             $isobj = 1 ;
         }
         $offset = $Offsets{$category};
@@ -471,6 +472,7 @@ sub warn
 
     my $message = pop ;
     my ($callers_bitmask, $offset, $i) = __chk(@_) ;
+    require Carp;
     Carp::croak($message)
 	if vec($callers_bitmask, $offset+1, 1) ||
 	   vec($callers_bitmask, $Offsets{'all'}+1, 1) ;
@@ -490,6 +492,7 @@ sub warnif
             	(vec($callers_bitmask, $offset, 1) ||
             	vec($callers_bitmask, $Offsets{'all'}, 1)) ;
 
+    require Carp;
     Carp::croak($message)
 	if vec($callers_bitmask, $offset+1, 1) ||
 	   vec($callers_bitmask, $Offsets{'all'}+1, 1) ;

@@ -98,6 +98,8 @@ my @death =
 
     'm/[a-\d]/' => 'False [] range "a-\d" in regex; marked by {#} in m/[a-\d{#}]/',
     'm/[\w-x]/' => 'False [] range "\w-" in regex; marked by {#} in m/[\w-{#}x]/',
+    'm/[a-\pM]/' => 'False [] range "a-\pM" in regex; marked by {#} in m/[a-\pM{#}]/',
+    'm/[\pM-x]/' => 'False [] range "\pM-" in regex; marked by {#} in m/[\pM-{#}x]/',
     "m'\\y'"     => 'Unrecognized escape \y passed through in regex; marked by {#} in m/\y{#}/',
 );
 
@@ -131,6 +133,7 @@ while (@death)
     chomp $@;
     $result =~ s/{\#}/$marker1/;
     $result =~ s/{\#}/$marker2/;
+    $result .= " at ";
     if ($@ !~ /^\Q$result/) {
 	print "# For $regex, expected:\n#  $result\n# Got:\n#  $@\n#\nnot ";
     }
@@ -164,6 +167,7 @@ while (@warning)
     }
     $result =~ s/{\#}/$marker1/;
     $result =~ s/{\#}/$marker2/;
+    $result .= " at ";
     if ($warning !~ /^\Q$result/)
     {
 	print <<"EOM";

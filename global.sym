@@ -1,8 +1,8 @@
 #
 #    global.sym
 #
-#    Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999,
-#    2000, 2001, 2002, 2003, by Larry Wall and others
+#    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+#    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
 #
 #    You may distribute under the terms of either the GNU General Public
 #    License or the Artistic License, as specified in the README file.
@@ -223,6 +223,8 @@ Perl_is_utf8_xdigit
 Perl_is_utf8_mark
 Perl_leave_scope
 Perl_op_null
+Perl_op_refcnt_lock
+Perl_op_refcnt_unlock
 Perl_load_module
 Perl_vload_module
 Perl_looks_like_number
@@ -324,10 +326,12 @@ Perl_scan_version
 Perl_new_version
 Perl_upg_version
 Perl_vnumify
+Perl_vnormal
 Perl_vstringify
 Perl_vcmp
 Perl_ninstr
 Perl_op_free
+Perl_find_rundefsvoffset
 Perl_pad_sv
 Perl_reentrant_size
 Perl_reentrant_init
@@ -426,6 +430,7 @@ Perl_sv_2bool
 Perl_sv_2cv
 Perl_sv_2io
 Perl_sv_2iv
+Perl_sv_2iv_flags
 Perl_sv_2mortal
 Perl_sv_2nv
 Perl_sv_2pv
@@ -433,6 +438,7 @@ Perl_sv_2pvutf8
 Perl_sv_2pvbyte
 Perl_sv_pvn_nomg
 Perl_sv_2uv
+Perl_sv_2uv_flags
 Perl_sv_iv
 Perl_sv_uv
 Perl_sv_nv
@@ -582,8 +588,6 @@ Perl_do_op_dump
 Perl_do_pmop_dump
 Perl_do_sv_dump
 Perl_magic_dump
-Perl_default_protect
-Perl_vdefault_protect
 Perl_reginitcolors
 Perl_sv_2pv_nolen
 Perl_sv_2pvutf8_nolen
@@ -664,3 +668,9 @@ Perl_PerlIO_stdin
 Perl_PerlIO_stdout
 Perl_PerlIO_stderr
 Perl_save_set_svflags
+Perl_hv_assert
+Perl_hv_clear_placeholders
+Perl_hv_scalar
+Perl_gv_fetchpvn_flags
+Perl_gv_fetchsv
+Perl_savesvpv

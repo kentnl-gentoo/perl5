@@ -9,7 +9,7 @@ BEGIN {
 use Config;
 use File::Spec;
 
-plan tests => 78;
+plan tests => 82;
 
 my $Perl = which_perl();
 
@@ -26,6 +26,7 @@ $Is_Solaris = $^O eq 'solaris';
 $Is_VMS     = $^O eq 'VMS';
 $Is_DGUX    = $^O eq 'dgux';
 $Is_MPRAS   = $^O =~ /svr4/ && -f '/etc/.relid';
+$Is_Rhapsody= $^O eq 'rhapsody';
 
 $Is_Dosish  = $Is_Dos || $Is_OS2 || $Is_MSWin32 || $Is_NetWare || $Is_Cygwin;
 
@@ -70,7 +71,7 @@ sleep 3 if $funky_FAT_timestamps;
 print FOO "Now is the time for all good men to come to.\n";
 close(FOO);
 
-sleep 2 unless $funky_FAT_timestamps;
+sleep 2;
 
 
 SKIP: {
@@ -112,10 +113,11 @@ SKIP: {
             !isnt($mtime, $ctime, 'hard link ctime != mtime') ) {
             print STDERR <<DIAG;
 # Check if you are on a tmpfs of some sort.  Building in /tmp sometimes
-# has this problem.  Also building on the ClearCase VOBS filesystem may
+# has this problem.  Building on the ClearCase VOBS filesystem may also
 # cause this failure.
-# Darwins UFS doesn't have a ctime concept, and thus is
-# expected to fail this test.
+#
+# Darwin's UFS doesn't have a ctime concept, and thus is expected to fail
+# this test.
 DIAG
         }
     }
@@ -176,7 +178,7 @@ ok(-r $tmpfile,     '   -r');
 ok(-w $tmpfile,     '   -w');
 
 SKIP: {
-    skip "-x simply determins if a file ends in an executable suffix", 1
+    skip "-x simply determines if a file ends in an executable suffix", 1
       if $Is_Dosish || $Is_MacOS;
 
     ok(-x $tmpfile,     '   -x');
@@ -212,7 +214,7 @@ SKIP: {
       if $Is_MSWin32 || $Is_NetWare || $Is_Dos;
     skip "/dev isn't available to test against", 6
       unless -d '/dev' && -r '/dev' && -x '/dev';
-    skip "Skipping; unexpected ls output in MP-RAS", 6
+    skip "Skipping: unexpected ls output in MP-RAS", 6
       if $Is_MPRAS;
 
     my $LS  = $Config{d_readlink} ? "ls -lL" : "ls -l";
@@ -307,7 +309,7 @@ SKIP: {
 SKIP: {
     skip "These tests require a TTY", 4 if $ENV{PERL_SKIP_TTY_TEST};
 
-    my $TTY = $^O eq 'rhapsody' ? "/dev/ttyp0" : "/dev/tty";
+    my $TTY = $Is_Rhapsody ? "/dev/ttyp0" : "/dev/tty";
 
     SKIP: {
         skip "Test uses unixisms", 2 if $Is_MSWin32 || $Is_NetWare;
@@ -404,16 +406,22 @@ unlink $tmpfile or print "# unlink failed: $!\n";
 my @r = \stat($Curdir);
 is(scalar @r, 13,   'stat returns full 13 elements');
 
-SKIP: {
-    skip "No lstat", 4 unless $Config{d_lstat};
+stat $0;
+eval { lstat _ };
+like( $@, qr/^The stat preceding lstat\(\) wasn't an lstat/,
+    'lstat _ croaks after stat' );
+eval { -l _ };
+like( $@, qr/^The stat preceding -l _ wasn't an lstat/,
+    '-l _ croaks after stat' );
 
-    stat $0;
-    eval { lstat _ };
-    like( $@, qr/^The stat preceding lstat\(\) wasn't an lstat/,
-	'lstat _ croaks after stat' );
-    eval { -l _ };
-    like( $@, qr/^The stat preceding -l _ wasn't an lstat/,
-	'-l _ croaks after stat' );
+lstat $0;
+eval { lstat _ };
+is( "$@", "", "lstat _ ok after lstat" );
+eval { -l _ };
+is( "$@", "", "-l _ ok after lstat" );
+  
+SKIP: {
+    skip "No lstat", 2 unless $Config{d_lstat};
 
     # bug id 20020124.004
     # If we have d_lstat, we should have symlink()
@@ -444,6 +452,18 @@ ok( (-M _) < 0, 'negative -M works');
 ok( (-A _) < 0, 'negative -A works');
 ok( (-C _) < 0, 'negative -C works');
 ok(unlink($f), 'unlink tmp file');
+
+{
+    ok(open(F, ">", $tmpfile), 'can create temp file');
+    close F;
+    chmod 0077, $tmpfile;
+    my @a = stat($tmpfile);
+    my $s1 = -s _;
+    -T _;
+    my $s2 = -s _;
+    is($s1, $s2, q(-T _ doesn't break the statbuffer));
+    unlink $file;
+}
 
 END {
     1 while unlink $tmpfile;

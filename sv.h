@@ -1,7 +1,7 @@
 /*    sv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -53,11 +53,11 @@ typedef enum {
 	SVt_PVNV,	/* 6 */
 	SVt_PVMG,	/* 7 */
 	SVt_PVBM,	/* 8 */
-	SVt_PVLV,	/* 9 */
-	SVt_PVAV,	/* 10 */
-	SVt_PVHV,	/* 11 */
-	SVt_PVCV,	/* 12 */
-	SVt_PVGV,	/* 13 */
+	SVt_PVGV,	/* 9 */
+	SVt_PVLV,	/* 10 */
+	SVt_PVAV,	/* 11 */
+	SVt_PVHV,	/* 12 */
+	SVt_PVCV,	/* 13 */
 	SVt_PVFM,	/* 14 */
 	SVt_PVIO	/* 15 */
 } svtype;
@@ -68,6 +68,13 @@ struct STRUCT_SV {		/* struct sv { */
     void*	sv_any;		/* pointer to something */
     U32		sv_refcnt;	/* how many references to us */
     U32		sv_flags;	/* what we are */
+#ifdef DEBUG_LEAKING_SCALARS
+    unsigned	sv_debug_optype:9;	/* the type of OP that allocated us */
+    unsigned	sv_debug_inpad:1;	/* was allocated in a pad for an OP */
+    unsigned	sv_debug_cloned:1;	/* was cloned for an ithread */
+    unsigned	sv_debug_line:16;	/* the line where we were allocated */
+    char *	sv_debug_file;		/* the file where we were allocated */
+#endif
 };
 
 struct gv {
@@ -129,10 +136,10 @@ perform the upgrade if necessary.  See C<svtype>.
 #if defined(__GNUC__) && !defined(__STRICT_ANSI__) && !defined(PERL_GCC_PEDANTIC)
 #  define SvREFCNT_inc(sv)		\
     ({					\
-	SV *nsv = (SV*)(sv);		\
-	if (nsv)			\
-	     (SvREFCNT(nsv))++;		\
-	nsv;				\
+	SV *_sv = (SV*)(sv);		\
+	if (_sv)			\
+	     (SvREFCNT(_sv))++;		\
+	_sv;				\
     })
 #else
 #  define SvREFCNT_inc(sv)	\
@@ -142,13 +149,13 @@ perform the upgrade if necessary.  See C<svtype>.
 #if defined(__GNUC__) && !defined(__STRICT_ANSI__) && !defined(PERL_GCC_PEDANTIC)
 #  define SvREFCNT_dec(sv)		\
     ({					\
-	SV *nsv = (SV*)(sv);		\
-	if (nsv) {			\
-	    if (SvREFCNT(nsv)) {	\
-		if (--(SvREFCNT(nsv)) == 0) \
-		    Perl_sv_free2(aTHX_ nsv);	\
+	SV *_sv = (SV*)(sv);		\
+	if (_sv) {			\
+	    if (SvREFCNT(_sv)) {	\
+		if (--(SvREFCNT(_sv)) == 0) \
+		    Perl_sv_free2(aTHX_ _sv);	\
 	    } else {			\
-		sv_free(nsv);		\
+		sv_free(_sv);		\
 	    }				\
 	}				\
     })
@@ -188,6 +195,7 @@ perform the upgrade if necessary.  See C<svtype>.
 #define SVp_SCREAM	0x08000000	/* has been studied? */
 
 #define SVf_UTF8        0x20000000      /* SvPV is UTF-8 encoded */
+/* Ensure this value does not clash with the GV_ADD* flags in gv.h */
 
 #define SVf_THINKFIRST	(SVf_READONLY|SVf_ROK|SVf_FAKE)
 
@@ -271,6 +279,13 @@ struct xpvlv {
     NV    	xnv_nv;		/* numeric value, if any */
     MAGIC*	xmg_magic;	/* linked list of magicalness */
     HV*		xmg_stash;	/* class package */
+
+    /* a full glob fits into this */
+    GP*		xgv_gp;
+    char*	xgv_name;
+    STRLEN	xgv_namelen;
+    HV*		xgv_stash;
+    U8		xgv_flags;
 
     STRLEN	xlv_targoff;
     STRLEN	xlv_targlen;
@@ -403,7 +418,8 @@ double.  Checks the B<private> setting.  Use C<SvNIOK>.
 Unsets the NV/IV status of an SV.
 
 =for apidoc Am|bool|SvOK|SV* sv
-Returns a boolean indicating whether the value is an SV.
+Returns a boolean indicating whether the value is an SV. It also tells
+whether the value is defined or not.
 
 =for apidoc Am|bool|SvIOKp|SV* sv
 Returns a boolean indicating whether the SV contains an integer.  Checks
@@ -432,13 +448,13 @@ Tells an SV that it is an integer and disables all other OK bits.
 =for apidoc Am|void|SvIOK_only_UV|SV* sv
 Tells and SV that it is an unsigned integer and disables all other OK bits.
 
-=for apidoc Am|void|SvIOK_UV|SV* sv
+=for apidoc Am|bool|SvIOK_UV|SV* sv
 Returns a boolean indicating whether the SV contains an unsigned integer.
 
 =for apidoc Am|void|SvUOK|SV* sv
 Returns a boolean indicating whether the SV contains an unsigned integer.
 
-=for apidoc Am|void|SvIOK_notUV|SV* sv
+=for apidoc Am|bool|SvIOK_notUV|SV* sv
 Returns a boolean indicating whether the SV contains a signed integer.
 
 =for apidoc Am|bool|SvNOK|SV* sv
@@ -559,9 +575,9 @@ Set the length of the string which is in the SV.  See C<SvCUR>.
 #define SvIOK_on(sv)		(SvRELEASE_IVX(sv), \
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
 #define SvIOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_IOK|SVp_IOK|SVf_IVisUV))
-#define SvIOK_only(sv)		((void)SvOK_off(sv), \
+#define SvIOK_only(sv)		(SvOK_off(sv), \
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
-#define SvIOK_only_UV(sv)	((void)SvOK_off_exc_UV(sv), \
+#define SvIOK_only_UV(sv)	(SvOK_off_exc_UV(sv), \
 				    SvFLAGS(sv) |= (SVf_IOK|SVp_IOK))
 
 #define SvIOK_UV(sv)		((SvFLAGS(sv) & (SVf_IOK|SVf_IVisUV))	\
@@ -577,11 +593,11 @@ Set the length of the string which is in the SV.  See C<SvCUR>.
 #define SvNOK(sv)		(SvFLAGS(sv) & SVf_NOK)
 #define SvNOK_on(sv)		(SvFLAGS(sv) |= (SVf_NOK|SVp_NOK))
 #define SvNOK_off(sv)		(SvFLAGS(sv) &= ~(SVf_NOK|SVp_NOK))
-#define SvNOK_only(sv)		((void)SvOK_off(sv), \
+#define SvNOK_only(sv)		(SvOK_off(sv), \
 				    SvFLAGS(sv) |= (SVf_NOK|SVp_NOK))
 
 /*
-=for apidoc Am|void|SvUTF8|SV* sv
+=for apidoc Am|bool|SvUTF8|SV* sv
 Returns a boolean indicating whether the SV contains UTF-8 encoded data.
 
 =for apidoc Am|void|SvUTF8_on|SV *sv
@@ -598,6 +614,8 @@ and leaves the UTF-8 status as it was.
 =cut
  */
 
+/* Ensure the return value of this macro does not clash with the GV_ADD* flags
+in gv.h: */
 #define SvUTF8(sv)		(SvFLAGS(sv) & SVf_UTF8)
 #define SvUTF8_on(sv)		(SvFLAGS(sv) |= (SVf_UTF8))
 #define SvUTF8_off(sv)		(SvFLAGS(sv) &= ~(SVf_UTF8))
@@ -618,7 +636,7 @@ and leaves the UTF-8 status as it was.
 #define SvVOK(sv)		(SvMAGICAL(sv) && mg_find(sv,'V'))
 #define SvOOK(sv)		(SvFLAGS(sv) & SVf_OOK)
 #define SvOOK_on(sv)		((void)SvIOK_off(sv), SvFLAGS(sv) |= SVf_OOK)
-#define SvOOK_off(sv)		(SvOOK(sv) && sv_backoff(sv))
+#define SvOOK_off(sv)		((void)(SvOOK(sv) && sv_backoff(sv)))
 
 #define SvFAKE(sv)		(SvFLAGS(sv) & SVf_FAKE)
 #define SvFAKE_on(sv)		(SvFLAGS(sv) |= SVf_FAKE)
@@ -731,8 +749,14 @@ and leaves the UTF-8 status as it was.
 #define SvLENx(sv) SvLEN(sv)
 #define SvEND(sv)(((XPV*)  SvANY(sv))->xpv_pv + ((XPV*)SvANY(sv))->xpv_cur)
 #define SvENDx(sv) ((PL_Sv = (sv)), SvEND(PL_Sv))
+
+#ifdef DEBUGGING
+#define SvMAGIC(sv)	(*(assert(SvTYPE(sv) >= SVt_PVMG), &((XPVMG*)  SvANY(sv))->xmg_magic))
+#define SvSTASH(sv)	(*(assert(SvTYPE(sv) >= SVt_PVMG), &((XPVMG*)  SvANY(sv))->xmg_stash))
+#else
 #define SvMAGIC(sv)	((XPVMG*)  SvANY(sv))->xmg_magic
 #define SvSTASH(sv)	((XPVMG*)  SvANY(sv))->xmg_stash
+#endif
 
 /* Ask a scalar nicely to try to become an IV, if possible.
    Not guaranteed to stay returning void */
@@ -742,22 +766,22 @@ and leaves the UTF-8 status as it was.
 		(void) SvIV(sv); } STMT_END
 #define SvIV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
-		(((XPVIV*)  SvANY(sv))->xiv_iv = val); } STMT_END
+		(SvIVX(sv) = (val)); } STMT_END
 #define SvNV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) == SVt_NV || SvTYPE(sv) >= SVt_PVNV); \
-		(((XPVNV*)  SvANY(sv))->xnv_nv = val); } STMT_END
+		(SvNVX(sv) = (val)); } STMT_END
 #define SvPV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_pv = val); } STMT_END
+		(SvPVX(sv) = (val)); } STMT_END
 #define SvCUR_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_cur = val); } STMT_END
+		(SvCUR(sv) = (val)); } STMT_END
 #define SvLEN_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_len = val); } STMT_END
+		(SvLEN(sv) = (val)); } STMT_END
 #define SvEND_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
-		(((XPV*)  SvANY(sv))->xpv_cur = val - SvPVX(sv)); } STMT_END
+		(SvCUR(sv) = (val) - SvPVX(sv)); } STMT_END
 
 #define BmRARE(sv)	((XPVBM*)  SvANY(sv))->xbm_rare
 #define BmUSEFUL(sv)	((XPVBM*)  SvANY(sv))->xbm_useful
@@ -854,6 +878,9 @@ C<SvPVx> for a version which guarantees to evaluate sv only once.
 =for apidoc Am|char*|SvPVx|SV* sv|STRLEN len
 A version of C<SvPV> which guarantees to evaluate sv only once.
 
+=for apidoc Am|char*|SvPV_nomg|SV* sv|STRLEN len
+Like C<SvPV> but doesn't process magic.
+
 =for apidoc Am|char*|SvPV_nolen|SV* sv
 Returns a pointer to the string in the SV, or a stringified form of
 the SV if the SV does not contain a string.  The SV may cache the
@@ -862,6 +889,9 @@ stringified form becoming C<SvPOK>.  Handles 'get' magic.
 =for apidoc Am|IV|SvIV|SV* sv
 Coerces the given SV to an integer and returns it. See  C<SvIVx> for a
 version which guarantees to evaluate sv only once.
+
+=for apidoc Am|IV|SvIV_nomg|SV* sv
+Like C<SvIV> but doesn't process magic.
 
 =for apidoc Am|IV|SvIVx|SV* sv
 Coerces the given SV to an integer and returns it. Guarantees to evaluate
@@ -878,6 +908,9 @@ sv only once. Use the more efficient C<SvNV> otherwise.
 =for apidoc Am|UV|SvUV|SV* sv
 Coerces the given SV to an unsigned integer and returns it.  See C<SvUVx>
 for a version which guarantees to evaluate sv only once.
+
+=for apidoc Am|UV|SvUV_nomg|SV* sv
+Like C<SvUV> but doesn't process magic.
 
 =for apidoc Am|UV|SvUVx|SV* sv
 Coerces the given SV to an unsigned integer and returns it. Guarantees to
@@ -934,6 +967,15 @@ COW)
 Returns a boolean indicating whether the SV is Copy-On-Write shared hash key
 scalar.
 
+=for apidoc Am|void|sv_catpvn_nomg|SV* sv|const char* ptr|STRLEN len
+Like C<sv_catpvn> but doesn't process magic.
+
+=for apidoc Am|void|sv_setsv_nomg|SV* dsv|SV* ssv
+Like C<sv_setsv> but doesn't process magic.
+
+=for apidoc Am|void|sv_catsv_nomg|SV* dsv|SV* ssv
+Like C<sv_catsv> but doesn't process magic.
+
 =cut
 */
 
@@ -941,6 +983,9 @@ scalar.
 #define SvIV(sv) (SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv))
 #define SvUV(sv) (SvIOK(sv) ? SvUVX(sv) : sv_2uv(sv))
 #define SvNV(sv) (SvNOK(sv) ? SvNVX(sv) : sv_2nv(sv))
+
+#define SvIV_nomg(sv) (SvIOK(sv) ? SvIVX(sv) : sv_2iv_flags(sv, 0))
+#define SvUV_nomg(sv) (SvIOK(sv) ? SvUVX(sv) : sv_2uv_flags(sv, 0))
 
 /* ----*/
 
@@ -987,7 +1032,7 @@ scalar.
 
 #define SvPVbyte_force(sv, lp) \
     ((SvFLAGS(sv) & (SVf_POK|SVf_UTF8|SVf_THINKFIRST)) == (SVf_POK) \
-     ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvbyte_force(sv, &lp))
+     ? ((lp = SvCUR(sv)), SvPVX(sv)) : sv_pvbyten_force(sv, &lp))
 
 #define SvPVbyte_nolen(sv) \
     ((SvFLAGS(sv) & (SVf_POK|SVf_UTF8)) == (SVf_POK)\
@@ -1006,12 +1051,12 @@ scalar.
 
 #if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
 
-#  define SvIVx(sv) ({SV *nsv = (SV*)(sv); SvIV(nsv); })
-#  define SvUVx(sv) ({SV *nsv = (SV*)(sv); SvUV(nsv); })
-#  define SvNVx(sv) ({SV *nsv = (SV*)(sv); SvNV(nsv); })
-#  define SvPVx(sv, lp) ({SV *nsv = (sv); SvPV(nsv, lp); })
-#  define SvPVutf8x(sv, lp) ({SV *nsv = (sv); SvPVutf8(nsv, lp); })
-#  define SvPVbytex(sv, lp) ({SV *nsv = (sv); SvPVbyte(nsv, lp); })
+#  define SvIVx(sv) ({SV *_sv = (SV*)(sv); SvIV(_sv); })
+#  define SvUVx(sv) ({SV *_sv = (SV*)(sv); SvUV(_sv); })
+#  define SvNVx(sv) ({SV *_sv = (SV*)(sv); SvNV(_sv); })
+#  define SvPVx(sv, lp) ({SV *_sv = (sv); SvPV(_sv, lp); })
+#  define SvPVutf8x(sv, lp) ({SV *_sv = (sv); SvPVutf8(_sv, lp); })
+#  define SvPVbytex(sv, lp) ({SV *_sv = (sv); SvPVbyte(_sv, lp); })
 #  define SvTRUE(sv) (						\
     !sv								\
     ? 0								\
@@ -1028,7 +1073,7 @@ scalar.
 	    :   SvNOK(sv)					\
 		? SvNVX(sv) != 0.0				\
 		: sv_2bool(sv) )
-#  define SvTRUEx(sv) ({SV *nsv = (sv); SvTRUE(nsv); })
+#  define SvTRUEx(sv) ({SV *_sv = (sv); SvTRUE(_sv); })
 
 #else /* __GNUC__ */
 
@@ -1068,6 +1113,7 @@ scalar.
 #define SV_GMAGIC		2
 #define SV_COW_DROP_PV		4
 #define SV_UTF8_NO_ENCODING	8
+#define SV_NOSTEAL		16
 
 /* We are about to replace the SV's current value. So if it's copy on write
    we need to normalise it. Use the SV_COW_DROP_PV flag hint to say that
@@ -1089,7 +1135,7 @@ scalar.
 #define CAN_COW_FLAGS	(SVp_POK|SVf_POK)
 
 #else
-#  define SvRELEASE_IVX(sv)   ((void)SvOOK_off(sv))
+#  define SvRELEASE_IVX(sv)   SvOOK_off(sv)
 #endif /* PERL_COPY_ON_WRITE */
 
 #define SV_CHECK_THINKFIRST(sv) if (SvTHINKFIRST(sv)) \
@@ -1114,6 +1160,8 @@ scalar.
 #define sv_2pv_nomg(sv, lp) sv_2pv_flags(sv, lp, 0)
 #define sv_pvn_force(sv, lp) sv_pvn_force_flags(sv, lp, SV_GMAGIC)
 #define sv_utf8_upgrade(sv) sv_utf8_upgrade_flags(sv, SV_GMAGIC)
+#define sv_2iv(sv) sv_2iv_flags(sv, SV_GMAGIC)
+#define sv_2uv(sv) sv_2uv_flags(sv, SV_GMAGIC)
 
 /* Should be named SvCatPVN_utf8_upgrade? */
 #define sv_catpvn_utf8_upgrade(dsv, sstr, slen, nsv)	\
@@ -1163,7 +1211,7 @@ ssv. May evaluate arguments more than once.
 Like C<SvSetSV>, but does any set magic required afterwards.
 
 =for apidoc Am|void|SvSetMagicSV_nosteal|SV* dsv|SV* ssv
-Like C<SvSetMagicSV>, but does any set magic required afterwards.
+Like C<SvSetSV_nosteal>, but does any set magic required afterwards.
 
 =for apidoc Am|void|SvSHARE|SV* sv
 Arranges for sv to be shared between threads if a suitable module
@@ -1205,10 +1253,7 @@ Returns a pointer to the character buffer.
 #define SvSetSV_nosteal_and(dst,src,finally) \
 	STMT_START {					\
 	    if ((dst) != (src)) {			\
-		U32 tMpF = SvFLAGS(src) & SVs_TEMP;	\
-		SvTEMP_off(src);			\
-		sv_setsv(dst, src);			\
-		SvFLAGS(src) |= tMpF;			\
+		sv_setsv_flags(dst, src, SV_GMAGIC | SV_NOSTEAL);	\
 		finally;				\
 	    }						\
 	} STMT_END

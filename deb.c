@@ -1,7 +1,7 @@
 /*    deb.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1998, 1999,
- *    2000, 2001, 2002, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -11,6 +11,11 @@
 /*
  * "Didst thou think that the eyes of the White Tower were blind?  Nay, I
  * have seen more than thou knowest, Gray Fool."  --Denethor
+ */
+
+/*
+ * This file contains various utilities for producing debugging output
+ * (mainly related to displaying the stack)
  */
 
 #include "EXTERN.h"
@@ -144,7 +149,7 @@ Perl_debstack(pTHX)
 
 
 #ifdef DEBUGGING
-static char * si_names[] = {
+static const char * si_names[] = {
     "UNKNOWN",
     "UNDEF",
     "MAIN",
@@ -168,7 +173,6 @@ Perl_deb_stack_all(pTHX)
 #ifdef DEBUGGING
     I32		 ix, si_ix;
     PERL_SI	 *si;
-    PERL_CONTEXT *cx;
 
     /* rewind to start of chain */
     si = PL_curstackinfo;
@@ -178,18 +182,14 @@ Perl_deb_stack_all(pTHX)
     si_ix=0;
     for (;;)
     {
-	char *si_name;
-	int si_name_ix = si->si_type+1; /* -1 is a valid index */
-	if (si_name_ix>= sizeof(si_names))
-	    si_name = "????";
-	else
-	    si_name = si_names[si_name_ix];
+        const int si_name_ix = si->si_type+1; /* -1 is a valid index */
+        const char *si_name = (si_name_ix>= sizeof(si_names)) ? "????" : si_names[si_name_ix];
 	PerlIO_printf(Perl_debug_log, "STACK %"IVdf": %s\n",
 						(IV)si_ix, si_name);
 
 	for (ix=0; ix<=si->si_cxix; ix++) {
 
-	    cx = &(si->si_cxstack[ix]);
+	    const PERL_CONTEXT *cx = &(si->si_cxstack[ix]);
 	    PerlIO_printf(Perl_debug_log,
 		    "  CX %"IVdf": %-6s => ",
 		    (IV)ix, PL_block_type[CxTYPE(cx)]
@@ -206,9 +206,9 @@ Perl_deb_stack_all(pTHX)
 		 */
 
 		I32 i, stack_min, stack_max, mark_min, mark_max;
-		I32 ret_min, ret_max;
 		PERL_CONTEXT *cx_n;
 		PERL_SI      *si_n;
+		OP	     *retop;
 
 		cx_n = Null(PERL_CONTEXT*);
 
@@ -257,27 +257,26 @@ Perl_deb_stack_all(pTHX)
 		}
 
 		mark_min  = cx->blk_oldmarksp;
-		ret_min   = cx->blk_oldretsp;
 		if (cx_n) {
 		    mark_max  = cx_n->blk_oldmarksp;
-		    ret_max   = cx_n->blk_oldretsp;
 		}
 		else {
 		    mark_max = PL_markstack_ptr - PL_markstack;
-		    ret_max  = PL_retstack_ix;
 		}
 
 		deb_stack_n(AvARRAY(si->si_stack),
 			stack_min, stack_max, mark_min, mark_max);
 
-		if (ret_max > ret_min) {
+		if (CxTYPE(cx) == CXt_EVAL || CxTYPE(cx) == CXt_SUB
+			|| CxTYPE(cx) == CXt_FORMAT)
+		{
+		    retop = (CxTYPE(cx) == CXt_EVAL)
+			    ? cx->blk_eval.retop : cx->blk_sub.retop;
+
 		    PerlIO_printf(Perl_debug_log, "  retop=%s\n",
-			    PL_retstack[ret_min]
-				? OP_NAME(PL_retstack[ret_min])
-				: "(null)"
+			    retop ? OP_NAME(retop) : "(null)"
 		    );
 		}
-
 	    }
 	} /* next context */
 

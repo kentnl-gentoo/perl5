@@ -80,6 +80,7 @@ my $out = '';
 my $declaresubs = "sub wanted;\n";
 my %init = ();
 my ($follow_in_effect,$Skip_And) = (0,0);
+my $print_needed = 1;
 
 while (@ARGV) {
     $_ = shift;
@@ -98,8 +99,10 @@ while (@ARGV) {
     } elsif ($_ eq '!') {
         $out .= tab . "!";
         next;
-    } elsif ($_ eq 'name') {
-        $out .= tab . '/' . fileglob_to_re(shift) . "/s";
+    } elsif (/^(i)?name$/) {
+        $out .= tab . '/' . fileglob_to_re(shift) . "/s$1";
+    } elsif (/^(i)?path$/) {
+        $out .= tab . '$File::Find::name =~ /' . fileglob_to_re(shift) . "/s$1";
     } elsif ($_ eq 'perm') {
         my $onum = shift;
         $onum =~ /^-?[0-7]+$/
@@ -117,8 +120,10 @@ while (@ARGV) {
         $out .= tab . "-$filetest _";
     } elsif ($_ eq 'print') {
         $out .= tab . 'print("$name\n")';
+	$print_needed = 0;
     } elsif ($_ eq 'print0') {
         $out .= tab . 'print("$name\0")';
+	$print_needed = 0;
     } elsif ($_ eq 'fstype') {
         my $type = shift;
         $out .= tab;
@@ -183,6 +188,7 @@ while (@ARGV) {
             $declaresubs .= "sub doexec (\$\@);\n";
             $init{doexec} = 1;
         }
+	$print_needed = 0;
     } elsif ($_ eq 'ok') {
         my @cmd = ();
         while (@ARGV && $ARGV[0] ne ';')
@@ -194,6 +200,7 @@ while (@ARGV) {
         { local $" = "','"; $out .= "doexec(1, '@cmd')"; }
         $declaresubs .= "sub doexec (\$\@);\n";
         $init{doexec} = 1;
+	$print_needed = 0;
     } elsif ($_ eq 'prune') {
         $out .= tab . '($File::Find::prune = 1)';
     } elsif ($_ eq 'xdev') {
@@ -210,6 +217,7 @@ while (@ARGV) {
         my $prog = shift;
         $prog =~ s/'/\\'/g;
         $out .= tab . "eval {$prog}";
+	$print_needed = 0;
     } elsif ($_ eq 'depth') {
         $find = 'finddepth';
         next;
@@ -217,6 +225,7 @@ while (@ARGV) {
         $out .= tab . "ls";
         $declaresubs .= "sub ls ();\n";
         $init{ls} = 1;
+	$print_needed = 0;
     } elsif ($_ eq 'tar') {
         die "-tar must have a filename argument\n" unless @ARGV;
         my $file = shift;
@@ -258,6 +267,12 @@ while (@ARGV) {
     }
 }
 
+if ($print_needed) {
+    my $t = tab;
+    if ($t !~ /&&\s*$/) { $t .= '&& ' }
+    $out .= "\n" . $t . 'print("$name\n")';
+}
+
 
 print <<"END";
 $startperl
@@ -279,6 +294,14 @@ use vars qw/*name *dir *prune/;
 $declaresubs
 
 END
+
+if (exists $init{doexec}) {
+    print <<'END';
+use Cwd ();
+my $cwd = Cwd::cwd();
+
+END
+}  
 
 if (exists $init{ls}) {
     print <<'END';
@@ -347,9 +370,6 @@ END
 
 if (exists $init{doexec}) {
     print <<'END';
-
-use Cwd ();
-my $cwd = Cwd::cwd();
 
 sub doexec ($@) {
     my $ok = shift;
@@ -765,6 +785,18 @@ File name matches specified GLOB wildcard pattern.  GLOB may need to be
 quoted to avoid interpretation by the shell (just as with using
 C<find(1)>).
 
+=item C<-iname GLOB>
+
+Like C<-name>, but the match is case insensitive.
+
+=item C<-path GLOB>
+
+Path name matches specified GLOB wildcard pattern.
+
+=item C<-ipath GLOB>
+
+Like C<-path>, but the match is case insensitive.
+
 =item C<-perm PERM>
 
 Low-order 9 bits of permission match octal value PERM.
@@ -833,7 +865,9 @@ True if last-modified time of file matches N.
 
 =item C<-print>
 
-Print out path of file (always true).
+Print out path of file (always true). If none of C<-exec>, C<-ls>,
+C<-print0>, or C<-ok> is specified, then C<-print> will be added
+implicitly.
 
 =item C<-print0>
 

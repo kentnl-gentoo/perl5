@@ -246,16 +246,14 @@ Note that both C<\x{...}> and C<\N{...}> are compile-time string
 constants: you cannot use variables in them.  if you want similar
 run-time functionality, use C<chr()> and C<charnames::vianame()>.
 
-Also note that if all the code points for pack "U" are below 0x100,
-bytes will be generated, just like if you were using C<chr()>.
-
-   my $bytes = pack("U*", 0x80, 0xFF);
-
 If you want to force the result to Unicode characters, use the special
-C<"U0"> prefix.  It consumes no arguments but forces the result to be
-in Unicode characters, instead of bytes.
+C<"U0"> prefix.  It consumes no arguments but causes the following bytes
+to be interpreted as the UTF-8 encoding of Unicode characters:
 
-   my $chars = pack("U0U*", 0x80, 0xFF);
+   my $chars = pack("U0W*", 0x80, 0x42);
+
+Likewise, you can stop such UTF-8 interpretation by using the special 
+C<"C0"> prefix.
 
 =head2 Handling Unicode
 
@@ -265,7 +263,7 @@ C<substr()> will work on the Unicode characters; regular expressions
 will work on the Unicode characters (see L<perlunicode> and L<perlretut>).
 
 Note that Perl considers combining character sequences to be
-characters, so for example
+separate characters, so for example
 
     use charnames ':full';
     print length("\N{LATIN CAPITAL LETTER A}\N{COMBINING ACUTE ACCENT}"), "\n";
@@ -299,8 +297,8 @@ If that variable isn't set, the encoding pragma will fail.
 The C<Encode> module knows about many encodings and has interfaces
 for doing conversions between those encodings:
 
-    use Encode 'from_to';
-    from_to($data, "iso-8859-3", "utf-8"); # from legacy to utf-8
+    use Encode 'decode';
+    $data = decode("iso-8859-3", $data); # convert from legacy to utf-8
 
 =head2 Unicode I/O
 
@@ -454,7 +452,7 @@ displayed as C<\x..>, and the rest of the characters as themselves:
                chr($_) =~ /[[:cntrl:]]/ ?  # else if control character ...
                sprintf("\\x%02X", $_) :    # \x..
                quotemeta(chr($_))          # else quoted or as themselves
-         } unpack("U*", $_[0]));           # unpack Unicode characters
+         } unpack("W*", $_[0]));           # unpack Unicode characters
    }
 
 For example,
@@ -494,11 +492,12 @@ explicitly-defined I/O layers). But if you must, there are two
 ways of looking behind the scenes.
 
 One way of peeking inside the internal encoding of Unicode characters
-is to use C<unpack("C*", ...> to get the bytes or C<unpack("H*", ...)>
-to display the bytes:
+is to use C<unpack("C*", ...> to get the bytes of whatever the string
+encoding happens to be, or C<unpack("U0..", ...)> to get the bytes of the
+UTF-8 encoding:
 
     # this prints  c4 80  for the UTF-8 bytes 0xc4 0x80
-    print join(" ", unpack("H*", pack("U", 0x100))), "\n";
+    print join(" ", unpack("U0(H2)*", pack("U", 0x100))), "\n";
 
 Yet another way would be to use the Devel::Peek module:
 
@@ -670,22 +669,24 @@ How Do I Detect Data That's Not Valid In a Particular Encoding?
 Use the C<Encode> package to try converting it.
 For example,
 
-    use Encode 'encode_utf8';
-    if (encode_utf8($string_of_bytes_that_I_think_is_utf8)) {
+    use Encode 'decode_utf8';
+    if (decode_utf8($string_of_bytes_that_I_think_is_utf8)) {
         # valid
     } else {
         # invalid
     }
 
-For UTF-8 only, you can use:
+Or use C<unpack> to try decoding it:
 
     use warnings;
-    @chars = unpack("U0U*", $string_of_bytes_that_I_think_is_utf8);
+    @chars = unpack("C0U*", $string_of_bytes_that_I_think_is_utf8);
 
 If invalid, a C<Malformed UTF-8 character (byte 0x##) in unpack>
-warning is produced. The "U0" means "expect strictly UTF-8 encoded
-Unicode".  Without that the C<unpack("U*", ...)> would accept also
-data like C<chr(0xFF>), similarly to the C<pack> as we saw earlier.
+warning is produced. The "C0" means 
+"process the string character per character".  Without that the 
+C<unpack("U*", ...)> would work in C<U0> mode (the default if the format 
+string starts with C<U>) and it would return the bytes making up the UTF-8 
+encoding of the target string, something that will always work.
 
 =item *
 
@@ -727,8 +728,8 @@ Back to converting data.  If you have (or want) data in your system's
 native 8-bit encoding (e.g. Latin-1, EBCDIC, etc.), you can use
 pack/unpack to convert to/from Unicode.
 
-    $native_string  = pack("C*", unpack("U*", $Unicode_string));
-    $Unicode_string = pack("U*", unpack("C*", $native_string));
+    $native_string  = pack("W*", unpack("U*", $Unicode_string));
+    $Unicode_string = pack("U*", unpack("W*", $native_string));
 
 If you have a sequence of bytes you B<know> is valid UTF-8,
 but Perl doesn't know it yet, you can make Perl a believer, too:
@@ -736,6 +737,10 @@ but Perl doesn't know it yet, you can make Perl a believer, too:
     use Encode 'decode_utf8';
     $Unicode = decode_utf8($bytes);
 
+or:
+
+    $Unicode = pack("U0a*", $bytes);
+   
 You can convert well-formed UTF-8 to a sequence of bytes, but if
 you just want to convert random binary data into UTF-8, you can't.
 B<Any random collection of bytes isn't well-formed UTF-8>.  You can

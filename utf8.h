@@ -42,7 +42,7 @@ EXTCONST unsigned char PL_utf8skip[];
 #endif
 
 END_EXTERN_C
-#define UTF8SKIP(s) PL_utf8skip[*(U8*)s]
+#define UTF8SKIP(s) PL_utf8skip[*(const U8*)s]
 
 /* Native character to iso-8859-1 */
 #define NATIVE_TO_ASCII(ch)      (ch)
@@ -147,12 +147,12 @@ encoded character.
  * (that is, the two high bits are set).  Otherwise we risk loading in the
  * heavy-duty SWASHINIT and SWASHGET routines unnecessarily.
  */
-#define isIDFIRST_lazy_if(p,c) ((IN_BYTES || (!c || (*((U8*)p) < 0xc0))) \
+#define isIDFIRST_lazy_if(p,c) ((IN_BYTES || (!c || (*((const U8*)p) < 0xc0))) \
 				? isIDFIRST(*(p)) \
-				: isIDFIRST_utf8((U8*)p))
-#define isALNUM_lazy_if(p,c)   ((IN_BYTES || (!c || (*((U8*)p) < 0xc0))) \
+				: isIDFIRST_utf8((const U8*)p))
+#define isALNUM_lazy_if(p,c)   ((IN_BYTES || (!c || (*((const U8*)p) < 0xc0))) \
 				? isALNUM(*(p)) \
-				: isALNUM_utf8((U8*)p))
+				: isALNUM_utf8((const U8*)p))
 
 
 #endif /* EBCDIC vs ASCII */
@@ -162,14 +162,26 @@ encoded character.
 #define isIDFIRST_lazy(p)	isIDFIRST_lazy_if(p,1)
 #define isALNUM_lazy(p)		isALNUM_lazy_if(p,1)
 
-/* how wide can a single UTF-8 encoded character become */
-#define UTF8_MAXLEN 13
-/* how wide a character can become when upper/lowercased */
-#define UTF8_MAXLEN_UCLC_MULT 3
-#define UTF8_MAXLEN_UCLC (UTF8_MAXLEN*UTF8_MAXLEN_UCLC_MULT)
-/* how wide a character can become when casefolded */
-#define UTF8_MAXLEN_FOLD_MULT 3
-#define UTF8_MAXLEN_FOLD (UTF8_MAXLEN*UTF8_MAXLEN_FOLD_MULT)
+#define UTF8_MAXBYTES 13
+/* How wide can a single UTF-8 encoded character become in bytes.
+ * NOTE: Strictly speaking Perl's UTF-8 should not be called UTF-8
+ * since UTF-8 is an encoding of Unicode and given Unicode's current
+ * upper limit only four bytes is possible.  Perl thinks of UTF-8
+ * as a way to encode non-negative integers in a binary format. */
+#define UTF8_MAXLEN UTF8_MAXBYTES
+
+#define UTF8_MAXLEN_UCLC 3		/* Obsolete, do not use. */
+#define UTF8_MAXLEN_UCLC_MULT 39	/* Obsolete, do not use. */
+#define UTF8_MAXLEN_FOLD 3		/* Obsolete, do not use. */
+#define UTF8_MAXLEN_FOLD_MULT 39	/* Obsolete, do not use. */
+
+/* The maximum number of UTF-8 bytes a single Unicode character can
+ * uppercase/lowercase/fold into; this number depends on the Unicode
+ * version.  An example of maximal expansion is the U+03B0 which
+ * uppercases to U+03C5 U+0308 U+0301.  The Unicode databases that
+ * tell these things are UnicodeDatabase.txt, CaseFolding.txt, and
+ * SpecialCasing.txt. */
+#define UTF8_MAXBYTES_CASE	6
 
 #define IN_BYTES (PL_curcop->op_private & HINT_BYTES)
 #define DO_UTF8(sv) (SvUTF8(sv) && !IN_BYTES)
@@ -183,8 +195,7 @@ encoded character.
 #define UTF8_ALLOW_FFFF			0x0040 /* Allows also FFFE. */
 #define UTF8_ALLOW_LONG			0x0080
 #define UTF8_ALLOW_ANYUV		(UTF8_ALLOW_EMPTY|UTF8_ALLOW_FE_FF|\
-					 UTF8_ALLOW_SURROGATE|\
-					 UTF8_ALLOW_FFFF|UTF8_ALLOW_LONG)
+					 UTF8_ALLOW_SURROGATE|UTF8_ALLOW_FFFF)
 #define UTF8_ALLOW_ANY			0x00FF
 #define UTF8_CHECK_ONLY			0x0200
 

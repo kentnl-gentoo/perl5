@@ -243,6 +243,8 @@ non-overridden program name
      former isn't working in some people's hands.  There is no such thing
      as reliable exception handling in Perl.
 
+1.27 Replaced tell STDOUT with bytes=tell STDOUT.
+
 =head1 AUTHORS
 
 Copyright 1995-2002, Lincoln D. Stein.  All rights reserved.  
@@ -279,7 +281,7 @@ use File::Spec;
 
 $main::SIG{__WARN__}=\&CGI::Carp::warn;
 
-$CGI::Carp::VERSION    = '1.26';
+$CGI::Carp::VERSION    = '1.29';
 $CGI::Carp::CUSTOM_MSG = undef;
 
 
@@ -369,7 +371,7 @@ sub _warn {
 # eval.  These evals don't count when looking at the stack backtrace.
 sub _longmess {
     my $message = Carp::longmess();
-    $message =~ s,eval[^\n]+(ModPerl|Apache)/Registry\w*\.pm.*,,s
+    $message =~ s,eval[^\n]+(ModPerl|Apache)/(?:Registry|Dispatch)\w*\.pm.*,,s
         if exists $ENV{MOD_PERL};
     return $message;
 }
@@ -379,10 +381,11 @@ sub ineval {
 }
 
 sub die {
-  my ($arg) = @_;
-  realdie @_ if ineval;
+  my ($arg,@rest) = @_;
+  realdie ($arg,@rest) if ineval();
+
   if (!ref($arg)) {
-    $arg = join("", @_);
+    $arg = join("", ($arg,@rest));
     my($file,$line,$id) = id(1);
     $arg .= " at $file line $line." unless $arg=~/\n$/;
     &fatalsToBrowser($arg) if $WRAP;
@@ -441,8 +444,6 @@ END
   ;
   my $mod_perl = exists $ENV{MOD_PERL};
 
-  warningsToBrowser(1);    # emit warnings before dying
-
   if ($CUSTOM_MSG) {
     if (ref($CUSTOM_MSG) eq 'CODE') {
       print STDOUT "Content-type: text/html\n\n" 
@@ -490,7 +491,8 @@ END
       $r->custom_response(500,$mess);
     }
   } else {
-    if (eval{tell STDOUT}) {
+    my $bytes_written = eval{tell STDOUT};
+    if (defined $bytes_written && $bytes_written > 0) {
         print STDOUT $mess;
     }
     else {
@@ -498,6 +500,8 @@ END
         print STDOUT $mess;
     }
   }
+
+  warningsToBrowser(1);    # emit warnings before dying
 }
 
 # Cut and paste from CGI.pm so that we don't have the overhead of

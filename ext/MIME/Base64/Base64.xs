@@ -1,6 +1,6 @@
-/* $Id: Base64.xs,v 1.38 2003/10/09 11:26:12 gisle Exp $
+/* $Id: Base64.xs,v 3.4 2004/08/24 16:29:35 gisle Exp $
 
-Copyright 1997-2003 Gisle Aas
+Copyright 1997-2004 Gisle Aas
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
@@ -28,6 +28,7 @@ metamail, which comes with this message:
 #ifdef __cplusplus
 extern "C" {
 #endif
+#define PERL_NO_GET_CONTEXT     /* we want efficiency */
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -98,6 +99,10 @@ static unsigned char index_64[256] = {
 #   endif
 #else
 #   define SvPVbyte SvPV
+#endif
+
+#ifndef isXDIGIT
+#   define isXDIGIT isxdigit
 #endif
 
 #ifndef NATIVE_TO_ASCII
@@ -253,16 +258,17 @@ decode_base64(sv)
 
 MODULE = MIME::Base64		PACKAGE = MIME::QuotedPrint
 
-#define qp_isplain(c) ((c) == '\t' || ((c) >= ' ' && (c) <= '~') && (c) != '=')
+#define qp_isplain(c) ((c) == '\t' || (((c) >= ' ' && (c) <= '~') && (c) != '='))
 
 SV*
 encode_qp(sv,...)
 	SV* sv
-	PROTOTYPE: $;$
+	PROTOTYPE: $;$$
 
 	PREINIT:
 	char *eol;
 	STRLEN eol_len;
+	int binary;
 	STRLEN sv_len;
 	STRLEN linelen;
 	char *beg;
@@ -282,6 +288,8 @@ encode_qp(sv,...)
 	    eol = "\n";
 	    eol_len = 1;
 	}
+
+	binary = (items > 2 && SvTRUE(ST(2)));
 
 	beg = SvPV(sv, sv_len);
 	end = beg + sv_len;
@@ -334,14 +342,14 @@ encode_qp(sv,...)
 	    if (p == end) {
 		break;
             }
-	    else if (*p == '\n' && eol_len) {
+	    else if (*p == '\n' && eol_len && !binary) {
 	        sv_catpvn(RETVAL, eol, eol_len);
 	        p++;
 		linelen = 0;
 	    }
 	    else {
 		/* output escaped char (with line breaks) */
-	        assert(p < end)
+	        assert(p < end);
 		if (eol_len && linelen > MAX_LINE - 4) {
 		    sv_catpvn(RETVAL, "=", 1);
 		    sv_catpvn(RETVAL, eol, eol_len);
@@ -358,6 +366,11 @@ encode_qp(sv,...)
      		SvGROW(RETVAL, expected_len);
 	    }
         }
+
+	if (SvCUR(RETVAL) && eol_len && linelen) {
+	    sv_catpvn(RETVAL, "=", 1);
+	    sv_catpvn(RETVAL, eol, eol_len);
+	}
 
 	OUTPUT:
 	RETVAL
@@ -399,7 +412,7 @@ decode_qp(sv)
 		    whitespace = 0;
                 }
             	if (*str == '=') {
-		    if ((str + 2) < end && isxdigit(str[1]) && isxdigit(str[2])) {
+		    if ((str + 2) < end && isXDIGIT(str[1]) && isXDIGIT(str[2])) {
 	                char buf[3];
                         str++;
 	                buf[0] = *str++;

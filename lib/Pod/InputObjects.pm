@@ -11,7 +11,7 @@
 package Pod::InputObjects;
 
 use vars qw($VERSION);
-$VERSION = 1.14;  ## Current version of this package
+$VERSION = 1.30;  ## Current version of this package
 require  5.005;    ## requires this Perl version or later
 
 #############################################################################
@@ -931,6 +931,8 @@ sub DESTROY {
 See L<Pod::Parser>, L<Pod::Select>
 
 =head1 AUTHOR
+
+Please report bugs using L<http://rt.cpan.org>.
 
 Brad Appleton E<lt>bradapp@enteract.comE<gt>
 

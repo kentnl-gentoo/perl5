@@ -2,8 +2,8 @@ package ExtUtils::MakeMaker;
 
 BEGIN {require 5.005_03;}
 
-$VERSION = '6.17';
-($Revision) = q$Revision: 1.133 $ =~ /Revision:\s+(\S+)/;
+$VERSION = '6.25';
+($Revision) = q$Revision: 1.147 $ =~ /Revision:\s+(\S+)/;
 
 require Exporter;
 use Config;
@@ -167,9 +167,11 @@ sub eval_in_subdirs {
 
     foreach my $dir (@{$self->{DIR}}){
         my($abs) = $self->catdir($pwd,$dir);
-        $self->eval_in_x($abs);
+        eval { $self->eval_in_x($abs); };
+        last if $@;
     }
     chdir $pwd;
+    die $@ if $@;
 }
 
 sub eval_in_x {
@@ -260,7 +262,7 @@ sub full_setup {
 
  special_targets
  c_o xs_c xs_o
- top_targets linkext dlsyms dynamic dynamic_bs
+ top_targets blibdirs linkext dlsyms dynamic dynamic_bs
  dynamic_lib static static_lib manifypods processPL
  installbin subdirs
  clean_subdirs clean realclean_subdirs realclean 
@@ -274,7 +276,7 @@ sub full_setup {
     @Overridable = @MM_Sections;
     push @Overridable, qw[
 
- dir_target libscan makeaperl needs_linking perm_rw perm_rwx
+ libscan makeaperl needs_linking perm_rw perm_rwx
  subdir_x test_via_harness test_via_script init_PERL
                          ];
 
@@ -381,7 +383,9 @@ sub new {
     foreach my $prereq (sort keys %{$self->{PREREQ_PM}}) {
         # 5.8.0 has a bug with require Foo::Bar alone in an eval, so an
         # extra statement is a workaround.
-        eval "require $prereq; 0";
+        my $file = "$prereq.pm";
+        $file =~ s{::}{/}g;
+        eval { require $file };
 
         my $pr_version = $prereq->VERSION || 0;
 
@@ -1014,7 +1018,7 @@ The generated Makefile enables the user of the extension to invoke
 The Makefile to be produced may be altered by adding arguments of the
 form C<KEY=VALUE>. E.g.
 
-  perl Makefile.PL PREFIX=/tmp/myperl5
+  perl Makefile.PL PREFIX=~
 
 Other interesting targets in the generated Makefile are
 
@@ -1091,6 +1095,15 @@ And to check the sequence in which the library directories are
 searched by perl, run
 
     perl -le 'print join $/, @INC'
+
+Sometimes older versions of the module you're installing live in other
+directories in @INC.  Because Perl loads the first version of a module it 
+finds, not the newest, you might accidentally get one of these older
+versions even after installing a brand new version.  To delete I<all other
+versions of the module you're installing> (not simply older ones) set the
+C<UNINST> variable.
+
+    make install UNINST=1
 
 
 =head2 PREFIX and LIB attribute
@@ -1356,13 +1369,13 @@ Something like C<"-DHAVE_UNISTD_H">
 
 This is the root directory into which the code will be installed.  It
 I<prepends itself to the normal prefix>.  For example, if your code
-would normally go into /usr/local/lib/perl you could set DESTDIR=/tmp/
-and installation would go into /tmp/usr/local/lib/perl.
+would normally go into F</usr/local/lib/perl> you could set DESTDIR=~/tmp/
+and installation would go into F<~/tmp/usr/local/lib/perl>.
 
 This is primarily of use for people who repackage Perl modules.
 
 NOTE: Due to the nature of make, it is important that you put the trailing
-slash on your DESTDIR.  "/tmp/" not "/tmp".
+slash on your DESTDIR.  F<~/tmp/> not F<~/tmp>.
 
 =item DIR
 
@@ -2051,7 +2064,7 @@ MakeMaker object. The following lines will be parsed o.k.:
 
     $VERSION = '1.00';
     *VERSION = \'1.01';
-    $VERSION = sprintf "%d.%03d", q$Revision: 1.133 $ =~ /(\d+)/g;
+    $VERSION = sprintf "%d.%03d", q$Revision: 1.147 $ =~ /(\d+)/g;
     $FOO::VERSION = '1.10';
     *FOO::VERSION = \'1.11';
     our $VERSION = 1.2.3;       # new for perl5.6.0 
@@ -2203,7 +2216,7 @@ for embedding.
 
 If you still need a different solution, try to develop another
 subroutine that fits your needs and submit the diffs to
-F<makemaker@perl.org>
+C<makemaker@perl.org>
 
 For a complete description of all MakeMaker methods see
 L<ExtUtils::MM_Unix>.
@@ -2451,26 +2464,26 @@ ExtUtils::Embed
 
 =head1 AUTHORS
 
-Andy Dougherty <F<doughera@lafayette.edu>>, Andreas KE<ouml>nig
-<F<andreas.koenig@mind.de>>, Tim Bunce <F<timb@cpan.org>>.  VMS
-support by Charles Bailey <F<bailey@newman.upenn.edu>>.  OS/2 support
-by Ilya Zakharevich <F<ilya@math.ohio-state.edu>>.
+Andy Dougherty C<doughera@lafayette.edu>, Andreas KE<ouml>nig
+C<andreas.koenig@mind.de>, Tim Bunce C<timb@cpan.org>.  VMS
+support by Charles Bailey C<bailey@newman.upenn.edu>.  OS/2 support
+by Ilya Zakharevich C<ilya@math.ohio-state.edu>.
 
-Currently maintained by Michael G Schwern <F<schwern@pobox.com>>
+Currently maintained by Michael G Schwern C<schwern@pobox.com>
 
-Send patches and ideas to <F<makemaker@perl.org>>.
+Send patches and ideas to C<makemaker@perl.org>.
 
 Send bug reports via http://rt.cpan.org/.  Please send your
 generated Makefile along with your report.
 
-For more up-to-date information, see http://www.makemaker.org.
+For more up-to-date information, see L<http://www.makemaker.org>.
 
 =head1 LICENSE
 
 This program is free software; you can redistribute it and/or 
 modify it under the same terms as Perl itself.
 
-See F<http://www.perl.com/perl/misc/Artistic.html>
+See L<http://www.perl.com/perl/misc/Artistic.html>
 
 
 =cut

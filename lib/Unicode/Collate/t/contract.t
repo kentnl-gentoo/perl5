@@ -51,7 +51,7 @@ ENTRIES
 
 #########################
 
-ok(1); # If we made it this far, we're ok.
+ok(1);
 
 my $kjeNoN = Unicode::Collate->new(
     level => 1,
@@ -72,7 +72,7 @@ $sortkeys{'KAta'} = $kjeNoN->viewSortKey("\x{043A}\x{0334}\x{0301}");
 $sortkeys{'KAat'} = $kjeNoN->viewSortKey("\x{043A}\x{0301}\x{0334}");
 
 eval { require Unicode::Normalize };
-if (!$@ && !$IsEBCDIC) {
+if (!$@) {
     my $kjeNFD = Unicode::Collate->new(
 	level => 1,
 	table => undef,

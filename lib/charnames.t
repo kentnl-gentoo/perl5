@@ -15,7 +15,7 @@ require File::Spec;
 
 $| = 1;
 
-print "1..73\n";
+print "1..74\n";
 
 use charnames ':full';
 
@@ -61,7 +61,7 @@ else { # EBCDIC where UTF-EBCDIC may be used (this may be 1047 specific since
 }
 
 sub to_bytes {
-    pack"a*", shift;
+    unpack"U0a*", shift;
 }
 
 {
@@ -328,6 +328,12 @@ for (@prgs) {
     1 while unlink $alifile;
     }
 
+# [perl #30409] charnames.pm clobbers default variable
+$_ = 'foobar';
+eval "use charnames ':full';";
+print "not " unless $_ eq 'foobar';
+print "ok 74\n";
+
 __END__
 # unsupported pragma
 use charnames ":scoobydoo";
@@ -399,7 +405,7 @@ Only HASH reference supported as argument to :alias at
 use charnames ":short", ":alias" => { e_ACUTE => "LATIN:e WITH ACUTE", "a_ACUTE" };
 "Here: \N{e_ACUTE}\N{a_ACUTE}!\n";
 EXPECT
-Use of uninitialized value in string eq at
+Use of uninitialized value
 ########
 # alias with hashref two aliases
 use charnames ":short", ":alias" => {

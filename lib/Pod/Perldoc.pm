@@ -12,7 +12,7 @@ use File::Spec::Functions qw(catfile catdir splitdir);
 use vars qw($VERSION @Pagers $Bindir $Pod2man
   $Temp_Files_Created $Temp_File_Lifetime
 );
-$VERSION = '3.11';
+$VERSION = '3.14';
 #..........................................................................
 
 BEGIN {  # Make a DEBUG constant very first thing...
@@ -766,9 +766,12 @@ sub maybe_generate_dynamic_pod {
         push @{ $self->{'temp_file_list'} }, $buffer;
          # I.e., it MIGHT be deleted at the end.
         
-        print $buffd "=over 8\n\n";
+	my $in_list = $self->opt_f;
+
+        print $buffd "=over 8\n\n" if $in_list;
         print $buffd @dynamic_pod  or die "Can't print $buffer: $!";
-        print $buffd "=back\n";
+        print $buffd "=back\n"     if $in_list;
+
         close $buffd        or die "Can't close $buffer: $!";
         
         @$found_things = $buffer;
@@ -1076,7 +1079,7 @@ sub MSWin_perldoc_tempfile {
   my $spec;
   
   do {
-    $spec = sprintf "%s/perldoc_%s_T%x_%x%02x.%s", # used also in MSWin_temp_cleanup
+    $spec = sprintf "%s\\perldoc_%s_T%x_%x%02x.%s", # used also in MSWin_temp_cleanup
       # Yes, we embed the create-time in the filename!
       $tempdir,
       $infix || 'x',
@@ -1229,6 +1232,13 @@ sub pagers_guessing {
         push @pagers, qw( more less pg view cat );
         unshift @pagers, $ENV{PAGER}  if $ENV{PAGER};
     }
+
+    if (IS_Cygwin) {
+        if (($pagers[0] eq 'less') || ($pagers[0] eq '/usr/bin/less')) {
+            unshift @pagers, '/usr/bin/less -isrR';
+        }
+    }
+
     unshift @pagers, $ENV{PERLDOC_PAGER} if $ENV{PERLDOC_PAGER};
     
     return;   
@@ -1310,10 +1320,12 @@ sub check_file {
     unless( ref $self ) {
       # Should never get called:
       $Carp::Verbose = 1;
-      Carp::croak join '',
+      require Carp;
+      Carp::croak( join '',
         "Crazy ", __PACKAGE__, " error:\n",
         "check_file must be an object_method!\n",
         "Aborting"
+      );
     }
     
     if(length $dir and not -d $dir) {
@@ -1489,6 +1501,12 @@ sub page {  # apply a pager to the output file
         # extension get the wrong default extension (such as .LIS for TYPE)
 
         $output = VMS::Filespec::rmsexpand($output, '.') if IS_VMS;
+
+        $output =~ s{/}{\\}g if IS_MSWin32 || IS_Dos;
+          # Altho "/" under MSWin is in theory good as a pathsep,
+          #  many many corners of the OS don't like it.  So we
+          #  have to force it to be "\" to make everyone happy.
+
         foreach my $pager (@pagers) {
             $self->aside("About to try calling $pager $output\n");
             if (IS_VMS) {

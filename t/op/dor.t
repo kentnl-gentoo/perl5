@@ -10,7 +10,7 @@ BEGIN {
 package main;
 require './test.pl';
 
-plan( tests => 30 );
+plan( tests => 41 );
 
 my($x);
 
@@ -23,6 +23,8 @@ is($x // 1, 1, 		'	// : left-hand operand undef');
 $x='';
 is($x // 0, '',		'	// : left-hand operand defined but empty');
 
+like([] // 0, qr/^ARRAY/,	'	// : left-hand operand a referece');
+
 $x=1;
 is(($x err 0), 1,	'	err: left-hand operand defined');
 
@@ -32,16 +34,18 @@ is(($x err 1), 1, 	'	err: left-hand operand undef');
 $x='';
 is(($x err 0), '',	'	err: left-hand operand defined but empty');
 
+like(([] err 0), qr/^ARRAY/,	'	err: left-hand operand a referece');
+
 $x=undef;
 $x //= 1;
 is($x, 1, 		'	//=: left-hand operand undefined');
 
 $x //= 0;
-is($x, 1, 		'	//=: left-hand operand defined');
+is($x, 1, 		'//=: left-hand operand defined');
 
 $x = '';
 $x //= 0;
-is($x, '', 		'	//=: left-hand operand defined but empty');
+is($x, '', 		'//=: left-hand operand defined but empty');
 
 @ARGV = (undef, 0, 3);
 is(shift       // 7, 7,	'shift // ... works');
@@ -72,3 +76,21 @@ eval q# sub { print $fh / 2 } #;
 is( $@, '' );
 eval q# sub { print $fh /2 } #;
 like( $@, qr/^Search pattern not terminated/ );
+
+# [perl #28123] Perl optimizes // away incorrectly
+
+is(0 // 2, 0, 		'	// : left-hand operand not optimized away');
+is('' // 2, '',		'	// : left-hand operand not optimized away');
+is(undef // 2, 2, 	'	// : left-hand operand optimized away');
+
+# [perl #32347] err should be a weak keyword
+
+package weakerr;
+
+sub err { "<@_>" }
+::is( (shift() err 42), 42,	'err as an operator' );
+::is( (shift err 42), 42,	'err as an operator, with ambiguity' );
+::is( (err 2), "<2>",		'err as a function without parens' );
+::is( err(2, 3), "<2 3>",	'err as a function with parens' );
+::is( err(), "<>",		'err as a function without arguments' );
+::is( err, "<>",		'err as a function without parens' );

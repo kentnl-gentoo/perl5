@@ -1,6 +1,6 @@
 package overload;
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 $overload::hint_bits = 0x20000; # HINT_LOCALIZE_HH
 
@@ -93,11 +93,7 @@ sub AddrRef {
 	return sprintf("$class_prefix$type(0x%x)", $addr);
 }
 
-sub StrVal {
-  (ref $_[0] && OverloadedStringify($_[0]) or ref($_[0]) eq 'Regexp') ?
-    (AddrRef(shift)) :
-    "$_[0]";
-}
+*StrVal = *AddrRef;
 
 sub mycan {				# Real can would leave stubs.
   my ($package, $meth) = @_;
@@ -704,7 +700,10 @@ Package C<overload.pm> provides the following public functions:
 
 =item overload::StrVal(arg)
 
-Gives string value of C<arg> as in absence of stringify overloading.
+Gives string value of C<arg> as in absence of stringify overloading. If you
+are using this to get the address of a reference (useful for checking if two
+references point to the same thing) then you may be better off using
+C<Scalar::Util::refaddr()>, which is faster.
 
 =item overload::Overloaded(arg)
 

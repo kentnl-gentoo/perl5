@@ -1,7 +1,8 @@
 /*
  *    embedvar.h
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, 2003, by Larry Wall and others
+ *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -81,7 +82,6 @@
 #define PL_op			(vTHX->Top)
 #define PL_opsave		(vTHX->Topsave)
 #define PL_peepp		(vTHX->Tpeepp)
-#define PL_protect		(vTHX->Tprotect)
 #define PL_reg_call_cc		(vTHX->Treg_call_cc)
 #define PL_reg_curpm		(vTHX->Treg_curpm)
 #define PL_reg_eval_set		(vTHX->Treg_eval_set)
@@ -126,9 +126,6 @@
 #define PL_regstartp		(vTHX->Tregstartp)
 #define PL_regtill		(vTHX->Tregtill)
 #define PL_restartop		(vTHX->Trestartop)
-#define PL_retstack		(vTHX->Tretstack)
-#define PL_retstack_ix		(vTHX->Tretstack_ix)
-#define PL_retstack_max		(vTHX->Tretstack_max)
 #define PL_rs			(vTHX->Trs)
 #define PL_savestack		(vTHX->Tsavestack)
 #define PL_savestack_ix		(vTHX->Tsavestack_ix)
@@ -246,6 +243,7 @@
 #define PL_exitlistlen		(vTHX->Iexitlistlen)
 #define PL_expect		(vTHX->Iexpect)
 #define PL_fdpid		(vTHX->Ifdpid)
+#define PL_fdscript		(vTHX->Ifdscript)
 #define PL_filemode		(vTHX->Ifilemode)
 #define PL_forkprocess		(vTHX->Iforkprocess)
 #define PL_formfeed		(vTHX->Iformfeed)
@@ -320,8 +318,6 @@
 #define PL_multi_open		(vTHX->Imulti_open)
 #define PL_multi_start		(vTHX->Imulti_start)
 #define PL_multiline		(vTHX->Imultiline)
-#define PL_new_hash_seed	(vTHX->Inew_hash_seed)
-#define PL_new_hash_seed_set	(vTHX->Inew_hash_seed_set)
 #define PL_nexttoke		(vTHX->Inexttoke)
 #define PL_nexttype		(vTHX->Inexttype)
 #define PL_nextval		(vTHX->Inextval)
@@ -338,7 +334,6 @@
 #define PL_oldname		(vTHX->Ioldname)
 #define PL_oldoldbufptr		(vTHX->Ioldoldbufptr)
 #define PL_op_mask		(vTHX->Iop_mask)
-#define PL_op_seqmax		(vTHX->Iop_seqmax)
 #define PL_origalen		(vTHX->Iorigalen)
 #define PL_origargc		(vTHX->Iorigargc)
 #define PL_origargv		(vTHX->Iorigargv)
@@ -368,6 +363,8 @@
 #define PL_reentrant_retint	(vTHX->Ireentrant_retint)
 #define PL_regex_pad		(vTHX->Iregex_pad)
 #define PL_regex_padav		(vTHX->Iregex_padav)
+#define PL_rehash_seed		(vTHX->Irehash_seed)
+#define PL_rehash_seed_set	(vTHX->Irehash_seed_set)
 #define PL_replgv		(vTHX->Ireplgv)
 #define PL_rsfp			(vTHX->Irsfp)
 #define PL_rsfp_filters		(vTHX->Irsfp_filters)
@@ -394,6 +391,7 @@
 #define PL_sublex_info		(vTHX->Isublex_info)
 #define PL_subline		(vTHX->Isubline)
 #define PL_subname		(vTHX->Isubname)
+#define PL_suidscript		(vTHX->Isuidscript)
 #define PL_sv_arenaroot		(vTHX->Isv_arenaroot)
 #define PL_sv_count		(vTHX->Isv_count)
 #define PL_sv_no		(vTHX->Isv_no)
@@ -458,12 +456,8 @@
 #define PL_xpvnv_root		(vTHX->Ixpvnv_root)
 #define PL_xrv_arenaroot	(vTHX->Ixrv_arenaroot)
 #define PL_xrv_root		(vTHX->Ixrv_root)
-#define PL_yychar		(vTHX->Iyychar)
-#define PL_yydebug		(vTHX->Iyydebug)
-#define PL_yyerrflag		(vTHX->Iyyerrflag)
-#define PL_yylval		(vTHX->Iyylval)
-#define PL_yynerrs		(vTHX->Iyynerrs)
-#define PL_yyval		(vTHX->Iyyval)
+#define PL_yycharp		(vTHX->Iyycharp)
+#define PL_yylvalp		(vTHX->Iyylvalp)
 
 #else	/* !MULTIPLICITY */
 
@@ -552,6 +546,7 @@
 #define PL_Iexitlistlen		PL_exitlistlen
 #define PL_Iexpect		PL_expect
 #define PL_Ifdpid		PL_fdpid
+#define PL_Ifdscript		PL_fdscript
 #define PL_Ifilemode		PL_filemode
 #define PL_Iforkprocess		PL_forkprocess
 #define PL_Iformfeed		PL_formfeed
@@ -626,8 +621,6 @@
 #define PL_Imulti_open		PL_multi_open
 #define PL_Imulti_start		PL_multi_start
 #define PL_Imultiline		PL_multiline
-#define PL_Inew_hash_seed	PL_new_hash_seed
-#define PL_Inew_hash_seed_set	PL_new_hash_seed_set
 #define PL_Inexttoke		PL_nexttoke
 #define PL_Inexttype		PL_nexttype
 #define PL_Inextval		PL_nextval
@@ -644,7 +637,6 @@
 #define PL_Ioldname		PL_oldname
 #define PL_Ioldoldbufptr	PL_oldoldbufptr
 #define PL_Iop_mask		PL_op_mask
-#define PL_Iop_seqmax		PL_op_seqmax
 #define PL_Iorigalen		PL_origalen
 #define PL_Iorigargc		PL_origargc
 #define PL_Iorigargv		PL_origargv
@@ -674,6 +666,8 @@
 #define PL_Ireentrant_retint	PL_reentrant_retint
 #define PL_Iregex_pad		PL_regex_pad
 #define PL_Iregex_padav		PL_regex_padav
+#define PL_Irehash_seed		PL_rehash_seed
+#define PL_Irehash_seed_set	PL_rehash_seed_set
 #define PL_Ireplgv		PL_replgv
 #define PL_Irsfp		PL_rsfp
 #define PL_Irsfp_filters	PL_rsfp_filters
@@ -700,6 +694,7 @@
 #define PL_Isublex_info		PL_sublex_info
 #define PL_Isubline		PL_subline
 #define PL_Isubname		PL_subname
+#define PL_Isuidscript		PL_suidscript
 #define PL_Isv_arenaroot	PL_sv_arenaroot
 #define PL_Isv_count		PL_sv_count
 #define PL_Isv_no		PL_sv_no
@@ -764,12 +759,8 @@
 #define PL_Ixpvnv_root		PL_xpvnv_root
 #define PL_Ixrv_arenaroot	PL_xrv_arenaroot
 #define PL_Ixrv_root		PL_xrv_root
-#define PL_Iyychar		PL_yychar
-#define PL_Iyydebug		PL_yydebug
-#define PL_Iyyerrflag		PL_yyerrflag
-#define PL_Iyylval		PL_yylval
-#define PL_Iyynerrs		PL_yynerrs
-#define PL_Iyyval		PL_yyval
+#define PL_Iyycharp		PL_yycharp
+#define PL_Iyylvalp		PL_yylvalp
 
 #define PL_TSv			PL_Sv
 #define PL_TXpv			PL_Xpv
@@ -814,7 +805,6 @@
 #define PL_Top			PL_op
 #define PL_Topsave		PL_opsave
 #define PL_Tpeepp		PL_peepp
-#define PL_Tprotect		PL_protect
 #define PL_Treg_call_cc		PL_reg_call_cc
 #define PL_Treg_curpm		PL_reg_curpm
 #define PL_Treg_eval_set	PL_reg_eval_set
@@ -859,9 +849,6 @@
 #define PL_Tregstartp		PL_regstartp
 #define PL_Tregtill		PL_regtill
 #define PL_Trestartop		PL_restartop
-#define PL_Tretstack		PL_retstack
-#define PL_Tretstack_ix		PL_retstack_ix
-#define PL_Tretstack_max	PL_retstack_max
 #define PL_Trs			PL_rs
 #define PL_Tsavestack		PL_savestack
 #define PL_Tsavestack_ix	PL_savestack_ix
@@ -912,6 +899,7 @@
 #define PL_sigfpe_saved		(PL_Vars.Gsigfpe_saved)
 #define PL_sv_placeholder	(PL_Vars.Gsv_placeholder)
 #define PL_thr_key		(PL_Vars.Gthr_key)
+#define PL_use_safe_putenv	(PL_Vars.Guse_safe_putenv)
 
 #else /* !PERL_GLOBAL_STRUCT */
 
@@ -929,6 +917,7 @@
 #define PL_Gsigfpe_saved	PL_sigfpe_saved
 #define PL_Gsv_placeholder	PL_sv_placeholder
 #define PL_Gthr_key		PL_thr_key
+#define PL_Guse_safe_putenv	PL_use_safe_putenv
 
 #endif /* PERL_GLOBAL_STRUCT */
 

@@ -132,8 +132,15 @@ For ease of access, the Perl manual has been split up into several sections.
 
     perlhist		Perl history records
     perldelta		Perl changes since previous version
-    perl58delta 	Perl changes in version 5.8.0
+    perl591delta	Perl changes in version 5.9.1
+    perl590delta	Perl changes in version 5.9.0
+    perl586delta	Perl changes in version 5.8.6
+    perl585delta	Perl changes in version 5.8.5
+    perl584delta	Perl changes in version 5.8.4
+    perl583delta	Perl changes in version 5.8.3
+    perl582delta	Perl changes in version 5.8.2
     perl581delta	Perl changes in version 5.8.1
+    perl58delta 	Perl changes in version 5.8.0
     perl573delta	Perl changes in version 5.7.3
     perl572delta	Perl changes in version 5.7.2
     perl571delta	Perl changes in version 5.7.1
@@ -367,9 +374,10 @@ Perl developers, please write to perl-thanks@perl.org .
  a2p	awk to perl translator
  s2p	sed to perl translator
 
- http://www.perl.com/       the Perl Home Page
+ http://www.perl.org/       the Perl homepage
+ http://www.perl.com/       Perl articles (O'Reilly Media)
  http://www.cpan.org/       the Comprehensive Perl Archive
- http://www.perl.org/       Perl Mongers (Perl user groups)
+ http://www.pm.org/         the Perl Mongers
 
 =head1 DIAGNOSTICS
 

@@ -6,7 +6,7 @@
 
 $| = 1;
 
-print "1..1055\n";
+print "1..1178\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -1689,10 +1689,11 @@ EOT
     print "not " if     $x =~ /[\x{100}]/;
     print "ok 604\n";
 
-    print "not " unless $x =~ /\p{InLatin1Supplement}/;
+    # the next two tests must be ignored on EBCDIC
+    print "not " unless $x =~ /\p{InLatin1Supplement}/ or ord("A") == 193;
     print "ok 605\n";
 
-    print "not " if     $x =~ /\P{InLatin1Supplement}/;
+    print "not " if     $x =~ /\P{InLatin1Supplement}/ and ord("A") != 193;
     print "ok 606\n";
 
     print "not " if     $x =~ /\p{InLatinExtendedA}/;
@@ -1907,8 +1908,10 @@ print "ok 663\n";
 print "not " unless chr(0xfb4f) =~ /\p{IsHebrew}/; # outside InHebrew
 print "ok 664\n";
 
-print "not " unless chr(0xb5) =~ /\p{IsGreek}/; # singleton (not in a range)
-print "ok 665\n";
+# # singleton (not in a range, this test must be ignored on EBCDIC)
+# print "not " unless chr(0xb5) =~ /\p{IsGreek}/ or ord("A") == 193;
+# print "ok 665\n";
+print "ok 665 # 0xb5 moved from Greek to Common with Unicode 4.0.1\n";
 
 print "not " unless chr(0x37a) =~ /\p{IsGreek}/; # singleton
 print "ok 666\n";
@@ -2233,10 +2236,11 @@ print "# some Unicode properties\n";
 }
 
 {
-    print "not " unless "a" =~ /\p{L&}/;
+    # L& and LC are the same
+    print "not " unless "a" =~ /\p{LC}/ and "a" =~ /\p{L&}/;
     print "ok 743\n";
 
-    print "not " if     "1" =~ /\p{L&}/;
+    print "not " if     "1" =~ /\p{LC}/ or "1" =~ /\p{L&}/;
     print "ok 744\n";
 }
 
@@ -3260,5 +3264,104 @@ for (120 .. 130) {
     }
 }
 
-# last test 1055
+# perl #25269: panic: pp_match start/end pointers
+ok("a-bc" eq eval {
+	my($x, $y) = "bca" =~ /^(?=.*(a)).*(bc)/;
+	"$x-$y";
+}, 'captures can move backwards in string');
 
+# perl #27940: \cA not recognized in character classes
+ok("a\cAb" =~ /\cA/, '\cA in pattern');
+ok("a\cAb" =~ /[\cA]/, '\cA in character class');
+ok("a\cAb" =~ /[\cA-\cB]/, '\cA in character class range');
+ok("abc" =~ /[^\cA-\cB]/, '\cA in negated character class range');
+ok("a\cBb" =~ /[\cA-\cC]/, '\cB in character class range');
+ok("a\cCbc" =~ /[^\cA-\cB]/, '\cC in negated character class range');
+ok("a\cAb" =~ /(??{"\cA"})/, '\cA in ??{} pattern');
+
+# perl #28532: optional zero-width match at end of string is ignored
+ok(("abc" =~ /^abc(\z)?/) && defined($1),
+    'optional zero-width match at end of string');
+ok(("abc" =~ /^abc(\z)??/) && !defined($1),
+    'optional zero-width match at end of string');
+
+
+
+{ # TRIE related
+    my @got=();
+    "words"=~/(word|word|word)(?{push @got,$1})s$/;
+    ok(@got==1,"TRIE optimation is working") or warn "# @got";
+    @got=();
+    "words"=~/(word|word|word)(?{push @got,$1})s$/i;
+    ok(@got==1,"TRIEF optimisation is working") or warn "# @got";
+
+    my @nums=map {int rand 1000} 1..100;
+    my $re="(".(join "|",@nums).")";
+    $re=qr/\b$re\b/;
+
+    foreach (@nums) {
+        ok($_=~/$re/,"Trie nums");
+    }
+    $_=join " ", @nums;
+    @got=();
+    push @got,$1 while /$re/g;
+
+    my %count;
+    $count{$_}++ for @got;
+    my $ok=1;
+    for (@nums) {
+        $ok=0 if --$count{$_}<0;
+    }
+    ok($ok,"Trie min count matches");
+}
+
+
+# TRIE related
+# LATIN SMALL/CAPITAL LETTER A WITH MACRON
+ok(("foba  \x{101}foo" =~ qr/(foo|\x{100}foo|bar)/i) && $1 eq "\x{101}foo",
+   "TRIEF + LATIN SMALL/CAPITAL LETTER A WITH MACRON");
+
+# LATIN SMALL/CAPITAL LETTER A WITH RING BELOW
+ok(("foba  \x{1E01}foo" =~ qr/(foo|\x{1E00}foo|bar)/i) && $1 eq "\x{1E01}foo",
+   "TRIEF + LATIN SMALL/CAPITAL LETTER A WITH RING BELOW");
+
+# DESERET SMALL/CAPITAL LETTER LONG I
+ok(("foba  \x{10428}foo" =~ qr/(foo|\x{10400}foo|bar)/i) &&  $1 eq "\x{10428}foo",
+   "TRIEF + DESERET SMALL/CAPITAL LETTER LONG I");
+
+# LATIN SMALL/CAPITAL LETTER A WITH RING BELOW + 'X'
+ok(("foba  \x{1E01}xfoo" =~ qr/(foo|\x{1E00}Xfoo|bar)/i) &&  $1 eq "\x{1E01}xfoo",
+   "TRIEF + LATIN SMALL/CAPITAL LETTER A WITH RING BELOW + 'X'");
+
+{# TRIE related
+
+use charnames ':full';
+
+$s="\N{LATIN SMALL LETTER SHARP S}";
+ok(("foba  ba$s" =~ qr/(foo|Ba$s|bar)/i)
+    &&  $1 eq "ba$s",
+   "TRIEF + LATIN SMALL LETTER SHARP S =~ ss");
+ok(("foba  ba$s" =~ qr/(Ba$s|foo|bar)/i)
+    &&  $1 eq "ba$s",
+   "TRIEF + LATIN SMALL LETTER SHARP S =~ ss");
+ok(("foba  ba$s" =~ qr/(foo|bar|Ba$s)/i)
+    &&  $1 eq "ba$s",
+   "TRIEF + LATIN SMALL LETTER SHARP S =~ ss");
+
+ok(("foba  ba$s" =~ qr/(foo|Bass|bar)/i)
+    &&  $1 eq "ba$s",
+   "TRIEF + LATIN SMALL LETTER SHARP S =~ ss");
+
+ok(("foba  ba$s" =~ qr/(foo|BaSS|bar)/i)
+    &&  $1 eq "ba$s",
+   "TRIEF + LATIN SMALL LETTER SHARP S =~ SS");
+}
+
+
+
+{
+    my @normal=qw(these are some normal words);
+    my $psycho=join "|",@normal,map chr $_,255..20000;
+    ok(('these'=~/($psycho)/) && $1 eq 'these','Pyscho');
+}
+# last test 1178

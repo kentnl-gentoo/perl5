@@ -44,9 +44,11 @@ $ extra_flags = ""
 $ user_c_flags = ""
 $ use_ieee_math = "y"
 $ be_case_sensitive = "n"
+$ unlink_all_versions = "n"
 $ use_vmsdebug_perl = "n"
 $ use64bitall = "n"
 $ use64bitint = "n"
+$ uselargefiles = "n"
 $ C_Compiler_Replace = "CC="
 $ Thread_Live_Dangerously = "MT="
 $ use_two_pot_malloc = "N"
@@ -880,7 +882,7 @@ $   config_symbols0 ="|archlib|archlibexp|bin|binexp|builddir|cf_email|config_sh
 $   config_symbols1 ="|installprivlib|installscript|installsitearch|installsitelib|most|oldarchlib|oldarchlibexp|osname|pager|perl_symbol|perl_verb|"
 $   config_symbols2 ="|prefix|privlib|privlibexp|scriptdir|sitearch|sitearchexp|sitebin|sitelib|sitelib_stem|sitelibexp|try_cxx|use64bitall|use64bitint|"
 $   config_symbols3 ="|usecasesensitive|usedefaulttypes|usedevel|useieee|useithreads|usemultiplicity|usemymalloc|usedebugging_perl|useperlio|usesecurelog|"
-$   config_symbols4 ="|usethreads|usevmsdebug|usefaststdio|"
+$   config_symbols4 ="|usethreads|usevmsdebug|usefaststdio|usemallocwrap|unlink_all_versions|uselargefiles|"
 $!  
 $   open/read CONFIG 'config_sh'
 $   rd_conf_loop:
@@ -932,6 +934,7 @@ $!
 $!     EOD
 $!     echo "     ","VMS_VAX"
 $!     echo "     ","VMS_AXP"
+$!     echo "     ","VMS_IA64"
 $!        : Now look for a hint file osname_osvers, unless one has been
 $!        : specified already.
 $!     TYPE SYS$INPUT:
@@ -1105,17 +1108,24 @@ $! Please try to use either archname .EQS. "VMS_VAX" or archname .EQS.
 $! "VMS_AXP" from here on to allow cross-platform configuration (e.g.
 $! configure a VAX build on an Alpha).
 $!
-$ IF (F$GETSYI("HW_MODEL") .LT. 1024)
+$ IF (F$GETSYI("HW_MODEL") .LT. 1024 .AND. F$GETSYI("HW_MODEL") .GT. 0)
 $ THEN 
 $   archname = "VMS_VAX"
-$   otherarch = "an Alpha"
+$   otherarch = "an Alpha or IA64"
 $   alignbytes="8"
 $   arch_type = "ARCH-TYPE=__VAX__"
 $ ELSE
-$   archname = "VMS_AXP"
-$   otherarch = "a VAX"
+$   IF (F$GETSYI("ARCH_TYPE") .EQ. 2)
+$   THEN
+$       archname = "VMS_AXP"
+$       otherarch = "a VAX or IA64"
+$       arch_type = "ARCH-TYPE=__AXP__"
+$   ELSE
+$       archname = "VMS_IA64"
+$       otherarch = "a VAX or Alpha"
+$       arch_type = "ARCH-TYPE=__IA64__"
+$   ENDIF
 $   alignbytes="8"
-$   arch_type = "ARCH-TYPE=__AXP__"
 $ ENDIF
 $ dflt = archname
 $ rp = "What is your architecture name? [''archname'] "
@@ -1141,6 +1151,10 @@ $   sharedperl = "Y"
 $   IF (archname.EQS."VMS_AXP")
 $   THEN
 $     macros = macros + """AXE=1"","
+$   ENDIF
+$   IF (archname.EQS."VMS_IA64")
+$   THEN
+$     macros = macros + """IXE=1"","
 $   ENDIF
 $ ENDIF
 $!
@@ -1340,6 +1354,18 @@ $   IF (.NOT. got_patch) .OR. -
 $Close_patch:
 $   CLOSE CONFIG
 $ ENDIF
+$!
+$ IF F$SEARCH("[-].patch") .NES. ""
+$ THEN
+$   SET NOON
+$   OPEN/READ PATCH [-].patch
+$   READ PATCH line
+$   CLOSE PATCH
+$   tmp = F$EDIT(line,"COLLAPSE")
+$   SET ON
+$   IF tmp .GT. perl_patchlevel then perl_patchlevel = tmp
+$ ENDIF
+$!
 $ version_patchlevel_string = "version ''patchlevel' subversion ''subversion'"
 $ IF got_perl_patchlevel .AND. perl_patchlevel .NES. "0"
 $ THEN
@@ -1581,7 +1607,8 @@ $     echo "You also have: ''line' ''archsufx' ''F$GETSYI("VERSION")'"
 $     vms_cc_available = vms_cc_available + "cc/decc "
 $   ENDIF
 $ ELSE
-$   IF (F$LOCATE("DEC",line).NE.F$LENGTH(line)).or.(F$LOCATE("Compaq",line).NE.F$LENGTH(line))
+$   IF (F$LOCATE("DEC",line).NE.F$LENGTH(line)).or.(F$LOCATE("Compaq",line).NE.F$LENGTH(line)) -
+    .or.(F$LOCATE("hp",line).NE.F$LENGTH(line))
 $   THEN 
 $     vms_cc_dflt = "/decc"
 $     vms_cc_available = vms_cc_available + "cc/decc "
@@ -1715,7 +1742,8 @@ $ IF ans.NES.""
 $ THEN
 $   ans = F$EDIT(ans,"TRIM, COMPRESS, LOWERCASE")
 $   Mcc = ans
-$   IF (F$LOCATE("dec",ans).NE.F$LENGTH(ans)).or.(F$LOCATE("compaq",ans).NE.F$LENGTH(ans))
+$   IF (F$LOCATE("dec",ans).NE.F$LENGTH(ans)).or.(F$LOCATE("compaq",ans).NE.F$LENGTH(ans)) -
+    .or.(F$LOCATE("hp",ans).NE.F$LENGTH(ans))
 $   THEN
 $     Mcc = "cc/decc"
 $! CPQ ?
@@ -2002,7 +2030,12 @@ $ THEN
 $   read CONFIG line
 $   archsufx = "VAX"
 $ ELSE
-$   archsufx = "AXP"
+$   IF archname .EQS. "VMS_AXP"
+$   THEN
+$       archsufx = "AXP"
+$   ELSE
+$       archsufx = "IA64"
+$   ENDIF
 $ ENDIF
 $ CLOSE CONFIG
 $ line = F$EDIT(line,"TRIM,COMPRESS")
@@ -2249,7 +2282,7 @@ $   usemultiplicity="undef"
 $ ENDIF
 $!
 $! Ask if they want to build with 64-bit support
-$ IF (archname.eqs."VMS_AXP").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
+$ IF (archname.NES."VMS_VAX").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
 $ THEN
 $   bool_dflt = "n"
 $   IF F$TYPE(use64bitint) .NES. "" 
@@ -2257,15 +2290,13 @@ $   THEN
 $       IF use64bitint .OR. use64bitint .eqs. "define" THEN bool_dflt = "y"
 $   ENDIF
 $   echo ""
-$   echo "You can have native 64-bit long integers."
+$   echo "You have natively 64-bit long integers."
 $   echo ""
 $   echo "Perl can be built to take advantage of 64-bit integer types"
-$   echo "on some systems, which provide a much larger range for perl's"
-$   echo "mathematical operations.  (Note that does *not* enable 64-bit"
-$   echo "fileops at the moment, as Dec C doesn't do that yet)."
+$   echo "on some systems, To do so, Configure can be run with -Duse64bitint."
 $   echo "Choosing this option will most probably introduce binary incompatibilities."
 $   echo ""
-$   echo "If this does not make any sense to you, just accept the default ''dflt'."
+$   echo "If this does not make any sense to you, just accept the default '" + bool_dflt + "'."
 $   rp = "Try to use 64-bit integers, if available? [''bool_dflt'] "
 $   GOSUB myread
 $   use64bitint = ans
@@ -2281,7 +2312,7 @@ $   echo "64-bitness as possible on the platform.  This in turn means even more"
 $   echo "binary incompatibilities.  On the other hand, your platform may not"
 $   echo "have any more 64-bitness available than what you already have chosen."
 $   echo ""
-$   echo "If this does not make any sense to you, just accept the default ''dflt'."
+$   echo "If this does not make any sense to you, just accept the default '" + bool_dflt + "'."
 $   rp = "Try to use maximal 64-bit support, if available? [''bool_dflt'] "
 $   GOSUB myread
 $   use64bitall=ans
@@ -2292,7 +2323,22 @@ $     echo "Since you have chosen a maximally 64-bit build, I'm also turning on"
 $     echo "the use of 64-bit integers."
 $     use64bitint="Y"
 $   ENDIF
-$ ENDIF ! AXP && >= 7.1
+$!
+$   bool_dflt = "n"
+$   IF F$TYPE(uselargefiles) .NES. "" 
+$   THEN
+$       IF uselargefiles .OR. uselargefiles .eqs. "define" THEN bool_dflt = "y"
+$   ENDIF
+$   echo ""
+$   echo "Perl can be built to understand large files (files larger than 2 gigabytes)"
+$   echo "on some systems.  To do so, Configure can be run with -Duselargefiles."
+$   echo ""
+$   echo "If this does not make any sense to you, just accept the default '" + bool_dflt + "'."
+$   rp = "Try to understand large files, if available? [''bool_dflt'] "
+$   GOSUB myread
+$   uselargefiles=ans
+$!
+$ ENDIF ! not VAX && >= 7.1
 $!
 $! Ask about threads, if appropriate
 $ IF ccname .EQS. "DEC" .OR. ccname .EQS. "CXX"
@@ -2354,8 +2400,8 @@ $       use_5005_threads="N"
 $     ELSE
 $       use_5005_threads="Y"
 $     ENDIF
-$     ! Are they on VMS 7.1 on an alpha?
-$     if (archname.eqs."VMS_AXP").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
+$     ! Are they on VMS 7.1 on an alpha or itanium?
+$     if (archname.nes."VMS_VAX").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
 $     THEN
 $       echo ""
 $       echo "Threaded perl can be linked to use multiple kernel threads"
@@ -2376,7 +2422,7 @@ $       ENDIF
 $     ENDIF
 $   ENDIF
 $ ENDIF
-$ IF archname .EQS. "VMS_AXP"
+$ IF archname .NES. "VMS_VAX"
 $ THEN
 $! Case sensitive?
 $   echo ""
@@ -2426,6 +2472,30 @@ $ useieee = "undef"
 $ usecasesensitive = "undef"
 $ if (use_ieee_math) then useieee = "define"
 $ if (be_case_sensitive) then usecasesensitive = "define"
+$! Unlink all versions?
+$ echo ""
+$ echo "By default, Perl's unlink() provides VMS-like behavior and only"
+$ echo "deletes the latest version of a file.  Enabling this option builds"
+$ echo "Perl so that unlink() deletes all versions of a file."
+$ bool_dflt = unlink_all_versions
+$ if f$type(unlink_all_versions) .nes. ""
+$ then
+$       if unlink_all_versions .or. unlink_all_versions .eqs. "define"
+$       then
+$         bool_dflt="y"
+$       else
+$         bool_dflt="n"
+$       endif
+$ endif
+$ rp = "Make unlink() delete all versions of a file? [''bool_dflt'] "
+$ GOSUB myread
+$ unlink_all_versions = ans
+$ IF unlink_all_versions
+$ THEN
+$     d_unlink_all_versions = "define"
+$ ELSE
+$     d_unlink_all_versions = "undef"
+$ ENDIF
 $! CC Flags
 $ echo ""
 $ echo "Your compiler may want other flags.  For this question you should include"
@@ -2487,6 +2557,20 @@ $ GOSUB myread
 $ d_alwdeftype = ans
 $ usedefaulttypes = "undef"
 $ if (d_alwdeftype) then usedefaulttypes = "define"
+$!
+$! determine whether to use malloc wrapping
+$ echo ""
+$ bool_dflt = "y"
+$ IF F$TYPE(usemallocwrap) .nes. ""
+$ then
+$   if .NOT. usemallocwrap .or. usemallocwrap .eqs. "undef" then bool_dflt = "n"
+$ endif
+$ rp = "Do you wish to wrap malloc calls to protect against potential overflows? [''bool_dflt'] "
+$ GOSUB myread
+$ IF ans
+$ THEN usemallocwrap = "define"
+$ ELSE usemallocwrap = "undef"
+$ ENDIF
 $!
 $! Ask if they want to use perl's memory allocator
 $ echo ""
@@ -2749,7 +2833,7 @@ $! Build up the extra C flags
 $!
 $ IF use_ieee_math
 $ THEN
-$   extra_flags = "''extra_flags'" + "/float=ieee/ieee=denorm_results"
+$   extra_flags = "''extra_flags'" + "/float=ieee/ieee=denorm"
 $ ENDIF
 $ IF be_case_sensitive
 $ THEN
@@ -2890,7 +2974,6 @@ $!
 $ IF use64bitint .OR. use64bitint .EQS. "define"
 $ THEN
 $   use64bitint = "define"
-$   uselargefiles = "define"
 $   uselongdouble = "define"
 $   alignbytes="16"
 $   usemorebits = "define"
@@ -2901,7 +2984,6 @@ $   uvxformat="""Lx"""
 $   uvXUformat="""LX"""
 $ ELSE
 $   use64bitint = "undef"
-$   uselargefiles = "undef"
 $   uselongdouble = "undef"
 $   usemorebits = "undef"
 $   ivdformat="""ld"""
@@ -2926,6 +3008,12 @@ $   use64bitall = "define"
 $ ELSE
 $   use64bitall = "undef"
 $ ENDIF
+$ IF uselargefiles .OR. uselargefiles .EQS. "define"
+$ THEN
+$   uselargefiles = "define"
+$ ELSE
+$   uselargefiles = "undef"
+$ ENDIF
 $!
 $ usemymalloc = "undef"
 $ if mymalloc then usemymalloc = "define"
@@ -2940,11 +3028,20 @@ $   dlext="axe"
 $   exe_ext=".axe"
 $   lib_ext=".alb"
 $ ELSE
-$   obj_ext=".obj"
-$   so="exe"
-$   dlext="exe"
-$   exe_ext=".exe"
-$   lib_ext=".olb"
+$   IF (sharedperl .AND. archname .EQS. "VMS_IA64")
+$   THEN
+$     obj_ext=".ibj"
+$     so="ixe"
+$     dlext="ixe"
+$     exe_ext=".ixe"
+$     lib_ext=".ilb"
+$   ELSE
+$     obj_ext=".obj"
+$     so="exe"
+$     dlext="exe"
+$     exe_ext=".exe"
+$     lib_ext=".olb"
+$   ENDIF
 $ ENDIF
 $ dlobj="dl_vms''obj_ext'"
 $!
@@ -3588,6 +3685,36 @@ $ ELSE
 $   d_int64_t = "undef"
 $   echo "You do not have int64_t."
 $ ENDIF
+$!
+$! Check to see if fseeko exists
+$!
+$ OS
+$ WS "#include <stdio.h>"
+$ WS "int main()"
+$ WS "{"
+$ WS "FILE *f=NULL;"
+$ WS "fseeko(f,(off_t)0,SEEK_SET);"
+$ WS "return(0);"
+$ WS "}"
+$ CS
+$ tmp = "fseeko"
+$ GOSUB inlibc
+$ d_fseeko = tmp
+$!
+$! Check to see if ftello exists
+$!
+$ OS
+$ WS "#include <stdio.h>"
+$ WS "int main()"
+$ WS "{"
+$ WS "FILE *f=NULL; off_t o=0;"
+$ WS "o=ftello(f);"
+$ WS "return(0);"
+$ WS "}"
+$ CS
+$ tmp = "ftello"
+$ GOSUB inlibc
+$ d_ftello = tmp
 $!
 $!: see if this is a netdb.h system
 $ IF Has_Dec_C_Sockets
@@ -4505,6 +4632,23 @@ $ ELSE
 $   d_getsent="undef"
 $ ENDIF
 $!
+$! Check for nanosleep
+$!
+$ OS
+$ WS "#if defined(__DECC) || defined(__DECCXX)"
+$ WS "#include <stdlib.h>"
+$ WS "#endif"
+$ WS "#include <time.h>"
+$ WS "int main()"
+$ WS "{"
+$ WS "int asleep = nanosleep(NULL,NULL);"
+$ WS "exit(0);"
+$ WS "}"
+$ CS
+$ tmp = "nanosleep"
+$ GOSUB inlibc
+$ d_nanosleep = tmp
+$!
 $! Check for socklen_t
 $!
 $ IF Has_Dec_C_Sockets .OR. Has_Socketshr
@@ -4624,6 +4768,32 @@ $ GOSUB type_size_check
 $ sizesize = tmp
 $ echo "Your ''zzz' size is ''sizesize' bytes."
 $!
+$! Check for _LARGEFILE capability.
+$!
+$ off_t_size = 4
+$ OS
+$ WS "#define _LARGEFILE"
+$ WS "#include <stdio.h>"
+$ WS "int main()"
+$ WS "{"
+$ WS "printf(""%d\n"", sizeof(off_t));"
+$ WS "return(0);"
+$ WS "}"
+$ CS
+$ GOSUB link_ok
+$ IF link_status .EQ. good_link
+$ THEN
+$   GOSUB just_mcr_it
+$   off_t_size = tmp
+$ ENDIF
+$ echo "Your off_t size is ''off_t_size' bytes when _LARGEFILE is defined."
+$ IF off_t_size .ne. 8 .AND. (uselargefiles .OR. uselargefiles .eqs. "define")
+$ THEN
+$   echo4 "You configured with -Duselargefiles but your CRTL does not support _LARGEFILE."
+$   echo4 "I'm disabling large file support."
+$   uselargefiles = "undef"
+$ ENDIF
+$!
 $! Check rand48 and its ilk
 $!
 $ echo4 "Looking for a random number function..."
@@ -4642,6 +4812,8 @@ $ GOSUB link_ok
 $ IF compile_status .EQ. good_compile .AND. link_status .EQ. good_link
 $ THEN
 $   drand01 = "drand48()"
+$   randbits = "48"
+$   randfunc = "drand48"
 $   randseedtype = "long int"
 $   seedfunc = "srand48"
 $   echo4 "Good, found drand48()."
@@ -4649,6 +4821,8 @@ $   d_drand48proto = "define"
 $ ELSE
 $   d_drand48proto = "undef"
 $   drand01="random()"
+$   randbits = "31"
+$   randfunc = "random"
 $   randseedtype = "unsigned"
 $   seedfunc = "srandom"
 $   OS
@@ -4668,6 +4842,7 @@ $   THEN
 $     echo4 "OK, found random()."
 $   ELSE
 $     drand01="(((float)rand())*MY_INV_RAND_MAX)"
+$     randfunc = "rand"
 $     randseedtype = "unsigned"
 $     seedfunc = "srand"
 $     echo4 "Yick, looks like I have to use rand()."
@@ -5081,6 +5256,7 @@ $   WS "    iss =  ((iss&1)==1 && code == 0x1234);"
 $   WS "    printf(""%d\n"",iss);"
 $   WS "}"
 $   CS
+$   ON ERROR THEN CONTINUE
 $   GOSUB compile
 $   IF tmp .EQS. "1"
 $   THEN
@@ -5159,14 +5335,16 @@ $ WC "# Configuration time: " + cf_time
 $ WC "# Configuration by  : " + cf_by
 $ WC "# Target system     : " + myuname
 $ WC ""
-$ WC "CONFIG='true'"
 $ WC "Makefile_SH='" + Makefile_SH + "'"
 $ WC "Mcc='" + Mcc + "'"
 $ WC "PERL_REVISION='" + revision + "'"
 $ WC "PERL_VERSION='" + patchlevel + "'" 
 $ WC "PERL_SUBVERSION='" + subversion + "'" 
+$ WC "PERL_API_REVISION='" + api_revision + "'"
 $ WC "PERL_API_VERSION='" + api_version + "'" 
 $ WC "PERL_API_SUBVERSION='" + api_subversion + "'"
+$ WC "PERL_PATCHLEVEL='" + perl_patchlevel + "'"
+$ WC "PERL_CONFIG_SH='true'"
 $ WC "_a='" + lib_ext + "'"
 $ WC "_exe='" + exe_ext + "'"
 $ WC "_o='" + obj_ext + "'"
@@ -5185,7 +5363,13 @@ $ WC "castflags='0'"
 $ WC "cc='" + perl_cc + "'"
 $ WC "cccdlflags='" + cccdlflags + "'"
 $ WC "ccdlflags='" + ccdlflags + "'"
-$ WC "ccflags='" + ccflags + "'"
+$ IF uselargefiles .OR. uselargefiles .EQS. "define"
+$ THEN
+$   WC "ccflags='" + ccflags + "/Define=_LARGEFILE'"
+$ ELSE
+$   WC "ccflags='" + ccflags + "'"
+$ ENDIF
+$ WC "ccflags_uselargefiles='" + "'"
 $ WC "ccname='" + ccname + "'"
 $ WC "ccversion='" + ccversion + "'"
 $ WC "cf_by='" + cf_by + "'"
@@ -5286,12 +5470,12 @@ $ WC "d_fpclassl='undef'"
 $ WC "d_fpos64_t='" + d_fpos64_t + "'"
 $ WC "d_frexpl='" + d_frexpl + "'"
 $ WC "d_fs_data_s='undef'"
-$ WC "d_fseeko='undef'"
+$ WC "d_fseeko='" + d_fseeko + "'"
 $ WC "d_fsetpos='define'"
 $ WC "d_fstatfs='undef'"
 $ WC "d_fstatvfs='undef'"
 $ WC "d_fsync='undef'"
-$ WC "d_ftello='undef'"
+$ WC "d_ftello='" + d_ftello + "'"
 $ WC "d_getcwd='define'"
 $ WC "d_getespwnam='undef'"
 $ WC "d_getfsstat='undef'"
@@ -5383,7 +5567,7 @@ $ WC "d_msghdr_s='undef'"
 $ WC "d_msync='" + d_msync + "'"
 $ WC "d_munmap='" + d_munmap + "'"
 $ WC "d_mymalloc='" + d_mymalloc + "'"
-$ WC "d_nanosleep='undef'"
+$ WC "d_nanosleep='" + d_nanosleep + "'"
 $ WC "d_nice='define'"
 $ WC "d_nl_langinfo='" + d_nl_langinfo + "'"
 $ WC "d_nv_preserves_uv='" + d_nv_preserves_uv + "'"
@@ -5496,6 +5680,8 @@ $ WC "d_strctcpy='define'"
 $ WC "d_strerrm='strerror((e),vaxc$errno)'"
 $ WC "d_strerror='define'"
 $ WC "d_strftime='define'"
+$ WC "d_strlcat='undef'"
+$ WC "d_strlcpy='undef'"
 $ WC "d_strtod='define'"
 $ WC "d_strtol='define'"
 $ WC "d_strtold='" + d_strtold + "'"
@@ -5533,7 +5719,7 @@ $ WC "d_ualarm='" + d_ualarm + "'"
 $ WC "d_umask='define'"
 $ WC "d_uname='" + d_uname + "'"
 $ WC "d_union_semun='undef'"
-$ WC "d_unlink_all_versions='undef'"
+$ WC "d_unlink_all_versions='" + d_unlink_all_versions + "'"	! VMS-specific
 $ WC "d_unordered='undef'"
 $ WC "d_usleep='" + d_usleep + "'"
 $ WC "d_usleepproto='" + d_usleep + "'"
@@ -5708,18 +5894,28 @@ $ DELETE/SYMBOL tmp
 $ WC "ld='" + ld + "'"
 $ WC "lddlflags='/Share'"
 $ WC "ldflags='" + ldflags + "'"
+$ WC "ldflags_uselargefiles='" + "'"
 $ WC "lib_ext='" + lib_ext + "'"
 $ WC "libc='" + libc + "'"
 $ WC "libpth='/sys$share /sys$library'"
 $ WC "libs='" + libs + "'"
+$ WC "libswanted='" + "'"
+$ WC "libswanted_uselargefiles='" + "'"
 $ WC "longdblsize='" + longdblsize + "'"
 $ WC "longlongsize='" + longlongsize + "'"
 $ WC "longsize='" + longsize + "'"
-$ WC "lseeksize='4'"
-$ WC "lseektype='int'"
+$ IF uselargefiles .OR. uselargefiles .EQS. "define"
+$ THEN
+$   WC "lseeksize='8'"
+$   WC "lseektype='off_t'"
+$ ELSE
+$   WC "lseeksize='4'"
+$   WC "lseektype='int'"
+$ ENDIF
 $ WC "mab='" + "'"
 $ WC "make='" + make + "'"
 $ WC "malloctype='void *'"
+$ WC "usemallocwrap='" + usemallocwrap + "'"
 $ WC "man1ext='rno'"
 $ WC "man3ext='rno'"
 $ WC "mmaptype='void *'"
@@ -5759,7 +5955,6 @@ $ WC "perl_symbol='" + perl_symbol + "'"  ! VMS specific
 $ WC "perl_verb='" + perl_verb + "'"      ! VMS specific
 $ WC "pgflquota='" + pgflquota + "'"
 $ WC "pidtype='" + pidtype + "'"
-$ WC "pm_apiversion='" + version + "'"
 $ WC "prefix='" + vms_prefix + "'"
 $ WC "prefixexp='" + vms_prefix + ":'"
 $ WC "privlib='" + privlib + "'"
@@ -5769,7 +5964,8 @@ $ WC "prototype='define'"
 $ WC "ptrsize='" + ptrsize + "'"
 $ WC "quadkind='" + quadkind + "'"
 $ WC "quadtype='" + quadtype + "'" 
-$ WC "randbits='31'"
+$ WC "randbits='" + randbits + "'"
+$ WC "randfunc='" + randfunc + "'"
 $ WC "randseedtype='" + randseedtype + "'"
 $ WC "ranlib='" + "'"
 $ WC "rd_nodata=' '"
@@ -5863,6 +6059,7 @@ $ WC "usemymalloc='" + usemymalloc + "'"
 $ WC "useperlio='" + useperlio + "'"
 $ WC "useposix='false'"
 $ WC "usereentrant='undef'"
+$ WC "userelocatableinc='undef'"
 $ WC "usesecurelog='" + usesecurelog + "'"  ! VMS-specific
 $ WC "usesocks='undef'"
 $ WC "usethreads='" + usethreads + "'"
@@ -5890,8 +6087,6 @@ $ WC "vms_cc_type='" + vms_cc_type + "'" ! VMS specific
 $ WC "vms_prefix='" + vms_prefix + "'" ! VMS specific
 $ WC "vms_ver='" + vms_ver + "'" ! VMS specific
 $ WC "voidflags='15'"
-$ WC "xs_apiversion='" + version + "'"
-$ WC "PERL_CONFIG_SH='true'"
 $!
 $! ## The UNIXy POSIXy reentrantey thingys ##
 $! See "Appendix B, Version-Dependency Tables" in the C RTL
@@ -6106,6 +6301,8 @@ $! Alas this does not help to build Fcntl
 $!   WC "#define PERL_IGNORE_FPUSIG SIGFPE"
 $ ENDIF
 $ IF kill_by_sigprc .EQS. "define" then WC "#define KILL_BY_SIGPRC"
+$ IF unlink_all_versions .OR. unlink_all_versions .EQS. "define" THEN -
+    WC "#define UNLINK_ALL_VERSIONS"
 $ CLOSE CONFIG
 $!
 $ echo4 "Doing variable substitutions on .SH files..."
@@ -6167,12 +6364,17 @@ $   MALLOC_REPLACE = "MALLOC=MALLOC=1"
 $ ELSE
 $   MALLOC_REPLACE = "MALLOC="
 $ ENDIF
+$ IF uselargefiles .OR. uselargefiles .EQS. "define"
+$ THEN
+$   LARGEFILE_REPLACE = "LARGEFILE=LARGEFILE=1"
+$ ELSE
+$   LARGEFILE_REPLACE = "LARGEFILE="
+$ ENDIF
 $ echo4 "Extracting ''defmakefile' (with variable substitutions)"
 $ DEFINE/USER_MODE sys$output 'UUmakefile'
-$ mcr []munchconfig 'config_sh' 'Makefile_SH' "''DECC_REPLACE'" -
- "''DECCXX_REPLACE'" "''ARCH_TYPE'" "''GNUC_REPLACE'" "''SOCKET_REPLACE'" -
- "''THREAD_REPLACE'" "''C_Compiler_Replace'" "''MALLOC_REPLACE'" -
- "''Thread_Live_Dangerously'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'"
+$ mcr []munchconfig 'config_sh' 'Makefile_SH' "''DECC_REPLACE'" "''DECCXX_REPLACE'" "''ARCH_TYPE'" "''GNUC_REPLACE'" -
+"''SOCKET_REPLACE'" "''THREAD_REPLACE'" "''C_Compiler_Replace'" "''MALLOC_REPLACE'" -
+"''Thread_Live_Dangerously'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'" "''LARGEFILE_REPLACE'"
 $! Clean up after ourselves
 $ DELETE/NOLOG/NOCONFIRM []munchconfig.exe;
 $!
@@ -6366,7 +6568,8 @@ $   echo ""
 $   echo4 "The perl.cld file is now being written..."
 $   OPEN/WRITE CONFIG 'file_2_find'
 $   ext = ".exe"
-$   IF (sharedperl .AND. archname .EQS. "VMS_AXP") THEN ext := .AXE
+$   IF (sharedperl .AND. F$EXTRACT(0,7,archname) .EQS. "VMS_AXP") THEN ext := .AXE
+$   IF (sharedperl .AND. F$EXTRACT(0,8,archname) .EQS. "VMS_IA64") THEN ext := .IXE
 $   IF (use_vmsdebug_perl)
 $   THEN
 $     WRITE CONFIG "define verb dbgperl"
@@ -6413,7 +6616,8 @@ $ WRITE CONFIG "$ define/translation=concealed ''vms_prefix' ''prefix'"
 $ WRITE CONFIG "$ ext = "".exe"""
 $ IF sharedperl
 $ THEN
-$ WRITE CONFIG "$ if f$getsyi(""HW_MODEL"") .ge. 1024 then ext = "".AXE"""
+$ WRITE CONFIG "$ if f$getsyi(""ARCH_TYPE"") .eq. 2 then ext = "".AXE"""
+$ WRITE CONFIG "$ if f$getsyi(""ARCH_TYPE"") .eq. 3 then ext = "".IXE"""
 $ ENDIF
 $ IF (perl_symbol)
 $ THEN
@@ -6460,20 +6664,21 @@ $ THEN
 $ WRITE CONFIG "$ dprofpp    == """ + perl_setup_perl + " ''vms_prefix':[utils]dprofpp.com"""
 $ ENDIF 
 $ WRITE CONFIG "$ enc2xs     == """ + perl_setup_perl + " ''vms_prefix':[utils]enc2xs.com"""
-$ WRITE CONFIG "$!find2perl  == """ + perl_setup_perl + " ''vms_prefix':[utils]find2perl.com"""
+$ WRITE CONFIG "$ find2perl  == """ + perl_setup_perl + " ''vms_prefix':[utils]find2perl.com"""
 $ WRITE CONFIG "$ h2ph       == """ + perl_setup_perl + " ''vms_prefix':[utils]h2ph.com"""
 $ WRITE CONFIG "$ h2xs       == """ + perl_setup_perl + " ''vms_prefix':[utils]h2xs.com"""
+$ WRITE CONFIG "$ instmodsh  == """ + perl_setup_perl + " ''vms_prefix':[utils]instmodsh.com"""
 $ WRITE CONFIG "$ libnetcfg  == """ + perl_setup_perl + " ''vms_prefix':[utils]libnetcfg.com"""
-$ WRITE CONFIG "$!perlbug    == """ + perl_setup_perl + " ''vms_prefix':[lib]perlbug.com"""
+$ WRITE CONFIG "$ perlbug    == """ + perl_setup_perl + " ''vms_prefix':[lib]perlbug.com"""
 $ WRITE CONFIG "$!perlcc     == """ + perl_setup_perl + " ''vms_prefix':[utils]perlcc.com"""
 $ WRITE CONFIG "$ perldoc    == """ + perl_setup_perl + " ''vms_prefix':[lib.pod]perldoc.com -t"""
 $ WRITE CONFIG "$ perlivp    == """ + perl_setup_perl + " ''vms_prefix':[utils]perlivp.com"""
 $ WRITE CONFIG "$ piconv     == """ + perl_setup_perl + " ''vms_prefix':[utils]piconv.com"""
 $ WRITE CONFIG "$ pl2pm      == """ + perl_setup_perl + " ''vms_prefix':[utils]pl2pm.com"""
-$ WRITE CONFIG "$ pod2html   == """ + perl_setup_perl + " pod2html"""
+$ WRITE CONFIG "$ pod2html   == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2html"""
 $ WRITE CONFIG "$ pod2latex  == """ + perl_setup_perl + " ''vms_prefix':[lib.pod]pod2latex.com"""
-$ WRITE CONFIG "$ pod2text   == """ + perl_setup_perl + " pod2text"""
-$ WRITE CONFIG "$!pod2man    == """ + perl_setup_perl + " pod2man"""
+$ WRITE CONFIG "$ pod2text   == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2text"""
+$ WRITE CONFIG "$!pod2man    == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2man"""
 $ WRITE CONFIG "$ pod2usage  == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2usage.com"""
 $ WRITE CONFIG "$ podchecker == """ + perl_setup_perl + " ''vms_prefix':[utils]podchecker.com"""
 $ WRITE CONFIG "$ podselect  == """ + perl_setup_perl + " ''vms_prefix':[utils]podselect.com"""

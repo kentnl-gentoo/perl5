@@ -38,12 +38,14 @@ releases of Perl are shepherded by a ``pumpking'', a porter
 responsible for gathering patches, deciding on a patch-by-patch
 feature-by-feature basis what will and will not go into the release.
 For instance, Gurusamy Sarathy was the pumpking for the 5.6 release of
-Perl, and Jarkko Hietaniemi is the pumpking for the 5.8 release, and
-Hugo van der Sanden will be the pumpking for the 5.10 release.
+Perl, and Jarkko Hietaniemi was the pumpking for the 5.8 release, and
+Hugo van der Sanden and Rafael Garcia-Suarez share the pumpking for
+the 5.10 release.
 
 In addition, various people are pumpkings for different things.  For
-instance, Andy Dougherty and Jarkko Hietaniemi share the I<Configure>
-pumpkin.
+instance, Andy Dougherty and Jarkko Hietaniemi did a grand job as the
+I<Configure> pumpkin up till the 5.8 release. For the 5.10 release
+H.Merijn Brand took over.
 
 Larry sees Perl development along the lines of the US government:
 there's the Legislature (the porters), the Executive branch (the
@@ -479,6 +481,93 @@ for reference.
 
 =back
 
+=head2 Working with the source
+
+Because you cannot use the Perforce client, you cannot easily generate
+diffs against the repository, nor will merges occur when you update
+via rsync.  If you edit a file locally and then rsync against the
+latest source, changes made in the remote copy will I<overwrite> your
+local versions!
+
+The best way to deal with this is to maintain a tree of symlinks to
+the rsync'd source.  Then, when you want to edit a file, you remove
+the symlink, copy the real file into the other tree, and edit it.  You
+can then diff your edited file against the original to generate a
+patch, and you can safely update the original tree.
+
+Perl's F<Configure> script can generate this tree of symlinks for you.
+The following example assumes that you have used rsync to pull a copy
+of the Perl source into the F<perl-rsync> directory.  In the directory
+above that one, you can execute the following commands:
+
+  mkdir perl-dev
+  cd perl-dev
+  ../perl-rsync/Configure -Dmksymlinks -Dusedevel -D"optimize=-g"
+
+This will start the Perl configuration process.  After a few prompts,
+you should see something like this:
+
+  Symbolic links are supported.
+
+  Checking how to test for symbolic links...
+  Your builtin 'test -h' may be broken.
+  Trying external '/usr/bin/test -h'.
+  You can test for symbolic links with '/usr/bin/test -h'.
+
+  Creating the symbolic links...
+  (First creating the subdirectories...)
+  (Then creating the symlinks...)
+
+The specifics may vary based on your operating system, of course.
+After you see this, you can abort the F<Configure> script, and you
+will see that the directory you are in has a tree of symlinks to the
+F<perl-rsync> directories and files.
+
+If you plan to do a lot of work with the Perl source, here are some
+Bourne shell script functions that can make your life easier:
+
+    function edit {
+	if [ -L $1 ]; then
+	    mv $1 $1.orig
+		cp $1.orig $1
+		vi $1
+	else
+	    /bin/vi $1
+		fi
+    }
+
+    function unedit {
+	if [ -L $1.orig ]; then
+	    rm $1
+		mv $1.orig $1
+		fi
+    }
+
+Replace "vi" with your favorite flavor of editor.
+
+Here is another function which will quickly generate a patch for the
+files which have been edited in your symlink tree:
+
+    mkpatchorig() {
+	local diffopts
+	    for f in `find . -name '*.orig' | sed s,^\./,,`
+		do
+		    case `echo $f | sed 's,.orig$,,;s,.*\.,,'` in
+			c)   diffopts=-p ;;
+		pod) diffopts='-F^=' ;;
+		*)   diffopts= ;;
+		esac
+		    diff -du $diffopts $f `echo $f | sed 's,.orig$,,'`
+		    done
+    }
+
+This function produces patches which include enough context to make
+your changes obvious.  This makes it easier for the Perl pumpking(s)
+to review them when you send them to the perl5-porters list, and that
+means they're more likely to get applied.
+
+This function assumed a GNU diff, and may require some tweaking for
+other diff variants.
 
 =head2 Perlbug administration
 
@@ -1787,9 +1876,10 @@ also use the full suite of core modules in the tests.
 =back
 
 When you say "make test" Perl uses the F<t/TEST> program to run the
-test suite.  All tests are run from the F<t/> directory, B<not> the
-directory which contains the test.  This causes some problems with the
-tests in F<lib/>, so here's some opportunity for some patching.
+test suite (except under Win32 where it uses F<t/harness> instead.)  
+All tests are run from the F<t/> directory, B<not> the directory 
+which contains the test.  This causes some problems with the tests 
+in F<lib/>, so here's some opportunity for some patching.
 
 You must be triply conscious of cross-platform concerns.  This usually
 boils down to using File::Spec and avoiding things like C<fork()> and
@@ -1800,7 +1890,8 @@ C<system()> unless absolutely necessary.
 There are various special make targets that can be used to test Perl
 slightly differently than the standard "test" target.  Not all them
 are expected to give a 100% success rate.  Many of them have several
-aliases.
+aliases, and many of them are not available on certain operating
+systems.
 
 =over 4
 
@@ -1808,14 +1899,20 @@ aliases.
 
 Run F<perl> on all core tests (F<t/*> and F<lib/[a-z]*> pragma tests).
 
+(Not available on Win32)
+
 =item test.deparse
 
 Run all the tests through B::Deparse.  Not all tests will succeed.
+
+(Not available on Win32)
 
 =item test.taintwarn
 
 Run all tests with the B<-t> command-line switch.  Not all tests
 are expected to succeed (until they're specifically fixed, of course).
+
+(Not available on Win32)
 
 =item minitest
 
@@ -1846,6 +1943,18 @@ C<-torture> argument to F<t/harness>.
 
 Run all the tests with -Mutf8.  Not all tests will succeed.
 
+(Not available on Win32)
+
+=item minitest.utf16 test.utf16
+
+Runs the tests with UTF-16 encoded scripts, encoded with different
+versions of this encoding.
+
+C<make utest.utf16> runs the test suite with a combination of C<-utf8> and
+C<-utf16> arguments to F<t/TEST>.
+
+(Not available on Win32)
+
 =item test_harness
 
 Run the test suite with the F<t/harness> controlling program, instead of
@@ -1854,6 +1963,20 @@ L<Test::Harness> module, thus using this test target supposes that perl
 mostly works. The main advantage for our purposes is that it prints a
 detailed summary of failed tests at the end. Also, unlike F<t/TEST>, it
 doesn't redirect stderr to stdout.
+
+Note that under Win32 F<t/harness> is always used instead of F<t/TEST>, so
+there is no special "test_harness" target.
+
+Under Win32's "test" target you may use the TEST_SWITCHES and TEST_FILES
+environment variables to control the behaviour of F<t/harness>.  This means
+you can say
+
+    nmake test TEST_FILES="op/*.t"
+    nmake test TEST_SWITCHES="-torture" TEST_FILES="op/*.t"
+
+=item test-notty test_notty
+
+Sets PERL_SKIP_TTY_TEST to true before running normal test.
 
 =back
 
@@ -1869,6 +1992,45 @@ or
     ./perl -I../lib harness list-of-.t-files
 
 (if you don't specify test scripts, the whole test suite will be run.)
+
+=head3 Using t/harness for testing
+
+If you use C<harness> for testing you have several command line options
+available to you. The arguments are as follows, and are in the order
+that they must appear if used together.
+
+    harness -v -torture -re=pattern LIST OF FILES TO TEST
+    harness -v -torture -re LIST OF PATTERNS TO MATCH
+
+If C<LIST OF FILES TO TEST> is omitted the file list is obtained from
+the manifest. The file list may include shell wildcards which will be 
+expanded out.
+
+=over 4
+
+=item -v
+
+Run the tests under verbose mode so you can see what tests were run, 
+and debug outbut.
+
+=item -torture
+
+Run the torture tests as well as the normal set.
+
+=item -re=PATTERN
+
+Filter the file list so that all the test files run match PATTERN.
+Note that this form is distinct from the B<-re LIST OF PATTERNS> form below
+in that it allows the file list to be provided as well.
+
+=item -re LIST OF PATTERNS
+
+Filter the file list so that all the test files run match 
+/(LIST|OF|PATTERNS)/. Note that with this form the patterns
+are joined by '|' and you cannot supply a list of files, instead
+the test files are obtained from the MANIFEST.
+
+=back
 
 You can run an individual test by a command similar to
 
@@ -2148,10 +2310,13 @@ documentation for more information. Also, spawned threads do the
 equivalent of setting this variable to the value 1.)
 
 If, at the end of a run you get the message I<N scalars leaked>, you can
-recompile with C<-DDEBUG_LEAKING_SCALARS>, which will cause
-the addresses of all those leaked SVs to be dumped; it also converts
-C<new_SV()> from a macro into a real function, so you can use your
-favourite debugger to discover where those pesky SVs were allocated.
+recompile with C<-DDEBUG_LEAKING_SCALARS>, which will cause the addresses
+of all those leaked SVs to be dumped along with details as to where each
+SV was originally allocated. This information is also displayed by
+Devel::Peek. Note that the extra details recorded with each SV increases
+memory usage, so it shouldn't be used in production environments. It also
+converts C<new_SV()> from a macro into a real function, so you can use
+your favourite debugger to discover where those pesky SVs were allocated.
 
 =head2 Profiling
 

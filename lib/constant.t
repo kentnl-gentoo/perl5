@@ -14,22 +14,10 @@ END { print STDERR @warnings }
 
 
 use strict;
-use Test::More tests => 74;
+use Test::More tests => 75;
 my $TB = Test::More->builder;
 
 BEGIN { use_ok('constant'); }
-
-sub test ($$;$) {
-    my($num, $bool, $diag) = @_;
-    if ($bool) {
-	print "ok $num\n";
-	return;
-    }
-    print "not ok $num\n";
-    return unless defined $diag;
-    $diag =~ s/\Z\n?/\n/;			# unchomp
-    print map "# $num : $_", split m/^/m, $diag;
-}
 
 use constant PI		=> 4 * atan2 1, 1;
 
@@ -245,3 +233,12 @@ is @{+FAMILY}, @{RFAM->[0]};
 is FAMILY->[2], RFAM->[0]->[2];
 is AGES->{FAMILY->[1]}, 28;
 is THREE**3, SPIT->(@{+FAMILY}**3);
+
+# Allow name of digits/underscores only if it begins with underscore
+{
+    use warnings FATAL => 'constant';
+    eval q{
+        use constant _1_2_3 => 'allowed';
+    };
+    ok( $@ eq '' );
+}

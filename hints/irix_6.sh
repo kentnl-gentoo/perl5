@@ -26,6 +26,8 @@
 
 # 64-bitty by Jarkko Hietaniemi on 9/1998
 
+# Martin Pool added -shared for gcc on 2004-01-27
+
 # Use   sh Configure -Dcc='cc -n32' to try compiling with -n32.
 #     or -Dcc='cc -n32 -mips3' (or -mips4) to force (non)portability
 # Don't bother with -n32 unless you have the 7.1 or later compilers.
@@ -38,6 +40,9 @@
 # optimization options (-LNO, -INLINE, -O3 to -O2, etcetera).
 # The compiler bug has been reported to SGI.
 # -- Allen Smith <allens@cpan.org>
+
+# Modified (10/30/04) to turn off usemallocwrap (PERL_MALLOC_WRAP) in -n32
+# mode - Allen.
 
 case "$use64bitall" in
 $define|true|[yY]*)
@@ -138,7 +143,15 @@ esac'
        test -z "$lddlflags" && lddlflags="-n32 -shared"
        test -z "$libc" && libc='/usr/lib32/libc.so'
        test -z "$plibpth" && plibpth='/usr/lib32 /lib32 /usr/ccs/lib'
-	;;
+
+       # PERL_MALLOC_WRAP gives false alarms ("panic: memory wrap") in IRIX
+       # -n32 mode, resulting in perl compiles never getting further than
+       # miniperl. I am not sure whether it actually does any good in -32 or
+       # -64 mode, especially the latter, but it does not give false
+       # alarms (in testing). -Allen
+
+       usemallocwrap=${usemallocwrap:-false}
+       ;;
 *"cc -64"*)
     case "`uname -s`" in
     IRIX)
@@ -173,6 +186,9 @@ esac'
 	ccflags="$ccflags -D_BSD_TYPES -D_BSD_TIME"
        test -z "$optimize" && optimize="-O3"
 	usenm='undef'
+	# It seems gcc can build Irix shlibs, but of course it needs
+	# -shared.  Otherwise you get link errors looking for main().
+	lddlflags="$lddlflags -shared"
 	case "`uname -s`" in
 	# Without the -mabi=64 gcc in 64-bit IRIX has problems passing
 	# and returning small structures.  This affects inet_*() and semctl().
@@ -183,6 +199,8 @@ esac'
 		lddlflags="$lddlflags -mabi=64"
 		;;
 	*)	ccflags="$ccflags -DIRIX32_SEMUN_BROKEN_BY_GCC"
+                # XXX Note: It is possible that turning off usemallocwrap is
+                # needed here; insufficient data! - Allen
 		;;
 	esac
 	;;

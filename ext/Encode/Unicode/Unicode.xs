@@ -1,5 +1,5 @@
 /*
- $Id: Unicode.xs,v 1.8 2003/06/18 09:29:02 dankogai Exp $
+ $Id: Unicode.xs,v 2.1 2004/10/24 13:00:29 dankogai Exp $
  */
 
 #define PERL_NO_GET_CONTEXT
@@ -54,7 +54,7 @@ enc_unpack(pTHX_ U8 **sp,U8 *e,STRLEN size,U8 endian)
 void
 enc_pack(pTHX_ SV *result,STRLEN size,U8 endian,UV value)
 {
-    U8 *d = (U8 *)SvGROW(result,SvCUR(result)+size);
+    U8 *d = (U8 *)SvGROW(result,SvCUR(result)+size+1);
     switch(endian) {
     case 'v':
     case 'V':
@@ -97,7 +97,7 @@ CODE:
     U8 endian   = *((U8 *)SvPV_nolen(attr("endian", 6)));
     int size    =   SvIV(attr("size",   4));
     int ucs2    = SvTRUE(attr("ucs2",   4));
-    int clone   = SvTRUE(attr("clone",  5));
+    int renewed = SvTRUE(attr("renewed",  7));
     SV *result  = newSVpvn("",0);
     STRLEN ulen;
     U8 *s = (U8 *)SvPVbyte(str,ulen);
@@ -124,7 +124,7 @@ CODE:
 	}
 #if 1
 	/* Update endian for next sequence */
-	if (clone) {
+	if (renewed) {
 	    hv_store((HV *)SvRV(obj),"endian",6,newSVpv((char *)&endian,1),0);
 	}
 #endif
@@ -200,7 +200,7 @@ CODE:
     U8 endian   = *((U8 *)SvPV_nolen(attr("endian", 6)));
     int size    =   SvIV(attr("size",   4));
     int ucs2    = SvTRUE(attr("ucs2",   4));
-    int clone   = SvTRUE(attr("clone",  5));
+    int renewed = SvTRUE(attr("renewed",  7));
     SV *result  = newSVpvn("",0);
     STRLEN ulen;
     U8 *s = (U8 *)SvPVutf8(utf8,ulen);
@@ -211,7 +211,7 @@ CODE:
 	enc_pack(aTHX_ result,size,endian,BOM_BE);
 #if 1
 	/* Update endian for next sequence */
-	if (clone){
+	if (renewed){
 	    hv_store((HV *)SvRV(obj),"endian",6,newSVpv((char *)&endian,1),0);
 	}
 #endif

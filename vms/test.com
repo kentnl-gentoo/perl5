@@ -16,9 +16,9 @@ $   oldmsg = F$Environment("Message")
 $   oldpriv = F$SetPrv("NOALL")         ! downgrade privs for safety
 $   discard = F$SetPrv("NETMBX,TMPMBX") ! only need these to run tests
 $!
-$! Process arguments.  P1 is the file extension of the Perl images.  P2,
-$! when not empty, indicates that we are testing a version of Perl built for
-$! the VMS debugger.  The other arguments are passed directly to t/TEST.
+$! Process arguments.  P1 is the file extension of the Perl images.
+$! P2, when not empty, indicates that we are testing a version of Perl built
+$! for the VMS debugger.  The other arguments are passed directly to t/TEST.
 $!
 $   exe = ".Exe"
 $   If p1.nes."" Then exe = p1
@@ -40,6 +40,9 @@ $   ndbg = ""
 $   if p2.nes."" then dbg  = "dbg"
 $   if p2.nes."" then ndbg = "ndbg"
 $!
+$! Run using "TEST." unless something else (e.g. "harness.") was specified.
+$  If F$Type(PERL_TEST_DRIVER) .eqs. "" Then PERL_TEST_DRIVER == "TEST."
+$!
 $!  Make sure we are where we need to be.
 $   If F$Search("t.dir").nes.""
 $   Then
@@ -57,7 +60,12 @@ $   EndIf
 $!
 $!  Pick up a copy of perl to use for the tests
 $   If F$Search("Perl.").nes."" Then Delete/Log/NoConfirm Perl.;*
-$   Copy/Log/NoConfirm [-]'ndbg'Perl'exe' []Perl.
+$   If PERL_TEST_DRIVER .eqs. "minitest"
+$   Then
+$       Copy/Log/NoConfirm [-]miniperl'exe' []Perl.
+$   Else
+$       Copy/Log/NoConfirm [-]'ndbg'Perl'exe' []Perl.
+$   EndIf
 $!
 $!  Pick up a copy of vmspipe.com to use for the tests
 $   If F$Search("VMSPIPE.COM").nes."" then Delete/Log/Noconfirm VMSPIPE.COM;*
@@ -73,7 +81,12 @@ $   testdir = "Directory/NoHead/NoTrail/Column=1"
 $   PerlShr_filespec = f$parse("Sys$Disk:[-]''dbg'PerlShr''exe'")
 $   Define 'dbg'Perlshr 'PerlShr_filespec'
 $   If F$Mode() .nes. "INTERACTIVE" Then Define/Nolog PERL_SKIP_TTY_TEST 1
-$   MCR Sys$Disk:[]Perl. "-I[-.lib]" TEST. "''p3'" "''p4'" "''p5'" "''p6'"
+$   If PERL_TEST_DRIVER .eqs. "minitest"
+$   Then
+$       MCR Sys$Disk:[]Perl. TEST. "-minitest" "base/*.t" "comp/*.t" "cmd/*.t" "run/*.t" "io/*.t" "op/*.t" "uni/*.t"
+$   Else
+$       MCR Sys$Disk:[]Perl. "-I[-.lib]" 'PERL_TEST_DRIVER' "''p3'" "''p4'" "''p5'" "''p6'" "''p7'"
+$   EndIf
 $   goto wrapup
 $!
 $ Control_Y_exit:

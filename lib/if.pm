@@ -1,6 +1,6 @@
 package if;
 
-our $VERSION = '0.03';
+$VERSION = '0.0401';
 
 sub work {
   my $method = shift() ? 'import' : 'unimport';
@@ -8,8 +8,7 @@ sub work {
 
   my $p = $_[0];		# PACKAGE
   (my $file = "$p.pm") =~ s!::!/!g;
-  require $file or die;
-
+  require $file;		# Works even if $_[0] is a keyword (like open)
   my $m = $p->can($method);
   goto &$m if $m;
 }

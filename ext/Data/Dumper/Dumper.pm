@@ -9,41 +9,50 @@
 
 package Data::Dumper;
 
-$VERSION = '2.121';
+$VERSION = '2.121_04';
 
 #$| = 1;
 
 use 5.006_001;
 require Exporter;
-use XSLoader ();
 require overload;
 
 use Carp;
 
-@ISA = qw(Exporter);
-@EXPORT = qw(Dumper);
-@EXPORT_OK = qw(DumperX);
+BEGIN {
+    @ISA = qw(Exporter);
+    @EXPORT = qw(Dumper);
+    @EXPORT_OK = qw(DumperX);
 
-XSLoader::load 'Data::Dumper';
+    # if run under miniperl, or otherwise lacking dynamic loading,
+    # XSLoader should be attempted to load, or the pure perl flag
+    # toggled on load failure.
+    eval {
+	require XSLoader;
+    };
+    $Useperl = 1 if $@;
+}
+
+XSLoader::load( 'Data::Dumper' ) unless $Useperl;
 
 # module vars and their defaults
-$Indent = 2 unless defined $Indent;
-$Purity = 0 unless defined $Purity;
-$Pad = "" unless defined $Pad;
-$Varname = "VAR" unless defined $Varname;
-$Useqq = 0 unless defined $Useqq;
-$Terse = 0 unless defined $Terse;
-$Freezer = "" unless defined $Freezer;
-$Toaster = "" unless defined $Toaster;
-$Deepcopy = 0 unless defined $Deepcopy;
-$Quotekeys = 1 unless defined $Quotekeys;
-$Bless = "bless" unless defined $Bless;
-#$Expdepth = 0 unless defined $Expdepth;
-$Maxdepth = 0 unless defined $Maxdepth;
-$Pair = ' => ' unless defined $Pair;
-$Useperl = 0 unless defined $Useperl;
-$Sortkeys = 0 unless defined $Sortkeys;
-$Deparse = 0 unless defined $Deparse;
+$Indent     = 2         unless defined $Indent;
+$Purity     = 0         unless defined $Purity;
+$Pad        = ""        unless defined $Pad;
+$Varname    = "VAR"     unless defined $Varname;
+$Useqq      = 0         unless defined $Useqq;
+$Terse      = 0         unless defined $Terse;
+$Freezer    = ""        unless defined $Freezer;
+$Toaster    = ""        unless defined $Toaster;
+$Deepcopy   = 0         unless defined $Deepcopy;
+$Quotekeys  = 1         unless defined $Quotekeys;
+$Bless      = "bless"   unless defined $Bless;
+#$Expdepth   = 0         unless defined $Expdepth;
+$Maxdepth   = 0         unless defined $Maxdepth;
+$Pair       = ' => '    unless defined $Pair;
+$Useperl    = 0         unless defined $Useperl;
+$Sortkeys   = 0         unless defined $Sortkeys;
+$Deparse    = 0         unless defined $Deparse;
 
 #
 # expects an arrayref of values to be dumped.
@@ -231,9 +240,13 @@ sub _dump {
 
   if ($type) {
 
-    # prep it, if it looks like an object
-    if (my $freezer = $s->{freezer}) {
-      $val->$freezer() if UNIVERSAL::can($val, $freezer);
+    # Call the freezer method if it's specified and the object has the
+    # method.  Trap errors and warn() instead of die()ing, like the XS
+    # implementation.
+    my $freezer = $s->{freezer};
+    if ($freezer and UNIVERSAL::can($val, $freezer)) {
+      eval { $val->$freezer() };
+      warn "WARNING(Freezer method call failed): $@" if $@;
     }
 
     ($realpack, $realtype, $id) =
@@ -381,7 +394,7 @@ sub _dump {
       if ($s->{deparse}) {
 	require B::Deparse;
 	my $sub =  'sub ' . (B::Deparse->new)->coderef2text($val);
-	$pad    =  $s->{sep} . $s->{pad} . $s->{xpad} . $s->{apad} . '    ';
+	$pad    =  $s->{sep} . $s->{pad} . $s->{apad} . $s->{xpad} x ($s->{level} - 1);
 	$sub    =~ s/\n/$pad/gse;
 	$out   .=  $sub;
       } else {
@@ -703,7 +716,8 @@ The default output of self-referential structures can be C<eval>ed, but the
 nested references to C<$VAR>I<n> will be undefined, since a recursive
 structure cannot be constructed using one Perl statement.  You should set the
 C<Purity> flag to 1 to get additional statements that will correctly fill in
-these references.
+these references.  Moreover, if C<eval>ed when strictures are in effect,
+you need to ensure that any variables it accesses are previously declared.
 
 In the extended usage form, the references to be dumped can be given
 user-specified names.  If a name begins with a C<*>, the output will 
@@ -885,6 +899,10 @@ different package.  The client is responsible for making sure the specified
 method can be called via the object, and that the object ends up containing
 only perl data types after the method has been called.  Defaults to an empty
 string.
+
+If an object does not support the method specified (determined using
+UNIVERSAL::can()) then the call will be skipped.  If the method dies a
+warning will be generated.
 
 =item *
 

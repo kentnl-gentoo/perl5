@@ -1,18 +1,34 @@
-#!./perl
+#!./perl -w
 
 BEGIN {
-    chdir 't' if -d 't';
-    @INC = '../lib';
+    if ($ENV{PERL_CORE}) {
+        chdir 't';
+        @INC = '../lib';
+    }
 }
-
-use Config;
 use Cwd;
+chdir 't';
+
 use strict;
-use warnings;
+use Config;
 use File::Spec;
 use File::Path;
 
-use Test::More tests => 16;
+use lib File::Spec->catdir('t', 'lib');
+use Test::More;
+require VMS::Filespec if $^O eq 'VMS';
+
+my $tests = 28;
+# _perl_abs_path() currently only works when the directory separator
+# is '/', so don't test it when it won't work.
+my $EXTRA_ABSPATH_TESTS = ($Config{prefix} =~ m/\//) && $^O ne 'cygwin';
+$tests += 4 if $EXTRA_ABSPATH_TESTS;
+plan tests => $tests;
+
+SKIP: {
+  skip "no need to check for blib/ in the core", 1 if $ENV{PERL_CORE};
+  like $INC{'Cwd.pm'}, qr{blib}i, "Cwd should be loaded from blib/ during testing";
+}
 
 my $IsVMS = $^O eq 'VMS';
 my $IsMacOS = $^O eq 'MacOS';
@@ -90,29 +106,20 @@ SKIP: {
     }
 }
 
-my $Top_Test_Dir = '_ptrslt_';
-my $Test_Dir     = "$Top_Test_Dir/_path_/_to_/_a_/_dir_";
-my $want = "t/$Test_Dir";
-if( $IsVMS ) {
-    # translate the unixy path to VMSish
-    $want =~ s|/|\.|g;
-    $want .= '\]';
-    $want = '((?i)' . $want . ')';  # might be ODS-2 or ODS-5
-} elsif ( $IsMacOS ) {
-    $_ = ":$_" for ($Top_Test_Dir, $Test_Dir);
-    s|/|:|g, s|$|:| for ($want, $Test_Dir);
+my @test_dirs = qw{_ptrslt_ _path_ _to_ _a_ _dir_};
+my $Test_Dir     = File::Spec->catdir(@test_dirs);
+
+mkpath([$Test_Dir], 0, 0777);
+Cwd::chdir $Test_Dir;
+
+foreach my $func (qw(cwd getcwd fastcwd fastgetcwd)) {
+  my $result = eval "$func()";
+  is $@, '';
+  dir_ends_with( $result, $Test_Dir, "$func()" );
 }
 
-mkpath(["$Test_Dir"], 0, 0777);
-Cwd::chdir "$Test_Dir";
-
-like(cwd(),        qr|$want$|, 'chdir() + cwd()');
-like(getcwd(),     qr|$want$|, '        + getcwd()');    
-like(fastcwd(),    qr|$want$|, '        + fastcwd()');
-like(fastgetcwd(), qr|$want$|, '        + fastgetcwd()');
-
 # Cwd::chdir should also update $ENV{PWD}
-like($ENV{PWD}, qr|$want$|,      'Cwd::chdir() updates $ENV{PWD}');
+dir_ends_with( $ENV{PWD}, $Test_Dir, 'Cwd::chdir() updates $ENV{PWD}' );
 my $updir = File::Spec->updir;
 Cwd::chdir $updir;
 print "#$ENV{PWD}\n";
@@ -125,23 +132,30 @@ print "#$ENV{PWD}\n";
 Cwd::chdir $updir;
 print "#$ENV{PWD}\n";
 
-rmtree([$Top_Test_Dir], 0, 0);
+rmtree($test_dirs[0], 0, 0);
 
-if ($IsVMS) {
-    like($ENV{PWD}, qr|\b((?i)t)\]$|);
+{
+  my $check = ($IsVMS   ? qr|\b((?i)t)\]$| :
+	       $IsMacOS ? qr|\bt:$| :
+			  qr|\bt$| );
+  
+  like($ENV{PWD}, $check);
 }
-elsif ($IsMacOS) {
-    like($ENV{PWD}, qr|\bt:$|);
-}
-else {
-    like($ENV{PWD}, qr|\bt$|);
+
+{
+  # Make sure abs_path() doesn't trample $ENV{PWD}
+  my $start_pwd = $ENV{PWD};
+  mkpath([$Test_Dir], 0, 0777);
+  Cwd::abs_path($Test_Dir);
+  is $ENV{PWD}, $start_pwd;
+  rmtree($test_dirs[0], 0, 0);
 }
 
 SKIP: {
-    skip "no symlinks on this platform", 2 unless $Config{d_symlink};
+    skip "no symlinks on this platform", 2+$EXTRA_ABSPATH_TESTS unless $Config{d_symlink};
 
     mkpath([$Test_Dir], 0, 0777);
-    symlink $Test_Dir => "linktest";
+    symlink $Test_Dir, "linktest";
 
     my $abs_path      =  Cwd::abs_path("linktest");
     my $fast_abs_path =  Cwd::fast_abs_path("linktest");
@@ -149,7 +163,73 @@ SKIP: {
 
     like($abs_path,      qr|$want$|);
     like($fast_abs_path, qr|$want$|);
+    like(Cwd::_perl_abs_path("linktest"), qr|$want$|) if $EXTRA_ABSPATH_TESTS;
 
-    rmtree([$Top_Test_Dir], 0, 0);
+    rmtree($test_dirs[0], 0, 0);
     unlink "linktest";
+}
+
+if ($ENV{PERL_CORE}) {
+    chdir '../ext/Cwd/t';
+    unshift @INC, '../../../lib';
+}
+
+# Make sure we can run abs_path() on files, not just directories
+my $path = 'cwd.t';
+path_ends_with(Cwd::abs_path($path), 'cwd.t', 'abs_path() can be invoked on a file');
+path_ends_with(Cwd::fast_abs_path($path), 'cwd.t', 'fast_abs_path() can be invoked on a file');
+path_ends_with(Cwd::_perl_abs_path($path), 'cwd.t', '_perl_abs_path() can be invoked on a file')
+  if $EXTRA_ABSPATH_TESTS;
+
+$path = File::Spec->catfile(File::Spec->updir, 't', $path);
+path_ends_with(Cwd::abs_path($path), 'cwd.t', 'abs_path() can be invoked on a file');
+path_ends_with(Cwd::fast_abs_path($path), 'cwd.t', 'fast_abs_path() can be invoked on a file');
+path_ends_with(Cwd::_perl_abs_path($path), 'cwd.t', '_perl_abs_path() can be invoked on a file')
+  if $EXTRA_ABSPATH_TESTS;
+
+
+  
+SKIP: {
+  my $file;
+  {
+    my $root = File::Spec->rootdir;
+    local *FH;
+    opendir FH, $root or skip("Can't opendir($root): $!", 2+$EXTRA_ABSPATH_TESTS);
+    ($file) = grep {-f $_ and not -l $_} map File::Spec->catfile($root, $_), readdir FH;
+    closedir FH;
+  }
+  skip "No plain file in root directory to test with", 2+$EXTRA_ABSPATH_TESTS unless $file;
+  
+  $file = VMS::Filespec::rmsexpand($file) if $^O eq 'VMS';
+  is Cwd::abs_path($file), $file, 'abs_path() works on files in the root directory';
+  is Cwd::fast_abs_path($file), $file, 'fast_abs_path() works on files in the root directory';
+  is Cwd::_perl_abs_path($file), $file, '_perl_abs_path() works on files in the root directory'
+    if $EXTRA_ABSPATH_TESTS;
+}
+
+
+#############################################
+# These routines give us sort of a poor-man's cross-platform
+# directory or path comparison capability.
+
+sub bracketed_form_dir {
+  return join '', map "[$_]", 
+    grep length, File::Spec->splitdir(File::Spec->canonpath( shift() ));
+}
+
+sub dir_ends_with {
+  my ($dir, $expect) = (shift, shift);
+  my $bracketed_expect = quotemeta bracketed_form_dir($expect);
+  like( bracketed_form_dir($dir), qr|$bracketed_expect$|i, (@_ ? shift : ()) );
+}
+
+sub bracketed_form_path {
+  return join '', map "[$_]", 
+    grep length, File::Spec->splitpath(File::Spec->canonpath( shift() ));
+}
+
+sub path_ends_with {
+  my ($dir, $expect) = (shift, shift);
+  my $bracketed_expect = quotemeta bracketed_form_path($expect);
+  like( bracketed_form_path($dir), qr|$bracketed_expect$|i, (@_ ? shift : ()) );
 }

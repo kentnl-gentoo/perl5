@@ -5,6 +5,7 @@
 $Level = 1;
 my $test = 1;
 my $planned;
+my $noplan;
 
 $TODO = 0;
 $NO_ENDING = 0;
@@ -13,18 +14,27 @@ sub plan {
     my $n;
     if (@_ == 1) {
 	$n = shift;
+	if ($n eq 'no_plan') {
+	  undef $n;
+	  $noplan = 1;
+	}
     } else {
 	my %plan = @_;
 	$n = $plan{tests}; 
     }
-    print STDOUT "1..$n\n";
+    print STDOUT "1..$n\n" unless $noplan;
     $planned = $n;
 }
 
 END {
     my $ran = $test - 1;
-    if (!$NO_ENDING && defined $planned && $planned != $ran) {
-        print STDERR "# Looks like you planned $planned tests but ran $ran.\n";
+    if (!$NO_ENDING) {
+	if (defined $planned && $planned != $ran) {
+	    print STDERR
+		"# Looks like you planned $planned tests but ran $ran.\n";
+	} elsif ($noplan) {
+	    print "1..$ran\n";
+	}
     }
 }
 
@@ -91,8 +101,8 @@ sub _q {
     my $x = shift;
     return 'undef' unless defined $x;
     my $q = $x;
-    $q =~ s/\\/\\\\/;
-    $q =~ s/'/\\'/;
+    $q =~ s/\\/\\\\/g;
+    $q =~ s/'/\\'/g;
     return "'$q'";
 }
 
@@ -235,21 +245,18 @@ sub within ($$$@) {
 }
 
 # Note: this isn't quite as fancy as Test::More::like().
-sub like ($$@) {
-    my ($got, $expected, $name, @mess) = @_;
+
+sub like   ($$@) { like_yn (0,@_) }; # 0 for -
+sub unlike ($$@) { like_yn (1,@_) }; # 1 for un-
+
+sub like_yn ($$$@) {
+    my ($flip, $got, $expected, $name, @mess) = @_;
     my $pass;
-    if (ref $expected eq 'Regexp') {
-	$pass = $got =~ $expected;
-	unless ($pass) {
-	    unshift(@mess, "#      got '$got'\n",
-		           "# expected /$expected/\n");
-	}
-    } else {
-	$pass = $got =~ /$expected/;
-	unless ($pass) {
-	    unshift(@mess, "#      got '$got'\n",
-		           "# expected /$expected/\n");
-	}
+    $pass = $got =~ /$expected/ if !$flip;
+    $pass = $got !~ /$expected/ if $flip;
+    unless ($pass) {
+	unshift(@mess, "#      got '$got'\n",
+		"# expected /$expected/\n");
     }
     _ok($pass, _where(), $name, @mess);
 }
@@ -284,10 +291,25 @@ sub skip {
     last SKIP;
 }
 
+sub todo_skip {
+    my $why = shift;
+    my $n   = @_ ? shift : 1;
+
+    for (1..$n) {
+        print STDOUT "ok $test # TODO & SKIP: $why\n";
+        $test++;
+    }
+    local $^W = 0;
+    last TODO;
+}
+
 sub eq_array {
     my ($ra, $rb) = @_;
     return 0 unless $#$ra == $#$rb;
     for my $i (0..$#$ra) {
+	next     if !defined $ra->[$i] && !defined $rb->[$i]; 
+	return 0 if !defined $ra->[$i];
+	return 0 if !defined $rb->[$i];
 	return 0 unless $ra->[$i] eq $rb->[$i];
     }
     return 1;
@@ -402,6 +424,12 @@ sub _create_runperl { # Create the string to qx in runperl().
         }
     } elsif (defined $args{progfile}) {
 	$runperl .= qq( "$args{progfile}");
+    } else {
+	# You probaby didn't want to be sucking in from the upstream stdin
+	die "test.pl:runperl(): none of prog, progs, progfile, args, "
+	    . " switches or stdin specified"
+	    unless defined $args{args} or defined $args{switches}
+		or defined $args{stdin};
     }
     if (defined $args{stdin}) {
 	# so we don't try to put literal newlines and crs onto the
@@ -445,6 +473,8 @@ sub _create_runperl { # Create the string to qx in runperl().
 }
 
 sub runperl {
+    die "test.pl:runperl() does not take a hashref"
+	if ref $_[0] and ref $_[0] eq 'HASH';
     my $runperl = &_create_runperl;
     my $result = `$runperl`;
     $result =~ s/\n\n/\n/ if $is_vms; # XXX pipes sometimes double these
@@ -586,7 +616,7 @@ sub _fresh_perl {
 }
 
 #
-# run_perl_is
+# fresh_perl_is
 #
 # Combination of run_perl() and is().
 #
@@ -600,7 +630,7 @@ sub fresh_perl_is {
 }
 
 #
-# run_perl_like
+# fresh_perl_like
 #
 # Combination of run_perl() and like().
 #

@@ -2,13 +2,13 @@
 
  DB_File.xs -- Perl 5 interface to Berkeley DB 
 
- written by Paul Marquess <Paul.Marquess@btinternet.com>
- last modified 22nd October 2002
- version 1.806
+ written by Paul Marquess <pmqs@cpan.org>
+ last modified 12th March 2005
+ version 1.811
 
  All comments/suggestions/problems are welcome
 
-     Copyright (c) 1995-2002 Paul Marquess. All rights reserved.
+     Copyright (c) 1995-2005 Paul Marquess. All rights reserved.
      This program is free software; you can redistribute it and/or
      modify it under the same terms as Perl itself.
 
@@ -106,6 +106,11 @@
                 Support for 4.1.X added.
                 Filter code can now cope with read-only $_
         1.806 - recursion detection beefed up.
+        1.807 - no change
+        1.808 - leak fixed in ParseOpenInfo
+        1.809 - no change
+        1.810 - no change
+        1.811 - no change
 
 */
 
@@ -394,9 +399,11 @@ typedef DBT DBTKEY ;
 
 #define OutputValue(arg, name)  					\
 	{ if (RETVAL == 0) {						\
+	      SvGETMAGIC(arg) ;          				\
 	      my_sv_setpvn(arg, name.data, name.size) ;			\
-	      TAINT;                                       	\
+	      TAINT;                                       		\
 	      SvTAINTED_on(arg);                                       	\
+	      SvUTF8_off(arg);                                       	\
 	      DBM_ckFilter(arg, filter_fetch_value,"filter_fetch_value") ; 	\
 	  }								\
 	}
@@ -404,13 +411,15 @@ typedef DBT DBTKEY ;
 #define OutputKey(arg, name)	 					\
 	{ if (RETVAL == 0) 						\
 	  { 								\
+		SvGETMAGIC(arg) ;          				\
 		if (db->type != DB_RECNO) {				\
 		    my_sv_setpvn(arg, name.data, name.size); 		\
 		}							\
 		else 							\
 		    sv_setiv(arg, (I32)*(I32*)name.data - 1); 		\
-	      TAINT;                                       	\
+	      TAINT;                                       		\
 	      SvTAINTED_on(arg);                                       	\
+	      SvUTF8_off(arg);                                       	\
 	      DBM_ckFilter(arg, filter_fetch_key,"filter_fetch_key") ; 	\
 	  } 								\
 	}
@@ -928,7 +937,10 @@ SV *   sv ;
     STRLEN	n_a;
     dMY_CXT;
 
-/* printf("In ParseOpenInfo name=[%s] flags=[%d] mode = [%d]\n", name, flags, mode) ;  */
+#ifdef TRACE    
+    printf("In ParseOpenInfo name=[%s] flags=[%d] mode=[%d] SV NULL=[%d]\n", 
+		    name, flags, mode, sv == NULL) ;  
+#endif
     Zero(RETVAL, 1, DB_File_type) ;
 
     /* Default to HASH */
@@ -1488,8 +1500,10 @@ db_DoTie_(isHASH, dbtype, name=undef, flags=O_CREAT|O_RDWR, mode=0666, type=DB_H
 	        sv = ST(5) ;
 
 	    RETVAL = ParseOpenInfo(aTHX_ isHASH, name, flags, mode, sv) ;
-	    if (RETVAL->dbp == NULL)
+	    if (RETVAL->dbp == NULL) {
+	        Safefree(RETVAL);
 	        RETVAL = NULL ;
+	    }
 	}
 	OUTPUT:	
 	    RETVAL
@@ -1652,7 +1666,8 @@ unshift(db, ...)
 #endif
 	    for (i = items-1 ; i > 0 ; --i)
 	    {
-	        value.data = SvPV(ST(i), n_a) ;
+		DBM_ckFilter(ST(i), filter_store_value, "filter_store_value");
+	        value.data = SvPVbyte(ST(i), n_a) ;
 	        value.size = n_a ;
 	        One = 1 ;
 	        key.data = &One ;
@@ -1761,7 +1776,8 @@ push(db, ...)
 		    keyval = 0 ;
 	        for (i = 1 ; i < items ; ++i)
 	        {
-	            value.data = SvPV(ST(i), n_a) ;
+		    DBM_ckFilter(ST(i), filter_store_value, "filter_store_value");
+	            value.data = SvPVbyte(ST(i), n_a) ;
 	            value.size = n_a ;
 		    ++ keyval ;
 	            key.data = &keyval ;

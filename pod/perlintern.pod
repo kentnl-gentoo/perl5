@@ -297,7 +297,7 @@ Locate the CV corresponding to the currently executing sub or eval.
 If db_seqp is non_null, skip CVs that are in the DB package and populate
 *db_seqp with the cop sequence number at the point that the DB:: code was
 entered. (allows debuggers to eval in the scope of the breakpoint rather
-than in in the scope of the debuger itself).
+than in in the scope of the debugger itself).
 
 	CV*	find_runcv(U32 *db_seqp)
 
@@ -400,7 +400,20 @@ created even in rvalue contexts.
 C<flags> is not used at present but available for future extension to
 allow selecting particular classes of magical variable.
 
-	bool	is_gv_magical(char *name, STRLEN len, U32 flags)
+Currently assumes that C<name> is NUL terminated (as well as len being valid).
+This assumption is met by all callers within the perl core, which all pass
+pointers returned by SvPV.
+
+	bool	is_gv_magical(const char *name, STRLEN len, U32 flags)
+
+=for hackers
+Found in file gv.c
+
+=item is_gv_magical_sv
+
+Returns C<TRUE> if given the name of a magical GV. Calls is_gv_magical.
+
+	bool	is_gv_magical_sv(SV *name, U32 flags)
 
 =for hackers
 Found in file gv.c
@@ -501,6 +514,12 @@ become so if C<my sub foo {}> is implemented.)
 Note that formats are treated as anon subs, and are cloned each time
 write is called (if necessary).
 
+The flag SVf_PADSTALE is cleared on lexicals each time the my() is executed,
+and set on scope exit. This allows the 'Variable $x is not available' warning
+to be generated in evals, such as 
+
+    { my $x = 1; sub f { eval '$x'} } f();
+
 	AV *	CvPADLIST(CV *cv)
 
 =for hackers
@@ -521,7 +540,7 @@ Found in file pad.c
 
 dump the contents of a CV
 
-	void	cv_dump(CV *cv, char *title)
+	void	cv_dump(const CV *cv, const char *title)
 
 =for hackers
 Found in file pad.c
@@ -564,7 +583,7 @@ GvSTASH to that value
 
 If fake, it means we're cloning an existing entry
 
-	PADOFFSET	pad_add_name(char *name, HV* typestash, HV* ourstash, bool clone)
+	PADOFFSET	pad_add_name(const char *name, HV* typestash, HV* ourstash, bool clone)
 
 =for hackers
 Found in file pad.c
@@ -597,7 +616,7 @@ Check for duplicate declarations: report any of:
        as C<ourstash>
 C<is_our> indicates that the name to check is an 'our' declaration
 
-	void	pad_check_dup(char* name, bool is_our, HV* ourstash)
+	void	pad_check_dup(const char* name, bool is_our, const HV* ourstash)
 
 =for hackers
 Found in file pad.c
@@ -621,7 +640,7 @@ then comes back down, adding fake entries as it goes. It has to be this way
 because fake namesvs in anon protoypes have to store in NVX the index into
 the parent pad.
 
-	PADOFFSET	pad_findlex(char *name, CV* cv, U32 seq, int warn, SV** out_capture, SV** out_name_sv, int *out_flags)
+	PADOFFSET	pad_findlex(const char *name, const CV* cv, U32 seq, int warn, SV** out_capture, SV** out_name_sv, int *out_flags)
 
 =for hackers
 Found in file pad.c
@@ -634,7 +653,7 @@ the complications introduced by eval). If the name is found in an outer pad,
 then a fake entry is added to the current pad.
 Returns the offset in the current pad, or NOT_IN_PAD on failure.
 
-	PADOFFSET	pad_findmy(char* name)
+	PADOFFSET	pad_findmy(const char* name)
 
 =for hackers
 Found in file pad.c
@@ -687,10 +706,10 @@ Found in file pad.c
 =item pad_push
 
 Push a new pad frame onto the padlist, unless there's already a pad at
-this depth, in which case don't bother creating a new one.
-If has_args is true, give the new pad an @_ in slot zero.
+this depth, in which case don't bother creating a new one.  Then give
+the new pad an @_ in slot zero.
 
-	void	pad_push(PADLIST *padlist, int depth, int has_args)
+	void	pad_push(PADLIST *padlist, int depth)
 
 =for hackers
 Found in file pad.c
@@ -785,11 +804,32 @@ Found in file pp.h
 
 =over 8
 
+=item find_uninit_var
+
+Find the name of the undefined variable (if any) that caused the operator o
+to issue a "Use of uninitialized value" warning.
+If match is true, only return a name if it's value matches uninit_sv.
+So roughly speaking, if a unary operator (such as OP_COS) generates a
+warning, then following the direct child of the op may yield an
+OP_PADSV or OP_GV that gives the name of the undefined variable. On the
+other hand, with OP_ADD there are two branches to follow, so we only print
+the variable name if we get an exact match.
+
+The name is returned as a mortal SV.
+
+Assumes that PL_op is the op that originally triggered the error, and that
+PL_comppad/PL_curpad points to the currently executing pad.
+
+	SV*	find_uninit_var(OP* obase, SV* uninit_sv, bool top)
+
+=for hackers
+Found in file sv.c
+
 =item report_uninit
 
 Print appropriate "Use of uninitialized variable" warning
 
-	void	report_uninit()
+	void	report_uninit(SV* uninit_sv)
 
 =for hackers
 Found in file sv.c

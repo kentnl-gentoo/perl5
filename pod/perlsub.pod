@@ -67,7 +67,8 @@ Assigning to the whole array C<@_> removes that aliasing, and does
 not update any arguments.
 
 The return value of a subroutine is the value of the last expression
-evaluated.  More explicitly, a C<return> statement may be used to exit the
+evaluated by that sub, or the empty list in the case of an empty sub.
+More explicitly, a C<return> statement may be used to exit the
 subroutine, optionally specifying the returned value, which will be
 evaluated in the appropriate context (list, scalar, or void) depending
 on the context of the subroutine call.  If you specify no return value,
@@ -202,13 +203,17 @@ disables any prototype checking on arguments you do provide.  This
 is partly for historical reasons, and partly for having a convenient way
 to cheat if you know what you're doing.  See L<Prototypes> below.
 
-Functions whose names are in all upper case are reserved to the Perl
-core, as are modules whose names are in all lower case.  A
-function in all capitals is a loosely-held convention meaning it
-will be called indirectly by the run-time system itself, usually
-due to a triggered event.  Functions that do special, pre-defined
-things include C<BEGIN>, C<CHECK>, C<INIT>, C<END>, C<AUTOLOAD>,
-C<CLONE> and C<DESTROY>--plus all functions mentioned in L<perltie>.
+Subroutines whose names are in all upper case are reserved to the Perl
+core, as are modules whose names are in all lower case.  A subroutine in
+all capitals is a loosely-held convention meaning it will be called
+indirectly by the run-time system itself, usually due to a triggered event.
+Subroutines that do special, pre-defined things include C<AUTOLOAD>, C<CLONE>,
+C<DESTROY> plus all functions mentioned in L<perltie> and L<PerlIO::via>.
+
+The C<BEGIN>, C<CHECK>, C<INIT> and C<END> subroutines are not so much
+subroutines as named special code blocks, of which you can have more
+than one in a package, and which you can B<not> call explicitly.  See
+L<perlmod/"BEGIN, CHECK, INIT and END">
 
 =head2 Private Variables via my()
 
@@ -440,18 +445,18 @@ via C<require> or C<use>, then this is probably just fine.  If it's
 all in the main program, you'll need to arrange for the C<my>
 to be executed early, either by putting the whole block above
 your main program, or more likely, placing merely a C<BEGIN>
-sub around it to make sure it gets executed before your program
+code block around it to make sure it gets executed before your program
 starts to run:
 
-    sub BEGIN {
+    BEGIN {
 	my $secret_val = 0;
 	sub gimme_another {
 	    return ++$secret_val;
 	}
     }
 
-See L<perlmod/"Package Constructors and Destructors"> about the
-special triggered functions, C<BEGIN>, C<CHECK>, C<INIT> and C<END>.
+See L<perlmod/"BEGIN, CHECK, INIT and END"> about the
+special triggered code blocks, C<BEGIN>, C<CHECK>, C<INIT> and C<END>.
 
 If declared at the outermost scope (the file scope), then lexicals
 work somewhat like C's file statics.  They are available to all
@@ -584,6 +589,8 @@ separator.
 Notably, if you want to work with a brand new value of the default scalar
 $_, and avoid the potential problem listed above about $_ previously
 carrying a magic value, you should use C<local *_> instead of C<local $_>.
+As of perl 5.9.1, you can also use the lexical form of C<$_> (declaring it
+with C<my $_>), which avoids completely this problem.
 
 =head3 Localization of elements of composite types
 
@@ -1127,20 +1134,23 @@ The following functions would all be inlined:
     sub FLAG_MASK ()	{ FLAG_FOO | FLAG_BAR }
 
     sub OPT_BAZ ()	{ not (0x1B58 & FLAG_MASK) }
-    sub BAZ_VAL () {
+
+    sub N () { int(OPT_BAZ) / 3 }
+
+    sub FOO_SET () { 1 if FLAG_MASK & FLAG_FOO }
+
+Be aware that these will not be inlined; as they contain inner scopes,
+the constant folding doesn't reduce them to a single constant:
+
+    sub foo_set () { if (FLAG_MASK & FLAG_FOO) { 1 } }
+
+    sub baz_val () {
 	if (OPT_BAZ) {
 	    return 23;
 	}
 	else {
 	    return 42;
 	}
-    }
-
-    sub N () { int(BAZ_VAL) / 3 }
-    BEGIN {
-	my $prod = 1;
-	for (1..N) { $prod *= $_ }
-	sub N_FACTORIAL () { $prod }
     }
 
 If you redefine a subroutine that was eligible for inlining, you'll get

@@ -1,7 +1,8 @@
 /*
  *    perlapi.h
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, 2003, by Larry Wall and others
+ *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -250,6 +251,8 @@ END_EXTERN_C
 #define PL_expect		(*Perl_Iexpect_ptr(aTHX))
 #undef  PL_fdpid
 #define PL_fdpid		(*Perl_Ifdpid_ptr(aTHX))
+#undef  PL_fdscript
+#define PL_fdscript		(*Perl_Ifdscript_ptr(aTHX))
 #undef  PL_filemode
 #define PL_filemode		(*Perl_Ifilemode_ptr(aTHX))
 #undef  PL_forkprocess
@@ -398,10 +401,6 @@ END_EXTERN_C
 #define PL_multi_start		(*Perl_Imulti_start_ptr(aTHX))
 #undef  PL_multiline
 #define PL_multiline		(*Perl_Imultiline_ptr(aTHX))
-#undef  PL_new_hash_seed
-#define PL_new_hash_seed	(*Perl_Inew_hash_seed_ptr(aTHX))
-#undef  PL_new_hash_seed_set
-#define PL_new_hash_seed_set	(*Perl_Inew_hash_seed_set_ptr(aTHX))
 #undef  PL_nexttoke
 #define PL_nexttoke		(*Perl_Inexttoke_ptr(aTHX))
 #undef  PL_nexttype
@@ -434,8 +433,6 @@ END_EXTERN_C
 #define PL_oldoldbufptr		(*Perl_Ioldoldbufptr_ptr(aTHX))
 #undef  PL_op_mask
 #define PL_op_mask		(*Perl_Iop_mask_ptr(aTHX))
-#undef  PL_op_seqmax
-#define PL_op_seqmax		(*Perl_Iop_seqmax_ptr(aTHX))
 #undef  PL_origalen
 #define PL_origalen		(*Perl_Iorigalen_ptr(aTHX))
 #undef  PL_origargc
@@ -494,6 +491,10 @@ END_EXTERN_C
 #define PL_regex_pad		(*Perl_Iregex_pad_ptr(aTHX))
 #undef  PL_regex_padav
 #define PL_regex_padav		(*Perl_Iregex_padav_ptr(aTHX))
+#undef  PL_rehash_seed
+#define PL_rehash_seed		(*Perl_Irehash_seed_ptr(aTHX))
+#undef  PL_rehash_seed_set
+#define PL_rehash_seed_set	(*Perl_Irehash_seed_set_ptr(aTHX))
 #undef  PL_replgv
 #define PL_replgv		(*Perl_Ireplgv_ptr(aTHX))
 #undef  PL_rsfp
@@ -546,6 +547,8 @@ END_EXTERN_C
 #define PL_subline		(*Perl_Isubline_ptr(aTHX))
 #undef  PL_subname
 #define PL_subname		(*Perl_Isubname_ptr(aTHX))
+#undef  PL_suidscript
+#define PL_suidscript		(*Perl_Isuidscript_ptr(aTHX))
 #undef  PL_sv_arenaroot
 #define PL_sv_arenaroot		(*Perl_Isv_arenaroot_ptr(aTHX))
 #undef  PL_sv_count
@@ -674,18 +677,10 @@ END_EXTERN_C
 #define PL_xrv_arenaroot	(*Perl_Ixrv_arenaroot_ptr(aTHX))
 #undef  PL_xrv_root
 #define PL_xrv_root		(*Perl_Ixrv_root_ptr(aTHX))
-#undef  PL_yychar
-#define PL_yychar		(*Perl_Iyychar_ptr(aTHX))
-#undef  PL_yydebug
-#define PL_yydebug		(*Perl_Iyydebug_ptr(aTHX))
-#undef  PL_yyerrflag
-#define PL_yyerrflag		(*Perl_Iyyerrflag_ptr(aTHX))
-#undef  PL_yylval
-#define PL_yylval		(*Perl_Iyylval_ptr(aTHX))
-#undef  PL_yynerrs
-#define PL_yynerrs		(*Perl_Iyynerrs_ptr(aTHX))
-#undef  PL_yyval
-#define PL_yyval		(*Perl_Iyyval_ptr(aTHX))
+#undef  PL_yycharp
+#define PL_yycharp		(*Perl_Iyycharp_ptr(aTHX))
+#undef  PL_yylvalp
+#define PL_yylvalp		(*Perl_Iyylvalp_ptr(aTHX))
 #undef  PL_Sv
 #define PL_Sv			(*Perl_TSv_ptr(aTHX))
 #undef  PL_Xpv
@@ -772,8 +767,6 @@ END_EXTERN_C
 #define PL_opsave		(*Perl_Topsave_ptr(aTHX))
 #undef  PL_peepp
 #define PL_peepp		(*Perl_Tpeepp_ptr(aTHX))
-#undef  PL_protect
-#define PL_protect		(*Perl_Tprotect_ptr(aTHX))
 #undef  PL_reg_call_cc
 #define PL_reg_call_cc		(*Perl_Treg_call_cc_ptr(aTHX))
 #undef  PL_reg_curpm
@@ -862,12 +855,6 @@ END_EXTERN_C
 #define PL_regtill		(*Perl_Tregtill_ptr(aTHX))
 #undef  PL_restartop
 #define PL_restartop		(*Perl_Trestartop_ptr(aTHX))
-#undef  PL_retstack
-#define PL_retstack		(*Perl_Tretstack_ptr(aTHX))
-#undef  PL_retstack_ix
-#define PL_retstack_ix		(*Perl_Tretstack_ix_ptr(aTHX))
-#undef  PL_retstack_max
-#define PL_retstack_max		(*Perl_Tretstack_max_ptr(aTHX))
 #undef  PL_rs
 #define PL_rs			(*Perl_Trs_ptr(aTHX))
 #undef  PL_savestack
@@ -958,6 +945,8 @@ END_EXTERN_C
 #define PL_sv_placeholder	(*Perl_Gsv_placeholder_ptr(NULL))
 #undef  PL_thr_key
 #define PL_thr_key		(*Perl_Gthr_key_ptr(NULL))
+#undef  PL_use_safe_putenv
+#define PL_use_safe_putenv	(*Perl_Guse_safe_putenv_ptr(NULL))
 
 #endif /* !PERL_CORE */
 #endif /* MULTIPLICITY */

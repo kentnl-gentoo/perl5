@@ -3,7 +3,7 @@ package autouse;
 #use strict;		# debugging only
 use 5.003_90;		# ->can, for my $var
 
-$autouse::VERSION = '1.03';
+$autouse::VERSION = '1.04';
 
 $autouse::DEBUG ||= 0;
 
@@ -73,9 +73,10 @@ sub import {
 sub vet_import ($) {
     my $module = shift;
     if (my $import = $module->can('import')) {
-	croak "autoused module has unique import() method"
+	croak "autoused module $module has unique import() method"
 	    unless defined(&Exporter::import)
-		   && $import == \&Exporter::import;
+		   && ($import == \&Exporter::import ||
+		       $import == \&UNIVERSAL::import)
     }
 }
 

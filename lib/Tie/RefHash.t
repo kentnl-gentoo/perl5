@@ -13,12 +13,17 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '.'; 
     push @INC, '../lib';
+    require Config;
+    if (($Config::Config{'extensions'} !~ m!\bData/Dumper\b!) ){
+	print "1..0 # Skip -- Perl configured without Data::Dumper module\n";
+	exit 0;
+    }
 }    
 
 use strict;
 use Tie::RefHash;
 use Data::Dumper;
-my $numtests = 37;
+my $numtests = 39;
 my $currtest = 1;
 print "1..$numtests\n";
 
@@ -124,6 +129,14 @@ test((keys %h)[0] eq $ref);
 test((keys %{$h{$ref}}) == 1);
 test((keys %{$h{$ref}})[0] eq $ref1);
 
+{
+    # Tests that delete returns the deleted element [perl #32193]
+    my $ref = \(my $var = "oink");
+    tie my %oink, 'Tie::RefHash';
+    $oink{$ref} = "ding";
+    test($oink{$ref} eq "ding");
+    test(delete($oink{$ref}) eq "ding");
+}
 
 die "expected to run $numtests tests, but ran ", $currtest - 1
   if $currtest - 1 != $numtests;
@@ -208,6 +221,7 @@ sub runtests {
             s/ at .+ line \d+\.$//mg;
             s/ at .+ line \d+, at .*//mg;
             s/ at .+ line \d+, near .*//mg;
+	    s/(uninitialized value)( within)? [\$@%].*? in /$1 in /g;
         }
 
         my (@warnings, %seen);
@@ -312,4 +326,3 @@ END
 
     return @r;
 }
-

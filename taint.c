@@ -14,6 +14,9 @@
  * liar, Saruman, and a corrupter of men's hearts."  --Theoden
  */
 
+/* This file contains a few functions for handling data tainting in Perl
+ */
+
 #include "EXTERN.h"
 #define PERL_IN_TAINT_C
 #include "perl.h"
@@ -21,7 +24,7 @@
 void
 Perl_taint_proper(pTHX_ const char *f, const char *s)
 {
-    char *ug;
+    const char *ug;
 
 #if defined(HAS_SETEUID) && defined(DEBUGGING)
 #   if Uid_t_size == 1
@@ -71,8 +74,8 @@ Perl_taint_env(pTHX)
 {
     SV** svp;
     MAGIC* mg;
-    char** e;
-    static char* misc_env[] = {
+    const char** e;
+    static const char* misc_env[] = {
 	"IFS",		/* most shells' inter-field separators */
 	"CDPATH",	/* ksh dain bramage #1 */
 	"ENV",		/* ksh dain bramage #2 */
@@ -80,8 +83,25 @@ Perl_taint_env(pTHX)
 	NULL
     };
 
+    /* Don't bother if there's no *ENV glob */
     if (!PL_envgv)
 	return;
+    /* If there's no %ENV hash of if it's not magical, croak, because
+     * it probably doesn't reflect the actual environment */
+    if (!GvHV(PL_envgv) || !(SvRMAGICAL(GvHV(PL_envgv))
+	    && mg_find((SV*)GvHV(PL_envgv), PERL_MAGIC_env))) {
+	const bool was_tainted = PL_tainted;
+        const char *name = GvENAME(PL_envgv);
+	PL_tainted = TRUE;
+	if (strEQ(name,"ENV"))
+	    /* hash alias */
+	    taint_proper("%%ENV is aliased to %s%s", "another variable");
+	else
+	    /* glob alias: report it in the error message */
+	    taint_proper("%%ENV is aliased to %%%s%s", name);
+	/* this statement is reached under -t or -U */
+	PL_tainted = was_tainted;
+    }
 
 #ifdef VMS
     {
@@ -124,7 +144,7 @@ Perl_taint_env(pTHX)
     svp = hv_fetch(GvHVn(PL_envgv),"TERM",4,FALSE);
     if (svp && *svp && SvTAINTED(*svp)) {
 	STRLEN n_a;
-	bool was_tainted = PL_tainted;
+	const bool was_tainted = PL_tainted;
 	char *t = SvPV(*svp, n_a);
 	char *e = t + n_a;
 	PL_tainted = was_tainted;

@@ -1,6 +1,6 @@
 /*    perly.y
  *
- *    Copyright (c) 1991-2002, Larry Wall
+ *    Copyright (c) 1991-2002, 2003, 2004 Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -12,44 +12,20 @@
  * All that is gold does not glitter, not all those who wander are lost.'
  */
 
-%{
-#include "EXTERN.h"
-#define PERL_IN_PERLY_C
-#include "perl.h"
-#ifdef EBCDIC
-#undef YYDEBUG
-#endif
-#define dep() deprecate("\"do\" to call subroutines")
+/* This file holds the grammar for the Perl language. If edited, you need
+ * to run regen_perly.pl, which re-creates the files perly.h, perly.tab
+ * and perly.act which are derived from this.
+ *
+ * The main job of of this grammar is to call the various newFOO()
+ * functions in op.c to build a syntax tree of OP structs.
+ * It relies on the lexer in toke.c to do the tokenizing.
+ */
 
-/* stuff included here to make perly_c.diff apply better */
+/*  Make the parser re-entrant. */
 
-#define yydebug	    PL_yydebug
-#define yynerrs	    PL_yynerrs
-#define yyerrflag   PL_yyerrflag
-#define yychar	    PL_yychar
-#define yyval	    PL_yyval
-#define yylval	    PL_yylval
-
-struct ysv {
-    short* yyss;
-    YYSTYPE* yyvs;
-    int oldyydebug;
-    int oldyynerrs;
-    int oldyyerrflag;
-    int oldyychar;
-    YYSTYPE oldyyval;
-    YYSTYPE oldyylval;
-};
-
-static void yydestruct(pTHX_ void *ptr);
-
-%}
+%pure_parser
 
 %start prog
-
-%{
-#if 0 /* get this from perly.h instead */
-%}
 
 %union {
     I32	ival;
@@ -57,16 +33,6 @@ static void yydestruct(pTHX_ void *ptr);
     OP *opval;
     GV *gvval;
 }
-
-%{
-#endif /* 0 */
-
-#ifdef USE_PURE_BISON
-#define YYLEX_PARAM (&yychar)
-#define yylex yylex_r
-#endif
-
-%}
 
 %token <ival> '{'
 
@@ -83,7 +49,7 @@ static void yydestruct(pTHX_ void *ptr);
 %token COLONATTR
 
 %type <ival> prog decl format startsub startanonsub startformsub
-%type <ival> progstart remember mremember '&'
+%type <ival> progstart remember mremember '&' savescope
 %type <opval> block mblock lineseq line loop cond else
 %type <opval> expr term subscripted scalar ary hsh arylen star amper sideff
 %type <opval> argexpr nexpr texpr iexpr mexpr mnexpr mtexpr miexpr
@@ -144,9 +110,6 @@ remember:	/* NULL */	/* start a full lexical scope */
 
 progstart:
 		{
-#if defined(YYDEBUG) && defined(DEBUGGING)
-		    yydebug = (DEBUG_p_TEST);
-#endif
 		    PL_expect = XSTATE; $$ = block_start(TRUE);
 		}
 	;
@@ -162,16 +125,20 @@ mremember:	/* NULL */	/* start a partial lexical scope */
 			{ $$ = block_start(FALSE); }
 	;
 
+savescope:	/* NULL */	/* remember stack pos in case of error */
+		{ $$ = PL_savestack_ix; }
+
 /* A collection of "lines" in the program */
 lineseq	:	/* NULL */
 			{ $$ = Nullop; }
 	|	lineseq decl
 			{ $$ = $1; }
-	|	lineseq line
-			{   $$ = append_list(OP_LINESEQ,
-				(LISTOP*)$1, (LISTOP*)$2);
+	|	lineseq savescope line
+			{   LEAVE_SCOPE($2);
+			    $$ = append_list(OP_LINESEQ,
+				(LISTOP*)$1, (LISTOP*)$3);
 			    PL_pad_reset_pending = TRUE;
-			    if ($1 && $2) PL_hints |= HINT_BLOCK_SCOPE; }
+			    if ($1 && $3) PL_hints |= HINT_BLOCK_SCOPE; }
 	;
 
 /* A "line" in the program */
@@ -431,7 +398,7 @@ argexpr	:	argexpr ','
 	;
 
 /* List operators */
-listop	:	LSTOP indirob argexpr          /* print $fh @args */
+listop	:	LSTOP indirob argexpr /* map {...} @args or print $fh @args */
 			{ $$ = convert($1, OPf_STACKED,
 				prepend_elem(OP_LIST, newGVREF($1,$2), $3) ); }
 	|	FUNC '(' indirob expr ')'      /* print ($fh @args */
@@ -460,7 +427,7 @@ listop	:	LSTOP indirob argexpr          /* print $fh @args */
 			{ $$ = convert($1, 0, $2); }
 	|	FUNC '(' listexprcom ')'             /* print (@args) */
 			{ $$ = convert($1, 0, $3); }
-	|	LSTOPSUB startanonsub block          /* map { foo } ... */
+	|	LSTOPSUB startanonsub block /* sub f(&@);   f { foo } ... */
 			{ $3 = newANONATTRSUB($2, 0, Nullop, $3); }
 		    listexpr		%prec LSTOP  /* ... @bar */
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
@@ -477,7 +444,8 @@ method	:	METHOD
 subscripted:    star '{' expr ';' '}'        /* *main::{something} */
                         /* In this and all the hash accessors, ';' is
                          * provided by the tokeniser */
-			{ $$ = newBINOP(OP_GELEM, 0, $1, scalar($3)); }
+			{ $$ = newBINOP(OP_GELEM, 0, $1, scalar($3));
+			    PL_expect = XOPERATOR; }
 	|	scalar '[' expr ']'          /* $array[$element] */
 			{ $$ = newBINOP(OP_AELEM, 0, oopsAV($1), scalar($3)); }
 	|	term ARROW '[' expr ']'      /* somearef->[$element] */
@@ -689,7 +657,7 @@ term	:	termbinop
 			{ $$ = newUNOP(OP_NOT, 0, scalar($2)); }
 	|	UNIOP                                /* Unary op, $_ implied */
 			{ $$ = newOP($1, 0); }
-	|	UNIOP block                          /* eval { foo }, I *think* */
+	|	UNIOP block                          /* eval { foo } */
 			{ $$ = newUNOP($1, 0, $2); }
 	|	UNIOP term                           /* Unary op */
 			{ $$ = newUNOP($1, 0, $2); }
@@ -704,13 +672,12 @@ term	:	termbinop
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
 				scalar($1)); }
 	|	FUNC1 '(' ')'                        /* not () */
-			{ $$ = newOP($1, OPf_SPECIAL); }
+			{ $$ = $1 == OP_NOT ? newUNOP($1, 0, newSVOP(OP_CONST, 0, newSViv(0)))
+					    : newOP($1, OPf_SPECIAL); }
 	|	FUNC1 '(' expr ')'                   /* not($foo) */
 			{ $$ = newUNOP($1, 0, $3); }
-	|	PMFUNC '(' term ')'                  /* split (/foo/) */
-			{ $$ = pmruntime($1, $3, Nullop); }
-	|	PMFUNC '(' term ',' term ')'         /* split (/foo/,$bar) */
-			{ $$ = pmruntime($1, $3, $5); }
+	|	PMFUNC '(' argexpr ')'           /* m//, s///, tr/// */
+			{ $$ = pmruntime($1, $3, 1); }
 	|	WORD
 	|	listop
 	;
@@ -791,13 +758,3 @@ indirob	:	WORD
 	|	PRIVATEREF
 			{ $$ = $1; }
 	;
-
-%% /* PROGRAM */
-
-/* more stuff added to make perly_c.diff easier to apply */
-
-#ifdef yyparse
-#undef yyparse
-#endif
-#define yyparse() Perl_yyparse(pTHX)
-

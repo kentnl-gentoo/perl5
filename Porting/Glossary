@@ -1974,6 +1974,14 @@ d_strftime (d_strftime.U):
 	This variable conditionally defines the HAS_STRFTIME symbol, which
 	indicates to the C program that the strftime() routine is available.
 
+d_strlcat (d_strlcat.U):
+	This variable conditionally defines the HAS_STRLCAT symbol, which
+	indicates to the C program that the strlcat () routine is available.
+
+d_strlcpy (d_strlcpy.U):
+	This variable conditionally defines the HAS_STRLCPY symbol, which
+	indicates to the C program that the strlcpy () routine is available.
+
 d_strtod (d_strtod.U):
 	This variable conditionally defines the HAS_STRTOD symbol, which
 	indicates to the C program that the strtod() routine is available
@@ -3801,21 +3809,6 @@ plibpth (libpth.U):
 	Its value is prepend to libpth. This variable takes care of special
 	machines, like the mips.  Usually, it should be empty.
 
-pm_apiversion (xs_apiversion.U):
-	This variable contains the version of the oldest perl
-	compatible with the present perl.  (That is, pure perl modules
-	written for $pm_apiversion will still work for the current
-	version).  perl.c:incpush() and lib/lib.pm will automatically
-	search in $sitelib for older directories across major versions
-	back to pm_apiversion.  This is only useful if you have a perl
-	library directory tree structured like the default one.  The
-	versioned site_perl library was introduced in 5.005, so that's
-	the default setting for this variable.  It's hard to imagine
-	it changing before Perl6.  It is included here for symmetry
-	with xs_apiveprsion -- the searching algorithms will
-	(presumably) be similar.
-	See the INSTALL file for how this works.
-
 pmake (Loc.U):
 	This variable is defined but not used by Configure.
 	The value is a plain '' and is not useful.
@@ -4614,6 +4607,10 @@ uselongdouble (uselongdbl.U):
 	This variable conditionally defines the USE_LONG_DOUBLE symbol,
 	and indicates that long doubles should be used when available.
 
+usemallocwrap (mallocsrc.U):
+	This variable contains y if we are wrapping malloc to prevent
+	integer overflow during size calculations.
+
 usemorebits (usemorebits.U):
 	This variable conditionally defines the USE_MORE_BITS symbol,
 	and indicates that explicit 64-bit interfaces and long doubles
@@ -4659,6 +4656,13 @@ usereentrant (usethreads.U):
 	_r versions of library functions.  This is only potentially
 	meaningful if usethreads is set and is very experimental, it is
 	not even prompted for.
+
+userelocatableinc (XXX.U):
+	This variable is set to true to indicate that perl should relocate
+	@INC entries at runtime based on the path to the perl binary.
+	Any @INC paths starting ".../" are relocated relative to the directory
+	containing the perl binary, and a logical cleanup of the path is then
+	made around the join point (removing "dir/../" pairs)
 
 usesfio (d_sfio.U):
 	This variable is set to true when the user agrees to use sfio.
@@ -4877,23 +4881,6 @@ xlibpth (libpth.U):
 	This variable holds extra path (space-separated) used to find
 	libraries on this platform, for example CPU-specific libraries
 	(on multi-CPU platforms) may be listed here.
-
-xs_apiversion (xs_apiversion.U):
-	This variable contains the version of the oldest perl binary
-	compatible with the present perl.  perl.c:incpush() and
-	lib/lib.pm will automatically search in $sitearch for older
-	directories across major versions back to xs_apiversion.
-	This is only useful if you have a perl library directory tree
-	structured like the default one.
-	See INSTALL for how this works.
-	The versioned site_perl directory was introduced in 5.005,
-	so that is the lowest possible value.
-	Since this can depend on compile time options
-	it is set by Configure.  Other non-default sources
-	of potential incompatibility, such as multiplicity, threads,
-	debugging, 64bits, sfio, etc., are not checked for currently,
-	though in principle we could go snooping around in old
-	Config.pm files.
 
 yacc (yacc.U):
 	This variable holds the name of the compiler compiler we

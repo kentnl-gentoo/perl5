@@ -1,7 +1,7 @@
 /*    handy.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999,
- *    2000, 2001, 2002, by Larry Wall and others
+ *    2000, 2001, 2002, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -157,6 +157,11 @@ typedef U64TYPE U64;
 #           endif
 #       endif
 #   endif
+#endif
+
+/* HMB H.Merijn Brand - a placeholder for preparing Configure patches */
+#if defined(USE_SITECUSTOMIZE) || defined(LIBM_VERSION_TYPE)
+/* Not (yet) used at top level, but mention them for metaconfig */
 #endif
 
 /* Mention I8SIZE, U8SIZE, I16SIZE, U16SIZE, I32SIZE, U32SIZE,
@@ -357,7 +362,7 @@ Converts the specified character to lowercase.
 #   define isGRAPH(c)	(isALNUM(c) || isPUNCT(c))
 #   define isPRINT(c)	(((c) > 32 && (c) < 127) || (c) == ' ')
 #   define isPUNCT(c)	(((c) >= 33 && (c) <= 47) || ((c) >= 58 && (c) <= 64)  || ((c) >= 91 && (c) <= 96) || ((c) >= 123 && (c) <= 126))
-#   define isXDIGIT(c)  (isdigit(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F'))
+#   define isXDIGIT(c)  (isDIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F'))
 #   define toUPPER(c)	(isLOWER(c) ? (c) - ('a' - 'A') : (c))
 #   define toLOWER(c)	(isUPPER(c) ? (c) + ('a' - 'A') : (c))
 #endif
@@ -559,15 +564,29 @@ The XSUB-writer's interface to the C C<memmove> function.  The C<src> is the
 source, C<dest> is the destination, C<nitems> is the number of items, and C<type> is
 the type.  Can do overlapping moves.  See also C<Copy>.
 
+=for apidoc Am|void *|MoveD|void* src|void* dest|int nitems|type
+Like C<Move> but returns dest. Useful for encouraging compilers to tail-call
+optimise.
+
 =for apidoc Am|void|Copy|void* src|void* dest|int nitems|type
 The XSUB-writer's interface to the C C<memcpy> function.  The C<src> is the
 source, C<dest> is the destination, C<nitems> is the number of items, and C<type> is
 the type.  May fail on overlapping copies.  See also C<Move>.
 
+=for apidoc Am|void *|CopyD|void* src|void* dest|int nitems|type
+
+Like C<Copy> but returns dest. Useful for encouraging compilers to tail-call
+optimise.
+
 =for apidoc Am|void|Zero|void* dest|int nitems|type
 
 The XSUB-writer's interface to the C C<memzero> function.  The C<dest> is the
 destination, C<nitems> is the number of items, and C<type> is the type.
+
+=for apidoc Am|void *|ZeroD|void* dest|int nitems|type
+
+Like C<Zero> but returns dest. Useful for encouraging compilers to tail-call
+optimise.
 
 =for apidoc Am|void|StructCopy|type src|type dest|type
 This is an architecture-independent macro to copy one structure to another.
@@ -583,6 +602,45 @@ hopefully catches attempts to access uninitialized memory.
 
 #define NEWSV(x,len)	newSV(len)
 
+#ifdef PERL_MALLOC_WRAP
+#define MEM_WRAP_CHECK(n,t) \
+	(void)((n)>((MEM_SIZE)~0)/sizeof(t)?(Perl_croak_nocontext(PL_memory_wrap),0):0)
+#define MEM_WRAP_CHECK_1(n,t,a) \
+	(void)((n)>((MEM_SIZE)~0)/sizeof(t)?(Perl_croak_nocontext(a),0):0)
+#define MEM_WRAP_CHECK_2(n,t,a,b) \
+	(void)((n)>((MEM_SIZE)~0)/sizeof(t)?(Perl_croak_nocontext(a,b),0):0)
+
+#define New(x,v,n,t)	(v = (MEM_WRAP_CHECK(n,t), (t*)safemalloc((MEM_SIZE)((n)*sizeof(t)))))
+#define Newc(x,v,n,t,c)	(v = (MEM_WRAP_CHECK(n,t), (c*)safemalloc((MEM_SIZE)((n)*sizeof(t)))))
+#define Newz(x,v,n,t)	(v = (MEM_WRAP_CHECK(n,t), (t*)safemalloc((MEM_SIZE)((n)*sizeof(t))))), \
+			memzero((char*)(v), (n)*sizeof(t))
+#define Renew(v,n,t) \
+	  (v = (MEM_WRAP_CHECK(n,t), (t*)saferealloc((Malloc_t)(v),(MEM_SIZE)((n)*sizeof(t)))))
+#define Renewc(v,n,t,c) \
+	  (v = (MEM_WRAP_CHECK(n,t), (c*)saferealloc((Malloc_t)(v),(MEM_SIZE)((n)*sizeof(t)))))
+#define Safefree(d)	safefree((Malloc_t)(d))
+
+#define Move(s,d,n,t)	(MEM_WRAP_CHECK(n,t), (void)memmove((char*)(d),(const char*)(s), (n) * sizeof(t)))
+#define Copy(s,d,n,t)	(MEM_WRAP_CHECK(n,t), (void)memcpy((char*)(d),(const char*)(s), (n) * sizeof(t)))
+#define Zero(d,n,t)	(MEM_WRAP_CHECK(n,t), (void)memzero((char*)(d), (n) * sizeof(t)))
+
+#define MoveD(s,d,n,t)	(MEM_WRAP_CHECK(n,t), memmove((char*)(d),(const char*)(s), (n) * sizeof(t)))
+#define CopyD(s,d,n,t)	(MEM_WRAP_CHECK(n,t), memcpy((char*)(d),(const char*)(s), (n) * sizeof(t)))
+#ifdef HAS_MEMSET
+#define ZeroD(d,n,t)	(MEM_WRAP_CHECK(n,t), memzero((char*)(d), (n) * sizeof(t)))
+#else
+/* Using bzero(), which returns void.  */
+#define ZeroD(d,n,t)	(MEM_WRAP_CHECK(n,t), memzero((char*)(d), (n) * sizeof(t)),d)
+#endif
+
+#define Poison(d,n,t)	(MEM_WRAP_CHECK(n,t), (void)memset((char*)(d), 0xAB, (n) * sizeof(t)))
+
+#else
+
+#define MEM_WRAP_CHECK(n,t)
+#define MEM_WRAP_CHECK_1(n,t,a)
+#define MEM_WRAP_CHECK_2(n,t,a,b)
+
 #define New(x,v,n,t)	(v = (t*)safemalloc((MEM_SIZE)((n)*sizeof(t))))
 #define Newc(x,v,n,t,c)	(v = (c*)safemalloc((MEM_SIZE)((n)*sizeof(t))))
 #define Newz(x,v,n,t)	(v = (t*)safemalloc((MEM_SIZE)((n)*sizeof(t)))), \
@@ -593,11 +651,21 @@ hopefully catches attempts to access uninitialized memory.
 	  (v = (c*)saferealloc((Malloc_t)(v),(MEM_SIZE)((n)*sizeof(t))))
 #define Safefree(d)	safefree((Malloc_t)(d))
 
-#define Move(s,d,n,t)	(void)memmove((char*)(d),(char*)(s), (n) * sizeof(t))
-#define Copy(s,d,n,t)	(void)memcpy((char*)(d),(char*)(s), (n) * sizeof(t))
+#define Move(s,d,n,t)	(void)memmove((char*)(d),(const char*)(s), (n) * sizeof(t))
+#define Copy(s,d,n,t)	(void)memcpy((char*)(d),(const char*)(s), (n) * sizeof(t))
 #define Zero(d,n,t)	(void)memzero((char*)(d), (n) * sizeof(t))
 
+#define MoveD(s,d,n,t)	memmove((char*)(d),(const char*)(s), (n) * sizeof(t))
+#define CopyD(s,d,n,t)	memcpy((char*)(d),(const char*)(s), (n) * sizeof(t))
+#ifdef HAS_MEMSET
+#define ZeroD(d,n,t)	memzero((char*)(d), (n) * sizeof(t))
+#else
+#define ZeroD(d,n,t)	((void)memzero((char*)(d), (n) * sizeof(t)),d)
+#endif
+
 #define Poison(d,n,t)	(void)memset((char*)(d), 0xAB, (n) * sizeof(t))
+
+#endif
 
 #else /* lint */
 
@@ -608,6 +676,9 @@ hopefully catches attempts to access uninitialized memory.
 #define Move(s,d,n,t)
 #define Copy(s,d,n,t)
 #define Zero(d,n,t)
+#define MoveD(s,d,n,t)	d
+#define CopyD(s,d,n,t)	d
+#define ZeroD(d,n,t)	d
 #define Poison(d,n,t)
 #define Safefree(d)	(d) = (d)
 
@@ -633,3 +704,19 @@ hopefully catches attempts to access uninitialized memory.
 # endif
 #endif
 
+/* convenience debug macros */
+#ifdef USE_ITHREADS
+#define pTHX_FORMAT  "Perl interpreter: 0x%p"
+#define pTHX__FORMAT ", Perl interpreter: 0x%p"
+#define pTHX_VALUE_   (unsigned long)my_perl,
+#define pTHX_VALUE    (unsigned long)my_perl
+#define pTHX__VALUE_ ,(unsigned long)my_perl,
+#define pTHX__VALUE  ,(unsigned long)my_perl
+#else
+#define pTHX_FORMAT 
+#define pTHX__FORMAT
+#define pTHX_VALUE_ 
+#define pTHX_VALUE
+#define pTHX__VALUE_ 
+#define pTHX__VALUE
+#endif /* USE_ITHREADS */

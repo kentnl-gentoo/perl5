@@ -144,6 +144,17 @@ value.
     print $i++;  # prints 0
     print ++$j;  # prints 1
 
+Note that just as in C, Perl doesn't define B<when> the variable is
+incremented or decremented. You just know it will be done sometime 
+before or after the value is returned. This also means that modifying
+a variable twice in the same statement will lead to undefined behaviour.
+Avoid statements like:
+
+    $i = $i ++;
+    print ++ $i + $i ++;
+
+Perl will not guarantee what the result of the above statements is.
+
 The auto-increment operator has a little extra builtin magic to it.  If
 you increment a variable that is numeric, or that has ever been used in
 a numeric context, you get a normal increment.  If, however, the
@@ -179,8 +190,8 @@ Unary "-" performs arithmetic negation if the operand is numeric.  If
 the operand is an identifier, a string consisting of a minus sign
 concatenated with the identifier is returned.  Otherwise, if the string
 starts with a plus or minus, a string starting with the opposite sign
-is returned.  One effect of these rules is that C<-bareword> is equivalent
-to C<"-bareword">.
+is returned.  One effect of these rules is that -bareword is equivalent
+to "-bareword".
 
 Unary "~" performs bitwise negation, i.e., 1's complement.  For
 example, C<0666 & ~027> is 0640.  (See also L<Integer Arithmetic> and
@@ -208,7 +219,8 @@ pattern, substitution, or transliteration.  The left argument is what is
 supposed to be searched, substituted, or transliterated instead of the default
 $_.  When used in scalar context, the return value generally indicates the
 success of the operation.  Behavior in list context depends on the particular
-operator.  See L</"Regexp Quote-Like Operators"> for details.
+operator.  See L</"Regexp Quote-Like Operators"> for details and 
+L<perlretut> for examples using these operators.
 
 If the right argument is an expression rather than a search pattern,
 substitution, or transliteration, it is interpreted as a search pattern at run
@@ -238,7 +250,9 @@ Binary "x" is the repetition operator.  In scalar context or if the left
 operand is not enclosed in parentheses, it returns a string consisting
 of the left operand repeated the number of times specified by the right
 operand.  In list context, if the left operand is enclosed in
-parentheses, it repeats the list.
+parentheses, it repeats the list.  If the right operand is zero or
+negative, it returns an empty string or an empty list, depending on the
+context.
 
     print '-' x 80;		# print row of dashes
 
@@ -530,7 +544,27 @@ As a scalar operator:
         close ARGV if eof;             # reset $. each file
     }
 
-As a list operator:
+Here's a simple example to illustrate the difference between
+the two range operators:
+
+    @lines = ("   - Foo",
+              "01 - Bar",
+              "1  - Baz",
+              "   - Quux");
+
+    foreach(@lines)
+    {
+        if (/0/ .. /1/)
+        {
+            print "$_\n";
+        }
+    }
+
+This program will print only the line containing "Bar". If 
+the range operator is changed to C<...>, it will also print the 
+"Baz" line.
+
+And now some examples as a list operator:
 
     for (101 .. 200) { print; }	# print $_ 100 times
     @foo = @foo[0 .. $#foo];	# an expensive no-op
@@ -654,9 +688,13 @@ In list context, it's just the list argument separator, and inserts
 both its arguments into the list.
 
 The C<< => >> operator is a synonym for the comma, but forces any word
-to its left to be interpreted as a string (as of 5.001). It is helpful
-in documenting the correspondence between keys and values in hashes,
-and other paired elements in lists.
+(consisting entirely of word characters) to its left to be interpreted
+as a string (as of 5.001).  If the argument on the left is not a word,
+it is first interpreted as an expression, and then the string value of
+that is used.
+
+The C<< => >> operator is helpful in documenting the correspondence
+between keys and values in hashes, and other paired elements in lists.
 
 =head2 List Operators (Rightward)
 
@@ -801,6 +839,9 @@ and in transliterations.
     \x{263a}	wide hex char	(SMILEY)
     \c[		control char    (ESC)
     \N{name}	named Unicode character
+
+B<NOTE>: Unlike C and other languages, Perl has no \v escape sequence for
+the vertical tab (VT - ASCII 11).
 
 The following escape sequences are available in constructs that interpolate
 but not in transliterations.
@@ -1182,10 +1223,10 @@ but leave its STDOUT to come out the old STDERR:
     $output = `cmd 3>&1 1>&2 2>&3 3>&-`;
 
 To read both a command's STDOUT and its STDERR separately, it's easiest
-and safest to redirect them separately to files, and then read from those
-files when the program is done:
+to redirect them separately to files, and then read from those files
+when the program is done:
 
-    system("program args 1>/tmp/program.stdout 2>/tmp/program.stderr");
+    system("program args 1>program.stdout 2>program.stderr");
 
 Using single-quote as a delimiter protects the command from Perl's
 double-quote interpolation, passing it on to the shell instead:
@@ -1342,9 +1383,9 @@ Examples:
 	\*/	# Match the closing delimiter.
     } []gsx;
 
-    s/^\s*(.*?)\s*$/$1/;	# trim white space in $_, expensively
+    s/^\s*(.*?)\s*$/$1/;	# trim whitespace in $_, expensively
 
-    for ($variable) {		# trim white space in $variable, cheap
+    for ($variable) {		# trim whitespace in $variable, cheap
 	s/^\s+//;
 	s/\s+$//;
     }
@@ -2022,6 +2063,14 @@ you say
 
 the compiler will precompute the number which that expression
 represents so that the interpreter won't have to.
+
+=head2 No-ops
+
+Perl doesn't officially have a no-op operator, but the bare constants
+C<0> and C<1> are special-cased to not produce a warning in a void
+context, so you can for example safely do
+
+    1 while foo();
 
 =head2 Bitwise String Operators
 

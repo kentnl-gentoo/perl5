@@ -1,7 +1,7 @@
 /*    miniperlmain.c
  *
- *    Copyright (C) 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002,
- *    by Larry Wall and others
+ *    Copyright (C) 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2003,
+ *    2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -12,9 +12,18 @@
  * "The Road goes ever on and on, down from the door where it began."
  */
 
+/* This file contains the main() function for the perl interpreter.
+ * Note that miniperlmain.c contains main() for the 'miniperl' binary,
+ * while perlmain.c contains main() for the 'perl' binary.
+ *
+ * Miniperl is like perl except that it does not support dynamic loading,
+ * and in fact is used to build the dynamic modules needed for the 'real'
+ * perl executable.
+ */
+
 #ifdef OEMVS
 #ifdef MYMALLOC
-/* sbrk is limited to first heap segement so make it big */
+/* sbrk is limited to first heap segment so make it big */
 #pragma runopts(HEAP(8M,500K,ANYWHERE,KEEP,8K,4K) STACK(,,ANY,) ALL31(ON))
 #else
 #pragma runopts(HEAP(2M,500K,ANYWHERE,KEEP,8K,4K) STACK(,,ANY,) ALL31(ON))
@@ -39,6 +48,10 @@ int
 main(int argc, char **argv, char **env)
 {
     int exitstatus;
+    (void)env;
+#ifndef PERL_USE_SAFE_PUTENV
+    PL_use_safe_putenv = 0;
+#endif /* PERL_USE_SAFE_PUTENV */
 
 #ifdef PERL_GLOBAL_STRUCT
 #define PERLVAR(var,type) /**/

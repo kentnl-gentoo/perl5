@@ -69,7 +69,7 @@ Postpone load of modules until a function is used
 
 =item base
 
-Establish IS-A relationship with base class at compile time
+Establish IS-A relationship with base classes at compile time
 
 =item bigint
 
@@ -101,11 +101,15 @@ Declare constants
 
 =item diagnostics
 
-Perl compiler pragma to force verbose warning diagnostics
+Produce verbose warning diagnostics
 
 =item encoding
 
 Allows you to write your script in non-ascii or non-utf8
+
+=item encoding::warnings
+
+Warn on implicit encoding conversions
 
 =item fields
 
@@ -359,7 +363,7 @@ Warn of errors (from perspective of caller)
 
 =item Carp::Heavy
 
-No user serviceable parts inside
+Heavy machinery, no user serviceable parts inside
 
 =item Class::ISA
 
@@ -380,6 +384,10 @@ Get pathname of current working directory
 =item DB
 
 Programmatic interface to the Perl debugging API (draft, subject to
+
+=item DBM_Filter
+
+Filter DBM keys/values 
 
 =item DB_File
 
@@ -412,6 +420,14 @@ Modules that calculate message digests
 =item Digest::MD5
 
 Perl interface to the MD5 Algorithm
+
+=item Digest::base
+
+Digest base class
+
+=item Digest::file
+
+Calculate digests of files
 
 =item DirHandle
 
@@ -549,6 +565,18 @@ Commands for the MM's to use in Makefiles
 
 Generate XS code to import C header constants
 
+=item ExtUtils::Constant::Base
+
+Base class for ExtUtils::Constant objects
+
+=item ExtUtils::Constant::Utils
+
+Helper functions for ExtUtils::Constant
+
+=item ExtUtils::Constant::XS
+
+Base class for ExtUtils::Constant objects
+
 =item ExtUtils::Embed
 
 Utilities for embedding Perl in C/C++ applications
@@ -587,7 +615,7 @@ DOS specific subclass of ExtUtils::MM_Unix
 
 =item ExtUtils::MM_MacOS
 
-Methods to override UN*X behaviour in ExtUtils::MakeMaker
+Once produced Makefiles for MacOS Classic
 
 =item ExtUtils::MM_NW5
 
@@ -635,11 +663,11 @@ Writing a module with MakeMaker
 
 =item ExtUtils::MakeMaker::bytes
 
-Version agnostic bytes.pm
+Version-agnostic bytes.pm
 
 =item ExtUtils::MakeMaker::vmsish
 
-Platform agnostic vmsish.pm
+Platform-agnostic vmsish.pm
 
 =item ExtUtils::Manifest
 
@@ -789,6 +817,10 @@ Compare 8-bit scalar data according to the current locale
 
 Functions for dealing with RFC3066-style language tags
 
+=item I18N::LangTags::Detect
+
+Detect the user's language preferences
+
 =item I18N::LangTags::List
 
 Tags and names for human languages
@@ -913,13 +945,13 @@ Arbitrary size integer math package
 
 Pure Perl module to support Math::BigInt
 
-=item Math::BigInt::Scalar
+=item Math::BigInt::CalcEmu
 
-Pure Perl module to test Math::BigInt with scalars
+Emulate low-level math with BigInt code
 
 =item Math::BigRat
 
-Arbitrarily big rationals
+Arbitrary big rational numbers
 
 =item Math::Complex
 
@@ -960,6 +992,10 @@ Glue to provide EXISTS for SDBM_File for Storable use
 =item Memoize::Storable
 
 Store Memoized data in Storable database
+
+=item Module::CoreList
+
+What modules shipped with versions of perl
 
 =item NDBM_File
 
@@ -1247,7 +1283,7 @@ Backend for building test libraries
 
 =item Test::Harness
 
-Run perl standard test scripts with statistics
+Run Perl standard test scripts with statistics
 
 =item Test::Harness::Assert
 
@@ -1260,6 +1296,10 @@ Internal Test::Harness Iterator
 =item Test::Harness::Straps
 
 Detailed analysis of test results
+
+=item Test::Harness::TAP
+
+Documentation for the TAP format
 
 =item Test::More
 
@@ -1392,10 +1432,6 @@ By-name interface to Perl's built-in getgr*() functions
 =item User::pwent
 
 By-name interface to Perl's built-in getpw*() functions
-
-=item Win32
-
-Interfaces to some Win32 API Functions
 
 =item XS::APItest
 

@@ -1,7 +1,7 @@
 /*    op.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -17,6 +17,12 @@
  *			parent takes over role of remembering starting op.)
  *	op_ppaddr	Pointer to current ppcode's function.
  *	op_type		The type of the operation.
+ *	op_opt		Whether or not the op has been optimised by the
+ *			peephole optimiser.
+ *	op_static	Whether or not the op is statically defined.
+ *			This flag is used by the B::C compiler backend
+ *			and indicates that the op should not be freed.
+ *	op_spare	Five spare bits!
  *	op_flags	Flags common to all operations.  See OPf_* below.
  *	op_private	Flags peculiar to a particular operation (BUT,
  *			by default, set to the number of children until
@@ -38,8 +44,10 @@
     OP*		op_sibling;		\
     OP*		(CPERLscope(*op_ppaddr))(pTHX);		\
     PADOFFSET	op_targ;		\
-    OPCODE	op_type;		\
-    U16		op_seq;			\
+    unsigned	op_type:9;		\
+    unsigned	op_opt:1;		\
+    unsigned	op_static:1;		\
+    unsigned	op_spare:5;		\
     U8		op_flags;		\
     U8		op_private;
 #endif
@@ -100,6 +108,7 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On RV2[SG]V, don't create GV--in defined()*/
 				/*  On OP_DBSTATE, indicates breakpoint
 				 *    (runtime property) */
+				/*  On OP_AELEMFAST, indiciates pad var */
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -135,15 +144,17 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpTRANS_TO_UTF		2
 #define OPpTRANS_IDENTICAL	4	/* right side is same as left */
 #define OPpTRANS_SQUASH		8
-#define OPpTRANS_DELETE		16
+    /* 16 is used for OPpTARGET_MY */
 #define OPpTRANS_COMPLEMENT	32
 #define OPpTRANS_GROWS		64
+#define OPpTRANS_DELETE		128
+#define OPpTRANS_ALL	(OPpTRANS_FROM_UTF|OPpTRANS_TO_UTF|OPpTRANS_IDENTICAL|OPpTRANS_SQUASH|OPpTRANS_COMPLEMENT|OPpTRANS_GROWS|OPpTRANS_DELETE)
 
 /* Private for OP_REPEAT */
 #define OPpREPEAT_DOLIST	64	/* List replication. */
 
-/* Private for OP_RV2?V, OP_?ELEM */
-#define OPpDEREF		(32|64)	/* Want ref to something: */
+/* Private for OP_RV2GV, OP_RV2SV, OP_AELEM, OP_HELEM, OP_PADSV */
+#define OPpDEREF		(32|64)	/* autovivify: Want ref to something: */
 #define OPpDEREF_AV		32	/*   Want ref to AV. */
 #define OPpDEREF_HV		64	/*   Want ref to HV. */
 #define OPpDEREF_SV		(32|64)	/*   Want ref to SV. */
@@ -169,7 +180,11 @@ Deprecated.  Use C<GIMME_V> instead.
   /* (lower bits may carry MAXARG) */
 #define OPpTARGET_MY		16	/* Target is PADMY. */
 
+/* Private for OP_ENTERITER and OP_ITER */
+#define OPpITER_REVERSED	4	/* for (reverse ...) */
+
 /* Private for OP_CONST */
+#define	OPpCONST_SHORTCIRCUIT	4	/* eg the constant 5 in (5 || foo) */
 #define	OPpCONST_STRICT		8	/* bearword subject to strict 'subs' */
 #define OPpCONST_ENTERED	16	/* Has been entered as symbol. */
 #define OPpCONST_ARYBASE	32	/* Was a $[ translated to constant. */
@@ -191,7 +206,9 @@ Deprecated.  Use C<GIMME_V> instead.
 /* Private for OP_SORT */
 #define OPpSORT_NUMERIC		1	/* Optimized away { $a <=> $b } */
 #define OPpSORT_INTEGER		2	/* Ditto while under "use integer" */
-#define OPpSORT_REVERSE		4	/* Descending sort */
+#define OPpSORT_REVERSE		4	/* Reversed sort */
+#define OPpSORT_INPLACE		8	/* sort in-place; eg @a = sort @a */
+#define OPpSORT_DESCEND		16	/* Descending sort */
 /* Private for OP_THREADSV */
 #define OPpDONE_SVREF		64	/* Been through newSVREF once */
 
@@ -207,6 +224,7 @@ Deprecated.  Use C<GIMME_V> instead.
 
 /* Private of OP_FTXXX */
 #define OPpFT_ACCESS		2	/* use filetest 'access' */
+#define OPpFT_STACKED		4	/* stacked filetest, as in "-f -x $f" */
 #define OP_IS_FILETEST_ACCESS(op) 		\
 	(((op)->op_type) == OP_FTRREAD  ||	\
 	 ((op)->op_type) == OP_FTRWRITE ||	\
@@ -215,6 +233,9 @@ Deprecated.  Use C<GIMME_V> instead.
 	 ((op)->op_type) == OP_FTEWRITE ||	\
 	 ((op)->op_type) == OP_FTEEXEC)
 
+/* Private for OP_(MAP|GREP)(WHILE|START) */
+#define OPpGREP_LEX		2	/* iterate over lexical $_ */
+    
 struct op {
     BASEOP
 };
@@ -246,7 +267,7 @@ struct pmop {
     BASEOP
     OP *	op_first;
     OP *	op_last;
-    OP *	op_pmreplroot;
+    OP *	op_pmreplroot; /* (type is really union {OP*,GV*,PADOFFSET}) */
     OP *	op_pmreplstart;
     PMOP *	op_pmnext;		/* list of all scanpats */
 #ifdef USE_ITHREADS
@@ -460,8 +481,13 @@ struct loop {
 
 #ifdef USE_ITHREADS
 #  define OP_REFCNT_INIT		MUTEX_INIT(&PL_op_mutex)
-#  define OP_REFCNT_LOCK		MUTEX_LOCK(&PL_op_mutex)
-#  define OP_REFCNT_UNLOCK		MUTEX_UNLOCK(&PL_op_mutex)
+#  ifdef PERL_CORE
+#    define OP_REFCNT_LOCK		MUTEX_LOCK(&PL_op_mutex)
+#    define OP_REFCNT_UNLOCK		MUTEX_UNLOCK(&PL_op_mutex)
+#  else
+#    define OP_REFCNT_LOCK		op_refcnt_lock()
+#    define OP_REFCNT_UNLOCK		op_refcnt_unlock()
+#  endif
 #  define OP_REFCNT_TERM		MUTEX_DESTROY(&PL_op_mutex)
 #else
 #  define OP_REFCNT_INIT		NOOP

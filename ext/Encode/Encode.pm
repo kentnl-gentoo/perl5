@@ -1,9 +1,9 @@
 #
-# $Id: Encode.pm,v 1.98 2003/08/20 11:16:34 dankogai Exp dankogai $
+# $Id: Encode.pm,v 2.9 2004/12/03 19:16:40 dankogai Exp $
 #
 package Encode;
 use strict;
-our $VERSION = do { my @r = (q$Revision: 1.9801 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
+our $VERSION = do { my @r = (q$Revision: 2.9 $ =~ /\d+/g); sprintf "%d."."%02d" x $#r, @r };
 sub DEBUG () { 0 }
 use XSLoader ();
 XSLoader::load(__PACKAGE__, $VERSION);
@@ -140,6 +140,7 @@ sub encode($$;$)
 {
     my ($name, $string, $check) = @_;
     return undef unless defined $string;
+    $string .= '' if ref $string; # stringify;
     $check ||=0;
     my $enc = find_encoding($name);
     unless(defined $enc){
@@ -155,6 +156,7 @@ sub decode($$;$)
 {
     my ($name,$octets,$check) = @_;
     return undef unless defined $octets;
+    $octets .= '' if ref $octets;
     $check ||=0;
     my $enc = find_encoding($name);
     unless(defined $enc){
@@ -195,11 +197,15 @@ sub encode_utf8($)
     return $str;
 }
 
-sub decode_utf8($)
+sub decode_utf8($;$)
 {
-    my ($str) = @_;
-    return undef unless utf8::decode($str);
-    return $str;
+    my ($str, $check) = @_;
+    if ($check){
+	return decode("utf8", $str, $check);
+    }else{
+	return undef unless utf8::decode($str);
+	return $str;
+    }
 }
 
 predefine_encodings(1);
@@ -395,9 +401,7 @@ for $octets is B<always> off.  When you encode anything, utf8 flag of
 the result is always off, even when it contains completely valid utf8
 string. See L</"The UTF-8 flag"> below.
 
-encode($valid_encoding, undef) is harmless but warns you for 
-C<Use of uninitialized value in subroutine entry>. 
-encode($valid_encoding, '') is harmless and warnless.
+If the $string is C<undef> or a reference then C<undef> is returned.
 
 =item $string = decode(ENCODING, $octets [, CHECK])
 
@@ -417,15 +421,14 @@ the utf8 flag for $string is on unless $octets entirely consists of
 ASCII data (or EBCDIC on EBCDIC machines).  See L</"The UTF-8 flag">
 below.
 
-decode($valid_encoding, undef) is harmless but warns you for 
-C<Use of uninitialized value in subroutine entry>. 
-decode($valid_encoding, '') is harmless and warnless.
+If the $string is C<undef> or a reference then C<undef> is returned.
 
 =item [$length =] from_to($octets, FROM_ENC, TO_ENC [, CHECK])
 
 Converts B<in-place> data between two encodings. The data in $octets
 must be encoded as octets and not as characters in Perl's internal
-format. For example, to convert ISO-8859-1 data to Microsoft's CP1250 encoding:
+format. For example, to convert ISO-8859-1 data to Microsoft's CP1250
+encoding:
 
   from_to($octets, "iso-8859-1", "cp1250");
 
@@ -436,8 +439,8 @@ and to convert it back:
 Note that because the conversion happens in place, the data to be
 converted cannot be a string constant; it must be a scalar variable.
 
-from_to() returns the length of the converted string in octets on success, undef
-otherwise.
+from_to() returns the length of the converted string in octets on
+success, I<undef> on error.
 
 B<CAVEAT>: The following operations look the same but are not quite so;
 
@@ -547,47 +550,56 @@ method.
   perlio_ok("euc-jp")
 
 Fortunately, all encodings that come with Encode core are PerlIO-savvy
-except for hz and ISO-2022-kr.  For gory details, see L<Encode::Encoding> and L<Encode::PerlIO>.
+except for hz and ISO-2022-kr.  For gory details, see
+L<Encode::Encoding> and L<Encode::PerlIO>.
 
 =head1 Handling Malformed Data
 
-The I<CHECK> argument is used as follows.  When you omit it,
-the behaviour is the same as if you had passed a value of 0 for
-I<CHECK>.
+The optional I<CHECK> argument is used as follows.  When you omit it,
+Encode::FB_DEFAULT ( == 0 ) is assumed.
+
+=over 2
+
+=item B<NOTE:> Not all encoding suppport this feature
+
+Some encodings ignore I<CHECK> argument.  For example,
+L<Encode::Unicode> ignores I<CHECK> and it always croaks on error.
+
+=back
+
+Now here is the list of I<CHECK> values available
 
 =over 2
 
 =item I<CHECK> = Encode::FB_DEFAULT ( == 0)
 
-If I<CHECK> is 0, (en|de)code will put a I<substitution character>
-in place of a malformed character.  For UCM-based encodings,
-E<lt>subcharE<gt> will be used.  For Unicode, the code point C<0xFFFD> is used.
-If the data is supposed to be UTF-8, an optional lexical warning
+If I<CHECK> is 0, (en|de)code will put a I<substitution character> in
+place of a malformed character.  When you encode, E<lt>subcharE<gt>
+will be used.  When you decode the code point C<0xFFFD> is used.  If
+the data is supposed to be UTF-8, an optional lexical warning
 (category utf8) is given.
 
 =item I<CHECK> = Encode::FB_CROAK ( == 1)
 
 If I<CHECK> is 1, methods will die on error immediately with an error
 message.  Therefore, when I<CHECK> is set to 1,  you should trap the
-fatal error with eval{} unless you really want to let it die on error.
+error with eval{} unless you really want to let it die.
 
 =item I<CHECK> = Encode::FB_QUIET
 
 If I<CHECK> is set to Encode::FB_QUIET, (en|de)code will immediately
-return the portion of the data that has been processed so far when
-an error occurs. The data argument will be overwritten with
-everything after that point (that is, the unprocessed part of data).
-This is handy when you have to call decode repeatedly in the case
-where your source data may contain partial multi-byte character
-sequences, for example because you are reading with a fixed-width
-buffer. Here is some sample code that does exactly this:
+return the portion of the data that has been processed so far when an
+error occurs. The data argument will be overwritten with everything
+after that point (that is, the unprocessed part of data).  This is
+handy when you have to call decode repeatedly in the case where your
+source data may contain partial multi-byte character sequences,
+(i.e. you are reading with a fixed-width buffer). Here is a sample
+code that does exactly this:
 
-  my $data = ''; my $utf8 = '';
-  while(defined(read $fh, $buffer, 256)){
-    # buffer may end in a partial character so we append
-    $data .= $buffer;
-    $utf8 .= decode($encoding, $data, Encode::FB_QUIET);
-    # $data now contains the unprocessed partial character
+  my $buffer = ''; my $string = '';
+  while(read $fh, $buffer, 256, length($buffer)){
+    $string .= decode($encoding, $buffer, Encode::FB_QUIET);
+    # $buffer now contains the unprocessed partial character
   }
 
 =item I<CHECK> = Encode::FB_WARN
@@ -611,8 +623,8 @@ where I<HHHH> is the Unicode ID of the character that cannot be found
 in the character repertoire of the encoding.
 
 HTML/XML character reference modes are about the same, in place of
-C<\x{I<HHHH>}>, HTML uses C<&#I<NNNN>>; where I<NNNN> is a decimal digit and
-XML uses C<&#xI<HHHH>>; where I<HHHH> is the hexadecimal digit.
+C<\x{I<HHHH>}>, HTML uses C<&#I<NNN>;> where I<NNN> is a decimal number and
+XML uses C<&#xI<HHHH>;> where I<HHHH> is the hexadecimal number.
 
 =item The bitmask
 
@@ -739,7 +751,7 @@ implementation.  As such, they are efficient but may change.
 If CHECK is true, also checks the data in STRING for being well-formed
 UTF-8.  Returns true if successful, false otherwise.
 
-As of perl 5.8.1, L<utf8> also has utf8::is_utif8().
+As of perl 5.8.1, L<utf8> also has utf8::is_utf8().
 
 =item _utf8_on(STRING)
 

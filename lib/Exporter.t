@@ -21,7 +21,7 @@ sub ok ($;$) {
 }
 
 
-print "1..26\n";
+print "1..28\n";
 require Exporter;
 ok( 1, 'Exporter compiled' );
 
@@ -75,7 +75,7 @@ $seat     = 'seat';
 BEGIN {*is = \&Is};
 sub Is { 'Is' };
 
-Exporter::export_ok_tags;
+Exporter::export_ok_tags();
 
 my %tags     = map { $_ => 1 } map { @$_ } values %EXPORT_TAGS;
 my %exportok = map { $_ => 1 } @EXPORT_OK;
@@ -196,3 +196,21 @@ push @Moving::Target::EXPORT_OK, 'bar';
 Moving::Target->import (bar);
 
 ::ok (bar eq "bar", "imported bar after EXPORT_OK changed");
+
+package The::Import;
+
+use Exporter 'import';
+
+eval { import() };
+::ok(\&import == \&Exporter::import, "imported the import routine");
+
+@EXPORT = qw( wibble );
+sub wibble {return "wobble"};
+
+package Use::The::Import;
+
+The::Import->import;
+
+my $val = eval { wibble() };
+::ok($val eq "wobble", "exported importer worked");
+

@@ -129,7 +129,9 @@ probably the right thing to do.
 
 This method will be triggered every time the tied variable is set
 (assigned).  Beyond its self reference, it also expects one (and only one)
-argument--the new value the user is trying to assign.
+argument--the new value the user is trying to assign. Don't worry about
+returning a value from STORE -- the semantic of assignment returning the
+assigned value is implemented with FETCH.
 
     sub STORE {
         my $self = shift;
@@ -154,7 +156,6 @@ argument--the new value the user is trying to assign.
         unless (defined setpriority(PRIO_PROCESS, $$self, $new_nicety)) {
             confess "setpriority failed: $!";
         }
-        return $new_nicety;
     }
 
 =item UNTIE this
@@ -473,7 +474,8 @@ the constructor.  FETCH and STORE access the key and value pairs.  EXISTS
 reports whether a key is present in the hash, and DELETE deletes one.
 CLEAR empties the hash by deleting all the key and value pairs.  FIRSTKEY
 and NEXTKEY implement the keys() and each() functions to iterate over all
-the keys.  UNTIE is called when C<untie> happens, and DESTROY is called when
+the keys. SCALAR is triggered when the tied hash is evaluated in scalar 
+context. UNTIE is called when C<untie> happens, and DESTROY is called when
 the tied variable is garbage collected.
 
 If this seems like a lot, then feel free to inherit from merely the
@@ -756,6 +758,31 @@ thing, but we'll have to go through the LIST field indirectly.
 	return each %{ $self->{LIST} }
     }
 
+=item SCALAR this
+
+This is called when the hash is evaluated in scalar context. In order
+to mimic the behaviour of untied hashes, this method should return a
+false value when the tied hash is considered empty. If this method does
+not exist, perl will make some educated guesses and return true when
+the hash is inside an iteration. If this isn't the case, FIRSTKEY is
+called, and the result will be a false value if FIRSTKEY returns the empty
+list, true otherwise.
+
+However, you should B<not> blindly rely on perl always doing the right 
+thing. Particularly, perl will mistakenly return true when you clear the 
+hash by repeatedly calling DELETE until it is empty. You are therefore 
+advised to supply your own SCALAR method when you want to be absolutely 
+sure that your hash behaves nicely in scalar context.
+
+In our example we can just call C<scalar> on the underlying hash
+referenced by C<$self-E<gt>{LIST}>:
+
+    sub SCALAR {
+	carp &whowasi if $DEBUG;
+	my $self = shift;
+	return scalar %{ $self->{LIST} }
+    }
+
 =item UNTIE this
 
 This is called when C<untie> occurs.  See L<The C<untie> Gotcha> below.
@@ -849,7 +876,7 @@ passed to the printf function.
     sub PRINTF {
         shift;
         my $fmt = shift;
-        print sprintf($fmt, @_)."\n";
+        print sprintf($fmt, @_);
     }
 
 =item READ this, LIST
@@ -1091,9 +1118,11 @@ You cannot easily tie a multilevel data structure (such as a hash of
 hashes) to a dbm file.  The first problem is that all but GDBM and
 Berkeley DB have size limitations, but beyond that, you also have problems
 with how references are to be represented on disk.  One experimental
-module that does attempt to address this need partially is the MLDBM
-module.  Check your nearest CPAN site as described in L<perlmodlib> for
-source code to MLDBM.
+module that does attempt to address this need is DBM::Deep.  Check your
+nearest CPAN site as described in L<perlmodlib> for source code.  Note
+that despite its name, DBM::Deep does not use dbm.  Another earlier attempt
+at solving the problem is MLDBM, which is also available on the CPAN, but
+which has some fairly serious limitations.
 
 Tied filehandles are still incomplete.  sysopen(), truncate(),
 flock(), fcntl(), stat() and -X can't currently be trapped.
@@ -1105,5 +1134,7 @@ Tom Christiansen
 TIEHANDLE by Sven Verdoolaege <F<skimo@dns.ufsia.ac.be>> and Doug MacEachern <F<dougm@osf.org>>
 
 UNTIE by Nick Ing-Simmons <F<nick@ing-simmons.net>>
+
+SCALAR by Tassilo von Parseval <F<tassilo.von.parseval@rwth-aachen.de>>
 
 Tying Arrays by Casey West <F<casey@geeknest.com>>

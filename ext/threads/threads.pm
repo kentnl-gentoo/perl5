@@ -50,13 +50,14 @@ our @EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 our @EXPORT = qw(
 async	
 );
-our $VERSION = '1.00';
+our $VERSION = '1.05';
 
 
 # || 0 to ensure compatibility with previous versions
 sub equal { ($_[0]->tid == $_[1]->tid) || 0 }
 
-# use "goto" trick to avoid pad problems from 5.8.1, should also be faster
+# use "goto" trick to avoid pad problems from 5.8.1 (fixed in 5.8.2)
+# should also be faster
 sub async (&;@) { unshift @_,'threads'; goto &new }
 
 sub object {
@@ -138,7 +139,8 @@ it the other way around.
 
 This will create a new thread with the entry point function and give
 it LIST as parameters.  It will return the corresponding threads
-object. The new() method is an alias for create().
+object, or C<undef> if thread creation failed. The new() method is an
+alias for create().
 
 =item $thread->join
 
@@ -268,7 +270,7 @@ signal handling is not threadsafe.
 
 =head1 AUTHOR and COPYRIGHT
 
-Arthur Bergman E<lt>arthur at contiller.seE<gt>
+Arthur Bergman E<lt>sky at nanisky.comE<gt>
 
 threads is released under the same license as Perl.
 

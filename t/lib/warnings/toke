@@ -799,4 +799,48 @@ use warnings 'ambiguous';
 $s = "(@-)(@+)";
 EXPECT
 
-
+########
+# toke.c
+# mandatory warning
+eval q/if ($a) { } elseif ($b) { }/;
+no warnings "syntax";
+eval q/if ($a) { } elseif ($b) { }/;
+EXPECT
+elseif should be elsif at (eval 1) line 1.
+########
+# toke.c
+# mandatory warning
+eval q/5 6/;
+no warnings "syntax";
+eval q/5 6/;
+EXPECT
+Number found where operator expected at (eval 1) line 1, near "5 6"
+	(Missing operator before  6?)
+########
+# toke.c
+use warnings "syntax";
+$_ = $a = 1;
+$a !=~  /1/;
+$a !=~ m#1#;
+$a !=~/1/;
+$a !=~ ?/?;
+$a !=~ y/1//;
+$a !=~ tr/1//;
+$a !=~ s/1//;
+$a != ~/1/;
+no warnings "syntax";
+$a !=~  /1/;
+$a !=~ m#1#;
+$a !=~/1/;
+$a !=~ ?/?;
+$a !=~ y/1//;
+$a !=~ tr/1//;
+$a !=~ s/1//;
+EXPECT
+!=~ should be !~ at - line 4.
+!=~ should be !~ at - line 5.
+!=~ should be !~ at - line 6.
+!=~ should be !~ at - line 7.
+!=~ should be !~ at - line 8.
+!=~ should be !~ at - line 9.
+!=~ should be !~ at - line 10.

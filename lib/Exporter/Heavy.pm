@@ -5,7 +5,8 @@ no strict 'refs';
 
 # On one line so MakeMaker will see it.
 require Exporter;  our $VERSION = $Exporter::VERSION;
-$Carp::Internal{"Exporter::Heavy"} = 1;
+# Carp does this now for us, so we can finally live w/o Carp
+#$Carp::Internal{"Exporter::Heavy"} = 1;
 
 =head1 NAME
 
@@ -69,7 +70,7 @@ sub heavy_export {
 	    $cache_is_current = 1;
 	}
 
-	if ($imports[0] =~ m#^[/!:]#){
+	if (grep m{^[/!:]}, @imports) {
 	    my $tagsref = \%{"${pkg}::EXPORT_TAGS"};
 	    my $tagdata;
 	    my %imports;

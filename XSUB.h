@@ -1,7 +1,7 @@
 /*    XSUB.h
  *
  *    Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -67,6 +67,14 @@ This is usually handled automatically by C<xsubpp>.
 Sets up the C<ix> variable for an XSUB which has aliases.  This is usually
 handled automatically by C<xsubpp>.
 
+=for apidoc Ams||dUNDERBAR
+Sets up the C<padoff_du> variable for an XSUB that wishes to use
+C<UNDERBAR>.
+
+=for apidoc AmU||UNDERBAR
+The SV* corresponding to the $_ variable. Works even if there
+is a lexical $_ in scope.
+
 =cut
 */
 
@@ -105,6 +113,11 @@ handled automatically by C<xsubpp>.
 #define XSINTERFACE_FUNC(ret,cv,f)     ((XSINTERFACE_CVT(ret,))(f))
 #define XSINTERFACE_FUNC_SET(cv,f)	\
 		CvXSUBANY(cv).any_dxptr = (void (*) (pTHX_ void*))(f)
+
+#define dUNDERBAR I32 padoff_du = find_rundefsvoffset()
+#define UNDERBAR ((padoff_du == NOT_IN_PAD \
+	    || PAD_COMPNAME_FLAGS(padoff_du) & SVpad_OUR) \
+	? DEFSV : PAD_SVl(padoff_du))
 
 /* Simple macros to put new mortal values onto the stack.   */
 /* Typically used to return values from XS functions.       */
@@ -166,7 +179,7 @@ Return an empty list from an XSUB immediately.
 
 =head1 Variables created by C<xsubpp> and C<xsubpp> internal functions
 
-=for apidoc AmU||newXSproto
+=for apidoc AmU||newXSproto|char* name|XSUBADDR_t f|char* filename|const char *proto
 Used by C<xsubpp> to hook up XSUBs as Perl subs.  Adds Perl prototypes to
 the subs.
 
@@ -178,6 +191,24 @@ handled automatically by C<ExtUtils::MakeMaker>.  See C<XS_VERSION_BOOTCHECK>.
 Macro to verify that a PM module's $VERSION variable matches the XS
 module's C<XS_VERSION> variable.  This is usually handled automatically by
 C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
+
+=head1 Simple Exception Handling Macros
+
+=for apidoc Ams||dXCPT
+Set up neccessary local variables for exception handling.
+See L<perlguts/"Exception Handling">.
+
+=for apidoc AmU||XCPT_TRY_START
+Starts a try block.  See L<perlguts/"Exception Handling">.
+
+=for apidoc AmU||XCPT_TRY_END
+Ends a try block.  See L<perlguts/"Exception Handling">.
+
+=for apidoc AmU||XCPT_CATCH
+Introduces a catch block.  See L<perlguts/"Exception Handling">.
+
+=for apidoc Ams||XCPT_RETHROW
+Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 
 =cut
 */
@@ -193,7 +224,8 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 
 #define XSRETURN(off)					\
     STMT_START {					\
-	PL_stack_sp = PL_stack_base + ax + ((off) - 1);	\
+	IV tmpXSoff = (off);				\
+	PL_stack_sp = PL_stack_base + ax + (tmpXSoff - 1);	\
 	return;						\
     } STMT_END
 
@@ -212,26 +244,40 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #ifdef XS_VERSION
 #  define XS_VERSION_BOOTCHECK \
     STMT_START {							\
-	SV *tmpsv; STRLEN n_a;						\
-	char *vn = Nullch, *module = SvPV(ST(0),n_a);			\
+	SV *_sv; STRLEN n_a;						\
+	const char *vn = Nullch, *module = SvPV(ST(0),n_a);		\
 	if (items >= 2)	 /* version supplied as bootstrap arg */	\
-	    tmpsv = ST(1);						\
+	    _sv = ST(1);						\
 	else {								\
 	    /* XXX GV_ADDWARN */					\
-	    tmpsv = get_sv(Perl_form(aTHX_ "%s::%s", module,		\
+	    _sv = get_sv(Perl_form(aTHX_ "%s::%s", module,		\
 				vn = "XS_VERSION"), FALSE);		\
-	    if (!tmpsv || !SvOK(tmpsv))					\
-		tmpsv = get_sv(Perl_form(aTHX_ "%s::%s", module,	\
+	    if (!_sv || !SvOK(_sv))					\
+		_sv = get_sv(Perl_form(aTHX_ "%s::%s", module,	\
 				    vn = "VERSION"), FALSE);		\
 	}								\
-	if (tmpsv && (!SvOK(tmpsv) || strNE(XS_VERSION, SvPV(tmpsv, n_a))))	\
-	    Perl_croak(aTHX_ "%s object version %s does not match %s%s%s%s %"SVf,\
-		  module, XS_VERSION,					\
-		  vn ? "$" : "", vn ? module : "", vn ? "::" : "",	\
-		  vn ? vn : "bootstrap parameter", tmpsv);		\
+	if (_sv) {							\
+	    SV *xssv = Perl_newSVpvf(aTHX_ "%s",XS_VERSION);		\
+	    xssv = new_version(xssv);					\
+	    if ( !sv_derived_from(_sv, "version") )			\
+		_sv = new_version(_sv);				\
+	    if ( vcmp(_sv,xssv) )					\
+		Perl_croak(aTHX_ "%s object version %"SVf" does not match %s%s%s%s %"SVf,\
+		      module, vstringify(xssv),				\
+		      vn ? "$" : "", vn ? module : "", vn ? "::" : "",	\
+		      vn ? vn : "bootstrap parameter", vstringify(_sv));\
+	}                                                               \
     } STMT_END
 #else
 #  define XS_VERSION_BOOTCHECK
+#endif
+
+#ifdef NO_XSLOCKS
+#  define dXCPT             dJMPENV; int rEtV = 0
+#  define XCPT_TRY_START    JMPENV_PUSH(rEtV); if (rEtV == 0)
+#  define XCPT_TRY_END      JMPENV_POP;
+#  define XCPT_CATCH        if (rEtV != 0)
+#  define XCPT_RETHROW      JMPENV_JUMP(rEtV)
 #endif
 
 /* 
@@ -266,6 +312,8 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 	    SAVEINT(db->filtering) ;				\
 	    db->filtering = TRUE ;				\
 	    SAVESPTR(DEFSV) ;					\
+            if (name[7] == 's')                                 \
+                arg = newSVsv(arg);                             \
 	    DEFSV = arg ;					\
 	    SvTEMP_off(arg) ;					\
 	    PUSHMARK(SP) ;					\
@@ -275,6 +323,10 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 	    PUTBACK ;						\
 	    FREETMPS ;						\
 	    LEAVE ;						\
+            if (name[7] == 's'){                                \
+                arg = sv_2mortal(arg);                          \
+            }                                                   \
+            SvOKp(arg);                                         \
 	}
 
 #if 1		/* for compatibility */

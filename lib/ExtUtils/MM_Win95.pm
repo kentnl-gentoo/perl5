@@ -7,8 +7,8 @@ require ExtUtils::MM_Win32;
 @ISA = qw(ExtUtils::MM_Win32);
 
 use Config;
-my $DMAKE = 1 if $Config{'make'} =~ /^dmake/i;
-my $NMAKE = 1 if $Config{'make'} =~ /^nmake/i;
+my $DMAKE = $Config{'make'} =~ /^dmake/i;
+my $NMAKE = $Config{'make'} =~ /^nmake/i;
 
 
 =head1 NAME
@@ -125,8 +125,6 @@ The && problem.
 sub xs_o {
     my($self) = shift;
     return '' unless $self->needs_linking();
-    # Having to choose between .xs -> .c -> .o and .xs -> .o confuses dmake.
-    return '' if $DMAKE;
     '
 .xs$(OBJ_EXT):
 	$(PERLRUN) $(XSUBPP) $(XSPROTOARG) $(XSUBPPARGS) $*.xs > $*.c
@@ -194,6 +192,20 @@ RCLEAN
 }
 
 
+=item max_exec_len
+
+Win98 chokes on things like Encode if we set the max length to nmake's max
+of 2K.  So we go for a more conservative value of 1K.
+
+=cut
+
+sub max_exec_len {
+    my $self = shift;
+
+    return $self->{_MAX_EXEC_LEN} ||= 1024;
+}
+
+
 =item os_flavor
 
 Win95 and Win98 and WinME are collectively Win9x and Win32
@@ -211,11 +223,11 @@ sub os_flavor {
 
 =head1 AUTHOR
 
-Code originally inside MM_Win32.  Original author unknown.  
+Code originally inside MM_Win32.  Original author unknown.
 
-Currently maintained by Michael G Schwern <schwern@pobox.com>.
+Currently maintained by Michael G Schwern C<schwern@pobox.com>.
 
-Send patches and ideas to <F<makemaker@perl.org>>.
+Send patches and ideas to C<makemaker@perl.org>.
 
 See http://www.makemaker.org.
 

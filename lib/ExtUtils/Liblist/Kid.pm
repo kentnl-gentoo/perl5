@@ -132,6 +132,7 @@ sub _unix_os2_ext {
 		 && ($thislib .= "_s") ){ # we must explicitly use _s version
 	    } elsif (-f ($fullname="$thispth/lib$thislib$Config_libext")){
 	    } elsif (-f ($fullname="$thispth/$thislib$Config_libext")){
+            } elsif (-f ($fullname="$thispth/lib$thislib.dll$Config_libext")){
 	    } elsif (-f ($fullname="$thispth/Slib$thislib$Config_libext")){
 	    } elsif ($^O eq 'dgux'
 		 && -l ($fullname="$thispth/lib$thislib$Config_libext")
@@ -226,9 +227,9 @@ sub _win32_ext {
     return ("", "", "", "", ($give_libs ? [] : ())) unless $potential_libs;
 
     my $cc		= $Config{cc};
-    my $VC		= 1 if $cc =~ /^cl/i;
-    my $BC		= 1 if $cc =~ /^bcc/i;
-    my $GC		= 1 if $cc =~ /^gcc/i;
+    my $VC		= $cc =~ /^cl/i;
+    my $BC		= $cc =~ /^bcc/i;
+    my $GC		= $cc =~ /^gcc/i;
     my $so		= $Config{'so'};
     my $libs		= $Config{'perllibs'};
     my $libpth		= $Config{'libpth'};

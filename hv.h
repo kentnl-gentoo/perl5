@@ -1,7 +1,7 @@
 /*    hv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, by Larry Wall and others
+ *    2000, 2001, 2002, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -89,13 +89,14 @@ struct xpvhv {
 	(hash) = (hash_PeRlHaSh + (hash_PeRlHaSh << 15)); \
     } STMT_END
 
-#ifdef PERL_IN_HV_C
+/* Only hv.c and mod_perl should be doing this.  */
+#ifdef PERL_HASH_INTERNAL_ACCESS
 #define PERL_HASH_INTERNAL(hash,str,len) \
      STMT_START	{ \
 	register const char *s_PeRlHaSh_tmp = str; \
 	register const unsigned char *s_PeRlHaSh = (const unsigned char *)s_PeRlHaSh_tmp; \
 	register I32 i_PeRlHaSh = len; \
-	register U32 hash_PeRlHaSh = PL_new_hash_seed; \
+	register U32 hash_PeRlHaSh = PL_rehash_seed; \
 	while (i_PeRlHaSh--) { \
 	    hash_PeRlHaSh += *s_PeRlHaSh++; \
 	    hash_PeRlHaSh += (hash_PeRlHaSh << 10); \

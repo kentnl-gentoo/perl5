@@ -55,6 +55,7 @@ my $global_sym  = "global.sym";
 my $pp_sym      = "pp.sym";
 my $globvar_sym = "globvar.sym";
 my $perlio_sym  = "perlio.sym";
+my $static_ext = "";
 
 if ($PLATFORM eq 'aix') {
     # Nothing for now.
@@ -85,6 +86,13 @@ unless ($PLATFORM eq 'win32' || $PLATFORM eq 'wince' || $PLATFORM eq 'MacOS' || 
 	    $ARCHNAME =    $1 if /^archname='(.+)'$/;
 	    $PATCHLEVEL =  $1 if /^perl_patchlevel='(.+)'$/;
 	}
+    }
+    close(CFG);
+}
+if ($PLATFORM eq 'win32' || $PLATFORM eq 'wince') {
+    open(CFG,"<..\\$config_sh") || die "Cannot open ..\\$config_sh: $!\n";
+    if ((join '', <CFG>) =~ /^static_ext='(.*)'$/m) {
+        $static_ext = $1;
     }
     close(CFG);
 }
@@ -377,6 +385,8 @@ elsif ($PLATFORM eq 'os2') {
 		    dlsym
 		    dlerror
 		    dlclose
+		    dup2
+		    dup
 		    my_tmpfile
 		    my_tmpnam
 		    my_flock
@@ -398,6 +408,10 @@ elsif ($PLATFORM eq 'os2') {
 		    nthreads_cond
 		    os2_cond_wait
 		    os2_stat
+		    os2_execname
+		    async_mssleep
+		    msCounter
+		    InfoTable
 		    pthread_join
 		    pthread_create
 		    pthread_detach
@@ -582,14 +596,6 @@ unless ($define{'PERL_COPY_ON_WRITE'}) {
 		  )];
 }
 
-unless ($define{'PERL_FLEXIBLE_EXCEPTIONS'}) {
-    skip_symbols [qw(
-		    PL_protect
-		    Perl_default_protect
-		    Perl_vdefault_protect
-		    )];
-}
-
 unless ($define{'USE_REENTRANT_API'}) {
     skip_symbols [qw(
 		    PL_reentrant_buffer
@@ -624,6 +630,12 @@ else {
 		    Perl_malloced_size
 		    MallocCfg_ptr
 		    MallocCfgP_ptr
+		    )];
+}
+
+if ($define{'PERL_MALLOC_WRAP'}) {
+    emit_symbols [qw(
+		    PL_memory_wrap
 		    )];
 }
 
@@ -1026,6 +1038,7 @@ if ($PLATFORM =~ /^win(?:32|ce)$/) {
 			    win32_pclose
 			    win32_rename
 			    win32_setmode
+			    win32_chsize
 			    win32_lseek
 			    win32_tell
 			    win32_dup
@@ -1332,6 +1345,15 @@ foreach my $symbol (qw(
     }
 }
 
+# records of type boot_module for statically linked modules (except Dynaloader)
+$static_ext =~ s/\//__/g;
+$static_ext =~ s/\bDynaLoader\b//;
+my @stat_mods = map {"boot_$_"} grep {/\S/} split /\s+/, $static_ext;
+foreach my $symbol (@stat_mods)
+    {
+	try_symbol($symbol);
+    }
+
 # Now all symbols should be defined because
 # next we are going to output them.
 
@@ -1340,7 +1362,14 @@ foreach my $symbol (sort keys %export) {
 }
 
 if ($PLATFORM eq 'os2') {
-	print "; LAST_ORDINAL=$sym_ord\n";
+	print <<EOP;
+    dll_perlmain=main
+    fill_extLibpath
+    dir_subst
+    Perl_OS2_handler_install
+
+; LAST_ORDINAL=$sym_ord
+EOP
 }
 
 sub emit_symbol {

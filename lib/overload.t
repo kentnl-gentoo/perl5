@@ -3,6 +3,11 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
+    require Config;
+    if (($Config::Config{'extensions'} !~ m!\bList/Util\b!) ){
+	print "1..0 # Skip -- Perl configured without List::Util module\n";
+	exit 0;
+    }
 }
 
 package Oscalar;
@@ -48,17 +53,24 @@ print "1..",&last,"\n";
 sub test {
   $test++; 
   if (@_ > 1) {
+    my $comment = "";
+    $comment = " # " . $_ [2] if @_ > 2;
     if ($_[0] eq $_[1]) {
-      print "ok $test\n";
+      print "ok $test$comment\n";
+      return 1;
     } else {
-      print "not ok $test: '$_[0]' ne '$_[1]'\n";
+      $comment .= ": '$_[0]' ne '$_[1]'";
+      print "not ok $test$comment\n";
+      return 0;
     }
   } else {
     if (shift) {
       print "ok $test\n";
+      return 1;
     } else {
       print "not ok $test\n";
-    } 
+      return 0;
+    }
   }
 }
 
@@ -1081,11 +1093,9 @@ sub xet { @_ == 2 ? $_[0]->{$_[1]} :
 package main;
 my $a = Foo->new;
 $a->xet('b', 42);
-print $a->xet('b') == 42 ? "ok 225\n" : "not ok 225\n";
-print defined eval { $a->{b} } ? "not ok 226\n" : "ok 226\n";
-print $@ =~ /zap/ ? "ok 227\n" : "not ok 227\n";
-
-print overload::StrVal(qr/a/) =~ /^Regexp=SCALAR\(0x[0-9a-f]+\)$/ ? "ok 228\n" : "not ok 228\n";
+test ($a->xet('b'), 42);
+test (!defined eval { $a->{b} });
+test ($@ =~ /zap/);
 
 {
    package t229;
@@ -1100,8 +1110,97 @@ print overload::StrVal(qr/a/) =~ /^Regexp=SCALAR\(0x[0-9a-f]+\)$/ ? "ok 228\n" :
       my $y = $x;
       eval { $y++ };
    }
-   print $warn ? "not ok 229\n" : "ok 229\n";
+   main::test (!$warn);
 }
 
+{
+    my ($int, $out1, $out2);
+    {
+        BEGIN { $int = 0; overload::constant 'integer' => sub {$int++; 17}; }
+        $out1 = 0;
+        $out2 = 1;
+    }
+    test($int,  2,  "#24313");	# 230
+    test($out1, 17, "#24313");	# 231
+    test($out2, 17, "#24313");	# 232
+}
+
+{
+    package Numify;
+    use overload (qw(0+ numify fallback 1));
+
+    sub new {
+	my $val = $_[1];
+	bless \$val, $_[0];
+    }
+
+    sub numify { ${$_[0]} }
+}
+
+{
+    package perl31793;
+    use overload cmp => sub { 0 };
+    package perl31793_fb;
+    use overload cmp => sub { 0 }, fallback => 1;
+    package main;
+    my $o  = bless [], 'perl31793';
+    my $of = bless [], 'perl31793_fb';
+    my $no = bless [], 'no_overload';
+    test (overload::StrVal(\"scalar") =~ /^SCALAR\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal([])        =~ /^ARRAY\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal({})        =~ /^HASH\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal(sub{1})    =~ /^CODE\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal(\*GLOB)    =~ /^GLOB\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal(\$o)       =~ /^REF\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal(qr/a/)     =~ /^Regexp=SCALAR\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal($o)        =~ /^perl31793=ARRAY\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal($of)       =~ /^perl31793_fb=ARRAY\(0x[0-9a-f]+\)$/);
+    test (overload::StrVal($no)       =~ /^no_overload=ARRAY\(0x[0-9a-f]+\)$/);
+}
+
+# These are all check that overloaded values rather than reference addressess
+# are what is getting tested.
+my ($two, $one, $un, $deux) = map {new Numify $_} 2, 1, 1, 2;
+my ($ein, $zwei) = (1, 2);
+
+my %map = (one => 1, un => 1, ein => 1, deux => 2, two => 2, zwei => 2);
+foreach my $op (qw(<=> == != < <= > >=)) {
+    foreach my $l (keys %map) {
+	foreach my $r (keys %map) {
+	    my $ocode = "\$$l $op \$$r";
+	    my $rcode = "$map{$l} $op $map{$r}";
+
+	    my $got = eval $ocode;
+	    die if $@;
+	    my $expect = eval $rcode;
+	    die if $@;
+	    test ($got, $expect, $ocode) or print "# $rcode\n";
+	}
+    }
+}
+{
+    # check that overloading works in regexes
+    {
+	package Foo493;
+	use overload
+	    '""' => sub { "^$_[0][0]\$" },
+	    '.'  => sub { 
+		    bless [
+			     $_[2]
+			    ? (ref $_[1] ? $_[1][0] : $_[1]) . ':' .$_[0][0] 
+			    : $_[0][0] . ':' . (ref $_[1] ? $_[1][0] : $_[1])
+		    ], 'Foo493'
+			};
+    }
+
+    my $a = bless [ "a" ], 'Foo493';
+    test('a' =~ /$a/);
+    test('x:a' =~ /x$a/);
+    test('x:a:=' =~ /x$a=$/);
+    test('x:a:a:=' =~ /x$a$a=$/);
+
+}
+
+
 # Last test is:
-sub last {229}
+sub last {497}

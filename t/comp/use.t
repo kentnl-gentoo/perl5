@@ -22,7 +22,7 @@ if ($@) {
 }
 print "ok ",$i++,"\n";
 
-eval sprintf "use %.5f;", $];
+eval sprintf "use %.6f;", $];
 if ($@) {
     print STDERR $@,"\n";
     print "not ";
@@ -30,20 +30,20 @@ if ($@) {
 print "ok ",$i++,"\n";
 
 
-eval sprintf "use %.5f;", $] - 0.000001;
+eval sprintf "use %.6f;", $] - 0.000001;
 if ($@) {
     print STDERR $@,"\n";
     print "not ";
 }
 print "ok ",$i++,"\n";
 
-eval sprintf("use %.5f;", $] + 1);
+eval sprintf("use %.6f;", $] + 1);
 unless ($@) {
     print "not ";
 }
 print "ok ",$i++,"\n";
 
-eval sprintf "use %.5f;", $] + 0.00001;
+eval sprintf "use %.6f;", $] + 0.00001;
 unless ($@) {
     print "not ";
 }
@@ -111,7 +111,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib v100.105";
-    unless ($@ =~ /lib version 100\.105 required--this is only version 35\.3/) {
+    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -121,7 +121,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib 100.105";
-    unless ($@ =~ /lib version 100\.105 required--this is only version 35\.3/) {
+    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -132,7 +132,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib v100.105";
-    unless ($@ =~ /lib version 100\.105 required--this is only version 35\.36/) {
+    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -142,7 +142,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib 100.105";
-    unless ($@ =~ /lib version 100\.105 required--this is only version 35\.36/) {
+    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -153,7 +153,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib v100.105";
-    unless ($@ =~ /lib version 100\.105 required--this is only version 35\.36/) {
+    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.036 \(35\.36\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -163,7 +163,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib 100.105";
-    unless ($@ =~ /lib version 100\.105 required--this is only version 35\.36/) {
+    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.036 \(35\.36\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";

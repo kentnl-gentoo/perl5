@@ -16,6 +16,8 @@
 #define Win32_Winsock
 #endif
 #include <windows.h>
+#include <ws2spi.h>
+
 #include "EXTERN.h"
 #include "perl.h"
 
@@ -86,11 +88,11 @@ start_sockets(void)
      * initalize the winsock interface and insure that it is
      * cleaned up at exit.
      */
-    version = 0x101;
+    version = 0x2;
     if(ret = WSAStartup(version, &retdata))
 	Perl_croak_nocontext("Unable to locate winsock library!\n");
     if(retdata.wVersion != version)
-	Perl_croak_nocontext("Could not find version 1.1 of winsock dll\n");
+	Perl_croak_nocontext("Could not find version 2.0 of winsock dll\n");
 
     /* atexit((void (*)(void)) EndSockets); */
     wsock_started = 1;
@@ -99,22 +101,6 @@ start_sockets(void)
 void
 set_socktype(void)
 {
-#ifdef USE_SOCKETS_AS_HANDLES
-#if defined(USE_ITHREADS)
-    dTHX;
-    if (!w32_init_socktype) {
-#endif
-	int iSockOpt = SO_SYNCHRONOUS_NONALERT;
-	/*
-	 * Enable the use of sockets as filehandles
-	 */
-	setsockopt(INVALID_SOCKET, SOL_SOCKET, SO_OPENTYPE,
-		    (char *)&iSockOpt, sizeof(iSockOpt));
-#if defined(USE_ITHREADS)
-	w32_init_socktype = 1;
-    }
-#endif
-#endif	/* USE_SOCKETS_AS_HANDLES */
 }
 
 
@@ -326,11 +312,11 @@ win32_select(int nfds, Perl_fd_set* rd, Perl_fd_set* wr, Perl_fd_set* ex, const 
     for (i = 0; i < nfds; i++) {
 	fd = TO_SOCKET(i);
 	if (PERL_FD_ISSET(i,rd))
-	    FD_SET(fd, &nrd);
+	    FD_SET((unsigned)fd, &nrd);
 	if (PERL_FD_ISSET(i,wr))
-	    FD_SET(fd, &nwr);
+	    FD_SET((unsigned)fd, &nwr);
 	if (PERL_FD_ISSET(i,ex))
-	    FD_SET(fd, &nex);
+	    FD_SET((unsigned)fd, &nex);
     }
 
     errno = save_errno;
@@ -399,6 +385,70 @@ win32_closesocket(SOCKET s)
     return r;
 }
 
+#ifdef USE_SOCKETS_AS_HANDLES
+#define WIN32_OPEN_SOCKET(af, type, protocol) open_ifs_socket(af, type, protocol)
+
+void
+convert_proto_info_w2a(WSAPROTOCOL_INFOW *in, WSAPROTOCOL_INFOA *out)
+{
+    Copy(in, out, 1, WSAPROTOCOL_INFOA);
+    wcstombs(out->szProtocol, in->szProtocol, sizeof(out->szProtocol));
+}
+
+SOCKET
+open_ifs_socket(int af, int type, int protocol)
+{
+    dTHX;
+    char *s;
+    unsigned long proto_buffers_len = 0;
+    int error_code;
+    SOCKET out = INVALID_SOCKET;
+
+    if ((s = PerlEnv_getenv("PERL_ALLOW_NON_IFS_LSP")) && atoi(s))
+        return WSASocket(af, type, protocol, NULL, 0, 0);
+
+    if (WSCEnumProtocols(NULL, NULL, &proto_buffers_len, &error_code) == SOCKET_ERROR
+        && error_code == WSAENOBUFS)
+    {
+	WSAPROTOCOL_INFOW *proto_buffers;
+        int protocols_available = 0;       
+ 
+        New(1, proto_buffers, proto_buffers_len / sizeof(WSAPROTOCOL_INFOW),
+            WSAPROTOCOL_INFOW);
+
+        if ((protocols_available = WSCEnumProtocols(NULL, proto_buffers, 
+            &proto_buffers_len, &error_code)) != SOCKET_ERROR)
+        {
+            int i;
+            for (i = 0; i < protocols_available; i++)
+            {
+                WSAPROTOCOL_INFOA proto_info;
+
+                if ((af != AF_UNSPEC && af != proto_buffers[i].iAddressFamily)
+                    || (type != proto_buffers[i].iSocketType)
+                    || (protocol != 0 && protocol != proto_buffers[i].iProtocol))
+                    continue;
+
+                if ((proto_buffers[i].dwServiceFlags1 & XP1_IFS_HANDLES) == 0)
+                    continue;
+
+                convert_proto_info_w2a(&(proto_buffers[i]), &proto_info);
+
+                out = WSASocket(af, type, protocol, &proto_info, 0, 0);
+                break;
+            }
+        }
+
+        Safefree(proto_buffers);
+    }
+
+    return out;
+}
+
+#else
+#define WIN32_OPEN_SOCKET(af, type, protocol) socket(af, type, protocol)
+#endif
+
 SOCKET
 win32_socket(int af, int type, int protocol)
 {
@@ -408,7 +458,8 @@ win32_socket(int af, int type, int protocol)
     SOCKET_TEST(s = socket(af, type, protocol), INVALID_SOCKET);
 #else
     StartSockets();
-    if((s = socket(af, type, protocol)) == INVALID_SOCKET)
+
+    if((s = WIN32_OPEN_SOCKET(af, type, protocol)) == INVALID_SOCKET)
 	errno = WSAGetLastError();
     else
 	s = OPEN_SOCKET(s);
@@ -497,7 +548,11 @@ my_fstat(int fd, Stat_t *sbufptr)
     int osf;
     if (!wsock_started || IsWinNT()) {
 #if defined(WIN64) || defined(USE_LARGE_FILES)
+#if defined(__BORLANDC__) /* buk */
+	return win32_fstat(fd, sbufptr );
+#else
 	return _fstati64(fd, sbufptr);
+#endif
 #else
 	return fstat(fd, sbufptr);
 #endif
@@ -525,7 +580,11 @@ my_fstat(int fd, Stat_t *sbufptr)
 	}
     }
 #if defined(WIN64) || defined(USE_LARGE_FILES)
+#if defined(__BORLANDC__) /* buk */
+    return win32_fstat(fd, sbufptr );
+#else
     return _fstati64(fd, sbufptr);
+#endif
 #else
     return fstat(fd, sbufptr);
 #endif

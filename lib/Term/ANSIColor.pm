@@ -1,5 +1,5 @@
 # Term::ANSIColor -- Color screen output using ANSI escape sequences.
-# $Id: ANSIColor.pm,v 1.7 2003/03/26 07:00:51 eagle Exp $
+# $Id: ANSIColor.pm,v 1.9 2004/12/04 01:29:12 eagle Exp $
 #
 # Copyright 1996, 1997, 1998, 2000, 2001, 2002
 #   by Russ Allbery <rra@stanford.edu> and Zenin <zenin@bawdycaste.com>
@@ -25,16 +25,16 @@ use Exporter ();
 @ISA         = qw(Exporter);
 @EXPORT      = qw(color colored);
 @EXPORT_OK   = qw(uncolor);
-%EXPORT_TAGS = (constants => [qw(CLEAR RESET BOLD UNDERLINE UNDERSCORE BLINK
-                                 REVERSE CONCEALED BLACK RED GREEN YELLOW
-                                 BLUE MAGENTA CYAN WHITE ON_BLACK ON_RED
-                                 ON_GREEN ON_YELLOW ON_BLUE ON_MAGENTA
+%EXPORT_TAGS = (constants => [qw(CLEAR RESET BOLD DARK UNDERLINE UNDERSCORE
+                                 BLINK REVERSE CONCEALED BLACK RED GREEN
+                                 YELLOW BLUE MAGENTA CYAN WHITE ON_BLACK
+                                 ON_RED ON_GREEN ON_YELLOW ON_BLUE ON_MAGENTA
                                  ON_CYAN ON_WHITE)]);
 Exporter::export_ok_tags ('constants');
 
 # Don't use the CVS revision as the version, since this module is also in Perl
 # core and too many things could munge CVS magic revision strings.
-$VERSION = 1.07;
+$VERSION = 1.09;
 
 ##############################################################################
 # Internal data structures
@@ -275,9 +275,9 @@ feature.
 
 Alternately, if you import C<:constants>, you can use the constants CLEAR,
 RESET, BOLD, DARK, UNDERLINE, UNDERSCORE, BLINK, REVERSE, CONCEALED, BLACK,
-RED, GREEN, YELLOW, BLUE, MAGENTA, ON_BLACK, ON_RED, ON_GREEN, ON_YELLOW,
-ON_BLUE, ON_MAGENTA, ON_CYAN, and ON_WHITE directly.  These are the same as
-color('attribute') and can be used if you prefer typing:
+RED, GREEN, YELLOW, BLUE, MAGENTA, CYAN, WHITE, ON_BLACK, ON_RED, ON_GREEN,
+ON_YELLOW, ON_BLUE, ON_MAGENTA, ON_CYAN, and ON_WHITE directly.  These are
+the same as color('attribute') and can be used if you prefer typing:
 
     print BOLD BLUE ON_WHITE "Text\n", RESET;
 
@@ -424,12 +424,14 @@ me flesh it out:
  PuTTY         yes     color     no      yes      no       yes      no
  Windows       yes      no       no      no       no       yes      no
  Cygwin SSH    yes      yes      no     color    color    color     yes
+ Mac Terminal  yes      yes      no      yes      yes      yes      yes
 
-Windows is Windows telnet, and Cygwin SSH is the OpenSSH implementation under
-Cygwin on Windows NT.  Where the entry is other than yes or no, that emulator
-displays the given attribute as something else instead.  Note that on an
-aixterm, clear doesn't reset colors; you have to explicitly set the colors
-back to what you want.  More entries in this table are welcome.
+Windows is Windows telnet, Cygwin SSH is the OpenSSH implementation under
+Cygwin on Windows NT, and Mac Terminal is the Terminal application in Mac OS
+X.  Where the entry is other than yes or no, that emulator displays the
+given attribute as something else instead.  Note that on an aixterm, clear
+doesn't reset colors; you have to explicitly set the colors back to what you
+want.  More entries in this table are welcome.
 
 Note that codes 3 (italic), 6 (rapid blink), and 9 (strikethrough) are
 specified in ANSI X3.64 and ECMA-048 but are not commonly supported by most

@@ -36,16 +36,18 @@ sub skip {
     return 1;
 }
 
-print "1..53\n";
+print "1..54\n";
 
-$Is_MSWin32 = $^O eq 'MSWin32';
-$Is_NetWare = $^O eq 'NetWare';
-$Is_VMS     = $^O eq 'VMS';
-$Is_Dos     = $^O eq 'dos';
-$Is_os2     = $^O eq 'os2';
-$Is_Cygwin  = $^O eq 'cygwin';
-$Is_MacOS   = $^O eq 'MacOS';
-$Is_MPE     = $^O eq 'mpeix';		
+$Is_MSWin32  = $^O eq 'MSWin32';
+$Is_NetWare  = $^O eq 'NetWare';
+$Is_VMS      = $^O eq 'VMS';
+$Is_Dos      = $^O eq 'dos';
+$Is_os2      = $^O eq 'os2';
+$Is_Cygwin   = $^O eq 'cygwin';
+$Is_MacOS    = $^O eq 'MacOS';
+$Is_MPE      = $^O eq 'mpeix';		
+$Is_miniperl = $ENV{PERL_CORE_MINITEST};
+$Is_BeOS     = $^O eq 'beos';
 
 $PERL = ($Is_NetWare            ? 'perl'   :
 	 ($Is_MacOS || $Is_VMS) ? $^X      :
@@ -248,12 +250,14 @@ EOF
     ok chmod(0755, $script), $!;
     $_ = ($Is_MacOS || $Is_VMS) ? `$perl $script` : `$script`;
     s/\.exe//i if $Is_Dos or $Is_Cygwin or $Is_os2;
+    s{./$script}{$script} if $Is_BeOS; # revert BeOS execvp() side-effect
     s{\bminiperl\b}{perl}; # so that test doesn't fail with miniperl
     s{is perl}{is $perl}; # for systems where $^X is only a basename
     s{\\}{/}g;
     ok((($Is_MSWin32 || $Is_os2) ? uc($_) eq uc($s1) : $_ eq $s1), " :$_:!=:$s1:");
     $_ = `$perl $script`;
     s/\.exe//i if $Is_Dos or $Is_os2;
+    s{./$perl}{$perl} if $Is_BeOS; # revert BeOS execvp() side-effect
     s{\\}{/}g;
     ok((($Is_MSWin32 || $Is_os2) ? uc($_) eq uc($s1) : $_ eq $s1), " :$_:!=:$s1: after `$perl $script`");
     ok unlink($script), $!;
@@ -347,7 +351,9 @@ else {
     skip('no caseless %ENV support') for 1..4;
 }
 
-{
+if ($Is_miniperl) {
+    skip ("miniperl can't rely on loading %Errno") for 1..2;
+} else {
    no warnings 'void';
 
 # Make sure Errno hasn't been prematurely autoloaded
@@ -362,15 +368,18 @@ else {
    }, $@;
 }
 
+if ($Is_miniperl) {
+    skip ("miniperl can't rely on loading %Errno");
+} else {
+    # Make sure that Errno loading doesn't clobber $!
 
-# Make sure that Errno loading doesn't clobber $!
+    undef %Errno::;
+    delete $INC{"Errno.pm"};
 
-undef %Errno::;
-delete $INC{"Errno.pm"};
-
-open(FOO, "nonesuch"); # Generate ENOENT
-my %errs = %{"!"}; # Cause Errno.pm to be loaded at run-time
-ok ${"!"}{ENOENT};
+    open(FOO, "nonesuch"); # Generate ENOENT
+    my %errs = %{"!"}; # Cause Errno.pm to be loaded at run-time
+    ok ${"!"}{ENOENT};
+}
 
 ok $^S == 0 && defined $^S;
 eval { ok $^S == 1 };
@@ -404,4 +413,16 @@ ok "@+" eq "10 1 6 10";
 	$ok = "a$\b" eq "aa\0bb";
     }
     ok $ok;
+}
+
+# Test for bug [perl #27839]
+{
+    my $x;
+    sub f {
+	"abc" =~ /(.)./;
+	$x = "@+";
+	return @+;
+    };
+    my @y = f();
+    ok( $x eq "@y", "return a magic array ($x) vs (@y)" );
 }

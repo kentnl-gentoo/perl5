@@ -366,6 +366,12 @@ Example:
     print "Text\n" if -T _;
     print "Binary\n" if -B _;
 
+As of Perl 5.9.1, as a form of purely syntactic sugar, you can stack file
+test operators, in a way that C<-f -w -x $file> is equivalent to
+C<-x $file && -w _ && -f _>. (This is only syntax fancy : if you use
+the return value of C<-f $file> as an argument to another filetest
+operator, no special magic will happen.)
+
 =item abs VALUE
 
 =item abs
@@ -608,7 +614,7 @@ false otherwise. See the example under C<die>.
 
 Changes the permissions of a list of files.  The first element of the
 list must be the numerical mode, which should probably be an octal
-number, and which definitely should I<not> a string of octal digits:
+number, and which definitely should I<not> be a string of octal digits:
 C<0644> is okay, C<'0644'> is not.  Returns the number of files
 successfully changed.  See also L</oct>, if all you have is a string.
 
@@ -660,6 +666,10 @@ You can actually chomp anything that's an lvalue, including an assignment:
 
 If you chomp a list, each element is chomped, and the total number of
 characters removed is returned.
+
+If the C<encoding> pragma is in scope then the lengths returned are
+calculated from the length of C<$/> in Unicode characters, which is not
+always the same as the length of C<$/> in the native encoding.
 
 Note that parentheses are necessary when you're chomping anything
 that is not a simple variable.  This is because C<chomp $cwd = `pwd`;>
@@ -766,10 +776,10 @@ another C<open> on it, because C<open> will close it for you.  (See
 C<open>.)  However, an explicit C<close> on an input file resets the line
 counter (C<$.>), while the implicit close done by C<open> does not.
 
-If the file handle came from a piped open C<close> will additionally
-return false if one of the other system calls involved fails or if the
+If the file handle came from a piped open, C<close> will additionally
+return false if one of the other system calls involved fails, or if the
 program exits with non-zero status.  (If the only problem was that the
-program exited non-zero C<$!> will be set to C<0>.)  Closing a pipe
+program exited non-zero, C<$!> will be set to C<0>.)  Closing a pipe
 also waits for the process executing on the pipe to complete, in case you
 want to look at the output of the pipe afterwards, and
 implicitly puts the exit status value of that command into C<$?>.
@@ -1033,8 +1043,18 @@ In the case of an array, if the array elements happen to be at the end,
 the size of the array will shrink to the highest element that tests
 true for exists() (or 0 if no such element exists).
 
-Returns each element so deleted or the undefined value if there was no such
-element.  Deleting from C<$ENV{}> modifies the environment.  Deleting from
+Returns a list with the same number of elements as the number of elements
+for which deletion was attempted.  Each element of that list consists of
+either the value of the element deleted, or the undefined value.  In scalar
+context, this means that you get the value of the last element deleted (or
+the undefined value if that element did not exist).
+
+    %hash = (foo => 11, bar => 22, baz => 33);
+    $scalar = delete $hash{foo};             # $scalar is 11
+    $scalar = delete @hash{qw(foo bar)};     # $scalar is 22
+    @array  = delete @hash{qw(foo bar baz)}; # @array  is (undef,undef,33)
+
+Deleting from C<%ENV> modifies the environment.  Deleting from
 a hash tied to a DBM file deletes the entry from the DBM file.  Deleting
 from a C<tie>d hash or array may not necessarily return anything.
 
@@ -1186,8 +1206,7 @@ A deprecated form of subroutine call.  See L<perlsub>.
 =item do EXPR
 
 Uses the value of EXPR as a filename and executes the contents of the
-file as a Perl script.  Its primary use is to include subroutines
-from a Perl subroutine library.
+file as a Perl script.
 
     do 'stat.pl';
 
@@ -1196,7 +1215,7 @@ is just like
     eval `cat stat.pl`;
 
 except that it's more efficient and concise, keeps track of the current
-filename for error messages, searches the @INC libraries, and updates
+filename for error messages, searches the @INC directories, and updates
 C<%INC> if the file is found.  See L<perlvar/Predefined Names> for these
 variables.  It also differs in that code evaluated with C<do FILENAME>
 cannot see lexicals in the enclosing scope; C<eval STRING> does.  It's the
@@ -1654,6 +1673,18 @@ Note that C<fcntl> will produce a fatal error if used on a machine that
 doesn't implement fcntl(2).  See the Fcntl module or your fcntl(2)
 manpage to learn what functions are available on your system.
 
+Here's an example of setting a filehandle named C<REMOTE> to be
+non-blocking at the system level.  You'll have to negotiate C<$|>
+on your own, though.
+
+    use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
+
+    $flags = fcntl(REMOTE, F_GETFL, 0)
+                or die "Can't get flags for the socket: $!\n";
+
+    $flags = fcntl(REMOTE, F_SETFL, $flags | O_NONBLOCK)
+                or die "Can't set flags for the socket: $!\n";
+
 =item fileno FILEHANDLE
 
 Returns the file descriptor for a filehandle, or undefined if the
@@ -2023,7 +2054,7 @@ addresses returned by the corresponding system library call.  In the
 Internet domain, each address is four bytes long and you can unpack it
 by saying something like:
 
-    ($a,$b,$c,$d) = unpack('C4',$addr[0]);
+    ($a,$b,$c,$d) = unpack('W4',$addr[0]);
 
 The Socket library makes this slightly easier:
 
@@ -2065,7 +2096,34 @@ IPs that the connection might have come in on.
 
 =item getsockopt SOCKET,LEVEL,OPTNAME
 
-Returns the socket option requested, or undef if there is an error.
+Queries the option named OPTNAME associated with SOCKET at a given LEVEL.
+Options may exist at multiple protocol levels depending on the socket
+type, but at least the uppermost socket level SOL_SOCKET (defined in the
+C<Socket> module) will exist. To query options at another level the
+protocol number of the appropriate protocol controlling the option
+should be supplied. For example, to indicate that an option is to be
+interpreted by the TCP protocol, LEVEL should be set to the protocol
+number of TCP, which you can get using getprotobyname.
+
+The call returns a packed string representing the requested socket option,
+or C<undef> if there is an error (the error reason will be in $!). What
+exactly is in the packed string depends in the LEVEL and OPTNAME, consult
+your system documentation for details. A very common case however is that
+the option is an integer, in which case the result will be an packed
+integer which you can decode using unpack with the C<i> (or C<I>) format.
+
+An example testing if Nagle's algorithm is turned on on a socket:
+
+    use Socket qw(:all);
+
+    defined(my $tcp = getprotobyname("tcp"))
+	or die "Could not determine the protocol number for tcp";
+    # my $tcp = IPPROTO_TCP; # Alternative
+    my $packed = getsockopt($socket, $tcp, TCP_NODELAY)
+	or die "Could not query TCP_NODELAY socket option: $!";
+    my $nodelay = unpack("I", $packed);
+    print "Nagle's algorithm is turned ", $nodelay ? "off\n" : "on\n";
+
 
 =item glob EXPR
 
@@ -2119,22 +2177,13 @@ In scalar context, C<gmtime()> returns the ctime(3) value:
 
     $now_string = gmtime;  # e.g., "Thu Oct 13 04:54:34 1994"
 
-Also see the C<timegm> function provided by the C<Time::Local> module,
-and the strftime(3) function available via the POSIX module.
+If you need local time instead of GMT use the L</localtime> builtin. 
+See also the C<timegm> function provided by the C<Time::Local> module,
+and the strftime(3) and mktime(3) functions available via the L<POSIX> module.
 
-This scalar value is B<not> locale dependent (see L<perllocale>), but
-is instead a Perl builtin.  Also see the C<Time::Local> module, and the
-strftime(3) and mktime(3) functions available via the POSIX module.  To
-get somewhat similar but locale dependent date strings, set up your
-locale environment variables appropriately (please see L<perllocale>)
-and try for example:
-
-    use POSIX qw(strftime);
-    $now_string = strftime "%a %b %e %H:%M:%S %Y", gmtime;
-
-Note that the C<%a> and C<%b> escapes, which represent the short forms
-of the day of the week and the month of the year, may not necessarily
-be three characters wide in all locales.
+This scalar value is B<not> locale dependent (see L<perllocale>), but is
+instead a Perl builtin.  To get somewhat similar but locale dependent date
+strings, see the example in L</localtime>.
 
 =item goto LABEL
 
@@ -2204,6 +2253,11 @@ element of a list returned by grep (for example, in a C<foreach>, C<map>
 or another C<grep>) actually modifies the element in the original list.
 This is usually something to be avoided when writing clear code.
 
+If C<$_> is lexical in the scope where the C<grep> appears (because it has
+been declared with C<my $_>) then, in addition the be locally aliased to
+the list elements, C<$_> keeps being lexical inside the block; i.e. it
+can't be seen from the outside, avoiding any potential side-effects.
+
 See also L</map> for a list composed of the results of the BLOCK or EXPR.
 
 =item hex EXPR
@@ -2211,7 +2265,7 @@ See also L</map> for a list composed of the results of the BLOCK or EXPR.
 =item hex
 
 Interprets EXPR as a hex string and returns the corresponding value.
-(To convert strings that might start with either 0, 0x, or 0b, see
+(To convert strings that might start with either C<0>, C<0x>, or C<0b>, see
 L</oct>.)  If EXPR is omitted, uses C<$_>.
 
     print hex '0xAf'; # prints '175'
@@ -2219,7 +2273,8 @@ L</oct>.)  If EXPR is omitted, uses C<$_>.
 
 Hex strings may only represent integers.  Strings that would cause
 integer overflow trigger a warning.  Leading whitespace is not stripped,
-unlike oct().
+unlike oct(). To present something as hex, look into L</printf>,
+L</sprintf>, or L</unpack>.
 
 =item import
 
@@ -2286,20 +2341,8 @@ system:
     $retval = ioctl(...) || -1;
     printf "System returned %d\n", $retval;
 
-The special string "C<0> but true" is exempt from B<-w> complaints
+The special string C<"0 but true"> is exempt from B<-w> complaints
 about improper numeric conversions.
-
-Here's an example of setting a filehandle named C<REMOTE> to be
-non-blocking at the system level.  You'll have to negotiate C<$|>
-on your own, though.
-
-    use Fcntl qw(F_GETFL F_SETFL O_NONBLOCK);
-
-    $flags = fcntl(REMOTE, F_GETFL, 0)
-                or die "Can't get flags for the socket: $!\n";
-
-    $flags = fcntl(REMOTE, F_SETFL, $flags | O_NONBLOCK)
-                or die "Can't set flags for the socket: $!\n";
 
 =item join EXPR,LIST
 
@@ -2325,7 +2368,8 @@ Perl for security reasons (see L<perlsec/"Algorithmic Complexity
 Attacks">).
 
 As a side effect, calling keys() resets the HASH's internal iterator,
-see L</each>.
+see L</each>. (In particular, calling keys() in void context resets
+the iterator with no other overhead.)
 
 Here is yet another way to print your environment:
 
@@ -2475,36 +2519,44 @@ for details, including issues with tied arrays and hashes.
 
 =item localtime EXPR
 
+=item localtime
+
 Converts a time as returned by the time function to a 9-element list
 with the time analyzed for the local time zone.  Typically used as
 follows:
 
     #  0    1    2     3     4    5     6     7     8
     ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
-						localtime(time);
+                                                localtime(time);
 
 All list elements are numeric, and come straight out of the C `struct
-tm'.  $sec, $min, and $hour are the seconds, minutes, and hours of the
-specified time.  $mday is the day of the month, and $mon is the month
-itself, in the range C<0..11> with 0 indicating January and 11
-indicating December.  $year is the number of years since 1900.  That
-is, $year is C<123> in year 2023.  $wday is the day of the week, with
-0 indicating Sunday and 3 indicating Wednesday.  $yday is the day of
-the year, in the range C<0..364> (or C<0..365> in leap years.)  $isdst
-is true if the specified time occurs during daylight savings time,
-false otherwise.
+tm'.  C<$sec>, C<$min>, and C<$hour> are the seconds, minutes, and hours
+of the specified time.
 
-Note that the $year element is I<not> simply the last two digits of
-the year.  If you assume it is, then you create non-Y2K-compliant
-programs--and you wouldn't want to do that, would you?
+C<$mday> is the day of the month, and C<$mon> is the month itself, in
+the range C<0..11> with 0 indicating January and 11 indicating December.
+This makes it easy to get a month name from a list:
 
-The proper way to get a complete 4-digit year is simply:
+    my @abbr = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
+    print "$abbr[$mon] $mday";
+    # $mon=9, $mday=18 gives "Oct 18"
 
-	$year += 1900;
+C<$year> is the number of years since 1900, not just the last two digits
+of the year.  That is, C<$year> is C<123> in year 2023.  The proper way
+to get a complete 4-digit year is simply:
 
-And to get the last two digits of the year (e.g., '01' in 2001) do:
+    $year += 1900;
 
-	$year = sprintf("%02d", $year % 100);
+To get the last two digits of the year (e.g., '01' in 2001) do:
+
+    $year = sprintf("%02d", $year % 100);
+
+C<$wday> is the day of the week, with 0 indicating Sunday and 3 indicating
+Wednesday.  C<$yday> is the day of the year, in the range C<0..364>
+(or C<0..365> in leap years.)
+
+C<$isdst> is true if the specified time occurs during Daylight Saving
+Time, false otherwise.
 
 If EXPR is omitted, C<localtime()> uses the current time (C<localtime(time)>).
 
@@ -2512,17 +2564,20 @@ In scalar context, C<localtime()> returns the ctime(3) value:
 
     $now_string = localtime;  # e.g., "Thu Oct 13 04:54:34 1994"
 
-This scalar value is B<not> locale dependent, see L<perllocale>, but
-instead a Perl builtin.  Also see the C<Time::Local> module
-(to convert the second, minutes, hours, ... back to seconds since the
-stroke of midnight the 1st of January 1970, the value returned by
-time()), and the strftime(3) and mktime(3) functions available via the
-POSIX module.  To get somewhat similar but locale dependent date
-strings, set up your locale environment variables appropriately
-(please see L<perllocale>) and try for example:
+This scalar value is B<not> locale dependent but is a Perl builtin. For GMT
+instead of local time use the L</gmtime> builtin. See also the
+C<Time::Local> module (to convert the second, minutes, hours, ... back to
+the integer value returned by time()), and the L<POSIX> module's strftime(3)
+and mktime(3) functions.
+
+To get somewhat similar but locale dependent date strings, set up your
+locale environment variables appropriately (please see L<perllocale>) and
+try for example:
 
     use POSIX qw(strftime);
     $now_string = strftime "%a %b %e %H:%M:%S %Y", localtime;
+    # or for GMT formatted appropriately for your locale:
+    $now_string = strftime "%a %b %e %H:%M:%S %Y", gmtime;
 
 Note that the C<%a> and C<%b>, the short forms of the day of the week
 and the month of the year, may not necessarily be three characters wide.
@@ -2599,6 +2654,11 @@ it can cause bizarre results if the elements of LIST are not variables.
 Using a regular C<foreach> loop for this purpose would be clearer in
 most cases.  See also L</grep> for an array composed of those items of
 the original list for which the BLOCK or EXPR evaluates to true.
+
+If C<$_> is lexical in the scope where the C<map> appears (because it has
+been declared with C<my $_>) then, in addition the be locally aliased to
+the list elements, C<$_> keeps being lexical inside the block; i.e. it
+can't be seen from the outside, avoiding any potential side-effects.
 
 C<{> starts both hash references and blocks, so C<map { ...> could be either
 the start of map BLOCK LIST or map EXPR, LIST. Because perl doesn't look
@@ -2883,7 +2943,9 @@ works for symmetry, but you really should consider writing something
 to the temporary file first.  You will need to seek() to do the
 reading.
 
-File handles can be opened to "in memory" files held in Perl scalars via:
+Since v5.8.0, perl has built using PerlIO by default.  Unless you've
+changed this (ie Configure -Uuseperlio), you can open file handles to
+"in memory" files held in Perl scalars via:
 
     open($fh, '>', \$variable) || ..
 
@@ -2914,7 +2976,7 @@ Examples:
     open(ARTICLE, "caesar <$article |")		# ditto
 	or die "Can't start caesar: $!";
 
-    open(EXTRACT, "|sort >/tmp/Tmp$$")		# $$ is our process id
+    open(EXTRACT, "|sort >Tmp$$")		# $$ is our process id
 	or die "Can't start sort: $!";
 
     # in memory files
@@ -2946,6 +3008,8 @@ Examples:
 	}
     }
 
+See L<perliol> for detailed info on PerlIO.
+
 You may also, in the Bourne shell tradition, specify an EXPR beginning
 with C<< '>&' >>, in which case the rest of the string is interpreted
 as the name of a filehandle (or file descriptor, if numeric) to be
@@ -2971,9 +3035,6 @@ C<STDERR> using various methods:
 
     print STDOUT "stdout 1\n";	# this works for
     print STDERR "stderr 1\n"; 	# subprocesses too
-
-    close STDOUT;
-    close STDERR;
 
     open STDOUT, ">&", $oldout or die "Can't dup \$oldout: $!";
     open STDERR, ">&OLDERR"    or die "Can't dup OLDERR: $!";
@@ -3225,13 +3286,19 @@ fork() emulation on Windows platforms, or by embedding perl in a
 multi-threaded application.  The C<unique> attribute does nothing in
 all other environments.
 
+Warning: the current implementation of this attribute operates on the
+typeglob associated with the variable; this means that C<our $x : unique>
+also has the effect of C<our @x : unique; our %x : unique>. This may be
+subject to change.
+
 =item pack TEMPLATE,LIST
 
 Takes a LIST of values and converts it into a string using the rules
 given by the TEMPLATE.  The resulting string is the concatenation of
 the converted values.  Typically, each converted value looks
 like its machine-level representation.  For example, on 32-bit machines
-a converted integer may be represented by a sequence of 4 bytes.
+an integer may be represented by a sequence of 4 bytes which will be 
+converted to a sequence of 4 characters.
 
 The TEMPLATE is a sequence of characters that give the order and type
 of values, as follows:
@@ -3245,34 +3312,16 @@ of values, as follows:
     h	A hex string (low nybble first).
     H	A hex string (high nybble first).
 
-    c	A signed char value.
-    C	An unsigned char value.  Only does bytes.  See U for Unicode.
+    c	A signed char (8-bit) value.
+    C	An unsigned C char (octet) even under Unicode. Should normally not
+        be used. See U and W instead.
+    W   An unsigned char value (can be greater than 255).
 
-    s	A signed short value.
+    s	A signed short (16-bit) value.
     S	An unsigned short value.
-	  (This 'short' is _exactly_ 16 bits, which may differ from
-	   what a local C compiler calls 'short'.  If you want
-	   native-length shorts, use the '!' suffix.)
 
-    i	A signed integer value.
-    I	An unsigned integer value.
-	  (This 'integer' is _at_least_ 32 bits wide.  Its exact
-           size depends on what a local C compiler calls 'int',
-           and may even be larger than the 'long' described in
-           the next item.)
-
-    l	A signed long value.
+    l	A signed long (32-bit) value.
     L	An unsigned long value.
-	  (This 'long' is _exactly_ 32 bits, which may differ from
-	   what a local C compiler calls 'long'.  If you want
-	   native-length longs, use the '!' suffix.)
-
-    n	An unsigned short in "network" (big-endian) order.
-    N	An unsigned long in "network" (big-endian) order.
-    v	An unsigned short in "VAX" (little-endian) order.
-    V	An unsigned long in "VAX" (little-endian) order.
-	  (These 'shorts' and 'longs' are _exactly_ 16 bits and
-	   _exactly_ 32 bits, respectively.)
 
     q	A signed quad (64-bit) value.
     Q	An unsigned quad value.
@@ -3280,14 +3329,23 @@ of values, as follows:
 	   integer values _and_ if Perl has been compiled to support those.
            Causes a fatal error otherwise.)
 
-    j   A signed integer value (a Perl internal integer, IV).
-    J   An unsigned integer value (a Perl internal unsigned integer, UV).
+    i	A signed integer value.
+    I	A unsigned integer value.
+	  (This 'integer' is _at_least_ 32 bits wide.  Its exact
+           size depends on what a local C compiler calls 'int'.)
+ 
+    n	An unsigned short (16-bit) in "network" (big-endian) order.
+    N	An unsigned long (32-bit) in "network" (big-endian) order.
+    v	An unsigned short (16-bit) in "VAX" (little-endian) order.
+    V	An unsigned long (32-bit) in "VAX" (little-endian) order.
+
+    j   A Perl internal signed integer value (IV).
+    J   A Perl internal unsigned integer value (UV).
 
     f	A single-precision float in the native format.
     d	A double-precision float in the native format.
 
-    F	A floating point value in the native native format
-           (a Perl internal floating point value, NV).
+    F	A Perl internal floating point value (NV) in the native format
     D	A long double-precision float in the native format.
 	  (Long doubles are available only if your system supports long
 	   double values _and_ if Perl has been compiled to support those.
@@ -3307,9 +3365,35 @@ of values, as follows:
 
     x	A null byte.
     X	Back up a byte.
-    @	Null fill to absolute position, counted from the start of
-        the innermost ()-group.
+    @	Null fill or truncate to absolute position, counted from the
+        start of the innermost ()-group.
+    .   Null fill or truncate to absolute position specified by value.
     (	Start of a ()-group.
+
+Some letters in the TEMPLATE may optionally be followed by one or
+more of these modifiers (the second column lists the letters for
+which the modifier is valid):
+
+    !   sSlLiI     Forces native (short, long, int) sizes instead
+                   of fixed (16-/32-bit) sizes.
+
+        xX         Make x and X act as alignment commands.
+
+        nNvV       Treat integers as signed instead of unsigned.
+
+        @.         Specify position as byte offset in the internal
+                   representation of the packed string. Efficient but
+                   dangerous.
+
+    >   sSiIlLqQ   Force big-endian byte-order on the type.
+        jJfFdDpP   (The "big end" touches the construct.)
+
+    <   sSiIlLqQ   Force little-endian byte-order on the type.
+        jJfFdDpP   (The "little end" touches the construct.)
+
+The C<E<gt>> and C<E<lt>> modifiers can also be used on C<()>-groups,
+in which case they force a certain byte-order on all components of
+that group, including subgroups.
 
 The following rules apply:
 
@@ -3319,12 +3403,13 @@ The following rules apply:
 
 Each letter may optionally be followed by a number giving a repeat
 count.  With all types except C<a>, C<A>, C<Z>, C<b>, C<B>, C<h>,
-C<H>, C<@>, C<x>, C<X> and C<P> the pack function will gobble up that
-many values from the LIST.  A C<*> for the repeat count means to use
-however many items are left, except for C<@>, C<x>, C<X>, where it is
-equivalent to C<0>, and C<u>, where it is equivalent to 1 (or 45, what
-is the same).  A numeric repeat count may optionally be enclosed in
-brackets, as in C<pack 'C[80]', @arr>.
+C<H>, C<@>, C<.>, C<x>, C<X> and C<P> the pack function will gobble up
+that many values from the LIST.  A C<*> for the repeat count means to
+use however many items are left, except for C<@>, C<x>, C<X>, where it
+is equivalent to C<0>, for <.> where it means relative to string start
+and C<u>, where it is equivalent to 1 (or 45, which is the same).
+A numeric repeat count may optionally be enclosed in brackets, as in
+C<pack 'C[80]', @arr>.
 
 One can replace the numeric repeat count by a template enclosed in brackets;
 then the packed length of this template in bytes is used as a count.
@@ -3338,72 +3423,84 @@ When used with C<Z>, C<*> results in the addition of a trailing null
 byte (so the packed result will be one longer than the byte C<length>
 of the item).
 
+When used with C<@>, the repeat count represents an offset from the start
+of the innermost () group.
+
+When used with C<.>, the repeat count is used to determine the starting
+position from where the value offset is calculated. If the repeat count
+is 0, it's relative to the current position. If the repeat count is C<*>,
+the offset is relative to the start of the packed string. And if its an
+integer C<n> the offset is relative to the start of the n-th innermost
+() group (or the start of the string if C<n> is bigger then the group
+level).
+
 The repeat count for C<u> is interpreted as the maximal number of bytes
-to encode per line of output, with 0 and 1 replaced by 45.
+to encode per line of output, with 0, 1 and 2 replaced by 45. The repeat 
+count should not be more than 65.
 
 =item *
 
 The C<a>, C<A>, and C<Z> types gobble just one value, but pack it as a
 string of length count, padding with nulls or spaces as necessary.  When
-unpacking, C<A> strips trailing spaces and nulls, C<Z> strips everything
-after the first null, and C<a> returns data verbatim.  When packing,
-C<a>, and C<Z> are equivalent.
+unpacking, C<A> strips trailing whitespace and nulls, C<Z> strips everything
+after the first null, and C<a> returns data verbatim.
 
 If the value-to-pack is too long, it is truncated.  If too long and an
 explicit count is provided, C<Z> packs only C<$count-1> bytes, followed
-by a null byte.  Thus C<Z> always packs a trailing null byte under
-all circumstances.
+by a null byte.  Thus C<Z> always packs a trailing null (except when the
+count is 0).
 
 =item *
 
 Likewise, the C<b> and C<B> fields pack a string that many bits long.
-Each byte of the input field of pack() generates 1 bit of the result.
+Each character of the input field of pack() generates 1 bit of the result.
 Each result bit is based on the least-significant bit of the corresponding
-input byte, i.e., on C<ord($byte)%2>.  In particular, bytes C<"0"> and
-C<"1"> generate bits 0 and 1, as do bytes C<"\0"> and C<"\1">.
+input character, i.e., on C<ord($char)%2>.  In particular, characters C<"0">
+and C<"1"> generate bits 0 and 1, as do characters C<"\0"> and C<"\1">.
 
 Starting from the beginning of the input string of pack(), each 8-tuple
-of bytes is converted to 1 byte of output.  With format C<b>
-the first byte of the 8-tuple determines the least-significant bit of a
-byte, and with format C<B> it determines the most-significant bit of
-a byte.
+of characters is converted to 1 character of output.  With format C<b>
+the first character of the 8-tuple determines the least-significant bit of a
+character, and with format C<B> it determines the most-significant bit of
+a character.
 
 If the length of the input string is not exactly divisible by 8, the
-remainder is packed as if the input string were padded by null bytes
+remainder is packed as if the input string were padded by null characters
 at the end.  Similarly, during unpack()ing the "extra" bits are ignored.
 
-If the input string of pack() is longer than needed, extra bytes are ignored.
-A C<*> for the repeat count of pack() means to use all the bytes of
-the input field.  On unpack()ing the bits are converted to a string
-of C<"0">s and C<"1">s.
+If the input string of pack() is longer than needed, extra characters are 
+ignored. A C<*> for the repeat count of pack() means to use all the 
+characters of the input field.  On unpack()ing the bits are converted to a 
+string of C<"0">s and C<"1">s.
 
 =item *
 
 The C<h> and C<H> fields pack a string that many nybbles (4-bit groups,
 representable as hexadecimal digits, 0-9a-f) long.
 
-Each byte of the input field of pack() generates 4 bits of the result.
-For non-alphabetical bytes the result is based on the 4 least-significant
-bits of the input byte, i.e., on C<ord($byte)%16>.  In particular,
-bytes C<"0"> and C<"1"> generate nybbles 0 and 1, as do bytes
-C<"\0"> and C<"\1">.  For bytes C<"a".."f"> and C<"A".."F"> the result
+Each character of the input field of pack() generates 4 bits of the result.
+For non-alphabetical characters the result is based on the 4 least-significant
+bits of the input character, i.e., on C<ord($char)%16>.  In particular,
+characters C<"0"> and C<"1"> generate nybbles 0 and 1, as do bytes
+C<"\0"> and C<"\1">.  For characters C<"a".."f"> and C<"A".."F"> the result
 is compatible with the usual hexadecimal digits, so that C<"a"> and
-C<"A"> both generate the nybble C<0xa==10>.  The result for bytes
+C<"A"> both generate the nybble C<0xa==10>.  The result for characters
 C<"g".."z"> and C<"G".."Z"> is not well-defined.
 
 Starting from the beginning of the input string of pack(), each pair
-of bytes is converted to 1 byte of output.  With format C<h> the
-first byte of the pair determines the least-significant nybble of the
-output byte, and with format C<H> it determines the most-significant
+of characters is converted to 1 character of output.  With format C<h> the
+first character of the pair determines the least-significant nybble of the
+output character, and with format C<H> it determines the most-significant
 nybble.
 
 If the length of the input string is not even, it behaves as if padded
-by a null byte at the end.  Similarly, during unpack()ing the "extra"
+by a null character at the end.  Similarly, during unpack()ing the "extra"
 nybbles are ignored.
 
-If the input string of pack() is longer than needed, extra bytes are ignored.
-A C<*> for the repeat count of pack() means to use all the bytes of
-the input field.  On unpack()ing the bits are converted to a string
+If the input string of pack() is longer than needed, extra characters are
+ignored.
+A C<*> for the repeat count of pack() means to use all the characters of
+the input field.  On unpack()ing the nybbles are converted to a string
 of hexadecimal digits.
 
 =item *
@@ -3415,26 +3512,39 @@ The C<P> type packs a pointer to a structure of the size indicated by the
 length.  A NULL pointer is created if the corresponding value for C<p> or
 C<P> is C<undef>, similarly for unpack().
 
+If your system has a strange pointer size (i.e. a pointer is neither as
+big as an int nor as big as a long), it may not be possible to pack or
+unpack pointers in big- or little-endian byte order.  Attempting to do
+so will result in a fatal error.
+
 =item *
 
-The C</> template character allows packing and unpacking of strings where
-the packed structure contains a byte count followed by the string itself.
-You write I<length-item>C</>I<string-item>.
+The C</> template character allows packing and unpacking of a sequence of
+items where the packed structure contains a packed item count followed by 
+the packed items themselves.
+You write I<length-item>C</>I<sequence-item>.
 
 The I<length-item> can be any C<pack> template letter, and describes
 how the length value is packed.  The ones likely to be of most use are
 integer-packing ones like C<n> (for Java strings), C<w> (for ASN.1 or
 SNMP) and C<N> (for Sun XDR).
 
-For C<pack>, the I<string-item> must, at present, be C<"A*">, C<"a*"> or
-C<"Z*">. For C<unpack> the length of the string is obtained from the
-I<length-item>, but if you put in the '*' it will be ignored. For all other
-codes, C<unpack> applies the length value to the next item, which must not
-have a repeat count.
+For C<pack>, the I<sequence-item> may have a repeat count, in which case
+the minimum of that and the number of available items is used as argument
+for the I<length-item>. If it has no repeat count or uses a '*', the number
+of available items is used. For C<unpack> the repeat count is always obtained
+by decoding the packed item count, and the I<sequence-item> must not have a
+repeat count.
 
-    unpack 'C/a', "\04Gurusamy";        gives 'Guru'
-    unpack 'a3/A* A*', '007 Bond  J ';  gives (' Bond','J')
-    pack 'n/a* w/a*','hello,','world';  gives "\000\006hello,\005world"
+If the I<sequence-item> refers to a string type (C<"A">, C<"a"> or C<"Z">),
+the I<length-item> is a string length, not a number of strings. If there is
+an explicit repeat count for pack, the packed string will be adjusted to that
+given length.
+
+    unpack 'W/a', "\04Gurusamy";        gives ('Guru')
+    unpack 'a3/A* A*', '007 Bond  J ';  gives (' Bond', 'J')
+    pack 'n/a* w/a','hello,','world';   gives "\000\006hello,\005world"
+    pack 'a/W2', ord('a') .. ord('z');  gives '2ab'
 
 The I<length-item> is not returned explicitly from C<unpack>.
 
@@ -3446,7 +3556,7 @@ which Perl does not regard as legal in numeric strings.
 =item *
 
 The integer types C<s>, C<S>, C<l>, and C<L> may be
-immediately followed by a C<!> suffix to signify native shorts or
+followed by a C<!> modifier to signify native shorts or
 longs--as you can see from above for example a bare C<l> does mean
 exactly 32 bits, the native C<long> (as seen by the local C compiler)
 may be larger.  This is an issue mainly in 64-bit platforms.  You can
@@ -3501,7 +3611,7 @@ Some systems may have even weirder byte orders such as
 You can see your system's preference with
 
  	print join(" ", map { sprintf "%#02x", $_ }
-                            unpack("C*",pack("L",0x12345678))), "\n";
+                            unpack("W*",pack("L",0x12345678))), "\n";
 
 The byteorder on the platform where Perl was built is also available
 via L<Config>:
@@ -3512,9 +3622,42 @@ via L<Config>:
 Byteorders C<'1234'> and C<'12345678'> are little-endian, C<'4321'>
 and C<'87654321'> are big-endian.
 
-If you want portable packed integers use the formats C<n>, C<N>,
-C<v>, and C<V>, their byte endianness and size are known.
+If you want portable packed integers you can either use the formats
+C<n>, C<N>, C<v>, and C<V>, or you can use the C<E<gt>> and C<E<lt>>
+modifiers.  These modifiers are only available as of perl 5.9.2.
 See also L<perlport>.
+
+=item *
+
+All integer and floating point formats as well as C<p> and C<P> and
+C<()>-groups may be followed by the C<E<gt>> or C<E<lt>> modifiers
+to force big- or little- endian byte-order, respectively.
+This is especially useful, since C<n>, C<N>, C<v> and C<V> don't cover
+signed integers, 64-bit integers and floating point values.  However,
+there are some things to keep in mind.
+
+Exchanging signed integers between different platforms only works
+if all platforms store them in the same format.  Most platforms store
+signed integers in two's complement, so usually this is not an issue.
+
+The C<E<gt>> or C<E<lt>> modifiers can only be used on floating point
+formats on big- or little-endian machines.  Otherwise, attempting to
+do so will result in a fatal error.
+
+Forcing big- or little-endian byte-order on floating point values for
+data exchange can only work if all platforms are using the same
+binary representation (e.g. IEEE floating point format).  Even if all
+platforms are using IEEE, there may be subtle differences.  Being able
+to use C<E<gt>> or C<E<lt>> on floating point values can be very useful,
+but also very dangerous if you don't know exactly what you're doing.
+It is definetely not a general way to portably store floating point
+values.
+
+When using C<E<gt>> or C<E<lt>> on an C<()>-group, this will affect
+all types inside the group that accept the byte-order modifiers,
+including all subgroups.  It will silently be ignored for all other
+types.  You are not allowed to override the byte-order within a group
+that already has a byte-order modifier suffix.
 
 =item *
 
@@ -3526,28 +3669,31 @@ may not be readable on another - even if both use IEEE floating point
 arithmetic (as the endian-ness of the memory representation is not part
 of the IEEE spec).  See also L<perlport>.
 
-Note that Perl uses doubles internally for all numeric calculation, and
-converting from double into float and thence back to double again will
-lose precision (i.e., C<unpack("f", pack("f", $foo)>) will not in general
-equal $foo).
+If you know exactly what you're doing, you can use the C<E<gt>> or C<E<lt>>
+modifiers to force big- or little-endian byte-order on floating point values.
+
+Note that Perl uses doubles (or long doubles, if configured) internally for
+all numeric calculation, and converting from double into float and thence back
+to double again will lose precision (i.e., C<unpack("f", pack("f", $foo)>)
+will not in general equal $foo).
 
 =item *
 
-If the pattern begins with a C<U>, the resulting string will be
-treated as UTF-8-encoded Unicode. You can force UTF-8 encoding on in a
-string with an initial C<U0>, and the bytes that follow will be
-interpreted as Unicode characters. If you don't want this to happen,
-you can begin your pattern with C<C0> (or anything else) to force Perl
-not to UTF-8 encode your string, and then follow this with a C<U*>
-somewhere in your pattern.
+Pack and unpack can operate in two modes, character mode (C<C0> mode) where
+the packed string is processed per character and UTF-8 mode (C<U0> mode)
+where the packed string is processed in its UTF-8-encoded Unicode form on
+a byte by byte basis. Character mode is the default unless the format string 
+starts with an C<U>. You can switch mode at any moment with an explicit 
+C<C0> or C<U0> in the format. A mode is in effect until the next mode switch 
+or until the end of the ()-group in which it was entered.
 
 =item *
 
 You must yourself do any alignment or padding by inserting for example
 enough C<'x'>es while packing.  There is no way to pack() and unpack()
-could know where the bytes are going to or coming from.  Therefore
+could know where the characters are going to or coming from.  Therefore
 C<pack> (and C<unpack>) handle their output and input as flat
-sequences of bytes.
+sequences of characters.
 
 =item *
 
@@ -3560,14 +3706,13 @@ C<@> starts again at 0. Therefore, the result of
 
 is the string "\0a\0\0bc".
 
-
 =item *
 
 C<x> and C<X> accept C<!> modifier.  In this case they act as
 alignment commands: they jump forward/back to the closest position
-aligned at a multiple of C<count> bytes.  For example, to pack() or
+aligned at a multiple of C<count> characters. For example, to pack() or
 unpack() C's C<struct {char c; double d; char cc[2]}> one may need to
-use the template C<C x![d] d C[2]>; this assumes that doubles must be
+use the template C<W x![d] d W[2]>; this assumes that doubles must be
 aligned on the double's size.
 
 For alignment commands C<count> of 0 is equivalent to C<count> of 1;
@@ -3575,9 +3720,17 @@ both result in no-ops.
 
 =item *
 
+C<n>, C<N>, C<v> and C<V> accept the C<!> modifier. In this case they
+will represent signed 16-/32-bit integers in big-/little-endian order.
+This is only portable if all platforms sharing the packed data use the
+same binary representation for signed integers (e.g. all platforms are
+using two's complement representation).
+
+=item *
+
 A comment in a TEMPLATE starts with C<#> and goes to the end of line.
 White space may be used to separate pack codes from each other, but
-a C<!> modifier and a repeat count must follow immediately.
+modifiers and a repeat count must follow immediately.
 
 =item *
 
@@ -3589,20 +3742,27 @@ to pack() than actually given, extra arguments are ignored.
 
 Examples:
 
-    $foo = pack("CCCC",65,66,67,68);
+    $foo = pack("WWWW",65,66,67,68);
     # foo eq "ABCD"
-    $foo = pack("C4",65,66,67,68);
+    $foo = pack("W4",65,66,67,68);
     # same thing
+    $foo = pack("W4",0x24b6,0x24b7,0x24b8,0x24b9);
+    # same thing with Unicode circled letters.
     $foo = pack("U4",0x24b6,0x24b7,0x24b8,0x24b9);
-    # same thing with Unicode circled letters
+    # same thing with Unicode circled letters. You don't get the UTF-8
+    # bytes because the U at the start of the format caused a switch to
+    # U0-mode, so the UTF-8 bytes get joined into characters
+    $foo = pack("C0U4",0x24b6,0x24b7,0x24b8,0x24b9);
+    # foo eq "\xe2\x92\xb6\xe2\x92\xb7\xe2\x92\xb8\xe2\x92\xb9"
+    # This is the UTF-8 encoding of the string in the previous example
 
     $foo = pack("ccxxcc",65,66,67,68);
     # foo eq "AB\0\0CD"
 
-    # note: the above examples featuring "C" and "c" are true
+    # note: the above examples featuring "W" and "c" are true
     # only on ASCII and ASCII-derived systems such as ISO Latin 1
     # and UTF-8.  In EBCDIC the first example would be
-    # $foo = pack("CCCC",193,194,195,196);
+    # $foo = pack("WWWW",193,194,195,196);
 
     $foo = pack("s2",1,2);
     # "\1\0\2\0" on little-endian
@@ -3636,6 +3796,17 @@ Examples:
     $bar = pack('s@4l', 12, 34);
     # short 12, zero fill to position 4, long 34
     # $foo eq $bar
+    $baz = pack('s.l', 12, 4, 34);
+    # short 12, zero fill to position 4, long 34
+
+    $foo = pack('nN', 42, 4711);
+    # pack big-endian 16- and 32-bit unsigned integers
+    $foo = pack('S>L>', 42, 4711);
+    # exactly the same
+    $foo = pack('s<l<', -42, 4711);
+    # pack little-endian 16- and 32-bit signed integers
+    $foo = pack('(sl)<', -42, 4711);
+    # exactly the same
 
 The same template may generally also be used in unpack().
 
@@ -3702,9 +3873,14 @@ array in subroutines, just like C<shift>.
 =item pos
 
 Returns the offset of where the last C<m//g> search left off for the variable
-in question (C<$_> is used when the variable is not specified).  May be
-modified to change that offset.  Such modification will also influence
-the C<\G> zero-width assertion in regular expressions.  See L<perlre> and
+in question (C<$_> is used when the variable is not specified).  Note that
+0 is a valid match offset, while C<undef> indicates that the search position
+is reset (usually due to match failure, but can also be because no match has
+yet been performed on the scalar). C<pos> directly accesses the location used
+by the regexp engine to store the offset, so assigning to C<pos> will change
+that offset, and so will also influence the C<\G> zero-width assertion in
+regular expressions. Because a failed C<m//gc> match doesn't reset the offset,
+the return from C<pos> won't change either in this case.  See L<perlre> and
 L<perlop>.
 
 =item print FILEHANDLE LIST
@@ -4087,7 +4263,9 @@ following subroutine:
     }
 
 Note that the file will not be included twice under the same specified
-name.  The file must return true as the last statement to indicate
+name.
+
+The file must return true as the last statement to indicate
 successful execution of any initialization code, so it's customary to
 end such a file with C<1;> unless you're sure it'll return true
 otherwise.  But it's better just to put the C<1;>, in case you add more
@@ -4231,6 +4409,8 @@ in the opposite order.
 
     undef $/;			# for efficiency of <>
     print scalar reverse <>;	# character tac, last line tsrif
+
+Used without arguments in scalar context, reverse() reverses C<$_>.
 
 This operator is also handy for inverting a hash, although there are some
 caveats.  If a value is duplicated in the original hash, only one of those
@@ -4420,7 +4600,8 @@ You can effect a sleep of 250 milliseconds this way:
     select(undef, undef, undef, 0.25);
 
 Note that whether C<select> gets restarted after signals (say, SIGALRM)
-is implementation-dependent.
+is implementation-dependent.  See also L<perlport> for notes on the
+portability of C<select>.
 
 B<WARNING>: One should not attempt to mix buffered I/O (like C<read>
 or <FH>) with C<select>, except as permitted by POSIX, and even
@@ -4853,8 +5034,9 @@ Example, assuming array lengths are passed before arrays:
 
 =item split
 
-Splits a string into a list of strings and returns that list.  By default,
-empty leading fields are preserved, and empty trailing ones are deleted.
+Splits the string EXPR into a list of strings and returns that list.  By
+default, empty leading fields are preserved, and empty trailing ones are
+deleted.  (If all fields are empty, they are considered to be trailing.)
 
 In scalar context, returns the number of fields found and splits into
 the C<@_> array.  Use of split in scalar context is deprecated, however,
@@ -5314,7 +5496,7 @@ as follows:
            = stat($filename);
 
 Not all fields are supported on all filesystem types.  Here are the
-meaning of the fields:
+meanings of the fields:
 
   0 dev      device number of filesystem
   1 ino      inode number
@@ -5332,13 +5514,13 @@ meaning of the fields:
 
 (The epoch was at 00:00 January 1, 1970 GMT.)
 
-(*) The ctime field is non-portable, in particular you cannot expect
-it to be a "creation time", see L<perlport/"Files and Filesystems">
-for details.
+(*) Not all fields are supported on all filesystem types. Notably, the
+ctime field is non-portable.  In particular, you cannot expect it to be a
+"creation time", see L<perlport/"Files and Filesystems"> for details.
 
-If stat is passed the special filehandle consisting of an underline, no
+If C<stat> is passed the special filehandle consisting of an underline, no
 stat is done, but the current contents of the stat structure from the
-last stat or filetest are returned.  Example:
+last C<stat>, C<lstat>, or filetest are returned.  Example:
 
     if (-x $file && (($d) = stat(_)) && $d < 0) {
 	print "$file is executable NFS file\n";
@@ -5383,7 +5565,7 @@ You can import symbolic mode constants (C<S_IF*>) and functions
     $is_setgid     =  S_ISDIR($mode);
 
 You could write the last two using the C<-u> and C<-d> operators.
-The commonly available S_IF* constants are
+The commonly available C<S_IF*> constants are
 
     # Permissions: read, write, execute, for user, group, others.
 
@@ -5404,7 +5586,7 @@ The commonly available S_IF* constants are
 
     S_IREAD S_IWRITE S_IEXEC
 
-and the S_IF* functions are
+and the C<S_IF*> functions are
 
     S_IMODE($mode)	the part of $mode containing the permission bits
 			and the setuid/setgid/sticky bits
@@ -5413,7 +5595,7 @@ and the S_IF* functions are
 			which can be bit-anded with e.g. S_IFREG
                         or with the following functions
 
-    # The operators -f, -d, -l, -b, -c, -p, and -s.
+    # The operators -f, -d, -l, -b, -c, -p, and -S.
 
     S_ISREG($mode) S_ISDIR($mode) S_ISLNK($mode)
     S_ISBLK($mode) S_ISCHR($mode) S_ISFIFO($mode) S_ISSOCK($mode)
@@ -5425,7 +5607,7 @@ and the S_IF* functions are
     S_ISENFMT($mode) S_ISWHT($mode)
 
 See your native chmod(2) and stat(2) documentation for more details
-about the S_* constants.  To get status info for a symbolic link
+about the C<S_*> constants.  To get status info for a symbolic link
 instead of the target file behind the link, use the C<lstat> function.
 
 =item study SCALAR
@@ -5541,15 +5723,21 @@ replacement string as the 4th argument.  This allows you to replace
 parts of the EXPR and return what was there before in one operation,
 just as you can with splice().
 
-If the lvalue returned by substr is used after the EXPR is changed in
-any way, the behaviour may not be as expected and is subject to change.
-This caveat includes code such as C<print(substr($foo,$a,$b)=$bar)> or
-C<(substr($foo,$a,$b)=$bar)=$fud> (where $foo is changed via the
-substring assignment, and then the substr is used again), or where a
-substr() is aliased via a C<foreach> loop or passed as a parameter or
-a reference to it is taken and then the alias, parameter, or deref'd
-reference either is used after the original EXPR has been changed or
-is assigned to and then used a second time.
+Note that the lvalue returned by by the 3-arg version of substr() acts as
+a 'magic bullet'; each time it is assigned to, it remembers which part
+of the original string is being modified; for example:
+
+    $x = '1234';
+    for (substr($x,1,2)) {
+        $_ = 'a';   print $x,"\n";	# prints 1a4
+        $_ = 'xyz'; print $x,"\n";	# prints 1xyz4
+        $x = '56789';
+        $_ = 'pq';  print $x,"\n";	# prints 5pq9
+    }
+
+
+Prior to Perl version 5.9.1, the result of using an lvalue multiple times was
+unspecified.
 
 =item symlink OLDFILE,NEWFILE
 
@@ -5612,7 +5800,7 @@ using the C<|>-operator.
 
 Some of the most common values are C<O_RDONLY> for opening the file in
 read-only mode, C<O_WRONLY> for opening the file in write-only mode,
-and C<O_RDWR> for opening the file in read-write mode, and.
+and C<O_RDWR> for opening the file in read-write mode.
 
 For historical reasons, some values work on almost every system
 supported by perl: zero means read-only, one means write-only, and two
@@ -5629,10 +5817,15 @@ process's current C<umask>.
 
 In many systems the C<O_EXCL> flag is available for opening files in
 exclusive mode.  This is B<not> locking: exclusiveness means here that
-if the file already exists, sysopen() fails.  The C<O_EXCL> wins
-C<O_TRUNC>.
+if the file already exists, sysopen() fails.  C<O_EXCL> may not work
+on network filesystems, and has no effect unless the C<O_CREAT> flag
+is set as well.  Setting C<O_CREAT|O_EXCL> prevents the file from
+being opened if it is a symbolic link.  It does not protect against
+symbolic links in the file's path.
 
-Sometimes you may want to truncate an already-existing file: C<O_TRUNC>.
+Sometimes you may want to truncate an already-existing file.  This
+can be done using the C<O_TRUNC> flag.  The behavior of
+C<O_TRUNC> with C<O_RDONLY> is undefined.
 
 You should seldom if ever use C<0644> as argument to C<sysopen>, because
 that takes away the user's option to have a more permissive umask.
@@ -5693,7 +5886,7 @@ will return byte offsets, not character offsets (because implementing
 that would render sysseek() very slow).
 
 sysseek() bypasses normal buffered IO, so mixing this with reads (other
-than C<sysread>, for example &gt;&lt or read()) C<print>, C<write>,
+than C<sysread>, for example C<< <> >> or read()) C<print>, C<write>,
 C<seek>, C<tell>, or C<eof> may cause confusion.
 
 For WHENCE, you may also use the constants C<SEEK_SET>, C<SEEK_CUR>,
@@ -5743,9 +5936,10 @@ indicates a failure to start the program (inspect $! for the reason).
 Like C<exec>, C<system> allows you to lie to a program about its name if
 you use the C<system PROGRAM LIST> syntax.  Again, see L</exec>.
 
-Because C<system> and backticks block C<SIGINT> and C<SIGQUIT>,
-killing the program they're running doesn't actually interrupt
-your program.
+Since C<SIGINT> and C<SIGQUIT> are ignored during the execution of
+C<system>, if you expect your program to terminate on receipt of these
+signals you will need to arrange to do so yourself based on the return
+value.
 
     @args = ("command", "arg1", "arg2");
     system(@args) == 0
@@ -5764,7 +5958,6 @@ C<$?> like this:
     else {
 	printf "child exited with value %d\n", $? >> 8;
     }
-
 
 or more portably by using the W*() calls of the POSIX extension;
 see L<perlport> for more information.
@@ -5821,11 +6014,9 @@ tell() on pipes, fifos, and sockets usually returns -1.
 
 There is no C<systell> function.  Use C<sysseek(FH, 0, 1)> for that.
 
-Do not use tell() on a filehandle that has been opened using
-sysopen(), use sysseek() for that as described above.  Why?  Because
-sysopen() creates unbuffered, "raw", filehandles, while open() creates
-buffered filehandles.  sysseek() make sense only on the first kind,
-tell() only makes sense on the second kind.
+Do not use tell() (or other buffered I/O operations) on a file handle
+that has been manipulated by sysread(), syswrite() or sysseek().
+Those functions ignore the buffering, while tell() does not.
 
 =item telldir DIRHANDLE
 
@@ -5868,6 +6059,7 @@ A class implementing a hash should have the following methods:
     EXISTS this, key
     FIRSTKEY this
     NEXTKEY this, lastkey
+    SCALAR this
     DESTROY this
     UNTIE this
 
@@ -5934,9 +6126,10 @@ package.
 =item time
 
 Returns the number of non-leap seconds since whatever time the system
-considers to be the epoch (that's 00:00:00, January 1, 1904 for Mac OS,
-and 00:00:00 UTC, January 1, 1970 for most other systems).
-Suitable for feeding to C<gmtime> and C<localtime>.
+considers to be the epoch, suitable for feeding to C<gmtime> and
+C<localtime>. On most systems the epoch is 00:00:00 UTC, January 1, 1970;
+a prominent exception being Mac OS Classic which uses 00:00:00, January 1,
+1904 in the current local time zone for its epoch.
 
 For measuring time in better granularity than one second,
 you may use either the Time::HiRes module (from CPAN, and starting from
@@ -6087,7 +6280,7 @@ If EXPR is omitted, unpacks the C<$_> string.
 
 The string is broken into chunks described by the TEMPLATE.  Each chunk
 is converted separately to a value.  Typically, either the string is a result
-of C<pack>, or the bytes of the string represent a C structure of some
+of C<pack>, or the characters of the string represent a C structure of some
 kind.
 
 The TEMPLATE has the same format as in the C<pack> function.
@@ -6100,7 +6293,7 @@ Here's a subroutine that does substring:
 
 and then there's
 
-    sub ordinal { unpack("c",$_[0]); } # same as ord()
+    sub ordinal { unpack("W",$_[0]); } # same as ord()
 
 In addition to fields allowed in pack(), you may prefix a field with
 a %<number> to indicate that
@@ -6114,7 +6307,7 @@ computes the same number as the System V sum program:
 
     $checksum = do {
 	local $/;  # slurp!
-	unpack("%32C*",<>) % 65535;
+	unpack("%32W*",<>) % 65535;
     };
 
 The following efficiently counts the number of set bits in a bit vector:
@@ -6257,7 +6450,8 @@ files.  The first two elements of the list must be the NUMERICAL access
 and modification times, in that order.  Returns the number of files
 successfully changed.  The inode change time of each file is set
 to the current time.  For example, this code has the same effect as the
-Unix touch(1) command when the files I<already exist>.
+Unix touch(1) command when the files I<already exist> and belong to
+the user running the program:
 
     #!/usr/bin/perl
     $atime = $mtime = time;
@@ -6267,7 +6461,8 @@ Since perl 5.7.2, if the first two elements of the list are C<undef>, then
 the utime(2) function in the C library will be called with a null second
 argument. On most systems, this will set the file's access and
 modification times to the current time (i.e. equivalent to the example
-above.)
+above) and will even work on other users' files where you have write
+permission:
 
     utime undef, undef, @ARGV;
 
@@ -6295,7 +6490,8 @@ function would produce on the same (unmodified) hash.  Since Perl
 for security reasons (see L<perlsec/"Algorithmic Complexity Attacks">).
 
 As a side effect, calling values() resets the HASH's internal iterator,
-see L</each>.
+see L</each>. (In particular, calling values() in void context resets
+the iterator with no other overhead.)
 
 Note that the values are not copied, which means modifying them will
 modify the contents of the hash:
@@ -6579,14 +6775,18 @@ and for other examples.
 
 =item wantarray
 
-Returns true if the context of the currently executing subroutine is
-looking for a list value.  Returns false if the context is looking
-for a scalar.  Returns the undefined value if the context is looking
-for no value (void context).
+Returns true if the context of the currently executing subroutine or
+C<eval> is looking for a list value.  Returns false if the context is
+looking for a scalar.  Returns the undefined value if the context is
+looking for no value (void context).
 
     return unless defined wantarray;	# don't bother doing more
     my @a = complex_calculation();
     return wantarray ? @a : "@a";
+
+C<wantarray()>'s result is unspecified in the top level of a file,
+in a C<BEGIN>, C<CHECK>, C<INIT> or C<END> block, or in a C<DESTROY>
+method.
 
 This function should have been named wantlist() instead.
 

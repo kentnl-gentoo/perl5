@@ -5,6 +5,8 @@
 # Determine the architecture type of this system.
 # Keep leading tab below -- Configure Black Magic -- RAM, 03/02/97
 	xxOsRevMajor=`uname -r | sed -e 's/^[^0-9]*//' | cut -d. -f1`;
+	xxOsRevMinor=`uname -r | sed -e 's/^[^0-9]*//' | cut -d. -f2`;
+	xxOsRev=`expr 100 \* $xxOsRevMajor + $xxOsRevMinor`
 if [ "$xxOsRevMajor" -ge 10 ]; then
     # This system is running >= 10.x
 
@@ -134,10 +136,36 @@ case `$cc -v 2>&1`"" in
 		esac
 	    ;;
     *)      ccisgcc=''
-	    ccversion=`which cc | xargs what | awk '/Compiler/{print $2}'`
+	    # What cannot be use in combination with ccache links :(
+	    cc_found=""
+	    for p in `echo $PATH | tr : ' ''` ; do
+		x="$p/cc"
+		if [ -f $x ] && [ -x $x ]; then
+		    if [ -h $x ]; then
+			l=`ls -l $x | sed 's,.*-> ,,'`
+			case $l in
+			    /*) x=$l		;;
+			    *)  x="$p/$l"	;;
+			    esac
+			fi
+		    x=`echo $x | sed 's,/\./,/,g'`
+		    case $x in
+			*ccache*) ;;
+			*) [ -z "$cc_found" ] && cc_found=$x ;;
+			esac
+		    fi
+		done
+	    [ -z "$cc_found" ] && cc_found=`which cc`
+	    what $cc_found >&4
+	    ccversion=`what $cc_found | awk '/Compiler/{print $2}/Itanium/{print $6,$7}'`
 	    case "$ccflags" in
                "-Ae "*) ;;
-               *) ccflags="-Ae $cc_cppflags -Wl,+vnocompatwarnings" ;;
+		*)  ccflags="-Ae $cc_cppflags"
+		    # +vnocompatwarnings not known in 10.10 and older
+		    if [ $xxOsRev -ge 1020 ]; then
+			ccflags="$ccflags -Wl,+vnocompatwarnings"
+			fi
+		    ;;
                esac
 	    # Needed because cpp does only support -Aa (not -Ae)
 	    cpplast='-'
@@ -397,6 +425,9 @@ case "$ccisgcc" in
     esac
 
 ## LARGEFILES
+if [ $xxOsRev -lt 1020 ]; then
+    uselargefiles="$undef"
+    fi
 
 #case "$uselargefiles-$ccisgcc" in
 #    "$define-$define"|'-define') 
@@ -629,6 +660,11 @@ usemymalloc='n'
 case "$useperlio" in
     $undef|false|[nN]*) usemymalloc='y' ;;
     esac
+
+# malloc wrap works
+case "$usemallocwrap" in
+'') usemallocwrap='define' ;;
+esac
 
 # fpclassify() is a macro, the library call is Fpclassify
 # Similarly with the others below.

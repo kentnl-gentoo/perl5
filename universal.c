@@ -1,7 +1,7 @@
 /*    universal.c
  *
- *    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
- *    by Larry Wall and others
+ *    Copyright (C) 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004,
+ *    2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -12,6 +12,10 @@
  * "The roots of those mountains must be roots indeed; there must be
  * great secrets buried there which have not been discovered since the
  * beginning." --Gandalf, relating Gollum's story
+ */
+
+/* This file contains the code that implements the functions in Perl's
+ * UNIVERSAL package, such as UNIVERSAL->can().
  */
 
 #include "EXTERN.h"
@@ -133,7 +137,7 @@ for class names as well as for objects.
 bool
 Perl_sv_derived_from(pTHX_ SV *sv, const char *name)
 {
-    char *type;
+    const char *type;
     HV *stash;
     HV *name_stash;
 
@@ -174,6 +178,7 @@ XS(XS_version_vcmp);
 XS(XS_version_boolean);
 XS(XS_version_noop);
 XS(XS_version_is_alpha);
+XS(XS_version_qv);
 XS(XS_utf8_is_utf8);
 XS(XS_utf8_valid);
 XS(XS_utf8_encode);
@@ -188,11 +193,13 @@ XS(XS_Internals_hv_clear_placehold);
 XS(XS_PerlIO_get_layers);
 XS(XS_Regexp_DESTROY);
 XS(XS_Internals_hash_seed);
+XS(XS_Internals_rehash_seed);
+XS(XS_Internals_HvREHASH);
 
 void
 Perl_boot_core_UNIVERSAL(pTHX)
 {
-    char *file = __FILE__;
+    const char file[] = __FILE__;
 
     newXS("UNIVERSAL::isa",             XS_UNIVERSAL_isa,         file);
     newXS("UNIVERSAL::can",             XS_UNIVERSAL_can,         file);
@@ -215,6 +222,7 @@ Perl_boot_core_UNIVERSAL(pTHX)
 	newXS("version::(nomethod", XS_version_noop, file);
 	newXS("version::noop", XS_version_noop, file);
 	newXS("version::is_alpha", XS_version_is_alpha, file);
+	newXS("version::qv", XS_version_qv, file);
     }
     newXS("utf8::is_utf8", XS_utf8_is_utf8, file);
     newXS("utf8::valid", XS_utf8_valid, file);
@@ -232,6 +240,8 @@ Perl_boot_core_UNIVERSAL(pTHX)
                XS_PerlIO_get_layers, file, "*;@");
     newXS("Regexp::DESTROY", XS_Regexp_DESTROY, file);
     newXSproto("Internals::hash_seed",XS_Internals_hash_seed, file, "");
+    newXSproto("Internals::rehash_seed",XS_Internals_rehash_seed, file, "");
+    newXSproto("Internals::HvREHASH", XS_Internals_HvREHASH, file, "\\%");
 }
 
 
@@ -310,7 +320,7 @@ XS(XS_UNIVERSAL_VERSION)
     GV **gvp;
     GV *gv;
     SV *sv;
-    char *undef;
+    const char *undef;
 
     if (SvROK(ST(0))) {
         sv = (SV*)SvRV(ST(0));
@@ -328,6 +338,8 @@ XS(XS_UNIVERSAL_VERSION)
         SV *nsv = sv_newmortal();
         sv_setsv(nsv, sv);
         sv = nsv;
+	if ( !sv_derived_from(sv, "version"))
+	    upg_version(sv);
         undef = Nullch;
     }
     else {
@@ -345,25 +357,32 @@ XS(XS_UNIVERSAL_VERSION)
 			     "%s does not define $%s::VERSION--version check failed",
 			     HvNAME(pkg), HvNAME(pkg));
 	     else {
-		  char *str = SvPVx(ST(0), len);
+                  const char *str = SvPVx(ST(0), len);
 
 		  Perl_croak(aTHX_
 			     "%s defines neither package nor VERSION--version check failed", str);
 	     }
 	}
-	if ( !sv_derived_from(sv, "version"))
-	    sv = new_version(sv);
 
-	if ( !sv_derived_from(req, "version"))
-	    req = new_version(req);
+	if ( !sv_derived_from(req, "version")) {
+	    /* req may very well be R/O, so create a new object */
+	    SV *nsv = sv_newmortal();
+	    sv_setsv(nsv, req);
+	    req = nsv;
+	    upg_version(req);
+	}
 
-	if ( vcmp( SvRV(req), SvRV(sv) ) > 0 )
-	    Perl_croak(aTHX_
-		"%s version %"SVf" required--this is only version %"SVf,
-		HvNAME(pkg), req, sv);
+	if ( vcmp( req, sv ) > 0 )
+	    Perl_croak(aTHX_ "%s version %"SVf" (%"SVf") required--"
+		    "this is only version %"SVf" (%"SVf")", HvNAME(pkg),
+		    vnumify(req),vnormal(req),vnumify(sv),vnormal(sv));
     }
 
-    ST(0) = sv;
+    if ( SvOK(sv) && sv_derived_from(sv, "version") ) {
+	ST(0) = vnumify(sv);
+    } else {
+	ST(0) = sv;
+    }
 
     XSRETURN(1);
 }
@@ -375,15 +394,20 @@ XS(XS_version_new)
 	Perl_croak(aTHX_ "Usage: version::new(class, version)");
     SP -= items;
     {
-/*	char *	class = (char *)SvPV_nolen(ST(0)); */
-        SV *version = ST(1);
+        const char *class = SvPV_nolen(ST(0));
+        SV *vs = ST(1);
+	SV *rv;
 	if (items == 3 )
 	{
-	    char *vs = savepvn(SvPVX(ST(2)),SvCUR(ST(2)));
-	    version = Perl_newSVpvf(aTHX_ "v%s",vs);
+	    vs = sv_newmortal(); 
+	    Perl_sv_setpvf(aTHX_ vs,"v%s",SvPV_nolen(ST(2)));
 	}
 
-	PUSHs(new_version(version));
+	rv = new_version(vs);
+	if ( strcmp(class,"version") != 0 ) /* inherited new() */
+	    sv_bless(rv, gv_stashpv(class,TRUE));
+
+	PUSHs(sv_2mortal(rv));
 	PUTBACK;
 	return;
     }
@@ -405,9 +429,7 @@ XS(XS_version_stringify)
 	  else
 	       Perl_croak(aTHX_ "lobj is not of type version");
 
-	  {
-	       PUSHs(vstringify(lobj));
-	  }
+	  PUSHs(sv_2mortal(vstringify(lobj)));
 
 	  PUTBACK;
 	  return;
@@ -430,9 +452,7 @@ XS(XS_version_numify)
 	  else
 	       Perl_croak(aTHX_ "lobj is not of type version");
 
-	  {
-	       PUSHs(vnumify(lobj));
-	  }
+	  PUSHs(sv_2mortal(vnumify(lobj)));
 
 	  PUTBACK;
 	  return;
@@ -476,7 +496,7 @@ XS(XS_version_vcmp)
 		    rs = newSViv(vcmp(lobj,rvs));
 	       }
 
-	       PUSHs(rs);
+	       PUSHs(sv_2mortal(rs));
 	  }
 
 	  PUTBACK;
@@ -503,7 +523,7 @@ XS(XS_version_boolean)
 	  {
 	       SV	*rs;
 	       rs = newSViv( vcmp(lobj,new_version(newSVpvn("0",1))) );
-	       PUSHs(rs);
+	       PUSHs(sv_2mortal(rs));
 	  }
 
 	  PUTBACK;
@@ -557,6 +577,43 @@ XS(XS_version_is_alpha)
     else
 	XSRETURN_NO;
 }
+	PUTBACK;
+	return;
+    }
+}
+
+XS(XS_version_qv)
+{
+    dXSARGS;
+    if (items != 1)
+	Perl_croak(aTHX_ "Usage: version::qv(ver)");
+    SP -= items;
+    {
+	SV *	ver = ST(0);
+	if ( !SvVOK(ver) ) /* only need to do with if not already v-string */
+	{
+	    SV *vs = sv_newmortal();
+	    char *version;
+	    if ( SvNOK(ver) ) /* may get too much accuracy */
+	    {
+		char tbuf[64];
+		sprintf(tbuf,"%.9"NVgf, SvNVX(ver));
+		version = savepv(tbuf);
+	    }
+	    else
+	    {
+		version = savesvpv(ver);
+	    }
+	    (void)scan_version(version,vs,TRUE);
+	    Safefree(version);
+
+	    PUSHs(vs);
+	}
+	else
+	{
+	    PUSHs(sv_2mortal(new_version(ver)));
+	}
+
 	PUTBACK;
 	return;
     }
@@ -728,53 +785,13 @@ XS(XS_Internals_SvREFCNT)	/* This is dangerous stuff. */
     XSRETURN_UNDEF; /* Can't happen. */
 }
 
-/* Maybe this should return the number of placeholders found in scalar context,
-   and a list of them in list context.  */
 XS(XS_Internals_hv_clear_placehold)
 {
     dXSARGS;
     HV *hv = (HV *) SvRV(ST(0));
-
-    /* I don't care how many parameters were passed in, but I want to avoid
-       the unused variable warning. */
-
-    items = (I32)HvPLACEHOLDERS(hv);
-
-    if (items) {
-        HE *entry;
-        I32 riter = HvRITER(hv);
-        HE *eiter = HvEITER(hv);
-        hv_iterinit(hv);
-        /* This may look suboptimal with the items *after* the iternext, but
-           it's quite deliberate. We only get here with items==0 if we've
-           just deleted the last placeholder in the hash. If we've just done
-           that then it means that the hash is in lazy delete mode, and the
-           HE is now only referenced in our iterator. If we just quit the loop
-           and discarded our iterator then the HE leaks. So we do the && the
-           other way to ensure iternext is called just one more time, which
-           has the side effect of triggering the lazy delete.  */
-        while ((entry = hv_iternext_flags(hv, HV_ITERNEXT_WANTPLACEHOLDERS))
-            && items) {
-            SV *val = hv_iterval(hv, entry);
-
-            if (val == &PL_sv_placeholder) {
-
-                /* It seems that I have to go back in the front of the hash
-                   API to delete a hash, even though I have a HE structure
-                   pointing to the very entry I want to delete, and could hold
-                   onto the previous HE that points to it. And it's easier to
-                   go in with SVs as I can then specify the precomputed hash,
-                   and don't have fun and games with utf8 keys.  */
-                SV *key = hv_iterkeysv(entry);
-
-                hv_delete_ent (hv, key, G_DISCARD, HeHASH(entry));
-                items--;
-            }
-        }
-        HvRITER(hv) = riter;
-        HvEITER(hv) = eiter;
-    }
-
+    if (items != 1)
+	Perl_croak(aTHX_ "Usage: UNIVERSAL::hv_clear_placeholders(hv)");
+    hv_clear_placeholders(hv);
     XSRETURN(0);
 }
 
@@ -842,7 +859,7 @@ XS(XS_PerlIO_get_layers)
 	     if (SvROK(sv) && isGV(SvRV(sv)))
 		  gv = (GV*)SvRV(sv);
 	     else
-		  gv = gv_fetchpv(SvPVX(sv), FALSE, SVt_PVIO);
+		  gv = gv_fetchsv(sv, FALSE, SVt_PVIO);
 	}
 
 	if (gv && (io = GvIO(gv))) {
@@ -916,3 +933,35 @@ XS(XS_Internals_hash_seed)
     XSRETURN_UV(PERL_HASH_SEED);
 }
 
+XS(XS_Internals_rehash_seed)
+{
+    /* Using dXSARGS would also have dITEM and dSP,
+     * which define 2 unused local variables.  */
+    dMARK; dAX;
+    XSRETURN_UV(PL_rehash_seed);
+}
+
+XS(XS_Internals_HvREHASH)	/* Subject to change  */
+{
+    dXSARGS;
+    if (SvROK(ST(0))) {
+	HV *hv = (HV *) SvRV(ST(0));
+	if (items == 1 && SvTYPE(hv) == SVt_PVHV) {
+	    if (HvREHASH(hv))
+		XSRETURN_YES;
+	    else
+		XSRETURN_NO;
+	}
+    }
+    Perl_croak(aTHX_ "Internals::HvREHASH $hashref");
+}
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

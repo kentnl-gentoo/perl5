@@ -26,7 +26,7 @@ BEGIN
     }
   print "# INC = @INC\n";
 
-  plan tests => 534;
+  plan tests => 686;
   }
 
 use Math::BigRat;

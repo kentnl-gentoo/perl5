@@ -10,7 +10,7 @@
 package Pod::ParseUtils;
 
 use vars qw($VERSION);
-$VERSION = 0.30;   ## Current version of this package
+$VERSION = 1.30;   ## Current version of this package
 require  5.005;    ## requires this Perl version or later
 
 =head1 NAME
@@ -396,7 +396,7 @@ sub parse {
     if($page =~ /[(]\w*[)]$/) {
         $self->warning("(section) in '$page' deprecated");
     }
-    if(!$quoted && $node =~ m:[|/]:) {
+    if(!$quoted && $node =~ m:[|/]: && $type ne 'hyperlink') {
         $self->warning("node '$node' contains non-escaped | or /");
     }
     if($alttext =~ m:[|/]:) {
@@ -836,7 +836,9 @@ sub idx {
 
 =head1 AUTHOR
 
-Marek Rouchal E<lt>marek@saftsack.fs.uni-bayreuth.deE<gt>, borrowing
+Please report bugs using L<http://rt.cpan.org>.
+
+Marek Rouchal E<lt>marekr@cpan.orgE<gt>, borrowing
 a lot of things from L<pod2man> and L<pod2roff> as well as other POD
 processing tools by Tom Christiansen, Brad Appleton and Russ Allbery.
 

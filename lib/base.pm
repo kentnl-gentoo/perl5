@@ -2,7 +2,7 @@ package base;
 
 use strict 'vars';
 use vars qw($VERSION);
-$VERSION = '2.03';
+$VERSION = '2.06';
 
 # constant.pm is slow
 sub SUCCESS () { 1 }
@@ -38,11 +38,26 @@ sub get_attr {
     return $Fattr->{$_[0]};
 }
 
-sub get_fields {
-    # Shut up a possible typo warning.
-    () = \%{$_[0].'::FIELDS'};
+if ($] < 5.009) {
+    *get_fields = sub {
+	# Shut up a possible typo warning.
+	() = \%{$_[0].'::FIELDS'};
+	my $f = \%{$_[0].'::FIELDS'};
 
-    return \%{$_[0].'::FIELDS'};
+	# should be centralized in fields? perhaps
+	# fields::mk_FIELDS_be_OK. Peh. As long as %{ $package . '::FIELDS' }
+	# is used here anyway, it doesn't matter.
+	bless $f, 'pseudohash' if (ref($f) ne 'pseudohash');
+
+	return $f;
+    }
+}
+else {
+    *get_fields = sub {
+	# Shut up a possible typo warning.
+	() = \%{$_[0].'::FIELDS'};
+	return \%{$_[0].'::FIELDS'};
+    }
 }
 
 sub import {
@@ -113,7 +128,7 @@ sub inherit_fields {
     if( keys %$dfields ) {
         warn "$derived is inheriting from $base but already has its own ".
              "fields!\n".
-             "This will cause problems with pseudo-hashes.\n".
+             "This will cause problems.\n".
              "Be sure you use base BEFORE declaring fields\n";
     }
 
@@ -137,10 +152,9 @@ sub inherit_fields {
         }
     }
 
-    unless( keys %$bfields ) {
-        foreach my $idx (1..$#{$battr}) {
-            $dattr->[$idx] = $battr->[$idx] & INHERITED;
-        }
+    foreach my $idx (1..$#{$battr}) {
+	next if defined $dattr->[$idx];
+	$dattr->[$idx] = $battr->[$idx] & INHERITED;
     }
 }
 
@@ -151,7 +165,7 @@ __END__
 
 =head1 NAME
 
-base - Establish IS-A relationship with base class at compile time
+base - Establish IS-A relationship with base classes at compile time
 
 =head1 SYNOPSIS
 
@@ -160,30 +174,39 @@ base - Establish IS-A relationship with base class at compile time
 
 =head1 DESCRIPTION
 
-Roughly similar in effect to
+Allows you to both load one or more modules, while setting up inheritance from
+those modules at the same time.  Roughly similar in effect to
 
+    package Baz;
     BEGIN {
         require Foo;
         require Bar;
         push @ISA, qw(Foo Bar);
     }
 
+If any of the listed modules are not loaded yet, I<base> silently attempts to
+C<require> them (and silently continues if the C<require> failed).  Whether to
+C<require> a base class module is determined by the absence of a global variable
+$VERSION in the base package.  If $VERSION is not detected even after loading
+it, <base> will define $VERSION in the base package, setting it to the string
+C<-1, set by base.pm>.
+
 Will also initialize the fields if one of the base classes has it.
-Multiple Inheritence of fields is B<NOT> supported, if two or more
+Multiple inheritence of fields is B<NOT> supported, if two or more
 base classes each have inheritable fields the 'base' pragma will
 croak.  See L<fields>, L<public> and L<protected> for a description of
 this feature.
 
-When strict 'vars' is in scope, I<base> also lets you assign to @ISA
-without having to declare @ISA with the 'vars' pragma first.
+=head1 DIAGNOSTICS
 
-If any of the base classes are not loaded yet, I<base> silently
-C<require>s them (but it won't call the C<import> method).  Whether to
-C<require> a base class package is determined by the absence of a global
-$VERSION in the base package.  If $VERSION is not detected even after
-loading it, I<base> will define $VERSION in the base package, setting it to
-the string C<-1, set by base.pm>.
+=over 4
 
+=item Base class package "%s" is empty.
+
+base.pm was unable to require the base package, because it was not
+found in your path.
+
+=back
 
 =head1 HISTORY
 
@@ -192,7 +215,7 @@ This module was introduced with Perl 5.004_04.
 
 =head1 CAVEATS
 
-Due to the limitations of the pseudo-hash implementation, you must use
+Due to the limitations of the implementation, you must use
 base I<before> you declare any of your own fields.
 
 

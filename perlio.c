@@ -1,5 +1,5 @@
 /*
- * perlio.c Copyright (c) 1996-2002, Nick Ing-Simmons You may distribute
+ * perlio.c Copyright (c) 1996-2005, Nick Ing-Simmons You may distribute
  * under the terms of either the GNU General Public License or the
  * Artistic License, as specified in the README file.
  */
@@ -7,6 +7,12 @@
 /*
  * Hour after hour for nearly three weary days he had jogged up and down,
  * over passes, and through long dales, and across many streams.
+ */
+
+/* This file contains the functions needed to implement PerlIO, which
+ * is Perl's private replacement for the C stdio library. This is used
+ * by default unless you compile with -Uuseperlio or run with
+ * PERLIO=:stdio (but don't do this unless you know what you're doing)
  */
 
 /*
@@ -448,7 +454,7 @@ PerlIO_debug(const char *fmt, ...)
     va_list ap;
     dSYS;
     va_start(ap, fmt);
-    if (!dbg) {
+    if (!dbg && !PL_tainting && PL_uid == PL_euid && PL_gid == PL_egid) {
 	char *s = PerlEnv_getenv("PERLIO_DEBUG");
 	if (s && *s)
 	    dbg = PerlLIO_open3(s, O_WRONLY | O_CREAT | O_APPEND, 0666);
@@ -457,21 +463,20 @@ PerlIO_debug(const char *fmt, ...)
     }
     if (dbg > 0) {
 	dTHX;
+	const char *s;
 #ifdef USE_ITHREADS
 	/* Use fixed buffer as sv_catpvf etc. needs SVs */
 	char buffer[1024];
-	char *s;
 	STRLEN len;
 	s = CopFILE(PL_curcop);
 	if (!s)
 	    s = "(none)";
-	sprintf(buffer, "%s:%" IVdf " ", s, (IV) CopLINE(PL_curcop));
+	sprintf(buffer, "%.40s:%" IVdf " ", s, (IV) CopLINE(PL_curcop));
 	len = strlen(buffer);
 	vsprintf(buffer+len, fmt, ap);
 	PerlLIO_write(dbg, buffer, strlen(buffer));
 #else
 	SV *sv = newSVpvn("", 0);
-	char *s;
 	STRLEN len;
 	s = CopFILE(PL_curcop);
 	if (!s)
@@ -604,7 +609,7 @@ PerlIO_list_push(pTHX_ PerlIO_list_t *list, PerlIO_funcs *funcs, SV *arg)
     p = &(list->array[list->cur++]);
     p->funcs = funcs;
     if ((p->arg = arg)) {
-	SvREFCNT_inc(arg);
+	(void)SvREFCNT_inc(arg);
     }
 }
 
@@ -2824,7 +2829,11 @@ PerlIOStdio_invalidate_fileno(pTHX_ FILE *f)
     /* XXX this could use PerlIO_canset_fileno() and
      * PerlIO_set_fileno() support from Configure
      */
-#  if defined(__GLIBC__)
+#  if defined(__UCLIBC__)
+    /* uClibc must come before glibc because it defines __GLIBC__ as well. */
+    f->__filedes = -1;
+    return 1;
+#  elif defined(__GLIBC__)
     /* There may be a better way for GLIBC:
     	- libio.h defines a flag to not close() on cleanup
      */	
@@ -2874,6 +2883,17 @@ PerlIOStdio_invalidate_fileno(pTHX_ FILE *f)
 	f->_close = (int (*)(void *)) dummy_close;
      */
     f->_file = -1;
+    return 1;
+#  elif defined(__OpenBSD__)
+    /* There may be a better way on OpenBSD:
+        - we could insert a dummy func in the _close function entry
+	f->_close = (int (*)(void *)) dummy_close;
+     */
+    f->_file = -1;
+    return 1;
+#  elif defined(__EMX__)
+    /* f->_flags &= ~_IOOPEN; */	/* Will leak stream->_buffer */
+    f->_handle = -1;
     return 1;
 #  elif defined(__CYGWIN__)
     /* There may be a better way on CYGWIN:
@@ -3687,6 +3707,7 @@ PerlIOBuf_write(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
 {
     PerlIOBuf *b = PerlIOSelf(f, PerlIOBuf);
     const STDCHAR *buf = (const STDCHAR *) vbuf;
+    const STDCHAR *flushptr = buf;
     Size_t written = 0;
     if (!b->buf)
 	PerlIO_get_base(f);
@@ -3697,32 +3718,26 @@ PerlIOBuf_write(pTHX_ PerlIO *f, const void *vbuf, Size_t count)
 	    return 0;
 	}
     }	
+    if (PerlIOBase(f)->flags & PERLIO_F_LINEBUF) {
+	flushptr = buf + count;
+	while (flushptr > buf && *(flushptr - 1) != '\n')
+	    --flushptr;
+    }
     while (count > 0) {
 	SSize_t avail = b->bufsiz - (b->ptr - b->buf);
 	if ((SSize_t) count < avail)
 	    avail = count;
+	if (flushptr > buf && flushptr <= buf + avail)
+	    avail = flushptr - buf;
 	PerlIOBase(f)->flags |= PERLIO_F_WRBUF;
-	if (PerlIOBase(f)->flags & PERLIO_F_LINEBUF) {
-	    while (avail > 0) {
-		int ch = *buf++;
-		*(b->ptr)++ = ch;
-		count--;
-		avail--;
-		written++;
-		if (ch == '\n') {
-		    PerlIO_flush(f);
-		    break;
-		}
-	    }
-	}
-	else {
-	    if (avail) {
-		Copy(buf, b->ptr, avail, STDCHAR);
-		count -= avail;
-		buf += avail;
-		written += avail;
-		b->ptr += avail;
-	    }
+	if (avail) {
+	    Copy(buf, b->ptr, avail, STDCHAR);
+	    count -= avail;
+	    buf += avail;
+	    written += avail;
+	    b->ptr += avail;
+	    if (buf == flushptr)
+		PerlIO_flush(f);
 	}
 	if (b->ptr >= (b->buf + b->bufsiz))
 	    PerlIO_flush(f);
@@ -4712,15 +4727,25 @@ char *
 PerlIO_getname(PerlIO *f, char *buf)
 {
     dTHX;
-    char *name = NULL;
 #ifdef VMS
+    char *name = NULL;
+    bool exported = FALSE;
     FILE *stdio = PerlIOSelf(f, PerlIOStdio)->stdio;
-    if (stdio)
+    if (!stdio) {
+	stdio = PerlIO_exportFILE(f,0);
+	exported = TRUE;
+    }
+    if (stdio) {
 	name = fgetname(stdio, buf);
-#else
-    Perl_croak(aTHX_ "Don't know how to get file name");
-#endif
+	if (exported) PerlIO_releaseFILE(f,stdio);
+    }
     return name;
+#else
+    (void)f;
+    (void)buf;
+    Perl_croak(aTHX_ "Don't know how to get file name");
+    return Nullch;
+#endif
 }
 
 

@@ -1,12 +1,12 @@
 # -*- Mode: cperl; cperl-indent-level: 4 -*-
-# $Id: Straps.pm,v 1.18 2003/08/15 01:29:23 andy Exp $
+# $Id: Straps.pm 450 2004-12-20 04:51:42Z andy $
 
 package Test::Harness::Straps;
 
 use strict;
 use vars qw($VERSION);
 use Config;
-$VERSION = '0.15';
+$VERSION = '0.20_01';
 
 use Test::Harness::Assert;
 use Test::Harness::Iterator;
@@ -69,8 +69,7 @@ Initialize a new strap.
 =cut
 
 sub new {
-    my($proto) = shift;
-    my($class) = ref $proto || $proto;
+    my $class = shift;
 
     my $self = bless {}, $class;
     $self->_init;
@@ -89,13 +88,14 @@ Initialize the internal state of a strap to make it ready for parsing.
 sub _init {
     my($self) = shift;
 
-    $self->{_is_vms}   = $^O eq 'VMS';
-    $self->{_is_win32} = $^O eq 'Win32';
+    $self->{_is_vms}   = ( $^O eq 'VMS' );
+    $self->{_is_win32} = ( $^O =~ /^(MS)?Win32$/ );
+    $self->{_is_macos} = ( $^O eq 'MacOS' );
 }
 
 =head1 Analysis
 
-=head2 C<analyze>
+=head2 $strap->analyze( $name, \@output_lines )
 
   my %results = $strap->analyze($name, \@test_output);
 
@@ -160,14 +160,7 @@ sub _analyze_line {
     $self->{line}++;
 
     my $type;
-    if( $self->_is_header($line) ) {
-        $type = 'header';
-
-        $self->{saw_header}++;
-
-        $totals->{max} += $self->{max};
-    }
-    elsif( $self->_is_test($line, \%result) ) {
+    if ( $self->_is_test($line, \%result) ) {
         $type = 'test';
 
         $totals->{seen}++;
@@ -203,11 +196,33 @@ sub _analyze_line {
             warn "Can't detailize, too big.\n";
         }
         else {
-            $totals->{details}[$result{number} - 1] = 
-                               {$self->_detailize($pass, \%result)};
+            #Generates the details based on the last test line seen.  C<$pass> is
+            #true if it was considered to be a passed test.  C<%test> is the results
+            #of the test you're summarizing.
+            my $details = {
+                ok         => $pass,
+                actual_ok  => $result{ok}
+            };
+
+            assert( defined( $details->{ok} ) && defined( $details->{actual_ok} ) );
+
+            # We don't want these to be undef because they are often
+            # checked and don't want the checker to have to deal with
+            # uninitialized vars.
+            foreach my $piece (qw(name type reason)) {
+                $details->{$piece} = defined $result{$piece} ? $result{$piece} : '';
+            }
+            $totals->{details}[$result{number} - 1] = $details;
         }
 
         # XXX handle counter mismatch
+    }
+    elsif ( $self->_is_header($line) ) {
+        $type = 'header';
+
+        $self->{saw_header}++;
+
+        $totals->{max} += $self->{max};
     }
     elsif ( $self->_is_bail_out($line, \$self->{bailout_reason}) ) {
         $type = 'bailout';
@@ -234,7 +249,7 @@ sub analyze_fh {
     my($self, $name, $fh) = @_;
 
     my $it = Test::Harness::Iterator->new($fh);
-    $self->_analyze_iterator($name, $it);
+    return $self->_analyze_iterator($name, $it);
 }
 
 =head2 C<analyze_file>
@@ -260,15 +275,14 @@ sub analyze_file {
     }
 
     local $ENV{PERL5LIB} = $self->_INC2PERL5LIB;
-
-    my $cmd = $self->{_is_vms}   ? "MCR $^X" :
-              $self->{_is_win32} ? Win32::GetShortPathName($^X)
-                                 : $^X;
-
-    my $switches = $self->_switches($file);
+    if ( $Test::Harness::Debug ) {
+        local $^W=0; # ignore undef warnings
+        print "# PERL5LIB=$ENV{PERL5LIB}\n";
+    }
 
     # *sigh* this breaks under taint, but open -| is unportable.
-    unless( open(FILE, "$cmd $switches $file|") ) {
+    my $line = $self->_command_line($file);
+    unless( open(FILE, "$line|") ) {
         print "can't run $file. $!\n";
         return;
     }
@@ -298,6 +312,53 @@ else {
     *_wait2exit = sub { POSIX::WEXITSTATUS($_[0]) }
 }
 
+=head2 C<_command_line( $file )>
+
+  my $command_line = $self->_command_line();
+
+Returns the full command line that will be run to test I<$file>.
+
+=cut
+
+sub _command_line {
+    my $self = shift;
+    my $file = shift;
+
+    my $command =  $self->_command();
+    my $switches = $self->_switches($file);
+
+    $file = qq["$file"] if ($file =~ /\s/) && ($file !~ /^".*"$/);
+    my $line = "$command $switches $file";
+
+    return $line;
+}
+
+
+=head2 C<_command>
+
+  my $command = $self->_command();
+
+Returns the command that runs the test.  Combine this with _switches()
+to build a command line.
+
+Typically this is C<$^X>, but you can set C<$ENV{HARNESS_COMMAND}>
+to use a different Perl than what you're running the harness under.
+This might be to run a threaded Perl, for example.
+
+You can also overload this method if you've built your own strap subclass,
+such as a PHP interpreter for a PHP-based strap.
+
+=cut
+
+sub _command {
+    my $self = shift;
+
+    return $ENV{HARNESS_PERL}           if defined $ENV{HARNESS_PERL};
+    return "MCR $^X"                    if $self->{_is_vms};
+    return Win32::GetShortPathName($^X) if $self->{_is_win32};
+    return $^X;
+}
+
 
 =head2 C<_switches>
 
@@ -310,28 +371,58 @@ Formats and returns the switches necessary to run the test.
 sub _switches {
     my($self, $file) = @_;
 
+    my @existing_switches = $self->_cleaned_switches( $Test::Harness::Switches, $ENV{HARNESS_PERL_SWITCHES} );
+    my @derived_switches;
+
     local *TEST;
     open(TEST, $file) or print "can't open $file. $!\n";
-    my $first = <TEST>;
-    my $s = $Test::Harness::Switches || '';
-    $s .= " $ENV{'HARNESS_PERL_SWITCHES'}"
-      if exists $ENV{'HARNESS_PERL_SWITCHES'};
-
-    if ($first =~ /^#!.*\bperl.*\s-\w*([Tt]+)/) {
-        # When taint mode is on, PERL5LIB is ignored.  So we need to put
-        # all that on the command line as -Is.
-        $s .= join " ", qq[ "-$1"], map {qq["-I$_"]} $self->_filtered_INC;
-    }
-    elsif ($^O eq 'MacOS') {
-        # MacPerl's putenv is broken, so it will not see PERL5LIB.
-        $s .= join " ", map {qq["-I$_"]} $self->_filtered_INC;
-    }
-
+    my $shebang = <TEST>;
     close(TEST) or print "can't close $file. $!\n";
 
-    return $s;
+    my $taint = ( $shebang =~ /^#!.*\bperl.*\s-\w*([Tt]+)/ );
+    push( @derived_switches, "-$1" ) if $taint;
+
+    # When taint mode is on, PERL5LIB is ignored.  So we need to put
+    # all that on the command line as -Is.
+    # MacPerl's putenv is broken, so it will not see PERL5LIB, tainted or not.
+    if ( $taint || $self->{_is_macos} ) {
+	my @inc = $self->_filtered_INC;
+	push @derived_switches, map { "-I$_" } @inc;
+    }
+
+    # Quote the argument if there's any whitespace in it, or if
+    # we're VMS, since VMS requires all parms quoted.  Also, don't quote
+    # it if it's already quoted.
+    for ( @derived_switches ) {
+	$_ = qq["$_"] if ((/\s/ || $self->{_is_vms}) && !/^".*"$/ );
+    }
+    return join( " ", @existing_switches, @derived_switches );
 }
 
+=head2 C<_cleaned_switches>
+
+  my @switches = $self->_cleaned_switches( @switches_from_user );
+
+Returns only defined, non-blank, trimmed switches from the parms passed.
+
+=cut
+
+sub _cleaned_switches {
+    my $self = shift;
+
+    local $_;
+
+    my @switches;
+    for ( @_ ) {
+	my $switch = $_;
+	next unless defined $switch;
+	$switch =~ s/^\s+//;
+	$switch =~ s/\s+$//;
+	push( @switches, $switch ) if $switch ne "";
+    }
+
+    return @switches;
+}
 
 =head2 C<_INC2PERL5LIB>
 
@@ -363,13 +454,31 @@ sub _filtered_INC {
     my($self, @inc) = @_;
     @inc = @INC unless @inc;
 
-    # VMS has a 255-byte limit on the length of %ENV entries, so
-    # toss the ones that involve perl_root, the install location
-    # for VMS
     if( $self->{_is_vms} ) {
+	# VMS has a 255-byte limit on the length of %ENV entries, so
+	# toss the ones that involve perl_root, the install location
         @inc = grep !/perl_root/i, @inc;
+
+    } elsif ( $self->{_is_win32} ) {
+	# Lose any trailing backslashes in the Win32 paths
+	s/[\\\/+]$// foreach @inc;
     }
 
+    my %seen;
+    $seen{$_}++ foreach $self->_default_inc();
+    @inc = grep !$seen{$_}++, @inc;
+
+    return @inc;
+}
+
+
+sub _default_inc {
+    my $self = shift;
+
+    local $ENV{PERL5LIB};
+    my $perl = $self->_command;
+    my @inc =`$perl -le "print join qq[\\n], \@INC"`;
+    chomp @inc;
     return @inc;
 }
 
@@ -476,7 +585,7 @@ result back in C<%test> which will contain:
   type          'todo' or 'skip' (if any)
   reason        why is it todo or skip? (if any)
 
-If will also catch lone 'not' lines, note it saw them 
+It will also catch lone 'not' lines, note it saw them in
 C<< $strap->{saw_lone_not} >> and the line in C<< $strap->{lone_not_line} >>.
 
 =cut
@@ -490,23 +599,16 @@ my $Report_Re = <<'REGEX';
                   (.*)                  # and the rest
 REGEX
 
-my $Extra_Re = <<'REGEX';
-                 ^
-                  (.*?) (?:(?:[^\\]|^)# (.*))?
-                 $
-REGEX
-
 sub _is_test {
     my($self, $line, $test) = @_;
 
     # We pulverize the line down into pieces in three parts.
     if( my($not, $num, $extra)    = $line  =~ /$Report_Re/ox ) {
-        my($name, $control) = split /(?:[^\\]|^)#/, $extra if $extra;
-        my($type, $reason)  = $control =~ /^\s*(\S+)(?:\s+(.*))?$/ if $control;
+        ($test->{name}, my $control) = $extra ? split(/(?:[^\\]|^)#/, $extra) : ();
+        (my $type, $test->{reason})  = $control ? $control =~ /^\s*(\S+)(?:\s+(.*))?$/ : ();
 
         $test->{number} = $num;
         $test->{ok}     = $not ? 0 : 1;
-        $test->{name}   = $name;
 
         if( defined $type ) {
             $test->{type}   = $type =~ /^TODO$/i ? 'todo' :
@@ -515,12 +617,11 @@ sub _is_test {
         else {
             $test->{type} = '';
         }
-        $test->{reason} = $reason;
 
         return $YES;
     }
     else{
-        # Sometimes the "not " and "ok" will be on seperate lines on VMS.
+        # Sometimes the "not " and "ok" will be on separate lines on VMS.
         # We catch this and remember we saw it.
         if( $line =~ /^not\s+$/ ) {
             $self->{saw_lone_not} = 1;
@@ -618,36 +719,6 @@ There is one final item, the details.
 Element 0 of the details is test #1.  I tried it with element 1 being
 #1 and 0 being empty, this is less awkward.
 
-=head2 C<_detailize>
-
-  my %details = $strap->_detailize($pass, \%test);
-
-Generates the details based on the last test line seen.  C<$pass> is
-true if it was considered to be a passed test.  C<%test> is the results
-of the test you're summarizing.
-
-=cut
-
-sub _detailize {
-    my($self, $pass, $test) = @_;
-
-    my %details = ( ok         => $pass,
-                    actual_ok  => $test->{ok}
-                  );
-
-    assert( !(grep !defined $details{$_}, keys %details),
-            'test contains the ok and actual_ok info' );
-
-    # We don't want these to be undef because they are often
-    # checked and don't want the checker to have to deal with
-    # uninitialized vars.
-    foreach my $piece (qw(name type reason)) {
-        $details{$piece} = defined $test->{$piece} ? $test->{$piece} : '';
-    }
-
-    return %details;
-}
-
 =head1 EXAMPLES
 
 See F<examples/mini_harness.plx> for an example of use.
@@ -662,6 +733,5 @@ Andy Lester C<< <andy@petdance.com> >>.
 L<Test::Harness>
 
 =cut
-
 
 1;

@@ -6,7 +6,7 @@ require 5.003;	# keep this compatible, an old perl is all we may have before
 BEGIN {
   push @INC, 'lib';
   require 'regen_lib.pl';
-}	# glob() below requires File::Glob
+}
 
 
 #
@@ -33,6 +33,7 @@ sub walk_table (&@) {
     else {
 	safer_unlink $filename;
 	open F, ">$filename" or die "Can't open $filename: $!";
+	binmode F;
 	$F = \*F;
     }
     print $F $leader if $leader;
@@ -44,6 +45,7 @@ sub walk_table (&@) {
 	    $_ .= <IN>;
 	    chomp;
 	}
+	s/\s+$//;
 	my @args;
 	if (/^\s*(#|$)/) {
 	    @args = $_;
@@ -82,10 +84,6 @@ FUNC:
 	    my $docs = "";
 DOC:
 	    while (defined($doc = <$fh>)) {
-                if ($doc =~ /^=head1 (.*)/) {
-                    $curheader = $1;
-                    next DOC;
-                }
 		$line++;
 		last DOC if $doc =~ /^=\w+/;
 		if ($doc =~ m:^\*/$:) {
@@ -107,7 +105,7 @@ DOC:
 		$docfuncs{$name} = [$flags, $docs, $ret, $file, $curheader, @args];
 	    }
 	    if (defined $doc) {
-		if ($doc =~ /^=for/) {
+		if ($doc =~ /^=(?:for|head)/) {
 		    $in = $doc;
 		    redo FUNC;
 		}
@@ -144,7 +142,15 @@ removed without notice.\n\n" if $flags =~ /x/;
 }
 
 my $file;
-for $file (glob('*.c'), glob('*.h')) {
+# glob() picks up docs from extra .c or .h files that may be in unclean
+# development trees.
+my $MANIFEST = do {
+  local ($/, *FH);
+  open FH, "MANIFEST" or die "Can't open MANIFEST: $!";
+  <FH>;
+};
+
+for $file (($MANIFEST =~ /^(\S+\.c)\t/gm), ($MANIFEST =~ /^(\S+\.h)\t/gm)) {
     open F, "< $file" or die "Cannot open $file for docs: $!\n";
     $curheader = "Functions in file $file\n";
     autodoc(\*F,$file);
@@ -154,6 +160,7 @@ for $file (glob('*.c'), glob('*.h')) {
 safer_unlink "pod/perlapi.pod";
 open (DOC, ">pod/perlapi.pod") or
 	die "Can't create pod/perlapi.pod: $!\n";
+binmode DOC;
 
 walk_table {	# load documented functions into approriate hash
     if (@_ > 1) {
@@ -213,7 +220,8 @@ my $key;
 for $key (sort { uc($a) cmp uc($b) || $a cmp $b } keys %apidocs) {
     my $section = $apidocs{$key}; 
     print DOC "\n=head1 $key\n\n=over 8\n\n";
-    for my $key (sort { uc($a) cmp uc($b); } keys %$section) {
+    # Again, fallback for determinacy
+    for my $key (sort { uc($a) cmp uc($b) || $a cmp $b } keys %$section) {
         docout(\*DOC, $key, $section->{$key});
     }
     print DOC "\n=back\n";
@@ -247,6 +255,7 @@ close(DOC) or die "Error closing pod/perlapi.pod: $!";
 safer_unlink "pod/perlintern.pod";
 open(GUTS, ">pod/perlintern.pod") or
 		die "Unable to create pod/perlintern.pod: $!\n";
+binmode GUTS;
 print GUTS <<'END';
 =head1 NAME
 

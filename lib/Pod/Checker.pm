@@ -10,7 +10,7 @@
 package Pod::Checker;
 
 use vars qw($VERSION);
-$VERSION = 1.41;  ## Current version of this package
+$VERSION = 1.42;  ## Current version of this package
 require  5.005;    ## requires this Perl version or later
 
 use Pod::ParseUtils; ## for hyperlinks and lists
@@ -204,6 +204,7 @@ These may not necessarily cause trouble, but indicate mediocre style.
 
 The POD file has some C<=item> and/or C<=head> commands that have
 the same text. Potential hyperlinks to such a text cannot be unique then.
+This warning is printed only with warning level greater than one.
 
 =item * line containing nothing but whitespace in paragraph
 
@@ -744,7 +745,6 @@ sub end_pod {
     ## print the number of errors found
     my $self   = shift;
     my $infile = $self->input_file();
-    my $out_fh = $self->output_handle();
 
     if(@{$self->{_list_stack}}) {
         my $list;
@@ -787,11 +787,13 @@ sub end_pod {
 
     # check the internal nodes for uniqueness. This pertains to
     # =headX, =item and X<...>
-    foreach(grep($self->{_unique_nodes}->{$_} > 1,
-      keys %{$self->{_unique_nodes}})) {
-        $self->poderror({ -line => '-', -file => $infile,
+    if($self->{-warnings} && $self->{-warnings}>1) {
+      foreach(grep($self->{_unique_nodes}->{$_} > 1,
+        keys %{$self->{_unique_nodes}})) {
+          $self->poderror({ -line => '-', -file => $infile,
             -severity => 'WARNING',
             -msg => "multiple occurrence of link target '$_'"});
+      }
     }
 
     # no POD found here
@@ -1254,8 +1256,10 @@ __END__
 
 =head1 AUTHOR
 
+Please report bugs using L<http://rt.cpan.org>.
+
 Brad Appleton E<lt>bradapp@enteract.comE<gt> (initial version),
-Marek Rouchal E<lt>marek@saftsack.fs.uni-bayreuth.deE<gt>
+Marek Rouchal E<lt>marekr@cpan.orgE<gt>
 
 Based on code for B<Pod::Text::pod2text()> written by
 Tom Christiansen E<lt>tchrist@mox.perl.comE<gt>

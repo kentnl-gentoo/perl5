@@ -17,14 +17,29 @@ require Test::Simple::Catch;
 my($out, $err) = Test::Simple::Catch::caught();
 Test::Builder->new->no_header(1);
 Test::Builder->new->no_ending(1);
+local $ENV{HARNESS_ACTIVE} = 0;
+
 
 # Can't use Test.pm, that's a 5.005 thing.
 package main;
 
-print "1..22\n";
+print "1..38\n";
 
 my $test_num = 1;
 # Utility testing functions.
+sub ok ($;$) {
+    my($test, $name) = @_;
+    my $ok = '';
+    $ok .= "not " unless $test;
+    $ok .= "ok $test_num";
+    $ok .= " - $name" if defined $name;
+    $ok .= "\n";
+    print $ok;
+    $test_num++;
+
+    return $test;
+}
+
 sub is ($$;$) {
     my($this, $that, $name) = @_;
     my $test = $$this eq $that;
@@ -49,7 +64,8 @@ sub is ($$;$) {
 sub like ($$;$) {
     my($this, $regex, $name) = @_;
 
-    my $test = $$this =~ /$regex/;
+    $regex = qr/$regex/ unless ref $regex;
+    my $test = $$this =~ $regex;
 
     my $ok = '';
     $ok .= "not " unless $test;
@@ -140,7 +156,7 @@ is( $err, <<ERR,                            '    right diagnostic' );
 ERR
 
 #line 131
-is_deeply({ foo => undef }, {},    'hashes of undefs',    'hashes of undefs' );
+is_deeply({ foo => undef }, {},    'hashes of undefs' );
 is( $out, "not ok 7 - hashes of undefs\n",  'hashes of undefs' );
 is( $err, <<ERR,                            '    right diagnostic' );
 #     Failed test ($0 at line 131)
@@ -206,10 +222,82 @@ my $bar = {
 
 #line 198
 is_deeply( $foo, $bar, 'deep structures' );
+ok( @Test::More::Data_Stack == 0, '@Data_Stack not holding onto things' );
 is( $out, "not ok 11 - deep structures\n",  'deep structures' );
 is( $err, <<ERR,                            '    right diagnostic' );
 #     Failed test ($0 at line 198)
 #     Structures begin differing at:
 #          \$got->{that}{foo} = Does not exist
 #     \$expected->{that}{foo} = '42'
+ERR
+
+
+#line 221
+my @tests = ([],
+             [qw(42)],
+             [qw(42 23), qw(42 23)]
+            );
+
+foreach my $test (@tests) {
+    my $num_args = @$test;
+
+    my $warning;
+    local $SIG{__WARN__} = sub { $warning .= join '', @_; };
+    is_deeply(@$test);
+
+    like \$warning, 
+         qr/^is_deeply\(\) takes two or three args, you gave $num_args\.\n/;
+}
+
+
+#line 240
+# [rt.cpan.org 6837]
+ok !is_deeply([{Foo => undef}],[{Foo => ""}]), 'undef != ""';
+ok( @Test::More::Data_Stack == 0, '@Data_Stack not holding onto things' );
+
+
+#line 258
+# [rt.cpan.org 7031]
+my $a = [];
+ok !is_deeply($a, $a.''),       "don't compare refs like strings";
+ok !is_deeply([$a], [$a.'']),   "  even deep inside";
+
+
+#line 265
+# [rt.cpan.org 7030]
+ok !is_deeply( {}, {key => []} ),  '[] could match non-existent values';
+ok !is_deeply( [], [[]] );
+
+
+#line 273
+$$err = $$out = '';
+is_deeply( [\'a', 'b'], [\'a', 'c'] );
+is( $out, "not ok 20\n",  'scalar refs in an array' );
+is( $err, <<ERR,        '    right diagnostic' );
+#     Failed test ($0 at line 274)
+#     Structures begin differing at:
+#          \$got->[1] = 'b'
+#     \$expected->[1] = 'c'
+ERR
+
+
+#line 285
+my $ref = \23;
+is_deeply( 23, $ref );
+is( $out, "not ok 21\n", 'scalar vs ref' );
+is( $err, <<ERR,        '  right diagnostic');
+#     Failed test ($0 at line 286)
+#     Structures begin differing at:
+#          \$got = '23'
+#     \$expected = '$ref'
+ERR
+
+#line 296
+is_deeply( $ref, 23 );
+is( $out, "not ok 22\n", 'ref vs scalar' );
+is( $err, <<ERR,        '  right diagnostic');
+#     Failed test ($0 at line 296)
+#     Structures begin differing at:
+#          \$got = '$ref'
+#     \$expected = '23'
 ERR

@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.0501;
+$VERSION = 1.0502;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 @EXPORT_OK = qw(anchorify);
@@ -77,6 +77,20 @@ section.  By default, no headers are generated.
     --help
 
 Displays the usage message.
+
+=item hiddendirs
+
+    --hiddendirs
+    --nohiddendirs
+
+Include hidden directories in the search for POD's in podpath if recurse
+is set.
+The default is not to traverse any directory whose name begins with C<.>.
+See L</"podpath"> and L</"recurse">.
+
+[This option is for backward compatibility only.
+It's hard to imagine that one would usefully create a module with a
+name component beginning with C<.>.]
 
 =item htmldir
 
@@ -213,6 +227,7 @@ my $Css;
 
 my $Recurse;
 my $Quiet;
+my $HiddenDirs;
 my $Verbose;
 my $Doindex;
 
@@ -515,7 +530,7 @@ END_OF_HEAD
 		} else {
 		    /^=(\S*)\s*/;
 		    warn "$0: $Podfile: unknown pod directive '$1' in "
-		       . "paragraph $Paragraph.  ignoring.\n";
+		       . "paragraph $Paragraph.  ignoring.\n" unless $Quiet;
 		}
 	    }
 	    $Top = 0;
@@ -604,6 +619,7 @@ Usage:  $0 --help --htmlroot=<name> --infile=<name> --outfile=<name>
   --flush        - flushes the item and directory caches.
   --[no]header   - produce block header/footer (default is no headers).
   --help         - prints this message.
+  --hiddendirs   - search hidden directories in podpath
   --htmldir      - directory for resulting HTML files.
   --htmlroot     - http-server base directory from which all relative paths
                    in podpath stem (default is /).
@@ -636,7 +652,7 @@ sub parse_command_line {
     my ($opt_backlink,$opt_cachedir,$opt_css,$opt_flush,$opt_header,$opt_help,
 	$opt_htmldir,$opt_htmlroot,$opt_index,$opt_infile,$opt_libpods,
 	$opt_netscape,$opt_outfile,$opt_podpath,$opt_podroot,$opt_quiet,
-	$opt_recurse,$opt_title,$opt_verbose);
+	$opt_recurse,$opt_title,$opt_verbose,$opt_hiddendirs);
 
     unshift @ARGV, split ' ', $Config{pod2html} if $Config{pod2html};
     my $result = GetOptions(
@@ -646,6 +662,7 @@ sub parse_command_line {
 			    'flush'      => \$opt_flush,
 			    'header!'    => \$opt_header,
 			    'help'       => \$opt_help,
+			    'hiddendirs!'=> \$opt_hiddendirs,
 			    'htmldir=s'  => \$opt_htmldir,
 			    'htmlroot=s' => \$opt_htmlroot,
 			    'index!'     => \$opt_index,
@@ -676,6 +693,7 @@ sub parse_command_line {
     $Htmlroot = $opt_htmlroot if defined $opt_htmlroot;
     $Doindex  = $opt_index    if defined $opt_index;
     $Podfile  = $opt_infile   if defined $opt_infile;
+    $HiddenDirs = $opt_hiddendirs if defined $opt_hiddendirs;
     $Htmlfile = $opt_outfile  if defined $opt_outfile;
     $Podroot  = $opt_podroot  if defined $opt_podroot;
     $Quiet    = $opt_quiet    if defined $opt_quiet;
@@ -871,7 +889,7 @@ sub scan_podpath {
 
 	    scan_items( \%Items, "$pod", @poddata);
 	} else {
-	    warn "$0: shouldn't be here (line ".__LINE__."\n";
+	    warn "$0: shouldn't be here (line ".__LINE__."\n" unless $Quiet;
 	}
     }
     @poddata = ();	# clean-up a bit
@@ -921,7 +939,9 @@ sub scan_dir {
     opendir(DIR, $dir) ||
 	die "$0: error opening directory $dir: $!\n";
     while (defined($_ = readdir(DIR))) {
-	if (-d "$dir/$_" && $_ ne "." && $_ ne "..") {	    # directory
+	if (-d "$dir/$_" && $_ ne "." && $_ ne ".."
+	    && ($HiddenDirs || !/^\./)
+	) {         # directory
 	    $Pages{$_}  = "" unless defined $Pages{$_};
 	    $Pages{$_} .= "$dir/$_:";
 	    push(@subdirs, $_);
@@ -1045,7 +1065,7 @@ sub process_head {
     my $level = $1;
 
     if( $Listlevel ){
-	warn "$0: $Podfile: unterminated list at =head in paragraph $Paragraph.  ignoring.\n";
+	warn "$0: $Podfile: unterminated list at =head in paragraph $Paragraph.  ignoring.\n" unless $Quiet;
         while( $Listlevel ){
             process_back();
         }
@@ -1113,7 +1133,7 @@ sub process_item {
     # bad!  but, the proper thing to do seems to be to just assume
     # they did do an =over.  so warn them once and then continue.
     if( $Listlevel == 0 ){
-	warn "$0: $Podfile: unexpected =item directive in paragraph $Paragraph.  ignoring.\n";
+	warn "$0: $Podfile: unexpected =item directive in paragraph $Paragraph.  ignoring.\n" unless $Quiet;
 	process_over();
     }
 
@@ -1172,7 +1192,7 @@ sub process_over {
 #
 sub process_back {
     if( $Listlevel == 0 ){
-	warn "$0: $Podfile: unexpected =back directive in paragraph $Paragraph.  ignoring.\n";
+	warn "$0: $Podfile: unexpected =back directive in paragraph $Paragraph.  ignoring.\n" unless $Quiet;
 	return;
     }
 
@@ -1601,7 +1621,7 @@ sub process_text1($$;$$){
 
             # warning; show some text.
             $linktext = $opar unless defined $linktext;
-            warn "$0: $Podfile: cannot resolve L<$opar> in paragraph $Paragraph.\n";
+            warn "$0: $Podfile: cannot resolve L<$opar> in paragraph $Paragraph.\n" unless $Quiet;
         }
 
         # now we have a URL or just plain code
@@ -1624,7 +1644,7 @@ sub process_text1($$;$$){
     } elsif( $func eq 'Z' ){
 	# Z<> - empty
 	warn "$0: $Podfile: invalid X<> in paragraph $Paragraph.\n"
-	    unless $$rstr =~ s/^>//;
+	    unless $$rstr =~ s/^>// or $Quiet;
 
     } else {
         my $term = pattern $closing;
@@ -1642,7 +1662,7 @@ sub process_text1($$;$$){
 	if( $lev == 1 ){
 	    $res .= pure_text( $$rstr );
 	} else {
-	    warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph.\n";
+	    warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph.\n" unless $Quiet;
 	}
     }
     return $res;
@@ -1666,7 +1686,7 @@ sub go_ahead($$$){
 	}
 	$res .= $2;
     }
-    warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph.\n";
+    warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph.\n" unless $Quiet;
     return $res;
 }
 
@@ -2049,7 +2069,7 @@ sub fragment_id {
 
 	# honour the perlfunc manpage: func [PAR[,[ ]PAR]...]
 	# and some funnies with ... Module ...
-	return $1 if $text =~ m{^([a-z\d]+)(\s+[A-Z\d,/& ]+)?$};
+	return $1 if $text =~ m{^([a-z\d_]+)(\s+[A-Z\d,/& ]+)?$};
 	return $1 if $text =~ m{^([a-z\d]+)\s+Module(\s+[A-Z\d,/& ]+)?$};
 
 	# text? normalize!

@@ -19,21 +19,7 @@ sub do_not_edit ($)
 {
     my $file = shift;
     
-    my $years;
-
-    if ($file eq 'embed.h') {
-        $years = '1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003';
-    } elsif ($file eq 'embedvar.h') {
-        $years = '1999, 2000, 2001, 2002, 2003';
-    } elsif ($file eq 'global.sym') {
-        $years = '1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003';
-    } elsif ($file eq 'perlapi.c') {
-        $years = '1999, 2000, 2001';
-    } elsif ($file eq 'perlapi.h') {
-        $years = '1999, 2000, 2001, 2002, 2003';
-    } elsif ($file eq 'proto.h') {
-        $years = '1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003';
-    }
+    my $years = '1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005';
 
     $years =~ s/1999,/1999,\n  / if length $years > 40;
 
@@ -95,6 +81,7 @@ sub walk_table (&@) {
     else {
 	safer_unlink $filename;
 	open F, ">$filename" or die "Can't open $filename: $!";
+	binmode F;
 	$F = \*F;
     }
     print $F $leader if $leader;
@@ -106,6 +93,7 @@ sub walk_table (&@) {
 	    $_ .= <IN>;
 	    chomp;
 	}
+	s/\s+$//;
 	my @args;
 	if (/^\s*(#|$)/) {
 	    @args = $_;
@@ -338,6 +326,7 @@ sub multoff ($$) {
 
 safer_unlink 'embed.h';
 open(EM, '> embed.h') or die "Can't create embed.h: $!\n";
+binmode EM;
 
 print EM do_not_edit ("embed.h"), <<'END';
 
@@ -547,6 +536,7 @@ close(EM) or die "Error closing EM: $!";
 safer_unlink 'embedvar.h';
 open(EM, '> embedvar.h')
     or die "Can't create embedvar.h: $!\n";
+binmode EM;
 
 print EM do_not_edit ("embedvar.h"), <<'END';
 
@@ -654,7 +644,9 @@ close(EM) or die "Error closing EM: $!";
 safer_unlink 'perlapi.h';
 safer_unlink 'perlapi.c';
 open(CAPI, '> perlapi.c') or die "Can't create perlapi.c: $!\n";
+binmode CAPI;
 open(CAPIH, '> perlapi.h') or die "Can't create perlapi.h: $!\n";
+binmode CAPIH;
 
 print CAPIH do_not_edit ("perlapi.h"), <<'EOT';
 

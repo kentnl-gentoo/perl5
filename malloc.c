@@ -6,6 +6,12 @@
  * "'The Chamber of Records,' said Gimli. 'I guess that is where we now stand.'"
  */
 
+/* This file contains Perl's own implementation of the malloc library.
+ * It is used if Configure decides that, on your platform, Perl's
+ * version is better than the OS's, or if you give Configure the
+ * -Dusemymalloc command-line option.
+ */
+
 /*
   Here are some notes on configuring Perl's malloc.  (For non-perl
   usage see below.)
@@ -357,6 +363,7 @@
 #      define Free_t void
 #    endif
 #    define Copy(s,d,n,t) (void)memcpy((char*)(d),(char*)(s), (n) * sizeof(t))
+#    define CopyD(s,d,n,t) memcpy((char*)(d),(char*)(s), (n) * sizeof(t))
 #    define PerlEnv_getenv getenv
 #    define PerlIO_printf fprintf
 #    define PerlIO_stderr() stderr
@@ -1219,14 +1226,15 @@ emergency_sbrk(MEM_SIZE size)
     MEM_SIZE rsize = (((size - 1)>>LOG_OF_MIN_ARENA) + 1)<<LOG_OF_MIN_ARENA;
 
     if (size >= BIG_SIZE
-	&& (!emergency_buffer_last_req || (size < emergency_buffer_last_req))) {
+	&& (!emergency_buffer_last_req ||
+	    (size < (MEM_SIZE)emergency_buffer_last_req))) {
 	/* Give the possibility to recover, but avoid an infinite cycle. */
 	MALLOC_UNLOCK;
 	emergency_buffer_last_req = size;
 	emergency_sbrk_croak("Out of memory during \"large\" request for %"UVuf" bytes, total sbrk() is %"UVuf" bytes", (UV)size, (UV)(goodsbrk + sbrk_slack));
     }
 
-    if (emergency_buffer_size >= rsize) {
+    if ((MEM_SIZE)emergency_buffer_size >= rsize) {
 	char *old = emergency_buffer;
 	
 	emergency_buffer_size -= rsize;
@@ -1666,9 +1674,9 @@ getpages(MEM_SIZE needed, int *nblksp, int bucket)
     MEM_SIZE slack = 0;
 
     if (sbrk_goodness > 0) {
-	if (!last_sbrk_top && require < FIRST_SBRK) 
+	if (!last_sbrk_top && require < (MEM_SIZE)FIRST_SBRK) 
 	    require = FIRST_SBRK;
-	else if (require < MIN_SBRK) require = MIN_SBRK;
+	else if (require < (MEM_SIZE)MIN_SBRK) require = MIN_SBRK;
 
 	if (require < goodsbrk * MIN_SBRK_FRAC1000 / 1000)
 	    require = goodsbrk * MIN_SBRK_FRAC1000 / 1000;
@@ -2311,8 +2319,7 @@ Perl_strdup(const char *s)
     MEM_SIZE l = strlen(s);
     char *s1 = (char *)Perl_malloc(l+1);
 
-    Copy(s, s1, (MEM_SIZE)(l+1), char);
-    return s1;
+    return CopyD(s, s1, (MEM_SIZE)(l+1), char);
 }
 
 #ifdef PERL_CORE

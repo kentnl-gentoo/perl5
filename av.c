@@ -1,7 +1,7 @@
 /*    av.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -100,6 +100,11 @@ Perl_av_extend(pTHX_ AV *av, I32 key)
 	    }
 	}
 	else {
+#ifdef PERL_MALLOC_WRAP
+	    static const char oom_array_extend[] =
+	      "Out of memory during array extend"; /* Duplicated in pp_hot.c */
+#endif
+
 	    if (AvALLOC(av)) {
 #if !defined(STRANGE_MALLOC) && !defined(MYMALLOC)
 		MEM_SIZE bytes;
@@ -114,6 +119,7 @@ Perl_av_extend(pTHX_ AV *av, I32 key)
 #endif 
 		newmax = key + AvMAX(av) / 5;
 	      resize:
+		MEM_WRAP_CHECK_1(newmax+1, SV*, oom_array_extend);
 #if defined(STRANGE_MALLOC) || defined(MYMALLOC)
 		Renew(AvALLOC(av),newmax+1, SV*);
 #else
@@ -148,6 +154,7 @@ Perl_av_extend(pTHX_ AV *av, I32 key)
 	    }
 	    else {
 		newmax = key < 3 ? 3 : key;
+		MEM_WRAP_CHECK_1(newmax+1, SV*, oom_array_extend);
 		New(2,AvALLOC(av), newmax+1, SV*);
 		ary = AvALLOC(av) + 1;
 		tmp = newmax;
@@ -186,7 +193,7 @@ Perl_av_fetch(pTHX_ register AV *av, I32 key, I32 lval)
 	return 0;
 
     if (SvRMAGICAL(av)) {
-        MAGIC *tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
+        const MAGIC * const tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
         if (tied_magic || mg_find((SV*)av, PERL_MAGIC_regdata)) {
             U32 adjust_index = 1;
 
@@ -274,7 +281,7 @@ Perl_av_store(pTHX_ register AV *av, I32 key, SV *val)
 	val = &PL_sv_undef;
 
     if (SvRMAGICAL(av)) {
-        MAGIC *tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
+        const MAGIC * const tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
         if (tied_magic) {
             /* Handle negative array indices 20020222 MJD */
             if (key < 0) {
@@ -373,13 +380,13 @@ AV *
 Perl_av_make(pTHX_ register I32 size, register SV **strp)
 {
     register AV *av;
-    register I32 i;
-    register SV** ary;
 
     av = (AV*)NEWSV(8,0);
     sv_upgrade((SV *) av,SVt_PVAV);
     AvFLAGS(av) = AVf_REAL;
     if (size) {		/* `defined' was returning undef for size==0 anyway. */
+        register SV** ary;
+        register I32 i;
 	New(4,ary,size,SV*);
 	AvALLOC(av) = ary;
 	SvPVX(av) = (char*)ary;
@@ -431,7 +438,6 @@ void
 Perl_av_clear(pTHX_ register AV *av)
 {
     register I32 key;
-    SV** ary;
 
 #ifdef DEBUGGING
     if (SvREFCNT(av) == 0 && ckWARN_d(WARN_DEBUGGING)) {
@@ -453,7 +459,7 @@ Perl_av_clear(pTHX_ register AV *av)
 	return;
 
     if (AvREAL(av)) {
-	ary = AvARRAY(av);
+        SV** ary = AvARRAY(av);
 	key = AvFILLp(av) + 1;
 	while (key) {
 	    SV * sv = ary[--key];
@@ -716,7 +722,7 @@ empty.
 */
 
 I32
-Perl_av_len(pTHX_ register AV *av)
+Perl_av_len(pTHX_ const register AV *av)
 {
     return AvFILL(av);
 }
@@ -780,7 +786,8 @@ Perl_av_fill(pTHX_ register AV *av, I32 fill)
 =for apidoc av_delete
 
 Deletes the element indexed by C<key> from the array.  Returns the
-deleted element. C<flags> is currently ignored.
+deleted element. If C<flags> equals C<G_DISCARD>, the element is freed
+and null is returned.
 
 =cut
 */
@@ -795,10 +802,10 @@ Perl_av_delete(pTHX_ AV *av, I32 key, I32 flags)
 	Perl_croak(aTHX_ PL_no_modify);
 
     if (SvRMAGICAL(av)) {
-        MAGIC *tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
-        SV **svp;
+        const MAGIC * const tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
         if ((tied_magic || mg_find((SV*)av, PERL_MAGIC_regdata))) {
             /* Handle negative array indices 20020222 MJD */
+            SV **svp;
             if (key < 0) {
                 unsigned adjust_index = 1;
                 if (tied_magic) {
@@ -838,6 +845,8 @@ Perl_av_delete(pTHX_ AV *av, I32 key, I32 flags)
     if (key > AvFILLp(av))
 	return Nullsv;
     else {
+	if (!AvREAL(av) && AvREIFY(av))
+	    av_reify(av);
 	sv = AvARRAY(av)[key];
 	if (key == AvFILLp(av)) {
 	    AvARRAY(av)[key] = &PL_sv_undef;
@@ -854,6 +863,8 @@ Perl_av_delete(pTHX_ AV *av, I32 key, I32 flags)
 	SvREFCNT_dec(sv);
 	sv = Nullsv;
     }
+    else if (AvREAL(av))
+	sv = sv_2mortal(sv);
     return sv;
 }
 
@@ -875,7 +886,7 @@ Perl_av_exists(pTHX_ AV *av, I32 key)
 
 
     if (SvRMAGICAL(av)) {
-        MAGIC *tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
+        const MAGIC * const tied_magic = mg_find((SV*)av, PERL_MAGIC_tied);
         if (tied_magic || mg_find((SV*)av, PERL_MAGIC_regdata)) {
             SV *sv = sv_newmortal();
             MAGIC *mg;
