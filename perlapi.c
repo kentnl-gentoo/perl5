@@ -3301,6 +3301,13 @@ Perl_dump_mstats(pTHXo_ char* s)
 {
     ((CPerlObj*)pPerl)->Perl_dump_mstats(s);
 }
+
+#undef  Perl_get_mstats
+int
+Perl_get_mstats(pTHXo_ perl_mstats_t *buf, int buflen, int level)
+{
+    return ((CPerlObj*)pPerl)->Perl_get_mstats(buf, buflen, level);
+}
 #endif
 
 #undef  Perl_safesysmalloc
@@ -3582,6 +3589,7 @@ Perl_magic_dump(pTHXo_ MAGIC *mg)
 {
     ((CPerlObj*)pPerl)->Perl_magic_dump(mg);
 }
+#if defined(PERL_FLEXIBLE_EXCEPTIONS)
 
 #undef  Perl_default_protect
 void*
@@ -3602,6 +3610,7 @@ Perl_vdefault_protect(pTHXo_ volatile JMPENV *je, int *excpt, protect_body_t bod
 {
     return ((CPerlObj*)pPerl)->Perl_vdefault_protect(je, excpt, body, args);
 }
+#endif
 
 #undef  Perl_reginitcolors
 void
@@ -3650,6 +3659,34 @@ char*
 Perl_sv_pvbyte(pTHXo_ SV *sv)
 {
     return ((CPerlObj*)pPerl)->Perl_sv_pvbyte(sv);
+}
+
+#undef  Perl_sv_utf8_upgrade
+void
+Perl_sv_utf8_upgrade(pTHXo_ SV *sv)
+{
+    ((CPerlObj*)pPerl)->Perl_sv_utf8_upgrade(sv);
+}
+
+#undef  Perl_sv_utf8_downgrade
+bool
+Perl_sv_utf8_downgrade(pTHXo_ SV *sv, bool fail_ok)
+{
+    return ((CPerlObj*)pPerl)->Perl_sv_utf8_downgrade(sv, fail_ok);
+}
+
+#undef  Perl_sv_utf8_encode
+void
+Perl_sv_utf8_encode(pTHXo_ SV *sv)
+{
+    ((CPerlObj*)pPerl)->Perl_sv_utf8_encode(sv);
+}
+
+#undef  Perl_sv_utf8_decode
+bool
+Perl_sv_utf8_decode(pTHXo_ SV *sv)
+{
+    return ((CPerlObj*)pPerl)->Perl_sv_utf8_decode(sv);
 }
 
 #undef  Perl_sv_force_normal
@@ -3829,12 +3866,16 @@ Perl_ptr_table_split(pTHXo_ PTR_TBL_t *tbl)
 #if defined(PERL_IN_PERL_C) || defined(PERL_DECL_PROT)
 #  if defined(IAMSUID)
 #  endif
+#if defined(PERL_FLEXIBLE_EXCEPTIONS)
+#endif
 #  if defined(USE_THREADS)
 #  endif
 #endif
 #if defined(PERL_IN_PP_C) || defined(PERL_DECL_PROT)
 #endif
 #if defined(PERL_IN_PP_CTL_C) || defined(PERL_DECL_PROT)
+#if defined(PERL_FLEXIBLE_EXCEPTIONS)
+#endif
 #endif
 #if defined(PERL_IN_PP_HOT_C) || defined(PERL_DECL_PROT)
 #endif
@@ -3851,9 +3892,6 @@ Perl_ptr_table_split(pTHXo_ PTR_TBL_t *tbl)
 #if defined(PERL_IN_SCOPE_C) || defined(PERL_DECL_PROT)
 #endif
 #if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
-#  if defined(PURIFY)
-#  else
-#  endif
 #  if defined(DEBUGGING)
 #  endif
 #endif

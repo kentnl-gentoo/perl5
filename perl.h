@@ -215,7 +215,10 @@ struct perl_thread;
 #define CALLREG_INTUIT_START CALL_FPTR(PL_regint_start)
 #define CALLREG_INTUIT_STRING CALL_FPTR(PL_regint_string)
 #define CALLREGFREE CALL_FPTR(PL_regfree)
-#define CALLPROTECT CALL_FPTR(PL_protect)
+
+#ifdef PERL_FLEXIBLE_EXCEPTIONS
+#  define CALLPROTECT CALL_FPTR(PL_protect)
+#endif
 
 #define NOOP (void)0
 #define dNOOP extern int Perl___notused
@@ -489,6 +492,10 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #   include <stdlib.h>
 #endif
 
+#ifdef PERL_MICRO /* Last chance to export Perl_my_swap */
+#  define MYSWAP
+#endif
+
 #if !defined(PERL_FOR_X2P) && !defined(WIN32)
 #  include "embed.h"
 #endif
@@ -528,6 +535,19 @@ Malloc_t Perl_realloc (Malloc_t where, MEM_SIZE nbytes);
 /* 'mfree' rather than 'free', since there is already a 'perl_free'
  * that causes clashes with case-insensitive linkers */
 Free_t   Perl_mfree (Malloc_t where);
+
+typedef struct perl_mstats perl_mstats_t;
+
+struct perl_mstats {
+    unsigned long *nfree;
+    unsigned long *ntotal;
+    long topbucket, topbucket_ev, topbucket_odd, totfree, total, total_chain;
+    long total_sbrk, sbrks, sbrk_good, sbrk_slack, start_slack, sbrked_remains;
+    long minbucket;
+    /* Level 1 info */
+    unsigned long *bucket_mem_size;
+    unsigned long *bucket_available_size;
+};
 
 #  define safemalloc  Perl_malloc
 #  define safecalloc  Perl_calloc
@@ -804,6 +824,10 @@ Free_t   Perl_mfree (Malloc_t where);
  * in the face of half-implementations.)
  */
 
+#ifdef I_SYSMODE
+#include <sys/mode.h>
+#endif
+
 #ifndef S_IFMT
 #   ifdef _S_IFMT
 #	define S_IFMT _S_IFMT
@@ -896,6 +920,30 @@ Free_t   Perl_mfree (Malloc_t where);
 
 #ifndef S_ISGID
 #   define S_ISGID 02000
+#endif
+
+#ifndef S_IRWXU
+#   define S_IRWXU (S_IRUSR|S_IWUSR|S_IXUSR)
+#endif 
+
+#ifndef S_IRWXG
+#   define S_IRWXG (S_IRGRP|S_IWGRP|S_IXGRP)
+#endif 
+
+#ifndef S_IRWXO
+#   define S_IRWXO (S_IROTH|S_IWOTH|S_IXOTH)
+#endif 
+
+#ifndef S_IREAD
+#   define S_IREAD S_IRUSR
+#endif
+
+#ifndef S_IWRITE
+#   define S_IWRITE S_IWUSR
+#endif
+
+#ifndef S_IEXEC
+#   define S_IEXEC S_IXUSR
 #endif
 
 #ifdef ff_next
@@ -2042,9 +2090,9 @@ char *crypt (const char*, const char*);
 #    ifndef getenv
 char *getenv (const char*);
 #    endif /* !getenv */
-#if !defined(EPOC) && !(defined(__hpux) && defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64)
+#    if !defined(EPOC) && !(defined(__hpux) && defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS == 64)
 Off_t lseek (int,Off_t,int);
-#endif
+#    endif
 #  endif /* !DONT_DECLARE_STD */
 char *getlogin (void);
 #endif /* !__cplusplus */
@@ -3012,24 +3060,26 @@ typedef struct am_table_short AMTS;
 
 #endif /* !USE_LOCALE_NUMERIC */
 
-#if !defined(Atol) && defined(HAS_LONG_LONG)
+#if !defined(Atol) && defined(IV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
 #   if !defined(Atol) && defined(HAS_STRTOLL)
 #       define Atol(s) strtoll(s, (char**)NULL, 10)
 #   endif
 #   if !defined(Atol) && defined(HAS_ATOLL)
 #       define Atol atoll
 #   endif
-#endif
 /* is there atoq() anywhere? */
+#endif
 #if !defined(Atol)
 #   define Atol atol /* we assume atol being available anywhere */
 #endif
 
-#if !defined(Strtoul) && defined(HAS_LONG_LONG) && defined(HAS_STRTOULL)
-#   define Strtoul strtoull
+#if !defined(Strtoul) && defined(UV_IS_QUAD) && QUADKIND == QUAD_IS_LONG_LONG
+#    if !defined(Strtoul) && defined(HAS_STRTOULL)
+#       define Strtoul strtoull
+#    endif
 #endif
 /* is there atouq() anywhere? */
-#if !defined(Strtoul) && defined(USE_64_BITS) && defined(HAS_STRTOUQ)
+#if !defined(Strtoul) && defined(HAS_STRTOUQ)
 #   define Strtoul strtouq
 #endif
 #if !defined(Strtoul)
@@ -3121,6 +3171,22 @@ typedef struct am_table_short AMTS;
 #   endif
 #endif
 
+#ifdef I_FCNTL
+#  include <fcntl.h>
+#endif
+
+#ifdef I_SYS_FILE
+#  include <sys/file.h>
+#endif
+
+#ifndef O_RDONLY
+/* Assume UNIX defaults */
+#    define O_RDONLY	0000
+#    define O_WRONLY	0001
+#    define O_RDWR	0002
+#    define O_CREAT	0100
+#endif
+
 #ifdef IAMSUID
 
 #ifdef I_SYS_STATVFS
@@ -3171,8 +3237,23 @@ typedef struct am_table_short AMTS;
 /* Mention
    
    NV_PRESERVES_UV
+
    HAS_ICONV
    I_ICONV
+
+   HAS_MKSTEMP
+   HAS_MKSTEMPS
+   HAS_MKDTEMP
+
+   HAS_GETCWD
+
+   HAS_MMAP
+   HAS_MPROTECT
+   HAS_MSYNC
+   HAS_MADVSISE
+   HAS_MUNMAP
+   I_SYSMMAN
+   Mmap_t
 
    so that Configure picks them up. */
 

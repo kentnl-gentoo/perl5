@@ -139,13 +139,6 @@ $define|true|[yY]*)
 	    # (e.g. pragma/overload core dumps)	 Let's suspect xlC_r, too.
 	    # --jhi@iki.fi
 	    cc=cc_r
-	    if test ! -e /bin/cc_r; then
-		    cat >&4 <<EOM
-For pthreads you should use the AIX C compiler cc_r.
-But I cannot find it as /bin/cc_r.
-Cannot continue, aborting.
-EOM
-	    fi
 	    ;;
 	'') 
 	    cc=cc_r
@@ -230,8 +223,8 @@ EOM
 		;;
 	    esac
 	    case "$ccflags" in
-	    *-DUSE_LONG_LONG*) ;;
-	    *) ccflags="$ccflags -DUSE_LONG_LONG" ;;
+	    *-DUSE_64_BITS*) ;;
+	    *) ccflags="$ccflags -DUSE_64_BITS" ;;
 	    esac
 	    # When a 64-bit cc becomes available $archname64
 	    # may need setting so that $archname gets it attached.
