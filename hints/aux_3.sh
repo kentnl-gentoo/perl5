@@ -1,4 +1,4 @@
-# hints/aux.sh
+# hints/aux_3.sh
 #
 # Improved by Jake Hamby <jehamby@lightside.com> to support both Apple CC
 # and GNU CC.  Tested on A/UX 3.1.1 with GCC 2.6.3.
