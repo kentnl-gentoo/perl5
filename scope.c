@@ -189,6 +189,9 @@ I32 empty;
 
     if (empty) {
 	register GP *gp;
+
+	if (GvCVu(gv))
+	    sub_generation++;	/* taking a method out of circulation */
 	Newz(602, gp, 1, GP);
 	GvGP(gv) = gp_ref(gp);
 	GvSV(gv) = NEWSV(72,0);
@@ -647,6 +650,8 @@ I32 base;
             SvLEN(gv) = (STRLEN)SSPOPIV;
             gp_free(gv);
             GvGP(gv) = (GP*)ptr;
+	    if (GvCVu(gv))
+		sub_generation++;  /* putting a method back into circulation */
 	    SvREFCNT_dec(gv);
             break;
 	case SAVEt_FREESV:
@@ -847,8 +852,8 @@ PERL_CONTEXT *cx;
 		(long)cx->sb_iters);
 	PerlIO_printf(Perl_debug_log, "SB_MAXITERS = %ld\n",
 		(long)cx->sb_maxiters);
-	PerlIO_printf(Perl_debug_log, "SB_SAVEMATCH = %ld\n",
-		(long)cx->sb_savematch);
+	PerlIO_printf(Perl_debug_log, "SB_SAFEBASE = %ld\n",
+		(long)cx->sb_safebase);
 	PerlIO_printf(Perl_debug_log, "SB_ONCE = %ld\n",
 		(long)cx->sb_once);
 	PerlIO_printf(Perl_debug_log, "SB_ORIG = %s\n",

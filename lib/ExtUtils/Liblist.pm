@@ -206,6 +206,10 @@ sub _win32_ext {
     }
     warn "Potential libraries are '$potential_libs':\n" if $verbose;
 
+    # normalize to forward slashes
+    $libpth =~ s,\\,/,g;
+    $potential_libs =~ s,\\,/,g;
+
     # compute $extralibs from $potential_libs
 
     my(@searchpath); # from "-L/path" entries in $potential_libs
@@ -260,6 +264,12 @@ sub _win32_ext {
     # make sure paths with spaces are properly quoted
     @extralibs = map { (/\s/ && !/^".*"$/) ? qq["$_"] : $_ } @extralibs;
     $lib = join(' ',@extralibs);
+
+    # normalize back to backward slashes (to help braindead tools)
+    # XXX this may break equally braindead GNU tools that don't understand
+    # backslashes, either.  Seems like one can't win here.  Cursed be CP/M.
+    $lib =~ s,/,\\,g;
+
     warn "Result: $lib\n" if $verbose;
     wantarray ? ($lib, '', $lib, '') : $lib;
 }

@@ -16,6 +16,7 @@ Makefile.SH		A script that generates Makefile
 Porting/Contract	Social contract for contributed modules in Perl core
 Porting/Glossary	Glossary of config.sh variables
 Porting/makerel		Release making utility
+Porting/p4d2p		Generate standard patches from p4 diffs
 Porting/patching.pod	How to report changes made to Perl
 Porting/patchls		Flexible patch file listing utility
 Porting/pumpkin.pod	Guidelines and hints for Perl maintainers
@@ -121,7 +122,7 @@ ext/DB_File/DB_File.xs		Berkeley DB extension external subroutines
 ext/DB_File/DB_File_BS		Berkeley DB extension mkbootstrap fodder
 ext/DB_File/Makefile.PL		Berkeley DB extension makefile writer
 ext/DB_File/typemap		Berkeley DB extension interface types
-ext/DynaLoader/DynaLoader.pm.PL	Dynamic Loader perl module
+ext/DynaLoader/DynaLoader_pm.PL	Dynamic Loader perl module
 ext/DynaLoader/Makefile.PL	Dynamic Loader makefile writer
 ext/DynaLoader/README		Dynamic Loader notes and intro
 ext/DynaLoader/dl_aix.xs	AIX implementation
@@ -362,6 +363,12 @@ lib/File/Copy.pm	Emulation of cp command
 lib/File/DosGlob.pm	Win32 DOS-globbing module
 lib/File/Find.pm	Routines to do a find
 lib/File/Path.pm	Do things like `mkdir -p' and `rm -r'
+lib/File/Spec.pm	Portable operations on file names
+lib/File/Spec/Mac.pm	Portable operations on Mac file names
+lib/File/Spec/OS2.pm	Portable operations on OS2 file names
+lib/File/Spec/Unix.pm	Portable operations on Unix file names
+lib/File/Spec/VMS.pm	Portable operations on VMS file names
+lib/File/Spec/Win32.pm	Portable operations on Win32 file names
 lib/File/stat.pm	By-name interface to Perl's builtin stat
 lib/FileCache.pm	Keep more files open than the system permits
 lib/FileHandle.pm	Backward-compatible front end to IO extension
@@ -393,6 +400,7 @@ lib/Sys/Syslog.pm	Perl module supporting syslogging
 lib/Term/Cap.pm		Perl module supporting termcap usage
 lib/Term/Complete.pm	A command completion subroutine
 lib/Term/ReadLine.pm	Stub readline library
+lib/Test.pm		A simple framework for writing test scripts
 lib/Test/Harness.pm	A test harness
 lib/Text/Abbrev.pm	An abbreviation table builder
 lib/Text/ParseWords.pm	Perl module to split words on arbitrary delimiter
@@ -413,6 +421,7 @@ lib/User/grent.pm	By-name interface to Perl's builtin getgr*
 lib/User/pwent.pm	By-name interface to Perl's builtin getpw*
 lib/abbrev.pl		An abbreviation table builder
 lib/assert.pl		assertion and panic with stack trace
+lib/attrs.pm		attrs extension Perl module (stub)
 lib/autouse.pm		Load and call a function only when it's used
 lib/base.pm		Establish IS-A relationship at compile time
 lib/bigfloat.pl		An arbitrary precision floating point package
@@ -449,6 +458,7 @@ lib/open3.pl		Open a three-ended pipe (uses IPC::Open3)
 lib/overload.pm		Module for overloading perl operators
 lib/perl5db.pl		Perl debugging routines
 lib/pwd.pl		Routines to keep track of PWD environment variable
+lib/re.pm		Pragmas for regular expressions
 lib/shellwords.pl	Perl library to split into words with shell quoting
 lib/sigtrap.pm		For trapping an abort and giving traceback
 lib/stat.pl		Perl library supporting stat function
@@ -682,7 +692,7 @@ t/lib/gdbm.t		See if GDBM_File works
 t/lib/getopt.t		See if Getopt::Std and Getopt::Long works
 t/lib/h2ph.h		Test header file for h2ph
 t/lib/h2ph.pht		Generated output from h2ph.h by h2ph, for comparison
-t/lib/h2ph.t		See if h2ph works
+t/lib/h2ph.t		See if h2ph works like it should
 t/lib/hostname.t	See if Sys::Hostname works
 t/lib/io_dup.t		See if dup()-related methods from IO work
 t/lib/io_pipe.t		See if pipe()-related methods from IO work
@@ -736,6 +746,7 @@ t/op/flip.t		See if range operator works
 t/op/fork.t		See if fork works
 t/op/glob.t		See if <*> works
 t/op/goto.t		See if goto works
+t/op/goto_xs.t		See if "goto &sub" works on XSUBs
 t/op/groups.t		See if $( works
 t/op/gv.t		See if typeglobs work
 t/op/hashwarn.t		See if warnings for bad hash assignments work

@@ -590,14 +590,17 @@ do_close(GV *gv, bool not_implicit)
     if (!gv)
 	gv = argvgv;
     if (!gv || SvTYPE(gv) != SVt_PVGV) {
-	SETERRNO(EBADF,SS$_IVCHAN);
+	if (not_implicit)
+	    SETERRNO(EBADF,SS$_IVCHAN);
 	return FALSE;
     }
     io = GvIO(gv);
     if (!io) {		/* never opened */
-	if (dowarn && not_implicit)
-	    warn("Close on unopened file <%s>",GvENAME(gv));
-	SETERRNO(EBADF,SS$_IVCHAN);
+	if (not_implicit) {
+	    if (dowarn)
+		warn("Close on unopened file <%s>",GvENAME(gv));
+	    SETERRNO(EBADF,SS$_IVCHAN);
+	}
 	return FALSE;
     }
     retval = io_close(io);
@@ -1119,7 +1122,7 @@ register SV **sp;
     SV **oldmark = mark;
 
 #define APPLY_TAINT_PROPER() \
-    if (!(tainting && tainted)) {} else { goto taint_proper; }
+    if (!(tainting && tainted)) {} else { goto taint_proper_label; }
 
     /* This is a first heuristic; it doesn't catch tainting magic. */
     if (tainting) {
@@ -1299,7 +1302,7 @@ register SV **sp;
     }
     return tot;
 
-  taint_proper:
+  taint_proper_label:
     TAINT_PROPER(what);
     return 0;	/* this should never happen */
 
@@ -1505,16 +1508,18 @@ SV **sp;
     SETERRNO(0,0);
     switch (optype)
     {
-      union semun unsemds;
 #ifdef HAS_MSG
     case OP_MSGCTL:
 	ret = msgctl(id, cmd, (struct msqid_ds *)a);
 	break;
 #endif
 #ifdef HAS_SEM
-    case OP_SEMCTL:
-        unsemds.buf = (struct semid_ds *)a;
-	ret = Semctl(id, n, cmd, unsemds);
+    case OP_SEMCTL: {
+            union semun unsemds;
+
+            unsemds.buf = (struct semid_ds *)a;
+	    ret = Semctl(id, n, cmd, unsemds);
+        }
 	break;
 #endif
 #ifdef HAS_SHM

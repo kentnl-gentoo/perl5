@@ -191,7 +191,6 @@ int	magic_clear_all_env _((SV* sv, MAGIC* mg));
 int	magic_clearpack	_((SV* sv, MAGIC* mg));
 int	magic_clearsig	_((SV* sv, MAGIC* mg));
 int	magic_existspack _((SV* sv, MAGIC* mg));
-int	magic_freedefelem _((SV* sv, MAGIC* mg));
 int	magic_get	_((SV* sv, MAGIC* mg));
 int	magic_getarylen	_((SV* sv, MAGIC* mg));
 int	magic_getdefelem _((SV* sv, MAGIC* mg));
@@ -280,6 +279,7 @@ OP*	newANONHASH _((OP* o));
 OP*	newANONSUB _((I32 floor, OP* proto, OP* block));
 OP*	newASSIGNOP _((I32 flags, OP* left, I32 optype, OP* right));
 OP*	newCONDOP _((I32 flags, OP* expr, OP* trueop, OP* falseop));
+void	newCONSTSUB _((HV* stash, char* name, SV* sv));
 void	newFORM _((I32 floor, OP* o, OP* block));
 OP*	newFOROP _((I32 flags, char* label, line_t forline, OP* scalar, OP* expr, OP*block, OP*cont));
 OP*	newLOGOP _((I32 optype, I32 flags, OP* left, OP* right));
@@ -381,7 +381,7 @@ regexp*	pregcomp _((char* exp, char* xend, PMOP* pm));
 OP*	ref _((OP* o, I32 type));
 OP*	refkids _((OP* o, I32 type));
 void	regdump _((regexp* r));
-I32	pregexec _((regexp* prog, char* stringarg, char* strend, char* strbeg, I32 minend, SV* screamer, I32 savematch));
+I32	pregexec _((regexp* prog, char* stringarg, char* strend, char* strbeg, I32 minend, SV* screamer, I32 safebase));
 void	pregfree _((struct regexp* r));
 char*	regnext _((char* p));
 void	regprop _((SV* sv, char* o));
@@ -556,7 +556,7 @@ int	yylex _((void));
 int	yyparse _((void));
 int	yywarn _((char* s));
 
-#if defined(MYMALLOC) || !defined(STANDARD_C)
+#if (defined(MYMALLOC) || !defined(STANDARD_C)) && (!defined(WIN32) || defined(PERL_CORE))
 Malloc_t malloc _((MEM_SIZE nbytes));
 Malloc_t calloc _((MEM_SIZE elements, MEM_SIZE size));
 Malloc_t realloc _((Malloc_t where, MEM_SIZE nbytes));

@@ -98,7 +98,9 @@ PP(pp_sassign)
     }
     if (tainting && tainted && !SvTAINTED(left))
 	TAINT_NOT;
+    PUTBACK;
     SvSetMagicSV(right, left);
+    SPAGAIN;
     SETs(right);
     RETURN;
 }
@@ -589,7 +591,6 @@ PP(pp_aassign)
 		hv_clear(hash);
 
 		while (relem < lastrelem) {	/* gobble up all the rest */
-		    STRLEN len;
 		    HE *didstore;
 		    if (*relem)
 			sv = *(relem++);
@@ -608,14 +609,29 @@ PP(pp_aassign)
 		    }
 		    TAINT_NOT;
 		}
-		if (relem == lastrelem && dowarn) {
-		    if (relem == firstrelem &&
-			SvROK(*relem) &&
-			( SvTYPE(SvRV(*relem)) == SVt_PVAV ||
-			  SvTYPE(SvRV(*relem)) == SVt_PVHV ) )
-			warn("Reference found where even-sized list expected");
-		    else
-			warn("Odd number of elements in hash assignment");
+		if (relem == lastrelem) {
+		    if (*relem) {
+			HE *didstore;
+			if (dowarn) {
+			    if (relem == firstrelem &&
+				SvROK(*relem) &&
+				( SvTYPE(SvRV(*relem)) == SVt_PVAV ||
+				  SvTYPE(SvRV(*relem)) == SVt_PVHV ) )
+				warn("Reference found where even-sized list expected");
+			    else
+				warn("Odd number of elements in hash assignment");
+			}
+			tmpstr = NEWSV(29,0);
+			didstore = hv_store_ent(hash,*relem,tmpstr,0);
+			if (magic) {
+			    if (SvSMAGICAL(tmpstr))
+				mg_set(tmpstr);
+			    if (!didstore)
+				SvREFCNT_dec(tmpstr);
+			}
+			TAINT_NOT;
+		    }
+		    relem++;
 		}
 	    }
 	    break;
@@ -732,9 +748,10 @@ PP(pp_match)
     register char *s;
     char *strend;
     I32 global;
-    I32 savematch;
+    I32 safebase;
     char *truebase;
     register REGEXP *rx = pm->op_pmregexp;
+    bool rxtainted;
     I32 gimme = GIMME;
     STRLEN len;
     I32 minmatch = 0;
@@ -751,6 +768,8 @@ PP(pp_match)
     strend = s + len;
     if (!s)
 	DIE("panic: do_match");
+    rxtainted = ((pm->op_pmdynflags & PMdf_TAINTED) ||
+		 (tainted && (pm->op_pmflags & PMf_RETAINT)));
     TAINT_NOT;
 
     if (pm->op_pmdynflags & PMdf_USED) {
@@ -775,9 +794,8 @@ PP(pp_match)
 	    }
 	}
     }
-    if (!rx->nparens && !global)
-	gimme = G_SCALAR;			/* accidental array context? */
-    savematch = sawampersand | ((gimme != G_ARRAY) && !global && rx->nparens);
+    safebase = (((gimme == G_ARRAY) || global || !rx->nparens)
+		&& !sawampersand);
     if (pm->op_pmflags & (PMf_MULTILINE|PMf_SINGLELINE)) {
 	SAVEINT(multiline);
 	multiline = pm->op_pmflags & PMf_MULTILINE;
@@ -827,7 +845,7 @@ play_it_again:
 	}
     }
     if (pregexec(rx, s, strend, truebase, minmatch,
-		 SvSCREAM(TARG) ? TARG : Nullsv, savematch))
+		 SvSCREAM(TARG) ? TARG : Nullsv, safebase))
     {
 	curpm = pm;
 	if (pm->op_pmflags & PMf_ONCE)
@@ -839,6 +857,7 @@ play_it_again:
     /*NOTREACHED*/
 
   gotcha:
+    rx->exec_tainted |= rxtainted;
     TAINT_IF(rx->exec_tainted);
     if (gimme == G_ARRAY) {
 	I32 iters, i, len;
@@ -865,6 +884,8 @@ play_it_again:
 		++rx->endp[0];
 	    goto play_it_again;
 	}
+	else if (!iters)
+	    XPUSHs(&sv_yes);
 	LEAVE_SCOPE(oldsave);
 	RETURN;
     }
@@ -878,7 +899,7 @@ play_it_again:
 		mg = mg_find(TARG, 'g');
 	    }
 	    if (rx->startp[0]) {
-		mg->mg_len = rx->subskip + (rx->endp[0] - rx->subbeg);
+		mg->mg_len = rx->endp[0] - rx->subbeg;
 		if (rx->startp[0] == rx->endp[0])
 		    mg->mg_flags |= MGf_MINMATCH;
 		else
@@ -890,6 +911,7 @@ play_it_again:
     }
 
 yup:
+    rx->exec_tainted |= rxtainted;
     TAINT_IF(rx->exec_tainted);
     ++BmUSEFUL(pm->op_pmshort);
     curpm = pm;
@@ -898,7 +920,6 @@ yup:
     Safefree(rx->subbase);
     rx->subbase = Nullch;
     if (global) {
-	rx->subskip = 0;
 	rx->subbeg = truebase;
 	rx->subend = strend;
 	rx->startp[0] = s;
@@ -907,22 +928,11 @@ yup:
     }
     if (sawampersand) {
 	char *tmps;
-	char *svptr;
-	STRLEN svlen;
 
-	if (sawampersand > 1) {
-	    svptr = t;
-	    svlen = strend - t;
-	}
-	else {
-	    svptr = s;
-	    svlen = SvCUR(pm->op_pmshort);
-	}
-	rx->subskip = svptr - t;
-	tmps = rx->subbase = savepvn(svptr, svlen);
+	tmps = rx->subbase = savepvn(t, strend-t);
 	rx->subbeg = tmps;
-	rx->subend = tmps + svlen;
-	tmps = rx->startp[0] = tmps + (s - svptr);
+	rx->subend = tmps + (strend-t);
+	tmps = rx->startp[0] = tmps + (s - t);
 	rx->endp[0] = tmps + SvCUR(pm->op_pmshort);
     }
     LEAVE_SCOPE(oldsave);
@@ -980,8 +990,11 @@ do_readline()
 		    IoFLAGS(io) &= ~IOf_START;
 		    IoLINES(io) = 0;
 		    if (av_len(GvAVn(last_in_gv)) < 0) {
-			SV *tmpstr = newSVpv("-", 1); /* assume stdin */
-			av_push(GvAVn(last_in_gv), tmpstr);
+			do_open(last_in_gv,"-",1,FALSE,0,0,Nullfp);
+			sv_setpvn(GvSV(last_in_gv), "-", 1);
+			SvSETMAGIC(GvSV(last_in_gv));
+			fp = IoIFP(io);
+			goto have_fp;
 		    }
 		}
 		fp = nextargv(last_in_gv);
@@ -1121,6 +1134,7 @@ do_readline()
 	}
 	RETURN;
     }
+  have_fp:
     if (gimme == G_SCALAR) {
 	sv = TARG;
 	if (SvROK(sv))
@@ -1387,7 +1401,7 @@ PP(pp_subst)
     bool once;
     bool rxtainted;
     char *orig;
-    I32 savematch;
+    I32 safebase;
     register REGEXP *rx = pm->op_pmregexp;
     STRLEN len;
     int force_on_match = 0;
@@ -1405,10 +1419,14 @@ PP(pp_subst)
 	|| (SvTYPE(TARG) > SVt_PVLV
 	    && !(SvTYPE(TARG) == SVt_PVGV && SvFAKE(TARG))))
 	croak(no_modify);
+    PUTBACK;
     s = SvPV(TARG, len);
     if (!SvPOKp(TARG) || SvTYPE(TARG) == SVt_PVGV)
 	force_on_match = 1;
-    rxtainted = tainted << 1;
+    rxtainted = ((pm->op_pmdynflags & PMdf_TAINTED) ||
+		 (tainted && (pm->op_pmflags & PMf_RETAINT)));
+    if (tainted)
+	rxtainted |= 2;
     TAINT_NOT;
 
   force_it:
@@ -1422,6 +1440,7 @@ PP(pp_subst)
 	pm = curpm;
 	rx = pm->op_pmregexp;
     }
+    safebase = (!rx->nparens && !sawampersand);
     if (pm->op_pmflags & (PMf_MULTILINE|PMf_SINGLELINE)) {
 	SAVEINT(multiline);
 	multiline = pm->op_pmflags & PMf_MULTILINE;
@@ -1465,16 +1484,10 @@ PP(pp_subst)
     /* known replacement string? */
     c = dstr ? SvPV(dstr, clen) : Nullch;
 
-    /* need to save results? */
-    savematch = sawampersand | (rx->nparens != 0);
-    /* save whole string, even prefix, for complex replacement */
-    if (!c)
-	savematch |= 16;
-
     /* can do inplace substitution? */
-    if (c && clen <= rx->minlen && !savematch) {
+    if (c && clen <= rx->minlen && safebase) {
 	if (! pregexec(rx, s, strend, orig, 0,
-		       SvSCREAM(TARG) ? TARG : Nullsv, 0)) {
+		       SvSCREAM(TARG) ? TARG : Nullsv, safebase)) {
 	    PUSHs(&sv_no);
 	    LEAVE_SCOPE(oldsave);
 	    RETURN;
@@ -1533,8 +1546,8 @@ PP(pp_subst)
 		    DIE("Substitution loop");
 		rxtainted |= rx->exec_tainted;
 		m = rx->startp[0];
-		i = rx->subskip + (m - rx->subbeg) - (s - orig);
-		if (i) {
+		/*SUPPRESS 560*/
+		if (i = m - s) {
 		    if (s != d)
 			Move(s, d, i, char);
 		    d += i;
@@ -1543,9 +1556,9 @@ PP(pp_subst)
 		    Copy(c, d, clen, char);
 		    d += clen;
 		}
-		s = orig + rx->subskip + (rx->endp[0] - rx->subbeg);
-	    } while (pregexec(rx, s, strend, orig, s == m, Nullsv, 0));
-		      /* don't match same null twice ^^ */
+		s = rx->endp[0];
+	    } while (pregexec(rx, s, strend, orig, s == m,
+			      Nullsv, TRUE)); /* don't match same null twice */
 	    if (s != d) {
 		i = strend - s;
 		SvCUR_set(TARG, d - SvPVX(TARG) + i);
@@ -1563,7 +1576,7 @@ PP(pp_subst)
     }
 
     if (pregexec(rx, s, strend, orig, 0,
-		 SvSCREAM(TARG) ? TARG : Nullsv, savematch)) {
+		 SvSCREAM(TARG) ? TARG : Nullsv, safebase)) {
 	if (force_on_match) {
 	    force_on_match = 0;
 	    s = SvPV_force(TARG, len);
@@ -1582,22 +1595,21 @@ PP(pp_subst)
 	    if (iters++ > maxiters)
 		DIE("Substitution loop");
 	    rxtainted |= rx->exec_tainted;
-	    if (savematch > 1 && rx->subbase && rx->subbase != orig) {
+	    if (rx->subbase && rx->subbase != orig) {
 		m = s;
 		s = orig;
 		orig = rx->subbase;
 		s = orig + (m - s);
 		strend = s + (strend - m);
-		savematch = 0;		/* let's not do THAT again */
 	    }
 	    m = rx->startp[0];
-	    sv_catpvn(dstr, s, rx->subskip + (m - rx->subbeg) - (s - orig));
-	    s = orig + rx->subskip + (rx->endp[0] - rx->subbeg);
+	    sv_catpvn(dstr, s, m-s);
+	    s = rx->endp[0];
 	    if (clen)
 		sv_catpvn(dstr, c, clen);
 	    if (once)
 		break;
-	} while (pregexec(rx, s, strend, orig, s == m, Nullsv, savematch));
+	} while (pregexec(rx, s, strend, orig, s == m, Nullsv, safebase));
 	sv_catpvn(dstr, s, strend - s);
 
 	(void)SvOOK_off(TARG);
@@ -1609,6 +1621,7 @@ PP(pp_subst)
 	sv_free(dstr);
 
 	TAINT_IF(rxtainted & 1);
+	SPAGAIN;
 	PUSHs(sv_2mortal(newSViv((I32)iters)));
 
 	(void)SvPOK_only(TARG);
@@ -2106,7 +2119,9 @@ PP(pp_method)
 	    !(ob=(SV*)GvIO(iogv)))
 	{
 	    if (!packname || !isIDFIRST(*packname))
-  DIE("Can't call method \"%s\" without a package or object reference", name);
+		DIE("Can't call method \"%s\" %s", name,
+		    SvOK(sv)? "without a package or object reference"
+			    : "on an undefined value");
 	    stash = gv_stashpvn(packname, packlen, TRUE);
 	    goto fetch;
 	}

@@ -441,8 +441,7 @@ MAGIC *mg;
 		    }
 		    sv_setpvn(sv,s,i);
 		    if (tainting)
-			tainted = (was_tainted || rx->exec_tainted ||
-				   (curpm->op_pmflags & PMf_TAINTMEM));
+			tainted = (was_tainted || rx->exec_tainted);
 		    break;
 		}
 	    }
@@ -1373,15 +1372,6 @@ MAGIC* mg;
 	sv_setsv(LvTARG(sv), sv);
 	SvSETMAGIC(LvTARG(sv));
     }
-    return 0;
-}
-
-int
-magic_freedefelem(sv,mg)
-SV* sv;
-MAGIC* mg;
-{
-    SvREFCNT_dec(LvTARG(sv));
     return 0;
 }
 

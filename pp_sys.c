@@ -481,7 +481,12 @@ PP(pp_umask)
     TAINT_PROPER("umask");
     XPUSHi(anum);
 #else
-    XPUSHs(&sv_undef)
+    /* Only DIE if trying to restrict permissions on `user' (self).
+     * Otherwise it's harmless and more useful to just return undef
+     * since 'group' and 'other' concepts probably don't exist here. */
+    if (MAXARG >= 1 && (POPi & 0700))
+	DIE("umask not implemented");
+    XPUSHs(&sv_undef);
 #endif
     RETURN;
 }
@@ -1320,7 +1325,12 @@ PP(pp_sysread)
     }
     else
 #endif
+    {
 	length = PerlIO_read(IoIFP(io), buffer+offset, length);
+	/* fread() returns 0 on both error and EOF */
+	if (PerlIO_error(IoIFP(io)))
+	    length = -1;
+    }
     if (length < 0)
 	goto say_undef;
     SvCUR_set(bufsv, length+offset);
@@ -1973,7 +1983,7 @@ PP(pp_ssockopt)
 		buf = SvPV(sv, na);
 		len = na;
 	    }
-	    else if (SvOK(sv)) {
+	    else {
 		aint = (int)SvIV(sv);
 		buf = (char*)&aint;
 		len = sizeof(int);

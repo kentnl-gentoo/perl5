@@ -2047,8 +2047,11 @@ I32 flags;
     pmop->op_flags = flags;
     pmop->op_private = 0 | (flags >> 8);
 
+    if (hints & HINT_RE_TAINT)
+	pmop->op_pmpermflags |= PMf_RETAINT;
     if (hints & HINT_LOCALE)
-	pmop->op_pmpermflags = (pmop->op_pmflags |= PMf_LOCALE);
+	pmop->op_pmpermflags |= PMf_LOCALE;
+    pmop->op_pmflags = pmop->op_pmpermflags;
 
     /* link into pm list */
     if (type != OP_TRANS && curstash) {
@@ -2145,6 +2148,8 @@ OP *repl;
 			     curop->op_type == OP_PADANY) {
 			     /* is okay */
 		    }
+		    else if (curop->op_type == OP_PUSHRE)
+			; /* Okay here, dangerous in newASSIGNOP */
 		    else
 			break;
 		}
@@ -2460,6 +2465,14 @@ OP *right;
 			     curop->op_type == OP_RV2GV) {
 			if (lastop->op_type != OP_GV)	/* funny deref? */
 			    break;
+		    }
+		    else if (curop->op_type == OP_PUSHRE) {
+			if (((PMOP*)curop)->op_pmreplroot) {
+			    GV *gv = (GV*)((PMOP*)curop)->op_pmreplroot;
+			    if (gv == defgv || SvCUR(gv) == generation)
+				break;
+			    SvCUR(gv) = generation;
+			}	
 		    }
 		    else
 			break;
@@ -3375,33 +3388,15 @@ OP *block;
 {
     dTHR;
     char *name = o ? SvPVx(cSVOPo->op_sv, na) : Nullch;
-    GV *gv = gv_fetchpv(name ? name : "__ANON__",
-			GV_ADDMULTI | (block ? 0 : GV_NOINIT), SVt_PVCV);
+    GV *gv = gv_fetchpv(name ? name : "__ANON__", GV_ADDMULTI, SVt_PVCV);
     char *ps = proto ? SvPVx(((SVOP*)proto)->op_sv, na) : Nullch;
-    register CV *cv;
+    register CV *cv=0;
     I32 ix;
 
     if (o)
 	SAVEFREEOP(o);
     if (proto)
 	SAVEFREEOP(proto);
-
-    if (SvTYPE(gv) != SVt_PVGV) {	/* Prototype now, and had
-					   maximum a prototype before. */
-	if (SvTYPE(gv) > SVt_NULL) {
-	    if (!SvPOK((SV*)gv) && !(SvIOK((SV*)gv) && SvIVX((SV*)gv) == -1))
-		warn("Runaway prototype");
-	    cv_ckproto((CV*)gv, NULL, ps);
-	}
-	if (ps)
-	    sv_setpv((SV*)gv, ps);
-	else
-	    sv_setiv((SV*)gv, -1);
-	SvREFCNT_dec(compcv);
-	compcv = NULL;
-	sub_generation++;
-	goto noblock;
-    }
 
     if (!name || GvCVGEN(gv))
 	cv = Nullcv;
@@ -3481,7 +3476,6 @@ OP *block;
 	}
     }
     if (!block) {
-      noblock:
 	copline = NOLINE;
 	LEAVE_SCOPE(floor);
 	return cv;
@@ -3592,6 +3586,33 @@ OP *block;
     copline = NOLINE;
     LEAVE_SCOPE(floor);
     return cv;
+}
+
+void
+newCONSTSUB(HV *stash, char *name, SV *sv)
+{
+    dTHR;
+    U32 oldhints = hints;
+    HV *old_cop_stash = curcop->cop_stash;
+    HV *old_curstash = curstash;
+    line_t oldline = curcop->cop_line;
+    curcop->cop_line = copline;
+
+    hints &= ~HINT_BLOCK_SCOPE;
+    if(stash)
+	curstash = curcop->cop_stash = stash;
+
+    newSUB(
+	start_subparse(FALSE, 0),
+	newSVOP(OP_CONST, 0, newSVpv(name,0)),
+	newSVOP(OP_CONST, 0, &sv_no),	/* SvPV(&sv_no) == "" -- GMB */
+	newSTATEOP(0, Nullch, newSVOP(OP_CONST, 0, sv))
+    );
+
+    hints = oldhints;
+    curcop->cop_stash = old_cop_stash;
+    curstash = old_curstash;
+    curcop->cop_line = oldline;
 }
 
 #ifdef DEPRECATED

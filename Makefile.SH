@@ -300,7 +300,7 @@ $(LIBPERL): $& perl$(OBJ_EXT) $(obj)
 
 miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)
 	$(CC) $(LARGE) $(CLDFLAGS) -o miniperl miniperlmain$(OBJ_EXT) $(LLIBPERL) $(libs)
-	@./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
+	./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
 
 perl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs
 	$(SHRPENV) $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o perl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
@@ -340,7 +340,7 @@ sperl$(OBJ_EXT): perl.c perly.h patchlevel.h $(h)
 preplibrary: miniperl lib/Config.pm $(plextract)
 	@sh ./makedir lib/auto
 	@echo "	AutoSplitting perl library"
-	@./miniperl -Ilib -e 'use AutoSplit; \
+	./miniperl -Ilib -e 'use AutoSplit; \
 		autosplit_lib_modules(@ARGV)' lib/*.pm lib/*/*.pm
 
 # Take care to avoid modifying lib/Config.pm without reason
@@ -514,7 +514,7 @@ depend: makedepend
 makedepend: makedepend.SH config.sh
 	sh ./makedepend.SH
 
-test-prep: miniperl perl preplibrary $(dynamic_ext)
+test-prep: miniperl perl preplibrary utilities $(dynamic_ext)
 	cd t && (rm -f perl$(EXE_EXT); $(LNS) ../perl$(EXE_EXT) perl$(EXE_EXT))
 
 test check: test-prep
@@ -535,9 +535,12 @@ minitest: miniperl
 # Handy way to run perlbug -ok without having to install and run the
 # installed perlbug. We don't re-run the tests here - we trust the user.
 # Please *don't* use this unless all tests pass.
-# If you want to report test failures, just use "perlbug -Ilib".
+# If you want to report test failures, use "make nok" instead.
 ok:
 	./perl -Ilib utils/perlbug -ok -s '(UNINSTALLED)'
+
+nok:
+	./perl -Ilib utils/perlbug -nok -s '(UNINSTALLED)'
 
 clist:	$(c)
 	echo $(c) | tr ' ' '\012' >.clist

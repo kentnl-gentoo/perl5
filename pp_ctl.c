@@ -64,7 +64,8 @@ PP(pp_regcmaybe)
     return NORMAL;
 }
 
-PP(pp_regcomp) {
+PP(pp_regcomp)
+{
     djSP;
     register PMOP *pm = (PMOP*)cLOGOP->op_other;
     register char *t;
@@ -73,6 +74,15 @@ PP(pp_regcomp) {
 
     tmpstr = POPs;
     t = SvPV(tmpstr, len);
+
+#ifndef INCOMPLETE_TAINTS
+    if (tainting) {
+	if (tainted)
+	    pm->op_pmdynflags |= PMdf_TAINTED;
+	else
+	    pm->op_pmdynflags &= ~PMdf_TAINTED;
+    }
+#endif
 
     /* Check against the last compiled regexp. */
     if (!pm->op_pmregexp || !pm->op_pmregexp->precomp ||
@@ -123,8 +133,8 @@ PP(pp_substcont)
 	sv_catsv(dstr, POPs);
 
 	/* Are we done */
-	if (cx->sb_once ||
-	    !pregexec(rx, s, cx->sb_strend, orig, s == m, Nullsv, 0))
+	if (cx->sb_once || !pregexec(rx, s, cx->sb_strend, orig,
+				s == m, Nullsv, cx->sb_safebase))
 	{
 	    SV *targ = cx->sb_targ;
 	    sv_catpvn(dstr, s, cx->sb_strend - s);
@@ -175,7 +185,7 @@ REGEXP *rx;
     U32 i;
 
     if (!p || p[1] < rx->nparens) {
-	i = 7 + rx->nparens * 2;
+	i = 6 + rx->nparens * 2;
 	if (!p)
 	    New(501, p, i, UV);
 	else
@@ -188,7 +198,6 @@ REGEXP *rx;
 
     *p++ = rx->nparens;
 
-    *p++ = rx->subskip;
     *p++ = (UV)rx->subbeg;
     *p++ = (UV)rx->subend;
     for (i = 0; i <= rx->nparens; ++i) {
@@ -211,7 +220,6 @@ REGEXP *rx;
 
     rx->nparens = *p++;
 
-    rx->subskip = *p++;
     rx->subbeg = (char*)(*p++);
     rx->subend = (char*)(*p++);
     for (i = 0; i <= rx->nparens; ++i) {
@@ -824,6 +832,7 @@ PP(pp_flop)
 	    char *tmps = SvPV(final, len);
 
 	    sv = sv_mortalcopy(left);
+	    SvPV_force(sv,na);
 	    while (!SvNIOKp(sv) && SvCUR(sv) <= len &&
 		strNE(SvPVX(sv),tmps) ) {
 		XPUSHs(sv);
@@ -1760,6 +1769,16 @@ PP(pp_goto)
 		AvREAL_off(av);
 		av_clear(av);
 	    }
+	    else if (CvXSUB(cv)) {	/* put GvAV(defgv) back onto stack */
+		AV* av = GvAV(defgv);
+		int i;
+
+		items = AvFILLp(av) + 1;
+		stack_sp++;
+		EXTEND(stack_sp, items); /* @_ could have been extended. */
+		Copy(AvARRAY(av), stack_sp, items, SV*);
+		stack_sp += items;
+	    }
 	    if (cx->cx_type == CXt_SUB &&
 		!(CvDEPTH(cx->blk_sub.cv) = cx->blk_sub.olddepth))
 		SvREFCNT_dec(cx->blk_sub.cv);
@@ -1782,8 +1801,16 @@ PP(pp_goto)
 		    SP = stack_base + items;
 		}
 		else {
+		    SV **newsp;
+		    I32 gimme;
+
 		    stack_sp--;		/* There is no cv arg. */
+		    /* Push a mark for the start of arglist */
+		    PUSHMARK(mark); 
 		    (void)(*CvXSUB(cv))(cv);
+		    /* Pop the current context like a decent sub should */
+		    POPBLOCK(cx, curpm);
+		    /* Do _not_ use PUTBACK, keep the XSUB's return stack! */
 		}
 		LEAVE;
 		return pop_return();
@@ -3011,7 +3038,7 @@ void
 qsortsv(array, num_elts, compare)
    SV ** array;
    size_t num_elts;
-   I32 (*compare)();
+   I32 (*compare) _((SV *a, SV *b));
 {
    register SV * temp;
 

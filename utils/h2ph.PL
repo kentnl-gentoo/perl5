@@ -2,6 +2,7 @@
 
 use Config;
 use File::Basename qw(basename dirname);
+use Cwd;
 
 # List explicitly here the variables you want Configure to
 # generate.  Metaconfig only looks for shell variables, so you
@@ -13,6 +14,7 @@ use File::Basename qw(basename dirname);
 
 # This forces PL files to create target in same directory as PL file.
 # This is so that make depend always knows where to find PL derivatives.
+$origdir = cwd;
 chdir dirname($0);
 $file = basename($0, '.PL');
 $file .= '.com' if $^O eq 'VMS';
@@ -38,7 +40,7 @@ use Config;
 use File::Path qw(mkpath);
 use Getopt::Std;
 
-getopts('Dd:rlha');
+getopts('Dd:rlhaQ');
 die "-r and -a options are mutually exclusive\n" if ($opt_r and $opt_a);
 @inc_dirs = inc_dirs() if $opt_a;
 
@@ -79,7 +81,7 @@ while (defined ($file = next_file())) {
 	open(OUT, ">-");
     } else {
 	($outfile = $file) =~ s/\.h$/.ph/ || next;
-	print "$file -> $outfile\n";
+	print "$file -> $outfile\n" unless $opt_Q;
 	if ($file =~ m|^(.*)/|) {
 	    $dir = $1;
 	    mkpath "$Dest_dir/$dir";
@@ -112,7 +114,7 @@ while (defined ($file = next_file())) {
 		redo;
 	    }
 	}
-	if (s/^\s*#\s*//) {
+	if (s/^\s*\#\s*//) {
 	    if (s/^define\s+(\w+)//) {
 		$name = $1;
 		$new = '';
@@ -171,37 +173,25 @@ while (defined ($file = next_file())) {
 		print OUT $t,"require '$incl';\n";
 	    } elsif(/^include_next\s*[<"](.*)[>"]/) {
 		($incl = $1) =~ s/\.h$/.ph/;
-		# should've read up on #include_next properly before attempting
-		# to implement it...
-		# 
-		#print OUT $t, "{\n";
-		#$tab += 4;
-		#$t = "\t" x ($tab / 8) . ' ' x ($tab % 8);
-		#print OUT $t, "my(\$INC) = shift(\@INC);\n";
-		#print OUT $t, "require '$incl';\n";
-		#print OUT $t, "unshift(\@INC, \$INC);}\n";
-		#$tab -= 4;
-		#$t = "\t" x ($tab / 8) . ' ' x ($tab % 8);
-		#print OUT $t, "}\n";
-		# 
-		# try this instead:
-		print OUT ($t, "my(\$i) = 0;\n");
-		print OUT ($t, "if(exists(\$INC{$incl})) {\n");
-		$tab += 4;
-		$t = "\t" x ($tab / 8) . ' ' x ($tab % 8);
-		print OUT ($t, "++\$i while (\$i <= \$#INC",
-			   " and \$INC[\$i].'/$incl' ne \$INC{'$incl'});\n");
-		print OUT ($t, "\$i = 0 if \$INC[\$i].'/$incl' ne",
-			   " \$INC{'$incl'};\n");
-		$tab -= 4;
-		$t = "\t" x ($tab / 8) . ' ' x ($tab % 8);
-		print OUT ($t, "}\n");
 		print OUT ($t,
-			   "eval(\"require '\" . ",
-			   "(\$i ? \$INC[\$i].'/' : '') . \"\$incl';\");");
-		# any better? require is smart enough not to try and include a
-		# file twice, i believe, so require-ing the same actual file
-		# should end up just being a null operation...
+			   "eval {\n");
+                $tab += 4;
+                $t = "\t" x ($tab / 8) . ' ' x ($tab % 8);
+		print OUT ($t,
+			   "my(\%INCD) = map { \$INC{\$_} => 1 } ",
+			   "(grep { \$_ eq \"$incl\" } keys(\%INC));\n");
+		print OUT ($t,
+			   "my(\@REM) = map { \"\$_/$incl\" } ",
+			   "(grep { not exists(\$INCD{\"\$_/$incl\"})",
+			   "and -f \"\$_/$incl\" } \@INC);\n");
+		print OUT ($t,
+			   "require \"\$REM[0]\" if \@REM;\n");
+                $tab -= 4;
+                $t = "\t" x ($tab / 8) . ' ' x ($tab % 8);
+                print OUT ($t,
+			   "};\n");
+		print OUT ($t,
+			   "warn(\$\@) if \$\@;\n");
 	    } elsif (/^ifdef\s+(\w+)/) {
 		print OUT $t,"if(defined(&$1)) {\n";
 		$tab += 4;
@@ -246,6 +236,34 @@ while (defined ($file = next_file())) {
 		print OUT $t, "warn(\"$1\");\n";
 	    } elsif(/^ident\s+(.*)/) {
 		print OUT $t, "# $1\n";
+	    }
+ 	} elsif(/^\s*(typedef\s*)?enum\s*(\s+[a-zA-Z_]\w*\s*)?\{/) {
+	    until(/\}.*?;/) {
+		chomp($next = <IN>);
+		$_ .= $next;
+		print OUT "# $next\n" if $opt_D;
+	    }
+	    s@/\*.*?\*/@@g;
+	    s/\s+/ /g;
+	    /^\s?(typedef\s?)?enum\s?([a-zA-Z_]\w*)?\s?\{(.*)\}\s?([a-zA-Z_]\w*)?\s?;/;
+	    ($enum_subs = $3) =~ s/\s//g;
+	    @enum_subs = split(/,/, $enum_subs);
+	    $enum_val = -1;
+	    for $enum (@enum_subs) {
+		($enum_name, $enum_value) = $enum =~ /^([a-zA-Z_]\w*)(=.+)?$/;
+		$enum_value =~ s/^=//;
+		$enum_val = (length($enum_value) ? $enum_value : $enum_val + 1);
+		if ($opt_h) {
+		    print OUT ($t,
+			       "eval(\"\\n#line $eval_index $outfile\\n",
+			       "sub $enum_name () \{ $enum_val; \}\") ",
+			       "unless defined(\&$enum_name);\n");
+		    ++ $eval_index;
+		} else {
+		    print OUT ($t,
+			       "eval(\"sub $enum_name () \{ $enum_val; \}\") ",
+			       "unless defined(\&$enum_name);\n");
+		}
 	    }
 	}
     }
@@ -615,3 +633,4 @@ You may need to dicker with the files produced.
 close OUT or die "Can't close $file: $!";
 chmod 0755, $file or die "Can't reset permissions for $file: $!\n";
 exec("$Config{'eunicefix'} $file") if $Config{'eunicefix'} ne ':';
+chdir $origdir;

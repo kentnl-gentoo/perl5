@@ -1664,6 +1664,7 @@ EXT U32		hints;		/* various compilation flags */
 #define HINT_STRICT_SUBS	0x00000200
 #define HINT_STRICT_VARS	0x00000400
 #define HINT_LOCALE		0x00000800
+#define HINT_RE_TAINT		0x00001000
 
 /**************************************************************************/
 /* This regexp stuff is global since it always happens within 1 expr eval */
@@ -1736,14 +1737,7 @@ IEXT bool	Iminus_F;
 IEXT bool	Idoswitches;
 IEXT bool	Idowarn;
 IEXT bool	Idoextract;
-    /* sometimes, binary compatibility is a pain */
-#ifdef MULTIPLICITY
-IEXT union { bool b; char c; } Isawampersand_u;	/* must save match strings */
-#undef   sawampersand
-#define  sawampersand  sawampersand_u.c
-#else
-IEXT bool	Isawampersand;
-#endif
+IEXT bool	Isawampersand;	/* must save all match strings */
 IEXT bool	Isawstudy;	/* do fbm_instr on all strings */
 IEXT bool	Isawvec;
 IEXT bool	Iunsafe;
@@ -1998,7 +1992,7 @@ EXT MGVTBL vtbl_uvar =	{magic_getuvar,
 				magic_setuvar,
 					0,	0,	0};
 EXT MGVTBL vtbl_defelem = {magic_getdefelem,magic_setdefelem,
-					0,	0,	magic_freedefelem};
+					0,	0,	0};
 
 #ifdef USE_LOCALE_COLLATE
 EXT MGVTBL vtbl_collxfrm = {0,
@@ -2254,10 +2248,9 @@ EXT bool	numeric_local INIT(TRUE);    /* Assume local numerics */
 #define SAVE_DEFSV SAVESPTR(GvSV(defgv))
 
 #ifdef HAS_SEM
-#   ifndef HAS_UNION_SEMUN
-#       include <sys/types.h>
-#       include <sys/ipc.h>
-#       include <sys/sem.h>
+#   include <sys/ipc.h>
+#   include <sys/sem.h>
+#   ifndef HAS_UNION_SEMUN	/* Provide the union semun. */
     union semun {
 	int val;
 	struct semid_ds *buf;
@@ -2271,10 +2264,9 @@ EXT bool	numeric_local INIT(TRUE);    /* Assume local numerics */
 #           define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun.buf)
 #       endif
 #   endif
-#   if defined(IPC_STAT) && !defined(Semctl)
-#       define Semctl(id, num, cmd, semun) croak("semctl not implemented")
+#   ifndef Semctl	/* Place our bets on the semun horse. */
+#       define Semctl(id, num, cmd, semun) semctl(id, num, cmd, semun)
 #   endif
 #endif
 
 #endif /* Include guard */
-

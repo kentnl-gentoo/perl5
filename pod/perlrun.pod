@@ -336,6 +336,11 @@ You can use C<eof> without parentheses to locate the end of each input file,
 in case you want to append to each file, or reset line numbering (see
 example in L<perlfunc/eof>).
 
+Finally, note that the B<-i> switch does not impede execution when no
+files are given on the command line.  In this case, no backup is made
+(the original file cannot, of course, be determined) and processing
+proceeds from STDIN to STDOUT as might be expected.
+
 =item B<-I>I<directory>
 
 Directories specified by B<-I> are prepended to the search path for
@@ -512,14 +517,15 @@ support that).
 =item B<-u>
 
 causes Perl to dump core after compiling your script.  You can then
-take this core dump and turn it into an executable file by using the
+in theory take this core dump and turn it into an executable file by using the
 B<undump> program (not supplied).  This speeds startup at the expense of
 some disk space (which you can minimize by stripping the executable).
 (Still, a "hello world" executable comes out to about 200K on my
 machine.)  If you want to execute a portion of your script before dumping,
 use the dump() operator instead.  Note: availability of B<undump> is
 platform specific and may not be available for a specific port of
-Perl.
+Perl.  It has been superseded by the new perl-to-C compiler, which is more
+portable, even though it's still only considered beta.
 
 =item B<-U>
 

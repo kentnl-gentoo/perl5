@@ -76,6 +76,7 @@ static void init_stacks _((void));
 static void my_exit_jump _((void)) __attribute__((noreturn));
 static void nuke_stacks _((void));
 static void open_script _((char *, bool, SV *));
+static void perldoc_ref _((void));
 static void usage _((char *));
 static void validate_suid _((char *, char*));
 static I32 read_e_script _((int idx, SV *buf_sv, int maxlen));
@@ -263,10 +264,10 @@ register PerlInterpreter *sv_interp;
     doswitches   = FALSE;
     dowarn       = FALSE;
     doextract    = FALSE;
+    sawampersand = FALSE;	/* must save all match strings */
     sawstudy     = FALSE;	/* do fbm_instr on all strings */
     sawvec       = FALSE;
     unsafe       = FALSE;
-    sawampersand = 0;		/* match strings to save */
 
     Safefree(inplace);
     inplace = Nullch;
@@ -882,9 +883,8 @@ PerlInterpreter *sv_interp;
 	break;
     }
 
-    DEBUG_r(PerlIO_printf(Perl_debug_log, "%s $&%s support.\n",
-			  sawampersand ? "Enabling" : "Omitting",
-			  sawampersand > 1 ? "$` $'" : ""));
+    DEBUG_r(PerlIO_printf(Perl_debug_log, "%s $` $& $' support.\n",
+                    sawampersand ? "Enabling" : "Omitting"));
 
     if (!restartop) {
 	DEBUG_x(dump_all());
@@ -1296,6 +1296,14 @@ I32 namlen;
 }
 
 static void
+perldoc_ref() 
+{ 
+    printf("Complete documentation for Perl, including FAQ lists, should be found on\n\
+this system using `man perl' or `perldoc perl'.  If you have access to the\n\
+Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n");
+}
+
+static void
 usage(name)		/* XXX move this out into a module ? */
 char *name;
 {
@@ -1334,6 +1342,7 @@ NULL
     printf("\nUsage: %s [switches] [--] [programfile] [arguments]", name);
     while (*p)
 	printf("\n  %s", *p++);
+    perldoc_ref();
 }
 
 /* This routine handles any switches that can be given during run */
@@ -1552,10 +1561,8 @@ char *s;
 #endif
 	printf("\n\
 Perl may be copied only under the terms of either the Artistic License or the\n\
-GNU General Public License, which may be found in the Perl 5.0 source kit.\n\n\
-Complete documentation for Perl, including FAQ lists, should be found on\n\
-this system using `man perl' or `perldoc perl'.  If you have access to the\n\
-Internet, point your browser at http://www.perl.com/, the Perl Home Page.\n\n");
+GNU General Public License, which may be found in the Perl 5.0 source kit.\n\n");
+	perldoc_ref();
 	exit(0);
     case 'w':
 	dowarn = TRUE;
@@ -1670,19 +1677,28 @@ SV *sv;
     dTHR;
     register char *s;
 
-    scriptname = find_script(scriptname, dosearch, NULL, 0);
+    fdscript = -1;
 
-    if (strnEQ(scriptname, "/dev/fd/", 8) && isDIGIT(scriptname[8]) ) {
-	char *s = scriptname + 8;
-	fdscript = atoi(s);
-	while (isDIGIT(*s))
-	    s++;
-	if (*s)
-	    scriptname = s + 1;
+    if (e_script) {
+	origfilename = savepv("-e");
     }
-    else
-	fdscript = -1;
-    origfilename = savepv(e_script ? "-e" : scriptname);
+    else {
+	/* if find_script() returns, it returns a malloc()-ed value */
+	origfilename = scriptname = find_script(scriptname, dosearch, NULL, 1);
+
+	if (strnEQ(scriptname, "/dev/fd/", 8) && isDIGIT(scriptname[8]) ) {
+	    char *s = scriptname + 8;
+	    fdscript = atoi(s);
+	    while (isDIGIT(*s))
+		s++;
+	    if (*s) {
+		scriptname = savepv(s + 1);
+		Safefree(origfilename);
+		origfilename = scriptname;
+	    }
+	}
+    }
+
     curcop->cop_filegv = gv_fetchfile(origfilename);
     if (strEQ(origfilename,"-"))
 	scriptname = "";
@@ -1695,7 +1711,7 @@ SV *sv;
     }
     else if (preprocess) {
 	char *cpp_cfg = CPPSTDIN;
-	SV *cpp = NEWSV(0,0);
+	SV *cpp = newSVpv("",0);
 	SV *cmd = NEWSV(0,0);
 
 	if (strEQ(cpp_cfg, "cppstdin"))
@@ -2317,9 +2333,6 @@ register char **env;
 	    if (!(s = strchr(*env,'=')))
 		continue;
 	    *s++ = '\0';
-#ifdef WIN32
-	    (void)strupr(*env);
-#endif
 	    sv = newSVpv(s--,0);
 	    (void)hv_store(hv, *env, s - *env, sv, 0);
 	    *s = '=';

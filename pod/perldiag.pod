@@ -459,7 +459,17 @@ an object reference until it has been blessed.  See L<perlobj>.
 
 (F) You used the syntax of a method call, but the slot filled by the
 object reference or package name contains an expression that returns
-neither an object reference nor a package name.  (Perhaps it's null?)
+a defined value which is neither an object reference nor a package name.
+Something like this will reproduce the error:
+
+    $BADREF = 42;
+    process $BADREF 1,2,3;
+    $BADREF->process(1,2,3);
+
+=item Can't call method "%s" on an undefined value
+
+(F) You used the syntax of a method call, but the slot filled by the
+object reference or package name contains an undefined value.
 Something like this will reproduce the error:
 
     $BADREF = undef;
@@ -644,6 +654,11 @@ call for another.  It can't manufacture one out of whole cloth.  In general
 you should be calling it out of only an AUTOLOAD routine anyway.  See
 L<perlfunc/goto>.
 
+=item Can't goto subroutine from an eval-string
+
+(F) The "goto subroutine" call can't be used to jump out of an eval "string".
+(You can use it to jump out of an eval {BLOCK}, but you probably don't want to.)
+
 =item Can't localize through a reference
 
 (F) You said something like C<local $$ref>, which Perl can't currently
@@ -817,6 +832,12 @@ message indicates that such a conversion was attempted.
 (P) The undefined SV is the bottom of the totem pole, in the scheme
 of upgradability.  Upgrading to undef indicates an error in the
 code calling sv_upgrade.
+
+=item Can't use %%! because Errno.pm is not available
+
+(F) The first time the %! hash is used, perl automatically loads the
+Errno.pm module. The Errno module is expected to tie the %! hash to
+provide symbolic names for C<$!> errno values.
 
 =item Can't use "my %s" in sort comparison
 
@@ -1265,10 +1286,11 @@ for more information.
 script if C<$ENV{PATH}> contains a directory that is writable by the world.
 See L<perlsec>.
 
-=item Insecure PATH
+=item Insecure $ENV{%s} while running %s
 
 (F) You can't use system(), exec(), or a piped open in a setuid or
-setgid script if C<$ENV{PATH}> is derived from data supplied (or
+setgid script if any of C<$ENV{PATH}>, C<$ENV{IFS}>, C<$ENV{CDPATH}>,
+C<$ENV{ENV}> or C<$ENV{BASH_ENV}> are derived from data supplied (or
 potentially supplied) by the user.  The script must set the path to a
 known value, using trustworthy data.  See L<perlsec>.
 
@@ -2036,6 +2058,18 @@ to use parens. In any case, a hash requires key/value B<pairs>.
     %hash = ( one => 1, two => 2, );	# right
     %hash = qw( one 1 two 2 );			# also fine
 
+=item Reference found where even-sized list expected
+
+(W) You gave a single reference where Perl was expecting a list with
+an even number of elements (for assignment to a hash). This
+usually means that you used the anon hash constructor when you meant 
+to use parens. In any case, a hash requires key/value B<pairs>.
+
+    %hash = { one => 1, two => 2, };	# WRONG
+    %hash = [ qw/ an anon array / ];	# WRONG
+    %hash = ( one => 1, two => 2, );	# right
+    %hash = qw( one 1 two 2 );			# also fine
+
 =item Reference miscount in sv_replace()
 
 (W) The internal sv_replace() function was handed a new SV with a
@@ -2470,8 +2504,13 @@ certain type.  Arrays must be @NAME or C<@{EXPR}>.  Hashes must be
 
 =item umask: argument is missing initial 0
 
-(W) A umask of 222 is incorrect.  It should be 0222, because octal literals
-always start with 0 in Perl, as in C.
+(W) A umask of 222 is incorrect.  It should be 0222, because octal
+literals always start with 0 in Perl, as in C.
+
+=item umask not implemented
+
+(F) Your machine doesn't implement the umask function and you tried
+to use it to restrict permissions for yourself (EXPR & 0700).
 
 =item Unable to create sub named "%s"
 

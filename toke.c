@@ -11,6 +11,8 @@
  *   "It all comes from here, the stench and the peril."  --Frodo
  */
 
+#define TMP_CRLF_PATCH
+
 #include "EXTERN.h"
 #include "perl.h"
 
@@ -567,7 +569,7 @@ int kind;
 	    /* XXX see note in pp_entereval() for why we forgo typo
 	       warnings if the symbol must be introduced in an eval.
 	       GSAR 96-10-12 */
-	    gv_fetchpv(s, in_eval ? (GV_ADDMULTI | 8) : TRUE,
+	    gv_fetchpv(s, in_eval ? (GV_ADDMULTI | GV_ADDINEVAL) : TRUE,
 		kind == '$' ? SVt_PV :
 		kind == '@' ? SVt_PVAV :
 		kind == '%' ? SVt_PVHV :
@@ -1492,7 +1494,7 @@ yylex()
 	/* build ops for a bareword */
 	yylval.opval = (OP*)newSVOP(OP_CONST, 0, newSVpv(tokenbuf+1, 0));
 	yylval.opval->op_private = OPpCONST_ENTERED;
-	gv_fetchpv(tokenbuf+1, in_eval ? (GV_ADDMULTI | 8) : TRUE,
+	gv_fetchpv(tokenbuf+1, in_eval ? (GV_ADDMULTI | GV_ADDINEVAL) : TRUE,
 		   ((tokenbuf[0] == '$') ? SVt_PV
 		    : (tokenbuf[0] == '@') ? SVt_PVAV
 		    : SVt_PVHV));
@@ -1948,9 +1950,11 @@ yylex()
 	}
 	goto retry;
     case '\r':
+#ifdef TMP_CRLF_PATCH
 	warn("Illegal character \\%03o (carriage return)", '\r');
 	croak(
       "(Maybe you didn't strip carriage returns after a network transfer?)\n");
+#endif
     case ' ': case '\t': case '\f': case 013:
 	s++;
 	goto retry;
@@ -4799,8 +4803,6 @@ int ch;
 	*pmfl |= PMf_MULTILINE;
     else if (ch == 's')
 	*pmfl |= PMf_SINGLELINE;
-    else if (ch == 't')
-	*pmfl |= PMf_TAINTMEM;
     else if (ch == 'x')
 	*pmfl |= PMf_EXTENDED;
 }
@@ -4823,7 +4825,7 @@ char *start;
     pm = (PMOP*)newPMOP(OP_MATCH, 0);
     if (multi_open == '?')
 	pm->op_pmflags |= PMf_ONCE;
-    while (*s && strchr("iogcmstx", *s))
+    while (*s && strchr("iogcmsx", *s))
 	pmflag(&pm->op_pmflags,*s++);
     pm->op_pmpermflags = pm->op_pmflags;
 
@@ -4874,7 +4876,7 @@ char *start;
 	    s++;
 	    es++;
 	}
-	else if (strchr("iogcmstx", *s))
+	else if (strchr("iogcmsx", *s))
 	    pmflag(&pm->op_pmflags,*s++);
 	else
 	    break;
@@ -5040,6 +5042,30 @@ register char *s;
     *d++ = '\n';
     *d = '\0';
     len = d - tokenbuf;
+#ifdef TMP_CRLF_PATCH
+    d = strchr(s, '\r');
+    if (d) {
+      char *olds = s;
+      s = d;
+      while (s < bufend) {
+          if (*s == '\r') {
+              *d++ = '\n';
+              if (*++s == '\n')
+                  s++;
+          }
+          else if (*s == '\n' && s[1] == '\r') {      /* \015\013 on a mac? */
+              *d++ = *s++;
+              s++;
+          }
+          else
+              *d++ = *s++;
+      }
+      *d = '\0';
+      bufend = d;
+      SvCUR_set(linestr, bufend - SvPVX(linestr));
+      s = olds;
+    }
+#endif
     d = "\n";
     if (outer || !(d=ninstr(s,bufend,d,d+1)))
 	herewas = newSVpv(s,bufend-s);
@@ -5091,6 +5117,22 @@ register char *s;
 	    missingterm(tokenbuf);
 	}
 	curcop->cop_line++;
+	bufend = SvPVX(linestr) + SvCUR(linestr);
+#ifdef TMP_CRLF_PATCH
+    if (bufend - linestart >= 2) {
+	    if ((bufend[-2] == '\r' && bufend[-1] == '\n') ||
+		(bufend[-2] == '\n' && bufend[-1] == '\r'))
+	    {
+	    bufend[-2] = '\n';
+	    bufend--;
+	    SvCUR_set(linestr, bufend - SvPVX(linestr));
+	}
+	else if (bufend[-1] == '\r')
+	    bufend[-1] = '\n';
+	}
+	else if (bufend - linestart == 1 && bufend[-1] == '\r')
+	    bufend[-1] = '\n';
+#endif
 	if (PERLDB_LINE && curstash != debstash) {
 	    SV *sv = NEWSV(88,0);
 
@@ -5099,7 +5141,6 @@ register char *s;
 	    av_store(GvAV(curcop->cop_filegv),
 	      (I32)curcop->cop_line,sv);
 	}
-	bufend = SvPVX(linestr) + SvCUR(linestr);
 	if (*s == term && memEQ(s,tokenbuf,len)) {
 	    s = bufend - 1;
 	    *s = ' ';
@@ -5377,6 +5418,22 @@ char *start;
 	 */
 
   	if (s < bufend) break;	/* handle case where we are done yet :-) */
+
+#ifdef TMP_CRLF_PATCH
+	if (to - SvPVX(sv) >= 2) {
+	    if ((to[-2] == '\r' && to[-1] == '\n') ||
+		(to[-2] == '\n' && to[-1] == '\r'))
+	    {
+		to[-2] = '\n';
+		to--;
+		SvCUR_set(sv, to - SvPVX(sv));
+	    }
+	    else if (to[-1] == '\r')
+		to[-1] = '\n';
+	}
+	else if (to - SvPVX(sv) == 1 && to[-1] == '\r')
+	    to[-1] = '\n';
+#endif
 
 	/* if we're out of file, or a read fails, bail and reset the current
 	   line marker so we can report where the unterminated string began

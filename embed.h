@@ -315,7 +315,6 @@
 #define magic_clearpack		Perl_magic_clearpack
 #define magic_clearsig		Perl_magic_clearsig
 #define magic_existspack	Perl_magic_existspack
-#define magic_freedefelem	Perl_magic_freedefelem
 #define magic_get		Perl_magic_get
 #define magic_getarylen		Perl_magic_getarylen
 #define magic_getdefelem	Perl_magic_getdefelem
@@ -411,6 +410,7 @@
 #define newAVREF		Perl_newAVREF
 #define newBINOP		Perl_newBINOP
 #define newCONDOP		Perl_newCONDOP
+#define newCONSTSUB		Perl_newCONSTSUB
 #define newCVREF		Perl_newCVREF
 #define newFORM			Perl_newFORM
 #define newFOROP		Perl_newFOROP
@@ -1325,7 +1325,6 @@
 #define rs			(curinterp->Irs)
 #define runlevel		(curinterp->Irunlevel)
 #define sawampersand		(curinterp->Isawampersand)
-#define sawampersand_u		(curinterp->Isawampersand_u)
 #define sawstudy		(curinterp->Isawstudy)
 #define sawvec			(curinterp->Isawvec)
 #define screamfirst		(curinterp->Iscreamfirst)
@@ -1480,7 +1479,6 @@
 #define Irs			rs
 #define Irunlevel		runlevel
 #define Isawampersand		sawampersand
-#define Isawampersand_u		sawampersand_u
 #define Isawstudy		sawstudy
 #define Isawvec			sawvec
 #define Iscreamfirst		screamfirst
@@ -1644,7 +1642,6 @@
 #define rs			Perl_rs
 #define runlevel		Perl_runlevel
 #define sawampersand		Perl_sawampersand
-#define sawampersand_u		Perl_sawampersand_u
 #define sawstudy		Perl_sawstudy
 #define sawvec			Perl_sawvec
 #define screamfirst		Perl_screamfirst
