@@ -19,7 +19,7 @@
 #include "EXTERN.h"
 #include "perl.h"
 
-extern char rcsid[];
+EXT char rcsid[];
 
 GV *
 gv_AVadd(gv)

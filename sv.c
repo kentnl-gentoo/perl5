@@ -2077,7 +2077,7 @@ register SV *sstr;
 void
 sv_setpvn(sv,ptr,len)
 register SV *sv;
-register char *ptr;
+register const char *ptr;
 register STRLEN len;
 {
     assert(len >= 0);  /* STRLEN is probably unsigned, so this may
@@ -2109,7 +2109,7 @@ register STRLEN len;
 void
 sv_setpv(sv,ptr)
 register SV *sv;
-register char *ptr;
+register const char *ptr;
 {
     register STRLEN len;
 
@@ -2394,7 +2394,7 @@ I32 namlen;
 	mg->mg_virtual = &vtbl_substr;
 	break;
     case 'y':
-	mg->mg_virtual = &vtbl_vivary;
+	mg->mg_virtual = &vtbl_itervar;
 	break;
     case '*':
 	mg->mg_virtual = &vtbl_glob;
