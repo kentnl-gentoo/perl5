@@ -1971,11 +1971,17 @@ typedef struct clone_params CLONE_PARAMS;
 #    define PERL_FPU_INIT fpsetmask(0);
 #  else
 #    if defined(SIGFPE) && defined(SIG_IGN)
-#      define PERL_FPU_INIT signal(SIGFPE, SIG_IGN);
+#      define PERL_FPU_INIT       PL_sigfpe_saved = signal(SIGFPE, SIG_IGN)
+#      define PERL_FPU_PRE_EXEC   { Sigsave_t xfpe; rsignal_save(SIGFPE, PL_sigfpe_saved, &xfpe);
+#      define PERL_FPU_POST_EXEC    rsignal_restore(SIGFPE, &xfpe); }
 #    else
 #      define PERL_FPU_INIT
 #    endif
 #  endif
+#endif
+#ifndef PERL_FPU_PRE_EXEC
+#  define PERL_FPU_PRE_EXEC   {
+#  define PERL_FPU_POST_EXEC  }
 #endif
 
 #ifndef PERL_SYS_INIT3
@@ -2304,7 +2310,7 @@ typedef        struct crypt_data {     /* straight from /usr/include/crypt.h */
 
 /* [perl #22371] Algorimic Complexity Attack on Perl 5.6.1, 5.8.0 */
 #if !defined(NO_HASH_SEED) && !defined(USE_HASH_SEED) && !defined(USE_HASH_SEED_EXPLICIT)
-#  define USE_HASH_SEED
+#  define USE_HASH_SEED_EXPLICIT
 #endif
 
 #include "regexp.h"

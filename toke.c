@@ -2701,7 +2701,9 @@ Perl_yylex(pTHX)
 		    else
 			newargv = PL_origargv;
 		    newargv[0] = ipath;
+		    PERL_FPU_PRE_EXEC
 		    PerlProc_execv(ipath, EXEC_ARGV_CAST(newargv));
+		    PERL_FPU_POST_EXEC
 		    Perl_croak(aTHX_ "Can't exec %s", ipath);
 		}
 #endif
@@ -7977,6 +7979,9 @@ Perl_scan_vstring(pTHX_ char *s, SV *sv)
 	    return pos;
 	}
     }
+
+    if (ckWARN(WARN_DEPRECATED))
+	Perl_warner(aTHX_ packWARN(WARN_DEPRECATED), "v-strings are deprecated", s);
 
     if (!isALPHA(*pos)) {
 	UV rev;

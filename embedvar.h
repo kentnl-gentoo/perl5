@@ -276,6 +276,7 @@
 #define PL_glob_index		(PERL_GET_INTERP->Iglob_index)
 #define PL_globalstash		(PERL_GET_INTERP->Iglobalstash)
 #define PL_hash_seed		(PERL_GET_INTERP->Ihash_seed)
+#define PL_hash_seed_set	(PERL_GET_INTERP->Ihash_seed_set)
 #define PL_he_arenaroot		(PERL_GET_INTERP->Ihe_arenaroot)
 #define PL_he_root		(PERL_GET_INTERP->Ihe_root)
 #define PL_hintgv		(PERL_GET_INTERP->Ihintgv)
@@ -593,6 +594,7 @@
 #define PL_glob_index		(vTHX->Iglob_index)
 #define PL_globalstash		(vTHX->Iglobalstash)
 #define PL_hash_seed		(vTHX->Ihash_seed)
+#define PL_hash_seed_set	(vTHX->Ihash_seed_set)
 #define PL_he_arenaroot		(vTHX->Ihe_arenaroot)
 #define PL_he_root		(vTHX->Ihe_root)
 #define PL_hintgv		(vTHX->Ihintgv)
@@ -913,6 +915,7 @@
 #define PL_Iglob_index		PL_glob_index
 #define PL_Iglobalstash		PL_globalstash
 #define PL_Ihash_seed		PL_hash_seed
+#define PL_Ihash_seed_set	PL_hash_seed_set
 #define PL_Ihe_arenaroot	PL_he_arenaroot
 #define PL_Ihe_root		PL_he_root
 #define PL_Ihintgv		PL_hintgv
@@ -1426,6 +1429,7 @@
 #define PL_op_mutex		(PL_Vars.Gop_mutex)
 #define PL_patleave		(PL_Vars.Gpatleave)
 #define PL_sh_path		(PL_Vars.Gsh_path)
+#define PL_sigfpe_saved		(PL_Vars.Gsigfpe_saved)
 #define PL_thr_key		(PL_Vars.Gthr_key)
 
 #else /* !PERL_GLOBAL_STRUCT */
@@ -1440,6 +1444,7 @@
 #define PL_Gop_mutex		PL_op_mutex
 #define PL_Gpatleave		PL_patleave
 #define PL_Gsh_path		PL_sh_path
+#define PL_Gsigfpe_saved	PL_sigfpe_saved
 #define PL_Gthr_key		PL_thr_key
 
 #endif /* PERL_GLOBAL_STRUCT */

@@ -13,55 +13,6 @@ the L<perl58delta>, which describes differences between 5.6.0 and
 
 =head1 Incompatible Changes
 
-=head2 Hash Randomisation
-
-Mainly due to security reasons, the "random ordering" of hashes
-has been made even more random.  Previously while the order of hash
-elements from keys(), values(), and each() was essentially random,
-it was still repeatable.  Now, however, the order varies between
-different runs of Perl.
-
-B<Perl has never guaranteed any ordering of the hash keys>, and the
-ordering has already changed several times during the lifetime of
-Perl 5.  Also, the ordering of hash keys has always been, and
-continues to be, affected by the insertion order.
-
-The added randomness may affect applications.
-
-One possible scenario is when output of an application has included
-hash data.  For example, if you have used the Data::Dumper module to
-dump data into different files, and then compared the files to see
-whether the data has changed, now you will have false positives since
-the order in which hashes are dumped will vary.  In general the cure
-is to sort the keys (or the values); in particular for Data::Dumper to
-use the C<Sortkeys> option; or if some particular order is really
-important, use tied hashes.
-
-More subtle problem is reliance on the order of "global destruction".
-That is what happens at the end of execution: Perl destroys all data
-structures, including user data.  If your destructors (the DESTROY
-subroutines) have assumed any particular ordering to the global
-destruction, there might be problems ahead.  For example, in a
-destructor of one object you cannot assume that objects of any other
-class are still available, unless you hold a reference to them.
-If the environment variable PERL_DESTRUCT_LEVEL is set to a non-zero
-value, or if Perl is exiting a spawned thread, it will also destruct
-the ordinary references and the symbol tables that are no longer in use.
-You can't call a class method or an ordinary function on a class that
-has been collected that way.
-
-The hash randomisation is certain to reveal hidden assumptions about
-some particular ordering of hash elements, and outright bugs: it
-revealed a few bugs in the Perl core and core modules.
-
-To disable the hash randomisation in runtime, set the environment
-variable PERL_HASH_SEED to 0 (zero) before running Perl (for more
-information see L<perlrun/PERL_HASH_SEED>), or to disable the feature
-completely in compile time, compile with C<-DNO_HASH_SEED> (see F<INSTALL>).
-
-See L<perlsec/"Algorithmic Complexity Attacks"> for the original
-rationale behind this change.
-
 =head2 UTF-8 On Filehandles No Longer Activated By Locale
 
 In Perl 5.8.0 all filehandles, including the standard filehandles,
@@ -184,50 +135,126 @@ The syntaxes
 
 now do localise variables, given that the $x is a valid variable name.
 
+=head2 Hash Randomisation
+
+A vulnerability was found in the "random ordering" of Perl hashes.
+By carefully crafting the hash keys one can cause the performance of
+hashes to degenerate considerably, enabling a denial-of-service attack.
+
+To make this malicious crafting harder, a new feature was added to
+Perl to allow randomising the hash ordering.  To activate this
+feature, set the environment variable PERL_HASH_SEED appropriately,
+see L<perlrun/PERL_HASH_SEED>.
+
+Previously while the order of hash elements from keys(), values(), and
+each() was essentially random, it was still repeatable.  Now, however,
+the order may vary between different runs of Perl.
+
+B<Perl has never guaranteed any ordering of the hash keys>, and the
+ordering has already changed several times during the lifetime of
+Perl 5.  Also, the ordering of hash keys has always been, and
+continues to be, affected by the insertion order.
+
+If the added randomness is used, existing applications may be affected.
+
+One possible scenario is when output of an application has included
+hash data.  For example, if you have used the Data::Dumper module to
+dump data into different files, and then compared the files to see
+whether the data has changed, now you will have false positives since
+the order in which hashes are dumped will vary.  In general the cure
+is to sort the keys (or the values); in particular for Data::Dumper to
+use the C<Sortkeys> option; or if some particular order is really
+important, use tied hashes.
+
+More subtle problem is reliance on the order of "global destruction".
+That is what happens at the end of execution: Perl destroys all data
+structures, including user data.  If your destructors (the DESTROY
+subroutines) have assumed any particular ordering to the global
+destruction, there might be problems ahead.  For example, in a
+destructor of one object you cannot assume that objects of any other
+class are still available, unless you hold a reference to them.
+If the environment variable PERL_DESTRUCT_LEVEL is set to a non-zero
+value, or if Perl is exiting a spawned thread, it will also destruct
+the ordinary references and the symbol tables that are no longer in use.
+You can't call a class method or an ordinary function on a class that
+has been collected that way.
+
+If the hash randomisation is used, it is certain to reveal hidden
+assumptions about some particular ordering of hash elements, and
+outright bugs: it revealed a few bugs in the Perl core and core
+modules.
+
+To disable the hash randomisation in runtime, just either don't set
+the environment variable PERL_HASH_SEED, or set it to 0 (zero) before
+running Perl (for more information see L<perlrun/PERL_HASH_SEED>),
+or to disable the feature completely in compile time, compile with
+C<-DNO_HASH_SEED> (see F<INSTALL>).
+
+See L<perlsec/"Algorithmic Complexity Attacks"> for the original rationale.
+
 =head2 Unicode Character Database 4.0.0
 
 Unicode Character Database has been updated to 4.0.0 from 3.2.0.
 
-=head2 Warnings
+=head2 Deprecation Warnings
 
-Perl 5.8.0 forgot to add some deprecation warnings.  These warnings
-have now been added.
+There is one new feature deprecation.  Perl 5.8.0 forgot to add
+some deprecation warnings, these warnings have now been added.
+Finally, a reminder of an impending feature removal.
 
-=head2 Pseudo-hashes really are deprecated
+=head3 (New) Version Strings (v-strings) Are Deprecated
 
-Pseudo-hashes were deprecated in Perl 5.8.0 and will be removed in Perl
-5.10.0, see L<perl58delta> for details.  Each attempt to access pseudo-hashes
-will trigger the warning C<Pseudo-hashes are deprecated>.  If you really want
-to continue using pseudo-hashes but not to see the deprecation warnings, add:
+Version Strings (v-strings) have been deprecated and they will be
+removed in some future release of Perl.  Each v-string will trigger
+the warning C<v-strings are deprecated>.   The marginal benefits of
+v-strings were greatly outweighed by the potential for Surprise and
+Confusion.  If you really want to continue using v-strings but not to
+see the deprecation warnings, use:
+
+    no warnings 'deprecated';
+
+=head3 (Reminder) Pseudo-hashes really are deprecated
+
+Pseudo-hashes were deprecated in Perl 5.8.0 and will be removed in
+Perl 5.10.0, see L<perl58delta> for details.  Each attempt to access
+pseudo-hashes will trigger the warning C<Pseudo-hashes are deprecated>.
+If you really want to continue using pseudo-hashes but not to see the
+deprecation warnings, use:
 
     no warnings 'deprecated';
 
 Or you can continue to use the L<fields> pragma, but please don't
 expect the data structures to be pseudohashes any more.
 
-=head2 5.005-style threads really are deprecated
+=head3 (Reminder) 5.005-style threads really are deprecated
 
-5.005-style threads (activated by C<use Thread;>) were deprecated in Perl
-5.8.0 and will be removed in Perl 5.10.0, see L<perl58delta> for details.
-Each attempt to create a 5.005-style thread will trigger the warning
-C<5.005 threads are deprecated>.  If you really want to continue using
-5.005 threads but not to see the deprecation warnings, add:
+5.005-style threads (activated by C<use Thread;>) were deprecated in
+5.Perl 8.0 and will be removed after Perl 5.8, see L<perl58delta> for
+5.details.  Each 5.005-style thread creation will trigger the warning
+5.C<5.005 threads are deprecated>.  If you really want to continue
+5.using the 5.005 threads but not to see the deprecation warnings, use:
 
     no warnings 'deprecated';
 
-=head2 Version Strings (v-strings) Are Deprecated
+=head3 (Reminder) The $* Variable Really Is Deprecated
 
-Version Strings (v-strings) have been deprecated.  They will not be
-available after Perl 5.8.  The marginal benefits of v-strings were
-greatly outweighed by the potential for Surprise and Confusion.
+The C<$*> variable controlling multi-line matching has been deprecated
+and will be removed after 5.8.  The variable has been deprecated for a
+long time, and a deprecation warning C<Use of $* is deprecated> is given,
+now the variable will just finally be removed.  The functionality has
+been supplanted by the C</s> and C</m> modifiers on pattern matching.
+If you really want to continue using the C<$*>-variable but not to see
+the deprecation warnings, use:
 
-=head2 The $* variable Is Deprecated
+    no warnings 'deprecated';
 
-The C<$*> variable controlling multi-line matching has been
-deprecated.  It will not be available after Perl 5.8.  The variable
-has been deprecated for a long time, now it will just finally be
-removed.  The functionality has been supplanted by the C</s> and
-C</m> modifiers on pattern matching.
+=head2 Miscellaneous Enhancements
+
+PerlIO::get_layers(FH) returns the names of the PerlIO layers
+active on a filehandle.
+
+utf8::is_utf8() has been added as a quick way to test whether
+a scalar is encoded internally in UTF-8 (Unicode).
 
 =head1 Modules and Pragmata
 
@@ -355,31 +382,35 @@ One can now build subsets of Perl core modules by using the
 Configure flags C<-Dnoextensions=> and C<-Donlyextensions=>,
 see F<INSTALL>
 
+=head2 Platform-specific enhancements
+
+In Cygwin Perl can now be built with threads (Configure -Duseithreads).
+
+In newer FreeBSD releases Perl 5.8.0 compilation failed because of
+trying to use <malloc.h>, which in FreeBSD is just a dummy file, and
+a fatal error to even try to use.  Now <malloc.h> is not used.
+
+Perl is now known to build also in Hitachi HI-UXMPP.
+
 Mac OS X now installs with Perl version number embedded in
 installation directory names for easier upgrading of user-compiled
 Perl, and the installation directories in general are more standard.
 (In other words, the default installation no longer breaks the
 Apple-provided Perl.)
 
-In newer FreeBSD releases Perl 5.8.0 compilation failed because of
-trying to use <malloc.h>, which in FreeBSD is just a dummy file, and
-a fatal error to even try to use.  Now <malloc.h> is not used.
+Perl has been ported to IBM's OS/400 PASE environment.  The best way
+to build a Perl for PASE is to use an AIX host as a cross-compilation
+environment.  See README.os400.
+
+Yet another cross-compilation option has been added, now Perl builds
+on OpenZaurus, see the Cross subdirectory.
 
 Tru64 gcc 3.2.1 -O3 toke.c dropped to -O2 because of gigantic
 memory use otherwise.
 
 Tru64 can now build Perl with the newer Berkeley DBs.
 
-Perl has been ported to IBM's OS/400 PASE environment.  The best way
-to build a Perl for PASE is to use an AIX host as a cross-compilation
-environment.  See README.os400.
-
-Perl is now known to build also in Hitachi HI-UXMPP.
-
 Building Perl on WinCE has been much enhanced, see the wince subdirectory.
-
-Yet another cross-compilation option has been added, now Perl builds
-on OpenZaurus, see the Cross subdirectory.
 
 =head1 Selected Bug Fixes
 
@@ -415,6 +446,12 @@ been fixed.
 
 FETCH etc may now safely access tied values (ie resulting in a recursive
 call to FETCH etc).
+
+At startup Perl blocks the SIGFPE signal away since there isn't much
+Perl can do about it.  Previously this blocking was in effect also for
+programs executed from within Perl.  Now Perl restores the original
+SIGFPE handling routine, whatever it was, before running external
+programs.
 
 Linenumbers in Perl scripts may now be greater than 65536, or 2**16.
 (Perl scripts have always been able to be larger than that, it's just
@@ -579,6 +616,11 @@ An illegal user-defined Unicode casemapping was specified.
 
 Something modified the values being iterated over.  This is not good.
 
+=head2 New "v-strings are deprecated"
+
+The marginal benefits of v-strings were greatly outweighed by the
+potential for Surprise and Confusion.
+
 =head1 Changed Internals
 
 These news matter to you only if you either write XS code or like to
@@ -615,9 +657,6 @@ PERL_NO_SHORT_NAMES.
 
 Perl_save_bool() has been added.
 
-utf8::is_utf8() has been added as a quick way to test whether
-a scalar is encoded internally in UTF-8 (Unicode).
-
 C<-DL> removed (the leaktest had been broken and unsupported for years,
 use alternative debugging mallocs or tools like valgrind and Purify).
 
@@ -632,9 +671,6 @@ system platform.
 
 =head1 Known Problems
 
-The hash randomisation mentioned in L</Incompatible Changes> is definitely
-problematic: it will wake dormant bugs and shake out bad assumptions.
-
 Many of the rarer platforms that worked 100% or pretty close to it
 with perl 5.8.0 have been left a little bit untended since their
 maintainers have been otherwise busy lately, and therefore there will
@@ -644,9 +680,20 @@ common Perl platforms (Unix and Unix-like, Microsoft platforms, and
 VMS) have large enough testing and expert population that they are
 doing well.
 
+=head2 lib/Net/Ping/t/510_ping_udp.t subtest 2
+
+The subtest 2 of lib/Net/Ping/t/510_ping_udp.t might fail if you have
+an unusual networking setup.  The test is trying to send a UDP ping to
+the IP address 127.0.0.1.
+
 =head1 Platform Specific Problems
 
-=head2 (FreeBSD)
+=head2 EBCDIC Platforms
+
+IBM z/OS and other EBCDIC platforms continue to be problematic
+regarding Unicode support.
+
+=head2 FreeBSD: malloc dilemma
 
 The choice of malloc (the C-level memory management interface)
 when building Perl is problematic in FreeBSD.
@@ -668,7 +715,22 @@ programs.  No such problems were found in other platforms, however.
 A decision was made to stick with the system malloc, regardless
 of the performance problems.
 
-=head2 (Win32) sysopen, sysread, syswrite
+=head2 HP-UX: HP cc warnings about sendfile
+
+With certain HP C compiler releases (e.g. B.11.11.02) you will
+get many warnings like this:
+
+    cc: "/usr/include/sys/socket.h", line 504: warning 562: Redeclaration of "sendfile" with a different storage class specifier: "sendfile" will have internal linkage.
+
+This warning, however, is not serious and can be ignored.
+
+=head2 Tru64: No threaded builds with GNU cc (gcc)
+
+In the latest Tru64 releases (e.g. v5.1B) the gcc (3.3) cannot be
+used to compile a threaded Perl (-Duseithreads) because the system
+<pthread.h> file doesn't know about gcc.
+
+=head2 Win32: sysopen, sysread, syswrite
 
 As of the 5.8.0 release, sysopen()/sysread()/syswrite() do not behave
 like they used to in 5.6.1 and earlier with respect to "text" mode.
@@ -681,10 +743,45 @@ compatible behavior may be re-introduced in a future release.  Until
 then, the use of sysopen(), sysread() and syswrite() is not supported
 for "text" mode operations.
 
-=head2 EBCDIC Platforms
+=head1 Future Directions
 
-IBM z/OS and other EBCDIC platforms continue to be problematic
-regarding Unicode support.
+The following things B<might> happen in future.  The first publicly
+available releases having these characteristics will be the developer
+releases Perl 5.9.x, culminating in the Perl 5.10.0 release.  These
+are our best guesses at the moment: we reserve the right to rethink.
+
+=over 4
+
+=item *
+
+PerlIO will become The Default.  Currently (in Perl 5.8.x) the stdio
+library is still used if Perl thinks it can use certain tricks to
+make stdio go B<really> fast.  For future releases our goal is to
+make PerlIO go even faster.
+
+=item *
+
+A new feature called I<assertions> will be available.  This means that
+one can have code called assertions sprinkled in the code: usually
+they are optimised away, but they can be enabled with the C<-A> option.
+
+=item *
+
+5.005 Threads Will Be Removed
+
+=item *
+
+V-strings (Version Strings) Will Be Removed
+
+=item *
+
+The C<$*> Variable Will Be Removed
+
+=item *
+
+Pseudohashes Will Be Removed
+
+=back
 
 =head1 Reporting Bugs
 

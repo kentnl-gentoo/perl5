@@ -1029,36 +1029,21 @@ setuid perl scripts securely.\n");
 
 #if defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT)
     /* [perl #22371] Algorimic Complexity Attack on Perl 5.6.1, 5.8.0
-     * This MUST be done before any hash stores or fetches take place. */
+     * This MUST be done before any hash stores or fetches take place.
+     * If you set PL_hash_seed (and assumedly also PL_hash_seed_set) yourself,
+     * it is your responsibility to provide a good random seed! */
+    if (!PL_hash_seed_set)
+	 PL_hash_seed = get_seed();
     {
-       bool earlytaint = doing_taint(argc, argv, env);
-       char *s = NULL;
+	 char *s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG");
 
-       if (!earlytaint)
-	   s = PerlEnv_getenv("PERL_HASH_SEED");
-       if (s)
-           while (isSPACE(*s)) s++;
-       if (s && isDIGIT(*s))
-           PL_hash_seed = (UV)Atoul(s);
-#ifndef USE_HASH_SEED_EXPLICIT
-       else {
-           /* Compute a random seed */
-           (void)seedDrand01((Rand_seed_t)seed());
-           PL_srand_called = TRUE;
-           PL_hash_seed = (UV)(Drand01() * (NV)UV_MAX);
-#if RANDBITS < (UVSIZE * 8)
-	   /* Since there are not enough randbits to to reach all
-	    * the bits of a UV, the low bits might need extra
-	    * help.  Sum in another random number that will
-	    * fill in the low bits. */
-	   PL_hash_seed +=
-	     (UV)(Drand01() * (NV)((1 << ((UVSIZE * 8 - RANDBITS))) - 1));
-#endif /* RANDBITS < (UVSIZE * 8) */
-       }
-#endif /* USE_HASH_SEED_EXPLICIT */
-       if ((s = PerlEnv_getenv("PERL_HASH_SEED_DEBUG")))
-	   PerlIO_printf(Perl_debug_log, "HASH_SEED = %"UVuf"\n",
-			 PL_hash_seed);
+	 if (s) {
+	      int i = atoi(s);
+
+	      if (i == 1)
+		   PerlIO_printf(Perl_debug_log, "HASH_SEED = %"UVuf"\n",
+				 PL_hash_seed);
+	 }
     }
 #endif /* #if defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT) */
 
@@ -3098,10 +3083,12 @@ S_open_script(pTHX_ char *scriptname, bool dosearch, SV *sv, int *fdscript)
                 PL_statbuf.st_mode & (S_ISUID|S_ISGID))
             {
                 /* try again */
+                PERL_FPU_PRE_EXEC
                 PerlProc_execv(Perl_form(aTHX_ "%s/sperl"PERL_FS_VER_FMT,
                                          BIN_EXP, (int)PERL_REVISION,
                                          (int)PERL_VERSION,
                                          (int)PERL_SUBVERSION), PL_origargv);
+                PERL_FPU_POST_EXEC
                 Perl_croak(aTHX_ "Can't do setuid\n");
             }
 #       endif
@@ -3358,9 +3345,11 @@ FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!\n");
 	    (void)PerlIO_close(PL_rsfp);
 #ifndef IAMSUID
 	    /* try again */
+	    PERL_FPU_PRE_EXEC
 	    PerlProc_execv(Perl_form(aTHX_ "%s/sperl"PERL_FS_VER_FMT, BIN_EXP,
 				     (int)PERL_REVISION, (int)PERL_VERSION,
 				     (int)PERL_SUBVERSION), PL_origargv);
+	    PERL_FPU_POST_EXEC
 #endif
 	    Perl_croak(aTHX_ "Can't do setuid\n");
 	}
@@ -3442,9 +3431,11 @@ FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!\n");
 #if defined(HAS_FCNTL) && defined(F_SETFD)
     fcntl(PerlIO_fileno(PL_rsfp),F_SETFD,0);	/* ensure no close-on-exec */
 #endif
+    PERL_FPU_PRE_EXEC
     PerlProc_execv(Perl_form(aTHX_ "%s/perl"PERL_FS_VER_FMT, BIN_EXP,
 			     (int)PERL_REVISION, (int)PERL_VERSION,
 			     (int)PERL_SUBVERSION), PL_origargv);/* try again */
+    PERL_FPU_POST_EXEC
     Perl_croak(aTHX_ "Can't do setuid\n");
 #endif /* IAMSUID */
 #else /* !DOSUID */

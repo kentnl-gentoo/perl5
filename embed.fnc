@@ -702,7 +702,7 @@ p	|I32	|setenv_getix	|char* nam
 p	|void	|setdefout	|GV* gv
 p	|HEK*	|share_hek	|const char* sv|I32 len|U32 hash
 np	|Signal_t |sighandler	|int sig
-np	|Signal_t |csighandler	|int sig
+Anp	|Signal_t |csighandler	|int sig
 Ap	|SV**	|stack_grow	|SV** sp|SV**p|int n
 Ap	|I32	|start_subparse	|I32 is_format|U32 flags
 p	|void	|sub_crush_depth|CV* cv
@@ -854,6 +854,7 @@ p	|void	|vivify_ref	|SV* sv|U32 to_what
 p	|I32	|wait4pid	|Pid_t pid|int* statusp|int flags
 p	|U32	|parse_unicode_opts|char **popt
 p	|U32	|seed
+p	|UV	|get_seed
 p	|void	|report_evil_fh	|GV *gv|IO *io|I32 op
 pd	|void	|report_uninit
 Afpd	|void	|warn		|const char* pat|...
