@@ -186,13 +186,19 @@ struct IPerlStdIOInfo
 
 #ifdef USE_STDIO_PTR
 #  define PerlIO_has_cntptr(f)		1       
-#  ifdef STDIO_CNT_LVALUE
-#    define PerlIO_canset_cnt(f)	1      
-#    ifdef STDIO_PTR_LVALUE
+#  ifdef STDIO_PTR_LVALUE
+#    ifdef  STDIO_CNT_LVALUE
+#      define PerlIO_canset_cnt(f)	1      
+#      ifdef STDIO_PTR_LVAL_NOCHANGE_CNT
+#        define PerlIO_fast_gets(f)	1        
+#      endif
+#    else /* STDIO_CNT_LVALUE */
+#      define PerlIO_canset_cnt(f)	0      
+#    endif
+#  else /* STDIO_PTR_LVALUE */
+#    ifdef STDIO_PTR_LVAL_SETS_CNT
 #      define PerlIO_fast_gets(f)	1        
 #    endif
-#  else
-#    define PerlIO_canset_cnt(f)	0      
 #  endif
 #else  /* USE_STDIO_PTR */
 #  define PerlIO_has_cntptr(f)		0
@@ -551,7 +557,7 @@ struct IPerlDirInfo
 
 #define PerlDir_mkdir(name, mode)	Mkdir((name), (mode))
 #ifdef VMS
-#  define PerlDir_chdir(n)		chdir(((n) && *(n)) ? (n) : "SYS$LOGIN")
+#  define PerlDir_chdir(n)		Chdir(((n) && *(n)) ? (n) : "SYS$LOGIN")
 #else 
 #  define PerlDir_chdir(name)		chdir((name))
 #endif

@@ -554,6 +554,7 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
     register I32 i;
     register SV **ary;
     MAGIC* mg;
+    I32 slide;
 
     if (!av || num <= 0)
 	return;
@@ -591,6 +592,9 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
     }
     if (num) {
 	i = AvFILLp(av);
+	/* Create extra elements */
+	slide = i > 0 ? i : 0;
+	num += slide;
 	av_extend(av, i + num);
 	AvFILLp(av) += num;
 	ary = AvARRAY(av);
@@ -598,6 +602,10 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
 	do {
 	    ary[--num] = &PL_sv_undef;
 	} while (num);
+	/* Make extra elements into a buffer */
+	AvMAX(av) -= slide;
+	AvFILLp(av) -= slide;
+	SvPVX(av) = (char*)(AvARRAY(av) + slide);
     }
 }
 
@@ -661,6 +669,14 @@ Perl_av_len(pTHX_ register AV *av)
     return AvFILL(av);
 }
 
+/*
+=for apidoc av_fill
+
+Ensure than an array has a given number of elements, equivalent to
+Perl's C<$#array = $fill;>.
+
+=cut
+*/
 void
 Perl_av_fill(pTHX_ register AV *av, I32 fill)
 {
@@ -708,6 +724,14 @@ Perl_av_fill(pTHX_ register AV *av, I32 fill)
 	(void)av_store(av,fill,&PL_sv_undef);
 }
 
+/*
+=for apidoc av_delete
+
+Deletes the element indexed by C<key> from the array.  Returns the
+deleted element. C<flags> is currently ignored.
+
+=cut
+*/
 SV *
 Perl_av_delete(pTHX_ AV *av, I32 key, I32 flags)
 {
@@ -758,10 +782,15 @@ Perl_av_delete(pTHX_ AV *av, I32 key, I32 flags)
 }
 
 /*
- * This relies on the fact that uninitialized array elements
- * are set to &PL_sv_undef.
- */
+=for apidoc av_exists
 
+Returns true if the element indexed by C<key> has been initialized.
+
+This relies on the fact that uninitialized array elements are set to
+C<&PL_sv_undef>.
+
+=cut
+*/
 bool
 Perl_av_exists(pTHX_ AV *av, I32 key)
 {
@@ -775,9 +804,14 @@ Perl_av_exists(pTHX_ AV *av, I32 key)
     if (SvRMAGICAL(av)) {
 	if (mg_find((SV*)av,'P') || mg_find((SV*)av,'D')) {
 	    SV *sv = sv_newmortal();
+	    MAGIC *mg;
+
 	    mg_copy((SV*)av, sv, 0, key);
-	    magic_existspack(sv, mg_find(sv, 'p'));
-	    return SvTRUE(sv);
+	    mg = mg_find(sv, 'p');
+	    if (mg) {
+		magic_existspack(sv, mg);
+		return SvTRUE(sv);
+	    }
 	}
     }
     if (key <= AvFILLp(av) && AvARRAY(av)[key] != &PL_sv_undef

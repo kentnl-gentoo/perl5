@@ -115,7 +115,7 @@ Contents
          -  Threads
       AUTHOR 
       SEE ALSO 
-  
+
 =head1 DESCRIPTION
 
 =head2 Target
@@ -178,13 +178,14 @@ has much more functions working (like C<fork>, C<popen> and so on). In
 fact RSX is required if there is no VCPI present. Note the
 RSX requires DPMI.
 
-Only the latest runtime is supported, currently C<0.9c>. Perl may run
+Only the latest runtime is supported, currently C<0.9d fix 03>. Perl may run
 under earlier versions of EMX, but this is not tested.
 
 One can get different parts of EMX from, say
 
-  ftp://ftp.cdrom.com/pub/os2/emx09c/
-  ftp://hobbes.nmsu.edu/os2/unix/emx09c/
+  http://www.leo.org/pub/comp/os/os2/leo/gnu/emx+gcc/
+  http://powerusersbbs.com/pub/os2/dev/   [EMX+GCC Development]
+  http://hobbes.nmsu.edu/pub/os2/dev/emx/v0.9d/
 
 The runtime component should have the name F<emxrt.zip>.
 
@@ -393,12 +394,12 @@ is considered a bug and should be fixed soon.
 
 =over 4
 
-=item
+=item *
 
 Did you run your programs with C<-w> switch? See 
 L<Starting OS/2 (and DOS) programs under Perl>.
 
-=item
+=item *
 
 Do you try to run I<internal> shell commands, like C<`copy a b`>
 (internal for F<cmd.exe>), or C<`glob a*b`> (internal for ksh)? You
@@ -723,7 +724,7 @@ can be constructed using C<pod2latex>.
 =head1 BUILD
 
 Here we discuss how to build Perl under OS/2. There is an alternative
-(but maybe older) view on L<http://www.shadow.net/~troc/os2perl.html>.
+(but maybe older) view on http://www.shadow.net/~troc/os2perl.html
 
 =head2 Prerequisites
 
@@ -1060,6 +1061,10 @@ You did not run C<omflibs>. See L<Prerequisites>.
 
 You use an old version of GNU make. See L<Prerequisites>.
 
+=head2 op/sprintf test failure
+
+This can result from a bug in emx sprintf which was fixed in 0.9d fix 03.
+
 =head1 Specific (mis)features of OS/2 port
 
 =head2 C<setpriority>, C<getpriority>
@@ -1158,18 +1163,18 @@ eventually).
 
 =over 4
 
-=item
+=item *
 
 Since L<flock(3)> is present in EMX, but is not functional, it is 
 emulated by perl.  To disable the emulations, set environment variable
 C<USE_PERL_FLOCK=0>.
 
-=item
+=item *
 
 Here is the list of things which may be "broken" on
 EMX (from EMX docs):
 
-=over
+=over 4
 
 =item *
 
@@ -1200,7 +1205,7 @@ L<waitpid(3)>:
 
 Note that C<kill -9> does not work with the current version of EMX.
 
-=item
+=item *
 
 Since F<sh.exe> is used for globing (see L<perlfunc/glob>), the bugs
 of F<sh.exe> plague perl as well. 
@@ -1481,7 +1486,7 @@ this works as well under DOS if you use DOS-enabled port of pdksh
 
 B<Disadvantages:> currently F<sh.exe> of pdksh calls external programs
 via fork()/exec(), and there is I<no> functioning exec() on
-OS/2. exec() is emulated by EMX by asyncroneous call while the caller
+OS/2. exec() is emulated by EMX by asynchronous call while the caller
 waits for child completion (to pretend that the C<pid> did not change). This
 means that 1 I<extra> copy of F<sh.exe> is made active via fork()/exec(),
 which may lead to some resources taken from the system (even if we do
@@ -1512,9 +1517,9 @@ cannot test it.
 For the details of the current situation with calling external programs,
 see L<Starting OS/2 (and DOS) programs under Perl>.
 
-=over
+=over 4
 
-=item
+=item *
 
 External scripts may be called by name.  Perl will try the same extensions
 as when processing B<-S> command-line switch.
@@ -1525,8 +1530,8 @@ as when processing B<-S> command-line switch.
 
 Perl uses its own malloc() under OS/2 - interpreters are usually malloc-bound
 for speed, but perl is not, since its malloc is lightning-fast.
-Perl-memory-usage-tuned benchmarks show that Perl's malloc is 5 times quickier
-than EMX one.  I do not have convincing data about memory footpring, but
+Perl-memory-usage-tuned benchmarks show that Perl's malloc is 5 times quicker
+than EMX one.  I do not have convincing data about memory footprint, but
 a (pretty random) benchmark showed that Perl one is 5% better.
 
 Combination of perl's malloc() and rigid DLL name resolution creates
@@ -1544,7 +1549,7 @@ preliminary.
 
 Most notable problems: 
 
-=over
+=over 4
 
 =item C<COND_WAIT> 
 

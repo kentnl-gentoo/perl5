@@ -37,25 +37,25 @@ Read on...
 
 =over 5
 
-L<Compiling your C program>
+=item Compiling your C program
 
-L<Adding a Perl interpreter to your C program>
+=item Adding a Perl interpreter to your C program
 
-L<Calling a Perl subroutine from your C program>
+=item Calling a Perl subroutine from your C program
 
-L<Evaluating a Perl statement from your C program>
+=item Evaluating a Perl statement from your C program
 
-L<Performing Perl pattern matches and substitutions from your C program>
+=item Performing Perl pattern matches and substitutions from your C program
 
-L<Fiddling with the Perl stack from your C program>
+=item Fiddling with the Perl stack from your C program
 
-L<Maintaining a persistent interpreter>
+=item Maintaining a persistent interpreter
 
-L<Maintaining multiple interpreter instances>
+=item Maintaining multiple interpreter instances
 
-L<Using Perl modules, which themselves use C libraries, from your C program>
+=item Using Perl modules, which themselves use C libraries, from your C program
 
-L<Embedding Perl under Win32>
+=item Embedding Perl under Win32
 
 =back 
 
@@ -258,9 +258,8 @@ and package C<END {}> blocks.
 If you want to pass arguments to the Perl subroutine, you can add
 strings to the C<NULL>-terminated C<args> list passed to
 I<call_argv>.  For other data types, or to examine return values,
-you'll need to manipulate the Perl stack.  That's demonstrated in the
-last section of this document: L<Fiddling with the Perl stack from
-your C program>.
+you'll need to manipulate the Perl stack.  That's demonstrated in
+L<Fiddling with the Perl stack from your C program>.
 
 =head2 Evaluating a Perl statement from your C program
 
@@ -356,7 +355,7 @@ made.
    int matches(SV *string, char *pattern, AV **matches);
 
 Given an C<SV>, a pattern, and a pointer to an empty C<AV>,
-matches() evaluates C<$string =~ $pattern> in an array context, and
+matches() evaluates C<$string =~ $pattern> in a list context, and
 fills in I<matches> with the array elements, returning the number of matches found.
 
 Here's a sample program, I<match.c>, that uses all three (long lines have
@@ -434,7 +433,7 @@ been wrapped here):
 
  /** matches(string, pattern, matches)
  **
- ** Used for matches in an array context.
+ ** Used for matches in a list context.
  **
  ** Returns the number of matches,
  ** and fills in **matches with the matching substrings
@@ -894,21 +893,14 @@ That's where the glue code can be inserted to create the initial contact between
 Perl and linked C/C++ routines.  Let's take a look some pieces of I<perlmain.c>
 to see how Perl does this:
 
+ static void xs_init (pTHX);
 
- #ifdef __cplusplus
- #  define EXTERN_C extern "C"
- #else
- #  define EXTERN_C extern
- #endif
-
- static void xs_init (void);
-
- EXTERN_C void boot_DynaLoader (CV* cv);
- EXTERN_C void boot_Socket (CV* cv);
+ EXTERN_C void boot_DynaLoader (pTHX_ CV* cv);
+ EXTERN_C void boot_Socket (pTHX_ CV* cv);
 
 
  EXTERN_C void
- xs_init()
+ xs_init(pTHX)
  {
         char *file = __FILE__;
         /* DynaLoader is a special case */
@@ -957,19 +949,11 @@ Consult L<perlxs>, L<perlguts>, and L<perlapi> for more details.
 
 =head1 Embedding Perl under Win32
 
-At the time of this writing (5.004), there are two versions of Perl
-which run under Win32.  (The two versions are merging in 5.005.)
-Interfacing to ActiveState's Perl library is quite different from the
-examples in this documentation, as significant changes were made to
-the internal Perl API.  However, it is possible to embed ActiveState's
-Perl runtime.  For details, see the Perl for Win32 FAQ at
-http://www.perl.com/CPAN/doc/FAQs/win32/perlwin32faq.html.
+In general, all of the source code shown here should work unmodified under
+Windows.
 
-With the "official" Perl version 5.004 or higher, all the examples
-within this documentation will compile and run untouched, although
-the build process is slightly different between Unix and Win32.  
-
-For starters, backticks don't work under the Win32 native command shell.
+However, there are some caveats about the command-line examples shown.
+For starters, backticks won't work under the Win32 native command shell.
 The ExtUtils::Embed kit on CPAN ships with a script called
 B<genmake>, which generates a simple makefile to build a program from
 a single C source file.  It can be used like this:

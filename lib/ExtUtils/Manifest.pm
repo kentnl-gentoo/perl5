@@ -187,13 +187,13 @@ sub manicopy {
     require File::Basename;
     my(%dirs,$file);
     $target = VMS::Filespec::unixify($target) if $Is_VMS;
-    File::Path::mkpath([ $target ],1,$Is_VMS ? undef : 0755);
+    File::Path::mkpath([ $target ],! $Quiet,$Is_VMS ? undef : 0755);
     foreach $file (keys %$read){
 	$file = VMS::Filespec::unixify($file) if $Is_VMS;
 	if ($file =~ m!/!) { # Ilya, that hurts, I fear, or maybe not?
 	    my $dir = File::Basename::dirname($file);
 	    $dir = VMS::Filespec::unixify($dir) if $Is_VMS;
-	    File::Path::mkpath(["$target/$dir"],1,$Is_VMS ? undef : 0755);
+	    File::Path::mkpath(["$target/$dir"],! $Quiet,$Is_VMS ? undef : 0755);
 	}
 	cp_if_diff($file, "$target/$file", $how);
     }
@@ -238,7 +238,7 @@ sub cp {
 
 sub ln {
     my ($srcFile, $dstFile) = @_;
-    return &cp if $Is_VMS;
+    return &cp if $Is_VMS or ($^O eq 'MSWin32' and Win32::IsWin95());
     link($srcFile, $dstFile);
     local($_) = $dstFile; # chmod a+r,go-w+X (except "X" only applies to u=x)
     my $mode= 0444 | (stat)[2] & 0700;

@@ -29,11 +29,44 @@ END_EXTERN_C
 
 #define UTF8_MAXLEN 13 /* how wide can a single UTF8 encoded character become */
 
-/*#define IN_UTF8 (PL_curcop->op_private & HINT_UTF8)*/
+/* #define IN_UTF8 (PL_curcop->op_private & HINT_UTF8) */
 #define IN_BYTE (PL_curcop->op_private & HINT_BYTE)
 #define DO_UTF8(sv) (SvUTF8(sv) && !IN_BYTE)
 
+#define UTF8_ALLOW_CONTINUATION		0x0001
+#define UTF8_ALLOW_NON_CONTINUATION	0x0002
+#define UTF8_ALLOW_FE_FF		0x0004
+#define UTF8_ALLOW_SHORT		0x0008
+#define UTF8_ALLOW_SURROGATE		0x0010
+#define UTF8_ALLOW_BOM			0x0020
+#define UTF8_ALLOW_FFFF			0x0040
+#define UTF8_ALLOW_LONG			0x0080
+#define UTF8_ALLOW_ANYUV		(UTF8_ALLOW_FE_FF|UTF8_ALLOW_FFFF \
+					|UTF8_ALLOW_BOM|UTF8_ALLOW_SURROGATE)
+#define UTF8_ALLOW_ANY			0x00ff
+#define UTF8_CHECK_ONLY			0x0100
+
 #define UTF8SKIP(s) PL_utf8skip[*(U8*)s]
+
+#ifdef HAS_QUAD
+#define UNISKIP(uv) ( (uv) < 0x80           ? 1 : \
+		      (uv) < 0x800          ? 2 : \
+		      (uv) < 0x10000        ? 3 : \
+		      (uv) < 0x200000       ? 4 : \
+		      (uv) < 0x4000000      ? 5 : \
+		      (uv) < 0x80000000     ? 6 : \
+                      (uv) < 0x1000000000LL ? 7 : 13 ) 
+#else
+/* No, I'm not even going to *TRY* putting #ifdef inside a #define */
+#define UNISKIP(uv) ( (uv) < 0x80           ? 1 : \
+		      (uv) < 0x800          ? 2 : \
+		      (uv) < 0x10000        ? 3 : \
+		      (uv) < 0x200000       ? 4 : \
+		      (uv) < 0x4000000      ? 5 : \
+		      (uv) < 0x80000000     ? 6 : 7 )
+#endif
+
+#define UNICODE_REPLACEMENT_CHARACTER	0xfffd
 
 /*
  * Note: we try to be careful never to call the isXXX_utf8() functions
@@ -41,11 +74,16 @@ END_EXTERN_C
  * (that is, the two high bits are set).  Otherwise we risk loading in the
  * heavy-duty SWASHINIT and SWASHGET routines unnecessarily.
  */
-#define isIDFIRST_lazy_if(p,c) ((!c || (*((U8*)p) < 0xc0)) \
+#ifdef EBCDIC
+#define isIDFIRST_lazy_if(p,c) isIDFIRST(*(p))
+#define isALNUM_lazy_if(p,c)   isALNUM(*(p))
+#else
+#define isIDFIRST_lazy_if(p,c) ((IN_BYTE || (!c || (*((U8*)p) < 0xc0))) \
 				? isIDFIRST(*(p)) \
 				: isIDFIRST_utf8((U8*)p))
-#define isALNUM_lazy_if(p,c)   ((!c || (*((U8*)p) < 0xc0)) \
+#define isALNUM_lazy_if(p,c)   ((IN_BYTE || (!c || (*((U8*)p) < 0xc0))) \
 				? isALNUM(*(p)) \
 				: isALNUM_utf8((U8*)p))
+#endif
 #define isIDFIRST_lazy(p)	isIDFIRST_lazy_if(p,1)
 #define isALNUM_lazy(p)		isALNUM_lazy_if(p,1)

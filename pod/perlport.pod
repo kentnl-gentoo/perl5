@@ -181,10 +181,12 @@ numbers to secondary storage such as a disk file or tape.
 
 Conflicting storage orders make utter mess out of the numbers.  If a
 little-endian host (Intel, VAX) stores 0x12345678 (305419896 in
-decimal), a big-endian host (Motorola, MIPS, Sparc, PA) reads it as
-0x78563412 (2018915346 in decimal).  To avoid this problem in network
-(socket) connections use the C<pack> and C<unpack> formats C<n>
-and C<N>, the "network" orders.  These are guaranteed to be portable.
+decimal), a big-endian host (Motorola, Sparc, PA) reads it as
+0x78563412 (2018915346 in decimal).  Alpha and MIPS can be either:
+Digital/Compaq used/uses them in little-endian mode; SGI/Cray uses
+them in big-endian mode.  To avoid this problem in network (socket)
+connections use the C<pack> and C<unpack> formats C<n> and C<N>, the
+"network" orders.  These are guaranteed to be portable.
 
 You can explore the endianness of your platform by unpacking a
 data structure packed in native format such as:
@@ -197,7 +199,7 @@ If you need to distinguish between endian architectures you could use
 either of the variables set like so:
 
     $is_big_endian   = unpack("h*", pack("s", 1)) =~ /01/;
-    $is_litte_endian = unpack("h*", pack("s", 1)) =~ /^1/;
+    $is_little_endian = unpack("h*", pack("s", 1)) =~ /^1/;
 
 Differing widths can cause truncation even between platforms of equal
 endianness.  The platform of shorter width loses the upper parts of the
@@ -217,7 +219,7 @@ So, it is reasonably safe to assume that all platforms support the
 notion of a "path" to uniquely identify a file on the system.  How
 that path is really written, though, differs considerably.
 
-Atlhough similar, file path specifications differ between Unix,
+Although similar, file path specifications differ between Unix,
 Windows, S<Mac OS>, OS/2, VMS, VOS, S<RISC OS>, and probably others.
 Unix, for example, is one of the few OSes that has the elegant idea
 of a single root directory.
@@ -332,7 +334,10 @@ operating systems put mandatory locks on such files.
 
 Don't count on a specific environment variable existing in C<%ENV>.
 Don't count on C<%ENV> entries being case-sensitive, or even
-case-preserving.
+case-preserving.  Don't try to clear %ENV by saying C<%ENV = ();>, or,
+if you really have to, make it conditional on C<$^O ne 'VMS'> since in
+VMS the C<%ENV> table is much more than a per-process key-value string
+table.
 
 Don't count on signals or C<%SIG> for anything.
 
@@ -355,7 +360,7 @@ Commands that launch external processes are generally supported on
 most platforms (though many of them do not support any type of
 forking).  The problem with using them arises from what you invoke
 them on.  External tools are often named differently on different
-platforms, may not be available in the same location, migth accept
+platforms, may not be available in the same location, might accept
 different arguments, can behave differently, and often present their
 results in a platform-dependent way.  Thus, you should seldom depend
 on them to produce consistent results. (Then again, if you're calling 
@@ -681,7 +686,7 @@ The ActiveState Pages, http://www.activestate.com/
 =item *
 
 The Cygwin environment for Win32; F<README.cygwin> (installed 
-as L<perlcygwin>), http://sourceware.cygnus.com/cygwin/
+as L<perlcygwin>), http://www.cygwin.com/
 
 =item *
 
@@ -888,9 +893,9 @@ vmsperl on the web, http://www.sidhe.org/vmsperl/index.html
 
 =head2 VOS
 
-Perl on VOS is discussed in F<README.vos> in the perl distribution.
-Perl on VOS can accept either VOS- or Unix-style file
-specifications as in either of the following:
+Perl on VOS is discussed in F<README.vos> in the perl distribution
+(installed as L<perlvos>).  Perl on VOS can accept either VOS- or
+Unix-style file specifications as in either of the following:
 
     $ perl -ne "print if /perl_setup/i" >system>notices
     $ perl -ne "print if /perl_setup/i" /system/notices
@@ -906,12 +911,11 @@ contain a slash character cannot be processed.  Such files must be
 renamed before they can be processed by Perl.  Note that VOS limits
 file names to 32 or fewer characters.
 
-The following C functions are unimplemented on VOS, and any attempt by
-Perl to use them will result in a fatal error message and an immediate
-exit from Perl:  dup, do_aspawn, do_spawn, fork, waitpid.  Once these
-functions become available in the VOS POSIX.1 implementation, you can
-either recompile and rebind Perl, or you can download a newer port from
-ftp.stratus.com.
+See F<README.vos> for restrictions that apply when Perl is built
+with the alpha version of VOS POSIX.1 support.
+
+Perl on VOS is built without any extensions and does not support
+dynamic loading.
 
 The value of C<$^O> on VOS is "VOS".  To determine the architecture that
 you are running on without resorting to loading all of C<%Config> you
@@ -1042,7 +1046,8 @@ Also see:
 
 *
 
-L<perlos390>, F<README.os390>, F<README.posix-bc>, F<README.vmesa>
+L<perlos390>, F<README.os390>, F<perlposix-bc>, F<README.vmesa>,
+L<perlebcdic>.
 
 =item *
 
@@ -1053,7 +1058,7 @@ general usage issues for all EBCDIC Perls.  Send a message body of
 =item  *
 
 AS/400 Perl information at
-ttp://as400.rochester.ibm.com/
+http://as400.rochester.ibm.com/
 as well as on CPAN in the F<ports/> directory.
 
 =back
@@ -1208,7 +1213,7 @@ A free perl5-based PERL.NLM for Novell Netware is available in
 precompiled binary and source code form from http://www.novell.com/
 as well as from CPAN.
 
-=item 
+=item  *
 
 Plan 9, F<README.plan9>
 
@@ -1640,6 +1645,10 @@ Not implemented. (S<Mac OS>, Win32, VMS, S<RISC OS>, VOS, VM/ESA)
 
 =item stat
 
+Platforms that do not have rdev, blksize, or blocks will return these
+as '', so numeric comparison or manipulation of these fields may cause
+'not numeric' warnings.
+
 mtime and atime are the same thing, and ctime is creation time instead of
 inode change time. (S<Mac OS>)
 
@@ -1649,6 +1658,9 @@ device and inode are not necessarily reliable.  (VMS)
 
 mtime, atime and ctime all return the last modification time.  Device and
 inode are not necessarily reliable.  (S<RISC OS>)
+
+dev, rdev, blksize, and blocks are not available.  inode is not
+meaningful and will differ between stat calls on the same file.  (os2)
 
 =item symlink OLDFILE,NEWFILE
 
@@ -1746,7 +1758,7 @@ two seconds. (Win32)
 Not implemented. (S<Mac OS>, VOS)
 
 Can only be applied to process handles returned for processes spawned
-using C<system(1, ...)>. (Win32)
+using C<system(1, ...)> or pseudo processes created with C<fork()>. (Win32)
 
 Not useful. (S<RISC OS>)
 
@@ -1844,6 +1856,7 @@ distribution available at http://www.perl.com/CPAN/src/index.html
 
 	AIX
 	DOS DJGPP 	1)
+	EPOC
 	FreeBSD
 	HP-UX
 	IRIX
@@ -1984,8 +1997,9 @@ http://www.perl.com/CPAN/ports/index.html for binary distributions.
 
 =head1 SEE ALSO
 
-L<perlamiga>, L<perlcygwin>, L<perldos>, L<perlhpux>, L<perlos2>,
-L<perlos390>, L<perlwin32>, L<perlvms>, and L<Win32>.
+L<perlaix>, L<perlamiga>, L<perlcygwin>, L<perldos>, L<perlepoc>,
+L<perlebcdic>, L<perlhpux>, L<perlos2>, L<perlos390>, L<perlposix-bc>,
+L<perlwin32>, L<perlvms>, L<perlvos>, and L<Win32>.
 
 =head1 AUTHORS / CONTRIBUTORS
 
@@ -2001,7 +2015,7 @@ Neale Ferguson <neale@mailbox.tabnsw.com.au>,
 David J. Fiander <davidf@mks.com>,
 Paul Green <Paul_Green@stratus.com>,
 M.J.T. Guy <mjtg@cus.cam.ac.uk>,
-Jarkko Hietaniemi <jhi@iki.fi<gt>,
+Jarkko Hietaniemi <jhi@iki.fi>,
 Luther Huffman <lutherh@stratcom.com>,
 Nick Ing-Simmons <nick@ni-s.u-net.com>,
 Andreas J. KE<ouml>nig <koenig@kulturbox.de>,

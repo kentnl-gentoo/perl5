@@ -687,7 +687,7 @@ CFG_VARS	=					\
 		"INST_ARCH=$(INST_ARCH)"		\
 		"archname=$(ARCHNAME)"			\
 		"cc=$(CC)"				\
-		"ccflags=$(OPTIMIZE:"=\") $(DEFINES) $(BUILDOPT)"	\
+		"ccflags=-nologo $(OPTIMIZE:"=\") $(DEFINES) $(BUILDOPT)"	\
 		"cf_email=$(EMAIL)"			\
 		"d_crypt=$(D_CRYPT)"			\
 		"d_mymalloc=$(PERL_MALLOC)"		\
@@ -830,7 +830,7 @@ perlmain$(o) : perlmain.c
 	$(CC) $(CFLAGS_O) -UPERLDLL $(OBJOUT_FLAG)$@ -c perlmain.c
 
 $(PERLEXE): $(PERLDLL) $(CONFIGPM) $(PERLEXE_OBJ) $(PERLEXE_RES)
-	$(LINK32) -subsystem:console -out:$@ -stack:0x8000000 $(LINK_FLAGS) \
+	$(LINK32) -subsystem:console -out:$@ -stack:0x1000000 $(LINK_FLAGS) \
 	    $(LIBFILES) $(PERLEXE_OBJ) $(SETARGV_OBJ) $(PERLIMPLIB) $(PERLEXE_RES)
 	copy $(PERLEXE) $(WPERLEXE)
 	$(MINIPERL) -I..\lib bin\exetype.pl $(WPERLEXE) WINDOWS
@@ -991,10 +991,11 @@ distclean: clean
 	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
 	-del /f $(LIBDIR)\Devel\Peek.pm $(LIBDIR)\Devel\DProf.pm
 	-del /f $(LIBDIR)\File\Glob.pm
-	-rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
-	-rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
-	-rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B
-	-rmdir /s /q $(LIBDIR)\Data || rmdir /s $(LIBDIR)\Data
+	-del /f $(LIBDIR)\Storable.pm
+	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
+	-if exist $(LIBDIR)\Thread rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
+	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B
+	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data || rmdir /s $(LIBDIR)\Data
 	-del /f $(PODDIR)\*.html
 	-del /f $(PODDIR)\*.bat
 	cd ..\utils
@@ -1011,8 +1012,8 @@ distclean: clean
 	cd $(EXTDIR)
 	-del /s *.lib *.def *.map *.pdb *.bs Makefile *$(o) pm_to_blib
 	cd ..\win32
-	-rmdir /s /q $(AUTODIR) || rmdir /s $(AUTODIR)
-	-rmdir /s /q $(COREDIR) || rmdir /s $(COREDIR)
+	-if exist $(AUTODIR) rmdir /s /q $(AUTODIR) || rmdir /s $(AUTODIR)
+	-if exist $(COREDIR) rmdir /s /q $(COREDIR) || rmdir /s $(COREDIR)
 
 install : all installbare installhtml
 
@@ -1080,7 +1081,7 @@ clean :
 	-@erase $(WPERLEXE)
 	-@erase $(PERLDLL)
 	-@erase $(CORE_OBJ)
-	-rmdir /s /q $(MINIDIR) || rmdir /s $(MINIDIR)
+	-if exist $(MINIDIR) rmdir /s /q $(MINIDIR) || rmdir /s $(MINIDIR)
 	-@erase $(WIN32_OBJ)
 	-@erase $(DLL_OBJ)
 	-@erase $(X2P_OBJ)
@@ -1089,3 +1090,19 @@ clean :
 	-@erase ..\x2p\*.exe ..\x2p\*.bat
 	-@erase *.ilk
 	-@erase *.pdb
+ 
+# Handy way to run perlbug -ok without having to install and run the
+# installed perlbug. We don't re-run the tests here - we trust the user.
+# Please *don't* use this unless all tests pass.
+# If you want to report test failures, use "nmake nok" instead.
+ok: utils
+	$(PERLEXE) -I..\lib ..\utils\perlbug -ok -s "(UNINSTALLED)"
+
+okfile: utils
+	$(PERLEXE) -I..\lib ..\utils\perlbug -ok -s "(UNINSTALLED)" -F perl.ok
+ 
+nok: utils
+	$(PERLEXE) -I..\lib ..\utils\perlbug -nok -s "(UNINSTALLED)"
+ 
+nokfile: utils
+	$(PERLEXE) -I..\lib ..\utils\perlbug -nok -s "(UNINSTALLED)" -F perl.nok

@@ -10,6 +10,7 @@
 #ifndef ___PerlHost_H___
 #define ___PerlHost_H___
 
+#include <signal.h>
 #include "iperlsys.h"
 #include "vmem.h"
 #include "vdir.h"
@@ -939,7 +940,7 @@ PerlLIOFlock(struct IPerlLIO* piPerl, int fd, int oper)
 int
 PerlLIOFileStat(struct IPerlLIO* piPerl, int handle, struct stat *buffer)
 {
-    return fstat(handle, buffer);
+    return win32_fstat(handle, buffer);
 }
 
 int
@@ -1639,7 +1640,7 @@ PerlProcWaitpid(struct IPerlProc* piPerl, int pid, int *status, int flags)
 Sighandler_t
 PerlProcSignal(struct IPerlProc* piPerl, int sig, Sighandler_t subcode)
 {
-    return 0;
+    return signal(sig, subcode);
 }
 
 #ifdef USE_ITHREADS
@@ -1665,6 +1666,11 @@ win32_start_child(LPVOID arg)
     w32_pseudo_id = id;
 #else
     w32_pseudo_id = GetCurrentThreadId();
+    if (IsWin95()) {
+	int pid = (int)w32_pseudo_id;
+	if (pid < 0)
+	    w32_pseudo_id = -pid;
+    }
 #endif
     if (tmpgv = gv_fetchpv("$", TRUE, SVt_PV))
 	sv_setiv(GvSV(tmpgv), -(IV)w32_pseudo_id);
@@ -1745,7 +1751,13 @@ PerlProcFork(struct IPerlProc* piPerl)
 #ifdef USE_ITHREADS
     DWORD id;
     HANDLE handle;
-    CPerlHost *h = new CPerlHost(*(CPerlHost*)w32_internal_host);
+    CPerlHost *h;
+
+    if (w32_num_pseudo_children >= MAXIMUM_WAIT_OBJECTS) {
+	errno = EAGAIN;
+	return -1;
+    }
+    h = new CPerlHost(*(CPerlHost*)w32_internal_host);
     PerlInterpreter *new_perl = perl_clone_using((PerlInterpreter*)aTHXo, 1,
 						 h->m_pHostperlMem,
 						 h->m_pHostperlMemShared,
@@ -1770,8 +1782,15 @@ PerlProcFork(struct IPerlProc* piPerl)
 			  (LPVOID)new_perl, 0, &id);
 #    endif
     PERL_SET_THX(aTHXo);	/* XXX perl_clone*() set TLS */
-    if (!handle)
-	Perl_croak(aTHX_ "panic: pseudo fork() failed");
+    if (!handle) {
+	errno = EAGAIN;
+	return -1;
+    }
+    if (IsWin95()) {
+	int pid = (int)id;
+	if (pid < 0)
+	    id = -pid;
+    }
     w32_pseudo_child_handles[w32_num_pseudo_children] = handle;
     w32_pseudo_child_pids[w32_num_pseudo_children] = id;
     ++w32_num_pseudo_children;
@@ -2199,7 +2218,7 @@ CPerlHost::CreateLocalEnvironmentStrings(VDir &vDir)
 	dwEnvIndex = 0;
 	lpLocalEnv = GetIndex(dwEnvIndex);
 	while(*lpEnvPtr != '\0') {
-	    if(lpLocalEnv == NULL) {
+	    if(!lpLocalEnv) {
 		// all environment overrides have been added
 		// so copy string into place
 		strcpy(lpStr, lpEnvPtr);
@@ -2229,6 +2248,16 @@ CPerlHost::CreateLocalEnvironmentStrings(VDir &vDir)
 		    }
 		}
 	    }
+	}
+
+	while(lpLocalEnv) {
+	    // still have environment overrides to add
+	    // so copy the strings into place
+	    strcpy(lpStr, lpLocalEnv);
+	    nLength = strlen(lpLocalEnv) + 1;
+	    lpStr += nLength;
+	    lpEnvPtr += nLength;
+	    lpLocalEnv = GetIndex(dwEnvIndex);
 	}
 
 	// add final NULL

@@ -82,10 +82,6 @@ static double UV_MAX_cxux = ((double)UV_MAX);
 
 /* variations on pp_null */
 
-#ifdef I_UNISTD
-#include <unistd.h>
-#endif
-
 /* XXX I can't imagine anyone who doesn't have this actually _needs_
    it, since pid_t is an integral type.
    --AD  2/20/1998
@@ -198,7 +194,7 @@ PP(pp_rv2gv)
     else {
 	if (SvTYPE(sv) != SVt_PVGV) {
 	    char *sym;
-	    STRLEN n_a;
+	    STRLEN len;
 
 	    if (SvGMAGICAL(sv)) {
 		mg_get(sv);
@@ -236,13 +232,17 @@ PP(pp_rv2gv)
 		    report_uninit();
 		RETSETUNDEF;
 	    }
-	    sym = SvPV(sv, n_a);
+	    sym = SvPV(sv,len);
 	    if ((PL_op->op_flags & OPf_SPECIAL) &&
 		!(PL_op->op_flags & OPf_MOD))
 	    {
 		sv = (SV*)gv_fetchpv(sym, FALSE, SVt_PVGV);
-		if (!sv)
+		if (!sv
+		    && (!is_gv_magical(sym,len,0)
+			|| !(sv = (SV*)gv_fetchpv(sym, TRUE, SVt_PVGV))))
+		{
 		    RETSETUNDEF;
+		}
 	    }
 	    else {
 		if (PL_op->op_private & HINT_STRICT_REFS)
@@ -276,7 +276,7 @@ PP(pp_rv2sv)
     else {
 	GV *gv = (GV*)sv;
 	char *sym;
-	STRLEN n_a;
+	STRLEN len;
 
 	if (SvTYPE(gv) != SVt_PVGV) {
 	    if (SvGMAGICAL(sv)) {
@@ -292,13 +292,17 @@ PP(pp_rv2sv)
 		    report_uninit();
 		RETSETUNDEF;
 	    }
-	    sym = SvPV(sv, n_a);
+	    sym = SvPV(sv, len);
 	    if ((PL_op->op_flags & OPf_SPECIAL) &&
 		!(PL_op->op_flags & OPf_MOD))
 	    {
 		gv = (GV*)gv_fetchpv(sym, FALSE, SVt_PV);
-		if (!gv)
+		if (!gv
+		    && (!is_gv_magical(sym,len,0)
+			|| !(gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PV))))
+		{
 		    RETSETUNDEF;
+		}
 	    }
 	    else {
 		if (PL_op->op_private & HINT_STRICT_REFS)
@@ -961,7 +965,7 @@ PP(pp_modulo)
 	NV dright;
 	NV dleft;
 
-	if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
+	if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
 	    IV i = SvIVX(POPs);
 	    right = (right_neg = (i < 0)) ? -i : i;
 	}
@@ -973,7 +977,7 @@ PP(pp_modulo)
 		dright = -dright;
 	}
 
-	if (!use_double && SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
+	if (!use_double && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
 	    IV i = SvIVX(POPs);
 	    left = (left_neg = (i < 0)) ? -i : i;
 	}
@@ -1053,7 +1057,7 @@ PP(pp_repeat)
 {
   djSP; dATARGET; tryAMAGICbin(repeat,opASSIGN);
   {
-    register I32 count = POPi;
+    register IV count = POPi;
     if (GIMME == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
 	dMARK;
 	I32 items = SP - MARK;
@@ -1076,10 +1080,10 @@ PP(pp_repeat)
 	    SP -= items;
     }
     else {	/* Note: mark already snarfed by pp_list */
-	SV *tmpstr;
+	SV *tmpstr = POPs;
 	STRLEN len;
+	bool isutf = DO_UTF8(tmpstr);
 
-	tmpstr = POPs;
 	SvSetSV(TARG, tmpstr);
 	SvPV_force(TARG, len);
 	if (count != 1) {
@@ -1092,7 +1096,10 @@ PP(pp_repeat)
 	    }
 	    *SvEND(TARG) = '\0';
 	}
-	(void)SvPOK_only(TARG);
+	if (isutf)
+	    (void)SvPOK_only_UTF8(TARG);
+	else
+	    (void)SvPOK_only(TARG);
 	PUSHTARG;
     }
     RETURN;
@@ -1199,15 +1206,8 @@ PP(pp_ncmp)
     {
       dPOPTOPnnrl;
       I32 value;
-#ifdef __osf__ /* XXX Configure probe for isnan and isnanl needed XXX */
-#if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
-#define Perl_isnan isnanl
-#else
-#define Perl_isnan isnan
-#endif
-#endif
 
-#ifdef __osf__ /* XXX fix in 5.6.1 --jhi */
+#ifdef Perl_isnan
       if (Perl_isnan(left) || Perl_isnan(right)) {
 	  SETs(&PL_sv_undef);
 	  RETURN;
@@ -1457,21 +1457,72 @@ PP(pp_complement)
 	}
       }
       else {
-	register char *tmps;
-	register long *tmpl;
+	register U8 *tmps;
 	register I32 anum;
 	STRLEN len;
 
 	SvSetSV(TARG, sv);
-	tmps = SvPV_force(TARG, len);
+	tmps = (U8*)SvPV_force(TARG, len);
 	anum = len;
+	if (SvUTF8(TARG)) {
+	  /* Calculate exact length, let's not estimate. */
+	  STRLEN targlen = 0;
+	  U8 *result;
+	  U8 *send;
+	  STRLEN l;
+	  UV nchar = 0;
+	  UV nwide = 0;
+
+	  send = tmps + len;
+	  while (tmps < send) {
+	    UV c = utf8_to_uv(tmps, send-tmps, &l, UTF8_ALLOW_ANYUV);
+	    tmps += UTF8SKIP(tmps);
+	    targlen += UNISKIP(~c);
+	    nchar++;
+	    if (c > 0xff)
+		nwide++;
+	  }
+
+	  /* Now rewind strings and write them. */
+	  tmps -= len;
+
+	  if (nwide) {
+	      Newz(0, result, targlen + 1, U8);
+	      while (tmps < send) {
+		  UV c = utf8_to_uv(tmps, send-tmps, &l, UTF8_ALLOW_ANYUV);
+		  tmps += UTF8SKIP(tmps);
+		  result = uv_to_utf8(result, ~c);
+	      }
+	      *result = '\0';
+	      result -= targlen;
+	      sv_setpvn(TARG, (char*)result, targlen);
+	      SvUTF8_on(TARG);
+	  }
+	  else {
+	      Newz(0, result, nchar + 1, U8);
+	      while (tmps < send) {
+		  U8 c = (U8)utf8_to_uv(tmps, 0, &l, UTF8_ALLOW_ANY);
+		  tmps += UTF8SKIP(tmps);
+		  *result++ = ~c;
+	      }
+	      *result = '\0';
+	      result -= nchar;
+	      sv_setpvn(TARG, (char*)result, nchar);
+	  }
+	  Safefree(result);
+	  SETs(TARG);
+	  RETURN;
+	}
 #ifdef LIBERAL
-	for ( ; anum && (unsigned long)tmps % sizeof(long); anum--, tmps++)
-	    *tmps = ~*tmps;
-	tmpl = (long*)tmps;
-	for ( ; anum >= sizeof(long); anum -= sizeof(long), tmpl++)
-	    *tmpl = ~*tmpl;
-	tmps = (char*)tmpl;
+	{
+	    register long *tmpl;
+	    for ( ; anum && (unsigned long)tmps % sizeof(long); anum--, tmps++)
+		*tmps = ~*tmps;
+	    tmpl = (long*)tmps;
+	    for ( ; anum >= sizeof(long); anum -= sizeof(long), tmpl++)
+		*tmpl = ~*tmpl;
+	    tmps = (U8*)tmpl;
+	}
 #endif
 	for ( ; anum > 0; anum--, tmps++)
 	    *tmps = ~*tmps;
@@ -1523,7 +1574,7 @@ PP(pp_i_add)
 {
     djSP; dATARGET; tryAMAGICbin(add,opASSIGN);
     {
-      dPOPTOPiirl;
+      dPOPTOPiirl_ul;
       SETi( left + right );
       RETURN;
     }
@@ -1533,7 +1584,7 @@ PP(pp_i_subtract)
 {
     djSP; dATARGET; tryAMAGICbin(subtr,opASSIGN);
     {
-      dPOPTOPiirl;
+      dPOPTOPiirl_ul;
       SETi( left - right );
       RETURN;
     }
@@ -1809,7 +1860,7 @@ PP(pp_log)
       NV value;
       value = POPn;
       if (value <= 0.0) {
-	RESTORE_NUMERIC_STANDARD();
+	SET_NUMERIC_STANDARD();
 	DIE(aTHX_ "Can't take log of %g", value);
       }
       value = Perl_log(value);
@@ -1825,7 +1876,7 @@ PP(pp_sqrt)
       NV value;
       value = POPn;
       if (value < 0.0) {
-	RESTORE_NUMERIC_STANDARD();
+	SET_NUMERIC_STANDARD();
 	DIE(aTHX_ "Can't take sqrt of %g", value);
       }
       value = Perl_sqrt(value);
@@ -1846,11 +1897,24 @@ PP(pp_int)
 	SETi(iv);
       }
       else {
-	if (value >= 0.0)
-	  (void)Perl_modf(value, &value);
+	  if (value >= 0.0) {
+#if defined(HAS_MODFL) || defined(LONG_DOUBLE_EQUALS_DOUBLE)
+	      (void)Perl_modf(value, &value);
+#else
+	      double tmp = (double)value;
+	      (void)Perl_modf(tmp, &tmp);
+	      value = (NV)tmp;
+#endif
+	  }
 	else {
-	  (void)Perl_modf(-value, &value);
-	  value = -value;
+#if defined(HAS_MODFL) || defined(LONG_DOUBLE_EQUALS_DOUBLE)
+	    (void)Perl_modf(-value, &value);
+	    value = -value;
+#else
+	    double tmp = (double)value;
+	    (void)Perl_modf(-tmp, &tmp);
+	    value = -(NV)tmp;
+#endif
 	}
 	iv = I_V(value);
 	if (iv == value)
@@ -1888,10 +1952,11 @@ PP(pp_hex)
 {
     djSP; dTARGET;
     char *tmps;
-    I32 argtype;
+    STRLEN argtype;
     STRLEN n_a;
 
     tmps = POPpx;
+    argtype = 1;		/* allow underscores */
     XPUSHn(scan_hex(tmps, 99, &argtype));
     RETURN;
 }
@@ -1900,7 +1965,7 @@ PP(pp_oct)
 {
     djSP; dTARGET;
     NV value;
-    I32 argtype;
+    STRLEN argtype;
     char *tmps;
     STRLEN n_a;
 
@@ -1909,6 +1974,7 @@ PP(pp_oct)
 	tmps++;
     if (*tmps == '0')
 	tmps++;
+    argtype = 1;		/* allow underscores */
     if (*tmps == 'x')
 	value = scan_hex(++tmps, 99, &argtype);
     else if (*tmps == 'b')
@@ -2013,12 +2079,12 @@ PP(pp_substr)
 	RETPUSHUNDEF;
     }
     else {
-        if (utfcurlen) {
+	if (utfcurlen)
 	    sv_pos_u2b(sv, &pos, &rem);
-	    SvUTF8_on(TARG);
-	}
 	tmps += pos;
 	sv_setpvn(TARG, tmps, rem);
+	if (utfcurlen)
+	    SvUTF8_on(TARG);
 	if (repl)
 	    sv_insert(sv, pos, rem, repl, repl_len);
 	else if (lvalue) {		/* it's an lvalue! */
@@ -2031,7 +2097,7 @@ PP(pp_substr)
 				"Attempt to use reference as lvalue in substr");
 		}
 		if (SvOK(sv))		/* is it defined ? */
-		    (void)SvPOK_only(sv);
+		    (void)SvPOK_only_UTF8(sv);
 		else
 		    sv_setpvn(sv,"",0);	/* avoid lexical reincarnation */
 	    }
@@ -2059,8 +2125,8 @@ PP(pp_substr)
 PP(pp_vec)
 {
     djSP; dTARGET;
-    register I32 size = POPi;
-    register I32 offset = POPi;
+    register IV size   = POPi;
+    register IV offset = POPi;
     register SV *src = POPs;
     I32 lvalue = PL_op->op_flags & OPf_MOD;
 
@@ -2176,13 +2242,13 @@ PP(pp_ord)
 {
     djSP; dTARGET;
     UV value;
-    STRLEN n_a;
     SV *tmpsv = POPs;
-    U8 *tmps = (U8*)SvPVx(tmpsv,n_a);
-    I32 retlen;
+    STRLEN len;
+    U8 *tmps = (U8*)SvPVx(tmpsv, len);
+    STRLEN retlen;
 
     if ((*tmps & 0x80) && DO_UTF8(tmpsv))
-	value = utf8_to_uv(tmps, &retlen);
+	value = utf8_to_uv(tmps, len, &retlen, 0);
     else
 	value = (UV)(*tmps & 255);
     XPUSHu(value);
@@ -2193,11 +2259,11 @@ PP(pp_chr)
 {
     djSP; dTARGET;
     char *tmps;
-    U32 value = POPu;
+    UV value = POPu;
 
     (void)SvUPGRADE(TARG,SVt_PV);
 
-    if (value > 255 && !IN_BYTE) {
+    if ((value > 255 && !IN_BYTE) || (value & 0x80 && PL_hints & HINT_UTF8) ) {
 	SvGROW(TARG, UTF8_MAXLEN+1);
 	tmps = SvPVX(TARG);
 	tmps = (char*)uv_to_utf8((U8*)tmps, (UV)value);
@@ -2214,7 +2280,6 @@ PP(pp_chr)
     tmps = SvPVX(TARG);
     *tmps++ = value;
     *tmps = '\0';
-    SvUTF8_off(TARG);				/* decontaminate */
     (void)SvPOK_only(TARG);
     XPUSHs(TARG);
     RETURN;
@@ -2247,10 +2312,10 @@ PP(pp_ucfirst)
     STRLEN slen;
 
     if (DO_UTF8(sv) && (s = (U8*)SvPV(sv, slen)) && slen && (*s & 0xc0) == 0xc0) {
-	I32 ulen;
+	STRLEN ulen;
 	U8 tmpbuf[UTF8_MAXLEN];
 	U8 *tend;
-	UV uv = utf8_to_uv(s, &ulen);
+	UV uv = utf8_to_uv(s, slen, &ulen, 0);
 
 	if (PL_op->op_private & OPpLOCALE) {
 	    TAINT;
@@ -2306,10 +2371,10 @@ PP(pp_lcfirst)
     STRLEN slen;
 
     if (DO_UTF8(sv) && (s = (U8*)SvPV(sv, slen)) && slen && (*s & 0xc0) == 0xc0) {
-	I32 ulen;
+	STRLEN ulen;
 	U8 tmpbuf[UTF8_MAXLEN];
 	U8 *tend;
-	UV uv = utf8_to_uv(s, &ulen);
+	UV uv = utf8_to_uv(s, slen, &ulen, 0);
 
 	if (PL_op->op_private & OPpLOCALE) {
 	    TAINT;
@@ -2366,7 +2431,7 @@ PP(pp_uc)
 
     if (DO_UTF8(sv)) {
 	dTARGET;
-	I32 ulen;
+	STRLEN ulen;
 	register U8 *d;
 	U8 *send;
 
@@ -2386,7 +2451,7 @@ PP(pp_uc)
 		TAINT;
 		SvTAINTED_on(TARG);
 		while (s < send) {
-		    d = uv_to_utf8(d, toUPPER_LC_uni( utf8_to_uv(s, &ulen)));
+		    d = uv_to_utf8(d, toUPPER_LC_uni( utf8_to_uv(s, len, &ulen, 0)));
 		    s += ulen;
 		}
 	    }
@@ -2440,7 +2505,7 @@ PP(pp_lc)
 
     if (DO_UTF8(sv)) {
 	dTARGET;
-	I32 ulen;
+	STRLEN ulen;
 	register U8 *d;
 	U8 *send;
 
@@ -2460,7 +2525,7 @@ PP(pp_lc)
 		TAINT;
 		SvTAINTED_on(TARG);
 		while (s < send) {
-		    d = uv_to_utf8(d, toLOWER_LC_uni( utf8_to_uv(s, &ulen)));
+		    d = uv_to_utf8(d, toLOWER_LC_uni( utf8_to_uv(s, len, &ulen, 0)));
 		    s += ulen;
 		}
 	    }
@@ -2547,7 +2612,7 @@ PP(pp_quotemeta)
 	}
 	*d = '\0';
 	SvCUR_set(TARG, d - SvPVX(TARG));
-	(void)SvPOK_only(TARG);
+	(void)SvPOK_only_UTF8(TARG);
     }
     else
 	sv_setpvn(TARG, s, len);
@@ -3236,7 +3301,7 @@ PP(pp_reverse)
 		*up++ = *down;
 		*down-- = tmp;
 	    }
-	    (void)SvPOK_only(TARG);
+	    (void)SvPOK_only_UTF8(TARG);
 	}
 	SP = MARK + 1;
 	SETTARG;
@@ -3304,9 +3369,9 @@ PP(pp_unpack)
     register char *str;
 
     /* These must not be in registers: */
-    I16 ashort;
+    short ashort;
     int aint;
-    I32 along;
+    long along;
 #ifdef HAS_QUAD
     Quad_t aquad;
 #endif
@@ -3602,7 +3667,9 @@ PP(pp_unpack)
 		len = strend - s;
 	    if (checksum) {
 		while (len-- > 0 && s < strend) {
-		    auint = utf8_to_uv((U8*)s, &along);
+		    STRLEN alen;
+		    auint = utf8_to_uv((U8*)s, strend - s, &alen, 0);
+		    along = alen;
 		    s += along;
 		    if (checksum > 32)
 			cdouble += (NV)auint;
@@ -3614,7 +3681,9 @@ PP(pp_unpack)
 		EXTEND(SP, len);
 		EXTEND_MORTAL(len);
 		while (len-- > 0 && s < strend) {
-		    auint = utf8_to_uv((U8*)s, &along);
+		    STRLEN alen;
+		    auint = utf8_to_uv((U8*)s, strend - s, &alen, 0);
+		    along = alen;
 		    s += along;
 		    sv = NEWSV(37, 0);
 		    sv_setuv(sv, (UV)auint);
@@ -4033,7 +4102,7 @@ PP(pp_unpack)
 			char *t;
 			STRLEN n_a;
 
-			sv = Perl_newSVpvf(aTHX_ "%.*Vu", (int)TYPE_DIGITS(UV), auv);
+			sv = Perl_newSVpvf(aTHX_ "%.*"UVf, (int)TYPE_DIGITS(UV), auv);
 			while (s < strend) {
 			    sv = mul128(sv, *s & 0x7f);
 			    if (!(*s++ & 0x80)) {
@@ -4370,6 +4439,7 @@ PP(pp_pack)
     register I32 items;
     STRLEN fromlen;
     register char *pat = SvPVx(*++MARK, fromlen);
+    char *patcopy;
     register char *patend = pat + fromlen;
     register I32 len;
     I32 datumtype;
@@ -4400,6 +4470,7 @@ PP(pp_pack)
     items = SP - MARK;
     MARK++;
     sv_setpvn(cat, "", 0);
+    patcopy = pat;
     while (pat < patend) {
 	SV *lengthcode = Nullsv;
 #define NEXTFROM ( lengthcode ? lengthcode : items-- > 0 ? *MARK++ : &PL_sv_no)
@@ -4407,8 +4478,12 @@ PP(pp_pack)
 #ifdef PERL_NATINT_PACK
 	natint = 0;
 #endif
-	if (isSPACE(datumtype))
+	if (isSPACE(datumtype)) {
+	    patcopy++;
 	    continue;
+        }
+	if (datumtype == 'U' && pat == patcopy+1) 
+	    SvUTF8_on(cat);
 	if (datumtype == '#') {
 	    while (pat < patend && *pat != '\n')
 		pat++;
@@ -4445,7 +4520,8 @@ PP(pp_pack)
 	    if ((*pat != 'a' && *pat != 'A' && *pat != 'Z') || pat[1] != '*')
 		DIE(aTHX_ "/ must be followed by a*, A* or Z*");
 	    lengthcode = sv_2mortal(newSViv(sv_len(items > 0
-						   ? *MARK : &PL_sv_no)));
+						   ? *MARK : &PL_sv_no)
+                                            + (*pat == 'Z' ? 1 : 0)));
 	}
 	switch(datumtype) {
 	default:
@@ -4743,10 +4819,14 @@ PP(pp_pack)
 		    DIE(aTHX_ "Cannot compress negative numbers");
 
 		if (
-#ifdef CXUX_BROKEN_CONSTANT_CONVERT
-		    adouble <= UV_MAX_cxux
+#if UVSIZE > 4 && UVSIZE >= NVSIZE
+		    adouble <= 0xffffffff
 #else
+#   ifdef CXUX_BROKEN_CONSTANT_CONVERT
+		    adouble <= UV_MAX_cxux
+#   else
 		    adouble <= UV_MAX
+#   endif
 #endif
 		    )
 		{
@@ -4789,8 +4869,9 @@ PP(pp_pack)
 		    do {
 			double next = floor(adouble / 128);
 			*--in = (unsigned char)(adouble - (next * 128)) | 0x80;
-			if (--in < buf)  /* this cannot happen ;-) */
+			if (in <= buf)  /* this cannot happen ;-) */
 			    DIE(aTHX_ "Cannot compress integer");
+			in--;
 			adouble = next;
 		    } while (adouble > 0);
 		    buf[sizeof(buf) - 1] &= 0x7f; /* clear continue bit */
@@ -4949,8 +5030,9 @@ PP(pp_split)
 {
     djSP; dTARG;
     AV *ary;
-    register I32 limit = POPi;			/* note, negative is forever */
+    register IV limit = POPi;			/* note, negative is forever */
     SV *sv = POPs;
+    bool doutf8 = DO_UTF8(sv);
     STRLEN len;
     register char *s = SvPV(sv, len);
     char *strend = s + len;
@@ -5053,6 +5135,8 @@ PP(pp_split)
 	    sv_setpvn(dstr, s, m-s);
 	    if (make_mortal)
 		sv_2mortal(dstr);
+	    if (doutf8)
+		(void)SvUTF8_on(dstr);
 	    XPUSHs(dstr);
 
 	    s = m + 1;
@@ -5073,6 +5157,8 @@ PP(pp_split)
 	    sv_setpvn(dstr, s, m-s);
 	    if (make_mortal)
 		sv_2mortal(dstr);
+	    if (doutf8)
+		(void)SvUTF8_on(dstr);
 	    XPUSHs(dstr);
 	    s = m;
 	}
@@ -5082,11 +5168,11 @@ PP(pp_split)
 	     && !(rx->reganch & ROPT_ANCH)) {
 	int tail = (rx->reganch & RE_INTUIT_TAIL);
 	SV *csv = CALLREG_INTUIT_STRING(aTHX_ rx);
-	char c;
 
 	len = rx->minlen;
 	if (len == 1 && !tail) {
-	    c = *SvPV(csv,len);
+	    STRLEN n_a;
+	    char c = *SvPV(csv, n_a);
 	    while (--limit) {
 		/*SUPPRESS 530*/
 		for (m = s; m < strend && *m != c; m++) ;
@@ -5096,8 +5182,12 @@ PP(pp_split)
 		sv_setpvn(dstr, s, m-s);
 		if (make_mortal)
 		    sv_2mortal(dstr);
+		if (doutf8)
+		    (void)SvUTF8_on(dstr);
 		XPUSHs(dstr);
-		s = m + 1;
+		/* The rx->minlen is in characters but we want to step
+		 * s ahead by bytes. */
+		s = m + (doutf8 ? SvCUR(csv) : len);
 	    }
 	}
 	else {
@@ -5111,8 +5201,12 @@ PP(pp_split)
 		sv_setpvn(dstr, s, m-s);
 		if (make_mortal)
 		    sv_2mortal(dstr);
+		if (doutf8)
+		    (void)SvUTF8_on(dstr);
 		XPUSHs(dstr);
-		s = m + len;		/* Fake \n at the end */
+		/* The rx->minlen is in characters but we want to step
+		 * s ahead by bytes. */
+		s = m + (doutf8 ? SvCUR(csv) : len); /* Fake \n at the end */
 	    }
 	}
     }
@@ -5138,6 +5232,8 @@ PP(pp_split)
 	    sv_setpvn(dstr, s, m-s);
 	    if (make_mortal)
 		sv_2mortal(dstr);
+	    if (doutf8)
+		(void)SvUTF8_on(dstr);
 	    XPUSHs(dstr);
 	    if (rx->nparens) {
 		for (i = 1; i <= rx->nparens; i++) {
@@ -5151,6 +5247,8 @@ PP(pp_split)
 			dstr = NEWSV(33, 0);
 		    if (make_mortal)
 			sv_2mortal(dstr);
+		    if (doutf8)
+			(void)SvUTF8_on(dstr);
 		    XPUSHs(dstr);
 		}
 	    }
@@ -5165,10 +5263,13 @@ PP(pp_split)
 
     /* keep field after final delim? */
     if (s < strend || (iters && origlimit)) {
-	dstr = NEWSV(34, strend-s);
-	sv_setpvn(dstr, s, strend-s);
+        STRLEN l = strend - s;
+	dstr = NEWSV(34, l);
+	sv_setpvn(dstr, s, l);
 	if (make_mortal)
 	    sv_2mortal(dstr);
+	if (doutf8)
+	    (void)SvUTF8_on(dstr);
 	XPUSHs(dstr);
 	iters++;
     }
@@ -5247,24 +5348,7 @@ PP(pp_lock)
     dTOPss;
     SV *retsv = sv;
 #ifdef USE_THREADS
-    MAGIC *mg;
-
-    if (SvROK(sv))
-	sv = SvRV(sv);
-
-    mg = condpair_magic(sv);
-    MUTEX_LOCK(MgMUTEXP(mg));
-    if (MgOWNER(mg) == thr)
-	MUTEX_UNLOCK(MgMUTEXP(mg));
-    else {
-	while (MgOWNER(mg))
-	    COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
-	MgOWNER(mg) = thr;
-	DEBUG_S(PerlIO_printf(Perl_debug_log, "0x%"UVxf": pp_lock lock 0x%"UVxf"\n",
-			      PTR2UV(thr), PTR2UV(sv));)
-	MUTEX_UNLOCK(MgMUTEXP(mg));
-	SAVEDESTRUCTOR_X(Perl_unlock_condpair, sv);
-    }
+    sv_lock(sv);
 #endif /* USE_THREADS */
     if (SvTYPE(retsv) == SVt_PVAV || SvTYPE(retsv) == SVt_PVHV
 	|| SvTYPE(retsv) == SVt_PVCV) {

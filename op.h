@@ -55,7 +55,7 @@ typedef U32 PADOFFSET;
 /*
 =for apidoc Amn|U32|GIMME_V
 The XSUB-writer's equivalent to Perl's C<wantarray>.  Returns C<G_VOID>,
-C<G_SCALAR> or C<G_ARRAY> for void, scalar or array context,
+C<G_SCALAR> or C<G_ARRAY> for void, scalar or list context,
 respectively.
 
 =for apidoc Amn|U32|GIMME
@@ -94,7 +94,8 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_EXISTS, treat av as av, not avhv.  */
 				/*  On OP_(ENTER|LEAVE)EVAL, don't clear $@ */
 				/*  On OP_ENTERITER, loop var is per-thread */
-                                /*  On pushre, re is /\s+/ imp. by split " " */
+				/*  On pushre, re is /\s+/ imp. by split " " */
+				/*  On regcomp, "use re 'eval'" was in scope */
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -129,9 +130,7 @@ Deprecated.  Use C<GIMME_V> instead.
 /* Private for OP_TRANS */
 #define OPpTRANS_FROM_UTF	1
 #define OPpTRANS_TO_UTF		2
-#define OPpTRANS_IDENTICAL	4
-	/* When CU or UC, means straight latin-1 to utf-8 or vice versa */
-	/* Otherwise, IDENTICAL means the right side is the same as the left */
+#define OPpTRANS_IDENTICAL	4	/* right side is same as left */
 #define OPpTRANS_SQUASH		8
 #define OPpTRANS_DELETE		16
 #define OPpTRANS_COMPLEMENT	32

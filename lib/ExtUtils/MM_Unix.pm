@@ -305,8 +305,8 @@ sub cflags {
     $libperl ||= $self->{LIBPERL_A} || "libperl$self->{LIB_EXT}" ;
     $libperl =~ s/\.\$\(A\)$/$self->{LIB_EXT}/;
 
-    @cflags{qw(cc ccflags optimize large split shellflags)}
-	= @Config{qw(cc ccflags optimize large split shellflags)};
+    @cflags{qw(cc ccflags optimize shellflags)}
+	= @Config{qw(cc ccflags optimize shellflags)};
     my($optdebug) = "";
 
     $cflags{shellflags} ||= '';
@@ -341,16 +341,12 @@ sub cflags {
 	  optimize=\"$cflags{optimize}\"
 	  perltype=\"$cflags{perltype}\"
 	  optdebug=\"$cflags{optdebug}\"
-	  large=\"$cflags{large}\"
-	  split=\"$cflags{'split'}\"
 	  eval '$prog'
 	  echo cc=\$cc
 	  echo ccflags=\$ccflags
 	  echo optimize=\$optimize
 	  echo perltype=\$perltype
 	  echo optdebug=\$optdebug
-	  echo large=\$large
-	  echo split=\$split
 	  `;
 	my($line);
 	foreach $line (@o){
@@ -368,7 +364,7 @@ sub cflags {
 	$cflags{optimize} = $optdebug;
     }
 
-    for (qw(ccflags optimize perltype large split)) {
+    for (qw(ccflags optimize perltype)) {
 	$cflags{$_} =~ s/^\s+//;
 	$cflags{$_} =~ s/\s+/ /g;
 	$cflags{$_} =~ s/\s+$//;
@@ -411,8 +407,6 @@ sub cflags {
 CCFLAGS = $self->{CCFLAGS}
 OPTIMIZE = $self->{OPTIMIZE}
 PERLTYPE = $self->{PERLTYPE}
-LARGE = $self->{LARGE}
-SPLIT = $self->{SPLIT}
 MPOLLUTE = $pollute
 };
 
@@ -457,7 +451,7 @@ EOT
     push(@otherfiles, qw[./blib $(MAKE_APERL_FILE) $(INST_ARCHAUTODIR)/extralibs.all
 			 perlmain.c mon.out core core.*perl.*.?
 			 *perl.core so_locations pm_to_blib
-			 *~ */*~ */*/*~ *$(OBJ_EXT) *$(LIB_EXT) perl.exe
+			 *$(OBJ_EXT) *$(LIB_EXT) perl.exe
 			 $(BOOTSTRAP) $(BASEEXT).bso $(BASEEXT).def
 			 $(BASEEXT).exp
 			]);
@@ -483,7 +477,7 @@ sub const_cccmd {
     return '' unless $self->needs_linking();
     return $self->{CONST_CCCMD} =
 	q{CCCMD = $(CC) -c $(INC) $(CCFLAGS) $(OPTIMIZE) \\
-	$(PERLTYPE) $(LARGE) $(SPLIT) $(MPOLLUTE) $(DEFINE_VERSION) \\
+	$(PERLTYPE) $(MPOLLUTE) $(DEFINE_VERSION) \\
 	$(XS_DEFINE_VERSION)};
 }
 
@@ -812,7 +806,7 @@ DIST_DEFAULT = $dist_default
 
 =item dist_basics (o)
 
-Defines the targets distclean, distcheck, skipcheck, manifest.
+Defines the targets distclean, distcheck, skipcheck, manifest, veryclean.
 
 =cut
 
@@ -839,6 +833,11 @@ skipcheck :
 manifest :
 	$(PERL) -I$(PERL_ARCHLIB) -I$(PERL_LIB) -MExtUtils::Manifest=mkmanifest \\
 		-e mkmanifest
+};
+
+    push @m, q{
+veryclean : realclean
+	$(RM_F) *~ *.orig */*~ */*.orig
 };
     join "", @m;
 }
@@ -1071,15 +1070,17 @@ $(INST_DYNAMIC): $(OBJECT) $(MYEXTLIB) $(BOOTSTRAP) $(INST_ARCHAUTODIR)/.exists 
     }
     $ldfrom = "-all $ldfrom -none" if ($^O eq 'dec_osf');
 
-    # Brain dead solaris linker does not use LD_RUN_PATH?
-    # This fixes dynamic extensions which need shared libs
-    my $ldrun = '';
-    $ldrun = join ' ', map "-R$_", split /:/, $self->{LD_RUN_PATH}
-       if ($^O eq 'solaris');
-
-    # The IRIX linker also doesn't use LD_RUN_PATH
+    # The IRIX linker doesn't use LD_RUN_PATH
     $ldrun = qq{-rpath "$self->{LD_RUN_PATH}"}
 	if ($^O eq 'irix' && $self->{LD_RUN_PATH});
+
+    # For example in AIX the shared objects/libraries from previous builds
+    # linger quite a while in the shared dynalinker cache even when nobody
+    # is using them.  This is painful if one for instance tries to restart
+    # a failed build because the link command will fail unnecessarily 'cos
+    # the shared object/library is 'busy'.
+    push(@m,'	$(RM_F) $@
+');
 
     push(@m,'	LD_RUN_PATH="$(LD_RUN_PATH)" $(LD) -o $@ '.$ldrun.' $(LDDLFLAGS) '.$ldfrom.
 		' $(OTHERLDFLAGS) $(MYEXTLIB) $(PERL_ARCHIVE) $(LDLOADLIBS) $(EXPORT_LIST)');
@@ -1147,9 +1148,9 @@ in these dirs:
 @$dirs
 ";
     }
-    foreach $dir (@$dirs){
-	next unless defined $dir; # $self->{PERL_SRC} may be undefined
-	foreach $name (@$names){
+    foreach $name (@$names){
+	foreach $dir (@$dirs){
+	    next unless defined $dir; # $self->{PERL_SRC} may be undefined
 	    my ($abs, $val);
 	    if ($self->file_name_is_absolute($name)) { # /foo/bar
 		$abs = $name;
@@ -1249,11 +1250,6 @@ eval 'exec $interpreter $arg -S \$0 \${1+"\$\@"}'
 	    next;
 	}
 	my($dev,$ino,$mode) = stat FIXIN;
-	# If they override perm_rwx, we won't notice it during fixin,
-	# because fixin is run through a new instance of MakeMaker.
-	# That is why we must run another CHMOD later.
-	$mode = oct($self->perm_rwx) unless $dev;
-	chmod $mode, $file;
 	
 	# Print out the new #! line (or equivalent).
 	local $\;
@@ -1261,7 +1257,15 @@ eval 'exec $interpreter $arg -S \$0 \${1+"\$\@"}'
 	print FIXOUT $shb, <FIXIN>;
 	close FIXIN;
 	close FIXOUT;
-	# can't rename open files on some DOSISH platforms
+
+	# can't rename/chmod open files on some DOSISH platforms
+
+	# If they override perm_rwx, we won't notice it during fixin,
+	# because fixin is run through a new instance of MakeMaker.
+	# That is why we must run another CHMOD later.
+	$mode = oct($self->perm_rwx) unless $dev;
+	chmod $mode, $file;
+
 	unless ( rename($file, "$file.bak") ) {	
 	    warn "Can't rename $file to $file.bak: $!";
 	    next;
@@ -1276,6 +1280,7 @@ eval 'exec $interpreter $arg -S \$0 \${1+"\$\@"}'
 	}
 	unlink "$file.bak";
     } continue {
+	close(FIXIN) if fileno(FIXIN);
 	chmod oct($self->perm_rwx), $file or
 	  die "Can't reset permissions for $file: $!\n";
 	system("$Config{'eunicefix'} $file") if $Config{'eunicefix'} ne ':';;
@@ -1653,7 +1658,7 @@ sub init_main {
 
     unless ($self->{PERL_SRC}){
 	my($dir);
-	foreach $dir ($self->updir(),$self->catdir($self->updir(),$self->updir()),$self->catdir($self->updir(),$self->updir(),$self->updir())){
+	foreach $dir ($self->updir(),$self->catdir($self->updir(),$self->updir()),$self->catdir($self->updir(),$self->updir(),$self->updir()),$self->catdir($self->updir(),$self->updir(),$self->updir(),$self->updir())){
 	    if (
 		-f $self->catfile($dir,"config.sh")
 		&&
@@ -2367,7 +2372,7 @@ $(MAKE_APERL_FILE) : $(FIRST_MAKEFILE)
 
     # The front matter of the linkcommand...
     $linkcmd = join ' ', "\$(CC)",
-	    grep($_, @Config{qw(large split ldflags ccdlflags)});
+	    grep($_, @Config{qw(ldflags ccdlflags)});
     $linkcmd =~ s/\s+/ /g;
     $linkcmd =~ s,(perl\.exp),\$(PERL_INC)/$1,;
 
@@ -2450,7 +2455,7 @@ MAP_PERLINC   = @{$perlinc || []}
 MAP_STATIC    = ",
 join(" \\\n\t", reverse sort keys %static), "
 
-MAP_PRELIBS   = $Config::Config{libs} $Config::Config{cryptlib}
+MAP_PRELIBS   = $Config::Config{perllibs} $Config::Config{cryptlib}
 ";
 
     if (defined $libperl) {
@@ -2458,6 +2463,7 @@ MAP_PRELIBS   = $Config::Config{libs} $Config::Config{cryptlib}
     }
     unless ($libperl && -f $lperl) { # Ilya's code...
 	my $dir = $self->{PERL_SRC} || "$self->{PERL_ARCHLIB}/CORE";
+	$dir = "$self->{PERL_ARCHLIB}/.." if $self->{UNINSTALLED_PERL};
 	$libperl ||= "libperl$self->{LIB_EXT}";
 	$libperl   = "$dir/$libperl";
 	$lperl   ||= "libperl$self->{LIB_EXT}";
@@ -2494,11 +2500,6 @@ MAP_LIBPERL = $libperl
     }
     # SUNOS ld does not take the full path to a shared library
     my $llibperl = ($libperl)?'$(MAP_LIBPERL)':'-lperl';
-
-    # Brain dead solaris linker does not use LD_RUN_PATH?
-    # This fixes dynamic extensions which need shared libs
-    my $ldfrom = ($^O eq 'solaris')?
-           join(' ', map "-R$_", split /:/, $self->{LD_RUN_PATH}):'';
 
 push @m, "
 \$(MAP_TARGET) :: $tmp/perlmain\$(OBJ_EXT) \$(MAP_LIBPERL) \$(MAP_STATIC) \$(INST_ARCHAUTODIR)/extralibs.all
@@ -3149,8 +3150,22 @@ realclean purge ::  clean
         push(@m, "	$self->{RM_F} \$(INST_DYNAMIC) \$(INST_BOOT)\n");
         push(@m, "	$self->{RM_F} \$(INST_STATIC)\n");
     }
-    push(@m, "	$self->{RM_F} " . join(" ", values %{$self->{PM}}) . "\n")
-	if keys %{$self->{PM}};
+    # Issue a several little RM_F commands rather than risk creating a
+    # very long command line (useful for extensions such as Encode
+    # that have many files).
+    if (keys %{$self->{PM}}) {
+	my $line = "";
+	foreach (values %{$self->{PM}}) {
+	    if (length($line) + length($_) > 80) {
+		push @m, "\t$self->{RM_F} $line\n";
+		$line = $_;
+	    }
+	    else {
+		$line .= " $_"; 
+	    }
+	}
+    push @m, "\t$self->{RM_F} $line\n" if $line;
+    }
     my(@otherfiles) = ($self->{MAKEFILE},
 		       "$self->{MAKEFILE}.old"); # Makefiles last
     push(@otherfiles, $attribs{FILES}) if $attribs{FILES};
@@ -3169,9 +3184,11 @@ form Foo/Bar and replaces the slash with C<::>. Returns the replacement.
 sub replace_manpage_separator {
     my($self,$man) = @_;
 	if ($^O eq 'uwin') {
-		$man =~ s,/+,.,g;
+	    $man =~ s,/+,.,g;
+	} elsif ($Is_Dos) {
+	    $man =~ s,/+,__,g;
 	} else {
-		$man =~ s,/+,::,g;
+	    $man =~ s,/+,::,g;
 	}
     $man;
 }
@@ -3490,13 +3507,13 @@ WARN_IF_OLD_PACKLIST = $(PERL) -we 'exit unless -f $$ARGV[0];' \\
 -e 'print "Please make sure the two installations are not conflicting\n";'
 
 UNINST=0
-VERBINST=1
+VERBINST=0
 
 MOD_INSTALL = $(PERL) -I$(INST_LIB) -I$(PERL_LIB) -MExtUtils::Install \
 -e "install({@ARGV},'$(VERBINST)',0,'$(UNINST)');"
 
 DOC_INSTALL = $(PERL) -e '$$\="\n\n";' \
--e 'print "=head2 ", scalar(localtime), ": C<", shift, ">", " L<", shift, ">";' \
+-e 'print "=head2 ", scalar(localtime), ": C<", shift, ">", " L<", $$arg=shift, "|", $$arg, ">";' \
 -e 'print "=over 4";' \
 -e 'while (defined($$key = shift) and defined($$val = shift)){print "=item *";print "C<$$key: $$val>";}' \
 -e 'print "=back";'

@@ -249,7 +249,7 @@ Perl_save_svref(pTHX_ SV **sptr)
     return save_scalar_at(sptr);
 }
 
-/* Like save_svref(), but doesn't deal with magic.  Can be used to
+/* Like save_sptr(), but also SvREFCNT_dec()s the new value.  Can be used to
  * restore a global SV to its prior contents, freeing new value. */
 void
 Perl_save_generic_svref(pTHX_ SV **sptr)
@@ -259,6 +259,19 @@ Perl_save_generic_svref(pTHX_ SV **sptr)
     SSPUSHPTR(sptr);
     SSPUSHPTR(SvREFCNT_inc(*sptr));
     SSPUSHINT(SAVEt_GENERIC_SVREF);
+}
+
+/* Like save_pptr(), but also Safefree()s the new value if it is different
+ * from the old one.  Can be used to restore a global char* to its prior
+ * contents, freeing new value. */
+void
+Perl_save_generic_pvref(pTHX_ char **str)
+{
+    dTHR;
+    SSCHECK(3);
+    SSPUSHPTR(str);
+    SSPUSHPTR(*str);
+    SSPUSHINT(SAVEt_GENERIC_PVREF);
 }
 
 void
@@ -289,6 +302,7 @@ Perl_save_gp(pTHX_ GV *gv, I32 empty)
 	GvGP(gv) = gp_ref(gp);
 	GvSV(gv) = NEWSV(72,0);
 	GvLINE(gv) = CopLINE(PL_curcop);
+	GvFILE(gv) = CopFILE(PL_curcop) ? CopFILE(PL_curcop) : "";
 	GvEGV(gv) = gv;
     }
     else {
@@ -454,6 +468,17 @@ Perl_save_sptr(pTHX_ SV **sptr)
     SSPUSHPTR(*sptr);
     SSPUSHPTR(sptr);
     SSPUSHINT(SAVEt_SPTR);
+}
+
+void
+Perl_save_padsv(pTHX_ PADOFFSET off)
+{
+    dTHR;
+    SSCHECK(4);
+    SSPUSHPTR(PL_curpad[off]);
+    SSPUSHPTR(PL_curpad);
+    SSPUSHLONG((long)off);
+    SSPUSHINT(SAVEt_PADSV);
 }
 
 SV **
@@ -646,6 +671,7 @@ Perl_leave_scope(pTHX_ I32 base)
     register AV *av;
     register HV *hv;
     register void* ptr;
+    register char* str;
     I32 i;
 
     if (base < -1)
@@ -666,14 +692,20 @@ Perl_leave_scope(pTHX_ I32 base)
 	    ptr = &GvSV(gv);
 	    SvREFCNT_dec(gv);
 	    goto restore_sv;
+        case SAVEt_GENERIC_PVREF:		/* generic pv */
+	    str = (char*)SSPOPPTR;
+	    ptr = SSPOPPTR;
+	    if (*(char**)ptr != str) {
+		Safefree(*(char**)ptr);
+		*(char**)ptr = str;
+	    }
+	    break;
         case SAVEt_GENERIC_SVREF:		/* generic sv */
 	    value = (SV*)SSPOPPTR;
 	    ptr = SSPOPPTR;
-	    if (ptr) {
-		sv = *(SV**)ptr;
-		*(SV**)ptr = value;
-		SvREFCNT_dec(sv);
-	    }
+	    sv = *(SV**)ptr;
+	    *(SV**)ptr = value;
+	    SvREFCNT_dec(sv);
 	    SvREFCNT_dec(value);
 	    break;
         case SAVEt_SVREF:			/* scalar reference */
@@ -939,6 +971,14 @@ Perl_leave_scope(pTHX_ I32 base)
 		PL_curpad = AvARRAY(PL_comppad);
 	    else
 		PL_curpad = Null(SV**);
+	    break;
+	case SAVEt_PADSV:
+	    {
+		PADOFFSET off = (PADOFFSET)SSPOPLONG;
+		ptr = SSPOPPTR;
+		if (ptr)
+		    ((SV**)ptr)[off] = (SV*)SSPOPPTR;
+	    }
 	    break;
 	default:
 	    Perl_croak(aTHX_ "panic: leave_scope inconsistency");
