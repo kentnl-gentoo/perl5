@@ -1,5 +1,5 @@
-#ifndef __XSLock_h__
-#define __XSLock_h__
+#ifndef __XSlock_h__
+#define __XSlock_h__
 
 class XSLockManager
 {
@@ -26,7 +26,7 @@ CPerlObj* pPerl;
 #undef dXSARGS
 #define dXSARGS	\
 	dSP; dMARK;		\
-	I32 ax = mark - stack_base + 1;	\
+	I32 ax = mark - PL_stack_base + 1;	\
 	I32 items = sp - mark; \
 	XSLock localLock; \
 	::pPerl = pPerl

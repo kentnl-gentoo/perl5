@@ -92,7 +92,7 @@ T_LONG
 T_U_LONG
 	$var = (unsigned long)SvIV($arg)
 T_CHAR
-	$var = (char)*SvPV($arg,na)
+	$var = (char)*SvPV($arg,PL_na)
 T_U_CHAR
 	$var = (unsigned char)SvIV($arg)
 T_FLOAT
@@ -102,7 +102,7 @@ T_NV
 T_DOUBLE
 	$var = (double)SvNV($arg)
 T_PV
-	$var = ($type)SvPV($arg,na)
+	$var = ($type)SvPV($arg,PL_na)
 T_PTR
 	$var = ($type)SvIV($arg)
 T_PTRREF
@@ -158,7 +158,7 @@ T_REFOBJ
 T_OPAQUE
 	$var NOT IMPLEMENTED
 T_OPAQUEPTR
-	$var = ($type)SvPV($arg,na)
+	$var = ($type)SvPV($arg,PL_na)
 T_PACKED
 	$var = XS_unpack_$ntype($arg)
 T_PACKEDARRAY
@@ -269,7 +269,7 @@ T_IN
 	    if ( do_open(gv, "<&", 2, FALSE, 0, 0, $var) )
 		sv_setsv($arg, sv_bless(newRV((SV*)gv), gv_stashpv("$Package",1)));
 	    else
-		$arg = &sv_undef;
+		$arg = &PL_sv_undef;
 	}
 T_INOUT
 	{
@@ -277,7 +277,7 @@ T_INOUT
 	    if ( do_open(gv, "+<&", 3, FALSE, 0, 0, $var) )
 		sv_setsv($arg, sv_bless(newRV((SV*)gv), gv_stashpv("$Package",1)));
 	    else
-		$arg = &sv_undef;
+		$arg = &PL_sv_undef;
 	}
 T_OUT
 	{
@@ -285,5 +285,5 @@ T_OUT
 	    if ( do_open(gv, "+>&", 3, FALSE, 0, 0, $var) )
 		sv_setsv($arg, sv_bless(newRV((SV*)gv), gv_stashpv("$Package",1)));
 	    else
-		$arg = &sv_undef;
+		$arg = &PL_sv_undef;
 	}

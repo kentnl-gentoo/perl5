@@ -15,7 +15,7 @@ use Exporter;
 use vars qw(%insn_data @insn_name @optype @specialsv_name);
 
 @optype = qw(OP UNOP BINOP LOGOP CONDOP LISTOP PMOP SVOP GVOP PVOP LOOP COP);
-@specialsv_name = qw(Nullsv &sv_undef &sv_yes &sv_no);
+@specialsv_name = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no);
 
 # XXX insn_data is initialised this way because with a large
 # %insn_data = (foo => [...], bar => [...], ...) initialiser

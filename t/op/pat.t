@@ -4,9 +4,7 @@
 # the format supported by op/regexp.t.  If you want to add a test
 # that does fit that format, add it to op/re_tests, not here.
 
-# $RCSfile: pat.t,v $$Revision: 4.1 $$Date: 92/08/07 18:28:12 $
-
-print "1..135\n";
+print "1..141\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -14,7 +12,8 @@ BEGIN {
 }
 eval 'use Config';          #  Defaults assumed if this fails
 
-$ENV{PERL_DESTRUCT_LEVEL} = 0; # XXX known to leaks scalars
+# XXX known to leak scalars
+$ENV{PERL_DESTRUCT_LEVEL} = 0 unless $ENV{PERL_DESTRUCT_LEVEL} > 3;
 
 $x = "abc\ndef\n";
 
@@ -535,6 +534,19 @@ $test++;
   print "ok $test\n";
   $test++;
 }
+
+{
+  package aa;
+  $c = 2;
+  $::c = 3;
+  '' =~ /(?{ $c = 4 })/;
+  print "not " unless $c == 4;
+}
+print "ok $test\n";
+$test++;
+print "not " unless $c == 3;
+print "ok $test\n";
+$test++;  
   
 sub must_warn_pat {
     my $warn_pat = shift;
@@ -560,3 +572,26 @@ my $for_future = make_must_warn('reserved for future extensions');
 &$for_future('q(a:[b]:) =~ /[x[:foo:]]/');
 &$for_future('q(a=[b]=) =~ /[x[=foo=]]/');
 &$for_future('q(a.[b].) =~ /[x[.foo.]]/');
+
+# test if failure of patterns returns empty list
+$_ = 'aaa';
+@_ = /bbb/;
+print "not " if @_;
+print "ok $test\n";
+$test++;
+
+@_ = /bbb/g;
+print "not " if @_;
+print "ok $test\n";
+$test++;
+
+@_ = /(bbb)/;
+print "not " if @_;
+print "ok $test\n";
+$test++;
+
+@_ = /(bbb)/g;
+print "not " if @_;
+print "ok $test\n";
+$test++;
+

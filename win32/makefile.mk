@@ -29,7 +29,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	*= \5.00475
+INST_VER	*= \5.00476
 
 #
 # uncomment to enable threads-capabilities
@@ -57,9 +57,11 @@ CCTYPE		*= BORLAND
 #CFG		*= Debug
 
 #
-# uncomment to enable use of PerlCRT.DLL.  Highly recommended.  It has
-# patches that fix known bugs in MSCVRT.DLL.  You will need to download it
-# from: <TBD> and follow the directions in the package to install.
+# uncomment to enable linking with setargv.obj under the Visual C
+# compiler. Setting this options enables perl to expand wildcards in
+# arguments, but it may be harder to use alternate methods like
+# File::DosGlob that are more powerful.  This option is supported only with
+# Visual C.
 #
 #USE_PERLCRT	*= define
 
@@ -225,8 +227,8 @@ SUBSYS		= console
 CXX_FLAG	= -xc++
 
 LIBC		= -lcrtdll
-LIBFILES	= $(CRYPT_LIB) -ladvapi32 -luser32 -lnetapi32 -lwsock32 -lmingw32 \
-		-lgcc -lmoldname $(LIBC) -lkernel32
+LIBFILES	= $(CRYPT_LIB) -ladvapi32 -luser32 -lnetapi32 -lwsock32 \
+		-lmingw32 -lgcc -lmoldname $(LIBC) -lkernel32
 
 .IF  "$(CFG)" == "Debug"
 OPTIMIZE	= -g -O2 $(RUNTIME) -DDEBUGGING
@@ -408,7 +410,11 @@ CFGH_TMPL	= config_H.bc
 
 CFGSH_TMPL	= config.gc
 CFGH_TMPL	= config_H.gc
-PERLIMPLIB	*= ..\libperl$(a)
+.IF "$(OBJECT)" == "-DPERL_OBJECT"
+PERLIMPLIB	= ..\libperlcore$(a)
+.ELSE
+PERLIMPLIB	= ..\libperl$(a)
+.ENDIF
 
 .ELSE
 
@@ -423,7 +429,7 @@ PERL95EXE	= ..\perl95.exe
 .IF "$(OBJECT)" == "-DPERL_OBJECT"
 PERLIMPLIB	*= ..\perlcore$(a)
 PERLDLL		= ..\perlcore.dll
-CAPILIB		= $(COREDIR)\PerlCAPI$(a)
+CAPILIB		= $(COREDIR)\perlCAPI$(a)
 .ELSE
 PERLIMPLIB	*= ..\perl$(a)
 PERLDLL		= ..\perl.dll
@@ -887,24 +893,24 @@ $(DYNALOADER).c: $(MINIPERL) $(EXTDIR)\DynaLoader\dl_win32.xs $(CONFIGPM)
 
 .IF "$(OBJECT)" == "-DPERL_OBJECT"
 
-PerlCAPI.cpp : $(MINIPERL)
+perlCAPI.cpp : $(MINIPERL)
 	$(MINIPERL) GenCAPI.pl $(COREDIR)
 
-PerlCAPI$(o) : PerlCAPI.cpp
+perlCAPI$(o) : perlCAPI.cpp
 .IF "$(CCTYPE)" == "BORLAND"
-	$(CC) $(CFLAGS_O) -c $(OBJOUT_FLAG)PerlCAPI$(o) PerlCAPI.cpp
+	$(CC) $(CFLAGS_O) -c $(OBJOUT_FLAG)perlCAPI$(o) perlCAPI.cpp
 .ELIF "$(CCTYPE)" == "GCC"
-	$(CC) $(CFLAGS_O) -c $(OBJOUT_FLAG)PerlCAPI$(o) PerlCAPI.cpp
+	$(CC) $(CFLAGS_O) -c $(OBJOUT_FLAG)perlCAPI$(o) perlCAPI.cpp
 .ELSE
 	$(CC) $(CFLAGS_O) $(RUNTIME) -UPERLDLL -c \
-	    $(OBJOUT_FLAG)PerlCAPI$(o) PerlCAPI.cpp
+	    $(OBJOUT_FLAG)perlCAPI$(o) perlCAPI.cpp
 .ENDIF
 
-$(CAPILIB) : PerlCAPI.cpp PerlCAPI$(o)
+$(CAPILIB) : perlCAPI.cpp perlCAPI$(o)
 .IF "$(CCTYPE)" == "BORLAND"
-	$(LIB32) $(LIBOUT_FLAG)$(CAPILIB) +PerlCAPI$(o)
+	$(LIB32) $(LIBOUT_FLAG)$(CAPILIB) +perlCAPI$(o)
 .ELSE
-	$(LIB32) $(LIBOUT_FLAG)$(CAPILIB) PerlCAPI$(o)
+	$(LIB32) $(LIBOUT_FLAG)$(CAPILIB) perlCAPI$(o)
 .ENDIF
 
 .ENDIF
@@ -973,13 +979,13 @@ $(ERRNO_PM): $(PERLEXE) $(ERRNO)_pm.PL
 	cd $(EXTDIR)\$(*B) && $(MAKE)
 
 doc: $(PERLEXE)
-	copy ..\README.win32 ..\pod\perlwin32.pod
 	$(PERLEXE) -I..\lib ..\installhtml --podroot=.. --htmldir=./html \
 	    --podpath=pod:lib:ext:utils --htmlroot="file://$(INST_HTML:s,:,|,)"\
 	    --libpod=perlfunc:perlguts:perlvar:perlrun:perlop --recurse
 
 utils: $(PERLEXE) $(X2P)
 	cd ..\utils && $(MAKE) PERL=$(MINIPERL)
+	copy ..\README.win32 ..\pod\perlwin32.pod
 	cd ..\pod && $(MAKE) -f ..\win32\pod.mak converters
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 
@@ -1066,7 +1072,7 @@ clean :
 	-@erase $(MINIPERL)
 	-@erase perlglob$(o)
 	-@erase perlmain$(o)
-	-@erase PerlCAPI.cpp
+	-@erase perlCAPI.cpp
 	-@erase config.w32
 	-@erase /f config.h
 	-@erase $(GLOBEXE)

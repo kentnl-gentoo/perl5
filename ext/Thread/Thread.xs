@@ -25,13 +25,13 @@ remove_thread(struct perl_thread *t)
 #ifdef USE_THREADS
     DEBUG_L(WITH_THR(PerlIO_printf(PerlIO_stderr(),
 				   "%p: remove_thread %p\n", thr, t)));
-    MUTEX_LOCK(&threads_mutex);
+    MUTEX_LOCK(&PL_threads_mutex);
     MUTEX_DESTROY(&t->mutex);
-    nthreads--;
+    PL_nthreads--;
     t->prev->next = t->next;
     t->next->prev = t->prev;
-    COND_BROADCAST(&nthreads_cond);
-    MUTEX_UNLOCK(&threads_mutex);
+    COND_BROADCAST(&PL_nthreads_cond);
+    MUTEX_UNLOCK(&PL_threads_mutex);
 #endif
 }
 
@@ -43,7 +43,7 @@ threadstart(void *arg)
     Thread savethread = thr;
     LOGOP myop;
     dSP;
-    I32 oldscope = scopestack_ix;
+    I32 oldscope = PL_scopestack_ix;
     I32 retval;
     AV *av;
     int i;
@@ -60,14 +60,14 @@ threadstart(void *arg)
     thr->private = 0;
 
     /* Now duplicate most of perl_call_sv but with a few twists */
-    op = (OP*)&myop;
-    Zero(op, 1, LOGOP);
+    PL_op = (OP*)&myop;
+    Zero(PL_op, 1, LOGOP);
     myop.op_flags = OPf_STACKED;
     myop.op_next = Nullop;
     myop.op_flags |= OPf_KNOW;
     myop.op_flags |= OPf_WANT_LIST;
-    op = pp_entersub(ARGS);
-    DEBUG_L(if (!op)
+    PL_op = pp_entersub(ARGS);
+    DEBUG_L(if (!PL_op)
 	    PerlIO_printf(PerlIO_stderr(), "thread starts at Nullop\n"));
     /*
      * When this thread is next scheduled, we start in the right
@@ -82,7 +82,7 @@ threadstart(void *arg)
     LOGOP myop;
     djSP;
     I32 oldmark = TOPMARK;
-    I32 oldscope = scopestack_ix;
+    I32 oldscope = PL_scopestack_ix;
     I32 retval;
     SV *sv;
     AV *av = newAV();
@@ -117,16 +117,16 @@ threadstart(void *arg)
     PUTBACK;
     perl_call_sv(sv, G_ARRAY|G_EVAL);
     SPAGAIN;
-    retval = SP - (stack_base + oldmark);
-    SP = stack_base + oldmark + 1;
+    retval = SP - (PL_stack_base + oldmark);
+    SP = PL_stack_base + oldmark + 1;
     if (SvCUR(thr->errsv)) {
 	MUTEX_LOCK(&thr->mutex);
 	thr->flags |= THRf_DID_DIE;
 	MUTEX_UNLOCK(&thr->mutex);
-	av_store(av, 0, &sv_no);
+	av_store(av, 0, &PL_sv_no);
 	av_store(av, 1, newSVsv(thr->errsv));
 	DEBUG_L(PerlIO_printf(PerlIO_stderr(), "%p died: %s\n",
-			      thr, SvPV(thr->errsv, na)));
+			      thr, SvPV(thr->errsv, PL_na)));
     } else {
 	DEBUG_L(STMT_START {
 	    for (i = 1; i <= retval; i++) {
@@ -134,7 +134,7 @@ threadstart(void *arg)
 				thr, i, SvPEEK(SP[i - 1]));
 	    }
 	} STMT_END);
-	av_store(av, 0, &sv_yes);
+	av_store(av, 0, &PL_sv_yes);
 	for (i = 1; i <= retval; i++, SP++)
 	    sv_setsv(*av_fetch(av, i, TRUE), SvREFCNT_inc(*SP));
     }
@@ -142,7 +142,7 @@ threadstart(void *arg)
   finishoff:
 #if 0    
     /* removed for debug */
-    SvREFCNT_dec(curstack);
+    SvREFCNT_dec(PL_curstack);
 #endif
     SvREFCNT_dec(thr->cvcache);
     SvREFCNT_dec(thr->threadsv);
@@ -150,19 +150,31 @@ threadstart(void *arg)
     SvREFCNT_dec(thr->errsv);
     SvREFCNT_dec(thr->errhv);
 
-    Safefree(markstack);
-    Safefree(scopestack);
-    Safefree(savestack);
-    Safefree(retstack);
-    Safefree(cxstack);
-    Safefree(tmps_stack);
-    Safefree(ofs);
+    /*Safefree(cxstack);*/
+    while (PL_curstackinfo->si_next)
+	PL_curstackinfo = PL_curstackinfo->si_next;
+    while (PL_curstackinfo) {
+	PERL_SI *p = PL_curstackinfo->si_prev;
+	SvREFCNT_dec(PL_curstackinfo->si_stack);
+	Safefree(PL_curstackinfo->si_cxstack);
+	Safefree(PL_curstackinfo);
+	PL_curstackinfo = p;
+    }    
+    Safefree(PL_markstack);
+    Safefree(PL_scopestack);
+    Safefree(PL_savestack);
+    Safefree(PL_retstack);
+    Safefree(PL_tmps_stack);
+    Safefree(PL_ofs);
 
-    SvREFCNT_dec(statname);
-    Safefree(screamfirst);
-    Safefree(screamnext);
-    Safefree(reg_start_tmp);
-    SvREFCNT_dec(lastscream);
+    SvREFCNT_dec(PL_rs);
+    SvREFCNT_dec(PL_nrs);
+    SvREFCNT_dec(PL_statname);
+    Safefree(PL_screamfirst);
+    Safefree(PL_screamnext);
+    Safefree(PL_reg_start_tmp);
+    SvREFCNT_dec(PL_lastscream);
+    /*SvREFCNT_dec(PL_defoutgv);*/
 
     MUTEX_LOCK(&thr->mutex);
     DEBUG_L(PerlIO_printf(PerlIO_stderr(),
@@ -244,12 +256,29 @@ newthread (SV *startsv, AV *initargs, char *classname)
     err = 0;
     if (!attr_inited) {
 	attr_inited = 1;
+#ifdef OLD_PTHREADS_API
+	err = pthread_attr_create(&attr);
+#else
 	err = pthread_attr_init(&attr);
+#endif
+#ifdef OLD_PTHREADS_API
+#ifdef VMS
+/* This is available with the old pthreads API, but only with */
+/* DecThreads (VMS and Digital Unix) */
+	if (err == 0)
+	    err = pthread_attr_setdetach_np(&attr, ATTR_JOINABLE);
+#endif
+#else
 	if (err == 0)
 	    err = pthread_attr_setdetachstate(&attr, ATTR_JOINABLE);
+#endif
     }
     if (err == 0)
+#ifdef OLD_PTHREADS_API
+	err = pthread_create(&thr->self, attr, threadstart, (void*) thr);
+#else
 	err = pthread_create(&thr->self, &attr, threadstart, (void*) thr);
+#endif
     /* Go */
     MUTEX_UNLOCK(&thr->mutex);
 #endif
@@ -278,7 +307,7 @@ newthread (SV *startsv, AV *initargs, char *classname)
     return sv_bless(newRV_noinc(sv), gv_stashpv(classname, TRUE));
 #else
     croak("No threads in this perl");
-    return &sv_undef;
+    return &PL_sv_undef;
 #endif
 }
 
@@ -342,7 +371,7 @@ join(t)
 	    for (i = 1; i <= AvFILL(av); i++)
 		XPUSHs(sv_2mortal(*av_fetch(av, i, FALSE)));
 	} else {
-	    char *mess = SvPV(*av_fetch(av, 1, FALSE), na);
+	    char *mess = SvPV(*av_fetch(av, 1, FALSE), PL_na);
 	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
 				  "%p: join propagating die message: %s\n",
 				  thr, mess));
@@ -384,7 +413,7 @@ equal(t1, t2)
 	Thread	t1
 	Thread	t2
     PPCODE:
-	PUSHs((t1 == t2) ? &sv_yes : &sv_no);
+	PUSHs((t1 == t2) ? &PL_sv_yes : &PL_sv_no);
 
 void
 flags(t)
@@ -426,7 +455,7 @@ void
 DESTROY(t)
 	SV *	t
     PPCODE:
-	PUSHs(&sv_yes);
+	PUSHs(&PL_sv_yes);
 
 void
 yield()
@@ -517,10 +546,10 @@ list(classname)
 	 * Iterate until we have enough dynamic storage for all threads.
 	 * We mustn't do any allocation while holding threads_mutex though.
 	 */
-	MUTEX_LOCK(&threads_mutex);
+	MUTEX_LOCK(&PL_threads_mutex);
 	do {
-	    n = nthreads;
-	    MUTEX_UNLOCK(&threads_mutex);
+	    n = PL_nthreads;
+	    MUTEX_UNLOCK(&PL_threads_mutex);
 	    if (AvFILL(av) < n - 1) {
 		int i = AvFILL(av);
 		for (i = AvFILL(av); i < n - 1; i++) {
@@ -531,9 +560,9 @@ list(classname)
 	
 		}
 	    }
-	    MUTEX_LOCK(&threads_mutex);
-	} while (n < nthreads);
-	n = nthreads;	/* Get the final correct value */
+	    MUTEX_LOCK(&PL_threads_mutex);
+	} while (n < PL_nthreads);
+	n = PL_nthreads;	/* Get the final correct value */
 
 	/*
 	 * At this point, there's enough room to fill in av.
@@ -553,7 +582,7 @@ list(classname)
 	    svp++;
 	} while (t != thr);
 	/*  */
-	MUTEX_UNLOCK(&threads_mutex);
+	MUTEX_UNLOCK(&PL_threads_mutex);
 	/* Truncate any unneeded slots in av */
 	av_fill(av, n - 1);
 	/* Finally, push all the new objects onto the stack and drop av */
@@ -570,15 +599,15 @@ void
 kill_sighandler_thread()
     PPCODE:
 	write(sig_pipe[1], "\0", 1);
-	PUSHs(&sv_yes);
+	PUSHs(&PL_sv_yes);
 
 void
 init_thread_signals()
     PPCODE:
-	sighandlerp = handle_thread_signal;
+	PL_sighandlerp = handle_thread_signal;
 	if (pipe(sig_pipe) == -1)
 	    XSRETURN_UNDEF;
-	PUSHs(&sv_yes);
+	PUSHs(&PL_sv_yes);
 
 void
 await_signal()
@@ -593,7 +622,7 @@ await_signal()
 	    croak("panic: await_signal");
 	ST(0) = sv_newmortal();
 	if (ret)
-	    sv_setsv(ST(0), c ? psig_ptr[c] : &sv_no);
+	    sv_setsv(ST(0), c ? psig_ptr[c] : &PL_sv_no);
 	DEBUG_L(PerlIO_printf(PerlIO_stderr(),
 			      "await_signal returning %s\n", SvPEEK(ST(0))););
 

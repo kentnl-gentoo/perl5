@@ -13,10 +13,6 @@
 #include <tchar.h>
 #ifdef __GNUC__
 #define Win32_Winsock
-#  ifdef __cplusplus
-#undef __attribute__		/* seems broken in 2.8.0 */
-#define __attribute__(p)
-#  endif
 #endif
 #include <windows.h>
 
@@ -474,7 +470,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     }
 
     while (++mark <= sp) {
-	if (*mark && (str = SvPV(*mark, na)))
+	if (*mark && (str = SvPV(*mark, PL_na)))
 	    argv[index++] = str;
 	else
 	    argv[index++] = "";
@@ -482,7 +478,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     argv[index++] = 0;
    
     status = win32_spawnvp(flag,
-			   (const char*)(really ? SvPV(really,na) : argv[0]),
+			   (const char*)(really ? SvPV(really,PL_na) : argv[0]),
 			   (const char* const*)argv);
 
     if (status < 0 && errno == ENOEXEC) {
@@ -495,19 +491,19 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
 	    argv[sh_items] = w32_perlshell_vec[sh_items];
    
 	status = win32_spawnvp(flag,
-			       (const char*)(really ? SvPV(really,na) : argv[0]),
+			       (const char*)(really ? SvPV(really,PL_na) : argv[0]),
 			       (const char* const*)argv);
     }
 
     if (flag != P_NOWAIT) {
 	if (status < 0) {
-	    if (dowarn)
+	    if (PL_dowarn)
 		warn("Can't spawn \"%s\": %s", argv[0], strerror(errno));
 	    status = 255 * 256;
 	}
 	else
 	    status *= 256;
-	statusvalue = status;
+	PL_statusvalue = status;
     }
     Safefree(argv);
     return (status);
@@ -588,7 +584,7 @@ do_spawn2(char *cmd, int exectype)
     }
     if (exectype != EXECF_SPAWN_NOWAIT) {
 	if (status < 0) {
-	    if (dowarn)
+	    if (PL_dowarn)
 		warn("Can't %s \"%s\": %s",
 		     (exectype == EXECF_EXEC ? "exec" : "spawn"),
 		     cmd, strerror(errno));
@@ -596,7 +592,7 @@ do_spawn2(char *cmd, int exectype)
 	}
 	else
 	    status *= 256;
-	statusvalue = status;
+	PL_statusvalue = status;
     }
     return (status);
 }
@@ -2122,7 +2118,7 @@ XS(w32_SetCwd)
     dXSARGS;
     if (items != 1)
 	croak("usage: Win32::SetCurrentDirectory($cwd)");
-    if (SetCurrentDirectory(SvPV(ST(0),na)))
+    if (SetCurrentDirectory(SvPV(ST(0),PL_na)))
 	XSRETURN_YES;
 
     XSRETURN_NO;
@@ -2194,7 +2190,7 @@ XS(w32_DomainName)
 	char dname[256];
 	DWORD dnamelen = sizeof(dname);
 	SID_NAME_USE snu;
-	if (LookupAccountName(NULL, name, &sid, &sidlen,
+	if (LookupAccountName(NULL, name, (PSID)&sid, &sidlen,
 			      dname, &dnamelen, &snu)) {
 	    XSRETURN_PV(dname);		/* all that for this */
 	}
@@ -2305,8 +2301,8 @@ XS(w32_Spawn)
     if (items != 3)
 	croak("usage: Win32::Spawn($cmdName, $args, $PID)");
 
-    cmd = SvPV(ST(0),na);
-    args = SvPV(ST(1), na);
+    cmd = SvPV(ST(0),PL_na);
+    args = SvPV(ST(1), PL_na);
 
     memset(&stStartInfo, 0, sizeof(stStartInfo));   /* Clear the block */
     stStartInfo.cb = sizeof(stStartInfo);	    /* Set the structure size */
@@ -2362,7 +2358,7 @@ XS(w32_GetShortPathName)
 	ST(0) = shortpath;
     }
     else
-	ST(0) = &sv_undef;
+	ST(0) = &PL_sv_undef;
     XSRETURN(1);
 }
 

@@ -64,7 +64,7 @@ odbm_TIEHASH(dbtype, filename, flags, mode)
 	    New(0, tmpbuf, strlen(filename) + 5, char);
 	    SAVEFREEPV(tmpbuf);
 	    sprintf(tmpbuf,"%s.dir",filename);
-	    if (stat(tmpbuf, &statbuf) < 0) {
+	    if (stat(tmpbuf, &PL_statbuf) < 0) {
 		if (flags & O_CREAT) {
 		    if (mode < 0 || close(creat(tmpbuf,mode)) < 0)
 			croak("ODBM_File: Can't create %s", filename);
@@ -76,7 +76,7 @@ odbm_TIEHASH(dbtype, filename, flags, mode)
 		    croak("ODBM_FILE: Can't open %s", filename);
 	    }
 	    RETVAL = (void*)(dbminit(filename) >= 0 ? &dbmrefcnt : 0);
-	    ST(0) = sv_mortalcopy(&sv_undef);
+	    ST(0) = sv_mortalcopy(&PL_sv_undef);
 	    sv_setptrobj(ST(0), RETVAL, dbtype);
 	}
 

@@ -20,17 +20,15 @@
 
 #ifdef __GNUC__
 typedef long long __int64;
-#define Win32_Winsock
-#  ifdef __cplusplus
-#undef __attribute__		/* seems broken in 2.8.0 */
-#define __attribute__(p)
-#  endif
+#  define Win32_Winsock
 /* GCC does not do __declspec() - render it a nop 
  * and turn on options to avoid importing data 
  */
-#define __declspec(x)
-#define PERL_GLOBAL_STRUCT
-#define MULTIPLICITY
+#  define __declspec(x)
+#  ifndef PERL_OBJECT
+#    define PERL_GLOBAL_STRUCT
+#    define MULTIPLICITY
+#  endif
 #endif
 
 /* Define DllExport akin to perl's EXT, 
@@ -216,6 +214,10 @@ typedef long		gid_t;
 #define flushall	_flushall
 #define fcloseall	_fcloseall
 
+#ifdef PERL_OBJECT
+#define FUNC_NAME_TO_PTR(name)	&(name)
+#endif
+
 #ifndef _O_NOINHERIT
 #  define _O_NOINHERIT	0x0080
 #  ifndef _NO_OLDNAMES
@@ -315,14 +317,14 @@ struct interp_intern {
 #endif
 };
 
-#define w32_perlshell_tokens	(sys_intern.w32_perlshell_tokens)
-#define w32_perlshell_vec	(sys_intern.w32_perlshell_vec)
-#define w32_perlshell_items	(sys_intern.w32_perlshell_items)
-#define w32_fdpid		(sys_intern.w32_fdpid)
+#define w32_perlshell_tokens	(PL_sys_intern.w32_perlshell_tokens)
+#define w32_perlshell_vec	(PL_sys_intern.w32_perlshell_vec)
+#define w32_perlshell_items	(PL_sys_intern.w32_perlshell_items)
+#define w32_fdpid		(PL_sys_intern.w32_fdpid)
 
 #ifndef USE_RTL_WAIT
-#  define w32_num_children	(sys_intern.w32_num_children)
-#  define w32_child_pids	(sys_intern.w32_child_pids)
+#  define w32_num_children	(PL_sys_intern.w32_num_children)
+#  define w32_child_pids	(PL_sys_intern.w32_child_pids)
 #endif
 
 /* 

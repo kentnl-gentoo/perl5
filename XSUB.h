@@ -1,4 +1,4 @@
-#define ST(off) stack_base[ax + (off)]
+#define ST(off) PL_stack_base[ax + (off)]
 
 #ifdef CAN_PROTOTYPE
 #ifdef PERL_OBJECT
@@ -12,7 +12,7 @@
 
 #define dXSARGS				\
 	dSP; dMARK;			\
-	I32 ax = mark - stack_base + 1;	\
+	I32 ax = mark - PL_stack_base + 1;	\
 	I32 items = sp - mark
 
 #define XSANY CvXSUBANY(cv)
@@ -31,7 +31,7 @@
 
 #define XSRETURN(off)					\
     STMT_START {					\
-	stack_sp = stack_base + ax + ((off) - 1);	\
+	PL_stack_sp = PL_stack_base + ax + ((off) - 1);	\
 	return;						\
     } STMT_END
 
@@ -40,9 +40,9 @@
 #define XST_mIV(i,v)  (ST(i) = sv_2mortal(newSViv(v))  )
 #define XST_mNV(i,v)  (ST(i) = sv_2mortal(newSVnv(v))  )
 #define XST_mPV(i,v)  (ST(i) = sv_2mortal(newSVpv(v,0)))
-#define XST_mNO(i)    (ST(i) = &sv_no   )
-#define XST_mYES(i)   (ST(i) = &sv_yes  )
-#define XST_mUNDEF(i) (ST(i) = &sv_undef)
+#define XST_mNO(i)    (ST(i) = &PL_sv_no   )
+#define XST_mYES(i)   (ST(i) = &PL_sv_yes  )
+#define XST_mUNDEF(i) (ST(i) = &PL_sv_undef)
  
 #define XSRETURN_IV(v) STMT_START { XST_mIV(0,v);  XSRETURN(1); } STMT_END
 #define XSRETURN_NV(v) STMT_START { XST_mNV(0,v);  XSRETURN(1); } STMT_END
@@ -57,36 +57,37 @@
 #ifdef XS_VERSION
 # define XS_VERSION_BOOTCHECK \
     STMT_START {							\
-	char *vn = Nullch, *module = SvPV(ST(0),na);			\
+	SV *tmpsv;							\
+	char *vn = Nullch, *module = SvPV(ST(0),PL_na);			\
 	if (items >= 2)	 /* version supplied as bootstrap arg */	\
-	    Sv = ST(1);							\
+	    tmpsv = ST(1);						\
 	else {								\
 	    /* XXX GV_ADDWARN */					\
-	    Sv = perl_get_sv(form("%s::%s", module,			\
+	    tmpsv = perl_get_sv(form("%s::%s", module,			\
 				  vn = "XS_VERSION"), FALSE);		\
-	    if (!Sv || !SvOK(Sv))					\
-		Sv = perl_get_sv(form("%s::%s", module,			\
+	    if (!tmpsv || !SvOK(tmpsv))					\
+		tmpsv = perl_get_sv(form("%s::%s", module,		\
 				      vn = "VERSION"), FALSE);		\
 	}								\
-	if (Sv && (!SvOK(Sv) || strNE(XS_VERSION, SvPV(Sv, na))))	\
+	if (tmpsv && (!SvOK(tmpsv) || strNE(XS_VERSION, SvPV(tmpsv, PL_na))))	\
 	    croak("%s object version %s does not match %s%s%s%s %_",	\
 		  module, XS_VERSION,					\
 		  vn ? "$" : "", vn ? module : "", vn ? "::" : "",	\
-		  vn ? vn : "bootstrap parameter", Sv);			\
+		  vn ? vn : "bootstrap parameter", tmpsv);		\
     } STMT_END
 #else
 # define XS_VERSION_BOOTCHECK
 #endif
 
 #ifdef PERL_OBJECT
-#include "ObjXSub.h"
+#include "objXSUB.h"
 #ifndef NO_XSLOCKS
 #ifdef WIN32
-#include "XSLock.h"
+#include "XSlock.h"
 #endif  /* WIN32 */
 #endif  /* NO_XSLOCKS */
 #else
 #ifdef PERL_CAPI
-#include "PerlCAPI.h"
+#include "perlCAPI.h"
 #endif
 #endif	/* PERL_OBJECT */

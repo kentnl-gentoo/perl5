@@ -2,6 +2,18 @@
 
 require 5.003;
 
+my @extvars = qw(sv_undef sv_yes sv_no na dowarn
+                 curcop compiling 
+                 tainting tainted stack_base stack_sp sv_arenaroot
+                 curstash DBsub DBsingle debstash
+                 rsfp 
+                 stdingv
+		 defgv
+		 errgv
+		 rsfp_filters
+		 perldb
+                );
+
 sub readsyms (\%$) {
     my ($syms, $file) = @_;
     %$syms = ();
@@ -86,13 +98,19 @@ sub embed ($) {
     my ($sym) = @_;
     hide($sym, "Perl_$sym");
 }
+sub embedvar ($) {
+    my ($sym) = @_;
+#   hide($sym, "Perl_$sym");
+    return '';
+}
+
 sub multon ($$$) {
     my ($sym,$pre,$ptr) = @_;
-    hide($sym, "($ptr$pre$sym)");
+    hide("PL_$sym", "($ptr$pre$sym)");
 }
 sub multoff ($$) {
     my ($sym,$pre) = @_;
-    hide("$pre$sym", $sym);
+    return hide("PL_$pre$sym", "PL_$sym");
 }
 
 unlink 'embed.h';
@@ -165,7 +183,7 @@ print EM <<'END';
 END
 
 for $sym (sort keys %thread) {
-    print EM multon($sym,'T','curinterp->');
+    print EM multon($sym,'T','PL_curinterp->');
 }
 
 print EM <<'END';
@@ -177,7 +195,7 @@ print EM <<'END';
 END
 
 for $sym (sort keys %intrp) {
-    print EM multon($sym,'I','curinterp->');
+    print EM multon($sym,'I','PL_curinterp->');
 }
 
 print EM <<'END';
@@ -211,7 +229,7 @@ print EM <<'END';
 END
 
 for $sym (sort keys %intrp) {
-    print EM embed($sym);
+    print EM embedvar($sym);
 }
 
 print EM <<'END';
@@ -221,7 +239,7 @@ print EM <<'END';
 END
 
 for $sym (sort keys %thread) {
-    print EM embed($sym);
+    print EM embedvar($sym);
 }
 
 print EM <<'END';
@@ -249,7 +267,7 @@ print EM <<'END';
 END
 
 for $sym (sort keys %globvar) {
-    print EM multon($sym,'G','Perl_Vars.');
+    print EM multon($sym,'G','PL_Vars.');
 }
 
 print EM <<'END';
@@ -269,7 +287,7 @@ print EM <<'END';
 END
 
 for $sym (sort keys %globvar) {
-    print EM embed($sym);
+    print EM embedvar($sym);
 }
 
 print EM <<'END';
@@ -278,5 +296,21 @@ print EM <<'END';
 #endif /* PERL_GLOBAL_STRUCT */
 
 END
+
+print EM <<'END';
+
+#ifndef MIN_PERL_DEFINE  
+
+END
+
+for $sym (sort @extvars) {
+    print EM hide($sym,"PL_$sym");
+}
+
+print EM <<'END';
+
+#endif /* MIN_PERL_DEFINE */
+END
+
 
 close(EM);

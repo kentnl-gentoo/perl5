@@ -25,7 +25,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	= \5.00475
+INST_VER	= \5.00476
 
 #
 # uncomment to enable threads-capabilities
@@ -49,9 +49,10 @@ INST_VER	= \5.00475
 #CFG		= Debug
 
 #
-# uncomment to enable use of PerlCRT.DLL.  Highly recommended.  It has
-# patches that fix known bugs in MSCVRT.DLL.  You will need to download it
-# from: <TBD> and follow the directions in the package to install.
+# uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
+# Highly recommended.  It has patches that fix known bugs in MSCVRT.DLL.
+# You will need to download it from: http://www.activestate.com/<TBD>
+# and follow the directions in the package to install.
 #
 #USE_PERLCRT	= define
 
@@ -266,7 +267,7 @@ EXTUTILSDIR	= $(LIBDIR)\extutils
 !IF "$(OBJECT)" == "-DPERL_OBJECT"
 PERLIMPLIB	= ..\perlcore.lib
 PERLDLL		= ..\perlcore.dll
-CAPILIB		= $(COREDIR)\PerlCAPI.lib
+CAPILIB		= $(COREDIR)\perlCAPI.lib
 !ELSE
 PERLIMPLIB	= ..\perl.lib
 PERLDLL		= ..\perl.dll
@@ -723,15 +724,15 @@ $(DYNALOADER).c: $(MINIPERL) $(EXTDIR)\DynaLoader\dl_win32.xs $(CONFIGPM)
 	cd ..\..\win32
 
 !IF "$(OBJECT)" == "-DPERL_OBJECT"
-PerlCAPI.cpp : $(MINIPERL)
+perlCAPI.cpp : $(MINIPERL)
 	$(MINIPERL) GenCAPI.pl $(COREDIR)
 
-PerlCAPI$(o) : PerlCAPI.cpp
+perlCAPI$(o) : perlCAPI.cpp
 	$(CC) $(CFLAGS_O) $(RUNTIME) -UPERLDLL -c \
-	    $(OBJOUT_FLAG)PerlCAPI$(o) PerlCAPI.cpp
+	    $(OBJOUT_FLAG)perlCAPI$(o) perlCAPI.cpp
 
-$(CAPILIB) : PerlCAPI.cpp PerlCAPI$(o)
-	lib /OUT:$(CAPILIB) PerlCAPI$(o)
+$(CAPILIB) : perlCAPI.cpp perlCAPI$(o)
+	lib /OUT:$(CAPILIB) perlCAPI$(o)
 !ENDIF
 
 $(EXTDIR)\DynaLoader\dl_win32.xs: dl_win32.xs
@@ -810,7 +811,6 @@ $(ERRNO_PM): $(PERLEXE) $(ERRNO)_pm.PL
 	cd ..\..\win32
 
 doc: $(PERLEXE)
-	copy ..\README.win32 ..\pod\perlwin32.pod
 	$(PERLEXE) -I..\lib ..\installhtml --podroot=.. --htmldir=./html \
 	    --podpath=pod:lib:ext:utils --htmlroot="file://$(INST_HTML::=|)" \
 	    --libpod=perlfunc:perlguts:perlvar:perlrun:perlop --recurse
@@ -819,6 +819,7 @@ utils: $(PERLEXE) $(X2P)
 	cd ..\utils
 	$(MAKE) PERL=$(MINIPERL)
 	cd ..\pod
+	copy ..\README.win32 .\perlwin32.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
@@ -911,7 +912,7 @@ clean :
 	-@erase perlmain$(o)
 	-@erase config.w32
 	-@erase /f config.h
-	-@erase PerlCAPI.cpp
+	-@erase perlCAPI.cpp
 	-@erase $(GLOBEXE)
 	-@erase $(PERLEXE)
 	-@erase $(PERLDLL)
