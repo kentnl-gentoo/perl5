@@ -13,7 +13,7 @@ BEGIN {
     }
 }
 $|++;
-print "1..90\n";
+print "1..102\n";
 use strict;
 
 use threads;
@@ -28,6 +28,48 @@ sub ok {
     $not = "not " unless $bool;
     print "${not}ok " . ($Base + $offset) . " - $text\n";
 }
+
+sub forko (&$$); # To prevent deadlock from underlying pthread_* bugs (as in
+                 # stock RH9 glibc/NPTL) or from our own errors, we run tests
+                 # in separately forked and alarmed processes.
+
+*forko = ($^O =~ /^dos|os2|mswin32|netware|vms$/i)
+? sub (&$$) { my $code = shift; goto &$code; }
+: sub (&$$) {
+  my ($code, $expected, $patience) = @_;
+  my ($test_num, $pid);
+  local *CHLD;
+
+  my $bump = $expected;
+
+  $patience ||= 60;
+
+  unless (defined($pid = open(CHLD, "-|"))) {
+    die "fork: $!\n";
+  }
+  if (! $pid) {   # Child -- run the test
+    $patience ||= 60;
+    alarm $patience;
+    &$code;
+    exit;
+  }
+
+  while (<CHLD>) {
+    $expected--, $test_num=$1 if /^(?:not )?ok (\d+)/;
+    #print "#forko: ($expected, $1) $_";
+    print;
+  }
+
+  close(CHLD);
+
+  while ($expected--) {
+    $test_num++;
+    print "not ok $test_num - child status $?\n";
+  }
+
+  $Base += $bump;
+
+};
 
 # - TEST basics
 
@@ -51,6 +93,7 @@ SYNC_SHARED: {
   my $cond : shared;
   my $lock : shared;
 
+  print "# testing my \$var : shared\n";
   ok(1, 1, "Shared synchronization tests preparation");
   $Base += 1;
 
@@ -68,74 +111,85 @@ SYNC_SHARED: {
   }
 
   # - TEST cond_wait
-  foreach (@wait_how) {
-    $test = "cond_wait [$_]";
-    threads->create(\&cw)->join;
-    $Base += 5;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_wait [$_]";
+      threads->create(\&cw)->join;
+      $Base += 6;
+    }
+  }, 6*@wait_how, 90);
 
   sub cw {
-    ## which lock to obtain in this scope?
-    $test =~ /twain/ ? lock($lock) : lock($cond);
-    ok(1,1, "$test: obtained initial lock");
+    my $thr;
 
-    my $thr = threads->create(\&signaller);
-    for ($test) {
-      cond_wait($cond), last        if    /simple/;
-      cond_wait($cond, $cond), last if    /repeat/;
-      cond_wait($cond, $lock), last if    /twain/;
-      die "$test: unknown test\n"; 
-    }
+    { # -- begin lock scope; which lock to obtain?
+      $test =~ /twain/ ? lock($lock) : lock($cond);
+      ok(1,1, "$test: obtained initial lock");
+
+      $thr = threads->create(\&signaller);
+      for ($test) {
+        cond_wait($cond), last        if    /simple/;
+        cond_wait($cond, $cond), last if    /repeat/;
+        cond_wait($cond, $lock), last if    /twain/;
+        die "$test: unknown test\n"; 
+      }
+      ok(5,1, "$test: condition obtained");
+    } # -- end lock scope
+
     $thr->join;
-    ok(5,1, "$test: condition obtained");
+    ok(6,1, "$test: join completed");
   }
 
   # - TEST cond_timedwait success
 
-  foreach (@wait_how) {
-    $test = "cond_timedwait [$_]";
-    threads->create(\&ctw, 5)->join;
-    $Base += 5;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_timedwait [$_]";
+      threads->create(\&ctw, 5)->join;
+      $Base += 6;
+    }
+  }, 6*@wait_how, 90);
 
   sub ctw($) {
     my $to = shift;
+    my $thr;
 
-    ## which lock to obtain in this scope?
-    $test =~ /twain/ ? lock($lock) : lock($cond);
-    ok(1,1, "$test: obtained initial lock");
+    { # -- begin lock scope;  which lock to obtain?
+      $test =~ /twain/ ? lock($lock) : lock($cond);
+      ok(1,1, "$test: obtained initial lock");
 
-    my $thr = threads->create(\&signaller);
-    ### N.B.: RACE!  If $timeout is very soon and/or we are unlucky, we
-    ###       might timeout on the cond_timedwait before the signaller
-    ###       thread even attempts lock()ing.
-    ###       Upshot:  $thr->join() never completes, because signaller is
-    ###       stuck attempting to lock the mutex we regained after waiting.
-    my $ok = 0;
-    for ($test) {
-      $ok=cond_timedwait($cond, time() + $to), last        if    /simple/;
-      $ok=cond_timedwait($cond, time() + $to, $cond), last if    /repeat/;
-      $ok=cond_timedwait($cond, time() + $to, $lock), last if    /twain/;
-      die "$test: unknown test\n"; 
-    }
-    print "# back from cond_timedwait; join()ing\n";
+      $thr = threads->create(\&signaller);
+      my $ok = 0;
+      for ($test) {
+        $ok=cond_timedwait($cond, time() + $to), last        if    /simple/;
+        $ok=cond_timedwait($cond, time() + $to, $cond), last if    /repeat/;
+        $ok=cond_timedwait($cond, time() + $to, $lock), last if    /twain/;
+        die "$test: unknown test\n"; 
+      }
+      ok(5,$ok, "$test: condition obtained");
+    } # -- end lock scope
+
     $thr->join;
-    ok(5,$ok, "$test: condition obtained");
+    ok(6,1, "$test: join completed");
   }
 
   # - TEST cond_timedwait timeout
 
-  foreach (@wait_how) {
-    $test = "cond_timedwait pause, timeout [$_]";
-    threads->create(\&ctw_fail, 3)->join;
-    $Base += 2;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_timedwait pause, timeout [$_]";
+      threads->create(\&ctw_fail, 3)->join;
+      $Base += 2;
+    }
+  }, 2*@wait_how, 90);
 
-  foreach (@wait_how) {
-    $test = "cond_timedwait instant timeout [$_]";
-    threads->create(\&ctw_fail, -60)->join;
-    $Base += 2;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_timedwait instant timeout [$_]";
+      threads->create(\&ctw_fail, -60)->join;
+      $Base += 2;
+    }
+  }, 2*@wait_how, 90);
 
   # cond_timedwait timeout (relative timeout)
   sub ctw_fail {
@@ -167,6 +221,7 @@ SYNCH_REFS: {
   my $cond = \$true_cond;
   my $lock = \$true_lock;
 
+  print "# testing reference to shared(\$var)\n";
   ok(1, 1, "Synchronization reference tests preparation");
   $Base += 1;
 
@@ -184,69 +239,85 @@ SYNCH_REFS: {
   }
 
   # - TEST cond_wait
-  foreach (@wait_how) {
-    $test = "cond_wait [$_]";
-    threads->create(\&cw2)->join;
-    $Base += 5;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_wait [$_]";
+      threads->create(\&cw2)->join;
+      $Base += 6;
+    }
+  }, 6*@wait_how, 90);
 
   sub cw2 {
-    ## which lock to obtain in this scope?
-    $test =~ /twain/ ? lock($lock) : lock($cond);
-    ok(1,1, "$test: obtained initial lock");
+    my $thr;
 
-    my $thr = threads->create(\&signaller2);
-    for ($test) {
-      cond_wait($cond), last        if    /simple/;
-      cond_wait($cond, $cond), last if    /repeat/;
-      cond_wait($cond, $lock), last if    /twain/;
-      die "$test: unknown test\n"; 
-    }
+    { # -- begin lock scope; which lock to obtain?
+      $test =~ /twain/ ? lock($lock) : lock($cond);
+      ok(1,1, "$test: obtained initial lock");
+
+      $thr = threads->create(\&signaller2);
+      for ($test) {
+        cond_wait($cond), last        if    /simple/;
+        cond_wait($cond, $cond), last if    /repeat/;
+        cond_wait($cond, $lock), last if    /twain/;
+        die "$test: unknown test\n"; 
+      }
+      ok(5,1, "$test: condition obtained");
+    } # -- end lock scope
+
     $thr->join;
-    ok(5,1, "$test: condition obtained");
+    ok(6,1, "$test: join completed");
   }
 
   # - TEST cond_timedwait success
 
-  foreach (@wait_how) {
-    $test = "cond_timedwait [$_]";
-    threads->create(\&ctw2, 5)->join;
-    $Base += 5;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_timedwait [$_]";
+      threads->create(\&ctw2, 5)->join;
+      $Base += 6;
+    }
+  }, 6*@wait_how, 90);
 
   sub ctw2($) {
     my $to = shift;
+    my $thr;
 
-    ## which lock to obtain in this scope?
-    $test =~ /twain/ ? lock($lock) : lock($cond);
-    ok(1,1, "$test: obtained initial lock");
+    { # -- begin lock scope;  which lock to obtain?
+      $test =~ /twain/ ? lock($lock) : lock($cond);
+      ok(1,1, "$test: obtained initial lock");
 
-    my $thr = threads->create(\&signaller2);
-    ###  N.B.:  RACE!  as above, with ctw()
-    my $ok = 0;
-    for ($test) {
-      $ok=cond_timedwait($cond, time() + $to), last        if    /simple/;
-      $ok=cond_timedwait($cond, time() + $to, $cond), last if    /repeat/;
-      $ok=cond_timedwait($cond, time() + $to, $lock), last if    /twain/;
-      die "$test: unknown test\n"; 
-    }
+      $thr = threads->create(\&signaller2);
+      my $ok = 0;
+      for ($test) {
+        $ok=cond_timedwait($cond, time() + $to), last        if    /simple/;
+        $ok=cond_timedwait($cond, time() + $to, $cond), last if    /repeat/;
+        $ok=cond_timedwait($cond, time() + $to, $lock), last if    /twain/;
+        die "$test: unknown test\n"; 
+      }
+      ok(5,$ok, "$test: condition obtained");
+    } # -- end lock scope
+
     $thr->join;
-    ok(5,$ok, "$test: condition obtained");
+    ok(6,1, "$test: join completed");
   }
 
   # - TEST cond_timedwait timeout
 
-  foreach (@wait_how) {
-    $test = "cond_timedwait pause, timeout [$_]";
-    threads->create(\&ctw_fail2, 3)->join;
-    $Base += 2;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_timedwait pause, timeout [$_]";
+      threads->create(\&ctw_fail2, 3)->join;
+      $Base += 2;
+    }
+  }, 2*@wait_how, 90);
 
-  foreach (@wait_how) {
-    $test = "cond_timedwait instant timeout [$_]";
-    threads->create(\&ctw_fail2, -60)->join;
-    $Base += 2;
-  }
+  forko( sub {
+    foreach (@wait_how) {
+      $test = "cond_timedwait instant timeout [$_]";
+      threads->create(\&ctw_fail2, -60)->join;
+      $Base += 2;
+    }
+  }, 2*@wait_how, 90);
 
   sub ctw_fail2 {
     my $to = shift;
