@@ -435,7 +435,6 @@ lib/AnyDBM_File.pm	Perl module to emulate dbmopen
 lib/AutoLoader.pm	Autoloader base class
 lib/AutoSplit.pm	Split up autoload functions
 lib/Benchmark.pm	Measure execution time
-lib/Bundle/CPAN.pm	The CPAN bundle
 lib/CGI.pm		Web server interface ("Common Gateway Interface")
 lib/CGI/Apache.pm	Support for Apache's Perl module
 lib/CGI/Carp.pm		Log server errors with helpful context
@@ -715,6 +714,7 @@ pod/perlmodlib.pod	Module policy info
 pod/perlobj.pod		Object info
 pod/perlop.pod		Operator info
 pod/perlpod.pod		Pod info
+pod/perlport.pod	Portability guide
 pod/perlre.pod		Regular expression info
 pod/perlref.pod		References info
 pod/perlrun.pod		Execution info
@@ -839,6 +839,7 @@ t/lib/io_taint.t	See if the untaint method from IO works
 t/lib/io_tell.t		See if seek()/tell()-related methods from IO work
 t/lib/io_udp.t		See if UDP socket-related methods from IO work
 t/lib/io_xs.t		See if XSUB methods from IO work
+t/lib/ipc_sysv.t	See if IPC::SysV works
 t/lib/ndbm.t		See if NDBM_File works
 t/lib/odbm.t		See if ODBM_File works
 t/lib/opcode.t		See if Opcode works
@@ -895,8 +896,6 @@ t/op/hashwarn.t		See if warnings for bad hash assignments work
 t/op/inc.t		See if inc/dec of integers near 32 bit limit work
 t/op/index.t		See if index works
 t/op/int.t		See if int works
-t/op/ipcmsg.t		See if msg* ops work
-t/op/ipcsem.t		See if sem* ops work
 t/op/join.t		See if join works
 t/op/list.t		See if array lists work
 t/op/local.t		See if local works
