@@ -105,12 +105,16 @@ static bool srand_called = FALSE;
 
 /* variations on pp_null */
 
-#ifdef DONT_DECLARE_STD
 #ifdef I_UNISTD
 #include <unistd.h>
 #endif
-#else
-extern pid_t getpid (void);
+
+/* XXX I can't imagine anyone who doesn't have this actually _needs_
+   it, since pid_t is an integral type.
+   --AD  2/20/1998
+*/
+#ifdef NEED_GETPID_PROTO
+extern Pid_t getpid (void);
 #endif
 
 PP(pp_stub)
@@ -2758,9 +2762,8 @@ PP(pp_unshift)
     MAGIC *mg;
 
     if (SvRMAGICAL(ary) && (mg = mg_find((SV*)ary,'P'))) {
-
-
 	*MARK-- = mg->mg_obj;
+	PUSHMARK(MARK);
 	PUTBACK;
 	ENTER;
 	perl_call_method("UNSHIFT",G_SCALAR|G_DISCARD);
