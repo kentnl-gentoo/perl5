@@ -1,14 +1,20 @@
 #!./perl -wT
 
-print "1..104\n";
-
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }
 
 use strict;
-use POSIX qw(locale_h);
+
+my $have_setlocale = 0;
+eval {
+    require POSIX;
+    import POSIX ':locale_h';
+    $have_setlocale++;
+};
+
+print "1..", ($have_setlocale ? 104 : 98), "\n";
 
 use vars qw($a
 	    $English $German $French $Spanish
@@ -199,7 +205,10 @@ check_taint_not  97, $2;
 check_taint_not  98, $a;
 
 # I think we've seen quite enough of taint.
-# Let us do some *real* locale work now.
+# Let us do some *real* locale work now,
+#  unless setlocale() is missing (i.e. minitest).
+
+exit unless $have_setlocale;
 
 sub getalnum {
     sort grep /\w/, map { chr } 0..255
@@ -212,7 +221,7 @@ sub locatelocale ($$@) {
 
     for (@try) {
 	local $^W = 0; # suppress "Subroutine LC_ALL redefined"
-	if (setlocale(LC_ALL, $_)) {
+	if (setlocale(&LC_ALL, $_)) {
 	    $$lcall = $_;
 	    @$alnum = &getalnum;
 	    last;
@@ -281,7 +290,7 @@ print "# Alnum_ = @Locale\n";
 
 {
     local $^W = 0;
-    setlocale(LC_ALL, $Locale);
+    setlocale(&LC_ALL, $Locale);
 }
 
 {

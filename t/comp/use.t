@@ -1,11 +1,11 @@
 #!./perl
 
-print "1..14\n";
-
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }
+
+print "1..14\n";
 
 my $i = 1;
 
