@@ -38,6 +38,8 @@
 #include "EXTERN.h"
 #include "perl.h"
 
+#include "patchlevel.h"
+
 #define NO_XSLOCKS
 #ifdef PERL_OBJECT
 extern CPerlObj* pPerl;
@@ -176,6 +178,7 @@ GetRegStr(const char *lpszValueName, char** ptr, DWORD* lpDataLen)
 static char *
 get_emd_part(char *prev_path, char *trailing_path, ...)
 {
+    char base[10];
     va_list ap;
     char mod_name[MAX_PATH+1];
     char *ptr;
@@ -185,6 +188,8 @@ get_emd_part(char *prev_path, char *trailing_path, ...)
 
     va_start(ap, trailing_path);
     strip = va_arg(ap, char *);
+
+    sprintf(base, "%5.3f", (double) 5 + ((double) PATCHLEVEL / (double) 1000));
 
     GetModuleFileName((w32_perldll_handle == INVALID_HANDLE_VALUE)
 		      ? GetModuleHandle(NULL)
@@ -209,17 +214,21 @@ get_emd_part(char *prev_path, char *trailing_path, ...)
     va_end(ap);
     strcpy(++ptr, trailing_path);
 
-    newsize = strlen(mod_name) + 1;
-    if (prev_path) {
-	oldsize = strlen(prev_path) + 1;
-	newsize += oldsize;			/* includes plus 1 for ';' */
-	Renew(prev_path, newsize, char);
-	prev_path[oldsize-1] = ';';
-	strcpy(&prev_path[oldsize], mod_name);
-    }
-    else {
-	New(1311, prev_path, newsize, char);
-	strcpy(prev_path, mod_name);
+    /* only add directory if it exists */
+    if(GetFileAttributes(mod_name) != (DWORD) -1) {
+	/* directory exists */
+	newsize = strlen(mod_name) + 1;
+	if (prev_path) {
+	    oldsize = strlen(prev_path) + 1;
+	    newsize += oldsize;			/* includes plus 1 for ';' */
+	    Renew(prev_path, newsize, char);
+	    prev_path[oldsize-1] = ';';
+	    strcpy(&prev_path[oldsize], mod_name);
+	}
+	else {
+	    New(1311, prev_path, newsize, char);
+	    strcpy(prev_path, mod_name);
+	}
     }
 
     return prev_path;
@@ -460,6 +469,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     int status;
     int flag = P_WAIT;
     int index = 0;
+    STRLEN n_a;
 
     if (sp <= mark)
 	return -1;
@@ -473,7 +483,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     }
 
     while (++mark <= sp) {
-	if (*mark && (str = SvPV(*mark, PL_na)))
+	if (*mark && (str = SvPV(*mark, n_a)))
 	    argv[index++] = str;
 	else
 	    argv[index++] = "";
@@ -481,7 +491,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
     argv[index++] = 0;
    
     status = win32_spawnvp(flag,
-			   (const char*)(really ? SvPV(really,PL_na) : argv[0]),
+			   (const char*)(really ? SvPV(really,n_a) : argv[0]),
 			   (const char* const*)argv);
 
     if (status < 0 && errno == ENOEXEC) {
@@ -494,7 +504,7 @@ do_aspawn(void *vreally, void **vmark, void **vsp)
 	    argv[sh_items] = w32_perlshell_vec[sh_items];
    
 	status = win32_spawnvp(flag,
-			       (const char*)(really ? SvPV(really,PL_na) : argv[0]),
+			       (const char*)(really ? SvPV(really,n_a) : argv[0]),
 			       (const char* const*)argv);
     }
 
@@ -1095,10 +1105,10 @@ win32_waitpid(int pid, int *status, int flags)
       return win32_wait(status);
     else {
       rc = cwait(status, pid, WAIT_CHILD);
-    /* cwait() returns differently on Borland */
-#ifdef __BORLANDC__
+    /* cwait() returns "correctly" on Borland */
+#ifndef __BORLANDC__
     if (status)
-	*status =  (((*status >> 8) & 0xff) | ((*status << 8) & 0xff00));
+	*status *= 256;
 #endif
       remove_dead_process((HANDLE)pid);
     }
@@ -1751,12 +1761,11 @@ win32_pclose(FILE *pf)
     /* wait for the child */
     if (cwait(&status, childpid, WAIT_CHILD) == -1)
         return (-1);
-    /* cwait() returns differently on Borland */
-#ifdef __BORLANDC__
-    return (((status >> 8) & 0xff) | ((status << 8) & 0xff00));
-#else
-    return (status);
+    /* cwait() returns "correctly" on Borland */
+#ifndef __BORLANDC__
+    status *= 256;
 #endif
+    return (status);
 
 #endif /* USE_RTL_POPEN */
 }
@@ -2150,9 +2159,10 @@ static
 XS(w32_SetCwd)
 {
     dXSARGS;
+    STRLEN n_a;
     if (items != 1)
 	croak("usage: Win32::SetCurrentDirectory($cwd)");
-    if (SetCurrentDirectory(SvPV(ST(0),PL_na)))
+    if (SetCurrentDirectory(SvPV(ST(0),n_a)))
 	XSRETURN_YES;
 
     XSRETURN_NO;
@@ -2331,12 +2341,13 @@ XS(w32_Spawn)
     PROCESS_INFORMATION stProcInfo;
     STARTUPINFO stStartInfo;
     BOOL bSuccess = FALSE;
+    STRLEN n_a;
 
     if (items != 3)
 	croak("usage: Win32::Spawn($cmdName, $args, $PID)");
 
-    cmd = SvPV(ST(0),PL_na);
-    args = SvPV(ST(1), PL_na);
+    cmd = SvPV(ST(0), n_a);
+    args = SvPV(ST(1), n_a);
 
     memset(&stStartInfo, 0, sizeof(stStartInfo));   /* Clear the block */
     stStartInfo.cb = sizeof(stStartInfo);	    /* Set the structure size */

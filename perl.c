@@ -354,6 +354,7 @@ perl_destruct(register PerlInterpreter *sv_interp)
     PL_main_start = Nullop;
     SvREFCNT_dec(PL_main_cv);
     PL_main_cv = Nullcv;
+    PL_dirty = TRUE;
 
     if (PL_sv_objcount) {
 	/*
@@ -361,8 +362,6 @@ perl_destruct(register PerlInterpreter *sv_interp)
 	 * destructors and destructees still exist.  Some sv's might remain.
 	 * Non-referenced objects are on their own.
 	 */
-    
-	PL_dirty = TRUE;
 	sv_clean_objs();
     }
 
@@ -548,6 +547,8 @@ perl_destruct(register PerlInterpreter *sv_interp)
     Safefree(PL_origfilename);
     Safefree(PL_archpat_auto);
     Safefree(PL_reg_start_tmp);
+    if (PL_reg_curpm)
+	Safefree(PL_reg_curpm);
     Safefree(HeKEY_hek(&PL_hv_fetch_ent_mh));
     Safefree(PL_op_mask);
     nuke_stacks();
@@ -829,7 +830,7 @@ setuid perl scripts securely.\n");
 		    sv_catpv(PL_Sv,"\"  Locally applied patches:\\n\",");
 		    for (i = 1; i <= LOCAL_PATCH_COUNT; i++) {
 			if (PL_localpatches[i])
-			    sv_catpvf(PL_Sv,"\"  \\t%s\\n\",",PL_localpatches[i]);
+			    sv_catpvf(PL_Sv,"q\"  \t%s\n\",",PL_localpatches[i]);
 		    }
 		}
 #endif
@@ -1020,7 +1021,7 @@ perl_run(void)
 perl_run(PerlInterpreter *sv_interp)
 #endif
 {
-    dSP;
+    dTHR;
     I32 oldscope;
     dJMPENV;
     int ret;
@@ -1144,6 +1145,7 @@ CV*
 perl_get_cv(char *name, I32 create)
 {
     GV* gv = gv_fetchpv(name, create, SVt_PVCV);
+    /* XXX unsafe for threads if eval_owner isn't held */
     if (create && !GvCVu(gv))
     	return newSUB(start_subparse(FALSE, 0),
 		      newSVOP(OP_CONST, 0, newSVpv(name,0)),
@@ -1446,8 +1448,10 @@ perl_eval_pv(char *p, I32 croak_on_error)
     sv = POPs;
     PUTBACK;
 
-    if (croak_on_error && SvTRUE(ERRSV))
-	croak(SvPVx(ERRSV, PL_na));
+    if (croak_on_error && SvTRUE(ERRSV)) {
+	STRLEN n_a;
+	croak(SvPVx(ERRSV, n_a));
+    }
 
     return sv;
 }
@@ -1850,6 +1854,7 @@ init_interp(void)
     PL_curcopdb		= NULL;		\
     PL_dbargs		= 0;		\
     PL_dlmax		= 128;		\
+    PL_dumpindent	= 4;		\
     PL_laststatval	= -1;		\
     PL_laststype	= OP_STAT;	\
     PL_maxscream	= -1;		\
@@ -1872,6 +1877,7 @@ init_interp(void)
     PL_profiledata	= NULL;		\
     PL_rsfp		= Nullfp;	\
     PL_rsfp_filters	= Nullav;	\
+    PL_dirty		= FALSE;	\
   } STMT_END
     I_REINIT;
 #else
@@ -1886,7 +1892,7 @@ init_interp(void)
 #    undef PERLVAR
 #    undef PERLVARI
 #    undef PERLVARIC
-#    else
+#  else
 #    define PERLVAR(var,type)
 #    define PERLVARI(var,type,init)	PL_##var = init;
 #    define PERLVARIC(var,type,init)	PL_##var = init;
@@ -2134,6 +2140,7 @@ validate_suid(char *validarg, char *scriptname, int fdscript)
 	croak("Can't stat script \"%s\"",PL_origfilename);
     if (fdscript < 0 && PL_statbuf.st_mode & (S_ISUID|S_ISGID)) {
 	I32 len;
+	STRLEN n_a;
 
 #ifdef IAMSUID
 #ifndef HAS_SETREUID
@@ -2206,12 +2213,12 @@ validate_suid(char *validarg, char *scriptname, int fdscript)
 	PL_doswitches = FALSE;		/* -s is insecure in suid */
 	PL_curcop->cop_line++;
 	if (sv_gets(PL_linestr, PL_rsfp, 0) == Nullch ||
-	  strnNE(SvPV(PL_linestr,PL_na),"#!",2) )	/* required even on Sys V */
+	  strnNE(SvPV(PL_linestr,n_a),"#!",2) )	/* required even on Sys V */
 	    croak("No #! line");
-	s = SvPV(PL_linestr,PL_na)+2;
+	s = SvPV(PL_linestr,n_a)+2;
 	if (*s == ' ') s++;
 	while (!isSPACE(*s)) s++;
-	for (s2 = s;  (s2 > SvPV(PL_linestr,PL_na)+2 &&
+	for (s2 = s;  (s2 > SvPV(PL_linestr,n_a)+2 &&
 		       (isDIGIT(s2[-1]) || strchr("._-", s2[-1])));  s2--) ;
 	if (strnNE(s2-4,"perl",4) && strnNE(s-9,"perl",4))  /* sanity check */
 	    croak("Not a perl script");
@@ -2750,7 +2757,7 @@ incpush(char *p, int addsubdirs)
 	    char *unix;
 	    STRLEN len;
 
-	    if ((unix = tounixspec_ts(SvPV(libdir,PL_na),Nullch)) != Nullch) {
+	    if ((unix = tounixspec_ts(SvPV(libdir,len),Nullch)) != Nullch) {
 		len = strlen(unix);
 		while (unix[len-1] == '/') len--;  /* Cosmetic */
 		sv_usepvn(libdir,unix,len);
@@ -2758,7 +2765,7 @@ incpush(char *p, int addsubdirs)
 	    else
 		PerlIO_printf(PerlIO_stderr(),
 		              "Failed to unixify @INC element \"%s\"\n",
-			      SvPV(libdir,PL_na));
+			      SvPV(libdir,len));
 #endif
 	    /* .../archname/version if -d .../archname/version/auto */
 	    sv_setsv(subdir, libdir);
@@ -2810,6 +2817,7 @@ init_main_thread()
     *SvEND(PL_thrsv) = '\0';	/* in the trailing_nul field */
     thr->oursv = PL_thrsv;
     PL_chopset = " \n-";
+    PL_dumpindent = 4;
 
     MUTEX_LOCK(&PL_threads_mutex);
     PL_nthreads++;
@@ -2978,7 +2986,7 @@ my_failure_exit(void)
 STATIC void
 my_exit_jump(void)
 {
-    dSP;
+    dTHR;
     register PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;

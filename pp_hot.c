@@ -322,6 +322,7 @@ PP(pp_print)
     IO *io;
     register PerlIO *fp;
     MAGIC *mg;
+    STRLEN n_a;
 
     if (PL_op->op_flags & OPf_STACKED)
 	gv = (GV*)*++MARK;
@@ -353,7 +354,7 @@ PP(pp_print)
 	if (ckWARN(WARN_UNOPENED)) {
 	    SV* sv = sv_newmortal();
             gv_fullname3(sv, gv, Nullch);
-            warner(WARN_UNOPENED, "Filehandle %s never opened", SvPV(sv,PL_na));
+            warner(WARN_UNOPENED, "Filehandle %s never opened", SvPV(sv,n_a));
         }
 
 	SETERRNO(EBADF,RMS$_IFI);
@@ -365,10 +366,10 @@ PP(pp_print)
             gv_fullname3(sv, gv, Nullch);
 	    if (IoIFP(io))
 		warner(WARN_IO, "Filehandle %s opened only for input", 
-				SvPV(sv,PL_na));
+				SvPV(sv,n_a));
 	    else if (ckWARN(WARN_CLOSED))
 		warner(WARN_CLOSED, "print on closed filehandle %s", 
-				SvPV(sv,PL_na));
+				SvPV(sv,n_a));
 	}
 	SETERRNO(EBADF,IoIFP(io)?RMS$_FAC:RMS$_IFI);
 	goto just_say_no;
@@ -447,6 +448,7 @@ PP(pp_rv2av)
 	    
 	    if (SvTYPE(sv) != SVt_PVGV) {
 		char *sym;
+		STRLEN n_a;
 
 		if (SvGMAGICAL(sv)) {
 		    mg_get(sv);
@@ -460,12 +462,12 @@ PP(pp_rv2av)
 		    if (ckWARN(WARN_UNINITIALIZED))
 			warner(WARN_UNINITIALIZED, PL_warn_uninit);
 		    if (GIMME == G_ARRAY) {
-			POPs;
+			(void)POPs;
 			RETURN;
 		    }
 		    RETSETUNDEF;
 		}
-		sym = SvPV(sv,PL_na);
+		sym = SvPV(sv,n_a);
 		if (PL_op->op_private & HINT_STRICT_REFS)
 		    DIE(PL_no_symref, sym, "an ARRAY");
 		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVAV);
@@ -484,7 +486,7 @@ PP(pp_rv2av)
 
     if (GIMME == G_ARRAY) {
 	I32 maxarg = AvFILL(av) + 1;
-	POPs;				/* XXXX May be optimized away? */
+	(void)POPs;			/* XXXX May be optimized away? */
 	EXTEND(SP, maxarg);          
 	if (SvRMAGICAL(av)) {
 	    U32 i; 
@@ -536,6 +538,7 @@ PP(pp_rv2hv)
 	    
 	    if (SvTYPE(sv) != SVt_PVGV) {
 		char *sym;
+		STRLEN n_a;
 
 		if (SvGMAGICAL(sv)) {
 		    mg_get(sv);
@@ -554,7 +557,7 @@ PP(pp_rv2hv)
 		    }
 		    RETSETUNDEF;
 		}
-		sym = SvPV(sv,PL_na);
+		sym = SvPV(sv,n_a);
 		if (PL_op->op_private & HINT_STRICT_REFS)
 		    DIE(PL_no_symref, sym, "a HASH");
 		gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVHV);
@@ -832,7 +835,7 @@ PP(pp_match)
     register char *s;
     char *strend;
     I32 global;
-    I32 safebase;
+    I32 r_flags;
     char *truebase;
     register REGEXP *rx = pm->op_pmregexp;
     bool rxtainted;
@@ -841,7 +844,6 @@ PP(pp_match)
     I32 minmatch = 0;
     I32 oldsave = PL_savestack_ix;
     I32 update_minmatch = 1;
-    SV *screamer;
 
     if (PL_op->op_flags & OPf_STACKED)
 	TARG = POPs;
@@ -871,10 +873,6 @@ PP(pp_match)
     }
     if (rx->minlen > len) goto failure;
 
-    screamer = ( (SvSCREAM(TARG) && rx->check_substr
-		  && SvTYPE(rx->check_substr) == SVt_PVBM
-		  && SvVALID(rx->check_substr)) 
-		? TARG : Nullsv);
     truebase = t = s;
     if (global = pm->op_pmflags & PMf_GLOBAL) {
 	rx->startp[0] = 0;
@@ -887,9 +885,14 @@ PP(pp_match)
 	    }
 	}
     }
-    safebase = ((gimme != G_ARRAY && !global && rx->nparens)
+    r_flags = ((gimme != G_ARRAY && !global && rx->nparens)
 		|| SvTEMP(TARG) || PL_sawampersand)
 		? REXEC_COPY_STR : 0;
+    if (SvSCREAM(TARG) && rx->check_substr
+	&& SvTYPE(rx->check_substr) == SVt_PVBM
+	&& SvVALID(rx->check_substr)) 
+	r_flags |= REXEC_SCREAM;
+
     if (pm->op_pmflags & (PMf_MULTILINE|PMf_SINGLELINE)) {
 	SAVEINT(PL_multiline);
 	PL_multiline = pm->op_pmflags & PMf_MULTILINE;
@@ -905,7 +908,7 @@ play_it_again:
     }
     if (rx->check_substr) {
 	if (!(rx->reganch & ROPT_NOSCAN)) { /* Floating checkstring. */
-	    if ( screamer ) {
+	    if (r_flags & REXEC_SCREAM) {
 		I32 p = -1;
 		char *b;
 		
@@ -950,8 +953,7 @@ play_it_again:
 	    rx->float_substr = Nullsv;
 	}
     }
-    if (CALLREGEXEC(rx, s, strend, truebase, minmatch,
-		      screamer, NULL, safebase))
+    if (CALLREGEXEC(rx, s, strend, truebase, minmatch, TARG, NULL, r_flags))
     {
 	PL_curpm = pm;
 	if (pm->op_pmflags & PMf_ONCE)
@@ -1390,8 +1392,10 @@ PP(pp_helem)
 	if (!svp || *svp == &PL_sv_undef) {
 	    SV* lv;
 	    SV* key2;
-	    if (!defer)
-		DIE(PL_no_helem, SvPV(keysv, PL_na));
+	    if (!defer) {
+		STRLEN n_a;
+		DIE(PL_no_helem, SvPV(keysv, n_a));
+	    }
 	    lv = sv_newmortal();
 	    sv_upgrade(lv, SVt_PVLV);
 	    LvTYPE(lv) = 'y';
@@ -1602,13 +1606,12 @@ PP(pp_subst)
     bool once;
     bool rxtainted;
     char *orig;
-    I32 safebase;
+    I32 r_flags;
     register REGEXP *rx = pm->op_pmregexp;
     STRLEN len;
     int force_on_match = 0;
     I32 oldsave = PL_savestack_ix;
     I32 update_minmatch = 1;
-    SV *screamer;
 
     /* known replacement string? */
     dstr = (pm->op_pmflags & PMf_CONST) ? POPs : Nullsv;
@@ -1646,12 +1649,12 @@ PP(pp_subst)
 	pm = PL_curpm;
 	rx = pm->op_pmregexp;
     }
-    screamer = ( (SvSCREAM(TARG) && rx->check_substr
-		  && SvTYPE(rx->check_substr) == SVt_PVBM
-		  && SvVALID(rx->check_substr)) 
-		? TARG : Nullsv);
-    safebase = (rx->nparens || SvTEMP(TARG) || PL_sawampersand)
+    r_flags = (rx->nparens || SvTEMP(TARG) || PL_sawampersand)
 		? REXEC_COPY_STR : 0;
+    if (SvSCREAM(TARG) && rx->check_substr
+		  && SvTYPE(rx->check_substr) == SVt_PVBM
+		  && SvVALID(rx->check_substr))
+	r_flags |= REXEC_SCREAM;
     if (pm->op_pmflags & (PMf_MULTILINE|PMf_SINGLELINE)) {
 	SAVEINT(PL_multiline);
 	PL_multiline = pm->op_pmflags & PMf_MULTILINE;
@@ -1659,7 +1662,7 @@ PP(pp_subst)
     orig = m = s;
     if (rx->check_substr) {
 	if (!(rx->reganch & ROPT_NOSCAN)) { /* It floats. */
-	    if (screamer) {
+	    if (r_flags & REXEC_SCREAM) {
 		I32 p = -1;
 		char *b;
 		
@@ -1706,9 +1709,9 @@ PP(pp_subst)
     c = dstr ? SvPV(dstr, clen) : Nullch;
 
     /* can do inplace substitution? */
-    if (c && clen <= rx->minlen && (once || !(safebase & REXEC_COPY_STR))
+    if (c && clen <= rx->minlen && (once || !(r_flags & REXEC_COPY_STR))
 	&& !(rx->reganch & ROPT_LOOKBEHIND_SEEN)) {
-	if (!CALLREGEXEC(rx, s, strend, orig, 0, screamer, NULL, safebase)) {
+	if (!CALLREGEXEC(rx, s, strend, orig, 0, TARG, NULL, r_flags)) {
 	    SPAGAIN;
 	    PUSHs(&PL_sv_no);
 	    LEAVE_SCOPE(oldsave);
@@ -1808,7 +1811,7 @@ PP(pp_subst)
 	RETURN;
     }
 
-    if (CALLREGEXEC(rx, s, strend, orig, 0, screamer, NULL, safebase)) {
+    if (CALLREGEXEC(rx, s, strend, orig, 0, TARG, NULL, r_flags)) {
 	if (force_on_match) {
 	    force_on_match = 0;
 	    s = SvPV_force(TARG, len);
@@ -1842,7 +1845,7 @@ PP(pp_subst)
 		sv_catpvn(dstr, c, clen);
 	    if (once)
 		break;
-	} while (CALLREGEXEC(rx, s, strend, orig, s == m, Nullsv, NULL, safebase));
+	} while (CALLREGEXEC(rx, s, strend, orig, s == m, Nullsv, NULL, r_flags));
 	sv_catpvn(dstr, s, strend - s);
 
 	(void)SvOOK_off(TARG);
@@ -2020,6 +2023,7 @@ PP(pp_entersub)
     default:
 	if (!SvROK(sv)) {
 	    char *sym;
+	    STRLEN n_a;
 
 	    if (sv == &PL_sv_yes) {		/* unfound import, ignore */
 		if (hasargs)
@@ -2031,7 +2035,7 @@ PP(pp_entersub)
 		sym = SvPOKp(sv) ? SvPVX(sv) : Nullch;
 	    }
 	    else
-		sym = SvPV(sv, PL_na);
+		sym = SvPV(sv, n_a);
 	    if (!sym)
 		DIE(PL_no_usym, "a subroutine");
 	    if (PL_op->op_private & HINT_STRICT_REFS)
@@ -2172,8 +2176,7 @@ PP(pp_entersub)
      	 * (3) instead of (2) so we'd have to clone. Would the fact
      	 * that we released the mutex more quickly make up for this?
      	 */
-	if (PL_threadnum &&
-	    (svp = hv_fetch(thr->cvcache, (char *)cv, sizeof(cv), FALSE)))
+	if ((svp = hv_fetch(thr->cvcache, (char *)cv, sizeof(cv), FALSE)))
 	{
 	    /* We already have a clone to use */
 	    MUTEX_UNLOCK(CvMUTEXP(cv));
@@ -2527,7 +2530,7 @@ PP(pp_method)
 	}
     }
 
-    name = SvPV(TOPs, PL_na);
+    name = SvPV(TOPs, packlen);
     sv = *(PL_stack_base + TOPMARK + 1);
     
     if (SvGMAGICAL(sv))

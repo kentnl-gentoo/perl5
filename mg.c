@@ -326,8 +326,13 @@ magic_regdata_cnt(SV *sv, MAGIC *mg)
     register REGEXP *rx;
     char *t;
 
-    if (PL_curpm && (rx = PL_curpm->op_pmregexp))
-	return rx->lastparen;
+    if (PL_curpm && (rx = PL_curpm->op_pmregexp)) {
+	if (mg->mg_obj)		/* @+ */
+	    return rx->nparens;
+	else			/* @- */
+	    return rx->lastparen;
+    }
+    
     return (U32)-1;
 }
 
@@ -350,9 +355,9 @@ magic_regdatum_get(SV *sv, MAGIC *mg)
 	    (t = rx->endp[paren]))
 	    {
 		if (mg->mg_obj)		/* @+ */
-		    i = t - rx->subbase;
+		    i = t - rx->subbeg;
 		else			/* @- */
-		    i = s - rx->subbase;
+		    i = s - rx->subbeg;
 		sv_setiv(sv,i);
 	    }
     }
@@ -416,8 +421,10 @@ magic_len(SV *sv, MAGIC *mg)
 	return (STRLEN)PL_orslen;
     }
     magic_get(sv,mg);
-    if (!SvPOK(sv) && SvNIOK(sv))
-	sv_2pv(sv, &PL_na);
+    if (!SvPOK(sv) && SvNIOK(sv)) {
+	STRLEN n_a;
+	sv_2pv(sv, &n_a);
+    }
     if (SvPOK(sv))
 	return SvCUR(sv);
     return 0;
@@ -477,6 +484,10 @@ magic_get(SV *sv, MAGIC *mg)
 	    /* printf("some %s\n", printW(PL_curcop->cop_warnings)), */
 	    sv_setsv(sv, PL_curcop->cop_warnings);
 	break;
+    case '\003':		/* ^C */
+	sv_setiv(sv, (IV)PL_minus_c);
+	break;
+
     case '\004':		/* ^D */
 	sv_setiv(sv, (IV)(PL_debug & 32767));
 	break;
@@ -836,7 +847,8 @@ magic_setenv(SV *sv, MAGIC *mg)
 int
 magic_clearenv(SV *sv, MAGIC *mg)
 {
-    my_setenv(MgPV(mg,PL_na),Nullch);
+    STRLEN n_a;
+    my_setenv(MgPV(mg,n_a),Nullch);
     return 0;
 }
 
@@ -849,12 +861,13 @@ magic_set_all_env(SV *sv, MAGIC *mg)
     dTHR;
     if (PL_localizing) {
 	HE* entry;
+	STRLEN n_a;
 	magic_clear_all_env(sv,mg);
 	hv_iterinit((HV*)sv);
 	while (entry = hv_iternext((HV*)sv)) {
 	    I32 keylen;
 	    my_setenv(hv_iterkey(entry, &keylen),
-		      SvPV(hv_iterval((HV*)sv, entry), PL_na));
+		      SvPV(hv_iterval((HV*)sv, entry), n_a));
 	}
     }
 #endif
@@ -902,8 +915,9 @@ int
 magic_getsig(SV *sv, MAGIC *mg)
 {
     I32 i;
+    STRLEN n_a;
     /* Are we fetching a signal entry? */
-    i = whichsig(MgPV(mg,PL_na));
+    i = whichsig(MgPV(mg,n_a));
     if (i) {
     	if(PL_psig_ptr[i])
     	    sv_setsv(sv,PL_psig_ptr[i]);
@@ -925,8 +939,9 @@ int
 magic_clearsig(SV *sv, MAGIC *mg)
 {
     I32 i;
+    STRLEN n_a;
     /* Are we clearing a signal entry? */
-    i = whichsig(MgPV(mg,PL_na));
+    i = whichsig(MgPV(mg,n_a));
     if (i) {
     	if(PL_psig_ptr[i]) {
     	    SvREFCNT_dec(PL_psig_ptr[i]);
@@ -947,8 +962,9 @@ magic_setsig(SV *sv, MAGIC *mg)
     register char *s;
     I32 i;
     SV** svp;
+    STRLEN len;
 
-    s = MgPV(mg,PL_na);
+    s = MgPV(mg,len);
     if (*s == '_') {
 	if (strEQ(s,"__DIE__"))
 	    svp = &PL_diehook;
@@ -975,7 +991,7 @@ magic_setsig(SV *sv, MAGIC *mg)
 	SvREFCNT_dec(PL_psig_ptr[i]);
 	PL_psig_ptr[i] = SvREFCNT_inc(sv);
 	SvTEMP_off(sv); /* Make sure it doesn't go away on us */
-	PL_psig_name[i] = newSVpv(s, strlen(s));
+	PL_psig_name[i] = newSVpvn(s, len);
 	SvREADONLY_on(PL_psig_name[i]);
     }
     if (SvTYPE(sv) == SVt_PVGV || SvROK(sv)) {
@@ -985,7 +1001,7 @@ magic_setsig(SV *sv, MAGIC *mg)
 	    *svp = SvREFCNT_inc(sv);
 	return 0;
     }
-    s = SvPV_force(sv,PL_na);
+    s = SvPV_force(sv,len);
     if (strEQ(s,"IGNORE")) {
 	if (i)
 	    (void)rsignal(i, SIG_IGN);
@@ -1005,7 +1021,7 @@ magic_setsig(SV *sv, MAGIC *mg)
 	 * tell whether HINT_STRICT_REFS is in force or not.
 	 */
 	if (!strchr(s,':') && !strchr(s,'\''))
-	    sv_setpv(sv, form("main::%s", s));
+	    sv_insert(sv, 0, 0, "main::", 6);
 	if (i)
 	    (void)rsignal(i, PL_sighandlerp);
 	else
@@ -1213,11 +1229,12 @@ magic_setdbline(SV *sv, MAGIC *mg)
     I32 i;
     GV* gv;
     SV** svp;
+    STRLEN n_a;
 
     gv = PL_DBline;
     i = SvTRUE(sv);
     svp = av_fetch(GvAV(gv),
-		     atoi(MgPV(mg,PL_na)), FALSE);
+		     atoi(MgPV(mg,n_a)), FALSE);
     if (svp && SvIOKp(*svp) && (o = (OP*)SvSTASH(*svp)))
 	o->op_private = i;
     else
@@ -1334,10 +1351,11 @@ magic_setglob(SV *sv, MAGIC *mg)
 {
     register char *s;
     GV* gv;
+    STRLEN n_a;
 
     if (!SvOK(sv))
 	return 0;
-    s = SvPV(sv, PL_na);
+    s = SvPV(sv, n_a);
     if (*s == '*' && s[1])
 	s++;
     gv = gv_fetchpv(s,TRUE, SVt_PVGV);
@@ -1537,6 +1555,7 @@ vivify_defelem(SV *sv)
 	return;
     if (mg->mg_obj) {
 	SV *ahv = LvTARG(sv);
+	STRLEN n_a;
 	if (SvTYPE(ahv) == SVt_PVHV) {
 	    HE *he = hv_fetch_ent((HV*)ahv, mg->mg_obj, TRUE, 0);
 	    if (he)
@@ -1548,7 +1567,7 @@ vivify_defelem(SV *sv)
 		value = *svp;
 	}
 	if (!value || value == &PL_sv_undef)
-	    croak(PL_no_helem, SvPV(mg->mg_obj, PL_na));
+	    croak(PL_no_helem, SvPV(mg->mg_obj, n_a));
     }
     else {
 	AV* av = (AV*)LvTARG(sv);
@@ -1654,6 +1673,11 @@ magic_set(SV *sv, MAGIC *mg)
 	    }
 	}
 	break;
+
+    case '\003':	/* ^C */
+	PL_minus_c = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
+	break;
+
     case '\004':	/* ^D */
 	PL_debug = (SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv)) | 0x80000000;
 	DEBUG_x(dump_all());
@@ -1680,7 +1704,7 @@ magic_set(SV *sv, MAGIC *mg)
 	if (PL_inplace)
 	    Safefree(PL_inplace);
 	if (SvOK(sv))
-	    PL_inplace = savepv(SvPV(sv,PL_na));
+	    PL_inplace = savepv(SvPV(sv,len));
 	else
 	    PL_inplace = Nullch;
 	break;
@@ -1688,7 +1712,7 @@ magic_set(SV *sv, MAGIC *mg)
 	if (PL_osname)
 	    Safefree(PL_osname);
 	if (SvOK(sv))
-	    PL_osname = savepv(SvPV(sv,PL_na));
+	    PL_osname = savepv(SvPV(sv,len));
 	else
 	    PL_osname = Nullch;
 	break;
@@ -1718,12 +1742,12 @@ magic_set(SV *sv, MAGIC *mg)
 	break;
     case '^':
 	Safefree(IoTOP_NAME(GvIOp(PL_defoutgv)));
-	IoTOP_NAME(GvIOp(PL_defoutgv)) = s = savepv(SvPV(sv,PL_na));
+	IoTOP_NAME(GvIOp(PL_defoutgv)) = s = savepv(SvPV(sv,len));
 	IoTOP_GV(GvIOp(PL_defoutgv)) = gv_fetchpv(s,TRUE, SVt_PVIO);
 	break;
     case '~':
 	Safefree(IoFMT_NAME(GvIOp(PL_defoutgv)));
-	IoFMT_NAME(GvIOp(PL_defoutgv)) = s = savepv(SvPV(sv,PL_na));
+	IoFMT_NAME(GvIOp(PL_defoutgv)) = s = savepv(SvPV(sv,len));
 	IoFMT_GV(GvIOp(PL_defoutgv)) = gv_fetchpv(s,TRUE, SVt_PVIO);
 	break;
     case '=':
@@ -1780,7 +1804,7 @@ magic_set(SV *sv, MAGIC *mg)
     case '#':
 	if (PL_ofmt)
 	    Safefree(PL_ofmt);
-	PL_ofmt = savepv(SvPV(sv,PL_na));
+	PL_ofmt = savepv(SvPV(sv,len));
 	break;
     case '[':
 	PL_compiling.cop_arybase = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
@@ -1888,7 +1912,7 @@ magic_set(SV *sv, MAGIC *mg)
     case ')':
 #ifdef HAS_SETGROUPS
 	{
-	    char *p = SvPV(sv, PL_na);
+	    char *p = SvPV(sv, len);
 	    Groups_t gary[NGROUPS];
 
 	    SET_NUMERIC_STANDARD();
@@ -1936,7 +1960,7 @@ magic_set(SV *sv, MAGIC *mg)
 	PL_tainting |= (PL_uid && (PL_euid != PL_uid || PL_egid != PL_gid));
 	break;
     case ':':
-	PL_chopset = SvPV_force(sv,PL_na);
+	PL_chopset = SvPV_force(sv,len);
 	break;
     case '0':
 	if (!PL_origalen) {
@@ -1949,7 +1973,10 @@ magic_set(SV *sv, MAGIC *mg)
 		    || PL_origargv[i] == s + 2
 #endif 
 		   )
-		    s += strlen(++s);	/* this one is ok too */
+		{
+		    ++s;
+		    s += strlen(s);	/* this one is ok too */
+		}
 		else
 		    break;
 	    }
@@ -1962,8 +1989,10 @@ magic_set(SV *sv, MAGIC *mg)
 		my_setenv("NoNe  SuCh", Nullch);
 					    /* force copy of environment */
 		for (i = 0; PL_origenviron[i]; i++)
-		    if (PL_origenviron[i] == s + 1)
-			s += strlen(++s);
+		    if (PL_origenviron[i] == s + 1) {
+			++s;
+			s += strlen(s);
+		    }
 		    else
 			break;
 	    }

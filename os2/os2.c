@@ -162,7 +162,8 @@ int
 os2_cond_wait(perl_cond *c, perl_mutex *m)
 {						
     int rc;
-    if ((rc = DosResetEventSem(*c,&PL_na)) && (rc != ERROR_ALREADY_RESET))
+    STRLEN n_a;
+    if ((rc = DosResetEventSem(*c,&n_a)) && (rc != ERROR_ALREADY_RESET))
 	croak("panic: COND_WAIT-reset: rc=%i", rc);		
     if (m) MUTEX_UNLOCK(m);					
     if (CheckOSError(DosWaitEventSem(*c,SEM_INDEFINITE_WAIT))
@@ -180,9 +181,10 @@ static PFN ExtFCN[2];			/* Labeled by ord below. */
 static USHORT loadOrd[2] = { 874, 873 }; /* Query=874, Set=873. */
 #define ORD_QUERY_ELP	0
 #define ORD_SET_ELP	1
+struct PMWIN_entries_t PMWIN_entries;
 
 APIRET
-loadByOrd(ULONG ord)
+loadByOrd(char *modname, ULONG ord)
 {
     if (ExtFCN[ord] == NULL) {
 	static HMODULE hdosc = 0;
@@ -191,14 +193,45 @@ loadByOrd(ULONG ord)
 	APIRET rc;
 
 	if ((!hdosc && CheckOSError(DosLoadModule(buf, sizeof buf, 
-						  "doscalls", &hdosc)))
+						  modname, &hdosc)))
 	    || CheckOSError(DosQueryProcAddr(hdosc, loadOrd[ord], NULL, &fcn)))
-	    die("This version of OS/2 does not support doscalls.%i", 
-		loadOrd[ord]);
+	    croak("This version of OS/2 does not support %s.%i", 
+		  modname, loadOrd[ord]);
 	ExtFCN[ord] = fcn;
     } 
-    if ((long)ExtFCN[ord] == -1) die("panic queryaddr");
+    if ((long)ExtFCN[ord] == -1) 
+	croak("panic queryaddr");
 }
+
+void 
+init_PMWIN_entries(void)
+{
+    static HMODULE hpmwin = 0;
+    static const int ords[] = {
+	763,				/* Initialize */
+	716,				/* CreateMsgQueue */
+	726,				/* DestroyMsgQueue */
+	918,				/* PeekMsg */
+	915,				/* GetMsg */
+	912,				/* DispatchMsg */
+    };
+    BYTE buf[20];
+    int i = 0;
+    unsigned long rc;
+
+    if (hpmwin)
+	return;
+
+    if (CheckOSError(DosLoadModule(buf, sizeof buf, "pmwin", &hpmwin)))
+	croak("This version of OS/2 does not support pmwin: error in %s", buf);
+    while (i <= 5) {
+	if (CheckOSError(DosQueryProcAddr(hpmwin, ords[i], NULL, 
+					  ((PFN*)&PMWIN_entries)+i)))
+	    croak("This version of OS/2 does not support pmwin.%d", ords[i]);
+	i++;
+    }
+}
+
 
 /* priorities */
 static signed char priors[] = {0, 1, 3, 2}; /* Last two interchanged,
@@ -443,6 +476,7 @@ char *inicmd;
 	char **argsp = fargs;
 	char nargs = 4;
 	int force_shell;
+	STRLEN n_a;
 	
 	if (flag == P_WAIT)
 		flag = P_NOWAIT;
@@ -457,7 +491,7 @@ char *inicmd;
 	    ) /* will spawnvp use PATH? */
 	    TAINT_ENV();	/* testing IFS here is overkill, probably */
 	/* We should check PERL_SH* and PERLLIB_* as well? */
-	if (!really || !*(tmps = SvPV(really, PL_na)))
+	if (!really || !*(tmps = SvPV(really, n_a)))
 	    tmps = PL_Argv[0];
 
       reread:
@@ -548,21 +582,24 @@ char *inicmd;
 		/* Try adding script extensions to the file name, and
 		   search on PATH. */
 		char *scr = find_script(PL_Argv[0], TRUE, NULL, 0);
-		int l = strlen(scr);
-		
-		if (l >= sizeof scrbuf) {
-		   Safefree(scr);
-		 longbuf:
-		   croak("Size of scriptname too big: %d", l);
-		}
-		strcpy(scrbuf, scr);
-		Safefree(scr);
-		scr = scrbuf;
 
 		if (scr) {
-		    FILE *file = fopen(scr, "r");
+		    FILE *file;
 		    char *s = 0, *s1;
+		    int l;
 
+                    l = strlen(scr);
+		
+                    if (l >= sizeof scrbuf) {
+                       Safefree(scr);
+                     longbuf:
+                       croak("Size of scriptname too big: %d", l);
+                    }
+                    strcpy(scrbuf, scr);
+                    Safefree(scr);
+                    scr = scrbuf;
+
+		    file = fopen(scr, "r");
 		    PL_Argv[0] = scr;
 		    if (!file)
 			goto panic_file;
@@ -759,6 +796,7 @@ register SV **sp;
     char *tmps = NULL;
     int rc;
     int flag = P_WAIT, trueflag, err, secondtry = 0;
+    STRLEN n_a;
 
     if (sp > mark) {
 	New(1301,PL_Argv, sp - mark + 3, char*);
@@ -771,7 +809,7 @@ register SV **sp;
 
 	while (++mark <= sp) {
 	    if (*mark)
-		*a++ = SvPVx(*mark, PL_na);
+		*a++ = SvPVx(*mark, n_a);
 	    else
 		*a++ = "";
 	}
@@ -1009,7 +1047,7 @@ char	*mode;
 int
 fork(void)
 {
-    die(PL_no_func, "Unsupported function fork");
+    croak(PL_no_func, "Unsupported function fork");
     errno = EINVAL;
     return -1;
 }
@@ -1114,7 +1152,8 @@ sys_alloc(int size) {
 
     if (rc == ERROR_NOT_ENOUGH_MEMORY) {
 	return (void *) -1;
-    } else if ( rc ) die("Got an error from DosAllocMem: %li", (long)rc);
+    } else if ( rc ) 
+	croak("Got an error from DosAllocMem: %li", (long)rc);
     return got;
 }
 
@@ -1148,8 +1187,9 @@ XS(XS_File__Copy_syscopy)
     if (items < 2 || items > 3)
 	croak("Usage: File::Copy::syscopy(src,dst,flag=0)");
     {
-	char *	src = (char *)SvPV(ST(0),PL_na);
-	char *	dst = (char *)SvPV(ST(1),PL_na);
+	STRLEN n_a;
+	char *	src = (char *)SvPV(ST(0),n_a);
+	char *	dst = (char *)SvPV(ST(1),n_a);
 	U32	flag;
 	int	RETVAL, rc;
 
@@ -1178,6 +1218,7 @@ mod2fname(sv)
     AV  *av;
     SV  *svp;
     char *s;
+    STRLEN n_a;
 
     if (!SvROK(sv)) croak("Not a reference given to mod2fname");
     sv = SvRV(sv);
@@ -1188,7 +1229,7 @@ mod2fname(sv)
     if (avlen < 0) 
       croak("Empty array reference given to mod2fname");
 
-    s = SvPV(*av_fetch((AV*)sv, avlen, FALSE), PL_na);
+    s = SvPV(*av_fetch((AV*)sv, avlen, FALSE), n_a);
     strncpy(fname, s, 8);
     len = strlen(s);
     if (len < 6) pos = len;
@@ -1198,7 +1239,7 @@ mod2fname(sv)
     }
     avlen --;
     while (avlen >= 0) {
-	s = SvPV(*av_fetch((AV*)sv, avlen, FALSE), PL_na);
+	s = SvPV(*av_fetch((AV*)sv, avlen, FALSE), n_a);
 	while (*s) {
 	    sum = 33 * sum + *(s++);	/* 7 is primitive mod 13. */
 	}
@@ -1273,7 +1314,7 @@ perllib_mangle(char *s, unsigned int l)
 	    }
 	    newl = strlen(newp);
 	    if (newl == 0 || oldl == 0) {
-		die("Malformed PERLLIB_PREFIX");
+		croak("Malformed PERLLIB_PREFIX");
 	    }
 	    strcpy(ret, newp);
 	    s = ret;
@@ -1295,10 +1336,100 @@ perllib_mangle(char *s, unsigned int l)
 	return s;
     }
     if (l + newl - oldl > STATIC_FILE_LENGTH || newl > STATIC_FILE_LENGTH) {
-	die("Malformed PERLLIB_PREFIX");
+	croak("Malformed PERLLIB_PREFIX");
     }
     strcpy(ret + newl, s + oldl);
     return ret;
+}
+
+unsigned long 
+Perl_hab_GET()			/* Needed if perl.h cannot be included */
+{
+    return perl_hab_GET();
+}
+
+HMQ
+Perl_Register_MQ(int serve)
+{
+    PPIB pib;
+    PTIB tib;
+
+    if (Perl_os2_initial_mode++)
+	return Perl_hmq;
+    DosGetInfoBlocks(&tib, &pib);
+    Perl_os2_initial_mode = pib->pib_ultype;
+    Perl_hmq_refcnt = 1;
+    /* Try morphing into a PM application. */
+    if (pib->pib_ultype != 3)		/* 2 is VIO */
+	pib->pib_ultype = 3;		/* 3 is PM */
+    init_PMWIN_entries();
+    /* 64 messages if before OS/2 3.0, ignored otherwise */
+    Perl_hmq = (*PMWIN_entries.CreateMsgQueue)(perl_hab_GET(), 64); 
+    if (!Perl_hmq) {
+	static int cnt;
+	if (cnt++)
+	    _exit(188);			/* Panic can try to create a window. */
+	croak("Cannot create a message queue, or morph to a PM application");
+    }
+    return Perl_hmq;
+}
+
+int
+Perl_Serve_Messages(int force)
+{
+    int cnt = 0;
+    QMSG msg;
+
+    if (Perl_hmq_servers && !force)
+	return 0;
+    if (!Perl_hmq_refcnt)
+	croak("No message queue");
+    while ((*PMWIN_entries.PeekMsg)(Perl_hab, &msg, NULLHANDLE, 0, 0, PM_REMOVE)) {
+	cnt++;
+	if (msg.msg == WM_QUIT)
+	    croak("QUITing...");
+	(*PMWIN_entries.DispatchMsg)(Perl_hab, &msg);
+    }
+    return cnt;
+}
+
+int
+Perl_Process_Messages(int force, I32 *cntp)
+{
+    QMSG msg;
+
+    if (Perl_hmq_servers && !force)
+	return 0;
+    if (!Perl_hmq_refcnt)
+	croak("No message queue");
+    while ((*PMWIN_entries.GetMsg)(Perl_hab, &msg, NULLHANDLE, 0, 0)) {
+	if (cntp)
+	    (*cntp)++;
+	(*PMWIN_entries.DispatchMsg)(Perl_hab, &msg);
+	if (msg.msg == WM_DESTROY)
+	    return -1;
+	if (msg.msg == WM_CREATE)
+	    return +1;
+    }
+    croak("QUITing...");
+}
+
+void
+Perl_Deregister_MQ(int serve)
+{
+    PPIB pib;
+    PTIB tib;
+
+    if (--Perl_hmq_refcnt == 0) {
+	(*PMWIN_entries.DestroyMsgQueue)(Perl_hmq);
+	Perl_hmq = 0;
+	/* Try morphing back from a PM application. */
+	if (pib->pib_ultype == 3)		/* 3 is PM */
+	    pib->pib_ultype = Perl_os2_initial_mode;
+	else
+	    warn("Unexpected program mode %d when morphing back from PM",
+		 pib->pib_ultype);
+    }
 }
 
 extern void dlopen();
@@ -1313,6 +1444,206 @@ void *fakedl = &dlopen;		/* Pull in dynaloading part. */
 #undef chdir				/* Was _chdir2. */
 #define sys_chdir(p) (chdir(p) == 0)
 #define change_drive(d) (_chdrive(d), (current_drive() == toupper(d)))
+
+static int DOS_harderr_state = -1;    
+
+XS(XS_OS2_Error)
+{
+    dXSARGS;
+    if (items != 2)
+	croak("Usage: OS2::Error(harderr, exception)");
+    {
+	int	arg1 = SvIV(ST(0));
+	int	arg2 = SvIV(ST(1));
+	int	a = ((arg1 ? FERR_ENABLEHARDERR : FERR_DISABLEHARDERR)
+		     | (arg2 ? FERR_ENABLEEXCEPTION : FERR_DISABLEEXCEPTION));
+	int	RETVAL = ((arg1 ? 1 : 0) | (arg2 ? 2 : 0));
+	unsigned long rc;
+
+	if (CheckOSError(DosError(a)))
+	    croak("DosError(%d) failed", a);
+	ST(0) = sv_newmortal();
+	if (DOS_harderr_state >= 0)
+	    sv_setiv(ST(0), DOS_harderr_state);
+	DOS_harderr_state = RETVAL;
+    }
+    XSRETURN(1);
+}
+
+static signed char DOS_suppression_state = -1;    
+
+XS(XS_OS2_Errors2Drive)
+{
+    dXSARGS;
+    if (items != 1)
+	croak("Usage: OS2::Errors2Drive(drive)");
+    {
+	STRLEN n_a;
+	SV  *sv = ST(0);
+	int	suppress = SvOK(sv);
+	char	*s = suppress ? SvPV(sv, n_a) : NULL;
+	char	drive = (s ? *s : 0);
+	unsigned long rc;
+
+	if (suppress && !isALPHA(drive))
+	    croak("Non-char argument '%c' to OS2::Errors2Drive()", drive);
+	if (CheckOSError(DosSuppressPopUps((suppress
+					    ? SPU_ENABLESUPPRESSION 
+					    : SPU_DISABLESUPPRESSION),
+					   drive)))
+	    croak("DosSuppressPopUps(%c) failed", drive);
+	ST(0) = sv_newmortal();
+	if (DOS_suppression_state > 0)
+	    sv_setpvn(ST(0), &DOS_suppression_state, 1);
+	else if (DOS_suppression_state == 0)
+	    sv_setpvn(ST(0), "", 0);
+	DOS_suppression_state = drive;
+    }
+    XSRETURN(1);
+}
+
+static const char * const si_fields[QSV_MAX] = {
+  "MAX_PATH_LENGTH",
+  "MAX_TEXT_SESSIONS",
+  "MAX_PM_SESSIONS",
+  "MAX_VDM_SESSIONS",
+  "BOOT_DRIVE",
+  "DYN_PRI_VARIATION",
+  "MAX_WAIT",
+  "MIN_SLICE",
+  "MAX_SLICE",
+  "PAGE_SIZE",
+  "VERSION_MAJOR",
+  "VERSION_MINOR",
+  "VERSION_REVISION",
+  "MS_COUNT",
+  "TIME_LOW",
+  "TIME_HIGH",
+  "TOTPHYSMEM",
+  "TOTRESMEM",
+  "TOTAVAILMEM",
+  "MAXPRMEM",
+  "MAXSHMEM",
+  "TIMER_INTERVAL",
+  "MAX_COMP_LENGTH",
+  "FOREGROUND_FS_SESSION",
+  "FOREGROUND_PROCESS"
+};
+
+XS(XS_OS2_SysInfo)
+{
+    dXSARGS;
+    if (items != 0)
+	croak("Usage: OS2::SysInfo()");
+    {
+	ULONG   si[QSV_MAX] = {0};	/* System Information Data Buffer */
+	APIRET  rc	= NO_ERROR;	/* Return code            */
+	int i = 0, j = 0;
+
+	if (CheckOSError(DosQuerySysInfo(1L, /* Request all available system */
+					 QSV_MAX, /* information */
+					 (PVOID)si,
+					 sizeof(si))))
+	    croak("DosQuerySysInfo() failed");
+	EXTEND(SP,2*QSV_MAX);
+	while (i < QSV_MAX) {
+	    ST(j) = sv_newmortal();
+	    sv_setpv(ST(j++), si_fields[i]);
+	    ST(j) = sv_newmortal();
+	    sv_setiv(ST(j++), si[i]);
+	    i++;
+	}
+    }
+    XSRETURN(2 * QSV_MAX);
+}
+
+XS(XS_OS2_BootDrive)
+{
+    dXSARGS;
+    if (items != 0)
+	croak("Usage: OS2::BootDrive()");
+    {
+	ULONG   si[1] = {0};	/* System Information Data Buffer */
+	APIRET  rc    = NO_ERROR;	/* Return code            */
+	char c;
+	
+	if (CheckOSError(DosQuerySysInfo(QSV_BOOT_DRIVE, QSV_BOOT_DRIVE,
+					 (PVOID)si, sizeof(si))))
+	    croak("DosQuerySysInfo() failed");
+	ST(0) = sv_newmortal();
+	c = 'a' - 1 + si[0];
+	sv_setpvn(ST(0), &c, 1);
+    }
+    XSRETURN(1);
+}
+
+XS(XS_OS2_MorphPM)
+{
+    dXSARGS;
+    if (items != 1)
+	croak("Usage: OS2::MorphPM(serve)");
+    {
+	bool  serve = SvOK(ST(0));
+	unsigned long   pmq = perl_hmq_GET(serve);
+
+	ST(0) = sv_newmortal();
+	sv_setiv(ST(0), pmq);
+    }
+    XSRETURN(1);
+}
+
+XS(XS_OS2_UnMorphPM)
+{
+    dXSARGS;
+    if (items != 1)
+	croak("Usage: OS2::UnMorphPM(serve)");
+    {
+	bool  serve = SvOK(ST(0));
+
+	perl_hmq_UNSET(serve);
+    }
+    XSRETURN(0);
+}
+
+XS(XS_OS2_Serve_Messages)
+{
+    dXSARGS;
+    if (items != 1)
+	croak("Usage: OS2::Serve_Messages(force)");
+    {
+	bool  force = SvOK(ST(0));
+	unsigned long   cnt = Perl_Serve_Messages(force);
+
+	ST(0) = sv_newmortal();
+	sv_setiv(ST(0), cnt);
+    }
+    XSRETURN(1);
+}
+
+XS(XS_OS2_Process_Messages)
+{
+    dXSARGS;
+    if (items < 1 || items > 2)
+	croak("Usage: OS2::Process_Messages(force [, cnt])");
+    {
+	bool  force = SvOK(ST(0));
+	unsigned long   cnt;
+	I32 *cntp = NULL;
+
+	if (items == 2) {
+	    SV *sv = ST(1);
+	    int fake = SvIV(sv);	/* Force SvIVX */
+	    
+	    if (!SvIOK(sv))
+		croak("Can't upgrade count to IV");
+	    cntp = &SvIVX(sv);
+	}
+	cnt =  Perl_Process_Messages(force, cntp);
+	ST(0) = sv_newmortal();
+	sv_setiv(ST(0), cnt);
+    }
+    XSRETURN(1);
+}
 
 XS(XS_Cwd_current_drive)
 {
@@ -1335,7 +1666,8 @@ XS(XS_Cwd_sys_chdir)
     if (items != 1)
 	croak("Usage: Cwd::sys_chdir(path)");
     {
-	char *	path = (char *)SvPV(ST(0),PL_na);
+	STRLEN n_a;
+	char *	path = (char *)SvPV(ST(0),n_a);
 	bool	RETVAL;
 
 	RETVAL = sys_chdir(path);
@@ -1351,7 +1683,8 @@ XS(XS_Cwd_change_drive)
     if (items != 1)
 	croak("Usage: Cwd::change_drive(d)");
     {
-	char	d = (char)*SvPV(ST(0),PL_na);
+	STRLEN n_a;
+	char	d = (char)*SvPV(ST(0),n_a);
 	bool	RETVAL;
 
 	RETVAL = change_drive(d);
@@ -1367,7 +1700,8 @@ XS(XS_Cwd_sys_is_absolute)
     if (items != 1)
 	croak("Usage: Cwd::sys_is_absolute(path)");
     {
-	char *	path = (char *)SvPV(ST(0),PL_na);
+	STRLEN n_a;
+	char *	path = (char *)SvPV(ST(0),n_a);
 	bool	RETVAL;
 
 	RETVAL = sys_is_absolute(path);
@@ -1383,7 +1717,8 @@ XS(XS_Cwd_sys_is_rooted)
     if (items != 1)
 	croak("Usage: Cwd::sys_is_rooted(path)");
     {
-	char *	path = (char *)SvPV(ST(0),PL_na);
+	STRLEN n_a;
+	char *	path = (char *)SvPV(ST(0),n_a);
 	bool	RETVAL;
 
 	RETVAL = sys_is_rooted(path);
@@ -1399,7 +1734,8 @@ XS(XS_Cwd_sys_is_relative)
     if (items != 1)
 	croak("Usage: Cwd::sys_is_relative(path)");
     {
-	char *	path = (char *)SvPV(ST(0),PL_na);
+	STRLEN n_a;
+	char *	path = (char *)SvPV(ST(0),n_a);
 	bool	RETVAL;
 
 	RETVAL = sys_is_relative(path);
@@ -1430,7 +1766,8 @@ XS(XS_Cwd_sys_abspath)
     if (items < 1 || items > 2)
 	croak("Usage: Cwd::sys_abspath(path, dir = NULL)");
     {
-	char *	path = (char *)SvPV(ST(0),PL_na);
+	STRLEN n_a;
+	char *	path = (char *)SvPV(ST(0),n_a);
 	char *	dir;
 	char p[MAXPATHLEN];
 	char *	RETVAL;
@@ -1438,7 +1775,7 @@ XS(XS_Cwd_sys_abspath)
 	if (items < 2)
 	    dir = NULL;
 	else {
-	    dir = (char *)SvPV(ST(1),PL_na);
+	    dir = (char *)SvPV(ST(1),n_a);
 	}
 	if (path[0] == '.' && (path[1] == '/' || path[1] == '\\')) {
 	    path += 2;
@@ -1535,7 +1872,7 @@ typedef APIRET (*PELP)(PSZ path, ULONG type);
 APIRET
 ExtLIBPATH(ULONG ord, PSZ path, ULONG type)
 {
-    loadByOrd(ord);			/* Guarantied to load or die! */
+    loadByOrd("doscalls",ord);		/* Guarantied to load or die! */
     return (*(PELP)ExtFCN[ord])(path, type);
 }
 
@@ -1578,7 +1915,8 @@ XS(XS_Cwd_extLibpath_set)
     if (items < 1 || items > 2)
 	croak("Usage: Cwd::extLibpath_set(s, type = 0)");
     {
-	char *	s = (char *)SvPV(ST(0),PL_na);
+	STRLEN n_a;
+	char *	s = (char *)SvPV(ST(0),n_a);
 	bool	type;
 	U32	rc;
 	bool	RETVAL;
@@ -1608,6 +1946,14 @@ Xs_OS2_init()
             newXS("Cwd::extLibpath", XS_Cwd_extLibpath, file);
             newXS("Cwd::extLibpath_set", XS_Cwd_extLibpath_set, file);
 	}
+        newXS("OS2::Error", XS_OS2_Error, file);
+        newXS("OS2::Errors2Drive", XS_OS2_Errors2Drive, file);
+        newXS("OS2::SysInfo", XS_OS2_SysInfo, file);
+        newXS("OS2::BootDrive", XS_OS2_BootDrive, file);
+        newXS("OS2::MorphPM", XS_OS2_MorphPM, file);
+        newXS("OS2::UnMorphPM", XS_OS2_UnMorphPM, file);
+        newXS("OS2::Serve_Messages", XS_OS2_Serve_Messages, file);
+        newXS("OS2::Process_Messages", XS_OS2_Process_Messages, file);
         newXS("DynaLoader::mod2fname", XS_DynaLoader_mod2fname, file);
         newXS("Cwd::current_drive", XS_Cwd_current_drive, file);
         newXS("Cwd::sys_chdir", XS_Cwd_sys_chdir, file);
@@ -1622,6 +1968,17 @@ Xs_OS2_init()
 #ifdef PERL_IS_AOUT
 	sv_setiv(GvSV(gv), 1);
 #endif 
+	gv = gv_fetchpv("OS2::emx_rev", TRUE, SVt_PV);
+	GvMULTI_on(gv);
+	sv_setiv(GvSV(gv), _emx_rev);
+	sv_setpv(GvSV(gv), _emx_vprt);
+	SvIOK_on(GvSV(gv));
+	gv = gv_fetchpv("OS2::emx_env", TRUE, SVt_PV);
+	GvMULTI_on(gv);
+	sv_setiv(GvSV(gv), _emx_env);
+	gv = gv_fetchpv("OS2::os_ver", TRUE, SVt_PV);
+	GvMULTI_on(gv);
+	sv_setnv(GvSV(gv), _osmajor + 0.001 * _osminor);
     }
 }
 

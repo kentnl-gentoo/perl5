@@ -164,8 +164,9 @@ PP(pp_substcont)
 
 	/* Are we done */
 	if (cx->sb_once || !CALLREGEXEC(rx, s, cx->sb_strend, orig,
-				     s == m, Nullsv, NULL,
-				     cx->sb_safebase ? 0 : REXEC_COPY_STR))
+				     s == m, cx->sb_targ, NULL,
+				     ((cx->sb_rflags & REXEC_COPY_STR)
+				      ? 0 : REXEC_COPY_STR)))
 	{
 	    SV *targ = cx->sb_targ;
 	    sv_catpvn(dstr, s, cx->sb_strend - s);
@@ -617,7 +618,13 @@ PP(pp_formline)
 	    break;
 
 	case FF_MORE:
-	    if (itemsize) {
+	    s = chophere;
+	    send = item + len;
+	    if (chopspace) {
+		while (*s && isSPACE(*s) && s < send)
+		    s++;
+	    }
+	    if (s < send) {
 		arg = fieldsize - itemsize;
 		if (arg) {
 		    fieldsize -= arg;
@@ -662,12 +669,8 @@ PP(pp_grepstart)
     ENTER;					/* enter outer scope */
 
     SAVETMPS;
-#ifdef USE_THREADS
-    /* SAVE_DEFSV does *not* suffice here */
-    save_sptr(&THREADSV(0));
-#else
-    SAVESPTR(GvSV(PL_defgv));
-#endif /* USE_THREADS */
+    /* SAVE_DEFSV does *not* suffice here for USE_THREADS */
+    SAVESPTR(DEFSV);
     ENTER;					/* enter inner scope */
     SAVESPTR(PL_curpm);
 
@@ -869,10 +872,11 @@ PP(pp_sort)
 	if (*up = *++MARK) {			/* Weed out nulls. */
 	    SvTEMP_off(*up);
 	    if (!PL_sortcop && !SvPOK(*up)) {
+		STRLEN n_a;
 	        if (SvAMAGIC(*up))
 	            overloading = 1;
 	        else
-		    (void)sv_2pv(*up, &PL_na);
+		    (void)sv_2pv(*up, &n_a);
 	    }
 	    up++;
 	}
@@ -911,6 +915,7 @@ PP(pp_sort)
 	    qsortsv((myorigmark+1), max, FUNC_NAME_TO_PTR(sortcv));
 
 	    POPBLOCK(cx,PL_curpm);
+	    PL_stack_sp = newsp;
 	    POPSTACK;
 	    CATCH_SET(oldcatch);
 	}
@@ -1002,11 +1007,11 @@ PP(pp_flop)
 	}
 	else {
 	    SV *final = sv_mortalcopy(right);
-	    STRLEN len;
+	    STRLEN len, n_a;
 	    char *tmps = SvPV(final, len);
 
 	    sv = sv_mortalcopy(left);
-	    SvPV_force(sv,PL_na);
+	    SvPV_force(sv,n_a);
 	    while (!SvNIOKp(sv) && SvCUR(sv) <= len) {
 		XPUSHs(sv);
 	        if (strEQ(SvPVX(sv),tmps))
@@ -1229,6 +1234,7 @@ OP *
 die_where(char *message)
 {
     dSP;
+    STRLEN n_a;
     if (PL_in_eval) {
 	I32 cxix;
 	register PERL_CONTEXT *cx;
@@ -1252,6 +1258,10 @@ die_where(char *message)
 			SvGROW(err, SvCUR(err)+sizeof(prefix)+klen);
 			sv_catpvn(err, prefix, sizeof(prefix)-1);
 			sv_catpvn(err, message, klen);
+			if (ckWARN(WARN_UNSAFE)) {
+			    STRLEN start = SvCUR(err)-klen-sizeof(prefix)+1;
+			    warner(WARN_UNSAFE, SvPVX(err)+start);
+			}
 		    }
 		    sv_inc(*svp);
 		}
@@ -1260,7 +1270,7 @@ die_where(char *message)
 		sv_setpv(ERRSV, message);
 	}
 	else
-	    message = SvPVx(ERRSV, PL_na);
+	    message = SvPVx(ERRSV, n_a);
 
 	while ((cxix = dopoptoeval(cxstack_ix)) < 0 && PL_curstackinfo->si_prev) {
 	    dounwind(-1);
@@ -1287,14 +1297,14 @@ die_where(char *message)
 	    LEAVE;
 
 	    if (optype == OP_REQUIRE) {
-		char* msg = SvPVx(ERRSV, PL_na);
+		char* msg = SvPVx(ERRSV, n_a);
 		DIE("%s", *msg ? msg : "Compilation failed in require");
 	    }
 	    return pop_return();
 	}
     }
     if (!message)
-	message = SvPVx(ERRSV, PL_na);
+	message = SvPVx(ERRSV, n_a);
     PerlIO_printf(PerlIO_stderr(), "%s",message);
     PerlIO_flush(PerlIO_stderr());
     my_failure_exit();
@@ -1472,11 +1482,12 @@ PP(pp_reset)
 {
     djSP;
     char *tmps;
+    STRLEN n_a;
 
     if (MAXARG < 1)
 	tmps = "";
     else
-	tmps = POPp;
+	tmps = POPpx;
     sv_reset(tmps, PL_curcop->cop_stash);
     PUSHs(&PL_sv_yes);
     RETURN;
@@ -1932,6 +1943,7 @@ PP(pp_goto)
     label = 0;
     if (PL_op->op_flags & OPf_STACKED) {
 	SV *sv = POPs;
+	STRLEN n_a;
 
 	/* This egregious kludge implements goto &subroutine */
 	if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV) {
@@ -2181,7 +2193,7 @@ PP(pp_goto)
 	    }
 	}
 	else
-	    label = SvPV(sv,PL_na);
+	    label = SvPV(sv,n_a);
     }
     else if (PL_op->op_flags & OPf_SPECIAL) {
 	if (! do_dump)
@@ -2330,7 +2342,8 @@ PP(pp_cswitch)
     if (PL_multiline)
 	PL_op = PL_op->op_next;			/* can't assume anything */
     else {
-	match = *(SvPVx(GvSV(cCOP->cop_gv), PL_na)) & 255;
+	STRLEN n_a;
+	match = *(SvPVx(GvSV(cCOP->cop_gv), n_a)) & 255;
 	match -= cCOP->uop.scop.scop_offset;
 	if (match < 0)
 	    match = 0;
@@ -2569,6 +2582,7 @@ doeval(int gimme, OP** startop)
 	I32 gimme;
 	PERL_CONTEXT *cx;
 	I32 optype = 0;			/* Might be reset by POPEVAL. */
+	STRLEN n_a;
 
 	PL_op = saveop;
 	if (PL_eval_root) {
@@ -2584,10 +2598,10 @@ doeval(int gimme, OP** startop)
 	lex_end();
 	LEAVE;
 	if (optype == OP_REQUIRE) {
-	    char* msg = SvPVx(ERRSV, PL_na);
+	    char* msg = SvPVx(ERRSV, n_a);
 	    DIE("%s", *msg ? msg : "Compilation failed in require");
 	} else if (startop) {
-	    char* msg = SvPVx(ERRSV, PL_na);
+	    char* msg = SvPVx(ERRSV, n_a);
 
 	    POPBLOCK(cx,PL_curpm);
 	    POPEVAL(cx);
@@ -2660,13 +2674,14 @@ PP(pp_require)
     SV** svp;
     I32 gimme = G_SCALAR;
     PerlIO *tryrsfp = 0;
+    STRLEN n_a;
 
     sv = POPs;
     if (SvNIOKp(sv) && !SvPOKp(sv)) {
 	SET_NUMERIC_STANDARD();
 	if (atof(PL_patchlevel) + 0.00000999 < SvNV(sv))
 	    DIE("Perl %s required--this is only version %s, stopped",
-		SvPV(sv,PL_na),PL_patchlevel);
+		SvPV(sv,n_a),PL_patchlevel);
 	RETPUSHYES;
     }
     name = SvPV(sv, len);
@@ -2709,7 +2724,7 @@ PP(pp_require)
 	{
 	    namesv = NEWSV(806, 0);
 	    for (i = 0; i <= AvFILL(ar); i++) {
-		char *dir = SvPVx(*av_fetch(ar, i, TRUE), PL_na);
+		char *dir = SvPVx(*av_fetch(ar, i, TRUE), n_a);
 #ifdef VMS
 		char *unixdir;
 		if ((unixdir = tounixpath(dir, Nullch)) == Nullch)
@@ -2745,7 +2760,7 @@ PP(pp_require)
 		sv_catpv(msg, " (did you run h2ph?)");
 	    sv_catpv(msg, " (@INC contains:");
 	    for (i = 0; i <= AvFILL(ar); i++) {
-		char *dir = SvPVx(*av_fetch(ar, i, TRUE), PL_na);
+		char *dir = SvPVx(*av_fetch(ar, i, TRUE), n_a);
 		sv_setpvf(dirmsgsv, " %s", dir);
 	        sv_catsv(msg, dirmsgsv);
 	    }

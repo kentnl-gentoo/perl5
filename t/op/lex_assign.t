@@ -11,7 +11,7 @@ $xref = \ "";
 %h = (1..6);
 $aref = \@a;
 $href = \%h;
-open OP, qq{$^X -le 'print "aaa Ok ok" while \$i++ < 100'|};
+open OP, qq{$^X -le "print 'aaa Ok ok' for 1..100"|};
 $chopit = 'aaaaaa';
 @chopar = (113 .. 119);
 $posstr = '123456';
@@ -179,7 +179,7 @@ chmod 'non-existent'		# chmod
 utime 'non-existent'		# utime
 rename 'non-existent', 'non-existent1'	# rename
 link 'non-existent', 'non-existent1' # link
-symlink 'non-existent', 'non-existent1' # symlink
+'???'				# symlink
 readlink 'non-existent', 'non-existent1' # readlink
 '???'				# mkdir
 '???'				# rmdir

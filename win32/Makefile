@@ -6,6 +6,10 @@
 #
 
 ##
+## Make sure you read README.win32 *before* you mess with anything here!
+##
+
+##
 ## Build configuration.  Edit the values below to suit your needs.
 ##
 
@@ -25,7 +29,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	= \5.00553
+INST_VER	= \5.00554
 
 #
 # uncomment to enable threads-capabilities
@@ -105,13 +109,30 @@ INST_VER	= \5.00553
 
 #
 # set the install locations of the compiler include/libraries
+# Running VCVARS32.BAT is *required* when using Visual C.
 # Some versions of Visual C don't define MSVCDIR in the environment,
 # so you may have to set CCHOME explicitly.
+#
+# If the path contains spaces, you can try putting it in double
+# quotes, but support for this is not well-tested, and various
+# other things may break, so you're kinda on your own if you are
+# into specious paths. :-)
 #
 #CCHOME		= f:\msvc20
 CCHOME		= $(MSVCDIR)
 CCINCDIR	= $(CCHOME)\include
 CCLIBDIR	= $(CCHOME)\lib
+
+#
+# additional compiler flags can be specified here.
+#
+# Adding -DPERL_POLLUTE enables support for old symbols, at the expense of
+# extreme pollution. You most probably want this if you're compiling modules
+# from CPAN, or other such serious uses of this experimental perl release.
+# We don't enable this by default because we want the modules to get fixed
+# instead of clinging to shortcuts like this one.
+#
+#BUILDOPT	= -DPERL_POLLUTE
 
 #
 # specify space-separated list of extra directories to look for libraries
@@ -154,9 +175,6 @@ USE_THREADS	= undef
 !IF "$(USE_MULTI)" == ""
 USE_MULTI	= undef
 !ENDIF
-
-#BUILDOPT	= -DPERL_GLOBAL_STRUCT
-# -DUSE_PERLIO -D__STDC__=1 -DUSE_SFIO -DI_SFIO -I\sfio97\include
 
 !IF "$(PROCESSOR_ARCHITECTURE)" == ""
 PROCESSOR_ARCHITECTURE	= x86
@@ -491,7 +509,7 @@ SETARGV_OBJ	= setargv$(o)
 !ENDIF
 
 DYNAMIC_EXT	= Socket IO Fcntl Opcode SDBM_File POSIX attrs Thread B re \
-		Data/Dumper
+		Data/Dumper Devel/Peek
 STATIC_EXT	= DynaLoader
 NONXS_EXT	= Errno
 
@@ -508,6 +526,7 @@ B		= $(EXTDIR)\B\B
 RE		= $(EXTDIR)\re\re
 DUMPER		= $(EXTDIR)\Data\Dumper\Dumper
 ERRNO		= $(EXTDIR)\Errno\Errno
+PEEK		= $(EXTDIR)\Devel\Peek\Peek
 
 SOCKET_DLL	= $(AUTODIR)\Socket\Socket.dll
 FCNTL_DLL	= $(AUTODIR)\Fcntl\Fcntl.dll
@@ -519,6 +538,7 @@ ATTRS_DLL	= $(AUTODIR)\attrs\attrs.dll
 THREAD_DLL	= $(AUTODIR)\Thread\Thread.dll
 B_DLL		= $(AUTODIR)\B\B.dll
 DUMPER_DLL	= $(AUTODIR)\Data\Dumper\Dumper.dll
+PEEK_DLL	= $(AUTODIR)\Devel\Peek\Peek.dll
 RE_DLL		= $(AUTODIR)\re\re.dll
 
 ERRNO_PM	= $(LIBDIR)\Errno.pm
@@ -534,6 +554,7 @@ EXTENSION_C	= 		\
 		$(THREAD).c	\
 		$(RE).c		\
 		$(DUMPER).c	\
+		$(PEEK).c	\
 		$(B).c
 
 EXTENSION_DLL	= 		\
@@ -545,6 +566,7 @@ EXTENSION_DLL	= 		\
 		$(POSIX_DLL)	\
 		$(ATTRS_DLL)	\
 		$(DUMPER_DLL)	\
+		$(PEEK_DLL)	\
 		$(B_DLL)
 
 EXTENSION_PM	=		\
@@ -769,6 +791,12 @@ $(DUMPER_DLL): $(PERLEXE) $(DUMPER).xs
 	$(MAKE)
 	cd ..\..\..\win32
 
+$(PEEK_DLL): $(PERLEXE) $(PEEK).xs
+	cd $(EXTDIR)\Devel\$(*B)
+	..\..\..\miniperl -I..\..\..\lib Makefile.PL INSTALLDIRS=perl
+	$(MAKE)
+	cd ..\..\..\win32
+
 $(RE_DLL): $(PERLEXE) $(RE).xs
 	cd $(EXTDIR)\$(*B)
 	..\..\miniperl -I..\..\lib Makefile.PL INSTALLDIRS=perl
@@ -862,6 +890,7 @@ distclean: clean
 	-del /f $(LIBDIR)\SDBM_File.pm $(LIBDIR)\Socket.pm $(LIBDIR)\POSIX.pm
 	-del /f $(LIBDIR)\B.pm $(LIBDIR)\O.pm $(LIBDIR)\re.pm
 	-del /f $(LIBDIR)\Data\Dumper.pm
+	-del /f $(LIBDIR)\Devel\Peek.pm
 	-rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
 	-rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
 	-rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B

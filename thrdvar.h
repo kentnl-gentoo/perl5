@@ -52,6 +52,8 @@ PERLVAR(Tretstack_max,	I32)
 
 PERLVAR(TSv,		SV *)		/* used to hold temporary values */
 PERLVAR(TXpv,		XPV *)		/* used to hold temporary values */
+PERLVAR(Tna,		STRLEN)		/* for use in SvPV when length is
+					   Not Applicable */
 
 /* stat stuff */
 PERLVAR(Tstatbuf,	Stat_t)
@@ -85,7 +87,7 @@ PERLVAR(Trestartop,	OP *)		/* propagating an error from croak? */
 PERLVARI(Tcurcop,	COP * VOL,	&PL_compiling)
 PERLVAR(Tin_eval,	VOL int)	/* trap "fatal" errors? */
 PERLVAR(Tdelaymagic,	int)		/* ($<,$>) = ... */
-PERLVAR(Tdirty,		bool)		/* in the middle of tearing things down? */
+PERLVARI(Tdirty,	bool, FALSE)	/* in the middle of tearing things down? */
 PERLVAR(Tlocalizing,	int)		/* are we processing a local() list? */
 
 PERLVAR(Tcurstack,	AV *)		/* THE STACK */
@@ -102,6 +104,7 @@ PERLVAR(Thv_fetch_ent_mh, HE)		/* owned by hv_fetch_ent() */
 PERLVAR(Tmodcount,	I32)		/* how much mod()ification in assignment? */
 
 PERLVAR(Tlastgotoprobe,	OP*)		/* from pp_ctl.c */
+PERLVARI(Tdumpindent,	I32, 4)		/* # of blanks per dump indentation level */
 
 /* sort stuff */
 PERLVAR(Tsortcop,	OP *)		/* user defined sort routine */
@@ -155,6 +158,12 @@ PERLVARI(Tregindent,	int,	    0)	/* from regexec.c */
 PERLVAR(Tregcc,		CURCUR *)	/* from regexec.c */
 PERLVAR(Treg_call_cc,	struct re_cc_state *)	/* from regexec.c */
 PERLVAR(Treg_re,	regexp *)	/* from regexec.c */
+PERLVAR(Treg_ganch,	char *)		/* position of \G */
+PERLVAR(Treg_sv,	SV *)		/* what we match against */
+PERLVAR(Treg_magic,	MAGIC *)	/* pos-magic of what we match */
+PERLVAR(Treg_oldpos,	I32)		/* old pos of what we match */
+PERLVARI(Treg_oldcurpm,	PMOP*, NULL)	/* curpm before match */
+PERLVARI(Treg_curpm,	PMOP*, NULL)	/* curpm during match */
 
 PERLVARI(Tregcompp,	regcomp_t, FUNC_NAME_TO_PTR(pregcomp))
 					/* Pointer to RE compiler */
@@ -162,6 +171,7 @@ PERLVARI(Tregexecp,	regexec_t, FUNC_NAME_TO_PTR(regexec_flags))
 					/* Pointer to RE executer */
 PERLVARI(Treginterp_cnt,int,	    0)	/* Whether `Regexp'
 						   was interpolated. */
+PERLVARI(Treg_starttry,	char *,	    0)	/* -Dr: where regtry was called. */
 #ifdef DEBUGGING
 PERLVARI(Twatchaddr,	char **,    0)
 PERLVAR(Twatchok,	char *)

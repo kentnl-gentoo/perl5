@@ -907,6 +907,7 @@ public:
 #define PerlSock_inet_addr(c)		inet_addr(c)
 #define PerlSock_inet_ntoa(i)		inet_ntoa(i)
 #define PerlSock_listen(s, b)		listen(s, b)
+#define PerlSock_recv(s, b, l, f)	recv(s, b, l, f)
 #define PerlSock_recvfrom(s, b, l, f, from, fromlen)			\
 	recvfrom(s, b, l, f, from, fromlen)
 #define PerlSock_select(n, r, w, e, t)	select(n, r, w, e, t)
@@ -925,6 +926,23 @@ public:
 
 
 #endif	/* PERL_OBJECT */
+
+/* Mention
+
+   HAS_READV
+   HAS_RECVMSG
+   HAS_SENDMSG
+   HAS_WRITEV
+   HAS_STRUCT_MSGHDR
+   HAS_STRUCT_CMSGHDR
+   I_SYSUIO
+
+   here so that Configure picks them up.  Perl core does not
+   use them but somebody might want to extend IO:: someday.
+
+   Jarkko Hietaniemi November 1998
+
+   */
 
 #endif	/* __Inc__IPerl___ */
 

@@ -242,12 +242,26 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_getgrps HAS_GETGROUPS		/**/
 
+/* HAS_GETHOSTNAME:
+ *	This symbol, if defined, indicates that the C program may use the
+ *	gethostname() routine to derive the host name.  See also HAS_UNAME
+ *	and PHOSTNAME.
+ */
 /* HAS_UNAME:
  *	This symbol, if defined, indicates that the C program may use the
  *	uname() routine to derive the host name.  See also HAS_GETHOSTNAME
  *	and PHOSTNAME.
  */
+/* PHOSTNAME:
+ *	This symbol, if defined, indicates that the C program may use the
+ *	contents of PHOSTNAME as a command to feed to the popen() routine
+ *	to derive the host name.  See also HAS_GETHOSTNAME and HAS_UNAME.
+ *	Note that the command uses a fully qualified path, so that it is safe
+ *	even if used by a process with super-user privileges.
+ */
+#$d_gethname HAS_GETHOSTNAME	/**/
 #$d_uname HAS_UNAME		/**/
+#$d_phostname PHOSTNAME "$aphostname"	/* How to get the host name */
 
 /* HAS_GETLOGIN:
  *	This symbol, if defined, indicates that the getlogin routine is
@@ -1106,6 +1120,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_void_closedir VOID_CLOSEDIR		/**/
 
+/* HAS_FD_SET:
+ *	This symbol, when defined, indicates presence of the fd_set typedef
+ *	in <sys/types.h>
+ */
+#$d_fd_set HAS_FD_SET	/**/
+
 /* Gconvert:
  *	This preprocessor macro is defined to convert a floating point
  *	number to a string without a trailing decimal point.  This
@@ -1176,6 +1196,13 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_sigaction HAS_SIGACTION	/**/
 
+/* HAS_SIGSETJMP:
+ *	This variable indicates to the C program that the sigsetjmp()
+ *	routine is available to save the calling process's registers
+ *	and stack environment for later use by siglongjmp(), and
+ *	to optionally save the process's signal mask.  See
+ *	Sigjmp_buf, Sigsetjmp, and Siglongjmp.
+ */
 /* Sigjmp_buf:
  *	This is the buffer type to be used with Sigsetjmp and Siglongjmp.
  */
@@ -1426,8 +1453,18 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	output.  This symbol will have the value "-" if CPPSTDIN needs a minus
  *	to specify standard input, otherwise the value is "".
  */
+/* CPPRUN:
+ *	This symbol contains the string which will invoke a C preprocessor on
+ *	the standard input and produce to standard output. It needs to end
+ *	with CPPLAST, after all other preprocessor flags have been specified.
+ *	The main difference with CPPSTDIN is that this program will never be a
+ *	pointer to a shell wrapper, i.e. it will be empty if no preprocessor is
+ *	available directly to the user. Note that it may well be different from
+ *	the preprocessor used to compile the C program.
+ */
 #define CPPSTDIN "$cppstdin"
 #define CPPMINUS "$cppminus"
+#define CPPRUN "$cpprun"
 
 /* HAS_ACCESS:
  *	This manifest constant lets the C program know that the access()
@@ -1436,6 +1473,9 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_access HAS_ACCESS		/**/
 
+/* HAS_CSH:
+ *	This symbol, if defined, indicates that the C-shell exists.
+ */
 /* CSH:
  *	This symbol, if defined, contains the full pathname of csh.
  */
@@ -1691,8 +1731,68 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	This symbol, if defined, indicates that the BSD socketpair() call is
  *	supported.
  */
-#$d_socket HAS_SOCKET		/**/
-#$d_sockpair HAS_SOCKETPAIR	/**/
+/* HAS_MSG_CTRUNC:
+ *	This symbol, if defined, indicates that the MSG_CTRUNC is supported.
+ *	Checking just with #ifdef might not be enough because this symbol
+ *	has been known to be an enum.
+ */
+/* HAS_MSG_DONTROUTE:
+ *	This symbol, if defined, indicates that the MSG_DONTROUTE is supported.
+ *	Checking just with #ifdef might not be enough because this symbol
+ *	has been known to be an enum.
+ */
+/* HAS_MSG_OOB:
+ *	This symbol, if defined, indicates that the MSG_OOB is supported.
+ *	Checking just with #ifdef might not be enough because this symbol
+ *	has been known to be an enum.
+ */
+/* HAS_MSG_PEEK:
+ *	This symbol, if defined, indicates that the MSG_PEEK is supported.
+ *	Checking just with #ifdef might not be enough because this symbol
+ *	has been known to be an enum.
+ */
+/* HAS_MSG_PROXY:
+ *	This symbol, if defined, indicates that the MSG_PROXY is supported.
+ *	Checking just with #ifdef might not be enough because this symbol
+ *	has been known to be an enum.
+ */
+/* HAS_SCM_RIGHTS:
+ *	This symbol, if defined, indicates that the SCM_RIGHTS is supported.
+ *	Checking just with #ifdef might not be enough because this symbol
+ *	has been known to be an enum.
+ */
+/* HAS_SENDMSG:
+ *	This symbol, if defined, indicates that the sendmsg is supported
+ *	to send messages between sockets.  You will also need struct
+ *	iovec from <sys/uio.h>, HAS_STRUCT_IOVEC and I_SYSUIO.
+ */
+/* HAS_RECVMSG:
+ *	This symbol, if defined, indicates that the recvmsg is supported
+ *	to send messages between sockets.  You will also need struct
+ *	iovec from <sys/uio.h>, HAS_STRUCT_IOVEC and I_SYSUIO.
+ */
+/* HAS_STRUCT_MSGHDR:
+ *	This symbol, if defined, indicates that the struct msghdr
+ *	(BSD 4.3 or 4.4) is supported.  You will also need struct
+ *	iovec from <sys/uio.h>, HAS_STRUCT_IOVEC and I_SYSUIO.
+ */
+/* HAS_STRUCT_CMSGHDR:
+ *	This symbol, if defined, indicates that the struct cmsghdr
+ *	(BSD 4.4) is supported.  You will also need struct
+ *	iovec from <sys/uio.h>, HAS_STRUCT_IOVEC and I_SYSUIO.
+ */
+#$d_socket	HAS_SOCKET		/**/
+#$d_sockpair	HAS_SOCKETPAIR	/**/
+#$d_msg_ctrunc	HAS_MSG_CTRUNC	/**/
+#$d_msg_dontroute	HAS_MSG_DONTROUTE	/**/
+#$d_msg_oob	HAS_MSG_OOB	/**/
+#$d_msg_peek	HAS_MSG_PEEK	/**/
+#$d_msg_proxy	HAS_MSG_PROXY	/**/
+#$d_scm_rights	HAS_SCM_RIGHTS	/**/
+#$d_sendmsg	HAS_SENDMSG	/**/
+#$d_recvmsg	HAS_RECVMSG	/**/
+#$d_msghdr_s	HAS_STRUCT_MSGHDR	/**/
+#$d_cmsghdr_s	HAS_STRUCT_CMSGHDR	/**/
 
 /* USE_STAT_BLOCKS:
  *	This symbol is defined if this system has a stat structure declaring
@@ -1825,6 +1925,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$d_pwgecos PWGECOS	/**/
 #$d_pwpasswd PWPASSWD	/**/
 
+/* I_SYSUIO:
+ *	This symbol, if defined, indicates that <sys/uio.h> exists and
+ *	should be included.
+ */
+#$i_sysuio	I_SYSUIO		/**/
+
 /* Free_t:
  *	This variable contains the return type of free().  It is usually
  * void, but occasionally int.
@@ -1932,11 +2038,24 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_ftello HAS_FTELLO		/**/
 
+/* HAS_READV:
+ *	This symbol, if defined, indicates that the readv routine is
+ *	available to do gather reads.  You will also need <sys/uio.h>
+ *	and there I_SYSUIO.
+ */
+#$d_readv HAS_READV		/**/
+
 /* USE_SFIO:
  *	This symbol, if defined, indicates that sfio should
  *	be used.
  */
 #$d_sfio	USE_SFIO		/**/
+
+/* HAS_WRITEV:
+ *	This symbol, if defined, indicates that the writev routine is
+ *	available to do scatter writes.
+ */
+#$d_writev HAS_WRITEV		/**/
 
 /* HAS_DBMINIT64:
  *	This symbol, if defined, indicates that the dbminit64 routine is
@@ -2005,6 +2124,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$i_inttypes   I_INTTYPES                /**/
 #$d_int64t     HAS_INT64_T               /**/
 
+/* I_POLL:
+ *	This symbol, if defined, indicates that <poll.h> exists and
+ *	should be included.
+ */
+#$i_poll	I_POLL		/**/
+
 /* HAS_FSTAT64:
  *	This symbol, if defined, indicates that the fstat64 routine is
  *	available to stat files (fds) larger than 2 gigabytes.
@@ -2067,7 +2192,7 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
 #$d_telldir64   HAS_TELLDIR64	/**/
 #$d_truncate64  HAS_TRUNCATE64	/**/
 #$d_off64t      HAS_OFF64_T    	/**/
-#$d_dirent64s   HAS_STRUCT_DIRENT64 	/**/
+#$d_dirent64_s   HAS_STRUCT_DIRENT64 	/**/
 
 /* PRIVLIB:
  *	This symbol contains the name of the private library for this package.
@@ -2266,6 +2391,15 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	instance.
  */
 #define ARCHNAME "$archname"		/**/
+
+/* PTHREAD_CREATE_JOINABLE:
+ *	This symbol, if defined, indicates how to create pthread
+ *	in joinable (aka undetached) state.  Not defined here if
+ *	pthread.h already has defined PTHREAD_CREATE_JOINABLE.
+ *	If defined, possible values are PTHREAD_CREATE_UNDETACHED
+ *	and __UNDETACHED.
+ */
+#$d_pthread_create_joinable PTHREAD_CREATE_JOINABLE $pthread_create_joinable /**/
 
 /* HAS_PTHREAD_YIELD:
  *	This symbol, if defined, indicates that the pthread_yield 

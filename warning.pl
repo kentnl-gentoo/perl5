@@ -1,5 +1,8 @@
 #!/usr/bin/perl
 
+BEGIN {
+  push @INC, './lib';
+}
 use strict ;
 
 sub DEFAULT_ON  () { 1 }
@@ -59,8 +62,8 @@ sub walk
     my @list = () ;
     my ($k, $v) ;
 
-    while (($k, $v) = each %$tre) {
-
+    foreach $k (sort keys %$tre) {
+	$v = $tre->{$k};
 	die "duplicate key $k\n" if defined $list{$k} ;
 	$Value{$index} = uc $k ;
         push @{ $list{$k} }, $index ++ ;
@@ -70,7 +73,6 @@ sub walk
     }
 
    return @list ;
-
 }
 
 ###########################################################################

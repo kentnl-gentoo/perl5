@@ -137,12 +137,12 @@ VIRTUAL void	dump_eval _((void));
 VIRTUAL void	dump_fds _((char* s));
 #endif
 VIRTUAL void	dump_form _((GV* gv));
-VIRTUAL void	dump_gv _((GV* gv));
+VIRTUAL void	gv_dump _((GV* gv));
 #ifdef MYMALLOC
 VIRTUAL void	dump_mstats _((char* s));
 #endif
-VIRTUAL void	dump_op _((OP* arg));
-VIRTUAL void	dump_pm _((PMOP* pm));
+VIRTUAL void	op_dump _((OP* arg));
+VIRTUAL void	pmop_dump _((PMOP* pm));
 VIRTUAL void	dump_packsubs _((HV* stash));
 VIRTUAL void	dump_sub _((GV* gv));
 VIRTUAL void	fbm_compile _((SV* sv, U32 flags));
@@ -361,7 +361,7 @@ VIRTUAL OP*	newNULLLIST _((void));
 VIRTUAL OP*	newOP _((I32 optype, I32 flags));
 VIRTUAL void	newPROG _((OP* o));
 VIRTUAL OP*	newRANGE _((I32 flags, OP* left, OP* right));
-VIRTUAL OP*	newSLICEOP _((I32 flags, OP* subscript, OP* list));
+VIRTUAL OP*	newSLICEOP _((I32 flags, OP* subscript, OP* listop));
 VIRTUAL OP*	newSTATEOP _((I32 flags, char* label, OP* o));
 VIRTUAL CV*	newSUB _((I32 floor, OP* o, OP* proto, OP* block));
 VIRTUAL CV*	newXS _((char* name, void (*subaddr)(CV* cv _CPERLproto), char* filename));
@@ -873,6 +873,7 @@ CHECKPOINT regcppush _((I32 parenfloor));
 char * regcppop _((void));
 char * regcp_set_to _((I32 ss));
 void cache_re _((regexp *prog));
+void restore_pos _((void *arg));
 U8 * reghop _((U8 *pos, I32 off));
 U8 * reghopmaybe _((U8 *pos, I32 off));
 void dump _((char *pat,...));
@@ -943,7 +944,21 @@ VIRTUAL void	sv_setpvn_mg _((SV *sv, const char *ptr, STRLEN len));
 VIRTUAL void	sv_setsv_mg _((SV *dstr, SV *sstr));
 VIRTUAL void	sv_usepvn_mg _((SV *sv, char *ptr, STRLEN len));
 
+VIRTUAL MGVTBL*	get_vtbl _((int vtbl_id));
+
 /* New virtual functions must be added here to maintain binary
  * compatablity with PERL_OBJECT
  */
 
+VIRTUAL char* pv_display _((SV *sv, char *pv, STRLEN cur, STRLEN len, STRLEN pvlim));
+VIRTUAL void dump_indent _((I32 level, PerlIO *file, const char* pat, ...));
+
+VIRTUAL void do_gv_dump _((I32 level, PerlIO *file, char *name, GV *sv));
+VIRTUAL void do_gvgv_dump _((I32 level, PerlIO *file, char *name, GV *sv));
+VIRTUAL void do_hv_dump _((I32 level, PerlIO *file, char *name, HV *sv));
+VIRTUAL void do_magic_dump _((I32 level, PerlIO *file, MAGIC *mg, I32 nest, I32 maxnest, bool dumpops, STRLEN pvlim));
+VIRTUAL void do_op_dump _((I32 level, PerlIO *file, OP *o));
+VIRTUAL void do_pmop_dump _((I32 level, PerlIO *file, PMOP *pm));
+VIRTUAL void do_sv_dump _((I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bool dumpops, STRLEN pvlim));
+VIRTUAL void magic_dump _((MAGIC *mg));
+VIRTUAL void reginitcolors _((void));

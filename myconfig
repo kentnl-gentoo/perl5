@@ -21,8 +21,10 @@ Summary of my $package ($baserev patchlevel $PATCHLEVEL subversion $SUBVERSION) 
   Platform:
     osname=$osname, osvers=$osvers, archname=$archname
     uname='$myuname'
+    config_args='$config_args'
     hint=$hint, useposix=$useposix, d_sigaction=$d_sigaction
     usethreads=$usethreads useperlio=$useperlio d_sfio=$d_sfio
+    use64bits=$use64bits usemultiplicity=$usemultiplicity
   Compiler:
     cc='$cc', optimize='$optimize', gccversion=$gccversion
     cppflags='$cppflags'

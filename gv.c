@@ -112,6 +112,7 @@ gv_init(GV *gv, HV *stash, char *name, STRLEN len, int multi)
     if (doproto) {			/* Replicate part of newSUB here. */
 	SvIOK_off(gv);
 	ENTER;
+	/* XXX unsafe for threads if eval_owner isn't held */
 	start_subparse(0,0);		/* Create CV in compcv. */
 	GvCV(gv) = PL_compcv;
 	LEAVE;
@@ -712,7 +713,7 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
 	if (len > 1)
 	    break;
 #ifdef COMPLEX_STATUS
-	sv_upgrade(GvSV(gv), SVt_PVLV);
+	(void)SvUPGRADE(GvSV(gv), SVt_PVLV);
 #endif
 	goto magicalize;
 
@@ -761,6 +762,7 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
     case '|':
     case '\001':
     case '\002':
+    case '\003':
     case '\004':
     case '\005':
     case '\006':
@@ -815,7 +817,7 @@ gv_fetchpv(char *nambeg, I32 add, I32 sv_type)
     case ']':
 	if (len == 1) {
 	    SV *sv = GvSV(gv);
-	    sv_upgrade(sv, SVt_PVNV);
+	    (void)SvUPGRADE(sv, SVt_PVNV);
 	    sv_setpv(sv, PL_patchlevel);
 	    (void)sv_2nv(sv);
 	    SvREADONLY_on(sv);
@@ -874,7 +876,8 @@ newIO(void)
     SvREFCNT(io) = 1;
     SvOBJECT_on(io);
     iogv = gv_fetchpv("FileHandle::", FALSE, SVt_PVHV);
-    if (!iogv)
+    /* unless exists($main::{FileHandle}) and defined(%main::FileHandle::) */
+    if (!(iogv && GvHV(iogv) && HvARRAY(GvHV(iogv))))
       iogv = gv_fetchpv("IO::Handle::", TRUE, SVt_PVHV);
     SvSTASH(io) = (HV*)SvREFCNT_inc(GvHV(iogv));
     return io;
@@ -1016,6 +1019,7 @@ Gv_AMupdate(HV *stash)
   MAGIC* mg=mg_find((SV*)stash,'c');
   AMT *amtp = (mg) ? (AMT*)mg->mg_ptr: (AMT *) NULL;
   AMT amt;
+  STRLEN n_a;
 
   if (mg && amtp->was_ok_am == PL_amagic_generation
       && amtp->was_ok_sub == PL_sub_generation)
@@ -1063,7 +1067,7 @@ Gv_AMupdate(HV *stash)
             default:
               if (!SvROK(sv)) {
                 if (!SvOK(sv)) break;
-		gv = gv_fetchmethod(stash, SvPV(sv, PL_na));
+		gv = gv_fetchmethod(stash, SvPV(sv, n_a));
                 if (gv) cv = GvCV(gv);
                 break;
               }
@@ -1124,7 +1128,7 @@ Gv_AMupdate(HV *stash)
 		GV *ngv;
 		
 		DEBUG_o( deb("Resolving method `%.256s' for overloaded `%s' in package `%.256s'\n", 
-			     SvPV(GvSV(gv), PL_na), cp, HvNAME(stash)) );
+			     SvPV(GvSV(gv), n_a), cp, HvNAME(stash)) );
 		if (!SvPOK(GvSV(gv)) 
 		    || !(ngv = gv_fetchmethod_autoload(stash, SvPVX(GvSV(gv)),
 						       FALSE)))
@@ -1437,6 +1441,7 @@ amagic_call(SV *left, SV *right, int method, int flags)
     SPAGAIN;
 
     res=POPs;
+    PUTBACK;
     POPSTACK;
     CATCH_SET(oldcatch);
 

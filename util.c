@@ -15,7 +15,8 @@
 #include "EXTERN.h"
 #include "perl.h"
 
-#if !defined(NSIG) || defined(M_UNIX) || defined(M_XENIX)
+/* XXX Configure test needed */
+#if !defined(NSIG) || defined(M_UNIX) || defined(M_XENIX) || defined(__NetBSD__)
 #include <signal.h>
 #endif
 
@@ -641,65 +642,53 @@ perl_init_i18nl10n(int printwarn)
 	else
 	    setlocale_failure = TRUE;
     }
-    if (!setlocale_failure)
-#endif /* LC_ALL */
-    {
+    if (!setlocale_failure) {
 #ifdef USE_LOCALE_CTYPE
-	if (! (curctype = setlocale(LC_CTYPE,
-				    (!done && (lang || PerlEnv_getenv("LC_CTYPE")))
+	if (! (curctype =
+	       setlocale(LC_CTYPE,
+			 (!done && (lang || PerlEnv_getenv("LC_CTYPE")))
 				    ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_CTYPE */
 #ifdef USE_LOCALE_COLLATE
-	if (! (curcoll = setlocale(LC_COLLATE,
-				   (!done && (lang || PerlEnv_getenv("LC_COLLATE")))
+	if (! (curcoll =
+	       setlocale(LC_COLLATE,
+			 (!done && (lang || PerlEnv_getenv("LC_COLLATE")))
 				   ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_COLLATE */
 #ifdef USE_LOCALE_NUMERIC
-	if (! (curnum = setlocale(LC_NUMERIC,
-				  (!done && (lang || PerlEnv_getenv("LC_NUMERIC")))
+	if (! (curnum =
+	       setlocale(LC_NUMERIC,
+			 (!done && (lang || PerlEnv_getenv("LC_NUMERIC")))
 				  ? "" : Nullch)))
 	    setlocale_failure = TRUE;
 #endif /* USE_LOCALE_NUMERIC */
     }
 
-#else /* !LOCALE_ENVIRON_REQUIRED */
-
-#ifdef LC_ALL
-
-    if (! setlocale(LC_ALL, ""))
-	setlocale_failure = TRUE;
-    else {
-#ifdef USE_LOCALE_CTYPE
-	curctype = setlocale(LC_CTYPE, Nullch);
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-	curcoll = setlocale(LC_COLLATE, Nullch);
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-	curnum = setlocale(LC_NUMERIC, Nullch);
-#endif /* USE_LOCALE_NUMERIC */
-    }
-
-#else /* !LC_ALL */
-
-#ifdef USE_LOCALE_CTYPE
-    if (! (curctype = setlocale(LC_CTYPE, "")))
-	setlocale_failure = TRUE;
-#endif /* USE_LOCALE_CTYPE */
-#ifdef USE_LOCALE_COLLATE
-    if (! (curcoll = setlocale(LC_COLLATE, "")))
-	setlocale_failure = TRUE;
-#endif /* USE_LOCALE_COLLATE */
-#ifdef USE_LOCALE_NUMERIC
-    if (! (curnum = setlocale(LC_NUMERIC, "")))
-	setlocale_failure = TRUE;
-#endif /* USE_LOCALE_NUMERIC */
-
 #endif /* LC_ALL */
 
 #endif /* !LOCALE_ENVIRON_REQUIRED */
+
+#ifdef LC_ALL
+    if (! setlocale(LC_ALL, ""))
+	setlocale_failure = TRUE;
+#endif /* LC_ALL */
+
+    if (!setlocale_failure) {
+#ifdef USE_LOCALE_CTYPE
+	if (! (curctype = setlocale(LC_CTYPE, "")))
+	    setlocale_failure = TRUE;
+#endif /* USE_LOCALE_CTYPE */
+#ifdef USE_LOCALE_COLLATE
+	if (! (curcoll = setlocale(LC_COLLATE, "")))
+	    setlocale_failure = TRUE;
+#endif /* USE_LOCALE_COLLATE */
+#ifdef USE_LOCALE_NUMERIC
+	if (! (curnum = setlocale(LC_NUMERIC, "")))
+	    setlocale_failure = TRUE;
+#endif /* USE_LOCALE_NUMERIC */
+    }
 
     if (setlocale_failure) {
 	char *p;
@@ -905,7 +894,7 @@ fbm_compile(SV *sv, U32 flags /* not used yet */)
     U32 frequency = 256;
 
     s = (U8*)SvPV_force(sv, len);
-    sv_upgrade(sv, SVt_PVBM);
+    (void)SvUPGRADE(sv, SVt_PVBM);
     if (len > 255 || len == 0)	/* TAIL might be on on a zero-length string. */
 	return;			/* can't have offsets that big */
     if (len > 2) {
@@ -1187,8 +1176,15 @@ savepvn(char *sv, register I32 len)
 STATIC SV *
 mess_alloc(void)
 {
+    dTHR;
     SV *sv;
     XPVMG *any;
+
+    if (!PL_dirty)
+	return sv_2mortal(newSVpvn("",0));
+
+    if (PL_mess_sv)
+	return PL_mess_sv;
 
     /* Create as PVMG now, to avoid any upgrading later */
     New(905, sv, 1, SV);
@@ -1196,30 +1192,27 @@ mess_alloc(void)
     SvFLAGS(sv) = SVt_PVMG;
     SvANY(sv) = (void*)any;
     SvREFCNT(sv) = 1 << 30; /* practically infinite */
+    PL_mess_sv = sv;
     return sv;
 }
 
 char *
 form(const char* pat, ...)
 {
+    SV *sv = mess_alloc();
     va_list args;
     va_start(args, pat);
-    if (!PL_mess_sv)
-	PL_mess_sv = mess_alloc();
-    sv_vsetpvfn(PL_mess_sv, pat, strlen(pat), &args, Null(SV**), 0, Null(bool*));
+    sv_vsetpvfn(sv, pat, strlen(pat), &args, Null(SV**), 0, Null(bool*));
     va_end(args);
-    return SvPVX(PL_mess_sv);
+    return SvPVX(sv);
 }
 
 char *
 mess(const char *pat, va_list *args)
 {
-    SV *sv;
+    SV *sv = mess_alloc();
     static char dgd[] = " during global destruction.\n";
 
-    if (!PL_mess_sv)
-	PL_mess_sv = mess_alloc();
-    sv = PL_mess_sv;
     sv_vsetpvfn(sv, pat, strlen(pat), args, Null(SV**), 0, Null(bool*));
     if (!SvCUR(sv) || *(SvEND(sv) - 1) != '\n') {
 	dTHR;
@@ -2845,11 +2838,6 @@ new_struct_thread(struct perl_thread *t)
     thr->flags = THRf_R_JOINABLE;
     MUTEX_INIT(&thr->mutex);
 
-    PL_curcop = t->Tcurcop;       /* XXX As good a guess as any? */
-    PL_defstash = t->Tdefstash;   /* XXX maybe these should */
-    PL_curstash = t->Tcurstash;   /* always be set to main? */
-
-
     /* top_env needs to be non-zero. It points to an area
        in which longjmp() stuff is stored, as C callstack
        info there at least is thread specific this has to
@@ -2866,6 +2854,25 @@ new_struct_thread(struct perl_thread *t)
     PL_in_eval = FALSE;
     PL_restartop = 0;
 
+    PL_statname = NEWSV(66,0);
+    PL_maxscream = -1;
+    PL_regcompp = FUNC_NAME_TO_PTR(pregcomp);
+    PL_regexecp = FUNC_NAME_TO_PTR(regexec_flags);
+    PL_regindent = 0;
+    PL_reginterp_cnt = 0;
+    PL_lastscream = Nullsv;
+    PL_screamfirst = 0;
+    PL_screamnext = 0;
+    PL_reg_start_tmp = 0;
+    PL_reg_start_tmpl = 0;
+
+    /* parent thread's data needs to be locked while we make copy */
+    MUTEX_LOCK(&t->mutex);
+
+    PL_curcop = t->Tcurcop;       /* XXX As good a guess as any? */
+    PL_defstash = t->Tdefstash;   /* XXX maybe these should */
+    PL_curstash = t->Tcurstash;   /* always be set to main? */
+
     PL_tainted = t->Ttainted;
     PL_curpm = t->Tcurpm;         /* XXX No PMOP ref count */
     PL_nrs = newSVsv(t->Tnrs);
@@ -2879,18 +2886,6 @@ new_struct_thread(struct perl_thread *t)
     PL_bodytarget = newSVsv(t->Tbodytarget);
     PL_toptarget = newSVsv(t->Ttoptarget);
 
-    PL_statname = NEWSV(66,0);
-    PL_maxscream = -1;
-    PL_regcompp = FUNC_NAME_TO_PTR(pregcomp);
-    PL_regexecp = FUNC_NAME_TO_PTR(regexec_flags);
-    PL_regindent = 0;
-    PL_reginterp_cnt = 0;
-    PL_lastscream = Nullsv;
-    PL_screamfirst = 0;
-    PL_screamnext = 0;
-    PL_reg_start_tmp = 0;
-    PL_reg_start_tmpl = 0;
-    
     /* Initialise all per-thread SVs that the template thread used */
     svp = AvARRAY(t->threadsv);
     for (i = 0; i <= AvFILLp(t->threadsv); i++, svp++) {
@@ -2912,6 +2907,9 @@ new_struct_thread(struct perl_thread *t)
     t->next = thr;
     thr->next->prev = thr;
     MUTEX_UNLOCK(&PL_threads_mutex);
+
+    /* done copying parent's state */
+    MUTEX_UNLOCK(&t->mutex);
 
 #ifdef HAVE_THREAD_INTERN
     init_thread_intern(thr);
@@ -2970,3 +2968,104 @@ get_specialsv_list(void)
 {
  return PL_specialsv_list;
 }
+
+
+MGVTBL*
+get_vtbl(int vtbl_id)
+{
+    MGVTBL* result = Null(MGVTBL*);
+
+    switch(vtbl_id) {
+    case want_vtbl_sv:
+	result = &PL_vtbl_sv;
+	break;
+    case want_vtbl_env:
+	result = &PL_vtbl_env;
+	break;
+    case want_vtbl_envelem:
+	result = &PL_vtbl_envelem;
+	break;
+    case want_vtbl_sig:
+	result = &PL_vtbl_sig;
+	break;
+    case want_vtbl_sigelem:
+	result = &PL_vtbl_sigelem;
+	break;
+    case want_vtbl_pack:
+	result = &PL_vtbl_pack;
+	break;
+    case want_vtbl_packelem:
+	result = &PL_vtbl_packelem;
+	break;
+    case want_vtbl_dbline:
+	result = &PL_vtbl_dbline;
+	break;
+    case want_vtbl_isa:
+	result = &PL_vtbl_isa;
+	break;
+    case want_vtbl_isaelem:
+	result = &PL_vtbl_isaelem;
+	break;
+    case want_vtbl_arylen:
+	result = &PL_vtbl_arylen;
+	break;
+    case want_vtbl_glob:
+	result = &PL_vtbl_glob;
+	break;
+    case want_vtbl_mglob:
+	result = &PL_vtbl_mglob;
+	break;
+    case want_vtbl_nkeys:
+	result = &PL_vtbl_nkeys;
+	break;
+    case want_vtbl_taint:
+	result = &PL_vtbl_taint;
+	break;
+    case want_vtbl_substr:
+	result = &PL_vtbl_substr;
+	break;
+    case want_vtbl_vec:
+	result = &PL_vtbl_vec;
+	break;
+    case want_vtbl_pos:
+	result = &PL_vtbl_pos;
+	break;
+    case want_vtbl_bm:
+	result = &PL_vtbl_bm;
+	break;
+    case want_vtbl_fm:
+	result = &PL_vtbl_fm;
+	break;
+    case want_vtbl_uvar:
+	result = &PL_vtbl_uvar;
+	break;
+#ifdef USE_THREADS
+    case want_vtbl_mutex:
+	result = &PL_vtbl_mutex;
+	break;
+#endif
+    case want_vtbl_defelem:
+	result = &PL_vtbl_defelem;
+	break;
+    case want_vtbl_regexp:
+	result = &PL_vtbl_regexp;
+	break;
+    case want_vtbl_regdata:
+	result = &PL_vtbl_regdata;
+	break;
+    case want_vtbl_regdatum:
+	result = &PL_vtbl_regdatum;
+	break;
+    case want_vtbl_collxfrm:
+	result = &PL_vtbl_collxfrm;
+	break;
+    case want_vtbl_amagic:
+	result = &PL_vtbl_amagic;
+	break;
+    case want_vtbl_amagicelem:
+	result = &PL_vtbl_amagicelem;
+	break;
+    }
+    return result;
+}
+

@@ -653,8 +653,7 @@ do_join(register SV *sv, SV *del, register SV **mark, register SV **sp)
 
     mark++;
     len = (items > 0 ? (delimlen * (items - 1) ) : 0);
-    if (SvTYPE(sv) < SVt_PV)
-	sv_upgrade(sv, SVt_PV);
+    (void)SvUPGRADE(sv, SVt_PV);
     if (SvLEN(sv) < len + items) {	/* current length is way too short */
 	while (items-- > 0) {
 	    if (*mark && !SvGMAGICAL(*mark) && SvOK(*mark)) {
@@ -922,7 +921,8 @@ do_vop(I32 optype, SV *sv, SV *left, SV *right)
     len = leftlen < rightlen ? leftlen : rightlen;
     lensave = len;
     if (SvOK(sv) || SvTYPE(sv) > SVt_PVMG) {
-	dc = SvPV_force(sv, PL_na);
+	STRLEN n_a;
+	dc = SvPV_force(sv, n_a);
 	if (SvCUR(sv) < len) {
 	    dc = SvGROW(sv, len + 1);
 	    (void)memzero(dc + SvCUR(sv), len - SvCUR(sv) + 1);

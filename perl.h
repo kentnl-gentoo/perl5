@@ -855,6 +855,7 @@ Free_t   Perl_free _((Malloc_t where));
 #ifndef Quad_t
 #    if LONGSIZE == 8
 #       define Quad_t  long
+#       define Uquad_t unsigned long
 #       define PERL_QUAD_IS_LONG
 #    endif
 #endif
@@ -862,6 +863,7 @@ Free_t   Perl_free _((Malloc_t where));
 #ifndef Quad_t
 #    if INTSIZE == 8
 #       define Quad_t  int
+#       define Uquad_t unsigned int
 #       define PERL_QUAD_IS_INT
 #    endif
 #endif
@@ -870,6 +872,7 @@ Free_t   Perl_free _((Malloc_t where));
 #    ifdef USE_LONG_LONG /* See above note about LP32. --jhi */
 #       if defined(HAS_LONG_LONG) && LONGLONGSIZE == 8
 #	    define Quad_t  long long
+#           define Uquad_t unsigned long long
 #           define PERL_QUAD_IS_LONG_LONG
 #       endif
 #    endif
@@ -886,8 +889,9 @@ Free_t   Perl_free _((Malloc_t where));
 #ifdef Quad_t
 #   define HAS_QUAD
 #   ifndef Uquad_t
-    /* Note that if your Quad_t is a typedef you *must* have defined
-     * also Uquad_t yourself because 'unsigned type' is illegal. */
+    /* Note that if your Quad_t is a typedef (not a #define) you *MUST*
+     * have defined by now Uquad_t yourself because 'unsigned type'
+     * is illegal. */
 #       define Uquad_t unsigned Quad_t
 #   endif
 #endif
@@ -1371,6 +1375,10 @@ typedef I32 (*filter_t) _((int, SV *, int));
 #        include "os2thread.h"
 #      else
 #        ifdef I_MACH_CTHREADS
+#          include <mach/cthreads.h>
+#          ifdef NeXT
+#            define MUTEX_INIT_CALLS_MALLOC
+#          endif
 typedef cthread_t	perl_os_thread;
 typedef mutex_t		perl_mutex;
 typedef condition_t	perl_cond;
@@ -1649,10 +1657,11 @@ Gid_t getgid _((void));
 Gid_t getegid _((void));
 #endif
 
-#ifdef DEBUGGING
 #ifndef Perl_debug_log
 #define Perl_debug_log	PerlIO_stderr()
 #endif
+
+#ifdef DEBUGGING
 #undef  YYDEBUG
 #define YYDEBUG 1
 #define DEB(a)     			a
@@ -1815,8 +1824,22 @@ typedef Sighandler_t Sigsave_t;
 #endif
 
 #ifdef MYMALLOC
-#  define MALLOC_INIT MUTEX_INIT(&PL_malloc_mutex)
-#  define MALLOC_TERM MUTEX_DESTROY(&PL_malloc_mutex)
+#  ifdef MUTEX_INIT_CALLS_MALLOC
+#    define MALLOC_INIT					\
+	STMT_START {					\
+		PL_malloc_mutex = NULL;			\
+		MUTEX_INIT(&PL_malloc_mutex);		\
+	} STMT_END
+#    define MALLOC_TERM					\
+	STMT_START {					\
+		perl_mutex tmp = PL_malloc_mutex;	\
+		PL_malloc_mutex = NULL;			\
+		MUTEX_DESTROY(&tmp);			\
+	} STMT_END
+#  else
+#    define MALLOC_INIT MUTEX_INIT(&PL_malloc_mutex)
+#    define MALLOC_TERM MUTEX_DESTROY(&PL_malloc_mutex)
+#  endif
 #else
 #  define MALLOC_INIT
 #  define MALLOC_TERM
@@ -2129,6 +2152,39 @@ typedef enum {
     XTERMBLOCK
 } expectation;
 
+enum {		/* pass one of these to get_vtbl */
+    want_vtbl_sv,
+    want_vtbl_env,
+    want_vtbl_envelem,
+    want_vtbl_sig,
+    want_vtbl_sigelem,
+    want_vtbl_pack,
+    want_vtbl_packelem,
+    want_vtbl_dbline,
+    want_vtbl_isa,
+    want_vtbl_isaelem,
+    want_vtbl_arylen,
+    want_vtbl_glob,
+    want_vtbl_mglob,
+    want_vtbl_nkeys,
+    want_vtbl_taint,
+    want_vtbl_substr,
+    want_vtbl_vec,
+    want_vtbl_pos,
+    want_vtbl_bm,
+    want_vtbl_fm,
+    want_vtbl_uvar,
+    want_vtbl_defelem,
+    want_vtbl_regexp,
+    want_vtbl_collxfrm,
+    want_vtbl_amagic,
+    want_vtbl_amagicelem,
+#ifdef USE_THREADS
+    want_vtbl_mutex,
+#endif
+    want_vtbl_regdata,
+    want_vtbl_regdatum
+};
 
 				/* Note: the lowest 8 bits are reserved for
 				   stuffing into op->op_private */
@@ -2505,7 +2561,8 @@ enum {
   to_sv_amg,   to_av_amg,
   to_hv_amg,   to_gv_amg,
   to_cv_amg,   iter_amg,    
-  max_amg_code,
+  max_amg_code
+  /* Do not leave a trailing comma here.  C9X allows it, C89 doesn't. */
 };
 
 #define NofAMmeth max_amg_code
