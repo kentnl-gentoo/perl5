@@ -11,7 +11,8 @@ this one.
 =head1 Supported Environments
 
 Perl5.004 builds out of the box on Unix, Plan9, LynxOS, VMS, OS/2,
-QNX, and AmigaOS.
+QNX, AmigaOS, and Windows NT; once built on Windows NT, Perl runs
+on Windows 95 as well.
 
 =head1 Core Changes
 
@@ -189,6 +190,24 @@ backward-compatible synonym for C<*STDOUT{IO}>.
 It is now possible to build Perl with AT&T's sfio IO package
 instead of stdio.  See L<perlapio> for more details, and
 the F<INSTALL> file for how to use it.
+
+=head2 New and changed syntax
+
+=over
+
+=item $coderef->(PARAMS)
+
+A subroutine reference may now be suffixed with an arrow and a
+(possibly empty) parameter list.  This syntax denotes a call of the
+referenced subroutine, with the given parameters (if any).
+
+This new syntax follows the pattern of C<$hashref-E<gt>{FOO}> and
+C<$aryref-E<gt>[$foo]>; now, C<&$subref($foo)> may now be written
+C<$subref-E<gt>($foo)>.  All of these arrow terms may be chained;
+thus, C<&{$table-E<gt>{FOO}}($bar)> may now be written
+C<$table-E<gt>{FOO}->($bar)>.
+
+=back
 
 =head2 New and changed builtin constants
 
@@ -1156,6 +1175,11 @@ empty (except that C<d_csh> should be C<'undef'>) so that Perl will
 think csh is missing.  In either case, after editing config.sh, run
 C<./Configure -S> and rebuild Perl.
 
+=item Invalid conversion in %s: "%s"
+
+(W) Perl does not understand the given format conversion.
+See L<perlfunc/sprintf>.
+
 =item Invalid type in pack: '%s'
 
 (F) The given character is not a valid pack type.  See L<perlfunc/pack>.
@@ -1201,6 +1225,10 @@ error is trappable I<once>.
 remaining memory (or virtual memory) to satisfy the request. However,
 the request was judged large enough (compile-time default is 64K), so
 a possibility to shut down by trapping this error is granted.
+
+=item panic: frexp
+
+(P) The library function frexp() failed, making printf("%f") impossible.
 
 =item Possible attempt to put comments in qw() list
 
