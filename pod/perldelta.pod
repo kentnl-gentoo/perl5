@@ -251,9 +251,9 @@ has been seen.
 =head2 New C<qr//> operator
 
 The C<qr//> operator, which is syntactically similar to the other quote-like
-operators, is used to create compiled regular expressions.  This compiled
+operators, is used to create precompiled regular expressions.  This compiled
 form can now be explicitly passed around in variables, and interpolated in
-other regular expressions.  See L<perlop> and L<perlre>.
+other regular expressions.  See L<perlop>.
 
 =head2 C<our> is now a reserved word
 
@@ -265,6 +265,17 @@ See L<Tie::Array>.
 
 Several missing hooks have been added.  There is also a new base class for
 TIEARRAY implementations.  See L<Tie::Array>.
+
+=head2 4th argument to substr
+
+substr() can now both return and replace in one operation.  The optional
+4th argument is the replacement string.  See L<perlfunc/substr>.
+
+=head2 Negative LENGTH argument to splice
+
+Splice() with a negative LENGTH argument now work similar to what the
+LENGTH did for substr().  Previously a negative LENGTH was treated as
+0.  See L<perlfunc/splice>.
 
 
 =head1 Supported Platforms
