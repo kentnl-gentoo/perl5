@@ -39,10 +39,10 @@ case "$usemymalloc" in
     '')  usemymalloc='n' ;;
     esac
 
-# malloc wrap works
+# malloc wrap works, but not in vac-5, see later
 case "$usemallocwrap" in
-'') usemallocwrap='define' ;;
-esac
+    '') usemallocwrap='define' ;;
+    esac
 
 # Intuiting the existence of system calls under AIX is difficult,
 # at best; the safest technique is to find them empirically.
@@ -143,6 +143,9 @@ case "$cc" in
 
 	ccversion=`echo "$ccversion" | awk '{print $2}'`
 	# Redbooks state AIX-5 only supports vac-5.0.2.0 and up
+	case "$ccversion" in
+	    5*) usemallocwrap='n' ;; # panic in miniperl
+	    esac
 	;;
     esac
 
@@ -228,17 +231,26 @@ case "$usethreads" in
 	    *gcc*) ccflags="-D_THREAD_SAFE $ccflags" ;;
 
 	    cc_r) ;;
-	    cc|xl[cC]|xl[cC]_r)
+	    '') cc=cc_r ;;
+
+	    *)
+
+
+	    # No | alternation in aix sed. :-(
+	    newcc=`echo $cc | sed -e 's/cc$/cc_r/' -e 's/xl[cC]$/cc_r/' -e 's/xl[cC]_r$/cc_r/'`
+	    case "$newcc" in
+		$cc) # No change
+		;;
+
+		*cc_r)
 		echo >&4 "Switching cc to cc_r because of POSIX threads."
 		# xlc_r has been known to produce buggy code in AIX 4.3.2.
 		# (e.g. pragma/overload core dumps)	 Let's suspect xlC_r, too.
 		# --jhi@iki.fi
-		cc=cc_r
+		cc="$newcc"
 		;;
 
-	    '') cc=cc_r ;;
-
-	    *)
+		*)
 		cat >&4 <<EOM
 *** For pthreads you should use the AIX C compiler cc_r.
 *** (now your compiler was set to '$cc')
@@ -247,6 +259,7 @@ EOM
 		exit 1
 		;;
 	    esac
+	esac
 
 	# Insert pthreads to libswanted, before any libc or libC.
 	set `echo X "$libswanted "| sed -e 's/ \([cC]\) / pthreads \1 /'`

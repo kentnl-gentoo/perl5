@@ -1016,8 +1016,9 @@ PP(pp_flip)
 #define RANGE_IS_NUMERIC(left,right) ( \
 	SvNIOKp(left)  || (SvOK(left)  && !SvPOKp(left))  || \
 	SvNIOKp(right) || (SvOK(right) && !SvPOKp(right)) || \
-	(((!SvOK(left) && SvOK(right)) || (looks_like_number(left) && \
-	  SvPOKp(left) && *SvPVX(left) != '0')) && looks_like_number(right)))
+	(((!SvOK(left) && SvOK(right)) || ((!SvOK(left) || \
+          looks_like_number(left)) && SvPOKp(left) && *SvPVX(left) != '0')) \
+         && (!SvOK(right) || looks_like_number(right))))
 
 PP(pp_flop)
 {
@@ -2249,7 +2250,7 @@ PP(pp_goto)
 		else {
 		    if (CvDEPTH(cv) == 100 && ckWARN(WARN_RECURSION))
 			sub_crush_depth(cv);
-		    pad_push(padlist, CvDEPTH(cv), cx->blk_sub.hasargs);
+		    pad_push(padlist, CvDEPTH(cv), 1);
 		}
 #ifdef USE_5005THREADS
 		if (!cx->blk_sub.hasargs) {
@@ -2716,7 +2717,7 @@ Locate the CV corresponding to the currently executing sub or eval.
 If db_seqp is non_null, skip CVs that are in the DB package and populate
 *db_seqp with the cop sequence number at the point that the DB:: code was
 entered. (allows debuggers to eval in the scope of the breakpoint rather
-than in in the scope of the debuger itself).
+than in in the scope of the debugger itself).
 
 =cut
 */

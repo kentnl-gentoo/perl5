@@ -959,7 +959,9 @@ perl_destruct(pTHXx)
 	    svend = &sva[SvREFCNT(sva)];
 	    for (sv = sva + 1; sv < svend; ++sv) {
 		if (SvTYPE(sv) != SVTYPEMASK) {
-		    PerlIO_printf(Perl_debug_log, "leaked: 0x%p\n", sv);
+		    PerlIO_printf(Perl_debug_log, "leaked: 0x%p"
+                                  pTHX__FORMAT "\n",
+                                  sv pTHX__VALUE);
 		}
 	    }
 	}
@@ -1490,7 +1492,8 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 		    sv_catpv(PL_Sv,"\"  Locally applied patches:\\n\",");
 		    for (i = 1; i <= LOCAL_PATCH_COUNT; i++) {
 			if (PL_localpatches[i])
-			    Perl_sv_catpvf(aTHX_ PL_Sv,"q\"  \t%s\n\",",PL_localpatches[i]);
+			    Perl_sv_catpvf(aTHX_ PL_Sv,"q%c\t%s\n%c,",
+				    0, PL_localpatches[i], 0);
 		    }
 		}
 #endif
@@ -2507,6 +2510,33 @@ NULL
 int
 Perl_get_debug_opts(pTHX_ char **s)
 {
+    static char *usage_msgd[] = {
+      " Debugging flag values: (see also -d)",
+      "  p  Tokenizing and parsing (with v, displays parse stack)",
+      "  s  Stack snapshots. with v, displays all stacks",
+      "  l  Context (loop) stack processing",
+      "  t  Trace execution",
+      "  o  Method and overloading resolution",
+      "  c  String/numeric conversions",
+      "  P  Print profiling info, preprocessor command for -P, source file input state",
+      "  m  Memory allocation",
+      "  f  Format processing",
+      "  r  Regular expression parsing and execution",
+      "  x  Syntax tree dump",
+      "  u  Tainting checks (Obsolete, previously used for LEAKTEST)",
+      "  H  Hash dump -- usurps values()",
+      "  X  Scratchpad allocation",
+      "  D  Cleaning up",
+      "  S  Thread synchronization",
+      "  T  Tokenising",
+      "  R  Include reference counts of dumped variables (eg when using -Ds)",
+      "  J  Do not s,t,P-debug (Jump over) opcodes within package DB",
+      "  v  Verbose: use in conjunction with other flags",
+      "  C  Copy On Write",
+      "  A  Consistency checks on internal structures",
+      "  q  quiet - currently only suppressed the 'EXECUTING' message",
+      NULL
+    };
     int i = 0;
     if (isALPHA(**s)) {
 	/* if adding extra options, remember to update DEBUG_MASK */
@@ -2517,13 +2547,17 @@ Perl_get_debug_opts(pTHX_ char **s)
 	    if (d)
 		i |= 1 << (d - debopts);
 	    else if (ckWARN_d(WARN_DEBUGGING))
-		Perl_warner(aTHX_ packWARN(WARN_DEBUGGING),
-		    "invalid option -D%c\n", **s);
+	        Perl_warner(aTHX_ packWARN(WARN_DEBUGGING),
+		    "invalid option -D%c, use -D'' to see choices\n", **s);
 	}
     }
-    else {
+    else if (isDIGIT(**s)) {
 	i = atoi(*s);
 	for (; isALNUM(**s); (*s)++) ;
+    }
+    else {
+      char **p = usage_msgd;
+      while (*p) PerlIO_printf(PerlIO_stdout(), "%s\n", *p++);
     }
 #  ifdef EBCDIC
     if ((i & DEBUG_p_FLAG) && ckWARN_d(WARN_DEBUGGING))
@@ -2639,7 +2673,7 @@ Perl_moreswitches(pTHX_ char *s)
 #else /* !DEBUGGING */
 	if (ckWARN_d(WARN_DEBUGGING))
 	    Perl_warner(aTHX_ packWARN(WARN_DEBUGGING),
-	           "Recompile perl with -DDEBUGGING to use -D switch\n");
+	           "Recompile perl with -DDEBUGGING to use -D switch (did you mean -d ?)\n");
 	for (s++; isALNUM(*s); s++) ;
 #endif
 	/*SUPPRESS 530*/
@@ -3205,9 +3239,10 @@ S_open_script(pTHX_ char *scriptname, bool dosearch, SV *sv)
     }
 #endif /* IAMSUID */
     if (!PL_rsfp) {
-/* PSz 16 Sep 03  Keep neat error message */
-            Perl_croak(aTHX_ "Can't open perl script \"%s\": %s\n",
-                       CopFILE(PL_curcop), Strerror(errno));
+	/* PSz 16 Sep 03  Keep neat error message */
+	Perl_croak(aTHX_ "Can't open perl script \"%s\": %s%s\n",
+		CopFILE(PL_curcop), Strerror(errno),
+		".\nUse -S to search $PATH for it.");
     }
 }
 
@@ -4692,7 +4727,7 @@ Perl_my_failure_exit(pTHX)
 	    STATUS_NATIVE_SET(44);
     }
     else {
-	if (!vaxc$errno && errno)	/* unlikely */
+	if (!vaxc$errno)		/* unlikely */
 	    STATUS_NATIVE_SET(44);
 	else
 	    STATUS_NATIVE_SET(vaxc$errno);

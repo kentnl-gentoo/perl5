@@ -3205,6 +3205,7 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 		&& (left->op_private & OPpLVAL_INTRO))
 	{
 	    op_free(right);
+	    left->op_flags &= ~(OPf_REF|OPf_SPECIAL);
 	    return left;
 	}
 	curop = list(force_list(left));
@@ -4109,11 +4110,19 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     char *name;
     char *aname;
     GV *gv;
-    char *ps = proto ? SvPVx(((SVOP*)proto)->op_sv, n_a) : Nullch;
+    char *ps;
     register CV *cv=0;
     SV *const_sv;
 
     name = o ? SvPVx(cSVOPo->op_sv, n_a) : Nullch;
+
+    if (proto) {
+	assert(proto->op_type == OP_CONST);
+	ps = SvPVx(((SVOP*)proto)->op_sv, n_a);
+    }
+    else
+	ps = Nullch;
+
     if (!name && PERLDB_NAMEANON && CopLINE(PL_curcop)) {
 	SV *sv = sv_newmortal();
 	Perl_sv_setpvf(aTHX_ sv, "%s[%s:%"IVdf"]",
@@ -5495,7 +5504,7 @@ Perl_ck_grep(pTHX_ OP *o)
 	OP* k;
 	o = ck_sort(o);
         kid = cLISTOPo->op_first->op_sibling;
-	for (k = cLISTOPo->op_first->op_sibling->op_next; k; k = k->op_next) {
+	for (k = cUNOPx(kid)->op_first; k; k = k->op_next) {
 	    kid = k;
 	}
 	kid->op_next = (OP*)gwop;
@@ -6762,6 +6771,17 @@ Perl_peep(pTHX_ register OP *o)
 	    o2 = o2->op_next;
 	    if (!o2 || o2->op_type != OP_AASSIGN
 		    || (o2->op_flags & OPf_WANT) != OPf_WANT_VOID)
+		break;
+
+	    /* check that the sort is the first arg on RHS of assign */
+
+	    o2 = cUNOPx(o2)->op_first;
+	    if (!o2 || o2->op_type != OP_NULL)
+		break;
+	    o2 = cUNOPx(o2)->op_first;
+	    if (!o2 || o2->op_type != OP_PUSHMARK)
+		break;
+	    if (o2->op_sibling != o)
 		break;
 
 	    /* check the array is the same on both sides */

@@ -1242,7 +1242,8 @@ Perl_gp_free(pTHX_ GV *gv)
     if (gp->gp_refcnt == 0) {
 	if (ckWARN_d(WARN_INTERNAL))
 	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-			"Attempt to free unreferenced glob pointers");
+			"Attempt to free unreferenced glob pointers"
+                        pTHX__FORMAT pTHX__VALUE);
         return;
     }
     if (gp->gp_cv) {
@@ -1256,7 +1257,7 @@ Perl_gp_free(pTHX_ GV *gv)
     }
 
     if (gp->gp_sv) SvREFCNT_dec(gp->gp_sv);
-    if (gp->gp_sv) SvREFCNT_dec(gp->gp_av);
+    if (gp->gp_av) SvREFCNT_dec(gp->gp_av);
     if (gp->gp_hv) {
 	 if (PL_stashcache && HvNAME(gp->gp_hv))
 	      hv_delete(PL_stashcache,
