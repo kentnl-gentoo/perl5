@@ -1,6 +1,6 @@
 /*    op.c
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -2635,6 +2635,7 @@ Perl_pmtrans(pTHX_ OP *o, OP *expr, OP *repl)
     I32 grows = 0;
     register short *tbl;
 
+    PL_hints |= HINT_BLOCK_SCOPE;
     complement	= o->op_private & OPpTRANS_COMPLEMENT;
     del		= o->op_private & OPpTRANS_DELETE;
     squash	= o->op_private & OPpTRANS_SQUASH;
@@ -6691,6 +6692,7 @@ Perl_peep(pTHX_ register OP *o)
 	    break;
 
 	case OP_ENTERLOOP:
+	case OP_ENTERITER:
 	    o->op_seq = PL_op_seqmax++;
 	    while (cLOOP->op_redoop->op_type == OP_NULL)
 		cLOOP->op_redoop = cLOOP->op_redoop->op_next;

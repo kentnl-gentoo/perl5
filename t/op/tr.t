@@ -5,7 +5,7 @@ BEGIN {
     @INC = '../lib';
 }
 
-print "1..51\n";
+print "1..54\n";
 
 $_ = "abcdefghijklmnopqrstuvwxyz";
 
@@ -296,3 +296,16 @@ print "ok 50\n";
 ($a = v300.196.172.302.197.172) =~ tr/\xc4-\xc8/\x{12c}-\x{130}/;
 print "not " unless $a eq v300.300.172.302.301.172;
 print "ok 51\n";
+
+# misc
+($a = "R0_001") =~ tr/R_//d;
+print "not " if hex($a) != 1;
+print "ok 52\n";
+
+@a = (1,2); map { y/1/./ for $_ } @a;
+print "not " if "@a" ne ". 2";
+print "ok 53\n";
+
+@a = (1,2); map { y/1/./ for $_.'' } @a;
+print "not " if "@a" ne "1 2";
+print "ok 54\n";

@@ -1,6 +1,6 @@
 /*    util.c
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -3808,6 +3808,16 @@ Perl_get_vtbl(pTHX_ int vtbl_id)
     return result;
 }
 
+#if !defined(FFLUSH_NULL) && defined(HAS__FWALK)
+static int S_fflush(FILE *fp);
+
+static int
+S_fflush(FILE *fp)
+{
+    return fflush(fp);
+}
+#endif
+
 I32
 Perl_my_fflush_all(pTHX)
 {
@@ -3817,7 +3827,7 @@ Perl_my_fflush_all(pTHX)
 # if defined(HAS__FWALK)
     /* undocumented, unprototyped, but very useful BSDism */
     extern void _fwalk(int (*)(FILE *));
-    _fwalk(&fflush);
+    _fwalk(&S_fflush);
     return 0;
 #   else
     long open_max = -1;

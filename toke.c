@@ -1,6 +1,6 @@
 /*    toke.c
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -79,7 +79,7 @@ static I32 utf16rev_textfilter(pTHXo_ int idx, SV *sv, int maxlen);
 #  endif
 YYSTYPE* yylval_pointer[YYMAXLEVEL];
 int* yychar_pointer[YYMAXLEVEL];
-int yyactlevel = 0;
+int yyactlevel = -1;
 #  undef yylval
 #  undef yychar
 #  define yylval (*yylval_pointer[yyactlevel])
@@ -2085,9 +2085,9 @@ Perl_yylex_r(pTHX_ YYSTYPE *lvalp, int *lcharp)
 {
     int r;
 
+    yyactlevel++;
     yylval_pointer[yyactlevel] = lvalp;
     yychar_pointer[yyactlevel] = lcharp;
-    yyactlevel++;
     if (yyactlevel >= YYMAXLEVEL)
 	Perl_croak(aTHX_ "panic: YYMAXLEVEL");
 
@@ -2102,13 +2102,8 @@ Perl_yylex_r(pTHX_ YYSTYPE *lvalp, int *lcharp)
 #ifdef __SC__
 #pragma segment Perl_yylex
 #endif
-
 int
-#ifdef USE_PURE_BISON
-Perl_yylex(pTHX_ YYSTYPE *lvalp, int *lcharp)
-#else
 Perl_yylex(pTHX)
-#endif
 {
     register char *s;
     register char *d;
@@ -4130,7 +4125,7 @@ Perl_yylex(pTHX)
 		    if (PerlLIO_setmode(PerlIO_fileno(PL_rsfp), O_TEXT) != -1) {
 #if defined(__BORLANDC__)
 			/* XXX see note in do_binmode() */
-			((FILE*)PL_rsfp)->flags |= _F_BIN;
+			((FILE*)PL_rsfp)->flags &= ~_F_BIN;
 #endif
 			if (loc > 0)
 			    PerlIO_seek(PL_rsfp, loc, 0);

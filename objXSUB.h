@@ -107,6 +107,10 @@
 #define Perl_av_push		pPerl->Perl_av_push
 #undef  av_push
 #define av_push			Perl_av_push
+#undef  Perl_av_reify
+#define Perl_av_reify		pPerl->Perl_av_reify
+#undef  av_reify
+#define av_reify		Perl_av_reify
 #undef  Perl_av_shift
 #define Perl_av_shift		pPerl->Perl_av_shift
 #undef  av_shift
@@ -1413,6 +1417,10 @@
 #define Perl_save_long		pPerl->Perl_save_long
 #undef  save_long
 #define save_long		Perl_save_long
+#undef  Perl_save_mortalizesv
+#define Perl_save_mortalizesv	pPerl->Perl_save_mortalizesv
+#undef  save_mortalizesv
+#define save_mortalizesv	Perl_save_mortalizesv
 #undef  Perl_save_nogv
 #define Perl_save_nogv		pPerl->Perl_save_nogv
 #undef  save_nogv
@@ -1914,7 +1922,6 @@
 #undef  whichsig
 #define whichsig		Perl_whichsig
 #ifdef USE_PURE_BISON
-#else
 #endif
 #if defined(MYMALLOC)
 #undef  Perl_dump_mstats

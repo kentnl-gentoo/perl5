@@ -668,6 +668,7 @@ PERL_CALLCONV void	Perl_save_item(pTHX_ SV* item);
 PERL_CALLCONV void	Perl_save_iv(pTHX_ IV* iv);
 PERL_CALLCONV void	Perl_save_list(pTHX_ SV** sarg, I32 maxsarg);
 PERL_CALLCONV void	Perl_save_long(pTHX_ long* longp);
+PERL_CALLCONV void	Perl_save_mortalizesv(pTHX_ SV* sv);
 PERL_CALLCONV void	Perl_save_nogv(pTHX_ GV* gv);
 PERL_CALLCONV void	Perl_save_op(pTHX);
 PERL_CALLCONV SV*	Perl_save_scalar(pTHX_ GV* gv);
@@ -842,10 +843,8 @@ PERL_CALLCONV I32	Perl_whichsig(pTHX_ char* sig);
 PERL_CALLCONV int	Perl_yyerror(pTHX_ char* s);
 #ifdef USE_PURE_BISON
 PERL_CALLCONV int	Perl_yylex_r(pTHX_ YYSTYPE *lvalp, int *lcharp);
-PERL_CALLCONV int	Perl_yylex(pTHX_ YYSTYPE *lvalp, int *lcharp);
-#else
-PERL_CALLCONV int	Perl_yylex(pTHX);
 #endif
+PERL_CALLCONV int	Perl_yylex(pTHX);
 PERL_CALLCONV int	Perl_yyparse(pTHX);
 PERL_CALLCONV int	Perl_yywarn(pTHX_ char* s);
 #if defined(MYMALLOC)

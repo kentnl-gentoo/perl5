@@ -60,6 +60,21 @@ use strict;
     package B::OBJECT;
 }
 
+sub B::GV::SAFENAME {
+  my $name = (shift())->NAME;
+
+  # The regex below corresponds to the isCONTROLVAR macro
+  # from toke.c
+
+  $name =~ s/^([\cA-\cZ\c\\c[\c]\c?\c_\c^])/"^".chr(64 ^ ord($1))/e;
+  return $name;
+}
+
+sub B::IV::int_value {
+  my ($self) = @_;
+  return (($self->FLAGS() & SVf_IVisUV()) ? $self->UVX : $self->IV);
+}
+
 my $debug;
 my $op_count = 0;
 my @parents = ();
@@ -131,6 +146,7 @@ sub objsym {
 
 sub walkoptree_exec {
     my ($op, $method, $level) = @_;
+    $level ||= 0;
     my ($sym, $ppname);
     my $prefix = "    " x $level;
     for (; $$op; $op = $op->next) {
@@ -332,7 +348,21 @@ C<REFCNT> (corresponding to the C function C<SvREFCNT>).
 
 =item IV
 
+Returns the value of the IV, I<interpreted as
+a signed integer>. This will be misleading
+if C<FLAGS & SVf_IVisUV>. Perhaps you want the
+C<int_value> method instead?
+
 =item IVX
+
+=item UVX
+
+=item int_value
+
+This method returns the value of the IV as an integer.
+It differs from C<IV> in that it returns the correct
+value regardless of whether it's stored signed or
+unsigned.
 
 =item needs64bits
 
@@ -363,6 +393,22 @@ C<REFCNT> (corresponding to the C function C<SvREFCNT>).
 =over 4
 
 =item PV
+
+This method is the one you usually want. It constructs a
+string using the length and offset information in the struct:
+for ordinary scalars it will return the string that you'd see
+from Perl, even if it contains null characters.
+
+=item PVX
+
+This method is less often useful. It assumes that the string
+stored in the struct is null-terminated, and disregards the
+length information.
+
+It is the appropriate method to use if you need to get the name
+of a lexical variable from a padname array. Lexical variable names
+are always stored with a null terminator, and the length field
+(SvCUR) is overloaded for other purposes and can't be relied on here.
 
 =back
 
@@ -431,6 +477,21 @@ C<REFCNT> (corresponding to the C function C<SvREFCNT>).
 This method returns TRUE if the GP field of the GV is NULL.
 
 =item NAME
+
+=item SAFENAME
+
+This method returns the name of the glob, but if the first
+character of the name is a control character, then it converts
+it to ^X first, so that *^G would return "^G" rather than "\cG".
+
+It's useful if you want to print out the name of a variable.
+If you restrict yourself to globs which exist at compile-time
+then the result ought to be unambiguous, because code like
+C<${"^G"} = 1> is compiled as two ops - a constant string and
+a dereference (rv2gv) - so that the glob is created at runtime.
+
+If you're working with globs at runtime, and need to disambiguate
+*^G from *{"^G"}, then you should use the raw NAME method.
 
 =item STASH
 

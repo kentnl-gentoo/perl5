@@ -33,6 +33,16 @@ sub B::BINOP::debug {
     printf "\top_last\t\t0x%x\n", ${$op->last};
 }
 
+sub B::LOOP::debug {
+    my ($op) = @_;
+    $op->B::BINOP::debug();
+    printf <<'EOT', ${$op->redoop}, ${$op->nextop}, ${$op->lastop};
+       op_redoop       0x%x
+       op_nextop       0x%x
+       op_lastop       0x%x
+EOT
+}
+
 sub B::LOGOP::debug {
     my ($op) = @_;
     $op->B::UNOP::debug();
@@ -208,14 +218,14 @@ EOT
 sub B::GV::debug {
     my ($gv) = @_;
     if ($done_gv{$$gv}++) {
-	printf "GV %s::%s\n", $gv->STASH->NAME, $gv->NAME;
+	printf "GV %s::%s\n", $gv->STASH->NAME, $gv->SAFENAME;
 	return;
     }
     my ($sv) = $gv->SV;
     my ($av) = $gv->AV;
     my ($cv) = $gv->CV;
     $gv->B::SV::debug;
-    printf <<'EOT', $gv->NAME, $gv->STASH->NAME, $gv->STASH, $$sv, $gv->GvREFCNT, $gv->FORM, $$av, ${$gv->HV}, ${$gv->EGV}, $$cv, $gv->CVGEN, $gv->LINE, $gv->FILE, $gv->GvFLAGS;
+    printf <<'EOT', $gv->SAFENAME, $gv->STASH->NAME, $gv->STASH, $$sv, $gv->GvREFCNT, $gv->FORM, $$av, ${$gv->HV}, ${$gv->EGV}, $$cv, $gv->CVGEN, $gv->LINE, $gv->FILE, $gv->GvFLAGS;
 	NAME		%s
 	STASH		%s (0x%x)
 	SV		0x%x

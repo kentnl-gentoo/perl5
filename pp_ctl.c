@@ -1,6 +1,6 @@
 /*    pp_ctl.c
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -2790,7 +2790,7 @@ S_doeval(pTHX_ int gimme, OP** startop)
 	CvOUTSIDE(PL_compcv) = (CV*)SvREFCNT_inc(caller);
     }
 
-    SAVEFREESV(PL_compcv);
+    SAVEMORTALIZESV(PL_compcv);	/* must remain until end of current statement */
 
     /* make sure we compile in the right package */
 

@@ -39,15 +39,26 @@ INST_TOP	*= $(INST_DRV)\perl
 CCTYPE		*= GCC
 
 #
+# uncomment this if your Borland compiler is older than v5.4.
+#
+#BCCOLD		= define
+
+#
+# uncomment this if you want to use Borland's VCL as your CRT.
+#
+#BCCVCL		= define
+
+#
 # set the install locations of the compiler include/libraries. Running
 # VCVARS32.BAT is *required* when using Visual C.  Some versions of
 # Visual C earlier than 5.x SP3 don't define MSVCDIR in the environment.
 # If such is the case you may have to set CCHOME explicitly.  Spaces in
 # the path name should not be quoted.
 #
-#CCHOME		*= c:\bc5
+#CCHOME		*= F:\Borland\BC5
 #CCHOME		*= $(MSVCDIR)
 CCHOME		*= c:\gcc-2.95.2-msvcrt
+
 CCINCDIR	*= $(CCHOME)\include
 CCLIBDIR	*= $(CCHOME)\lib
 
@@ -351,7 +362,11 @@ INST_HTML	= $(INST_TOP)$(INST_VER)\html
 .IF "$(CCTYPE)" == "BORLAND"
 
 CC		= bcc32
+.IF "$(BCCOLD)" != "define"
+LINK32		= ilink32
+.ELSE
 LINK32		= tlink32
+.END
 LIB32		= tlib /P128
 IMPLIB		= implib -c
 RSC		= rc
@@ -367,10 +382,10 @@ SUBSYS		= console
 CXX_FLAG	= -P
 
 LIBC		= cw32mti.lib
-LIBFILES	= $(CRYPT_LIB) import32.lib $(LIBC) odbc32.lib odbccp32.lib
+LIBFILES	= $(CRYPT_LIB) import32.lib $(LIBC)
 
 .IF  "$(CFG)" == "Debug"
-OPTIMIZE	= -v -D_RTLDLL -DDEBUGGING
+OPTIMIZE	= -v -D_RTLDLL -DDEBUGGING -y -R
 LINK_DBG	= -v
 .ELSE
 OPTIMIZE	= -O2 -D_RTLDLL
@@ -383,6 +398,14 @@ LINK_FLAGS	= $(LINK_DBG) -L"$(INST_COREDIR)" -L"$(CCLIBDIR)"
 OBJOUT_FLAG	= -o
 EXEOUT_FLAG	= -e
 LIBOUT_FLAG	= 
+.IF "$(BCCOLD)" != "define"
+LINK_FLAGS	+= -Gn
+DEFINES		+= -D_MT
+.IF "$(BCCVCL)" == "define"
+LIBC		!= cp32mti.lib vcl.lib vcl50.lib vclx50.lib vcle50.lib
+LINK_FLAGS	+= -L"$(CCLIBDIR)\Release"
+.END
+.END
 
 .ELIF "$(CCTYPE)" == "GCC"
 
@@ -1211,20 +1234,23 @@ doc: $(PERLEXE)
 
 utils: $(PERLEXE) $(X2P)
 	cd ..\utils && $(MAKE) PERL=$(MINIPERL)
-	copy ..\README.aix .\perlaix.pod
-	copy ..\README.amiga ..\pod\perlamiga.pod
-	copy ..\README.cygwin ..\pod\perlcygwin.pod
-	copy ..\README.dos ..\pod\perldos.pod
-	copy ..\README.epoc .\perlepoc.pod
-	copy ..\README.hpux ..\pod\perlhpux.pod
-	copy ..\README.machten ..\pod\perlmachten.pod
-	copy ..\README.os2 ..\pod\perlos2.pod
-	copy ..\README.os390 ..\pod\perlos390.pod
-	copy ..\README.vmesa ..\pod\perlvmesa.pod
-	copy ..\README.bs2000 ..\pod\perlbs2000.pod
-	copy ..\README.solaris .\perlsolaris.pod
-	copy ..\vms\perlvms.pod ..\pod\perlvms.pod
-	copy ..\README.vos ..\perlvos.pod
+	copy ..\README.aix	..\pod\perlaix.pod
+	copy ..\README.amiga	..\pod\perlamiga.pod
+	copy ..\README.bs2000	..\pod\perlbs2000.pod
+	copy ..\README.cygwin	..\pod\perlcygwin.pod
+	copy ..\README.dos	..\pod\perldos.pod
+	copy ..\README.epoc	..\pod\perlepoc.pod
+	copy ..\README.hpux	..\pod\perlhpux.pod
+	copy ..\README.machten	..\pod\perlmachten.pod
+	copy ..\README.macos	..\pod\perlmacos.pod
+	copy ..\README.mpeix	..\pod\perlmpeix.pod
+	copy ..\README.os2	..\pod\perlos2.pod
+	copy ..\README.os390	..\pod\perlos390.pod
+	copy ..\README.solaris	..\pod\perlsolaris.pod
+	copy ..\README.vmesa	..\pod\perlvmesa.pod
+	copy ..\vms\perlvms.pod	..\pod\perlvms.pod
+	copy ..\README.vos	..\pod\perlvos.pod
+	copy ..\README.win32	..\pod\perlwin32.pod
 	cd ..\pod && $(MAKE) -f ..\win32\pod.mak converters
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 
@@ -1245,15 +1271,17 @@ distclean: clean
 	-del /f $(LIBDIR)\Data\Dumper.pm $(LIBDIR)\ByteLoader.pm
 	-del /f $(LIBDIR)\Devel\Peek.pm $(LIBDIR)\Devel\DProf.pm
 	-del /f $(LIBDIR)\File\Glob.pm
-	-del /f $(LIBDIR)\Storable.pm
 	-if exist $(LIBDIR)\IO rmdir /s /q $(LIBDIR)\IO || rmdir /s $(LIBDIR)\IO
 	-if exist $(LIBDIR)\Thread rmdir /s /q $(LIBDIR)\Thread || rmdir /s $(LIBDIR)\Thread
 	-if exist $(LIBDIR)\B rmdir /s /q $(LIBDIR)\B || rmdir /s $(LIBDIR)\B
 	-if exist $(LIBDIR)\Data rmdir /s /q $(LIBDIR)\Data || rmdir /s $(LIBDIR)\Data
-	-cd $(PODDIR) && del /f *.html *.bat checkpods perlamiga.pod \
-	    perlcygwin.pod perldos.pod perlhpux.pod perlmachten.pod \
-	    perlos2.pod perlvms.pod perlwin32.pod pod2html pod2latex \
-	    pod2man pod2text pod2usage podchecker podselect
+	-cd $(PODDIR) && del /f *.html *.bat checkpods \
+	    perlaix.pod perlamiga.pod perlbs2000.pod perlcygwin.pod \
+	    perldos.pod perlepoc.pod perlhpux.pod perlmachten.pod \
+	    perlmacos.pod perlmpeix.pod perlos2.pod perlos390.pod \
+	    perlsolaris.pod perlvmesa.pod perlvms.pod perlvos.pod \
+	    perlwin32.pod pod2html pod2latex pod2man pod2text pod2usage \
+	    podchecker podselect
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph h2xs perldoc \
 	    dprofpp *.bat perlcc pstruct
 	-cd ..\x2p && del /f find2perl s2p *.bat

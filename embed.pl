@@ -1410,7 +1410,7 @@ Apd	|I32	|av_len		|AV* ar
 Apd	|AV*	|av_make	|I32 size|SV** svp
 Apd	|SV*	|av_pop		|AV* ar
 Apd	|void	|av_push	|AV* ar|SV* val
-p	|void	|av_reify	|AV* ar
+ApM	|void	|av_reify	|AV* ar
 Apd	|SV*	|av_shift	|AV* ar
 Apd	|SV**	|av_store	|AV* ar|I32 key|SV* val
 Apd	|void	|av_undef	|AV* ar
@@ -1940,6 +1940,7 @@ Ap	|void	|save_item	|SV* item
 Ap	|void	|save_iv	|IV* iv
 Ap	|void	|save_list	|SV** sarg|I32 maxsarg
 Ap	|void	|save_long	|long* longp
+Ap	|void	|save_mortalizesv|SV* sv
 Ap	|void	|save_nogv	|GV* gv
 p	|void	|save_op
 Ap	|SV*	|save_scalar	|GV* gv
@@ -2107,10 +2108,8 @@ Ap	|I32	|whichsig	|char* sig
 p	|int	|yyerror	|char* s
 #ifdef USE_PURE_BISON
 p	|int	|yylex_r	|YYSTYPE *lvalp|int *lcharp
-p	|int	|yylex		|YYSTYPE *lvalp|int *lcharp
-#else
-p	|int	|yylex
 #endif
+p	|int	|yylex
 p	|int	|yyparse
 p	|int	|yywarn		|char* s
 #if defined(MYMALLOC)

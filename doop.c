@@ -1,6 +1,6 @@
 /*    doop.c
  *
- *    Copyright (c) 1991-2000, Larry Wall
+ *    Copyright (c) 1991-2001, Larry Wall
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -179,6 +179,7 @@ S_do_trans_complex(pTHX_ SV *sv)/* SPC - NOT OK */
 		s++;
 	    }
 	}
+	*d = '\0';
 	SvCUR_set(sv, d - dstart);
     }
     else { /* isutf8 */

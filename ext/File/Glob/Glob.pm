@@ -19,6 +19,7 @@ require AutoLoader;
     bsd_glob
     glob
     GLOB_ABEND
+    GLOB_ALPHASORT
     GLOB_ALTDIRFUNC
     GLOB_BRACE
     GLOB_CSH
@@ -37,6 +38,7 @@ require AutoLoader;
 %EXPORT_TAGS = (
     'glob' => [ qw(
         GLOB_ABEND
+	GLOB_ALPHASORT
         GLOB_ALTDIRFUNC
         GLOB_BRACE
         GLOB_CSH
@@ -104,7 +106,13 @@ sub GLOB_ERROR {
     return constant('GLOB_ERROR', 0);
 }
 
-sub GLOB_CSH () { GLOB_BRACE() | GLOB_NOMAGIC() | GLOB_QUOTE() | GLOB_TILDE() }
+sub GLOB_CSH () {
+    GLOB_BRACE()
+	| GLOB_NOMAGIC()
+	| GLOB_QUOTE()
+	| GLOB_TILDE()
+	| GLOB_ALPHASORT()
+}
 
 $DEFAULT_FLAGS = GLOB_CSH();
 if ($^O =~ /^(?:MSWin32|VMS|os2|dos|riscos|MacOS)$/) {
@@ -288,7 +296,7 @@ Expand patterns that start with '~' to user name home directories.
 =item C<GLOB_CSH>
 
 For convenience, C<GLOB_CSH> is a synonym for
-C<GLOB_BRACE | GLOB_NOMAGIC | GLOB_QUOTE | GLOB_TILDE>.
+C<GLOB_BRACE | GLOB_NOMAGIC | GLOB_QUOTE | GLOB_TILDE | GLOB_ALPHASORT>.
 
 =back
 
@@ -296,6 +304,18 @@ The POSIX provided C<GLOB_APPEND>, C<GLOB_DOOFFS>, and the FreeBSD
 extensions C<GLOB_ALTDIRFUNC>, and C<GLOB_MAGCHAR> flags have not been
 implemented in the Perl version because they involve more complex
 interaction with the underlying C structures.
+
+The following flag has been added in the Perl implementation for
+compatibility with common flavors of csh:
+
+=over 4
+
+=item C<GLOB_ALPHASORT>
+
+If C<GLOB_NOSORT> is not in effect, sort filenames is alphabetical
+order (case does not matter) rather than in ASCII order.
+
+=back
 
 =head1 DIAGNOSTICS
 
@@ -356,14 +376,32 @@ Win32 users should use the real slash.  If you really want to use
 backslashes, consider using Sarathy's File::DosGlob, which comes with
 the standard Perl distribution.
 
+=item *
+
+Mac OS (Classic) users should note a few differences. Since
+Mac OS is not Unix, when the glob code encounters a tilde glob (e.g.
+~user/foo) and the C<GLOB_TILDE> flag is used, it simply returns that
+pattern without doing any expansion.
+
+Glob on Mac OS is case-insensitive by default (if you don't use any
+flags). If you specify any flags at all and still want glob
+to be case-insensitive, you must include C<GLOB_NOCASE> in the flags.
+
+The path separator is ':' (aka colon), not '/' (aka slash). Mac OS users
+should be careful about specifying relative pathnames. While a full path
+always begins with a volume name, a relative pathname should always
+begin with a ':'.  If specifying a volume name only, a trailing ':' is
+required.
+
 =back
 
 =head1 AUTHOR
 
 The Perl interface was written by Nathan Torkington E<lt>gnat@frii.comE<gt>,
 and is released under the artistic license.  Further modifications were
-made by Greg Bacon E<lt>gbacon@cs.uah.eduE<gt> and Gurusamy Sarathy
-E<lt>gsar@activestate.comE<gt>.  The C glob code has the
+made by Greg Bacon E<lt>gbacon@cs.uah.eduE<gt>, Gurusamy Sarathy
+E<lt>gsar@activestate.comE<gt>, and Thomas Wegner
+E<lt>wegner_thomas@yahoo.comE<gt>.  The C glob code has the
 following copyright:
 
     Copyright (c) 1989, 1993 The Regents of the University of California.

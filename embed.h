@@ -592,6 +592,7 @@
 #define save_iv			Perl_save_iv
 #define save_list		Perl_save_list
 #define save_long		Perl_save_long
+#define save_mortalizesv	Perl_save_mortalizesv
 #define save_nogv		Perl_save_nogv
 #define save_op			Perl_save_op
 #define save_scalar		Perl_save_scalar
@@ -750,10 +751,8 @@
 #define yyerror			Perl_yyerror
 #ifdef USE_PURE_BISON
 #define yylex_r			Perl_yylex_r
-#define yylex			Perl_yylex
-#else
-#define yylex			Perl_yylex
 #endif
+#define yylex			Perl_yylex
 #define yyparse			Perl_yyparse
 #define yywarn			Perl_yywarn
 #if defined(MYMALLOC)
@@ -2061,6 +2060,7 @@
 #define save_iv(a)		Perl_save_iv(aTHX_ a)
 #define save_list(a,b)		Perl_save_list(aTHX_ a,b)
 #define save_long(a)		Perl_save_long(aTHX_ a)
+#define save_mortalizesv(a)	Perl_save_mortalizesv(aTHX_ a)
 #define save_nogv(a)		Perl_save_nogv(aTHX_ a)
 #define save_op()		Perl_save_op(aTHX)
 #define save_scalar(a)		Perl_save_scalar(aTHX_ a)
@@ -2215,10 +2215,8 @@
 #define yyerror(a)		Perl_yyerror(aTHX_ a)
 #ifdef USE_PURE_BISON
 #define yylex_r(a,b)		Perl_yylex_r(aTHX_ a,b)
-#define yylex(a,b)		Perl_yylex(aTHX_ a,b)
-#else
-#define yylex()			Perl_yylex(aTHX)
 #endif
+#define yylex()			Perl_yylex(aTHX)
 #define yyparse()		Perl_yyparse(aTHX)
 #define yywarn(a)		Perl_yywarn(aTHX_ a)
 #if defined(MYMALLOC)
@@ -4039,6 +4037,8 @@
 #define save_list		Perl_save_list
 #define Perl_save_long		CPerlObj::Perl_save_long
 #define save_long		Perl_save_long
+#define Perl_save_mortalizesv	CPerlObj::Perl_save_mortalizesv
+#define save_mortalizesv	Perl_save_mortalizesv
 #define Perl_save_nogv		CPerlObj::Perl_save_nogv
 #define save_nogv		Perl_save_nogv
 #define Perl_save_op		CPerlObj::Perl_save_op
@@ -4346,12 +4346,9 @@
 #ifdef USE_PURE_BISON
 #define Perl_yylex_r		CPerlObj::Perl_yylex_r
 #define yylex_r			Perl_yylex_r
-#define Perl_yylex		CPerlObj::Perl_yylex
-#define yylex			Perl_yylex
-#else
-#define Perl_yylex		CPerlObj::Perl_yylex
-#define yylex			Perl_yylex
 #endif
+#define Perl_yylex		CPerlObj::Perl_yylex
+#define yylex			Perl_yylex
 #define Perl_yyparse		CPerlObj::Perl_yyparse
 #define yyparse			Perl_yyparse
 #define Perl_yywarn		CPerlObj::Perl_yywarn

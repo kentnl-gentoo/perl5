@@ -211,6 +211,13 @@ Perl_av_push(pTHXo_ AV* ar, SV* val)
     ((CPerlObj*)pPerl)->Perl_av_push(ar, val);
 }
 
+#undef  Perl_av_reify
+void
+Perl_av_reify(pTHXo_ AV* ar)
+{
+    ((CPerlObj*)pPerl)->Perl_av_reify(ar);
+}
+
 #undef  Perl_av_shift
 SV*
 Perl_av_shift(pTHXo_ AV* ar)
@@ -2575,6 +2582,13 @@ Perl_save_long(pTHXo_ long* longp)
     ((CPerlObj*)pPerl)->Perl_save_long(longp);
 }
 
+#undef  Perl_save_mortalizesv
+void
+Perl_save_mortalizesv(pTHXo_ SV* sv)
+{
+    ((CPerlObj*)pPerl)->Perl_save_mortalizesv(sv);
+}
+
 #undef  Perl_save_nogv
 void
 Perl_save_nogv(pTHXo_ GV* gv)
@@ -3456,7 +3470,6 @@ Perl_whichsig(pTHXo_ char* sig)
     return ((CPerlObj*)pPerl)->Perl_whichsig(sig);
 }
 #ifdef USE_PURE_BISON
-#else
 #endif
 #if defined(MYMALLOC)
 
