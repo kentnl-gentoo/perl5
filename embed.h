@@ -61,6 +61,7 @@
 #define avhv_iternext		Perl_avhv_iternext
 #define avhv_iternextsv		Perl_avhv_iternextsv
 #define avhv_iterval		Perl_avhv_iterval
+#define avhv_keys		Perl_avhv_keys
 #define avhv_store		Perl_avhv_store
 #define avhv_store_ent		Perl_avhv_store_ent
 #define band_amg		Perl_band_amg
@@ -184,7 +185,6 @@
 #define do_trans		Perl_do_trans
 #define do_vecset		Perl_do_vecset
 #define do_vop			Perl_do_vop
-#define doeval			Perl_doeval
 #define dofindlabel		Perl_dofindlabel
 #define dopoptoeval		Perl_dopoptoeval
 #define dounwind		Perl_dounwind
@@ -216,6 +216,7 @@
 #define filter_add		Perl_filter_add
 #define filter_del		Perl_filter_del
 #define filter_read		Perl_filter_read
+#define find_threadsv		Perl_find_threadsv
 #define fold			Perl_fold
 #define fold_constants		Perl_fold_constants
 #define fold_locale		Perl_fold_locale
@@ -330,6 +331,7 @@
 #define magic_clearsig		Perl_magic_clearsig
 #define magic_existspack	Perl_magic_existspack
 #define magic_freedefelem	Perl_magic_freedefelem
+#define magic_freeregexp	Perl_magic_freeregexp
 #define magic_get		Perl_magic_get
 #define magic_getarylen		Perl_magic_getarylen
 #define magic_getdefelem	Perl_magic_getdefelem
@@ -515,7 +517,6 @@
 #define padix			Perl_padix
 #define patleave		Perl_patleave
 #define peep			Perl_peep
-#define per_thread_magicals	Perl_per_thread_magicals
 #define pidgone			Perl_pidgone
 #define pidstatus		Perl_pidstatus
 #define pmflag			Perl_pmflag
@@ -822,7 +823,6 @@
 #define pp_socket		Perl_pp_socket
 #define pp_sockpair		Perl_pp_sockpair
 #define pp_sort			Perl_pp_sort
-#define pp_specific		Perl_pp_specific
 #define pp_splice		Perl_pp_splice
 #define pp_split		Perl_pp_split
 #define pp_sprintf		Perl_pp_sprintf
@@ -851,6 +851,7 @@
 #define pp_syswrite		Perl_pp_syswrite
 #define pp_tell			Perl_pp_tell
 #define pp_telldir		Perl_pp_telldir
+#define pp_threadsv		Perl_pp_threadsv
 #define pp_tie			Perl_pp_tie
 #define pp_tied			Perl_pp_tied
 #define pp_time			Perl_pp_time
@@ -889,32 +890,11 @@
 #define reall_srchlen		Perl_reall_srchlen
 #define ref			Perl_ref
 #define refkids			Perl_refkids
-#define regarglen		Perl_regarglen
-#define regbol			Perl_regbol
-#define regcode			Perl_regcode
-#define regdummy		Perl_regdummy
 #define regdump			Perl_regdump
-#define regendp			Perl_regendp
-#define regeol			Perl_regeol
-#define reginput		Perl_reginput
+#define regexec_flags		Perl_regexec_flags
 #define regkind			Perl_regkind
-#define reglastparen		Perl_reglastparen
-#define regmyendp		Perl_regmyendp
-#define regmyp_size		Perl_regmyp_size
-#define regmystartp		Perl_regmystartp
-#define regnarrate		Perl_regnarrate
-#define regnaughty		Perl_regnaughty
 #define regnext			Perl_regnext
-#define regnpar			Perl_regnpar
-#define regparse		Perl_regparse
-#define regprecomp		Perl_regprecomp
-#define regprev			Perl_regprev
 #define regprop			Perl_regprop
-#define regsawback		Perl_regsawback
-#define regsize			Perl_regsize
-#define regstartp		Perl_regstartp
-#define regtill			Perl_regtill
-#define regxend			Perl_regxend
 #define repeat_amg		Perl_repeat_amg
 #define repeat_ass_amg		Perl_repeat_ass_amg
 #define repeatcpy		Perl_repeatcpy
@@ -958,6 +938,7 @@
 #define save_scalar		Perl_save_scalar
 #define save_sptr		Perl_save_sptr
 #define save_svref		Perl_save_svref
+#define save_threadsv		Perl_save_threadsv
 #define savepv			Perl_savepv
 #define savepvn			Perl_savepvn
 #define savestack		Perl_savestack
@@ -1045,6 +1026,7 @@
 #define sv_cmp			Perl_sv_cmp
 #define sv_cmp_locale		Perl_sv_cmp_locale
 #define sv_collxfrm		Perl_sv_collxfrm
+#define sv_compile_2op		Perl_sv_compile_2op
 #define sv_dec			Perl_sv_dec
 #define sv_derived_from		Perl_sv_derived_from
 #define sv_dump			Perl_sv_dump
@@ -1103,6 +1085,7 @@
 #define thisexpr		Perl_thisexpr
 #define thr_key			Perl_thr_key
 #define threads_mutex		Perl_threads_mutex
+#define threadsv_names		Perl_threadsv_names
 #define timesbuf		Perl_timesbuf
 #define tokenbuf		Perl_tokenbuf
 #define too_few_arguments	Perl_too_few_arguments
@@ -1196,7 +1179,6 @@
 #define no_wrongref		Perl_no_wrongref
 #define pad_reset_pending	Perl_pad_reset_pending
 #define padix_floor		Perl_padix_floor
-#define regflags		Perl_regflags
 #define safecalloc		Perl_safecalloc
 #define safefree		Perl_safefree
 #define safemalloc		Perl_safemalloc
@@ -1277,6 +1259,7 @@
 #define formfeed		(curinterp->Iformfeed)
 #define formtarget		(curinterp->Iformtarget)
 #define gensym			(curinterp->Igensym)
+#define globalstash		(curinterp->Iglobalstash)
 #define in_eval			(curinterp->Iin_eval)
 #define incgv			(curinterp->Iincgv)
 #define initav			(curinterp->Iinitav)
@@ -1330,7 +1313,6 @@
 #define restartop		(curinterp->Irestartop)
 #define rightgv			(curinterp->Irightgv)
 #define rs			(curinterp->Irs)
-#define runlevel		(curinterp->Irunlevel)
 #define sawampersand		(curinterp->Isawampersand)
 #define sawstudy		(curinterp->Isawstudy)
 #define sawvec			(curinterp->Isawvec)
@@ -1429,6 +1411,7 @@
 #define Iformfeed		formfeed
 #define Iformtarget		formtarget
 #define Igensym			gensym
+#define Iglobalstash		globalstash
 #define Iin_eval		in_eval
 #define Iincgv			incgv
 #define Iinitav			initav
@@ -1482,7 +1465,6 @@
 #define Irestartop		restartop
 #define Irightgv		rightgv
 #define Irs			rs
-#define Irunlevel		runlevel
 #define Isawampersand		sawampersand
 #define Isawstudy		sawstudy
 #define Isawvec			sawvec
@@ -1590,6 +1572,7 @@
 #define formfeed		Perl_formfeed
 #define formtarget		Perl_formtarget
 #define gensym			Perl_gensym
+#define globalstash		Perl_globalstash
 #define in_eval			Perl_in_eval
 #define incgv			Perl_incgv
 #define initav			Perl_initav
@@ -1643,7 +1626,6 @@
 #define restartop		Perl_restartop
 #define rightgv			Perl_rightgv
 #define rs			Perl_rs
-#define runlevel		Perl_runlevel
 #define sawampersand		Perl_sawampersand
 #define sawstudy		Perl_sawstudy
 #define sawvec			Perl_sawvec

@@ -70,7 +70,7 @@ static void init_debugger _((void));
 static void init_lexer _((void));
 static void init_main_stash _((void));
 #ifdef USE_THREADS
-static struct thread * init_main_thread _((void));
+static struct perl_thread * init_main_thread _((void));
 #endif /* USE_THREADS */
 static void init_perllib _((void));
 static void init_postdump_symbols _((int, char **, char **));
@@ -112,7 +112,7 @@ perl_construct(register PerlInterpreter *sv_interp)
 #ifdef USE_THREADS
     int i;
 #ifndef FAKE_THREADS
-    struct thread *thr;
+    struct perl_thread *thr;
 #endif /* FAKE_THREADS */
 #endif /* USE_THREADS */
     
@@ -134,7 +134,6 @@ perl_construct(register PerlInterpreter *sv_interp)
 	if (pthread_key_create(&thr_key, 0))
 	    croak("panic: pthread_key_create");
 #endif
-	MUTEX_INIT(&malloc_mutex);
 	MUTEX_INIT(&sv_mutex);
 	/*
 	 * Safe to use basic SV functions from now on (though
@@ -418,36 +417,6 @@ perl_destruct(register PerlInterpreter *sv_interp)
 
     /* defgv, aka *_ should be taken care of elsewhere */
 
-#if 0  /* just about all regexp stuff, seems to be ok */
-
-    /* shortcuts to regexp stuff */
-    leftgv = Nullgv;
-    ampergv = Nullgv;
-
-    SAVEFREEOP(curpm);
-    SAVEFREEOP(oldlastpm); /* for saving regexp context during debugger */
-
-    regprecomp = NULL;	/* uncompiled string. */
-    regparse = NULL;	/* Input-scan pointer. */
-    regxend = NULL;	/* End of input for compile */
-    regnpar = 0;	/* () count. */
-    regcode = NULL;	/* Code-emit pointer; &regdummy = don't. */
-    regsize = 0;	/* Code size. */
-    regnaughty = 0;	/* How bad is this pattern? */
-    regsawback = 0;	/* Did we see \1, ...? */
-
-    reginput = NULL;		/* String-input pointer. */
-    regbol = NULL;		/* Beginning of input, for ^ check. */
-    regeol = NULL;		/* End of input, for $ check. */
-    regstartp = (char **)NULL;	/* Pointer to startp array. */
-    regendp = (char **)NULL;	/* Ditto for endp. */
-    reglastparen = 0;		/* Similarly for lastparen. */
-    regtill = NULL;		/* How far we are required to go. */
-    regflags = 0;		/* are we folding, multilining? */
-    regprev = (char)NULL;	/* char before regbol, \n if none */
-
-#endif /* if 0 */
-
     /* clean up after study() */
     SvREFCNT_dec(lastscream);
     lastscream = Nullsv;
@@ -559,7 +528,6 @@ perl_destruct(register PerlInterpreter *sv_interp)
     DEBUG_P(debprofdump());
 #ifdef USE_THREADS
     MUTEX_DESTROY(&sv_mutex);
-    MUTEX_DESTROY(&malloc_mutex);
     MUTEX_DESTROY(&eval_mutex);
     COND_DESTROY(&eval_cond);
 
@@ -967,7 +935,7 @@ print \"  \\@INC:\\n    @INC\\n\";");
     SvREFCNT_dec(rs);
     rs = SvREFCNT_inc(nrs);
 #ifdef USE_THREADS
-    sv_setsv(*av_fetch(thr->magicals, find_thread_magical("/"), FALSE), rs); 
+    sv_setsv(*av_fetch(thr->threadsv, find_threadsv("/"), FALSE), rs); 
 #else
     sv_setsv(GvSV(gv_fetchpv("/", TRUE, SVt_PV)), rs);
 #endif /* USE_THREADS */
@@ -1082,10 +1050,10 @@ perl_get_sv(char *name, I32 create)
     GV *gv;
 #ifdef USE_THREADS
     if (name[1] == '\0' && !isALPHA(name[0])) {
-	PADOFFSET tmp = find_thread_magical(name);
+	PADOFFSET tmp = find_threadsv(name);
     	if (tmp != NOT_IN_PAD) {
 	    dTHR;
-	    return *av_fetch(thr->magicals, tmp, FALSE);
+	    return *av_fetch(thr->threadsv, tmp, FALSE);
 	}
     }
 #endif /* USE_THREADS */
@@ -1716,6 +1684,9 @@ GNU General Public License, which may be found in the Perl 5.0 source kit.\n\n")
 	break;
     case '-':
     case 0:
+#ifdef WIN32
+    case '\r':
+#endif
     case '\n':
     case '\t':
 	break;
@@ -1798,6 +1769,7 @@ init_main_stash(void)
     curstash = defstash;
     compiling.cop_stash = defstash;
     debstash = GvHV(gv_fetchpv("DB::", GV_ADDMULTI, SVt_PVHV));
+    globalstash = GvHV(gv_fetchpv("CORE::GLOBAL::", GV_ADDMULTI, SVt_PVHV));
     /* We must init $/ before switches are processed. */
     sv_setpvn(GvSV(gv_fetchpv("/", TRUE, SVt_PV)), "\n", 1);
 }
@@ -2016,7 +1988,7 @@ SV *sv;
     if (strEQ(origfilename,"-"))
 	scriptname = "";
     if (fdscript >= 0) {
-	rsfp = PerlIO_fdopen(fdscript,"r");
+	rsfp = PerlIO_fdopen(fdscript,PERL_SCRIPT_MODE);
 #if defined(HAS_FCNTL) && defined(F_SETFD)
 	if (rsfp)
 	    fcntl(PerlIO_fileno(rsfp),F_SETFD,1);  /* ensure close-on-exec */
@@ -2100,7 +2072,7 @@ sed %s -e \"/^[^#]/b\" \
 	rsfp = PerlIO_stdin();
     }
     else {
-	rsfp = PerlIO_open(scriptname,"r");
+	rsfp = PerlIO_open(scriptname,PERL_SCRIPT_MODE);
 #if defined(HAS_FCNTL) && defined(F_SETFD)
 	if (rsfp)
 	    fcntl(PerlIO_fileno(rsfp),F_SETFD,1);  /* ensure close-on-exec */
@@ -2527,7 +2499,7 @@ init_predump_symbols(void)
     GV *othergv;
 
 #ifdef USE_THREADS
-    sv_setpvn(*av_fetch(thr->magicals,find_thread_magical("\""),FALSE)," ", 1);
+    sv_setpvn(*av_fetch(thr->threadsv,find_threadsv("\""),FALSE)," ", 1);
 #else
     sv_setpvn(GvSV(gv_fetchpv("\"", TRUE, SVt_PV)), " ", 1);
 #endif /* USE_THREADS */
@@ -2806,16 +2778,16 @@ incpush(char *p, int addsubdirs)
 }
 
 #ifdef USE_THREADS
-static struct thread *
+static struct perl_thread *
 init_main_thread()
 {
-    struct thread *thr;
+    struct perl_thread *thr;
     XPV *xpv;
 
-    Newz(53, thr, 1, struct thread);
+    Newz(53, thr, 1, struct perl_thread);
     curcop = &compiling;
     thr->cvcache = newHV();
-    thr->magicals = newAV();
+    thr->threadsv = newAV();
     thr->specific = newAV();
     thr->errhv = newHV();
     thr->flags = THRf_R_JOINABLE;
@@ -2843,9 +2815,13 @@ init_main_thread()
 
 #ifdef HAVE_THREAD_INTERN
     init_thread_intern(thr);
+#endif
+
+#ifdef SET_THREAD_SELF
+    SET_THREAD_SELF(thr);
 #else
     thr->self = pthread_self();
-#endif /* HAVE_THREAD_INTERN */
+#endif /* SET_THREAD_SELF */
     SET_THR(thr);
 
     /*

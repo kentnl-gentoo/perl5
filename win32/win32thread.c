@@ -1,6 +1,20 @@
 #include "EXTERN.h"
 #include "perl.h"
 
+__declspec(thread) struct thread *Perl_current_thread = NULL;
+
+void
+Perl_setTHR(struct thread *t)
+{
+ Perl_current_thread = t;
+}
+
+struct thread *
+Perl_getTHR(void)
+{
+ return Perl_current_thread;
+}
+
 void
 Perl_alloc_thread_key(void)
 {
@@ -15,11 +29,11 @@ Perl_alloc_thread_key(void)
 }
 
 void
-init_thread_intern(struct thread *thr)
+Perl_set_thread_self(struct perl_thread *thr)
 {
 #ifdef USE_THREADS
-    /* GetCurrentThread() retrurns a pseudo handle, need
-       this to convert it into a handle another thread can use
+    /* Set thr->self.  GetCurrentThread() retrurns a pseudo handle, need
+       this to convert it into a handle another thread can use.
      */
     DuplicateHandle(GetCurrentProcess(),
 		    GetCurrentThread(),
@@ -33,7 +47,7 @@ init_thread_intern(struct thread *thr)
 
 #ifdef USE_THREADS
 int
-Perl_thread_create(struct thread *thr, thread_func_t *fn)
+Perl_thread_create(struct perl_thread *thr, thread_func_t *fn)
 {
     DWORD junk;
 

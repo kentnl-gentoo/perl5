@@ -5,7 +5,7 @@
 #else
 
 /* POSIXish threads */
-typedef pthread_t perl_thread;
+typedef pthread_t perl_os_thread;
 #ifdef OLD_PTHREADS_API
 #  define pthread_mutexattr_init(a) pthread_mutexattr_create(a)
 #  define pthread_mutexattr_settype(a,t) pthread_mutexattr_setkind_np(a,t)
@@ -26,7 +26,11 @@ typedef pthread_t perl_thread;
 #endif
 
 #ifndef YIELD
-#  define YIELD sched_yield()
+#  ifdef HAS_PTHREAD_YIELD
+#    define YIELD pthread_yield()
+#  else
+#    define YIELD sched_yield()
+#  endif
 #endif
 
 #ifndef MUTEX_INIT
@@ -109,15 +113,15 @@ typedef pthread_t perl_thread;
 
 #ifndef THR
 #  ifdef OLD_PTHREADS_API
-struct thread *getTHR _((void));
+struct perl_thread *getTHR _((void));
 #    define THR getTHR()
 #  else
-#    define THR ((struct thread *) pthread_getspecific(thr_key))
+#    define THR ((struct perl_thread *) pthread_getspecific(thr_key))
 #  endif /* OLD_PTHREADS_API */
 #endif /* THR */
 
 #ifndef dTHR
-#  define dTHR struct thread *thr = THR
+#  define dTHR struct perl_thread *thr = THR
 #endif /* dTHR */
 
 #ifndef INIT_THREADS
@@ -134,7 +138,7 @@ struct thread *getTHR _((void));
 #  define THREAD_RET_CAST(p)	((void *)(p))
 #endif /* THREAD_RET */
 
-struct thread {
+struct perl_thread {
     /* The fields that used to be global */
     /* Important ones in the first cache line (if alignment is done right) */
     SV **	Tstack_sp;
@@ -211,21 +215,20 @@ struct thread {
     AV *	Tcurstack;
     AV *	Tmainstack;
     JMPENV *	Ttop_env;
-    I32		Trunlevel;
 
     /* XXX Sort stuff, firstgv, secongv and so on? */
 
     SV *	oursv;
     HV *	cvcache;
-    perl_thread	self;			/* Underlying thread object */
+    perl_os_thread	self;		/* Underlying thread object */
     U32		flags;
-    AV *	magicals;		/* Per-thread magicals */
+    AV *	threadsv;		/* Per-thread SVs ($_, $@ etc.) */
     AV *	specific;		/* Thread-specific user data */
     SV *	errsv;			/* Backing SV for $@ */
     HV *	errhv;			/* HV for what was %@ in pp_ctl.c */
     perl_mutex	mutex;			/* For the fields others can change */
     U32		tid;
-    struct thread *next, *prev;		/* Circular linked list of threads */
+    struct perl_thread *next, *prev;		/* Circular linked list of threads */
     JMPENV	Tstart_env;	        /* Top of top_env longjmp() chain */ 
 #ifdef HAVE_THREAD_INTERN
     struct thread_intern i;		/* Platform-dependent internals */
@@ -233,7 +236,7 @@ struct thread {
     char	trailing_nul;		/* For the sake of thrsv and oursv */
 };
 
-typedef struct thread *Thread;
+typedef struct perl_thread *Thread;
 
 /* Values and macros for thr->flags */
 #define THRf_STATE_MASK	7
@@ -309,9 +312,9 @@ typedef struct condpair {
 #undef	chopset
 #undef	formtarget
 #undef	bodytarget
+#undef  start_env
 #undef	toptarget
 #undef	top_env
-#undef	runlevel
 #undef	in_eval
 #undef	restartop
 #undef	delaymagic
@@ -383,7 +386,6 @@ typedef struct condpair {
 #define localizing	(thr->Tlocalizing)
 
 #define	top_env		(thr->Ttop_env)
-#define	runlevel	(thr->Trunlevel)
 #define start_env       (thr->Tstart_env)
 
 #else

@@ -314,6 +314,11 @@ d_Gconvert=''
 d_getgrps=''
 d_setgrps=''
 d_gethent=''
+d_gethbadd=''
+gethbadd_addr_type=''
+gethbadd_alen_type=''
+d_getnbadd=''
+getnbadd_net_type=''
 aphostname=''
 d_gethname=''
 d_phostname=''
@@ -460,6 +465,8 @@ usedl=''
 fpostype=''
 gidtype=''
 groupstype=''
+d_sched_yield=''
+d_pthread_yield=''
 h_fcntl=''
 h_sysfile=''
 db_hashtype=''
@@ -482,6 +489,7 @@ i_malloc=''
 i_math=''
 i_memory=''
 i_ndbm=''
+i_netdb=''
 i_neterrno=''
 i_niin=''
 i_sysin=''
@@ -595,6 +603,7 @@ installprivlib=''
 privlib=''
 privlibexp=''
 prototype=''
+pthreads_created_joinable=''
 randbits=''
 installscript=''
 scriptdir=''
@@ -2592,32 +2601,8 @@ $undef$define) . ./whoa; eval "$var=\$tu";;
 *) eval "$var=$val";;
 esac'
 
-$cat <<EOM
-
-Perl 5.004 can be compiled for binary compatibility with 5.003.
-If you decide to do so, you will be able to continue using any
-extensions that were compiled for Perl 5.003.  However, binary
-compatibility forces Perl to expose some of its internal symbols
-in the same way that 5.003 did.  So you may have symbol conflicts
-if you embed a binary-compatible Perl in other programs.
-
-EOM
-case "$d_bincompat3" in
-"$undef") dflt=n ;;
-*) dflt=y ;;
-esac
-rp='Binary compatibility with Perl 5.003?'
-. ./myread
-case "$ans" in
-y*) val="$define" ;;
-*)  val="$undef" ;;
-esac
-set d_bincompat3
-eval $setvar
-case "$d_bincompat3" in
-"$define") bincompat3=y ;;
-*) bincompat3=n ;;
-esac
+: bincompat3 is no more even possible starting with 5.005
+d_bincompat3=$undef
 
 : make some quick guesses about what we are up against
 echo " "
@@ -6624,6 +6609,14 @@ eval $inlibc
 set fsetpos d_fsetpos
 eval $inlibc
 
+: see if gethostbyaddr exists
+set gethostbyaddr d_gethbadd
+eval $inlibc
+
+: see if getnetbyaddr exists
+set getnetbyaddr d_getnbadd
+eval $inlibc
+
 : see if gethostent exists
 set gethostent d_gethent
 eval $inlibc
@@ -8559,6 +8552,24 @@ EOM
 *)  groupstype="$gidtype";;
 esac
 
+case "$usethreads" in
+$define)
+
+    : see if sched_yield exists
+    set sched_yield d_sched_yield
+    eval $inlibc
+    
+    : see if pthread_yield exists
+    set pthread_yield d_pthread_yield
+    eval $inlibc
+
+    ;;
+*)
+    d_sched_yield=$undef
+    d_pthread_yield=$undef
+    ;;
+esac
+
 : see what type lseek is declared as in the kernel
 set off_t lseektype long stdio.h sys/types.h
 eval $typedef
@@ -9223,6 +9234,148 @@ EOM
 fi
 $rm -f ssize ssize.[co] ssize.out
 
+: see if this is a netdb.h system
+set netdb.h i_netdb
+eval $inhdr
+
+: check for type of arguments to gethostbyaddr.  This will only really
+: work if the system supports prototypes and provides one for
+: gethostbyaddr.
+case "$d_gethbadd" in
+$define)
+        if test "X$gethbadd_addr_type" = X -o "X$gethbadd_alen_type" = X; then
+	    $cat <<EOM
+
+Checking to see what type of arguments are expected by gethostbyaddr().
+EOM
+	$cat >try.c <<EOCP
+#include <sys/types.h>
+#$i_niin I_NIIN
+#$i_netdb I_NETDB
+#$i_unistd I_UNISTD
+#$d_socket HAS_SOCKET
+#$d_socket HAS_SOCKET
+#ifdef HAS_SOCKET
+#include <sys/socket.h> /* Might include <sys/bsdtypes.h> */
+#endif
+#ifdef I_NIIN
+#include <netinet/in.h>
+#endif
+#ifdef I_NETDB
+#include <netdb.h>
+#endif
+#ifdef I_UNISTD
+#include <unistd.h>
+#endif
+#define Size_t $sizetype
+main()
+{
+	Gethbadd_addr_t	addr;
+        Gethbadd_alen_t	alen;
+	struct hostent*	hent;
+
+	extern struct hostent *gethostbyaddr(const Gethbadd_addr_t, Gethbadd_alen_t, int);
+
+	alen = sizeof(struct in_addr);
+	addr = (Gethbadd_addr_t)malloc(alen);
+	/* We do not execute this so the contents of the addr matter not. */
+	hent = gethostbyaddr(addr, alen, AF_INET);
+
+	exit(0);
+}
+EOCP
+	    for xxx in "void *" "char *"; do
+		    for yyy in Size_t int; do
+			    if $cc $ccflags -c -DGethbadd_addr_t="$xxx" -DGethbadd_alen_t="$yyy" try.c >/dev/null 2>&1 ; then
+				gethbadd_addr_type="$xxx"
+				gethbadd_alen_type="$yyy"
+				echo "Your system uses $xxx for the 1st argument to gethostbyaddr." >&4
+				echo "and the the 2nd argument to gethostbyaddr is $yyy." >&4
+				break
+			    fi
+		    done
+		    test "X$gethbadd_addr_type" != X && break
+	    done
+	    if test "X$gethbadd_addr_type" = X; then
+		    rp='What is the type for the 1st argument to gethostbyaddr?'
+		    dflt="void *"
+		    . ./myread
+		    gethbadd_addr_type="$ans"
+
+		    # Remove the "const" if needed.
+		    gethbadd_addr_type=`echo $gethbadd_addr_type | sed 's/^const //'`
+
+		    rp='What is the type for the 2nd argument to gethostbyaddr ?'
+		    dflt="Size_t"
+		    . ./myread
+		    gethbadd_alen_type="$ans"
+	    fi
+	    $rm -f try.[co]
+	fi
+	;;
+*)	gethbadd_addr_type='void *'
+	gethbadd_alen_type='Size_t'
+	;;
+esac
+
+: check for type of arguments to getnetbyaddr.  This will only really
+: work if the system supports prototypes and provides one for
+: getnetbyaddr.
+case "$d_getnbadd" in
+$define)
+        if test "X$getnbadd_addr_type" = X -o "X$getnbadd_alen_type" = X; then
+	    $cat <<EOM
+
+Checking to see what type of arguments are expected by getnetbyaddr().
+EOM
+	$cat >try.c <<EOCP
+#$i_niin I_NIIN
+#$i_netdb I_NETDB
+#$d_socket HAS_SOCKET
+#$d_socket HAS_SOCKET
+#include <sys/types.h>
+#ifdef HAS_SOCKET
+#include <sys/socket.h> /* Might include <sys/bsdtypes.h> */
+#endif
+#ifdef I_NIIN
+#include <netinet/in.h>
+#endif
+#ifdef I_NETDB
+#include <netdb.h>
+#endif
+main()
+{
+	Getnbadd_net_t	net;
+	struct netent*	nent;
+
+	extern struct netent *getnetbyaddr(Getnbadd_net_t, int);
+
+	/* We do not execute this so the contents of the net matter not. */
+	nent = getnetbyaddr(net, AF_INET);
+
+	exit(0);
+}
+EOCP
+	    for xxx in in_addr_t long int; do
+		    if $cc $ccflags -c -DGetnbadd_net_t="$xxx" try.c >/dev/null 2>&1 ; then
+			getnbadd_net_type="$xxx"
+			echo "Your system uses $xxx for the 1st argument to getnetbyaddr." >&4
+			break
+		    fi
+	    done
+	    if test "X$getnbadd_net_type" = X; then
+		    rp='What is the type for the 1st argument to getnetbyaddr?'
+		    dflt="long"
+		    . ./myread
+		    getnbadd_net_type="$ans"
+	    fi
+	    $rm -f try.[co]
+	fi
+	;;
+*)	getnbadd_net_type='long'
+	;;
+esac
+
 : see what type of char stdio uses.
 echo " "
 if $contains 'unsigned.*char.*_ptr;' `./findhdr stdio.h` >/dev/null 2>&1 ; then
@@ -9764,6 +9917,53 @@ val="$t_gdbm"
 set i_gdbm
 eval $setvar
 
+: test whether pthreads are created in joinable -- aka undetached -- state
+if test "X$usethreads" != X; then
+echo " "
+echo 'Checking whether pthreads are created joinable.' >&4
+	$cat >try.c <<EOCP
+/* Note: this program returns 1 if detached, 0 if not.
+ * Easier this way because the PTHREAD_CREATE_DETACHED is more
+ * portable than the obsolete PTHREAD_CREATE_UNDETACHED.
+ * Testing for joinable (aka undetached) as opposed to detached
+ * is then again logically more sensible because that's
+ * the more modern default state in the pthreads implementations. */
+#include <pthread.h>
+#include <stdio.h>
+int main() {
+    pthread_attr_t attr;
+    int detachstate;
+    pthread_attr_init(&attr);
+    pthread_attr_getdetachstate(&attr, &detachstate);
+    printf("%s\n",
+           detachstate == PTHREAD_CREATE_DETACHED ?
+           "detached" : "joinable");
+    exit(0);
+}
+EOCP
+    if $cc $ccflags $ldflags -o try try.c $libs >/dev/null 2>&1; then
+	yyy=`./try`
+    else
+	echo "(I can't seem to compile the test program--assuming they are.)"
+	yyy=joinable
+    fi
+    case "$yyy" in
+    joinable)
+      val="$define"
+      echo "Yup, they are."
+      ;;
+    *)
+      val="$undef"
+      echo "Nope, they aren't."
+      ;;
+    esac
+    set d_pthreads_created_joinable
+    eval $setvar
+    $rm -f try try.*
+else
+    d_pthreads_created_joinable=$undef
+fi
+
 echo " "
 echo "Looking for extensions..." >&4
 cd ../ext
@@ -10089,9 +10289,14 @@ d_fsetpos='$d_fsetpos'
 d_ftime='$d_ftime'
 d_getgrps='$d_getgrps'
 d_setgrps='$d_setgrps'
+d_gethbadd='$d_gethbadd'
+gethbadd_addr_type='$gethbadd_addr_type'
+gethbadd_alen_type='$gethbadd_alen_type'
 d_gethent='$d_gethent'
 d_gethname='$d_gethname'
 d_getlogin='$d_getlogin'
+d_getnbadd='$d_getnbadd'
+getnbadd_net_type='$getnbadd_net_type'
 d_getpgid='$d_getpgid'
 d_getpgrp2='$d_getpgrp2'
 d_getpgrp='$d_getpgrp'
@@ -10134,6 +10339,7 @@ d_phostname='$d_phostname'
 d_pipe='$d_pipe'
 d_poll='$d_poll'
 d_portable='$d_portable'
+d_pthread_yield='$d_pthread_yield'
 d_pwage='$d_pwage'
 d_pwchange='$d_pwchange'
 d_pwclass='$d_pwclass'
@@ -10148,6 +10354,7 @@ d_rmdir='$d_rmdir'
 d_safebcpy='$d_safebcpy'
 d_safemcpy='$d_safemcpy'
 d_sanemcmp='$d_sanemcmp'
+d_sched_yield='$d_sched_yield'
 d_seekdir='$d_seekdir'
 d_select='$d_select'
 d_sem='$d_sem'
@@ -10273,6 +10480,7 @@ i_malloc='$i_malloc'
 i_math='$i_math'
 i_memory='$i_memory'
 i_ndbm='$i_ndbm'
+i_netdb='$i_netdb'
 i_neterrno='$i_neterrno'
 i_niin='$i_niin'
 i_pwd='$i_pwd'
@@ -10400,6 +10608,7 @@ prefixexp='$prefixexp'
 privlib='$privlib'
 privlibexp='$privlibexp'
 prototype='$prototype'
+pthreads_created_joinable='$pthreads_created_joinable'
 randbits='$randbits'
 ranlib='$ranlib'
 rd_nodata='$rd_nodata'

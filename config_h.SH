@@ -329,6 +329,36 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$d_gethent HAS_GETHOSTENT		/**/
 
+/* HAS_GETHBADD:
+ *	This symbol, if defined, indicates that the gethostbyaddr routine is
+ *	available to lookup host names by their IP addresses.
+ */
+#$d_gethbadd HAS_GETHBADD		/**/
+
+/* Gethbadd_addr_t:
+ *	This symbol holds the type used for the 1st argument
+ *	to gethostbyaddr().
+ */
+#define Gethbadd_addr_t		$gethbadd_addr_type
+
+/* Gethbadd_alen_t:
+ *	This symbol holds the type used for the 2nd argument
+ *	to gethostbyaddr().
+ */
+#define Gethbadd_alen_t		$gethbadd_alen_type
+
+/* HAS_GETNBADD:
+ *	This symbol, if defined, indicates that the getnetbyaddr routine is
+ *	available to lookup networks by their IP addresses.
+ */
+#$d_getnbadd HAS_GETNBADD		/**/
+
+/* Gethbadd_net_t:
+ *	This symbol holds the type used for the 1st argument
+ *	to getnetbyaddr().
+ */
+#define Getnbadd_net_t		$getnbadd_net_type
+
 /* HAS_UNAME:
  *	This symbol, if defined, indicates that the C program may use the
  *	uname() routine to derive the host name.  See also HAS_GETHOSTNAME
@@ -535,6 +565,18 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	available to poll active file descriptors.
  */
 #$d_poll HAS_POLL		/**/
+
+/* HAS_PTHREAD_YIELD:
+ *	This symbol, if defined, indicates that the pthread_yield routine is
+ *	available to yield the execution of the current thread.
+ */
+#$d_pthread_yield HAS_PTHREAD_YIELD
+
+/* HAS_SCHED_YIELD:
+ *	This symbol, if defined, indicates that the sched_yield routine is
+ *	available to yield the execution of the current thread.
+ */
+#$d_sched_yield HAS_SCHED_YIELD
 
 /* HAS_READDIR:
  *	This symbol, if defined, indicates that the readdir routine is
@@ -1117,6 +1159,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  */
 #$i_niin I_NETINET_IN	/**/
 
+/* I_NETDB:
+ *	This symbol, if defined, indicates that <netdb.h> exists and 
+ *	should be included.
+ */
+#$i_netdb I_NETDB		/**/
+
 /* I_PWD:
  *	This symbol, if defined, indicates to the C program that it should
  *	include <pwd.h>.
@@ -1587,6 +1635,12 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *	be used.
  */
 #$d_sfio	USE_SFIO		/**/
+
+/* PTHREADS_CREATED_JOINABLE:
+ *	This symbol, if defined, indicates that pthreads are created
+ *	in the joinable (aka undetached) state.
+ */
+#$d_pthreads_created_joinable	PTHREADS_CREATED_JOINABLE		/**/
 
 /* Sigjmp_buf:
  *	This is the buffer type to be used with Sigsetjmp and Siglongjmp.

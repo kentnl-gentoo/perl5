@@ -819,7 +819,8 @@ fbm_compile(SV *sv)
     I32 rarest = 0;
     U32 frequency = 256;
 
-    if (len > 255)
+    sv_upgrade(sv, SVt_PVBM);
+    if (len > 255 || len == 0)	/* TAIL might be on on a zero-length string. */
 	return;			/* can't have offsets that big */
     Sv_Grow(sv,len+258);
     table = (unsigned char*)(SvPVX(sv) + len + 1);
@@ -834,7 +835,6 @@ fbm_compile(SV *sv)
 	    table[*s] = i;
 	s--,i++;
     }
-    sv_upgrade(sv, SVt_PVBM);
     sv_magic(sv, Nullsv, 'B', Nullch, 0);	/* deep magic */
     SvVALID_on(sv);
 
@@ -864,8 +864,15 @@ fbm_instr(unsigned char *big, register unsigned char *bigend, SV *littlestr)
     if (SvTYPE(littlestr) != SVt_PVBM || !SvVALID(littlestr)) {
 	STRLEN len;
 	char *l = SvPV(littlestr,len);
-	if (!len)
+	if (!len) {
+	    if (SvTAIL(littlestr)) {
+		if (bigend > big && bigend[-1] == '\n')
+		    return (char *)(bigend - 1);
+		else
+		    return (char *) bigend;
+	    }
 	    return (char*)big;
+	}
 	return ninstr((char*)big,(char*)bigend, l, l + len);
     }
 
@@ -911,20 +918,35 @@ fbm_instr(unsigned char *big, register unsigned char *bigend, SV *littlestr)
 	    while (tmp--) {
 		if (*--s == *--little)
 		    continue;
+	      differ:
 		s = olds + 1;	/* here we pay the price for failure */
 		little = oldlittle;
 		if (s < bigend)	/* fake up continue to outer loop */
 		    goto top2;
 		return Nullch;
 	    }
+	    if (SvTAIL(littlestr)	/* automatically multiline */
+		&& olds + 1 != bigend
+		&& olds[1] != '\n') 
+		goto differ;
 	    return (char *)s;
 	}
     }
     return Nullch;
 }
 
+/* start_shift, end_shift are positive quantities which give offsets
+   of ends of some substring of bigstr.
+   If `last' we want the last occurence.
+   old_posp is the way of communication between consequent calls if
+   the next call needs to find the . 
+   The initial *old_posp should be -1.
+   Note that we do not take into account SvTAIL, so it may give wrong
+   positives if _ALL flag is set.
+ */
+
 char *
-screaminstr(SV *bigstr, SV *littlestr)
+screaminstr(SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift, I32 *old_posp, I32 last)
 {
     register unsigned char *s, *x;
     register unsigned char *big;
@@ -932,54 +954,65 @@ screaminstr(SV *bigstr, SV *littlestr)
     register I32 previous;
     register I32 first;
     register unsigned char *little;
-    register unsigned char *bigend;
+    register I32 stop_pos;
     register unsigned char *littleend;
+    I32 found = 0;
 
-    if ((pos = screamfirst[BmRARE(littlestr)]) < 0) 
+    if (*old_posp == -1
+	? (pos = screamfirst[BmRARE(littlestr)]) < 0
+	: (((pos = *old_posp), pos += screamnext[pos]) == 0))
 	return Nullch;
     little = (unsigned char *)(SvPVX(littlestr));
     littleend = little + SvCUR(littlestr);
     first = *little++;
+    /* The value of pos we can start at: */
     previous = BmPREVIOUS(littlestr);
     big = (unsigned char *)(SvPVX(bigstr));
-    bigend = big + SvCUR(bigstr);
-    while (pos < previous) {
+    /* The value of pos we can stop at: */
+    stop_pos = SvCUR(bigstr) - end_shift - (SvCUR(littlestr) - 1 - previous);
+    if (previous + start_shift > stop_pos) return Nullch;
+    while (pos < previous + start_shift) {
 	if (!(pos += screamnext[pos]))
 	    return Nullch;
     }
 #ifdef POINTERRIGOR
     do {
+	if (pos >= stop_pos) return Nullch;
 	if (big[pos-previous] != first)
 	    continue;
 	for (x=big+pos+1-previous,s=little; s < littleend; /**/ ) {
-	    if (x >= bigend)
-		return Nullch;
 	    if (*s++ != *x++) {
 		s--;
 		break;
 	    }
 	}
-	if (s == littleend)
-	    return (char *)(big+pos-previous);
+	if (s == littleend) {
+	    *old_posp = pos;
+	    if (!last) return (char *)(big+pos-previous);
+	    found = 1;
+	}
     } while ( pos += screamnext[pos] );
+    return (last && found) ? (char *)(big+(*old_posp)-previous) : Nullch;
 #else /* !POINTERRIGOR */
     big -= previous;
     do {
+	if (pos >= stop_pos) return Nullch;
 	if (big[pos] != first)
 	    continue;
 	for (x=big+pos+1,s=little; s < littleend; /**/ ) {
-	    if (x >= bigend)
-		return Nullch;
 	    if (*s++ != *x++) {
 		s--;
 		break;
 	    }
 	}
-	if (s == littleend)
-	    return (char *)(big+pos);
+	if (s == littleend) {
+	    *old_posp = pos;
+	    if (!last) return (char *)(big+pos);
+	    found = 1;
+	}
     } while ( pos += screamnext[pos] );
+    return (last && found) ? (char *)(big+(*old_posp)) : Nullch;
 #endif /* POINTERRIGOR */
-    return Nullch;
 }
 
 I32
@@ -1120,7 +1153,6 @@ die(pat, va_alist)
     dTHR;
     va_list args;
     char *message;
-    I32 oldrunlevel = runlevel;
     int was_in_eval = in_eval;
     HV *stash;
     GV *gv;
@@ -1181,10 +1213,10 @@ die(pat, va_alist)
     restartop = die_where(message);
 #ifdef USE_THREADS
     DEBUG_L(PerlIO_printf(PerlIO_stderr(),
-	  "%p: die: restartop = %p, was_in_eval = %d, oldrunlevel = %d\n",
-	  thr, restartop, was_in_eval, oldrunlevel));
+	  "%p: die: restartop = %p, was_in_eval = %d, top_env = %p\n",
+	  thr, restartop, was_in_eval, top_env));
 #endif /* USE_THREADS */
-    if ((!restartop && was_in_eval) || oldrunlevel > 1)
+    if ((!restartop && was_in_eval) || top_env->je_prev)
 	JMPENV_JUMP(3);
     return restartop;
 }
@@ -2290,7 +2322,7 @@ void
 perl_cond_signal(cp)
 perl_cond *cp;
 {
-    perl_thread t;
+    perl_os_thread t;
     perl_cond cond = *cp;
     
     if (!cond)
@@ -2311,7 +2343,7 @@ void
 perl_cond_broadcast(cp)
 perl_cond *cp;
 {
-    perl_thread t;
+    perl_os_thread t;
     perl_cond cond, cond_next;
     
     for (cond = *cp; cond; cond = cond_next) {
@@ -2350,14 +2382,14 @@ perl_cond *cp;
 #endif /* FAKE_THREADS */
 
 #ifdef OLD_PTHREADS_API
-struct thread *
+struct perl_thread *
 getTHR _((void))
 {
     pthread_addr_t t;
 
     if (pthread_getspecific(thr_key, &t))
 	croak("panic: pthread_getspecific");
-    return (struct thread *) t;
+    return (struct perl_thread *) t;
 }
 #endif /* OLD_PTHREADS_API */
 
@@ -2406,22 +2438,20 @@ condpair_magic(SV *sv)
  * called. The use by ext/Thread/Thread.xs in core perl (where t is the
  * thread calling new_struct_thread) clearly satisfies this constraint.
  */
-struct thread *
-new_struct_thread(struct thread *t)
+struct perl_thread *
+new_struct_thread(struct perl_thread *t)
 {
-    struct thread *thr;
+    struct perl_thread *thr;
     SV *sv;
     SV **svp;
     I32 i;
 
     sv = newSVpv("", 0);
-    SvGROW(sv, sizeof(struct thread) + 1);
-    SvCUR_set(sv, sizeof(struct thread));
+    SvGROW(sv, sizeof(struct perl_thread) + 1);
+    SvCUR_set(sv, sizeof(struct perl_thread));
     thr = (Thread) SvPVX(sv);
-    /* Zero(thr, 1, struct thread); */
-
     /* debug */
-    memset(thr, 0xab, sizeof(struct thread));
+    memset(thr, 0xab, sizeof(struct perl_thread));
     markstack = 0;
     scopestack = 0;
     savestack = 0;
@@ -2431,11 +2461,11 @@ new_struct_thread(struct thread *t)
     /* end debug */
 
     thr->oursv = sv;
-    init_stacks(thr);
+    init_stacks(ARGS);
 
     curcop = &compiling;
     thr->cvcache = newHV();
-    thr->magicals = newAV();
+    thr->threadsv = newAV();
     thr->specific = newAV();
     thr->errsv = newSVpv("", 0);
     thr->errhv = newHV();
@@ -2445,9 +2475,21 @@ new_struct_thread(struct thread *t)
     curcop = t->Tcurcop;       /* XXX As good a guess as any? */
     defstash = t->Tdefstash;   /* XXX maybe these should */
     curstash = t->Tcurstash;   /* always be set to main? */
-    /* top_env needs to be non-zero. The particular value doesn't matter */
-    top_env = t->Ttop_env;
-    runlevel = 1;		/* XXX should be safe ? */
+
+
+    /* top_env needs to be non-zero. It points to an area
+       in which longjmp() stuff is stored, as C callstack
+       info there at least is thread specific this has to
+       be per-thread. Otherwise a 'die' in a thread gives
+       that thread the C stack of last thread to do an eval {}!
+       See comments in scope.h    
+       Initialize top entry (as in perl.c for main thread)
+     */
+    start_env.je_prev = NULL;
+    start_env.je_ret = -1;
+    start_env.je_mustcatch = TRUE;
+    top_env  = &start_env;
+
     in_eval = FALSE;
     restartop = 0;
 
@@ -2464,15 +2506,15 @@ new_struct_thread(struct thread *t)
     bodytarget = newSVsv(t->Tbodytarget);
     toptarget = newSVsv(t->Ttoptarget);
     
-    /* Initialise all per-thread magicals that the template thread used */
-    svp = AvARRAY(t->magicals);
-    for (i = 0; i <= AvFILL(t->magicals); i++, svp++) {
+    /* Initialise all per-thread SVs that the template thread used */
+    svp = AvARRAY(t->threadsv);
+    for (i = 0; i <= AvFILL(t->threadsv); i++, svp++) {
 	if (*svp && *svp != &sv_undef) {
 	    SV *sv = newSVsv(*svp);
-	    av_store(thr->magicals, i, sv);
-	    sv_magic(sv, 0, 0, &per_thread_magicals[i], 1);
+	    av_store(thr->threadsv, i, sv);
+	    sv_magic(sv, 0, 0, &threadsv_names[i], 1);
 	    DEBUG_L(PerlIO_printf(PerlIO_stderr(),
-				  "new_struct_thread: copied magical %d\n",i));
+		"new_struct_thread: copied threadsv %d %p->%p\n",i, t, thr));
 	}
     } 
 
@@ -2504,4 +2546,5 @@ Perl_huge(void)
  return HUGE_VAL;
 }
 #endif
+
 

@@ -1,8 +1,0 @@
-
-# Check scope of pragma with eval
-no strict ;
-eval {
-    my $a = ${"Fred"} ;
-};
-print STDERR $@ ;
-my $a = ${"Fred"} ;

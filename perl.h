@@ -29,6 +29,9 @@
 
 #include "embed.h"
 
+#undef START_EXTERN_C
+#undef END_EXTERN_C
+#undef EXTERN_C
 #ifdef __cplusplus
 #  define START_EXTERN_C extern "C" {
 #  define END_EXTERN_C }
@@ -37,12 +40,6 @@
 #  define START_EXTERN_C 
 #  define END_EXTERN_C 
 #  define EXTERN_C
-#endif
-
-#if defined(USE_THREADS) /* && !defined(PERL_CORE) && !defined(PERLDLL) */
-#ifndef CRIPPLED_CC
-#define CRIPPLED_CC
-#endif
 #endif
 
 #ifdef OP_IN_REGISTER
@@ -116,7 +113,7 @@ register struct op *op asm(stringify(OP_IN_REGISTER));
 # define STANDARD_C 1
 #endif
 
-#if defined(__cplusplus) || defined(WIN32)
+#if defined(__cplusplus) || defined(WIN32) || defined(__sgi)
 # define DONT_DECLARE_STD 1
 #endif
 
@@ -465,9 +462,13 @@ register struct op *op asm(stringify(OP_IN_REGISTER));
 #ifdef USE_THREADS
 #  define ERRSV (thr->errsv)
 #  define ERRHV (thr->errhv)
+#  define DEFSV *av_fetch(thr->threadsv, find_threadsv("_"), FALSE)
+#  define SAVE_DEFSV save_threadsv(find_threadsv("_"))
 #else
 #  define ERRSV GvSV(errgv)
 #  define ERRHV GvHV(errgv)
+#  define DEFSV GvSV(defgv)
+#  define SAVE_DEFSV SAVESPTR(GvSV(defgv))
 #endif /* USE_THREADS */
 
 #ifndef errno
@@ -1057,7 +1058,7 @@ union any {
 };
 
 #ifdef USE_THREADS
-#define ARGSproto struct thread *thr
+#define ARGSproto struct perl_thread *thr
 #else
 #define ARGSproto void
 #endif /* USE_THREADS */
@@ -1342,6 +1343,14 @@ typedef Sighandler_t Sigsave_t;
 # define RUNOPS_DEFAULT runops_standard
 #endif
 
+#ifdef MYMALLOC
+#  define MALLOC_INIT MUTEX_INIT(&malloc_mutex)
+#  define MALLOC_TERM MUTEX_DESTROY(&malloc_mutex)
+#else
+#  define MALLOC_INIT
+#  define MALLOC_TERM
+#endif
+
 /*
  * These need prototyping here because <proto.h> isn't
  * included until after runops is initialised.
@@ -1352,7 +1361,7 @@ int runops_standard _((void));
 int runops_debug _((void));
 #endif
 
-#define PER_THREAD_MAGICALS "123456789&`'+/.,\\\";^-%=|~:\001\005!@"
+#define THREADSV_NAMES "_123456789&`'+/.,\\\";^-%=|~:\001\005!@"
 
 /****************/
 /* Truly global */
@@ -1361,24 +1370,24 @@ int runops_debug _((void));
 /* global state */
 EXT PerlInterpreter *	curinterp;	/* currently running interpreter */
 #ifdef USE_THREADS
-EXT perl_key		thr_key;	/* For per-thread struct thread ptr */
+EXT perl_key		thr_key;	/* For per-thread struct perl_thread* */
 EXT perl_mutex		sv_mutex;	/* Mutex for allocating SVs in sv.c */
 EXT perl_mutex		malloc_mutex;	/* Mutex for malloc */
 EXT perl_mutex		eval_mutex;	/* Mutex for doeval */
 EXT perl_cond		eval_cond;	/* Condition variable for doeval */
-EXT struct thread *	eval_owner;	/* Owner thread for doeval */
+EXT struct perl_thread *	eval_owner;	/* Owner thread for doeval */
 EXT int			nthreads;	/* Number of threads currently */
 EXT perl_mutex		threads_mutex;	/* Mutex for nthreads and thread list */
 EXT perl_cond		nthreads_cond;	/* Condition variable for nthreads */
-EXT char *		per_thread_magicals INIT(PER_THREAD_MAGICALS);
+EXT char *		threadsv_names INIT(THREADSV_NAMES);
 #ifdef FAKE_THREADS
-EXT struct thread *	thr;		/* Currently executing (fake) thread */
+EXT struct perl_thread *	thr;	/* Currently executing (fake) thread */
 #endif
 #endif /* USE_THREADS */
 
 /* VMS doesn't use environ array and NeXT has problems with crt0.o globals */
 #if !defined(VMS) && !(defined(NeXT) && defined(__DYNAMIC__))
-#if !defined(DONT_DECLARE_STD) || (defined(__svr4__) && defined(__GNUC__) && defined(sun))
+#if !defined(DONT_DECLARE_STD) || (defined(__svr4__) && defined(__GNUC__) && defined(sun)) || defined(__sgi)
 extern char **	environ;	/* environment variables supplied via exec */
 #endif
 #else
@@ -1751,29 +1760,6 @@ EXT U32		hints;		/* various compilation flags */
 #define HINT_STRICT_VARS	0x00000400
 #define HINT_LOCALE		0x00000800
 
-/**************************************************************************/
-/* This regexp stuff is global since it always happens within 1 expr eval */
-/**************************************************************************/
-
-EXT char *	regprecomp;	/* uncompiled string. */
-EXT char *	regparse;	/* Input-scan pointer. */
-EXT char *	regxend;	/* End of input for compile */
-EXT I32		regnpar;	/* () count. */
-EXT char *	regcode;	/* Code-emit pointer; &regdummy = don't. */
-EXT I32		regsize;	/* Code size. */
-EXT I32		regnaughty;	/* How bad is this pattern? */
-EXT I32		regsawback;	/* Did we see \1, ...? */
-
-EXT char *	reginput;	/* String-input pointer. */
-EXT char *	regbol;		/* Beginning of input, for ^ check. */
-EXT char *	regeol;		/* End of input, for $ check. */
-EXT char **	regstartp;	/* Pointer to startp array. */
-EXT char **	regendp;	/* Ditto for endp. */
-EXT U32 *	reglastparen;	/* Similarly for lastparen. */
-EXT char *	regtill;	/* How far we are required to go. */
-EXT U16		regflags;	/* are we folding, multilining? */
-EXT char	regprev;	/* char before regbol, \n if none */
-
 EXT bool	do_undump;	/* -u or dump seen? */
 EXT VOL U32	debug;
 
@@ -1889,6 +1875,7 @@ IEXT AV *	Idbargs;	/* args to call listed by caller function */
 IEXT HV *	Idefstash;	/* main symbol table */
 IEXT HV *	Icurstash;	/* symbol table for current package */
 IEXT HV *	Idebstash;	/* symbol table for perldb package */
+IEXT HV *	Iglobalstash;	/* global keyword overrides imported here */
 IEXT SV *	Icurstname;	/* name of current package */
 IEXT AV *	Ibeginav;	/* names of BEGIN subroutines */
 IEXT AV *	Iendav;		/* names of END subroutines */
@@ -1945,7 +1932,6 @@ IEXT I32	Icxstack_ix IINIT(-1);
 IEXT I32	Icxstack_max IINIT(128);
 IEXT JMPENV 	Istart_env;	/* empty startup sigjmp() environment */
 IEXT JMPENV *	Itop_env;	/* ptr. to current sigjmp() environment */
-IEXT I32	Irunlevel;
 
 /* stack stuff */
 IEXT AV *	Icurstack;		/* THE STACK */
@@ -1981,7 +1967,7 @@ IEXT SV *	Imess_sv;
 
 #ifdef USE_THREADS
 /* threads stuff */
-IEXT SV *	Ithrsv;		/* holds struct thread for main thread */
+IEXT SV *	Ithrsv;		/* holds struct perl_thread for main thread */
 #endif /* USE_THREADS */
 
 #undef IEXT
@@ -2075,6 +2061,8 @@ EXT MGVTBL vtbl_mutex =	{0,	0,	0,	0,	magic_mutexfree};
 EXT MGVTBL vtbl_defelem = {magic_getdefelem,magic_setdefelem,
 					0,	0,	magic_freedefelem};
 
+EXT MGVTBL vtbl_regexp = {0,0,0,0, magic_freeregexp};
+
 #ifdef USE_LOCALE_COLLATE
 EXT MGVTBL vtbl_collxfrm = {0,
 				magic_setcollxfrm,
@@ -2117,6 +2105,7 @@ EXT MGVTBL vtbl_mutex;
 #endif /* USE_THREADS */
 
 EXT MGVTBL vtbl_defelem;
+EXT MGVTBL vtbl_regexp;
 
 #ifdef USE_LOCALE_COLLATE
 EXT MGVTBL vtbl_collxfrm;
@@ -2314,6 +2303,10 @@ EXT bool	numeric_local INIT(TRUE);    /* Assume local numerics */
  * Remap printf 
  */
 #define printf PerlIO_stdoutf
+#endif
+
+#ifndef PERL_SCRIPT_MODE
+#define PERL_SCRIPT_MODE "r"
 #endif
 
 /*
