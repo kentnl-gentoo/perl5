@@ -11,8 +11,7 @@ use vars qw($VERSION $Is_Mac $Is_OS2 $Is_VMS $Is_Win32 $Is_Dos $Is_PERL_OBJECT
 $VERSION = substr q$Revision: 1.12602 $, 10;
 # $Id: MM_Unix.pm,v 1.126 1998/06/28 21:32:49 k Exp k $
 
-Exporter::import('ExtUtils::MakeMaker',
-	qw( $Verbose &neatvalue));
+Exporter::import('ExtUtils::MakeMaker', qw($Verbose &neatvalue));
 
 $Is_OS2 = $^O eq 'os2';
 $Is_Mac = $^O eq 'MacOS';
@@ -188,6 +187,7 @@ sub ExtUtils::MM_Unix::fixin ;
 sub ExtUtils::MM_Unix::force ;
 sub ExtUtils::MM_Unix::guess_name ;
 sub ExtUtils::MM_Unix::has_link_code ;
+sub ExtUtils::MM_Unix::htmlifypods ;
 sub ExtUtils::MM_Unix::init_dirscan ;
 sub ExtUtils::MM_Unix::init_main ;
 sub ExtUtils::MM_Unix::init_others ;
@@ -375,9 +375,8 @@ sub cflags {
 	$self->{uc $_} ||= $cflags{$_}
     }
 
-    if ($self->{CAPI} && $Is_PERL_OBJECT) {
-        $self->{CCFLAGS} =~ s/-DPERL_OBJECT(\s|$)//;
-        $self->{CCFLAGS} .= ' -DPERL_CAPI ';
+    if ($Is_PERL_OBJECT) {
+        $self->{CCFLAGS} =~ s/-DPERL_OBJECT(\b|$)/-DPERL_CAPI/g;
         if ($Is_Win32 && $Config{'cc'} =~ /^cl.exe/i) {
             # Turn off C++ mode of the MSC compiler
             $self->{CCFLAGS} =~ s/-TP(\s|$)//;
@@ -389,12 +388,18 @@ sub cflags {
 	$self->{CCFLAGS} .= ' -DPERL_POLLUTE ';
     }
 
+    my $pollute = '';
+    if ($Config{usemymalloc} and $self->{PERL_MALLOC_OK}) {
+	$pollute = '$(PERL_MALLOC_DEF)';
+    }
+
     return $self->{CFLAGS} = qq{
 CCFLAGS = $self->{CCFLAGS}
 OPTIMIZE = $self->{OPTIMIZE}
 PERLTYPE = $self->{PERLTYPE}
 LARGE = $self->{LARGE}
 SPLIT = $self->{SPLIT}
+MPOLLUTE = $pollute
 };
 
 }
@@ -451,7 +456,7 @@ sub const_cccmd {
     return '' unless $self->needs_linking();
     return $self->{CONST_CCCMD} =
 	q{CCCMD = $(CC) -c $(INC) $(CCFLAGS) $(OPTIMIZE) \\
-	$(PERLTYPE) $(LARGE) $(SPLIT) $(DEFINE_VERSION) \\
+	$(PERLTYPE) $(LARGE) $(SPLIT) $(MPOLLUTE) $(DEFINE_VERSION) \\
 	$(XS_DEFINE_VERSION)};
 }
 
@@ -536,6 +541,7 @@ VERSION_MACRO = VERSION
 DEFINE_VERSION = -D\$(VERSION_MACRO)=\\\"\$(VERSION)\\\"
 XS_VERSION_MACRO = XS_VERSION
 XS_DEFINE_VERSION = -D\$(XS_VERSION_MACRO)=\\\"\$(XS_VERSION)\\\"
+PERL_MALLOC_DEF = -DPERL_EXTMALLOC_DEF -Dmalloc=Perl_malloc -Dfree=Perl_mfree -Drealloc=Perl_realloc -Dcalloc=Perl_calloc
 };
 
     push @m, qq{
@@ -565,12 +571,19 @@ XS_FILES= ".join(" \\\n\t", sort keys %{$self->{XS}})."
 C_FILES = ".join(" \\\n\t", @{$self->{C}})."
 O_FILES = ".join(" \\\n\t", @{$self->{O_FILES}})."
 H_FILES = ".join(" \\\n\t", @{$self->{H}})."
+HTMLLIBPODS    = ".join(" \\\n\t", sort keys %{$self->{HTMLLIBPODS}})."
+HTMLSCRIPTPODS = ".join(" \\\n\t", sort keys %{$self->{HTMLSCRIPTPODS}})."
 MAN1PODS = ".join(" \\\n\t", sort keys %{$self->{MAN1PODS}})."
 MAN3PODS = ".join(" \\\n\t", sort keys %{$self->{MAN3PODS}})."
 ";
 
     for $tmp (qw/
-	      INST_MAN1DIR INSTALLMAN1DIR MAN1EXT INST_MAN3DIR INSTALLMAN3DIR MAN3EXT
+	      INST_HTMLPRIVLIBDIR INSTALLHTMLPRIVLIBDIR
+	      INST_HTMLSITELIBDIR INSTALLHTMLSITELIBDIR
+	      INST_HTMLSCRIPTDIR  INSTALLHTMLSCRIPTDIR
+	      INST_HTMLLIBDIR                    HTMLEXT
+	      INST_MAN1DIR        INSTALLMAN1DIR MAN1EXT
+	      INST_MAN3DIR        INSTALLMAN3DIR MAN3EXT
 	      /) {
 	next unless defined $self->{$tmp};
 	push @m, "$tmp = $self->{$tmp}\n";
@@ -1295,9 +1308,60 @@ sub has_link_code {
     return $self->{HAS_LINK_CODE} = 0;
 }
 
+=item htmlifypods (o)
+
+Defines targets and routines to translate the pods into HTML manpages
+and put them into the INST_HTMLLIBDIR and INST_HTMLSCRIPTDIR
+directories.
+
+=cut
+
+sub htmlifypods {
+    my($self, %attribs) = @_;
+    return "\nhtmlifypods : pure_all\n\t$self->{NOECHO}\$(NOOP)\n" unless
+	%{$self->{HTMLLIBPODS}} || %{$self->{HTMLSCRIPTPODS}};
+    my($dist);
+    my($pod2html_exe);
+    if (defined $self->{PERL_SRC}) {
+	$pod2html_exe = $self->catfile($self->{PERL_SRC},'pod','pod2html');
+    } else {
+	$pod2html_exe = $self->catfile($Config{scriptdirexp},'pod2html');
+    }
+    unless ($pod2html_exe = $self->perl_script($pod2html_exe)) {
+	# No pod2html but some HTMLxxxPODS to be installed
+	print <<END;
+
+Warning: I could not locate your pod2html program. Please make sure,
+         your pod2html program is in your PATH before you execute 'make'
+
+END
+        $pod2html_exe = "-S pod2html";
+    }
+    my(@m);
+    push @m,
+qq[POD2HTML_EXE = $pod2html_exe\n],
+qq[POD2HTML = \$(PERL) -we 'use File::Basename; use File::Path qw(mkpath); %m=\@ARGV;for (keys %m){' \\\n],
+q[-e 'next if -e $$m{$$_} && -M $$m{$$_} < -M $$_ && -M $$m{$$_} < -M "],
+ $self->{MAKEFILE}, q[";' \\
+-e 'print "Htmlifying $$m{$$_}\n";' \\
+-e '$$dir = dirname($$m{$$_}); mkpath($$dir) unless -d $$dir;' \\
+-e 'system(qq[$$^X ].q["-I$(PERL_ARCHLIB)" "-I$(PERL_LIB)" $(POD2HTML_EXE) ].qq[$$_>$$m{$$_}])==0 or warn "Couldn\\047t install $$m{$$_}\n";' \\
+-e 'chmod(oct($(PERM_RW))), $$m{$$_} or warn "chmod $(PERM_RW) $$m{$$_}: $$!\n";}'
+];
+    push @m, "\nhtmlifypods : pure_all ";
+    push @m, join " \\\n\t", keys %{$self->{HTMLLIBPODS}}, keys %{$self->{HTMLSCRIPTPODS}};
+
+    push(@m,"\n");
+    if (%{$self->{HTMLLIBPODS}} || %{$self->{HTMLSCRIPTPODS}}) {
+	push @m, "\t$self->{NOECHO}\$(POD2HTML) \\\n\t";
+	push @m, join " \\\n\t", %{$self->{HTMLLIBPODS}}, %{$self->{HTMLSCRIPTPODS}};
+    }
+    join('', @m);
+}
+
 =item init_dirscan
 
-Initializes DIR, XS, PM, C, O_FILES, H, PL_FILES, MAN*PODS, EXE_FILES.
+Initializes DIR, XS, PM, C, O_FILES, H, PL_FILES, HTML*PODS, MAN*PODS, EXE_FILES.
 
 =cut
 
@@ -1413,65 +1477,59 @@ sub init_dirscan {	# --- File and Directory Lists (.xs .pm .pod etc)
     $self->{PL_FILES} = \%pl_files unless $self->{PL_FILES};
 
     # Set up names of manual pages to generate from pods
-    if ($self->{MAN1PODS}) {
-    } elsif ( $self->{INST_MAN1DIR} =~ /^(none|\s*)$/ ) {
-    	$self->{MAN1PODS} = {};
-    } else {
-	my %manifypods = ();
+    my %pods;
+    foreach my $man (qw(MAN1 MAN3 HTMLLIB HTMLSCRIPT)) {
+	unless ($self->{"${man}PODS"}) {
+	    $self->{"${man}PODS"} = {};
+	    $pods{$man} = 1 unless $self->{"INST_${man}DIR"} =~ /^(none|\s*)$/;
+	}
+    }
+
+    if ($pods{MAN1} || $pods{HTMLSCRIPT}) {
 	if ( exists $self->{EXE_FILES} ) {
 	    foreach $name (@{$self->{EXE_FILES}}) {
-#		use FileHandle ();
-#		my $fh = new FileHandle;
 		local *FH;
 		my($ispod)=0;
-#		if ($fh->open("<$name")) {
 		if (open(FH,"<$name")) {
-#		    while (<$fh>) {
 		    while (<FH>) {
 			if (/^=head1\s+\w+/) {
 			    $ispod=1;
 			    last;
 			}
 		    }
-#		    $fh->close;
 		    close FH;
 		} else {
 		    # If it doesn't exist yet, we assume, it has pods in it
 		    $ispod = 1;
 		}
-		if( $ispod ) {
-		    $manifypods{$name} =
-			$self->catfile('$(INST_MAN1DIR)',
-				       basename($name).'.$(MAN1EXT)');
+		next unless $ispod;
+		if ($pods{HTMLSCRIPT}) {
+		    $self->{HTMLSCRIPTPODS}->{$name} =
+		      $self->catfile("\$(INST_HTMLSCRIPTDIR)", basename($name).".\$(HTMLEXT)");
+		}
+		if ($pods{MAN1}) {
+		    $self->{MAN1PODS}->{$name} =
+		      $self->catfile("\$(INST_MAN1DIR)", basename($name).".\$(MAN1EXT)");
 		}
 	    }
 	}
-	$self->{MAN1PODS} = \%manifypods;
     }
-    if ($self->{MAN3PODS}) {
-    } elsif ( $self->{INST_MAN3DIR} =~ /^(none|\s*)$/ ) {
-    	$self->{MAN3PODS} = {};
-    } else {
+    if ($pods{MAN3} || $pods{HTMLLIB}) {
 	my %manifypods = (); # we collect the keys first, i.e. the files
 			     # we have to convert to pod
 	foreach $name (keys %{$self->{PM}}) {
 	    if ($name =~ /\.pod$/ ) {
 		$manifypods{$name} = $self->{PM}{$name};
 	    } elsif ($name =~ /\.p[ml]$/ ) {
-#		use FileHandle ();
-#		my $fh = new FileHandle;
 		local *FH;
 		my($ispod)=0;
-#		$fh->open("<$name");
 		if (open(FH,"<$name")) {
-		    #		while (<$fh>) {
 		    while (<FH>) {
 			if (/^=head1\s+\w+/) {
 			    $ispod=1;
 			    last;
 			}
 		    }
-		    #		$fh->close;
 		    close FH;
 		} else {
 		    $ispod = 1;
@@ -1490,14 +1548,20 @@ sub init_dirscan {	# --- File and Directory Lists (.xs .pm .pod etc)
 		next;
 	    }
 	    my($manpagename) = $name;
+	    $manpagename =~ s/\.p(od|m|l)$//;
+	    if ($pods{HTMLLIB}) {
+		$self->{HTMLLIBPODS}->{$name} =
+		  $self->catfile("\$(INST_HTMLLIBDIR)", "$manpagename.\$(HTMLEXT)");
+	    }
 	    unless ($manpagename =~ s!^\W*lib\W+!!) { # everything below lib is ok
 		$manpagename = $self->catfile(split(/::/,$self->{PARENT_NAME}),$manpagename);
 	    }
-	    $manpagename =~ s/\.p(od|m|l)$//;
-	    $manpagename = $self->replace_manpage_separator($manpagename);
-	    $manifypods{$name} = $self->catfile("\$(INST_MAN3DIR)","$manpagename.\$(MAN3EXT)");
+	    if ($pods{MAN3}) {
+		$manpagename = $self->replace_manpage_separator($manpagename);
+		$self->{MAN3PODS}->{$name} =
+		  $self->catfile("\$(INST_MAN3DIR)", "$manpagename.\$(MAN3EXT)");
+	    }
 	}
-	$self->{MAN3PODS} = \%manifypods;
     }
 }
 
@@ -1702,8 +1766,7 @@ usually solves this kind of problem.
 
     my($install_variable,$search_prefix,$replace_prefix);
 
-    # The rule, taken from Configure, is that if prefix contains perl,
-    # we shape the tree
+    # If the prefix contains perl, Configure shapes the tree as follows:
     #    perlprefix/lib/                INSTALLPRIVLIB
     #    perlprefix/lib/pod/
     #    perlprefix/lib/site_perl/	INSTALLSITELIB
@@ -1715,6 +1778,11 @@ usually solves this kind of problem.
     #    prefix/lib/perl5/site_perl/	INSTALLSITELIB
     #    prefix/bin/			INSTALLBIN
     #    prefix/lib/perl5/man/		INSTALLMAN1DIR
+    #
+    # The above results in various kinds of breakage on various
+    # platforms, so we cope with it as follows: if prefix/lib/perl5
+    # or prefix/lib/perl5/man exist, we'll replace those instead
+    # of /prefix/{lib,man}
 
     $replace_prefix = qq[\$\(PREFIX\)];
     for $install_variable (qw/
@@ -1723,36 +1791,45 @@ usually solves this kind of problem.
 			   /) {
 	$self->prefixify($install_variable,$configure_prefix,$replace_prefix);
     }
-    $search_prefix = $configure_prefix =~ /perl/ ?
-	$self->catdir($configure_prefix,"lib") :
-	$self->catdir($configure_prefix,"lib","perl5");
+    my $funkylibdir = $self->catdir($configure_prefix,"lib","perl5");
+    $funkylibdir = '' unless -d $funklibdir;
+    $search_prefix = $funkylibdir || $self->catdir($configure_prefix,"lib");
     if ($self->{LIB}) {
 	$self->{INSTALLPRIVLIB} = $self->{INSTALLSITELIB} = $self->{LIB};
 	$self->{INSTALLARCHLIB} = $self->{INSTALLSITEARCH} = 
 	    $self->catdir($self->{LIB},$Config{'archname'});
-    } else {
-	$replace_prefix = $self->{PREFIX} =~ /perl/ ? 
-	    $self->catdir(qq[\$\(PREFIX\)],"lib") :
-		$self->catdir(qq[\$\(PREFIX\)],"lib","perl5");
+    }
+    else {
+	if (-d $self->catdir($self->{PREFIX},"lib","perl5")) {
+	    $replace_prefix = $self->catdir(qq[\$\(PREFIX\)],"lib", "perl5");
+	}
+	else {
+	    $replace_prefix = $self->catdir(qq[\$\(PREFIX\)],"lib");
+	}
 	for $install_variable (qw/
 			       INSTALLPRIVLIB
 			       INSTALLARCHLIB
 			       INSTALLSITELIB
 			       INSTALLSITEARCH
-			       /) {
+			       /)
+	{
 	    $self->prefixify($install_variable,$search_prefix,$replace_prefix);
 	}
     }
-    $search_prefix = $configure_prefix =~ /perl/ ?
-	$self->catdir($configure_prefix,"man") :
-	    $self->catdir($configure_prefix,"lib","perl5","man");
-    $replace_prefix = $self->{PREFIX} =~ /perl/ ? 
-	$self->catdir(qq[\$\(PREFIX\)],"man") :
-	    $self->catdir(qq[\$\(PREFIX\)],"lib","perl5","man");
+    my $funkymandir = $self->catdir($configure_prefix,"lib","perl5","man");
+    $funkymandir = '' unless -d $funkmandir;
+    $search_prefix = $funkymandir || $self->catdir($configure_prefix,"man");
+    if (-d $self->catdir($self->{PREFIX},"lib","perl5", "man")) {
+	$replace_prefix = $self->catdir(qq[\$\(PREFIX\)],"lib", "perl5", "man");
+    }
+    else {
+	$replace_prefix = $self->catdir(qq[\$\(PREFIX\)],"man");
+    }
     for $install_variable (qw/
 			   INSTALLMAN1DIR
 			   INSTALLMAN3DIR
-			   /) {
+			   /)
+    {
 	$self->prefixify($install_variable,$search_prefix,$replace_prefix);
     }
 
@@ -1779,6 +1856,30 @@ usually solves this kind of problem.
 	}
     }
     $self->{MAN3EXT} ||= $Config::Config{man3ext};
+
+    $self->{INSTALLHTMLPRIVLIBDIR} = $Config::Config{installhtmlprivlibdir}
+        unless defined $self->{INSTALLHTMLPRIVLIBDIR};
+    $self->{INSTALLHTMLSITELIBDIR} = $Config::Config{installhtmlsitelibdir}
+        unless defined $self->{INSTALLHTMLSITELIBDIR};
+
+    unless (defined $self->{INST_HTMLLIBDIR}){
+	if ($self->{INSTALLHTMLSITELIBDIR} =~ /^(none|\s*)$/){
+	    $self->{INST_HTMLLIBDIR} = $self->{INSTALLHTMLSITELIBDIR};
+	} else {
+	    $self->{INST_HTMLLIBDIR} = $self->catdir($self->curdir,'blib','html','lib');
+	}
+    }
+
+    $self->{INSTALLHTMLSCRIPTDIR} = $Config::Config{installhtmlscriptdir}
+        unless defined $self->{INSTALLHTMLSCRIPTDIR};
+    unless (defined $self->{INST_HTMLSCRIPTDIR}){
+	if ($self->{INSTALLHTMLSCRIPTDIR} =~ /^(none|\s*)$/){
+	    $self->{INST_HTMLSCRIPTDIR} = $self->{INSTALLHTMLSCRIPTDIR};
+	} else {
+	    $self->{INST_HTMLSCRIPTDIR} = $self->catdir($self->curdir,'blib','html','bin');
+	}
+    }
+    $self->{HTMLEXT} ||= $Config::Config{htmlext} || 'html';
 
 
     # Get some stuff out of %Config if we haven't yet done so
@@ -1972,6 +2073,8 @@ pure_perl_install ::
 		$(INST_ARCHLIB) $(INSTALLARCHLIB) \
 		$(INST_BIN) $(INSTALLBIN) \
 		$(INST_SCRIPT) $(INSTALLSCRIPT) \
+		$(INST_HTMLLIBDIR) $(INSTALLHTMLPRIVLIBDIR) \
+		$(INST_HTMLSCRIPTDIR) $(INSTALLHTMLSCRIPTDIR) \
 		$(INST_MAN1DIR) $(INSTALLMAN1DIR) \
 		$(INST_MAN3DIR) $(INSTALLMAN3DIR)
 	}.$self->{NOECHO}.q{$(WARN_IF_OLD_PACKLIST) \
@@ -1986,6 +2089,8 @@ pure_site_install ::
 		$(INST_ARCHLIB) $(INSTALLSITEARCH) \
 		$(INST_BIN) $(INSTALLBIN) \
 		$(INST_SCRIPT) $(INSTALLSCRIPT) \
+		$(INST_HTMLLIBDIR) $(INSTALLHTMLSITELIBDIR) \
+		$(INST_HTMLSCRIPTDIR) $(INSTALLHTMLSCRIPTDIR) \
 		$(INST_MAN1DIR) $(INSTALLMAN1DIR) \
 		$(INST_MAN3DIR) $(INSTALLMAN3DIR)
 	}.$self->{NOECHO}.q{$(WARN_IF_OLD_PACKLIST) \
@@ -2448,7 +2553,7 @@ sub manifypods {
     } else {
 	$pod2man_exe = $self->catfile($Config{scriptdirexp},'pod2man');
     }
-    unless ($self->perl_script($pod2man_exe)) {
+    unless ($pod2man_exe = $self->perl_script($pod2man_exe)) {
 	# No pod2man but some MAN3PODS to be installed
 	print <<END;
 
@@ -2575,7 +2680,9 @@ sub nicetext {
 
 =item parse_version
 
-parse a file and return what you think is $VERSION in this file set to
+parse a file and return what you think is $VERSION in this file set to.
+It will return the string "undef" if it can't figure out what $VERSION
+is.
 
 =cut
 
@@ -2603,7 +2710,7 @@ sub parse_version {
 	};
 	local($^W) = 0;
 	$result = eval($eval);
-	die "Could not eval '$eval' in $parsefile: $@" if $@;
+	warn "Could not eval '$eval' in $parsefile: $@" if $@;
 	$result = "undef" unless defined $result;
 	last;
     }
@@ -3328,7 +3435,7 @@ sub tool_xsubpp {
 	}
     }
 
-    my $xsubpp = $self->{CAPI} ? "xsubpp -object_capi" : "xsubpp";
+    my $xsubpp = "xsubpp";
 
     return qq{
 XSUBPPDIR = $xsdir
@@ -3410,7 +3517,7 @@ sub top_targets {
 ';
 
     push @m, '
-all :: pure_all manifypods
+all :: pure_all htmlifypods manifypods
 	'.$self->{NOECHO}.'$(NOOP)
 ' 
 	  unless $self->{SKIPHASH}{'all'};
@@ -3439,6 +3546,24 @@ config :: Version_check
 } unless $self->{PARENT} or ($self->{PERL_SRC} && $self->{INSTALLDIRS} eq "perl") or $self->{NO_VC};
 
     push @m, $self->dir_target(qw[$(INST_AUTODIR) $(INST_LIBDIR) $(INST_ARCHAUTODIR)]);
+
+    if (%{$self->{HTMLLIBPODS}}) {
+	push @m, qq[
+config :: \$(INST_HTMLLIBDIR)/.exists
+	$self->{NOECHO}\$(NOOP)
+
+];
+	push @m, $self->dir_target(qw[$(INST_HTMLLIBDIR)]);
+    }
+
+    if (%{$self->{HTMLSCRIPTPODS}}) {
+	push @m, qq[
+config :: \$(INST_HTMLSCRIPTDIR)/.exists
+	$self->{NOECHO}\$(NOOP)
+
+];
+	push @m, $self->dir_target(qw[$(INST_HTMLSCRIPTDIR)]);
+    }
 
     if (%{$self->{MAN1PODS}}) {
 	push @m, qq[

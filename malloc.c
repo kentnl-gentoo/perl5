@@ -147,8 +147,8 @@
      warn(format, arg)			fprintf(stderr, idem)
 
      # Locking/unlocking for MT operation
-     MALLOC_LOCK			MUTEX_LOCK(&PL_malloc_mutex)
-     MALLOC_UNLOCK			MUTEX_UNLOCK(&PL_malloc_mutex)
+     MALLOC_LOCK			MUTEX_LOCK_NOCONTEXT(&PL_malloc_mutex)
+     MALLOC_UNLOCK			MUTEX_UNLOCK_NOCONTEXT(&PL_malloc_mutex)
 
      # Locking/unlocking mutex for MT operation
      MUTEX_LOCK(l)			void
@@ -227,7 +227,12 @@
 
 #ifdef PERL_CORE
 #  include "EXTERN.h"
+#define PERL_IN_MALLOC_C
 #  include "perl.h"
+#  if defined(PERL_IMPLICIT_CONTEXT)
+#    define croak	Perl_croak_nocontext
+#    define warn	Perl_warn_nocontext
+#  endif
 #else
 #  ifdef PERL_FOR_X2P
 #    include "../EXTERN.h"
@@ -273,6 +278,15 @@
 #  ifdef DEBUGGING
 #     undef DEBUGGING
 #  endif
+#  ifndef pTHX
+#     define pTHX		void
+#     define pTHX_
+#     define dTHX		extern int Perl___notused
+#     define WITH_THX(s)	s
+#  endif
+#  ifndef PERL_GET_INTERP
+#     define PERL_GET_INTERP	PL_curinterp
+#  endif
 #endif
 
 #ifndef MUTEX_LOCK
@@ -284,11 +298,11 @@
 #endif 
 
 #ifndef MALLOC_LOCK
-#  define MALLOC_LOCK		MUTEX_LOCK(&PL_malloc_mutex)
+#  define MALLOC_LOCK		MUTEX_LOCK_NOCONTEXT(&PL_malloc_mutex)
 #endif 
 
 #ifndef MALLOC_UNLOCK
-#  define MALLOC_UNLOCK		MUTEX_UNLOCK(&PL_malloc_mutex)
+#  define MALLOC_UNLOCK		MUTEX_UNLOCK_NOCONTEXT(&PL_malloc_mutex)
 #endif 
 
 #  ifndef fatalcroak				/* make depend */
@@ -297,7 +311,7 @@
 
 #ifdef DEBUGGING
 #  undef DEBUG_m
-#  define DEBUG_m(a)  if (PL_debug & 128)   a
+#  define DEBUG_m(a)  if (PERL_GET_INTERP && PL_debug & 128)   a
 #endif
 
 /*
@@ -410,13 +424,6 @@ union	overhead {
 #define	ov_size		ovu.ovu_size
 #define	ov_rmagic	ovu.ovu_rmagic
 };
-
-#ifdef DEBUGGING
-static void botch _((char *diag, char *s));
-#endif
-static void morecore _((int bucket));
-static int findbucket _((union overhead *freep, int srchlen));
-static void add_to_chain(void *p, MEM_SIZE size, MEM_SIZE chip);
 
 #define	MAGIC		0xff		/* magic # on accounting info */
 #define RMAGIC		0x55555555	/* magic # on range info */
@@ -715,7 +722,18 @@ static char bucket_of[] =
 
 static char *emergency_buffer;
 static MEM_SIZE emergency_buffer_size;
-static Malloc_t emergency_sbrk(MEM_SIZE size);
+
+static int	findbucket	(union overhead *freep, int srchlen);
+static void	morecore	(register int bucket);
+#  if defined(DEBUGGING)
+static void	botch		(char *diag, char *s);
+#  endif
+static void	add_to_chain	(void *p, MEM_SIZE size, MEM_SIZE chip);
+static Malloc_t	emergency_sbrk	(MEM_SIZE size);
+static void*	get_from_chain	(MEM_SIZE size);
+static void*	get_from_bigger_buckets(int bucket, MEM_SIZE size);
+static union overhead *getpages	(int needed, int *nblksp, int bucket);
+static int	getpages_adjacent(int require);
 
 static Malloc_t
 emergency_sbrk(MEM_SIZE size)
@@ -735,7 +753,7 @@ emergency_sbrk(MEM_SIZE size)
 	emergency_buffer += rsize;
 	return old;
     } else {		
-	dTHR;
+	dTHX;
 	/* First offense, give a possibility to recover by dieing. */
 	/* No malloc involved here: */
 	GV **gvp = (GV**)hv_fetch(PL_defstash, "^M", 2, 0);
@@ -790,7 +808,7 @@ static	union overhead *nextf[NBUCKETS];
 
 #ifdef USE_PERL_SBRK
 #define sbrk(a) Perl_sbrk(a)
-Malloc_t Perl_sbrk _((int size));
+Malloc_t Perl_sbrk (int size);
 #else 
 #ifdef DONT_DECLARE_STD
 #ifdef I_UNISTD
@@ -840,7 +858,7 @@ Perl_malloc(register size_t nbytes)
 	BARK_64K_LIMIT("Allocation",nbytes,nbytes);
 #ifdef DEBUGGING
 	if ((long)nbytes < 0)
-		croak("%s", "panic: malloc");
+	    croak("%s", "panic: malloc");
 #endif
 
 	MALLOC_LOCK;
@@ -886,7 +904,7 @@ Perl_malloc(register size_t nbytes)
 #ifdef PERL_CORE
 		if (!PL_nomemok) {
 		    PerlIO_puts(PerlIO_stderr(),"Out of memory!\n");
-		    my_exit(1);
+		    WITH_THX(my_exit(1));
 		}
 #else
   		return (NULL);
@@ -1331,7 +1349,7 @@ morecore(register int bucket)
 
 Free_t
 Perl_mfree(void *mp)
-{   
+{
   	register MEM_SIZE size;
 	register union overhead *ovp;
 	char *cp = (char*)mp;
@@ -1413,7 +1431,7 @@ Perl_mfree(void *mp)
 
 Malloc_t
 Perl_realloc(void *mp, size_t nbytes)
-{   
+{
   	register MEM_SIZE onb;
 	union overhead *ovp;
   	char *res;
@@ -1426,7 +1444,7 @@ Perl_realloc(void *mp, size_t nbytes)
 	MEM_SIZE size = nbytes;
 
 	if ((long)nbytes < 0)
-		croak("%s", "panic: realloc");
+	    croak("%s", "panic: realloc");
 #endif
 
 	BARK_64K_LIMIT("Reallocation",nbytes,size);
@@ -1613,7 +1631,7 @@ Perl_calloc(register size_t elements, register size_t size)
 }
 
 MEM_SIZE
-malloced_size(void *p)
+Perl_malloced_size(void *p)
 {
     union overhead *ovp = (union overhead *)
 	((caddr_t)p - sizeof (union overhead) * CHUNK_SHIFT);
@@ -1630,8 +1648,6 @@ malloced_size(void *p)
     return BUCKET_SIZE_REAL(bucket);
 }
 
-#ifdef DEBUGGING_MSTATS
-
 #  ifdef BUCKETS_ROOT2
 #    define MIN_EVEN_REPORT 6
 #  else
@@ -1645,8 +1661,9 @@ malloced_size(void *p)
  * frees for each size category.
  */
 void
-dump_mstats(char *s)
+Perl_dump_mstats(pTHX_ char *s)
 {
+#ifdef DEBUGGING_MSTATS
   	register int i, j;
   	register union overhead *p;
   	int topbucket=0, topbucket_ev=0, topbucket_odd=0, totfree=0, total=0;
@@ -1715,15 +1732,9 @@ dump_mstats(char *s)
 	PerlIO_printf(PerlIO_stderr(), "\nTotal sbrk(): %d/%d:%d. Odd ends: pad+heads+chain+tail: %d+%d+%d+%d.\n",
 		      goodsbrk + sbrk_slack, sbrks, sbrk_good, sbrk_slack,
 		      start_slack, total_chain, sbrked_remains);
+#endif /* DEBUGGING_MSTATS */
 }
-#else
-void
-dump_mstats(char *s)
-{
-}
-#endif
 #endif /* lint */
-
 
 #ifdef USE_PERL_SBRK
 

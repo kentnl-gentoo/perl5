@@ -16,7 +16,7 @@ BEGIN {
 
 use strict;
 
-print "1..100\n";
+print "1..107\n";
 
 my $i = 1;
 
@@ -384,7 +384,7 @@ print "ok ", $i++, "\n";
 print "not " if defined prototype('CORE::system');
 print "ok ", $i++, "\n";
 
-print "# CORE::open => ($p)\nnot " if ($p = prototype('CORE::open')) ne '*;$';
+print "# CORE::open => ($p)\nnot " if ($p = prototype('CORE::open')) ne '*;$;$';
 print "ok ", $i++, "\n";
 
 print "# CORE:Foo => ($p), \$@ => `$@'\nnot " 
@@ -419,6 +419,7 @@ print "ok ", $i++, "\n";
 sub star (*&) { &{$_[1]} }
 sub star2 (**&) { &{$_[2]} }
 sub BAR { "quux" }
+sub Bar::BAZ { "quuz" }
 my $star = 'FOO';
 star FOO, sub { print "ok $i\n" if $_[0] eq 'FOO' }; $i++;
 star(FOO, sub { print "ok $i\n" if $_[0] eq 'FOO' }); $i++;
@@ -432,8 +433,8 @@ star \*FOO, sub { print "ok $i\n" if $_[0] eq \*FOO }; $i++;
 star(\*FOO, sub { print "ok $i\n" if $_[0] eq \*FOO }); $i++;
 star2 FOO, BAR, sub { print "ok $i\n"
 			if $_[0] eq 'FOO' and $_[1] eq 'BAR' }; $i++;
-star2(BAR, FOO, sub { print "ok $i\n"
-			if $_[0] eq 'BAR' and $_[1] eq 'FOO' }); $i++;
+star2(Bar::BAZ, FOO, sub { print "ok $i\n"
+			if $_[0] eq 'Bar::BAZ' and $_[1] eq 'FOO' }); $i++;
 star2 BAR(), FOO, sub { print "ok $i\n"
 			if $_[0] eq 'quux' and $_[1] eq 'FOO' }; $i++;
 star2(FOO, BAR(), sub { print "ok $i\n"
@@ -447,11 +448,21 @@ star2 $star, $star, sub { print "ok $i\n"
 star2($star, $star, sub { print "ok $i\n"
 			if $_[0] eq 'FOO' and $_[1] eq 'FOO' }); $i++;
 star2 *FOO, *BAR, sub { print "ok $i\n"
-			if $_[0] eq \*FOO and $_[0] eq \*BAR }; $i++;
+			if $_[0] eq \*FOO and $_[1] eq \*BAR }; $i++;
 star2(*FOO, *BAR, sub { print "ok $i\n"
-			if $_[0] eq \*FOO and $_[0] eq \*BAR }); $i++;
+			if $_[0] eq \*FOO and $_[1] eq \*BAR }); $i++;
 star2 \*FOO, \*BAR, sub { no strict 'refs'; print "ok $i\n"
-			if $_[0] eq \*{'FOO'} and $_[0] eq \*{'BAR'} }; $i++;
+			if $_[0] eq \*{'FOO'} and $_[1] eq \*{'BAR'} }; $i++;
 star2(\*FOO, \*BAR, sub { no strict 'refs'; print "ok $i\n"
-			if $_[0] eq \*{'FOO'} and $_[0] eq \*{'BAR'} }); $i++;
+			if $_[0] eq \*{'FOO'} and $_[1] eq \*{'BAR'} }); $i++;
 
+# test scalarref prototype
+sub sreftest (\$$) {
+    print "ok $_[1]\n" if ref $_[0];
+}
+{
+    no strict 'vars';
+    sreftest my $sref, $i++;
+    sreftest($helem{$i}, $i++);
+    sreftest $aelem[0], $i++;
+}

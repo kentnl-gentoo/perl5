@@ -14,14 +14,14 @@ struct xpvcv {
     STRLEN	xpv_cur;	/* length of xp_pv as a C string */
     STRLEN	xpv_len;	/* allocated size */
     IV		xof_off;	/* integer value */
-    double	xnv_nv;		/* numeric value, if any */
+    NV		xnv_nv;		/* numeric value, if any */
     MAGIC*	xmg_magic;	/* magic for scalar array */
     HV*		xmg_stash;	/* class package */
 
     HV *	xcv_stash;
     OP *	xcv_start;
     OP *	xcv_root;
-    void      (*xcv_xsub) _((CV* _CPERLproto));
+    void	(*xcv_xsub) (pTHXo_ CV*);
     ANY		xcv_xsubany;
     GV *	xcv_gv;
     GV *	xcv_filegv;

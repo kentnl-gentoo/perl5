@@ -7,6 +7,8 @@
  *
  */
 
+#if !defined(PERL_IMPLICIT_SYS)
+
 #define VOIDUSED 1
 #include "config.h"
 
@@ -21,6 +23,7 @@
  */
 
 #include "EXTERN.h"
+#define PERL_IN_PERLIO_C
 #include "perl.h"
 
 #ifdef PERLIO_IS_STDIO 
@@ -140,12 +143,12 @@ PerlIO_canset_cnt(PerlIO *f)
 void
 PerlIO_set_cnt(PerlIO *f, int cnt)
 {
- if (cnt < -1)
-  warn("Setting cnt to %d\n",cnt);
+ if (cnt < -1 && ckWARN_s(WARN_INTERNAL))
+  Perl_warner(aTHX_ WARN_INTERNAL, "Setting cnt to %d\n",cnt);
 #if defined(USE_STDIO_PTR) && defined(STDIO_CNT_LVALUE)
  FILE_cnt(f) = cnt;
 #else
- croak("Cannot set 'cnt' of FILE * on this system");
+ Perl_croak(aTHX_ "Cannot set 'cnt' of FILE * on this system");
 #endif
 }
 
@@ -156,20 +159,20 @@ PerlIO_set_ptrcnt(PerlIO *f, STDCHAR *ptr, int cnt)
 #ifdef FILE_bufsiz
  STDCHAR *e = FILE_base(f) + FILE_bufsiz(f);
  int ec = e - ptr;
- if (ptr > e + 1)
-  warn("Setting ptr %p > end+1 %p\n", ptr, e + 1);
- if (cnt != ec)
-  warn("Setting cnt to %d, ptr implies %d\n",cnt,ec);
+ if (ptr > e + 1 && ckWARN_s(WARN_INTERNAL))
+  Perl_warner(aTHX_ WARN_INTERNAL, "Setting ptr %p > end+1 %p\n", ptr, e + 1);
+ if (cnt != ec && ckWARN_s(WARN_INTERNAL))
+  Perl_warner(aTHX_ WARN_INTERNAL, "Setting cnt to %d, ptr implies %d\n",cnt,ec);
 #endif
 #if defined(USE_STDIO_PTR) && defined(STDIO_PTR_LVALUE)
  FILE_ptr(f) = ptr;
 #else
- croak("Cannot set 'ptr' of FILE * on this system");
+ Perl_croak(aTHX_ "Cannot set 'ptr' of FILE * on this system");
 #endif
 #if defined(USE_STDIO_PTR) && defined(STDIO_CNT_LVALUE)
  FILE_cnt(f) = cnt;
 #else
- croak("Cannot set 'cnt' of FILE * on this system");
+ Perl_croak(aTHX_ "Cannot set 'cnt' of FILE * on this system");
 #endif
 }
 
@@ -180,7 +183,7 @@ PerlIO_get_cnt(PerlIO *f)
 #ifdef FILE_cnt
  return FILE_cnt(f);
 #else
- croak("Cannot get 'cnt' of FILE * on this system");
+ Perl_croak(aTHX_ "Cannot get 'cnt' of FILE * on this system");
  return -1;
 #endif
 }
@@ -192,7 +195,7 @@ PerlIO_get_bufsiz(PerlIO *f)
 #ifdef FILE_bufsiz
  return FILE_bufsiz(f);
 #else
- croak("Cannot get 'bufsiz' of FILE * on this system");
+ Perl_croak(aTHX_ "Cannot get 'bufsiz' of FILE * on this system");
  return -1;
 #endif
 }
@@ -204,7 +207,7 @@ PerlIO_get_ptr(PerlIO *f)
 #ifdef FILE_ptr
  return FILE_ptr(f);
 #else
- croak("Cannot get 'ptr' of FILE * on this system");
+ Perl_croak(aTHX_ "Cannot get 'ptr' of FILE * on this system");
  return NULL;
 #endif
 }
@@ -216,7 +219,7 @@ PerlIO_get_base(PerlIO *f)
 #ifdef FILE_base
  return FILE_base(f);
 #else
- croak("Cannot get 'base' of FILE * on this system");
+ Perl_croak(aTHX_ "Cannot get 'base' of FILE * on this system");
  return NULL;
 #endif
 }
@@ -281,7 +284,7 @@ PerlIO_getname(PerlIO *f, char *buf)
 #ifdef VMS
  return fgetname(f,buf);
 #else
- croak("Don't know how to get file name");
+ Perl_croak(aTHX_ "Don't know how to get file name");
  return NULL;
 #endif
 }
@@ -536,7 +539,10 @@ PerlIO_vsprintf(char *s, int n, const char *fmt, va_list ap)
    if (strlen(s) >= (STRLEN)n)
     {
      PerlIO_puts(PerlIO_stderr(),"panic: sprintf overflow - memory corrupted!\n");
-     my_exit(1);
+     {
+      dTHX;
+      my_exit(1);
+     }
     }
   }
  return val;
@@ -555,4 +561,6 @@ PerlIO_sprintf(char *s, int n, const char *fmt,...)
  return result;
 }
 #endif
+
+#endif /* !PERL_IMPLICIT_SYS */
 

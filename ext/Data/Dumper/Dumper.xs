@@ -1,3 +1,4 @@
+#define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -19,14 +20,14 @@
 #  endif
 #endif
 
-static I32 num_q _((char *s, STRLEN slen));
-static I32 esc_q _((char *dest, char *src, STRLEN slen));
-static SV *sv_x _((SV *sv, char *str, STRLEN len, I32 n));
-static I32 DD_dump _((SV *val, char *name, STRLEN namelen, SV *retval,
-		      HV *seenhv, AV *postav, I32 *levelp, I32 indent,
-		      SV *pad, SV *xpad, SV *apad, SV *sep,
-		      SV *freezer, SV *toaster,
-		      I32 purity, I32 deepcopy, I32 quotekeys, SV *bless));
+static I32 num_q (char *s, STRLEN slen);
+static I32 esc_q (char *dest, char *src, STRLEN slen);
+static SV *sv_x (pTHX_ SV *sv, char *str, STRLEN len, I32 n);
+static I32 DD_dump (pTHX_ SV *val, char *name, STRLEN namelen, SV *retval,
+		    HV *seenhv, AV *postav, I32 *levelp, I32 indent,
+		    SV *pad, SV *xpad, SV *apad, SV *sep,
+		    SV *freezer, SV *toaster,
+		    I32 purity, I32 deepcopy, I32 quotekeys, SV *bless);
 
 /* does a string need to be protected? */
 static I32
@@ -95,7 +96,7 @@ esc_q(register char *d, register char *s, register STRLEN slen)
 
 /* append a repeated string to an SV */
 static SV *
-sv_x(SV *sv, register char *str, STRLEN len, I32 n)
+sv_x(pTHX_ SV *sv, register char *str, STRLEN len, I32 n)
 {
     if (sv == Nullsv)
 	sv = newSVpvn("", 0);
@@ -126,7 +127,7 @@ sv_x(SV *sv, register char *str, STRLEN len, I32 n)
  * efficiency raisins.)  Ugggh!
  */
 static I32
-DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
+DD_dump(pTHX_ SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	AV *postav, I32 *levelp, I32 indent, SV *pad, SV *xpad,
 	SV *apad, SV *sep, SV *freezer, SV *toaster, I32 purity,
 	I32 deepcopy, I32 quotekeys, SV *bless)
@@ -251,21 +252,39 @@ DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		SvREFCNT_dec(seenentry);
 	    }
 	}
-	
-	(*levelp)++;
-	ipad = sv_x(Nullsv, SvPVX(xpad), SvCUR(xpad), *levelp);
 
-	if (realpack) {   /* we have a blessed ref */
-	    STRLEN blesslen;
-	    char *blessstr = SvPV(bless, blesslen);
-	    sv_catpvn(retval, blessstr, blesslen);
-	    sv_catpvn(retval, "( ", 2);
-	    if (indent >= 2) {
-		blesspad = apad;
-		apad = newSVsv(apad);
-		sv_x(apad, " ", 1, blesslen+2);
+	if (realpack) {
+	    if (*realpack == 'R' && strEQ(realpack, "Regexp")) {
+		STRLEN rlen;
+		char *rval = SvPV(val, rlen);
+		char *slash = strchr(rval, '/');
+		sv_catpvn(retval, "qr/", 3);
+		while (slash) {
+		    sv_catpvn(retval, rval, slash-rval);
+		    sv_catpvn(retval, "\\/", 2);
+		    rlen -= slash-rval+1;
+		    rval = slash+1;
+		    slash = strchr(rval, '/');
+		}
+		sv_catpvn(retval, rval, rlen);
+		sv_catpvn(retval, "/", 1);
+		return 1;
+	    }
+	    else {				/* we have a blessed ref */
+		STRLEN blesslen;
+		char *blessstr = SvPV(bless, blesslen);
+		sv_catpvn(retval, blessstr, blesslen);
+		sv_catpvn(retval, "( ", 2);
+		if (indent >= 2) {
+		    blesspad = apad;
+		    apad = newSVsv(apad);
+		    sv_x(aTHX_ apad, " ", 1, blesslen+2);
+		}
 	    }
 	}
+
+	(*levelp)++;
+	ipad = sv_x(aTHX_ Nullsv, SvPVX(xpad), SvCUR(xpad), *levelp);
 
 	if (realtype <= SVt_PVBM) {			     /* scalar ref */
 	    SV *namesv = newSVpvn("${", 2);
@@ -273,14 +292,14 @@ DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	    sv_catpvn(namesv, "}", 1);
 	    if (realpack) {				     /* blessed */ 
 		sv_catpvn(retval, "do{\\(my $o = ", 13);
-		DD_dump(ival, SvPVX(namesv), SvCUR(namesv), retval, seenhv,
+		DD_dump(aTHX_ ival, SvPVX(namesv), SvCUR(namesv), retval, seenhv,
 			postav, levelp,	indent, pad, xpad, apad, sep,
 			freezer, toaster, purity, deepcopy, quotekeys, bless);
 		sv_catpvn(retval, ")}", 2);
 	    }						     /* plain */
 	    else {
 		sv_catpvn(retval, "\\", 1);
-		DD_dump(ival, SvPVX(namesv), SvCUR(namesv), retval, seenhv,
+		DD_dump(aTHX_ ival, SvPVX(namesv), SvCUR(namesv), retval, seenhv,
 			postav, levelp,	indent, pad, xpad, apad, sep,
 			freezer, toaster, purity, deepcopy, quotekeys, bless);
 	    }
@@ -291,7 +310,7 @@ DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	    sv_catpvn(namesv, name, namelen);
 	    sv_catpvn(namesv, "}", 1);
 	    sv_catpvn(retval, "\\", 1);
-	    DD_dump(ival, SvPVX(namesv), SvCUR(namesv), retval, seenhv,
+	    DD_dump(aTHX_ ival, SvPVX(namesv), SvCUR(namesv), retval, seenhv,
 		    postav, levelp,	indent, pad, xpad, apad, sep,
 		    freezer, toaster, purity, deepcopy, quotekeys, bless);
 	    SvREFCNT_dec(namesv);
@@ -359,14 +378,14 @@ DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		}
 		sv_catsv(retval, totpad);
 		sv_catsv(retval, ipad);
-		DD_dump(elem, iname, ilen, retval, seenhv, postav,
+		DD_dump(aTHX_ elem, iname, ilen, retval, seenhv, postav,
 			levelp,	indent, pad, xpad, apad, sep,
 			freezer, toaster, purity, deepcopy, quotekeys, bless);
 		if (ix < ixmax)
 		    sv_catpvn(retval, ",", 1);
 	    }
 	    if (ixmax >= 0) {
-		SV *opad = sv_x(Nullsv, SvPVX(xpad), SvCUR(xpad), (*levelp)-1);
+		SV *opad = sv_x(aTHX_ Nullsv, SvPVX(xpad), SvCUR(xpad), (*levelp)-1);
 		sv_catsv(retval, totpad);
 		sv_catsv(retval, opad);
 		SvREFCNT_dec(opad);
@@ -465,7 +484,7 @@ DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		else
 		    newapad = apad;
 
-		DD_dump(hval, SvPVX(sname), SvCUR(sname), retval, seenhv,
+		DD_dump(aTHX_ hval, SvPVX(sname), SvCUR(sname), retval, seenhv,
 			postav, levelp,	indent, pad, xpad, newapad, sep,
 			freezer, toaster, purity, deepcopy, quotekeys, bless);
 		SvREFCNT_dec(sname);
@@ -474,7 +493,7 @@ DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		    SvREFCNT_dec(newapad);
 	    }
 	    if (i) {
-		SV *opad = sv_x(Nullsv, SvPVX(xpad), SvCUR(xpad), *levelp-1);
+		SV *opad = sv_x(aTHX_ Nullsv, SvPVX(xpad), SvCUR(xpad), *levelp-1);
 		sv_catsv(retval, totpad);
 		sv_catsv(retval, opad);
 		SvREFCNT_dec(opad);
@@ -602,9 +621,9 @@ DD_dump(SV *val, char *name, STRLEN namelen, SV *retval, HV *seenhv,
 			
 			SvCUR(newapad) = 0;
 			if (indent >= 2)
-			    (void)sv_x(newapad, " ", 1, SvCUR(postentry));
+			    (void)sv_x(aTHX_ newapad, " ", 1, SvCUR(postentry));
 			
-			DD_dump(e, SvPVX(nname), SvCUR(nname), postentry,
+			DD_dump(aTHX_ e, SvPVX(nname), SvCUR(nname), postentry,
 				seenhv, postav, &nlevel, indent, pad, xpad,
 				newapad, sep, freezer, toaster, purity,
 				deepcopy, quotekeys, bless);
@@ -804,7 +823,7 @@ Data_Dumper_Dumpxs(href, ...)
 		    }
 		    
 		    if (indent >= 2) {
-			SV *tmpsv = sv_x(Nullsv, " ", 1, SvCUR(name)+3);
+			SV *tmpsv = sv_x(aTHX_ Nullsv, " ", 1, SvCUR(name)+3);
 			newapad = newSVsv(apad);
 			sv_catsv(newapad, tmpsv);
 			SvREFCNT_dec(tmpsv);
@@ -812,7 +831,7 @@ Data_Dumper_Dumpxs(href, ...)
 		    else
 			newapad = apad;
 		    
-		    DD_dump(val, SvPVX(name), SvCUR(name), valstr, seenhv,
+		    DD_dump(aTHX_ val, SvPVX(name), SvCUR(name), valstr, seenhv,
 			    postav, &level, indent, pad, xpad, newapad, sep,
 			    freezer, toaster, purity, deepcopy, quotekeys,
 			    bless);

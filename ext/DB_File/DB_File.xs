@@ -3,8 +3,8 @@
  DB_File.xs -- Perl 5 interface to Berkeley DB 
 
  written by Paul Marquess <Paul.Marquess@btinternet.com>
- last modified 6th March 1999
- version 1.66
+ last modified 6th June 1999
+ version 1.67
 
  All comments/suggestions/problems are welcome
 
@@ -66,6 +66,9 @@
         1.65 -  Fixed a bug in the PUSH logic.
 		Added BOOT check that using 2.3.4 or greater
         1.66 -  Added DBM filter code
+        1.67 -  Backed off the use of newSVpvn.
+		Fixed DBM Filter code for Perl 5.004.
+		Fixed a small memory leak in the filter code.
 
 
 
@@ -87,6 +90,11 @@
 #    define PL_sv_undef		sv_undef
 #    define PL_na		na
 
+#endif
+
+/* DEFSV appears first in 5.004_56 */
+#ifndef DEFSV
+#define DEFSV		GvSV(defgv)
 #endif
 
 /* Being the Berkeley DB we prefer the <sys/cdefs.h> (which will be
@@ -301,16 +309,13 @@ typedef DBT DBTKEY ;
 	    if (db->filtering)					\
 	        croak("recursion detected in %s", name) ;	\
 	    db->filtering = TRUE ;				\
-	    /* SAVE_DEFSV ;*/   /* save $_ */			\
 	    save_defsv = newSVsv(DEFSV) ;			\
 	    sv_setsv(DEFSV, arg) ;				\
 	    PUSHMARK(sp) ;					\
 	    (void) perl_call_sv(db->type, G_DISCARD|G_NOARGS); 	\
-	    /* SPAGAIN ; */						\
 	    sv_setsv(arg, DEFSV) ;				\
-	    sv_setsv(DEFSV, save_defsv) ;				\
+	    sv_setsv(DEFSV, save_defsv) ;			\
 	    SvREFCNT_dec(save_defsv) ;				\
-	    /* PUTBACK ; */						\
 	    db->filtering = FALSE ;				\
 	    /*printf("end of filtering %s\n", name) ;*/		\
 	}
@@ -352,12 +357,7 @@ static DBTKEY empty ;
 #ifdef DB_VERSION_MAJOR
 
 static int
-db_put(db, key, value, flags)
-DB_File		db ;
-DBTKEY		key ;
-DBT		value ;
-u_int		flags ;
-
+db_put(DB_File db, DBTKEY key, DBT value, u_int flags)
 {
     int status ;
 
@@ -381,7 +381,7 @@ u_int		flags ;
 #endif /* DB_VERSION_MAJOR */
 
 static void
-GetVersionInfo()
+GetVersionInfo(pTHX)
 {
     SV * ver_sv = perl_get_sv("DB_File::db_version", TRUE) ;
 #ifdef DB_VERSION_MAJOR
@@ -412,10 +412,9 @@ GetVersionInfo()
 
 
 static int
-btree_compare(key1, key2)
-const DBT * key1 ;
-const DBT * key2 ;
+btree_compare(const DBT *key1, const DBT *key2)
 {
+    dTHX;
     dSP ;
     void * data1, * data2 ;
     int retval ;
@@ -423,7 +422,7 @@ const DBT * key2 ;
     
     data1 = key1->data ;
     data2 = key2->data ;
-#if 0
+
     /* As newSVpv will assume that the data pointer is a null terminated C 
        string if the size parameter is 0, make sure that data points to an 
        empty string if the length is 0
@@ -432,14 +431,14 @@ const DBT * key2 ;
         data1 = "" ; 
     if (key2->size == 0)
         data2 = "" ;
-#endif
+
     ENTER ;
     SAVETMPS;
 
     PUSHMARK(SP) ;
     EXTEND(SP,2) ;
-    PUSHs(sv_2mortal(newSVpvn(data1,key1->size)));
-    PUSHs(sv_2mortal(newSVpvn(data2,key2->size)));
+    PUSHs(sv_2mortal(newSVpv(data1,key1->size)));
+    PUSHs(sv_2mortal(newSVpv(data2,key2->size)));
     PUTBACK ;
 
     count = perl_call_sv(CurrentDB->compare, G_SCALAR); 
@@ -459,10 +458,9 @@ const DBT * key2 ;
 }
 
 static DB_Prefix_t
-btree_prefix(key1, key2)
-const DBT * key1 ;
-const DBT * key2 ;
+btree_prefix(const DBT *key1, const DBT *key2)
 {
+    dTHX;
     dSP ;
     void * data1, * data2 ;
     int retval ;
@@ -470,7 +468,7 @@ const DBT * key2 ;
     
     data1 = key1->data ;
     data2 = key2->data ;
-#if 0
+
     /* As newSVpv will assume that the data pointer is a null terminated C 
        string if the size parameter is 0, make sure that data points to an 
        empty string if the length is 0
@@ -479,14 +477,14 @@ const DBT * key2 ;
         data1 = "" ;
     if (key2->size == 0)
         data2 = "" ;
-#endif
+
     ENTER ;
     SAVETMPS;
 
     PUSHMARK(SP) ;
     EXTEND(SP,2) ;
-    PUSHs(sv_2mortal(newSVpvn(data1,key1->size)));
-    PUSHs(sv_2mortal(newSVpvn(data2,key2->size)));
+    PUSHs(sv_2mortal(newSVpv(data1,key1->size)));
+    PUSHs(sv_2mortal(newSVpv(data2,key2->size)));
     PUTBACK ;
 
     count = perl_call_sv(CurrentDB->prefix, G_SCALAR); 
@@ -506,24 +504,23 @@ const DBT * key2 ;
 }
 
 static DB_Hash_t
-hash_cb(data, size)
-const void * data ;
-size_t size ;
+hash_cb(const void *data, size_t size)
 {
+    dTHX;
     dSP ;
     int retval ;
     int count ;
-#if 0
+
     if (size == 0)
         data = "" ;
-#endif
+
      /* DGH - Next two lines added to fix corrupted stack problem */
     ENTER ;
     SAVETMPS;
 
     PUSHMARK(SP) ;
 
-    XPUSHs(sv_2mortal(newSVpvn((char*)data,size)));
+    XPUSHs(sv_2mortal(newSVpv((char*)data,size)));
     PUTBACK ;
 
     count = perl_call_sv(CurrentDB->hash, G_SCALAR); 
@@ -546,8 +543,7 @@ size_t size ;
 #ifdef TRACE
 
 static void
-PrintHash(hash)
-INFO * hash ;
+PrintHash(INFO *hash)
 {
     printf ("HASH Info\n") ;
     printf ("  hash      = %s\n", 
@@ -561,8 +557,7 @@ INFO * hash ;
 }
 
 static void
-PrintRecno(recno)
-INFO * recno ;
+PrintRecno(INFO *recno)
 {
     printf ("RECNO Info\n") ;
     printf ("  flags     = %d\n", recno->db_RE_flags) ;
@@ -575,8 +570,7 @@ INFO * recno ;
 }
 
 static void
-PrintBtree(btree)
-INFO * btree ;
+PrintBtree(INFO *btree)
 {
     printf ("BTREE Info\n") ;
     printf ("  compare    = %s\n", 
@@ -603,8 +597,7 @@ INFO * btree ;
 
 
 static I32
-GetArrayLength(db)
-DB_File db ;
+GetArrayLength(pTHX_ DB_File db)
 {
     DBT		key ;
     DBT		value ;
@@ -622,13 +615,11 @@ DB_File db ;
 }
 
 static recno_t
-GetRecnoKey(db, value)
-DB_File  db ;
-I32      value ;
+GetRecnoKey(pTHX_ DB_File db, I32 value)
 {
     if (value < 0) {
 	/* Get the length of the array */
-	I32 length = GetArrayLength(db) ;
+	I32 length = GetArrayLength(aTHX_ db) ;
 
 	/* check for attempt to write before start of array */
 	if (length + value + 1 <= 0)
@@ -643,12 +634,7 @@ I32      value ;
 }
 
 static DB_File
-ParseOpenInfo(isHASH, name, flags, mode, sv)
-int    isHASH ;
-char * name ;
-int    flags ;
-int    mode ;
-SV *   sv ;
+ParseOpenInfo(pTHX_ int isHASH, char *name, int flags, int mode, SV *sv)
 {
     SV **	svp;
     HV *	action ;
@@ -917,18 +903,8 @@ SV *   sv ;
 }
 
 
-static int
-not_here(s)
-char *s;
-{
-    croak("DB_File::%s not implemented on this architecture", s);
-    return -1;
-}
-
 static double 
-constant(name, arg)
-char *name;
-int arg;
+constant(char *name, int arg)
 {
     errno = 0;
     switch (*name) {
@@ -1161,7 +1137,7 @@ MODULE = DB_File	PACKAGE = DB_File	PREFIX = db_
 
 BOOT:
   {
-    GetVersionInfo() ;
+    GetVersionInfo(aTHX) ;
  
     empty.data = &zero ;
     empty.size =  sizeof(recno_t) ;
@@ -1192,7 +1168,7 @@ db_DoTie_(isHASH, dbtype, name=undef, flags=O_CREAT|O_RDWR, mode=0666, type=DB_H
             if (items == 6)
 	        sv = ST(5) ;
 
-	    RETVAL = ParseOpenInfo(isHASH, name, flags, mode, sv) ;
+	    RETVAL = ParseOpenInfo(aTHX_ isHASH, name, flags, mode, sv) ;
 	    if (RETVAL->dbp == NULL)
 	        RETVAL = NULL ;
 	}
@@ -1465,7 +1441,7 @@ length(db)
 	ALIAS:		FETCHSIZE = 1
 	CODE:
 	    CurrentDB = db ;
-	    RETVAL = GetArrayLength(db) ;
+	    RETVAL = GetArrayLength(aTHX_ db) ;
 	OUTPUT:
 	    RETVAL
 
@@ -1593,7 +1569,8 @@ db_seq(db, key, value, flags)
 #define setFilter(type)					\
 	{						\
 	    if (db->type)				\
-	        RETVAL = newSVsv(db->type) ; 		\
+	        RETVAL = sv_mortalcopy(db->type) ;	\
+	    ST(0) = RETVAL ;				\
 	    if (db->type && (code == &PL_sv_undef)) {	\
                 SvREFCNT_dec(db->type) ;		\
 	        db->type = NULL ;			\
@@ -1614,8 +1591,6 @@ filter_fetch_key(db, code)
 	SV *		RETVAL = &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_fetch_key) ;
-	OUTPUT:
-	    RETVAL
 
 SV *
 filter_store_key(db, code)
@@ -1624,8 +1599,6 @@ filter_store_key(db, code)
 	SV *		RETVAL = &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_store_key) ;
-	OUTPUT:
-	    RETVAL
 
 SV *
 filter_fetch_value(db, code)
@@ -1634,8 +1607,6 @@ filter_fetch_value(db, code)
 	SV *		RETVAL = &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_fetch_value) ;
-	OUTPUT:
-	    RETVAL
 
 SV *
 filter_store_value(db, code)
@@ -1644,7 +1615,5 @@ filter_store_value(db, code)
 	SV *		RETVAL = &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_store_value) ;
-	OUTPUT:
-	    RETVAL
 
 #endif /* DBM_FILTERING */

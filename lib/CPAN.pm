@@ -575,7 +575,7 @@ Please make sure the directory exists and is writable.
     }
     my $fh;
     unless ($fh = FileHandle->new(">$lockfile")) {
-	if ($! =~ /Permission/) {
+	if ($! =~ /Permission/ || $!{EACCES}) {
 	    my $incc = $INC{'CPAN/Config.pm'};
 	    my $myincc = MM->catfile($ENV{HOME},'.cpan','CPAN','MyConfig.pm');
 	    $CPAN::Frontend->myprint(qq{

@@ -198,7 +198,7 @@ sub AUTOLOAD {
     ($constname = $AUTOLOAD) =~ s/.*:://;
     my $val = constant($constname, @_ ? $_[0] : 0);
     if ($! != 0) {
-	if ($! =~ /Invalid/) {
+	if ($! =~ /Invalid/ || $!{EINVAL}) {
 	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
 	    goto &AutoLoader::AUTOLOAD;
 	}
@@ -228,7 +228,7 @@ if (not $JPL::_env_) {
     $ENV{THREADS_TYPE} ||= "green_threads";
 
     $JAVALIB = "$ENV{JAVA_HOME}/lib/$arch/$ENV{THREADS_TYPE}";
-    $ENV{LD_LIBRARY_PATH} .= ":$JAVALIB";
+    $ENV{$Config{ldlibpthname}} .= ":$JAVALIB";
 
     $JVM = GetJavaVM("$JAVALIB/libjava.so",@JVM_ARGS);
 }

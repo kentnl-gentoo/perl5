@@ -1,11 +1,14 @@
 #ifdef WIN32
 #define _POSIX_
 #endif
+
+#define PERL_NO_GET_CONTEXT
+
 #include "EXTERN.h"
 #define PERLIO_NOT_STDIO 1
 #include "perl.h"
 #include "XSUB.h"
-#ifdef PERL_OBJECT	/* XXX _very_ temporary hacks */
+#if defined(PERL_OBJECT) || defined(PERL_CAPI)
 #  undef signal
 #  undef open
 #  undef setmode
@@ -104,6 +107,7 @@
 #else
 #if defined (CYGWIN32)
 #    define tzname _tzname
+#    undef MB_CUR_MAX          /* XXX: bug in b20.1 */
 #endif
 #if defined (WIN32)
 #  undef mkfifo
@@ -138,8 +142,12 @@
 #else
 
 #  ifndef HAS_MKFIFO
-#    ifndef mkfifo
-#      define mkfifo(path, mode) (mknod((path), (mode) | S_IFIFO, 0))
+#    ifdef OS2
+#      define mkfifo(a,b) not_here("mkfifo")
+#    else	/* !( defined OS2 ) */ 
+#      ifndef mkfifo
+#        define mkfifo(path, mode) (mknod((path), (mode) | S_IFIFO, 0))
+#      endif
 #    endif
 #  endif /* !HAS_MKFIFO */
 
@@ -180,10 +188,10 @@ typedef struct termios* POSIX__Termios;
 #endif
 
 /* Possibly needed prototypes */
-char *cuserid _((char *));
-double strtod _((const char *, char **));
-long strtol _((const char *, char **, int));
-unsigned long strtoul _((const char *, char **, int));
+char *cuserid (char *);
+double strtod (const char *, char **);
+long strtol (const char *, char **, int);
+unsigned long strtoul (const char *, char **, int);
 
 #ifndef HAS_CUSERID
 #define cuserid(a) (char *) not_here("cuserid")
@@ -312,8 +320,7 @@ char *tzname[] = { "" , "" };
 
 #ifdef STRUCT_TM_HASZONE
 static void
-init_tm(ptm)		/* see mktime, strftime and asctime	*/
-    struct tm *ptm;
+init_tm(struct tm *ptm)		/* see mktime, strftime and asctime	*/
 {
     Time_t now;
     (void)time(&now);
@@ -1522,9 +1529,10 @@ constant(char *name, int arg)
 #else
 		goto not_there;
 #endif
-	    if (strEQ(name, "L_tmpname"))
-#ifdef L_tmpname
-		return L_tmpname;
+	    /* L_tmpnam[e] was a typo--retained for compatibility */
+	    if (strEQ(name, "L_tmpname") || strEQ(name, "L_tmpnam"))
+#ifdef L_tmpnam
+		return L_tmpnam;
 #else
 		goto not_there;
 #endif
@@ -3048,7 +3056,7 @@ setlocale(category, locale = 0)
 		else
 #endif
 		    newctype = RETVAL;
-		perl_new_ctype(newctype);
+		new_ctype(newctype);
 	    }
 #endif /* USE_LOCALE_CTYPE */
 #ifdef USE_LOCALE_COLLATE
@@ -3065,7 +3073,7 @@ setlocale(category, locale = 0)
 		else
 #endif
 		    newcoll = RETVAL;
-		perl_new_collate(newcoll);
+		new_collate(newcoll);
 	    }
 #endif /* USE_LOCALE_COLLATE */
 #ifdef USE_LOCALE_NUMERIC
@@ -3082,7 +3090,7 @@ setlocale(category, locale = 0)
 		else
 #endif
 		    newnum = RETVAL;
-		perl_new_numeric(newnum);
+		new_numeric(newnum);
 	    }
 #endif /* USE_LOCALE_NUMERIC */
 	}
@@ -3199,7 +3207,7 @@ sigaction(sig, action, oldaction = 0)
 		    croak("Can't supply an action without a HANDLER");
 		sv_setpv(*sigsvp, SvPV(*svp, n_a));
 		mg_set(*sigsvp);	/* handles DEFAULT and IGNORE */
-		act.sa_handler = sighandler;
+		act.sa_handler = PL_sighandlerp;
 
 		/* Set up any desired mask. */
 		svp = hv_fetch(action, "MASK", 4, FALSE);
@@ -3370,9 +3378,18 @@ write(fd, buffer, nbytes)
 	char *		buffer
 	size_t		nbytes
 
-char *
-tmpnam(s = 0)
-	char *		s = 0;
+SV *
+tmpnam()
+    PREINIT:
+	STRLEN i;
+	int len;
+    CODE:
+	RETVAL = newSVpvn("", 0);
+	SvGROW(RETVAL, L_tmpnam);
+	len = strlen(tmpnam(SvPV(RETVAL, i)));
+	SvCUR_set(RETVAL, len);
+    OUTPUT:
+	RETVAL
 
 void
 abort()

@@ -17,6 +17,10 @@
 
 /* Important ones in the first cache line (if alignment is done right) */
 
+#ifdef USE_THREADS
+PERLVAR(interp,		PerlInterpreter*)	/* thread owner */
+#endif
+
 PERLVAR(Tstack_sp,	SV **)		/* top of the stack */
 #ifdef OP_IN_REGISTER
 PERLVAR(Topsave,	OP *)
@@ -96,7 +100,7 @@ PERLVAR(Tmainstack,	AV *)		/* the stack when nothing funny is happening */
 
 PERLVAR(Ttop_env,	JMPENV *)	/* ptr. to current sigjmp() environment */
 PERLVAR(Tstart_env,	JMPENV)		/* empty startup sigjmp() environment */
-PERLVARI(Tprotect,	protect_proc_t,	FUNC_NAME_TO_PTR(default_protect))
+PERLVARI(Tprotect,	protect_proc_t,	MEMBER_TO_FPTR(Perl_default_protect))
 
 /* statics "owned" by various functions */
 PERLVAR(Tav_fetch_sv,	SV *)		/* owned by av_fetch() */
@@ -138,7 +142,7 @@ PERLVAR(Tseen_evals,	I32)		/* from regcomp.c */
 PERLVAR(Tregcomp_rx,	regexp *)	/* from regcomp.c */
 PERLVAR(Textralen,	I32)		/* from regcomp.c */
 PERLVAR(Tcolorset,	int)		/* from regcomp.c */
-PERLVAR(Tcolors[6],	char *)		/* from regcomp.c */
+PERLVARA(Tcolors,6,	char *)		/* from regcomp.c */
 PERLVAR(Treginput,	char *)		/* String-input pointer. */
 PERLVAR(Tregbol,	char *)		/* Beginning of input, for ^ check. */
 PERLVAR(Tregeol,	char *)		/* End of input, for $ check. */
@@ -169,17 +173,22 @@ PERLVARI(Treg_curpm,	PMOP*, NULL)	/* curpm during match */
 PERLVAR(Treg_oldsaved,	char*)		/* old saved substr during match */
 PERLVAR(Treg_oldsavedlen, STRLEN)	/* old length of saved substr during match */
 
-PERLVARI(Tregcompp,	regcomp_t, FUNC_NAME_TO_PTR(pregcomp))
-					/* Pointer to RE compiler */
-PERLVARI(Tregexecp,	regexec_t, FUNC_NAME_TO_PTR(regexec_flags))
-					/* Pointer to RE executer */
+PERLVARI(Tregcompp,	regcomp_t, MEMBER_TO_FPTR(Perl_pregcomp))
+					/* Pointer to REx compiler */
+PERLVARI(Tregexecp,	regexec_t, MEMBER_TO_FPTR(Perl_regexec_flags))
+					/* Pointer to REx executer */
+PERLVARI(Tregint_start,	re_intuit_start_t, MEMBER_TO_FPTR(Perl_re_intuit_start))
+					/* Pointer to optimized REx executer */
+PERLVARI(Tregint_string,re_intuit_string_t, MEMBER_TO_FPTR(Perl_re_intuit_string))
+					/* Pointer to optimized REx string */
+PERLVARI(Tregfree,	regfree_t, MEMBER_TO_FPTR(Perl_pregfree))
+					/* Pointer to REx free()er */
+
 PERLVARI(Treginterp_cnt,int,	    0)	/* Whether `Regexp'
 						   was interpolated. */
 PERLVARI(Treg_starttry,	char *,	    0)	/* -Dr: where regtry was called. */
-#ifdef DEBUGGING
 PERLVARI(Twatchaddr,	char **,    0)
 PERLVAR(Twatchok,	char *)
-#endif
 
 /* Note that the variables below are all explicitly referenced in the code
  * as thr->whatever and therefore don't need the 'T' prefix. */

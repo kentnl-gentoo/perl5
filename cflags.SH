@@ -1,4 +1,4 @@
-case $CONFIGDOTSH in
+case $CONFIG in
 '')
 	if test -f config.sh; then TOP=.;
 	elif test -f ../config.sh; then TOP=..;
@@ -65,7 +65,7 @@ case $# in
 0) set *.c; echo "The current C flags are:" ;;
 esac
 
-set `echo "$* " | sed -e 's/\.[oc] / /g' -e 's/\.obj / /g'`
+set `echo "$* " | sed -e 's/\.[oc] / /g' -e 's/\.obj / /g' -e "s/\\$obj_ext / /g"`
 
 for file do
 

@@ -56,6 +56,31 @@ no useful value.  See L<perlmod>.
 (F) The '!' is allowed in pack() and unpack() only after certain types.
 See L<perlfunc/pack>.
 
+=item # cannot take a count
+
+(F) You had an unpack template indicating a counted-length string,
+but you have also specified an explicit size for the string.
+See L<perlfunc/pack>.
+
+=item # must be followed by a, A or Z
+
+(F) You had an unpack template indicating a counted-length string,
+which must be followed by one of the letters a, A or Z
+to indicate what sort of string is to be unpacked.
+See L<perlfunc/pack>.
+
+=item # must be followed by a*, A* or Z*
+
+(F) You had an pack template indicating a counted-length string,
+Currently the only things that can have their length counted are a*, A* or Z*.
+See L<perlfunc/pack>.
+
+=item # must follow a numeric type
+
+(F) You had an unpack template that contained a '#',
+but this did not follow some numeric unpack specification.
+See L<perlfunc/pack>.
+
 =item % may only be used in unpack
 
 (F) You can't pack a string by supplying a checksum, because the
@@ -73,6 +98,16 @@ C<'>-delimited regular expression.
 (W) You've run afoul of the rule that says that any list operator followed
 by parentheses turns into a function, with all the list operators arguments
 found inside the parentheses.  See L<perlop/Terms and List Operators (Leftward)>.
+
+=item %s() called too early to check prototype
+
+(W) You've called a function that has a prototype before the parser saw a
+definition or declaration for it, and Perl could not check that the call
+conforms to the prototype.  You need to either add an early prototype
+declaration for the subroutine in question, or move the subroutine
+definition ahead of the call to get proper prototype checking.  Alternatively,
+if you are certain that you're calling the function correctly, you may put
+an ampersand before the name to avoid the warning.  See L<perlsub>.
 
 =item %s argument is not a HASH element
 
@@ -316,6 +351,12 @@ and should have been freed, and in fact, probably was freed.  This
 could indicate that SvREFCNT_dec() was called too many times, or that
 SvREFCNT_inc() was called too few times, or that the SV was mortalized
 when it shouldn't have been, or that memory has been corrupted.
+
+=item Attempt to join self
+
+(F) You tried to join a thread from within itself, which is an
+impossible task.  You may be joining the wrong thread, or you may
+need to move the join() to some other thread.
 
 =item Attempt to pack pointer to temporary value
 
@@ -1000,6 +1041,17 @@ there is no builtin with the name C<word>.
 opposed to a subroutine reference): no such method callable via the
 package. If method name is C<???>, this is an internal error.
 
+=item Character class [:%s:] unknown
+
+(F) The class in the character class [: :] syntax is unknown.
+
+=item Character class syntax [%s] belongs inside character classes
+
+(W) The character class constructs [: :], [= =], and [. .]  go
+I<inside> character classes, the [] are part of the construct,
+for example: /[012[:alpha:]345]/.  Note that the last two constructs
+are not currently implemented, they are placeholders for future extensions.
+
 =item Character class syntax [. .] is reserved for future extensions
 
 (W) Within regular expression character classes ([]) the syntax beginning
@@ -1007,14 +1059,6 @@ with "[." and ending with ".]" is reserved for future extensions.
 If you need to represent those character sequences inside a regular
 expression character class, just quote the square brackets with the
 backslash: "\[." and ".\]".
-
-=item Character class syntax [: :] is reserved for future extensions
-
-(W) Within regular expression character classes ([]) the syntax beginning
-with "[:" and ending with ":]" is reserved for future extensions.
-If you need to represent those character sequences inside a regular
-expression character class, just quote the square brackets with the
-backslash: "\[:" and ":\]".
 
 =item Character class syntax [= =] is reserved for future extensions
 
@@ -1104,6 +1148,18 @@ a valid magic number.
 times more than it has returned.  This probably indicates an infinite
 recursion, unless you're writing strange benchmark programs, in which
 case it indicates something else.
+
+=item defined(@array) is deprecated
+
+(D) defined() is not usually useful on arrays because it checks for an
+undefined I<scalar> value.  If you want to see if the array is empty,
+just use C<if (@array) { # not empty }> for example.  
+
+=item defined(%hash) is deprecated
+
+(D) defined() is not usually useful on hashes because it checks for an
+undefined I<scalar> value.  If you want to see if the hash is empty,
+just use C<if (%hash) { # not empty }> for example.  
 
 =item Delimiter for here document is too long
 
@@ -1253,7 +1309,7 @@ PDP-11 or something?
 You need to do an open() or a socket() call, or call a constructor from
 the FileHandle package.
 
-=item Filehandle %s opened for only input
+=item Filehandle %s opened only for input
 
 (W) You tried to write on a read-only filehandle.  If you
 intended it to be a read-write filehandle, you needed to open it with
@@ -1261,12 +1317,12 @@ intended it to be a read-write filehandle, you needed to open it with
 you intended only to write the file, use "E<gt>" or "E<gt>E<gt>".  See
 L<perlfunc/open>.
 
-=item Filehandle opened for only input
+=item Filehandle %s opened only for output
 
-(W) You tried to write on a read-only filehandle.  If you
+(W) You tried to read from a filehandle opened only for writing.  If you
 intended it to be a read-write filehandle, you needed to open it with
 "+E<lt>" or "+E<gt>" or "+E<gt>E<gt>" instead of with "E<lt>" or nothing.  If
-you intended only to write the file, use "E<gt>" or "E<gt>E<gt>".  See
+you intended only to read from the file, use "E<lt>".  See
 L<perlfunc/open>.
 
 =item Final $ should be \$ or $name
@@ -1288,7 +1344,7 @@ the name.
 (W) You redefined a format.  To suppress this warning, say
 
     {
-	local $^W = 0;
+	no warning;
 	eval "format NAME =...";
     }
 
@@ -1425,7 +1481,7 @@ Interpretation of the binary number stopped before the offending digit.
 (W) You may have tried to use an 8 or 9 in a octal number.  Interpretation
 of the octal number stopped before the 8 or 9.
 
-=item Illegal hex digit %s ignored
+=item Illegal hexadecimal digit %s ignored
 
 (W) You may have tried to use a character other than 0 - 9 or A - F in a
 hexadecimal number.  Interpretation of the hexadecimal number stopped
@@ -1472,8 +1528,8 @@ known value, using trustworthy data.  See L<perlsec>.
 
 =item Integer overflow in %s number
 
-(S) The literal hex, octal or binary number you have specified is
-too big for your architecture. On a 32-bit architecture the largest
+(S) The literal hexadecimal, octal or binary number you have specified
+is too big for your architecture. On a 32-bit architecture the largest
 literal hex, octal or binary number representable without overflow
 is 0xFFFFFFFF, 037777777777, or 0b11111111111111111111111111111111
 respectively.  Note that Perl transparently promotes decimal literals
@@ -2262,7 +2318,7 @@ are outside the range which can be represented by integers internally.
 One possible workaround is to force Perl to use magical string
 increment by prepending "0" to your numbers.
 
-=item Read on closed filehandle E<lt>%sE<gt>
+=item Read on closed filehandle %s
 
 (W) The filehandle you're reading from got itself closed sometime before now.
 Check your logic flow.
@@ -2540,7 +2596,7 @@ may break this.
 (W) You redefined a subroutine.  To suppress this warning, say
 
     {
-	local $^W = 0;
+	no warning;
 	eval "sub name { ... }";
     }
 
@@ -2833,6 +2889,12 @@ representative, who probably put it there in the first place.
 =item Unknown BYTEORDER
 
 (F) There are no byte-swapping functions for a machine with this byte order.
+
+=item Unknown open() mode '%s'
+
+(F) The second argument of 3-arguments open is not one from the list
+of C<L<lt>>, C<L<gt>>, C<E<gt>E<gt>>, C<+L<lt>>, C<+L<gt>>,
+C<+E<gt>E<gt>>, C<-|>, C<|-> of possible open() modes.
 
 =item Unknown process %x sent message to prime_env_iter: %s
 
@@ -3157,7 +3219,7 @@ but in actual fact, you got
 
 So put in parentheses to say what you really mean.
 
-=item Write on closed filehandle
+=item Write on closed filehandle %s
 
 (W) The filehandle you're writing to got itself closed sometime before now.
 Check your logic flow.

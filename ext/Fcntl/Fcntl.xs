@@ -1,3 +1,4 @@
+#define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -105,6 +106,12 @@ constant(char *name, int arg)
 	    if (strEQ(name, "F_SETFL"))
 #ifdef F_SETFL
 	        return F_SETFL;
+#else
+	        goto not_there;
+#endif
+	    if (strEQ(name, "F_SETLK"))
+#ifdef F_SETLK
+	        return F_SETLK;
 #else
 	        goto not_there;
 #endif

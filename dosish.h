@@ -23,21 +23,8 @@
 #    define PERL_SYS_INIT(c,v)	Perl_win32_init(c,v)
 #    define BIT_BUCKET "nul"
 #  else
-#    ifdef CYGWIN32
-#      define PERL_SYS_INIT(c,v)	\
-		MALLOC_INIT;
-#      define OP_BINARY O_BINARY
-#      define BIT_BUCKET "nul"
-#      define HAS_IOCTL
-#      define HAS_UTIME
-#      define HAS_KILL
-#      define HAS_WAIT
-#      define HAS_CHOWN
-#      define HAS_GROUP
-#    else
-#      define PERL_SYS_INIT(c,v)
-#      define BIT_BUCKET "\\dev\\nul" /* "wanna be like, umm, Newlined, or somethin?" */
-#    endif
+#    define PERL_SYS_INIT(c,v)	Perl_my_setenv_init(&environ)
+#    define BIT_BUCKET "\\dev\\nul" /* "wanna be like, umm, Newlined, or somethin?" */
 #  endif
 #endif	/* DJGPP */
 
@@ -123,13 +110,4 @@
 #  define HAS_KILL
 #  define HAS_WAIT
 #  define HAS_CHOWN
-/*
- * This provides a layer of functions and macros to ensure extensions will
- * get to use the same RTL functions as the core.
- */
-#  ifndef HASATTRIBUTE
-#    ifndef PERL_OBJECT
-#      include <win32iop.h>
-#    endif
-#  endif
 #endif	/* WIN32 */

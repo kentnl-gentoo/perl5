@@ -38,7 +38,7 @@ typedef U32 PADOFFSET;
 #define BASEOP				\
     OP*		op_next;		\
     OP*		op_sibling;		\
-    OP*		(CPERLscope(*op_ppaddr))_((ARGSproto));		\
+    OP*		(CPERLscope(*op_ppaddr))(pTHX);		\
     PADOFFSET	op_targ;		\
     OPCODE	op_type;		\
     U16		op_seq;			\
@@ -79,6 +79,7 @@ typedef U32 PADOFFSET;
 				/*  On OP_ENTERSUB || OP_NULL, saw a "do". */
 				/*  On OP_(ENTER|LEAVE)EVAL, don't clear $@ */
 				/*  On OP_ENTERITER, loop var is per-thread */
+                                /*  On pushre, re is /\s+/ imp. by split " " */
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -126,9 +127,15 @@ typedef U32 PADOFFSET;
   /* OP_RV2CV only */
 #define OPpENTERSUB_AMPER	8	/* Used & form to call. */
 #define OPpENTERSUB_NOPAREN	128	/* bare sub call (without parens) */
+  /* OP_GV only */
+#define OPpEARLY_CV		32	/* foo() called before sub foo was parsed */
   /* OP_?ELEM only */
 #define OPpLVAL_DEFER		16	/* Defer creation of array/hash elem */
   /* for OP_RV2?V, lower bits carry hints */
+
+/* Private for OPs with TARGLEX */
+  /* (lower bits may carry MAXARG) */
+#define OPpTARGET_MY		16	/* Target is PADMY. */
 
 /* Private for OP_CONST */
 #define	OPpCONST_STRICT		8	/* bearword subject to strict 'subs' */
@@ -175,13 +182,6 @@ struct logop {
     BASEOP
     OP *	op_first;
     OP *	op_other;
-};
-
-struct condop {
-    BASEOP
-    OP *	op_first;
-    OP *	op_true;
-    OP *	op_false;
 };
 
 struct listop {
@@ -257,7 +257,6 @@ struct loop {
 #define cBINOP ((BINOP*)PL_op)
 #define cLISTOP ((LISTOP*)PL_op)
 #define cLOGOP ((LOGOP*)PL_op)
-#define cCONDOP ((CONDOP*)PL_op)
 #define cPMOP ((PMOP*)PL_op)
 #define cSVOP ((SVOP*)PL_op)
 #define cGVOP ((GVOP*)PL_op)
@@ -269,7 +268,6 @@ struct loop {
 #define cBINOPo ((BINOP*)o)
 #define cLISTOPo ((LISTOP*)o)
 #define cLOGOPo ((LOGOP*)o)
-#define cCONDOPo ((CONDOP*)o)
 #define cPMOPo ((PMOP*)o)
 #define cSVOPo ((SVOP*)o)
 #define cGVOPo ((GVOP*)o)
@@ -282,7 +280,6 @@ struct loop {
 #define kBINOP ((BINOP*)kid)
 #define kLISTOP ((LISTOP*)kid)
 #define kLOGOP ((LOGOP*)kid)
-#define kCONDOP ((CONDOP*)kid)
 #define kPMOP ((PMOP*)kid)
 #define kSVOP ((SVOP*)kid)
 #define kGVOP ((GVOP*)kid)
@@ -301,27 +298,29 @@ struct loop {
 #define OA_OTHERINT 32
 #define OA_DANGEROUS 64
 #define OA_DEFGV 128
+#define OA_TARGLEX 256
 
 /* The next 4 bits encode op class information */
-#define OA_CLASS_MASK (15 << 8)
+#define OCSHIFT 9
 
-#define OA_BASEOP (0 << 8)
-#define OA_UNOP (1 << 8)
-#define OA_BINOP (2 << 8)
-#define OA_LOGOP (3 << 8)
-#define OA_CONDOP (4 << 8)
-#define OA_LISTOP (5 << 8)
-#define OA_PMOP (6 << 8)
-#define OA_SVOP (7 << 8)
-#define OA_GVOP (8 << 8)
-#define OA_PVOP_OR_SVOP (9 << 8)
-#define OA_LOOP (10 << 8)
-#define OA_COP (11 << 8)
-#define OA_BASEOP_OR_UNOP (12 << 8)
-#define OA_FILESTATOP (13 << 8)
-#define OA_LOOPEXOP (14 << 8)
+#define OA_CLASS_MASK (15 << OCSHIFT)
 
-#define OASHIFT 12
+#define OA_BASEOP (0 << OCSHIFT)
+#define OA_UNOP (1 << OCSHIFT)
+#define OA_BINOP (2 << OCSHIFT)
+#define OA_LOGOP (3 << OCSHIFT)
+#define OA_LISTOP (4 << OCSHIFT)
+#define OA_PMOP (5 << OCSHIFT)
+#define OA_SVOP (6 << OCSHIFT)
+#define OA_GVOP (7 << OCSHIFT)
+#define OA_PVOP_OR_SVOP (8 << OCSHIFT)
+#define OA_LOOP (9 << OCSHIFT)
+#define OA_COP (10 << OCSHIFT)
+#define OA_BASEOP_OR_UNOP (11 << OCSHIFT)
+#define OA_FILESTATOP (12 << OCSHIFT)
+#define OA_LOOPEXOP (13 << OCSHIFT)
+
+#define OASHIFT 13
 
 /* Remaining nybbles of PL_opargs */
 #define OA_SCALAR 1

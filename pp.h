@@ -15,7 +15,7 @@
 #define dARGS
 #endif /* USE_THREADS */
 
-#define PP(s) OP * s(ARGSproto)
+#define PP(s) OP * Perl_##s(pTHX)
 
 #define SP sp
 #define MARK mark
@@ -50,7 +50,7 @@
 #define dTARG SV *targ
 
 #define NORMAL PL_op->op_next
-#define DIE return die
+#define DIE return Perl_die
 
 #define PUTBACK		PL_stack_sp = sp
 #define RETURN		return PUTBACK, NORMAL
@@ -88,43 +88,44 @@
 #define PUSHs(s)	(*++sp = (s))
 #define PUSHTARG	STMT_START { SvSETMAGIC(TARG); PUSHs(TARG); } STMT_END
 #define PUSHp(p,l)	STMT_START { sv_setpvn(TARG, (p), (l)); PUSHTARG; } STMT_END
-#define PUSHn(n)	STMT_START { sv_setnv(TARG, (double)(n)); PUSHTARG; } STMT_END
+#define PUSHn(n)	STMT_START { sv_setnv(TARG, (NV)(n)); PUSHTARG; } STMT_END
 #define PUSHi(i)	STMT_START { sv_setiv(TARG, (IV)(i)); PUSHTARG; } STMT_END
 #define PUSHu(u)	STMT_START { sv_setuv(TARG, (UV)(u)); PUSHTARG; } STMT_END
 
 #define XPUSHs(s)	STMT_START { EXTEND(sp,1); (*++sp = (s)); } STMT_END
 #define XPUSHTARG	STMT_START { SvSETMAGIC(TARG); XPUSHs(TARG); } STMT_END
 #define XPUSHp(p,l)	STMT_START { sv_setpvn(TARG, (p), (l)); XPUSHTARG; } STMT_END
-#define XPUSHn(n)	STMT_START { sv_setnv(TARG, (double)(n)); XPUSHTARG; } STMT_END
+#define XPUSHn(n)	STMT_START { sv_setnv(TARG, (NV)(n)); XPUSHTARG; } STMT_END
 #define XPUSHi(i)	STMT_START { sv_setiv(TARG, (IV)(i)); XPUSHTARG; } STMT_END
 #define XPUSHu(u)	STMT_START { sv_setuv(TARG, (UV)(u)); XPUSHTARG; } STMT_END
+#define XPUSHundef	STMT_START { SvOK_off(TARG); XPUSHs(TARG); } STMT_END
 
 #define SETs(s)		(*sp = s)
 #define SETTARG		STMT_START { SvSETMAGIC(TARG); SETs(TARG); } STMT_END
 #define SETp(p,l)	STMT_START { sv_setpvn(TARG, (p), (l)); SETTARG; } STMT_END
-#define SETn(n)		STMT_START { sv_setnv(TARG, (double)(n)); SETTARG; } STMT_END
+#define SETn(n)		STMT_START { sv_setnv(TARG, (NV)(n)); SETTARG; } STMT_END
 #define SETi(i)		STMT_START { sv_setiv(TARG, (IV)(i)); SETTARG; } STMT_END
 #define SETu(u)		STMT_START { sv_setuv(TARG, (UV)(u)); SETTARG; } STMT_END
 
 #define dTOPss		SV *sv = TOPs
 #define dPOPss		SV *sv = POPs
-#define dTOPnv		double value = TOPn
-#define dPOPnv		double value = POPn
+#define dTOPnv		NV value = TOPn
+#define dPOPnv		NV value = POPn
 #define dTOPiv		IV value = TOPi
 #define dPOPiv		IV value = POPi
 #define dTOPuv		UV value = TOPu
 #define dPOPuv		UV value = POPu
 
 #define dPOPXssrl(X)	SV *right = POPs; SV *left = CAT2(X,s)
-#define dPOPXnnrl(X)	double right = POPn; double left = CAT2(X,n)
+#define dPOPXnnrl(X)	NV right = POPn; NV left = CAT2(X,n)
 #define dPOPXiirl(X)	IV right = POPi; IV left = CAT2(X,i)
 
 #define USE_LEFT(sv) \
 	(SvOK(sv) || SvGMAGICAL(sv) || !(PL_op->op_flags & OPf_STACKED))
 #define dPOPXnnrl_ul(X)	\
-    double right = POPn;				\
+    NV right = POPn;				\
     SV *leftsv = CAT2(X,s);				\
-    double left = USE_LEFT(leftsv) ? SvNV(leftsv) : 0.0
+    NV left = USE_LEFT(leftsv) ? SvNV(leftsv) : 0.0
 #define dPOPXiirl_ul(X) \
     IV right = POPi;					\
     SV *leftsv = CAT2(X,s);				\
@@ -151,7 +152,9 @@
 #define RETSETUNDEF	RETURNX(SETs(&PL_sv_undef))
 
 #define ARGTARG		PL_op->op_targ
-#define MAXARG		PL_op->op_private
+
+    /* See OPpTARGET_MY: */
+#define MAXARG		(PL_op->op_private & 15)
 
 #define SWITCHSTACK(f,t) \
     STMT_START {							\
@@ -209,8 +212,8 @@
 
 #define FORCE_SETs(sv) STMT_START { sv_setsv(TARG, (sv)); SETTARG; } STMT_END
 
-#define tryAMAGICun	tryAMAGICunSET
-#define tryAMAGICunSET(meth) tryAMAGICunW(meth,SETs,0,RETURN)
+#define tryAMAGICun(meth)	tryAMAGICunW(meth,SETsvUN,0,RETURN)
+#define tryAMAGICunSET(meth)	tryAMAGICunW(meth,SETs,0,RETURN)
 #define tryAMAGICunTARGET(meth, shift)					\
 	{ dSP; sp--; 	/* get TARGET from below PL_stack_sp */		\
 	    { dTARGETSTACKED; 						\
@@ -218,14 +221,20 @@
 
 #define setAGAIN(ref) sv = arg = ref;					\
   if (!SvROK(ref))							\
-      croak("Overloaded dereference did not return a reference");	\
+      Perl_croak(aTHX_ "Overloaded dereference did not return a reference");	\
   goto am_again;
 
 #define tryAMAGICunDEREF(meth) tryAMAGICunW(meth,setAGAIN,0,(void)0)
 
 #define opASSIGN (PL_op->op_flags & OPf_STACKED)
 #define SETsv(sv)	STMT_START {					\
-		if (opASSIGN) { sv_setsv(TARG, (sv)); SETTARG; }	\
+		if (opASSIGN || (SvFLAGS(TARG) & SVs_PADMY))		\
+		   { sv_setsv(TARG, (sv)); SETTARG; }			\
+		else SETs(sv); } STMT_END
+
+#define SETsvUN(sv)	STMT_START {					\
+		if (SvFLAGS(TARG) & SVs_PADMY)		\
+		   { sv_setsv(TARG, (sv)); SETTARG; }			\
 		else SETs(sv); } STMT_END
 
 /* newSVsv does not behave as advertised, so we copy missing

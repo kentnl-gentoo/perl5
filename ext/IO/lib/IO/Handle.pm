@@ -468,30 +468,12 @@ sub input_record_separator {
 }
 
 sub input_line_number {
-    # local $. does not work properly, so we need to do it some other
-    # way.  We use select, although this is not quite right.  What we
-    # really need to know is the file handle that was the subject of the
-    # last read, seek or tell.
-    my $now  = select;
-    my $keep = $.;
-    my $tell = tell qualify($_[0], caller) if ref($_[0]);
-    my $prev = $.;
-    $. = $_[1] if @_ > 1;
-    no strict "refs";
-    $tell = tell $now;
-    $. = $keep;
-    $prev;
-}
-
-=for when local $. works properly
-sub input_line_number {
     local $.;
     my $tell = tell qualify($_[0], caller) if ref($_[0]);
     my $prev = $.;
     $. = $_[1] if @_ > 1;
     $prev;
 }
-=cut
 
 sub format_page_number {
     my $old = new SelectSaver qualify($_[0], caller) if ref($_[0]);
@@ -565,18 +547,18 @@ sub format_write {
     }
 }
 
+# XXX undocumented
 sub fcntl {
     @_ == 3 || croak 'usage: $io->fcntl( OP, VALUE );';
-    my ($io, $op, $val) = @_;
-    my $r = fcntl($io, $op, $val);
-    defined $r && $r eq "0 but true" ? 0 : $r;
+    my ($io, $op) = @_;
+    return fcntl($io, $op, $_[2]);
 }
 
+# XXX undocumented
 sub ioctl {
     @_ == 3 || croak 'usage: $io->ioctl( OP, VALUE );';
-    my ($io, $op, $val) = @_;
-    my $r = ioctl($io, $op, $val);
-    defined $r && $r eq "0 but true" ? 0 : $r;
+    my ($io, $op) = @_;
+    return ioctl($io, $op, $_[2]);
 }
 
 # this sub is for compatability with older releases of IO that used

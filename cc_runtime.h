@@ -1,4 +1,5 @@
-#define DOOP(ppname) PUTBACK; PL_op = ppname(ARGS); SPAGAIN
+#define DOOP(ppname) PUTBACK; PL_op = ppname(aTHX); SPAGAIN
+#define CCPP(s)   OP * s(pTHX)
 
 #define PP_LIST(g) do {			\
 	dMARK;				\
@@ -43,7 +44,7 @@
 	JMPENV_PUSH(ret);			\
 	switch (ret) {				\
 	case 0:					\
-	    PL_op = ppaddr(ARGS);			\
+	    PL_op = ppaddr(aTHX);		\
 	    PL_retstack[PL_retstack_ix - 1] = Nullop;	\
 	    if (PL_op != nxt) CALLRUNOPS();		\
 	    JMPENV_POP;				\
@@ -52,46 +53,23 @@
 	case 2: JMPENV_POP; JMPENV_JUMP(2);	\
 	case 3:					\
 	    JMPENV_POP;				\
-	    if (PL_restartop != nxt)		\
+	    if (PL_restartop && PL_restartop != nxt)		\
 		JMPENV_JUMP(3);			\
 	}					\
 	PL_op = nxt;				\
 	SPAGAIN;				\
     } while (0)
 
-#define B_JMPENV_PUSH(cur_env,v) \
-    STMT_START {                                        \
-        cur_env.je_prev = PL_top_env;                   \
-        OP_REG_TO_MEM;                                  \
-        cur_env.je_ret = PerlProc_setjmp(cur_env.je_buf, 1);    \
-        OP_MEM_TO_REG;                                  \
-        PL_top_env = &cur_env;                          \
-        cur_env.je_mustcatch = FALSE;                   \
-        (v) = cur_env.je_ret;                           \
-    } STMT_END
-#define B_JMPENV_POP(cur_env) \
-    STMT_START { PL_top_env = cur_env.je_prev; } STMT_END
 
-#define B_JMPENV_JUMP(cur_env,v) \
-    STMT_START {                                                \
-        OP_REG_TO_MEM;                                          \
-        if (PL_top_env->je_prev)                                        \
-            PerlProc_longjmp(PL_top_env->je_buf, (v));                  \
-        if ((v) == 2)                                           \
-            PerlProc_exit(STATUS_NATIVE_EXPORT);                                \
-        PerlIO_printf(PerlIO_stderr(), "panic: top_env\n");     \
-        PerlProc_exit(1);                                               \
-    } STMT_END    
-
-
-#define PP_ENTERTRY(jmpbuf,label)  {		\
-	int ret;				\
-	B_JMPENV_PUSH(jmpbuf,ret);			\
-	switch (ret) {				\
-	case 1: B_JMPENV_POP(jmpbuf); B_JMPENV_JUMP(jmpbuf,1);	\
-	case 2: B_JMPENV_POP(jmpbuf); B_JMPENV_JUMP(jmpbuf,2);	\
-	case 3: B_JMPENV_POP(jmpbuf); SPAGAIN; goto label;\
-	}                                       \
-    } while (0)
-
-#define PP_LEAVETRY PL_top_env=PL_top_env->je_prev
+#define PP_ENTERTRY(jmpbuf,label)  \
+	STMT_START {                    \
+		int ret;		\
+		JMPENV_PUSH_ENV(jmpbuf,ret);			\
+		switch (ret) {				\
+			case 1: JMPENV_POP_ENV(jmpbuf); JMPENV_JUMP(1);\
+			case 2: JMPENV_POP_ENV(jmpbuf); JMPENV_JUMP(2);\
+			case 3: JMPENV_POP_ENV(jmpbuf); SPAGAIN; goto label;\
+		}                                       \
+	} STMT_END
+#define PP_LEAVETRY \
+	STMT_START{ PL_top_env=PL_top_env->je_prev; }STMT_END

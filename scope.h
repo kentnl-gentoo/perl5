@@ -48,12 +48,12 @@
 #define ENTER							\
     STMT_START {						\
 	push_scope();						\
-	DEBUG_l(WITH_THR(deb("ENTER scope %ld at %s:%d\n",	\
+	DEBUG_l(WITH_THR(Perl_deb(aTHX_ "ENTER scope %ld at %s:%d\n",	\
 		    PL_scopestack_ix, __FILE__, __LINE__)));	\
     } STMT_END
 #define LEAVE							\
     STMT_START {						\
-	DEBUG_l(WITH_THR(deb("LEAVE scope %ld at %s:%d\n",	\
+	DEBUG_l(WITH_THR(Perl_deb(aTHX_ "LEAVE scope %ld at %s:%d\n",	\
 		    PL_scopestack_ix, __FILE__, __LINE__)));	\
 	pop_scope();						\
     } STMT_END
@@ -81,17 +81,9 @@
 #define SAVEGENERICSV(s)	save_generic_svref((SV**)&(s))
 #define SAVEDELETE(h,k,l) \
 	  save_delete(SOFT_CAST(HV*)(h), SOFT_CAST(char*)(k), (I32)(l))
-#ifdef PERL_OBJECT
-#define CALLDESTRUCTOR this->*SSPOPDPTR
+#define CALLDESTRUCTOR (*SSPOPDPTR)
 #define SAVEDESTRUCTOR(f,p) \
-	  save_destructor((DESTRUCTORFUNC)(FUNC_NAME_TO_PTR(f)),	\
-			  SOFT_CAST(void*)(p))
-#else
-#define CALLDESTRUCTOR *SSPOPDPTR
-#define SAVEDESTRUCTOR(f,p) \
-	  save_destructor(SOFT_CAST(void(*)_((void*)))(FUNC_NAME_TO_PTR(f)), \
-			  SOFT_CAST(void*)(p))
-#endif
+	  save_destructor((DESTRUCTORFUNC_t)(f), SOFT_CAST(void*)(p))
 
 #define SAVESTACK_POS() \
     STMT_START {				\
@@ -159,8 +151,8 @@ typedef struct jmpenv JMPENV;
  * Function that catches/throws, and its callback for the
  *  body of protected processing.
  */
-typedef void *(CPERLscope(*protect_body_t)) _((va_list));
-typedef void *(CPERLscope(*protect_proc_t)) _((int *, protect_body_t, ...));
+typedef void *(CPERLscope(*protect_body_t)) (pTHX_ va_list);
+typedef void *(CPERLscope(*protect_proc_t)) (pTHX_ int *, protect_body_t, ...);
 
 /*
  * How to build the first jmpenv.
@@ -221,7 +213,7 @@ typedef void *(CPERLscope(*protect_proc_t)) _((int *, protect_body_t, ...));
 
 #define dJMPENV		JMPENV cur_env
 
-#define JMPENV_PUSH_INIT(THROWFUNC) \
+#define JMPENV_PUSH_INIT_ENV(cur_env,THROWFUNC) \
     STMT_START {					\
 	cur_env.je_throw = (THROWFUNC);			\
 	cur_env.je_ret = -1;				\
@@ -230,22 +222,32 @@ typedef void *(CPERLscope(*protect_proc_t)) _((int *, protect_body_t, ...));
 	PL_top_env = &cur_env;				\
 	OP_REG_TO_MEM;					\
     } STMT_END
-#define JMPENV_POST_CATCH \
+
+#define JMPENV_PUSH_INIT(THROWFUNC) JMPENV_PUSH_INIT_ENV(cur_env,THROWFUNC) 
+
+#define JMPENV_POST_CATCH_ENV(cur_env) \
     STMT_START {					\
 	OP_MEM_TO_REG;					\
 	PL_top_env = &cur_env;				\
     } STMT_END
 
-#define JMPENV_PUSH(v) \
+#define JMPENV_POST_CATCH JMPENV_POST_CATCH_ENV(cur_env)
+
+
+#define JMPENV_PUSH_ENV(cur_env,v) \
     STMT_START {					\
-	JMPENV_PUSH_INIT(NULL);				\
-	EXCEPT_SET(PerlProc_setjmp(cur_env.je_buf, 1));	\
-	JMPENV_POST_CATCH;				\
-	(v) = EXCEPT_GET;				\
+	JMPENV_PUSH_INIT_ENV(cur_env,NULL);				\
+	EXCEPT_SET_ENV(cur_env,PerlProc_setjmp(cur_env.je_buf, 1));	\
+	JMPENV_POST_CATCH_ENV(cur_env);				\
+	(v) = EXCEPT_GET_ENV(cur_env);				\
     } STMT_END
 
-#define JMPENV_POP \
+#define JMPENV_PUSH(v) JMPENV_PUSH_ENV(cur_env,v) 
+
+#define JMPENV_POP_ENV(cur_env) \
     STMT_START { PL_top_env = cur_env.je_prev; } STMT_END
+
+#define JMPENV_POP  JMPENV_POP_ENV(cur_env) 
 
 #define JMPENV_JUMP(v) \
     STMT_START {						\
@@ -262,8 +264,10 @@ typedef void *(CPERLscope(*protect_proc_t)) _((int *, protect_body_t, ...));
 	PerlProc_exit(1);					\
     } STMT_END
 
-#define EXCEPT_GET	(cur_env.je_ret)
-#define EXCEPT_SET(v)	(cur_env.je_ret = (v))
+#define EXCEPT_GET_ENV(cur_env)	(cur_env.je_ret)
+#define EXCEPT_GET EXCEPT_GET_ENV(cur_env)
+#define EXCEPT_SET_ENV(cur_env,v)	(cur_env.je_ret = (v))
+#define EXCEPT_SET(v) EXCEPT_SET_ENV(cur_env,v)
 
 #define CATCH_GET	(PL_top_env->je_mustcatch)
 #define CATCH_SET(v)	(PL_top_env->je_mustcatch = (v))

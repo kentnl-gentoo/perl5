@@ -1,8 +1,13 @@
 =head1 NAME
 
-perldelta - what's new for perl5.006 (as of 5.005_56)
+perldelta - what's new for perl v5.6 (as of v5.005_58)
 
 =head1 DESCRIPTION
+
+This is an unsupported alpha release, meant for intrepid Perl developers
+only.  The included sources may not even build correctly on some platforms.
+Subscribing to perl5-porters is the best way to monitor and contribute
+to the progress of development releases (see www.perl.org for info).
 
 This document describes differences between the 5.005 release and this one.
 
@@ -10,7 +15,7 @@ This document describes differences between the 5.005 release and this one.
 
 =head2 Perl Source Incompatibilities
 
-None known at this time.
+TODO
 
 =head2 C Source Incompatibilities
 
@@ -19,13 +24,31 @@ None known at this time.
 =item C<PERL_POLLUTE>
 
 Release 5.005 grandfathered old global symbol names by providing preprocessor
-macros for extension source compatibility.  As of release 5.006, these
+macros for extension source compatibility.  As of release 5.6, these
 preprocessor definitions are not available by default.  You need to explicitly
 compile perl with C<-DPERL_POLLUTE> to get these definitions.  For
 extensions still using the old symbols, this option can be
 specified via MakeMaker:
 
     perl Makefile.PL POLLUTE=1
+
+=item C<PERL_IMPLICIT_CONTEXT>
+
+This new build option provides a set of macros for all API functions
+such that an implicit interpreter/thread context argument is passed to
+every API function.  As a result of this, something like C<sv_setsv(foo,bar)>
+amounts to a macro invocation that actually translates to
+C<Perl_sv_setsv(my_perl,foo,bar)>.  While this is generally expected
+to not have any significant source compatibility issues, the difference
+between a macro and a real function call will need to be considered.
+
+Note that the above issue is not relevant to the default build of
+Perl, whose interfaces continue to match those of prior versions
+(but subject to the other options described here).
+
+For testing purposes, the 5.005_58 release automatically enables
+PERL_IMPLICIT_CONTEXT whenever Perl is built with -Dusethreads or
+-Dusemultiplicity.
 
 =item C<PERL_POLLUTE_MALLOC>
 
@@ -40,7 +63,7 @@ be called in programs that used Perl's malloc.  Previous versions of Perl
 have allowed this behaviour to be suppressed with the HIDEMYMALLOC and
 EMBEDMYMALLOC preprocessor definitions.
 
-As of release 5.006, Perl's malloc family of functions have default names
+As of release 5.6, Perl's malloc family of functions have default names
 distinct from the system versions.  You need to explicitly compile perl with
 C<-DPERL_POLLUTE_MALLOC> to get the older behaviour.  HIDEMYMALLOC
 and EMBEDMYMALLOC have no effect, since the behaviour they enabled is now
@@ -81,8 +104,13 @@ from the change.
 
 =head2 Binary Incompatibilities
 
-This release is not binary compatible with the 5.005 release or its
-maintenance versions.
+The default build of this release can be made binary compatible with the
+5.005 release or its maintenance versions.  Add -DPERL_BINCOMPAT_5005
+to ccflags in config.sh to achieve this.  See INSTALL for further
+information about adding build flags to config.sh.
+
+The usethreads or usemultiplicity builds are B<not> binary compatible
+with the corresponding builds in 5.005.
 
 =head1 Core Changes
 
@@ -95,7 +123,8 @@ scope.  See L<utf8> for more information.
 =head2 Lexically scoped warning categories
 
 You can now control the granularity of warnings emitted by perl at a finer
-level using the C<use warning> pragma.  See L<warning> for details.
+level using the C<use warning> pragma.  See L<warning> and L<perllexwarn>
+for details.
 
 =head2 Binary numbers supported
 
@@ -142,6 +171,11 @@ behaviour of:
 
 remains unchanged.  See L<perlop>.
 
+=head2 POSIX character class syntax [: :] supported
+
+For example to match alphabetic characters use /[[:alpha:]]/.
+See L<perlre> for details.
+
 =head2 Improved C<qw//> operator
 
 The C<qw//> operator is now evaluated at compile time into a true list
@@ -164,6 +198,11 @@ strings.  See L<perlfunc/"pack">.
 
 The new format type modifier '!' is useful for packing and unpacking
 native shorts, ints, and longs.  See L<perlfunc/"pack">.
+
+=head2 pack() and unpack() support counted strings
+
+The template character '#' can be used to specify a counted string
+type to be packed or unpacked.  See L<perlfunc/"pack">.
 
 =head2 $^X variables may now have names longer than one character
 
@@ -229,6 +268,13 @@ was attempted.  This mostly eliminates confusing
 buffering mishaps suffered by users unaware of how Perl internally
 handles I/O.
 
+=head2 Better diagnostics on meaningless filehandle operations
+
+Constructs such as C<open(E<lt>FHE<gt>)> and C<close(E<lt>FHE<gt>)>
+are compile time errors.  Attempting to read from filehandles that
+were opened only for writing will now produce warnings (just as
+writing to read-only filehandles does).
+
 =head1 Supported Platforms
 
 =over 4
@@ -253,6 +299,10 @@ GNU/Hurd is now supported.
 =item *
 
 Rhapsody is now supported.
+
+=item *
+
+EPOC is is now supported (on Psion 5).
 
 =back
 
@@ -295,6 +345,20 @@ Verify operations that access pad objects (lexicals and temporaries).
 =head2 Modules
 
 =over 4
+
+=item ByteLoader
+
+The ByteLoader is a dedication extension to generate and run
+Perl bytecode.  See L<ByteLoader>.
+
+=item B
+
+The Perl Compiler suite has been extensively reworked for this
+release.
+
+=item Devel::DProf
+
+Devel::DProf, a Perl source code profiler has been added.
 
 =item Dumpvalue
 
@@ -424,6 +488,10 @@ See L<perldbmfilter> for further information.
 
 C<use utf8> to enable UTF-8 and Unicode support.
 
+C<use caller 'encoding'> allows modules to inherit pragmatic attributes
+from the caller's context.  C<encoding> is currently the only supported
+attribute.
+
 Lexical warnings pragma, C<use warning;>, to control optional warnings.
 
 C<use filetest> to control the behaviour of filetests (C<-r> C<-w> ...).
@@ -463,15 +531,35 @@ A tutorial on managing class data for object modules.
 by Perl.  This combination appears in an interpolated variable or a
 C<'>-delimited regular expression.
 
-=item Unrecognized escape \\%c passed through
+=item Filehandle %s opened only for output
 
-(W) You used a backslash-character combination which is not recognized
-by Perl.
+(W) You tried to read from a filehandle opened only for writing.  If you
+intended it to be a read-write filehandle, you needed to open it with
+"+E<lt>" or "+E<gt>" or "+E<gt>E<gt>" instead of with "E<lt>" or nothing.  If
+you intended only to read from the file, use "E<lt>".  See
+L<perlfunc/open>.
 
 =item Missing command in piped open
 
 (W) You used the C<open(FH, "| command")> or C<open(FH, "command |")>
 construction, but the command was missing or blank.
+
+=item Unrecognized escape \\%c passed through
+
+(W) You used a backslash-character combination which is not recognized
+by Perl.
+
+=item defined(@array) is deprecated
+
+(D) defined() is not usually useful on arrays because it checks for an
+undefined I<scalar> value.  If you want to see if the array is empty,
+just use C<if (@array) { # not empty }> for example.  
+
+=item defined(%hash) is deprecated
+
+(D) defined() is not usually useful on hashes because it checks for an
+undefined I<scalar> value.  If you want to see if the hash is empty,
+just use C<if (%hash) { # not empty }> for example.  
 
 =head1 Obsolete Diagnostics
 
@@ -479,10 +567,17 @@ Todo.
 
 =head1 Configuration Changes
 
+=head2 installusrbinperl
+
 You can use "Configure -Uinstallusrbinperl" which causes installperl
 to skip installing perl also as /usr/bin/perl.  This is useful if you
 prefer not to modify /usr/bin for some reason or another but harmful
 because many scripts assume to find Perl in /usr/bin/perl.
+
+=head2 SOCKS support
+
+You can use "Configure -Dusesocks" which causes Perl to probe
+for the SOCKS proxy protocol library, http://www.socks.nec.com/
 
 =head1 BUGS
 

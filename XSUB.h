@@ -1,17 +1,9 @@
 #define ST(off) PL_stack_base[ax + (off)]
 
-#ifdef CAN_PROTOTYPE
-#  ifdef PERL_OBJECT
-#    define XS(name) void name(CV* cv, CPerlObj* pPerl)
-#  else
-#    if defined(CYGWIN32) && defined(USE_DYNAMIC_LOADING)
-#      define XS(name) __declspec(dllexport) void name(CV* cv)
-#    else
-#      define XS(name) void name(CV* cv)
-#    endif
-#  endif
+#if defined(CYGWIN32) && defined(USE_DYNAMIC_LOADING)
+#  define XS(name) __declspec(dllexport) void name(pTHXo_ CV* cv)
 #else
-#  define XS(name) void name(cv) CV* cv;
+#  define XS(name) void name(pTHXo_ CV* cv)
 #endif
 
 #define dXSARGS				\
@@ -29,9 +21,9 @@
 #  define XSINTERFACE_CVT(ret,name) ret (*name)()
 #endif
 #define dXSFUNCTION(ret)		XSINTERFACE_CVT(ret,XSFUNCTION)
-#define XSINTERFACE_FUNC(ret,cv,f)	((XSINTERFACE_CVT(ret,))(f))
+#define XSINTERFACE_FUNC(ret,cv,f)	((XSINTERFACE_CVT(ret,cv))(f))
 #define XSINTERFACE_FUNC_SET(cv,f)	\
-		CvXSUBANY(cv).any_dptr = (void (*) _((void*)))(f)
+		CvXSUBANY(cv).any_dptr = (void (*) (pTHXo_ void*))(f)
 
 #define XSRETURN(off)					\
     STMT_START {					\
@@ -69,14 +61,14 @@
 	    tmpsv = ST(1);						\
 	else {								\
 	    /* XXX GV_ADDWARN */					\
-	    tmpsv = perl_get_sv(form("%s::%s", module,			\
-				  vn = "XS_VERSION"), FALSE);		\
+	    tmpsv = get_sv(Perl_form(aTHX_ "%s::%s", module,		\
+				vn = "XS_VERSION"), FALSE);		\
 	    if (!tmpsv || !SvOK(tmpsv))					\
-		tmpsv = perl_get_sv(form("%s::%s", module,		\
-				      vn = "VERSION"), FALSE);		\
+		tmpsv = get_sv(Perl_form(aTHX_ "%s::%s", module,	\
+				    vn = "VERSION"), FALSE);		\
 	}								\
 	if (tmpsv && (!SvOK(tmpsv) || strNE(XS_VERSION, SvPV(tmpsv, n_a))))	\
-	    croak("%s object version %s does not match %s%s%s%s %_",	\
+	    Perl_croak(aTHX_ "%s object version %s does not match %s%s%s%s %_",	\
 		  module, XS_VERSION,					\
 		  vn ? "$" : "", vn ? module : "", vn ? "::" : "",	\
 		  vn ? vn : "bootstrap parameter", tmpsv);		\
@@ -85,38 +77,7 @@
 #  define XS_VERSION_BOOTCHECK
 #endif
 
-#ifdef PERL_CAPI
-#  define VTBL_sv		get_vtbl(want_vtbl_sv)
-#  define VTBL_env		get_vtbl(want_vtbl_env)
-#  define VTBL_envelem		get_vtbl(want_vtbl_envelem)
-#  define VTBL_sig		get_vtbl(want_vtbl_sig)
-#  define VTBL_sigelem		get_vtbl(want_vtbl_sigelem)
-#  define VTBL_pack		get_vtbl(want_vtbl_pack)
-#  define VTBL_packelem		get_vtbl(want_vtbl_packelem)
-#  define VTBL_dbline		get_vtbl(want_vtbl_dbline)
-#  define VTBL_isa		get_vtbl(want_vtbl_isa)
-#  define VTBL_isaelem		get_vtbl(want_vtbl_isaelem)
-#  define VTBL_arylen		get_vtbl(want_vtbl_arylen)
-#  define VTBL_glob		get_vtbl(want_vtbl_glob)
-#  define VTBL_mglob		get_vtbl(want_vtbl_mglob)
-#  define VTBL_nkeys		get_vtbl(want_vtbl_nkeys)
-#  define VTBL_taint		get_vtbl(want_vtbl_taint)
-#  define VTBL_substr		get_vtbl(want_vtbl_substr)
-#  define VTBL_vec		get_vtbl(want_vtbl_vec)
-#  define VTBL_pos		get_vtbl(want_vtbl_pos)
-#  define VTBL_bm		get_vtbl(want_vtbl_bm)
-#  define VTBL_fm		get_vtbl(want_vtbl_fm)
-#  define VTBL_uvar		get_vtbl(want_vtbl_uvar)
-#  define VTBL_defelem		get_vtbl(want_vtbl_defelem)
-#  define VTBL_regexp		get_vtbl(want_vtbl_regexp)
-#  define VTBL_regdata		get_vtbl(want_vtbl_regdata)
-#  define VTBL_regdatum		get_vtbl(want_vtbl_regdatum)
-#  ifdef USE_LOCALE_COLLATE
-#    define VTBL_collxfrm	get_vtbl(want_vtbl_collxfrm)
-#  endif
-#  define VTBL_amagic		get_vtbl(want_vtbl_amagic)
-#  define VTBL_amagicelem	get_vtbl(want_vtbl_amagicelem)
-#else
+#if 1		/* for compatibility */
 #  define VTBL_sv		&PL_vtbl_sv
 #  define VTBL_env		&PL_vtbl_env
 #  define VTBL_envelem		&PL_vtbl_envelem
@@ -149,39 +110,22 @@
 #  define VTBL_amagicelem	&PL_vtbl_amagicelem
 #endif
 
-#ifdef PERL_OBJECT
+#if defined(PERL_OBJECT) || defined(PERL_CAPI)
+#  include "perlapi.h"
 #  include "objXSUB.h"
+#endif	/* PERL_OBJECT || PERL_CAPI */
 
-#  undef  PERL_OBJECT_THIS
-#  define PERL_OBJECT_THIS pPerl
-#  undef  PERL_OBJECT_THIS_
-#  define PERL_OBJECT_THIS_ pPerl,
-
-#  undef  SAVEDESTRUCTOR
-#  define SAVEDESTRUCTOR(f,p) \
-	pPerl->Perl_save_destructor((FUNC_NAME_TO_PTR(f)),(p))
-
-#  ifdef WIN32
-#    ifndef WIN32IO_IS_STDIO
-#      undef	errno
-#      define	errno			ErrorNo()
-#    endif
-#    undef  ErrorNo
-#    define ErrorNo			pPerl->ErrorNo
-#    undef  NtCrypt
-#    define NtCrypt			pPerl->NtCrypt
-#    undef  NtGetLib
-#    define NtGetLib			pPerl->NtGetLib
-#    undef  NtGetArchLib
-#    define NtGetArchLib		pPerl->NtGetArchLib
-#    undef  NtGetSiteLib
-#    define NtGetSiteLib		pPerl->NtGetSiteLib
-#    undef  NtGetBin
-#    define NtGetBin			pPerl->NtGetBin
-#    undef  NtGetDebugScriptStr
-#    define NtGetDebugScriptStr		pPerl->NtGetDebugScriptStr
-#  endif /* WIN32 */
-
+#if defined(PERL_CAPI)
+#  undef aTHX
+#  undef aTHX_
+#  undef _aTHX
+#  if defined(PERL_NO_GET_CONTEXT)
+#    define aTHX	 my_perl
+#  else
+#    define aTHX	 PERL_GET_INTERP
+#  endif /* PERL_NO_GET_CONTEXT */
+#  define aTHX_	aTHX,
+#  define _aTHX	,aTHX
 #  ifndef NO_XSLOCKS
 #    undef closedir
 #    undef opendir
@@ -333,13 +277,5 @@
 #    define shutdown		PerlSock_shutdown
 #    define socket		PerlSock_socket
 #    define socketpair		PerlSock_socketpair
-
-#    ifdef WIN32
-#      include "XSlock.h"
-#    endif  /* WIN32 */
 #  endif  /* NO_XSLOCKS */
-#else
-#  ifdef PERL_CAPI
-#    include "perlCAPI.h"
-#  endif
-#endif	/* PERL_OBJECT */
+#endif  /* PERL_CAPI */

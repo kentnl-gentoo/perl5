@@ -332,11 +332,11 @@ invert_opset function.
 
     cond_expr flip flop andassign orassign and or xor
 
-    warn die lineseq nextstate scope enter leave
+    warn die lineseq nextstate scope enter leave setstate
 
     rv2cv anoncode prototype
 
-    entersub leavesub return method -- XXX loops via recursion?
+    entersub leavesub return method method_named -- XXX loops via recursion?
 
     leaveeval -- needed for Safe to operate, is safe without entereval
 

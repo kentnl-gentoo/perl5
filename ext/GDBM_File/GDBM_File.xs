@@ -54,7 +54,7 @@ not_here(char *s)
  * perl free() it when it deallocates the SV, depending on whether
  * perl uses malloc()/free() or not. */
 static void
-output_datum(SV *arg, char *str, int size)
+output_datum(pTHX_ SV *arg, char *str, int size)
 {
 #if !defined(MYMALLOC) || (defined(MYMALLOC) && defined(PERL_POLLUTE_MALLOC))
 	sv_usepvn(arg, str, size);
@@ -256,7 +256,6 @@ gdbm_STORE(db, key, value, flags = GDBM_REPLACE)
 		croak("No write permission to gdbm file");
 	    croak("gdbm store returned %d, errno %d, key \"%.*s\"",
 			RETVAL,errno,key.dsize,key.dptr);
-	    gdbm_clearerr(db);
 	}
 
 #define gdbm_DELETE(db,key)			gdbm_delete(db->dbp,key)
@@ -305,7 +304,8 @@ gdbm_setopt (db, optflag, optval, optlen)
 #define setFilter(type)					\
 	{						\
 	    if (db->type)				\
-	        RETVAL = newSVsv(db->type) ; 		\
+	        RETVAL = sv_mortalcopy(db->type) ; 	\
+	    ST(0) = RETVAL ;				\
 	    if (db->type && (code == &PL_sv_undef)) {	\
                 SvREFCNT_dec(db->type) ;		\
 	        db->type = NULL ;			\
@@ -327,8 +327,6 @@ filter_fetch_key(db, code)
 	SV *		RETVAL = &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_fetch_key) ;
-	OUTPUT:
-	    RETVAL
 
 SV *
 filter_store_key(db, code)
@@ -337,8 +335,6 @@ filter_store_key(db, code)
 	SV *		RETVAL =  &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_store_key) ;
-	OUTPUT:
-	    RETVAL
 
 SV *
 filter_fetch_value(db, code)
@@ -347,8 +343,6 @@ filter_fetch_value(db, code)
 	SV *		RETVAL =  &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_fetch_value) ;
-	OUTPUT:
-	    RETVAL
 
 SV *
 filter_store_value(db, code)
@@ -357,6 +351,4 @@ filter_store_value(db, code)
 	SV *		RETVAL =  &PL_sv_undef ;
 	CODE:
 	    setFilter(filter_store_value) ;
-	OUTPUT:
-	    RETVAL
 

@@ -7,18 +7,18 @@
  *
  */
 
+#define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#include "INTERN.h"
 
 #ifdef PERL_OBJECT
 #undef PL_op_name
 #undef PL_opargs 
 #undef PL_op_desc
-#define PL_op_name (pPerl->Perl_get_op_names())
-#define PL_opargs (pPerl->Perl_get_opargs())
-#define PL_op_desc (pPerl->Perl_get_op_descs())
+#define PL_op_name (get_op_names())
+#define PL_opargs (get_opargs())
+#define PL_op_desc (get_op_descs())
 #endif
 
 #ifdef PerlIO
@@ -53,15 +53,14 @@ typedef enum {
     OPc_UNOP,	/* 2 */
     OPc_BINOP,	/* 3 */
     OPc_LOGOP,	/* 4 */
-    OPc_CONDOP,	/* 5 */
-    OPc_LISTOP,	/* 6 */
-    OPc_PMOP,	/* 7 */
-    OPc_SVOP,	/* 8 */
-    OPc_GVOP,	/* 9 */
-    OPc_PVOP,	/* 10 */
-    OPc_CVOP,	/* 11 */
-    OPc_LOOP,	/* 12 */
-    OPc_COP	/* 13 */
+    OPc_LISTOP,	/* 5 */
+    OPc_PMOP,	/* 6 */
+    OPc_SVOP,	/* 7 */
+    OPc_GVOP,	/* 8 */
+    OPc_PVOP,	/* 9 */
+    OPc_CVOP,	/* 10 */
+    OPc_LOOP,	/* 11 */
+    OPc_COP	/* 12 */
 } opclass;
 
 static char *opclassnames[] = {
@@ -70,7 +69,6 @@ static char *opclassnames[] = {
     "B::UNOP",
     "B::BINOP",
     "B::LOGOP",
-    "B::CONDOP",
     "B::LISTOP",
     "B::PMOP",
     "B::SVOP",
@@ -83,8 +81,10 @@ static char *opclassnames[] = {
 
 static int walkoptree_debug = 0;	/* Flag for walkoptree debug hook */
 
+static SV *specialsv_list[4];
+
 static opclass
-cc_opclass(OP *o)
+cc_opclass(pTHX_ OP *o)
 {
     if (!o)
 	return OPc_NULL;
@@ -107,9 +107,6 @@ cc_opclass(OP *o)
 
     case OA_LOGOP:
 	return OPc_LOGOP;
-
-    case OA_CONDOP:
-	return OPc_CONDOP;
 
     case OA_LISTOP:
 	return OPc_LISTOP;
@@ -186,19 +183,19 @@ cc_opclass(OP *o)
 }
 
 static char *
-cc_opclassname(OP *o)
+cc_opclassname(pTHX_ OP *o)
 {
-    return opclassnames[cc_opclass(o)];
+    return opclassnames[cc_opclass(aTHX_ o)];
 }
 
 static SV *
-make_sv_object(SV *arg, SV *sv)
+make_sv_object(pTHX_ SV *arg, SV *sv)
 {
     char *type = 0;
     IV iv;
     
-    for (iv = 0; iv < sizeof(PL_specialsv_list)/sizeof(SV*); iv++) {
-	if (sv == PL_specialsv_list[iv]) {
+    for (iv = 0; iv < sizeof(specialsv_list)/sizeof(SV*); iv++) {
+	if (sv == specialsv_list[iv]) {
 	    type = "B::SPECIAL";
 	    break;
 	}
@@ -212,14 +209,14 @@ make_sv_object(SV *arg, SV *sv)
 }
 
 static SV *
-make_mg_object(SV *arg, MAGIC *mg)
+make_mg_object(pTHX_ SV *arg, MAGIC *mg)
 {
     sv_setiv(newSVrv(arg, "B::MAGIC"), (IV)mg);
     return arg;
 }
 
 static SV *
-cstring(SV *sv)
+cstring(pTHX_ SV *sv)
 {
     SV *sstr = newSVpvn("", 0);
     STRLEN len;
@@ -272,7 +269,7 @@ cstring(SV *sv)
 }
 
 static SV *
-cchar(SV *sv)
+cchar(pTHX_ SV *sv)
 {
     SV *sstr = newSVpvn("'", 1);
     STRLEN n_a;
@@ -311,76 +308,8 @@ cchar(SV *sv)
     return sstr;
 }
 
-#ifdef INDIRECT_BGET_MACROS
-void freadpv(U32 len, void *data)
-{
-    New(666, pv.xpv_pv, len, char);
-    fread(pv.xpv_pv, 1, len, (FILE*)data);
-    pv.xpv_len = len;
-    pv.xpv_cur = len - 1;
-}
-
-void byteload_fh(InputStream fp)
-{
-    struct bytestream bs;
-    bs.data = fp;
-    bs.fgetc = (int(*) _((void*)))fgetc;
-    bs.fread = (int(*) _((char*,size_t,size_t,void*)))fread;
-    bs.freadpv = freadpv;
-    byterun(bs);
-}
-
-static int fgetc_fromstring(void *data)
-{
-    char **strp = (char **)data;
-    return *(*strp)++;
-}
-
-static int fread_fromstring(char *argp, size_t elemsize, size_t nelem,
-			    void *data)
-{
-    char **strp = (char **)data;
-    size_t len = elemsize * nelem;
-    
-    memcpy(argp, *strp, len);
-    *strp += len;
-    return (int)len;
-}
-
-static void freadpv_fromstring(U32 len, void *data)
-{
-    char **strp = (char **)data;
-    
-    New(666, pv.xpv_pv, len, char);
-    memcpy(pv.xpv_pv, *strp, len);
-    pv.xpv_len = len;
-    pv.xpv_cur = len - 1;
-    *strp += len;
-}    
-
-void byteload_string(char *str)
-{
-    struct bytestream bs;
-    bs.data = &str;
-    bs.fgetc = fgetc_fromstring;
-    bs.fread = fread_fromstring;
-    bs.freadpv = freadpv_fromstring;
-    byterun(bs);
-}
-#else
-void byteload_fh(InputStream fp)
-{
-    byterun(fp);
-}
-
-void byteload_string(char *str)
-{
-    croak("Must compile with -DINDIRECT_BGET_MACROS for byteload_string");
-}    
-#endif /* INDIRECT_BGET_MACROS */
-
 void
-walkoptree(SV *opsv, char *method)
+walkoptree(pTHX_ SV *opsv, char *method)
 {
     dSP;
     OP *o;
@@ -403,8 +332,8 @@ walkoptree(SV *opsv, char *method)
 	OP *kid;
 	for (kid = ((UNOP*)o)->op_first; kid; kid = kid->op_sibling) {
 	    /* Use the same opsv. Rely on methods not to mess it up. */
-	    sv_setiv(newSVrv(opsv, cc_opclassname(kid)), (IV)kid);
-	    walkoptree(opsv, method);
+	    sv_setiv(newSVrv(opsv, cc_opclassname(aTHX_ kid)), (IV)kid);
+	    walkoptree(aTHX_ opsv, method);
 	}
     }
 }
@@ -413,7 +342,6 @@ typedef OP	*B__OP;
 typedef UNOP	*B__UNOP;
 typedef BINOP	*B__BINOP;
 typedef LOGOP	*B__LOGOP;
-typedef CONDOP	*B__CONDOP;
 typedef LISTOP	*B__LISTOP;
 typedef PMOP	*B__PMOP;
 typedef SVOP	*B__SVOP;
@@ -446,7 +374,10 @@ BOOT:
 {
     HV *stash = gv_stashpvn("B", 1, TRUE);
     AV *export_ok = perl_get_av("B::EXPORT_OK",TRUE);
-    INIT_SPECIALSV_LIST;
+    specialsv_list[0] = Nullsv;
+    specialsv_list[1] = &PL_sv_undef;
+    specialsv_list[2] = &PL_sv_yes;
+    specialsv_list[3] = &PL_sv_no;
 #include "defsubs.h"
 }
 
@@ -494,6 +425,8 @@ void
 walkoptree(opsv, method)
 	SV *	opsv
 	char *	method
+    CODE:
+	walkoptree(aTHX_ opsv, method);
 
 int
 walkoptree_debug(...)
@@ -503,19 +436,6 @@ walkoptree_debug(...)
 	    walkoptree_debug = 1;
     OUTPUT:
 	RETVAL
-
-int
-byteload_fh(fp)
-	InputStream    fp
-    CODE:
-	byteload_fh(fp);
-	RETVAL = 1;
-    OUTPUT:
-	RETVAL
-
-void
-byteload_string(str)
-	char *	str
 
 #define address(sv) (IV)sv
 
@@ -590,10 +510,18 @@ minus_c()
 SV *
 cstring(sv)
 	SV *	sv
+    CODE:
+	RETVAL = cstring(aTHX_ sv);
+    OUTPUT:
+	RETVAL
 
 SV *
 cchar(sv)
 	SV *	sv
+    CODE:
+	RETVAL = cchar(aTHX_ sv);
+    OUTPUT:
+	RETVAL
 
 void
 threadsv_names()
@@ -628,11 +556,19 @@ OP_sibling(o)
 	B::OP		o
 
 char *
+OP_name(o)
+	B::OP		o
+    CODE:
+	ST(0) = sv_newmortal();
+	sv_setpv(ST(0), PL_op_name[o->op_type]);
+
+
+char *
 OP_ppaddr(o)
 	B::OP		o
     CODE:
 	ST(0) = sv_newmortal();
-	sv_setpvn(ST(0), "pp_", 3);
+	sv_setpvn(ST(0), "Perl_pp_", 8);
 	sv_catpv(ST(0), PL_op_name[o->op_type]);
 
 char *
@@ -683,19 +619,6 @@ B::OP
 LOGOP_other(o)
 	B::LOGOP	o
 
-#define CONDOP_true(o)	o->op_true
-#define CONDOP_false(o)	o->op_false
-
-MODULE = B	PACKAGE = B::CONDOP		PREFIX = CONDOP_
-
-B::OP
-CONDOP_true(o)
-	B::CONDOP	o
-
-B::OP
-CONDOP_false(o)
-	B::CONDOP	o
-
 #define LISTOP_children(o)	o->op_children
 
 MODULE = B	PACKAGE = B::LISTOP		PREFIX = LISTOP_
@@ -727,7 +650,7 @@ PMOP_pmreplroot(o)
 		     (IV)root);
 	}
 	else {
-	    sv_setiv(newSVrv(ST(0), cc_opclassname(root)), (IV)root);
+	    sv_setiv(newSVrv(ST(0), cc_opclassname(aTHX_ root)), (IV)root);
 	}
 
 B::OP
@@ -864,6 +787,11 @@ IV
 SvIVX(sv)
 	B::IV	sv
 
+UV 
+SvUVX(sv) 
+	B::IV   sv
+                      
+
 MODULE = B	PACKAGE = B::IV
 
 #define needs64bits(sv) ((I32)SvIVX(sv) != SvIVX(sv))
@@ -919,6 +847,14 @@ SvPV(sv)
 	ST(0) = sv_newmortal();
 	sv_setpvn(ST(0), SvPVX(sv), SvCUR(sv));
 
+STRLEN
+SvLEN(sv)
+	B::PV	sv
+
+STRLEN
+SvCUR(sv)
+	B::PV	sv
+
 MODULE = B	PACKAGE = B::PVMG	PREFIX = Sv
 
 void
@@ -927,7 +863,7 @@ SvMAGIC(sv)
 	MAGIC *	mg = NO_INIT
     PPCODE:
 	for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic)
-	    XPUSHs(make_mg_object(sv_newmortal(), mg));
+	    XPUSHs(make_mg_object(aTHX_ sv_newmortal(), mg));
 
 MODULE = B	PACKAGE = B::PVMG
 
@@ -1166,7 +1102,7 @@ AvARRAY(av)
 	    SV **svp = AvARRAY(av);
 	    I32 i;
 	    for (i = 0; i <= AvFILL(av); i++)
-		XPUSHs(make_sv_object(sv_newmortal(), svp[i]));
+		XPUSHs(make_sv_object(aTHX_ sv_newmortal(), svp[i]));
 	}
 
 MODULE = B	PACKAGE = B::AV
@@ -1267,6 +1203,6 @@ HvARRAY(hv)
 	    EXTEND(sp, HvKEYS(hv) * 2);
 	    while (sv = hv_iternextsv(hv, &key, &len)) {
 		PUSHs(newSVpvn(key, len));
-		PUSHs(make_sv_object(sv_newmortal(), sv));
+		PUSHs(make_sv_object(aTHX_ sv_newmortal(), sv));
 	    }
 	}

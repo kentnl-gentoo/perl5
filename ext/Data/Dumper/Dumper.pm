@@ -259,14 +259,22 @@ sub _dump {
       }
     }
 
+    if ($realpack) {
+      if ($realpack eq 'Regexp') {
+	$out = "$val";
+	$out =~ s,/,\\/,g;
+	return "qr/$out/";
+      }
+      else {          # we have a blessed ref
+	$out = $s->{'bless'} . '( ';
+	$blesspad = $s->{apad};
+	$s->{apad} .= '       ' if ($s->{indent} >= 2);
+      }
+    }
+
     $s->{level}++;
     $ipad = $s->{xpad} x $s->{level};
 
-    if ($realpack) {          # we have a blessed ref
-      $out = $s->{'bless'} . '( ';
-      $blesspad = $s->{apad};
-      $s->{apad} .= '       ' if ($s->{indent} >= 2);
-    }
     
     if ($realtype eq 'SCALAR') {
       if ($realpack) {
@@ -389,7 +397,7 @@ sub _dump {
     elsif (!defined($val)) {
       $out .= "undef";
     }
-    elsif ($val =~ /^-?[1-9]\d{0,8}$/) { # safe decimal number
+    elsif ($val =~ /^(?:0|-?[1-9]\d{0,8})$/) { # safe decimal number
       $out .= $val;
     }
     else {				 # string

@@ -25,7 +25,7 @@
 #    define PERL_IN_XSUB_RE
 #  endif
 /* need access to debugger hooks */
-#  ifndef DEBUGGING
+#  if defined(PERL_EXT_RE_DEBUG) && !defined(DEBUGGING)
 #    define DEBUGGING
 #  endif
 #endif
@@ -35,9 +35,12 @@
 #  define Perl_regexec_flags my_regexec
 #  define Perl_regdump my_regdump
 #  define Perl_regprop my_regprop
+#  define Perl_re_intuit_start my_re_intuit_start
 /* *These* symbols are masked to allow static link. */
 #  define Perl_pregexec my_pregexec
 #  define Perl_reginitcolors my_reginitcolors 
+
+#  define PERL_NO_GET_CONTEXT
 #endif 
 
 /*SUPPRESS 112*/
@@ -73,7 +76,14 @@
  * regular-expression syntax might require a total rethink.
  */
 #include "EXTERN.h"
+#define PERL_IN_REGEXEC_C
 #include "perl.h"
+
+#ifdef PERL_IN_XSUB_RE
+#  if defined(PERL_CAPI) || defined(PERL_OBJECT)
+#    include "XSUB.h"
+#  endif
+#endif
 
 #include "regcomp.h"
 
@@ -91,37 +101,16 @@
 #define	STATIC	static
 #endif
 
-#ifndef PERL_OBJECT
-typedef I32 CHECKPOINT;
-
 /*
  * Forwards.
  */
 
-static I32 regmatch _((regnode *prog));
-static I32 regrepeat _((regnode *p, I32 max));
-static I32 regrepeat_hard _((regnode *p, I32 max, I32 *lp));
-static I32 regtry _((regexp *prog, char *startpos));
-
-static bool reginclass _((char *p, I32 c));
-static bool reginclassutf8 _((regnode *f, U8* p));
-static CHECKPOINT regcppush _((I32 parenfloor));
-static char * regcppop _((void));
-static char * regcp_set_to _((I32 ss));
-static void cache_re _((regexp *prog));
-static void restore_pos _((void *arg));
-#endif
-
-#define REGINCLASS(p,c)  (*(p) ? reginclass(p,c) : ANYOF_TEST(p,c))
+#define REGINCLASS(p,c)  (ANYOF_FLAGS(p) ? reginclass(p,c) : ANYOF_BITMAP_TEST(p,c))
 #define REGINCLASSUTF8(f,p)  (ARG1(f) ? reginclassutf8(f,p) : swash_fetch((SV*)PL_regdata->data[ARG2(f)],p))
 
 #define CHR_SVLEN(sv) (UTF ? sv_len_utf8(sv) : SvCUR(sv))
 #define CHR_DIST(a,b) (UTF ? utf8_distance(a,b) : a - b)
 
-#ifndef PERL_OBJECT
-static U8 * reghop _((U8 *pos, I32 off));
-static U8 * reghopmaybe _((U8 *pos, I32 off));
-#endif
 #define reghop_c(pos,off) ((char*)reghop((U8*)pos, off))
 #define reghopmaybe_c(pos,off) ((char*)reghopmaybe((U8*)pos, off))
 #define HOP(pos,off) (UTF ? reghop((U8*)pos, off) : (U8*)(pos + off))
@@ -129,8 +118,11 @@ static U8 * reghopmaybe _((U8 *pos, I32 off));
 #define HOPc(pos,off) ((char*)HOP(pos,off))
 #define HOPMAYBEc(pos,off) ((char*)HOPMAYBE(pos,off))
 
+static void restore_pos(pTHXo_ void *arg);
+
+
 STATIC CHECKPOINT
-regcppush(I32 parenfloor)
+S_regcppush(pTHX_ I32 parenfloor)
 {
     dTHR;
     int retval = PL_savestack_ix;
@@ -163,7 +155,7 @@ regcppush(I32 parenfloor)
 				lastcp, PL_savestack_ix) : 0); regcpblow(lastcp)
 
 STATIC char *
-regcppop(void)
+S_regcppop(pTHX)
 {
     dTHR;
     I32 i = SSPOPINT;
@@ -207,7 +199,7 @@ regcppop(void)
 }
 
 STATIC char *
-regcp_set_to(I32 ss)
+S_regcp_set_to(pTHX_ I32 ss)
 {
     dTHR;
     I32 tmp = PL_savestack_ix;
@@ -237,7 +229,7 @@ typedef struct re_cc_state
  - pregexec - match a regexp against a string
  */
 I32
-pregexec(register regexp *prog, char *stringarg, register char *strend,
+Perl_pregexec(pTHX_ register regexp *prog, char *stringarg, register char *strend,
 	 char *strbeg, I32 minend, SV *screamer, U32 nosave)
 /* strend: pointer to null at end of string */
 /* strbeg: real beginning of string */
@@ -250,7 +242,7 @@ pregexec(register regexp *prog, char *stringarg, register char *strend,
 }
 
 STATIC void
-cache_re(regexp *prog)
+S_cache_re(pTHX_ regexp *prog)
 {
     dTHR;
     PL_regprecomp = prog->precomp;		/* Needed for FAIL. */
@@ -262,28 +254,201 @@ cache_re(regexp *prog)
     PL_reg_re = prog;    
 }
 
-STATIC void
-restore_pos(void *arg)
-{
-    dTHR;
-    if (PL_reg_eval_set) {
-	if (PL_reg_oldsaved) {
-	    PL_reg_re->subbeg = PL_reg_oldsaved;
-	    PL_reg_re->sublen = PL_reg_oldsavedlen;
-	    RX_MATCH_COPIED_on(PL_reg_re);
-	}
-	PL_reg_magic->mg_len = PL_reg_oldpos;
-	PL_reg_eval_set = 0;
-	PL_curpm = PL_reg_oldcurpm;
-    }	
-}
+/* 
+ * Need to implement the following flags for reg_anch:
+ *
+ * USE_INTUIT_NOML		- Useful to call re_intuit_start() first
+ * USE_INTUIT_ML
+ * INTUIT_AUTORITATIVE_NOML	- Can trust a positive answer
+ * INTUIT_AUTORITATIVE_ML
+ * INTUIT_ONCE_NOML		- Intuit can match in one location only.
+ * INTUIT_ONCE_ML
+ *
+ * Another flag for this function: SECOND_TIME (so that float substrs
+ * with giant delta may be not rechecked).
+ */
 
+/* Assumptions: if ANCH_GPOS, then strpos is anchored. XXXX Check GPOS logic */
+
+/* If SCREAM, then sv should be compatible with strpos and strend.
+   Otherwise, only SvCUR(sv) is used to get strbeg. */
+
+/* XXXX We assume that strpos is strbeg unless sv. */
+
+char *
+Perl_re_intuit_start(pTHX_ regexp *prog, SV *sv, char *strpos,
+		     char *strend, U32 flags, re_scream_pos_data *data)
+{
+    I32 start_shift;
+    /* Should be nonnegative! */
+    I32 end_shift;
+    char *s;
+    char *t;
+    I32 ml_anch;
+
+    DEBUG_r( if (!PL_colorset) reginitcolors() );
+    DEBUG_r(PerlIO_printf(Perl_debug_log,
+		      "%sGuessing start of match:%s `%s%.60s%s%s' against `%s%.*s%s%s'\n",
+		      PL_colors[4],PL_colors[5],PL_colors[0],
+		      prog->precomp,
+		      PL_colors[1],
+		      (strlen(prog->precomp) > 60 ? "..." : ""),
+		      PL_colors[0],
+		      (strend - strpos > 60 ? 60 : strend - strpos),
+		      strpos, PL_colors[1],
+		      (strend - strpos > 60 ? "..." : ""))
+	);
+
+    if (prog->minlen > strend - strpos)
+	goto fail;
+
+    /* XXXX Move further down? */
+    start_shift = prog->check_offset_min;	/* okay to underestimate on CC */
+    /* Should be nonnegative! */
+    end_shift = prog->minlen - start_shift -
+	CHR_SVLEN(prog->check_substr) + (SvTAIL(prog->check_substr) != 0);
+
+    if (prog->reganch & ROPT_ANCH) {
+	ml_anch = !( (prog->reganch & ROPT_ANCH_SINGLE)
+		     || ( (prog->reganch & ROPT_ANCH_BOL)
+			  && !PL_multiline ) );
+
+	if ((prog->check_offset_min == prog->check_offset_max) && !ml_anch) {
+	    /* Anchored... */
+	    I32 slen;
+
+	    if ( !(prog->reganch & ROPT_ANCH_GPOS) /* Checked by the caller */
+		 && (sv && (strpos + SvCUR(sv) != strend)) )
+		goto fail;
+
+	    PL_regeol = strend;			/* Used in HOP() */
+	    s = (char*)HOP((U8*)strpos, prog->check_offset_min);
+	    if (SvTAIL(prog->check_substr)) {
+		slen = SvCUR(prog->check_substr);	/* >= 1 */
+
+		if ( strend - s > slen || strend - s < slen - 1 ) {
+		    s = Nullch;
+		    goto finish;
+		}
+		if ( strend - s == slen && strend[-1] != '\n') {
+		    s = Nullch;
+		    goto finish;
+		}
+		/* Now should match s[0..slen-2] */
+		slen--;
+		if (slen && (*SvPVX(prog->check_substr) != *s
+			     || (slen > 1
+				 && memNE(SvPVX(prog->check_substr), s, slen))))
+		    s = Nullch;
+	    }
+	    else if (*SvPVX(prog->check_substr) != *s
+		     || ((slen = SvCUR(prog->check_substr)) > 1
+			 && memNE(SvPVX(prog->check_substr), s, slen)))
+		    s = Nullch;
+	    else
+		    s = strpos;
+	    goto finish;
+	}
+	s = strpos;
+	if (!ml_anch && (s + prog->check_offset_max < strend - prog->minlen))
+	    end_shift += strend - s - prog->minlen - prog->check_offset_max;
+    }
+    else {
+	ml_anch = 0;
+	s = strpos;
+    }
+
+  restart:
+    if (end_shift < 0)
+	end_shift = 0; /* can happen when strend == strpos */
+    if (flags & REXEC_SCREAM) {
+	SV *c = prog->check_substr;
+	char *strbeg = SvPVX(sv);	/* XXXX Assume PV_force() on SCREAM! */
+	I32 p = -1;			/* Internal iterator of scream. */
+	I32 *pp = data ? data->scream_pos : &p;
+
+	if (PL_screamfirst[BmRARE(c)] >= 0
+	    || ( BmRARE(c) == '\n'
+		 && (BmPREVIOUS(c) == SvCUR(c) - 1)
+		 && SvTAIL(c) ))
+	    s = screaminstr(sv, prog->check_substr, 
+			    start_shift + (strpos - strbeg), end_shift, pp, 0);
+	else
+	    s = Nullch;
+	if (data)
+	    *data->scream_olds = s;
+    }
+    else
+	s = fbm_instr((unsigned char*)s + start_shift,
+		      (unsigned char*)strend - end_shift,
+		      prog->check_substr, PL_multiline ? FBMrf_MULTILINE : 0);
+
+    /* Update the count-of-usability, remove useless subpatterns,
+	unshift s.  */
+  finish:
+    if (!s) {
+	++BmUSEFUL(prog->check_substr);	/* hooray */
+	goto fail;			/* not present */
+    }
+    else if (s - strpos > prog->check_offset_max &&
+	     ((prog->reganch & ROPT_UTF8)
+	      ? ((t = reghopmaybe_c(s, -(prog->check_offset_max)))
+		 && t >= strpos)
+	      : (t = s - prog->check_offset_max) != 0) ) {
+	if (ml_anch && t[-1] != '\n') {
+	  find_anchor:
+	    while (t < strend - end_shift - prog->minlen) {
+		if (*t == '\n') {
+		    if (t < s - prog->check_offset_min) {
+			s = t + 1;
+			goto set_useful;
+		    }
+		    s = t + 1;
+		    goto restart;
+		}
+		t++;
+	    }
+	    s = Nullch;
+	    goto finish;
+	}
+	s = t;
+      set_useful:
+	++BmUSEFUL(prog->check_substr);	/* hooray/2 */
+    }
+    else {
+	if (ml_anch && sv 
+	    && (strpos + SvCUR(sv) != strend) && strpos[-1] != '\n') {
+	    t = strpos;
+	    goto find_anchor;
+	}
+	if (!(prog->reganch & ROPT_NAUGHTY)
+	    && --BmUSEFUL(prog->check_substr) < 0
+	    && prog->check_substr == prog->float_substr) { /* boo */
+	    /* If flags & SOMETHING - do not do it many times on the same match */
+	    SvREFCNT_dec(prog->check_substr);
+	    prog->check_substr = Nullsv;	/* disable */
+	    prog->float_substr = Nullsv;	/* clear */
+	    s = strpos;
+	    prog->reganch &= ~RE_USE_INTUIT;
+	}
+	else
+	    s = strpos;
+    }
+
+    DEBUG_r(PerlIO_printf(Perl_debug_log, "%sFound%s at offset %ld\n",
+			  PL_colors[4],PL_colors[5], (long)(s - strpos)) );
+    return s;
+  fail:
+    DEBUG_r(PerlIO_printf(Perl_debug_log, "%sNot found...%s\n",
+			  PL_colors[4],PL_colors[5]));
+    return Nullch;
+}
 
 /*
  - regexec_flags - match a regexp against a string
  */
 I32
-regexec_flags(register regexp *prog, char *stringarg, register char *strend,
+Perl_regexec_flags(pTHX_ register regexp *prog, char *stringarg, register char *strend,
 	      char *strbeg, I32 minend, SV *sv, void *data, U32 flags)
 /* strend: pointer to null at end of string */
 /* strbeg: real beginning of string */
@@ -317,7 +482,7 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     /* Be paranoid... */
     if (prog == NULL || startpos == NULL) {
-	croak("NULL regexp parameter");
+	Perl_croak(aTHX_ "NULL regexp parameter");
 	return 0;
     }
 
@@ -334,7 +499,7 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     /* Check validity of program. */
     if (UCHARAT(prog->program) != REG_MAGIC) {
-	croak("corrupted regexp program");
+	Perl_croak(aTHX_ "corrupted regexp program");
     }
 
     PL_reg_flags = 0;
@@ -359,73 +524,6 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 
     /* If there is a "must appear" string, look for it. */
     s = startpos;
-    if (!(flags & REXEC_CHECKED) 
-	&& prog->check_substr != Nullsv &&
-	!(prog->reganch & ROPT_ANCH_GPOS) &&
-	(!(prog->reganch & (ROPT_ANCH_BOL | ROPT_ANCH_MBOL))
-	 || (PL_multiline && prog->check_substr == prog->anchored_substr)) )
-    {
-	char *t;
-	start_shift = prog->check_offset_min;	/* okay to underestimate on CC */
-	/* Should be nonnegative! */
-	end_shift = minlen - start_shift -
-	    CHR_SVLEN(prog->check_substr) + (SvTAIL(prog->check_substr) != 0);
-	if (flags & REXEC_SCREAM) {
-	    SV *c = prog->check_substr;
-
-	    if (PL_screamfirst[BmRARE(c)] >= 0
-		|| ( BmRARE(c) == '\n'
-		     && (BmPREVIOUS(c) == SvCUR(c) - 1)
-		     && SvTAIL(c) ))
-		    s = screaminstr(sv, prog->check_substr, 
-				    start_shift + (stringarg - strbeg),
-				    end_shift, &scream_pos, 0);
-	    else
-		    s = Nullch;
-	    scream_olds = s;
-	}
-	else
-	    s = fbm_instr((unsigned char*)s + start_shift,
-			  (unsigned char*)strend - end_shift,
-		prog->check_substr, PL_multiline ? FBMrf_MULTILINE : 0);
-	if (!s) {
-	    ++BmUSEFUL(prog->check_substr);	/* hooray */
-	    goto phooey;	/* not present */
-	}
-	else if (s - stringarg > prog->check_offset_max &&
-		 (UTF 
-		    ? ((t = reghopmaybe_c(s, -(prog->check_offset_max))) && t >= stringarg)
-		    : (t = s - prog->check_offset_max) != 0
-		 )
-		)
-	{
-	    ++BmUSEFUL(prog->check_substr);	/* hooray/2 */
-	    s = t;
-	}
-	else if (!(prog->reganch & ROPT_NAUGHTY)
-		   && --BmUSEFUL(prog->check_substr) < 0
-		   && prog->check_substr == prog->float_substr) { /* boo */
-	    SvREFCNT_dec(prog->check_substr);
-	    prog->check_substr = Nullsv;	/* disable */
-	    prog->float_substr = Nullsv;	/* clear */
-	    s = startpos;
-	}
-	else
-	    s = startpos;
-    }
-
-    DEBUG_r(if (!PL_colorset) reginitcolors());
-    DEBUG_r(PerlIO_printf(Perl_debug_log, 
-		      "%sMatching%s `%s%.60s%s%s' against `%s%.*s%s%s'\n",
-		      PL_colors[4],PL_colors[5],PL_colors[0],
-		      prog->precomp,
-		      PL_colors[1],
-		      (strlen(prog->precomp) > 60 ? "..." : ""),
-		      PL_colors[0], 
-		      (strend - startpos > 60 ? 60 : strend - startpos),
-		      startpos, PL_colors[1],
-		      (strend - startpos > 60 ? "..." : ""))
-	);
 
     if (prog->reganch & ROPT_GPOS_SEEN) {
 	MAGIC *mg;
@@ -435,27 +533,69 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 	    PL_reg_ganch = strbeg + mg->mg_len;
 	else
 	    PL_reg_ganch = startpos;
+	if (prog->reganch & ROPT_ANCH_GPOS) {
+	    if (s > PL_reg_ganch)
+		goto phooey;
+	    s = PL_reg_ganch;
+	}
     }
+
+    if (!(flags & REXEC_CHECKED) && prog->check_substr != Nullsv) {
+	re_scream_pos_data d;
+
+	d.scream_olds = &scream_olds;
+	d.scream_pos = &scream_pos;
+	s = re_intuit_start(prog, sv, s, strend, flags, &d);
+	if (!s)
+	    goto phooey;	/* not present */
+    }
+
+    DEBUG_r( if (!PL_colorset) reginitcolors() );
+    DEBUG_r(PerlIO_printf(Perl_debug_log,
+		      "%sMatching%s `%s%.60s%s%s' against `%s%.*s%s%s'\n",
+		      PL_colors[4],PL_colors[5],PL_colors[0],
+		      prog->precomp,
+		      PL_colors[1],
+		      (strlen(prog->precomp) > 60 ? "..." : ""),
+		      PL_colors[0],
+		      (strend - startpos > 60 ? 60 : strend - startpos),
+		      startpos, PL_colors[1],
+		      (strend - startpos > 60 ? "..." : ""))
+	);
 
     /* Simplest case:  anchored match need be tried only once. */
     /*  [unless only anchor is BOL and multiline is set] */
     if (prog->reganch & (ROPT_ANCH & ~ROPT_ANCH_GPOS)) {
-	if (regtry(prog, startpos))
+	if (s == startpos && regtry(prog, startpos))
 	    goto got_it;
 	else if (PL_multiline || (prog->reganch & ROPT_IMPLICIT)
 		 || (prog->reganch & ROPT_ANCH_MBOL)) /* XXXX SBOL? */
 	{
+	    char *end;
+
 	    if (minlen)
 		dontbother = minlen - 1;
-	    strend = HOPc(strend, -dontbother);
+	    end = HOPc(strend, -dontbother) - 1;
 	    /* for multiline we only have to try after newlines */
-	    if (s > startpos)
-		s--;
-	    while (s < strend) {
-		if (*s++ == '\n') {	/* don't need PL_utf8skip here */
-		    if (s < strend && regtry(prog, s))
+	    if (prog->check_substr) {
+		while (1) {
+		    if (regtry(prog, s))
 			goto got_it;
-		}
+		    if (s >= end)
+			goto phooey;
+		    s = re_intuit_start(prog, sv, s + 1, strend, flags, NULL);
+		    if (!s)
+			goto phooey;
+		}		
+	    } else {
+		if (s > startpos)
+		    s--;
+		while (s < end) {
+		    if (*s++ == '\n') {	/* don't need PL_utf8skip here */
+			if (regtry(prog, s))
+			    goto got_it;
+		    }
+		}		
 	    }
 	}
 	goto phooey;
@@ -468,7 +608,7 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
     /* Messy cases:  unanchored match. */
     if (prog->anchored_substr && prog->reganch & ROPT_SKIP) { 
 	/* we have /x+whatever/ */
-	/* it must be a one character string */
+	/* it must be a one character string (XXXX Except UTF?) */
 	char ch = SvPVX(prog->anchored_substr)[0];
 	if (UTF) {
 	    while (s < strend) {
@@ -505,7 +645,8 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 	    prog->anchored_substr ? prog->anchored_offset : prog->float_min_offset;
 	I32 delta = back_max - back_min;
 	char *last = HOPc(strend,	/* Cannot start after this */
-			  -(CHR_SVLEN(must) - (SvTAIL(must) != 0) + back_min));
+			  -(I32)(CHR_SVLEN(must)
+				 - (SvTAIL(must) != 0) + back_min));
 	char *last1;		/* Last position checked before */
 
 	if (s > PL_bostr)
@@ -919,6 +1060,34 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 		s += UTF8SKIP(s);
 	    }
 	    break;
+	case DIGITL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isDIGIT_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case DIGITLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isDIGIT_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
 	case NDIGIT:
 	    while (s < strend) {
 		if (!isDIGIT(*s)) {
@@ -943,6 +1112,842 @@ regexec_flags(register regexp *prog, char *stringarg, register char *strend,
 		else
 		    tmp = 1;
 		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NDIGITL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isDIGIT_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NDIGITLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isDIGIT_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case ALNUMC:
+	    while (s < strend) {
+		if (isALNUMC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case ALNUMCUTF8:
+	    while (s < strend) {
+		if (swash_fetch(PL_utf8_alnumc, (U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case ALNUMCL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isALNUMC_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case ALNUMCLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isALNUMC_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NALNUMC:
+	    while (s < strend) {
+		if (!isALNUMC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NALNUMCUTF8:
+	    while (s < strend) {
+		if (!swash_fetch(PL_utf8_alnumc, (U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NALNUMCL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isALNUMC_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NALNUMCLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isALNUMC_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case ASCII:
+	    while (s < strend) {
+		if (isASCII(*(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NASCII:
+	    while (s < strend) {
+		if (!isASCII(*(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case CNTRL:
+	    while (s < strend) {
+		if (isCNTRL(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case CNTRLUTF8:
+	    while (s < strend) {
+		if (swash_fetch(PL_utf8_cntrl,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case CNTRLL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isCNTRL_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case CNTRLLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (*s == ' ' || isCNTRL_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NCNTRL:
+	    while (s < strend) {
+		if (!isCNTRL(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NCNTRLUTF8:
+	    while (s < strend) {
+		if (!swash_fetch(PL_utf8_cntrl,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NCNTRLL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isCNTRL_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NCNTRLLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isCNTRL_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case GRAPH:
+	    while (s < strend) {
+		if (isGRAPH(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case GRAPHUTF8:
+	    while (s < strend) {
+		if (swash_fetch(PL_utf8_graph,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case GRAPHL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isGRAPH_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case GRAPHLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (*s == ' ' || isGRAPH_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NGRAPH:
+	    while (s < strend) {
+		if (!isGRAPH(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NGRAPHUTF8:
+	    while (s < strend) {
+		if (!swash_fetch(PL_utf8_graph,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NGRAPHL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isGRAPH_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NGRAPHLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isGRAPH_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case LOWER:
+	    while (s < strend) {
+		if (isLOWER(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case LOWERUTF8:
+	    while (s < strend) {
+		if (swash_fetch(PL_utf8_lower,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case LOWERL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isLOWER_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case LOWERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (*s == ' ' || isLOWER_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NLOWER:
+	    while (s < strend) {
+		if (!isLOWER(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NLOWERUTF8:
+	    while (s < strend) {
+		if (!swash_fetch(PL_utf8_lower,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NLOWERL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isLOWER_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NLOWERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isLOWER_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case PRINT:
+	    while (s < strend) {
+		if (isPRINT(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case PRINTUTF8:
+	    while (s < strend) {
+		if (swash_fetch(PL_utf8_print,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case PRINTL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isPRINT_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case PRINTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (*s == ' ' || isPRINT_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NPRINT:
+	    while (s < strend) {
+		if (!isPRINT(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NPRINTUTF8:
+	    while (s < strend) {
+		if (!swash_fetch(PL_utf8_print,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NPRINTL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isPRINT_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NPRINTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isPRINT_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case PUNCT:
+	    while (s < strend) {
+		if (isPUNCT(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case PUNCTUTF8:
+	    while (s < strend) {
+		if (swash_fetch(PL_utf8_punct,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case PUNCTL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isPUNCT_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case PUNCTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (*s == ' ' || isPUNCT_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NPUNCT:
+	    while (s < strend) {
+		if (!isPUNCT(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NPUNCTUTF8:
+	    while (s < strend) {
+		if (!swash_fetch(PL_utf8_punct,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NPUNCTL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isPUNCT_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NPUNCTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isPUNCT_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case UPPER:
+	    while (s < strend) {
+		if (isUPPER(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case UPPERUTF8:
+	    while (s < strend) {
+		if (swash_fetch(PL_utf8_upper,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case UPPERL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (isUPPER_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case UPPERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (*s == ' ' || isUPPER_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NUPPER:
+	    while (s < strend) {
+		if (!isUPPER(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NUPPERUTF8:
+	    while (s < strend) {
+		if (!swash_fetch(PL_utf8_upper,(U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case NUPPERL:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isUPPER_LC(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NUPPERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    while (s < strend) {
+		if (!isUPPER_LC_utf8((U8*)s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s += UTF8SKIP(s);
+	    }
+	    break;
+	case XDIGIT:
+	    while (s < strend) {
+		if (isXDIGIT(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
+	    }
+	    break;
+	case NXDIGIT:
+	    while (s < strend) {
+		if (!isXDIGIT(*s)) {
+		    if (tmp && regtry(prog, s))
+			goto got_it;
+		    else
+			tmp = doevery;
+		}
+		else
+		    tmp = 1;
+		s++;
 	    }
 	    break;
 	}
@@ -1015,7 +2020,7 @@ got_it:
 	    sv_setsv(oreplsv, GvSV(PL_replgv));/* So that when GvSV(replgv) is
 						  restored, the value remains
 						  the same. */
-	restore_pos(0);
+	restore_pos(aTHXo_ 0);
     }
 
     /* make sure $`, $&, $', and $digit will work later */
@@ -1042,7 +2047,7 @@ got_it:
 
 phooey:
     if (PL_reg_eval_set)
-	restore_pos(0);
+	restore_pos(aTHXo_ 0);
     return 0;
 }
 
@@ -1050,7 +2055,7 @@ phooey:
  - regtry - try match at specific point
  */
 STATIC I32			/* 0 failure, 1 success */
-regtry(regexp *prog, char *startpos)
+S_regtry(pTHX_ regexp *prog, char *startpos)
 {
     dTHR;
     register I32 i;
@@ -1162,7 +2167,7 @@ regtry(regexp *prog, char *startpos)
  * advantage of machines that use a register save mask on subroutine entry.
  */
 STATIC I32			/* 0 failure, 1 success */
-regmatch(regnode *prog)
+S_regmatch(pTHX_ regnode *prog)
 {
     dTHR;
     register regnode *scan;	/* Current node. */
@@ -1564,15 +2569,30 @@ regmatch(regnode *prog)
 		sayNO;
 	    nextchr = UCHARAT(++locinput);
 	    break;
+	case DIGITL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
 	case DIGIT:
-	    if (!isDIGIT(nextchr))
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (!(OP(scan) == DIGIT
+		  ? isDIGIT(nextchr) : isDIGIT_LC(nextchr)))
 		sayNO;
 	    nextchr = UCHARAT(++locinput);
 	    break;
+	case DIGITLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
 	case DIGITUTF8:
+	    if (!nextchr)
+		sayNO;
 	    if (nextchr & 0x80) {
-		if (!(swash_fetch(PL_utf8_digit,(U8*)locinput)))
+		if (OP(scan) == NDIGITUTF8
+		    ? swash_fetch(PL_utf8_digit,(U8*)locinput)
+		    : isDIGIT_LC_utf8((U8*)locinput))
+		{
 		    sayNO;
+		}
 		locinput += PL_utf8skip[nextchr];
 		nextchr = UCHARAT(locinput);
 		break;
@@ -1581,13 +2601,20 @@ regmatch(regnode *prog)
 		sayNO;
 	    nextchr = UCHARAT(++locinput);
 	    break;
+	case NDIGITL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
 	case NDIGIT:
-	    if (!nextchr && locinput >= PL_regeol)
+	    if (!nextchr)
 		sayNO;
-	    if (isDIGIT(nextchr))
+	    if (OP(scan) == DIGIT
+		? isDIGIT(nextchr) : isDIGIT_LC(nextchr))
 		sayNO;
 	    nextchr = UCHARAT(++locinput);
 	    break;
+	case NDIGITLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
 	case NDIGITUTF8:
 	    if (!nextchr && locinput >= PL_regeol)
 		sayNO;
@@ -1599,6 +2626,522 @@ regmatch(regnode *prog)
 		break;
 	    }
 	    if (isDIGIT(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case ALNUMCL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case ALNUMC:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == ALNUMC
+		  ? isALNUMC(nextchr) : isALNUMC_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case ALNUMCLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case ALNUMCUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == ALNUMCUTF8
+		      ? swash_fetch(PL_utf8_alnumc, (U8*)locinput)
+		      : isALNUMC_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == ALNUMCUTF8
+		  ? isALNUMC(nextchr) : isALNUMC_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NALNUMCL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NALNUMC:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == ALNUMC
+		? isALNUMC(nextchr) : isALNUMC_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NALNUMCLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NALNUMCUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_alnumc,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isALNUMC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case ALPHAL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case ALPHA:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == ALPHA
+		  ? isALPHA(nextchr) : isALPHA_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case ALPHALUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case ALPHAUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == ALPHAUTF8
+		      ? swash_fetch(PL_utf8_alpha, (U8*)locinput)
+		      : isALPHA_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == ALPHAUTF8
+		  ? isALPHA(nextchr) : isALPHA_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NALPHAL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NALPHA:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == ALPHA
+		? isALPHA(nextchr) : isALPHA_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NALPHALUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NALPHAUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_alpha,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isALPHA(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case ASCII:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (!isASCII(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NASCII:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (isASCII(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case CNTRLL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case CNTRL:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == CNTRL
+		  ? isCNTRL(nextchr) : isCNTRL_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case CNTRLLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case CNTRLUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == CNTRLUTF8
+		      ? swash_fetch(PL_utf8_cntrl, (U8*)locinput)
+		      : isCNTRL_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == CNTRLUTF8
+		  ? isCNTRL(nextchr) : isCNTRL_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NCNTRLL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NCNTRL:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == CNTRL
+		? isCNTRL(nextchr) : isCNTRL_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NCNTRLLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NCNTRLUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_cntrl,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isCNTRL(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case GRAPHL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case GRAPH:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == GRAPH
+		  ? isGRAPH(nextchr) : isGRAPH_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case GRAPHLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case GRAPHUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == GRAPHUTF8
+		      ? swash_fetch(PL_utf8_graph, (U8*)locinput)
+		      : isGRAPH_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == GRAPHUTF8
+		  ? isGRAPH(nextchr) : isGRAPH_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NGRAPHL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NGRAPH:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == GRAPH
+		? isGRAPH(nextchr) : isGRAPH_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NGRAPHLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NGRAPHUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_graph,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isGRAPH(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case LOWERL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case LOWER:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == LOWER
+		  ? isLOWER(nextchr) : isLOWER_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case LOWERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case LOWERUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == LOWERUTF8
+		      ? swash_fetch(PL_utf8_lower, (U8*)locinput)
+		      : isLOWER_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == LOWERUTF8
+		  ? isLOWER(nextchr) : isLOWER_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NLOWERL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NLOWER:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == LOWER
+		? isLOWER(nextchr) : isLOWER_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NLOWERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NLOWERUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_lower,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isLOWER(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case PRINTL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case PRINT:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == PRINT
+		  ? isPRINT(nextchr) : isPRINT_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case PRINTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case PRINTUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == PRINTUTF8
+		      ? swash_fetch(PL_utf8_print, (U8*)locinput)
+		      : isPRINT_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == PRINTUTF8
+		  ? isPRINT(nextchr) : isPRINT_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NPRINTL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NPRINT:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == PRINT
+		? isPRINT(nextchr) : isPRINT_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NPRINTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NPRINTUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_print,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isPRINT(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case PUNCTL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case PUNCT:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == PUNCT
+		  ? isPUNCT(nextchr) : isPUNCT_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case PUNCTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case PUNCTUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == PUNCTUTF8
+		      ? swash_fetch(PL_utf8_punct, (U8*)locinput)
+		      : isPUNCT_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == PUNCTUTF8
+		  ? isPUNCT(nextchr) : isPUNCT_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NPUNCTL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NPUNCT:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == PUNCT
+		? isPUNCT(nextchr) : isPUNCT_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NPUNCTLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NPUNCTUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_punct,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isPUNCT(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case UPPERL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case UPPER:
+	    if (!nextchr)
+		sayNO;
+	    if (!(OP(scan) == UPPER
+		  ? isUPPER(nextchr) : isUPPER_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case UPPERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case UPPERUTF8:
+	    if (!nextchr)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (!(OP(scan) == UPPERUTF8
+		      ? swash_fetch(PL_utf8_upper, (U8*)locinput)
+		      : isUPPER_LC_utf8((U8*)locinput)))
+		{
+		    sayNO;
+		}
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (!(OP(scan) == UPPERUTF8
+		  ? isUPPER(nextchr) : isUPPER_LC(nextchr)))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NUPPERL:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NUPPER:
+	    if (!nextchr)
+		sayNO;
+	    if (OP(scan) == UPPER
+		? isUPPER(nextchr) : isUPPER_LC(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NUPPERLUTF8:
+	    PL_reg_flags |= RF_tainted;
+	    /* FALL THROUGH */
+	case NUPPERUTF8:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (nextchr & 0x80) {
+		if (swash_fetch(PL_utf8_upper,(U8*)locinput))
+		    sayNO;
+		locinput += PL_utf8skip[nextchr];
+		nextchr = UCHARAT(locinput);
+		break;
+	    }
+	    if (isUPPER(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case XDIGIT:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (!isXDIGIT(nextchr))
+		sayNO;
+	    nextchr = UCHARAT(++locinput);
+	    break;
+	case NXDIGIT:
+	    if (!nextchr && locinput >= PL_regeol)
+		sayNO;
+	    if (isXDIGIT(nextchr))
 		sayNO;
 	    nextchr = UCHARAT(++locinput);
 	    break;
@@ -1696,7 +3239,7 @@ regmatch(regnode *prog)
 	    PL_curpad = AvARRAY((AV*)PL_regdata->data[n + 2]);
 	    PL_regendp[0] = PL_reg_magic->mg_len = locinput - PL_bostr;
 
-	    CALLRUNOPS();			/* Scalar context. */
+	    CALLRUNOPS(aTHX);			/* Scalar context. */
 	    SPAGAIN;
 	    ret = POPs;
 	    PUTBACK;
@@ -1731,7 +3274,7 @@ regmatch(regnode *prog)
 			I32 onpar = PL_regnpar;
 
 			pm.op_pmflags = 0;
-			re = CALLREGCOMP(t, t + len, &pm);
+			re = CALLREGCOMP(aTHX_ t, t + len, &pm);
 			if (!(SvFLAGS(ret) 
 			      & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)))
 			    sv_magic(ret,(SV*)ReREFCNT_inc(re),'r',0,0);
@@ -1925,7 +3468,7 @@ regmatch(regnode *prog)
 			if (ckWARN(WARN_UNSAFE) && n >= REG_INFTY 
 			    && !(PL_reg_flags & RF_warned)) {
 			    PL_reg_flags |= RF_warned;
-			    warner(WARN_UNSAFE, "%s limit (%d) exceeded",
+			    Perl_warner(aTHX_ WARN_UNSAFE, "%s limit (%d) exceeded",
 				 "Complex regular subexpression recursion",
 				 REG_INFTY - 1);
 			}
@@ -1982,7 +3525,7 @@ regmatch(regnode *prog)
 		if (ckWARN(WARN_UNSAFE) && n >= REG_INFTY 
 			&& !(PL_reg_flags & RF_warned)) {
 		    PL_reg_flags |= RF_warned;
-		    warner(WARN_UNSAFE, "%s limit (%d) exceeded",
+		    Perl_warner(aTHX_ WARN_UNSAFE, "%s limit (%d) exceeded",
 			 "Complex regular subexpression recursion",
 			 REG_INFTY - 1);
 		}
@@ -2474,7 +4017,7 @@ regmatch(regnode *prog)
 	default:
 	    PerlIO_printf(PerlIO_stderr(), "%lx %d\n",
 			  (unsigned long)scan, OP(scan));
-	    croak("regexp memory corruption");
+	    Perl_croak(aTHX_ "regexp memory corruption");
 	}
 	scan = next;
     }
@@ -2483,7 +4026,7 @@ regmatch(regnode *prog)
     * We get here only if there's trouble -- normally "case END" is
     * the terminating point.
     */
-    croak("corrupted regexp pointers");
+    Perl_croak(aTHX_ "corrupted regexp pointers");
     /*NOTREACHED*/
     sayNO;
 
@@ -2509,7 +4052,7 @@ no:
  * rather than incrementing count on every character.  [Er, except utf8.]]
  */
 STATIC I32
-regrepeat(regnode *p, I32 max)
+S_regrepeat(pTHX_ regnode *p, I32 max)
 {
     dTHR;
     register char *scan;
@@ -2723,7 +4266,7 @@ regrepeat(regnode *p, I32 max)
  */
 
 STATIC I32
-regrepeat_hard(regnode *p, I32 max, I32 *lp)
+S_regrepeat_hard(pTHX_ regnode *p, I32 max, I32 *lp)
 {
     dTHR;
     register char *scan;
@@ -2774,14 +4317,14 @@ regrepeat_hard(regnode *p, I32 max, I32 *lp)
  */
 
 STATIC bool
-reginclass(register char *p, register I32 c)
+S_reginclass(pTHX_ register char *p, register I32 c)
 {
     dTHR;
-    char flags = *p;
+    char flags = ANYOF_FLAGS(p);
     bool match = FALSE;
 
     c &= 0xFF;
-    if (ANYOF_TEST(p, c))
+    if (ANYOF_BITMAP_TEST(p, c))
 	match = TRUE;
     else if (flags & ANYOF_FOLD) {
 	I32 cf;
@@ -2791,17 +4334,40 @@ reginclass(register char *p, register I32 c)
 	}
 	else
 	    cf = PL_fold[c];
-	if (ANYOF_TEST(p, cf))
+	if (ANYOF_BITMAP_TEST(p, cf))
 	    match = TRUE;
     }
 
-    if (!match && (flags & ANYOF_ISA)) {
+    if (!match && (flags & ANYOF_CLASS)) {
 	PL_reg_flags |= RF_tainted;
-
-	if (((flags & ANYOF_ALNUML)  && isALNUM_LC(c))  ||
-	    ((flags & ANYOF_NALNUML) && !isALNUM_LC(c)) ||
-	    ((flags & ANYOF_SPACEL)  && isSPACE_LC(c))  ||
-	    ((flags & ANYOF_NSPACEL) && !isSPACE_LC(c)))
+	if (
+	    (ANYOF_CLASS_TEST(p, ANYOF_ALNUM)   &&  isALNUM_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NALNUM)  && !isALNUM_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_SPACE)   &&  isSPACE_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NSPACE)  && !isSPACE_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_DIGIT)   &&  isDIGIT_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NDIGIT)  && !isDIGIT_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_ALNUMC)  &&  isALNUMC_LC(c)) ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NALNUMC) && !isALNUMC_LC(c)) ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_ALPHA)   &&  isALPHA_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NALPHA)  && !isALPHA_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_ASCII)   &&  isASCII(c))     ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NASCII)  && !isASCII(c))     ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_CNTRL)   &&  isCNTRL_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NCNTRL)  && !isCNTRL_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_GRAPH)   &&  isGRAPH_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NGRAPH)  && !isGRAPH_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_LOWER)   &&  isLOWER_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NLOWER)  && !isLOWER_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_PRINT)   &&  isPRINT_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NPRINT)  && !isPRINT_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_PUNCT)   &&  isPUNCT_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NPUNCT)  && !isPUNCT_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_UPPER)   &&  isUPPER_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NUPPER)  && !isUPPER_LC(c))  ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_XDIGIT)  &&  isXDIGIT(c))    ||
+	    (ANYOF_CLASS_TEST(p, ANYOF_NXDIGIT) && !isXDIGIT(c))
+	    ) /* How's that for a conditional? */
 	{
 	    match = TRUE;
 	}
@@ -2811,7 +4377,7 @@ reginclass(register char *p, register I32 c)
 }
 
 STATIC bool
-reginclassutf8(regnode *f, U8 *p)
+S_reginclassutf8(pTHX_ regnode *f, U8 *p)
 {                                           
     dTHR;
     char flags = ARG1(f);
@@ -2833,23 +4399,13 @@ reginclassutf8(regnode *f, U8 *p)
 	    match = TRUE;
     }
 
-    if (!match && (flags & ANYOF_ISA)) {
-	PL_reg_flags |= RF_tainted;
-
-	if (((flags & ANYOF_ALNUML)  && isALNUM_LC_utf8(p))  ||
-	    ((flags & ANYOF_NALNUML) && !isALNUM_LC_utf8(p)) ||
-	    ((flags & ANYOF_SPACEL)  && isSPACE_LC_utf8(p))  ||
-	    ((flags & ANYOF_NSPACEL) && !isSPACE_LC_utf8(p)))
-	{
-	    match = TRUE;
-	}
-    }
+    /* UTF8 combined with ANYOF_CLASS is ill-defined. */
 
     return (flags & ANYOF_INVERT) ? !match : match;
 }
 
 STATIC U8 *
-reghop(U8 *s, I32 off)
+S_reghop(pTHX_ U8 *s, I32 off)
 {                               
     dTHR;
     if (off >= 0) {
@@ -2871,7 +4427,7 @@ reghop(U8 *s, I32 off)
 }
 
 STATIC U8 *
-reghopmaybe(U8* s, I32 off)
+S_reghopmaybe(pTHX_ U8* s, I32 off)
 {
     dTHR;
     if (off >= 0) {
@@ -2897,3 +4453,25 @@ reghopmaybe(U8* s, I32 off)
     }
     return s;
 }
+
+#ifdef PERL_OBJECT
+#define NO_XSLOCKS
+#include "XSUB.h"
+#endif
+
+static void
+restore_pos(pTHXo_ void *arg)
+{
+    dTHR;
+    if (PL_reg_eval_set) {
+	if (PL_reg_oldsaved) {
+	    PL_reg_re->subbeg = PL_reg_oldsaved;
+	    PL_reg_re->sublen = PL_reg_oldsavedlen;
+	    RX_MATCH_COPIED_on(PL_reg_re);
+	}
+	PL_reg_magic->mg_len = PL_reg_oldpos;
+	PL_reg_eval_set = 0;
+	PL_curpm = PL_reg_oldcurpm;
+    }	
+}
+

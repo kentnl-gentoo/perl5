@@ -92,7 +92,10 @@ sub init_hash { map { $_ => 1 } @_ }
 #
 %skip_lexicals = init_hash qw(pp_enter pp_enterloop);
 %skip_invalidate = init_hash qw(pp_enter pp_enterloop);
-%need_curcop = init_hash qw(pp_rv2gv  pp_bless pp_repeat pp_sort pp_caller pp_reset pp_rv2cv pp_entereval pp_require pp_dofile pp_entertry pp_enterloop pp_enteriter pp_entersub pp_enter);
+%need_curcop = init_hash qw(pp_rv2gv  pp_bless pp_repeat pp_sort pp_caller
+			pp_reset pp_rv2cv pp_entereval pp_require pp_dofile
+			pp_entertry pp_enterloop pp_enteriter pp_entersub
+			pp_enter pp_method);
 
 sub debug {
     if ($debug_runtime) {
@@ -121,7 +124,7 @@ sub output_runtime {
     print qq(#include "cc_runtime.h"\n);
     foreach $ppdata (@pp_list) {
 	my ($name, $runtime, $declare) = @$ppdata;
-	print "\nstatic\nPP($name)\n{\n";
+	print "\nstatic\nCCPP($name)\n{\n";
 	my ($type, $varlist, $line);
 	while (($type, $varlist) = each %$declare) {
 	    print "\t$type ", join(", ", @$varlist), ";\n";
@@ -149,7 +152,7 @@ sub init_pp {
     declare("SV", "**svp");
     map { declare("SV", "*$_") } qw(sv src dst left right);
     declare("MAGIC", "*mg");
-    $decl->add("static OP * $ppname _((ARGSproto));");
+    $decl->add("static OP * $ppname (pTHX);");
     debug "init_pp: $ppname\n" if $debug_queue;
 }
 
@@ -521,13 +524,13 @@ sub pp_or {
 	    
 sub pp_cond_expr {
     my $op = shift;
-    my $false = $op->false;
+    my $false = $op->next;
     unshift(@bblock_todo, $false);
     reload_lexicals();
     my $bool = pop_bool();
     write_back_stack();
     runtime(sprintf("if (!$bool) goto %s;", label($false)));
-    return $op->true;
+    return $op->other;
 }
 
 sub pp_padsv {
@@ -580,15 +583,47 @@ sub pp_dbstate {
 }
 
 #default_pp will handle this:
-#sub pp_rv2gv { $curcop->write_back; default_pp(@_) }
 #sub pp_bless { $curcop->write_back; default_pp(@_) }
 #sub pp_repeat { $curcop->write_back; default_pp(@_) }
 # The following subs need $curcop->write_back if we decide to support arybase:
 # pp_pos, pp_substr, pp_index, pp_rindex, pp_aslice, pp_lslice, pp_splice
-#sub pp_sort { $curcop->write_back; default_pp(@_) }
 #sub pp_caller { $curcop->write_back; default_pp(@_) }
 #sub pp_reset { $curcop->write_back; default_pp(@_) }
 
+sub pp_rv2gv{
+    my $op =shift;
+    $curcop->write_back;
+    write_back_lexicals() unless $skip_lexicals{$ppname};
+    write_back_stack() unless $skip_stack{$ppname};
+    my $sym=doop($op);
+    if ($op->private & OPpDEREF) {
+        $init->add(sprintf("((UNOP *)$sym)->op_first = $sym;"));	
+        $init->add(sprintf("((UNOP *)$sym)->op_type = %d;", 
+		$op->first->type));	
+    }
+    return $op->next;
+}
+sub pp_sort {
+    my $op = shift;
+    my $ppname = $op->ppaddr;
+    if ( $op->flags & OPf_SPECIAL && $op->flags  & OPf_STACKED){   
+        #this indicates the sort BLOCK Array case
+        #ugly surgery required.
+        my $root=$op->first->sibling->first;
+        my $start=$root->first;
+	$op->first->save;
+	$op->first->sibling->save;
+	$root->save;
+	my $sym=$start->save;
+        my $fakeop=cc_queue("pp_sort".$$op,$root,$start);
+	$init->add(sprintf("(%s)->op_next=%s;",$sym,$fakeop));
+    }
+    $curcop->write_back;
+    write_back_lexicals();
+    write_back_stack();
+    doop($op);
+    return $op->next;
+}              
 sub pp_gv {
     my $op = shift;
     my $gvsym = $op->gv->save;
@@ -861,9 +896,9 @@ BEGIN {
     # XXX The standard perl PP code has extra handling for
     # some special case arguments of these operators.
     #
-    sub pp_add { numeric_binop($_[0], $plus_op, INTS_CLOSED) }
-    sub pp_subtract { numeric_binop($_[0], $minus_op, INTS_CLOSED) }
-    sub pp_multiply { numeric_binop($_[0], $multiply_op, INTS_CLOSED) }
+    sub pp_add { numeric_binop($_[0], $plus_op) }
+    sub pp_subtract { numeric_binop($_[0], $minus_op) }
+    sub pp_multiply { numeric_binop($_[0], $multiply_op) }
     sub pp_divide { numeric_binop($_[0], $divide_op) }
     sub pp_modulo { int_binop($_[0], $modulo_op) } # differs from perl's
 
@@ -909,7 +944,7 @@ sub pp_sassign {
 	($src, $dst) = ($dst, $src) if $backwards;
 	my $type = $src->{type};
 	if ($type == T_INT) {
-	    $dst->set_int($src->as_int);
+	    $dst->set_int($src->as_int,$src->{flags} & VALID_UNSIGNED);
 	} elsif ($type == T_DOUBLE) {
 	    $dst->set_numeric($src->as_numeric);
 	} else {
@@ -922,7 +957,11 @@ sub pp_sassign {
 	    my $type = $src->{type};
 	    runtime("if (PL_tainting && PL_tainted) TAINT_NOT;");
 	    if ($type == T_INT) {
-		runtime sprintf("sv_setiv(TOPs, %s);", $src->as_int);
+                if ($src->{flags} & VALID_UNSIGNED){ 
+                     runtime sprintf("sv_setuv(TOPs, %s);", $src->as_int);
+                }else{
+                    runtime sprintf("sv_setiv(TOPs, %s);", $src->as_int);
+                }
 	    } elsif ($type == T_DOUBLE) {
 		runtime sprintf("sv_setnv(TOPs, %s);", $src->as_double);
 	    } else {
@@ -1000,7 +1039,7 @@ sub pp_entersub {
     write_back_stack();
     my $sym = doop($op);
     runtime("while (PL_op != ($sym)->op_next && PL_op != (OP*)0 ){");
-    runtime("PL_op = (*PL_op->op_ppaddr)(ARGS);");
+    runtime("PL_op = (*PL_op->op_ppaddr)(aTHX);");
     runtime("SPAGAIN;}");
     $know_op = 0;
     invalidate_lexicals(REGISTER|TEMPORARY);
@@ -1035,7 +1074,16 @@ sub pp_enterwrite {
     my $op = shift;
     pp_entersub($op);
 }
-
+sub pp_leavesub{
+    my $op = shift;
+    write_back_lexicals() unless $skip_lexicals{$ppname};
+    write_back_stack() unless $skip_stack{$ppname};
+    runtime("if (PL_curstackinfo->si_type == PERLSI_SORT){");   
+    runtime("\tPUTBACK;return 0;");
+    runtime("}");
+    doop($op);
+    return $op->next;
+}
 sub pp_leavewrite {
     my $op = shift;
     write_back_lexicals(REGISTER|TEMPORARY);
@@ -1043,7 +1091,7 @@ sub pp_leavewrite {
     my $sym = doop($op);
     # XXX Is this the right way to distinguish between it returning
     # CvSTART(cv) (via doform) and pop_return()?
-    #runtime("if (PL_op) PL_op = (*PL_op->op_ppaddr)(ARGS);");
+    #runtime("if (PL_op) PL_op = (*PL_op->op_ppaddr)(aTHX);");
     runtime("SPAGAIN;");
     $know_op = 0;
     invalidate_lexicals(REGISTER|TEMPORARY);
@@ -1057,6 +1105,7 @@ sub doeval {
     write_back_stack();
     my $sym = loadop($op);
     my $ppaddr = $op->ppaddr;
+    #runtime(qq/printf("$ppaddr type eval\n");/);
     runtime("PP_EVAL($ppaddr, ($sym)->op_next);");
     $know_op = 1;
     invalidate_lexicals(REGISTER|TEMPORARY);
@@ -1064,8 +1113,23 @@ sub doeval {
 }
 
 sub pp_entereval { doeval(@_) }
-sub pp_require { doeval(@_) }
 sub pp_dofile { doeval(@_) }
+
+#pp_require is protected by pp_entertry, so no protection for it.
+sub pp_require {
+    my $op = shift;
+    $curcop->write_back;
+    write_back_lexicals(REGISTER|TEMPORARY);
+    write_back_stack();
+    my $sym = doop($op);
+    runtime("while (PL_op != ($sym)->op_next && PL_op != (OP*)0 ){");
+    runtime("PL_op = (*PL_op->op_ppaddr)(ARGS);");
+    runtime("SPAGAIN;}");
+    $know_op = 1;
+    invalidate_lexicals(REGISTER|TEMPORARY);
+    return $op->next;
+}
+
 
 sub pp_entertry {
     my $op = shift;
@@ -1174,10 +1238,10 @@ sub pp_range {
 	# it to find and adjust out targ. We don't need it ourselves.
 	$op->save;
 	runtime sprintf("if (SvTRUE(PL_curpad[%d])) goto %s;",
-			$op->targ, label($op->false));
-	unshift(@bblock_todo, $op->false);
+			$op->targ, label($op->other));
+	unshift(@bblock_todo, $op->other);
     }
-    return $op->true;
+    return $op->next;
 }
 
 sub pp_flip {
@@ -1187,7 +1251,7 @@ sub pp_flip {
 	error("context of flip unknown at compile-time");
     }
     if (($flags & OPf_WANT)==OPf_WANT_LIST) {
-	return $op->first->false;
+	return $op->first->other;
     }
     write_back_lexicals();
     write_back_stack();
@@ -1205,7 +1269,7 @@ sub pp_flip {
     } else {
 	runtime("\tsv_setiv(PL_curpad[$ix], 0);",
 		"\tsp--;",
-		sprintf("\tgoto %s;", label($op->first->false)));
+		sprintf("\tgoto %s;", label($op->first->other)));
     }
     runtime("}",
 	  qq{sv_setpv(PL_curpad[$ix], "");},
@@ -1364,7 +1428,7 @@ sub pp_substcont {
 
 sub default_pp {
     my $op = shift;
-    my $ppname = $op->ppaddr;
+    my $ppname = "pp_" . $op->name;
     if ($curcop and $need_curcop{$ppname}){
 	$curcop->write_back;
     }
@@ -1381,7 +1445,7 @@ sub default_pp {
 
 sub compile_op {
     my $op = shift;
-    my $ppname = $op->ppaddr;
+    my $ppname = "pp_" . $op->name;
     if (exists $ignore_op{$ppname}) {
 	return $op->next;
     }
@@ -1499,7 +1563,7 @@ sub cc_main {
 	$init->add(sprintf("PL_main_root = s\\_%x;", ${main_root()}),
 		   "PL_main_start = $start;",
 		   "PL_curpad = AvARRAY($curpad_sym);",
-		   "PL_initav = $init_av;",
+		   "PL_initav = (AV *) $init_av;",
 		   "GvHV(PL_incgv) = $inc_hv;",
 		   "GvAV(PL_incgv) = $inc_av;",
 		   "av_store(CvPADLIST(PL_main_cv),0,SvREFCNT_inc($curpad_nam));",
@@ -1531,7 +1595,7 @@ XS(boot_$cmodule)
     SAVESPTR(PL_op);
     PL_curpad = AvARRAY($curpad_sym);
     PL_op = $start;
-    pp_main(ARGS);
+    pp_main(aTHX);
     FREETMPS;
     LEAVE;
     ST(0) = &PL_sv_yes;

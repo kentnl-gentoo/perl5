@@ -3,6 +3,7 @@
 BEGIN {
     chdir 't' if -d 't';
     unshift @INC, '../lib';
+    unshift @INC, '.';
     require Config; import Config;
     if (!$Config{d_setlocale} || $Config{ccflags} =~ /\bD?NO_LOCALE\b/) {
 	print "1..0\n";
@@ -14,6 +15,14 @@ use strict;
 
 my $debug = 1;
 
+sub debug {
+    print @_ if $debug;
+}
+
+sub debugf {
+    printf @_ if $debug;
+}
+
 my $have_setlocale = 0;
 eval {
     require POSIX;
@@ -21,23 +30,15 @@ eval {
     $have_setlocale++;
 };
 
-use vars qw(&LC_ALL);
-
 # Visual C's CRT goes silly on strings of the form "en_US.ISO8859-1"
 # and mingw32 uses said silly CRT
 $have_setlocale = 0 if $^O eq 'MSWin32' && $Config{cc} =~ /^(cl|gcc)/i;
 
-# 103 (the last test) may fail but that is sort-of okay.
-# (It indicates something broken in the environment, not Perl)
+print "1..", ($have_setlocale ? 115 : 98), "\n";
 
-print "1..", ($have_setlocale ? 103 : 98), "\n";
+use vars qw(&LC_ALL);
 
-use vars qw($a
-	    $English $German $French $Spanish
-	    @C @English @German @French @Spanish
-	    $Locale @Locale %UPPER %lower %bothcase @Neoalpha);
-
-$a = 'abc %';
+my $a = 'abc %';
 
 sub ok {
     my ($n, $result) = @_;
@@ -229,41 +230,69 @@ exit unless $have_setlocale;
 
 # Find locales.
 
+debug "# Scanning for locales...\n";
+
+# Note that it's okay that some languages have their native names
+# capitalized here even though that's not "right".  They are lowercased
+# anyway later during the scanning process (and besides, some clueless
+# vendor might have them capitalized errorneously anyway).
+
 my $locales = <<EOF;
+Afrikaans:af:za:1 15
 Arabic:ar:dz eg sa:6 arabic8
-Bulgarian:bg:bg:5
-Chinese:zh:cn tw:cn.EUC eucCN eucTW euc.CN euc.TW tw.EUC
-Croation:hr:hr:2
+Brezhoneg Breton:br:fr:1 15
+Bulgarski Bulgarian:bg:bg:5
+Chinese:zh:cn tw:cn.EUC eucCN eucTW euc.CN euc.TW GB2312 tw.EUC
+Hrvatski Croatian:hr:hr:2
+Cymraeg Welsh:cy:cy:1 14 15
 Czech:cs:cz:2
-Danish:dk:da:1
-Danish:dk:da:1
-Dutch:nl:nl:1
-English American British:en:au ca gb ie nz us uk:1 cp850
-Estonian:et:ee:1
-Finnish:fi:fi:1
-French:fr:be ca ch fr:1
-German:de:de at ch:1
-Greek:el:gr:7 g8
+Dansk Danish:dk:da:1 15
+Nederlands Dutch:nl:be nl:1 15
+English American British:en:au ca gb ie nz us uk:1 15 cp850
+Esperanto:eo:eo:3
+Eesti Estonian:et:ee:4 6 13
+Suomi Finnish:fi:fi:1 15
+Flamish::fl:1 15
+Deutsch German:de:at be ch de lu:1 15
+Euskaraz Basque:eu:es fr:1 15
+Galego Galician:gl:es:1 15
+Ellada Greek:el:gr:7 g8
+Frysk:fy:nl:1 15
+Greenlandic:kl:gl:4 6
 Hebrew:iw:il:8 hebrew8
 Hungarian:hu:hu:2
-Icelandic:is:is:1
-Italian:it:it:1
-Japanese:ja:jp:euc eucJP jp.EUC sjis
+Indonesian:in:id:1 15
+Gaeilge Irish:ga:IE:1 14 15
+Italiano Italian:it:ch it:1 15
+Nihongo Japanese:ja:jp:euc eucJP jp.EUC sjis
 Korean:ko:kr:
-Latin:la:va:1
-Latvian:lv:lv:1
-Lithuanian:lt:lt:1
-Polish:pl:pl:2
-Portuguese:po:po br:1
+Latine Latin:la:va:1 15
+Latvian:lv:lv:4 6 13
+Lithuanian:lt:lt:4 6 13
+Macedonian:mk:mk:1 15
+Maltese:mt:mt:3
+Norsk Norwegian:no:no:1 15
+Occitan:oc:es:1 15
+Polski Polish:pl:pl:2
 Rumanian:ro:ro:2
-Russian:ru:ru su:5 koi8 koi8r koi8u cp1251
+Russki Russian:ru:ru su ua:5 koi8 koi8r koi8u cp1251
+Serbski Serbian:sr:yu:5
 Slovak:sk:sk:2
-Slovene:sl:si:2
-Spanish:es:ar bo cl co cr ec es gt mx ni pa pe py sv uy ve:1
-Swedish:sv:se:1
-Thai:th:th:tis620
+Slovene Slovenian:sl:si:2
+Sqhip Albanian:sq:sq:1 15
+Svenska Swedish:sv:fi se:1 15
+Thai:th:th:11 tis620
 Turkish:tr:tr:9 turkish8
+Yiddish:::1 15
 EOF
+
+sub in_utf8 () { $^H & 0x08 }
+
+if (in_utf8) {
+    require "pragma/locale/utf8";
+} else {
+    require "pragma/locale/latin1";
+}
 
 my @Locale;
 my $Locale;
@@ -302,8 +331,12 @@ trylocale("C");
 trylocale("POSIX");
 foreach (0..15) {
     trylocale("ISO8859-$_");
-    trylocale("iso_8859_$_");
     trylocale("iso8859$_");
+    trylocale("iso8859-$_");
+    trylocale("iso_8859_$_");
+    trylocale("isolatin$_");
+    trylocale("isolatin-$_");
+    trylocale("iso_latin_$_");
 }
 
 foreach my $locale (split(/\n/, $locales)) {
@@ -337,19 +370,28 @@ foreach my $locale (split(/\n/, $locales)) {
     }
 }
 
+setlocale(LC_ALL, "C");
+
 @Locale = sort @Locale;
-
-sub debug {
-    print @_ if $debug;
-}
-
-sub debugf {
-    printf @_ if $debug;
-}
 
 debug "# Locales = @Locale\n";
 
 my %Problem;
+my %Okay;
+my %Testing;
+my @Neoalpha;
+
+sub tryneoalpha {
+    my ($Locale, $i, $test) = @_;
+    debug "# testing $i with locale '$Locale'\n"
+	unless $Testing{$i}{$Locale}++;
+    unless ($test) {
+	$Problem{$i}{$Locale} = 1;
+	debug "# failed $i with locale '$Locale'\n";
+    } else {
+	push @{$Okay{$i}}, $Locale;
+    }
+}
 
 foreach $Locale (@Locale) {
     debug "# Locale = $Locale\n";
@@ -365,7 +407,9 @@ foreach $Locale (@Locale) {
 
     # Sieve the uppercase and the lowercase.
     
-    %UPPER = %lower = %bothcase = ();
+    my %UPPER = ();
+    my %lower = ();
+    my %BoThCaSe = ();
     for (@Alnum_) {
 	if (/[^\d_]/) { # skip digits and the _
 	    if (uc($_) eq $_) {
@@ -377,19 +421,19 @@ foreach $Locale (@Locale) {
 	}
     }
     foreach (keys %UPPER) {
-	$bothcase{$_}++ if exists $lower{$_};
+	$BoThCaSe{$_}++ if exists $lower{$_};
     }
     foreach (keys %lower) {
-	$bothcase{$_}++ if exists $UPPER{$_};
+	$BoThCaSe{$_}++ if exists $UPPER{$_};
     }
-    foreach (keys %bothcase) {
+    foreach (keys %BoThCaSe) {
 	delete $UPPER{$_};
 	delete $lower{$_};
     }
 
     debug "# UPPER    = ", join(" ", sort keys %UPPER   ), "\n";
     debug "# lower    = ", join(" ", sort keys %lower   ), "\n";
-    debug "# bothcase = ", join(" ", sort keys %bothcase), "\n";
+    debug "# BoThCaSe = ", join(" ", sort keys %BoThCaSe), "\n";
 
     # Find the alphabets that are not alphabets in the default locale.
 
@@ -408,126 +452,196 @@ foreach $Locale (@Locale) {
 
     if (@Neoalpha == 0) {
 	# If we have no Neoalphas the remaining tests are no-ops.
-	debug "# no Neoalpha, skipping tests 99..103 for locale '$Locale'\n";
-	next;
-    }
+	debug "# no Neoalpha, skipping tests 99..102 for locale '$Locale'\n";
+	foreach (99..102) {
+	    push @{$Okay{$_}}, $Locale;
+	}
+    } else {
 
-    # Test \w.
+	# Test \w.
     
-    debug "# testing 99 with locale '$Locale'\n";
-    {
-	my $word = join('', @Neoalpha);
-
-	$word =~ /^(\w+)$/;
-
-	if ($1 ne $word) {
-	    $Problem{99}{$Locale} = 1;
-	    debug "# failed 99 ($1 vs $word)\n";
-	}
-    }
-
-    # Test #100 removed but to preserve historical test number
-    # consistency we do not renumber the remaining tests.
-
-    # Cross-check whole character set.
-
-    debug "# testing 101 with locale '$Locale'\n";
-    for (map { chr } 0..255) {
-	if ((/\w/ and /\W/) or (/\d/ and /\D/) or (/\s/ and /\S/)) {
-	    $Problem{101}{$Locale} = 1;
-	    debug "# failed 101\n";
-	    last;
-	}
-    }
-
-    # Test for read-only scalars' locale vs non-locale comparisons.
-
-    debug "# testing 102 with locale '$Locale'\n";
-    {
-	no locale;
-	$a = "qwerty";
 	{
-	    use locale;
-	    if ($a cmp "qwerty") {
-		$Problem{102}{$Locale} = 1;
-		debug "# failed 102\n";
+	    my $word = join('', @Neoalpha);
+
+	    $word =~ /^(\w+)$/;
+
+	    tryneoalpha($Locale, 99, $1 eq $word);
+	}
+
+	# Cross-check the whole 8-bit character set.
+
+	for (map { chr } 0..255) {
+	    tryneoalpha($Locale, 100,
+			(/\w/ xor /\W/) ||
+			(/\d/ xor /\D/) ||
+			(/\s/ xor /\S/));
+	}
+
+	# Test for read-only scalars' locale vs non-locale comparisons.
+
+	{
+	    no locale;
+	    $a = "qwerty";
+	    {
+		use locale;
+		tryneoalpha($Locale, 101, ($a cmp "qwerty") == 0);
+	    }
+	}
+
+	{
+	    my ($from, $to, $lesser, $greater,
+		@test, %test, $test, $yes, $no, $sign);
+
+	    for (0..9) {
+		# Select a slice.
+		$from = int(($_*@Alnum_)/10);
+		$to = $from + int(@Alnum_/10);
+		$to = $#Alnum_ if ($to > $#Alnum_);
+		$lesser  = join('', @Alnum_[$from..$to]);
+		# Select a slice one character on.
+		$from++; $to++;
+		$to = $#Alnum_ if ($to > $#Alnum_);
+		$greater = join('', @Alnum_[$from..$to]);
+		($yes, $no, $sign) = ($lesser lt $greater
+				      ? ("    ", "not ", 1)
+				      : ("not ", "    ", -1));
+		# all these tests should FAIL (return 0).
+		# Exact lt or gt cannot be tested because
+		# in some locales, say, eacute and E may test equal.
+		@test = 
+		    (
+		     $no.'    ($lesser  le $greater)',  # 1
+		     'not      ($lesser  ne $greater)', # 2
+		     '         ($lesser  eq $greater)', # 3
+		     $yes.'    ($lesser  ge $greater)', # 4
+		     $yes.'    ($lesser  ge $greater)', # 5
+		     $yes.'    ($greater le $lesser )', # 7
+		     'not      ($greater ne $lesser )', # 8
+		     '         ($greater eq $lesser )', # 9
+		     $no.'     ($greater ge $lesser )', # 10
+		     'not (($lesser cmp $greater) == -$sign)' # 12
+		     );
+		@test{@test} = 0 x @test;
+		$test = 0;
+		for my $ti (@test) {
+		    $test{$ti} = eval $ti;
+		    $test ||= $test{$ti}
+		}
+		tryneoalpha($Locale, 102, $test == 0);
+		if ($test) {
+		    debug "# lesser  = '$lesser'\n";
+		    debug "# greater = '$greater'\n";
+		    debug "# lesser cmp greater = ",
+		          $lesser cmp $greater, "\n";
+		    debug "# greater cmp lesser = ",
+		          $greater cmp $lesser, "\n";
+		    debug "# (greater) from = $from, to = $to\n";
+		    for my $ti (@test) {
+			debugf("# %-40s %-4s", $ti,
+			       $test{$ti} ? 'FAIL' : 'ok');
+			if ($ti =~ /\(\.*(\$.+ +cmp +\$[^\)]+)\.*\)/) {
+			    debugf("(%s == %4d)", $1, eval $1);
+			}
+			debug "\n#";
+		    }
+
+		    last;
+		}
 	    }
 	}
     }
 
-    # This test must be the last one because its failure is not fatal.
-    # The @Alnum_ should be internally consistent.
-    # Thanks to Hallvard Furuseth <h.b.furuseth@usit.uio.no>
-    # for inventing a way to test for ordering consistency
-    # without requiring any particular order.
-    # <jhi@iki.fi>
-    
-    debug "# testing 103 with locale '$Locale'\n";
+    use locale;
+
+    my ($x, $y) = (1.23, 1.23);
+
+    my $a = "$x";
+    printf ''; # printf used to reset locale to "C"
+    my $b = "$y";
+
+    debug "# 103..107: a = $a, b = $b, Locale = $Locale\n";
+
+    tryneoalpha($Locale, 103, $a eq $b);
+
+    my $c = "$x";
+    my $z = sprintf ''; # sprintf used to reset locale to "C"
+    my $d = "$y";
+
+    debug "# 104..107: c = $c, d = $d, Locale = $Locale\n";
+
+    tryneoalpha($Locale, 104, $c eq $d); 
+
     {
-	my ($from, $to, $lesser, $greater,
-	    @test, %test, $test, $yes, $no, $sign);
+	my $w = 0;
+	local $SIG{__WARN__} = sub { $w++ };
+	local $^W = 1;
 
-	for (0..9) {
-	    # Select a slice.
-	    $from = int(($_*@Alnum_)/10);
-	    $to = $from + int(@Alnum_/10);
-	    $to = $#Alnum_ if ($to > $#Alnum_);
-	    $lesser  = join('', @Alnum_[$from..$to]);
-	    # Select a slice one character on.
-	    $from++; $to++;
-	    $to = $#Alnum_ if ($to > $#Alnum_);
-	    $greater = join('', @Alnum_[$from..$to]);
-	    ($yes, $no, $sign) = ($lesser lt $greater
-				  ? ("    ", "not ", 1)
-				  : ("not ", "    ", -1));
-	    # all these tests should FAIL (return 0).
-	    # Exact lt or gt cannot be tested because
-	    # in some locales, say, eacute and E may test equal.
-	    @test = 
-		(
-		 $no.'    ($lesser  le $greater)',  # 1
-		 'not      ($lesser  ne $greater)', # 2
-		 '         ($lesser  eq $greater)', # 3
-		 $yes.'    ($lesser  ge $greater)', # 4
-		 $yes.'    ($lesser  ge $greater)', # 5
-		 $yes.'    ($greater le $lesser )', # 7
-		 'not      ($greater ne $lesser )', # 8
-		 '         ($greater eq $lesser )', # 9
-		 $no.'     ($greater ge $lesser )', # 10
-		 'not (($lesser cmp $greater) == -$sign)' # 12
-		 );
-	    @test{@test} = 0 x @test;
-	    $test = 0;
-	    for my $ti (@test) { $test{$ti} = eval $ti ; $test ||= $test{$ti} }
-	    if ($test) {
-		$Problem{103}{$Locale} = 1;
-		debug "# failed 103 at:\n";
-		debug "# lesser  = '$lesser'\n";
-		debug "# greater = '$greater'\n";
-		debug "# lesser cmp greater = ", $lesser cmp $greater, "\n";
-		debug "# greater cmp lesser = ", $greater cmp $lesser, "\n";
-		debug "# (greater) from = $from, to = $to\n";
-		for my $ti (@test) {
-		    debugf("# %-40s %-4s", $ti,
-			   $test{$ti} ? 'FAIL' : 'ok');
-		    if ($ti =~ /\(\.*(\$.+ +cmp +\$[^\)]+)\.*\)/) {
-			debugf("(%s == %4d)", $1, eval $1);
-		    }
-		    debug "\n#";
-		}
+	# the == (among other ops) used to warn for locales
+	# that had something else than "." as the radix character
 
-		last;
-	    }
+	tryneoalpha($Locale, 105, $c == 1.23);
+
+	tryneoalpha($Locale, 106, $c == $x);
+
+	tryneoalpha($Locale, 107, $c == $d);
+
+	{
+	    no locale;
+	
+	    my $e = "$x";
+
+	    debug "# 108..110: e = $e, Locale = $Locale\n";
+
+	    tryneoalpha($Locale, 108, $e == 1.23);
+
+	    tryneoalpha($Locale, 109, $e == $x);
+	    
+	    tryneoalpha($Locale, 110, $e == $c);
 	}
+	
+	tryneoalpha($Locale, 111, $w == 0);
+
+	my $f = "1.23";
+
+	debug "# 112..114: f = $f, locale = $Locale\n";
+
+	tryneoalpha($Locale, 112, $f == 1.23);
+
+	tryneoalpha($Locale, 113, $f == $x);
+	
+	tryneoalpha($Locale, 114, $f == $c);
+    }
+
+    debug "# testing 115 with locale '$Locale'\n";
+    {
+	use locale;
+
+	sub lcA {
+	    my $lc0 = lc $_[0];
+	    my $lc1 = lc $_[1];
+	    return $lc0 cmp $lc1;
+	}
+
+        sub lcB {
+	    return lc($_[0]) cmp lc($_[1]);
+	}
+
+        my $x = "ab";
+        my $y = "aa";
+        my $z = "AB";
+
+        tryneoalpha($Locale, 115,
+		    lcA($x, $y) == 1 && lcB($x, $y) == 1 ||
+		    lcA($x, $z) == 0 && lcB($x, $z) == 0);
     }
 }
 
-no locale;
+# Recount the errors.
 
-foreach (99..103) {
-    if ($Problem{$_}) {
-	if ($_ == 103) {
-	    print "# The failure of test 103 is not necessarily fatal.\n";
+foreach (99..115) {
+    if ($Problem{$_} || !defined $Okay{$_} || !@{$Okay{$_}}) {
+	if ($_ == 102) {
+	    print "# The failure of test 102 is not necessarily fatal.\n";
 	    print "# It usually indicates a problem in the enviroment,\n";
 	    print "# not in Perl itself.\n";
 	}
@@ -536,20 +650,23 @@ foreach (99..103) {
     print "ok $_\n";
 }
 
+# Give final advice.
+
 my $didwarn = 0;
 
-foreach (99..103) {
+foreach (99..115) {
     if ($Problem{$_}) {
 	my @f = sort keys %{ $Problem{$_} };
 	my $f = join(" ", @f);
 	$f =~ s/(.{50,60}) /$1\n#\t/g;
-	warn
-	    "# The locale ", (@f == 1 ? "definition" : "definitions"), "\n#\n",
+	print
+	    "#\n",
+            "# The locale ", (@f == 1 ? "definition" : "definitions"), "\n#\n",
 	    "#\t", $f, "\n#\n",
 	    "# on your system may have errors because the locale test $_\n",
             "# failed in ", (@f == 1 ? "that locale" : "those locales"),
             ".\n";
-	warn <<EOW;
+	print <<EOW;
 #
 # If your users are not using these locales you are safe for the moment,
 # but please report this failure first to perlbug\@perl.com using the
@@ -562,12 +679,14 @@ EOW
     }
 }
 
+# Tell which locales ere okay.
+
 if ($didwarn) {
     my @s;
     
     foreach my $l (@Locale) {
 	my $p = 0;
-	foreach my $t (99..103) {
+	foreach my $t (102..102) {
 	    $p++ if $Problem{$t}{$l};
 	}
 	push @s, $l if $p == 0;

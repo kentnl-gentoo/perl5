@@ -17,7 +17,7 @@
 #
 #    - use nm in AIX 43x and above
 #    - gcc + threads now builds
-#    - added support for socks, when Dccflags=-DSOCKS specified
+#    [(added support for socks) Jul 99 SOCKS support rewritten]
 #
 # Notes:
 #
@@ -43,7 +43,9 @@ d_setruid='undef'
 
 alignbytes=8
 
-usemymalloc='n'
+case "$usemymalloc" in
+'')  usemymalloc='n' ;;
+esac
 
 # Intuiting the existence of system calls under AIX is difficult,
 # at best; the safest technique is to find them empirically.
@@ -59,7 +61,7 @@ case "$osvers" in
 esac
 
 so="a"
-dlext="so"
+dlext="o"
 
 # Trying to set this breaks the POSIX.c compilation
 
@@ -79,7 +81,7 @@ case "$osvers" in
     ccflags="$ccflags -D_ALL_SOURCE -D_ANSI_C_SOURCE -D_POSIX_SOURCE"
     case "$cc" in
      *gcc*) ;;
-     *) ccflags="$ccflags -qmaxmem=8192" ;;
+     *) ccflags="$ccflags -qmaxmem=16384" ;;
     esac
     nm_opt='-B'
     ;;
@@ -93,8 +95,13 @@ d_setreuid='undef'
 #
 # Tell perl which symbols to export for dynamic linking.
 case "$cc" in
-*gcc*) ccdlflags='-Xlinker -bE:perl.exp' ;;
-*) ccdlflags='-bE:perl.exp' ;;
+*gcc*) ccdlflags='-Xlinker' ;;
+esac
+# the required -bE:$installarchlib/CORE/perl.exp is added by
+# libperl.U (Configure) later.
+
+case "$ldlibpthname" in
+'') ldlibpthname=LIBPATH ;;
 esac
 
 # The first 3 options would not be needed if dynamic libs. could be linked
@@ -104,83 +111,12 @@ esac
 #                           symbol: boot_$(EXP)  can it be auto-generated?
 case "$osvers" in
 3*) 
-    lddlflags='-H512 -T512 -bhalt:4 -bM:SRE -bI:$(PERL_INC)/perl.exp -bE:$(BASEEXT).exp -e _nostart'
+    lddlflags="$lddlflags -H512 -T512 -bhalt:4 -bM:SRE -bI:$(PERL_INC)/perl.exp -bE:$(BASEEXT).exp -e _nostart -lc"
     ;;
 *) 
-    lddlflags='-bhalt:4 -bM:SRE -bI:$(PERL_INC)/perl.exp -bE:$(BASEEXT).exp -b noentry'
+    lddlflags="$lddlflags -bhalt:4 -bM:SRE -bI:$(PERL_INC)/perl.exp -bE:$(BASEEXT).exp -b noentry -lc"
     ;;
 esac
-
-#
-# if $ccflags contains -DSOCKS, then add socks library support.
-#
-# SOCKS support also requires each source module with socket support
-# add the following lines directly after the #include <socket.h>:
-#
-#   #ifdef SOCKS
-#   #include <socks.h>
-#   #endif
-#
-# It is expected that libsocks.a resides in /usr/local/lib and that
-# socks.h resides in /usr/local/include. If these files live some
-# different place then modify 
-#
-
-for arg in $ccflags ; do
-
-   if [ "$arg" = "-DSOCKS" ] ; then
-
-      sockslib=socks5
-      incpath=/usr/local/include
-      libpath=/usr/local/lib
-
-      echo >&4 "SOCKS using $incpath/socks.h and $libpath/lib${sockslib}.a"
-      echo >&4 "SOCKS requires source modifications. #include <socket.h> must change to:"
-      echo >&4
-      echo >&4 "   #include <socket.h>"
-      echo >&4 "   #ifdef SOCKS"
-      echo >&4 "   #include <socks.h>"
-      echo >&4 "   #endif"
-      echo >&4
-      echo >&4 "in some or all of the following files:"
-      echo >&4
-
-      for arg in `find . \( -name '*.c' -o -name '*.xs' -o -name '*.h' \) \
-                         -exec egrep -l '#.*include.*socket\.h' {} \; | \
-                         egrep -v "win32|vms|t/lib|Socket.c` ; do
-         echo >&4 "   $arg"
-      done
-
-      echo >&4
-
-      lddlflags="$lddlflags -l$sockslib"
-
-      # setting $libs here breaks the optional libraries search
-      # for some reason, so use $libswanted instead
-      #libs="$libs -lsocks5"
-
-      libswanted="$libswanted $sockslib"
-
-      #
-      # path for include file
-      #
-
-      locincpth="$locincpath /usr/local/include"
-
-      #
-      # path for library not needed, if in /usr/local/lib as that
-      # directory is already searched.
-      #
-
-      #loclibpth="$loclibpath /usr/local/lib"
-
-      break
-
-   fi
-
-done
-
-lddllibc="-lc"
 
 # This script UU/usethreads.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use threads.
@@ -197,6 +133,13 @@ $define|true|[yY]*)
 	    # (e.g. pragma/overload core dumps)
 	    # --jhi@iki.fi
 	    cc=cc_r
+	    if test ! -e /bin/cc_r; then
+	 	    cat >&4 <<EOM
+For pthreads you should use the AIX C compiler cc_r.
+But I cannot find it in /bin.
+Cannot continue, aborting.
+EOM
+	    fi
             ;;
         '') 
 	    cc=cc_r
@@ -204,18 +147,19 @@ $define|true|[yY]*)
         *)
  	    cat >&4 <<EOM
 For pthreads you should use the AIX C compiler cc_r.
-(now your compiler was '$cc')
+(now your compiler was set to '$cc')
 Cannot continue, aborting.
 EOM
  	    exit 1
 	    ;;
         esac
 
-        # Add the POSIX threads library and the re-entrant libc.
+        # Add the POSIX threads library and the re-entrant libc to lddflags.
+        set `echo X "$lddlflags"| sed -e 's/ -lc$/ -lpthreads -lc_r/'`
+        shift
+        lddlflags="$*"
 
-        lddllibc="-lpthreads -lc_r"
-
-        # Add the c_r library to the list of wanted libraries.
+        # Add the POSIX threads library and the re-entrant libc to libswanted.
         # Make sure the c_r library is before the c library or
         # make will fail.
         set `echo X "$libswanted "| sed -e 's/ c / pthreads c_r /'`
@@ -223,7 +167,41 @@ EOM
         libswanted="$*"
 	;;
 esac
-
-lddlflags="$lddlflags $lddllibc"
-
 EOCBU
+
+# This script UU/use64bits.cbu will get 'called-back' by Configure 
+# after it has prompted the user for whether to use 64 bits.
+cat > UU/use64bits.cbu <<'EOCBU'
+case "$use64bits" in
+$define|true|[yY]*)
+	    case "`uname -r`" in
+	    3.*|4.[012].*)
+		cat >&4 <<EOM
+AIX `uname -r` does not support 64-bit interfaces.
+You should upgrade to at least AIX 4.3.
+EOM
+		exit 1
+		;;
+	    esac
+	    ccflags="$ccflags `getconf XBS5_LPBIG_OFFBIG_CFLAGS`"
+    	    ccflags="$ccflags -DUSE_LONG_LONG"
+
+	    ldflags="$ldflags `getconf XBS5_LPBIG_OFFBIG_LDFLAGS`"
+	    # _Somehow_ in AIX 4.3.1.0 the above getconf call manages to
+	    # insert(?) *something* to $ldflags so that later (in Configure) evaluating
+	    # $ldflags causes a newline after the '-b64' (the result of the getconf).
+	    # Try it out: just uncomment the below line and rerun Configure:
+#	    echo >& "AIX $ldflags mystery" ; exit 1
+	    # Just don't ask me how AIX does it.
+	    # Therefore the line re-evaluating ldflags: it seems to drop the whatever
+	    # AIX managed to break. --jhi
+	    ldflags="`echo $ldflags`"
+
+	    libswanted="$libswanted `getconf XBS5_LPBIG_OFFBIG_LIBS|sed -e 's@^-l@@' -e 's@ -l@ @g'`"
+	    # When a 64-bit cc becomes available $archname64
+	    # may need setting so that $archname gets it attached.
+	    ;;
+esac
+EOCBU
+
+# EOF

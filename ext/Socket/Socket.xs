@@ -1,3 +1,4 @@
+#define PERL_NO_GET_CONTEXT
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
@@ -7,6 +8,9 @@
 #  include <sys/types.h>
 # endif
 # include <sys/socket.h>
+# if defined(USE_SOCKS) && defined(I_SOCKS)
+#   include <socks.h>
+# endif 
 # ifdef MPE
 #  define PF_INET AF_INET
 #  define PF_UNIX AF_UNIX
@@ -18,7 +22,9 @@
 # ifdef I_NETINET_IN
 #  include <netinet/in.h>
 # endif
-# include <netdb.h>
+# ifdef I_NETDB
+#  include <netdb.h>
+# endif
 # ifdef I_ARPA_INET
 #  include <arpa/inet.h>
 # endif
@@ -63,6 +69,7 @@
 static int
 my_inet_aton(register const char *cp, struct in_addr *addr)
 {
+	dTHX;
 	register U32 val;
 	register int base;
 	register char c;
@@ -929,12 +936,37 @@ pack_sockaddr_un(pathname)
 #ifdef I_SYS_UN
 	struct sockaddr_un sun_ad; /* fear using sun */
 	STRLEN len;
+
 	Zero( &sun_ad, sizeof sun_ad, char );
 	sun_ad.sun_family = AF_UNIX;
 	len = strlen(pathname);
 	if (len > sizeof(sun_ad.sun_path))
 	    len = sizeof(sun_ad.sun_path);
+#  ifdef OS2	/* Name should start with \socket\ and contain backslashes! */
+	{
+	    int off;
+	    char *s, *e;
+
+	    if (pathname[0] != '/' && pathname[0] != '\\')
+		croak("Relative UNIX domain socket name '%s' unsupported", pathname);
+	    else if (len < 8 
+		     || pathname[7] != '/' && pathname[7] != '\\'
+		     || !strnicmp(pathname + 1, "socket", 6))
+		off = 7;
+	    else
+		off = 0;		/* Preserve names starting with \socket\ */
+	    Copy( "\\socket", sun_ad.sun_path, off, char);
+	    Copy( pathname, sun_ad.sun_path + off, len, char );
+
+	    s = sun_ad.sun_path + off - 1;
+	    e = s + len + 1;
+	    while (++s < e)
+		if (*s = '/')
+		    *s = '\\';
+	}
+#  else	/* !( defined OS2 ) */ 
 	Copy( pathname, sun_ad.sun_path, len, char );
+#  endif
 	ST(0) = sv_2mortal(newSVpvn((char *)&sun_ad, sizeof sun_ad));
 #else
 	ST(0) = (SV *) not_here("pack_sockaddr_un");

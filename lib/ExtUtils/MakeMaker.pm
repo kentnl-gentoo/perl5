@@ -241,12 +241,16 @@ sub full_setup {
 
     AUTHOR ABSTRACT ABSTRACT_FROM BINARY_LOCATION
     C CAPI CCFLAGS CONFIG CONFIGURE DEFINE DIR DISTNAME DL_FUNCS DL_VARS
-    EXCLUDE_EXT EXE_FILES FIRST_MAKEFILE FULLPERL FUNCLIST H IMPORTS
-    INC INCLUDE_EXT INSTALLARCHLIB INSTALLBIN INSTALLDIRS INSTALLMAN1DIR
+    EXCLUDE_EXT EXE_FILES FIRST_MAKEFILE FULLPERL FUNCLIST H 
+    HTMLLIBPODS HTMLSCRIPTPOD IMPORTS
+    INC INCLUDE_EXT INSTALLARCHLIB INSTALLBIN INSTALLDIRS INSTALLHTMLPRIVLIBDIR
+    INSTALLHTMLSCRIPTDIR INSTALLHTMLSITELIBDIR INSTALLMAN1DIR
     INSTALLMAN3DIR INSTALLPRIVLIB INSTALLSCRIPT INSTALLSITEARCH
     INSTALLSITELIB INST_ARCHLIB INST_BIN INST_EXE INST_LIB
+    INST_HTMLLIBDIR INST_HTMLSCRIPTDIR
     INST_MAN1DIR INST_MAN3DIR INST_SCRIPT LDFROM LIB LIBPERL_A LIBS
     LINKTYPE MAKEAPERL MAKEFILE MAN1PODS MAN3PODS MAP_TARGET MYEXTLIB
+    PERL_MALLOC_OK
     NAME NEEDS_LINKING NOECHO NORECURS NO_VC OBJECT OPTIMIZE PERL PERLMAINCC
     PERL_ARCHLIB PERL_LIB PERL_SRC PERM_RW PERM_RWX
     PL_FILES PM PMLIBDIRS POLLUTE PPM_INSTALL_EXEC PPM_INSTALL_SCRIPT PREFIX
@@ -276,7 +280,8 @@ sub full_setup {
  pasthru
 
  c_o xs_c xs_o top_targets linkext dlsyms dynamic dynamic_bs
- dynamic_lib static static_lib manifypods processPL installbin subdirs
+ dynamic_lib static static_lib htmlifypods manifypods processPL
+ installbin subdirs
  clean realclean dist_basics dist_core dist_dir dist_test dist_ci
  install force perldepend makefile staticmake test ppd
 
@@ -328,9 +333,9 @@ sub full_setup {
     %Prepend_dot_dot = 
 	qw(
 
-	   INST_BIN 1 INST_EXE 1 INST_LIB 1 INST_ARCHLIB 1 INST_SCRIPT
-	   1 MAP_TARGET 1 INST_MAN1DIR 1 INST_MAN3DIR 1 PERL_SRC 1
-	   PERL 1 FULLPERL 1
+	   INST_BIN 1 INST_EXE 1 INST_LIB 1 INST_ARCHLIB 1 INST_SCRIPT 1
+	   MAP_TARGET 1 INST_HTMLLIBDIR 1 INST_HTMLSCRIPTDIR 1 
+	   INST_MAN1DIR 1 INST_MAN3DIR 1 PERL_SRC 1 PERL 1 FULLPERL 1
 
 	  );
 
@@ -979,26 +984,29 @@ want to specify some other option, set C<TESTDB_SW> variable:
 =head2 make install
 
 make alone puts all relevant files into directories that are named by
-the macros INST_LIB, INST_ARCHLIB, INST_SCRIPT, INST_MAN1DIR, and
-INST_MAN3DIR. All these default to something below ./blib if you are
-I<not> building below the perl source directory. If you I<are>
-building below the perl source, INST_LIB and INST_ARCHLIB default to
- ../../lib, and INST_SCRIPT is not defined.
+the macros INST_LIB, INST_ARCHLIB, INST_SCRIPT, INST_HTMLLIBDIR,
+INST_HTMLSCRIPTDIR, INST_MAN1DIR, and INST_MAN3DIR.  All these default
+to something below ./blib if you are I<not> building below the perl
+source directory. If you I<are> building below the perl source,
+INST_LIB and INST_ARCHLIB default to ../../lib, and INST_SCRIPT is not
+defined.
 
 The I<install> target of the generated Makefile copies the files found
 below each of the INST_* directories to their INSTALL*
 counterparts. Which counterparts are chosen depends on the setting of
 INSTALLDIRS according to the following table:
 
-		       	   INSTALLDIRS set to
-       	       	        perl   	          site
+		       	         INSTALLDIRS set to
+       	       	              perl   	          site
 
-    INST_ARCHLIB    INSTALLARCHLIB    INSTALLSITEARCH
-    INST_LIB        INSTALLPRIVLIB    INSTALLSITELIB
-    INST_BIN                  INSTALLBIN
-    INST_SCRIPT              INSTALLSCRIPT
-    INST_MAN1DIR             INSTALLMAN1DIR
-    INST_MAN3DIR             INSTALLMAN3DIR
+    INST_ARCHLIB	INSTALLARCHLIB        INSTALLSITEARCH
+    INST_LIB		INSTALLPRIVLIB        INSTALLSITELIB
+    INST_HTMLLIBDIR	INSTALLHTMLPRIVLIBDIR INSTALLHTMLSITELIBDIR
+    INST_HTMLSCRIPTDIR            INSTALLHTMLSCRIPTDIR
+    INST_BIN			  INSTALLBIN
+    INST_SCRIPT                   INSTALLSCRIPT
+    INST_MAN1DIR                  INSTALLMAN1DIR
+    INST_MAN3DIR                  INSTALLMAN3DIR
 
 The INSTALL... macros in turn default to their %Config
 ($Config{installprivlib}, $Config{installarchlib}, etc.) counterparts.
@@ -1219,6 +1227,9 @@ currently used by MakeMaker but may be handy in Makefile.PLs.
 
 =item CAPI
 
+[This attribute is obsolete in Perl 5.6.  PERL_OBJECT builds are C-compatible
+by default.]
+
 Switch to force usage of the Perl C API even when compiling for PERL_OBJECT.
 
 Note that this attribute is passed through to any recursive build,
@@ -1332,6 +1343,20 @@ names are passed through unaltered to the linker options file.
 
 Ref to array of *.h file names. Similar to C.
 
+=item HTMLLIBPODS
+
+Hashref of .pm and .pod files.  MakeMaker will default this to all
+ .pod and any .pm files that include POD directives.  The files listed
+here will be converted to HTML format and installed as was requested
+at Configure time.
+
+=item HTMLSCRIPTPODS
+
+Hashref of pod-containing files.  MakeMaker will default this to all
+EXE_FILES files that include POD directives.  The files listed
+here will be converted to HTML format and installed as was requested
+at Configure time.
+
 =item IMPORTS
 
 This attribute is used to specify names to be imported into the
@@ -1371,6 +1396,22 @@ Determines which of the two sets of installation directories to
 choose: installprivlib and installarchlib versus installsitelib and
 installsitearch. The first pair is chosen with INSTALLDIRS=perl, the
 second with INSTALLDIRS=site. Default is site.
+
+=item INSTALLHTMLPRIVLIBDIR
+
+This directory gets the HTML pages at 'make install' time. Defaults to
+$Config{installhtmlprivlibdir}.
+
+=item INSTALLHTMLSCRIPTDIR
+
+This directory gets the HTML pages at 'make install' time. Defaults to
+$Config{installhtmlscriptdir}.
+
+=item INSTALLHTMLSITELIBDIR
+
+This directory gets the HTML pages at 'make install' time. Defaults to
+$Config{installhtmlsitelibdir}.
+
 
 =item INSTALLMAN1DIR
 
@@ -1421,6 +1462,14 @@ need to use it.
 Directory where we put library files of this extension while building
 it.
 
+=item INST_HTMLLIBDIR
+
+Directory to hold the man pages in HTML format at 'make' time
+
+=item INST_HTMLSCRIPTDIR
+
+Directory to hold the man pages in HTML format at 'make' time
+
 =item INST_MAN1DIR
 
 Directory to hold the man pages at 'make' time
@@ -1432,9 +1481,37 @@ Directory to hold the man pages at 'make' time
 =item INST_SCRIPT
 
 Directory, where executable files should be installed during
-'make'. Defaults to "./blib/bin", just to have a dummy location during
+'make'. Defaults to "./blib/script", just to have a dummy location during
 testing. make install will copy the files in INST_SCRIPT to
 INSTALLSCRIPT.
+
+=item PERL_MALLOC_OK
+
+defaults to 0.  Should be set to TRUE if the extension can work with
+the memory allocation routines substituted by the Perl malloc() subsystem.
+This should be applicable to most extensions with exceptions of those
+
+=over
+
+=item *
+
+with bugs in memory allocations which are caught by Perl's malloc();
+
+=item *
+
+which interact with the memory allocator in other ways than via
+malloc(), realloc(), free(), calloc(), sbrk() and brk();
+
+=item *
+
+which rely on special alignment which is not provided by Perl's malloc().
+
+=back
+
+B<NOTE.>  Negligence to set this flag in I<any one> of loaded extension
+nullifies many advantages of Perl's malloc(), such as better usage of
+system resources, error detection, memory usage reporting, catchable failure
+of memory allocations, etc.
 
 =item LDFROM
 

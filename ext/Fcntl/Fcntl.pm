@@ -122,7 +122,7 @@ sub AUTOLOAD {
     (my $constname = $AUTOLOAD) =~ s/.*:://;
     my $val = constant($constname, 0);
     if ($! != 0) {
-	if ($! =~ /Invalid/) {
+	if ($! =~ /Invalid/ || $!{EINVAL}) {
 	    $AutoLoader::AUTOLOAD = $AUTOLOAD;
 	    goto &AutoLoader::AUTOLOAD;
 	}

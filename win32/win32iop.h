@@ -113,6 +113,13 @@ DllExport  void		win32_free(void *block);
 DllExport  int		win32_open_osfhandle(long handle, int flags);
 DllExport  long		win32_get_osfhandle(int fd);
 
+DllExport  DIR*		win32_opendir(char *filename);
+DllExport  struct direct*	win32_readdir(DIR *dirp);
+DllExport  long		win32_telldir(DIR *dirp);
+DllExport  void		win32_seekdir(DIR *dirp, long loc);
+DllExport  void		win32_rewinddir(DIR *dirp);
+DllExport  int		win32_closedir(DIR *dirp);
+
 #ifndef USE_WIN32_RTL_ENV
 DllExport  char*	win32_getenv(const char *name);
 DllExport  int		win32_putenv(const char *name);
@@ -129,6 +136,8 @@ DllExport  int		win32_uname(struct utsname *n);
 DllExport  int		win32_wait(int *status);
 DllExport  int		win32_waitpid(int pid, int *status, int flags);
 DllExport  int		win32_kill(int pid, int sig);
+DllExport  unsigned long	win32_os_id(void);
+DllExport  void*	win32_dynaload(const char*filename);
 
 #if defined(HAVE_DES_FCRYPT) || defined(PERL_OBJECT)
 DllExport char *	win32_crypt(const char *txt, const char *salt);
@@ -276,6 +285,7 @@ END_EXTERN_C
 #define seekdir			win32_seekdir
 #define rewinddir		win32_rewinddir
 #define closedir		win32_closedir
+#define os_id			win32_os_id
 
 #ifdef HAVE_DES_FCRYPT
 #undef crypt
