@@ -1,7 +1,8 @@
 /*
  *    opcode.h
  *
- *    Copyright (c) 1997-2002, Larry Wall
+ *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -20,10 +21,10 @@
 START_EXTERN_C
 
 
-#define OP_NAME(o) (o->op_type == OP_CUSTOM ? custom_op_name(o) : \
-                    PL_op_name[o->op_type])
-#define OP_DESC(o) (o->op_type == OP_CUSTOM ? custom_op_desc(o) : \
-                    PL_op_desc[o->op_type])
+#define OP_NAME(o) ((o)->op_type == OP_CUSTOM ? custom_op_name(o) : \
+                    PL_op_name[(o)->op_type])
+#define OP_DESC(o) ((o)->op_type == OP_CUSTOM ? custom_op_desc(o) : \
+                    PL_op_desc[(o)->op_type])
 
 #ifndef DOINIT
 EXT char *PL_op_name[];
@@ -380,6 +381,8 @@ EXT char *PL_op_name[] = {
 	"threadsv",
 	"setstate",
 	"method_named",
+	"dor",
+	"dorassign",
 	"custom",
 };
 #endif
@@ -739,6 +742,8 @@ EXT char *PL_op_desc[] = {
 	"per-thread value",
 	"set statement info",
 	"method with known name",
+	"defined or (//)",
+	"defined or assignment (//=)",
 	"unknown custom operator",
 };
 #endif
@@ -1103,6 +1108,8 @@ EXT OP * (CPERLscope(*PL_ppaddr)[])(pTHX) = {
 	MEMBER_TO_FPTR(Perl_pp_threadsv),
 	MEMBER_TO_FPTR(Perl_pp_setstate),
 	MEMBER_TO_FPTR(Perl_pp_method_named),
+	MEMBER_TO_FPTR(Perl_pp_dor),
+	MEMBER_TO_FPTR(Perl_pp_dorassign),
 };
 #endif
 
@@ -1461,6 +1468,8 @@ EXT OP * (CPERLscope(*PL_check)[]) (pTHX_ OP *op) = {
 	MEMBER_TO_FPTR(Perl_ck_null),	/* threadsv */
 	MEMBER_TO_FPTR(Perl_ck_null),	/* setstate */
 	MEMBER_TO_FPTR(Perl_ck_null),	/* method_named */
+	MEMBER_TO_FPTR(Perl_ck_null),	/* dor */
+	MEMBER_TO_FPTR(Perl_ck_null),	/* dorassign */
 	MEMBER_TO_FPTR(Perl_ck_null),	/* custom */
 };
 #endif
@@ -1606,7 +1615,7 @@ EXT U32 PL_opargs[] = {
 	0x00000248,	/* rv2hv */
 	0x00028404,	/* helem */
 	0x00048801,	/* hslice */
-	0x00022800,	/* unpack */
+	0x00122800,	/* unpack */
 	0x0004280d,	/* pack */
 	0x00222808,	/* split */
 	0x0004280d,	/* join */
@@ -1616,8 +1625,8 @@ EXT U32 PL_opargs[] = {
 	0x00004805,	/* anonhash */
 	0x05326801,	/* splice */
 	0x0004691d,	/* push */
-	0x00007604,	/* pop */
-	0x00007604,	/* shift */
+	0x00017604,	/* pop */
+	0x00017604,	/* shift */
 	0x0004691d,	/* unshift */
 	0x0005a801,	/* sort */
 	0x00004809,	/* reverse */
@@ -1816,10 +1825,12 @@ EXT U32 PL_opargs[] = {
 	0x00000014,	/* egrent */
 	0x0000000c,	/* getlogin */
 	0x0004281d,	/* syscall */
-	0x00003604,	/* lock */
+	0x0000f604,	/* lock */
 	0x00000044,	/* threadsv */
 	0x00001404,	/* setstate */
 	0x00000c40,	/* method_named */
+	0x00000600,	/* dor */
+	0x00000604,	/* dorassign */
 	0x00000000,	/* custom */
 };
 #endif

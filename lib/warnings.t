@@ -40,6 +40,7 @@ foreach my $file (@w_files) {
 
     next if $file =~ /(~|\.orig|,v)$/;
     next if $file =~ /perlio$/ && !(find PerlIO::Layer 'perlio');
+    next if -d $file;
 
     open F, "<$file" or die "Cannot open $file: $!\n" ;
     my $line = 0;
@@ -58,7 +59,7 @@ foreach my $file (@w_files) {
 
 undef $/;
 
-print "1..", scalar(@prgs)-$files, "\n";
+print "1.." . (scalar(@prgs)-$files) . "\n";
 
 
 for (@prgs){
@@ -75,6 +76,8 @@ for (@prgs){
         $switch =~ s/(-\S*[A-Z]\S*)/"$1"/ if $Is_VMS; # protect uc switches
     }
     my($prog,$expected) = split(/\nEXPECT\n/, $_);
+    my ($todo, $todo_reason);
+    $todo = $prog =~ s/^#\s*TODO(.*)\n//m and $todo_reason = $1;
     if ( $prog =~ /--FILE--/) {
         my(@files) = split(/\n--FILE--\s*([^\s\n]*)\s*\n/, $prog) ;
 	shift @files ;
@@ -176,12 +179,21 @@ for (@prgs){
 			 (!$option_regex && $results !~ /^\Q$expected/))) or
 	   (!$prefix && (( $option_regex && $results !~ /^$expected/) ||
 			 (!$option_regex && $results ne $expected)))) {
-        print STDERR "PROG: $switch\n$prog\n";
-        print STDERR "EXPECTED:\n$expected\n";
-        print STDERR "GOT:\n$results\n";
+        my $err_line = "PROG: $switch\n$prog\n" .
+                       "EXPECTED:\n$expected\n" .
+                       "GOT:\n$results\n";
+        if ($todo) {
+            $err_line =~ s/^/# /mg;
+            print $err_line;  # Harness can't filter it out from STDERR.
+        }
+        else {
+            print STDERR $err_line;
+        }
         print "not ";
     }
-    print "ok ", ++$i, "\n";
+    print "ok " . ++$i;
+    print " # TODO$todo_reason" if $todo;
+    print "\n";
     foreach (@temps)
 	{ unlink $_ if $_ }
     foreach (@temp_path)

@@ -11,8 +11,8 @@ $i = 1;
 
 my $Is_EBCDIC = (ord('A') == 193) ? 1 : 0;
 my $Is_UTF8   = (${^OPEN} || "") =~ /:utf8/;
-my $total_tests = 23;
-if ($Is_EBCDIC || $Is_UTF8) { $total_tests = 20; }
+my $total_tests = 44;
+if ($Is_EBCDIC || $Is_UTF8) { $total_tests = 41; }
 print "1..$total_tests\n";
 
 sub do_require {
@@ -108,11 +108,43 @@ do_require "0;\n";
 print "# $@\nnot " unless $@ =~ /did not return a true/;
 print "ok ",$i++,"\n";
 
+print "not " if exists $INC{'bleah.pm'};
+print "ok ",$i++,"\n";
+
+my $flag_file = 'bleah.flg';
+# run-time error in require
+for my $expected_compile (1,0) {
+    write_file($flag_file, 1);
+    print "not " unless -e $flag_file;
+    print "ok ",$i++,"\n";
+    write_file('bleah.pm', "unlink '$flag_file' or die; \$a=0; \$b=1/\$a; 1;\n");
+    print "# $@\nnot " if eval { require 'bleah.pm' };
+    print "ok ",$i++,"\n";
+    print "not " unless -e $flag_file xor $expected_compile;
+    print "ok ",$i++,"\n";
+    print "not " unless exists $INC{'bleah.pm'};
+    print "ok ",$i++,"\n";
+}
+
 # compile-time failure in require
 do_require "1)\n";
 # bison says 'parse error' instead of 'syntax error',
 # various yaccs may or may not capitalize 'syntax'.
 print "# $@\nnot " unless $@ =~ /(syntax|parse) error/mi;
+print "ok ",$i++,"\n";
+
+# previous failure cached in %INC
+print "not " unless exists $INC{'bleah.pm'};
+print "ok ",$i++,"\n";
+write_file($flag_file, 1);
+write_file('bleah.pm', "unlink '$flag_file'; 1");
+print "# $@\nnot " if eval { require 'bleah.pm' };
+print "ok ",$i++,"\n";
+print "# $@\nnot " unless $@ =~ /Compilation failed/i;
+print "ok ",$i++,"\n";
+print "not " unless -e $flag_file;
+print "ok ",$i++,"\n";
+print "not " unless exists $INC{'bleah.pm'};
 print "ok ",$i++,"\n";
 
 # successful require
@@ -130,6 +162,23 @@ dofile();
 sub dofile { do "bleah.do"; };
 print $x;
 
+# Test that scalar context is forced for require
+
+write_file('bleah.pm', <<'**BLEAH**'
+print "not " if !defined wantarray || wantarray ne '';
+print "ok $i - require() context\n";
+1;
+**BLEAH**
+);
+                              delete $INC{"bleah.pm"}; ++$::i;
+$foo = eval q{require bleah}; delete $INC{"bleah.pm"}; ++$::i;
+@foo = eval q{require bleah}; delete $INC{"bleah.pm"}; ++$::i;
+       eval q{require bleah}; delete $INC{"bleah.pm"}; ++$::i;
+       eval q{$_=$_+2;require bleah}; delete $INC{"bleah.pm"}; ++$::i;
+$foo = eval  {require bleah}; delete $INC{"bleah.pm"}; ++$::i;
+@foo = eval  {require bleah}; delete $INC{"bleah.pm"}; ++$::i;
+       eval  {require bleah};
+
 # UTF-encoded things - skipped on EBCDIC machines and on UTF-8 input
 
 if ($Is_EBCDIC || $Is_UTF8) { exit; }
@@ -146,7 +195,11 @@ sub bytes_to_utf16 {
 $i++; do_require(bytes_to_utf16('n', qq(print "ok $i\\n"; 1;\n), 1)); # BE
 $i++; do_require(bytes_to_utf16('v', qq(print "ok $i\\n"; 1;\n), 1)); # LE
 
-END { 1 while unlink 'bleah.pm'; 1 while unlink 'bleah.do'; }
+END {
+    1 while unlink 'bleah.pm';
+    1 while unlink 'bleah.do';
+    1 while unlink 'bleah.flg';
+}
 
 # ***interaction with pod (don't put any thing after here)***
 

@@ -1,6 +1,7 @@
 /*    scope.c
  *
- *    Copyright (c) 1991-2002, Larry Wall
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -154,6 +155,13 @@ Perl_savestack_grow(pTHX)
     Renew(PL_savestack, PL_savestack_max, ANY);
 }
 
+void
+Perl_savestack_grow_cnt(pTHX_ I32 need)
+{
+    PL_savestack_max = PL_savestack_ix + need;
+    Renew(PL_savestack, PL_savestack_max, ANY);
+}
+
 #undef GROW
 
 void
@@ -191,9 +199,9 @@ S_save_scalar_at(pTHX_ SV **sptr)
 
     sv = *sptr = NEWSV(0,0);
     if (SvTYPE(osv) >= SVt_PVMG && SvMAGIC(osv) && SvTYPE(osv) != SVt_PVGV) {
+	MAGIC *mg;
 	sv_upgrade(sv, SvTYPE(osv));
 	if (SvGMAGICAL(osv)) {
-	    MAGIC* mg;
 	    bool oldtainted = PL_tainted;
 	    mg_get(osv);		/* note, can croak! */
 	    if (PL_tainting && PL_tainted &&
@@ -206,6 +214,16 @@ S_save_scalar_at(pTHX_ SV **sptr)
 	    PL_tainted = oldtainted;
 	}
 	SvMAGIC(sv) = SvMAGIC(osv);
+	/* if it's a special scalar or if it has no 'set' magic,
+	 * propagate the SvREADONLY flag. --rgs 20030922 */
+	for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
+	    if (SvMAGIC(sv)->mg_type == '\0'
+		    || !SvMAGIC(sv)->mg_virtual->svt_set)
+	    {
+		SvFLAGS(sv) |= SvREADONLY(osv);
+		break;
+	    }
+	}
 	SvFLAGS(sv) |= SvMAGICAL(osv);
 	/* XXX SvMAGIC() is *shared* between osv and sv.  This can
 	 * lead to coredumps when both SVs are destroyed without one
@@ -273,10 +291,22 @@ Perl_save_shared_pvref(pTHX_ char **str)
     SSPUSHINT(SAVEt_SHARED_PVREF);
 }
 
+/* set the SvFLAGS specified by mask to the values in val */
+
+void
+Perl_save_set_svflags(pTHX_ SV* sv, U32 mask, U32 val)
+{
+    SSCHECK(4);
+    SSPUSHPTR(sv);
+    SSPUSHINT(mask);
+    SSPUSHINT(val);
+    SSPUSHINT(SAVEt_SET_SVFLAGS);
+}
+
 void
 Perl_save_gp(pTHX_ GV *gv, I32 empty)
 {
-    SSCHECK(6);
+    SSGROW(6);
     SSPUSHIV((IV)SvLEN(gv));
     SvLEN(gv) = 0; /* forget that anything was allocated here */
     SSPUSHIV((IV)SvCUR(gv));
@@ -391,6 +421,15 @@ Perl_save_long(pTHX_ long int *longp)
 }
 
 void
+Perl_save_bool(pTHX_ bool *boolp)
+{
+    SSCHECK(3);
+    SSPUSHBOOL(*boolp);
+    SSPUSHPTR(boolp);
+    SSPUSHINT(SAVEt_BOOL);
+}
+
+void
 Perl_save_I32(pTHX_ I32 *intp)
 {
     SSCHECK(3);
@@ -460,8 +499,9 @@ void
 Perl_save_padsv(pTHX_ PADOFFSET off)
 {
     SSCHECK(4);
+    ASSERT_CURPAD_ACTIVE("save_padsv");
     SSPUSHPTR(PL_curpad[off]);
-    SSPUSHPTR(PL_curpad);
+    SSPUSHPTR(PL_comppad);
     SSPUSHLONG((long)off);
     SSPUSHINT(SAVEt_PADSV);
 }
@@ -469,16 +509,8 @@ Perl_save_padsv(pTHX_ PADOFFSET off)
 SV **
 Perl_save_threadsv(pTHX_ PADOFFSET i)
 {
-#ifdef USE_5005THREADS
-    SV **svp = &THREADSV(i);	/* XXX Change to save by offset */
-    DEBUG_S(PerlIO_printf(Perl_debug_log, "save_threadsv %"UVuf": %p %p:%s\n",
-			  (UV)i, svp, *svp, SvPEEK(*svp)));
-    save_svref(svp);
-    return svp;
-#else
     Perl_croak(aTHX_ "panic: save_threadsv called in non-threaded perl");
     return 0;
-#endif /* USE_5005THREADS */
 }
 
 void
@@ -542,9 +574,11 @@ Perl_save_freepv(pTHX_ char *pv)
 void
 Perl_save_clearsv(pTHX_ SV **svp)
 {
+    ASSERT_CURPAD_ACTIVE("save_clearsv");
     SSCHECK(2);
     SSPUSHLONG((long)(svp-PL_curpad));
     SSPUSHINT(SAVEt_CLEARSV);
+    SvPADSTALE_off(*svp); /* mark lexical as active */
 }
 
 void
@@ -600,6 +634,9 @@ Perl_save_aelem(pTHX_ AV *av, I32 idx, SV **sptr)
     SSPUSHINT(idx);
     SSPUSHPTR(SvREFCNT_inc(*sptr));
     SSPUSHINT(SAVEt_AELEM);
+    /* if it gets reified later, the restore will have the wrong refcnt */
+    if (!AvREAL(av) && AvREIFY(av))
+	SvREFCNT_inc(*sptr);
     save_scalar_at(sptr);
     sv = *sptr;
     /* If we're localizing a tied array element, this new sv
@@ -682,7 +719,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    value = (SV*)SSPOPPTR;
 	    gv = (GV*)SSPOPPTR;
 	    ptr = &GvSV(gv);
-	    SvREFCNT_dec(gv);
+	    av = (AV*)gv; /* what to refcnt_dec */
 	    goto restore_sv;
 	case SAVEt_GENERIC_PVREF:		/* generic pv */
 	    str = (char*)SSPOPPTR;
@@ -715,6 +752,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_SVREF:			/* scalar reference */
 	    value = (SV*)SSPOPPTR;
 	    ptr = SSPOPPTR;
+	    av = Nullav; /* what to refcnt_dec */
 	restore_sv:
 	    sv = *(SV**)ptr;
 	    DEBUG_S(PerlIO_printf(Perl_debug_log,
@@ -750,6 +788,8 @@ Perl_leave_scope(pTHX_ I32 base)
 	    SvSETMAGIC(value);
 	    PL_localizing = 0;
 	    SvREFCNT_dec(value);
+	    if (av) /* actually an av, hv or gv */
+		SvREFCNT_dec(av);
 	    break;
 	case SAVEt_AV:				/* array reference */
 	    av = (AV*)SSPOPPTR;
@@ -794,6 +834,10 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_LONG:			/* long reference */
 	    ptr = SSPOPPTR;
 	    *(long*)ptr = (long)SSPOPLONG;
+	    break;
+	case SAVEt_BOOL:			/* bool reference */
+	    ptr = SSPOPPTR;
+	    *(bool*)ptr = (bool)SSPOPBOOL;
 	    break;
 	case SAVEt_I32:				/* I32 reference */
 	    ptr = SSPOPPTR;
@@ -857,8 +901,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    break;
 	case SAVEt_FREEOP:
 	    ptr = SSPOPPTR;
-	    if (PL_comppad)
-		PL_curpad = AvARRAY(PL_comppad);
+	    ASSERT_CURPAD_LEGAL("SAVEt_FREEOP"); /* XXX DAPM tmp */
 	    op_free((OP*)ptr);
 	    break;
 	case SAVEt_FREEPV:
@@ -868,6 +911,14 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_CLEARSV:
 	    ptr = (void*)&PL_curpad[SSPOPLONG];
 	    sv = *(SV**)ptr;
+
+	    DEBUG_Xv(PerlIO_printf(Perl_debug_log,
+	     "Pad 0x%"UVxf"[0x%"UVxf"] clearsv: %ld sv=0x%"UVxf"<%"IVdf"> %s\n",
+		PTR2UV(PL_comppad), PTR2UV(PL_curpad),
+		(long)((SV **)ptr-PL_curpad), PTR2UV(sv), (IV)SvREFCNT(sv),
+		(SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) ? "clear" : "abandon"
+	    ));
+
 	    /* Can clear pad variable in place? */
 	    if (SvREFCNT(sv) <= 1 && !SvOBJECT(sv)) {
 		/*
@@ -904,16 +955,19 @@ Perl_leave_scope(pTHX_ I32 base)
 		    (void)SvOOK_off(sv);
 		    break;
 		}
+		SvPADSTALE_on(sv); /* mark as no longer live */
 	    }
 	    else {	/* Someone has a claim on this, so abandon it. */
-		U32 padflags = SvFLAGS(sv) & (SVs_PADBUSY|SVs_PADMY|SVs_PADTMP);
+		U32 padflags = SvFLAGS(sv) & (SVs_PADMY|SVs_PADTMP);
 		switch (SvTYPE(sv)) {	/* Console ourselves with a new value */
 		case SVt_PVAV:	*(SV**)ptr = (SV*)newAV();	break;
 		case SVt_PVHV:	*(SV**)ptr = (SV*)newHV();	break;
 		default:	*(SV**)ptr = NEWSV(0,0);	break;
 		}
 		SvREFCNT_dec(sv);	/* Cast current value to the winds. */
-		SvFLAGS(*(SV**)ptr) |= padflags; /* preserve pad nature */
+		/* preserve pad nature, but also mark as not live
+		 * for any closure capturing */
+		SvFLAGS(*(SV**)ptr) |= padflags | SVs_PADSTALE;
 	    }
 	    break;
 	case SAVEt_DELETE:
@@ -945,13 +999,14 @@ Perl_leave_scope(pTHX_ I32 base)
 	    value = (SV*)SSPOPPTR;
 	    i = SSPOPINT;
 	    av = (AV*)SSPOPPTR;
+	    if (!AvREAL(av) && AvREIFY(av)) /* undo reify guard */
+		SvREFCNT_dec(value);
 	    ptr = av_fetch(av,i,1);
 	    if (ptr) {
 		sv = *(SV**)ptr;
 		if (sv && sv != &PL_sv_undef) {
 		    if (SvTIED_mg((SV*)av, PERL_MAGIC_tied))
 			(void)SvREFCNT_inc(sv);
-		    SvREFCNT_dec(av);
 		    goto restore_sv;
 		}
 	    }
@@ -969,8 +1024,8 @@ Perl_leave_scope(pTHX_ I32 base)
 		    ptr = &HeVAL((HE*)ptr);
 		    if (SvTIED_mg((SV*)hv, PERL_MAGIC_tied))
 			(void)SvREFCNT_inc(*(SV**)ptr);
-		    SvREFCNT_dec(hv);
 		    SvREFCNT_dec(sv);
+		    av = (AV*)hv; /* what to refcnt_dec */
 		    goto restore_sv;
 		}
 	    }
@@ -989,7 +1044,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    *(I32*)&PL_hints = (I32)SSPOPINT;
 	    break;
 	case SAVEt_COMPPAD:
-	    PL_comppad = (AV*)SSPOPPTR;
+	    PL_comppad = (PAD*)SSPOPPTR;
 	    if (PL_comppad)
 		PL_curpad = AvARRAY(PL_comppad);
 	    else
@@ -1000,7 +1055,16 @@ Perl_leave_scope(pTHX_ I32 base)
 		PADOFFSET off = (PADOFFSET)SSPOPLONG;
 		ptr = SSPOPPTR;
 		if (ptr)
-		    ((SV**)ptr)[off] = (SV*)SSPOPPTR;
+		    AvARRAY((PAD*)ptr)[off] = (SV*)SSPOPPTR;
+	    }
+	    break;
+	case SAVEt_SET_SVFLAGS:
+	    {
+		U32 val  = (U32)SSPOPINT;
+		U32 mask = (U32)SSPOPINT;
+		sv = (SV*)SSPOPPTR;
+		SvFLAGS(sv) &= ~mask;
+		SvFLAGS(sv) |= val;
 	    }
 	    break;
 	default:

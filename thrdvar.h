@@ -1,6 +1,6 @@
 /*    thdrvar.h
  *
- *    Copyright (c) 1997-2002, Larry Wall
+ *    Copyright (C) 1999, 2000, 2001, 2002, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -26,10 +26,6 @@
  * will be global per-interpreter. */
 
 /* Important ones in the first cache line (if alignment is done right) */
-
-#ifdef USE_5005THREADS
-PERLVAR(interp,		PerlInterpreter*)	/* thread owner */
-#endif
 
 PERLVAR(Tstack_sp,	SV **)		/* top of the stack */
 #ifdef OP_IN_REGISTER
@@ -94,7 +90,7 @@ PERLVAR(Ttimesbuf,	struct tms)
 /* Fields used by magic variables such as $@, $/ and so on */
 PERLVAR(Ttainted,	bool)		/* using variables controlled by $< */
 PERLVAR(Tcurpm,		PMOP *)		/* what to do \ interps in REs from */
-PERLVAR(Tnrs,		SV *)		/* placeholder: unused since 5.8.0 (5.7.2 patch #12027 for bug ID 20010815.012) */
+PERLVAR(Tnrs,		SV *)		/* was placeholder: unused since 5.8.0 (5.7.2 patch #12027 for bug ID 20010815.012). Used to save rx->saved_copy */
 
 /*
 =for apidoc mn|SV*|PL_rs
@@ -144,9 +140,9 @@ PERLVARI(Tprotect,	protect_proc_t,	MEMBER_TO_FPTR(Perl_default_protect))
 PERLVARI(Terrors,	SV *, Nullsv)	/* outstanding queued errors */
 
 /* statics "owned" by various functions */
-PERLVAR(Tav_fetch_sv,	SV *)		/* owned by av_fetch() */
-PERLVAR(Thv_fetch_sv,	SV *)		/* owned by hv_fetch() */
-PERLVAR(Thv_fetch_ent_mh, HE)		/* owned by hv_fetch_ent() */
+PERLVAR(Tav_fetch_sv,	SV *)		/* unused as of change #19268 */
+PERLVAR(Thv_fetch_sv,	SV *)		/* unused as of change #19268 */
+PERLVAR(Thv_fetch_ent_mh, HE*)		/* owned by hv_fetch_ent() */
 
 PERLVAR(Tmodcount,	I32)		/* how much mod()ification in assignment? */
 
@@ -172,23 +168,11 @@ PERLVARI(Tmaxscream,	I32,	-1)
 PERLVAR(Tlastscream,	SV *)
 
 PERLVAR(Tregdummy,	regnode)	/* from regcomp.c */
-PERLVAR(Tregcomp_parse,	char*)		/* Input-scan pointer. */
-PERLVAR(Tregxend,	char*)		/* End of input for compile */
-PERLVAR(Tregcode,	regnode*)	/* Code-emit pointer; &regdummy = don't */
-PERLVAR(Tregnaughty,	I32)		/* How bad is this pattern? */
-PERLVAR(Tregsawback,	I32)		/* Did we see \1, ...? */
 PERLVAR(Tregprecomp,	char *)		/* uncompiled string. */
 PERLVAR(Tregnpar,	I32)		/* () count. */
 PERLVAR(Tregsize,	I32)		/* Code size. */
-PERLVAR(Tregflags,	U32)		/* are we folding, multilining? */
-PERLVAR(Tregseen,	U32)		/* from regcomp.c */
-PERLVAR(Tseen_zerolen,	I32)		/* from regcomp.c */
-PERLVAR(Tseen_evals,	I32)		/* from regcomp.c */
-PERLVAR(Tregcomp_rx,	regexp *)	/* from regcomp.c */
-PERLVAR(Textralen,	I32)		/* from regcomp.c */
 PERLVAR(Tcolorset,	int)		/* from regcomp.c */
 PERLVARA(Tcolors,6,	char *)		/* from regcomp.c */
-PERLVAR(Treg_whilem_seen, I32)		/* number of WHILEM in this expr */
 PERLVAR(Treginput,	char *)		/* String-input pointer. */
 PERLVAR(Tregbol,	char *)		/* Beginning of input, for ^ check. */
 PERLVAR(Tregeol,	char *)		/* End of input, for $ check. */
@@ -197,7 +181,6 @@ PERLVAR(Tregendp,	I32 *)		/* Ditto for endp. */
 PERLVAR(Treglastparen,	U32 *)		/* Similarly for lastparen. */
 PERLVAR(Treglastcloseparen, U32 *)	/* Similarly for lastcloseparen. */
 PERLVAR(Tregtill,	char *)		/* How far we are required to go. */
-PERLVAR(Tregcompat1,	char)		/* used to be regprev1 */
 PERLVAR(Treg_start_tmp,	char **)	/* from regexec.c */
 PERLVAR(Treg_start_tmpl,U32)		/* from regexec.c */
 PERLVAR(Tregdata,	struct reg_data *)
@@ -245,32 +228,6 @@ PERLVAR(Twatchok,	char *)
 
 /* Note that the variables below are all explicitly referenced in the code
  * as thr->whatever and therefore don't need the 'T' prefix. */
-
-#ifdef USE_5005THREADS
-
-PERLVAR(oursv,		SV *)
-PERLVAR(cvcache,	HV *)
-PERLVAR(self,		perl_os_thread)	/* Underlying thread object */
-PERLVAR(flags,		U32)
-PERLVAR(threadsv,	AV *)		/* Per-thread SVs ($_, $@ etc.) */
-PERLVAR(threadsvp,	SV **)		/* AvARRAY(threadsv) */
-PERLVAR(specific,	AV *)		/* Thread-specific user data */
-PERLVAR(errsv,		SV *)		/* Backing SV for $@ */
-PERLVAR(mutex,		perl_mutex)	/* For the fields others can change */
-PERLVAR(tid,		U32)
-PERLVAR(prev,		struct perl_thread *)
-PERLVAR(next,		struct perl_thread *)
-					/* Circular linked list of threads */
-
-#ifdef HAVE_THREAD_INTERN
-PERLVAR(i,		struct thread_intern)
-					/* Platform-dependent internals */
-#endif
-
-PERLVAR(trailing_nul,	char)		/* For the sake of thrsv and oursv */
-PERLVAR(thr_done,	bool)		/* True when the thread has finished */
-
-#endif /* USE_5005THREADS */
 
 PERLVAR(Treg_match_utf8,	bool)		/* was what we matched against utf8 */
 

@@ -1,6 +1,7 @@
 /*    util.c
  *
- *    Copyright (c) 1991-2002, Larry Wall
+ *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -37,15 +38,6 @@
 #endif
 
 #define FLUSH
-
-#ifdef LEAKTEST
-
-long xcount[MAXXCOUNT];
-long lastxcount[MAXXCOUNT];
-long xycount[MAXXCOUNT][MAXYCOUNT];
-long lastxycount[MAXXCOUNT][MAXYCOUNT];
-
-#endif
 
 #if defined(HAS_FCNTL) && defined(F_SETFD) && !defined(FD_CLOEXEC)
 #  define FD_CLOEXEC 1			/* NeXT needs this */
@@ -85,7 +77,7 @@ Perl_safesysmalloc(MEM_SIZE size)
     else {
 	PerlIO_puts(Perl_error_log,PL_no_mem) FLUSH;
 	my_exit(1);
-        return Nullch;
+	return Nullch;
     }
     /*NOTREACHED*/
 }
@@ -188,148 +180,6 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
     }
     /*NOTREACHED*/
 }
-
-#ifdef LEAKTEST
-
-struct mem_test_strut {
-    union {
-	long type;
-	char c[2];
-    } u;
-    long size;
-};
-
-#    define ALIGN sizeof(struct mem_test_strut)
-
-#    define sizeof_chunk(ch) (((struct mem_test_strut*) (ch))->size)
-#    define typeof_chunk(ch) \
-	(((struct mem_test_strut*) (ch))->u.c[0] + ((struct mem_test_strut*) (ch))->u.c[1]*100)
-#    define set_typeof_chunk(ch,t) \
-	(((struct mem_test_strut*) (ch))->u.c[0] = t % 100, ((struct mem_test_strut*) (ch))->u.c[1] = t / 100)
-#define SIZE_TO_Y(size) ( (size) > MAXY_SIZE				\
-			  ? MAXYCOUNT - 1 				\
-			  : ( (size) > 40 				\
-			      ? ((size) - 1)/8 + 5			\
-			      : ((size) - 1)/4))
-
-Malloc_t
-Perl_safexmalloc(I32 x, MEM_SIZE size)
-{
-    register char* where = (char*)safemalloc(size + ALIGN);
-
-    xcount[x] += size;
-    xycount[x][SIZE_TO_Y(size)]++;
-    set_typeof_chunk(where, x);
-    sizeof_chunk(where) = size;
-    return (Malloc_t)(where + ALIGN);
-}
-
-Malloc_t
-Perl_safexrealloc(Malloc_t wh, MEM_SIZE size)
-{
-    char *where = (char*)wh;
-
-    if (!wh)
-	return safexmalloc(0,size);
-
-    {
-	MEM_SIZE old = sizeof_chunk(where - ALIGN);
-	int t = typeof_chunk(where - ALIGN);
-	register char* new = (char*)saferealloc(where - ALIGN, size + ALIGN);
-
-	xycount[t][SIZE_TO_Y(old)]--;
-	xycount[t][SIZE_TO_Y(size)]++;
-	xcount[t] += size - old;
-	sizeof_chunk(new) = size;
-	return (Malloc_t)(new + ALIGN);
-    }
-}
-
-void
-Perl_safexfree(Malloc_t wh)
-{
-    I32 x;
-    char *where = (char*)wh;
-    MEM_SIZE size;
-
-    if (!where)
-	return;
-    where -= ALIGN;
-    size = sizeof_chunk(where);
-    x = where[0] + 100 * where[1];
-    xcount[x] -= size;
-    xycount[x][SIZE_TO_Y(size)]--;
-    safefree(where);
-}
-
-Malloc_t
-Perl_safexcalloc(I32 x,MEM_SIZE count, MEM_SIZE size)
-{
-    register char * where = (char*)safexmalloc(x, size * count + ALIGN);
-    xcount[x] += size;
-    xycount[x][SIZE_TO_Y(size)]++;
-    memset((void*)(where + ALIGN), 0, size * count);
-    set_typeof_chunk(where, x);
-    sizeof_chunk(where) = size;
-    return (Malloc_t)(where + ALIGN);
-}
-
-STATIC void
-S_xstat(pTHX_ int flag)
-{
-    register I32 i, j, total = 0;
-    I32 subtot[MAXYCOUNT];
-
-    for (j = 0; j < MAXYCOUNT; j++) {
-	subtot[j] = 0;
-    }
-
-    PerlIO_printf(Perl_debug_log, "   Id  subtot   4   8  12  16  20  24  28  32  36  40  48  56  64  72  80 80+\n", total);
-    for (i = 0; i < MAXXCOUNT; i++) {
-	total += xcount[i];
-	for (j = 0; j < MAXYCOUNT; j++) {
-	    subtot[j] += xycount[i][j];
-	}
-	if (flag == 0
-	    ? xcount[i]			/* Have something */
-	    : (flag == 2
-	       ? xcount[i] != lastxcount[i] /* Changed */
-	       : xcount[i] > lastxcount[i])) { /* Growed */
-	    PerlIO_printf(Perl_debug_log,"%2d %02d %7ld ", i / 100, i % 100,
-			  flag == 2 ? xcount[i] - lastxcount[i] : xcount[i]);
-	    lastxcount[i] = xcount[i];
-	    for (j = 0; j < MAXYCOUNT; j++) {
-		if ( flag == 0
-		     ? xycount[i][j]	/* Have something */
-		     : (flag == 2
-			? xycount[i][j] != lastxycount[i][j] /* Changed */
-			: xycount[i][j] > lastxycount[i][j])) {	/* Growed */
-		    PerlIO_printf(Perl_debug_log,"%3ld ",
-				  flag == 2
-				  ? xycount[i][j] - lastxycount[i][j]
-				  : xycount[i][j]);
-		    lastxycount[i][j] = xycount[i][j];
-		} else {
-		    PerlIO_printf(Perl_debug_log, "  . ", xycount[i][j]);
-		}
-	    }
-	    PerlIO_printf(Perl_debug_log, "\n");
-	}
-    }
-    if (flag != 2) {
-	PerlIO_printf(Perl_debug_log, "Total %7ld ", total);
-	for (j = 0; j < MAXYCOUNT; j++) {
-	    if (subtot[j]) {
-		PerlIO_printf(Perl_debug_log, "%3ld ", subtot[j]);
-	    } else {
-		PerlIO_printf(Perl_debug_log, "  . ");
-	    }
-	}
-	PerlIO_printf(Perl_debug_log, "\n");	
-    }
-}
-
-#endif /* LEAKTEST */
 
 /* These must be defined when not using Perl's malloc for binary
  * compatibility */
@@ -508,8 +358,12 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
     I32 rarest = 0;
     U32 frequency = 256;
 
-    if (flags & FBMcf_TAIL)
+    if (flags & FBMcf_TAIL) {
+	MAGIC *mg = SvUTF8(sv) && SvMAGICAL(sv) ? mg_find(sv, PERL_MAGIC_utf8) : NULL;
 	sv_catpvn(sv, "\n", 1);		/* Taken into account in fbm_instr() */
+	if (mg && mg->mg_len >= 0)
+	    mg->mg_len++;
+    }
     s = (U8*)SvPV_force(sv, len);
     (void)SvUPGRADE(sv, SVt_PVBM);
     if (len == 0)		/* TAIL might be on a zero-length string. */
@@ -1108,7 +962,7 @@ Perl_vmess(pTHX_ const char *pat, va_list *args)
 
 	if (CopLINE(cop))
 	    Perl_sv_catpvf(aTHX_ sv, " at %s line %"IVdf,
-           OutCopFILE(cop), (IV)CopLINE(cop));
+	    OutCopFILE(cop), (IV)CopLINE(cop));
 	if (GvIO(PL_last_in_gv) && IoLINES(GvIOp(PL_last_in_gv))) {
 	    bool line_mode = (RsSIMPLE(PL_rs) &&
 			      SvCUR(PL_rs) == 1 && *SvPVX(PL_rs) == '\n');
@@ -1118,13 +972,55 @@ Perl_vmess(pTHX_ const char *pat, va_list *args)
 			   line_mode ? "line" : "chunk",
 			   (IV)IoLINES(GvIOp(PL_last_in_gv)));
 	}
-#ifdef USE_5005THREADS
-	if (thr->tid)
-	    Perl_sv_catpvf(aTHX_ sv, " thread %ld", thr->tid);
-#endif
 	sv_catpv(sv, PL_dirty ? dgd : ".\n");
     }
     return sv;
+}
+
+void
+Perl_write_to_stderr(pTHX_ const char* message, int msglen)
+{
+    IO *io;
+    MAGIC *mg;
+
+    if (PL_stderrgv && SvREFCNT(PL_stderrgv) 
+	&& (io = GvIO(PL_stderrgv))
+	&& (mg = SvTIED_mg((SV*)io, PERL_MAGIC_tiedscalar))) 
+    {
+	dSP;
+	ENTER;
+	SAVETMPS;
+
+	save_re_context();
+	SAVESPTR(PL_stderrgv);
+	PL_stderrgv = Nullgv;
+
+	PUSHSTACKi(PERLSI_MAGIC);
+
+	PUSHMARK(SP);
+	EXTEND(SP,2);
+	PUSHs(SvTIED_obj((SV*)io, mg));
+	PUSHs(sv_2mortal(newSVpvn(message, msglen)));
+	PUTBACK;
+	call_method("PRINT", G_SCALAR);
+
+	POPSTACK;
+	FREETMPS;
+	LEAVE;
+    }
+    else {
+#ifdef USE_SFIO
+	/* SFIO can really mess with your errno */
+	int e = errno;
+#endif
+	PerlIO *serr = Perl_error_log;
+
+	PERL_WRITE_MSG_TO_CONSOLE(serr, message, msglen);
+	(void)PerlIO_flush(serr);
+#ifdef USE_SFIO
+	errno = e;
+#endif
+    }
 }
 
 OP *
@@ -1137,6 +1033,7 @@ Perl_vdie(pTHX_ const char* pat, va_list *args)
     CV *cv;
     SV *msv;
     STRLEN msglen;
+    I32 utf8 = 0;
 
     DEBUG_S(PerlIO_printf(Perl_debug_log,
 			  "%p: die: curstack = %p, mainstack = %p\n",
@@ -1151,6 +1048,7 @@ Perl_vdie(pTHX_ const char* pat, va_list *args)
 	}
 	else
 	    message = SvPV(msv,msglen);
+	utf8 = SvUTF8(msv);
     }
     else {
 	message = Nullch;
@@ -1176,6 +1074,7 @@ Perl_vdie(pTHX_ const char* pat, va_list *args)
 	    save_re_context();
 	    if (message) {
 		msg = newSVpvn(message, msglen);
+		SvFLAGS(msg) |= utf8;
 		SvREADONLY_on(msg);
 		SAVEFREESV(msg);
 	    }
@@ -1194,6 +1093,7 @@ Perl_vdie(pTHX_ const char* pat, va_list *args)
     }
 
     PL_restartop = die_where(message, msglen);
+    SvFLAGS(ERRSV) |= utf8;
     DEBUG_S(PerlIO_printf(Perl_debug_log,
 	  "%p: die: restartop = %p, was_in_eval = %d, top_env = %p\n",
 	  thr, PL_restartop, was_in_eval, PL_top_env));
@@ -1236,6 +1136,7 @@ Perl_vcroak(pTHX_ const char* pat, va_list *args)
     CV *cv;
     SV *msv;
     STRLEN msglen;
+    I32 utf8 = 0;
 
     if (pat) {
 	msv = vmess(pat, args);
@@ -1246,6 +1147,7 @@ Perl_vcroak(pTHX_ const char* pat, va_list *args)
 	}
 	else
 	    message = SvPV(msv,msglen);
+	utf8 = SvUTF8(msv);
     }
     else {
 	message = Nullch;
@@ -1271,6 +1173,7 @@ Perl_vcroak(pTHX_ const char* pat, va_list *args)
 	    save_re_context();
 	    if (message) {
 		msg = newSVpvn(message, msglen);
+		SvFLAGS(msg) |= utf8;
 		SvREADONLY_on(msg);
 		SAVEFREESV(msg);
 	    }
@@ -1289,24 +1192,13 @@ Perl_vcroak(pTHX_ const char* pat, va_list *args)
     }
     if (PL_in_eval) {
 	PL_restartop = die_where(message, msglen);
+	SvFLAGS(ERRSV) |= utf8;
 	JMPENV_JUMP(3);
     }
     else if (!message)
 	message = SvPVx(ERRSV, msglen);
 
-    {
-#ifdef USE_SFIO
-	/* SFIO can really mess with your errno */
-	int e = errno;
-#endif
-	PerlIO *serr = Perl_error_log;
-
-	PERL_WRITE_MSG_TO_CONSOLE(serr, message, msglen);
-	(void)PerlIO_flush(serr);
-#ifdef USE_SFIO
-	errno = e;
-#endif
-    }
+    write_to_stderr(message, msglen);
     my_failure_exit();
 }
 
@@ -1361,10 +1253,10 @@ Perl_vwarn(pTHX_ const char* pat, va_list *args)
     CV *cv;
     SV *msv;
     STRLEN msglen;
-    IO *io;
-    MAGIC *mg;
+    I32 utf8 = 0;
 
     msv = vmess(pat, args);
+    utf8 = SvUTF8(msv);
     message = SvPV(msv, msglen);
 
     if (PL_warnhook) {
@@ -1382,6 +1274,7 @@ Perl_vwarn(pTHX_ const char* pat, va_list *args)
 	    ENTER;
 	    save_re_context();
 	    msg = newSVpvn(message, msglen);
+	    SvFLAGS(msg) |= utf8;
 	    SvREADONLY_on(msg);
 	    SAVEFREESV(msg);
 
@@ -1396,33 +1289,7 @@ Perl_vwarn(pTHX_ const char* pat, va_list *args)
 	}
     }
 
-    /* if STDERR is tied, use it instead */
-    if (PL_stderrgv && (io = GvIOp(PL_stderrgv))
-	&& (mg = SvTIED_mg((SV*)io, PERL_MAGIC_tiedscalar))) {
-	dSP; ENTER;
-	PUSHMARK(SP);
-	XPUSHs(SvTIED_obj((SV*)io, mg));
-	XPUSHs(sv_2mortal(newSVpvn(message, msglen)));
-	PUTBACK;
-	call_method("PRINT", G_SCALAR);
-	LEAVE;
-	return;
-    }
-
-    {
-	PerlIO *serr = Perl_error_log;
-
-	PERL_WRITE_MSG_TO_CONSOLE(serr, message, msglen);
-#ifdef LEAKTEST
-	DEBUG_L(*message == '!'
-		? (xstat(message[1]=='!'
-			 ? (message[2]=='!' ? 2 : 1)
-			 : 0)
-		   , 0)
-		: 0);
-#endif
-	(void)PerlIO_flush(serr);
-    }
+    write_to_stderr(message, msglen);
 }
 
 #if defined(PERL_IMPLICIT_CONTEXT)
@@ -1486,95 +1353,80 @@ Perl_vwarner(pTHX_ U32  err, const char* pat, va_list* args)
     CV *cv;
     SV *msv;
     STRLEN msglen;
+    I32 utf8 = 0;
 
     msv = vmess(pat, args);
     message = SvPV(msv, msglen);
+    utf8 = SvUTF8(msv);
 
     if (ckDEAD(err)) {
-#ifdef USE_5005THREADS
-        DEBUG_S(PerlIO_printf(Perl_debug_log, "croak: 0x%"UVxf" %s", PTR2UV(thr), message));
-#endif /* USE_5005THREADS */
-        if (PL_diehook) {
-            /* sv_2cv might call Perl_croak() */
-            SV *olddiehook = PL_diehook;
-            ENTER;
-            SAVESPTR(PL_diehook);
-            PL_diehook = Nullsv;
-            cv = sv_2cv(olddiehook, &stash, &gv, 0);
-            LEAVE;
-            if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
-                dSP;
-                SV *msg;
+	if (PL_diehook) {
+	    /* sv_2cv might call Perl_croak() */
+	    SV *olddiehook = PL_diehook;
+	    ENTER;
+	    SAVESPTR(PL_diehook);
+	    PL_diehook = Nullsv;
+	    cv = sv_2cv(olddiehook, &stash, &gv, 0);
+	    LEAVE;
+	    if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
+		dSP;
+		SV *msg;
 
-                ENTER;
+		ENTER;
 		save_re_context();
-                msg = newSVpvn(message, msglen);
-                SvREADONLY_on(msg);
-                SAVEFREESV(msg);
+		msg = newSVpvn(message, msglen);
+		SvFLAGS(msg) |= utf8;
+		SvREADONLY_on(msg);
+		SAVEFREESV(msg);
 
 		PUSHSTACKi(PERLSI_DIEHOOK);
-                PUSHMARK(sp);
-                XPUSHs(msg);
-                PUTBACK;
-                call_sv((SV*)cv, G_DISCARD);
+		PUSHMARK(sp);
+		XPUSHs(msg);
+		PUTBACK;
+		call_sv((SV*)cv, G_DISCARD);
 		POPSTACK;
-                LEAVE;
-            }
-        }
-        if (PL_in_eval) {
-            PL_restartop = die_where(message, msglen);
-            JMPENV_JUMP(3);
-        }
-	{
-	    PerlIO *serr = Perl_error_log;
-	    PERL_WRITE_MSG_TO_CONSOLE(serr, message, msglen);
-	    (void)PerlIO_flush(serr);
+		LEAVE;
+	    }
 	}
-        my_failure_exit();
-
+	if (PL_in_eval) {
+	    PL_restartop = die_where(message, msglen);
+	    SvFLAGS(ERRSV) |= utf8;
+	    JMPENV_JUMP(3);
+	}
+	write_to_stderr(message, msglen);
+	my_failure_exit();
     }
     else {
-        if (PL_warnhook) {
-            /* sv_2cv might call Perl_warn() */
-            SV *oldwarnhook = PL_warnhook;
-            ENTER;
-            SAVESPTR(PL_warnhook);
-            PL_warnhook = Nullsv;
-            cv = sv_2cv(oldwarnhook, &stash, &gv, 0);
+	if (PL_warnhook) {
+	    /* sv_2cv might call Perl_warn() */
+	    SV *oldwarnhook = PL_warnhook;
+	    ENTER;
+	    SAVESPTR(PL_warnhook);
+	    PL_warnhook = Nullsv;
+	    cv = sv_2cv(oldwarnhook, &stash, &gv, 0);
 	    LEAVE;
-            if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
-                dSP;
-                SV *msg;
+	    if (cv && !CvDEPTH(cv) && (CvROOT(cv) || CvXSUB(cv))) {
+		dSP;
+		SV *msg;
 
-                ENTER;
+		ENTER;
 		save_re_context();
-                msg = newSVpvn(message, msglen);
-                SvREADONLY_on(msg);
-                SAVEFREESV(msg);
+		msg = newSVpvn(message, msglen);
+		SvFLAGS(msg) |= utf8;
+		SvREADONLY_on(msg);
+		SAVEFREESV(msg);
 
 		PUSHSTACKi(PERLSI_WARNHOOK);
-                PUSHMARK(sp);
-                XPUSHs(msg);
-                PUTBACK;
-                call_sv((SV*)cv, G_DISCARD);
+		PUSHMARK(sp);
+		XPUSHs(msg);
+		PUTBACK;
+		call_sv((SV*)cv, G_DISCARD);
 		POPSTACK;
-                LEAVE;
-                return;
-            }
-        }
-	{
-	    PerlIO *serr = Perl_error_log;
-	    PERL_WRITE_MSG_TO_CONSOLE(serr, message, msglen);
-#ifdef LEAKTEST
-	    DEBUG_L(*message == '!'
-		? (xstat(message[1]=='!'
-			 ? (message[2]=='!' ? 2 : 1)
-			 : 0)
-		   , 0)
-		: 0);
-#endif
-	    (void)PerlIO_flush(serr);
+		LEAVE;
+		return;
+	    }
 	}
+	write_to_stderr(message, msglen);
     }
 }
 
@@ -1613,9 +1465,9 @@ Perl_my_setenv(pTHX_ char *nam, char *val)
 	for (max = i; environ[max]; max++) ;
 	tmpenv = (char**)safesysmalloc((max+2) * sizeof(char*));
 	for (j=0; j<max; j++) {		/* copy environment */
-            int len = strlen(environ[j]);
-            tmpenv[j] = (char*)safesysmalloc((len+1)*sizeof(char));
-            Copy(environ[j], tmpenv[j], len+1, char);
+	    int len = strlen(environ[j]);
+	    tmpenv[j] = (char*)safesysmalloc((len+1)*sizeof(char));
+	    Copy(environ[j], tmpenv[j], len+1, char);
 	}
 	tmpenv[max] = Nullch;
 	environ = tmpenv;		/* tell exec where it is now */
@@ -1648,7 +1500,7 @@ Perl_my_setenv(pTHX_ char *nam, char *val)
     char *new_env;
     int nlen = strlen(nam), vlen;
     if (!val) {
-        val = "";
+	val = "";
     }
     vlen = strlen(val);
     new_env = (char*)safesysmalloc((nlen + vlen + 2) * sizeof(char));
@@ -1680,6 +1532,7 @@ Perl_my_setenv(pTHX_ char *nam,char *val)
 
 #endif /* WIN32 || NETWARE */
 
+#ifndef PERL_MICRO
 I32
 Perl_setenv_getix(pTHX_ char *nam)
 {
@@ -1697,6 +1550,7 @@ Perl_setenv_getix(pTHX_ char *nam)
     }					/* potential SEGV's */
     return i;
 }
+#endif /* !PERL_MICRO */
 
 #endif /* !VMS && !EPOC*/
 
@@ -2003,7 +1857,7 @@ Perl_my_popen_list(pTHX_ char *mode, int n, SV **args)
 	    int fd;
 
 	    for (fd = PL_maxsysfd + 1; fd < NOFILE; fd++) {
-	        if (fd != pp[1])
+		if (fd != pp[1])
 		    PerlLIO_close(fd);
 	    }
 	}
@@ -2141,11 +1995,11 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 #define NOFILE 20
 #endif
 	    {
-	        int fd;
+		int fd;
 
 		for (fd = PL_maxsysfd + 1; fd < NOFILE; fd++)
 		    if (fd != pp[1])
-		        PerlLIO_close(fd);
+			PerlLIO_close(fd);
 	    }
 #endif
 	    /* may or may not use the shell */
@@ -2155,10 +2009,13 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 #endif	/* defined OS2 */
 	/*SUPPRESS 560*/
 	if ((tmpgv = gv_fetchpv("$",TRUE, SVt_PV))) {
-        SvREADONLY_off(GvSV(tmpgv));
+	    SvREADONLY_off(GvSV(tmpgv));
 	    sv_setiv(GvSV(tmpgv), PerlProc_getpid());
-        SvREADONLY_on(GvSV(tmpgv));
-    }
+	    SvREADONLY_on(GvSV(tmpgv));
+	}
+#ifdef THREADS_HAVE_PIDS
+	PL_ppid = (IV)getppid();
+#endif
 	PL_forkprocess = 0;
 	hv_clear(PL_pidstatus);	/* we have no children */
 	return Nullfp;
@@ -2247,7 +2104,7 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
 void
 Perl_atfork_lock(void)
 {
-#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
+#if defined(USE_ITHREADS)
     /* locks must be held in locking order (if any) */
 #  ifdef MYMALLOC
     MUTEX_LOCK(&PL_malloc_mutex);
@@ -2260,7 +2117,7 @@ Perl_atfork_lock(void)
 void
 Perl_atfork_unlock(void)
 {
-#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
+#if defined(USE_ITHREADS)
     /* locks must be released in same order as in atfork_lock() */
 #  ifdef MYMALLOC
     MUTEX_UNLOCK(&PL_malloc_mutex);
@@ -2274,7 +2131,7 @@ Perl_my_fork(void)
 {
 #if defined(HAS_FORK)
     Pid_t pid;
-#if (defined(USE_5005THREADS) || defined(USE_ITHREADS)) && !defined(HAS_PTHREAD_ATFORK)
+#if defined(USE_ITHREADS) && !defined(HAS_PTHREAD_ATFORK)
     atfork_lock();
     pid = fork();
     atfork_unlock();
@@ -2344,6 +2201,11 @@ dup2(int oldfd, int newfd)
 #ifndef PERL_MICRO
 #ifdef HAS_SIGACTION
 
+#ifdef MACOS_TRADITIONAL
+/* We don't want restart behavior on MacOS */
+#undef SA_RESTART
+#endif
+
 Sighandler_t
 Perl_rsignal(pTHX_ int signo, Sighandler_t handler)
 {
@@ -2359,11 +2221,10 @@ Perl_rsignal(pTHX_ int signo, Sighandler_t handler)
     sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
 #ifdef SA_RESTART
-#if defined(PERL_OLD_SIGNALS)
-    act.sa_flags |= SA_RESTART;	/* SVR4, 4.3+BSD */
+    if (PL_signals & PERL_SIGNALS_UNSAFE_FLAG)
+        act.sa_flags |= SA_RESTART;	/* SVR4, 4.3+BSD */
 #endif
-#endif
-#ifdef SA_NOCLDWAIT
+#if defined(SA_NOCLDWAIT) && !defined(BSDish) /* See [perl #18849] */
     if (signo == SIGCHLD && handler == (Sighandler_t)SIG_IGN)
 	act.sa_flags |= SA_NOCLDWAIT;
 #endif
@@ -2379,9 +2240,9 @@ Perl_rsignal_state(pTHX_ int signo)
     struct sigaction oact;
 
     if (sigaction(signo, (struct sigaction *)NULL, &oact) == -1)
-        return SIG_ERR;
+	return SIG_ERR;
     else
-        return oact.sa_handler;
+	return oact.sa_handler;
 }
 
 int
@@ -2399,11 +2260,10 @@ Perl_rsignal_save(pTHX_ int signo, Sighandler_t handler, Sigsave_t *save)
     sigemptyset(&act.sa_mask);
     act.sa_flags = 0;
 #ifdef SA_RESTART
-#if defined(PERL_OLD_SIGNALS)
-    act.sa_flags |= SA_RESTART;	/* SVR4, 4.3+BSD */
+    if (PL_signals & PERL_SIGNALS_UNSAFE_FLAG)
+        act.sa_flags |= SA_RESTART;	/* SVR4, 4.3+BSD */
 #endif
-#endif
-#ifdef SA_NOCLDWAIT
+#if defined(SA_NOCLDWAIT) && !defined(BSDish) /* See [perl #18849] */
     if (signo == SIGCHLD && handler == (Sighandler_t)SIG_IGN)
 	act.sa_flags |= SA_NOCLDWAIT;
 #endif
@@ -2461,7 +2321,7 @@ Perl_rsignal_state(pTHX_ int signo)
     oldsig = PerlProc_signal(signo, sig_trap);
     PerlProc_signal(signo, oldsig);
     if (sig_trapped)
-        PerlProc_kill(PerlProc_getpid(), signo);
+	PerlProc_kill(PerlProc_getpid(), signo);
     return oldsig;
 }
 
@@ -2563,35 +2423,35 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
 	return -1;
 #if !defined(HAS_WAITPID) && !defined(HAS_WAIT4) || defined(HAS_WAITPID_RUNTIME)
     {
-    SV *sv;
-    SV** svp;
-    char spid[TYPE_CHARS(int)];
+	SV *sv;
+	SV** svp;
+	char spid[TYPE_CHARS(int)];
 
-    if (pid > 0) {
-	sprintf(spid, "%"IVdf, (IV)pid);
-	svp = hv_fetch(PL_pidstatus,spid,strlen(spid),FALSE);
-	if (svp && *svp != &PL_sv_undef) {
-	    *statusp = SvIVX(*svp);
-	    (void)hv_delete(PL_pidstatus,spid,strlen(spid),G_DISCARD);
-	    return pid;
-	}
-    }
-    else {
-	HE *entry;
-
-	hv_iterinit(PL_pidstatus);
-	if ((entry = hv_iternext(PL_pidstatus))) {
-	    SV *sv;
-	    char spid[TYPE_CHARS(int)];
-
-	    pid = atoi(hv_iterkey(entry,(I32*)statusp));
-	    sv = hv_iterval(PL_pidstatus,entry);
-	    *statusp = SvIVX(sv);
+	if (pid > 0) {
 	    sprintf(spid, "%"IVdf, (IV)pid);
-	    (void)hv_delete(PL_pidstatus,spid,strlen(spid),G_DISCARD);
-	    return pid;
+	    svp = hv_fetch(PL_pidstatus,spid,strlen(spid),FALSE);
+	    if (svp && *svp != &PL_sv_undef) {
+		*statusp = SvIVX(*svp);
+		(void)hv_delete(PL_pidstatus,spid,strlen(spid),G_DISCARD);
+		return pid;
+	    }
 	}
-        }
+	else {
+	    HE *entry;
+
+	    hv_iterinit(PL_pidstatus);
+	    if ((entry = hv_iternext(PL_pidstatus))) {
+		SV *sv;
+		char spid[TYPE_CHARS(int)];
+
+		pid = atoi(hv_iterkey(entry,(I32*)statusp));
+		sv = hv_iterval(PL_pidstatus,entry);
+		*statusp = SvIVX(sv);
+		sprintf(spid, "%"IVdf, (IV)pid);
+		(void)hv_delete(PL_pidstatus,spid,strlen(spid),G_DISCARD);
+		return pid;
+	    }
+	}
     }
 #endif
 #ifdef HAS_WAITPID
@@ -2861,7 +2721,7 @@ Perl_find_script(pTHX_ char *scriptname, bool dosearch, char **search_ext, I32 f
 #endif
     {
 	bool seen_dot = 0;
-	
+
 	PL_bufend = s + strlen(s);
 	while (s < PL_bufend) {
 #ifdef MACOS_TRADITIONAL
@@ -2933,7 +2793,7 @@ Perl_find_script(pTHX_ char *scriptname, bool dosearch, char **search_ext, I32 f
 #endif
 		)
 	    {
-		xfound = tmpbuf;              /* bingo! */
+		xfound = tmpbuf;		/* bingo! */
 		break;
 	    }
 	    if (!xfailed)
@@ -2947,7 +2807,7 @@ Perl_find_script(pTHX_ char *scriptname, bool dosearch, char **search_ext, I32 f
 	    seen_dot = 1;			/* Disable message. */
 	if (!xfound) {
 	    if (flags & 1) {			/* do or die? */
-	        Perl_croak(aTHX_ "Can't %s %s%s%s",
+		Perl_croak(aTHX_ "Can't %s %s%s%s",
 		      (xfailed ? "execute" : "find"),
 		      (xfailed ? xfailed : scriptname),
 		      (xfailed ? "" : " on PATH"),
@@ -2967,7 +2827,7 @@ Perl_find_script(pTHX_ char *scriptname, bool dosearch, char **search_ext, I32 f
 void *
 Perl_get_context(void)
 {
-#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
+#if defined(USE_ITHREADS)
 #  ifdef OLD_PTHREADS_API
     pthread_addr_t t;
     if (pthread_getspecific(PL_thr_key, &t))
@@ -2988,7 +2848,7 @@ Perl_get_context(void)
 void
 Perl_set_context(void *t)
 {
-#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
+#if defined(USE_ITHREADS)
 #  ifdef I_MACH_CTHREADS
     cthread_set_data(cthread_self(), t);
 #  else
@@ -2999,280 +2859,6 @@ Perl_set_context(void *t)
 }
 
 #endif /* !PERL_GET_CONTEXT_DEFINED */
-
-#ifdef USE_5005THREADS
-
-#ifdef FAKE_THREADS
-/* Very simplistic scheduler for now */
-void
-schedule(void)
-{
-    thr = thr->i.next_run;
-}
-
-void
-Perl_cond_init(pTHX_ perl_cond *cp)
-{
-    *cp = 0;
-}
-
-void
-Perl_cond_signal(pTHX_ perl_cond *cp)
-{
-    perl_os_thread t;
-    perl_cond cond = *cp;
-
-    if (!cond)
-	return;
-    t = cond->thread;
-    /* Insert t in the runnable queue just ahead of us */
-    t->i.next_run = thr->i.next_run;
-    thr->i.next_run->i.prev_run = t;
-    t->i.prev_run = thr;
-    thr->i.next_run = t;
-    thr->i.wait_queue = 0;
-    /* Remove from the wait queue */
-    *cp = cond->next;
-    Safefree(cond);
-}
-
-void
-Perl_cond_broadcast(pTHX_ perl_cond *cp)
-{
-    perl_os_thread t;
-    perl_cond cond, cond_next;
-
-    for (cond = *cp; cond; cond = cond_next) {
-	t = cond->thread;
-	/* Insert t in the runnable queue just ahead of us */
-	t->i.next_run = thr->i.next_run;
-	thr->i.next_run->i.prev_run = t;
-	t->i.prev_run = thr;
-	thr->i.next_run = t;
-	thr->i.wait_queue = 0;
-	/* Remove from the wait queue */
-	cond_next = cond->next;
-	Safefree(cond);
-    }
-    *cp = 0;
-}
-
-void
-Perl_cond_wait(pTHX_ perl_cond *cp)
-{
-    perl_cond cond;
-
-    if (thr->i.next_run == thr)
-	Perl_croak(aTHX_ "panic: perl_cond_wait called by last runnable thread");
-
-    New(666, cond, 1, struct perl_wait_queue);
-    cond->thread = thr;
-    cond->next = *cp;
-    *cp = cond;
-    thr->i.wait_queue = cond;
-    /* Remove ourselves from runnable queue */
-    thr->i.next_run->i.prev_run = thr->i.prev_run;
-    thr->i.prev_run->i.next_run = thr->i.next_run;
-}
-#endif /* FAKE_THREADS */
-
-MAGIC *
-Perl_condpair_magic(pTHX_ SV *sv)
-{
-    MAGIC *mg;
-
-    (void)SvUPGRADE(sv, SVt_PVMG);
-    mg = mg_find(sv, PERL_MAGIC_mutex);
-    if (!mg) {
-	condpair_t *cp;
-
-	New(53, cp, 1, condpair_t);
-	MUTEX_INIT(&cp->mutex);
-	COND_INIT(&cp->owner_cond);
-	COND_INIT(&cp->cond);
-	cp->owner = 0;
-	LOCK_CRED_MUTEX;		/* XXX need separate mutex? */
-	mg = mg_find(sv, PERL_MAGIC_mutex);
-	if (mg) {
-	    /* someone else beat us to initialising it */
-	    UNLOCK_CRED_MUTEX;		/* XXX need separate mutex? */
-	    MUTEX_DESTROY(&cp->mutex);
-	    COND_DESTROY(&cp->owner_cond);
-	    COND_DESTROY(&cp->cond);
-	    Safefree(cp);
-	}
-	else {
-	    sv_magic(sv, Nullsv, PERL_MAGIC_mutex, 0, 0);
-	    mg = SvMAGIC(sv);
-	    mg->mg_ptr = (char *)cp;
-	    mg->mg_len = sizeof(cp);
-	    UNLOCK_CRED_MUTEX;		/* XXX need separate mutex? */
-	    DEBUG_S(WITH_THR(PerlIO_printf(Perl_debug_log,
-					   "%p: condpair_magic %p\n", thr, sv)));
-	}
-    }
-    return mg;
-}
-
-SV *
-Perl_sv_lock(pTHX_ SV *osv)
-{
-    MAGIC *mg;
-    SV *sv = osv;
-
-    LOCK_SV_LOCK_MUTEX;
-    if (SvROK(sv)) {
-	sv = SvRV(sv);
-    }
-
-    mg = condpair_magic(sv);
-    MUTEX_LOCK(MgMUTEXP(mg));
-    if (MgOWNER(mg) == thr)
-	MUTEX_UNLOCK(MgMUTEXP(mg));
-    else {
-	while (MgOWNER(mg))
-	    COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
-	MgOWNER(mg) = thr;
-	DEBUG_S(PerlIO_printf(Perl_debug_log,
-			      "0x%"UVxf": Perl_lock lock 0x%"UVxf"\n",
-			      PTR2UV(thr), PTR2UV(sv)));
-	MUTEX_UNLOCK(MgMUTEXP(mg));
-	SAVEDESTRUCTOR_X(Perl_unlock_condpair, sv);
-    }
-    UNLOCK_SV_LOCK_MUTEX;
-    return sv;
-}
-
-/*
- * Make a new perl thread structure using t as a prototype. Some of the
- * fields for the new thread are copied from the prototype thread, t,
- * so t should not be running in perl at the time this function is
- * called. The use by ext/Thread/Thread.xs in core perl (where t is the
- * thread calling new_struct_thread) clearly satisfies this constraint.
- */
-struct perl_thread *
-Perl_new_struct_thread(pTHX_ struct perl_thread *t)
-{
-#if !defined(PERL_IMPLICIT_CONTEXT)
-    struct perl_thread *thr;
-#endif
-    SV *sv;
-    SV **svp;
-    I32 i;
-
-    sv = newSVpvn("", 0);
-    SvGROW(sv, sizeof(struct perl_thread) + 1);
-    SvCUR_set(sv, sizeof(struct perl_thread));
-    thr = (Thread) SvPVX(sv);
-#ifdef DEBUGGING
-    Poison(thr, 1, struct perl_thread);
-    PL_markstack = 0;
-    PL_scopestack = 0;
-    PL_savestack = 0;
-    PL_retstack = 0;
-    PL_dirty = 0;
-    PL_localizing = 0;
-    Zero(&PL_hv_fetch_ent_mh, 1, HE);
-    PL_efloatbuf = (char*)NULL;
-    PL_efloatsize = 0;
-#else
-    Zero(thr, 1, struct perl_thread);
-#endif
-
-    thr->oursv = sv;
-    init_stacks();
-
-    PL_curcop = &PL_compiling;
-    thr->interp = t->interp;
-    thr->cvcache = newHV();
-    thr->threadsv = newAV();
-    thr->specific = newAV();
-    thr->errsv = newSVpvn("", 0);
-    thr->flags = THRf_R_JOINABLE;
-    thr->thr_done = 0;
-    MUTEX_INIT(&thr->mutex);
-
-    JMPENV_BOOTSTRAP;
-
-    PL_in_eval = EVAL_NULL;	/* ~(EVAL_INEVAL|EVAL_WARNONLY|EVAL_KEEPERR|EVAL_INREQUIRE) */
-    PL_restartop = 0;
-
-    PL_statname = NEWSV(66,0);
-    PL_errors = newSVpvn("", 0);
-    PL_maxscream = -1;
-    PL_regcompp = MEMBER_TO_FPTR(Perl_pregcomp);
-    PL_regexecp = MEMBER_TO_FPTR(Perl_regexec_flags);
-    PL_regint_start = MEMBER_TO_FPTR(Perl_re_intuit_start);
-    PL_regint_string = MEMBER_TO_FPTR(Perl_re_intuit_string);
-    PL_regfree = MEMBER_TO_FPTR(Perl_pregfree);
-    PL_regindent = 0;
-    PL_reginterp_cnt = 0;
-    PL_lastscream = Nullsv;
-    PL_screamfirst = 0;
-    PL_screamnext = 0;
-    PL_reg_start_tmp = 0;
-    PL_reg_start_tmpl = 0;
-    PL_reg_poscache = Nullch;
-
-    PL_peepp = MEMBER_TO_FPTR(Perl_peep);
-
-    /* parent thread's data needs to be locked while we make copy */
-    MUTEX_LOCK(&t->mutex);
-
-#ifdef PERL_FLEXIBLE_EXCEPTIONS
-    PL_protect = t->Tprotect;
-#endif
-
-    PL_curcop = t->Tcurcop;       /* XXX As good a guess as any? */
-    PL_defstash = t->Tdefstash;   /* XXX maybe these should */
-    PL_curstash = t->Tcurstash;   /* always be set to main? */
-
-    PL_tainted = t->Ttainted;
-    PL_curpm = t->Tcurpm;         /* XXX No PMOP ref count */
-    PL_rs = newSVsv(t->Trs);
-    PL_last_in_gv = Nullgv;
-    PL_ofs_sv = t->Tofs_sv ? SvREFCNT_inc(PL_ofs_sv) : Nullsv;
-    PL_defoutgv = (GV*)SvREFCNT_inc(t->Tdefoutgv);
-    PL_chopset = t->Tchopset;
-    PL_bodytarget = newSVsv(t->Tbodytarget);
-    PL_toptarget = newSVsv(t->Ttoptarget);
-    if (t->Tformtarget == t->Ttoptarget)
-	PL_formtarget = PL_toptarget;
-    else
-	PL_formtarget = PL_bodytarget;
-
-    /* Initialise all per-thread SVs that the template thread used */
-    svp = AvARRAY(t->threadsv);
-    for (i = 0; i <= AvFILLp(t->threadsv); i++, svp++) {
-	if (*svp && *svp != &PL_sv_undef) {
-	    SV *sv = newSVsv(*svp);
-	    av_store(thr->threadsv, i, sv);
-	    sv_magic(sv, 0, PERL_MAGIC_sv, &PL_threadsv_names[i], 1);
-	    DEBUG_S(PerlIO_printf(Perl_debug_log,
-		"new_struct_thread: copied threadsv %"IVdf" %p->%p\n",
-				  (IV)i, t, thr));
-	}
-    }
-    thr->threadsvp = AvARRAY(thr->threadsv);
-
-    MUTEX_LOCK(&PL_threads_mutex);
-    PL_nthreads++;
-    thr->tid = ++PL_threadnum;
-    thr->next = t->next;
-    thr->prev = t;
-    t->next = thr;
-    thr->next->prev = thr;
-    MUTEX_UNLOCK(&PL_threads_mutex);
-
-    /* done copying parent's state */
-    MUTEX_UNLOCK(&t->mutex);
-
-#ifdef HAVE_THREAD_INTERN
-    Perl_init_thread_intern(thr);
-#endif /* HAVE_THREAD_INTERN */
-    return thr;
-}
-#endif /* USE_5005THREADS */
 
 #ifdef PERL_GLOBAL_STRUCT
 struct perl_vars *
@@ -3393,11 +2979,6 @@ Perl_get_vtbl(pTHX_ int vtbl_id)
     case want_vtbl_uvar:
 	result = &PL_vtbl_uvar;
 	break;
-#ifdef USE_5005THREADS
-    case want_vtbl_mutex:
-	result = &PL_vtbl_mutex;
-	break;
-#endif
     case want_vtbl_defelem:
 	result = &PL_vtbl_defelem;
 	break;
@@ -3424,6 +3005,9 @@ Perl_get_vtbl(pTHX_ int vtbl_id)
     case want_vtbl_backref:
 	result = &PL_vtbl_backref;
 	break;
+    case want_vtbl_utf8:
+	result = &PL_vtbl_utf8;
+	break;
     }
     return result;
 }
@@ -3431,7 +3015,7 @@ Perl_get_vtbl(pTHX_ int vtbl_id)
 I32
 Perl_my_fflush_all(pTHX)
 {
-#if defined(FFLUSH_NULL)
+#if defined(USE_PERLIO) || defined(FFLUSH_NULL) || defined(USE_SFIO)
     return PerlIO_flush(NULL);
 #else
 # if defined(HAS__FWALK)
@@ -3472,7 +3056,7 @@ Perl_my_fflush_all(pTHX)
       return 0;
     }
 #  endif
-    SETERRNO(EBADF,RMS$_IFI);
+    SETERRNO(EBADF,RMS_IFI);
     return EOF;
 # endif
 #endif
@@ -3481,54 +3065,67 @@ Perl_my_fflush_all(pTHX)
 void
 Perl_report_evil_fh(pTHX_ GV *gv, IO *io, I32 op)
 {
-    char *vile;
-    I32   warn_type;
     char *func =
 	op == OP_READLINE   ? "readline"  :	/* "<HANDLE>" not nice */
 	op == OP_LEAVEWRITE ? "write" :		/* "write exit" not nice */
 	PL_op_desc[op];
     char *pars = OP_IS_FILETEST(op) ? "" : "()";
-    char *type = OP_IS_SOCKET(op) ||
-                 (gv && io && IoTYPE(io) == IoTYPE_SOCKET) ?
-                     "socket" : "filehandle";
+    char *type = OP_IS_SOCKET(op)
+	    || (gv && io && IoTYPE(io) == IoTYPE_SOCKET)
+		?  "socket" : "filehandle";
     char *name = NULL;
-
-    if (gv && io && IoTYPE(io) == IoTYPE_CLOSED) {
-	vile = "closed";
-	warn_type = WARN_CLOSED;
-    }
-    else {
-	vile = "unopened";
-	warn_type = WARN_UNOPENED;
-    }
 
     if (gv && isGV(gv)) {
 	name = GvENAME(gv);
     }
 
     if (op == OP_phoney_OUTPUT_ONLY || op == OP_phoney_INPUT_ONLY) {
-	if (name && *name)
-	    Perl_warner(aTHX_ packWARN(WARN_IO), "Filehandle %s opened only for %sput",
-			name,
-			(op == OP_phoney_INPUT_ONLY ? "in" : "out"));
-	else
-	    Perl_warner(aTHX_ packWARN(WARN_IO), "Filehandle opened only for %sput",
-			(op == OP_phoney_INPUT_ONLY ? "in" : "out"));
-    } else if (name && *name) {
-	Perl_warner(aTHX_ packWARN(warn_type),
-		    "%s%s on %s %s %s", func, pars, vile, type, name);
-	if (io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
-	    Perl_warner(aTHX_ packWARN(warn_type),
-			"\t(Are you trying to call %s%s on dirhandle %s?)\n",
-			func, pars, name);
+	if (ckWARN(WARN_IO)) {
+	    const char *direction = (op == OP_phoney_INPUT_ONLY) ? "in" : "out";
+	    if (name && *name)
+		Perl_warner(aTHX_ packWARN(WARN_IO),
+			    "Filehandle %s opened only for %sput",
+			    name, direction);
+	    else
+		Perl_warner(aTHX_ packWARN(WARN_IO),
+			    "Filehandle opened only for %sput", direction);
+	}
     }
     else {
-	Perl_warner(aTHX_ packWARN(warn_type),
-		    "%s%s on %s %s", func, pars, vile, type);
-	if (gv && io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
-	    Perl_warner(aTHX_ packWARN(warn_type),
+	char *vile;
+	I32   warn_type;
+
+	if (gv && io && IoTYPE(io) == IoTYPE_CLOSED) {
+	    vile = "closed";
+	    warn_type = WARN_CLOSED;
+	}
+	else {
+	    vile = "unopened";
+	    warn_type = WARN_UNOPENED;
+	}
+
+	if (ckWARN(warn_type)) {
+	    if (name && *name) {
+		Perl_warner(aTHX_ packWARN(warn_type),
+			    "%s%s on %s %s %s", func, pars, vile, type, name);
+		if (io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
+		    Perl_warner(
+			aTHX_ packWARN(warn_type),
+			"\t(Are you trying to call %s%s on dirhandle %s?)\n",
+			func, pars, name
+		    );
+	    }
+	    else {
+		Perl_warner(aTHX_ packWARN(warn_type),
+			    "%s%s on %s %s", func, pars, vile, type);
+		if (gv && io && IoDIRP(io) && !(IoFLAGS(io) & IOf_FAKE_DIRP))
+		    Perl_warner(
+			aTHX_ packWARN(warn_type),
 			"\t(Are you trying to call %s%s on dirhandle?)\n",
-			func, pars);
+			func, pars
+		    );
+	    }
+	}
     }
 }
 
@@ -3539,36 +3136,36 @@ static const char controllablechars[] = "?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_";
 int
 Perl_ebcdic_control(pTHX_ int ch)
 {
-    	if (ch > 'a') {
-	        char *ctlp;
+    if (ch > 'a') {
+	char *ctlp;
 
- 	       if (islower(ch))
-  	              ch = toupper(ch);
+	if (islower(ch))
+	    ch = toupper(ch);
 
- 	       if ((ctlp = strchr(controllablechars, ch)) == 0) {
-  	              Perl_die(aTHX_ "unrecognised control character '%c'\n", ch);
-     	       }
-
-        	if (ctlp == controllablechars)
-         	       return('\177'); /* DEL */
-        	else
-         	       return((unsigned char)(ctlp - controllablechars - 1));
-	} else { /* Want uncontrol */
-        	if (ch == '\177' || ch == -1)
-                	return('?');
-        	else if (ch == '\157')
-                	return('\177');
-        	else if (ch == '\174')
-                	return('\000');
-        	else if (ch == '^')    /* '\137' in 1047, '\260' in 819 */
-                	return('\036');
-        	else if (ch == '\155')
-                	return('\037');
-        	else if (0 < ch && ch < (sizeof(controllablechars) - 1))
-                	return(controllablechars[ch+1]);
-        	else
-                	Perl_die(aTHX_ "invalid control request: '\\%03o'\n", ch & 0xFF);
+	if ((ctlp = strchr(controllablechars, ch)) == 0) {
+	    Perl_die(aTHX_ "unrecognised control character '%c'\n", ch);
 	}
+
+	if (ctlp == controllablechars)
+	    return('\177'); /* DEL */
+	else
+	    return((unsigned char)(ctlp - controllablechars - 1));
+    } else { /* Want uncontrol */
+	if (ch == '\177' || ch == -1)
+	    return('?');
+	else if (ch == '\157')
+	    return('\177');
+	else if (ch == '\174')
+	    return('\000');
+	else if (ch == '^')    /* '\137' in 1047, '\260' in 819 */
+	    return('\036');
+	else if (ch == '\155')
+	    return('\037');
+	else if (0 < ch && ch < (sizeof(controllablechars) - 1))
+	    return(controllablechars[ch+1]);
+	else
+	    Perl_die(aTHX_ "invalid control request: '\\%03o'\n", ch & 0xFF);
+    }
 }
 #endif
 
@@ -3821,6 +3418,20 @@ Perl_my_strftime(pTHX_ char *fmt, int sec, int min, int hour, int mday, int mon,
   mytm.tm_yday = yday;
   mytm.tm_isdst = isdst;
   mini_mktime(&mytm);
+  /* use libc to get the values for tm_gmtoff and tm_zone [perl #18238] */
+#if defined(HAS_MKTIME) && (defined(HAS_TM_TM_GMTOFF) || defined(HAS_TM_TM_ZONE))
+  STMT_START {
+    struct tm mytm2;
+    mytm2 = mytm;
+    mktime(&mytm2);
+#ifdef HAS_TM_TM_GMTOFF
+    mytm.tm_gmtoff = mytm2.tm_gmtoff;
+#endif
+#ifdef HAS_TM_TM_ZONE
+    mytm.tm_zone = mytm2.tm_zone;
+#endif
+  } STMT_END;
+#endif
   buflen = 64;
   New(0, buf, buflen, char);
   len = strftime(buf, buflen, fmt, &mytm);
@@ -3873,7 +3484,7 @@ return FALSE
 
 #define SV_CWD_ISDOT(dp) \
     (dp->d_name[0] == '.' && (dp->d_name[1] == '\0' || \
-        (dp->d_name[1] == '.' && dp->d_name[2] == '\0')))
+	(dp->d_name[1] == '.' && dp->d_name[2] == '\0')))
 
 /*
 =head1 Miscellaneous Functions
@@ -3906,18 +3517,18 @@ Perl_getcwd_sv(pTHX_ register SV *sv)
     {
 	char buf[MAXPATHLEN];
 
-        /* Some getcwd()s automatically allocate a buffer of the given
+	/* Some getcwd()s automatically allocate a buffer of the given
 	 * size from the heap if they are given a NULL buffer pointer.
 	 * The problem is that this behaviour is not portable. */
-        if (getcwd(buf, sizeof(buf) - 1)) {
-            STRLEN len = strlen(buf);
-            sv_setpvn(sv, buf, len);
-            return TRUE;
-        }
-        else {
-            sv_setsv(sv, &PL_sv_undef);
-            return FALSE;
-        }
+	if (getcwd(buf, sizeof(buf) - 1)) {
+	    STRLEN len = strlen(buf);
+	    sv_setpvn(sv, buf, len);
+	    return TRUE;
+	}
+	else {
+	    sv_setsv(sv, &PL_sv_undef);
+	    return FALSE;
+	}
     }
 
 #else
@@ -3931,7 +3542,7 @@ Perl_getcwd_sv(pTHX_ register SV *sv)
     (void)SvUPGRADE(sv, SVt_PV);
 
     if (PerlLIO_lstat(".", &statbuf) < 0) {
-        SV_CWD_RETURN_UNDEF;
+	SV_CWD_RETURN_UNDEF;
     }
 
     orig_cdev = statbuf.st_dev;
@@ -3940,96 +3551,96 @@ Perl_getcwd_sv(pTHX_ register SV *sv)
     cino = orig_cino;
 
     for (;;) {
-        odev = cdev;
-        oino = cino;
+	odev = cdev;
+	oino = cino;
 
-        if (PerlDir_chdir("..") < 0) {
-            SV_CWD_RETURN_UNDEF;
-        }
-        if (PerlLIO_stat(".", &statbuf) < 0) {
-            SV_CWD_RETURN_UNDEF;
-        }
-
-        cdev = statbuf.st_dev;
-        cino = statbuf.st_ino;
-
-        if (odev == cdev && oino == cino) {
-            break;
-        }
-        if (!(dir = PerlDir_open("."))) {
-            SV_CWD_RETURN_UNDEF;
-        }
-
-        while ((dp = PerlDir_read(dir)) != NULL) {
-#ifdef DIRNAMLEN
-            namelen = dp->d_namlen;
-#else
-            namelen = strlen(dp->d_name);
-#endif
-            /* skip . and .. */
-            if (SV_CWD_ISDOT(dp)) {
-                continue;
-            }
-
-            if (PerlLIO_lstat(dp->d_name, &statbuf) < 0) {
-                SV_CWD_RETURN_UNDEF;
-            }
-
-            tdev = statbuf.st_dev;
-            tino = statbuf.st_ino;
-            if (tino == oino && tdev == odev) {
-                break;
-            }
-        }
-
-        if (!dp) {
-            SV_CWD_RETURN_UNDEF;
-        }
-
-        if (pathlen + namelen + 1 >= MAXPATHLEN) {
-            SV_CWD_RETURN_UNDEF;
+	if (PerlDir_chdir("..") < 0) {
+	    SV_CWD_RETURN_UNDEF;
+	}
+	if (PerlLIO_stat(".", &statbuf) < 0) {
+	    SV_CWD_RETURN_UNDEF;
 	}
 
-        SvGROW(sv, pathlen + namelen + 1);
+	cdev = statbuf.st_dev;
+	cino = statbuf.st_ino;
 
-        if (pathlen) {
-            /* shift down */
-            Move(SvPVX(sv), SvPVX(sv) + namelen + 1, pathlen, char);
-        }
+	if (odev == cdev && oino == cino) {
+	    break;
+	}
+	if (!(dir = PerlDir_open("."))) {
+	    SV_CWD_RETURN_UNDEF;
+	}
 
-        /* prepend current directory to the front */
-        *SvPVX(sv) = '/';
-        Move(dp->d_name, SvPVX(sv)+1, namelen, char);
-        pathlen += (namelen + 1);
+	while ((dp = PerlDir_read(dir)) != NULL) {
+#ifdef DIRNAMLEN
+	    namelen = dp->d_namlen;
+#else
+	    namelen = strlen(dp->d_name);
+#endif
+	    /* skip . and .. */
+	    if (SV_CWD_ISDOT(dp)) {
+		continue;
+	    }
+
+	    if (PerlLIO_lstat(dp->d_name, &statbuf) < 0) {
+		SV_CWD_RETURN_UNDEF;
+	    }
+
+	    tdev = statbuf.st_dev;
+	    tino = statbuf.st_ino;
+	    if (tino == oino && tdev == odev) {
+		break;
+	    }
+	}
+
+	if (!dp) {
+	    SV_CWD_RETURN_UNDEF;
+	}
+
+	if (pathlen + namelen + 1 >= MAXPATHLEN) {
+	    SV_CWD_RETURN_UNDEF;
+	}
+
+	SvGROW(sv, pathlen + namelen + 1);
+
+	if (pathlen) {
+	    /* shift down */
+	    Move(SvPVX(sv), SvPVX(sv) + namelen + 1, pathlen, char);
+	}
+
+	/* prepend current directory to the front */
+	*SvPVX(sv) = '/';
+	Move(dp->d_name, SvPVX(sv)+1, namelen, char);
+	pathlen += (namelen + 1);
 
 #ifdef VOID_CLOSEDIR
-        PerlDir_close(dir);
+	PerlDir_close(dir);
 #else
-        if (PerlDir_close(dir) < 0) {
-            SV_CWD_RETURN_UNDEF;
-        }
+	if (PerlDir_close(dir) < 0) {
+	    SV_CWD_RETURN_UNDEF;
+	}
 #endif
     }
 
     if (pathlen) {
-        SvCUR_set(sv, pathlen);
-        *SvEND(sv) = '\0';
-        SvPOK_only(sv);
+	SvCUR_set(sv, pathlen);
+	*SvEND(sv) = '\0';
+	SvPOK_only(sv);
 
 	if (PerlDir_chdir(SvPVX(sv)) < 0) {
-            SV_CWD_RETURN_UNDEF;
-        }
+	    SV_CWD_RETURN_UNDEF;
+	}
     }
     if (PerlLIO_stat(".", &statbuf) < 0) {
-        SV_CWD_RETURN_UNDEF;
+	SV_CWD_RETURN_UNDEF;
     }
 
     cdev = statbuf.st_dev;
     cino = statbuf.st_ino;
 
     if (cdev != orig_cdev || cino != orig_cino) {
-        Perl_croak(aTHX_ "Unstable directory path, "
-                   "current directory changed unexpectedly");
+	Perl_croak(aTHX_ "Unstable directory path, "
+		   "current directory changed unexpectedly");
     }
 
     return TRUE;
@@ -4041,81 +3652,311 @@ Perl_getcwd_sv(pTHX_ register SV *sv)
 }
 
 /*
-=head1 SV Manipulation Functions
-
-=for apidoc new_vstring
+=for apidoc scan_version
 
 Returns a pointer to the next character after the parsed
-vstring, as well as updating the passed in sv.
+version string, as well as upgrading the passed in SV to
+an RV.
 
-Function must be called like
+Function must be called with an already existing SV like
 
-        sv = NEWSV(92,5);
-	s = new_vstring(s,sv);
+    sv = NEWSV(92,0);
+    s = scan_version(s,sv);
 
-The sv must already be large enough to store the vstring
-passed in.
+Performs some preprocessing to the string to ensure that
+it has the correct characteristics of a version.  Flags the
+object if it contains an underscore (which denotes this
+is a beta version).
 
 =cut
 */
 
 char *
-Perl_new_vstring(pTHX_ char *s, SV *sv)
+Perl_scan_version(pTHX_ char *s, SV *rv)
 {
+    const char *start = s;
     char *pos = s;
+    I32 saw_period = 0;
+    bool saw_under = 0;
+    SV* sv = newSVrv(rv, "version"); /* create an SV and upgrade the RV */
+    (void)sv_upgrade(sv, SVt_PVAV); /* needs to be an AV type */
+
+    /* pre-scan the imput string to check for decimals */
+    while ( *pos == '.' || *pos == '_' || isDIGIT(*pos) )
+    {
+	if ( *pos == '.' )
+	{
+	    if ( saw_under )
+		Perl_croak(aTHX_ "Invalid version format (underscores before decimal)");
+	    saw_period++ ;
+	}
+	else if ( *pos == '_' )
+	{
+	    if ( saw_under )
+		Perl_croak(aTHX_ "Invalid version format (multiple underscores)");
+	    saw_under = 1;
+	}
+	pos++;
+    }
+    pos = s;
+
     if (*pos == 'v') pos++;  /* get past 'v' */
-    while (isDIGIT(*pos) || *pos == '_')
-    pos++;
+    while (isDIGIT(*pos))
+	pos++;
     if (!isALPHA(*pos)) {
-	UV rev;
-	U8 tmpbuf[UTF8_MAXLEN+1];
-	U8 *tmpend;
+	I32 rev;
 
 	if (*s == 'v') s++;  /* get past 'v' */
-
-	sv_setpvn(sv, "", 0);
 
 	for (;;) {
 	    rev = 0;
 	    {
-		 /* this is atoi() that tolerates underscores */
-		 char *end = pos;
-		 UV mult = 1;
-		 if ( s > pos && *(s-1) == '_') {
-		      mult = 10;
-		 }
-		 while (--end >= s) {
-		      UV orev;
-		      orev = rev;
-		      rev += (*end - '0') * mult;
-		      mult *= 10;
-		      if (orev > rev && ckWARN_d(WARN_OVERFLOW))
-			   Perl_warner(aTHX_ packWARN(WARN_OVERFLOW),
-				       "Integer overflow in decimal number");
-		 }
-	    }
-#ifdef EBCDIC
-	    if (rev > 0x7FFFFFFF)
-		 Perl_croak(aTHX "In EBCDIC the v-string components cannot exceed 2147483647");
-#endif
-	    /* Append native character for the rev point */
-	    tmpend = uvchr_to_utf8(tmpbuf, rev);
-	    sv_catpvn(sv, (const char*)tmpbuf, tmpend - tmpbuf);
-	    if (!UNI_IS_INVARIANT(NATIVE_TO_UNI(rev)))
-		 SvUTF8_on(sv);
+  		/* this is atoi() that delimits on underscores */
+  		char *end = pos;
+  		I32 mult = 1;
+ 		I32 orev;
+  		if ( s < pos && s > start && *(s-1) == '_' ) {
+ 			mult *= -1;	/* beta version */
+  		}
+		/* the following if() will only be true after the decimal
+		 * point of a version originally created with a bare
+		 * floating point number, i.e. not quoted in any way
+		 */
+ 		if ( s > start+1 && saw_period == 1 && !saw_under ) {
+ 		    mult = 100;
+ 		    while ( s < end ) {
+ 			orev = rev;
+ 			rev += (*s - '0') * mult;
+ 			mult /= 10;
+ 			if ( PERL_ABS(orev) > PERL_ABS(rev) )
+ 			    Perl_croak(aTHX_ "Integer overflow in version");
+ 			s++;
+ 		    }
+  		}
+ 		else {
+ 		    while (--end >= s) {
+ 			orev = rev;
+ 			rev += (*end - '0') * mult;
+ 			mult *= 10;
+ 			if ( PERL_ABS(orev) > PERL_ABS(rev) )
+ 			    Perl_croak(aTHX_ "Integer overflow in version");
+ 		    }
+ 		} 
+  	    }
+  
+  	    /* Append revision */
+	    av_push((AV *)sv, newSViv(rev));
 	    if ( (*pos == '.' || *pos == '_') && isDIGIT(pos[1]))
-		 s = ++pos;
+		s = ++pos;
+	    else if ( isDIGIT(*pos) )
+		s = pos;
 	    else {
-		 s = pos;
-		 break;
+		s = pos;
+		break;
 	    }
-	    while (isDIGIT(*pos) )
-		 pos++;
+	    while ( isDIGIT(*pos) ) {
+		if ( !saw_under && saw_period == 1 && pos-s == 3 )
+		    break;
+		pos++;
+	    }
 	}
-	SvPOK_on(sv);
-	SvREADONLY_on(sv);
     }
     return s;
+}
+
+/*
+=for apidoc new_version
+
+Returns a new version object based on the passed in SV:
+
+    SV *sv = new_version(SV *ver);
+
+Does not alter the passed in ver SV.  See "upg_version" if you
+want to upgrade the SV.
+
+=cut
+*/
+
+SV *
+Perl_new_version(pTHX_ SV *ver)
+{
+    SV *rv = newSV(0);
+    char *version;
+    if ( SvNOK(ver) ) /* may get too much accuracy */ 
+    {
+	char tbuf[64];
+	sprintf(tbuf,"%.9"NVgf, SvNVX(ver));
+	version = savepv(tbuf);
+    }
+#ifdef SvVOK
+    else if ( SvVOK(ver) ) { /* already a v-string */
+	MAGIC* mg = mg_find(ver,PERL_MAGIC_vstring);
+	version = savepvn( (const char*)mg->mg_ptr,mg->mg_len );
+    }
+#endif
+    else /* must be a string or something like a string */
+    {
+	version = (char *)SvPV(ver,PL_na);
+    }
+    version = scan_version(version,rv);
+    return rv;
+}
+
+/*
+=for apidoc upg_version
+
+In-place upgrade of the supplied SV to a version object.
+
+    SV *sv = upg_version(SV *sv);
+
+Returns a pointer to the upgraded SV.
+
+=cut
+*/
+
+SV *
+Perl_upg_version(pTHX_ SV *ver)
+{
+    char *version = savepvn(SvPVX(ver),SvCUR(ver));
+#ifdef SvVOK
+    if ( SvVOK(ver) ) { /* already a v-string */
+	MAGIC* mg = mg_find(ver,PERL_MAGIC_vstring);
+	version = savepvn( (const char*)mg->mg_ptr,mg->mg_len );
+    }
+#endif
+    version = scan_version(version,ver);
+    return ver;
+}
+
+
+/*
+=for apidoc vnumify
+
+Accepts a version object and returns the normalized floating
+point representation.  Call like:
+
+    sv = vnumify(rv);
+
+NOTE: you can pass either the object directly or the SV
+contained within the RV.
+
+=cut
+*/
+
+SV *
+Perl_vnumify(pTHX_ SV *vs)
+{
+    I32 i, len, digit;
+    SV *sv = NEWSV(92,0);
+    if ( SvROK(vs) )
+	vs = SvRV(vs);
+    len = av_len((AV *)vs);
+    if ( len == -1 )
+    {
+	Perl_sv_catpv(aTHX_ sv,"0");
+	return sv;
+    }
+    digit = SvIVX(*av_fetch((AV *)vs, 0, 0));
+    Perl_sv_setpvf(aTHX_ sv,"%d.", PERL_ABS(digit));
+    for ( i = 1 ; i <= len ; i++ )
+    {
+	digit = SvIVX(*av_fetch((AV *)vs, i, 0));
+	Perl_sv_catpvf(aTHX_ sv,"%03d", PERL_ABS(digit));
+    }
+    if ( len == 0 )
+	 Perl_sv_catpv(aTHX_ sv,"000");
+    sv_setnv(sv, SvNV(sv));
+    return sv;
+}
+
+/*
+=for apidoc vstringify
+
+Accepts a version object and returns the normalized string
+representation.  Call like:
+
+    sv = vstringify(rv);
+
+NOTE: you can pass either the object directly or the SV
+contained within the RV.
+
+=cut
+*/
+
+SV *
+Perl_vstringify(pTHX_ SV *vs)
+{
+    I32 i, len, digit;
+    SV *sv = NEWSV(92,0);
+    if ( SvROK(vs) )
+	vs = SvRV(vs);
+    len = av_len((AV *)vs);
+    if ( len == -1 )
+    {
+	Perl_sv_catpv(aTHX_ sv,"");
+	return sv;
+    }
+    digit = SvIVX(*av_fetch((AV *)vs, 0, 0));
+    Perl_sv_setpvf(aTHX_ sv,"%"IVdf,(IV)digit);
+    for ( i = 1 ; i <= len ; i++ )
+    {
+	digit = SvIVX(*av_fetch((AV *)vs, i, 0));
+	if ( digit < 0 )
+	    Perl_sv_catpvf(aTHX_ sv,"_%"IVdf,(IV)-digit);
+	else
+	    Perl_sv_catpvf(aTHX_ sv,".%"IVdf,(IV)digit);
+    }
+    if ( len == 0 )
+	 Perl_sv_catpv(aTHX_ sv,".0");
+    return sv;
+} 
+
+/*
+=for apidoc vcmp
+
+Version object aware cmp.  Both operands must already have been 
+converted into version objects.
+
+=cut
+*/
+
+int
+Perl_vcmp(pTHX_ SV *lsv, SV *rsv)
+{
+    I32 i,l,m,r,retval;
+    if ( SvROK(lsv) )
+	lsv = SvRV(lsv);
+    if ( SvROK(rsv) )
+	rsv = SvRV(rsv);
+    l = av_len((AV *)lsv);
+    r = av_len((AV *)rsv);
+    m = l < r ? l : r;
+    retval = 0;
+    i = 0;
+    while ( i <= m && retval == 0 )
+    {
+	I32 left  = SvIV(*av_fetch((AV *)lsv,i,0));
+	I32 right = SvIV(*av_fetch((AV *)rsv,i,0));
+	bool lbeta = left  < 0 ? 1 : 0;
+	bool rbeta = right < 0 ? 1 : 0;
+	left  = PERL_ABS(left);
+	right = PERL_ABS(right);
+	if ( left < right || (left == right && lbeta && !rbeta) )
+	    retval = -1;
+	if ( left > right || (left == right && rbeta && !lbeta) )
+	    retval = +1;
+	i++;
+    }
+
+    if ( l != r && retval == 0 ) /* possible match except for trailing 0 */
+    {
+	if ( !( l < r && r-l == 1 && SvIV(*av_fetch((AV *)rsv,r,0)) == 0 ) &&
+	     !( l-r == 1 && SvIV(*av_fetch((AV *)lsv,l,0)) == 0 ) )
+	{
+	    retval = l < r ? -1 : +1; /* not a match after all */
+	}
+    }
+    return retval;
 }
 
 #if !defined(HAS_SOCKETPAIR) && defined(HAS_SOCKET) && defined(AF_INET) && defined(PF_INET) && defined(SOCK_DGRAM) && defined(HAS_SELECT)
@@ -4130,39 +3971,38 @@ S_socketpair_udp (int fd[2]) {
     int sockets[2] = {-1, -1};
     struct sockaddr_in addresses[2];
     int i;
-    Sock_size_t size = sizeof (struct sockaddr_in);
+    Sock_size_t size = sizeof(struct sockaddr_in);
     unsigned short port;
     int got;
 
-    memset (&addresses, 0, sizeof (addresses));
+    memset(&addresses, 0, sizeof(addresses));
     i = 1;
     do {
-        sockets[i] = PerlSock_socket (AF_INET, SOCK_DGRAM, PF_INET);
-        if (sockets[i] == -1)
-            goto tidy_up_and_fail;
+	sockets[i] = PerlSock_socket(AF_INET, SOCK_DGRAM, PF_INET);
+	if (sockets[i] == -1)
+	    goto tidy_up_and_fail;
 
-        addresses[i].sin_family = AF_INET;
-        addresses[i].sin_addr.s_addr = htonl (INADDR_LOOPBACK);
-        addresses[i].sin_port = 0;	/* kernel choses port.  */
-        if (PerlSock_bind (sockets[i], (struct sockaddr *) &addresses[i],
-                  sizeof (struct sockaddr_in))
-            == -1)
-            goto tidy_up_and_fail;
+	addresses[i].sin_family = AF_INET;
+	addresses[i].sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	addresses[i].sin_port = 0;	/* kernel choses port.  */
+	if (PerlSock_bind(sockets[i], (struct sockaddr *) &addresses[i],
+		sizeof(struct sockaddr_in)) == -1)
+	    goto tidy_up_and_fail;
     } while (i--);
 
     /* Now have 2 UDP sockets. Find out which port each is connected to, and
        for each connect the other socket to it.  */
     i = 1;
     do {
-        if (PerlSock_getsockname (sockets[i], (struct sockaddr *) &addresses[i], &size)
-            == -1)
-            goto tidy_up_and_fail;
-        if (size != sizeof (struct sockaddr_in))
-            goto abort_tidy_up_and_fail;
-        /* !1 is 0, !0 is 1 */
-        if (PerlSock_connect(sockets[!i], (struct sockaddr *) &addresses[i],
-                    sizeof (struct sockaddr_in)) == -1)
-            goto tidy_up_and_fail;
+	if (PerlSock_getsockname(sockets[i], (struct sockaddr *) &addresses[i],
+		&size) == -1)
+	    goto tidy_up_and_fail;
+	if (size != sizeof(struct sockaddr_in))
+	    goto abort_tidy_up_and_fail;
+	/* !1 is 0, !0 is 1 */
+	if (PerlSock_connect(sockets[!i], (struct sockaddr *) &addresses[i],
+		sizeof(struct sockaddr_in)) == -1)
+	    goto tidy_up_and_fail;
     } while (i--);
 
     /* Now we have 2 sockets connected to each other. I don't trust some other
@@ -4170,16 +4010,16 @@ S_socketpair_udp (int fd[2]) {
        a packet from each to the other.  */
     i = 1;
     do {
-        /* I'm going to send my own port number.  As a short.
-           (Who knows if someone somewhere has sin_port as a bitfield and needs
-           this routine. (I'm assuming crays have socketpair)) */
-        port = addresses[i].sin_port;
-        got = PerlLIO_write (sockets[i], &port, sizeof(port));
-        if (got != sizeof(port)) {
-            if (got == -1)
-                goto tidy_up_and_fail;
-            goto abort_tidy_up_and_fail;
-        }
+	/* I'm going to send my own port number.  As a short.
+	   (Who knows if someone somewhere has sin_port as a bitfield and needs
+	   this routine. (I'm assuming crays have socketpair)) */
+	port = addresses[i].sin_port;
+	got = PerlLIO_write(sockets[i], &port, sizeof(port));
+	if (got != sizeof(port)) {
+	    if (got == -1)
+		goto tidy_up_and_fail;
+	    goto abort_tidy_up_and_fail;
+	}
     } while (i--);
 
     /* Packets sent. I don't trust them to have arrived though.
@@ -4193,54 +4033,54 @@ S_socketpair_udp (int fd[2]) {
     */
 
     {
-        struct timeval waitfor = {0, 100000}; /* You have 0.1 seconds */
-        int max = sockets[1] > sockets[0] ? sockets[1] : sockets[0];
-        fd_set rset;
+	struct timeval waitfor = {0, 100000}; /* You have 0.1 seconds */
+	int max = sockets[1] > sockets[0] ? sockets[1] : sockets[0];
+	fd_set rset;
 
-        FD_ZERO (&rset);
-        FD_SET (sockets[0], &rset);
-        FD_SET (sockets[1], &rset);
+	FD_ZERO(&rset);
+	FD_SET(sockets[0], &rset);
+	FD_SET(sockets[1], &rset);
 
-        got = PerlSock_select (max + 1, &rset, NULL, NULL, &waitfor);
-        if (got != 2 || !FD_ISSET (sockets[0], &rset)
-            || !FD_ISSET (sockets[1], &rset)) {
-             /* I hope this is portable and appropriate.  */
-            if (got == -1)
-                goto tidy_up_and_fail;
-            goto abort_tidy_up_and_fail;
-        }
+	got = PerlSock_select(max + 1, &rset, NULL, NULL, &waitfor);
+	if (got != 2 || !FD_ISSET(sockets[0], &rset)
+		|| !FD_ISSET(sockets[1], &rset)) {
+	    /* I hope this is portable and appropriate.  */
+	    if (got == -1)
+		goto tidy_up_and_fail;
+	    goto abort_tidy_up_and_fail;
+	}
     }
 
     /* And the paranoia department even now doesn't trust it to have arrive
        (hence MSG_DONTWAIT). Or that what arrives was sent by us.  */
     {
-        struct sockaddr_in readfrom;
-        unsigned short buffer[2];
+	struct sockaddr_in readfrom;
+	unsigned short buffer[2];
 
-        i = 1;
-        do {
+	i = 1;
+	do {
 #ifdef MSG_DONTWAIT
-            got = PerlSock_recvfrom (sockets[i], (char *) &buffer, sizeof(buffer),
-                            MSG_DONTWAIT,
-                            (struct sockaddr *) &readfrom, &size);
+	    got = PerlSock_recvfrom(sockets[i], (char *) &buffer,
+		    sizeof(buffer), MSG_DONTWAIT,
+		    (struct sockaddr *) &readfrom, &size);
 #else
-            got = PerlSock_recvfrom (sockets[i], (char *) &buffer, sizeof(buffer),
-                            0,
-                            (struct sockaddr *) &readfrom, &size);
+	    got = PerlSock_recvfrom(sockets[i], (char *) &buffer,
+		    sizeof(buffer), 0,
+		    (struct sockaddr *) &readfrom, &size);
 #endif
 
-            if (got == -1)
-                    goto tidy_up_and_fail;
-            if (got != sizeof(port)
-                || size != sizeof (struct sockaddr_in)
-                /* Check other socket sent us its port.  */
-                || buffer[0] != (unsigned short) addresses[!i].sin_port
-                /* Check kernel says we got the datagram from that socket.  */
-                || readfrom.sin_family != addresses[!i].sin_family
-                || readfrom.sin_addr.s_addr != addresses[!i].sin_addr.s_addr
-                || readfrom.sin_port != addresses[!i].sin_port)
-                goto abort_tidy_up_and_fail;
-        } while (i--);
+	    if (got == -1)
+		goto tidy_up_and_fail;
+	    if (got != sizeof(port)
+		    || size != sizeof(struct sockaddr_in)
+		    /* Check other socket sent us its port.  */
+		    || buffer[0] != (unsigned short) addresses[!i].sin_port
+		    /* Check kernel says we got the datagram from that socket */
+		    || readfrom.sin_family != addresses[!i].sin_family
+		    || readfrom.sin_addr.s_addr != addresses[!i].sin_addr.s_addr
+		    || readfrom.sin_port != addresses[!i].sin_port)
+		goto abort_tidy_up_and_fail;
+	} while (i--);
     }
     /* My caller (my_socketpair) has validated that this is non-NULL  */
     fd[0] = sockets[0];
@@ -4253,13 +4093,13 @@ S_socketpair_udp (int fd[2]) {
     errno = ECONNABORTED;
   tidy_up_and_fail:
     {
-        int save_errno = errno;
-        if (sockets[0] != -1)
-            PerlLIO_close (sockets[0]);
-        if (sockets[1] != -1)
-            PerlLIO_close (sockets[1]);
-        errno = save_errno;
-        return -1;
+	int save_errno = errno;
+	if (sockets[0] != -1)
+	    PerlLIO_close(sockets[0]);
+	if (sockets[1] != -1)
+	    PerlLIO_close(sockets[1]);
+	errno = save_errno;
+	return -1;
     }
 }
 #endif /*  EMULATE_SOCKETPAIR_UDP */
@@ -4281,62 +4121,65 @@ Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
 #ifdef AF_UNIX
 	|| family != AF_UNIX
 #endif
-	) {
-        errno = EAFNOSUPPORT;
-        return -1;
+    ) {
+	errno = EAFNOSUPPORT;
+	return -1;
     }
     if (!fd) {
-        errno = EINVAL;
-        return -1;
+	errno = EINVAL;
+	return -1;
     }
 
 #ifdef EMULATE_SOCKETPAIR_UDP
     if (type == SOCK_DGRAM)
-        return S_socketpair_udp (fd);
+	return S_socketpair_udp(fd);
 #endif
 
-    listener = PerlSock_socket (AF_INET, type, 0);
+    listener = PerlSock_socket(AF_INET, type, 0);
     if (listener == -1)
-        return -1;
-    memset (&listen_addr, 0, sizeof (listen_addr));
+	return -1;
+    memset(&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin_family = AF_INET;
-    listen_addr.sin_addr.s_addr = htonl (INADDR_LOOPBACK);
+    listen_addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
     listen_addr.sin_port = 0;	/* kernel choses port.  */
-    if (PerlSock_bind (listener, (struct sockaddr *) &listen_addr, sizeof (listen_addr))
-        == -1)
-        goto tidy_up_and_fail;
+    if (PerlSock_bind(listener, (struct sockaddr *) &listen_addr,
+	    sizeof(listen_addr)) == -1)
+	goto tidy_up_and_fail;
     if (PerlSock_listen(listener, 1) == -1)
-        goto tidy_up_and_fail;
+	goto tidy_up_and_fail;
 
-    connector = PerlSock_socket (AF_INET, type, 0);
+    connector = PerlSock_socket(AF_INET, type, 0);
     if (connector == -1)
-        goto tidy_up_and_fail;
+	goto tidy_up_and_fail;
     /* We want to find out the port number to connect to.  */
-    size = sizeof (connect_addr);
-    if (PerlSock_getsockname (listener, (struct sockaddr *) &connect_addr, &size) == -1)
-        goto tidy_up_and_fail;
-    if (size != sizeof (connect_addr))
-        goto abort_tidy_up_and_fail;
+    size = sizeof(connect_addr);
+    if (PerlSock_getsockname(listener, (struct sockaddr *) &connect_addr,
+	    &size) == -1)
+	goto tidy_up_and_fail;
+    if (size != sizeof(connect_addr))
+	goto abort_tidy_up_and_fail;
     if (PerlSock_connect(connector, (struct sockaddr *) &connect_addr,
-                sizeof (connect_addr)) == -1)
-        goto tidy_up_and_fail;
+	    sizeof(connect_addr)) == -1)
+	goto tidy_up_and_fail;
 
-    size = sizeof (listen_addr);
-    acceptor = PerlSock_accept (listener, (struct sockaddr *) &listen_addr, &size);
+    size = sizeof(listen_addr);
+    acceptor = PerlSock_accept(listener, (struct sockaddr *) &listen_addr,
+	    &size);
     if (acceptor == -1)
-        goto tidy_up_and_fail;
-    if (size != sizeof (listen_addr))
-        goto abort_tidy_up_and_fail;
-    PerlLIO_close (listener);
+	goto tidy_up_and_fail;
+    if (size != sizeof(listen_addr))
+	goto abort_tidy_up_and_fail;
+    PerlLIO_close(listener);
     /* Now check we are talking to ourself by matching port and host on the
        two sockets.  */
-    if (PerlSock_getsockname (connector, (struct sockaddr *) &connect_addr, &size) == -1)
-        goto tidy_up_and_fail;
-    if (size != sizeof (connect_addr)
-        || listen_addr.sin_family != connect_addr.sin_family
-        || listen_addr.sin_addr.s_addr != connect_addr.sin_addr.s_addr
-        || listen_addr.sin_port != connect_addr.sin_port) {
-        goto abort_tidy_up_and_fail;
+    if (PerlSock_getsockname(connector, (struct sockaddr *) &connect_addr,
+	    &size) == -1)
+	goto tidy_up_and_fail;
+    if (size != sizeof(connect_addr)
+	    || listen_addr.sin_family != connect_addr.sin_family
+	    || listen_addr.sin_addr.s_addr != connect_addr.sin_addr.s_addr
+	    || listen_addr.sin_port != connect_addr.sin_port) {
+	goto abort_tidy_up_and_fail;
     }
     fd[0] = connector;
     fd[1] = acceptor;
@@ -4346,15 +4189,15 @@ Perl_my_socketpair (int family, int type, int protocol, int fd[2]) {
   errno = ECONNABORTED; /* I hope this is portable and appropriate.  */
   tidy_up_and_fail:
     {
-        int save_errno = errno;
-        if (listener != -1)
-            PerlLIO_close (listener);
-        if (connector != -1)
-            PerlLIO_close (connector);
-        if (acceptor != -1)
-            PerlLIO_close (acceptor);
-        errno = save_errno;
-        return -1;
+	int save_errno = errno;
+	if (listener != -1)
+	    PerlLIO_close(listener);
+	if (connector != -1)
+	    PerlLIO_close(connector);
+	if (acceptor != -1)
+	    PerlLIO_close(acceptor);
+	errno = save_errno;
+	return -1;
     }
 }
 #else
@@ -4417,3 +4260,174 @@ Perl_sv_nounlocking(pTHX_ SV *sv)
 {
 }
 
+U32
+Perl_parse_unicode_opts(pTHX_ char **popt)
+{
+  char *p = *popt;
+  U32 opt = 0;
+
+  if (*p) {
+       if (isDIGIT(*p)) {
+	    opt = (U32) atoi(p);
+	    while (isDIGIT(*p)) p++;
+	    if (*p && *p != '\n' && *p != '\r')
+		 Perl_croak(aTHX_ "Unknown Unicode option letter '%c'", *p);
+       }
+       else {
+	    for (; *p; p++) {
+		 switch (*p) {
+		 case PERL_UNICODE_STDIN:
+		      opt |= PERL_UNICODE_STDIN_FLAG;	break;
+		 case PERL_UNICODE_STDOUT:
+		      opt |= PERL_UNICODE_STDOUT_FLAG;	break;
+		 case PERL_UNICODE_STDERR:
+		      opt |= PERL_UNICODE_STDERR_FLAG;	break;
+		 case PERL_UNICODE_STD:
+		      opt |= PERL_UNICODE_STD_FLAG;    	break;
+		 case PERL_UNICODE_IN:
+		      opt |= PERL_UNICODE_IN_FLAG;	break;
+		 case PERL_UNICODE_OUT:
+		      opt |= PERL_UNICODE_OUT_FLAG;	break;
+		 case PERL_UNICODE_INOUT:
+		      opt |= PERL_UNICODE_INOUT_FLAG;	break;
+		 case PERL_UNICODE_LOCALE:
+		      opt |= PERL_UNICODE_LOCALE_FLAG;	break;
+		 case PERL_UNICODE_ARGV:
+		      opt |= PERL_UNICODE_ARGV_FLAG;	break;
+		 default:
+		      if (*p != '\n' && *p != '\r')
+			  Perl_croak(aTHX_
+				     "Unknown Unicode option letter '%c'", *p);
+		 }
+	    }
+       }
+  }
+  else
+       opt = PERL_UNICODE_DEFAULT_FLAGS;
+
+  if (opt & ~PERL_UNICODE_ALL_FLAGS)
+       Perl_croak(aTHX_ "Unknown Unicode option value %"UVuf,
+		  (UV) (opt & ~PERL_UNICODE_ALL_FLAGS));
+
+  *popt = p;
+
+  return opt;
+}
+
+U32
+Perl_seed(pTHX)
+{
+    /*
+     * This is really just a quick hack which grabs various garbage
+     * values.  It really should be a real hash algorithm which
+     * spreads the effect of every input bit onto every output bit,
+     * if someone who knows about such things would bother to write it.
+     * Might be a good idea to add that function to CORE as well.
+     * No numbers below come from careful analysis or anything here,
+     * except they are primes and SEED_C1 > 1E6 to get a full-width
+     * value from (tv_sec * SEED_C1 + tv_usec).  The multipliers should
+     * probably be bigger too.
+     */
+#if RANDBITS > 16
+#  define SEED_C1	1000003
+#define   SEED_C4	73819
+#else
+#  define SEED_C1	25747
+#define   SEED_C4	20639
+#endif
+#define   SEED_C2	3
+#define   SEED_C3	269
+#define   SEED_C5	26107
+
+#ifndef PERL_NO_DEV_RANDOM
+    int fd;
+#endif
+    U32 u;
+#ifdef VMS
+#  include <starlet.h>
+    /* when[] = (low 32 bits, high 32 bits) of time since epoch
+     * in 100-ns units, typically incremented ever 10 ms.        */
+    unsigned int when[2];
+#else
+#  ifdef HAS_GETTIMEOFDAY
+    struct timeval when;
+#  else
+    Time_t when;
+#  endif
+#endif
+
+/* This test is an escape hatch, this symbol isn't set by Configure. */
+#ifndef PERL_NO_DEV_RANDOM
+#ifndef PERL_RANDOM_DEVICE
+   /* /dev/random isn't used by default because reads from it will block
+    * if there isn't enough entropy available.  You can compile with
+    * PERL_RANDOM_DEVICE to it if you'd prefer Perl to block until there
+    * is enough real entropy to fill the seed. */
+#  define PERL_RANDOM_DEVICE "/dev/urandom"
+#endif
+    fd = PerlLIO_open(PERL_RANDOM_DEVICE, 0);
+    if (fd != -1) {
+    	if (PerlLIO_read(fd, &u, sizeof u) != sizeof u)
+	    u = 0;
+	PerlLIO_close(fd);
+	if (u)
+	    return u;
+    }
+#endif
+
+#ifdef VMS
+    _ckvmssts(sys$gettim(when));
+    u = (U32)SEED_C1 * when[0] + (U32)SEED_C2 * when[1];
+#else
+#  ifdef HAS_GETTIMEOFDAY
+    PerlProc_gettimeofday(&when,NULL);
+    u = (U32)SEED_C1 * when.tv_sec + (U32)SEED_C2 * when.tv_usec;
+#  else
+    (void)time(&when);
+    u = (U32)SEED_C1 * when;
+#  endif
+#endif
+    u += SEED_C3 * (U32)PerlProc_getpid();
+    u += SEED_C4 * (U32)PTR2UV(PL_stack_sp);
+#ifndef PLAN9           /* XXX Plan9 assembler chokes on this; fix needed  */
+    u += SEED_C5 * (U32)PTR2UV(&when);
+#endif
+    return u;
+}
+
+UV
+Perl_get_hash_seed(pTHX)
+{
+     char *s = PerlEnv_getenv("PERL_HASH_SEED");
+     UV myseed = 0;
+
+     if (s)
+	  while (isSPACE(*s)) s++;
+     if (s && isDIGIT(*s))
+	  myseed = (UV)Atoul(s);
+     else
+#ifdef USE_HASH_SEED_EXPLICIT
+     if (s)
+#endif
+     {
+	  /* Compute a random seed */
+	  (void)seedDrand01((Rand_seed_t)seed());
+	  myseed = (UV)(Drand01() * (NV)UV_MAX);
+#if RANDBITS < (UVSIZE * 8)
+	  /* Since there are not enough randbits to to reach all
+	   * the bits of a UV, the low bits might need extra
+	   * help.  Sum in another random number that will
+	   * fill in the low bits. */
+	  myseed +=
+	       (UV)(Drand01() * (NV)((1 << ((UVSIZE * 8 - RANDBITS))) - 1));
+#endif /* RANDBITS < (UVSIZE * 8) */
+	  if (myseed == 0) { /* Superparanoia. */
+	      myseed = (UV)(Drand01() * (NV)UV_MAX); /* One more chance. */
+	      if (myseed == 0)
+		  Perl_croak(aTHX_ "Your random numbers are not that random");
+	  }
+     }
+     PL_new_hash_seed_set = TRUE;
+
+     return myseed;
+}

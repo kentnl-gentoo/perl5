@@ -1,6 +1,7 @@
 /*    miniperlmain.c
  *
- *    Copyright (c) 1997-2002, Larry Wall
+ *    Copyright (C) 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002,
+ *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -57,7 +58,7 @@ main(int argc, char **argv, char **env)
 
     PERL_SYS_INIT3(&argc,&argv,&env);
 
-#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
+#if defined(USE_ITHREADS)
     /* XXX Ideally, this should really be happening in perl_alloc() or
      * perl_construct() to keep libperl.a transparently fork()-safe.
      * It is currently done here only because Apache/mod_perl have

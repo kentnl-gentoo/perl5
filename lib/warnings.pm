@@ -6,7 +6,7 @@
 
 package warnings;
 
-our $VERSION = '1.00';
+our $VERSION = '1.03';
 
 =head1 NAME
 
@@ -38,6 +38,10 @@ warnings - Perl pragma to control optional warnings
     warnings::warnif($object, "some warning");
 
 =head1 DESCRIPTION
+
+The C<warnings> pragma is a replacement for the command line flag C<-w>,
+but the pragma is limited to the enclosing block, while the flag is global.
+See L<perllexwarn> for more information.
 
 If no import list is supplied, all possible warnings are either enabled
 or disabled.
@@ -127,9 +131,9 @@ See L<perlmodlib/Pragmatic Modules> and L<perllexwarn>.
 
 =cut
 
-use Carp ;
+use Carp ();
 
-%Offsets = (
+our %Offsets : unique = (
 
     # Warnings Categories added in Perl 5.008
 
@@ -180,11 +184,16 @@ use Carp ;
     'utf8'		=> 88,
     'void'		=> 90,
     'y2k'		=> 92,
+
+    # Warnings Categories added in Perl 5.009
+
+    'assertions'	=> 94,
   );
 
-%Bits = (
-    'all'		=> "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x15", # [0..46]
+our %Bits : unique = (
+    'all'		=> "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55", # [0..47]
     'ambiguous'		=> "\x00\x00\x00\x00\x00\x00\x00\x04\x00\x00\x00\x00", # [29]
+    'assertions'	=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x40", # [47]
     'bareword'		=> "\x00\x00\x00\x00\x00\x00\x00\x10\x00\x00\x00\x00", # [30]
     'closed'		=> "\x00\x10\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [6]
     'closure'		=> "\x04\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [1]
@@ -232,9 +241,10 @@ use Carp ;
     'y2k'		=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x10", # [46]
   );
 
-%DeadBits = (
-    'all'		=> "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\x2a", # [0..46]
+our %DeadBits : unique = (
+    'all'		=> "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa", # [0..47]
     'ambiguous'		=> "\x00\x00\x00\x00\x00\x00\x00\x08\x00\x00\x00\x00", # [29]
+    'assertions'	=> "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x80", # [47]
     'bareword'		=> "\x00\x00\x00\x00\x00\x00\x00\x20\x00\x00\x00\x00", # [30]
     'closed'		=> "\x00\x20\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [6]
     'closure'		=> "\x08\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00", # [1]
@@ -283,7 +293,7 @@ use Carp ;
   );
 
 $NONE     = "\0\0\0\0\0\0\0\0\0\0\0\0";
-$LAST_BIT = 94 ;
+$LAST_BIT = 96 ;
 $BYTES    = 12 ;
 
 $All = "" ; vec($All, $Offsets{'all'}, 2) = 3 ;
@@ -291,7 +301,7 @@ $All = "" ; vec($All, $Offsets{'all'}, 2) = 3 ;
 sub Croaker
 {
     delete $Carp::CarpInternal{'warnings'};
-    croak @_ ;
+    Carp::croak(@_);
 }
 
 sub bits
@@ -429,16 +439,17 @@ sub __chk
 	$i -= 2 ;
     }
     else {
-        for ($i = 2 ; $pkg = (caller($i))[0] ; ++ $i) {
-            last if $pkg ne $this_pkg ;
-        }
-        $i = 2
-            if !$pkg || $pkg eq $this_pkg ;
+        $i = _error_loc(); # see where Carp will allocate the error
     }
 
     my $callers_bitmask = (caller($i))[9] ;
     return ($callers_bitmask, $offset, $i) ;
 }
+
+sub _error_loc {
+    require Carp::Heavy;
+    goto &Carp::short_error_loc; # don't introduce another stack frame
+}                                                             
 
 sub enabled
 {
@@ -460,10 +471,10 @@ sub warn
 
     my $message = pop ;
     my ($callers_bitmask, $offset, $i) = __chk(@_) ;
-    croak($message)
+    Carp::croak($message)
 	if vec($callers_bitmask, $offset+1, 1) ||
 	   vec($callers_bitmask, $Offsets{'all'}+1, 1) ;
-    carp($message) ;
+    Carp::carp($message) ;
 }
 
 sub warnif
@@ -479,11 +490,11 @@ sub warnif
             	(vec($callers_bitmask, $offset, 1) ||
             	vec($callers_bitmask, $Offsets{'all'}, 1)) ;
 
-    croak($message)
+    Carp::croak($message)
 	if vec($callers_bitmask, $offset+1, 1) ||
 	   vec($callers_bitmask, $Offsets{'all'}+1, 1) ;
 
-    carp($message) ;
+    Carp::carp($message) ;
 }
 
 1;

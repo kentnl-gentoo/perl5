@@ -86,7 +86,7 @@ NLM_VERSION    = 3,20,0
 
 
 # Here comes the CW tools - TO BE FILLED TO BUILD WITH CW -
-MODULE_DESC     = "Perl 5.8.0 for NetWare"
+MODULE_DESC     = "Perl 5.9.0 for NetWare"
 CCTYPE          = CodeWarrior
 C_COMPILER		= mwccnlm -c
 CPP_COMPILER	= mwccnlm
@@ -285,9 +285,7 @@ NW_CFG_VARS = \
 		"static_ext=$(STATIC_EXT)"		\
 		"dynamic_ext=$(DYNAMIC_EXT)"		\
 		"nonxs_ext=$(NONXS_EXT)"		\
-		"use5005threads=$(USE_5005THREADS)"	\
 		"useithreads=$(USE_ITHREADS)"		\
-		"usethreads=$(USE_5005THREADS)"		\
 		"usemultiplicity=$(USE_MULTI)"		\
 		"ld=$(LINK)"			\
 		"base_import=$(BASE_IMPORT_FILES)"	\
@@ -467,7 +465,7 @@ INST_NW_TOP2 = $(INST_NW_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-INST_VER	= \5.8.0
+INST_VER	= \5.9.0
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -505,15 +503,6 @@ USE_IMP_SYS	= define
 # else USE_STDIO will be defined.
 #USE_PERLIO	= define
 #USE_STDIO = define
-#
-# WARNING! This option is deprecated and will eventually go away (enable
-# USE_ITHREADS instead).
-#
-# uncomment to enable threads-capabilities.  This is incompatible with
-# USE_ITHREADS, and is only here for people who may have come to rely
-# on the experimental Thread support that was in 5.005.
-#
-#USE_5005THREADS= define
 
 # For now let this be here
 #
@@ -555,14 +544,6 @@ CRYPT_FLAG	= -DHAVE_DES_FCRYPT
 PERL_MALLOC	= undef
 !ENDIF
 
-!IF "$(USE_5005THREADS)" == ""
-USE_5005THREADS	= undef
-!ENDIF
-
-!IF "$(USE_5005THREADS)" == "define"
-USE_ITHREADS	= undef
-!ENDIF
-
 !IF "$(USE_IMP_SYS)" == "define"
 PERL_MALLOC	= undef
 !ENDIF
@@ -583,16 +564,15 @@ USE_IMP_SYS	= undef
 USE_PERLCRT	= undef
 !ENDIF
 
-!IF "$(USE_IMP_SYS)$(USE_MULTI)$(USE_5005THREADS)" == "defineundefundef"
+!IF "$(USE_IMP_SYS)$(USE_MULTI)" == "defineundef"
 USE_MULTI	= define
 !ENDIF
 
 !IF "$(USE_ITHREADS)$(USE_MULTI)" == "defineundef"
 USE_MULTI	= define
-USE_5005THREADS	= undef
 !ENDIF
 
-!IF "$(USE_MULTI)$(USE_5005THREADS)" != "undefundef"
+!IF "$(USE_MULTI)" != "undef"
 BUILDOPT	= $(BUILDOPT) -DPERL_IMPLICIT_CONTEXT
 !ENDIF
 
@@ -604,17 +584,13 @@ BUILDOPT	= $(BUILDOPT) -DPERL_IMPLICIT_SYS
 PROCESSOR_ARCHITECTURE	= x86
 !ENDIF
 
-!IF "$(USE_5005THREADS)" == "define"
-ARCHNAME	= NetWare-$(PROCESSOR_ARCHITECTURE)-thread
-!ELSE
 !IF "$(USE_MULTI)" == "define"
 ARCHNAME	= NetWare-$(PROCESSOR_ARCHITECTURE)-multi
 !ELSE
 ARCHNAME	= NetWare-$(PROCESSOR_ARCHITECTURE)
 !ENDIF
-!ENDIF
 
-!IF "$(USE_MULTI)$(USE_5005THREADS)" != "undefundef"
+!IF "$(USE_MULTI)" != "undef"
 ADD_BUILDOPT	= $(ADD_BUILDOPT) -DPERL_IMPLICIT_CONTEXT
 !ENDIF
 

@@ -1,8 +1,8 @@
 package overload;
 
-our $VERSION = '1.00';
+our $VERSION = '1.02';
 
-$overload::hint_bits = 0x20000;
+$overload::hint_bits = 0x20000; # HINT_LOCALIZE_HH
 
 sub nil {}
 
@@ -84,10 +84,13 @@ sub Method {
 sub AddrRef {
   my $package = ref $_[0];
   return "$_[0]" unless $package;
-  bless $_[0], overload::Fake;	# Non-overloaded package
-  my $str = "$_[0]";
-  bless $_[0], $package;	# Back
-  $package . substr $str, index $str, '=';
+
+	require Scalar::Util;
+	my $class = Scalar::Util::blessed($_[0]);
+	my $class_prefix = defined($class) ? "$class=" : "";
+	my $type = Scalar::Util::reftype($_[0]);
+	my $addr = Scalar::Util::refaddr($_[0]);
+	return sprintf("$class_prefix$type(0x%x)", $addr);
 }
 
 sub StrVal {
@@ -108,11 +111,11 @@ sub mycan {				# Real can would leave stubs.
 }
 
 %constants = (
-	      'integer'	  =>  0x1000,
-	      'float'	  =>  0x2000,
-	      'binary'	  =>  0x4000,
-	      'q'	  =>  0x8000,
-	      'qr'	  => 0x10000,
+	      'integer'	  =>  0x1000, # HINT_NEW_INTEGER
+	      'float'	  =>  0x2000, # HINT_NEW_FLOAT
+	      'binary'	  =>  0x4000, # HINT_NEW_BINARY
+	      'q'	  =>  0x8000, # HINT_NEW_STRING
+	      'qr'	  => 0x10000, # HINT_NEW_RE
 	     );
 
 %ops = ( with_assign	  => "+ - * / % ** << >> x .",
@@ -922,10 +925,7 @@ numeric value.)  This prints:
 =head2 Two-face references
 
 Suppose you want to create an object which is accessible as both an
-array reference and a hash reference, similar to the
-L<pseudo-hash|perlref/"Pseudo-hashes: Using an array as a hash">
-builtin Perl type.  Let's make it better than a pseudo-hash by
-allowing index 0 to be treated as a normal element.
+array reference and a hash reference.
 
   package two_refs;
   use overload '%{}' => \&gethash, '@{}' => sub { $ {shift()} };

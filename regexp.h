@@ -1,6 +1,7 @@
 /*    regexp.h
  *
- *    Copyright (c) 1997-2002, Larry Wall
+ *    Copyright (C) 1993, 1994, 1996, 1997, 1999, 2000, 2001, 2003,
+ *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -36,6 +37,9 @@ typedef struct regexp {
         struct reg_data *data;	/* Additional data. */
 	char *subbeg;		/* saved or original string 
 				   so \digit works forever. */
+#ifdef PERL_COPY_ON_WRITE
+        SV *saved_copy;         /* If non-NULL, SV which is COW from original */
+#endif
         U32 *offsets;           /* offset annotations 20001228 MJD */
 	I32 sublen;		/* Length of string pointed by subbeg */
 	I32 refcnt;
@@ -71,6 +75,7 @@ typedef struct regexp {
 #define ROPT_NAUGHTY		0x20000 /* how exponential is this pattern? */
 #define ROPT_COPY_DONE		0x40000	/* subbeg is a copy of the string */
 #define ROPT_TAINTED_SEEN	0x80000
+#define ROPT_MATCH_UTF8		0x10000000 /* subbeg is utf-8 */
 
 #define RE_USE_INTUIT_NOML	0x0100000 /* Best to intuit before matching */
 #define RE_USE_INTUIT_ML	0x0200000
@@ -99,6 +104,30 @@ typedef struct regexp {
 					 ? RX_MATCH_COPIED_on(prog) \
 					 : RX_MATCH_COPIED_off(prog))
 
+#ifdef PERL_COPY_ON_WRITE
+#define RX_MATCH_COPY_FREE(rx) \
+	STMT_START {if (rx->saved_copy) { \
+	    SV_CHECK_THINKFIRST_COW_DROP(rx->saved_copy); \
+	} \
+	if (RX_MATCH_COPIED(rx)) { \
+	    Safefree(rx->subbeg); \
+	    RX_MATCH_COPIED_off(rx); \
+	}} STMT_END
+#else
+#define RX_MATCH_COPY_FREE(rx) \
+	STMT_START {if (RX_MATCH_COPIED(rx)) { \
+	    Safefree(rx->subbeg); \
+	    RX_MATCH_COPIED_off(rx); \
+	}} STMT_END
+#endif
+
+#define RX_MATCH_UTF8(prog)		((prog)->reganch & ROPT_MATCH_UTF8)
+#define RX_MATCH_UTF8_on(prog)		((prog)->reganch |= ROPT_MATCH_UTF8)
+#define RX_MATCH_UTF8_off(prog)		((prog)->reganch &= ~ROPT_MATCH_UTF8)
+#define RX_MATCH_UTF8_set(prog, t)	((t) \
+			? (RX_MATCH_UTF8_on(prog), (PL_reg_match_utf8 = 1)) \
+			: (RX_MATCH_UTF8_off(prog), (PL_reg_match_utf8 = 0)))
+    
 #define REXEC_COPY_STR	0x01		/* Need to copy the string. */
 #define REXEC_CHECKED	0x02		/* check_substr already checked. */
 #define REXEC_SCREAM	0x04		/* use scream table. */

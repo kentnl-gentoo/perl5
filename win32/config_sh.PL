@@ -49,11 +49,8 @@ my @noxs    = FindExt::noxs_extensions();
 my @known   = sort(@dynamic,split(/\s+/,$opt{'staticext'}),@noxs);
 $opt{'known_extensions'} = join(' ',@known);
 
-if (!$opt{'use5005threads'} || $opt{'use5005threads'} eq 'undef')
- {
-  @dynamic = grep(!/Thread/,@dynamic);
-  @known   = grep(!/Thread/,@dynamic);
- }
+@dynamic = grep(!/Thread/,@dynamic);
+@known   = grep(!/Thread/,@dynamic);
 
 $opt{'dynamic_ext'} = join(' ',@dynamic);
 $opt{'nonxs_ext'}   = join(' ',@noxs);
@@ -91,6 +88,11 @@ $opt{incpath} = mungepath($opt{incpath}) if exists $opt{incpath};
 if (defined(&Win32::IsWin95) && Win32::IsWin95()) {
     $opt{d_flock} = 'undef';
     $opt{d_link} = 'undef';
+}
+
+if ($opt{uselargefiles} ne 'define') {
+    $opt{lseeksize} = 4;
+    $opt{lseektype} = 'off_t';
 }
 
 while (<>) {

@@ -6,13 +6,20 @@
 # and by MacOS Classic.
 #
 # reads global.sym, pp.sym, perlvars.h, intrpvar.h, thrdvar.h, config.h
-# On OS/2 reads miniperl.map as well
+# On OS/2 reads miniperl.map and the previous version of perl5.def as well
 
 my $PLATFORM;
 my $CCTYPE;
 
 while (@ARGV) {
     my $flag = shift;
+    if ($flag =~ s/^CC_FLAGS=/ /) {
+	for my $fflag ($flag =~ /(?:^|\s)-D(\S+)/g) {
+	    $fflag     .= '=1' unless $fflag =~ /^(\w+)=/;
+	    $define{$1} = $2   if $fflag =~ /^(\w+)=(.+)$/;
+	}
+	next;
+    }
     $define{$1} = 1 if ($flag =~ /^-D(\w+)$/);
     $define{$1} = $2 if ($flag =~ /^-D(\w+)=(.+)$/);
     $CCTYPE   = $1 if ($flag =~ /^CCTYPE=(\w+)$/);
@@ -105,7 +112,6 @@ if ($define{USE_ITHREADS}) {
 
 $define{PERL_IMPLICIT_CONTEXT} ||=
     $define{USE_ITHREADS} ||
-    $define{USE_5005THREADS}  ||
     $define{MULTIPLICITY} ;
 
 if ($define{USE_ITHREADS} && $PLATFORM ne 'win32' && $^O ne 'darwin') {
@@ -118,7 +124,7 @@ my $sym_ord = 0;
 
 if ($PLATFORM =~ /^win(?:32|ce)$/) {
     warn join(' ',keys %define)."\n";
-    ($dll = ($define{PERL_DLL} || "perl58")) =~ s/\.dll$//i;
+    ($dll = ($define{PERL_DLL} || "perl59")) =~ s/\.dll$//i;
     print "LIBRARY $dll\n";
     print "DESCRIPTION 'Perl interpreter'\n";
     print "EXPORTS\n";
@@ -170,7 +176,7 @@ elsif ($PLATFORM eq 'aix') {
 }
 elsif ($PLATFORM eq 'netware') {
 	if ($FILETYPE eq 'def') {
-	print "LIBRARY perl58\n";
+	print "LIBRARY perl59\n";
 	print "DESCRIPTION 'Perl interpreter for NetWare'\n";
 	print "EXPORTS\n";
 	}
@@ -289,7 +295,6 @@ if ($PLATFORM eq 'wince') {
 		     Perl_sv_collxfrm
 		     setgid
 		     setuid
-		     win32_async_check
 		     win32_free_childdir
 		     win32_free_childenv
 		     win32_get_childdir
@@ -382,6 +387,8 @@ elsif ($PLATFORM eq 'os2') {
 		    my_getpwent
 		    my_setpwent
 		    my_endpwent
+		    fork_with_resources
+		    croak_with_os2error
 		    setgrent
 		    endgrent
 		    getgrent
@@ -418,7 +425,14 @@ elsif ($PLATFORM eq 'os2') {
 		    os2error
 		    ResetWinError
 		    CroakWinError
+		    PL_do_undump
 		    )]);
+    emit_symbols([qw(os2_cond_wait
+		     pthread_join
+		     pthread_create
+		     pthread_detach
+		    )])
+      if $define{'USE_5005THREADS'} or $define{'USE_ITHREADS'};
 }
 elsif ($PLATFORM eq 'MacOS') {
     skip_symbols [qw(
@@ -561,6 +575,13 @@ else {
 		    )];
 }
 
+unless ($define{'PERL_COPY_ON_WRITE'}) {
+    skip_symbols [qw(
+		    Perl_sv_setsv_cow
+		    Perl_sv_release_IVX
+		  )];
+}
+
 unless ($define{'PERL_FLEXIBLE_EXCEPTIONS'}) {
     skip_symbols [qw(
 		    PL_protect
@@ -581,8 +602,10 @@ if ($define{'MYMALLOC'}) {
 		    Perl_get_mstats
 		    Perl_strdup
 		    Perl_putenv
+		    MallocCfg_ptr
+		    MallocCfgP_ptr
 		    )];
-    if ($define{'USE_5005THREADS'} || $define{'USE_ITHREADS'}) {
+    if ($define{'USE_ITHREADS'}) {
 	emit_symbols [qw(
 			PL_malloc_mutex
 			)];
@@ -599,16 +622,18 @@ else {
 		    Perl_dump_mstats
 		    Perl_get_mstats
 		    Perl_malloced_size
+		    MallocCfg_ptr
+		    MallocCfgP_ptr
 		    )];
 }
 
-unless ($define{'USE_5005THREADS'} || $define{'USE_ITHREADS'}) {
+unless ($define{'USE_ITHREADS'}) {
     skip_symbols [qw(
 		    PL_thr_key
 		    )];
 }
 
-unless ($define{'USE_5005THREADS'}) {
+# USE_5005THREADS symbols. Kept as reference for easier removal
     skip_symbols [qw(
 		    PL_sv_mutex
 		    PL_strtab_mutex
@@ -635,7 +660,6 @@ unless ($define{'USE_5005THREADS'}) {
 		    Perl_magic_mutexfree
 		    Perl_sv_lock
 		    )];
-}
 
 unless ($define{'USE_ITHREADS'}) {
     skip_symbols [qw(
@@ -645,6 +669,7 @@ unless ($define{'USE_ITHREADS'}) {
 		    PL_regex_padav
 		    PL_sharedsv_space
 		    PL_sharedsv_space_mutex
+		    PL_dollarzero_mutex
 		    Perl_dirp_dup
 		    Perl_cx_dup
 		    Perl_si_dup
@@ -711,7 +736,13 @@ unless ($define{'PL_OP_SLAB_ALLOC'}) {
                      PL_OpPtr
                      PL_OpSlab
                      PL_OpSpace
+		     Perl_Slab_Alloc
+		     Perl_Slab_Free
                     )];
+}
+
+unless ($define{'THREADS_HAVE_PIDS'}) {
+    skip_symbols [qw(PL_ppid)];
 }
 
 sub readvar {
@@ -726,11 +757,6 @@ sub readvar {
     }
     close(VARS);
     return \@syms;
-}
-
-if ($define{'USE_5005THREADS'}) {
-    my $thrd = readvar($thrdvar_h);
-    skip_symbols $thrd;
 }
 
 if ($define{'PERL_GLOBAL_STRUCT'}) {
@@ -748,73 +774,75 @@ my @syms = ($global_sym, $globvar_sym); # $pp_sym is not part of the API
 # These are in _addition to_ the public face of the abstraction
 # and need to be exported to allow XS modules to implement layers
 my @layer_syms = qw(
-			 PerlIOBase_clearerr
-			 PerlIOBase_close
-			 PerlIOBase_dup
-			 PerlIOBase_eof
-			 PerlIOBase_error
-			 PerlIOBase_fileno
-			 PerlIOBase_pushed
-			 PerlIOBase_binmode
-			 PerlIOBase_popped
-			 PerlIOBase_read
-			 PerlIOBase_setlinebuf
-			 PerlIOBase_unread
-			 PerlIOBuf_bufsiz
-			 PerlIOBuf_fill
-			 PerlIOBuf_flush
-			 PerlIOBuf_get_base
-			 PerlIOBuf_get_cnt
-			 PerlIOBuf_get_ptr
-			 PerlIOBuf_open
-			 PerlIOBuf_pushed
-			 PerlIOBuf_popped
-			 PerlIOBuf_read
-			 PerlIOBuf_seek
-			 PerlIOBuf_set_ptrcnt
-			 PerlIOBuf_tell
-			 PerlIOBuf_unread
-			 PerlIOBuf_write
-			 PerlIO_debug
-			 PerlIO_allocate
-			 PerlIO_apply_layera
-			 PerlIO_apply_layers
-			 PerlIO_arg_fetch
-			 PerlIO_define_layer
-			 PerlIO_modestr
-			 PerlIO_parse_layers
-			 PerlIO_layer_fetch
-			 PerlIO_list_free
-			 PerlIO_apply_layera
-			 PerlIO_pending
-			 PerlIO_push
-			 PerlIO_pop
-			 PerlIO_sv_dup
-			 PerlIO_perlio
-
-Perl_PerlIO_clearerr
-Perl_PerlIO_close
-Perl_PerlIO_eof
-Perl_PerlIO_error
-Perl_PerlIO_fileno
-Perl_PerlIO_fill
-Perl_PerlIO_flush
-Perl_PerlIO_get_base
-Perl_PerlIO_get_bufsiz
-Perl_PerlIO_get_cnt
-Perl_PerlIO_get_ptr
-Perl_PerlIO_read
-Perl_PerlIO_seek
-Perl_PerlIO_set_cnt
-Perl_PerlIO_set_ptrcnt
-Perl_PerlIO_setlinebuf
-Perl_PerlIO_stderr
-Perl_PerlIO_stdin
-Perl_PerlIO_stdout
-Perl_PerlIO_tell
-Perl_PerlIO_unread
-Perl_PerlIO_write
-
+		    PerlIOBase_binmode
+		    PerlIOBase_clearerr
+		    PerlIOBase_close
+		    PerlIOBase_dup
+		    PerlIOBase_eof
+		    PerlIOBase_error
+		    PerlIOBase_fileno
+		    PerlIOBase_noop_fail
+		    PerlIOBase_noop_ok
+		    PerlIOBase_popped
+		    PerlIOBase_pushed
+		    PerlIOBase_read
+		    PerlIOBase_setlinebuf
+		    PerlIOBase_unread
+		    PerlIOBuf_bufsiz
+		    PerlIOBuf_close
+		    PerlIOBuf_dup
+		    PerlIOBuf_fill
+		    PerlIOBuf_flush
+		    PerlIOBuf_get_base
+		    PerlIOBuf_get_cnt
+		    PerlIOBuf_get_ptr
+		    PerlIOBuf_open
+		    PerlIOBuf_popped
+		    PerlIOBuf_pushed
+		    PerlIOBuf_read
+		    PerlIOBuf_seek
+		    PerlIOBuf_set_ptrcnt
+		    PerlIOBuf_tell
+		    PerlIOBuf_unread
+		    PerlIOBuf_write
+		    PerlIO_allocate
+		    PerlIO_apply_layera
+		    PerlIO_apply_layers
+		    PerlIO_arg_fetch
+		    PerlIO_debug
+		    PerlIO_define_layer
+		    PerlIO_isutf8
+		    PerlIO_layer_fetch
+		    PerlIO_list_free
+		    PerlIO_modestr
+		    PerlIO_parse_layers
+		    PerlIO_pending
+		    PerlIO_perlio
+		    PerlIO_pop
+		    PerlIO_push
+		    PerlIO_sv_dup
+		    Perl_PerlIO_clearerr
+		    Perl_PerlIO_close
+		    Perl_PerlIO_eof
+		    Perl_PerlIO_error
+		    Perl_PerlIO_fileno
+		    Perl_PerlIO_fill
+		    Perl_PerlIO_flush
+		    Perl_PerlIO_get_base
+		    Perl_PerlIO_get_bufsiz
+		    Perl_PerlIO_get_cnt
+		    Perl_PerlIO_get_ptr
+		    Perl_PerlIO_read
+		    Perl_PerlIO_seek
+		    Perl_PerlIO_set_cnt
+		    Perl_PerlIO_set_ptrcnt
+		    Perl_PerlIO_setlinebuf
+		    Perl_PerlIO_stderr
+		    Perl_PerlIO_stdin
+		    Perl_PerlIO_stdout
+		    Perl_PerlIO_tell
+		    Perl_PerlIO_unread
+		    Perl_PerlIO_write
 );
 if ($PLATFORM eq 'netware') {
     push(@layer_syms,'PL_def_layerlist','PL_known_layers','PL_perlio');
@@ -942,7 +970,7 @@ if ($define{'MULTIPLICITY'}) {
 	emit_symbols $glob;
     }
     # XXX AIX seems to want the perlvars.h symbols, for some reason
-    if ($PLATFORM eq 'aix') {
+    if ($PLATFORM eq 'aix' or $PLATFORM eq 'os2') {	# OS/2 needs PL_thr_key
 	my $glob = readvar($perlvars_h);
 	emit_symbols $glob;
     }
@@ -956,7 +984,7 @@ else {
 	my $glob = readvar($intrpvar_h);
 	emit_symbols $glob;
     }
-    unless ($define{'MULTIPLICITY'} || $define{'USE_5005THREADS'}) {
+    unless ($define{'MULTIPLICITY'}) {
 	my $glob = readvar($thrdvar_h);
 	emit_symbols $glob;
     }
@@ -985,6 +1013,7 @@ if ($PLATFORM =~ /^win(?:32|ce)$/) {
 			    Perl_init_os_extras
 			    Perl_thread_create
 			    Perl_win32_init
+			    Perl_win32_term
 			    RunPerl
 			    win32_async_check
 			    win32_errno
