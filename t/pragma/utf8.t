@@ -2,7 +2,7 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    unshift @INC, '../lib';
+    @INC = '../lib';
     $ENV{PERL5LIB} = '../lib';
     if ( ord("\t") != 9 ) { # skip on ebcdic platforms
         print "1..0 # Skip utf8 tests on ebcdic platform.\n";
@@ -10,7 +10,7 @@ BEGIN {
     }
 }
 
-print "1..60\n";
+print "1..66\n";
 
 my $test = 1;
 
@@ -20,69 +20,77 @@ sub ok {
     print "ok $test\n";
 }
 
+sub ok_bytes {
+    use bytes;
+    my ($got,$expect) = @_;
+    print "# expected [$expect], got [$got]\nnot " if $got ne $expect;
+    print "ok $test\n";
+}
+
+
 {
     use utf8;
     $_ = ">\x{263A}<"; 
     s/([\x{80}-\x{10ffff}])/"&#".ord($1).";"/eg; 
     ok $_, '>&#9786;<';
-    $test++;
+    $test++;				# 1
 
     $_ = ">\x{263A}<"; 
     my $rx = "\x{80}-\x{10ffff}";
     s/([$rx])/"&#".ord($1).";"/eg; 
     ok $_, '>&#9786;<';
-    $test++;
+    $test++;				# 2
 
     $_ = ">\x{263A}<"; 
     my $rx = "\\x{80}-\\x{10ffff}";
     s/([$rx])/"&#".ord($1).";"/eg; 
     ok $_, '>&#9786;<';
-    $test++;
+    $test++;				# 3
 
     $_ = "alpha,numeric"; 
     m/([[:alpha:]]+)/; 
     ok $1, 'alpha';
-    $test++;
+    $test++;				# 4
 
     $_ = "alphaNUMERICstring";
     m/([[:^lower:]]+)/; 
     ok $1, 'NUMERIC';
-    $test++;
+    $test++;				# 5
 
     $_ = "alphaNUMERICstring";
     m/(\p{Ll}+)/; 
     ok $1, 'alpha';
-    $test++;
+    $test++;				# 6
 
     $_ = "alphaNUMERICstring"; 
     m/(\p{Lu}+)/; 
     ok $1, 'NUMERIC';
-    $test++;
+    $test++;				# 7
 
     $_ = "alpha,numeric"; 
     m/([\p{IsAlpha}]+)/; 
     ok $1, 'alpha';
-    $test++;
+    $test++;				# 8
 
     $_ = "alphaNUMERICstring";
     m/([^\p{IsLower}]+)/; 
     ok $1, 'NUMERIC';
-    $test++;
+    $test++;				# 9
 
     $_ = "alpha123numeric456"; 
     m/([\p{IsDigit}]+)/; 
     ok $1, '123';
-    $test++;
+    $test++;				# 10
 
     $_ = "alpha123numeric456"; 
     m/([^\p{IsDigit}]+)/; 
     ok $1, 'alpha';
-    $test++;
+    $test++;				# 11
 
     $_ = ",123alpha,456numeric"; 
     m/([\p{IsAlnum}]+)/; 
     ok $1, '123alpha';
-    $test++;
+    $test++;				# 12
 }
 {
     use utf8;
@@ -90,80 +98,100 @@ sub ok {
     $_ = "\x{263A}>\x{263A}\x{263A}"; 
 
     ok length, 4;
-    $test++;
+    $test++;				# 13
 
     ok length((m/>(.)/)[0]), 1;
-    $test++;
+    $test++;				# 14
 
     ok length($&), 2;
-    $test++;
+    $test++;				# 15
 
     ok length($'), 1;
-    $test++;
+    $test++;				# 16
 
     ok length($`), 1;
-    $test++;
+    $test++;				# 17
 
     ok length($1), 1;
-    $test++;
+    $test++;				# 18
 
     ok length($tmp=$&), 2;
-    $test++;
+    $test++;				# 19
 
     ok length($tmp=$'), 1;
-    $test++;
+    $test++;				# 20
 
     ok length($tmp=$`), 1;
-    $test++;
+    $test++;				# 21
 
     ok length($tmp=$1), 1;
-    $test++;
+    $test++;				# 22
 
-    ok $&, pack("C*", ord(">"), 0342, 0230, 0272);
-    $test++;
+    {
+	use bytes;
 
-    ok $', pack("C*", 0342, 0230, 0272);
-    $test++;
+	my $tmp = $&;
+	ok $tmp, pack("C*", ord(">"), 0342, 0230, 0272);
+	$test++;				# 23
 
-    ok $`, pack("C*", 0342, 0230, 0272);
-    $test++;
+	$tmp = $';
+	ok $tmp, pack("C*", 0342, 0230, 0272);
+	$test++;				# 24
 
-    ok $1, pack("C*", 0342, 0230, 0272);
-    $test++;
+	$tmp = $`;
+	ok $tmp, pack("C*", 0342, 0230, 0272);
+	$test++;				# 25
+
+	$tmp = $1;
+	ok $tmp, pack("C*", 0342, 0230, 0272);
+	$test++;				# 26
+    }
+
+    ok_bytes $&, pack("C*", ord(">"), 0342, 0230, 0272);
+    $test++;				# 27
+
+    ok_bytes $', pack("C*", 0342, 0230, 0272);
+    $test++;				# 28
+
+    ok_bytes $`, pack("C*", 0342, 0230, 0272);
+    $test++;				# 29
+
+    ok_bytes $1, pack("C*", 0342, 0230, 0272);
+    $test++;				# 30
 
     {
 	use bytes;
 	no utf8;
 
 	ok length, 10;
-	$test++;
+	$test++;				# 31
 
     	ok length((m/>(.)/)[0]), 1;
-    	$test++;
+    	$test++;				# 32
 
     	ok length($&), 2;
-    	$test++;
+    	$test++;				# 33
 
     	ok length($'), 5;
-    	$test++;
+    	$test++;				# 34
 
     	ok length($`), 3;
-    	$test++;
+    	$test++;				# 35
 
     	ok length($1), 1;
-    	$test++;
+    	$test++;				# 36
 
 	ok $&, pack("C*", ord(">"), 0342);
-	$test++;
+	$test++;				# 37
 
 	ok $', pack("C*", 0230, 0272, 0342, 0230, 0272);
-	$test++;
+	$test++;				# 38
 
 	ok $`, pack("C*", 0342, 0230, 0272);
-	$test++;
+	$test++;				# 39
 
 	ok $1, pack("C*", 0342);
-	$test++;
+	$test++;				# 40
 
     }
 
@@ -174,80 +202,96 @@ sub ok {
     }
 
     ok length, 10;
-    $test++;
+    $test++;				# 41
 
     ok length((m/>(.)/)[0]), 1;
-    $test++;
+    $test++;				# 42
 
     ok length($&), 2;
-    $test++;
+    $test++;				# 43
 
     ok length($'), 1;
-    $test++;
+    $test++;				# 44
 
     ok length($`), 1;
-    $test++;
+    $test++;				# 45
 
     ok length($1), 1;
-    $test++;
+    $test++;				# 46
 
     ok length($tmp=$&), 2;
-    $test++;
+    $test++;				# 47
 
     ok length($tmp=$'), 1;
-    $test++;
+    $test++;				# 48
 
     ok length($tmp=$`), 1;
-    $test++;
+    $test++;				# 49
 
     ok length($tmp=$1), 1;
-    $test++;
+    $test++;				# 50
 
-    ok $&, pack("C*", ord(">"), 0342, 0230, 0272);
-    $test++;
+    {
+	use bytes;
 
-    ok $', pack("C*", 0342, 0230, 0272);
-    $test++;
+        my $tmp = $&;
+	ok $tmp, pack("C*", ord(">"), 0342, 0230, 0272);
+	$test++;				# 51
 
-    ok $`, pack("C*", 0342, 0230, 0272);
-    $test++;
+        $tmp = $';
+	ok $tmp, pack("C*", 0342, 0230, 0272);
+	$test++;				# 52
 
-    ok $1, pack("C*", 0342, 0230, 0272);
-    $test++;
+        $tmp = $`;
+	ok $tmp, pack("C*", 0342, 0230, 0272);
+	$test++;				# 53
 
+        $tmp = $1;
+	ok $tmp, pack("C*", 0342, 0230, 0272);
+	$test++;				# 54
+    }
     {
 	use bytes;
 	no utf8;
 
 	ok length, 10;
-	$test++;
+	$test++;				# 55
 
     	ok length((m/>(.)/)[0]), 1;
-    	$test++;
+    	$test++;				# 56
 
     	ok length($&), 2;
-    	$test++;
+    	$test++;				# 57
 
     	ok length($'), 5;
-    	$test++;
+    	$test++;				# 58
 
     	ok length($`), 3;
-    	$test++;
+    	$test++;				# 59
 
     	ok length($1), 1;
-    	$test++;
+    	$test++;				# 60
 
 	ok $&, pack("C*", ord(">"), 0342);
-	$test++;
+	$test++;				# 61
 
 	ok $', pack("C*", 0230, 0272, 0342, 0230, 0272);
-	$test++;
+	$test++;				# 62
 
 	ok $`, pack("C*", 0342, 0230, 0272);
-	$test++;
+	$test++;				# 63
 
 	ok $1, pack("C*", 0342);
-	$test++;
+	$test++;				# 64
 
     }
+
+    ok "\x{ab}" =~ /^\x{ab}$/, 1;
+    $test++;					# 65
+}
+
+{
+    use utf8;
+    ok_bytes chr(0xe2), pack("C*", 0xc3, 0xa2);
+    $test++;                # 66
 }

@@ -284,11 +284,15 @@ be skipped.
 
 runs the program under the Perl debugger.  See L<perldebug>.
 
-=item B<-d:>I<foo>
+=item B<-d:>I<foo[=bar,baz]>
 
 runs the program under the control of a debugging, profiling, or
 tracing module installed as Devel::foo. E.g., B<-d:DProf> executes
-the program using the Devel::DProf profiler.  See L<perldebug>.
+the program using the Devel::DProf profiler.  As with the B<-M>
+flag, options may be passed to the Devel::foo package where they
+will be received and interpreted by the Devel::foo::import routine.
+The comma-separated list of options must follow a C<=> character.
+See L<perldebug>.
 
 =item B<-D>I<letters>
 
@@ -808,6 +812,18 @@ after compilation.
 Relevant only if your perl executable was built with B<-DDEBUGGING>,
 this controls the behavior of global destruction of objects and other
 references.
+
+=item PERL_ROOT (specific to the VMS port)
+
+A translation concealed rooted logical name that contains perl and the
+logical device for the @INC path on VMS only.  Other logical names that
+affect perl on VMS include PERLSHR, PERL_ENV_TABLES, and 
+SYS$TIMEZONE_DIFFERENTIAL but are optional and discussed further in 
+L<perlvms> and in F<README.vms> in the Perl source distribution.
+
+=item SYS$LOGIN (specific to the VMS port)
+
+Used if chdir has no argument and HOME and LOGDIR are not set.
 
 =back
 

@@ -289,7 +289,7 @@ than the PERL_BADLANG approach, but setting LC_ALL (or
 other locale variables) may affect other programs as well, not just
 Perl.  In particular, external programs run from within Perl will see
 these changes.  If you make the new settings permanent (read on), all
-programs you run see the changes.  See L<ENVIRONMENT> for for
+programs you run see the changes.  See L<ENVIRONMENT> for
 the full list of relevant environment variables and L<USING LOCALES>
 for their effects in Perl.  Effects in other programs are 
 easily deducible.  For example, the variable LC_COLLATE may well affect
@@ -449,7 +449,7 @@ if you "use locale".
 	a A b B c C d D e E
 	a b c d e A B C D E
 
-Here is a code snippet to tell what alphanumeric
+Here is a code snippet to tell what "word"
 characters are in the current locale, in that locale's order:
 
         use locale;
@@ -518,8 +518,9 @@ results, and so always obey the current C<LC_COLLATE> locale.
 In the scope of S<C<use locale>>, Perl obeys the C<LC_CTYPE> locale
 setting.  This controls the application's notion of which characters are
 alphabetic.  This affects Perl's C<\w> regular expression metanotation,
-which stands for alphanumeric characters--that is, alphabetic and
-numeric characters.  (Consult L<perlre> for more information about
+which stands for alphanumeric characters--that is, alphabetic,
+numeric, and including other special characters such as the underscore or
+hyphen.  (Consult L<perlre> for more information about
 regular expressions.)  Thanks to C<LC_CTYPE>, depending on your locale
 setting, characters like 'E<aelig>', 'E<eth>', 'E<szlig>', and
 'E<oslash>' may be understood as C<\w> characters.
@@ -946,44 +947,19 @@ In certain systems, the operating system's locale support
 is broken and cannot be fixed or used by Perl.  Such deficiencies can
 and will result in mysterious hangs and/or Perl core dumps when the
 C<use locale> is in effect.  When confronted with such a system,
-please report in excruciating detail to <F<perlbug@perl.com>>, and
+please report in excruciating detail to <F<perlbug@perl.org>>, and
 complain to your vendor: bug fixes may exist for these problems
 in your operating system.  Sometimes such bug fixes are called an
 operating system upgrade.
 
 =head1 SEE ALSO
 
-L<POSIX (3)/isalnum>
-
-L<POSIX (3)/isalpha>
-
-L<POSIX (3)/isdigit>
-
-L<POSIX (3)/isgraph>
-
-L<POSIX (3)/islower>
-
-L<POSIX (3)/isprint>,
-
-L<POSIX (3)/ispunct>
-
-L<POSIX (3)/isspace>
-
-L<POSIX (3)/isupper>,
-
-L<POSIX (3)/isxdigit>
-
-L<POSIX (3)/localeconv>
-
-L<POSIX (3)/setlocale>,
-
-L<POSIX (3)/strcoll>
-
-L<POSIX (3)/strftime>
-
-L<POSIX (3)/strtod>,
-
-L<POSIX (3)/strxfrm>
+L<POSIX (3)/isalnum>, L<POSIX (3)/isalpha>, L<POSIX (3)/isdigit>, 
+L<POSIX (3)/isgraph>, L<POSIX (3)/islower>, L<POSIX (3)/isprint>, 
+L<POSIX (3)/ispunct>, L<POSIX (3)/isspace>, L<POSIX (3)/isupper>, 
+L<POSIX (3)/isxdigit>, L<POSIX (3)/localeconv>, L<POSIX (3)/setlocale>, 
+L<POSIX (3)/strcoll>, L<POSIX (3)/strftime>, L<POSIX (3)/strtod>, 
+L<POSIX (3)/strxfrm>.
 
 =head1 HISTORY
 

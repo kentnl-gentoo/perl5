@@ -181,10 +181,12 @@ numbers to secondary storage such as a disk file or tape.
 
 Conflicting storage orders make utter mess out of the numbers.  If a
 little-endian host (Intel, VAX) stores 0x12345678 (305419896 in
-decimal), a big-endian host (Motorola, MIPS, Sparc, PA) reads it as
-0x78563412 (2018915346 in decimal).  To avoid this problem in network
-(socket) connections use the C<pack> and C<unpack> formats C<n>
-and C<N>, the "network" orders.  These are guaranteed to be portable.
+decimal), a big-endian host (Motorola, Sparc, PA) reads it as
+0x78563412 (2018915346 in decimal).  Alpha and MIPS can be either:
+Digital/Compaq used/uses them in little-endian mode; SGI/Cray uses
+them in big-endian mode.  To avoid this problem in network (socket)
+connections use the C<pack> and C<unpack> formats C<n> and C<N>, the
+"network" orders.  These are guaranteed to be portable.
 
 You can explore the endianness of your platform by unpacking a
 data structure packed in native format such as:
@@ -197,7 +199,7 @@ If you need to distinguish between endian architectures you could use
 either of the variables set like so:
 
     $is_big_endian   = unpack("h*", pack("s", 1)) =~ /01/;
-    $is_litte_endian = unpack("h*", pack("s", 1)) =~ /^1/;
+    $is_little_endian = unpack("h*", pack("s", 1)) =~ /^1/;
 
 Differing widths can cause truncation even between platforms of equal
 endianness.  The platform of shorter width loses the upper parts of the
@@ -217,7 +219,7 @@ So, it is reasonably safe to assume that all platforms support the
 notion of a "path" to uniquely identify a file on the system.  How
 that path is really written, though, differs considerably.
 
-Atlhough similar, file path specifications differ between Unix,
+Although similar, file path specifications differ between Unix,
 Windows, S<Mac OS>, OS/2, VMS, VOS, S<RISC OS>, and probably others.
 Unix, for example, is one of the few OSes that has the elegant idea
 of a single root directory.
@@ -355,7 +357,7 @@ Commands that launch external processes are generally supported on
 most platforms (though many of them do not support any type of
 forking).  The problem with using them arises from what you invoke
 them on.  External tools are often named differently on different
-platforms, may not be available in the same location, migth accept
+platforms, may not be available in the same location, might accept
 different arguments, can behave differently, and often present their
 results in a platform-dependent way.  Thus, you should seldom depend
 on them to produce consistent results. (Then again, if you're calling 
@@ -681,7 +683,7 @@ The ActiveState Pages, http://www.activestate.com/
 =item *
 
 The Cygwin environment for Win32; F<README.cygwin> (installed 
-as L<perlcygwin>), http://sourceware.cygnus.com/cygwin/
+as L<perlcygwin>), http://sources.redhat.com/cygwin/
 
 =item *
 
@@ -1042,7 +1044,8 @@ Also see:
 
 *
 
-L<perlos390>, F<README.os390>, F<README.posix-bc>, F<README.vmesa>
+L<perlos390>, F<README.os390>, F<perlposix-bc>, F<README.vmesa>,
+L<perlebcdic>.
 
 =item *
 
@@ -1053,7 +1056,7 @@ general usage issues for all EBCDIC Perls.  Send a message body of
 =item  *
 
 AS/400 Perl information at
-ttp://as400.rochester.ibm.com/
+http://as400.rochester.ibm.com/
 as well as on CPAN in the F<ports/> directory.
 
 =back
@@ -1640,6 +1643,10 @@ Not implemented. (S<Mac OS>, Win32, VMS, S<RISC OS>, VOS, VM/ESA)
 
 =item stat
 
+Platforms that do not have rdev, blksize, or blocks will return these
+as '', so numeric comparison or manipulation of these fields may cause
+'not numeric' warnings.
+
 mtime and atime are the same thing, and ctime is creation time instead of
 inode change time. (S<Mac OS>)
 
@@ -1649,6 +1656,9 @@ device and inode are not necessarily reliable.  (VMS)
 
 mtime, atime and ctime all return the last modification time.  Device and
 inode are not necessarily reliable.  (S<RISC OS>)
+
+dev, rdev, blksize, and blocks are not available.  inode is not
+meaningful and will differ between stat calls on the same file.  (os2)
 
 =item symlink OLDFILE,NEWFILE
 
@@ -1746,7 +1756,7 @@ two seconds. (Win32)
 Not implemented. (S<Mac OS>, VOS)
 
 Can only be applied to process handles returned for processes spawned
-using C<system(1, ...)>. (Win32)
+using C<system(1, ...)> or pseudo processes created with C<fork()>. (Win32)
 
 Not useful. (S<RISC OS>)
 
@@ -1844,6 +1854,7 @@ distribution available at http://www.perl.com/CPAN/src/index.html
 
 	AIX
 	DOS DJGPP 	1)
+	EPOC
 	FreeBSD
 	HP-UX
 	IRIX

@@ -2,7 +2,7 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    unshift @INC, '../lib' if -d '../lib';
+    @INC = '../lib';
 }
 
 use warnings;
@@ -212,8 +212,9 @@ eval q{
     use constant 'SIG' => 1 ;
 };
 
-test 59, @warnings == 14 ;
+test 59, @warnings == 15 ;
 test 60, (shift @warnings) =~ /^Constant name 'BEGIN' is a Perl keyword at/;
+shift @warnings; #Constant subroutine BEGIN redefined at
 test 61, (shift @warnings) =~ /^Constant name 'INIT' is a Perl keyword at/;
 test 62, (shift @warnings) =~ /^Constant name 'CHECK' is a Perl keyword at/;
 test 63, (shift @warnings) =~ /^Constant name 'END' is a Perl keyword at/;

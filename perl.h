@@ -21,7 +21,11 @@
 #endif /* PERL_FOR_X2P */
 
 #define VOIDUSED 1
-#include "config.h"
+#ifdef PERL_MICRO 
+#   include "uconfig.h"
+#else
+#   include "config.h"
+#endif
 
 #if defined(USE_ITHREADS) && defined(USE_5005THREADS)
 #  include "error: USE_ITHREADS and USE_5005THREADS are incompatible"
@@ -164,8 +168,8 @@ class CPerlObj;
 #define aTHXo_			this,
 #define PERL_OBJECT_THIS	aTHXo
 #define PERL_OBJECT_THIS_	aTHXo_
-#define dTHXoa(a)		pTHXo = a
-#define dTHXo			dTHXoa(PERL_GET_THX)
+#define dTHXoa(a)		pTHXo = (CPerlObj*)a
+#define dTHXo			pTHXo = PERL_GET_THX
 
 #define pTHXx		void
 #define pTHXx_
@@ -180,15 +184,16 @@ struct perl_thread;
 #    define pTHX	register struct perl_thread *thr
 #    define aTHX	thr
 #    define dTHR	dNOOP
+#    define dTHXa(a)	pTHX = (struct perl_thread*)a
 #  else
 #    ifndef MULTIPLICITY
 #      define MULTIPLICITY
 #    endif
 #    define pTHX	register PerlInterpreter *my_perl
 #    define aTHX	my_perl
+#    define dTHXa(a)	pTHX = (PerlInterpreter*)a
 #  endif
-#  define dTHXa(a)	pTHX = a
-#  define dTHX		dTHXa(PERL_GET_THX)
+#  define dTHX		pTHX = PERL_GET_THX
 #  define pTHX_		pTHX,
 #  define aTHX_		aTHX,
 #  define pTHX_1	2	
@@ -242,6 +247,7 @@ struct perl_thread;
 #  define aTHXo		aTHX
 #  define aTHXo_	aTHX_
 #  define dTHXo		dTHX
+#  define dTHXoa(x)	dTHXa(x)
 #endif
 
 #ifndef pTHXx
@@ -459,6 +465,10 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 #undef METHOD
 #endif
 
+#ifdef PERL_MICRO
+#   define NO_LOCALE
+#endif
+
 #ifdef I_LOCALE
 #   include <locale.h>
 #endif
@@ -592,6 +602,7 @@ struct perl_mstats {
 #    endif
 #  endif
 #else
+#  undef  memset
 #  define memset(d,c,l) my_memset(d,c,l)
 #endif /* HAS_MEMSET */
 
@@ -808,6 +819,12 @@ struct perl_mstats {
 #		include <sys/dir.h>
 #	    endif
 #	endif
+#   endif
+#endif
+
+#ifdef PERL_MICRO
+#   ifndef DIR
+#      define DIR void
 #   endif
 #endif
 
@@ -1144,16 +1161,22 @@ typedef NVTYPE NV;
 #       include <sunmath.h>
 #   endif
 #   define NV_DIG LDBL_DIG
-#   ifdef HAS_SQRTL
-        /* libsunmath doesn't have modfl and frexpl as of mid-March 2000 */
-	/* XXX Configure probe for modfl and frexpl needed XXX */
-#       if defined(__sun) && defined(__svr4)
-#           define Perl_modf(x,y) ((long double)modf((double)(x),(double*)(y)))
-#           define Perl_frexp(x) ((long double)frexp((double)(x)))
+#   ifdef LDBL_MANT_DIG
+#       define NV_MANT_DIG LDBL_MANT_DIG
+#   endif
+#   ifdef LDBL_MAX
+#       define NV_MAX LDBL_MAX
+#       define NV_MIN LDBL_MIN
+#   else
+#       ifdef HUGE_VALL
+#           define NV_MAX HUGE_VALL
 #       else
-#           define Perl_modf modfl
-#           define Perl_frexp frexpl
+#           ifdef HUGE_VAL
+#               define NV_MAX ((NV)HUGE_VAL)
+#           endif
 #       endif
+#   endif
+#   ifdef HAS_SQRTL
 #       define Perl_cos cosl
 #       define Perl_sin sinl
 #       define Perl_sqrt sqrtl
@@ -1164,10 +1187,39 @@ typedef NVTYPE NV;
 #       define Perl_floor floorl
 #       define Perl_fmod fmodl
 #   endif
+/* e.g. libsunmath doesn't have modfl and frexpl as of mid-March 2000 */
+#   ifdef HAS_MODFL
+#       define Perl_modf(x,y) modfl(x,y)
+#   else
+#       define Perl_modf(x,y) ((long double)modf((double)(x),(double*)(y)))
+#   endif
+#   ifdef HAS_FREXPL
+#       define Perl_frexp(x,y) frexpl(x,y)
+#   else
+#       define Perl_frexp(x,y) ((long double)frexp((double)(x),y))
+#   endif
+#   ifdef HAS_ISNANL
+#       define Perl_isnan(x) isnanl(x)
+#   else
+#       ifdef HAS_ISNAN
+#           define Perl_isnan(x) isnan((double)(x))
+#       else
+#           define Perl_isnan(x) ((x)!=(x))
+#       endif
+#   endif
 #else
 #   define NV_DIG DBL_DIG
-#   define Perl_modf modf
-#   define Perl_frexp frexp
+#   ifdef DBL_MANT_DIG
+#       define NV_MANT_DIG DBL_MANT_DIG
+#   endif
+#   ifdef DBL_MAX
+#       define NV_MAX DBL_MAX
+#       define NV_MIN DBL_MIN
+#   else
+#       ifdef HUGE_VAL
+#           define NV_MAX HUGE_VAL
+#       endif
+#   endif
 #   define Perl_cos cos
 #   define Perl_sin sin
 #   define Perl_sqrt sqrt
@@ -1177,18 +1229,32 @@ typedef NVTYPE NV;
 #   define Perl_pow pow
 #   define Perl_floor floor
 #   define Perl_fmod fmod
+#   define Perl_modf(x,y) modf(x,y)
+#   define Perl_frexp(x,y) frexp(x,y)
+#   ifdef HAS_ISNAN
+#       define Perl_isnan(x) isnan(x)
+#   else
+#       define Perl_isnan(x) ((x)!=(x))
+#   endif
 #endif
 
 #if !defined(Perl_atof) && defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
 #   if !defined(Perl_atof) && defined(HAS_STRTOLD) 
-#       define Perl_atof(s) strtold(s, (char**)NULL)
+#       define Perl_atof(s) (NV)strtold(s, (char**)NULL)
 #   endif
 #   if !defined(Perl_atof) && defined(HAS_ATOLF)
-#       define Perl_atof atolf
+#       define Perl_atof (NV)atolf
+#   endif
+#   if !defined(Perl_atof) && defined(PERL_SCNfldbl)
+#       define Perl_atof PERL_SCNfldbl
+#       define Perl_atof2(s,f) sscanf((s), "%"PERL_SCNfldbl, &(f))
 #   endif
 #endif
 #if !defined(Perl_atof)
 #   define Perl_atof atof /* we assume atof being available anywhere */
+#endif
+#if !defined(Perl_atof2)
+#   define Perl_atof2(s,f) ((f) = (NV)Perl_atof(s))
 #endif
 
 /* Previously these definitions used hardcoded figures. 
@@ -1362,25 +1428,10 @@ typedef NVTYPE NV;
 
 #ifdef UV_IS_QUAD
 
-#  ifdef UQUAD_MAX
-#    define PERL_UQUAD_MAX ((UV)UQUAD_MAX)
-#  else
 #    define PERL_UQUAD_MAX	(~(UV)0)
-#  endif
-
-#  define PERL_UQUAD_MIN ((UV)0)
-
-#  ifdef QUAD_MAX
-#    define PERL_QUAD_MAX ((IV)QUAD_MAX)
-#  else
+#    define PERL_UQUAD_MIN	((UV)0)
 #    define PERL_QUAD_MAX 	((IV) (PERL_UQUAD_MAX >> 1))
-#  endif
-
-#  ifdef QUAD_MIN
-#    define PERL_QUAD_MIN ((IV)QUAD_MIN)
-#  else
 #    define PERL_QUAD_MIN 	(-PERL_QUAD_MAX - ((3 & -1) == 3))
-#  endif
 
 #endif
 
@@ -2199,7 +2250,7 @@ typedef OP* (CPERLscope(*PPADDR_t)[]) (pTHX);
 #    define environ (*environ_pointer)
 EXT char *** environ_pointer;
 #  else
-#    if defined(__APPLE__)
+#    if defined(__APPLE__) && defined(PERL_CORE)
 #      include <crt_externs.h>	/* for the env array */
 #      define environ (*_NSGetEnviron())
 #    endif
@@ -2771,10 +2822,14 @@ EXT MGVTBL PL_vtbl_envelem =	{0,	MEMBER_TO_FPTR(Perl_magic_setenv),
 					0,	MEMBER_TO_FPTR(Perl_magic_clearenv),
 							0};
 EXT MGVTBL PL_vtbl_sig =	{0,	0,		 0, 0, 0};
+#ifdef PERL_MICRO
+EXT MGVTBL PL_vtbl_sigelem =	{0,	0,		 0, 0, 0};
+#else
 EXT MGVTBL PL_vtbl_sigelem =	{MEMBER_TO_FPTR(Perl_magic_getsig),
 					MEMBER_TO_FPTR(Perl_magic_setsig),
 					0,	MEMBER_TO_FPTR(Perl_magic_clearsig),
 							0};
+#endif
 EXT MGVTBL PL_vtbl_pack =	{0,	0,	MEMBER_TO_FPTR(Perl_magic_sizepack),	MEMBER_TO_FPTR(Perl_magic_wipepack),
 							0};
 EXT MGVTBL PL_vtbl_packelem =	{MEMBER_TO_FPTR(Perl_magic_getpack),
@@ -2824,7 +2879,8 @@ EXT MGVTBL PL_vtbl_defelem = {MEMBER_TO_FPTR(Perl_magic_getdefelem),MEMBER_TO_FP
 
 EXT MGVTBL PL_vtbl_regexp = {0,0,0,0, MEMBER_TO_FPTR(Perl_magic_freeregexp)};
 EXT MGVTBL PL_vtbl_regdata = {0, 0, MEMBER_TO_FPTR(Perl_magic_regdata_cnt), 0, 0};
-EXT MGVTBL PL_vtbl_regdatum = {MEMBER_TO_FPTR(Perl_magic_regdatum_get), 0, 0, 0, 0};
+EXT MGVTBL PL_vtbl_regdatum = {MEMBER_TO_FPTR(Perl_magic_regdatum_get),
+			       MEMBER_TO_FPTR(Perl_magic_regdatum_set), 0, 0, 0};
 
 #ifdef USE_LOCALE_COLLATE
 EXT MGVTBL PL_vtbl_collxfrm = {0,
@@ -3067,8 +3123,20 @@ typedef struct am_table_short AMTS;
 	((PL_hints & HINT_LOCALE) && \
 	  PL_numeric_radix && (c) == PL_numeric_radix)
 
-#define RESTORE_NUMERIC_LOCAL()		if ((PL_hints & HINT_LOCALE) && PL_numeric_standard) SET_NUMERIC_LOCAL()
-#define RESTORE_NUMERIC_STANDARD()	if ((PL_hints & HINT_LOCALE) && PL_numeric_local) SET_NUMERIC_STANDARD()
+#define STORE_NUMERIC_LOCAL_SET_STANDARD() \
+	bool was_local = (PL_hints & HINT_LOCALE) && PL_numeric_local; \
+	if (!was_local) SET_NUMERIC_STANDARD();
+
+#define STORE_NUMERIC_STANDARD_SET_LOCAL() \
+	bool was_standard = !(PL_hints & HINT_LOCALE) || PL_numeric_standard; \
+	if (!was_standard) SET_NUMERIC_LOCAL();
+
+#define RESTORE_NUMERIC_LOCAL() \
+	if (was_local) SET_NUMERIC_LOCAL();
+
+#define RESTORE_NUMERIC_STANDARD() \
+	if (was_standard) SET_NUMERIC_STANDARD();
+
 #define Atof				my_atof
 
 #else /* !USE_LOCALE_NUMERIC */
@@ -3076,6 +3144,8 @@ typedef struct am_table_short AMTS;
 #define SET_NUMERIC_STANDARD()  	/**/
 #define SET_NUMERIC_LOCAL()     	/**/
 #define IS_NUMERIC_RADIX(c)		(0)
+#define STORE_NUMERIC_LOCAL_SET_STANDARD()	/**/
+#define STORE_NUMERIC_STANDARD_SET_LOCAL()	/**/
 #define RESTORE_NUMERIC_LOCAL()		/**/
 #define RESTORE_NUMERIC_STANDARD()	/**/
 #define Atof				Perl_atof
@@ -3296,6 +3366,10 @@ typedef struct am_table_short AMTS;
 
 #endif /* IAMSUID */
 
+#ifdef I_LIBUTIL
+#   include <libutil.h>		/* setproctitle() in some FreeBSDs */
+#endif
+
 /* and finally... */
 #define PERL_PATCHLEVEL_H_IMPLICIT
 #include "patchlevel.h"
@@ -3321,6 +3395,10 @@ typedef struct am_table_short AMTS;
    HAS_MUNMAP
    I_SYSMMAN
    Mmap_t
+
+   NVef
+   NVff
+   NVgf
 
    so that Configure picks them up. */
 

@@ -21,7 +21,7 @@ package DynaLoader;
 #   feast like to keep their secret; for wonder makes the words of
 #   praise louder.'
 
-#   (Quote from Tolkien sugested by Anno Siegel.)
+#   (Quote from Tolkien suggested by Anno Siegel.)
 #
 # See pod text at end of file for documentation.
 # See also ext/DynaLoader/README in source tree for other information.
@@ -114,9 +114,9 @@ push(@dl_library_path, split(/:/, $ENV{LD_LIBRARY_PATH}))
 }
 
 # No prizes for guessing why we don't say 'bootstrap DynaLoader;' here.
+# NOTE: All dl_*.xs (including dl_none.xs) define a dl_error() XSUB
 boot_DynaLoader('DynaLoader') if defined(&boot_DynaLoader) &&
-                                !defined(&dl_load_file);
-
+                                !defined(&dl_error);
 
 if ($dl_debug) {
     print STDERR "DynaLoader.pm loaded (@INC, @dl_library_path)\n";
@@ -170,8 +170,8 @@ sub bootstrap {
 
     print STDERR "DynaLoader::bootstrap for $module ",
 		($Is_MacOS
-                      ? "(auto/$modpname/$modfname.$dl_dlext)\n" :
-		 	"(:auto:$modpname:$modfname.$dl_dlext)\n")
+		       ? "(:auto:$modpname:$modfname.$dl_dlext)\n" :
+		       "(auto/$modpname/$modfname.$dl_dlext)\n")
 	if $dl_debug;
 
     foreach (@INC) {

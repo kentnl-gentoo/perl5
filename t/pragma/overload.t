@@ -2,7 +2,7 @@
 
 BEGIN {
     chdir 't' if -d 't';
-    unshift @INC, '../lib';
+    @INC = '../lib';
 }
 
 package Oscalar;
@@ -417,7 +417,7 @@ EOF
   m'try it';
   s'first part'second part';
   s/yet another/tail here/;
-  tr/z-Z/z-Z/;
+  tr/A-Z/a-z/;
 }
 
 test($out, '_<foo>_');		# 117
@@ -425,7 +425,7 @@ test($out1, '_<f\'o\\o>_');		# 128
 test($out2, "_<a\a>_foo_<,\,>_");	# 129
 test("@q1", "foo q f'o\\\\o q a\\a qq ,\\, qq oups
  qq oups1
- q second part q tail here s z-Z tr z-Z tr");	# 130
+ q second part q tail here s A-Z tr a-z tr");	# 130
 test("@qr1", "b\\b qq .\\. qq try it q first part q yet another qq");	# 131
 test($res, 1);			# 132
 test($a, "_<oups
@@ -919,14 +919,55 @@ test $bar->[3], 13;		# 206
 my $aaa;
 { my $bbbb = 0; $aaa = bless \$bbbb, B }
 
-test !$aaa, 1;
+test !$aaa, 1;			# 207
 
 unless ($aaa) {
-  test 'ok', 'ok';
+  test 'ok', 'ok';		# 208
 } else {
-  test 'is not', 'ok';
+  test 'is not', 'ok';		# 208
 }
 
+# check that overload isn't done twice by join
+{ my $c = 0;
+  package Join;
+  use overload '""' => sub { $c++ };
+  my $x = join '', bless([]), 'pq', bless([]);
+  main::test $x, '0pq1';		# 209
+};
+
+# Test module-specific warning
+{
+    # check the Odd number of arguments for overload::constant warning
+    my $a = "" ;
+    local $SIG{__WARN__} = sub {$a = @_[0]} ;
+    $x = eval ' overload::constant "integer" ; ' ;
+    test($a eq "") ; # 210
+    use warnings 'overload' ;
+    $x = eval ' overload::constant "integer" ; ' ;
+    test($a =~ /^Odd number of arguments for overload::constant at/) ; # 211
+}
+
+{
+    # check the `$_[0]' is not an overloadable type warning
+    my $a = "" ;
+    local $SIG{__WARN__} = sub {$a = @_[0]} ;
+    $x = eval ' overload::constant "fred" => sub {} ; ' ;
+    test($a eq "") ; # 212
+    use warnings 'overload' ;
+    $x = eval ' overload::constant "fred" => sub {} ; ' ;
+    test($a =~ /^`fred' is not an overloadable type at/); # 213
+}
+
+{
+    # check the `$_[1]' is not a code reference warning
+    my $a = "" ;
+    local $SIG{__WARN__} = sub {$a = @_[0]} ;
+    $x = eval ' overload::constant "integer" => 1; ' ;
+    test($a eq "") ; # 214
+    use warnings 'overload' ;
+    $x = eval ' overload::constant "integer" => 1; ' ;
+    test($a =~ /^`1' is not a code reference at/); # 215
+}
 
 # Last test is:
-sub last {208}
+sub last {215}

@@ -1,5 +1,5 @@
 # B::Deparse.pm
-# Copyright (c) 1998, 1999 Stephen McCamant. All rights reserved.
+# Copyright (c) 1998, 1999, 2000 Stephen McCamant. All rights reserved.
 # This module is free software; you can redistribute and/or modify
 # it under the same terms as Perl itself.
 
@@ -8,16 +8,16 @@
 
 package B::Deparse;
 use Carp 'cluck', 'croak';
-use Config;
 use B qw(class main_root main_start main_cv svref_2object opnumber
 	 OPf_WANT OPf_WANT_VOID OPf_WANT_SCALAR OPf_WANT_LIST
 	 OPf_KIDS OPf_REF OPf_STACKED OPf_SPECIAL
 	 OPpLVAL_INTRO OPpENTERSUB_AMPER OPpSLICE OPpCONST_BARE
 	 OPpTRANS_SQUASH OPpTRANS_DELETE OPpTRANS_COMPLEMENT OPpTARGET_MY
 	 SVf_IOK SVf_NOK SVf_ROK SVf_POK
+         CVf_METHOD CVf_LOCKED CVf_LVALUE
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = 0.59;
+$VERSION = 0.591;
 use strict;
 
 # Changes between 0.50 and 0.51:
@@ -252,17 +252,17 @@ sub walk_sub {
     walk_tree($op, sub {
 	my $op = shift;
 	if ($op->name eq "gv") {
-	    my $gv = $self->maybe_padgv($op);
+	    my $gv = $self->gv_or_padgv($op);
 	    if ($op->next->name eq "entersub") {
-		next if $self->{'subs_done'}{$$gv}++;
-		next if class($gv->CV) eq "SPECIAL";
+		return if $self->{'subs_done'}{$$gv}++;
+		return if class($gv->CV) eq "SPECIAL";
 		$self->todo($gv, $gv->CV, 0);
 		$self->walk_sub($gv->CV);
 	    } elsif ($op->next->name eq "enterwrite"
 		     or ($op->next->name eq "rv2gv"
 			 and $op->next->next->name eq "enterwrite")) {
-		next if $self->{'forms_done'}{$$gv}++;
-		next if class($gv->FORM) eq "SPECIAL";
+		return if $self->{'forms_done'}{$$gv}++;
+		return if class($gv->FORM) eq "SPECIAL";
 		$self->todo($gv, $gv->FORM, 1);
 		$self->walk_sub($gv->FORM);
 	    }
@@ -378,7 +378,7 @@ sub compile {
 	while (scalar(@{$self->{'subs_todo'}})) {
 	    push @text, $self->next_todo;
 	}
-	print indent(join("", @text)), "\n" if @text;
+	print $self->indent(join("", @text)), "\n" if @text;
     }
 }
 
@@ -433,6 +433,13 @@ sub deparse_sub {
     if ($cv->FLAGS & SVf_POK) {
 	$proto = "(". $cv->PV . ") ";
     }
+    if ($cv->CvFLAGS & (CVf_METHOD|CVf_LOCKED|CVf_LVALUE)) {
+        $proto .= ": ";
+        $proto .= "lvalue " if $cv->CvFLAGS & CVf_LVALUE;
+        $proto .= "locked " if $cv->CvFLAGS & CVf_LOCKED;
+        $proto .= "method " if $cv->CvFLAGS & CVf_METHOD;
+    }
+
     local($self->{'curcv'}) = $cv;
     local($self->{'curstash'}) = $self->{'curstash'};
     if (not null $cv->ROOT) {
@@ -840,7 +847,7 @@ sub pp_i_preinc { pfixop(@_, "++", 23) }
 sub pp_i_predec { pfixop(@_, "--", 23) }
 sub pp_i_postinc { maybe_targmy(@_, \&pfixop, "++", 23, POSTFIX) }
 sub pp_i_postdec { maybe_targmy(@_, \&pfixop, "--", 23, POSTFIX) }
-sub pp_complement { maybe_targmy(@_. \&pfixop, "~", 21) }
+sub pp_complement { maybe_targmy(@_, \&pfixop, "~", 21) }
 
 sub pp_negate { maybe_targmy(@_, \&real_negate) }
 sub real_negate {
@@ -1653,6 +1660,13 @@ sub pp_list {
     }
 }
 
+sub is_ifelse_cont {
+    my $op = shift;
+    return ($op->name eq "null" and class($op) eq "UNOP"
+	    and $op->first->name =~ /^(and|cond_expr)$/
+	    and is_scope($op->first->first->sibling));
+}
+
 sub pp_cond_expr {
     my $self = shift;
     my($op, $cx) = @_;
@@ -1660,36 +1674,34 @@ sub pp_cond_expr {
     my $true = $cond->sibling;
     my $false = $true->sibling;
     my $cuddle = $self->{'cuddle'};
-    unless ($cx == 0 and is_scope($true) and is_scope($false)) {
+    unless ($cx == 0 and (is_scope($true) and $true->name ne "null") and
+	    (is_scope($false) || is_ifelse_cont($false))) {
 	$cond = $self->deparse($cond, 8);
 	$true = $self->deparse($true, 8);
 	$false = $self->deparse($false, 8);
 	return $self->maybe_parens("$cond ? $true : $false", $cx, 8);
-    } 
+    }
+
     $cond = $self->deparse($cond, 1);
     $true = $self->deparse($true, 0);    
-    if ($false->name eq "lineseq") { # braces w/o scope => elsif
-	my $head = "if ($cond) {\n\t$true\n\b}";
-	my @elsifs;
-	while (!null($false) and $false->name eq "lineseq") {
-	    my $newop = $false->first->sibling->first;
-	    my $newcond = $newop->first;
-	    my $newtrue = $newcond->sibling;
-	    $false = $newtrue->sibling; # last in chain is OP_AND => no else
-	    $newcond = $self->deparse($newcond, 1);
-	    $newtrue = $self->deparse($newtrue, 0);
-	    push @elsifs, "elsif ($newcond) {\n\t$newtrue\n\b}";
-	}
-	if (!null($false)) {	    
-	    $false = $cuddle . "else {\n\t" .
-	      $self->deparse($false, 0) . "\n\b}\cK";
-	} else {
-	    $false = "\cK";
-	}
-	return $head . join($cuddle, "", @elsifs) . $false; 
+    my $head = "if ($cond) {\n\t$true\n\b}";
+    my @elsifs;
+    while (!null($false) and is_ifelse_cont($false)) {
+	my $newop = $false->first;
+	my $newcond = $newop->first;
+	my $newtrue = $newcond->sibling;
+	$false = $newtrue->sibling; # last in chain is OP_AND => no else
+	$newcond = $self->deparse($newcond, 1);
+	$newtrue = $self->deparse($newtrue, 0);
+	push @elsifs, "elsif ($newcond) {\n\t$newtrue\n\b}";
     }
-    $false = $self->deparse($false, 0);
-    return "if ($cond) {\n\t$true\n\b}${cuddle}else {\n\t$false\n\b}\cK";
+    if (!null($false)) {	    
+	$false = $cuddle . "else {\n\t" .
+	  $self->deparse($false, 0) . "\n\b}\cK";
+    } else {
+	$false = "\cK";
+    }
+    return $head . join($cuddle, "", @elsifs) . $false; 
 }
 
 sub pp_leaveloop {
@@ -1780,7 +1792,7 @@ sub pp_leaveloop {
 	   if (is_state $state) {
 	       $expr = $self->deparse($state, 0);
 	       $state = $state->sibling;
-	       last if null $kid;
+              last if null $state;
 	   }
 	   $expr .= $self->deparse($state, 0);
 	   push @exprs, $expr if $expr;
@@ -1814,7 +1826,7 @@ sub pp_null {
     } elsif ($op->first->name eq "enter") {
 	return $self->pp_leave($op, $cx);
     } elsif ($op->targ == OP_STRINGIFY) {
-	return $self->dquote($op);
+	return $self->dquote($op, $cx);
     } elsif (!null($op->first->sibling) and
 	     $op->first->sibling->name eq "readline" and
 	     $op->first->sibling->flags & OPf_STACKED) {
@@ -1879,37 +1891,34 @@ sub pp_threadsv {
     return $self->maybe_local($op, $cx, "\$" .  $threadsv_names[$op->targ]);
 }    
 
-sub maybe_padgv {
+sub gv_or_padgv {
     my $self = shift;
     my $op = shift;
-    my $gv;
-    if ($Config{useithreads}) {
-	$gv = $self->padval($op->padix);
+    if (class($op) eq "PADOP") {
+	return $self->padval($op->padix);
+    } else { # class($op) eq "SVOP"
+	return $op->gv;
     }
-    else {
-	$gv = $op->gv;
-    }
-    return $gv;
 }
 
 sub pp_gvsv {
     my $self = shift;
     my($op, $cx) = @_;
-    my $gv = $self->maybe_padgv($op);
+    my $gv = $self->gv_or_padgv($op);
     return $self->maybe_local($op, $cx, "\$" . $self->gv_name($gv));
 }
 
 sub pp_gv {
     my $self = shift;
     my($op, $cx) = @_;
-    my $gv = $self->maybe_padgv($op);
+    my $gv = $self->gv_or_padgv($op);
     return $self->gv_name($gv);
 }
 
 sub pp_aelemfast {
     my $self = shift;
     my($op, $cx) = @_;
-    my $gv = $self->maybe_padgv($op);
+    my $gv = $self->gv_or_padgv($op);
     return "\$" . $self->gv_name($gv) . "[" . $op->private . "]";
 }
 
@@ -2220,7 +2229,7 @@ sub pp_entersub {
 	$amper = "&";
 	$kid = "{" . $self->deparse($kid, 0) . "}";
     } elsif ($kid->first->name eq "gv") {
-	my $gv = $self->maybe_padgv($kid->first);
+	my $gv = $self->gv_or_padgv($kid->first);
 	if (class($gv->CV) ne "SPECIAL") {
 	    $proto = $gv->CV->PV if $gv->CV->FLAGS & SVf_POK;
 	}
@@ -2252,9 +2261,9 @@ sub pp_entersub {
     } else {
 	if (defined $proto and $proto eq "") {
 	    return $kid;
-	} elsif ($proto eq "\$") {
+	} elsif (defined $proto and $proto eq "\$") {
 	    return $self->maybe_parens_func($kid, $args, $cx, 16);
-	} elsif ($proto or $simple) {
+	} elsif (defined($proto) && $proto or $simple) {
 	    return $self->maybe_parens_func($kid, $args, $cx, 5);
 	} else {
 	    return "$kid(" . $args . ")";
@@ -2418,7 +2427,7 @@ sub pp_backtick {
 
 sub dquote {
     my $self = shift;
-    my($op, $cx) = shift;
+    my($op, $cx) = @_;
     my $kid = $op->first->sibling; # skip ex-stringify, pushmark
     return $self->deparse($kid, $cx) if $self->{'unquote'};
     $self->maybe_targmy($kid, $cx,
@@ -2486,7 +2495,7 @@ sub pchr { # ASCII
 
 sub collapse {
     my(@chars) = @_;
-    my($c, $str, $tr);
+    my($str, $c, $tr) = ("");
     for ($c = 0; $c < @chars; $c++) {
 	$tr = $chars[$c];
 	$str .= pchr($tr);

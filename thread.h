@@ -117,6 +117,7 @@
 #define INIT_THREADS		cthread_init()
 #define YIELD			cthread_yield()
 #define ALLOC_THREAD_KEY	NOOP
+#define FREE_THREAD_KEY		NOOP
 #define SET_THREAD_SELF(thr)	(thr->self = cthread_self())
 
 #endif /* I_MACH_CTHREADS */
@@ -251,9 +252,16 @@
 #  define ALLOC_THREAD_KEY \
     STMT_START {						\
 	if (pthread_key_create(&PL_thr_key, 0))	{		\
-	    fprintf(stderr, "panic: pthread_key_create");	\
+	    PerlIO_printf(PerlIO_stderr(), "panic: pthread_key_create");	\
 	    exit(1);						\
 	}							\
+    } STMT_END
+#endif
+
+#ifndef FREE_THREAD_KEY
+#  define FREE_THREAD_KEY \
+    STMT_START {						\
+	pthread_key_delete(PL_thr_key);				\
     } STMT_END
 #endif
 
@@ -280,7 +288,10 @@
 #  define UNLOCK_STRTAB_MUTEX	MUTEX_UNLOCK(&PL_strtab_mutex)
 #  define LOCK_CRED_MUTEX	MUTEX_LOCK(&PL_cred_mutex)
 #  define UNLOCK_CRED_MUTEX	MUTEX_UNLOCK(&PL_cred_mutex)
-
+#  define LOCK_FDPID_MUTEX	MUTEX_LOCK(&PL_fdpid_mutex)
+#  define UNLOCK_FDPID_MUTEX	MUTEX_UNLOCK(&PL_fdpid_mutex)
+#  define LOCK_SV_LOCK_MUTEX	MUTEX_LOCK(&PL_sv_lock_mutex)
+#  define UNLOCK_SV_LOCK_MUTEX	MUTEX_UNLOCK(&PL_sv_lock_mutex)
 
 /* Values and macros for thr->flags */
 #define THRf_STATE_MASK	7
@@ -374,6 +385,22 @@ typedef struct condpair {
 
 #ifndef UNLOCK_CRED_MUTEX
 #  define UNLOCK_CRED_MUTEX
+#endif
+
+#ifndef LOCK_FDPID_MUTEX
+#  define LOCK_FDPID_MUTEX
+#endif
+
+#ifndef UNLOCK_FDPID_MUTEX
+#  define UNLOCK_FDPID_MUTEX
+#endif
+
+#ifndef LOCK_SV_LOCK_MUTEX
+#  define LOCK_SV_LOCK_MUTEX
+#endif
+
+#ifndef UNLOCK_SV_LOCK_MUTEX
+#  define UNLOCK_SV_LOCK_MUTEX
 #endif
 
 /* THR, SET_THR, and dTHR are there for compatibility with old versions */

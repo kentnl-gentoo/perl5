@@ -292,7 +292,8 @@ Perl_mg_copy(pTHX_ SV *sv, SV *nsv, const char *key, I32 klen)
     for (mg = SvMAGIC(sv); mg; mg = mg->mg_moremagic) {
 	if (isUPPER(mg->mg_type)) {
 	    sv_magic(nsv,
-		     mg->mg_type == 'P' ? SvTIED_obj(sv, mg) : mg->mg_obj,
+		     mg->mg_type == 'P' ? SvTIED_obj(sv, mg) :
+		     (mg->mg_type == 'D' && mg->mg_obj) ? sv : mg->mg_obj,
 		     toLOWER(mg->mg_type), key, klen);
 	    count++;
 	}
@@ -376,6 +377,15 @@ Perl_magic_regdatum_get(pTHX_ SV *sv, MAGIC *mg)
 		sv_setiv(sv,i);
 	    }
     }
+    return 0;
+}
+
+int
+Perl_magic_regdatum_set(pTHX_ SV *sv, MAGIC *mg)
+{
+    dTHR;
+    Perl_croak(aTHX_ PL_no_modify);
+    /* NOT REACHED */
     return 0;
 }
 
@@ -489,8 +499,8 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	{
 	    char msg[256];
 	    
-	    sv_setnv(sv,(double)gLastMacOSErr);
-	    sv_setpv(sv, gLastMacOSErr ? GetSysErrText(gLastMacOSErr, msg) : "");	
+	    sv_setnv(sv,(double)gMacPerl_OSErr);
+	    sv_setpv(sv, gMacPerl_OSErr ? GetSysErrText(gMacPerl_OSErr, msg) : "");	
 	}
 #else	
 #ifdef VMS
@@ -614,6 +624,9 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	    {
 		i = t1 - s1;
 		s = rx->subbeg + s1;
+		if (!rx->subbeg)
+		    break;
+
 	      getrx:
 		if (i >= 0) {
 		    bool was_tainted;
@@ -950,6 +963,7 @@ Perl_magic_clear_all_env(pTHX_ SV *sv, MAGIC *mg)
     return 0;
 }
 
+#ifndef PERL_MICRO
 int
 Perl_magic_getsig(pTHX_ SV *sv, MAGIC *mg)
 {
@@ -1066,6 +1080,7 @@ Perl_magic_setsig(pTHX_ SV *sv, MAGIC *mg)
     }
     return 0;
 }
+#endif /* !PERL_MICRO */
 
 int
 Perl_magic_setisa(pTHX_ SV *sv, MAGIC *mg)
@@ -1272,8 +1287,6 @@ Perl_magic_setdbline(pTHX_ SV *sv, MAGIC *mg)
 		     atoi(MgPV(mg,n_a)), FALSE);
     if (svp && SvIOKp(*svp) && (o = INT2PTR(OP*,SvIVX(*svp))))
 	o->op_private = i;
-    else if (ckWARN_d(WARN_INTERNAL))
-	Perl_warner(aTHX_ WARN_INTERNAL, "Can't break at that line\n");
     return 0;
 }
 
@@ -1670,7 +1683,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	break;
     case '\005':  /* ^E */
 #ifdef MACOS_TRADITIONAL
-	gLastMacOSErr = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
+	gMacPerl_OSErr = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
 #else
 #  ifdef VMS
 	set_vaxc_errno(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv));
@@ -1735,18 +1748,21 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	            PL_compiling.cop_warnings = pWARN_NONE;
 		    break;
 		}
-                if (isWARN_on(sv, WARN_ALL)) {
-	            PL_compiling.cop_warnings = pWARN_ALL;
-	            PL_dowarn |= G_WARN_ONCE ;
-	        }	
-		else {
+		{
 		    STRLEN len, i;
 		    int accumulate = 0 ;
+		    int any_fatals = 0 ;
 		    char * ptr = (char*)SvPV(sv, len) ;
-		    for (i = 0 ; i < len ; ++i) 
-		        accumulate += ptr[i] ;
+		    for (i = 0 ; i < len ; ++i) {
+		        accumulate |= ptr[i] ;
+		        any_fatals |= (ptr[i] & 0xAA) ;
+		    }
 		    if (!accumulate)
 	                PL_compiling.cop_warnings = pWARN_NONE;
+		    else if (isWARN_on(sv, WARN_ALL) && !any_fatals) {
+	                PL_compiling.cop_warnings = pWARN_ALL;
+	                PL_dowarn |= G_WARN_ONCE ;
+	            }	
                     else {
 	                if (specialWARN(PL_compiling.cop_warnings))
 		            PL_compiling.cop_warnings = newSVsv(sv) ;
@@ -1755,6 +1771,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	                if (isWARN_on(PL_compiling.cop_warnings, WARN_ONCE))
 	                    PL_dowarn |= G_WARN_ONCE ;
 	            }
+
 		}
 	    }
 	}
@@ -1994,6 +2011,30 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	break;
 #ifndef MACOS_TRADITIONAL
     case '0':
+#ifdef HAS_SETPROCTITLE
+	/* The BSDs don't show the argv[] in ps(1) output, they
+	 * show a string from the process struct and provide
+	 * the setproctitle() routine to manipulate that. */
+	{
+	    s = SvPV(sv, len);
+#   if __FreeBSD_version >= 410001
+	    /* The leading "-" removes the "perl: " prefix,
+	     * but not the "(perl) suffix from the ps(1)
+	     * output, because that's what ps(1) shows if the
+	     * argv[] is modified. */
+	    setproctitle("-%s", s, len + 1);
+#   else	/* old FreeBSDs, NetBSD, OpenBSD, anyBSD */
+	    /* This doesn't really work if you assume that
+	     * $0 = 'foobar'; will wipe out 'perl' from the $0
+	     * because in ps(1) output the result will be like
+	     * sprintf("perl: %s (perl)", s)
+	     * I guess this is a security feature:
+	     * one (a user process) cannot get rid of the original name.
+	     * --jhi */
+	    setproctitle("%s", s);
+#   endif
+	}
+#endif
 	if (!PL_origalen) {
 	    s = PL_origargv[0];
 	    s += strlen(s);
@@ -2100,7 +2141,11 @@ static SV* sig_sv;
 Signal_t
 Perl_sighandler(int sig)
 {
+#if defined(WIN32) && defined(PERL_IMPLICIT_CONTEXT)
+    dTHXoa(PL_curinterp);	/* fake TLS, because signals don't do TLS */
+#else
     dTHX;
+#endif
     dSP;
     GV *gv = Nullgv;
     HV *st;
@@ -2110,6 +2155,10 @@ Perl_sighandler(int sig)
     U32 flags = 0;
     I32 o_save_i = PL_savestack_ix;
     XPV *tXpv = PL_Xpv;
+
+#if defined(WIN32) && defined(PERL_IMPLICIT_CONTEXT)
+    PERL_SET_THX(aTHXo);	/* fake TLS, see above */
+#endif
     
     if (PL_savestack_ix + 15 <= PL_savestack_max)
 	flags |= 1;

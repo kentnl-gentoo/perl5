@@ -115,7 +115,7 @@ character sets are different.  Perl builtin functions that may behave
 differently under EBCDIC are mentioned in the perlport.pod document.
 
 OpenEdition (UNIX System Services) does not (yet) support the #! means 
-of script invokation.
+of script invocation.
 See:
 
     head `whence perldoc`
@@ -142,7 +142,7 @@ L<INSTALL>, L<perlport>, L<ExtUtils::MakeMaker>.
 
 The Perl Institute (http://www.perl.org/) maintains a perl-mvs 
 mailing list of interest to all folks building and/or
-using perl on EBCDIC platforms.  To subscibe, send a message of:
+using perl on EBCDIC platforms.  To subscribe, send a message of:
 
     subscribe perl-mvs
 

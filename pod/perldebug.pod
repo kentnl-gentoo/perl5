@@ -342,7 +342,7 @@ missing, all actions are wiped out!
 
 Adds an action (Perl command) to happen after the prompt when you've
 just given a command to return to executing the script.  A multi-line
-command may be entered by slackbashing the newlines.
+command may be entered by backslashing the newlines.
 
 =item { ?
 
@@ -766,6 +766,11 @@ This shows the sorts of output the C<l> command can produce:
 Breakable lines are marked with C<:>.  Lines with breakpoints are
 marked by C<b> and those with actions by C<a>.  The line that's
 about to be executed is marked by C<< ==> >>.
+
+Please be aware that code in debugger listings may not look the same
+as your original source code.  Line directives and external source
+filters can alter the code before Perl sees it, causing code to move
+from its original positions or take on entirely different forms.
 
 =item Frame listing
 

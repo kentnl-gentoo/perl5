@@ -21,13 +21,18 @@
 #ifdef I_SHADOW
 /* Shadow password support for solaris - pdo@cs.umd.edu
  * Not just Solaris: at least HP-UX, IRIX, Linux.
- * the API is from SysV. --jhi */
-#ifdef __hpux__
+ * The API is from SysV.
+ *
+ * There are at least two more shadow interfaces,
+ * see the comments in pp_gpwent().
+ *
+ * --jhi */
+#   ifdef __hpux__
 /* There is a MAXINT coming from <shadow.h> <- <hpsecurity.h> <- <values.h>
- * and another MAXINT from "perl.h" <- <sys/param.h>. */ 
-#undef MAXINT
-#endif
-#include <shadow.h>
+ * and another MAXINT from "perl.h" <- <sys/param.h>. */
+#       undef MAXINT
+#   endif
+#   include <shadow.h>
 #endif
 
 /* XXX If this causes problems, set i_unistd=undef in the hint file.  */
@@ -35,8 +40,8 @@
 # include <unistd.h>
 #endif
 
-#ifdef HAS_SYSCALL   
-#ifdef __cplusplus              
+#ifdef HAS_SYSCALL
+#ifdef __cplusplus
 extern "C" int syscall(unsigned long,...);
 #endif
 #endif
@@ -53,7 +58,7 @@ extern "C" int syscall(unsigned long,...);
 # include <sys/socket.h>
 # if defined(USE_SOCKS) && defined(I_SOCKS)
 #   include <socks.h>
-# endif 
+# endif
 # ifdef I_NETDB
 #  include <netdb.h>
 # endif
@@ -195,10 +200,9 @@ static char zero_but_true[ZBTLEN + 1] = "0 but true";
 #endif
 
 #if !defined(PERL_EFF_ACCESS_R_OK) && defined(HAS_EACCESS)
-#   if defined(I_SYS_SECURITY)
+#   ifdef I_SYS_SECURITY
 #       include <sys/security.h>
 #   endif
-    /* XXX Configure test needed for eaccess */
 #   ifdef ACC_SELF
         /* HP SecureWare */
 #       define PERL_EFF_ACCESS_R_OK(p) (eaccess((p), R_OK, ACC_SELF))
@@ -504,7 +508,7 @@ PP(pp_open)
     djSP; dTARGET;
     GV *gv;
     SV *sv;
-    SV *name;
+    SV *name = Nullsv;
     I32 have_name = 0;
     char *tmps;
     STRLEN len;
@@ -608,8 +612,8 @@ PP(pp_pipe_op)
     IoIFP(rstio) = PerlIO_fdopen(fd[0], "r");
     IoOFP(wstio) = PerlIO_fdopen(fd[1], "w");
     IoIFP(wstio) = IoOFP(wstio);
-    IoTYPE(rstio) = '<';
-    IoTYPE(wstio) = '>';
+    IoTYPE(rstio) = IoTYPE_RDONLY;
+    IoTYPE(wstio) = IoTYPE_WRONLY;
 
     if (!IoIFP(rstio) || !IoOFP(wstio)) {
 	if (IoIFP(rstio)) PerlIO_close(IoIFP(rstio));
@@ -699,7 +703,7 @@ PP(pp_binmode)
     if (MAXARG > 1)
 	discp = POPs;
 
-    gv = (GV*)POPs; 
+    gv = (GV*)POPs;
 
     if (gv && (mg = SvTIED_mg((SV*)gv, 'q'))) {
 	PUSHMARK(SP);
@@ -718,7 +722,7 @@ PP(pp_binmode)
     if (!(io = GvIO(gv)) || !(fp = IoIFP(io)))
 	RETPUSHUNDEF;
 
-    if (do_binmode(fp,IoTYPE(io),mode_from_discipline(discp))) 
+    if (do_binmode(fp,IoTYPE(io),mode_from_discipline(discp)))
 	RETPUSHYES;
     else
 	RETPUSHUNDEF;
@@ -765,7 +769,7 @@ PP(pp_tie)
 	    PUSHs(*MARK++);
 	PUTBACK;
 	call_method(methname, G_SCALAR);
-    } 
+    }
     else {
 	/* Not clear why we don't call call_method here too.
 	 * perhaps to get different error message ?
@@ -773,7 +777,7 @@ PP(pp_tie)
 	stash = gv_stashsv(*MARK, FALSE);
 	if (!stash || !(gv = gv_fetchmethod(stash, methname))) {
 	    DIE(aTHX_ "Can't locate object method \"%s\" via package \"%s\"",
-		 methname, SvPV(*MARK,n_a));                   
+		 methname, SvPV(*MARK,n_a));
 	}
 	ENTER;
 	PUSHSTACKi(PERLSI_MAGIC);
@@ -804,16 +808,29 @@ PP(pp_untie)
     SV *sv = POPs;
     char how = (SvTYPE(sv) == SVt_PVHV || SvTYPE(sv) == SVt_PVAV) ? 'P' : 'q';
 
-    if (ckWARN(WARN_UNTIE)) {
         MAGIC * mg ;
         if ((mg = SvTIED_mg(sv, how))) {
-            if (mg && SvREFCNT(SvRV(mg->mg_obj)) > 1)  
+	SV *obj = SvRV(mg->mg_obj);
+	GV *gv;
+	CV *cv = NULL;
+	if ((gv = gv_fetchmethod_autoload(SvSTASH(obj), "UNTIE", FALSE)) &&
+            isGV(gv) && (cv = GvCV(gv))) {
+	    PUSHMARK(SP);
+	    XPUSHs(SvTIED_obj((SV*)gv, mg));
+	    XPUSHs(sv_2mortal(newSViv(SvREFCNT(obj)-1)));
+	    PUTBACK;
+	    ENTER;
+	    call_sv((SV *)cv, G_VOID);
+	    LEAVE;
+	    SPAGAIN;
+        }
+        else if (ckWARN(WARN_UNTIE)) {
+	    if (mg && SvREFCNT(obj) > 1)
 		Perl_warner(aTHX_ WARN_UNTIE,
 		    "untie attempted while %"UVuf" inner references still exist",
-		    (UV)SvREFCNT(SvRV(mg->mg_obj)) - 1 ) ;
+		    (UV)SvREFCNT(obj) - 1 ) ;
         }
     }
- 
     sv_unmagic(sv, how);
     RETPUSHYES;
 }
@@ -885,7 +902,7 @@ PP(pp_dbmopen)
     }
 
     if (sv_isobject(TOPs)) {
-	sv_unmagic((SV *) hv, 'P');            
+	sv_unmagic((SV *) hv, 'P');
 	sv_magic((SV*)hv, TOPs, 'P', Nullch, 0);
     }
     LEAVE;
@@ -1066,7 +1083,7 @@ PP(pp_select)
     else {
 	GV **gvp = (GV**)hv_fetch(hv, GvNAME(egv), GvNAMELEN(egv), FALSE);
 	if (gvp && *gvp == egv) {
-	    gv_efullname3(TARG, PL_defoutgv, Nullch);
+	    gv_efullname4(TARG, PL_defoutgv, Nullch, TRUE);
 	    XPUSHTARG;
 	}
 	else {
@@ -1170,11 +1187,14 @@ PP(pp_enterwrite)
 
     cv = GvFORM(fgv);
     if (!cv) {
+        char *name = NULL;
 	if (fgv) {
 	    SV *tmpsv = sv_newmortal();
-	    gv_efullname3(tmpsv, fgv, Nullch);
-	    DIE(aTHX_ "Undefined format \"%s\" called",SvPVX(tmpsv));
+	    gv_efullname4(tmpsv, fgv, Nullch, FALSE);
+	    name = SvPV_nolen(tmpsv);
 	}
+	if (name && *name)
+	    DIE(aTHX_ "Undefined format \"%s\" called", name);
 	DIE(aTHX_ "Not a format reference");
     }
     if (CvCLONE(cv))
@@ -1251,10 +1271,19 @@ PP(pp_leavewrite)
 	if (!fgv)
 	    DIE(aTHX_ "bad top format reference");
 	cv = GvFORM(fgv);
-	if (!cv) {
-	    SV *tmpsv = sv_newmortal();
-	    gv_efullname3(tmpsv, fgv, Nullch);
-	    DIE(aTHX_ "Undefined top format \"%s\" called",SvPVX(tmpsv));
+	{
+	    char *name = NULL;
+	    if (!cv) {
+	        SV *sv = sv_newmortal();
+		gv_efullname4(sv, fgv, Nullch, FALSE);
+		name = SvPV_nolen(sv);
+	    }
+	    if (name && *name)
+	        DIE(aTHX_ "Undefined top format \"%s\" called",name);
+	    /* why no:
+	    else
+	        DIE(aTHX_ "Undefined top format called");
+	    ?*/
 	}
 	if (CvCLONE(cv))
 	    cv = (CV*)sv_2mortal((SV*)cv_clone(cv));
@@ -1270,14 +1299,22 @@ PP(pp_leavewrite)
     if (!fp) {
 	if (ckWARN2(WARN_CLOSED,WARN_IO)) {
 	    if (IoIFP(io)) {
-		SV* sv = sv_newmortal();
-		gv_efullname3(sv, gv, Nullch);
-		Perl_warner(aTHX_ WARN_IO,
-			    "Filehandle %s opened only for input",
-			    SvPV_nolen(sv));
+		/* integrate with report_evil_fh()? */
+	        char *name = NULL;
+		if (isGV(gv)) {
+		    SV* sv = sv_newmortal();
+		    gv_efullname4(sv, gv, Nullch, FALSE);
+		    name = SvPV_nolen(sv);
+		}
+		if (name && *name)
+		    Perl_warner(aTHX_ WARN_IO,
+				"Filehandle %s opened only for input", name);
+		else
+		    Perl_warner(aTHX_ WARN_IO,
+				"Filehandle opened only for input");
 	    }
 	    else if (ckWARN(WARN_CLOSED))
-		report_closed_fh(gv, io, "write", "filehandle");
+		report_evil_fh(gv, io, PL_op->op_type);
 	}
 	PUSHs(&PL_sv_no);
     }
@@ -1340,24 +1377,30 @@ PP(pp_prtf)
 
     sv = NEWSV(0,0);
     if (!(io = GvIO(gv))) {
-	if (ckWARN(WARN_UNOPENED)) {
-	    gv_efullname3(sv, gv, Nullch);
-	    Perl_warner(aTHX_ WARN_UNOPENED,
-			"Filehandle %s never opened", SvPV(sv,n_a));
-	}
+        dTHR;
+	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
+	    report_evil_fh(gv, io, PL_op->op_type);
 	SETERRNO(EBADF,RMS$_IFI);
 	goto just_say_no;
     }
     else if (!(fp = IoOFP(io))) {
 	if (ckWARN2(WARN_CLOSED,WARN_IO))  {
+	    /* integrate with report_evil_fh()? */
 	    if (IoIFP(io)) {
-		gv_efullname3(sv, gv, Nullch);
-		Perl_warner(aTHX_ WARN_IO,
-			    "Filehandle %s opened only for input",
-			    SvPV(sv,n_a));
+	        char *name = NULL;
+		if (isGV(gv)) {
+		    gv_efullname4(sv, gv, Nullch, FALSE);
+		    name = SvPV_nolen(sv);
+		}
+		if (name && *name)
+		    Perl_warner(aTHX_ WARN_IO,
+				"Filehandle %s opened only for input", name);
+		else
+		    Perl_warner(aTHX_ WARN_IO,
+				"Filehandle opened only for input");
 	    }
 	    else if (ckWARN(WARN_CLOSED))
-		report_closed_fh(gv, io, "printf", "filehandle");
+		report_evil_fh(gv, io, PL_op->op_type);
 	}
 	SETERRNO(EBADF,IoIFP(io)?RMS$_FAC:RMS$_IFI);
 	goto just_say_no;
@@ -1511,7 +1554,7 @@ PP(pp_sysread)
     }
     if (PL_op->op_type == OP_SYSREAD) {
 #ifdef PERL_SOCK_SYSREAD_IS_RECV
-	if (IoTYPE(io) == 's') {
+	if (IoTYPE(io) == IoTYPE_SOCKET) {
 	    length = PerlSock_recv(PerlIO_fileno(IoIFP(io)),
 				   buffer+offset, length, 0);
 	}
@@ -1524,7 +1567,7 @@ PP(pp_sysread)
     }
     else
 #ifdef HAS_SOCKET__bad_code_maybe
-    if (IoTYPE(io) == 's') {
+    if (IoTYPE(io) == IoTYPE_SOCKET) {
 	char namebuf[MAXPATHLEN];
 #if defined(VMS_DO_SOCKETS) && defined(DECCRTL_SOCKETS)
 	bufsize = sizeof (struct sockaddr_in);
@@ -1543,13 +1586,22 @@ PP(pp_sysread)
 	    length = -1;
     }
     if (length < 0) {
-	if ((IoTYPE(io) == '>' || IoIFP(io) == PerlIO_stdout()
+	if ((IoTYPE(io) == IoTYPE_WRONLY || IoIFP(io) == PerlIO_stdout()
 	    || IoIFP(io) == PerlIO_stderr()) && ckWARN(WARN_IO))
 	{
-	    SV* sv = sv_newmortal();
-	    gv_efullname3(sv, gv, Nullch);
-	    Perl_warner(aTHX_ WARN_IO, "Filehandle %s opened only for output",
-			SvPV_nolen(sv));
+	    /* integrate with report_evil_fh()? */
+	    char *name = NULL;
+	    if (isGV(gv)) {
+		SV* sv = sv_newmortal();
+		gv_efullname4(sv, gv, Nullch, FALSE);
+		name = SvPV_nolen(sv);
+	    }
+	    if (name && *name)
+		Perl_warner(aTHX_ WARN_IO,
+			    "Filehandle %s opened only for output", name);
+	    else
+		Perl_warner(aTHX_ WARN_IO,
+			    "Filehandle opened only for output");
 	}
 	goto say_undef;
     }
@@ -1626,12 +1678,8 @@ PP(pp_send)
     io = GvIO(gv);
     if (!io || !IoIFP(io)) {
 	retval = -1;
-	if (ckWARN(WARN_CLOSED)) {
-	    if (PL_op->op_type == OP_SYSWRITE)
-		report_closed_fh(gv, io, "syswrite", "filehandle");
-	    else
-		report_closed_fh(gv, io, "send", "socket");
-	}
+	if (ckWARN(WARN_CLOSED))
+	    report_evil_fh(gv, io, PL_op->op_type);
     }
     else if (PL_op->op_type == OP_SYSWRITE) {
 	if (MARK < SP) {
@@ -1647,7 +1695,7 @@ PP(pp_send)
 	if (length > blen - offset)
 	    length = blen - offset;
 #ifdef PERL_SOCK_SYSWRITE_IS_SEND
-	if (IoTYPE(io) == 's') {
+	if (IoTYPE(io) == IoTYPE_SOCKET) {
 	    retval = PerlSock_send(PerlIO_fileno(IoIFP(io)),
 				   buffer+offset, length, 0);
 	}
@@ -1741,7 +1789,7 @@ PP(pp_eof)
 PP(pp_tell)
 {
     djSP; dTARGET;
-    GV *gv;     
+    GV *gv;
     MAGIC *mg;
 
     if (MAXARG == 0)
@@ -1843,7 +1891,7 @@ PP(pp_truncate)
     len = (Off_t)POPi;
 #endif
     /* Checking for length < 0 is problematic as the type might or
-     * might not be signed: if it is not, clever compilers will moan. */ 
+     * might not be signed: if it is not, clever compilers will moan. */
     /* XXX Configure probe for the signedness of the length type of *truncate() needed? XXX */
     SETERRNO(0,0);
 #if defined(HAS_TRUNCATE) || defined(HAS_CHSIZE) || defined(F_FREESP)
@@ -1857,7 +1905,7 @@ PP(pp_truncate)
 	    PerlIO_flush(IoIFP(GvIOp(tmpgv)));
 #ifdef HAS_TRUNCATE
 	    if (ftruncate(PerlIO_fileno(IoIFP(GvIOn(tmpgv))), len) < 0)
-#else 
+#else
 	    if (my_chsize(PerlIO_fileno(IoIFP(GvIOn(tmpgv))), len) < 0)
 #endif
 		result = 0;
@@ -1958,7 +2006,7 @@ PP(pp_ioctl)
 	retval = fcntl(PerlIO_fileno(IoIFP(io)), func, (int)s);
 #else
 	retval = fcntl(PerlIO_fileno(IoIFP(io)), func, s);
-#endif 
+#endif
 #else
 	DIE(aTHX_ "fcntl is not implemented");
 #endif
@@ -1988,6 +2036,7 @@ PP(pp_flock)
     I32 value;
     int argtype;
     GV *gv;
+    IO *io = NULL;
     PerlIO *fp;
 
 #ifdef FLOCK
@@ -1996,19 +2045,21 @@ PP(pp_flock)
 	gv = PL_last_in_gv;
     else
 	gv = (GV*)POPs;
-    if (gv && GvIO(gv))
-	fp = IoIFP(GvIOp(gv));
-    else
+    if (gv && (io = GvIO(gv)))
+	fp = IoIFP(io);
+    else {
 	fp = Nullfp;
+	io = NULL;
+    }
     if (fp) {
 	(void)PerlIO_flush(fp);
 	value = (I32)(PerlLIO_flock(PerlIO_fileno(fp), argtype) >= 0);
     }
     else {
+	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
+	    report_evil_fh(gv, io, PL_op->op_type);
 	value = 0;
 	SETERRNO(EBADF,RMS$_IFI);
-	if (ckWARN(WARN_CLOSED))
-	    report_closed_fh(gv, GvIO(gv), "flock", "filehandle");
     }
     PUSHi(value);
     RETURN;
@@ -2047,7 +2098,7 @@ PP(pp_socket)
 	RETPUSHUNDEF;
     IoIFP(io) = PerlIO_fdopen(fd, "r");	/* stdio gets confused about sockets */
     IoOFP(io) = PerlIO_fdopen(fd, "w");
-    IoTYPE(io) = 's';
+    IoTYPE(io) = IoTYPE_SOCKET;
     if (!IoIFP(io) || !IoOFP(io)) {
 	if (IoIFP(io)) PerlIO_close(IoIFP(io));
 	if (IoOFP(io)) PerlIO_close(IoOFP(io));
@@ -2094,10 +2145,10 @@ PP(pp_sockpair)
 	RETPUSHUNDEF;
     IoIFP(io1) = PerlIO_fdopen(fd[0], "r");
     IoOFP(io1) = PerlIO_fdopen(fd[0], "w");
-    IoTYPE(io1) = 's';
+    IoTYPE(io1) = IoTYPE_SOCKET;
     IoIFP(io2) = PerlIO_fdopen(fd[1], "r");
     IoOFP(io2) = PerlIO_fdopen(fd[1], "w");
-    IoTYPE(io2) = 's';
+    IoTYPE(io2) = IoTYPE_SOCKET;
     if (!IoIFP(io1) || !IoOFP(io1) || !IoIFP(io2) || !IoOFP(io2)) {
 	if (IoIFP(io1)) PerlIO_close(IoIFP(io1));
 	if (IoOFP(io1)) PerlIO_close(IoOFP(io1));
@@ -2169,7 +2220,7 @@ PP(pp_bind)
 
 nuts:
     if (ckWARN(WARN_CLOSED))
-	report_closed_fh(gv, io, "bind", "socket");
+	report_evil_fh(gv, io, PL_op->op_type);
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
@@ -2199,7 +2250,7 @@ PP(pp_connect)
 
 nuts:
     if (ckWARN(WARN_CLOSED))
-	report_closed_fh(gv, io, "connect", "socket");
+	report_evil_fh(gv, io, PL_op->op_type);
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
@@ -2225,7 +2276,7 @@ PP(pp_listen)
 
 nuts:
     if (ckWARN(WARN_CLOSED))
-	report_closed_fh(gv, io, "listen", "socket");
+	report_evil_fh(gv, io, PL_op->op_type);
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
@@ -2266,7 +2317,7 @@ PP(pp_accept)
 	goto badexit;
     IoIFP(nstio) = PerlIO_fdopen(fd, "r");
     IoOFP(nstio) = PerlIO_fdopen(fd, "w");
-    IoTYPE(nstio) = 's';
+    IoTYPE(nstio) = IoTYPE_SOCKET;
     if (!IoIFP(nstio) || !IoOFP(nstio)) {
 	if (IoIFP(nstio)) PerlIO_close(IoIFP(nstio));
 	if (IoOFP(nstio)) PerlIO_close(IoOFP(nstio));
@@ -2282,7 +2333,7 @@ PP(pp_accept)
 
 nuts:
     if (ckWARN(WARN_CLOSED))
-	report_closed_fh(ggv, ggv ? GvIO(ggv) : 0, "accept", "socket");
+	report_evil_fh(ggv, ggv ? GvIO(ggv) : 0, PL_op->op_type);
     SETERRNO(EBADF,SS$_IVCHAN);
 
 badexit:
@@ -2309,7 +2360,7 @@ PP(pp_shutdown)
 
 nuts:
     if (ckWARN(WARN_CLOSED))
-	report_closed_fh(gv, io, "shutdown", "socket");
+	report_evil_fh(gv, io, PL_op->op_type);
     SETERRNO(EBADF,SS$_IVCHAN);
     RETPUSHUNDEF;
 #else
@@ -2388,9 +2439,7 @@ PP(pp_ssockopt)
 
 nuts:
     if (ckWARN(WARN_CLOSED))
-	report_closed_fh(gv, io,
-			 optype == OP_GSOCKOPT ? "getsockopt" : "setsockopt",
-			 "socket");
+	report_evil_fh(gv, io, optype);
     SETERRNO(EBADF,SS$_IVCHAN);
 nuts2:
     RETPUSHUNDEF;
@@ -2444,7 +2493,7 @@ PP(pp_getpeername)
 	    if (((struct sockaddr *)SvPVX(sv))->sa_family == AF_INET &&
 		!memcmp((char *)SvPVX(sv) + sizeof(u_short), nowhere,
 			sizeof(u_short) + sizeof(struct in_addr))) {
-		goto nuts2;	    
+		goto nuts2;	
 	    }
 	}
 #endif
@@ -2463,10 +2512,7 @@ PP(pp_getpeername)
 
 nuts:
     if (ckWARN(WARN_CLOSED))
-	report_closed_fh(gv, io,
-			 optype == OP_GETSOCKNAME ? "getsockname"
-						  : "getpeername",
-			 "socket");
+	report_evil_fh(gv, io, optype);
     SETERRNO(EBADF,SS$_IVCHAN);
 nuts2:
     RETPUSHUNDEF;
@@ -2486,32 +2532,39 @@ PP(pp_lstat)
 PP(pp_stat)
 {
     djSP;
-    GV *tmpgv;
+    GV *gv;
     I32 gimme;
     I32 max = 13;
     STRLEN n_a;
 
     if (PL_op->op_flags & OPf_REF) {
-	tmpgv = cGVOP_gv;
+	gv = cGVOP_gv;
+	if (PL_op->op_type == OP_LSTAT && ckWARN(WARN_IO))
+	    Perl_warner(aTHX_ WARN_IO,
+			"lstat() on filehandle %s", GvENAME(gv));
       do_fstat:
-	if (tmpgv != PL_defgv) {
+	if (gv != PL_defgv) {
 	    PL_laststype = OP_STAT;
-	    PL_statgv = tmpgv;
+	    PL_statgv = gv;
 	    sv_setpv(PL_statname, "");
-	    PL_laststatval = (GvIO(tmpgv) && IoIFP(GvIOp(tmpgv))
-		? PerlLIO_fstat(PerlIO_fileno(IoIFP(GvIOn(tmpgv))), &PL_statcache) : -1);
+	    PL_laststatval = (GvIO(gv) && IoIFP(GvIOp(gv))
+		? PerlLIO_fstat(PerlIO_fileno(IoIFP(GvIOn(gv))), &PL_statcache) : -1);
 	}
-	if (PL_laststatval < 0)
+	if (PL_laststatval < 0) {
+	    dTHR;
+	    if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
+		report_evil_fh(gv, GvIO(gv), PL_op->op_type);
 	    max = 0;
+	}
     }
     else {
 	SV* sv = POPs;
 	if (SvTYPE(sv) == SVt_PVGV) {
-	    tmpgv = (GV*)sv;
+	    gv = (GV*)sv;
 	    goto do_fstat;
 	}
 	else if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVGV) {
-	    tmpgv = (GV*)SvRV(sv);
+	    gv = (GV*)SvRV(sv);
 	    goto do_fstat;
 	}
 	sv_setpv(PL_statname, SvPV(sv,n_a));
@@ -2552,7 +2605,7 @@ PP(pp_stat)
 	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_uid)));
 #   endif
 #endif
-#if Gid_t_size > IVSIZE 
+#if Gid_t_size > IVSIZE
 	PUSHs(sv_2mortal(newSVnv(PL_statcache.st_gid)));
 #else
 #   if Gid_t_sign <= 0
@@ -3053,10 +3106,10 @@ PP(pp_fttext)
 		len = 512;
 	}
 	else {
-	    if (ckWARN(WARN_UNOPENED)) {
+	    dTHR;
+	    if (ckWARN2(WARN_UNOPENED,WARN_CLOSED)) {
 		gv = cGVOP_gv;
-		Perl_warner(aTHX_ WARN_UNOPENED, "Test on unopened file <%s>",
-			    GvENAME(gv));
+		report_evil_fh(gv, GvIO(gv), PL_op->op_type);
 	    }
 	    SETERRNO(EBADF,RMS$_IFI);
 	    RETPUSHUNDEF;
@@ -3078,7 +3131,7 @@ PP(pp_fttext)
 	    (void)PerlIO_close(fp);
 	    RETPUSHUNDEF;
 	}
-	do_binmode(fp, '<', TRUE);
+	do_binmode(fp, '<', O_BINARY);
 	len = PerlIO_read(fp, tbuf, sizeof(tbuf));
 	(void)PerlIO_close(fp);
 	if (len <= 0) {
@@ -3104,7 +3157,7 @@ PP(pp_fttext)
 	    break;
 	}
 #ifdef EBCDIC
-        else if (!(isPRINT(*s) || isSPACE(*s))) 
+        else if (!(isPRINT(*s) || isSPACE(*s)))
             odd++;
 #else
 	else if (*s & 128) {
@@ -3680,6 +3733,8 @@ PP(pp_fork)
     EXTEND(SP, 1);
     PERL_FLUSHALL_FOR_CHILD;
     childpid = PerlProc_fork();
+    if (childpid == -1)
+	RETSETUNDEF;
     PUSHi(childpid);
     RETURN;
 #  else
@@ -3690,13 +3745,18 @@ PP(pp_fork)
 
 PP(pp_wait)
 {
-#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL) 
+#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL)
     djSP; dTARGET;
     Pid_t childpid;
     int argflags;
 
     childpid = wait4pid(-1, &argflags, 0);
+#  if defined(USE_ITHREADS) && defined(PERL_IMPLICIT_SYS)
+    /* 0 and -1 are both error returns (the former applies to WNOHANG case) */
+    STATUS_NATIVE_SET((childpid && childpid != -1) ? argflags : -1);
+#  else
     STATUS_NATIVE_SET((childpid > 0) ? argflags : -1);
+#  endif
     XPUSHi(childpid);
     RETURN;
 #else
@@ -3706,7 +3766,7 @@ PP(pp_wait)
 
 PP(pp_waitpid)
 {
-#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL) 
+#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL)
     djSP; dTARGET;
     Pid_t childpid;
     int optype;
@@ -3715,7 +3775,12 @@ PP(pp_waitpid)
     optype = POPi;
     childpid = TOPi;
     childpid = wait4pid(childpid, &argflags, optype);
+#  if defined(USE_ITHREADS) && defined(PERL_IMPLICIT_SYS)
+    /* 0 and -1 are both error returns (the former applies to WNOHANG case) */
+    STATUS_NATIVE_SET((childpid && childpid != -1) ? argflags : -1);
+#  else
     STATUS_NATIVE_SET((childpid > 0) ? argflags : -1);
+#  endif
     SETi(childpid);
     RETURN;
 #else
@@ -3743,7 +3808,7 @@ PP(pp_system)
 	}
     }
     PERL_FLUSHALL_FOR_CHILD;
-#if (defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS) && !defined(OS2)
+#if (defined(HAS_FORK) || defined(AMIGAOS)) && !defined(VMS) && !defined(OS2) && !defined(__CYGWIN__) || defined(PERL_MICRO)
     if (PerlProc_pipe(pp) >= 0)
 	did_pipes = 1;
     while ((childpid = vfork()) == -1) {
@@ -3762,13 +3827,17 @@ PP(pp_system)
     if (childpid > 0) {
 	if (did_pipes)
 	    PerlLIO_close(pp[1]);
+#ifndef PERL_MICRO
 	rsignal_save(SIGINT, SIG_IGN, &ihand);
 	rsignal_save(SIGQUIT, SIG_IGN, &qhand);
+#endif
 	do {
 	    result = wait4pid(childpid, &status, 0);
 	} while (result == -1 && errno == EINTR);
+#ifndef PERL_MICRO
 	(void)rsignal_restore(SIGINT, &ihand);
 	(void)rsignal_restore(SIGQUIT, &qhand);
+#endif
 	STATUS_NATIVE_SET(result == -1 ? -1 : status);
 	do_execfree();	/* free any memory child malloced on vfork */
 	SP = ORIGMARK;
@@ -3812,6 +3881,8 @@ PP(pp_system)
     }
     PerlProc__exit(-1);
 #else /* ! FORK or VMS or OS/2 */
+    PL_statusvalue = 0;
+    result = 0;
     if (PL_op->op_flags & OPf_STACKED) {
 	SV *really = *++MARK;
 	value = (I32)do_aspawn(really, (void **)MARK, (void **)SP);
@@ -3821,10 +3892,12 @@ PP(pp_system)
     else {
 	value = (I32)do_spawn(SvPVx(sv_mortalcopy(*SP), n_a));
     }
+    if (PL_statusvalue == -1)	/* hint that value must be returned as is */
+	result = 1;
     STATUS_NATIVE_SET(value);
     do_execfree();
     SP = ORIGMARK;
-    PUSHi(STATUS_CURRENT);
+    PUSHi(result ? value : STATUS_CURRENT);
 #endif /* !FORK or VMS */
     RETURN;
 }
@@ -4487,7 +4560,7 @@ PP(pp_gprotoent)
 #if defined(HAS_GETPROTOBYNAME) || defined(HAS_GETPROTOBYNUMBER) || defined(HAS_GETPROTOENT)
     I32 which = PL_op->op_type;
     register char **elem;
-    register SV *sv;  
+    register SV *sv;
 #ifndef HAS_GETPROTO_PROTOS /* XXX Do we need individual probes? */
     struct protoent *PerlSock_getprotobyname(Netdb_name_t);
     struct protoent *PerlSock_getprotobynumber(int);
@@ -4770,50 +4843,88 @@ PP(pp_gpwent)
 #ifdef HAS_PASSWD
     I32 which = PL_op->op_type;
     register SV *sv;
-    struct passwd *pwent;
     STRLEN n_a;
-#if defined(HAS_GETSPENT) || defined(HAS_GETSPNAM)
-    struct spwd *spwent = NULL;
-#endif
+    struct passwd *pwent  = NULL;
+    /*
+     * We currently support only the SysV getsp* shadow password interface.
+     * The interface is declared in <shadow.h> and often one needs to link
+     * with -lsecurity or some such.
+     * This interface is used at least by Solaris, HP-UX, IRIX, and Linux.
+     * (and SCO?)
+     *
+     * AIX getpwnam() is clever enough to return the encrypted password
+     * only if the caller (euid?) is root.
+     *
+     * There are at least two other shadow password APIs.  Many platforms
+     * seem to contain more than one interface for accessing the shadow
+     * password databases, possibly for compatibility reasons.
+     * The getsp*() is by far he simplest one, the other two interfaces
+     * are much more complicated, but also very similar to each other.
+     *
+     * <sys/types.h>
+     * <sys/security.h>
+     * <prot.h>
+     * struct pr_passwd *getprpw*();
+     * The password is in
+     * char getprpw*(...).ufld.fd_encrypt[]
+     * Mention HAS_GETPRPWNAM here so that Configure probes for it.
+     *
+     * <sys/types.h>
+     * <sys/security.h>
+     * <prot.h>
+     * struct es_passwd *getespw*();
+     * The password is in
+     * char *(getespw*(...).ufld.fd_encrypt)
+     * Mention HAS_GETESPWNAM here so that Configure probes for it.
+     *
+     * Mention I_PROT here so that Configure probes for it.
+     *
+     * In HP-UX for getprpw*() the manual page claims that one should include
+     * <hpsecurity.h> instead of <sys/security.h>, but that is not needed
+     * if one includes <shadow.h> as that includes <hpsecurity.h>,
+     * and pp_sys.c already includes <shadow.h> if there is such.
+     *
+     * Note that <sys/security.h> is already probed for, but currently
+     * it is only included in special cases.
+     *
+     * In Digital UNIX/Tru64 if using the getespw*() (which seems to be
+     * be preferred interface, even though also the getprpw*() interface
+     * is available) one needs to link with -lsecurity -ldb -laud -lm.
+     * One also needs to call set_auth_parameters() in main() before
+     * doing anything else, whether one is using getespw*() or getprpw*().
+     *
+     * Note that accessing the shadow databases can be magnitudes
+     * slower than accessing the standard databases.
+     *
+     * --jhi
+     */
 
-    if (which == OP_GPWNAM)
-	pwent = getpwnam(POPpx);
-    else if (which == OP_GPWUID)
-	pwent = getpwuid(POPi);
-    else
-#ifdef HAS_GETPWENT
-	pwent = (struct passwd *)getpwent();
-#else
+    switch (which) {
+    case OP_GPWNAM:
+	pwent  = getpwnam(POPpx);
+	break;
+    case OP_GPWUID:
+	pwent = getpwuid((Uid_t)POPi);
+	break;
+    case OP_GPWENT:
+#   ifdef HAS_GETPWENT
+	pwent  = getpwent();
+#   else
 	DIE(aTHX_ PL_no_func, "getpwent");
-#endif
-
-#ifdef HAS_GETSPNAM
-    if (which == OP_GPWNAM) {
-	if (pwent)
-	    spwent = getspnam(pwent->pw_name);
+#   endif
+	break;
     }
-#  ifdef HAS_GETSPUID /* AFAIK there isn't any anywhere. --jhi */ 
-    else if (which == OP_GPWUID) {
-	if (pwent)
-	    spwent = getspnam(pwent->pw_name);
-    }
-#  endif
-#  ifdef HAS_GETSPENT
-    else
-	spwent = (struct spwd *)getspent();
-#  endif
-#endif
 
     EXTEND(SP, 10);
     if (GIMME != G_ARRAY) {
 	PUSHs(sv = sv_newmortal());
 	if (pwent) {
 	    if (which == OP_GPWNAM)
-#if Uid_t_sign <= 0
+#   if Uid_t_sign <= 0
 		sv_setiv(sv, (IV)pwent->pw_uid);
-#else
+#   else
 		sv_setuv(sv, (UV)pwent->pw_uid);
-#endif
+#   endif
 	    else
 		sv_setpv(sv, pwent->pw_name);
 	}
@@ -4825,81 +4936,112 @@ PP(pp_gpwent)
 	sv_setpv(sv, pwent->pw_name);
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
-#ifdef PWPASSWD
-#   if defined(HAS_GETSPENT) || defined(HAS_GETSPNAM)
-      if (spwent)
-              sv_setpv(sv, spwent->sp_pwdp);
-      else
-              sv_setpv(sv, pwent->pw_passwd);
-#   else
-	sv_setpv(sv, pwent->pw_passwd);
+	SvPOK_off(sv);
+	/* If we have getspnam(), we try to dig up the shadow
+	 * password.  If we are underprivileged, the shadow
+	 * interface will set the errno to EACCES or similar,
+	 * and return a null pointer.  If this happens, we will
+	 * use the dummy password (usually "*" or "x") from the
+	 * standard password database.
+	 *
+	 * In theory we could skip the shadow call completely
+	 * if euid != 0 but in practice we cannot know which
+	 * security measures are guarding the shadow databases
+	 * on a random platform.
+	 *
+	 * Resist the urge to use additional shadow interfaces.
+	 * Divert the urge to writing an extension instead.
+	 *
+	 * --jhi */
+#   ifdef HAS_GETSPNAM
+	{
+	    struct spwd *spwent;
+	    int saverrno; /* Save and restore errno so that
+			   * underprivileged attempts seem
+			   * to have never made the unsccessful
+			   * attempt to retrieve the shadow password. */
+
+	    saverrno = errno;
+	    spwent = getspnam(pwent->pw_name);
+	    errno = saverrno;
+	    if (spwent && spwent->sp_pwdp)
+		sv_setpv(sv, spwent->sp_pwdp);
+	}
 #   endif
-#endif
-#ifndef INCOMPLETE_TAINTS
-	/* passwd is tainted because user himself can diddle with it. */
+	if (!SvPOK(sv)) /* Use the standard password, then. */
+	    sv_setpv(sv, pwent->pw_passwd);
+
+#   ifndef INCOMPLETE_TAINTS
+	/* passwd is tainted because user himself can diddle with it.
+	 * admittedly not much and in a very limited way, but nevertheless. */
 	SvTAINTED_on(sv);
-#endif
+#   endif
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
-#if Uid_t_sign <= 0
+#   if Uid_t_sign <= 0
 	sv_setiv(sv, (IV)pwent->pw_uid);
-#else
+#   else
 	sv_setuv(sv, (UV)pwent->pw_uid);
-#endif
+#   endif
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
-#if Uid_t_sign <= 0
+#   if Uid_t_sign <= 0
 	sv_setiv(sv, (IV)pwent->pw_gid);
-#else
-	sv_setuv(sv, (UV)pwent->pw_gid);
-#endif
-	/* pw_change, pw_quota, and pw_age are mutually exclusive. */
-	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
-#ifdef PWCHANGE
-	sv_setiv(sv, (IV)pwent->pw_change);
-#else
-#   ifdef PWQUOTA
-	sv_setiv(sv, (IV)pwent->pw_quota);
 #   else
-#       ifdef PWAGE
+	sv_setuv(sv, (UV)pwent->pw_gid);
+#   endif
+	/* pw_change, pw_quota, and pw_age are mutually exclusive--
+	 * because of the poor interface of the Perl getpw*(),
+	 * not because there's some standard/convention saying so.
+	 * A better interface would have been to return a hash,
+	 * but we are accursed by our history, alas. --jhi.  */
+	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
+#   ifdef PWCHANGE
+	sv_setiv(sv, (IV)pwent->pw_change);
+#   else
+#       ifdef PWQUOTA
+	sv_setiv(sv, (IV)pwent->pw_quota);
+#       else
+#           ifdef PWAGE
 	sv_setpv(sv, pwent->pw_age);
+#           endif
 #       endif
 #   endif
-#endif
 
-	/* pw_class and pw_comment are mutually exclusive. */
+	/* pw_class and pw_comment are mutually exclusive--.
+	 * see the above note for pw_change, pw_quota, and pw_age. */
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
-#ifdef PWCLASS
+#   ifdef PWCLASS
 	sv_setpv(sv, pwent->pw_class);
-#else
-#   ifdef PWCOMMENT
+#   else
+#       ifdef PWCOMMENT
 	sv_setpv(sv, pwent->pw_comment);
+#       endif
 #   endif
-#endif
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
-#ifdef PWGECOS
+#   ifdef PWGECOS
 	sv_setpv(sv, pwent->pw_gecos);
-#endif
-#ifndef INCOMPLETE_TAINTS
+#   endif
+#   ifndef INCOMPLETE_TAINTS
 	/* pw_gecos is tainted because user himself can diddle with it. */
 	SvTAINTED_on(sv);
-#endif
+#   endif
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
 	sv_setpv(sv, pwent->pw_dir);
 
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
 	sv_setpv(sv, pwent->pw_shell);
-#ifndef INCOMPLETE_TAINTS
+#   ifndef INCOMPLETE_TAINTS
 	/* pw_shell is tainted because user himself can diddle with it. */
 	SvTAINTED_on(sv);
-#endif
+#   endif
 
-#ifdef PWEXPIRE
+#   ifdef PWEXPIRE
 	PUSHs(sv = sv_mortalcopy(&PL_sv_no));
 	sv_setiv(sv, (IV)pwent->pw_expire);
-#endif
+#   endif
     }
     RETURN;
 #else
@@ -4912,9 +5054,6 @@ PP(pp_spwent)
     djSP;
 #if defined(HAS_PASSWD) && defined(HAS_SETPWENT)
     setpwent();
-#   ifdef HAS_SETSPENT
-    setspent();
-#   endif
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_func, "setpwent");
@@ -4926,9 +5065,6 @@ PP(pp_epwent)
     djSP;
 #if defined(HAS_PASSWD) && defined(HAS_ENDPWENT)
     endpwent();
-#   ifdef HAS_ENDSPENT
-    endspent();
-#   endif
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_func, "endpwent");
@@ -5081,7 +5217,7 @@ PP(pp_syscall)
 	    a[i++] = SvIV(*MARK);
 	else if (*MARK == &PL_sv_undef)
 	    a[i++] = 0;
-	else 
+	else
 	    a[i++] = (unsigned long)SvPV_force(*MARK, n_a);
 	if (i > 15)
 	    break;
@@ -5149,7 +5285,7 @@ PP(pp_syscall)
 }
 
 #ifdef FCNTL_EMULATE_FLOCK
- 
+
 /*  XXX Emulate flock() with fcntl().
     What's really needed is a good file locking module.
 */
@@ -5158,7 +5294,7 @@ static int
 fcntl_emulate_flock(int fd, int operation)
 {
     struct flock flock;
- 
+
     switch (operation & ~LOCK_NB) {
     case LOCK_SH:
 	flock.l_type = F_RDLCK;
@@ -5175,7 +5311,7 @@ fcntl_emulate_flock(int fd, int operation)
     }
     flock.l_whence = SEEK_SET;
     flock.l_start = flock.l_len = (Off_t)0;
- 
+
     return fcntl(fd, (operation & LOCK_NB) ? F_SETLK : F_SETLKW, &flock);
 }
 

@@ -93,7 +93,7 @@ if test "$libemx" = "X"; then echo "Cannot find C library!" >&2; fi
 libpth="`echo \"$LIBRARY_PATH\" | tr ';\\\' ' /'`"
 libpth="$libpth $libemx/mt $libemx"
 
-set `emxrev -f emxlibcm`
+set `cmd /c emxrev -f emxlibcm`
 emxcrtrev=$5
 # indented to not put it into config.sh
   _defemxcrtrev=-D_EMX_CRT_REV_=$emxcrtrev
@@ -305,10 +305,6 @@ case "$0$running_c_cmd" in
     ;;
   *) echo "!!! Apparently we are running a renamed Configure: '$0'." >&2
 esac
-
-# Copy pod:
-
-cp -uf ./README.os2 ./pod/perlos2.pod
 
 # This script UU/usethreads.cbu will get 'called-back' by Configure 
 # after it has prompted the user for whether to use threads.

@@ -1,5 +1,5 @@
 # Pod::Man -- Convert POD data to formatted *roff input.
-# $Id: Man.pm,v 1.2 2000/03/19 07:30:13 eagle Exp $
+# $Id: Man.pm,v 1.4 2000/04/26 04:03:41 eagle Exp $
 #
 # Copyright 1999, 2000 by Russ Allbery <rra@stanford.edu>
 #
@@ -38,7 +38,7 @@ use vars qw(@ISA %ESCAPES $PREAMBLE $VERSION);
 # Perl core and too many things could munge CVS magic revision strings.
 # This number should ideally be the same as the CVS revision in podlators,
 # however.
-$VERSION = 1.02;
+$VERSION = 1.04;
 
 
 ############################################################################
@@ -110,7 +110,7 @@ $PREAMBLE = <<'----END OF PREAMBLE----';
 .if \nF \{\
 .    de IX
 .    tm Index:\\$1\t\\n%\t"\\$2"
-.    .
+..
 .    nr % 0
 .    rr F
 .\}
@@ -194,6 +194,8 @@ $PREAMBLE = <<'----END OF PREAMBLE----';
     'lt'        =>    '<',      # left chevron, less-than
     'gt'        =>    '>',      # right chevron, greater-than
     'quot'      =>    '"',      # double quote
+    'sol'       =>    '/',      # solidus
+    'verbar'    =>    '|',      # vertical bar
 
     'Aacute'    =>    "A\\*'",  # capital A, acute accent
     'aacute'    =>    "a\\*'",  # small a, acute accent
@@ -460,7 +462,18 @@ sub command {
     return if $command eq 'pod';
     return if ($$self{EXCLUDE} && $command ne 'end');
     $command = 'cmd_' . $command;
-    $self->$command (@_);
+    unless ($self -> can ($command)) {
+        my $com = substr $command => 4;
+        my ($file, $line) = $_ [2] -> file_line;
+       (my $text = $_ [0]) =~ s/\n+\z//g;
+        $text = " $text" if $text =~ /^\S/;
+        warn qq {$file: Unknown command paragraph "=$com${text}"},
+             qq { on line $line.\n};
+        return;
+    }
+    else {
+        $self->$command (@_);
+    }
 }
 
 # Called for a verbatim paragraph.  Gets the paragraph, the line number, and
@@ -550,8 +563,11 @@ sub sequence {
         return bless \ "$tmp", 'Pod::Man::String';
     }
 
-    # C<>, L<>, X<>, and E<> don't apply guesswork to their contents.
-    local $_ = $self->collapse ($seq->parse_tree, $command =~ /^[CELX]$/);
+    # C<>, L<>, X<>, and E<> don't apply guesswork to their contents.  C<>
+    # needs some additional special handling.
+    my $literal = ($command =~ /^[CELX]$/);
+    $literal++ if $command eq 'C';
+    local $_ = $self->collapse ($seq->parse_tree, $literal);
 
     # Handle E<> escapes.
     if ($command eq 'E') {
@@ -576,8 +592,6 @@ sub sequence {
     } elsif ($command eq 'I') {
         return bless \ ('\f(IS' . $_ . '\f(IE'), 'Pod::Man::String';
     } elsif ($command eq 'C') {
-        s/-/\\-/g;
-        s/__/_\\|_/g;
         return bless \ ('\f(FS\*(C`' . $_ . "\\*(C'\\f(FE"),
             'Pod::Man::String';
     }
@@ -682,7 +696,7 @@ sub cmd_item {
     my $index;
     if (/\w/ && !/^\w[.\)]\s*$/) {
         $index = $_;
-        $index =~ s/^\s*[-*+o.]?\s*//;
+        $index =~ s/^\s*[-*+o.]?(?:\s+|\Z)//;
     }
     s/^\*(\s|\Z)/\\\(bu$1/;
     if ($$self{WEIRDINDENT}) {
@@ -830,8 +844,10 @@ sub parse {
 # text (not call guesswork on it), and returns the concatenation of all of
 # the text strings in that parse tree.  If the literal flag isn't true,
 # guesswork() will be called on all plain scalars in the parse tree.
-# Assumes that everything in the parse tree is either a scalar or a
-# reference to a scalar.
+# Otherwise, just escape backslashes in the normal case.  If collapse is
+# being called on a C<> sequence, literal is set to 2, and we do some
+# additional cleanup.  Assumes that everything in the parse tree is either a
+# scalar or a reference to a scalar.
 sub collapse {
     my ($self, $ptree, $literal) = @_;
     if ($literal) {
@@ -840,6 +856,8 @@ sub collapse {
                 $$_;
             } else {
                 s/\\/\\e/g;
+                s/-/\\-/g    if $literal > 1;
+                s/__/_\\|_/g if $literal > 1;
                 $_;
             }
         } $ptree->children);
@@ -1154,6 +1172,11 @@ know about.  C<EE<lt>%sE<gt>> was printed verbatim in the output.
 
 (W) The POD source contained a non-standard interior sequence (something of
 the form C<XE<lt>E<gt>>) that Pod::Man didn't know about.  It was ignored.
+
+=item %s: Unknown command paragraph "%s" on line %d.
+
+(W) The POD source contained a non-standard command paragraph (something of
+the form C<=command args>) that Pod::Man didn't know about. It was ignored.
 
 =item Unmatched =back
 

@@ -145,24 +145,69 @@ PP(pp_concat)
   {
     dPOPTOPssrl;
     STRLEN len;
-    char *s;
+    U8 *s;
+    bool left_utf = DO_UTF8(left);
+    bool right_utf = DO_UTF8(right);
+
+    if (left_utf != right_utf) {
+        if (TARG == right && !right_utf) {
+            sv_utf8_upgrade(TARG); /* Now straight binary copy */
+            SvUTF8_on(TARG);
+        }
+        else {
+            /* Set TARG to PV(left), then add right */
+            U8 *l, *c, *olds = NULL;
+            STRLEN targlen;
+	    s = (U8*)SvPV(right,len);
+            if (TARG == right) {
+		/* Take a copy since we're about to overwrite TARG */
+		olds = s = (U8*)savepvn((char*)s, len);
+	    }
+            l = (U8*)SvPV(left, targlen);
+            if (TARG != left)
+                sv_setpvn(TARG, (char*)l, targlen);
+            if (!left_utf)
+                sv_utf8_upgrade(TARG);
+            /* Extend TARG to length of right (s) */
+            targlen = SvCUR(TARG) + len;
+            if (!right_utf) {
+                /* plus one for each hi-byte char if we have to upgrade */
+                for (c = s; c < s + len; c++)  {
+                    if (*c & 0x80)
+                        targlen++;
+                }
+            }
+            SvGROW(TARG, targlen+1);
+            /* And now copy, maybe upgrading right to UTF8 on the fly */
+            for (c = (U8*)SvEND(TARG); len--; s++) {
+                 if (*s & 0x80 && !right_utf)
+                     c = uv_to_utf8(c, *s);
+                 else
+                     *c++ = *s;
+            }
+            SvCUR_set(TARG, targlen);
+            *SvEND(TARG) = '\0';
+            SvUTF8_on(TARG);
+            SETs(TARG);
+	    Safefree(olds);
+            RETURN;
+        }
+    }
 
     if (TARG != left) {
-	s = SvPV(left,len);
+	s = (U8*)SvPV(left,len);
 	if (TARG == right) {
-	    sv_insert(TARG, 0, 0, s, len);
+	    sv_insert(TARG, 0, 0, (char*)s, len);
 	    SETs(TARG);
 	    RETURN;
 	}
-	sv_setpvn(TARG,s,len);
+	sv_setpvn(TARG, (char *)s, len);
     }
     else if (SvGMAGICAL(TARG))
 	mg_get(TARG);
-    else if (!SvOK(TARG) && SvTYPE(TARG) <= SVt_PVMG) {
+    else if (!SvOK(TARG) && SvTYPE(TARG) <= SVt_PVMG)
 	sv_setpv(TARG, "");	/* Suppress warning. */
-	s = SvPV_force(TARG, len);
-    }
-    s = SvPV(right,len);
+    s = (U8*)SvPV(right,len);
     if (SvOK(TARG)) {
 #if defined(PERL_Y2KWARN)
 	if ((SvIOK(right) || SvNOK(right)) && ckWARN(WARN_Y2K)) {
@@ -176,19 +221,12 @@ PP(pp_concat)
 	    }
 	}
 #endif
-	if (DO_UTF8(right))
-	    sv_utf8_upgrade(TARG);
-	sv_catpvn(TARG,s,len);
-	if (!IN_BYTE) {
-	    if (SvUTF8(right))
-		SvUTF8_on(TARG);
-	}
-	else if (!SvUTF8(right)) {
-	    SvUTF8_off(TARG);
-	}
+	sv_catpvn(TARG, (char *)s, len);
     }
     else
-	sv_setpvn(TARG,s,len);	/* suppress warning */
+	sv_setpvn(TARG, (char *)s, len);	/* suppress warning */
+    if (left_utf)
+	SvUTF8_on(TARG);
     SETTARG;
     RETURN;
   }
@@ -357,26 +395,31 @@ PP(pp_print)
 	RETURN;
     }
     if (!(io = GvIO(gv))) {
-	if (ckWARN(WARN_UNOPENED)) {
-	    SV* sv = sv_newmortal();
-	    gv_efullname3(sv, gv, Nullch);
-            Perl_warner(aTHX_ WARN_UNOPENED, "Filehandle %s never opened",
-			SvPV(sv,n_a));
-        }
+        dTHR;
+	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
+	    report_evil_fh(gv, io, PL_op->op_type);
 	SETERRNO(EBADF,RMS$_IFI);
 	goto just_say_no;
     }
     else if (!(fp = IoOFP(io))) {
 	if (ckWARN2(WARN_CLOSED, WARN_IO))  {
 	    if (IoIFP(io)) {
-		SV* sv = sv_newmortal();
-		gv_efullname3(sv, gv, Nullch);
-		Perl_warner(aTHX_ WARN_IO,
-			    "Filehandle %s opened only for input",
-			    SvPV(sv,n_a));
+		/* integrate with report_evil_fh()? */
+	        char *name = NULL;
+		if (isGV(gv)) {
+		    SV* sv = sv_newmortal();
+		    gv_efullname4(sv, gv, Nullch, FALSE);
+		    name = SvPV_nolen(sv);
+		}
+		if (name && *name)
+		  Perl_warner(aTHX_ WARN_IO,
+			      "Filehandle %s opened only for input", name);
+		else
+		    Perl_warner(aTHX_ WARN_IO,
+				"Filehandle opened only for input");
 	    }
-	    else if (ckWARN(WARN_CLOSED))
-		report_closed_fh(gv, io, "print", "filehandle");
+	    else if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
+		report_evil_fh(gv, io, PL_op->op_type);
 	}
 	SETERRNO(EBADF,IoIFP(io)?RMS$_FAC:RMS$_IFI);
 	goto just_say_no;
@@ -455,7 +498,7 @@ PP(pp_rv2av)
 	    
 	    if (SvTYPE(sv) != SVt_PVGV) {
 		char *sym;
-		STRLEN n_a;
+		STRLEN len;
 
 		if (SvGMAGICAL(sv)) {
 		    mg_get(sv);
@@ -474,13 +517,17 @@ PP(pp_rv2av)
 		    }
 		    RETSETUNDEF;
 		}
-		sym = SvPV(sv,n_a);
+		sym = SvPV(sv,len);
 		if ((PL_op->op_flags & OPf_SPECIAL) &&
 		    !(PL_op->op_flags & OPf_MOD))
 		{
 		    gv = (GV*)gv_fetchpv(sym, FALSE, SVt_PVAV);
-		    if (!gv)
+		    if (!gv
+			&& (!is_gv_magical(sym,len,0)
+			    || !(gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVAV))))
+		    {
 			RETSETUNDEF;
+		    }
 		}
 		else {
 		    if (PL_op->op_private & HINT_STRICT_REFS)
@@ -555,7 +602,7 @@ PP(pp_rv2hv)
 	    
 	    if (SvTYPE(sv) != SVt_PVGV) {
 		char *sym;
-		STRLEN n_a;
+		STRLEN len;
 
 		if (SvGMAGICAL(sv)) {
 		    mg_get(sv);
@@ -574,13 +621,17 @@ PP(pp_rv2hv)
 		    }
 		    RETSETUNDEF;
 		}
-		sym = SvPV(sv,n_a);
+		sym = SvPV(sv,len);
 		if ((PL_op->op_flags & OPf_SPECIAL) &&
 		    !(PL_op->op_flags & OPf_MOD))
 		{
 		    gv = (GV*)gv_fetchpv(sym, FALSE, SVt_PVHV);
-		    if (!gv)
+		    if (!gv
+			&& (!is_gv_magical(sym,len,0)
+			    || !(gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PVHV))))
+		    {
 			RETSETUNDEF;
+		    }
 		}
 		else {
 		    if (PL_op->op_private & HINT_STRICT_REFS)
@@ -1021,7 +1072,8 @@ play_it_again:
 	     && !PL_sawampersand 
 	     && ((rx->reganch & ROPT_NOSCAN)
 		 || !((rx->reganch & RE_INTUIT_TAIL)
-		      && (r_flags & REXEC_SCREAM))))
+		      && (r_flags & REXEC_SCREAM)))
+	     && !SvROK(TARG))	/* Cannot trust since INTUIT cannot guess ^ */
 	    goto yup;
     }
     if (CALLREGEXEC(aTHX_ rx, s, strend, truebase, minmatch, TARG, NULL, r_flags))
@@ -1331,10 +1383,19 @@ Perl_do_readline(pTHX)
 		 && (IoTYPE(io) == '>' || fp == PerlIO_stdout()
 		     || fp == PerlIO_stderr()))
 	{
-	    SV* sv = sv_newmortal();
-	    gv_efullname3(sv, PL_last_in_gv, Nullch);
-	    Perl_warner(aTHX_ WARN_IO, "Filehandle %s opened only for output",
-			SvPV_nolen(sv));
+	    /* integrate with report_evil_fh()? */
+	    char *name = NULL;
+	    if (isGV(PL_last_in_gv)) { /* can this ever fail? */
+		SV* sv = sv_newmortal();
+		gv_efullname4(sv, PL_last_in_gv, Nullch, FALSE);
+		name = SvPV_nolen(sv);
+	    }
+	    if (name && *name)
+		Perl_warner(aTHX_ WARN_IO,
+			    "Filehandle %s opened only for output", name);
+	    else
+		Perl_warner(aTHX_ WARN_IO,
+			    "Filehandle opened only for output");
 	}
     }
     if (!fp) {
@@ -1344,7 +1405,7 @@ Perl_do_readline(pTHX)
 			    "glob failed (can't start child: %s)",
 			    Strerror(errno));
 	    else
-		report_closed_fh(PL_last_in_gv, io, "readline", "filehandle");
+		report_evil_fh(PL_last_in_gv, io, PL_op->op_type);
 	}
 	if (gimme == G_SCALAR) {
 	    (void)SvOK_off(TARG);
@@ -1374,8 +1435,7 @@ Perl_do_readline(pTHX)
 /* delay EOF state for a snarfed empty file */
 #define SNARF_EOF(gimme,rs,io,sv) \
     (gimme != G_SCALAR || SvCUR(sv)					\
-     || !RsSNARF(rs) || (IoFLAGS(io) & IOf_NOLINE)			\
-     || ((IoFLAGS(io) |= IOf_NOLINE), FALSE))
+     || (IoFLAGS(io) & IOf_NOLINE) || !RsSNARF(rs))
 
     for (;;) {
 	if (!sv_gets(sv, fp, offset)
@@ -1408,6 +1468,7 @@ Perl_do_readline(pTHX)
 	    SvTAINTED_on(sv);
 	}
 	IoLINES(io)++;
+	IoFLAGS(io) |= IOf_NOLINE;
 	SvSETMAGIC(sv);
 	XPUSHs(sv);
 	if (type == OP_GLOB) {
@@ -1871,7 +1932,7 @@ PP(pp_subst)
 	    SPAGAIN;
 	    PUSHs(sv_2mortal(newSViv((I32)iters)));
 	}
-	(void)SvPOK_only(TARG);
+	(void)SvPOK_only_UTF8(TARG);
 	TAINT_IF(rxtainted);
 	if (SvSMAGICAL(TARG)) {
 	    PUTBACK;
@@ -2220,7 +2281,9 @@ S_get_db_sub(pTHX_ SV **svp, CV *cv)
 		    && (gv = (GV*)*svp) ))) {
 	    /* Use GV from the stack as a fallback. */
 	    /* GV is potentially non-unique, or contain different CV. */
-	    sv_setsv(dbsv, newRV((SV*)cv));
+	    SV *tmp = newRV((SV*)cv);
+	    sv_setsv(dbsv, tmp);
+	    SvREFCNT_dec(tmp);
 	}
 	else {
 	    gv_efullname3(dbsv, gv, Nullch);
@@ -2643,6 +2706,7 @@ try_autoload:
 	    cx->blk_sub.savearray = GvAV(PL_defgv);
 	    GvAV(PL_defgv) = (AV*)SvREFCNT_inc(av);
 #endif /* USE_THREADS */
+	    cx->blk_sub.oldcurpad = PL_curpad;
 	    cx->blk_sub.argarray = av;
 	    ++MARK;
 
@@ -2867,6 +2931,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	char* leaf = name;
 	char* sep = Nullch;
 	char* p;
+	GV* gv;
 
 	for (p = name; *p; p++) {
 	    if (*p == '\'')
@@ -2882,9 +2947,18 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	    packname = name;
 	    packlen = sep - name;
 	}
-	Perl_croak(aTHX_
-		   "Can't locate object method \"%s\" via package \"%s\"",
-		   leaf, packname);
+	gv = gv_fetchpv(packname, 0, SVt_PVHV);
+	if (gv && isGV(gv)) {
+	    Perl_croak(aTHX_
+		       "Can't locate object method \"%s\" via package \"%s\"",
+		       leaf, packname);
+	}
+	else {
+	    Perl_croak(aTHX_
+		       "Can't locate object method \"%s\" via package \"%s\""
+		       " (perhaps you forgot to load \"%s\"?)",
+		       leaf, packname, packname);
+	}
     }
     return isGV(gv) ? (SV*)GvCV(gv) : (SV*)gv;
 }

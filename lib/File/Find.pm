@@ -42,6 +42,22 @@ Reports the name of a directory only AFTER all its entries
 have been reported.  Entry point finddepth() is a shortcut for
 specifying C<{ bydepth => 1 }> in the first argument of find().
 
+=item C<preprocess>
+
+The value should be a code reference.  This code reference is used to
+preprocess a directory; it is called after readdir() but before the loop that
+calls the wanted() function.  It is called with a list of strings and is
+expected to return a list of strings.  The code can be used to sort the
+strings alphabetically, numerically, or to filter out directory entries based
+on their name alone.
+
+=item C<postprocess>
+
+The value should be a code reference.  It is invoked just before leaving the
+current directory.  It is called in void context with no arguments.  The name
+of the current directory is in $File::Find::dir.  This hook is handy for
+summarizing a directory, such as calculating its disk usage.
+
 =item C<follow>
 
 Causes symbolic links to be followed. Since directory trees with symbolic
@@ -183,7 +199,8 @@ require File::Basename;
 
 my %SLnkSeen;
 my ($wanted_callback, $avoid_nlink, $bydepth, $no_chdir, $follow,
-    $follow_skip, $full_check, $untaint, $untaint_skip, $untaint_pat);
+    $follow_skip, $full_check, $untaint, $untaint_skip, $untaint_pat,
+    $pre_process, $post_process);
 
 sub contract_name {
     my ($cdir,$fn) = @_;
@@ -282,6 +299,8 @@ sub _find_opt {
     my $cwd_untainted = $cwd;
     $wanted_callback  = $wanted->{wanted};
     $bydepth          = $wanted->{bydepth};
+    $pre_process      = $wanted->{preprocess};
+    $post_process     = $wanted->{postprocess};
     $no_chdir         = $wanted->{no_chdir};
     $full_check       = $wanted->{follow};
     $follow           = $full_check || $wanted->{follow_fast};
@@ -373,7 +392,7 @@ sub _find_opt {
 
             $name = $abs_dir . $_;
 
-            &$wanted_callback;
+            { &$wanted_callback }; # protect against wild "next"
 
         }
 
@@ -429,7 +448,7 @@ sub _find_dir($$$) {
             $_= ($no_chdir ? $dir_name : $dir_rel );
 	    # prune may happen here
             $prune= 0;
-            &$wanted_callback; 
+            { &$wanted_callback }; 	# protect against wild "next"
             next if $prune;
 	}
       
@@ -464,6 +483,8 @@ sub _find_dir($$$) {
 	}
 	@filenames = readdir DIR;
 	closedir(DIR);
+	@filenames = &$pre_process(@filenames) if $pre_process;
+	push @Stack,[$CdLvl,$dir_name,"",-2]   if $post_process;
 
 	if ($nlink == 2 && !$avoid_nlink) {
 	    # This dir has no subdirectories.
@@ -472,7 +493,7 @@ sub _find_dir($$$) {
 		
 		$name = $dir_pref . $FN;
 		$_ = ($no_chdir ? $name : $FN);
-		&$wanted_callback;
+		{ &$wanted_callback }; # protect against wild "next"
 	    }
 
 	}
@@ -496,13 +517,13 @@ sub _find_dir($$$) {
 		    else {
 			$name = $dir_pref . $FN;
 			$_= ($no_chdir ? $name : $FN);
-			&$wanted_callback;
+			{ &$wanted_callback }; # protect against wild "next"
 		    }
 		}
 		else {
 		    $name = $dir_pref . $FN;
 		    $_= ($no_chdir ? $name : $FN);
-		    &$wanted_callback;
+		    { &$wanted_callback }; # protect against wild "next"
 		}
 	    }
 	}
@@ -518,7 +539,11 @@ sub _find_dir($$$) {
 	    }
 	    $dir_name = ($p_dir eq '/' ? "/$dir_rel" : "$p_dir/$dir_rel");
 	    $dir_pref = "$dir_name/";
-            if ( $nlink < 0 ) {  # must be finddepth, report dirname now
+	    if ( $nlink == -2 ) {
+		$name = $dir = $p_dir;
+		$_ = ".";
+		&$post_process;		# End-of-directory processing
+            } elsif ( $nlink < 0 ) {  # must be finddepth, report dirname now
                 $name = $dir_name;
                 if ( substr($name,-2) eq '/.' ) {
                   $name =~ s|/\.$||;
@@ -528,7 +553,7 @@ sub _find_dir($$$) {
                 if ( substr($_,-2) eq '/.' ) {
                   s|/\.$||;
                 }
-                &$wanted_callback;
+                { &$wanted_callback }; # protect against wild "next"
             } else {
                 push @Stack,[$CdLvl,$p_dir,$dir_rel,-1]  if  $bydepth;
                 last;
@@ -584,13 +609,25 @@ sub _find_dir_symlnk($$$) {
     while (defined $SE) {
 
 	unless ($bydepth) {
+	    # change to parent directory
+	    unless ($no_chdir) {
+		my $udir = $pdir_loc;
+		if ($untaint) {
+		    $udir = $1 if $pdir_loc =~ m|$untaint_pat|;
+		}
+		unless (chdir $udir) {
+		    warn "Can't cd to $udir: $!\n";
+		    next;
+		}
+	    }
 	    $dir= $p_dir;
             $name= $dir_name;
             $_= ($no_chdir ? $dir_name : $dir_rel );
             $fullname= $dir_loc;
 	    # prune may happen here
             $prune= 0;
-            &$wanted_callback;
+	    lstat($_); # make sure  file tests with '_' work
+            { &$wanted_callback }; # protect against wild "next"
             next if  $prune;
 	}
 
@@ -640,7 +677,7 @@ sub _find_dir_symlnk($$$) {
 		$fullname = $new_loc;
 		$name = $dir_pref . $FN;
 		$_ = ($no_chdir ? $name : $FN);
-		&$wanted_callback;
+		{ &$wanted_callback }; # protect against wild "next"
 	    }
 	}
 
@@ -673,7 +710,8 @@ sub _find_dir_symlnk($$$) {
                   s|/\.$||;
                 }
 
-	        &$wanted_callback;
+		lstat($_); # make sure  file tests with '_' work
+	        { &$wanted_callback }; # protect against wild "next"
             } else {
                 push @Stack,[$dir_loc, $pdir_loc, $p_dir, $dir_rel,-1]  if  $bydepth;
                 last;
@@ -721,7 +759,8 @@ if ($^O eq 'VMS') {
 }
 
 $File::Find::dont_use_nlink = 1
-    if $^O eq 'os2' || $^O eq 'dos' || $^O eq 'amigaos' || $^O eq 'MSWin32';
+    if $^O eq 'os2' || $^O eq 'dos' || $^O eq 'amigaos' || $^O eq 'MSWin32' ||
+       $^O eq 'cygwin';
 
 # Set dont_use_nlink in your hint file if your system's stat doesn't
 # report the number of links in a directory as an indication

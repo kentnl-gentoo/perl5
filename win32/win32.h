@@ -135,6 +135,12 @@ struct utsname {
 #define USE_FIXED_OSFHANDLE
 #endif
 
+/* Define PERL_WIN32_SOCK_DLOAD to have Perl dynamically load the winsock
+   DLL when needed. Don't use if your compiler supports delayloading (ie, VC++ 6.0)
+	-- BKS 5-29-2000 */
+#if !(defined(_M_IX86) && _MSC_VER >= 1200)
+#define PERL_WIN32_SOCK_DLOAD
+#endif
 #define ENV_IS_CASELESS
 
 #ifndef VER_PLATFORM_WIN32_WINDOWS	/* VC-2.0 headers don't have this */
@@ -151,6 +157,11 @@ struct utsname {
 #  define	W_OK	2
 #  define	X_OK	1
 #  define	F_OK	0
+#endif
+
+/* for waitpid() */
+#ifndef WNOHANG
+#  define WNOHANG	1
 #endif
 
 #define PERL_GET_CONTEXT_DEFINED
@@ -188,6 +199,8 @@ struct utsname {
 /* Borland C thinks that a pointer to a member variable is 12 bytes in size. */
 #define PERL_MEMBER_PTR_SIZE	12
 
+#define isnan		_isnan
+
 #endif
 
 #ifdef _MSC_VER			/* Microsoft Visual C++ */
@@ -200,6 +213,8 @@ typedef unsigned short	mode_t;
 /* Visual C thinks that a pointer to a member variable is 16 bytes in size. */
 #define PERL_MEMBER_PTR_SIZE	16
 
+#define isnan		_isnan
+
 #endif /* _MSC_VER */
 
 #ifdef __MINGW32__		/* Minimal Gnu-Win32 */
@@ -211,6 +226,7 @@ typedef long		gid_t;
 #endif
 #define flushall	_flushall
 #define fcloseall	_fcloseall
+#define isnan		_isnan	/* ...same libraries as MSVC */
 
 #ifdef PERL_OBJECT
 #  define MEMBER_TO_FPTR(name)	&(name)

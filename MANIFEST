@@ -7,6 +7,7 @@ Changes5.002		Differences between 5.001 and 5.002
 Changes5.003		Differences between 5.002 and 5.003
 Changes5.004		Differences between 5.003 and 5.004
 Changes5.005		Differences between 5.004 and 5.005
+Changes5.6		Differences between 5.005 and 5.6
 Configure		Portability tool
 Copying			The GNU General Public License
 EXTERN.h		Included before foreign .h files
@@ -15,6 +16,7 @@ INTERN.h		Included before domestic .h files
 MAINTAIN		Who maintains which files
 MANIFEST		This list of files
 Makefile.SH		A script that generates Makefile
+Makefile.micro		microperl Makefile
 Policy_sh.SH		Hold site-wide preferences between Configure runs.
 Porting/Contract	Social contract for contributed modules in Perl core
 Porting/Glossary	Glossary of config.sh variables
@@ -41,6 +43,7 @@ README.epoc		Notes about EPOC port
 README.hpux		Notes about HP-UX port
 README.hurd		Notes about GNU/Hurd port
 README.machten		Notes about Power MachTen port
+README.micro		Notes about microperl 
 README.mint		Notes about Atari MiNT port
 README.mpeix		Notes about MPE/iX port
 README.os2		Notes about OS/2 port
@@ -55,6 +58,7 @@ README.vos		Notes about Stratus VOS port
 README.win32		Notes about Win32 port
 Todo			The Wishlist
 Todo-5.6		What needs doing before/during the 5.6.x release cycle
+Todo.micro		The Wishlist for microperl
 XSUB.h			Include file for extension subroutines
 apollo/netinet/in.h	Apollo DomainOS port: C header file frontend
 av.c			Array value code
@@ -69,8 +73,8 @@ configure.com		Configure-equivalent for VMS
 configure.gnu		Crude emulation of GNU configure
 cop.h			Control operator header
 cv.h			Code value header
-cygwin/cygwin.c		Additional code for Cygwin port
 cygwin/Makefile.SHs	Shared library generation for Cygwin port
+cygwin/cygwin.c		Additional code for Cygwin port
 cygwin/ld2.in		ld wrapper template for Cygwin port
 cygwin/perlld.in	dll generator template for Cygwin port
 deb.c			Debugging routines
@@ -84,71 +88,6 @@ doop.c			Support code for various operations
 dosish.h		Some defines for MS/DOSish machines
 dump.c			Debugging output
 ebcdic.c		EBCDIC support routines
-eg/ADB			An adb wrapper to put in your crash dir
-eg/README		Intro to example perl scripts
-eg/cgi/RunMeFirst		Setup script for CGI examples
-eg/cgi/caution.xbm		CGI example
-eg/cgi/clickable_image.cgi	CGI example
-eg/cgi/cookie.cgi		CGI example
-eg/cgi/crash.cgi		CGI example
-eg/cgi/customize.cgi		CGI example
-eg/cgi/diff_upload.cgi		CGI example
-eg/cgi/dna_small_gif.uu		Small image for CGI examples
-eg/cgi/file_upload.cgi		CGI example
-eg/cgi/frameset.cgi		CGI example
-eg/cgi/index.html		Index page for CGI examples
-eg/cgi/internal_links.cgi	CGI example
-eg/cgi/javascript.cgi		CGI example
-eg/cgi/monty.cgi		CGI example
-eg/cgi/multiple_forms.cgi	CGI example
-eg/cgi/nph-clock.cgi		CGI example
-eg/cgi/nph-multipart.cgi	CGI example
-eg/cgi/popup.cgi		CGI example
-eg/cgi/save_state.cgi		CGI example
-eg/cgi/tryit.cgi		CGI example
-eg/cgi/wilogo_gif.uu		Small image for CGI examples
-eg/changes		A program to list recently changed files
-eg/client		A sample client
-eg/down			A program to do things to subdirectories
-eg/dus			A program to do du -s on non-mounted dirs
-eg/findcp		A find wrapper that implements a -cp switch
-eg/findtar		A find wrapper that pumps out a tar file
-eg/g/gcp		A program to do a global rcp
-eg/g/gcp.man		Manual page for gcp
-eg/g/ged		A program to do a global edit
-eg/g/ghosts		A sample /etc/ghosts file
-eg/g/gsh		A program to do a global rsh
-eg/g/gsh.man		Manual page for gsh
-eg/muck			A program to find missing make dependencies
-eg/muck.man		Manual page for muck
-eg/myrup		A program to find lightly loaded machines
-eg/nih			Script to insert #! workaround
-eg/relink		A program to change symbolic links
-eg/rename		A program to rename files
-eg/rmfrom		A program to feed doomed filenames to
-eg/scan/scan_df		Scan for filesystem anomalies
-eg/scan/scan_last	Scan for login anomalies
-eg/scan/scan_messages	Scan for console message anomalies
-eg/scan/scan_passwd	Scan for passwd file anomalies
-eg/scan/scan_ps		Scan for process anomalies
-eg/scan/scan_sudo	Scan for sudo anomalies
-eg/scan/scan_suid	Scan for setuid anomalies
-eg/scan/scanner		An anomaly reporter
-eg/server		A sample server
-eg/shmkill		A program to remove unused shared memory
-eg/sysvipc/README	Intro to Sys V IPC examples
-eg/sysvipc/ipcmsg	Example of SYS V IPC message queues
-eg/sysvipc/ipcsem	Example of Sys V IPC semaphores
-eg/sysvipc/ipcshm	Example of Sys V IPC shared memory
-eg/travesty		A program to print travesties of its input text
-eg/unuc			Un-uppercases an all-uppercase text
-eg/uudecode		A version of uudecode
-eg/van/empty		A program to empty the trashcan
-eg/van/unvanish		A program to undo what vanish does
-eg/van/vanexp		A program to expire vanished files
-eg/van/vanish		A program to put files in a trashcan
-eg/who			A sample who program
-eg/wrapsuid		A setuid script wrapper generator
 emacs/cperl-mode.el	An alternate perl-mode
 emacs/e2ctags.pl	etags to ctags converter
 emacs/ptags		Creates smart TAGS file
@@ -238,6 +177,7 @@ ext/DynaLoader/dl_dld.xs	GNU dld style implementation
 ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
 ext/DynaLoader/dl_dyld.xs	NeXT/Apple dyld implementation
 ext/DynaLoader/dl_hpux.xs	HP-UX implementation
+ext/DynaLoader/dl_mac.xs	MacOS implementation
 ext/DynaLoader/dl_mpeix.xs	MPE/iX implementation
 ext/DynaLoader/dl_next.xs	NeXT implementation
 ext/DynaLoader/dl_none.xs	Stub implementation
@@ -246,6 +186,7 @@ ext/DynaLoader/dl_vms.xs	VMS implementation
 ext/DynaLoader/dlutils.c	Dynamic loader utilities for dl_*.xs files
 ext/DynaLoader/hints/aix.pl	Hint for DynaLoader for named architecture
 ext/DynaLoader/hints/linux.pl	Hint for DynaLoader for named architecture
+ext/DynaLoader/hints/netbsd.pl	Hint for DynaLoader for named architecture
 ext/DynaLoader/hints/openbsd.pl	Hint for DynaLoader for named architecture
 ext/Errno/ChangeLog		Errno perl module change log
 ext/Errno/Errno_pm.PL		Errno perl module create script
@@ -300,8 +241,8 @@ ext/NDBM_File/NDBM_File.xs	NDBM extension external subroutines
 ext/NDBM_File/hints/cygwin.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/dec_osf.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/dynixptx.pl	Hint for NDBM_File for named architecture
-ext/NDBM_File/hints/solaris.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/sco.pl	Hint for NDBM_File for named architecture
+ext/NDBM_File/hints/solaris.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/hints/svr4.pl	Hint for NDBM_File for named architecture
 ext/NDBM_File/typemap		NDBM extension interface types
 ext/ODBM_File/Makefile.PL	ODBM extension makefile writer
@@ -366,9 +307,15 @@ ext/SDBM_File/typemap		SDBM extension interface types
 ext/Socket/Makefile.PL	Socket extension makefile writer
 ext/Socket/Socket.pm	Socket extension Perl module
 ext/Socket/Socket.xs	Socket extension external subroutines
-ext/Sys/Hostname/Makefile.PL	Sys::Hostname extension makefile writer
+ext/Storable/ChangeLog		Storable extension
+ext/Storable/Makefile.PL	Storable extension
+ext/Storable/MANIFEST		Storable extension
+ext/Storable/README		Storable extension
+ext/Storable/Storable.pm	Storable extension
+ext/Storable/Storable.xs	Storable extension
 ext/Sys/Hostname/Hostname.pm	Sys::Hostname extension Perl module
 ext/Sys/Hostname/Hostname.xs	Sys::Hostname extension external subroutines
+ext/Sys/Hostname/Makefile.PL	Sys::Hostname extension makefile writer
 ext/Sys/Syslog/Makefile.PL	Sys::Syslog extension makefile writer
 ext/Sys/Syslog/Syslog.pm	Sys::Syslog extension Perl module
 ext/Sys/Syslog/Syslog.xs	Sys::Syslog extension external subroutines
@@ -408,6 +355,7 @@ ext/re/re.xs		re extension external subroutines
 ext/util/make_ext	Used by Makefile to execute extension Makefiles
 ext/util/mkbootstrap	Turns ext/*/*_BS into bootstrap info
 fakethr.h		Fake threads header
+fix_pl			Fix up patchlevel.h for repository perls
 form.h			Public declarations for the above
 global.sym		Symbols that need hiding when embedded
 globals.c		File to declare global symbols (for shared library)
@@ -567,6 +515,29 @@ lib/CGI/Fast.pm		Support for FastCGI (persistent server process)
 lib/CGI/Pretty.pm	Output nicely formatted HTML
 lib/CGI/Push.pm		Support for server push
 lib/CGI/Switch.pm	Simple interface for multiple server types
+lib/CGI/Util.pm		Utility functions
+lib/CGI/eg/RunMeFirst		Setup script for CGI examples
+lib/CGI/eg/caution.xbm		CGI example
+lib/CGI/eg/clickable_image.cgi	CGI example
+lib/CGI/eg/cookie.cgi		CGI example
+lib/CGI/eg/crash.cgi		CGI example
+lib/CGI/eg/customize.cgi	CGI example
+lib/CGI/eg/diff_upload.cgi	CGI example
+lib/CGI/eg/dna_small_gif.uu	Small image for CGI examples
+lib/CGI/eg/file_upload.cgi	CGI example
+lib/CGI/eg/frameset.cgi		CGI example
+lib/CGI/eg/index.html		Index page for CGI examples
+lib/CGI/eg/internal_links.cgi	CGI example
+lib/CGI/eg/javascript.cgi	CGI example
+lib/CGI/eg/make_links.pl	CGI example
+lib/CGI/eg/monty.cgi		CGI example
+lib/CGI/eg/multiple_forms.cgi	CGI example
+lib/CGI/eg/nph-clock.cgi	CGI example
+lib/CGI/eg/nph-multipart.cgi	CGI example
+lib/CGI/eg/popup.cgi		CGI example
+lib/CGI/eg/save_state.cgi	CGI example
+lib/CGI/eg/tryit.cgi		CGI example
+lib/CGI/eg/wilogo_gif.uu	CGI example
 lib/CPAN.pm		Interface to Comprehensive Perl Archive Network
 lib/CPAN/FirstTime.pm	Utility for creating CPAN config files
 lib/CPAN/Nox.pm		Runs CPAN while avoiding compiled extensions
@@ -616,6 +587,7 @@ lib/File/Spec/OS2.pm	portable operations on OS2 file names
 lib/File/Spec/Unix.pm	portable operations on Unix file names
 lib/File/Spec/VMS.pm	portable operations on VMS file names
 lib/File/Spec/Win32.pm	portable operations on Win32 file names
+lib/File/Temp.pm	create safe temporary files and file handles
 lib/File/stat.pm	By-name interface to Perl's builtin stat
 lib/FileCache.pm	Keep more files open than the system permits
 lib/FileHandle.pm	Backward-compatible front end to IO extension
@@ -639,6 +611,7 @@ lib/Pod/Find.pm		used by pod/splitpod
 lib/Pod/Functions.pm	used by pod/splitpod
 lib/Pod/Html.pm		Convert POD data to HTML
 lib/Pod/InputObjects.pm	Pod-Parser - define objects for input streams
+lib/Pod/LaTeX.pm	Convert POD data to LaTeX
 lib/Pod/Man.pm		Convert POD data to *roff
 lib/Pod/ParseUtils.pm	Pod-Parser - pod utility functions
 lib/Pod/Parser.pm	Pod-Parser - define base class for parsing POD
@@ -677,6 +650,7 @@ lib/Time/tm.pm		Internal object for Time::{gm,local}time
 lib/UNIVERSAL.pm	Base class for ALL classes
 lib/User/grent.pm	By-name interface to Perl's builtin getgr*
 lib/User/pwent.pm	By-name interface to Perl's builtin getpw*
+lib/Win32.pod		Documentation for Win32 extras
 lib/abbrev.pl		An abbreviation table builder
 lib/assert.pl		assertion and panic with stack trace
 lib/attributes.pm	For "sub foo : attrlist"
@@ -690,7 +664,6 @@ lib/bytes.pm		Pragma to enable byte operations
 lib/bytes_heavy.pl	Support routines for byte pragma
 lib/cacheout.pl		Manages output filehandles when you need too many
 lib/charnames.pm	Character names
-lib/chat2.pl            Obsolete ipc library (use Comm.pm etc instead)
 lib/complete.pl		A command completion subroutine
 lib/constant.pm		For "use constant"
 lib/ctime.pl		A ctime workalike
@@ -712,7 +685,7 @@ lib/hostname.pl		Old hostname code
 lib/importenv.pl	Perl routine to get environment into variables
 lib/integer.pm		For "use integer"
 lib/less.pm		For "use less"
-lib/lib.pm		For "use lib"
+lib/lib_pm.PL		For "use lib", produces lib/lib.pm
 lib/locale.pm		For "use locale"
 lib/look.pl		A "look" equivalent
 lib/newgetopt.pl	A perl library supporting long option parsing
@@ -734,9 +707,11 @@ lib/timelocal.pl	Perl library supporting inverse of localtime, gmtime
 lib/unicode/ArabLink.pl				Unicode character database
 lib/unicode/ArabLnkGrp.pl			Unicode character database
 lib/unicode/ArabShap.txt			Unicode character database
+lib/unicode/BidiMirr.txt			Unicode character database
 lib/unicode/Bidirectional.pl			Unicode character database
 lib/unicode/Block.pl				Unicode character database
 lib/unicode/Blocks.txt				Unicode character database
+lib/unicode/CaseFold.txt			Unicode character database
 lib/unicode/Category.pl				Unicode character database
 lib/unicode/CombiningClass.pl			Unicode character database
 lib/unicode/CompExcl.txt			Unicode character database
@@ -833,26 +808,37 @@ lib/unicode/Index.txt				Unicode character database
 lib/unicode/Is/ASCII.pl				Unicode character database
 lib/unicode/Is/Alnum.pl				Unicode character database
 lib/unicode/Is/Alpha.pl				Unicode character database
+lib/unicode/Is/BidiAL.pl			Unicode character database
 lib/unicode/Is/BidiAN.pl			Unicode character database
 lib/unicode/Is/BidiB.pl				Unicode character database
+lib/unicode/Is/BidiBN.pl			Unicode character database
 lib/unicode/Is/BidiCS.pl			Unicode character database
 lib/unicode/Is/BidiEN.pl			Unicode character database
 lib/unicode/Is/BidiES.pl			Unicode character database
 lib/unicode/Is/BidiET.pl			Unicode character database
 lib/unicode/Is/BidiL.pl				Unicode character database
+lib/unicode/Is/BidiLRE.pl			Unicode character database
+lib/unicode/Is/BidiLRO.pl			Unicode character database
+lib/unicode/Is/BidiNSM.pl			Unicode character database
 lib/unicode/Is/BidiON.pl			Unicode character database
+lib/unicode/Is/BidiPDF.pl			Unicode character database
 lib/unicode/Is/BidiR.pl				Unicode character database
+lib/unicode/Is/BidiRLE.pl			Unicode character database
+lib/unicode/Is/BidiRLO.pl			Unicode character database
 lib/unicode/Is/BidiS.pl				Unicode character database
 lib/unicode/Is/BidiWS.pl			Unicode character database
 lib/unicode/Is/C.pl				Unicode character database
 lib/unicode/Is/Cc.pl				Unicode character database
+lib/unicode/Is/Cf.pl				Unicode character database
 lib/unicode/Is/Cn.pl				Unicode character database
 lib/unicode/Is/Cntrl.pl				Unicode character database
 lib/unicode/Is/Co.pl				Unicode character database
+lib/unicode/Is/Cs.pl				Unicode character database
 lib/unicode/Is/DCcircle.pl			Unicode character database
 lib/unicode/Is/DCcompat.pl			Unicode character database
 lib/unicode/Is/DCfinal.pl			Unicode character database
 lib/unicode/Is/DCfont.pl			Unicode character database
+lib/unicode/Is/DCfraction.pl			Unicode character database
 lib/unicode/Is/DCinital.pl			Unicode character database
 lib/unicode/Is/DCinitial.pl			Unicode character database
 lib/unicode/Is/DCisolated.pl			Unicode character database
@@ -869,6 +855,35 @@ lib/unicode/Is/DecoCompat.pl			Unicode character database
 lib/unicode/Is/Digit.pl				Unicode character database
 lib/unicode/Is/Graph.pl				Unicode character database
 lib/unicode/Is/L.pl				Unicode character database
+lib/unicode/Is/LbrkAI.pl			Unicode character database
+lib/unicode/Is/LbrkAL.pl			Unicode character database
+lib/unicode/Is/LbrkB2.pl			Unicode character database
+lib/unicode/Is/LbrkBA.pl			Unicode character database
+lib/unicode/Is/LbrkBB.pl			Unicode character database
+lib/unicode/Is/LbrkBK.pl			Unicode character database
+lib/unicode/Is/LbrkCB.pl			Unicode character database
+lib/unicode/Is/LbrkCL.pl			Unicode character database
+lib/unicode/Is/LbrkCM.pl			Unicode character database
+lib/unicode/Is/LbrkCR.pl			Unicode character database
+lib/unicode/Is/LbrkEX.pl			Unicode character database
+lib/unicode/Is/LbrkGL.pl			Unicode character database
+lib/unicode/Is/LbrkHY.pl			Unicode character database
+lib/unicode/Is/LbrkID.pl			Unicode character database
+lib/unicode/Is/LbrkIN.pl			Unicode character database
+lib/unicode/Is/LbrkIS.pl			Unicode character database
+lib/unicode/Is/LbrkLF.pl			Unicode character database
+lib/unicode/Is/LbrkNS.pl			Unicode character database
+lib/unicode/Is/LbrkNU.pl			Unicode character database
+lib/unicode/Is/LbrkOP.pl			Unicode character database
+lib/unicode/Is/LbrkPO.pl			Unicode character database
+lib/unicode/Is/LbrkPR.pl			Unicode character database
+lib/unicode/Is/LbrkQU.pl			Unicode character database
+lib/unicode/Is/LbrkSA.pl			Unicode character database
+lib/unicode/Is/LbrkSG.pl			Unicode character database
+lib/unicode/Is/LbrkSP.pl			Unicode character database
+lib/unicode/Is/LbrkSY.pl			Unicode character database
+lib/unicode/Is/LbrkXX.pl			Unicode character database
+lib/unicode/Is/LbrkZW.pl			Unicode character database
 lib/unicode/Is/Ll.pl				Unicode character database
 lib/unicode/Is/Lm.pl				Unicode character database
 lib/unicode/Is/Lo.pl				Unicode character database
@@ -877,34 +892,53 @@ lib/unicode/Is/Lt.pl				Unicode character database
 lib/unicode/Is/Lu.pl				Unicode character database
 lib/unicode/Is/M.pl				Unicode character database
 lib/unicode/Is/Mc.pl				Unicode character database
+lib/unicode/Is/Me.pl				Unicode character database
 lib/unicode/Is/Mirrored.pl			Unicode character database
 lib/unicode/Is/Mn.pl				Unicode character database
 lib/unicode/Is/N.pl				Unicode character database
 lib/unicode/Is/Nd.pl				Unicode character database
+lib/unicode/Is/Nl.pl				Unicode character database
 lib/unicode/Is/No.pl				Unicode character database
 lib/unicode/Is/P.pl				Unicode character database
+lib/unicode/Is/Pc.pl				Unicode character database
 lib/unicode/Is/Pd.pl				Unicode character database
 lib/unicode/Is/Pe.pl				Unicode character database
+lib/unicode/Is/Pf.pl				Unicode character database
+lib/unicode/Is/Pi.pl				Unicode character database
 lib/unicode/Is/Po.pl				Unicode character database
 lib/unicode/Is/Print.pl				Unicode character database
 lib/unicode/Is/Ps.pl				Unicode character database
 lib/unicode/Is/Punct.pl				Unicode character database
 lib/unicode/Is/S.pl				Unicode character database
 lib/unicode/Is/Sc.pl				Unicode character database
+lib/unicode/Is/Sk.pl				Unicode character database
 lib/unicode/Is/Sm.pl				Unicode character database
 lib/unicode/Is/So.pl				Unicode character database
 lib/unicode/Is/Space.pl				Unicode character database
 lib/unicode/Is/SylA.pl				Unicode character database
+lib/unicode/Is/SylAA.pl				Unicode character database
+lib/unicode/Is/SylAAI.pl			Unicode character database
+lib/unicode/Is/SylAI.pl				Unicode character database
 lib/unicode/Is/SylC.pl				Unicode character database
 lib/unicode/Is/SylE.pl				Unicode character database
+lib/unicode/Is/SylEE.pl				Unicode character database
 lib/unicode/Is/SylI.pl				Unicode character database
+lib/unicode/Is/SylII.pl				Unicode character database
+lib/unicode/Is/SylN.pl				Unicode character database
 lib/unicode/Is/SylO.pl				Unicode character database
+lib/unicode/Is/SylOO.pl				Unicode character database
 lib/unicode/Is/SylU.pl				Unicode character database
 lib/unicode/Is/SylV.pl				Unicode character database
 lib/unicode/Is/SylWA.pl				Unicode character database
+lib/unicode/Is/SylWAA.pl			Unicode character database
 lib/unicode/Is/SylWC.pl				Unicode character database
 lib/unicode/Is/SylWE.pl				Unicode character database
+lib/unicode/Is/SylWEE.pl			Unicode character database
 lib/unicode/Is/SylWI.pl				Unicode character database
+lib/unicode/Is/SylWII.pl			Unicode character database
+lib/unicode/Is/SylWO.pl				Unicode character database
+lib/unicode/Is/SylWOO.pl			Unicode character database
+lib/unicode/Is/SylWU.pl				Unicode character database
 lib/unicode/Is/SylWV.pl				Unicode character database
 lib/unicode/Is/Syllable.pl			Unicode character database
 lib/unicode/Is/Upper.pl				Unicode character database
@@ -922,17 +956,18 @@ lib/unicode/Name.pl				Unicode character database
 lib/unicode/Names.txt				Unicode character database
 lib/unicode/NamesList.html			Unicode character database
 lib/unicode/Number.pl				Unicode character database
-lib/unicode/Props.txt				Unicode character database
+lib/unicode/PropList.txt			Unicode character database
 lib/unicode/README.Ethiopic			Unicode character database
+lib/unicode/README.perl				Unicode character database
 lib/unicode/ReadMe.txt				Unicode character database info
 lib/unicode/SpecCase.txt			Unicode character database
 lib/unicode/To/Digit.pl				Unicode character database
 lib/unicode/To/Lower.pl				Unicode character database
 lib/unicode/To/Title.pl				Unicode character database
 lib/unicode/To/Upper.pl				Unicode character database
-lib/unicode/UCD300.html				Unicode character database
-lib/unicode/Unicode.300				Unicode character database
-lib/unicode/Unicode3.html			Unicode character database
+lib/unicode/UCD301.html				Unicode character database
+lib/unicode/UCDFF301.html			Unicode character database
+lib/unicode/Unicode.301				Unicode character database
 lib/unicode/mktables.PL				Unicode character database generator
 lib/unicode/syllables.txt			Unicode character database
 lib/utf8.pm					Pragma to control Unicode support
@@ -991,12 +1026,12 @@ os2/OS2/Process/Makefile.PL	system() constants in a module
 os2/OS2/Process/Process.pm	system() constants in a module
 os2/OS2/Process/Process.xs	system() constants in a module
 os2/OS2/REXX/Changes		DLL access module
-os2/OS2/REXX/MANIFEST		DLL access module
 os2/OS2/REXX/DLL/Changes		DLL access module
 os2/OS2/REXX/DLL/DLL.pm		DLL access module
 os2/OS2/REXX/DLL/DLL.xs		DLL access module
 os2/OS2/REXX/DLL/MANIFEST	DLL access module
 os2/OS2/REXX/DLL/Makefile.PL	DLL access module
+os2/OS2/REXX/MANIFEST		DLL access module
 os2/OS2/REXX/Makefile.PL	DLL access module
 os2/OS2/REXX/REXX.pm		DLL access module
 os2/OS2/REXX/REXX.xs		DLL access module
@@ -1050,16 +1085,16 @@ plan9/plan9.c		Plan9 port: Plan9-specific C routines
 plan9/plan9ish.h	Plan9 port: Plan9-specific C header file
 plan9/setup.rc		Plan9 port: script for easy build+install
 plan9/versnum		Plan9 port: script to print version number
-pod/Makefile		Make pods into something else
-pod/Win32.pod		Documentation for Win32 extras
-pod/buildtoc		generate perltoc.pod
+pod/Makefile.SH		generate Makefile whichs makes pods into something else
+pod/buildtoc.PL		generate buildtoc which generates perltoc.pod
 pod/checkpods.PL	Tool to check for common errors in pods
-pod/perl.pod		Top level perl man page
+pod/perl.pod		Top level perl documentation
 pod/perl5004delta.pod	Changes from 5.003 to 5.004
 pod/perl5005delta.pod	Changes from 5.004 to 5.005
+pod/perl56delta.pod	Changes from 5.005 to 5.6
 pod/perlapi.pod         Perl API documentation (autogenerated)
 pod/perlapio.pod	IO API info
-pod/perlbook.pod	Book info
+pod/perlbook.pod	Perl book information
 pod/perlboot.pod	Beginner's Object-oriented Tutorial
 pod/perlbot.pod		Object-oriented Bag o' Tricks
 pod/perlcall.pod	Callback info
@@ -1067,10 +1102,12 @@ pod/perlcompile.pod	Info on using the Compiler suite
 pod/perldata.pod	Data structure info
 pod/perldbmfilter.pod	Info about DBM Filters
 pod/perldebguts.pod	Debugger guts info
+pod/perldebtut.pod	Perl debugging tutorial
 pod/perldebug.pod	Debugger info
 pod/perldelta.pod	Changes since last version
 pod/perldiag.pod	Diagnostic info
 pod/perldsc.pod		Data Structures Cookbook
+pod/perlebcdic.pod	Considerations for running Perl on EBCDIC platforms
 pod/perlembed.pod	Embedding info
 pod/perlfaq.pod		Frequently Asked Questions, Top Level
 pod/perlfaq1.pod	Frequently Asked Questions, Part 1
@@ -1096,7 +1133,9 @@ pod/perllocale.pod	Locale support info
 pod/perllol.pod		How to use lists of lists
 pod/perlmod.pod		Module mechanism info
 pod/perlmodinstall.pod	Installing CPAN Modules
+pod/perlmodlib.PL	Generate pod/perlmodlib.pod
 pod/perlmodlib.pod	Module policy info
+pod/perlnewmod.pod	Preparing a new module for distribution
 pod/perlnumber.pod	Semantics of numbers and numeric operations
 pod/perlobj.pod		Object info
 pod/perlop.pod		Operator info
@@ -1106,6 +1145,8 @@ pod/perlport.pod	Portability guide
 pod/perlre.pod		Regular expression info
 pod/perlref.pod		References info
 pod/perlreftut.pod	Mark's references tutorial
+pod/perlrequick.pod	Quick start guide for Perl regular expressions
+pod/perlretut.pod	Tutorial for Perl regular expressions
 pod/perlrun.pod		Execution info
 pod/perlsec.pod		Security info
 pod/perlstyle.pod	Style info
@@ -1119,6 +1160,7 @@ pod/perltoot.pod	Tom's object-oriented tutorial
 pod/perltootc.pod	Tom's object-oriented tutorial (more on class data)
 pod/perltrap.pod	Trap info
 pod/perlunicode.pod	Unicode support info
+pod/perlutil.pod	Accompanying utilities explained
 pod/perlvar.pod		Variable info
 pod/perlxs.pod		XS api info
 pod/perlxstut.pod	XS tutorial
@@ -1202,6 +1244,7 @@ t/lib/ansicolor.t	See if Term::ANSIColor works
 t/lib/anydbm.t		See if AnyDBM_File works
 t/lib/attrs.t		See if attrs works with C<sub : attrs>
 t/lib/autoloader.t	See if AutoLoader works
+t/lib/b.t		See if B backends work
 t/lib/basename.t	See if File::Basename works
 t/lib/bigfloat.t	See if bigfloat.pl works
 t/lib/bigfltpm.t	See if BigFloat.pm works
@@ -1210,6 +1253,7 @@ t/lib/bigintpm.t	See if BigInt.pm works
 t/lib/cgi-form.t	See if CGI.pm works
 t/lib/cgi-function.t	See if CGI.pm works
 t/lib/cgi-html.t	See if CGI.pm works
+t/lib/cgi-pretty.t	See if CGI.pm works
 t/lib/cgi-request.t	See if CGI.pm works
 t/lib/charnames.t	See if character names work
 t/lib/checktree.t	See if File::CheckTree works
@@ -1236,8 +1280,8 @@ t/lib/dprof/test6_v	Perl code profiler tests
 t/lib/dumper-ovl.t	See if Data::Dumper works for overloaded data
 t/lib/dumper.t		See if Data::Dumper works
 t/lib/english.t		See if English works
-t/lib/env.t		See if Env works
 t/lib/env-array.t	See if Env works for arrays
+t/lib/env.t		See if Env works
 t/lib/errno.t		See if Errno works
 t/lib/fatal.t           See if Fatal works
 t/lib/fields.t          See if base/fields works
@@ -1249,6 +1293,10 @@ t/lib/filehand.t	See if FileHandle works
 t/lib/filepath.t	See if File::Path works
 t/lib/filespec.t	See if File::Spec works
 t/lib/findbin.t		See if FindBin works
+t/lib/ftmp-mktemp.t	See if File::Temp works
+t/lib/ftmp-posix.t	See if File::Temp works
+t/lib/ftmp-security.t	See if File::Temp works
+t/lib/ftmp-tempfile.t	See if File::Temp works
 t/lib/gdbm.t		See if GDBM_File works
 t/lib/getopt.t		See if Getopt::Std and Getopt::Long work
 t/lib/glob-basic.t	See if File::Glob works
@@ -1258,6 +1306,7 @@ t/lib/glob-taint.t	See if File::Glob works
 t/lib/gol-basic.t	See if Getopt::Long works
 t/lib/gol-compat.t	See if Getopt::Long works
 t/lib/gol-linkage.t	See if Getopt::Long works
+t/lib/gol-oo.t		See if Getopt::Long works
 t/lib/h2ph.h		Test header file for h2ph
 t/lib/h2ph.pht		Generated output from h2ph.h by h2ph, for comparison
 t/lib/h2ph.t		See if h2ph works like it should
@@ -1284,6 +1333,7 @@ t/lib/open2.t		See if IPC::Open2 works
 t/lib/open3.t		See if IPC::Open3 works
 t/lib/ops.t		See if Opcode works
 t/lib/parsewords.t	See if Text::ParseWords works
+t/lib/peek.t		See if Devel::Peek works
 t/lib/ph.t		See if h2ph works
 t/lib/posix.t		See if POSIX works
 t/lib/safe1.t		See if Safe works
@@ -1291,10 +1341,26 @@ t/lib/safe2.t		See if Safe works
 t/lib/sdbm.t		See if SDBM_File works
 t/lib/searchdict.t	See if Search::Dict works
 t/lib/selectsaver.t	See if SelectSaver works
+t/lib/selfloader.t	See if SelfLoader works
 t/lib/socket.t		See if Socket works
 t/lib/soundex.t		See if Soundex works
+t/lib/st-06compat.t	See if Storable works
+t/lib/st-blessed.t	See if Storable works
+t/lib/st-canonical.t	See if Storable works
+t/lib/st-dclone.t	See if Storable works
+t/lib/st-dump.pl	See if Storable works
+t/lib/st-forgive.t	See if Storable works
+t/lib/st-freeze.t	See if Storable works
+t/lib/st-overload.t	See if Storable works
+t/lib/st-recurse.t	See if Storable works
+t/lib/st-retrieve.t	See if Storable works
+t/lib/st-store.t	See if Storable works
+t/lib/st-tied.t		See if Storable works
+t/lib/st-tiedhook.t	See if Storable works
+t/lib/st-tieditems.t	See if Storable works
 t/lib/symbol.t		See if Symbol works
 t/lib/syslfs.t		See if large files work for sysio
+t/lib/syslog.t		See if Sys::Syslog works
 t/lib/textfill.t	See if Text::Wrap::fill works
 t/lib/texttabs.t	See if Text::Tabs works
 t/lib/textwrap.t	See if Text::Wrap::wrap works
@@ -1314,6 +1380,7 @@ t/op/assignwarn.t	See if OP= operators warn correctly for undef targets
 t/op/attrs.t		See if attributes on declarations work
 t/op/auto.t		See if autoincrement et all work
 t/op/avhv.t		See if pseudo-hashes work
+t/op/bless.t		See if bless works
 t/op/bop.t		See if bitops work
 t/op/chars.t		See if character escapes work
 t/op/chop.t		See if chop works
@@ -1357,6 +1424,7 @@ t/op/method.t		See if method calls work
 t/op/misc.t		See if miscellaneous bugs have been fixed
 t/op/mkdir.t		See if mkdir works
 t/op/my.t		See if lexical scoping works
+t/op/my_stash.t		See if my Package works
 t/op/nothr5005.t	local @_ test which does not work under use5005threads
 t/op/numconvert.t	See if accessing fields does not change numeric values
 t/op/oct.t		See if oct and hex work
@@ -1376,6 +1444,7 @@ t/op/recurse.t		See if deep recursion works
 t/op/ref.t		See if refs and objects work
 t/op/regexp.t		See if regular expressions work
 t/op/regexp_noamp.t	See if regular expressions work with optimizations
+t/op/regmesg.t		See if one can get regular expression errors
 t/op/repeat.t		See if x operator works
 t/op/runlevel.t		See if die() works from perl_call_*()
 t/op/sleep.t		See if sleep works
@@ -1405,6 +1474,7 @@ t/op/wantarray.t	See if wantarray works
 t/op/write.t		See if write works
 t/pod/emptycmd.t	Test empty pod directives
 t/pod/emptycmd.xr	Expected results for emptycmd.t
+t/pod/find.t		See if Pod::Find works
 t/pod/for.t		Test =for directive
 t/pod/for.xr		Expected results for for.t
 t/pod/headings.t	Test =head directives
@@ -1444,8 +1514,8 @@ t/pragma/strict-refs	Tests of "use strict 'refs'" for strict.t
 t/pragma/strict-subs	Tests of "use strict 'subs'" for strict.t
 t/pragma/strict-vars	Tests of "use strict 'vars'" for strict.t
 t/pragma/strict.t	See if strictures work
-t/pragma/subs.t		See if subroutine pseudo-importation works
 t/pragma/sub_lval.t	See if lvalue subroutines work
+t/pragma/subs.t		See if subroutine pseudo-importation works
 t/pragma/utf8.t		See if utf8 operations work
 t/pragma/warn/1global	Tests of global warnings for warnings.t
 t/pragma/warn/2use	Tests for "use warnings" for warnings.t
@@ -1485,6 +1555,8 @@ taint.c			Tainting code
 thrdvar.h		Per-thread variables
 thread.h		Threading header
 toke.c			The tokener
+uconfig.h		Configuration header for microperl
+uconfig.sh		Configuration script for microperl
 universal.c		The default UNIVERSAL package methods
 unixish.h		Defines that are assumed on Unix
 utf8.c			Unicode routines
@@ -1496,7 +1568,6 @@ utils/c2ph.PL		program to translate dbx stabs to perl
 utils/dprofpp.PL	Perl code profile post-processor
 utils/h2ph.PL		A thing to turn C .h files into perl .ph files
 utils/h2xs.PL		Program to make .xs files from C header files
-utils/perlbc.PL		Front-end for byte compiler
 utils/perlbug.PL	A simple tool to submit a bug report
 utils/perlcc.PL		Front-end for compiler
 utils/perldoc.PL	A simple tool to find & display perl's documentation
@@ -1533,11 +1604,11 @@ vms/perly_c.vms		perly.c with fixed declarations for global syms
 vms/perly_h.vms		perly.h with fixed declarations for global syms
 vms/sockadapt.c		glue for SockshShr socket support
 vms/sockadapt.h		glue for SockshShr socket support
-vms/subconfigure.com    performs compiler checks and writes config.sh, config.h, and descrip.mms
 vms/test.com		DCL driver for regression tests
 vms/vms.c		VMS-specific C code for Perl core
 vms/vms_yfix.pl		convert Unix perly.[ch] to VMS perly_[ch].vms
 vms/vmsish.h		VMS-specific C header for Perl core
+vms/vmspipe.com		VMS-specific piped command helper script
 vms/writemain.pl	Generate perlmain.c from miniperlmain.c+extensions
 vos/Changes		Changes made to port Perl to the VOS operating system
 vos/build.cm		VOS command macro to build Perl

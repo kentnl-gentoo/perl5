@@ -198,7 +198,7 @@ PP(pp_rv2gv)
     else {
 	if (SvTYPE(sv) != SVt_PVGV) {
 	    char *sym;
-	    STRLEN n_a;
+	    STRLEN len;
 
 	    if (SvGMAGICAL(sv)) {
 		mg_get(sv);
@@ -236,13 +236,17 @@ PP(pp_rv2gv)
 		    report_uninit();
 		RETSETUNDEF;
 	    }
-	    sym = SvPV(sv, n_a);
+	    sym = SvPV(sv,len);
 	    if ((PL_op->op_flags & OPf_SPECIAL) &&
 		!(PL_op->op_flags & OPf_MOD))
 	    {
 		sv = (SV*)gv_fetchpv(sym, FALSE, SVt_PVGV);
-		if (!sv)
+		if (!sv
+		    && (!is_gv_magical(sym,len,0)
+			|| !(sv = (SV*)gv_fetchpv(sym, TRUE, SVt_PVGV))))
+		{
 		    RETSETUNDEF;
+		}
 	    }
 	    else {
 		if (PL_op->op_private & HINT_STRICT_REFS)
@@ -276,7 +280,7 @@ PP(pp_rv2sv)
     else {
 	GV *gv = (GV*)sv;
 	char *sym;
-	STRLEN n_a;
+	STRLEN len;
 
 	if (SvTYPE(gv) != SVt_PVGV) {
 	    if (SvGMAGICAL(sv)) {
@@ -292,13 +296,17 @@ PP(pp_rv2sv)
 		    report_uninit();
 		RETSETUNDEF;
 	    }
-	    sym = SvPV(sv, n_a);
+	    sym = SvPV(sv, len);
 	    if ((PL_op->op_flags & OPf_SPECIAL) &&
 		!(PL_op->op_flags & OPf_MOD))
 	    {
 		gv = (GV*)gv_fetchpv(sym, FALSE, SVt_PV);
-		if (!gv)
+		if (!gv
+		    && (!is_gv_magical(sym,len,0)
+			|| !(gv = (GV*)gv_fetchpv(sym, TRUE, SVt_PV))))
+		{
 		    RETSETUNDEF;
+		}
 	    }
 	    else {
 		if (PL_op->op_private & HINT_STRICT_REFS)
@@ -553,7 +561,11 @@ PP(pp_bless)
     else {
 	SV *ssv = POPs;
 	STRLEN len;
-	char *ptr = SvPV(ssv,len);
+	char *ptr;
+
+	if (ssv && !SvGMAGICAL(ssv) && !SvAMAGIC(ssv) && SvROK(ssv))
+	    Perl_croak(aTHX_ "Attempt to bless into a reference");
+	ptr = SvPV(ssv,len);
 	if (ckWARN(WARN_MISC) && len == 0)
 	    Perl_warner(aTHX_ WARN_MISC, 
 		   "Explicit blessing to '' (assuming package main)");
@@ -591,6 +603,9 @@ PP(pp_gelem)
     case 'F':
 	if (strEQ(elem, "FILEHANDLE")) /* XXX deprecate in 5.005 */
 	    tmpRef = (SV*)GvIOp(gv);
+	else
+	if (strEQ(elem, "FORMAT"))
+	    tmpRef = (SV*)GvFORM(gv);
 	break;
     case 'G':
 	if (strEQ(elem, "GLOB"))
@@ -961,7 +976,7 @@ PP(pp_modulo)
 	NV dright;
 	NV dleft;
 
-	if (SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
+	if (SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
 	    IV i = SvIVX(POPs);
 	    right = (right_neg = (i < 0)) ? -i : i;
 	}
@@ -973,7 +988,7 @@ PP(pp_modulo)
 		dright = -dright;
 	}
 
-	if (!use_double && SvIOK(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
+	if (!use_double && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)) {
 	    IV i = SvIVX(POPs);
 	    left = (left_neg = (i < 0)) ? -i : i;
 	}
@@ -1076,10 +1091,10 @@ PP(pp_repeat)
 	    SP -= items;
     }
     else {	/* Note: mark already snarfed by pp_list */
-	SV *tmpstr;
+	SV *tmpstr = POPs;
 	STRLEN len;
+	bool isutf = DO_UTF8(tmpstr);
 
-	tmpstr = POPs;
 	SvSetSV(TARG, tmpstr);
 	SvPV_force(TARG, len);
 	if (count != 1) {
@@ -1092,7 +1107,10 @@ PP(pp_repeat)
 	    }
 	    *SvEND(TARG) = '\0';
 	}
-	(void)SvPOK_only(TARG);
+	if (isutf)
+	    (void)SvPOK_only_UTF8(TARG);
+	else
+	    (void)SvPOK_only(TARG);
 	PUSHTARG;
     }
     RETURN;
@@ -1199,15 +1217,8 @@ PP(pp_ncmp)
     {
       dPOPTOPnnrl;
       I32 value;
-#ifdef __osf__ /* XXX Configure probe for isnan and isnanl needed XXX */
-#if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
-#define Perl_isnan isnanl
-#else
-#define Perl_isnan isnan
-#endif
-#endif
 
-#ifdef __osf__ /* XXX fix in 5.6.1 --jhi */
+#ifdef Perl_isnan
       if (Perl_isnan(left) || Perl_isnan(right)) {
 	  SETs(&PL_sv_undef);
 	  RETURN;
@@ -1809,7 +1820,7 @@ PP(pp_log)
       NV value;
       value = POPn;
       if (value <= 0.0) {
-	RESTORE_NUMERIC_STANDARD();
+	SET_NUMERIC_STANDARD();
 	DIE(aTHX_ "Can't take log of %g", value);
       }
       value = Perl_log(value);
@@ -1825,7 +1836,7 @@ PP(pp_sqrt)
       NV value;
       value = POPn;
       if (value < 0.0) {
-	RESTORE_NUMERIC_STANDARD();
+	SET_NUMERIC_STANDARD();
 	DIE(aTHX_ "Can't take sqrt of %g", value);
       }
       value = Perl_sqrt(value);
@@ -1892,6 +1903,7 @@ PP(pp_hex)
     STRLEN n_a;
 
     tmps = POPpx;
+    argtype = 1;		/* allow underscores */
     XPUSHn(scan_hex(tmps, 99, &argtype));
     RETURN;
 }
@@ -1909,6 +1921,7 @@ PP(pp_oct)
 	tmps++;
     if (*tmps == '0')
 	tmps++;
+    argtype = 1;		/* allow underscores */
     if (*tmps == 'x')
 	value = scan_hex(++tmps, 99, &argtype);
     else if (*tmps == 'b')
@@ -2013,12 +2026,12 @@ PP(pp_substr)
 	RETPUSHUNDEF;
     }
     else {
-        if (utfcurlen) {
+	if (utfcurlen)
 	    sv_pos_u2b(sv, &pos, &rem);
-	    SvUTF8_on(TARG);
-	}
 	tmps += pos;
 	sv_setpvn(TARG, tmps, rem);
+	if (utfcurlen)
+	    SvUTF8_on(TARG);
 	if (repl)
 	    sv_insert(sv, pos, rem, repl, repl_len);
 	else if (lvalue) {		/* it's an lvalue! */
@@ -2031,7 +2044,7 @@ PP(pp_substr)
 				"Attempt to use reference as lvalue in substr");
 		}
 		if (SvOK(sv))		/* is it defined ? */
-		    (void)SvPOK_only(sv);
+		    (void)SvPOK_only_UTF8(sv);
 		else
 		    sv_setpvn(sv,"",0);	/* avoid lexical reincarnation */
 	    }
@@ -2197,7 +2210,7 @@ PP(pp_chr)
 
     (void)SvUPGRADE(TARG,SVt_PV);
 
-    if (value > 255 && !IN_BYTE) {
+    if ((value > 255 && !IN_BYTE) || (value & 0x80 && PL_hints & HINT_UTF8) ) {
 	SvGROW(TARG, UTF8_MAXLEN+1);
 	tmps = SvPVX(TARG);
 	tmps = (char*)uv_to_utf8((U8*)tmps, (UV)value);
@@ -2214,7 +2227,6 @@ PP(pp_chr)
     tmps = SvPVX(TARG);
     *tmps++ = value;
     *tmps = '\0';
-    SvUTF8_off(TARG);				/* decontaminate */
     (void)SvPOK_only(TARG);
     XPUSHs(TARG);
     RETURN;
@@ -2547,7 +2559,7 @@ PP(pp_quotemeta)
 	}
 	*d = '\0';
 	SvCUR_set(TARG, d - SvPVX(TARG));
-	(void)SvPOK_only(TARG);
+	(void)SvPOK_only_UTF8(TARG);
     }
     else
 	sv_setpvn(TARG, s, len);
@@ -3236,7 +3248,7 @@ PP(pp_reverse)
 		*up++ = *down;
 		*down-- = tmp;
 	    }
-	    (void)SvPOK_only(TARG);
+	    (void)SvPOK_only_UTF8(TARG);
 	}
 	SP = MARK + 1;
 	SETTARG;
@@ -4370,6 +4382,7 @@ PP(pp_pack)
     register I32 items;
     STRLEN fromlen;
     register char *pat = SvPVx(*++MARK, fromlen);
+    char *patcopy;
     register char *patend = pat + fromlen;
     register I32 len;
     I32 datumtype;
@@ -4400,6 +4413,7 @@ PP(pp_pack)
     items = SP - MARK;
     MARK++;
     sv_setpvn(cat, "", 0);
+    patcopy = pat;
     while (pat < patend) {
 	SV *lengthcode = Nullsv;
 #define NEXTFROM ( lengthcode ? lengthcode : items-- > 0 ? *MARK++ : &PL_sv_no)
@@ -4407,8 +4421,12 @@ PP(pp_pack)
 #ifdef PERL_NATINT_PACK
 	natint = 0;
 #endif
-	if (isSPACE(datumtype))
+	if (isSPACE(datumtype)) {
+	    patcopy++;
 	    continue;
+        }
+	if (datumtype == 'U' && pat == patcopy+1) 
+	    SvUTF8_on(cat);
 	if (datumtype == '#') {
 	    while (pat < patend && *pat != '\n')
 		pat++;
@@ -4445,7 +4463,8 @@ PP(pp_pack)
 	    if ((*pat != 'a' && *pat != 'A' && *pat != 'Z') || pat[1] != '*')
 		DIE(aTHX_ "/ must be followed by a*, A* or Z*");
 	    lengthcode = sv_2mortal(newSViv(sv_len(items > 0
-						   ? *MARK : &PL_sv_no)));
+						   ? *MARK : &PL_sv_no)
+                                            + (*pat == 'Z' ? 1 : 0)));
 	}
 	switch(datumtype) {
 	default:
@@ -4743,10 +4762,14 @@ PP(pp_pack)
 		    DIE(aTHX_ "Cannot compress negative numbers");
 
 		if (
-#ifdef CXUX_BROKEN_CONSTANT_CONVERT
-		    adouble <= UV_MAX_cxux
+#if UVSIZE > 4 && UVSIZE >= NVSIZE
+		    adouble <= 0xffffffff
 #else
+#   ifdef CXUX_BROKEN_CONSTANT_CONVERT
+		    adouble <= UV_MAX_cxux
+#   else
 		    adouble <= UV_MAX
+#   endif
 #endif
 		    )
 		{
@@ -5247,24 +5270,7 @@ PP(pp_lock)
     dTOPss;
     SV *retsv = sv;
 #ifdef USE_THREADS
-    MAGIC *mg;
-
-    if (SvROK(sv))
-	sv = SvRV(sv);
-
-    mg = condpair_magic(sv);
-    MUTEX_LOCK(MgMUTEXP(mg));
-    if (MgOWNER(mg) == thr)
-	MUTEX_UNLOCK(MgMUTEXP(mg));
-    else {
-	while (MgOWNER(mg))
-	    COND_WAIT(MgOWNERCONDP(mg), MgMUTEXP(mg));
-	MgOWNER(mg) = thr;
-	DEBUG_S(PerlIO_printf(Perl_debug_log, "0x%"UVxf": pp_lock lock 0x%"UVxf"\n",
-			      PTR2UV(thr), PTR2UV(sv));)
-	MUTEX_UNLOCK(MgMUTEXP(mg));
-	SAVEDESTRUCTOR_X(Perl_unlock_condpair, sv);
-    }
+    sv_lock(sv);
 #endif /* USE_THREADS */
     if (SvTYPE(retsv) == SVt_PVAV || SvTYPE(retsv) == SVt_PVHV
 	|| SvTYPE(retsv) == SVt_PVCV) {
