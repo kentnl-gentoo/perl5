@@ -1,8 +1,9 @@
 package ExtUtils::Liblist;
-use vars qw($VERSION);
+
+use 5.005_64;
 # Broken out of MakeMaker from version 4.11
 
-$VERSION = substr q$Revision: 1.25 $, 10;
+our $VERSION = substr q$Revision: 1.25 $, 10;
 
 use Config;
 use Cwd 'cwd';
@@ -540,7 +541,7 @@ below.
 =head2 EXTRALIBS
 
 List of libraries that need to be linked with when linking a perl
-binary which includes this extension Only those libraries that
+binary which includes this extension. Only those libraries that
 actually exist are included.  These are written to a file and used
 when linking perl.
 
@@ -562,7 +563,7 @@ object file.  This list is used to create a .bs (bootstrap) file.
 =head1 PORTABILITY
 
 This module deals with a lot of system dependencies and has quite a
-few architecture specific B<if>s in the code.
+few architecture specific C<if>s in the code.
 
 =head2 VMS implementation
 
@@ -682,7 +683,7 @@ enable searching for default libraries specified by C<$Config{libs}>.
 
 The libraries specified may be a mixture of static libraries and
 import libraries (to link with DLLs).  Since both kinds are used
-pretty transparently on the win32 platform, we do not attempt to
+pretty transparently on the Win32 platform, we do not attempt to
 distinguish between them.
 
 =item *

@@ -56,6 +56,8 @@
 #define malloced_size		Perl_malloced_size
 #endif
 #if defined(PERL_OBJECT)
+#ifndef __BORLANDC__
+#endif
 #endif
 #if defined(PERL_OBJECT)
 #else
@@ -65,12 +67,15 @@
 #define append_elem		Perl_append_elem
 #define append_list		Perl_append_list
 #define apply			Perl_apply
+#define avhv_delete_ent		Perl_avhv_delete_ent
 #define avhv_exists_ent		Perl_avhv_exists_ent
 #define avhv_fetch_ent		Perl_avhv_fetch_ent
 #define avhv_iternext		Perl_avhv_iternext
 #define avhv_iterval		Perl_avhv_iterval
 #define avhv_keys		Perl_avhv_keys
 #define av_clear		Perl_av_clear
+#define av_delete		Perl_av_delete
+#define av_exists		Perl_av_exists
 #define av_extend		Perl_av_extend
 #define av_fake			Perl_av_fake
 #define av_fetch		Perl_av_fetch
@@ -604,11 +609,15 @@
 #define sv_2mortal		Perl_sv_2mortal
 #define sv_2nv			Perl_sv_2nv
 #define sv_2pv			Perl_sv_2pv
+#define sv_2pvutf8		Perl_sv_2pvutf8
+#define sv_2pvbyte		Perl_sv_2pvbyte
 #define sv_2uv			Perl_sv_2uv
 #define sv_iv			Perl_sv_iv
 #define sv_uv			Perl_sv_uv
 #define sv_nv			Perl_sv_nv
 #define sv_pvn			Perl_sv_pvn
+#define sv_pvutf8n		Perl_sv_pvutf8n
+#define sv_pvbyten		Perl_sv_pvbyten
 #define sv_true			Perl_sv_true
 #define sv_add_arena		Perl_sv_add_arena
 #define sv_backoff		Perl_sv_backoff
@@ -650,6 +659,8 @@
 #define sv_pos_u2b		Perl_sv_pos_u2b
 #define sv_pos_b2u		Perl_sv_pos_b2u
 #define sv_pvn_force		Perl_sv_pvn_force
+#define sv_pvutf8n_force	Perl_sv_pvutf8n_force
+#define sv_pvbyten_force	Perl_sv_pvbyten_force
 #define sv_reftype		Perl_sv_reftype
 #define sv_replace		Perl_sv_replace
 #define sv_report_used		Perl_sv_report_used
@@ -701,6 +712,7 @@
 #define vivify_defelem		Perl_vivify_defelem
 #define vivify_ref		Perl_vivify_ref
 #define wait4pid		Perl_wait4pid
+#define report_closed_fh	Perl_report_closed_fh
 #define report_uninit		Perl_report_uninit
 #define warn			Perl_warn
 #define vwarn			Perl_vwarn
@@ -765,7 +777,11 @@
 #define vdefault_protect	Perl_vdefault_protect
 #define reginitcolors		Perl_reginitcolors
 #define sv_2pv_nolen		Perl_sv_2pv_nolen
+#define sv_2pvutf8_nolen	Perl_sv_2pvutf8_nolen
+#define sv_2pvbyte_nolen	Perl_sv_2pvbyte_nolen
 #define sv_pv			Perl_sv_pv
+#define sv_pvutf8		Perl_sv_pvutf8
+#define sv_pvbyte		Perl_sv_pvbyte
 #define sv_force_normal		Perl_sv_force_normal
 #define tmps_grow		Perl_tmps_grow
 #define sv_rvweaken		Perl_sv_rvweaken
@@ -842,6 +858,7 @@
 #define too_many_arguments	S_too_many_arguments
 #define op_clear		S_op_clear
 #define null			S_null
+#define pad_addlex		S_pad_addlex
 #define pad_findlex		S_pad_findlex
 #define newDEFSVOP		S_newDEFSVOP
 #define new_logop		S_new_logop
@@ -1067,8 +1084,8 @@
 #  if defined(CRIPPLED_CC)
 #define uni			S_uni
 #  endif
-#  if defined(WIN32)
-#define win32_textfilter	S_win32_textfilter
+#  if defined(PERL_CR_FILTER)
+#define cr_textfilter		S_cr_textfilter
 #  endif
 #endif
 #if defined(PERL_IN_UNIVERSAL_C) || defined(PERL_DECL_PROT)
@@ -1479,6 +1496,8 @@
 #define malloced_size		Perl_malloced_size
 #endif
 #if defined(PERL_OBJECT)
+#ifndef __BORLANDC__
+#endif
 #endif
 #if defined(PERL_OBJECT)
 #else
@@ -1488,12 +1507,15 @@
 #define append_elem(a,b,c)	Perl_append_elem(aTHX_ a,b,c)
 #define append_list(a,b,c)	Perl_append_list(aTHX_ a,b,c)
 #define apply(a,b,c)		Perl_apply(aTHX_ a,b,c)
+#define avhv_delete_ent(a,b,c,d)	Perl_avhv_delete_ent(aTHX_ a,b,c,d)
 #define avhv_exists_ent(a,b,c)	Perl_avhv_exists_ent(aTHX_ a,b,c)
 #define avhv_fetch_ent(a,b,c,d)	Perl_avhv_fetch_ent(aTHX_ a,b,c,d)
 #define avhv_iternext(a)	Perl_avhv_iternext(aTHX_ a)
 #define avhv_iterval(a,b)	Perl_avhv_iterval(aTHX_ a,b)
 #define avhv_keys(a)		Perl_avhv_keys(aTHX_ a)
 #define av_clear(a)		Perl_av_clear(aTHX_ a)
+#define av_delete(a,b,c)	Perl_av_delete(aTHX_ a,b,c)
+#define av_exists(a,b)		Perl_av_exists(aTHX_ a,b)
 #define av_extend(a,b)		Perl_av_extend(aTHX_ a,b)
 #define av_fake(a,b)		Perl_av_fake(aTHX_ a,b)
 #define av_fetch(a,b,c)		Perl_av_fetch(aTHX_ a,b,c)
@@ -1794,20 +1816,20 @@
 #define my(a)			Perl_my(aTHX_ a)
 #define my_atof(a)		Perl_my_atof(aTHX_ a)
 #if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
-#define my_bcopy(a,b,c)		Perl_my_bcopy(aTHX_ a,b,c)
+#define my_bcopy		Perl_my_bcopy
 #endif
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
-#define my_bzero(a,b)		Perl_my_bzero(aTHX_ a,b)
+#define my_bzero		Perl_my_bzero
 #endif
 #define my_exit(a)		Perl_my_exit(aTHX_ a)
 #define my_failure_exit()	Perl_my_failure_exit(aTHX)
 #define my_fflush_all()		Perl_my_fflush_all(aTHX)
 #define my_lstat()		Perl_my_lstat(aTHX)
 #if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
-#define my_memcmp(a,b,c)	Perl_my_memcmp(aTHX_ a,b,c)
+#define my_memcmp		Perl_my_memcmp
 #endif
 #if !defined(HAS_MEMSET)
-#define my_memset(a,b,c)	Perl_my_memset(aTHX_ a,b,c)
+#define my_memset		Perl_my_memset
 #endif
 #if !defined(PERL_OBJECT)
 #define my_pclose(a)		Perl_my_pclose(aTHX_ a)
@@ -2008,11 +2030,15 @@
 #define sv_2mortal(a)		Perl_sv_2mortal(aTHX_ a)
 #define sv_2nv(a)		Perl_sv_2nv(aTHX_ a)
 #define sv_2pv(a,b)		Perl_sv_2pv(aTHX_ a,b)
+#define sv_2pvutf8(a,b)		Perl_sv_2pvutf8(aTHX_ a,b)
+#define sv_2pvbyte(a,b)		Perl_sv_2pvbyte(aTHX_ a,b)
 #define sv_2uv(a)		Perl_sv_2uv(aTHX_ a)
 #define sv_iv(a)		Perl_sv_iv(aTHX_ a)
 #define sv_uv(a)		Perl_sv_uv(aTHX_ a)
 #define sv_nv(a)		Perl_sv_nv(aTHX_ a)
 #define sv_pvn(a,b)		Perl_sv_pvn(aTHX_ a,b)
+#define sv_pvutf8n(a,b)		Perl_sv_pvutf8n(aTHX_ a,b)
+#define sv_pvbyten(a,b)		Perl_sv_pvbyten(aTHX_ a,b)
 #define sv_true(a)		Perl_sv_true(aTHX_ a)
 #define sv_add_arena(a,b,c)	Perl_sv_add_arena(aTHX_ a,b,c)
 #define sv_backoff(a)		Perl_sv_backoff(aTHX_ a)
@@ -2053,6 +2079,8 @@
 #define sv_pos_u2b(a,b,c)	Perl_sv_pos_u2b(aTHX_ a,b,c)
 #define sv_pos_b2u(a,b)		Perl_sv_pos_b2u(aTHX_ a,b)
 #define sv_pvn_force(a,b)	Perl_sv_pvn_force(aTHX_ a,b)
+#define sv_pvutf8n_force(a,b)	Perl_sv_pvutf8n_force(aTHX_ a,b)
+#define sv_pvbyten_force(a,b)	Perl_sv_pvbyten_force(aTHX_ a,b)
 #define sv_reftype(a,b)		Perl_sv_reftype(aTHX_ a,b)
 #define sv_replace(a,b)		Perl_sv_replace(aTHX_ a,b)
 #define sv_report_used()	Perl_sv_report_used(aTHX)
@@ -2103,6 +2131,7 @@
 #define vivify_defelem(a)	Perl_vivify_defelem(aTHX_ a)
 #define vivify_ref(a,b)		Perl_vivify_ref(aTHX_ a,b)
 #define wait4pid(a,b,c)		Perl_wait4pid(aTHX_ a,b,c)
+#define report_closed_fh(a,b,c,d)	Perl_report_closed_fh(aTHX_ a,b,c,d)
 #define report_uninit()		Perl_report_uninit(aTHX)
 #define vwarn(a,b)		Perl_vwarn(aTHX_ a,b)
 #define vwarner(a,b,c)		Perl_vwarner(aTHX_ a,b,c)
@@ -2161,7 +2190,11 @@
 #define vdefault_protect(a,b,c,d)	Perl_vdefault_protect(aTHX_ a,b,c,d)
 #define reginitcolors()		Perl_reginitcolors(aTHX)
 #define sv_2pv_nolen(a)		Perl_sv_2pv_nolen(aTHX_ a)
+#define sv_2pvutf8_nolen(a)	Perl_sv_2pvutf8_nolen(aTHX_ a)
+#define sv_2pvbyte_nolen(a)	Perl_sv_2pvbyte_nolen(aTHX_ a)
 #define sv_pv(a)		Perl_sv_pv(aTHX_ a)
+#define sv_pvutf8(a)		Perl_sv_pvutf8(aTHX_ a)
+#define sv_pvbyte(a)		Perl_sv_pvbyte(aTHX_ a)
 #define sv_force_normal(a)	Perl_sv_force_normal(aTHX_ a)
 #define tmps_grow(a)		Perl_tmps_grow(aTHX_ a)
 #define sv_rvweaken(a)		Perl_sv_rvweaken(aTHX_ a)
@@ -2238,6 +2271,7 @@
 #define too_many_arguments(a,b)	S_too_many_arguments(aTHX_ a,b)
 #define op_clear(a)		S_op_clear(aTHX_ a)
 #define null(a)			S_null(aTHX_ a)
+#define pad_addlex(a)		S_pad_addlex(aTHX_ a)
 #define pad_findlex(a,b,c,d,e,f,g)	S_pad_findlex(aTHX_ a,b,c,d,e,f,g)
 #define newDEFSVOP()		S_newDEFSVOP(aTHX)
 #define new_logop(a,b,c,d)	S_new_logop(aTHX_ a,b,c,d)
@@ -2462,8 +2496,8 @@
 #  if defined(CRIPPLED_CC)
 #define uni(a,b)		S_uni(aTHX_ a,b)
 #  endif
-#  if defined(WIN32)
-#define win32_textfilter(a,b,c)	S_win32_textfilter(aTHX_ a,b,c)
+#  if defined(PERL_CR_FILTER)
+#define cr_textfilter(a,b,c)	S_cr_textfilter(aTHX_ a,b,c)
 #  endif
 #endif
 #if defined(PERL_IN_UNIVERSAL_C) || defined(PERL_DECL_PROT)
@@ -2879,6 +2913,8 @@
 #define malloced_size		Perl_malloced_size
 #endif
 #if defined(PERL_OBJECT)
+#ifndef __BORLANDC__
+#endif
 #endif
 #if defined(PERL_OBJECT)
 #else
@@ -2893,6 +2929,8 @@
 #define append_list		Perl_append_list
 #define Perl_apply		CPerlObj::Perl_apply
 #define apply			Perl_apply
+#define Perl_avhv_delete_ent	CPerlObj::Perl_avhv_delete_ent
+#define avhv_delete_ent		Perl_avhv_delete_ent
 #define Perl_avhv_exists_ent	CPerlObj::Perl_avhv_exists_ent
 #define avhv_exists_ent		Perl_avhv_exists_ent
 #define Perl_avhv_fetch_ent	CPerlObj::Perl_avhv_fetch_ent
@@ -2905,6 +2943,10 @@
 #define avhv_keys		Perl_avhv_keys
 #define Perl_av_clear		CPerlObj::Perl_av_clear
 #define av_clear		Perl_av_clear
+#define Perl_av_delete		CPerlObj::Perl_av_delete
+#define av_delete		Perl_av_delete
+#define Perl_av_exists		CPerlObj::Perl_av_exists
+#define av_exists		Perl_av_exists
 #define Perl_av_extend		CPerlObj::Perl_av_extend
 #define av_extend		Perl_av_extend
 #define Perl_av_fake		CPerlObj::Perl_av_fake
@@ -3934,6 +3976,10 @@
 #define sv_2nv			Perl_sv_2nv
 #define Perl_sv_2pv		CPerlObj::Perl_sv_2pv
 #define sv_2pv			Perl_sv_2pv
+#define Perl_sv_2pvutf8		CPerlObj::Perl_sv_2pvutf8
+#define sv_2pvutf8		Perl_sv_2pvutf8
+#define Perl_sv_2pvbyte		CPerlObj::Perl_sv_2pvbyte
+#define sv_2pvbyte		Perl_sv_2pvbyte
 #define Perl_sv_2uv		CPerlObj::Perl_sv_2uv
 #define sv_2uv			Perl_sv_2uv
 #define Perl_sv_iv		CPerlObj::Perl_sv_iv
@@ -3944,6 +3990,10 @@
 #define sv_nv			Perl_sv_nv
 #define Perl_sv_pvn		CPerlObj::Perl_sv_pvn
 #define sv_pvn			Perl_sv_pvn
+#define Perl_sv_pvutf8n		CPerlObj::Perl_sv_pvutf8n
+#define sv_pvutf8n		Perl_sv_pvutf8n
+#define Perl_sv_pvbyten		CPerlObj::Perl_sv_pvbyten
+#define sv_pvbyten		Perl_sv_pvbyten
 #define Perl_sv_true		CPerlObj::Perl_sv_true
 #define sv_true			Perl_sv_true
 #define Perl_sv_add_arena	CPerlObj::Perl_sv_add_arena
@@ -4024,6 +4074,10 @@
 #define sv_pos_b2u		Perl_sv_pos_b2u
 #define Perl_sv_pvn_force	CPerlObj::Perl_sv_pvn_force
 #define sv_pvn_force		Perl_sv_pvn_force
+#define Perl_sv_pvutf8n_force	CPerlObj::Perl_sv_pvutf8n_force
+#define sv_pvutf8n_force	Perl_sv_pvutf8n_force
+#define Perl_sv_pvbyten_force	CPerlObj::Perl_sv_pvbyten_force
+#define sv_pvbyten_force	Perl_sv_pvbyten_force
 #define Perl_sv_reftype		CPerlObj::Perl_sv_reftype
 #define sv_reftype		Perl_sv_reftype
 #define Perl_sv_replace		CPerlObj::Perl_sv_replace
@@ -4122,6 +4176,8 @@
 #define vivify_ref		Perl_vivify_ref
 #define Perl_wait4pid		CPerlObj::Perl_wait4pid
 #define wait4pid		Perl_wait4pid
+#define Perl_report_closed_fh	CPerlObj::Perl_report_closed_fh
+#define report_closed_fh	Perl_report_closed_fh
 #define Perl_report_uninit	CPerlObj::Perl_report_uninit
 #define report_uninit		Perl_report_uninit
 #define Perl_warn		CPerlObj::Perl_warn
@@ -4241,8 +4297,16 @@
 #define reginitcolors		Perl_reginitcolors
 #define Perl_sv_2pv_nolen	CPerlObj::Perl_sv_2pv_nolen
 #define sv_2pv_nolen		Perl_sv_2pv_nolen
+#define Perl_sv_2pvutf8_nolen	CPerlObj::Perl_sv_2pvutf8_nolen
+#define sv_2pvutf8_nolen	Perl_sv_2pvutf8_nolen
+#define Perl_sv_2pvbyte_nolen	CPerlObj::Perl_sv_2pvbyte_nolen
+#define sv_2pvbyte_nolen	Perl_sv_2pvbyte_nolen
 #define Perl_sv_pv		CPerlObj::Perl_sv_pv
 #define sv_pv			Perl_sv_pv
+#define Perl_sv_pvutf8		CPerlObj::Perl_sv_pvutf8
+#define sv_pvutf8		Perl_sv_pvutf8
+#define Perl_sv_pvbyte		CPerlObj::Perl_sv_pvbyte
+#define sv_pvbyte		Perl_sv_pvbyte
 #define Perl_sv_force_normal	CPerlObj::Perl_sv_force_normal
 #define sv_force_normal		Perl_sv_force_normal
 #define Perl_tmps_grow		CPerlObj::Perl_tmps_grow
@@ -4377,6 +4441,8 @@
 #define op_clear		S_op_clear
 #define S_null			CPerlObj::S_null
 #define null			S_null
+#define S_pad_addlex		CPerlObj::S_pad_addlex
+#define pad_addlex		S_pad_addlex
 #define S_pad_findlex		CPerlObj::S_pad_findlex
 #define pad_findlex		S_pad_findlex
 #define S_newDEFSVOP		CPerlObj::S_newDEFSVOP
@@ -4790,9 +4856,9 @@
 #define S_uni			CPerlObj::S_uni
 #define uni			S_uni
 #  endif
-#  if defined(WIN32)
-#define S_win32_textfilter	CPerlObj::S_win32_textfilter
-#define win32_textfilter	S_win32_textfilter
+#  if defined(PERL_CR_FILTER)
+#define S_cr_textfilter		CPerlObj::S_cr_textfilter
+#define cr_textfilter		S_cr_textfilter
 #  endif
 #endif
 #if defined(PERL_IN_UNIVERSAL_C) || defined(PERL_DECL_PROT)

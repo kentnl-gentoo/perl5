@@ -719,7 +719,7 @@ Perl_do_vecget(pTHX_ SV *sv, I32 offset, I32 size)
 		if (offset >= srclen)
 		    retnum = 0;
 		else
-		    retnum = (UV) s[offset] << 8;
+		    retnum = (UV) s[offset] <<  8;
 	    }
 	    else if (size == 32) {
 		if (offset >= srclen)
@@ -786,7 +786,7 @@ Perl_do_vecget(pTHX_ SV *sv, I32 offset, I32 size)
 			((UV) s[offset + 3] << 32) +
 			((UV) s[offset + 4] << 24) +
 			((UV) s[offset + 5] << 16) +
-			(     s[offset + 6] << 8);
+			(     s[offset + 6] <<  8);
 	    }
 #endif
 	}
@@ -799,7 +799,7 @@ Perl_do_vecget(pTHX_ SV *sv, I32 offset, I32 size)
 	    retnum = s[offset];
 	else if (size == 16)
 	    retnum =
-		((UV) s[offset] <<  8) +
+		((UV) s[offset] <<      8) +
 		      s[offset + 1];
 	else if (size == 32)
 	    retnum =
@@ -820,7 +820,7 @@ Perl_do_vecget(pTHX_ SV *sv, I32 offset, I32 size)
 		((UV) s[offset + 3] << 32) +
 		((UV) s[offset + 4] << 24) +
 		((UV) s[offset + 5] << 16) +
-		(     s[offset + 6] << 8) +
+		(     s[offset + 6] <<  8) +
 		      s[offset + 7];
 	}
 #endif
@@ -933,7 +933,7 @@ Perl_do_chop(pTHX_ register SV *astr, register SV *sv)
     s = SvPV(sv, len);
     if (len && !SvPOK(sv))
 	s = SvPV_force(sv, len);
-    if (IN_UTF8) {
+    if (DO_UTF8(sv)) {
 	if (s && len) {
 	    char *send = s + len;
 	    char *start = s;
@@ -946,12 +946,12 @@ Perl_do_chop(pTHX_ register SV *astr, register SV *sv)
 	    *s = '\0';
 	    SvCUR_set(sv, s - start);
 	    SvNIOK_off(sv);
+	    SvUTF8_on(astr);
 	}
 	else
 	    sv_setpvn(astr, "", 0);
     }
-    else
-    if (s && len) {
+    else if (s && len) {
 	s += --len;
 	sv_setpvn(astr, s, 1);
 	*s = '\0';
@@ -961,7 +961,7 @@ Perl_do_chop(pTHX_ register SV *astr, register SV *sv)
     else
 	sv_setpvn(astr, "", 0);
     SvSETMAGIC(sv);
-} 
+}
 
 I32
 Perl_do_chomp(pTHX_ register SV *sv)

@@ -912,6 +912,15 @@ Perl_mem_collxfrm(pTHX_ const char *s, STRLEN len, STRLEN *xlen)
 
    If FBMcf_TAIL, the table is created as if the string has a trailing \n. */
 
+/*
+=for apidoc fbm_compile
+
+Analyses the string in order to make fast searches on it using fbm_instr()
+-- the Boyer-Moore algorithm.
+
+=cut
+*/
+
 void
 Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
 {
@@ -971,6 +980,17 @@ Perl_fbm_compile(pTHX_ SV *sv, U32 flags)
 /* If SvTAIL(littlestr), it has a fake '\n' at end. */
 /* If SvTAIL is actually due to \Z or \z, this gives false positives
    if multiline */
+
+/*
+=for apidoc fbm_instr
+
+Returns the location of the SV in the string delimited by C<str> and
+C<strend>.  It returns C<Nullch> if the string can't be found.  The C<sv>
+does not have to be fbm_compiled, but the search will not be as fast
+then.
+
+=cut
+*/
 
 char *
 Perl_fbm_instr(pTHX_ unsigned char *big, register unsigned char *bigend, SV *littlestr, U32 flags)
@@ -1304,6 +1324,14 @@ Perl_ibcmp_locale(pTHX_ const char *s1, const char *s2, register I32 len)
 
 /* copy a string to a safe spot */
 
+/*
+=for apidoc savepv
+
+Copy a string to a safe spot.  This does not use an SV.
+
+=cut
+*/
+
 char *
 Perl_savepv(pTHX_ const char *sv)
 {
@@ -1315,6 +1343,15 @@ Perl_savepv(pTHX_ const char *sv)
 }
 
 /* same thing but with a known length */
+
+/*
+=for apidoc savepvn
+
+Copy a string to a safe spot.  The C<len> indicates number of bytes to
+copy.  This does not use an SV.
+
+=cut
+*/
 
 char *
 Perl_savepvn(pTHX_ const char *sv, register I32 len)
@@ -1620,6 +1657,16 @@ Perl_croak_nocontext(const char *pat, ...)
 }
 #endif /* PERL_IMPLICIT_CONTEXT */
 
+/*
+=for apidoc croak
+
+This is the XSUB-writer's interface to Perl's C<die> function.  Use this
+function the same way you use the C C<printf> function.  See
+C<warn>.
+
+=cut
+*/
+
 void
 Perl_croak(pTHX_ const char *pat, ...)
 {
@@ -1698,6 +1745,16 @@ Perl_warn_nocontext(const char *pat, ...)
     va_end(args);
 }
 #endif /* PERL_IMPLICIT_CONTEXT */
+
+/*
+=for apidoc warn
+
+This is the XSUB-writer's interface to Perl's C<warn> function.  Use this
+function the same way you use the C C<printf> function.  See
+C<croak>.
+
+=cut
+*/
 
 void
 Perl_warn(pTHX_ const char *pat, ...)
@@ -1889,7 +1946,7 @@ Perl_my_setenv_init(char ***penviron)
 }
 
 void
-my_setenv(char *nam, char *val)
+Perl_my_setenv(pTHX_ char *nam, char *val)
 {
     /* You can not directly manipulate the environ[] array because
      * the routines do some additional work that syncs the Cygwin
@@ -1901,13 +1958,13 @@ my_setenv(char *nam, char *val)
        if (!oldstr)
            return;
        unsetenv(nam);
-       Safefree(oldstr);
+       safesysfree(oldstr);
        return;
     }
     setenv(nam, val, 1);
     environ = *Perl_main_environ; /* environ realloc can occur in setenv */
     if(oldstr && environ[setenv_getix(nam)] != oldstr)
-       Safefree(oldstr);
+       safesysfree(oldstr);
 }
 #else /* if WIN32 */
 
@@ -2003,9 +2060,10 @@ Perl_unlnk(pTHX_ char *f)	/* unlink all versions of a file */
 }
 #endif
 
+/* this is a drop-in replacement for bcopy() */
 #if !defined(HAS_BCOPY) || !defined(HAS_SAFE_BCOPY)
 char *
-Perl_my_bcopy(pTHX_ register const char *from,register char *to,register I32 len)
+Perl_my_bcopy(register const char *from,register char *to,register I32 len)
 {
     char *retval = to;
 
@@ -2023,9 +2081,10 @@ Perl_my_bcopy(pTHX_ register const char *from,register char *to,register I32 len
 }
 #endif
 
+/* this is a drop-in replacement for memset() */
 #ifndef HAS_MEMSET
 void *
-Perl_my_memset(pTHX_ register char *loc, register I32 ch, register I32 len)
+Perl_my_memset(register char *loc, register I32 ch, register I32 len)
 {
     char *retval = loc;
 
@@ -2035,9 +2094,10 @@ Perl_my_memset(pTHX_ register char *loc, register I32 ch, register I32 len)
 }
 #endif
 
+/* this is a drop-in replacement for bzero() */
 #if !defined(HAS_BZERO) && !defined(HAS_MEMSET)
 char *
-Perl_my_bzero(pTHX_ register char *loc, register I32 len)
+Perl_my_bzero(register char *loc, register I32 len)
 {
     char *retval = loc;
 
@@ -2047,9 +2107,10 @@ Perl_my_bzero(pTHX_ register char *loc, register I32 len)
 }
 #endif
 
+/* this is a drop-in replacement for memcmp() */
 #if !defined(HAS_MEMCMP) || !defined(HAS_SANE_MEMCMP)
 I32
-Perl_my_memcmp(pTHX_ const char *s1, const char *s2, register I32 len)
+Perl_my_memcmp(const char *s1, const char *s2, register I32 len)
 {
     register U8 *a = (U8 *)s1;
     register U8 *b = (U8 *)s2;
@@ -3339,11 +3400,11 @@ Perl_condpair_magic(pTHX_ SV *sv)
 	COND_INIT(&cp->owner_cond);
 	COND_INIT(&cp->cond);
 	cp->owner = 0;
-	MUTEX_LOCK(&PL_cred_mutex);		/* XXX need separate mutex? */
+	LOCK_CRED_MUTEX;		/* XXX need separate mutex? */
 	mg = mg_find(sv, 'm');
 	if (mg) {
 	    /* someone else beat us to initialising it */
-	    MUTEX_UNLOCK(&PL_cred_mutex);	/* XXX need separate mutex? */
+	    UNLOCK_CRED_MUTEX;		/* XXX need separate mutex? */
 	    MUTEX_DESTROY(&cp->mutex);
 	    COND_DESTROY(&cp->owner_cond);
 	    COND_DESTROY(&cp->cond);
@@ -3354,7 +3415,7 @@ Perl_condpair_magic(pTHX_ SV *sv)
 	    mg = SvMAGIC(sv);
 	    mg->mg_ptr = (char *)cp;
 	    mg->mg_len = sizeof(cp);
-	    MUTEX_UNLOCK(&PL_cred_mutex);	/* XXX need separate mutex? */
+	    UNLOCK_CRED_MUTEX;		/* XXX need separate mutex? */
 	    DEBUG_S(WITH_THR(PerlIO_printf(Perl_debug_log,
 					   "%p: condpair_magic %p\n", thr, sv));)
 	}
@@ -3698,7 +3759,8 @@ Perl_my_fflush_all(pTHX)
 }
 
 NV
-Perl_my_atof(pTHX_ const char* s) {
+Perl_my_atof(pTHX_ const char* s)
+{
 #ifdef USE_LOCALE_NUMERIC
     if ((PL_hints & HINT_LOCALE) && PL_numeric_local) {
 	NV x, y;
@@ -3716,4 +3778,24 @@ Perl_my_atof(pTHX_ const char* s) {
 #else
     return Perl_atof(s);
 #endif
+}
+
+void
+Perl_report_closed_fh(pTHX_ GV *gv, IO *io, const char *func, const char *obj)
+{
+    SV *sv;
+    char *name;
+
+    assert(gv);
+
+    sv = sv_newmortal();
+    gv_efullname3(sv, gv, Nullch);
+    name = SvPVX(sv);
+
+    Perl_warner(aTHX_ WARN_CLOSED, "%s() on closed %s %s", func, obj, name);
+
+    if (io && IoDIRP(io))
+	Perl_warner(aTHX_ WARN_CLOSED,
+		    "(Are you trying to call %s() on dirhandle %s?)\n",
+		    func, name);
 }

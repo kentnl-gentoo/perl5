@@ -9,7 +9,7 @@
   Filehandle %s opened only for output		[pp_print]
     print <STDOUT> ;
 
-  print on closed filehandle %s			[pp_print]
+  print() on closed filehandle %s		[pp_print]
     close STDIN ; print STDIN "abc" ;
 
   uninitialized					[pp_rv2av]
@@ -30,7 +30,7 @@
 
   glob failed (can't start child: %s)		[Perl_do_readline] <<TODO
 
-  Read on closed filehandle %s			[Perl_do_readline]
+  readline() on closed filehandle %s		[Perl_do_readline]
     close STDIN ; $a = <STDIN>;
 
   glob failed (child exited with status %d%s)	[Perl_do_readline] <<TODO
@@ -83,10 +83,17 @@ Filehandle main::FOO opened only for output at - line 8.
 use warnings 'closed' ;
 close STDIN ;
 print STDIN "anc";
+opendir STDIN, ".";
+print STDIN "anc";
+closedir STDIN;
 no warnings 'closed' ;
 print STDIN "anc";
+opendir STDIN, ".";
+print STDIN "anc";
 EXPECT
-print on closed filehandle main::STDIN at - line 4.
+print() on closed filehandle main::STDIN at - line 4.
+print() on closed filehandle main::STDIN at - line 6.
+(Are you trying to call print() on dirhandle main::STDIN?)
 ########
 # pp_hot.c [pp_rv2av]
 use warnings 'uninitialized' ;
@@ -124,11 +131,16 @@ Reference found where even-sized list expected at - line 3.
 ########
 # pp_hot.c [Perl_do_readline]
 use warnings 'closed' ;
-close STDIN ; $a = <STDIN> ;
+close STDIN        ; $a = <STDIN> ;
+opendir STDIN, "." ; $a = <STDIN> ;
+closedir STDIN;
 no warnings 'closed' ;
+opendir STDIN, "." ; $a = <STDIN> ;
 $a = <STDIN> ;
 EXPECT
-Read on closed filehandle main::STDIN at - line 3.
+readline() on closed filehandle main::STDIN at - line 3.
+readline() on closed filehandle main::STDIN at - line 4.
+(Are you trying to call readline() on dirhandle main::STDIN?)
 ########
 # pp_hot.c [Perl_do_readline]
 use warnings 'io' ;

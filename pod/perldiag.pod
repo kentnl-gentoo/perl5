@@ -31,6 +31,14 @@ C<"%(-?@> sort before the letters, while C<[> and C<\> sort after.
 
 =over 4
 
+=item "%s" variable %s masks earlier declaration in same %s
+
+(W) A "my" or "our" variable has been redeclared in the current scope or statement,
+effectively eliminating all access to the previous instance.  This is almost
+always a typographical error.  Note that the earlier variable will still exist
+until the end of the scope or until all closure referents to it are
+destroyed.
+
 =item "my sub" not yet implemented
 
 (F) Lexically scoped subroutines are not yet implemented.  Don't try that
@@ -42,18 +50,15 @@ yet.
 to try to declare one with a package qualifier on the front.  Use local()
 if you want to localize a package variable.
 
-=item "my" variable %s masks earlier declaration in same %s
-
-(W) A lexical variable has been redeclared in the current scope or statement,
-effectively eliminating all access to the previous instance.  This is almost
-always a typographical error.  Note that the earlier variable will still exist
-until the end of the scope or until all closure referents to it are
-destroyed.
-
 =item "no" not allowed in expression
 
 (F) The "no" keyword is recognized and executed at compile time, and returns
 no useful value.  See L<perlmod>.
+
+=item "our" variable %s redeclared
+
+(W) You seem to have already declared the same global once before in the
+current lexical scope.
 
 =item "use" not allowed in expression
 
@@ -140,24 +145,29 @@ definition ahead of the call to get proper prototype checking.  Alternatively,
 if you are certain that you're calling the function correctly, you may put
 an ampersand before the name to avoid the warning.  See L<perlsub>.
 
-=item %s argument is not a HASH element
+=item %s argument is not a HASH or ARRAY element
 
-(F) The argument to exists() must be a hash element, such as
-
-    $foo{$bar}
-    $ref->[12]->{"susie"}
-
-=item %s argument is not a HASH element or slice
-
-(F) The argument to delete() must be either a hash element, such as
+(F) The argument to exists() must be a hash or array element, such as:
 
     $foo{$bar}
-    $ref->[12]->{"susie"}
+    $ref->[12]->["susie"]
 
-or a hash slice, such as
+=item %s argument is not a HASH or ARRAY element or slice
 
-    @foo{$bar, $baz, $xyzzy}
+(F) The argument to delete() must be either a hash or array element, such as:
+
+    $foo{$bar}
+    $ref->[12]->["susie"]
+
+or a hash or array slice, such as:
+
+    @foo[$bar, $baz, $xyzzy]
     @{$ref->[12]}{"susie", "queue"}
+
+=item %s argument is not a subroutine name
+
+(F) The argument to exists() for C<exists &sub> must be a subroutine
+name, and not a subroutine call.  C<exists &sub()> will generate this error.
 
 =item %s did not return a true value
 
@@ -280,7 +290,7 @@ the string being unpacked.  See L<perlfunc/pack>.
 (F) You wrote C<require E<lt>fileE<gt>> when you should have written
 C<require 'file'>.
 
-=item accept() on closed fd
+=item accept() on closed socket %s
 
 (W) You tried to do an accept on a closed socket.  Did you forget to check
 the return value of your socket() call?  See L<perlfunc/accept>.
@@ -518,7 +528,7 @@ likely depends on its correct operation, Perl just gave up.
 (4294967295) and therefore non-portable between systems.  See
 L<perlport> for more on portability concerns.
 
-=item bind() on closed fd
+=item bind() on closed socket %s
 
 (W) You tried to do a bind on a closed socket.  Did you forget to check
 the return value of your socket() call?  See L<perlfunc/bind>.
@@ -679,10 +689,16 @@ only with arrays that have a hash reference at index 0.
 (P) An error peculiar to VMS.  The process is suffering from exhausted quotas
 or other plumbing problems.
 
-=item Can't declare %s in my
+=item Can't declare class for non-scalar %s in "%s"
 
-(F) Only scalar, array, and hash variables may be declared as lexical variables.
-They must have ordinary identifiers as names.
+(S) Currently, only scalar variables can declared with a specific class
+qualifier in a "my" or "our" declaration.  The semantics may be extended
+for other types of variables in future.
+
+=item Can't declare %s in "%s"
+
+(F) Only scalar, array, and hash variables may be declared as "my" or
+"our" variables.  They must have ordinary identifiers as names.
 
 =item Can't do inplace edit on %s: %s
 
@@ -1068,7 +1084,7 @@ most likely an unexpected right brace '}'.
 reference of the type needed.  You can use the ref() function to
 test the type of the reference, if need be.
 
-=item Can't use \1 to mean $1 in expression
+=item Can't use \%c to mean $%c in expression
 
 (W) In an ordinary expression, backslash is a unary operator that creates
 a reference to its argument.  The use of backslash to indicate a backreference
@@ -1076,7 +1092,7 @@ to a matched substring is valid only as part of a regular expression pattern.
 Trying to do this in ordinary Perl code produces a value that prints
 out looking like SCALAR(0xdecaf).  Use the $1 form instead.
 
-=item Can't use bareword ("%s") as %s ref while \"strict refs\" in use
+=item Can't use bareword ("%s") as %s ref while "strict refs" in use
 
 (F) Only hard references are allowed by "strict refs".  Symbolic references
 are disallowed.  See L<perlref>.
@@ -1187,7 +1203,7 @@ than in the regular expression engine; or rewriting the regular
 expression so that it is simpler or backtracks less.  (See L<perlbook>
 for information on I<Mastering Regular Expressions>.)
 
-=item connect() on closed fd
+=item connect() on closed socket %s
 
 (W) You tried to do a connect on a closed socket.  Did you forget to check
 the return value of your socket() call?  See L<perlfunc/connect>.
@@ -1202,13 +1218,13 @@ See L<perlsub/"Constant Functions"> and L<constant>.
 
 =item Constant subroutine %s redefined
 
-(S) You redefined a subroutine which had previously been eligible for
+(S|W) You redefined a subroutine which had previously been eligible for
 inlining.  See L<perlsub/"Constant Functions"> for commentary and
 workarounds.
 
 =item Constant subroutine %s undefined
 
-(S) You undefined a subroutine which had previously been eligible for
+(W) You undefined a subroutine which had previously been eligible for
 inlining.  See L<perlsub/"Constant Functions"> for commentary and
 workarounds.
 
@@ -1273,6 +1289,11 @@ See Server error.
 
 (W) You probably referred to an imported subroutine &FOO as $FOO or some such.
 
+=item Did you mean "local" instead of "our"?
+
+(W) Remember that "our" does not localize the declared global variable.
+You have declared it again in the same lexical scope, which seems superfluous.
+
 =item Did you mean $ or @ instead of %?
 
 (W) You probably said %hash{$key} when you meant $hash{$key} or @hash{@keys}.
@@ -1321,7 +1342,7 @@ unlikely to be what you want.
 
 =item %s failed--call queue aborted
 
-(F) An untrapped exception was raised while executing a STOP, INIT, or
+(F) An untrapped exception was raised while executing a CHECK, INIT, or
 END subroutine.  Processing of the remainder of the queue of such
 routines has been prematurely ended.
 
@@ -1453,6 +1474,12 @@ a literal "at" sign, or was meant to introduce a variable name
 that happens to be missing.  So you have to put either the backslash or
 the name.
 
+=item flock() on closed filehandle %s
+
+(W) The filehandle you're attempting to flock() got itself closed some
+time before now.  Check your logic flow.  flock() operates on filehandles.
+Are you attempting to call flock() on a dirhandle by the same name?
+
 =item Format %s redefined
 
 (W) You redefined a format.  To suppress this warning, say
@@ -1489,7 +1516,7 @@ when you meant
 because if it did, it'd feel morally obligated to return every hostname
 on the Internet.
 
-=item get{sock,peer}name() on closed fd
+=item get%sname() on closed socket %s
 
 (W) You tried to get a socket or peer socket name on a closed socket.
 Did you forget to check the return value of your socket() call?
@@ -1509,8 +1536,9 @@ the line, and you really meant a "less than".
 =item Global symbol "%s" requires explicit package name
 
 (F) You've said "use strict vars", which indicates that all variables
-must either be lexically scoped (using "my"), or explicitly qualified to
-say which package the global variable is in (using "::").
+must either be lexically scoped (using "my"), declared beforehand using
+"our", or explicitly qualified to say which package the global variable
+is in (using "::").
 
 =item goto must have label
 
@@ -1717,7 +1745,7 @@ See L<perlfunc/sprintf>.
 
 =item Invalid separator character %s in attribute list
 
-(F) Something other than a comma or whitespace was seen between the
+(F) Something other than a colon or whitespace was seen between the
 elements of an attribute list.  If the previous attribute
 had a parenthesised parameter list, perhaps that list was terminated
 too soon.  See L<attributes>.
@@ -1766,7 +1794,7 @@ L<perlfunc/last>.
 (F) While under the C<use filetest> pragma, switching the real and
 effective uids or gids failed.
 
-=item listen() on closed fd
+=item listen() on closed socket %s
 
 (W) You tried to do a listen on a closed socket.  Did you forget to check
 the return value of your socket() call?  See L<perlfunc/listen>.
@@ -1904,6 +1932,11 @@ See L<perlsec>.
 
 (F) A setuid script can't be specified by the user.
 
+=item No %s specified for -%c
+
+(F) The indicated command line switch needs a mandatory argument, but
+you haven't specified one.
+
 =item No comma allowed after %s
 
 (F) A list operator that has a filehandle or "indirect object" is not
@@ -1973,6 +2006,12 @@ where you wanted to redirect stdout.
 and found a 'E<gt>' or a 'E<gt>E<gt>' on the command line, but can't find the
 name of the file to which to write data destined for stdout.
 
+=item No package name allowed for variable %s in "our"
+
+(F) Fully qualified variable names are not allowed in "our" declarations,
+because that doesn't make much sense under existing semantics.  Such
+syntax is reserved for future extensions.
+
 =item No Perl script found in input
 
 (F) You called C<perl -x>, but no line was found in the file beginning
@@ -1988,10 +2027,10 @@ your system.
 (F) Configure didn't find anything resembling the setreuid() call for
 your system.
 
-=item No space allowed after B<-I>
+=item No space allowed after -%c
 
-(F) The argument to B<-I> must follow the B<-I> immediately with no
-intervening space.
+(F) The argument to the indicated command line switch must follow immediately
+after the switch, without intervening spaces.
 
 =item No such pseudo-hash field "%s"
 
@@ -2133,7 +2172,7 @@ See also L<perlport> for writing portable code.
 
 =item Odd number of elements in hash assignment
 
-(S) You specified an odd number of elements to initialize a hash, which
+(W) You specified an odd number of elements to initialize a hash, which
 is odd, because hashes come in key/value pairs.
 
 =item Offset outside string
@@ -2379,7 +2418,7 @@ when you meant
 
     my ($foo, $bar) = @_;
 
-Remember that "my" and "local" bind closer than comma.
+Remember that "my", "our" and "local" bind closer than comma.
 
 =item Perl %3.3f required--this is only version %s, stopped
 
@@ -2478,12 +2517,12 @@ instead of "||".
 
 See Server error.
 
-=item print on closed filehandle %s
+=item print() on closed filehandle %s
 
 (W) The filehandle you're printing on got itself closed sometime before now.
 Check your logic flow.
 
-=item printf on closed filehandle %s
+=item printf() on closed filehandle %s
 
 (W) The filehandle you're writing to got itself closed sometime before now.
 Check your logic flow.
@@ -2508,7 +2547,7 @@ are outside the range which can be represented by integers internally.
 One possible workaround is to force Perl to use magical string
 increment by prepending "0" to your numbers.
 
-=item Read on closed filehandle %s
+=item readline() on closed filehandle %s
 
 (W) The filehandle you're reading from got itself closed sometime before now.
 Check your logic flow.
@@ -2649,9 +2688,9 @@ that had previously been marked as free.
 (W) A nearby syntax error was probably caused by a missing semicolon,
 or possibly some other missing operator, such as a comma.
 
-=item Send on closed socket
+=item send() on closed socket %s
 
-(W) The filehandle you're sending to got itself closed sometime before now.
+(W) The socket you're sending to got itself closed sometime before now.
 Check your logic flow.
 
 =item Sequence (? incomplete
@@ -2738,7 +2777,7 @@ because the world might have written on it already.
 
 (F) You don't have System V shared memory IPC on your system.
 
-=item shutdown() on closed fd
+=item shutdown() on closed socket %s
 
 (W) You tried to do a shutdown on a closed socket.  Seems a bit superfluous.
 
@@ -2876,7 +2915,7 @@ into Perl yourself.
 machine.  In some machines the functionality can exist but be
 unconfigured.  Consult your system support.
 
-=item Syswrite on closed filehandle
+=item syswrite() on closed filehandle %s
 
 (W) The filehandle you're writing to got itself closed sometime before now.
 Check your logic flow.
@@ -3444,7 +3483,7 @@ but in actual fact, you got
 
 So put in parentheses to say what you really mean.
 
-=item Write on closed filehandle %s
+=item write() on closed filehandle %s
 
 (W) The filehandle you're writing to got itself closed sometime before now.
 Check your logic flow.
@@ -3487,11 +3526,11 @@ already have a subroutine of that name declared, which means that Perl 5
 will try to call the subroutine when the assignment is executed, which is
 probably not what you want.  (If it IS what you want, put an & in front.)
 
-=item [gs]etsockopt() on closed fd
+=item %cetsockopt() on closed socket %s
 
 (W) You tried to get or set a socket option on a closed socket.
 Did you forget to check the return value of your socket() call?
-See L<perlfunc/getsockopt>.
+See L<perlfunc/getsockopt> and L<perlfunc/setsockopt>.
 
 =item \1 better written as $1
 
@@ -3557,3 +3596,4 @@ in F<README.os2>.
 
 =back
 
+=cut

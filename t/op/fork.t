@@ -6,7 +6,10 @@ BEGIN {
     chdir 't' if -d 't';
     unshift @INC, '../lib';
     require Config; import Config;
-    unless ($Config{'d_fork'} || $Config{ccflags} =~ /-DUSE_ITHREADS\b/) {
+    unless ($Config{'d_fork'}
+	    or ($^O eq 'MSWin32' and $Config{useithreads}
+		and $Config{ccflags} =~ /-DPERL_IMPLICIT_SYS/))
+    {
 	print "1..0 # Skip: no fork\n";
 	exit 0;
     }
@@ -227,19 +230,23 @@ if ($^O eq 'MSWin32') {
 else {
     $getenv = qq[$^X -e 'print \$ENV{TST}'];
 }
+$ENV{TST} = 'foo';
 if (fork) {
     sleep 1;
-    $ENV{TST} = 'foo';
-    print "parent: " . `$getenv`;
+    print "parent before: " . `$getenv`;
+    $ENV{TST} = 'bar';
+    print "parent after: " . `$getenv`;
 }
 else {
-    $ENV{TST} = 'bar';
-    print "child: " . `$getenv`;
-    sleep 1;
+    print "child before: " . `$getenv`;
+    $ENV{TST} = 'baz';
+    print "child after: " . `$getenv`;
 }
 EXPECT
-parent: foo
-child: bar
+child before: foo
+child after: baz
+parent before: foo
+parent after: bar
 ########
 $| = 1;
 $\ = "\n";
@@ -313,3 +320,50 @@ BEGIN {
 #print "outer\n"
 EXPECT
 inner
+########
+sub pipe_to_fork ($$) {
+    my $parent = shift;
+    my $child = shift;
+    pipe($child, $parent) or die;
+    my $pid = fork();
+    die "fork() failed: $!" unless defined $pid;
+    close($pid ? $child : $parent);
+    $pid;
+}
+
+if (pipe_to_fork('PARENT','CHILD')) {
+    # parent
+    print PARENT "pipe_to_fork\n";
+    close PARENT;
+}
+else {
+    # child
+    while (<CHILD>) { print; }
+    close CHILD;
+    exit;
+}
+
+sub pipe_from_fork ($$) {
+    my $parent = shift;
+    my $child = shift;
+    pipe($parent, $child) or die;
+    my $pid = fork();
+    die "fork() failed: $!" unless defined $pid;
+    close($pid ? $child : $parent);
+    $pid;
+}
+
+if (pipe_from_fork('PARENT','CHILD')) {
+    # parent
+    while (<PARENT>) { print; }
+    close PARENT;
+}
+else {
+    # child
+    print CHILD "pipe_from_fork\n";
+    close CHILD;
+    exit;
+}
+EXPECT
+pipe_from_fork
+pipe_to_fork

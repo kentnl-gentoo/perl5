@@ -13,7 +13,7 @@ require Exporter;
 use VMS::Filespec;
 use File::Basename;
 use File::Spec;
-use vars qw($Revision @ISA);
+our($Revision, @ISA);
 $Revision = '5.56 (27-Apr-1999)';
 
 @ISA = qw( File::Spec );
@@ -1105,13 +1105,6 @@ config :: $(INST_ARCHAUTODIR).exists
 config :: $(INST_AUTODIR).exists
 	$(NOECHO) $(NOOP)
 ';
-
-    push @m, q{
-config :: Version_check
-	$(NOECHO) $(NOOP)
-
-} unless $self->{PARENT} or ($self->{PERL_SRC} && $self->{INSTALLDIRS} eq "perl") or $self->{NO_VC};
-
 
     push @m, $self->dir_target(qw[$(INST_AUTODIR) $(INST_LIBDIR) $(INST_ARCHAUTODIR)]);
     if (%{$self->{MAN1PODS}}) {

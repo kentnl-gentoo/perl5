@@ -9,7 +9,9 @@
 #ifndef  _INC_WIN32_PERL5
 #define  _INC_WIN32_PERL5
 
-#define _WIN32_WINNT 0x0400	/* needed for TryEnterCriticalSection() etc. */
+#ifndef _WIN32_WINNT
+#  define _WIN32_WINNT 0x0400     /* needed for TryEnterCriticalSection() etc. */
+#endif
 
 #if defined(PERL_OBJECT) || defined(PERL_IMPLICIT_SYS) || defined(PERL_CAPI)
 #  define DYNAMIC_ENV_FETCH
@@ -35,18 +37,6 @@
 #    define __int64 long long
 #  endif
 #  define Win32_Winsock
-/* GCC does not do __declspec() - render it a nop 
- * and turn on options to avoid importing data 
- */
-#ifndef __declspec
-#  define __declspec(x)
-#endif
-#  ifndef PERL_OBJECT
-#    define PERL_GLOBAL_STRUCT
-#    ifndef MULTIPLICITY
-#      define MULTIPLICITY
-#    endif
-#  endif
 #endif
 
 /* Define DllExport akin to perl's EXT, 
@@ -54,6 +44,8 @@
  * then Export the symbol, 
  * otherwise import it.
  */
+
+/* now even GCC supports __declspec() */
 
 #if defined(PERL_OBJECT)
 #define DllExport
@@ -131,15 +123,18 @@ struct utsname {
 #define PERL_SOCK_SYSREAD_IS_RECV
 #define PERL_SOCK_SYSWRITE_IS_SEND
 
+#define PERL_NO_FORCE_LINK		/* no need for PL_force_link_funcs */
 
 /* if USE_WIN32_RTL_ENV is not defined, Perl uses direct Win32 calls
  * to read the environment, bypassing the runtime's (usually broken)
  * facilities for accessing the same.  See note in util.c/my_setenv(). */
 /*#define USE_WIN32_RTL_ENV */
 
-/* Define USE_FIXED_OSFHANDLE to fix VC's _open_osfhandle() on W95.
- * Can only enable it if not using the DLL CRT (it doesn't expose internals) */
-#if defined(_MSC_VER) && !defined(_DLL) && defined(_M_IX86)
+/* Define USE_FIXED_OSFHANDLE to fix MSVCRT's _open_osfhandle() on W95.
+   It now uses some black magic to work seamlessly with the DLL CRT and
+   works with MSVC++ 4.0+ or GCC/Mingw32
+	-- BKS 1-24-2000 */
+#if (defined(_M_IX86) && _MSC_VER >= 1000) || defined(__MINGW32__)
 #define USE_FIXED_OSFHANDLE
 #endif
 
@@ -168,6 +163,7 @@ struct utsname {
 #define _access access
 #define _chdir chdir
 #define _getpid getpid
+#define wcsicmp _wcsicmp
 #include <sys/types.h>
 
 #ifndef DllMain
@@ -190,6 +186,9 @@ struct utsname {
 #  define MEMBER_TO_FPTR(name)	&(name)
 #endif
 
+/* Borland C thinks that a pointer to a member variable is 12 bytes in size. */
+#define PERL_MEMBER_PTR_SIZE	12
+
 #endif
 
 #ifdef _MSC_VER			/* Microsoft Visual C++ */
@@ -199,45 +198,8 @@ typedef long		gid_t;
 typedef unsigned short	mode_t;
 #pragma  warning(disable: 4018 4035 4101 4102 4244 4245 4761)
 
-#ifndef PERL_OBJECT
-
 /* Visual C thinks that a pointer to a member variable is 16 bytes in size. */
-#define STRUCT_MGVTBL_DEFINITION					\
-struct mgvtbl {								\
-    union {								\
-	int	    (CPERLscope(*svt_get))(pTHX_ SV *sv, MAGIC* mg);	\
-	char	    handle_VC_problem1[16];				\
-    };									\
-    union {								\
-	int	    (CPERLscope(*svt_set))(pTHX_ SV *sv, MAGIC* mg);	\
-	char	    handle_VC_problem2[16];				\
-    };									\
-    union {								\
-	U32	    (CPERLscope(*svt_len))(pTHX_ SV *sv, MAGIC* mg);	\
-	char	    handle_VC_problem3[16];				\
-    };									\
-    union {								\
-	int	    (CPERLscope(*svt_clear))(pTHX_ SV *sv, MAGIC* mg);	\
-	char	    handle_VC_problem4[16];				\
-    };									\
-    union {								\
-	int	    (CPERLscope(*svt_free))(pTHX_ SV *sv, MAGIC* mg);	\
-	char	    handle_VC_problem5[16];				\
-    };									\
-}
-
-#define BASEOP_DEFINITION		\
-    OP*		op_next;		\
-    OP*		op_sibling;		\
-    OP*		(CPERLscope(*op_ppaddr))(pTHX);		\
-    char	handle_VC_problem[12];	\
-    PADOFFSET	op_targ;		\
-    OPCODE	op_type;		\
-    U16		op_seq;			\
-    U8		op_flags;		\
-    U8		op_private;
-
-#endif /* PERL_OBJECT */
+#define PERL_MEMBER_PTR_SIZE	16
 
 #endif /* _MSC_VER */
 
@@ -250,9 +212,6 @@ typedef long		gid_t;
 #endif
 #define flushall	_flushall
 #define fcloseall	_fcloseall
-
-#undef __attribute__
-#define __attribute__(x)
 
 #ifndef CP_UTF8
 #  define CP_UTF8	65001
@@ -272,6 +231,45 @@ typedef long		gid_t;
 #endif /* __MINGW32__ */
 
 /* compatibility stuff for other compilers goes here */
+
+
+#if !defined(PERL_OBJECT) && defined(PERL_CAPI) && defined(PERL_MEMBER_PTR_SIZE)
+#  define STRUCT_MGVTBL_DEFINITION \
+struct mgvtbl {								\
+    union {								\
+	int	    (CPERLscope(*svt_get))(pTHX_ SV *sv, MAGIC* mg);	\
+	char	    handle_VC_problem1[PERL_MEMBER_PTR_SIZE];		\
+    };									\
+    union {								\
+	int	    (CPERLscope(*svt_set))(pTHX_ SV *sv, MAGIC* mg);	\
+	char	    handle_VC_problem2[PERL_MEMBER_PTR_SIZE];		\
+    };									\
+    union {								\
+	U32	    (CPERLscope(*svt_len))(pTHX_ SV *sv, MAGIC* mg);	\
+	char	    handle_VC_problem3[PERL_MEMBER_PTR_SIZE];		\
+    };									\
+    union {								\
+	int	    (CPERLscope(*svt_clear))(pTHX_ SV *sv, MAGIC* mg);	\
+	char	    handle_VC_problem4[PERL_MEMBER_PTR_SIZE];		\
+    };									\
+    union {								\
+	int	    (CPERLscope(*svt_free))(pTHX_ SV *sv, MAGIC* mg);	\
+	char	    handle_VC_problem5[PERL_MEMBER_PTR_SIZE];		\
+    };									\
+}
+
+#  define BASEOP_DEFINITION \
+    OP*		op_next;						\
+    OP*		op_sibling;						\
+    OP*		(CPERLscope(*op_ppaddr))(pTHX);				\
+    char	handle_VC_problem[PERL_MEMBER_PTR_SIZE-sizeof(OP*)];	\
+    PADOFFSET	op_targ;						\
+    OPCODE	op_type;						\
+    U16		op_seq;							\
+    U8		op_flags;						\
+    U8		op_private;
+
+#endif /* !PERL_OBJECT && PERL_CAPI && PERL_MEMBER_PTR_SIZE */
 
 
 START_EXTERN_C
@@ -336,12 +334,10 @@ typedef  char *		caddr_t;	/* In malloc.c (core address). */
 #define PERL_CORE
 #endif
 
-#ifdef USE_BINMODE_SCRIPTS
-#define PERL_SCRIPT_MODE "rb"
-EXT void win32_strip_return(struct sv *sv);
+#ifdef PERL_TEXTMODE_SCRIPTS
+#  define PERL_SCRIPT_MODE		"r"
 #else
-#define PERL_SCRIPT_MODE "r"
-#define win32_strip_return(sv) NOOP
+#  define PERL_SCRIPT_MODE		"rb"
 #endif
 
 /* 
@@ -427,12 +423,14 @@ struct interp_intern {
 /* Use CP_UTF8 when mode is UTF8 */
 
 #define A2WHELPER(lpa, lpw, nBytes)\
-    lpw[0] = 0, MultiByteToWideChar((IN_UTF8) ? CP_UTF8 : CP_ACP, 0, lpa, -1, lpw, (nBytes/sizeof(WCHAR)))
+    lpw[0] = 0, MultiByteToWideChar((IN_BYTE) ? CP_ACP : CP_UTF8, 0, \
+				    lpa, -1, lpw, (nBytes/sizeof(WCHAR)))
 
 #define W2AHELPER(lpw, lpa, nChars)\
-    lpa[0] = '\0', WideCharToMultiByte((IN_UTF8) ? CP_UTF8 : CP_ACP, 0, lpw, -1, (LPSTR)lpa, nChars, NULL, NULL)
+    lpa[0] = '\0', WideCharToMultiByte((IN_BYTE) ? CP_ACP : CP_UTF8, 0, \
+				       lpw, -1, (LPSTR)lpa, nChars, NULL, NULL)
 
-#define USING_WIDE()	(PerlEnv_os_id() == VER_PLATFORM_WIN32_NT)
+#define USING_WIDE() (PL_bigchar && PerlEnv_os_id() == VER_PLATFORM_WIN32_NT)
 
 #ifdef USE_ITHREADS
 #  define PERL_WAIT_FOR_CHILDREN \

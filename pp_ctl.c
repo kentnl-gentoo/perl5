@@ -114,6 +114,8 @@ PP(pp_regcomp)
 		PL_reginterp_cnt = I32_MAX; /* Mark as safe.  */
 
 	    pm->op_pmflags = pm->op_pmpermflags;	/* reset case sensitivity */
+	    if (DO_UTF8(tmpstr))
+		pm->op_pmdynflags |= PMdf_UTF8;
 	    pm->op_pmregexp = CALLREGCOMP(aTHX_ t, t + len, pm);
 	    PL_reginterp_cnt = 0;		/* XXXX Be extra paranoid - needed
 					   inside tie/overload accessors.  */
@@ -134,9 +136,13 @@ PP(pp_regcomp)
     else if (strEQ("\\s+", pm->op_pmregexp->precomp))
 	pm->op_pmflags |= PMf_WHITE;
 
+    /* XXX runtime compiled output needs to move to the pad */
     if (pm->op_pmflags & PMf_KEEP) {
 	pm->op_private &= ~OPpRUNTIME;	/* no point compiling again */
+#if !defined(USE_ITHREADS) && !defined(USE_THREADS)
+	/* XXX can't change the optree at runtime either */
 	cLOGOP->op_first->op_next = PL_op->op_next;
+#endif
     }
     RETURN;
 }
@@ -292,7 +298,8 @@ PP(pp_formline)
     NV value;
     bool gotsome;
     STRLEN len;
-    STRLEN fudge = SvCUR(tmpForm) * (IN_UTF8 ? 3 : 1) + 1;
+    STRLEN fudge = SvCUR(tmpForm) * (IN_BYTE ? 1 : 3) + 1;
+    bool item_is_utf = FALSE;
 
     if (!SvMAGICAL(tmpForm) || !SvCOMPILED(tmpForm)) {
 	SvREADONLY_off(tmpForm);
@@ -370,7 +377,7 @@ PP(pp_formline)
 	case FF_CHECKNL:
 	    item = s = SvPV(sv, len);
 	    itemsize = len;
-	    if (IN_UTF8) {
+	    if (DO_UTF8(sv)) {
 		itemsize = sv_len_utf8(sv);
 		if (itemsize != len) {
 		    I32 itembytes;
@@ -389,11 +396,13 @@ PP(pp_formline)
 			    break;
 			s++;
 		    }
+		    item_is_utf = TRUE;
 		    itemsize = s - item;
 		    sv_pos_b2u(sv, &itemsize);
 		    break;
 		}
 	    }
+	    item_is_utf = FALSE;
 	    if (itemsize > fieldsize)
 		itemsize = fieldsize;
 	    send = chophere = s + itemsize;
@@ -410,7 +419,7 @@ PP(pp_formline)
 	case FF_CHECKCHOP:
 	    item = s = SvPV(sv, len);
 	    itemsize = len;
-	    if (IN_UTF8) {
+	    if (DO_UTF8(sv)) {
 		itemsize = sv_len_utf8(sv);
 		if (itemsize != len) {
 		    I32 itembytes;
@@ -448,9 +457,11 @@ PP(pp_formline)
 			itemsize = chophere - item;
 			sv_pos_b2u(sv, &itemsize);
 		    }
+		    item_is_utf = TRUE;
 		    break;
 		}
 	    }
+	    item_is_utf = FALSE;
 	    if (itemsize <= fieldsize) {
 		send = chophere = s + itemsize;
 		while (s < send) {
@@ -506,7 +517,7 @@ PP(pp_formline)
 	case FF_ITEM:
 	    arg = itemsize;
 	    s = item;
-	    if (IN_UTF8) {
+	    if (item_is_utf) {
 		while (arg--) {
 		    if (*s & 0x80) {
 			switch (UTF8SKIP(s)) {
@@ -549,6 +560,7 @@ PP(pp_formline)
 	case FF_LINEGLOB:
 	    item = s = SvPV(sv, len);
 	    itemsize = len;
+	    item_is_utf = FALSE;		/* XXX is this correct? */
 	    if (itemsize) {
 		gotsome = TRUE;
 		send = s + itemsize;
@@ -993,7 +1005,9 @@ PP(pp_flop)
 	    mg_get(right);
 
 	if (SvNIOKp(left) || !SvPOKp(left) ||
-	  (looks_like_number(left) && *SvPVX(left) != '0') )
+	    SvNIOKp(right) || !SvPOKp(right) ||
+	    (looks_like_number(left) && *SvPVX(left) != '0' &&
+	     looks_like_number(right) && *SvPVX(right) != '0'))
 	{
 	    if (SvNV(left) < IV_MIN || SvNV(right) > IV_MAX)
 		DIE(aTHX_ "Range iterator outside integer range");
@@ -1296,7 +1310,7 @@ Perl_qerror(pTHX_ SV *err)
     else if (PL_errors)
 	sv_catsv(PL_errors, err);
     else
-	Perl_warn(aTHX_ "%_", err);
+	Perl_warn(aTHX_ "%"SVf, err);
     ++PL_error_count;
 }
 
@@ -1670,7 +1684,11 @@ PP(pp_enteriter)
 	if (SvTYPE(cx->blk_loop.iterary) != SVt_PVAV) {
 	    dPOPss;
 	    if (SvNIOKp(sv) || !SvPOKp(sv) ||
-		(looks_like_number(sv) && *SvPVX(sv) != '0')) {
+		SvNIOKp(cx->blk_loop.iterary) || !SvPOKp(cx->blk_loop.iterary) ||
+		(looks_like_number(sv) && *SvPVX(sv) != '0' &&
+		 looks_like_number((SV*)cx->blk_loop.iterary) &&
+		 *SvPVX(cx->blk_loop.iterary) != '0'))
+	    {
 		 if (SvNV(sv) < IV_MIN ||
 		     SvNV((SV*)cx->blk_loop.iterary) >= IV_MAX)
 		     DIE(aTHX_ "Range iterator outside integer range");
@@ -1949,10 +1967,17 @@ PP(pp_next)
     if (cxix < cxstack_ix)
 	dounwind(cxix);
 
-    TOPBLOCK(cx);
-    oldsave = PL_scopestack[PL_scopestack_ix - 1];
-    LEAVE_SCOPE(oldsave);
-    return cx->blk_loop.next_op;
+    cx = &cxstack[cxstack_ix];
+    {
+	OP *nextop = cx->blk_loop.next_op;
+	/* clean scope, but only if there's no continue block */
+	if (nextop == cUNOPx(cx->blk_loop.last_op)->op_first->op_next) {
+	    TOPBLOCK(cx);
+	    oldsave = PL_scopestack[PL_scopestack_ix - 1];
+	    LEAVE_SCOPE(oldsave);
+	}
+	return nextop;
+    }
 }
 
 PP(pp_redo)
@@ -2381,8 +2406,7 @@ PP(pp_goto)
 		/* Eventually we may want to stack the needed arguments
 		 * for each op.  For now, we punt on the hard ones. */
 		if (PL_op->op_type == OP_ENTERITER)
-		    DIE(aTHX_ "Can't \"goto\" into the middle of a foreach loop",
-			label);
+		    DIE(aTHX_ "Can't \"goto\" into the middle of a foreach loop");
 		CALL_FPTR(PL_op->op_ppaddr)(aTHX);
 	    }
 	    PL_op = oldop;
@@ -2830,10 +2854,54 @@ PP(pp_require)
     SV *filter_sub = 0;
 
     sv = POPs;
-    if (SvNIOKp(sv) && !SvPOKp(sv)) {
-	if (Atof(PL_patchlevel) + 0.00000999 < SvNV(sv))
-	    DIE(aTHX_ "Perl %s required--this is only version %s, stopped",
-		SvPV(sv,n_a),PL_patchlevel);
+    if (SvNIOKp(sv)) {
+	UV rev, ver, sver;
+	if (SvPOKp(sv) && SvUTF8(sv)) {		/* require v5.6.1 */
+	    I32 len;
+	    U8 *s = (U8*)SvPVX(sv);
+	    U8 *end = (U8*)SvPVX(sv) + SvCUR(sv);
+	    if (s < end) {
+		rev = utf8_to_uv(s, &len);
+		s += len;
+		if (s < end) {
+		    ver = utf8_to_uv(s, &len);
+		    s += len;
+		    if (s < end)
+			sver = utf8_to_uv(s, &len);
+		    else
+			sver = 0;
+		}
+		else
+		    ver = 0;
+	    }
+	    else
+		rev = 0;
+	    if (PERL_REVISION < rev
+		|| (PERL_REVISION == rev
+		    && (PERL_VERSION < ver
+			|| (PERL_VERSION == ver
+			    && PERL_SUBVERSION < sver))))
+	    {
+		DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--this is only version "
+		    "v%d.%d.%d, stopped", rev, ver, sver, PERL_REVISION,
+		    PERL_VERSION, PERL_SUBVERSION);
+	    }
+	}
+	else if (!SvPOKp(sv)) {			/* require 5.005_03 */
+	    NV n = SvNV(sv);
+	    rev = (UV)n;
+	    ver = (UV)((n-rev)*1000);
+	    sver = (UV)((((n-rev)*1000 - ver) + 0.0009) * 1000);
+
+	    if ((NV)PERL_REVISION + ((NV)PERL_VERSION/(NV)1000)
+		+ ((NV)PERL_SUBVERSION/(NV)1000000)
+		+ 0.00000099 < SvNV(sv))
+	    {
+		DIE(aTHX_ "Perl v%"UVuf".%"UVuf".%"UVuf" required--this is only version "
+		    "v%d.%d.%d, stopped", rev, ver, sver, PERL_REVISION,
+		    PERL_VERSION, PERL_SUBVERSION);
+	    }
+	}
 	RETPUSHYES;
     }
     name = SvPV(sv, len);

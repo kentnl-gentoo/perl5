@@ -33,12 +33,9 @@ ld2: $& Makefile perlld ${src}/cygwin/ld2.in
 # install is included in Cygwin distributions, and we make a note of th
 # requirement in the README.cygwin file. However, let's give them
 # a warning.
-	@if test -n "`type $1 2>&1 | sed -n -e '/'$1'$/p'`" ; then \
-		install -c -m 755 ld2 ${installbin}/ld2 ; \
-	else \
+	@install -c -m 755 ld2 ${installbin}/ld2
+	@if test ! -f  ${installbin}/ld2; then \
 		echo "*************************************************" ; \
-		echo "Oh, no! You didn't read the README.cygwin" ; \
-		echo "file, which stated that \"install\" was required." ; \
 		echo "Make will probably fail in a few more steps." ; \
 		echo "When it does, copy \"ld2\" to a directory in" ; \
 		echo "your path, other than \".\"." ; \
@@ -124,9 +121,9 @@ $(LIBPERL)$(LIB_EXT): $& perl$(OBJ_EXT) $(cwobj) ld2
 # build problems but that's not obvious to the novice.
 # The Module used here must not depend on Config or any extensions.
 
-miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)s$(LIB_EXT)
-	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl miniperlmain$(OBJ_EXT) $(LLIBPERL)s $(libs)
-	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
+miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)s$(LIB_EXT) opmini$(OBJ_EXT)
+	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL)s $(libs)
+	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 
 !NO!SUBS!
 	;;
@@ -146,9 +143,9 @@ $(LIBPERL)$(LIB_EXT): $& perl$(OBJ_EXT) $(cwobj)
 # build problems but that's not obvious to the novice.
 # The Module used here must not depend on Config or any extensions.
 
-miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)$(LIB_EXT)
-	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl miniperlmain$(OBJ_EXT) $(LLIBPERL) $(libs)
-	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
+miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)$(LIB_EXT) opmini$(OBJ_EXT)
+	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL) $(libs)
+	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 
 !NO!SUBS!
 	;;
@@ -158,6 +155,9 @@ esac
 # $(LIBPERL)$(LIB_EXT) expands to this name dependless of build model
 #
 $spitshell >>Makefile <<'!NO!SUBS!'
+
+opmini$(OBJ_EXT) : op.c
+	$(CCCMD) $(PLDLFLAGS) -DPERL_EXTERNAL_GLOB -o opmini$(OBJ_EXT) op.c
 
 perl: $& perlmain$(OBJ_EXT) $(LIBPERL)$(LIB_EXT) $(DYNALOADER) $(static_ext) ext.libs
 	$(SHRPENV) $(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o perl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)

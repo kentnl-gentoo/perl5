@@ -228,7 +228,7 @@ addedbyconf = UU $(shextract) $(plextract) pstruct
 
 h1 = EXTERN.h INTERN.h XSUB.h av.h config.h cop.h cv.h dosish.h
 h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h
-h3 = opcode.h patchlevel.h perl.h perly.h pp.h proto.h regcomp.h
+h3 = opcode.h patchlevel.h perl.h perlapi.h perly.h pp.h proto.h regcomp.h
 h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
 h5 = utf8.h warnings.h
 h = $(h1) $(h2) $(h3) $(h4) $(h5)
@@ -236,13 +236,13 @@ h = $(h1) $(h2) $(h3) $(h4) $(h5)
 c1 = $(mallocsrc) av.c scope.c op.c doop.c doio.c dump.c hv.c mg.c
 c2 = perl.c perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c
 c3 = gv.c sv.c taint.c toke.c util.c deb.c run.c universal.c xsutils.c
-c4 = globals.c perlio.c
+c4 = globals.c perlio.c perlapi.c
 
 c = $(c1) $(c2) $(c3) $(c4) miniperlmain.c perlmain.c
 
 obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
-obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) xsutils$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT)
+obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) xsutils$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT)
 
 obj = $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 
@@ -261,7 +261,7 @@ lintflags = -hbvxac
 .c$(OBJ_EXT):
 	$(CCCMD) $(PLDLFLAGS) $*.c
 
-all: $(FIRSTMAKEFILE) miniperl $(private) $(public) $(dynamic_ext) $(nonxs_ext)
+all: $(FIRSTMAKEFILE) miniperl extra.pods $(private) $(public) $(dynamic_ext) $(nonxs_ext)
 	@echo " ";
 	@echo "	Everything is up to date. 'make test' to run test suite."
 
@@ -285,6 +285,9 @@ utilities:	miniperl lib/Config.pm $(plextract) FORCE
 # Apparently some makes require an action for the FORCE target.
 FORCE:
 	@sh -c true
+
+opmini$(OBJ_EXT): op.c
+	$(CCCMD) $(PLDLFLAGS) -DPERL_EXTERNAL_GLOB -o opmini$(OBJ_EXT) op.c
 
 miniperlmain$(OBJ_EXT): miniperlmain.c
 	$(CCCMD) $(PLDLFLAGS) $*.c
@@ -336,8 +339,7 @@ $(LIBPERL_NONSHR): perl$(OBJ_EXT) $(obj)
 	$(RMS) $(LIBPERL_NONSHR)
 	$(AR) rcu $(LIBPERL_NONSHR) perl$(OBJ_EXT) $(obj)
 
-$(MINIPERL_NONSHR): $(LIBPERL_NONSHR) miniperlmain$(OBJ_EXT)
-	$(CCCMD) $(PLDLFLAGS) -DPERL_EXTERNAL_GLOB -o opmini$(OBJ_EXT) op.c
+$(MINIPERL_NONSHR): $(LIBPERL_NONSHR) miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT)
 	$(CC) $(LDFLAGS) -o $(MINIPERL_NONSHR) miniperlmain$(OBJ_EXT) \
 	    opmini$(OBJ_EXT) $(LIBPERL_NONSHR) $(LIBS)
 
@@ -421,11 +423,28 @@ $(LIBPERL): $& perl$(OBJ_EXT) $(obj) $(LIBPERLEXPORT)
 # build problems but that's not obvious to the novice.
 # The Module used here must not depend on Config or any extensions.
 
-miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL)
-	$(CCCMD) $(PLDLFLAGS) -DPERL_EXTERNAL_GLOB -o opmini$(OBJ_EXT) op.c
+!NO!SUBS!
+
+	case "${osname}${osvers}" in
+	next4*)
+		$spitshell >>Makefile <<'!NO!SUBS!'
+miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
+	$(CC) -o miniperl `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
+	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) perl$(OBJ_EXT) $(libs)
+	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+!NO!SUBS!
+		;;
+	*)
+		$spitshell >>Makefile <<'!NO!SUBS!'
+miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 	$(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) -o miniperl \
 	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL) $(libs)
-	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e 0 || $(MAKE) minitest
+	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+!NO!SUBS!
+		;;
+	esac
+
+	$spitshell >>Makefile <<'!NO!SUBS!'
 
 perl: $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
 	$(SHRPENV) $(LDLIBPTH) $(CC) $(LARGE) $(CLDFLAGS) $(CCDLFLAGS) -o perl perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
@@ -471,7 +490,7 @@ preplibrary: miniperl lib/Config.pm
 # Take care to avoid modifying lib/Config.pm without reason
 # (If trying to create a new port and having problems with the configpm script, 
 # try 'make minitest' and/or commenting out the tests at the end of configpm.)
-lib/Config.pm: config.sh miniperl configpm
+lib/Config.pm: config.sh miniperl configpm lib/re.pm
 	$(LDLIBPTH) ./miniperl configpm configpm.tmp
 	sh mv-if-diff configpm.tmp $@
 
@@ -483,10 +502,10 @@ lib/re.pm: ext/re/re.pm
 	rm -f $@
 	cat ext/re/re.pm > $@
 
-$(plextract):	miniperl lib/Config.pm lib/re.pm
+$(plextract):	miniperl lib/Config.pm
 	$(LDLIBPTH) ./miniperl -Ilib $@.PL
 
-extra.pods: perl
+extra.pods: miniperl
 	-@test -f extra.pods && rm -f `cat extra.pods`
 	-@rm -f extra.pods
 	-@for x in `grep -l '^=[a-z]' README.*` ; do \
@@ -497,7 +516,7 @@ extra.pods: perl
 
 install: all install.perl install.man
 
-install.perl:	all extra.pods installperl
+install.perl:	all installperl
 	if [ -n "$(COMPILE)" ]; \
 	then \
 		cd utils; $(MAKE) compile; \
@@ -507,7 +526,7 @@ install.perl:	all extra.pods installperl
 	fi
 	$(LDLIBPTH) ./perl installperl
 
-install.man:	all extra.pods installman
+install.man:	all installman
 	$(LDLIBPTH) ./perl installman
 
 # XXX Experimental. Hardwired values, but useful for testing.
@@ -532,7 +551,7 @@ install.html: all installhtml
 
 run_byacc:	FORCE
 	$(BYACC) -d perly.y
-	chmod 664 perly.c
+	-chmod 664 perly.c
 	sh $(shellflags) ./perly.fixer y.tab.c perly.c
 	sed -e 's/fprintf *( *stderr *,/PerlIO_printf(Perl_debug_log,/g' \
 	    -e 's/y\.tab/perly/g' perly.c >perly.tmp && mv perly.tmp perly.c

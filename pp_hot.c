@@ -29,7 +29,6 @@
 #include <sys/file.h>
 #endif
 
-#define HOP(pos,off) (IN_UTF8 ? utf8_hop(pos, off) : (pos + off))
 
 /* Hot code. */
 
@@ -153,8 +152,14 @@ PP(pp_concat)
     dPOPTOPssrl;
     STRLEN len;
     char *s;
+
     if (TARG != left) {
 	s = SvPV(left,len);
+	if (TARG == right) {
+	    sv_insert(TARG, 0, 0, s, len);
+	    SETs(TARG);
+	    RETURN;
+	}
 	sv_setpvn(TARG,s,len);
     }
     else if (SvGMAGICAL(TARG))
@@ -360,15 +365,15 @@ PP(pp_print)
     }
     else if (!(fp = IoOFP(io))) {
 	if (ckWARN2(WARN_CLOSED, WARN_IO))  {
-	    SV* sv = sv_newmortal();
-	    gv_efullname3(sv, gv, Nullch);
-	    if (IoIFP(io))
+	    if (IoIFP(io)) {
+		SV* sv = sv_newmortal();
+		gv_efullname3(sv, gv, Nullch);
 		Perl_warner(aTHX_ WARN_IO,
 			    "Filehandle %s opened only for input",
 			    SvPV(sv,n_a));
+	    }
 	    else if (ckWARN(WARN_CLOSED))
-		Perl_warner(aTHX_ WARN_CLOSED,
-			    "print on closed filehandle %s", SvPV(sv,n_a));
+		report_closed_fh(gv, io, "print", "filehandle");
 	}
 	SETERRNO(EBADF,IoIFP(io)?RMS$_FAC:RMS$_IFI);
 	goto just_say_no;
@@ -1036,6 +1041,7 @@ yup:					/* Confirmed by INTUIT */
 	rx->startp[0] = s - truebase;
 	rx->endp[0] = s - truebase + rx->minlen;
     }
+    rx->nparens = rx->lastparen = 0;	/* used by @- and @+ */
     LEAVE_SCOPE(oldsave);
     RETPUSHYES;
 
@@ -1251,13 +1257,8 @@ Perl_do_readline(pTHX)
 		Perl_warner(aTHX_ WARN_CLOSED,
 			    "glob failed (can't start child: %s)",
 			    Strerror(errno));
-	    else {
-		SV* sv = sv_newmortal();
-		gv_efullname3(sv, PL_last_in_gv, Nullch);
-		Perl_warner(aTHX_ WARN_CLOSED,
-			    "Read on closed filehandle %s",
-			    SvPV_nolen(sv));
-	    }
+	    else
+		report_closed_fh(PL_last_in_gv, io, "readline", "filehandle");
 	}
 	if (gimme == G_SCALAR) {
 	    (void)SvOK_off(TARG);
@@ -1284,12 +1285,11 @@ Perl_do_readline(pTHX)
 	offset = 0;
     }
 
-/* flip-flop EOF state for a snarfed empty file */
+/* delay EOF state for a snarfed empty file */
 #define SNARF_EOF(gimme,rs,io,sv) \
-    ((gimme != G_SCALAR || SvCUR(sv)					\
-      || (IoFLAGS(io) & IOf_NOLINE) || IoLINES(io) || !RsSNARF(rs))	\
-	? ((IoFLAGS(io) &= ~IOf_NOLINE), TRUE)				\
-	: ((IoFLAGS(io) |= IOf_NOLINE), FALSE))
+    (gimme != G_SCALAR || SvCUR(sv)					\
+     || !RsSNARF(rs) || (IoFLAGS(io) & IOf_NOLINE)			\
+     || ((IoFLAGS(io) |= IOf_NOLINE), FALSE))
 
     for (;;) {
 	if (!sv_gets(sv, fp, offset)
@@ -1306,7 +1306,7 @@ Perl_do_readline(pTHX)
 		if (!do_close(PL_last_in_gv, FALSE) && ckWARN(WARN_CLOSED)) {
 		    Perl_warner(aTHX_ WARN_CLOSED,
 			   "glob failed (child exited with status %d%s)",
-			   STATUS_CURRENT >> 8,
+			   (int)(STATUS_CURRENT >> 8),
 			   (STATUS_CURRENT & 0x80) ? ", core dumped" : "");
 		}
 	    }
@@ -2738,7 +2738,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	    !(ob=(SV*)GvIO(iogv)))
 	{
 	    if (!packname || 
-		((*(U8*)packname >= 0xc0 && IN_UTF8)
+		((*(U8*)packname >= 0xc0 && DO_UTF8(sv))
 		    ? !isIDFIRST_utf8((U8*)packname)
 		    : !isIDFIRST(*packname)
 		))

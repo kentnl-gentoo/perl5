@@ -23,8 +23,25 @@
 #define VOIDUSED 1
 #include "config.h"
 
+#if defined(USE_ITHREADS) && defined(USE_5005THREADS)
+#  include "error: USE_ITHREADS and USE_5005THREADS are incompatible"
+#endif
+
+/* XXX This next guard can disappear if the sources are revised
+   to use USE_5005THREADS throughout. -- A.D  1/6/2000
+*/
+#if defined(USE_ITHREADS) && defined(USE_THREADS)
+#  include "error: USE_ITHREADS and USE_THREADS are incompatible"
+#endif
+
 /* See L<perlguts/"The Perl API"> for detailed notes on
  * PERL_IMPLICIT_CONTEXT and PERL_IMPLICIT_SYS */
+
+#ifdef USE_ITHREADS
+#  if !defined(MULTIPLICITY) && !defined(PERL_OBJECT)
+#    define MULTIPLICITY
+#  endif
+#endif
 
 #ifdef USE_THREADS
 #  ifndef PERL_IMPLICIT_CONTEXT
@@ -40,6 +57,9 @@
 
 #ifdef PERL_CAPI
 #  undef PERL_OBJECT
+#  ifndef MULTIPLICITY
+#    define MULTIPLICITY
+#  endif
 #  ifndef PERL_IMPLICIT_CONTEXT
 #    define PERL_IMPLICIT_CONTEXT
 #  endif
@@ -171,6 +191,10 @@ struct perl_thread;
 #  define dTHX		dTHXa(PERL_GET_THX)
 #  define pTHX_		pTHX,
 #  define aTHX_		aTHX,
+#  define pTHX_1	2	
+#  define pTHX_2	3
+#  define pTHX_3	4
+#  define pTHX_4	5
 #endif
 
 #define STATIC static
@@ -203,6 +227,10 @@ struct perl_thread;
 #  define aTHX_
 #  define dTHXa(a)	dNOOP
 #  define dTHX		dNOOP
+#  define pTHX_1	1	
+#  define pTHX_2	2
+#  define pTHX_3	3
+#  define pTHX_4	4
 #endif
 
 #ifndef pTHXo
@@ -383,7 +411,8 @@ register struct op *Perl_op asm(stringify(OP_IN_REGISTER));
 /* HP-UX 10.X CMA (Common Multithreaded Architecure) insists that
    pthread.h must be included before all other header files.
 */
-#if defined(USE_THREADS) && defined(PTHREAD_H_FIRST) && defined(I_PTHREAD)
+#if (defined(USE_THREADS) || defined(USE_ITHREADS)) \
+    && defined(PTHREAD_H_FIRST) && defined(I_PTHREAD)
 #  include <pthread.h>
 #endif
 
@@ -1070,10 +1099,16 @@ typedef NVTYPE NV;
 #   define Perl_fmod fmod
 #endif
 
-#if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE) && defined(HAS_ATOLF)
-#   define Perl_atof atolf
-#else
-#   define Perl_atof atof
+#if !defined(Perl_atof) && defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE)
+#   if !defined(Perl_atof) && defined(HAS_STRTOLD)
+#       define Perl_atof(s) strtold(s, (char**)NULL)
+#   endif
+#   if !defined(Perl_atof) && defined(HAS_ATOLF)
+#       define Perl_atof atolf
+#   endif
+#endif
+#if !defined(Perl_atof)
+#   define Perl_atof atof /* we assume atof being available anywhere */
 #endif
 
 /* Previously these definitions used hardcoded figures. 
@@ -1469,10 +1504,6 @@ typedef struct ptr_tbl PTR_TBL_t;
 #  define PERL_SYS_INIT3(argvp,argcp,envp) PERL_SYS_INIT(argvp,argcp)
 #endif
 
-#ifndef PERL_SYS_INIT3
-#  define PERL_SYS_INIT3(argvp,argcp,envp) PERL_SYS_INIT(argvp,argcp)
-#endif
-
 #ifndef MAXPATHLEN
 #  ifdef PATH_MAX
 #    ifdef _POSIX_PATH_MAX
@@ -1502,11 +1533,12 @@ typedef struct ptr_tbl PTR_TBL_t;
  * May make sense to have threads after "*ish.h" anyway
  */
 
-#ifdef USE_THREADS
+#if defined(USE_THREADS) || defined(USE_ITHREADS)
+#  if defined(USE_THREADS)
    /* pending resolution of licensing issues, we avoid the erstwhile
     * atomic.h everywhere */
 #  define EMULATE_ATOMIC_REFCOUNTS
-
+#  endif
 #  ifdef FAKE_THREADS
 #    include "fakethr.h"
 #  else
@@ -1537,10 +1569,10 @@ typedef pthread_key_t	perl_key;
 #      endif /* OS2 */
 #    endif /* WIN32 */
 #  endif /* FAKE_THREADS */
-#endif /* USE_THREADS */
+#endif /* USE_THREADS || USE_ITHREADS */
 
 #ifdef WIN32
-#include "win32.h"
+#  include "win32.h"
 #endif
 
 #ifdef VMS
@@ -1596,7 +1628,13 @@ typedef pthread_key_t	perl_key;
 #define PERL_EXIT_EXPECTED	0x01
 
 #ifndef MEMBER_TO_FPTR
-#define MEMBER_TO_FPTR(name)		name
+#  define MEMBER_TO_FPTR(name)		name
+#endif
+
+/* format to use for version numbers in file/directory names */
+/* XXX move to Configure? */
+#ifndef PERL_FS_VER_FMT
+#  define PERL_FS_VER_FMT	"%d.%d.%d"
 #endif
 
 /* This defines a way to flush all output buffers.  This may be a
@@ -1644,6 +1682,14 @@ typedef pthread_key_t	perl_key;
 #  endif
 #  endif
 #  endif
+#endif
+
+#ifndef SVf
+#  ifdef CHECK_FORMAT
+#    define SVf "p"
+#  else
+#    define SVf "_"
+#  endif 
 #endif
 
 /* Some unistd.h's give a prototype for pause() even though
@@ -1842,6 +1888,8 @@ struct ptr_tbl {
 #define U_V(what) (cast_uv((NV)(what)))
 #endif
 
+/* Mention NV_PRESERVES_UV so that Configure picks it up. */
+
 /* These do not care about the fractional part, only about the range. */
 #define NV_WITHIN_IV(nv) (I_V(nv) >= IV_MIN && I_V(nv) <= IV_MAX)
 #define NV_WITHIN_UV(nv) ((nv)>=0.0 && U_V(nv) >= UV_MIN && U_V(nv) <= UV_MAX)
@@ -1868,6 +1916,7 @@ Gid_t getegid (void);
 
 #ifndef Perl_error_log
 #  define Perl_error_log	(PL_stderrgv			\
+				 && IoOFP(GvIOp(PL_stderrgv))	\
 				 ? IoOFP(GvIOp(PL_stderrgv))	\
 				 : PerlIO_stderr())
 #endif
@@ -2418,7 +2467,7 @@ enum {		/* pass one of these to get_vtbl */
 #define HINT_INTEGER		0x00000001
 #define HINT_STRICT_REFS	0x00000002
 /* #define HINT_notused4	0x00000004 */
-#define HINT_UTF8		0x00000008
+#define HINT_BYTE		0x00000008
 /* #define HINT_notused10	0x00000010 */
 				/* Note: 20,40,80 used for NATIVE_HINTS */
 
@@ -2438,6 +2487,7 @@ enum {		/* pass one of these to get_vtbl */
 #define HINT_RE_EVAL		0x00200000
 
 #define HINT_FILETEST_ACCESS	0x00400000
+#define HINT_UTF8		0x00800000
 
 /* Various states of an input record separator SV (rs, nrs) */
 #define RsSNARF(sv)   (! SvOK(sv))
@@ -2956,16 +3006,29 @@ typedef struct am_table_short AMTS;
 
 #endif /* !USE_LOCALE_NUMERIC */
 
-#if defined(USE_LONG_LONG) && defined(HAS_LONG_LONG) && defined(HAS_ATOLL)
-#define Atol atoll 
-#else
-#define Atol atol
+#if !defined(Atol) && defined(USE_LONG_LONG) && defined(HAS_LONG_LONG)
+#   if !defined(Atol) && defined(HAS_STRTOLL)
+#       define Atol(s) strtoll(s, (char**)NULL, 10)
+#   endif
+#   if !defined(Atol) && defined(HAS_ATOLL)
+#       define Atol atoll
+#   endif
+#endif
+/* is there atoq() anywhere? */
+#if !defined(Atol)
+#   define Atol atol /* we assume atol being available anywhere */
 #endif
 
-#if defined(USE_LONG_LONG) && defined(HAS_LONG_LONG) && defined(HAS_STRTOULL)
-#define Strtoul strtoull
-#else
-#define Strtoul strtoul
+#if !defined(Strtoul) && defined(USE_LONG_LONG) && defined(HAS_LONG_LONG) \
+	&& defined(HAS_STRTOULL)
+#   define Strtoul strtoull
+#endif
+/* is there atouq() anywhere? */
+#if !defined(Strtoul) && defined(USE_64_BITS) && defined(HAS_STRTOUQ)
+#   define Strtoul strtouq
+#endif
+#if !defined(Strtoul)
+#   define Strtoul strtoul /* we assume strtoul being available anywhere */
 #endif
 
 #if !defined(PERLIO_IS_STDIO) && defined(HASATTRIBUTE)

@@ -78,9 +78,9 @@ Perl_dump_sub(pTHX_ GV *gv)
     gv_fullname3(sv, gv, Nullch);
     Perl_dump_indent(aTHX_ 0, Perl_debug_log, "\nSUB %s = ", SvPVX(sv));
     if (CvXSUB(GvCV(gv)))
-	Perl_dump_indent(aTHX_ 0, Perl_debug_log, "(xsub 0x%x %d)\n",
+	Perl_dump_indent(aTHX_ 0, Perl_debug_log, "(xsub 0x%lx %d)\n",
 	    (long)CvXSUB(GvCV(gv)),
-	    CvXSUBANY(GvCV(gv)).any_i32);
+	    (int)CvXSUBANY(GvCV(gv)).any_i32);
     else if (CvROOT(GvCV(gv)))
 	op_dump(CvROOT(GvCV(gv)));
     else
@@ -392,7 +392,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 	if (o->op_type == OP_NULL)
 	    Perl_dump_indent(aTHX_ level, file, "  (was %s)\n", PL_op_name[o->op_targ]);
 	else
-	    Perl_dump_indent(aTHX_ level, file, "TARG = %d\n", o->op_targ);
+	    Perl_dump_indent(aTHX_ level, file, "TARG = %ld\n", (long)o->op_targ);
     }
 #ifdef DUMPADDR
     Perl_dump_indent(aTHX_ level, file, "ADDR = 0x%"UVxf" => 0x%"UVxf"\n", (UV)o, (UV)o->op_next);
@@ -485,6 +485,8 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, OP *o)
 	    else {
 		if (o->op_private & HINT_STRICT_REFS)
 		    sv_catpv(tmpsv, ",STRICT_REFS");
+		if (o->op_private & OPpOUR_INTRO)
+		    sv_catpv(tmpsv, ",OUR_INTRO");
 	    }
 	}
 	else if (o->op_type == OP_CONST) {
@@ -699,7 +701,7 @@ Perl_do_magic_dump(pTHX_ I32 level, PerlIO *file, MAGIC *mg, I32 nest, I32 maxne
 		do_sv_dump(level+2, file, mg->mg_obj, nest+1, maxnest, dumpops, pvlim); /* MG is already +1 */
 	}
         if (mg->mg_len)
-	    Perl_dump_indent(aTHX_ level, file, "    MG_LEN = %d\n", mg->mg_len);
+	    Perl_dump_indent(aTHX_ level, file, "    MG_LEN = %ld\n", (long)mg->mg_len);
         if (mg->mg_ptr) {
 	    Perl_dump_indent(aTHX_ level, file, "    MG_PTR = 0x%"UVxf, PTR2UV(mg->mg_ptr));
 	    if (mg->mg_len >= 0) {
@@ -780,8 +782,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
     Perl_sv_setpvf(aTHX_ d,
 		   "(0x%"UVxf") at 0x%"UVxf"\n%*s  REFCNT = %"IVdf"\n%*s  FLAGS = (",
 		   PTR2UV(SvANY(sv)), PTR2UV(sv),
-		   PL_dumpindent*level, "", (IV)SvREFCNT(sv),
-		   PL_dumpindent*level, "");
+		   (int)(PL_dumpindent*level), "", (IV)SvREFCNT(sv),
+		   (int)(PL_dumpindent*level), "");
 
     if (flags & SVs_PADBUSY)	sv_catpv(d, "PADBUSY,");
     if (flags & SVs_PADTMP)	sv_catpv(d, "PADTMP,");
@@ -1087,7 +1089,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	Perl_dump_indent(aTHX_ level, file, "  MUTEXP = 0x%"UVxf"\n", PTR2UV(CvMUTEXP(sv)));
 	Perl_dump_indent(aTHX_ level, file, "  OWNER = 0x%"UVxf"\n",  PTR2UV(CvOWNER(sv)));
 #endif /* USE_THREADS */
-	Perl_dump_indent(aTHX_ level, file, "  FLAGS = 0x%"UVxf"\n", CvFLAGS(sv));
+	Perl_dump_indent(aTHX_ level, file, "  FLAGS = 0x%"UVxf"\n", (UV)CvFLAGS(sv));
 	if (type == SVt_PVFM)
 	    Perl_dump_indent(aTHX_ level, file, "  LINES = %"IVdf"\n", (IV)FmLINES(sv));
 	Perl_dump_indent(aTHX_ level, file, "  PADLIST = 0x%"UVxf"\n", PTR2UV(CvPADLIST(sv)));
@@ -1105,7 +1107,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 				/* %5d below is enough whitespace. */
 				file, 
 				"%5d. 0x%"UVxf" (%s\"%s\" %"IVdf"-%"IVdf")\n",
-				ix, PTR2UV(ppad[ix]),
+				(int)ix, PTR2UV(ppad[ix]),
 				SvFAKE(pname[ix]) ? "FAKE " : "",
 				SvPVX(pname[ix]),
 				(IV)SvNVX(pname[ix]),
@@ -1130,6 +1132,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	Perl_dump_indent(aTHX_ level, file, "  NAMELEN = %"IVdf"\n", (IV)GvNAMELEN(sv));
 	do_hv_dump (level, file, "  GvSTASH", GvSTASH(sv));
 	Perl_dump_indent(aTHX_ level, file, "  GP = 0x%"UVxf"\n", PTR2UV(GvGP(sv)));
+	if (!GvGP(sv))
+	    break;
 	Perl_dump_indent(aTHX_ level, file, "    SV = 0x%"UVxf"\n", PTR2UV(GvSV(sv)));
 	Perl_dump_indent(aTHX_ level, file, "    REFCNT = %"IVdf"\n", (IV)GvREFCNT(sv));
 	Perl_dump_indent(aTHX_ level, file, "    IO = 0x%"UVxf"\n", PTR2UV(GvIOp(sv)));

@@ -34,6 +34,14 @@ struct gp {
 #define GvSTASH(gv)	(GvXPVGV(gv)->xgv_stash)
 #define GvFLAGS(gv)	(GvXPVGV(gv)->xgv_flags)
 
+/*
+=for apidoc Am|SV*|GvSV|GV* gv
+
+Return the SV from the GV.
+
+=cut
+*/
+
 #define GvSV(gv)	(GvGP(gv)->gp_sv)
 #define GvREFCNT(gv)	(GvGP(gv)->gp_refcnt)
 #define GvIO(gv)	((gv) && SvTYPE((SV*)gv) == SVt_PVGV ? GvIOp(gv) : 0)
@@ -141,4 +149,3 @@ HV *GvHVn();
 #define GV_ADDWARN	0x04	/* add, but warn if symbol wasn't already there */
 #define GV_ADDINEVAL	0x08	/* add, as though we're doing so within an eval */
 #define GV_NOINIT	0x10	/* add, but don't init symbol, if type != PVGV */
-#define GV_ADDOUR	0x20	/* add "our" variable */

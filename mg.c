@@ -60,6 +60,14 @@ S_save_magic(pTHX_ I32 mgs_ix, SV *sv)
     SvFLAGS(sv) |= (SvFLAGS(sv) & (SVp_IOK|SVp_NOK|SVp_POK)) >> PRIVSHIFT;
 }
 
+/*
+=for apidoc mg_magical
+
+Turns on the magical status of an SV.  See C<sv_magic>.
+
+=cut
+*/
+
 void
 Perl_mg_magical(pTHX_ SV *sv)
 {
@@ -76,6 +84,14 @@ Perl_mg_magical(pTHX_ SV *sv)
 	}
     }
 }
+
+/*
+=for apidoc mg_get
+
+Do magic after a value is retrieved from the SV.  See C<sv_magic>.
+
+=cut
+*/
 
 int
 Perl_mg_get(pTHX_ SV *sv)
@@ -112,6 +128,14 @@ Perl_mg_get(pTHX_ SV *sv)
     return 0;
 }
 
+/*
+=for apidoc mg_set
+
+Do magic after a value is assigned to the SV.  See C<sv_magic>.
+
+=cut
+*/
+
 int
 Perl_mg_set(pTHX_ SV *sv)
 {
@@ -137,6 +161,14 @@ Perl_mg_set(pTHX_ SV *sv)
     restore_magic(aTHXo_ (void*)mgs_ix);
     return 0;
 }
+
+/*
+=for apidoc mg_length
+
+Report on the SV's length.  See C<sv_magic>.
+
+=cut
+*/
 
 U32
 Perl_mg_length(pTHX_ SV *sv)
@@ -196,6 +228,14 @@ Perl_mg_size(pTHX_ SV *sv)
     return 0;
 }
 
+/*
+=for apidoc mg_clear
+
+Clear something magical that the SV represents.  See C<sv_magic>.
+
+=cut
+*/
+
 int
 Perl_mg_clear(pTHX_ SV *sv)
 {
@@ -217,6 +257,14 @@ Perl_mg_clear(pTHX_ SV *sv)
     return 0;
 }
 
+/*
+=for apidoc mg_find
+
+Finds the magic pointer for type matching the SV.  See C<sv_magic>.
+
+=cut
+*/
+
 MAGIC*
 Perl_mg_find(pTHX_ SV *sv, int type)
 {
@@ -227,6 +275,14 @@ Perl_mg_find(pTHX_ SV *sv, int type)
     }
     return 0;
 }
+
+/*
+=for apidoc mg_copy
+
+Copies the magic from one SV to another.  See C<sv_magic>.
+
+=cut
+*/
 
 int
 Perl_mg_copy(pTHX_ SV *sv, SV *nsv, const char *key, I32 klen)
@@ -243,6 +299,14 @@ Perl_mg_copy(pTHX_ SV *sv, SV *nsv, const char *key, I32 klen)
     }
     return count;
 }
+
+/*
+=for apidoc mg_free
+
+Free any magic storage used by the SV.  See C<sv_magic>.
+
+=cut
+*/
 
 int
 Perl_mg_free(pTHX_ SV *sv)
@@ -503,6 +567,9 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	sv_setiv(sv, (IV)PL_basetime);
 #endif
 	break;
+    case '\025':		/* ^U */
+	sv_setiv(sv, (IV)PL_bigchar);
+	break;
     case '\027':		/* ^W  & $^Warnings*/
 	if (*(mg->mg_ptr+1) == '\0')
 	    sv_setiv(sv, (IV)((PL_dowarn & G_WARN_ON) ? TRUE : FALSE));
@@ -545,6 +612,10 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 			PL_tainted = FALSE;
 		    }
 		    sv_setpvn(sv, s, i);
+		    if ((PL_curpm->op_pmdynflags & PMdf_UTF8) && !IN_BYTE)
+			SvUTF8_on(sv);
+		    else
+			SvUTF8_off(sv);
 		    if (PL_tainting)
 			PL_tainted = (was_tainted || RX_MATCH_TAINTED(rx));
 		    break;
@@ -848,7 +919,7 @@ Perl_magic_clear_all_env(pTHX_ SV *sv, MAGIC *mg)
 #	ifdef CYGWIN
     I32 i;
     for (i = 0; environ[i]; i++)
-       Safefree(environ[i]);
+       safesysfree(environ[i]);
 #	else
 #	    ifndef PERL_USE_SAFE_PUTENV
     I32 i;
@@ -1222,7 +1293,7 @@ Perl_magic_getpos(pTHX_ SV *sv, MAGIC *mg)
 	if (mg && mg->mg_len >= 0) {
 	    dTHR;
 	    I32 i = mg->mg_len;
-	    if (IN_UTF8)
+	    if (DO_UTF8(lsv))
 		sv_pos_b2u(lsv, &i);
 	    sv_setiv(sv, i + PL_curcop->cop_arybase);
 	    return 0;
@@ -1238,7 +1309,7 @@ Perl_magic_setpos(pTHX_ SV *sv, MAGIC *mg)
     SV* lsv = LvTARG(sv);
     SSize_t pos;
     STRLEN len;
-    STRLEN ulen;
+    STRLEN ulen = 0;
     dTHR;
 
     mg = 0;
@@ -1259,12 +1330,10 @@ Perl_magic_setpos(pTHX_ SV *sv, MAGIC *mg)
 
     pos = SvIV(sv) - PL_curcop->cop_arybase;
 
-    if (IN_UTF8) {
+    if (DO_UTF8(lsv)) {
 	ulen = sv_len_utf8(lsv);
 	if (ulen)
 	    len = ulen;
-	else
-	    ulen = 0;
     }
 
     if (pos < 0) {
@@ -1640,6 +1709,9 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 #else
 	PL_basetime = (Time_t)(SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv));
 #endif
+	break;
+    case '\025':	/* ^U */
+	PL_bigchar = SvTRUE(sv);
 	break;
     case '\027':	/* ^W & $^Warnings */
 	if (*(mg->mg_ptr+1) == '\0') {

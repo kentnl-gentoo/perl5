@@ -13,7 +13,7 @@ $VERSION = '2.101';
 
 #$| = 1;
 
-require 5.004_02;
+require 5.005_64;
 require Exporter;
 use XSLoader ();
 require overload;
@@ -230,7 +230,7 @@ sub _dump {
 	  if ($s->{purity} and $s->{level} > 0) {
 	    $out = ($realtype eq 'HASH')  ? '{}' :
 	      ($realtype eq 'ARRAY') ? '[]' :
-		"''" ;
+		'do{my $o}' ;
 	    push @post, $name . " = " . $s->{seen}{$id}[0];
 	  }
 	  else {
@@ -550,25 +550,35 @@ my %esc = (
 sub qquote {
   local($_) = shift;
   s/([\\\"\@\$])/\\$1/g;
-  return qq("$_") unless /[^\040-\176]/;  # fast exit
+  return qq("$_") unless 
+    /[^ !"\#\$%&'()*+,\-.\/0-9:;<=>?\@A-Z[\\\]^_`a-z{|}~]/;  # fast exit
 
   my $high = shift || "";
   s/([\a\b\t\n\f\r\e])/$esc{$1}/g;
 
-  # no need for 3 digits in escape for these
-  s/([\0-\037])(?!\d)/'\\'.sprintf('%o',ord($1))/eg;
-
-  s/([\0-\037\177])/'\\'.sprintf('%03o',ord($1))/eg;
-  if ($high eq "iso8859") {
-    s/([\200-\240])/'\\'.sprintf('%o',ord($1))/eg;
-  } elsif ($high eq "utf8") {
-#   use utf8;
-#   $str =~ s/([^\040-\176])/sprintf "\\x{%04x}", ord($1)/ge;
-  } elsif ($high eq "8bit") {
-      # leave it as it is
-  } else {
-    s/([\0-\037\177-\377])/'\\'.sprintf('%03o',ord($1))/eg;
+  if (ord('^')==94)  { # ascii
+    # no need for 3 digits in escape for these
+    s/([\0-\037])(?!\d)/'\\'.sprintf('%o',ord($1))/eg;
+    s/([\0-\037\177])/'\\'.sprintf('%03o',ord($1))/eg;
+    # all but last branch below not supported --BEHAVIOR SUBJECT TO CHANGE--
+    if ($high eq "iso8859") {
+      s/([\200-\240])/'\\'.sprintf('%o',ord($1))/eg;
+    } elsif ($high eq "utf8") {
+#     use utf8;
+#     $str =~ s/([^\040-\176])/sprintf "\\x{%04x}", ord($1)/ge;
+    } elsif ($high eq "8bit") {
+        # leave it as it is
+    } else {
+      s/([\200-\377])/'\\'.sprintf('%03o',ord($1))/eg;
+    }
   }
+  else { # ebcdic
+      s{([^ !"\#\$%&'()*+,\-.\/0-9:;<=>?\@A-Z[\\\]^_`a-z{|}~])(?!\d)}
+       {my $v = ord($1); '\\'.sprintf(($v <= 037 ? '%o' : '%03o'), $v)}eg;
+      s{([^ !"\#\$%&'()*+,\-.\/0-9:;<=>?\@A-Z[\\\]^_`a-z{|}~])}
+       {'\\'.sprintf('%03o',ord($1))}eg;
+  }
+
   return qq("$_");
 }
 

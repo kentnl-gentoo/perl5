@@ -639,7 +639,10 @@ Perl_re_intuit_start(pTHX_ regexp *prog, SV *sv, char *strpos,
 	/* Even in this situation we may use MBOL flag if strpos is offset
 	   wrt the start of the string. */
 	if (ml_anch && sv
-	    && (strpos + SvCUR(sv) != strend) && strpos[-1] != '\n') {
+	    && (strpos + SvCUR(sv) != strend) && strpos[-1] != '\n'
+	    /* May be due to an implicit anchor of m{.*foo}  */
+	    && !(prog->reganch & ROPT_IMPLICIT))
+	{
 	    t = strpos;
 	    goto find_anchor;
 	}
@@ -688,6 +691,10 @@ Perl_re_intuit_start(pTHX_ regexp *prog, SV *sv, char *strpos,
 	char *startpos = sv ? strend - SvCUR(sv) : s;
 
 	t = s;
+	if (prog->reganch & ROPT_UTF8) {	
+	    PL_regdata = prog->data;	/* Used by REGINCLASS UTF logic */
+	    PL_bostr = startpos;
+	}
         s = find_byclass(prog, prog->regstclass, s, endpos, startpos, 1);
 	if (!s) {
 #ifdef DEBUGGING
@@ -730,13 +737,17 @@ Perl_re_intuit_start(pTHX_ regexp *prog, SV *sv, char *strpos,
 			  (long)(other_last - i_strpos)) );
 		goto do_other_anchored;
 	    }
-	    if (!prog->float_substr) {	/* Could have been deleted */
-		if (ml_anch) {
-		    s = t = t + 1;
-		    goto try_at_offset;
-		}
-		goto fail;
+	    /* Another way we could have checked stclass at the
+               current position only: */
+	    if (ml_anch) {
+		s = t = t + 1;
+		DEBUG_r( PerlIO_printf(Perl_debug_log,
+			  "Trying /^/m starting at offset %ld...\n",
+			  (long)(t - i_strpos)) );
+		goto try_at_offset;
 	    }
+	    if (!prog->float_substr)	/* Could have been deleted */
+		goto fail;
 	    /* Check is floating subtring. */
 	  retry_floating_check:
 	    t = check_at - start_shift;
@@ -865,9 +876,9 @@ S_find_byclass(pTHX_ regexp * prog, regnode *c, char *s, char *strend, char *sta
 	    /* FALL THROUGH */
 	case BOUNDUTF8:
 	    tmp = (I32)(s != startpos) ? utf8_to_uv(reghop((U8*)s, -1), 0) : '\n';
-	    tmp = ((OP(c) == BOUND ? isALNUM_uni(tmp) : isALNUM_LC_uni(tmp)) != 0);
+	    tmp = ((OP(c) == BOUNDUTF8 ? isALNUM_uni(tmp) : isALNUM_LC_uni(tmp)) != 0);
 	    while (s < strend) {
-		if (tmp == !(OP(c) == BOUND ?
+		if (tmp == !(OP(c) == BOUNDUTF8 ?
 			     swash_fetch(PL_utf8_alnum, (U8*)s) :
 			     isALNUM_LC_utf8((U8*)s)))
 		{
@@ -900,12 +911,10 @@ S_find_byclass(pTHX_ regexp * prog, regnode *c, char *s, char *strend, char *sta
 	    PL_reg_flags |= RF_tainted;
 	    /* FALL THROUGH */
 	case NBOUNDUTF8:
-	    if (prog->minlen)
-		strend = reghop_c(strend, -1);
 	    tmp = (I32)(s != startpos) ? utf8_to_uv(reghop((U8*)s, -1), 0) : '\n';
-	    tmp = ((OP(c) == NBOUND ? isALNUM_uni(tmp) : isALNUM_LC_uni(tmp)) != 0);
+	    tmp = ((OP(c) == NBOUNDUTF8 ? isALNUM_uni(tmp) : isALNUM_LC_uni(tmp)) != 0);
 	    while (s < strend) {
-		if (tmp == !(OP(c) == NBOUND ?
+		if (tmp == !(OP(c) == NBOUNDUTF8 ?
 			     swash_fetch(PL_utf8_alnum, (U8*)s) :
 			     isALNUM_LC_utf8((U8*)s)))
 		    tmp = !tmp;
@@ -2326,6 +2335,7 @@ S_regmatch(pTHX_ regnode *prog)
 			I32 onpar = PL_regnpar;
 
 			pm.op_pmflags = 0;
+			pm.op_pmdynflags = (UTF||DO_UTF8(ret) ? PMdf_UTF8 : 0);
 			re = CALLREGCOMP(aTHX_ t, t + len, &pm);
 			if (!(SvFLAGS(ret) 
 			      & (SVs_TEMP | SVs_PADTMP | SVf_READONLY)))

@@ -388,7 +388,6 @@ PM_TO_BLIB = }.join(" \\\n\t", %{$self->{PM}}).q{
 
 
 sub path {
-    local $^W = 1;
     my($self) = @_;
     my $path = $ENV{'PATH'} || $ENV{'Path'} || $ENV{'path'};
     my @path = split(';',$path);
@@ -485,13 +484,11 @@ sub dynamic_lib {
     my($ldfrom) = '$(LDFROM)';
     my(@m);
 
-# several things for GCC/Mingw32:
-# 1. use correct CRT startup objects (possibly unnecessary)
-# 2. try to overcome non-relocateable-DLL problems by generating
+# one thing for GCC/Mingw32:
+# we try to overcome non-relocateable-DLL problems by generating
 #    a (hopefully unique) image-base from the dll's name
 # -- BKS, 10-19-1999
     if ($GCC) { 
-	$otherldflags .= ' -L$(PERL_ARCHIVE:d) -nostdlib $(PERL_ARCHIVE:d)gdllcrt0.o ';
 	my $dllname = $self->{BASEEXT} . "." . $self->{DLEXT};
 	$dllname =~ /(....)(.{0,4})/;
 	my $baseaddr = unpack("n", $1 ^ $2);
@@ -750,12 +747,6 @@ config :: $(INST_ARCHAUTODIR)\.exists
 config :: $(INST_AUTODIR)\.exists
 	'.$self->{NOECHO}.'$(NOOP)
 ';
-
-    push @m, qq{
-config :: Version_check
-	$self->{NOECHO}\$(NOOP)
-
-} unless $self->{PARENT} or ($self->{PERL_SRC} && $self->{INSTALLDIRS} eq "perl") or $self->{NO_VC};
 
     push @m, $self->dir_target(qw[$(INST_AUTODIR) $(INST_LIBDIR) $(INST_ARCHAUTODIR)]);
 

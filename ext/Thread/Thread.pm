@@ -1,7 +1,7 @@
 package Thread;
 require Exporter;
 use XSLoader ();
-use vars qw($VERSION @ISA @EXPORT);
+our($VERSION, @ISA, @EXPORT);
 
 $VERSION = "1.0";
 
@@ -175,6 +175,8 @@ The C<tid> method returns the tid of a thread. The tid is a monotonically
 increasing integer assigned when a thread is created. The main thread of a
 program will have a tid of zero, while subsequent threads will have tids
 assigned starting with one.
+
+=back
 
 =head1 LIMITATIONS
 

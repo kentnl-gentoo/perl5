@@ -257,19 +257,18 @@ sub _createCode
 
     local($") = " -I";
 
-    open(GENFILE, "> $generated_file") || die "Can't open $generated_file: $!";
-
     if ($backend eq "Bytecode")
     {
         require ByteLoader;
 
+	open(GENFILE, "> $generated_file") || die "Can't open $generated_file: $!";
+	binmode GENFILE;
         print GENFILE "#!$^X\n" if @_ == 3;
         print GENFILE "use ByteLoader $ByteLoader::VERSION;\n";
+	close(GENFILE);
 
 	$output_switch ="a";
     }
-
-    close(GENFILE);
 
     if (@_ == 3)                                   # compiling a program   
     {
@@ -369,6 +368,8 @@ sub _ccharness
 	my $lperl = $^O eq 'os2' ? '-llibperl' 
 	   : $^O eq 'MSWin32' ? "$Config{archlibexp}\\CORE\\perl.lib"
 	   : '-lperl';
+       ($lperl = $Config{libperl}) =~ s/lib(.*)\Q$Config{_a}\E/-l$1/
+	    if($^O eq 'cygwin');
 
 	$optimize = $Config{'optimize'} =~ /-O\d/ ? '' : $Config{'optimize'};
 
@@ -377,9 +378,11 @@ sub _ccharness
     }
 
     my $libs = _getSharedObjects($sourceprog);
+    @$libs = grep { !(/DynaLoader\.a$/ && ($dynaloader = $_)) } @$libs
+	if($^O eq 'cygwin');
 
     my $ccflags = $Config{ccflags};
-    $ccflags .= ' -DUSEIMPORTLIB' if $Config{osname} =~ /cygwin/i;
+    $ccflags .= ' -DUSEIMPORTLIB' if $^O eq 'cygwin';
     my $cccmd = "$Config{cc} $ccflags $optimize $incdir "
 		."@args $dynaloader $linkargs @$libs";
 

@@ -8,7 +8,8 @@ First, make sure you are installing an up-to-date version of Perl.   If
 you didn't get your Perl source from CPAN, check the latest version at
 <URL:http://www.perl.com/CPAN/src/>.
 
-The basic steps to build and install perl5 on a Unix system are:
+The basic steps to build and install perl5 on a Unix system
+with all the defaults are:
 
 	rm -f config.sh Policy.sh
 	sh Configure -de
@@ -42,7 +43,34 @@ For information on what's new in this release, see the
 pod/perldelta.pod file.  For more detailed information about specific
 changes, see the Changes file.
 
-IMPORTANT NOTE:  5.005_53 and later releases do not export unadorned
+=head1 DESCRIPTION
+
+This document is written in pod format as an easy way to indicate its
+structure.  The pod format is described in pod/perlpod.pod, but you can
+read it as is with any pager or editor.  Headings and items are marked
+by lines beginning with '='.  The other mark-up used is
+
+    B<text>     embolden text, used for switches, programs or commands
+    C<code>	literal code
+    L<name>     A link (cross reference) to name
+
+Although most of the defaults are probably fine for most users,
+you should probably at least skim through this entire document before
+proceeding.
+
+If you're building Perl on a non-Unix system, you should also read
+the README file specific to your operating system, since this may
+provide additional or different instructions for building Perl.
+
+If there is a hint file for your system (in the hints/ directory) you
+should also read that hint file for specific information for your
+system.  (Unixware users should use the svr4.sh hint file.)  If
+there is a README file for your platform, then you should read
+that too.  Additional information is in the Porting/ directory.
+
+=head1 WARNING:  This version requires an extra step to build old extensions.
+
+5.005_53 and later releases do not export unadorned
 global symbols anymore.  This means you may need to build older
 extensions that have not been updated for the new naming convention
 with:
@@ -55,30 +83,6 @@ building perl itself with:
 	sh Configure -Accflags=-DPERL_POLLUTE
 
 pod/perldelta.pod contains more details about this.
-
-=head1 DESCRIPTION
-
-This document is written in pod format as an easy way to indicate its
-structure.  The pod format is described in pod/perlpod.pod, but you can
-read it as is with any pager or editor.  Headings and items are marked
-by lines beginning with '='.  The other mark-up used is
-
-    B<text>     embolden text, used for switches, programs or commands
-    C<code>	literal code
-    L<name>     A link (cross reference) to name
-
-You should probably at least skim through this entire document before
-proceeding.
-
-If you're building Perl on a non-Unix system, you should also read
-the README file specific to your operating system, since this may
-provide additional or different instructions for building Perl.
-
-If there is a hint file for your system (in the hints/ directory) you
-should also read that hint file for specific information for your
-system.  (Unixware users should use the svr4.sh hint file.)  If
-there is a README file for your platform, then you should read
-that too.  Additional information is in the Porting/ directory.
 
 =head1 WARNING:  This version may not be binary compatible with Perl 5.005.
 
@@ -102,7 +106,7 @@ The standard extensions supplied with Perl will be handled automatically.
 On a related issue, old modules may possibly be affected by the
 changes in the Perl language in the current release.  Please see
 pod/perldelta.pod (and pod/perl500Xdelta.pod) for a description of
-what's changed.  See also your installed copy of the perllocal.pod
+what's changed.  See your installed copy of the perllocal.pod
 file for a (possibly incomplete) list of locally installed modules.
 Also see CPAN::autobundle for one way to make a "bundle" of your
 currently installed modules.
@@ -126,10 +130,10 @@ followed.  This will enable us to officially support this option.
 
 =head1 Space Requirements
 
-The complete perl5 source tree takes up about 15 MB of disk space.
-After completing make, it takes up roughly 20 MB, though the actual
+The complete perl5 source tree takes up about 20 MB of disk space.
+After completing make, it takes up roughly 30 MB, though the actual
 total is likely to be quite system-dependent.  The installation
-directories need something on the order of 15 MB, though again that
+directories need something on the order of 20 MB, though again that
 value is system-dependent.
 
 =head1 Start with a Fresh Distribution
@@ -333,9 +337,9 @@ The directories set up by Configure fall into three broad categories.
 
 =item Directories for the perl distribution
 
-By default, Configure will use the following directories for 5.6.
+By default, Configure will use the following directories for 5.6.0.
 $version is the full perl version number, including subversion, e.g.
-5.6 or 5.6.1, and $archname is a string like sun4-sunos,
+5.6.0 or 5.6.1, and $archname is a string like sun4-sunos,
 determined by Configure.  The full definitions of all Configure
 variables are in the file Porting/Glossary.
 
@@ -360,23 +364,21 @@ the common style is shown here.
 
 After perl is installed, you may later wish to add modules (e.g. from
 CPAN) or scripts.  Configure will set up the following directories to
-be used for installing those add-on modules and scripts.  $apiversion
-is the perl version number (without subversion), e.g. 5.6.
+be used for installing those add-on modules and scripts.
 
     Configure variable	Default value
     $siteprefix		$prefix
     $sitebin		$siteprefix/bin
     $sitescriptdir	$siteprefix/bin
-    $sitelib		$siteprefix/lib/perl5/site_perl/
-    $sitearch		$siteprefix/lib/perl5/site_perl/$apiversion/$archname
+    $sitelib		$siteprefix/lib/perl5/site_perl/$version
+    $sitearch		$siteprefix/lib/perl5/site_perl/$version/$archname
     $siteman1dir	$siteprefix/man/man1
     $siteman3dir	$siteprefix/man/man3
     $sitehtml1dir	(none)
     $sitehtml3dir	(none)
 
 By default, ExtUtils::MakeMaker will install architecture-independent
-modules into $sitelib/$apiversion and architecture-dependent modules
-into $sitearch.
+modules into $sitelib and architecture-dependent modules into $sitearch.
 
 =item Directories for vendor-supplied add-on files
 
@@ -389,8 +391,8 @@ for you to use to distribute add-on modules.
     (The next ones are set only if vendorprefix is set.)
     $vendorbin		$vendorprefix/bin
     $vendorscriptdir	$vendorprefix/bin
-    $vendorlib		$vendorprefix/lib/perl5/vendor_perl/
-    $vendorarch	    $vendorprefix/lib/perl5/vendor_perl/$apiversion/$archname
+    $vendorlib		$vendorprefix/lib/perl5/vendor_perl/$version
+    $vendorarch		$vendorprefix/lib/perl5/vendor_perl/$version/$archname
     $vendorman1dir	$vendorprefix/man/man1
     $vendorman3dir	$vendorprefix/man/man3
     $vendorhtml1dir	(none)
@@ -414,24 +416,28 @@ This would have the effect of setting the following:
 
 	$sitebin	/usr/local/bin
 	$sitescriptdir	/usr/local/bin
-	$sitelib	/usr/local/lib/perl5/site_perl/
-	$sitearch	/usr/local/lib/perl5/site_perl/$apiversion/$archname
+	$sitelib	/usr/local/lib/perl5/site_perl/$version
+	$sitearch	/usr/local/lib/perl5/site_perl/$version/$archname
 	$siteman1dir	/usr/local/man/man1
 	$siteman3dir	/usr/local/man/man3
 
 	$vendorbin		/usr/bin
 	$vendorscriptdir	/usr/bin
-	$vendorlib	/usr/lib/perl5/vendor_perl/
-	$vendorarch	/usr/lib/perl5/vendor_perl/$apiversion/$archname
+	$vendorlib	/usr/lib/perl5/vendor_perl/$version
+	$vendorarch	/usr/lib/perl5/vendor_perl/$version/$archname
 	$vendorman1dir	/usr/man/man1
 	$vendorman3dir	/usr/man/man3
 
 Note how in this example, the vendor-supplied directories are in the
 /usr hierarchy, while the directories reserved for the end-user are in
-the /usr/local hierarchy.  Note too how the vendor-supplied
-directories track $apiversion, rather than $version, to ease upgrading
-between maintenance subversions.  See L<"Coexistence with earlier
-versions of perl5"> below for more details.
+the /usr/local hierarchy.
+
+The entire installed library hierarchy is installed in locations with
+version numbers, keeping the installations of different versions distinct.
+However, later installations of Perl can still be configured to search the
+installed libraries corresponding to compatible earlier versions.
+See L<"Coexistence with earlier versions of perl5"> below for more details
+on how Perl can be made to search older version directories.
 
 Of course you may use these directories however you see fit.  For
 example, you may wish to use $siteprefix for site-specific files that
@@ -459,7 +465,7 @@ without resetting MANPATH.
 
 You can continue to use the old default from the command line with
 
-	sh Configure -Dman3dir=/usr/local/lib/perl5/5.6/man/man3
+	sh Configure -Dman3dir=/usr/local/lib/perl5/5.6.0/man/man3
 
 Some users also prefer to use a .3pm suffix.  You can do that with
 
@@ -497,13 +503,13 @@ library directory structure is slightly simplified.  Instead of
 suggesting $prefix/lib/perl5/, Configure will suggest $prefix/lib.
 
 Thus, for example, if you Configure with
--Dprefix=/opt/perl, then the default library directories for 5.6 are
+-Dprefix=/opt/perl, then the default library directories for 5.6.0 are
 
     Configure variable	Default value
-	$privlib	/opt/perl/lib/5.6
-	$archlib	/opt/perl/lib/5.6/$archname
-	$sitelib	/opt/perl/lib/site_perl/5.6
-	$sitearch	/opt/perl/lib/site_perl/5.6/$archname
+	$privlib	/opt/perl/lib/5.6.0
+	$archlib	/opt/perl/lib/5.6.0/$archname
+	$sitelib	/opt/perl/lib/site_perl/5.6.0
+	$sitearch	/opt/perl/lib/site_perl/5.6.0/$archname
 
 =head2 Changing the installation directory
 
@@ -579,7 +585,7 @@ If the generated Policy.sh file is unsuitable, you may freely edit it
 to contain any valid shell commands.  It will be run just after the
 platform-specific hints files.
 
-Note:  Since the directory hierarchy for 5.6 contains a number of
+Note:  Since the directory hierarchy for 5.6.0 contains a number of
 new vendor* and site* entries, your Policy.sh file will probably not
 set them to your desired values.  I encourage you to run Configure
 interactively to be sure it puts things where you want them.
@@ -603,6 +609,20 @@ Currently, you need to specify -Dusethreads on the Configure command
 line so that the hint files can make appropriate adjustments.
 
 The default is to compile without thread support.
+
+As of v5.5.64, perl has two different internal threads implementations.
+The 5.005 version (5005threads) and an interpreter-based implementation
+(ithreads) with one interpreter per thread.  By default, Configure selects
+ithreads if -Dusethreads is specified.  However, you can select the old
+5005threads behavior instead by either
+
+	sh Configure -Dusethreads -Duse5005threads
+
+or by
+	sh Configure -Dusethreads -Uuseithreads
+
+Eventually (by perl v5.6.0) this internal confusion ought to disappear,
+and these options may disappear as well.
 
 =head2 Selecting File IO mechanisms
 
@@ -721,7 +741,7 @@ You can elect to build a shared libperl by
 To build a shared libperl, the environment variable controlling shared
 library search (LD_LIBRARY_PATH in most systems, DYLD_LIBRARY_PATH for
 NeXTSTEP/OPENSTEP/Rhapsody, LIBRARY_PATH for BeOS, SHLIB_PATH for
-HP-UX, LIBPATH for AIX, PATH for cygwin) must be set up to include
+HP-UX, LIBPATH for AIX, PATH for Cygwin) must be set up to include
 the Perl build directory because that's where the shared libperl will
 be created.  Configure arranges makefile to have the correct shared
 library search settings.
@@ -864,7 +884,17 @@ the Configure command line.  Similarly, the Opcode extension is always
 built by default, but you can skip it by setting the Configure variable
 useopcode=false either in a hint file for from the command line.
 
-You can learn more about each of these extensions by consulting the
+If you unpack any additional extensions in the ext/ directory before
+running Configure, then Configure will offer to build those additional
+extensions as well.  Most users probably shouldn't have to do this --
+it is usually easier to build additional extensions later after perl
+has been installed.  However, if you wish to have those additional
+extensions statically linked into the perl binary, then this offers a
+convenient way to do that in one step.  (It is not necessary, however;
+you can build and install extensions just fine even if you don't have
+dynamic loading.  See lib/ExtUtils/MakeMaker.pm for more details.)
+
+You can learn more about each of the supplied extensions by consulting the
 documentation in the individual .pm modules, located under the
 ext/ subdirectory.
 
@@ -887,7 +917,7 @@ to turn off each extension:
     SDBM_File		(Always included by default)
     Opcode		useopcode
     Socket		d_socket
-    Threads		usethreads
+    Threads		use5005threads
     attrs		(Always included by default)
 
 Thus to skip the NDBM_File extension, you can use
@@ -1116,8 +1146,9 @@ $ccflags or $optimize, and then re-run
 
 =item No sh
 
-If you don't have sh, you'll have to copy the sample file Porting/config_H
-to config.h and edit the config.h to reflect your system's peculiarities.
+If you don't have sh, you'll have to copy the sample file
+Porting/config.sh to config.sh and edit your config.sh to reflect your
+system's peculiarities.  See Porting/pumpkin.pod for more information.
 You'll probably also have to extensively modify the extension building
 mechanism.
 
@@ -1162,7 +1193,7 @@ libgdbm under HP-UX 11.
 Specific information for the OS/2, Plan9, VMS and Win32 ports is in the
 corresponding README files and subdirectories.  Additional information,
 including a glossary of all those config.sh variables, is in the Porting
-subdirectory.  Especially Porting/Glossary should come in handy. 
+subdirectory.  Especially Porting/Glossary should come in handy.
 
 Ports for other systems may also be available.  You should check out
 http://www.perl.com/CPAN/ports for current information on ports to
@@ -1676,70 +1707,68 @@ searched by 5.005_03 are
 	/usr/local/lib/perl5/site_perl/5.005/$archname
 	/usr/local/lib/perl5/site_perl/5.005
 
-Now, suppose you install version 5.6.  The directories searched by
-version 5.6 will be
+Beginning with 5.6.0 the version number in the site libraries are
+fully versioned.  Now, suppose you install version 5.6.0.  The directories
+searched by version 5.6.0 will be
 
-	/usr/local/lib/perl5/5.6/$archname
-	/usr/local/lib/perl5/5.6
-	/usr/local/lib/perl5/site_perl/5.6/$archname
-	/usr/local/lib/perl5/site_perl/5.6
+	/usr/local/lib/perl5/5.6.0/$archname
+	/usr/local/lib/perl5/5.6.0
+	/usr/local/lib/perl5/site_perl/5.6.0/$archname
+	/usr/local/lib/perl5/site_perl/5.6.0
 
 	/usr/local/lib/perl5/site_perl/5.005/$archname
 	/usr/local/lib/perl5/site_perl/5.005
-
-Notice the last two entries -- Perl understands the default structure
-of the $sitelib directories and will look back in older, compatible
-directories.  This way, modules installed under 5.005_03 will continue
-to be usable by 5.005_03 but will also accessible to 5.6.  Further,
-suppose that you upgrade a module to one which requires features
-present only in 5.6.  That new module will get installed into
-/usr/local/lib/perl5/site_perl/5.6 and will be available to 5.6,
-but will not interfere with the 5.005_03 version.
-
-Also, by default, 5.6 will look in
-
 	/usr/local/lib/perl5/site_perl/
 
-for 5.004-era pure perl modules.
+Notice the last three entries -- Perl understands the default structure
+of the $sitelib directories and will look back in older, compatible
+directories.  This way, modules installed under 5.005_03 will continue
+to be usable by 5.005_03 but will also accessible to 5.6.0.  Further,
+suppose that you upgrade a module to one which requires features
+present only in 5.6.0.  That new module will get installed into
+/usr/local/lib/perl5/site_perl/5.6.0 and will be available to 5.6.0,
+but will not interfere with the 5.005_03 version.
 
-Lastly, suppose you now install version 5.6.1.  The directories
-searched by 5.6.1 will be
+The last entry, /usr/local/lib/perl5/site_perl/, is there so that
+5.6.0 will look for 5.004-era pure perl modules.
+
+Lastly, suppose you now install version 5.6.1, which we'll assume is
+binary compatible with 5.6.0 and 5.005.  The directories searched
+by 5.6.1 (if you don't change the Configure defaults) will be:
 
 	/usr/local/lib/perl5/5.6.1/$archname
 	/usr/local/lib/perl5/5.6.1
-	/usr/local/lib/perl5/site_perl/5.6/$archname
-	/usr/local/lib/perl5/site_perl/5.6
+	/usr/local/lib/perl5/site_perl/5.6.1/$archname
+	/usr/local/lib/perl5/site_perl/5.6.1
+
+	/usr/local/lib/perl5/site_perl/5.6.0/$archname
+	/usr/local/lib/perl5/site_perl/5.6.0
 
 	/usr/local/lib/perl5/site_perl/5.005/$archname
 	/usr/local/lib/perl5/site_perl/5.005
 	/usr/local/lib/perl5/site_perl/
 
-When you install an add-on extension, it gets installed into $sitelib (or
-$sitearch if it is architecture-specific).  This directory deliberately
-does NOT include the sub-version number (01) so that both 5.6 and
-5.6.1 can use the extension.
+Assuming the users in your site are still actively using perl 5.6.0 and
+5.005 after you installed 5.6.1, you can continue to install add-on
+extensions using any of perl 5.6.1, 5.6.0, or 5.005.  The installations
+of these different versions remain distinct, but remember that the newer
+versions of perl are automatically set up to search the site libraries of
+the older ones.  This means that installing a new extension with 5.005
+will make it visible to all three versions.  Later, if you install the
+same extension using, say, perl 5.6.1, it will override the 5.005-installed
+version, but only for perl 5.6.1.
 
-However, if you do run into problems, and you want to continue to use the
-old version of perl along with your extension, move those extension files
-to the appropriate version directory, such as $privlib (or $archlib).
-(The extension's .packlist file lists the files installed with that
-extension.  For the Tk extension, for example, the list of files installed
-is in $sitearch/auto/Tk/.packlist.)  Then use your newer version of perl
-to rebuild and re-install the extension into $sitelib.  This way, Perl
-5.6 will find your files in the 5.6 directory, and newer versions
-of perl will find your newer extension in the $sitelib directory.
-(This is also why perl searches the site-specific libraries last.)
-
-Alternatively, if you are willing to reinstall all your modules
-every time you upgrade perl, then you can include the subversion
-number in $sitearch and $sitelib when you run Configure.
+This way, you can choose to share compatible extensions, but also upgrade
+to a newer version of an extension that may be incompatible with earlier
+versions, without breaking the earlier versions' installations.
 
 =head2 Maintaining completely separate versions
 
 Many users prefer to keep all versions of perl in completely
 separate directories.  This guarantees that an update to one version
-won't interfere with another version.  One convenient way to do this
-is by using a separate prefix for each version, such as
+won't interfere with another version.  (The defaults guarantee this for
+libraries after 5.6.0, but not for executables. TODO?)  One convenient
+way to do this is by using a separate prefix for each version, such as
 
 	sh Configure -Dprefix=/opt/perl5.004
 
@@ -1756,17 +1785,17 @@ seriously consider using a separate directory, since development
 subversions may not have all the compatibility wrinkles ironed out
 yet.
 
-=head2 Upgrading from 5.005 to 5.6
+=head2 Upgrading from 5.005 to 5.6.0
 
-Extensions built and installed with versions of perl prior to 5.005_50
-will need to be recompiled to be used with 5.005_50 and later.  You will,
-however, be able to continue using 5.005 even after you install 5.6.
-The 5.005 binary will still be able to find the modules built under
-5.005; the 5.6 binary will look in the new $sitearch and $sitelib
-directories, and will not find them.  See also your installed copy
-of the perllocal.pod file for a (possibly incomplete) list of locally
-installed modules.  Note that you want perllocal.pod not perllocale.pod
-for installed module information.
+Most extensions built and installed with versions of perl
+prior to 5.005_50 will not need to be recompiled to be used with
+5.6.0.  If you find you do need to rebuild an extension with 5.6.0,
+you may safely do so without disturbing the 5.005 installation.
+(See L<"Coexistence with earlier versions of perl5"> above.)
+
+See your installed copy of the perllocal.pod file for a (possibly
+incomplete) list of locally installed modules.  Note that you want
+perllocal.pod not perllocale.pod for installed module information.
 
 =head1 Coexistence with perl4
 

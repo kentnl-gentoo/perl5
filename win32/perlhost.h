@@ -1628,7 +1628,7 @@ PerlProcSignal(struct IPerlProc* piPerl, int sig, Sighandler_t subcode)
 }
 
 #ifdef USE_ITHREADS
-static DWORD WINAPI
+static THREAD_RET_TYPE
 win32_start_child(LPVOID arg)
 {
     PerlInterpreter *my_perl = (PerlInterpreter*)arg;
@@ -1668,7 +1668,7 @@ win32_start_child(LPVOID arg)
 
     {
 	dJMPENV;
-	volatile oldscope = PL_scopestack_ix;
+	volatile int oldscope = PL_scopestack_ix;
 
 restart:
 	JMPENV_PUSH(status);
@@ -1723,7 +1723,7 @@ PerlProcFork(struct IPerlProc* piPerl)
 #ifdef USE_ITHREADS
     DWORD id;
     HANDLE handle;
-    CPerlHost *h = new CPerlHost();
+    CPerlHost *h = new CPerlHost(*(CPerlHost*)w32_internal_host);
     PerlInterpreter *new_perl = perl_clone_using((PerlInterpreter*)aTHXo, 1,
 						 h->m_pHostperlMem,
 						 h->m_pHostperlMemShared,
@@ -1735,13 +1735,19 @@ PerlProcFork(struct IPerlProc* piPerl)
 						 h->m_pHostperlSock,
 						 h->m_pHostperlProc
 						 );
+    new_perl->Isys_intern.internal_host = h;
 #  ifdef PERL_SYNC_FORK
     id = win32_start_child((LPVOID)new_perl);
     PERL_SET_INTERP(aTHXo);
 #  else
+#    ifdef USE_RTL_THREAD_API
+    handle = (HANDLE)_beginthreadex((void*)NULL, 0, win32_start_child,
+				    (void*)new_perl, 0, (unsigned*)&id);
+#    else
     handle = CreateThread(NULL, 0, win32_start_child,
 			  (LPVOID)new_perl, 0, &id);
-    PERL_SET_INTERP(aTHXo);
+#    endif
+    PERL_SET_INTERP(aTHXo);	/* XXX perl_clone*() set TLS */
     if (!handle)
 	Perl_croak(aTHX_ "panic: pseudo fork() failed");
     w32_pseudo_child_handles[w32_num_pseudo_children] = handle;
@@ -1890,7 +1896,7 @@ CPerlHost::CPerlHost(struct IPerlMem** ppMem, struct IPerlMem** ppMemShared,
 		 struct IPerlDir** ppDir, struct IPerlSock** ppSock,
 		 struct IPerlProc** ppProc)
 {
-    m_pvDir = new VDir();
+    m_pvDir = new VDir(0);
     m_pVMem = new VMem();
     m_pVMemShared = new VMem();
     m_pVMemParse =  new VMem();
@@ -1929,7 +1935,7 @@ CPerlHost::CPerlHost(CPerlHost& host)
     m_pVMemParse =  host.GetMemParse();
 
     /* duplicate directory info */
-    m_pvDir = new VDir();
+    m_pvDir = new VDir(0);
     m_pvDir->Init(host.GetDir(), m_pVMem);
 
     CopyMemory(&m_hostperlMem, &perlMem, sizeof(perlMem));
@@ -1941,15 +1947,15 @@ CPerlHost::CPerlHost(CPerlHost& host)
     CopyMemory(&m_hostperlDir, &perlDir, sizeof(perlDir));
     CopyMemory(&m_hostperlSock, &perlSock, sizeof(perlSock));
     CopyMemory(&m_hostperlProc, &perlProc, sizeof(perlProc));
-    m_pHostperlMem	    = &host.m_hostperlMem;
-    m_pHostperlMemShared    = &host.m_hostperlMemShared;
-    m_pHostperlMemParse	    = &host.m_hostperlMemParse;
-    m_pHostperlEnv	    = &host.m_hostperlEnv;
-    m_pHostperlStdIO	    = &host.m_hostperlStdIO;
-    m_pHostperlLIO	    = &host.m_hostperlLIO;
-    m_pHostperlDir	    = &host.m_hostperlDir;
-    m_pHostperlSock	    = &host.m_hostperlSock;
-    m_pHostperlProc	    = &host.m_hostperlProc;
+    m_pHostperlMem	    = &m_hostperlMem;
+    m_pHostperlMemShared    = &m_hostperlMemShared;
+    m_pHostperlMemParse	    = &m_hostperlMemParse;
+    m_pHostperlEnv	    = &m_hostperlEnv;
+    m_pHostperlStdIO	    = &m_hostperlStdIO;
+    m_pHostperlLIO	    = &m_hostperlLIO;
+    m_pHostperlDir	    = &m_hostperlDir;
+    m_pHostperlSock	    = &m_hostperlSock;
+    m_pHostperlProc	    = &m_hostperlProc;
 
     m_dwEnvCount = 0;
     m_lppEnvList = NULL;

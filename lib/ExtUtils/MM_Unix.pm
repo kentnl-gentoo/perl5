@@ -377,10 +377,22 @@ sub cflags {
 
     if ($Is_PERL_OBJECT) {
         $self->{CCFLAGS} =~ s/-DPERL_OBJECT(\b|$)/-DPERL_CAPI/g;
-        if ($Is_Win32 && $Config{'cc'} =~ /^cl/i) {
-            # Turn off C++ mode of the MSC compiler
-            $self->{CCFLAGS} =~ s/-TP(\s|$)//;
-            $self->{OPTIMIZE} =~ s/-TP(\s|$)//;
+        if ($Is_Win32) { 
+	    if ($Config{'cc'} =~ /^cl/i) {
+		# Turn off C++ mode of the MSC compiler
+		$self->{CCFLAGS} =~ s/-TP(\s|$)//g;
+		$self->{OPTIMIZE} =~ s/-TP(\s|$)//g;
+	    }
+	    elsif ($Config{'cc'} =~ /^bcc32/i) {
+		# Turn off C++ mode of the Borland compiler
+		$self->{CCFLAGS} =~ s/-P(\s|$)//g;
+		$self->{OPTIMIZE} =~ s/-P(\s|$)//g;
+	    }
+	    elsif ($Config{'cc'} =~ /^gcc/i) {
+		# Turn off C++ mode of the GCC compiler
+		$self->{CCFLAGS} =~ s/-xc\+\+(\s|$)//g;
+		$self->{OPTIMIZE} =~ s/-xc\+\+(\s|$)//g;
+	    }
         }
     }
 
@@ -1992,7 +2004,8 @@ usually solves this kind of problem.
 	push @defpath, $component if defined $component;
     }
     $self->{PERL} ||=
-        $self->find_perl(5.0, [ $self->canonpath($^X), 'miniperl','perl','perl5',"perl$]" ],
+        $self->find_perl(5.0, [ $self->canonpath($^X), 'miniperl',
+				'perl','perl5',"perl$Config{version}" ],
 	    \@defpath, $Verbose );
     # don't check if perl is executable, maybe they have decided to
     # supply switches with perl
@@ -2753,7 +2766,7 @@ sub parse_version {
 		$_
 	    }; \$$2
 	};
-	local($^W) = 0;
+	no warnings;
 	$result = eval($eval);
 	warn "Could not eval '$eval' in $parsefile: $@" if $@;
 	$result = "undef" unless defined $result;
@@ -3598,12 +3611,6 @@ config :: $(INST_ARCHAUTODIR)/.exists
 config :: $(INST_AUTODIR)/.exists
 	'.$self->{NOECHO}.'$(NOOP)
 ';
-
-    push @m, qq{
-config :: Version_check
-	$self->{NOECHO}\$(NOOP)
-
-} unless $self->{PARENT} or ($self->{PERL_SRC} && $self->{INSTALLDIRS} eq "perl") or $self->{NO_VC};
 
     push @m, $self->dir_target(qw[$(INST_AUTODIR) $(INST_LIBDIR) $(INST_ARCHAUTODIR)]);
 

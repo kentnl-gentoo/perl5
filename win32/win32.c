@@ -15,6 +15,8 @@
 #define Win32_Winsock
 #endif
 #include <windows.h>
+#include <winnt.h>
+#include <io.h>
 
 /* #include "config.h" */
 
@@ -174,12 +176,13 @@ get_emd_part(SV **prev_pathp, char *trailing_path, ...)
     char *optr;
     char *strip;
     int oldsize, newsize;
+    STRLEN baselen;
 
     va_start(ap, trailing_path);
     strip = va_arg(ap, char *);
 
-    sprintf(base, "%5.3f",
-	    (double)PERL_REVISION + ((double)PERL_VERSION / (double)1000));
+    sprintf(base, "%d.%d", (int)PERL_REVISION, (int)PERL_VERSION);
+    baselen = strlen(base);
 
     if (!*w32_module_name) {
 	GetModuleFileName((HMODULE)((w32_perldll_handle == INVALID_HANDLE_VALUE)
@@ -211,10 +214,10 @@ get_emd_part(SV **prev_pathp, char *trailing_path, ...)
 	/* avoid stripping component if there is no slash,
 	 * or it doesn't match ... */
 	if (!ptr || stricmp(ptr+1, strip) != 0) {
-	    /* ... but not if component matches 5.00X* */
+	    /* ... but not if component matches m|5\.$patchlevel.*| */
 	    if (!ptr || !(*strip == '5' && *(ptr+1) == '5'
-			  && strncmp(strip, base, 5) == 0
-			  && strncmp(ptr+1, base, 5) == 0))
+			  && strncmp(strip, base, baselen) == 0
+			  && strncmp(ptr+1, base, baselen) == 0))
 	    {
 		*optr = '/';
 		ptr = optr;
@@ -281,12 +284,6 @@ win32_get_sitelib(char *pl)
      * ";$EMD/" . ((-d $EMD/../../../$]) ? "../../.." : "../.."). "/site/$]/lib";  */
     sprintf(pathstr, "site/%s/lib", pl);
     (void)get_emd_part(&sv1, pathstr, ARCHNAME, "bin", pl, Nullch);
-    if (!sv1 && strlen(pl) == 7) {
-	/* pl may have been SUBVERSION-specific; try again without
-	 * SUBVERSION */
-	sprintf(pathstr, "site/%.5s/lib", pl);
-	(void)get_emd_part(&sv1, pathstr, ARCHNAME, "bin", pl, Nullch);
-    }
 
     /* $HKCU{'sitelib'} || $HKLM{'sitelib'} . ---; */
     (void)get_regstr(sitelib, &sv2);
@@ -674,7 +671,7 @@ win32_opendir(char *filename)
     WIN32_FIND_DATAW	wFindData;
     HANDLE		fh;
     char		buffer[MAX_PATH*2];
-    WCHAR		wbuffer[MAX_PATH];
+    WCHAR		wbuffer[MAX_PATH+1];
     char*		ptr;
 
     len = strlen(filename);
@@ -945,9 +942,9 @@ remove_dead_process(long child)
     if (child >= 0) {
 	dTHXo;
 	CloseHandle(w32_child_handles[child]);
-	Copy(&w32_child_handles[child+1], &w32_child_handles[child],
+	Move(&w32_child_handles[child+1], &w32_child_handles[child],
 	     (w32_num_children-child-1), HANDLE);
-	Copy(&w32_child_pids[child+1], &w32_child_pids[child],
+	Move(&w32_child_pids[child+1], &w32_child_pids[child],
 	     (w32_num_children-child-1), DWORD);
 	w32_num_children--;
     }
@@ -972,9 +969,9 @@ remove_dead_pseudo_process(long child)
     if (child >= 0) {
 	dTHXo;
 	CloseHandle(w32_pseudo_child_handles[child]);
-	Copy(&w32_pseudo_child_handles[child+1], &w32_pseudo_child_handles[child],
+	Move(&w32_pseudo_child_handles[child+1], &w32_pseudo_child_handles[child],
 	     (w32_num_pseudo_children-child-1), HANDLE);
-	Copy(&w32_pseudo_child_pids[child+1], &w32_pseudo_child_pids[child],
+	Move(&w32_pseudo_child_pids[child+1], &w32_pseudo_child_pids[child],
 	     (w32_num_pseudo_children-child-1), DWORD);
 	w32_num_pseudo_children--;
     }
@@ -1033,13 +1030,13 @@ win32_sleep(unsigned int t)
 }
 
 DllExport int
-win32_stat(const char *path, struct stat *buffer)
+win32_stat(const char *path, struct stat *sbuf)
 {
     dTHXo;
-    char	t[MAX_PATH+1]; 
+    char	buffer[MAX_PATH+1]; 
     int		l = strlen(path);
     int		res;
-    WCHAR	wbuffer[MAX_PATH];
+    WCHAR	wbuffer[MAX_PATH+1];
     HANDLE      handle;
     int         nlink = 1;
 
@@ -1048,17 +1045,20 @@ win32_stat(const char *path, struct stat *buffer)
 	/* FindFirstFile() and stat() are buggy with a trailing
 	 * backslash, so change it to a forward slash :-( */
 	case '\\':
-	    strncpy(t, path, l-1);
-	    t[l - 1] = '/';
-	    t[l] = '\0';
-	    path = t;
+	    strncpy(buffer, path, l-1);
+	    buffer[l - 1] = '/';
+	    buffer[l] = '\0';
+	    path = buffer;
 	    break;
 	/* FindFirstFile() is buggy with "x:", so add a dot :-( */
 	case ':':
 	    if (l == 2 && isALPHA(path[0])) {
-		t[0] = path[0]; t[1] = ':'; t[2] = '.'; t[3] = '\0';
+		buffer[0] = path[0];
+		buffer[1] = ':';
+		buffer[2] = '.';
+		buffer[3] = '\0';
 		l = 3;
-		path = t;
+		path = buffer;
 	    }
 	    break;
 	}
@@ -1073,8 +1073,8 @@ win32_stat(const char *path, struct stat *buffer)
 	handle = CreateFileW(wbuffer, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
     }
     else {
-	path = PerlDir_mapA(path);
-	handle = CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
+	strcpy(buffer, PerlDir_mapA(path));
+	handle = CreateFileA(buffer, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
     }
     if (handle != INVALID_HANDLE_VALUE) {
 	BY_HANDLE_FILE_INFORMATION bhi;
@@ -1085,32 +1085,32 @@ win32_stat(const char *path, struct stat *buffer)
 
     /* wbuffer or path will be mapped correctly above */
     if (USING_WIDE()) {
-	res = _wstat(wbuffer, (struct _stat *)buffer);
+	res = _wstat(wbuffer, (struct _stat *)sbuf);
     }
     else {
-	res = stat(path, buffer);
+	res = stat(buffer, sbuf);
     }
-    buffer->st_nlink = nlink;
+    sbuf->st_nlink = nlink;
 
     if (res < 0) {
 	/* CRT is buggy on sharenames, so make sure it really isn't.
 	 * XXX using GetFileAttributesEx() will enable us to set
-	 * buffer->st_*time (but note that's not available on the
+	 * sbuf->st_*time (but note that's not available on the
 	 * Windows of 1995) */
 	DWORD r;
 	if (USING_WIDE()) {
 	    r = GetFileAttributesW(wbuffer);
 	}
 	else {
-	    r = GetFileAttributesA(path);
+	    r = GetFileAttributesA(buffer);
 	}
 	if (r != 0xffffffff && (r & FILE_ATTRIBUTE_DIRECTORY)) {
-	    /* buffer may still contain old garbage since stat() failed */
-	    Zero(buffer, 1, struct stat);
-	    buffer->st_mode = S_IFDIR | S_IREAD;
+	    /* sbuf may still contain old garbage since stat() failed */
+	    Zero(sbuf, 1, struct stat);
+	    sbuf->st_mode = S_IFDIR | S_IREAD;
 	    errno = 0;
 	    if (!(r & FILE_ATTRIBUTE_READONLY))
-		buffer->st_mode |= S_IWRITE | S_IEXEC;
+		sbuf->st_mode |= S_IWRITE | S_IEXEC;
 	    return 0;
 	}
     }
@@ -1121,27 +1121,27 @@ win32_stat(const char *path, struct stat *buffer)
 	    /* The drive can be inaccessible, some _stat()s are buggy */
 	    if (USING_WIDE()
 		? !GetVolumeInformationW(wbuffer,NULL,0,NULL,NULL,NULL,NULL,0)
-		: !GetVolumeInformationA(path,NULL,0,NULL,NULL,NULL,NULL,0)) {
+		: !GetVolumeInformationA(buffer,NULL,0,NULL,NULL,NULL,NULL,0)) {
 		errno = ENOENT;
 		return -1;
 	    }
 	}
 #ifdef __BORLANDC__
-	if (S_ISDIR(buffer->st_mode))
-	    buffer->st_mode |= S_IWRITE | S_IEXEC;
-	else if (S_ISREG(buffer->st_mode)) {
+	if (S_ISDIR(sbuf->st_mode))
+	    sbuf->st_mode |= S_IWRITE | S_IEXEC;
+	else if (S_ISREG(sbuf->st_mode)) {
 	    if (l >= 4 && path[l-4] == '.') {
 		const char *e = path + l - 3;
 		if (strnicmp(e,"exe",3)
 		    && strnicmp(e,"bat",3)
 		    && strnicmp(e,"com",3)
 		    && (IsWin95() || strnicmp(e,"cmd",3)))
-		    buffer->st_mode &= ~S_IEXEC;
+		    sbuf->st_mode &= ~S_IEXEC;
 		else
-		    buffer->st_mode |= S_IEXEC;
+		    sbuf->st_mode |= S_IEXEC;
 	    }
 	    else
-		buffer->st_mode &= ~S_IEXEC;
+		sbuf->st_mode &= ~S_IEXEC;
 	}
 #endif
     }
@@ -1231,7 +1231,7 @@ DllExport char *
 win32_getenv(const char *name)
 {
     dTHXo;
-    WCHAR wBuffer[MAX_PATH];
+    WCHAR wBuffer[MAX_PATH+1];
     DWORD needlen;
     SV *curitem = Nullsv;
 
@@ -1395,11 +1395,13 @@ win32_unlink(const char *filename)
     DWORD attrs;
 
     if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
+	WCHAR wBuffer[MAX_PATH+1];
 
 	A2WHELPER(filename, wBuffer, sizeof(wBuffer));
 	wcscpy(wBuffer, PerlDir_mapW(wBuffer));
 	attrs = GetFileAttributesW(wBuffer);
+	if (attrs == 0xFFFFFFFF)
+	    goto fail;
 	if (attrs & FILE_ATTRIBUTE_READONLY) {
 	    (void)SetFileAttributesW(wBuffer, attrs & ~FILE_ATTRIBUTE_READONLY);
 	    ret = _wunlink(wBuffer);
@@ -1410,18 +1412,24 @@ win32_unlink(const char *filename)
 	    ret = _wunlink(wBuffer);
     }
     else {
-	filename = PerlDir_mapA(filename);
-	attrs = GetFileAttributesA(filename);
+	char buffer[MAX_PATH+1];
+	strcpy(buffer, PerlDir_mapA(filename));
+	attrs = GetFileAttributesA(buffer);
+	if (attrs == 0xFFFFFFFF)
+	    goto fail;
 	if (attrs & FILE_ATTRIBUTE_READONLY) {
-	    (void)SetFileAttributesA(filename, attrs & ~FILE_ATTRIBUTE_READONLY);
-	    ret = unlink(filename);
+	    (void)SetFileAttributesA(buffer, attrs & ~FILE_ATTRIBUTE_READONLY);
+	    ret = unlink(buffer);
 	    if (ret == -1)
-		(void)SetFileAttributesA(filename, attrs);
+		(void)SetFileAttributesA(buffer, attrs);
 	}
 	else
-	    ret = unlink(filename);
+	    ret = unlink(buffer);
     }
     return ret;
+fail:
+    errno = ENOENT;
+    return -1;
 }
 
 DllExport int
@@ -1433,7 +1441,8 @@ win32_utime(const char *filename, struct utimbuf *times)
     FILETIME ftAccess;
     FILETIME ftWrite;
     struct utimbuf TimeBuffer;
-    WCHAR wbuffer[MAX_PATH];
+    WCHAR wbuffer[MAX_PATH+1];
+    char buffer[MAX_PATH+1];
 
     int rc;
     if (USING_WIDE()) {
@@ -1442,8 +1451,8 @@ win32_utime(const char *filename, struct utimbuf *times)
 	rc = _wutime(wbuffer, (struct _utimbuf*)times);
     }
     else {
-	filename = PerlDir_mapA(filename);
-	rc = utime(filename, times);
+	strcpy(buffer, PerlDir_mapA(filename));
+	rc = utime(buffer, times);
     }
     /* EACCES: path specifies directory or readonly file */
     if (rc == 0 || errno != EACCES /* || !IsWinNT() */)
@@ -1462,7 +1471,7 @@ win32_utime(const char *filename, struct utimbuf *times)
 			    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
     }
     else {
-	handle = CreateFileA(filename, GENERIC_READ | GENERIC_WRITE,
+	handle = CreateFileA(buffer, GENERIC_READ | GENERIC_WRITE,
 			    FILE_SHARE_READ | FILE_SHARE_DELETE, NULL,
 			    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, NULL);
     }
@@ -1686,6 +1695,8 @@ FAILED:
     return -1;
 }
 
+#ifndef PERL_OBJECT
+
 static UINT timerid = 0;
 
 static VOID CALLBACK TimerProc(HWND win, UINT msg, UINT id, DWORD time)
@@ -1695,10 +1706,12 @@ static VOID CALLBACK TimerProc(HWND win, UINT msg, UINT id, DWORD time)
     timerid=0;  
     sighandler(14);
 }
+#endif	/* !PERL_OBJECT */
 
 DllExport unsigned int
 win32_alarm(unsigned int sec)
 {
+#ifndef PERL_OBJECT
     /* 
      * the 'obvious' implentation is SetTimer() with a callback
      * which does whatever receiving SIGALRM would do 
@@ -1723,6 +1736,7 @@ win32_alarm(unsigned int sec)
         timerid=0;  
        }
      }
+#endif	/* !PERL_OBJECT */
     return 0;
 }
 
@@ -1743,44 +1757,60 @@ win32_crypt(const char *txt, const char *salt)
 #endif
 }
 
-#ifdef USE_FIXED_OSFHANDLE
+/* C doesn't like repeat struct definitions */
 
-EXTERN_C int __cdecl _alloc_osfhnd(void);
-EXTERN_C int __cdecl _set_osfhnd(int fh, long value);
-EXTERN_C void __cdecl _lock_fhandle(int);
-EXTERN_C void __cdecl _unlock_fhandle(int);
-EXTERN_C void __cdecl _unlock(int);
+#if defined(USE_FIXED_OSFHANDLE) || defined(PERL_MSVCRT_READFIX)
 
-#if	(_MSC_VER >= 1000)
-typedef struct	{
+#ifndef _CRTIMP
+#define _CRTIMP __declspec(dllimport)
+#endif
+
+/*
+ * Control structure for lowio file handles
+ */
+typedef struct {
     long osfhnd;    /* underlying OS file HANDLE */
     char osfile;    /* attributes of file (e.g., open in text mode?) */
     char pipech;    /* one char buffer for handles opened on pipes */
-#if defined (_MT) && !defined (DLL_FOR_WIN32S)
     int lockinitflag;
     CRITICAL_SECTION lock;
-#endif  /* defined (_MT) && !defined (DLL_FOR_WIN32S) */
-}	ioinfo;
+} ioinfo;
 
-EXTERN_C ioinfo * __pioinfo[];
 
-#define IOINFO_L2E			5
-#define IOINFO_ARRAY_ELTS	(1 << IOINFO_L2E)
-#define _pioinfo(i)	(__pioinfo[i >> IOINFO_L2E] + (i & (IOINFO_ARRAY_ELTS - 1)))
-#define _osfile(i)	(_pioinfo(i)->osfile)
+/*
+ * Array of arrays of control structures for lowio files.
+ */
+EXTERN_C _CRTIMP ioinfo* __pioinfo[];
 
-#else	/* (_MSC_VER >= 1000) */
-extern char _osfile[];
-#endif	/* (_MSC_VER >= 1000) */
+/*
+ * Definition of IOINFO_L2E, the log base 2 of the number of elements in each
+ * array of ioinfo structs.
+ */
+#define IOINFO_L2E	    5
+
+/*
+ * Definition of IOINFO_ARRAY_ELTS, the number of elements in ioinfo array
+ */
+#define IOINFO_ARRAY_ELTS   (1 << IOINFO_L2E)
+
+/*
+ * Access macros for getting at an ioinfo struct and its fields from a
+ * file handle
+ */
+#define _pioinfo(i) (__pioinfo[(i) >> IOINFO_L2E] + ((i) & (IOINFO_ARRAY_ELTS - 1)))
+#define _osfhnd(i)  (_pioinfo(i)->osfhnd)
+#define _osfile(i)  (_pioinfo(i)->osfile)
+#define _pipech(i)  (_pioinfo(i)->pipech)
+
+#endif
+
+#ifdef USE_FIXED_OSFHANDLE
 
 #define FOPEN			0x01	/* file handle open */
+#define FNOINHERIT		0x10	/* file handle opened O_NOINHERIT */
 #define FAPPEND			0x20	/* file handle opened O_APPEND */
 #define FDEV			0x40	/* file handle refers to device */
 #define FTEXT			0x80	/* file handle is in text mode */
-
-#define _STREAM_LOCKS   26		/* Table of stream locks */
-#define _LAST_STREAM_LOCK  (_STREAM_LOCKS+_NSTREAM_-1)	/* Last stream lock */
-#define _FH_LOCKS          (_LAST_STREAM_LOCK+1)	/* Table of fh locks */
 
 /***
 *int my_open_osfhandle(long osfhandle, int flags) - open C Runtime file handle
@@ -1788,8 +1818,10 @@ extern char _osfile[];
 *Purpose:
 *       This function allocates a free C Runtime file handle and associates
 *       it with the Win32 HANDLE specified by the first parameter. This is a
-*		temperary fix for WIN95's brain damage GetFileType() error on socket
-*		we just bypass that call for socket
+*	temperary fix for WIN95's brain damage GetFileType() error on socket
+*	we just bypass that call for socket
+*
+*	This works with MSVC++ 4.0+ or GCC/Mingw32
 *
 *Entry:
 *       long osfhandle - Win32 HANDLE to associate with C Runtime file handle.
@@ -1802,6 +1834,31 @@ extern char _osfile[];
 *Exceptions:
 *
 *******************************************************************************/
+
+/*
+ * we fake up some parts of the CRT that aren't exported by MSVCRT.dll
+ * this lets sockets work on Win9X with GCC and should fix the problems
+ * with perl95.exe
+ *	-- BKS, 1-23-2000
+*/
+
+/* since we are not doing a dup2(), this works fine */
+
+#define _set_osfhnd(fh, osfh) (void)(_osfhnd(fh) = osfh)
+
+/* create an ioinfo entry, kill its handle, and steal the entry */
+
+static int
+_alloc_osfhnd(void)
+{
+    HANDLE hF = CreateFile("NUL", 0, 0, NULL, OPEN_ALWAYS, 0, NULL);
+    int fh = _open_osfhandle((long)hF, 0);
+    CloseHandle(hF);
+    if (fh == -1)
+        return fh;
+    EnterCriticalSection(&(_pioinfo(fh)->lock));
+    return fh;
+}
 
 static int
 my_open_osfhandle(long osfhandle, int flags)
@@ -1818,6 +1875,9 @@ my_open_osfhandle(long osfhandle, int flags)
     if (flags & O_TEXT)
 	fileflags |= FTEXT;
 
+    if (flags & O_NOINHERIT)
+	fileflags |= FNOINHERIT;
+
     /* attempt to allocate a C Runtime file handle */
     if ((fh = _alloc_osfhnd()) == -1) {
 	errno = EMFILE;		/* too many open files */
@@ -1830,18 +1890,12 @@ my_open_osfhandle(long osfhandle, int flags)
 
     fileflags |= FOPEN;		/* mark as open */
 
-#if (_MSC_VER >= 1000)
     _osfile(fh) = fileflags;	/* set osfile entry */
-    _unlock_fhandle(fh);
-#else
-    _osfile[fh] = fileflags;	/* set osfile entry */
-    _unlock(fh+_FH_LOCKS);		/* unlock handle */
-#endif
+    LeaveCriticalSection(&_pioinfo(fh)->lock);
 
     return fh;			/* return handle */
 }
 
-#define _open_osfhandle my_open_osfhandle
 #endif	/* USE_FIXED_OSFHANDLE */
 
 /* simulate flock by locking a range on the file */
@@ -2051,7 +2105,8 @@ DllExport FILE *
 win32_fopen(const char *filename, const char *mode)
 {
     dTHXo;
-    WCHAR wMode[MODE_SIZE], wBuffer[MAX_PATH];
+    WCHAR wMode[MODE_SIZE], wBuffer[MAX_PATH+1];
+    FILE *f;
     
     if (!*filename)
 	return NULL;
@@ -2062,9 +2117,14 @@ win32_fopen(const char *filename, const char *mode)
     if (USING_WIDE()) {
 	A2WHELPER(mode, wMode, sizeof(wMode));
 	A2WHELPER(filename, wBuffer, sizeof(wBuffer));
-	return _wfopen(PerlDir_mapW(wBuffer), wMode);
+	f = _wfopen(PerlDir_mapW(wBuffer), wMode);
     }
-    return fopen(PerlDir_mapA(filename), mode);
+    else
+	f = fopen(PerlDir_mapA(filename), mode);
+    /* avoid buffering headaches for child processes */
+    if (f && *mode == 'a')
+	win32_fseek(f, 0, SEEK_END);
+    return f;
 }
 
 #ifndef USE_SOCKETS_AS_HANDLES
@@ -2077,18 +2137,24 @@ win32_fdopen(int handle, const char *mode)
 {
     dTHXo;
     WCHAR wMode[MODE_SIZE];
+    FILE *f;
     if (USING_WIDE()) {
 	A2WHELPER(mode, wMode, sizeof(wMode));
-	return _wfdopen(handle, wMode);
+	f = _wfdopen(handle, wMode);
     }
-    return fdopen(handle, (char *) mode);
+    else
+	f = fdopen(handle, (char *) mode);
+    /* avoid buffering headaches for child processes */
+    if (f && *mode == 'a')
+	win32_fseek(f, 0, SEEK_END);
+    return f;
 }
 
 DllExport FILE *
 win32_freopen(const char *path, const char *mode, FILE *stream)
 {
     dTHXo;
-    WCHAR wMode[MODE_SIZE], wBuffer[MAX_PATH];
+    WCHAR wMode[MODE_SIZE], wBuffer[MAX_PATH+1];
     if (stricmp(path, "/dev/null")==0)
 	path = "NUL";
 
@@ -2369,7 +2435,7 @@ Nt4CreateHardLinkW(
     StreamId.dwStreamId = BACKUP_LINK;
     StreamId.dwStreamAttributes = 0;
     StreamId.dwStreamNameSize = 0;
-#ifdef __BORLANDC__
+#if defined(__BORLANDC__) || defined(__MINGW32__)
     StreamId.Size.u.HighPart = 0;
     StreamId.Size.u.LowPart = dwLen;
 #else
@@ -2394,11 +2460,11 @@ win32_link(const char *oldname, const char *newname)
 {
     dTHXo;
     BOOL (__stdcall *pfnCreateHardLinkW)(LPCWSTR,LPCWSTR,LPSECURITY_ATTRIBUTES);
-    WCHAR wOldName[MAX_PATH];
-    WCHAR wNewName[MAX_PATH];
+    WCHAR wOldName[MAX_PATH+1];
+    WCHAR wNewName[MAX_PATH+1];
 
     if (IsWin95())
-	Perl_die(aTHX_ PL_no_func, "link");
+	Perl_croak(aTHX_ PL_no_func, "link");
 
     pfnCreateHardLinkW =
 	(BOOL (__stdcall *)(LPCWSTR, LPCWSTR, LPSECURITY_ATTRIBUTES))
@@ -2420,26 +2486,31 @@ win32_link(const char *oldname, const char *newname)
 DllExport int
 win32_rename(const char *oname, const char *newname)
 {
-    WCHAR wOldName[MAX_PATH];
-    WCHAR wNewName[MAX_PATH];
-    char szOldName[MAX_PATH];
+    WCHAR wOldName[MAX_PATH+1];
+    WCHAR wNewName[MAX_PATH+1];
+    char szOldName[MAX_PATH+1];
+    char szNewName[MAX_PATH+1];
     BOOL bResult;
+    dTHXo;
+
     /* XXX despite what the documentation says about MoveFileEx(),
      * it doesn't work under Windows95!
      */
     if (IsWinNT()) {
-	dTHXo;
+	DWORD dwFlags = MOVEFILE_COPY_ALLOWED;
 	if (USING_WIDE()) {
 	    A2WHELPER(oname, wOldName, sizeof(wOldName));
 	    A2WHELPER(newname, wNewName, sizeof(wNewName));
+	    if (wcsicmp(wNewName, wOldName))
+		dwFlags |= MOVEFILE_REPLACE_EXISTING;
 	    wcscpy(wOldName, PerlDir_mapW(wOldName));
-	    bResult = MoveFileExW(wOldName,PerlDir_mapW(wNewName),
-			MOVEFILE_COPY_ALLOWED|MOVEFILE_REPLACE_EXISTING);
+	    bResult = MoveFileExW(wOldName,PerlDir_mapW(wNewName), dwFlags);
 	}
 	else {
-	    strcpy(szOldName, PerlDir_mapA(szOldName));
-	    bResult = MoveFileExA(szOldName,PerlDir_mapA(newname),
-			MOVEFILE_COPY_ALLOWED|MOVEFILE_REPLACE_EXISTING);
+	    if (stricmp(newname, oname))
+		dwFlags |= MOVEFILE_REPLACE_EXISTING;
+	    strcpy(szOldName, PerlDir_mapA(oname));
+	    bResult = MoveFileExA(szOldName,PerlDir_mapA(newname), dwFlags);
 	}
 	if (!bResult) {
 	    DWORD err = GetLastError();
@@ -2464,14 +2535,17 @@ win32_rename(const char *oname, const char *newname)
     }
     else {
 	int retval = 0;
-	char tmpname[MAX_PATH+1];
+	char szTmpName[MAX_PATH+1];
 	char dname[MAX_PATH+1];
 	char *endname = Nullch;
 	STRLEN tmplen = 0;
 	DWORD from_attr, to_attr;
 
+	strcpy(szOldName, PerlDir_mapA(oname));
+	strcpy(szNewName, PerlDir_mapA(newname));
+
 	/* if oname doesn't exist, do nothing */
-	from_attr = GetFileAttributes(oname);
+	from_attr = GetFileAttributes(szOldName);
 	if (from_attr == 0xFFFFFFFF) {
 	    errno = ENOENT;
 	    return -1;
@@ -2481,7 +2555,7 @@ win32_rename(const char *oname, const char *newname)
 	 * don't delete it in case oname happens to be the same file
 	 * (but perhaps accessed via a different path)
 	 */
-	to_attr = GetFileAttributes(newname);
+	to_attr = GetFileAttributes(szNewName);
 	if (to_attr != 0xFFFFFFFF) {
 	    /* if newname is a directory, we fail
 	     * XXX could overcome this with yet more convoluted logic */
@@ -2489,29 +2563,29 @@ win32_rename(const char *oname, const char *newname)
 		errno = EACCES;
 		return -1;
 	    }
-	    tmplen = strlen(newname);
-	    strcpy(tmpname,newname);
-	    endname = tmpname+tmplen;
-	    for (; endname > tmpname ; --endname) {
+	    tmplen = strlen(szNewName);
+	    strcpy(szTmpName,szNewName);
+	    endname = szTmpName+tmplen;
+	    for (; endname > szTmpName ; --endname) {
 		if (*endname == '/' || *endname == '\\') {
 		    *endname = '\0';
 		    break;
 		}
 	    }
-	    if (endname > tmpname)
-		endname = strcpy(dname,tmpname);
+	    if (endname > szTmpName)
+		endname = strcpy(dname,szTmpName);
 	    else
 		endname = ".";
 
 	    /* get a temporary filename in same directory
 	     * XXX is this really the best we can do? */
-	    if (!GetTempFileName((LPCTSTR)endname, "plr", 0, tmpname)) {
+	    if (!GetTempFileName((LPCTSTR)endname, "plr", 0, szTmpName)) {
 		errno = ENOENT;
 		return -1;
 	    }
-	    DeleteFile(tmpname);
+	    DeleteFile(szTmpName);
 
-	    retval = rename(newname, tmpname);
+	    retval = rename(szNewName, szTmpName);
 	    if (retval != 0) {
 		errno = EACCES;
 		return retval;
@@ -2519,16 +2593,16 @@ win32_rename(const char *oname, const char *newname)
 	}
 
 	/* rename oname to newname */
-	retval = rename(oname, newname);
+	retval = rename(szOldName, szNewName);
 
 	/* if we created a temporary file before ... */
 	if (endname != Nullch) {
 	    /* ...and rename succeeded, delete temporary file/directory */
 	    if (retval == 0)
-		DeleteFile(tmpname);
+		DeleteFile(szTmpName);
 	    /* else restore it to what it was */
 	    else
-		(void)rename(tmpname, newname);
+		(void)rename(szTmpName, szNewName);
 	}
 	return retval;
     }
@@ -2558,7 +2632,7 @@ win32_open(const char *path, int flag, ...)
     dTHXo;
     va_list ap;
     int pmode;
-    WCHAR wBuffer[MAX_PATH];
+    WCHAR wBuffer[MAX_PATH+1];
 
     va_start(ap, flag);
     pmode = va_arg(ap, int);
@@ -2598,10 +2672,204 @@ win32_dup2(int fd1,int fd2)
     return dup2(fd1,fd2);
 }
 
+#ifdef PERL_MSVCRT_READFIX
+
+#define LF		10	/* line feed */
+#define CR		13	/* carriage return */
+#define CTRLZ		26      /* ctrl-z means eof for text */
+#define FOPEN		0x01	/* file handle open */
+#define FEOFLAG		0x02	/* end of file has been encountered */
+#define FCRLF		0x04	/* CR-LF across read buffer (in text mode) */
+#define FPIPE		0x08	/* file handle refers to a pipe */
+#define FAPPEND		0x20	/* file handle opened O_APPEND */
+#define FDEV		0x40	/* file handle refers to device */
+#define FTEXT		0x80	/* file handle is in text mode */
+#define MAX_DESCRIPTOR_COUNT	(64*32) /* this is the maximun that MSVCRT can handle */
+
+int __cdecl
+_fixed_read(int fh, void *buf, unsigned cnt)
+{
+    int bytes_read;                 /* number of bytes read */
+    char *buffer;                   /* buffer to read to */
+    int os_read;                    /* bytes read on OS call */
+    char *p, *q;                    /* pointers into buffer */
+    char peekchr;                   /* peek-ahead character */
+    ULONG filepos;                  /* file position after seek */
+    ULONG dosretval;                /* o.s. return value */
+
+    /* validate handle */
+    if (((unsigned)fh >= (unsigned)MAX_DESCRIPTOR_COUNT) ||
+         !(_osfile(fh) & FOPEN))
+    {
+	/* out of range -- return error */
+	errno = EBADF;
+	_doserrno = 0;  /* not o.s. error */
+	return -1;
+    }
+
+    EnterCriticalSection(&(_pioinfo(fh)->lock));  /* lock file */
+
+    bytes_read = 0;                 /* nothing read yet */
+    buffer = (char*)buf;
+
+    if (cnt == 0 || (_osfile(fh) & FEOFLAG)) {
+        /* nothing to read or at EOF, so return 0 read */
+        goto functionexit;
+    }
+
+    if ((_osfile(fh) & (FPIPE|FDEV)) && _pipech(fh) != LF) {
+        /* a pipe/device and pipe lookahead non-empty: read the lookahead
+         * char */
+        *buffer++ = _pipech(fh);
+        ++bytes_read;
+        --cnt;
+        _pipech(fh) = LF;           /* mark as empty */
+    }
+
+    /* read the data */
+
+    if (!ReadFile((HANDLE)_osfhnd(fh), buffer, cnt, (LPDWORD)&os_read, NULL))
+    {
+        /* ReadFile has reported an error. recognize two special cases.
+         *
+         *      1. map ERROR_ACCESS_DENIED to EBADF
+         *
+         *      2. just return 0 if ERROR_BROKEN_PIPE has occurred. it
+         *         means the handle is a read-handle on a pipe for which
+         *         all write-handles have been closed and all data has been
+         *         read. */
+
+        if ((dosretval = GetLastError()) == ERROR_ACCESS_DENIED) {
+            /* wrong read/write mode should return EBADF, not EACCES */
+            errno = EBADF;
+            _doserrno = dosretval;
+            bytes_read = -1;
+	    goto functionexit;
+        }
+        else if (dosretval == ERROR_BROKEN_PIPE) {
+            bytes_read = 0;
+	    goto functionexit;
+        }
+        else {
+            bytes_read = -1;
+	    goto functionexit;
+        }
+    }
+
+    bytes_read += os_read;          /* update bytes read */
+
+    if (_osfile(fh) & FTEXT) {
+        /* now must translate CR-LFs to LFs in the buffer */
+
+        /* set CRLF flag to indicate LF at beginning of buffer */
+        /* if ((os_read != 0) && (*(char *)buf == LF))   */
+        /*    _osfile(fh) |= FCRLF;                      */
+        /* else                                          */
+        /*    _osfile(fh) &= ~FCRLF;                     */
+
+        _osfile(fh) &= ~FCRLF;
+
+        /* convert chars in the buffer: p is src, q is dest */
+        p = q = (char*)buf;
+        while (p < (char *)buf + bytes_read) {
+            if (*p == CTRLZ) {
+                /* if fh is not a device, set ctrl-z flag */
+                if (!(_osfile(fh) & FDEV))
+                    _osfile(fh) |= FEOFLAG;
+                break;              /* stop translating */
+            }
+            else if (*p != CR)
+                *q++ = *p++;
+            else {
+                /* *p is CR, so must check next char for LF */
+                if (p < (char *)buf + bytes_read - 1) {
+                    if (*(p+1) == LF) {
+                        p += 2;
+                        *q++ = LF;  /* convert CR-LF to LF */
+                    }
+                    else
+                        *q++ = *p++;    /* store char normally */
+                }
+                else {
+                    /* This is the hard part.  We found a CR at end of
+                       buffer.  We must peek ahead to see if next char
+                       is an LF. */
+                    ++p;
+
+                    dosretval = 0;
+                    if (!ReadFile((HANDLE)_osfhnd(fh), &peekchr, 1,
+                                    (LPDWORD)&os_read, NULL))
+                        dosretval = GetLastError();
+
+                    if (dosretval != 0 || os_read == 0) {
+                        /* couldn't read ahead, store CR */
+                        *q++ = CR;
+                    }
+                    else {
+                        /* peekchr now has the extra character -- we now
+                           have several possibilities:
+                           1. disk file and char is not LF; just seek back
+                              and copy CR
+                           2. disk file and char is LF; store LF, don't seek back
+                           3. pipe/device and char is LF; store LF.
+                           4. pipe/device and char isn't LF, store CR and
+                              put char in pipe lookahead buffer. */
+                        if (_osfile(fh) & (FDEV|FPIPE)) {
+                            /* non-seekable device */
+                            if (peekchr == LF)
+                                *q++ = LF;
+                            else {
+                                *q++ = CR;
+                                _pipech(fh) = peekchr;
+                            }
+                        }
+                        else {
+                            /* disk file */
+                            if (peekchr == LF) {
+                                /* nothing read yet; must make some
+                                   progress */
+                                *q++ = LF;
+                                /* turn on this flag for tell routine */
+                                _osfile(fh) |= FCRLF;
+                            }
+                            else {
+				HANDLE osHandle;        /* o.s. handle value */
+                                /* seek back */
+				if ((osHandle = (HANDLE)_get_osfhandle(fh)) != (HANDLE)-1)
+				{
+				    if ((filepos = SetFilePointer(osHandle, -1, NULL, FILE_CURRENT)) == -1)
+					dosretval = GetLastError();
+				}
+                                if (peekchr != LF)
+                                    *q++ = CR;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /* we now change bytes_read to reflect the true number of chars
+           in the buffer */
+        bytes_read = q - (char *)buf;
+    }
+
+functionexit:	
+    LeaveCriticalSection(&(_pioinfo(fh)->lock));    /* unlock file */
+
+    return bytes_read;
+}
+
+#endif	/* PERL_MSVCRT_READFIX */
+
 DllExport int
 win32_read(int fd, void *buf, unsigned int cnt)
 {
+#ifdef PERL_MSVCRT_READFIX
+    return _fixed_read(fd, buf, cnt);
+#else
     return read(fd, buf, cnt);
+#endif
 }
 
 DllExport int
@@ -2615,7 +2883,7 @@ win32_mkdir(const char *dir, int mode)
 {
     dTHXo;
     if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
+	WCHAR wBuffer[MAX_PATH+1];
 	A2WHELPER(dir, wBuffer, sizeof(wBuffer));
 	return _wmkdir(PerlDir_mapW(wBuffer));
     }
@@ -2627,7 +2895,7 @@ win32_rmdir(const char *dir)
 {
     dTHXo;
     if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
+	WCHAR wBuffer[MAX_PATH+1];
 	A2WHELPER(dir, wBuffer, sizeof(wBuffer));
 	return _wrmdir(PerlDir_mapW(wBuffer));
     }
@@ -2639,7 +2907,7 @@ win32_chdir(const char *dir)
 {
     dTHXo;
     if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
+	WCHAR wBuffer[MAX_PATH+1];
 	A2WHELPER(dir, wBuffer, sizeof(wBuffer));
 	return _wchdir(wBuffer);
     }
@@ -2651,7 +2919,7 @@ win32_access(const char *path, int mode)
 {
     dTHXo;
     if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
+	WCHAR wBuffer[MAX_PATH+1];
 	A2WHELPER(path, wBuffer, sizeof(wBuffer));
 	return _waccess(PerlDir_mapW(wBuffer), mode);
     }
@@ -2663,7 +2931,7 @@ win32_chmod(const char *path, int mode)
 {
     dTHXo;
     if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
+	WCHAR wBuffer[MAX_PATH+1];
 	A2WHELPER(path, wBuffer, sizeof(wBuffer));
 	return _wchmod(PerlDir_mapW(wBuffer), mode);
     }
@@ -3151,6 +3419,10 @@ win32_free(void *block)
 int
 win32_open_osfhandle(long handle, int flags)
 {
+#ifdef USE_FIXED_OSFHANDLE
+    if (IsWin95())
+	return my_open_osfhandle(handle, flags);
+#endif
     return _open_osfhandle(handle, flags);
 }
 
@@ -3166,7 +3438,7 @@ win32_dynaload(const char* filename)
     dTHXo;
     HMODULE hModule;
     if (USING_WIDE()) {
-	WCHAR wfilename[MAX_PATH];
+	WCHAR wfilename[MAX_PATH+1];
 	A2WHELPER(filename, wfilename, sizeof(wfilename));
 	hModule = LoadLibraryExW(PerlDir_mapW(wfilename), NULL, LOAD_WITH_ALTERED_SEARCH_PATH);
     }
@@ -3600,15 +3872,15 @@ XS(w32_CopyFile)
     if (items != 3)
 	Perl_croak(aTHX_ "usage: Win32::CopyFile($from, $to, $overwrite)");
     if (USING_WIDE()) {
-	WCHAR wSourceFile[MAX_PATH];
-	WCHAR wDestFile[MAX_PATH];
+	WCHAR wSourceFile[MAX_PATH+1];
+	WCHAR wDestFile[MAX_PATH+1];
 	A2WHELPER(SvPV_nolen(ST(0)), wSourceFile, sizeof(wSourceFile));
 	wcscpy(wSourceFile, PerlDir_mapW(wSourceFile));
 	A2WHELPER(SvPV_nolen(ST(1)), wDestFile, sizeof(wDestFile));
 	bResult = CopyFileW(wSourceFile, PerlDir_mapW(wDestFile), !SvTRUE(ST(2)));
     }
     else {
-	char szSourceFile[MAX_PATH];
+	char szSourceFile[MAX_PATH+1];
 	strcpy(szSourceFile, PerlDir_mapA(SvPV_nolen(ST(0))));
 	bResult = CopyFileA(szSourceFile, PerlDir_mapA(SvPV_nolen(ST(1))), !SvTRUE(ST(2)));
     }
@@ -3685,31 +3957,6 @@ Perl_win32_init(int *argcp, char ***argvp)
 #endif
     MALLOC_INIT;
 }
-
-#ifdef USE_BINMODE_SCRIPTS
-
-void
-win32_strip_return(SV *sv)
-{
- char *s = SvPVX(sv);
- char *e = s+SvCUR(sv);
- char *d = s;
- while (s < e)
-  {
-   if (*s == '\r' && s[1] == '\n')
-    {
-     *d++ = '\n';
-     s += 2;
-    }
-   else 
-    {
-     *d++ = *s++;
-    }   
-  }
- SvCUR_set(sv,d-SvPVX(sv)); 
-}
-
-#endif
 
 #ifdef USE_ITHREADS
 

@@ -86,6 +86,15 @@ perl_alloc_using(struct IPerlMem* ipM, struct IPerlMem* ipMS,
     return my_perl;
 }
 #else
+
+/*
+=for apidoc perl_alloc
+
+Allocates a new Perl interpreter.  See L<perlembed>.
+
+=cut
+*/
+
 PerlInterpreter *
 perl_alloc(void)
 {
@@ -94,9 +103,18 @@ perl_alloc(void)
     /* New() needs interpreter, so call malloc() instead */
     my_perl = (PerlInterpreter*)PerlMem_malloc(sizeof(PerlInterpreter));
     PERL_SET_INTERP(my_perl);
+    Zero(my_perl, 1, PerlInterpreter);
     return my_perl;
 }
 #endif /* PERL_IMPLICIT_SYS */
+
+/*
+=for apidoc perl_construct
+
+Initializes a new Perl interpreter.  See L<perlembed>.
+
+=cut
+*/
 
 void
 perl_construct(pTHXx)
@@ -118,9 +136,8 @@ perl_construct(pTHXx)
 
    /* Init the real globals (and main thread)? */
     if (!PL_linestr) {
-#ifdef USE_THREADS
-
     	INIT_THREADS;
+#ifdef USE_THREADS
 #ifdef ALLOC_THREAD_KEY
         ALLOC_THREAD_KEY;
 #else
@@ -203,14 +220,29 @@ perl_construct(pTHXx)
     init_i18nl10n(1);
     SET_NUMERIC_STANDARD();
 
+    {
+	U8 *s;
+	PL_patchlevel = NEWSV(0,4);
+	SvUPGRADE(PL_patchlevel, SVt_PVNV);
+	if (PERL_REVISION > 127 || PERL_VERSION > 127 || PERL_SUBVERSION > 127)
+	    SvGROW(PL_patchlevel,24);
+	s = (U8*)SvPVX(PL_patchlevel);
+	s = uv_to_utf8(s, (UV)PERL_REVISION);
+	s = uv_to_utf8(s, (UV)PERL_VERSION);
+	s = uv_to_utf8(s, (UV)PERL_SUBVERSION);
+	*s = '\0';
+	SvCUR_set(PL_patchlevel, s - (U8*)SvPVX(PL_patchlevel));
+	SvPOK_on(PL_patchlevel);
+	SvNVX(PL_patchlevel) = (NV)PERL_REVISION
+				+ ((NV)PERL_VERSION / (NV)1000)
 #if defined(PERL_SUBVERSION) && PERL_SUBVERSION > 0
-    sprintf(PL_patchlevel, "%7.5f",   (double) PERL_REVISION
-				+ ((double) PERL_VERSION / (double) 1000)
-				+ ((double) PERL_SUBVERSION / (double) 100000));
-#else
-    sprintf(PL_patchlevel, "%5.3f", (double) PERL_REVISION +
-				((double) PERL_VERSION / (double) 1000));
+				+ ((NV)PERL_SUBVERSION / (NV)1000000)
 #endif
+				;
+	SvNOK_on(PL_patchlevel);	/* dual valued */
+	SvUTF8_on(PL_patchlevel);
+	SvREADONLY_on(PL_patchlevel);
+    }
 
 #if defined(LOCAL_PATCH_COUNT)
     PL_localpatches = local_patches;	/* For possible -v */
@@ -223,6 +255,14 @@ perl_construct(pTHXx)
 
     ENTER;
 }
+
+/*
+=for apidoc perl_destruct
+
+Shuts down a Perl interpreter.  See L<perlembed>.
+
+=cut
+*/
 
 void
 perl_destruct(pTHXx)
@@ -393,6 +433,7 @@ perl_destruct(pTHXx)
 
     Safefree(PL_inplace);
     PL_inplace = Nullch;
+    SvREFCNT_dec(PL_patchlevel);
 
     if (PL_e_script) {
 	SvREFCNT_dec(PL_e_script);
@@ -437,11 +478,11 @@ perl_destruct(pTHXx)
     /* startup and shutdown function lists */
     SvREFCNT_dec(PL_beginav);
     SvREFCNT_dec(PL_endav);
-    SvREFCNT_dec(PL_stopav);
+    SvREFCNT_dec(PL_checkav);
     SvREFCNT_dec(PL_initav);
     PL_beginav = Nullav;
     PL_endav = Nullav;
-    PL_stopav = Nullav;
+    PL_checkav = Nullav;
     PL_initav = Nullav;
 
     /* shortcuts just get cleared */
@@ -598,7 +639,6 @@ perl_destruct(pTHXx)
 
     /* No SVs have survived, need to clean out */
     Safefree(PL_origfilename);
-    Safefree(PL_archpat_auto);
     Safefree(PL_reg_start_tmp);
     if (PL_reg_curpm)
 	Safefree(PL_reg_curpm);
@@ -649,6 +689,14 @@ perl_destruct(pTHXx)
     }
 }
 
+/*
+=for apidoc perl_free
+
+Releases a Perl interpreter.  See L<perlembed>.
+
+=cut
+*/
+
 void
 perl_free(pTHXx)
 {
@@ -667,6 +715,14 @@ Perl_call_atexit(pTHX_ ATEXIT_t fn, void *ptr)
     PL_exitlist[PL_exitlistlen].ptr = ptr;
     ++PL_exitlistlen;
 }
+
+/*
+=for apidoc perl_parse
+
+Tells a Perl interpreter to parse a Perl script.  See L<perlembed>.
+
+=cut
+*/
 
 int
 perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
@@ -727,8 +783,8 @@ setuid perl scripts securely.\n");
 		env, xsinit);
     switch (ret) {
     case 0:
-	if (PL_stopav)
-	    call_list(oldscope, PL_stopav);
+	if (PL_checkav)
+	    call_list(oldscope, PL_checkav);
 	return 0;
     case 1:
 	STATUS_ALL_FAILURE;
@@ -739,8 +795,8 @@ setuid perl scripts securely.\n");
 	    LEAVE;
 	FREETMPS;
 	PL_curstash = PL_defstash;
-	if (PL_stopav)
-	    call_list(oldscope, PL_stopav);
+	if (PL_checkav)
+	    call_list(oldscope, PL_checkav);
 	return STATUS_NATIVE_EXPORT;
     case 3:
 	PerlIO_printf(Perl_error_log, "panic: top_env\n");
@@ -840,18 +896,18 @@ S_parse_body(pTHX_ va_list args)
 	    if (!*++s && (s=argv[1]) != Nullch) {
 		argc--,argv++;
 	    }
-	    while (s && isSPACE(*s))
-		++s;
 	    if (s && *s) {
-		char *e, *p;
-		for (e = s; *e && !isSPACE(*e); e++) ;
-		p = savepvn(s, e-s);
+		char *p;
+		STRLEN len = strlen(s);
+		p = savepvn(s, len);
 		incpush(p, TRUE);
-		sv_catpv(sv,"-I");
-		sv_catpv(sv,p);
-		sv_catpv(sv," ");
+		sv_catpvn(sv, "-I", 2);
+		sv_catpvn(sv, p, len);
+		sv_catpvn(sv, " ", 1);
 		Safefree(p);
-	    }	/* XXX else croak? */
+	    }
+	    else
+		Perl_croak(aTHX_ "No directory specified for -I");
 	    break;
 	case 'P':
 	    forbid_setid("-P");
@@ -883,6 +939,21 @@ S_parse_body(pTHX_ va_list args)
 #  endif
 #  ifdef USE_THREADS
 		sv_catpv(PL_Sv," USE_THREADS");
+#  endif
+#  ifdef USE_ITHREADS
+		sv_catpv(PL_Sv," USE_ITHREADS");
+#  endif
+#  ifdef USE_64_BITS
+		sv_catpv(PL_Sv," USE_64_BITS");
+#  endif
+#  ifdef USE_LONG_DOUBLE
+		sv_catpv(PL_Sv," USE_LONG_DOUBLE");
+#  endif
+#  ifdef USE_LARGE_FILES
+		sv_catpv(PL_Sv," USE_LARGE_FILES");
+#  endif
+#  ifdef USE_SOCKS
+		sv_catpv(PL_Sv," USE_SOCKS");
 #  endif
 #  ifdef PERL_OBJECT
 		sv_catpv(PL_Sv," PERL_OBJECT");
@@ -962,7 +1033,8 @@ print \"  \\@INC:\\n    @INC\\n\";");
 #ifndef SECURE_INTERNAL_GETENV
         !PL_tainting &&
 #endif
-                        (s = PerlEnv_getenv("PERL5OPT"))) {
+	(s = PerlEnv_getenv("PERL5OPT")))
+    {
 	while (isSPACE(*s))
 	    s++;
 	if (*s == '-' && *(s+1) == 'T')
@@ -1121,6 +1193,14 @@ print \"  \\@INC:\\n    @INC\\n\";");
     return NULL;
 }
 
+/*
+=for apidoc perl_run
+
+Tells a Perl interpreter to run.  See L<perlembed>.
+
+=cut
+*/
+
 int
 perl_run(pTHXx)
 {
@@ -1210,6 +1290,16 @@ S_run_body(pTHX_ va_list args)
     return NULL;
 }
 
+/*
+=for apidoc p||get_sv
+
+Returns the SV of the specified Perl scalar.  If C<create> is set and the
+Perl variable does not exist then it will be created.  If C<create> is not
+set and the variable does not exist then NULL is returned.
+
+=cut
+*/
+
 SV*
 Perl_get_sv(pTHX_ const char *name, I32 create)
 {
@@ -1229,6 +1319,16 @@ Perl_get_sv(pTHX_ const char *name, I32 create)
     return Nullsv;
 }
 
+/*
+=for apidoc p||get_av
+
+Returns the AV of the specified Perl array.  If C<create> is set and the
+Perl variable does not exist then it will be created.  If C<create> is not
+set and the variable does not exist then NULL is returned.
+
+=cut
+*/
+
 AV*
 Perl_get_av(pTHX_ const char *name, I32 create)
 {
@@ -1240,6 +1340,16 @@ Perl_get_av(pTHX_ const char *name, I32 create)
     return Nullav;
 }
 
+/*
+=for apidoc p||get_hv
+
+Returns the HV of the specified Perl hash.  If C<create> is set and the
+Perl variable does not exist then it will be created.  If C<create> is not
+set and the variable does not exist then NULL is returned.
+
+=cut
+*/
+
 HV*
 Perl_get_hv(pTHX_ const char *name, I32 create)
 {
@@ -1250,6 +1360,17 @@ Perl_get_hv(pTHX_ const char *name, I32 create)
 	return GvHV(gv);
     return Nullhv;
 }
+
+/*
+=for apidoc p||get_cv
+
+Returns the CV of the specified Perl subroutine.  If C<create> is set and
+the Perl subroutine does not exist then it will be declared (which has the
+same effect as saying C<sub name;>).  If C<create> is not set and the
+subroutine does not exist then NULL is returned.
+
+=cut
+*/
 
 CV*
 Perl_get_cv(pTHX_ const char *name, I32 create)
@@ -1271,6 +1392,14 @@ Perl_get_cv(pTHX_ const char *name, I32 create)
 
 /* Be sure to refetch the stack pointer after calling these routines. */
 
+/*
+=for apidoc p||call_argv
+
+Performs a callback to the specified Perl sub.  See L<perlcall>.
+
+=cut
+*/
+
 I32
 Perl_call_argv(pTHX_ const char *sub_name, I32 flags, register char **argv)
               
@@ -1290,6 +1419,14 @@ Perl_call_argv(pTHX_ const char *sub_name, I32 flags, register char **argv)
     return call_pv(sub_name, flags);
 }
 
+/*
+=for apidoc p||call_pv
+
+Performs a callback to the specified Perl sub.  See L<perlcall>.
+
+=cut
+*/
+
 I32
 Perl_call_pv(pTHX_ const char *sub_name, I32 flags)
               		/* name of the subroutine */
@@ -1297,6 +1434,15 @@ Perl_call_pv(pTHX_ const char *sub_name, I32 flags)
 {
     return call_sv((SV*)get_cv(sub_name, TRUE), flags);
 }
+
+/*
+=for apidoc p||call_method
+
+Performs a callback to the specified Perl method.  The blessed object must
+be on the stack.  See L<perlcall>.
+
+=cut
+*/
 
 I32
 Perl_call_method(pTHX_ const char *methname, I32 flags)
@@ -1316,6 +1462,15 @@ Perl_call_method(pTHX_ const char *methname, I32 flags)
 }
 
 /* May be called with any of a CV, a GV, or an SV containing the name. */
+/*
+=for apidoc p||call_sv
+
+Performs a callback to the Perl sub whose name is in the SV.  See
+L<perlcall>.
+
+=cut
+*/
+
 I32
 Perl_call_sv(pTHX_ SV *sv, I32 flags)
        
@@ -1478,6 +1633,14 @@ S_call_xbody(pTHX_ OP *myop, int is_eval)
 
 /* Eval a string. The G_EVAL flag is always assumed. */
 
+/*
+=for apidoc p||eval_sv
+
+Tells Perl to C<eval> the string in the SV.
+
+=cut
+*/
+
 I32
 Perl_eval_sv(pTHX_ SV *sv, I32 flags)
        
@@ -1560,6 +1723,14 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
     return retval;
 }
 
+/*
+=for apidoc p||eval_pv
+
+Tells Perl to C<eval> the given string and return an SV* result.
+
+=cut
+*/
+
 SV*
 Perl_eval_pv(pTHX_ const char *p, I32 croak_on_error)
 {
@@ -1583,6 +1754,14 @@ Perl_eval_pv(pTHX_ const char *p, I32 croak_on_error)
 }
 
 /* Require a module. */
+
+/*
+=for apidoc p||require_pv
+
+Tells Perl to C<require> a module.
+
+=cut
+*/
 
 void
 Perl_require_pv(pTHX_ const char *pv)
@@ -1746,14 +1925,23 @@ Perl_moreswitches(pTHX_ char *s)
 	    ++s;
 	if (*s) {
 	    char *e, *p;
-	    for (e = s; *e && !isSPACE(*e); e++) ;
-	    p = savepvn(s, e-s);
-	    incpush(p, TRUE);
-	    Safefree(p);
-	    s = e;
+	    p = s;
+	    /* ignore trailing spaces (possibly followed by other switches) */
+	    do {
+		for (e = p; *e && !isSPACE(*e); e++) ;
+		p = e;
+		while (isSPACE(*p))
+		    p++;
+	    } while (*p && *p != '-');
+	    e = savepvn(s, e-s);
+	    incpush(e, TRUE);
+	    Safefree(e);
+	    s = p;
+	    if (*s == '-')
+		s++;
 	}
 	else
-	    Perl_croak(aTHX_ "No space allowed after -I");
+	    Perl_croak(aTHX_ "No directory specified for -I");
 	return s;
     case 'l':
 	PL_minus_l = TRUE;
@@ -1840,13 +2028,8 @@ Perl_moreswitches(pTHX_ char *s)
 	s++;
 	return s;
     case 'v':
-#if defined(PERL_SUBVERSION) && PERL_SUBVERSION > 0
-	printf("\nThis is perl, version %d.%03d_%02d built for %s",
-	    PERL_REVISION, PERL_VERSION, PERL_SUBVERSION, ARCHNAME);
-#else
-	printf("\nThis is perl, version %s built for %s",
-		PL_patchlevel, ARCHNAME);
-#endif
+	printf("\nThis is perl, v%"UVuf".%"UVuf".%"UVuf" built for %s",
+	       (UV)PERL_REVISION, (UV)PERL_VERSION, (UV)PERL_SUBVERSION, ARCHNAME);
 #if defined(LOCAL_PATCH_COUNT)
 	if (LOCAL_PATCH_COUNT > 0)
 	    printf("\n(with %d registered patch%s, see perl -V for more detail)",
@@ -2143,7 +2326,7 @@ S_open_script(pTHX_ char *scriptname, bool dosearch, SV *sv, int *fdscript)
 	    Perl_sv_catpvf(aTHX_ cpp, "%s/", BIN_EXP);
 	sv_catpv(cpp, cpp_cfg);
 
-	sv_catpv(sv,"-I");
+	sv_catpvn(sv, "-I", 2);
 	sv_catpv(sv,PRIVLIB_EXP);
 
 #ifdef MSDOS
@@ -2159,7 +2342,7 @@ sed %s -e \"/^[^#]/b\" \
  -e \"/^#[ 	]*undef[ 	]/b\" \
  -e \"/^#[ 	]*endif/b\" \
  -e \"s/^#.*//\" \
- %s | %_ -C %_ %s",
+ %s | %"SVf" -C %"SVf" %s",
 	  (PL_doextract ? "-e \"1,/^#/d\n\"" : ""),
 #else
 #  ifdef __OPEN_VM
@@ -2175,7 +2358,7 @@ sed %s -e \"/^[^#]/b\" \
  -e '/^#[ 	]*undef[ 	]/b' \
  -e '/^#[ 	]*endif/b' \
  -e 's/^[ 	]*#.*//' \
- %s | %_ %_ %s",
+ %s | %"SVf" %"SVf" %s",
 #  else
 	Perl_sv_setpvf(aTHX_ cmd, "\
 %s %s -e '/^[^#]/b' \
@@ -2189,7 +2372,7 @@ sed %s -e \"/^[^#]/b\" \
  -e '/^#[ 	]*undef[ 	]/b' \
  -e '/^#[ 	]*endif/b' \
  -e 's/^[ 	]*#.*//' \
- %s | %_ -C %_ %s",
+ %s | %"SVf" -C %"SVf" %s",
 #  endif
 #ifdef LOC_SED
 	  LOC_SED,
@@ -2242,7 +2425,9 @@ sed %s -e \"/^[^#]/b\" \
 	    PL_statbuf.st_mode & (S_ISUID|S_ISGID))
 	{
 	    /* try again */
-	    PerlProc_execv(Perl_form(aTHX_ "%s/sperl%s", BIN_EXP, PL_patchlevel), PL_origargv);
+	    PerlProc_execv(Perl_form(aTHX_ "%s/sperl"PERL_FS_VER_FMT, BIN_EXP,
+				     (int)PERL_REVISION, (int)PERL_VERSION,
+				     (int)PERL_SUBVERSION), PL_origargv);
 	    Perl_croak(aTHX_ "Can't do setuid\n");
 	}
 #endif
@@ -2290,7 +2475,7 @@ S_fd_on_nosuid_fs(pTHX_ int fd)
 #               if defined(HAS_FSTAT) && \
 		   defined(HAS_USTAT) && \
 		   defined(HAS_GETMNT) && \
-		   defined(HAS_STRUCT_FS_DATA) &&
+		   defined(HAS_STRUCT_FS_DATA) && \
 		   defined(NOSTAT_ONE)
     struct stat fdst;
     if (fstat(fd, &fdst) == 0) {
@@ -2489,7 +2674,9 @@ FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!\n");
 	    (void)PerlIO_close(PL_rsfp);
 #ifndef IAMSUID
 	    /* try again */
-	    PerlProc_execv(Perl_form(aTHX_ "%s/sperl%s", BIN_EXP, PL_patchlevel), PL_origargv);
+	    PerlProc_execv(Perl_form(aTHX_ "%s/sperl"PERL_FS_VER_FMT, BIN_EXP,
+				     (int)PERL_REVISION, (int)PERL_VERSION,
+				     (int)PERL_SUBVERSION), PL_origargv);
 #endif
 	    Perl_croak(aTHX_ "Can't do setuid\n");
 	}
@@ -2571,7 +2758,9 @@ FIX YOUR KERNEL, PUT A C WRAPPER AROUND THIS SCRIPT, OR USE -u AND UNDUMP!\n");
 #if defined(HAS_FCNTL) && defined(F_SETFD)
     fcntl(PerlIO_fileno(PL_rsfp),F_SETFD,0);	/* ensure no close-on-exec */
 #endif
-    PerlProc_execv(Perl_form(aTHX_ "%s/perl%s", BIN_EXP, PL_patchlevel), PL_origargv);/* try again */
+    PerlProc_execv(Perl_form(aTHX_ "%s/perl"PERL_FS_VER_FMT, BIN_EXP,
+			     (int)PERL_REVISION, (int)PERL_VERSION,
+			     (int)PERL_SUBVERSION), PL_origargv);/* try again */
     Perl_croak(aTHX_ "Can't do setuid\n");
 #endif /* IAMSUID */
 #else /* !DOSUID */
@@ -2801,7 +2990,7 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 	for (; argc > 0 && **argv == '-'; argc--,argv++) {
 	    if (!argv[0][1])
 		break;
-	    if (argv[0][1] == '-') {
+	    if (argv[0][1] == '-' && !argv[0][2]) {
 		argc--,argv++;
 		break;
 	    }
@@ -2968,17 +3157,6 @@ S_incpush(pTHX_ char *p, int addsubdirs)
 
     if (addsubdirs) {
 	subdir = sv_newmortal();
-	if (!PL_archpat_auto) {
-	    STRLEN len = (sizeof(ARCHNAME) + strlen(PL_patchlevel)
-			  + sizeof("//auto"));
-	    New(55, PL_archpat_auto, len, char);
-	    sprintf(PL_archpat_auto, "/%s/%s/auto", ARCHNAME, PL_patchlevel);
-#ifdef VMS
-	for (len = sizeof(ARCHNAME) + 2;
-	     PL_archpat_auto[len] != '\0' && PL_archpat_auto[len] != '/'; len++)
-		if (PL_archpat_auto[len] == '.') PL_archpat_auto[len] = '_';
-#endif
-	}
     }
 
     /* Break at all separators */
@@ -3024,16 +3202,16 @@ S_incpush(pTHX_ char *p, int addsubdirs)
 			      SvPV(libdir,len));
 #endif
 	    /* .../archname/version if -d .../archname/version/auto */
-	    sv_setsv(subdir, libdir);
-	    sv_catpv(subdir, PL_archpat_auto);
+	    Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/%s/"PERL_FS_VER_FMT"/auto", libdir,
+			   ARCHNAME, (int)PERL_REVISION,
+			   (int)PERL_VERSION, (int)PERL_SUBVERSION);
 	    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
 		  S_ISDIR(tmpstatbuf.st_mode))
 		av_push(GvAVn(PL_incgv),
 			newSVpvn(SvPVX(subdir), SvCUR(subdir) - sizeof "auto"));
 
 	    /* .../archname if -d .../archname/auto */
-	    sv_insert(subdir, SvCUR(libdir) + sizeof(ARCHNAME),
-		      strlen(PL_patchlevel) + 1, "", 0);
+	    Perl_sv_setpvf(aTHX_ subdir, "%"SVf"/%s/auto", libdir, ARCHNAME);
 	    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
 		  S_ISDIR(tmpstatbuf.st_mode))
 		av_push(GvAVn(PL_incgv),
@@ -3150,7 +3328,7 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 		else
 		    Perl_sv_catpvf(aTHX_ atsv,
 				   "%s failed--call queue aborted",
-				   paramList == PL_stopav ? "STOP"
+				   paramList == PL_checkav ? "CHECK"
 				   : paramList == PL_initav ? "INIT"
 				   : "END");
 		while (PL_scopestack_ix > oldscope)
@@ -3174,7 +3352,7 @@ Perl_call_list(pTHX_ I32 oldscope, AV *paramList)
 		    Perl_croak(aTHX_ "BEGIN failed--compilation aborted");
 		else
 		    Perl_croak(aTHX_ "%s failed--call queue aborted",
-			       paramList == PL_stopav ? "STOP"
+			       paramList == PL_checkav ? "CHECK"
 			       : paramList == PL_initav ? "INIT"
 			       : "END");
 	    }

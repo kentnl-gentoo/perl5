@@ -1,4 +1,4 @@
-require 5.003;
+require 5.005_64;
 
 =head1 NAME
 
@@ -133,6 +133,9 @@ C<PERL_DPROF_BUFFER> sets size of output buffer in words.  Defaults to 2**14.
 C<PERL_DPROF_TICKS> sets number of ticks per second on some systems where
 a replacement for times() is used.  Defaults to the value of C<HZ> macro.
 
+C<PERL_DPROF_OUT_FILE_NAME> sets the name of the output file.  If not set,
+defaults to tmon.out.
+
 =head1 BUGS
 
 Builtin functions cannot be measured by Devel::DProf.
@@ -184,7 +187,8 @@ sub DB {
 
 use XSLoader ();
 
-$Devel::DProf::VERSION = '19990108'; # this version not authorized by
+# Underscore to allow older Perls to access older version from CPAN
+$Devel::DProf::VERSION = '20000000.00_00';  # this version not authorized by
 				     # Dean Roehrich. See "Changes" file.
 
 XSLoader::load 'Devel::DProf', $Devel::DProf::VERSION;

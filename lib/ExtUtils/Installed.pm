@@ -1,4 +1,6 @@
 package ExtUtils::Installed;
+
+use 5.005_64;
 use strict;
 use Carp qw();
 use ExtUtils::Packlist;
@@ -6,8 +8,7 @@ use ExtUtils::MakeMaker;
 use Config;
 use File::Find;
 use File::Basename;
-use vars qw($VERSION);
-$VERSION = '0.02';
+our $VERSION = '0.02';
 
 sub _is_type($$$)
 {
@@ -56,7 +57,7 @@ my $self = {};
 # Read the core packlist
 $self->{Perl}{packlist} =
    ExtUtils::Packlist->new("$Config{installarchlib}/.packlist");
-$self->{Perl}{version} = $];
+$self->{Perl}{version} = $Config{version};
 
 # Read the module packlists
 my $sub = sub

@@ -15,7 +15,7 @@ const int driveCount = 30;
 class VDir
 {
 public:
-    VDir();
+    VDir(int bManageDir = 1);
     ~VDir() {};
 
     void Init(VDir* pDir, VMem *pMem);
@@ -91,7 +91,7 @@ protected:
     };
 
     VMem *pMem;
-    int nDefault;
+    int nDefault, bManageDirectory;
     char *dirTableA[driveCount];
     char szLocalBufferA[MAX_PATH+1];
     WCHAR *dirTableW[driveCount];
@@ -99,9 +99,10 @@ protected:
 };
 
 
-VDir::VDir()
+VDir::VDir(int bManageDir /* = 1 */)
 {
     nDefault = 0;
+    bManageDirectory = bManageDir;
     memset(dirTableA, 0, sizeof(dirTableA));
     memset(dirTableW, 0, sizeof(dirTableW));
 }
@@ -110,6 +111,7 @@ void VDir::Init(VDir* pDir, VMem *p)
 {
     int index;
     DWORD driveBits;
+    int nSave;
     char szBuffer[MAX_PATH*driveCount];
 
     pMem = p;
@@ -120,6 +122,8 @@ void VDir::Init(VDir* pDir, VMem *p)
 	nDefault = pDir->GetDefault();
     }
     else {
+	nSave = bManageDirectory;
+	bManageDirectory = 0;
 	driveBits = GetLogicalDrives();
 	if (GetLogicalDriveStrings(sizeof(szBuffer), szBuffer)) {
 	    char* pEnv = GetEnvironmentStrings();
@@ -133,6 +137,7 @@ void VDir::Init(VDir* pDir, VMem *p)
 	    FreeEnvironmentStrings(pEnv);
 	}
 	SetDefaultA(".");
+	bManageDirectory = nSave;
     }
 }
 
@@ -163,6 +168,10 @@ int VDir::SetDirA(char const *pPath, int index)
 	    }
 	}
     }
+
+    if(bManageDirectory)
+	::SetCurrentDirectoryA(pPath);
+
     return length;
 }
 
@@ -217,6 +226,10 @@ int VDir::SetDirW(WCHAR const *pPath, int index)
 	    }
 	}
     }
+
+    if(bManageDirectory)
+	::SetCurrentDirectoryW(pPath);
+
     return length;
 }
 
@@ -321,32 +334,27 @@ int VDir::SetCurrentDirectoryA(char *lpBuffer)
     HANDLE hHandle;
     WIN32_FIND_DATA win32FD;
     char szBuffer[MAX_PATH+1], *pPtr;
-    int nRet = -1;
+    int length, nRet = -1;
 
     GetFullPathNameA(MapPathA(lpBuffer), sizeof(szBuffer), szBuffer, &pPtr);
-
-    hHandle = FindFirstFile(szBuffer, &win32FD);
-    if (hHandle != INVALID_HANDLE_VALUE) {
-        FindClose(hHandle);
-	SetDefaultDirA(szBuffer, DriveIndex(szBuffer[0]));
-	nRet = 0;
+    /* if the last char is a '\\' or a '/' then add
+     * an '*' before calling FindFirstFile
+     */
+    length = strlen(szBuffer);
+    if(length > 0 && IsPathSep(szBuffer[length-1])) {
+	szBuffer[length] = '*';
+	szBuffer[length+1] = '\0';
     }
-    return nRet;
-}
 
-int VDir::SetCurrentDirectoryW(WCHAR *lpBuffer)
-{
-    HANDLE hHandle;
-    WIN32_FIND_DATAW win32FD;
-    WCHAR szBuffer[MAX_PATH+1], *pPtr;
-    int nRet = -1;
-
-    GetFullPathNameW(MapPathW(lpBuffer), (sizeof(szBuffer)/sizeof(WCHAR)), szBuffer, &pPtr);
-
-    hHandle = FindFirstFileW(szBuffer, &win32FD);
+    hHandle = FindFirstFileA(szBuffer, &win32FD);
     if (hHandle != INVALID_HANDLE_VALUE) {
         FindClose(hHandle);
-	SetDefaultDirW(szBuffer, DriveIndex((char)szBuffer[0]));
+
+	/* if an '*' was added remove it */
+	if(szBuffer[length] == '*')
+	    szBuffer[length] = '\0';
+
+	SetDefaultDirA(szBuffer, DriveIndex(szBuffer[0]));
 	nRet = 0;
     }
     return nRet;
@@ -463,5 +471,35 @@ WCHAR* VDir::MapPathW(const WCHAR *pInName)
     return szLocalBufferW;
 }
 
+int VDir::SetCurrentDirectoryW(WCHAR *lpBuffer)
+{
+    HANDLE hHandle;
+    WIN32_FIND_DATAW win32FD;
+    WCHAR szBuffer[MAX_PATH+1], *pPtr;
+    int length, nRet = -1;
+
+    GetFullPathNameW(MapPathW(lpBuffer), (sizeof(szBuffer)/sizeof(WCHAR)), szBuffer, &pPtr);
+    /* if the last char is a '\\' or a '/' then add
+     * an '*' before calling FindFirstFile
+     */
+    length = wcslen(szBuffer);
+    if(length > 0 && IsPathSep(szBuffer[length-1])) {
+	szBuffer[length] = '*';
+	szBuffer[length+1] = '\0';
+    }
+
+    hHandle = FindFirstFileW(szBuffer, &win32FD);
+    if (hHandle != INVALID_HANDLE_VALUE) {
+        FindClose(hHandle);
+
+	/* if an '*' was added remove it */
+	if(szBuffer[length] == '*')
+	    szBuffer[length] = '\0';
+
+	SetDefaultDirW(szBuffer, DriveIndex((char)szBuffer[0]));
+	nRet = 0;
+    }
+    return nRet;
+}
 
 #endif	/* ___VDir_H___ */
