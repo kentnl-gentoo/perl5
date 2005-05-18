@@ -1,7 +1,7 @@
 /*    pp_hot.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1054,9 +1054,8 @@ PP(pp_aassign)
 	    i = 0;
 	    while (relem <= lastrelem) {	/* gobble up all the rest */
 		SV **didstore;
-		sv = NEWSV(28,0);
 		assert(*relem);
-		sv_setsv(sv,*relem);
+		sv = newSVsv(*relem);
 		*(relem++) = sv;
 		didstore = av_store(ary,i++,sv);
 		if (magic) {
@@ -2224,8 +2223,7 @@ PP(pp_subst)
 	    goto force_it;
 	}
 	rxtainted |= RX_MATCH_TAINTED(rx);
-	dstr = NEWSV(25, len);
-	sv_setpvn(dstr, m, s-m);
+	dstr = newSVpvn(m, s-m);
 	if (DO_UTF8(TARG))
 	    SvUTF8_on(dstr);
 	PL_curpm = pm;
@@ -2696,8 +2694,8 @@ try_autoload:
     gimme = GIMME_V;
     if ((PL_op->op_private & OPpENTERSUB_DB) && GvCV(PL_DBsub) && !CvNODEBUG(cv)) {
 	cv = get_db_sub(&sv, cv);
-	if (!cv)
-	    DIE(aTHX_ "No DBsub routine");
+	if (!cv || (!CvXSUB(cv) && !CvSTART(cv)))
+	    DIE(aTHX_ "No DB::sub routine defined");
     }
 
 #ifdef USE_5005THREADS
@@ -3243,7 +3241,11 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	    /* the method name is unqualified or starts with SUPER:: */ 
 	    packname = sep ? CopSTASHPV(PL_curcop) :
 		stash ? HvNAME(stash) : packname;
-	    packlen = strlen(packname);
+	    if (!packname)
+		Perl_croak(aTHX_
+			   "Can't use anonymous symbol table for method lookup");
+	    else
+		packlen = strlen(packname);
 	}
 	else {
 	    /* the method name is qualified */
@@ -3285,3 +3287,13 @@ unset_cvowner(pTHX_ void *cvarg)
     SvREFCNT_dec(cv);
 }
 #endif /* USE_5005THREADS */
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

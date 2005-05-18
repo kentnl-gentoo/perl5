@@ -1,7 +1,7 @@
 /*    mg.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -139,7 +139,7 @@ Do magic after a value is retrieved from the SV.  See C<sv_magic>.
 int
 Perl_mg_get(pTHX_ SV *sv)
 {
-    int new = 0;
+    int have_new = 0;
     MAGIC *newmg, *head, *cur, *mg;
     I32 mgs_ix = SSNEW(sizeof(MGS));
     int was_temp = SvTEMP(sv);
@@ -180,19 +180,19 @@ Perl_mg_get(pTHX_ SV *sv)
 
 	mg = mg->mg_moremagic;
 
-	if (new) {
+	if (have_new) {
 	    /* Have we finished with the new entries we saw? Start again
 	       where we left off (unless there are more new entries). */
 	    if (mg == head) {
-		new  = 0;
+		have_new = 0;
 		mg   = cur;
 		head = newmg;
 	    }
 	}
 
 	/* Were any new entries added? */
-	if (!new && (newmg = SvMAGIC(sv)) != head) {
-	    new = 1;
+	if (!have_new && (newmg = SvMAGIC(sv)) != head) {
+	    have_new = 1;
 	    cur = mg;
 	    mg  = newmg;
 	}
@@ -713,9 +713,11 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 		    ? (PL_taint_warn || PL_unsafe ? -1 : 1)
 		    : 0);
         break;
-    case '\025':		/* $^UNICODE */
+    case '\025':		/* $^UNICODE, $^UTF8LOCALE */
         if (strEQ(mg->mg_ptr, "\025NICODE"))
 	    sv_setuv(sv, (UV) PL_unicode);
+        else if (strEQ(mg->mg_ptr, "\025TF8LOCALE"))
+	    sv_setuv(sv, (UV) PL_utf8locale);
         break;
     case '\027':		/* ^W  & $^WARNING_BITS */
 	if (*(mg->mg_ptr+1) == '\0')
@@ -727,7 +729,16 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	        sv_setpvn(sv, WARN_NONEstring, WARNsize) ;
             }
             else if (PL_compiling.cop_warnings == pWARN_ALL) {
-	        sv_setpvn(sv, WARN_ALLstring, WARNsize) ;
+		/* Get the bit mask for $warnings::Bits{all}, because
+		 * it could have been extended by warnings::register */
+		SV **bits_all;
+		HV *bits=get_hv("warnings::Bits", FALSE);
+		if (bits && (bits_all=hv_fetch(bits, "all", 3, FALSE))) {
+		    sv_setsv(sv, *bits_all);
+		}
+	        else {
+		    sv_setpvn(sv, WARN_ALLstring, WARNsize) ;
+		}
 	    }
             else {
 	        sv_setsv(sv, PL_compiling.cop_warnings);
@@ -2126,7 +2137,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	if (PL_inplace)
 	    Safefree(PL_inplace);
 	if (SvOK(sv))
-	    PL_inplace = savepv(SvPV(sv,len));
+	    PL_inplace = savesvpv(sv);
 	else
 	    PL_inplace = Nullch;
 	break;
@@ -2138,7 +2149,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	    }
 	    if (SvOK(sv)) {
 		TAINT_PROPER("assigning to $^O");
-		PL_osname = savepv(SvPV(sv,len));
+		PL_osname = savesvpv(sv);
 	    }
 	}
 	else if (strEQ(mg->mg_ptr, "\017PEN")) {
@@ -2150,8 +2161,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	break;
     case '\020':	/* ^P */
 	PL_perldb = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
-	if ((PERLDB_SUB || PERLDB_LINE || PERLDB_SUBLINE)
-		&& !PL_DBsingle)
+	if (PL_perldb && !PL_DBsingle)
 	    init_debugger();
 	break;
     case '\024':	/* ^T */
@@ -2214,12 +2224,12 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
 	break;
     case '^':
 	Safefree(IoTOP_NAME(GvIOp(PL_defoutgv)));
-	IoTOP_NAME(GvIOp(PL_defoutgv)) = s = savepv(SvPV(sv,len));
+	IoTOP_NAME(GvIOp(PL_defoutgv)) = s = savesvpv(sv);
 	IoTOP_GV(GvIOp(PL_defoutgv)) = gv_fetchpv(s,TRUE, SVt_PVIO);
 	break;
     case '~':
 	Safefree(IoFMT_NAME(GvIOp(PL_defoutgv)));
-	IoFMT_NAME(GvIOp(PL_defoutgv)) = s = savepv(SvPV(sv,len));
+	IoFMT_NAME(GvIOp(PL_defoutgv)) = s = savesvpv(sv);
 	IoFMT_GV(GvIOp(PL_defoutgv)) = gv_fetchpv(s,TRUE, SVt_PVIO);
 	break;
     case '=':
@@ -2281,7 +2291,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
     case '#':
 	if (PL_ofmt)
 	    Safefree(PL_ofmt);
-	PL_ofmt = savepv(SvPV(sv,len));
+	PL_ofmt = savesvpv(sv);
 	break;
     case '[':
 	PL_compiling.cop_arybase = SvIOK(sv) ? SvIVX(sv) : sv_2iv(sv);
@@ -2653,7 +2663,7 @@ Perl_sighandler(int sig)
 	(void)rsignal(sig, PL_csighandlerp);
 #endif
 #endif /* !PERL_MICRO */
-	Perl_die(aTHX_ Nullformat);
+	DieNull;
     }
 cleanup:
     if (flags & 1)

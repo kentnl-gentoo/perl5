@@ -1,7 +1,7 @@
 /*    gv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -153,3 +153,6 @@ Return the SV from the GV.
 #define GV_ADDWARN	0x04	/* add, but warn if symbol wasn't already there */
 #define GV_ADDINEVAL	0x08	/* add, as though we're doing so within an eval */
 #define GV_NOINIT	0x10	/* add, but don't init symbol, if type != PVGV */
+
+#define gv_fullname3(sv,gv,prefix) gv_fullname4(sv,gv,prefix,TRUE)
+#define gv_efullname3(sv,gv,prefix) gv_efullname4(sv,gv,prefix,TRUE)

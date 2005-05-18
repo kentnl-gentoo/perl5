@@ -15,7 +15,7 @@ use Exporter;
 use Errno;
 
 @ISA = qw(IO::Socket);
-$VERSION = "1.27";
+$VERSION = "1.28";
 
 my $EINVAL = exists(&Errno::EINVAL) ? Errno::EINVAL() : 1;
 
@@ -132,7 +132,7 @@ sub configure {
     $proto ||= (getprotobyname('tcp'))[2];
 
     my $pname = (getprotobynumber($proto))[0];
-    $type = $arg->{Type} || $socket_type{$pname};
+    $type = $arg->{Type} || $socket_type{lc $pname};
 
     my @raddr = ();
 

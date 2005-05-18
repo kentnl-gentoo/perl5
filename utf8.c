@@ -1,6 +1,7 @@
 /*    utf8.c
  *
- *    Copyright (C) 2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and
+ *    others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -38,7 +39,7 @@ within non-zero characters.
 =for apidoc A|U8 *|uvuni_to_utf8_flags|U8 *d|UV uv|UV flags
 
 Adds the UTF-8 representation of the Unicode codepoint C<uv> to the end
-of the string C<d>; C<d> should be have at least C<UTF8_MAXLEN+1> free
+of the string C<d>; C<d> should be have at least C<UTF8_MAXBYTES+1> free
 bytes available. The return value is the pointer to the byte after the
 end of the new character. In other words,
 
@@ -432,7 +433,7 @@ Perl_utf8n_to_uvuni(pTHX_ U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags)
 	if (!(uv > ouv)) {
 	    /* These cannot be allowed. */
 	    if (uv == ouv) {
-		if (!(flags & UTF8_ALLOW_LONG)) {
+		if (expectlen != 13 && !(flags & UTF8_ALLOW_LONG)) {
 		    warning = UTF8_WARN_LONG;
 		    goto malformed;
 		}
@@ -477,7 +478,7 @@ malformed:
 	switch (warning) {
 	case 0: /* Intentionally empty. */ break;
 	case UTF8_WARN_EMPTY:
-	    Perl_sv_catpvf(aTHX_ sv, "(empty string)");
+	    Perl_sv_catpv(aTHX_ sv, "(empty string)");
 	    break;
 	case UTF8_WARN_CONTINUATION:
 	    Perl_sv_catpvf(aTHX_ sv, "(unexpected continuation byte 0x%02"UVxf", with no preceding start byte)", uv);
@@ -514,7 +515,7 @@ malformed:
 	    Perl_sv_catpvf(aTHX_ sv, "(character 0x%04"UVxf")", uv);
 	    break;
 	default:
-	    Perl_sv_catpvf(aTHX_ sv, "(unknown reason)");
+	    Perl_sv_catpv(aTHX_ sv, "(unknown reason)");
 	    break;
 	}
 	
@@ -551,7 +552,7 @@ returned and retlen is set, if possible, to -1.
 UV
 Perl_utf8_to_uvchr(pTHX_ U8 *s, STRLEN *retlen)
 {
-    return Perl_utf8n_to_uvchr(aTHX_ s, UTF8_MAXLEN, retlen,
+    return Perl_utf8n_to_uvchr(aTHX_ s, UTF8_MAXBYTES, retlen,
 			       ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
 }
 
@@ -575,7 +576,7 @@ UV
 Perl_utf8_to_uvuni(pTHX_ U8 *s, STRLEN *retlen)
 {
     /* Call the low level routine asking for checks */
-    return Perl_utf8n_to_uvuni(aTHX_ s, UTF8_MAXLEN, retlen,
+    return Perl_utf8n_to_uvuni(aTHX_ s, UTF8_MAXBYTES, retlen,
 			       ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
 }
 
@@ -875,7 +876,7 @@ Perl_utf16_to_utf8(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
     }
 
     if (bytelen & 1)
-	Perl_croak(aTHX_ "panic: utf16_to_utf8: odd bytelen %d", bytelen);
+	Perl_croak(aTHX_ "panic: utf16_to_utf8: odd bytelen %"UVf, (UV)bytelen);
 
     pend = p + bytelen;
 
@@ -937,7 +938,7 @@ Perl_utf16_to_utf8_reversed(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
 bool
 Perl_is_uni_alnum(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_alnum(tmpbuf);
 }
@@ -945,7 +946,7 @@ Perl_is_uni_alnum(pTHX_ UV c)
 bool
 Perl_is_uni_alnumc(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_alnumc(tmpbuf);
 }
@@ -953,7 +954,7 @@ Perl_is_uni_alnumc(pTHX_ UV c)
 bool
 Perl_is_uni_idfirst(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_idfirst(tmpbuf);
 }
@@ -961,7 +962,7 @@ Perl_is_uni_idfirst(pTHX_ UV c)
 bool
 Perl_is_uni_alpha(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_alpha(tmpbuf);
 }
@@ -969,7 +970,7 @@ Perl_is_uni_alpha(pTHX_ UV c)
 bool
 Perl_is_uni_ascii(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_ascii(tmpbuf);
 }
@@ -977,7 +978,7 @@ Perl_is_uni_ascii(pTHX_ UV c)
 bool
 Perl_is_uni_space(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_space(tmpbuf);
 }
@@ -985,7 +986,7 @@ Perl_is_uni_space(pTHX_ UV c)
 bool
 Perl_is_uni_digit(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_digit(tmpbuf);
 }
@@ -993,7 +994,7 @@ Perl_is_uni_digit(pTHX_ UV c)
 bool
 Perl_is_uni_upper(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_upper(tmpbuf);
 }
@@ -1001,7 +1002,7 @@ Perl_is_uni_upper(pTHX_ UV c)
 bool
 Perl_is_uni_lower(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_lower(tmpbuf);
 }
@@ -1009,7 +1010,7 @@ Perl_is_uni_lower(pTHX_ UV c)
 bool
 Perl_is_uni_cntrl(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_cntrl(tmpbuf);
 }
@@ -1017,7 +1018,7 @@ Perl_is_uni_cntrl(pTHX_ UV c)
 bool
 Perl_is_uni_graph(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_graph(tmpbuf);
 }
@@ -1025,7 +1026,7 @@ Perl_is_uni_graph(pTHX_ UV c)
 bool
 Perl_is_uni_print(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_print(tmpbuf);
 }
@@ -1033,7 +1034,7 @@ Perl_is_uni_print(pTHX_ UV c)
 bool
 Perl_is_uni_punct(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN+1];
+    U8 tmpbuf[UTF8_MAXBYTES+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_punct(tmpbuf);
 }
@@ -1041,7 +1042,7 @@ Perl_is_uni_punct(pTHX_ UV c)
 bool
 Perl_is_uni_xdigit(pTHX_ UV c)
 {
-    U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+    U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
     uvchr_to_utf8(tmpbuf, c);
     return is_utf8_xdigit(tmpbuf);
 }
@@ -1166,7 +1167,7 @@ Perl_to_uni_upper_lc(pTHX_ U32 c)
     /* XXX returns only the first character -- do not use XXX */
     /* XXX no locale support yet */
     STRLEN len;
-    U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+    U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
     return (U32)to_uni_upper(c, tmpbuf, &len);
 }
 
@@ -1176,7 +1177,7 @@ Perl_to_uni_title_lc(pTHX_ U32 c)
     /* XXX returns only the first character XXX -- do not use XXX */
     /* XXX no locale support yet */
     STRLEN len;
-    U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+    U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
     return (U32)to_uni_title(c, tmpbuf, &len);
 }
 
@@ -1186,7 +1187,7 @@ Perl_to_uni_lower_lc(pTHX_ U32 c)
     /* XXX returns only the first character -- do not use XXX */
     /* XXX no locale support yet */
     STRLEN len;
-    U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+    U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
     return (U32)to_uni_lower(c, tmpbuf, &len);
 }
 
@@ -1400,7 +1401,7 @@ UV
 Perl_to_utf8_case(pTHX_ U8 *p, U8* ustrp, STRLEN *lenp, SV **swashp, char *normal, char *special)
 {
     UV uv0, uv1;
-    U8 tmpbuf[UTF8_MAXLEN_FOLD+1];
+    U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
     STRLEN len = 0;
 
     uv0 = utf8_to_uvchr(p, 0);
@@ -1489,9 +1490,8 @@ Perl_to_utf8_case(pTHX_ U8 *p, U8* ustrp, STRLEN *lenp, SV **swashp, char *norma
 
 Convert the UTF-8 encoded character at p to its uppercase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_UCLC+1 bytes since the
-uppercase version may be longer than the original character (up to two
-characters).
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since
+the uppercase version may be longer than the original character.
 
 The first character of the uppercased version is returned
 (but note, as explained above, that there may be more.)
@@ -1510,9 +1510,8 @@ Perl_to_utf8_upper(pTHX_ U8 *p, U8* ustrp, STRLEN *lenp)
 
 Convert the UTF-8 encoded character at p to its titlecase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_UCLC+1 bytes since the
-titlecase version may be longer than the original character (up to two
-characters).
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since the
+titlecase version may be longer than the original character.
 
 The first character of the titlecased version is returned
 (but note, as explained above, that there may be more.)
@@ -1531,9 +1530,8 @@ Perl_to_utf8_title(pTHX_ U8 *p, U8* ustrp, STRLEN *lenp)
 
 Convert the UTF-8 encoded character at p to its lowercase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_UCLC+1 bytes since the
-lowercase version may be longer than the original character (up to two
-characters).
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since the
+lowercase version may be longer than the original character.
 
 The first character of the lowercased version is returned
 (but note, as explained above, that there may be more.)
@@ -1552,7 +1550,7 @@ Perl_to_utf8_lower(pTHX_ U8 *p, U8* ustrp, STRLEN *lenp)
 
 Convert the UTF-8 encoded character at p to its foldcase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_FOLD+1 bytes since the
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since the
 foldcase version may be longer than the original character (up to
 three characters).
 
@@ -1574,13 +1572,18 @@ SV*
 Perl_swash_init(pTHX_ char* pkg, char* name, SV *listsv, I32 minbits, I32 none)
 {
     SV* retval;
-    SV* tokenbufsv = sv_2mortal(NEWSV(0,0));
+    SV* tokenbufsv = sv_newmortal();
     dSP;
     size_t pkg_len = strlen(pkg);
     size_t name_len = strlen(name);
     HV *stash = gv_stashpvn(pkg, pkg_len, FALSE);
     SV* errsv_save;
 
+    PUSHSTACKi(PERLSI_MAGIC);
+    ENTER;
+    SAVEI32(PL_hints);
+    PL_hints = 0;
+    save_re_context();
     if (!gv_fetchmeth(stash, "SWASHNEW", 8, -1)) {	/* demand load utf8 */
 	ENTER;
 	errsv_save = newSVsv(ERRSV);
@@ -1592,7 +1595,6 @@ Perl_swash_init(pTHX_ char* pkg, char* name, SV *listsv, I32 minbits, I32 none)
 	LEAVE;
     }
     SPAGAIN;
-    PUSHSTACKi(PERLSI_MAGIC);
     PUSHMARK(SP);
     EXTEND(SP,5);
     PUSHs(sv_2mortal(newSVpvn(pkg, pkg_len)));
@@ -1601,10 +1603,6 @@ Perl_swash_init(pTHX_ char* pkg, char* name, SV *listsv, I32 minbits, I32 none)
     PUSHs(sv_2mortal(newSViv(minbits)));
     PUSHs(sv_2mortal(newSViv(none)));
     PUTBACK;
-    ENTER;
-    SAVEI32(PL_hints);
-    PL_hints = 0;
-    save_re_context();
     if (IN_PERL_COMPILETIME) {
 	/* XXX ought to be handled by lex_start */
 	SAVEI32(PL_in_my);
@@ -1711,7 +1709,7 @@ Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr, bool do_utf8)
 	    /* We use utf8n_to_uvuni() as we want an index into
 	       Unicode tables, not a native character number.
 	     */
-	    UV code_point = utf8n_to_uvuni(ptr, UTF8_MAXLEN, 0,
+	    UV code_point = utf8n_to_uvuni(ptr, UTF8_MAXBYTES, 0,
 					   ckWARN(WARN_UTF8) ?
 					   0 : UTF8_ALLOW_ANY);
 	    SV *errsv_save;
@@ -1778,7 +1776,7 @@ Perl_swash_fetch(pTHX_ SV *sv, U8 *ptr, bool do_utf8)
 =for apidoc A|U8 *|uvchr_to_utf8|U8 *d|UV uv
 
 Adds the UTF-8 representation of the Native codepoint C<uv> to the end
-of the string C<d>; C<d> should be have at least C<UTF8_MAXLEN+1> free
+of the string C<d>; C<d> should be have at least C<UTF8_MAXBYTES+1> free
 bytes available. The return value is the pointer to the byte after the
 end of the new character. In other words,
 
@@ -1855,7 +1853,10 @@ Perl_pv_uni_display(pTHX_ SV *dsv, U8 *spv, STRLEN len, STRLEN pvlim, UV flags)
     sv_setpvn(dsv, "", 0);
     for (s = (char *)spv, e = s + len; s < e; s += UTF8SKIP(s)) {
 	 UV u;
-	 bool ok = FALSE;
+	  /* This serves double duty as a flag and a character to print after
+	     a \ when flags & UNI_DISPLAY_BACKSLASH is true.
+	  */
+	 char ok = 0;
 
 	 if (pvlim && SvCUR(dsv) >= pvlim) {
 	      truncated++;
@@ -1863,27 +1864,31 @@ Perl_pv_uni_display(pTHX_ SV *dsv, U8 *spv, STRLEN len, STRLEN pvlim, UV flags)
 	 }
 	 u = utf8_to_uvchr((U8*)s, 0);
 	 if (u < 256) {
+	     unsigned char c = (unsigned char)u & 0xFF;
 	     if (!ok && (flags & UNI_DISPLAY_BACKSLASH)) {
-	         switch (u & 0xFF) {
+	         switch (c) {
 		 case '\n':
-		     Perl_sv_catpvf(aTHX_ dsv, "\\n"); ok = TRUE; break;
+		     ok = 'n'; break;
 		 case '\r':
-		     Perl_sv_catpvf(aTHX_ dsv, "\\r"); ok = TRUE; break;
+		     ok = 'r'; break;
 		 case '\t':
-		     Perl_sv_catpvf(aTHX_ dsv, "\\t"); ok = TRUE; break;
+		     ok = 't'; break;
 		 case '\f':
-		     Perl_sv_catpvf(aTHX_ dsv, "\\f"); ok = TRUE; break;
+		     ok = 'f'; break;
 		 case '\a':
-		     Perl_sv_catpvf(aTHX_ dsv, "\\a"); ok = TRUE; break;
+		     ok = 'a'; break;
 		 case '\\':
-		     Perl_sv_catpvf(aTHX_ dsv, "\\\\" ); ok = TRUE; break;
+		     ok = '\\'; break;
 		 default: break;
+		 }
+		 if (ok) {
+		     Perl_sv_catpvf(aTHX_ dsv, "\\%c", ok);
 		 }
 	     }
 	     /* isPRINT() is the locale-blind version. */
-	     if (!ok && (flags & UNI_DISPLAY_ISPRINT) && isPRINT(u & 0xFF)) {
-	         Perl_sv_catpvf(aTHX_ dsv, "%c", (char)(u & 0xFF));
-		 ok = TRUE;
+	     if (!ok && (flags & UNI_DISPLAY_ISPRINT) && isPRINT(c)) {
+	         Perl_sv_catpvf(aTHX_ dsv, "%c", c);
+		 ok = 1;
 	     }
 	 }
 	 if (!ok)
@@ -1947,8 +1952,8 @@ Perl_ibcmp_utf8(pTHX_ const char *s1, char **pe1, register UV l1, bool u1, const
      register U8 *e1 = 0, *f1 = 0, *q1 = 0;
      register U8 *e2 = 0, *f2 = 0, *q2 = 0;
      STRLEN n1 = 0, n2 = 0;
-     U8 foldbuf1[UTF8_MAXLEN_FOLD+1];
-     U8 foldbuf2[UTF8_MAXLEN_FOLD+1];
+     U8 foldbuf1[UTF8_MAXBYTES_CASE+1];
+     U8 foldbuf2[UTF8_MAXBYTES_CASE+1];
      U8 natbuf[1+1];
      STRLEN foldlen1, foldlen2;
      bool match;
@@ -2023,3 +2028,12 @@ Perl_ibcmp_utf8(pTHX_ const char *s1, char **pe1, register UV l1, bool u1, const
      return match ? 0 : 1; /* 0 match, 1 mismatch */
 }
 
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

@@ -1,7 +1,7 @@
 /*    doio.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -53,6 +53,9 @@
 #  define OPEN_EXCL 0
 #endif
 
+#define PERL_MODE_MAX 8
+#define PERL_FLAGS_MAX 10
+
 #include <signal.h>
 
 bool
@@ -89,7 +92,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
     bool was_fdopen = FALSE;
     bool in_raw = 0, in_crlf = 0, out_raw = 0, out_crlf = 0;
     char *type  = NULL;
-    char mode[8];		/* stdio file mode ("r\0", "rb\0", "r+b\0" etc.) */
+    char mode[PERL_MODE_MAX];	/* stdio file mode ("r\0", "rb\0", "r+b\0" etc.) */
     SV *namesv;
 
     Zero(mode,sizeof(mode),char);
@@ -216,7 +219,6 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 
 	if (num_svs) {
 	    /* New style explicit name, type is just mode and layer info */
-	    STRLEN l = 0;
 #ifdef USE_STDIO
 	    if (SvROK(*svp) && !strchr(name,'&')) {
 		if (ckWARN(WARN_IO))
@@ -226,9 +228,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 		goto say_false;
 	    }
 #endif /* USE_STDIO */
-	    name = SvOK(*svp) ? SvPV(*svp, l) : "";
-	    len = (I32)l;
-	    name = savepvn(name, len);
+	    name = SvOK(*svp) ? savesvpv (*svp) : savepvn ("", 0);
 	    SAVEFREEPV(name);
 	}
 	else {
@@ -265,7 +265,7 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 		errno = EPIPE;
 		goto say_false;
 	    }
-	    if (strNE(name,"-") || num_svs)
+	    if ((*name == '-' && name[1] == '\0') || num_svs)
 		TAINT_ENV();
 	    TAINT_PROPER("piped open");
 	    if (!num_svs && name[len-1] == '|') {
@@ -275,10 +275,17 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    }
 	    mode[0] = 'w';
 	    writing = 1;
+#ifdef HAS_STRLCAT
+            if (out_raw)
+                strlcat(mode, "b", PERL_MODE_MAX);
+            else if (out_crlf)
+                strlcat(mode, "t", PERL_MODE_MAX); 
+#else
 	    if (out_raw)
 		strcat(mode, "b");
 	    else if (out_crlf)
 		strcat(mode, "t");
+#endif
 	    if (num_svs > 1) {
 		fp = PerlProc_popen_list(mode, num_svs, svp);
 	    }
@@ -306,11 +313,17 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    }
 	    writing = 1;
 
+#ifdef HAS_STRLCAT
+            if (out_raw)
+                strlcat(mode, "b", PERL_MODE_MAX);
+            else if (out_crlf)
+                strlcat(mode, "t", PERL_MODE_MAX);
+#else
 	    if (out_raw)
 		strcat(mode, "b");
 	    else if (out_crlf)
 		strcat(mode, "t");
-
+#endif
 	    if (*type == '&') {
 	      duplicity:
 		dodup = PERLIO_DUP_FD;
@@ -432,11 +445,17 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    /*SUPPRESS 530*/
 	    for (type++; isSPACE(*type); type++) ;
 	    mode[0] = 'r';
+#ifdef HAS_STRLCAT
+            if (in_raw)
+                strlcat(mode, "b", PERL_MODE_MAX);
+            else if (in_crlf)
+                strlcat(mode, "t", PERL_MODE_MAX);
+#else
 	    if (in_raw)
 		strcat(mode, "b");
 	    else if (in_crlf)
 		strcat(mode, "t");
-
+#endif
 	    if (*type == '&') {
 		goto duplicity;
 	    }
@@ -483,14 +502,23 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 		errno = EPIPE;
 		goto say_false;
 	    }
-	    if (strNE(name,"-") || num_svs)
+	    if (!(*name == '-' && name[1] == '\0') || num_svs)
 		TAINT_ENV();
 	    TAINT_PROPER("piped open");
 	    mode[0] = 'r';
+
+#ifdef HAS_STRLCAT
+            if (in_raw)
+                strlcat(mode, "b", PERL_MODE_MAX);
+            else if (in_crlf)
+                strlcat(mode, "t", PERL_MODE_MAX);
+#else
 	    if (in_raw)
 		strcat(mode, "b");
 	    else if (in_crlf)
 		strcat(mode, "t");
+#endif
+
 	    if (num_svs > 1) {
 		fp = PerlProc_popen_list(mode,num_svs,svp);
 	    }
@@ -515,11 +543,20 @@ Perl_do_openn(pTHX_ GV *gv, register char *name, I32 len, int as_raw,
 	    /*SUPPRESS 530*/
 	    for (; isSPACE(*name); name++) ;
 	    mode[0] = 'r';
+
+#ifdef HAS_STRLCAT
+            if (in_raw)
+                strlcat(mode, "b", PERL_MODE_MAX);
+            else if (in_crlf)
+                strlcat(mode, "t", PERL_MODE_MAX);
+#else
 	    if (in_raw)
 		strcat(mode, "b");
 	    else if (in_crlf)
 		strcat(mode, "t");
-	    if (strEQ(name,"-")) {
+#endif
+
+	    if (*name == '-' && name[1] == '\0') {
 		fp = PerlIO_stdin();
 		IoTYPE(io) = IoTYPE_STD;
 	    }
@@ -1019,11 +1056,14 @@ Perl_io_close(pTHX_ IO *io, bool not_implicit)
 	    retval = TRUE;
 	else {
 	    if (IoOFP(io) && IoOFP(io) != IoIFP(io)) {		/* a socket */
-		retval = (PerlIO_close(IoOFP(io)) != EOF);
+		bool prev_err = PerlIO_error(IoOFP(io));
+		retval = (PerlIO_close(IoOFP(io)) != EOF && !prev_err);
 		PerlIO_close(IoIFP(io));	/* clear stdio, fd already closed */
 	    }
-	    else
-		retval = (PerlIO_close(IoIFP(io)) != EOF);
+	    else {
+		bool prev_err = PerlIO_error(IoIFP(io));
+		retval = (PerlIO_close(IoIFP(io)) != EOF && !prev_err);
+	    }
 	}
 	IoOFP(io) = IoIFP(io) = Nullfp;
     }
@@ -1141,7 +1181,7 @@ Perl_mode_from_discipline(pTHX_ SV *discp)
 	    if (*s == ':') {
 		switch (s[1]) {
 		case 'r':
-		    if (len > 3 && strnEQ(s+1, "raw", 3)
+		    if (s[2] == 'a' && s[3] == 'w'
 			&& (!s[4] || s[4] == ':' || isSPACE(s[4])))
 		    {
 			mode = O_BINARY;
@@ -1151,7 +1191,7 @@ Perl_mode_from_discipline(pTHX_ SV *discp)
 		    }
 		    /* FALL THROUGH */
 		case 'c':
-		    if (len > 4 && strnEQ(s+1, "crlf", 4)
+		    if (s[2] == 'r' && s[3] == 'l' && s[4] == 'f'
 			&& (!s[5] || s[5] == ':' || isSPACE(s[5])))
 		    {
 			mode = O_TEXT;
@@ -1200,14 +1240,15 @@ Perl_do_binmode(pTHX_ PerlIO *fp, int iotype, int mode)
  return PerlIO_binmode(aTHX_ fp, iotype, mode, name);
 }
 
-#if !defined(HAS_TRUNCATE) && !defined(HAS_CHSIZE) && defined(F_FREESP)
-	/* code courtesy of William Kucharski */
-#define HAS_CHSIZE
-
+#if !defined(HAS_TRUNCATE) && !defined(HAS_CHSIZE)
 I32 my_chsize(fd, length)
 I32 fd;			/* file descriptor */
 Off_t length;		/* length to set file to */
 {
+#ifdef F_FREESP
+	/* code courtesy of William Kucharski */
+#define HAS_CHSIZE
+
     struct flock fl;
     Stat_t filebuf;
 
@@ -1248,8 +1289,12 @@ Off_t length;		/* length to set file to */
     }
 
     return 0;
-}
+#else
+    dTHX;
+    DIE(aTHX_ "truncate not implemented");
 #endif /* F_FREESP */
+}
+#endif /* !HAS_TRUNCATE && !HAS_CHSIZE */
 
 bool
 Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
@@ -1495,14 +1540,22 @@ Perl_do_exec3(pTHX_ char *cmd, int fd, int do_report)
 
 #ifdef CSH
     {
-        char flags[10];
+        char flags[PERL_FLAGS_MAX];
 	if (strnEQ(cmd,PL_cshname,PL_cshlen) &&
 	    strnEQ(cmd+PL_cshlen," -c",3)) {
+#ifdef HAS_STRLCPY
+          strlcpy(flags, "-c", PERL_FLAGS_MAX);
+#else
 	  strcpy(flags,"-c");
+#endif
 	  s = cmd+PL_cshlen+3;
 	  if (*s == 'f') {
 	      s++;
+#ifdef HAS_STRLCPY
+              strlcat(flags, "f", PERL_FLAGS_MAX);
+#else
 	      strcat(flags,"f");
+#endif
 	  }
 	  if (*s == ' ')
 	      s++;

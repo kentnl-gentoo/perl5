@@ -1,7 +1,8 @@
 /*
  *    perlapi.h
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -496,6 +497,10 @@ END_EXTERN_C
 #define PL_psig_pend		(*Perl_Ipsig_pend_ptr(aTHX))
 #undef  PL_psig_ptr
 #define PL_psig_ptr		(*Perl_Ipsig_ptr_ptr(aTHX))
+#undef  PL_pte_arenaroot
+#define PL_pte_arenaroot	(*Perl_Ipte_arenaroot_ptr(aTHX))
+#undef  PL_pte_root
+#define PL_pte_root		(*Perl_Ipte_root_ptr(aTHX))
 #undef  PL_ptr_table
 #define PL_ptr_table		(*Perl_Iptr_table_ptr(aTHX))
 #undef  PL_reentrant_buffer

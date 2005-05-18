@@ -258,7 +258,7 @@ Ap	|GV*	|gv_autoload4	|HV* stash|const char* name|STRLEN len \
 				|I32 method
 Ap	|void	|gv_check	|HV* stash
 Ap	|void	|gv_efullname	|SV* sv|GV* gv
-Ap	|void	|gv_efullname3	|SV* sv|GV* gv|const char* prefix
+Amb	|void	|gv_efullname3	|SV* sv|GV* gv|const char* prefix
 Ap	|void	|gv_efullname4	|SV* sv|GV* gv|const char* prefix|bool keepmain
 Ap	|GV*	|gv_fetchfile	|const char* name
 Apd	|GV*	|gv_fetchmeth	|HV* stash|const char* name|STRLEN len \
@@ -270,12 +270,12 @@ Apd	|GV*	|gv_fetchmethod_autoload|HV* stash|const char* name \
 				|I32 autoload
 Ap	|GV*	|gv_fetchpv	|const char* name|I32 add|I32 sv_type
 Ap	|void	|gv_fullname	|SV* sv|GV* gv
-Ap	|void	|gv_fullname3	|SV* sv|GV* gv|const char* prefix
+Amb	|void	|gv_fullname3	|SV* sv|GV* gv|const char* prefix
 Ap	|void	|gv_fullname4	|SV* sv|GV* gv|const char* prefix|bool keepmain
 Ap	|void	|gv_init	|GV* gv|HV* stash|const char* name \
 				|STRLEN len|int multi
 Apd	|HV*	|gv_stashpv	|const char* name|I32 create
-Ap	|HV*	|gv_stashpvn	|const char* name|U32 namelen|I32 create
+Apd	|HV*	|gv_stashpvn	|const char* name|U32 namelen|I32 create
 Apd	|HV*	|gv_stashsv	|SV* sv|I32 create
 Apd	|void	|hv_clear	|HV* tb
 Ap	|void	|hv_delayfree_ent|HV* hv|HE* entry
@@ -374,7 +374,7 @@ p	|I32	|keyword	|char* d|I32 len
 Ap	|void	|leave_scope	|I32 base
 p	|void	|lex_end
 p	|void	|lex_start	|SV* line
-Ap |void   |op_null    |OP* o
+Ap	|void	|op_null	|OP* o
 p	|void	|op_clear	|OP* o
 p	|OP*	|linklist	|OP* o
 p	|OP*	|list		|OP* o
@@ -764,7 +764,7 @@ Apd	|STRLEN	|sv_len_utf8	|SV* sv
 Apd	|void	|sv_magic	|SV* sv|SV* obj|int how|const char* name \
 				|I32 namlen
 Apd	|MAGIC *|sv_magicext	|SV* sv|SV* obj|int how|MGVTBL *vtbl \
-				| const char* name|I32 namlen	
+				|const char* name|I32 namlen
 Apd	|SV*	|sv_mortalcopy	|SV* oldsv
 Apd	|SV*	|sv_newmortal
 Apd	|SV*	|sv_newref	|SV* sv
@@ -1425,4 +1425,85 @@ p	|SV*	|magic_scalarpack|HV* hv|MAGIC*	mg
 #if defined(DEBUGGING)
 p	|int	|get_debug_opts_flags	|char **s|int flags
 #endif
+
+Ap	|void	|op_refcnt_lock
+Ap	|void	|op_refcnt_unlock
+Apd	|char*	|savesvpv	|SV* sv
+
+#ifdef PERL_NEED_MY_HTOLE16
+np	|U16	|my_htole16	|U16 n
+#endif
+#ifdef PERL_NEED_MY_LETOH16
+np	|U16	|my_letoh16	|U16 n
+#endif
+#ifdef PERL_NEED_MY_HTOBE16
+np	|U16	|my_htobe16	|U16 n
+#endif
+#ifdef PERL_NEED_MY_BETOH16
+np	|U16	|my_betoh16	|U16 n
+#endif
+#ifdef PERL_NEED_MY_HTOLE32
+np	|U32	|my_htole32	|U32 n
+#endif
+#ifdef PERL_NEED_MY_LETOH32
+np	|U32	|my_letoh32	|U32 n
+#endif
+#ifdef PERL_NEED_MY_HTOBE32
+np	|U32	|my_htobe32	|U32 n
+#endif
+#ifdef PERL_NEED_MY_BETOH32
+np	|U32	|my_betoh32	|U32 n
+#endif
+#ifdef PERL_NEED_MY_HTOLE64
+np	|U64	|my_htole64	|U64 n
+#endif
+#ifdef PERL_NEED_MY_LETOH64
+np	|U64	|my_letoh64	|U64 n
+#endif
+#ifdef PERL_NEED_MY_HTOBE64
+np	|U64	|my_htobe64	|U64 n
+#endif
+#ifdef PERL_NEED_MY_BETOH64
+np	|U64	|my_betoh64	|U64 n
+#endif
+
+#ifdef PERL_NEED_MY_HTOLES
+np	|short	|my_htoles	|short n
+#endif
+#ifdef PERL_NEED_MY_LETOHS
+np	|short	|my_letohs	|short n
+#endif
+#ifdef PERL_NEED_MY_HTOBES
+np	|short	|my_htobes	|short n
+#endif
+#ifdef PERL_NEED_MY_BETOHS
+np	|short	|my_betohs	|short n
+#endif
+#ifdef PERL_NEED_MY_HTOLEI
+np	|int	|my_htolei	|int n
+#endif
+#ifdef PERL_NEED_MY_LETOHI
+np	|int	|my_letohi	|int n
+#endif
+#ifdef PERL_NEED_MY_HTOBEI
+np	|int	|my_htobei	|int n
+#endif
+#ifdef PERL_NEED_MY_BETOHI
+np	|int	|my_betohi	|int n
+#endif
+#ifdef PERL_NEED_MY_HTOLEL
+np	|long	|my_htolel	|long n
+#endif
+#ifdef PERL_NEED_MY_LETOHL
+np	|long	|my_letohl	|long n
+#endif
+#ifdef PERL_NEED_MY_HTOBEL
+np	|long	|my_htobel	|long n
+#endif
+#ifdef PERL_NEED_MY_BETOHL
+np	|long	|my_betohl	|long n
+#endif
+
+np	|void	|my_swabn	|void* ptr|int n
+
 END_EXTERN_C

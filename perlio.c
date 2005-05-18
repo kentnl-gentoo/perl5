@@ -1,5 +1,5 @@
 /*
- * perlio.c Copyright (c) 1996-2004, Nick Ing-Simmons You may distribute
+ * perlio.c Copyright (c) 1996-2005, Nick Ing-Simmons You may distribute
  * under the terms of either the GNU General Public License or the
  * Artistic License, as specified in the README file.
  */
@@ -454,7 +454,7 @@ PerlIO_debug(const char *fmt, ...)
     va_list ap;
     dSYS;
     va_start(ap, fmt);
-    if (!dbg) {
+    if (!dbg && !PL_tainting && PL_uid == PL_euid && PL_gid == PL_egid) {
 	char *s = PerlEnv_getenv("PERLIO_DEBUG");
 	if (s && *s)
 	    dbg = PerlLIO_open3(s, O_WRONLY | O_CREAT | O_APPEND, 0666);
@@ -471,7 +471,7 @@ PerlIO_debug(const char *fmt, ...)
 	s = CopFILE(PL_curcop);
 	if (!s)
 	    s = "(none)";
-	sprintf(buffer, "%s:%" IVdf " ", s, (IV) CopLINE(PL_curcop));
+	sprintf(buffer, "%.40s:%" IVdf " ", s, (IV) CopLINE(PL_curcop));
 	len = strlen(buffer);
 	vsprintf(buffer+len, fmt, ap);
 	PerlLIO_write(dbg, buffer, strlen(buffer));
@@ -2390,7 +2390,7 @@ IV
 PerlIOUnix_seek(pTHX_ PerlIO *f, Off_t offset, int whence)
 {
     int fd = PerlIOSelf(f, PerlIOUnix)->fd;
-    Off_t new;
+    Off_t new_loc;
     if (PerlIOBase(f)->flags & PERLIO_F_NOTREG) {
 #ifdef  ESPIPE
 	SETERRNO(ESPIPE, LIB_INVARG);
@@ -2399,8 +2399,8 @@ PerlIOUnix_seek(pTHX_ PerlIO *f, Off_t offset, int whence)
 #endif
 	return -1;
     }
-    new  = PerlLIO_lseek(fd, offset, whence);
-    if (new == (Off_t) - 1)
+    new_loc = PerlLIO_lseek(fd, offset, whence);
+    if (new_loc == (Off_t) - 1)
      {
       return -1;
      }
@@ -2830,7 +2830,11 @@ PerlIOStdio_invalidate_fileno(pTHX_ FILE *f)
     /* XXX this could use PerlIO_canset_fileno() and
      * PerlIO_set_fileno() support from Configure
      */
-#  if defined(__GLIBC__)
+#  if defined(__UCLIBC__)
+    /* uClibc must come before glibc because it defines __GLIBC__ as well. */
+    f->__filedes = -1;
+    return 1;
+#  elif defined(__GLIBC__)
     /* There may be a better way for GLIBC:
     	- libio.h defines a flag to not close() on cleanup
      */	
@@ -2876,6 +2880,13 @@ PerlIOStdio_invalidate_fileno(pTHX_ FILE *f)
     return 1;
 #  elif defined(__FreeBSD__)
     /* There may be a better way on FreeBSD:
+        - we could insert a dummy func in the _close function entry
+	f->_close = (int (*)(void *)) dummy_close;
+     */
+    f->_file = -1;
+    return 1;
+#  elif defined(__OpenBSD__)
+    /* There may be a better way on OpenBSD:
         - we could insert a dummy func in the _close function entry
 	f->_close = (int (*)(void *)) dummy_close;
      */

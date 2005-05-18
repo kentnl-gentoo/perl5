@@ -1,7 +1,7 @@
 /*    sv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -234,6 +234,7 @@ perform the upgrade if necessary.  See C<svtype>.
 
 #define SVrepl_EVAL	0x40000000	/* Replacement part of s///e */
 
+#define SVphv_CLONEABLE	0x08000000	/* for stashes: clone its objects */
 #define SVphv_REHASH	0x10000000	/* HV is recalculating hash values */
 #define SVphv_SHAREKEYS 0x20000000	/* keys live on shared string table */
 #define SVphv_LAZYDEL	0x40000000	/* entry in xhv_eiter must be deleted */

@@ -2,7 +2,7 @@
  *    proto.h
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -241,7 +241,7 @@ PERL_CALLCONV GV*	Perl_gv_IOadd(pTHX_ GV* gv);
 PERL_CALLCONV GV*	Perl_gv_autoload4(pTHX_ HV* stash, const char* name, STRLEN len, I32 method);
 PERL_CALLCONV void	Perl_gv_check(pTHX_ HV* stash);
 PERL_CALLCONV void	Perl_gv_efullname(pTHX_ SV* sv, GV* gv);
-PERL_CALLCONV void	Perl_gv_efullname3(pTHX_ SV* sv, GV* gv, const char* prefix);
+/* PERL_CALLCONV void	gv_efullname3(pTHX_ SV* sv, GV* gv, const char* prefix); */
 PERL_CALLCONV void	Perl_gv_efullname4(pTHX_ SV* sv, GV* gv, const char* prefix, bool keepmain);
 PERL_CALLCONV GV*	Perl_gv_fetchfile(pTHX_ const char* name);
 PERL_CALLCONV GV*	Perl_gv_fetchmeth(pTHX_ HV* stash, const char* name, STRLEN len, I32 level);
@@ -250,7 +250,7 @@ PERL_CALLCONV GV*	Perl_gv_fetchmethod(pTHX_ HV* stash, const char* name);
 PERL_CALLCONV GV*	Perl_gv_fetchmethod_autoload(pTHX_ HV* stash, const char* name, I32 autoload);
 PERL_CALLCONV GV*	Perl_gv_fetchpv(pTHX_ const char* name, I32 add, I32 sv_type);
 PERL_CALLCONV void	Perl_gv_fullname(pTHX_ SV* sv, GV* gv);
-PERL_CALLCONV void	Perl_gv_fullname3(pTHX_ SV* sv, GV* gv, const char* prefix);
+/* PERL_CALLCONV void	gv_fullname3(pTHX_ SV* sv, GV* gv, const char* prefix); */
 PERL_CALLCONV void	Perl_gv_fullname4(pTHX_ SV* sv, GV* gv, const char* prefix, bool keepmain);
 PERL_CALLCONV void	Perl_gv_init(pTHX_ GV* gv, HV* stash, const char* name, STRLEN len, int multi);
 PERL_CALLCONV HV*	Perl_gv_stashpv(pTHX_ const char* name, I32 create);
@@ -730,7 +730,7 @@ PERL_CALLCONV int	Perl_sv_isobject(pTHX_ SV* sv);
 PERL_CALLCONV STRLEN	Perl_sv_len(pTHX_ SV* sv);
 PERL_CALLCONV STRLEN	Perl_sv_len_utf8(pTHX_ SV* sv);
 PERL_CALLCONV void	Perl_sv_magic(pTHX_ SV* sv, SV* obj, int how, const char* name, I32 namlen);
-PERL_CALLCONV MAGIC *	Perl_sv_magicext(pTHX_ SV* sv, SV* obj, int how, MGVTBL *vtbl, const char* name, I32 namlen	);
+PERL_CALLCONV MAGIC *	Perl_sv_magicext(pTHX_ SV* sv, SV* obj, int how, MGVTBL *vtbl, const char* name, I32 namlen);
 PERL_CALLCONV SV*	Perl_sv_mortalcopy(pTHX_ SV* oldsv);
 PERL_CALLCONV SV*	Perl_sv_newmortal(pTHX);
 PERL_CALLCONV SV*	Perl_sv_newref(pTHX_ SV* sv);
@@ -1366,4 +1366,85 @@ PERL_CALLCONV SV*	Perl_magic_scalarpack(pTHX_ HV* hv, MAGIC*	mg);
 #if defined(DEBUGGING)
 PERL_CALLCONV int	Perl_get_debug_opts_flags(pTHX_ char **s, int flags);
 #endif
+
+PERL_CALLCONV void	Perl_op_refcnt_lock(pTHX);
+PERL_CALLCONV void	Perl_op_refcnt_unlock(pTHX);
+PERL_CALLCONV char*	Perl_savesvpv(pTHX_ SV* sv);
+
+#ifdef PERL_NEED_MY_HTOLE16
+PERL_CALLCONV U16	Perl_my_htole16(U16 n);
+#endif
+#ifdef PERL_NEED_MY_LETOH16
+PERL_CALLCONV U16	Perl_my_letoh16(U16 n);
+#endif
+#ifdef PERL_NEED_MY_HTOBE16
+PERL_CALLCONV U16	Perl_my_htobe16(U16 n);
+#endif
+#ifdef PERL_NEED_MY_BETOH16
+PERL_CALLCONV U16	Perl_my_betoh16(U16 n);
+#endif
+#ifdef PERL_NEED_MY_HTOLE32
+PERL_CALLCONV U32	Perl_my_htole32(U32 n);
+#endif
+#ifdef PERL_NEED_MY_LETOH32
+PERL_CALLCONV U32	Perl_my_letoh32(U32 n);
+#endif
+#ifdef PERL_NEED_MY_HTOBE32
+PERL_CALLCONV U32	Perl_my_htobe32(U32 n);
+#endif
+#ifdef PERL_NEED_MY_BETOH32
+PERL_CALLCONV U32	Perl_my_betoh32(U32 n);
+#endif
+#ifdef PERL_NEED_MY_HTOLE64
+PERL_CALLCONV U64	Perl_my_htole64(U64 n);
+#endif
+#ifdef PERL_NEED_MY_LETOH64
+PERL_CALLCONV U64	Perl_my_letoh64(U64 n);
+#endif
+#ifdef PERL_NEED_MY_HTOBE64
+PERL_CALLCONV U64	Perl_my_htobe64(U64 n);
+#endif
+#ifdef PERL_NEED_MY_BETOH64
+PERL_CALLCONV U64	Perl_my_betoh64(U64 n);
+#endif
+
+#ifdef PERL_NEED_MY_HTOLES
+PERL_CALLCONV short	Perl_my_htoles(short n);
+#endif
+#ifdef PERL_NEED_MY_LETOHS
+PERL_CALLCONV short	Perl_my_letohs(short n);
+#endif
+#ifdef PERL_NEED_MY_HTOBES
+PERL_CALLCONV short	Perl_my_htobes(short n);
+#endif
+#ifdef PERL_NEED_MY_BETOHS
+PERL_CALLCONV short	Perl_my_betohs(short n);
+#endif
+#ifdef PERL_NEED_MY_HTOLEI
+PERL_CALLCONV int	Perl_my_htolei(int n);
+#endif
+#ifdef PERL_NEED_MY_LETOHI
+PERL_CALLCONV int	Perl_my_letohi(int n);
+#endif
+#ifdef PERL_NEED_MY_HTOBEI
+PERL_CALLCONV int	Perl_my_htobei(int n);
+#endif
+#ifdef PERL_NEED_MY_BETOHI
+PERL_CALLCONV int	Perl_my_betohi(int n);
+#endif
+#ifdef PERL_NEED_MY_HTOLEL
+PERL_CALLCONV long	Perl_my_htolel(long n);
+#endif
+#ifdef PERL_NEED_MY_LETOHL
+PERL_CALLCONV long	Perl_my_letohl(long n);
+#endif
+#ifdef PERL_NEED_MY_HTOBEL
+PERL_CALLCONV long	Perl_my_htobel(long n);
+#endif
+#ifdef PERL_NEED_MY_BETOHL
+PERL_CALLCONV long	Perl_my_betohl(long n);
+#endif
+
+PERL_CALLCONV void	Perl_my_swabn(void* ptr, int n);
+
 END_EXTERN_C

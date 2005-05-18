@@ -608,7 +608,7 @@ false otherwise. See the example under C<die>.
 
 Changes the permissions of a list of files.  The first element of the
 list must be the numerical mode, which should probably be an octal
-number, and which definitely should I<not> a string of octal digits:
+number, and which definitely should I<not> be a string of octal digits:
 C<0644> is okay, C<'0644'> is not.  Returns the number of files
 successfully changed.  See also L</oct>, if all you have is a string.
 
@@ -1200,8 +1200,7 @@ A deprecated form of subroutine call.  See L<perlsub>.
 =item do EXPR
 
 Uses the value of EXPR as a filename and executes the contents of the
-file as a Perl script.  Its primary use is to include subroutines
-from a Perl subroutine library.
+file as a Perl script.
 
     do 'stat.pl';
 
@@ -1210,7 +1209,7 @@ is just like
     eval `cat stat.pl`;
 
 except that it's more efficient and concise, keeps track of the current
-filename for error messages, searches the @INC libraries, and updates
+filename for error messages, searches the @INC directories, and updates
 C<%INC> if the file is found.  See L<perlvar/Predefined Names> for these
 variables.  It also differs in that code evaluated with C<do FILENAME>
 cannot see lexicals in the enclosing scope; C<eval STRING> does.  It's the
@@ -2112,13 +2111,13 @@ integer which you can decode using unpack with the C<i> (or C<I>) format.
 
 An example testing if Nagle's algorithm is turned on on a socket:
 
-    use Socket;
+    use Socket qw(:all);
 
     defined(my $tcp = getprotobyname("tcp"))
 	or die "Could not determine the protocol number for tcp";
-    # my $tcp = Socket::IPPROTO_TCP; # Alternative
-    my $packed = getsockopt($socket, $tcp, Socket::TCP_NODELAY)
-	or die "Could not query TCP_NODELAY SOCKEt option: $!";
+    # my $tcp = IPPROTO_TCP; # Alternative
+    my $packed = getsockopt($socket, $tcp, TCP_NODELAY)
+	or die "Could not query TCP_NODELAY socket option: $!";
     my $nodelay = unpack("I", $packed);
     print "Nagle's algorithm is turned ", $nodelay ? "off\n" : "on\n";
 
@@ -2258,7 +2257,7 @@ See also L</map> for a list composed of the results of the BLOCK or EXPR.
 =item hex
 
 Interprets EXPR as a hex string and returns the corresponding value.
-(To convert strings that might start with either 0, 0x, or 0b, see
+(To convert strings that might start with either C<0>, C<0x>, or C<0b>, see
 L</oct>.)  If EXPR is omitted, uses C<$_>.
 
     print hex '0xAf'; # prints '175'
@@ -2266,7 +2265,8 @@ L</oct>.)  If EXPR is omitted, uses C<$_>.
 
 Hex strings may only represent integers.  Strings that would cause
 integer overflow trigger a warning.  Leading whitespace is not stripped,
-unlike oct().
+unlike oct(). To present something as hex, look into L</printf>,
+L</sprintf>, or L</unpack>.
 
 =item import
 
@@ -2511,36 +2511,44 @@ for details, including issues with tied arrays and hashes.
 
 =item localtime EXPR
 
+=item localtime
+
 Converts a time as returned by the time function to a 9-element list
 with the time analyzed for the local time zone.  Typically used as
 follows:
 
     #  0    1    2     3     4    5     6     7     8
     ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
-						localtime(time);
+                                                localtime(time);
 
 All list elements are numeric, and come straight out of the C `struct
-tm'.  $sec, $min, and $hour are the seconds, minutes, and hours of the
-specified time.  $mday is the day of the month, and $mon is the month
-itself, in the range C<0..11> with 0 indicating January and 11
-indicating December.  $year is the number of years since 1900.  That
-is, $year is C<123> in year 2023.  $wday is the day of the week, with
-0 indicating Sunday and 3 indicating Wednesday.  $yday is the day of
-the year, in the range C<0..364> (or C<0..365> in leap years.)  $isdst
-is true if the specified time occurs during daylight savings time,
-false otherwise.
+tm'.  C<$sec>, C<$min>, and C<$hour> are the seconds, minutes, and hours
+of the specified time.
 
-Note that the $year element is I<not> simply the last two digits of
-the year.  If you assume it is, then you create non-Y2K-compliant
-programs--and you wouldn't want to do that, would you?
+C<$mday> is the day of the month, and C<$mon> is the month itself, in
+the range C<0..11> with 0 indicating January and 11 indicating December.
+This makes it easy to get a month name from a list:
 
-The proper way to get a complete 4-digit year is simply:
+    my @abbr = qw( Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec );
+    print "$abbr[$mon] $mday";
+    # $mon=9, $mday=18 gives "Oct 18"
 
-	$year += 1900;
+C<$year> is the number of years since 1900, not just the last two digits
+of the year.  That is, C<$year> is C<123> in year 2023.  The proper way
+to get a complete 4-digit year is simply:
 
-And to get the last two digits of the year (e.g., '01' in 2001) do:
+    $year += 1900;
 
-	$year = sprintf("%02d", $year % 100);
+To get the last two digits of the year (e.g., '01' in 2001) do:
+
+    $year = sprintf("%02d", $year % 100);
+
+C<$wday> is the day of the week, with 0 indicating Sunday and 3 indicating
+Wednesday.  C<$yday> is the day of the year, in the range C<0..364>
+(or C<0..365> in leap years.)
+
+C<$isdst> is true if the specified time occurs during Daylight Saving
+Time, false otherwise.
 
 If EXPR is omitted, C<localtime()> uses the current time (C<localtime(time)>).
 
@@ -2987,7 +2995,7 @@ Examples:
 	}
     }
 
-See L<perliol/> for detailed info on PerlIO.
+See L<perliol> for detailed info on PerlIO.
 
 You may also, in the Bourne shell tradition, specify an EXPR beginning
 with C<< '>&' >>, in which case the rest of the string is interpreted
@@ -4477,6 +4485,15 @@ Note that whether C<select> gets restarted after signals (say, SIGALRM)
 is implementation-dependent.  See also L<perlport> for notes on the
 portability of C<select>.
 
+On error, C<select> behaves like the select(2) system call : it returns
+-1 and sets C<$!>.
+
+Note: on some Unixes, the select(2) system call may report a socket file
+descriptor as "ready for reading", when actually no data is available,
+thus a subsequent read blocks. It can be avoided using always the
+O_NONBLOCK flag on the socket. See select(2) and fcntl(2) for further
+details.
+
 B<WARNING>: One should not attempt to mix buffered I/O (like C<read>
 or <FH>) with C<select>, except as permitted by POSIX, and even
 then only on POSIX systems.  You have to use C<sysread> instead.
@@ -5754,7 +5771,7 @@ will return byte offsets, not character offsets (because implementing
 that would render sysseek() very slow).
 
 sysseek() bypasses normal buffered IO, so mixing this with reads (other
-than C<sysread>, for example &gt;&lt or read()) C<print>, C<write>,
+than C<sysread>, for example C<< <> >> or read()) C<print>, C<write>,
 C<seek>, C<tell>, or C<eof> may cause confusion.
 
 For WHENCE, you may also use the constants C<SEEK_SET>, C<SEEK_CUR>,
@@ -6637,13 +6654,17 @@ and for other examples.
 =item wantarray
 
 Returns true if the context of the currently executing subroutine or
-eval() block is looking for a list value.  Returns false if the context is
+C<eval> is looking for a list value.  Returns false if the context is
 looking for a scalar.  Returns the undefined value if the context is
 looking for no value (void context).
 
     return unless defined wantarray;	# don't bother doing more
     my @a = complex_calculation();
     return wantarray ? @a : "@a";
+
+C<wantarray()>'s result is unspecified in the top level of a file,
+in a C<BEGIN>, C<CHECK>, C<INIT> or C<END> block, or in a C<DESTROY>
+method.
 
 This function should have been named wantlist() instead.
 

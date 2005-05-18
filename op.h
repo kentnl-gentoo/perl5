@@ -1,7 +1,7 @@
 /*    op.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -254,7 +254,7 @@ struct pmop {
     BASEOP
     OP *	op_first;
     OP *	op_last;
-    OP *	op_pmreplroot;
+    OP *	op_pmreplroot; /* (type is really union {OP*,GV*,PADOFFSET}) */
     OP *	op_pmreplstart;
     PMOP *	op_pmnext;		/* list of all scanpats */
 #ifdef USE_ITHREADS
@@ -468,8 +468,13 @@ struct loop {
 
 #ifdef USE_ITHREADS
 #  define OP_REFCNT_INIT		MUTEX_INIT(&PL_op_mutex)
-#  define OP_REFCNT_LOCK		MUTEX_LOCK(&PL_op_mutex)
-#  define OP_REFCNT_UNLOCK		MUTEX_UNLOCK(&PL_op_mutex)
+#  ifdef PERL_CORE
+#    define OP_REFCNT_LOCK		MUTEX_LOCK(&PL_op_mutex)
+#    define OP_REFCNT_UNLOCK		MUTEX_UNLOCK(&PL_op_mutex)
+#  else
+#    define OP_REFCNT_LOCK		op_refcnt_lock()
+#    define OP_REFCNT_UNLOCK		op_refcnt_unlock()
+#  endif
 #  define OP_REFCNT_TERM		MUTEX_DESTROY(&PL_op_mutex)
 #else
 #  define OP_REFCNT_INIT		NOOP

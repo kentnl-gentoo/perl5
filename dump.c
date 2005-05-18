@@ -1,7 +1,7 @@
 /*    dump.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -966,7 +966,7 @@ Perl_do_gvgv_dump(pTHX_ I32 level, PerlIO *file, char *name, GV *sv)
     Perl_dump_indent(aTHX_ level, file, "%s = 0x%"UVxf, name, PTR2UV(sv));
     if (sv && GvNAME(sv)) {
 	PerlIO_printf(file, "\t\"");
-	if (GvSTASH(sv))
+	if (GvSTASH(sv) && HvNAME(GvSTASH(sv)))
 	    PerlIO_printf(file, "%s\" :: \"", HvNAME(GvSTASH(sv)));
 	PerlIO_printf(file, "%s\"\n", GvNAME(sv));
     }
@@ -1021,7 +1021,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
     if (flags & SVp_IOK)	sv_catpv(d, "pIOK,");
     if (flags & SVp_NOK)	sv_catpv(d, "pNOK,");
     if (flags & SVp_POK)	sv_catpv(d, "pPOK,");
-    if (flags & SVp_SCREAM)	sv_catpv(d, "SCREAM,");
+    if (flags & SVp_SCREAM && type != SVt_PVHV)
+				sv_catpv(d, "SCREAM,");
 
     switch (type) {
     case SVt_PVCV:
@@ -1043,6 +1044,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	if (HvLAZYDEL(sv))	sv_catpv(d, "LAZYDEL,");
 	if (HvHASKFLAGS(sv))	sv_catpv(d, "HASKFLAGS,");
 	if (HvREHASH(sv))	sv_catpv(d, "REHASH,");
+	if (flags & SVphv_CLONEABLE) sv_catpv(d, "CLONEABLE,");
 	break;
     case SVt_PVGV:
 	if (GvINTRO(sv))	sv_catpv(d, "INTRO,");
@@ -1078,7 +1080,8 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 				sv_catpv(d, "TYPED,");
 	break;
     }
-    if ((SvPOK(sv) || SvPOKp(sv)) && SvUTF8(sv))
+    /* SVphv_SHAREKEYS is also 0x20000000 */
+    if ((type != SVt_PVHV) && SvUTF8(sv))
         sv_catpv(d, "UTF8");
 
     if (*(SvEND(d) - 1) == ',')

@@ -1,7 +1,7 @@
 /*    util.c
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -758,10 +758,18 @@ char *
 Perl_savepv(pTHX_ const char *pv)
 {
     register char *newaddr;
+#ifdef PERL_MALLOC_WRAP
+    STRLEN pvlen;
+#endif
     if (!pv)
 	return Nullch;
 
+#ifdef PERL_MALLOC_WRAP
+    pvlen = strlen(pv)+1;
+    New(902,newaddr,pvlen,char);
+#else
     New(902,newaddr,strlen(pv)+1,char);
+#endif
     return strcpy(newaddr,pv);
 }
 
@@ -819,6 +827,26 @@ Perl_savesharedpv(pTHX_ const char *pv)
     return strcpy(newaddr,pv);
 }
 
+/*
+=for apidoc savesvpv
+
+A version of C<savepv()>/C<savepvn()> which gets the string to duplicate from
+the passed in SV using C<SvPV()>
+
+=cut
+*/
+
+char *
+Perl_savesvpv(pTHX_ SV *sv)
+{
+    STRLEN len;
+    const char *pv = SvPV(sv, len);
+    register char *newaddr;
+
+    ++len;
+    New(903,newaddr,len,char);
+    return CopyD(pv,newaddr,len,char);
+}
 
 
 /* the SV for Perl_form() and mess() is not kept in an arena */
@@ -1673,7 +1701,7 @@ Perl_my_ntohl(pTHX_ long l)
  * -DWS
  */
 
-#define HTOV(name,type)						\
+#define HTOLE(name,type)					\
 	type							\
 	name (register type n)					\
 	{							\
@@ -1682,14 +1710,14 @@ Perl_my_ntohl(pTHX_ long l)
 		char c[sizeof(type)];				\
 	    } u;						\
 	    register I32 i;					\
-	    register I32 s;					\
-	    for (i = 0, s = 0; i < sizeof(u.c); i++, s += 8) {	\
+	    register I32 s = 0;					\
+	    for (i = 0; i < sizeof(u.c); i++, s += 8) {		\
 		u.c[i] = (n >> s) & 0xFF;			\
 	    }							\
 	    return u.value;					\
 	}
 
-#define VTOH(name,type)						\
+#define LETOH(name,type)					\
 	type							\
 	name (register type n)					\
 	{							\
@@ -1698,27 +1726,218 @@ Perl_my_ntohl(pTHX_ long l)
 		char c[sizeof(type)];				\
 	    } u;						\
 	    register I32 i;					\
-	    register I32 s;					\
+	    register I32 s = 0;					\
 	    u.value = n;					\
 	    n = 0;						\
-	    for (i = 0, s = 0; i < sizeof(u.c); i++, s += 8) {	\
-		n += (u.c[i] & 0xFF) << s;			\
+	    for (i = 0; i < sizeof(u.c); i++, s += 8) {		\
+		n |= ((type)(u.c[i] & 0xFF)) << s;		\
 	    }							\
 	    return n;						\
 	}
 
+/*
+ * Big-endian byte order functions.
+ */
+
+#define HTOBE(name,type)					\
+	type							\
+	name (register type n)					\
+	{							\
+	    union {						\
+		type value;					\
+		char c[sizeof(type)];				\
+	    } u;						\
+	    register I32 i;					\
+	    register I32 s = 8*(sizeof(u.c)-1);			\
+	    for (i = 0; i < sizeof(u.c); i++, s -= 8) {		\
+		u.c[i] = (n >> s) & 0xFF;			\
+	    }							\
+	    return u.value;					\
+	}
+
+#define BETOH(name,type)					\
+	type							\
+	name (register type n)					\
+	{							\
+	    union {						\
+		type value;					\
+		char c[sizeof(type)];				\
+	    } u;						\
+	    register I32 i;					\
+	    register I32 s = 8*(sizeof(u.c)-1);			\
+	    u.value = n;					\
+	    n = 0;						\
+	    for (i = 0; i < sizeof(u.c); i++, s -= 8) {		\
+		n |= ((type)(u.c[i] & 0xFF)) << s;		\
+	    }							\
+	    return n;						\
+	}
+
+/*
+ * If we just can't do it...
+ */
+
+#define NOT_AVAIL(name,type)                                    \
+        type                                                    \
+        name (register type n)                                  \
+        {                                                       \
+            Perl_croak_nocontext(#name "() not available");     \
+            return n; /* not reached */                         \
+        }
+
+
 #if defined(HAS_HTOVS) && !defined(htovs)
-HTOV(htovs,short)
+HTOLE(htovs,short)
 #endif
 #if defined(HAS_HTOVL) && !defined(htovl)
-HTOV(htovl,long)
+HTOLE(htovl,long)
 #endif
 #if defined(HAS_VTOHS) && !defined(vtohs)
-VTOH(vtohs,short)
+LETOH(vtohs,short)
 #endif
 #if defined(HAS_VTOHL) && !defined(vtohl)
-VTOH(vtohl,long)
+LETOH(vtohl,long)
 #endif
+
+#ifdef PERL_NEED_MY_HTOLE16
+# if U16SIZE == 2
+HTOLE(Perl_my_htole16,U16)
+# else
+NOT_AVAIL(Perl_my_htole16,U16)
+# endif
+#endif
+#ifdef PERL_NEED_MY_LETOH16
+# if U16SIZE == 2
+LETOH(Perl_my_letoh16,U16)
+# else
+NOT_AVAIL(Perl_my_letoh16,U16)
+# endif
+#endif
+#ifdef PERL_NEED_MY_HTOBE16
+# if U16SIZE == 2
+HTOBE(Perl_my_htobe16,U16)
+# else
+NOT_AVAIL(Perl_my_htobe16,U16)
+# endif
+#endif
+#ifdef PERL_NEED_MY_BETOH16
+# if U16SIZE == 2
+BETOH(Perl_my_betoh16,U16)
+# else
+NOT_AVAIL(Perl_my_betoh16,U16)
+# endif
+#endif
+
+#ifdef PERL_NEED_MY_HTOLE32
+# if U32SIZE == 4
+HTOLE(Perl_my_htole32,U32)
+# else
+NOT_AVAIL(Perl_my_htole32,U32)
+# endif
+#endif
+#ifdef PERL_NEED_MY_LETOH32
+# if U32SIZE == 4
+LETOH(Perl_my_letoh32,U32)
+# else
+NOT_AVAIL(Perl_my_letoh32,U32)
+# endif
+#endif
+#ifdef PERL_NEED_MY_HTOBE32
+# if U32SIZE == 4
+HTOBE(Perl_my_htobe32,U32)
+# else
+NOT_AVAIL(Perl_my_htobe32,U32)
+# endif
+#endif
+#ifdef PERL_NEED_MY_BETOH32
+# if U32SIZE == 4
+BETOH(Perl_my_betoh32,U32)
+# else
+NOT_AVAIL(Perl_my_betoh32,U32)
+# endif
+#endif
+
+#ifdef PERL_NEED_MY_HTOLE64
+# if U64SIZE == 8
+HTOLE(Perl_my_htole64,U64)
+# else
+NOT_AVAIL(Perl_my_htole64,U64)
+# endif
+#endif
+#ifdef PERL_NEED_MY_LETOH64
+# if U64SIZE == 8
+LETOH(Perl_my_letoh64,U64)
+# else
+NOT_AVAIL(Perl_my_letoh64,U64)
+# endif
+#endif
+#ifdef PERL_NEED_MY_HTOBE64
+# if U64SIZE == 8
+HTOBE(Perl_my_htobe64,U64)
+# else
+NOT_AVAIL(Perl_my_htobe64,U64)
+# endif
+#endif
+#ifdef PERL_NEED_MY_BETOH64
+# if U64SIZE == 8
+BETOH(Perl_my_betoh64,U64)
+# else
+NOT_AVAIL(Perl_my_betoh64,U64)
+# endif
+#endif
+
+#ifdef PERL_NEED_MY_HTOLES
+HTOLE(Perl_my_htoles,short)
+#endif
+#ifdef PERL_NEED_MY_LETOHS
+LETOH(Perl_my_letohs,short)
+#endif
+#ifdef PERL_NEED_MY_HTOBES
+HTOBE(Perl_my_htobes,short)
+#endif
+#ifdef PERL_NEED_MY_BETOHS
+BETOH(Perl_my_betohs,short)
+#endif
+
+#ifdef PERL_NEED_MY_HTOLEI
+HTOLE(Perl_my_htolei,int)
+#endif
+#ifdef PERL_NEED_MY_LETOHI
+LETOH(Perl_my_letohi,int)
+#endif
+#ifdef PERL_NEED_MY_HTOBEI
+HTOBE(Perl_my_htobei,int)
+#endif
+#ifdef PERL_NEED_MY_BETOHI
+BETOH(Perl_my_betohi,int)
+#endif
+
+#ifdef PERL_NEED_MY_HTOLEL
+HTOLE(Perl_my_htolel,long)
+#endif
+#ifdef PERL_NEED_MY_LETOHL
+LETOH(Perl_my_letohl,long)
+#endif
+#ifdef PERL_NEED_MY_HTOBEL
+HTOBE(Perl_my_htobel,long)
+#endif
+#ifdef PERL_NEED_MY_BETOHL
+BETOH(Perl_my_betohl,long)
+#endif
+
+void
+Perl_my_swabn(void *ptr, int n)
+{
+    register char *s = (char *)ptr;
+    register char *e = s + (n-1);
+    register char tc;
+
+    for (n /= 2; n > 0; s++, e--, n--) {
+      tc = *s;
+      *s = *e;
+      *e = tc;
+    }
+}
 
 PerlIO *
 Perl_my_popen_list(pTHX_ char *mode, int n, SV **args)
@@ -1861,7 +2080,7 @@ Perl_my_popen(pTHX_ char *cmd, char *mode)
     register I32 This, that;
     register Pid_t pid;
     SV *sv;
-    I32 doexec = strNE(cmd,"-");
+    I32 doexec = !(*cmd == '-' && cmd[1] == '\0');
     I32 did_pipes = 0;
     int pp[2];
 
@@ -2355,7 +2574,7 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
     {
 	SV *sv;
 	SV** svp;
-	char spid[TYPE_CHARS(int)];
+	char spid[TYPE_CHARS(IV)];
 
 	if (pid > 0) {
 	    sprintf(spid, "%"IVdf, (IV)pid);
@@ -2371,9 +2590,6 @@ Perl_wait4pid(pTHX_ Pid_t pid, int *statusp, int flags)
 
 	    hv_iterinit(PL_pidstatus);
 	    if ((entry = hv_iternext(PL_pidstatus))) {
-		SV *sv;
-		char spid[TYPE_CHARS(int)];
-
 		pid = atoi(hv_iterkey(entry,(I32*)statusp));
 		sv = hv_iterval(PL_pidstatus,entry);
 		*statusp = SvIVX(sv);
@@ -2422,7 +2638,7 @@ void
 Perl_pidgone(pTHX_ Pid_t pid, int status)
 {
     register SV *sv;
-    char spid[TYPE_CHARS(int)];
+    char spid[TYPE_CHARS(IV)];
 
     sprintf(spid, "%"IVdf, (IV)pid);
     sv = *hv_fetch(PL_pidstatus,spid,strlen(spid),TRUE);
@@ -3409,8 +3625,11 @@ Perl_init_tm(pTHX_ struct tm *ptm)	/* see mktime, strftime and asctime */
 {
 #ifdef HAS_TM_TM_ZONE
     Time_t now;
+    struct tm* my_tm;
     (void)time(&now);
-    Copy(localtime(&now), ptm, 1, struct tm);
+    my_tm = localtime(&now);
+    if (my_tm)
+        Copy(my_tm, ptm, 1, struct tm);
 #endif
 }
 

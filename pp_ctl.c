@@ -1,7 +1,7 @@
 /*    pp_ctl.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1470,7 +1470,8 @@ PP(pp_caller)
             }
 	    RETURN;
 	}
-	if (PL_DBsub && cxix >= 0 &&
+	/* caller() should not report the automatic calls to &DB::sub */
+	if (PL_DBsub && GvCV(PL_DBsub) && cxix >= 0 &&
 		ccstack[cxix].blk_sub.cv == GvCV(PL_DBsub))
 	    count++;
 	if (!count--)
@@ -1483,7 +1484,8 @@ PP(pp_caller)
         dbcxix = dopoptosub_at(ccstack, cxix - 1);
 	/* We expect that ccstack[dbcxix] is CXt_SUB, anyway, the
 	   field below is defined for any cx. */
-	if (PL_DBsub && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub))
+	/* caller() should not report the automatic calls to &DB::sub */
+	if (PL_DBsub && GvCV(PL_DBsub) && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub))
 	    cx = &ccstack[dbcxix];
     }
 
@@ -1586,8 +1588,18 @@ PP(pp_caller)
 		(old_warnings == pWARN_STD && (PL_dowarn & G_WARN_ON) == 0))
             mask = newSVpvn(WARN_NONEstring, WARNsize) ;
         else if (old_warnings == pWARN_ALL ||
-		  (old_warnings == pWARN_STD && PL_dowarn & G_WARN_ON))
-            mask = newSVpvn(WARN_ALLstring, WARNsize) ;
+		  (old_warnings == pWARN_STD && PL_dowarn & G_WARN_ON)) {
+	    /* Get the bit mask for $warnings::Bits{all}, because
+	     * it could have been extended by warnings::register */
+	    SV **bits_all;
+	    HV *bits = get_hv("warnings::Bits", FALSE);
+	    if (bits && (bits_all=hv_fetch(bits, "all", 3, FALSE))) {
+		mask = newSVsv(*bits_all);
+	    }
+	    else {
+		mask = newSVpvn(WARN_ALLstring, WARNsize) ;
+	    }
+	}
         else
             mask = newSVsv(old_warnings);
         PUSHs(sv_2mortal(mask));
@@ -3918,3 +3930,13 @@ S_path_is_absolute(pTHX_ char *name)
     else
     	return FALSE;
 }
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

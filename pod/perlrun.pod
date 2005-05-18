@@ -140,8 +140,10 @@ Perl program and a Perl library file.
 
 =item Macintosh
 
-A Macintosh perl program will have the appropriate Creator and
-Type, so that double-clicking them will invoke the perl application.
+Under "Classic" MacOS, a perl program will have the appropriate Creator and
+Type, so that double-clicking them will invoke the MacPerl application.
+Under Mac OS X, clickable apps can be made from any C<#!> script using Wil
+Sanchez' DropScript utility: http://www.wsanchez.net/software/ .
 
 =item VMS
 
@@ -401,7 +403,7 @@ as it executes, the way that C<sh -x> provides for shell scripts,
 you can't use Perl's B<-D> switch.  Instead do this
 
   # If you have "env" utility
-  env=PERLDB_OPTS="NonStop=1 AutoTrace=1 frame=2" perl -dS program
+  env PERLDB_OPTS="NonStop=1 AutoTrace=1 frame=2" perl -dS program
 
   # Bourne shell syntax
   $ PERLDB_OPTS="NonStop=1 AutoTrace=1 frame=2" perl -dS program
@@ -417,6 +419,17 @@ may be used to enter one line of program.  If B<-e> is given, Perl
 will not look for a filename in the argument list.  Multiple B<-e>
 commands may be given to build up a multi-line script.  Make sure
 to use semicolons where you would in a normal program.
+
+=item B<-f>
+
+Disable executing F<$Config{siteperl}/sitecustomize.pl> at
+startup.
+
+Perl can be built so that it by default will try to execute
+F<$Config{siteperl}/sitecustomize.pl> at startup.  This is a hook that
+allows the sysadmin to customize how perl behaves.  It can for
+instance be used to add entries to the @INC array to make perl find
+modules in non-standard locations.
 
 =item B<-F>I<pattern>
 
@@ -720,7 +733,8 @@ if it is invoked with B<-xyz=abc>.
     if ($xyz) { print "$xyz\n" }
 
 Do note that B<--help> creates the variable ${-help}, which is not compliant
-with C<strict refs>.
+with C<strict refs>.  Also, when using this option on a script with
+warnings enabled you may get a lot of spurious "used only once" warnings.
 
 =item B<-S>
 
@@ -1080,6 +1094,8 @@ and Win32 approximate equivalent:
    set PERLIO_DEBUG=CON
    perl script ...
 
+This functionality is disabled for setuid scripts and for scripts run
+with B<-T>.
 
 =item PERLLIB
 

@@ -79,7 +79,7 @@
  ****    Alterations to Henry's code are...
  ****
  ****    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- ****    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ ****    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  ****
  ****    You may distribute under the terms of either the GNU General Public
  ****    License or the Artistic License, as specified in the README file.
@@ -98,7 +98,6 @@
 #define RF_warned	2		/* warned about big count? */
 #define RF_evaled	4		/* Did an EVAL with setting? */
 #define RF_utf8		8		/* String contains multibyte chars? */
-#define RF_false	16		/* odd number of nested negatives */
 
 #define UTF ((PL_reg_flags & RF_utf8) != 0)
 
@@ -1027,15 +1026,15 @@ S_find_byclass(pTHX_ regexp * prog, regnode *c, char *s, char *strend, char *sta
 	    if (UTF) {
 	        STRLEN ulen1, ulen2;
 		U8 *sm = (U8 *) m;
-		U8 tmpbuf1[UTF8_MAXLEN_UCLC+1];
-		U8 tmpbuf2[UTF8_MAXLEN_UCLC+1];
+		U8 tmpbuf1[UTF8_MAXBYTES_CASE+1];
+		U8 tmpbuf2[UTF8_MAXBYTES_CASE+1];
 
 		to_utf8_lower((U8*)m, tmpbuf1, &ulen1);
 		to_utf8_upper((U8*)m, tmpbuf2, &ulen2);
 
-		c1 = utf8n_to_uvchr(tmpbuf1, UTF8_MAXLEN_UCLC, 
+		c1 = utf8n_to_uvchr(tmpbuf1, UTF8_MAXBYTES_CASE, 
 				    0, ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
-		c2 = utf8n_to_uvchr(tmpbuf2, UTF8_MAXLEN_UCLC,
+		c2 = utf8n_to_uvchr(tmpbuf2, UTF8_MAXBYTES_CASE,
 				    0, ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
 		lnc = 0;
 		while (sm < ((U8 *) m + ln)) {
@@ -1073,15 +1072,15 @@ S_find_byclass(pTHX_ regexp * prog, regnode *c, char *s, char *strend, char *sta
 
 	    if (do_utf8) {
 	        UV c, f;
-	        U8 tmpbuf [UTF8_MAXLEN+1];
-		U8 foldbuf[UTF8_MAXLEN_FOLD+1];
+	        U8 tmpbuf [UTF8_MAXBYTES+1];
+		U8 foldbuf[UTF8_MAXBYTES_CASE+1];
 		STRLEN len, foldlen;
 		
 		if (c1 == c2) {
 		    /* Upper and lower of 1st char are equal -
 		     * probably not a "letter". */
 		    while (s <= e) {
-		        c = utf8n_to_uvchr((U8*)s, UTF8_MAXLEN, &len,
+		        c = utf8n_to_uvchr((U8*)s, UTF8_MAXBYTES, &len,
 					   ckWARN(WARN_UTF8) ?
 					   0 : UTF8_ALLOW_ANY);
 			if ( c == c1
@@ -1108,7 +1107,7 @@ S_find_byclass(pTHX_ regexp * prog, regnode *c, char *s, char *strend, char *sta
 		}
 		else {
 		    while (s <= e) {
-		      c = utf8n_to_uvchr((U8*)s, UTF8_MAXLEN, &len,
+		      c = utf8n_to_uvchr((U8*)s, UTF8_MAXBYTES, &len,
 					   ckWARN(WARN_UTF8) ?
 					   0 : UTF8_ALLOW_ANY);
 
@@ -2241,6 +2240,42 @@ typedef union re_unwind_t {
 #define sayNO_SILENT goto do_no
 #define saySAME(x) if (x) goto yes; else goto no
 
+#define POSCACHE_SUCCESS 0	/* caching success rather than failure */
+#define POSCACHE_SEEN 1		/* we know what we're caching */
+#define POSCACHE_START 2	/* the real cache: this bit maps to pos 0 */
+#define CACHEsayYES STMT_START { \
+    if (cache_offset | cache_bit) { \
+	if (!(PL_reg_poscache[0] & (1<<POSCACHE_SEEN))) \
+	    PL_reg_poscache[0] |= (1<<POSCACHE_SUCCESS) || (1<<POSCACHE_SEEN); \
+        else if (!(PL_reg_poscache[0] & (1<<POSCACHE_SUCCESS))) { \
+	    /* cache records failure, but this is success */ \
+	    DEBUG_r( \
+		PerlIO_printf(Perl_debug_log, \
+		    "%*s  (remove success from failure cache)\n", \
+		    REPORT_CODE_OFF+PL_regindent*2, "") \
+	    ); \
+	    PL_reg_poscache[cache_offset] &= ~(1<<cache_bit); \
+	} \
+    } \
+    sayYES; \
+} STMT_END
+#define CACHEsayNO STMT_START { \
+    if (cache_offset | cache_bit) { \
+	if (!(PL_reg_poscache[0] & (1<<POSCACHE_SEEN))) \
+	    PL_reg_poscache[0] |= (1<<POSCACHE_SEEN); \
+        else if ((PL_reg_poscache[0] & (1<<POSCACHE_SUCCESS))) { \
+	    /* cache records success, but this is failure */ \
+	    DEBUG_r( \
+		PerlIO_printf(Perl_debug_log, \
+		    "%*s  (remove failure from success cache)\n", \
+		    REPORT_CODE_OFF+PL_regindent*2, "") \
+	    ); \
+	    PL_reg_poscache[cache_offset] &= ~(1<<cache_bit); \
+	} \
+    } \
+    sayNO; \
+} STMT_END
+
 #define REPORT_CODE_OFF 24
 
 /*
@@ -2449,7 +2484,7 @@ S_regmatch(pTHX_ regnode *prog)
 			if (l >= PL_regeol)
 			     sayNO;
 			if (NATIVE_TO_UNI(*(U8*)s) !=
-			    utf8n_to_uvuni((U8*)l, UTF8_MAXLEN, &ulen,
+			    utf8n_to_uvuni((U8*)l, UTF8_MAXBYTES, &ulen,
 					   ckWARN(WARN_UTF8) ?
 					   0 : UTF8_ALLOW_ANY))
 			     sayNO;
@@ -2463,7 +2498,7 @@ S_regmatch(pTHX_ regnode *prog)
 			if (l >= PL_regeol)
 			    sayNO;
 			if (NATIVE_TO_UNI(*((U8*)l)) !=
-			    utf8n_to_uvuni((U8*)s, UTF8_MAXLEN, &ulen,
+			    utf8n_to_uvuni((U8*)s, UTF8_MAXBYTES, &ulen,
 					   ckWARN(WARN_UTF8) ?
 					   0 : UTF8_ALLOW_ANY))
 			    sayNO;
@@ -2796,8 +2831,8 @@ S_regmatch(pTHX_ regnode *prog)
 		 */
 		if (OP(scan) == REFF) {
 		    STRLEN ulen1, ulen2;
-		    U8 tmpbuf1[UTF8_MAXLEN_UCLC+1];
-		    U8 tmpbuf2[UTF8_MAXLEN_UCLC+1];
+		    U8 tmpbuf1[UTF8_MAXBYTES_CASE+1];
+		    U8 tmpbuf2[UTF8_MAXBYTES_CASE+1];
 		    while (s < e) {
 			if (l >= PL_regeol)
 			    sayNO;
@@ -3132,6 +3167,7 @@ S_regmatch(pTHX_ regnode *prog)
 		CHECKPOINT cp, lastcp;
 		CURCUR* cc = PL_regcc;
 		char *lastloc = cc->lastloc; /* Detection of 0-len. */
+		I32 cache_offset = 0, cache_bit = 0;
 		
 		n = cc->cur + 1;	/* how many we know we matched */
 		PL_reginput = locinput;
@@ -3184,7 +3220,7 @@ S_regmatch(pTHX_ regnode *prog)
 		    PL_reg_leftiter = PL_reg_maxiter;
 		}
 		if (PL_reg_leftiter-- == 0) {
-		    I32 size = (PL_reg_maxiter + 7)/8;
+		    I32 size = (PL_reg_maxiter + 7 + POSCACHE_START)/8;
 		    if (PL_reg_poscache) {
 			if ((I32)PL_reg_poscache_size < size) {
 			    Renew(PL_reg_poscache, size, char);
@@ -3203,23 +3239,26 @@ S_regmatch(pTHX_ regnode *prog)
 			);
 		}
 		if (PL_reg_leftiter < 0) {
-		    I32 o = locinput - PL_bostr, b;
+		    cache_offset = locinput - PL_bostr;
 
-		    o = (scan->flags & 0xf) - 1 + o * (scan->flags>>4);
-		    b = o % 8;
-		    o /= 8;
-		    if (PL_reg_poscache[o] & (1<<b)) {
+		    cache_offset = (scan->flags & 0xf) - 1 + POSCACHE_START
+			    + cache_offset * (scan->flags>>4);
+		    cache_bit = cache_offset % 8;
+		    cache_offset /= 8;
+		    if (PL_reg_poscache[cache_offset] & (1<<cache_bit)) {
 		    DEBUG_r(
 			PerlIO_printf(Perl_debug_log,
 				      "%*s  already tried at this position...\n",
 				      REPORT_CODE_OFF+PL_regindent*2, "")
 			);
-			if (PL_reg_flags & RF_false)
+			if (PL_reg_poscache[0] & (1<<POSCACHE_SUCCESS))
+			    /* cache records success */
 			    sayYES;
 			else
+			    /* cache records failure */
 			    sayNO_SILENT;
 		    }
-		    PL_reg_poscache[o] |= (1<<b);
+		    PL_reg_poscache[cache_offset] |= (1<<cache_bit);
 		}
 		}
 
@@ -3233,7 +3272,7 @@ S_regmatch(pTHX_ regnode *prog)
 		    REGCP_SET(lastcp);
 		    if (regmatch(cc->next)) {
 			regcpblow(cp);
-			sayYES;	/* All done. */
+			CACHEsayYES;	/* All done. */
 		    }
 		    REGCP_UNWIND(lastcp);
 		    regcppop();
@@ -3249,7 +3288,7 @@ S_regmatch(pTHX_ regnode *prog)
 				 "Complex regular subexpression recursion",
 				 REG_INFTY - 1);
 			}
-			sayNO;
+			CACHEsayNO;
 		    }
 
 		    DEBUG_r(
@@ -3265,13 +3304,13 @@ S_regmatch(pTHX_ regnode *prog)
 		    REGCP_SET(lastcp);
 		    if (regmatch(cc->scan)) {
 			regcpblow(cp);
-			sayYES;
+			CACHEsayYES;
 		    }
 		    REGCP_UNWIND(lastcp);
 		    regcppop();
 		    cc->cur = n - 1;
 		    cc->lastloc = lastloc;
-		    sayNO;
+		    CACHEsayNO;
 		}
 
 		/* Prefer scan over next for maximal matching. */
@@ -3283,7 +3322,7 @@ S_regmatch(pTHX_ regnode *prog)
 		    REGCP_SET(lastcp);
 		    if (regmatch(cc->scan)) {
 			regcpblow(cp);
-			sayYES;
+			CACHEsayYES;
 		    }
 		    REGCP_UNWIND(lastcp);
 		    regcppop();		/* Restore some previous $<digit>s? */
@@ -3307,13 +3346,13 @@ S_regmatch(pTHX_ regnode *prog)
 		if (PL_regcc)
 		    ln = PL_regcc->cur;
 		if (regmatch(cc->next))
-		    sayYES;
+		    CACHEsayYES;
 		if (PL_regcc)
 		    PL_regcc->cur = ln;
 		PL_regcc = cc;
 		cc->cur = n - 1;
 		cc->lastloc = lastloc;
-		sayNO;
+		CACHEsayNO;
 	    }
 	    /* NOT REACHED */
 	case BRANCHJ:
@@ -3570,21 +3609,21 @@ S_regmatch(pTHX_ regnode *prog)
 		    else { /* UTF */
 			if (OP(text_node) == EXACTF || OP(text_node) == REFF) {
 			     STRLEN ulen1, ulen2;
-			     U8 tmpbuf1[UTF8_MAXLEN_UCLC+1];
-			     U8 tmpbuf2[UTF8_MAXLEN_UCLC+1];
+			     U8 tmpbuf1[UTF8_MAXBYTES_CASE+1];
+			     U8 tmpbuf2[UTF8_MAXBYTES_CASE+1];
 
 			     to_utf8_lower((U8*)s, tmpbuf1, &ulen1);
 			     to_utf8_upper((U8*)s, tmpbuf2, &ulen2);
 
-			     c1 = utf8n_to_uvuni(tmpbuf1, UTF8_MAXLEN, 0,
+			     c1 = utf8n_to_uvuni(tmpbuf1, UTF8_MAXBYTES, 0,
 						 ckWARN(WARN_UTF8) ?
 						 0 : UTF8_ALLOW_ANY);
-			     c2 = utf8n_to_uvuni(tmpbuf2, UTF8_MAXLEN, 0,
+			     c2 = utf8n_to_uvuni(tmpbuf2, UTF8_MAXBYTES, 0,
 						 ckWARN(WARN_UTF8) ?
 						 0 : UTF8_ALLOW_ANY);
 			}
 			else {
-			    c2 = c1 = utf8n_to_uvchr(s, UTF8_MAXLEN, 0,
+			    c2 = c1 = utf8n_to_uvchr(s, UTF8_MAXBYTES, 0,
 						     ckWARN(WARN_UTF8) ?
 						     0 : UTF8_ALLOW_ANY);
 			}
@@ -3646,7 +3685,7 @@ S_regmatch(pTHX_ regnode *prog)
 				 * utf8_distance(old, locinput) */
 				while (locinput <= e &&
 				       utf8n_to_uvchr((U8*)locinput,
-						      UTF8_MAXLEN, &len,
+						      UTF8_MAXBYTES, &len,
 						      ckWARN(WARN_UTF8) ?
 						      0 : UTF8_ALLOW_ANY) != (UV)c1) {
 				    locinput += len;
@@ -3657,7 +3696,7 @@ S_regmatch(pTHX_ regnode *prog)
 				 * utf8_distance(old, locinput) */
 				while (locinput <= e) {
 				    UV c = utf8n_to_uvchr((U8*)locinput,
-							  UTF8_MAXLEN, &len,
+							  UTF8_MAXBYTES, &len,
 							  ckWARN(WARN_UTF8) ?
 							  0 : UTF8_ALLOW_ANY);
 				    if (c == (UV)c1 || c == (UV)c2)
@@ -3694,7 +3733,7 @@ S_regmatch(pTHX_ regnode *prog)
 		    if (c1 != -1000) {
 			if (do_utf8)
 			    c = utf8n_to_uvchr((U8*)PL_reginput,
-					       UTF8_MAXLEN, 0,
+					       UTF8_MAXBYTES, 0,
 					       ckWARN(WARN_UTF8) ?
 					       0 : UTF8_ALLOW_ANY);
 			else
@@ -3744,7 +3783,7 @@ S_regmatch(pTHX_ regnode *prog)
 			if (c1 != -1000) {
 			    if (do_utf8)
 				c = utf8n_to_uvchr((U8*)PL_reginput,
-						   UTF8_MAXLEN, 0,
+						   UTF8_MAXBYTES, 0,
 						   ckWARN(WARN_UTF8) ?
 						   0 : UTF8_ALLOW_ANY);
 			    else
@@ -3767,7 +3806,7 @@ S_regmatch(pTHX_ regnode *prog)
 			if (c1 != -1000) {
 			    if (do_utf8)
 				c = utf8n_to_uvchr((U8*)PL_reginput,
-						   UTF8_MAXLEN, 0,
+						   UTF8_MAXBYTES, 0,
 						   ckWARN(WARN_UTF8) ?
 						   0 : UTF8_ALLOW_ANY);
 			    else
@@ -3850,7 +3889,6 @@ S_regmatch(pTHX_ regnode *prog)
 	    }
 	    else
 		PL_reginput = locinput;
-	    PL_reg_flags ^= RF_false;
 	    goto do_ifmatch;
 	case IFMATCH:
 	    n = 1;
@@ -3866,8 +3904,6 @@ S_regmatch(pTHX_ regnode *prog)
 	  do_ifmatch:
 	    inner = NEXTOPER(NEXTOPER(scan));
 	    if (regmatch(inner) != n) {
-		if (n == 0)
-		    PL_reg_flags ^= RF_false;
 	      say_no:
 		if (logical) {
 		    logical = 0;
@@ -3877,8 +3913,6 @@ S_regmatch(pTHX_ regnode *prog)
 		else
 		    sayNO;
 	    }
-	    if (n == 0)
-		PL_reg_flags ^= RF_false;
 	  say_yes:
 	    if (logical) {
 		logical = 0;
@@ -4360,7 +4394,7 @@ S_reginclass(pTHX_ register regnode *n, register U8* p, STRLEN* lenp, register b
     STRLEN plen;
 
     if (do_utf8 && !UTF8_IS_INVARIANT(c))
-	 c = utf8n_to_uvchr(p, UTF8_MAXLEN, &len,
+	 c = utf8n_to_uvchr(p, UTF8_MAXBYTES, &len,
 			    ckWARN(WARN_UTF8) ? 0 : UTF8_ALLOW_ANY);
 
     plen = lenp ? *lenp : UNISKIP(NATIVE_TO_UNI(c));
@@ -4397,7 +4431,7 @@ S_reginclass(pTHX_ register regnode *n, register U8* p, STRLEN* lenp, register b
 			}
 		    }
 		    if (!match) {
-		        U8 tmpbuf[UTF8_MAXLEN_FOLD+1];
+		        U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
 			STRLEN tmplen;
 
 		        to_utf8_fold(p, tmpbuf, &tmplen);
@@ -4555,8 +4589,7 @@ S_to_utf8_substr(pTHX_ register regexp *prog)
 {
     SV* sv;
     if (prog->float_substr && !prog->float_utf8) {
-	prog->float_utf8 = sv = NEWSV(117, 0);
-	SvSetSV(sv, prog->float_substr);
+	prog->float_utf8 = sv = newSVsv(prog->float_substr);
 	sv_utf8_upgrade(sv);
 	if (SvTAIL(prog->float_substr))
 	    SvTAIL_on(sv);
@@ -4564,8 +4597,7 @@ S_to_utf8_substr(pTHX_ register regexp *prog)
 	    prog->check_utf8 = sv;
     }
     if (prog->anchored_substr && !prog->anchored_utf8) {
-	prog->anchored_utf8 = sv = NEWSV(118, 0);
-	SvSetSV(sv, prog->anchored_substr);
+	prog->anchored_utf8 = sv = newSVsv(prog->anchored_substr);
 	sv_utf8_upgrade(sv);
 	if (SvTAIL(prog->anchored_substr))
 	    SvTAIL_on(sv);
@@ -4579,8 +4611,7 @@ S_to_byte_substr(pTHX_ register regexp *prog)
 {
     SV* sv;
     if (prog->float_utf8 && !prog->float_substr) {
-	prog->float_substr = sv = NEWSV(117, 0);
-	SvSetSV(sv, prog->float_utf8);
+	prog->float_substr = sv = newSVsv(prog->float_utf8);
 	if (sv_utf8_downgrade(sv, TRUE)) {
 	    if (SvTAIL(prog->float_utf8))
 		SvTAIL_on(sv);
@@ -4592,8 +4623,7 @@ S_to_byte_substr(pTHX_ register regexp *prog)
 	    prog->check_substr = sv;
     }
     if (prog->anchored_utf8 && !prog->anchored_substr) {
-	prog->anchored_substr = sv = NEWSV(118, 0);
-	SvSetSV(sv, prog->anchored_utf8);
+	prog->anchored_substr = sv = newSVsv(prog->anchored_utf8);
 	if (sv_utf8_downgrade(sv, TRUE)) {
 	    if (SvTAIL(prog->anchored_utf8))
 		SvTAIL_on(sv);

@@ -1063,7 +1063,7 @@ calling sv_upgrade.
 
 =item Can't use anonymous symbol table for method lookup
 
-(P) The internal routine that does method lookup was handed a symbol
+(F) The internal routine that does method lookup was handed a symbol
 table that doesn't have a name.  Symbol tables can become anonymous
 for example by undefining stashes: C<undef %Some::Package::>.
 
@@ -1400,6 +1400,11 @@ qualifying it as C<CORE::dump()>.  Maybe it's a typo.  See L<perlfunc/dump>.
 (S malloc) An internal routine called free() on something that had
 already been freed.
 
+=item Duplicate modifier '%c' after '%c' in %s
+
+(W) You have applied the same modifier more than once after a type
+in a pack template.  See L<perlfunc/pack>.
+
 =item elseif should be elsif
 
 (S syntax) There is no keyword "elseif" in Perl because Larry thinks it's
@@ -1417,6 +1422,12 @@ a regular expression without specifying the property name.
 
 (F) While under the C<use filetest> pragma, switching the real and
 effective uids or gids failed.
+
+=item %ENV is aliased to %s
+
+(F) You're running under taint mode, and the C<%ENV> variable has been
+aliased to another hash, so it doesn't reflect anymore the state of the
+program's environment. This is potentially insecure.
 
 =item Error converting file specification %s
 
@@ -2308,22 +2319,21 @@ doesn't know where you want to pipe the output from this command.
 =item No DB::DB routine defined
 
 (F) The currently executing code was compiled with the B<-d> switch, but
-for some reason the perl5db.pl file (or some facsimile thereof) didn't
-define a routine to be called at the beginning of each statement.  Which
-is odd, because the file should have been required automatically, and
-should have blown up the require if it didn't parse right.
+for some reason the  current debugger (e.g. F<perl5db.pl> or a C<Devel::>
+module) didn't define a routine to be called at the beginning of each
+statement.
 
 =item No dbm on this machine
 
 (P) This is counted as an internal error, because every machine should
 supply dbm nowadays, because Perl comes with SDBM.  See L<SDBM_File>.
 
-=item No DBsub routine
+=item No DB::sub routine defined
 
-(F) The currently executing code was compiled with the B<-d> switch,
-but for some reason the perl5db.pl file (or some facsimile thereof)
-didn't define a DB::sub routine to be called at the beginning of each
-ordinary subroutine call.
+(F) The currently executing code was compiled with the B<-d> switch, but
+for some reason the current debugger (e.g. F<perl5db.pl> or a C<Devel::>
+module) didn't define a C<DB::sub> routine to be called at the beginning
+of each ordinary subroutine call.
 
 =item No B<-e> allowed in setuid scripts
 
@@ -3450,6 +3460,11 @@ L<perlfunc/setsockopt>.
 (F) The setuid emulator won't run a script that is writable by the
 world, because the world might have written on it already.
 
+=item Setuid script not plain file
+
+(F) The setuid emulator won't run a script that isn't read from a file,
+but from a socket, a pipe or another device.
+
 =item shm%s not implemented
 
 (F) You don't have System V shared memory IPC on your system.
@@ -3764,7 +3779,7 @@ system call to call, silly dilly.
 =item Too late for "-%s" option
 
 (X) The #! line (or local equivalent) in a Perl script contains the
-B<-M> or B<-m> option.  This is an error because B<-M> and B<-m> options
+B<-M>, B<-m> or B<-C> option.  This is an error because those options
 are not intended for use inside scripts.  Use the C<use> pragma instead.
 
 =item Too late to run %s block

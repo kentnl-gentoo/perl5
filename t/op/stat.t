@@ -9,7 +9,7 @@ BEGIN {
 use Config;
 use File::Spec;
 
-plan tests => 78;
+plan tests => 82;
 
 my $Perl = which_perl();
 
@@ -71,7 +71,7 @@ sleep 3 if $funky_FAT_timestamps;
 print FOO "Now is the time for all good men to come to.\n";
 close(FOO);
 
-sleep 2 unless $funky_FAT_timestamps;
+sleep 2;
 
 
 SKIP: {
@@ -406,16 +406,22 @@ unlink $tmpfile or print "# unlink failed: $!\n";
 my @r = \stat($Curdir);
 is(scalar @r, 13,   'stat returns full 13 elements');
 
-SKIP: {
-    skip "No lstat", 4 unless $Config{d_lstat};
+stat $0;
+eval { lstat _ };
+like( $@, qr/^The stat preceding lstat\(\) wasn't an lstat/,
+    'lstat _ croaks after stat' );
+eval { -l _ };
+like( $@, qr/^The stat preceding -l _ wasn't an lstat/,
+    '-l _ croaks after stat' );
 
-    stat $0;
-    eval { lstat _ };
-    like( $@, qr/^The stat preceding lstat\(\) wasn't an lstat/,
-	'lstat _ croaks after stat' );
-    eval { -l _ };
-    like( $@, qr/^The stat preceding -l _ wasn't an lstat/,
-	'-l _ croaks after stat' );
+lstat $0;
+eval { lstat _ };
+is( "$@", "", "lstat _ ok after lstat" );
+eval { -l _ };
+is( "$@", "", "-l _ ok after lstat" );
+  
+SKIP: {
+    skip "No lstat", 2 unless $Config{d_lstat};
 
     # bug id 20020124.004
     # If we have d_lstat, we should have symlink()
@@ -446,6 +452,18 @@ ok( (-M _) < 0, 'negative -M works');
 ok( (-A _) < 0, 'negative -A works');
 ok( (-C _) < 0, 'negative -C works');
 ok(unlink($f), 'unlink tmp file');
+
+{
+    ok(open(F, ">", $tmpfile), 'can create temp file');
+    close F;
+    chmod 0077, $tmpfile;
+    my @a = stat($tmpfile);
+    my $s1 = -s _;
+    -T _;
+    my $s2 = -s _;
+    is($s1, $s2, q(-T _ doesn't break the statbuffer));
+    unlink $file;
+}
 
 END {
     1 while unlink $tmpfile;

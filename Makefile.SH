@@ -20,6 +20,10 @@ esac
 # #22227 $baserev
 # #22302 $yacc $byacc
 
+# H.Merijn Brand [30 Oct 2004]
+# Mentioned for the same reason for future reference
+# #23434 $d_strlcat $d_strlcpy
+
 : This forces SH files to create target in same directory as SH file.
 : This is so that make depend always knows where to find SH derivatives.
 case "$0" in
@@ -71,6 +75,10 @@ true)
 		;;
 	netbsd*|freebsd[234]*|openbsd*)
 		linklibperl="-L. -lperl"
+		;;
+	interix*)
+		linklibperl="-L. -lperl"
+		shrpldflags="$shrpldflags -Wl,--image-base,0x57000000"
 		;;
 	aix*)
 		shrpldflags="-H512 -T512 -bhalt:4 -bM:SRE -bE:perl.exp"
@@ -307,7 +315,8 @@ CCCMD    = `sh $(shellflags) cflags "optimize='$(OPTIMIZE)'" $@`
 
 CCCMDSRC = `sh $(shellflags) cflags "optimize='$(OPTIMIZE)'" $<`
 
-private = preplibrary lib/Config.pm lib/ExtUtils/Miniperl.pm
+CONFIGPM = lib/Config.pm lib/Config_heavy.pl
+private = preplibrary $(CONFIGPM) lib/ExtUtils/Miniperl.pm
 
 # Files to be built with variable substitution before miniperl
 # is available.
@@ -380,10 +389,10 @@ compile: all
 	cd x2p; $(MAKE) compile;
 	cd pod; $(MAKE) compile;
 
-translators:	miniperl$(EXE_EXT) lib/Config.pm FORCE
+translators:	miniperl$(EXE_EXT) $(CONFIGPM) FORCE
 	@echo " "; echo "	Making x2p stuff"; cd x2p; $(LDLIBPTH) $(MAKE) all
 
-utilities:	miniperl$(EXE_EXT) lib/Config.pm $(plextract) lib/lib.pm FORCE
+utilities:	miniperl$(EXE_EXT) $(CONFIGPM) $(plextract) lib/lib.pm FORCE
 	@echo " "; echo "	Making utilities"; cd utils; $(LDLIBPTH) $(MAKE) all
 
 
@@ -555,7 +564,7 @@ $(LIBPERL): $& perl$(OBJ_EXT) $(obj) $(LIBPERLEXPORT)
 !NO!SUBS!
 
 	case "${osname}${osvers}" in
-	aix*)
+	aix*|beos*)
 		$spitshell >>Makefile <<'!NO!SUBS!'
 miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 	$(CC) -o miniperl $(CLDFLAGS) \
@@ -564,7 +573,7 @@ miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
-	beos*|next4*)
+	next4*)
 		$spitshell >>Makefile <<'!NO!SUBS!'
 miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 	$(CC) -o miniperl `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
@@ -736,7 +745,7 @@ sperl$(OBJ_EXT): perl.c $(h)
 # We need to autosplit in two steps because VOS can't handle so many args
 #
 .PHONY: preplibrary
-preplibrary: miniperl$(EXE_EXT) lib/Config.pm lib/lib.pm $(PREPLIBRARY_LIBPERL)
+preplibrary: miniperl$(EXE_EXT) $(CONFIGPM) lib/lib.pm $(PREPLIBRARY_LIBPERL)
 	@sh ./makedir lib/auto
 	@echo "	AutoSplitting perl library"
 	$(LDLIBPTH) ./miniperl -Ilib -e 'use AutoSplit; \
@@ -748,11 +757,11 @@ preplibrary: miniperl$(EXE_EXT) lib/Config.pm lib/lib.pm $(PREPLIBRARY_LIBPERL)
 # Take care to avoid modifying lib/Config.pm without reason
 # (If trying to create a new port and having problems with the configpm script,
 # try 'make minitest' and/or commenting out the tests at the end of configpm.)
-lib/Config.pm: config.sh miniperl$(EXE_EXT) configpm Porting/Glossary
-	$(LDLIBPTH) ./miniperl -Ilib configpm configpm.tmp
-	sh mv-if-diff configpm.tmp $@
+$(CONFIGPM): config.sh miniperl$(EXE_EXT) configpm Porting/Glossary
+	$(LDLIBPTH) ./miniperl -Ilib configpm --heavy=lib/Config_heavy.pl configpm.tmp
+	sh mv-if-diff configpm.tmp lib/Config.pm
 
-lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl$(EXE_EXT) minimod.pl lib/Config.pm
+lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl$(EXE_EXT) minimod.pl $(CONFIGPM)
 	$(LDLIBPTH) ./miniperl minimod.pl > minimod.tmp
 	sh mv-if-diff minimod.tmp $@
 	-touch lib/ExtUtils/Miniperl.pm
@@ -760,18 +769,18 @@ lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl$(EXE_EXT) minimod.pl lib/Confi
 lib/re.pm: ext/re/re.pm
 	cp ext/re/re.pm ext/re/re.tmp && sh mv-if-diff ext/re/re.tmp lib/re.pm
 
-$(plextract):	miniperl$(EXE_EXT) lib/Config.pm x2p/s2p
+$(plextract):	miniperl$(EXE_EXT) $(CONFIGPM) x2p/s2p
 	@-rm -f $@
-	$(LDLIBPTH) ./miniperl -Ilib $@.PL
+	$(LDLIBPTH) ./miniperl -I`pwd`/lib $@.PL
 
-x2p/s2p: miniperl$(EXE_EXT) lib/Config.pm x2p/s2p.PL
+x2p/s2p: miniperl$(EXE_EXT) $(CONFIGPM) x2p/s2p.PL
 	cd x2p; $(LDLIBPTH) $(MAKE) s2p
 
-lib/lib.pm:	miniperl$(EXE_EXT) lib/Config.pm
+lib/lib.pm:	miniperl$(EXE_EXT) $(CONFIGPM)
 	@-rm -f $@
 	$(LDLIBPTH) ./miniperl -Ilib lib/lib_pm.PL
 
-$(unidatafiles): miniperl$(EXE_EXT) lib/Config.pm lib/unicore/mktables
+$(unidatafiles): miniperl$(EXE_EXT) $(CONFIGPM) lib/unicore/mktables
 	cd lib/unicore && $(LDLIBPTH) ../../miniperl -I../../lib mktables -w
 
 extra.pods: miniperl$(EXE_EXT)
@@ -785,7 +794,7 @@ extra.pods: miniperl$(EXE_EXT)
 	-@rm -f pod/perlvms.pod
 	-@test -f vms/perlvms.pod && cd pod && $(LNS) ../vms/perlvms.pod perlvms.pod && cd .. && echo "pod/perlvms.pod" >> extra.pods
 	-@rm -f pod/perldelta.pod
-	-@test -f pod/perl586delta.pod && cd pod && $(LNS) perl586delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods # See buildtoc
+	-@test -f pod/perl587delta.pod && cd pod && $(LNS) perl587delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods # See buildtoc
 
 extras.make: perl$(EXE_EXT)
 	-@test -s extras.lst && PATH="`pwd`:${PATH}" PERL5LIB="`pwd`/lib" $(LDLIBPTH) ./perl -Ilib -MCPAN -e '@ARGV&&make(@ARGV)' `cat extras.lst`
@@ -1032,8 +1041,8 @@ _cleaner2:
 	rm -rf .config
 	rm -f preload
 	rm -f testcompile compilelog
-	-rmdir lib/B lib/Data lib/Digest
 	rm -rf lib/Encode
+	-rmdir lib/B lib/Data
 	-rmdir lib/Filter/Util lib/IO/Socket lib/IO
 	-rmdir lib/List lib/MIME lib/Scalar lib/Sys 
 	-rmdir lib/threads lib/XS

@@ -883,11 +883,24 @@ Found in file gv.c
 =item gv_stashpv
 
 Returns a pointer to the stash for a specified package.  C<name> should
-be a valid UTF-8 string.  If C<create> is set then the package will be
+be a valid UTF-8 string and must be null-terminated.  If C<create> is set
+then the package will be created if it does not already exist.  If C<create>
+is not set and the package does not exist then NULL is returned.
+
+	HV*	gv_stashpv(const char* name, I32 create)
+
+=for hackers
+Found in file gv.c
+
+=item gv_stashpvn
+
+Returns a pointer to the stash for a specified package.  C<name> should
+be a valid UTF-8 string.  The C<namelen> parameter indicates the length of
+the C<name>, in bytes.  If C<create> is set then the package will be
 created if it does not already exist.  If C<create> is not set and the
 package does not exist then NULL is returned.
 
-	HV*	gv_stashpv(const char* name, I32 create)
+	HV*	gv_stashpvn(const char* name, U32 namelen, I32 create)
 
 =for hackers
 Found in file gv.c
@@ -1673,6 +1686,16 @@ A version of C<savepv()> which allocates the duplicate string in memory
 which is shared between threads.
 
 	char*	savesharedpv(const char* pv)
+
+=for hackers
+Found in file util.c
+
+=item savesvpv
+
+A version of C<savepv()>/C<savepvn()> which gets the string to duplicate from
+the passed in SV using C<SvPV()>
+
+	char*	savesvpv(SV* sv)
 
 =for hackers
 Found in file util.c
@@ -3005,22 +3028,22 @@ version which guarantees to evaluate sv only once.
 =for hackers
 Found in file sv.h
 
-=item SvIVx
-
-Coerces the given SV to an integer and returns it. Guarantees to evaluate
-sv only once. Use the more efficient C<SvIV> otherwise.
-
-	IV	SvIVx(SV* sv)
-
-=for hackers
-Found in file sv.h
-
 =item SvIVX
 
 Returns the raw value in the SV's IV slot, without checks or conversions.
 Only use when you are sure SvIOK is true. See also C<SvIV()>.
 
 	IV	SvIVX(SV* sv)
+
+=for hackers
+Found in file sv.h
+
+=item SvIVx
+
+Coerces the given SV to an integer and returns it. Guarantees to evaluate
+sv only once. Use the more efficient C<SvIV> otherwise.
+
+	IV	SvIVx(SV* sv)
 
 =for hackers
 Found in file sv.h
@@ -3120,22 +3143,22 @@ which guarantees to evaluate sv only once.
 =for hackers
 Found in file sv.h
 
-=item SvNVx
-
-Coerces the given SV to a double and returns it. Guarantees to evaluate
-sv only once. Use the more efficient C<SvNV> otherwise.
-
-	NV	SvNVx(SV* sv)
-
-=for hackers
-Found in file sv.h
-
 =item SvNVX
 
 Returns the raw value in the SV's NV slot, without checks or conversions.
 Only use when you are sure SvNOK is true. See also C<SvNV()>.
 
 	NV	SvNVX(SV* sv)
+
+=for hackers
+Found in file sv.h
+
+=item SvNVx
+
+Coerces the given SV to a double and returns it. Guarantees to evaluate
+sv only once. Use the more efficient C<SvNV> otherwise.
+
+	NV	SvNVx(SV* sv)
 
 =for hackers
 Found in file sv.h
@@ -3330,21 +3353,21 @@ Like C<SvPV_nolen>, but converts sv to utf8 first if necessary.
 =for hackers
 Found in file sv.h
 
-=item SvPVx
-
-A version of C<SvPV> which guarantees to evaluate sv only once.
-
-	char*	SvPVx(SV* sv, STRLEN len)
-
-=for hackers
-Found in file sv.h
-
 =item SvPVX
 
 Returns a pointer to the physical string in the SV.  The SV must contain a
 string.
 
 	char*	SvPVX(SV* sv)
+
+=for hackers
+Found in file sv.h
+
+=item SvPVx
+
+A version of C<SvPV> which guarantees to evaluate sv only once.
+
+	char*	SvPVx(SV* sv, STRLEN len)
 
 =for hackers
 Found in file sv.h
@@ -3572,22 +3595,22 @@ for a version which guarantees to evaluate sv only once.
 =for hackers
 Found in file sv.h
 
-=item SvUVx
-
-Coerces the given SV to an unsigned integer and returns it. Guarantees to
-evaluate sv only once. Use the more efficient C<SvUV> otherwise.
-
-	UV	SvUVx(SV* sv)
-
-=for hackers
-Found in file sv.h
-
 =item SvUVX
 
 Returns the raw value in the SV's UV slot, without checks or conversions.
 Only use when you are sure SvIOK is true. See also C<SvUV()>.
 
 	UV	SvUVX(SV* sv)
+
+=for hackers
+Found in file sv.h
+
+=item SvUVx
+
+Coerces the given SV to an unsigned integer and returns it. Guarantees to
+evaluate sv only once. Use the more efficient C<SvUV> otherwise.
+
+	UV	SvUVx(SV* sv)
 
 =for hackers
 Found in file sv.h
@@ -3778,7 +3801,8 @@ output to an SV.  If the appended data contains "wide" characters
 (including, but not limited to, SVs with a UTF-8 PV formatted with %s,
 and characters >255 formatted with %c), the original SV might get
 upgraded to UTF-8.  Handles 'get' magic, but not 'set' magic.  See
-C<sv_catpvf_mg>.
+C<sv_catpvf_mg>. If the original SV was UTF-8, the pattern should be
+valid UTF-8; if the original SV was bytes, the pattern should be too.
 
 	void	sv_catpvf(SV* sv, const char* pat, ...)
 
@@ -4137,6 +4161,9 @@ then adds a new magic item of type C<how> to the head of the magic list.
 See C<sv_magicext> (which C<sv_magic> now calls) for a description of the
 handling of the C<name> and C<namlen> arguments.
 
+You need to use C<sv_magicext> to add magic to SvREADONLY SVs and also
+to add more than one instance of the same 'how'.
+
 	void	sv_magic(SV* sv, SV* obj, int how, const char* name, I32 namlen)
 
 =for hackers
@@ -4158,7 +4185,7 @@ to contain an C<SV*> and is stored as-is with its REFCNT incremented.
 
 (This is now used as a subroutine by C<sv_magic>.)
 
-	MAGIC *	sv_magicext(SV* sv, SV* obj, int how, MGVTBL *vtbl, const char* name, I32 namlen	)
+	MAGIC *	sv_magicext(SV* sv, SV* obj, int how, MGVTBL *vtbl, const char* name, I32 namlen)
 
 =for hackers
 Found in file sv.c
@@ -5127,7 +5154,7 @@ Found in file utf8.c
 
 Convert the UTF-8 encoded character at p to its foldcase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_FOLD+1 bytes since the
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since the
 foldcase version may be longer than the original character (up to
 three characters).
 
@@ -5143,9 +5170,8 @@ Found in file utf8.c
 
 Convert the UTF-8 encoded character at p to its lowercase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_UCLC+1 bytes since the
-lowercase version may be longer than the original character (up to two
-characters).
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since the
+lowercase version may be longer than the original character.
 
 The first character of the lowercased version is returned
 (but note, as explained above, that there may be more.)
@@ -5159,9 +5185,8 @@ Found in file utf8.c
 
 Convert the UTF-8 encoded character at p to its titlecase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_UCLC+1 bytes since the
-titlecase version may be longer than the original character (up to two
-characters).
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since the
+titlecase version may be longer than the original character.
 
 The first character of the titlecased version is returned
 (but note, as explained above, that there may be more.)
@@ -5175,9 +5200,8 @@ Found in file utf8.c
 
 Convert the UTF-8 encoded character at p to its uppercase version and
 store that in UTF-8 in ustrp and its length in bytes in lenp.  Note
-that the ustrp needs to be at least UTF8_MAXLEN_UCLC+1 bytes since the
-uppercase version may be longer than the original character (up to two
-characters).
+that the ustrp needs to be at least UTF8_MAXBYTES_CASE+1 bytes since
+the uppercase version may be longer than the original character.
 
 The first character of the uppercased version is returned
 (but note, as explained above, that there may be more.)
@@ -5312,7 +5336,7 @@ Found in file utf8.c
 =item uvchr_to_utf8
 
 Adds the UTF-8 representation of the Native codepoint C<uv> to the end
-of the string C<d>; C<d> should be have at least C<UTF8_MAXLEN+1> free
+of the string C<d>; C<d> should be have at least C<UTF8_MAXBYTES+1> free
 bytes available. The return value is the pointer to the byte after the
 end of the new character. In other words,
 
@@ -5330,7 +5354,7 @@ Found in file utf8.c
 =item uvuni_to_utf8_flags
 
 Adds the UTF-8 representation of the Unicode codepoint C<uv> to the end
-of the string C<d>; C<d> should be have at least C<UTF8_MAXLEN+1> free
+of the string C<d>; C<d> should be have at least C<UTF8_MAXBYTES+1> free
 bytes available. The return value is the pointer to the byte after the
 end of the new character. In other words,
 

@@ -19,7 +19,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          CVf_METHOD CVf_LOCKED CVf_LVALUE CVf_ASSERTION
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE PMf_SKIPWHITE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = 0.69;
+$VERSION = 0.70;
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -2366,6 +2366,8 @@ sub mapop {
 
 sub pp_mapwhile { mapop(@_, "map") }
 sub pp_grepwhile { mapop(@_, "grep") }
+sub pp_mapstart { baseop(@_, "map") }
+sub pp_grepstart { baseop(@_, "grep") }
 
 sub pp_list {
     my $self = shift;
@@ -3962,6 +3964,18 @@ sub regcomp {
     my $kid = $op->first;
     $kid = $kid->first if $kid->name eq "regcmaybe";
     $kid = $kid->first if $kid->name eq "regcreset";
+    if ($kid->name eq "null" and !null($kid->first)
+	and $kid->first->name eq 'pushmark')
+    {
+	my $str = '';
+	$kid = $kid->first->sibling;
+	while (!null($kid)) {
+	    $str .= $self->re_dq($kid, $extended);
+	    $kid = $kid->sibling;
+	}
+	return $str, 1;
+    }
+
     return ($self->re_dq($kid, $extended), 1) if $self->pure_string($kid);
     return ($self->deparse($kid, $cx), 0);
 }

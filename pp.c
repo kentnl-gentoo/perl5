@@ -1,7 +1,7 @@
 /*    pp.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -564,50 +564,55 @@ PP(pp_gelem)
     gv = (GV*)POPs;
     tmpRef = Nullsv;
     sv = Nullsv;
-    switch (elem ? *elem : '\0')
-    {
-    case 'A':
-	if (strEQ(elem, "ARRAY"))
-	    tmpRef = (SV*)GvAV(gv);
-	break;
-    case 'C':
-	if (strEQ(elem, "CODE"))
-	    tmpRef = (SV*)GvCVu(gv);
-	break;
-    case 'F':
-	if (strEQ(elem, "FILEHANDLE")) {
-	    /* finally deprecated in 5.8.0 */
-	    deprecate("*glob{FILEHANDLE}");
-	    tmpRef = (SV*)GvIOp(gv);
+    if (elem) {
+	/* elem will always be NUL terminated.  */
+	const char *elem2 = elem + 1;
+	switch (*elem) {
+	case 'A':
+	    if (strEQ(elem2, "RRAY"))
+		tmpRef = (SV*)GvAV(gv);
+	    break;
+	case 'C':
+	    if (strEQ(elem2, "ODE"))
+		tmpRef = (SV*)GvCVu(gv);
+	    break;
+	case 'F':
+	    if (strEQ(elem2, "ILEHANDLE")) {
+		/* finally deprecated in 5.8.0 */
+		deprecate("*glob{FILEHANDLE}");
+		tmpRef = (SV*)GvIOp(gv);
+	    }
+	    else
+		if (strEQ(elem2, "ORMAT"))
+		    tmpRef = (SV*)GvFORM(gv);
+	    break;
+	case 'G':
+	    if (strEQ(elem2, "LOB"))
+		tmpRef = (SV*)gv;
+	    break;
+	case 'H':
+	    if (strEQ(elem2, "ASH"))
+		tmpRef = (SV*)GvHV(gv);
+	    break;
+	case 'I':
+	    if (*elem2 == 'O' && !elem[2])
+		tmpRef = (SV*)GvIOp(gv);
+	    break;
+	case 'N':
+	    if (strEQ(elem2, "AME"))
+		sv = newSVpvn(GvNAME(gv), GvNAMELEN(gv));
+	    break;
+	case 'P':
+	    if (strEQ(elem2, "ACKAGE")) {
+		char *name = HvNAME(GvSTASH(gv));
+		sv = newSVpv(name ? name : "__ANON__", 0);
+	    }
+	    break;
+	case 'S':
+	    if (strEQ(elem2, "CALAR"))
+		tmpRef = GvSV(gv);
+	    break;
 	}
-	else
-	if (strEQ(elem, "FORMAT"))
-	    tmpRef = (SV*)GvFORM(gv);
-	break;
-    case 'G':
-	if (strEQ(elem, "GLOB"))
-	    tmpRef = (SV*)gv;
-	break;
-    case 'H':
-	if (strEQ(elem, "HASH"))
-	    tmpRef = (SV*)GvHV(gv);
-	break;
-    case 'I':
-	if (strEQ(elem, "IO"))
-	    tmpRef = (SV*)GvIOp(gv);
-	break;
-    case 'N':
-	if (strEQ(elem, "NAME"))
-	    sv = newSVpvn(GvNAME(gv), GvNAMELEN(gv));
-	break;
-    case 'P':
-	if (strEQ(elem, "PACKAGE"))
-	    sv = newSVpv(HvNAME(GvSTASH(gv)), 0);
-	break;
-    case 'S':
-	if (strEQ(elem, "SCALAR"))
-	    tmpRef = GvSV(gv);
-	break;
     }
     if (tmpRef)
 	sv = newRV(tmpRef);
@@ -1489,11 +1494,11 @@ PP(pp_repeat)
 	    if (count < 1)
 		SvCUR_set(TARG, 0);
 	    else {
-		IV max = count * len;
+		STRLEN max = (UV)count * len;
 		if (len > ((MEM_SIZE)~0)/count)
 		     Perl_croak(aTHX_ oom_string_extend);
 	        MEM_WRAP_CHECK_1(max, char, oom_string_extend);
-		SvGROW(TARG, (count * len) + 1);
+		SvGROW(TARG, max + 1);
 		repeatcpy(SvPVX(TARG) + len, SvPVX(TARG), len, count - 1);
 		SvCUR(TARG) *= count;
 	    }
@@ -3183,12 +3188,15 @@ PP(pp_index)
     dSP; dTARGET;
     SV *big;
     SV *little;
+    SV *temp = Nullsv;
     I32 offset;
     I32 retval;
     char *tmps;
     char *tmps2;
     STRLEN biglen;
     I32 arybase = PL_curcop->cop_arybase;
+    int big_utf8;
+    int little_utf8;
 
     if (MAXARG < 3)
 	offset = 0;
@@ -3196,9 +3204,31 @@ PP(pp_index)
 	offset = POPi - arybase;
     little = POPs;
     big = POPs;
-    tmps = SvPV(big, biglen);
-    if (offset > 0 && DO_UTF8(big))
+    big_utf8 = DO_UTF8(big);
+    little_utf8 = DO_UTF8(little);
+    if (big_utf8 ^ little_utf8) {
+	/* One needs to be upgraded.  */
+	SV *bytes = little_utf8 ? big : little;
+	STRLEN len;
+	char *p = SvPV(bytes, len);
+
+	temp = newSVpvn(p, len);
+
+	if (PL_encoding) {
+	    sv_recode_to_utf8(temp, PL_encoding);
+	} else {
+	    sv_utf8_upgrade(temp);
+	}
+	if (little_utf8) {
+	    big = temp;
+	    big_utf8 = TRUE;
+	} else {
+	    little = temp;
+	}
+    }
+    if (big_utf8 && offset > 0)
 	sv_pos_u2b(big, &offset, 0);
+    tmps = SvPV(big, biglen);
     if (offset < 0)
 	offset = 0;
     else if (offset > (I32)biglen)
@@ -3208,8 +3238,10 @@ PP(pp_index)
 	retval = -1;
     else
 	retval = tmps2 - tmps;
-    if (retval > 0 && DO_UTF8(big))
+    if (retval > 0 && big_utf8)
 	sv_pos_b2u(big, &retval);
+    if (temp)
+	SvREFCNT_dec(temp);
     PUSHi(retval + arybase);
     RETURN;
 }
@@ -3219,6 +3251,7 @@ PP(pp_rindex)
     dSP; dTARGET;
     SV *big;
     SV *little;
+    SV *temp = Nullsv;
     STRLEN blen;
     STRLEN llen;
     I32 offset;
@@ -3226,17 +3259,42 @@ PP(pp_rindex)
     char *tmps;
     char *tmps2;
     I32 arybase = PL_curcop->cop_arybase;
+    int big_utf8;
+    int little_utf8;
 
     if (MAXARG >= 3)
 	offset = POPi;
     little = POPs;
     big = POPs;
+    big_utf8 = DO_UTF8(big);
+    little_utf8 = DO_UTF8(little);
+    if (big_utf8 ^ little_utf8) {
+	/* One needs to be upgraded.  */
+	SV *bytes = little_utf8 ? big : little;
+	STRLEN len;
+	char *p = SvPV(bytes, len);
+
+	temp = newSVpvn(p, len);
+
+	if (PL_encoding) {
+	    sv_recode_to_utf8(temp, PL_encoding);
+	} else {
+	    sv_utf8_upgrade(temp);
+	}
+	if (little_utf8) {
+	    big = temp;
+	    big_utf8 = TRUE;
+	} else {
+	    little = temp;
+	}
+    }
     tmps2 = SvPV(little, llen);
     tmps = SvPV(big, blen);
+
     if (MAXARG < 3)
 	offset = blen;
     else {
-	if (offset > 0 && DO_UTF8(big))
+	if (offset > 0 && big_utf8)
 	    sv_pos_u2b(big, &offset, 0);
 	offset = offset - arybase + llen;
     }
@@ -3249,8 +3307,10 @@ PP(pp_rindex)
 	retval = -1;
     else
 	retval = tmps2 - tmps;
-    if (retval > 0 && DO_UTF8(big))
+    if (retval > 0 && big_utf8)
 	sv_pos_b2u(big, &retval);
+    if (temp)
+	SvREFCNT_dec(temp);
     PUSHi(retval + arybase);
     RETURN;
 }
@@ -3282,7 +3342,7 @@ PP(pp_ord)
     }
 
     XPUSHu(DO_UTF8(argsv) ?
-	   utf8n_to_uvchr(s, UTF8_MAXLEN, 0, UTF8_ALLOW_ANYUV) :
+	   utf8n_to_uvchr(s, UTF8_MAXBYTES, 0, UTF8_ALLOW_ANYUV) :
 	   (*s & 0xff));
 
     RETURN;
@@ -3392,7 +3452,7 @@ PP(pp_ucfirst)
     if (DO_UTF8(sv) &&
 	(s = (U8*)SvPV_nomg(sv, slen)) && slen &&
 	UTF8_IS_START(*s)) {
-	U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+	U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
 	STRLEN ulen;
 	STRLEN tculen;
 
@@ -3455,7 +3515,7 @@ PP(pp_lcfirst)
 	(s = (U8*)SvPV_nomg(sv, slen)) && slen &&
 	UTF8_IS_START(*s)) {
 	STRLEN ulen;
-	U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+	U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
 	U8 *tend;
 	UV uv;
 
@@ -3512,7 +3572,7 @@ PP(pp_uc)
 	STRLEN ulen;
 	register U8 *d;
 	U8 *send;
-	U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+	U8 tmpbuf[UTF8_MAXBYTES+1];
 
 	s = (U8*)SvPV_nomg(sv,len);
 	if (!len) {
@@ -3521,18 +3581,32 @@ PP(pp_uc)
 	    SETs(TARG);
 	}
 	else {
-	    STRLEN nchar = utf8_length(s, s + len);
+	    STRLEN min = len + 1;
 
 	    (void)SvUPGRADE(TARG, SVt_PV);
-	    SvGROW(TARG, (nchar * UTF8_MAXLEN_UCLC) + 1);
+	    SvGROW(TARG, min);
 	    (void)SvPOK_only(TARG);
 	    d = (U8*)SvPVX(TARG);
 	    send = s + len;
 	    while (s < send) {
+		STRLEN u = UTF8SKIP(s);
+
 		toUPPER_utf8(s, tmpbuf, &ulen);
+		if (ulen > u && (SvLEN(TARG) < (min += ulen - u))) {
+		    /* If the eventually required minimum size outgrows
+		     * the available space, we need to grow. */
+		    UV o = d - (U8*)SvPVX(TARG);
+
+		    /* If someone uppercases one million U+03B0s we
+		     * SvGROW() one million times.  Or we could try
+		     * guessing how much to allocate without allocating
+		     * too much. Such is life. */
+		    SvGROW(TARG, min);
+		    d = (U8*)SvPVX(TARG) + o;
+		}
 		Copy(tmpbuf, d, ulen, U8);
 		d += ulen;
-		s += UTF8SKIP(s);
+		s += u;
 	    }
 	    *d = '\0';
 	    SvUTF8_on(TARG);
@@ -3581,7 +3655,7 @@ PP(pp_lc)
 	STRLEN ulen;
 	register U8 *d;
 	U8 *send;
-	U8 tmpbuf[UTF8_MAXLEN_UCLC+1];
+	U8 tmpbuf[UTF8_MAXBYTES_CASE+1];
 
 	s = (U8*)SvPV_nomg(sv,len);
 	if (!len) {
@@ -3590,16 +3664,18 @@ PP(pp_lc)
 	    SETs(TARG);
 	}
 	else {
-	    STRLEN nchar = utf8_length(s, s + len);
+	    STRLEN min = len + 1;
 
 	    (void)SvUPGRADE(TARG, SVt_PV);
-	    SvGROW(TARG, (nchar * UTF8_MAXLEN_UCLC) + 1);
+	    SvGROW(TARG, min);
 	    (void)SvPOK_only(TARG);
 	    d = (U8*)SvPVX(TARG);
 	    send = s + len;
 	    while (s < send) {
+		STRLEN u = UTF8SKIP(s);
 		UV uv = toLOWER_utf8(s, tmpbuf, &ulen);
-#define GREEK_CAPITAL_LETTER_SIGMA 0x03A3 /* Unicode */
+
+#define GREEK_CAPITAL_LETTER_SIGMA 0x03A3 /* Unicode U+03A3 */
 		if (uv == GREEK_CAPITAL_LETTER_SIGMA) {
 		     /*
 		      * Now if the sigma is NOT followed by
@@ -3613,12 +3689,26 @@ PP(pp_lc)
 		      * then it should be mapped to 0x03C2,
 		      * (GREEK SMALL LETTER FINAL SIGMA),
 		      * instead of staying 0x03A3.
-		      * See lib/unicore/SpecCase.txt.
+		      * "should be": in other words,
+		      * this is not implemented yet.
+		      * See lib/unicore/SpecialCasing.txt.
 		      */
+		}
+		if (ulen > u && (SvLEN(TARG) < (min += ulen - u))) {
+		    /* If the eventually required minimum size outgrows
+		     * the available space, we need to grow. */
+		    UV o = d - (U8*)SvPVX(TARG);
+
+		    /* If someone lowercases one million U+0130s we
+		     * SvGROW() one million times.  Or we could try
+		     * guessing how much to allocate without allocating.
+		     * too much.  Such is life. */
+		    SvGROW(TARG, min);
+		    d = (U8*)SvPVX(TARG) + o;
 		}
 		Copy(tmpbuf, d, ulen, U8);
 		d += ulen;
-		s += UTF8SKIP(s);
+		s += u;
 	    }
 	    *d = '\0';
 	    SvUTF8_on(TARG);
@@ -4144,8 +4234,7 @@ PP(pp_splice)
     /* make new elements SVs now: avoid problems if they're from the array */
     for (dst = MARK, i = newlen; i; i--) {
         SV *h = *dst;
-	*dst = NEWSV(46, 0);
-	sv_setsv(*dst++, h);
+	*dst++ = newSVsv(h);
     }
 
     if (diff < 0) {				/* shrinking the area */
@@ -4353,8 +4442,7 @@ PP(pp_unshift)
     else {
 	av_unshift(ary, SP - MARK);
 	while (MARK < SP) {
-	    sv = NEWSV(27, 0);
-	    sv_setsv(sv, *++MARK);
+	    sv = newSVsv(*++MARK);
 	    (void)av_store(ary, i++, sv);
 	}
     }
@@ -4538,8 +4626,7 @@ PP(pp_split)
 	    if (m >= strend)
 		break;
 
-	    dstr = NEWSV(30, m-s);
-	    sv_setpvn(dstr, s, m-s);
+	    dstr = newSVpvn(s, m-s);
 	    if (make_mortal)
 		sv_2mortal(dstr);
 	    if (do_utf8)
@@ -4553,15 +4640,14 @@ PP(pp_split)
 		++s;
 	}
     }
-    else if (strEQ("^", rx->precomp)) {
+    else if (rx->precomp[0] == '^' && rx->precomp[1] == '\0') {
 	while (--limit) {
 	    /*SUPPRESS 530*/
 	    for (m = s; m < strend && *m != '\n'; m++) ;
 	    m++;
 	    if (m >= strend)
 		break;
-	    dstr = NEWSV(30, m-s);
-	    sv_setpvn(dstr, s, m-s);
+	    dstr = newSVpvn(s, m-s);
 	    if (make_mortal)
 		sv_2mortal(dstr);
 	    if (do_utf8)
@@ -4586,8 +4672,7 @@ PP(pp_split)
 		for (m = s; m < strend && *m != c; m++) ;
 		if (m >= strend)
 		    break;
-		dstr = NEWSV(30, m-s);
-		sv_setpvn(dstr, s, m-s);
+		dstr = newSVpvn(s, m-s);
 		if (make_mortal)
 		    sv_2mortal(dstr);
 		if (do_utf8)
@@ -4608,8 +4693,7 @@ PP(pp_split)
 			     csv, PL_multiline ? FBMrf_MULTILINE : 0)) )
 #endif
 	    {
-		dstr = NEWSV(31, m-s);
-		sv_setpvn(dstr, s, m-s);
+		dstr = newSVpvn(s, m-s);
 		if (make_mortal)
 		    sv_2mortal(dstr);
 		if (do_utf8)
@@ -4642,8 +4726,7 @@ PP(pp_split)
 		strend = s + (strend - m);
 	    }
 	    m = rx->startp[0] + orig;
-	    dstr = NEWSV(32, m-s);
-	    sv_setpvn(dstr, s, m-s);
+	    dstr = newSVpvn(s, m-s);
 	    if (make_mortal)
 		sv_2mortal(dstr);
 	    if (do_utf8)
@@ -4658,8 +4741,7 @@ PP(pp_split)
 		       parens that didn't match -- they should be set to
 		       undef, not the empty string */
 		    if (m >= orig && s >= orig) {
-			dstr = NEWSV(33, m-s);
-			sv_setpvn(dstr, s, m-s);
+			dstr = newSVpvn(s, m-s);
 		    }
 		    else
 			dstr = &PL_sv_undef;  /* undef, not "" */
@@ -4681,8 +4763,7 @@ PP(pp_split)
     /* keep field after final delim? */
     if (s < strend || (iters && origlimit)) {
         STRLEN l = strend - s;
-	dstr = NEWSV(34, l);
-	sv_setpvn(dstr, s, l);
+	dstr = newSVpvn(s, l);
 	if (make_mortal)
 	    sv_2mortal(dstr);
 	if (do_utf8)
@@ -4790,3 +4871,13 @@ PP(pp_threadsv)
     DIE(aTHX_ "tried to access per-thread data in non-threaded perl");
 #endif /* USE_5005THREADS */
 }
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

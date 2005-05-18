@@ -1,7 +1,7 @@
 /*    pp_sort.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -365,7 +365,7 @@ S_mergesortsv(pTHX_ gptr *base, size_t nmemb, SVCOMPARE_t cmp, U32 flags)
     gptr small[SMALLSORT];
     gptr *which[3];
     off_runs stack[60], *stackp;
-    SVCOMPARE_t savecmp;
+    SVCOMPARE_t savecmp = 0;
 
     if (nmemb <= 1) return;			/* sorted trivially */
 
@@ -1503,7 +1503,7 @@ PP(pp_sort)
     bool hasargs = FALSE;
     I32 is_xsub = 0;
     I32 sorting_av = 0;
-    U8 private = PL_op->op_private;
+    U8 priv = PL_op->op_private;
     U8 flags = PL_op->op_flags;
     void (*sortsvp)(pTHX_ SV **array, size_t nmemb, SVCOMPARE_t cmp)
       = Perl_sortsv;
@@ -1566,7 +1566,7 @@ PP(pp_sort)
     /* optimiser converts "@a = sort @a" to "sort \@a";
      * in case of tied @a, pessimise: push (@a) onto stack, then assign
      * result back to @a at the end of this function */
-    if (private & OPpSORT_INPLACE) {
+    if (priv & OPpSORT_INPLACE) {
 	assert( MARK+1 == SP && *SP && SvTYPE(*SP) == SVt_PVAV);
 	(void)POPMARK; /* remove mark associated with ex-OP_AASSIGN */
 	av = (AV*)(*SP);
@@ -1574,7 +1574,7 @@ PP(pp_sort)
 	if (SvMAGICAL(av)) {
 	    MEXTEND(SP, max);
 	    p2 = SP;
-	    for (i=0; i < (U32)max; i++) {
+	    for (i=0; i < max; i++) {
 		SV **svp = av_fetch(av, i, FALSE);
 		*SP++ = (svp) ? *svp : Nullsv;
 	    }
@@ -1589,7 +1589,7 @@ PP(pp_sort)
 	max = SP - MARK;
    }
 
-    if (private & OPpSORT_DESCEND) {
+    if (priv & OPpSORT_DESCEND) {
 	sortsvp = S_sortsv_desc;
     }
 
@@ -1674,8 +1674,8 @@ PP(pp_sort)
 	    MEXTEND(SP, 20);	/* Can't afford stack realloc on signal. */
 	    start = sorting_av ? AvARRAY(av) : ORIGMARK+1;
 	    sortsvp(aTHX_ start, max,
-		    (private & OPpSORT_NUMERIC)
-			? ( (private & OPpSORT_INTEGER)
+		    (priv & OPpSORT_NUMERIC)
+			? ( (priv & OPpSORT_INTEGER)
 			    ? ( overloading ? amagic_i_ncmp : sv_i_ncmp)
 			    : ( overloading ? amagic_ncmp : sv_ncmp))
 			: ( IN_LOCALE_RUNTIME
@@ -1684,7 +1684,7 @@ PP(pp_sort)
 				: sv_cmp_locale_static)
 			    : ( overloading ? amagic_cmp : sv_cmp_static)));
 	}
-	if (private & OPpSORT_REVERSE) {
+	if (priv & OPpSORT_REVERSE) {
 	    SV **q = start+max-1;
 	    while (start < q) {
 		SV *tmp = *start;
@@ -1698,8 +1698,7 @@ PP(pp_sort)
 	SV *sv;
 	SV** base, **didstore;
 	for (base = ORIGMARK+1, i=0; i < max; i++) {
-	    sv = NEWSV(28,0);
-	    sv_setsv(sv, base[i]);
+	    sv = newSVsv(base[i]);
 	    base[i] = sv;
 	}
 	av_clear(av);
@@ -1928,3 +1927,13 @@ amagic_cmp_locale(pTHX_ register SV *str1, register SV *str2)
     }
     return sv_cmp_locale(str1, str2);
 }
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

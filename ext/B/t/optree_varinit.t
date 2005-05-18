@@ -1,14 +1,19 @@
 #!perl
 
 BEGIN {
-    chdir 't';
-    @INC = ('../lib', '../ext/B/t');
+    if ($ENV{PERL_CORE}){
+	chdir('t') if -d 't';
+	@INC = ('.', '../lib', '../ext/B/t');
+    } else {
+	unshift @INC, 't';
+	push @INC, "../../t";
+    }
     require Config;
     if (($Config::Config{'extensions'} !~ /\bB\b/) ){
         print "1..0 # Skip -- Perl configured without B module\n";
         exit 0;
     }
-    require './test.pl';
+    # require 'test.pl'; # now done by OptreeCheck
 }
 use OptreeCheck;
 use Config;
@@ -104,6 +109,7 @@ EONT_EONT
 
 checkOptree ( name	=> 'local $a',
 	      prog	=> 'local $a',
+	      errs      => ['Name "main::a" used only once: possible typo at -e line 1.'],
 	      bcopts	=> '-basic',
 	      expect	=> <<'EOT_EOT', expect_nt => <<'EONT_EONT');
 4  <@> leave[1 ref] vKP/REFC ->(end)
@@ -219,6 +225,7 @@ EONT_EONT
 
 checkOptree ( name	=> 'local $a=undef',
 	      prog	=> 'local $a=undef',
+	      errs      => ['Name "main::a" used only once: possible typo at -e line 1.'],
 	      note	=> 'locals are rare, probly not worth doing',
 	      bcopts	=> '-basic',
 	      expect	=> <<'EOT_EOT', expect_nt => <<'EONT_EONT');
@@ -333,6 +340,7 @@ EONT_EONT
 
 checkOptree ( name	=> 'local $a=()',
 	      prog	=> 'local $a=()',
+	      errs      => ['Name "main::a" used only once: possible typo at -e line 1.'],
               #todo	=> 'probly not worth doing',
 	      bcopts	=> '-exec',
 	      expect	=> <<'EOT_EOT', expect_nt => <<'EONT_EONT');

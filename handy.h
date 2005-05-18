@@ -1,7 +1,7 @@
 /*    handy.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999,
- *    2000, 2001, 2002, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -157,6 +157,11 @@ typedef U64TYPE U64;
 #           endif
 #       endif
 #   endif
+#endif
+
+/* HMB H.Merijn Brand - a placeholder for preparing Configure patches */
+#if defined(LIBM_LIB_VERSION)
+/* Not (yet) used at top level, but mention them for metaconfig */
 #endif
 
 /* Mention I8SIZE, U8SIZE, I16SIZE, U16SIZE, I32SIZE, U32SIZE,

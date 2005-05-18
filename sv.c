@@ -1,7 +1,7 @@
 /*    sv.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -311,9 +311,9 @@ S_more_sv(pTHX)
         PL_nice_chunk_size = 0;
     }
     else {
-	char *chunk;                /* must use New here to match call to */
-	New(704,chunk,1008,char);   /* Safefree() in sv_free_arenas()     */
-	sv_add_arena(chunk, 1008, 0);
+	char *chunk; /* must use New here to match call to Safefree()      */
+	New(704,chunk,PERL_ARENA_SIZE,char);   /*  in sv_free_arenas()     */
+	sv_add_arena(chunk, PERL_ARENA_SIZE, 0);
     }
     uproot_SV(sv);
     return sv;
@@ -588,6 +588,15 @@ Perl_sv_free_arenas(pTHX)
     PL_he_arenaroot = 0;
     PL_he_root = 0;
 
+#if defined(USE_ITHREADS)
+    for (arena = (XPV*)PL_pte_arenaroot; arena; arena = arenanext) {
+	arenanext = (XPV*)arena->xpv_pv;
+	Safefree(arena);
+    }
+    PL_pte_arenaroot = 0;
+    PL_pte_root = 0;
+#endif
+
     if (PL_nice_chunk)
 	Safefree(PL_nice_chunk);
     PL_nice_chunk = Nullch;
@@ -652,12 +661,12 @@ S_more_xiv(pTHX)
     register IV* xiv;
     register IV* xivend;
     XPV* ptr;
-    New(705, ptr, 1008/sizeof(XPV), XPV);
+    New(705, ptr, PERL_ARENA_SIZE/sizeof(XPV), XPV);
     ptr->xpv_pv = (char*)PL_xiv_arenaroot;	/* linked list of xiv arenas */
     PL_xiv_arenaroot = ptr;			/* to keep Purify happy */
 
     xiv = (IV*) ptr;
-    xivend = &xiv[1008 / sizeof(IV) - 1];
+    xivend = &xiv[PERL_ARENA_SIZE / sizeof(IV) - 1];
     xiv += (sizeof(XPV) - 1) / sizeof(IV) + 1;	/* fudge by size of XPV */
     PL_xiv_root = xiv;
     while (xiv < xivend) {
@@ -702,12 +711,12 @@ S_more_xnv(pTHX)
     register NV* xnv;
     register NV* xnvend;
     XPV *ptr;
-    New(711, ptr, 1008/sizeof(XPV), XPV);
+    New(711, ptr, PERL_ARENA_SIZE/sizeof(XPV), XPV);
     ptr->xpv_pv = (char*)PL_xnv_arenaroot;
     PL_xnv_arenaroot = ptr;
 
     xnv = (NV*) ptr;
-    xnvend = &xnv[1008 / sizeof(NV) - 1];
+    xnvend = &xnv[PERL_ARENA_SIZE / sizeof(NV) - 1];
     xnv += (sizeof(XPVIV) - 1) / sizeof(NV) + 1; /* fudge by sizeof XPVIV */
     PL_xnv_root = xnv;
     while (xnv < xnvend) {
@@ -751,12 +760,12 @@ S_more_xrv(pTHX)
     register XRV* xrv;
     register XRV* xrvend;
     XPV *ptr;
-    New(712, ptr, 1008/sizeof(XPV), XPV);
+    New(712, ptr, PERL_ARENA_SIZE/sizeof(XPV), XPV);
     ptr->xpv_pv = (char*)PL_xrv_arenaroot;
     PL_xrv_arenaroot = ptr;
 
     xrv = (XRV*) ptr;
-    xrvend = &xrv[1008 / sizeof(XRV) - 1];
+    xrvend = &xrv[PERL_ARENA_SIZE / sizeof(XRV) - 1];
     xrv += (sizeof(XPV) - 1) / sizeof(XRV) + 1;
     PL_xrv_root = xrv;
     while (xrv < xrvend) {
@@ -799,11 +808,11 @@ S_more_xpv(pTHX)
 {
     register XPV* xpv;
     register XPV* xpvend;
-    New(713, xpv, 1008/sizeof(XPV), XPV);
+    New(713, xpv, PERL_ARENA_SIZE/sizeof(XPV), XPV);
     xpv->xpv_pv = (char*)PL_xpv_arenaroot;
     PL_xpv_arenaroot = xpv;
 
-    xpvend = &xpv[1008 / sizeof(XPV) - 1];
+    xpvend = &xpv[PERL_ARENA_SIZE / sizeof(XPV) - 1];
     PL_xpv_root = ++xpv;
     while (xpv < xpvend) {
 	xpv->xpv_pv = (char*)(xpv + 1);
@@ -845,11 +854,11 @@ S_more_xpviv(pTHX)
 {
     register XPVIV* xpviv;
     register XPVIV* xpvivend;
-    New(714, xpviv, 1008/sizeof(XPVIV), XPVIV);
+    New(714, xpviv, PERL_ARENA_SIZE/sizeof(XPVIV), XPVIV);
     xpviv->xpv_pv = (char*)PL_xpviv_arenaroot;
     PL_xpviv_arenaroot = xpviv;
 
-    xpvivend = &xpviv[1008 / sizeof(XPVIV) - 1];
+    xpvivend = &xpviv[PERL_ARENA_SIZE / sizeof(XPVIV) - 1];
     PL_xpviv_root = ++xpviv;
     while (xpviv < xpvivend) {
 	xpviv->xpv_pv = (char*)(xpviv + 1);
@@ -891,11 +900,11 @@ S_more_xpvnv(pTHX)
 {
     register XPVNV* xpvnv;
     register XPVNV* xpvnvend;
-    New(715, xpvnv, 1008/sizeof(XPVNV), XPVNV);
+    New(715, xpvnv, PERL_ARENA_SIZE/sizeof(XPVNV), XPVNV);
     xpvnv->xpv_pv = (char*)PL_xpvnv_arenaroot;
     PL_xpvnv_arenaroot = xpvnv;
 
-    xpvnvend = &xpvnv[1008 / sizeof(XPVNV) - 1];
+    xpvnvend = &xpvnv[PERL_ARENA_SIZE / sizeof(XPVNV) - 1];
     PL_xpvnv_root = ++xpvnv;
     while (xpvnv < xpvnvend) {
 	xpvnv->xpv_pv = (char*)(xpvnv + 1);
@@ -937,11 +946,11 @@ S_more_xpvcv(pTHX)
 {
     register XPVCV* xpvcv;
     register XPVCV* xpvcvend;
-    New(716, xpvcv, 1008/sizeof(XPVCV), XPVCV);
+    New(716, xpvcv, PERL_ARENA_SIZE/sizeof(XPVCV), XPVCV);
     xpvcv->xpv_pv = (char*)PL_xpvcv_arenaroot;
     PL_xpvcv_arenaroot = xpvcv;
 
-    xpvcvend = &xpvcv[1008 / sizeof(XPVCV) - 1];
+    xpvcvend = &xpvcv[PERL_ARENA_SIZE / sizeof(XPVCV) - 1];
     PL_xpvcv_root = ++xpvcv;
     while (xpvcv < xpvcvend) {
 	xpvcv->xpv_pv = (char*)(xpvcv + 1);
@@ -983,11 +992,11 @@ S_more_xpvav(pTHX)
 {
     register XPVAV* xpvav;
     register XPVAV* xpvavend;
-    New(717, xpvav, 1008/sizeof(XPVAV), XPVAV);
+    New(717, xpvav, PERL_ARENA_SIZE/sizeof(XPVAV), XPVAV);
     xpvav->xav_array = (char*)PL_xpvav_arenaroot;
     PL_xpvav_arenaroot = xpvav;
 
-    xpvavend = &xpvav[1008 / sizeof(XPVAV) - 1];
+    xpvavend = &xpvav[PERL_ARENA_SIZE / sizeof(XPVAV) - 1];
     PL_xpvav_root = ++xpvav;
     while (xpvav < xpvavend) {
 	xpvav->xav_array = (char*)(xpvav + 1);
@@ -1029,11 +1038,11 @@ S_more_xpvhv(pTHX)
 {
     register XPVHV* xpvhv;
     register XPVHV* xpvhvend;
-    New(718, xpvhv, 1008/sizeof(XPVHV), XPVHV);
+    New(718, xpvhv, PERL_ARENA_SIZE/sizeof(XPVHV), XPVHV);
     xpvhv->xhv_array = (char*)PL_xpvhv_arenaroot;
     PL_xpvhv_arenaroot = xpvhv;
 
-    xpvhvend = &xpvhv[1008 / sizeof(XPVHV) - 1];
+    xpvhvend = &xpvhv[PERL_ARENA_SIZE / sizeof(XPVHV) - 1];
     PL_xpvhv_root = ++xpvhv;
     while (xpvhv < xpvhvend) {
 	xpvhv->xhv_array = (char*)(xpvhv + 1);
@@ -1075,11 +1084,11 @@ S_more_xpvmg(pTHX)
 {
     register XPVMG* xpvmg;
     register XPVMG* xpvmgend;
-    New(719, xpvmg, 1008/sizeof(XPVMG), XPVMG);
+    New(719, xpvmg, PERL_ARENA_SIZE/sizeof(XPVMG), XPVMG);
     xpvmg->xpv_pv = (char*)PL_xpvmg_arenaroot;
     PL_xpvmg_arenaroot = xpvmg;
 
-    xpvmgend = &xpvmg[1008 / sizeof(XPVMG) - 1];
+    xpvmgend = &xpvmg[PERL_ARENA_SIZE / sizeof(XPVMG) - 1];
     PL_xpvmg_root = ++xpvmg;
     while (xpvmg < xpvmgend) {
 	xpvmg->xpv_pv = (char*)(xpvmg + 1);
@@ -1121,11 +1130,11 @@ S_more_xpvlv(pTHX)
 {
     register XPVLV* xpvlv;
     register XPVLV* xpvlvend;
-    New(720, xpvlv, 1008/sizeof(XPVLV), XPVLV);
+    New(720, xpvlv, PERL_ARENA_SIZE/sizeof(XPVLV), XPVLV);
     xpvlv->xpv_pv = (char*)PL_xpvlv_arenaroot;
     PL_xpvlv_arenaroot = xpvlv;
 
-    xpvlvend = &xpvlv[1008 / sizeof(XPVLV) - 1];
+    xpvlvend = &xpvlv[PERL_ARENA_SIZE / sizeof(XPVLV) - 1];
     PL_xpvlv_root = ++xpvlv;
     while (xpvlv < xpvlvend) {
 	xpvlv->xpv_pv = (char*)(xpvlv + 1);
@@ -1167,11 +1176,11 @@ S_more_xpvbm(pTHX)
 {
     register XPVBM* xpvbm;
     register XPVBM* xpvbmend;
-    New(721, xpvbm, 1008/sizeof(XPVBM), XPVBM);
+    New(721, xpvbm, PERL_ARENA_SIZE/sizeof(XPVBM), XPVBM);
     xpvbm->xpv_pv = (char*)PL_xpvbm_arenaroot;
     PL_xpvbm_arenaroot = xpvbm;
 
-    xpvbmend = &xpvbm[1008 / sizeof(XPVBM) - 1];
+    xpvbmend = &xpvbm[PERL_ARENA_SIZE / sizeof(XPVBM) - 1];
     PL_xpvbm_root = ++xpvbm;
     while (xpvbm < xpvbmend) {
 	xpvbm->xpv_pv = (char*)(xpvbm + 1);
@@ -1284,13 +1293,13 @@ bool
 Perl_sv_upgrade(pTHX_ register SV *sv, U32 mt)
 {
 
-    char*	pv = NULL;
-    U32		cur = 0;
-    U32		len = 0;
-    IV		iv = 0;
-    NV		nv = 0.0;
-    MAGIC*	magic = NULL;
-    HV*		stash = Nullhv;
+    char*	pv;
+    U32		cur;
+    U32		len;
+    IV		iv;
+    NV		nv;
+    MAGIC*	magic;
+    HV*		stash;
 
     if (mt != SVt_PV && SvREADONLY(sv) && SvFAKE(sv)) {
 	sv_force_normal(sv);
@@ -1302,61 +1311,39 @@ Perl_sv_upgrade(pTHX_ register SV *sv, U32 mt)
     if (mt < SVt_PVIV)
 	(void)SvOOK_off(sv);
 
+    pv = NULL;
+    cur = 0;
+    len = 0;
+    iv = 0;
+    nv = 0.0;
+    magic = NULL;
+    stash = Nullhv;
+
     switch (SvTYPE(sv)) {
     case SVt_NULL:
-	pv	= 0;
-	cur	= 0;
-	len	= 0;
-	iv	= 0;
-	nv	= 0.0;
-	magic	= 0;
-	stash	= 0;
 	break;
     case SVt_IV:
-	pv	= 0;
-	cur	= 0;
-	len	= 0;
 	iv	= SvIVX(sv);
-	nv	= (NV)SvIVX(sv);
 	del_XIV(SvANY(sv));
-	magic	= 0;
-	stash	= 0;
 	if (mt == SVt_NV)
 	    mt = SVt_PVNV;
 	else if (mt < SVt_PVIV)
 	    mt = SVt_PVIV;
 	break;
     case SVt_NV:
-	pv	= 0;
-	cur	= 0;
-	len	= 0;
 	nv	= SvNVX(sv);
-	iv	= I_V(nv);
-	magic	= 0;
-	stash	= 0;
 	del_XNV(SvANY(sv));
-	SvANY(sv) = 0;
 	if (mt < SVt_PVNV)
 	    mt = SVt_PVNV;
 	break;
     case SVt_RV:
 	pv	= (char*)SvRV(sv);
-	cur	= 0;
-	len	= 0;
-	iv	= PTR2IV(pv);
-	nv	= PTR2NV(pv);
 	del_XRV(SvANY(sv));
-	magic	= 0;
-	stash	= 0;
 	break;
     case SVt_PV:
 	pv	= SvPVX(sv);
 	cur	= SvCUR(sv);
 	len	= SvLEN(sv);
-	iv	= 0;
-	nv	= 0.0;
-	magic	= 0;
-	stash	= 0;
 	del_XPV(SvANY(sv));
 	if (mt <= SVt_IV)
 	    mt = SVt_PVIV;
@@ -1368,9 +1355,6 @@ Perl_sv_upgrade(pTHX_ register SV *sv, U32 mt)
 	cur	= SvCUR(sv);
 	len	= SvLEN(sv);
 	iv	= SvIVX(sv);
-	nv	= 0.0;
-	magic	= 0;
-	stash	= 0;
 	del_XPVIV(SvANY(sv));
 	break;
     case SVt_PVNV:
@@ -1379,8 +1363,6 @@ Perl_sv_upgrade(pTHX_ register SV *sv, U32 mt)
 	len	= SvLEN(sv);
 	iv	= SvIVX(sv);
 	nv	= SvNVX(sv);
-	magic	= 0;
-	stash	= 0;
 	del_XPVNV(SvANY(sv));
 	break;
     case SVt_PVMG:
@@ -3127,17 +3109,12 @@ Perl_sv_2pv_flags(pTHX_ register SV *sv, STRLEN *lp, I32 flags)
 		}
 		tsv = NEWSV(0,0);
 		if (SvOBJECT(sv)) {
-                    HV *svs = SvSTASH(sv);
-		    Perl_sv_setpvf(
-                        aTHX_ tsv, "%s=%s",
-                        /* [20011101.072] This bandaid for C<package;>
-                           should eventually be removed. AMS 20011103 */
-                        (svs ? HvNAME(svs) : "<none>"), s
-                    );
-                }
+		    const char *name = HvNAME(SvSTASH(sv));
+		    Perl_sv_setpvf(aTHX_ tsv, "%s=%s(0x%"UVxf")",
+				   name ? name : "__ANON__" , s, PTR2UV(sv));
+		}
 		else
-		    sv_setpv(tsv, s);
-		Perl_sv_catpvf(aTHX_ tsv, "(0x%"UVxf")", PTR2UV(sv));
+		    Perl_sv_setpvf(aTHX_ tsv, "%s(0x%"UVxf")", s, PTR2UV(sv));
 		goto tokensaveref;
 	    }
 	    *lp = strlen(s);
@@ -4597,10 +4574,10 @@ Perl_sv_magicext(pTHX_ SV* sv, SV* obj, int how, MGVTBL *vtable,
     mg->mg_moremagic = SvMAGIC(sv);
     SvMAGIC(sv) = mg;
 
-    /* Some magic sontains a reference loop, where the sv and object refer to
-       each other.  To prevent a reference loop that would prevent such
-       objects being freed, we look for such loops and if we find one we
-       avoid incrementing the object refcount.
+    /* Sometimes a magic contains a reference loop, where the sv and
+       object refer to each other.  To prevent a reference loop that
+       would prevent such objects being freed, we look for such loops
+       and if we find one we avoid incrementing the object refcount.
 
        Note we cannot do this to avoid self-tie loops as intervening RV must
        have its REFCNT incremented to keep it in existence.
@@ -4661,6 +4638,9 @@ then adds a new magic item of type C<how> to the head of the magic list.
 
 See C<sv_magicext> (which C<sv_magic> now calls) for a description of the
 handling of the C<name> and C<namlen> arguments.
+
+You need to use C<sv_magicext> to add magic to SvREADONLY SVs and also
+to add more than one instance of the same 'how'.
 
 =cut
 */
@@ -5658,7 +5638,7 @@ Perl_sv_pos_u2b(pTHX_ register SV *sv, I32* offsetp, I32* lenp)
 	 if (lenp) {
 	      found = FALSE;
 	      start = s;
-              if (utf8_mg_pos(sv, &mg, &cache, 2, lenp, *lenp + *offsetp, &s, start, send)) {
+              if (utf8_mg_pos(sv, &mg, &cache, 2, lenp, *lenp, &s, start, send)) {
                   *lenp -= boffset;
                   found = TRUE;
               }
@@ -7068,13 +7048,10 @@ Perl_newSVsv(pTHX_ register SV *old)
 	return Nullsv;
     }
     new_SV(sv);
-    if (SvTEMP(old)) {
-	SvTEMP_off(old);
-	sv_setsv(sv,old);
-	SvTEMP_on(old);
-    }
-    else
-	sv_setsv(sv,old);
+    /* SV_GMAGIC is the default for sv_setv()
+       SV_NOSTEAL prevents TEMP buffers being, well, stolen, and saves games
+       with SvTEMP_off and SvTEMP_on round a call to sv_setsv.  */
+    sv_setsv_flags(sv, old, SV_GMAGIC | SV_NOSTEAL);
     return sv;
 }
 
@@ -7617,10 +7594,8 @@ char *
 Perl_sv_reftype(pTHX_ SV *sv, int ob)
 {
     if (ob && SvOBJECT(sv)) {
-        HV *svs = SvSTASH(sv);
-        /* [20011101.072] This bandaid for C<package;> should eventually
-           be removed. AMS 20011103 */
-        return (svs ? HvNAME(svs) : "<none>");
+	char *name = HvNAME(SvSTASH(sv));
+	return name ? name : "__ANON__";
     }
     else {
 	switch (SvTYPE(sv)) {
@@ -7700,6 +7675,8 @@ Perl_sv_isa(pTHX_ SV *sv, const char *name)
 	return 0;
     sv = (SV*)SvRV(sv);
     if (!SvOBJECT(sv))
+	return 0;
+    if (!HvNAME(SvSTASH(sv)))
 	return 0;
 
     return strEQ(HvNAME(SvSTASH(sv)), name);
@@ -8221,7 +8198,8 @@ output to an SV.  If the appended data contains "wide" characters
 (including, but not limited to, SVs with a UTF-8 PV formatted with %s,
 and characters >255 formatted with %c), the original SV might get
 upgraded to UTF-8.  Handles 'get' magic, but not 'set' magic.  See
-C<sv_catpvf_mg>.
+C<sv_catpvf_mg>. If the original SV was UTF-8, the pattern should be
+valid UTF-8; if the original SV was bytes, the pattern should be too.
 
 =cut */
 
@@ -8483,7 +8461,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 #endif
 
 	char esignbuf[4];
-	U8 utf8buf[UTF8_MAXLEN+1];
+	U8 utf8buf[UTF8_MAXBYTES+1];
 	STRLEN esignlen = 0;
 
 	char *eptr = Nullch;
@@ -8602,6 +8580,11 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		fill = *q++;
 	    EXPECT_NUMBER(q, width);
 
+#ifdef CHECK_FORMAT
+	if ((*q == 'p') && left) {
+            vectorize = (width == 1);
+	}
+#endif
 	if (vectorize) {
 	    if (vectorarg) {
 		if (args)
@@ -8781,6 +8764,9 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 	    goto string;
 
 	case '_':
+#ifdef CHECK_FORMAT
+	format_sv:
+#endif
 	    /*
 	     * The "%_" hack might have to be changed someday,
 	     * if ISO or ANSI decide to use '_' for something.
@@ -8802,6 +8788,21 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 	    /* INTEGERS */
 
 	case 'p':
+#ifdef CHECK_FORMAT
+	    if (left) {
+		left = FALSE;
+	        if (!width)
+		    goto format_sv;	/* %-p	-> %_	*/
+		if (vectorize) {
+		    width = 0;
+		    goto format_vd;	/* %-1p	-> %vd  */      
+		}
+		precis = width;
+		has_precis = TRUE;
+		width = 0;
+		goto format_sv;		/* %-Np	-> %.N_	*/	
+	    }
+#endif
 	    if (alt || vectorize)
 		goto unknown;
 	    uv = PTR2UV(args ? va_arg(*args, void*) : argsv);
@@ -8817,6 +8818,9 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 	    /* FALL THROUGH */
 	case 'd':
 	case 'i':
+#ifdef CHECK_FORMAT
+	format_vd:
+#endif
 	    if (vectorize) {
 		STRLEN ulen;
 		if (!veclen)
@@ -9451,7 +9455,9 @@ Perl_re_dup(pTHX_ REGEXP *r, CLONE_PARAMS *param)
 	    case 'o':
 		/* Compiled op trees are readonly, and can thus be
 		   shared without duplication. */
+		OP_REFCNT_LOCK;
 		d->data[i] = (void*)OpREFCNT_inc((OP*)r->data->data[i]);
+		OP_REFCNT_UNLOCK;
 		break;
 	    case 'n':
 		d->data[i] = r->data->data[i];
@@ -9641,6 +9647,46 @@ Perl_ptr_table_new(pTHX)
 #  define PTR_TABLE_HASH(ptr) (PTR2UV(ptr) >> 2)
 #endif
 
+
+
+STATIC void
+S_more_pte(pTHX)
+{
+    register struct ptr_tbl_ent* pte;
+    register struct ptr_tbl_ent* pteend;
+    XPV *ptr;
+    New(54, ptr, PERL_ARENA_SIZE/sizeof(XPV), XPV);
+    ptr->xpv_pv = (char*)PL_pte_arenaroot;
+    PL_pte_arenaroot = ptr;
+
+    pte = (struct ptr_tbl_ent*)ptr;
+    pteend = &pte[PERL_ARENA_SIZE / sizeof(struct ptr_tbl_ent) - 1];
+    PL_pte_root = ++pte;
+    while (pte < pteend) {
+	pte->next = pte + 1;
+	pte++;
+    }
+    pte->next = 0;
+}
+
+STATIC struct ptr_tbl_ent*
+S_new_pte(pTHX)
+{
+    struct ptr_tbl_ent* pte;
+    if (!PL_pte_root)
+	S_more_pte(aTHX);
+    pte = PL_pte_root;
+    PL_pte_root = pte->next;
+    return pte;
+}
+
+STATIC void
+S_del_pte(pTHX_ struct ptr_tbl_ent*p)
+{
+    p->next = PL_pte_root;
+    PL_pte_root = p;
+}
+
 /* map an existing pointer using a table */
 
 void *
@@ -9677,7 +9723,7 @@ Perl_ptr_table_store(pTHX_ PTR_TBL_t *tbl, void *oldv, void *newv)
 	    return;
 	}
     }
-    Newz(0, tblent, 1, PTR_TBL_ENT_t);
+    tblent = S_new_pte(aTHX);
     tblent->oldval = oldv;
     tblent->newval = newv;
     tblent->next = *otblent;
@@ -9742,7 +9788,7 @@ Perl_ptr_table_clear(pTHX_ PTR_TBL_t *tbl)
         if (entry) {
             oentry = entry;
             entry = entry->next;
-            Safefree(oentry);
+            S_del_pte(aTHX_ oentry);
         }
         if (!entry) {
             if (++riter > max) {
@@ -9914,6 +9960,13 @@ Perl_sv_dup(pTHX_ SV *sstr, CLONE_PARAMS* param)
 	PerlIO_printf(Perl_debug_log, "watch at %p hit, found string \"%s\"\n",
 		      PL_watch_pvx, SvPVX(sstr));
 #endif
+
+    /* don't clone objects whose class has asked us not to */
+    if (SvOBJECT(sstr) && ! (SvFLAGS(SvSTASH(sstr)) & SVphv_CLONEABLE)) {
+	SvFLAGS(dstr) &= ~SVTYPEMASK;
+	SvOBJECT_off(dstr);
+	return dstr;
+    }
 
     switch (SvTYPE(sstr)) {
     case SVt_NULL:
@@ -10153,7 +10206,9 @@ Perl_sv_dup(pTHX_ SV *sstr, CLONE_PARAMS* param)
 	Perl_rvpv_dup(aTHX_ dstr, sstr, param);
 	CvSTASH(dstr)	= hv_dup(CvSTASH(sstr), param); /* NOTE: not refcounted */
 	CvSTART(dstr)	= CvSTART(sstr);
+	OP_REFCNT_LOCK;
 	CvROOT(dstr)	= OpREFCNT_inc(CvROOT(sstr));
+	OP_REFCNT_UNLOCK;
 	CvXSUB(dstr)	= CvXSUB(sstr);
 	CvXSUBANY(dstr)	= CvXSUBANY(sstr);
 	if (CvCONST(sstr)) {
@@ -10618,6 +10673,40 @@ Perl_ss_dup(pTHX_ PerlInterpreter *proto_perl, CLONE_PARAMS* param)
     return nss;
 }
 
+
+/* if sv is a stash, call $class->CLONE_SKIP(), and set the SVphv_CLONEABLE
+ * flag to the result. This is done for each stash before cloning starts,
+ * so we know which stashes want their objects cloned */
+
+static void
+do_mark_cloneable_stash(pTHX_ SV *sv)
+{
+    if (HvNAME((HV*)sv)) {
+	GV* cloner = gv_fetchmethod_autoload((HV*)sv, "CLONE_SKIP", 0);
+	SvFLAGS(sv) |= SVphv_CLONEABLE; /* clone objects by default */
+	if (cloner && GvCV(cloner)) {
+	    dSP;
+	    UV status;
+
+	    ENTER;
+	    SAVETMPS;
+	    PUSHMARK(SP);
+	    XPUSHs(sv_2mortal(newSVpv(HvNAME((HV*)sv), 0)));
+	    PUTBACK;
+	    call_sv((SV*)GvCV(cloner), G_SCALAR);
+	    SPAGAIN;
+	    status = POPu;
+	    PUTBACK;
+	    FREETMPS;
+	    LEAVE;
+	    if (status)
+		SvFLAGS(sv) &= ~SVphv_CLONEABLE;
+	}
+    }
+}
+
+
+
 /*
 =for apidoc perl_clone
 
@@ -10699,6 +10788,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     CLONE_PARAMS* param = &clone_params;
 
     PerlInterpreter *my_perl = (PerlInterpreter*)(*ipM->pMalloc)(ipM, sizeof(PerlInterpreter));
+    /* for each stash, determine whether its objects should be cloned */
+    S_visit(proto_perl, do_mark_cloneable_stash, SVt_PVHV, SVTYPEMASK);
     PERL_SET_THX(my_perl);
 
 #  ifdef DEBUGGING
@@ -10730,9 +10821,9 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     CLONE_PARAMS clone_params;
     CLONE_PARAMS* param = &clone_params;
     PerlInterpreter *my_perl = (PerlInterpreter*)PerlMem_malloc(sizeof(PerlInterpreter));
+    /* for each stash, determine whether its objects should be cloned */
+    S_visit(proto_perl, do_mark_cloneable_stash, SVt_PVHV, SVTYPEMASK);
     PERL_SET_THX(my_perl);
-
-
 
 #    ifdef DEBUGGING
     Poison(my_perl, 1, PerlInterpreter);
@@ -10778,6 +10869,10 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_xpvbm_root	= NULL;
     PL_he_arenaroot	= NULL;
     PL_he_root		= NULL;
+#if defined(USE_ITHREADS)
+    PL_pte_arenaroot	= NULL;
+    PL_pte_root		= NULL;
+#endif
     PL_nice_chunk	= NULL;
     PL_nice_chunk_size	= 0;
     PL_sv_count		= 0;
@@ -11467,7 +11562,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 	    ENTER;
 	    SAVETMPS;
 	    PUSHMARK(SP);
-           XPUSHs(sv_2mortal(newSVpv(HvNAME(stash), 0)));
+	    XPUSHs(sv_2mortal(newSVpv(HvNAME(stash), 0)));
 	    PUTBACK;
 	    call_sv((SV*)GvCV(cloner), G_DISCARD);
 	    FREETMPS;
@@ -11592,3 +11687,12 @@ Perl_sv_cat_decode(pTHX_ SV *dsv, SV *encoding,
     return ret;
 }
 
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

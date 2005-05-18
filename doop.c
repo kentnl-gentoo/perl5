@@ -1,7 +1,7 @@
 /*    doop.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -338,7 +338,7 @@ S_do_trans_simple_utf8(pTHX_ SV *sv)
 
     if (grows) {
 	/* d needs to be bigger than s, in case e.g. upgrading is required */
-	New(0, d, len*3+UTF8_MAXLEN, U8);
+	New(0, d, len * 3 + UTF8_MAXBYTES, U8);
 	dend = d + len * 3;
 	dstart = d;
     }
@@ -370,10 +370,10 @@ S_do_trans_simple_utf8(pTHX_ SV *sv)
 
 	if (d > dend) {
 	    STRLEN clen = d - dstart;
-	    STRLEN nlen = dend - dstart + len + UTF8_MAXLEN;
+	    STRLEN nlen = dend - dstart + len + UTF8_MAXBYTES;
 	    if (!grows)
 		Perl_croak(aTHX_ "panic: do_trans_simple_utf8 line %d",__LINE__);
-	    Renew(dstart, nlen+UTF8_MAXLEN, U8);
+	    Renew(dstart, nlen + UTF8_MAXBYTES, U8);
 	    d = dstart + clen;
 	    dend = dstart + nlen;
 	}
@@ -480,7 +480,7 @@ S_do_trans_complex_utf8(pTHX_ SV *sv)
 
     if (grows) {
 	/* d needs to be bigger than s, in case e.g. upgrading is required */
-	New(0, d, len*3+UTF8_MAXLEN, U8);
+	New(0, d, len * 3 + UTF8_MAXBYTES, U8);
 	dend = d + len * 3;
 	dstart = d;
     }
@@ -496,10 +496,10 @@ S_do_trans_complex_utf8(pTHX_ SV *sv)
 	
 	    if (d > dend) {
 	        STRLEN clen = d - dstart;
-		STRLEN nlen = dend - dstart + len + UTF8_MAXLEN;
+		STRLEN nlen = dend - dstart + len + UTF8_MAXBYTES;
 		if (!grows)
 		    Perl_croak(aTHX_ "panic: do_trans_complex_utf8 line %d",__LINE__);
-		Renew(dstart, nlen+UTF8_MAXLEN, U8);
+		Renew(dstart, nlen + UTF8_MAXBYTES, U8);
 		d = dstart + clen;
 		dend = dstart + nlen;
 	    }
@@ -550,10 +550,10 @@ S_do_trans_complex_utf8(pTHX_ SV *sv)
 	    uv = swash_fetch(rv, s, TRUE);
 	    if (d > dend) {
 	        STRLEN clen = d - dstart;
-		STRLEN nlen = dend - dstart + len + UTF8_MAXLEN;
+		STRLEN nlen = dend - dstart + len + UTF8_MAXBYTES;
 		if (!grows)
 		    Perl_croak(aTHX_ "panic: do_trans_complex_utf8 line %d",__LINE__);
-		Renew(dstart, nlen+UTF8_MAXLEN, U8);
+		Renew(dstart, nlen + UTF8_MAXBYTES, U8);
 		d = dstart + clen;
 		dend = dstart + nlen;
 	    }
@@ -676,8 +676,7 @@ Perl_do_join(pTHX_ register SV *sv, SV *del, register SV **mark, register SV **s
 
     sv_setpvn(sv, "", 0);
     /* sv_setpv retains old UTF8ness [perl #24846] */
-    if (SvUTF8(sv))
-	SvUTF8_off(sv);
+    SvUTF8_off(sv);
 
     if (PL_tainting && SvMAGICAL(sv))
 	SvTAINTED_off(sv);
@@ -1421,3 +1420,12 @@ Perl_do_kv(pTHX)
     return NORMAL;
 }
 
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

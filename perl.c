@@ -1,7 +1,7 @@
 /*    perl.c
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -379,8 +379,9 @@ perl_construct(pTHXx)
 #endif
 
     /* Use sysconf(_SC_CLK_TCK) if available, if not
-     * available or if the sysconf() fails, use the HZ. */
-#if defined(HAS_SYSCONF) && defined(_SC_CLK_TCK)
+     * available or if the sysconf() fails, use the HZ.
+     * BeOS has those, but returns the wrong value. */
+#if defined(HAS_SYSCONF) && defined(_SC_CLK_TCK) && !defined(__BEOS__)
     PL_clocktick = sysconf(_SC_CLK_TCK);
     if (PL_clocktick <= 0)
 #endif
@@ -1101,6 +1102,31 @@ perl_free(pTHXx)
 #endif
 }
 
+#if defined(USE_5005THREADS) || defined(USE_ITHREADS)
+/* provide destructors to clean up the thread key when libperl is unloaded */
+#ifndef WIN32 /* handled during DLL_PROCESS_DETACH in win32/perllib.c */
+
+#if defined(__hpux) && !defined(__GNUC__)
+#pragma fini "perl_fini"
+#endif
+
+#if defined(__GNUC__) && defined(__attribute__) 
+/* want to make sure __attribute__ works here even
+ * for -Dd_attribut=undef builds.
+ */
+#undef __attribute__
+#endif
+
+static void __attribute__((destructor))
+perl_fini()
+{
+    if (PL_curinterp)
+	FREE_THREAD_KEY;
+}
+
+#endif /* WIN32 */
+#endif /* THREADS */
+
 void
 Perl_call_atexit(pTHX_ ATEXIT_t fn, void *ptr)
 {
@@ -1329,6 +1355,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     register SV *sv;
     register char *s;
     char *cddir = Nullch;
+    bool minus_f = FALSE;
 
     PL_fdscript = -1;
     PL_suidscript = -1;
@@ -1421,6 +1448,11 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 	    sv_catpv(PL_e_script, "\n");
 	    break;
 
+	case 'f':
+	    minus_f = TRUE;
+	    s++;
+	    goto reswitch;
+
 	case 'I':	/* -I handled both here and in moreswitches() */
 	    forbid_setid("-I");
 	    if (!*++s && (s=argv[1]) != Nullch) {
@@ -1454,12 +1486,16 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 		PL_preambleav = newAV();
 	    av_push(PL_preambleav, newSVpv("use Config qw(myconfig config_vars)",0));
 	    if (*++s != ':')  {
+                STRLEN opts;
+
 		PL_Sv = newSVpv("print myconfig();",0);
 #ifdef VMS
 		sv_catpv(PL_Sv,"print \"\\nCharacteristics of this PERLSHR image: \\n\",");
 #else
 		sv_catpv(PL_Sv,"print \"\\nCharacteristics of this binary (from libperl): \\n\",");
 #endif
+                opts = SvCUR(PL_Sv);
+
 		sv_catpv(PL_Sv,"\"  Compile-time options:");
 #  ifdef DEBUGGING
 		sv_catpv(PL_Sv," DEBUGGING");
@@ -1488,12 +1524,33 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #  ifdef USE_SOCKS
 		sv_catpv(PL_Sv," USE_SOCKS");
 #  endif
+#  ifdef USE_SITECUSTOMIZE
+		sv_catpv(PL_Sv," USE_SITECUSTOMIZE");
+#  endif	       
 #  ifdef PERL_IMPLICIT_CONTEXT
 		sv_catpv(PL_Sv," PERL_IMPLICIT_CONTEXT");
 #  endif
 #  ifdef PERL_IMPLICIT_SYS
 		sv_catpv(PL_Sv," PERL_IMPLICIT_SYS");
 #  endif
+
+                while (SvCUR(PL_Sv) > opts+76) {
+                    /* find last space after "options: " and before col 76 */
+
+                    char *space, *pv = SvPV_nolen(PL_Sv);
+                    char c = pv[opts+76];
+                    pv[opts+76] = '\0';
+                    space = strrchr(pv+opts+26, ' ');
+                    pv[opts+76] = c;
+                    if (!space) break; /* "Can't happen" */
+
+                    /* break the line before that space */
+
+                    opts = space - pv;
+                    sv_insert(PL_Sv, opts, 0,
+                              "\\n                       ", 25);
+                }
+
 		sv_catpv(PL_Sv,"\\n\",");
 
 #if defined(LOCAL_PATCH_COUNT)
@@ -1617,6 +1674,15 @@ print \"  \\@INC:\\n    @INC\\n\";");
 	    }
 	}
     }
+
+#ifdef USE_SITECUSTOMIZE
+    if (!minus_f) {
+	if (!PL_preambleav)
+	    PL_preambleav = newAV();
+	av_unshift(PL_preambleav, 1);
+	(void)av_store(PL_preambleav, 0, Perl_newSVpvf(aTHX_ "BEGIN { do '%s/sitecustomize.pl' }", SITELIB_EXP));
+    }
+#endif
 
     if (PL_taint_warn && PL_dowarn != G_WARN_ALL_OFF) {
        PL_compiling.cop_warnings = newSVpvn(WARN_TAINTstring, WARNsize);
@@ -2485,6 +2551,9 @@ S_usage(pTHX_ char *name)		/* XXX move this out into a module ? */
 "-d[:debugger]   run program under debugger",
 "-D[number/list] set debugging flags (argument is a bit mask or alphabets)",
 "-e program      one line of program (several -e's allowed, omit programfile)",
+#ifdef USE_SITECUSTOMIZE
+"-f              don't do $sitelib/sitecustomize.pl at startup",
+#endif
 "-F/pattern/     split() pattern for -a switch (//'s are optional)",
 "-i[extension]   edit <> files in place (makes backup if extension supplied)",
 "-Idirectory     specify @INC/#include directory (several -I's allowed)",
@@ -2877,7 +2946,7 @@ Perl_moreswitches(pTHX_ char *s)
 #endif
 
 	PerlIO_printf(PerlIO_stdout(),
-		      "\n\nCopyright 1987-2004, Larry Wall\n");
+		      "\n\nCopyright 1987-2005, Larry Wall\n");
 #ifdef MACOS_TRADITIONAL
 	PerlIO_printf(PerlIO_stdout(),
 		      "\nMac OS port Copyright 1991-2002, Matthias Neeracher;\n"
@@ -3161,7 +3230,7 @@ S_open_script(pTHX_ char *scriptname, bool dosearch, SV *sv)
 
     CopFILE_free(PL_curcop);
     CopFILE_set(PL_curcop, PL_origfilename);
-    if (strEQ(PL_origfilename,"-"))
+    if (*PL_origfilename == '-' && PL_origfilename[1] == '\0')
 	scriptname = "";
     if (PL_fdscript >= 0) {
 	PL_rsfp = PerlIO_fdopen(PL_fdscript,PERL_SCRIPT_MODE);
@@ -3560,7 +3629,8 @@ S_validate_suid(pTHX_ char *validarg, char *scriptname)
 	/* Sanity check on buffer end */
 	while ((*s) && !isSPACE(*s)) s++;
 	for (s2 = s;  (s2 > SvPV(PL_linestr,n_a)+2 &&
-		       (isDIGIT(s2[-1]) || strchr("._-", s2[-1])));  s2--) ;
+		       (isDIGIT(s2[-1]) || s2[-1] == '.' || s2[-1] == '_'
+			|| s2[-1] == '-'));  s2--) ;
 	/* Sanity check on buffer start */
 	if ( (s2-4 < SvPV(PL_linestr,n_a)+2 || strnNE(s2-4,"perl",4)) &&
 	      (s-9 < SvPV(PL_linestr,n_a)+2 || strnNE(s-9,"perl",4)) )
@@ -3847,7 +3917,8 @@ S_find_beginning(pTHX)
 	    s2 = s;
 	    while (*s == ' ' || *s == '\t') s++;
 	    if (*s++ == '-') {
-		while (isDIGIT(s2[-1]) || strchr("-._", s2[-1])) s2--;
+		while (isDIGIT(s2[-1]) || s2[-1] == '-' || s2[-1] == '.'
+		       || s2[-1] == '_') s2--;
 		if (strnEQ(s2-4,"perl",4))
 		    /*SUPPRESS 530*/
 		    while ((s = moreswitches(s)))
@@ -4185,6 +4256,22 @@ S_procself_val(pTHX_ SV *sv, char *arg0)
 #endif /* HAS_PROCSELFEXE */
 
 STATIC void
+S_set_caret_X(pTHX) {
+    GV* tmpgv = gv_fetchpv("\030",TRUE, SVt_PV); /* $^X */
+    if (tmpgv) {
+#ifdef HAS_PROCSELFEXE
+	S_procself_val(aTHX_ GvSV(tmpgv), PL_origargv[0]);
+#else
+#ifdef OS2
+	sv_setpv(GvSV(tmpgv), os2_execname(aTHX));
+#else
+	sv_setpv(GvSV(tmpgv),PL_origargv[0]);
+#endif
+#endif
+    }
+}
+
+STATIC void
 S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register char **env)
 {
     char *s;
@@ -4212,17 +4299,7 @@ S_init_postdump_symbols(pTHX_ register int argc, register char **argv, register 
 	magicname("0", "0", 1);
 #endif
     }
-    if ((tmpgv = gv_fetchpv("\030",TRUE, SVt_PV))) {/* $^X */
-#ifdef HAS_PROCSELFEXE
-	S_procself_val(aTHX_ GvSV(tmpgv), PL_origargv[0]);
-#else
-#ifdef OS2
-	sv_setpv(GvSV(tmpgv), os2_execname(aTHX));
-#else
-	sv_setpv(GvSV(tmpgv),PL_origargv[0]);
-#endif
-#endif
-    }
+    S_set_caret_X(aTHX);
     if ((PL_envgv = gv_fetchpv("ENV",TRUE, SVt_PVHV))) {
 	HV *hv;
 	GvMULTI_on(PL_envgv);
@@ -4420,6 +4497,21 @@ S_init_perllib(pTHX)
 #  define PERLLIB_MANGLE(s,n) (s)
 #endif
 
+/* Push a directory onto @INC if it exists.
+   Generate a new SV if we do this, to save needing to copy the SV we push
+   onto @INC  */
+STATIC SV *
+S_incpush_if_exists(pTHX_ SV *dir)
+{
+    Stat_t tmpstatbuf;
+    if (PerlLIO_stat(SvPVX(dir), &tmpstatbuf) >= 0 &&
+	S_ISDIR(tmpstatbuf.st_mode)) {
+	av_push(GvAVn(PL_incgv), dir);
+	dir = NEWSV(0,0);
+    }
+    return dir;
+}
+
 STATIC void
 S_incpush(pTHX_ char *p, int addsubdirs, int addoldvers, int usesep)
 {
@@ -4429,7 +4521,7 @@ S_incpush(pTHX_ char *p, int addsubdirs, int addoldvers, int usesep)
 	return;
 
     if (addsubdirs || addoldvers) {
-	subdir = sv_newmortal();
+	subdir = NEWSV(0,0);
     }
 
     /* Break at all separators */
@@ -4475,7 +4567,6 @@ S_incpush(pTHX_ char *p, int addsubdirs, int addoldvers, int usesep)
 	    const char *incverlist[] = { PERL_INC_VERSION_LIST };
 	    const char **incver;
 #endif
-	    Stat_t tmpstatbuf;
 #ifdef VMS
 	    char *unix;
 	    STRLEN len;
@@ -4505,23 +4596,18 @@ S_incpush(pTHX_ char *p, int addsubdirs, int addoldvers, int usesep)
 				libdir,
 			       (int)PERL_REVISION, (int)PERL_VERSION,
 			       (int)PERL_SUBVERSION, ARCHNAME);
-		if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
-		      S_ISDIR(tmpstatbuf.st_mode))
-		    av_push(GvAVn(PL_incgv), newSVsv(subdir));
+		subdir = S_incpush_if_exists(aTHX_ subdir);
 
 		/* .../version if -d .../version */
 		Perl_sv_setpvf(aTHX_ subdir, "%"SVf PERL_ARCH_FMT_PATH, libdir,
 			       (int)PERL_REVISION, (int)PERL_VERSION,
 			       (int)PERL_SUBVERSION);
-		if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
-		      S_ISDIR(tmpstatbuf.st_mode))
-		    av_push(GvAVn(PL_incgv), newSVsv(subdir));
+		subdir = S_incpush_if_exists(aTHX_ subdir);
 
 		/* .../archname if -d .../archname */
 		Perl_sv_setpvf(aTHX_ subdir, "%"SVf PERL_ARCH_FMT, libdir, ARCHNAME);
-		if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
-		      S_ISDIR(tmpstatbuf.st_mode))
-		    av_push(GvAVn(PL_incgv), newSVsv(subdir));
+		subdir = S_incpush_if_exists(aTHX_ subdir);
+
 	    }
 
 #ifdef PERL_INC_VERSION_LIST
@@ -4529,9 +4615,7 @@ S_incpush(pTHX_ char *p, int addsubdirs, int addoldvers, int usesep)
 		for (incver = incverlist; *incver; incver++) {
 		    /* .../xxx if -d .../xxx */
 		    Perl_sv_setpvf(aTHX_ subdir, "%"SVf PERL_ARCH_FMT, libdir, *incver);
-		    if (PerlLIO_stat(SvPVX(subdir), &tmpstatbuf) >= 0 &&
-			  S_ISDIR(tmpstatbuf.st_mode))
-			av_push(GvAVn(PL_incgv), newSVsv(subdir));
+		    subdir = S_incpush_if_exists(aTHX_ subdir);
 		}
 	    }
 #endif
@@ -4539,6 +4623,10 @@ S_incpush(pTHX_ char *p, int addsubdirs, int addoldvers, int usesep)
 
 	/* finally push this lib directory on the end of @INC */
 	av_push(GvAVn(PL_incgv), libdir);
+    }
+    if (subdir) {
+	assert (SvREFCNT(subdir) == 1);
+	SvREFCNT_dec(subdir);
     }
 }
 

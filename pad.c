@@ -1,6 +1,6 @@
 /*    pad.c
  *
- *    Copyright (C) 2002, 2003, 2004, by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2004, 2005 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1353,7 +1353,9 @@ S_cv_clone2(pTHX_ CV *proto, CV *outside)
 #endif
     CvGV(cv)		= CvGV(proto);
     CvSTASH(cv)		= CvSTASH(proto);
+    OP_REFCNT_LOCK;
     CvROOT(cv)		= OpREFCNT_inc(CvROOT(proto));
+    OP_REFCNT_UNLOCK;
     CvSTART(cv)		= CvSTART(proto);
     if (outside) {
 	CvOUTSIDE(cv)	= (CV*)SvREFCNT_inc(outside);

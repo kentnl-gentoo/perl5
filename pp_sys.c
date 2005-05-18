@@ -1,7 +1,7 @@
 /*    pp_sys.c
  *
  *    Copyright (C) 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -43,12 +43,6 @@
 #       undef MAXINT
 #   endif
 #   include <shadow.h>
-#endif
-
-#ifdef HAS_SYSCALL
-#ifdef __cplusplus
-extern "C" int syscall(unsigned long,...);
-#endif
 #endif
 
 #ifdef I_SYS_WAIT
@@ -345,13 +339,14 @@ PP(pp_backtick)
 		;
 	}
 	else if (gimme == G_SCALAR) {
-	    SV *oldrs = PL_rs;
+	    ENTER;
+	    SAVESPTR(PL_rs);
 	    PL_rs = &PL_sv_undef;
 	    sv_setpv(TARG, "");	/* note that this preserves previous buffer */
 	    while (sv_gets(TARG, fp, SvCUR(TARG)) != Nullch)
 		/*SUPPRESS 530*/
 		;
-	    PL_rs = oldrs;
+	    LEAVE;
 	    XPUSHs(TARG);
 	    SvTAINTED_on(TARG);
 	}
@@ -504,7 +499,7 @@ PP(pp_die)
 		    sv_setsv(error,*PL_stack_sp--);
 		}
 	    }
-	    DIE(aTHX_ Nullformat);
+	    DIE_NULL;
 	}
 	else {
 	    if (SvPOK(error) && SvCUR(error))
@@ -1340,13 +1335,13 @@ PP(pp_leavewrite)
 		topgv = gv_fetchpv(SvPVX(topname), FALSE, SVt_PVFM);
 		if ((topgv && GvFORM(topgv)) ||
 		  !gv_fetchpv("top",FALSE,SVt_PVFM))
-		    IoTOP_NAME(io) = savepv(SvPVX(topname));
+		    IoTOP_NAME(io) = savesvpv(topname);
 		else
 		    IoTOP_NAME(io) = savepv("top");
 	    }
 	    topgv = gv_fetchpv(IoTOP_NAME(io),FALSE, SVt_PVFM);
 	    if (!topgv || !GvFORM(topgv)) {
-		IoLINES_LEFT(io) = 100000000;
+		IoLINES_LEFT(io) = IoPAGE_LEN(io);
 		goto forget_top;
 	    }
 	    IoTOP_GV(io) = topgv;
@@ -1555,6 +1550,8 @@ PP(pp_sysread)
     STRLEN blen;
     MAGIC *mg;
     int fp_utf8;
+    int buffer_utf8;
+    SV *read_target;
     Size_t got = 0;
     Size_t wanted;
     bool charstart = FALSE;
@@ -1602,9 +1599,11 @@ PP(pp_sysread)
 	buffer = SvPVutf8_force(bufsv, blen);
 	/* UTF-8 may not have been set if they are all low bytes */
 	SvUTF8_on(bufsv);
+	buffer_utf8 = 0;
     }
     else {
 	buffer = SvPV_force(bufsv, blen);
+	buffer_utf8 = !IN_BYTES && SvUTF8(bufsv);
     }
     if (length < 0)
 	DIE(aTHX_ "Negative length");
@@ -1672,11 +1671,30 @@ PP(pp_sysread)
     }
  more_bytes:
     bufsize = SvCUR(bufsv);
+    /* Allocating length + offset + 1 isn't perfect in the case of reading
+       bytes from a byte file handle into a UTF8 buffer, but it won't harm us
+       unduly.
+       (should be 2 * length + offset + 1, or possibly something longer if
+       PL_encoding is true) */
     buffer  = SvGROW(bufsv, (STRLEN)(length+offset+1));
     if (offset > bufsize) { /* Zero any newly allocated space */
     	Zero(buffer+bufsize, offset-bufsize, char);
     }
     buffer = buffer + offset;
+    if (!buffer_utf8) {
+	read_target = bufsv;
+    } else {
+	/* Best to read the bytes into a new SV, upgrade that to UTF8, then
+	   concatenate it to the current buffer.  */
+
+	/* Truncate the existing buffer to the start of where we will be
+	   reading to:  */
+	SvCUR_set(bufsv, offset);
+
+	read_target = sv_newmortal();
+	(void)SvUPGRADE(read_target, SVt_PV);
+	buffer = SvGROW(read_target, (STRLEN)(length + 1));
+    }
 
     if (PL_op->op_type == OP_SYSREAD) {
 #ifdef PERL_SOCK_SYSREAD_IS_RECV
@@ -1716,9 +1734,9 @@ PP(pp_sysread)
 		report_evil_fh(gv, io, OP_phoney_OUTPUT_ONLY);
 	goto say_undef;
     }
-    SvCUR_set(bufsv, count+(buffer - SvPVX(bufsv)));
-    *SvEND(bufsv) = '\0';
-    (void)SvPOK_only(bufsv);
+    SvCUR_set(read_target, count+(buffer - SvPVX(read_target)));
+    *SvEND(read_target) = '\0';
+    (void)SvPOK_only(read_target);
     if (fp_utf8 && !IN_BYTES) {
 	/* Look at utf8 we got back and count the characters */
 	char *bend = buffer + count;
@@ -1753,6 +1771,11 @@ PP(pp_sysread)
 	/* return value is character count */
 	count = got;
 	SvUTF8_on(bufsv);
+    }
+    else if (buffer_utf8) {
+	/* Let svcatsv upgrade the bytes we read in to utf8.
+	   The buffer is a mortal so will be freed soon.  */
+	sv_catsv_nomg(bufsv, read_target);
     }
     SvSETMAGIC(bufsv);
     /* This should not be marked tainted if the fp is marked clean */
@@ -2081,7 +2104,6 @@ PP(pp_truncate)
      * might not be signed: if it is not, clever compilers will moan. */
     /* XXX Configure probe for the signedness of the length type of *truncate() needed? XXX */
     SETERRNO(0,0);
-#if defined(HAS_TRUNCATE) || defined(HAS_CHSIZE) || defined(F_FREESP)
     {
         STRLEN n_a;
 	int result = 1;
@@ -2156,9 +2178,6 @@ PP(pp_truncate)
 	    SETERRNO(EBADF,RMS_IFI);
 	RETPUSHUNDEF;
     }
-#else
-    DIE(aTHX_ "truncate not implemented");
-#endif
 }
 
 PP(pp_fcntl)
@@ -2818,12 +2837,10 @@ PP(pp_stat)
 	}
 	sv_setpv(PL_statname, SvPV(sv,n_a));
 	PL_statgv = Nullgv;
-#ifdef HAS_LSTAT
 	PL_laststype = PL_op->op_type;
 	if (PL_op->op_type == OP_LSTAT)
 	    PL_laststatval = PerlLIO_lstat(SvPV(PL_statname, n_a), &PL_statcache);
 	else
-#endif
 	    PL_laststatval = PerlLIO_stat(SvPV(PL_statname, n_a), &PL_statcache);
 	if (PL_laststatval < 0) {
 	    if (ckWARN(WARN_NEWLINE) && strchr(SvPV(PL_statname, n_a), '\n'))
@@ -3368,7 +3385,6 @@ PP(pp_fttext)
 	sv = POPs;
       really_filename:
 	PL_statgv = Nullgv;
-	PL_laststatval = -1;
 	PL_laststype = OP_STAT;
 	sv_setpv(PL_statname, SvPV(sv, n_a));
 	if (!(fp = PerlIO_open(SvPVX(PL_statname), "r"))) {
@@ -5772,3 +5788,13 @@ lockf_emulate_flock(int fd, int operation)
 }
 
 #endif /* LOCKF_EMULATE_FLOCK */
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

@@ -1,7 +1,7 @@
 /*    hv.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -61,12 +61,12 @@ S_more_he(pTHX)
     register HE* he;
     register HE* heend;
     XPV *ptr;
-    New(54, ptr, 1008/sizeof(XPV), XPV);
+    New(54, ptr, PERL_ARENA_SIZE/sizeof(XPV), XPV);
     ptr->xpv_pv = (char*)PL_he_arenaroot;
     PL_he_arenaroot = ptr;
 
     he = (HE*)ptr;
-    heend = &he[1008 / sizeof(HE) - 1];
+    heend = &he[PERL_ARENA_SIZE / sizeof(HE) - 1];
     PL_he_root = ++he;
     while (he < heend) {
 	HeNEXT(he) = (HE*)(he + 1);
@@ -640,6 +640,8 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	entry = ((HE**)xhv->xhv_array)[hash & (I32) xhv->xhv_max];
     }
     for (; entry; ++n_links, entry = HeNEXT(entry)) {
+	if (!HeKEY_hek(entry))
+	    continue;
 	if (HeHASH(entry) != hash)		/* strings can't be equal */
 	    continue;
 	if (HeKLEN(entry) != (I32)klen)
@@ -1539,7 +1541,7 @@ Perl_hv_clear_placeholders(pTHX_ HV *hv)
 
 		if (--items == 0) {
 		    /* Finished.  */
-		    HvTOTALKEYS(hv) -= HvPLACEHOLDERS(hv);
+		    HvTOTALKEYS(hv) -= (IV)HvPLACEHOLDERS(hv);
 		    if (HvKEYS(hv) == 0)
 			HvHASKFLAGS_off(hv);
 		    HvPLACEHOLDERS(hv) = 0;
@@ -2129,3 +2131,13 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, register U32 hash, int flags)
 
     return HeKEY_hek(entry);
 }
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * vim: shiftwidth=4:
+*/

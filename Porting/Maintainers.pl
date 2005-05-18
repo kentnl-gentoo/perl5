@@ -13,6 +13,7 @@ package Maintainers;
 	'abergman'	=> 'Arthur Bergman <abergman@cpan.org>',
 	'ams'		=> 'Abhijit Menon-Sen <ams@cpan.org>',
 	'andk'		=> 'Andreas J. Koenig <andk@cpan.org>',
+	'autrijus'	=> 'Autrijus Tang <autrijus@cpan.org>',
 	'bbb'		=> 'Rob Brown <bbb@cpan.org>',
 	'craig'		=> 'Craig Berry <craigberry@mac.com>',
 	'dankogai'	=> 'Dan Kogai <dankogai@cpan.org>',
@@ -25,6 +26,7 @@ package Maintainers;
 	'gsar'		=> 'Gurusamy Sarathy <gsar@activestate.com>',
 	'ilyam'		=> 'Ilya Martynov <ilyam@cpan.org>',
 	'ilyaz'		=> 'Ilya Zakharevich <ilyaz@cpan.org>',
+	'jand'		=> 'Jan Dubois <jand@activestate.com>',
 	'jhi'		=> 'Jarkko Hietaniemi <jhi@cpan.org>',
 	'jstowe'	=> 'Jonathan Stowe <jstowe@cpan.org>',
 	'jv'		=> 'Johan Vromans <jv@cpan.org>',
@@ -165,6 +167,13 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'encoding::warnings' =>
+		{
+		'MAINTAINER'	=> 'autrijus',
+		'FILES'		=> q[lib/encoding/warnings.pm lib/encoding/warnings],
+		'CPAN'		=> 1,
+		},
+
 	'Errno' =>
 		{
 		'MAINTAINER'	=> 'p5p', # Not gbarr.
@@ -175,7 +184,7 @@ package Maintainers;
 	'ExtUtils::MakeMaker' =>
 		{
 		'MAINTAINER'	=> 'mschwern',
-		'FILES'		=> q[lib/ExtUtils/{Command,Install,Installed,Liblist,MakeMaker,Manifest,Mkbootstrap,Mksymlists,MM*,MY,Packlist,testlib}.pm lib/ExtUtils/{Command,Liblist,MakeMaker}
+		'FILES'		=> q[lib/ExtUtils/{Command,Install,Installed,Liblist,MakeMaker,Manifest,Mkbootstrap,Mksymlists,MM*,MY,Packlist,testlib}.pm lib/ExtUtils/{Command,Liblist,MakeMaker,MANIFEST.SKIP}
 				     lib/ExtUtils/t t/lib/MakeMaker t/lib/TieIn.pm t/lib/TieOut.pm],
 		'CPAN'		=> 1,
 		},
@@ -399,7 +408,7 @@ package Maintainers;
 	'podlators' =>
 		{
 		'MAINTAINER'	=> 'rra',
-		'FILES'		=> q[lib/Pod/{Html,Man,ParseLink,Text,Text/{Color,Overstrike,Termcap}}.pm pod/pod2man.PL pod/pod2text.PL lib/Pod/t/{basic.*,{man,parselink,text*}.t}],
+		'FILES'		=> q[lib/Pod/{Man,ParseLink,Text,Text/{Color,Overstrike,Termcap}}.pm pod/pod2man.PL pod/pod2text.PL lib/Pod/t/{basic.*,{man,parselink,text*}.t}],
 		'CPAN'		=> 1,
 		},
 
@@ -564,8 +573,8 @@ package Maintainers;
 
 	'win32' =>
 		{
-		'MAINTAINER'	=> 'gsar',
-		'FILES'		=> q[win32 README.win32 lib/Win32.pod t/win32],
+		'MAINTAINER'	=> 'jand',
+		'FILES'		=> q[win32 README.win32 t/win32],
 		'CPAN'		=> 0,
 		},
 

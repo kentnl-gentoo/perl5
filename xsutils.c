@@ -1,6 +1,6 @@
 /*    xsutils.c
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004,
+ *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005
  *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
@@ -71,19 +71,32 @@ modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 	switch (SvTYPE(sv)) {
 	case SVt_PVCV:
 	    switch ((int)len) {
+#ifdef CVf_ASSERTION
+	    case 9:
+		if (memEQ(name, "assertion", 9)) {
+		    if (negated)
+			CvFLAGS((CV*)sv) &= ~CVf_ASSERTION;
+		    else
+			CvFLAGS((CV*)sv) |= CVf_ASSERTION;
+		    continue;
+		}
+		break;
+#endif
 	    case 6:
-		switch (*name) {
+		switch (name[3]) {
 		case 'l':
 #ifdef CVf_LVALUE
-		    if (strEQ(name, "lvalue")) {
+		    if (memEQ(name, "lvalue", 6)) {
 			if (negated)
 			    CvFLAGS((CV*)sv) &= ~CVf_LVALUE;
 			else
 			    CvFLAGS((CV*)sv) |= CVf_LVALUE;
 			continue;
 		    }
+		    break;
+		case 'k':
 #endif /* defined CVf_LVALUE */
-		    if (strEQ(name, "locked")) {
+		    if (memEQ(name, "locked", 6)) {
 			if (negated)
 			    CvFLAGS((CV*)sv) &= ~CVf_LOCKED;
 			else
@@ -91,8 +104,8 @@ modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 			continue;
 		    }
 		    break;
-		case 'm':
-		    if (strEQ(name, "method")) {
+		case 'h':
+		    if (memEQ(name, "method", 6)) {
 			if (negated)
 			    CvFLAGS((CV*)sv) &= ~CVf_METHOD;
 			else
@@ -107,17 +120,17 @@ modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 	default:
 	    switch ((int)len) {
 	    case 6:
-		switch (*name) {
-		case 's':
-		    if (strEQ(name, "shared")) {
+		switch (name[5]) {
+		case 'd':
+		    if (memEQ(name, "share", 5)) {
 			if (negated)
 			    Perl_croak(aTHX_ "A variable may not be unshared");
 			SvSHARE(sv);
                         continue;
                     }
 		    break;
-		case 'u':
-		    if (strEQ(name, "unique")) {
+		case 'e':
+		    if (memEQ(name, "uniqu", 5)) {
 			if (SvTYPE(sv) == SVt_PVGV) {
 			    if (negated)
 				GvUNIQUE_off(sv);
@@ -228,11 +241,7 @@ XS(XS_attributes__guess_stash)
 {
     dXSARGS;
     SV *rv, *sv;
-#ifdef dXSTARGET
-    dXSTARGET;
-#else
-    SV * TARG = sv_newmortal();
-#endif
+    dXSTARG;
 
     if (items != 1) {
 usage:
@@ -276,9 +285,7 @@ usage:
 	    sv_setpv(TARG, HvNAME(stash));
     }
 
-#ifdef dXSTARGET
     SvSETMAGIC(TARG);
-#endif
     XSRETURN(1);
 }
 
@@ -286,11 +293,7 @@ XS(XS_attributes_reftype)
 {
     dXSARGS;
     SV *rv, *sv;
-#ifdef dXSTARGET
-    dXSTARGET;
-#else
-    SV * TARG = sv_newmortal();
-#endif
+    dXSTARG;
 
     if (items != 1) {
 usage:
@@ -306,9 +309,7 @@ usage:
 	goto usage;
     sv = SvRV(rv);
     sv_setpv(TARG, sv_reftype(sv, 0));
-#ifdef dXSTARGET
     SvSETMAGIC(TARG);
-#endif
 
     XSRETURN(1);
 }
@@ -316,11 +317,6 @@ usage:
 XS(XS_attributes__warn_reserved)
 {
     dXSARGS;
-#ifdef dXSTARGET
-    dXSTARGET;
-#else
-    SV * TARG = sv_newmortal();
-#endif
 
     if (items != 0) {
 	Perl_croak(aTHX_
@@ -328,11 +324,7 @@ XS(XS_attributes__warn_reserved)
     }
 
     EXTEND(SP,1);
-    ST(0) = TARG;
-    sv_setiv(TARG, ckWARN(WARN_RESERVED) != 0);
-#ifdef dXSTARGET
-    SvSETMAGIC(TARG);
-#endif
+    ST(0) = boolSV(ckWARN(WARN_RESERVED));
 
     XSRETURN(1);
 }
