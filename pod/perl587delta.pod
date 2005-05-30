@@ -52,7 +52,15 @@ B upgraded to version 1.09
 
 =item *
 
+base upgraded to version 2.07
+
+=item *
+
 bignum upgraded to version 0.17
+
+=item *
+
+bytes upgraded to version 1.02
 
 =item *
 
@@ -108,7 +116,7 @@ IO::Socket upgraded to version 1.28
 
 =item *
 
-Math::BigInt upgraded to version 1.76
+Math::BigInt upgraded to version 1.77
 
 =item *
 
@@ -159,7 +167,7 @@ Test::Simple upgraded to version 0.54
 Text::Wrap upgraded to version 2001.09293, to fix a bug when wrap() was
 called with a non-space separator.
 
-item *
+=item *
 
 threads::shared upgraded to version 0.93
 
@@ -336,6 +344,13 @@ is 4080 bytes.
 Unicode strings returned from overloaded operators can be buggy. This is a
 long standing bug reported since 5.8.6 was released, but we do not yet have
 a suitable fix for it.
+
+=head1 Platform Specific Problems
+
+On UNICOS, lib/Math/BigInt/t/bigintc.t hangs burning CPU.
+ext/B/t/bytecode.t and ext/Socket/t/socketpair.t both fail tests.
+These are unlikely to be resolved, as our valiant UNICOS porter's last
+Cray is being decommissioned.
 
 =head1 Reporting Bugs
 
