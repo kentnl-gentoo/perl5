@@ -36,6 +36,7 @@
 
 #include "reentr.h"
 
+#if defined(USE_LOCALE_NUMERIC) || defined(USE_LOCALE_COLLATE)
 /*
  * Standardize the locale name from a string returned by 'setlocale'.
  *
@@ -52,24 +53,19 @@
 STATIC char *
 S_stdize_locale(pTHX_ char *locs)
 {
-    char *s;
+    const char *s = strchr(locs, '=');
     bool okay = TRUE;
 
-    if ((s = strchr(locs, '='))) {
-	char *t;
-
+    if (s) {
+	const char * const t = strchr(s, '.');
 	okay = FALSE;
-	if ((t = strchr(s, '.'))) {
-	    char *u;
-
-	    if ((u = strchr(t, '\n'))) {
-
-		if (u[1] == 0) {
-		    STRLEN len = u - s;
-		    Move(s + 1, locs, len, char);
-		    locs[len] = 0;
-		    okay = TRUE;
-		}
+	if (t) {
+	    const char * const u = strchr(t, '\n');
+	    if (u && (u[1] == 0)) {
+		const STRLEN len = u - s;
+		Move(s + 1, locs, len, char);
+		locs[len] = 0;
+		okay = TRUE;
 	    }
 	}
     }
@@ -79,6 +75,7 @@ S_stdize_locale(pTHX_ char *locs)
 
     return locs;
 }
+#endif
 
 void
 Perl_set_numeric_radix(pTHX)
@@ -115,10 +112,8 @@ Perl_new_numeric(pTHX_ char *newnum)
 #ifdef USE_LOCALE_NUMERIC
 
     if (! newnum) {
-	if (PL_numeric_name) {
-	    Safefree(PL_numeric_name);
-	    PL_numeric_name = NULL;
-	}
+	Safefree(PL_numeric_name);
+	PL_numeric_name = NULL;
 	PL_numeric_standard = TRUE;
 	PL_numeric_local = TRUE;
 	return;
@@ -173,7 +168,6 @@ void
 Perl_new_ctype(pTHX_ char *newctype)
 {
 #ifdef USE_LOCALE_CTYPE
-
     int i;
 
     for (i = 0; i < 256; i++) {
@@ -186,6 +180,7 @@ Perl_new_ctype(pTHX_ char *newctype)
     }
 
 #endif /* USE_LOCALE_CTYPE */
+    PERL_UNUSED_ARG(newctype);
 }
 
 /*
@@ -220,9 +215,9 @@ Perl_new_collate(pTHX_ char *newcoll)
 	  /* 50: surely no system expands a char more. */
 #define XFRMBUFSIZE  (2 * 50)
 	  char xbuf[XFRMBUFSIZE];
-	  Size_t fa = strxfrm(xbuf, "a",  XFRMBUFSIZE);
-	  Size_t fb = strxfrm(xbuf, "ab", XFRMBUFSIZE);
-	  SSize_t mult = fb - fa;
+	  const Size_t fa = strxfrm(xbuf, "a",  XFRMBUFSIZE);
+	  const Size_t fb = strxfrm(xbuf, "ab", XFRMBUFSIZE);
+	  const SSize_t mult = fb - fa;
 	  if (mult < 1)
 	      Perl_croak(aTHX_ "strxfrm() gets absurd");
 	  PL_collxfrm_base = (fa > (Size_t)mult) ? (fa - mult) : 0;
@@ -536,16 +531,13 @@ Perl_init_i18nl10n(pTHX_ int printwarn)
 #endif
 
 #ifdef USE_LOCALE_CTYPE
-    if (curctype != NULL)
-	Safefree(curctype);
+    Safefree(curctype);
 #endif /* USE_LOCALE_CTYPE */
 #ifdef USE_LOCALE_COLLATE
-    if (curcoll != NULL)
-	Safefree(curcoll);
+    Safefree(curcoll);
 #endif /* USE_LOCALE_COLLATE */
 #ifdef USE_LOCALE_NUMERIC
-    if (curnum != NULL)
-	Safefree(curnum);
+    Safefree(curnum);
 #endif /* USE_LOCALE_NUMERIC */
     return ok;
 }
@@ -577,7 +569,7 @@ Perl_mem_collxfrm(pTHX_ const char *s, STRLEN len, STRLEN *xlen)
     /* the +1 is for the terminating NUL. */
 
     xAlloc = sizeof(PL_collation_ix) + PL_collxfrm_base + (PL_collxfrm_mult * len) + 1;
-    New(171, xbuf, xAlloc, char);
+    Newx(xbuf, xAlloc, char);
     if (! xbuf)
 	goto bad;
 
@@ -617,3 +609,12 @@ Perl_mem_collxfrm(pTHX_ const char *s, STRLEN len, STRLEN *xlen)
 
 #endif /* USE_LOCALE_COLLATE */
 
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

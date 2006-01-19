@@ -9,7 +9,7 @@ BEGIN {
 use Config;
 use File::Spec;
 
-plan tests => 82;
+plan tests => 86;
 
 my $Perl = which_perl();
 
@@ -126,6 +126,8 @@ DIAG
 
 # truncate and touch $tmpfile.
 open(F, ">$tmpfile") || DIE("Can't open temp test file: $!");
+ok(-z \*F,     '-z on empty filehandle');
+ok(! -s \*F,   '   and -s');
 close F;
 
 ok(-z $tmpfile,     '-z on empty file');
@@ -133,6 +135,11 @@ ok(! -s $tmpfile,   '   and -s');
 
 open(F, ">$tmpfile") || DIE("Can't open temp test file: $!");
 print F "hi\n";
+close F;
+
+open(F, "<$tmpfile") || DIE("Can't open temp test file: $!");
+ok(!-z *F,     '-z on empty filehandle');
+ok( -s *F,   '   and -s');
 close F;
 
 ok(! -z $tmpfile,   '-z on non-empty file');
@@ -167,11 +174,6 @@ SKIP: {
 }
 
 
-
-
-# in ms windows, $tmpfile inherits owner uid from directory
-# not sure about os/2, but chown is harmless anyway
-eval { chown $>,$tmpfile; 1 } or print "# $@" ;
 
 ok(chmod(0700,$tmpfile),    'chmod 0700');
 ok(-r $tmpfile,     '   -r');
@@ -462,7 +464,7 @@ ok(unlink($f), 'unlink tmp file');
     -T _;
     my $s2 = -s _;
     is($s1, $s2, q(-T _ doesn't break the statbuffer));
-    unlink $file;
+    unlink $tmpfile;
 }
 
 END {

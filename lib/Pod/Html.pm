@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.0503;
+$VERSION = 1.0504;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 @EXPORT_OK = qw(anchorify);
@@ -462,10 +462,12 @@ sub pod2html {
 END_OF_BLOCK
 
     print HTML <<END_OF_HEAD;
+<?xml version="1.0" ?>
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
 <title>$Title</title>$csslink
+<meta http-equiv="content-type" content="text/html; charset=utf-8" />
 <link rev="made" href="mailto:$Config{perladmin}" />
 </head>
 
@@ -524,7 +526,7 @@ END_OF_HEAD
 		} elsif (/^=over\s*(.*)/) {		# =over N
 		    process_over();
 		} elsif (/^=back/) {		# =back
-		    process_back();
+		    process_back($need_dd);
 		} elsif (/^=for\s+(\S+)\s*(.*)/si) {# =for
 		    process_for($1,$2);
 		} else {
@@ -571,11 +573,9 @@ END_OF_HEAD
 		## end of experimental
 
 		if( $after_item ){
-		    print HTML "$text\n";
 		    $After_Lpar = 1;
-		} else {
-		    print HTML "<p>$text</p>\n";
 		}
+		print HTML "<p>$text</p>\n";
 	    }
 	    print HTML "</dd>\n" if $need_dd;
 	    $after_item = 0;
@@ -637,7 +637,7 @@ Usage:  $0 --help --htmlroot=<name> --infile=<name> --outfile=<name>
                    pods (empty by default).
   --podroot      - filesystem base directory from which all relative paths
                    in podpath stem (default is .).
-  --[no]quiet    - supress some benign warning messages (default is off).
+  --[no]quiet    - suppress some benign warning messages (default is off).
   --[no]recurse  - recurse on those subdirectories listed in podpath
                    (default behaviour).
   --title        - title that will appear in resulting html file.
@@ -959,6 +959,19 @@ sub scan_dir {
 	    $Pages{$_}  = "" unless defined $Pages{$_};
 	    $Pages{$_} .= "$dir/$_.pm:";
 	    push(@pods, "$dir/$_.pm");
+	} elsif (-T "$dir/$_") {			    # script(?)
+	    local *F;
+	    if (open(F, "$dir/$_")) {
+		my $line;
+		while (defined($line = <F>)) {
+		    if ($line =~ /^=(?:pod|head1)/) {
+			$Pages{$_}  = "" unless defined $Pages{$_};
+			$Pages{$_} .= "$dir/$_.pod:";
+			last;
+		    }
+		}
+		close(F);
+	    }
 	}
     }
     closedir(DIR);
@@ -1107,7 +1120,7 @@ sub emit_item_tag($$$){
         $name = anchorify($name);
 	print HTML qq{<a name="$name">}, process_text( \$otext ), '</a>';
     }
-    print HTML "</strong><br />\n";
+    print HTML "</strong>\n";
     undef( $EmittedItem );
 }
 
@@ -1139,7 +1152,7 @@ sub process_item {
 
     # formatting: insert a paragraph if preceding item has >1 paragraph
     if( $After_Lpar ){
-	print HTML "<p></p>\n";
+	print HTML $need_dd ? "</dd>\n" : "</li>\n" if $After_Lpar;
 	$After_Lpar = 0;
     }
 
@@ -1172,7 +1185,6 @@ sub process_item {
         }
         $need_dd = 1;
     }
-    print HTML "</$emitted>" if $emitted;
     print HTML "\n";
     return $need_dd;
 }
@@ -1191,6 +1203,7 @@ sub process_over {
 # process_back - process a pod back tag and convert it to HTML format.
 #
 sub process_back {
+    my $need_dd = shift;
     if( $Listlevel == 0 ){
 	warn "$0: $Podfile: unexpected =back directive in paragraph $Paragraph.  ignoring.\n" unless $Quiet;
 	return;
@@ -1201,7 +1214,7 @@ sub process_back {
     # $Listend[$Listlevel] may have never been initialized.
     $Listlevel--;
     if( defined $Listend[$Listlevel] ){
-	print HTML '<p></p>' if $After_Lpar;
+	print HTML $need_dd ? "</dd>\n" : "</li>\n" if $After_Lpar;
 	print HTML $Listend[$Listlevel];
         print HTML "\n";
         pop( @Listend );
@@ -1395,7 +1408,7 @@ sub inIS_text($){
 sub process_puretext {
     my($text, $quote, $notinIS) = @_;
 
-    ## Guessing at func() or [$@%&]*var references in plain text is destined
+    ## Guessing at func() or [\$\@%&]*var references in plain text is destined
     ## to produce some strange looking ref's. uncomment to disable:
     ## $notinIS = 0;
 
@@ -1883,7 +1896,7 @@ sub coderef($$){
     my( $url );
 
     my $fid = fragment_id( $item );
-    if( defined( $page ) ){
+    if( defined( $page ) && $page ne "" ){
 	# we have been given a $page...
 	$page =~ s{::}{/}g;
 
@@ -2059,7 +2072,7 @@ sub fragment_id {
 	return $1 if $text =~ /->\s*(\w+)\s*\(?/;
 
 	# a variable name?
-	return $1 if $text =~ /^([$@%*]\S+)/;
+	return $1 if $text =~ /^([\$\@%*]\S+)/;
 
 	# some pattern matching operator?
 	return $1 if $text =~ m|^(\w+/).*/\w*$|;

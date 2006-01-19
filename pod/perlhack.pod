@@ -34,13 +34,12 @@ words, it's your usual mix of technical people.
 
 Over this group of porters presides Larry Wall.  He has the final word
 in what does and does not change in the Perl language.  Various
-releases of Perl are shepherded by a ``pumpking'', a porter
-responsible for gathering patches, deciding on a patch-by-patch
+releases of Perl are shepherded by a "pumpking", a porter
+responsible for gathering patches, deciding on a patch-by-patch,
 feature-by-feature basis what will and will not go into the release.
 For instance, Gurusamy Sarathy was the pumpking for the 5.6 release of
 Perl, and Jarkko Hietaniemi was the pumpking for the 5.8 release, and
-Hugo van der Sanden and Rafael Garcia-Suarez share the pumpking for
-the 5.10 release.
+Rafael Garcia-Suarez holds the pumpking crown for the 5.10 release.
 
 In addition, various people are pumpkings for different things.  For
 instance, Andy Dougherty and Jarkko Hietaniemi did a grand job as the
@@ -130,7 +129,7 @@ Is this something that only the submitter wants added to the language,
 or would it be broadly useful?  Sometimes, instead of adding a feature
 with a tight focus, the porters might decide to wait until someone
 implements the more generalized feature.  For instance, instead of
-implementing a ``delayed evaluation'' feature, the porters are waiting
+implementing a "delayed evaluation" feature, the porters are waiting
 for a macro system that would permit delayed evaluation and much more.
 
 =item Does it potentially introduce new bugs?
@@ -179,8 +178,8 @@ always a good idea.
 
 =item Is there another way to do it?
 
-Larry said ``Although the Perl Slogan is I<There's More Than One Way
-to Do It>, I hesitate to make 10 ways to do something''.  This is a
+Larry said "Although the Perl Slogan is I<There's More Than One Way
+to Do It>, I hesitate to make 10 ways to do something".  This is a
 tricky heuristic to navigate, though--one man's essential addition is
 another man's pointless cruft.
 
@@ -194,16 +193,16 @@ authors, ...  Perl is supposed to be easy.
 Working code is always preferred to pie-in-the-sky ideas.  A patch to
 add a feature stands a much higher chance of making it to the language
 than does a random feature request, no matter how fervently argued the
-request might be.  This ties into ``Will it be useful?'', as the fact
+request might be.  This ties into "Will it be useful?", as the fact
 that someone took the time to make the patch demonstrates a strong
 desire for the feature.
 
 =back
 
-If you're on the list, you might hear the word ``core'' bandied
-around.  It refers to the standard distribution.  ``Hacking on the
-core'' means you're changing the C source code to the Perl
-interpreter.  ``A core module'' is one that ships with Perl.
+If you're on the list, you might hear the word "core" bandied
+around.  It refers to the standard distribution.  "Hacking on the
+core" means you're changing the C source code to the Perl
+interpreter.  "A core module" is one that ships with Perl.
 
 =head2 Keeping in sync
 
@@ -217,8 +216,8 @@ changed.  The current state of the main trunk of repository, and patches
 that describe the individual changes that have happened since the last
 public release are available at this location:
 
-    http://public.activestate.com/gsar/APC/
-    ftp://ftp.linux.activestate.com/pub/staff/gsar/APC/
+    http://public.activestate.com/pub/apc/
+    ftp://public.activestate.com/pub/apc/
 
 If you're looking for a particular change, or a change that affected
 a particular set of files, you may find the B<Perl Repository Browser>
@@ -254,10 +253,10 @@ to doing so:
 =item rsync'ing the source tree
 
 Presuming you are in the directory where your perl source resides
-and you have rsync installed and available, you can `upgrade' to
+and you have rsync installed and available, you can "upgrade" to
 the bleadperl using:
 
- # rsync -avz rsync://ftp.linux.activestate.com/perl-current/ .
+ # rsync -avz rsync://public.activestate.com/perl-current/ .
 
 This takes care of updating every single item in the source tree to
 the latest applied patch level, creating files that are new (to your
@@ -268,7 +267,7 @@ Note that this will not delete any files that were in '.' before
 the rsync. Once you are sure that the rsync is running correctly,
 run it with the --delete and the --dry-run options like this:
 
- # rsync -avz --delete --dry-run rsync://ftp.linux.activestate.com/perl-current/ .
+ # rsync -avz --delete --dry-run rsync://public.activestate.com/perl-current/ .
 
 This will I<simulate> an rsync run that also deletes files not
 present in the bleadperl master copy. Observe the results from
@@ -355,7 +354,7 @@ yourself to the source files.
 Presuming you are in a directory where your patches reside, you can
 get them in sync with
 
- # rsync -avz rsync://ftp.linux.activestate.com/perl-current-diffs/ .
+ # rsync -avz rsync://public.activestate.com/perl-current-diffs/ .
 
 This makes sure the latest available patch is downloaded to your
 patch directory.
@@ -363,7 +362,7 @@ patch directory.
 It's then up to you to apply these patches, using something like
 
  # last=`ls -t *.gz | sed q`
- # rsync -avz rsync://ftp.linux.activestate.com/perl-current-diffs/ .
+ # rsync -avz rsync://public.activestate.com/perl-current-diffs/ .
  # find . -name '*.gz' -newer $last -exec gzcat {} \; >blead.patch
  # cd ../perl-current
  # patch -p1 -N <../perl-current-diffs/blead.patch
@@ -805,7 +804,7 @@ there's three things going on here.
 C<yyparse>, the parser, lives in F<perly.c>, although you're better off
 reading the original YACC input in F<perly.y>. (Yes, Virginia, there
 B<is> a YACC grammar for Perl!) The job of the parser is to take your
-code and `understand' it, splitting it into sentences, deciding which
+code and "understand" it, splitting it into sentences, deciding which
 operands go with which operators and so on.
 
 The parser is nobly assisted by the lexer, which chunks up your input
@@ -859,7 +858,7 @@ The C<PERL_ASYNC_CHECK> makes sure that things like signals interrupt
 execution if required.
 
 The actual functions called are known as PP code, and they're spread
-between four files: F<pp_hot.c> contains the `hot' code, which is most
+between four files: F<pp_hot.c> contains the "hot" code, which is most
 often used and highly optimized, F<pp_sys.c> contains all the
 system-specific functions, F<pp_ctl.c> contains the functions which
 implement control structures (C<if>, C<while> and the like) and F<pp.c>
@@ -878,9 +877,9 @@ retrieves the return op from it, and returns it.
 
 =item Exception handing
 
-Perl's exception handing (ie C<die> etc) is built on top of the low-level
+Perl's exception handing (i.e. C<die> etc) is built on top of the low-level
 C<setjmp()>/C<longjmp()> C-library functions. These basically provide a
-way to capture the current PC and SP registers and later restore them; ie
+way to capture the current PC and SP registers and later restore them; i.e.
 a C<longjmp()> continues at the point in code where a previous C<setjmp()>
 was done, with anything further up on the C stack being lost. This is why
 code should always save values using C<SAVE_FOO> rather than in auto
@@ -1254,10 +1253,10 @@ If you're not used to reading BNF grammars, this is how it works: You're
 fed certain things by the tokeniser, which generally end up in upper
 case. Here, C<ADDOP>, is provided when the tokeniser sees C<+> in your
 code. C<ASSIGNOP> is provided when C<=> is used for assigning. These are
-`terminal symbols', because you can't get any simpler than them.
+"terminal symbols", because you can't get any simpler than them.
 
 The grammar, lines one and three of the snippet above, tells you how to
-build up more complex forms. These complex forms, `non-terminal symbols'
+build up more complex forms. These complex forms, "non-terminal symbols"
 are generally placed in lower case. C<term> here is a non-terminal
 symbol, representing a single expression.
 
@@ -1286,8 +1285,8 @@ call C<newBINOP> to create a new binary operator. The first parameter to
 C<newBINOP>, a function in F<op.c>, is the op type. It's an addition
 operator, so we want the type to be C<ADDOP>. We could specify this
 directly, but it's right there as the second token in the input, so we
-use C<$2>. The second parameter is the op's flags: 0 means `nothing
-special'. Then the things to add: the left and right hand side of our
+use C<$2>. The second parameter is the op's flags: 0 means "nothing
+special". Then the things to add: the left and right hand side of our
 expression, in scalar context.
 
 =head2 Stacks
@@ -1335,14 +1334,14 @@ description of the macros used in stack manipulation.
 
 =item Mark stack
 
-I say `your portion of the stack' above because PP code doesn't
+I say "your portion of the stack" above because PP code doesn't
 necessarily get the whole stack to itself: if your function calls
 another function, you'll only want to expose the arguments aimed for the
 called function, and not (necessarily) let it get at your own data. The
-way we do this is to have a `virtual' bottom-of-stack, exposed to each
+way we do this is to have a "virtual" bottom-of-stack, exposed to each
 function. The mark stack keeps bookmarks to locations in the argument
 stack usable by each function. For instance, when dealing with a tied
-variable, (internally, something with `P' magic) Perl has to call
+variable, (internally, something with "P" magic) Perl has to call
 methods for accesses to the tied variables. However, we need to separate
 the arguments exposed to the method to the argument exposed to the
 original function - the store or fetch or whatever it may be. Here's how
@@ -1859,6 +1858,9 @@ the module maintainer (with a copy to p5p).  This will help the module
 maintainer keep the CPAN version in sync with the core version without
 constantly scanning p5p.
 
+The list of maintainers of core modules is usefully documented in
+F<Porting/Maintainers.pl>.
+
 =head2 Adding a new function to the core
 
 If, as part of a patch to fix a bug, or just because you have an
@@ -2080,7 +2082,7 @@ F<testname.valgrind>.
 
 (Only in Tru64)  Run all the tests using the memory leak + naughty
 memory access tool "Third Degree".  The log files will be named
-F<perl3.log.testname>.
+F<perl.3log.testname>.
 
 =item test.torture torturetest
 

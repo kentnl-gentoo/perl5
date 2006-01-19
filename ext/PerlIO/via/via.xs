@@ -45,7 +45,7 @@ PerlIOVia_fetchmethod(pTHX_ PerlIOVia * s, char *method, CV ** save)
 {
     GV *gv = gv_fetchmeth(s->stash, method, strlen(method), 0);
 #if 0
-    Perl_warn(aTHX_ "Lookup %s::%s => %p", HvNAME(s->stash), method, gv);
+    Perl_warn(aTHX_ "Lookup %s::%s => %p", HvNAME_get(s->stash), method, gv);
 #endif
     if (gv) {
 	return *save = GvCV(gv);
@@ -87,7 +87,7 @@ PerlIOVia_method(pTHX_ PerlIO * f, char *method, CV ** save, int flags,
 	}
 	if (*PerlIONext(f)) {
 	    if (!s->fh) {
-		GV *gv = newGVgen(HvNAME(s->stash));
+		GV *gv = newGVgen(HvNAME_get(s->stash));
 		GvIOp(gv) = newIO();
 		s->fh = newRV_noinc((SV *) gv);
 		s->io = GvIOp(gv);
@@ -141,7 +141,7 @@ PerlIOVia_pushed(pTHX_ PerlIO * f, const char *mode, SV * arg,
 		    newSVpvn(Perl_form(aTHX_ "PerlIO::via::%s", pkg),
 			     pkglen + 13);
 		SvREFCNT_dec(arg);
-		s->stash = gv_stashpvn(SvPVX(s->obj), pkglen + 13, FALSE);
+		s->stash = gv_stashpvn(SvPVX_const(s->obj), pkglen + 13, FALSE);
 	    }
 	    if (s->stash) {
 		char lmode[8];
@@ -247,7 +247,7 @@ PerlIOVia_open(pTHX_ PerlIO_funcs * self, PerlIO_list_t * layers,
 	else {
 	    /* Required open method not present */
 	    PerlIO_funcs *tab = NULL;
-	    const IV m = n - 1;
+	    IV m = n - 1;
 	    while (m >= 0) {
 		PerlIO_funcs *t =
 		    PerlIO_layer_fetch(aTHX_ layers, m, NULL);
@@ -255,7 +255,7 @@ PerlIOVia_open(pTHX_ PerlIO_funcs * self, PerlIO_list_t * layers,
 		    tab = t;
 		    break;
 		}
-		n--;
+		m--;
 	    }
 	    if (tab) {
 		if ((*tab->Open) (aTHX_ tab, layers, m, mode, fd, imode,

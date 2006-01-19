@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.65";
+our $VERSION   = "0.66";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -132,12 +132,12 @@ sub walk_output { # updates $walkHandle
 }
 
 sub concise_subref {
-    my($order, $coderef) = @_;
+    my($order, $coderef, $name) = @_;
     my $codeobj = svref_2object($coderef);
 
-    return concise_stashref(@_)	
+    return concise_stashref(@_)
 	unless ref $codeobj eq 'B::CV';
-    concise_cv_obj($order, $codeobj);
+    concise_cv_obj($order, $codeobj, $name);
 }
 
 sub concise_stashref {
@@ -156,17 +156,42 @@ sub concise_stashref {
 
 # This should have been called concise_subref, but it was exported
 # under this name in versions before 0.56
-sub concise_cv { concise_subref(@_); }
+*concise_cv = \&concise_subref;
 
 sub concise_cv_obj {
-    my ($order, $cv) = @_;
+    my ($order, $cv, $name) = @_;
+    # name is either a string, or a CODE ref (copy of $cv arg??)
+
     $curcv = $cv;
-    die "err: coderef has no START\n" if class($cv->START) eq "NULL";
+    if ($cv->XSUB) {
+	print $walkHandle "$name is XS code\n";
+	return;
+    }
+    if (class($cv->START) eq "NULL") {
+	no strict 'refs';
+	if (ref $name eq 'CODE') {
+	    print $walkHandle "coderef $name has no START\n";
+	}
+	elsif (exists &$name) {
+	    print $walkHandle "$name exists in stash, but has no START\n";
+	}
+	else {
+	    print $walkHandle "$name not in symbol table\n";
+	}
+	return;
+    }
     sequence($cv->START);
     if ($order eq "exec") {
 	walk_exec($cv->START);
-    } elsif ($order eq "basic") {
-	walk_topdown($cv->ROOT, sub { $_[0]->concise($_[1]) }, 0);
+    }
+    elsif ($order eq "basic") {
+	# walk_topdown($cv->ROOT, sub { $_[0]->concise($_[1]) }, 0);
+	my $root = $cv->ROOT;
+	unless (ref $root eq 'B::NULL') {
+	    walk_topdown($root, sub { $_[0]->concise($_[1]) }, 0);
+	} else {
+	    print $walkHandle "B::NULL encountered doing ROOT on $cv. avoiding disaster\n";
+	}
     } else {
 	print $walkHandle tree($cv->ROOT, 0);
     }
@@ -193,14 +218,14 @@ sub concise_specials {
     my($name, $order, @cv_s) = @_;
     my $i = 1;
     if ($name eq "BEGIN") {
-	splice(@cv_s, 0, 7); # skip 7 BEGIN blocks in this file
+	splice(@cv_s, 0, 8); # skip 7 BEGIN blocks in this file. NOW 8 ??
     } elsif ($name eq "CHECK") {
 	pop @cv_s; # skip the CHECK block that calls us
     }
     for my $cv (@cv_s) {
 	print $walkHandle "$name $i:\n";
 	$i++;
-	concise_cv_obj($order, $cv);
+	concise_cv_obj($order, $cv, $name);
     }
 }
 
@@ -217,8 +242,11 @@ my @tree_decorations =
 
 sub compileOpts {
     # set rendering state from options and args
-    my @options = grep(/^-/, @_);
-    my @args = grep(!/^-/, @_);
+    my (@options,@args);
+    if (@_) {
+	@options = grep(/^-/, @_);
+	@args = grep(!/^-/, @_);
+    }
     for my $o (@options) {
 	# mode/order
 	if ($o eq "-basic") {
@@ -278,20 +306,20 @@ sub compile {
 
 	    if ($objname eq "BEGIN") {
 		concise_specials("BEGIN", $order,
-			       B::begin_av->isa("B::AV") ?
-			       B::begin_av->ARRAY : ());
+				 B::begin_av->isa("B::AV") ?
+				 B::begin_av->ARRAY : ());
 	    } elsif ($objname eq "INIT") {
 		concise_specials("INIT", $order,
-			       B::init_av->isa("B::AV") ?
-			       B::init_av->ARRAY : ());
+				 B::init_av->isa("B::AV") ?
+				 B::init_av->ARRAY : ());
 	    } elsif ($objname eq "CHECK") {
 		concise_specials("CHECK", $order,
-			       B::check_av->isa("B::AV") ?
-			       B::check_av->ARRAY : ());
+				 B::check_av->isa("B::AV") ?
+				 B::check_av->ARRAY : ());
 	    } elsif ($objname eq "END") {
 		concise_specials("END", $order,
-                                     B::end_av->isa("B::AV") ?
-			       B::end_av->ARRAY : ());
+				 B::end_av->isa("B::AV") ?
+				 B::end_av->ARRAY : ());
 	    }
 	    else {
 		# convert function names to subrefs
@@ -304,11 +332,13 @@ sub compile {
 		    $objname = "main::" . $objname unless $objname =~ /::/;
 		    print $walkHandle "$objname:\n";
 		    no strict 'refs';
-		    die "err: unknown function ($objname)\n"
-			unless *{$objname}{CODE};
+		    unless (exists &$objname) {
+			print $walkHandle "err: unknown function ($objname)\n";
+			return;
+		    }
 		    $objref = \&$objname;
 		}
-		concise_subref($order, $objref);
+		concise_subref($order, $objref, $objname);
 	    }
 	}
 	if (!@args or $do_main) {
@@ -394,7 +424,7 @@ sub walk_topdown {
 	    walk_topdown($kid, $sub, $level + 1);
 	}
     }
-    if (class($op) eq "PMOP") {
+    elsif (class($op) eq "PMOP") {
 	my $maybe_root = $op->pmreplroot;
 	if (ref($maybe_root) and $maybe_root->isa("B::OP")) {
 	    # It really is the root of the replacement, not something
@@ -529,7 +559,7 @@ $priv{$_}{64} = "REFC" for ("leave", "leavesub", "leavesublv", "leavewrite");
 $priv{"aassign"}{64} = "COMMON";
 $priv{"aassign"}{32} = "PHASH" if $] < 5.009;
 $priv{"sassign"}{64} = "BKWARD";
-$priv{$_}{64} = "RTIME" for ("match", "subst", "substcont");
+$priv{$_}{64} = "RTIME" for ("match", "subst", "substcont", "qr");
 @{$priv{"trans"}}{1,2,4,8,16,64} = ("<UTF", ">UTF", "IDENT", "SQUASH", "DEL",
 				    "COMPL", "GROWS");
 $priv{"repeat"}{64} = "DOLIST";
@@ -597,10 +627,11 @@ sub private_flags {
 }
 
 sub concise_sv {
-    my($sv, $hr) = @_;
+    my($sv, $hr, $preferpv) = @_;
     $hr->{svclass} = class($sv);
     $hr->{svclass} = "UV"
       if $hr->{svclass} eq "IV" and $sv->FLAGS & SVf_IVisUV;
+    Carp::cluck("bad concise_sv: $sv") unless $sv and $$sv;
     $hr->{svaddr} = sprintf("%#x", $$sv);
     if ($hr->{svclass} eq "GV") {
 	my $gv = $sv;
@@ -619,6 +650,8 @@ sub concise_sv {
 	}
 	if (class($sv) eq "SPECIAL") {
 	    $hr->{svval} .= ["Null", "sv_undef", "sv_yes", "sv_no"]->[$$sv];
+	} elsif ($preferpv && $sv->FLAGS & SVf_POK) {
+	    $hr->{svval} .= cstring($sv->PV);
 	} elsif ($sv->FLAGS & SVf_NOK) {
 	    $hr->{svval} .= $sv->NV;
 	} elsif ($sv->FLAGS & SVf_IOK) {
@@ -729,19 +762,19 @@ sub concise_op {
     } elsif ($h{class} eq "LOGOP") {
 	undef $lastnext;
 	$h{arg} = "(other->" . seq($op->other) . ")";
-    } elsif ($h{class} eq "SVOP") {
+    }
+    elsif ($h{class} eq "SVOP" or $h{class} eq "PADOP") {
 	unless ($h{name} eq 'aelemfast' and $op->flags & OPf_SPECIAL) {
-	    if (! ${$op->sv}) {
-		my $sv = (($curcv->PADLIST->ARRAY)[1]->ARRAY)[$op->targ];
-		$h{arg} = "[" . concise_sv($sv, \%h) . "]";
+	    my $idx = ($h{class} eq "SVOP") ? $op->targ : $op->padix;
+	    my $preferpv = $h{name} eq "method_named";
+	    if ($h{class} eq "PADOP" or !${$op->sv}) {
+		my $sv = (($curcv->PADLIST->ARRAY)[1]->ARRAY)[$idx];
+		$h{arg} = "[" . concise_sv($sv, \%h, $preferpv) . "]";
 		$h{targarglife} = $h{targarg} = "";
 	    } else {
-		$h{arg} = "(" . concise_sv($op->sv, \%h) . ")";
+		$h{arg} = "(" . concise_sv($op->sv, \%h, $preferpv) . ")";
 	    }
 	}
-    } elsif ($h{class} eq "PADOP") {
-	my $sv = (($curcv->PADLIST->ARRAY)[1]->ARRAY)[$op->padix];
-	$h{arg} = "[" . concise_sv($sv, \%h) . "]";
     }
     $h{seq} = $h{hyphseq} = seq($op);
     $h{seq} = "" if $h{seq} eq "-";
@@ -908,7 +941,7 @@ tree in one of several space-efficient text formats suitable for debugging
 the inner workings of perl or other compiler backends. It can print OPs in
 the order they appear in the OP tree, in the order they will execute, or
 in a text approximation to their tree structure, and the format of the
-information displyed is customizable. Its function is similar to that of
+information displayed is customizable. Its function is similar to that of
 perl's B<-Dx> debugging flag or the B<B::Terse> module, but it is more
 sophisticated and flexible.
 
@@ -1214,7 +1247,7 @@ Private flags, if any are set for an opcode, are displayed after a '/'
 
 They're opcode specific, and occur less often than the public ones, so
 they're represented by short mnemonics instead of single-chars; see
-L<op.h> for gory details, or try this quick 2-liner:
+F<op.h> for gory details, or try this quick 2-liner:
 
   $> perl -MB::Concise -de 1
   DB<1> |x \%B::Concise::priv
@@ -1310,7 +1343,7 @@ rendering of each opcode.
 Only some of these are used by the standard styles, the others are
 provided for you to delve into optree mechanics, should you wish to
 add a new style (see L</add_style> below) that uses them.  You can
-also add new ones using L<add_callback>.
+also add new ones using L</add_callback>.
 
 =over 4
 
@@ -1580,12 +1613,13 @@ the output.
 
 =head2 Errors
 
-All detected errors, (invalid arguments, internal errors, etc.) are
-resolved with a die($message). Use an eval if you wish to catch these
-errors and continue processing.
+Errors in rendering (non-existent function-name, non-existent coderef)
+are written to the STDOUT, or wherever you've set it via
+walk_output().
 
-In particular, B<compile> will die if you've asked for a non-existent
-function-name, a non-existent coderef, or a non-CODE reference.
+Errors using the various *style* calls, and bad args to walk_output(),
+result in die().  Use an eval if you wish to catch these errors and
+continue processing.
 
 =head1 AUTHOR
 

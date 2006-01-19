@@ -658,9 +658,9 @@ Do not assume that the alphabetic characters are encoded contiguously
 
 Do not assume anything about the ordering of the characters.
 The lowercase letters may come before or after the uppercase letters;
-the lowercase and uppercase may be interlaced so that both `a' and `A'
-come before `b'; the accented and other international characters may
-be interlaced so that E<auml> comes before `b'.
+the lowercase and uppercase may be interlaced so that both "a" and "A"
+come before "b"; the accented and other international characters may
+be interlaced so that E<auml> comes before "b".
 
 =head2 Internationalisation
 
@@ -1555,6 +1555,17 @@ suffixes.  C<-S> is meaningless.  (Win32)
 
 C<-x> (or C<-X>) determine if a file has an executable file type.
 (S<RISC OS>)
+
+=item atan2 Y,X
+
+Due to issues with various CPUs, math libraries, compilers, and standards,
+results for C<atan2()> may vary depending on any combination of the above.
+Perl attempts to conform to the Open Group/IEEE standards for the results
+returned from C<atan2()>, but cannot force the issue if the system Perl is
+run on does not allow it.  (Tru64, HP-UX 10.20) 
+
+The current version of the standards for C<atan2()> is available at 
+L<http://www.opengroup.org/onlinepubs/009695399/functions/atan2.html>.
 
 =item atan2
 

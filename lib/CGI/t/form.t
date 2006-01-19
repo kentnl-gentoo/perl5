@@ -4,10 +4,10 @@
 # ensure the blib's are in @INC, else we might use the core CGI.pm
 use lib qw(. ./blib/lib ./blib/arch);
 
-use Test::More tests => 17;
+use Test::More tests => 18;
 
 BEGIN { use_ok('CGI'); };
-use CGI (':standard','-no_debug');
+use CGI (':standard','-no_debug','-tabindex');
 
 my $CRLF = "\015\012";
 if ($^O eq 'VMS') {
@@ -111,9 +111,19 @@ is(popup_menu(-name     => 'game',
 	      '-values' => [qw/checkers chess cribbage/],
 	      -default  => 'cribbage',
 	      -override => 1),
-   '<select name="game" tabindex="21">
+   '<select name="game" tabindex="21" >
 <option value="checkers">checkers</option>
 <option value="chess">chess</option>
 <option selected="selected" value="cribbage">cribbage</option>
 </select>',
    'popup_menu()');
+is(scrolling_list(-name => 'game',
+		  '-values' => [qw/checkers chess cribbage/],
+		  -default => 'cribbage',
+		  -override=>1),
+   '<select name="game" tabindex="22"  size="3">
+<option value="checkers">checkers</option>
+<option value="chess">chess</option>
+<option selected="selected" value="cribbage">cribbage</option>
+</select>',
+  'scrolling_list()');

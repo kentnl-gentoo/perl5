@@ -1,8 +1,9 @@
-/*
+/*  -*- buffer-read-only: t -*-
+ *
  *    embedvar.h
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -248,6 +249,7 @@
 #define PL_doextract		(PERL_GET_INTERP->Idoextract)
 #define PL_doswitches		(PERL_GET_INTERP->Idoswitches)
 #define PL_dowarn		(PERL_GET_INTERP->Idowarn)
+#define PL_dumper_fd		(PERL_GET_INTERP->Idumper_fd)
 #define PL_e_script		(PERL_GET_INTERP->Ie_script)
 #define PL_egid			(PERL_GET_INTERP->Iegid)
 #define PL_encoding		(PERL_GET_INTERP->Iencoding)
@@ -572,6 +574,7 @@
 #define PL_doextract		(vTHX->Idoextract)
 #define PL_doswitches		(vTHX->Idoswitches)
 #define PL_dowarn		(vTHX->Idowarn)
+#define PL_dumper_fd		(vTHX->Idumper_fd)
 #define PL_e_script		(vTHX->Ie_script)
 #define PL_egid			(vTHX->Iegid)
 #define PL_encoding		(vTHX->Iencoding)
@@ -899,6 +902,7 @@
 #define PL_Idoextract		PL_doextract
 #define PL_Idoswitches		PL_doswitches
 #define PL_Idowarn		PL_dowarn
+#define PL_Idumper_fd		PL_dumper_fd
 #define PL_Ie_script		PL_e_script
 #define PL_Iegid		PL_egid
 #define PL_Iencoding		PL_encoding
@@ -1505,3 +1509,5 @@
 #define tainting		PL_tainting
 
 #endif /* PERL_POLLUTE */
+
+/* ex: set ro: */

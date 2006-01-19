@@ -116,7 +116,7 @@ PERLVAR(Trs,		SV *)		/* input record separator $/ */
 PERLVAR(Tlast_in_gv,	GV *)		/* GV used in last <FH> */
 PERLVAR(Tofs_sv,	SV *)		/* output field separator $, */
 PERLVAR(Tdefoutgv,	GV *)		/* default FH for output */
-PERLVARI(Tchopset,	char *,	" \n-")	/* $: */
+PERLVARI(Tchopset,	const char *,	" \n-")	/* $: */
 PERLVAR(Tformtarget,	SV *)
 PERLVAR(Tbodytarget,	SV *)
 PERLVAR(Ttoptarget,	SV *)
@@ -237,8 +237,7 @@ PERLVARI(Tregint_string,re_intuit_string_t, MEMBER_TO_FPTR(Perl_re_intuit_string
 PERLVARI(Tregfree,	regfree_t, MEMBER_TO_FPTR(Perl_pregfree))
 					/* Pointer to REx free()er */
 
-PERLVARI(Treginterp_cnt,int,	    0)	/* Whether `Regexp'
-						   was interpolated. */
+PERLVARI(Treginterp_cnt,int,	    0)	/* Whether "Regexp" was interpolated. */
 PERLVARI(Treg_starttry,	char *,	    0)	/* -Dr: where regtry was called. */
 PERLVARI(Twatchaddr,	char **,    0)
 PERLVAR(Twatchok,	char *)

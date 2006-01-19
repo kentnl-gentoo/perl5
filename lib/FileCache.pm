@@ -1,6 +1,6 @@
 package FileCache;
 
-our $VERSION = '1.05';
+our $VERSION = '1.06';
 
 =head1 NAME
 
@@ -51,6 +51,8 @@ append them to the command string as you would system EXPR.
 
 Returns EXPR on success for convenience. You may neglect the
 return value and manipulate EXPR as the filehandle directly if you prefer.
+
+=back
 
 =head1 CAVEATS
 

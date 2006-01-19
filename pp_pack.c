@@ -158,12 +158,14 @@ S_mul128(pTHX_ SV *sv, U8 m)
 
 # define DO_BO_UNPACK(var, type)
 # define DO_BO_PACK(var, type)
-# define DO_BO_UNPACK_PTR(var, type, pre_cast)
-# define DO_BO_PACK_PTR(var, type, pre_cast)
+# define DO_BO_UNPACK_PTR(var, type, pre_cast, post_cast)
+# define DO_BO_PACK_PTR(var, type, pre_cast, post_cast)
 # define DO_BO_UNPACK_N(var, type)
 # define DO_BO_PACK_N(var, type)
 # define DO_BO_UNPACK_P(var)
 # define DO_BO_PACK_P(var)
+# define DO_BO_UNPACK_PC(var)
+# define DO_BO_PACK_PC(var)
 
 #else
 
@@ -190,28 +192,28 @@ S_mul128(pTHX_ SV *sv, U8 m)
           }                                                                   \
         } STMT_END
 
-# define DO_BO_UNPACK_PTR(var, type, pre_cast)                                \
+# define DO_BO_UNPACK_PTR(var, type, pre_cast, post_cast)                     \
         STMT_START {                                                          \
           switch (TYPE_ENDIANNESS(datumtype)) {                               \
             case TYPE_IS_BIG_ENDIAN:                                          \
-              var = (void *) my_betoh ## type ((pre_cast) var);               \
+              var = (post_cast*) my_betoh ## type ((pre_cast) var);           \
               break;                                                          \
             case TYPE_IS_LITTLE_ENDIAN:                                       \
-              var = (void *) my_letoh ## type ((pre_cast) var);               \
+              var = (post_cast *) my_letoh ## type ((pre_cast) var);          \
               break;                                                          \
             default:                                                          \
               break;                                                          \
           }                                                                   \
         } STMT_END
 
-# define DO_BO_PACK_PTR(var, type, pre_cast)                                  \
+# define DO_BO_PACK_PTR(var, type, pre_cast, post_cast)                       \
         STMT_START {                                                          \
           switch (TYPE_ENDIANNESS(datumtype)) {                               \
             case TYPE_IS_BIG_ENDIAN:                                          \
-              var = (void *) my_htobe ## type ((pre_cast) var);               \
+              var = (post_cast *) my_htobe ## type ((pre_cast) var);          \
               break;                                                          \
             case TYPE_IS_LITTLE_ENDIAN:                                       \
-              var = (void *) my_htole ## type ((pre_cast) var);               \
+              var = (post_cast *) my_htole ## type ((pre_cast) var);          \
               break;                                                          \
             default:                                                          \
               break;                                                          \
@@ -235,14 +237,20 @@ S_mul128(pTHX_ SV *sv, U8 m)
          } STMT_END
 
 # if PTRSIZE == INTSIZE
-#  define DO_BO_UNPACK_P(var)	DO_BO_UNPACK_PTR(var, i, int)
-#  define DO_BO_PACK_P(var)	DO_BO_PACK_PTR(var, i, int)
+#  define DO_BO_UNPACK_P(var)	DO_BO_UNPACK_PTR(var, i, int, void)
+#  define DO_BO_PACK_P(var)	DO_BO_PACK_PTR(var, i, int, void)
+#  define DO_BO_UNPACK_PC(var)	DO_BO_UNPACK_PTR(var, i, int, char)
+#  define DO_BO_PACK_PC(var)	DO_BO_PACK_PTR(var, i, int, char)
 # elif PTRSIZE == LONGSIZE
-#  define DO_BO_UNPACK_P(var)	DO_BO_UNPACK_PTR(var, l, long)
-#  define DO_BO_PACK_P(var)	DO_BO_PACK_PTR(var, l, long)
+#  define DO_BO_UNPACK_P(var)	DO_BO_UNPACK_PTR(var, l, long, void)
+#  define DO_BO_PACK_P(var)	DO_BO_PACK_PTR(var, l, long, void)
+#  define DO_BO_UNPACK_PC(var)	DO_BO_UNPACK_PTR(var, l, long, char)
+#  define DO_BO_PACK_PC(var)	DO_BO_PACK_PTR(var, l, long, char)
 # else
 #  define DO_BO_UNPACK_P(var)	BO_CANT_DOIT(unpack, pointer)
 #  define DO_BO_PACK_P(var)	BO_CANT_DOIT(pack, pointer)
+#  define DO_BO_UNPACK_PC(var)	BO_CANT_DOIT(unpack, pointer)
+#  define DO_BO_PACK_PC(var)	BO_CANT_DOIT(pack, pointer)
 # endif
 
 # if defined(my_htolen) && defined(my_letohn) && \
@@ -603,8 +611,8 @@ S_measure_struct(pTHX_ register tempsym_t* symptr)
 /* locate matching closing parenthesis or bracket
  * returns char pointer to char after match, or NULL
  */
-STATIC char *
-S_group_end(pTHX_ register char *patptr, register char *patend, char ender)
+STATIC const char *
+S_group_end(pTHX_ register const char *patptr, register const char *patend, char ender)
 {
     while (patptr < patend) {
 	char c = *patptr++;
@@ -632,8 +640,8 @@ S_group_end(pTHX_ register char *patptr, register char *patend, char ender)
  * Expects a pointer to the first digit and address of length variable
  * Advances char pointer to 1st non-digit char and returns number
  */ 
-STATIC char *
-S_get_num(pTHX_ register char *patptr, I32 *lenptr )
+STATIC const char *
+S_get_num(pTHX_ register const char *patptr, I32 *lenptr )
 {
   I32 len = *patptr++ - '0';
   while (isDIGIT(*patptr)) {
@@ -651,8 +659,8 @@ S_get_num(pTHX_ register char *patptr, I32 *lenptr )
 STATIC bool
 S_next_symbol(pTHX_ register tempsym_t* symptr )
 {
-  register char* patptr = symptr->patptr; 
-  register char* patend = symptr->patend; 
+  const char* patptr = symptr->patptr; 
+  const char* patend = symptr->patend; 
 
   symptr->flags &= ~FLAG_SLASH;
 
@@ -685,8 +693,9 @@ S_next_symbol(pTHX_ register tempsym_t* symptr )
         if( isDIGIT(*patptr) || *patptr == '*' || *patptr == '[' )
           Perl_croak(aTHX_ "()-group starts with a count in %s",
                      symptr->flags & FLAG_PACK ? "pack" : "unpack" );
-        symptr->grpbeg = patptr;
-        patptr = 1 + ( symptr->grpend = group_end(patptr, patend, ')') );
+        symptr->grpbeg = (char *) patptr;
+        patptr
+	    = 1 + ( symptr->grpend = (char *)group_end(patptr, patend, ')') );
         if( symptr->level >= MAX_SUB_TEMPLATE_LEVEL )
 	  Perl_croak(aTHX_ "Too deeply nested ()-groups in %s",
                      symptr->flags & FLAG_PACK ? "pack" : "unpack" );
@@ -701,7 +710,7 @@ S_next_symbol(pTHX_ register tempsym_t* symptr )
       /* look for modifiers */
       while (patptr < patend) {
         const char *allowed;
-        I32 modifier = 0;
+        I32 modifier;
         switch (*patptr) {
           case '!':
             modifier = TYPE_IS_SHRIEKING;
@@ -718,6 +727,8 @@ S_next_symbol(pTHX_ register tempsym_t* symptr )
             break;
 #endif
           default:
+            allowed = "";
+            modifier = 0;
             break;
         }
 
@@ -763,7 +774,7 @@ S_next_symbol(pTHX_ register tempsym_t* symptr )
           symptr->howlen = e_star;
 
         } else if (*patptr == '[') {
-          char* lenptr = ++patptr;            
+          const char* lenptr = ++patptr;            
           symptr->howlen = e_number;
           patptr = group_end( patptr, patend, ']' ) + 1;
           /* what kind of [] is it? */
@@ -774,8 +785,8 @@ S_next_symbol(pTHX_ register tempsym_t* symptr )
                          symptr->flags & FLAG_PACK ? "pack" : "unpack");
           } else {
             tempsym_t savsym = *symptr;
-            symptr->patend = patptr-1;
-            symptr->patptr = lenptr;
+            symptr->patend = (char *) patptr-1;
+            symptr->patptr = (char *) lenptr;
             savsym.length = measure_struct(symptr);
             *symptr = savsym;
           }
@@ -813,11 +824,11 @@ S_next_symbol(pTHX_ register tempsym_t* symptr )
       }
 
       symptr->code = code;
-      symptr->patptr = patptr; 
+      symptr->patptr = (char *) patptr; 
       return TRUE;
     }
   }
-  symptr->patptr = patptr; 
+  symptr->patptr = (char *) patptr; 
   return FALSE;
 }
 
@@ -1074,7 +1085,7 @@ S_unpack_rec(pTHX_ register tempsym_t* symptr, register char *s, char *strbeg, c
 		len = (strend - s) * 8;
 	    if (checksum) {
 		if (!PL_bitcount) {
-		    Newz(601, PL_bitcount, 256, char);
+		    Newxz(PL_bitcount, 256, char);
 		    for (bits = 1; bits < 256; bits++) {
 			if (bits & 1)	PL_bitcount[bits]++;
 			if (bits & 2)	PL_bitcount[bits]++;
@@ -1503,7 +1514,7 @@ S_unpack_rec(pTHX_ register tempsym_t* symptr, register char *s, char *strbeg, c
 	    while (len-- > 0) {
 		assert (sizeof(char*) <= strend - s);
 		Copy(s, &aptr, 1, char*);
-		DO_BO_UNPACK_P(aptr);
+		DO_BO_UNPACK_PC(aptr);
 		s += sizeof(char*);
 		/* newSVpv generates undef if aptr is NULL */
 		PUSHs(sv_2mortal(newSVpv(aptr, 0)));
@@ -1524,8 +1535,7 @@ S_unpack_rec(pTHX_ register tempsym_t* symptr, register char *s, char *strbeg, c
 			auv = 0;
 		    }
 		    else if (++bytes >= sizeof(UV)) {	/* promote to string */
-			char *t;
-			STRLEN n_a;
+			const char *t;
 
 			sv = Perl_newSVpvf(aTHX_ "%.*"UVf, (int)TYPE_DIGITS(UV), auv);
 			while (s < strend) {
@@ -1535,10 +1545,10 @@ S_unpack_rec(pTHX_ register tempsym_t* symptr, register char *s, char *strbeg, c
 				break;
 			    }
 			}
-			t = SvPV(sv, n_a);
+			t = SvPV_nolen_const(sv);
 			while (*t == '0')
 			    t++;
-			sv_chop(sv, t);
+			sv_chop(sv, (char *)t);
 			PUSHs(sv_2mortal(sv));
 			len--;
 			auv = 0;
@@ -1556,7 +1566,7 @@ S_unpack_rec(pTHX_ register tempsym_t* symptr, register char *s, char *strbeg, c
 		break;
 	    else {
 		Copy(s, &aptr, 1, char*);
-		DO_BO_UNPACK_P(aptr);
+		DO_BO_UNPACK_PC(aptr);
 		s += sizeof(char*);
 	    }
 	    /* newSVpvn generates undef if aptr is NULL */
@@ -1775,21 +1785,21 @@ PP(pp_unpack)
     I32 gimme = GIMME_V;
     STRLEN llen;
     STRLEN rlen;
-    register char *pat = SvPV(left, llen);
+    const char *pat = SvPV_const(left, llen);
 #ifdef PACKED_IS_OCTETS
     /* Packed side is assumed to be octets - so force downgrade if it
        has been UTF-8 encoded by accident
      */
     register char *s = SvPVbyte(right, rlen);
 #else
-    register char *s = SvPV(right, rlen);
+    const char *s = SvPV_const(right, rlen);
 #endif
-    char *strend = s + rlen;
-    register char *patend = pat + llen;
+    const char *strend = s + rlen;
+    const char *patend = pat + llen;
     register I32 cnt;
 
     PUTBACK;
-    cnt = unpackstring(pat, patend, s, strend,
+    cnt = unpackstring((char *)pat, (char *)patend, (char *)s, (char *)strend,
 		     ((gimme == G_SCALAR) ? FLAG_UNPACK_ONLY_ONE : 0)
 		     | (DO_UTF8(right) ? FLAG_UNPACK_DO_UTF8 : 0));
 
@@ -1828,11 +1838,10 @@ S_doencodes(pTHX_ register SV *sv, register char *s, register I32 len)
 }
 
 STATIC SV *
-S_is_an_int(pTHX_ char *s, STRLEN l)
+S_is_an_int(pTHX_ const char *s, STRLEN l)
 {
-  STRLEN	 n_a;
   SV             *result = newSVpvn(s, l);
-  char           *result_c = SvPV(result, n_a);	/* convenience */
+  char           *result_c = SvPV_nolen(result);	/* convenience */
   char           *out = result_c;
   bool            skip = 1;
   bool            ignore = 0;
@@ -2099,7 +2108,7 @@ S_pack_rec(pTHX_ SV *cat, register tempsym_t* symptr, register SV **beglist, SV 
 	case 'Z':
 	case 'a':
 	    fromstr = NEXTFROM;
-	    aptr = SvPV(fromstr, fromlen);
+	    aptr = (char *) SvPV_const(fromstr, fromlen);
 	    if (howlen == e_star) {   
 		len = fromlen;
 		if (datumtype == 'Z')
@@ -2558,17 +2567,18 @@ S_pack_rec(pTHX_ SV *cat, register tempsym_t* symptr, register SV **beglist, SV 
 		    sv_catpvn(cat, in, (buf + sizeof(buf)) - in);
 		}
 		else {
-		    char           *from, *result, *in;
+		    const char     *from;
+		    char           *result, *in;
 		    SV             *norm;
 		    STRLEN          len;
 		    bool            done;
 
 		    /* Copy string and check for compliance */
-		    from = SvPV(fromstr, len);
+		    from = SvPV_const(fromstr, len);
 		    if ((norm = is_an_int(from, len)) == NULL)
 			Perl_croak(aTHX_ "Can only compress unsigned integers in pack");
 
-		    New('w', result, len, char);
+		    Newx(result, len, char);
 		    in = result + len;
 		    done = FALSE;
 		    while (!done)
@@ -2702,17 +2712,17 @@ S_pack_rec(pTHX_ SV *cat, register tempsym_t* symptr, register SV **beglist, SV 
 				"Attempt to pack pointer to temporary value");
 		    }
 		    if (SvPOK(fromstr) || SvNIOK(fromstr))
-			aptr = SvPV_flags(fromstr, n_a, 0);
+			aptr = (char *) SvPV_nomg_const(fromstr, n_a);
 		    else
 			aptr = SvPV_force_flags(fromstr, n_a, 0);
 		}
-		DO_BO_PACK_P(aptr);
+		DO_BO_PACK_PC(aptr);
 		sv_catpvn(cat, (char*)&aptr, sizeof(char*));
 	    }
 	    break;
 	case 'u':
 	    fromstr = NEXTFROM;
-	    aptr = SvPV(fromstr, fromlen);
+	    aptr = (char *) SvPV_const(fromstr, fromlen);
 	    SvGROW(cat, fromlen * 4 / 3);
 	    if (len <= 2)
 		len = 45;
@@ -2743,13 +2753,14 @@ PP(pp_pack)
     dSP; dMARK; dORIGMARK; dTARGET;
     register SV *cat = TARG;
     STRLEN fromlen;
-    register char *pat = SvPVx(*++MARK, fromlen);
-    register char *patend = pat + fromlen;
+    SV *pat_sv = *++MARK;
+    register const char *pat = SvPV_const(pat_sv, fromlen);
+    register const char *patend = pat + fromlen;
 
     MARK++;
     sv_setpvn(cat, "", 0);
 
-    packlist(cat, pat, patend, MARK, SP + 1);
+    packlist(cat, (char *) pat, (char *) patend, MARK, SP + 1);
 
     SvSETMAGIC(cat);
     SP = ORIGMARK;
@@ -2764,5 +2775,5 @@ PP(pp_pack)
  * indent-tabs-mode: t
  * End:
  *
- * vim: shiftwidth=4:
-*/
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

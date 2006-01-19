@@ -5,6 +5,11 @@
 # and optionally also the relevant metaconfig units (-U option).
 # 
 
+BEGIN {
+    # Get function prototypes
+    require 'regen_lib.pl';
+}
+
 use strict;
 use Getopt::Std;
 my %opts;
@@ -35,13 +40,16 @@ my %map = (
 # Example #3: S_CBI   means type func_r(const char*, char*, int)
 
 
+safer_unlink 'reentr.h';
 die "reentr.h: $!" unless open(H, ">reentr.h");
+binmode H;
 select H;
 print <<EOF;
-/*
+/* -*- buffer-read-only: t -*-
+ *
  *    reentr.h
  *
- *    Copyright (C) 2002, 2003, 2005 by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -51,7 +59,7 @@ print <<EOF;
  */
 
 #ifndef REENTR_H
-#define REENTR_H 
+#define REENTR_H
 
 #ifdef USE_REENTRANT_API
 
@@ -173,6 +181,7 @@ while (<DATA>) { # Read in the protypes.
 
     # If given the -U option open up the metaconfig unit for this function.
     if ($opts{U} && open(U, ">d_${func}_r.U"))  {
+    	binmode U;
 	select U;
     }
 
@@ -337,7 +346,7 @@ sub pushssif {
 sub pushinitfree {
     my $func = shift;
     push @init, <<EOF;
-	New(31338, PL_reentrant_buffer->_${func}_buffer, PL_reentrant_buffer->_${func}_size, char);
+	Newx(PL_reentrant_buffer->_${func}_buffer, PL_reentrant_buffer->_${func}_size, char);
 EOF
     push @free, <<EOF;
 	Safefree(PL_reentrant_buffer->_${func}_buffer);
@@ -582,7 +591,7 @@ EOF
 EOF
 	    push @init, <<EOF;
 #if   !($D)
-	New(31338, PL_reentrant_buffer->_${genfunc}_buffer, PL_reentrant_buffer->_${genfunc}_size, char);
+	Newx(PL_reentrant_buffer->_${genfunc}_buffer, PL_reentrant_buffer->_${genfunc}_size, char);
 #endif
 EOF
 	    push @free, <<EOF;
@@ -841,19 +850,23 @@ print <<EOF;
  
 #endif
 
+/* ex: set ro: */
 EOF
 
 close(H);
 
 # Prepare to write the reentr.c.
 
+safer_unlink 'reentr.c';
 die "reentr.c: $!" unless open(C, ">reentr.c");
+binmode C;
 select C;
 print <<EOF;
-/*
+/* -*- buffer-read-only: t -*-
+ *
  *    reentr.c
  *
- *    Copyright (C) 2002, 2003, by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -889,7 +902,7 @@ Perl_reentrant_size(pTHX) {
 void
 Perl_reentrant_init(pTHX) {
 #ifdef USE_REENTRANT_API
-	New(31337, PL_reentrant_buffer, 1, REENTR);
+	Newx(PL_reentrant_buffer, 1, REENTR);
 	Perl_reentrant_size(aTHX);
 @init
 #endif /* USE_REENTRANT_API */
@@ -1132,6 +1145,7 @@ Perl_reentrant_retry(const char *f, ...)
     return retptr;
 }
 
+/* ex: set ro: */
 EOF
 
 __DATA__

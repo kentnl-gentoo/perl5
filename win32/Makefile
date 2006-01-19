@@ -1,7 +1,7 @@
 #
 # Makefile to build perl on Windows NT using Microsoft NMAKE.
 # Supported compilers:
-#	Visual C++ 2.0 through 6.0 (and possibly newer versions)
+#	Visual C++ 2.0 through 7.0 (and possibly newer versions)
 #	MS Platform SDK 64-bit compiler and tools **experimental**
 #
 # This is set up to build a perl.exe that runs off a shared library
@@ -32,7 +32,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.8.7
+#INST_VER	= \5.8.8
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -98,11 +98,18 @@ USE_LARGE_FILES	= define
 #USE_5005THREADS	= define
 
 #
-# uncomment one of the following lines if you are using either
-# Visual C++ 2.x or Visual C++ 6.x (aka Visual Studio 98)
+# uncomment exactly one of the following
 #
+# Visual C++ 2.x
 #CCTYPE		= MSVC20
+# Visual C++ > 2.x and < 6.x
+#CCTYPE		= MSVC
+# Visual C++ 6.x (aka Visual Studio 98)
 CCTYPE		= MSVC60
+# Visual C++ Toolkit 2003 (free version of Visual C++ 7.x command-line tools)
+#CCTYPE		= MSVC70FREE
+# Visual C++ 7.x (aka Visual Studio .NET 2003) (full version)
+#CCTYPE		= MSVC70
 
 #
 # uncomment next line if you want debug version of perl (big,slow)
@@ -177,6 +184,7 @@ CCLIBDIR	= $(CCHOME)\lib
 #
 # Additional compiler flags can be specified here.
 #
+BUILDOPT	= $(BUILDOPTEXTRA)
 
 # Adding -DPERL_HASH_SEED_EXPLICIT will disable randomization of Perl's
 # internal hash function unless the PERL_HASH_SEED environment variable is set.
@@ -349,11 +357,10 @@ BUILDOPT	= $(BUILDOPT) -DUSE_PERLIO
 ARCHNAME	= $(ARCHNAME)-thread
 !ENDIF
 
-# Visual Studio 98 specific
-!IF "$(CCTYPE)" == "MSVC60"
-
-# VC 6.0 can load the socket dll on demand.  Makes the test suite
-# run in about 10% less time.
+# Visual Studio 98 and .NET 2003 specific
+# VC++ 6.x and 7.x can load DLL's on demand.  Makes the test suite run in
+# about 10% less time.  (The free version of 7.x can't do this, however.)
+!IF "$(CCTYPE)" == "MSVC60" || "$(CCTYPE)" == "MSVC70"
 DELAYLOAD	= -DELAYLOAD:ws2_32.dll -DELAYLOAD:shell32.dll delayimp.lib
 !ENDIF
 
@@ -433,6 +440,14 @@ DEFINES		= $(DEFINES) -DWIN64 -DCONSERVATIVE
 OPTIMIZE	= $(OPTIMIZE) -Wp64 -Op
 !ENDIF
 
+# the string-pooling option -Gf is deprecated in VC++ 7.x and will be removed
+# in later versions, so use read-only string-pooling (-GF) instead
+!IF "$(CCTYPE)" == "MSVC70FREE" || "$(CCTYPE)" == "MSVC70"
+STRPOOL		= -GF
+!ELSE
+STRPOOL		= -Gf
+!ENDIF
+
 !IF "$(USE_PERLCRT)" != "define"
 BUILDOPT	= $(BUILDOPT) -DPERL_MSVCRT_READFIX
 !ENDIF
@@ -451,7 +466,8 @@ LIBBASEFILES	= $(LIBBASEFILES) odbc32.lib odbccp32.lib
 # we add LIBC here, since we may be using PerlCRT.dll
 LIBFILES	= $(LIBBASEFILES) $(LIBC)
 
-CFLAGS		= -nologo -Gf -W3 $(INCLUDES) $(DEFINES) $(LOCDEFS) \
+EXTRACFLAGS	= -nologo $(STRPOOL) -W3
+CFLAGS		= $(EXTRACFLAGS) $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
 LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
 		-libpath:"$(INST_COREDIR)" \
@@ -717,6 +733,10 @@ PERLDLL_OBJ	= $(PERLDLL_OBJ) $(WIN32_OBJ) $(DLL_OBJ)
 SETARGV_OBJ	= setargv$(o)
 !ENDIF
 
+# specify static extensions here
+#STATIC_EXT	= Cwd Compress/Zlib
+STATIC_EXT	= 
+
 DYNALOADER		= $(EXTDIR)\DynaLoader\DynaLoader
 SOCKET			= $(EXTDIR)\Socket\Socket
 FCNTL			= $(EXTDIR)\Fcntl\Fcntl
@@ -858,7 +878,7 @@ CFG_VARS	=					\
 		"archname=$(ARCHNAME)"			\
 		"cc=$(CC)"				\
 		"ld=$(LINK32)"				\
-		"ccflags=-nologo -Gf -W3 $(OPTIMIZE:"=\") $(DEFINES) $(BUILDOPT)"	\
+		"ccflags=$(EXTRACFLAGS) $(OPTIMIZE:"=\") $(DEFINES) $(BUILDOPT)"	\
 		"cf_email=$(EMAIL)"	 		\
 		"d_crypt=$(D_CRYPT)"			\
 		"d_mymalloc=$(PERL_MALLOC)"		\
@@ -965,11 +985,12 @@ $(DLL_OBJ)	: $(CORE_H)
 $(X2P_OBJ)	: $(CORE_H)
 
 perldll.def : $(MINIPERL) $(CONFIGPM) ..\global.sym ..\pp.sym ..\makedef.pl
+	$(MINIPERL) -I..\lib buildext.pl --create-perllibst-h
 	$(MINIPERL) -w ..\makedef.pl PLATFORM=win32 $(OPTIMIZE) $(DEFINES) $(BUILDOPT) \
 	    CCTYPE=$(CCTYPE) > perldll.def
 
-$(PERLDLL): perldll.def $(PERLDLL_OBJ) $(PERLDLL_RES)
-	$(LINK32) -dll -def:perldll.def -base:0x28000000 -out:$@ @<<
+$(PERLDLL): perldll.def $(PERLDLL_OBJ) $(PERLDLL_RES) Extensions_static
+	$(LINK32) -dll -def:perldll.def -base:0x28000000 -out:$@ @Extensions_static @<<
 		$(LINK_FLAGS) $(DELAYLOAD) $(LIBFILES) $(PERLDLL_OBJ) $(PERLDLL_RES)
 <<
 	$(XCOPY) $(PERLIMPLIB) $(COREDIR)
@@ -1037,8 +1058,13 @@ $(EXTDIR)\DynaLoader\dl_win32.xs: dl_win32.xs
 
 #-------------------------------------------------------------------------------
 Extensions: buildext.pl $(PERLDEP) $(CONFIGPM)
-	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR)
-	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext
+	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) --dynamic
+	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext --dynamic
+
+Extensions_static : buildext.pl
+	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) --static
+	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext --static
+	$(MINIPERL) -I..\lib buildext.pl --list-static-libs > Extensions_static
 
 Extensions_clean: 
 	-if exist $(MINIPERL) $(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) clean
@@ -1080,6 +1106,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.irix     ..\pod\perlirix.pod
 	copy ..\README.jp       ..\pod\perljp.pod
 	copy ..\README.ko       ..\pod\perlko.pod
+	copy ..\README.linux    ..\pod\perllinux.pod
 	copy ..\README.machten  ..\pod\perlmachten.pod
 	copy ..\README.macos    ..\pod\perlmacos.pod
 	copy ..\README.macosx   ..\pod\perlmacosx.pod
@@ -1100,7 +1127,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vms      ..\pod\perlvms.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl587delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl588delta.pod ..\pod\perldelta.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\lib
 	$(PERLEXE) lib_pm.PL
@@ -1171,12 +1198,12 @@ distclean: realclean
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldelta.pod perldgux.pod perldos.pod perlepoc.pod \
 	    perlfreebsd.pod perlhpux.pod perlhurd.pod perlirix.pod \
-	    perljp.pod perlko.pod perlmachten.pod perlmacos.pod \
-	    perlmacosx.pod perlmint.pod perlmpeix.pod perlnetware.pod \
-	    perlopenbsd.pod perlos2.pod perlos390.pod perlos400.pod \
-	    perlplan9.pod perlqnx.pod perlsolaris.pod perltru64.pod \
-	    perltw.pod perluts.pod perlvmesa.pod perlvms.pod perlvms.pod \
-	    perlvos.pod perlwin32.pod \
+	    perljp.pod perlko.pod perllinux.pod perlmachten.pod \
+	    perlmacos.pod perlmacosx.pod perlmint.pod perlmpeix.pod \
+	    perlnetware.pod perlopenbsd.pod perlos2.pod perlos390.pod \
+	    perlos400.pod perlplan9.pod perlqnx.pod perlsolaris.pod \
+	    perltru64.pod perltw.pod perluts.pod perlvmesa.pod perlvms.pod \
+	    perlvms.pod perlvos.pod perlwin32.pod \
 	    pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
@@ -1186,6 +1213,7 @@ distclean: realclean
 	-del /f ..\config.sh ..\splittree.pl perlmain.c dlutils.c config.h.new
 	-del /f $(CONFIGPM)
 	-del /f bin\*.bat
+	-del /f perllibst.h
 	-del /f $(PERLEXE_ICO) perl.base
 	-cd .. && del /s *.lib *.map *.pdb *.ilk *.bs *$(o) .exists pm_to_blib
 	-cd $(EXTDIR) && del /s *.def Makefile Makefile.old
@@ -1278,6 +1306,7 @@ _clean :
 	-@$(DEL) ..\x2p\*.exe ..\x2p\*.bat
 	-@$(DEL) *.ilk
 	-@$(DEL) *.pdb
+	-@$(DEL) Extensions_static
 
 clean : Extensions_clean _clean
 

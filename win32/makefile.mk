@@ -1,9 +1,9 @@
 #
 # Makefile to build perl on Windows NT using DMAKE.
 # Supported compilers:
-#	Visual C++ 2.0 through 6.0 (and possibly newer versions)
-#	Borland C++ 5.02
-#	Mingw32 with gcc-2.95.2 or better  **experimental**
+#	Visual C++ 2.0 through 7.0 (and possibly newer versions)
+#	Borland C++ 5.02 or better
+#	Mingw32 with gcc-2.95.2 or better
 #	MS Platform SDK 64-bit compiler and tools **experimental**
 #
 # This is set up to build a perl.exe that runs off a shared library
@@ -34,7 +34,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.8.7
+#INST_VER	*= \5.8.8
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -106,8 +106,12 @@ USE_LARGE_FILES	*= define
 #CCTYPE		*= MSVC20
 # Visual C++ > 2.x and < 6.x
 #CCTYPE		*= MSVC
-# Visual C++ >= 6.x
+# Visual C++ 6.x (aka Visual Studio 98)
 #CCTYPE		*= MSVC60
+# Visual C++ Toolkit 2003 (free version of Visual C++ 7.x command-line tools)
+#CCTYPE		*= MSVC70FREE
+# Visual C++ 7.x (aka Visual Studio .NET 2003) (full version)
+#CCTYPE		*= MSVC70
 # Borland 5.02 or later
 #CCTYPE		*= BORLAND
 # MinGW with gcc-2.95.2 or later
@@ -190,7 +194,7 @@ CRYPT_SRC	*= fcrypt.c
 # not be quoted)
 #
 .IF "$(CCTYPE)" == "BORLAND"
-CCHOME		*= C:\borland\bcc55
+CCHOME		*= C:\Borland\BCC55
 .ELIF "$(CCTYPE)" == "GCC"
 CCHOME		*= C:\MinGW
 .ELSE
@@ -202,6 +206,7 @@ CCLIBDIR	*= $(CCHOME)\lib
 #
 # Additional compiler flags can be specified here.
 #
+BUILDOPT	*= $(BUILDOPTEXTRA)
 
 #
 # Adding -DPERL_HASH_SEED_EXPLICIT will disable randomization of Perl's
@@ -348,19 +353,11 @@ ARCHNAME	= MSWin32-$(PROCESSOR_ARCHITECTURE)
 ARCHNAME	!:= $(ARCHNAME)-thread
 .ENDIF
 
-# Visual Studio 98 specific
-.IF "$(CCTYPE)" == "MSVC60"
-
-# VC 6.0 can load the socket dll on demand.  Makes the test suite
-# run in about 10% less time.
+# Visual Studio 98 and .NET 2003 specific
+# VC++ 6.x and 7.x can load DLL's on demand.  Makes the test suite run in
+# about 10% less time.  (The free version of 7.x can't do this, however.)
+.IF "$(CCTYPE)" == "MSVC60" || "$(CCTYPE)" == "MSVC70"
 DELAYLOAD	*= -DELAYLOAD:ws2_32.dll -DELAYLOAD:shell32.dll delayimp.lib
-
-.IF "$(CFG)" == "Debug"
-.ELSE
-# VC 6.0 seems capable of compiling perl correctly with optimizations
-# enabled.  Anything earlier fails tests.
-CFG		*= Optimize
-.ENDIF
 .ENDIF
 
 ARCHDIR		= ..\lib\$(ARCHNAME)
@@ -396,7 +393,7 @@ LINK32		= tlink32
 .ENDIF
 LIB32		= tlib /P128
 IMPLIB		= implib -c
-RSC		= rc
+RSC		= brcc32
 
 #
 # Options
@@ -409,7 +406,14 @@ SUBSYS		= console
 CXX_FLAG	= -P
 
 LIBC		= cw32mti.lib
-LIBFILES	= $(CRYPT_LIB) import32.lib $(LIBC)
+
+# same libs as MSVC, except Borland doesn't have oldnames.lib
+LIBFILES	= $(CRYPT_LIB) \
+		kernel32.lib user32.lib gdi32.lib winspool.lib \
+		comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib \
+		netapi32.lib uuid.lib ws2_32.lib mpr.lib winmm.lib \
+		version.lib odbc32.lib odbccp32.lib \
+		import32.lib $(LIBC)
 
 .IF  "$(CFG)" == "Debug"
 OPTIMIZE	= -v -D_RTLDLL -DDEBUGGING
@@ -419,9 +423,11 @@ OPTIMIZE	= -O2 -D_RTLDLL
 LINK_DBG	=
 .ENDIF
 
+EXTRACFLAGS	=
 CFLAGS		= -w -g0 -tWM -tWD $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
-LINK_FLAGS	= $(LINK_DBG) -L"$(INST_COREDIR)"  -L"$(CCLIBDIR)"
+LINK_FLAGS	= $(LINK_DBG) -L"$(INST_COREDIR)" -L"$(CCLIBDIR)" \
+		-L"$(CCLIBDIR)\PSDK"
 OBJOUT_FLAG	= -o
 EXEOUT_FLAG	= -e
 LIBOUT_FLAG	=
@@ -464,7 +470,7 @@ LIBFILES	= $(CRYPT_LIB) $(LIBC) \
 		  -lmoldname -lkernel32 -luser32 -lgdi32 \
 		  -lwinspool -lcomdlg32 -ladvapi32 -lshell32 -lole32 \
 		  -loleaut32 -lnetapi32 -luuid -lws2_32 -lmpr \
-		  -lwinmm -lversion -lodbc32
+		  -lwinmm -lversion -lodbc32 -lodbccp32
 
 .IF  "$(CFG)" == "Debug"
 OPTIMIZE	= -g -O2 -DDEBUGGING
@@ -474,6 +480,7 @@ OPTIMIZE	= -s -O2
 LINK_DBG	= -s
 .ENDIF
 
+EXTRACFLAGS	=
 CFLAGS		= $(INCLUDES) $(DEFINES) $(LOCDEFS) $(OPTIMIZE)
 LINK_FLAGS	= $(LINK_DBG) -L"$(INST_COREDIR)" -L"$(CCLIBDIR)"
 OBJOUT_FLAG	= -o
@@ -540,6 +547,14 @@ DEFINES		+= -DWIN64 -DCONSERVATIVE
 OPTIMIZE	+= -Wp64 -Op
 .ENDIF
 
+# the string-pooling option -Gf is deprecated in VC++ 7.x and will be removed
+# in later versions, so use read-only string-pooling (-GF) instead
+.IF "$(CCTYPE)" == "MSVC70FREE" || "$(CCTYPE)" == "MSVC70"
+STRPOOL		= -GF
+.ELSE
+STRPOOL		= -Gf
+.ENDIF
+
 .IF "$(USE_PERLCRT)" != "define"
 BUILDOPT	+= -DPERL_MSVCRT_READFIX
 .ENDIF
@@ -558,7 +573,8 @@ LIBBASEFILES	+= odbc32.lib odbccp32.lib
 # we add LIBC here, since we may be using PerlCRT.dll
 LIBFILES	= $(LIBBASEFILES) $(LIBC)
 
-CFLAGS		= -nologo -Gf -W3 $(INCLUDES) $(DEFINES) $(LOCDEFS) \
+EXTRACFLAGS	= -nologo $(STRPOOL) -W3
+CFLAGS		= $(EXTRACFLAGS) $(INCLUDES) $(DEFINES) $(LOCDEFS) \
 		$(PCHFLAGS) $(OPTIMIZE)
 LINK_FLAGS	= -nologo -nodefaultlib $(LINK_DBG) \
 		-libpath:"$(INST_COREDIR)" \
@@ -585,10 +601,21 @@ BLINK_FLAGS	= $(PRIV_LINK_FLAGS) $(LINK_FLAGS)
 # require backslashes to be doubled-up when written to $(mktmp) files.
 # Other dmake's do not require this and would actually output a double
 # backslash if they were doubled-up.
-.IF "$(shell type $(mktmp \\))"=="\\"
+.IF "$(shell @type $(mktmp \\))"=="\\"
 B=\\
 .ELSE
 B=\\\
+.ENDIF
+
+# There is a related issue with other escape sequences: Sarathy's old
+# dmake automatically maps escape sequences like \n to their ASCII values
+# when used in macros, while other dmake's only do so if this behaviour
+# is explicitly requested with the :m modifier.
+DONTUSETHIS=\n
+.IF "$(shell @type $(mktmp \n))"=="\n"
+N=$(DONTUSETHIS:m)
+.ELSE
+N=$(DONTUSETHIS)
 .ENDIF
 
 o *= .obj
@@ -896,7 +923,7 @@ CFG_VARS	=					\
 		archname=$(ARCHNAME)		~	\
 		cc=$(CC)			~	\
 		ld=$(LINK32)			~	\
-		ccflags=$(OPTIMIZE) $(DEFINES) $(BUILDOPT)	~	\
+		ccflags=$(EXTRACFLAGS) $(OPTIMIZE) $(DEFINES) $(BUILDOPT)	~	\
 		cf_email=$(EMAIL)		~	\
 		d_crypt=$(D_CRYPT)		~	\
 		d_mymalloc=$(PERL_MALLOC)	~	\
@@ -931,6 +958,17 @@ RIGHTMAKE	= __switch_makefiles
 .ELSE
 MK2		= __not_needed
 RIGHTMAKE	=
+.ENDIF
+
+.IMPORT .IGNORE : SystemRoot windir
+
+# Don't just .IMPORT OS from the environment because dmake sets OS itself.
+ENV_OS=$(subst,OS=, $(shell @set OS))
+
+.IF "$(ENV_OS)" == "Windows_NT"
+ODBCCP32_DLL = $(SystemRoot)\system32\odbccp32.dll
+.ELSE
+ODBCCP32_DLL = $(windir)\system\odbccp32.dll
 .ENDIF
 
 #
@@ -1043,6 +1081,8 @@ $(CONFIGPM) : $(MINIPERL) ..\config.sh config_h.PL ..\minimod.pl
 
 $(MINIPERL) : $(MINIDIR) $(MINI_OBJ) $(CRTIPMLIBS)
 .IF "$(CCTYPE)" == "BORLAND"
+	if not exist $(CCLIBDIR)\PSDK\odbccp32.lib \
+	    cd $(CCLIBDIR)\PSDK && implib odbccp32.lib $(ODBCCP32_DLL)
 	$(LINK32) -Tpe -ap $(BLINK_FLAGS) \
 	    @$(mktmp c0x32$(o) $(MINI_OBJ:s,\,$B,),$(@:s,\,$B,),,$(LIBFILES),)
 .ELIF "$(CCTYPE)" == "GCC"
@@ -1069,9 +1109,9 @@ $(MINIWIN32_OBJ) : $(CORE_NOCFG_H)
 
 perllib$(o)	: perllib.c .\perlhost.h .\vdir.h .\vmem.h
 .IF "$(USE_IMP_SYS)" == "define"
-	$(CC) -c -I. -DWITH_STATIC $(CFLAGS_O) $(CXX_FLAG) $(OBJOUT_FLAG)$@ perllib.c
+	$(CC) -c -I. $(CFLAGS_O) $(CXX_FLAG) $(OBJOUT_FLAG)$@ perllib.c
 .ELSE
-	$(CC) -c -I. -DWITH_STATIC $(CFLAGS_O) $(OBJOUT_FLAG)$@ perllib.c
+	$(CC) -c -I. $(CFLAGS_O) $(OBJOUT_FLAG)$@ perllib.c
 .ENDIF
 
 # 1. we don't want to rebuild miniperl.exe when config.h changes
@@ -1094,15 +1134,15 @@ perldll.def : $(MINIPERL) $(CONFIGPM) ..\global.sym ..\pp.sym ..\makedef.pl
 $(PERLDLL): perldll.def $(PERLDLL_OBJ) $(PERLDLL_RES) Extensions_static
 .IF "$(CCTYPE)" == "BORLAND"
 	$(LINK32) -Tpd -ap $(BLINK_FLAGS) \
-	    @$(mktmp c0d32$(o) $(PERLDLL_OBJ:s,\,$B,)\n \
-		$@,\n \
-		$(LIBFILES)\n \
-		perldll.def\n)
+	    @$(mktmp c0d32$(o) $(PERLDLL_OBJ:s,\,$B,)$N \
+		$@,$N \
+	        $(subst,\,$B $(shell @type Extensions_static)) $(LIBFILES)$N \
+		perldll.def$N)
 	$(IMPLIB) $*.lib $@
 .ELIF "$(CCTYPE)" == "GCC"
 	$(LINK32) -mdll -o $@ -Wl,--base-file -Wl,perl.base $(BLINK_FLAGS) \
 	    $(mktmp $(LKPRE) $(PERLDLL_OBJ:s,\,$B,) \
-	        $(shell $(MINIPERL) -I..\lib buildext.pl --list-static-libs) \
+	        $(subst,\,$B $(shell @type Extensions_static)) \
 	        $(LIBFILES) $(LKPOST))
 	dlltool --output-lib $(PERLIMPLIB) \
 		--dllname $(PERLDLL:b).dll \
@@ -1111,11 +1151,11 @@ $(PERLDLL): perldll.def $(PERLDLL_OBJ) $(PERLDLL_RES) Extensions_static
 		--output-exp perl.exp
 	$(LINK32) -mdll -o $@ $(BLINK_FLAGS) \
 	    $(mktmp $(LKPRE) $(PERLDLL_OBJ:s,\,$B,) \
-	        $(shell $(MINIPERL) -I..\lib buildext.pl --list-static-libs) \
+	        $(subst,\,$B $(shell @type Extensions_static)) \
 	        $(LIBFILES) perl.exp $(LKPOST))
 .ELSE
 	$(LINK32) -dll -def:perldll.def -out:$@ \
-	    $(shell $(MINIPERL) -I..\lib buildext.pl --list-static-libs) \
+	    @Extensions_static \
 	    @$(mktmp -base:0x28000000 $(BLINK_FLAGS) $(DELAYLOAD) $(LIBFILES) \
 	        $(PERLDLL_RES) $(PERLDLL_OBJ:s,\,$B,))
 .ENDIF
@@ -1168,9 +1208,9 @@ perlmain$(o) : perlmain.c
 $(PERLEXE): $(PERLDLL) $(CONFIGPM) $(PERLEXE_OBJ) $(PERLEXE_RES)
 .IF "$(CCTYPE)" == "BORLAND"
 	$(LINK32) -Tpe -ap $(BLINK_FLAGS) \
-	    @$(mktmp c0x32$(o) $(PERLEXE_OBJ:s,\,$B,)\n \
-	    $(@:s,\,$B,),\n \
-	    $(PERLIMPLIB) $(LIBFILES)\n)
+	    @$(mktmp c0x32$(o) $(PERLEXE_OBJ:s,\,$B,)$N \
+	    $(@:s,\,$B,),$N \
+	    $(PERLIMPLIB) $(LIBFILES)$N)
 .ELIF "$(CCTYPE)" == "GCC"
 	$(LINK32) -mconsole -o $@ $(BLINK_FLAGS)  \
 	    $(PERLEXE_OBJ) $(PERLIMPLIB) $(LIBFILES)
@@ -1201,8 +1241,9 @@ Extensions : buildext.pl $(PERLDEP) $(CONFIGPM)
 	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext --dynamic
 
 Extensions_static : buildext.pl
-	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext --static
 	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) --static
+	$(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) ext --static
+	$(MINIPERL) -I..\lib buildext.pl --list-static-libs > Extensions_static
 
 Extensions_clean :
 	-if exist $(MINIPERL) $(MINIPERL) -I..\lib buildext.pl $(MAKE) $(PERLDEP) $(EXTDIR) clean
@@ -1242,6 +1283,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.irix     ..\pod\perlirix.pod
 	copy ..\README.jp       ..\pod\perljp.pod
 	copy ..\README.ko       ..\pod\perlko.pod
+	copy ..\README.linux    ..\pod\perllinux.pod
 	copy ..\README.machten  ..\pod\perlmachten.pod
 	copy ..\README.macos    ..\pod\perlmacos.pod
 	copy ..\README.macosx   ..\pod\perlmacosx.pod
@@ -1262,7 +1304,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vms      ..\pod\perlvms.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl587delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl588delta.pod ..\pod\perldelta.pod
 	cd ..\pod && $(MAKE) -f ..\win32\pod.mak converters
 	cd ..\lib && $(PERLEXE) lib_pm.PL
 	$(PERLEXE) $(PL2BAT) $(UTILS)
@@ -1330,12 +1372,12 @@ distclean: realclean
 	    perlbs2000.pod perlce.pod perlcn.pod perlcygwin.pod \
 	    perldelta.pod perldgux.pod perldos.pod perlepoc.pod \
 	    perlfreebsd.pod perlhpux.pod perlhurd.pod perlirix.pod \
-	    perljp.pod perlko.pod perlmachten.pod perlmacos.pod \
-	    perlmacosx.pod perlmint.pod perlmpeix.pod perlnetware.pod \
-	    perlopenbsd.pod perlos2.pod perlos390.pod perlos400.pod \
-	    perlplan9.pod perlqnx.pod perlsolaris.pod perltru64.pod \
-	    perltw.pod perluts.pod perlvmesa.pod perlvms.pod perlvms.pod \
-	    perlvos.pod perlwin32.pod \
+	    perljp.pod perlko.pod perllinux.pod perlmachten.pod \
+	    perlmacos.pod perlmacosx.pod perlmint.pod perlmpeix.pod \
+	    perlnetware.pod perlopenbsd.pod perlos2.pod perlos390.pod \
+	    perlos400.pod perlplan9.pod perlqnx.pod perlsolaris.pod \
+	    perltru64.pod perltw.pod perluts.pod perlvmesa.pod perlvms.pod \
+	    perlvms.pod perlvos.pod perlwin32.pod \
 	    pod2html pod2latex pod2man pod2text pod2usage \
 	    podchecker podselect
 	-cd ..\utils && del /f h2ph splain perlbug pl2pm c2ph pstruct h2xs \
@@ -1347,7 +1389,7 @@ distclean: realclean
 	-del /f bin\*.bat
 	-del /f perllibst.h
 	-del /f $(PERLEXE_ICO) perl.base
-	-cd .. && del /s *$(a) *.map *.pdb *.ilk *.bs *$(o) .exists pm_to_blib
+	-cd .. && del /s *$(a) *.map *.pdb *.ilk *.tds *.bs *$(o) .exists pm_to_blib
 	-cd $(EXTDIR) && del /s *.def Makefile Makefile.old
 	-if exist $(AUTODIR) rmdir /s /q $(AUTODIR)
 	-if exist $(AUTODIR) rmdir /s $(AUTODIR)
@@ -1444,6 +1486,8 @@ _clean :
 	-@erase ..\x2p\*.exe ..\x2p\*.bat
 	-@erase *.ilk
 	-@erase *.pdb
+	-@erase *.tds
+	-@erase Extensions_static
 
 clean : Extensions_clean _clean
 
