@@ -1,8 +1,9 @@
-/*
+/*  -*- buffer-read-only: t -*-
+ *
  *    perlapi.h
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -27,11 +28,14 @@ START_EXTERN_C
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
 #define PERLVAR(v,t)	EXTERN_C t* Perl_##v##_ptr(pTHX);
 #define PERLVARA(v,n,t)	typedef t PL_##v##_t[n];			\
 			EXTERN_C PL_##v##_t* Perl_##v##_ptr(pTHX);
 #define PERLVARI(v,t,i)	PERLVAR(v,t)
 #define PERLVARIC(v,t,i) PERLVAR(v, const t)
+#define PERLVARISC(v,i)	typedef const char PL_##v##_t[sizeof(i)];	\
+			EXTERN_C PL_##v##_t* Perl_##v##_ptr(pTHX);
 
 #include "thrdvar.h"
 #include "intrpvar.h"
@@ -41,6 +45,16 @@ START_EXTERN_C
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
+
+#ifndef PERL_GLOBAL_STRUCT
+EXTERN_C Perl_ppaddr_t** Perl_Gppaddr_ptr(pTHX);
+EXTERN_C Perl_check_t**  Perl_Gcheck_ptr(pTHX);
+EXTERN_C unsigned char** Perl_Gfold_locale_ptr(pTHX);
+#define Perl_ppaddr_ptr      Perl_Gppaddr_ptr
+#define Perl_check_ptr       Perl_Gcheck_ptr
+#define Perl_fold_locale_ptr Perl_Gfold_locale_ptr
+#endif
 
 END_EXTERN_C
 
@@ -56,9 +70,9 @@ END_EXTERN_C
 START_EXTERN_C
 
 #ifndef DOINIT
-EXT void *PL_force_link_funcs[];
+EXTCONST void * const PL_force_link_funcs[];
 #else
-EXT void *PL_force_link_funcs[] = {
+EXTCONST void * const PL_force_link_funcs[] = {
 #undef PERLVAR
 #undef PERLVARA
 #undef PERLVARI
@@ -67,15 +81,34 @@ EXT void *PL_force_link_funcs[] = {
 #define PERLVARA(v,n,t)	PERLVAR(v,t)
 #define PERLVARI(v,t,i)	PERLVAR(v,t)
 #define PERLVARIC(v,t,i) PERLVAR(v,t)
+#define PERLVARISC(v,i) PERLVAR(v,char)
+
+/* In Tru64 (__DEC && __osf__) the cc option -std1 causes that one
+ * cannot cast between void pointers and function pointers without
+ * info level warnings.  The PL_force_link_funcs[] would cause a few
+ * hundred of those warnings.  In code one can circumnavigate this by using
+ * unions that overlay the different pointers, but in declarations one
+ * cannot use this trick.  Therefore we just disable the warning here
+ * for the duration of the PL_force_link_funcs[] declaration. */
+
+#if defined(__DECC) && defined(__osf__)
+#pragma message save
+#pragma message disable (nonstandcast)
+#endif
 
 #include "thrdvar.h"
 #include "intrpvar.h"
 #include "perlvars.h"
 
+#if defined(__DECC) && defined(__osf__)
+#pragma message restore
+#endif
+
 #undef PERLVAR
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
 };
 #endif	/* DOINIT */
 
@@ -147,6 +180,10 @@ END_EXTERN_C
 #define PL_beginav_save		(*Perl_Ibeginav_save_ptr(aTHX))
 #undef  PL_bitcount
 #define PL_bitcount		(*Perl_Ibitcount_ptr(aTHX))
+#undef  PL_body_arenaroots
+#define PL_body_arenaroots	(*Perl_Ibody_arenaroots_ptr(aTHX))
+#undef  PL_body_roots
+#define PL_body_roots		(*Perl_Ibody_roots_ptr(aTHX))
 #undef  PL_bufend
 #define PL_bufend		(*Perl_Ibufend_ptr(aTHX))
 #undef  PL_bufptr
@@ -219,6 +256,8 @@ END_EXTERN_C
 #define PL_doswitches		(*Perl_Idoswitches_ptr(aTHX))
 #undef  PL_dowarn
 #define PL_dowarn		(*Perl_Idowarn_ptr(aTHX))
+#undef  PL_dumper_fd
+#define PL_dumper_fd		(*Perl_Idumper_fd_ptr(aTHX))
 #undef  PL_e_script
 #define PL_e_script		(*Perl_Ie_script_ptr(aTHX))
 #undef  PL_egid
@@ -273,10 +312,6 @@ END_EXTERN_C
 #define PL_hash_seed		(*Perl_Ihash_seed_ptr(aTHX))
 #undef  PL_hash_seed_set
 #define PL_hash_seed_set	(*Perl_Ihash_seed_set_ptr(aTHX))
-#undef  PL_he_arenaroot
-#define PL_he_arenaroot		(*Perl_Ihe_arenaroot_ptr(aTHX))
-#undef  PL_he_root
-#define PL_he_root		(*Perl_Ihe_root_ptr(aTHX))
 #undef  PL_hintgv
 #define PL_hintgv		(*Perl_Ihintgv_ptr(aTHX))
 #undef  PL_hints
@@ -377,6 +412,8 @@ END_EXTERN_C
 #define PL_mess_sv		(*Perl_Imess_sv_ptr(aTHX))
 #undef  PL_min_intro_pending
 #define PL_min_intro_pending	(*Perl_Imin_intro_pending_ptr(aTHX))
+#undef  PL_minus_E
+#define PL_minus_E		(*Perl_Iminus_E_ptr(aTHX))
 #undef  PL_minus_F
 #define PL_minus_F		(*Perl_Iminus_F_ptr(aTHX))
 #undef  PL_minus_a
@@ -401,6 +438,10 @@ END_EXTERN_C
 #define PL_multi_start		(*Perl_Imulti_start_ptr(aTHX))
 #undef  PL_multiline
 #define PL_multiline		(*Perl_Imultiline_ptr(aTHX))
+#undef  PL_my_cxt_list
+#define PL_my_cxt_list		(*Perl_Imy_cxt_list_ptr(aTHX))
+#undef  PL_my_cxt_size
+#define PL_my_cxt_size		(*Perl_Imy_cxt_size_ptr(aTHX))
 #undef  PL_nexttoke
 #define PL_nexttoke		(*Perl_Inexttoke_ptr(aTHX))
 #undef  PL_nexttype
@@ -423,8 +464,6 @@ END_EXTERN_C
 #define PL_numeric_radix_sv	(*Perl_Inumeric_radix_sv_ptr(aTHX))
 #undef  PL_numeric_standard
 #define PL_numeric_standard	(*Perl_Inumeric_standard_ptr(aTHX))
-#undef  PL_ofmt
-#define PL_ofmt			(*Perl_Iofmt_ptr(aTHX))
 #undef  PL_oldbufptr
 #define PL_oldbufptr		(*Perl_Ioldbufptr_ptr(aTHX))
 #undef  PL_oldname
@@ -511,8 +550,6 @@ END_EXTERN_C
 #define PL_savebegin		(*Perl_Isavebegin_ptr(aTHX))
 #undef  PL_sawampersand
 #define PL_sawampersand		(*Perl_Isawampersand_ptr(aTHX))
-#undef  PL_sh_path_compat
-#define PL_sh_path_compat	(*Perl_Ish_path_compat_ptr(aTHX))
 #undef  PL_sharehook
 #define PL_sharehook		(*Perl_Isharehook_ptr(aTHX))
 #undef  PL_sig_pending
@@ -531,6 +568,8 @@ END_EXTERN_C
 #define PL_stashcache		(*Perl_Istashcache_ptr(aTHX))
 #undef  PL_statusvalue
 #define PL_statusvalue		(*Perl_Istatusvalue_ptr(aTHX))
+#undef  PL_statusvalue_posix
+#define PL_statusvalue_posix	(*Perl_Istatusvalue_posix_ptr(aTHX))
 #undef  PL_statusvalue_vms
 #define PL_statusvalue_vms	(*Perl_Istatusvalue_vms_ptr(aTHX))
 #undef  PL_stderrgv
@@ -629,54 +668,6 @@ END_EXTERN_C
 #define PL_warnhook		(*Perl_Iwarnhook_ptr(aTHX))
 #undef  PL_widesyscalls
 #define PL_widesyscalls		(*Perl_Iwidesyscalls_ptr(aTHX))
-#undef  PL_xiv_arenaroot
-#define PL_xiv_arenaroot	(*Perl_Ixiv_arenaroot_ptr(aTHX))
-#undef  PL_xiv_root
-#define PL_xiv_root		(*Perl_Ixiv_root_ptr(aTHX))
-#undef  PL_xnv_arenaroot
-#define PL_xnv_arenaroot	(*Perl_Ixnv_arenaroot_ptr(aTHX))
-#undef  PL_xnv_root
-#define PL_xnv_root		(*Perl_Ixnv_root_ptr(aTHX))
-#undef  PL_xpv_arenaroot
-#define PL_xpv_arenaroot	(*Perl_Ixpv_arenaroot_ptr(aTHX))
-#undef  PL_xpv_root
-#define PL_xpv_root		(*Perl_Ixpv_root_ptr(aTHX))
-#undef  PL_xpvav_arenaroot
-#define PL_xpvav_arenaroot	(*Perl_Ixpvav_arenaroot_ptr(aTHX))
-#undef  PL_xpvav_root
-#define PL_xpvav_root		(*Perl_Ixpvav_root_ptr(aTHX))
-#undef  PL_xpvbm_arenaroot
-#define PL_xpvbm_arenaroot	(*Perl_Ixpvbm_arenaroot_ptr(aTHX))
-#undef  PL_xpvbm_root
-#define PL_xpvbm_root		(*Perl_Ixpvbm_root_ptr(aTHX))
-#undef  PL_xpvcv_arenaroot
-#define PL_xpvcv_arenaroot	(*Perl_Ixpvcv_arenaroot_ptr(aTHX))
-#undef  PL_xpvcv_root
-#define PL_xpvcv_root		(*Perl_Ixpvcv_root_ptr(aTHX))
-#undef  PL_xpvhv_arenaroot
-#define PL_xpvhv_arenaroot	(*Perl_Ixpvhv_arenaroot_ptr(aTHX))
-#undef  PL_xpvhv_root
-#define PL_xpvhv_root		(*Perl_Ixpvhv_root_ptr(aTHX))
-#undef  PL_xpviv_arenaroot
-#define PL_xpviv_arenaroot	(*Perl_Ixpviv_arenaroot_ptr(aTHX))
-#undef  PL_xpviv_root
-#define PL_xpviv_root		(*Perl_Ixpviv_root_ptr(aTHX))
-#undef  PL_xpvlv_arenaroot
-#define PL_xpvlv_arenaroot	(*Perl_Ixpvlv_arenaroot_ptr(aTHX))
-#undef  PL_xpvlv_root
-#define PL_xpvlv_root		(*Perl_Ixpvlv_root_ptr(aTHX))
-#undef  PL_xpvmg_arenaroot
-#define PL_xpvmg_arenaroot	(*Perl_Ixpvmg_arenaroot_ptr(aTHX))
-#undef  PL_xpvmg_root
-#define PL_xpvmg_root		(*Perl_Ixpvmg_root_ptr(aTHX))
-#undef  PL_xpvnv_arenaroot
-#define PL_xpvnv_arenaroot	(*Perl_Ixpvnv_arenaroot_ptr(aTHX))
-#undef  PL_xpvnv_root
-#define PL_xpvnv_root		(*Perl_Ixpvnv_root_ptr(aTHX))
-#undef  PL_xrv_arenaroot
-#define PL_xrv_arenaroot	(*Perl_Ixrv_arenaroot_ptr(aTHX))
-#undef  PL_xrv_root
-#define PL_xrv_root		(*Perl_Ixrv_root_ptr(aTHX))
 #undef  PL_yycharp
 #define PL_yycharp		(*Perl_Iyycharp_ptr(aTHX))
 #undef  PL_yylvalp
@@ -877,8 +868,6 @@ END_EXTERN_C
 #define PL_secondgv		(*Perl_Tsecondgv_ptr(aTHX))
 #undef  PL_sortcop
 #define PL_sortcop		(*Perl_Tsortcop_ptr(aTHX))
-#undef  PL_sortcxix
-#define PL_sortcxix		(*Perl_Tsortcxix_ptr(aTHX))
 #undef  PL_sortstash
 #define PL_sortstash		(*Perl_Tsortstash_ptr(aTHX))
 #undef  PL_stack_base
@@ -921,6 +910,10 @@ END_EXTERN_C
 #define PL_No			(*Perl_GNo_ptr(NULL))
 #undef  PL_Yes
 #define PL_Yes			(*Perl_GYes_ptr(NULL))
+#undef  PL_appctx
+#define PL_appctx		(*Perl_Gappctx_ptr(NULL))
+#undef  PL_check
+#define PL_check		(*Perl_Gcheck_ptr(NULL))
 #undef  PL_csighandlerp
 #define PL_csighandlerp		(*Perl_Gcsighandlerp_ptr(NULL))
 #undef  PL_curinterp
@@ -929,27 +922,60 @@ END_EXTERN_C
 #define PL_do_undump		(*Perl_Gdo_undump_ptr(NULL))
 #undef  PL_dollarzero_mutex
 #define PL_dollarzero_mutex	(*Perl_Gdollarzero_mutex_ptr(NULL))
+#undef  PL_fold_locale
+#define PL_fold_locale		(*Perl_Gfold_locale_ptr(NULL))
 #undef  PL_hexdigit
 #define PL_hexdigit		(*Perl_Ghexdigit_ptr(NULL))
 #undef  PL_malloc_mutex
 #define PL_malloc_mutex		(*Perl_Gmalloc_mutex_ptr(NULL))
+#undef  PL_mmap_page_size
+#define PL_mmap_page_size	(*Perl_Gmmap_page_size_ptr(NULL))
+#undef  PL_my_ctx_mutex
+#define PL_my_ctx_mutex		(*Perl_Gmy_ctx_mutex_ptr(NULL))
+#undef  PL_my_cxt_index
+#define PL_my_cxt_index		(*Perl_Gmy_cxt_index_ptr(NULL))
 #undef  PL_op_mutex
 #define PL_op_mutex		(*Perl_Gop_mutex_ptr(NULL))
+#undef  PL_op_seq
+#define PL_op_seq		(*Perl_Gop_seq_ptr(NULL))
+#undef  PL_op_sequence
+#define PL_op_sequence		(*Perl_Gop_sequence_ptr(NULL))
 #undef  PL_patleave
 #define PL_patleave		(*Perl_Gpatleave_ptr(NULL))
+#undef  PL_perlio_debug_fd
+#define PL_perlio_debug_fd	(*Perl_Gperlio_debug_fd_ptr(NULL))
+#undef  PL_perlio_fd_refcnt
+#define PL_perlio_fd_refcnt	(*Perl_Gperlio_fd_refcnt_ptr(NULL))
+#undef  PL_ppaddr
+#define PL_ppaddr		(*Perl_Gppaddr_ptr(NULL))
 #undef  PL_sh_path
 #define PL_sh_path		(*Perl_Gsh_path_ptr(NULL))
+#undef  PL_sig_defaulting
+#define PL_sig_defaulting	(*Perl_Gsig_defaulting_ptr(NULL))
+#undef  PL_sig_handlers_initted
+#define PL_sig_handlers_initted	(*Perl_Gsig_handlers_initted_ptr(NULL))
+#undef  PL_sig_ignoring
+#define PL_sig_ignoring		(*Perl_Gsig_ignoring_ptr(NULL))
+#undef  PL_sig_sv
+#define PL_sig_sv		(*Perl_Gsig_sv_ptr(NULL))
+#undef  PL_sig_trapped
+#define PL_sig_trapped		(*Perl_Gsig_trapped_ptr(NULL))
 #undef  PL_sigfpe_saved
 #define PL_sigfpe_saved		(*Perl_Gsigfpe_saved_ptr(NULL))
 #undef  PL_sv_placeholder
 #define PL_sv_placeholder	(*Perl_Gsv_placeholder_ptr(NULL))
 #undef  PL_thr_key
 #define PL_thr_key		(*Perl_Gthr_key_ptr(NULL))
+#undef  PL_timesbase
+#define PL_timesbase		(*Perl_Gtimesbase_ptr(NULL))
 #undef  PL_use_safe_putenv
 #define PL_use_safe_putenv	(*Perl_Guse_safe_putenv_ptr(NULL))
+#undef  PL_watch_pvx
+#define PL_watch_pvx		(*Perl_Gwatch_pvx_ptr(NULL))
 
 #endif /* !PERL_CORE */
 #endif /* MULTIPLICITY */
 
 #endif /* __perlapi_h__ */
 
+/* ex: set ro: */

@@ -8,12 +8,11 @@
  *
  */
 
-/* typedefs to eliminate some typing */
-typedef struct he HE;
-typedef struct hek HEK;
-
 /* entry in hash value chain */
 struct he {
+    /* Keep hent_next first in this structure, because sv_free_arenas take
+       advantage of this to share code between the he arenas and the SV
+       body arenas  */
     HE		*hent_next;	/* next entry in chain */
     HEK		*hent_hek;	/* hash key */
     SV		*hent_val;	/* scalar value that was hashed */
@@ -29,23 +28,53 @@ struct hek {
        is UTF-8 */
 };
 
+struct shared_he {
+    struct he shared_he_he;
+    struct hek shared_he_hek;
+};
+
+/* Subject to change.
+   Don't access this directly.
+*/
+struct xpvhv_aux {
+    HEK		*xhv_name;	/* name, if a symbol table */
+    AV		*xhv_backreferences; /* back references for weak references */
+    HE		*xhv_eiter;	/* current entry of iterator */
+    I32		xhv_riter;	/* current root of iterator */
+};
+
 /* hash structure: */
 /* This structure must match the beginning of struct xpvmg in sv.h. */
 struct xpvhv {
-    char *	xhv_array;	/* pointer to malloced string */
+    NV		xnv_nv;		/* numeric value, if any */
     STRLEN	xhv_fill;	/* how full xhv_array currently is */
     STRLEN	xhv_max;	/* subscript of last element of xhv_array */
-    IV		xhv_keys;	/* how many elements in the array */
-    NV		xnv_nv;		/* numeric value, if any */
-#define xhv_placeholders xnv_nv
+    union {
+	IV	xivu_iv;	/* integer value or pv offset */
+	UV	xivu_uv;
+	void *	xivu_p1;
+    }		xiv_u;
     MAGIC*	xmg_magic;	/* magic for scalar array */
     HV*		xmg_stash;	/* class package */
-
-    I32		xhv_riter;	/* current root of iterator */
-    HE		*xhv_eiter;	/* current entry of iterator */
-    PMOP	*xhv_pmroot;	/* list of pm's for this package */
-    char	*xhv_name;	/* name, if a symbol table */
 };
+
+#define xhv_keys xiv_u.xivu_iv
+
+#if 0
+typedef struct xpvhv xpvhv_allocated;
+#else
+typedef struct {
+    STRLEN	xhv_fill;	/* how full xhv_array currently is */
+    STRLEN	xhv_max;	/* subscript of last element of xhv_array */
+    union {
+	IV	xivu_iv;	/* integer value or pv offset */
+	UV	xivu_uv;
+	void *	xivu_p1;
+    }		xiv_u;
+    MAGIC*	xmg_magic;	/* magic for scalar array */
+    HV*		xmg_stash;	/* class package */
+} xpvhv_allocated;
+#endif
 
 /* hash a key */
 /* FYI: This is the "One-at-a-Time" algorithm by Bob Jenkins
@@ -54,7 +83,7 @@ struct xpvhv {
 /* The use of a temporary pointer and the casting games
  * is needed to serve the dual purposes of
  * (a) the hashed data being interpreted as "unsigned char" (new since 5.8,
- *     a "char" can be either signed or signed, depending on the compiler)
+ *     a "char" can be either signed or unsigned, depending on the compiler)
  * (b) catering for old code that uses a "char"
  *
  * The "hash seed" feature was added in Perl 5.8.1 to perturb the results
@@ -64,7 +93,7 @@ struct xpvhv {
  * If USE_HASH_SEED_EXPLICIT is defined, hash randomisation is done
  * only if the environment variable PERL_HASH_SEED is set.
  * For maximal control, one can define PERL_HASH_SEED.
- * (see also erl.c:perl_parse()).
+ * (see also perl.c:perl_parse()).
  */
 #ifndef PERL_HASH_SEED
 #   if defined(USE_HASH_SEED) || defined(USE_HASH_SEED_EXPLICIT)
@@ -75,7 +104,7 @@ struct xpvhv {
 #endif
 #define PERL_HASH(hash,str,len) \
      STMT_START	{ \
-	register const char *s_PeRlHaSh_tmp = str; \
+	register const char * const s_PeRlHaSh_tmp = str; \
 	register const unsigned char *s_PeRlHaSh = (const unsigned char *)s_PeRlHaSh_tmp; \
 	register I32 i_PeRlHaSh = len; \
 	register U32 hash_PeRlHaSh = PERL_HASH_SEED; \
@@ -93,7 +122,7 @@ struct xpvhv {
 #ifdef PERL_HASH_INTERNAL_ACCESS
 #define PERL_HASH_INTERNAL(hash,str,len) \
      STMT_START	{ \
-	register const char *s_PeRlHaSh_tmp = str; \
+	register const char * const s_PeRlHaSh_tmp = str; \
 	register const unsigned char *s_PeRlHaSh = (const unsigned char *)s_PeRlHaSh_tmp; \
 	register I32 i_PeRlHaSh = len; \
 	register U32 hash_PeRlHaSh = PL_rehash_seed; \
@@ -124,7 +153,8 @@ Null HV pointer.
 =head1 Hash Manipulation Functions
 
 =for apidoc Am|char*|HvNAME|HV* stash
-Returns the package name of a stash.  See C<SvSTASH>, C<CvSTASH>.
+Returns the package name of a stash, or NULL if C<stash> isn't a stash.
+See C<SvSTASH>, C<CvSTASH>.
 
 =for apidoc Am|void*|HeKEY|HE* he
 Returns the actual pointer stored in the key slot of the hash entry. The
@@ -176,32 +206,42 @@ C<SV*>.
 
 
 #define Nullhv Null(HV*)
-#define HvARRAY(hv)	(*(HE***)&((XPVHV*)  SvANY(hv))->xhv_array)
+#define HvARRAY(hv)	((hv)->sv_u.svu_hash)
 #define HvFILL(hv)	((XPVHV*)  SvANY(hv))->xhv_fill
 #define HvMAX(hv)	((XPVHV*)  SvANY(hv))->xhv_max
-#define HvRITER(hv)	((XPVHV*)  SvANY(hv))->xhv_riter
-#define HvEITER(hv)	((XPVHV*)  SvANY(hv))->xhv_eiter
-#define HvPMROOT(hv)	((XPVHV*)  SvANY(hv))->xhv_pmroot
-#define HvNAME(hv)	((XPVHV*)  SvANY(hv))->xhv_name
+/* This quite intentionally does no flag checking first. That's your
+   responsibility.  */
+#define HvAUX(hv)	((struct xpvhv_aux*)&(HvARRAY(hv)[HvMAX(hv)+1]))
+#define HvRITER(hv)	(*Perl_hv_riter_p(aTHX_ (HV*)(hv)))
+#define HvEITER(hv)	(*Perl_hv_eiter_p(aTHX_ (HV*)(hv)))
+#define HvRITER_set(hv,r)	Perl_hv_riter_set(aTHX_ (HV*)(hv), r)
+#define HvEITER_set(hv,e)	Perl_hv_eiter_set(aTHX_ (HV*)(hv), e)
+#define HvRITER_get(hv)	(SvOOK(hv) ? HvAUX(hv)->xhv_riter : -1)
+#define HvEITER_get(hv)	(SvOOK(hv) ? HvAUX(hv)->xhv_eiter : 0)
+#define HvNAME(hv)	HvNAME_get(hv)
+/* FIXME - all of these should use a UTF8 aware API, which should also involve
+   getting the length. */
+/* This macro may go away without notice.  */
+#define HvNAME_HEK(hv) (SvOOK(hv) ? HvAUX(hv)->xhv_name : 0)
+#define HvNAME_get(hv)	((SvOOK(hv) && (HvAUX(hv)->xhv_name)) \
+			 ? HEK_KEY(HvAUX(hv)->xhv_name) : 0)
+#define HvNAMELEN_get(hv)	((SvOOK(hv) && (HvAUX(hv)->xhv_name)) \
+				 ? HEK_LEN(HvAUX(hv)->xhv_name) : 0)
 
 /* the number of keys (including any placeholers) */
 #define XHvTOTALKEYS(xhv)	((xhv)->xhv_keys)
-
-/* The number of placeholders in the enumerated-keys hash */
-#define XHvPLACEHOLDERS(xhv)	((xhv)->xhv_placeholders)
-
-/* the number of keys that exist() (i.e. excluding placeholders) */
-#define XHvUSEDKEYS(xhv)      (XHvTOTALKEYS(xhv) - (IV)XHvPLACEHOLDERS(xhv))
 
 /*
  * HvKEYS gets the number of keys that actually exist(), and is provided
  * for backwards compatibility with old XS code. The core uses HvUSEDKEYS
  * (keys, excluding placeholdes) and HvTOTALKEYS (including placeholders)
  */
-#define HvKEYS(hv)		XHvUSEDKEYS((XPVHV*)  SvANY(hv))
-#define HvUSEDKEYS(hv)		XHvUSEDKEYS((XPVHV*)  SvANY(hv))
+#define HvKEYS(hv)		HvUSEDKEYS(hv)
+#define HvUSEDKEYS(hv)		(HvTOTALKEYS(hv) - HvPLACEHOLDERS_get(hv))
 #define HvTOTALKEYS(hv)		XHvTOTALKEYS((XPVHV*)  SvANY(hv))
-#define HvPLACEHOLDERS(hv)	XHvPLACEHOLDERS((XPVHV*)  SvANY(hv))
+#define HvPLACEHOLDERS(hv)	(*Perl_hv_placeholders_p(aTHX_ (HV*)hv))
+#define HvPLACEHOLDERS_get(hv)	(SvMAGIC(hv) ? Perl_hv_placeholders_get(aTHX_ (HV*)hv) : 0)
+#define HvPLACEHOLDERS_set(hv,p)	Perl_hv_placeholders_set(aTHX_ (HV*)hv, p)
 
 #define HvSHAREKEYS(hv)		(SvFLAGS(hv) & SVphv_SHAREKEYS)
 #define HvSHAREKEYS_on(hv)	(SvFLAGS(hv) |= SVphv_SHAREKEYS)
@@ -305,7 +345,10 @@ C<SV*>.
 #define HEK_REHASH_on(hek)	(HEK_FLAGS(hek) |= HVhek_REHASH)
 
 /* calculate HV array allocation */
-#if defined(STRANGE_MALLOC) || defined(MYMALLOC)
+#ifndef PERL_USE_LARGE_HV_ALLOC
+/* Default to allocating the correct size - default to assuming that malloc()
+   is not broken and is efficient at allocating blocks sized at powers-of-two.
+*/   
 #  define PERL_HV_ARRAY_ALLOC_BYTES(size) ((size) * sizeof(HE*))
 #else
 #  define MALLOC_OVERHEAD 16
@@ -318,6 +361,26 @@ C<SV*>.
 /* Flags for hv_iternext_flags.  */
 #define HV_ITERNEXT_WANTPLACEHOLDERS	0x01	/* Don't skip placeholders.  */
 
+#define hv_iternext(hv)	hv_iternext_flags(hv, 0)
+#define hv_magic(hv, gv, how) sv_magic((SV*)(hv), (SV*)(gv), how, Nullch, 0)
+
 /* available as a function in hv.c */
 #define Perl_sharepvn(sv, len, hash) HEK_KEY(share_hek(sv, len, hash))
 #define sharepvn(sv, len, hash)	     Perl_sharepvn(sv, len, hash)
+
+#define share_hek_hek(hek)						\
+    (++(((struct shared_he *)(((char *)hek)				\
+			      - STRUCT_OFFSET(struct shared_he,		\
+					      shared_he_hek)))		\
+	->shared_he_he.hent_val),					\
+     hek)
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

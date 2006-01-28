@@ -233,7 +233,7 @@ non-overridden program name
      fatalsToBrowser() output.
 
 1.23 ineval() now checks both $^S and inspects the message for the "eval" pattern
-     (hack alert!) in order to accomodate various combinations of Perl and
+     (hack alert!) in order to accommodate various combinations of Perl and
      mod_perl.
 
 1.24 Patch from Scott Gifford (sgifford@suspectclass.com): Add support
@@ -465,17 +465,20 @@ END
   ;
 
   if ($mod_perl) {
-    require mod_perl;
-    if ($mod_perl::VERSION >= 1.99) {
+    my $r;
+    if ($ENV{MOD_PERL_API_VERSION} && $ENV{MOD_PERL_API_VERSION} == 2) {
       $mod_perl = 2;
-      require Apache::RequestRec;
-      require Apache::RequestIO;
-      require Apache::RequestUtil;
+      require Apache2::RequestRec;
+      require Apache2::RequestIO;
+      require Apache2::RequestUtil;
       require APR::Pool;
       require ModPerl::Util;
-      require Apache::Response;
+      require Apache2::Response;
+      $r = Apache2::RequestUtil->request;
     }
-    my $r = Apache->request;
+    else {
+      $r = Apache->request;
+    }
     # If bytes have already been sent, then
     # we print the message out directly.
     # Otherwise we make a custom error

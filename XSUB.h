@@ -54,6 +54,10 @@ C<xsubpp>.
 Sets up the C<ax> variable.
 This is usually handled automatically by C<xsubpp> by calling C<dXSARGS>.
 
+=for apidoc Ams||dAXMARK
+Sets up the C<ax> variable and stack marker variable C<mark>.
+This is usually handled automatically by C<xsubpp> by calling C<dXSARGS>.
+
 =for apidoc Ams||dITEMS
 Sets up the C<items> variable.
 This is usually handled automatically by C<xsubpp> by calling C<dXSARGS>.
@@ -78,23 +82,53 @@ is a lexical $_ in scope.
 =cut
 */
 
-#define ST(off) PL_stack_base[ax + (off)]
-
-#if defined(__CYGWIN__) && defined(USE_DYNAMIC_LOADING)
-#  define XS(name) __declspec(dllexport) void name(pTHX_ CV* cv)
-#else
-#  define XS(name) void name(pTHX_ CV* cv)
+#ifndef PERL_UNUSED_ARG
+#  ifdef lint
+#    include <note.h>
+#    define PERL_UNUSED_ARG(x) NOTE(ARGUNUSED(x))
+#  else
+#    define PERL_UNUSED_ARG(x) ((void)x)
+#  endif
+#endif
+#ifndef PERL_UNUSED_VAR
+#  define PERL_UNUSED_VAR(x) ((void)x)
 #endif
 
-#define dAX I32 ax = MARK - PL_stack_base + 1
+#define ST(off) PL_stack_base[ax + (off)]
+
+#undef XS
+#if defined(__CYGWIN__) && defined(USE_DYNAMIC_LOADING)
+#  define XS(name) __declspec(dllexport) void name(pTHX_ CV* cv)
+#endif
+#if defined(__SYMBIAN32__)
+#  define XS(name) EXPORT_C void name(pTHX_ CV* cv)
+#endif
+#ifndef XS
+#  ifdef HASATTRIBUTE_UNUSED
+#    define XS(name) void name(pTHX_ CV* cv __attribute__unused__)
+#  else
+#    define XS(name) void name(pTHX_ CV* cv)
+#  endif
+#endif
+
+#define dAX const I32 ax = MARK - PL_stack_base + 1
+
+#define dAXMARK				\
+	I32 ax = POPMARK;	\
+	register SV **mark = PL_stack_base + ax++
 
 #define dITEMS I32 items = SP - MARK
 
-#define dXSARGS				\
-	dSP; dMARK;			\
-	dAX; dITEMS
+#ifdef lint
+#  define dXSARGS \
+	NOTE(ARGUNUSED(cv)) \
+	dSP; dAXMARK; dITEMS
+#else
+#  define dXSARGS \
+	dSP; dAXMARK; dITEMS
+#endif
 
-#define dXSTARG SV * targ = ((PL_op->op_private & OPpENTERSUB_HASTARG) \
+#define dXSTARG SV * const targ = ((PL_op->op_private & OPpENTERSUB_HASTARG) \
 			     ? PAD_SV(PL_op->op_targ) : sv_newmortal())
 
 /* Should be used before final PUSHi etc. if not in PPCODE section. */
@@ -195,7 +229,7 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 =head1 Simple Exception Handling Macros
 
 =for apidoc Ams||dXCPT
-Set up neccessary local variables for exception handling.
+Set up necessary local variables for exception handling.
 See L<perlguts/"Exception Handling">.
 
 =for apidoc AmU||XCPT_TRY_START
@@ -244,8 +278,8 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 #ifdef XS_VERSION
 #  define XS_VERSION_BOOTCHECK \
     STMT_START {							\
-	SV *_sv; STRLEN n_a;						\
-	const char *vn = Nullch, *module = SvPV(ST(0),n_a);		\
+	SV *_sv;							\
+	const char *vn = Nullch, *module = SvPV_nolen_const(ST(0));	\
 	if (items >= 2)	 /* version supplied as bootstrap arg */	\
 	    _sv = ST(1);						\
 	else {								\
@@ -286,7 +320,7 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 */
 
 #define DBM_setFilter(db_type,code)				\
-	{							\
+	STMT_START {						\
 	    if (db_type)					\
 	        RETVAL = sv_mortalcopy(db_type) ;		\
 	    ST(0) = RETVAL ;					\
@@ -300,9 +334,10 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 	        else						\
 	            db_type = newSVsv(code) ;			\
 	    }	    						\
-	}
+	} STMT_END
 
 #define DBM_ckFilter(arg,type,name)				\
+        STMT_START {						\
 	if (db->type) {						\
 	    if (db->filtering) {				\
 	        croak("recursion detected in %s", name) ;	\
@@ -327,7 +362,7 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
                 arg = sv_2mortal(arg);                          \
             }                                                   \
             SvOKp(arg);                                         \
-	}
+	} } STMT_END                                                     
 
 #if 1		/* for compatibility */
 #  define VTBL_sv		&PL_vtbl_sv
@@ -585,3 +620,13 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 #endif  /* PERL_IMPLICIT_SYS && !PERL_CORE */
 
 #endif /* _INC_PERL_XSUB_H */		/* include guard */
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

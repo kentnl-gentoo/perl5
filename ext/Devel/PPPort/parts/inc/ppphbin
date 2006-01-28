@@ -1,12 +1,12 @@
 ################################################################################
 ##
-##  $Revision: 26 $
+##  $Revision: 31 $
 ##  $Author: mhx $
-##  $Date: 2005/01/31 08:10:53 +0100 $
+##  $Date: 2006/01/14 18:08:02 +0100 $
 ##
 ################################################################################
 ##
-##  Version 3.x, Copyright (C) 2004-2005, Marcus Holland-Moritz.
+##  Version 3.x, Copyright (C) 2004-2006, Marcus Holland-Moritz.
 ##  Version 2.x, Copyright (C) 2001, Paul Marquess.
 ##  Version 1.x, Copyright (C) 1999, Kenneth Albanowski.
 ##
@@ -29,6 +29,8 @@ my %opt = (
   hints     => 1,
   changes   => 1,
   cplusplus => 0,
+  filter    => 1,
+  strip     => 0,
 );
 
 my($ppport) = $0 =~ /([\w.]+)$/;
@@ -38,7 +40,7 @@ my $HS = "[ \t]";             # horizontal whitespace
 eval {
   require Getopt::Long;
   Getopt::Long::GetOptions(\%opt, qw(
-    help quiet diag! hints! changes! cplusplus
+    help quiet diag! filter! hints! changes! cplusplus strip
     patch=s copy=s diff=s compat-version=s
     list-provided list-unsupported api-info=s
   )) or usage();
@@ -50,6 +52,7 @@ if ($@ and grep /^-/, @ARGV) {
 }
 
 usage() if $opt{help};
+strip() if $opt{strip};
 
 if (exists $opt{'compat-version'}) {
   my($r,$v,$s) = eval { parse_version($opt{'compat-version'}) };
@@ -57,7 +60,7 @@ if (exists $opt{'compat-version'}) {
     die "Invalid version number format: '$opt{'compat-version'}'\n";
   }
   die "Only Perl 5 is supported\n" if $r != 5;
-  die "Invalid version number: $opt{'compat-version'}\n" if $v >= 1000 || $v >= 1000;
+  die "Invalid version number: $opt{'compat-version'}\n" if $v >= 1000 || $s >= 1000;
   $opt{'compat-version'} = sprintf "%d.%03d%03d", $r, $v, $s;
 }
 else {
@@ -70,32 +73,8 @@ my $cce  = '*'.'/';
 my $rccs = quotemeta $ccs;
 my $rcce = quotemeta $cce;
 
-my @files;
-
-if (@ARGV) {
-  @files = map { glob $_ } @ARGV;
-}
-else {
-  eval {
-    require File::Find;
-    File::Find::find(sub {
-      $File::Find::name =~ /\.(xs|c|h|cc)$/i
-          and push @files, $File::Find::name;
-    }, '.');
-  };
-  if ($@) {
-    @files = map { glob $_ } qw(*.xs *.c *.h *.cc);
-  }
-  my %filter = map { /(.*)\.xs$/ ? ("$1.c" => 1) : () } @files;
-  @files = grep { !/\b\Q$ppport\E$/i && !exists $filter{$_} } @files;
-}
-
-unless (@files) {
-  die "No input files given!\n";
-}
-
 my %API = map { /^(\w+)\|([^|]*)\|([^|]*)\|(\w*)$/
-                ? ( $1 => { 
+                ? ( $1 => {
                       ($2                  ? ( base     => $2 ) : ()),
                       ($3                  ? ( todo     => $3 ) : ()),
                       (index($4, 'v') >= 0 ? ( varargs  => 1  ) : ()),
@@ -192,6 +171,44 @@ if (exists $opt{'list-provided'}) {
     print "$f$flags\n";
   }
   exit 0;
+}
+
+my @files;
+my @srcext = qw( xs c h cc cpp );
+my $srcext = join '|', @srcext;
+
+if (@ARGV) {
+  my %seen;
+  @files = grep { -f && !exists $seen{$_} } map { glob $_ } @ARGV;
+}
+else {
+  eval {
+    require File::Find;
+    File::Find::find(sub {
+      $File::Find::name =~ /\.($srcext)$/i
+          and push @files, $File::Find::name;
+    }, '.');
+  };
+  if ($@) {
+    @files = map { glob "*.$_" } @srcext;
+  }
+}
+
+if (!@ARGV || $opt{filter}) {
+  my(@in, @out);
+  my %xsc = map { /(.*)\.xs$/ ? ("$1.c" => 1, "$1.cc" => 1) : () } @files;
+  for (@files) {
+    my $out = exists $xsc{$_} || /\b\Q$ppport\E$/i || !/\.($srcext)$/i;
+    push @{ $out ? \@out : \@in }, $_;
+  }
+  if (@ARGV && @out) {
+    warning("Skipping the following files (use --nofilter to avoid this):\n| ", join "\n| ", @out);
+  }
+  @files = @in;
+}
+
+unless (@files) {
+  die "No input files given!\n";
 }
 
 my(%files, %global, %revreplace);
@@ -694,4 +711,33 @@ See perldoc $0 for details.
 ENDUSAGE
 
   exit 2;
+}
+
+sub strip
+{
+  my $self = do { local(@ARGV,$/)=($0); <> };
+  $self =~ s/^$HS+Do NOT edit.*?(?=^-)//ms;
+  $self =~ s/^SKIP.*(?=^__DATA__)/SKIP
+if (\@ARGV && \$ARGV[0] eq '--unstrip') {
+  eval { require Devel::PPPort };
+  \$@ and die "Cannot require Devel::PPPort, please install.\\n";
+  Devel::PPPort::WriteFile(\$0);
+  exit 0;
+}
+print <<END;
+
+Sorry, but this is a stripped version of \$0.
+
+To be able to use its original script and doc functionality,
+please try to regenerate this file using:
+
+  \$^X \$0 --unstrip
+
+END
+/ms;
+
+  open OUT, ">$0" or die "cannot strip $0: $!\n";
+  print OUT $self;
+
+  exit 0;
 }

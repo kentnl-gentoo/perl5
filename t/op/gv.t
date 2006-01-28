@@ -7,46 +7,44 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
-}   
+}
 
 use warnings;
 
-print "1..52\n";
+require './test.pl';
+plan( tests => 132 );
 
 # type coersion on assignment
 $foo = 'foo';
 $bar = *main::foo;
 $bar = $foo;
-print ref(\$bar) eq 'SCALAR' ? "ok 1\n" : "not ok 1\n";
+is(ref(\$bar), 'SCALAR');
 $foo = *main::bar;
 
 # type coersion (not) on misc ops
 
-if ($foo) {
-  print ref(\$foo) eq 'GLOB' ? "ok 2\n" : "not ok 2\n";
-}
+ok($foo);
+is(ref(\$foo), 'GLOB');
 
-unless ($foo =~ /abcd/) {
-  print ref(\$foo) eq 'GLOB' ? "ok 3\n" : "not ok 3\n";
-}
+unlike ($foo, qr/abcd/);
+is(ref(\$foo), 'GLOB');
 
-if ($foo eq '*main::bar') {
-  print ref(\$foo) eq 'GLOB' ? "ok 4\n" : "not ok 4\n";
-}
+is($foo, '*main::bar');
+is(ref(\$foo), 'GLOB');
 
 # type coersion on substitutions that match
 $a = *main::foo;
 $b = $a;
 $a =~ s/^X//;
-print ref(\$a) eq 'GLOB' ? "ok 5\n" : "not ok 5\n";
+is(ref(\$a), 'GLOB');
 $a =~ s/^\*//;
-print $a eq 'main::foo' ? "ok 6\n" : "not ok 6\n";
-print ref(\$b) eq 'GLOB' ? "ok 7\n" : "not ok 7\n";
+is($a, 'main::foo');
+is(ref(\$b), 'GLOB');
 
 # typeglobs as lvalues
 substr($foo, 0, 1) = "XXX";
-print ref(\$foo) eq 'SCALAR' ? "ok 8\n" : "not ok 8\n";
-print $foo eq 'XXXmain::bar' ? "ok 9\n" : "not ok 9\n";
+is(ref(\$foo), 'SCALAR');
+is($foo, 'XXXmain::bar');
 
 # returning glob values
 sub foo {
@@ -56,13 +54,12 @@ sub foo {
 }
 
 ($fuu, $baa) = foo();
-if (defined $fuu) {
-  print ref(\$fuu) eq 'GLOB' ? "ok 10\n" : "not ok 10\n";
-}
+ok(defined $fuu);
+is(ref(\$fuu), 'GLOB');
 
-if (defined $baa) {
-  print ref(\$baa) eq 'GLOB' ? "ok 11\n" : "not ok 11\n";
-}
+
+ok(defined $baa);
+is(ref(\$baa), 'GLOB');
 
 # nested package globs
 # NOTE:  It's probably OK if these semantics change, because the
@@ -70,142 +67,146 @@ if (defined $baa) {
 #        (I hope.)
 
 { package Foo::Bar; no warnings 'once'; $test=1; }
-print exists $Foo::{'Bar::'} ? "ok 12\n" : "not ok 12\n";
-print $Foo::{'Bar::'} eq '*Foo::Bar::' ? "ok 13\n" : "not ok 13\n";
+ok(exists $Foo::{'Bar::'});
+is($Foo::{'Bar::'}, '*Foo::Bar::');
+
 
 # test undef operator clearing out entire glob
 $foo = 'stuff';
 @foo = qw(more stuff);
 %foo = qw(even more random stuff);
 undef *foo;
-print +($foo || @foo || %foo) ? "not ok" : "ok", " 14\n";
+is ($foo, undef);
+is (scalar @foo, 0);
+is (scalar %foo, 0);
 
-# test warnings from assignment of undef to glob
 {
-    my $msg;
+    # test warnings from assignment of undef to glob
+    my $msg = '';
     local $SIG{__WARN__} = sub { $msg = $_[0] };
     use warnings;
     *foo = 'bar';
-    print $msg ? "not ok" : "ok", " 15\n";
+    is($msg, '');
     *foo = undef;
-    print $msg ? "ok" : "not ok", " 16\n";
+    like($msg, qr/Undefined value assigned to typeglob/);
 }
 
+my $test = curr_test();
 # test *glob{THING} syntax
-$x = "ok 17\n";
-@x = ("ok 18\n");
-%x = ("ok 19" => "\n");
-sub x { "ok 20\n" }
+$x = "ok $test\n";
+++$test;
+@x = ("ok $test\n");
+++$test;
+%x = ("ok $test" => "\n");
+++$test;
+sub x { "ok $test\n" }
 print ${*x{SCALAR}}, @{*x{ARRAY}}, %{*x{HASH}}, &{*x{CODE}};
+# This needs to go here, after the print, as sub x will return the current
+# value of test
+++$test;
 format x =
-ok 21
+XXX This text isn't used. Should it be?
 .
-print ref *x{FORMAT} eq "FORMAT" ? "ok 21\n" : "not ok 21\n";
+curr_test($test);
+
+is (ref *x{FORMAT}, "FORMAT");
 *x = *STDOUT;
-print *{*x{GLOB}} eq "*main::STDOUT" ? "ok 22\n" : "not ok 22\n";
-print {*x{IO}} "ok 23\n";
+is (*{*x{GLOB}}, "*main::STDOUT");
 
 {
-	my $warn;
-	local $SIG{__WARN__} = sub {
-		$warn .= $_[0];
-	};
-	my $val = *x{FILEHANDLE};
-	print {*x{IO}} ($warn =~ /is deprecated/ ? "ok 24\n" : "not ok 24\n");
-	
+    my $test = curr_test();
+
+    print {*x{IO}} "ok $test\n";
+    ++$test;
+
+    my $warn;
+    local $SIG{__WARN__} = sub {
+	$warn .= $_[0];
+    };
+    my $val = *x{FILEHANDLE};
+    print {*x{IO}} ($warn =~ /is deprecated/
+		    ? "ok $test\n" : "not ok $test\n");
+    curr_test(++$test);
 }
 
-# test if defined() doesn't create any new symbols
 
 {
-    my $test = 24;
+    # test if defined() doesn't create any new symbols
 
     my $a = "SYM000";
-    print "not " if defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(!defined *{$a});
 
-    print "not " if defined @{$a} or defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(!defined @{$a});
+    ok(!defined *{$a});
 
-    print "not " if defined %{$a} or defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(!defined %{$a});
+    ok(!defined *{$a});
 
-    print "not " if defined ${$a} or defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(!defined ${$a});
+    ok(!defined *{$a});
 
-    print "not " if defined &{$a} or defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(!defined &{$a});
+    ok(!defined *{$a});
 
-    *{$a} = sub { print "ok $test\n" };
-    print "not " unless defined &{$a} and defined *{$a};
-    ++$test; &{$a};
+    my $state = "not";
+    *{$a} = sub { $state = "ok" };
+    ok(defined &{$a});
+    ok(defined *{$a});
+    &{$a};
+    is ($state, 'ok');
 }
 
-# although it *should* if you're talking about magicals
-
 {
-    my $test = 30;
+    # although it *should* if you're talking about magicals
 
     my $a = "]";
-    print "not " unless defined ${$a};
-    ++$test; print "ok $test\n";
-    print "not " unless defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(defined ${$a});
+    ok(defined *{$a});
 
     $a = "1";
     "o" =~ /(o)/;
-    print "not " unless ${$a};
-    ++$test; print "ok $test\n";
-    print "not " unless defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(${$a});
+    ok(defined *{$a});
     $a = "2";
-    print "not " if ${$a};
-    ++$test; print "ok $test\n";
-    print "not " unless defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(!${$a});
+    ok(defined *{$a});
     $a = "1x";
-    print "not " if defined ${$a};
-    ++$test; print "ok $test\n";
-    print "not " if defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(!defined ${$a});
+    ok(!defined *{$a});
     $a = "11";
     "o" =~ /(((((((((((o)))))))))))/;
-    print "not " unless ${$a};
-    ++$test; print "ok $test\n";
-    print "not " unless defined *{$a};
-    ++$test; print "ok $test\n";
+    ok(${$a});
+    ok(defined *{$a});
 }
-
 
 # [ID 20010526.001] localized glob loses value when assigned to
 
 $j=1; %j=(a=>1); @j=(1); local *j=*j; *j = sub{};
 
-print $j    == 1 ? "ok 41\n"  : "not ok 41\n";
-print $j{a} == 1 ? "ok 42\n"  : "not ok 42\n";
-print $j[0] == 1 ? "ok 43\n" : "not ok 43\n";
-
-# does pp_readline() handle glob-ness correctly?
+is($j, 1);
+is($j{a}, 1);
+is($j[0], 1);
 
 {
+    # does pp_readline() handle glob-ness correctly?
     my $g = *foo;
     $g = <DATA>;
-    print $g;
+    is ($g, "Perl\n");
 }
 
 {
     my $w = '';
-    $SIG{__WARN__} = sub { $w = $_[0] };
+    local $SIG{__WARN__} = sub { $w = $_[0] };
     sub abc1 ();
     local *abc1 = sub { };
-    print $w eq '' ? "ok 45\n" : "not ok 45\n# $w";
+    is ($w, '');
     sub abc2 ();
     local *abc2;
     *abc2 = sub { };
-    print $w eq '' ? "ok 46\n" : "not ok 46\n# $w";
+    is ($w, '');
     sub abc3 ();
     *abc3 = sub { };
-    print $w =~ /Prototype mismatch/ ? "ok 47\n" : "not ok 47\n# $w";
+    like ($w, qr/Prototype mismatch/);
 }
 
 {
@@ -214,7 +215,7 @@ print $j[0] == 1 ? "ok 43\n" : "not ok 43\n";
     my $x = "not ";
     $x  = undef;
     $x .= <DATA>;
-    print $x;
+    is ($x, "Rules\n");
 }
 
 {
@@ -224,26 +225,176 @@ print $j[0] == 1 ? "ok 43\n" : "not ok 43\n";
     my $v;
     sub f { $_[0] = 0; $_[0] = "a"; $_[0] = *DATA }
     f($v);
-    print $v eq '*main::DATA' ? "ok 49\n" : "not ok 49\n# $e";
+    is ($v, '*main::DATA');
     my $x = <$v>;
-    print $x || "not ok 50\n";
+    is ($x, "perl\n");
 }
 
-{   
+{
+    $e = '';
     # GLOB assignment to tied element
     local $SIG{__DIE__} = sub { $e = $_[0] };
-    sub T::TIEARRAY { bless [] => "T" }
-    sub T::STORE    { $_[0]->[ $_[1] ] = $_[2] }
-    sub T::FETCH    { $_[0]->[ $_[1] ] }
+    sub T::TIEARRAY  { bless [] => "T" }
+    sub T::STORE     { $_[0]->[ $_[1] ] = $_[2] }
+    sub T::FETCH     { $_[0]->[ $_[1] ] }
+    sub T::FETCHSIZE { @{$_[0]} }
     tie my @ary => "T";
     $ary[0] = *DATA;
-    print $ary[0] eq '*main::DATA' ? "ok 51\n" : "not ok 51\n# $e";
+    is ($ary[0], '*main::DATA');
+    is ($e, '');
     my $x = readline $ary[0];
-    print $x || "not ok 52\n";
+    is($x, "rocks\n");
 }
 
+{
+    # Need some sort of die or warn to get the global destruction text if the
+    # bug is still present
+    my $output = runperl(prog => <<'EOPROG');
+package M;
+$| = 1;
+sub DESTROY {eval {die qq{Farewell $_[0]}}; print $@}
+package main;
+
+bless \$A::B, 'M';
+*A:: = \*B::;
+EOPROG
+    like($output, qr/^Farewell M=SCALAR/, "DESTROY was called");
+    unlike($output, qr/global destruction/,
+           "unreferenced symbol tables should be cleaned up immediately");
+}
+
+# Possibly not the correct test file for these tests.
+# There are certain space optimisations implemented via promotion rules to
+# GVs
+
+foreach (qw (oonk ga_shloip)) {
+    ok(!exists $::{$_}, "no symbols of any sort to start with for $_");
+}
+
+# A string in place of the typeglob is promoted to the function prototype
+$::{oonk} = "pie";
+my $proto = eval 'prototype \&oonk';
+die if $@;
+is ($proto, "pie", "String is promoted to prototype");
+
+
+# A reference to a value is used to generate a constant subroutine
+foreach my $value (3, "Perl rules", \42, qr/whatever/, [1,2,3], {1=>2},
+		   \*STDIN, \&ok, \undef, *STDOUT) {
+    delete $::{oonk};
+    $::{oonk} = \$value;
+    $proto = eval 'prototype \&oonk';
+    die if $@;
+    is ($proto, '', "Prototype for a constant subroutine is empty");
+
+    my $got = eval 'oonk';
+    die if $@;
+    is (ref $got, ref $value, "Correct type of value (" . ref($value) . ")");
+    is ($got, $value, "Value is correctly set");
+}
+
+delete $::{oonk};
+$::{oonk} = \"Value";
+
+*{"ga_shloip"} = \&{"oonk"};
+
+is (ref $::{ga_shloip}, 'SCALAR', "Export of proxy constant as is");
+is (ref $::{oonk}, 'SCALAR', "Export doesn't affect original");
+is (eval 'ga_shloip', "Value", "Constant has correct value");
+is (ref $::{ga_shloip}, 'SCALAR',
+    "Inlining of constant doesn't change represenatation");
+
+delete $::{ga_shloip};
+
+eval 'sub ga_shloip (); 1' or die $@;
+is ($::{ga_shloip}, '', "Prototype is stored as an empty string");
+
+# Check that a prototype expands.
+*{"ga_shloip"} = \&{"oonk"};
+
+is (ref $::{oonk}, 'SCALAR', "Export doesn't affect original");
+is (eval 'ga_shloip', "Value", "Constant has correct value");
+is (ref \$::{ga_shloip}, 'GLOB', "Symbol table has full typeglob");
+
+
+@::zwot = ('Zwot!');
+
+# Check that assignment to an existing typeglob works
+{
+  my $w = '';
+  local $SIG{__WARN__} = sub { $w = $_[0] };
+  *{"zwot"} = \&{"oonk"};
+  is($w, '', "Should be no warning");
+}
+
+is (ref $::{oonk}, 'SCALAR', "Export doesn't affect original");
+is (eval 'zwot', "Value", "Constant has correct value");
+is (ref \$::{zwot}, 'GLOB', "Symbol table has full typeglob");
+is (join ('!', @::zwot), 'Zwot!', "Existing array still in typeglob");
+
+sub spritsits () {
+    "Traditional";
+}
+
+# Check that assignment to an existing subroutine works
+{
+  my $w = '';
+  local $SIG{__WARN__} = sub { $w = $_[0] };
+  *{"spritsits"} = \&{"oonk"};
+  like($w, qr/^Constant subroutine main::spritsits redefined/,
+       "Redefining a constant sub should warn");
+}
+
+is (ref $::{oonk}, 'SCALAR', "Export doesn't affect original");
+is (eval 'spritsits', "Value", "Constant has correct value");
+is (ref \$::{spritsits}, 'GLOB', "Symbol table has full typeglob");
+
+my $result;
+# Check that assignment to an existing typeglob works
+{
+  my $w = '';
+  local $SIG{__WARN__} = sub { $w = $_[0] };
+  $result = *{"plunk"} = \&{"oonk"};
+  is($w, '', "Should be no warning");
+}
+
+is (ref \$result, 'GLOB',
+    "Non void assignment should still return a typeglob");
+
+is (ref $::{oonk}, 'SCALAR', "Export doesn't affect original");
+is (eval 'plunk', "Value", "Constant has correct value");
+is (ref \$::{plunk}, 'GLOB', "Symbol table has full typeglob");
+
+my $gr = eval '\*plunk' or die;
+
+{
+  my $w = '';
+  local $SIG{__WARN__} = sub { $w = $_[0] };
+  $result = *{$gr} = \&{"oonk"};
+  is($w, '', "Redefining a constant sub to another constant sub with the same underlying value should not warn (It's just re-exporting, and that was always legal)");
+}
+
+is (ref $::{oonk}, 'SCALAR', "Export doesn't affect original");
+is (eval 'plunk', "Value", "Constant has correct value");
+is (ref \$::{plunk}, 'GLOB', "Symbol table has full typeglob");
+
+format =
+.
+
+foreach my $value ([1,2,3], {1=>2}, *STDOUT{IO}, \&ok, *STDOUT{FORMAT}) {
+    # *STDOUT{IO} returns a reference to a PVIO. As it's blessed, ref returns
+    # IO::Handle, which isn't what we want.
+    my $type = $value;
+    $type =~ s/.*=//;
+    $type =~ s/\(.*//;
+    delete $::{oonk};
+    $::{oonk} = $value;
+    $proto = eval 'prototype \&oonk';
+    like ($@, qr/^Cannot convert a reference to $type to typeglob/,
+	  "Cannot upgrade ref-to-$type to typeglob");
+}
 __END__
-ok 44
-ok 48
-ok 50
-ok 52
+Perl
+Rules
+perl
+rocks

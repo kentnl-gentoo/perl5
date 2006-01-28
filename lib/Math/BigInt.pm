@@ -18,10 +18,10 @@ package Math::BigInt;
 my $class = "Math::BigInt";
 require 5.005;
 
-$VERSION = '1.75';
+$VERSION = '1.77';
 
-@ISA = qw( Exporter );
-@EXPORT_OK = qw( objectify bgcd blcm); 
+@ISA = qw(Exporter);
+@EXPORT_OK = qw(objectify bgcd blcm); 
 
 # _trap_inf and _trap_nan are internal and should never be accessed from the
 # outside
@@ -162,8 +162,8 @@ $_trap_nan = 0;				# are NaNs ok? set w/ config()
 $_trap_inf = 0;				# are infs ok? set w/ config()
 my $nan = 'NaN'; 			# constants for easier life
 
-my $CALC = 'Math::BigInt::Calc';	# module to do the low level math
-					# default is Calc.pm
+my $CALC = 'Math::BigInt::FastCalc';	# module to do the low level math
+					# default is FastCalc.pm
 my $IMPORT = 0;				# was import() called yet?
 					# used to make require work
 my %WARN;				# warn only once for low-level libs
@@ -528,11 +528,10 @@ sub new
     }
 
   # handle '+inf', '-inf' first
-  if ($wanted =~ /^[+-]?inf$/)
+  if ($wanted =~ /^[+-]?inf\z/)
     {
-    $self->{value} = $CALC->_zero();
-    $self->{sign} = $wanted; $self->{sign} = '+inf' if $self->{sign} eq 'inf';
-    return $self;
+    $self->{sign} = $wanted;		# set a default sign for bstr()
+    return $self->binf($wanted);
     }
   # split str in m mantissa, e exponent, i integer, f fraction, v value, s sign
   my ($mis,$miv,$mfv,$es,$ev) = _split($wanted);
@@ -663,7 +662,7 @@ sub binf
   if (${"${class}::_trap_inf"})
     {
     require Carp;
-    Carp::croak ("Tried to set $self to +-inf in $class\::binfn()");
+    Carp::croak ("Tried to set $self to +-inf in $class\::binf()");
     }
   $self->import() if $IMPORT == 0;		# make require work
   return if $self->modify('binf');
@@ -728,7 +727,7 @@ sub bzero
 sub bone
   {
   # create a bigint '+1' (or -1 if given sign '-'),
-  # if given a BigInt, set it to +1 or -1, respecively
+  # if given a BigInt, set it to +1 or -1, respectively
   my $self = shift;
   my $sign = shift; $sign = '+' if !defined $sign || $sign ne '-';
   $self = $class if !defined $self;
@@ -2265,7 +2264,7 @@ sub objectify
   # the first argument is number of args objectify() should look at it will
   # return $count+1 elements, the first will be a classname. This is because
   # overloaded '""' calls bstr($object,undef,undef) and this would result in
-  # useless objects beeing created and thrown away. So we cannot simple loop
+  # useless objects being created and thrown away. So we cannot simple loop
   # over @_. If the given count is 0, all arguments will be used.
  
   # If the second arg is a ref, use it as class.
@@ -2414,7 +2413,7 @@ sub import
     {
     $_ =~ tr/a-zA-Z0-9://cd;			# limit to sane characters
     }
-  push @c,'Calc';				# if all fail, try this
+  push @c, 'FastCalc', 'Calc';			# if all fail, try these
   $CALC = '';					# signal error
   foreach my $lib (@c)
     {
@@ -2640,9 +2639,11 @@ sub modify () { 0; }
 1;
 __END__
 
+=pod
+
 =head1 NAME
 
-Math::BigInt - Arbitrary size integer math package
+Math::BigInt - Arbitrary size integer/float math package
 
 =head1 SYNOPSIS
 
@@ -2682,7 +2683,7 @@ Math::BigInt - Arbitrary size integer math package
   $x->is_inf($sign);	# if $x is +inf, or -inf (sign is default '+')
   $x->is_int();		# if $x is an integer (not a float)
 
-  # comparing and digit/sign extration
+  # comparing and digit/sign extraction
   $x->bcmp($y);		# compare numbers (undef,<0,=0,>0)
   $x->bacmp($y);	# compare absolutely (undef,<0,=0,>0)
   $x->sign();		# return the sign, either +,- or NaN
@@ -2691,7 +2692,7 @@ Math::BigInt - Arbitrary size integer math package
 
   # The following all modify their first argument. If you want to preserve
   # $x, use $z = $x->copy()->bXXX($y); See under L<CAVEATS> for why this is
-  # neccessary when mixing $a = $b assigments with non-overloaded math.
+  # necessary when mixing $a = $b assignments with non-overloaded math.
 
   $x->bzero();		# set $x to 0
   $x->bnan();		# set $x to NaN
@@ -2782,7 +2783,7 @@ Math::BigInt - Arbitrary size integer math package
 
 =head1 DESCRIPTION
 
-All operators (inlcuding basic math operations) are overloaded if you
+All operators (including basic math operations) are overloaded if you
 declare your big integers as
 
   $i = new Math::BigInt '123_456_789_123_456_789';
@@ -2870,7 +2871,7 @@ appropriate information.
 			even
 	version		version number of the class you used
 			1.61
-	div_scale	Fallback acccuracy for div
+	div_scale	Fallback accuracy for div
 			40
 	trap_nan	If true, traps creation of NaN via croak()
 			1
@@ -2890,11 +2891,26 @@ Example:
 
 	$x->accuracy(5);		# local for $x
 	CLASS->accuracy(5);		# global for all members of CLASS
-	$A = $x->accuracy();		# read out
-	$A = CLASS->accuracy();		# read out
+					# Note: This also applies to new()!
+
+	$A = $x->accuracy();		# read out accuracy that affects $x
+	$A = CLASS->accuracy();		# read out global accuracy
 
 Set or get the global or local accuracy, aka how many significant digits the
-results have. 
+results have. If you set a global accuracy, then this also applies to new()!
+
+Warning! The accuracy I<sticks>, e.g. once you created a number under the
+influence of C<< CLASS->accuracy($A) >>, all results from math operations with
+that number will also be rounded. 
+
+In most cases, you should probably round the results explicitly using one of
+L<round()>, L<bround()> or L<bfround()> or by passing the desired accuracy
+to the math operation as additional parameter:
+
+        my $x = Math::BigInt->new(30000);
+        my $y = Math::BigInt->new(7);
+        print scalar $x->copy()->bdiv($y, 2);		# print 4300
+        print scalar $x->copy()->bdiv($y)->bround(2);	# print 4300
 
 Please see the section about L<ACCURACY AND PRECISION> for further details.
 
@@ -2909,7 +2925,7 @@ represents the accuracy that will be in effect for $x:
 
 	$y = Math::BigInt->new(1234567);	# unrounded
 	print Math::BigInt->accuracy(4),"\n";	# set 4, print 4
-	$x = Math::BigInt->new(123456);		# will be automatically rounded
+	$x = Math::BigInt->new(123456);		# $x will be automatically rounded!
 	print "$x $y\n";			# '123500 1234567'
 	print $x->accuracy(),"\n";		# will be 4
 	print $y->accuracy(),"\n";		# also 4, since global is 4
@@ -2924,35 +2940,46 @@ Math::BigInt.
 
 =head2 precision
 
-	$x->precision(-2);		# local for $x, round right of the dot
-	$x->precision(2);		# ditto, but round left of the dot
-	CLASS->accuracy(5);		# global for all members of CLASS
-	CLASS->precision(-5);		# ditto
-	$P = CLASS->precision();	# read out
-	$P = $x->precision();		# read out
+	$x->precision(-2);	# local for $x, round at the second digit right of the dot
+	$x->precision(2);	# ditto, round at the second digit left of the dot
 
-Set or get the global or local precision, aka how many digits the result has
-after the dot (or where to round it when passing a positive number). In
-Math::BigInt, passing a negative number precision has no effect since no
-numbers have digits after the dot.
+	CLASS->precision(5);	# Global for all members of CLASS
+				# This also applies to new()!
+	CLASS->precision(-5);	# ditto
+
+	$P = CLASS->precision();	# read out global precision 
+	$P = $x->precision();		# read out precision that affects $x
+
+Note: You probably want to use L<accuracy()> instead. With L<accuracy> you
+set the number of digits each result should have, with L<precision> you
+set the place where to round!
+
+C<precision()> sets or gets the global or local precision, aka at which digit
+before or after the dot to round all results. A set global precision also
+applies to all newly created numbers!
+
+In Math::BigInt, passing a negative number precision has no effect since no
+numbers have digits after the dot. In L<Math::BigFloat>, it will round all
+results to P digits after the dot.
 
 Please see the section about L<ACCURACY AND PRECISION> for further details.
 
-Value must be greater than zero. Pass an undef value to disable it:
+Pass an undef value to disable it:
 
 	$x->precision(undef);
 	Math::BigInt->precision(undef);
 
 Returns the current precision. For C<$x->precision()> it will return either the
 local precision of $x, or if not defined, the global. This means the return
-value represents the accuracy that will be in effect for $x:
+value represents the prevision that will be in effect for $x:
 
 	$y = Math::BigInt->new(1234567);	# unrounded
 	print Math::BigInt->precision(4),"\n";	# set 4, print 4
 	$x = Math::BigInt->new(123456);		# will be automatically rounded
+	print $x;				# print "120000"!
 
-Note: Works also for subclasses like Math::BigFloat. Each class has it's own
-globals separated from Math::BigInt, but it is possible to subclass
+Note: Works also for subclasses like L<Math::BigFloat>. Each class has its
+own globals separated from Math::BigInt, but it is possible to subclass
 Math::BigInt and make the globals of the subclass aliases to the ones from
 Math::BigInt.
 
@@ -3041,7 +3068,7 @@ If used on an object, it will set it to one:
 	$x->is_inf();			# true if +inf
 	$x->is_inf('-');		# true if -inf (sign is default '+')
 
-These methods all test the BigInt for beeing one specific value and return
+These methods all test the BigInt for being one specific value and return
 true or false depending on the input. These are faster than doing something
 like:
 
@@ -3058,7 +3085,7 @@ C<-inf> is negative. A C<zero> is neither positive nor negative.
 
 These methods are only testing the sign, and not the value.
 
-C<is_positive()> and C<is_negative()> are aliase to C<is_pos()> and
+C<is_positive()> and C<is_negative()> are aliases to C<is_pos()> and
 C<is_neg()>, respectively. C<is_positive()> and C<is_negative()> were
 introduced in v1.36, while C<is_pos()> and C<is_neg()> were only introduced
 in v1.68.
@@ -3313,7 +3340,7 @@ v1.22, while C<as_int()> was only introduced in v1.68.
 
 	$x->bstr();
 
-Returns a normalized string represantation of C<$x>.
+Returns a normalized string representation of C<$x>.
 
 =head2 bsstr
 
@@ -3484,7 +3511,7 @@ versions <= 5.7.2) is like this:
       result has at most max(scale, length(dividend), length(divisor)) digits
     Actual code:
       scale = max(scale, length(dividend)-1,length(divisor)-1);
-      scale += length(divisior) - length(dividend);
+      scale += length(divisor) - length(dividend);
     So for lx = 3, ly = 9, scale = 10, scale will actually be 16 (10+9-3).
     Actually, the 'difference' added to the scale is calculated from the
     number of "significant digits" in dividend and divisor, which is derived
@@ -3523,7 +3550,7 @@ This is how it works now:
   * to find out the current global P, use C<< Math::SomeClass->precision() >>
   * use C<< $x->accuracy() >> respective C<< $x->precision() >> for the local
     setting of C<< $x >>.
-  * Please note that C<< $x->accuracy() >> respecive C<< $x->precision() >>
+  * Please note that C<< $x->accuracy() >> respective C<< $x->precision() >>
     return eventually defined global A or P, when C<< $x >>'s A or P is not
     set.
 
@@ -3569,7 +3596,7 @@ This is how it works now:
     be automatically cleared.
   * If two objects are involved in an operation, and one of them has A in
     effect, and the other P, this results in an error (NaN).
-  * A takes precendence over P (Hint: A comes before P).
+  * A takes precedence over P (Hint: A comes before P).
     If neither of them is defined, nothing is used, i.e. the result will have
     as many digits as it can (with an exception for fdiv/fsqrt) and will not
     be rounded.
@@ -3587,7 +3614,7 @@ This is how it works now:
     + never round (this is the default):
       This is done by setting A and P to undef. No math operation
       will round the result, with fdiv() and fsqrt() as exceptions to guard
-      against overflows. You must explicitely call bround(), bfround() or
+      against overflows. You must explicitly call bround(), bfround() or
       round() (the latter with parameters).
       Note: Once you have rounded a number, the settings will 'stick' on it
       and 'infect' all other numbers engaged in math operations with it, since
@@ -3707,7 +3734,7 @@ overloading these routines is not possible, this cannot be fixed from BigInt.
 =item ==, !=, <, >, <=, >= with NaNs
 
 BigInt's bcmp() routine currently returns undef to signal that a NaN was
-involved in a comparisation. However, the overload code turns that into
+involved in a comparison. However, the overload code turns that into
 either 1 or '' and thus operations like C<< NaN != NaN >> might return
 wrong values.
 
@@ -3899,7 +3926,7 @@ more time then the actual addition.
 With a technique called copy-on-write, the cost of copying with overload could
 be minimized or even completely avoided. A test implementation of COW did show
 performance gains for overloaded math, but introduced a performance loss due
-to a constant overhead for all other operatons. So Math::BigInt does currently
+to a constant overhead for all other operations. So Math::BigInt does currently
 not COW.
 
 The rewritten version of this module (vs. v0.01) is slower on certain
@@ -4106,7 +4133,7 @@ Additionally, the following still works:
 
 There is now a C<bsstr()> method to get the string in scientific notation aka
 C<1e+2> instead of C<100>. Be advised that overloaded 'eq' always uses bstr()
-for comparisation, but Perl will represent some numbers as 100 and others
+for comparison, but Perl will represent some numbers as 100 and others
 as 1e+308. If in doubt, convert both arguments to Math::BigInt before 
 comparing them as strings:
 
@@ -4120,7 +4147,7 @@ comparing them as strings:
 	$y = Math::BigInt->new($y);
 	ok ($x,$y);			# okay
 
-Alternatively, simple use C<< <=> >> for comparisations, this will get it
+Alternatively, simple use C<< <=> >> for comparisons, this will get it
 always right. There is not yet a way to get a number automatically represented
 as a string that matches exactly the way Perl represents it.
 
@@ -4146,7 +4173,7 @@ effect:
 
 This also works for other subclasses, like Math::String.
 
-It is yet unlcear whether overloaded int() should return a scalar or a BigInt.
+It is yet unclear whether overloaded int() should return a scalar or a BigInt.
 
 If you want a real Perl scalar, use C<numify()>:
 
@@ -4176,7 +4203,7 @@ The following will probably not do what you expect:
 	print $c->bdiv(10000),"\n";
 
 It prints both quotient and remainder since print calls C<bdiv()> in list
-context. Also, C<bdiv()> will modify $c, so be carefull. You probably want
+context. Also, C<bdiv()> will modify $c, so be careful. You probably want
 to use
 	
 	print $c / 10000,"\n";
@@ -4205,7 +4232,7 @@ manpage), and the equation
 holds true for any $x and $y, which justifies calling the two return
 values of bdiv() the quotient and remainder. The only exception to this rule
 are when $y == 0 and $x is negative, then the remainder will also be
-negative. See below under "infinity handling" for the reasoning behing this.
+negative. See below under "infinity handling" for the reasoning behind this.
 
 Perl's 'use integer;' changes the behaviour of % and / for scalars, but will
 not change BigInt's way to do things. This is because under 'use integer' Perl
@@ -4417,7 +4444,7 @@ Completely rewritten by Tels http://bloodgate.com in late 2000, 2001 - 2004
 and still at it in 2005.
 
 Many people contributed in one or more ways to the final beast, see the file
-CREDITS for an (uncomplete) list. If you miss your name, please drop me a
+CREDITS for an (incomplete) list. If you miss your name, please drop me a
 mail. Thank you!
 
 =cut

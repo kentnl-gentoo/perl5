@@ -8,13 +8,13 @@
 #
 ################################################################################
 #
-#  $Revision: 33 $
+#  $Revision: 41 $
 #  $Author: mhx $
-#  $Date: 2005/01/31 08:10:55 +0100 $
+#  $Date: 2006/01/14 18:07:56 +0100 $
 #
 ################################################################################
 #
-#  Version 3.x, Copyright (C) 2004-2005, Marcus Holland-Moritz.
+#  Version 3.x, Copyright (C) 2004-2006, Marcus Holland-Moritz.
 #  Version 2.x, Copyright (C) 2001, Paul Marquess.
 #  Version 1.x, Copyright (C) 1999, Kenneth Albanowski.
 #
@@ -45,12 +45,12 @@ C<Devel::PPPort> contains a single function, called C<WriteFile>. Its
 only purpose is to write the F<ppport.h> C header file. This file
 contains a series of macros and, if explicitly requested, functions that
 allow XS modules to be built using older versions of Perl. Currently,
-Perl versions from 5.003 to 5.9.2 are supported.
+Perl versions from 5.003 to 5.9.3 are supported.
 
-This module is used by C<h2xs> to write the file F<ppport.h>. 
+This module is used by C<h2xs> to write the file F<ppport.h>.
 
 =head2 Why use ppport.h?
- 
+
 You should use F<ppport.h> in modern code so that your code will work
 with the widest range of Perl interpreters possible, without significant
 additional work.
@@ -69,7 +69,7 @@ They are most probably no XS writers. Also, don't make F<ppport.h>
 optional. Rather, just take the most recent copy of F<ppport.h> that
 you can find (e.g. by generating it with the latest C<Devel::PPPort>
 release from CPAN), copy it into your project, adjust your project to
-use it, and distribute the header along with your module. 
+use it, and distribute the header along with your module.
 
 =head2 Running ppport.h
 
@@ -99,7 +99,7 @@ Otherwise it returns a false value.
 
 =head1 COMPATIBILITY
 
-F<ppport.h> supports Perl versions from 5.003 to 5.9.2
+F<ppport.h> supports Perl versions from 5.003 to 5.9.3
 in threaded and non-threaded configurations.
 
 =head2 Provided Perl compatibility API
@@ -133,6 +133,7 @@ in older Perl releases:
     CopSTASHPV_set
     CopyD
     dAX
+    dAXMARK
     DEFSV
     dITEMS
     dMY_CXT
@@ -194,6 +195,9 @@ in older Perl releases:
     newRV_noinc
     newSVpvn
     newSVuv
+    Newx
+    Newxc
+    Newxz
     NOOP
     NUM2PTR
     NVef
@@ -254,6 +258,7 @@ in older Perl releases:
     PERL_SCAN_SILENT_ILLDIGIT
     PERL_SHORT_MAX
     PERL_SHORT_MIN
+    PERL_SIGNALS_UNSAFE_FLAG
     PERL_SUBVERSION
     PERL_UCHAR_MAX
     PERL_UCHAR_MIN
@@ -288,6 +293,7 @@ in older Perl releases:
     PL_ppaddr
     PL_rsfp
     PL_rsfp_filters
+    PL_signals
     PL_stack_base
     PL_stack_sp
     PL_stdingv
@@ -346,12 +352,18 @@ in older Perl releases:
     sv_vsetpvf_mg
     SvGETMAGIC
     SvIV_nomg
+    SvMAGIC_set
     SvPV_force_nomg
     SvPV_nolen
     SvPV_nomg
     SvPVbyte
+    SvPVX_const
+    SvPVX_mutable
+    SvRV_set
+    SvSTASH_set
     SvUV
     SvUV_nomg
+    SvUV_set
     SvUVX
     SvUVx
     SvUVXx
@@ -369,6 +381,8 @@ in older Perl releases:
     XCPT_TRY_START
     XPUSHmortal
     XPUSHu
+    XSprePUSH
+    XSRETURN
     XSRETURN_UV
     XST_mUV
     ZeroD
@@ -383,6 +397,38 @@ Here's a list of the currently unsupported API, and also the version of
 Perl below which it is unsupported:
 
 =over 4
+
+=item perl 5.9.3
+
+  MULTICALL
+  POP_MULTICALL
+  PUSH_MULTICALL
+  SvSTASH_set
+  av_arylen_p
+  ckwarn
+  ckwarn_d
+  csighandler
+  dMULTICALL
+  doref
+  gv_const_sv
+  hv_eiter_p
+  hv_eiter_set
+  hv_name_set
+  hv_placeholders_get
+  hv_placeholders_p
+  hv_placeholders_set
+  hv_riter_p
+  hv_riter_set
+  is_utf8_string_loclen
+  my_sprintf
+  newGIVENOP
+  newSVhek
+  newWHENOP
+  newWHILEOP
+  ref
+  sortsv_flags
+  stashpv_hvname_match
+  vverify
 
 =item perl 5.9.2
 
@@ -427,6 +473,7 @@ Perl below which it is unsupported:
   save_bool
   savestack_grow_cnt
   scan_vstring
+  seed
   sv_cat_decode
   sv_compile_2op
   sv_setpviv
@@ -531,7 +578,6 @@ Perl below which it is unsupported:
   POPpbytex
   SvUOK
   bytes_from_utf8
-  csighandler
   despatch_signals
   do_openn
   gv_handler
@@ -548,9 +594,7 @@ Perl below which it is unsupported:
   utf8_length
   utf8_to_uvchr
   utf8_to_uvuni
-  utf8n_to_uvchr
   utf8n_to_uvuni
-  uvchr_to_utf8
   uvuni_to_utf8
 
 =item perl 5.6.1
@@ -764,10 +808,6 @@ Perl below which it is unsupported:
   save_aelem
   save_helem
 
-=item perl 5.004_04
-
-  newWHILEOP
-
 =item perl 5.004
 
   GIMME_V
@@ -815,6 +855,7 @@ Perl below which it is unsupported:
   rsignal_state
   save_I16
   save_gp
+  share_hek
   start_subparse
   sv_catpvf
   sv_catpvf_mg
@@ -863,7 +904,7 @@ Version 3.x was ported back to CPAN by Marcus Holland-Moritz.
 
 =head1 COPYRIGHT
 
-Version 3.x, Copyright (C) 2004-2005, Marcus Holland-Moritz.
+Version 3.x, Copyright (C) 2004-2006, Marcus Holland-Moritz.
 
 Version 2.x, Copyright (C) 2001, Paul Marquess.
 
@@ -884,12 +925,13 @@ require DynaLoader;
 use strict;
 use vars qw($VERSION @ISA $data);
 
-$VERSION = do { my @r = '$Snapshot: /Devel-PPPort/3.06 $' =~ /(\d+\.\d+(?:_\d+)?)/; @r ? $r[0] : '9.99' };
+$VERSION = do { my @r = '$Snapshot: /Devel-PPPort/3.08 $' =~ /(\d+\.\d+(?:_\d+)?)/; @r ? $r[0] : '9.99' };
 
 @ISA = qw(DynaLoader);
 
 bootstrap Devel::PPPort;
 
+sub _init_data
 {
   $data = do { local $/; <DATA> };
   my $now = localtime;
@@ -898,12 +940,13 @@ bootstrap Devel::PPPort;
   $data =~ s/__VERSION__/$VERSION/g;
   $data =~ s/__DATE__/$now/g;
   $data =~ s/__PKG__/$pkg/g;
-  $data =~ s/^POD\s//gm;
+  $data =~ s/^\|>//gm;
 }
 
 sub WriteFile
 {
   my $file = shift || 'ppport.h';
+  defined $data or _init_data();
   my $copy = $data;
   $copy =~ s/\bppport\.h\b/$file/g;
 
@@ -923,317 +966,341 @@ __DATA__
 /*
 ----------------------------------------------------------------------
 
-    ppport.h -- Perl/Pollution/Portability Version __VERSION__ 
-   
+    ppport.h -- Perl/Pollution/Portability Version __VERSION__
+
     Automatically created by __PKG__ running under
     perl __PERL_VERSION__ on __DATE__.
-    
+
     Do NOT edit this file directly! -- Edit PPPort_pm.PL and the
     includes in parts/inc/ instead.
- 
+
     Use 'perldoc ppport.h' to view the documentation below.
 
 ----------------------------------------------------------------------
 
 SKIP
 
-POD =pod
-POD 
-POD =head1 NAME
-POD 
-POD ppport.h - Perl/Pollution/Portability version __VERSION__
-POD 
-POD =head1 SYNOPSIS
-POD 
-POD   perl ppport.h [options] [files]
-POD 
-POD   --help                      show short help
-POD 
-POD   --patch=file                write one patch file with changes
-POD   --copy=suffix               write changed copies with suffix
-POD   --diff=program              use diff program and options
-POD 
-POD   --compat-version=version    provide compatibility with Perl version
-POD   --cplusplus                 accept C++ comments
-POD 
-POD   --quiet                     don't output anything except fatal errors
-POD   --nodiag                    don't show diagnostics
-POD   --nohints                   don't show hints
-POD   --nochanges                 don't suggest changes
-POD 
-POD   --list-provided             list provided API
-POD   --list-unsupported          list unsupported API
-POD   --api-info=name             show Perl API portability information
-POD 
-POD =head1 COMPATIBILITY
-POD 
-POD This version of F<ppport.h> is designed to support operation with Perl
-POD installations back to 5.003, and has been tested up to 5.9.2.
-POD 
-POD =head1 OPTIONS
-POD 
-POD =head2 --help
-POD 
-POD Display a brief usage summary.
-POD 
-POD =head2 --patch=I<file>
-POD 
-POD If this option is given, a single patch file will be created if
-POD any changes are suggested. This requires a working diff program
-POD to be installed on your system.
-POD 
-POD =head2 --copy=I<suffix>
-POD 
-POD If this option is given, a copy of each file will be saved with
-POD the given suffix that contains the suggested changes. This does
-POD not require any external programs.
-POD 
-POD If neither C<--patch> or C<--copy> are given, the default is to
-POD simply print the diffs for each file. This requires either
-POD C<Text::Diff> or a C<diff> program to be installed.
-POD 
-POD =head2 --diff=I<program>
-POD 
-POD Manually set the diff program and options to use. The default
-POD is to use C<Text::Diff>, when installed, and output unified
-POD context diffs.
-POD 
-POD =head2 --compat-version=I<version>
-POD 
-POD Tell F<ppport.h> to check for compatibility with the given
-POD Perl version. The default is to check for compatibility with Perl
-POD version 5.003. You can use this option to reduce the output
-POD of F<ppport.h> if you intend to be backward compatible only
-POD up to a certain Perl version.
-POD 
-POD =head2 --cplusplus
-POD 
-POD Usually, F<ppport.h> will detect C++ style comments and
-POD replace them with C style comments for portability reasons.
-POD Using this option instructs F<ppport.h> to leave C++
-POD comments untouched.
-POD 
-POD =head2 --quiet
-POD 
-POD Be quiet. Don't print anything except fatal errors.
-POD 
-POD =head2 --nodiag
-POD 
-POD Don't output any diagnostic messages. Only portability
-POD alerts will be printed.
-POD 
-POD =head2 --nohints
-POD 
-POD Don't output any hints. Hints often contain useful portability
-POD notes.
-POD 
-POD =head2 --nochanges
-POD 
-POD Don't suggest any changes. Only give diagnostic output and hints
-POD unless these are also deactivated.
-POD 
-POD =head2 --list-provided
-POD 
-POD Lists the API elements for which compatibility is provided by
-POD F<ppport.h>. Also lists if it must be explicitly requested,
-POD if it has dependencies, and if there are hints for it.
-POD 
-POD =head2 --list-unsupported
-POD 
-POD Lists the API elements that are known not to be supported by
-POD F<ppport.h> and below which version of Perl they probably
-POD won't be available or work.
-POD 
-POD =head2 --api-info=I<name>
-POD 
-POD Show portability information for API elements matching I<name>.
-POD If I<name> is surrounded by slashes, it is interpreted as a regular
-POD expression.
-POD 
-POD =head1 DESCRIPTION
-POD 
-POD In order for a Perl extension (XS) module to be as portable as possible
-POD across differing versions of Perl itself, certain steps need to be taken.
-POD 
-POD =over 4
-POD 
-POD =item *
-POD 
-POD Including this header is the first major one. This alone will give you
-POD access to a large part of the Perl API that hasn't been available in
-POD earlier Perl releases. Use
-POD 
-POD     perl ppport.h --list-provided
-POD 
-POD to see which API elements are provided by ppport.h.
-POD 
-POD =item *
-POD 
-POD You should avoid using deprecated parts of the API. For example, using
-POD global Perl variables without the C<PL_> prefix is deprecated. Also,
-POD some API functions used to have a C<perl_> prefix. Using this form is
-POD also deprecated. You can safely use the supported API, as F<ppport.h>
-POD will provide wrappers for older Perl versions.
-POD 
-POD =item *
-POD 
-POD If you use one of a few functions that were not present in earlier
-POD versions of Perl, and that can't be provided using a macro, you have
-POD to explicitly request support for these functions by adding one or
-POD more C<#define>s in your source code before the inclusion of F<ppport.h>.
-POD 
-POD These functions will be marked C<explicit> in the list shown by
-POD C<--list-provided>.
-POD 
-POD Depending on whether you module has a single or multiple files that
-POD use such functions, you want either C<static> or global variants.
-POD 
-POD For a C<static> function, use:
-POD 
-POD     #define NEED_function
-POD 
-POD For a global function, use:
-POD 
-POD     #define NEED_function_GLOBAL
-POD 
-POD Note that you mustn't have more than one global request for one
-POD function in your project.
-POD 
-POD     Function                  Static Request               Global Request                    
-POD     -----------------------------------------------------------------------------------------
-POD     eval_pv()                 NEED_eval_pv                 NEED_eval_pv_GLOBAL               
-POD     grok_bin()                NEED_grok_bin                NEED_grok_bin_GLOBAL              
-POD     grok_hex()                NEED_grok_hex                NEED_grok_hex_GLOBAL              
-POD     grok_number()             NEED_grok_number             NEED_grok_number_GLOBAL           
-POD     grok_numeric_radix()      NEED_grok_numeric_radix      NEED_grok_numeric_radix_GLOBAL    
-POD     grok_oct()                NEED_grok_oct                NEED_grok_oct_GLOBAL              
-POD     newCONSTSUB()             NEED_newCONSTSUB             NEED_newCONSTSUB_GLOBAL           
-POD     newRV_noinc()             NEED_newRV_noinc             NEED_newRV_noinc_GLOBAL           
-POD     sv_2pv_nolen()            NEED_sv_2pv_nolen            NEED_sv_2pv_nolen_GLOBAL          
-POD     sv_2pvbyte()              NEED_sv_2pvbyte              NEED_sv_2pvbyte_GLOBAL            
-POD     sv_catpvf_mg()            NEED_sv_catpvf_mg            NEED_sv_catpvf_mg_GLOBAL          
-POD     sv_catpvf_mg_nocontext()  NEED_sv_catpvf_mg_nocontext  NEED_sv_catpvf_mg_nocontext_GLOBAL
-POD     sv_setpvf_mg()            NEED_sv_setpvf_mg            NEED_sv_setpvf_mg_GLOBAL          
-POD     sv_setpvf_mg_nocontext()  NEED_sv_setpvf_mg_nocontext  NEED_sv_setpvf_mg_nocontext_GLOBAL
-POD     vnewSVpvf()               NEED_vnewSVpvf               NEED_vnewSVpvf_GLOBAL             
-POD 
-POD To avoid namespace conflicts, you can change the namespace of the
-POD explicitly exported functions using the C<DPPP_NAMESPACE> macro.
-POD Just C<#define> the macro before including C<ppport.h>:
-POD 
-POD     #define DPPP_NAMESPACE MyOwnNamespace_
-POD     #include "ppport.h"
-POD 
-POD The default namespace is C<DPPP_>.
-POD 
-POD =back
-POD 
-POD The good thing is that most of the above can be checked by running
-POD F<ppport.h> on your source code. See the next section for
-POD details.
-POD 
-POD =head1 EXAMPLES
-POD 
-POD To verify whether F<ppport.h> is needed for your module, whether you
-POD should make any changes to your code, and whether any special defines
-POD should be used, F<ppport.h> can be run as a Perl script to check your
-POD source code. Simply say:
-POD 
-POD     perl ppport.h
-POD 
-POD The result will usually be a list of patches suggesting changes
-POD that should at least be acceptable, if not necessarily the most
-POD efficient solution, or a fix for all possible problems.
-POD 
-POD If you know that your XS module uses features only available in
-POD newer Perl releases, if you're aware that it uses C++ comments,
-POD and if you want all suggestions as a single patch file, you could
-POD use something like this:
-POD 
-POD     perl ppport.h --compat-version=5.6.0 --cplusplus --patch=test.diff
-POD 
-POD If you only want your code to be scanned without any suggestions
-POD for changes, use:
-POD 
-POD     perl ppport.h --nochanges
-POD 
-POD You can specify a different C<diff> program or options, using
-POD the C<--diff> option:
-POD 
-POD     perl ppport.h --diff='diff -C 10'
-POD 
-POD This would output context diffs with 10 lines of context.
-POD 
-POD To display portability information for the C<newSVpvn> function,
-POD use:
-POD 
-POD     perl ppport.h --api-info=newSVpvn
-POD 
-POD Since the argument to C<--api-info> can be a regular expression,
-POD you can use
-POD 
-POD     perl ppport.h --api-info=/_nomg$/
-POD 
-POD to display portability information for all C<_nomg> functions or
-POD 
-POD     perl ppport.h --api-info=/./
-POD 
-POD to display information for all known API elements.
-POD 
-POD =head1 BUGS
-POD 
-POD If this version of F<ppport.h> is causing failure during
-POD the compilation of this module, please check if newer versions
-POD of either this module or C<Devel::PPPort> are available on CPAN
-POD before sending a bug report.
-POD 
-POD If F<ppport.h> was generated using the latest version of
-POD C<Devel::PPPort> and is causing failure of this module, please
-POD file a bug report using the CPAN Request Tracker at L<http://rt.cpan.org/>.
-POD 
-POD Please include the following information:
-POD 
-POD =over 4
-POD 
-POD =item 1.
-POD 
-POD The complete output from running "perl -V"
-POD 
-POD =item 2.
-POD 
-POD This file.
-POD 
-POD =item 3.
-POD 
-POD The name and version of the module you were trying to build.
-POD 
-POD =item 4.
-POD 
-POD A full log of the build that failed.
-POD 
-POD =item 5.
-POD 
-POD Any other information that you think could be relevant.
-POD 
-POD =back
-POD 
-POD For the latest version of this code, please get the C<Devel::PPPort>
-POD module from CPAN.
-POD 
-POD =head1 COPYRIGHT
-POD 
-POD Version 3.x, Copyright (c) 2004-2005, Marcus Holland-Moritz.
-POD 
-POD Version 2.x, Copyright (C) 2001, Paul Marquess.
-POD 
-POD Version 1.x, Copyright (C) 1999, Kenneth Albanowski.
-POD 
-POD This program is free software; you can redistribute it and/or
-POD modify it under the same terms as Perl itself.
-POD 
-POD =head1 SEE ALSO
-POD 
-POD See L<Devel::PPPort>.
+|>=pod
+|>
+|>=head1 NAME
+|>
+|>ppport.h - Perl/Pollution/Portability version __VERSION__
+|>
+|>=head1 SYNOPSIS
+|>
+|>  perl ppport.h [options] [source files]
+|>
+|>  Searches current directory for files if no [source files] are given
+|>
+|>  --help                      show short help
+|>
+|>  --patch=file                write one patch file with changes
+|>  --copy=suffix               write changed copies with suffix
+|>  --diff=program              use diff program and options
+|>
+|>  --compat-version=version    provide compatibility with Perl version
+|>  --cplusplus                 accept C++ comments
+|>
+|>  --quiet                     don't output anything except fatal errors
+|>  --nodiag                    don't show diagnostics
+|>  --nohints                   don't show hints
+|>  --nochanges                 don't suggest changes
+|>  --nofilter                  don't filter input files
+|>
+|>  --strip                     strip all script and doc functionality from
+|>                              ppport.h (this, obviously, cannot be undone)
+|>
+|>  --list-provided             list provided API
+|>  --list-unsupported          list unsupported API
+|>  --api-info=name             show Perl API portability information
+|>
+|>=head1 COMPATIBILITY
+|>
+|>This version of F<ppport.h> is designed to support operation with Perl
+|>installations back to 5.003, and has been tested up to 5.9.3.
+|>
+|>=head1 OPTIONS
+|>
+|>=head2 --help
+|>
+|>Display a brief usage summary.
+|>
+|>=head2 --patch=I<file>
+|>
+|>If this option is given, a single patch file will be created if
+|>any changes are suggested. This requires a working diff program
+|>to be installed on your system.
+|>
+|>=head2 --copy=I<suffix>
+|>
+|>If this option is given, a copy of each file will be saved with
+|>the given suffix that contains the suggested changes. This does
+|>not require any external programs.
+|>
+|>If neither C<--patch> or C<--copy> are given, the default is to
+|>simply print the diffs for each file. This requires either
+|>C<Text::Diff> or a C<diff> program to be installed.
+|>
+|>=head2 --diff=I<program>
+|>
+|>Manually set the diff program and options to use. The default
+|>is to use C<Text::Diff>, when installed, and output unified
+|>context diffs.
+|>
+|>=head2 --compat-version=I<version>
+|>
+|>Tell F<ppport.h> to check for compatibility with the given
+|>Perl version. The default is to check for compatibility with Perl
+|>version 5.003. You can use this option to reduce the output
+|>of F<ppport.h> if you intend to be backward compatible only
+|>down to a certain Perl version.
+|>
+|>=head2 --cplusplus
+|>
+|>Usually, F<ppport.h> will detect C++ style comments and
+|>replace them with C style comments for portability reasons.
+|>Using this option instructs F<ppport.h> to leave C++
+|>comments untouched.
+|>
+|>=head2 --quiet
+|>
+|>Be quiet. Don't print anything except fatal errors.
+|>
+|>=head2 --nodiag
+|>
+|>Don't output any diagnostic messages. Only portability
+|>alerts will be printed.
+|>
+|>=head2 --nohints
+|>
+|>Don't output any hints. Hints often contain useful portability
+|>notes.
+|>
+|>=head2 --nochanges
+|>
+|>Don't suggest any changes. Only give diagnostic output and hints
+|>unless these are also deactivated.
+|>
+|>=head2 --nofilter
+|>
+|>Don't filter the list of input files. By default, files not looking
+|>like source code (i.e. not *.xs, *.c, *.cc, *.cpp or *.h) are skipped.
+|>
+|>=head2 --strip
+|>
+|>Strip all script and documentation functionality from F<ppport.h>.
+|>This reduces the size of F<ppport.h> dramatically and may be useful
+|>if you want to include F<ppport.h> in smaller modules without
+|>increasing their distribution size too much.
+|>
+|>=head2 --list-provided
+|>
+|>Lists the API elements for which compatibility is provided by
+|>F<ppport.h>. Also lists if it must be explicitly requested,
+|>if it has dependencies, and if there are hints for it.
+|>
+|>=head2 --list-unsupported
+|>
+|>Lists the API elements that are known not to be supported by
+|>F<ppport.h> and below which version of Perl they probably
+|>won't be available or work.
+|>
+|>=head2 --api-info=I<name>
+|>
+|>Show portability information for API elements matching I<name>.
+|>If I<name> is surrounded by slashes, it is interpreted as a regular
+|>expression.
+|>
+|>=head1 DESCRIPTION
+|>
+|>In order for a Perl extension (XS) module to be as portable as possible
+|>across differing versions of Perl itself, certain steps need to be taken.
+|>
+|>=over 4
+|>
+|>=item *
+|>
+|>Including this header is the first major one. This alone will give you
+|>access to a large part of the Perl API that hasn't been available in
+|>earlier Perl releases. Use
+|>
+|>    perl ppport.h --list-provided
+|>
+|>to see which API elements are provided by ppport.h.
+|>
+|>=item *
+|>
+|>You should avoid using deprecated parts of the API. For example, using
+|>global Perl variables without the C<PL_> prefix is deprecated. Also,
+|>some API functions used to have a C<perl_> prefix. Using this form is
+|>also deprecated. You can safely use the supported API, as F<ppport.h>
+|>will provide wrappers for older Perl versions.
+|>
+|>=item *
+|>
+|>If you use one of a few functions or variables that were not present in
+|>earlier versions of Perl, and that can't be provided using a macro, you
+|>have to explicitly request support for these functions by adding one or
+|>more C<#define>s in your source code before the inclusion of F<ppport.h>.
+|>
+|>These functions or variables will be marked C<explicit> in the list shown
+|>by C<--list-provided>.
+|>
+|>Depending on whether you module has a single or multiple files that
+|>use such functions or variables, you want either C<static> or global
+|>variants.
+|>
+|>For a C<static> function or variable (used only in a single source
+|>file), use:
+|>
+|>    #define NEED_function
+|>    #define NEED_variable
+|>
+|>For a global function or variable (used in multiple source files),
+|>use:
+|>
+|>    #define NEED_function_GLOBAL
+|>    #define NEED_variable_GLOBAL
+|>
+|>Note that you mustn't have more than one global request for the
+|>same function or variable in your project.
+|>
+|>    Function / Variable       Static Request               Global Request
+|>    -----------------------------------------------------------------------------------------
+|>    PL_signals                NEED_PL_signals              NEED_PL_signals_GLOBAL
+|>    eval_pv()                 NEED_eval_pv                 NEED_eval_pv_GLOBAL
+|>    grok_bin()                NEED_grok_bin                NEED_grok_bin_GLOBAL
+|>    grok_hex()                NEED_grok_hex                NEED_grok_hex_GLOBAL
+|>    grok_number()             NEED_grok_number             NEED_grok_number_GLOBAL
+|>    grok_numeric_radix()      NEED_grok_numeric_radix      NEED_grok_numeric_radix_GLOBAL
+|>    grok_oct()                NEED_grok_oct                NEED_grok_oct_GLOBAL
+|>    newCONSTSUB()             NEED_newCONSTSUB             NEED_newCONSTSUB_GLOBAL
+|>    newRV_noinc()             NEED_newRV_noinc             NEED_newRV_noinc_GLOBAL
+|>    sv_2pv_nolen()            NEED_sv_2pv_nolen            NEED_sv_2pv_nolen_GLOBAL
+|>    sv_2pvbyte()              NEED_sv_2pvbyte              NEED_sv_2pvbyte_GLOBAL
+|>    sv_catpvf_mg()            NEED_sv_catpvf_mg            NEED_sv_catpvf_mg_GLOBAL
+|>    sv_catpvf_mg_nocontext()  NEED_sv_catpvf_mg_nocontext  NEED_sv_catpvf_mg_nocontext_GLOBAL
+|>    sv_setpvf_mg()            NEED_sv_setpvf_mg            NEED_sv_setpvf_mg_GLOBAL
+|>    sv_setpvf_mg_nocontext()  NEED_sv_setpvf_mg_nocontext  NEED_sv_setpvf_mg_nocontext_GLOBAL
+|>    vnewSVpvf()               NEED_vnewSVpvf               NEED_vnewSVpvf_GLOBAL
+|>
+|>To avoid namespace conflicts, you can change the namespace of the
+|>explicitly exported functions / variables using the C<DPPP_NAMESPACE>
+|>macro. Just C<#define> the macro before including C<ppport.h>:
+|>
+|>    #define DPPP_NAMESPACE MyOwnNamespace_
+|>    #include "ppport.h"
+|>
+|>The default namespace is C<DPPP_>.
+|>
+|>=back
+|>
+|>The good thing is that most of the above can be checked by running
+|>F<ppport.h> on your source code. See the next section for
+|>details.
+|>
+|>=head1 EXAMPLES
+|>
+|>To verify whether F<ppport.h> is needed for your module, whether you
+|>should make any changes to your code, and whether any special defines
+|>should be used, F<ppport.h> can be run as a Perl script to check your
+|>source code. Simply say:
+|>
+|>    perl ppport.h
+|>
+|>The result will usually be a list of patches suggesting changes
+|>that should at least be acceptable, if not necessarily the most
+|>efficient solution, or a fix for all possible problems.
+|>
+|>If you know that your XS module uses features only available in
+|>newer Perl releases, if you're aware that it uses C++ comments,
+|>and if you want all suggestions as a single patch file, you could
+|>use something like this:
+|>
+|>    perl ppport.h --compat-version=5.6.0 --cplusplus --patch=test.diff
+|>
+|>If you only want your code to be scanned without any suggestions
+|>for changes, use:
+|>
+|>    perl ppport.h --nochanges
+|>
+|>You can specify a different C<diff> program or options, using
+|>the C<--diff> option:
+|>
+|>    perl ppport.h --diff='diff -C 10'
+|>
+|>This would output context diffs with 10 lines of context.
+|>
+|>To display portability information for the C<newSVpvn> function,
+|>use:
+|>
+|>    perl ppport.h --api-info=newSVpvn
+|>
+|>Since the argument to C<--api-info> can be a regular expression,
+|>you can use
+|>
+|>    perl ppport.h --api-info=/_nomg$/
+|>
+|>to display portability information for all C<_nomg> functions or
+|>
+|>    perl ppport.h --api-info=/./
+|>
+|>to display information for all known API elements.
+|>
+|>=head1 BUGS
+|>
+|>If this version of F<ppport.h> is causing failure during
+|>the compilation of this module, please check if newer versions
+|>of either this module or C<Devel::PPPort> are available on CPAN
+|>before sending a bug report.
+|>
+|>If F<ppport.h> was generated using the latest version of
+|>C<Devel::PPPort> and is causing failure of this module, please
+|>file a bug report using the CPAN Request Tracker at L<http://rt.cpan.org/>.
+|>
+|>Please include the following information:
+|>
+|>=over 4
+|>
+|>=item 1.
+|>
+|>The complete output from running "perl -V"
+|>
+|>=item 2.
+|>
+|>This file.
+|>
+|>=item 3.
+|>
+|>The name and version of the module you were trying to build.
+|>
+|>=item 4.
+|>
+|>A full log of the build that failed.
+|>
+|>=item 5.
+|>
+|>Any other information that you think could be relevant.
+|>
+|>=back
+|>
+|>For the latest version of this code, please get the C<Devel::PPPort>
+|>module from CPAN.
+|>
+|>=head1 COPYRIGHT
+|>
+|>Version 3.x, Copyright (c) 2004-2006, Marcus Holland-Moritz.
+|>
+|>Version 2.x, Copyright (C) 2001, Paul Marquess.
+|>
+|>Version 1.x, Copyright (C) 1999, Kenneth Albanowski.
+|>
+|>This program is free software; you can redistribute it and/or
+|>modify it under the same terms as Perl itself.
+|>
+|>=head1 SEE ALSO
+|>
+|>See L<Devel::PPPort>.
 
 =cut
 
@@ -1245,6 +1312,8 @@ my %opt = (
   hints     => 1,
   changes   => 1,
   cplusplus => 0,
+  filter    => 1,
+  strip     => 0,
 );
 
 my($ppport) = $0 =~ /([\w.]+)$/;
@@ -1254,7 +1323,7 @@ my $HS = "[ \t]";             # horizontal whitespace
 eval {
   require Getopt::Long;
   Getopt::Long::GetOptions(\%opt, qw(
-    help quiet diag! hints! changes! cplusplus
+    help quiet diag! filter! hints! changes! cplusplus strip
     patch=s copy=s diff=s compat-version=s
     list-provided list-unsupported api-info=s
   )) or usage();
@@ -1266,6 +1335,7 @@ if ($@ and grep /^-/, @ARGV) {
 }
 
 usage() if $opt{help};
+strip() if $opt{strip};
 
 if (exists $opt{'compat-version'}) {
   my($r,$v,$s) = eval { parse_version($opt{'compat-version'}) };
@@ -1273,7 +1343,7 @@ if (exists $opt{'compat-version'}) {
     die "Invalid version number format: '$opt{'compat-version'}'\n";
   }
   die "Only Perl 5 is supported\n" if $r != 5;
-  die "Invalid version number: $opt{'compat-version'}\n" if $v >= 1000 || $v >= 1000;
+  die "Invalid version number: $opt{'compat-version'}\n" if $v >= 1000 || $s >= 1000;
   $opt{'compat-version'} = sprintf "%d.%03d%03d", $r, $v, $s;
 }
 else {
@@ -1286,32 +1356,8 @@ my $cce  = '*'.'/';
 my $rccs = quotemeta $ccs;
 my $rcce = quotemeta $cce;
 
-my @files;
-
-if (@ARGV) {
-  @files = map { glob $_ } @ARGV;
-}
-else {
-  eval {
-    require File::Find;
-    File::Find::find(sub {
-      $File::Find::name =~ /\.(xs|c|h|cc)$/i
-          and push @files, $File::Find::name;
-    }, '.');
-  };
-  if ($@) {
-    @files = map { glob $_ } qw(*.xs *.c *.h *.cc);
-  }
-  my %filter = map { /(.*)\.xs$/ ? ("$1.c" => 1) : () } @files;
-  @files = grep { !/\b\Q$ppport\E$/i && !exists $filter{$_} } @files;
-}
-
-unless (@files) {
-  die "No input files given!\n";
-}
-
 my %API = map { /^(\w+)\|([^|]*)\|([^|]*)\|(\w*)$/
-                ? ( $1 => { 
+                ? ( $1 => {
                       ($2                  ? ( base     => $2 ) : ()),
                       ($3                  ? ( todo     => $3 ) : ()),
                       (index($4, 'v') >= 0 ? ( varargs  => 1  ) : ()),
@@ -1346,6 +1392,7 @@ ENTER|||
 ERRSV|5.004050||p
 EXTEND|||
 EXTERN_C|5.005000||p
+F0convert|||n
 FREETMPS|||
 GIMME_V||5.004000|n
 GIMME|||n
@@ -1386,6 +1433,7 @@ IVdf|5.006000||p
 LEAVE|||
 LVRET|||
 MARK|||
+MULTICALL||5.009003|
 MY_CXT_CLONE|5.009002||p
 MY_CXT_INIT|5.007003||p
 MY_CXT|5.007003||p
@@ -1398,9 +1446,9 @@ NVTYPE|5.006000||p
 NVef|5.006001||p
 NVff|5.006001||p
 NVgf|5.006001||p
-Newc|||
-Newz|||
-New|||
+Newxc|5.009003||p
+Newxz|5.009003||p
+Newx|5.009003||p
 Nullav|||
 Nullch|||
 Nullcv|||
@@ -1410,6 +1458,7 @@ ORIGMARK|||
 PAD_BASE_SV|||
 PAD_CLONE_VARS|||
 PAD_COMPNAME_FLAGS|||
+PAD_COMPNAME_GEN_set|||
 PAD_COMPNAME_GEN|||
 PAD_COMPNAME_OURSTASH|||
 PAD_COMPNAME_PV|||
@@ -1422,7 +1471,7 @@ PAD_SET_CUR_NOSAVE|||
 PAD_SET_CUR|||
 PAD_SVl|||
 PAD_SV|||
-PERL_BCDVERSION|5.009002||p
+PERL_BCDVERSION|5.009003||p
 PERL_GCC_BRACE_GROUPS_FORBIDDEN|5.008001||p
 PERL_INT_MAX|5.004000||p
 PERL_INT_MIN|5.004000||p
@@ -1476,6 +1525,7 @@ PERL_SCAN_GREATER_THAN_UV_MAX|5.007003||p
 PERL_SCAN_SILENT_ILLDIGIT|5.008001||p
 PERL_SHORT_MAX|5.004000||p
 PERL_SHORT_MIN|5.004000||p
+PERL_SIGNALS_UNSAFE_FLAG|5.008001||p
 PERL_SUBVERSION|5.006000||p
 PERL_UCHAR_MAX|5.004000||p
 PERL_UCHAR_MIN|5.004000||p
@@ -1516,6 +1566,7 @@ PL_ppaddr|5.006000||p
 PL_rsfp_filters|5.004050||p
 PL_rsfp|5.004050||p
 PL_rs|||n
+PL_signals|5.008001||p
 PL_stack_base|5.004050||p
 PL_stack_sp|5.004050||p
 PL_stdingv|5.004050||p
@@ -1525,6 +1576,7 @@ PL_sv_undef|5.004050||pn
 PL_sv_yes|5.004050||pn
 PL_tainted|5.004050||p
 PL_tainting|5.004050||p
+POP_MULTICALL||5.009003|
 POPi|||n
 POPl|||n
 POPn|||n
@@ -1538,6 +1590,7 @@ PTR2UV|5.006000||p
 PTR2ul|5.007001||p
 PTRV|5.006000||p
 PUSHMARK|||
+PUSH_MULTICALL||5.009003|
 PUSHi|||
 PUSHmortal|5.009002||p
 PUSHn|||
@@ -1609,12 +1662,15 @@ SvIOKp|||
 SvIOK|||
 SvIVX|||
 SvIV_nomg|5.009001||p
+SvIV_set|||
 SvIVx|||
 SvIV|||
 SvIsCOW_shared_hash||5.008003|
 SvIsCOW||5.008003|
+SvLEN_set|||
 SvLEN|||
 SvLOCK||5.007003|
+SvMAGIC_set|5.009003||p
 SvNIOK_off|||
 SvNIOKp|||
 SvNIOK|||
@@ -1624,6 +1680,7 @@ SvNOK_on|||
 SvNOKp|||
 SvNOK|||
 SvNVX|||
+SvNV_set|||
 SvNVx|||
 SvNV|||
 SvOK|||
@@ -1634,11 +1691,14 @@ SvPOK_only|||
 SvPOK_on|||
 SvPOKp|||
 SvPOK|||
+SvPVX_const|5.009003||p
+SvPVX_mutable|5.009003||p
 SvPVX|||
 SvPV_force_nomg|5.007002||p
 SvPV_force|||
 SvPV_nolen|5.006000||p
 SvPV_nomg|5.007002||p
+SvPV_set|||
 SvPVbyte_force||5.009002|
 SvPVbyte_nolen||5.006000|
 SvPVbytex_force||5.006000|
@@ -1657,9 +1717,11 @@ SvREFCNT|||
 SvROK_off|||
 SvROK_on|||
 SvROK|||
+SvRV_set|5.009003||p
 SvRV|||
 SvSETMAGIC|||
 SvSHARE||5.007003|
+SvSTASH_set|5.009003|5.009003|p
 SvSTASH|||
 SvSetMagicSV_nosteal||5.004000|
 SvSetMagicSV||5.004000|
@@ -1680,6 +1742,7 @@ SvUTF8||5.006000|
 SvUVXx|5.004000||p
 SvUVX|5.004000||p
 SvUV_nomg|5.009001||p
+SvUV_set|5.009003||p
 SvUVx|5.004000||p
 SvUV|5.004000||p
 SvVOK||5.008001|
@@ -1709,7 +1772,7 @@ XSRETURN_PV|||
 XSRETURN_UNDEF|||
 XSRETURN_UV|5.008001||p
 XSRETURN_YES|||
-XSRETURN|||
+XSRETURN|||p
 XST_mIV|||
 XST_mNO|||
 XST_mNV|||
@@ -1719,6 +1782,7 @@ XST_mUV|5.008001||p
 XST_mYES|||
 XS_VERSION_BOOTCHECK|||
 XS_VERSION|||
+XSprePUSH|5.006000||p
 XS|||
 ZeroD|5.009002||p
 Zero|||
@@ -1731,6 +1795,10 @@ aTHX|5.006000||p
 add_data|||
 allocmy|||
 amagic_call|||
+amagic_cmp_locale|||
+amagic_cmp|||
+amagic_i_ncmp|||
+amagic_ncmp|||
 any_dup|||
 ao|||
 append_elem|||
@@ -1739,10 +1807,9 @@ apply_attrs_my|||
 apply_attrs_string||5.006001|
 apply_attrs|||
 apply|||
-asIV|||
-asUV|||
 atfork_lock||5.007003|n
 atfork_unlock||5.007003|n
+av_arylen_p||5.009003|
 av_clear|||
 av_delete||5.006000|
 av_exists||5.006000|
@@ -1786,9 +1853,54 @@ cast_i32||5.006000|
 cast_iv||5.006000|
 cast_ulong||5.006000|
 cast_uv||5.006000|
+check_type_and_open|||
 check_uni|||
 checkcomma|||
 checkposixcc|||
+ck_anoncode|||
+ck_bitop|||
+ck_concat|||
+ck_defined|||
+ck_delete|||
+ck_die|||
+ck_eof|||
+ck_eval|||
+ck_exec|||
+ck_exists|||
+ck_exit|||
+ck_ftst|||
+ck_fun|||
+ck_glob|||
+ck_grep|||
+ck_index|||
+ck_join|||
+ck_lengthconst|||
+ck_lfun|||
+ck_listiob|||
+ck_match|||
+ck_method|||
+ck_null|||
+ck_open|||
+ck_repeat|||
+ck_require|||
+ck_retarget|||
+ck_return|||
+ck_rfun|||
+ck_rvconst|||
+ck_sassign|||
+ck_say|||
+ck_select|||
+ck_shift|||
+ck_sort|||
+ck_spair|||
+ck_split|||
+ck_subr|||
+ck_substr|||
+ck_svconst|||
+ck_trunc|||
+ck_unpack|||
+ckwarn_d||5.009003|
+ckwarn||5.009003|
 cl_and|||
 cl_anything|||
 cl_init_zero|||
@@ -1801,7 +1913,7 @@ cop_free|||
 cr_textfilter|||
 croak_nocontext|||vn
 croak|||v
-csighandler||5.007001|n
+csighandler||5.009003|n
 custom_op_desc||5.007003|
 custom_op_name||5.007003|
 cv_ckproto|||
@@ -1812,9 +1924,11 @@ cv_undef|||
 cx_dump||5.005000|
 cx_dup|||
 cxinc|||
+dAXMARK|5.009003||p
 dAX|5.007002||p
 dITEMS|5.007002||p
 dMARK|||
+dMULTICALL||5.009003|
 dMY_CXT_SV|5.007003||p
 dMY_CXT|5.007003||p
 dNOOP|5.006000||p
@@ -1839,25 +1953,12 @@ debprof|||
 debstackptrs||5.007003|
 debstack||5.007003|
 deb||5.007003|v
-del_he|||
 del_sv|||
-del_xiv|||
-del_xnv|||
-del_xpvav|||
-del_xpvbm|||
-del_xpvcv|||
-del_xpvhv|||
-del_xpviv|||
-del_xpvlv|||
-del_xpvmg|||
-del_xpvnv|||
-del_xpv|||
-del_xrv|||
 delimcpy||5.004000|
-depcom|||
 deprecate_old|||
 deprecate|||
 despatch_signals||5.007001|
+destroy_matcher|||
 die_nocontext|||vn
 die_where|||
 die|||v
@@ -1898,6 +1999,7 @@ do_readline|||
 do_seek|||
 do_semop|||
 do_shmio|||
+do_smartmatch|||
 do_spawn_nowait|||
 do_spawn|||
 do_sprintf|||
@@ -1916,7 +2018,6 @@ do_vecset|||
 do_vop|||
 docatch_body|||
 docatch|||
-doencodes|||
 doeval|||
 dofile|||
 dofindlabel|||
@@ -1926,10 +2027,13 @@ dooneliner|||
 doopen_pm|||
 doparseform|||
 dopoptoeval|||
+dopoptogiven|||
 dopoptolabel|||
 dopoptoloop|||
 dopoptosub_at|||
 dopoptosub|||
+dopoptowhen|||
+doref||5.009003|
 dounwind|||
 dowantarray|||
 dump_all||5.006000|
@@ -1940,6 +2044,7 @@ dump_indent||5.006000|v
 dump_mstats|||
 dump_packsubs||5.006000|
 dump_sub||5.006000|
+dump_sv_child|||
 dump_vindent||5.006000|
 dumpuntil|||
 dup_attrlist|||
@@ -1950,6 +2055,7 @@ expect_number|||
 fbm_compile||5.005000|
 fbm_instr||5.005000|
 fd_on_nosuid_fs|||
+feature_is_enabled|||
 filter_add|||
 filter_del|||
 filter_gets|||
@@ -1961,6 +2067,7 @@ find_runcv|||
 find_rundefsvoffset||5.009002|
 find_script|||
 find_uninit_var|||
+first_symbol|||n
 fold_constants|||
 forbid_setid|||
 force_ident|||
@@ -1972,6 +2079,7 @@ form_nocontext|||vn
 form||5.004000|v
 fp_dup|||
 fprintf_nocontext|||vn
+free_global_struct|||
 free_tied_hv_pool|||
 free_tmps|||
 gen_constant_list|||
@@ -2005,8 +2113,10 @@ group_end|||
 gv_AVadd|||
 gv_HVadd|||
 gv_IOadd|||
+gv_SVadd|||
 gv_autoload4||5.004000|
 gv_check|||
+gv_const_sv||5.009003|
 gv_dump||5.006000|
 gv_efullname3||5.004000|
 gv_efullname4||5.006001|
@@ -2026,20 +2136,24 @@ gv_fullname|||
 gv_handler||5.007001|
 gv_init_sv|||
 gv_init|||
-gv_share|||
 gv_stashpvn|5.006000||p
 gv_stashpv|||
 gv_stashsv|||
 he_dup|||
+hek_dup|||
 hfreeentries|||
 hsplit|||
 hv_assert||5.009001|
+hv_auxinit|||
+hv_backreferences_p|||
 hv_clear_placeholders||5.009001|
 hv_clear|||
 hv_delayfree_ent||5.004000|
 hv_delete_common|||
 hv_delete_ent||5.004000|
 hv_delete|||
+hv_eiter_p||5.009003|
+hv_eiter_set||5.009003|
 hv_exists_ent||5.004000|
 hv_exists|||
 hv_fetch_common|||
@@ -2053,10 +2167,17 @@ hv_iternext_flags||5.008000|
 hv_iternextsv|||
 hv_iternext|||
 hv_iterval|||
+hv_kill_backrefs|||
 hv_ksplit||5.004000|
 hv_magic_check|||
 hv_magic|||
+hv_name_set||5.009003|
 hv_notallowed|||
+hv_placeholders_get||5.009003|
+hv_placeholders_p||5.009003|
+hv_placeholders_set||5.009003|
+hv_riter_p||5.009003|
+hv_riter_set||5.009003|
 hv_scalar||5.009001|
 hv_store_ent||5.004000|
 hv_store_flags||5.008000|
@@ -2067,10 +2188,12 @@ ibcmp_utf8||5.007003|
 ibcmp|||
 incl_perldb|||
 incline|||
+incpush_if_exists|||
 incpush|||
 ingroup|||
 init_argv_symbols|||
 init_debugger|||
+init_global_struct|||
 init_i18nl10n||5.006000|
 init_i18nl14n||5.006000|
 init_ids|||
@@ -2098,6 +2221,7 @@ is_an_int|||
 is_gv_magical_sv|||
 is_gv_magical|||
 is_handle_constructor|||
+is_list_assignment|||
 is_lvalue_sub||5.007001|
 is_uni_alnum_lc||5.006000|
 is_uni_alnumc_lc||5.006000|
@@ -2131,8 +2255,10 @@ is_utf8_alnumc||5.006000|
 is_utf8_alnum||5.006000|
 is_utf8_alpha||5.006000|
 is_utf8_ascii||5.006000|
+is_utf8_char_slow|||
 is_utf8_char||5.006000|
 is_utf8_cntrl||5.006000|
+is_utf8_common|||
 is_utf8_digit||5.006000|
 is_utf8_graph||5.006000|
 is_utf8_idcont||5.008000|
@@ -2142,6 +2268,7 @@ is_utf8_mark||5.006000|
 is_utf8_print||5.006000|
 is_utf8_punct||5.006000|
 is_utf8_space||5.006000|
+is_utf8_string_loclen||5.009003|
 is_utf8_string_loc||5.008001|
 is_utf8_string||5.006001|
 is_utf8_upper||5.006000|
@@ -2155,12 +2282,12 @@ leave_scope|||
 lex_end|||
 lex_start|||
 linklist|||
-list_assignment|||
 listkids|||
 list|||
 load_module_nocontext|||vn
 load_module||5.006000|v
 localize|||
+looks_like_bool|||
 looks_like_number|||
 lop|||
 mPUSHi|5.009002||p
@@ -2177,6 +2304,7 @@ magic_clearpack|||
 magic_clearsig|||
 magic_dump||5.006000|
 magic_existspack|||
+magic_freearylen_p|||
 magic_freeovrld|||
 magic_freeregexp|||
 magic_getarylen|||
@@ -2226,9 +2354,12 @@ magic_set|||
 magic_sizepack|||
 magic_wipepack|||
 magicname|||
+make_matcher|||
+make_trie|||
 malloced_size|||n
 malloc||5.007002|n
 markstack_grow|||
+matcher_matches_sv|||
 measure_struct|||
 memEQ|5.004000||p
 memNE|5.004000||p
@@ -2245,6 +2376,7 @@ mg_find|||
 mg_free|||
 mg_get|||
 mg_length||5.005000|
+mg_localize|||
 mg_magical|||
 mg_set|||
 mg_size||5.005000|
@@ -2253,20 +2385,6 @@ missingterm|||
 mode_from_discipline|||
 modkids|||
 mod|||
-more_he|||
-more_sv|||
-more_xiv|||
-more_xnv|||
-more_xpvav|||
-more_xpvbm|||
-more_xpvcv|||
-more_xpvhv|||
-more_xpviv|||
-more_xpvlv|||
-more_xpvmg|||
-more_xpvnv|||
-more_xpv|||
-more_xrv|||
 moreswitches|||
 mul128|||
 mulexp10|||n
@@ -2282,6 +2400,8 @@ my_betohl|||n
 my_betohs|||n
 my_bzero|||n
 my_chsize|||
+my_clearenv|||
+my_cxt_init|||
 my_exit_jump|||
 my_exit|||
 my_failure_exit||5.004000|
@@ -2316,12 +2436,14 @@ my_popen_list||5.007001|
 my_popen||5.004000|
 my_setenv|||
 my_socketpair||5.007003|n
+my_sprintf||5.009003|vn
 my_stat|||
 my_strftime||5.007002|
 my_swabn|||n
 my_swap|||
 my_unexec|||
 my|||
+need_utf8|||n
 newANONATTRSUB||5.006000|
 newANONHASH|||
 newANONLIST|||
@@ -2337,6 +2459,8 @@ newCVREF|||
 newDEFSVOP|||
 newFORM|||
 newFOROP|||
+newGIVENOP||5.009003|
+newGIVWHENOP|||
 newGVOP|||
 newGVREF|||
 newGVgen|||
@@ -2364,6 +2488,7 @@ newSTATEOP|||
 newSUB|||
 newSVOP|||
 newSVREF|||
+newSVhek||5.009003|
 newSViv|||
 newSVnv|||
 newSVpvf_nocontext|||vn
@@ -2376,7 +2501,8 @@ newSVsv|||
 newSVuv|5.006000||p
 newSV|||
 newUNOP|||
-newWHILEOP||5.004040|
+newWHENOP||5.009003|
+newWHILEOP||5.009003|
 newXSproto||5.006000|
 newXS||5.006000|
 new_collate||5.006000|
@@ -2387,18 +2513,6 @@ new_logop|||
 new_numeric||5.006000|
 new_stackinfo||5.005000|
 new_version||5.009000|
-new_xiv|||
-new_xnv|||
-new_xpvav|||
-new_xpvbm|||
-new_xpvcv|||
-new_xpvhv|||
-new_xpviv|||
-new_xpvlv|||
-new_xpvmg|||
-new_xpvnv|||
-new_xpv|||
-new_xrv|||
 next_symbol|||
 nextargv|||
 nextchar|||
@@ -2410,6 +2524,7 @@ not_a_number|||
 nothreadhook||5.008000|
 nuke_stacks|||
 num_overflow|||n
+offer_nice_chunk|||
 oopsAV|||
 oopsCV|||
 oopsHV|||
@@ -2434,6 +2549,7 @@ pad_add_name|||
 pad_alloc|||
 pad_block_start|||
 pad_check_dup|||
+pad_compname_type|||
 pad_findlex|||
 pad_findmy|||
 pad_fixup_inner_anons|||
@@ -2492,16 +2608,16 @@ reentrant_free|||
 reentrant_init|||
 reentrant_retry|||vn
 reentrant_size|||
+ref_array_or_hash|||
 refkids|||
 refto|||
-ref|||
+ref||5.009003|
 reg_node|||
 reganode|||
 regatom|||
 regbranch|||
 regclass_swash||5.007003|
 regclass|||
-regcp_set_to|||
 regcppop|||
 regcppush|||
 regcurly|||
@@ -2532,14 +2648,17 @@ report_evil_fh|||
 report_uninit|||
 require_errno|||
 require_pv||5.006000|
+restore_magic|||
 rninstr|||
 rsignal_restore|||
 rsignal_save|||
 rsignal_state||5.004000|
 rsignal||5.004000|
 run_body|||
+run_user_filter|||
 runops_debug||5.005000|
 runops_standard||5.005000|
+rvpv_dup|||
 rxres_free|||
 rxres_restore|||
 rxres_save|||
@@ -2624,7 +2743,9 @@ scan_vstring||5.008001|
 scan_word|||
 scope|||
 screaminstr||5.005000|
-seed|||
+seed||5.008001|
+sequence_num|||
+sequence|||
 set_context||5.006000|n
 set_csh|||
 set_numeric_local||5.006000|
@@ -2633,16 +2754,21 @@ set_numeric_standard||5.006000|
 setdefout|||
 setenv_getix|||
 share_hek_flags|||
-share_hek|||
+share_hek||5.004000|
 si_dup|||
 sighandler|||n
 simplify_sort|||
 skipspace|||
+sortcv_stacked|||
+sortcv_xsub|||
+sortcv|||
+sortsv_flags||5.009003|
 sortsv||5.007003|
 ss_dup|||
 stack_grow|||
 start_glob|||
 start_subparse||5.004000|
+stashpv_hvname_match||5.009003|
 stdize_locale|||
 strEQ|||
 strGE|||
@@ -2651,6 +2777,8 @@ strLE|||
 strLT|||
 strNE|||
 str_to_version||5.006000|
+stringify_regexp|||
+strip_return|||
 strnEQ|||
 strnNE|||
 study_chunk|||
@@ -2686,12 +2814,12 @@ sv_catpvf_mg|5.006000|5.004000|pv
 sv_catpvf_nocontext|||vn
 sv_catpvf||5.004000|v
 sv_catpvn_flags||5.007002|
-sv_catpvn_mg|5.006000||p
+sv_catpvn_mg|5.004050||p
 sv_catpvn_nomg|5.007002||p
 sv_catpvn|||
 sv_catpv|||
 sv_catsv_flags||5.007002|
-sv_catsv_mg|5.006000||p
+sv_catsv_mg|5.004050||p
 sv_catsv_nomg|5.007002||p
 sv_catsv|||
 sv_chop|||
@@ -2709,6 +2837,7 @@ sv_derived_from||5.004000|
 sv_dump|||
 sv_dup|||
 sv_eq|||
+sv_exp_grow|||
 sv_force_normal_flags||5.007001|
 sv_force_normal||5.006000|
 sv_free2|||
@@ -2716,16 +2845,19 @@ sv_free_arenas|||
 sv_free|||
 sv_gets||5.004000|
 sv_grow|||
+sv_i_ncmp|||
 sv_inc|||
 sv_insert|||
 sv_isa|||
 sv_isobject|||
 sv_iv||5.005000|
+sv_kill_backrefs|||
 sv_len_utf8||5.006000|
 sv_len|||
 sv_magicext||5.007003|
 sv_magic|||
 sv_mortalcopy|||
+sv_ncmp|||
 sv_newmortal|||
 sv_newref|||
 sv_nolocking||5.007003|
@@ -2807,6 +2939,7 @@ sv_vsetpvf|5.006000|5.004000|p
 svtype|||
 swallow_bom|||
 swash_fetch||5.007002|
+swash_get|||
 swash_init||5.006000|
 sys_intern_clear|||
 sys_intern_dup|||
@@ -2830,10 +2963,12 @@ to_utf8_lower||5.007003|
 to_utf8_substr|||
 to_utf8_title||5.007003|
 to_utf8_upper||5.007003|
+tokenize_use|||
 tokeq|||
 tokereport|||
 too_few_arguments|||
 too_many_arguments|||
+uiv_2buf|||n
 unlnk|||
 unpack_rec|||
 unpack_str||5.007003|
@@ -2841,12 +2976,11 @@ unpackstring||5.008001|
 unshare_hek_or_pvn|||
 unshare_hek|||
 unsharepvn||5.004000|
+unwind_handler_stack|||
 upg_version||5.009000|
 usage|||
-utf16_textfilter|||
 utf16_to_utf8_reversed||5.006001|
 utf16_to_utf8||5.006001|
-utf16rev_textfilter|||
 utf8_distance||5.006000|
 utf8_hop||5.006000|
 utf8_length||5.007001|
@@ -2855,17 +2989,20 @@ utf8_mg_pos|||
 utf8_to_bytes||5.006001|
 utf8_to_uvchr||5.007001|
 utf8_to_uvuni||5.007001|
-utf8n_to_uvchr||5.007001|
+utf8n_to_uvchr|||
 utf8n_to_uvuni||5.007001|
 utilize|||
 uvchr_to_utf8_flags||5.007003|
-uvchr_to_utf8||5.007001|
+uvchr_to_utf8|||
 uvuni_to_utf8_flags||5.007003|
 uvuni_to_utf8||5.007001|
 validate_suid|||
+varname|||
 vcmp||5.009000|
 vcroak||5.006000|
 vdeb||5.007003|
+vdie_common|||
+vdie_croak_common|||
 vdie|||
 vform||5.006000|
 visit|||
@@ -2877,6 +3014,7 @@ vnewSVpvf|5.006000|5.004000|p
 vnormal||5.009002|
 vnumify||5.009000|
 vstringify||5.009000|
+vverify||5.009003|
 vwarner||5.006000|
 vwarn||5.006000|
 wait4pid|||
@@ -2886,6 +3024,7 @@ warner||5.006000|v
 warn|||v
 watch|||
 whichsig|||
+write_no_mem|||
 write_to_stderr|||
 yyerror|||
 yylex|||
@@ -2979,6 +3118,44 @@ if (exists $opt{'list-provided'}) {
     print "$f$flags\n";
   }
   exit 0;
+}
+
+my @files;
+my @srcext = qw( xs c h cc cpp );
+my $srcext = join '|', @srcext;
+
+if (@ARGV) {
+  my %seen;
+  @files = grep { -f && !exists $seen{$_} } map { glob $_ } @ARGV;
+}
+else {
+  eval {
+    require File::Find;
+    File::Find::find(sub {
+      $File::Find::name =~ /\.($srcext)$/i
+          and push @files, $File::Find::name;
+    }, '.');
+  };
+  if ($@) {
+    @files = map { glob "*.$_" } @srcext;
+  }
+}
+
+if (!@ARGV || $opt{filter}) {
+  my(@in, @out);
+  my %xsc = map { /(.*)\.xs$/ ? ("$1.c" => 1, "$1.cc" => 1) : () } @files;
+  for (@files) {
+    my $out = exists $xsc{$_} || /\b\Q$ppport\E$/i || !/\.($srcext)$/i;
+    push @{ $out ? \@out : \@in }, $_;
+  }
+  if (@ARGV && @out) {
+    warning("Skipping the following files (use --nofilter to avoid this):\n| ", join "\n| ", @out);
+  }
+  @files = @in;
+}
+
+unless (@files) {
+  die "No input files given!\n";
 }
 
 my(%files, %global, %revreplace);
@@ -3482,6 +3659,35 @@ ENDUSAGE
   exit 2;
 }
 
+sub strip
+{
+  my $self = do { local(@ARGV,$/)=($0); <> };
+  $self =~ s/^$HS+Do NOT edit.*?(?=^-)//ms;
+  $self =~ s/^SKIP.*(?=^__DATA__)/SKIP
+if (\@ARGV && \$ARGV[0] eq '--unstrip') {
+  eval { require Devel::PPPort };
+  \$@ and die "Cannot require Devel::PPPort, please install.\\n";
+  Devel::PPPort::WriteFile(\$0);
+  exit 0;
+}
+print <<END;
+
+Sorry, but this is a stripped version of \$0.
+
+To be able to use its original script and doc functionality,
+please try to regenerate this file using:
+
+  \$^X \$0 --unstrip
+
+END
+/ms;
+
+  open OUT, ">$0" or die "cannot strip $0: $!\n";
+  print OUT $self;
+
+  exit 0;
+}
+
 __DATA__
 */
 
@@ -3515,7 +3721,7 @@ __DATA__
 
 #define PERL_BCDVERSION ((PERL_REVISION * 0x1000000L) + (PERL_VERSION * 0x1000L) + PERL_SUBVERSION)
 
-/* It is very unlikely that anyone will try to use this with Perl 6 
+/* It is very unlikely that anyone will try to use this with Perl 6
    (or greater), but who knows.
  */
 #if PERL_REVISION != 5
@@ -3859,20 +4065,18 @@ __DATA__
 #ifndef UVSIZE
 #  define UVSIZE                         IVSIZE
 #endif
-
 #ifndef sv_setuv
-#  define sv_setuv(sv, uv)                  \
-   STMT_START {                             \
-       UV TeMpUv = uv;                      \
-       if (TeMpUv <= IV_MAX)                \
-           sv_setiv(sv, TeMpUv);            \
-       else                                 \
-           sv_setnv(sv, (double)TeMpUv);    \
-   } STMT_END
+#  define sv_setuv(sv, uv)               \
+               STMT_START {                         \
+                 UV TeMpUv = uv;                    \
+                 if (TeMpUv <= IV_MAX)              \
+                   sv_setiv(sv, TeMpUv);            \
+                 else                               \
+                   sv_setnv(sv, (double)TeMpUv);    \
+               } STMT_END
 #endif
-
 #ifndef newSVuv
-#  define newSVuv(uv) ((uv) <= IV_MAX ? newSViv((IV)uv) : newSVnv((NV)uv))
+#  define newSVuv(uv)                    ((uv) <= IV_MAX ? newSViv((IV)uv) : newSVnv((NV)uv))
 #endif
 #ifndef sv_2uv
 #  define sv_2uv(sv)                     ((PL_Sv = (sv)), (UV) (SvNOK(PL_Sv) ? SvNV(PL_Sv) : sv_2nv(PL_Sv)))
@@ -3915,7 +4119,60 @@ __DATA__
 #  define XPUSHu(u)                      STMT_START { sv_setuv(TARG, (UV)(u)); XPUSHTARG; } STMT_END
 #endif
 
-#if (PERL_VERSION < 4) || ((PERL_VERSION == 4) && (PERL_SUBVERSION <= 5))
+#ifdef HAS_MEMCMP
+#ifndef memNE
+#  define memNE(s1,s2,l)                 (memcmp(s1,s2,l))
+#endif
+
+#ifndef memEQ
+#  define memEQ(s1,s2,l)                 (!memcmp(s1,s2,l))
+#endif
+
+#else
+#ifndef memNE
+#  define memNE(s1,s2,l)                 (bcmp(s1,s2,l))
+#endif
+
+#ifndef memEQ
+#  define memEQ(s1,s2,l)                 (!bcmp(s1,s2,l))
+#endif
+
+#endif
+#ifndef MoveD
+#  define MoveD(s,d,n,t)                 memmove((char*)(d),(char*)(s), (n) * sizeof(t))
+#endif
+
+#ifndef CopyD
+#  define CopyD(s,d,n,t)                 memcpy((char*)(d),(char*)(s), (n) * sizeof(t))
+#endif
+
+#ifdef HAS_MEMSET
+#ifndef ZeroD
+#  define ZeroD(d,n,t)                   memzero((char*)(d), (n) * sizeof(t))
+#endif
+
+#else
+#ifndef ZeroD
+#  define ZeroD(d,n,t)                   ((void)memzero((char*)(d), (n) * sizeof(t)), d)
+#endif
+
+#endif
+#ifndef Poison
+#  define Poison(d,n,t)                  (void)memset((char*)(d), 0xAB, (n) * sizeof(t))
+#endif
+#ifndef Newx
+#  define Newx(v,n,t)                    New(0,v,n,t)
+#endif
+
+#ifndef Newxc
+#  define Newxc(v,n,t,c)                 Newc(0,v,n,t,c)
+#endif
+
+#ifndef Newxz
+#  define Newxz(v,n,t)                   Newz(0,v,n,t)
+#endif
+
+#if ((PERL_VERSION < 4) || ((PERL_VERSION == 4) && (PERL_SUBVERSION <= 5)))
 /* Replace: 1 */
 #  define PL_DBsingle               DBsingle
 #  define PL_DBsub                  DBsub
@@ -3951,14 +4208,16 @@ __DATA__
 /* Replace: 0 */
 #endif
 
-#ifdef HASATTRIBUTE
-#  if (defined(__GNUC__) && defined(__cplusplus)) || defined(__INTEL_COMPILER)
-#    define PERL_UNUSED_DECL
+#ifndef PERL_UNUSED_DECL
+#  ifdef HASATTRIBUTE
+#    if (defined(__GNUC__) && defined(__cplusplus)) || defined(__INTEL_COMPILER)
+#      define PERL_UNUSED_DECL
+#    else
+#      define PERL_UNUSED_DECL __attribute__((unused))
+#    endif
 #  else
-#    define PERL_UNUSED_DECL __attribute__((unused))
+#    define PERL_UNUSED_DECL
 #  endif
-#else
-#  define PERL_UNUSED_DECL
 #endif
 #ifndef NOOP
 #  define NOOP                           (void)0
@@ -3999,7 +4258,7 @@ typedef NVTYPE NV;
 #  if PTRSIZE == LONGSIZE
 #    define PTR2ul(p)     (unsigned long)(p)
 #  else
-#    define PTR2ul(p)     INT2PTR(unsigned long,p)        
+#    define PTR2ul(p)     INT2PTR(unsigned long,p)
 #  endif
 
 #endif /* !INT2PTR */
@@ -4091,48 +4350,6 @@ typedef NVTYPE NV;
 #endif
 
 /* Replace: 0 */
-
-#ifdef HAS_MEMCMP
-#ifndef memNE
-#  define memNE(s1,s2,l)                 (memcmp(s1,s2,l))
-#endif
-
-#ifndef memEQ
-#  define memEQ(s1,s2,l)                 (!memcmp(s1,s2,l))
-#endif
-
-#else
-#ifndef memNE
-#  define memNE(s1,s2,l)                 (bcmp(s1,s2,l))
-#endif
-
-#ifndef memEQ
-#  define memEQ(s1,s2,l)                 (!bcmp(s1,s2,l))
-#endif
-
-#endif
-#ifndef MoveD
-#  define MoveD(s,d,n,t)                 memmove((char*)(d),(char*)(s), (n) * sizeof(t))
-#endif
-
-#ifndef CopyD
-#  define CopyD(s,d,n,t)                 memcpy((char*)(d),(char*)(s), (n) * sizeof(t))
-#endif
-
-#ifdef HAS_MEMSET
-#ifndef ZeroD
-#  define ZeroD(d,n,t)                   memzero((char*)(d), (n) * sizeof(t))
-#endif
-
-#else
-#ifndef ZeroD
-#  define ZeroD(d,n,t)                   ((void)memzero((char*)(d), (n) * sizeof(t)),d)
-#endif
-
-#endif
-#ifndef Poison
-#  define Poison(d,n,t)                  (void)memset((char*)(d), 0xAB, (n) * sizeof(t))
-#endif
 #ifndef dUNDERBAR
 #  define dUNDERBAR                      dNOOP
 #endif
@@ -4150,6 +4367,37 @@ typedef NVTYPE NV;
 #ifndef dXSTARG
 #  define dXSTARG                        SV * targ = sv_newmortal()
 #endif
+#ifndef dAXMARK
+#  define dAXMARK                        I32 ax = POPMARK; \
+                               register SV ** const mark = PL_stack_base + ax++
+#endif
+#ifndef XSprePUSH
+#  define XSprePUSH                      (sp = PL_stack_base + ax - 1)
+#endif
+
+#if ((PERL_VERSION < 5) || ((PERL_VERSION == 5) && (PERL_SUBVERSION < 0)))
+#  undef XSRETURN
+#  define XSRETURN(off)                                   \
+      STMT_START {                                        \
+          PL_stack_sp = PL_stack_base + ax + ((off) - 1); \
+          return;                                         \
+      } STMT_END
+#endif
+
+#ifndef PERL_SIGNALS_UNSAFE_FLAG
+
+#define PERL_SIGNALS_UNSAFE_FLAG 0x0001
+
+#if defined(NEED_PL_signals)
+static U32 DPPP_(my_PL_signals) = PERL_SIGNALS_UNSAFE_FLAG;
+#elif defined(NEED_PL_signals_GLOBAL)
+U32 DPPP_(my_PL_signals) = PERL_SIGNALS_UNSAFE_FLAG;
+#else
+extern U32 DPPP_(my_PL_signals);
+#endif
+#define PL_signals DPPP_(my_PL_signals)
+
+#endif
 #ifndef dTHR
 #  define dTHR                           dNOOP
 #endif
@@ -4165,15 +4413,15 @@ typedef NVTYPE NV;
 #endif
 
 #ifndef pTHX_
-#  define pTHX_                          
+#  define pTHX_
 #endif
 
 #ifndef aTHX
-#  define aTHX                           
+#  define aTHX
 #endif
 
 #ifndef aTHX_
-#  define aTHX_                          
+#  define aTHX_
 #endif
 #ifndef dTHXoa
 #  define dTHXoa(x)                      dTHXa(x)
@@ -4396,7 +4644,7 @@ DPPP_(my_newCONSTSUB)(HV *stash, char *name, SV *sv)
  * case below uses it to declare the data as static. */
 #define START_MY_CXT
 
-#if (PERL_VERSION < 4 || (PERL_VERSION == 4 && PERL_SUBVERSION < 68 ))
+#if ((PERL_VERSION < 4) || ((PERL_VERSION == 4) && (PERL_SUBVERSION < 68)))
 /* Fetches the SV that keeps the per-interpreter data. */
 #define dMY_CXT_SV \
 	SV *my_cxt_sv = get_sv(MY_CXT_KEY, FALSE)
@@ -4491,7 +4739,7 @@ DPPP_(my_newCONSTSUB)(HV *stash, char *name, SV *sv)
 
 #ifndef NVef
 #  if defined(USE_LONG_DOUBLE) && defined(HAS_LONG_DOUBLE) && \
-      defined(PERL_PRIfldbl) /* Not very likely, but let's try anyway. */ 
+      defined(PERL_PRIfldbl) /* Not very likely, but let's try anyway. */
 #    define NVef          PERL_PRIeldbl
 #    define NVff          PERL_PRIfldbl
 #    define NVgf          PERL_PRIgldbl
@@ -4521,7 +4769,7 @@ extern char * DPPP_(my_sv_2pv_nolen)(pTHX_ register SV *sv);
 
 char *
 DPPP_(my_sv_2pv_nolen)(pTHX_ register SV *sv)
-{   
+{
   STRLEN n_a;
   return sv_2pv(sv, &n_a);
 }
@@ -4565,7 +4813,7 @@ extern char * DPPP_(my_sv_2pvbyte)(pTHX_ register SV *sv, STRLEN *lp);
 
 char *
 DPPP_(my_sv_2pvbyte)(pTHX_ register SV *sv, STRLEN *lp)
-{   
+{
   sv_utf8_downgrade(sv,0);
   return SvPV(sv,*lp);
 }
@@ -4609,6 +4857,62 @@ DPPP_(my_sv_2pvbyte)(pTHX_ register SV *sv, STRLEN *lp)
  */
 #ifndef sv_pvn_force
 #  define sv_pvn_force(sv, len)          SvPV_force(sv, len)
+#endif
+#ifndef SvMAGIC_set
+#  define SvMAGIC_set(sv, val)           \
+                STMT_START { assert(SvTYPE(sv) >= SVt_PVMG); \
+                (((XPVMG*) SvANY(sv))->xmg_magic = (val)); } STMT_END
+#endif
+
+#if ((PERL_VERSION < 9) || ((PERL_VERSION == 9) && (PERL_SUBVERSION < 3)))
+#ifndef SvPVX_const
+#  define SvPVX_const(sv)                ((const char*) (0 + SvPVX(sv)))
+#endif
+
+#ifndef SvPVX_mutable
+#  define SvPVX_mutable(sv)              (0 + SvPVX(sv))
+#endif
+#ifndef SvRV_set
+#  define SvRV_set(sv, val)              \
+                STMT_START { assert(SvTYPE(sv) >=  SVt_RV); \
+                (((XRV*) SvANY(sv))->xrv_rv = (val)); } STMT_END
+#endif
+
+#else
+#ifndef SvPVX_const
+#  define SvPVX_const(sv)                ((const char*)((sv)->sv_u.svu_pv))
+#endif
+
+#ifndef SvPVX_mutable
+#  define SvPVX_mutable(sv)              ((sv)->sv_u.svu_pv)
+#endif
+#ifndef SvRV_set
+#  define SvRV_set(sv, val)              \
+                STMT_START { assert(SvTYPE(sv) >=  SVt_RV); \
+                ((sv)->sv_u.svu_rv = (val)); } STMT_END
+#endif
+
+#endif
+#ifndef SvSTASH_set
+#  define SvSTASH_set(sv, val)           \
+                STMT_START { assert(SvTYPE(sv) >= SVt_PVMG); \
+                (((XPVMG*) SvANY(sv))->xmg_stash = (val)); } STMT_END
+#endif
+
+#if ((PERL_VERSION < 4) || ((PERL_VERSION == 4) && (PERL_SUBVERSION < 0)))
+#ifndef SvUV_set
+#  define SvUV_set(sv, val)              \
+                STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
+                (((XPVIV*) SvANY(sv))->xiv_iv = (IV) (val)); } STMT_END
+#endif
+
+#else
+#ifndef SvUV_set
+#  define SvUV_set(sv, val)              \
+                STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
+                (((XPVUV*) SvANY(sv))->xuv_uv = (val)); } STMT_END
+#endif
+
 #endif
 
 #if ((PERL_VERSION > 4) || ((PERL_VERSION == 4) && (PERL_SUBVERSION >= 0))) && !defined(vnewSVpvf)
@@ -5243,12 +5547,12 @@ DPPP_(my_grok_numeric_radix)(pTHX_ const char **sp, const char *send)
 {
 #ifdef USE_LOCALE_NUMERIC
 #ifdef PL_numeric_radix_sv
-    if (PL_numeric_radix_sv && IN_LOCALE) { 
+    if (PL_numeric_radix_sv && IN_LOCALE) {
         STRLEN len;
         char* radix = SvPV(PL_numeric_radix_sv, len);
         if (*sp + len <= send && memEQ(*sp, radix, len)) {
             *sp += len;
-            return TRUE; 
+            return TRUE;
         }
     }
 #else
@@ -5259,14 +5563,14 @@ DPPP_(my_grok_numeric_radix)(pTHX_ const char **sp, const char *send)
     dTHR;  /* needed for older threaded perls */
     struct lconv *lc = localeconv();
     char *radix = lc->decimal_point;
-    if (radix && IN_LOCALE) { 
+    if (radix && IN_LOCALE) {
         STRLEN len = strlen(radix);
         if (*sp + len <= send && memEQ(*sp, radix, len)) {
             *sp += len;
-            return TRUE; 
+            return TRUE;
         }
     }
-#endif /* PERL_VERSION */
+#endif
 #endif /* USE_LOCALE_NUMERIC */
     /* always try "." if numeric radix didn't match because
      * we may have data from different locales mixed */
@@ -5576,7 +5880,7 @@ DPPP_(my_grok_bin)(pTHX_ char *start, STRLEN *len_p, I32 *flags, NV *result)
             warn("Illegal binary digit '%c' ignored", *s);
         break;
     }
-    
+
     if (   ( overflowed && value_nv > 4294967295.0)
 #if UVSIZE > 4
 	|| (!overflowed && value > 0xffffffff  )
@@ -5678,7 +5982,7 @@ DPPP_(my_grok_hex)(pTHX_ char *start, STRLEN *len_p, I32 *flags, NV *result)
             warn("Illegal hexadecimal digit '%c' ignored", *s);
         break;
     }
-    
+
     if (   ( overflowed && value_nv > 4294967295.0)
 #if UVSIZE > 4
 	|| (!overflowed && value > 0xffffffff  )
@@ -5771,7 +6075,7 @@ DPPP_(my_grok_oct)(pTHX_ char *start, STRLEN *len_p, I32 *flags, NV *result)
         }
         break;
     }
-    
+
     if (   ( overflowed && value_nv > 4294967295.0)
 #if UVSIZE > 4
 	|| (!overflowed && value > 0xffffffff  )

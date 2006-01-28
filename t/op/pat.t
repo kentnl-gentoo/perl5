@@ -6,7 +6,7 @@
 
 $| = 1;
 
-print "1..1178\n";
+print "1..1199\n";
 
 BEGIN {
     chdir 't' if -d 't';
@@ -79,12 +79,21 @@ $XXX{345} = 345;
 while ($_ = shift(@XXX)) {
     ?(.*)? && (print $1,"\n");
     /not/ && reset;
-    /not ok 26/ && reset 'X';
+    if (/not ok 26/) {
+      if ($^O eq 'VMS') {
+	$_ = shift(@XXX);
+      }
+      else {
+	reset 'X';
+      }
+   }
 }
 
-while (($key,$val) = each(%XXX)) {
+if ($^O ne 'VMS') {
+  while (($key,$val) = each(%XXX)) {
     print "not ok 27\n";
     exit;
+  }
 }
 
 print "ok 27\n";
@@ -2984,8 +2993,8 @@ sub IsSyriac1 {
 END
 }
 
-print "\x{0712}" =~ /\p{IsSyriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
-print "\x{072F}" =~ /\P{IsSyriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+ok("\x{0712}" =~ /\p{IsSyriac1}/, '\x{0712}, \p{IsSyriac1}');
+ok("\x{072F}" =~ /\P{IsSyriac1}/, '\x{072F}, \P{IsSyriac1}');
 
 sub Syriac1 {
     return <<'END';
@@ -2994,8 +3003,29 @@ sub Syriac1 {
 END
 }
 
-print "\x{0712}" =~ /\p{Syriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
-print "\x{072F}" =~ /\P{Syriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+ok("\x{0712}" =~ /\p{Syriac1}/, '\x{0712}, \p{Syriac1}');
+ok("\x{072F}" =~ /\P{Syriac1}/, '\x{072F}, \p{Syriac1}');
+
+print "# user-defined character properties may lack \\n at the end\n";
+sub InGreekSmall   { return "03B1\t03C9" }
+sub InGreekCapital { return "0391\t03A9\n-03A2" }
+
+ok("\x{03C0}" =~ /\p{InGreekSmall}/,   "Small pi");
+ok("\x{03C2}" =~ /\p{InGreekSmall}/,   "Final sigma");
+ok("\x{03A0}" =~ /\p{InGreekCapital}/, "Capital PI");
+ok("\x{03A2}" =~ /\P{InGreekCapital}/, "Reserved");
+
+sub AsciiHexAndDash {
+    return <<'END';
++utf8::ASCII_Hex_Digit
++utf8::Dash
+END
+}
+
+ok("-" =~ /\p{Dash}/,            "'-' is Dash");
+ok("A" =~ /\p{ASCII_Hex_Digit}/, "'A' is ASCII_Hex_Digit");
+ok("-" =~ /\p{AsciiHexAndDash}/, "'-' is AsciiHexAndDash");
+ok("A" =~ /\p{AsciiHexAndDash}/, "'A' is AsciiHexAndDash");
 
 {
     print "# Change #18179\n";
@@ -3364,4 +3394,75 @@ ok(("foba  ba$s" =~ qr/(foo|BaSS|bar)/i)
     my $psycho=join "|",@normal,map chr $_,255..20000;
     ok(('these'=~/($psycho)/) && $1 eq 'these','Pyscho');
 }
-# last test 1178
+
+# [perl #36207] mixed utf8 / latin-1 and case folding
+
+{
+    my $utf8 = "\xe9\x{100}"; chop $utf8;
+    my $latin1 = "\xe9";
+
+    ok($utf8 =~ /\xe9/i, "utf8/latin");
+    ok($utf8 =~ /$latin1/i, "utf8/latin runtime");
+    ok($utf8 =~ /(abc|\xe9)/i, "utf8/latin trie");
+    ok($utf8 =~ /(abc|$latin1)/i, "utf8/latin trie runtime");
+
+    ok("\xe9" =~ /$utf8/i, "# TODO latin/utf8");
+    ok("\xe9" =~ /(abc|$utf8)/i, "# latin/utf8 trie");
+    ok($latin1 =~ /$utf8/i, "# TODO latin/utf8 runtime");
+    ok($latin1 =~ /(abc|$utf8)/i, "# latin/utf8 trie runtime");
+}
+
+# [perl #37038] Global regular matches generate invalid pointers
+
+{
+    my $s = "abcd";
+    $s =~ /(..)(..)/g;
+    $s = $1;
+    $s = $2;
+    ok($s eq 'cd',
+       "# assigning to original string should not corrupt match vars");
+}
+
+{
+    package wooosh;
+    sub gloople {
+      "!";
+    }
+    package main;
+    
+    my $aeek = bless {}, 'wooosh';
+    eval {$aeek->gloople() =~ /(.)/g;};
+    ok($@ eq "", "//g match against return value of sub") or print "# $@\n";
+}
+
+{
+    sub gloople {
+      "!";
+    }
+    eval {gloople() =~ /(.)/g;};
+    ok($@ eq "", "# 26410 didn't affect sub calls for some reason")
+	or print "# $@\n";
+}
+
+{
+    package lv;
+    $var = "abc";
+    sub variable : lvalue { $var }
+
+    package main;
+    my $o = bless [], "lv";
+    my $f = "";
+    eval { for (1..2) { $f .= $1 if $o->variable =~ /(.)/g } };
+    ok($f eq "ab", "pos retained between calls # TODO") or print "# $@\n";
+}
+
+{
+    $var = "abc";
+    sub variable : lvalue { $var }
+
+    my $f = "";
+    eval { for (1..2) { $f .= $1 if variable() =~ /(.)/g } };
+    ok($f eq "ab", "pos retained between calls # TODO") or print "# $@\n";
+}
+
+# last test 1199

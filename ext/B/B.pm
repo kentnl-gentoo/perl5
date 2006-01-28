@@ -7,7 +7,7 @@
 #
 package B;
 
-our $VERSION = '1.07';
+our $VERSION = '1.10';
 
 use XSLoader ();
 require Exporter;
@@ -31,10 +31,10 @@ use strict;
 @B::NULL::ISA = 'B::SV';
 @B::PV::ISA = 'B::SV';
 @B::IV::ISA = 'B::SV';
-@B::NV::ISA = 'B::IV';
+@B::NV::ISA = 'B::SV';
 @B::RV::ISA = 'B::SV';
 @B::PVIV::ISA = qw(B::PV B::IV);
-@B::PVNV::ISA = qw(B::PV B::NV);
+@B::PVNV::ISA = qw(B::PVIV B::NV);
 @B::PVMG::ISA = 'B::PVNV';
 # Change in the inheritance hierarchy post 5.9.0
 @B::PVLV::ISA = $] > 5.009 ? 'B::GV' : 'B::PVMG';
@@ -543,26 +543,26 @@ and later this is:
 
                              B::SV
                                |
-                +--------------+----------------------+
-                |              |                      |
-              B::PV          B::IV                  B::RV
-                |  \        /     \
-                |   \      /       \
-                |   B::PVIV         B::NV
-                 \                 /
-                  \____         __/
-                       \       /
-                        B::PVNV
-                           |
-                           |
-                        B::PVMG
-                           |
-                +-----+----+------+-----+-----+
-                |     |    |      |     |     |
-              B::BM B::AV B::GV B::HV B::CV B::IO
-                           |            |
-                        B::PVLV         |
-                                      B::FM
+                +--------------+----------+------------+
+                |              |          |            |
+              B::PV          B::IV      B::NV        B::RV
+                   \         /          /
+                    \       /          /
+                     B::PVIV          /
+                         \           /
+                          \         /
+                           \       /
+                            B::PVNV
+                               |
+                               |
+                            B::PVMG
+                               |
+                    +-----+----+------+-----+-----+
+                    |     |    |      |     |     |
+                  B::BM B::AV B::GV B::HV B::CV B::IO
+                               |            |
+                            B::PVLV         |
+                                          B::FM
 
 
 For 5.9.0 and earlier, PVLV is a direct subclass of PVMG, so the base
@@ -848,8 +848,6 @@ IoIFP($io) == PerlIO_stdin() ).
 
 =item MAX
 
-=item OFF
-
 =item ARRAY
 
 =item ARRAYelt
@@ -857,7 +855,15 @@ IoIFP($io) == PerlIO_stdin() ).
 Like C<ARRAY>, but takes an index as an argument to get only one element,
 rather than a list of all of them.
 
+=item OFF
+
+This method is deprecated if running under Perl 5.8, and is no longer present
+if running under Perl 5.9
+
 =item AvFLAGS
+
+This method returns the AV specific flags. In Perl 5.9 these are now stored
+in with the main SV flags, so this method is no longer present.
 
 =back
 
@@ -909,9 +915,12 @@ For constant subroutines, returns the constant SV returned by the subroutine.
 
 =item NAME
 
+=item ARRAY
+
 =item PMROOT
 
-=item ARRAY
+This method is not present if running under Perl 5.9, as the PMROOT
+information is no longer stored directly in the hash.
 
 =back
 

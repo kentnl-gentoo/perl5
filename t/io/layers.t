@@ -31,18 +31,20 @@ my $DOSISH    = $^O =~ /^(?:MSWin32|os2|dos|NetWare|mint)$/ ? 1 : 0;
    $DOSISH    = 1 if !$DOSISH and $^O =~ /^uwin/;
 my $NONSTDIO  = exists $ENV{PERLIO} && $ENV{PERLIO} ne 'stdio'     ? 1 : 0;
 my $FASTSTDIO = $Config{d_faststdio} && $Config{usefaststdio}      ? 1 : 0;
-my $UNICODE_STDIN;
+my $UTF8_STDIN;
 if (${^UNICODE} & 1) {
     if (${^UNICODE} & 64) {
 	# Conditional on the locale
-	$UNICODE_STDIN = ${^UTF8LOCALE};
+	$UTF8_STDIN = ${^UTF8LOCALE};
     } else {
 	# Unconditional
-	$UNICODE_STDIN = 1;
+	$UTF8_STDIN = 1;
     }
+} else {
+    $UTF8_STDIN = 0;
 }
-my $NTEST = 43 - (($DOSISH || !$FASTSTDIO) ? 7 : 0) - ($DOSISH ? 5 : 0)
-    + $UNICODE_STDIN;
+my $NTEST = 44 - (($DOSISH || !$FASTSTDIO) ? 7 : 0) - ($DOSISH ? 5 : 0)
+    + $UTF8_STDIN;
 
 sub PerlIO::F_UTF8 () { 0x00008000 } # from perliol.h
 
@@ -55,7 +57,7 @@ print <<__EOH__;
 # FASTSTDIO     = $FASTSTDIO
 # UNICODE       = ${^UNICODE}
 # UTF8LOCALE    = ${^UTF8LOCALE}
-# UNICODE_STDIN = $UNICODE_STDIN
+# UTF8_STDIN = $UTF8_STDIN
 __EOH__
 
 SKIP: {
@@ -120,7 +122,7 @@ SKIP: {
     }
 
     check([ PerlIO::get_layers(STDIN) ],
-	  $UNICODE_STDIN ? [ "stdio", "utf8" ] : [ "stdio" ],
+	  $UTF8_STDIN ? [ "stdio", "utf8" ] : [ "stdio" ],
 	  "STDIN");
 
     open(F, ">:crlf", "afile");
@@ -211,6 +213,13 @@ SKIP: {
 	close F;
 	close G;
     }
+
+    # Check that PL_sigwarn's reference count is correct, and that 
+    # &PerlIO::Layer::NoWarnings isn't prematurely freed.
+    fresh_perl_like (<<'EOT', qr/^CODE/);
+open(UTF, "<:raw:encoding(utf8)", "afile") or die $!;
+print ref *PerlIO::Layer::NoWarnings{CODE};
+EOT
 
     1 while unlink "afile";
 }

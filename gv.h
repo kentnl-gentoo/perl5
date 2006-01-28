@@ -1,7 +1,7 @@
 /*    gv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -18,14 +18,26 @@ struct gp {
     GV *	gp_egv;		/* effective gv, if *glob */
     CV *	gp_cv;		/* subroutine value */
     U32		gp_cvgen;	/* generational validity of cached gv_cv */
-    U32		gp_flags;	/* XXX unused */
     line_t	gp_line;	/* line first declared at (for -w) */
     char *	gp_file;	/* file first declared in (for -w) */
 };
 
 #define GvXPVGV(gv)	((XPVGV*)SvANY(gv))
 
-#define GvGP(gv)	(GvXPVGV(gv)->xgv_gp)
+/* MSVC++ 6.0 (_MSC_VER == 1200) can't compile pp_hot.c with DEBUGGING enabled
+ * if we include the following assert(). Must be a compiler bug because it
+ * works fine with MSVC++ 7.0. Borland (5.5.1) has the same problem. And MinGW
+ * (gcc-3.4.2) has a different problem when compiling win32/perllib.c! */
+#if defined(DEBUGGING) && \
+    ((!defined(_MSC_VER) || _MSC_VER > 1200) && \
+      !defined(__BORLANDC__) && !defined(__MINGW32__))
+#  define GvGP(gv)	(*(assert(SvTYPE(gv) == SVt_PVGV || \
+				  SvTYPE(gv) == SVt_PVLV), \
+			   &(GvXPVGV(gv)->xgv_gp)))
+#else
+#  define GvGP(gv)	(GvXPVGV(gv)->xgv_gp)
+#endif
+
 #define GvNAME(gv)	(GvXPVGV(gv)->xgv_name)
 #define GvNAMELEN(gv)	(GvXPVGV(gv)->xgv_namelen)
 #define GvSTASH(gv)	(GvXPVGV(gv)->xgv_stash)
@@ -42,6 +54,14 @@ Return the SV from the GV.
 */
 
 #define GvSV(gv)	(GvGP(gv)->gp_sv)
+#ifdef PERL_DONT_CREATE_GVSV
+#define GvSVn(gv)	(*(GvGP(gv)->gp_sv ? \
+			 &(GvGP(gv)->gp_sv) : \
+			 &(GvGP(gv_SVadd(gv))->gp_sv)))
+#else
+#define GvSVn(gv)	GvSV(gv)
+#endif
+
 #define GvREFCNT(gv)	(GvGP(gv)->gp_refcnt)
 #define GvIO(gv)	((gv) && SvTYPE((SV*)gv) == SVt_PVGV && GvGP(gv) ? GvIOp(gv) : 0)
 #define GvIOp(gv)	(GvGP(gv)->gp_io)
@@ -65,8 +85,6 @@ Return the SV from the GV.
 #define GvCV(gv)	(GvGP(gv)->gp_cv)
 #define GvCVGEN(gv)	(GvGP(gv)->gp_cvgen)
 #define GvCVu(gv)	(GvGP(gv)->gp_cvgen ? Nullcv : GvGP(gv)->gp_cv)
-
-#define GvGPFLAGS(gv)	(GvGP(gv)->gp_flags)
 
 #define GvLINE(gv)	(GvGP(gv)->gp_line)
 #define GvFILE(gv)	(GvGP(gv)->gp_file)
@@ -122,12 +140,9 @@ Return the SV from the GV.
 #define GvIN_PAD_on(gv)		(GvFLAGS(gv) |= GVf_IN_PAD)
 #define GvIN_PAD_off(gv)	(GvFLAGS(gv) &= ~GVf_IN_PAD)
 
-/* XXX: all GvFLAGS options are used, borrowing GvGPFLAGS for the moment */
-
-#define GVf_UNIQUE           0x0001
-#define GvUNIQUE(gv)         (GvGP(gv) && (GvGPFLAGS(gv) & GVf_UNIQUE))
-#define GvUNIQUE_on(gv)      (GvGPFLAGS(gv) |= GVf_UNIQUE)
-#define GvUNIQUE_off(gv)     (GvGPFLAGS(gv) &= ~GVf_UNIQUE)
+#define GvUNIQUE(gv)            0
+#define GvUNIQUE_on(gv)
+#define GvUNIQUE_off(gv)
 
 #ifdef USE_ITHREADS
 #define GV_UNIQUE_CHECK
@@ -153,8 +168,15 @@ Return the SV from the GV.
 #define GV_ADDWARN	0x04	/* add, but warn if symbol wasn't already there */
 #define GV_ADDINEVAL	0x08	/* add, as though we're doing so within an eval */
 #define GV_NOINIT	0x10	/* add, but don't init symbol, if type != PVGV */
+/* This is used by toke.c to avoid turing placeholder constants in the symbol
+   table into full PVGVs with attached constant subroutines.  */
+#define GV_NOADD_NOINIT	0x20	/* Don't add the symbol if it's not there.
+				   Don't init it if it is there but ! PVGV */
+#define GV_NOEXPAND	0x40	/* Don't expand SvOK() entries to PVGV */
+
 /*      SVf_UTF8 (more accurately the return value from SvUTF8) is also valid
 	as a flag to gv_fetch_pvn_flags, so ensure it lies outside this range.
 */
 #define gv_fullname3(sv,gv,prefix) gv_fullname4(sv,gv,prefix,TRUE)
 #define gv_efullname3(sv,gv,prefix) gv_efullname4(sv,gv,prefix,TRUE)
+#define gv_fetchmethod(stash, name) gv_fetchmethod_autoload(stash, name, TRUE)

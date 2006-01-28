@@ -1,26 +1,27 @@
 #!./perl
 # tests for "goto &sub"-ing into XSUBs
 
-# $RCSfile$$Revision$$Date$
-
 # Note: This only tests things that should *work*.  At some point, it may
 #       be worth while to write some failure tests for things that should
 #       *break* (such as calls with wrong number of args).  For now, I'm
 #       guessing that if all of these work correctly, the bad ones will
 #       break correctly as well.
 
-chdir 't' if -d 't';
-@INC = '../lib';
-$ENV{PERL5LIB} = "../lib";
+BEGIN { $| = 1; }
+BEGIN {
+    chdir 't' if -d 't';
+    @INC = '../lib';
+    $ENV{PERL5LIB} = "../lib";
 
 # turn warnings into fatal errors
-$SIG{__WARN__} = sub { die "WARNING: @_" } ;
+    $SIG{__WARN__} = sub { die "WARNING: @_" } ;
 
-BEGIN { $| = 1; }
-eval 'require Fcntl'
-  or do { print "1..0\n# Fcntl unavailable, can't test XS goto.\n"; exit 0 };
-
-print "1..10\n";
+    foreach (qw(Fcntl XS::APItest)) {
+	eval "require $_"
+	or do { print "1..0\n# $_ unavailable, can't test XS goto.\n"; exit 0 }
+    }
+}
+print "1..11\n";
 
 # We don't know what symbols are defined in platform X's system headers.
 # We don't even want to guess, because some platform out there will
@@ -96,3 +97,20 @@ sub call_goto_ref { &goto_ref; }
 
 $ret = call_goto_ref($VALID);
 print(($ret == $value) ? "ok 10\n" : "not ok 10\n# ($ret != $value)\n");
+
+
+# [perl #35878] croak in XS after goto segfaulted
+
+use XS::APItest qw(mycroak);
+
+sub goto_croak { goto &mycroak }
+
+{
+    my $e;
+    for (1..4) {
+	eval { goto_croak("boo$_\n") };
+	$e .= $@;
+    }
+    print $e eq "boo1\nboo2\nboo3\nboo4\n" ? "ok 11\n" : "not ok 11\n";
+}
+

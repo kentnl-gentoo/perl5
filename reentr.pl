@@ -5,6 +5,11 @@
 # and optionally also the relevant metaconfig units (-U option).
 # 
 
+BEGIN {
+    # Get function prototypes
+    require 'regen_lib.pl';
+}
+
 use strict;
 use Getopt::Std;
 my %opts;
@@ -35,13 +40,16 @@ my %map = (
 # Example #3: S_CBI   means type func_r(const char*, char*, int)
 
 
+safer_unlink 'reentr.h';
 die "reentr.h: $!" unless open(H, ">reentr.h");
+binmode H;
 select H;
 print <<EOF;
-/*
+/* -*- buffer-read-only: t -*-
+ *
  *    reentr.h
  *
- *    Copyright (C) 2002, 2003, by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -51,7 +59,7 @@ print <<EOF;
  */
 
 #ifndef REENTR_H
-#define REENTR_H 
+#define REENTR_H
 
 #ifdef USE_REENTRANT_API
  
@@ -79,6 +87,17 @@ print <<EOF;
 #   undef HAS_STRERROR_R
 #   define NETDB_R_OBSOLETE
 #endif
+
+/*
+ * As of OpenBSD 3.7, reentrant functions are now working, they just are
+ * incompatible with everyone else.  To make OpenBSD happy, we have to
+ * memzero out certain structures before calling the functions.
+ */
+#if defined(__OpenBSD__)
+#    define REENTR_MEMZERO(a,b) memzero(a,b),
+#else
+#    define REENTR_MEMZERO(a,b)
+#endif 
 
 #ifdef NETDB_R_OBSOLETE
 #   undef HAS_ENDHOSTENT_R
@@ -165,6 +184,7 @@ while (<DATA>) { # Read in the protypes.
 
     # If given the -U option open up the metaconfig unit for this function.
     if ($opts{U} && open(U, ">d_${func}_r.U"))  {
+    	binmode U;
 	select U;
     }
 
@@ -329,7 +349,7 @@ sub pushssif {
 sub pushinitfree {
     my $func = shift;
     push @init, <<EOF;
-	New(31338, PL_reentrant_buffer->_${func}_buffer, PL_reentrant_buffer->_${func}_size, char);
+	Newx(PL_reentrant_buffer->_${func}_buffer, PL_reentrant_buffer->_${func}_size, char);
 EOF
     push @free, <<EOF;
 	Safefree(PL_reentrant_buffer->_${func}_buffer);
@@ -577,7 +597,7 @@ EOF
 EOF
 	    push @init, <<EOF;
 #if   !($D)
-	New(31338, PL_reentrant_buffer->_${genfunc}_buffer, PL_reentrant_buffer->_${genfunc}_size, char);
+	Newx(PL_reentrant_buffer->_${genfunc}_buffer, PL_reentrant_buffer->_${genfunc}_size, char);
 #endif
 EOF
 	    push @free, <<EOF;
@@ -679,6 +699,13 @@ EOF
 		$w = ", $w" if length $v;
 	    }
 	    my $call = "${func}_r($v$w)";
+
+            # Must make OpenBSD happy
+            my $memzero = '';
+            if($p =~ /D$/ &&
+                ($genfunc eq 'protoent' || $genfunc eq 'servent')) {
+                $memzero = 'REENTR_MEMZERO(&PL_reentrant_buffer->_' . $genfunc . '_data, sizeof(PL_reentrant_buffer->_' . $genfunc . '_data))';
+            }
 	    push @wrap, <<EOF;
 #   if !defined($func) && ${FUNC}_R_PROTO == REENTRANT_PROTO_$p
 EOF
@@ -691,11 +718,11 @@ EOF
 		    my $rv = $v ? ", $v" : "";
 		    if ($r eq 'I') {
 			push @wrap, <<EOF;
-#       define $func($v) ((PL_reentrant_retint = $call)$test ? $true : (((PL_reentrant_retint == ERANGE) || (errno == ERANGE)) ? Perl_reentrant_retry("$func"$rv) : 0))
+#       define $func($v) ($memzero(PL_reentrant_retint = $call)$test ? $true : ((PL_reentrant_retint == ERANGE) ? ($seent{$func} *) Perl_reentrant_retry("$func"$rv) : 0))
 EOF
 		    } else {
 			push @wrap, <<EOF;
-#       define $func($v) ($call$test ? $true : ((errno == ERANGE) ? Perl_reentrant_retry("$func"$rv) : 0))
+#       define $func($v) ($call$test ? $true : ((errno == ERANGE) ? ($seent{$func} *) Perl_reentrant_retry("$func"$rv) : 0))
 EOF
                     }
 		} else {
@@ -733,19 +760,23 @@ typedef struct {
  
 #endif
 
+/* ex: set ro: */
 EOF
 
 close(H);
 
 # Prepare to write the reentr.c.
 
+safer_unlink 'reentr.c';
 die "reentr.c: $!" unless open(C, ">reentr.c");
+binmode C;
 select C;
 print <<EOF;
-/*
+/* -*- buffer-read-only: t -*-
+ *
  *    reentr.c
  *
- *    Copyright (C) 2002, 2003, by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -781,7 +812,7 @@ Perl_reentrant_size(pTHX) {
 void
 Perl_reentrant_init(pTHX) {
 #ifdef USE_REENTRANT_API
-	New(31337, PL_reentrant_buffer, 1, REENTR);
+	Newx(PL_reentrant_buffer, 1, REENTR);
 	Perl_reentrant_size(aTHX);
 @init
 #endif /* USE_REENTRANT_API */
@@ -839,7 +870,7 @@ Perl_reentrant_retry(const char *f, ...)
 		    retptr = gethostbyaddr(p0, asize, anint); break;
 	        case OP_GHBYNAME:
 		    p0 = va_arg(ap, void *);
-		    retptr = gethostbyname(p0); break;
+		    retptr = gethostbyname((char *)p0); break;
 	        case OP_GHOSTENT:
 		    retptr = gethostent(); break;
 	        default:
@@ -867,7 +898,7 @@ Perl_reentrant_retry(const char *f, ...)
 		switch (PL_op->op_type) {
 	        case OP_GGRNAM:
 		    p0 = va_arg(ap, void *);
-		    retptr = getgrnam(p0); break;
+		    retptr = getgrnam((char *)p0); break;
 	        case OP_GGRGID:
 #if Gid_t_size < INTSIZE
 		    gid = (Gid_t)va_arg(ap, int);
@@ -906,7 +937,7 @@ Perl_reentrant_retry(const char *f, ...)
 		    retptr = getnetbyaddr(net, anint); break;
 	        case OP_GNBYNAME:
 		    p0 = va_arg(ap, void *);
-		    retptr = getnetbyname(p0); break;
+		    retptr = getnetbyname((char *)p0); break;
 	        case OP_GNETENT:
 		    retptr = getnetent(); break;
 	        default:
@@ -934,7 +965,7 @@ Perl_reentrant_retry(const char *f, ...)
 		switch (PL_op->op_type) {
 	        case OP_GPWNAM:
 		    p0 = va_arg(ap, void *);
-		    retptr = getpwnam(p0); break;
+		    retptr = getpwnam((char *)p0); break;
 	        case OP_GPWUID:
 #if Uid_t_size < INTSIZE
 		    uid = (Uid_t)va_arg(ap, int);
@@ -968,7 +999,7 @@ Perl_reentrant_retry(const char *f, ...)
 		switch (PL_op->op_type) {
 	        case OP_GPBYNAME:
 		    p0 = va_arg(ap, void *);
-		    retptr = getprotobyname(p0); break;
+		    retptr = getprotobyname((char *)p0); break;
 	        case OP_GPBYNUMBER:
 		    anint = va_arg(ap, int);
 		    retptr = getprotobynumber(anint); break;
@@ -999,11 +1030,11 @@ Perl_reentrant_retry(const char *f, ...)
 	        case OP_GSBYNAME:
 		    p0 = va_arg(ap, void *);
 		    p1 = va_arg(ap, void *);
-		    retptr = getservbyname(p0, p1); break;
+		    retptr = getservbyname((char *)p0, (char *)p1); break;
 	        case OP_GSBYPORT:
 		    anint = va_arg(ap, int);
 		    p0 = va_arg(ap, void *);
-		    retptr = getservbyport(anint, p0); break;
+		    retptr = getservbyport(anint, (char *)p0); break;
 	        case OP_GSERVENT:
 		    retptr = getservent(); break;
 	        default:
@@ -1024,6 +1055,7 @@ Perl_reentrant_retry(const char *f, ...)
     return retptr;
 }
 
+/* ex: set ro: */
 EOF
 
 __DATA__
@@ -1044,7 +1076,7 @@ getgrnam C	|grp	|struct group	|I_CSBWR|I_CSBIR|S_CBI|I_CSBI|S_CSBI
 gethostbyaddr CWI	|netdb	|struct hostent	|I_CWISBWRE|S_CWISBWIE|S_CWISBIE|S_TWISBIE|S_CIISBIE|S_CSBIE|S_TSBIE|I_CWISD|I_CIISD|I_CII|I_TsISBWRE|D=struct hostent_data*|T=const void*|s=socklen_t
 gethostbyname C	|netdb	|struct hostent	|I_CSBWRE|S_CSBIE|I_CSD|D=struct hostent_data*
 gethostent	|netdb	|struct hostent	|I_SBWRE|I_SBIE|S_SBIE|S_SBI|I_SBI|I_SD|D=struct hostent_data*
-getlogin	|unistd	|		|I_BW|I_BI|B_BW|B_BI
+getlogin	|unistd	|char		|I_BW|I_BI|B_BW|B_BI
 getnetbyaddr LI	|netdb	|struct netent	|I_UISBWRE|I_LISBI|S_TISBI|S_LISBI|I_TISD|I_LISD|I_IISD|I_uISBWRE|D=struct netent_data*|T=in_addr_t|U=unsigned long|u=uint32_t
 getnetbyname C	|netdb	|struct netent	|I_CSBWRE|I_CSBI|S_CSBI|I_CSD|D=struct netent_data*
 getnetent	|netdb	|struct netent	|I_SBWRE|I_SBIE|S_SBIE|S_SBI|I_SBI|I_SD|D=struct netent_data*

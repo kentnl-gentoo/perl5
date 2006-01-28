@@ -7,11 +7,12 @@ binmode KW;
 select KW;
 
 print <<EOM;
-/*
+/* -*- buffer-read-only: t -*-
+ *
  *    keywords.h
  *
- *    Copyright (C) 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002,
- *    by Larry Wall and others
+ *    Copyright (C) 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002, 2005,
+ *    2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -32,6 +33,8 @@ while (<DATA>) {
     ($keyword) = split;
     print &tab(5, "#define KEY_$keyword"), $keynum++, "\n";
 }
+
+print KW "\n/* ex: set ro: */\n";
 
 close KW or die "Error closing keywords.h: $!";
 
@@ -65,6 +68,7 @@ atan2
 bind
 binmode
 bless
+break
 caller
 chdir
 chmod
@@ -82,6 +86,7 @@ cos
 crypt
 dbmclose
 dbmopen
+default
 defined
 delete
 die
@@ -139,6 +144,7 @@ getservbyport
 getservent
 getsockname
 getsockopt
+given
 glob
 gmtime
 goto
@@ -216,6 +222,7 @@ rewinddir
 rindex
 rmdir
 s
+say
 scalar
 seek
 seekdir
@@ -286,6 +293,7 @@ wait
 waitpid
 wantarray
 warn
+when
 while
 write
 x

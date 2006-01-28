@@ -893,47 +893,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$i_vfork I_VFORK	/**/
 
-/* INTSIZE:
- *	This symbol contains the value of sizeof(int) so that the C
- *	preprocessor can make decisions based on it.
- */
-/* LONGSIZE:
- *	This symbol contains the value of sizeof(long) so that the C
- *	preprocessor can make decisions based on it.
- */
-/* SHORTSIZE:
- *	This symbol contains the value of sizeof(short) so that the C
- *	preprocessor can make decisions based on it.
- */
-#define INTSIZE $intsize		/**/
-#define LONGSIZE $longsize		/**/
-#define SHORTSIZE $shortsize		/**/
-
-/* MULTIARCH:
- *	This symbol, if defined, signifies that the build
- *	process will produce some binary files that are going to be
- *	used in a cross-platform environment.  This is the case for
- *	example with the NeXT "fat" binaries that contain executables
- *	for several CPUs.
- */
-#$multiarch MULTIARCH		/**/
-
-/* HAS_QUAD:
- *	This symbol, if defined, tells that there's a 64-bit integer type,
- *	Quad_t, and its unsigned counterpar, Uquad_t. QUADKIND will be one
- *	of QUAD_IS_INT, QUAD_IS_LONG, QUAD_IS_LONG_LONG, or QUAD_IS_INT64_T.
- */
-#$d_quad HAS_QUAD	/**/
-#ifdef HAS_QUAD
-#   define Quad_t $quadtype	/**/
-#   define Uquad_t $uquadtype	/**/
-#   define QUADKIND $quadkind	/**/
-#   define QUAD_IS_INT	1
-#   define QUAD_IS_LONG	2
-#   define QUAD_IS_LONG_LONG	3
-#   define QUAD_IS_INT64_T	4
-#endif
-
 /* HAS_ACCESSX:
  *	This symbol, if defined, indicates that the accessx routine is
  *	available to do extended access checks.
@@ -971,6 +930,27 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define OSNAME "$osname"		/**/
 #define OSVERS "$osvers"		/**/
 
+/* USE_CROSS_COMPILE:
+ *	This symbol, if defined, indicates that Perl is being cross-compiled.
+ */
+/* PERL_TARGETARCH:
+ *	This symbol, if defined, indicates the target architecture
+ *	Perl has been cross-compiled to.  Undefined if not a cross-compile.
+ */
+#ifndef USE_CROSS_COMPILE
+#$usecrosscompile	USE_CROSS_COMPILE	/**/
+#define	PERL_TARGETARCH	"$targetarch"	/**/
+#endif
+
+/* MULTIARCH:
+ *	This symbol, if defined, signifies that the build
+ *	process will produce some binary files that are going to be
+ *	used in a cross-platform environment.  This is the case for
+ *	example with the NeXT "fat" binaries that contain executables
+ *	for several CPUs.
+ */
+#$multiarch MULTIARCH		/**/
+
 /* MEM_ALIGNBYTES:
  *	This symbol contains the number of bytes required to align a
  *	double, or a long double when applicable. Usual values are 2,
@@ -981,12 +961,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #else
 #define MEM_ALIGNBYTES $alignbytes
 #endif
-
-/* PERL_RELOCATABLE_INC:
- *	This symbol, if defined, indicates that we'd like to relocate entries
- *	in @INC at run time based on the location of the perl binary.
- */
-#$userelocatableinc PERL_RELOCATABLE_INC		/**/
 
 /* ARCHLIB:
  *	This variable, if defined, holds the name of the directory in
@@ -1034,6 +1008,22 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #define BIN "$bin"	/**/
 #define BIN_EXP "$binexp"	/**/
+
+/* INTSIZE:
+ *	This symbol contains the value of sizeof(int) so that the C
+ *	preprocessor can make decisions based on it.
+ */
+/* LONGSIZE:
+ *	This symbol contains the value of sizeof(long) so that the C
+ *	preprocessor can make decisions based on it.
+ */
+/* SHORTSIZE:
+ *	This symbol contains the value of sizeof(short) so that the C
+ *	preprocessor can make decisions based on it.
+ */
+#define INTSIZE $intsize		/**/
+#define LONGSIZE $longsize		/**/
+#define SHORTSIZE $shortsize		/**/
 
 /* BYTEORDER:
  *	This symbol holds the hexadecimal constant defined in byteorder,
@@ -1467,6 +1457,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to ftell beyond 32 bits (useful for ILP32 hosts).
  */
 #$d_ftello HAS_FTELLO		/**/
+
+/* HAS_FUTIMES:
+ *	This symbol, if defined, indicates that the futimes routine is
+ *	available to change file descriptor time stamps with struct timevals.
+ */
+#$d_futimes HAS_FUTIMES		/**/
 
 /* Gconvert:
  *	This preprocessor macro is defined to convert a floating point
@@ -1958,6 +1954,18 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_madvise HAS_MADVISE		/**/
 
+/* HAS_MALLOC_SIZE:
+ *	This symbol, if defined, indicates that the malloc_size
+ *	routine is available for use.
+ */
+#$d_malloc_size HAS_MALLOC_SIZE		/**/
+
+/* HAS_MALLOC_GOOD_SIZE:
+ *	This symbol, if defined, indicates that the malloc_good_size
+ *	routine is available for use.
+ */
+#$d_malloc_good_size HAS_MALLOC_GOOD_SIZE	/**/
+
 /* HAS_MEMCHR:
  *	This symbol, if defined, indicates that the memchr routine is available
  *	to locate characters within a C string.
@@ -2307,6 +2315,23 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define Siglongjmp(buf,retval) longjmp((buf),(retval))
 #endif
 
+/* USE_SITECUSTOMIZE:
+ *	This symbol, if defined, indicates that sitecustomize should
+ *	be used.
+ */
+#$usesitecustomize	USE_SITECUSTOMIZE		/**/
+
+/* HAS_SNPRINTF:
+ *	This symbol, if defined, indicates that the snprintf () library
+ *	function is available for use.
+ */
+/* HAS_VSNPRINTF:
+ *	This symbol, if defined, indicates that the vsnprintf () library
+ *	function is available for use.
+ */
+#$d_snprintf HAS_SNPRINTF	/**/
+#$d_vsnprintf HAS_VSNPRINTF	/**/
+
 /* HAS_SOCKET:
  *	This symbol, if defined, indicates that the BSD socket interface is
  *	supported.
@@ -2525,18 +2550,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #$d_strerror_r HAS_STRERROR_R	   /**/
 #define STRERROR_R_PROTO $strerror_r_proto	   /**/
 
-/* HAS_STRLCAT:
- *	This symbol, if defined, indicates that the strlcat () routine is
- *	available to do string concatenation.
- */
-#$d_strlcat HAS_STRLCAT		/**/
-
-/* HAS_STRLCPY:
- *	This symbol, if defined, indicates that the strlcpy () routine is
- *	available to do string copying.
- */
-#$d_strlcpy HAS_STRLCPY		/**/
-
 /* HAS_STRTOLD:
  *	This symbol, if defined, indicates that the strtold routine is
  *	available to convert strings to long doubles.
@@ -2646,6 +2659,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	(effectively: whether either of them is NaN)
  */
 #$d_unordered HAS_UNORDERED		/**/
+
+/* HAS_UNSETENV:
+ *	This symbol, if defined, indicates that the unsetenv () routine is
+ *	available for use.
+ */
+#$d_unsetenv HAS_UNSETENV		/**/
 
 /* HAS_USTAT:
  *	This symbol, if defined, indicates that the ustat system call is
@@ -3161,6 +3180,22 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_perl_otherlibdirs PERL_OTHERLIBDIRS "$otherlibdirs"		/**/
 
+/* HAS_QUAD:
+ *	This symbol, if defined, tells that there's a 64-bit integer type,
+ *	Quad_t, and its unsigned counterpar, Uquad_t. QUADKIND will be one
+ *	of QUAD_IS_INT, QUAD_IS_LONG, QUAD_IS_LONG_LONG, or QUAD_IS_INT64_T.
+ */
+#$d_quad HAS_QUAD	/**/
+#ifdef HAS_QUAD
+#   define Quad_t $quadtype	/**/
+#   define Uquad_t $uquadtype	/**/
+#   define QUADKIND $quadkind	/**/
+#   define QUAD_IS_INT	1
+#   define QUAD_IS_LONG	2
+#   define QUAD_IS_LONG_LONG	3
+#   define QUAD_IS_INT64_T	4
+#endif
+
 /* IVTYPE:
  *	This symbol defines the C type used for Perl's IV.
  */
@@ -3235,6 +3270,10 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	This symbol contains the number of bits a variable of type NVTYPE
  *	can preserve of a variable of type UVTYPE.
  */
+/* NV_ZERO_IS_ALLBITS_ZERO:
+ *	This symbol, if defined, indicates that a variable of type NVTYPE
+ *	stores 0.0 in memory as all bits zero.
+ */
 #define	IVTYPE		$ivtype		/**/
 #define	UVTYPE		$uvtype		/**/
 #define	I8TYPE		$i8type		/**/
@@ -3263,6 +3302,7 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define	NVSIZE		$nvsize		/**/
 #$d_nv_preserves_uv	NV_PRESERVES_UV
 #define	NV_PRESERVES_UV_BITS	$nv_preserves_uv_bits
+#$d_nv_zero_is_allbits_zero	NV_ZERO_IS_ALLBITS_ZERO
 #if UVSIZE == 8
 #   ifdef BYTEORDER
 #       if BYTEORDER == 0x1234
@@ -3469,12 +3509,6 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define SITELIB "$sitelib"		/**/
 #define SITELIB_EXP "$sitelibexp"		/**/
 #define SITELIB_STEM "$sitelib_stem"		/**/
-
-/* USE_SITECUSTOMIZE:
- *    This symbol, if defined, indicates that sitecustomize should
- *    be used.
- */
-#$d_sitecustomize     USE_SITECUSTOMIZE               /**/
 
 /* Size_t_size:
  *	This symbol holds the size of a Size_t in bytes.
@@ -3707,17 +3741,34 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #define M_VOID			/* Xenix strikes again */
 #endif
 
-/* HASATTRIBUTE:
- *	This symbol indicates the C compiler can check for function attributes,
- *	such as printf formats. This is normally only supported by GNU cc.
+/* HASATTRIBUTE_FORMAT:
+ *	Can we handle GCC attribute for checking printf-style formats
  */
-#$d_attribut HASATTRIBUTE 	/**/
-#ifndef HASATTRIBUTE
-#ifdef __attribute__
-#undef __attribute__
-#endif
-#define __attribute__(_arg_)
-#endif
+/* HASATTRIBUTE_MALLOC:
+ *	Can we handle GCC attribute for malloc-style functions.
+ */
+/* HASATTRIBUTE_NONNULL:
+ *	Can we handle GCC attribute for nonnull function parms.
+ */
+/* HASATTRIBUTE_NORETURN:
+ *	Can we handle GCC attribute for functions that do not return
+ */
+/* HASATTRIBUTE_PURE:
+ *	Can we handle GCC attribute for pure functions
+ */
+/* HASATTRIBUTE_UNUSED:
+ *	Can we handle GCC attribute for unused variables and arguments
+ */
+/* HASATTRIBUTE_WARN_UNUSED_RESULT:
+ *	Can we handle GCC attribute for warning on unused results
+ */
+#$d_attribute_format HASATTRIBUTE_FORMAT	/**/
+#$d_attribute_noreturn HASATTRIBUTE_NORETURN	/**/
+#$d_attribute_malloc HASATTRIBUTE_MALLOC	/**/
+#$d_attribute_nonnull HASATTRIBUTE_NONNULL	/**/
+#$d_attribute_pure HASATTRIBUTE_PURE	/**/
+#$d_attribute_unused HASATTRIBUTE_UNUSED	/**/
+#$d_attribute_warn_unused_result HASATTRIBUTE_WARN_UNUSED_RESULT	/**/
 
 /* HAS_CRYPT:
  *	This symbol, if defined, indicates that the crypt routine is available
@@ -3803,23 +3854,17 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #define SH_PATH "$sh"  /**/
 
-/* USE_CROSS_COMPILE:
- *	This symbol, if defined, indicates that Perl is being cross-compiled.
- */
-/* PERL_TARGETARCH:
- *	This symbol, if defined, indicates the target architecture
- *	Perl has been cross-compiled to.  Undefined if not a cross-compile.
- */
-#ifndef USE_CROSS_COMPILE
-#$usecrosscompile	USE_CROSS_COMPILE	/**/
-#define	PERL_TARGETARCH	"$targetarch"	/**/
-#endif
-
 /* HAS_AINTL:
  *	This symbol, if defined, indicates that the aintl routine is
  *	available.  If copysignl is also present we can emulate modfl.
  */
 #$d_aintl HAS_AINTL		/**/
+
+/* HAS_CLEARENV:
+ *	This symbol, if defined, indicates that the clearenv () routine is
+ *	available for use.
+ */
+#$d_clearenv HAS_CLEARENV		/**/
 
 /* HAS_COPYSIGNL:
  *	This symbol, if defined, indicates that the copysignl routine is
@@ -3879,6 +3924,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_ilogbl HAS_ILOGBL		/**/
 
+/* LIBM_LIB_VERSION:
+ *	This symbol, if defined, indicates that libm exports _LIB_VERSION
+ *	and that math.h defines the enum to manipulate it.
+ */
+#$d_libm_lib_version LIBM_LIB_VERSION		/**/
+
 /* HAS_NL_LANGINFO:
  *	This symbol, if defined, indicates that the nl_langinfo routine is
  *	available to return local data.  You will also need <langinfo.h>
@@ -3934,6 +3985,14 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  */
 #$d_sockatmarkproto	HAS_SOCKATMARK_PROTO	/**/
 
+/* SPRINTF_RETURNS_STRLEN:
+ *	This variable defines whether sprintf returns the length of the string
+ *	(as per the ANSI spec). Some C libraries retain compatibility with
+ *	pre-ANSI C and return a pointer to the passed in buffer; for these
+ *	this variable will be undef.
+ */
+#$d_sprintf_returns_strlen SPRINTF_RETURNS_STRLEN	/**/
+
 /* HAS_SETRESGID_PROTO:
  *	This symbol, if defined, indicates that the system provides
  *	a prototype for the setresgid() function.  Otherwise, it is up
@@ -3955,6 +4014,18 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
  *	available to do time formatting.
  */
 #$d_strftime HAS_STRFTIME		/**/
+
+/* HAS_STRLCAT:
+ *	This symbol, if defined, indicates that the strlcat () routine is
+ *	available to do string concatenation.
+ */
+#$d_strlcat HAS_STRLCAT		/**/
+
+/* HAS_STRLCPY:
+ *	This symbol, if defined, indicates that the strlcpy () routine is
+ *	available to do string copying.
+ */
+#$d_strlcpy HAS_STRLCPY		/**/
 
 /* HAS_SYSCALL_PROTO:
  *	This symbol, if defined, indicates that the system provides
@@ -4007,6 +4078,12 @@ sed <<!GROK!THIS! >$CONFIG_H -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un
 #ifndef USE_FAST_STDIO
 #$usefaststdio	USE_FAST_STDIO		/**/
 #endif
+
+/* PERL_RELOCATABLE_INC:
+ *	This symbol, if defined, indicates that we'd like to relocate entries
+ *	in @INC at run time based on the location of the perl binary.
+ */
+#define PERL_RELOCATABLE_INC "$userelocatableinc" 		/**/
 
 /* HAS_CTERMID_R:
  *	This symbol, if defined, indicates that the ctermid_r routine

@@ -1,23 +1,28 @@
+# $Id: /local/schwern.org/CPAN/ExtUtils-MakeMaker/trunk/lib/ExtUtils/MakeMaker.pm 4535 2005-05-20T23:08:34.937906Z schwern  $
 package ExtUtils::MakeMaker;
 
 BEGIN {require 5.005_03;}
 
-$VERSION = '6.25';
-($Revision) = q$Revision: 1.147 $ =~ /Revision:\s+(\S+)/;
-
 require Exporter;
-use Config;
+use ExtUtils::MakeMaker::Config;
 use Carp ();
 use File::Path;
 
 use vars qw(
             @ISA @EXPORT @EXPORT_OK
-            $Revision $VERSION $Verbose %Config 
+            $VERSION $Verbose %Config 
             @Prepend_parent @Parent
             %Recognized_Att_Keys @Get_from_Config @MM_Sections @Overridable 
             $Filename
            );
+
+# Has to be on its own line with no $ after it to avoid being noticed by
+# the version control system
+use vars qw($Revision);
 use strict;
+
+$VERSION = '6.30_01';
+($Revision = q$Revision: 4535 $) =~ /Revision:\s+(\S+)/;
 
 @ISA = qw(Exporter);
 @EXPORT = qw(&WriteMakefile &writeMakefile $Verbose &prompt);
@@ -209,7 +214,7 @@ sub full_setup {
 
     INST_ARCHLIB INST_SCRIPT INST_BIN INST_LIB INST_MAN1DIR INST_MAN3DIR
     INSTALLDIRS
-    DESTDIR PREFIX
+    DESTDIR PREFIX INSTALLBASE
     PERLPREFIX      SITEPREFIX      VENDORPREFIX
     INSTALLPRIVLIB  INSTALLSITELIB  INSTALLVENDORLIB
     INSTALLARCHLIB  INSTALLSITEARCH INSTALLVENDORARCH
@@ -217,7 +222,7 @@ sub full_setup {
     INSTALLMAN1DIR          INSTALLMAN3DIR
     INSTALLSITEMAN1DIR      INSTALLSITEMAN3DIR
     INSTALLVENDORMAN1DIR    INSTALLVENDORMAN3DIR
-    INSTALLSCRIPT 
+    INSTALLSCRIPT   INSTALLSITESCRIPT  INSTALLVENDORSCRIPT
     PERL_LIB        PERL_ARCHLIB 
     SITELIBEXP      SITEARCHEXP 
 
@@ -266,9 +271,8 @@ sub full_setup {
  dynamic_lib static static_lib manifypods processPL
  installbin subdirs
  clean_subdirs clean realclean_subdirs realclean 
- metafile metafile_addtomanifest
- signature signature_addtomanifest
- dist_basics dist_core distdir dist_test dist_ci
+ metafile signature
+ dist_basics dist_core distdir dist_test dist_ci distmeta distsignature
  install force perldepend makefile staticmake test ppd
 
           ); # loses section ordering
@@ -1080,7 +1084,7 @@ INSTALLDIRS according to the following table:
   INST_ARCHLIB   INSTALLARCHLIB  INSTALLSITEARCH     INSTALLVENDORARCH
   INST_LIB       INSTALLPRIVLIB  INSTALLSITELIB      INSTALLVENDORLIB
   INST_BIN       INSTALLBIN      INSTALLSITEBIN      INSTALLVENDORBIN
-  INST_SCRIPT    INSTALLSCRIPT   INSTALLSCRIPT       INSTALLSCRIPT
+  INST_SCRIPT    INSTALLSCRIPT   INSTALLSITESCRIPT   INSTALLVENDORSCRIPT
   INST_MAN1DIR   INSTALLMAN1DIR  INSTALLSITEMAN1DIR  INSTALLVENDORMAN1DIR
   INST_MAN3DIR   INSTALLMAN3DIR  INSTALLSITEMAN3DIR  INSTALLVENDORMAN3DIR
 
@@ -1541,7 +1545,7 @@ Defaults to $Config{installprivlib}.
 =item INSTALLSCRIPT
 
 Used by 'make install' which copies files from INST_SCRIPT to this
-directory.
+directory if INSTALLDIRS=perl.
 
 =item INSTALLSITEARCH
 
@@ -1568,6 +1572,11 @@ $(SITEPREFIX)/man/man$(MAN*EXT).
 
 If set to 'none', no man pages will be installed.
 
+=item INSTALLSITESCRIPT
+
+Used by 'make install' which copies files from INST_SCRIPT to this
+directory if INSTALLDIRS is set to site (default).
+
 =item INSTALLVENDORARCH
 
 Used by 'make install', which copies files from INST_ARCHLIB to this
@@ -1591,6 +1600,11 @@ These directories get the man pages at 'make install' time if
 INSTALLDIRS=vendor.  Defaults to $(VENDORPREFIX)/man/man$(MAN*EXT).
 
 If set to 'none', no man pages will be installed.
+
+=item INSTALLVENDORSCRIPT
+
+Used by 'make install' which copies files from INST_SCRIPT to this
+directory if INSTALLDIRS is set to is set to vendor.
 
 =item INST_ARCHLIB
 
@@ -1868,18 +1882,39 @@ See also L<MM_Unix/perm_rwx>.
 
 =item PL_FILES
 
-Ref to hash of files to be processed as perl programs. MakeMaker
-will default to any found *.PL file (except Makefile.PL) being keys
-and the basename of the file being the value. E.g.
+MakeMaker can run programs to generate files for you at build time.
+By default any file named *.PL (except Makefile.PL and Build.PL) in
+the top level directory will be assumed to be a Perl program and run
+passing its own basename in as an argument.  For example...
 
-  {'foobar.PL' => 'foobar'}
+    perl foo.PL foo
 
-The *.PL files are expected to produce output to the target files
-themselves. If multiple files can be generated from the same *.PL
-file then the value in the hash can be a reference to an array of
-target file names. E.g.
+This behavior can be overridden by supplying your own set of files to
+search.  PL_FILES accepts a hash ref, the key being the file to run
+and the value is passed in as the first argument when the PL file is run.
 
-  {'foobar.PL' => ['foobar1','foobar2']}
+    PL_FILES => {'bin/foobar.PL' => 'bin/foobar'}
+
+Would run bin/foobar.PL like this:
+
+    perl bin/foobar.PL bin/foobar
+
+If multiple files from one program are desired an array ref can be used.
+
+    PL_FILES => {'bin/foobar.PL' => [qw(bin/foobar1 bin/foobar2)]}
+
+In this case the program will be run multiple times using each target file.
+
+    perl bin/foobar.PL bin/foobar1
+    perl bin/foobar.PL bin/foobar2
+
+PL files are normally run B<after> pm_to_blib and include INST_LIB and
+INST_ARCH in its C<@INC> so the just built modules can be
+accessed... unless the PL file is making a module (or anything else in
+PM) in which case it is run B<before> pm_to_blib and does not include
+INST_LIB and INST_ARCH in its C<@INC>.  This apparently odd behavior
+is there for backwards compatibility (and its somewhat DWIM).
+
 
 =item PM
 
@@ -1912,7 +1947,7 @@ done.  For instance, you would need to say:
 
   {'PM_FILTER' => 'grep -v \\"^\\#\\"'}
 
-to remove all the leading coments on the fly during the build.  The
+to remove all the leading comments on the fly during the build.  The
 extra \\ are necessary, unfortunately, because this variable is interpolated
 within the context of a Perl program built on the command line, and double
 quotes are what is used with the -e switch to build that command line.  The
@@ -2007,8 +2042,9 @@ Overridable by PREFIX
 
 =item SIGN
 
-When true, perform the generation and addition to the MANIFEST of
-the SIGNATURE file during 'make distdir', via 'cpansign -s'.
+When true, perform the generation and addition to the MANIFEST of the
+SIGNATURE file in the distdir during 'make distdir', via 'cpansign
+-s'.
 
 Note that you need to install the Module::Signature module to
 perform this operation.
@@ -2064,7 +2100,7 @@ MakeMaker object. The following lines will be parsed o.k.:
 
     $VERSION = '1.00';
     *VERSION = \'1.01';
-    $VERSION = sprintf "%d.%03d", q$Revision: 1.147 $ =~ /(\d+)/g;
+    $VERSION = sprintf "%d.%03d", q$Revision: 4535 $ =~ /(\d+)/g;
     $FOO::VERSION = '1.10';
     *FOO::VERSION = \'1.11';
     our $VERSION = 1.2.3;       # new for perl5.6.0 
@@ -2135,7 +2171,7 @@ passed to the method as a hash.
 
 =item depend
 
-  {ANY_TARGET => ANY_DEPENDECY, ...}
+  {ANY_TARGET => ANY_DEPENDENCY, ...}
 
 (ANY_TARGET must not be given a double-colon rule by MakeMaker.)
 
@@ -2243,13 +2279,13 @@ Some of the most common mistakes:
 
 =over 2
 
-=item C<<MAN3PODS => ' '>>
+=item C<< MAN3PODS => ' ' >>
 
-This is commonly used to supress the creation of man pages.  MAN3PODS
+This is commonly used to suppress the creation of man pages.  MAN3PODS
 takes a hash ref not a string, but the above worked by accident in old
 versions of MakeMaker.
 
-The correct code is C<<MAN3PODS => { }>>.
+The correct code is C<< MAN3PODS => { } >>.
 
 =back
 
@@ -2309,9 +2345,9 @@ Copies all the files that are in the MANIFEST file to a newly created
 directory with the name C<$(DISTNAME)-$(VERSION)>. If that directory
 exists, it will be removed first.
 
-Additionally, it will create a META.yml module meta-data file and add
-this to your MANFIEST.  You can shut this behavior off with the NO_META
-flag.
+Additionally, it will create a META.yml module meta-data file in the
+distdir and add this to the distdir's MANFIEST.  You can shut this
+behavior off with the NO_META flag.
 
 =item   make disttest
 
@@ -2454,6 +2490,10 @@ is processed before any actual command line arguments are processed.
 
 If set to a true value then MakeMaker's prompt function will
 always return the default without waiting for user input.
+
+=item PERL_CORE
+
+Same as the PERL_CORE parameter.  The parameter overrides this.
 
 =back
 

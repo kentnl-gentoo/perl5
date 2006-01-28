@@ -8,7 +8,7 @@ BEGIN {
 $| = 1;
 umask 0;
 $xref = \ "";
-$runme = ($^O eq 'VMS' ? 'MCR ' : '') . $^X;
+$runme = $^X;
 @a = (1..5);
 %h = (1..6);
 $aref = \@a;
@@ -265,7 +265,7 @@ open BLAH, "<non-existent"	# open
 fileno STDERR			# fileno
 umask 0				# umask
 select STDOUT			# sselect
-select "","","",0		# select
+select undef,undef,undef,0	# select
 getc OP				# getc
 '???'				# read
 '???'				# sysread

@@ -1073,7 +1073,7 @@ PerlLIOUnlink(struct IPerlLIO* piPerl, const char *filename)
 }
 
 int
-PerlLIOUtime(struct IPerlLIO* piPerl, char *filename, struct utimbuf *times)
+PerlLIOUtime(struct IPerlLIO* piPerl, const char *filename, struct utimbuf *times)
 {
     return win32_utime(filename, times);
 }
@@ -1144,7 +1144,7 @@ PerlDirClose(struct IPerlDir* piPerl, DIR *dirp)
 }
 
 DIR*
-PerlDirOpen(struct IPerlDir* piPerl, char *filename)
+PerlDirOpen(struct IPerlDir* piPerl, const char *filename)
 {
     return win32_opendir(filename);
 }
@@ -1758,7 +1758,7 @@ restart:
 	    PL_curstash = PL_defstash;
 	    if (PL_endav && !PL_minus_c)
 		call_list(oldscope, PL_endav);
-	    status = STATUS_NATIVE_EXPORT;
+	    status = STATUS_EXIT;
 	    break;
 	case 3:
 	    if (PL_restartop) {
@@ -2228,7 +2228,7 @@ CPerlHost::GetChildDir(void)
     dTHX;
     int length;
     char* ptr;
-    New(0, ptr, MAX_PATH+1, char);
+    Newx(ptr, MAX_PATH+1, char);
     if(ptr) {
 	m_pvDir->GetCurrentDirectoryA(MAX_PATH+1, ptr);
 	length = strlen(ptr);
@@ -2275,7 +2275,7 @@ CPerlHost::CreateLocalEnvironmentStrings(VDir &vDir)
     // add the additional space used by changes made to the environment
     dwSize += CalculateEnvironmentSpace();
 
-    New(1, lpStr, dwSize, char);
+    Newx(lpStr, dwSize, char);
     lpPtr = lpStr;
     if(lpStr != NULL) {
 	// build the local environment
@@ -2424,13 +2424,7 @@ CPerlHost::Chdir(const char *dirname)
 	errno = ENOENT;
 	return -1;
     }
-    if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
-	A2WHELPER(dirname, wBuffer, sizeof(wBuffer));
-	ret = m_pvDir->SetCurrentDirectoryW(wBuffer);
-    }
-    else
-	ret = m_pvDir->SetCurrentDirectoryA((char*)dirname);
+    ret = m_pvDir->SetCurrentDirectoryA((char*)dirname);
     if(ret < 0) {
 	errno = ENOENT;
     }

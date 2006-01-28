@@ -12,7 +12,7 @@ package Math::BigFloat;
 #   _a	: accuracy
 #   _p	: precision
 
-$VERSION = '1.49';
+$VERSION = '1.51';
 require 5.005;
 
 require Exporter;
@@ -47,7 +47,7 @@ $upgrade = undef;
 $downgrade = undef;
 # the package we are using for our private parts, defaults to:
 # Math::BigInt->config()->{lib}
-my $MBI = 'Math::BigInt::Calc';
+my $MBI = 'Math::BigInt::FastCalc';
 
 # are NaNs ok? (otherwise it dies when encountering an NaN) set w/ config()
 $_trap_nan = 0;
@@ -135,16 +135,12 @@ sub new
   # else: got a string
 
   # handle '+inf', '-inf' first
-  if ($wanted =~ /^[+-]?inf$/)
+  if ($wanted =~ /^[+-]?inf\z/)
     {
     return $downgrade->new($wanted) if $downgrade;
 
-    $self->{_e} = $MBI->_zero();
-    $self->{_es} = '+';
-    $self->{_m} = $MBI->_zero();
-    $self->{sign} = $wanted;
-    $self->{sign} = '+inf' if $self->{sign} eq 'inf';
-    return $self->bnorm();
+    $self->{sign} = $wanted;		# set a default sign for bstr()
+    return $self->binf($wanted);
     }
 
   # shortcut for simple forms like '12' that neither have trailing nor leading
@@ -201,13 +197,14 @@ sub new
         my $z = $MBI->_new($zeros);
         # turn '120e2' into '12e3'
         $MBI->_rsft ( $self->{_m}, $z, 10);
-	_e_add ( $self->{_e}, $z, $self->{_es}, '+');
+        ($self->{_e}, $self->{_es}) =
+	  _e_add ( $self->{_e}, $z, $self->{_es}, '+');
         }
       }
     $self->{sign} = $$mis;
 
     # for something like 0Ey, set y to 1, and -0 => +0
-    # Check $$miv for beeing '0' and $$mfv eq '', because otherwise _m could not
+    # Check $$miv for being '0' and $$mfv eq '', because otherwise _m could not
     # have become 0. That's faster than to call $MBI->_is_zero().
     $self->{sign} = '+', $self->{_e} = $MBI->_one()
      if $$miv eq '0' and $$mfv eq '';
@@ -1343,13 +1340,18 @@ sub bdiv
 
   # already handled inf/NaN/-inf above:
 
+  # check that $y is not 1 nor -1 and cache the result:
+  my $y_not_one = !($MBI->_is_zero($y->{_e}) && $MBI->_is_one($y->{_m}));
+
+  # flipping the sign of $y will also flip the sign of $x for the special
+  # case of $x->bsub($x); so we can catch it below:
   my $xsign = $x->{sign};
   $y->{sign} =~ tr/+-/-+/;
-  my $y_not_one = !$y->is_one();	# cache this result
+
   if ($xsign ne $x->{sign})
     {
     # special case of $x /= $x results in 1
-    $x->bone();
+    $x->bone();			# "fixes" also sign of $y, since $x is $y
     }
   else
     {
@@ -1443,7 +1445,11 @@ sub bmod
     return $x->bnan() if $x->is_zero();
     return $x;
     }
-  return $x->bzero() if $y->is_one() || $x->is_zero();
+
+  return $x->bzero() if $x->is_zero()
+ || ($x->is_int() &&
+  # check that $y == +1 or $y == -1:
+    ($MBI->_is_zero($y->{_e}) && $MBI->_is_one($y->{_m})));
 
   my $cmp = $x->bacmp($y);			# equal or $x < $y?
   return $x->bzero($a,$p) if $cmp == 0;		# $x == $y => result 0
@@ -2551,7 +2557,7 @@ Math::BigFloat - Arbitrary size floating point math package
 
   # The following all modify their first argument. If you want to preserve
   # $x, use $z = $x->copy()->bXXX($y); See under L<CAVEATS> for why this is
-  # neccessary when mixing $a = $b assigments with non-overloaded math.
+  # necessary when mixing $a = $b assignments with non-overloaded math.
  
   # set 
   $x->bzero();			# set $i to 0
@@ -2626,7 +2632,7 @@ Math::BigFloat - Arbitrary size floating point math package
 
 =head1 DESCRIPTION
 
-All operators (inlcuding basic math operations) are overloaded if you
+All operators (including basic math operations) are overloaded if you
 declare your big floating point numbers as
 
   $i = new Math::BigFloat '12_3.456_789_123_456_789E-2';
@@ -2659,7 +2665,7 @@ C</^[+-]\d*\.\d+E[+-]?\d+$/>
 
 =back
 
-all with optional leading and trailing zeros and/or spaces. Additonally,
+all with optional leading and trailing zeros and/or spaces. Additionally,
 numbers are allowed to have an underscore between any two digits.
 
 Empty strings as well as other illegal numbers results in 'NaN'.
@@ -2716,28 +2722,27 @@ This might change in the future, so do not depend on it.
 
 See also: L<Rounding|Rounding>.
 
-Math::BigFloat supports both precision and accuracy. For a full documentation,
-examples and tips on these topics please see the large section in
-L<Math::BigInt>.
+Math::BigFloat supports both precision (rounding to a certain place before or
+after the dot) and accuracy (rounding to a certain number of digits). For a
+full documentation, examples and tips on these topics please see the large
+section about rounding in L<Math::BigInt>.
 
-Since things like sqrt(2) or 1/3 must presented with a limited precision lest
-a operation consumes all resources, each operation produces no more than
-the requested number of digits.
+Since things like C<sqrt(2)> or C<1 / 3> must presented with a limited
+accuracy lest a operation consumes all resources, each operation produces
+no more than the requested number of digits.
 
-Please refer to BigInt's documentation for the precedence rules of which
-accuracy/precision setting will be used.
-
-If there is no gloabl precision set, B<and> the operation inquestion was not
-called with a requested precision or accuracy, B<and> the input $x has no
-accuracy or precision set, then a fallback parameter will be used. For
-historical reasons, it is called C<div_scale> and can be accessed via:
+If there is no gloabl precision or accuracy set, B<and> the operation in
+question was not called with a requested precision or accuracy, B<and> the
+input $x has no accuracy or precision set, then a fallback parameter will
+be used. For historical reasons, it is called C<div_scale> and can be accessed
+via:
 
 	$d = Math::BigFloat->div_scale();		# query
 	Math::BigFloat->div_scale($n);			# set to $n digits
 
-The default value is 40 digits.
+The default value for C<div_scale> is 40.
 
-In case the result of one operation has more precision than specified,
+In case the result of one operation has more digits than specified,
 it is rounded. The rounding mode taken is either the default mode, or the one
 supplied to the operation after the I<scale>:
 
@@ -2751,11 +2756,11 @@ supplied to the operation after the I<scale>:
 
 Note that C<< Math::BigFloat->accuracy() >> and C<< Math::BigFloat->precision() >>
 set the global variables, and thus B<any> newly created number will be subject
-to the global rounding. This means that in the examples above, the C<3>
-as argument to C<bdiv()> will also get an accuracy of B<5>.
+to the global rounding B<immediately>. This means that in the examples above, the
+C<3> as argument to C<bdiv()> will also get an accuracy of B<5>.
 
 It is less confusing to either calculate the result fully, and afterwards
-round it explicitely, or use the additional parameters to the math
+round it explicitly, or use the additional parameters to the math
 functions like so:
 
 	use Math::BigFloat;	
@@ -2821,9 +2826,48 @@ C<as_number()>:
 	$x = Math::BigFloat->new(2.5);
 	$y = $x->as_number('odd');	# $y = 3
 
-=head1 EXAMPLES
- 
-  # not ready yet
+=head1 METHODS
+
+=head2 accuracy
+
+        $x->accuracy(5);                # local for $x
+        CLASS->accuracy(5);             # global for all members of CLASS
+                                        # Note: This also applies to new()!
+
+        $A = $x->accuracy();            # read out accuracy that affects $x
+        $A = CLASS->accuracy();         # read out global accuracy
+
+Set or get the global or local accuracy, aka how many significant digits the
+results have. If you set a global accuracy, then this also applies to new()!
+
+Warning! The accuracy I<sticks>, e.g. once you created a number under the
+influence of C<< CLASS->accuracy($A) >>, all results from math operations with
+that number will also be rounded.
+
+In most cases, you should probably round the results explicitly using one of
+L<round()>, L<bround()> or L<bfround()> or by passing the desired accuracy
+to the math operation as additional parameter:
+
+        my $x = Math::BigInt->new(30000);
+        my $y = Math::BigInt->new(7);
+        print scalar $x->copy()->bdiv($y, 2);           # print 4300
+        print scalar $x->copy()->bdiv($y)->bround(2);   # print 4300
+
+=head2 precision()
+
+        $x->precision(-2);      # local for $x, round at the second digit right of the dot
+        $x->precision(2);       # ditto, round at the second digit left of the dot
+
+        CLASS->precision(5);    # Global for all members of CLASS
+                                # This also applies to new()!
+        CLASS->precision(-5);   # ditto
+
+        $P = CLASS->precision();        # read out global precision
+        $P = $x->precision();           # read out precision that affects $x
+
+Note: You probably want to use L<accuracy()> instead. With L<accuracy> you
+set the number of digits each result should have, with L<precision> you
+set the place where to round!
 
 =head1 Autocreating constants
 
@@ -2860,7 +2904,7 @@ Math::BigInt::Bar, and when this also fails, revert to Math::BigInt::Calc:
 	use Math::BigFloat lib => 'Foo,Math::BigInt::Bar';
 
 Calc.pm uses as internal format an array of elements of some decimal base
-(usually 1e7, but this might be differen for some systems) with the least
+(usually 1e7, but this might be different for some systems) with the least
 significant digit first, while BitVect.pm uses a bit vector of base 2, most
 significant bit first. Other modules might use even different means of
 representing the numbers. See the respective module documentation for further
@@ -2881,7 +2925,7 @@ It is also possible to just require Math::BigFloat:
 
 	require Math::BigFloat;
 
-This will load the neccessary things (like BigInt) when they are needed, and
+This will load the necessary things (like BigInt) when they are needed, and
 automatically.
 
 Use the lib, Luke! And see L<Using Math::BigInt::Lite> for more details than
@@ -2927,9 +2971,9 @@ words, Math::BigFloat will try to retain previously loaded libs when you
 don't specify it onem but if you specify one, it will try to load them.
 
 Actually, the lib loading order would be "Bar,Baz,Calc", and then
-"Foo,Bar,Baz,Calc", but independend of which lib exists, the result is the
+"Foo,Bar,Baz,Calc", but independent of which lib exists, the result is the
 same as trying the latter load alone, except for the fact that one of Bar or
-Baz might be loaded needlessly in an intermidiate step (and thus hang around
+Baz might be loaded needlessly in an intermediate step (and thus hang around
 and waste memory). If neither Bar nor Baz exist (or don't work/compile), they
 will still be tried to be loaded, but this is not as time/memory consuming as
 actually loading one of them. Still, this type of usage is not recommended due
@@ -3002,7 +3046,7 @@ The following will probably not do what you expect:
 	print $c->bdiv(123.456),"\n";
 
 It prints both quotient and reminder since print works in list context. Also,
-bdiv() will modify $c, so be carefull. You probably want to use
+bdiv() will modify $c, so be careful. You probably want to use
 	
 	print $c / 123.456,"\n";
 	print scalar $c->bdiv(123.456),"\n";  # or if you want to modify $c
@@ -3030,6 +3074,49 @@ C<badd()> etc. The first will modify $x, the second one won't:
 	print bpow($x,$i),"\n"; 	# modify $x
 	print $x->bpow($i),"\n"; 	# ditto
 	print $x ** $i,"\n";		# leave $x alone 
+
+=item precision() vs. accuracy()
+
+A common pitfall is to use L<precision()> when you want to round a result to
+a certain number of digits:
+
+	use Math::BigFloat;
+
+	Math::BigFloat->precision(4);		# does not do what you think it does
+	my $x = Math::BigFloat->new(12345);	# rounds $x to "12000"!
+	print "$x\n";				# print "12000"
+	my $y = Math::BigFloat->new(3);		# rounds $y to "0"!
+	print "$y\n";				# print "0"
+	$z = $x / $y;				# 12000 / 0 => NaN!
+	print "$z\n";
+	print $z->precision(),"\n";		# 4
+
+Replacing L<precision> with L<accuracy> is probably not what you want, either:
+
+	use Math::BigFloat;
+
+	Math::BigFloat->accuracy(4);		# enables global rounding:
+	my $x = Math::BigFloat->new(123456);	# rounded immediately to "12350"
+	print "$x\n";				# print "123500"
+	my $y = Math::BigFloat->new(3);		# rounded to "3
+	print "$y\n";				# print "3"
+	print $z = $x->copy()->bdiv($y),"\n";	# 41170
+	print $z->accuracy(),"\n";		# 4
+
+What you want to use instead is:
+
+	use Math::BigFloat;
+
+	my $x = Math::BigFloat->new(123456);	# no rounding
+	print "$x\n";				# print "123456"
+	my $y = Math::BigFloat->new(3);		# no rounding
+	print "$y\n";				# print "3"
+	print $z = $x->copy()->bdiv($y,4),"\n";	# 41150
+	print $z->accuracy(),"\n";		# undef
+
+In addition to computing what you expected, the last example also does B<not>
+"taint" the result with an accuracy or precision setting, which would
+influence any further operation.
 
 =back
 

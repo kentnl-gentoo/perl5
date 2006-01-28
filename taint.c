@@ -1,7 +1,7 @@
 /*    taint.c
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -24,24 +24,23 @@
 void
 Perl_taint_proper(pTHX_ const char *f, const char *s)
 {
-    const char *ug;
-
 #if defined(HAS_SETEUID) && defined(DEBUGGING)
+    dVAR;
 #   if Uid_t_size == 1
     {
-	 UV  uid = PL_uid;
-	 UV euid = PL_euid;
+	const UV  uid = PL_uid;
+	const UV euid = PL_euid;
 
-	 DEBUG_u(PerlIO_printf(Perl_debug_log,
+	DEBUG_u(PerlIO_printf(Perl_debug_log,
 			       "%s %d %"UVuf" %"UVuf"\n",
 			       s, PL_tainted, uid, euid));
     }
 #   else
     {
-	 IV  uid = PL_uid;
-	 IV euid = PL_euid;
+	const IV  uid = PL_uid;
+	const IV euid = PL_euid;
 
-	 DEBUG_u(PerlIO_printf(Perl_debug_log,
+	DEBUG_u(PerlIO_printf(Perl_debug_log,
 			       "%s %d %"IVdf" %"IVdf"\n",
 			       s, PL_tainted, uid, euid));
     }
@@ -49,6 +48,8 @@ Perl_taint_proper(pTHX_ const char *f, const char *s)
 #endif
 
     if (PL_tainted) {
+	const char *ug;
+
 	if (!f)
 	    f = PL_no_security;
 	if (PL_euid != PL_uid)
@@ -72,10 +73,11 @@ Perl_taint_proper(pTHX_ const char *f, const char *s)
 void
 Perl_taint_env(pTHX)
 {
+    dVAR;
     SV** svp;
     MAGIC* mg;
-    const char** e;
-    static const char* misc_env[] = {
+    const char* const *e;
+    static const char* const misc_env[] = {
 	"IFS",		/* most shells' inter-field separators */
 	"CDPATH",	/* ksh dain bramage #1 */
 	"ENV",		/* ksh dain bramage #2 */
@@ -91,7 +93,7 @@ Perl_taint_env(pTHX)
     if (!GvHV(PL_envgv) || !(SvRMAGICAL(GvHV(PL_envgv))
 	    && mg_find((SV*)GvHV(PL_envgv), PERL_MAGIC_env))) {
 	const bool was_tainted = PL_tainted;
-        const char *name = GvENAME(PL_envgv);
+	const char * const name = GvENAME(PL_envgv);
 	PL_tainted = TRUE;
 	if (strEQ(name,"ENV"))
 	    /* hash alias */
@@ -107,11 +109,12 @@ Perl_taint_env(pTHX)
     {
     int i = 0;
     char name[10 + TYPE_DIGITS(int)] = "DCL$PATH";
+    STRLEN len = 8; /* strlen(name)  */
 
     while (1) {
 	if (i)
-	    (void)sprintf(name,"DCL$PATH;%d", i);
-	svp = hv_fetch(GvHVn(PL_envgv), name, strlen(name), FALSE);
+	    len = my_sprintf(name,"DCL$PATH;%d", i);
+	svp = hv_fetch(GvHVn(PL_envgv), name, len, FALSE);
 	if (!svp || *svp == &PL_sv_undef)
 	    break;
 	if (SvTAINTED(*svp)) {
@@ -127,7 +130,7 @@ Perl_taint_env(pTHX)
   }
 #endif /* VMS */
 
-    svp = hv_fetch(GvHVn(PL_envgv),"PATH",4,FALSE);
+    svp = hv_fetchs(GvHVn(PL_envgv),"PATH",FALSE);
     if (svp && *svp) {
 	if (SvTAINTED(*svp)) {
 	    TAINT;
@@ -141,12 +144,12 @@ Perl_taint_env(pTHX)
 
 #ifndef VMS
     /* tainted $TERM is okay if it contains no metachars */
-    svp = hv_fetch(GvHVn(PL_envgv),"TERM",4,FALSE);
+    svp = hv_fetchs(GvHVn(PL_envgv),"TERM",FALSE);
     if (svp && *svp && SvTAINTED(*svp)) {
-	STRLEN n_a;
+	STRLEN len;
 	const bool was_tainted = PL_tainted;
-	char *t = SvPV(*svp, n_a);
-	char *e = t + n_a;
+	const char *t = SvPV_const(*svp, len);
+	const char * const e = t + len;
 	PL_tainted = was_tainted;
 	if (t < e && isALNUM(*t))
 	    t++;
@@ -160,10 +163,20 @@ Perl_taint_env(pTHX)
 #endif /* !VMS */
 
     for (e = misc_env; *e; e++) {
-	svp = hv_fetch(GvHVn(PL_envgv), *e, strlen(*e), FALSE);
+	SV * const * const svp = hv_fetch(GvHVn(PL_envgv), *e, strlen(*e), FALSE);
 	if (svp && *svp != &PL_sv_undef && SvTAINTED(*svp)) {
 	    TAINT;
 	    taint_proper("Insecure $ENV{%s}%s", *e);
 	}
     }
 }
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

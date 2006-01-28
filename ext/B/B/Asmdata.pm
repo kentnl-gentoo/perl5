@@ -1,3 +1,4 @@
+# -#- buffer-read-only: t -#-
 #
 #      Copyright (c) 1996-1999 Malcolm Beattie
 #
@@ -88,93 +89,91 @@ $insn_data{av_pushx} = [61, \&PUT_svindex, "GET_svindex"];
 $insn_data{av_push} = [62, \&PUT_svindex, "GET_svindex"];
 $insn_data{xav_fill} = [63, \&PUT_PADOFFSET, "GET_PADOFFSET"];
 $insn_data{xav_max} = [64, \&PUT_PADOFFSET, "GET_PADOFFSET"];
-$insn_data{xav_flags} = [65, \&PUT_U8, "GET_U8"];
-$insn_data{xhv_riter} = [66, \&PUT_I32, "GET_I32"];
-$insn_data{xhv_name} = [67, \&PUT_pvindex, "GET_pvindex"];
-$insn_data{xhv_pmroot} = [68, \&PUT_opindex, "GET_opindex"];
-$insn_data{hv_store} = [69, \&PUT_svindex, "GET_svindex"];
-$insn_data{sv_magic} = [70, \&PUT_U8, "GET_U8"];
-$insn_data{mg_obj} = [71, \&PUT_svindex, "GET_svindex"];
-$insn_data{mg_private} = [72, \&PUT_U16, "GET_U16"];
-$insn_data{mg_flags} = [73, \&PUT_U8, "GET_U8"];
-$insn_data{mg_name} = [74, \&PUT_pvcontents, "GET_pvcontents"];
-$insn_data{mg_namex} = [75, \&PUT_svindex, "GET_svindex"];
-$insn_data{xmg_stash} = [76, \&PUT_svindex, "GET_svindex"];
-$insn_data{gv_fetchpv} = [77, \&PUT_strconst, "GET_strconst"];
-$insn_data{gv_fetchpvx} = [78, \&PUT_strconst, "GET_strconst"];
-$insn_data{gv_stashpv} = [79, \&PUT_strconst, "GET_strconst"];
-$insn_data{gv_stashpvx} = [80, \&PUT_strconst, "GET_strconst"];
-$insn_data{gp_sv} = [81, \&PUT_svindex, "GET_svindex"];
-$insn_data{gp_refcnt} = [82, \&PUT_U32, "GET_U32"];
-$insn_data{gp_refcnt_add} = [83, \&PUT_I32, "GET_I32"];
-$insn_data{gp_av} = [84, \&PUT_svindex, "GET_svindex"];
-$insn_data{gp_hv} = [85, \&PUT_svindex, "GET_svindex"];
-$insn_data{gp_cv} = [86, \&PUT_svindex, "GET_svindex"];
-$insn_data{gp_file} = [87, \&PUT_pvindex, "GET_pvindex"];
-$insn_data{gp_io} = [88, \&PUT_svindex, "GET_svindex"];
-$insn_data{gp_form} = [89, \&PUT_svindex, "GET_svindex"];
-$insn_data{gp_cvgen} = [90, \&PUT_U32, "GET_U32"];
-$insn_data{gp_line} = [91, \&PUT_U32, "GET_U32"];
-$insn_data{gp_share} = [92, \&PUT_svindex, "GET_svindex"];
-$insn_data{xgv_flags} = [93, \&PUT_U8, "GET_U8"];
-$insn_data{op_next} = [94, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_sibling} = [95, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_ppaddr} = [96, \&PUT_strconst, "GET_strconst"];
-$insn_data{op_targ} = [97, \&PUT_PADOFFSET, "GET_PADOFFSET"];
-$insn_data{op_type} = [98, \&PUT_U16, "GET_U16"];
-$insn_data{op_opt} = [99, \&PUT_U8, "GET_U8"];
-$insn_data{op_static} = [100, \&PUT_U8, "GET_U8"];
-$insn_data{op_flags} = [101, \&PUT_U8, "GET_U8"];
-$insn_data{op_private} = [102, \&PUT_U8, "GET_U8"];
-$insn_data{op_first} = [103, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_last} = [104, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_other} = [105, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_pmreplroot} = [106, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_pmreplstart} = [107, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_pmnext} = [108, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_pmstashpv} = [109, \&PUT_pvindex, "GET_pvindex"];
-$insn_data{op_pmreplrootpo} = [110, \&PUT_PADOFFSET, "GET_PADOFFSET"];
-$insn_data{op_pmstash} = [111, \&PUT_svindex, "GET_svindex"];
-$insn_data{op_pmreplrootgv} = [112, \&PUT_svindex, "GET_svindex"];
-$insn_data{pregcomp} = [113, \&PUT_pvcontents, "GET_pvcontents"];
-$insn_data{op_pmflags} = [114, \&PUT_U16, "GET_U16"];
-$insn_data{op_pmpermflags} = [115, \&PUT_U16, "GET_U16"];
-$insn_data{op_pmdynflags} = [116, \&PUT_U8, "GET_U8"];
-$insn_data{op_sv} = [117, \&PUT_svindex, "GET_svindex"];
-$insn_data{op_padix} = [118, \&PUT_PADOFFSET, "GET_PADOFFSET"];
-$insn_data{op_pv} = [119, \&PUT_pvcontents, "GET_pvcontents"];
-$insn_data{op_pv_tr} = [120, \&PUT_op_tr_array, "GET_op_tr_array"];
-$insn_data{op_redoop} = [121, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_nextop} = [122, \&PUT_opindex, "GET_opindex"];
-$insn_data{op_lastop} = [123, \&PUT_opindex, "GET_opindex"];
-$insn_data{cop_label} = [124, \&PUT_pvindex, "GET_pvindex"];
-$insn_data{cop_stashpv} = [125, \&PUT_pvindex, "GET_pvindex"];
-$insn_data{cop_file} = [126, \&PUT_pvindex, "GET_pvindex"];
-$insn_data{cop_stash} = [127, \&PUT_svindex, "GET_svindex"];
-$insn_data{cop_filegv} = [128, \&PUT_svindex, "GET_svindex"];
-$insn_data{cop_seq} = [129, \&PUT_U32, "GET_U32"];
-$insn_data{cop_arybase} = [130, \&PUT_I32, "GET_I32"];
-$insn_data{cop_line} = [131, \&PUT_U32, "GET_U32"];
-$insn_data{cop_io} = [132, \&PUT_svindex, "GET_svindex"];
-$insn_data{cop_warnings} = [133, \&PUT_svindex, "GET_svindex"];
-$insn_data{main_start} = [134, \&PUT_opindex, "GET_opindex"];
-$insn_data{main_root} = [135, \&PUT_opindex, "GET_opindex"];
-$insn_data{main_cv} = [136, \&PUT_svindex, "GET_svindex"];
-$insn_data{curpad} = [137, \&PUT_svindex, "GET_svindex"];
-$insn_data{push_begin} = [138, \&PUT_svindex, "GET_svindex"];
-$insn_data{push_init} = [139, \&PUT_svindex, "GET_svindex"];
-$insn_data{push_end} = [140, \&PUT_svindex, "GET_svindex"];
-$insn_data{curstash} = [141, \&PUT_svindex, "GET_svindex"];
-$insn_data{defstash} = [142, \&PUT_svindex, "GET_svindex"];
-$insn_data{data} = [143, \&PUT_U8, "GET_U8"];
-$insn_data{incav} = [144, \&PUT_svindex, "GET_svindex"];
-$insn_data{load_glob} = [145, \&PUT_svindex, "GET_svindex"];
-$insn_data{regex_padav} = [146, \&PUT_svindex, "GET_svindex"];
-$insn_data{dowarn} = [147, \&PUT_U8, "GET_U8"];
-$insn_data{comppad_name} = [148, \&PUT_svindex, "GET_svindex"];
-$insn_data{xgv_stash} = [149, \&PUT_svindex, "GET_svindex"];
-$insn_data{signal} = [150, \&PUT_strconst, "GET_strconst"];
-$insn_data{formfeed} = [151, \&PUT_svindex, "GET_svindex"];
+$insn_data{xhv_riter} = [65, \&PUT_I32, "GET_I32"];
+$insn_data{xhv_name} = [66, \&PUT_pvindex, "GET_pvindex"];
+$insn_data{hv_store} = [67, \&PUT_svindex, "GET_svindex"];
+$insn_data{sv_magic} = [68, \&PUT_U8, "GET_U8"];
+$insn_data{mg_obj} = [69, \&PUT_svindex, "GET_svindex"];
+$insn_data{mg_private} = [70, \&PUT_U16, "GET_U16"];
+$insn_data{mg_flags} = [71, \&PUT_U8, "GET_U8"];
+$insn_data{mg_name} = [72, \&PUT_pvcontents, "GET_pvcontents"];
+$insn_data{mg_namex} = [73, \&PUT_svindex, "GET_svindex"];
+$insn_data{xmg_stash} = [74, \&PUT_svindex, "GET_svindex"];
+$insn_data{gv_fetchpv} = [75, \&PUT_strconst, "GET_strconst"];
+$insn_data{gv_fetchpvx} = [76, \&PUT_strconst, "GET_strconst"];
+$insn_data{gv_stashpv} = [77, \&PUT_strconst, "GET_strconst"];
+$insn_data{gv_stashpvx} = [78, \&PUT_strconst, "GET_strconst"];
+$insn_data{gp_sv} = [79, \&PUT_svindex, "GET_svindex"];
+$insn_data{gp_refcnt} = [80, \&PUT_U32, "GET_U32"];
+$insn_data{gp_refcnt_add} = [81, \&PUT_I32, "GET_I32"];
+$insn_data{gp_av} = [82, \&PUT_svindex, "GET_svindex"];
+$insn_data{gp_hv} = [83, \&PUT_svindex, "GET_svindex"];
+$insn_data{gp_cv} = [84, \&PUT_svindex, "GET_svindex"];
+$insn_data{gp_file} = [85, \&PUT_pvindex, "GET_pvindex"];
+$insn_data{gp_io} = [86, \&PUT_svindex, "GET_svindex"];
+$insn_data{gp_form} = [87, \&PUT_svindex, "GET_svindex"];
+$insn_data{gp_cvgen} = [88, \&PUT_U32, "GET_U32"];
+$insn_data{gp_line} = [89, \&PUT_U32, "GET_U32"];
+$insn_data{gp_share} = [90, \&PUT_svindex, "GET_svindex"];
+$insn_data{xgv_flags} = [91, \&PUT_U8, "GET_U8"];
+$insn_data{op_next} = [92, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_sibling} = [93, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_ppaddr} = [94, \&PUT_strconst, "GET_strconst"];
+$insn_data{op_targ} = [95, \&PUT_PADOFFSET, "GET_PADOFFSET"];
+$insn_data{op_type} = [96, \&PUT_U16, "GET_U16"];
+$insn_data{op_opt} = [97, \&PUT_U8, "GET_U8"];
+$insn_data{op_static} = [98, \&PUT_U8, "GET_U8"];
+$insn_data{op_flags} = [99, \&PUT_U8, "GET_U8"];
+$insn_data{op_private} = [100, \&PUT_U8, "GET_U8"];
+$insn_data{op_first} = [101, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_last} = [102, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_other} = [103, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_pmreplroot} = [104, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_pmreplstart} = [105, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_pmnext} = [106, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_pmstashpv} = [107, \&PUT_pvindex, "GET_pvindex"];
+$insn_data{op_pmreplrootpo} = [108, \&PUT_PADOFFSET, "GET_PADOFFSET"];
+$insn_data{op_pmstash} = [109, \&PUT_svindex, "GET_svindex"];
+$insn_data{op_pmreplrootgv} = [110, \&PUT_svindex, "GET_svindex"];
+$insn_data{pregcomp} = [111, \&PUT_pvcontents, "GET_pvcontents"];
+$insn_data{op_pmflags} = [112, \&PUT_U16, "GET_U16"];
+$insn_data{op_pmpermflags} = [113, \&PUT_U16, "GET_U16"];
+$insn_data{op_pmdynflags} = [114, \&PUT_U8, "GET_U8"];
+$insn_data{op_sv} = [115, \&PUT_svindex, "GET_svindex"];
+$insn_data{op_padix} = [116, \&PUT_PADOFFSET, "GET_PADOFFSET"];
+$insn_data{op_pv} = [117, \&PUT_pvcontents, "GET_pvcontents"];
+$insn_data{op_pv_tr} = [118, \&PUT_op_tr_array, "GET_op_tr_array"];
+$insn_data{op_redoop} = [119, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_nextop} = [120, \&PUT_opindex, "GET_opindex"];
+$insn_data{op_lastop} = [121, \&PUT_opindex, "GET_opindex"];
+$insn_data{cop_label} = [122, \&PUT_pvindex, "GET_pvindex"];
+$insn_data{cop_stashpv} = [123, \&PUT_pvindex, "GET_pvindex"];
+$insn_data{cop_file} = [124, \&PUT_pvindex, "GET_pvindex"];
+$insn_data{cop_stash} = [125, \&PUT_svindex, "GET_svindex"];
+$insn_data{cop_filegv} = [126, \&PUT_svindex, "GET_svindex"];
+$insn_data{cop_seq} = [127, \&PUT_U32, "GET_U32"];
+$insn_data{cop_arybase} = [128, \&PUT_I32, "GET_I32"];
+$insn_data{cop_line} = [129, \&PUT_U32, "GET_U32"];
+$insn_data{cop_io} = [130, \&PUT_svindex, "GET_svindex"];
+$insn_data{cop_warnings} = [131, \&PUT_svindex, "GET_svindex"];
+$insn_data{main_start} = [132, \&PUT_opindex, "GET_opindex"];
+$insn_data{main_root} = [133, \&PUT_opindex, "GET_opindex"];
+$insn_data{main_cv} = [134, \&PUT_svindex, "GET_svindex"];
+$insn_data{curpad} = [135, \&PUT_svindex, "GET_svindex"];
+$insn_data{push_begin} = [136, \&PUT_svindex, "GET_svindex"];
+$insn_data{push_init} = [137, \&PUT_svindex, "GET_svindex"];
+$insn_data{push_end} = [138, \&PUT_svindex, "GET_svindex"];
+$insn_data{curstash} = [139, \&PUT_svindex, "GET_svindex"];
+$insn_data{defstash} = [140, \&PUT_svindex, "GET_svindex"];
+$insn_data{data} = [141, \&PUT_U8, "GET_U8"];
+$insn_data{incav} = [142, \&PUT_svindex, "GET_svindex"];
+$insn_data{load_glob} = [143, \&PUT_svindex, "GET_svindex"];
+$insn_data{regex_padav} = [144, \&PUT_svindex, "GET_svindex"];
+$insn_data{dowarn} = [145, \&PUT_U8, "GET_U8"];
+$insn_data{comppad_name} = [146, \&PUT_svindex, "GET_svindex"];
+$insn_data{xgv_stash} = [147, \&PUT_svindex, "GET_svindex"];
+$insn_data{signal} = [148, \&PUT_strconst, "GET_strconst"];
+$insn_data{formfeed} = [149, \&PUT_svindex, "GET_svindex"];
 
 my ($insn_name, $insn_data);
 while (($insn_name, $insn_data) = each %insn_data) {
@@ -235,7 +234,7 @@ A simple mapping of the op type number to its type (like 'COP' or 'BINOP').
   my $sv_name = $specialsv_name[$sv_index];
 
 Certain SV types are considered 'special'.  They're represented by
-B::SPECIAL and are refered to by a number from the specialsv_list.
+B::SPECIAL and are referred to by a number from the specialsv_list.
 This array maps that number back to the name of the SV (like 'Nullsv'
 or '&PL_sv_undef').
 
@@ -246,3 +245,5 @@ or '&PL_sv_undef').
 Malcolm Beattie, C<mbeattie@sable.ox.ac.uk>
 
 =cut
+
+# ex: set ro:

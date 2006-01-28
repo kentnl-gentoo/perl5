@@ -19,7 +19,8 @@ our @EXPORT = qw( print_double print_int print_long
 		  call_sv call_pv call_method eval_sv eval_pv require_pv
 		  G_SCALAR G_ARRAY G_VOID G_DISCARD G_EVAL G_NOARGS
 		  G_KEEPERR G_NODEBUG G_METHOD
-		  exception
+		  exception mycroak strtab
+		  my_cxt_getint my_cxt_getsv my_cxt_setint my_cxt_setsv
 );
 
 # from cop.h 
@@ -33,7 +34,7 @@ sub G_KEEPERR()	{  16 }
 sub G_NODEBUG()	{  32 }
 sub G_METHOD()	{  64 }
 
-our $VERSION = '0.05';
+our $VERSION = '0.09';
 
 bootstrap XS::APItest $VERSION;
 
@@ -160,17 +161,17 @@ the function; for example
 
 =item B<eval_sv>
 
-Evalulates the passed SV. Result handling is done the same as for
+Evaluates the passed SV. Result handling is done the same as for
 C<call_sv()> etc.
 
 =item B<eval_pv>
 
-Excercises the C function of the same name in scalar context. Returns the
+Exercises the C function of the same name in scalar context. Returns the
 same SV that the C function returns.
 
 =item B<require_pv>
 
-Excercises the C function of the same name. Returns nothing.
+Exercises the C function of the same name. Returns nothing.
 
 =back
 

@@ -411,12 +411,9 @@ for that.  (Mnemonic: when you want your pipes to be piping hot.)
 
 =item $,
 
-The output field separator for the print operator.  Ordinarily the
-print operator simply prints out its arguments without further
-adornment.  To get behavior more like B<awk>, set this variable as
-you would set B<awk>'s OFS variable to specify what is printed
-between fields.  (Mnemonic: what is printed when there is a "," in
-your print statement.)
+The output field separator for the print operator.  If defined, this
+value is printed between each of print's arguments.  Default is C<undef>.
+(Mnemonic: what is printed when there is a "," in your print statement.)
 
 =item IO::Handle->output_record_separator EXPR
 
@@ -426,14 +423,10 @@ your print statement.)
 
 =item $\
 
-The output record separator for the print operator.  Ordinarily the
-print operator simply prints out its arguments as is, with no
-trailing newline or other end-of-record string added.  To get
-behavior more like B<awk>, set this variable as you would set
-B<awk>'s ORS variable to specify what is printed at the end of the
-print.  (Mnemonic: you set C<$\> instead of adding "\n" at the
-end of the print.  Also, it's just like C<$/>, but it's what you
-get "back" from Perl.)
+The output record separator for the print operator.  If defined, this
+value is printed after the last of print's arguments.  Default is C<undef>.
+(Mnemonic: you set C<$\> instead of adding "\n" at the end of the print.
+Also, it's just like C<$/>, but it's what you get "back" from Perl.)
 
 =item $LIST_SEPARATOR
 
@@ -474,18 +467,6 @@ taken for something more important.)
 
 Consider using "real" multidimensional arrays as described
 in L<perllol>.
-
-=item $#
-
-The output format for printed numbers.  This variable is a half-hearted
-attempt to emulate B<awk>'s OFMT variable.  There are times, however,
-when B<awk> and Perl have differing notions of what counts as 
-numeric.  The initial value is "%.I<n>g", where I<n> is the value
-of the macro DBL_DIG from your system's F<float.h>.  This is different from
-B<awk>'s default OFMT setting of "%.6g", so you need to set C<$#>
-explicitly to get B<awk>'s value.  (Mnemonic: # is the number sign.)
-
-Use of C<$#> is deprecated.
 
 =item HANDLE->format_page_number(EXPR)
 
@@ -528,9 +509,9 @@ C<$-[>I<n>C<]> is the offset of the start of the substring matched by
 I<n>-th subpattern, or undef if the subpattern did not match.
 
 Thus after a match against $_, $& coincides with C<substr $_, $-[0],
-$+[0] - $-[0]>.  Similarly, C<$>I<n> coincides with C<substr $_, $-[>I<n>C<],
-$+[>I<n>C<] - $-[>I<n>C<]> if C<$-[>I<n>C<]> is defined, and $+ coincides with
-C<substr $_, $-[$#-], $+[$#-]>.  One can use C<$#-> to find the last
+$+[0] - $-[0]>.  Similarly, $I<n> coincides with C<substr $_, $-[n],
+$+[n] - $-[n]> if C<$-[n]> is defined, and $+ coincides with
+C<substr $_, $-[$#-], $+[$#-] - $-[$#-]>.  One can use C<$#-> to find the last
 matched subgroup in the last successful match.  Contrast with
 C<$#+>, the number of subgroups in the regular expression.  Compare
 with C<@+>.
@@ -556,7 +537,7 @@ After a match against some variable $var:
 
 =item C<$2> is the same as C<substr($var, $-[2], $+[2] - $-[2])>
 
-=item C<$3> is the same as C<substr $var, $-[3], $+[3] - $-[3])>
+=item C<$3> is the same as C<substr($var, $-[3], $+[3] - $-[3])>
 
 =back
 
@@ -617,7 +598,7 @@ L<perlfunc/formline()>.
 The status returned by the last pipe close, backtick (C<``>) command,
 successful call to wait() or waitpid(), or from the system()
 operator.  This is just the 16-bit status word returned by the
-wait() system call (or else is made up to look like it).  Thus, the
+traditional Unix wait() system call (or else is made up to look like it).  Thus, the
 exit value of the subprocess is really (C<<< $? >> 8 >>>), and
 C<$? & 127> gives which signal, if any, the process died from, and
 C<$? & 128> reports whether there was a core dump.  (Mnemonic:
@@ -642,6 +623,17 @@ actual VMS exit status, instead of the default emulation of POSIX
 status; see L<perlvms/$?> for details.
 
 Also see L<Error Indicators>.
+
+=item ${^CHILD_ERROR_NATIVE}
+
+The native status returned by the last pipe close, backtick (C<``>)
+command, successful call to wait() or waitpid(), or from the system()
+operator.  On POSIX-like systems this value can be decoded with the
+WIFEXITED, WEXITSTATUS, WIFSIGNALED, WTERMSIG, WIFSTOPPED, WSTOPSIG
+and WIFCONTINUED functions provided by the L<POSIX> module.
+
+Under VMS this reflects the actual VMS exit status; i.e. it is the same
+as $? when the pragma C<use vmsish 'status'> is in effect.
 
 =item ${^ENCODING}
 
@@ -855,7 +847,7 @@ changes.  Modifying the $0 is more useful as a way of indicating the
 current program state than it is for hiding the program you're
 running.  (Mnemonic: same as B<sh> and B<ksh>.)
 
-Note that there are platform specific limitations on the the maximum
+Note that there are platform specific limitations on the maximum
 length of C<$0>.  In the most extreme case it may be limited to the
 space occupied by the original C<$0>.
 
@@ -873,7 +865,7 @@ and version).  This is an operating system feature, Perl cannot help it.
 
 In multithreaded scripts Perl coordinates the threads so that any
 thread may modify its copy of the C<$0> and the change becomes visible
-to ps(1) (assuming the operating system plays along).  Note that the
+to ps(1) (assuming the operating system plays along).  Note that
 the view of C<$0> the other threads have will not change since they
 have their own copies of it.
 
@@ -891,8 +883,8 @@ directive, and cannot influence the behavior of any other file.
 Its use is highly discouraged.
 
 Note that, unlike other compile-time directives (such as L<strict>),
-assignment to $[ can be seen from outer lexical scopes in the same file.
-However, you can use local() on it to strictly bound its value to a
+assignment to C<$[> can be seen from outer lexical scopes in the same file.
+However, you can use local() on it to strictly bind its value to a
 lexical block.
 
 =item $]
@@ -1020,15 +1012,16 @@ inplace editing.  (Mnemonic: value of B<-i> switch.)
 By default, running out of memory is an untrappable, fatal error.
 However, if suitably built, Perl can use the contents of C<$^M>
 as an emergency memory pool after die()ing.  Suppose that your Perl
-were compiled with -DPERL_EMERGENCY_SBRK and used Perl's malloc.
+were compiled with C<-DPERL_EMERGENCY_SBRK> and used Perl's malloc.
 Then
 
     $^M = 'a' x (1 << 16);
 
 would allocate a 64K buffer for use in an emergency.  See the
 F<INSTALL> file in the Perl distribution for information on how to
-enable this option.  To discourage casual use of this advanced
-feature, there is no L<English|English> long name for this variable.
+add custom C compilation flags when compiling perl.  To discourage casual
+use of this advanced feature, there is no L<English|English> long name for
+this variable.
 
 =item $OSNAME
 
@@ -1152,6 +1145,13 @@ documentation for the C<-C> switch for more information about
 the possible values. This variable is set during Perl startup
 and is thereafter read-only.
 
+=item ${^UTF8LOCALE}
+
+This variable indicates whether an UTF-8 locale was detected by perl at
+startup. This information is used by perl when it's in
+adjust-utf8ness-to-locale mode (as when run with the C<-CL> command-line
+switch); see L<perlrun> for more info on this.
+
 =item $PERL_VERSION
 
 =item $^V
@@ -1221,7 +1221,7 @@ executable files do not require use of the suffix when invoking
 a command.  To convert the value of $^X to a path name, use the
 following statements:
 
-# Build up a set of file names (not command names).
+  # Build up a set of file names (not command names).
   use Config;
   $this_perl = $^X;
   if ($^O ne 'VMS')
@@ -1438,7 +1438,7 @@ C<$@> is set if the string to be C<eval>-ed did not compile (this
 may happen if C<open> or C<close> were imported with bad prototypes),
 or if Perl code executed during evaluation die()d .  In these cases
 the value of $@ is the compile error, or the argument to C<die>
-(which will interpolate C<$!> and C<$?>!).  (See also L<Fatal>,
+(which will interpolate C<$!> and C<$?>).  (See also L<Fatal>,
 though.)
 
 When the eval() expression above is executed, open(), C<< <PIPE> >>,

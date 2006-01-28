@@ -1,3 +1,13 @@
+/*
+ * 
+ * Copyright (c) 1996-2002 Douglas E. Wegscheid.  All rights reserved.
+ * 
+ * Copyright (c) 2002,2003,2004,2005 Jarkko Hietaniemi.  All rights reserved.
+ * 
+ * This program is free software; you can redistribute it and/or modify
+ * it under the same terms as Perl itself.
+ */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,6 +30,9 @@ extern "C" {
 #  include <sys/select.h>
 # endif
 #endif
+#if defined(TIME_HIRES_CLOCK_GETTIME_SYSCALL) || defined(TIME_HIRES_CLOCK_GETRES_SYSCALL)
+#include <syscall.h>
+#endif
 #ifdef __cplusplus
 }
 #endif
@@ -31,6 +44,7 @@ extern "C" {
 #ifdef HAS_PAUSE
 #   define Pause   pause
 #else
+#   undef Pause /* In case perl.h did it already. */
 #   define Pause() sleep(~0) /* Zzz for a long time. */
 #endif
 
@@ -51,7 +65,17 @@ extern "C" {
 # endif
 #endif
 
-#include "const-c.inc"
+#if defined(TIME_HIRES_CLOCK_GETTIME) && defined(_STRUCT_ITIMERSPEC)
+
+/* HP-UX has CLOCK_XXX values but as enums, not as defines.
+ * The only way to detect these would be to test compile for each. */
+# ifdef __hpux
+#  define CLOCK_REALTIME CLOCK_REALTIME
+#  define CLOCK_VIRTUAL  CLOCK_VIRTUAL
+#  define CLOCK_PROFILE  CLOCK_PROFILE
+# endif /* # ifdef __hpux */
+
+#endif /* #if defined(TIME_HIRES_CLOCK_GETTIME) && defined(_STRUCT_ITIMERSPEC) */
 
 #if defined(WIN32) || defined(CYGWIN_WITH_W32API)
 
@@ -347,14 +371,16 @@ gettimeofday (struct timeval *tp, void *tpz)
 
 
  /* Do not use H A S _ N A N O S L E E P
-  * so that Perl Configure doesn't scan for it.
+  * so that Perl Configure doesn't scan for it (and pull in -lrt and
+  * the like which are not usually good ideas for the default Perl).
+  * (We are part of the core perl now.)
   * The TIME_HIRES_NANOSLEEP is set by Makefile.PL. */
 #if !defined(HAS_USLEEP) && defined(TIME_HIRES_NANOSLEEP)
 #define HAS_USLEEP
-#define usleep hrt_unanosleep  /* could conflict with ncurses for static build */
+#define usleep hrt_nanosleep  /* could conflict with ncurses for static build */
 
 void
-hrt_unanosleep(unsigned long usec) /* This is used to emulate usleep. */
+hrt_nanosleep(unsigned long usec) /* This is used to emulate usleep. */
 {
     struct timespec res;
     res.tv_sec = usec/1000/1000;
@@ -394,6 +420,33 @@ hrt_usleep(unsigned long usec)
 }
 #endif /* #if !defined(HAS_USLEEP) && defined(WIN32) */
 
+#if !defined(HAS_USLEEP) && defined(TIME_HIRES_NANOSLEEP)
+#define HAS_USLEEP
+#define usleep hrt_usleep  /* could conflict with ncurses for static build */
+
+void
+hrt_usleep(unsigned long usec)
+{
+	struct timespec ts1;
+	ts1.tv_sec  = usec * 1000; /* Ignoring wraparound. */
+	ts1.tv_nsec = 0;
+	nanosleep(&ts1, NULL);
+}
+
+#endif /* #if !defined(HAS_USLEEP) && defined(TIME_HIRES_NANOSLEEP) */
+
+#if !defined(HAS_USLEEP) && defined(HAS_POLL)
+#define HAS_USLEEP
+#define usleep hrt_usleep  /* could conflict with ncurses for static build */
+
+void
+hrt_usleep(unsigned long usec)
+{
+    int msec = usec / 1000;
+    poll(0, 0, msec);
+}
+
+#endif /* #if !defined(HAS_USLEEP) && defined(HAS_POLL) */
 
 #if !defined(HAS_UALARM) && defined(HAS_SETITIMER)
 #define HAS_UALARM
@@ -635,6 +688,8 @@ myNVtime()
 
 #endif /* #ifdef HAS_GETTIMEOFDAY */
 
+#include "const-c.inc"
+
 MODULE = Time::HiRes            PACKAGE = Time::HiRes
 
 PROTOTYPES: ENABLE
@@ -647,10 +702,8 @@ BOOT:
 #ifdef ATLEASTFIVEOHOHFIVE
 #ifdef HAS_GETTIMEOFDAY
   {
-    UV auv[2];
     hv_store(PL_modglobal, "Time::NVtime", 12, newSViv(PTR2IV(myNVtime)), 0);
-    if (myU2time(aTHX_ auv) == 0)
-      hv_store(PL_modglobal, "Time::U2time", 12, newSViv((IV) auv[0]), 0);
+    hv_store(PL_modglobal, "Time::U2time", 12, newSViv(PTR2IV(myU2time)), 0);
   }
 #endif
 #endif
@@ -703,32 +756,44 @@ usleep(useconds)
 #if defined(TIME_HIRES_NANOSLEEP)
 
 NV
-nanosleep(nseconds)
-        NV nseconds
+nanosleep(nsec)
+        NV nsec
 	PREINIT:
+	int status = -1;
 	struct timeval Ta, Tb;
 	CODE:
 	gettimeofday(&Ta, NULL);
 	if (items > 0) {
-	    struct timespec tsa;
-	    if (nseconds > 1E9) {
-		IV seconds = (IV) (nseconds / 1E9);
-		if (seconds) {
-		    sleep(seconds);
-		    nseconds -= 1E9 * seconds;
+	    struct timespec ts1;
+	    if (nsec > 1E9) {
+		IV sec = (IV) (nsec / 1E9);
+		if (sec) {
+		    sleep(sec);
+		    nsec -= 1E9 * sec;
 		}
-	    } else if (nseconds < 0.0)
-	        croak("Time::HiRes::nanosleep(%"NVgf"): negative time not invented yet", nseconds);
-	    tsa.tv_sec  = (IV) (nseconds / 1E9);
-	    tsa.tv_nsec = (IV) nseconds - tsa.tv_sec * 1E9;
-	    nanosleep(&tsa, NULL);
-	} else
+	    } else if (nsec < 0.0)
+	        croak("Time::HiRes::nanosleep(%"NVgf"): negative time not invented yet", nsec);
+	    ts1.tv_sec  = (IV) (nsec / 1E9);
+	    ts1.tv_nsec = (IV) nsec - ts1.tv_sec * 1E9;
+	    status = nanosleep(&ts1, NULL);
+	} else {
 	    PerlProc_pause();
+	    status = 0;
+	}
 	gettimeofday(&Tb, NULL);
-	RETVAL = 1E3*(1E6*(Tb.tv_sec-Ta.tv_sec)+(NV)((IV)Tb.tv_usec-(IV)Ta.tv_usec));
+	RETVAL = status == 0 ? 1E3*(1E6*(Tb.tv_sec-Ta.tv_sec)+(NV)((IV)Tb.tv_usec-(IV)Ta.tv_usec)) : -1;
 
 	OUTPUT:
 	RETVAL
+
+#else  /* #if defined(TIME_HIRES_NANOSLEEP) */
+
+NV
+nanosleep(nsec)
+        NV nsec
+    CODE:
+        croak("Time::HiRes::nanosleep(): unimplemented in this platform");
+        RETVAL = 0.0;
 
 #endif /* #if defined(TIME_HIRES_NANOSLEEP) */
 
@@ -769,6 +834,15 @@ sleep(...)
 	OUTPUT:
 	RETVAL
 
+#else  /* #if defined(HAS_USLEEP) && defined(HAS_GETTIMEOFDAY) */
+
+NV
+usleep(useconds)
+        NV useconds
+    CODE:
+        croak("Time::HiRes::usleep(): unimplemented in this platform");
+        RETVAL = 0.0;
+
 #endif /* #if defined(HAS_USLEEP) && defined(HAS_GETTIMEOFDAY) */
 
 #ifdef HAS_UALARM
@@ -798,6 +872,24 @@ alarm(seconds,interval=0)
 	OUTPUT:
 	RETVAL
 
+#else
+
+int
+ualarm(useconds,interval=0)
+	int useconds
+	int interval
+    CODE:
+        croak("Time::HiRes::ualarm(): unimplemented in this platform");
+	RETVAL = -1;
+
+NV
+alarm(seconds,interval=0)
+	NV seconds
+	NV interval
+    CODE:
+        croak("Time::HiRes::alarm(): unimplemented in this platform");
+	RETVAL = 0.0;
+
 #endif /* #ifdef HAS_UALARM */
 
 #ifdef HAS_GETTIMEOFDAY
@@ -810,16 +902,18 @@ gettimeofday()
         PPCODE:
         int status;
         status = gettimeofday (&Tp, &Tz);
-        Tp.tv_sec += Tz.tz_minuteswest * 60;	/* adjust for TZ */
 
-        if (GIMME == G_ARRAY) {
-             EXTEND(sp, 2);
-             /* Mac OS (Classic) has unsigned time_t */
-             PUSHs(sv_2mortal(newSVuv(Tp.tv_sec)));
-             PUSHs(sv_2mortal(newSViv(Tp.tv_usec)));
-        } else {
-             EXTEND(sp, 1);
-             PUSHs(sv_2mortal(newSVnv(Tp.tv_sec + (Tp.tv_usec / 1000000.0))));
+	if (status == 0) {
+	     Tp.tv_sec += Tz.tz_minuteswest * 60;	/* adjust for TZ */
+             if (GIMME == G_ARRAY) {
+                 EXTEND(sp, 2);
+                 /* Mac OS (Classic) has unsigned time_t */
+                 PUSHs(sv_2mortal(newSVuv(Tp.tv_sec)));
+                 PUSHs(sv_2mortal(newSViv(Tp.tv_usec)));
+             } else {
+                 EXTEND(sp, 1);
+                 PUSHs(sv_2mortal(newSVnv(Tp.tv_sec + (Tp.tv_usec / 1000000.0))));
+	     }
         }
 
 NV
@@ -830,8 +924,12 @@ time()
         CODE:
         int status;
         status = gettimeofday (&Tp, &Tz);
-        Tp.tv_sec += Tz.tz_minuteswest * 60;	/* adjust for TZ */
-        RETVAL = Tp.tv_sec + (Tp.tv_usec / 1000000.0);
+	if (status == 0) {
+            Tp.tv_sec += Tz.tz_minuteswest * 60;	/* adjust for TZ */
+	    RETVAL = Tp.tv_sec + (Tp.tv_usec / 1000000.0);
+        } else {
+	    RETVAL = -1.0;
+	}
 	OUTPUT:
 	RETVAL
 
@@ -843,13 +941,15 @@ gettimeofday()
         PPCODE:
 	int status;
         status = gettimeofday (&Tp, NULL);
-        if (GIMME == G_ARRAY) {
-	     EXTEND(sp, 2);
-             PUSHs(sv_2mortal(newSViv(Tp.tv_sec)));
-             PUSHs(sv_2mortal(newSViv(Tp.tv_usec)));
-        } else {
-             EXTEND(sp, 1);
-             PUSHs(sv_2mortal(newSVnv(Tp.tv_sec + (Tp.tv_usec / 1000000.0))));
+	if (status == 0) {
+	     if (GIMME == G_ARRAY) {
+	         EXTEND(sp, 2);
+                 PUSHs(sv_2mortal(newSViv(Tp.tv_sec)));
+                 PUSHs(sv_2mortal(newSViv(Tp.tv_usec)));
+             } else {
+                 EXTEND(sp, 1);
+                 PUSHs(sv_2mortal(newSVnv(Tp.tv_sec + (Tp.tv_usec / 1000000.0))));
+             }
         }
 
 NV
@@ -859,7 +959,11 @@ time()
         CODE:
 	int status;
         status = gettimeofday (&Tp, NULL);
-        RETVAL = Tp.tv_sec + (Tp.tv_usec / 1000000.);
+	if (status == 0) {
+            RETVAL = Tp.tv_sec + (Tp.tv_usec / 1000000.);
+	} else {
+	    RETVAL = -1.0;
+	}
 	OUTPUT:
 	RETVAL
 
@@ -913,4 +1017,123 @@ getitimer(which)
 
 #endif /* #if defined(HAS_GETITIMER) && defined(HAS_SETITIMER) */
 
+#if defined(TIME_HIRES_CLOCK_GETTIME)
+
+NV
+clock_gettime(clock_id = CLOCK_REALTIME)
+	int clock_id
+    PREINIT:
+	struct timespec ts;
+	int status = -1;
+    CODE:
+#ifdef TIME_HIRES_CLOCK_GETTIME_SYSCALL
+	status = syscall(SYS_clock_gettime, clock_id, &ts);
+#else
+	status = clock_gettime(clock_id, &ts);
+#endif
+	RETVAL = status == 0 ? ts.tv_sec + (NV) ts.tv_nsec / (NV) 1e9 : -1;
+
+    OUTPUT:
+	RETVAL
+
+#else  /* if defined(TIME_HIRES_CLOCK_GETTIME) */
+
+NV
+clock_gettime(clock_id = 0)
+	int clock_id
+    CODE:
+        croak("Time::HiRes::clock_gettime(): unimplemented in this platform");
+        RETVAL = 0.0;
+
+#endif /*  #if defined(TIME_HIRES_CLOCK_GETTIME) */
+
+#if defined(TIME_HIRES_CLOCK_GETRES)
+
+NV
+clock_getres(clock_id = CLOCK_REALTIME)
+	int clock_id
+    PREINIT:
+	int status = -1;
+	struct timespec ts;
+    CODE:
+#ifdef TIME_HIRES_CLOCK_GETRES_SYSCALL
+	status = syscall(SYS_clock_getres, clock_id, &ts);
+#else
+	status = clock_getres(clock_id, &ts);
+#endif
+	RETVAL = status == 0 ? ts.tv_sec + (NV) ts.tv_nsec / (NV) 1e9 : -1;
+
+    OUTPUT:
+	RETVAL
+
+#else  /* if defined(TIME_HIRES_CLOCK_GETRES) */
+
+NV
+clock_getres(clock_id = 0)
+	int clock_id
+    CODE:
+        croak("Time::HiRes::clock_getres(): unimplemented in this platform");
+        RETVAL = 0.0;
+
+#endif /*  #if defined(TIME_HIRES_CLOCK_GETRES) */
+
+#if defined(TIME_HIRES_CLOCK_NANOSLEEP) && defined(TIMER_ABSTIME)
+
+NV
+clock_nanosleep(clock_id = CLOCK_REALTIME, sec = 0.0, flags = 0)
+	int clock_id
+	NV  sec
+	int flags
+    PREINIT:
+	int status = -1;
+	struct timespec ts;
+	struct timeval Ta, Tb;
+    CODE:
+	gettimeofday(&Ta, NULL);
+	if (items > 1) {
+	    ts.tv_sec  = (IV) sec;
+	    ts.tv_nsec = (sec - (NV) ts.tv_sec) * (NV) 1E9;
+	    status = clock_nanosleep(clock_id, flags, &ts, NULL);
+	} else {
+	    PerlProc_pause();
+	    status = 0;
+	}
+	gettimeofday(&Tb, NULL);
+	RETVAL = status == 0 ? 1E3*(1E6*(Tb.tv_sec-Ta.tv_sec)+(NV)((IV)Tb.tv_usec-(IV)Ta.tv_usec)) : -1;
+
+    OUTPUT:
+	RETVAL
+
+#else  /* if defined(TIME_HIRES_CLOCK_NANOSLEEP) && defined(TIMER_ABSTIME) */
+
+NV
+clock_nanosleep()
+    CODE:
+        croak("Time::HiRes::clock_nanosleep(): unimplemented in this platform");
+        RETVAL = 0.0;
+
+#endif /*  #if defined(TIME_HIRES_CLOCK_NANOSLEEP) && defined(TIMER_ABSTIME) */
+
+#if defined(TIME_HIRES_CLOCK) && defined(CLOCKS_PER_SEC)
+
+NV
+clock()
+    PREINIT:
+	clock_t clocks;
+    CODE:
+	clocks = clock();
+	RETVAL = clocks == -1 ? -1 : (NV)clocks / (NV)CLOCKS_PER_SEC;
+
+    OUTPUT:
+	RETVAL
+
+#else  /* if defined(TIME_HIRES_CLOCK) && defined(CLOCKS_PER_SEC) */
+
+NV
+clock()
+    CODE:
+        croak("Time::HiRes::clock(): unimplemented in this platform");
+        RETVAL = 0.0;
+
+#endif /*  #if defined(TIME_HIRES_CLOCK) && defined(CLOCKS_PER_SEC) */
 

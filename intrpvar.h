@@ -29,7 +29,7 @@ PERLVAR(Iwarnhook,	SV *)
 /* switches */
 PERLVAR(Iminus_c,	bool)
 PERLVAR(Ipatchlevel,	SV *)
-PERLVAR(Ilocalpatches,	const char **)
+PERLVAR(Ilocalpatches,	const char * const *)
 PERLVARI(Isplitstr,	const char *, " ")
 PERLVAR(Ipreprocess,	bool)
 PERLVAR(Iminus_n,	bool)
@@ -38,6 +38,7 @@ PERLVAR(Iminus_l,	bool)
 PERLVAR(Iminus_a,	bool)
 PERLVAR(Iminus_F,	bool)
 PERLVAR(Idoswitches,	bool)
+PERLVAR(Iminus_E,	bool)
 
 /*
 =head1 Global Variables
@@ -74,6 +75,8 @@ PERLVAR(Istatusvalue,	I32)		/* $? */
 PERLVAR(Iexit_flags,	U8)		/* was exit() unexpected, etc. */
 #ifdef VMS
 PERLVAR(Istatusvalue_vms,U32)
+#else
+PERLVAR(Istatusvalue_posix,I32)
 #endif
 
 /* shortcuts to various I/O objects */
@@ -178,7 +181,6 @@ PERLVAR(Imess_sv,	SV *)
 
 /* XXX shouldn't these be per-thread? --GSAR */
 PERLVAR(Iors_sv,	SV *)		/* output record separator $\ */
-PERLVAR(Iofmt,		char *)		/* output format for numbers $# */
 
 /* interpreter atexit processing */
 PERLVARI(Iexitlist,	PerlExitListEntry *, NULL)
@@ -202,7 +204,7 @@ PERLVAR(Imodglobal,	HV *)		/* per-interp module data */
 /* these used to be in global before 5.004_68 */
 PERLVARI(Iprofiledata,	U32 *,	NULL)	/* table of ops, counts */
 PERLVARI(Irsfp,	PerlIO * VOL,	Nullfp) /* current source file pointer */
-PERLVARI(Irsfp_filters,	AV *,	Nullav)	/* keeps active source filters */
+PERLVARI(Irsfp_filters,	AV *,	NULL)	/* keeps active source filters */
 
 PERLVAR(Icompiling,	COP)		/* compiling/done executing marker */
 
@@ -238,29 +240,16 @@ PERLVARI(Icop_seqmax,	U32,	0)	/* statement sequence number */
 PERLVARI(Ievalseq,	U32,	0)	/* eval sequence number */
 PERLVAR(Iorigenviron,	char **)
 PERLVAR(Iorigalen,	U32)
+#ifdef PERL_USES_PL_PIDSTATUS
 PERLVAR(Ipidstatus,	HV *)		/* pid-to-status mappings for waitpid */
+#endif
 PERLVARI(Imaxo,	int,	MAXO)		/* maximum number of ops */
 PERLVAR(Iosname,	char *)		/* operating system */
 
-/* For binary compatibility with older versions only */
-PERLVARI(Ish_path_compat,	const char *,	SH_PATH)/* full path of shell */
-
 PERLVAR(Isighandlerp,	Sighandler_t)
 
-PERLVAR(Ixiv_arenaroot,	XPV*)		/* list of allocated xiv areas */
-PERLVAR(Ixiv_root,	IV *)		/* free xiv list */
-PERLVAR(Ixnv_root,	NV *)		/* free xnv list */
-PERLVAR(Ixrv_root,	XRV *)		/* free xrv list */
-PERLVAR(Ixpv_root,	XPV *)		/* free xpv list */
-PERLVAR(Ixpviv_root,	XPVIV *)	/* free xpviv list */
-PERLVAR(Ixpvnv_root,	XPVNV *)	/* free xpvnv list */
-PERLVAR(Ixpvcv_root,	XPVCV *)	/* free xpvcv list */
-PERLVAR(Ixpvav_root,	XPVAV *)	/* free xpvav list */
-PERLVAR(Ixpvhv_root,	XPVHV *)	/* free xpvhv list */
-PERLVAR(Ixpvmg_root,	XPVMG *)	/* free xpvmg list */
-PERLVAR(Ixpvlv_root,	XPVLV *)	/* free xpvlv list */
-PERLVAR(Ixpvbm_root,	XPVBM *)	/* free xpvbm list */
-PERLVAR(Ihe_root,	HE *)		/* free he list */
+PERLVARA(Ibody_roots,	SVt_LAST, void*) /* array of body roots */
+
 PERLVAR(Inice_chunk,	char *)		/* a nice chunk of memory to reuse */
 PERLVAR(Inice_chunk_size,	U32)	/* how nice the chunk of memory is */
 
@@ -423,20 +412,9 @@ PERLVAR(IProc,		struct IPerlProc*)
 #if defined(USE_ITHREADS)
 PERLVAR(Iptr_table,	PTR_TBL_t*)
 #endif
-PERLVARI(Ibeginav_save, AV*, Nullav)	/* save BEGIN{}s when compiling */
+PERLVARI(Ibeginav_save, AV*, NULL)	/* save BEGIN{}s when compiling */
 
-PERLVAR(Ixnv_arenaroot,	XPV*)		/* list of allocated xnv areas */
-PERLVAR(Ixrv_arenaroot,	XPV*)		/* list of allocated xrv areas */
-PERLVAR(Ixpv_arenaroot,	XPV*)		/* list of allocated xpv areas */
-PERLVAR(Ixpviv_arenaroot,XPVIV*)	/* list of allocated xpviv areas */
-PERLVAR(Ixpvnv_arenaroot,XPVNV*)	/* list of allocated xpvnv areas */
-PERLVAR(Ixpvcv_arenaroot,XPVCV*)	/* list of allocated xpvcv areas */
-PERLVAR(Ixpvav_arenaroot,XPVAV*)	/* list of allocated xpvav areas */
-PERLVAR(Ixpvhv_arenaroot,XPVHV*)	/* list of allocated xpvhv areas */
-PERLVAR(Ixpvmg_arenaroot,XPVMG*)	/* list of allocated xpvmg areas */
-PERLVAR(Ixpvlv_arenaroot,XPVLV*)	/* list of allocated xpvlv areas */
-PERLVAR(Ixpvbm_arenaroot,XPVBM*)	/* list of allocated xpvbm areas */
-PERLVAR(Ihe_arenaroot,	XPV*)		/* list of allocated he areas */
+PERLVARA(Ibody_arenaroots, SVt_LAST, void*) /* consolidated body-arena pointers */
 
      /* 5.6.0 stopped here */
 
@@ -489,7 +467,7 @@ PERLVAR(Iutf8_idcont,	SV *)
 
 PERLVAR(Isort_RealCmp,  SVCOMPARE_t)
 
-PERLVARI(Icheckav_save, AV*, Nullav)	/* save CHECK{}s when compiling */
+PERLVARI(Icheckav_save, AV*, NULL)	/* save CHECK{}s when compiling */
 
 PERLVARI(Iclocktick, long, 0)	/* this many times() ticks in a second */
 
@@ -505,8 +483,8 @@ PERLVAR(Ireentrant_retint, int)	/* Integer return value from reentrant functions
 
 /* Hooks to shared SVs and locks. */
 PERLVARI(Isharehook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
-PERLVARI(Ilockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nolocking))
-PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nounlocking))
+PERLVARI(Ilockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
+PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
 PERLVARI(Ithreadhook,	thrhook_proc_t,	MEMBER_TO_FPTR(Perl_nothreadhook))
 
 /* Force inclusion of both runops options */
@@ -535,10 +513,19 @@ PERLVARI(Irehash_seed_set, bool, FALSE)	/* 582 hash initialized? */
    taken out of blead soon, and relevant prototypes changed.  */
 PERLVARI(Ifdscript, int, -1)	/* fd for script */
 PERLVARI(Isuidscript, int, -1)	/* fd for suid script */
+#ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
+/* File descriptor to talk to the child which dumps scalars.  */
+PERLVARI(Idumper_fd, int, -1)
+#endif
+
+#ifdef PERL_IMPLICIT_CONTEXT
+PERLVARI(Imy_cxt_size, int, 0)		/* size of PL_my_cxt_list */
+PERLVARI(Imy_cxt_list, void **, NULL) /* per-module array of MY_CXT pointers */
+#endif
+
 /* New variables must be added to the very end, before this comment,
  * for binary compatibility (the offsets of the old members must not change).
  * (Don't forget to add your variable also to perl_clone()!)
  * XSUB.h provides wrapper functions via perlapi.h that make this
  * irrelevant, but not all code may be expected to #include XSUB.h.
  */
-

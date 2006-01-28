@@ -1,7 +1,7 @@
 /*    mg.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999,
- *    2000, 2002, by Larry Wall and others
+ *    2000, 2002, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -20,12 +20,13 @@ struct mgvtbl {
     int		(CPERLscope(*svt_copy))	(pTHX_ SV *sv, MAGIC* mg,
     					SV *nsv, const char *name, int namlen);
     int		(CPERLscope(*svt_dup))	(pTHX_ MAGIC *mg, CLONE_PARAMS *param);
+    int		(CPERLscope(*svt_local))(pTHX_ SV *nsv, MAGIC *mg);
 };
 #endif
 
 struct magic {
     MAGIC*	mg_moremagic;
-    const MGVTBL* mg_virtual;	/* pointer to magic functions */
+    MGVTBL*	mg_virtual;	/* pointer to magic functions */
     U16		mg_private;
     char	mg_type;
     U8		mg_flags;
@@ -38,8 +39,9 @@ struct magic {
 #define MGf_MINMATCH   1        /* PERL_MAGIC_regex_global only */
 #define MGf_REFCOUNTED 2
 #define MGf_GSKIP      4
-#define MGf_COPY       8
-#define MGf_DUP        16
+#define MGf_COPY       8	/* has an svt_copy  MGVTBL entry */
+#define MGf_DUP     0x10 	/* has an svt_dup   MGVTBL entry */
+#define MGf_LOCAL   0x20	/* has an svt_local MGVTBL entry */
 
 #define MgTAINTEDDIR(mg)	(mg->mg_flags & MGf_TAINTEDDIR)
 #define MgTAINTEDDIR_on(mg)	(mg->mg_flags |= MGf_TAINTEDDIR)
@@ -48,6 +50,12 @@ struct magic {
 #define MgPV(mg,lp)		((((int)(lp = (mg)->mg_len)) == HEf_SVKEY) ?   \
 				 SvPV((SV*)((mg)->mg_ptr),lp) :		\
 				 (mg)->mg_ptr)
+#define MgPV_const(mg,lp)	((((int)(lp = (mg)->mg_len)) == HEf_SVKEY) ? \
+				 SvPV_const((SV*)((mg)->mg_ptr),lp) :        \
+				 (const char*)(mg)->mg_ptr)
+#define MgPV_nolen_const(mg)	(((((int)(mg)->mg_len)) == HEf_SVKEY) ?   \
+				 SvPV_nolen_const((SV*)((mg)->mg_ptr)) :  \
+				 (const char*)(mg)->mg_ptr)
 
 #define SvTIED_mg(sv,how) \
     (SvRMAGICAL(sv) ? mg_find((sv),(how)) : Null(MAGIC*))

@@ -1,6 +1,6 @@
 /*    xsutils.c
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005
+ *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
  *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
@@ -23,12 +23,12 @@
  */
 
 /* package attributes; */
-void XS_attributes__warn_reserved(pTHX_ CV *cv);
-void XS_attributes_reftype(pTHX_ CV *cv);
-void XS_attributes__modify_attrs(pTHX_ CV *cv);
-void XS_attributes__guess_stash(pTHX_ CV *cv);
-void XS_attributes__fetch_attrs(pTHX_ CV *cv);
-void XS_attributes_bootstrap(pTHX_ CV *cv);
+PERL_XS_EXPORT_C void XS_attributes__warn_reserved(pTHX_ CV *cv);
+PERL_XS_EXPORT_C void XS_attributes_reftype(pTHX_ CV *cv);
+PERL_XS_EXPORT_C void XS_attributes__modify_attrs(pTHX_ CV *cv);
+PERL_XS_EXPORT_C void XS_attributes__guess_stash(pTHX_ CV *cv);
+PERL_XS_EXPORT_C void XS_attributes__fetch_attrs(pTHX_ CV *cv);
+PERL_XS_EXPORT_C void XS_attributes_bootstrap(pTHX_ CV *cv);
 
 
 /*
@@ -56,15 +56,16 @@ Perl_boot_core_xsutils(pTHX)
 static int
 modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 {
+    dVAR;
     SV *attr;
-    char *name;
-    STRLEN len;
-    bool negated;
     int nret;
 
     for (nret = 0 ; numattrs && (attr = *attrlist++); numattrs--) {
-	name = SvPV(attr, len);
-	if ((negated = (*name == '-'))) {
+	STRLEN len;
+	const char *name = SvPV_const(attr, len);
+	const bool negated = (*name == '-');
+
+	if (negated) {
 	    name++;
 	    len--;
 	}
@@ -132,10 +133,11 @@ modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 		case 'e':
 		    if (memEQ(name, "uniqu", 5)) {
 			if (SvTYPE(sv) == SVt_PVGV) {
-			    if (negated)
+			    if (negated) {
 				GvUNIQUE_off(sv);
-			    else
+			    } else {
 				GvUNIQUE_on(sv);
+			    }
 			}
 			/* Hope this came from toke.c if not a GV. */
                         continue;
@@ -158,6 +160,7 @@ modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 
 XS(XS_attributes_bootstrap)
 {
+    dVAR;
     dXSARGS;
     const char file[] = __FILE__;
 
@@ -175,6 +178,7 @@ XS(XS_attributes_bootstrap)
 
 XS(XS_attributes__modify_attrs)
 {
+    dVAR;
     dXSARGS;
     SV *rv, *sv;
 
@@ -196,6 +200,7 @@ usage:
 
 XS(XS_attributes__fetch_attrs)
 {
+    dVAR;
     dXSARGS;
     SV *rv, *sv;
     cv_flags_t cvflags;
@@ -216,21 +221,21 @@ usage:
     case SVt_PVCV:
 	cvflags = CvFLAGS((CV*)sv);
 	if (cvflags & CVf_LOCKED)
-	    XPUSHs(sv_2mortal(newSVpvn("locked", 6)));
+	    XPUSHs(sv_2mortal(newSVpvs("locked")));
 #ifdef CVf_LVALUE
 	if (cvflags & CVf_LVALUE)
-	    XPUSHs(sv_2mortal(newSVpvn("lvalue", 6)));
+	    XPUSHs(sv_2mortal(newSVpvs("lvalue")));
 #endif
 	if (cvflags & CVf_METHOD)
-	    XPUSHs(sv_2mortal(newSVpvn("method", 6)));
+	    XPUSHs(sv_2mortal(newSVpvs("method")));
         if (GvUNIQUE(CvGV((CV*)sv)))
-	    XPUSHs(sv_2mortal(newSVpvn("unique", 6)));
+	    XPUSHs(sv_2mortal(newSVpvs("unique")));
 	if (cvflags & CVf_ASSERTION)
-	    XPUSHs(sv_2mortal(newSVpvn("assertion", 9)));
+	    XPUSHs(sv_2mortal(newSVpvs("assertion")));
 	break;
     case SVt_PVGV:
 	if (GvUNIQUE(sv))
-	    XPUSHs(sv_2mortal(newSVpvn("unique", 6)));
+	    XPUSHs(sv_2mortal(newSVpvs("unique")));
 	break;
     default:
 	break;
@@ -241,6 +246,7 @@ usage:
 
 XS(XS_attributes__guess_stash)
 {
+    dVAR;
     dXSARGS;
     SV *rv, *sv;
     dXSTARG;
@@ -258,13 +264,13 @@ usage:
     sv = SvRV(rv);
 
     if (SvOBJECT(sv))
-	sv_setpv(TARG, HvNAME(SvSTASH(sv)));
+	sv_setpvn(TARG, HvNAME_get(SvSTASH(sv)), HvNAMELEN_get(SvSTASH(sv)));
 #if 0	/* this was probably a bad idea */
     else if (SvPADMY(sv))
 	sv_setsv(TARG, &PL_sv_no);	/* unblessed lexical */
 #endif
     else {
-	HV *stash = Nullhv;
+	const HV *stash = NULL;
 	switch (SvTYPE(sv)) {
 	case SVt_PVCV:
 	    if (CvGV(sv) && isGV(CvGV(sv)) && GvSTASH(CvGV(sv)))
@@ -284,7 +290,7 @@ usage:
 	    break;
 	}
 	if (stash)
-	    sv_setpv(TARG, HvNAME(stash));
+	    sv_setpvn(TARG, HvNAME_get(stash), HvNAMELEN_get(stash));
     }
 
     SvSETMAGIC(TARG);
@@ -293,6 +299,7 @@ usage:
 
 XS(XS_attributes_reftype)
 {
+    dVAR;
     dXSARGS;
     SV *rv, *sv;
     dXSTARG;
@@ -305,8 +312,7 @@ usage:
 
     rv = ST(0);
     ST(0) = TARG;
-    if (SvGMAGICAL(rv))
-	mg_get(rv);
+    SvGETMAGIC(rv);
     if (!(SvOK(rv) && SvROK(rv)))
 	goto usage;
     sv = SvRV(rv);
@@ -318,6 +324,7 @@ usage:
 
 XS(XS_attributes__warn_reserved)
 {
+    dVAR;
     dXSARGS;
 
     if (items != 0) {
@@ -331,3 +338,12 @@ XS(XS_attributes__warn_reserved)
     XSRETURN(1);
 }
 
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

@@ -9,7 +9,7 @@ use strict 'vars';
 eval 'use Errno';
 die $@ if $@ and !$ENV{PERL_CORE_MINITEST};
 
-print "1..19\n";
+print "1..21\n";
 
 my $foo = 'STDOUT';
 print $foo "ok 1\n";
@@ -48,7 +48,20 @@ if (!exists &Errno::EBADF) {
     print "ok 19 # skipped: no EBADF\n";
 } else {
     $! = 0;
+    no warnings 'unopened';
     print NONEXISTENT "foo";
     print "not " if ($! != &Errno::EBADF);
     print "ok 19\n";
+}
+
+{
+    # Change 26009: pp_print didn't extend the stack
+    #               before pushing its return value
+    # to make sure only that these obfuscated sentences will not crash.
+
+    map print(reverse), ('')x68;
+    print "ok 20\n";
+
+    map print(+()), ('')x68;
+    print "ok 21\n";
 }

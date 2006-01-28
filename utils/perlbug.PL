@@ -30,7 +30,11 @@ open PATCH_LEVEL, "<" . catfile(updir, "patchlevel.h")
 my $patchlevel_date = (stat PATCH_LEVEL)[9];
 
 while (<PATCH_LEVEL>) {
-    last if $_ =~ /^\s*static\s+char.*?local_patches\[\]\s*=\s*{\s*$/;
+    last if $_ =~ /^\s*static\s+(?:const\s+)?char.*?local_patches\[\]\s*=\s*{\s*$/;
+}
+
+if (! defined($_)) {
+    warn "Warning: local_patches section not found in patchlevel.h\n";
 }
 
 my @patches;
@@ -57,7 +61,7 @@ print "Extracting $file (with variable substitutions)\n";
 # In this section, perl variables will be expanded during extraction.
 # You can use $Config{...} to use Configure variables.
 
-my $extract_version = sprintf("v%vd", $^V);
+my $extract_version = sprintf("%vd", $^V);
 
 print OUT <<"!GROK!THIS!";
 $Config{startperl}
@@ -145,7 +149,7 @@ my( $file, $usefile, $cc, $address, $perlbug, $testaddress, $filename, $messagei
     $fh, $me, $Is_MSWin32, $Is_Linux, $Is_VMS, $msg, $body, $andcc, %REP, $ok,
     $Is_OpenBSD);
 
-my $perl_version = $^V ? sprintf("v%vd", $^V) : $];
+my $perl_version = $^V ? sprintf("%vd", $^V) : $];
 
 my $config_tag2 = "$perl_version - $Config{cf_time}";
 

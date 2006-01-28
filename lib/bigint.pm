@@ -1,7 +1,7 @@
 package bigint;
 require 5.005;
 
-$VERSION = '0.06';
+$VERSION = '0.07';
 use Exporter;
 @ISA		= qw( Exporter );
 @EXPORT_OK	= qw( ); 
@@ -102,7 +102,7 @@ sub import
   my $self = shift;
 
   # some defaults
-  my $lib = 'Calc';
+  my $lib = '';
 
   my @import = ( ':constant' );				# drive it w/ constant
   my @a = @_; my $l = scalar @_; my $j = 0;
@@ -162,9 +162,10 @@ sub import
       }
     require Math::BigInt if $_lite == 0;	# not already loaded?
     $class = 'Math::BigInt';			# regardless of MBIL or not
-    } 
+    }
+  push @import, 'lib' => $lib if $lib ne '';
   # Math::BigInt::Trace or plain Math::BigInt
-  $class->import(@import, lib => $lib);
+  $class->import(@import);
 
   bigint->accuracy($a) if defined $a;
   bigint->precision($p) if defined $p;
@@ -320,7 +321,7 @@ following work:
 	print $x + 1, " ", $y,"\n";	# prints 10 9
 
 but calling any method that modifies the number directly will result in
-B<both> the original and the copy beeing destroyed:
+B<both> the original and the copy being destroyed:
 	
 	$x = 9; $y = $x;
 	print $x->badd(1), " ", $y,"\n";	# prints 10 10

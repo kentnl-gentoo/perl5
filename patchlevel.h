@@ -1,7 +1,7 @@
 /*    patchlevel.h
  *
  *    Copyright (C) 1993, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -15,7 +15,7 @@
 
 #define PERL_REVISION	5		/* age */
 #define PERL_VERSION	9		/* epoch */
-#define PERL_SUBVERSION	2		/* generation */
+#define PERL_SUBVERSION	3		/* generation */
 
 /* The following numbers describe the earliest compatible version of
    Perl ("compatibility" here being defined as sufficient binary/API
@@ -32,7 +32,7 @@
 */
 #define PERL_API_REVISION	5	/* Adjust manually as needed.  */
 #define PERL_API_VERSION	9	/* Adjust manually as needed.  */
-#define PERL_API_SUBVERSION	1	/* Adjust manually as needed.  */
+#define PERL_API_SUBVERSION	2	/* Adjust manually as needed.  */
 /*
    XXX Note:  The selection of non-default Configure options, such
    as -Duselonglong may invalidate these settings.  Currently, Configure
@@ -100,6 +100,7 @@ while (<PLIN>) {
 }
 close PLOUT or die "Couldn't close filehandle writing to patchlevel.new : $!";
 close PLIN or die "Couldn't close filehandle reading from patchlevel.h : $!";
+close DATA; # needed to allow unlink to work win32.
 unlink "patchlevel.bak" or warn "Couldn't unlink patchlevel.bak : $!"
   if -e "patchlevel.bak";
 rename "patchlevel.h", "patchlevel.bak" or
@@ -114,11 +115,8 @@ hunk.
 
  */
 
-
-
-
 #if !defined(PERL_PATCHLEVEL_H_IMPLICIT) && !defined(LOCAL_PATCH_COUNT)
-static const char *local_patches[] = {
+static const char * const local_patches[] = {
 	NULL
 	,NULL
 };

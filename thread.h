@@ -1,6 +1,6 @@
 /*    thread.h
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, 2004, 2005
+ *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
  *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
@@ -335,7 +335,7 @@
     STMT_START {						\
 	int _eC_;						\
 	if ((_eC_ = pthread_key_create(&PL_thr_key, 0))) {	\
-            write(2, "panic: pthread_key_create failed\n", 33); \
+            write(2, STR_WITH_LEN("panic: pthread_key_create failed\n")); \
 	    exit(1);						\
 	}							\
     } STMT_END

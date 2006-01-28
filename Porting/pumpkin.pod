@@ -455,7 +455,7 @@ This is to ease maintenance.  When Configure gets updated, the parts
 sometimes get scrambled around, and the changes in config_H can
 sometimes be very hard to follow.  config.sh, on the other hand, can
 safely be sorted, so it's easy to track (typically very small) changes
-to config.sh and then propoagate them to a canned 'config.h' by any
+to config.sh and then propagate them to a canned 'config.h' by any
 number of means, including a perl script in win32/ or carrying 
 config.sh and config_h.SH to a Unix system and running sh
 config_h.SH.)  Vms uses configure.com to generate its own config.sh
@@ -479,7 +479,7 @@ directories.
 
 =head2 make regen_perly
 
-If perly.y has been edited, it is nessary to run this target to rebuild
+If perly.y has been edited, it is necessary to run this target to rebuild
 perly.h, perly.act and perly.tab. In fact this target just runs the Perl
 script regen_perly.pl. Note that perly.c is I<not> rebuilt; this is just a
 plain static file now. 
@@ -587,7 +587,7 @@ time around, may be tackled in the future.  Update the file to reflect
 the situation as it stands when you hand over the pumpkin.
 
 You might like, early in your pumpkin-holding career, to see if you
-can find champions for partiticular issues on the to-do list: an issue
+can find champions for particular issues on the to-do list: an issue
 owned is an issue more likely to be resolved.
 
 There are also some more porting-specific L</Todo> items later in this
@@ -713,43 +713,6 @@ branches.
 
 =over 4
 
-=item CHECK_FORMAT
-
-If you have gcc, you can test the correct use of printf-style
-arguments.  Run C<Configure> with S<-Dccflags='-DCHECK_FORMAT
--Wformat'> (and S<-Dcc=gcc>, if you are not on a system where C<cc>
-is C<gcc>) and run C<make>.  The compiler will produce warnings of
-incorrect use of format arguments.  
-
-As of change 23767, CHECK_FORMAT changes perl-defined formats
-to obscure (but standard) formats, and then traps the obscure
-format.  The resulting perl executable operates properly but 
-you should not use the executable produced by this process.
-
-=over 4
-
-=item *
- 
-A more accurate approach is the following commands:
-
-    make clean
-    make all OPTIMIZE='-DCHECK_FORMAT -Wformat' >& make.log  
-    perl -nwe 'print if /^\S+:/ and not /^make\b/' make.log
-
-=item *
-
-A more thorough approach to compiler warnings is
-
-    make clean
-    make miniperl OPTIMIZE=-O\ -DCHECK_FORMAT >& make.log
-    make all OPTIMIZE=-O\ -DCHECK_FORMAT\ -Wall\ -Wno-unused\
-			    -Wno-uninitialized >>& make.log
-    perl -nwe 'print if /^\S+:/ and not /^make\b/' make.log
-
-=back
-
-(-Wformat support by Robin Barker.)
-
 =item gcc -ansi -pedantic
 
 Configure -Dgccansipedantic [ -Dcc=gcc ] will enable (via the cflags script,
@@ -830,41 +793,9 @@ The only currently known leaks happen when there are compile-time errors
 within eval or require.  (Fixing these is non-trivial, unfortunately, but
 they must be fixed eventually.)
 
-=head1 Common Gotcha's
+=head1 Common Gotchas
 
 =over 4
-
-=item #elif
-
-The '#elif' preprocessor directive is not understood on all systems.
-Specifically, I know that Pyramids don't understand it.  Thus instead of the
-simple
-
-	#if defined(I_FOO)
-	#  include <foo.h>
-	#elif defined(I_BAR)
-	#  include <bar.h>
-	#else
-	#  include <fubar.h>
-	#endif
-
-You have to do the more Byzantine
-
-	#if defined(I_FOO)
-	#  include <foo.h>
-	#else
-	#  if defined(I_BAR)
-	#    include <bar.h>
-	#  else
-	#    include <fubar.h>
-	#  endif
-	#endif
-
-Incidentally, whitespace between the leading '#' and the preprocessor
-command is not guaranteed, but is very portable and you may use it freely.
-I think it makes things a bit more readable, especially once things get
-rather deeply nested.  I also think that things should almost never get
-too deeply nested,  so it ought to be a moot point :-)
 
 =item Probably Prefer POSIX
 

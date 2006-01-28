@@ -15,7 +15,7 @@ my $no_signedness = $] > 5.009 ? '' :
 plan tests => 14697;
 
 use strict;
-use warnings;
+use warnings qw(FATAL all);
 use Config;
 
 my $Is_EBCDIC = (defined $Config{ebcdic} && $Config{ebcdic} eq 'define');
@@ -43,7 +43,7 @@ if ($no_signedness) {
 }
 
 for my $size ( 16, 32, 64 ) {
-  if (exists $Config{"u${size}size"} and $Config{"u${size}size"} != ($size >> 3)) {
+  if (defined $Config{"u${size}size"} and $Config{"u${size}size"} != ($size >> 3)) {
     push @valid_errors, qr/^Perl_my_$maybe_not_avail$size\(\) not available/;
   }
 }
@@ -129,6 +129,7 @@ sub list_eq ($$) {
 
     my $foo;
     open(BIN, $Perl) || die "Can't open $Perl: $!\n";
+    binmode BIN;
     sysread BIN, $foo, 8192;
     close BIN;
 
@@ -368,7 +369,7 @@ SKIP: {
 # temps
 sub foo { my $a = "a"; return $a . $a++ . $a++ }
 {
-  use warnings;
+  use warnings qw(NONFATAL all);;
   my $warning;
   local $SIG{__WARN__} = sub {
       $warning = $_[0];
@@ -943,6 +944,8 @@ SKIP: {
 
     # does unpack U0U on byte data warn?
     {
+	use warnings qw(NONFATAL all);;
+
         my $bad = pack("U0C", 255);
         local $SIG{__WARN__} = sub { $@ = "@_" };
         my @null = unpack('U0U', $bad);
@@ -1191,11 +1194,6 @@ SKIP: {
 }
 
 {  # more on grouping (W.Laun)
-  use warnings;
-  my $warning;
-  local $SIG{__WARN__} = sub {
-      $warning = $_[0];
-  };
   # @ absolute within ()-group
   my $badc = pack( '(a)*', unpack( '(@1a @0a @2)*', 'abcd' ) );
   is( $badc, 'badc' );
@@ -1234,7 +1232,7 @@ SKIP: {
 }
 
 { # syntax checks (W.Laun)
-  use warnings;
+  use warnings qw(NONFATAL all);;
   my @warning;
   local $SIG{__WARN__} = sub {
       push( @warning, $_[0] );
@@ -1355,6 +1353,7 @@ SKIP: {
 	     my $p = eval { pack $junk1, @list2 };
              skip "cannot pack '$type' on this perl", 12
                if is_valid_error($@);
+	     die "pack $junk1 failed: $@" if $@;
 
 	     my $half = int( (length $p)/2 );
 	     for my $move ('', "X$half", "X!$half", 'x1', 'x!8', "x$half") {
@@ -1405,6 +1404,7 @@ is(scalar unpack('A /A /A Z20', '3004bcde'), 'bcde');
   $b =~ s/(?:17000+|16999+)\d+(e-45) /17$1 /gi; # stringification is gamble
   is($b, "@a @a");
 
+  use warnings qw(NONFATAL all);;
   my $warning;
   local $SIG{__WARN__} = sub {
       $warning = $_[0];
@@ -1496,6 +1496,7 @@ is(unpack('c'), 65, "one-arg unpack (change #18751)"); # defaulting to $_
 }
 
 {
+    use warnings qw(NONFATAL all);;
     my $warning;
     local $SIG{__WARN__} = sub {
         $warning = $_[0];

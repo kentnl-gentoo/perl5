@@ -1,5 +1,6 @@
 # B::Deparse.pm
-# Copyright (c) 1998-2000, 2002, 2003 Stephen McCamant. All rights reserved.
+# Copyright (c) 1998-2000, 2002, 2003, 2004, 2005, 2006 Stephen McCamant.
+# All rights reserved.
 # This module is free software; you can redistribute and/or modify
 # it under the same terms as Perl itself.
 
@@ -19,7 +20,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          CVf_METHOD CVf_LOCKED CVf_LVALUE CVf_ASSERTION
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE PMf_SKIPWHITE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = 0.69;
+$VERSION = 0.73;
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -116,6 +117,11 @@ use warnings ();
 # - option to use Data::Dumper for constants
 # - more bug fixes
 # - discovered lots more bugs not yet fixed
+#
+# ...
+#
+# Changes between 0.72 and 0.73
+# - support new switch constructs
 
 # Todo:
 #  (See also BUGS section at the end of this file)
@@ -1183,6 +1189,7 @@ sub deparse_root {
     local(@$self{qw'curstash warnings hints'})
       = @$self{qw'curstash warnings hints'};
     my @kids;
+    return if null $op->first; # Can happen, e.g., for Bytecode without -k
     for (my $kid = $op->first->sibling; !null($kid); $kid = $kid->sibling) {
 	push @kids, $kid;
     }
@@ -1225,7 +1232,7 @@ Carp::confess() unless ref($gv) eq "B::GV";
     my $name = $gv->SAFENAME;
     if (($stash eq 'main' && $globalnames{$name})
 	or ($stash eq $self->{'curstash'} && !$globalnames{$name})
-	or $name =~ /^[^A-Za-z_]/)
+	or $name =~ /^[^A-Za-z_:]/)
     {
 	$stash = "";
     } else {
@@ -1412,10 +1419,10 @@ sub pp_nextstate {
 
 sub declare_warnings {
     my ($from, $to) = @_;
-    if (($to & WARN_MASK) eq warnings::bits("all")) {
+    if (($to & WARN_MASK) eq (warnings::bits("all") & WARN_MASK)) {
 	return "use warnings;\n";
     }
-    elsif (($to & WARN_MASK) eq "\0"x length($to)) {
+    elsif (($to & WARN_MASK) eq ("\0"x length($to) & WARN_MASK)) {
 	return "no warnings;\n";
     }
     return "BEGIN {\${^WARNING_BITS} = ".perlstring($to)."}\n";
@@ -1632,6 +1639,38 @@ sub pp_ggrgid { unop(@_, "getgrgid") }
 
 sub pp_lock { unop(@_, "lock") }
 
+sub pp_continue { unop(@_, "continue"); }
+sub pp_break {
+    my ($self, $op) = @_;
+    return "" if $op->flags & OPf_SPECIAL;
+    unop(@_, "break");
+}
+
+sub givwhen {
+    my $self = shift;
+    my($op, $cx, $givwhen) = @_;
+
+    my $enterop = $op->first;
+    my ($head, $block);
+    if ($enterop->flags & OPf_SPECIAL) {
+	$head = "default";
+	$block = $self->deparse($enterop->first, 0);
+    }
+    else {
+	my $cond = $enterop->first;
+	my $cond_str = $self->deparse($cond, 1);
+	$head = "$givwhen ($cond_str)";
+	$block = $self->deparse($cond->sibling, 0);
+    }
+
+    return "$head {\n".
+	"\t$block\n".
+	"\b}\cK";
+}
+
+sub pp_leavegiven { givwhen(@_, "given"); }
+sub pp_leavewhen  { givwhen(@_, "when"); }
+
 sub pp_exists {
     my $self = shift;
     my($op, $cx) = @_;
@@ -1680,15 +1719,16 @@ sub pp_delete {
 sub pp_require {
     my $self = shift;
     my($op, $cx) = @_;
+    my $opname = $op->flags & OPf_SPECIAL ? 'CORE::require' : 'require';
     if (class($op) eq "UNOP" and $op->first->name eq "const"
 	and $op->first->private & OPpCONST_BARE)
     {
 	my $name = $self->const_sv($op->first)->PV;
 	$name =~ s[/][::]g;
 	$name =~ s/\.pm//g;
-	return "require $name";
+	return "$opname $name";
     } else {	
-	$self->unop($op, $cx, "require");
+	$self->unop($op, $cx, $opname);
     }
 }
 
@@ -2006,6 +2046,16 @@ sub pp_scmp { binop(@_, "cmp", 14) }
 
 sub pp_sassign { binop(@_, "=", 7, SWAP_CHILDREN) }
 sub pp_aassign { binop(@_, "=", 7, SWAP_CHILDREN | LIST_CONTEXT) }
+
+sub pp_smartmatch {
+    my ($self, $op, $cx) = @_;
+    if ($op->flags & OPf_SPECIAL) {
+	return $self->deparse($op->first, $cx);
+    }
+    else {
+	binop(@_, "~~", 14);
+    }
+}
 
 # `.' is special because concats-of-concats are optimized to save copying
 # by making all but the first concat stacked. The effect is as if the
@@ -2327,7 +2377,7 @@ sub indirop {
 	# give bareword warnings in that case. Therefore if context
 	# requires, we'll put parens around the outside "(sort f 1, 2,
 	# 3)". Unfortunately, we'll currently think the parens are
-	# neccessary more often that they really are, because we don't
+	# necessary more often that they really are, because we don't
 	# distinguish which side of an assignment we're on.
 	if ($cx >= 5) {
 	    return "($name2 $args)";
@@ -3148,7 +3198,7 @@ sub pp_entersub {
 	no warnings 'uninitialized';
 	$declared = exists $self->{'subs_declared'}{$kid}
 	    || (
-		 defined &{ %{$self->{'curstash'}."::"}->{$kid} }
+		 defined &{ ${$self->{'curstash'}."::"}{$kid} }
 		 && !exists
 		     $self->{'subs_deparsed'}{$self->{'curstash'}."::".$kid}
 		 && defined prototype $self->{'curstash'}."::".$kid
@@ -3368,14 +3418,16 @@ sub re_unback {
 sub balanced_delim {
     my($str) = @_;
     my @str = split //, $str;
-    my($ar, $open, $close, $fail, $c, $cnt);
+    my($ar, $open, $close, $fail, $c, $cnt, $last_bs);
     for $ar (['[',']'], ['(',')'], ['<','>'], ['{','}']) {
 	($open, $close) = @$ar;
-	$fail = 0; $cnt = 0;
+	$fail = 0; $cnt = 0; $last_bs = 0;
 	for $c (@str) {
 	    if ($c eq $open) {
+		$fail = 1 if $last_bs;
 		$cnt++;
 	    } elsif ($c eq $close) {
+		$fail = 1 if $last_bs;
 		$cnt--;
 		if ($cnt < 0) {
 		    # qq()() isn't ")("
@@ -3383,6 +3435,7 @@ sub balanced_delim {
 		    last;
 		}
 	    }
+	    $last_bs = $c eq '\\';
 	}
 	$fail = 1 if $cnt != 0;
 	return ($open, "$open$str$close") if not $fail;

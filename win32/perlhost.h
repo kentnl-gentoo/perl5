@@ -1065,7 +1065,7 @@ PerlLIOUnlink(struct IPerlLIO* piPerl, const char *filename)
 }
 
 int
-PerlLIOUtime(struct IPerlLIO* piPerl, char *filename, struct utimbuf *times)
+PerlLIOUtime(struct IPerlLIO* piPerl, const char *filename, struct utimbuf *times)
 {
     return win32_utime(filename, times);
 }
@@ -1136,7 +1136,7 @@ PerlDirClose(struct IPerlDir* piPerl, DIR *dirp)
 }
 
 DIR*
-PerlDirOpen(struct IPerlDir* piPerl, char *filename)
+PerlDirOpen(struct IPerlDir* piPerl, const char *filename)
 {
     return win32_opendir(filename);
 }
@@ -1693,6 +1693,7 @@ win32_start_child(LPVOID arg)
     PerlInterpreter *my_perl = (PerlInterpreter*)arg;
     GV *tmpgv;
     int status;
+    HWND parent_message_hwnd;
 #ifdef PERL_SYNC_FORK
     static long sync_fork_id = 0;
     long id = ++sync_fork_id;
@@ -1719,7 +1720,15 @@ win32_start_child(LPVOID arg)
 	sv_setiv(sv, -(IV)w32_pseudo_id);
 	SvREADONLY_on(sv);
     }
+#ifdef PERL_USES_PL_PIDSTATUS    
     hv_clear(PL_pidstatus);
+#endif    
+
+    /* create message window and tell parent about it */
+    parent_message_hwnd = w32_message_hwnd;
+    w32_message_hwnd = win32_create_message_window();
+    if (parent_message_hwnd != NULL)
+        PostMessage(parent_message_hwnd, WM_USER_MESSAGE, w32_pseudo_id, (LONG)w32_message_hwnd);
 
     /* push a zero on the stack (we are the child) */
     {
@@ -1750,7 +1759,7 @@ restart:
 	    PL_curstash = PL_defstash;
 	    if (PL_endav && !PL_minus_c)
 		call_list(oldscope, PL_endav);
-	    status = STATUS_NATIVE_EXPORT;
+	    status = STATUS_EXIT;
 	    break;
 	case 3:
 	    if (PL_restartop) {
@@ -1824,6 +1833,11 @@ PerlProcFork(struct IPerlProc* piPerl)
     id = win32_start_child((LPVOID)new_perl);
     PERL_SET_THX(aTHX);
 #  else
+    if (w32_message_hwnd == INVALID_HANDLE_VALUE)
+        w32_message_hwnd = win32_create_message_window();
+    new_perl->Isys_intern.message_hwnd = w32_message_hwnd;
+    w32_pseudo_child_message_hwnds[w32_num_pseudo_children] =
+        (w32_message_hwnd == NULL) ? (HWND)NULL : (HWND)INVALID_HANDLE_VALUE;
 #    ifdef USE_RTL_THREAD_API
     handle = (HANDLE)_beginthreadex((void*)NULL, 0, win32_start_child,
 				    (void*)new_perl, 0, (unsigned*)&id);
@@ -2216,7 +2230,7 @@ CPerlHost::GetChildDir(void)
     dTHX;
     int length;
     char* ptr;
-    New(0, ptr, MAX_PATH+1, char);
+    Newx(ptr, MAX_PATH+1, char);
     if(ptr) {
 	m_pvDir->GetCurrentDirectoryA(MAX_PATH+1, ptr);
 	length = strlen(ptr);
@@ -2263,7 +2277,7 @@ CPerlHost::CreateLocalEnvironmentStrings(VDir &vDir)
     // add the additional space used by changes made to the environment
     dwSize += CalculateEnvironmentSpace();
 
-    New(1, lpStr, dwSize, char);
+    Newx(lpStr, dwSize, char);
     lpPtr = lpStr;
     if(lpStr != NULL) {
 	// build the local environment
@@ -2412,13 +2426,7 @@ CPerlHost::Chdir(const char *dirname)
 	errno = ENOENT;
 	return -1;
     }
-    if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
-	A2WHELPER(dirname, wBuffer, sizeof(wBuffer));
-	ret = m_pvDir->SetCurrentDirectoryW(wBuffer);
-    }
-    else
-	ret = m_pvDir->SetCurrentDirectoryA((char*)dirname);
+    ret = m_pvDir->SetCurrentDirectoryA((char*)dirname);
     if(ret < 0) {
 	errno = ENOENT;
     }

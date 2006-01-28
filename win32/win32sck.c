@@ -125,7 +125,7 @@ my_fdopen(int fd, char *mode)
     /*
      * If we get here, then fd is actually a socket.
      */
-    Newz(1310, fp, 1, FILE);	/* XXX leak, good thing this code isn't used */
+    Newxz(fp, 1, FILE);	/* XXX leak, good thing this code isn't used */
     if(fp == NULL) {
 	errno = ENOMEM;
 	return NULL;
@@ -413,7 +413,7 @@ open_ifs_socket(int af, int type, int protocol)
 	WSAPROTOCOL_INFOW *proto_buffers;
         int protocols_available = 0;       
  
-        New(1, proto_buffers, proto_buffers_len / sizeof(WSAPROTOCOL_INFOW),
+        Newx(proto_buffers, proto_buffers_len / sizeof(WSAPROTOCOL_INFOW),
             WSAPROTOCOL_INFOW);
 
         if ((protocols_available = WSCEnumProtocols(NULL, proto_buffers, 
@@ -426,7 +426,8 @@ open_ifs_socket(int af, int type, int protocol)
 
                 if ((af != AF_UNSPEC && af != proto_buffers[i].iAddressFamily)
                     || (type != proto_buffers[i].iSocketType)
-                    || (protocol != 0 && protocol != proto_buffers[i].iProtocol))
+                    || (protocol != 0 && proto_buffers[i].iProtocol != 0 &&
+                        protocol != proto_buffers[i].iProtocol))
                     continue;
 
                 if ((proto_buffers[i].dwServiceFlags1 & XP1_IFS_HANDLES) == 0)

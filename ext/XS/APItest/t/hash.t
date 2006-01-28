@@ -55,6 +55,40 @@ main_tests (\@keys, \@testkeys, ' [utf8 hash]');
       "hv_store doesn't insert a key with the raw utf8 on a tied hash");
 }
 
+{
+    my $strtab = strtab();
+    is (ref $strtab, 'HASH', "The shared string table quacks like a hash");
+    my $wibble = "\0";
+    eval {
+	$strtab->{$wibble}++;
+    };
+    my $prefix = "Cannot modify shared string table in hv_";
+    my $what = $prefix . 'fetch';
+    like ($@, qr/^$what/,$what);
+    eval {
+	XS::APItest::Hash::store($strtab, 'Boom!',  1)
+    };
+    $what = $prefix . 'store';
+    like ($@, qr/^$what/, $what);
+    if (0) {
+	A::B->method();
+    }
+    # DESTROY should be in there.
+    eval {
+	delete $strtab->{DESTROY};
+    };
+    $what = $prefix . 'delete';
+    like ($@, qr/^$what/, $what);
+    # I can't work out how to get to the code that flips the wasutf8 flag on
+    # the hash key without some ikcy XS
+}
+
+{
+    is_deeply([&XS::APItest::Hash::test_hv_free_ent], [2,2,1,1],
+	      "hv_free_ent frees the value immediately");
+    is_deeply([&XS::APItest::Hash::test_hv_delayfree_ent], [2,2,2,1],
+	      "hv_delayfree_ent keeps the value around until FREETMPS");
+}
 exit;
 
 ################################   The End   ################################

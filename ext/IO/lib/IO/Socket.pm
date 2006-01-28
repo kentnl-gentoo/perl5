@@ -19,11 +19,11 @@ use Errno;
 # legacy
 
 require IO::Socket::INET;
-require IO::Socket::UNIX if ($^O ne 'epoc');
+require IO::Socket::UNIX if ($^O ne 'epoc' && $^O ne 'symbian');
 
 @ISA = qw(IO::Handle);
 
-$VERSION = "1.28";
+$VERSION = "1.29_01";
 
 @EXPORT_OK = qw(sockatmark);
 
@@ -141,6 +141,13 @@ sub connect {
     $err ? undef : $sock;
 }
 
+sub close {
+    @_ == 1 or croak 'usage: $sock->close()';
+    my $sock = shift;
+    ${*$sock}{'io_socket_peername'} = undef;
+    $sock->SUPER::close();
+}
+
 sub bind {
     @_ == 2 or croak 'usage: $sock->bind(NAME)';
     my $sock = shift;
@@ -195,9 +202,7 @@ sub sockname {
 sub peername {
     @_ == 1 or croak 'usage: $sock->peername()';
     my($sock) = @_;
-    getpeername($sock)
-      || ${*$sock}{'io_socket_peername'}
-      || undef;
+    ${*$sock}{'io_socket_peername'} ||= getpeername($sock);
 }
 
 sub connected {
@@ -239,11 +244,12 @@ sub recv {
 sub shutdown {
     @_ == 2 or croak 'usage: $sock->shutdown(HOW)';
     my($sock, $how) = @_;
+    ${*$sock}{'io_socket_peername'} = undef;
     shutdown($sock, $how);
 }
 
 sub setsockopt {
-    @_ == 4 or croak '$sock->setsockopt(LEVEL, OPTNAME)';
+    @_ == 4 or croak '$sock->setsockopt(LEVEL, OPTNAME, OPTVAL)';
     setsockopt($_[0],$_[1],$_[2],$_[3]);
 }
 
@@ -404,7 +410,7 @@ false otherwise.
     use IO::Socket;
 
     my $sock = IO::Socket::INET->new('some_server');
-    $sock->read(1024,$data) until $sock->atmark;
+    $sock->read($data, 1024) until $sock->atmark;
 
 Note: this is a reasonably new addition to the family of socket
 functions, so all systems may not support this yet.  If it is

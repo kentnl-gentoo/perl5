@@ -2,7 +2,7 @@ package base;
 
 use strict 'vars';
 use vars qw($VERSION);
-$VERSION = '2.06';
+$VERSION = '2.07';
 
 # constant.pm is slow
 sub SUCCESS () { 1 }
@@ -78,7 +78,7 @@ sub import {
 	      unless defined ${$base.'::VERSION'};
         }
         else {
-            local $SIG{__DIE__} = 'IGNORE';
+            local $SIG{__DIE__};
             eval "require $base";
             # Only ignore "Can't locate" errors from our eval require.
             # Other fatal errors (syntax etc) must be reported.
@@ -97,7 +97,7 @@ ERROR
         push @{"$inheritor\::ISA"}, $base;
 
         if ( has_fields($base) || has_attr($base) ) {
-	    # No multiple fields inheritence *suck*
+	    # No multiple fields inheritance *suck*
 	    if ($fields_base) {
 		require Carp;
 		Carp::croak("Can't multiply inherit %FIELDS");
@@ -192,7 +192,7 @@ it, <base> will define $VERSION in the base package, setting it to the string
 C<-1, set by base.pm>.
 
 Will also initialize the fields if one of the base classes has it.
-Multiple inheritence of fields is B<NOT> supported, if two or more
+Multiple inheritance of fields is B<NOT> supported, if two or more
 base classes each have inheritable fields the 'base' pragma will
 croak.  See L<fields>, L<public> and L<protected> for a description of
 this feature.

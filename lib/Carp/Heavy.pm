@@ -7,12 +7,72 @@ Carp::Heavy - heavy machinery, no user serviceable parts inside
 
 =cut
 
-# use strict; # not yet
-
 # On one line so MakeMaker will see it.
 use Carp;  our $VERSION = $Carp::VERSION;
+# use strict; # not yet
+
+# 'use Carp' just installs some very lightweight stubs; the first time
+# these are called, they require Carp::Heavy which installs the real
+# routines.
+
+# Comments added by Andy Wardley <abw@kfs.org> 09-Apr-98, based on an
+# _almost_ complete understanding of the package.  Corrections and
+# comments are welcome.
+
+# The members of %Internal are packages that are internal to perl.
+# Carp will not report errors from within these packages if it
+# can.  The members of %CarpInternal are internal to Perl's warning
+# system.  Carp will not report errors from within these packages
+# either, and will not report calls *to* these packages for carp and
+# croak.  They replace $CarpLevel, which is deprecated.    The
+# $Max(EvalLen|(Arg(Len|Nums)) variables are used to specify how the eval
+# text and function arguments should be formatted when printed.
+
+# Comments added by Jos I. Boumans <kane@dwim.org> 11-Aug-2004
+# I can not get %CarpInternal or %Internal to work as advertised,
+# therefore leaving it out of the below documentation.
+# $CarpLevel may be decprecated according to the last comment, but
+# after 6 years, it's still around and in heavy use ;)
+
+# disable these by default, so they can live w/o require Carp
+$CarpInternal{Carp}++;
+$CarpInternal{warnings}++;
+$Internal{Exporter}++;
+$Internal{'Exporter::Heavy'}++;
+
 
 our ($CarpLevel, $MaxArgNums, $MaxEvalLen, $MaxArgLen, $Verbose);
+
+# XXX longmess_real and shortmess_real should really be merged into
+# XXX {long|sort}mess_heavy at some point
+
+sub  longmess_real {
+    # Icky backwards compatibility wrapper. :-(
+    my $call_pack = caller();
+    if ($Internal{$call_pack} or $CarpInternal{$call_pack}) {
+      return longmess_heavy(@_);
+    }
+    else {
+      local $CarpLevel = $CarpLevel + 1;
+      return longmess_heavy(@_);
+    }
+};
+
+sub shortmess_real {
+    # Icky backwards compatibility wrapper. :-(
+    my $call_pack = caller();
+    local @CARP_NOT = caller();
+    shortmess_heavy(@_);
+};
+
+# replace the two hooks added by Carp
+
+# aliasing the whole glob rather than just the CV slot avoids 'redefined'
+# warnings, even in the presence of perl -W (as used by lib/warnings.t !)
+
+*longmess_jmp  = *longmess_real;
+*shortmess_jmp = *shortmess_real;
+
 
 sub caller_info {
   my $i = shift(@_) + 1;
@@ -43,11 +103,10 @@ sub caller_info {
 # Transform an argument to a function into a string.
 sub format_arg {
   my $arg = shift;
-  if (not defined($arg)) {
-    $arg = 'undef';
-  }
-  elsif (ref($arg)) {
+  if (ref($arg)) {
       $arg = defined($overload::VERSION) ? overload::StrVal($arg) : "$arg";
+  }elsif (not defined($arg)) {
+    $arg = 'undef';
   }
   $arg =~ s/'/\\'/g;
   $arg = str_len_trim($arg, $MaxArgLen);
@@ -56,9 +115,10 @@ sub format_arg {
   $arg = "'$arg'" unless $arg =~ /^-?[\d.]+\z/;
 
   # The following handling of "control chars" is direct from
-  # the original code - I think it is broken on Unicode though.
+  # the original code - it is broken on Unicode though.
   # Suggestions?
-  $arg =~ s/([[:cntrl:]]|[[:^ascii:]])/sprintf("\\x{%x}",ord($1))/eg;
+  utf8::is_utf8($arg)
+    or $arg =~ s/([[:cntrl:]]|[[:^ascii:]])/sprintf("\\x{%x}",ord($1))/eg;
   return $arg;
 }
 
@@ -171,6 +231,7 @@ sub short_error_loc {
   {
     my $called = caller($i++);
     my $caller = caller($i);
+
     return 0 unless defined($caller); # What happened?
     redo if $Internal{$caller};
     redo if $CarpInternal{$called};
@@ -180,6 +241,7 @@ sub short_error_loc {
   }
   return $i - 1;
 }
+
 
 sub shortmess_heavy {
   return longmess_heavy(@_) if $Verbose;

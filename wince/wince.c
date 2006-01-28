@@ -354,7 +354,7 @@ has_shell_metachars(char *ptr)
  * the library functions will get the correct environment
  */
 PerlIO *
-Perl_my_popen(pTHX_ char *cmd, char *mode)
+Perl_my_popen(pTHX_ const char *cmd, const char *mode)
 {
   printf("popen(%s)\n", cmd);
 
@@ -414,8 +414,8 @@ tokenize(const char *str, char **dest, char ***destv)
 	int slen = strlen(str);
 	register char *ret;
 	register char **retv;
-	New(1307, ret, slen+2, char);
-	New(1308, retv, (slen+3)/2, char*);
+	Newx(ret, slen+2, char);
+	Newx(retv, (slen+3)/2, char*);
 
 	retstart = ret;
 	retvstart = retv;
@@ -466,13 +466,10 @@ win32_times(struct tms *timebuf)
   return -1;
 }
 
-/* TODO */
 Sighandler_t
 win32_signal(int sig, Sighandler_t subcode)
 {
-  dTHX;
-  Perl_croak_nocontext("signal() TBD on this platform");
-  return FALSE;
+  return xcesignal(sig, subcode);
 }
 
 static void
@@ -541,8 +538,8 @@ do_spawn2(pTHX_ char *cmd, int exectype)
     /* Save an extra exec if possible. See if there are shell
      * metacharacters in it */
     if (!has_shell_metachars(cmd)) {
-	New(1301,argv, strlen(cmd) / 2 + 2, char*);
-	New(1302,cmd2, strlen(cmd) + 1, char);
+	Newx(argv, strlen(cmd) / 2 + 2, char*);
+	Newx(cmd2, strlen(cmd) + 1, char);
 	strcpy(cmd2, cmd);
 	a = argv;
 	for (s = cmd2; *s;) {
@@ -579,7 +576,7 @@ do_spawn2(pTHX_ char *cmd, int exectype)
 	char **argv;
 	int i = -1;
 	get_shell();
-	New(1306, argv, w32_perlshell_items + 2, char*);
+	Newx(argv, w32_perlshell_items + 2, char*);
 	while (++i < w32_perlshell_items)
 	    argv[i] = w32_perlshell_vec[i];
 	argv[i++] = cmd;
@@ -632,7 +629,7 @@ Perl_do_spawn_nowait(pTHX_ char *cmd)
 }
 
 bool
-Perl_do_exec(pTHX_ char *cmd)
+Perl_do_exec(pTHX_ const char *cmd)
 {
     do_spawn2(aTHX_ cmd, EXECF_EXEC);
     return FALSE;
@@ -643,7 +640,7 @@ Perl_do_exec(pTHX_ char *cmd)
  * return the pointer to the current file name.
  */
 DllExport DIR *
-win32_opendir(char *filename)
+win32_opendir(const char *filename)
 {
     dTHX;
     DIR			*dirp;
@@ -667,7 +664,7 @@ win32_opendir(char *filename)
 	return NULL;
 
     /* Get us a DIR structure */
-    Newz(1303, dirp, 1, DIR);
+    Newxz(dirp, 1, DIR);
 
     /* Create the search pattern */
     strcpy(scanname, filename);
@@ -716,7 +713,7 @@ win32_opendir(char *filename)
 	dirp->size = 128;
     else
 	dirp->size = idx;
-    New(1304, dirp->start, dirp->size, char);
+    Newx(dirp->start, dirp->size, char);
     strcpy(dirp->start, ptr);
     dirp->nfiles++;
     dirp->end = dirp->curr = dirp->start;
@@ -822,7 +819,7 @@ win32_closedir(DIR *dirp)
 /////!!!!!!!!!!! return here and do right stuff!!!!
 
 DllExport DIR *
-win32_opendir(char *filename)
+win32_opendir(const char *filename)
 {
   return opendir(filename);
 }
@@ -1727,7 +1724,7 @@ create_command_line(char *cname, STRLEN clen, const char * const *args)
     DEBUG_p(PerlIO_printf(Perl_debug_log, "\n"));
 
     argc = index;
-    New(1310, cmd, len, char);
+    Newx(cmd, len, char);
     ptr = cmd;
 
     if (bat_file) {
@@ -1828,7 +1825,7 @@ qualified_path(const char *cmd)
 
     /* look in PATH */
     pathstr = PerlEnv_getenv("PATH");
-    New(0, fullcmd, MAX_PATH+1, char);
+    Newx(fullcmd, MAX_PATH+1, char);
     curfullcmd = fullcmd;
 
     while (1) {
@@ -1937,17 +1934,10 @@ win32_get_childdir(void)
 {
     dTHX;
     char* ptr;
-    char szfilename[(MAX_PATH+1)*2];
-    if (USING_WIDE()) {
-	WCHAR wfilename[MAX_PATH+1];
-	GetCurrentDirectoryW(MAX_PATH+1, wfilename);
-	W2AHELPER(wfilename, szfilename, sizeof(szfilename));
-    }
-    else {
-	GetCurrentDirectoryA(MAX_PATH+1, szfilename);
-    }
+    char szfilename[MAX_PATH+1];
+    GetCurrentDirectoryA(MAX_PATH+1, szfilename);
 
-    New(0, ptr, strlen(szfilename)+1, char);
+    Newx(ptr, strlen(szfilename)+1, char);
     strcpy(ptr, szfilename);
     return ptr;
 }
@@ -1994,7 +1984,7 @@ win32_spawnvp(int mode, const char *cmdname, const char *const *argv)
 	/* if command name contains dquotes, must remove them */
 	if (strchr(cname, '"')) {
 	    cmd = cname;
-	    New(0,cname,clen+1,char);
+	    Newx(cname,clen+1,char);
 	    clen = 0;
 	    while (*cmd) {
 		if (*cmd != '"') {
@@ -2625,7 +2615,7 @@ Perl_init_os_extras(void)
     w32_perlshell_tokens = Nullch;
     w32_perlshell_items = -1;
     w32_fdpid = newAV(); /* XX needs to be in Perl_win32_init()? */
-    New(1313, w32_children, 1, child_tab);
+    Newx(w32_children, 1, child_tab);
     w32_num_children = 0;
 
     newXS("Win32::GetCwd", w32_GetCwd, file);
@@ -2937,11 +2927,11 @@ Perl_sys_intern_init(pTHX)
     w32_perlshell_vec		= (char**)NULL;
     w32_perlshell_items		= 0;
     w32_fdpid			= newAV();
-    New(1313, w32_children, 1, child_tab);
+    Newx(w32_children, 1, child_tab);
     w32_num_children		= 0;
 #  ifdef USE_ITHREADS
     w32_pseudo_id		= 0;
-    New(1313, w32_pseudo_children, 1, child_tab);
+    Newx(w32_pseudo_children, 1, child_tab);
     w32_num_pseudo_children	= 0;
 #  endif
     w32_init_socktype		= 0;
@@ -2974,9 +2964,9 @@ Perl_sys_intern_dup(pTHX_ struct interp_intern *src, struct interp_intern *dst)
     dst->perlshell_vec		= (char**)NULL;
     dst->perlshell_items	= 0;
     dst->fdpid			= newAV();
-    Newz(1313, dst->children, 1, child_tab);
+    Newxz(dst->children, 1, child_tab);
     dst->pseudo_id		= 0;
-    Newz(1313, dst->pseudo_children, 1, child_tab);
+    Newxz(dst->pseudo_children, 1, child_tab);
     dst->thr_intern.Winit_socktype = 0;
     dst->timerid                 = 0;
     dst->poll_count              = 0;

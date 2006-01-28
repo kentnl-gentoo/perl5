@@ -51,7 +51,11 @@
 #include "perlio.h"
 
 #ifndef Sighandler_t
+#  if defined(HAS_SIGACTION) && defined(SA_SIGINFO)
+typedef Signal_t (*Sighandler_t) (int, ...);
+#  else
 typedef Signal_t (*Sighandler_t) (int);
+#  endif
 #endif
 
 #if defined(PERL_IMPLICIT_SYS)
@@ -366,7 +370,7 @@ typedef int		(*LPMakedir)(struct IPerlDir*, const char*, int);
 typedef int		(*LPChdir)(struct IPerlDir*, const char*);
 typedef int		(*LPRmdir)(struct IPerlDir*, const char*);
 typedef int		(*LPDirClose)(struct IPerlDir*, DIR*);
-typedef DIR*		(*LPDirOpen)(struct IPerlDir*, char*);
+typedef DIR*		(*LPDirOpen)(struct IPerlDir*, const char*);
 typedef struct direct*	(*LPDirRead)(struct IPerlDir*, DIR*);
 typedef void		(*LPDirRewind)(struct IPerlDir*, DIR*);
 typedef void		(*LPDirSeek)(struct IPerlDir*, DIR*, long);
@@ -628,7 +632,7 @@ typedef int		(*LPLIONameStat)(struct IPerlLIO*, const char*,
 typedef char*		(*LPLIOTmpnam)(struct IPerlLIO*, char*);
 typedef int		(*LPLIOUmask)(struct IPerlLIO*, int);
 typedef int		(*LPLIOUnlink)(struct IPerlLIO*, const char*);
-typedef int		(*LPLIOUtime)(struct IPerlLIO*, char*, struct utimbuf*);
+typedef int		(*LPLIOUtime)(struct IPerlLIO*, const char*, struct utimbuf*);
 typedef int		(*LPLIOWrite)(struct IPerlLIO*, int, const void*,
 			    unsigned int);
 
@@ -915,8 +919,10 @@ struct IPerlProcInfo;
 typedef void		(*LPProcAbort)(struct IPerlProc*);
 typedef char*		(*LPProcCrypt)(struct IPerlProc*, const char*,
 			    const char*);
-typedef void		(*LPProcExit)(struct IPerlProc*, int);
-typedef void		(*LPProc_Exit)(struct IPerlProc*, int);
+typedef void		(*LPProcExit)(struct IPerlProc*, int)
+			    __attribute__noreturn__;
+typedef void		(*LPProc_Exit)(struct IPerlProc*, int)
+			    __attribute__noreturn__;
 typedef int		(*LPProcExecl)(struct IPerlProc*, const char*,
 			    const char*, const char*, const char*,
 			    const char*);

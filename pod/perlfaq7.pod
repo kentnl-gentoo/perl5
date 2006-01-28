@@ -1,6 +1,6 @@
 =head1 NAME
 
-perlfaq7 - General Perl Language Issues ($Revision: 1.22 $, $Date: 2005/03/27 07:19:01 $)
+perlfaq7 - General Perl Language Issues ($Revision: 1.28 $, $Date: 2005/12/31 00:54:37 $)
 
 =head1 DESCRIPTION
 
@@ -97,7 +97,7 @@ See L<perllexwarn> for more details.
 	no warnings;          # temporarily turn off warnings
 	$a = $b + $c;         # I know these might be undef
     }
-    
+
 Additionally, you can enable and disable categories of warnings.
 You turn off the categories you want to ignore and you can still
 get other categories of warnings.  See L<perllexwarn> for the
@@ -179,7 +179,7 @@ If you're looking for something a bit more rigorous, try L<perltoot>.
 (contributed by brian d foy)
 
 L<perlmod>, L<perlmodlib>, L<perlmodstyle> explain modules
-in all the gory details. L<perlnewmod> gives a a brief
+in all the gory details. L<perlnewmod> gives a brief
 overview of the process along with a couple of suggestions
 about style.
 
@@ -271,24 +271,40 @@ $line back in its caller's scope.
 
 =head2 What is variable suicide and how can I prevent it?
 
-Variable suicide is when you (temporarily or permanently) lose the
-value of a variable.  It is caused by scoping through my() and local()
-interacting with either closures or aliased foreach() iterator
-variables and subroutine arguments.  It used to be easy to
-inadvertently lose a variable's value this way, but now it's much
-harder.  Take this code:
+This problem was fixed in perl 5.004_05, so preventing it means upgrading
+your version of perl. ;)
 
-    my $f = "foo";
+Variable suicide is when you (temporarily or permanently) lose the value
+of a variable.  It is caused by scoping through my() and local()
+interacting with either closures or aliased foreach() iterator variables
+and subroutine arguments.  It used to be easy to inadvertently lose a
+variable's value this way, but now it's much harder.  Take this code:
+
+    my $f = 'foo';
     sub T {
-      while ($i++ < 3) { my $f = $f; $f .= "bar"; print $f, "\n" }
+      while ($i++ < 3) { my $f = $f; $f .= $i; print $f, "\n" }
     }
     T;
     print "Finally $f\n";
 
+If you are experiencing variable suicide, that C<my $f> in the subroutine
+doesn't pick up a fresh copy of the C<$f> whose value is <foo>. The output
+shows that inside the subroutine the value of C<$f> leaks through when it
+shouldn't, as in this output:
+
+	foobar
+	foobarbar
+	foobarbarbar
+	Finally foo
+
 The $f that has "bar" added to it three times should be a new C<$f>
-(C<my $f> should create a new local variable each time through the loop).
-It isn't, however.  This was a bug, now fixed in the latest releases
-(tested against 5.004_05, 5.005_03, and 5.005_56).
+C<my $f> should create a new lexical variable each time through the loop.
+The expected output is:
+
+	foobar
+	foobar
+	foobar
+	Finally foo
 
 =head2 How can I pass/return a {Function, FileHandle, Array, Hash, Method, Regex}?
 
@@ -296,7 +312,7 @@ With the exception of regexes, you need to pass references to these
 objects.  See L<perlsub/"Pass by Reference"> for this particular
 question, and L<perlref> for information on references.
 
-See ``Passing Regexes'', below, for information on passing regular
+See "Passing Regexes", below, for information on passing regular
 expressions.
 
 =over 4
@@ -411,42 +427,62 @@ You could also investigate the can() method in the UNIVERSAL class
 
 =head2 How do I create a static variable?
 
-As with most things in Perl, TMTOWTDI.  What is a "static variable" in
-other languages could be either a function-private variable (visible
-only within a single function, retaining its value between calls to
-that function), or a file-private variable (visible only to functions
-within the file it was declared in) in Perl.
+(contributed by brian d foy)
 
-Here's code to implement a function-private variable:
+Perl doesn't have "static" variables, which can only be accessed from
+the function in which they are declared. You can get the same effect
+with lexical variables, though.
+
+You can fake a static variable by using a lexical variable which goes
+out of scope. In this example, you define the subroutine C<counter>, and
+it uses the lexical variable C<$count>. Since you wrap this in a BEGIN
+block, C<$count> is defined at compile-time, but also goes out of
+scope at the end of the BEGIN block. The BEGIN block also ensures that
+the subroutine and the value it uses is defined at compile-time so the
+subroutine is ready to use just like any other subroutine, and you can
+put this code in the same place as other subroutines in the program
+text (i.e. at the end of the code, typically). The subroutine
+C<counter> still has a reference to the data, and is the only way you
+can access the value (and each time you do, you increment the value).
+The data in chunk of memory defined by C<$count> is private to
+C<counter>.
 
     BEGIN {
-        my $counter = 42;
-        sub prev_counter { return --$counter }
-        sub next_counter { return $counter++ }
+        my $count = 1;
+        sub counter { $count++ }
     }
 
-Now prev_counter() and next_counter() share a private variable $counter
-that was initialized at compile time.
+    my $start = count();
 
-To declare a file-private variable, you'll still use a my(), putting
-the declaration at the outer scope level at the top of the file.
-Assume this is in file Pax.pm:
+    .... # code that calls count();
 
-    package Pax;
-    my $started = scalar(localtime(time()));
+    my $end = count();
 
-    sub begun { return $started }
+In the previous example, you created a function-private variable
+because only one function remembered its reference. You could define
+multiple functions while the variable is in scope, and each function
+can share the "private" variable. It's not really "static" because you
+can access it outside the function while the lexical variable is in
+scope, and even create references to it. In this example,
+C<increment_count> and C<return_count> share the variable. One
+function adds to the value and the other simply returns the value.
+They can both access C<$count>, and since it has gone out of scope,
+there is no other way to access it.
 
-When C<use Pax> or C<require Pax> loads this module, the variable will
-be initialized.  It won't get garbage-collected the way most variables
-going out of scope do, because the begun() function cares about it,
-but no one else can get it.  It is not called $Pax::started because
-its scope is unrelated to the package.  It's scoped to the file.  You
-could conceivably have several packages in that same file all
-accessing the same private variable, but another file with the same
-package couldn't get to it.
+    BEGIN {
+        my $count = 1;
+        sub increment_count { $count++ }
+        sub return_count    { $count }
+    }
 
-See L<perlsub/"Persistent Private Variables"> for details.
+To declare a file-private variable, you still use a lexical variable.
+A file is also a scope, so a lexical variable defined in the file
+cannot be seen from any other file.
+
+See L<perlsub/"Persistent Private Variables"> for more information.
+The discussion of closures in L<perlref> may help you even though we
+did not use anonymous subroutines in this answer. See
+L<perlsub/"Persistent Private Variables"> for details.
 
 =head2 What's the difference between dynamic and lexical (static) scoping?  Between local() and my()?
 
@@ -757,7 +793,7 @@ with <=end>.
     by everyone
 
 	=end comment
-	
+
     =cut
 
     # program continues
@@ -904,12 +940,12 @@ settings.
 
 If you see "bad interpreter - no such file or directory", the first
 line in your perl script (the "shebang" line) does not contain the
-right path to perl (or any other program capable of running scripts). 
+right path to perl (or any other program capable of running scripts).
 Sometimes this happens when you move the script from one machine to
 another and each machine has a different path to perl---/usr/bin/perl
 versus /usr/local/bin/perl for instance. It may also indicate
-that the source machine has CRLF line terminators and the 
-destination machine has LF only: the shell tries to find 
+that the source machine has CRLF line terminators and the
+destination machine has LF only: the shell tries to find
 /usr/bin/perl<CR>, but can't.
 
 If you see "bad interpreter: Permission denied", you need to make your
@@ -926,7 +962,7 @@ where you expect it so you need to adjust your shebang line.
 
 =head1 AUTHOR AND COPYRIGHT
 
-Copyright (c) 1997-2005 Tom Christiansen, Nathan Torkington, and
+Copyright (c) 1997-2006 Tom Christiansen, Nathan Torkington, and
 other authors as noted. All rights reserved.
 
 This documentation is free; you can redistribute it and/or modify it

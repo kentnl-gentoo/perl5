@@ -27,7 +27,7 @@ BEGIN {
 use OptreeCheck;	# ALSO DOES @ARGV HANDLING !!!!!!
 use Config;
 
-plan tests => 6;
+plan tests => 7;
 
 require_ok("B::Concise");
 
@@ -41,9 +41,17 @@ my $out = runperl(
 my $src = q[our ($beg, $chk, $init, $end) = qq{'foo'}; BEGIN { $beg++ } CHECK { $chk++ } INIT { $init++ } END { $end++ }];
 
 
+my @warnings_todo;
+@warnings_todo = (todo =>
+   "Change 23768 (Remove Carp from warnings.pm) alters expected output, not"
+   . "propagated to 5.8.x")
+    if $] < 5.009;
+
+
 checkOptree ( name	=> 'BEGIN',
 	      bcopts	=> 'BEGIN',
 	      prog	=> $src,
+	      @warnings_todo,
 	      expect	=> <<'EOT_EOT', expect_nt => <<'EONT_EONT');
 # BEGIN 1:
 # b  <1> leavesub[1 ref] K/REFC,1 ->(end)
@@ -58,7 +66,7 @@ checkOptree ( name	=> 'BEGIN',
 # 6              <0> pushmark s ->7
 # 7              <$> const[PV "warnings"] sM ->8
 # 8              <$> const[PV "qw"] sM ->9
-# 9              <$> method_named[PVIV 1520340202] ->a
+# 9              <$> method_named[PV "import"] ->a
 # BEGIN 2:
 # f  <1> leavesub[1 ref] K/REFC,1 ->(end)
 # -     <@> lineseq KP ->f
@@ -80,7 +88,7 @@ EOT_EOT
 # 6              <0> pushmark s ->7
 # 7              <$> const(PV "warnings") sM ->8
 # 8              <$> const(PV "qw") sM ->9
-# 9              <$> method_named(PVIV 1520340202) ->a
+# 9              <$> method_named(PV "import") ->a
 # BEGIN 2:
 # f  <1> leavesub[1 ref] K/REFC,1 ->(end)
 # -     <@> lineseq KP ->f
@@ -160,8 +168,8 @@ EONT_EONT
 
 checkOptree ( name	=> 'all of BEGIN END INIT CHECK -exec',
 	      bcopts	=> [qw/ BEGIN END INIT CHECK -exec /],
-	      #todo	=> 'get working',
 	      prog	=> $src,
+	      @warnings_todo,
 	      expect	=> <<'EOT_EOT', expect_nt => <<'EONT_EONT');
 # BEGIN 1:
 # 1  <;> nextstate(B::Concise -234 Concise.pm:328) v/2
@@ -172,7 +180,7 @@ checkOptree ( name	=> 'all of BEGIN END INIT CHECK -exec',
 # 6  <0> pushmark s
 # 7  <$> const[PV "warnings"] sM
 # 8  <$> const[PV "qw"] sM
-# 9  <$> method_named[PVIV 1520340202] 
+# 9  <$> method_named[PV "unimport"] 
 # a  <1> entersub[t1] KS*/TARG,2
 # b  <1> leavesub[1 ref] K/REFC,1
 # BEGIN 2:
@@ -205,7 +213,7 @@ EOT_EOT
 # 6  <0> pushmark s
 # 7  <$> const(PV "warnings") sM
 # 8  <$> const(PV "qw") sM
-# 9  <$> method_named(PVIV 1520340202) 
+# 9  <$> method_named(PV "unimport") 
 # a  <1> entersub[t1] KS*/TARG,2
 # b  <1> leavesub[1 ref] K/REFC,1
 # BEGIN 2:
@@ -228,4 +236,41 @@ EOT_EOT
 # p  <$> gvsv(*chk) s
 # q  <1> postinc[t2] sK/1
 # r  <1> leavesub[1 ref] K/REFC,1
+EONT_EONT
+
+
+# perl "-I../lib" -MO=Concise,BEGIN,CHECK,INIT,END,-exec -e '$a=$b && print q/foo/'
+
+
+
+checkOptree ( name	=> 'regression test for patch 25352',
+	      bcopts	=> [qw/ BEGIN END INIT CHECK -exec /],
+	      prog	=> 'print q/foo/',
+	      @warnings_todo,
+	      expect	=> <<'EOT_EOT', expect_nt => <<'EONT_EONT');
+# BEGIN 1:
+# 1  <;> nextstate(B::Concise -234 Concise.pm:359) v/2
+# 2  <$> const[PV "warnings.pm"] s/BARE
+# 3  <1> require sK/1
+# 4  <;> nextstate(B::Concise -234 Concise.pm:359) v/2
+# 5  <;> nextstate(B::Concise -234 Concise.pm:359) /2
+# 6  <0> pushmark s
+# 7  <$> const[PV "warnings"] sM
+# 8  <$> const[PV "qw"] sM
+# 9  <$> method_named[PV "unimport"] 
+# a  <1> entersub[t1] KS*/TARG,2
+# b  <1> leavesub[1 ref] K/REFC,1
+EOT_EOT
+# BEGIN 1:
+# 1  <;> nextstate(B::Concise -234 Concise.pm:359) v/2
+# 2  <$> const(PV "warnings.pm") s/BARE
+# 3  <1> require sK/1
+# 4  <;> nextstate(B::Concise -234 Concise.pm:359) v/2
+# 5  <;> nextstate(B::Concise -234 Concise.pm:359) /2
+# 6  <0> pushmark s
+# 7  <$> const(PV "warnings") sM
+# 8  <$> const(PV "qw") sM
+# 9  <$> method_named(PV "unimport") 
+# a  <1> entersub[t1] KS*/TARG,2
+# b  <1> leavesub[1 ref] K/REFC,1
 EONT_EONT

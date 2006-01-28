@@ -21,7 +21,7 @@ BEGIN {
   }
 }
 
-$VERSION = "2.26";
+$VERSION = "2.26_01";
 @ISA     = qw(Exporter);
 @EXPORT  = qw(CMD_INFO CMD_OK CMD_MORE CMD_REJECT CMD_ERROR CMD_PENDING);
 
@@ -431,7 +431,8 @@ sub datasend
  while($len)
   {
    my $wout;
-   if (select(undef,$wout=$win, undef, $timeout) > 0 or -f $cmd) # -f for testing on win32
+   my $s = select(undef,$wout=$win, undef, $timeout);
+   if ((defined $s and $s > 0) or -f $cmd) # -f for testing on win32
     {
      my $w = syswrite($cmd, $line, $len, $offset);
      unless (defined($w))
@@ -748,7 +749,7 @@ Returns a filehandle tied to the Net::Cmd object.  After issuing a
 command, you may read from this filehandle using read() or <>.  The
 filehandle will return EOF when the final dot is encountered.
 Similarly, you may write to the filehandle in order to send data to
-the server after issuing a commmand that expects data to be written.
+the server after issuing a command that expects data to be written.
 
 See the Net::POP3 and Net::SMTP modules for examples of this.
 

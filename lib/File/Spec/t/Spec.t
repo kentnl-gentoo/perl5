@@ -91,14 +91,18 @@ if ($^O eq 'MacOS') {
 [ "Unix->catdir('','d1','d2','d3')",    '/d1/d2/d3' ],
 [ "Unix->catdir('d1','d2','d3')",       'd1/d2/d3'  ],
 
-[ "Unix->canonpath('')",                                      ''          ],
 [ "Unix->canonpath('///../../..//./././a//b/.././c/././')",   '/a/b/../c' ],
-[ "Unix->canonpath('/.')",                                    '/'         ],
-[ "Unix->canonpath('/./')",                                   '/'         ],
-[ "Unix->canonpath('/a/./')",                                 '/a'        ],
-[ "Unix->canonpath('/a/.')",                                  '/a'        ],
+[ "Unix->canonpath('')",                       ''               ],
+# rt.perl.org 27052
+[ "Unix->canonpath('a/../../b/c')",            'a/../../b/c'    ],
+[ "Unix->canonpath('/.')",                     '/'              ],
+[ "Unix->canonpath('/./')",                    '/'              ],
+[ "Unix->canonpath('/a/./')",                  '/a'             ],
+[ "Unix->canonpath('/a/.')",                   '/a'             ],
+[ "Unix->canonpath('/../../')",                '/'              ],
+[ "Unix->canonpath('/../..')",                 '/'              ],
 
-[  "Unix->abs2rel('/t1/t2/t3','/t1/t2/t3')",          ''                   ],
+[  "Unix->abs2rel('/t1/t2/t3','/t1/t2/t3')",          '.'                  ],
 [  "Unix->abs2rel('/t1/t2/t4','/t1/t2/t3')",          '../t4'              ],
 [  "Unix->abs2rel('/t1/t2','/t1/t2/t3')",             '..'                 ],
 [  "Unix->abs2rel('/t1/t2/t3/t4','/t1/t2/t3')",       't4'                 ],
@@ -118,6 +122,7 @@ if ($^O eq 'MacOS') {
 [ "Unix->rel2abs('/t1','/t1/t2/t3')",            '/t1'             ],
 
 [ "Win32->case_tolerant()",         '1'  ],
+[ "Win32->rootdir()",               '\\'  ],
 
 [ "Win32->splitpath('file')",                            ',,file'                            ],
 [ "Win32->splitpath('\\d1/d2\\d3/')",                    ',\\d1/d2\\d3/,'                    ],
@@ -208,6 +213,8 @@ if ($^O eq 'MacOS') {
 [ "Win32->canonpath('a:')",             'A:'                  ],
 [ "Win32->canonpath('A:f')",            'A:f'                 ],
 [ "Win32->canonpath('A:/')",            'A:\\'                ],
+# rt.perl.org 27052
+[ "Win32->canonpath('a\\..\\..\\b\\c')", '..\\b\\c'           ],
 [ "Win32->canonpath('//a\\b//c')",      '\\\\a\\b\\c'         ],
 [ "Win32->canonpath('/a/..../c')",      '\\a\\....\\c'        ],
 [ "Win32->canonpath('//a/b\\c')",       '\\\\a\\b\\c'         ],
@@ -229,7 +236,7 @@ if ($^O eq 'MacOS') {
 
 # FakeWin32 subclass (see below) just sets CWD to C:\one\two and getdcwd('D') to D:\alpha\beta
 
-[ "FakeWin32->abs2rel('/t1/t2/t3','/t1/t2/t3')",     ''                       ],
+[ "FakeWin32->abs2rel('/t1/t2/t3','/t1/t2/t3')",     '.'                      ],
 [ "FakeWin32->abs2rel('/t1/t2/t4','/t1/t2/t3')",     '..\\t4'                 ],
 [ "FakeWin32->abs2rel('/t1/t2','/t1/t2/t3')",        '..'                     ],
 [ "FakeWin32->abs2rel('/t1/t2/t3/t4','/t1/t2/t3')",  't4'                     ],
@@ -241,13 +248,15 @@ if ($^O eq 'MacOS') {
 [ "FakeWin32->abs2rel('/./','/t1/t2/t3')",           '..\\..\\..'             ],
 [ "FakeWin32->abs2rel('\\\\a/t1/t2/t4','/t2/t3')",   '\\\\a\\t1\\t2\\t4'      ],
 [ "FakeWin32->abs2rel('//a/t1/t2/t4','/t2/t3')",     '\\\\a\\t1\\t2\\t4'      ],
-[ "FakeWin32->abs2rel('A:/t1/t2/t3','A:/t1/t2/t3')",     ''                   ],
+[ "FakeWin32->abs2rel('A:/t1/t2/t3','A:/t1/t2/t3')",     '.'                  ],
 [ "FakeWin32->abs2rel('A:/t1/t2/t3/t4','A:/t1/t2/t3')",  't4'                 ],
 [ "FakeWin32->abs2rel('A:/t1/t2/t3','A:/t1/t2/t3/t4')",  '..'                 ],
 [ "FakeWin32->abs2rel('A:/t1/t2/t3','B:/t1/t2/t3')",     'A:\\t1\\t2\\t3'     ],
 [ "FakeWin32->abs2rel('A:/t1/t2/t3/t4','B:/t1/t2/t3')",  'A:\\t1\\t2\\t3\\t4' ],
 [ "FakeWin32->abs2rel('E:/foo/bar/baz')",            'E:\\foo\\bar\\baz'      ],
 [ "FakeWin32->abs2rel('C:/one/two/three')",          'three'                  ],
+[ "FakeWin32->abs2rel('C:\\Windows\\System32', 'C:\\')",  'Windows\System32'  ],
+[ "FakeWin32->abs2rel('\\\\computer2\\share3\\foo.txt', '\\\\computer2\\share3')",  'foo.txt' ],
 
 [ "FakeWin32->rel2abs('temp','C:/')",                       'C:\\temp'                        ],
 [ "FakeWin32->rel2abs('temp','C:/a')",                      'C:\\a\\temp'                     ],
@@ -349,11 +358,11 @@ if ($^O eq 'MacOS') {
 [ "VMS->catdir('[.name]')",                                               '[.name]'            ],
 [ "VMS->catdir('[.name]','[.name]')",                                     '[.name.name]'],
 
-[  "VMS->abs2rel('node::volume:[t1.t2.t3]','node::volume:[t1.t2.t3]')", ''                 ],
+[  "VMS->abs2rel('node::volume:[t1.t2.t3]','node::volume:[t1.t2.t3]')", '[]'                 ],
 [  "VMS->abs2rel('node::volume:[t1.t2.t3]','[t1.t2.t3]')", 'node::volume:[t1.t2.t3]'                 ],
 [  "VMS->abs2rel('node::volume:[t1.t2.t4]','node::volume:[t1.t2.t3]')", '[-.t4]'           ],
 [  "VMS->abs2rel('node::volume:[t1.t2.t4]','[t1.t2.t3]')", 'node::volume:[t1.t2.t4]'           ],
-[  "VMS->abs2rel('[t1.t2.t3]','[t1.t2.t3]')",              ''                 ],
+[  "VMS->abs2rel('[t1.t2.t3]','[t1.t2.t3]')",              '[]'               ],
 [  "VMS->abs2rel('[t1.t2.t3]file','[t1.t2.t3]')",          'file'             ],
 [  "VMS->abs2rel('[t1.t2.t3]file','[t1.t2]')",             '[.t3]file'        ],
 [  "VMS->abs2rel('v:[t1.t2.t3]file','v:[t1.t2]')",         '[.t3]file'        ],
@@ -362,7 +371,7 @@ if ($^O eq 'MacOS') {
 [  "VMS->abs2rel('[t1.t2.t3.t4]','[t1.t2.t3]')",           '[.t4]'            ],
 [  "VMS->abs2rel('[t4.t5.t6]','[t1.t2.t3]')",              '[---.t4.t5.t6]'   ],
 [ "VMS->abs2rel('[000000]','[t1.t2.t3]')",                 '[---]'            ],
-[ "VMS->abs2rel('a:[t1.t2.t4]','a:[t1.t2.t3]')",             '[-.t4]'           ],
+[ "VMS->abs2rel('a:[t1.t2.t4]','a:[t1.t2.t3]')",           '[-.t4]'           ],
 [ "VMS->abs2rel('a:[t1.t2.t4]','[t1.t2.t3]')",             'a:[t1.t2.t4]'           ],
 [ "VMS->abs2rel('[a.-.b.c.-]','[t1.t2.t3]')",              '[---.b]'          ],
 

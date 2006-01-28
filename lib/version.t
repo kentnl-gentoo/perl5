@@ -4,32 +4,55 @@
 
 #########################
 
-use Test::More tests => 170;
+use Test::More qw(no_plan);
 
 diag "Tests with base class" unless $ENV{PERL_CORE};
 
-use_ok("version"); # If we made it this far, we are ok.
+BEGIN {
+    use_ok("version", 0.50); # If we made it this far, we are ok.
+}
+
 BaseTests("version");
 
 diag "Tests with empty derived class" unless $ENV{PERL_CORE};
 
 package version::Empty;
-use vars qw($VERSION @ISA);
-use Exporter;
-use version 0.30;
-@ISA = qw(Exporter version);
+use base version;
 $VERSION = 0.01;
+no warnings 'redefine';
+*::qv = sub { return bless version::qv(shift), __PACKAGE__; };
+
+package version::Bad;
+use base version;
+sub new { my($self,$n)=@_;  bless \$n, $self }
 
 package main;
-my $testobj = new version::Empty 1.002_003;
+my $testobj = version::Empty->new(1.002_003);
 isa_ok( $testobj, "version::Empty" );
 ok( $testobj->numify == 1.002003, "Numified correctly" );
-ok( $testobj->stringify eq "1.2.3", "Stringified correctly" );
+ok( $testobj->stringify eq "1.002003", "Stringified correctly" );
+ok( $testobj->normal eq "v1.2.3", "Normalified correctly" );
 
-my $verobj = new version "1.2.4";
+my $verobj = version->new("1.2.4");
 ok( $verobj > $testobj, "Comparison vs parent class" );
 ok( $verobj gt $testobj, "Comparison vs parent class" );
 BaseTests("version::Empty");
+
+diag "tests with bad subclass" unless $ENV{PERL_CORE};
+$testobj = version::Bad->new(1.002_003);
+isa_ok( $testobj, "version::Bad" );
+eval { my $string = $testobj->numify };
+like($@, qr/Invalid version object/,
+    "Bad subclass numify");
+eval { my $string = $testobj->normal };
+like($@, qr/Invalid version object/,
+    "Bad subclass normal");
+eval { my $string = $testobj->stringify };
+like($@, qr/Invalid version object/,
+    "Bad subclass stringify");
+eval { my $test = $testobj > 1.0 };
+like($@, qr/Invalid version object/,
+    "Bad subclass vcmp");
 
 sub BaseTests {
 
@@ -41,7 +64,7 @@ sub BaseTests {
 	# Test bare number processing
 	diag "tests with bare numbers" unless $ENV{PERL_CORE};
 	$version = $CLASS->new(5.005_03);
-	is ( "$version" , "5.5.30" , '5.005_03 eq 5.5.30' );
+	is ( "$version" , "5.005030" , '5.005_03 eq 5.5.30' );
 	$version = $CLASS->new(1.23);
 	is ( "$version" , "1.230" , '1.23 eq "1.230"' );
 	
@@ -50,16 +73,16 @@ sub BaseTests {
 	$version = $CLASS->new("5.005_03");
 	is ( "$version" , "5.005_030" , '"5.005_03" eq "5.005_030"' );
 	$version = $CLASS->new("v1.23");
-	is ( "$version" , "1.23.0" , '"v1.23" eq "1.23.0"' );
+	is ( "$version" , "v1.23.0" , '"v1.23" eq "v1.23.0"' );
 	
 	# Test stringify operator
 	diag "tests with stringify" unless $ENV{PERL_CORE};
 	$version = $CLASS->new("5.005");
 	is ( "$version" , "5.005" , '5.005 eq "5.005"' );
 	$version = $CLASS->new("5.006.001");
-	is ( "$version" , "5.6.1" , '5.006.001 eq 5.6.1' );
+	is ( "$version" , "v5.6.1" , '5.006.001 eq v5.6.1' );
 	$version = $CLASS->new("1.2.3_4");
-	is ( "$version" , "1.2.3_4" , 'alpha version 1.2.3_4 eq 1.2.3_4' );
+	is ( "$version" , "v1.2.3_4" , 'alpha version 1.2.3_4 eq v1.2.3_4' );
 	
 	# test illegal formats
 	diag "test illegal formats" unless $ENV{PERL_CORE};
@@ -71,11 +94,35 @@ sub BaseTests {
 	like($@, qr/underscores before decimal/,
 	    "Invalid version format (underscores before decimal)");
 	
-	$version = $CLASS->new("99 and 44/100 pure");
+	eval {my $version = $CLASS->new("1_2")};
+	like($@, qr/alpha without decimal/,
+	    "Invalid version format (alpha without decimal)");
+
+	# for this first test, just upgrade the warn() to die()
+	eval {
+	    local $SIG{__WARN__} = sub { die $_[0] };
+	    $version = $CLASS->new("1.2b3");
+	};
+	my $warnregex = "Version string '.+' contains invalid data; ".
+		"ignoring: '.+'";
+
+	like($@, qr/$warnregex/,
+	    "Version string contains invalid data; ignoring");
+
+	# from here on out capture the warning and test independently
+	my $warning;
+	local $SIG{__WARN__} = sub { $warning = $_[0] };
+ 	$version = $CLASS->new("99 and 44/100 pure");
+
+	like($warning, qr/$warnregex/,
+	    "Version string contains invalid data; ignoring");
 	ok ("$version" eq "99.000", '$version eq "99.000"');
 	ok ($version->numify == 99.0, '$version->numify == 99.0');
+	ok ($version->normal eq "v99.0.0", '$version->normal eq v99.0.0');
 	
 	$version = $CLASS->new("something");
+	like($warning, qr/$warnregex/,
+	    "Version string contains invalid data; ignoring");
 	ok (defined $version, 'defined $version');
 	
 	# reset the test object to something reasonable
@@ -85,7 +132,7 @@ sub BaseTests {
 	ok ($version, 'boolean');
 	
 	# Test class membership
-	isa_ok ( $version, "version" );
+	isa_ok ( $version, $CLASS );
 	
 	# Test comparison operators with self
 	diag "tests with self" unless $ENV{PERL_CORE};
@@ -211,20 +258,32 @@ sub BaseTests {
 	ok ( $version eq "1.2.0", 'qv("1.2") eq "1.2.0"' );
 	$version = qv(1.2);
 	ok ( $version eq "1.2.0", 'qv(1.2) eq "1.2.0"' );
+	isa_ok( qv('5.008'), $CLASS );
 
 	# test creation from existing version object
 	diag "create new from existing version" unless $ENV{PERL_CORE};
-	ok (eval {$new_version = version->new($version)},
+	ok (eval {$new_version = $CLASS->new($version)},
 		"new from existing object");
-	ok ($new_version == $version, "duped object identical");
+	ok ($new_version == $version, "class->new($version) identical");
+	$new_version = $version->new();
+	ok ($new_version == $version, "$version->new() also identical");
+	$new_version = $version->new("1.2.3");
+	is ($new_version, "v1.2.3" , '$version->new("1.2.3") works too');
 
 	# test the CVS revision mode
 	diag "testing CVS Revision" unless $ENV{PERL_CORE};
-	$version = new version qw$Revision: 1.2$;
+	$version = new $CLASS qw$Revision: 1.2$;
 	ok ( $version eq "1.2.0", 'qw$Revision: 1.2$ eq 1.2.0' );
-	$version = new version qw$Revision: 1.2.3.4$;
+	$version = new $CLASS qw$Revision: 1.2.3.4$;
 	ok ( $version eq "1.2.3.4", 'qw$Revision: 1.2.3.4$ eq 1.2.3.4' );
 	
+	# test the CPAN style reduced significant digit form
+	diag "testing CPAN-style versions" unless $ENV{PERL_CORE};
+	$version = $CLASS->new("1.23_01");
+	is ( "$version" , "1.23_0100", "CPAN-style alpha version" );
+	ok ( $version > 1.23, "1.23_01 > 1.23");
+	ok ( $version < 1.24, "1.23_01 < 1.24");
+
 	# test reformed UNIVERSAL::VERSION
 	diag "Replacement UNIVERSAL::VERSION tests" unless $ENV{PERL_CORE};
 	
@@ -255,12 +314,35 @@ SKIP: 	{
 		    if $] < 5.008_001; 
 	    diag "Tests with v-strings" unless $ENV{PERL_CORE};
 	    $version = $CLASS->new(1.2.3);
-	    ok("$version" eq "1.2.3", '"$version" eq 1.2.3');
+	    ok("$version" eq "v1.2.3", '"$version" eq 1.2.3');
 	    $version = $CLASS->new(1.0.0);
 	    $new_version = $CLASS->new(1);
 	    ok($version == $new_version, '$version == $new_version');
 	    ok($version eq $new_version, '$version eq $new_version');
 	    $version = qv(1.2.3);
-	    ok("$version" eq "1.2.3", 'v-string initialized qv()');
+	    ok("$version" eq "v1.2.3", 'v-string initialized qv()');
 	}
+
+	diag "Tests with real-world (malformed) data" unless $ENV{PERL_CORE};
+
+	# trailing zero testing (reported by Andreas Koenig).
+	$version = $CLASS->new("1");
+	ok($version->numify eq "1.000", "trailing zeros preserved");
+	$version = $CLASS->new("1.0");
+	ok($version->numify eq "1.000", "trailing zeros preserved");
+	$version = $CLASS->new("1.0.0");
+	ok($version->numify eq "1.000000", "trailing zeros preserved");
+	$version = $CLASS->new("1.0.0.0");
+	ok($version->numify eq "1.000000000", "trailing zeros preserved");
+	
+	# leading zero testing (reported by Andreas Koenig).
+	$version = $CLASS->new(".7");
+	ok($version->numify eq "0.700", "leading zero inferred");
+
+	# leading space testing (reported by Andreas Koenig).
+	$version = $CLASS->new(" 1.7");
+	ok($version->numify eq "1.700", "leading space ignored");
+
 }
+
+1;

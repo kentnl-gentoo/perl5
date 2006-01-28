@@ -1,8 +1,8 @@
 # Term::ANSIColor -- Color screen output using ANSI escape sequences.
-# $Id: ANSIColor.pm,v 1.9 2004/12/04 01:29:12 eagle Exp $
+# $Id: ANSIColor.pm,v 1.10 2005/08/21 18:31:58 eagle Exp $
 #
-# Copyright 1996, 1997, 1998, 2000, 2001, 2002
-#   by Russ Allbery <rra@stanford.edu> and Zenin <zenin@bawdycaste.com>
+# Copyright 1996, 1997, 1998, 2000, 2001, 2002, 2005
+#   by Russ Allbery <rra@stanford.edu> and Zenin
 #
 # This program is free software; you may redistribute it and/or modify it
 # under the same terms as Perl itself.
@@ -34,7 +34,7 @@ Exporter::export_ok_tags ('constants');
 
 # Don't use the CVS revision as the version, since this module is also in Perl
 # core and too many things could munge CVS magic revision strings.
-$VERSION = 1.09;
+$VERSION = '1.10';
 
 ##############################################################################
 # Internal data structures
@@ -182,8 +182,9 @@ sub colored {
     if (defined $EACHLINE) {
         my $attr = color (@codes);
         join '',
-            map { $_ && $_ ne $EACHLINE ? $attr . $_ . "\e[0m" : $_ }
-                split (/(\Q$EACHLINE\E)/, $string);
+            map { $_ ne $EACHLINE ? $attr . $_ . "\e[0m" : $_ }
+                grep { length ($_) > 0 }
+                    split (/(\Q$EACHLINE\E)/, $string);
     } else {
         color (@codes) . $string . "\e[0m";
     }
@@ -305,7 +306,7 @@ twenty-two in the constants interface.  On the flip side, the constants
 interface has the advantage of better compile time error checking, since
 misspelled names of colors or attributes in calls to color() and colored()
 won't be caught until runtime whereas misspelled names of constants will be
-caught at compile time.  So, polute your namespace with almost two dozen
+caught at compile time.  So, pollute your namespace with almost two dozen
 subroutines that you may not even use that often, or risk a silly bug by
 mistyping an attribute.  Your choice, TMTOWTDI after all.
 
@@ -390,7 +391,7 @@ string.  (Of course, you may consider it a bug that commas between all the
 constants aren't required, in which case you may feel free to insert commas
 unless you're using $Term::ANSIColor::AUTORESET.)
 
-For easier debuging, you may prefer to always use the commas when not
+For easier debugging, you may prefer to always use the commas when not
 setting $Term::ANSIColor::AUTORESET so that you'll get a fatal compile error
 rather than a warning.
 
@@ -465,7 +466,7 @@ with input from Zenin.  Russ Allbery now maintains this module.
 =head1 COPYRIGHT AND LICENSE
 
 Copyright 1996, 1997, 1998, 2000, 2001, 2002 Russ Allbery <rra@stanford.edu>
-and Zenin <zenin@bawdycaste.org>.  This program is free software; you may
-redistribute it and/or modify it under the same terms as Perl itself.
+and Zenin.  This program is free software; you may redistribute it and/or
+modify it under the same terms as Perl itself.
 
 =cut

@@ -1,7 +1,9 @@
-/*
+/* -*- buffer-read-only: t -*-
+ *
  *    opnames.h
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006,
+ *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -366,11 +368,19 @@ typedef enum opcode {
 	OP_METHOD_NAMED,/* 350 */
 	OP_DOR,		/* 351 */
 	OP_DORASSIGN,	/* 352 */
-	OP_CUSTOM,	/* 353 */
+	OP_ENTERGIVEN,	/* 353 */
+	OP_LEAVEGIVEN,	/* 354 */
+	OP_ENTERWHEN,	/* 355 */
+	OP_LEAVEWHEN,	/* 356 */
+	OP_BREAK,	/* 357 */
+	OP_CONTINUE,	/* 358 */
+	OP_SMARTMATCH,	/* 359 */
+	OP_SAY,		/* 360 */
+	OP_CUSTOM,	/* 361 */
 	OP_max		
 } opcode;
 
-#define MAXO 354
+#define MAXO 362
 #define OP_phoney_INPUT_ONLY -1
 #define OP_phoney_OUTPUT_ONLY -2
 
@@ -420,3 +430,4 @@ typedef enum opcode {
 	 (op) == OP_FTTTY || \
 	 (op) == OP_FTZERO)
 
+/* ex: set ro: */

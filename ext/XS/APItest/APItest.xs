@@ -1,9 +1,110 @@
+#define PERL_IN_XS_APITEST
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
 
+
+/* for my_cxt tests */
+
+#define MY_CXT_KEY "XS::APItest::_guts" XS_VERSION
+
+typedef struct {
+    int i;
+    SV *sv;
+} my_cxt_t;
+
+START_MY_CXT
+
+/* indirect functions to test the [pa]MY_CXT macros */
+
+int
+my_cxt_getint_p(pMY_CXT)
+{
+    return MY_CXT.i;
+}
+
+void
+my_cxt_setint_p(pMY_CXT_ int i)
+{
+    MY_CXT.i = i;
+}
+
+SV*
+my_cxt_getsv_interp()
+{
+#ifdef PERL_IMPLICIT_CONTEXT
+    dTHX;
+    dMY_CXT_INTERP(my_perl);
+#else
+    dMY_CXT;
+#endif
+    return MY_CXT.sv;
+}
+
+void
+my_cxt_setsv_p(SV* sv _pMY_CXT)
+{
+    MY_CXT.sv = sv;
+}
+
+
 /* from exception.c */
 int exception(int);
+
+/* A routine to test hv_delayfree_ent
+   (which itself is tested by testing on hv_free_ent  */
+
+typedef void (freeent_function)(pTHX_ HV *, register HE *);
+
+void
+test_freeent(freeent_function *f) {
+    dTHX;
+    dSP;
+    HV *test_hash = newHV();
+    HE *victim;
+    SV *test_scalar;
+    U32 results[4];
+    int i;
+
+#ifdef PURIFY
+    victim = (HE*)safemalloc(sizeof(HE));
+#else
+    /* Storing then deleting something should ensure that a hash entry is
+       available.  */
+    hv_store(test_hash, "", 0, &PL_sv_yes, 0);
+    hv_delete(test_hash, "", 0, 0);
+
+    /* We need to "inline" new_he here as it's static, and the functions we
+       test expect to be able to call del_HE on the HE  */
+    if (!PL_body_roots[HE_SVSLOT])
+	croak("PL_he_root is 0");
+    victim = PL_body_roots[HE_SVSLOT];
+    PL_body_roots[HE_SVSLOT] = HeNEXT(victim);
+#endif
+
+    victim->hent_hek = Perl_share_hek(aTHX_ "", 0, 0);
+
+    test_scalar = newSV(0);
+    SvREFCNT_inc(test_scalar);
+    victim->hent_val = test_scalar;
+
+    /* Need this little game else we free the temps on the return stack.  */
+    results[0] = SvREFCNT(test_scalar);
+    SAVETMPS;
+    results[1] = SvREFCNT(test_scalar);
+    f(aTHX_ test_hash, victim);
+    results[2] = SvREFCNT(test_scalar);
+    FREETMPS;
+    results[3] = SvREFCNT(test_scalar);
+
+    i = 0;
+    do {
+	mPUSHu(results[i]);
+    } while (++i < sizeof(results)/sizeof(results[0]));
+
+    /* Goodbye to our extra reference.  */
+    SvREFCNT_dec(test_scalar);
+}
 
 MODULE = XS::APItest:Hash		PACKAGE = XS::APItest::Hash
 
@@ -108,6 +209,19 @@ fetch(hash, key_sv)
 	RETVAL = newSVsv(*result);
         OUTPUT:
         RETVAL
+
+void
+test_hv_free_ent()
+	PPCODE:
+	test_freeent(&Perl_hv_free_ent);
+	XSRETURN(4);
+
+void
+test_hv_delayfree_ent()
+	PPCODE:
+	test_freeent(&Perl_hv_delayfree_ent);
+	XSRETURN(4);
+	    
 =pod
 
 sub TIEHASH  { bless {}, $_[0] }
@@ -124,6 +238,19 @@ sub CLEAR    { %{$_[0]} = () }
 MODULE = XS::APItest		PACKAGE = XS::APItest
 
 PROTOTYPES: DISABLE
+
+BOOT:
+{
+    MY_CXT_INIT;
+    MY_CXT.i  = 99;
+    MY_CXT.sv = newSVpv("initial",0);
+}                              
+
+void
+CLONE(...)
+    CODE:
+    MY_CXT_CLONE;
+    MY_CXT.sv = newSVpv("initial_clone",0);
 
 void
 print_double(val)
@@ -311,7 +438,7 @@ eval_sv(sv, flags)
 	EXTEND(SP, 1);
 	PUSHs(sv_2mortal(newSViv(i)));
 
-SV*
+void
 eval_pv(p, croak_on_error)
     const char* p
     I32 croak_on_error
@@ -333,3 +460,46 @@ exception(throw_e)
     OUTPUT:
         RETVAL
 
+void
+mycroak(pv)
+    const char* pv
+    CODE:
+    Perl_croak(aTHX_ "%s", pv);
+
+SV*
+strtab()
+   CODE:
+   RETVAL = newRV_inc((SV*)PL_strtab);
+   OUTPUT:
+   RETVAL
+
+int
+my_cxt_getint()
+    CODE:
+	dMY_CXT;
+	RETVAL = my_cxt_getint_p(aMY_CXT);
+    OUTPUT:
+        RETVAL
+
+void
+my_cxt_setint(i)
+    int i;
+    CODE:
+	dMY_CXT;
+	my_cxt_setint_p(aMY_CXT_ i);
+
+void
+my_cxt_getsv()
+    PPCODE:
+	EXTEND(SP, 1);
+	ST(0) = my_cxt_getsv_interp();
+	XSRETURN(1);
+
+void
+my_cxt_setsv(sv)
+    SV *sv;
+    CODE:
+	dMY_CXT;
+	SvREFCNT_dec(MY_CXT.sv);
+	my_cxt_setsv_p(sv _aMY_CXT);
+	SvREFCNT_inc(sv);

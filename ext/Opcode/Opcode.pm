@@ -6,7 +6,7 @@ use strict;
 
 our($VERSION, $XS_VERSION, @ISA, @EXPORT_OK);
 
-$VERSION = "1.06";
+$VERSION = "1.08";
 $XS_VERSION = "1.03";
 
 use Carp;
@@ -351,7 +351,7 @@ available memory).
 
     anonlist anonhash
 
-Note that despite the existance of this optag a memory resource attack
+Note that despite the existence of this optag a memory resource attack
 may still be possible using only :base_core ops.
 
 Disabling these ops is a I<very> heavy handed way to attempt to prevent
@@ -374,14 +374,15 @@ used to implement a resource attack (e.g., consume all available CPU time).
 
 These ops enable I<filehandle> (rather than filename) based input and
 output. These are safe on the assumption that only pre-existing
-filehandles are available for use.  To create new filehandles other ops
-such as open would need to be enabled.
+filehandles are available for use.  Usually, to create new filehandles
+other ops such as open would need to be enabled, if you don't take into
+account the magical open of ARGV.
 
     readline rcatline getc read
 
     formline enterwrite leavewrite
 
-    print sysread syswrite send recv
+    print say sysread syswrite send recv
 
     eof tell seek sysseek
 
@@ -415,6 +416,11 @@ These are a hotchpotch of opcodes still waiting to be considered
 
     entertry leavetry -- can be used to 'hide' fatal errors
 
+    entergiven leavegiven
+    enterwhen leavewhen
+    break continue
+    smartmatch
+
     custom -- where should this go
 
 =item :base_math
@@ -441,11 +447,12 @@ These ops are related to multi-threading.
 A handy tag name for a I<reasonable> default set of ops.  (The current ops
 allowed are unstable while development continues. It will change.)
 
-    :base_core :base_mem :base_loop :base_io :base_orig :base_thread
+    :base_core :base_mem :base_loop :base_orig :base_thread
+
+This list used to contain :base_io prior to Opcode 1.07.
 
 If safety matters to you (and why else would you be using the Opcode module?)
 then you should not rely on the definition of this, or indeed any other, optag!
-
 
 =item :filesys_read
 
@@ -553,7 +560,7 @@ SystemV Interprocess Communications:
 =item :dangerous
 
 This tag is simply a bucket for opcodes that are unlikely to be used via
-a tag name but need to be tagged for completness and documentation.
+a tag name but need to be tagged for completeness and documentation.
 
     syscall dump chroot
 

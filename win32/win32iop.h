@@ -117,7 +117,7 @@ DllExport  int		win32_open_osfhandle(intptr_t handle, int flags);
 DllExport  intptr_t	win32_get_osfhandle(int fd);
 DllExport  FILE*	win32_fdupopen(FILE *pf);
 
-DllExport  DIR*		win32_opendir(char *filename);
+DllExport  DIR*		win32_opendir(const char *filename);
 DllExport  struct direct*	win32_readdir(DIR *dirp);
 DllExport  long		win32_telldir(DIR *dirp);
 DllExport  void		win32_seekdir(DIR *dirp, long loc);
@@ -191,6 +191,9 @@ END_EXTERN_C
 #undef putc
 #undef getchar
 #undef putchar
+#endif
+
+#if defined(__MINGW32__) || defined(__BORLANDC__)
 #undef fileno
 #endif
 

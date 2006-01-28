@@ -258,6 +258,7 @@ sub like_yn ($$$@) {
 	unshift(@mess, "#      got '$got'\n",
 		"# expected /$expected/\n");
     }
+    local $Level = 2;
     _ok($pass, _where(), $name, @mess);
 }
 
@@ -296,7 +297,7 @@ sub todo_skip {
     my $n   = @_ ? shift : 1;
 
     for (1..$n) {
-        print STDOUT "ok $test # TODO & SKIP: $why\n";
+        print STDOUT "not ok $test # TODO & SKIP: $why\n";
         $test++;
     }
     local $^W = 0;
@@ -390,6 +391,10 @@ sub _quote_args {
 sub _create_runperl { # Create the string to qx in runperl().
     my %args = @_;
     my $runperl = $^X =~ m/\s/ ? qq{"$^X"} : $^X;
+    #- this allows, for example, to set PERL_RUNPERL_DEBUG=/usr/bin/valgrind
+    if ($ENV{PERL_RUNPERL_DEBUG}) {
+	$runperl = "$ENV{PERL_RUNPERL_DEBUG} $runperl";
+    }
     unless ($args{nolib}) {
 	if ($is_macos) {
 	    $runperl .= ' -I::lib';
@@ -575,7 +580,7 @@ sub _fresh_perl {
                   {if (-e _ and -f _)}
     }
 
-    print TEST $prog, "\n";
+    print TEST $prog;
     close TEST or die "Cannot close $tmpfile: $!";
 
     my $results = runperl(%$runperl_args);
@@ -643,6 +648,68 @@ sub fresh_perl_like {
 			  $_[0] =~ (ref $expected ? $expected : /$expected/) :
 		          $expected },
 		$runperl_args, $name);
+}
+
+sub can_ok ($@) {
+    my($proto, @methods) = @_;
+    my $class = ref $proto || $proto;
+
+    unless( @methods ) {
+        return _ok( 0, _where(), "$class->can(...)" );
+    }
+
+    my @nok = ();
+    foreach my $method (@methods) {
+        local($!, $@);  # don't interfere with caller's $@
+                        # eval sometimes resets $!
+        eval { $proto->can($method) } || push @nok, $method;
+    }
+
+    my $name;
+    $name = @methods == 1 ? "$class->can('$methods[0]')" 
+                          : "$class->can(...)";
+    
+    _ok( !@nok, _where(), $name );
+}
+
+sub isa_ok ($$;$) {
+    my($object, $class, $obj_name) = @_;
+
+    my $diag;
+    $obj_name = 'The object' unless defined $obj_name;
+    my $name = "$obj_name isa $class";
+    if( !defined $object ) {
+        $diag = "$obj_name isn't defined";
+    }
+    elsif( !ref $object ) {
+        $diag = "$obj_name isn't a reference";
+    }
+    else {
+        # We can't use UNIVERSAL::isa because we want to honor isa() overrides
+        local($@, $!);  # eval sometimes resets $!
+        my $rslt = eval { $object->isa($class) };
+        if( $@ ) {
+            if( $@ =~ /^Can't call method "isa" on unblessed reference/ ) {
+                if( !UNIVERSAL::isa($object, $class) ) {
+                    my $ref = ref $object;
+                    $diag = "$obj_name isn't a '$class' it's a '$ref'";
+                }
+            } else {
+                die <<WHOA;
+WHOA! I tried to call ->isa on your object and got some weird error.
+This should never happen.  Please contact the author immediately.
+Here's the error.
+$@
+WHOA
+            }
+        }
+        elsif( !$rslt ) {
+            my $ref = ref $object;
+            $diag = "$obj_name isn't a '$class' it's a '$ref'";
+        }
+    }
+
+    _ok( !$diag, _where(), $name );
 }
 
 1;

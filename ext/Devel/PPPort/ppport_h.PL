@@ -4,13 +4,13 @@
 #
 ################################################################################
 #
-#  $Revision: 4 $
+#  $Revision: 6 $
 #  $Author: mhx $
-#  $Date: 2005/01/31 08:10:54 +0100 $
+#  $Date: 2006/01/14 22:38:30 +0100 $
 #
 ################################################################################
 #
-#  Version 3.x, Copyright (C) 2004-2005, Marcus Holland-Moritz.
+#  Version 3.x, Copyright (C) 2004-2006, Marcus Holland-Moritz.
 #  Version 2.x, Copyright (C) 2001, Paul Marquess.
 #  Version 1.x, Copyright (C) 1999, Kenneth Albanowski.
 #
@@ -19,8 +19,8 @@
 #
 ################################################################################
 
-package Devel::PPPort; 
-sub bootstrap {}; 
+package Devel::PPPort;
+sub bootstrap {};
 require "PPPort.pm";
 rename 'ppport.h', 'ppport.old' if -f 'ppport.h';
 unlink "ppport.old" if WriteFile("ppport.h") && -f 'ppport.h';

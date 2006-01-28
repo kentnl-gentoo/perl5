@@ -126,11 +126,11 @@ Also remember that C doesn't allow you to safely say C<foo(SvPV(s, len),
 len);>. It might work with your compiler, but it won't work for everyone.
 Break this sort of statement up into separate assignments:
 
-	SV *s;
-	STRLEN len;
-	char * ptr;
-	ptr = SvPV(s, len);
-	foo(ptr, len);
+    SV *s;
+    STRLEN len;
+    char * ptr;
+    ptr = SvPV(s, len);
+    foo(ptr, len);
 
 If you want to know if the scalar value is TRUE, you can use:
 
@@ -304,7 +304,7 @@ The are various ways in which the private and public flags may differ.
 For example, a tied SV may have a valid underlying value in the IV slot
 (so SvIOKp is true), but the data should be accessed via the FETCH
 routine rather than directly, so SvIOK is false. Another is when
-numeric conversion has occured and precision has been lost: only the
+numeric conversion has occurred and precision has been lost: only the
 private flag is set on 'lossy' values. So when an NV is converted to an
 IV with loss, SvIOKp, SvNOKp and SvNOK will be set, while SvIOK wont be.
 
@@ -970,13 +970,19 @@ C<MGVTBL>, which is a structure of function pointers and stands for
 "Magic Virtual Table" to handle the various operations that might be
 applied to that variable.
 
-The C<MGVTBL> has five pointers to the following routine types:
+The C<MGVTBL> has five (or sometimes eight) pointers to the following
+routine types:
 
     int  (*svt_get)(SV* sv, MAGIC* mg);
     int  (*svt_set)(SV* sv, MAGIC* mg);
     U32  (*svt_len)(SV* sv, MAGIC* mg);
     int  (*svt_clear)(SV* sv, MAGIC* mg);
     int  (*svt_free)(SV* sv, MAGIC* mg);
+
+    int  (*svt_copy)(SV *sv, MAGIC* mg, SV *nsv, const char *name, int namlen);
+    int  (*svt_dup)(MAGIC *mg, CLONE_PARAMS *param);
+    int  (*svt_local)(SV *nsv, MAGIC *mg);
+
 
 This MGVTBL structure is set at compile-time in F<perl.h> and there are
 currently 19 types (or 21 with overloading turned on).  These different
@@ -991,6 +997,10 @@ actions depending on which function is being called.
     svt_clear		Clear something the SV represents.
     svt_free            Free any extra storage associated with the SV.
 
+    svt_copy		copy tied variable magic to a tied element
+    svt_dup		duplicate a magic structure during thread cloning
+    svt_local		copy magic to local value during 'local'
+
 For instance, the MGVTBL structure called C<vtbl_sv> (which corresponds
 to an C<mg_type> of C<PERL_MAGIC_sv>) contains:
 
@@ -1001,6 +1011,13 @@ if a get operation is being performed, the routine C<magic_get> is
 called.  All the various routines for the various magical types begin
 with C<magic_>.  NOTE: the magic routines are not considered part of
 the Perl API, and may not be exported by the Perl library.
+
+The last three slots are a recent addition, and for source code
+compatibility they are only checked for if one of the three flags
+MGf_COPY, MGf_DUP or MGf_LOCAL is set in mg_flags. This means that most
+code can continue declaring a vtable as a 5-element value. These three are
+currently used exclusively by the threading code, and are highly subject
+to change.
 
 The current kinds of Magic Virtual Tables are:
 
@@ -1046,8 +1063,12 @@ The current kinds of Magic Virtual Tables are:
     *  PERL_MAGIC_glob           vtbl_glob      GV (typeglob)
     #  PERL_MAGIC_arylen         vtbl_arylen    Array length ($#ary)
     .  PERL_MAGIC_pos            vtbl_pos       pos() lvalue
-    <  PERL_MAGIC_backref        vtbl_backref   ???
+    <  PERL_MAGIC_backref        vtbl_backref   back pointer to a weak ref 
     ~  PERL_MAGIC_ext            (none)         Available for use by extensions
+    :  PERL_MAGIC_symtab	 (none)		hash used as symbol table
+    %  PERL_MAGIC_rhash	 	 (none)		hash used as restricted hash
+    @  PERL_MAGIC_arylen_p	 vtbl_arylen_p	pointer to $#a from @a
+
 
 When an uppercase and lowercase letter both exist in the table, then the
 uppercase letter is typically used to represent some kind of composite type
@@ -1486,25 +1507,20 @@ platforms, it may cause spurious malloc or free errors.
 
 The following three macros are used to initially allocate memory :
 
-    New(x, pointer, number, type);
-    Newc(x, pointer, number, type, cast);
-    Newz(x, pointer, number, type);
+    Newx(pointer, number, type);
+    Newxc(pointer, number, type, cast);
+    Newxz(pointer, number, type);
 
-The first argument C<x> was a "magic cookie" that was used to keep track
-of who called the macro, to help when debugging memory problems.  However,
-the current code makes no use of this feature (most Perl developers now
-use run-time memory checkers), so this argument can be any number.
-
-The second argument C<pointer> should be the name of a variable that will
+The first argument C<pointer> should be the name of a variable that will
 point to the newly allocated memory.
 
-The third and fourth arguments C<number> and C<type> specify how many of
+The second and third arguments C<number> and C<type> specify how many of
 the specified type of data structure should be allocated.  The argument
-C<type> is passed to C<sizeof>.  The final argument to C<Newc>, C<cast>,
+C<type> is passed to C<sizeof>.  The final argument to C<Newxc>, C<cast>,
 should be used if the C<pointer> argument is different from the C<type>
 argument.
 
-Unlike the C<New> and C<Newc> macros, the C<Newz> macro calls C<memzero>
+Unlike the C<Newx> and C<Newxc> macros, the C<Newxz> macro calls C<memzero>
 to zero out all the newly allocated memory.
 
 =head3 Reallocation
@@ -1871,6 +1887,26 @@ PERL_IMPLICIT_CONTEXT is also normally defined, and enables the
 support for passing in a "hidden" first argument that represents all three
 data structures.
 
+Two other "encapsulation" macros are the PERL_GLOBAL_STRUCT and
+PERL_GLOBAL_STRUCT_PRIVATE (the latter turns on the former, and the
+former turns on MULTIPLICITY.)  The PERL_GLOBAL_STRUCT causes all the
+internal variables of Perl to be wrapped inside a single global struct,
+struct perl_vars, accessible as (globals) &PL_Vars or PL_VarsPtr or
+the function  Perl_GetVars().  The PERL_GLOBAL_STRUCT_PRIVATE goes
+one step further, there is still a single struct (allocated in main()
+either from heap or from stack) but there are no global data symbols
+pointing to it.  In either case the global struct should be initialised
+as the very first thing in main() using Perl_init_global_struct() and
+correspondingly tear it down after perl_free() using Perl_free_global_struct(),
+please see F<miniperlmain.c> for usage details.  You may also need
+to use C<dVAR> in your coding to "declare the global variables"
+when you are using them.  dTHX does this for you automatically.
+
+For backward compatibility reasons defining just PERL_GLOBAL_STRUCT
+doesn't actually hide all symbols inside a big global struct: some
+PerlIO_xxx vtables are left visible.  The PERL_GLOBAL_STRUCT_PRIVATE
+then hides everything (see how the PERLIO_FUNCS_DECL is used).
+
 All this obviously requires a way for the Perl internal functions to be
 either subroutines taking some kind of structure as the first
 argument, or subroutines taking nothing as the first argument.  To
@@ -2072,6 +2108,13 @@ Never add a comma after C<pTHX> yourself--always use the form of the
 macro with the underscore for functions that take explicit arguments,
 or the form without the argument for functions with no explicit arguments.
 
+If one is compiling Perl with the C<-DPERL_GLOBAL_STRUCT> the C<dVAR>
+definition is needed if the Perl global variables (see F<perlvars.h>
+or F<globvar.sym>) are accessed in the function and C<dTHX> is not
+used (the C<dTHX> includes the C<dVAR> if necessary).  One notices
+the need for C<dVAR> only with the said compile-time define, because
+otherwise the Perl global variables are visible as-is.
+
 =head2 Should I do anything special if I call perl from multiple threads?
 
 If you create interpreters in one thread and then proceed to call them in
@@ -2141,16 +2184,18 @@ after that are the arguments. The first column is a set of flags:
 
 =item A
 
-This function is a part of the public API.
+This function is a part of the public API. All such functions should also
+have 'd', very few do not.
 
 =item p
 
-This function has a C<Perl_> prefix; ie, it is defined as C<Perl_av_fetch>
+This function has a C<Perl_> prefix; i.e. it is defined as
+C<Perl_av_fetch>.
 
 =item d
 
 This function has documentation using the C<apidoc> feature which we'll
-look at in a second.
+look at in a second.  Some functions have 'd' but not 'A'; docs are good.
 
 =back
 
@@ -2160,12 +2205,13 @@ Other available flags are:
 
 =item s
 
-This is a static function and is defined as C<S_whatever>, and usually
-called within the sources as C<whatever(...)>.
+This is a static function and is defined as C<STATIC S_whatever>, and
+usually called within the sources as C<whatever(...)>.
 
 =item n
 
-This does not use C<aTHX_> and C<pTHX> to pass interpreter context. (See
+This does not need a interpreter context, so the definition has no
+C<pTHX>, and it follows that callers don't use C<aTHX>.  (See
 L<perlguts/Background and PERL_IMPLICIT_CONTEXT>.)
 
 =item r
@@ -2209,6 +2255,10 @@ This function is visible to extensions included in the Perl core.
 
 Binary backward compatibility; this function is a macro but also has
 a C<Perl_> implementation (which is exported).
+
+=item others
+
+See the comments at the top of C<embed.fnc> for others.
 
 =back
 
@@ -2272,7 +2322,7 @@ be able to use these macros:
 You can use these macros if you call code that may croak, but you need
 to do some cleanup before giving control back to Perl. For example:
 
-        dXCPT;    /* set up neccessary variables */
+        dXCPT;    /* set up necessary variables */
 
         XCPT_TRY_START {
           code_that_may_croak();
@@ -2553,7 +2603,7 @@ define your own ops. This is primarily to allow the building of
 interpreters for other languages in the Perl core, but it also allows
 optimizations through the creation of "macro-ops" (ops which perform the
 functions of multiple ops which are usually executed together, such as
-C<gvsv, gvsv, add>.) 
+C<gvsv, gvsv, add>.)
 
 This feature is implemented as a new op type, C<OP_CUSTOM>. The Perl
 core does not "know" anything special about this op type, and so it will
@@ -2585,9 +2635,7 @@ need to enter a name and description for your op at the appropriate
 place in the C<PL_custom_op_names> and C<PL_custom_op_descs> hashes.
 
 Forthcoming versions of C<B::Generate> (version 1.0 and above) should
-directly support the creation of custom ops by name; C<Opcodes::Custom> 
-will provide functions which make it trivial to "register" custom ops to
-the Perl interpreter.
+directly support the creation of custom ops by name.
 
 =head1 AUTHORS
 

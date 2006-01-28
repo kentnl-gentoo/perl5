@@ -18,12 +18,13 @@ BEGIN {
 sub do_not_edit ($)
 {
     my $file = shift;
-    
-    my $years = '1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005';
+
+    my $years = '1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006';
 
     $years =~ s/1999,/1999,\n  / if length $years > 40;
 
     my $warning = <<EOW;
+ -*- buffer-read-only: t -*-
 
    $file
 
@@ -79,7 +80,7 @@ sub walk_table (&@) {
 	$F = $filename;
     }
     else {
-	safer_unlink $filename;
+	safer_unlink $filename if $filename ne '/dev/null';
 	open F, ">$filename" or die "Can't open $filename: $!";
 	binmode F;
 	$F = \*F;
@@ -101,8 +102,8 @@ sub walk_table (&@) {
 	else {
 	    @args = split /\s*\|\s*/, $_;
 	}
-        my @outs = &{$function}(@args);
-        print $F @outs; # $function->(@args) is not 5.003
+	my @outs = &{$function}(@args);
+	print $F @outs; # $function->(@args) is not 5.003
     }
     print $F $trailer if $trailer;
     unless (ref $filename) {
@@ -113,36 +114,16 @@ sub walk_table (&@) {
 sub munge_c_files () {
     my $functions = {};
     unless (@ARGV) {
-        warn "\@ARGV empty, nothing to do\n";
+	warn "\@ARGV empty, nothing to do\n";
 	return;
     }
     walk_table {
 	if (@_ > 1) {
 	    $functions->{$_[2]} = \@_ if $_[@_-1] =~ /\.\.\./;
 	}
-    } '/dev/null', '';
+    } '/dev/null', '', '';
     local $^I = '.bak';
     while (<>) {
-#	if (/^#\s*include\s+"perl.h"/) {
-#	    my $file = uc $ARGV;
-#	    $file =~ s/\./_/g;
-#	    print "#define PERL_IN_$file\n";
-#	}
-#	s{^(\w+)\s*\(}
-#	 {
-#	    my $f = $1;
-#	    my $repl = "$f(";
-#	    if (exists $functions->{$f}) {
-#		my $flags = $functions->{$f}[0];
-#		$repl = "Perl_$repl" if $flags =~ /p/;
-#		unless ($flags =~ /n/) {
-#		    $repl .= "pTHX";
-#		    $repl .= "_ " if @{$functions->{$f}} > 3;
-#		}
-#		warn("$ARGV:$.:$repl\n");
-#	    }
-#	    $repl;
-#	 }e;
 	s{(\b(\w+)[ \t]*\([ \t]*(?!aTHX))}
 	 {
 	    my $repl = $1;
@@ -172,6 +153,8 @@ sub write_protos {
     }
     else {
 	my ($flags,$retval,$func,@args) = @_;
+	my @nonnull;
+	my $has_context = ( $flags !~ /n/ );
 	$ret .= '/* ' if $flags =~ /m/;
 	if ($flags =~ /s/) {
 	    $retval = "STATIC $retval";
@@ -184,59 +167,108 @@ sub write_protos {
 	    }
 	}
 	$ret .= "$retval\t$func(";
-	unless ($flags =~ /n/) {
-	    $ret .= "pTHX";
-	    $ret .= "_ " if @args;
+	if ( $has_context ) {
+	    $ret .= @args ? "pTHX_ " : "pTHX";
 	}
 	if (@args) {
+	    my $n;
+	    for my $arg ( @args ) {
+		++$n;
+		if ( $arg =~ /\*/ && $arg !~ /\b(NN|NULLOK)\b/ ) {
+		    warn "$func: $arg needs NN or NULLOK\n";
+		    our $unflagged_pointers;
+		    ++$unflagged_pointers;
+		}
+		push( @nonnull, $n ) if ( $arg =~ s/\s*\bNN\b\s+// );
+		$arg =~ s/\s*\bNULLOK\b\s+//; # strip NULLOK with no effect
+
+		# Make sure each arg has at least a type and a var name.
+		# An arg of "int" is valid C, but want it to be "int foo".
+		my $temp_arg = $arg;
+		$temp_arg =~ s/\*//g;
+		$temp_arg =~ s/\s*\bstruct\b\s*/ /g;
+		if ( ($temp_arg ne "...") && ($temp_arg !~ /\w+\s+\w+/) ) {
+		    warn "$func: $arg doesn't have a name\n";
+		}
+	    }
 	    $ret .= join ", ", @args;
 	}
 	else {
-	    $ret .= "void" if $flags =~ /n/;
+	    $ret .= "void" if !$has_context;
 	}
 	$ret .= ")";
-	$ret .= " __attribute__((noreturn))" if $flags =~ /r/;
+	my @attrs;
+	if ( $flags =~ /r/ ) {
+	    push @attrs, "__attribute__noreturn__";
+	}
+	if ( $flags =~ /a/ ) {
+	    push @attrs, "__attribute__malloc__";
+	    $flags .= "R"; # All allocing must check return value
+	}
+	if ( $flags =~ /R/ ) {
+	    push @attrs, "__attribute__warn_unused_result__";
+	}
+	if ( $flags =~ /P/ ) {
+	    push @attrs, "__attribute__pure__";
+	}
 	if( $flags =~ /f/ ) {
-	    my $prefix = $flags =~ /n/ ? '' : 'pTHX_';
+	    my $prefix = $has_context ? 'pTHX_' : '';
 	    my $args = scalar @args;
-	    $ret .= sprintf "\n\t__attribute__format__(__printf__,%s%d,%s%d)",
+	    push @attrs, sprintf "__attribute__format__(__printf__,%s%d,%s%d)",
 				    $prefix, $args - 1, $prefix, $args;
+	}
+	if ( @nonnull ) {
+	    my @pos = map { $has_context ? "pTHX_$_" : $_ } @nonnull;
+	    push @attrs, map { sprintf( "__attribute__nonnull__(%s)", $_ ) } @pos;
+	}
+	if ( @attrs ) {
+	    $ret .= "\n";
+	    $ret .= join( "\n", map { "\t\t\t$_" } @attrs );
 	}
 	$ret .= ";";
 	$ret .= ' */' if $flags =~ /m/;
-	$ret .= "\n";
+	$ret .= @attrs ? "\n\n" : "\n";
     }
     $ret;
 }
 
-# generates global.sym (API export list), and populates %global with global symbols
-sub write_global_sym {
-    my $ret = "";
-    if (@_ > 1) {
-	my ($flags,$retval,$func,@args) = @_;
-	if ($flags =~ /[AX]/ && $flags !~ /[xm]/
-	    || $flags =~ /b/) { # public API, so export
-	    $func = "Perl_$func" if $flags =~ /[pbX]/;
-	    $ret = "$func\n";
-	}
-    }
-    $ret;
+# generates global.sym (API export list)
+{
+  my %seen;
+  sub write_global_sym {
+      my $ret = "";
+      if (@_ > 1) {
+	  my ($flags,$retval,$func,@args) = @_;
+	  # If a function is defined twice, for example before and after an
+	  # #else, only process the flags on the first instance for global.sym
+	  return $ret if $seen{$func}++;
+	  if ($flags =~ /[AX]/ && $flags !~ /[xm]/
+	      || $flags =~ /b/) { # public API, so export
+	      $func = "Perl_$func" if $flags =~ /[pbX]/;
+	      $ret = "$func\n";
+	  }
+      }
+      $ret;
+  }
 }
 
-walk_table(\&write_protos,     "proto.h", undef);
-walk_table(\&write_global_sym, "global.sym", undef);
+
+our $unflagged_pointers;
+walk_table(\&write_protos,     "proto.h", undef, "/* ex: set ro: */\n");
+warn "$unflagged_pointers pointer arguments to clean up\n" if $unflagged_pointers;
+walk_table(\&write_global_sym, "global.sym", undef, "# ex: set ro:\n");
 
 # XXX others that may need adding
 #       warnhook
 #       hints
 #       copline
 my @extvars = qw(sv_undef sv_yes sv_no na dowarn
-                 curcop compiling
-                 tainting tainted stack_base stack_sp sv_arenaroot
+		 curcop compiling
+		 tainting tainted stack_base stack_sp sv_arenaroot
 		 no_modify
-                 curstash DBsub DBsingle DBassertion debstash
-                 rsfp
-                 stdingv
+		 curstash DBsub DBsingle DBassertion debstash
+		 rsfp
+		 stdingv
 		 defgv
 		 errgv
 		 rsfp_filters
@@ -274,7 +306,7 @@ sub readvars(\%$$@) {
 	or die "embed.pl: Can't open $file: $!\n";
     while (<FILE>) {
 	s/[ \t]*#.*//;		# Delete comments.
-	if (/PERLVARA?I?C?\($pre(\w+)/) {
+	if (/PERLVARA?I?S?C?\($pre(\w+)/) {
 	    my $sym = $1;
 	    $sym = $pre . $sym if $keep_pre;
 	    warn "duplicate symbol $sym while processing $file\n"
@@ -344,8 +376,19 @@ print EM do_not_edit ("embed.h"), <<'END';
 
 END
 
+# Try to elimiate lots of repeated
+# #ifdef PERL_CORE
+# foo
+# #endif
+# #ifdef PERL_CORE
+# bar
+# #endif
+# by tracking state and merging foo and bar into one block.
+my $ifdef_state = '';
+
 walk_table {
     my $ret = "";
+    my $new_ifdef_state = '';
     if (@_ == 1) {
 	my $arg = shift;
 	$ret .= "$arg\n" if $arg =~ /^#\s*(if|ifn?def|else|endif)\b/;
@@ -362,14 +405,30 @@ walk_table {
 	}
 	if ($ret ne '' && $flags !~ /A/) {
 	    if ($flags =~ /E/) {
-		$ret = "#if defined(PERL_CORE) || defined(PERL_EXT)\n$ret#endif\n";
-	    } else {
-		$ret = "#ifdef PERL_CORE\n$ret#endif\n";
+		$new_ifdef_state
+		    = "#if defined(PERL_CORE) || defined(PERL_EXT)\n";
+	    }
+	    else {
+		$new_ifdef_state = "#ifdef PERL_CORE\n";
+	    }
+
+	    if ($new_ifdef_state ne $ifdef_state) {
+		$ret = $new_ifdef_state . $ret;
 	    }
         }
     }
+    if ($ifdef_state && $new_ifdef_state ne $ifdef_state) {
+	# Close the old one ahead of opening the new one.
+	$ret = "#endif\n$ret";
+    }
+    # Remember the new state.
+    $ifdef_state = $new_ifdef_state;
     $ret;
 } \*EM, "";
+
+if ($ifdef_state) {
+    print EM "#endif\n";
+}
 
 for $sym (sort keys %ppsym) {
     $sym =~ s/^Perl_//;
@@ -384,8 +443,10 @@ END
 
 my @az = ('a'..'z');
 
+$ifdef_state = '';
 walk_table {
     my $ret = "";
+    my $new_ifdef_state = '';
     if (@_ == 1) {
 	my $arg = shift;
 	$ret .= "$arg\n" if $arg =~ /^#\s*(if|ifn?def|else|endif)\b/;
@@ -420,16 +481,32 @@ walk_table {
 		$ret .= $alist . ")\n";
 	    }
 	}
-         unless ($flags =~ /A/) {
+	unless ($flags =~ /A/) {
 	    if ($flags =~ /E/) {
-		$ret = "#if defined(PERL_CORE) || defined(PERL_EXT)\n$ret#endif\n";
-	    } else {
-		$ret = "#ifdef PERL_CORE\n$ret#endif\n";
+		$new_ifdef_state
+		    = "#if defined(PERL_CORE) || defined(PERL_EXT)\n";
+	    }
+	    else {
+		$new_ifdef_state = "#ifdef PERL_CORE\n";
+	    }
+
+	    if ($new_ifdef_state ne $ifdef_state) {
+		$ret = $new_ifdef_state . $ret;
 	    }
         }
     }
+    if ($ifdef_state && $new_ifdef_state ne $ifdef_state) {
+	# Close the old one ahead of opening the new one.
+	$ret = "#endif\n$ret";
+    }
+    # Remember the new state.
+    $ifdef_state = $new_ifdef_state;
     $ret;
 } \*EM, "";
+
+if ($ifdef_state) {
+    print EM "#endif\n";
+}
 
 for $sym (sort keys %ppsym) {
     $sym =~ s/^Perl_//;
@@ -529,6 +606,7 @@ print EM <<'END';
 #  define Perl_sv_setpvf_mg_nocontext	Perl_sv_setpvf_mg
 #endif
 
+/* ex: set ro: */
 END
 
 close(EM) or die "Error closing EM: $!";
@@ -609,7 +687,8 @@ print EM <<'END';
 END
 
 for $sym (sort keys %globvar) {
-    print EM multon($sym,'G','PL_Vars.');
+    print EM multon($sym,   'G','my_vars->');
+    print EM multon("G$sym",'', 'my_vars->');
 }
 
 print EM <<'END';
@@ -637,6 +716,8 @@ for $sym (sort @extvars) {
 print EM <<'END';
 
 #endif /* PERL_POLLUTE */
+
+/* ex: set ro: */
 END
 
 close(EM) or die "Error closing EM: $!";
@@ -662,11 +743,14 @@ START_EXTERN_C
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
 #define PERLVAR(v,t)	EXTERN_C t* Perl_##v##_ptr(pTHX);
 #define PERLVARA(v,n,t)	typedef t PL_##v##_t[n];			\
 			EXTERN_C PL_##v##_t* Perl_##v##_ptr(pTHX);
 #define PERLVARI(v,t,i)	PERLVAR(v,t)
 #define PERLVARIC(v,t,i) PERLVAR(v, const t)
+#define PERLVARISC(v,i)	typedef const char PL_##v##_t[sizeof(i)];	\
+			EXTERN_C PL_##v##_t* Perl_##v##_ptr(pTHX);
 
 #include "thrdvar.h"
 #include "intrpvar.h"
@@ -676,6 +760,16 @@ START_EXTERN_C
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
+
+#ifndef PERL_GLOBAL_STRUCT
+EXTERN_C Perl_ppaddr_t** Perl_Gppaddr_ptr(pTHX);
+EXTERN_C Perl_check_t**  Perl_Gcheck_ptr(pTHX);
+EXTERN_C unsigned char** Perl_Gfold_locale_ptr(pTHX);
+#define Perl_ppaddr_ptr      Perl_Gppaddr_ptr
+#define Perl_check_ptr       Perl_Gcheck_ptr
+#define Perl_fold_locale_ptr Perl_Gfold_locale_ptr
+#endif
 
 END_EXTERN_C
 
@@ -691,9 +785,9 @@ END_EXTERN_C
 START_EXTERN_C
 
 #ifndef DOINIT
-EXT void *PL_force_link_funcs[];
+EXTCONST void * const PL_force_link_funcs[];
 #else
-EXT void *PL_force_link_funcs[] = {
+EXTCONST void * const PL_force_link_funcs[] = {
 #undef PERLVAR
 #undef PERLVARA
 #undef PERLVARI
@@ -702,15 +796,34 @@ EXT void *PL_force_link_funcs[] = {
 #define PERLVARA(v,n,t)	PERLVAR(v,t)
 #define PERLVARI(v,t,i)	PERLVAR(v,t)
 #define PERLVARIC(v,t,i) PERLVAR(v,t)
+#define PERLVARISC(v,i) PERLVAR(v,char)
+
+/* In Tru64 (__DEC && __osf__) the cc option -std1 causes that one
+ * cannot cast between void pointers and function pointers without
+ * info level warnings.  The PL_force_link_funcs[] would cause a few
+ * hundred of those warnings.  In code one can circumnavigate this by using
+ * unions that overlay the different pointers, but in declarations one
+ * cannot use this trick.  Therefore we just disable the warning here
+ * for the duration of the PL_force_link_funcs[] declaration. */
+
+#if defined(__DECC) && defined(__osf__)
+#pragma message save
+#pragma message disable (nonstandcast)
+#endif
 
 #include "thrdvar.h"
 #include "intrpvar.h"
 #include "perlvars.h"
 
+#if defined(__DECC) && defined(__osf__)
+#pragma message restore
+#endif
+
 #undef PERLVAR
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
 };
 #endif	/* DOINIT */
 
@@ -741,6 +854,7 @@ print CAPIH <<'EOT';
 
 #endif /* __perlapi_h__ */
 
+/* ex: set ro: */
 EOT
 close CAPIH or die "Error closing CAPIH: $!";
 
@@ -759,14 +873,17 @@ START_EXTERN_C
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
 
 #define PERLVAR(v,t)	t* Perl_##v##_ptr(pTHX)				\
-			{ return &(aTHX->v); }
+			{ dVAR; return &(aTHX->v); }
 #define PERLVARA(v,n,t)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
-			{ return &(aTHX->v); }
+			{ dVAR; return &(aTHX->v); }
 
 #define PERLVARI(v,t,i)	PERLVAR(v,t)
 #define PERLVARIC(v,t,i) PERLVAR(v, const t)
+#define PERLVARISC(v,i)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
+			{ dVAR; return &(aTHX->v); }
 
 #include "thrdvar.h"
 #include "intrpvar.h"
@@ -774,22 +891,48 @@ START_EXTERN_C
 #undef PERLVAR
 #undef PERLVARA
 #define PERLVAR(v,t)	t* Perl_##v##_ptr(pTHX)				\
-			{ return &(PL_##v); }
+			{ dVAR; return &(PL_##v); }
 #define PERLVARA(v,n,t)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
-			{ return &(PL_##v); }
+			{ dVAR; return &(PL_##v); }
 #undef PERLVARIC
-#define PERLVARIC(v,t,i)	const t* Perl_##v##_ptr(pTHX)		\
+#undef PERLVARISC
+#define PERLVARIC(v,t,i)	\
+			const t* Perl_##v##_ptr(pTHX)		\
 			{ return (const t *)&(PL_##v); }
+#define PERLVARISC(v,i)	PL_##v##_t* Perl_##v##_ptr(pTHX)	\
+			{ dVAR; return &(PL_##v); }
 #include "perlvars.h"
 
 #undef PERLVAR
 #undef PERLVARA
 #undef PERLVARI
 #undef PERLVARIC
+#undef PERLVARISC
+
+#ifndef PERL_GLOBAL_STRUCT
+/* A few evil special cases.  Could probably macrofy this. */
+#undef PL_ppaddr
+#undef PL_check
+#undef PL_fold_locale
+Perl_ppaddr_t** Perl_Gppaddr_ptr(pTHX) {
+    static const Perl_ppaddr_t* ppaddr_ptr = PL_ppaddr;
+    return (Perl_ppaddr_t**)&ppaddr_ptr;
+}
+Perl_check_t**  Perl_Gcheck_ptr(pTHX) {
+    static const Perl_check_t* check_ptr  = PL_check;
+    return (Perl_check_t**)&check_ptr;
+}
+unsigned char** Perl_Gfold_locale_ptr(pTHX) {
+    static const unsigned char* fold_locale_ptr = PL_fold_locale;
+    return (unsigned char**)&fold_locale_ptr;
+}
+#endif
 
 END_EXTERN_C
 
 #endif /* MULTIPLICITY */
+
+/* ex: set ro: */
 EOT
 
 close(CAPI) or die "Error closing CAPI: $!";
@@ -814,3 +957,5 @@ my %vfuncs = qw(
     Perl_dump_indent		Perl_dump_vindent
     Perl_default_protect	Perl_vdefault_protect
 );
+
+# ex: set ts=8 sts=4 sw=4 noet:

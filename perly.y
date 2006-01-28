@@ -41,22 +41,24 @@
 %token <pval> LABEL
 %token <ival> FORMAT SUB ANONSUB PACKAGE USE
 %token <ival> WHILE UNTIL IF UNLESS ELSE ELSIF CONTINUE FOR
+%token <ival> GIVEN WHEN DEFAULT
 %token <ival> LOOPEX DOTDOT
 %token <ival> FUNC0 FUNC1 FUNC UNIOP LSTOP
 %token <ival> RELOP EQOP MULOP ADDOP
 %token <ival> DOLSHARP DO HASHBRACK NOAMP
-%token <ival> LOCAL MY MYSUB
+%token <ival> LOCAL MY MYSUB REQUIRE
 %token COLONATTR
 
-%type <ival> prog decl format startsub startanonsub startformsub
-%type <ival> progstart remember mremember '&' savescope
+%type <ival> prog decl format startsub startanonsub startformsub mintro
+%type <ival> progstart remember mremember '&' savescope mydefsv
 %type <opval> block mblock lineseq line loop cond else
 %type <opval> expr term subscripted scalar ary hsh arylen star amper sideff
-%type <opval> argexpr nexpr texpr iexpr mexpr mnexpr mtexpr miexpr
+%type <opval> argexpr nexpr texpr iexpr mexpr mnexpr miexpr
 %type <opval> listexpr listexprcom indirob listop method
 %type <opval> formname subname proto subbody cont my_scalar
 %type <opval> subattrlist myattrlist mysubrout myattrterm myterm
 %type <opval> termbinop termunop anonymous termdo
+%type <opval> switch case
 %type <pval> label
 
 %nonassoc PREC_LOW
@@ -77,6 +79,7 @@
 %nonassoc EQOP
 %nonassoc RELOP
 %nonassoc UNIOP UNIOPSUB
+%nonassoc REQUIRE
 %left <ival> SHIFTOP
 %left ADDOP
 %left MULOP
@@ -106,6 +109,10 @@ block	:	'{' remember lineseq '}'
 
 remember:	/* NULL */	/* start a full lexical scope */
 			{ $$ = block_start(TRUE); }
+	;
+
+mydefsv:	/* NULL */	/* lexicalize $_ */
+			{ $$ = (I32) allocmy("$_"); }
 	;
 
 progstart:
@@ -145,6 +152,10 @@ lineseq	:	/* NULL */
 line	:	label cond
 			{ $$ = newSTATEOP(0, $1, $2); }
 	|	loop	/* loops add their own labels */
+	|	switch  /* ... and so do switches */
+			{ $$ = $1; }
+	|	label case
+			{ $$ = newSTATEOP(0, $1, $2); }
 	|	label ';'
 			{ if ($1 != Nullch) {
 			      $$ = newSTATEOP(0, $1, newOP(OP_NULL, 0));
@@ -199,6 +210,14 @@ cond	:	IF '(' remember mexpr ')' mblock else
 				   newCONDOP(0, $4, scope($6), $7)); }
 	;
 
+/* Cases for a switch statement */
+case	:	WHEN '(' remember mexpr ')' mblock
+	{ $$ = block_end($3,
+		newWHENOP($4, scope($6))); }
+	|	DEFAULT block
+	{ $$ = newWHENOP(0, scope($2)); }
+	;
+
 /* Continue blocks */
 cont	:	/* NULL */
 			{ $$ = Nullop; }
@@ -207,18 +226,18 @@ cont	:	/* NULL */
 	;
 
 /* Loops: while, until, for, and a bare block */
-loop	:	label WHILE '(' remember mtexpr ')' mblock cont
+loop	:	label WHILE '(' remember texpr ')' mintro mblock cont
 			{ PL_copline = (line_t)$2;
 			    $$ = block_end($4,
 				   newSTATEOP(0, $1,
 				     newWHILEOP(0, 1, (LOOP*)Nullop,
-						$2, $5, $7, $8))); }
-	|	label UNTIL '(' remember miexpr ')' mblock cont
+						$2, $5, $8, $9, $7))); }
+	|	label UNTIL '(' remember iexpr ')' mintro mblock cont
 			{ PL_copline = (line_t)$2;
 			    $$ = block_end($4,
 				   newSTATEOP(0, $1,
 				     newWHILEOP(0, 1, (LOOP*)Nullop,
-						$2, $5, $7, $8))); }
+						$2, $5, $8, $9, $7))); }
 	|	label FOR MY remember my_scalar '(' mexpr ')' mblock cont
 			{ $$ = block_end($4,
 				 newFOROP(0, $1, (line_t)$2, $5, $7, $9, $10)); }
@@ -229,14 +248,15 @@ loop	:	label WHILE '(' remember mtexpr ')' mblock cont
 	|	label FOR '(' remember mexpr ')' mblock cont
 			{ $$ = block_end($4,
 				 newFOROP(0, $1, (line_t)$2, Nullop, $5, $7, $8)); }
-	|	label FOR '(' remember mnexpr ';' mtexpr ';' mnexpr ')' mblock
+	|	label FOR '(' remember mnexpr ';' texpr ';' mintro mnexpr ')'
+	    	    mblock
 			/* basically fake up an initialize-while lineseq */
 			{ OP *forop;
 			  PL_copline = (line_t)$2;
 			  forop = newSTATEOP(0, $1,
 					    newWHILEOP(0, 1, (LOOP*)Nullop,
 						$2, scalar($7),
-						$11, $9));
+						$12, $10, $9));
 			  if ($5) {
 				forop = append_elem(OP_LINESEQ,
                                         newSTATEOP(0, ($1?savepv($1):Nullch),
@@ -248,8 +268,23 @@ loop	:	label WHILE '(' remember mtexpr ')' mblock cont
 	|	label block cont  /* a block is a loop that happens once */
 			{ $$ = newSTATEOP(0, $1,
 				 newWHILEOP(0, 1, (LOOP*)Nullop,
-					    NOLINE, Nullop, $2, $3)); }
+					    NOLINE, Nullop, $2, $3, 0)); }
 	;
+
+/* Switch blocks */
+switch	:	label GIVEN '(' remember mydefsv mexpr ')' mblock
+			{ PL_copline = (line_t) $2;
+			    $$ = block_end($4,
+				newSTATEOP(0, $1,
+				    newGIVENOP($6, scope($8),
+					(PADOFFSET) $5) )); }
+	;
+
+/* determine whether there are any new my declarations */
+mintro	:	/* NULL */
+			{ $$ = (PL_min_intro_pending &&
+			    PL_max_intro_pending >=  PL_min_intro_pending);
+			  intro_my(); }
 
 /* Normal expression */
 nexpr	:	/* NULL */
@@ -274,10 +309,6 @@ mexpr	:	expr
 	;
 
 mnexpr	:	nexpr
-			{ $$ = $1; intro_my(); }
-	;
-
-mtexpr	:	texpr
 			{ $$ = $1; intro_my(); }
 	;
 
@@ -335,7 +366,7 @@ startformsub:	/* NULL */	/* start a format subroutine scope */
 	;
 
 /* Name of a subroutine - must be a bareword, could be special */
-subname	:	WORD	{ STRLEN n_a; char *name = SvPV(((SVOP*)$1)->op_sv,n_a);
+subname	:	WORD	{ const char *const name = SvPV_nolen_const(((SVOP*)$1)->op_sv);
 			  if (strEQ(name, "BEGIN") || strEQ(name, "END")
 			      || strEQ(name, "INIT") || strEQ(name, "CHECK"))
 			      CvSPECIAL_on(PL_compcv);
@@ -484,6 +515,10 @@ subscripted:    star '{' expr ';' '}'        /* *main::{something} */
 	|	subscripted '(' ')'        /* $foo->{bar}->() */
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
 				   newCVREF(0, scalar($1))); }
+	|	'(' expr ')' '[' expr ']'            /* list slice */
+			{ $$ = newSLICEOP(0, $5, $2); }
+	|	'(' ')' '[' expr ']'                 /* empty list slice! */
+			{ $$ = newSLICEOP(0, $4, Nullop); }
     ;
 
 /* Binary operators between terms */
@@ -559,7 +594,7 @@ anonymous:	'[' expr ']'
 
 /* Things called with "do" */
 termdo	:       DO term	%prec UNIOP                     /* do $filename */
-			{ $$ = dofile($2); }
+			{ $$ = dofile($2, $1); }
 	|	DO block	%prec '('               /* do { code */
 			{ $$ = newUNOP(OP_NULL, OPf_SPECIAL, scope($2)); }
 	|	DO WORD '(' ')'                         /* do somesub() */
@@ -619,10 +654,6 @@ term	:	termbinop
 			{ $$ = newUNOP(OP_AV2ARYLEN, 0, ref($1, OP_AV2ARYLEN));}
 	|       subscripted
 			{ $$ = $1; }
-	|	'(' expr ')' '[' expr ']'            /* list slice */
-			{ $$ = newSLICEOP(0, $5, $2); }
-	|	'(' ')' '[' expr ']'                 /* empty list slice! */
-			{ $$ = newSLICEOP(0, $4, Nullop); }
 	|	ary '[' expr ']'                     /* array slice */
 			{ $$ = prepend_elem(OP_ASLICE,
 				newOP(OP_PUSHMARK, 0),
@@ -661,6 +692,10 @@ term	:	termbinop
 			{ $$ = newUNOP($1, 0, $2); }
 	|	UNIOP term                           /* Unary op */
 			{ $$ = newUNOP($1, 0, $2); }
+	|	REQUIRE                              /* require, $_ implied */
+			{ $$ = newOP(OP_REQUIRE, $1 ? OPf_SPECIAL : 0); }
+	|	REQUIRE term                         /* require Foo */
+			{ $$ = newUNOP(OP_REQUIRE, $1 ? OPf_SPECIAL : 0, $2); }
 	|	UNIOPSUB term                        /* Sub treated as unop */
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
 			    append_elem(OP_LIST, $2, scalar($1))); }

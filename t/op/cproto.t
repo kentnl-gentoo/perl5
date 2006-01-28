@@ -47,7 +47,7 @@ close (;*)
 closedir (*)
 cmp unknown
 connect (*$)
-continue unknown
+continue ()
 cos (;$)
 crypt ($$)
 dbmclose (\%)
@@ -137,7 +137,7 @@ lstat (*)
 lt ($$)
 m undef
 map undef
-mkdir ($;$)
+mkdir (;$$)
 msgctl ($$$)
 msgget ($$)
 msgrcv ($$$$$)
@@ -197,7 +197,7 @@ send (*$$;$)
 setgrent ()
 sethostent ($)
 setnetent ($)
-setpgrp undef
+setpgrp (;$$)
 setpriority ($$$)
 setprotoent ($)
 setpwent ()

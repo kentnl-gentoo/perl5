@@ -1,4 +1,5 @@
-/*
+/* -*- buffer-read-only: t -*-
+ *
  *      Copyright (c) 1996-1999 Malcolm Beattie
  *
  *      You may distribute under the terms of either the GNU General Public
@@ -14,13 +15,18 @@ struct byteloader_fdata {
     int	idx;
 };
 
+struct byteloader_pv_state {
+    char			*pvx;
+    XPV				xpv;
+};
+
 struct byteloader_state {
     struct byteloader_fdata	*bs_fdata;
     SV				*bs_sv;
     void			**bs_obj_list;
     int				bs_obj_list_fill;
     int				bs_ix;
-    XPV				bs_pv;
+    struct byteloader_pv_state	bs_pv;
     int				bs_iv_overflows;
 };
 
@@ -94,94 +100,92 @@ enum {
     INSN_AV_PUSH,			/* 62 */
     INSN_XAV_FILL,			/* 63 */
     INSN_XAV_MAX,			/* 64 */
-    INSN_XAV_FLAGS,			/* 65 */
-    INSN_XHV_RITER,			/* 66 */
-    INSN_XHV_NAME,			/* 67 */
-    INSN_XHV_PMROOT,			/* 68 */
-    INSN_HV_STORE,			/* 69 */
-    INSN_SV_MAGIC,			/* 70 */
-    INSN_MG_OBJ,			/* 71 */
-    INSN_MG_PRIVATE,			/* 72 */
-    INSN_MG_FLAGS,			/* 73 */
-    INSN_MG_NAME,			/* 74 */
-    INSN_MG_NAMEX,			/* 75 */
-    INSN_XMG_STASH,			/* 76 */
-    INSN_GV_FETCHPV,			/* 77 */
-    INSN_GV_FETCHPVX,			/* 78 */
-    INSN_GV_STASHPV,			/* 79 */
-    INSN_GV_STASHPVX,			/* 80 */
-    INSN_GP_SV,			/* 81 */
-    INSN_GP_REFCNT,			/* 82 */
-    INSN_GP_REFCNT_ADD,			/* 83 */
-    INSN_GP_AV,			/* 84 */
-    INSN_GP_HV,			/* 85 */
-    INSN_GP_CV,			/* 86 */
-    INSN_GP_FILE,			/* 87 */
-    INSN_GP_IO,			/* 88 */
-    INSN_GP_FORM,			/* 89 */
-    INSN_GP_CVGEN,			/* 90 */
-    INSN_GP_LINE,			/* 91 */
-    INSN_GP_SHARE,			/* 92 */
-    INSN_XGV_FLAGS,			/* 93 */
-    INSN_OP_NEXT,			/* 94 */
-    INSN_OP_SIBLING,			/* 95 */
-    INSN_OP_PPADDR,			/* 96 */
-    INSN_OP_TARG,			/* 97 */
-    INSN_OP_TYPE,			/* 98 */
-    INSN_OP_OPT,			/* 99 */
-    INSN_OP_STATIC,			/* 100 */
-    INSN_OP_FLAGS,			/* 101 */
-    INSN_OP_PRIVATE,			/* 102 */
-    INSN_OP_FIRST,			/* 103 */
-    INSN_OP_LAST,			/* 104 */
-    INSN_OP_OTHER,			/* 105 */
-    INSN_OP_PMREPLROOT,			/* 106 */
-    INSN_OP_PMREPLSTART,			/* 107 */
-    INSN_OP_PMNEXT,			/* 108 */
-    INSN_OP_PMSTASHPV,			/* 109 */
-    INSN_OP_PMREPLROOTPO,			/* 110 */
-    INSN_OP_PMSTASH,			/* 111 */
-    INSN_OP_PMREPLROOTGV,			/* 112 */
-    INSN_PREGCOMP,			/* 113 */
-    INSN_OP_PMFLAGS,			/* 114 */
-    INSN_OP_PMPERMFLAGS,			/* 115 */
-    INSN_OP_PMDYNFLAGS,			/* 116 */
-    INSN_OP_SV,			/* 117 */
-    INSN_OP_PADIX,			/* 118 */
-    INSN_OP_PV,			/* 119 */
-    INSN_OP_PV_TR,			/* 120 */
-    INSN_OP_REDOOP,			/* 121 */
-    INSN_OP_NEXTOP,			/* 122 */
-    INSN_OP_LASTOP,			/* 123 */
-    INSN_COP_LABEL,			/* 124 */
-    INSN_COP_STASHPV,			/* 125 */
-    INSN_COP_FILE,			/* 126 */
-    INSN_COP_STASH,			/* 127 */
-    INSN_COP_FILEGV,			/* 128 */
-    INSN_COP_SEQ,			/* 129 */
-    INSN_COP_ARYBASE,			/* 130 */
-    INSN_COP_LINE,			/* 131 */
-    INSN_COP_IO,			/* 132 */
-    INSN_COP_WARNINGS,			/* 133 */
-    INSN_MAIN_START,			/* 134 */
-    INSN_MAIN_ROOT,			/* 135 */
-    INSN_MAIN_CV,			/* 136 */
-    INSN_CURPAD,			/* 137 */
-    INSN_PUSH_BEGIN,			/* 138 */
-    INSN_PUSH_INIT,			/* 139 */
-    INSN_PUSH_END,			/* 140 */
-    INSN_CURSTASH,			/* 141 */
-    INSN_DEFSTASH,			/* 142 */
-    INSN_DATA,			/* 143 */
-    INSN_INCAV,			/* 144 */
-    INSN_LOAD_GLOB,			/* 145 */
-    INSN_REGEX_PADAV,			/* 146 */
-    INSN_DOWARN,			/* 147 */
-    INSN_COMPPAD_NAME,			/* 148 */
-    INSN_XGV_STASH,			/* 149 */
-    INSN_SIGNAL,			/* 150 */
-    INSN_FORMFEED,			/* 151 */
-    MAX_INSN = 151
+    INSN_XHV_RITER,			/* 65 */
+    INSN_XHV_NAME,			/* 66 */
+    INSN_HV_STORE,			/* 67 */
+    INSN_SV_MAGIC,			/* 68 */
+    INSN_MG_OBJ,			/* 69 */
+    INSN_MG_PRIVATE,			/* 70 */
+    INSN_MG_FLAGS,			/* 71 */
+    INSN_MG_NAME,			/* 72 */
+    INSN_MG_NAMEX,			/* 73 */
+    INSN_XMG_STASH,			/* 74 */
+    INSN_GV_FETCHPV,			/* 75 */
+    INSN_GV_FETCHPVX,			/* 76 */
+    INSN_GV_STASHPV,			/* 77 */
+    INSN_GV_STASHPVX,			/* 78 */
+    INSN_GP_SV,			/* 79 */
+    INSN_GP_REFCNT,			/* 80 */
+    INSN_GP_REFCNT_ADD,			/* 81 */
+    INSN_GP_AV,			/* 82 */
+    INSN_GP_HV,			/* 83 */
+    INSN_GP_CV,			/* 84 */
+    INSN_GP_FILE,			/* 85 */
+    INSN_GP_IO,			/* 86 */
+    INSN_GP_FORM,			/* 87 */
+    INSN_GP_CVGEN,			/* 88 */
+    INSN_GP_LINE,			/* 89 */
+    INSN_GP_SHARE,			/* 90 */
+    INSN_XGV_FLAGS,			/* 91 */
+    INSN_OP_NEXT,			/* 92 */
+    INSN_OP_SIBLING,			/* 93 */
+    INSN_OP_PPADDR,			/* 94 */
+    INSN_OP_TARG,			/* 95 */
+    INSN_OP_TYPE,			/* 96 */
+    INSN_OP_OPT,			/* 97 */
+    INSN_OP_STATIC,			/* 98 */
+    INSN_OP_FLAGS,			/* 99 */
+    INSN_OP_PRIVATE,			/* 100 */
+    INSN_OP_FIRST,			/* 101 */
+    INSN_OP_LAST,			/* 102 */
+    INSN_OP_OTHER,			/* 103 */
+    INSN_OP_PMREPLROOT,			/* 104 */
+    INSN_OP_PMREPLSTART,			/* 105 */
+    INSN_OP_PMNEXT,			/* 106 */
+    INSN_OP_PMSTASHPV,			/* 107 */
+    INSN_OP_PMREPLROOTPO,			/* 108 */
+    INSN_OP_PMSTASH,			/* 109 */
+    INSN_OP_PMREPLROOTGV,			/* 110 */
+    INSN_PREGCOMP,			/* 111 */
+    INSN_OP_PMFLAGS,			/* 112 */
+    INSN_OP_PMPERMFLAGS,			/* 113 */
+    INSN_OP_PMDYNFLAGS,			/* 114 */
+    INSN_OP_SV,			/* 115 */
+    INSN_OP_PADIX,			/* 116 */
+    INSN_OP_PV,			/* 117 */
+    INSN_OP_PV_TR,			/* 118 */
+    INSN_OP_REDOOP,			/* 119 */
+    INSN_OP_NEXTOP,			/* 120 */
+    INSN_OP_LASTOP,			/* 121 */
+    INSN_COP_LABEL,			/* 122 */
+    INSN_COP_STASHPV,			/* 123 */
+    INSN_COP_FILE,			/* 124 */
+    INSN_COP_STASH,			/* 125 */
+    INSN_COP_FILEGV,			/* 126 */
+    INSN_COP_SEQ,			/* 127 */
+    INSN_COP_ARYBASE,			/* 128 */
+    INSN_COP_LINE,			/* 129 */
+    INSN_COP_IO,			/* 130 */
+    INSN_COP_WARNINGS,			/* 131 */
+    INSN_MAIN_START,			/* 132 */
+    INSN_MAIN_ROOT,			/* 133 */
+    INSN_MAIN_CV,			/* 134 */
+    INSN_CURPAD,			/* 135 */
+    INSN_PUSH_BEGIN,			/* 136 */
+    INSN_PUSH_INIT,			/* 137 */
+    INSN_PUSH_END,			/* 138 */
+    INSN_CURSTASH,			/* 139 */
+    INSN_DEFSTASH,			/* 140 */
+    INSN_DATA,			/* 141 */
+    INSN_INCAV,			/* 142 */
+    INSN_LOAD_GLOB,			/* 143 */
+    INSN_REGEX_PADAV,			/* 144 */
+    INSN_DOWARN,			/* 145 */
+    INSN_COMPPAD_NAME,			/* 146 */
+    INSN_XGV_STASH,			/* 147 */
+    INSN_SIGNAL,			/* 148 */
+    INSN_FORMFEED,			/* 149 */
+    MAX_INSN = 149
 };
 
 enum {
@@ -198,3 +202,4 @@ enum {
     OPt_COP		/* 10 */
 };
 
+/* ex: set ro: */

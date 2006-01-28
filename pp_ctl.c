@@ -1,7 +1,7 @@
 /*    pp_ctl.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -38,10 +38,9 @@
 
 #define DOCATCH(o) ((CATCH_GET == TRUE) ? docatch(o) : (o))
 
-static I32 run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen);
-
 PP(pp_wantarray)
 {
+    dVAR;
     dSP;
     I32 cxix;
     EXTEND(SP, 1);
@@ -60,13 +59,9 @@ PP(pp_wantarray)
     }
 }
 
-PP(pp_regcmaybe)
-{
-    return NORMAL;
-}
-
 PP(pp_regcreset)
 {
+    dVAR;
     /* XXXX Should store the old value to allow for tie/overload - and
        restore in regcomp, where marked with XXXX. */
     PL_reginterp_cnt = 0;
@@ -76,11 +71,10 @@ PP(pp_regcreset)
 
 PP(pp_regcomp)
 {
+    dVAR;
     dSP;
     register PMOP *pm = (PMOP*)cLOGOP->op_other;
-    register char *t;
     SV *tmpstr;
-    STRLEN len;
     MAGIC *mg = Null(MAGIC*);
 
     /* prevent recompiling under /o and ithreads. */
@@ -124,12 +118,13 @@ PP(pp_regcomp)
 	    mg = mg_find(sv, PERL_MAGIC_qr);
     }
     if (mg) {
-	regexp *re = (regexp *)mg->mg_obj;
+	regexp * const re = (regexp *)mg->mg_obj;
 	ReREFCNT_dec(PM_GETRE(pm));
 	PM_SETRE(pm, ReREFCNT_inc(re));
     }
     else {
-	t = SvPV(tmpstr, len);
+	STRLEN len;
+	const char *t = SvPV_const(tmpstr, len);
 
 	/* Check against the last compiled regexp. */
 	if (!PM_GETRE(pm) || !PM_GETRE(pm)->precomp ||
@@ -151,7 +146,7 @@ PP(pp_regcomp)
 		if (pm->op_pmdynflags & PMdf_UTF8)
 		    t = (char*)bytes_to_utf8((U8*)t, &len);
 	    }
-	    PM_SETRE(pm, CALLREGCOMP(aTHX_ t, t + len, pm));
+	    PM_SETRE(pm, CALLREGCOMP(aTHX_ (char *)t, (char *)t + len, pm));
 	    if (!DO_UTF8(tmpstr) && (pm->op_pmdynflags & PMdf_UTF8))
 		Safefree(t);
 	    PL_reginterp_cnt = 0;	/* XXXX Be extra paranoid - needed
@@ -188,15 +183,16 @@ PP(pp_regcomp)
 
 PP(pp_substcont)
 {
+    dVAR;
     dSP;
-    register PMOP *pm = (PMOP*) cLOGOP->op_other;
     register PERL_CONTEXT *cx = &cxstack[cxstack_ix];
-    register SV *dstr = cx->sb_dstr;
+    register PMOP * const pm = (PMOP*) cLOGOP->op_other;
+    register SV * const dstr = cx->sb_dstr;
     register char *s = cx->sb_s;
     register char *m = cx->sb_m;
     char *orig = cx->sb_orig;
-    register REGEXP *rx = cx->sb_rx;
-    SV *nsv = Nullsv;
+    register REGEXP * const rx = cx->sb_rx;
+    SV *nsv = NULL;
     REGEXP *old = PM_GETRE(pm);
     if(old != rx) {
 	if(old)
@@ -205,16 +201,17 @@ PP(pp_substcont)
     }
 
     rxres_restore(&cx->sb_rxres, rx);
-    RX_MATCH_UTF8_set(rx, SvUTF8(cx->sb_targ));
+    RX_MATCH_UTF8_set(rx, DO_UTF8(cx->sb_targ));
 
     if (cx->sb_iters++) {
-	I32 saviters = cx->sb_iters;
+	const I32 saviters = cx->sb_iters;
 	if (cx->sb_iters > cx->sb_maxiters)
 	    DIE(aTHX_ "Substitution loop");
 
 	if (!(cx->sb_rxtainted & 2) && SvTAINTED(TOPs))
 	    cx->sb_rxtainted |= 2;
 	sv_catsv(dstr, POPs);
+	FREETMPS; /* Prevent excess tmp stack */
 
 	/* Are we done */
 	if (cx->sb_once || !CALLREGEXEC(aTHX_ rx, s, cx->sb_strend, orig,
@@ -223,7 +220,7 @@ PP(pp_substcont)
 				      ? (REXEC_IGNOREPOS|REXEC_NOT_FIRST)
 				      : (REXEC_COPY_STR|REXEC_IGNOREPOS|REXEC_NOT_FIRST))))
 	{
-	    SV *targ = cx->sb_targ;
+	    SV * const targ = cx->sb_targ;
 
 	    assert(cx->sb_strend >= s);
 	    if(cx->sb_strend > s) {
@@ -234,22 +231,20 @@ PP(pp_substcont)
 	    }
 	    cx->sb_rxtainted |= RX_MATCH_TAINTED(rx);
 
-#ifdef PERL_COPY_ON_WRITE
+#ifdef PERL_OLD_COPY_ON_WRITE
 	    if (SvIsCOW(targ)) {
 		sv_force_normal_flags(targ, SV_COW_DROP_PV);
 	    } else
 #endif
 	    {
-		SvOOK_off(targ);
-		if (SvLEN(targ))
-		    Safefree(SvPVX(targ));
+		SvPV_free(targ);
 	    }
-	    SvPVX(targ) = SvPVX(dstr);
+	    SvPV_set(targ, SvPVX(dstr));
 	    SvCUR_set(targ, SvCUR(dstr));
 	    SvLEN_set(targ, SvLEN(dstr));
 	    if (DO_UTF8(dstr))
 		SvUTF8_on(targ);
-	    SvPVX(dstr) = 0;
+	    SvPV_set(dstr, NULL);
 	    sv_free(dstr);
 
 	    TAINT_IF(cx->sb_rxtainted & 1);
@@ -283,13 +278,13 @@ PP(pp_substcont)
     }
     cx->sb_s = rx->endp[0] + orig;
     { /* Update the pos() information. */
-	SV *sv = cx->sb_targ;
+	SV * const sv = cx->sb_targ;
 	MAGIC *mg;
 	I32 i;
 	if (SvTYPE(sv) < SVt_PVMG)
-	    (void)SvUPGRADE(sv, SVt_PVMG);
+	    SvUPGRADE(sv, SVt_PVMG);
 	if (!(mg = mg_find(sv, PERL_MAGIC_regex_global))) {
-	    sv_magic(sv, Nullsv, PERL_MAGIC_regex_global, Nullch, 0);
+	    sv_magic(sv, NULL, PERL_MAGIC_regex_global, NULL, 0);
 	    mg = mg_find(sv, PERL_MAGIC_regex_global);
 	}
 	i = m - orig;
@@ -298,7 +293,7 @@ PP(pp_substcont)
 	mg->mg_len = i;
     }
     if (old != rx)
-	ReREFCNT_inc(rx);
+	(void)ReREFCNT_inc(rx);
     cx->sb_rxtainted |= RX_MATCH_TAINTED(rx);
     rxres_save(&cx->sb_rxres, rx);
     RETURNOP(pm->op_pmreplstart);
@@ -311,24 +306,24 @@ Perl_rxres_save(pTHX_ void **rsp, REGEXP *rx)
     U32 i;
 
     if (!p || p[1] < rx->nparens) {
-#ifdef PERL_COPY_ON_WRITE
+#ifdef PERL_OLD_COPY_ON_WRITE
 	i = 7 + rx->nparens * 2;
 #else
 	i = 6 + rx->nparens * 2;
 #endif
 	if (!p)
-	    New(501, p, i, UV);
+	    Newx(p, i, UV);
 	else
 	    Renew(p, i, UV);
 	*rsp = (void*)p;
     }
 
-    *p++ = PTR2UV(RX_MATCH_COPIED(rx) ? rx->subbeg : Nullch);
+    *p++ = PTR2UV(RX_MATCH_COPIED(rx) ? rx->subbeg : NULL);
     RX_MATCH_COPIED_off(rx);
 
-#ifdef PERL_COPY_ON_WRITE
+#ifdef PERL_OLD_COPY_ON_WRITE
     *p++ = PTR2UV(rx->saved_copy);
-    rx->saved_copy = Nullsv;
+    rx->saved_copy = NULL;
 #endif
 
     *p++ = rx->nparens;
@@ -351,7 +346,7 @@ Perl_rxres_restore(pTHX_ void **rsp, REGEXP *rx)
     RX_MATCH_COPIED_set(rx, *p);
     *p++ = 0;
 
-#ifdef PERL_COPY_ON_WRITE
+#ifdef PERL_OLD_COPY_ON_WRITE
     if (rx->saved_copy)
 	SvREFCNT_dec (rx->saved_copy);
     rx->saved_copy = INT2PTR(SV*,*p);
@@ -371,11 +366,18 @@ Perl_rxres_restore(pTHX_ void **rsp, REGEXP *rx)
 void
 Perl_rxres_free(pTHX_ void **rsp)
 {
-    UV *p = (UV*)*rsp;
+    UV * const p = (UV*)*rsp;
 
     if (p) {
+#ifdef PERL_POISON
+	void *tmp = INT2PTR(char*,*p);
+	Safefree(tmp);
+	if (*p)
+	    Poison(*p, 1, sizeof(*p));
+#else
 	Safefree(INT2PTR(char*,*p));
-#ifdef PERL_COPY_ON_WRITE
+#endif
+#ifdef PERL_OLD_COPY_ON_WRITE
 	if (p[1]) {
 	    SvREFCNT_dec (INT2PTR(SV*,p[1]));
 	}
@@ -387,31 +389,29 @@ Perl_rxres_free(pTHX_ void **rsp)
 
 PP(pp_formline)
 {
-    dSP; dMARK; dORIGMARK;
-    register SV *tmpForm = *++MARK;
+    dVAR; dSP; dMARK; dORIGMARK;
+    register SV * const tmpForm = *++MARK;
     register U32 *fpc;
     register char *t;
-    register char *f;
-    register char *s;
-    register char *send;
+    const char *f;
     register I32 arg;
-    register SV *sv = Nullsv;
-    char *item = Nullch;
+    register SV *sv = NULL;
+    const char *item = NULL;
     I32 itemsize  = 0;
     I32 fieldsize = 0;
     I32 lines = 0;
-    bool chopspace = (strchr(PL_chopset, ' ') != Nullch);
-    char *chophere = Nullch;
-    char *linemark = Nullch;
+    bool chopspace = (strchr(PL_chopset, ' ') != NULL);
+    const char *chophere = NULL;
+    char *linemark = NULL;
     NV value;
     bool gotsome = FALSE;
     STRLEN len;
-    STRLEN fudge = SvPOK(tmpForm)
+    const STRLEN fudge = SvPOK(tmpForm)
 			? (SvCUR(tmpForm) * (IN_BYTES ? 1 : 3) + 1) : 0;
     bool item_is_utf8 = FALSE;
     bool targ_is_utf8 = FALSE;
-    SV * nsv = Nullsv;
-    OP * parseres = 0;
+    SV * nsv = NULL;
+    OP * parseres = NULL;
     const char *fmt;
     bool oneline;
 
@@ -431,11 +431,9 @@ PP(pp_formline)
 	targ_is_utf8 = TRUE;
     t = SvGROW(PL_formtarget, len + fudge + 1);  /* XXX SvCUR bad */
     t += len;
-    f = SvPV(tmpForm, len);
+    f = SvPV_const(tmpForm, len);
     /* need to jump to the next word */
-    s = f + len + WORD_ALIGN - SvCUR(tmpForm) % WORD_ALIGN;
-
-    fpc = (U32*)s;
+    fpc = (U32*)(f + len + WORD_ALIGN - SvCUR(tmpForm) % WORD_ALIGN);
 
     for (;;) {
 	DEBUG_f( {
@@ -477,14 +475,14 @@ PP(pp_formline)
 	case FF_LITERAL:
 	    arg = *fpc++;
 	    if (targ_is_utf8 && !SvUTF8(tmpForm)) {
-		SvCUR_set(PL_formtarget, t - SvPVX(PL_formtarget));
+		SvCUR_set(PL_formtarget, t - SvPVX_const(PL_formtarget));
 		*t = '\0';
 		sv_catpvn_utf8_upgrade(PL_formtarget, f, arg, nsv);
 		t = SvEND(PL_formtarget);
 		break;
 	    }
 	    if (!targ_is_utf8 && DO_UTF8(tmpForm)) {
-		SvCUR_set(PL_formtarget, t - SvPVX(PL_formtarget));
+		SvCUR_set(PL_formtarget, t - SvPVX_const(PL_formtarget));
 		*t = '\0';
 		sv_utf8_upgrade(PL_formtarget);
 		SvGROW(PL_formtarget, SvCUR(PL_formtarget) + fudge + 1);
@@ -514,127 +512,134 @@ PP(pp_formline)
 	    break;
 
 	case FF_CHECKNL:
-	    item = s = SvPV(sv, len);
-	    itemsize = len;
-	    if (DO_UTF8(sv)) {
-		itemsize = sv_len_utf8(sv);
-		if (itemsize != (I32)len) {
-		    I32 itembytes;
-		    if (itemsize > fieldsize) {
-			itemsize = fieldsize;
-			itembytes = itemsize;
-			sv_pos_u2b(sv, &itembytes, 0);
-		    }
-		    else
-			itembytes = len;
-		    send = chophere = s + itembytes;
-		    while (s < send) {
-			if (*s & ~31)
-			    gotsome = TRUE;
-			else if (*s == '\n')
-			    break;
-			s++;
-		    }
-		    item_is_utf8 = TRUE;
-		    itemsize = s - item;
-		    sv_pos_b2u(sv, &itemsize);
-		    break;
-		}
-	    }
-	    item_is_utf8 = FALSE;
-	    if (itemsize > fieldsize)
-		itemsize = fieldsize;
-	    send = chophere = s + itemsize;
-	    while (s < send) {
-		if (*s & ~31)
-		    gotsome = TRUE;
-		else if (*s == '\n')
-		    break;
-		s++;
-	    }
-	    itemsize = s - item;
-	    break;
-
-	case FF_CHECKCHOP:
-	    item = s = SvPV(sv, len);
-	    itemsize = len;
-	    if (DO_UTF8(sv)) {
-		itemsize = sv_len_utf8(sv);
-		if (itemsize != (I32)len) {
-		    I32 itembytes;
-		    if (itemsize <= fieldsize) {
-			send = chophere = s + itemsize;
-			while (s < send) {
-			    if (*s == '\r') {
-				itemsize = s - item;
-				chophere = s;
-				break;
-			    }
-			    if (*s++ & ~31)
-				gotsome = TRUE;
+	    {
+		const char *send;
+		const char *s = item = SvPV_const(sv, len);
+		itemsize = len;
+		if (DO_UTF8(sv)) {
+		    itemsize = sv_len_utf8(sv);
+		    if (itemsize != (I32)len) {
+			I32 itembytes;
+			if (itemsize > fieldsize) {
+			    itemsize = fieldsize;
+			    itembytes = itemsize;
+			    sv_pos_u2b(sv, &itembytes, 0);
 			}
-		    }
-		    else {
-			itemsize = fieldsize;
-			itembytes = itemsize;
-			sv_pos_u2b(sv, &itembytes, 0);
+			else
+			    itembytes = len;
 			send = chophere = s + itembytes;
-			while (s < send || (s == send && isSPACE(*s))) {
-			    if (isSPACE(*s)) {
-				if (chopspace)
-				    chophere = s;
-				if (*s == '\r')
-				    break;
-			    }
-			    else {
-				if (*s & ~31)
-				    gotsome = TRUE;
-				if (strchr(PL_chopset, *s))
-				    chophere = s + 1;
-			    }
+			while (s < send) {
+			    if (*s & ~31)
+				gotsome = TRUE;
+			    else if (*s == '\n')
+				break;
 			    s++;
 			}
-			itemsize = chophere - item;
-			sv_pos_b2u(sv, &itemsize);
-		    }
-		    item_is_utf8 = TRUE;
-		    break;
-		}
-	    }
-	    item_is_utf8 = FALSE;
-	    if (itemsize <= fieldsize) {
-		send = chophere = s + itemsize;
-		while (s < send) {
-		    if (*s == '\r') {
+			item_is_utf8 = TRUE;
 			itemsize = s - item;
-			chophere = s;
+			sv_pos_b2u(sv, &itemsize);
 			break;
 		    }
-		    if (*s++ & ~31)
-			gotsome = TRUE;
 		}
-	    }
-	    else {
-		itemsize = fieldsize;
+		item_is_utf8 = FALSE;
+		if (itemsize > fieldsize)
+		    itemsize = fieldsize;
 		send = chophere = s + itemsize;
-		while (s < send || (s == send && isSPACE(*s))) {
-		    if (isSPACE(*s)) {
-			if (chopspace)
-			    chophere = s;
-			if (*s == '\r')
-			    break;
-		    }
-		    else {
-			if (*s & ~31)
-			    gotsome = TRUE;
-			if (strchr(PL_chopset, *s))
-			    chophere = s + 1;
-		    }
+		while (s < send) {
+		    if (*s & ~31)
+			gotsome = TRUE;
+		    else if (*s == '\n')
+			break;
 		    s++;
 		}
-		itemsize = chophere - item;
+		itemsize = s - item;
+		break;
 	    }
-	    break;
+
+	case FF_CHECKCHOP:
+	    {
+		const char *s = item = SvPV_const(sv, len);
+		itemsize = len;
+		if (DO_UTF8(sv)) {
+		    itemsize = sv_len_utf8(sv);
+		    if (itemsize != (I32)len) {
+			I32 itembytes;
+			if (itemsize <= fieldsize) {
+			    const char *send = chophere = s + itemsize;
+			    while (s < send) {
+				if (*s == '\r') {
+				    itemsize = s - item;
+				    chophere = s;
+				    break;
+				}
+				if (*s++ & ~31)
+				    gotsome = TRUE;
+			    }
+			}
+			else {
+			    const char *send;
+			    itemsize = fieldsize;
+			    itembytes = itemsize;
+			    sv_pos_u2b(sv, &itembytes, 0);
+			    send = chophere = s + itembytes;
+			    while (s < send || (s == send && isSPACE(*s))) {
+				if (isSPACE(*s)) {
+				    if (chopspace)
+					chophere = s;
+				    if (*s == '\r')
+					break;
+				}
+				else {
+				    if (*s & ~31)
+					gotsome = TRUE;
+				    if (strchr(PL_chopset, *s))
+					chophere = s + 1;
+				}
+				s++;
+			    }
+			    itemsize = chophere - item;
+			    sv_pos_b2u(sv, &itemsize);
+			}
+			item_is_utf8 = TRUE;
+			break;
+		    }
+		}
+		item_is_utf8 = FALSE;
+		if (itemsize <= fieldsize) {
+		    const char *const send = chophere = s + itemsize;
+		    while (s < send) {
+			if (*s == '\r') {
+			    itemsize = s - item;
+			    chophere = s;
+			    break;
+			}
+			if (*s++ & ~31)
+			    gotsome = TRUE;
+		    }
+		}
+		else {
+		    const char *send;
+		    itemsize = fieldsize;
+		    send = chophere = s + itemsize;
+		    while (s < send || (s == send && isSPACE(*s))) {
+			if (isSPACE(*s)) {
+			    if (chopspace)
+				chophere = s;
+			    if (*s == '\r')
+				break;
+			}
+			else {
+			    if (*s & ~31)
+				gotsome = TRUE;
+			    if (strchr(PL_chopset, *s))
+				chophere = s + 1;
+			}
+			s++;
+		    }
+		    itemsize = chophere - item;
+		}
+		break;
+	    }
 
 	case FF_SPACE:
 	    arg = fieldsize - itemsize;
@@ -656,77 +661,81 @@ PP(pp_formline)
 	    break;
 
 	case FF_ITEM:
-	    arg = itemsize;
-	    s = item;
-	    if (item_is_utf8) {
-		if (!targ_is_utf8) {
-		    SvCUR_set(PL_formtarget, t - SvPVX(PL_formtarget));
-		    *t = '\0';
-		    sv_utf8_upgrade(PL_formtarget);
-		    SvGROW(PL_formtarget, SvCUR(PL_formtarget) + fudge + 1);
-		    t = SvEND(PL_formtarget);
-		    targ_is_utf8 = TRUE;
-		}
-		while (arg--) {
-		    if (UTF8_IS_CONTINUED(*s)) {
-			STRLEN skip = UTF8SKIP(s);
-			switch (skip) {
-			default:
-			    Move(s,t,skip,char);
-			    s += skip;
-			    t += skip;
-			    break;
-			case 7: *t++ = *s++;
-			case 6: *t++ = *s++;
-			case 5: *t++ = *s++;
-			case 4: *t++ = *s++;
-			case 3: *t++ = *s++;
-			case 2: *t++ = *s++;
-			case 1: *t++ = *s++;
+	    {
+		const char *s = item;
+		arg = itemsize;
+		if (item_is_utf8) {
+		    if (!targ_is_utf8) {
+			SvCUR_set(PL_formtarget, t - SvPVX_const(PL_formtarget));
+			*t = '\0';
+			sv_utf8_upgrade(PL_formtarget);
+			SvGROW(PL_formtarget, SvCUR(PL_formtarget) + fudge + 1);
+			t = SvEND(PL_formtarget);
+			targ_is_utf8 = TRUE;
+		    }
+		    while (arg--) {
+			if (UTF8_IS_CONTINUED(*s)) {
+			    STRLEN skip = UTF8SKIP(s);
+			    switch (skip) {
+			    default:
+				Move(s,t,skip,char);
+				s += skip;
+				t += skip;
+				break;
+			    case 7: *t++ = *s++;
+			    case 6: *t++ = *s++;
+			    case 5: *t++ = *s++;
+			    case 4: *t++ = *s++;
+			    case 3: *t++ = *s++;
+			    case 2: *t++ = *s++;
+			    case 1: *t++ = *s++;
+			    }
+			}
+			else {
+			    if ( !((*t++ = *s++) & ~31) )
+				t[-1] = ' ';
 			}
 		    }
-		    else {
-			if ( !((*t++ = *s++) & ~31) )
-			    t[-1] = ' ';
-		    }
+		    break;
 		}
-		break;
-	    }
-	    if (targ_is_utf8 && !item_is_utf8) {
-		SvCUR_set(PL_formtarget, t - SvPVX(PL_formtarget));
-		*t = '\0';
-		sv_catpvn_utf8_upgrade(PL_formtarget, s, arg, nsv);
-		for (; t < SvEND(PL_formtarget); t++) {
+		if (targ_is_utf8 && !item_is_utf8) {
+		    SvCUR_set(PL_formtarget, t - SvPVX_const(PL_formtarget));
+		    *t = '\0';
+		    sv_catpvn_utf8_upgrade(PL_formtarget, s, arg, nsv);
+		    for (; t < SvEND(PL_formtarget); t++) {
 #ifdef EBCDIC
-		    int ch = *t;
+			const int ch = *t;
+			if (iscntrl(ch))
+#else
+			    if (!(*t & ~31))
+#endif
+				*t = ' ';
+		    }
+		    break;
+		}
+		while (arg--) {
+#ifdef EBCDIC
+		    const int ch = *t++ = *s++;
 		    if (iscntrl(ch))
 #else
-		    if (!(*t & ~31))
+			if ( !((*t++ = *s++) & ~31) )
 #endif
-			*t = ' ';
+			    t[-1] = ' ';
 		}
 		break;
 	    }
-	    while (arg--) {
-#ifdef EBCDIC
-		int ch = *t++ = *s++;
-		if (iscntrl(ch))
-#else
-		if ( !((*t++ = *s++) & ~31) )
-#endif
-		    t[-1] = ' ';
-	    }
-	    break;
 
 	case FF_CHOP:
-	    s = chophere;
-	    if (chopspace) {
-		while (*s && isSPACE(*s))
-		    s++;
+	    {
+		const char *s = chophere;
+		if (chopspace) {
+		    while (isSPACE(*s))
+			s++;
+		}
+		sv_chop(sv,s);
+		SvSETMAGIC(sv);
+		break;
 	    }
-	    sv_chop(sv,s);
-	    SvSETMAGIC(sv);
-	    break;
 
 	case FF_LINESNGL:
 	    chopspace = 0;
@@ -735,47 +744,49 @@ PP(pp_formline)
 	case FF_LINEGLOB:
 	    oneline = FALSE;
 	ff_line:
-	    item = s = SvPV(sv, len);
-	    itemsize = len;
-	    if ((item_is_utf8 = DO_UTF8(sv)))
-		itemsize = sv_len_utf8(sv);
-	    if (itemsize) {
-		bool chopped = FALSE;
-		gotsome = TRUE;
-		send = s + len;
-		chophere = s + itemsize;
-		while (s < send) {
-		    if (*s++ == '\n') {
-		        if (oneline) {
-			    chopped = TRUE;
-			    chophere = s;
-			    break;
-			} else {
-			    if (s == send) {
-			        itemsize--;
-			        chopped = TRUE;
-			    } else
-			        lines++;
+	    {
+		const char *s = item = SvPV_const(sv, len);
+		itemsize = len;
+		if ((item_is_utf8 = DO_UTF8(sv)))
+		    itemsize = sv_len_utf8(sv);
+		if (itemsize) {
+		    bool chopped = FALSE;
+		    const char *const send = s + len;
+		    gotsome = TRUE;
+		    chophere = s + itemsize;
+		    while (s < send) {
+			if (*s++ == '\n') {
+			    if (oneline) {
+				chopped = TRUE;
+				chophere = s;
+				break;
+			    } else {
+				if (s == send) {
+				    itemsize--;
+				    chopped = TRUE;
+				} else
+				    lines++;
+			    }
 			}
 		    }
+		    SvCUR_set(PL_formtarget, t - SvPVX_const(PL_formtarget));
+		    if (targ_is_utf8)
+			SvUTF8_on(PL_formtarget);
+		    if (oneline) {
+			SvCUR_set(sv, chophere - item);
+			sv_catsv(PL_formtarget, sv);
+			SvCUR_set(sv, itemsize);
+		    } else
+			sv_catsv(PL_formtarget, sv);
+		    if (chopped)
+			SvCUR_set(PL_formtarget, SvCUR(PL_formtarget) - 1);
+		    SvGROW(PL_formtarget, SvCUR(PL_formtarget) + fudge + 1);
+		    t = SvPVX(PL_formtarget) + SvCUR(PL_formtarget);
+		    if (item_is_utf8)
+			targ_is_utf8 = TRUE;
 		}
-		SvCUR_set(PL_formtarget, t - SvPVX(PL_formtarget));
-		if (targ_is_utf8)
-		    SvUTF8_on(PL_formtarget);
-		if (oneline) {
-		    SvCUR_set(sv, chophere - item);
-		    sv_catsv(PL_formtarget, sv);
-		    SvCUR_set(sv, itemsize);
-		} else
-		    sv_catsv(PL_formtarget, sv);
-		if (chopped)
-		    SvCUR_set(PL_formtarget, SvCUR(PL_formtarget) - 1);
-		SvGROW(PL_formtarget, SvCUR(PL_formtarget) + fudge + 1);
-		t = SvPVX(PL_formtarget) + SvCUR(PL_formtarget);
-		if (item_is_utf8)
-		    targ_is_utf8 = TRUE;
+		break;
 	    }
-	    break;
 
 	case FF_0DECIMAL:
 	    arg = *fpc++;
@@ -831,7 +842,7 @@ PP(pp_formline)
 	    if (gotsome) {
 		if (arg) {		/* repeat until fields exhausted? */
 		    *t = '\0';
-		    SvCUR_set(PL_formtarget, t - SvPVX(PL_formtarget));
+		    SvCUR_set(PL_formtarget, t - SvPVX_const(PL_formtarget));
 		    lines += FmLINES(PL_formtarget);
 		    if (lines == 200) {
 			arg = t - linemark;
@@ -852,33 +863,35 @@ PP(pp_formline)
 	    break;
 
 	case FF_MORE:
-	    s = chophere;
-	    send = item + len;
-	    if (chopspace) {
-		while (*s && isSPACE(*s) && s < send)
-		    s++;
-	    }
-	    if (s < send) {
-		arg = fieldsize - itemsize;
-		if (arg) {
-		    fieldsize -= arg;
-		    while (arg-- > 0)
-			*t++ = ' ';
+	    {
+		const char *s = chophere;
+		const char *send = item + len;
+		if (chopspace) {
+		    while (isSPACE(*s) && (s < send))
+			s++;
 		}
-		s = t - 3;
-		if (strnEQ(s,"   ",3)) {
-		    while (s > SvPVX(PL_formtarget) && isSPACE(s[-1]))
-			s--;
+		if (s < send) {
+		    char *s1;
+		    arg = fieldsize - itemsize;
+		    if (arg) {
+			fieldsize -= arg;
+			while (arg-- > 0)
+			    *t++ = ' ';
+		    }
+		    s1 = t - 3;
+		    if (strnEQ(s1,"   ",3)) {
+			while (s1 > SvPVX_const(PL_formtarget) && isSPACE(s1[-1]))
+			    s1--;
+		    }
+		    *s1++ = '.';
+		    *s1++ = '.';
+		    *s1++ = '.';
 		}
-		*s++ = '.';
-		*s++ = '.';
-		*s++ = '.';
+		break;
 	    }
-	    break;
-
 	case FF_END:
 	    *t = '\0';
-	    SvCUR_set(PL_formtarget, t - SvPVX(PL_formtarget));
+	    SvCUR_set(PL_formtarget, t - SvPVX_const(PL_formtarget));
 	    if (targ_is_utf8)
 		SvUTF8_on(PL_formtarget);
 	    FmLINES(PL_formtarget) += lines;
@@ -890,7 +903,7 @@ PP(pp_formline)
 
 PP(pp_grepstart)
 {
-    dSP;
+    dVAR; dSP;
     SV *src;
 
     if (PL_stack_base + *PL_markstack_ptr == SP) {
@@ -925,15 +938,10 @@ PP(pp_grepstart)
     return ((LOGOP*)PL_op->op_next)->op_other;
 }
 
-PP(pp_mapstart)
-{
-    DIE(aTHX_ "panic: mapstart");	/* uses grepstart */
-}
-
 PP(pp_mapwhile)
 {
-    dSP;
-    I32 gimme = GIMME_V;
+    dVAR; dSP;
+    const I32 gimme = GIMME_V;
     I32 items = (SP - PL_stack_base) - *PL_markstack_ptr; /* how many new items */
     I32 count;
     I32 shift;
@@ -1043,6 +1051,7 @@ PP(pp_mapwhile)
 
 PP(pp_range)
 {
+    dVAR;
     if (GIMME == G_ARRAY)
 	return NORMAL;
     if (SvTRUEx(PAD_SV(PL_op->op_targ)))
@@ -1053,6 +1062,7 @@ PP(pp_range)
 
 PP(pp_flip)
 {
+    dVAR;
     dSP;
 
     if (GIMME == G_ARRAY) {
@@ -1060,7 +1070,7 @@ PP(pp_flip)
     }
     else {
 	dTOPss;
-	SV *targ = PAD_SV(PL_op->op_targ);
+	SV * const targ = PAD_SV(PL_op->op_targ);
 	int flip = 0;
 
 	if (PL_op->op_private & OPpFLIP_LINENUM) {
@@ -1068,8 +1078,9 @@ PP(pp_flip)
 		flip = SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv));
 	    }
 	    else {
-		GV *gv = gv_fetchpv(".", TRUE, SVt_PV);
-		if (gv && GvSV(gv)) flip = SvIV(sv) == SvIV(GvSV(gv));
+		GV * const gv = gv_fetchpv(".", TRUE, SVt_PV);
+		if (gv && GvSV(gv))
+		    flip = SvIV(sv) == SvIV(GvSV(gv));
 	    }
 	} else {
 	    flip = SvTRUE(sv);
@@ -1087,7 +1098,7 @@ PP(pp_flip)
 		RETURNOP(((LOGOP*)cUNOP->op_first)->op_other);
 	    }
 	}
-	sv_setpv(TARG, "");
+	sv_setpvn(TARG, "", 0);
 	SETs(targ);
 	RETURN;
     }
@@ -1101,25 +1112,22 @@ PP(pp_flip)
 	SvNIOKp(left)  || (SvOK(left)  && !SvPOKp(left))  || \
 	SvNIOKp(right) || (SvOK(right) && !SvPOKp(right)) || \
 	(((!SvOK(left) && SvOK(right)) || ((!SvOK(left) || \
-          looks_like_number(left)) && SvPOKp(left) && *SvPVX(left) != '0')) \
+          looks_like_number(left)) && SvPOKp(left) && *SvPVX_const(left) != '0')) \
          && (!SvOK(right) || looks_like_number(right))))
 
 PP(pp_flop)
 {
-    dSP;
+    dVAR; dSP;
 
     if (GIMME == G_ARRAY) {
 	dPOPPOPssrl;
-	register IV i, j;
-	register SV *sv;
-	IV max;
 
-	if (SvGMAGICAL(left))
-	    mg_get(left);
-	if (SvGMAGICAL(right))
-	    mg_get(right);
+	SvGETMAGIC(left);
+	SvGETMAGIC(right);
 
 	if (RANGE_IS_NUMERIC(left,right)) {
+	    register IV i, j;
+	    IV max;
 	    if ((SvOK(left) && SvNV(left) < IV_MIN) ||
 		(SvOK(right) && SvNV(right) > IV_MAX))
 		DIE(aTHX_ "Range iterator outside integer range");
@@ -1133,20 +1141,20 @@ PP(pp_flop)
 	    else
 		j = 0;
 	    while (j--) {
-		sv = sv_2mortal(newSViv(i++));
+		SV * const sv = sv_2mortal(newSViv(i++));
 		PUSHs(sv);
 	    }
 	}
 	else {
-	    SV *final = sv_mortalcopy(right);
-	    STRLEN len, n_a;
-	    char *tmps = SvPV(final, len);
+	    SV * const final = sv_mortalcopy(right);
+	    STRLEN len;
+	    const char * const tmps = SvPV_const(final, len);
 
-	    sv = sv_mortalcopy(left);
-	    SvPV_force(sv,n_a);
+	    SV *sv = sv_mortalcopy(left);
+	    SvPV_force_nolen(sv);
 	    while (!SvNIOKp(sv) && SvCUR(sv) <= len) {
 		XPUSHs(sv);
-	        if (strEQ(SvPVX(sv),tmps))
+	        if (strEQ(SvPVX_const(sv),tmps))
 	            break;
 		sv = sv_2mortal(newSVsv(sv));
 		sv_inc(sv);
@@ -1155,7 +1163,7 @@ PP(pp_flop)
     }
     else {
 	dTOPss;
-	SV *targ = PAD_SV(cUNOP->op_first->op_targ);
+	SV * const targ = PAD_SV(cUNOP->op_first->op_targ);
 	int flop = 0;
 	sv_inc(targ);
 
@@ -1164,7 +1172,7 @@ PP(pp_flop)
 		flop = SvIV(sv) == (IV)IoLINES(GvIOp(PL_last_in_gv));
 	    }
 	    else {
-		GV *gv = gv_fetchpv(".", TRUE, SVt_PV);
+		GV * const gv = gv_fetchpv(".", TRUE, SVt_PV);
 		if (gv && GvSV(gv)) flop = SvIV(sv) == SvIV(GvSV(gv));
 	    }
 	}
@@ -1174,7 +1182,7 @@ PP(pp_flop)
 
 	if (flop) {
 	    sv_setiv(PAD_SV(((UNOP*)cUNOP->op_first)->op_first->op_targ), 0);
-	    sv_catpv(targ, "E0");
+	    sv_catpvs(targ, "E0");
 	}
 	SETs(targ);
     }
@@ -1184,29 +1192,34 @@ PP(pp_flop)
 
 /* Control. */
 
-static const char *context_name[] = {
+static const char * const context_name[] = {
     "pseudo-block",
     "subroutine",
     "eval",
     "loop",
     "substitution",
     "block",
-    "format"
+    "format",
+    "given",
+    "when"
 };
 
 STATIC I32
 S_dopoptolabel(pTHX_ const char *label)
 {
+    dVAR;
     register I32 i;
 
     for (i = cxstack_ix; i >= 0; i--) {
-	register const PERL_CONTEXT *cx = &cxstack[i];
+	register const PERL_CONTEXT * const cx = &cxstack[i];
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	case CXt_SUB:
 	case CXt_FORMAT:
 	case CXt_EVAL:
 	case CXt_NULL:
+	case CXt_GIVEN:
+	case CXt_WHEN:
 	    if (ckWARN(WARN_EXITING))
 		Perl_warner(aTHX_ packWARN(WARN_EXITING), "Exiting %s via %s",
 			context_name[CxTYPE(cx)], OP_NAME(PL_op));
@@ -1214,8 +1227,7 @@ S_dopoptolabel(pTHX_ const char *label)
 		return -1;
 	    break;
 	case CXt_LOOP:
-	    if (!cx->blk_loop.label ||
-	      strNE(label, cx->blk_loop.label) ) {
+	    if ( !cx->blk_loop.label || strNE(label, cx->blk_loop.label) ) {
 		DEBUG_l(Perl_deb(aTHX_ "(Skipping label #%ld %s)\n",
 			(long)i, cx->blk_loop.label));
 		continue;
@@ -1227,16 +1239,20 @@ S_dopoptolabel(pTHX_ const char *label)
     return i;
 }
 
+
+
 I32
 Perl_dowantarray(pTHX)
 {
-    I32 gimme = block_gimme();
+    dVAR;
+    const I32 gimme = block_gimme();
     return (gimme == G_VOID) ? G_SCALAR : gimme;
 }
 
 I32
 Perl_block_gimme(pTHX)
 {
+    dVAR;
     const I32 cxix = dopoptosub(cxstack_ix);
     if (cxix < 0)
 	return G_VOID;
@@ -1258,6 +1274,7 @@ Perl_block_gimme(pTHX)
 I32
 Perl_is_lvalue_sub(pTHX)
 {
+    dVAR;
     const I32 cxix = dopoptosub(cxstack_ix);
     assert(cxix >= 0);  /* We should only be called from inside subs */
 
@@ -1270,15 +1287,17 @@ Perl_is_lvalue_sub(pTHX)
 STATIC I32
 S_dopoptosub(pTHX_ I32 startingblock)
 {
+    dVAR;
     return dopoptosub_at(cxstack, startingblock);
 }
 
 STATIC I32
-S_dopoptosub_at(pTHX_ PERL_CONTEXT *cxstk, I32 startingblock)
+S_dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
 {
+    dVAR;
     I32 i;
     for (i = startingblock; i >= 0; i--) {
-        register const PERL_CONTEXT *cx = &cxstk[i];
+	register const PERL_CONTEXT * const cx = &cxstk[i];
 	switch (CxTYPE(cx)) {
 	default:
 	    continue;
@@ -1295,6 +1314,7 @@ S_dopoptosub_at(pTHX_ PERL_CONTEXT *cxstk, I32 startingblock)
 STATIC I32
 S_dopoptoeval(pTHX_ I32 startingblock)
 {
+    dVAR;
     I32 i;
     for (i = startingblock; i >= 0; i--) {
 	register const PERL_CONTEXT *cx = &cxstack[i];
@@ -1312,9 +1332,10 @@ S_dopoptoeval(pTHX_ I32 startingblock)
 STATIC I32
 S_dopoptoloop(pTHX_ I32 startingblock)
 {
+    dVAR;
     I32 i;
     for (i = startingblock; i >= 0; i--) {
-	register const PERL_CONTEXT *cx = &cxstack[i];
+	register const PERL_CONTEXT * const cx = &cxstack[i];
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
 	case CXt_SUB:
@@ -1335,9 +1356,51 @@ S_dopoptoloop(pTHX_ I32 startingblock)
     return i;
 }
 
+STATIC I32
+S_dopoptogiven(pTHX_ I32 startingblock)
+{
+    dVAR;
+    I32 i;
+    for (i = startingblock; i >= 0; i--) {
+	register const PERL_CONTEXT *cx = &cxstack[i];
+	switch (CxTYPE(cx)) {
+	default:
+	    continue;
+	case CXt_GIVEN:
+	    DEBUG_l( Perl_deb(aTHX_ "(Found given #%ld)\n", (long)i));
+	    return i;
+	case CXt_LOOP:
+	    if (CxFOREACHDEF(cx)) {
+		DEBUG_l( Perl_deb(aTHX_ "(Found foreach #%ld)\n", (long)i));
+		return i;
+	    }
+	}
+    }
+    return i;
+}
+
+STATIC I32
+S_dopoptowhen(pTHX_ I32 startingblock)
+{
+    dVAR;
+    I32 i;
+    for (i = startingblock; i >= 0; i--) {
+	register const PERL_CONTEXT *cx = &cxstack[i];
+	switch (CxTYPE(cx)) {
+	default:
+	    continue;
+	case CXt_WHEN:
+	    DEBUG_l( Perl_deb(aTHX_ "(Found when #%ld)\n", (long)i));
+	    return i;
+	}
+    }
+    return i;
+}
+
 void
 Perl_dounwind(pTHX_ I32 cxix)
 {
+    dVAR;
     I32 optype;
 
     while (cxstack_ix > cxix) {
@@ -1368,11 +1431,13 @@ Perl_dounwind(pTHX_ I32 cxix)
 	}
 	cxstack_ix--;
     }
+    PERL_UNUSED_VAR(optype);
 }
 
 void
 Perl_qerror(pTHX_ SV *err)
 {
+    dVAR;
     if (PL_in_eval)
 	sv_catsv(ERRSV, err);
     else if (PL_errors)
@@ -1385,33 +1450,33 @@ Perl_qerror(pTHX_ SV *err)
 OP *
 Perl_die_where(pTHX_ const char *message, STRLEN msglen)
 {
-    STRLEN n_a;
+    dVAR;
 
     if (PL_in_eval) {
 	I32 cxix;
 	I32 gimme;
-	SV **newsp;
 
 	if (message) {
 	    if (PL_in_eval & EVAL_KEEPERR) {
                 static const char prefix[] = "\t(in cleanup) ";
-		SV *err = ERRSV;
-                const char *e = Nullch;
+		SV * const err = ERRSV;
+		const char *e = NULL;
 		if (!SvPOK(err))
-		    sv_setpv(err,"");
+		    sv_setpvn(err,"",0);
 		else if (SvCUR(err) >= sizeof(prefix)+msglen-1) {
-		    e = SvPV(err, n_a);
-		    e += n_a - msglen;
+		    STRLEN len;
+		    e = SvPV_const(err, len);
+		    e += len - msglen;
 		    if (*e != *message || strNE(e,message))
-			e = Nullch;
+			e = NULL;
 		}
 		if (!e) {
 		    SvGROW(err, SvCUR(err)+sizeof(prefix)+msglen);
 		    sv_catpvn(err, prefix, sizeof(prefix)-1);
 		    sv_catpvn(err, message, msglen);
 		    if (ckWARN(WARN_MISC)) {
-			STRLEN start = SvCUR(err)-msglen-sizeof(prefix)+1;
-			Perl_warner(aTHX_ packWARN(WARN_MISC), SvPVX(err)+start);
+			const STRLEN start = SvCUR(err)-msglen-sizeof(prefix)+1;
+			Perl_warner(aTHX_ packWARN(WARN_MISC), SvPVX_const(err)+start);
 		    }
 		}
 	    }
@@ -1430,6 +1495,7 @@ Perl_die_where(pTHX_ const char *message, STRLEN msglen)
 	if (cxix >= 0) {
 	    I32 optype;
 	    register PERL_CONTEXT *cx;
+	    SV **newsp;
 
 	    if (cxix < cxstack_ix)
 		dounwind(cxix);
@@ -1437,7 +1503,7 @@ Perl_die_where(pTHX_ const char *message, STRLEN msglen)
 	    POPBLOCK(cx,PL_curpm);
 	    if (CxTYPE(cx) != CXt_EVAL) {
 		if (!message)
-		    message = SvPVx(ERRSV, msglen);
+		    message = SvPVx_const(ERRSV, msglen);
 		PerlIO_write(Perl_error_log, "panic: die ", 11);
 		PerlIO_write(Perl_error_log, message, msglen);
 		my_exit(1);
@@ -1457,9 +1523,9 @@ Perl_die_where(pTHX_ const char *message, STRLEN msglen)
 	    PL_curcop = cx->blk_oldcop;
 
 	    if (optype == OP_REQUIRE) {
-                const char* msg = SvPVx(ERRSV, n_a);
-                SV *nsv = cx->blk_eval.old_namesv;
-                (void)hv_store(GvHVn(PL_incgv), SvPVX(nsv), SvCUR(nsv),
+                const char* const msg = SvPVx_nolen_const(ERRSV);
+		SV * const nsv = cx->blk_eval.old_namesv;
+                (void)hv_store(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv),
                                &PL_sv_undef, 0);
 		DIE(aTHX_ "%sCompilation failed in require",
 		    *msg ? msg : "Unknown error\n");
@@ -1469,7 +1535,7 @@ Perl_die_where(pTHX_ const char *message, STRLEN msglen)
 	}
     }
     if (!message)
-	message = SvPVx(ERRSV, msglen);
+	message = SvPVx_const(ERRSV, msglen);
 
     write_to_stderr(message, msglen);
     my_failure_exit();
@@ -1479,75 +1545,23 @@ Perl_die_where(pTHX_ const char *message, STRLEN msglen)
 
 PP(pp_xor)
 {
-    dSP; dPOPTOPssrl;
+    dVAR; dSP; dPOPTOPssrl;
     if (SvTRUE(left) != SvTRUE(right))
 	RETSETYES;
     else
 	RETSETNO;
 }
 
-PP(pp_andassign)
-{
-    dSP;
-    if (!SvTRUE(TOPs))
-	RETURN;
-    else
-	RETURNOP(cLOGOP->op_other);
-}
-
-PP(pp_orassign)
-{
-    dSP;
-    if (SvTRUE(TOPs))
-	RETURN;
-    else
-	RETURNOP(cLOGOP->op_other);
-}
-
-PP(pp_dorassign)
-{
-    dSP;
-    register SV* sv;
-
-    sv = TOPs;
-    if (!sv || !SvANY(sv)) {
-	RETURNOP(cLOGOP->op_other);
-    }
-
-    switch (SvTYPE(sv)) {
-    case SVt_PVAV:
-	if (AvMAX(sv) >= 0 || SvGMAGICAL(sv) || (SvRMAGICAL(sv) && mg_find(sv, PERL_MAGIC_tied)))
-	    RETURN;
-	break;
-    case SVt_PVHV:
-	if (HvARRAY(sv) || SvGMAGICAL(sv) || (SvRMAGICAL(sv) && mg_find(sv, PERL_MAGIC_tied)))
-	    RETURN;
-	break;
-    case SVt_PVCV:
-	if (CvROOT(sv) || CvXSUB(sv))
-	    RETURN;
-	break;
-    default:
-	if (SvGMAGICAL(sv))
-	    mg_get(sv);
-	if (SvOK(sv))
-	    RETURN;
-    }
-
-    RETURNOP(cLOGOP->op_other);
-}
-
 PP(pp_caller)
 {
+    dVAR;
     dSP;
     register I32 cxix = dopoptosub(cxstack_ix);
-    register PERL_CONTEXT *cx;
-    register PERL_CONTEXT *ccstack = cxstack;
-    PERL_SI *top_si = PL_curstackinfo;
-    I32 dbcxix;
+    register const PERL_CONTEXT *cx;
+    register const PERL_CONTEXT *ccstack = cxstack;
+    const PERL_SI *top_si = PL_curstackinfo;
     I32 gimme;
     const char *stashname;
-    SV *sv;
     I32 count = 0;
 
     if (MAXARG)
@@ -1567,7 +1581,8 @@ PP(pp_caller)
             }
 	    RETURN;
 	}
-	if (PL_DBsub && cxix >= 0 &&
+	/* caller() should not report the automatic calls to &DB::sub */
+	if (PL_DBsub && GvCV(PL_DBsub) && cxix >= 0 &&
 		ccstack[cxix].blk_sub.cv == GvCV(PL_DBsub))
 	    count++;
 	if (!count--)
@@ -1577,10 +1592,11 @@ PP(pp_caller)
 
     cx = &ccstack[cxix];
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
-        dbcxix = dopoptosub_at(ccstack, cxix - 1);
+        const I32 dbcxix = dopoptosub_at(ccstack, cxix - 1);
 	/* We expect that ccstack[dbcxix] is CXt_SUB, anyway, the
 	   field below is defined for any cx. */
-	if (PL_DBsub && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub))
+	/* caller() should not report the automatic calls to &DB::sub */
+	if (PL_DBsub && GvCV(PL_DBsub) && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub))
 	    cx = &ccstack[dbcxix];
     }
 
@@ -1608,21 +1624,21 @@ PP(pp_caller)
     if (!MAXARG)
 	RETURN;
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
-	GV *cvgv = CvGV(ccstack[cxix].blk_sub.cv);
+	GV * const cvgv = CvGV(ccstack[cxix].blk_sub.cv);
 	/* So is ccstack[dbcxix]. */
 	if (isGV(cvgv)) {
-	    sv = NEWSV(49, 0);
-	    gv_efullname3(sv, cvgv, Nullch);
+	    SV * const sv = newSV(0);
+	    gv_efullname3(sv, cvgv, NULL);
 	    PUSHs(sv_2mortal(sv));
 	    PUSHs(sv_2mortal(newSViv((I32)cx->blk_sub.hasargs)));
 	}
 	else {
-	    PUSHs(sv_2mortal(newSVpvn("(unknown)",9)));
+	    PUSHs(sv_2mortal(newSVpvs("(unknown)")));
 	    PUSHs(sv_2mortal(newSViv((I32)cx->blk_sub.hasargs)));
 	}
     }
     else {
-	PUSHs(sv_2mortal(newSVpvn("(eval)",6)));
+	PUSHs(sv_2mortal(newSVpvs("(eval)")));
 	PUSHs(sv_2mortal(newSViv(0)));
     }
     gimme = (I32)cx->blk_gimme;
@@ -1654,13 +1670,12 @@ PP(pp_caller)
     if (CxTYPE(cx) == CXt_SUB && cx->blk_sub.hasargs
 	&& CopSTASH_eq(PL_curcop, PL_debstash))
     {
-	AV *ary = cx->blk_sub.argarray;
-        const int off = AvARRAY(ary) - AvALLOC(ary);
+	AV * const ary = cx->blk_sub.argarray;
+	const int off = AvARRAY(ary) - AvALLOC(ary);
 
 	if (!PL_dbargs) {
-	    GV* tmpgv;
-	    PL_dbargs = GvAV(gv_AVadd(tmpgv = gv_fetchpv("DB::args", TRUE,
-				SVt_PVAV)));
+	    GV* const tmpgv = gv_fetchpv("DB::args", TRUE, SVt_PVAV);
+	    PL_dbargs = GvAV(gv_AVadd(tmpgv));
 	    GvMULTI_on(tmpgv);
 	    AvREAL_off(PL_dbargs);	/* XXX should be REIFY (see av.h) */
 	}
@@ -1677,7 +1692,7 @@ PP(pp_caller)
 			     HINT_PRIVATE_MASK)));
     {
 	SV * mask ;
-	SV * old_warnings = cx->blk_oldcop->cop_warnings ;
+	SV * const old_warnings = cx->blk_oldcop->cop_warnings ;
 
 	if  (old_warnings == pWARN_NONE ||
 		(old_warnings == pWARN_STD && (PL_dowarn & G_WARN_ON) == 0))
@@ -1687,8 +1702,8 @@ PP(pp_caller)
 	    /* Get the bit mask for $warnings::Bits{all}, because
 	     * it could have been extended by warnings::register */
 	    SV **bits_all;
-	    HV *bits = get_hv("warnings::Bits", FALSE);
-	    if (bits && (bits_all=hv_fetch(bits, "all", 3, FALSE))) {
+	    HV * const bits = get_hv("warnings::Bits", FALSE);
+	    if (bits && (bits_all=hv_fetchs(bits, "all", FALSE))) {
 		mask = newSVsv(*bits_all);
 	    }
 	    else {
@@ -1704,28 +1719,19 @@ PP(pp_caller)
 
 PP(pp_reset)
 {
+    dVAR;
     dSP;
-    const char *tmps;
-    STRLEN n_a;
-
-    if (MAXARG < 1)
-	tmps = "";
-    else
-	tmps = POPpx;
+    const char * const tmps = (MAXARG < 1) ? "" : POPpconstx;
     sv_reset(tmps, CopSTASH(PL_curcop));
     PUSHs(&PL_sv_yes);
     RETURN;
-}
-
-PP(pp_lineseq)
-{
-    return NORMAL;
 }
 
 /* like pp_nextstate, but used instead when the debugger is active */
 
 PP(pp_dbstate)
 {
+    dVAR;
     PL_curcop = (COP*)PL_op;
     TAINT_NOT;		/* Each statement is presumed innocent */
     PL_stack_sp = PL_stack_base + cxstack[cxstack_ix].blk_oldsp;
@@ -1735,14 +1741,12 @@ PP(pp_dbstate)
 	    || SvIV(PL_DBsingle) || SvIV(PL_DBsignal) || SvIV(PL_DBtrace))
     {
 	dSP;
-	register CV *cv;
 	register PERL_CONTEXT *cx;
-	I32 gimme = G_ARRAY;
+	const I32 gimme = G_ARRAY;
 	U8 hasargs;
-	GV *gv;
+	GV * const gv = PL_DBgv;
+	register CV * const cv = GvCV(gv);
 
-	gv = PL_DBgv;
-	cv = GvCV(gv);
 	if (!cv)
 	    DIE(aTHX_ "No DB::DB routine defined");
 
@@ -1759,29 +1763,36 @@ PP(pp_dbstate)
 	hasargs = 0;
 	SPAGAIN;
 
-	PUSHBLOCK(cx, CXt_SUB, SP);
-	PUSHSUB_DB(cx);
-	cx->blk_sub.retop = PL_op->op_next;
-	CvDEPTH(cv)++;
-	PAD_SET_CUR(CvPADLIST(cv),1);
-	RETURNOP(CvSTART(cv));
+	if (CvXSUB(cv)) {
+	    CvDEPTH(cv)++;
+	    PUSHMARK(SP);
+	    (void)(*CvXSUB(cv))(aTHX_ cv);
+	    CvDEPTH(cv)--;
+	    FREETMPS;
+	    LEAVE;
+	    return NORMAL;
+	}
+	else {
+	    PUSHBLOCK(cx, CXt_SUB, SP);
+	    PUSHSUB_DB(cx);
+	    cx->blk_sub.retop = PL_op->op_next;
+	    CvDEPTH(cv)++;
+	    SAVECOMPPAD();
+	    PAD_SET_CUR_NOSAVE(CvPADLIST(cv), 1);
+	    RETURNOP(CvSTART(cv));
+	}
     }
     else
 	return NORMAL;
 }
 
-PP(pp_scope)
-{
-    return NORMAL;
-}
-
 PP(pp_enteriter)
 {
-    dSP; dMARK;
+    dVAR; dSP; dMARK;
     register PERL_CONTEXT *cx;
-    I32 gimme = GIMME_V;
+    const I32 gimme = GIMME_V;
     SV **svp;
-    U32 cxtype = CXt_LOOP;
+    U32 cxtype = CXt_LOOP | CXp_FOREACH;
 #ifdef USE_ITHREADS
     void *iterdata;
 #endif
@@ -1805,14 +1816,17 @@ PP(pp_enteriter)
 #endif
     }
     else {
-	GV *gv = (GV*)POPs;
+	GV * const gv = (GV*)POPs;
 	svp = &GvSV(gv);			/* symbol table variable */
 	SAVEGENERICSV(*svp);
-	*svp = NEWSV(0,0);
+	*svp = newSV(0);
 #ifdef USE_ITHREADS
 	iterdata = (void*)gv;
 #endif
     }
+
+    if (PL_op->op_private & OPpITER_DEF)
+	cxtype |= CXp_FOR_DEF;
 
     ENTER;
 
@@ -1826,24 +1840,29 @@ PP(pp_enteriter)
 	cx->blk_loop.iterary = (AV*)SvREFCNT_inc(POPs);
 	if (SvTYPE(cx->blk_loop.iterary) != SVt_PVAV) {
 	    dPOPss;
-	    SV *right = (SV*)cx->blk_loop.iterary;
+	    SV * const right = (SV*)cx->blk_loop.iterary;
+	    SvGETMAGIC(sv);
+	    SvGETMAGIC(right);
 	    if (RANGE_IS_NUMERIC(sv,right)) {
 		if ((SvOK(sv) && SvNV(sv) < IV_MIN) ||
 		    (SvOK(right) && SvNV(right) >= IV_MAX))
 		    DIE(aTHX_ "Range iterator outside integer range");
 		cx->blk_loop.iterix = SvIV(sv);
 		cx->blk_loop.itermax = SvIV(right);
+#ifdef DEBUGGING
+		/* for correct -Dstv display */
+		cx->blk_oldsp = sp - PL_stack_base;
+#endif
 	    }
 	    else {
-		STRLEN n_a;
 		cx->blk_loop.iterlval = newSVsv(sv);
-		(void) SvPV_force(cx->blk_loop.iterlval,n_a);
-		(void) SvPV(right,n_a);
+		(void) SvPV_force_nolen(cx->blk_loop.iterlval);
+		(void) SvPV_nolen_const(right);
 	    }
 	}
 	else if (PL_op->op_private & OPpITER_REVERSED) {
-	    cx->blk_loop.itermax = -1;
-	    cx->blk_loop.iterix = AvFILL(cx->blk_loop.iterary);
+	    cx->blk_loop.itermax = 0;
+	    cx->blk_loop.iterix = AvFILL(cx->blk_loop.iterary) + 1;
 
 	}
     }
@@ -1851,8 +1870,8 @@ PP(pp_enteriter)
 	cx->blk_loop.iterary = PL_curstack;
 	AvFILLp(PL_curstack) = SP - PL_stack_base;
 	if (PL_op->op_private & OPpITER_REVERSED) {
-	    cx->blk_loop.itermax = MARK - PL_stack_base;
-	    cx->blk_loop.iterix = cx->blk_oldsp;
+	    cx->blk_loop.itermax = MARK - PL_stack_base + 1;
+	    cx->blk_loop.iterix = cx->blk_oldsp + 1;
 	}
 	else {
 	    cx->blk_loop.iterix = MARK - PL_stack_base;
@@ -1864,9 +1883,9 @@ PP(pp_enteriter)
 
 PP(pp_enterloop)
 {
-    dSP;
+    dVAR; dSP;
     register PERL_CONTEXT *cx;
-    I32 gimme = GIMME_V;
+    const I32 gimme = GIMME_V;
 
     ENTER;
     SAVETMPS;
@@ -1880,7 +1899,7 @@ PP(pp_enterloop)
 
 PP(pp_leaveloop)
 {
-    dSP;
+    dVAR; dSP;
     register PERL_CONTEXT *cx;
     I32 gimme;
     SV **newsp;
@@ -1888,6 +1907,7 @@ PP(pp_leaveloop)
     SV **mark;
 
     POPBLOCK(cx,newpm);
+    assert(CxTYPE(cx) == CXt_LOOP);
     mark = newsp;
     newsp = PL_stack_base + cx->blk_loop.resetsp;
 
@@ -1920,8 +1940,7 @@ PP(pp_leaveloop)
 
 PP(pp_return)
 {
-    dSP; dMARK;
-    I32 cxix;
+    dVAR; dSP; dMARK;
     register PERL_CONTEXT *cx;
     bool popsub2 = FALSE;
     bool clear_errsv = FALSE;
@@ -1932,23 +1951,33 @@ PP(pp_return)
     SV *sv;
     OP *retop;
 
-    if (PL_curstackinfo->si_type == PERLSI_SORT) {
-	if (cxstack_ix == PL_sortcxix
-	    || dopoptosub(cxstack_ix) <= PL_sortcxix)
-	{
-	    if (cxstack_ix > PL_sortcxix)
-		dounwind(PL_sortcxix);
-	    AvARRAY(PL_curstack)[1] = *SP;
+    const I32 cxix = dopoptosub(cxstack_ix);
+
+    if (cxix < 0) {
+	if (CxMULTICALL(cxstack)) { /* In this case we must be in a
+				     * sort block, which is a CXt_NULL
+				     * not a CXt_SUB */
+	    dounwind(0);
+	    PL_stack_base[1] = *PL_stack_sp;
 	    PL_stack_sp = PL_stack_base + 1;
 	    return 0;
 	}
+	else
+	    DIE(aTHX_ "Can't return outside a subroutine");
     }
-
-    cxix = dopoptosub(cxstack_ix);
-    if (cxix < 0)
-	DIE(aTHX_ "Can't return outside a subroutine");
     if (cxix < cxstack_ix)
 	dounwind(cxix);
+
+    if (CxMULTICALL(&cxstack[cxix])) {
+	gimme = cxstack[cxix].blk_gimme;
+	if (gimme == G_VOID)
+	    PL_stack_sp = PL_stack_base;
+	else if (gimme == G_SCALAR) {
+	    PL_stack_base[1] = *PL_stack_sp;
+	    PL_stack_sp = PL_stack_base + 1;
+	}
+	return 0;
+    }
 
     POPBLOCK(cx,newpm);
     switch (CxTYPE(cx)) {
@@ -1969,8 +1998,8 @@ PP(pp_return)
 	    (MARK == SP || (gimme == G_SCALAR && !SvTRUE(*SP))) )
 	{
 	    /* Unassume the success we assumed earlier. */
-	    SV *nsv = cx->blk_eval.old_namesv;
-	    (void)hv_delete(GvHVn(PL_incgv), SvPVX(nsv), SvCUR(nsv), G_DISCARD);
+	    SV * const nsv = cx->blk_eval.old_namesv;
+	    (void)hv_delete(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv), G_DISCARD);
 	    DIE(aTHX_ "%"SVf" did not return a true value", nsv);
 	}
 	break;
@@ -2024,18 +2053,18 @@ PP(pp_return)
 	POPSUB(cx,sv);	/* release CV and @_ ... */
     }
     else
-	sv = Nullsv;
+	sv = NULL;
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
     LEAVESUB(sv);
     if (clear_errsv)
-	sv_setpv(ERRSV,"");
+	sv_setpvn(ERRSV,"",0);
     return retop;
 }
 
 PP(pp_last)
 {
-    dSP;
+    dVAR; dSP;
     I32 cxix;
     register PERL_CONTEXT *cx;
     I32 pop2 = 0;
@@ -2045,7 +2074,8 @@ PP(pp_last)
     SV **newsp;
     PMOP *newpm;
     SV **mark;
-    SV *sv = Nullsv;
+    SV *sv = NULL;
+
 
     if (PL_op->op_flags & OPf_SPECIAL) {
 	cxix = dopoptoloop(cxstack_ix);
@@ -2118,11 +2148,14 @@ PP(pp_last)
     PL_curpm = newpm;	/* ... and pop $1 et al */
 
     LEAVESUB(sv);
+    PERL_UNUSED_VAR(optype);
+    PERL_UNUSED_VAR(gimme);
     return nextop;
 }
 
 PP(pp_next)
 {
+    dVAR;
     I32 cxix;
     register PERL_CONTEXT *cx;
     I32 inner;
@@ -2146,14 +2179,17 @@ PP(pp_next)
     TOPBLOCK(cx);
     if (PL_scopestack_ix < inner)
 	leave_scope(PL_scopestack[PL_scopestack_ix]);
+    PL_curcop = cx->blk_oldcop;
     return cx->blk_loop.next_op;
 }
 
 PP(pp_redo)
 {
+    dVAR;
     I32 cxix;
     register PERL_CONTEXT *cx;
     I32 oldsave;
+    OP* redo_op;
 
     if (PL_op->op_flags & OPf_SPECIAL) {
 	cxix = dopoptoloop(cxstack_ix);
@@ -2168,17 +2204,26 @@ PP(pp_redo)
     if (cxix < cxstack_ix)
 	dounwind(cxix);
 
+    redo_op = cxstack[cxix].blk_loop.redo_op;
+    if (redo_op->op_type == OP_ENTER) {
+	/* pop one less context to avoid $x being freed in while (my $x..) */
+	cxstack_ix++;
+	assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_BLOCK);
+	redo_op = redo_op->op_next;
+    }
+
     TOPBLOCK(cx);
     oldsave = PL_scopestack[PL_scopestack_ix - 1];
     LEAVE_SCOPE(oldsave);
     FREETMPS;
-    return cx->blk_loop.redo_op;
+    PL_curcop = cx->blk_oldcop;
+    return redo_op;
 }
 
 STATIC OP *
 S_dofindlabel(pTHX_ OP *o, const char *label, OP **opstack, OP **oplimit)
 {
-    OP *kid = Nullop;
+    dVAR;
     OP **ops = opstack;
     static const char too_deep[] = "Target of goto is too deeply nested";
 
@@ -2196,6 +2241,7 @@ S_dofindlabel(pTHX_ OP *o, const char *label, OP **opstack, OP **oplimit)
     }
     *ops = 0;
     if (o->op_flags & OPf_KIDS) {
+	OP *kid;
 	/* First try all the kids at this level, since that's likeliest. */
 	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling) {
 	    if ((kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) &&
@@ -2222,27 +2268,20 @@ S_dofindlabel(pTHX_ OP *o, const char *label, OP **opstack, OP **oplimit)
     return 0;
 }
 
-PP(pp_dump)
-{
-    return pp_goto();
-    /*NOTREACHED*/
-}
-
 PP(pp_goto)
 {
-    dSP;
-    OP *retop = 0;
+    dVAR; dSP;
+    OP *retop = NULL;
     I32 ix;
     register PERL_CONTEXT *cx;
 #define GOTO_DEPTH 64
     OP *enterops[GOTO_DEPTH];
-    const char *label = 0;
+    const char *label = NULL;
     const bool do_dump = (PL_op->op_type == OP_DUMP);
     static const char must_have_label[] = "goto must have label";
 
     if (PL_op->op_flags & OPf_STACKED) {
-	SV *sv = POPs;
-	STRLEN n_a;
+	SV * const sv = POPs;
 
 	/* This egregious kludge implements goto &subroutine */
 	if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVCV) {
@@ -2268,7 +2307,7 @@ PP(pp_goto)
 		    if (autogv && (cv = GvCV(autogv)))
 			goto retry;
 		    tmpstr = sv_newmortal();
-		    gv_efullname3(tmpstr, gv, Nullch);
+		    gv_efullname3(tmpstr, gv, NULL);
 		    DIE(aTHX_ "Goto undefined subroutine &%"SVf"",tmpstr);
 		}
 		DIE(aTHX_ "Goto undefined subroutine");
@@ -2283,8 +2322,16 @@ PP(pp_goto)
 	    if (cxix < cxstack_ix)
 		dounwind(cxix);
 	    TOPBLOCK(cx);
-	    if (CxREALEVAL(cx))
-		DIE(aTHX_ "Can't goto subroutine from an eval-string");
+	    SPAGAIN;
+	    /* ban goto in eval: see <20050521150056.GC20213@iabyn.com> */
+	    if (CxTYPE(cx) == CXt_EVAL) {
+		if (CxREALEVAL(cx))
+		    DIE(aTHX_ "Can't goto subroutine from an eval-string");
+		else
+		    DIE(aTHX_ "Can't goto subroutine from an eval-block");
+	    }
+	    else if (CxMULTICALL(cx))
+		DIE(aTHX_ "Can't goto subroutine from a sort sub (or similar callback)");
 	    if (CxTYPE(cx) == CXt_SUB && cx->blk_sub.hasargs) {
 		/* put @_ back onto stack */
 		AV* av = cx->blk_sub.argarray;
@@ -2301,13 +2348,12 @@ PP(pp_goto)
 		    SvREFCNT_dec(av);
 		    av = newAV();
 		    av_extend(av, items-1);
-		    AvFLAGS(av) = AVf_REIFY;
+		    AvREIFY_only(av);
 		    PAD_SVl(0) = (SV*)(cx->blk_sub.argarray = av);
 		}
 	    }
 	    else if (CvXSUB(cv)) {	/* put GvAV(defgv) back onto stack */
-		AV* av;
-		av = GvAV(PL_defgv);
+		AV* const av = GvAV(PL_defgv);
 		items = AvFILLp(av) + 1;
 		EXTEND(SP, items+1); /* @_ could have been extended. */
 		Copy(AvARRAY(av), SP + 1, items, SV*);
@@ -2324,6 +2370,7 @@ PP(pp_goto)
 	    SAVETMPS;
 	    SAVEFREESV(cv); /* later, undo the 'avoid premature free' hack */
 	    if (CvXSUB(cv)) {
+		OP* retop = cx->blk_sub.retop;
 		if (reified) {
 		    I32 index;
 		    for (index=0; index<items; index++)
@@ -2348,17 +2395,18 @@ PP(pp_goto)
 		    SV **newsp;
 		    I32 gimme;
 
+		    /* XS subs don't have a CxSUB, so pop it */
+		    POPBLOCK(cx, PL_curpm);
 		    /* Push a mark for the start of arglist */
 		    PUSHMARK(mark);
 		    PUTBACK;
 		    (void)(*CvXSUB(cv))(aTHX_ cv);
-		    /* Pop the current context like a decent sub should */
-		    POPBLOCK(cx, PL_curpm);
-		    /* Do _not_ use PUTBACK, keep the XSUB's return stack! */
+		    /* Put these at the bottom since the vars are set but not used */
+		    PERL_UNUSED_VAR(newsp);
+		    PERL_UNUSED_VAR(gimme);
 		}
 		LEAVE;
-		assert(CxTYPE(cx) == CXt_SUB);
-		return cx->blk_sub.retop;
+		return retop;
 	    }
 	    else {
 		AV* padlist = CvPADLIST(cv);
@@ -2379,7 +2427,8 @@ PP(pp_goto)
 			sub_crush_depth(cv);
 		    pad_push(padlist, CvDEPTH(cv));
 		}
-		PAD_SET_CUR(padlist, CvDEPTH(cv));
+		SAVECOMPPAD();
+		PAD_SET_CUR_NOSAVE(padlist, CvDEPTH(cv));
 		if (cx->blk_sub.hasargs)
 		{
 		    AV* av = (AV*)PAD_SVl(0);
@@ -2394,13 +2443,13 @@ PP(pp_goto)
 			ary = AvALLOC(av);
 			if (AvARRAY(av) != ary) {
 			    AvMAX(av) += AvARRAY(av) - AvALLOC(av);
-			    SvPVX(av) = (char*)ary;
+			    SvPV_set(av, (char*)ary);
 			}
 			if (items >= AvMAX(av) + 1) {
 			    AvMAX(av) = items - 1;
 			    Renew(ary,items+1,SV*);
 			    AvALLOC(av) = ary;
-			    SvPVX(av) = (char*)ary;
+			    SvPV_set(av, (char*)ary);
 			}
 		    }
 		    ++mark;
@@ -2423,17 +2472,18 @@ PP(pp_goto)
 		     * We do not care about using sv to call CV;
 		     * it's for informational purposes only.
 		     */
-		    SV *sv = GvSV(PL_DBsub);
+		    SV * const sv = GvSV(PL_DBsub);
 		    CV *gotocv;
 
+		    save_item(sv);
 		    if (PERLDB_SUB_NN) {
-			(void)SvUPGRADE(sv, SVt_PVIV);
+			const int type = SvTYPE(sv);
+			if (type < SVt_PVIV && type != SVt_IV)
+			    sv_upgrade(sv, SVt_PVIV);
 			(void)SvIOK_on(sv);
-			SAVEIV(SvIVX(sv));
-			SvIVX(sv) = PTR2IV(cv); /* Do it the quickest way */
+			SvIV_set(sv, PTR2IV(cv)); /* Do it the quickest way */
 		    } else {
-			save_item(sv);
-			gv_efullname3(sv, CvGV(cv), Nullch);
+			gv_efullname3(sv, CvGV(cv), NULL);
 		    }
 		    if (  PERLDB_GOTO
 			  && (gotocv = get_cv("DB::goto", FALSE)) ) {
@@ -2446,7 +2496,7 @@ PP(pp_goto)
 	    }
 	}
 	else {
-	    label = SvPV(sv,n_a);
+	    label = SvPV_nolen_const(sv);
 	    if (!(do_dump || *label))
 		DIE(aTHX_ must_have_label);
 	}
@@ -2459,10 +2509,10 @@ PP(pp_goto)
 	label = cPVOP->op_pv;
 
     if (label && *label) {
-	OP *gotoprobe = 0;
+	OP *gotoprobe = NULL;
 	bool leaving_eval = FALSE;
 	bool in_block = FALSE;
-        PERL_CONTEXT *last_eval_cx = 0;
+	PERL_CONTEXT *last_eval_cx = NULL;
 
 	/* find label */
 
@@ -2494,7 +2544,7 @@ PP(pp_goto)
 		    gotoprobe = PL_main_root;
 		break;
 	    case CXt_SUB:
-		if (CvDEPTH(cx->blk_sub.cv)) {
+		if (CvDEPTH(cx->blk_sub.cv) && !CxMULTICALL(cx)) {
 		    gotoprobe = CvROOT(cx->blk_sub.cv);
 		    break;
 		}
@@ -2546,7 +2596,7 @@ PP(pp_goto)
 	/* push wanted frames */
 
 	if (*enterops && enterops[1]) {
-	    OP *oldop = PL_op;
+	    OP * const oldop = PL_op;
 	    ix = enterops[1]->op_type == OP_ENTER && in_block ? 2 : 1;
 	    for (; enterops[ix]; ix++) {
 		PL_op = enterops[ix];
@@ -2578,6 +2628,7 @@ PP(pp_goto)
 
 PP(pp_exit)
 {
+    dVAR;
     dSP;
     I32 anum;
 
@@ -2597,59 +2648,18 @@ PP(pp_exit)
     RETURN;
 }
 
-#ifdef NOTYET
-PP(pp_nswitch)
-{
-    dSP;
-    NV value = SvNVx(GvSV(cCOP->cop_gv));
-    register I32 match = I_32(value);
-
-    if (value < 0.0) {
-	if (((NV)match) > value)
-	    --match;		/* was fractional--truncate other way */
-    }
-    match -= cCOP->uop.scop.scop_offset;
-    if (match < 0)
-	match = 0;
-    else if (match > cCOP->uop.scop.scop_max)
-	match = cCOP->uop.scop.scop_max;
-    PL_op = cCOP->uop.scop.scop_next[match];
-    RETURNOP(PL_op);
-}
-
-PP(pp_cswitch)
-{
-    dSP;
-    register I32 match;
-
-    if (PL_multiline)
-	PL_op = PL_op->op_next;			/* can't assume anything */
-    else {
-	STRLEN n_a;
-	match = *(SvPVx(GvSV(cCOP->cop_gv), n_a)) & 255;
-	match -= cCOP->uop.scop.scop_offset;
-	if (match < 0)
-	    match = 0;
-	else if (match > cCOP->uop.scop.scop_max)
-	    match = cCOP->uop.scop.scop_max;
-	PL_op = cCOP->uop.scop.scop_next[match];
-    }
-    RETURNOP(PL_op);
-}
-#endif
-
 /* Eval. */
 
 STATIC void
 S_save_lines(pTHX_ AV *array, SV *sv)
 {
-    register const char *s = SvPVX(sv);
-    register const char *send = SvPVX(sv) + SvCUR(sv);
-    register const char *t;
-    register I32 line = 1;
+    const char *s = SvPVX_const(sv);
+    const char * const send = SvPVX_const(sv) + SvCUR(sv);
+    I32 line = 1;
 
     while (s && s < send) {
-	SV *tmpstr = NEWSV(85,0);
+	const char *t;
+	SV * const tmpstr = newSV(0);
 
 	sv_upgrade(tmpstr, SVt_PVMG);
 	t = strchr(s, '\n');
@@ -2664,20 +2674,20 @@ S_save_lines(pTHX_ AV *array, SV *sv)
     }
 }
 
-STATIC void *
+STATIC void
 S_docatch_body(pTHX)
 {
+    dVAR;
     CALLRUNOPS(aTHX);
-    return NULL;
+    return;
 }
 
 STATIC OP *
 S_docatch(pTHX_ OP *o)
 {
+    dVAR;
     int ret;
     OP * const oldop = PL_op;
-    OP *retop;
-    volatile PERL_SI *cursi = PL_curstackinfo;
     dJMPENV;
 
 #ifdef DEBUGGING
@@ -2685,32 +2695,32 @@ S_docatch(pTHX_ OP *o)
 #endif
     PL_op = o;
 
-    /* Normally, the leavetry at the end of this block of ops will
-     * pop an op off the return stack and continue there. By setting
-     * the op to Nullop, we force an exit from the inner runops()
-     * loop. DAPM.
-     */
-    assert(cxstack_ix >= 0);
-    assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_EVAL);
-    retop = cxstack[cxstack_ix].blk_eval.retop;
-    cxstack[cxstack_ix].blk_eval.retop = Nullop;
-
     JMPENV_PUSH(ret);
     switch (ret) {
     case 0:
+	assert(cxstack_ix >= 0);
+	assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_EVAL);
+	cxstack[cxstack_ix].blk_eval.cur_top_env = PL_top_env;
  redo_body:
 	docatch_body();
 	break;
     case 3:
 	/* die caught by an inner eval - continue inner loop */
-	if (PL_restartop && cursi == PL_curstackinfo) {
+
+	/* NB XXX we rely on the old popped CxEVAL still being at the top
+	 * of the stack; the way die_where() currently works, this
+	 * assumption is valid. In theory The cur_top_env value should be
+	 * returned in another global, the way retop (aka PL_restartop)
+	 * is. */
+	assert(CxTYPE(&cxstack[cxstack_ix+1]) == CXt_EVAL);
+
+	if (PL_restartop
+	    && cxstack[cxstack_ix+1].blk_eval.cur_top_env == PL_top_env)
+	{
 	    PL_op = PL_restartop;
 	    PL_restartop = 0;
 	    goto redo_body;
 	}
-	/* a die in this eval - continue in outer loop */
-	if (!PL_restartop)
-	    break;
 	/* FALL THROUGH */
     default:
 	JMPENV_POP;
@@ -2720,7 +2730,7 @@ S_docatch(pTHX_ OP *o)
     }
     JMPENV_POP;
     PL_op = oldop;
-    return retop;
+    return Nullop;
 }
 
 OP *
@@ -2729,10 +2739,11 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
 /* startop op_free() this to undo. */
 /* code Short string id of the caller. */
 {
-    dSP;				/* Make POPBLOCK work. */
+    /* FIXME - how much of this code is common with pp_entereval?  */
+    dVAR; dSP;				/* Make POPBLOCK work. */
     PERL_CONTEXT *cx;
     SV **newsp;
-    I32 gimme = 0;   /* SUSPECT - INITIALZE TO WHAT?  NI-S */
+    I32 gimme = G_VOID;
     I32 optype;
     OP dummy;
     OP *rop;
@@ -2741,6 +2752,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
     char *safestr;
     int runtime;
     CV* runcv = Nullcv;	/* initialise to avoid compiler warnings */
+    STRLEN len;
 
     ENTER;
     lex_start(sv);
@@ -2752,14 +2764,16 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
 	CopSTASH_set(&PL_compiling, PL_curstash);
     }
     if (PERLDB_NAMEEVAL && CopLINE(PL_curcop)) {
-	SV *sv = sv_newmortal();
+	SV * const sv = sv_newmortal();
 	Perl_sv_setpvf(aTHX_ sv, "_<(%.10seval %lu)[%s:%"IVdf"]",
 		       code, (unsigned long)++PL_evalseq,
 		       CopFILE(PL_curcop), (IV)CopLINE(PL_curcop));
 	tmpbuf = SvPVX(sv);
+	len = SvCUR(sv);
     }
     else
-	sprintf(tmpbuf, "_<(%.10s_eval %lu)", code, (unsigned long)++PL_evalseq);
+	len = my_sprintf(tmpbuf, "_<(%.10s_eval %lu)", code,
+			 (unsigned long)++PL_evalseq);
     SAVECOPFILE_FREE(&PL_compiling);
     CopFILE_set(&PL_compiling, tmpbuf+2);
     SAVECOPLINE(&PL_compiling);
@@ -2769,8 +2783,8 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
        (i.e. before run-time proper). To work around the coredump that
        ensues, we always turn GvMULTI_on for any globals that were
        introduced within evals. See force_ident(). GSAR 96-10-12 */
-    safestr = savepv(tmpbuf);
-    SAVEDELETE(PL_defstash, safestr, strlen(safestr));
+    safestr = savepvn(tmpbuf, len);
+    SAVEDELETE(PL_defstash, safestr, len);
     SAVEHINTS();
 #ifdef OP_IN_REGISTER
     PL_opsave = op;
@@ -2807,6 +2821,9 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
 #ifdef OP_IN_REGISTER
     op = PL_opsave;
 #endif
+    PERL_UNUSED_VAR(newsp);
+    PERL_UNUSED_VAR(optype);
+
     return rop;
 }
 
@@ -2818,7 +2835,7 @@ Locate the CV corresponding to the currently executing sub or eval.
 If db_seqp is non_null, skip CVs that are in the DB package and populate
 *db_seqp with the cop sequence number at the point that the DB:: code was
 entered. (allows debuggers to eval in the scope of the breakpoint rather
-than in in the scope of the debugger itself).
+than in the scope of the debugger itself).
 
 =cut
 */
@@ -2826,6 +2843,7 @@ than in in the scope of the debugger itself).
 CV*
 Perl_find_runcv(pTHX_ U32 *db_seqp)
 {
+    dVAR;
     PERL_SI	 *si;
 
     if (db_seqp)
@@ -2835,7 +2853,7 @@ Perl_find_runcv(pTHX_ U32 *db_seqp)
 	for (ix = si->si_cxix; ix >= 0; ix--) {
 	    const PERL_CONTEXT *cx = &(si->si_cxstack[ix]);
 	    if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
-		CV *cv = cx->blk_sub.cv;
+		CV * const cv = cx->blk_sub.cv;
 		/* skip DB:: code */
 		if (db_seqp && PL_debstash && CvSTASH(cv) == PL_debstash) {
 		    *db_seqp = cx->blk_oldcop->cop_seq;
@@ -2861,8 +2879,8 @@ Perl_find_runcv(pTHX_ U32 *db_seqp)
 STATIC OP *
 S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 {
-    dSP;
-    OP *saveop = PL_op;
+    dVAR; dSP;
+    OP * const saveop = PL_op;
 
     PL_in_eval = ((saveop && saveop->op_type == OP_REQUIRE)
 		  ? (EVAL_INREQUIRE | (PL_in_eval & EVAL_INEVAL))
@@ -2871,7 +2889,7 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
     PUSHMARK(SP);
 
     SAVESPTR(PL_compcv);
-    PL_compcv = (CV*)NEWSV(1104,0);
+    PL_compcv = (CV*)newSV(0);
     sv_upgrade((SV *)PL_compcv, SVt_PVCV);
     CvEVAL_on(PL_compcv);
     assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_EVAL);
@@ -2904,15 +2922,15 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
     PL_error_count = 0;
     PL_curcop = &PL_compiling;
     PL_curcop->cop_arybase = 0;
-    if (saveop && saveop->op_flags & OPf_SPECIAL)
+    if (saveop && saveop->op_type != OP_REQUIRE && saveop->op_flags & OPf_SPECIAL)
 	PL_in_eval |= EVAL_KEEPERR;
     else
-	sv_setpv(ERRSV,"");
+	sv_setpvn(ERRSV,"",0);
     if (yyparse() || PL_error_count || !PL_eval_root) {
 	SV **newsp;			/* Used by POPBLOCK. */
-       PERL_CONTEXT *cx = &cxstack[cxstack_ix];
+	PERL_CONTEXT *cx = &cxstack[cxstack_ix];
 	I32 optype = 0;			/* Might be reset by POPEVAL. */
-	STRLEN n_a;
+	const char *msg;
 
 	PL_op = saveop;
 	if (PL_eval_root) {
@@ -2926,28 +2944,27 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	}
 	lex_end();
 	LEAVE;
+
+	msg = SvPVx_nolen_const(ERRSV);
 	if (optype == OP_REQUIRE) {
-            const char* msg = SvPVx(ERRSV, n_a);
-           SV *nsv = cx->blk_eval.old_namesv;
-           (void)hv_store(GvHVn(PL_incgv), SvPVX(nsv), SvCUR(nsv),
+	    const SV * const nsv = cx->blk_eval.old_namesv;
+	    (void)hv_store(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv),
                           &PL_sv_undef, 0);
 	    DIE(aTHX_ "%sCompilation failed in require",
 		*msg ? msg : "Unknown error\n");
 	}
 	else if (startop) {
-            const char* msg = SvPVx(ERRSV, n_a);
-
 	    POPBLOCK(cx,PL_curpm);
 	    POPEVAL(cx);
 	    Perl_croak(aTHX_ "%sCompilation failed in regexp",
 		       (*msg ? msg : "Unknown error\n"));
 	}
 	else {
-            const char* msg = SvPVx(ERRSV, n_a);
 	    if (!*msg) {
 	        sv_setpv(ERRSV, "Compilation error");
 	    }
 	}
+	PERL_UNUSED_VAR(newsp);
 	RETPUSHUNDEF;
     }
     CopLINE_set(&PL_compiling, 0);
@@ -2975,7 +2992,7 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 
     /* Register with debugger: */
     if (PERLDB_INTER && saveop->op_type == OP_REQUIRE) {
-	CV *cv = get_cv("DB::postponed", FALSE);
+	CV * const cv = get_cv("DB::postponed", FALSE);
 	if (cv) {
 	    dSP;
 	    PUSHMARK(SP);
@@ -2996,59 +3013,73 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 }
 
 STATIC PerlIO *
+S_check_type_and_open(pTHX_ const char *name, const char *mode)
+{
+    Stat_t st;
+    const int st_rc = PerlLIO_stat(name, &st);
+    if (st_rc < 0) {
+       return Nullfp;
+    }
+
+    if(S_ISDIR(st.st_mode) || S_ISBLK(st.st_mode)) {
+       Perl_die(aTHX_ "%s %s not allowed in require",
+           S_ISDIR(st.st_mode) ? "Directory" : "Block device", name);
+    }
+    return PerlIO_open(name, mode);
+}
+
+STATIC PerlIO *
 S_doopen_pm(pTHX_ const char *name, const char *mode)
 {
 #ifndef PERL_DISABLE_PMC
-    STRLEN namelen = strlen(name);
+    const STRLEN namelen = strlen(name);
     PerlIO *fp;
 
     if (namelen > 3 && strEQ(name + namelen - 3, ".pm")) {
-	SV *pmcsv = Perl_newSVpvf(aTHX_ "%s%c", name, 'c');
-	const char * const pmc = SvPV_nolen(pmcsv);
-	Stat_t pmstat;
+	SV * const pmcsv = Perl_newSVpvf(aTHX_ "%s%c", name, 'c');
+	const char * const pmc = SvPV_nolen_const(pmcsv);
 	Stat_t pmcstat;
 	if (PerlLIO_stat(pmc, &pmcstat) < 0) {
-	    fp = PerlIO_open(name, mode);
+	    fp = check_type_and_open(name, mode);
 	}
 	else {
+	    Stat_t pmstat;
 	    if (PerlLIO_stat(name, &pmstat) < 0 ||
 	        pmstat.st_mtime < pmcstat.st_mtime)
 	    {
-		fp = PerlIO_open(pmc, mode);
+		fp = check_type_and_open(pmc, mode);
 	    }
 	    else {
-		fp = PerlIO_open(name, mode);
+		fp = check_type_and_open(name, mode);
 	    }
 	}
 	SvREFCNT_dec(pmcsv);
     }
     else {
-	fp = PerlIO_open(name, mode);
+	fp = check_type_and_open(name, mode);
     }
     return fp;
 #else
-    return PerlIO_open(name, mode);
+    return check_type_and_open(name, mode);
 #endif /* !PERL_DISABLE_PMC */
 }
 
 PP(pp_require)
 {
-    dSP;
+    dVAR; dSP;
     register PERL_CONTEXT *cx;
     SV *sv;
-    char *name;
+    const char *name;
     STRLEN len;
-    char *tryname = Nullch;
-    SV *namesv = Nullsv;
-    SV** svp;
-    I32 gimme = GIMME_V;
-    PerlIO *tryrsfp = 0;
-    STRLEN n_a;
+    const char *tryname = NULL;
+    SV *namesv = NULL;
+    const I32 gimme = GIMME_V;
     int filter_has_file = 0;
-    GV *filter_child_proc = 0;
-    SV *filter_state = 0;
-    SV *filter_sub = 0;
-    SV *hook_sv = 0;
+    PerlIO *tryrsfp = NULL;
+    GV *filter_child_proc = NULL;
+    SV *filter_state = NULL;
+    SV *filter_sub = NULL;
+    SV *hook_sv = NULL;
     SV *encoding;
     OP *op;
 
@@ -3060,23 +3091,32 @@ PP(pp_require)
 
 	sv = new_version(sv);
 	if (!sv_derived_from(PL_patchlevel, "version"))
-	    (void *)upg_version(PL_patchlevel);
-	if ( vcmp(sv,PL_patchlevel) > 0 )
-	    DIE(aTHX_ "Perl v%"SVf" required--this is only v%"SVf", stopped",
-		vstringify(sv), vstringify(PL_patchlevel));
+	    upg_version(PL_patchlevel);
+	if (cUNOP->op_first->op_type == OP_CONST && cUNOP->op_first->op_private & OPpCONST_NOVER) {
+	    if ( vcmp(sv,PL_patchlevel) < 0 )
+		DIE(aTHX_ "Perls since %"SVf" too modern--this is %"SVf", stopped",
+		    vnormal(sv), vnormal(PL_patchlevel));
+	}
+	else {
+	    if ( vcmp(sv,PL_patchlevel) > 0 )
+		DIE(aTHX_ "Perl %"SVf" required--this is only %"SVf", stopped",
+		    vnormal(sv), vnormal(PL_patchlevel));
+	}
 
 	    RETPUSHYES;
     }
-    name = SvPV(sv, len);
+    name = SvPV_const(sv, len);
     if (!(name && len > 0 && *name))
 	DIE(aTHX_ "Null filename used");
     TAINT_PROPER("require");
-    if (PL_op->op_type == OP_REQUIRE &&
-       (svp = hv_fetch(GvHVn(PL_incgv), name, len, 0))) {
-       if (*svp != &PL_sv_undef)
-           RETPUSHYES;
-       else
-           DIE(aTHX_ "Compilation failed in require");
+    if (PL_op->op_type == OP_REQUIRE) {
+	SV * const * const svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
+	if ( svp ) {
+	    if (*svp != &PL_sv_undef)
+		RETPUSHYES;
+	    else
+		DIE(aTHX_ "Compilation failed in require");
+	}
     }
 
     /* prepare to compile file */
@@ -3097,14 +3137,14 @@ PP(pp_require)
     }
 #endif
     if (!tryrsfp) {
-	AV *ar = GvAVn(PL_incgv);
+	AV * const ar = GvAVn(PL_incgv);
 	I32 i;
 #ifdef VMS
 	char *unixname;
-	if ((unixname = tounixspec(name, Nullch)) != Nullch)
+	if ((unixname = tounixspec(name, NULL)) != NULL)
 #endif
 	{
-	    namesv = NEWSV(806, 0);
+	    namesv = newSV(0);
 	    for (i = 0; i <= AvFILL(ar); i++) {
 		SV *dirsv = *av_fetch(ar, i, TRUE);
 
@@ -3120,8 +3160,8 @@ PP(pp_require)
 
 		    Perl_sv_setpvf(aTHX_ namesv, "/loader/0x%"UVxf"/%s",
 				   PTR2UV(SvRV(dirsv)), name);
-		    tryname = SvPVX(namesv);
-		    tryrsfp = 0;
+		    tryname = SvPVX_const(namesv);
+		    tryrsfp = NULL;
 
 		    ENTER;
 		    SAVETMPS;
@@ -3188,9 +3228,8 @@ PP(pp_require)
 				(void)SvREFCNT_inc(filter_state);
 			    }
 
-			    if (tryrsfp == 0) {
-				tryrsfp = PerlIO_open("/dev/null",
-						      PERL_SCRIPT_MODE);
+			    if (!tryrsfp) {
+				tryrsfp = PerlIO_open("/dev/null", PERL_SCRIPT_MODE);
 			    }
 			}
 			SP--;
@@ -3208,15 +3247,15 @@ PP(pp_require)
 		    filter_has_file = 0;
 		    if (filter_child_proc) {
 			SvREFCNT_dec(filter_child_proc);
-			filter_child_proc = 0;
+			filter_child_proc = NULL;
 		    }
 		    if (filter_state) {
 			SvREFCNT_dec(filter_state);
-			filter_state = 0;
+			filter_state = NULL;
 		    }
 		    if (filter_sub) {
 			SvREFCNT_dec(filter_sub);
-			filter_sub = 0;
+			filter_sub = NULL;
 		    }
 		}
 		else {
@@ -3228,7 +3267,7 @@ PP(pp_require)
 			|| (*name == ':' && name[1] != ':' && strchr(name+2, ':'))
 #endif
 		  ) {
-		    char *dir = SvPVx(dirsv, n_a);
+		    const char *dir = SvPVx_nolen_const(dirsv);
 #ifdef MACOS_TRADITIONAL
 		    char buf1[256];
 		    char buf2[256];
@@ -3236,18 +3275,32 @@ PP(pp_require)
 		    MacPerl_CanonDir(name, buf2, 1);
 		    Perl_sv_setpvf(aTHX_ namesv, "%s%s", MacPerl_CanonDir(dir, buf1, 0), buf2+(buf2[0] == ':'));
 #else
-#ifdef VMS
+#  ifdef VMS
 		    char *unixdir;
-		    if ((unixdir = tounixpath(dir, Nullch)) == Nullch)
+		    if ((unixdir = tounixpath(dir, NULL)) == NULL)
 			continue;
 		    sv_setpv(namesv, unixdir);
 		    sv_catpv(namesv, unixname);
-#else
+#  else
+#    ifdef __SYMBIAN32__
+		    if (PL_origfilename[0] &&
+			PL_origfilename[1] == ':' &&
+			!(dir[0] && dir[1] == ':'))
+		        Perl_sv_setpvf(aTHX_ namesv,
+				       "%c:%s\\%s",
+				       PL_origfilename[0],
+				       dir, name);
+		    else
+		        Perl_sv_setpvf(aTHX_ namesv,
+				       "%s\\%s",
+				       dir, name);
+#    else
 		    Perl_sv_setpvf(aTHX_ namesv, "%s/%s", dir, name);
-#endif
+#    endif
+#  endif
 #endif
 		    TAINT_PROPER("require");
-		    tryname = SvPVX(namesv);
+		    tryname = SvPVX_const(namesv);
 		    tryrsfp = doopen_pm(tryname, PERL_SCRIPT_MODE);
 		    if (tryrsfp) {
 			if (tryname[0] == '.' && tryname[1] == '/')
@@ -3264,26 +3317,32 @@ PP(pp_require)
     SvREFCNT_dec(namesv);
     if (!tryrsfp) {
 	if (PL_op->op_type == OP_REQUIRE) {
-	    char *msgstr = name;
-	    if (namesv) {			/* did we lookup @INC? */
-		SV *msg = sv_2mortal(newSVpv(msgstr,0));
-		SV *dirmsgsv = NEWSV(0, 0);
-		AV *ar = GvAVn(PL_incgv);
-		I32 i;
-		sv_catpvn(msg, " in @INC", 8);
-		if (instr(SvPVX(msg), ".h "))
-		    sv_catpv(msg, " (change .h to .ph maybe?)");
-		if (instr(SvPVX(msg), ".ph "))
-		    sv_catpv(msg, " (did you run h2ph?)");
-		sv_catpv(msg, " (@INC contains:");
-		for (i = 0; i <= AvFILL(ar); i++) {
-		    char *dir = SvPVx(*av_fetch(ar, i, TRUE), n_a);
-		    Perl_sv_setpvf(aTHX_ dirmsgsv, " %s", dir);
-		    sv_catsv(msg, dirmsgsv);
-		}
-		sv_catpvn(msg, ")", 1);
-		SvREFCNT_dec(dirmsgsv);
-		msgstr = SvPV_nolen(msg);
+	    const char *msgstr = name;
+	    if(errno == EMFILE) {
+		SV * const msg
+		    = sv_2mortal(Perl_newSVpvf(aTHX_ "%s:   %s", msgstr,
+					       Strerror(errno)));
+		msgstr = SvPV_nolen_const(msg);
+	    } else {
+	        if (namesv) {			/* did we lookup @INC? */
+		    AV * const ar = GvAVn(PL_incgv);
+		    I32 i;
+		    SV * const msg = sv_2mortal(Perl_newSVpvf(aTHX_ 
+			"%s in @INC%s%s (@INC contains:",
+			msgstr,
+			(instr(msgstr, ".h ")
+			 ? " (change .h to .ph maybe?)" : ""),
+			(instr(msgstr, ".ph ")
+			 ? " (did you run h2ph?)" : "")
+							      ));
+		    
+		    for (i = 0; i <= AvFILL(ar); i++) {
+			sv_catpvs(msg, " ");
+			sv_catsv(msg, *av_fetch(ar, i, TRUE));
+		    }
+		    sv_catpvs(msg, ")");
+		    msgstr = SvPV_nolen_const(msg);
+		}    
 	    }
 	    DIE(aTHX_ "Can't locate %s", msgstr);
 	}
@@ -3294,20 +3353,21 @@ PP(pp_require)
 	SETERRNO(0, SS_NORMAL);
 
     /* Assume success here to prevent recursive requirement. */
-    len = strlen(name);
+    /* name is never assigned to again, so len is still strlen(name)  */
     /* Check whether a hook in @INC has already filled %INC */
-    if (!hook_sv || !(svp = hv_fetch(GvHVn(PL_incgv), name, len, 0))) {
-	(void)hv_store(GvHVn(PL_incgv), name, len,
-		       (hook_sv ? SvREFCNT_inc(hook_sv)
-				: newSVpv(CopFILE(&PL_compiling), 0)),
-		       0 );
+    if (!hook_sv) {
+	(void)hv_store(GvHVn(PL_incgv), name, len, newSVpv(CopFILE(&PL_compiling),0),0);
+    } else {
+	SV** const svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
+	if (!svp)
+	    (void)hv_store(GvHVn(PL_incgv), name, len, SvREFCNT_inc(hook_sv), 0 );
     }
 
     ENTER;
     SAVETMPS;
-    lex_start(sv_2mortal(newSVpvn("",0)));
+    lex_start(sv_2mortal(newSVpvs("")));
     SAVEGENERICSV(PL_rsfp_filters);
-    PL_rsfp_filters = Nullav;
+    PL_rsfp_filters = NULL;
 
     PL_rsfp = tryrsfp;
     SAVEHINTS();
@@ -3322,10 +3382,10 @@ PP(pp_require)
     else
         PL_compiling.cop_warnings = pWARN_STD ;
     SAVESPTR(PL_compiling.cop_io);
-    PL_compiling.cop_io = Nullsv;
+    PL_compiling.cop_io = NULL;
 
     if (filter_sub || filter_child_proc) {
-	SV *datasv = filter_add(run_user_filter, Nullsv);
+	SV * const datasv = filter_add(S_run_user_filter, NULL);
 	IoLINES(datasv) = filter_has_file;
 	IoFMT_GV(datasv) = (GV *)filter_child_proc;
 	IoTOP_GV(datasv) = (GV *)filter_state;
@@ -3344,7 +3404,7 @@ PP(pp_require)
 
     /* Store and reset encoding. */
     encoding = PL_encoding;
-    PL_encoding = Nullsv;
+    PL_encoding = NULL;
 
     op = DOCATCH(doeval(gimme, NULL, Nullcv, PL_curcop->cop_seq));
 
@@ -3354,17 +3414,13 @@ PP(pp_require)
     return op;
 }
 
-PP(pp_dofile)
-{
-    return pp_require();
-}
-
 PP(pp_entereval)
 {
-    dSP;
+    dVAR; dSP;
     register PERL_CONTEXT *cx;
-    dPOPss;
-    I32 gimme = GIMME_V, was = PL_sub_generation;
+    SV *sv;
+    const I32 gimme = GIMME_V;
+    const I32 was = PL_sub_generation;
     char tbuf[TYPE_DIGITS(long) + 12];
     char *tmpbuf = tbuf;
     char *safestr;
@@ -3372,8 +3428,14 @@ PP(pp_entereval)
     OP *ret;
     CV* runcv;
     U32 seq;
+    HV *saved_hh = NULL;
+    
+    if (PL_op->op_private & OPpEVAL_HAS_HH) {
+	saved_hh = (HV*) SvREFCNT_inc(POPs);
+    }
+    sv = POPs;
 
-    if (!SvPV(sv,len))
+    if (!SvPV_nolen_const(sv))
 	RETPUSHUNDEF;
     TAINT_PROPER("eval");
 
@@ -3384,14 +3446,15 @@ PP(pp_entereval)
     /* switch to eval mode */
 
     if (PERLDB_NAMEEVAL && CopLINE(PL_curcop)) {
-	SV *sv = sv_newmortal();
+	SV * const sv = sv_newmortal();
 	Perl_sv_setpvf(aTHX_ sv, "_<(eval %lu)[%s:%"IVdf"]",
 		       (unsigned long)++PL_evalseq,
 		       CopFILE(PL_curcop), (IV)CopLINE(PL_curcop));
 	tmpbuf = SvPVX(sv);
+	len = SvCUR(sv);
     }
     else
-	sprintf(tmpbuf, "_<(eval %lu)", (unsigned long)++PL_evalseq);
+	len = my_sprintf(tmpbuf, "_<(eval %lu)", (unsigned long)++PL_evalseq);
     SAVECOPFILE_FREE(&PL_compiling);
     CopFILE_set(&PL_compiling, tmpbuf+2);
     SAVECOPLINE(&PL_compiling);
@@ -3401,10 +3464,12 @@ PP(pp_entereval)
        (i.e. before run-time proper). To work around the coredump that
        ensues, we always turn GvMULTI_on for any globals that were
        introduced within evals. See force_ident(). GSAR 96-10-12 */
-    safestr = savepv(tmpbuf);
-    SAVEDELETE(PL_defstash, safestr, strlen(safestr));
+    safestr = savepvn(tmpbuf, len);
+    SAVEDELETE(PL_defstash, safestr, len);
     SAVEHINTS();
     PL_hints = PL_op->op_targ;
+    if (saved_hh)
+	GvHV(PL_hintgv) = saved_hh;
     SAVESPTR(PL_compiling.cop_warnings);
     if (specialWARN(PL_curcop->cop_warnings))
         PL_compiling.cop_warnings = PL_curcop->cop_warnings;
@@ -3445,7 +3510,7 @@ PP(pp_entereval)
 
 PP(pp_leaveeval)
 {
-    dSP;
+    dVAR; dSP;
     register SV **mark;
     SV **newsp;
     PMOP *newpm;
@@ -3497,15 +3562,15 @@ PP(pp_leaveeval)
 	!(gimme == G_SCALAR ? SvTRUE(*SP) : SP > newsp))
     {
 	/* Unassume the success we assumed earlier. */
-	SV *nsv = cx->blk_eval.old_namesv;
-	(void)hv_delete(GvHVn(PL_incgv), SvPVX(nsv), SvCUR(nsv), G_DISCARD);
+	SV * const nsv = cx->blk_eval.old_namesv;
+	(void)hv_delete(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv), G_DISCARD);
 	retop = Perl_die(aTHX_ "%"SVf" did not return a true value", nsv);
 	/* die_where() did LEAVE, or we won't be here */
     }
     else {
 	LEAVE;
 	if (!(save_flags & OPf_SPECIAL))
-	    sv_setpv(ERRSV,"");
+	    sv_setpvn(ERRSV,"",0);
     }
 
     RETURNOP(retop);
@@ -3513,9 +3578,9 @@ PP(pp_leaveeval)
 
 PP(pp_entertry)
 {
-    dSP;
+    dVAR; dSP;
     register PERL_CONTEXT *cx;
-    I32 gimme = GIMME_V;
+    const I32 gimme = GIMME_V;
 
     ENTER;
     SAVETMPS;
@@ -3525,30 +3590,29 @@ PP(pp_entertry)
     cx->blk_eval.retop = cLOGOP->op_other->op_next;
 
     PL_in_eval = EVAL_INEVAL;
-    sv_setpv(ERRSV,"");
+    sv_setpvn(ERRSV,"",0);
     PUTBACK;
     return DOCATCH(PL_op->op_next);
 }
 
 PP(pp_leavetry)
 {
-    dSP;
-    register SV **mark;
+    dVAR; dSP;
     SV **newsp;
     PMOP *newpm;
-    OP* retop;
     I32 gimme;
     register PERL_CONTEXT *cx;
     I32 optype;
 
     POPBLOCK(cx,newpm);
     POPEVAL(cx);
-    retop = cx->blk_eval.retop;
+    PERL_UNUSED_VAR(optype);
 
     TAINT_NOT;
     if (gimme == G_VOID)
 	SP = newsp;
     else if (gimme == G_SCALAR) {
+	register SV **mark;
 	MARK = newsp + 1;
 	if (MARK <= SP) {
 	    if (SvFLAGS(TOPs) & (SVs_PADTMP|SVs_TEMP))
@@ -3564,6 +3628,7 @@ PP(pp_leavetry)
     }
     else {
 	/* in case LEAVE wipes old return values */
+	register SV **mark;
 	for (mark = newsp + 1; mark <= SP; mark++) {
 	    if (!(SvFLAGS(*mark) & (SVs_PADTMP|SVs_TEMP))) {
 		*mark = sv_mortalcopy(*mark);
@@ -3574,8 +3639,616 @@ PP(pp_leavetry)
     PL_curpm = newpm;	/* Don't pop $1 et al till now */
 
     LEAVE;
-    sv_setpv(ERRSV,"");
-    RETURNOP(retop);
+    sv_setpvn(ERRSV,"",0);
+    RETURN;
+}
+
+PP(pp_entergiven)
+{
+    dVAR; dSP;
+    register PERL_CONTEXT *cx;
+    const I32 gimme = GIMME_V;
+    
+    ENTER;
+    SAVETMPS;
+
+    if (PL_op->op_targ == 0) {
+	SV ** const defsv_p = &GvSV(PL_defgv);
+	*defsv_p = newSVsv(POPs);
+	SAVECLEARSV(*defsv_p);
+    }
+    else
+    	sv_setsv(PAD_SV(PL_op->op_targ), POPs);
+
+    PUSHBLOCK(cx, CXt_GIVEN, SP);
+    PUSHGIVEN(cx);
+
+    RETURN;
+}
+
+PP(pp_leavegiven)
+{
+    dVAR; dSP;
+    register PERL_CONTEXT *cx;
+    I32 gimme;
+    SV **newsp;
+    PMOP *newpm;
+    SV **mark;
+
+    POPBLOCK(cx,newpm);
+    assert(CxTYPE(cx) == CXt_GIVEN);
+    mark = newsp;
+
+    SP = newsp;
+    PUTBACK;
+
+    PL_curpm = newpm;   /* pop $1 et al */
+
+    LEAVE;
+
+    return NORMAL;
+}
+
+/* Helper routines used by pp_smartmatch */
+STATIC
+PMOP *
+S_make_matcher(pTHX_ regexp *re)
+{
+    dVAR;
+    PMOP *matcher = (PMOP *) newPMOP(OP_MATCH, OPf_WANT_SCALAR | OPf_STACKED);
+    PM_SETRE(matcher, ReREFCNT_inc(re));
+    
+    SAVEFREEOP((OP *) matcher);
+    ENTER; SAVETMPS;
+    SAVEOP();
+    return matcher;
+}
+
+STATIC
+bool
+S_matcher_matches_sv(pTHX_ PMOP *matcher, SV *sv)
+{
+    dVAR;
+    dSP;
+    
+    PL_op = (OP *) matcher;
+    XPUSHs(sv);
+    PUTBACK;
+    (void) pp_match();
+    SPAGAIN;
+    return (SvTRUEx(POPs));
+}
+
+STATIC
+void
+S_destroy_matcher(pTHX_ PMOP *matcher)
+{
+    dVAR;
+    PERL_UNUSED_ARG(matcher);
+    FREETMPS;
+    LEAVE;
+}
+
+/* Do a smart match */
+PP(pp_smartmatch)
+{
+    return do_smartmatch(Nullhv, Nullhv);
+}
+
+/* This version of do_smartmatch() implements the following
+   table of smart matches:
+    
+    $a      $b        Type of Match Implied    Matching Code
+    ======  =====     =====================    =============
+    (overloading trumps everything)
+
+    Code[+] Code[+]   referential equality     match if refaddr($a) == refaddr($b)
+    Any     Code[+]   scalar sub truth         match if $b->($a)
+
+    Hash    Hash      hash keys identical      match if sort(keys(%$a)) ÈeqÇ sort(keys(%$b))
+    Hash    Array     hash value slice truth   match if $a->{any(@$b)}
+    Hash    Regex     hash key grep            match if any(keys(%$a)) =~ /$b/
+    Hash    Any       hash entry existence     match if exists $a->{$b}
+
+    Array   Array     arrays are identical[*]  match if $a È~~Ç $b
+    Array   Regex     array grep               match if any(@$a) =~ /$b/
+    Array   Num       array contains number    match if any($a) == $b
+    Array   Any       array contains string    match if any($a) eq $b
+
+    Any     undef     undefined                match if !defined $a
+    Any     Regex     pattern match            match if $a =~ /$b/
+    Code()  Code()    results are equal        match if $a->() eq $b->()
+    Any     Code()    simple closure truth     match if $b->() (ignoring $a)
+    Num     numish[!] numeric equality         match if $a == $b
+    Any     Str       string equality          match if $a eq $b
+    Any     Num       numeric equality         match if $a == $b
+
+    Any     Any       string equality          match if $a eq $b
+
+
+ + - this must be a code reference whose prototype (if present) is not ""
+     (subs with a "" prototype are dealt with by the 'Code()' entry lower down)
+ * - if a circular reference is found, we fall back to referential equality
+ ! - either a real number, or a string that looks_like_number()
+
+ */
+STATIC
+OP *
+S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
+{
+    dVAR;
+    dSP;
+    
+    SV *e = TOPs;	/* e is for 'expression' */
+    SV *d = TOPm1s;	/* d is for 'default', as in PL_defgv */
+    SV *this, *other;
+    MAGIC *mg;
+    regexp *this_regex, *other_regex;
+
+#   define NOT_EMPTY_PROTO(cv) (!SvPOK(cv) || SvCUR(cv) == 0)
+
+#   define SM_REF(type) ( \
+	   (SvROK(d) && (SvTYPE(this = SvRV(d)) == SVt_##type) && (other = e)) \
+	|| (SvROK(e) && (SvTYPE(this = SvRV(e)) == SVt_##type) && (other = d)))
+
+#   define SM_CV_NEP   /* Find a code ref without an empty prototype */ \
+	((SvROK(d) && (SvTYPE(this = SvRV(d)) == SVt_PVCV)		\
+	    && NOT_EMPTY_PROTO(this) && (other = e))			\
+	|| (SvROK(e) && (SvTYPE(this = SvRV(e)) == SVt_PVCV)		\
+	    && NOT_EMPTY_PROTO(this) && (other = d)))
+
+#   define SM_REGEX ( \
+	   (SvROK(d) && SvMAGICAL(this = SvRV(d))			\
+	&& (mg = mg_find(this, PERL_MAGIC_qr))				\
+	&& (this_regex = (regexp *)mg->mg_obj)				\
+	&& (other = e))							\
+    ||									\
+	   (SvROK(e) && SvMAGICAL(this = SvRV(e))			\
+	&& (mg = mg_find(this, PERL_MAGIC_qr))				\
+	&& (this_regex = (regexp *)mg->mg_obj)				\
+	&& (other = d))	)
+	
+
+#   define SM_OTHER_REF(type) \
+	(SvROK(other) && SvTYPE(SvRV(other)) == SVt_##type)
+
+#   define SM_OTHER_REGEX (SvROK(other) && SvMAGICAL(SvRV(other))	\
+	&& (mg = mg_find(SvRV(other), PERL_MAGIC_qr))			\
+	&& (other_regex = (regexp *)mg->mg_obj))
+	
+
+#   define SM_SEEN_THIS(sv) hv_exists_ent(seen_this, \
+	sv_2mortal(newSViv(PTR2IV(sv))), 0)
+
+#   define SM_SEEN_OTHER(sv) hv_exists_ent(seen_other, \
+	sv_2mortal(newSViv(PTR2IV(sv))), 0)
+
+    tryAMAGICbinSET(smart, 0);
+    
+    SP -= 2;	/* Pop the values */
+
+    /* Take care only to invoke mg_get() once for each argument. 
+     * Currently we do this by copying the SV if it's magical. */
+    if (d) {
+	if (SvGMAGICAL(d))
+	    d = sv_mortalcopy(d);
+    }
+    else
+	d = &PL_sv_undef;
+
+    assert(e);
+    if (SvGMAGICAL(e))
+	e = sv_mortalcopy(e);
+
+    if (SM_CV_NEP) {
+	I32 c;
+	
+	if ( SM_OTHER_REF(PVCV) && NOT_EMPTY_PROTO(SvRV(other)) )
+	{
+	    if (this == SvRV(other))
+		RETPUSHYES;
+	    else
+		RETPUSHNO;
+	}
+	
+	ENTER;
+	SAVETMPS;
+	PUSHMARK(SP);
+	PUSHs(other);
+	PUTBACK;
+	c = call_sv(this, G_SCALAR);
+	SPAGAIN;
+	if (c == 0)
+	    PUSHs(&PL_sv_no);
+	else if (SvTEMP(TOPs))
+	    SvREFCNT_inc(TOPs);
+	FREETMPS;
+	LEAVE;
+	RETURN;
+    }
+    else if (SM_REF(PVHV)) {
+	if (SM_OTHER_REF(PVHV)) {
+	    /* Check that the key-sets are identical */
+	    HE *he;
+	    HV *other_hv = (HV *) SvRV(other);
+	    bool tied = FALSE;
+	    bool other_tied = FALSE;
+	    U32 this_key_count  = 0,
+	        other_key_count = 0;
+	    
+	    /* Tied hashes don't know how many keys they have. */
+	    if (SvTIED_mg(this, PERL_MAGIC_tied)) {
+		tied = TRUE;
+	    }
+	    else if (SvTIED_mg((SV *) other_hv, PERL_MAGIC_tied)) {
+		HV * const temp = other_hv;
+		other_hv = (HV *) this;
+		this  = (SV *) temp;
+		tied = TRUE;
+	    }
+	    if (SvTIED_mg((SV *) other_hv, PERL_MAGIC_tied))
+		other_tied = TRUE;
+	    
+	    if (!tied && HvUSEDKEYS((HV *) this) != HvUSEDKEYS(other_hv))
+	    	RETPUSHNO;
+
+	    /* The hashes have the same number of keys, so it suffices
+	       to check that one is a subset of the other. */
+	    (void) hv_iterinit((HV *) this);
+	    while ( (he = hv_iternext((HV *) this)) ) {
+	    	I32 key_len;
+		char * const key = hv_iterkey(he, &key_len);
+	    	
+	    	++ this_key_count;
+	    	
+	    	if(!hv_exists(other_hv, key, key_len)) {
+	    	    (void) hv_iterinit((HV *) this);	/* reset iterator */
+		    RETPUSHNO;
+	    	}
+	    }
+	    
+	    if (other_tied) {
+		(void) hv_iterinit(other_hv);
+		while ( hv_iternext(other_hv) )
+		    ++other_key_count;
+	    }
+	    else
+		other_key_count = HvUSEDKEYS(other_hv);
+	    
+	    if (this_key_count != other_key_count)
+		RETPUSHNO;
+	    else
+		RETPUSHYES;
+	}
+	else if (SM_OTHER_REF(PVAV)) {
+	    AV * const other_av = (AV *) SvRV(other);
+	    const I32 other_len = av_len(other_av) + 1;
+	    I32 i;
+	    
+	    if (HvUSEDKEYS((HV *) this) != other_len)
+		RETPUSHNO;
+	    
+	    for(i = 0; i < other_len; ++i) {
+		SV ** const svp = av_fetch(other_av, i, FALSE);
+		char *key;
+		STRLEN key_len;
+
+		if (!svp)	/* ??? When can this happen? */
+		    RETPUSHNO;
+
+		key = SvPV(*svp, key_len);
+	    	if(!hv_exists((HV *) this, key, key_len))
+		    RETPUSHNO;
+	    }
+	    RETPUSHYES;
+	}
+	else if (SM_OTHER_REGEX) {
+	    PMOP * const matcher = make_matcher(other_regex);
+	    HE *he;
+
+	    (void) hv_iterinit((HV *) this);
+	    while ( (he = hv_iternext((HV *) this)) ) {
+		if (matcher_matches_sv(matcher, hv_iterkeysv(he))) {
+		    (void) hv_iterinit((HV *) this);
+		    destroy_matcher(matcher);
+		    RETPUSHYES;
+		}
+	    }
+	    destroy_matcher(matcher);
+	    RETPUSHNO;
+	}
+	else {
+	    if (hv_exists_ent((HV *) this, other, 0))
+		RETPUSHYES;
+	    else
+		RETPUSHNO;
+	}
+    }
+    else if (SM_REF(PVAV)) {
+	if (SM_OTHER_REF(PVAV)) {
+	    AV *other_av = (AV *) SvRV(other);
+	    if (av_len((AV *) this) != av_len(other_av))
+		RETPUSHNO;
+	    else {
+	    	I32 i;
+	    	const I32 other_len = av_len(other_av);
+
+		if (Nullhv == seen_this) {
+		    seen_this = newHV();
+		    (void) sv_2mortal((SV *) seen_this);
+		}
+		if (Nullhv == seen_other) {
+		    seen_this = newHV();
+		    (void) sv_2mortal((SV *) seen_other);
+		}
+		for(i = 0; i <= other_len; ++i) {
+		    SV * const * const this_elem = av_fetch((AV *)this, i, FALSE);
+		    SV * const * const other_elem = av_fetch(other_av, i, FALSE);
+
+		    if (!this_elem || !other_elem) {
+			if (this_elem || other_elem)
+			    RETPUSHNO;
+		    }
+		    else if (SM_SEEN_THIS(*this_elem)
+			 || SM_SEEN_OTHER(*other_elem))
+		    {
+			if (*this_elem != *other_elem)
+			    RETPUSHNO;
+		    }
+		    else {
+			hv_store_ent(seen_this,
+			    sv_2mortal(newSViv(PTR2IV(*this_elem))),
+			    &PL_sv_undef, 0);
+			hv_store_ent(seen_other,
+			    sv_2mortal(newSViv(PTR2IV(*other_elem))),
+			    &PL_sv_undef, 0);
+			PUSHs(*this_elem);
+			PUSHs(*other_elem);
+			
+			PUTBACK;
+			(void) do_smartmatch(seen_this, seen_other);
+			SPAGAIN;
+			
+			if (!SvTRUEx(POPs))
+			    RETPUSHNO;
+		    }
+		}
+		RETPUSHYES;
+	    }
+	}
+	else if (SM_OTHER_REGEX) {
+	    PMOP * const matcher = make_matcher(other_regex);
+	    const I32 this_len = av_len((AV *) this);
+	    I32 i;
+
+	    for(i = 0; i <= this_len; ++i) {
+		SV * const * const svp = av_fetch((AV *)this, i, FALSE);
+		if (svp && matcher_matches_sv(matcher, *svp)) {
+		    destroy_matcher(matcher);
+		    RETPUSHYES;
+		}
+	    }
+	    destroy_matcher(matcher);
+	    RETPUSHNO;
+	}
+	else if (SvIOK(other) || SvNOK(other)) {
+	    I32 i;
+
+	    for(i = 0; i <= AvFILL((AV *) this); ++i) {
+		SV * const * const svp = av_fetch((AV *)this, i, FALSE);
+		if (!svp)
+		    continue;
+		
+		PUSHs(other);
+		PUSHs(*svp);
+		PUTBACK;
+		if ((PL_curcop->op_private & HINT_INTEGER) == HINT_INTEGER)
+		    (void) pp_i_eq();
+		else
+		    (void) pp_eq();
+		SPAGAIN;
+		if (SvTRUEx(POPs))
+		    RETPUSHYES;
+	    }
+	    RETPUSHNO;
+	}
+	else if (SvPOK(other)) {
+	    const I32 this_len = av_len((AV *) this);
+	    I32 i;
+
+	    for(i = 0; i <= this_len; ++i) {
+		SV * const * const svp = av_fetch((AV *)this, i, FALSE);
+		if (!svp)
+		    continue;
+		
+		PUSHs(other);
+		PUSHs(*svp);
+		PUTBACK;
+		(void) pp_seq();
+		SPAGAIN;
+		if (SvTRUEx(POPs))
+		    RETPUSHYES;
+	    }
+	    RETPUSHNO;
+	}
+    }
+    else if (!SvOK(d) || !SvOK(e)) {
+	if (!SvOK(d) && !SvOK(e))
+	    RETPUSHYES;
+	else
+	    RETPUSHNO;
+    }
+    else if (SM_REGEX) {
+	PMOP * const matcher = make_matcher(this_regex);
+
+	PUTBACK;
+	PUSHs(matcher_matches_sv(matcher, other)
+	    ? &PL_sv_yes
+	    : &PL_sv_no);
+	destroy_matcher(matcher);
+	RETURN;
+    }
+    else if (SM_REF(PVCV)) {
+	I32 c;
+	/* This must be a null-prototyped sub, because we
+	   already checked for the other kind. */
+	
+	ENTER;
+	SAVETMPS;
+	PUSHMARK(SP);
+	PUTBACK;
+	c = call_sv(this, G_SCALAR);
+	SPAGAIN;
+	if (c == 0)
+	    PUSHs(&PL_sv_undef);
+	else if (SvTEMP(TOPs))
+	    SvREFCNT_inc(TOPs);
+
+	if (SM_OTHER_REF(PVCV)) {
+	    /* This one has to be null-proto'd too.
+	       Call both of 'em, and compare the results */
+	    PUSHMARK(SP);
+	    c = call_sv(SvRV(other), G_SCALAR);
+	    SPAGAIN;
+	    if (c == 0)
+		PUSHs(&PL_sv_undef);
+	    else if (SvTEMP(TOPs))
+		SvREFCNT_inc(TOPs);
+	    FREETMPS;
+	    LEAVE;
+	    PUTBACK;
+	    return pp_eq();
+	}
+	
+	FREETMPS;
+	LEAVE;
+	RETURN;
+    }
+    else if ( ((SvIOK(d) || SvNOK(d)) && (this = d) && (other = e))
+         ||   ((SvIOK(e) || SvNOK(e)) && (this = e) && (other = d)) )
+    {
+	if (SvPOK(other) && !looks_like_number(other)) {
+	    /* String comparison */
+	    PUSHs(d); PUSHs(e);
+	    PUTBACK;
+	    return pp_seq();
+	}
+	/* Otherwise, numeric comparison */
+	PUSHs(d); PUSHs(e);
+	PUTBACK;
+	if ((PL_curcop->op_private & HINT_INTEGER) == HINT_INTEGER)
+	    (void) pp_i_eq();
+	else
+	    (void) pp_eq();
+	SPAGAIN;
+	if (SvTRUEx(POPs))
+	    RETPUSHYES;
+	else
+	    RETPUSHNO;
+    }
+    
+    /* As a last resort, use string comparison */
+    PUSHs(d); PUSHs(e);
+    PUTBACK;
+    return pp_seq();
+}
+
+PP(pp_enterwhen)
+{
+    dVAR; dSP;
+    register PERL_CONTEXT *cx;
+    const I32 gimme = GIMME_V;
+
+    /* This is essentially an optimization: if the match
+       fails, we don't want to push a context and then
+       pop it again right away, so we skip straight
+       to the op that follows the leavewhen.
+    */
+    if ((0 == (PL_op->op_flags & OPf_SPECIAL)) && !SvTRUEx(POPs))
+	return cLOGOP->op_other->op_next;
+
+    ENTER;
+    SAVETMPS;
+
+    PUSHBLOCK(cx, CXt_WHEN, SP);
+    PUSHWHEN(cx);
+
+    RETURN;
+}
+
+PP(pp_leavewhen)
+{
+    dVAR; dSP;
+    register PERL_CONTEXT *cx;
+    I32 gimme;
+    SV **newsp;
+    PMOP *newpm;
+
+    POPBLOCK(cx,newpm);
+    assert(CxTYPE(cx) == CXt_WHEN);
+
+    SP = newsp;
+    PUTBACK;
+
+    PL_curpm = newpm;   /* pop $1 et al */
+
+    LEAVE;
+    return NORMAL;
+}
+
+PP(pp_continue)
+{
+    dVAR;   
+    I32 cxix;
+    register PERL_CONTEXT *cx;
+    I32 inner;
+    
+    cxix = dopoptowhen(cxstack_ix); 
+    if (cxix < 0)   
+	DIE(aTHX_ "Can't \"continue\" outside a when block");
+    if (cxix < cxstack_ix)
+        dounwind(cxix);
+    
+    /* clear off anything above the scope we're re-entering */
+    inner = PL_scopestack_ix;
+    TOPBLOCK(cx);
+    if (PL_scopestack_ix < inner)
+        leave_scope(PL_scopestack[PL_scopestack_ix]);
+    PL_curcop = cx->blk_oldcop;
+    return cx->blk_givwhen.leave_op;
+}
+
+PP(pp_break)
+{
+    dVAR;   
+    I32 cxix;
+    register PERL_CONTEXT *cx;
+    I32 inner;
+    
+    cxix = dopoptogiven(cxstack_ix); 
+    if (cxix < 0) {
+	if (PL_op->op_flags & OPf_SPECIAL)
+	    DIE(aTHX_ "Can't use when() outside a topicalizer");
+	else
+	    DIE(aTHX_ "Can't \"break\" outside a given block");
+    }
+    if (CxFOREACH(&cxstack[cxix]) && (0 == (PL_op->op_flags & OPf_SPECIAL)))
+	DIE(aTHX_ "Can't \"break\" in a loop topicalizer");
+
+    if (cxix < cxstack_ix)
+        dounwind(cxix);
+    
+    /* clear off anything above the scope we're re-entering */
+    inner = PL_scopestack_ix;
+    TOPBLOCK(cx);
+    if (PL_scopestack_ix < inner)
+        leave_scope(PL_scopestack[PL_scopestack_ix]);
+    PL_curcop = cx->blk_oldcop;
+
+    if (CxFOREACH(cx))
+	return cx->blk_loop.next_op;
+    else
+	return cx->blk_givwhen.leave_op;
 }
 
 STATIC OP *
@@ -3583,15 +4256,15 @@ S_doparseform(pTHX_ SV *sv)
 {
     STRLEN len;
     register char *s = SvPV_force(sv, len);
-    register char *send = s + len;
-    register char *base = Nullch;
+    register char * const send = s + len;
+    register char *base = NULL;
     register I32 skipspaces = 0;
     bool noblank   = FALSE;
     bool repeat    = FALSE;
     bool postspace = FALSE;
     U32 *fops;
     register U32 *fpc;
-    U32 *linepc = 0;
+    U32 *linepc = NULL;
     register I32 arg;
     bool ischop;
     bool unchopnum = FALSE;
@@ -3606,9 +4279,9 @@ S_doparseform(pTHX_ SV *sv)
 	    maxops += 10;
     }
     s = base;
-    base = Nullch;
+    base = NULL;
 
-    New(804, fops, maxops, U32);
+    Newx(fops, maxops, U32);
     fpc = fops;
 
     if (s < send) {
@@ -3787,7 +4460,7 @@ S_doparseform(pTHX_ SV *sv)
     }
     Copy(fops, s, arg, U32);
     Safefree(fops);
-    sv_magic(sv, Nullsv, PERL_MAGIC_fm, Nullch, 0);
+    sv_magic(sv, NULL, PERL_MAGIC_fm, NULL, 0);
     SvCOMPILED_on(sv);
 
     if (unchopnum && repeat)
@@ -3824,13 +4497,14 @@ S_num_overflow(NV value, I32 fldsize, I32 frcsize)
 }
 
 static I32
-run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
+S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 {
-    SV *datasv = FILTER_DATA(idx);
-    int filter_has_file = IoLINES(datasv);
-    GV *filter_child_proc = (GV *)IoFMT_GV(datasv);
-    SV *filter_state = (SV *)IoTOP_GV(datasv);
-    SV *filter_sub = (SV *)IoBOTTOM_GV(datasv);
+    dVAR;
+    SV * const datasv = FILTER_DATA(idx);
+    const int filter_has_file = IoLINES(datasv);
+    GV * const filter_child_proc = (GV *)IoFMT_GV(datasv);
+    SV * const filter_state = (SV *)IoTOP_GV(datasv);
+    SV * const filter_sub = (SV *)IoBOTTOM_GV(datasv);
     int len = 0;
 
     /* I was having segfault trouble under Linux 2.2.5 after a
@@ -3887,7 +4561,7 @@ run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	    SvREFCNT_dec(filter_sub);
 	    IoBOTTOM_GV(datasv) = Nullgv;
 	}
-	filter_del(run_user_filter);
+	filter_del(S_run_user_filter);
     }
 
     return len;
@@ -3900,11 +4574,12 @@ S_path_is_absolute(pTHX_ const char *name)
 {
     if (PERL_FILE_IS_ABSOLUTE(name)
 #ifdef MACOS_TRADITIONAL
-	|| (*name == ':'))
+	|| (*name == ':')
 #else
 	|| (*name == '.' && (name[1] == '/' ||
-			     (name[1] == '.' && name[2] == '/'))))
+			     (name[1] == '.' && name[2] == '/')))
 #endif
+	 )
     {
 	return TRUE;
     }
@@ -3919,5 +4594,5 @@ S_path_is_absolute(pTHX_ const char *name)
  * indent-tabs-mode: t
  * End:
  *
- * vim: shiftwidth=4:
-*/
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

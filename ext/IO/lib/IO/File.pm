@@ -137,7 +137,7 @@ require Exporter;
 
 @ISA = qw(IO::Handle IO::Seekable Exporter);
 
-$VERSION = "1.10";
+$VERSION = "1.13_01";
 
 @EXPORT = @IO::Seekable::EXPORT;
 
@@ -181,13 +181,9 @@ sub open {
 	} elsif ($mode =~ /:/) {
 	    return open($fh, $mode, $file) if @_ == 3;
 	    croak 'usage: $fh->open(FILENAME, IOLAYERS)';
-	}
-	if (defined($file) && length($file)
-	    && ! File::Spec->file_name_is_absolute($file))
-	{
-	    $file = File::Spec->rel2abs($file);
-	}
-	$file = IO::Handle::_open_mode_string($mode) . " $file\0";
+	} else {
+            return open($fh, IO::Handle::_open_mode_string($mode), $file);
+        }
     }
     open($fh, $file);
 }
@@ -197,7 +193,7 @@ sub open {
 ##
 
 sub binmode {
-    ( @_ == 0 or @_ == 1 ) or croak 'usage $fh->binmode([LAYER])';
+    ( @_ == 1 or @_ == 2 ) or croak 'usage $fh->binmode([LAYER])';
 
     my($fh, $layer) = @_;
 

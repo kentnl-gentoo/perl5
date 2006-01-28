@@ -193,7 +193,7 @@ know which context to supply to the right side.
 
 =item A thread exited while %d threads were running
 
-(W) When using threaded Perl, a thread (not necessarily the main
+(W threads)(S) When using threaded Perl, a thread (not necessarily the main
 thread) exited while there were still other threads running.
 Usually it's a good idea to first collect the return values of the
 created threads by joining them, and only then exit from the main
@@ -282,6 +282,15 @@ invalid anytime, even before the end of the current statement.  Use
 literals or global values as arguments to the "p" pack() template to
 avoid this warning.
 
+=item Attempt to set length of freed array
+
+(W) You tried to set the length of an array which has been freed.  You
+can do this by storing a reference to the scalar representing the last index
+of an array and later assigning through that reference. For example
+
+    $r = do {my @a; \$#a};
+    $$r = 503
+
 =item Attempt to use reference as lvalue in substr
 
 (W substr) You supplied a reference as the first argument to substr()
@@ -351,6 +360,12 @@ by setting environment variable C<PERL_BADFREE> to 1.
 
 (P) An internal request asked to add an array entry to something that
 wasn't a symbol table entry.
+
+=item Bad symbol for dirhandle
+
+(P) An internal request asked to add a dirhandle entry to something
+that wasn't a symbol table entry.
+
 
 =item Bad symbol for filehandle
 
@@ -471,6 +486,13 @@ See L<perlfunc/pack>.
 (F) An argument to pack("w",...) was negative.  The BER compressed integer
 format can only be used with positive integers.  See L<perlfunc/pack>.
 
+=item Cannot convert a reference to %s to typeglob
+
+(F) You manipulated Perl's symbol table directly, stored a reference in it,
+then tried to access that symbol via conventional Perl syntax. The access
+triggers Perl to autovivify that typeglob, but it there is no legal conversion
+from that type of reference to a typeglob.
+
 =item Can only compress unsigned integers in pack
 
 (F) An argument to pack("w",...) was not an integer.  The BER compressed
@@ -481,6 +503,15 @@ to compress something else.  See L<perlfunc/pack>.
 
 (F) Only hard references may be blessed.  This is how Perl "enforces"
 encapsulation of objects.  See L<perlobj>.
+
+=item Can't "break" in a loop topicalizer
+
+(F) You called C<break>, but you're in a C<foreach> block rather than
+a C<given> block. You probably meant to use C<next> or C<last>.
+
+=item Can't "break" outside a given block
+
+(F) You called C<break>, but you're not inside a C<given> block.
 
 =item Can't call method "%s" in empty package "%s"
 
@@ -556,6 +587,11 @@ but then $foo no longer contains a glob.
 
 (F) Certain types of SVs, in particular real symbol table entries
 (typeglobs), can't be forced to stop being what they are.
+
+=item Can't "continue" outside a when block
+
+(F) You called C<continue>, but you're not inside a C<when>
+or C<default> block.
 
 =item Can't create pipe mailbox
 
@@ -686,15 +722,6 @@ found in the PATH.
 found in the PATH, or at least not with the correct permissions.  The
 script exists in the current directory, but PATH prohibits running it.
 
-=item Can't find %s property definition %s
-
-(F) You may have tried to use C<\p> which means a Unicode property (for
-example C<\p{Lu}> is all uppercase letters).  If you did mean to use a
-Unicode property, see L<perlunicode> for the list of known properties.
-If you didn't mean to use a Unicode property, escape the C<\p>, either
-by C<\\p> (just the C<\p>) or by C<\Q\p> (the rest of the string, until
-possible C<\E>).
-
 =item Can't find string terminator %s anywhere before EOF
 
 (F) Perl strings can stretch over multiple lines.  This message means
@@ -706,6 +733,15 @@ nesting levels, the following is missing its final parenthesis:
 If you're getting this error from a here-document, you may have included
 unseen whitespace before or after your closing tag. A good programmer's
 editor will have a way to help you find these characters.
+
+=item Can't find Unicode property definition "%s"
+
+(F) You may have tried to use C<\p> which means a Unicode property (for
+example C<\p{Lu}> is all uppercase letters).  If you did mean to use a
+Unicode property, see L<perlunicode> for the list of known properties.
+If you didn't mean to use a Unicode property, escape the C<\p>, either
+by C<\\p> (just the C<\p>) or by C<\Q\p> (the rest of the string, until
+possible C<\E>).
 
 =item Can't fork
 
@@ -752,11 +788,16 @@ a block, except that it isn't a proper block.  This usually occurs if
 you tried to jump out of a sort() block or subroutine, which is a no-no.
 See L<perlfunc/goto>.
 
-=item Can't goto subroutine from an eval-string
+=item Can't goto subroutine from a sort sub (or similar callback)
+
+(F) The "goto subroutine" call can't be used to jump out of the
+comparison sub for a sort(), or from a similar callback (such
+as the reduce() function in List::Util).
+
+=item Can't goto subroutine from an eval-%s
 
 (F) The "goto subroutine" call can't be used to jump out of an eval
-"string".  (You can use it to jump out of an eval {BLOCK}, but you
-probably don't want to.)
+"string" or block.
 
 =item Can't goto subroutine outside a subroutine
 
@@ -946,13 +987,6 @@ missing.  You need to figure out where your CRTL misplaced its environ
 or define F<PERL_ENV_TABLES> (see L<perlvms>) so that environ is not
 searched.
 
-=item Can't redefine active sort subroutine %s
-
-(F) Perl optimizes the internal handling of sort subroutines and keeps
-pointers into them.  You tried to redefine one such sort subroutine when
-it was currently active, which is not allowed.  If you really want to do
-this, you should write C<sort { &func } @x> instead of C<sort func @x>.
-
 =item Can't "redo" outside a loop block
 
 (F) A "redo" statement was executed to restart the current block, but
@@ -1126,7 +1160,7 @@ references are disallowed.  See L<perlref>.
 
 (F) The compiler tried to interpret a bracketed expression as a
 subscript.  But to the left of the brackets was an expression that
-didn't look like an array reference, or anything else subscriptable.
+didn't look like a hash or array reference, or anything else subscriptable.
 
 =item Can't use \%c to mean $%c in expression
 
@@ -1136,6 +1170,13 @@ backreference to a matched substring is valid only as part of a regular
 expression pattern.  Trying to do this in ordinary Perl code produces a
 value that prints out looking like SCALAR(0xdecaf).  Use the $1 form
 instead.
+
+=item Can't use "when" outside a topicalizer
+
+(F) You have used a when() block that is neither inside a C<foreach>
+loop nor a C<given> block. (Note that this error is issued on exit
+from the C<when> block, so you won't get the error if the match fails,
+or if you use an explicit C<continue>.)
 
 =item Can't weaken a nonreference
 
@@ -1229,6 +1270,11 @@ uses the character values modulus 256 instead, as if you had provided:
 =item close() on unopened filehandle %s
 
 (W unopened) You tried to close a filehandle that was never opened.
+
+=item closedir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you tried to close is either closed or not really
+a dirhandle.  Check your control flow.
 
 =item Code missing after '/'
 
@@ -1466,6 +1512,10 @@ subroutine or package before the current location.  You can use an empty
 (W misc) You used the obsolescent C<dump()> built-in function, without fully
 qualifying it as C<CORE::dump()>.  Maybe it's a typo.  See L<perlfunc/dump>.
 
+=item dump is not supported
+
+(F) Your machine doesn't support dump/undump.
+
 =item Duplicate free() ignored
 
 (S malloc) An internal routine called free() on something that had
@@ -1634,13 +1684,13 @@ Another possibility is that you attempted to open filedescriptor 0
 =item Filehandle %s reopened as %s only for input
 
 (W io) You opened for reading a filehandle that got the same filehandle id
-as STDOUT or STDERR. This occured because you closed STDOUT or STDERR
+as STDOUT or STDERR. This occurred because you closed STDOUT or STDERR
 previously.
 
 =item Filehandle STDIN reopened as %s only for output
 
 (W io) You opened for writing a filehandle that got the same filehandle id
-as STDIN. This occured because you closed STDIN previously.
+as STDIN. This occurred because you closed STDIN previously.
 
 =item Final $ should be \$ or $name
 
@@ -1858,7 +1908,7 @@ Interpretation of the octal number stopped before the 8 or 9.
 =item Illegal switch in PERL5OPT: %s
 
 (X) The PERL5OPT environment variable may only be used to set the
-following switches: B<-[DIMUdmtw]>.
+following switches: B<-[CDIMUdmtwA]>.
 
 =item Ill-formed CRTL environ value "%s"
 
@@ -1931,6 +1981,12 @@ representable without overflow is 0xFFFFFFFF, 037777777777, or
 transparently promotes all numbers to a floating point representation
 internally--subject to loss of precision errors in subsequent
 operations.
+
+=item Integer overflow in format string for %s
+
+(F) The indexes and widths specified in the format string of printf()
+or sprintf() are too large.  The numbers must not overflow the size of
+integers for your architecture.
 
 =item Integer overflow in version
 
@@ -2056,6 +2112,12 @@ neither as a system call or an ioctl call (SIOCATMARK).
 been removed as of 5.9.0 and is no longer supported. You should use the
 C<//m> and C<//s> regexp modifiers instead.
 
+=item $# is no longer supported
+
+(D deprecated) The special variable C<$#>, deprecated in older perls, has
+been removed as of 5.9.3 and is no longer supported. You should use the
+printf/sprintf functions instead.
+
 =item `%s' is not a code reference
 
 (W overload) The second (fourth, sixth, ...) argument of overload::constant
@@ -2096,7 +2158,7 @@ effective uids or gids failed.
 
 =item length/code after end of string in unpack
 
-(F) While unpacking, the string buffer was alread used up when an unpack
+(F) While unpacking, the string buffer was already used up when an unpack
 length/code combination tried to obtain more data. This results in
 an undefined value for the length. See L<perlfunc/pack>.
 
@@ -2157,7 +2219,8 @@ when the function is called.
 
 =item Malformed UTF-8 character (%s)
 
-(W utf8) Perl detected something that didn't comply with UTF-8 encoding rules.
+(S utf8) (F) Perl detected something that didn't comply with UTF-8
+encoding rules.
 
 One possible cause is that you read in data that you thought to be in
 UTF-8 but it wasn't (it was for example legacy 8-bit data).  Another
@@ -2428,22 +2491,21 @@ doesn't know where you want to pipe the output from this command.
 =item No DB::DB routine defined
 
 (F) The currently executing code was compiled with the B<-d> switch, but
-for some reason the perl5db.pl file (or some facsimile thereof) didn't
-define a routine to be called at the beginning of each statement.  Which
-is odd, because the file should have been required automatically, and
-should have blown up the require if it didn't parse right.
+for some reason the  current debugger (e.g. F<perl5db.pl> or a C<Devel::>
+module) didn't define a routine to be called at the beginning of each
+statement.
 
 =item No dbm on this machine
 
 (P) This is counted as an internal error, because every machine should
 supply dbm nowadays, because Perl comes with SDBM.  See L<SDBM_File>.
 
-=item No DBsub routine
+=item No DB::sub routine defined
 
-(F) The currently executing code was compiled with the B<-d> switch,
-but for some reason the perl5db.pl file (or some facsimile thereof)
-didn't define a DB::sub routine to be called at the beginning of each
-ordinary subroutine call.
+(F) The currently executing code was compiled with the B<-d> switch, but
+for some reason the current debugger (e.g. F<perl5db.pl> or a C<Devel::>
+module) didn't define a C<DB::sub> routine to be called at the beginning
+of each ordinary subroutine call.
 
 =item No B<-e> allowed in setuid scripts
 
@@ -2615,6 +2677,12 @@ to UTC.  If it's not, define the logical name
 F<SYS$TIMEZONE_DIFFERENTIAL> to translate to the number of seconds which
 need to be added to UTC to get local time.
 
+=item Non-string passed as bitmask
+
+(W misc) A number has been passed as a bitmask argument to select().
+Use the vec() function to construct the file descriptor bitmasks for
+select. See L<perlfunc/select>
+
 =item Null filename used
 
 (F) You can't require the null filename, especially because on many
@@ -2706,7 +2774,7 @@ that isn't open.  Check your control flow.  See also L<perlfunc/-X>.
 
 (S internal) An internal warning that the grammar is screwed up.
 
-=item Operation `%s': no method found, %s
+=item Operation "%s": no method found, %s
 
 (F) An attempt was made to perform an overloaded operation for which no
 handler was defined.  While some handlers can be autogenerated in terms
@@ -2812,6 +2880,13 @@ page.  See L<perlform>.
 
 (P) An internal error.
 
+=item panic: attempt to call %s in %s
+
+(P) One of the file test operators entered a code branch that calls
+an ACL related-function, but that function is not available on this
+platform.  Earlier checks mean that it should not be possible to
+enter this branch on this platform.
+
 =item panic: ck_grep
 
 (P) Failed an internal consistency check trying to compile a grep.
@@ -2861,6 +2936,13 @@ data.
 (P) We popped the context stack to a context with the specified label,
 and then discovered it wasn't a context we know how to do a goto in.
 
+=item panic: hfreeentries failed to free hash
+
+(P) The internal routine used to clear a hashes entries tried repeatedly,
+but each time something added more entries to the hash. Most likely the hash
+contains an object with a reference back to the hash and a destructor that
+adds a new object to the hash.
+
 =item panic: INTERPCASEMOD
 
 (P) The lexer got into a bad state at a case modifier.
@@ -2897,17 +2979,9 @@ references to an object.
 
 (P) Something requested a negative number of bytes of malloc.
 
-=item panic: mapstart
-
-(P) The compiler is screwed up with respect to the map() function.
-
 =item panic: memory wrap
 
 (P) Something tried to allocate more memory than possible.
-
-=item panic: null array
-
-(P) One of the internal array routines was passed a null AV pointer.
 
 =item panic: pad_alloc
 
@@ -2980,6 +3054,11 @@ was string.
 =item panic: top_env
 
 (P) The compiler attempted to do a goto, or something weird like that.
+
+=item panic: unimplemented op %s (#%d) called
+
+(P) The compiler is screwed up and attempted to use an op that isn't permitted
+at run time.
 
 =item panic: utf16_to_utf8: odd bytelen
 
@@ -3188,11 +3267,6 @@ but there was no array C<@foo> in scope at the time. If you wanted a
 literal @foo, then write it as \@foo; otherwise find out what happened
 to the array you apparently lost track of.
 
-=item Possible Y2K bug: %s
-
-(W y2k) You are concatenating the number 19 with another number, which
-could be a potential Year 2000 problem.
-
 =item pragma "attrs" is deprecated, use "sub NAME : ATTRS" instead
 
 (D deprecated) You have written something like this:
@@ -3288,6 +3362,11 @@ are outside the range which can be represented by integers internally.
 One possible workaround is to force Perl to use magical string increment
 by prepending "0" to your numbers.
 
+=item readdir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you're reading from is either closed or not really 
+a dirhandle.  Check your control flow.
+
 =item readline() on closed filehandle %s
 
 (W closed) The filehandle you're reading from got itself closed sometime
@@ -3371,7 +3450,7 @@ earlier.
 
 =item Repeated format line will never terminate (~~ and @# incompatible)
 
-(F) Your format containes the ~~ repeat-until-blank sequence and a
+(F) Your format contains the ~~ repeat-until-blank sequence and a
 numeric field that will never go blank so that the repetition never
 terminates. You might use ^# instead.  See L<perlform>.
 
@@ -3379,6 +3458,11 @@ terminates. You might use ^# instead.  See L<perlform>.
 
 (W syntax) You wrote your assignment operator backwards.  The = must
 always comes last, to avoid ambiguity with subsequent unary operators.
+
+=item rewinddir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you tried to do a rewinddir() on is either closed or not
+really a dirhandle.  Check your control flow.
 
 =item Runaway format
 
@@ -3441,10 +3525,25 @@ construct, not just the empty search pattern.  Therefore code written
 in Perl 5.9.0 or later that uses the // as the I<defined-or> can be
 misparsed by pre-5.9.0 Perls as a non-terminated search pattern.
 
+=item Search pattern not terminated or ternary operator parsed as search pattern
+
+(F) The lexer couldn't find the final delimiter of a C<?PATTERN?>
+construct.
+
+The question mark is also used as part of the ternary operator (as in
+C<foo ? 0 : 1>) leading to some ambiguous constructions being wrongly
+parsed. One way to disambiguate the parsing is to put parentheses around
+the conditional expression, i.e. C<(foo) ? 0 : 1>.
+
 =item %sseek() on unopened filehandle
 
 (W unopened) You tried to use the seek() or sysseek() function on a
 filehandle that was either never opened or has since been closed.
+
+=item seekdir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you are doing a seekdir() on is either closed or not
+really a dirhandle.  Check your control flow.
 
 =item select not implemented
 
@@ -3655,7 +3754,7 @@ a block by itself.
 (W unopened) You tried to use the stat() function on a filehandle that
 was either never opened or has since been closed.
 
-=item Stub found while resolving method `%s' overloading %s
+=item Stub found while resolving method "%s" overloading "%s"
 
 (P) Overloading resolution over @ISA tree may be broken by importation
 stubs.  Stubs should never be implicitly created, but explicit calls to
@@ -3701,6 +3800,11 @@ assignment or as a subroutine argument for example).
 
 (F) Your Perl was compiled with B<-D>SETUID_SCRIPTS_ARE_SECURE_NOW, but
 a version of the setuid emulator somehow got run anyway.
+
+=item sv_upgrade from type %d down to type %d
+
+(P) Perl tried to force the upgrade an SV to a type which was actually
+inferior to its current type.
 
 =item Switch (?(condition)... contains too many branches in regex; marked by <-- HERE in m/%s/
 
@@ -3798,6 +3902,11 @@ for Perl to reach.  Perl is doing you a favor by refusing.
 (W unopened) You tried to use the tell() function on a filehandle that
 was either never opened or has since been closed.
 
+=item telldir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you tried to telldir() is either closed or not really
+a dirhandle.  Check your control flow.
+
 =item That use of $[ is unsupported
 
 (F) Assignment to C<$[> is now strictly circumscribed, and interpreted
@@ -3852,7 +3961,7 @@ target of the change to
 
 =item thread failed to start: %s
 
-(F) The entry point function of threads->create() failed for some reason.
+(W threads)(S) The entry point function of threads->create() failed for some reason.
 
 =item times not implemented
 
@@ -4308,7 +4417,7 @@ L<perlref> for more on this.
 This warning will not be issued for numerical constants equal to 0 or 1
 since they are often used in statements like
 
-    1 while sub_with_side_effects() ;
+    1 while sub_with_side_effects();
 
 String constants that would normally evaluate to 0 or 1 are warned
 about.
@@ -4423,11 +4532,6 @@ C<use AutoLoader 'AUTOLOAD';>.
 
 (F) You attempted to use a feature of printf that is accessible from
 only C.  This usually means there's a better way to do it in Perl.
-
-=item Use of $# is deprecated
-
-(D deprecated) This was an ill-advised attempt to emulate a poorly
-defined B<awk> feature.  Use an explicit printf() or sprintf() instead.
 
 =item Use of %s is deprecated
 
@@ -4611,6 +4715,11 @@ are automatically rebound to the current values of such variables.
 its equivalent C<BEGIN> block found an internal inconsistency with
 the version number.
 
+=item Version string '%s' contains invalid data; ignoring: '%s'
+
+(W misc) The version string contains invalid characters at the end, which
+are being ignored.
+
 =item v-string in use/require is non-portable
 
 (W portable) The use of v-strings is non-portable to older, pre-5.6, Perls.
@@ -4692,16 +4801,6 @@ the beginning of the string being (un)packed.  See L<perlfunc/pack>.
 
 (F) You had a pack template that specified a relative position after
 the end of the string being unpacked.  See L<perlfunc/pack>.
-
-=item Xsub "%s" called in sort
-
-(F) The use of an external subroutine as a sort comparison is not yet
-supported.
-
-=item Xsub called in sort
-
-(F) The use of an external subroutine as a sort comparison is not yet
-supported.
 
 =item YOU HAVEN'T DISABLED SET-ID SCRIPTS IN THE KERNEL YET!
 

@@ -34,11 +34,9 @@
 /*
  * externals
  */
-#ifndef WIN32
-#ifndef sun
-extern int errno;
-#endif
-#endif
+
+#include <errno.h> /* See notes in perl.h about avoiding
+			extern int errno; */
 
 extern Malloc_t malloc proto((MEM_SIZE));
 extern Free_t free proto((Malloc_t));
@@ -62,7 +60,7 @@ static int makroom proto((DBM *, long, int));
 #define OFF_PAG(off)	(long) (off) * PBLKSIZ
 #define OFF_DIR(off)	(long) (off) * DBLKSIZ
 
-static long masks[] = {
+static const long masks[] = {
 	000000000000, 000000000001, 000000000003, 000000000007,
 	000000000017, 000000000037, 000000000077, 000000000177,
 	000000000377, 000000000777, 000000001777, 000000003777,

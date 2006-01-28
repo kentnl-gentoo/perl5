@@ -3,6 +3,7 @@
  * VMS-specific routines for perl5
  * Version: 5.7.0
  *
+ * August 2005 Convert VMS status code to UNIX status codes
  * August 2000 tweaks to vms_image_init, my_flush, my_fwrite, cando_by_name, 
  *             and Perl_cando by Craig Berry
  * 29-Aug-2000 Charles Lane's piping improvements rolled in
@@ -30,6 +31,9 @@
 #include <lib$routines.h>
 #include <lnmdef.h>
 #include <msgdef.h>
+#if __CRTL_VER >= 70301000 && !defined(__VAX)
+#include <ppropdef.h>
+#endif
 #include <prvdef.h>
 #include <psldef.h>
 #include <rms.h>
@@ -41,6 +45,71 @@
 #include <syidef.h>
 #include <uaidef.h>
 #include <uicdef.h>
+#include <stsdef.h>
+#include <rmsdef.h>
+
+/* Set the maximum filespec size here as it is larger for EFS file
+ * specifications.
+ * Not fully implemented at this time because the larger size
+ * will likely impact the stack local storage requirements of
+ * threaded code, and probably cause hard to diagnose failures.
+ * To implement the larger sizes, all places where filename
+ * storage is put on the stack need to be changed to use
+ * New()/SafeFree() instead.
+ */
+#ifndef __VAX
+#ifndef VMS_MAXRSS
+#ifdef NAML$C_MAXRSS
+#define VMS_MAXRSS (NAML$C_MAXRSS+1)
+#ifndef VMS_LONGNAME_SUPPORT
+#define VMS_LONGNAME_SUPPORT 1
+#endif /* VMS_LONGNAME_SUPPORT */
+#endif /* NAML$C_MAXRSS */
+#endif /* VMS_MAXRSS */
+#endif
+
+/* temporary hack until support is complete */
+#ifdef VMS_LONGNAME_SUPPORT
+#undef VMS_LONGNAME_SUPPORT
+#undef VMS_MAXRSS
+#endif
+/* end of temporary hack until support is complete */
+
+#ifndef VMS_MAXRSS
+#define VMS_MAXRSS (NAM$C_MAXRSS + 1)
+#endif
+
+#if  __CRTL_VER < 70301000 && __CRTL_VER >= 70300000
+int   decc$feature_get_index(const char *name);
+char* decc$feature_get_name(int index);
+int   decc$feature_get_value(int index, int mode);
+int   decc$feature_set_value(int index, int mode, int value);
+#else
+#include <unixlib.h>
+#endif
+
+#if __CRTL_VER >= 70300000 && !defined(__VAX)
+
+static int set_feature_default(const char *name, int value)
+{
+    int status;
+    int index;
+
+    index = decc$feature_get_index(name);
+
+    status = decc$feature_set_value(index, 1, value);
+    if (index == -1 || (status == -1)) {
+      return -1;
+    }
+
+    status = decc$feature_get_value(index, 1);
+    if (status != value) {
+      return -1;
+    }
+
+return 0;
+}
+#endif
 
 /* Older versions of ssdef.h don't have these */
 #ifndef SS$_INVFILFOROP
@@ -53,7 +122,7 @@
 /* We implement I/O here, so we will be mixing PerlIO and stdio calls. */
 #define PERLIO_NOT_STDIO 0 
 
-/* Don't replace system definitions of vfork, getenv, and stat, 
+/* Don't replace system definitions of vfork, getenv, lstat, and stat, 
  * code below needs to get to the underlying CRTL routines. */
 #define DONT_MASK_RTL_CALLS
 #include "EXTERN.h"
@@ -85,22 +154,40 @@
 dEXT int h_errno;
 #endif
 
+#ifdef __DECC
+#pragma message disable pragma
+#pragma member_alignment save
+#pragma nomember_alignment longword
+#pragma message save
+#pragma message disable misalgndmem
+#endif
 struct itmlst_3 {
   unsigned short int buflen;
   unsigned short int itmcode;
   void *bufadr;
   unsigned short int *retlen;
 };
+#ifdef __DECC
+#pragma message restore
+#pragma member_alignment restore
+#endif
 
 #define do_fileify_dirspec(a,b,c)	mp_do_fileify_dirspec(aTHX_ a,b,c)
 #define do_pathify_dirspec(a,b,c)	mp_do_pathify_dirspec(aTHX_ a,b,c)
 #define do_tovmsspec(a,b,c)		mp_do_tovmsspec(aTHX_ a,b,c)
 #define do_tovmspath(a,b,c)		mp_do_tovmspath(aTHX_ a,b,c)
 #define do_rmsexpand(a,b,c,d,e)		mp_do_rmsexpand(aTHX_ a,b,c,d,e)
+#define do_vms_realpath(a,b)		mp_do_vms_realpath(aTHX_ a,b)
 #define do_tounixspec(a,b,c)		mp_do_tounixspec(aTHX_ a,b,c)
 #define do_tounixpath(a,b,c)		mp_do_tounixpath(aTHX_ a,b,c)
+#define do_vms_case_tolerant(a)		mp_do_vms_case_tolerant(a)
 #define expand_wild_cards(a,b,c,d)	mp_expand_wild_cards(aTHX_ a,b,c,d)
 #define getredirection(a,b)		mp_getredirection(aTHX_ a,b)
+
+static char *mp_do_tovmspath(pTHX_ const char *path, char *buf, int ts);
+static char *mp_do_tounixpath(pTHX_ const char *path, char *buf, int ts);
+static char *mp_do_tounixspec(pTHX_ const char *, char *, int);
+static char *mp_do_pathify_dirspec(pTHX_ const char *dir,char *buf, int ts);
 
 /* see system service docs for $TRNLNM -- NOT the same as LNM$_MAX_INDEX */
 #define PERL_LNM_MAX_ALLOWED_INDEX 127
@@ -111,8 +198,14 @@ struct itmlst_3 {
  */
 #define PERL_LNM_MAX_ITER 10
 
-#define MAX_DCL_SYMBOL              255     /* well, what *we* can set, at least*/
-#define MAX_DCL_LINE_LENGTH        (4*MAX_DCL_SYMBOL-4)
+  /* New values with 7.3-2*/ /* why does max DCL have 4 byte subtracted from it? */
+#if __CRTL_VER >= 70302000 && !defined(__VAX)
+#define MAX_DCL_SYMBOL		(8192)
+#define MAX_DCL_LINE_LENGTH	(4096 - 4)
+#else
+#define MAX_DCL_SYMBOL		(1024)
+#define MAX_DCL_LINE_LENGTH	(1024 - 4)
+#endif
 
 static char *__mystrtolower(char *str)
 {
@@ -137,15 +230,66 @@ static int no_translate_barewords;
 static int tz_updated = 1;
 #endif
 
+/* DECC Features that may need to affect how Perl interprets
+ * displays filename information
+ */
+static int decc_disable_to_vms_logname_translation = 1;
+static int decc_disable_posix_root = 1;
+int decc_efs_case_preserve = 0;
+static int decc_efs_charset = 0;
+static int decc_filename_unix_no_version = 0;
+static int decc_filename_unix_only = 0;
+int decc_filename_unix_report = 0;
+int decc_posix_compliant_pathnames = 0;
+int decc_readdir_dropdotnotype = 0;
+static int vms_process_case_tolerant = 1;
+
+/* bug workarounds if needed */
+int decc_bug_readdir_efs1 = 0;
+int decc_bug_devnull = 0;
+int decc_bug_fgetname = 0;
+int decc_dir_barename = 0;
+
+/* Is this a UNIX file specification?
+ *   No longer a simple check with EFS file specs
+ *   For now, not a full check, but need to
+ *   handle POSIX ^UP^ specifications
+ *   Fixing to handle ^/ cases would require
+ *   changes to many other conversion routines.
+ */
+
+static is_unix_filespec(const char *path)
+{
+int ret_val;
+const char * pch1;
+
+    ret_val = 0;
+    if (strncmp(path,"\"^UP^",5) != 0) {
+	pch1 = strchr(path, '/');
+	if (pch1 != NULL)
+	    ret_val = 1;
+	else {
+
+	    /* If the user wants UNIX files, "." needs to be treated as in UNIX */
+	    if (decc_filename_unix_report || decc_filename_unix_only) {
+	    if (strcmp(path,".") == 0)
+		ret_val = 1;
+	    }
+	}
+    }
+    return ret_val;
+}
+
+
 /* my_maxidx
  * Routine to retrieve the maximum equivalence index for an input
  * logical name.  Some calls to this routine have no knowledge if
  * the variable is a logical or not.  So on error we return a max
  * index of zero.
  */
-/*{{{int my_maxidx(char *lnm) */
+/*{{{int my_maxidx(const char *lnm) */
 static int
-my_maxidx(char *lnm)
+my_maxidx(const char *lnm)
 {
     int status;
     int midx;
@@ -157,7 +301,7 @@ my_maxidx(char *lnm)
     lnmdsc.dsc$w_length = strlen(lnm);
     lnmdsc.dsc$b_dtype = DSC$K_DTYPE_T;
     lnmdsc.dsc$b_class = DSC$K_CLASS_S;
-    lnmdsc.dsc$a_pointer = lnm;
+    lnmdsc.dsc$a_pointer = (char *) lnm; /* Cast ok for read only parameter */
 
     status = sys$trnlnm(&attr, &fildevdsc, &lnmdsc, 0, itlst);
     if ((status & 1) == 0)
@@ -172,7 +316,8 @@ int
 Perl_vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
   struct dsc$descriptor_s **tabvec, unsigned long int flags)
 {
-    char uplnm[LNM$C_NAMLENGTH+1], *cp1, *cp2;
+    const char *cp1;
+    char uplnm[LNM$C_NAMLENGTH+1], *cp2;
     unsigned short int eqvlen, curtab, ivlnm = 0, ivsym = 0, ivenv = 0, secure;
     unsigned long int retsts, attr = LNM$M_CASE_BLIND;
     int midx;
@@ -195,7 +340,7 @@ Perl_vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
     if (!lnm || !eqv || ((idx != 0) && ((idx-1) > PERL_LNM_MAX_ALLOWED_INDEX))) {
       set_errno(EINVAL); set_vaxc_errno(SS$_BADPARAM); return 0;
     }
-    for (cp1 = (char *)lnm, cp2 = uplnm; *cp1; cp1++, cp2++) {
+    for (cp1 = lnm, cp2 = uplnm; *cp1; cp1++, cp2++) {
       *cp2 = _toupper(*cp1);
       if (cp1 - lnm > LNM$C_NAMLENGTH) {
         set_errno(EINVAL); set_vaxc_errno(SS$_IVLOGNAM);
@@ -243,9 +388,9 @@ Perl_vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
           _ckvmssts(lib$sget1_dd(&deflen,&eqvdsc));
           retsts = lib$get_symbol(&lnmdsc,&eqvdsc,&eqvlen,0);
           if (retsts & 1) { 
-            if (eqvlen > 1024) {
+            if (eqvlen > MAX_DCL_SYMBOL) {
               set_errno(EVMSERR); set_vaxc_errno(LIB$_STRTRU);
-              eqvlen = 1024;
+              eqvlen = MAX_DCL_SYMBOL;
 	      /* Special hack--we might be called before the interpreter's */
 	      /* fully initialized, in which case either thr or PL_curcop */
 	      /* might be bogus. We have to check, since ckWARN needs them */
@@ -264,9 +409,9 @@ Perl_vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
       }
       else if (!ivlnm) {
         if ( (idx == 0) && (flags & PERL__TRNENV_JOIN_SEARCHLIST) ) {
-          midx = my_maxidx((char *) lnm);
-          for (idx = 0, cp1 = eqv; idx <= midx; idx++) {
-            lnmlst[1].bufadr = cp1;
+          midx = my_maxidx(lnm);
+          for (idx = 0, cp2 = eqv; idx <= midx; idx++) {
+            lnmlst[1].bufadr = cp2;
             eqvlen = 0;
             retsts = sys$trnlnm(&attr,tabvec[curtab],&lnmdsc,&acmode,lnmlst);
             if (retsts == SS$_IVLOGNAM) { ivlnm = 1; break; }
@@ -281,11 +426,11 @@ Perl_vmstrnenv(const char *lnm, char *eqv, unsigned long int idx,
                    (uplnm[4] == 'I' && !strcmp(uplnm,"SYS$INPUT"))   ||
                    (uplnm[4] == 'E' && !strcmp(uplnm,"SYS$ERROR"))   ||
                    (uplnm[4] == 'C' && !strcmp(uplnm,"SYS$COMMAND")) )  ) {
-              memcpy(eqv,eqv+4,eqvlen-4);
+              memmove(eqv,eqv+4,eqvlen-4);
               eqvlen -= 4;
             }
-            cp1 += eqvlen;
-            *cp1 = '\0';
+            cp2 += eqvlen;
+            *cp2 = '\0';
           }
           if ((retsts == SS$_IVLOGNAM) ||
               (retsts == SS$_NOLOGNAM)) { continue; }
@@ -337,14 +482,15 @@ int Perl_my_trnlnm(pTHX_ const char *lnm, char *eqv, unsigned long int idx)
 char *
 Perl_my_getenv(pTHX_ const char *lnm, bool sys)
 {
+    const char *cp1;
     static char *__my_getenv_eqv = NULL;
-    char uplnm[LNM$C_NAMLENGTH+1], *cp1, *cp2, *eqv;
+    char uplnm[LNM$C_NAMLENGTH+1], *cp2, *eqv;
     unsigned long int idx = 0;
     int trnsuccess, success, secure, saverr, savvmserr;
     int midx, flags;
     SV *tmpsv;
 
-    midx = my_maxidx((char *) lnm) + 1;
+    midx = my_maxidx(lnm) + 1;
 
     if (PL_curinterp) {  /* Perl interpreter running -- may be threaded */
       /* Set up a temporary buffer for the return value; Perl will
@@ -359,14 +505,30 @@ Perl_my_getenv(pTHX_ const char *lnm, bool sys)
         Renew(__my_getenv_eqv,LNM$C_NAMLENGTH*midx+1,char);
       }
       else {
-        New(1380,__my_getenv_eqv,LNM$C_NAMLENGTH*midx+1,char);
+        Newx(__my_getenv_eqv,LNM$C_NAMLENGTH*midx+1,char);
       }
       eqv = __my_getenv_eqv;  
     }
 
-    for (cp1 = (char *) lnm, cp2 = eqv; *cp1; cp1++,cp2++) *cp2 = _toupper(*cp1);
+    for (cp1 = lnm, cp2 = eqv; *cp1; cp1++,cp2++) *cp2 = _toupper(*cp1);
     if (cp1 - lnm == 7 && !strncmp(eqv,"DEFAULT",7)) {
+      int len;
       getcwd(eqv,LNM$C_NAMLENGTH);
+
+      len = strlen(eqv);
+
+      /* Get rid of "000000/ in rooted filespecs */
+      if (len > 7) {
+        char * zeros;
+	zeros = strstr(eqv, "/000000/");
+	if (zeros != NULL) {
+	  int mlen;
+	  mlen = len - (zeros - eqv) - 7;
+	  memmove(zeros, &zeros[7], mlen);
+	  len = len - 7;
+	  eqv[len] = '\0';
+	}
+      }
       return eqv;
     }
     else {
@@ -422,14 +584,15 @@ Perl_my_getenv(pTHX_ const char *lnm, bool sys)
 char *
 Perl_my_getenv_len(pTHX_ const char *lnm, unsigned long *len, bool sys)
 {
-    char *buf, *cp1, *cp2;
+    const char *cp1;
+    char *buf, *cp2;
     unsigned long idx = 0;
     int midx, flags;
     static char *__my_getenv_len_eqv = NULL;
     int secure, saverr, savvmserr;
     SV *tmpsv;
     
-    midx = my_maxidx((char *) lnm) + 1;
+    midx = my_maxidx(lnm) + 1;
 
     if (PL_curinterp) {  /* Perl interpreter running -- may be threaded */
       /* Set up a temporary buffer for the return value; Perl will
@@ -444,15 +607,29 @@ Perl_my_getenv_len(pTHX_ const char *lnm, unsigned long *len, bool sys)
         Renew(__my_getenv_len_eqv,LNM$C_NAMLENGTH*midx+1,char);
       }
       else {
-        New(1381,__my_getenv_len_eqv,LNM$C_NAMLENGTH*midx+1,char);
+        Newx(__my_getenv_len_eqv,LNM$C_NAMLENGTH*midx+1,char);
       }
       buf = __my_getenv_len_eqv;  
     }
 
-    for (cp1 = (char *)lnm, cp2 = buf; *cp1; cp1++,cp2++) *cp2 = _toupper(*cp1);
+    for (cp1 = lnm, cp2 = buf; *cp1; cp1++,cp2++) *cp2 = _toupper(*cp1);
     if (cp1 - lnm == 7 && !strncmp(buf,"DEFAULT",7)) {
+    char * zeros;
+
       getcwd(buf,LNM$C_NAMLENGTH);
       *len = strlen(buf);
+
+      /* Get rid of "000000/ in rooted filespecs */
+      if (*len > 7) {
+      zeros = strstr(buf, "/000000/");
+      if (zeros != NULL) {
+	int mlen;
+	mlen = *len - (zeros - buf) - 7;
+	memmove(zeros, &zeros[7], mlen);
+	*len = *len - 7;
+	buf[*len] = '\0';
+	}
+      }
       return buf;
     }
     else {
@@ -484,6 +661,19 @@ Perl_my_getenv_len(pTHX_ const char *lnm, unsigned long *len, bool sys)
       }
 
       *len = vmstrnenv(lnm,buf,idx,secure ? fildev : NULL,flags);
+
+      /* Get rid of "000000/ in rooted filespecs */
+      if (*len > 7) {
+      char * zeros;
+	zeros = strstr(buf, "/000000/");
+	if (zeros != NULL) {
+	  int mlen;
+	  mlen = *len - (zeros - buf) - 7;
+	  memmove(zeros, &zeros[7], mlen);
+	  *len = *len - 7;
+	  buf[*len] = '\0';
+	}
+      }
 
       /* Discard NOLOGNAM on internal calls since we're often looking
        * for an optional name, and this "error" often shows up as the
@@ -612,7 +802,7 @@ prime_env_iter(void)
       defflags &= ~CLI$M_TRUSTED;
     } while (retsts == LIB$_INVARG && (flags | CLI$M_TRUSTED));
     _ckvmssts(retsts);
-    if (!buf) New(1322,buf,mbxbufsiz + 1,char);
+    if (!buf) Newx(buf,mbxbufsiz + 1,char);
     if (seenhv) SvREFCNT_dec(seenhv);
     seenhv = newHV();
     while (1) {
@@ -671,7 +861,7 @@ prime_env_iter(void)
          * to indicate a zero-length value.  Get the actual value to make sure.
          */
         char lnm[LNM$C_NAMLENGTH+1];
-        char eqv[LNM$C_NAMLENGTH+1];
+        char eqv[MAX_DCL_SYMBOL+1];
         strncpy(lnm, key, keylen);
         int trnlen = vmstrnenv(lnm, eqv, 0, fildev, 0);
         sv = newSVpvn(eqv, strlen(eqv));
@@ -686,7 +876,7 @@ prime_env_iter(void)
     }
     if (cmddsc.dsc$w_length == 14) { /* We just read LNM$FILE_DEV */
       /* get the PPFs for this process, not the subprocess */
-      char *ppfs[] = {"SYS$COMMAND", "SYS$INPUT", "SYS$OUTPUT", "SYS$ERROR", NULL};
+      const char *ppfs[] = {"SYS$COMMAND", "SYS$INPUT", "SYS$OUTPUT", "SYS$ERROR", NULL};
       char eqv[LNM$C_NAMLENGTH+1];
       int trnlen, i;
       for (i = 0; ppfs[i]; i++) {
@@ -718,7 +908,8 @@ prime_env_iter(void)
 int
 Perl_vmssetenv(pTHX_ const char *lnm, const char *eqv, struct dsc$descriptor_s **tabvec)
 {
-    char uplnm[LNM$C_NAMLENGTH], *cp1, *cp2, *c;
+    const char *cp1;
+    char uplnm[LNM$C_NAMLENGTH], *cp2, *c;
     unsigned short int curtab, ivlnm = 0, ivsym = 0, ivenv = 0;
     int nseg = 0, j;
     unsigned long int retsts, usermode = PSL$C_USER;
@@ -734,7 +925,7 @@ Perl_vmssetenv(pTHX_ const char *lnm, const char *eqv, struct dsc$descriptor_s *
         return SS$_IVLOGNAM;
     }
 
-    for (cp1 = (char *)lnm, cp2 = uplnm; *cp1; cp1++, cp2++) {
+    for (cp1 = lnm, cp2 = uplnm; *cp1; cp1++, cp2++) {
       *cp2 = _toupper(*cp1);
       if (cp1 - lnm > LNM$C_NAMLENGTH) {
         set_errno(EINVAL); set_vaxc_errno(SS$_IVLOGNAM);
@@ -799,7 +990,7 @@ Perl_vmssetenv(pTHX_ const char *lnm, const char *eqv, struct dsc$descriptor_s *
 #endif
       }
       else {
-        eqvdsc.dsc$a_pointer = (char *)eqv;
+        eqvdsc.dsc$a_pointer = (char *) eqv; /* cast ok to readonly parameter */
         eqvdsc.dsc$w_length  = strlen(eqv);
         if ((tmpdsc.dsc$a_pointer = tabvec[0]->dsc$a_pointer) &&
             !str$case_blind_compare(&tmpdsc,&clisym)) {
@@ -823,7 +1014,7 @@ Perl_vmssetenv(pTHX_ const char *lnm, const char *eqv, struct dsc$descriptor_s *
               nseg = PERL_LNM_MAX_ALLOWED_INDEX + 1;
 	    }
 
-            New(1382,ilist,nseg+1,struct itmlst_3);
+            Newx(ilist,nseg+1,struct itmlst_3);
             ile = ilist;
             if (!ile) {
 	      set_errno(ENOMEM); set_vaxc_errno(SS$_INSFMEM);
@@ -898,7 +1089,7 @@ Perl_my_setenv(pTHX_ const char *lnm, const char *eqv)
         int i;
         for (i = 0; lnm[i]; i++) uplnm[i] = _toupper(lnm[i]);
         if (!strcmp(uplnm,"DEFAULT")) {
-          if (eqv && *eqv) chdir(eqv);
+          if (eqv && *eqv) my_chdir(eqv);
           return;
         }
     } 
@@ -923,7 +1114,7 @@ Perl_my_setenv(pTHX_ const char *lnm, const char *eqv)
  *  used for redirection of sys$error
  */
 void
-Perl_vmssetuserlnm(pTHX_ char *name, char *eqv)
+Perl_vmssetuserlnm(pTHX_ const char *name, const char *eqv)
 {
     $DESCRIPTOR(d_tab, "LNM$PROCESS");
     struct dsc$descriptor_d d_name = {0,DSC$K_DTYPE_T,DSC$K_CLASS_D,0};
@@ -931,11 +1122,11 @@ Perl_vmssetuserlnm(pTHX_ char *name, char *eqv)
     unsigned char acmode = PSL$C_USER;
     struct itmlst_3 lnmlst[2] = {{0, LNM$_STRING, 0, 0},
                                  {0, 0, 0, 0}};
-    d_name.dsc$a_pointer = name;
+    d_name.dsc$a_pointer = (char *)name; /* Cast OK for read only parameter */
     d_name.dsc$w_length = strlen(name);
 
     lnmlst[0].buflen = strlen(eqv);
-    lnmlst[0].bufadr = eqv;
+    lnmlst[0].bufadr = (char *)eqv; /* Cast OK for read only parameter */
 
     iss = sys$crelnm(&attr,&d_tab,&d_name,&acmode,lnmlst);
     if (!(iss&1)) lib$signal(iss);
@@ -952,6 +1143,8 @@ Perl_vmssetuserlnm(pTHX_ char *name, char *eqv)
  * the case of its string arguments; in order to match the behavior
  * of LOGINOUT et al., alphabetic characters in both arguments must
  *  be upcased by the caller.
+ *
+ * - fix me to call ACM services when available
  */
 char *
 Perl_my_crypt(pTHX_ const char *textpasswd, const char *usrname)
@@ -1004,13 +1197,206 @@ Perl_my_crypt(pTHX_ const char *textpasswd, const char *usrname)
 /*}}}*/
 
 
-static char *mp_do_rmsexpand(pTHX_ char *, char *, int, char *, unsigned);
-static char *mp_do_fileify_dirspec(pTHX_ char *, char *, int);
-static char *mp_do_tovmsspec(pTHX_ char *, char *, int);
+static char *mp_do_rmsexpand(pTHX_ const char *, char *, int, const char *, unsigned);
+static char *mp_do_fileify_dirspec(pTHX_ const char *, char *, int);
+static char *mp_do_tovmsspec(pTHX_ const char *, char *, int);
+
+/* fixup barenames that are directories for internal use.
+ * There have been problems with the consistent handling of UNIX
+ * style directory names when routines are presented with a name that
+ * has no directory delimitors at all.  So this routine will eventually
+ * fix the issue.
+ */
+static char * fixup_bare_dirnames(const char * name)
+{
+  if (decc_disable_to_vms_logname_translation) {
+/* fix me */
+  }
+  return NULL;
+}
+
+/* mp_do_kill_file
+ * A little hack to get around a bug in some implemenation of remove()
+ * that do not know how to delete a directory
+ *
+ * Delete any file to which user has control access, regardless of whether
+ * delete access is explicitly allowed.
+ * Limitations: User must have write access to parent directory.
+ *              Does not block signals or ASTs; if interrupted in midstream
+ *              may leave file with an altered ACL.
+ * HANDLE WITH CARE!
+ */
+/*{{{int mp_do_kill_file(const char *name, int dirflag)*/
+static int
+mp_do_kill_file(pTHX_ const char *name, int dirflag)
+{
+    char *vmsname, *rspec;
+    char *remove_name;
+    unsigned long int jpicode = JPI$_UIC, type = ACL$C_FILE;
+    unsigned long int cxt = 0, aclsts, fndsts, rmsts = -1;
+    struct dsc$descriptor_s fildsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
+    struct myacedef {
+      unsigned char myace$b_length;
+      unsigned char myace$b_type;
+      unsigned short int myace$w_flags;
+      unsigned long int myace$l_access;
+      unsigned long int myace$l_ident;
+    } newace = { sizeof(struct myacedef), ACE$C_KEYID, 0,
+                 ACE$M_READ | ACE$M_WRITE | ACE$M_DELETE | ACE$M_CONTROL, 0},
+      oldace = { sizeof(struct myacedef), ACE$C_KEYID, 0, 0, 0};
+     struct itmlst_3
+       findlst[3] = {{sizeof oldace, ACL$C_FNDACLENT, &oldace, 0},
+                     {sizeof oldace, ACL$C_READACE,   &oldace, 0},{0,0,0,0}},
+       addlst[2] = {{sizeof newace, ACL$C_ADDACLENT, &newace, 0},{0,0,0,0}},
+       dellst[2] = {{sizeof newace, ACL$C_DELACLENT, &newace, 0},{0,0,0,0}},
+       lcklst[2] = {{sizeof newace, ACL$C_WLOCK_ACL, &newace, 0},{0,0,0,0}},
+       ulklst[2] = {{sizeof newace, ACL$C_UNLOCK_ACL, &newace, 0},{0,0,0,0}};
+
+    /* Expand the input spec using RMS, since the CRTL remove() and
+     * system services won't do this by themselves, so we may miss
+     * a file "hiding" behind a logical name or search list. */
+    Newx(vmsname, NAM$C_MAXRSS+1, char);
+    if (do_tovmsspec(name,vmsname,0) == NULL) {
+      Safefree(vmsname);
+      return -1;
+    }
+
+    if (decc_posix_compliant_pathnames) {
+      /* In POSIX mode, we prefer to remove the UNIX name */
+      rspec = vmsname;
+      remove_name = (char *)name;
+    }
+    else {
+      Newx(rspec, NAM$C_MAXRSS+1, char);
+      if (do_rmsexpand(vmsname, rspec, 1, NULL, PERL_RMSEXPAND_M_VMS) == NULL) {
+	Safefree(rspec);
+        Safefree(vmsname);
+	return -1;
+      }
+      Safefree(vmsname);
+      remove_name = rspec;
+    }
+
+#if defined(__CRTL_VER) && __CRTL_VER >= 70000000
+    if (dirflag != 0) {
+	if (decc_dir_barename && decc_posix_compliant_pathnames) {
+	  Newx(remove_name, NAM$C_MAXRSS+1, char);
+	  do_pathify_dirspec(name, remove_name, 0);
+	  if (!rmdir(remove_name)) {
+
+	    Safefree(remove_name);
+	    Safefree(rspec);
+	    return 0;   /* Can we just get rid of it? */
+	  }
+	}
+        else {
+	  if (!rmdir(remove_name)) {
+	    Safefree(rspec);
+	    return 0;   /* Can we just get rid of it? */
+	  }
+	}
+    }
+    else
+#endif
+      if (!remove(remove_name)) {
+	Safefree(rspec);
+	return 0;   /* Can we just get rid of it? */
+      }
+
+    /* If not, can changing protections help? */
+    if (vaxc$errno != RMS$_PRV) {
+      Safefree(rspec);
+      return -1;
+    }
+
+    /* No, so we get our own UIC to use as a rights identifier,
+     * and the insert an ACE at the head of the ACL which allows us
+     * to delete the file.
+     */
+    _ckvmssts(lib$getjpi(&jpicode,0,0,&(oldace.myace$l_ident),0,0));
+    fildsc.dsc$w_length = strlen(rspec);
+    fildsc.dsc$a_pointer = rspec;
+    cxt = 0;
+    newace.myace$l_ident = oldace.myace$l_ident;
+    if (!((aclsts = sys$change_acl(0,&type,&fildsc,lcklst,0,0,0)) & 1)) {
+      switch (aclsts) {
+        case RMS$_FNF: case RMS$_DNF: case SS$_NOSUCHOBJECT:
+          set_errno(ENOENT); break;
+        case RMS$_DIR:
+          set_errno(ENOTDIR); break;
+        case RMS$_DEV:
+          set_errno(ENODEV); break;
+        case RMS$_SYN: case SS$_INVFILFOROP:
+          set_errno(EINVAL); break;
+        case RMS$_PRV:
+          set_errno(EACCES); break;
+        default:
+          _ckvmssts(aclsts);
+      }
+      set_vaxc_errno(aclsts);
+      Safefree(rspec);
+      return -1;
+    }
+    /* Grab any existing ACEs with this identifier in case we fail */
+    aclsts = fndsts = sys$change_acl(0,&type,&fildsc,findlst,0,0,&cxt);
+    if ( fndsts & 1 || fndsts == SS$_ACLEMPTY || fndsts == SS$_NOENTRY
+                    || fndsts == SS$_NOMOREACE ) {
+      /* Add the new ACE . . . */
+      if (!((aclsts = sys$change_acl(0,&type,&fildsc,addlst,0,0,0)) & 1))
+        goto yourroom;
+
+#if defined(__CRTL_VER) && __CRTL_VER >= 70000000
+      if (dirflag != 0)
+	if (decc_dir_barename && decc_posix_compliant_pathnames) {
+	  Newx(remove_name, NAM$C_MAXRSS+1, char);
+	  do_pathify_dirspec(name, remove_name, 0);
+	  rmsts = rmdir(remove_name);
+	  Safefree(remove_name);
+	}
+	else {
+	rmsts = rmdir(remove_name);
+	}
+      else
+#endif
+        rmsts = remove(remove_name);
+      if (rmsts) {
+        /* We blew it - dir with files in it, no write priv for
+         * parent directory, etc.  Put things back the way they were. */
+        if (!((aclsts = sys$change_acl(0,&type,&fildsc,dellst,0,0,0)) & 1))
+          goto yourroom;
+        if (fndsts & 1) {
+          addlst[0].bufadr = &oldace;
+          if (!((aclsts = sys$change_acl(0,&type,&fildsc,addlst,0,0,&cxt)) & 1))
+            goto yourroom;
+        }
+      }
+    }
+
+    yourroom:
+    fndsts = sys$change_acl(0,&type,&fildsc,ulklst,0,0,0);
+    /* We just deleted it, so of course it's not there.  Some versions of
+     * VMS seem to return success on the unlock operation anyhow (after all
+     * the unlock is successful), but others don't.
+     */
+    if (fndsts == RMS$_FNF || fndsts == SS$_NOSUCHOBJECT) fndsts = SS$_NORMAL;
+    if (aclsts & 1) aclsts = fndsts;
+    if (!(aclsts & 1)) {
+      set_errno(EVMSERR);
+      set_vaxc_errno(aclsts);
+      Safefree(rspec);
+      return -1;
+    }
+
+    Safefree(rspec);
+    return rmsts;
+
+}  /* end of kill_file() */
+/*}}}*/
+
 
 /*{{{int do_rmdir(char *name)*/
 int
-Perl_do_rmdir(pTHX_ char *name)
+Perl_do_rmdir(pTHX_ const char *name)
 {
     char dirfile[NAM$C_MAXRSS+1];
     int retval;
@@ -1018,7 +1404,7 @@ Perl_do_rmdir(pTHX_ char *name)
 
     if (do_fileify_dirspec(name,dirfile,0) == NULL) return -1;
     if (flex_stat(dirfile,&st) || !S_ISDIR(st.st_mode)) retval = -1;
-    else retval = kill_file(dirfile);
+    else retval = mp_do_kill_file(aTHX_ dirfile, 1);
     return retval;
 
 }  /* end of do_rmdir */
@@ -1034,7 +1420,7 @@ Perl_do_rmdir(pTHX_ char *name)
  */
 /*{{{int kill_file(char *name)*/
 int
-Perl_kill_file(pTHX_ char *name)
+Perl_kill_file(pTHX_ const char *name)
 {
     char vmsname[NAM$C_MAXRSS+1], rspec[NAM$C_MAXRSS+1];
     unsigned long int jpicode = JPI$_UIC, type = ACL$C_FILE;
@@ -1135,7 +1521,7 @@ Perl_kill_file(pTHX_ char *name)
 
 /*{{{int my_mkdir(char *,Mode_t)*/
 int
-Perl_my_mkdir(pTHX_ char *dir, Mode_t mode)
+Perl_my_mkdir(pTHX_ const char *dir, Mode_t mode)
 {
   STRLEN dirlen = strlen(dir);
 
@@ -1158,19 +1544,32 @@ Perl_my_mkdir(pTHX_ char *dir, Mode_t mode)
 
 /*{{{int my_chdir(char *)*/
 int
-Perl_my_chdir(pTHX_ char *dir)
+Perl_my_chdir(pTHX_ const char *dir)
 {
   STRLEN dirlen = strlen(dir);
 
   /* zero length string sometimes gives ACCVIO */
   if (dirlen == 0) return -1;
+  const char *dir1;
+
+  /* Perl is passing the output of the DCL SHOW DEFAULT with leading spaces.
+   * This does not work if DECC$EFS_CHARSET is active.  Hack it here
+   * so that existing scripts do not need to be changed.
+   */
+  dir1 = dir;
+  while ((dirlen > 0) && (*dir1 == ' ')) {
+    dir1++;
+    dirlen--;
+  }
 
   /* some versions of CRTL chdir() doesn't tolerate trailing /, since
    * that implies
    * null file name/type.  However, it's commonplace under Unix,
    * so we'll allow it for a gain in portability.
+   *
+   * - Preview- '/' will be valid soon on VMS
    */
-  if (dir[dirlen-1] == '/') {
+  if ((dirlen > 1) && (dir1[dirlen-1] == '/')) {
     char *newdir = savepvn(dir,dirlen-1);
     int ret = chdir(newdir);
     Safefree(newdir);
@@ -1190,8 +1589,11 @@ my_tmpfile(void)
 
   if ((fp = tmpfile())) return fp;
 
-  New(1323,cp,L_tmpnam+24,char);
-  strcpy(cp,"Sys$Scratch:");
+  Newx(cp,L_tmpnam+24,char);
+  if (decc_filename_unix_only == 0)
+    strcpy(cp,"Sys$Scratch:");
+  else
+    strcpy(cp,"/tmp/");
   tmpnam(cp+strlen(cp));
   strcat(cp,".Perltmp");
   fp = fopen(cp,"w+","fop=dlt");
@@ -1301,7 +1703,6 @@ Perl_sig_to_vmscondition(int sig)
     return sig_code[sig];
 }
 
-
 int
 Perl_my_kill(int pid, int sig)
 {
@@ -1312,9 +1713,48 @@ Perl_my_kill(int pid, int sig)
                      struct dsc$descriptor_s *prcname,
                      unsigned int code);
 
+     /* sig 0 means validate the PID */
+    /*------------------------------*/
+    if (sig == 0) {
+	const unsigned long int jpicode = JPI$_PID;
+	pid_t ret_pid;
+	int status;
+        status = lib$getjpi(&jpicode, &pid, NULL, &ret_pid, NULL, NULL);
+	if ($VMS_STATUS_SUCCESS(status))
+	   return 0;
+	switch (status) {
+        case SS$_NOSUCHNODE:
+        case SS$_UNREACHABLE:
+	case SS$_NONEXPR:
+	   errno = ESRCH;
+	   break;
+	case SS$_NOPRIV:
+	   errno = EPERM;
+	   break;
+	default:
+	   errno = EVMSERR;
+	}
+	vaxc$errno=status;
+	return -1;
+    }
+
     code = Perl_sig_to_vmscondition(sig);
 
-    if (!pid || !code) {
+    if (!code) {
+	SETERRNO(EINVAL, SS$_BADPARAM);
+        return -1;
+    }
+
+    /* Fixme: Per official UNIX specification: If pid = 0, or negative then
+     * signals are to be sent to multiple processes.
+     *  pid = 0 - all processes in group except ones that the system exempts
+     *  pid = -1 - all processes except ones that the system exempts
+     *  pid = -n - all processes in group (abs(n)) except ... 
+     * For now, just report as not supported.
+     */
+
+    if (pid <= 0) {
+	SETERRNO(ENOTSUP, SS$_UNSUPPORTED);
         return -1;
     }
 
@@ -1340,6 +1780,332 @@ Perl_my_kill(int pid, int sig)
 }
 #endif
 
+/* Routine to convert a VMS status code to a UNIX status code.
+** More tricky than it appears because of conflicting conventions with
+** existing code.
+**
+** VMS status codes are a bit mask, with the least significant bit set for
+** success.
+**
+** Special UNIX status of EVMSERR indicates that no translation is currently
+** available, and programs should check the VMS status code.
+**
+** Programs compiled with _POSIX_EXIT have a special encoding that requires
+** decoding.
+*/
+
+#ifndef C_FACILITY_NO
+#define C_FACILITY_NO 0x350000
+#endif
+#ifndef DCL_IVVERB
+#define DCL_IVVERB 0x38090
+#endif
+
+int Perl_vms_status_to_unix(int vms_status, int child_flag)
+{
+int facility;
+int fac_sp;
+int msg_no;
+int msg_status;
+int unix_status;
+
+  /* Assume the best or the worst */
+  if (vms_status & STS$M_SUCCESS)
+    unix_status = 0;
+  else
+    unix_status = EVMSERR;
+
+  msg_status = vms_status & ~STS$M_CONTROL;
+
+  facility = vms_status & STS$M_FAC_NO;
+  fac_sp = vms_status & STS$M_FAC_SP;
+  msg_no = vms_status & (STS$M_MSG_NO | STS$M_SEVERITY);
+
+  if (((facility == 0) || (fac_sp == 0))  && (child_flag == 0)) {
+    switch(msg_no) {
+    case SS$_NORMAL:
+	unix_status = 0;
+	break;
+    case SS$_ACCVIO:
+	unix_status = EFAULT;
+	break;
+    case SS$_DEVOFFLINE:
+	unix_status = EBUSY;
+	break;
+    case SS$_CLEARED:
+	unix_status = ENOTCONN;
+	break;
+    case SS$_IVCHAN:
+    case SS$_IVLOGNAM:
+    case SS$_BADPARAM:
+    case SS$_IVLOGTAB:
+    case SS$_NOLOGNAM:
+    case SS$_NOLOGTAB:
+    case SS$_INVFILFOROP:
+    case SS$_INVARG:
+    case SS$_NOSUCHID:
+    case SS$_IVIDENT:
+	unix_status = EINVAL;
+	break;
+    case SS$_UNSUPPORTED:
+	unix_status = ENOTSUP;
+	break;
+    case SS$_FILACCERR:
+    case SS$_NOGRPPRV:
+    case SS$_NOSYSPRV:
+	unix_status = EACCES;
+	break;
+    case SS$_DEVICEFULL:
+	unix_status = ENOSPC;
+	break;
+    case SS$_NOSUCHDEV:
+	unix_status = ENODEV;
+	break;
+    case SS$_NOSUCHFILE:
+    case SS$_NOSUCHOBJECT:
+	unix_status = ENOENT;
+	break;
+    case SS$_ABORT:				    /* Fatal case */
+    case ((SS$_ABORT & STS$M_COND_ID) | STS$K_ERROR): /* Error case */
+    case ((SS$_ABORT & STS$M_COND_ID) | STS$K_WARNING): /* Warning case */
+	unix_status = EINTR;
+	break;
+    case SS$_BUFFEROVF:
+	unix_status = E2BIG;
+	break;
+    case SS$_INSFMEM:
+	unix_status = ENOMEM;
+	break;
+    case SS$_NOPRIV:
+	unix_status = EPERM;
+	break;
+    case SS$_NOSUCHNODE:
+    case SS$_UNREACHABLE:
+	unix_status = ESRCH;
+	break;
+    case SS$_NONEXPR:
+	unix_status = ECHILD;
+	break;
+    default:
+	if ((facility == 0) && (msg_no < 8)) {
+	  /* These are not real VMS status codes so assume that they are
+          ** already UNIX status codes
+	  */
+	  unix_status = msg_no;
+	  break;
+	}
+    }
+  }
+  else {
+    /* Translate a POSIX exit code to a UNIX exit code */
+    if ((facility == C_FACILITY_NO) && ((msg_no & 0xA000) == 0xA000))  {
+	unix_status = (msg_no & 0x07F8) >> 3;
+    }
+    else {
+
+	 /* Documented traditional behavior for handling VMS child exits */
+	/*--------------------------------------------------------------*/
+	if (child_flag != 0) {
+
+	     /* Success / Informational return 0 */
+	    /*----------------------------------*/
+	    if (msg_no & STS$K_SUCCESS)
+		return 0;
+
+	     /* Warning returns 1 */
+	    /*-------------------*/
+	    if ((msg_no & (STS$K_ERROR | STS$K_SEVERE)) == 0)
+	    	return 1;
+
+	     /* Everything else pass through the severity bits */
+	    /*------------------------------------------------*/
+	    return (msg_no & STS$M_SEVERITY);
+	}
+
+	 /* Normal VMS status to ERRNO mapping attempt */
+	/*--------------------------------------------*/
+	switch(msg_status) {
+	/* case RMS$_EOF: */ /* End of File */
+	case RMS$_FNF:	/* File Not Found */
+	case RMS$_DNF:	/* Dir Not Found */
+		unix_status = ENOENT;
+		break;
+	case RMS$_RNF:	/* Record Not Found */
+		unix_status = ESRCH;
+		break;
+	case RMS$_DIR:
+		unix_status = ENOTDIR;
+		break;
+	case RMS$_DEV:
+		unix_status = ENODEV;
+		break;
+	case RMS$_IFI:
+	case RMS$_FAC:
+	case RMS$_ISI:
+		unix_status = EBADF;
+		break;
+	case RMS$_FEX:
+		unix_status = EEXIST;
+		break;
+	case RMS$_SYN:
+	case RMS$_FNM:
+	case LIB$_INVSTRDES:
+	case LIB$_INVARG:
+	case LIB$_NOSUCHSYM:
+	case LIB$_INVSYMNAM:
+	case DCL_IVVERB:
+		unix_status = EINVAL;
+		break;
+	case CLI$_BUFOVF:
+	case RMS$_RTB:
+	case CLI$_TKNOVF:
+	case CLI$_RSLOVF:
+		unix_status = E2BIG;
+		break;
+	case RMS$_PRV:	/* No privilege */
+	case RMS$_ACC:	/* ACP file access failed */
+	case RMS$_WLK:	/* Device write locked */
+		unix_status = EACCES;
+		break;
+	/* case RMS$_NMF: */  /* No more files */
+	}
+    }
+  }
+
+  return unix_status;
+} 
+
+/* Try to guess at what VMS error status should go with a UNIX errno
+ * value.  This is hard to do as there could be many possible VMS
+ * error statuses that caused the errno value to be set.
+ */
+
+int Perl_unix_status_to_vms(int unix_status)
+{
+int test_unix_status;
+
+     /* Trivial cases first */
+    /*---------------------*/
+    if (unix_status == EVMSERR)
+	return vaxc$errno;
+
+     /* Is vaxc$errno sane? */
+    /*---------------------*/
+    test_unix_status = Perl_vms_status_to_unix(vaxc$errno, 0);
+    if (test_unix_status == unix_status)
+	return vaxc$errno;
+
+     /* If way out of range, must be VMS code already */
+    /*-----------------------------------------------*/
+    if (unix_status > EVMSERR)
+	return unix_status;
+
+     /* If out of range, punt */
+    /*-----------------------*/
+    if (unix_status > __ERRNO_MAX)
+	return SS$_ABORT;
+
+
+     /* Ok, now we have to do it the hard way. */
+    /*----------------------------------------*/
+    switch(unix_status) {
+    case 0:	return SS$_NORMAL;
+    case EPERM: return SS$_NOPRIV;
+    case ENOENT: return SS$_NOSUCHOBJECT;
+    case ESRCH: return SS$_UNREACHABLE;
+    case EINTR: return SS$_ABORT;
+    /* case EIO: */
+    /* case ENXIO:  */
+    case E2BIG: return SS$_BUFFEROVF;
+    /* case ENOEXEC */
+    case EBADF: return RMS$_IFI;
+    case ECHILD: return SS$_NONEXPR;
+    /* case EAGAIN */
+    case ENOMEM: return SS$_INSFMEM;
+    case EACCES: return SS$_FILACCERR;
+    case EFAULT: return SS$_ACCVIO;
+    /* case ENOTBLK */
+    case EBUSY: return SS$_DEVOFFLINE;
+    case EEXIST: return RMS$_FEX;
+    /* case EXDEV */
+    case ENODEV: return SS$_NOSUCHDEV;
+    case ENOTDIR: return RMS$_DIR;
+    /* case EISDIR */
+    case EINVAL: return SS$_INVARG;
+    /* case ENFILE */
+    /* case EMFILE */
+    /* case ENOTTY */
+    /* case ETXTBSY */
+    /* case EFBIG */
+    case ENOSPC: return SS$_DEVICEFULL;
+    case ESPIPE: return LIB$_INVARG;
+    /* case EROFS: */
+    /* case EMLINK: */
+    /* case EPIPE: */
+    /* case EDOM */
+    case ERANGE: return LIB$_INVARG;
+    /* case EWOULDBLOCK */
+    /* case EINPROGRESS */
+    /* case EALREADY */
+    /* case ENOTSOCK */
+    /* case EDESTADDRREQ */
+    /* case EMSGSIZE */
+    /* case EPROTOTYPE */
+    /* case ENOPROTOOPT */
+    /* case EPROTONOSUPPORT */
+    /* case ESOCKTNOSUPPORT */
+    /* case EOPNOTSUPP */
+    /* case EPFNOSUPPORT */
+    /* case EAFNOSUPPORT */
+    /* case EADDRINUSE */
+    /* case EADDRNOTAVAIL */
+    /* case ENETDOWN */
+    /* case ENETUNREACH */
+    /* case ENETRESET */
+    /* case ECONNABORTED */
+    /* case ECONNRESET */
+    /* case ENOBUFS */
+    /* case EISCONN */
+    case ENOTCONN: return SS$_CLEARED;
+    /* case ESHUTDOWN */
+    /* case ETOOMANYREFS */
+    /* case ETIMEDOUT */
+    /* case ECONNREFUSED */
+    /* case ELOOP */
+    /* case ENAMETOOLONG */
+    /* case EHOSTDOWN */
+    /* case EHOSTUNREACH */
+    /* case ENOTEMPTY */
+    /* case EPROCLIM */
+    /* case EUSERS  */
+    /* case EDQUOT  */
+    /* case ENOMSG  */
+    /* case EIDRM */
+    /* case EALIGN */
+    /* case ESTALE */
+    /* case EREMOTE */
+    /* case ENOLCK */
+    /* case ENOSYS */
+    /* case EFTYPE */
+    /* case ECANCELED */
+    /* case EFAIL */
+    /* case EINPROG */
+    case ENOTSUP:
+	return SS$_UNSUPPORTED;
+    /* case EDEADLK */
+    /* case ENWAIT */
+    /* case EILSEQ */
+    /* case EBADCAT */
+    /* case EBADMSG */
+    /* case EABANDONED */
+    default:
+	return SS$_ABORT; /* punt */
+    }
+
+  return SS$_ABORT; /* Should not get here */
+} 
+
+
 /* default piping mailbox size */
 #define PERL_BUFSIZ        512
 
@@ -1351,7 +2117,8 @@ create_mbx(pTHX_ unsigned short int *chan, struct dsc$descriptor_s *namdsc)
   static unsigned long int syssize = 0;
   unsigned long int dviitm = DVI$_DEVNAM;
   char csize[LNM$C_NAMLENGTH+1];
-  
+  int sts;
+
   if (!syssize) {
     unsigned long syiitm = SYI$_MAXBUF;
     /*
@@ -1373,9 +2140,9 @@ create_mbx(pTHX_ unsigned short int *chan, struct dsc$descriptor_s *namdsc)
   if (mbxbufsiz < 128) mbxbufsiz = 128;
   if (mbxbufsiz > syssize) mbxbufsiz = syssize;
 
-  _ckvmssts(sys$crembx(0,chan,mbxbufsiz,mbxbufsiz,0,0,0));
+  _ckvmssts(sts = sys$crembx(0,chan,mbxbufsiz,mbxbufsiz,0,0,0));
 
-  _ckvmssts(lib$getdvi(&dviitm, chan, NULL, NULL, namdsc, &namdsc->dsc$w_length));
+  _ckvmssts(sts = lib$getdvi(&dviitm, chan, NULL, NULL, namdsc, &namdsc->dsc$w_length));
   namdsc->dsc$a_pointer[namdsc->dsc$w_length] = '\0';
 
 }  /* end of create_mbx() */
@@ -1525,14 +2292,14 @@ pipe_exit_routine(pTHX)
 
     while (info) {
       int need_eof;
-      _ckvmssts(sys$setast(0));
+      _ckvmssts_noperl(sys$setast(0));
       if (info->in && !info->in->shut_on_empty) {
-        _ckvmssts(sys$qio(0,info->in->chan_in,IO$_WRITEOF,0,0,0,
+        _ckvmssts_noperl(sys$qio(0,info->in->chan_in,IO$_WRITEOF,0,0,0,
                           0, 0, 0, 0, 0, 0));
         info->waiting = 1;
         did_stuff = 1;
       }
-      _ckvmssts(sys$setast(1));
+      _ckvmssts_noperl(sys$setast(1));
       info = info->next;
     }
 
@@ -1543,11 +2310,11 @@ pipe_exit_routine(pTHX)
 
         info = open_pipes;
         while (info) {
-          _ckvmssts(sys$setast(0));
+          _ckvmssts_noperl(sys$setast(0));
           if (info->waiting && info->done) 
                 info->waiting = 0;
           nwait += info->waiting;
-          _ckvmssts(sys$setast(1));
+          _ckvmssts_noperl(sys$setast(1));
           info = info->next;
         }
         if (!nwait) break;
@@ -1557,13 +2324,13 @@ pipe_exit_routine(pTHX)
     did_stuff = 0;
     info = open_pipes;
     while (info) {
-      _ckvmssts(sys$setast(0));
+      _ckvmssts_noperl(sys$setast(0));
       if (!info->done) { /* Tap them gently on the shoulder . . .*/
         sts = sys$forcex(&info->pid,0,&abort);
-        if (!(sts&1) && sts != SS$_NONEXPR) _ckvmssts(sts); 
+        if (!(sts&1) && sts != SS$_NONEXPR) _ckvmssts_noperl(sts); 
         did_stuff = 1;
       }
-      _ckvmssts(sys$setast(1));
+      _ckvmssts_noperl(sys$setast(1));
       info = info->next;
     }
 
@@ -1574,11 +2341,11 @@ pipe_exit_routine(pTHX)
 
         info = open_pipes;
         while (info) {
-          _ckvmssts(sys$setast(0));
+          _ckvmssts_noperl(sys$setast(0));
           if (info->waiting && info->done) 
                 info->waiting = 0;
           nwait += info->waiting;
-          _ckvmssts(sys$setast(1));
+          _ckvmssts_noperl(sys$setast(1));
           info = info->next;
         }
         if (!nwait) break;
@@ -1587,12 +2354,12 @@ pipe_exit_routine(pTHX)
 
     info = open_pipes;
     while (info) {
-      _ckvmssts(sys$setast(0));
+      _ckvmssts_noperl(sys$setast(0));
       if (!info->done) {  /* We tried to be nice . . . */
         sts = sys$delprc(&info->pid,0);
-        if (!(sts&1) && sts != SS$_NONEXPR) _ckvmssts(sts); 
+        if (!(sts&1) && sts != SS$_NONEXPR) _ckvmssts_noperl(sts); 
       }
-      _ckvmssts(sys$setast(1));
+      _ckvmssts_noperl(sys$setast(1));
       info = info->next;
     }
 
@@ -1616,6 +2383,7 @@ popen_completion_ast(pInfo info)
 {
   pInfo i = open_pipes;
   int iss;
+  int sts;
   pXpipe x;
 
   info->completion &= 0x0FFFFFFF; /* strip off "control" field */
@@ -1676,7 +2444,7 @@ popen_completion_ast(pInfo info)
 
 }
 
-static unsigned long int setup_cmddsc(pTHX_ char *cmd, int check_img, int *suggest_quote, struct dsc$descriptor_s **pvmscmd);
+static unsigned long int setup_cmddsc(pTHX_ const char *cmd, int check_img, int *suggest_quote, struct dsc$descriptor_s **pvmscmd);
 static void vms_execfree(struct dsc$descriptor_s *vmscmd);
 
 /*
@@ -1725,7 +2493,7 @@ popen_translate(pTHX_ char *logical, char *result)
 */
     ifi  = 0;
     if (result[0] == 0x1b && result[1] == 0x00) {
-        memcpy(&ifi,result+2,2);
+        memmove(&ifi,result+2,2);
         strcpy(result,result+4);
     }
     return ifi;     /* this is the RMS internal file id */
@@ -1757,7 +2525,8 @@ pipe_tochild_setup(pTHX_ char *rmbx, char *wmbx)
     unsigned int dviitm = DVI$_DEVBUFSIZ;
     int j, n;
 
-    New(1368, p, 1, Pipe);
+    n = sizeof(Pipe);
+    _ckvmssts(lib$get_vm(&n, &p));
 
     create_mbx(aTHX_ &p->chan_in , &d_mbx1);
     create_mbx(aTHX_ &p->chan_out, &d_mbx2);
@@ -1802,6 +2571,7 @@ pipe_tochild1_ast(pPipe p)
     pCBuf b = p->curr;
     int iss = p->iosb.status;
     int eof = (iss == SS$_ENDOFFILE);
+    int sts;
 #ifdef PERL_IMPLICIT_CONTEXT
     pTHX = p->thx;
 #endif
@@ -1817,7 +2587,7 @@ pipe_tochild1_ast(pPipe p)
 
         b->eof  = eof;
         b->size = p->iosb.count;
-        _ckvmssts(lib$insqhi(b, &p->wait));
+        _ckvmssts(sts = lib$insqhi(b, &p->wait));
         if (p->need_wake) {
             p->need_wake = FALSE;
             _ckvmssts(sys$dclast(pipe_tochild2_ast,p,0));
@@ -1926,12 +2696,14 @@ pipe_infromchild_setup(pTHX_ char *rmbx, char *wmbx)
                                       DSC$K_CLASS_S, mbx2};
     unsigned int dviitm = DVI$_DEVBUFSIZ;
 
-    New(1367, p, 1, Pipe);
+    int n = sizeof(Pipe);
+    _ckvmssts(lib$get_vm(&n, &p));
     create_mbx(aTHX_ &p->chan_in , &d_mbx1);
     create_mbx(aTHX_ &p->chan_out, &d_mbx2);
 
     _ckvmssts(lib$getdvi(&dviitm, &p->chan_in, 0, &p->bufsize));
-    New(1367, p->buf, p->bufsize, char);
+    n = p->bufsize * sizeof(char);
+    _ckvmssts(lib$get_vm(&n, &p->buf));
     p->shut_on_empty = FALSE;
     p->info   = 0;
     p->type   = 0;
@@ -2035,6 +2807,7 @@ pipe_mbxtofd_setup(pTHX_ int fd, char *out)
     struct stat s;
     struct dsc$descriptor_s d_mbx = {sizeof mbx, DSC$K_DTYPE_T,
                                       DSC$K_CLASS_S, mbx};
+    int n = sizeof(Pipe);
 
     /* things like terminals and mbx's don't need this filter */
     if (fd && fstat(fd,&s) == 0) {
@@ -2049,11 +2822,12 @@ pipe_mbxtofd_setup(pTHX_ int fd, char *out)
         }
     }
 
-    New(1366, p, 1, Pipe);
+    _ckvmssts(lib$get_vm(&n, &p));
     p->fd_out = dup(fd);
     create_mbx(aTHX_ &p->chan_in, &d_mbx);
     _ckvmssts(lib$getdvi(&dviitm, &p->chan_in, 0, &p->bufsize));
-    New(1366, p->buf, p->bufsize+1, char);
+    n = (p->bufsize+1) * sizeof(char);
+    _ckvmssts(lib$get_vm(&n, &p->buf));
     p->shut_on_empty = FALSE;
     p->retry = 0;
     p->info  = 0;
@@ -2129,7 +2903,7 @@ free_pipelocs(pTHX_ void *head)
     p = *pHead;
     while (p) {
         pnext = p->next;
-        Safefree(p);
+        PerlMem_free(p);
         p = pnext;
     }
     *pHead = 0;
@@ -2153,7 +2927,7 @@ store_pipelocs(pTHX)
 
 /*  the . directory from @INC comes last */
 
-    New(1370,p,1,PLOC);
+    p = (pPLOC) PerlMem_malloc(sizeof(PLOC));
     p->next = head_PLOC;
     head_PLOC = p;
     strcpy(p->dir,"./");
@@ -2167,10 +2941,23 @@ store_pipelocs(pTHX)
 #endif
         strcpy(temp, PL_origargv[0]);
         x = strrchr(temp,']');
-        if (x) x[1] = '\0';
+	if (x == NULL) {
+	x = strrchr(temp,'>');
+	  if (x == NULL) {
+	    /* It could be a UNIX path */
+	    x = strrchr(temp,'/');
+	  }
+	}
+	if (x)
+	  x[1] = '\0';
+	else {
+	  /* Got a bare name, so use default directory */
+	  temp[0] = '.';
+	  temp[1] = '\0';
+	}
 
         if ((unixdir = tounixpath(temp, Nullch)) != Nullch) {
-            New(1370,p,1,PLOC);
+            p = (pPLOC) PerlMem_malloc(sizeof(PLOC));
             p->next = head_PLOC;
             head_PLOC = p;
             strncpy(p->dir,unixdir,sizeof(p->dir)-1);
@@ -2194,7 +2981,7 @@ store_pipelocs(pTHX)
         if ((unixdir = tounixpath(dir, Nullch)) == Nullch)
             continue;
 
-        New(1370,p,1,PLOC);
+        p = (pPLOC) PerlMem_malloc(sizeof(PLOC));
         p->next = head_PLOC;
         head_PLOC = p;
         strncpy(p->dir,unixdir,sizeof(p->dir)-1);
@@ -2205,7 +2992,7 @@ store_pipelocs(pTHX)
 
 #ifdef ARCHLIB_EXP
     if ((unixdir = tounixpath(ARCHLIB_EXP, Nullch)) != Nullch) {
-        New(1370,p,1,PLOC);
+        p = (pPLOC) PerlMem_malloc(sizeof(PLOC));
         p->next = head_PLOC;
         head_PLOC = p;
         strncpy(p->dir,unixdir,sizeof(p->dir)-1);
@@ -2263,7 +3050,8 @@ vmspipe_tempfile(pTHX)
     char file[NAM$C_MAXRSS+1];
     FILE *fp;
     static int index = 0;
-    stat_t s0, s1;
+    Stat_t s0, s1;
+    int cmp_result;
 
     /* create a tempfile */
 
@@ -2278,15 +3066,29 @@ vmspipe_tempfile(pTHX)
     */
 
     index++;
-    sprintf(file,"sys$scratch:perlpipe_%08.8x_%d.com",mypid,index);
-    fp = fopen(file,"w");
-    if (!fp) {
+    if (!decc_filename_unix_only) {
+      sprintf(file,"sys$scratch:perlpipe_%08.8x_%d.com",mypid,index);
+      fp = fopen(file,"w");
+      if (!fp) {
         sprintf(file,"sys$login:perlpipe_%08.8x_%d.com",mypid,index);
         fp = fopen(file,"w");
         if (!fp) {
             sprintf(file,"sys$disk:[]perlpipe_%08.8x_%d.com",mypid,index);
             fp = fopen(file,"w");
-        }
+	}
+      }
+     }
+     else {
+      sprintf(file,"/tmp/perlpipe_%08.8x_%d.com",mypid,index);
+      fp = fopen(file,"w");
+      if (!fp) {
+	sprintf(file,"/sys$login/perlpipe_%08.8x_%d.com",mypid,index);
+	fp = fopen(file,"w");
+	if (!fp) {
+	  sprintf(file,"./perlpipe_%08.8x_%d.com",mypid,index);
+	  fp = fopen(file,"w");
+	}
+      }
     }
     if (!fp) return 0;  /* we're hosed */
 
@@ -2316,17 +3118,21 @@ vmspipe_tempfile(pTHX)
     fsync(fileno(fp));
 
     fgetname(fp, file, 1);
-    fstat(fileno(fp), &s0);
+    fstat(fileno(fp), (struct stat *)&s0);
     fclose(fp);
 
+    if (decc_filename_unix_only)
+	do_tounixspec(file, file, 0);
     fp = fopen(file,"r","shr=get");
     if (!fp) return 0;
-    fstat(fileno(fp), &s1);
+    fstat(fileno(fp), (struct stat *)&s1);
 
-    if (s0.st_ino[0] != s1.st_ino[0] ||
-        s0.st_ino[1] != s1.st_ino[1] ||
-        s0.st_ino[2] != s1.st_ino[2] ||
-        s0.st_ctime  != s1.st_ctime  )  {
+    #if defined(_USE_STD_STAT)
+      cmp_result = s0.crtl_stat.st_ino != s1.crtl_stat.st_ino;
+    #else
+      cmp_result = memcmp(s0.crtl_stat.st_ino, s1.crtl_stat.st_ino, 6);
+    #endif
+    if ((cmp_result != 0) && (s0.st_ctime != s1.st_ctime))  {
         fclose(fp);
         return 0;
     }
@@ -2337,7 +3143,7 @@ vmspipe_tempfile(pTHX)
 
 
 static PerlIO *
-safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
+safe_popen(pTHX_ const char *cmd, const char *in_mode, int *psts)
 {
     static int handler_set_up = FALSE;
     unsigned long int sts, flags = CLI$M_NOWAIT;
@@ -2346,12 +3152,12 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
      * environment.  Hence we've switched to LOCAL symbol table.
      */
     unsigned int table = LIB$K_CLI_LOCAL_SYM;
-    int j, wait = 0;
+    int j, wait = 0, n;
     char *p, mode[10], symbol[MAX_DCL_SYMBOL+1], *vmspipe;
     char in[512], out[512], err[512], mbx[512];
     FILE *tpipe = 0;
     char tfilebuf[NAM$C_MAXRSS+1];
-    pInfo info;
+    pInfo info = NULL;
     char cmd_sym_name[20];
     struct dsc$descriptor_s d_symbol= {0, DSC$K_DTYPE_T,
                                       DSC$K_CLASS_S, symbol};
@@ -2438,7 +3244,8 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
       *psts = sts;
       return Nullfp; 
     }
-    New(1301,info,1,Info);
+    n = sizeof(Info);
+    _ckvmssts(lib$get_vm(&n, &info));
         
     strcpy(mode,in_mode);
     info->mode = *mode;
@@ -2492,9 +3299,14 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
                 if (!done) _ckvmssts(sys$waitfr(pipe_ef));
             }
 
-            if (info->out->buf) Safefree(info->out->buf);
-            Safefree(info->out);
-            Safefree(info);
+            if (info->out->buf) {
+                n = info->out->bufsize * sizeof(char);
+                _ckvmssts(lib$free_vm(&n, &info->out->buf));
+            }
+            n = sizeof(Pipe);
+            _ckvmssts(lib$free_vm(&n, &info->out));
+            n = sizeof(Info);
+            _ckvmssts(lib$free_vm(&n, &info));
             *psts = RMS$_FNF;
             return Nullfp;
         }
@@ -2524,7 +3336,7 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
 
         info->in = pipe_tochild_setup(aTHX_ in,mbx);
         if (!info->useFILE) {
-        info->fp  = PerlIO_open(mbx, mode);
+	    info->fp  = PerlIO_open(mbx, mode);
         } else {
             info->fp = (PerlIO *) freopen(mbx, mode, stdout);
             Perl_vmssetuserlnm(aTHX_ "SYS$OUTPUT",mbx);
@@ -2551,9 +3363,14 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
                 if (!done) _ckvmssts(sys$waitfr(pipe_ef));
             }
 
-            if (info->in->buf) Safefree(info->in->buf);
-            Safefree(info->in);
-            Safefree(info);
+            if (info->in->buf) {
+                n = info->in->bufsize * sizeof(char);
+                _ckvmssts(lib$free_vm(&n, &info->in->buf));
+            }
+            n = sizeof(Pipe);
+            _ckvmssts(lib$free_vm(&n, &info->in));
+            n = sizeof(Info);
+            _ckvmssts(lib$free_vm(&n, &info));
             *psts = RMS$_FNF;
             return Nullfp;
         }
@@ -2589,9 +3406,6 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
     d_symbol.dsc$w_length = strlen(symbol);
     _ckvmssts(lib$set_symbol(&d_sym_out, &d_symbol, &table));
 
-    p = vmscmd->dsc$a_pointer;
-    while (*p && *p != '\n') p++;
-    *p = '\0';                                  /* truncate on \n */
     p = vmscmd->dsc$a_pointer;
     while (*p == ' ' || *p == '\t') p++;        /* remove leading whitespace */
     if (*p == '$') p++;                         /* remove leading $ */
@@ -2655,7 +3469,9 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
              if (!done) _ckvmssts(sys$waitfr(pipe_ef));
          }
         *psts = info->completion;
-        my_pclose(info->fp);
+/* Caller thinks it is open and tries to close it. */
+/* This causes some problems, as it changes the error status */
+/*        my_pclose(info->fp); */
     } else { 
         *psts = SS$_NORMAL;
     }
@@ -2665,7 +3481,7 @@ safe_popen(pTHX_ char *cmd, char *in_mode, int *psts)
 
 /*{{{  PerlIO *my_popen(char *cmd, char *mode)*/
 PerlIO *
-Perl_my_popen(pTHX_ char *cmd, char *mode)
+Perl_my_popen(pTHX_ const char *cmd, const char *mode)
 {
     int sts;
     TAINT_ENV();
@@ -2681,7 +3497,7 @@ I32 Perl_my_pclose(pTHX_ PerlIO *fp)
 {
     pInfo info, last = NULL;
     unsigned long int retsts;
-    int done, iss;
+    int done, iss, n;
     
     for (info = open_pipes; info != NULL; last = info, info = info->next)
         if (info->fp == fp) break;
@@ -2701,7 +3517,7 @@ I32 Perl_my_pclose(pTHX_ PerlIO *fp)
      */
      if (info->fp) {
         if (!info->useFILE) 
-     PerlIO_flush(info->fp);   /* first, flush data */
+            PerlIO_flush(info->fp);   /* first, flush data */
         else 
             fflush((FILE *)info->fp);
     }
@@ -2724,7 +3540,7 @@ I32 Perl_my_pclose(pTHX_ PerlIO *fp)
     _ckvmssts(sys$setast(1));
     if (info->fp) {
      if (!info->useFILE) 
-    PerlIO_close(info->fp);
+        PerlIO_close(info->fp);
      else 
         fclose((FILE *)info->fp);
     }
@@ -2752,18 +3568,31 @@ I32 Perl_my_pclose(pTHX_ PerlIO *fp)
     /* free buffers and structures */
 
     if (info->in) {
-        if (info->in->buf) Safefree(info->in->buf);
-        Safefree(info->in);
+        if (info->in->buf) {
+            n = info->in->bufsize * sizeof(char);
+            _ckvmssts(lib$free_vm(&n, &info->in->buf));
+        }
+        n = sizeof(Pipe);
+        _ckvmssts(lib$free_vm(&n, &info->in));
     }
     if (info->out) {
-        if (info->out->buf) Safefree(info->out->buf);
-        Safefree(info->out);
+        if (info->out->buf) {
+            n = info->out->bufsize * sizeof(char);
+            _ckvmssts(lib$free_vm(&n, &info->out->buf));
+        }
+        n = sizeof(Pipe);
+        _ckvmssts(lib$free_vm(&n, &info->out));
     }
     if (info->err) {
-        if (info->err->buf) Safefree(info->err->buf);
-        Safefree(info->err);
+        if (info->err->buf) {
+            n = info->err->bufsize * sizeof(char);
+            _ckvmssts(lib$free_vm(&n, &info->err->buf));
+        }
+        n = sizeof(Pipe);
+        _ckvmssts(lib$free_vm(&n, &info->err));
     }
-    Safefree(info);
+    n = sizeof(Info);
+    _ckvmssts(lib$free_vm(&n, &info));
 
     return retsts;
 
@@ -2934,6 +3763,105 @@ my_gconvert(double val, int ndig, int trail, char *buf)
 }
 /*}}}*/
 
+#if 1 /* defined(__VAX) || !defined(NAML$C_MAXRSS) */
+static int rms_free_search_context(struct FAB * fab)
+{
+struct NAM * nam;
+
+    nam = fab->fab$l_nam;
+    nam->nam$b_nop |= NAM$M_SYNCHK;
+    nam->nam$l_rlf = NULL;
+    fab->fab$b_dns = 0;
+    return sys$parse(fab, NULL, NULL);
+}
+
+#define rms_setup_nam(nam) struct NAM nam = cc$rms_nam
+#define rms_set_nam_nop(nam, opt) nam.nam$b_nop |= (opt)
+#define rms_set_nam_fnb(nam, opt) nam.nam$l_fnb |= (opt)
+#define rms_is_nam_fnb(nam, opt) (nam.nam$l_fnb & (opt))
+#define rms_nam_esll(nam) nam.nam$b_esl
+#define rms_nam_esl(nam) nam.nam$b_esl
+#define rms_nam_name(nam) nam.nam$l_name
+#define rms_nam_namel(nam) nam.nam$l_name
+#define rms_nam_type(nam) nam.nam$l_type
+#define rms_nam_typel(nam) nam.nam$l_type
+#define rms_nam_ver(nam) nam.nam$l_ver
+#define rms_nam_verl(nam) nam.nam$l_ver
+#define rms_nam_rsll(nam) nam.nam$b_rsl
+#define rms_nam_rsl(nam) nam.nam$b_rsl
+#define rms_bind_fab_nam(fab, nam) fab.fab$l_nam = &nam
+#define rms_set_fna(fab, nam, name, size) \
+	fab.fab$b_fns = size; fab.fab$l_fna = name;
+#define rms_get_fna(fab, nam) fab.fab$l_fna
+#define rms_set_dna(fab, nam, name, size) \
+	fab.fab$b_dns = size; fab.fab$l_dna = name;
+#define rms_nam_dns(fab, nam) fab.fab$b_dns;
+#define rms_set_esa(fab, nam, name, size) \
+	nam.nam$b_ess = size; nam.nam$l_esa = name;
+#define rms_set_esal(nam, s_name, s_size, l_name, l_size) \
+	nam.nam$l_esa = s_name; nam.nam$b_ess = s_size;
+#define rms_set_rsa(nam, name, size) \
+	nam.nam$l_rsa = name; nam.nam$b_rss = size;
+#define rms_set_rsal(nam, s_name, s_size, l_name, l_size) \
+	nam.nam$l_rsa = s_name; nam.nam$b_rss = s_size;
+
+#else
+static int rms_free_search_context(struct FAB * fab)
+{
+struct NAML * nam;
+
+    nam = fab->fab$l_naml;
+    nam->naml$b_nop |= NAM$M_SYNCHK;
+    nam->naml$l_rlf = NULL;
+    nam->naml$l_long_defname_size = 0;
+    fab->fab$b_dns = 0;
+    return sys$parse(fab, NULL, NULL);
+}
+
+#define rms_setup_nam(nam) struct NAML nam = cc$rms_naml
+#define rms_set_nam_nop(nam, opt) nam.naml$b_nop |= (opt)
+#define rms_set_nam_fnb(nam, opt) nam.naml$l_fnb |= (opt)
+#define rms_is_nam_fnb(nam, opt) (nam.naml$l_fnb & (opt))
+#define rms_nam_esll(nam) nam.naml$l_long_expand_size
+#define rms_nam_esl(nam) nam.naml$b_esl
+#define rms_nam_name(nam) nam.naml$l_name
+#define rms_nam_namel(nam) nam.naml$l_long_name
+#define rms_nam_type(nam) nam.naml$l_type
+#define rms_nam_typel(nam) nam.naml$l_long_type
+#define rms_nam_ver(nam) nam.naml$l_ver
+#define rms_nam_verl(nam) nam.naml$l_long_ver
+#define rms_nam_rsll(nam) nam.naml$l_long_result_size
+#define rms_nam_rsl(nam) nam.naml$b_rsl
+#define rms_bind_fab_nam(fab, nam) fab.fab$l_naml = &nam
+#define rms_set_fna(fab, nam, name, size) \
+	fab.fab$b_fns = 0; fab.fab$l_fna = (char *) -1; \
+	nam.naml$l_long_filename_size = size; \
+	nam.naml$l_long_filename = name
+#define rms_get_fna(fab, nam) nam.naml$l_long_filename
+#define rms_set_dna(fab, nam, name, size) \
+	fab.fab$b_dns = 0; fab.fab$l_dna = (char *) -1; \
+	nam.naml$l_long_defname_size = size; \
+	nam.naml$l_long_defname = name
+#define rms_nam_dns(fab, nam) nam.naml$l_long_defname_size
+#define rms_set_esa(fab, nam, name, size) \
+	nam.naml$b_ess = 0; nam.naml$l_esa = (char *) -1; \
+	nam.naml$l_long_expand_alloc = size; \
+	nam.naml$l_long_expand = name
+#define rms_set_esal(nam, s_name, s_size, l_name, l_size) \
+	nam.naml$l_esa = s_name; nam.naml$b_ess = s_size; \
+	nam.naml$l_long_expand = l_name; \
+	nam.naml$l_long_expand_alloc = l_size;
+#define rms_set_rsa(nam, name, size) \
+	nam.naml$l_rsa = NULL; nam.naml$b_rss = 0; \
+	nam.naml$l_long_result = name; \
+	nam.naml$l_long_result_alloc = size;
+#define rms_set_rsal(nam, s_name, s_size, l_name, l_size) \
+	nam.naml$l_rsa = s_name; nam.naml$b_rss = s_size; \
+	nam.naml$l_long_result = l_name; \
+	nam.naml$l_long_result_alloc = l_size;
+
+#endif
+
 
 /*{{{char *do_rmsexpand(char *fspec, char *out, int ts, char *def, unsigned opts)*/
 /* Shortcut for common case of simple calls to $PARSE and $SEARCH
@@ -2946,11 +3874,16 @@ my_gconvert(double val, int ndig, int trail, char *buf)
  * specification string.  The fourth argument is unused at present.
  * rmesexpand() returns the address of the resultant string if
  * successful, and NULL on error.
+ *
+ * New functionality for previously unused opts value:
+ *  PERL_RMSEXPAND_M_VMS - Force output file specification to VMS format.
  */
-static char *mp_do_tounixspec(pTHX_ char *, char *, int);
+static char *mp_do_tounixspec(pTHX_ const char *, char *, int);
 
+#if defined(__VAX) || !defined(NAML$C_MAXRSS)
+/* ODS-2 only version */
 static char *
-mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsigned opts)
+mp_do_rmsexpand(pTHX_ const char *filespec, char *outbuf, int ts, const char *defspec, unsigned opts)
 {
   static char __rmsexpand_retbuf[NAM$C_MAXRSS+1];
   char vmsfspec[NAM$C_MAXRSS+1], tmpfspec[NAM$C_MAXRSS+1];
@@ -2959,30 +3892,40 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
   struct NAM mynam = cc$rms_nam;
   STRLEN speclen;
   unsigned long int retsts, trimver, trimtype, haslower = 0, isunix = 0;
+  int sts;
 
   if (!filespec || !*filespec) {
     set_vaxc_errno(LIB$_INVARG); set_errno(EINVAL);
     return NULL;
   }
   if (!outbuf) {
-    if (ts) out = New(1319,outbuf,NAM$C_MAXRSS+1,char);
+    if (ts) out = Newx(outbuf,NAM$C_MAXRSS+1,char);
     else    outbuf = __rmsexpand_retbuf;
   }
-  if ((isunix = (strchr(filespec,'/') != NULL))) {
-    if (do_tovmsspec(filespec,vmsfspec,0) == NULL) return NULL;
+  isunix = is_unix_filespec(filespec);
+  if (isunix) {
+    if (do_tovmsspec(filespec,vmsfspec,0) == NULL) {
+	if (out)
+	   Safefree(out);
+	return NULL;
+    }
     filespec = vmsfspec;
   }
 
-  myfab.fab$l_fna = filespec;
+  myfab.fab$l_fna = (char *)filespec;  /* cast ok for read only pointer */
   myfab.fab$b_fns = strlen(filespec);
   myfab.fab$l_nam = &mynam;
 
   if (defspec && *defspec) {
     if (strchr(defspec,'/') != NULL) {
-      if (do_tovmsspec(defspec,tmpfspec,0) == NULL) return NULL;
+      if (do_tovmsspec(defspec,tmpfspec,0) == NULL) {
+	if (out)
+	   Safefree(out);
+	return NULL;
+      }
       defspec = tmpfspec;
     }
-    myfab.fab$l_dna = defspec;
+    myfab.fab$l_dna = (char *)defspec; /* cast ok for read only pointer */
     myfab.fab$b_dns = strlen(defspec);
   }
 
@@ -2990,6 +3933,11 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
   mynam.nam$b_ess = sizeof esa;
   mynam.nam$l_rsa = outbuf;
   mynam.nam$b_rss = NAM$C_MAXRSS;
+
+#ifdef NAM$M_NO_SHORT_UPCASE
+  if (decc_efs_case_preserve)
+    mynam.nam$b_nop |= NAM$M_NO_SHORT_UPCASE;
+#endif
 
   retsts = sys$parse(&myfab,0,0);
   if (!(retsts & 1)) {
@@ -2999,7 +3947,7 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
       if (retsts & 1) goto expanded;
     }  
     mynam.nam$l_rlf = NULL; myfab.fab$b_dns = 0;
-    (void) sys$parse(&myfab,0,0);  /* Free search context */
+    sts = sys$parse(&myfab,0,0);  /* Free search context */
     if (out) Safefree(out);
     set_vaxc_errno(retsts);
     if      (retsts == RMS$_PRV) set_errno(EACCES);
@@ -3011,7 +3959,7 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
   retsts = sys$search(&myfab,0,0);
   if (!(retsts & 1) && retsts != RMS$_FNF) {
     mynam.nam$b_nop |= NAM$M_SYNCHK; mynam.nam$l_rlf = NULL;
-    myfab.fab$b_dns = 0; (void) sys$parse(&myfab,0,0);  /* Free search context */
+    myfab.fab$b_dns = 0; sts = sys$parse(&myfab,0,0);  /* Free search context */
     if (out) Safefree(out);
     set_vaxc_errno(retsts);
     if      (retsts == RMS$_PRV) set_errno(EACCES);
@@ -3022,8 +3970,10 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
   /* If the input filespec contained any lowercase characters,
    * downcase the result for compatibility with Unix-minded code. */
   expanded:
-  for (out = myfab.fab$l_fna; *out; out++)
-    if (islower(*out)) { haslower = 1; break; }
+  if (!decc_efs_case_preserve) {
+    for (out = myfab.fab$l_fna; *out; out++)
+      if (islower(*out)) { haslower = 1; break; }
+  }
   if (mynam.nam$b_rsl) { out = outbuf; speclen = mynam.nam$b_rsl; }
   else                 { out = esa;    speclen = mynam.nam$b_esl; }
   /* Trim off null fields added by $PARSE
@@ -3040,19 +3990,27 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
       struct NAM defnam = cc$rms_nam;
      
       deffab.fab$l_nam = &defnam;
-      deffab.fab$l_fna = defspec;  deffab.fab$b_fns = myfab.fab$b_dns;
+      /* cast below ok for read only pointer */
+      deffab.fab$l_fna = (char *)defspec;  deffab.fab$b_fns = myfab.fab$b_dns;
       defnam.nam$l_esa = defesa;   defnam.nam$b_ess = sizeof defesa;
       defnam.nam$b_nop = NAM$M_SYNCHK;
+#ifdef NAM$M_NO_SHORT_UPCASE
+      if (decc_efs_case_preserve)
+	defnam.nam$b_nop |= NAM$M_NO_SHORT_UPCASE;
+#endif
       if (sys$parse(&deffab,0,0) & 1) {
         if (trimver)  trimver  = !(defnam.nam$l_fnb & NAM$M_EXP_VER);
         if (trimtype) trimtype = !(defnam.nam$l_fnb & NAM$M_EXP_TYPE); 
       }
     }
-    if (trimver) speclen = mynam.nam$l_ver - out;
+    if (trimver) {
+      if (*mynam.nam$l_ver != '\"')
+	speclen = mynam.nam$l_ver - out;
+    }
     if (trimtype) {
       /* If we didn't already trim version, copy down */
       if (speclen > mynam.nam$l_ver - out)
-        memcpy(mynam.nam$l_type, mynam.nam$l_ver, 
+        memmove(mynam.nam$l_type, mynam.nam$l_ver, 
                speclen - (mynam.nam$l_ver - out));
       speclen -= mynam.nam$l_ver - mynam.nam$l_type; 
     }
@@ -3063,11 +4021,23 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
       mynam.nam$l_ver  == mynam.nam$l_type + 1 &&
       !(mynam.nam$l_fnb & NAM$M_EXP_NAME))
     speclen = mynam.nam$l_name - out;
+
+  /* Posix format specifications must have matching quotes */
+  if (decc_posix_compliant_pathnames && (out[0] == '\"')) {
+    if ((speclen > 1) && (out[speclen-1] != '\"')) {
+      out[speclen] = '\"';
+      speclen++;
+    }
+  }
+
   out[speclen] = '\0';
-  if (haslower) __mystrtolower(out);
+  if (haslower && !decc_efs_case_preserve) __mystrtolower(out);
 
   /* Have we been working with an expanded, but not resultant, spec? */
   /* Also, convert back to Unix syntax if necessary. */
+  if ((opts & PERL_RMSEXPAND_M_VMS) != 0)
+    isunix = 0;
+
   if (!mynam.nam$b_rsl) {
     if (isunix) {
       if (do_tounixspec(esa,outbuf,0) == NULL) return NULL;
@@ -3079,15 +4049,324 @@ mp_do_rmsexpand(pTHX_ char *filespec, char *outbuf, int ts, char *defspec, unsig
     strcpy(outbuf,tmpfspec);
   }
   mynam.nam$b_nop |= NAM$M_SYNCHK; mynam.nam$l_rlf = NULL;
-  mynam.nam$l_rsa = NULL; mynam.nam$b_rss = 0;
-  myfab.fab$b_dns = 0; (void) sys$parse(&myfab,0,0);  /* Free search context */
+  mynam.nam$l_rsa = NULL;
+  mynam.nam$b_rss = 0;
+  myfab.fab$b_dns = 0;  sts = sys$parse(&myfab,0,0);  /* Free search context */
   return outbuf;
 }
+#else
+/* ODS-5 supporting routine */
+static char *
+mp_do_rmsexpand(pTHX_ const char *filespec, char *outbuf, int ts, const char *defspec, unsigned opts)
+{
+  static char __rmsexpand_retbuf[NAML$C_MAXRSS+1];
+  char * vmsfspec, *tmpfspec;
+  char * esa, *cp, *out = NULL;
+  char * esal;
+  char * outbufl;
+  struct FAB myfab = cc$rms_fab;
+  rms_setup_nam(mynam);
+  STRLEN speclen;
+  unsigned long int retsts, trimver, trimtype, haslower = 0, isunix = 0;
+  int sts;
+
+  if (!filespec || !*filespec) {
+    set_vaxc_errno(LIB$_INVARG); set_errno(EINVAL);
+    return NULL;
+  }
+  if (!outbuf) {
+    if (ts) out = Newx(outbuf,VMS_MAXRSS,char);
+    else    outbuf = __rmsexpand_retbuf;
+  }
+
+  vmsfspec = NULL;
+  tmpfspec = NULL;
+  outbufl = NULL;
+  isunix = is_unix_filespec(filespec);
+  if (isunix) {
+    Newx(vmsfspec, VMS_MAXRSS, char);
+    if (do_tovmsspec(filespec,vmsfspec,0) == NULL) {
+	Safefree(vmsfspec);
+	if (out)
+	   Safefree(out);
+	return NULL;
+    }
+    filespec = vmsfspec;
+
+     /* Unless we are forcing to VMS format, a UNIX input means
+      * UNIX output, and that requires long names to be used
+      */
+    if ((opts & PERL_RMSEXPAND_M_VMS) == 0)
+	opts |= PERL_RMSEXPAND_M_LONG;
+    else {
+	isunix = 0;
+    }
+  }
+
+  rms_set_fna(myfab, mynam, (char *)filespec, strlen(filespec)); /* cast ok */
+  rms_bind_fab_nam(myfab, mynam);
+
+  if (defspec && *defspec) {
+    int t_isunix;
+    t_isunix = is_unix_filespec(defspec);
+    if (t_isunix) {
+      Newx(tmpfspec, VMS_MAXRSS, char);
+      if (do_tovmsspec(defspec,tmpfspec,0) == NULL) {
+	Safefree(tmpfspec);
+	if (vmsfspec != NULL)
+	    Safefree(vmsfspec);
+	if (out)
+	   Safefree(out);
+	return NULL;
+      }
+      defspec = tmpfspec;
+    }
+    rms_set_dna(myfab, mynam, (char *)defspec, strlen(defspec)); /* cast ok */
+  }
+
+  Newx(esa, NAM$C_MAXRSS + 1, char);
+#if !defined(__VAX) && defined(NAML$C_MAXRSS)
+  Newx(esal, NAML$C_MAXRSS + 1, char);
+#endif
+  rms_set_esal(mynam, esa, NAM$C_MAXRSS, esal, NAML$C_MAXRSS);
+
+  if ((opts & PERL_RMSEXPAND_M_LONG) != 0) {
+    rms_set_rsa(mynam, outbuf, (VMS_MAXRSS - 1));
+  }
+  else {
+#if !defined(__VAX) && defined(NAML$C_MAXRSS)
+    Newx(outbufl, VMS_MAXRSS, char);
+    rms_set_rsal(mynam, outbuf, NAM$C_MAXRSS, outbufl, (VMS_MAXRSS - 1));
+#else
+    rms_set_rsa(mynam, outbuf, NAM$C_MAXRSS);
+#endif
+  }
+
+#ifdef NAM$M_NO_SHORT_UPCASE
+  if (decc_efs_case_preserve)
+    rms_set_nam_nop(mynam, NAM$M_NO_SHORT_UPCASE);
+#endif
+
+  /* First attempt to parse as an existing file */
+  retsts = sys$parse(&myfab,0,0);
+  if (!(retsts & STS$K_SUCCESS)) {
+
+    /* Could not find the file, try as syntax only if error is not fatal */
+    rms_set_nam_nop(mynam, NAM$M_SYNCHK);
+    if (retsts == RMS$_DNF || retsts == RMS$_DIR || retsts == RMS$_DEV) {
+      retsts = sys$parse(&myfab,0,0);
+      if (retsts & STS$K_SUCCESS) goto expanded;
+    }  
+
+     /* Still could not parse the file specification */
+    /*----------------------------------------------*/
+    sts = rms_free_search_context(&myfab); /* Free search context */
+    if (out) Safefree(out);
+    if (tmpfspec != NULL)
+	Safefree(tmpfspec);
+    if (vmsfspec != NULL)
+	Safefree(vmsfspec);
+    Safefree(esa);
+    Safefree(esal);
+    set_vaxc_errno(retsts);
+    if      (retsts == RMS$_PRV) set_errno(EACCES);
+    else if (retsts == RMS$_DEV) set_errno(ENODEV);
+    else if (retsts == RMS$_DIR) set_errno(ENOTDIR);
+    else                         set_errno(EVMSERR);
+    return NULL;
+  }
+  retsts = sys$search(&myfab,0,0);
+  if (!(retsts & STS$K_SUCCESS) && retsts != RMS$_FNF) {
+    sts = rms_free_search_context(&myfab); /* Free search context */
+    if (out) Safefree(out);
+    if (tmpfspec != NULL)
+	Safefree(tmpfspec);
+    if (vmsfspec != NULL)
+	Safefree(vmsfspec);
+    Safefree(esa);
+    Safefree(esal);
+    set_vaxc_errno(retsts);
+    if      (retsts == RMS$_PRV) set_errno(EACCES);
+    else                         set_errno(EVMSERR);
+    return NULL;
+  }
+
+  /* If the input filespec contained any lowercase characters,
+   * downcase the result for compatibility with Unix-minded code. */
+  expanded:
+  if (!decc_efs_case_preserve) {
+    for (out = rms_get_fna(myfab, mynam); *out; out++)
+      if (islower(*out)) { haslower = 1; break; }
+  }
+
+   /* Is a long or a short name expected */
+  /*------------------------------------*/
+  if ((opts & PERL_RMSEXPAND_M_LONG) != 0) {
+    if (rms_nam_rsll(mynam)) {
+	out = outbuf;
+	speclen = rms_nam_rsll(mynam);
+    }
+    else {
+	out = esal; /* Not esa */
+	speclen = rms_nam_esll(mynam);
+    }
+  }
+  else {
+    if (rms_nam_rsl(mynam)) {
+	out = outbuf;
+	speclen = rms_nam_rsl(mynam);
+    }
+    else {
+	out = esa; /* Not esal */
+	speclen = rms_nam_esl(mynam);
+    }
+  }
+  /* Trim off null fields added by $PARSE
+   * If type > 1 char, must have been specified in original or default spec
+   * (not true for version; $SEARCH may have added version of existing file).
+   */
+  trimver  = !rms_is_nam_fnb(mynam, NAM$M_EXP_VER);
+  if ((opts & PERL_RMSEXPAND_M_LONG) != 0) {
+    trimtype = !rms_is_nam_fnb(mynam, NAM$M_EXP_TYPE) &&
+             ((rms_nam_verl(mynam) - rms_nam_typel(mynam)) == 1);
+  }
+  else {
+    trimtype = !rms_is_nam_fnb(mynam, NAM$M_EXP_TYPE) &&
+             ((rms_nam_ver(mynam) - rms_nam_type(mynam)) == 1);
+  }
+  if (trimver || trimtype) {
+    if (defspec && *defspec) {
+      char *defesal = NULL;
+      Newx(defesal, NAML$C_MAXRSS + 1, char);
+      if (defesal != NULL) {
+	struct FAB deffab = cc$rms_fab;
+	rms_setup_nam(defnam);
+     
+	rms_bind_fab_nam(deffab, defnam);
+
+	/* Cast ok */ 
+	rms_set_fna
+	    (deffab, defnam, (char *)defspec, rms_nam_dns(myfab, mynam)); 
+
+	rms_set_esa(deffab, defnam, defesal, VMS_MAXRSS - 1);
+
+	rms_set_nam_nop(defnam, 0);
+	rms_set_nam_nop(defnam, NAM$M_SYNCHK);
+#ifdef NAM$M_NO_SHORT_UPCASE
+	if (decc_efs_case_preserve)
+	  rms_set_nam_nop(defnam, NAM$M_NO_SHORT_UPCASE);
+#endif
+	if (sys$parse(&deffab,0,0) & STS$K_SUCCESS) {
+	  if (trimver) {
+	     trimver  = !rms_is_nam_fnb(defnam, NAM$M_EXP_VER);
+	  }
+	  if (trimtype) {
+	    trimtype = !rms_is_nam_fnb(defnam, NAM$M_EXP_TYPE); 
+	  }
+	}
+	Safefree(defesal);
+      }
+    }
+    if (trimver) {
+      if ((opts & PERL_RMSEXPAND_M_LONG) != 0) {
+	if (*(rms_nam_verl(mynam)) != '\"')
+	  speclen = rms_nam_verl(mynam) - out;
+      }
+      else {
+	if (*(rms_nam_ver(mynam)) != '\"')
+	  speclen = rms_nam_ver(mynam) - out;
+      }
+    }
+    if (trimtype) {
+      /* If we didn't already trim version, copy down */
+      if ((opts & PERL_RMSEXPAND_M_LONG) != 0) {
+	if (speclen > rms_nam_verl(mynam) - out)
+	  memmove
+	   (rms_nam_typel(mynam),
+	    rms_nam_verl(mynam),
+	    speclen - (rms_nam_verl(mynam) - out));
+	  speclen -= rms_nam_verl(mynam) - rms_nam_typel(mynam);
+      }
+      else {
+	if (speclen > rms_nam_ver(mynam) - out)
+	  memmove
+	   (rms_nam_type(mynam),
+	    rms_nam_ver(mynam),
+	    speclen - (rms_nam_ver(mynam) - out));
+	  speclen -= rms_nam_ver(mynam) - rms_nam_type(mynam);
+      }
+    }
+  }
+
+   /* Done with these copies of the input files */
+  /*-------------------------------------------*/
+  if (vmsfspec != NULL)
+	Safefree(vmsfspec);
+  if (tmpfspec != NULL)
+	Safefree(tmpfspec);
+
+  /* If we just had a directory spec on input, $PARSE "helpfully"
+   * adds an empty name and type for us */
+  if ((opts & PERL_RMSEXPAND_M_LONG) != 0) {
+    if (rms_nam_namel(mynam) == rms_nam_typel(mynam) &&
+	rms_nam_verl(mynam)  == rms_nam_typel(mynam) + 1 &&
+	!(rms_is_nam_fnb(mynam, NAM$M_EXP_NAME)))
+      speclen = rms_nam_namel(mynam) - out;
+  }
+  else {
+    if (rms_nam_name(mynam) == rms_nam_type(mynam) &&
+	rms_nam_ver(mynam)  == rms_nam_ver(mynam) + 1 &&
+	!(rms_is_nam_fnb(mynam, NAM$M_EXP_NAME)))
+      speclen = rms_nam_name(mynam) - out;
+  }
+
+  /* Posix format specifications must have matching quotes */
+  if (decc_posix_compliant_pathnames && (out[0] == '\"')) {
+    if ((speclen > 1) && (out[speclen-1] != '\"')) {
+      out[speclen] = '\"';
+      speclen++;
+    }
+  }
+  out[speclen] = '\0';
+  if (haslower && !decc_efs_case_preserve) __mystrtolower(out);
+
+  /* Have we been working with an expanded, but not resultant, spec? */
+  /* Also, convert back to Unix syntax if necessary. */
+
+  if (!rms_nam_rsll(mynam)) {
+    if (isunix) {
+      if (do_tounixspec(esa,outbuf,0) == NULL) {
+	Safefree(esal);
+	Safefree(esa);
+	return NULL;
+      }
+    }
+    else strcpy(outbuf,esa);
+  }
+  else if (isunix) {
+    Newx(tmpfspec, VMS_MAXRSS, char);
+    if (do_tounixspec(outbuf,tmpfspec,0) == NULL) {
+	Safefree(esa);
+	Safefree(esal);
+	Safefree(tmpfspec);
+	return NULL;
+    }
+    strcpy(outbuf,tmpfspec);
+    Safefree(tmpfspec);
+  }
+
+  rms_set_rsal(mynam, NULL, 0, NULL, 0);
+  sts = rms_free_search_context(&myfab); /* Free search context */
+  Safefree(esa);
+  Safefree(esal);
+  return outbuf;
+}
+#endif
 /*}}}*/
 /* External entry points */
-char *Perl_rmsexpand(pTHX_ char *spec, char *buf, char *def, unsigned opt)
+char *Perl_rmsexpand(pTHX_ const char *spec, char *buf, const char *def, unsigned opt)
 { return do_rmsexpand(spec,buf,0,def,opt); }
-char *Perl_rmsexpand_ts(pTHX_ char *spec, char *buf, char *def, unsigned opt)
+char *Perl_rmsexpand_ts(pTHX_ const char *spec, char *buf, const char *def, unsigned opt)
 { return do_rmsexpand(spec,buf,1,def,opt); }
 
 
@@ -3125,14 +4404,15 @@ char *Perl_rmsexpand_ts(pTHX_ char *spec, char *buf, char *def, unsigned opt)
 ** found in the Perl standard distribution.
  */
 
-/*{{{ char *fileify_dirspec[_ts](char *path, char *buf)*/
-static char *mp_do_fileify_dirspec(pTHX_ char *dir,char *buf,int ts)
+/*{{{ char *fileify_dirspec[_ts](char *dir, char *buf)*/
+static char *mp_do_fileify_dirspec(pTHX_ const char *dir,char *buf,int ts)
 {
-    static char __fileify_retbuf[NAM$C_MAXRSS+1];
+    static char __fileify_retbuf[VMS_MAXRSS];
     unsigned long int dirlen, retlen, addmfd = 0, hasfilename = 0;
     char *retspec, *cp1, *cp2, *lastdir;
-    char trndir[NAM$C_MAXRSS+2], vmsdir[NAM$C_MAXRSS+1];
+    char *trndir, *vmsdir;
     unsigned short int trnlnm_iter_count;
+    int sts;
 
     if (!dir || !*dir) {
       set_errno(EINVAL); set_vaxc_errno(SS$_BADPARAM); return NULL;
@@ -3140,174 +4420,248 @@ static char *mp_do_fileify_dirspec(pTHX_ char *dir,char *buf,int ts)
     dirlen = strlen(dir);
     while (dirlen && dir[dirlen-1] == '/') --dirlen;
     if (!dirlen) { /* We had Unixish '/' -- substitute top of current tree */
-      strcpy(trndir,"/sys$disk/000000");
-      dir = trndir;
-      dirlen = 16;
+      if (!decc_posix_compliant_pathnames && decc_disable_posix_root) {
+        dir = "/sys$disk";
+        dirlen = 9;
+      }
+      else
+	dirlen = 1;
     }
-    if (dirlen > NAM$C_MAXRSS) {
-      set_errno(ENAMETOOLONG); set_vaxc_errno(RMS$_SYN); return NULL;
+    if (dirlen > (VMS_MAXRSS - 1)) {
+      set_errno(ENAMETOOLONG); set_vaxc_errno(RMS$_SYN);
+      return NULL;
     }
-    if (!strpbrk(dir+1,"/]>:")) {
+    Newx(trndir, VMS_MAXRSS + 1, char);
+    if (!strpbrk(dir+1,"/]>:")  &&
+	(!decc_posix_compliant_pathnames && decc_disable_posix_root)) {
       strcpy(trndir,*dir == '/' ? dir + 1: dir);
       trnlnm_iter_count = 0;
       while (!strpbrk(trndir,"/]>:>") && my_trnlnm(trndir,trndir,0)) {
         trnlnm_iter_count++; 
         if (trnlnm_iter_count >= PERL_LNM_MAX_ITER) break;
       }
-      dir = trndir;
-      dirlen = strlen(dir);
+      dirlen = strlen(trndir);
     }
     else {
       strncpy(trndir,dir,dirlen);
       trndir[dirlen] = '\0';
-      dir = trndir;
     }
+
+    /* At this point we are done with *dir and use *trndir which is a
+     * copy that can be modified.  *dir must not be modified.
+     */
+
     /* If we were handed a rooted logical name or spec, treat it like a
      * simple directory, so that
      *    $ Define myroot dev:[dir.]
      *    ... do_fileify_dirspec("myroot",buf,1) ...
      * does something useful.
      */
-    if (dirlen >= 2 && !strcmp(dir+dirlen-2,".]")) {
-      dir[--dirlen] = '\0';
-      dir[dirlen-1] = ']';
+    if (dirlen >= 2 && !strcmp(trndir+dirlen-2,".]")) {
+      trndir[--dirlen] = '\0';
+      trndir[dirlen-1] = ']';
     }
-    if (dirlen >= 2 && !strcmp(dir+dirlen-2,".>")) {
-      dir[--dirlen] = '\0';
-      dir[dirlen-1] = '>';
+    if (dirlen >= 2 && !strcmp(trndir+dirlen-2,".>")) {
+      trndir[--dirlen] = '\0';
+      trndir[dirlen-1] = '>';
     }
 
-    if ((cp1 = strrchr(dir,']')) != NULL || (cp1 = strrchr(dir,'>')) != NULL) {
+    if ((cp1 = strrchr(trndir,']')) != NULL || (cp1 = strrchr(trndir,'>')) != NULL) {
       /* If we've got an explicit filename, we can just shuffle the string. */
       if (*(cp1+1)) hasfilename = 1;
       /* Similarly, we can just back up a level if we've got multiple levels
          of explicit directories in a VMS spec which ends with directories. */
       else {
-        for (cp2 = cp1; cp2 > dir; cp2--) {
-          if (*cp2 == '.') {
-            *cp2 = *cp1; *cp1 = '\0';
-            hasfilename = 1;
-            break;
+        for (cp2 = cp1; cp2 > trndir; cp2--) {
+	  if (*cp2 == '.') {
+	    if ((cp2 - 1 > trndir) && (*(cp2 - 1) != '^')) {
+              *cp2 = *cp1; *cp1 = '\0';
+              hasfilename = 1;
+	      break;
+	    }
           }
           if (*cp2 == '[' || *cp2 == '<') break;
         }
       }
     }
 
-    if (hasfilename || !strpbrk(dir,"]:>")) { /* Unix-style path or filename */
-      if (dir[0] == '.') {
-        if (dir[1] == '\0' || (dir[1] == '/' && dir[2] == '\0'))
+    Newx(vmsdir, VMS_MAXRSS + 1, char);
+    cp1 = strpbrk(trndir,"]:>");
+    if (hasfilename || !cp1) { /* Unix-style path or filename */
+      if (trndir[0] == '.') {
+        if (trndir[1] == '\0' || (trndir[1] == '/' && trndir[2] == '\0')) {
+	  Safefree(trndir);
+	  Safefree(vmsdir);
           return do_fileify_dirspec("[]",buf,ts);
-        else if (dir[1] == '.' &&
-                 (dir[2] == '\0' || (dir[2] == '/' && dir[3] == '\0')))
+	}
+        else if (trndir[1] == '.' &&
+               (trndir[2] == '\0' || (trndir[2] == '/' && trndir[3] == '\0'))) {
+	  Safefree(trndir);
+	  Safefree(vmsdir);
           return do_fileify_dirspec("[-]",buf,ts);
+	}
       }
-      if (dirlen && dir[dirlen-1] == '/') {    /* path ends with '/'; just add .dir;1 */
+      if (dirlen && trndir[dirlen-1] == '/') {    /* path ends with '/'; just add .dir;1 */
         dirlen -= 1;                 /* to last element */
-        lastdir = strrchr(dir,'/');
+        lastdir = strrchr(trndir,'/');
       }
-      else if ((cp1 = strstr(dir,"/.")) != NULL) {
+      else if ((cp1 = strstr(trndir,"/.")) != NULL) {
         /* If we have "/." or "/..", VMSify it and let the VMS code
          * below expand it, rather than repeating the code to handle
          * relative components of a filespec here */
         do {
           if (*(cp1+2) == '.') cp1++;
           if (*(cp1+2) == '/' || *(cp1+2) == '\0') {
-            if (do_tovmsspec(dir,vmsdir,0) == NULL) return NULL;
+	    char * ret_chr;
+            if (do_tovmsspec(trndir,vmsdir,0) == NULL) {
+		Safefree(trndir);
+		Safefree(vmsdir);
+		return NULL;
+	    }
             if (strchr(vmsdir,'/') != NULL) {
               /* If do_tovmsspec() returned it, it must have VMS syntax
                * delimiters in it, so it's a mixed VMS/Unix spec.  We take
                * the time to check this here only so we avoid a recursion
                * loop; otherwise, gigo.
                */
-              set_errno(EINVAL);  set_vaxc_errno(RMS$_SYN);  return NULL;
+	      Safefree(trndir);
+	      Safefree(vmsdir);
+              set_errno(EINVAL);  set_vaxc_errno(RMS$_SYN);
+	      return NULL;
             }
-            if (do_fileify_dirspec(vmsdir,trndir,0) == NULL) return NULL;
-            return do_tounixspec(trndir,buf,ts);
+            if (do_fileify_dirspec(vmsdir,trndir,0) == NULL) {
+		Safefree(trndir);
+		Safefree(vmsdir);
+		return NULL;
+	    }
+	    ret_chr = do_tounixspec(trndir,buf,ts);
+	    Safefree(trndir);
+	    Safefree(vmsdir);
+            return ret_chr;
           }
           cp1++;
         } while ((cp1 = strstr(cp1,"/.")) != NULL);
-        lastdir = strrchr(dir,'/');
+        lastdir = strrchr(trndir,'/');
       }
-      else if (dirlen >= 7 && !strcmp(&dir[dirlen-7],"/000000")) {
+      else if (dirlen >= 7 && !strcmp(&trndir[dirlen-7],"/000000")) {
+	char * ret_chr;
         /* Ditto for specs that end in an MFD -- let the VMS code
          * figure out whether it's a real device or a rooted logical. */
-        dir[dirlen] = '/'; dir[dirlen+1] = '\0';
-        if (do_tovmsspec(dir,vmsdir,0) == NULL) return NULL;
-        if (do_fileify_dirspec(vmsdir,trndir,0) == NULL) return NULL;
-        return do_tounixspec(trndir,buf,ts);
+
+        /* This should not happen any more.  Allowing the fake /000000
+         * in a UNIX pathname causes all sorts of problems when trying
+         * to run in UNIX emulation.  So the VMS to UNIX conversions
+         * now remove the fake /000000 directories.
+         */
+
+        trndir[dirlen] = '/'; trndir[dirlen+1] = '\0';
+        if (do_tovmsspec(trndir,vmsdir,0) == NULL) {
+	    Safefree(trndir);
+	    Safefree(vmsdir);
+	    return NULL;
+	}
+        if (do_fileify_dirspec(vmsdir,trndir,0) == NULL) {
+	    Safefree(trndir);
+	    Safefree(vmsdir);
+	    return NULL;
+	}
+	ret_chr = do_tounixspec(trndir,buf,ts);
+	Safefree(trndir);
+	Safefree(vmsdir);
+        return ret_chr;
       }
       else {
-        if ( !(lastdir = cp1 = strrchr(dir,'/')) &&
-             !(lastdir = cp1 = strrchr(dir,']')) &&
-             !(lastdir = cp1 = strrchr(dir,'>'))) cp1 = dir;
+
+        if ( !(lastdir = cp1 = strrchr(trndir,'/')) &&
+             !(lastdir = cp1 = strrchr(trndir,']')) &&
+             !(lastdir = cp1 = strrchr(trndir,'>'))) cp1 = trndir;
         if ((cp2 = strchr(cp1,'.'))) {  /* look for explicit type */
           int ver; char *cp3;
-          if (!*(cp2+1) || toupper(*(cp2+1)) != 'D' ||  /* Wrong type. */
-              !*(cp2+2) || toupper(*(cp2+2)) != 'I' ||  /* Bzzt. */
-              !*(cp2+3) || toupper(*(cp2+3)) != 'R' ||
-              (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
-              (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
+
+	  /* For EFS or ODS-5 look for the last dot */
+	  if (decc_efs_charset) {
+	      cp2 = strrchr(cp1,'.');
+	  }
+	  if (vms_process_case_tolerant) {
+              if (!*(cp2+1) || toupper(*(cp2+1)) != 'D' ||  /* Wrong type. */
+                  !*(cp2+2) || toupper(*(cp2+2)) != 'I' ||  /* Bzzt. */
+                  !*(cp2+3) || toupper(*(cp2+3)) != 'R' ||
+                  (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
+                  (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
                             (ver || *cp3)))))) {
-            set_errno(ENOTDIR);
-            set_vaxc_errno(RMS$_DIR);
-            return NULL;
+		  Safefree(trndir);
+		  Safefree(vmsdir);
+                  set_errno(ENOTDIR);
+                  set_vaxc_errno(RMS$_DIR);
+                  return NULL;
+	      }
+	  }
+	  else {
+              if (!*(cp2+1) || *(cp2+1) != 'D' ||  /* Wrong type. */
+                  !*(cp2+2) || *(cp2+2) != 'I' ||  /* Bzzt. */
+                  !*(cp2+3) || *(cp2+3) != 'R' ||
+                  (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
+                  (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
+                            (ver || *cp3)))))) {
+		 Safefree(trndir);
+		 Safefree(vmsdir);
+                 set_errno(ENOTDIR);
+                 set_vaxc_errno(RMS$_DIR);
+                 return NULL;
+	      }
           }
-          dirlen = cp2 - dir;
+          dirlen = cp2 - trndir;
         }
       }
-      /* If we lead off with a device or rooted logical, add the MFD
-         if we're specifying a top-level directory. */
-      if (lastdir && *dir == '/') {
-        addmfd = 1;
-        for (cp1 = lastdir - 1; cp1 > dir; cp1--) {
-          if (*cp1 == '/') {
-            addmfd = 0;
-            break;
-          }
-        }
-      }
-      retlen = dirlen + (addmfd ? 13 : 6);
+
+      retlen = dirlen + 6;
       if (buf) retspec = buf;
-      else if (ts) New(1309,retspec,retlen+1,char);
+      else if (ts) Newx(retspec,retlen+1,char);
       else retspec = __fileify_retbuf;
-      if (addmfd) {
-        dirlen = lastdir - dir;
-        memcpy(retspec,dir,dirlen);
-        strcpy(&retspec[dirlen],"/000000");
-        strcpy(&retspec[dirlen+7],lastdir);
-      }
-      else {
-        memcpy(retspec,dir,dirlen);
-        retspec[dirlen] = '\0';
-      }
+      memcpy(retspec,trndir,dirlen);
+      retspec[dirlen] = '\0';
+
       /* We've picked up everything up to the directory file name.
          Now just add the type and version, and we're set. */
-      strcat(retspec,".dir;1");
+      if ((!decc_efs_case_preserve) && vms_process_case_tolerant)
+	strcat(retspec,".dir;1");
+      else
+	strcat(retspec,".DIR;1");
+      Safefree(trndir);
+      Safefree(vmsdir);
       return retspec;
     }
     else {  /* VMS-style directory spec */
-      char esa[NAM$C_MAXRSS+1], term, *cp;
+
+      char *esa, term, *cp;
       unsigned long int sts, cmplen, haslower = 0;
+      unsigned int nam_fnb;
+      char * nam_type;
       struct FAB dirfab = cc$rms_fab;
-      struct NAM savnam, dirnam = cc$rms_nam;
+      rms_setup_nam(savnam);
+      rms_setup_nam(dirnam);
 
-      dirfab.fab$b_fns = strlen(dir);
-      dirfab.fab$l_fna = dir;
-      dirfab.fab$l_nam = &dirnam;
-      dirfab.fab$l_dna = ".DIR;1";
-      dirfab.fab$b_dns = 6;
-      dirnam.nam$b_ess = NAM$C_MAXRSS;
-      dirnam.nam$l_esa = esa;
+      Newx(esa, VMS_MAXRSS + 1, char);
+      rms_set_fna(dirfab, dirnam, trndir, strlen(trndir));
+      rms_bind_fab_nam(dirfab, dirnam);
+      rms_set_dna(dirfab, dirnam, ".DIR;1", 6);
+      rms_set_esa(dirfab, dirnam, esa, (VMS_MAXRSS - 1));
+#ifdef NAM$M_NO_SHORT_UPCASE
+      if (decc_efs_case_preserve)
+	rms_set_nam_nop(dirnam, NAM$M_NO_SHORT_UPCASE);
+#endif
 
-      for (cp = dir; *cp; cp++)
+      for (cp = trndir; *cp; cp++)
         if (islower(*cp)) { haslower = 1; break; }
-      if (!((sts = sys$parse(&dirfab))&1)) {
-        if (dirfab.fab$l_sts == RMS$_DIR) {
-          dirnam.nam$b_nop |= NAM$M_SYNCHK;
-          sts = sys$parse(&dirfab) & 1;
+      if (!((sts = sys$parse(&dirfab)) & STS$K_SUCCESS)) {
+        if ((dirfab.fab$l_sts == RMS$_DIR) || (dirfab.fab$l_sts == RMS$_DNF)) {
+	  rms_set_nam_nop(dirnam, NAM$M_SYNCHK);
+          sts = sys$parse(&dirfab) & STS$K_SUCCESS;
         }
         if (!sts) {
+	  Safefree(esa);
+	  Safefree(trndir);
+	  Safefree(vmsdir);
           set_errno(EVMSERR);
           set_vaxc_errno(dirfab.fab$l_sts);
           return NULL;
@@ -3315,87 +4669,116 @@ static char *mp_do_fileify_dirspec(pTHX_ char *dir,char *buf,int ts)
       }
       else {
         savnam = dirnam;
-        if (sys$search(&dirfab)&1) {  /* Does the file really exist? */
+	/* Does the file really exist? */
+        if (sys$search(&dirfab)& STS$K_SUCCESS) { 
           /* Yes; fake the fnb bits so we'll check type below */
-          dirnam.nam$l_fnb |= NAM$M_EXP_TYPE | NAM$M_EXP_VER;
+	rms_set_nam_fnb(dirnam, (NAM$M_EXP_TYPE | NAM$M_EXP_VER));
         }
         else { /* No; just work with potential name */
           if (dirfab.fab$l_sts == RMS$_FNF) dirnam = savnam;
           else { 
+	    Safefree(esa);
+	    Safefree(trndir);
+	    Safefree(vmsdir);
             set_errno(EVMSERR);  set_vaxc_errno(dirfab.fab$l_sts);
-            dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-            dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+	    sts = rms_free_search_context(&dirfab);
             return NULL;
           }
         }
       }
-      if (!(dirnam.nam$l_fnb & (NAM$M_EXP_DEV | NAM$M_EXP_DIR))) {
+      if (!rms_is_nam_fnb(dirnam, (NAM$M_EXP_DEV | NAM$M_EXP_DIR))) {
         cp1 = strchr(esa,']');
         if (!cp1) cp1 = strchr(esa,'>');
         if (cp1) {  /* Should always be true */
-          dirnam.nam$b_esl -= cp1 - esa - 1;
-          memcpy(esa,cp1 + 1,dirnam.nam$b_esl);
+          rms_nam_esll(dirnam) -= cp1 - esa - 1;
+          memmove(esa,cp1 + 1, rms_nam_esll(dirnam));
         }
       }
-      if (dirnam.nam$l_fnb & NAM$M_EXP_TYPE) {  /* Was type specified? */
+      if (rms_is_nam_fnb(dirnam, NAM$M_EXP_TYPE)) {  /* Was type specified? */
         /* Yep; check version while we're at it, if it's there. */
-        cmplen = (dirnam.nam$l_fnb & NAM$M_EXP_VER) ? 6 : 4;
-        if (strncmp(dirnam.nam$l_type,".DIR;1",cmplen)) { 
+        cmplen = rms_is_nam_fnb(dirnam, NAM$M_EXP_VER) ? 6 : 4;
+        if (strncmp(rms_nam_typel(dirnam), ".DIR;1", cmplen)) { 
           /* Something other than .DIR[;1].  Bzzt. */
-          dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-          dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+	  sts = rms_free_search_context(&dirfab);
+	  Safefree(esa);
+	  Safefree(trndir);
+	  Safefree(vmsdir);
           set_errno(ENOTDIR);
           set_vaxc_errno(RMS$_DIR);
           return NULL;
         }
       }
-      esa[dirnam.nam$b_esl] = '\0';
-      if (dirnam.nam$l_fnb & NAM$M_EXP_NAME) {
+      esa[rms_nam_esll(dirnam)] = '\0';
+      if (rms_is_nam_fnb(dirnam, NAM$M_EXP_NAME)) {
         /* They provided at least the name; we added the type, if necessary, */
         if (buf) retspec = buf;                            /* in sys$parse() */
-        else if (ts) New(1311,retspec,dirnam.nam$b_esl+1,char);
+        else if (ts) Newx(retspec, rms_nam_esll(dirnam)+1, char);
         else retspec = __fileify_retbuf;
         strcpy(retspec,esa);
-        dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-        dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+	sts = rms_free_search_context(&dirfab);
+	Safefree(trndir);
+	Safefree(esa);
+	Safefree(vmsdir);
         return retspec;
       }
       if ((cp1 = strstr(esa,".][000000]")) != NULL) {
         for (cp2 = cp1 + 9; *cp2; cp1++,cp2++) *cp1 = *cp2;
         *cp1 = '\0';
-        dirnam.nam$b_esl -= 9;
+        rms_nam_esll(dirnam) -= 9;
       }
       if ((cp1 = strrchr(esa,']')) == NULL) cp1 = strrchr(esa,'>');
       if (cp1 == NULL) { /* should never happen */
-        dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-        dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+	sts = rms_free_search_context(&dirfab);
+	Safefree(trndir);
+	Safefree(esa);
+	Safefree(vmsdir);
         return NULL;
       }
       term = *cp1;
       *cp1 = '\0';
       retlen = strlen(esa);
-      if ((cp1 = strrchr(esa,'.')) != NULL) {
+      cp1 = strrchr(esa,'.');
+      /* ODS-5 directory specifications can have extra "." in them. */
+      while (cp1 != NULL) {
+        if ((cp1-1 == esa) || (*(cp1-1) != '^'))
+	  break;
+	else {
+	   cp1--;
+	   while ((cp1 > esa) && (*cp1 != '.'))
+	     cp1--;
+	}
+	if (cp1 == esa)
+	  cp1 = NULL;
+      }
+
+      if ((cp1) != NULL) {
         /* There's more than one directory in the path.  Just roll back. */
         *cp1 = term;
         if (buf) retspec = buf;
-        else if (ts) New(1311,retspec,retlen+7,char);
+        else if (ts) Newx(retspec,retlen+7,char);
         else retspec = __fileify_retbuf;
         strcpy(retspec,esa);
       }
       else {
-        if (dirnam.nam$l_fnb & NAM$M_ROOT_DIR) {
+        if (rms_is_nam_fnb(dirnam, NAM$M_ROOT_DIR)) {
           /* Go back and expand rooted logical name */
-          dirnam.nam$b_nop = NAM$M_SYNCHK | NAM$M_NOCONCEAL;
-          if (!(sys$parse(&dirfab) & 1)) {
-            dirnam.nam$l_rlf = NULL;
-            dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+          rms_set_nam_nop(dirnam, NAM$M_SYNCHK | NAM$M_NOCONCEAL);
+#ifdef NAM$M_NO_SHORT_UPCASE
+	  if (decc_efs_case_preserve)
+	    rms_set_nam_nop(dirnam, NAM$M_NO_SHORT_UPCASE);
+#endif
+          if (!(sys$parse(&dirfab) & STS$K_SUCCESS)) {
+	    sts = rms_free_search_context(&dirfab);
+	    Safefree(esa);
+	    Safefree(trndir);
+	    Safefree(vmsdir);
             set_errno(EVMSERR);
             set_vaxc_errno(dirfab.fab$l_sts);
             return NULL;
           }
-          retlen = dirnam.nam$b_esl - 9; /* esa - '][' - '].DIR;1' */
+          retlen = rms_nam_esll(dirnam) - 9; /* esa - '][' - '].DIR;1' */
           if (buf) retspec = buf;
-          else if (ts) New(1312,retspec,retlen+16,char);
+          else if (ts) Newx(retspec,retlen+16,char);
           else retspec = __fileify_retbuf;
           cp1 = strstr(esa,"][");
           if (!cp1) cp1 = strstr(esa,"]<");
@@ -3403,71 +4786,94 @@ static char *mp_do_fileify_dirspec(pTHX_ char *dir,char *buf,int ts)
           memcpy(retspec,esa,dirlen);
           if (!strncmp(cp1+2,"000000]",7)) {
             retspec[dirlen-1] = '\0';
-            for (cp1 = retspec+dirlen-1; *cp1 != '.' && *cp1 != '['; cp1--) ;
+	    /* Not full ODS-5, just extra dots in directories for now */
+	    cp1 = retspec + dirlen - 1;
+	    while (cp1 > retspec)
+	    {
+	      if (*cp1 == '[')
+		break;
+	      if (*cp1 == '.') {
+		if (*(cp1-1) != '^')
+		  break;
+	      }
+	      cp1--;
+	    }
             if (*cp1 == '.') *cp1 = ']';
             else {
               memmove(cp1+8,cp1+1,retspec+dirlen-cp1);
-              memcpy(cp1+1,"000000]",7);
+              memmove(cp1+1,"000000]",7);
             }
           }
           else {
-            memcpy(retspec+dirlen,cp1+2,retlen-dirlen);
+            memmove(retspec+dirlen,cp1+2,retlen-dirlen);
             retspec[retlen] = '\0';
             /* Convert last '.' to ']' */
-            for (cp1 = retspec+retlen-1; *cp1 != '.' && *cp1 != '['; cp1--) ;
+            cp1 = retspec+retlen-1;
+	    while (*cp != '[') {
+	      cp1--;
+	      if (*cp1 == '.') {
+		/* Do not trip on extra dots in ODS-5 directories */
+		if ((cp1 == retspec) || (*(cp1-1) != '^'))
+		break;
+	      }
+	    }
             if (*cp1 == '.') *cp1 = ']';
             else {
               memmove(cp1+8,cp1+1,retspec+dirlen-cp1);
-              memcpy(cp1+1,"000000]",7);
+              memmove(cp1+1,"000000]",7);
             }
           }
         }
         else {  /* This is a top-level dir.  Add the MFD to the path. */
           if (buf) retspec = buf;
-          else if (ts) New(1312,retspec,retlen+16,char);
+          else if (ts) Newx(retspec,retlen+16,char);
           else retspec = __fileify_retbuf;
           cp1 = esa;
           cp2 = retspec;
-          while (*cp1 != ':') *(cp2++) = *(cp1++);
+          while ((*cp1 != ':')  && (*cp1 != '\0')) *(cp2++) = *(cp1++);
           strcpy(cp2,":[000000]");
           cp1 += 2;
           strcpy(cp2+9,cp1);
         }
       }
-      dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-      dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+      sts = rms_free_search_context(&dirfab);
       /* We've set up the string up through the filename.  Add the
          type and version, and we're done. */
       strcat(retspec,".DIR;1");
 
       /* $PARSE may have upcased filespec, so convert output to lower
        * case if input contained any lowercase characters. */
-      if (haslower) __mystrtolower(retspec);
+      if (haslower && !decc_efs_case_preserve) __mystrtolower(retspec);
+      Safefree(trndir);
+      Safefree(esa);
+      Safefree(vmsdir);
       return retspec;
     }
 }  /* end of do_fileify_dirspec() */
 /*}}}*/
 /* External entry points */
-char *Perl_fileify_dirspec(pTHX_ char *dir, char *buf)
+char *Perl_fileify_dirspec(pTHX_ const char *dir, char *buf)
 { return do_fileify_dirspec(dir,buf,0); }
-char *Perl_fileify_dirspec_ts(pTHX_ char *dir, char *buf)
+char *Perl_fileify_dirspec_ts(pTHX_ const char *dir, char *buf)
 { return do_fileify_dirspec(dir,buf,1); }
 
 /*{{{ char *pathify_dirspec[_ts](char *path, char *buf)*/
-static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
+static char *mp_do_pathify_dirspec(pTHX_ const char *dir,char *buf, int ts)
 {
-    static char __pathify_retbuf[NAM$C_MAXRSS+1];
+    static char __pathify_retbuf[VMS_MAXRSS];
     unsigned long int retlen;
-    char *retpath, *cp1, *cp2, trndir[NAM$C_MAXRSS+1];
+    char *retpath, *cp1, *cp2, *trndir;
     unsigned short int trnlnm_iter_count;
     STRLEN trnlen;
+    int sts;
 
     if (!dir || !*dir) {
       set_errno(EINVAL); set_vaxc_errno(SS$_BADPARAM); return NULL;
     }
 
+    Newx(trndir, VMS_MAXRSS, char);
     if (*dir) strcpy(trndir,dir);
-    else getcwd(trndir,sizeof trndir - 1);
+    else getcwd(trndir,VMS_MAXRSS - 1);
 
     trnlnm_iter_count = 0;
     while (!strpbrk(trndir,"/]:>") && !no_translate_barewords
@@ -3479,49 +4885,74 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
       /* Trap simple rooted lnms, and return lnm:[000000] */
       if (!strcmp(trndir+trnlen-2,".]")) {
         if (buf) retpath = buf;
-        else if (ts) New(1318,retpath,strlen(dir)+10,char);
+        else if (ts) Newx(retpath,strlen(dir)+10,char);
         else retpath = __pathify_retbuf;
         strcpy(retpath,dir);
         strcat(retpath,":[000000]");
+	Safefree(trndir);
         return retpath;
       }
     }
-    dir = trndir;
 
-    if (!strpbrk(dir,"]:>")) { /* Unix-style path or plain name */
-      if (*dir == '.' && (*(dir+1) == '\0' ||
-                          (*(dir+1) == '.' && *(dir+2) == '\0')))
-        retlen = 2 + (*(dir+1) != '\0');
+    /* At this point we do not work with *dir, but the copy in
+     * *trndir that is modifiable.
+     */
+
+    if (!strpbrk(trndir,"]:>")) { /* Unix-style path or plain name */
+      if (*trndir == '.' && (*(trndir+1) == '\0' ||
+                          (*(trndir+1) == '.' && *(trndir+2) == '\0')))
+        retlen = 2 + (*(trndir+1) != '\0');
       else {
-        if ( !(cp1 = strrchr(dir,'/')) &&
-             !(cp1 = strrchr(dir,']')) &&
-             !(cp1 = strrchr(dir,'>')) ) cp1 = dir;
+        if ( !(cp1 = strrchr(trndir,'/')) &&
+             !(cp1 = strrchr(trndir,']')) &&
+             !(cp1 = strrchr(trndir,'>')) ) cp1 = trndir;
         if ((cp2 = strchr(cp1,'.')) != NULL &&
             (*(cp2-1) != '/' ||                /* Trailing '.', '..', */
              !(*(cp2+1) == '\0' ||             /* or '...' are dirs.  */
               (*(cp2+1) == '.' && *(cp2+2) == '\0') ||
               (*(cp2+1) == '.' && *(cp2+2) == '.' && *(cp2+3) == '\0')))) {
           int ver; char *cp3;
-          if (!*(cp2+1) || toupper(*(cp2+1)) != 'D' ||  /* Wrong type. */
-              !*(cp2+2) || toupper(*(cp2+2)) != 'I' ||  /* Bzzt. */
-              !*(cp2+3) || toupper(*(cp2+3)) != 'R' ||
-              (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
-              (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
+
+	  /* For EFS or ODS-5 look for the last dot */
+	  if (decc_efs_charset) {
+	    cp2 = strrchr(cp1,'.');
+	  }
+	  if (vms_process_case_tolerant) {
+              if (!*(cp2+1) || toupper(*(cp2+1)) != 'D' ||  /* Wrong type. */
+                  !*(cp2+2) || toupper(*(cp2+2)) != 'I' ||  /* Bzzt. */
+                  !*(cp2+3) || toupper(*(cp2+3)) != 'R' ||
+                  (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
+                  (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
                             (ver || *cp3)))))) {
-            set_errno(ENOTDIR);
-            set_vaxc_errno(RMS$_DIR);
-            return NULL;
-          }
-          retlen = cp2 - dir + 1;
+		Safefree(trndir);
+                set_errno(ENOTDIR);
+                set_vaxc_errno(RMS$_DIR);
+                return NULL;
+              }
+	  }
+	  else {
+              if (!*(cp2+1) || *(cp2+1) != 'D' ||  /* Wrong type. */
+                  !*(cp2+2) || *(cp2+2) != 'I' ||  /* Bzzt. */
+                  !*(cp2+3) || *(cp2+3) != 'R' ||
+                  (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
+                  (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
+                            (ver || *cp3)))))) {
+		Safefree(trndir);
+                set_errno(ENOTDIR);
+                set_vaxc_errno(RMS$_DIR);
+                return NULL;
+              }
+	  }
+          retlen = cp2 - trndir + 1;
         }
         else {  /* No file type present.  Treat the filename as a directory. */
-          retlen = strlen(dir) + 1;
+          retlen = strlen(trndir) + 1;
         }
       }
       if (buf) retpath = buf;
-      else if (ts) New(1313,retpath,retlen+1,char);
+      else if (ts) Newx(retpath,retlen+1,char);
       else retpath = __pathify_retbuf;
-      strncpy(retpath,dir,retlen-1);
+      strncpy(retpath, trndir, retlen-1);
       if (retpath[retlen-2] != '/') { /* If the path doesn't already end */
         retpath[retlen-1] = '/';      /* with '/', add it. */
         retpath[retlen] = '\0';
@@ -3529,26 +4960,44 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
       else retpath[retlen-1] = '\0';
     }
     else {  /* VMS-style directory spec */
-      char esa[NAM$C_MAXRSS+1], *cp;
+      char *esa, *cp;
       unsigned long int sts, cmplen, haslower;
       struct FAB dirfab = cc$rms_fab;
-      struct NAM savnam, dirnam = cc$rms_nam;
+      int dirlen;
+      rms_setup_nam(savnam);
+      rms_setup_nam(dirnam);
 
       /* If we've got an explicit filename, we can just shuffle the string. */
-      if ( ( (cp1 = strrchr(dir,']')) != NULL ||
-             (cp1 = strrchr(dir,'>')) != NULL     ) && *(cp1+1)) {
+      if ( ( (cp1 = strrchr(trndir,']')) != NULL ||
+             (cp1 = strrchr(trndir,'>')) != NULL     ) && *(cp1+1)) {
         if ((cp2 = strchr(cp1,'.')) != NULL) {
           int ver; char *cp3;
-          if (!*(cp2+1) || toupper(*(cp2+1)) != 'D' ||  /* Wrong type. */
-              !*(cp2+2) || toupper(*(cp2+2)) != 'I' ||  /* Bzzt. */
-              !*(cp2+3) || toupper(*(cp2+3)) != 'R' ||
-              (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
-              (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
+	  if (vms_process_case_tolerant) {
+              if (!*(cp2+1) || toupper(*(cp2+1)) != 'D' ||  /* Wrong type. */
+                  !*(cp2+2) || toupper(*(cp2+2)) != 'I' ||  /* Bzzt. */
+                  !*(cp2+3) || toupper(*(cp2+3)) != 'R' ||
+                  (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
+                  (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
                             (ver || *cp3)))))) {
-            set_errno(ENOTDIR);
-            set_vaxc_errno(RMS$_DIR);
-            return NULL;
-          }
+	       Safefree(trndir);
+               set_errno(ENOTDIR);
+               set_vaxc_errno(RMS$_DIR);
+               return NULL;
+             }
+	  }
+	  else {
+              if (!*(cp2+1) || *(cp2+1) != 'D' ||  /* Wrong type. */
+                  !*(cp2+2) || *(cp2+2) != 'I' ||  /* Bzzt. */
+                  !*(cp2+3) || *(cp2+3) != 'R' ||
+                  (*(cp2+4) && ((*(cp2+4) != ';' && *(cp2+4) != '.')  ||
+                  (*(cp2+5) && ((ver = strtol(cp2+5,&cp3,10)) != 1 &&
+                            (ver || *cp3)))))) {
+	       Safefree(trndir);
+               set_errno(ENOTDIR);
+               set_vaxc_errno(RMS$_DIR);
+               return NULL;
+             }
+	  }
         }
         else {  /* No file type, so just draw name into directory part */
           for (cp2 = cp1; *cp2; cp2++) ;
@@ -3558,32 +5007,39 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
         *cp1 = '.';
         /* We've now got a VMS 'path'; fall through */
       }
-      dirfab.fab$b_fns = strlen(dir);
-      dirfab.fab$l_fna = dir;
-      if (dir[dirfab.fab$b_fns-1] == ']' ||
-          dir[dirfab.fab$b_fns-1] == '>' ||
-          dir[dirfab.fab$b_fns-1] == ':') { /* It's already a VMS 'path' */
-        if (buf) retpath = buf;
-        else if (ts) New(1314,retpath,strlen(dir)+1,char);
-        else retpath = __pathify_retbuf;
-        strcpy(retpath,dir);
-        return retpath;
-      } 
-      dirfab.fab$l_dna = ".DIR;1";
-      dirfab.fab$b_dns = 6;
-      dirfab.fab$l_nam = &dirnam;
-      dirnam.nam$b_ess = (unsigned char) sizeof esa - 1;
-      dirnam.nam$l_esa = esa;
 
-      for (cp = dir; *cp; cp++)
+      dirlen = strlen(trndir);
+      if (trndir[dirlen-1] == ']' ||
+          trndir[dirlen-1] == '>' ||
+          trndir[dirlen-1] == ':') { /* It's already a VMS 'path' */
+        if (buf) retpath = buf;
+        else if (ts) Newx(retpath,strlen(trndir)+1,char);
+        else retpath = __pathify_retbuf;
+        strcpy(retpath,trndir);
+	Safefree(trndir);
+        return retpath;
+      }
+      rms_set_fna(dirfab, dirnam, trndir, dirlen);
+      Newx(esa, VMS_MAXRSS, char);
+      rms_set_dna(dirfab, dirnam, ".DIR;1", 6);
+      rms_bind_fab_nam(dirfab, dirnam);
+      rms_set_esa(dirfab, dirnam, esa, VMS_MAXRSS - 1);
+#ifdef NAM$M_NO_SHORT_UPCASE
+      if (decc_efs_case_preserve)
+	  rms_set_nam_nop(dirnam, NAM$M_NO_SHORT_UPCASE);
+#endif
+
+      for (cp = trndir; *cp; cp++)
         if (islower(*cp)) { haslower = 1; break; }
 
-      if (!(sts = (sys$parse(&dirfab)&1))) {
-        if (dirfab.fab$l_sts == RMS$_DIR) {
-          dirnam.nam$b_nop |= NAM$M_SYNCHK;
-          sts = sys$parse(&dirfab) & 1;
+      if (!(sts = (sys$parse(&dirfab)& STS$K_SUCCESS))) {
+        if ((dirfab.fab$l_sts == RMS$_DIR) || (dirfab.fab$l_sts == RMS$_DNF)) {
+	  rms_set_nam_nop(dirnam, NAM$M_SYNCHK);
+          sts = sys$parse(&dirfab) & STS$K_SUCCESS;
         }
         if (!sts) {
+	  Safefree(trndir);
+	  Safefree(esa);
           set_errno(EVMSERR);
           set_vaxc_errno(dirfab.fab$l_sts);
           return NULL;
@@ -3591,10 +5047,13 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
       }
       else {
         savnam = dirnam;
-        if (!(sys$search(&dirfab)&1)) {  /* Does the file really exist? */
+	/* Does the file really exist? */
+        if (!(sys$search(&dirfab)&STS$K_SUCCESS)) {
           if (dirfab.fab$l_sts != RMS$_FNF) {
-            dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-            dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+	    int sts1;
+	    sts1 = rms_free_search_context(&dirfab);
+	    Safefree(trndir);
+	    Safefree(esa);
             set_errno(EVMSERR);
             set_vaxc_errno(dirfab.fab$l_sts);
             return NULL;
@@ -3602,13 +5061,15 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
           dirnam = savnam; /* No; just work with potential name */
         }
       }
-      if (dirnam.nam$l_fnb & NAM$M_EXP_TYPE) {  /* Was type specified? */
+      if (rms_is_nam_fnb(dirnam, NAM$M_EXP_TYPE)) {  /* Was type specified? */
         /* Yep; check version while we're at it, if it's there. */
-        cmplen = (dirnam.nam$l_fnb & NAM$M_EXP_VER) ? 6 : 4;
-        if (strncmp(dirnam.nam$l_type,".DIR;1",cmplen)) { 
+        cmplen = rms_is_nam_fnb(dirnam, NAM$M_EXP_VER) ? 6 : 4;
+        if (strncmp(rms_nam_typel(dirnam),".DIR;1",cmplen)) {
+	  int sts2;
           /* Something other than .DIR[;1].  Bzzt. */
-          dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-          dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+	  sts2 = rms_free_search_context(&dirfab);
+	  Safefree(trndir);
+	  Safefree(esa);
           set_errno(ENOTDIR);
           set_vaxc_errno(RMS$_DIR);
           return NULL;
@@ -3616,42 +5077,45 @@ static char *mp_do_pathify_dirspec(pTHX_ char *dir,char *buf, int ts)
       }
       /* OK, the type was fine.  Now pull any file name into the
          directory path. */
-      if ((cp1 = strrchr(esa,']'))) *dirnam.nam$l_type = ']';
+      if ((cp1 = strrchr(esa,']'))) *(rms_nam_typel(dirnam)) = ']';
       else {
         cp1 = strrchr(esa,'>');
-        *dirnam.nam$l_type = '>';
+        *(rms_nam_typel(dirnam)) = '>';
       }
       *cp1 = '.';
-      *(dirnam.nam$l_type + 1) = '\0';
-      retlen = dirnam.nam$l_type - esa + 2;
+      *(rms_nam_typel(dirnam) + 1) = '\0';
+      retlen = (rms_nam_typel(dirnam)) - esa + 2;
       if (buf) retpath = buf;
-      else if (ts) New(1314,retpath,retlen,char);
+      else if (ts) Newx(retpath,retlen,char);
       else retpath = __pathify_retbuf;
       strcpy(retpath,esa);
-      dirnam.nam$b_nop |= NAM$M_SYNCHK;  dirnam.nam$l_rlf = NULL;
-      dirfab.fab$b_dns = 0;  (void) sys$parse(&dirfab,0,0);
+      Safefree(esa);
+      sts = rms_free_search_context(&dirfab);
       /* $PARSE may have upcased filespec, so convert output to lower
        * case if input contained any lowercase characters. */
-      if (haslower) __mystrtolower(retpath);
+      if (haslower && !decc_efs_case_preserve) __mystrtolower(retpath);
     }
 
+    Safefree(trndir);
     return retpath;
 }  /* end of do_pathify_dirspec() */
 /*}}}*/
 /* External entry points */
-char *Perl_pathify_dirspec(pTHX_ char *dir, char *buf)
+char *Perl_pathify_dirspec(pTHX_ const char *dir, char *buf)
 { return do_pathify_dirspec(dir,buf,0); }
-char *Perl_pathify_dirspec_ts(pTHX_ char *dir, char *buf)
+char *Perl_pathify_dirspec_ts(pTHX_ const char *dir, char *buf)
 { return do_pathify_dirspec(dir,buf,1); }
 
-/*{{{ char *tounixspec[_ts](char *path, char *buf)*/
-static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
+/*{{{ char *tounixspec[_ts](char *spec, char *buf)*/
+static char *mp_do_tounixspec(pTHX_ const char *spec, char *buf, int ts)
 {
-  static char __tounixspec_retbuf[NAM$C_MAXRSS+1];
-  char *dirend, *rslt, *cp1, *cp2, *cp3, tmp[NAM$C_MAXRSS+1];
-  int devlen, dirlen, retlen = NAM$C_MAXRSS+1;
+  static char __tounixspec_retbuf[VMS_MAXRSS];
+  char *dirend, *rslt, *cp1, *cp3, tmp[VMS_MAXRSS];
+  const char *cp2;
+  int devlen, dirlen, retlen = VMS_MAXRSS;
   int expand = 1; /* guarantee room for leading and trailing slashes */
   unsigned short int trnlnm_iter_count;
+  int cmp_rslt;
 
   if (spec == NULL) return NULL;
   if (strlen(spec) > NAM$C_MAXRSS) return NULL;
@@ -3667,10 +5131,80 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
           { expand++; cp1 +=2; } /* VMS '...' ==> Unix '/.../' */
       }
     }
-    New(1315,rslt,retlen+2+2*expand,char);
+    Newx(rslt,retlen+2+2*expand,char);
   }
   else rslt = __tounixspec_retbuf;
-  if (strchr(spec,'/') != NULL) {
+
+  /* New VMS specific format needs translation
+   * glob passes filenames with trailing '\n' and expects this preserved.
+   */
+  if (decc_posix_compliant_pathnames) {
+    if (strncmp(spec, "\"^UP^", 5) == 0) {
+      char * uspec;
+      char *tunix;
+      int tunix_len;
+      int nl_flag;
+
+      Newx(tunix, VMS_MAXRSS + 1,char);
+      strcpy(tunix, spec);
+      tunix_len = strlen(tunix);
+      nl_flag = 0;
+      if (tunix[tunix_len - 1] == '\n') {
+	tunix[tunix_len - 1] = '\"';
+	tunix[tunix_len] = '\0';
+	tunix_len--;
+	nl_flag = 1;
+      }
+      uspec = decc$translate_vms(tunix);
+      Safefree(tunix);
+      if ((int)uspec > 0) {
+	strcpy(rslt,uspec);
+	if (nl_flag) {
+	  strcat(rslt,"\n");
+	}
+	else {
+	  /* If we can not translate it, makemaker wants as-is */
+	  strcpy(rslt, spec);
+	}
+	return rslt;
+      }
+    }
+  }
+
+  cmp_rslt = 0; /* Presume VMS */
+  cp1 = strchr(spec, '/');
+  if (cp1 == NULL)
+    cmp_rslt = 0;
+
+    /* Look for EFS ^/ */
+    if (decc_efs_charset) {
+      while (cp1 != NULL) {
+	cp2 = cp1 - 1;
+	if (*cp2 != '^') {
+	  /* Found illegal VMS, assume UNIX */
+	  cmp_rslt = 1;
+	  break;
+	}
+      cp1++;
+      cp1 = strchr(cp1, '/');
+    }
+  }
+
+  /* Look for "." and ".." */
+  if (decc_filename_unix_report) {
+    if (spec[0] == '.') {
+      if ((spec[1] == '\0') || (spec[1] == '\n')) {
+	cmp_rslt = 1;
+      }
+      else {
+	if ((spec[1] == '.') && ((spec[2] == '\0') || (spec[2] == '\n'))) {
+	  cmp_rslt = 1;
+	}
+      }
+    }
+  }
+  /* This is already UNIX or at least nothing VMS understands */
+  if (cmp_rslt) {
     strcpy(rslt,spec);
     return rslt;
   }
@@ -3684,6 +5218,61 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
     strcpy(rslt,spec);
     return rslt;
   }
+
+  /* Special case 1 - sys$posix_root = / */
+#if __CRTL_VER >= 70000000
+  if (!decc_disable_posix_root) {
+    if (strncasecmp(spec, "SYS$POSIX_ROOT:", 15) == 0) {
+      *cp1 = '/';
+      cp1++;
+      cp2 = cp2 + 15;
+      }
+  }
+#endif
+
+  /* Special case 2 - Convert NLA0: to /dev/null */
+#if __CRTL_VER < 70000000
+  cmp_rslt = strncmp(spec,"NLA0:", 5);
+  if (cmp_rslt != 0)
+     cmp_rslt = strncmp(spec,"nla0:", 5);
+#else
+  cmp_rslt = strncasecmp(spec,"NLA0:", 5);
+#endif
+  if (cmp_rslt == 0) {
+    strcpy(rslt, "/dev/null");
+    cp1 = cp1 + 9;
+    cp2 = cp2 + 5;
+    if (spec[6] != '\0') {
+      cp1[9] == '/';
+      cp1++;
+      cp2++;
+    }
+  }
+
+   /* Also handle special case "SYS$SCRATCH:" */
+#if __CRTL_VER < 70000000
+  cmp_rslt = strncmp(spec,"SYS$SCRATCH:", 12);
+  if (cmp_rslt != 0)
+     cmp_rslt = strncmp(spec,"sys$scratch:", 12);
+#else
+  cmp_rslt = strncasecmp(spec,"SYS$SCRATCH:", 12);
+#endif
+  if (cmp_rslt == 0) {
+  int islnm;
+
+    islnm = my_trnlnm(tmp, "TMP", 0);
+    if (!islnm) {
+      strcpy(rslt, "/tmp");
+      cp1 = cp1 + 4;
+      cp2 = cp2 + 12;
+      if (spec[12] != '\0') {
+	cp1[4] == '/';
+	cp1++;
+	cp2++;
+      }
+    }
+  }
+
   if (*cp2 != '[' && *cp2 != '<') {
     *(cp1++) = '/';
   }
@@ -3693,7 +5282,7 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
       *(cp1++) = '.'; *(cp1++) = '/'; *(cp1++) = '\0';
       return rslt;
     }
-    else if ( *cp2 != '.' && *cp2 != '-') { /* add the implied device */
+    else if ( *cp2 != '^' && *cp2 != '.' && *cp2 != '-') { /* add the implied device */
       if (getcwd(tmp,sizeof tmp,1) == NULL) {
         if (ts) Safefree(rslt);
         return NULL;
@@ -3721,6 +5310,11 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
       }
       *(cp1++) = '/';
     }
+    if ((*cp2 == '^')) {
+	/* EFS file escape, pass the next character as is */
+	/* Fix me: HEX encoding for UNICODE not implemented */
+	cp2++;
+    }
     else if ( *cp2 == '.') {
       if (*(cp2+1) == '.' && *(cp2+2) == '.') {
         *(cp1++) = '.'; *(cp1++) = '.'; *(cp1++) = '.'; *(cp1++) = '/';
@@ -3730,6 +5324,12 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
     }
   }
   for (; cp2 <= dirend; cp2++) {
+    if ((*cp2 == '^')) {
+	/* EFS file escape, pass the next character as is */
+	/* Fix me: HEX encoding for UNICODE not implemented */
+	cp2++;
+	*(cp1++) = *cp2;
+    }
     if (*cp2 == ':') {
       *(cp1++) = '/';
       if (*(cp2+1) == '[') cp2++;
@@ -3737,7 +5337,7 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
     else if (*cp2 == ']' || *cp2 == '>') {
       if (*(cp1-1) != '/') *(cp1++) = '/'; /* Don't double after ellipsis */
     }
-    else if (*cp2 == '.') {
+    else if ((*cp2 == '.') && (*cp2-1 != '^')) {
       *(cp1++) = '/';
       if (*(cp2+1) == ']' || *(cp2+1) == '>') {
         while (*(cp2+1) == ']' || *(cp2+1) == '>' ||
@@ -3769,24 +5369,687 @@ static char *mp_do_tounixspec(pTHX_ char *spec, char *buf, int ts)
   while (*cp2) *(cp1++) = *(cp2++);
   *cp1 = '\0';
 
+  /* This still leaves /000000/ when working with a
+   * VMS device root or concealed root.
+   */
+  {
+  int ulen;
+  char * zeros;
+
+      ulen = strlen(rslt);
+
+      /* Get rid of "000000/ in rooted filespecs */
+      if (ulen > 7) {
+	zeros = strstr(rslt, "/000000/");
+	if (zeros != NULL) {
+	  int mlen;
+	  mlen = ulen - (zeros - rslt) - 7;
+	  memmove(zeros, &zeros[7], mlen);
+	  ulen = ulen - 7;
+	  rslt[ulen] = '\0';
+	}
+      }
+  }
+
   return rslt;
 
 }  /* end of do_tounixspec() */
 /*}}}*/
 /* External entry points */
-char *Perl_tounixspec(pTHX_ char *spec, char *buf) { return do_tounixspec(spec,buf,0); }
-char *Perl_tounixspec_ts(pTHX_ char *spec, char *buf) { return do_tounixspec(spec,buf,1); }
+char *Perl_tounixspec(pTHX_ const char *spec, char *buf) { return do_tounixspec(spec,buf,0); }
+char *Perl_tounixspec_ts(pTHX_ const char *spec, char *buf) { return do_tounixspec(spec,buf,1); }
+
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+
+static int posix_to_vmsspec
+  (char *vmspath, int vmspath_len, const char *unixpath) {
+int sts;
+struct FAB myfab = cc$rms_fab;
+struct NAML mynam = cc$rms_naml;
+struct dsc$descriptor_s dvidsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
+ struct dsc$descriptor_s specdsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
+char *esa;
+char *vms_delim;
+int dir_flag;
+int unixlen;
+
+  /* If not a posix spec already, convert it */
+  dir_flag = 0;
+  unixlen = strlen(unixpath);
+  if (unixlen == 0) {
+    vmspath[0] = '\0';
+    return SS$_NORMAL;
+  }
+  if (strncmp(unixpath,"\"^UP^",5) != 0) {
+    sprintf(vmspath,"\"^UP^%s\"",unixpath);
+  }
+  else {
+    /* This is already a VMS specification, no conversion */
+    unixlen--;
+    strncpy(vmspath,unixpath, vmspath_len);
+  }
+  vmspath[vmspath_len] = 0;
+  if (unixpath[unixlen - 1] == '/')
+  dir_flag = 1;
+  Newx(esa, VMS_MAXRSS, char);
+  myfab.fab$l_fna = vmspath;
+  myfab.fab$b_fns = strlen(vmspath);
+  myfab.fab$l_naml = &mynam;
+  mynam.naml$l_esa = NULL;
+  mynam.naml$b_ess = 0;
+  mynam.naml$l_long_expand = esa;
+  mynam.naml$l_long_expand_alloc = (unsigned char) VMS_MAXRSS - 1;
+  mynam.naml$l_rsa = NULL;
+  mynam.naml$b_rss = 0;
+  if (decc_efs_case_preserve)
+    mynam.naml$b_nop |= NAM$M_NO_SHORT_UPCASE;
+  mynam.naml$l_input_flags |= NAML$M_OPEN_SPECIAL;
+
+  /* Set up the remaining naml fields */
+  sts = sys$parse(&myfab);
+
+  /* It failed! Try again as a UNIX filespec */
+  if (!(sts & 1)) {
+    Safefree(esa);
+    return sts;
+  }
+
+   /* get the Device ID and the FID */
+   sts = sys$search(&myfab);
+   /* on any failure, returned the POSIX ^UP^ filespec */
+   if (!(sts & 1)) {
+      Safefree(esa);
+      return sts;
+   }
+   specdsc.dsc$a_pointer = vmspath;
+   specdsc.dsc$w_length = vmspath_len;
+ 
+   dvidsc.dsc$a_pointer = &mynam.naml$t_dvi[1];
+   dvidsc.dsc$w_length = mynam.naml$t_dvi[0];
+   sts = lib$fid_to_name
+      (&dvidsc, mynam.naml$w_fid, &specdsc, &specdsc.dsc$w_length);
+
+  /* on any failure, returned the POSIX ^UP^ filespec */
+  if (!(sts & 1)) {
+     /* This can happen if user does not have permission to read directories */
+     if (strncmp(unixpath,"\"^UP^",5) != 0)
+       sprintf(vmspath,"\"^UP^%s\"",unixpath);
+     else
+       strcpy(vmspath, unixpath);
+  }
+  else {
+    vmspath[specdsc.dsc$w_length] = 0;
+
+    /* Are we expecting a directory? */
+    if (dir_flag != 0) {
+    int i;
+    char *eptr;
+
+      eptr = NULL;
+
+      i = specdsc.dsc$w_length - 1;
+      while (i > 0) {
+      int zercnt;
+	zercnt = 0;
+	/* Version must be '1' */
+	if (vmspath[i--] != '1')
+	  break;
+	/* Version delimiter is one of ".;" */
+	if ((vmspath[i] != '.') && (vmspath[i] != ';'))
+	  break;
+	i--;
+	if (vmspath[i--] != 'R')
+	  break;
+	if (vmspath[i--] != 'I')
+	  break;
+	if (vmspath[i--] != 'D')
+	  break;
+	if (vmspath[i--] != '.')
+	  break;
+	eptr = &vmspath[i+1];
+ 	while (i > 0) {
+	  if ((vmspath[i] == ']') || (vmspath[i] == '>')) {
+	    if (vmspath[i-1] != '^') {
+	      if (zercnt != 6) {
+  		*eptr = vmspath[i];
+		eptr[1] = '\0';
+		vmspath[i] = '.';
+  		break;
+	      }
+	      else {
+ 		/* Get rid of 6 imaginary zero directory filename */
+  		vmspath[i+1] = '\0';
+ 	      }
+	    }
+	  }
+	  if (vmspath[i] == '0')
+	    zercnt++;
+	  else
+	    zercnt = 10;
+	  i--;
+	}
+	break;
+      }
+    }
+  }
+  Safefree(esa);
+  return sts;
+}
+
+/* Can not use LIB$FID_TO_NAME, so doing a manual conversion */
+static int posix_to_vmsspec_hardway
+  (char *vmspath, int vmspath_len, const char *unixpath) {
+
+char *esa;
+const char *unixptr;
+char *vmsptr;
+const char *lastslash;
+const char *lastdot;
+int unixlen;
+int vmslen;
+int dir_start;
+int dir_dot;
+int quoted;
+
+
+  unixptr = unixpath;
+  dir_dot = 0;
+
+  /* Ignore leading "/" characters */
+  while((unixptr[0] == '/') && (unixptr[1] == '/')) {
+    unixptr++;
+  }
+  unixlen = strlen(unixptr);
+
+  /* Do nothing with blank paths */
+  if (unixlen == 0) {
+    vmspath[0] = '\0';
+    return SS$_NORMAL;
+  }
+
+  lastslash = strrchr(unixptr,'/');
+  lastdot = strrchr(unixptr,'.');
+
+
+  /* last dot is last dot or past end of string */
+  if (lastdot == NULL)
+    lastdot = unixptr + unixlen;
+
+  /* if no directories, set last slash to beginning of string */
+  if (lastslash == NULL) {
+    lastslash = unixptr;
+  }
+  else {
+    /* Watch out for trailing "." after last slash, still a directory */
+    if ((lastslash[1] == '.') && (lastslash[2] == '\0')) {
+      lastslash = unixptr + unixlen;
+    }
+
+    /* Watch out for traiing ".." after last slash, still a directory */
+    if ((lastslash[1] == '.')&&(lastslash[2] == '.')&&(lastslash[3] == '\0')) {
+      lastslash = unixptr + unixlen;
+    }
+
+    /* dots in directories are aways escaped */
+    if (lastdot < lastslash)
+      lastdot = unixptr + unixlen;
+  }
+
+  /* if (unixptr < lastslash) then we are in a directory */
+
+  dir_start = 0;
+  quoted = 0;
+
+  vmsptr = vmspath;
+  vmslen = 0;
+
+  /* This could have a "^UP^ on the front */
+  if (strncmp(unixptr,"\"^UP^",5) == 0) {
+    quoted = 1;
+    unixptr+= 5;
+  }
+
+  /* Start with the UNIX path */
+  if (*unixptr != '/') {
+    /* relative paths */
+    if (lastslash > unixptr) {
+    int dotdir_seen;
+
+      /* skip leading ./ */
+      dotdir_seen = 0;
+      while ((unixptr[0] == '.') && (unixptr[1] == '/')) {
+	dotdir_seen = 1;
+	unixptr++;
+	unixptr++;
+      }
+
+      /* Are we still in a directory? */
+      if (unixptr <= lastslash) {
+ 	*vmsptr++ = '[';
+ 	vmslen = 1;
+ 	dir_start = 1;
+ 
+ 	/* if not backing up, then it is relative forward. */
+ 	if (!((*unixptr == '.') && (unixptr[1] == '.') &&
+ 	      ((unixptr[2] == '/') || (unixptr[2] == '\0')))) {
+ 	  *vmsptr++ = '.';
+ 	  vmslen++;
+ 	  dir_dot = 1;
+ 	}
+       }
+       else {
+	 if (dotdir_seen) {
+	   /* Perl wants an empty directory here to tell the difference
+	    * between a DCL commmand and a filename
+	    */
+	  *vmsptr++ = '[';
+	  *vmsptr++ = ']';
+	  vmslen = 2;
+ 	}
+      }
+    }
+    else {
+      /* Handle two special files . and .. */
+      if (unixptr[0] == '.') {
+        if (unixptr[1] == '\0') {
+	  *vmsptr++ = '[';
+	  *vmsptr++ = ']';
+	  vmslen += 2;
+	  *vmsptr++ = '\0';
+	  return SS$_NORMAL;
+	}
+        if ((unixptr[1] == '.') && (unixptr[2] == '\0')) {
+	  *vmsptr++ = '[';
+	  *vmsptr++ = '-';
+	  *vmsptr++ = ']';
+	  vmslen += 3;
+	  *vmsptr++ = '\0';
+	  return SS$_NORMAL;
+	}
+      }
+    }
+  }
+  else {	/* Absolute PATH handling */
+  int sts;
+  char * nextslash;
+  int seg_len;
+    /* Need to find out where root is */
+
+    /* In theory, this procedure should never get an absolute POSIX pathname
+     * that can not be found on the POSIX root.
+     * In practice, that can not be relied on, and things will show up
+     * here that are a VMS device name or concealed logical name instead.
+     * So to make things work, this procedure must be tolerant.
+     */
+    Newx(esa, vmspath_len, char);
+
+    sts = SS$_NORMAL;
+    nextslash = strchr(&unixptr[1],'/');
+    seg_len = 0;
+    if (nextslash != NULL) {
+      seg_len = nextslash - &unixptr[1];
+      strncpy(vmspath, unixptr, seg_len + 1);
+      vmspath[seg_len+1] = 0;
+      sts = posix_to_vmsspec(esa, vmspath_len, vmspath);
+    }
+
+    if (sts & 1) {
+      /* This is verified to be a real path */
+
+      sts = posix_to_vmsspec(esa, vmspath_len, "/");
+      strcpy(vmspath, esa);
+      vmslen = strlen(vmspath);
+      vmsptr = vmspath + vmslen;
+      unixptr++;
+      if (unixptr < lastslash) {
+      char * rptr;
+	vmsptr--;
+	*vmsptr++ = '.';
+	dir_start = 1;
+	dir_dot = 1;
+	if (vmslen > 7) {
+	int cmp;
+	  rptr = vmsptr - 7;
+	  cmp = strcmp(rptr,"000000.");
+	  if (cmp == 0) {
+	    vmslen -= 7;
+	    vmsptr -= 7;
+	    vmsptr[1] = '\0';
+	  } /* removing 6 zeros */
+	} /* vmslen < 7, no 6 zeros possible */
+      } /* Not in a directory */
+    } /* end of verified real path handling */
+    else {
+    int add_6zero;
+    int islnm;
+
+      /* Ok, we have a device or a concealed root that is not in POSIX
+       * or we have garbage.  Make the best of it.
+       */
+
+      /* Posix to VMS destroyed this, so copy it again */
+      strncpy(vmspath, &unixptr[1], seg_len);
+      vmspath[seg_len] = 0;
+      vmslen = seg_len;
+      vmsptr = &vmsptr[vmslen];
+      islnm = 0;
+
+      /* Now do we need to add the fake 6 zero directory to it? */
+      add_6zero = 1;
+      if ((*lastslash == '/') && (nextslash < lastslash)) {
+	/* No there is another directory */
+	add_6zero = 0;
+      }
+      else {
+      int trnend;
+
+	/* now we have foo:bar or foo:[000000]bar to decide from */
+	islnm = vmstrnenv(vmspath, esa, 0, fildev, 0);
+        trnend = islnm ? islnm - 1 : 0;
+
+	/* if this was a logical name, ']' or '>' must be present */
+	/* if not a logical name, then assume a device and hope. */
+	islnm =  trnend ? (esa[trnend] == ']' || esa[trnend] == '>') : 0;
+
+	/* if log name and trailing '.' then rooted - treat as device */
+	add_6zero = islnm ? (esa[trnend-1] == '.') : 0;
+
+	/* Fix me, if not a logical name, a device lookup should be
+         * done to see if the device is file structured.  If the device
+         * is not file structured, the 6 zeros should not be put on.
+         *
+         * As it is, perl is occasionally looking for dev:[000000]tty.
+	 * which looks a little strange.
+         */
+
+	if ((add_6zero == 0) && (*nextslash == '/') && (nextslash[1] == '\0')) {
+	  /* No real directory present */
+	  add_6zero = 1;
+	}
+      }
+
+      /* Put the device delimiter on */
+      *vmsptr++ = ':';
+      vmslen++;
+      unixptr = nextslash;
+      unixptr++;
+
+      /* Start directory if needed */
+      if (!islnm || add_6zero) {
+	*vmsptr++ = '[';
+	vmslen++;
+	dir_start = 1;
+      }
+
+      /* add fake 000000] if needed */
+      if (add_6zero) {
+	*vmsptr++ = '0';
+	*vmsptr++ = '0';
+	*vmsptr++ = '0';
+	*vmsptr++ = '0';
+	*vmsptr++ = '0';
+	*vmsptr++ = '0';
+	*vmsptr++ = ']';
+	vmslen += 7;
+	dir_start = 0;
+      }
+
+    } /* non-POSIX translation */
+    Safefree(esa);
+  } /* End of relative/absolute path handling */
+
+  while ((*unixptr) && (vmslen < vmspath_len)){
+  int dash_flag;
+
+    dash_flag = 0;
+
+    if (dir_start != 0) {
+
+      /* First characters in a directory are handled special */
+      while ((*unixptr == '/') ||
+	     ((*unixptr == '.') &&
+	      ((unixptr[1]=='.') || (unixptr[1]=='/') || (unixptr[1]=='\0')))) {
+      int loop_flag;
+
+	loop_flag = 0;
+
+        /* Skip redundant / in specification */
+        while ((*unixptr == '/') && (dir_start != 0)) {
+	  loop_flag = 1;
+	  unixptr++;
+	  if (unixptr == lastslash)
+	    break;
+	}
+	if (unixptr == lastslash)
+	  break;
+
+        /* Skip redundant ./ characters */
+	while ((*unixptr == '.') &&
+	       ((unixptr[1] == '/')||(unixptr[1] == '\0'))) {
+	  loop_flag = 1;
+	  unixptr++;
+	  if (unixptr == lastslash)
+	    break;
+	  if (*unixptr == '/')
+	    unixptr++;
+	}
+	if (unixptr == lastslash)
+	  break;
+
+	/* Skip redundant ../ characters */
+	while ((*unixptr == '.') && (unixptr[1] == '.') &&
+	     ((unixptr[2] == '/') || (unixptr[2] == '\0'))) {
+	  /* Set the backing up flag */
+	  loop_flag = 1;
+	  dir_dot = 0;
+	  dash_flag = 1;
+	  *vmsptr++ = '-';
+	  vmslen++;
+	  unixptr++; /* first . */
+	  unixptr++; /* second . */
+	  if (unixptr == lastslash)
+	    break;
+	  if (*unixptr == '/') /* The slash */
+	    unixptr++;
+	}
+	if (unixptr == lastslash)
+	  break;
+
+	/* To do: Perl expects /.../ to be translated to [...] on VMS */
+  	/* Not needed when VMS is pretending to be UNIX. */
+
+	/* Is this loop stuck because of too many dots? */
+	if (loop_flag == 0) {
+	  /* Exit the loop and pass the rest through */
+	  break;
+	}
+      }
+
+      /* Are we done with directories yet? */
+      if (unixptr >= lastslash) {
+
+	/* Watch out for trailing dots */
+	if (dir_dot != 0) {
+	    vmslen --;
+	    vmsptr--;
+	}
+	*vmsptr++ = ']';
+	vmslen++;
+	dash_flag = 0;
+	dir_start = 0;
+	if (*unixptr == '/')
+	  unixptr++;
+      }
+      else {
+	/* Have we stopped backing up? */
+	if (dash_flag) {
+	  *vmsptr++ = '.';
+	  vmslen++;
+	  dash_flag = 0;
+	  /* dir_start continues to be = 1 */
+	}
+	if (*unixptr == '-') {
+	  *vmsptr++ = '^';
+	  *vmsptr++ = *unixptr++;
+	  vmslen += 2;
+	  dir_start = 0;
+
+	  /* Now are we done with directories yet? */
+	  if (unixptr >= lastslash) {
+
+	    /* Watch out for trailing dots */
+	    if (dir_dot != 0) {
+	      vmslen --;
+	      vmsptr--;
+	    }
+
+	    *vmsptr++ = ']';
+	    vmslen++;
+	    dash_flag = 0;
+	    dir_start = 0;
+	  }
+	}
+      }
+    }
+
+    /* All done? */
+    if (*unixptr == '\0')
+      break;
+
+    /* Normal characters - More EFS work probably needed */
+    dir_start = 0;
+    dir_dot = 0;
+
+    switch(*unixptr) {
+    case '/':
+	/* remove multiple / */
+	while (unixptr[1] == '/') {
+	   unixptr++;
+	}
+	if (unixptr == lastslash) {
+	  /* Watch out for trailing dots */
+	  if (dir_dot != 0) {
+	    vmslen --;
+	    vmsptr--;
+	  }
+	  *vmsptr++ = ']';
+	}
+	else {
+	  dir_start = 1;
+	  *vmsptr++ = '.';
+	  dir_dot = 1;
+
+	  /* To do: Perl expects /.../ to be translated to [...] on VMS */
+ 	  /* Not needed when VMS is pretending to be UNIX. */
+
+	}
+	dash_flag = 0;
+	if (*unixptr != '\0')
+	  unixptr++;
+	vmslen++;
+	break;
+    case '?':
+	*vmsptr++ = '%';
+	vmslen++;
+	unixptr++;
+	break;
+    case ' ':
+	*vmsptr++ = '^';
+	*vmsptr++ = '_';
+	vmslen += 2;
+	unixptr++;
+	break;
+    case '.':
+	if ((unixptr < lastdot) || (unixptr[1] == '\0')) {
+	  *vmsptr++ = '^';
+	  *vmsptr++ = '.';
+	  vmslen += 2;
+	  unixptr++;
+
+	  /* trailing dot ==> '^..' on VMS */
+	  if (*unixptr == '\0') {
+	    *vmsptr++ = '.';
+	    vmslen++;
+	  }
+	  *vmsptr++ = *unixptr++;
+	  vmslen ++;
+	}
+	if (quoted && (unixptr[1] == '\0')) {
+	  unixptr++;
+	  break;
+	}
+	*vmsptr++ = '^';
+	*vmsptr++ = *unixptr++;
+	vmslen += 2;
+	break;
+    case '~':
+    case ';':
+    case '\\':
+	*vmsptr++ = '^';
+	*vmsptr++ = *unixptr++;
+	vmslen += 2;
+	break;
+    default:
+	if (*unixptr != '\0') {
+	  *vmsptr++ = *unixptr++;
+	  vmslen++;
+	}
+	break;
+    }
+  }
+
+  /* Make sure directory is closed */
+  if (unixptr == lastslash) {
+    char *vmsptr2;
+    vmsptr2 = vmsptr - 1;
+
+    if (*vmsptr2 != ']') {
+      *vmsptr2--;
+
+      /* directories do not end in a dot bracket */
+      if (*vmsptr2 == '.') {
+	vmsptr2--;
+
+	/* ^. is allowed */
+        if (*vmsptr2 != '^') {
+	  vmsptr--; /* back up over the dot */
+ 	}
+      }
+      *vmsptr++ = ']';
+    }
+  }
+  else {
+    char *vmsptr2;
+    /* Add a trailing dot if a file with no extension */
+    vmsptr2 = vmsptr - 1;
+    if ((*vmsptr2 != ']') && (*vmsptr2 != '*') && (*vmsptr2 != '%') &&
+        (*lastdot != '.')) {
+	*vmsptr++ = '.';
+        vmslen++;
+    }
+  }
+
+  *vmsptr = '\0';
+  return SS$_NORMAL;
+}
+#endif
 
 /*{{{ char *tovmsspec[_ts](char *path, char *buf)*/
-static char *mp_do_tovmsspec(pTHX_ char *path, char *buf, int ts) {
-  static char __tovmsspec_retbuf[NAM$C_MAXRSS+1];
+static char *mp_do_tovmsspec(pTHX_ const char *path, char *buf, int ts) {
+  static char __tovmsspec_retbuf[VMS_MAXRSS];
   char *rslt, *dirend;
-  register char *cp1, *cp2;
+  char *lastdot;
+  char *vms_delim;
+  register char *cp1;
+  const char *cp2;
   unsigned long int infront = 0, hasdir = 1;
+  int rslt_len;
+  int no_type_seen;
 
   if (path == NULL) return NULL;
+  rslt_len = VMS_MAXRSS;
   if (buf) rslt = buf;
-  else if (ts) New(1316,rslt,strlen(path)+9,char);
+  else if (ts) Newx(rslt, VMS_MAXRSS, char);
   else rslt = __tovmsspec_retbuf;
   if (strpbrk(path,"]:>") ||
       (dirend = strrchr(path,'/')) == NULL) {
@@ -3798,27 +6061,135 @@ static char *mp_do_tovmsspec(pTHX_ char *path, char *buf, int ts) {
     else strcpy(rslt,path);
     return rslt;
   }
+
+   /* Posix specifications are now a native VMS format */
+  /*--------------------------------------------------*/
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+  if (decc_posix_compliant_pathnames) {
+    if (strncmp(path,"\"^UP^",5) == 0) {
+      posix_to_vmsspec_hardway(rslt, rslt_len, path);
+      return rslt;
+    }
+  }
+#endif
+
+  vms_delim = strpbrk(path,"]:>");
+
+  if ((vms_delim != NULL) ||
+      ((dirend = strrchr(path,'/')) == NULL)) {
+
+    /* VMS special characters found! */
+
+    if (path[0] == '.') {
+      if (path[1] == '\0') strcpy(rslt,"[]");
+      else if (path[1] == '.' && path[2] == '\0')
+	strcpy(rslt,"[-]");
+
+      /* Dot preceeding a device or directory ? */
+      else {
+	/* If not in POSIX mode, pass it through and hope it works */
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+	if (!decc_posix_compliant_pathnames)
+ 	  strcpy(rslt,path); /* probably garbage */
+	else
+	  posix_to_vmsspec_hardway(rslt, rslt_len, path);
+#else
+        strcpy(rslt,path); /* probably garbage */
+#endif
+      }
+    }
+    else {
+
+       /* If no VMS characters and in POSIX mode, convert it!
+        * This is the easiest way to get directory specifications
+        * handled correctly in POSIX mode
+        */
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+      if ((vms_delim == NULL) && decc_posix_compliant_pathnames)
+	posix_to_vmsspec_hardway(rslt, rslt_len, path);
+      else {
+        /* No unix path separators - presume VMS already */
+	strcpy(rslt,path);
+      }
+#else
+      strcpy(rslt,path); /* probably garbage */
+#endif
+    }
+    return rslt;
+  }
+
+/* If POSIX mode active, handle the conversion */
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+  if (decc_posix_compliant_pathnames) {
+    posix_to_vmsspec_hardway(rslt, rslt_len, path);
+    return rslt;
+  }
+#endif
+
   if (*(dirend+1) == '.') {  /* do we have trailing "/." or "/.." or "/..."? */
     if (!*(dirend+2)) dirend +=2;
     if (*(dirend+2) == '.' && !*(dirend+3)) dirend += 3;
     if (*(dirend+2) == '.' && *(dirend+3) == '.' && !*(dirend+4)) dirend += 4;
   }
+
   cp1 = rslt;
   cp2 = path;
+  lastdot = strrchr(cp2,'.');
   if (*cp2 == '/') {
-    char trndev[NAM$C_MAXRSS+1];
+    char *trndev;
     int islnm, rooted;
     STRLEN trnend;
 
     while (*(cp2+1) == '/') cp2++;  /* Skip multiple /s */
     if (!*(cp2+1)) {
-      if (!buf & ts) Renew(rslt,18,char);
-      strcpy(rslt,"sys$disk:[000000]");
+      if (decc_disable_posix_root) {
+	strcpy(rslt,"sys$disk:[000000]");
+      }
+      else {
+	strcpy(rslt,"sys$posix_root:[000000]");
+      }
       return rslt;
     }
     while (*(++cp2) != '/' && *cp2) *(cp1++) = *cp2;
     *cp1 = '\0';
+    Newx(trndev, VMS_MAXRSS, char);
     islnm =  my_trnlnm(rslt,trndev,0);
+
+     /* DECC special handling */
+    if (!islnm) {
+      if (strcmp(rslt,"bin") == 0) {
+	strcpy(rslt,"sys$system");
+	cp1 = rslt + 10;
+	*cp1 = 0;
+	islnm =  my_trnlnm(rslt,trndev,0);
+      }
+      else if (strcmp(rslt,"tmp") == 0) {
+	strcpy(rslt,"sys$scratch");
+	cp1 = rslt + 11;
+	*cp1 = 0;
+	islnm =  my_trnlnm(rslt,trndev,0);
+      }
+      else if (!decc_disable_posix_root) {
+        strcpy(rslt, "sys$posix_root");
+	cp1 = rslt + 13;
+	*cp1 = 0;
+	cp2 = path;
+        while (*(cp2+1) == '/') cp2++;  /* Skip multiple /s */
+	islnm =  my_trnlnm(rslt,trndev,0);
+      }
+      else if (strcmp(rslt,"dev") == 0) {
+	if (strncmp(cp2,"/null", 5) == 0) {
+	  if ((cp2[5] == 0) || (cp2[5] == '/')) {
+	    strcpy(rslt,"NLA0");
+	    cp1 = rslt + 4;
+	    *cp1 = 0;
+	    cp2 = cp2 + 5;
+	    islnm =  my_trnlnm(rslt,trndev,0);
+	  }
+	}
+      }
+    }
+
     trnend = islnm ? strlen(trndev) - 1 : 0;
     islnm =  trnend ? (trndev[trnend] == ']' || trndev[trnend] == '>') : 0;
     rooted = islnm ? (trndev[trnend-1] == '.') : 0;
@@ -3832,17 +6203,21 @@ static char *mp_do_tovmsspec(pTHX_ char *path, char *buf, int ts) {
     }
     else {
       if (cp2 != dirend) {
-        if (!buf && ts) Renew(rslt,strlen(path)-strlen(rslt)+trnend+4,char);
         strcpy(rslt,trndev);
         cp1 = rslt + trnend;
-        *(cp1++) = '.';
-        cp2++;
+	if (*cp2 != 0) {
+          *(cp1++) = '.';
+          cp2++;
+        }
       }
       else {
-        *(cp1++) = ':';
-        hasdir = 0;
+	if (decc_disable_posix_root) {
+	  *(cp1++) = ':';
+	  hasdir = 0;
+	}
       }
     }
+    Safefree(trndev);
   }
   else {
     *(cp1++) = '[';
@@ -3860,6 +6235,10 @@ static char *mp_do_tovmsspec(pTHX_ char *path, char *buf, int ts) {
         *(cp1++) = '.'; *(cp1++) = '.'; *(cp1++) = '.'; /* ".../" --> "..." */
         if (!*(cp2+4)) *(cp1++) = '.'; /* Simulate trailing '/' for later */
         cp2 += 4;
+      }
+      else if ((cp2 != lastdot) || (lastdot < dirend)) {
+	/* Escape the extra dots in EFS file specifications */
+	*(cp1++) = '^';
       }
       if (cp2 > dirend) cp2 = dirend;
     }
@@ -3898,11 +6277,25 @@ static char *mp_do_tovmsspec(pTHX_ char *path, char *buf, int ts) {
         }
         else cp2 += 3;  /* Trailing '/' was there, so skip it, too */
       }
-      else *(cp1++) = '_';  /* fix up syntax - '.' in name not allowed */
+      else {
+        if (decc_efs_charset == 0)
+	  *(cp1++) = '_';  /* fix up syntax - '.' in name not allowed */
+	else {
+	  *(cp1++) = '^';  /* fix up syntax - '.' in name is allowed */
+	  *(cp1++) = '.';
+	}
+      }
     }
     else {
       if (!infront && *(cp1-1) == '-')  *(cp1++) = '.';
-      if (*cp2 == '.')      *(cp1++) = '_';
+      if (*cp2 == '.') {
+        if (decc_efs_charset == 0)
+	  *(cp1++) = '_';
+	else {
+	  *(cp1++) = '^';
+	  *(cp1++) = '.';
+	}
+      }
       else                  *(cp1++) =  *cp2;
       infront = 1;
     }
@@ -3910,7 +6303,91 @@ static char *mp_do_tovmsspec(pTHX_ char *path, char *buf, int ts) {
   if (*(cp1-1) == '.') cp1--; /* Unix spec ending in '/' ==> trailing '.' */
   if (hasdir) *(cp1++) = ']';
   if (*cp2) cp2++;  /* check in case we ended with trailing '..' */
-  while (*cp2) *(cp1++) = *(cp2++);
+  /* fixme for ODS5 */
+  no_type_seen = 0;
+  if (cp2 > lastdot)
+    no_type_seen = 1;
+  while (*cp2) {
+    switch(*cp2) {
+    case '?':
+	*(cp1++) = '%';
+	cp2++;
+    case ' ':
+	*(cp1)++ = '^';
+	*(cp1)++ = '_';
+	cp2++;
+	break;
+    case '.':
+	if (((cp2 < lastdot) || (cp2[1] == '\0')) &&
+	    decc_readdir_dropdotnotype) {
+	  *(cp1)++ = '^';
+	  *(cp1)++ = '.';
+	  cp2++;
+
+	  /* trailing dot ==> '^..' on VMS */
+	  if (*cp2 == '\0') {
+	    *(cp1++) = '.';
+	    no_type_seen = 0;
+	  }
+	}
+	else {
+	  *(cp1++) = *(cp2++);
+	  no_type_seen = 0;
+	}
+	break;
+    case '\"':
+    case '~':
+    case '`':
+    case '!':
+    case '#':
+    case '%':
+    case '^':
+    case '&':
+    case '(':
+    case ')':
+    case '=':
+    case '+':
+    case '\'':
+    case '@':
+    case '[':
+    case ']':
+    case '{':
+    case '}':
+    case ':':
+    case '\\':
+    case '|':
+    case '<':
+    case '>':
+	*(cp1++) = '^';
+	*(cp1++) = *(cp2++);
+	break;
+    case ';':
+	/* FIXME: This needs fixing as Perl is putting ".dir;" on UNIX filespecs
+	 * which is wrong.  UNIX notation should be ".dir. unless
+	 * the DECC$FILENAME_UNIX_NO_VERSION is enabled.
+	 * changing this behavior could break more things at this time.
+	 * efs character set effectively does not allow "." to be a version
+	 * delimiter as a further complication about changing this.
+	 */
+	if (decc_filename_unix_report != 0) {
+	  *(cp1++) = '^';
+	}
+	*(cp1++) = *(cp2++);
+	break;
+    default:
+	*(cp1++) = *(cp2++);
+    }
+  }
+  if ((no_type_seen == 1) && decc_readdir_dropdotnotype) {
+  char *lcp1;
+    lcp1 = cp1;
+    lcp1--;
+     /* Fix me for "^]", but that requires making sure that you do
+      * not back up past the start of the filename
+      */
+    if ((*lcp1 != ']') && (*lcp1 != '*') && (*lcp1 != '%'))
+      *cp1++ = '.';
+  }
   *cp1 = '\0';
 
   return rslt;
@@ -3918,65 +6395,95 @@ static char *mp_do_tovmsspec(pTHX_ char *path, char *buf, int ts) {
 }  /* end of do_tovmsspec() */
 /*}}}*/
 /* External entry points */
-char *Perl_tovmsspec(pTHX_ char *path, char *buf) { return do_tovmsspec(path,buf,0); }
-char *Perl_tovmsspec_ts(pTHX_ char *path, char *buf) { return do_tovmsspec(path,buf,1); }
+char *Perl_tovmsspec(pTHX_ const char *path, char *buf) { return do_tovmsspec(path,buf,0); }
+char *Perl_tovmsspec_ts(pTHX_ const char *path, char *buf) { return do_tovmsspec(path,buf,1); }
 
 /*{{{ char *tovmspath[_ts](char *path, char *buf)*/
-static char *mp_do_tovmspath(pTHX_ char *path, char *buf, int ts) {
-  static char __tovmspath_retbuf[NAM$C_MAXRSS+1];
+static char *mp_do_tovmspath(pTHX_ const char *path, char *buf, int ts) {
+  static char __tovmspath_retbuf[VMS_MAXRSS];
   int vmslen;
-  char pathified[NAM$C_MAXRSS+1], vmsified[NAM$C_MAXRSS+1], *cp;
+  char *pathified, *vmsified, *cp;
 
   if (path == NULL) return NULL;
-  if (do_pathify_dirspec(path,pathified,0) == NULL) return NULL;
-  if (do_tovmsspec(pathified,buf ? buf : vmsified,0) == NULL) return NULL;
-  if (buf) return buf;
+  Newx(pathified, VMS_MAXRSS, char);
+  if (do_pathify_dirspec(path,pathified,0) == NULL) {
+    Safefree(pathified);
+    return NULL;
+  }
+  Newx(vmsified, VMS_MAXRSS, char);
+  if (do_tovmsspec(pathified,buf ? buf : vmsified,0) == NULL) {
+    Safefree(pathified);
+    Safefree(vmsified);
+    return NULL;
+  }
+  Safefree(pathified);
+  if (buf) {
+    Safefree(vmsified);
+    return buf;
+  }
   else if (ts) {
     vmslen = strlen(vmsified);
-    New(1317,cp,vmslen+1,char);
+    Newx(cp,vmslen+1,char);
     memcpy(cp,vmsified,vmslen);
     cp[vmslen] = '\0';
+    Safefree(vmsified);
     return cp;
   }
   else {
     strcpy(__tovmspath_retbuf,vmsified);
+    Safefree(vmsified);
     return __tovmspath_retbuf;
   }
 
 }  /* end of do_tovmspath() */
 /*}}}*/
 /* External entry points */
-char *Perl_tovmspath(pTHX_ char *path, char *buf) { return do_tovmspath(path,buf,0); }
-char *Perl_tovmspath_ts(pTHX_ char *path, char *buf) { return do_tovmspath(path,buf,1); }
+char *Perl_tovmspath(pTHX_ const char *path, char *buf) { return do_tovmspath(path,buf,0); }
+char *Perl_tovmspath_ts(pTHX_ const char *path, char *buf) { return do_tovmspath(path,buf,1); }
 
 
 /*{{{ char *tounixpath[_ts](char *path, char *buf)*/
-static char *mp_do_tounixpath(pTHX_ char *path, char *buf, int ts) {
-  static char __tounixpath_retbuf[NAM$C_MAXRSS+1];
+static char *mp_do_tounixpath(pTHX_ const char *path, char *buf, int ts) {
+  static char __tounixpath_retbuf[VMS_MAXRSS];
   int unixlen;
-  char pathified[NAM$C_MAXRSS+1], unixified[NAM$C_MAXRSS+1], *cp;
+  char *pathified, *unixified, *cp;
 
   if (path == NULL) return NULL;
-  if (do_pathify_dirspec(path,pathified,0) == NULL) return NULL;
-  if (do_tounixspec(pathified,buf ? buf : unixified,0) == NULL) return NULL;
-  if (buf) return buf;
+  Newx(pathified, VMS_MAXRSS, char);
+  if (do_pathify_dirspec(path,pathified,0) == NULL) {
+    Safefree(pathified);
+    return NULL;
+  }
+  Newx(unixified, VMS_MAXRSS, char);
+  if (do_tounixspec(pathified,buf ? buf : unixified,0) == NULL) {
+    Safefree(pathified);
+    Safefree(unixified);
+    return NULL;
+  }
+  Safefree(pathified);
+  if (buf) {
+    Safefree(unixified);
+    return buf;
+  }
   else if (ts) {
     unixlen = strlen(unixified);
-    New(1317,cp,unixlen+1,char);
+    Newx(cp,unixlen+1,char);
     memcpy(cp,unixified,unixlen);
     cp[unixlen] = '\0';
+    Safefree(unixified);
     return cp;
   }
   else {
     strcpy(__tounixpath_retbuf,unixified);
+    Safefree(unixified);
     return __tounixpath_retbuf;
   }
 
 }  /* end of do_tounixpath() */
 /*}}}*/
 /* External entry points */
-char *Perl_tounixpath(pTHX_ char *path, char *buf) { return do_tounixpath(path,buf,0); }
-char *Perl_tounixpath_ts(pTHX_ char *path, char *buf) { return do_tounixpath(path,buf,1); }
+char *Perl_tounixpath(pTHX_ const char *path, char *buf) { return do_tounixpath(path,buf,0); }
+char *Perl_tounixpath_ts(pTHX_ const char *path, char *buf) { return do_tounixpath(path,buf,1); }
 
 /*
  * @(#)argproc.c 2.2 94/08/16	Mark Pizzolato (mark@infocomm.com)
@@ -4180,7 +6687,8 @@ mp_getredirection(pTHX_ int *ac, char ***av)
      * Allocate and fill in the new argument vector, Some Unix's terminate
      * the list with an extra null pointer.
      */
-    New(1302, argv, item_count+1, char *);
+    Newx(argv, item_count+1, char *);
+    argv = (char **) PerlMem_malloc((item_count+1) * sizeof(char *));
     *av = argv;
     for (j = 0; j < item_count; ++j, list_head = list_head->next)
 	argv[j] = list_head->value;
@@ -4275,11 +6783,11 @@ static void add_item(struct list_item **head,
 {
     if (*head == 0)
 	{
-	New(1303,*head,1,struct list_item);
+	*head = (struct list_item *) PerlMem_malloc(sizeof(struct list_item));
 	*tail = *head;
 	}
     else {
-	New(1304,(*tail)->next,1,struct list_item);
+	(*tail)->next = (struct list_item *) PerlMem_malloc(sizeof(struct list_item));
 	*tail = (*tail)->next;
 	}
     (*tail)->value = value;
@@ -4299,11 +6807,16 @@ char *had_version;
 char *had_device;
 int had_directory;
 char *devdir,*cp;
-char vmsspec[NAM$C_MAXRSS+1];
+char *vmsspec;
 $DESCRIPTOR(filespec, "");
 $DESCRIPTOR(defaultspec, "SYS$DISK:[]");
 $DESCRIPTOR(resultspec, "");
-unsigned long int zero = 0, sts;
+unsigned long int lff_flags = 0;
+int sts;
+
+#ifdef VMS_LONGNAME_SUPPORT
+    lff_flags = LIB$M_FIL_LONG_NAMES;
+#endif
 
     for (cp = item; *cp; cp++) {
 	if (*cp == '*' || *cp == '%' || isspace(*cp)) break;
@@ -4331,6 +6844,7 @@ unsigned long int zero = 0, sts;
     resultspec.dsc$b_dtype = DSC$K_DTYPE_T;
     resultspec.dsc$b_class = DSC$K_CLASS_D;
     resultspec.dsc$a_pointer = NULL;
+    Newx(vmsspec, VMS_MAXRSS, char);
     if ((isunix = (int) strchr(item,'/')) != (int) NULL)
       filespec.dsc$a_pointer = do_tovmsspec(item,vmsspec,0);
     if (!isunix || !filespec.dsc$a_pointer)
@@ -4346,17 +6860,18 @@ unsigned long int zero = 0, sts;
     had_device = strchr(item, ':');
     had_directory = (isunix || NULL != strchr(item, '[')) || (NULL != strchr(item, '<'));
     
-    while (1 == (1 & (sts = lib$find_file(&filespec, &resultspec, &context,
-    				  &defaultspec, 0, 0, &zero))))
+    while ($VMS_STATUS_SUCCESS(sts = lib$find_file
+				 (&filespec, &resultspec, &context,
+    				  &defaultspec, 0, 0, &lff_flags)))
 	{
 	char *string;
 	char *c;
 
-	New(1305,string,resultspec.dsc$w_length+1,char);
+	Newx(string,resultspec.dsc$w_length+1,char);
 	strncpy(string, resultspec.dsc$a_pointer, resultspec.dsc$w_length);
 	string[resultspec.dsc$w_length] = '\0';
 	if (NULL == had_version)
-	    *((char *)strrchr(string, ';')) = '\0';
+	    *(strrchr(string, ';')) = '\0';
 	if ((!had_directory) && (had_device == NULL))
 	    {
 	    if (NULL == (devdir = strrchr(string, ']')))
@@ -4367,13 +6882,16 @@ unsigned long int zero = 0, sts;
 	 * Be consistent with what the C RTL has already done to the rest of
 	 * the argv items and lowercase all of these names.
 	 */
-	for (c = string; *c; ++c)
+	if (!decc_efs_case_preserve) {
+	    for (c = string; *c; ++c)
 	    if (isupper(*c))
 		*c = tolower(*c);
+	}
 	if (isunix) trim_unixpath(string,item,1);
 	add_item(head, tail, string, count);
 	++expcount;
-	}
+    }
+    Safefree(vmsspec);
     if (sts != RMS$_NMF)
 	{
 	set_vaxc_errno(sts);
@@ -4493,7 +7011,7 @@ pipe_and_fork(pTHX_ char **cmargv)
 
 static int background_process(pTHX_ int argc, char **argv)
 {
-char command[2048] = "$";
+char command[MAX_DCL_SYMBOL + 1] = "$";
 $DESCRIPTOR(value, "");
 static $DESCRIPTOR(cmd, "BACKGROUND$COMMAND");
 static $DESCRIPTOR(null, "NLA0:");
@@ -4502,13 +7020,16 @@ char pidstring[80];
 $DESCRIPTOR(pidstr, "");
 int pid;
 unsigned long int flags = 17, one = 1, retsts;
+int len;
 
     strcat(command, argv[0]);
-    while (--argc)
+    len = strlen(command);
+    while (--argc && (len < MAX_DCL_SYMBOL))
 	{
 	strcat(command, " \"");
 	strcat(command, *(++argv));
 	strcat(command, "\"");
+	len = strlen(command);
 	}
     value.dsc$a_pointer = command;
     value.dsc$w_length = strlen(value.dsc$a_pointer);
@@ -4542,6 +7063,8 @@ unsigned long int flags = 17, one = 1, retsts;
 #ifndef KGB$M_SUBSYSTEM
 #  define KGB$M_SUBSYSTEM 0x8
 #endif
+ 
+/* Avoid Newx() in vms_image_init as thread context has not been initialized. */
 
 /*{{{void vms_image_init(int *, char ***)*/
 void
@@ -4562,7 +7085,7 @@ vms_image_init(int *argcp, char ***argvp)
                                  {          0,                0,    0,      0} };
 
 #ifdef KILL_BY_SIGPRC
-    (void) Perl_csighandler_init();
+    Perl_csighandler_init();
 #endif
 
   _ckvmssts_noperl(sys$getjpiw(0,NULL,NULL,jpilist,iosb,NULL,NULL));
@@ -4591,8 +7114,8 @@ vms_image_init(int *argcp, char ***argvp)
                          "Check your rights database for corruption.\n");
          exit(SS$_ABORT);
       }
-      if (jpilist[1].bufadr != rlst) Safefree(jpilist[1].bufadr);
-      jpilist[1].bufadr = New(1320,mask,rsz,unsigned long int);
+      if (jpilist[1].bufadr != rlst) PerlMem_free(jpilist[1].bufadr);
+      jpilist[1].bufadr = mask = (unsigned long int *) PerlMem_malloc(rsz * sizeof(unsigned long int));
       jpilist[1].buflen = rsz * sizeof(unsigned long int);
       _ckvmssts_noperl(sys$getjpiw(0,NULL,NULL,&jpilist[1],iosb,NULL,NULL));
       _ckvmssts_noperl(iosb[0]);
@@ -4609,6 +7132,33 @@ vms_image_init(int *argcp, char ***argvp)
     }
     if (mask != rlst) Safefree(mask);
   }
+
+  /* When Perl is in decc_filename_unix_report mode and is run from a concealed
+   * logical, some versions of the CRTL will add a phanthom /000000/
+   * directory.  This needs to be removed.
+   */
+  if (decc_filename_unix_report) {
+  char * zeros;
+  int ulen;
+    ulen = strlen(argvp[0][0]);
+    if (ulen > 7) {
+      zeros = strstr(argvp[0][0], "/000000/");
+      if (zeros != NULL) {
+	int mlen;
+	mlen = ulen - (zeros - argvp[0][0]) - 7;
+	memmove(zeros, &zeros[7], mlen);
+	ulen = ulen - 7;
+	argvp[0][0][ulen] = '\0';
+      }
+    }
+    /* It also may have a trailing dot that needs to be removed otherwise
+     * it will be converted to VMS mode incorrectly.
+     */
+    ulen--;
+    if ((argvp[0][0][ulen] == '.') && (decc_readdir_dropdotnotype))
+      argvp[0][0][ulen] = '\0';
+  }
+
   /* We need to use this hack to tell Perl it should run with tainting,
    * since its tainting flag may be part of the PL_curinterp struct, which
    * hasn't been allocated when vms_image_init() is called.
@@ -4616,9 +7166,9 @@ vms_image_init(int *argcp, char ***argvp)
   if (will_taint) {
     char **newargv, **oldargv;
     oldargv = *argvp;
-    New(1320,newargv,(*argcp)+2,char *);
+    newargv = (char **) PerlMem_malloc(((*argcp)+2) * sizeof(char *));
     newargv[0] = oldargv[0];
-    New(1320,newargv[1],3,char);
+    newargv[1] = (char *) PerlMem_malloc(3 * sizeof(char));
     strcpy(newargv[1], "-T");
     Copy(&oldargv[1],&newargv[2],(*argcp)-1,char **);
     (*argcp)++;
@@ -4645,12 +7195,12 @@ vms_image_init(int *argcp, char ***argvp)
   for (tabidx = 0;
        len = my_trnlnm("PERL_ENV_TABLES",eqv,tabidx);
        tabidx++) {
-    if (!tabidx) New(1321,tabvec,tabct,struct dsc$descriptor_s *);
+    if (!tabidx) tabvec = (struct dsc$descriptor_s **) PerlMem_malloc(tabct * sizeof(struct dsc$descriptor_s *));
     else if (tabidx >= tabct) {
       tabct += 8;
-      Renew(tabvec,tabct,struct dsc$descriptor_s *);
+      tabvec = (struct dsc$descriptor_s **) PerlMem_realloc(tabvec, tabct * sizeof(struct dsc$descriptor_s *));
     }
-    New(1322,tabvec[tabidx],1,struct dsc$descriptor_s);
+    tabvec[tabidx] = (struct dsc$descriptor_s *) PerlMem_malloc(sizeof(struct dsc$descriptor_s));
     tabvec[tabidx]->dsc$w_length  = 0;
     tabvec[tabidx]->dsc$b_dtype   = DSC$K_DTYPE_T;
     tabvec[tabidx]->dsc$b_class   = DSC$K_CLASS_D;
@@ -4663,7 +7213,7 @@ vms_image_init(int *argcp, char ***argvp)
 #if defined(USE_ITHREADS) && ( defined(__DECC) || defined(__DECCXX) )
   {
 # include <reentrancy.h>
-  (void) decc$set_reentrancy(C$C_MULTITHREAD);
+  decc$set_reentrancy(C$C_MULTITHREAD);
   }
 #endif
   return;
@@ -4688,20 +7238,32 @@ vms_image_init(int *argcp, char ***argvp)
  */
 /*{{{int trim_unixpath(char *fspec, char *wildspec, int opts)*/
 int
-Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
+Perl_trim_unixpath(pTHX_ char *fspec, const char *wildspec, int opts)
 {
-  char unixified[NAM$C_MAXRSS+1], unixwild[NAM$C_MAXRSS+1],
+  char *unixified, *unixwild,
        *template, *base, *end, *cp1, *cp2;
   register int tmplen, reslen = 0, dirs = 0;
 
+  Newx(unixwild, VMS_MAXRSS, char);
   if (!wildspec || !fspec) return 0;
+  template = unixwild;
   if (strpbrk(wildspec,"]>:") != NULL) {
-    if (do_tounixspec(wildspec,unixwild,0) == NULL) return 0;
-    else template = unixwild;
+    if (do_tounixspec(wildspec,unixwild,0) == NULL) {
+	Safefree(unixwild);
+	return 0;
+    }
   }
-  else template = wildspec;
+  else {
+    strncpy(unixwild, wildspec, VMS_MAXRSS-1);
+    unixwild[VMS_MAXRSS-1] = 0;
+  }
+  Newx(unixified, VMS_MAXRSS, char);
   if (strpbrk(fspec,"]>:") != NULL) {
-    if (do_tounixspec(fspec,unixified,0) == NULL) return 0;
+    if (do_tounixspec(fspec,unixified,0) == NULL) {
+	Safefree(unixwild);
+	Safefree(unixified);
+	return 0;
+    }
     else base = unixified;
     /* reslen != 0 ==> we had to unixify resultant filespec, so we must
      * check to see that final result fits into (isn't longer than) fspec */
@@ -4711,11 +7273,19 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
 
   /* No prefix or absolute path on wildcard, so nothing to remove */
   if (!*template || *template == '/') {
-    if (base == fspec) return 1;
+    Safefree(unixwild);
+    if (base == fspec) {
+	Safefree(unixified);
+	return 1;
+    }
     tmplen = strlen(unixified);
-    if (tmplen > reslen) return 0;  /* not enough space */
+    if (tmplen > reslen) {
+	Safefree(unixified);
+	return 0;  /* not enough space */
+    }
     /* Copy unixified resultant, including trailing NUL */
     memmove(fspec,unixified,tmplen+1);
+    Safefree(unixified);
     return 1;
   }
 
@@ -4726,18 +7296,21 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
       if ((*cp1 == '/') && !dirs--) /* postdec so we get front of rel path */
         { cp1++; break; }
     if (cp1 != fspec) memmove(fspec,cp1, end - cp1 + 1);
+    Safefree(unixified);
+    Safefree(unixwild);
     return 1;
   }
   else {
-    char tpl[NAM$C_MAXRSS+1], lcres[NAM$C_MAXRSS+1];
+    char *tpl, *lcres;
     char *front, *nextell, *lcend, *lcfront, *ellipsis = cp1;
     int ells = 1, totells, segdirs, match;
-    struct dsc$descriptor_s wilddsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, tpl},
+    struct dsc$descriptor_s wilddsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, NULL},
                             resdsc =  {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
 
     while ((cp1 = strstr(ellipsis+4,".../")) != NULL) {ellipsis = cp1; ells++;}
     totells = ells;
     for (cp1 = ellipsis+4; *cp1; cp1++) if (*cp1 == '/') dirs++;
+    Newx(tpl, VMS_MAXRSS, char);
     if (ellipsis == template && opts & 1) {
       /* Template begins with an ellipsis.  Since we can't tell how many
        * directory names at the front of the resultant to keep for an
@@ -4747,13 +7320,23 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
        * ellipsis weren't there (i.e. return shortest possible path that
        * could match template).
        */
-      if (getcwd(tpl, sizeof tpl,0) == NULL) return 0;
-      for (cp1 = tpl, cp2 = base; *cp1 && *cp2; cp1++,cp2++)
-        if (_tolower(*cp1) != _tolower(*cp2)) break;
+      if (getcwd(tpl, (VMS_MAXRSS - 1),0) == NULL) {
+	  Safefree(tpl);
+	  Safefree(unixified);
+	  Safefree(unixwild);
+	  return 0;
+      }
+      if (!decc_efs_case_preserve) {
+ 	for (cp1 = tpl, cp2 = base; *cp1 && *cp2; cp1++,cp2++)
+	  if (_tolower(*cp1) != _tolower(*cp2)) break;
+      }
       segdirs = dirs - totells;  /* Min # of dirs we must have left */
       for (front = cp2+1; *front; front++) if (*front == '/') segdirs--;
       if (*cp1 == '\0' && *cp2 == '/' && segdirs < 1) {
-        memcpy(fspec,cp2+1,end - cp2);
+        memmove(fspec,cp2+1,end - cp2);
+	Safefree(unixified);
+	Safefree(unixwild);
+	Safefree(tpl);
         return 1;
       }
     }
@@ -4762,9 +7345,23 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
       for (front = end ; front >= base; front--)
          if (*front == '/' && !dirs--) { front++; break; }
     }
-    for (cp1=template,cp2=lcres; *cp1 && cp2 <= lcres + sizeof lcres;
-         cp1++,cp2++) *cp2 = _tolower(*cp1);  /* Make lc copy for match */
-    if (cp1 != '\0') return 0;  /* Path too long. */
+    Newx(lcres, VMS_MAXRSS, char);
+    for (cp1=template,cp2=lcres; *cp1 && cp2 <= lcres + (VMS_MAXRSS - 1);
+         cp1++,cp2++) {
+	    if (!decc_efs_case_preserve) {
+		*cp2 = _tolower(*cp1);  /* Make lc copy for match */
+	    }
+	    else {
+		*cp2 = *cp1;
+	    }
+    }
+    if (cp1 != '\0') {
+	Safefree(unixified);
+	Safefree(unixwild);
+	Safefree(lcres);
+	Safefree(tpl);
+	return 0;  /* Path too long. */
+    }
     lcend = cp2;
     *cp2 = '\0';  /* Pick up with memcpy later */
     lcfront = lcres + (front - base);
@@ -4777,16 +7374,30 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
       if (cp1 + 4 == ellipsis) { /* Consecutive ellipses */
         ellipsis = cp1; continue;
       }
+      wilddsc.dsc$a_pointer = tpl;
       wilddsc.dsc$w_length = resdsc.dsc$w_length = ellipsis - 1 - cp1;
       nextell = cp1;
       for (segdirs = 0, cp2 = tpl;
-           cp1 <= ellipsis - 1 && cp2 <= tpl + sizeof tpl;
+           cp1 <= ellipsis - 1 && cp2 <= tpl + (VMS_MAXRSS-1);
            cp1++, cp2++) {
          if (*cp1 == '?') *cp2 = '%'; /* Substitute VMS' wildcard for Unix' */
-         else *cp2 = _tolower(*cp1);  /* else lowercase for match */
+         else {
+	    if (!decc_efs_case_preserve) {
+	      *cp2 = _tolower(*cp1);  /* else lowercase for match */
+	    }
+	    else {
+	      *cp2 = *cp1;  /* else preserve case for match */
+	    }
+	 }
          if (*cp2 == '/') segdirs++;
       }
-      if (cp1 != ellipsis - 1) return 0; /* Path too long */
+      if (cp1 != ellipsis - 1) {
+	  Safefree(unixified);
+	  Safefree(unixwild);
+	  Safefree(lcres);
+	  Safefree(tpl);
+	  return 0; /* Path too long */
+      }
       /* Back up at least as many dirs as in template before matching */
       for (cp1 = lcfront - 1; segdirs && cp1 >= lcres; cp1--)
         if (*cp1 == '/' && !segdirs--) { cp1++; break; }
@@ -4798,7 +7409,13 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
         }
         for ( ; cp1 >= lcres; cp1--) if (*cp1 == '/') { cp1++; break; }
       }
-      if (!match) return 0;  /* Can't find prefix ??? */
+      if (!match) {
+	Safefree(unixified);
+	Safefree(unixwild);
+	Safefree(lcres);
+	Safefree(tpl);
+	return 0;  /* Can't find prefix ??? */
+      }
       if (match > 1 && opts & 1) {
         /* This ... wildcard could cover more than one set of dirs (i.e.
          * a set of similar dir names is repeated).  If the template
@@ -4810,19 +7427,35 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
          */
         char def[NAM$C_MAXRSS+1], *st;
 
-        if (getcwd(def, sizeof def,0) == NULL) return 0;
-        for (cp1 = def, cp2 = base; *cp1 && *cp2; cp1++,cp2++)
-          if (_tolower(*cp1) != _tolower(*cp2)) break;
+        if (getcwd(def, sizeof def,0) == NULL) {
+	    Safefree(unixified);
+	    Safefree(unixwild);
+	    Safefree(lcres);
+	    Safefree(tpl);
+	    return 0;
+	}
+	if (!decc_efs_case_preserve) {
+	  for (cp1 = def, cp2 = base; *cp1 && *cp2; cp1++,cp2++)
+	    if (_tolower(*cp1) != _tolower(*cp2)) break;
+	}
         segdirs = dirs - totells;  /* Min # of dirs we must have left */
         for (st = cp2+1; *st; st++) if (*st == '/') segdirs--;
         if (*cp1 == '\0' && *cp2 == '/') {
-          memcpy(fspec,cp2+1,end - cp2);
+          memmove(fspec,cp2+1,end - cp2);
+	  Safefree(lcres);
+	  Safefree(unixified);
+	  Safefree(unixwild);
+	  Safefree(tpl);
           return 1;
         }
         /* Nope -- stick with lcfront from above and keep going. */
       }
     }
-    memcpy(fspec,base + (lcfront - lcres), lcend - lcfront + 1);
+    memmove(fspec,base + (lcfront - lcres), lcend - lcfront + 1);
+    Safefree(unixified);
+    Safefree(unixwild);
+    Safefree(lcres);
+    Safefree(tpl);
     return 1;
     ellipsis = nextell;
   }
@@ -4859,7 +7492,7 @@ Perl_trim_unixpath(pTHX_ char *fspec, char *wildspec, int opts)
  */
 /*{{{ DIR *opendir(char*name) */
 DIR *
-Perl_opendir(pTHX_ char *name)
+Perl_opendir(pTHX_ const char *name)
 {
     DIR *dd;
     char dir[NAM$C_MAXRSS+1];
@@ -4881,11 +7514,11 @@ Perl_opendir(pTHX_ char *name)
       return NULL;
     }
     /* Get memory for the handle, and the pattern. */
-    New(1306,dd,1,DIR);
-    New(1307,dd->pattern,strlen(dir)+sizeof "*.*" + 1,char);
+    Newx(dd,1,DIR);
+    Newx(dd->pattern,strlen(dir)+sizeof "*.*" + 1,char);
 
     /* Fill in the fields; mainly playing with the descriptor. */
-    (void)sprintf(dd->pattern, "%s*.*",dir);
+    sprintf(dd->pattern, "%s*.*",dir);
     dd->context = 0;
     dd->count = 0;
     dd->vms_wantversions = 0;
@@ -4894,7 +7527,7 @@ Perl_opendir(pTHX_ char *name)
     dd->pat.dsc$b_dtype = DSC$K_DTYPE_T;
     dd->pat.dsc$b_class = DSC$K_CLASS_S;
 #if defined(USE_ITHREADS)
-    New(1308,dd->mutex,1,perl_mutex);
+    Newx(dd->mutex,1,perl_mutex);
     MUTEX_INIT( (perl_mutex *) dd->mutex );
 #else
     dd->mutex = NULL;
@@ -4920,15 +7553,17 @@ vmsreaddirversions(DIR *dd, int flag)
  */
 /*{{{ void closedir(DIR *dd)*/
 void
-closedir(DIR *dd)
+Perl_closedir(DIR *dd)
 {
-    (void)lib$find_file_end(&dd->context);
+    int sts;
+
+    sts = lib$find_file_end(&dd->context);
     Safefree(dd->pattern);
 #if defined(USE_ITHREADS)
     MUTEX_DESTROY( (perl_mutex *) dd->mutex );
     Safefree(dd->mutex);
 #endif
-    Safefree((char *)dd);
+    Safefree(dd);
 }
 /*}}}*/
 
@@ -4950,9 +7585,9 @@ collectversions(pTHX_ DIR *dd)
 
     /* Add the version wildcard, ignoring the "*.*" put on before */
     i = strlen(dd->pattern);
-    New(1308,text,i + e->d_namlen + 3,char);
-    (void)strcpy(text, dd->pattern);
-    (void)sprintf(&text[i - 3], "%s;*", e->d_name);
+    Newx(text,i + e->d_namlen + 3,char);
+    strcpy(text, dd->pattern);
+    sprintf(&text[i - 3], "%s;*", e->d_name);
 
     /* Set up the pattern descriptor. */
     pat.dsc$a_pointer = text;
@@ -5021,14 +7656,23 @@ Perl_readdir(pTHX_ DIR *dd)
     }
     dd->count++;
     /* Force the buffer to end with a NUL, and downcase name to match C convention. */
-    buff[sizeof buff - 1] = '\0';
+    if (!decc_efs_case_preserve) {
+      buff[sizeof buff - 1] = '\0';
+      for (p = buff; *p; p++) *p = _tolower(*p);
+      while (--p >= buff) if (!isspace(*p)) break; /* Do we really need this? */
+      *p = '\0';
+    }
+    else {
+      /* we don't want to force to lowercase, just null terminate */
+      buff[res.dsc$w_length] = '\0';
+    }
     for (p = buff; *p; p++) *p = _tolower(*p);
     while (--p >= buff) if (!isspace(*p)) break;  /* Do we really need this? */
     *p = '\0';
 
     /* Skip any directory component and just copy the name. */
-    if ((p = strchr(buff, ']'))) (void)strcpy(dd->entry.d_name, p + 1);
-    else (void)strcpy(dd->entry.d_name, buff);
+    if ((p = strchr(buff, ']'))) strcpy(dd->entry.d_name, p + 1);
+    else strcpy(dd->entry.d_name, buff);
 
     /* Clobber the version. */
     if ((p = strchr(dd->entry.d_name, ';'))) *p = '\0';
@@ -5068,7 +7712,7 @@ Perl_readdir_r(pTHX_ DIR *dd, struct dirent *entry, struct dirent **result)
  */
 /*{{{ long telldir(DIR *dd)*/
 long
-telldir(DIR *dd)
+Perl_telldir(DIR *dd)
 {
     return dd->count;
 }
@@ -5095,7 +7739,7 @@ Perl_seekdir(pTHX_ DIR *dd, long count)
 
     /* The increment is in readdir(). */
     for (dd->count = 0; dd->count < count; )
-	(void)readdir(dd);
+	readdir(dd);
 
     dd->vms_wantversions = vms_wantversions;
 
@@ -5179,7 +7823,7 @@ setup_argstr(pTHX_ SV *really, SV **mark, SV **sp)
       cmdlen += rlen ? rlen + 1 : 0;
     }
   }
-  New(401,PL_Cmd,cmdlen+1,char);
+  Newx(PL_Cmd,cmdlen+1,char);
 
   if (tmps && *tmps) {
     strcpy(PL_Cmd,tmps);
@@ -5200,10 +7844,12 @@ setup_argstr(pTHX_ SV *really, SV **mark, SV **sp)
 
 
 static unsigned long int
-setup_cmddsc(pTHX_ char *cmd, int check_img, int *suggest_quote,
+setup_cmddsc(pTHX_ const char *incmd, int check_img, int *suggest_quote,
                    struct dsc$descriptor_s **pvmscmd)
 {
   char vmsspec[NAM$C_MAXRSS+1], resspec[NAM$C_MAXRSS+1];
+  char image_name[NAM$C_MAXRSS+1];
+  char image_argv[NAM$C_MAXRSS+1];
   $DESCRIPTOR(defdsc,".EXE");
   $DESCRIPTOR(defdsc2,".");
   $DESCRIPTOR(resdsc,resspec);
@@ -5211,9 +7857,20 @@ setup_cmddsc(pTHX_ char *cmd, int check_img, int *suggest_quote,
   struct dsc$descriptor_s imgdsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
   unsigned long int cxt = 0, flags = 1, retsts = SS$_NORMAL;
   register char *s, *rest, *cp, *wordbreak;
+  char * cmd;
+  int cmdlen;
   register int isdcl;
 
-  New(402,vmscmd,sizeof(struct dsc$descriptor_s),struct dsc$descriptor_s);
+  Newx(vmscmd,sizeof(struct dsc$descriptor_s),struct dsc$descriptor_s);
+
+  /* Make a copy for modification */
+  cmdlen = strlen(incmd);
+  Newx(cmd, cmdlen+1, char);
+  strncpy(cmd, incmd, cmdlen);
+  cmd[cmdlen] = 0;
+  image_name[0] = 0;
+  image_argv[0] = 0;
+
   vmscmd->dsc$a_pointer = NULL;
   vmscmd->dsc$b_dtype  = DSC$K_DTYPE_T;
   vmscmd->dsc$b_class  = DSC$K_CLASS_S;
@@ -5222,9 +7879,13 @@ setup_cmddsc(pTHX_ char *cmd, int check_img, int *suggest_quote,
 
   if (suggest_quote) *suggest_quote = 0;
 
-  if (strlen(cmd) > MAX_DCL_LINE_LENGTH)
+  if (strlen(cmd) > MAX_DCL_LINE_LENGTH) {
     return CLI$_BUFOVF;                /* continuation lines currently unsupported */
+    Safefree(cmd);
+  }
+
   s = cmd;
+
   while (*s && isspace(*s)) s++;
 
   if (*s == '@' || *s == '$') {
@@ -5274,15 +7935,15 @@ setup_cmddsc(pTHX_ char *cmd, int check_img, int *suggest_quote,
     if (!(retsts&1)) {
         _ckvmssts(lib$find_file_end(&cxt));
         retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc2,0,0,&flags);
-    if (!(retsts & 1) && *s == '$') {
-          _ckvmssts(lib$find_file_end(&cxt));
-      imgdsc.dsc$a_pointer++; imgdsc.dsc$w_length--;
-      retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc,0,0,&flags);
-          if (!(retsts&1)) {
-      _ckvmssts(lib$find_file_end(&cxt));
-            retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc2,0,0,&flags);
-          }
-    }
+      if (!(retsts & 1) && *s == '$') {
+        _ckvmssts(lib$find_file_end(&cxt));
+	imgdsc.dsc$a_pointer++; imgdsc.dsc$w_length--;
+	retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc,0,0,&flags);
+	if (!(retsts&1)) {
+	  _ckvmssts(lib$find_file_end(&cxt));
+          retsts = lib$find_file(&imgdsc,&resdsc,&cxt,&defdsc2,0,0,&flags);
+        }
+      }
     }
     _ckvmssts(lib$find_file_end(&cxt));
 
@@ -5293,27 +7954,154 @@ setup_cmddsc(pTHX_ char *cmd, int check_img, int *suggest_quote,
       *s = '\0';
 
       /* check that it's really not DCL with no file extension */
-      fp = fopen(resspec,"r","ctx=bin,shr=get");
+      fp = fopen(resspec,"r","ctx=bin","ctx=rec","shr=get");
       if (fp) {
-        char b[4] = {0,0,0,0};
-        read(fileno(fp),b,4);
+        char b[256] = {0,0,0,0};
+        read(fileno(fp), b, 256);
         isdcl = isprint(b[0]) && isprint(b[1]) && isprint(b[2]) && isprint(b[3]);
+	if (isdcl) {
+	  int shebang_len;
+
+	  /* Check for script */
+	  shebang_len = 0;
+	  if ((b[0] == '#') && (b[1] == '!'))
+	     shebang_len = 2;
+#ifdef ALTERNATE_SHEBANG
+	  else {
+	    shebang_len = strlen(ALTERNATE_SHEBANG);
+	    if (strncmp(b, ALTERNATE_SHEBANG, shebang_len) == 0) {
+	      char * perlstr;
+		perlstr = strstr("perl",b);
+		if (perlstr == NULL)
+		  shebang_len = 0;
+	    }
+	    else
+	      shebang_len = 0;
+	  }
+#endif
+
+	  if (shebang_len > 0) {
+	  int i;
+	  int j;
+	  char tmpspec[NAM$C_MAXRSS + 1];
+
+	    i = shebang_len;
+	     /* Image is following after white space */
+	    /*--------------------------------------*/
+	    while (isprint(b[i]) && isspace(b[i]))
+		i++;
+
+	    j = 0;
+	    while (isprint(b[i]) && !isspace(b[i])) {
+		tmpspec[j++] = b[i++];
+		if (j >= NAM$C_MAXRSS)
+		   break;
+	    }
+	    tmpspec[j] = '\0';
+
+	     /* There may be some default parameters to the image */
+	    /*---------------------------------------------------*/
+	    j = 0;
+	    while (isprint(b[i])) {
+		image_argv[j++] = b[i++];
+		if (j >= NAM$C_MAXRSS)
+		   break;
+	    }
+	    while ((j > 0) && !isprint(image_argv[j-1]))
+		j--;
+	    image_argv[j] = 0;
+
+	    /* It will need to be converted to VMS format and validated */
+	    if (tmpspec[0] != '\0') {
+	      char * iname;
+
+	       /* Try to find the exact program requested to be run */
+	      /*---------------------------------------------------*/
+	      iname = do_rmsexpand
+		  (tmpspec, image_name, 0, ".exe", PERL_RMSEXPAND_M_VMS);
+	      if (iname != NULL) {
+		if (cando_by_name(S_IXUSR,0,image_name)) {
+		  /* MCR prefix needed */
+		  isdcl = 0;
+		}
+		else {
+		   /* Try again with a null type */
+		  /*----------------------------*/
+		  iname = do_rmsexpand
+		    (tmpspec, image_name, 0, ".", PERL_RMSEXPAND_M_VMS);
+		  if (iname != NULL) {
+		    if (cando_by_name(S_IXUSR,0,image_name)) {
+		      /* MCR prefix needed */
+		      isdcl = 0;
+		    }
+		  }
+		}
+
+		 /* Did we find the image to run the script? */
+		/*------------------------------------------*/
+		if (isdcl) {
+		  char *tchr;
+
+		   /* Assume DCL or foreign command exists */
+		  /*--------------------------------------*/
+		  tchr = strrchr(tmpspec, '/');
+		  if (tchr != NULL) {
+		    tchr++;
+		  }
+		  else {
+		    tchr = tmpspec;
+		  }
+		  strcpy(image_name, tchr);
+		}
+	      }
+	    }
+	  }
+	}
         fclose(fp);
       }
       if (check_img && isdcl) return RMS$_FNF;
 
       if (cando_by_name(S_IXUSR,0,resspec)) {
-        New(402,vmscmd->dsc$a_pointer,7 + s - resspec + (rest ? strlen(rest) : 0),char);
+        Newx(vmscmd->dsc$a_pointer, MAX_DCL_LINE_LENGTH ,char);
         if (!isdcl) {
             strcpy(vmscmd->dsc$a_pointer,"$ MCR ");
-            if (suggest_quote) *suggest_quote = 1;
+	    if (image_name[0] != 0) {
+		strcat(vmscmd->dsc$a_pointer, image_name);
+		strcat(vmscmd->dsc$a_pointer, " ");
+	    }
+	} else if (image_name[0] != 0) {
+	    strcpy(vmscmd->dsc$a_pointer, image_name);
+	    strcat(vmscmd->dsc$a_pointer, " ");
         } else {
             strcpy(vmscmd->dsc$a_pointer,"@");
-            if (suggest_quote) *suggest_quote = 1;
         }
-        strcat(vmscmd->dsc$a_pointer,resspec);
-        if (rest) strcat(vmscmd->dsc$a_pointer,rest);
+        if (suggest_quote) *suggest_quote = 1;
+
+	/* If there is an image name, use original command */
+	if (image_name[0] == 0)
+	    strcat(vmscmd->dsc$a_pointer,resspec);
+	else {
+	    rest = cmd;
+	    while (*rest && isspace(*rest)) rest++;
+	}
+
+	if (image_argv[0] != 0) {
+	  strcat(vmscmd->dsc$a_pointer,image_argv);
+	  strcat(vmscmd->dsc$a_pointer, " ");
+	}
+        if (rest) {
+	   int rest_len;
+	   int vmscmd_len;
+
+	   rest_len = strlen(rest);
+	   vmscmd_len = strlen(vmscmd->dsc$a_pointer);
+	   if ((rest_len + vmscmd_len) < MAX_DCL_LINE_LENGTH)
+	      strcat(vmscmd->dsc$a_pointer,rest);
+	   else
+	     retsts = CLI$_BUFOVF;
+	}
         vmscmd->dsc$w_length = strlen(vmscmd->dsc$a_pointer);
+        Safefree(cmd);
         return (vmscmd->dsc$w_length > MAX_DCL_LINE_LENGTH ? CLI$_BUFOVF : retsts);
       }
       else retsts = RMS$_PRV;
@@ -5327,6 +8115,8 @@ setup_cmddsc(pTHX_ char *cmd, int check_img, int *suggest_quote,
   }
   else  */
       vmscmd->dsc$a_pointer = savepvn(cmd,vmscmd->dsc$w_length);
+
+  Safefree(cmd);
 
   /* check if it's a symbol (for quoting purposes) */
   if (suggest_quote && !*suggest_quote) { 
@@ -5375,7 +8165,7 @@ Perl_vms_do_aexec(pTHX_ SV *really,SV **mark,SV **sp)
 
 /* {{{bool vms_do_exec(char *cmd) */
 bool
-Perl_vms_do_exec(pTHX_ char *cmd)
+Perl_vms_do_exec(pTHX_ const char *cmd)
 {
   struct dsc$descriptor_s *vmscmd;
 
@@ -5427,7 +8217,7 @@ Perl_vms_do_exec(pTHX_ char *cmd)
 }  /* end of vms_do_exec() */
 /*}}}*/
 
-unsigned long int Perl_do_spawn(pTHX_ char *);
+unsigned long int Perl_do_spawn(pTHX_ const char *);
 
 /* {{{ unsigned long int do_aspawn(void *really,void **mark,void **sp) */
 unsigned long int
@@ -5441,7 +8231,7 @@ Perl_do_aspawn(pTHX_ void *really,void **mark,void **sp)
 
 /* {{{unsigned long int do_spawn(char *cmd) */
 unsigned long int
-Perl_do_spawn(pTHX_ char *cmd)
+Perl_do_spawn(pTHX_ const char *cmd)
 {
   unsigned long int sts, substs;
 
@@ -5477,7 +8267,10 @@ Perl_do_spawn(pTHX_ char *cmd)
     sts = substs;
   }
   else {
-    (void) safe_popen(aTHX_ cmd, "nW", (int *)&sts);
+    PerlIO * fp;
+    fp = safe_popen(aTHX_ cmd, "nW", (int *)&sts);
+    if (fp != NULL)
+      my_pclose(fp);
   }
   return sts;
 }  /* end of do_spawn() */
@@ -5495,18 +8288,18 @@ static unsigned int *sockflags, sockflagsize;
 /*{{{ FILE *my_fdopen(int fd, const char *mode)*/
 FILE *my_fdopen(int fd, const char *mode)
 {
-  FILE *fp = fdopen(fd, (char *) mode);
+  FILE *fp = fdopen(fd, mode);
 
   if (fp) {
     unsigned int fdoff = fd / sizeof(unsigned int);
-    struct stat sbuf; /* native stat; we don't need flex_stat */
+    Stat_t sbuf; /* native stat; we don't need flex_stat */
     if (!sockflagsize || fdoff > sockflagsize) {
       if (sockflags) Renew(     sockflags,fdoff+2,unsigned int);
-      else           New  (1324,sockflags,fdoff+2,unsigned int);
+      else           Newx  (sockflags,fdoff+2,unsigned int);
       memset(sockflags+sockflagsize,0,fdoff + 2 - sockflagsize);
       sockflagsize = fdoff + 2;
     }
-    if (fstat(fd,&sbuf) == 0 && S_ISSOCK(sbuf.st_mode))
+    if (fstat(fd, (struct stat *)&sbuf) == 0 && S_ISSOCK(sbuf.st_mode))
       sockflags[fdoff] |= 1 << (fd % sizeof(unsigned int));
   }
   return fp;
@@ -5700,7 +8493,7 @@ static int fillpasswd (pTHX_ const char *name, struct passwd *pwd)
     name_desc.dsc$w_length=  strlen(name);
     name_desc.dsc$b_dtype=   DSC$K_DTYPE_T;
     name_desc.dsc$b_class=   DSC$K_CLASS_S;
-    name_desc.dsc$a_pointer= (char *) name;
+    name_desc.dsc$a_pointer= (char *) name; /* read only pointer */
 
 /*  Note that sys$getuai returns many fields as counted strings. */
     sts= sys$getuai(0, 0, &name_desc, &itmlst, 0, 0, 0);
@@ -5736,7 +8529,8 @@ static int fillpasswd (pTHX_ const char *name, struct passwd *pwd)
     }
     else
         strcpy(pwd->pw_unixdir, pwd->pw_dir);
-    __mystrtolower(pwd->pw_unixdir);
+    if (!decc_efs_case_preserve)
+        __mystrtolower(pwd->pw_unixdir);
     return 1;
 }
 
@@ -5744,7 +8538,7 @@ static int fillpasswd (pTHX_ const char *name, struct passwd *pwd)
  * Get information for a named user.
 */
 /*{{{struct passwd *getpwnam(char *name)*/
-struct passwd *Perl_my_getpwnam(pTHX_ char *name)
+struct passwd *Perl_my_getpwnam(pTHX_ const char *name)
 {
     struct dsc$descriptor_s name_desc;
     union uicdef uic;
@@ -6281,8 +9075,8 @@ tz_parse(pTHX_ time_t *w, int *dst, char *zone, int *gmtoff)
 
         for (j = 0; j < 12; j++) {
             w2 =localtime(&when);
-            (void) tz_parse_startend(s_start,w2,&ds);
-            (void) tz_parse_startend(s_end,w2,&de);
+            tz_parse_startend(s_start,w2,&ds);
+            tz_parse_startend(s_end,w2,&de);
             if (ds != de) break;
             when += 30*86400;
         }
@@ -6411,7 +9205,7 @@ Perl_my_localtime(pTHX_ const time_t *timep)
     return NULL;
   }
   if (*timep == 0) gmtime_emulation_type = 0;  /* possibly reset TZ */
-  if (gmtime_emulation_type == 0) (void) my_time(NULL); /* Init UTC */
+  if (gmtime_emulation_type == 0) my_time(NULL); /* Init UTC */
 
   when = *timep;
 # ifdef RTL_USES_UTC
@@ -6465,10 +9259,11 @@ Perl_my_localtime(pTHX_ const time_t *timep)
  */
 static const long int utime_baseadjust[2] = { 0x4beb4000, 0x7c9567 };
 
-/*{{{int my_utime(char *path, struct utimbuf *utimes)*/
-int Perl_my_utime(pTHX_ char *file, struct utimbuf *utimes)
+/*{{{int my_utime(const char *path, const struct utimbuf *utimes)*/
+int Perl_my_utime(pTHX_ const char *file, const struct utimbuf *utimes)
 {
   register int i;
+  int sts;
   long int bintime[2], len = 2, lowbit, unixtime,
            secscale = 10000000; /* seconds --> 100 ns intervals */
   unsigned long int chan, iosb[2], retsts;
@@ -6490,6 +9285,7 @@ int Perl_my_utime(pTHX_ char *file, struct utimbuf *utimes)
    */
 #  pragma message restore
 #endif
+  /* cast ok for read only parameter */
   struct dsc$descriptor fibdsc = {sizeof(myfib), DSC$K_DTYPE_Z, DSC$K_CLASS_S,(char *) &myfib},
                         devdsc = {0,DSC$K_DTYPE_T, DSC$K_CLASS_S,0},
                         fnmdsc = {0,DSC$K_DTYPE_T, DSC$K_CLASS_S,0};
@@ -6545,6 +9341,8 @@ int Perl_my_utime(pTHX_ char *file, struct utimbuf *utimes)
   mynam.nam$b_ess = (unsigned char) sizeof esa;
   mynam.nam$l_rsa = rsa;
   mynam.nam$b_rss = (unsigned char) sizeof rsa;
+  if (decc_efs_case_preserve)
+      mynam.nam$b_nop |= NAM$M_NO_SHORT_UPCASE;
 
   /* Look for the file to be affected, letting RMS parse the file
    * specification for us as well.  I have set errno using only
@@ -6561,7 +9359,7 @@ int Perl_my_utime(pTHX_ char *file, struct utimbuf *utimes)
   retsts = sys$search(&myfab,0,0);
   if (!(retsts & 1)) {
     mynam.nam$b_nop |= NAM$M_SYNCHK;  mynam.nam$l_rlf = NULL;
-    myfab.fab$b_dns = 0;  (void) sys$parse(&myfab,0,0);
+    myfab.fab$b_dns = 0;  sts = sys$parse(&myfab,0,0);
     set_vaxc_errno(retsts);
     if      (retsts == RMS$_PRV) set_errno(EACCES);
     else if (retsts == RMS$_FNF) set_errno(ENOENT);
@@ -6570,12 +9368,13 @@ int Perl_my_utime(pTHX_ char *file, struct utimbuf *utimes)
   }
 
   devdsc.dsc$w_length = mynam.nam$b_dev;
+  /* cast ok for read only parameter */
   devdsc.dsc$a_pointer = (char *) mynam.nam$l_dev;
 
   retsts = sys$assign(&devdsc,&chan,0,0);
   if (!(retsts & 1)) {
     mynam.nam$b_nop |= NAM$M_SYNCHK;  mynam.nam$l_rlf = NULL;
-    myfab.fab$b_dns = 0;  (void) sys$parse(&myfab,0,0);
+    myfab.fab$b_dns = 0;  sts = sys$parse(&myfab,0,0);
     set_vaxc_errno(retsts);
     if      (retsts == SS$_IVDEVNAM)   set_errno(ENOTDIR);
     else if (retsts == SS$_NOPRIV)     set_errno(EACCES);
@@ -6601,7 +9400,7 @@ int Perl_my_utime(pTHX_ char *file, struct utimbuf *utimes)
 #endif
   retsts = sys$qiow(0,chan,IO$_MODIFY,iosb,0,0,&fibdsc,&fnmdsc,0,0,myatr,0);
   mynam.nam$b_nop |= NAM$M_SYNCHK;  mynam.nam$l_rlf = NULL;
-  myfab.fab$b_dns = 0;  (void) sys$parse(&myfab,0,0);
+  myfab.fab$b_dns = 0;  sts = sys$parse(&myfab,0,0);
   _ckvmssts(sys$dassgn(chan));
   if (retsts & 1) retsts = iosb[0];
   if (!(retsts & 1)) {
@@ -6616,11 +9415,12 @@ int Perl_my_utime(pTHX_ char *file, struct utimbuf *utimes)
 /*}}}*/
 
 /*
- * flex_stat, flex_fstat
+ * flex_stat, flex_lstat, flex_fstat
  * basic stat, but gets it right when asked to stat
  * a Unix-style path ending in a directory name (e.g. dir1/dir2/dir3)
  */
 
+#ifndef _USE_STD_STAT
 /* encode_dev packs a VMS device name string into an integer to allow
  * simple comparisons. This can be used, for example, to check whether two
  * files are located on the same device, by comparing their encoded device
@@ -6670,7 +9470,7 @@ static mydev_t encode_dev (pTHX_ const char *dev)
     dev_desc.dsc$w_length =  strlen (dev);
     dev_desc.dsc$b_dtype =   DSC$K_DTYPE_T;
     dev_desc.dsc$b_class =   DSC$K_CLASS_S;
-    dev_desc.dsc$a_pointer = (char *) dev;
+    dev_desc.dsc$a_pointer = (char *) dev;  /* Read only parameter */
     _ckvmssts(lib$getdvi(&item, 0, &dev_desc, &lockid, 0, 0));
     if (lockid) return (lockid & ~LOCKID_MASK);
   }
@@ -6695,6 +9495,7 @@ static mydev_t encode_dev (pTHX_ const char *dev)
   return (enc | LOCKID_MASK);  /* May have already overflowed into bit 31 */
 
 }  /* end of encode_dev() */
+#endif
 
 static char namecache[NAM$C_MAXRSS+1];
 
@@ -6702,6 +9503,10 @@ static int
 is_null_device(name)
     const char *name;
 {
+  if (decc_bug_devnull != 0) {
+    if (strcmp("/dev/null", name) == 0) /* temp hack */
+      return 1;
+  }
     /* The VMS null device is named "_NLA0:", usually abbreviated as "NL:".
        The underscore prefix, controller letter, and unit number are
        independently optional; for our purposes, the colon punctuation
@@ -6721,11 +9526,22 @@ is_null_device(name)
  * subset of the applicable information.
  */
 bool
-Perl_cando(pTHX_ Mode_t bit, Uid_t effective, Stat_t *statbufp)
+Perl_cando(pTHX_ Mode_t bit, bool effective, const Stat_t *statbufp)
 {
   char fname_phdev[NAM$C_MAXRSS+1];
-  if (statbufp == &PL_statcache) return cando_by_name(bit,effective,namecache);
-  else {
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+  /* Namecache not workable with symbolic links, as symbolic links do
+   *  not have extensions and directories do in VMS mode.  So in order
+   *  to test this, the did and ino_t must be used.
+   *
+   * Fix-me - Hide the information in the new stat structure
+   *	      Get rid of the namecache.
+   */
+  if (decc_posix_compliant_pathnames == 0)
+#endif
+      if (statbufp == &PL_statcache)
+	  return cando_by_name(bit,effective,namecache);
+  {
     char fname[NAM$C_MAXRSS+1];
     unsigned long int retsts;
     struct dsc$descriptor_s devdsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0},
@@ -6763,9 +9579,9 @@ Perl_cando(pTHX_ Mode_t bit, Uid_t effective, Stat_t *statbufp)
 /*}}}*/
 
 
-/*{{{I32 cando_by_name(I32 bit, Uid_t effective, char *fname)*/
+/*{{{I32 cando_by_name(I32 bit, bool effective, char *fname)*/
 I32
-Perl_cando_by_name(pTHX_ I32 bit, Uid_t effective, char *fname)
+Perl_cando_by_name(pTHX_ I32 bit, bool effective, const char *fname)
 {
   static char usrname[L_cuserid];
   static struct dsc$descriptor_s usrdsc =
@@ -6836,7 +9652,7 @@ Perl_cando_by_name(pTHX_ I32 bit, Uid_t effective, char *fname)
                                     &usrprodsc.dsc$w_length,0));
 
   /* allocate space for the profile and get it filled in */
-  New(1330,usrprodsc.dsc$a_pointer,usrprodsc.dsc$w_length,char);
+  Newx(usrprodsc.dsc$a_pointer,usrprodsc.dsc$w_length,char);
   _ckvmssts(sys$create_user_profile(&usrdsc,&usrprolst,0,usrprodsc.dsc$a_pointer,
                                     &usrprodsc.dsc$w_length,0));
 
@@ -6876,8 +9692,35 @@ int
 Perl_flex_fstat(pTHX_ int fd, Stat_t *statbufp)
 {
   if (!fstat(fd,(stat_t *) statbufp)) {
-    if (statbufp == (Stat_t *) &PL_statcache) *namecache == '\0';
+    if (statbufp == (Stat_t *) &PL_statcache) {
+    char *cptr;
+
+	/* Save name for cando by name in VMS format */
+	cptr = getname(fd, namecache, 1);
+
+	/* This should not happen, but just in case */
+	if (cptr == NULL)
+	   namecache[0] = '\0';
+    }
+#ifdef _USE_STD_STAT
+    memcpy(&statbufp->st_ino, &statbufp->crtl_stat.st_ino, 8);
+#else
+    memcpy(&statbufp->st_ino, statbufp->crtl_stat.st_ino, 8);
+#endif
+#ifndef _USE_STD_STAT
+    strncpy(statbufp->st_devnam, statbufp->crtl_stat.st_dev, 63);
+    statbufp->st_devnam[63] = 0;
     statbufp->st_dev = encode_dev(aTHX_ statbufp->st_devnam);
+#else
+    /* todo:
+     * The device is only encoded so that Perl_cando can use it to
+     * look up ACLS.  So rmsexpand it to the 255 character version
+     * and store it in ->st_devnam.  rmsexpand needs to be fixed
+     * for long filenames and symbolic links first.  This also seems
+     * to remove the need for a namecache that could be stale.
+     */
+#endif
+
 #   ifdef RTL_USES_UTC
 #   ifdef VMSISH_TIME
     if (VMSISH_TIME) {
@@ -6904,9 +9747,21 @@ Perl_flex_fstat(pTHX_ int fd, Stat_t *statbufp)
 }  /* end of flex_fstat() */
 /*}}}*/
 
-/*{{{ int flex_stat(const char *fspec, Stat_t *statbufp)*/
-int
-Perl_flex_stat(pTHX_ const char *fspec, Stat_t *statbufp)
+#if !defined(__VAX) && __CRTL_VER >= 80200000
+#ifdef lstat
+#undef lstat
+#endif
+#else
+#ifdef lstat
+#undef lstat
+#endif
+#define lstat(_x, _y) stat(_x, _y)
+#endif
+
+#define flex_stat_int(a,b,c)		Perl_flex_stat_int(aTHX_ a,b,c)
+
+static int
+Perl_flex_stat_int(pTHX_ const char *fspec, Stat_t *statbufp, int lstat_flag)
 {
     char fileified[NAM$C_MAXRSS+1];
     char temp_fspec[NAM$C_MAXRSS+300];
@@ -6918,15 +9773,17 @@ Perl_flex_stat(pTHX_ const char *fspec, Stat_t *statbufp)
     strcpy(temp_fspec, fspec);
     if (statbufp == (Stat_t *) &PL_statcache)
       do_tovmsspec(temp_fspec,namecache,0);
-    if (is_null_device(temp_fspec)) { /* Fake a stat() for the null device */
-      memset(statbufp,0,sizeof *statbufp);
-      statbufp->st_dev = encode_dev(aTHX_ "_NLA0:");
-      statbufp->st_mode = S_IFBLK | S_IREAD | S_IWRITE | S_IEXEC;
-      statbufp->st_uid = 0x00010001;
-      statbufp->st_gid = 0x0001;
-      time((time_t *)&statbufp->st_mtime);
-      statbufp->st_atime = statbufp->st_ctime = statbufp->st_mtime;
-      return 0;
+    if (decc_bug_devnull != 0) {
+      if (is_null_device(temp_fspec)) { /* Fake a stat() for the null device */
+	memset(statbufp,0,sizeof *statbufp);
+	statbufp->st_dev = encode_dev(aTHX_ "_NLA0:");
+	statbufp->st_mode = S_IFBLK | S_IREAD | S_IWRITE | S_IEXEC;
+	statbufp->st_uid = 0x00010001;
+	statbufp->st_gid = 0x0001;
+	time((time_t *)&statbufp->st_mtime);
+	statbufp->st_atime = statbufp->st_ctime = statbufp->st_mtime;
+	return 0;
+      }
     }
 
     /* Try for a directory name first.  If fspec contains a filename without
@@ -6936,15 +9793,53 @@ Perl_flex_stat(pTHX_ const char *fspec, Stat_t *statbufp)
      * not sea:[wine.dark]., if the latter exists.  If the intended target is
      * the file with null type, specify this by calling flex_stat() with
      * a '.' at the end of fspec.
+     *
+     * If we are in Posix filespec mode, accept the filename as is.
      */
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+  if (decc_posix_compliant_pathnames == 0) {
+#endif
     if (do_fileify_dirspec(temp_fspec,fileified,0) != NULL) {
-      retval = stat(fileified,(stat_t *) statbufp);
+      if (lstat_flag == 0)
+	retval = stat(fileified,(stat_t *) statbufp);
+      else
+	retval = lstat(fileified,(stat_t *) statbufp);
       if (!retval && statbufp == (Stat_t *) &PL_statcache)
         strcpy(namecache,fileified);
     }
-    if (retval) retval = stat(temp_fspec,(stat_t *) statbufp);
+    if (retval) {
+      if (lstat_flag == 0)
+	retval = stat(temp_fspec,(stat_t *) statbufp);
+      else
+	retval = lstat(temp_fspec,(stat_t *) statbufp);
+    }
+#if __CRTL_VER >= 80200000 && !defined(__VAX)
+  } else {
+    if (lstat_flag == 0)
+      retval = stat(temp_fspec,(stat_t *) statbufp);
+    else
+      retval = lstat(temp_fspec,(stat_t *) statbufp);
+  }
+#endif
     if (!retval) {
+#ifdef _USE_STD_STAT
+      memcpy(&statbufp->st_ino, &statbufp->crtl_stat.st_ino, 8);
+#else
+      memcpy(&statbufp->st_ino, statbufp->crtl_stat.st_ino, 8);
+#endif
+#ifndef _USE_STD_STAT
+      strncpy(statbufp->st_devnam, statbufp->crtl_stat.st_dev, 63);
+      statbufp->st_devnam[63] = 0;
       statbufp->st_dev = encode_dev(aTHX_ statbufp->st_devnam);
+#else
+    /* todo:
+     * The device is only encoded so that Perl_cando can use it to
+     * look up ACLS.  So rmsexpand it to the 255 character version
+     * and store it in ->st_devnam.  rmsexpand needs to be fixed
+     * for long filenames and symbolic links first.  This also seems
+     * to remove the need for a namecache that could be stale.
+     */
+#endif
 #     ifdef RTL_USES_UTC
 #     ifdef VMSISH_TIME
       if (VMSISH_TIME) {
@@ -6969,14 +9864,30 @@ Perl_flex_stat(pTHX_ const char *fspec, Stat_t *statbufp)
     if (retval == 0) { errno = saved_errno; vaxc$errno = saved_vaxc_errno; }
     return retval;
 
-}  /* end of flex_stat() */
+}  /* end of flex_stat_int() */
+
+
+/*{{{ int flex_stat(const char *fspec, Stat_t *statbufp)*/
+int
+Perl_flex_stat(pTHX_ const char *fspec, Stat_t *statbufp)
+{
+   return flex_stat_int(fspec, statbufp, 0);
+}
+/*}}}*/
+
+/*{{{ int flex_lstat(const char *fspec, Stat_t *statbufp)*/
+int
+Perl_flex_lstat(pTHX_ const char *fspec, Stat_t *statbufp)
+{
+   return flex_stat_int(fspec, statbufp, 1);
+}
 /*}}}*/
 
 
 /*{{{char *my_getlogin()*/
 /* VMS cuserid == Unix getlogin, except calling sequence */
 char *
-my_getlogin()
+my_getlogin(void)
 {
     static char user[L_cuserid];
     return cuserid(user);
@@ -7007,10 +9918,11 @@ my_getlogin()
  * as part of the Perl standard distribution under the terms of the
  * GNU General Public License or the Perl Artistic License.  Copies
  * of each may be found in the Perl standard distribution.
- */
+ */ /* FIXME */
 /*{{{int rmscopy(char *src, char *dst, int preserve_dates)*/
+#if defined(__VAX) || !defined(NAML$C_MAXRSS)
 int
-Perl_rmscopy(pTHX_ char *spec_in, char *spec_out, int preserve_dates)
+Perl_rmscopy(pTHX_ const char *spec_in, const char *spec_out, int preserve_dates)
 {
     char vmsin[NAM$C_MAXRSS+1], vmsout[NAM$C_MAXRSS+1], esa[NAM$C_MAXRSS],
          rsa[NAM$C_MAXRSS], ubf[32256];
@@ -7044,6 +9956,10 @@ Perl_rmscopy(pTHX_ char *spec_in, char *spec_out, int preserve_dates)
     nam.nam$l_esa = esa;
     nam.nam$b_ess = sizeof (esa);
     nam.nam$b_esl = nam.nam$b_rsl = 0;
+#ifdef NAM$M_NO_SHORT_UPCASE
+    if (decc_efs_case_preserve)
+        nam.nam$b_nop |= NAM$M_NO_SHORT_UPCASE;
+#endif
 
     xabdat = cc$rms_xabdat;        /* To get creation date */
     xabdat.xab$l_nxt = (void *) &xabfhc;
@@ -7083,7 +9999,7 @@ Perl_rmscopy(pTHX_ char *spec_in, char *spec_out, int preserve_dates)
     fab_out.fab$b_dns = nam.nam$l_name ? nam.nam$b_name + nam.nam$b_type : 0;
 
     if (preserve_dates == 0) {  /* Act like DCL COPY */
-      nam.nam$b_nop = NAM$M_SYNCHK;
+      nam.nam$b_nop |= NAM$M_SYNCHK;
       fab_out.fab$l_xab = NULL;  /* Don't disturb data from input file */
       if (!((sts = sys$parse(&fab_out)) & 1)) {
         set_errno(sts == RMS$_SYN ? EINVAL : EVMSERR);
@@ -7171,6 +10087,253 @@ Perl_rmscopy(pTHX_ char *spec_in, char *spec_out, int preserve_dates)
     return 1;
 
 }  /* end of rmscopy() */
+#else
+/* ODS-5 support version */
+int
+Perl_rmscopy(pTHX_ const char *spec_in, const char *spec_out, int preserve_dates)
+{
+    char *vmsin, * vmsout, *esa, *esa_out,
+         *rsa, *ubf;
+    unsigned long int i, sts, sts2;
+    struct FAB fab_in, fab_out;
+    struct RAB rab_in, rab_out;
+    struct NAML nam;
+    struct NAML nam_out;
+    struct XABDAT xabdat;
+    struct XABFHC xabfhc;
+    struct XABRDT xabrdt;
+    struct XABSUM xabsum;
+
+    Newx(vmsin, VMS_MAXRSS, char);
+    Newx(vmsout, VMS_MAXRSS, char);
+    if (!spec_in  || !*spec_in  || !do_tovmsspec(spec_in,vmsin,1) ||
+        !spec_out || !*spec_out || !do_tovmsspec(spec_out,vmsout,1)) {
+      Safefree(vmsin);
+      Safefree(vmsout);
+      set_errno(EINVAL); set_vaxc_errno(LIB$_INVARG);
+      return 0;
+    }
+
+    Newx(esa, VMS_MAXRSS, char);
+    nam = cc$rms_naml;
+    fab_in = cc$rms_fab;
+    fab_in.fab$l_fna = (char *) -1;
+    fab_in.fab$b_fns = 0;
+    nam.naml$l_long_filename = vmsin;
+    nam.naml$l_long_filename_size = strlen(vmsin);
+    fab_in.fab$b_shr = FAB$M_SHRPUT | FAB$M_UPI;
+    fab_in.fab$b_fac = FAB$M_BIO | FAB$M_GET;
+    fab_in.fab$l_fop = FAB$M_SQO;
+    fab_in.fab$l_naml =  &nam;
+    fab_in.fab$l_xab = (void *) &xabdat;
+
+    Newx(rsa, VMS_MAXRSS, char);
+    nam.naml$l_rsa = NULL;
+    nam.naml$b_rss = 0;
+    nam.naml$l_long_result = rsa;
+    nam.naml$l_long_result_alloc = VMS_MAXRSS - 1;
+    nam.naml$l_esa = NULL;
+    nam.naml$b_ess = 0;
+    nam.naml$l_long_expand = esa;
+    nam.naml$l_long_expand_alloc = VMS_MAXRSS - 1;
+    nam.naml$b_esl = nam.naml$b_rsl = 0;
+    nam.naml$l_long_expand_size = 0;
+    nam.naml$l_long_result_size = 0;
+#ifdef NAM$M_NO_SHORT_UPCASE
+    if (decc_efs_case_preserve)
+        nam.naml$b_nop |= NAM$M_NO_SHORT_UPCASE;
+#endif
+
+    xabdat = cc$rms_xabdat;        /* To get creation date */
+    xabdat.xab$l_nxt = (void *) &xabfhc;
+
+    xabfhc = cc$rms_xabfhc;        /* To get record length */
+    xabfhc.xab$l_nxt = (void *) &xabsum;
+
+    xabsum = cc$rms_xabsum;        /* To get key and area information */
+
+    if (!((sts = sys$open(&fab_in)) & 1)) {
+      Safefree(vmsin);
+      Safefree(vmsout);
+      Safefree(esa);
+      Safefree(rsa);
+      set_vaxc_errno(sts);
+      switch (sts) {
+        case RMS$_FNF: case RMS$_DNF:
+          set_errno(ENOENT); break;
+        case RMS$_DIR:
+          set_errno(ENOTDIR); break;
+        case RMS$_DEV:
+          set_errno(ENODEV); break;
+        case RMS$_SYN:
+          set_errno(EINVAL); break;
+        case RMS$_PRV:
+          set_errno(EACCES); break;
+        default:
+          set_errno(EVMSERR);
+      }
+      return 0;
+    }
+
+    nam_out = nam;
+    fab_out = fab_in;
+    fab_out.fab$w_ifi = 0;
+    fab_out.fab$b_fac = FAB$M_BIO | FAB$M_PUT;
+    fab_out.fab$b_shr = FAB$M_SHRGET | FAB$M_UPI;
+    fab_out.fab$l_fop = FAB$M_SQO;
+    fab_out.fab$l_naml = &nam_out;
+    fab_out.fab$l_fna = (char *) -1;
+    fab_out.fab$b_fns = 0;
+    nam_out.naml$l_long_filename = vmsout;
+    nam_out.naml$l_long_filename_size = strlen(vmsout);
+    fab_out.fab$l_dna = (char *) -1;
+    fab_out.fab$b_dns = 0;
+    nam_out.naml$l_long_defname = nam.naml$l_long_name;
+    nam_out.naml$l_long_defname_size =
+	nam.naml$l_long_name ?
+	   nam.naml$l_long_name_size + nam.naml$l_long_type_size : 0;
+
+    Newx(esa_out, VMS_MAXRSS, char);
+    nam_out.naml$l_rsa = NULL;
+    nam_out.naml$b_rss = 0;
+    nam_out.naml$l_long_result = NULL;
+    nam_out.naml$l_long_result_alloc = 0;
+    nam_out.naml$l_esa = NULL;
+    nam_out.naml$b_ess = 0;
+    nam_out.naml$l_long_expand = esa_out;
+    nam_out.naml$l_long_expand_alloc = VMS_MAXRSS - 1;
+
+    if (preserve_dates == 0) {  /* Act like DCL COPY */
+      nam_out.naml$b_nop |= NAM$M_SYNCHK;
+      fab_out.fab$l_xab = NULL;  /* Don't disturb data from input file */
+      if (!((sts = sys$parse(&fab_out)) & 1)) {
+	Safefree(vmsin);
+	Safefree(vmsout);
+	Safefree(esa);
+	Safefree(rsa);
+	Safefree(esa_out);
+        set_errno(sts == RMS$_SYN ? EINVAL : EVMSERR);
+        set_vaxc_errno(sts);
+        return 0;
+      }
+      fab_out.fab$l_xab = (void *) &xabdat;
+      if (nam.naml$l_fnb & (NAM$M_EXP_NAME | NAM$M_EXP_TYPE)) preserve_dates = 1;
+    }
+    if (preserve_dates < 0)   /* Clear all bits; we'll use it as a */
+      preserve_dates =0;      /* bitmask from this point forward   */
+
+    if (!(preserve_dates & 1)) fab_out.fab$l_xab = (void *) &xabfhc;
+    if (!((sts = sys$create(&fab_out)) & 1)) {
+      Safefree(vmsin);
+      Safefree(vmsout);
+      Safefree(esa);
+      Safefree(rsa);
+      Safefree(esa_out);
+      set_vaxc_errno(sts);
+      switch (sts) {
+        case RMS$_DNF:
+          set_errno(ENOENT); break;
+        case RMS$_DIR:
+          set_errno(ENOTDIR); break;
+        case RMS$_DEV:
+          set_errno(ENODEV); break;
+        case RMS$_SYN:
+          set_errno(EINVAL); break;
+        case RMS$_PRV:
+          set_errno(EACCES); break;
+        default:
+          set_errno(EVMSERR);
+      }
+      return 0;
+    }
+    fab_out.fab$l_fop |= FAB$M_DLT;  /* in case we have to bail out */
+    if (preserve_dates & 2) {
+      /* sys$close() will process xabrdt, not xabdat */
+      xabrdt = cc$rms_xabrdt;
+#ifndef __GNUC__
+      xabrdt.xab$q_rdt = xabdat.xab$q_rdt;
+#else
+      /* gcc doesn't like the assignment, since its prototype for xab$q_rdt
+       * is unsigned long[2], while DECC & VAXC use a struct */
+      memcpy(xabrdt.xab$q_rdt,xabdat.xab$q_rdt,sizeof xabrdt.xab$q_rdt);
+#endif
+      fab_out.fab$l_xab = (void *) &xabrdt;
+    }
+
+    Newx(ubf, 32256, char);
+    rab_in = cc$rms_rab;
+    rab_in.rab$l_fab = &fab_in;
+    rab_in.rab$l_rop = RAB$M_BIO;
+    rab_in.rab$l_ubf = ubf;
+    rab_in.rab$w_usz = 32256;
+    if (!((sts = sys$connect(&rab_in)) & 1)) {
+      sys$close(&fab_in); sys$close(&fab_out);
+      Safefree(vmsin);
+      Safefree(vmsout);
+      Safefree(esa);
+      Safefree(ubf);
+      Safefree(rsa);
+      Safefree(esa_out);
+      set_errno(EVMSERR); set_vaxc_errno(sts);
+      return 0;
+    }
+
+    rab_out = cc$rms_rab;
+    rab_out.rab$l_fab = &fab_out;
+    rab_out.rab$l_rbf = ubf;
+    if (!((sts = sys$connect(&rab_out)) & 1)) {
+      sys$close(&fab_in); sys$close(&fab_out);
+      Safefree(vmsin);
+      Safefree(vmsout);
+      Safefree(esa);
+      Safefree(ubf);
+      Safefree(rsa);
+      Safefree(esa_out);
+      set_errno(EVMSERR); set_vaxc_errno(sts);
+      return 0;
+    }
+
+    while ((sts = sys$read(&rab_in))) {  /* always true  */
+      if (sts == RMS$_EOF) break;
+      rab_out.rab$w_rsz = rab_in.rab$w_rsz;
+      if (!(sts & 1) || !((sts = sys$write(&rab_out)) & 1)) {
+        sys$close(&fab_in); sys$close(&fab_out);
+	Safefree(vmsin);
+	Safefree(vmsout);
+	Safefree(esa);
+	Safefree(ubf);
+	Safefree(rsa);
+	Safefree(esa_out);
+        set_errno(EVMSERR); set_vaxc_errno(sts);
+        return 0;
+      }
+    }
+
+
+    fab_out.fab$l_fop &= ~FAB$M_DLT;  /* We got this far; keep the output */
+    sys$close(&fab_in);  sys$close(&fab_out);
+    sts = (fab_in.fab$l_sts & 1) ? fab_out.fab$l_sts : fab_in.fab$l_sts;
+    if (!(sts & 1)) {
+      Safefree(vmsin);
+      Safefree(vmsout);
+      Safefree(esa);
+      Safefree(ubf);
+      Safefree(rsa);
+      Safefree(esa_out);
+      set_errno(EVMSERR); set_vaxc_errno(sts);
+      return 0;
+    }
+
+    Safefree(vmsin);
+    Safefree(vmsout);
+    Safefree(esa);
+    Safefree(ubf);
+    Safefree(rsa);
+    Safefree(esa_out);
+    return 1;
+
+}  /* end of rmscopy() */
+#endif
 /*}}}*/
 
 
@@ -7322,7 +10485,7 @@ void
 rmscopy_fromperl(pTHX_ CV *cv)
 {
   dXSARGS;
-  char inspec[NAM$C_MAXRSS+1], outspec[NAM$C_MAXRSS+1], *inp, *outp;
+  char *inspec, *outspec, *inp, *outp;
   int date_flag;
   struct dsc$descriptor indsc  = { 0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0},
                         outdsc = { 0, DSC$K_DTYPE_T, DSC$K_CLASS_S, 0};
@@ -7335,10 +10498,12 @@ rmscopy_fromperl(pTHX_ CV *cv)
     Perl_croak(aTHX_ "Usage: File::Copy::rmscopy(from,to[,date_flag])");
 
   mysv = SvROK(ST(0)) ? SvRV(ST(0)) : ST(0);
+  Newx(inspec, VMS_MAXRSS, char);
   if (SvTYPE(mysv) == SVt_PVGV) {
     if (!(io = GvIOp(mysv)) || !PerlIO_getname(IoIFP(io),inspec)) {
       set_errno(EINVAL); set_vaxc_errno(LIB$_INVARG);
       ST(0) = &PL_sv_no;
+      Safefree(inspec);
       XSRETURN(1);
     }
     inp = inspec;
@@ -7347,14 +10512,18 @@ rmscopy_fromperl(pTHX_ CV *cv)
     if (mysv != ST(0) || !(inp = SvPV(mysv,n_a)) || !*inp) {
       set_errno(EINVAL); set_vaxc_errno(LIB$_INVARG);
       ST(0) = &PL_sv_no;
+      Safefree(inspec);
       XSRETURN(1);
     }
   }
   mysv = SvROK(ST(1)) ? SvRV(ST(1)) : ST(1);
+  Newx(outspec, VMS_MAXRSS, char);
   if (SvTYPE(mysv) == SVt_PVGV) {
     if (!(io = GvIOp(mysv)) || !PerlIO_getname(IoIFP(io),outspec)) {
       set_errno(EINVAL); set_vaxc_errno(LIB$_INVARG);
       ST(0) = &PL_sv_no;
+      Safefree(inspec);
+      Safefree(outspec);
       XSRETURN(1);
     }
     outp = outspec;
@@ -7363,16 +10532,22 @@ rmscopy_fromperl(pTHX_ CV *cv)
     if (mysv != ST(1) || !(outp = SvPV(mysv,n_a)) || !*outp) {
       set_errno(EINVAL); set_vaxc_errno(LIB$_INVARG);
       ST(0) = &PL_sv_no;
+      Safefree(inspec);
+      Safefree(outspec);
       XSRETURN(1);
     }
   }
   date_flag = (items == 3) ? SvIV(ST(2)) : 0;
 
   ST(0) = boolSV(rmscopy(inp,outp,date_flag));
+  Safefree(inspec);
+  Safefree(outspec);
   XSRETURN(1);
 }
 
-
+/* The mod2fname is limited to shorter filenames by design, so it should
+ * not be modified to support longer EFS pathnames
+ */
 void
 mod2fname(pTHX_ CV *cv)
 {
@@ -7460,6 +10635,46 @@ hushexit_fromperl(pTHX_ CV *cv)
     XSRETURN(1);
 }
 
+#ifdef HAS_SYMLINK
+static char *
+mp_do_vms_realpath(pTHX_ const char *filespec, char * rslt_spec);
+
+void
+vms_realpath_fromperl(pTHX_ CV *cv)
+{
+  dXSARGS;
+  char *fspec, *rslt_spec, *rslt;
+  STRLEN n_a;
+
+  if (!items || items != 1)
+    Perl_croak(aTHX_ "Usage: VMS::Filespec::vms_realpath(spec)");
+
+  fspec = SvPV(ST(0),n_a);
+  if (!fspec || !*fspec) XSRETURN_UNDEF;
+
+  Newx(rslt_spec, VMS_MAXRSS + 1, char);
+  rslt = do_vms_realpath(fspec, rslt_spec);
+  ST(0) = sv_newmortal();
+  if (rslt != NULL)
+    sv_usepvn(ST(0),rslt,strlen(rslt));
+  else
+    Safefree(rslt_spec);
+  XSRETURN(1);
+}
+#endif
+
+#if __CRTL_VER >= 70301000 && !defined(__VAX)
+int do_vms_case_tolerant(void);
+
+void
+vms_case_tolerant_fromperl(pTHX_ CV *cv)
+{
+  dXSARGS;
+  ST(0) = boolSV(do_vms_case_tolerant());
+  XSRETURN(1);
+}
+#endif
+
 void  
 Perl_sys_intern_dup(pTHX_ struct interp_intern *src, 
                           struct interp_intern *dst)
@@ -7480,12 +10695,16 @@ Perl_sys_intern_init(pTHX)
 
     VMSISH_HUSHED = 0;
 
+    /* fix me later to track running under GNV */
+    /* this allows some limited testing */
+    MY_POSIX_EXIT = decc_filename_unix_report;
+
     x = (float)ix;
     MY_INV_RAND_MAX = 1./x;
 }
 
 void
-init_os_extras()
+init_os_extras(void)
 {
   dTHX;
   char* file = __FILE__;
@@ -7507,10 +10726,393 @@ init_os_extras()
   newXSproto("DynaLoader::mod2fname", mod2fname, file, "$");
   newXS("File::Copy::rmscopy",rmscopy_fromperl,file);
   newXSproto("vmsish::hushed",hushexit_fromperl,file,";$");
+#ifdef HAS_SYMLINK
+  newXSproto("VMS::Filespec::vms_realpath",vms_realpath_fromperl,file,"$;$");
+#endif
+#if __CRTL_VER >= 70301000 && !defined(__VAX)
+  newXSproto("VMS::Filespec::case_tolerant",vms_case_tolerant_fromperl,file,"$;$");
+#endif
 
   store_pipelocs(aTHX);         /* will redo any earlier attempts */
 
   return;
 }
   
+#ifdef HAS_SYMLINK
+
+#if __CRTL_VER == 80200000
+/* This missed getting in to the DECC SDK for 8.2 */
+char *realpath(const char *file_name, char * resolved_name, ...);
+#endif
+
+/*{{{char *do_vms_realpath(const char *file_name, char *resolved_name)*/
+/* wrapper for the realpath() function added with 8.2 RMS SYMLINK SDK.
+ * The perl fallback routine to provide realpath() is not as efficient
+ * on OpenVMS.
+ */
+static char *
+mp_do_vms_realpath(pTHX_ const char *filespec, char *outbuf)
+{
+    return realpath(filespec, outbuf);
+}
+
+/*}}}*/
+/* External entry points */
+char *Perl_vms_realpath(pTHX_ const char *filespec, char *outbuf)
+{ return do_vms_realpath(filespec, outbuf); }
+#else
+char *Perl_vms_realpath(pTHX_ const char *filespec, char *outbuf)
+{ return NULL; }
+#endif
+
+
+#if __CRTL_VER >= 70301000 && !defined(__VAX)
+/* case_tolerant */
+
+/*{{{int do_vms_case_tolerant(void)*/
+/* OpenVMS provides a case sensitive implementation of ODS-5 and this is
+ * controlled by a process setting.
+ */
+int do_vms_case_tolerant(void)
+{
+    return vms_process_case_tolerant;
+}
+/*}}}*/
+/* External entry points */
+int Perl_vms_case_tolerant(void)
+{ return do_vms_case_tolerant(); }
+#else
+int Perl_vms_case_tolerant(void)
+{ return vms_process_case_tolerant; }
+#endif
+
+
+ /* Start of DECC RTL Feature handling */
+
+static int sys_trnlnm
+   (const char * logname,
+    char * value,
+    int value_len)
+{
+    const $DESCRIPTOR(table_dsc, "LNM$FILE_DEV");
+    const unsigned long attr = LNM$M_CASE_BLIND;
+    struct dsc$descriptor_s name_dsc;
+    int status;
+    unsigned short result;
+    struct itmlst_3 itlst[2] = {{value_len, LNM$_STRING, value, &result},
+                                {0, 0, 0, 0}};
+
+    name_dsc.dsc$w_length = strlen(logname);
+    name_dsc.dsc$a_pointer = (char *)logname;
+    name_dsc.dsc$b_dtype = DSC$K_DTYPE_T;
+    name_dsc.dsc$b_class = DSC$K_CLASS_S;
+
+    status = sys$trnlnm(&attr, &table_dsc, &name_dsc, 0, itlst);
+
+    if ($VMS_STATUS_SUCCESS(status)) {
+
+	 /* Null terminate and return the string */
+	/*--------------------------------------*/
+	value[result] = 0;
+    }
+
+    return status;
+}
+
+static int sys_crelnm
+   (const char * logname,
+    const char * value)
+{
+    int ret_val;
+    const char * proc_table = "LNM$PROCESS_TABLE";
+    struct dsc$descriptor_s proc_table_dsc;
+    struct dsc$descriptor_s logname_dsc;
+    struct itmlst_3 item_list[2];
+
+    proc_table_dsc.dsc$a_pointer = (char *) proc_table;
+    proc_table_dsc.dsc$w_length = strlen(proc_table);
+    proc_table_dsc.dsc$b_dtype = DSC$K_DTYPE_T;
+    proc_table_dsc.dsc$b_class = DSC$K_CLASS_S;
+
+    logname_dsc.dsc$a_pointer = (char *) logname;
+    logname_dsc.dsc$w_length = strlen(logname);
+    logname_dsc.dsc$b_dtype = DSC$K_DTYPE_T;
+    logname_dsc.dsc$b_class = DSC$K_CLASS_S;
+
+    item_list[0].buflen = strlen(value);
+    item_list[0].itmcode = LNM$_STRING;
+    item_list[0].bufadr = (char *)value;
+    item_list[0].retlen = NULL;
+
+    item_list[1].buflen = 0;
+    item_list[1].itmcode = 0;
+
+    ret_val = sys$crelnm
+		       (NULL,
+			(const struct dsc$descriptor_s *)&proc_table_dsc,
+			(const struct dsc$descriptor_s *)&logname_dsc,
+			NULL,
+			(const struct item_list_3 *) item_list);
+
+    return ret_val;
+}
+
+
+/* C RTL Feature settings */
+
+static int set_features
+   (int (* init_coroutine)(int *, int *, void *),  /* Needs casts if used */
+    int (* cli_routine)(void),	/* Not documented */
+    void *image_info)		/* Not documented */
+{
+    int status;
+    int s;
+    int dflt;
+    char* str;
+    char val_str[10];
+#if defined(JPI$_CASE_LOOKUP_PERM) && !defined(__VAX)
+    const unsigned long int jpicode1 = JPI$_CASE_LOOKUP_PERM;
+    const unsigned long int jpicode2 = JPI$_CASE_LOOKUP_IMAGE;
+    unsigned long case_perm;
+    unsigned long case_image;
+#endif
+
+    /* hacks to see if known bugs are still present for testing */
+
+    /* Readdir is returning filenames in VMS syntax always */
+    decc_bug_readdir_efs1 = 1;
+    status = sys_trnlnm("DECC_BUG_READDIR_EFS1", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+       if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T'))
+         decc_bug_readdir_efs1 = 1;
+       else
+	 decc_bug_readdir_efs1 = 0;
+    }
+
+    /* PCP mode requires creating /dev/null special device file */
+    decc_bug_devnull = 0;
+    status = sys_trnlnm("DECC_BUG_DEVNULL", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+       if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T'))
+          decc_bug_devnull = 1;
+    }
+
+    /* fgetname returning a VMS name in UNIX mode */
+    decc_bug_fgetname = 1;
+    status = sys_trnlnm("DECC_BUG_FGETNAME", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+      if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T'))
+	decc_bug_fgetname = 1;
+      else
+	decc_bug_fgetname = 0;
+    }
+
+    /* UNIX directory names with no paths are broken in a lot of places */
+    decc_dir_barename = 1;
+    status = sys_trnlnm("DECC_DIR_BARENAME", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+      if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T'))
+	decc_dir_barename = 1;
+      else
+	decc_dir_barename = 0;
+    }
+
+#if __CRTL_VER >= 70300000 && !defined(__VAX)
+    s = decc$feature_get_index("DECC$DISABLE_TO_VMS_LOGNAME_TRANSLATION");
+    if (s >= 0) {
+	decc_disable_to_vms_logname_translation = decc$feature_get_value(s, 1);
+	if (decc_disable_to_vms_logname_translation < 0)
+	    decc_disable_to_vms_logname_translation = 0;
+    }
+
+    s = decc$feature_get_index("DECC$EFS_CASE_PRESERVE");
+    if (s >= 0) {
+	decc_efs_case_preserve = decc$feature_get_value(s, 1);
+	if (decc_efs_case_preserve < 0)
+	    decc_efs_case_preserve = 0;
+    }
+
+    s = decc$feature_get_index("DECC$EFS_CHARSET");
+    if (s >= 0) {
+	decc_efs_charset = decc$feature_get_value(s, 1);
+	if (decc_efs_charset < 0)
+	    decc_efs_charset = 0;
+    }
+
+    s = decc$feature_get_index("DECC$FILENAME_UNIX_REPORT");
+    if (s >= 0) {
+	decc_filename_unix_report = decc$feature_get_value(s, 1);
+	if (decc_filename_unix_report > 0)
+	    decc_filename_unix_report = 1;
+	else
+	    decc_filename_unix_report = 0;
+    }
+
+    s = decc$feature_get_index("DECC$FILENAME_UNIX_ONLY");
+    if (s >= 0) {
+	decc_filename_unix_only = decc$feature_get_value(s, 1);
+	if (decc_filename_unix_only > 0) {
+	    decc_filename_unix_only = 1;
+	}
+	else {
+	    decc_filename_unix_only = 0;
+	}
+    }
+
+    s = decc$feature_get_index("DECC$FILENAME_UNIX_NO_VERSION");
+    if (s >= 0) {
+	decc_filename_unix_no_version = decc$feature_get_value(s, 1);
+	if (decc_filename_unix_no_version < 0)
+	    decc_filename_unix_no_version = 0;
+    }
+
+    s = decc$feature_get_index("DECC$READDIR_DROPDOTNOTYPE");
+    if (s >= 0) {
+	decc_readdir_dropdotnotype = decc$feature_get_value(s, 1);
+	if (decc_readdir_dropdotnotype < 0)
+	    decc_readdir_dropdotnotype = 0;
+    }
+
+    status = sys_trnlnm("SYS$POSIX_ROOT", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+	s = decc$feature_get_index("DECC$DISABLE_POSIX_ROOT");
+	if (s >= 0) {
+	    dflt = decc$feature_get_value(s, 4);
+	    if (dflt > 0) {
+		decc_disable_posix_root = decc$feature_get_value(s, 1);
+		if (decc_disable_posix_root <= 0) {
+		    decc$feature_set_value(s, 1, 1);
+		    decc_disable_posix_root = 1;
+		}
+	    }
+	    else {
+		/* Traditionally Perl assumes this is off */
+		decc_disable_posix_root = 1;
+		decc$feature_set_value(s, 1, 1);
+	    }
+	}
+    }
+
+#if __CRTL_VER >= 80200000
+    s = decc$feature_get_index("DECC$POSIX_COMPLIANT_PATHNAMES");
+    if (s >= 0) {
+	decc_posix_compliant_pathnames = decc$feature_get_value(s, 1);
+	if (decc_posix_compliant_pathnames < 0)
+	    decc_posix_compliant_pathnames = 0;
+	if (decc_posix_compliant_pathnames > 4)
+	    decc_posix_compliant_pathnames = 0;
+    }
+
+#endif
+#else
+    status = sys_trnlnm
+	("DECC$DISABLE_TO_VMS_LOGNAME_TRANSLATION", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+	val_str[0] = _toupper(val_str[0]);
+	if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T')) {
+	   decc_disable_to_vms_logname_translation = 1;
+	}
+    }
+
+#ifndef __VAX
+    status = sys_trnlnm("DECC$EFS_CASE_PRESERVE", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+	val_str[0] = _toupper(val_str[0]);
+	if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T')) {
+	   decc_efs_case_preserve = 1;
+	}
+    }
+#endif
+
+    status = sys_trnlnm("DECC$FILENAME_UNIX_REPORT", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+	val_str[0] = _toupper(val_str[0]);
+	if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T')) {
+	   decc_filename_unix_report = 1;
+	}
+    }
+    status = sys_trnlnm("DECC$FILENAME_UNIX_ONLY", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+	val_str[0] = _toupper(val_str[0]);
+	if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T')) {
+	   decc_filename_unix_only = 1;
+	   decc_filename_unix_report = 1;
+	}
+    }
+    status = sys_trnlnm("DECC$FILENAME_UNIX_NO_VERSION", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+	val_str[0] = _toupper(val_str[0]);
+	if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T')) {
+	   decc_filename_unix_no_version = 1;
+	}
+    }
+    status = sys_trnlnm("DECC$READDIR_DROPDOTNOTYPE", val_str, sizeof(val_str));
+    if ($VMS_STATUS_SUCCESS(status)) {
+	val_str[0] = _toupper(val_str[0]);
+	if ((val_str[0] == 'E') || (val_str[0] == '1') || (val_str[0] == 'T')) {
+	   decc_readdir_dropdotnotype = 1;
+	}
+    }
+#endif
+
+#if defined(JPI$_CASE_LOOKUP_PERM) && !defined(__VAX)
+
+     /* Report true case tolerance */
+    /*----------------------------*/
+    status = lib$getjpi(&jpicode1, 0, 0, &case_perm, 0, 0);
+    if (!$VMS_STATUS_SUCCESS(status))
+	case_perm = PPROP$K_CASE_BLIND;
+    status = lib$getjpi(&jpicode2, 0, 0, &case_image, 0, 0);
+    if (!$VMS_STATUS_SUCCESS(status))
+	case_image = PPROP$K_CASE_BLIND;
+    if ((case_perm == PPROP$K_CASE_SENSITIVE) ||
+	(case_image == PPROP$K_CASE_SENSITIVE))
+	vms_process_case_tolerant = 0;
+
+#endif
+
+
+    /* CRTL can be initialized past this point, but not before. */
+/*    DECC$CRTL_INIT(); */
+
+    return SS$_NORMAL;
+}
+
+#ifdef __DECC
+/* DECC dependent attributes */
+#if __DECC_VER < 60560002
+#define relative
+#define not_executable
+#else
+#define relative ,rel
+#define not_executable ,noexe
+#endif
+#pragma nostandard
+#pragma extern_model save
+#pragma extern_model strict_refdef "LIB$INITIALIZ" nowrt
+#endif
+	const __align (LONGWORD) int spare[8] = {0};
+/* .psect LIB$INITIALIZE, NOPIC, USR, CON, REL, GBL, NOSHR, NOEXE, RD, */
+/*			  NOWRT, LONG */
+#ifdef __DECC
+#pragma extern_model strict_refdef "LIB$INITIALIZE" con, gbl,noshr, \
+	nowrt,noshr relative not_executable
+#endif
+const long vms_cc_features = (const long)set_features;
+
+/*
+** Force a reference to LIB$INITIALIZE to ensure it
+** exists in the image.
+*/
+int lib$initialize(void);
+#ifdef __DECC
+#pragma extern_model strict_refdef
+#endif
+    int lib_init_ref = (int) lib$initialize;
+
+#ifdef __DECC
+#pragma extern_model restore
+#pragma standard
+#endif
+
 /*  End of vms.c */

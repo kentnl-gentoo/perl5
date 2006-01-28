@@ -35,7 +35,8 @@ absolute path of the current working directory.
 
 Returns the current working directory.
 
-Re-implements the getcwd(3) (or getwd(3)) functions in Perl.
+Exposes the POSIX function getcwd(3) or re-implements it if it's not
+available.
 
 =item cwd
 
@@ -170,7 +171,7 @@ use strict;
 use Exporter;
 use vars qw(@ISA @EXPORT @EXPORT_OK $VERSION);
 
-$VERSION = '3.05';
+$VERSION = '3.15';
 
 @ISA = qw/ Exporter /;
 @EXPORT = qw(cwd getcwd fastcwd fastgetcwd);
@@ -302,6 +303,7 @@ foreach my $try ('/bin/pwd',
         last;
     }
 }
+my $found_pwd_cmd = defined($pwd_cmd);
 unless ($pwd_cmd) {
     # Isn't this wrong?  _backtick_pwd() will fail if somenone has
     # pwd in their path but it is not /bin/pwd or /usr/bin/pwd?
@@ -315,7 +317,10 @@ sub _croak { require Carp; Carp::croak(@_) }
 
 # The 'natural and safe form' for UNIX (pwd may be setuid root)
 sub _backtick_pwd {
-    local @ENV{qw(PATH IFS CDPATH ENV BASH_ENV)};
+    # Localize %ENV entries in a way that won't create new hash keys
+    my @localize = grep exists $ENV{$_}, qw(PATH IFS CDPATH ENV BASH_ENV);
+    local @ENV{@localize};
+    
     my $cwd = `$pwd_cmd`;
     # Belt-and-suspenders in case someone said "undef $/".
     local $/ = "\n";
@@ -330,9 +335,20 @@ sub _backtick_pwd {
 unless ($METHOD_MAP{$^O}{cwd} or defined &cwd) {
     # The pwd command is not available in some chroot(2)'ed environments
     my $sep = $Config::Config{path_sep} || ':';
-    if( $^O eq 'MacOS' || (defined $ENV{PATH} &&
-			   $^O ne 'MSWin32' &&  # no pwd on Windows
-			   grep { -x "$_/pwd" } split($sep, $ENV{PATH})) )
+    my $os = $^O;  # Protect $^O from tainting
+
+
+    # Try again to find a pwd, this time searching the whole PATH.
+    if (defined $ENV{PATH} and $os ne 'MSWin32') {  # no pwd on Windows
+	my @candidates = split($sep, $ENV{PATH});
+	while (!$found_pwd_cmd and @candidates) {
+	    my $candidate = shift @candidates;
+	    $found_pwd_cmd = 1 if -x "$candidate/pwd";
+	}
+    }
+
+    # MacOS has some special magic to make `pwd` work.
+    if( $os eq 'MacOS' || $found_pwd_cmd )
     {
 	*cwd = \&_backtick_pwd;
     }
@@ -349,11 +365,10 @@ unless ($METHOD_MAP{$^O}{cwd} or defined &cwd) {
 #
 # Usage: $cwd = getcwd();
 
-sub getcwd
+sub _perl_getcwd
 {
     abs_path('.');
 }
-
 
 # By John Bazik
 #
@@ -584,9 +599,7 @@ sub fast_abs_path {
 	    return fast_abs_path($link_target);
 	}
 	
-	my $tdir = $dir;
-	$tdir =~ s!\\!/!g if $^O eq 'MSWin32';
-	return $tdir eq File::Spec->rootdir
+	return $dir eq File::Spec->rootdir
 	  ? File::Spec->catpath($vol, $dir, $file)
 	  : fast_abs_path(File::Spec->catpath($vol, $dir, '')) . '/' . $file;
     }
@@ -643,10 +656,7 @@ sub _win32_cwd {
     return $ENV{'PWD'};
 }
 
-*_NT_cwd = \&_win32_cwd if (!defined &_NT_cwd && 
-                            defined &Win32::GetCwd);
-
-*_NT_cwd = \&_os2_cwd unless defined &_NT_cwd;
+*_NT_cwd = defined &Win32::GetCwd ? \&_win32_cwd : \&_os2_cwd;
 
 sub _dos_cwd {
     if (!defined &Dos::GetCwd) {
@@ -703,6 +713,7 @@ if (exists $METHOD_MAP{$^O}) {
 
 # In case the XS version doesn't load.
 *abs_path = \&_perl_abs_path unless defined &abs_path;
+*getcwd = \&_perl_getcwd unless defined &getcwd;
 
 # added function alias for those of us more
 # used to the libc function.  --tchrist 27-Jan-00

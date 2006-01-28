@@ -52,7 +52,7 @@ my $last = $have_setlocale ? &last : &last_without_setlocale;
 
 print "1..$last\n";
 
-use vars qw(&LC_ALL);
+sub LC_ALL ();
 
 $a = 'abc %';
 
@@ -436,6 +436,15 @@ if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a 2>/dev/null|")) {
 }
 
 setlocale(LC_ALL, "C");
+
+if ($^O eq 'darwin') {
+    # Darwin 8/Mac OS X 10.4 has bad Basque locales: perl bug #35895,
+    # Apple bug ID# 4139653. It also has a problem in Byelorussian.
+    if ($Config{osvers} ge '8' and $Config{osvers} lt '9') {
+	debug "# Skipping eu_ES, be_BY locales -- buggy in Darwin\n";
+	@Locale = grep ! m/^(eu_ES|be_BY.CP1131$)/, @Locale;
+    }
+}
 
 @Locale = sort @Locale;
 

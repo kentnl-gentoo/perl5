@@ -9,7 +9,7 @@ BEGIN {
 
 use Config;
 require "test.pl";
-plan(tests => 31);
+plan(tests => 38);
 
 my $IsVMS   = $^O eq 'VMS';
 my $IsMacOS = $^O eq 'MacOS';
@@ -41,6 +41,30 @@ SKIP: {
 }
 
 $Cwd = abs_path;
+
+SKIP: {
+    skip("no fchdir", 6) unless ($Config{d_fchdir} || "") eq "define";
+    ok(opendir(my $dh, "."), "opendir .");
+    ok(open(my $fh, "<", "op"), "open op");
+    ok(chdir($fh), "fchdir op");
+    ok(-f "chdir.t", "verify that we are in op");
+    if (($Config{d_dirfd} || "") eq "define") {
+       ok(chdir($dh), "fchdir back");
+    }
+    else {
+       eval { chdir($dh); };
+       like($@, qr/^The dirfd function is unimplemented at/, "dirfd is unimplemented");
+       chdir "..";
+    }
+    ok(-d "op", "verify that we are back");
+}
+
+SKIP: {
+    skip("has fchdir", 1) if ($Config{d_fchdir} || "") eq "define";
+    opendir(my $dh, "op");
+    eval { chdir($dh); };
+    like($@, qr/^The fchdir function is unimplemented at/, "fchdir is unimplemented");
+}
 
 # The environment variables chdir() pays attention to.
 my @magic_envs = qw(HOME LOGDIR SYS$LOGIN);
@@ -114,6 +138,10 @@ END {
 
     # Restore the environment for VMS (and doesn't hurt for anyone else)
     @ENV{@magic_envs} = @Saved_Env{@magic_envs};
+
+    # On VMS this must be deleted or process table is wrong on exit
+    # when this script is run interactively.
+    delete $ENV{'SYS$LOGIN'} if $IsVMS;
 }
 
 

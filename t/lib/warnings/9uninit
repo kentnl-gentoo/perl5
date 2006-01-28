@@ -625,8 +625,8 @@ Use of uninitialized value $m1 in glob elem at - line 5.
 Use of uninitialized value $g1 in subroutine prototype at - line 6.
 Use of uninitialized value $g1 in bless at - line 7.
 Use of uninitialized value $m1 in quoted execution (``, qx) at - line 8.
-Use of uninitialized value $g1 in concatenation (.) or string at - line 10.
 Use of uninitialized value $m1 in concatenation (.) or string at - line 10.
+Use of uninitialized value $g1 in concatenation (.) or string at - line 10.
 ########
 use warnings 'uninitialized';
 my ($m1);
@@ -1220,8 +1220,8 @@ $v = -r $m1;
 $v = -w $m1;
 $v = -x $m1;
 $v = -e $m1;
-$v = -O $m1;
 $v = -o $m1;
+$v = -O $m1;
 $v = -z $m1;
 $v = -s $m1;
 $v = -M $m1;

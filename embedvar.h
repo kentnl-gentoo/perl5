@@ -1,8 +1,9 @@
-/*
+/*  -*- buffer-read-only: t -*-
+ *
  *    embedvar.h
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -137,7 +138,6 @@
 #define PL_screamnext		(vTHX->Tscreamnext)
 #define PL_secondgv		(vTHX->Tsecondgv)
 #define PL_sortcop		(vTHX->Tsortcop)
-#define PL_sortcxix		(vTHX->Tsortcxix)
 #define PL_sortstash		(vTHX->Tsortstash)
 #define PL_stack_base		(vTHX->Tstack_base)
 #define PL_stack_max		(vTHX->Tstack_max)
@@ -191,6 +191,8 @@
 #define PL_beginav		(vTHX->Ibeginav)
 #define PL_beginav_save		(vTHX->Ibeginav_save)
 #define PL_bitcount		(vTHX->Ibitcount)
+#define PL_body_arenaroots	(vTHX->Ibody_arenaroots)
+#define PL_body_roots		(vTHX->Ibody_roots)
 #define PL_bufend		(vTHX->Ibufend)
 #define PL_bufptr		(vTHX->Ibufptr)
 #define PL_checkav		(vTHX->Icheckav)
@@ -227,6 +229,7 @@
 #define PL_doextract		(vTHX->Idoextract)
 #define PL_doswitches		(vTHX->Idoswitches)
 #define PL_dowarn		(vTHX->Idowarn)
+#define PL_dumper_fd		(vTHX->Idumper_fd)
 #define PL_e_script		(vTHX->Ie_script)
 #define PL_egid			(vTHX->Iegid)
 #define PL_encoding		(vTHX->Iencoding)
@@ -254,8 +257,6 @@
 #define PL_globalstash		(vTHX->Iglobalstash)
 #define PL_hash_seed		(vTHX->Ihash_seed)
 #define PL_hash_seed_set	(vTHX->Ihash_seed_set)
-#define PL_he_arenaroot		(vTHX->Ihe_arenaroot)
-#define PL_he_root		(vTHX->Ihe_root)
 #define PL_hintgv		(vTHX->Ihintgv)
 #define PL_hints		(vTHX->Ihints)
 #define PL_in_clean_all		(vTHX->Iin_clean_all)
@@ -306,6 +307,7 @@
 #define PL_maxsysfd		(vTHX->Imaxsysfd)
 #define PL_mess_sv		(vTHX->Imess_sv)
 #define PL_min_intro_pending	(vTHX->Imin_intro_pending)
+#define PL_minus_E		(vTHX->Iminus_E)
 #define PL_minus_F		(vTHX->Iminus_F)
 #define PL_minus_a		(vTHX->Iminus_a)
 #define PL_minus_c		(vTHX->Iminus_c)
@@ -318,6 +320,8 @@
 #define PL_multi_open		(vTHX->Imulti_open)
 #define PL_multi_start		(vTHX->Imulti_start)
 #define PL_multiline		(vTHX->Imultiline)
+#define PL_my_cxt_list		(vTHX->Imy_cxt_list)
+#define PL_my_cxt_size		(vTHX->Imy_cxt_size)
 #define PL_nexttoke		(vTHX->Inexttoke)
 #define PL_nexttype		(vTHX->Inexttype)
 #define PL_nextval		(vTHX->Inextval)
@@ -329,7 +333,6 @@
 #define PL_numeric_name		(vTHX->Inumeric_name)
 #define PL_numeric_radix_sv	(vTHX->Inumeric_radix_sv)
 #define PL_numeric_standard	(vTHX->Inumeric_standard)
-#define PL_ofmt			(vTHX->Iofmt)
 #define PL_oldbufptr		(vTHX->Ioldbufptr)
 #define PL_oldname		(vTHX->Ioldname)
 #define PL_oldoldbufptr		(vTHX->Ioldoldbufptr)
@@ -373,7 +376,6 @@
 #define PL_runops_std		(vTHX->Irunops_std)
 #define PL_savebegin		(vTHX->Isavebegin)
 #define PL_sawampersand		(vTHX->Isawampersand)
-#define PL_sh_path_compat	(vTHX->Ish_path_compat)
 #define PL_sharehook		(vTHX->Isharehook)
 #define PL_sig_pending		(vTHX->Isig_pending)
 #define PL_sighandlerp		(vTHX->Isighandlerp)
@@ -383,6 +385,7 @@
 #define PL_srand_called		(vTHX->Isrand_called)
 #define PL_stashcache		(vTHX->Istashcache)
 #define PL_statusvalue		(vTHX->Istatusvalue)
+#define PL_statusvalue_posix	(vTHX->Istatusvalue_posix)
 #define PL_statusvalue_vms	(vTHX->Istatusvalue_vms)
 #define PL_stderrgv		(vTHX->Istderrgv)
 #define PL_stdingv		(vTHX->Istdingv)
@@ -432,30 +435,6 @@
 #define PL_uudmap		(vTHX->Iuudmap)
 #define PL_warnhook		(vTHX->Iwarnhook)
 #define PL_widesyscalls		(vTHX->Iwidesyscalls)
-#define PL_xiv_arenaroot	(vTHX->Ixiv_arenaroot)
-#define PL_xiv_root		(vTHX->Ixiv_root)
-#define PL_xnv_arenaroot	(vTHX->Ixnv_arenaroot)
-#define PL_xnv_root		(vTHX->Ixnv_root)
-#define PL_xpv_arenaroot	(vTHX->Ixpv_arenaroot)
-#define PL_xpv_root		(vTHX->Ixpv_root)
-#define PL_xpvav_arenaroot	(vTHX->Ixpvav_arenaroot)
-#define PL_xpvav_root		(vTHX->Ixpvav_root)
-#define PL_xpvbm_arenaroot	(vTHX->Ixpvbm_arenaroot)
-#define PL_xpvbm_root		(vTHX->Ixpvbm_root)
-#define PL_xpvcv_arenaroot	(vTHX->Ixpvcv_arenaroot)
-#define PL_xpvcv_root		(vTHX->Ixpvcv_root)
-#define PL_xpvhv_arenaroot	(vTHX->Ixpvhv_arenaroot)
-#define PL_xpvhv_root		(vTHX->Ixpvhv_root)
-#define PL_xpviv_arenaroot	(vTHX->Ixpviv_arenaroot)
-#define PL_xpviv_root		(vTHX->Ixpviv_root)
-#define PL_xpvlv_arenaroot	(vTHX->Ixpvlv_arenaroot)
-#define PL_xpvlv_root		(vTHX->Ixpvlv_root)
-#define PL_xpvmg_arenaroot	(vTHX->Ixpvmg_arenaroot)
-#define PL_xpvmg_root		(vTHX->Ixpvmg_root)
-#define PL_xpvnv_arenaroot	(vTHX->Ixpvnv_arenaroot)
-#define PL_xpvnv_root		(vTHX->Ixpvnv_root)
-#define PL_xrv_arenaroot	(vTHX->Ixrv_arenaroot)
-#define PL_xrv_root		(vTHX->Ixrv_root)
 #define PL_yycharp		(vTHX->Iyycharp)
 #define PL_yylvalp		(vTHX->Iyylvalp)
 
@@ -494,6 +473,8 @@
 #define PL_Ibeginav		PL_beginav
 #define PL_Ibeginav_save	PL_beginav_save
 #define PL_Ibitcount		PL_bitcount
+#define PL_Ibody_arenaroots	PL_body_arenaroots
+#define PL_Ibody_roots		PL_body_roots
 #define PL_Ibufend		PL_bufend
 #define PL_Ibufptr		PL_bufptr
 #define PL_Icheckav		PL_checkav
@@ -530,6 +511,7 @@
 #define PL_Idoextract		PL_doextract
 #define PL_Idoswitches		PL_doswitches
 #define PL_Idowarn		PL_dowarn
+#define PL_Idumper_fd		PL_dumper_fd
 #define PL_Ie_script		PL_e_script
 #define PL_Iegid		PL_egid
 #define PL_Iencoding		PL_encoding
@@ -557,8 +539,6 @@
 #define PL_Iglobalstash		PL_globalstash
 #define PL_Ihash_seed		PL_hash_seed
 #define PL_Ihash_seed_set	PL_hash_seed_set
-#define PL_Ihe_arenaroot	PL_he_arenaroot
-#define PL_Ihe_root		PL_he_root
 #define PL_Ihintgv		PL_hintgv
 #define PL_Ihints		PL_hints
 #define PL_Iin_clean_all	PL_in_clean_all
@@ -609,6 +589,7 @@
 #define PL_Imaxsysfd		PL_maxsysfd
 #define PL_Imess_sv		PL_mess_sv
 #define PL_Imin_intro_pending	PL_min_intro_pending
+#define PL_Iminus_E		PL_minus_E
 #define PL_Iminus_F		PL_minus_F
 #define PL_Iminus_a		PL_minus_a
 #define PL_Iminus_c		PL_minus_c
@@ -621,6 +602,8 @@
 #define PL_Imulti_open		PL_multi_open
 #define PL_Imulti_start		PL_multi_start
 #define PL_Imultiline		PL_multiline
+#define PL_Imy_cxt_list		PL_my_cxt_list
+#define PL_Imy_cxt_size		PL_my_cxt_size
 #define PL_Inexttoke		PL_nexttoke
 #define PL_Inexttype		PL_nexttype
 #define PL_Inextval		PL_nextval
@@ -632,7 +615,6 @@
 #define PL_Inumeric_name	PL_numeric_name
 #define PL_Inumeric_radix_sv	PL_numeric_radix_sv
 #define PL_Inumeric_standard	PL_numeric_standard
-#define PL_Iofmt		PL_ofmt
 #define PL_Ioldbufptr		PL_oldbufptr
 #define PL_Ioldname		PL_oldname
 #define PL_Ioldoldbufptr	PL_oldoldbufptr
@@ -676,7 +658,6 @@
 #define PL_Irunops_std		PL_runops_std
 #define PL_Isavebegin		PL_savebegin
 #define PL_Isawampersand	PL_sawampersand
-#define PL_Ish_path_compat	PL_sh_path_compat
 #define PL_Isharehook		PL_sharehook
 #define PL_Isig_pending		PL_sig_pending
 #define PL_Isighandlerp		PL_sighandlerp
@@ -686,6 +667,7 @@
 #define PL_Isrand_called	PL_srand_called
 #define PL_Istashcache		PL_stashcache
 #define PL_Istatusvalue		PL_statusvalue
+#define PL_Istatusvalue_posix	PL_statusvalue_posix
 #define PL_Istatusvalue_vms	PL_statusvalue_vms
 #define PL_Istderrgv		PL_stderrgv
 #define PL_Istdingv		PL_stdingv
@@ -735,30 +717,6 @@
 #define PL_Iuudmap		PL_uudmap
 #define PL_Iwarnhook		PL_warnhook
 #define PL_Iwidesyscalls	PL_widesyscalls
-#define PL_Ixiv_arenaroot	PL_xiv_arenaroot
-#define PL_Ixiv_root		PL_xiv_root
-#define PL_Ixnv_arenaroot	PL_xnv_arenaroot
-#define PL_Ixnv_root		PL_xnv_root
-#define PL_Ixpv_arenaroot	PL_xpv_arenaroot
-#define PL_Ixpv_root		PL_xpv_root
-#define PL_Ixpvav_arenaroot	PL_xpvav_arenaroot
-#define PL_Ixpvav_root		PL_xpvav_root
-#define PL_Ixpvbm_arenaroot	PL_xpvbm_arenaroot
-#define PL_Ixpvbm_root		PL_xpvbm_root
-#define PL_Ixpvcv_arenaroot	PL_xpvcv_arenaroot
-#define PL_Ixpvcv_root		PL_xpvcv_root
-#define PL_Ixpvhv_arenaroot	PL_xpvhv_arenaroot
-#define PL_Ixpvhv_root		PL_xpvhv_root
-#define PL_Ixpviv_arenaroot	PL_xpviv_arenaroot
-#define PL_Ixpviv_root		PL_xpviv_root
-#define PL_Ixpvlv_arenaroot	PL_xpvlv_arenaroot
-#define PL_Ixpvlv_root		PL_xpvlv_root
-#define PL_Ixpvmg_arenaroot	PL_xpvmg_arenaroot
-#define PL_Ixpvmg_root		PL_xpvmg_root
-#define PL_Ixpvnv_arenaroot	PL_xpvnv_arenaroot
-#define PL_Ixpvnv_root		PL_xpvnv_root
-#define PL_Ixrv_arenaroot	PL_xrv_arenaroot
-#define PL_Ixrv_root		PL_xrv_root
 #define PL_Iyycharp		PL_yycharp
 #define PL_Iyylvalp		PL_yylvalp
 
@@ -860,7 +818,6 @@
 #define PL_Tscreamnext		PL_screamnext
 #define PL_Tsecondgv		PL_secondgv
 #define PL_Tsortcop		PL_sortcop
-#define PL_Tsortcxix		PL_sortcxix
 #define PL_Tsortstash		PL_sortstash
 #define PL_Tstack_base		PL_stack_base
 #define PL_Tstack_max		PL_stack_max
@@ -885,39 +842,108 @@
 
 #if defined(PERL_GLOBAL_STRUCT)
 
-#define PL_No			(PL_Vars.GNo)
-#define PL_Yes			(PL_Vars.GYes)
-#define PL_csighandlerp		(PL_Vars.Gcsighandlerp)
-#define PL_curinterp		(PL_Vars.Gcurinterp)
-#define PL_do_undump		(PL_Vars.Gdo_undump)
-#define PL_dollarzero_mutex	(PL_Vars.Gdollarzero_mutex)
-#define PL_hexdigit		(PL_Vars.Ghexdigit)
-#define PL_malloc_mutex		(PL_Vars.Gmalloc_mutex)
-#define PL_op_mutex		(PL_Vars.Gop_mutex)
-#define PL_patleave		(PL_Vars.Gpatleave)
-#define PL_sh_path		(PL_Vars.Gsh_path)
-#define PL_sigfpe_saved		(PL_Vars.Gsigfpe_saved)
-#define PL_sv_placeholder	(PL_Vars.Gsv_placeholder)
-#define PL_thr_key		(PL_Vars.Gthr_key)
-#define PL_use_safe_putenv	(PL_Vars.Guse_safe_putenv)
+#define PL_No			(my_vars->GNo)
+#define PL_GNo			(my_vars->GNo)
+#define PL_Yes			(my_vars->GYes)
+#define PL_GYes			(my_vars->GYes)
+#define PL_appctx		(my_vars->Gappctx)
+#define PL_Gappctx		(my_vars->Gappctx)
+#define PL_check		(my_vars->Gcheck)
+#define PL_Gcheck		(my_vars->Gcheck)
+#define PL_csighandlerp		(my_vars->Gcsighandlerp)
+#define PL_Gcsighandlerp	(my_vars->Gcsighandlerp)
+#define PL_curinterp		(my_vars->Gcurinterp)
+#define PL_Gcurinterp		(my_vars->Gcurinterp)
+#define PL_do_undump		(my_vars->Gdo_undump)
+#define PL_Gdo_undump		(my_vars->Gdo_undump)
+#define PL_dollarzero_mutex	(my_vars->Gdollarzero_mutex)
+#define PL_Gdollarzero_mutex	(my_vars->Gdollarzero_mutex)
+#define PL_fold_locale		(my_vars->Gfold_locale)
+#define PL_Gfold_locale		(my_vars->Gfold_locale)
+#define PL_hexdigit		(my_vars->Ghexdigit)
+#define PL_Ghexdigit		(my_vars->Ghexdigit)
+#define PL_malloc_mutex		(my_vars->Gmalloc_mutex)
+#define PL_Gmalloc_mutex	(my_vars->Gmalloc_mutex)
+#define PL_mmap_page_size	(my_vars->Gmmap_page_size)
+#define PL_Gmmap_page_size	(my_vars->Gmmap_page_size)
+#define PL_my_ctx_mutex		(my_vars->Gmy_ctx_mutex)
+#define PL_Gmy_ctx_mutex	(my_vars->Gmy_ctx_mutex)
+#define PL_my_cxt_index		(my_vars->Gmy_cxt_index)
+#define PL_Gmy_cxt_index	(my_vars->Gmy_cxt_index)
+#define PL_op_mutex		(my_vars->Gop_mutex)
+#define PL_Gop_mutex		(my_vars->Gop_mutex)
+#define PL_op_seq		(my_vars->Gop_seq)
+#define PL_Gop_seq		(my_vars->Gop_seq)
+#define PL_op_sequence		(my_vars->Gop_sequence)
+#define PL_Gop_sequence		(my_vars->Gop_sequence)
+#define PL_patleave		(my_vars->Gpatleave)
+#define PL_Gpatleave		(my_vars->Gpatleave)
+#define PL_perlio_debug_fd	(my_vars->Gperlio_debug_fd)
+#define PL_Gperlio_debug_fd	(my_vars->Gperlio_debug_fd)
+#define PL_perlio_fd_refcnt	(my_vars->Gperlio_fd_refcnt)
+#define PL_Gperlio_fd_refcnt	(my_vars->Gperlio_fd_refcnt)
+#define PL_ppaddr		(my_vars->Gppaddr)
+#define PL_Gppaddr		(my_vars->Gppaddr)
+#define PL_sh_path		(my_vars->Gsh_path)
+#define PL_Gsh_path		(my_vars->Gsh_path)
+#define PL_sig_defaulting	(my_vars->Gsig_defaulting)
+#define PL_Gsig_defaulting	(my_vars->Gsig_defaulting)
+#define PL_sig_handlers_initted	(my_vars->Gsig_handlers_initted)
+#define PL_Gsig_handlers_initted	(my_vars->Gsig_handlers_initted)
+#define PL_sig_ignoring		(my_vars->Gsig_ignoring)
+#define PL_Gsig_ignoring	(my_vars->Gsig_ignoring)
+#define PL_sig_sv		(my_vars->Gsig_sv)
+#define PL_Gsig_sv		(my_vars->Gsig_sv)
+#define PL_sig_trapped		(my_vars->Gsig_trapped)
+#define PL_Gsig_trapped		(my_vars->Gsig_trapped)
+#define PL_sigfpe_saved		(my_vars->Gsigfpe_saved)
+#define PL_Gsigfpe_saved	(my_vars->Gsigfpe_saved)
+#define PL_sv_placeholder	(my_vars->Gsv_placeholder)
+#define PL_Gsv_placeholder	(my_vars->Gsv_placeholder)
+#define PL_thr_key		(my_vars->Gthr_key)
+#define PL_Gthr_key		(my_vars->Gthr_key)
+#define PL_timesbase		(my_vars->Gtimesbase)
+#define PL_Gtimesbase		(my_vars->Gtimesbase)
+#define PL_use_safe_putenv	(my_vars->Guse_safe_putenv)
+#define PL_Guse_safe_putenv	(my_vars->Guse_safe_putenv)
+#define PL_watch_pvx		(my_vars->Gwatch_pvx)
+#define PL_Gwatch_pvx		(my_vars->Gwatch_pvx)
 
 #else /* !PERL_GLOBAL_STRUCT */
 
 #define PL_GNo			PL_No
 #define PL_GYes			PL_Yes
+#define PL_Gappctx		PL_appctx
+#define PL_Gcheck		PL_check
 #define PL_Gcsighandlerp	PL_csighandlerp
 #define PL_Gcurinterp		PL_curinterp
 #define PL_Gdo_undump		PL_do_undump
 #define PL_Gdollarzero_mutex	PL_dollarzero_mutex
+#define PL_Gfold_locale		PL_fold_locale
 #define PL_Ghexdigit		PL_hexdigit
 #define PL_Gmalloc_mutex	PL_malloc_mutex
+#define PL_Gmmap_page_size	PL_mmap_page_size
+#define PL_Gmy_ctx_mutex	PL_my_ctx_mutex
+#define PL_Gmy_cxt_index	PL_my_cxt_index
 #define PL_Gop_mutex		PL_op_mutex
+#define PL_Gop_seq		PL_op_seq
+#define PL_Gop_sequence		PL_op_sequence
 #define PL_Gpatleave		PL_patleave
+#define PL_Gperlio_debug_fd	PL_perlio_debug_fd
+#define PL_Gperlio_fd_refcnt	PL_perlio_fd_refcnt
+#define PL_Gppaddr		PL_ppaddr
 #define PL_Gsh_path		PL_sh_path
+#define PL_Gsig_defaulting	PL_sig_defaulting
+#define PL_Gsig_handlers_initted	PL_sig_handlers_initted
+#define PL_Gsig_ignoring	PL_sig_ignoring
+#define PL_Gsig_sv		PL_sig_sv
+#define PL_Gsig_trapped		PL_sig_trapped
 #define PL_Gsigfpe_saved	PL_sigfpe_saved
 #define PL_Gsv_placeholder	PL_sv_placeholder
 #define PL_Gthr_key		PL_thr_key
+#define PL_Gtimesbase		PL_timesbase
 #define PL_Guse_safe_putenv	PL_use_safe_putenv
+#define PL_Gwatch_pvx		PL_watch_pvx
 
 #endif /* PERL_GLOBAL_STRUCT */
 
@@ -953,3 +979,5 @@
 #define tainting		PL_tainting
 
 #endif /* PERL_POLLUTE */
+
+/* ex: set ro: */

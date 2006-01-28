@@ -1,9 +1,9 @@
 #!/usr/bin/perl -w
-# $Id: text.t,v 1.1 2002/06/23 19:16:25 eagle Exp $
+# $Id: text.t,v 1.3 2004/12/31 21:29:48 eagle Exp $
 #
 # text.t -- Additional specialized tests for Pod::Text.
 #
-# Copyright 2002 by Russ Allbery <rra@stanford.edu>
+# Copyright 2002, 2004 by Russ Allbery <rra@stanford.edu>
 #
 # This program is free software; you may redistribute it and/or modify it
 # under the same terms as Perl itself.
@@ -17,7 +17,7 @@ BEGIN {
     }
     unshift (@INC, '../blib/lib');
     $| = 1;
-    print "1..2\n";
+    print "1..3\n";
 }
 
 END {
@@ -40,6 +40,7 @@ while (<DATA>) {
     close TMP;
     my $parser = Pod::Text->new or die "Cannot create parser\n";
     $parser->parse_from_file ('tmp.pod', 'out.tmp');
+    undef $parser;
     open (TMP, 'out.tmp') or die "Cannot open out.tmp: $!\n";
     my $output;
     {
@@ -75,5 +76,15 @@ This C<.> should be quoted.
 ###
 PERIODS
     This "." should be quoted.
+
+###
+
+###
+=head1 CE<lt>E<gt> WITH SPACES
+
+What does C<<  this.  >> end up looking like?
+###
+C<> WITH SPACES
+    What does "this." end up looking like?
 
 ###

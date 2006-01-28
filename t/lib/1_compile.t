@@ -19,7 +19,6 @@ my @Core_Modules = grep /\S/, <DATA>;
 chomp @Core_Modules;
 
 if (eval { require Socket }) {
-  push @Core_Modules, qw(Net::Domain);
   # Two Net:: modules need the Convert::EBCDIC if in EBDCIC.
   if (ord("A") != 193 || eval { require Convert::EBCDIC }) {
       push @Core_Modules, qw(Net::Cmd Net::POP3);
@@ -40,6 +39,10 @@ if (@Core_Modules) {
 } else {
   print $message;
 }
+print <<'EOREWARD';
+# http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2001-04/msg01223.html
+# 20010421230349.P2946@blackrider.blackstar.co.uk
+EOREWARD
 
 my $test_num = 2;
 

@@ -17,7 +17,7 @@ BEGIN {
 }
 {
     # simulate a pragma -- don't forget HINT_LOCALIZE_HH
-    BEGIN { $^H |= 0x00020000; $^H{foo} = "a"; }
+    BEGIN { $^H |= 0x04020000; $^H{foo} = "a"; }
     BEGIN {
 	print "not " if $^H{foo} ne "a";
 	print "ok 3 - \$^H{foo} is now 'a'\n";
@@ -50,7 +50,7 @@ BEGIN {
     # op_entereval should keep the pragmas it was compiled with
     eval q*
 	print "not " if $^H{foo} ne "a";
-	print "ok 13 - \$^H{foo} is 'a' at eval-\"\" time # TODO\n";
+	print "ok 13 - \$^H{foo} is 'a' at eval-\"\" time\n";
 	print "not " unless $^H & 0x00020000;
 	print "ok 14 - \$^H contains HINT_LOCALIZE_HH at eval\"\"-time\n";
     *;

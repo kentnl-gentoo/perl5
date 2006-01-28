@@ -12,7 +12,7 @@ BEGIN {
 
 use Devel::Peek;
 
-print "1..22\n";
+print "1..23\n";
 
 our $DEBUG = 0;
 open(SAVERR, ">&STDERR") or die "Can't dup STDERR: $!";
@@ -167,8 +167,6 @@ do_test(11,
   SV = PVAV\\($ADDR\\) at $ADDR
     REFCNT = 2
     FLAGS = \\(\\)
-    IV = 0
-    NV = 0
     ARRAY = $ADDR
     FILL = 1
     MAX = 1
@@ -190,8 +188,6 @@ do_test(12,
   SV = PVHV\\($ADDR\\) at $ADDR
     REFCNT = 2
     FLAGS = \\(SHAREKEYS\\)
-    IV = 1
-    NV = $FLOAT
     ARRAY = $ADDR  \\(0:7, 1:1\\)
     hash quality = 100.0%
     KEYS = 1
@@ -286,8 +282,6 @@ do_test(16,
   SV = PVHV\\($ADDR\\) at $ADDR
     REFCNT = 2
     FLAGS = \\(OBJECT,SHAREKEYS\\)
-    IV = 0
-    NV = 0
     STASH = $ADDR\\t"Tac"
     ARRAY = 0x0
     KEYS = 0
@@ -319,7 +313,6 @@ do_test(17,
     HV = 0x0
     CV = 0x0
     CVGEN = 0x0
-    GPFLAGS = 0x0
     LINE = \\d+
     FILE = ".*\\b(?i:peek\\.t)"
     FLAGS = $ADDR
@@ -355,8 +348,6 @@ do_test(19,
   SV = PVHV\\($ADDR\\) at $ADDR
     REFCNT = 2
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
-    UV = 1
-    NV = $FLOAT
     ARRAY = $ADDR  \\(0:7, 1:1\\)
     hash quality = 100.0%
     KEYS = 1
@@ -381,8 +372,6 @@ do_test(19,
   SV = PVHV\\($ADDR\\) at $ADDR
     REFCNT = 2
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
-    UV = 1
-    NV = 0
     ARRAY = $ADDR  \\(0:7, 1:1\\)
     hash quality = 100.0%
     KEYS = 1
@@ -410,7 +399,7 @@ do_test(20,
   NV = 0
   PV = $ADDR ""\\\0
   CUR = 0
-  LEN = 1
+  LEN = \d+
   MAGIC = $ADDR
     MG_VIRTUAL = &PL_vtbl_mglob
     MG_TYPE = PERL_MAGIC_regex_global\\(g\\)
@@ -421,6 +410,8 @@ do_test(20,
 # TAINTEDDIR is not set on: OS2, AMIGAOS, WIN32, MSDOS
 # environment variables may be invisibly case-forced, hence the (?i:PATH)
 # C<scalar(@ARGV)> is turned into an IV on VMS hence the (?:IV)?
+# VMS is setting FAKE and READONLY flags.  What VMS uses for storing
+# ENV hashes is also not always null terminated.
 #
 do_test(21,
         $ENV{PATH}=@ARGV,  # scalar(@ARGV) is a handy known tainted value
@@ -441,9 +432,9 @@ do_test(21,
     MG_PTR = $ADDR (?:"(?i:PATH)"|=> HEf_SVKEY
     SV = PV(?:IV)?\\($ADDR\\) at $ADDR
       REFCNT = \d+
-      FLAGS = \\(TEMP,POK,pPOK\\)
+      FLAGS = \\(TEMP,POK,(?:FAKE,READONLY,)?pPOK\\)
 (?:      IV = 0
-)?      PV = $ADDR "(?i:PATH)"\\\0
+)?      PV = $ADDR "(?i:PATH)"(?:\\\0)?
       CUR = \d+
       LEN = \d+)
   MAGIC = $ADDR
@@ -474,3 +465,41 @@ do_test(22,
     CUR = 0
     LEN = 0
     STASH = $ADDR\s+"Foobar"');
+
+# Constant subroutines
+
+sub const () {
+    "Perl rules";
+}
+
+do_test(23,
+	\&const,
+'SV = RV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(ROK\\)
+  RV = $ADDR
+  SV = PVCV\\($ADDR\\) at $ADDR
+    REFCNT = (2)
+    FLAGS = \\(POK,pPOK,CONST\\)
+    IV = 0
+    NV = 0
+    PROTOTYPE = ""
+    COMP_STASH = 0x0
+    ROOT = 0x0
+    XSUB = $ADDR
+    XSUBANY = $ADDR \\(CONST SV\\)
+    SV = PV\\($ADDR\\) at $ADDR
+      REFCNT = 1
+      FLAGS = \\(.*POK,READONLY,pPOK\\)
+      PV = $ADDR "Perl rules"\\\0
+      CUR = 10
+      LEN = \\d+
+    GVGV::GV = $ADDR\\t"main" :: "const"
+    FILE = ".*\\b(?i:peek\\.t)"
+    DEPTH = 0
+(?:    MUTEXP = $ADDR
+    OWNER = $ADDR
+)?    FLAGS = 0x200
+    OUTSIDE_SEQ = 0
+    PADLIST = 0x0
+    OUTSIDE = 0x0 \\(null\\)');	

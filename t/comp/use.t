@@ -5,7 +5,7 @@ BEGIN {
     @INC = '../lib';
 }
 
-print "1..28\n";
+print "1..31\n";
 
 my $i = 1;
 eval "use 5.000";	# implicit semicolon
@@ -18,6 +18,25 @@ print "ok ",$i++,"\n";
 eval "use 5.000;";
 if ($@) {
     print STDERR $@,"\n";
+    print "not ";
+}
+print "ok ",$i++,"\n";
+
+eval "use 6.000;";
+unless ($@ =~ /Perl v6\.0\.0 required--this is only \Q$^V\E, stopped/) {
+    print "not ";
+}
+print "ok ",$i++,"\n";
+
+eval "no 6.000;";
+if ($@) {
+    print STDERR $@,"\n";
+    print "not ";
+}
+print "ok ",$i++,"\n";
+
+eval "no 5.000;";
+unless ($@ =~ /Perls since v5\.0\.0 too modern--this is \Q$^V\E, stopped/) {
     print "not ";
 }
 print "ok ",$i++,"\n";
@@ -111,7 +130,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib v100.105";
-    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
+    unless ($@ =~ /lib version 100.105 \(v100\.105\.0\) required--this is only version 35.360 \(v35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -121,7 +140,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib 100.105";
-    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
+    unless ($@ =~ /lib version 100.105 \(v100\.105\.0\) required--this is only version 35.360 \(v35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -132,7 +151,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib v100.105";
-    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
+    unless ($@ =~ /lib version 100.105 \(v100\.105\.0\) required--this is only version 35.360 \(v35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -142,7 +161,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib 100.105";
-    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.360 \(35\.360\.0\)/) {
+    unless ($@ =~ /lib version 100.105 \(v100\.105\.0\) required--this is only version 35.360 \(v35\.360\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -153,7 +172,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib v100.105";
-    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.036 \(35\.36\.0\)/) {
+    unless ($@ =~ /lib version 100.105 \(v100\.105\.0\) required--this is only version 35.036000 \(v35\.36\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";
@@ -163,7 +182,7 @@ print "ok ",$i++,"\n";
     print "ok ",$i++,"\n";
 
     eval "use lib 100.105";
-    unless ($@ =~ /lib version 100.105 \(100\.105\.0\) required--this is only version 35.036 \(35\.36\.0\)/) {
+    unless ($@ =~ /lib version 100.105 \(v100\.105\.0\) required--this is only version 35.036000 \(v35\.36\.0\)/) {
 	print "not ";
     }
     print "ok ",$i++,"\n";

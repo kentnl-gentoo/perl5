@@ -571,3 +571,17 @@ FIRSTKEY
 not empty
 FIRSTKEY
 empty
+########
+sub TIESCALAR { bless {} }
+sub FETCH { my $x = 3.3; 1 if 0+$x; $x }
+tie $h, "main";
+print $h,"\n";
+EXPECT
+3.3
+########
+sub TIESCALAR { bless {} }
+sub FETCH { shift()->{i} ++ }
+tie $h, "main";
+print $h.$h;
+EXPECT
+01

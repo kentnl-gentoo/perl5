@@ -62,7 +62,7 @@ Object interface:
   require File::Temp;
   use File::Temp ();
 
-  $fh = new File::Temp($template);
+  $fh = new File::Temp( TEMPLATE => $template );
   $fname = $fh->filename;
 
   $tmp = new File::Temp( UNLINK => 0, SUFFIX => '.dat' );
@@ -183,7 +183,7 @@ Exporter::export_tags('POSIX','mktemp');
 
 # Version number
 
-$VERSION = '0.16';
+$VERSION = '0.16_01';
 
 # This is a list of characters that can be used in random filenames
 
@@ -1863,7 +1863,7 @@ fields returned by stat() are compared).
 Returns false if the stat information differs or if the link count is
 greater than 1.
 
-On certain platofms, eg Windows, not all the fields returned by stat()
+On certain platforms, e.g. Windows, not all the fields returned by stat()
 can be compared. For example, the C<dev> and C<rdev> fields seem to be
 different in Windows.  Also, it seems that the size of the file
 returned by stat() does not always agree, with C<stat(FH)> being more

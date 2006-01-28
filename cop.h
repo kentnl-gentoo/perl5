@@ -1,7 +1,7 @@
 /*    cop.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -12,6 +12,126 @@
  * At run time, PL_curcop is set to point to the most recently executed cop,
  * and thus can be used to determine our current state.
  */
+
+/* A jmpenv packages the state required to perform a proper non-local jump.
+ * Note that there is a start_env initialized when perl starts, and top_env
+ * points to this initially, so top_env should always be non-null.
+ *
+ * Existence of a non-null top_env->je_prev implies it is valid to call
+ * longjmp() at that runlevel (we make sure start_env.je_prev is always
+ * null to ensure this).
+ *
+ * je_mustcatch, when set at any runlevel to TRUE, means eval ops must
+ * establish a local jmpenv to handle exception traps.  Care must be taken
+ * to restore the previous value of je_mustcatch before exiting the
+ * stack frame iff JMPENV_PUSH was not called in that stack frame.
+ * GSAR 97-03-27
+ */
+
+struct jmpenv {
+    struct jmpenv *	je_prev;
+    Sigjmp_buf		je_buf;		/* only for use if !je_throw */
+    int			je_ret;		/* last exception thrown */
+    bool		je_mustcatch;	/* need to call longjmp()? */
+};
+
+typedef struct jmpenv JMPENV;
+
+#ifdef OP_IN_REGISTER
+#define OP_REG_TO_MEM	PL_opsave = op
+#define OP_MEM_TO_REG	op = PL_opsave
+#else
+#define OP_REG_TO_MEM	NOOP
+#define OP_MEM_TO_REG	NOOP
+#endif
+
+/*
+ * How to build the first jmpenv.
+ *
+ * top_env needs to be non-zero. It points to an area
+ * in which longjmp() stuff is stored, as C callstack
+ * info there at least is thread specific this has to
+ * be per-thread. Otherwise a 'die' in a thread gives
+ * that thread the C stack of last thread to do an eval {}!
+ */
+
+#define JMPENV_BOOTSTRAP \
+    STMT_START {				\
+	Zero(&PL_start_env, 1, JMPENV);		\
+	PL_start_env.je_ret = -1;		\
+	PL_start_env.je_mustcatch = TRUE;	\
+	PL_top_env = &PL_start_env;		\
+    } STMT_END
+
+/*
+ *   PERL_FLEXIBLE_EXCEPTIONS
+ * 
+ * All the flexible exceptions code has been removed.
+ * See the following threads for details:
+ *
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/2004-07/msg00378.html
+ * 
+ * Joshua's original patches (which weren't applied) and discussion:
+ * 
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-02/msg01396.html
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-02/msg01489.html
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-02/msg01491.html
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-02/msg01608.html
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-02/msg02144.html
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1998-02/msg02998.html
+ * 
+ * Chip's reworked patch and discussion:
+ * 
+ *   http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/1999-03/msg00520.html
+ * 
+ * The flaw in these patches (which went unnoticed at the time) was
+ * that they moved some code that could potentially die() out of the
+ * region protected by the setjmp()s.  This caused exceptions within
+ * END blocks and such to not be handled by the correct setjmp().
+ * 
+ * The original patches that introduces flexible exceptions were:
+ *
+ *   http://public.activestate.com/cgi-bin/perlbrowse?patch=3386
+ *   http://public.activestate.com/cgi-bin/perlbrowse?patch=5162
+ */
+
+#define dJMPENV		JMPENV cur_env
+
+#define JMPENV_PUSH(v) \
+    STMT_START {							\
+	DEBUG_l(Perl_deb(aTHX_ "Setting up jumplevel %p, was %p\n",	\
+			 &cur_env, PL_top_env));			\
+	cur_env.je_prev = PL_top_env;					\
+	OP_REG_TO_MEM;							\
+	cur_env.je_ret = PerlProc_setjmp(cur_env.je_buf, SCOPE_SAVES_SIGNAL_MASK);		\
+	OP_MEM_TO_REG;							\
+	PL_top_env = &cur_env;						\
+	cur_env.je_mustcatch = FALSE;					\
+	(v) = cur_env.je_ret;						\
+    } STMT_END
+
+#define JMPENV_POP \
+    STMT_START {							\
+	DEBUG_l(Perl_deb(aTHX_ "popping jumplevel was %p, now %p\n",	\
+			 PL_top_env, cur_env.je_prev));			\
+	PL_top_env = cur_env.je_prev;					\
+    } STMT_END
+
+#define JMPENV_JUMP(v) \
+    STMT_START {						\
+	OP_REG_TO_MEM;						\
+	if (PL_top_env->je_prev)				\
+	    PerlProc_longjmp(PL_top_env->je_buf, (v));		\
+	if ((v) == 2)						\
+	    PerlProc_exit(STATUS_EXIT);		                \
+	PerlIO_printf(PerlIO_stderr(), "panic: top_env\n");	\
+	PerlProc_exit(1);					\
+    } STMT_END
+
+#define CATCH_GET		(PL_top_env->je_mustcatch)
+#define CATCH_SET(v)		(PL_top_env->je_mustcatch = (v))
+
+
 
 struct cop {
     BASEOP
@@ -46,7 +166,13 @@ struct cop {
 #  define CopFILESV(c)		(CopFILE(c) \
 				 ? GvSV(gv_fetchfile(CopFILE(c))) : Nullsv)
 #  define CopFILEAV(c)		(CopFILE(c) \
-				 ? GvAV(gv_fetchfile(CopFILE(c))) : Nullav)
+				 ? GvAV(gv_fetchfile(CopFILE(c))) : NULL)
+#  ifdef DEBUGGING
+#    define CopFILEAVx(c)	(assert(CopFILE(c)), \
+				   GvAV(gv_fetchfile(CopFILE(c))))
+#  else
+#    define CopFILEAVx(c)	(GvAV(gv_fetchfile(CopFILE(c))))
+#  endif
 #  define CopSTASHPV(c)		((c)->cop_stashpv)
 
 #  ifdef NETWARE
@@ -56,33 +182,31 @@ struct cop {
 #  endif
 
 #  define CopSTASH(c)		(CopSTASHPV(c) \
-				 ? gv_stashpv(CopSTASHPV(c),GV_ADD) : Nullhv)
-#  define CopSTASH_set(c,hv)	CopSTASHPV_set(c, (hv) ? HvNAME(hv) : Nullch)
-#  define CopSTASH_eq(c,hv)	((hv) 					\
-				 && (CopSTASHPV(c) == HvNAME(hv)	\
-				     || (CopSTASHPV(c) && HvNAME(hv)	\
-					 && strEQ(CopSTASHPV(c), HvNAME(hv)))))
+				 ? gv_stashpv(CopSTASHPV(c),GV_ADD) : NULL)
+#  define CopSTASH_set(c,hv)	CopSTASHPV_set(c, (hv) ? HvNAME_get(hv) : Nullch)
+#  define CopSTASH_eq(c,hv)	((hv) && stashpv_hvname_match(c,hv))
 #  ifdef NETWARE
 #    define CopSTASH_free(c) SAVECOPSTASH_FREE(c)
-#  else
-#    define CopSTASH_free(c)	PerlMemShared_free(CopSTASHPV(c))      
-#  endif
-
-#  ifdef NETWARE
 #    define CopFILE_free(c) SAVECOPFILE_FREE(c)
 #  else
-#    define CopFILE_free(c)	(PerlMemShared_free(CopFILE(c)),(CopFILE(c) = Nullch))      
+#    define CopSTASH_free(c)	PerlMemShared_free(CopSTASHPV(c))
+#    define CopFILE_free(c)	(PerlMemShared_free(CopFILE(c)),(CopFILE(c) = Nullch))
 #  endif
 #else
 #  define CopFILEGV(c)		((c)->cop_filegv)
 #  define CopFILEGV_set(c,gv)	((c)->cop_filegv = (GV*)SvREFCNT_inc(gv))
 #  define CopFILE_set(c,pv)	CopFILEGV_set((c), gv_fetchfile(pv))
 #  define CopFILESV(c)		(CopFILEGV(c) ? GvSV(CopFILEGV(c)) : Nullsv)
-#  define CopFILEAV(c)		(CopFILEGV(c) ? GvAV(CopFILEGV(c)) : Nullav)
+#  define CopFILEAV(c)		(CopFILEGV(c) ? GvAV(CopFILEGV(c)) : NULL)
+#  ifdef DEBUGGING
+#    define CopFILEAVx(c)	(assert(CopFILEGV(c)), GvAV(CopFILEGV(c)))
+#  else
+#    define CopFILEAVx(c)	(GvAV(CopFILEGV(c)))
+# endif
 #  define CopFILE(c)		(CopFILESV(c) ? SvPVX(CopFILESV(c)) : Nullch)
 #  define CopSTASH(c)		((c)->cop_stash)
 #  define CopSTASH_set(c,hv)	((c)->cop_stash = (hv))
-#  define CopSTASHPV(c)		(CopSTASH(c) ? HvNAME(CopSTASH(c)) : Nullch)
+#  define CopSTASHPV(c)		(CopSTASH(c) ? HvNAME_get(CopSTASH(c)) : Nullch)
    /* cop_stash is not refcounted */
 #  define CopSTASHPV_set(c,pv)	CopSTASH_set((c), gv_stashpv(pv,GV_ADD))
 #  define CopSTASH_eq(c,hv)	(CopSTASH(c) == (hv))
@@ -168,7 +292,7 @@ struct block_sub {
 #define CLEAR_ARGARRAY(ary) \
     STMT_START {							\
 	AvMAX(ary) += AvARRAY(ary) - AvALLOC(ary);			\
-	SvPVX(ary) = (char*)AvALLOC(ary);				\
+	SvPV_set(ary, (char*)AvALLOC(ary));				\
 	AvFILLp(ary) = -1;						\
     } STMT_END
 
@@ -182,7 +306,7 @@ struct block_sub {
 		SvREFCNT_dec(cx->blk_sub.argarray);			\
 		cx->blk_sub.argarray = newAV();				\
 		av_extend(cx->blk_sub.argarray, fill);			\
-		AvFLAGS(cx->blk_sub.argarray) = AVf_REIFY;		\
+		AvREIFY_only(cx->blk_sub.argarray);			\
 		CX_CURPAD_SV(cx->blk_sub, 0) = (SV*)cx->blk_sub.argarray;	\
 	    }								\
 	    else {							\
@@ -213,6 +337,7 @@ struct block_eval {
     SV *	cur_text;
     CV *	cv;
     OP *	retop;	/* op to execute on exit from eval */
+    JMPENV *	cur_top_env; /* value of PL_top_env when eval CX created */
 };
 
 #define PUSHEVAL(cx,n,fgv)						\
@@ -224,6 +349,7 @@ struct block_eval {
 	cx->blk_eval.cur_text = PL_linestr;				\
 	cx->blk_eval.cv = Nullcv; /* set by doeval(), as applicable */	\
 	cx->blk_eval.retop = Nullop; 					\
+	cx->blk_eval.cur_top_env = PL_top_env; 				\
     } STMT_END
 
 #define POPEVAL(cx)							\
@@ -285,19 +411,34 @@ struct block_loop {
 	cx->blk_loop.next_op = cLOOP->op_nextop;			\
 	cx->blk_loop.last_op = cLOOP->op_lastop;			\
 	cx->blk_loop.iterlval = Nullsv;					\
-	cx->blk_loop.iterary = Nullav;					\
+	cx->blk_loop.iterary = NULL;					\
 	cx->blk_loop.iterix = -1;					\
 	CX_ITERDATA_SET(cx,dat);
 
 #define POPLOOP(cx)							\
 	SvREFCNT_dec(cx->blk_loop.iterlval);				\
 	if (CxITERVAR(cx)) {						\
-	    SV **s_v_p = CxITERVAR(cx);					\
-	    sv_2mortal(*s_v_p);						\
-	    *s_v_p = cx->blk_loop.itersave;				\
+            if (SvPADMY(cx->blk_loop.itersave)) {			\
+		SV **s_v_p = CxITERVAR(cx);				\
+		sv_2mortal(*s_v_p);					\
+		*s_v_p = cx->blk_loop.itersave;				\
+	    }								\
+	    else {							\
+		SvREFCNT_dec(cx->blk_loop.itersave);			\
+	    }								\
 	}								\
 	if (cx->blk_loop.iterary && cx->blk_loop.iterary != PL_curstack)\
 	    SvREFCNT_dec(cx->blk_loop.iterary);
+
+/* given/when context */
+struct block_givwhen {
+	OP *leave_op;
+};
+
+#define PUSHGIVEN(cx)							\
+	cx->blk_givwhen.leave_op = cLOGOP->op_other;
+
+#define PUSHWHEN PUSHGIVEN
 
 /* context common to subroutines, evals and loops */
 struct block {
@@ -312,6 +453,7 @@ struct block {
 	struct block_sub	blku_sub;
 	struct block_eval	blku_eval;
 	struct block_loop	blku_loop;
+	struct block_givwhen	blku_givwhen;
     } blk_u;
 };
 #define blk_oldsp	cx_u.cx_blk.blku_oldsp
@@ -323,6 +465,7 @@ struct block {
 #define blk_sub		cx_u.cx_blk.blk_u.blku_sub
 #define blk_eval	cx_u.cx_blk.blk_u.blku_eval
 #define blk_loop	cx_u.cx_blk.blk_u.blku_loop
+#define blk_givwhen	cx_u.cx_blk.blk_u.blku_givwhen
 
 /* Enter a block. */
 #define PUSHBLOCK(cx,t,sp) CXINC, cx = &cxstack[cxstack_ix],		\
@@ -425,13 +568,21 @@ struct context {
 #define CXt_SUBST	4
 #define CXt_BLOCK	5
 #define CXt_FORMAT	6
+#define CXt_GIVEN	7
+#define CXt_WHEN	8
+
+/* private flags for CXt_SUB and CXt_NULL */
+#define CXp_MULTICALL	0x00000400	/* part of a multicall (so don't
+					   tear down context on exit). */ 
 
 /* private flags for CXt_EVAL */
 #define CXp_REAL	0x00000100	/* truly eval'', not a lookalike */
 #define CXp_TRYBLOCK	0x00000200	/* eval{}, not eval'' or similar */
 
-#ifdef USE_ITHREADS
 /* private flags for CXt_LOOP */
+#define CXp_FOREACH	0x00000200	/* a foreach loop */
+#define CXp_FOR_DEF	0x00000400	/* foreach using $_ */
+#ifdef USE_ITHREADS
 #  define CXp_PADVAR	0x00000100	/* itervar lives on pad, iterdata
 					   has pad offset; if not set,
 					   iterdata holds GV* */
@@ -440,10 +591,16 @@ struct context {
 #endif
 
 #define CxTYPE(c)	((c)->cx_type & CXTYPEMASK)
+#define CxMULTICALL(c)	(((c)->cx_type & CXp_MULTICALL)			\
+			 == CXp_MULTICALL)
 #define CxREALEVAL(c)	(((c)->cx_type & (CXt_EVAL|CXp_REAL))		\
 			 == (CXt_EVAL|CXp_REAL))
 #define CxTRYBLOCK(c)	(((c)->cx_type & (CXt_EVAL|CXp_TRYBLOCK))	\
 			 == (CXt_EVAL|CXp_TRYBLOCK))
+#define CxFOREACH(c)	(((c)->cx_type & (CXt_LOOP|CXp_FOREACH))	\
+                         == (CXt_LOOP|CXp_FOREACH))
+#define CxFOREACHDEF(c)	(((c)->cx_type & (CXt_LOOP|CXp_FOREACH|CXp_FOR_DEF))\
+			 == (CXt_LOOP|CXp_FOREACH|CXp_FOR_DEF))
 
 #define CXINC (cxstack_ix < cxstack_max ? ++cxstack_ix : (cxstack_ix = cxinc()))
 
@@ -564,7 +721,7 @@ typedef struct stackinfo PERL_SI;
 #define POPSTACK \
     STMT_START {							\
 	dSP;								\
-	PERL_SI *prev = PL_curstackinfo->si_prev;			\
+	PERL_SI * const prev = PL_curstackinfo->si_prev;		\
 	if (!prev) {							\
 	    PerlIO_printf(Perl_error_log, "panic: POPSTACK\n");		\
 	    my_exit(1);							\
@@ -585,3 +742,66 @@ typedef struct stackinfo PERL_SI;
 #define IN_PERL_COMPILETIME	(PL_curcop == &PL_compiling)
 #define IN_PERL_RUNTIME		(PL_curcop != &PL_compiling)
 
+/*
+=head1 Multicall Functions
+
+=for apidoc Ams||dMULTICALL
+Declare local variables for a multicall. See L<perlcall/Lightweight Callbacks>.
+
+=for apidoc Ams||PUSH_MULTICALL
+Opening bracket for a lightweight callback.
+See L<perlcall/Lightweight Callbacks>.
+
+=for apidoc Ams||MULTICALL
+Make a lightweight callback. See L<perlcall/Lightweight Callbacks>.
+
+=for apidoc Ams||POP_MULTICALL
+Closing bracket for a lightweight callback.
+See L<perlcall/Lightweight Callbacks>.
+
+=cut
+*/
+
+#define dMULTICALL \
+    SV **newsp;			/* set by POPBLOCK */			\
+    PERL_CONTEXT *cx;							\
+    CV *multicall_cv;							\
+    OP *multicall_cop;							\
+    bool multicall_oldcatch; 						\
+    U8 hasargs = 0		/* used by PUSHSUB */
+
+#define PUSH_MULTICALL(the_cv) \
+    STMT_START {							\
+	CV * const _nOnclAshIngNamE_ = the_cv;				\
+	CV * const cv = _nOnclAshIngNamE_;				\
+	AV * const padlist = CvPADLIST(cv);				\
+	ENTER;								\
+ 	multicall_oldcatch = CATCH_GET;					\
+	SAVETMPS; SAVEVPTR(PL_op);					\
+	CATCH_SET(TRUE);						\
+	PUSHBLOCK(cx, CXt_SUB|CXp_MULTICALL, PL_stack_sp);		\
+	PUSHSUB(cx);							\
+	if (++CvDEPTH(cv) >= 2) {					\
+	    PERL_STACK_OVERFLOW_CHECK();				\
+	    Perl_pad_push(aTHX_ padlist, CvDEPTH(cv));			\
+	}								\
+	SAVECOMPPAD();							\
+	PAD_SET_CUR_NOSAVE(padlist, CvDEPTH(cv));			\
+	multicall_cv = cv;						\
+	multicall_cop = CvSTART(cv);					\
+    } STMT_END
+
+#define MULTICALL \
+    STMT_START {							\
+	PL_op = multicall_cop;						\
+	CALLRUNOPS(aTHX);						\
+    } STMT_END
+
+#define POP_MULTICALL \
+    STMT_START {							\
+	LEAVESUB(multicall_cv);						\
+	CvDEPTH(multicall_cv)--;					\
+	POPBLOCK(cx,PL_curpm);						\
+	CATCH_SET(multicall_oldcatch);					\
+	LEAVE;								\
+    } STMT_END

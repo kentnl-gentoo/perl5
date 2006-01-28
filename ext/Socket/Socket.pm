@@ -1,7 +1,7 @@
 package Socket;
 
 our($VERSION, @ISA, @EXPORT, @EXPORT_OK, %EXPORT_TAGS);
-$VERSION = "1.77";
+$VERSION = "1.78";
 
 =head1 NAME
 
@@ -337,7 +337,10 @@ use XSLoader ();
 
 @EXPORT_OK = qw(CR LF CRLF $CR $LF $CRLF
 
+	       IPPROTO_ICMP
 	       IPPROTO_TCP
+	       IPPROTO_UDP
+
 	       TCP_KEEPALIVE
 	       TCP_MAXRT
 	       TCP_MAXSEG

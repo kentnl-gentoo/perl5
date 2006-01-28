@@ -1,6 +1,6 @@
 /*    perly.c
  *
- *    Copyright (c) 2004 Larry Wall
+ *    Copyright (c) 2004, 2005, 2006 Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -109,26 +109,19 @@ do {								\
 `--------------------------------*/
 
 static void
-yysymprint (pTHX_ PerlIO *yyoutput, int yytype, YYSTYPE *yyvaluep)
+yysymprint (pTHX_ PerlIO *yyoutput, int yytype, const YYSTYPE *yyvaluep)
 {
-    /* Pacify ``unused variable'' warnings.  */
-    (void) yyvaluep;
-
     if (yytype < YYNTOKENS) {
 	YYFPRINTF (yyoutput, "token %s (", yytname[yytype]);
 #   ifdef YYPRINT
 	YYPRINT (yyoutput, yytoknum[yytype], *yyvaluep);
 #   else
-	YYFPRINTF (yyoutput, "0x%x", yyvaluep->ival);
+	YYFPRINTF (yyoutput, "0x%"UVxf, (UV)yyvaluep->ival);
 #   endif
     }
     else
 	YYFPRINTF (yyoutput, "nterm %s (", yytname[yytype]);
 
-    switch (yytype) {
-	default:
-	    break;
-    }
     YYFPRINTF (yyoutput, ")");
 }
 
@@ -138,7 +131,7 @@ yysymprint (pTHX_ PerlIO *yyoutput, int yytype, YYSTYPE *yyvaluep)
  *  meanings as the local vars in yyparse() of the same name */
 
 static void
-yy_stack_print (pTHX_ short *yyss, short *yyssp, YYSTYPE *yyvs, const char**yyns)
+yy_stack_print (pTHX_ const short *yyss, const short *yyssp, const YYSTYPE *yyvs, const char**yyns)
 {
     int i;
     int start = 1;
@@ -160,7 +153,7 @@ yy_stack_print (pTHX_ short *yyss, short *yyssp, YYSTYPE *yyvs, const char**yyns
 	PerlIO_printf(Perl_debug_log, " %8.8s", *yyns);
     PerlIO_printf(Perl_debug_log, "\nvalue:");
     for (i=0, yyvs += start; i < count; i++, yyvs++)
-	PerlIO_printf(Perl_debug_log, " %8x", yyvs->ival);
+	PerlIO_printf(Perl_debug_log, " %8"UVxf, (UV)yyvs->ival);
     PerlIO_printf(Perl_debug_log, "\n\n");
 }
 
@@ -179,7 +172,7 @@ static void
 yy_reduce_print (pTHX_ int yyrule)
 {
     int yyi;
-    unsigned int yylineno = yyrline[yyrule];
+    const unsigned int yylineno = yyrline[yyrule];
     YYFPRINTF (Perl_debug_log, "Reducing stack by rule %d (line %u), ",
 			  yyrule - 1, yylineno);
     /* Print the symbols being reduced, and their result.  */
@@ -250,26 +243,6 @@ yystpcpy (pTHX_ char *yydest, const char *yysrc)
 
 #endif /* !YYERROR_VERBOSE */
 
-
-/*-----------------------------------------------.
-| Release the memory associated to this symbol.  |
-`-----------------------------------------------*/
-
-static void
-yydestruct (int yytype, YYSTYPE *yyvaluep)
-{
-    /* Pacify ``unused variable'' warnings.  */
-    (void) yyvaluep;
-
-    switch (yytype) {
-	default:
-	    break;
-    }
-}
-
-
-
-
 /*----------.
 | yyparse.  |
 `----------*/
@@ -277,6 +250,7 @@ yydestruct (int yytype, YYSTYPE *yyvaluep)
 int
 Perl_yyparse (pTHX)
 {
+    dVAR;
     int yychar; /* The lookahead symbol.  */
     YYSTYPE yylval; /* The semantic value of the lookahead symbol.  */
     int yynerrs; /* Number of syntax errors so far.  */
@@ -290,8 +264,8 @@ Perl_yyparse (pTHX)
     int yytoken = 0;
 
     /* two stacks and their tools:
-	  `yyss': related to states,
-	  `yyvs': related to semantic values,
+	  yyss: related to states,
+	  yyvs: related to semantic values,
 
 	  Refer to the stacks thru separate pointers, to allow yyoverflow
 	  to reallocate them elsewhere.  */
@@ -337,8 +311,8 @@ Perl_yyparse (pTHX)
     PL_yycharp = &yychar; /* so PL_yyerror() can access it */
     PL_yylvalp = &yylval; /* so various functions in toke.c can access it */
 
-    yyss_sv = NEWSV(73, YYINITDEPTH * sizeof(short));
-    yyvs_sv = NEWSV(73, YYINITDEPTH * sizeof(YYSTYPE));
+    yyss_sv = newSV(YYINITDEPTH * sizeof(short));
+    yyvs_sv = newSV(YYINITDEPTH * sizeof(YYSTYPE));
     SAVEFREESV(yyss_sv);
     SAVEFREESV(yyvs_sv);
     yyss = (short *) SvPVX(yyss_sv);
@@ -347,8 +321,9 @@ Perl_yyparse (pTHX)
     yyssp = yyss;
     yyvsp = yyvs;
 #ifdef DEBUGGING
-    yyns_sv = NEWSV(73, YYINITDEPTH * sizeof(char *));
+    yyns_sv = newSV(YYINITDEPTH * sizeof(char *));
     SAVEFREESV(yyns_sv);
+    /* XXX This seems strange to cast char * to char ** */
     yyns = (const char **) SvPVX(yyns_sv);
     yynsp = yyns;
 #endif
@@ -378,7 +353,7 @@ Perl_yyparse (pTHX)
 
     if (yyss + yystacksize - 1 <= yyssp) {
 	 /* Get the current used size of the three stacks, in elements.  */
-	 YYSIZE_T yysize = yyssp - yyss + 1;
+	 const YYSIZE_T yysize = yyssp - yyss + 1;
 
 	 /* Extend the stack our own way.  */
 	 if (YYMAXDEPTH <= yystacksize)
@@ -393,6 +368,7 @@ Perl_yyparse (pTHX)
 	 yyvs = (YYSTYPE *) SvPVX(yyvs_sv);
 #ifdef DEBUGGING
 	 SvGROW(yyns_sv, yystacksize * sizeof(char *));
+	 /* XXX This seems strange to cast char * to char ** */
 	 yyns = (const char **) SvPVX(yyns_sv);
 	 if (! yyns)
 	       goto yyoverflowlab;
@@ -509,7 +485,7 @@ Perl_yyparse (pTHX)
     yylen = yyr2[yyn];
 
     /* If YYLEN is nonzero, implement the default value of the action:
-      `$$ = $1'.
+      "$$ = $1".
 
       Otherwise, the following line sets YYVAL to garbage.
       This behavior is undocumented and Bison
@@ -541,7 +517,7 @@ Perl_yyparse (pTHX)
     *++yynsp = (const char *)(yytname [yyr1[yyn]]);
 #endif
 
-    /* Now `shift' the result of the reduction.  Determine what state
+    /* Now shift the result of the reduction.  Determine what state
 	  that goes to, based on the state we popped back to and the rule
 	  number reduced by.  */
 
@@ -579,7 +555,7 @@ Perl_yyparse (pTHX)
 
 	if (YYPACT_NINF < yyn && yyn < YYLAST) {
 	    YYSIZE_T yysize = 0;
-	    int yytype = YYTRANSLATE (yychar);
+	    const int yytype = YYTRANSLATE (yychar);
 	    char *yymsg;
 	    int yyx, yycount;
 
@@ -592,9 +568,9 @@ Perl_yyparse (pTHX)
 		    yysize += yystrlen (yytname[yyx]) + 15, yycount++;
 	    yysize += yystrlen ("syntax error, unexpected ") + 1;
 	    yysize += yystrlen (yytname[yytype]);
-	    New(yymsg, yysize, char *);
+	    Newx(yymsg, yysize, char *);
 	    if (yymsg != 0) {
-		char *yyp = yystpcpy (yymsg, "syntax error, unexpected ");
+		const char *yyp = yystpcpy (yymsg, "syntax error, unexpected ");
 		yyp = yystpcpy (yyp, yytname[yytype]);
 
 		if (yycount < 5) {
@@ -635,14 +611,12 @@ Perl_yyparse (pTHX)
 	    /* Pop the rest of the stack.  */
 	    while (yyss < yyssp) {
 		YYDSYMPRINTF ("Error: popping", yystos[*yyssp], yyvsp);
-		yydestruct (yystos[*yyssp], yyvsp);
 		YYPOPSTACK;
 	    }
 	    YYABORT;
 	}
 
 	YYDSYMPRINTF ("Error: discarding", yytoken, &yylval);
-	yydestruct (yytoken, &yylval);
 	yychar = YYEMPTY;
 
     }
@@ -674,7 +648,6 @@ Perl_yyparse (pTHX)
 	    YYABORT;
 
 	YYDSYMPRINTF ("Error: popping", yystos[*yyssp], yyvsp);
-	yydestruct (yystos[yystate], yyvsp);
 	yyvsp--;
 #ifdef DEBUGGING
 	yynsp--;
@@ -728,3 +701,13 @@ Perl_yyparse (pTHX)
 
     return yyresult;
 }
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

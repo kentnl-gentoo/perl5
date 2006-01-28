@@ -31,7 +31,7 @@
 #
 #  -- .robin. <robin@kitsite.com>  2001-03-13
 
-print "1..43\n";
+print "1..47\n";
 
 my $ok;
 
@@ -966,4 +966,42 @@ print ($ok ? "ok 41\n" : "not ok 41\n");
     print $late_free ? "not " : "", "ok 43 - redo with continue memory leak\n";
 }
 
+
+# ensure that redo doesn't clear a lexical delcared in the condition
+
+{
+    my $i = 1;
+    while (my $x = $i) {
+	$i++;
+	redo if $i == 2;
+	print $x == 1 ? "" : "not ", "ok 44 - while/redo lexical life\n";
+	last;
+    }
+    $i = 1;
+    until (! (my $x = $i)) {
+	$i++;
+	redo if $i == 2;
+	print $x == 1 ? "" : "not ", "ok 45 - until/redo lexical life\n";
+	last;
+    }
+    for ($i = 1; my $x = $i; ) {
+	$i++;
+	redo if $i == 2;
+	print $x == 1 ? "" : "not ", "ok 46 - for/redo lexical life\n";
+	last;
+    }
+
+}
+
+{
+    # [perl #37725]
+
+    $a37725[3] = 1; # use package var
+    $i = 2;
+    for my $x (reverse @a37725) {
+	$x = $i++;
+    }
+    print "@a37725" == "5 4 3 2" ? "" : "not ",
+	"ok 47 - reverse with empty slots (@a37725)\n";
+}
 

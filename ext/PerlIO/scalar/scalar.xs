@@ -40,7 +40,7 @@ PerlIOScalar_pushed(pTHX_ PerlIO * f, const char *mode, SV * arg,
     SvUPGRADE(s->var, SVt_PV);
     code = PerlIOBase_pushed(aTHX_ f, mode, Nullsv, tab);
     if (!SvOK(s->var) || (PerlIOBase(f)->flags) & PERLIO_F_TRUNCATE)
-	SvCUR(s->var) = 0;
+	SvCUR_set(s->var, 0);
     if ((PerlIOBase(f)->flags) & PERLIO_F_APPEND)
 	s->posn = SvCUR(s->var);
     else
@@ -106,9 +106,8 @@ PerlIOScalar_unread(pTHX_ PerlIO * f, const void *vbuf, Size_t count)
 {
     PerlIOScalar *s = PerlIOSelf(f, PerlIOScalar);
     char *dst = SvGROW(s->var, (STRLEN)s->posn + count);
+    s->posn -= count;
     Move(vbuf, dst + s->posn, count, char);
-    s->posn += count;
-    SvCUR_set(s->var, (STRLEN)s->posn);
     SvPOK_on(s->var);
     return count;
 }
@@ -254,7 +253,7 @@ PerlIOScalar_dup(pTHX_ PerlIO * f, PerlIO * o, CLONE_PARAMS * param,
     return f;
 }
 
-PerlIO_funcs PerlIO_scalar = {
+PERLIO_FUNCS_DECL(PerlIO_scalar) = {
     sizeof(PerlIO_funcs),
     "scalar",
     sizeof(PerlIOScalar),
@@ -295,7 +294,7 @@ PROTOTYPES: ENABLE
 BOOT:
 {
 #ifdef PERLIO_LAYERS
- PerlIO_define_layer(aTHX_ &PerlIO_scalar);
+ PerlIO_define_layer(aTHX_ PERLIO_FUNCS_CAST(&PerlIO_scalar));
 #endif
 }
 

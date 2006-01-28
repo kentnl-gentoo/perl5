@@ -17,7 +17,7 @@ use Config;
 use File::Spec::Functions;
 
 BEGIN { require './test.pl'; }
-plan tests => 238;
+plan tests => 245;
 
 
 $| = 1;
@@ -133,6 +133,23 @@ my $TEST = catfile(curdir(), 'TEST');
 # taint them ourselves.
 {
     $ENV{'DCL$PATH'} = '' if $Is_VMS;
+
+    if ($Is_MSWin32 && $Config{ccname} =~ /bcc32/ && ! -f 'cc3250mt.dll') {
+	my $bcc_dir;
+	foreach my $dir (split /$Config{path_sep}/, $ENV{PATH}) {
+	    if (-f "$dir/cc3250mt.dll") {
+		$bcc_dir = $dir and last;
+	    }
+	}
+	if (defined $bcc_dir) {
+	    require File::Copy;
+	    File::Copy::copy("$bcc_dir/cc3250mt.dll", '.') or
+		die "$0: failed to copy cc3250mt.dll: $!\n";
+	    eval q{
+		END { unlink "cc3250mt.dll" }
+	    };
+	}
+    }
 
     $ENV{PATH} = '';
     delete @ENV{@MoreEnv};
@@ -1088,4 +1105,46 @@ TERNARY_CONDITIONALS: {
     elsif ( my @bar = $foo =~ /([$valid_chars]+)/o ) {
         test not any_tainted @bar;
     }
+}
+
+# at scope exit, a restored localised value should have its old
+# taint status, not the taint status of the current statement
+
+{
+    our $x99 = $^X;
+    test tainted $x99;
+
+    $x99 = '';
+    test not tainted $x99;
+
+    my $c = do { local $x99; $^X };
+    test not tainted $x99;
+}
+{
+    our $x99 = $^X;
+    test tainted $x99;
+
+    my $c = do { local $x99; '' };
+    test tainted $x99;
+}
+
+# an mg_get of a tainted value during localization shouldn't taint the
+# statement
+
+{
+    eval { local $0, eval '1' };
+    test $@ eq '';
+}
+
+# [perl #8262] //g loops infinitely on tainted data
+
+{
+    my @a;
+    local $::TODO = 1;
+    $a[0] = $^X;
+    my $i = 0;
+    while($a[0]=~ m/(.)/g ) {
+	last if $i++ > 10000;
+    }
+    cmp_ok $i, '<', 10000, "infinite m//g";
 }

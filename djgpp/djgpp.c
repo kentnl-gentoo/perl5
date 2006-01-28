@@ -193,7 +193,7 @@ doshell:
             return convretcode (system (cmd),cmd,execf);
 	}
 
-    New (1303,PL_Argv,(s-cmd)/2+2,char*);
+    Newx (PL_Argv,(s-cmd)/2+2,char*);
     PL_Cmd=savepvn (cmd,s-cmd);
     a=PL_Argv;
     for (s=PL_Cmd; *s;) {
@@ -222,7 +222,7 @@ do_spawn (pTHX_ char *cmd)
 }
 
 bool
-Perl_do_exec (pTHX_ char *cmd)
+Perl_do_exec (pTHX_ const char *cmd)
 {
     do_spawn2 (aTHX_ cmd,EXECF_EXEC);
     return FALSE;

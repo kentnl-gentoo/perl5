@@ -1,8 +1,8 @@
 #ifdef PERL_CORE
-/* A Bison parser, made by GNU Bison 2.0.  */
+/* A Bison parser, made by GNU Bison 2.1.  */
 
 /* Skeleton parser for Yacc-like parsing with Bison,
-   Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004 Free Software Foundation, Inc.
+   Copyright (C) 1984, 1989, 1990, 2000, 2001, 2002, 2003, 2004, 2005 Free Software Foundation, Inc.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
@@ -16,8 +16,8 @@
 
    You should have received a copy of the GNU General Public License
    along with this program; if not, write to the Free Software
-   Foundation, Inc., 59 Temple Place - Suite 330,
-   Boston, MA 02111-1307, USA.  */
+   Foundation, Inc., 51 Franklin Street, Fifth Floor,
+   Boston, MA 02110-1301, USA.  */
 
 /* As a special exception, when this file is copied by Bison into a
    Bison output file, you may use that output file without restriction.
@@ -53,48 +53,53 @@
      ELSIF = 278,
      CONTINUE = 279,
      FOR = 280,
-     LOOPEX = 281,
-     DOTDOT = 282,
-     FUNC0 = 283,
-     FUNC1 = 284,
-     FUNC = 285,
-     UNIOP = 286,
-     LSTOP = 287,
-     RELOP = 288,
-     EQOP = 289,
-     MULOP = 290,
-     ADDOP = 291,
-     DOLSHARP = 292,
-     DO = 293,
-     HASHBRACK = 294,
-     NOAMP = 295,
-     LOCAL = 296,
-     MY = 297,
-     MYSUB = 298,
-     COLONATTR = 299,
-     PREC_LOW = 300,
-     DOROP = 301,
-     OROP = 302,
-     ANDOP = 303,
-     NOTOP = 304,
-     ASSIGNOP = 305,
-     DORDOR = 306,
-     OROR = 307,
-     ANDAND = 308,
-     BITOROP = 309,
-     BITANDOP = 310,
-     SHIFTOP = 311,
-     MATCHOP = 312,
-     REFGEN = 313,
-     UMINUS = 314,
-     POWOP = 315,
-     POSTDEC = 316,
-     POSTINC = 317,
-     PREDEC = 318,
-     PREINC = 319,
-     ARROW = 320
+     GIVEN = 281,
+     WHEN = 282,
+     DEFAULT = 283,
+     LOOPEX = 284,
+     DOTDOT = 285,
+     FUNC0 = 286,
+     FUNC1 = 287,
+     FUNC = 288,
+     UNIOP = 289,
+     LSTOP = 290,
+     RELOP = 291,
+     EQOP = 292,
+     MULOP = 293,
+     ADDOP = 294,
+     DOLSHARP = 295,
+     DO = 296,
+     HASHBRACK = 297,
+     NOAMP = 298,
+     LOCAL = 299,
+     MY = 300,
+     MYSUB = 301,
+     REQUIRE = 302,
+     COLONATTR = 303,
+     PREC_LOW = 304,
+     DOROP = 305,
+     OROP = 306,
+     ANDOP = 307,
+     NOTOP = 308,
+     ASSIGNOP = 309,
+     DORDOR = 310,
+     OROR = 311,
+     ANDAND = 312,
+     BITOROP = 313,
+     BITANDOP = 314,
+     SHIFTOP = 315,
+     MATCHOP = 316,
+     REFGEN = 317,
+     UMINUS = 318,
+     POWOP = 319,
+     POSTDEC = 320,
+     POSTINC = 321,
+     PREDEC = 322,
+     PREINC = 323,
+     ARROW = 324
    };
 #endif
+/* Tokens.  */
 #define WORD 258
 #define METHOD 259
 #define FUNCMETH 260
@@ -118,46 +123,50 @@
 #define ELSIF 278
 #define CONTINUE 279
 #define FOR 280
-#define LOOPEX 281
-#define DOTDOT 282
-#define FUNC0 283
-#define FUNC1 284
-#define FUNC 285
-#define UNIOP 286
-#define LSTOP 287
-#define RELOP 288
-#define EQOP 289
-#define MULOP 290
-#define ADDOP 291
-#define DOLSHARP 292
-#define DO 293
-#define HASHBRACK 294
-#define NOAMP 295
-#define LOCAL 296
-#define MY 297
-#define MYSUB 298
-#define COLONATTR 299
-#define PREC_LOW 300
-#define DOROP 301
-#define OROP 302
-#define ANDOP 303
-#define NOTOP 304
-#define ASSIGNOP 305
-#define DORDOR 306
-#define OROR 307
-#define ANDAND 308
-#define BITOROP 309
-#define BITANDOP 310
-#define SHIFTOP 311
-#define MATCHOP 312
-#define REFGEN 313
-#define UMINUS 314
-#define POWOP 315
-#define POSTDEC 316
-#define POSTINC 317
-#define PREDEC 318
-#define PREINC 319
-#define ARROW 320
+#define GIVEN 281
+#define WHEN 282
+#define DEFAULT 283
+#define LOOPEX 284
+#define DOTDOT 285
+#define FUNC0 286
+#define FUNC1 287
+#define FUNC 288
+#define UNIOP 289
+#define LSTOP 290
+#define RELOP 291
+#define EQOP 292
+#define MULOP 293
+#define ADDOP 294
+#define DOLSHARP 295
+#define DO 296
+#define HASHBRACK 297
+#define NOAMP 298
+#define LOCAL 299
+#define MY 300
+#define MYSUB 301
+#define REQUIRE 302
+#define COLONATTR 303
+#define PREC_LOW 304
+#define DOROP 305
+#define OROP 306
+#define ANDOP 307
+#define NOTOP 308
+#define ASSIGNOP 309
+#define DORDOR 310
+#define OROR 311
+#define ANDAND 312
+#define BITOROP 313
+#define BITANDOP 314
+#define SHIFTOP 315
+#define MATCHOP 316
+#define REFGEN 317
+#define UMINUS 318
+#define POWOP 319
+#define POSTDEC 320
+#define POSTINC 321
+#define PREDEC 322
+#define PREINC 323
+#define ARROW 324
 
 
 
@@ -171,8 +180,8 @@ typedef union YYSTYPE {
     OP *opval;
     GV *gvval;
 } YYSTYPE;
-/* Line 1318 of yacc.c.  */
-#line 174 "perly.h"
+/* Line 1447 of yacc.c.  */
+#line 183 "perly.h"
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1
 # define YYSTYPE_IS_TRIVIAL 1

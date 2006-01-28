@@ -1,6 +1,6 @@
 package overload;
 
-our $VERSION = '1.03';
+our $VERSION = '1.04';
 
 $overload::hint_bits = 0x20000; # HINT_LOCALIZE_HH
 
@@ -170,7 +170,7 @@ __END__
 
 =head1 NAME
 
-overload - Package for overloading perl operations
+overload - Package for overloading Perl operations
 
 =head1 SYNOPSIS
 
@@ -422,7 +422,7 @@ The dereference operators must be specified explicitly they will not be passed t
 
 =item * I<Special>
 
-    "nomethod", "fallback", "=",
+    "nomethod", "fallback", "=", "~~",
 
 see L<SPECIAL SYMBOLS FOR C<use overload>>.
 
@@ -516,6 +516,11 @@ unless C<"fallback"> was specified as a key in C<use overload> directive.
 The key C<"fallback"> governs what to do if a method for a particular
 operation is not found.  Three different cases are possible depending on
 the value of C<"fallback">:
+
+=head2 Smart Match
+
+The key C<"~~"> allows you to override the smart matching used by
+the switch construct. See L<feature>.
 
 =over 16
 
@@ -717,12 +722,12 @@ Returns C<undef> or a reference to the method that implements C<op>.
 
 =head1 Overloading constants
 
-For some application Perl parser mangles constants too much.  It is possible
-to hook into this process via overload::constant() and overload::remove_constant()
-functions.
+For some applications, the Perl parser mangles constants too much.
+It is possible to hook into this process via C<overload::constant()>
+and C<overload::remove_constant()> functions.
 
 These functions take a hash as an argument.  The recognized keys of this hash
-are
+are:
 
 =over 8
 
@@ -777,9 +782,6 @@ From these methods they may be called as
 	  die "unknown import: @_" unless @_ == 1 and $_[0] eq ':constant';
 	  overload::constant integer => sub {Math::BigInt->new(shift)};
 	}
-
-B<BUGS> Currently overloaded-ness of constants does not propagate
-into C<eval '...'>.
 
 =head1 IMPLEMENTATION
 

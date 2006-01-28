@@ -9,9 +9,10 @@ use vars qw($VERSION @ISA @EXPORT);
 
 @EXPORT  = qw(test_harness pod2man perllocal_install uninstall 
               warn_if_old_packlist);
-$VERSION = '0.03_01';
+$VERSION = '0.05_01';
 
 my $Is_VMS = $^O eq 'VMS';
+
 
 =head1 NAME
 
@@ -50,9 +51,14 @@ sub test_harness {
 
     $Test::Harness::verbose = shift;
 
+    # Because Windows doesn't do this for us and listing all the *.t files
+    # out on the command line can blow over its exec limit.
+    require ExtUtils::Command;
+    my @argv = ExtUtils::Command::expand_wildcards(@ARGV);
+
     local @INC = @INC;
     unshift @INC, map { File::Spec->rel2abs($_) } @_;
-    Test::Harness::runtests(sort { lc $a cmp lc $b } @ARGV);
+    Test::Harness::runtests(sort { lc $a cmp lc $b } @argv);
 }
 
 
@@ -111,8 +117,6 @@ sub pod2man {
     # compatibility.
     delete $options{lax};
 
-    my $parser = Pod::Man->new(%options);
-
     do {{  # so 'next' works
         my ($pod, $man) = splice(@ARGV, 0, 2);
 
@@ -122,6 +126,7 @@ sub pod2man {
 
         print "Manifying $man\n";
 
+        my $parser = Pod::Man->new(%options);
         $parser->parse_from_file($pod, $man)
           or do { warn("Could not install $man\n");  next };
 
@@ -162,9 +167,9 @@ PACKLIST_WARNING
     perl "-MExtUtils::Command::MM" -e perllocal_install 
         <type> <module name> <key> <value> ...
 
-    # VMS only, key/value pairs come on STDIN
+    # VMS only, key|value pairs come on STDIN
     perl "-MExtUtils::Command::MM" -e perllocal_install
-        <type> <module name> < <key> <value> ...
+        <type> <module name> < <key>|<value> ...
 
 Prints a fragment of POD suitable for appending to perllocal.pod.
 Arguments are read from @ARGV.

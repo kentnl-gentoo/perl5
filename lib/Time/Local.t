@@ -53,10 +53,16 @@ my @neg_time =
      [ 1950, 04, 12, 9, 30, 31 ],
     );
 
-my $neg_epoch_ok = defined ((localtime(-3600))[0]) ? 1 : 0;
+# Use 3 days before the start of the epoch because with Borland on
+# Win32 it will work for -3600 _if_ your time zone is +01:00 (or
+# greater).
+my $neg_epoch_ok = defined ((localtime(-259200))[0]) ? 1 : 0;
 
 # use vmsish 'time' makes for oddness around the Unix epoch
-if ($^O eq 'VMS') { $time[0][2]++ }
+if ($^O eq 'VMS') { 
+    $time[0][2]++;
+    $neg_epoch_ok = 0; # time_t is unsigned
+}
 
 my $tests = (@time * 12);
 $tests += @neg_time * 12;
