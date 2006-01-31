@@ -1845,9 +1845,6 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #  ifdef PL_OP_SLAB_ALLOC
 			     " PL_OP_SLAB_ALLOC"
 #  endif
-#  ifdef SPRINTF_RETURNS_STRLEN
-			     " SPRINTF_RETURNS_STRLEN"
-#  endif
 #  ifdef THREADS_HAVE_PIDS
 			     " THREADS_HAVE_PIDS"
 #  endif
@@ -3984,11 +3981,13 @@ S_validate_suid(pTHX_ const char *validarg, const char *scriptname)
 	PL_doswitches = FALSE;		/* -s is insecure in suid */
 	/* PSz 13 Nov 03  But -s was caught elsewhere ... so unsetting it here is useless(?!) */
 	CopLINE_inc(PL_curcop);
-	linestr = SvPV_nolen_const(PL_linestr);
-	if (sv_gets(PL_linestr, PL_rsfp, 0) == Nullch ||
-	  strnNE(linestr,"#!",2) )	/* required even on Sys V */
+	if (sv_gets(PL_linestr, PL_rsfp, 0) == Nullch)
 	    Perl_croak(aTHX_ "No #! line");
-	linestr+=2;
+	linestr = SvPV_nolen_const(PL_linestr);
+	/* required even on Sys V */
+	if (!*linestr || !linestr[1] || strnNE(linestr,"#!",2))
+	    Perl_croak(aTHX_ "No #! line");
+	linestr += 2;
 	s = linestr;
 	/* PSz 27 Feb 04 */
 	/* Sanity check on line length */
@@ -5035,7 +5034,7 @@ S_init_main_thread(pTHX)
     SvFLAGS(PL_thrsv) = SVt_PV;
     SvANY(PL_thrsv) = (void*)xpv;
     SvREFCNT(PL_thrsv) = 1 << 30;	/* practically infinite */
-    SvPV_set(PL_thrsvr, (char*)thr);
+    SvPV_set(PL_thrsv, (char*)thr);
     SvCUR_set(PL_thrsv, sizeof(thr));
     SvLEN_set(PL_thrsv, sizeof(thr));
     *SvEND(PL_thrsv) = '\0';	/* in the trailing_nul field */
