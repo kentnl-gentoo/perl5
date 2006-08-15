@@ -585,6 +585,7 @@ unless ($define{'DEBUGGING'}) {
 		    Perl_debstackptrs
 		    Perl_pad_sv
 		    Perl_sv_peek
+		    Perl_hv_assert
 		    PL_block_type
 		    PL_watchaddr
 		    PL_watchok
@@ -714,6 +715,7 @@ unless ($define{'USE_ITHREADS'}) {
 		    PL_sharedsv_space
 		    PL_sharedsv_space_mutex
 		    PL_dollarzero_mutex
+		    PL_hints_mutex
 		    Perl_dirp_dup
 		    Perl_cx_dup
 		    Perl_si_dup
@@ -831,6 +833,52 @@ unless ($define{'PERL_USES_PL_PIDSTATUS'}) {
 		    )];
 }
 
+unless ($define{'PERL_TRACK_MEMPOOL'}) {
+    skip_symbols [qw(
+                     PL_memory_debug_header
+                    )];
+}
+
+if ($define{'PERL_MAD'}) {
+    skip_symbols [qw(
+		     PL_nextval
+		     PL_nexttype
+		     )];
+} else {
+    skip_symbols [qw(
+		    PL_madskills
+		    PL_xmlfp
+		    PL_lasttoke
+		    PL_realtokenstart
+		    PL_faketokens
+		    PL_thismad
+		    PL_thistoken
+		    PL_thisopen
+		    PL_thisstuff
+		    PL_thisclose
+		    PL_thiswhite
+		    PL_nextwhite
+		    PL_skipwhite
+		    PL_endwhite
+		    PL_curforce
+		    Perl_pad_peg
+		    Perl_xmldump_indent
+		    Perl_xmldump_vindent
+		    Perl_xmldump_all
+		    Perl_xmldump_packsubs
+		    Perl_xmldump_sub
+		    Perl_xmldump_form
+		    Perl_xmldump_eval
+		    Perl_sv_catxmlsv
+		    Perl_sv_catxmlpvn
+		    Perl_sv_xmlpeek
+		    Perl_do_pmop_xmldump
+		    Perl_pmop_xmldump
+		    Perl_do_op_xmldump
+		    Perl_op_xmldump
+		    )];
+}
+
 unless ($define{'d_mmap'}) {
     skip_symbols [qw(
 		    PL_mmap_page_size
@@ -931,6 +979,7 @@ my @layer_syms = qw(
 		    PerlIO_sv_dup
 		    Perl_PerlIO_clearerr
 		    Perl_PerlIO_close
+		    Perl_PerlIO_context_layers
 		    Perl_PerlIO_eof
 		    Perl_PerlIO_error
 		    Perl_PerlIO_fileno
@@ -1525,17 +1574,6 @@ sub output_symbol {
 
 1;
 __DATA__
-# extra globals not included above.
-Perl_cxinc
-perl_alloc
-perl_alloc_using
-perl_clone
-perl_clone_using
-perl_construct
-perl_destruct
-perl_free
-perl_parse
-perl_run
 # Oddities from PerlIO
 PerlIO_binmode
 PerlIO_getpos

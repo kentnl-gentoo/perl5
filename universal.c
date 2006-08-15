@@ -31,8 +31,8 @@
  * The main guts of traverse_isa was actually copied from gv_fetchmeth
  */
 
-STATIC SV *
-S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
+STATIC bool
+S_isa_lookup(pTHX_ HV *stash, const char *name, const HV* const name_stash,
              int len, int level)
 {
     dVAR;
@@ -45,16 +45,16 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
 
     /* A stash/class can go by many names (ie. User == main::User), so 
        we compare the stash itself just in case */
-    if (name_stash && (stash == name_stash))
-        return &PL_sv_yes;
+    if (name_stash && ((const HV *)stash == name_stash))
+        return TRUE;
 
     hvname = HvNAME_get(stash);
 
     if (strEQ(hvname, name))
-	return &PL_sv_yes;
+	return TRUE;
 
     if (strEQ(name, "UNIVERSAL"))
-	return &PL_sv_yes;
+	return TRUE;
 
     if (level > 100)
 	Perl_croak(aTHX_ "Recursive inheritance detected in package '%s'",
@@ -66,12 +66,15 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
 	&& (hv = GvHV(gv)))
     {
 	if (SvIV(subgen) == (IV)PL_sub_generation) {
-	    SV* sv;
 	    SV** const svp = (SV**)hv_fetch(hv, name, len, FALSE);
-	    if (svp && (sv = *svp) != (SV*)&PL_sv_undef) {
-	        DEBUG_o( Perl_deb(aTHX_ "Using cached ISA %s for package %s\n",
-				  name, hvname) );
-		return sv;
+	    if (svp) {
+		SV * const sv = *svp;
+#ifdef DEBUGGING
+		if (sv != &PL_sv_undef)
+		    DEBUG_o( Perl_deb(aTHX_ "Using cached ISA %s for package %s\n",
+				    name, hvname) );
+#endif
+		return (sv == &PL_sv_yes);
 	    }
 	}
 	else {
@@ -111,19 +114,18 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
 		    if (ckWARN(WARN_MISC))
 			Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
 				    "Can't locate package %"SVf" for @%s::ISA",
-				    sv, hvname);
+				    (void*)sv, hvname);
 		    continue;
 		}
-		if (&PL_sv_yes == isa_lookup(basestash, name, name_stash, 
-                                             len, level + 1)) {
+		if (isa_lookup(basestash, name, name_stash, len, level + 1)) {
 		    (void)hv_store(hv,name,len,&PL_sv_yes,0);
-		    return &PL_sv_yes;
+		    return TRUE;
 		}
 	    }
 	    (void)hv_store(hv,name,len,&PL_sv_no,0);
 	}
     }
-    return &PL_sv_no;
+    return FALSE;
 }
 
 /*
@@ -131,9 +133,9 @@ S_isa_lookup(pTHX_ HV *stash, const char *name, HV* name_stash,
 
 =for apidoc sv_derived_from
 
-Returns a boolean indicating whether the SV is derived from the specified
-class.  This is the function that implements C<UNIVERSAL::isa>.  It works
-for class names as well as for objects.
+Returns a boolean indicating whether the SV is derived from the specified class
+I<at the C level>.  To check derivation at the Perl level, call C<isa()> as a
+normal Perl method.
 
 =cut
 */
@@ -160,17 +162,67 @@ Perl_sv_derived_from(pTHX_ SV *sv, const char *name)
 
     if (stash) {
 	HV * const name_stash = gv_stashpv(name, FALSE);
-	return isa_lookup(stash, name, name_stash, strlen(name), 0) == &PL_sv_yes;
+	return isa_lookup(stash, name, name_stash, strlen(name), 0);
     }
     else
 	return FALSE;
 
 }
 
+/*
+=for apidoc sv_does
+
+Returns a boolean indicating whether the SV performs a specific, named role.
+The SV can be a Perl object or the name of a Perl class.
+
+=cut
+*/
+
 #include "XSUB.h"
+
+bool
+Perl_sv_does(pTHX_ SV *sv, const char *name)
+{
+    const char *classname;
+    bool does_it;
+
+    dSP;
+    ENTER;
+    SAVETMPS;
+
+    SvGETMAGIC(sv);
+
+    if (!SvOK(sv) || !(SvROK(sv) || (SvPOK(sv) && SvCUR(sv))
+		|| (SvGMAGICAL(sv) && SvPOKp(sv) && SvCUR(sv))))
+	return FALSE;
+
+    if (sv_isobject(sv)) {
+	classname = sv_reftype(SvRV(sv),TRUE);
+    } else {
+	classname = SvPV(sv,PL_na);
+    }
+
+    if (strEQ(name,classname))
+	return TRUE;
+
+    PUSHMARK(SP);
+    XPUSHs(sv);
+    XPUSHs(sv_2mortal(newSVpv(name, 0)));
+    PUTBACK;
+
+    call_method("isa", G_SCALAR);
+    SPAGAIN;
+
+    does_it = SvTRUE( TOPs );
+    FREETMPS;
+    LEAVE;
+
+    return does_it;
+}
 
 PERL_XS_EXPORT_C void XS_UNIVERSAL_isa(pTHX_ CV *cv);
 PERL_XS_EXPORT_C void XS_UNIVERSAL_can(pTHX_ CV *cv);
+PERL_XS_EXPORT_C void XS_UNIVERSAL_DOES(pTHX_ CV *cv);
 PERL_XS_EXPORT_C void XS_UNIVERSAL_VERSION(pTHX_ CV *cv);
 XS(XS_version_new);
 XS(XS_version_stringify);
@@ -207,10 +259,11 @@ void
 Perl_boot_core_UNIVERSAL(pTHX)
 {
     dVAR;
-    const char file[] = __FILE__;
+    static const char file[] = __FILE__;
 
     newXS("UNIVERSAL::isa",             XS_UNIVERSAL_isa,         file);
     newXS("UNIVERSAL::can",             XS_UNIVERSAL_can,         file);
+    newXS("UNIVERSAL::DOES",            XS_UNIVERSAL_DOES,        file);
     newXS("UNIVERSAL::VERSION", 	XS_UNIVERSAL_VERSION, 	  file);
     {
 	/* register the overloading (type 'A') magic */
@@ -322,6 +375,25 @@ XS(XS_UNIVERSAL_can)
     XSRETURN(1);
 }
 
+XS(XS_UNIVERSAL_DOES)
+{
+    dVAR;
+    dXSARGS;
+
+    if (items != 2)
+	Perl_croak(aTHX_ "Usage: invocant->does(kind)");
+    else {
+	SV * const sv = ST(0);
+	const char *name;
+
+	name = SvPV_nolen_const(ST(1));
+	if (sv_does( sv, name ))
+	    XSRETURN_YES;
+
+	XSRETURN_NO;
+    }
+}
+
 XS(XS_UNIVERSAL_VERSION)
 {
     dVAR;
@@ -342,7 +414,7 @@ XS(XS_UNIVERSAL_VERSION)
         pkg = gv_stashsv(ST(0), FALSE);
     }
 
-    gvp = pkg ? (GV**)hv_fetchs(pkg, "VERSION", FALSE) : Null(GV**);
+    gvp = pkg ? (GV**)hv_fetchs(pkg, "VERSION", FALSE) : NULL;
 
     if (gvp && isGV(gv = *gvp) && (sv = GvSV(gv)) && SvOK(sv)) {
         SV * const nsv = sv_newmortal();
@@ -383,8 +455,11 @@ XS(XS_UNIVERSAL_VERSION)
 
 	if ( vcmp( req, sv ) > 0 )
 	    Perl_croak(aTHX_ "%s version %"SVf" (%"SVf") required--"
-		    "this is only version %"SVf" (%"SVf")", HvNAME_get(pkg),
-		    vnumify(req),vnormal(req),vnumify(sv),vnormal(sv));
+		       "this is only version %"SVf" (%"SVf")", HvNAME_get(pkg),
+		       (void*)vnumify(req),
+		       (void*)vnormal(req),
+		       (void*)vnumify(sv),
+		       (void*)vnormal(sv));
     }
 
     if ( SvOK(sv) && sv_derived_from(sv, "version") ) {
@@ -411,17 +486,10 @@ XS(XS_version_new)
 		? HvNAME(SvSTASH(SvRV(ST(0))))
 		: (char *)SvPV_nolen(ST(0));
 
-	if ( items == 1 ) {
-	    /* no parameter provided */
-	    if ( sv_isobject(ST(0)) ) {
-		/* copy existing object */
-		vs = ST(0);
-	    }
-	    else {
-		/* create empty object */
-		vs = sv_newmortal();
-		sv_setpvn(vs,"",0);
-	    }
+	if ( items == 1 || vs == &PL_sv_undef ) { /* no param or explicit undef */
+	    /* create empty object */
+	    vs = sv_newmortal();
+	    sv_setpvn(vs,"",0);
 	}
 	else if ( items == 3 ) {
 	    vs = sv_newmortal();
@@ -620,7 +688,7 @@ XS(XS_version_qv)
 	    if ( SvNOK(ver) ) /* may get too much accuracy */
 	    {
 		char tbuf[64];
-		const STRLEN len = my_sprintf(tbuf,"%.9"NVgf, SvNVX(ver));
+		const STRLEN len = my_snprintf(tbuf, sizeof(tbuf), "%.9"NVgf, SvNVX(ver));
 		version = savepvn(tbuf, len);
 	    }
 	    else
@@ -819,6 +887,7 @@ XS(XS_Internals_hv_clear_placehold)
 
 XS(XS_Regexp_DESTROY)
 {
+    PERL_UNUSED_CONTEXT;
     PERL_UNUSED_ARG(cv);
 }
 
@@ -917,9 +986,11 @@ XS(XS_PerlIO_get_layers)
 		  else {
 		       if (namok && argok)
 			    XPUSHs(Perl_newSVpvf(aTHX_ "%"SVf"(%"SVf")",
-					       *namsvp, *argsvp));
+						 (void*)*namsvp,
+						 (void*)*argsvp));
 		       else if (namok)
-			    XPUSHs(Perl_newSVpvf(aTHX_ "%"SVf, *namsvp));
+			    XPUSHs(Perl_newSVpvf(aTHX_ "%"SVf,
+						 (void*)*namsvp));
 		       else
 			    XPUSHs(&PL_sv_undef);
 		       nitem++;

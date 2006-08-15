@@ -13,19 +13,18 @@ use File::Spec;
 use Digest::SHA;
 
 BEGIN {
-        if ($ENV{PERL_CORE}) {
-                chdir 't' if -d 't';
-                @INC = '../lib';
-        }
+	if ($ENV{PERL_CORE}) {
+		chdir 't' if -d 't';
+		@INC = '../lib';
+	}
 }
 
 my @hashes;
 
 BEGIN {
-	my $file = dirname($0) . "/nist/byte-hashes.sha1";
-	my $datafile = File::Spec->canonpath($file);
-	open(F, $datafile);
-	while (<F>) {
+	my $file = File::Spec->catfile(dirname($0), "nist", "byte-hashes.sha1");
+	open(my $fh, q{<}, $file);
+	while (<$fh>) {
 		next unless (/^[0-9A-F]/);
 		s/[\r\n]+$//;
 		if (/\^$/) {
@@ -33,7 +32,7 @@ BEGIN {
 			push(@hashes, $_);
 		}
 	}
-	close(F);
+	close($fh);
 	plan tests => scalar(@hashes);
 }
 
@@ -60,10 +59,9 @@ my $hash;
 my $type3 = 0;
 my $ctx = Digest::SHA->new(1);
 
-my $file = dirname($0) . "/nist/byte-messages.sha1";
-my $datafile = File::Spec->canonpath($file);
-open(F, $datafile);
-while (<F>) {
+my $file = File::Spec->catfile(dirname($0), "nist", "byte-messages.sha1");
+open(my $fh, q{<}, $file);
+while (<$fh>) {
 	$type3 = 1 if (/Type 3/);
 	$type3 = 0 if (/^<D/);
 	next unless (/^[0-9^ ]/);
@@ -86,4 +84,4 @@ while (<F>) {
 		$line = "";
 	}
 }
-close(F);
+close($fh);

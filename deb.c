@@ -32,6 +32,8 @@ Perl_deb_nocontext(const char *pat, ...)
     va_start(args, pat);
     vdeb(pat, &args);
     va_end(args);
+#else
+    PERL_UNUSED_ARG(pat);
 #endif /* DEBUGGING */
 }
 #endif
@@ -45,6 +47,7 @@ Perl_deb(pTHX_ const char *pat, ...)
     vdeb(pat, &args);
     va_end(args);
 #else
+    PERL_UNUSED_CONTEXT;
     PERL_UNUSED_ARG(pat);
 #endif /* DEBUGGING */
 }
@@ -54,12 +57,13 @@ Perl_vdeb(pTHX_ const char *pat, va_list *args)
 {
 #ifdef DEBUGGING
     dVAR;
-    char* file = OutCopFILE(PL_curcop);
+    const char* const file = OutCopFILE(PL_curcop);
 
     PerlIO_printf(Perl_debug_log, "(%s:%ld)\t", (file ? file : "<free>"),
 		  (long)CopLINE(PL_curcop));
     (void) PerlIO_vprintf(Perl_debug_log, pat, *args);
 #else
+    PERL_UNUSED_CONTEXT;
     PERL_UNUSED_ARG(pat);
     PERL_UNUSED_ARG(args);
 #endif /* DEBUGGING */
@@ -131,6 +135,7 @@ S_deb_stack_n(pTHX_ SV** stack_base, I32 stack_min, I32 stack_max,
     while (1);
     PerlIO_printf(Perl_debug_log, "\n");
 #else
+    PERL_UNUSED_CONTEXT;
     PERL_UNUSED_ARG(stack_base);
     PERL_UNUSED_ARG(stack_min);
     PERL_UNUSED_ARG(stack_max);
@@ -198,8 +203,8 @@ Perl_deb_stack_all(pTHX)
     si_ix=0;
     for (;;)
     {
-        const int si_name_ix = si->si_type+1; /* -1 is a valid index */
-        const char * const si_name = (si_name_ix>= sizeof(si_names)) ? "????" : si_names[si_name_ix];
+        const size_t si_name_ix = si->si_type+1; /* -1 is a valid index */
+        const char * const si_name = (si_name_ix >= sizeof(si_names)) ? "????" : si_names[si_name_ix];
 	I32 ix;
 	PerlIO_printf(Perl_debug_log, "STACK %"IVdf": %s\n",
 						(IV)si_ix, si_name);
@@ -223,10 +228,8 @@ Perl_deb_stack_all(pTHX)
 		 */
 
 		I32 i, stack_min, stack_max, mark_min, mark_max;
-		const PERL_CONTEXT *cx_n;
+		const PERL_CONTEXT *cx_n = NULL;
 		const PERL_SI *si_n;
-
-		cx_n = Null(PERL_CONTEXT*);
 
 		/* there's a separate stack per SI, so only search
 		 * this one */
@@ -255,7 +258,7 @@ Perl_deb_stack_all(pTHX)
 
 		si_n = si;
 		i = ix;
-		cx_n = Null(PERL_CONTEXT*);
+		cx_n = NULL;
 		for (;;) {
 		    i++;
 		    if (i > si_n->si_cxix) {
@@ -306,6 +309,8 @@ Perl_deb_stack_all(pTHX)
     } /* next stackinfo */
 
     PerlIO_printf(Perl_debug_log, "\n");
+#else
+    PERL_UNUSED_CONTEXT;
 #endif /* DEBUGGING */
 }
 

@@ -14,7 +14,8 @@ my @optype= qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP);
 
 # Nullsv *must* come first in the following so that the condition
 # ($$sv == 0) can continue to be used to test (sv == Nullsv).
-my @specialsv = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no pWARN_ALL pWARN_NONE);
+my @specialsv = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no
+		   (SV*)pWARN_ALL (SV*)pWARN_NONE (SV*)pWARN_STD);
 
 my (%alias_from, $from, $tos);
 while (($from, $tos) = each %alias_to) {
@@ -89,7 +90,10 @@ for ($i = 0; $i < @optype - 1; $i++) {
     printf BYTERUN_C "    sizeof(%s),\n", $optype[$i], $i;
 }
 printf BYTERUN_C "    sizeof(%s)\n", $optype[$i], $i;
-print BYTERUN_C <<'EOT';
+
+my $size = @specialsv;
+
+print BYTERUN_C <<"EOT";
 };
 
 void *
@@ -109,7 +113,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
     dVAR;
     register int insn;
     U32 ix;
-    SV *specialsv_list[6];
+    SV *specialsv_list[$size];
 
     BYTECODE_HEADER_CHECK;	/* croak if incorrect platform */
     Newx(bstate->bs_obj_list, 32, void*); /* set op objlist */
@@ -370,7 +374,7 @@ stpv		bstate->bs_pv.pvx			U32		x
 ldspecsv	bstate->bs_sv				U8		x
 ldspecsvx	bstate->bs_sv				U8		x
 newsv		bstate->bs_sv				U8		x
-newsvx		bstate->bs_sv				U32		x
+newsvx		bstate->bs_sv				svtype		x
 newop		PL_op					U8		x
 newopx		PL_op					U16		x
 newopn		PL_op					U8		x
@@ -444,7 +448,7 @@ gp_refcnt_add	GvREFCNT(bstate->bs_sv)			I32		x
 gp_av		*(SV**)&GvAV(bstate->bs_sv)		svindex
 gp_hv		*(SV**)&GvHV(bstate->bs_sv)		svindex
 gp_cv		*(SV**)&GvCV(bstate->bs_sv)		svindex
-gp_file		GvFILE(bstate->bs_sv)			pvindex
+gp_file		bstate->bs_sv				pvindex		x
 gp_io		*(SV**)&GvIOp(bstate->bs_sv)		svindex
 gp_form		*(SV**)&GvFORM(bstate->bs_sv)		svindex
 gp_cvgen	GvCVGEN(bstate->bs_sv)			U32
@@ -493,10 +497,9 @@ cop_stash	cCOP					svindex		x
 cop_filegv	cCOP					svindex		x
 #endif
 cop_seq		cCOP->cop_seq				U32
-cop_arybase	cCOP->cop_arybase			I32
+cop_arybase	cCOP					I32		x
 cop_line	cCOP->cop_line				line_t
-cop_io		cCOP->cop_io				svindex
-cop_warnings	cCOP->cop_warnings			svindex
+cop_warnings	cCOP					svindex		x
 main_start	PL_main_start				opindex
 main_root	PL_main_root				opindex
 main_cv		*(SV**)&PL_main_cv			svindex

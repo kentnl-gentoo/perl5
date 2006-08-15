@@ -6,7 +6,7 @@ is_utf8_string_loc             # U
 packlist                       # U
 save_bool                      # U
 savestack_grow_cnt             # U
-scan_vstring                   # E
+scan_vstring                   # U
 seed                           # U
 sv_cat_decode                  # U
 sv_compile_2op                 # E (Perl_sv_compile_2op)
@@ -14,6 +14,7 @@ sv_setpviv                     # U
 sv_setpviv_mg                  # U
 unpackstring                   # U
 IN_PERL_COMPILETIME            # added by devel/scanprov
+PERL_ABS                       # added by devel/scanprov
 PERL_GCC_BRACE_GROUPS_FORBIDDEN # added by devel/scanprov
 PERL_MAGIC_utf8                # added by devel/scanprov
 PERL_MAGIC_vstring             # added by devel/scanprov

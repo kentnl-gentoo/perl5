@@ -24,7 +24,7 @@ use warnings;
 use strict;
 use Config;
 
-print "1..39\n";
+print "1..42\n";
 
 use B::Deparse;
 my $deparse = B::Deparse->new() or print "not ";
@@ -63,13 +63,12 @@ while (<DATA>) {
     }
     else {
 	my $deparsed = $deparse->coderef2text( $coderef );
-	my $regex = quotemeta($expected);
-	do {
-	    no warnings 'misc';
-	    $regex =~ s/\s+/\s+/g;
-	};
+	my $regex = $expected;
+	$regex =~ s/(\S+)/\Q$1/g;
+	$regex =~ s/\s+/\\s+/g;
+	$regex = '^\{\s*' . $regex . '\s*\}$';
 
-	my $ok = ($deparsed =~ /^\{\s*$regex\s*\}$/);
+	my $ok = ($deparsed =~ /$regex/);
 	print (($ok ? "ok " : "not ok ") . $i++ . "\n");
 	if (!$ok) {
 	    print "# EXPECTED:\n";
@@ -117,7 +116,7 @@ BEGIN { $^W = 1; }
 BEGIN { $/ = "\n"; $\ = "\n"; }
 LINE: while (defined($_ = <ARGV>)) {
     chomp $_;
-    our(@F) = split(" ", $_, 0);
+    our(@F) = split(' ', $_, 0);
     '???';
 }
 EOF
@@ -320,3 +319,13 @@ print $_ foreach (reverse @a);
 # 33
 our @a;
 print $_ foreach (reverse 1, 2..5);
+####
+# 34  (bug #38684)
+our @ary;
+@ary = split(' ', 'foo', 0);
+####
+# 35 (bug #40055)
+do { () }; 
+####
+# 36 (ibid.)
+do { my $x = 1; $x }; 

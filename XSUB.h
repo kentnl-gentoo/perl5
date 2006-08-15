@@ -83,7 +83,7 @@ is a lexical $_ in scope.
 */
 
 #ifndef PERL_UNUSED_ARG
-#  ifdef lint
+#  if defined(lint) && defined(S_SPLINT_S) /* www.splint.org */
 #    include <note.h>
 #    define PERL_UNUSED_ARG(x) NOTE(ARGUNUSED(x))
 #  else
@@ -104,7 +104,7 @@ is a lexical $_ in scope.
 #  define XS(name) EXPORT_C void name(pTHX_ CV* cv)
 #endif
 #ifndef XS
-#  ifdef HASATTRIBUTE_UNUSED
+#  if defined(HASATTRIBUTE_UNUSED) && !defined(__cplusplus)
 #    define XS(name) void name(pTHX_ CV* cv __attribute__unused__)
 #  else
 #    define XS(name) void name(pTHX_ CV* cv)
@@ -119,7 +119,7 @@ is a lexical $_ in scope.
 
 #define dITEMS I32 items = SP - MARK
 
-#ifdef lint
+#if defined(lint) && defined(S_SPLINT_S) /* www.splint.org */
 #  define dXSARGS \
 	NOTE(ARGUNUSED(cv)) \
 	dSP; dAXMARK; dITEMS
@@ -148,9 +148,9 @@ is a lexical $_ in scope.
 #define XSINTERFACE_FUNC_SET(cv,f)	\
 		CvXSUBANY(cv).any_dxptr = (void (*) (pTHX_ void*))(f)
 
-#define dUNDERBAR I32 padoff_du = find_rundefsvoffset()
+#define dUNDERBAR PADOFFSET padoff_du = find_rundefsvoffset()
 #define UNDERBAR ((padoff_du == NOT_IN_PAD \
-	    || PAD_COMPNAME_FLAGS(padoff_du) & SVpad_OUR) \
+	    || PAD_COMPNAME_FLAGS_isOUR(padoff_du)) \
 	? DEFSV : PAD_SVl(padoff_du))
 
 /* Simple macros to put new mortal values onto the stack.   */
@@ -273,13 +273,13 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 #define XSRETURN_UNDEF STMT_START { XST_mUNDEF(0); XSRETURN(1); } STMT_END
 #define XSRETURN_EMPTY STMT_START {                XSRETURN(0); } STMT_END
 
-#define newXSproto(a,b,c,d)	sv_setpv((SV*)newXS(a,b,c), d)
+#define newXSproto(a,b,c,d)	newXS_flags(a,b,c,d,0)
 
 #ifdef XS_VERSION
 #  define XS_VERSION_BOOTCHECK \
     STMT_START {							\
 	SV *_sv;							\
-	const char *vn = Nullch, *module = SvPV_nolen_const(ST(0));	\
+	const char *vn = NULL, *module = SvPV_nolen_const(ST(0));	\
 	if (items >= 2)	 /* version supplied as bootstrap arg */	\
 	    _sv = ST(1);						\
 	else {								\
@@ -398,6 +398,12 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 #endif
 
 #include "perlapi.h"
+#ifndef PERL_MAD
+#  undef PL_madskills
+#  undef PL_xmlfp
+#  define PL_madskills 0
+#  define PL_xmlfp 0
+#endif
 
 #if defined(PERL_IMPLICIT_CONTEXT) && !defined(PERL_NO_GET_CONTEXT) && !defined(PERL_CORE)
 #  undef aTHX

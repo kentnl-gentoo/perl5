@@ -12,6 +12,7 @@ use strict;
 use lib '../lib';
 
 use Cwd;
+use Config;
 use IO::File;
 use File::Copy;
 use File::Path;
@@ -165,6 +166,13 @@ chmod 0644, $COMPRESS_FILE;
                     ok( $file,      "Got File object" );
                     isa_ok( $file,  "Archive::Tar::File" );
 
+                    ### whitebox test -- make sure find_entry gets the
+                    ### right files
+                    for my $test ( $file->full_path, $file ) {
+                        is( $tar->_find_entry( $test ), $file,
+                                    "   Found proper object" );
+                    }
+                    
                     next unless $file->is_file;
 
                     my $name = $file->full_path;
@@ -220,7 +228,15 @@ chmod 0644, $COMPRESS_FILE;
         is( scalar @files, scalar @add,
                                     "Adding files");
         is( $files[0]->name, 'b',   "   Proper name" );
-	is( $files[0]->is_file, 1,  "   Proper type" );
+
+        SKIP: {
+            skip( "You are building perl using symlinks", 1)
+                if ($ENV{PERL_CORE} and $Config{config_args} =~/Dmksymlinks/);
+
+            is( $files[0]->is_file, 1,  
+                                    "   Proper type" );
+        }
+
         like( $files[0]->get_content, qr/^bbbbbbbbbbb\s*$/,
                                     "   Content OK" );
 
@@ -467,12 +483,18 @@ SKIP: {
 
     is( $obj->name, $name,          "   Expected file found" );
 
+
     ### extract this single file to cwd()
     for my $meth (qw[extract extract_file]) {
-        ok( $tar->$meth( $obj->full_path ),
+
+        ### extract it by full path and object
+        for my $arg ( $obj, $obj->full_path ) {
+
+            ok( $tar->$meth( $arg ),
                                     "Extracted '$name' to cwd() with $meth" );
-        ok( -e $obj->full_path,     "   Extracted file exists" );
-        rm( $obj->full_path ) unless $NO_UNLINK;
+            ok( -e $obj->full_path, "   Extracted file exists" );
+            rm( $obj->full_path ) unless $NO_UNLINK;
+        }
     }
 
     ### extract this file to @ROOT

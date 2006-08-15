@@ -317,6 +317,7 @@ expect	[ scalar extract_multiple(undef, [ q/([a-z]),?/ ]) ],
 expect [ pos ], [ 0 ];
 expect [ $_ ], [ substr($stdtext3,2) ];
 
+
 # TEST 86
 
 # Fails in Text-Balanced-1.95 with result ['1 ', '""', '1234']

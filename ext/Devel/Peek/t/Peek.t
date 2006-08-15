@@ -4,15 +4,17 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require Config; import Config;
-    if ($Config{'extensions'} !~ /\bPeek\b/) {
+    if ($Config{'extensions'} !~ /\bDevel\/Peek\b/) {
         print "1..0 # Skip: Devel::Peek was not built\n";
         exit 0;
     }
 }
 
+require "./test.pl";
+
 use Devel::Peek;
 
-print "1..23\n";
+plan(23);
 
 our $DEBUG = 0;
 open(SAVERR, ">&STDERR") or die "Can't dup STDERR: $!";
@@ -30,12 +32,21 @@ sub do_test {
 	    $pattern =~ s/\$FLOAT/(?:\\d*\\.\\d+(?:e[-+]\\d+)?|\\d+)/g;
 	    # handle DEBUG_LEAKING_SCALARS prefix
 	    $pattern =~ s/^(\s*)(SV =.* at )/(?:$1ALLOCATED at .*?\n)?$1$2/mg;
+
+	    $pattern =~ s/^ *\$XSUB *\n/
+		($] < 5.009) ? "    XSUB = 0\n    XSUBANY = 0\n" : '';
+	    /mge;
+	    $pattern =~ s/^ *\$ROOT *\n/
+		($] < 5.009) ? "    ROOT = 0x0\n" : '';
+	    /mge;
+	    $pattern =~ s/^ *\$IVNV *\n/
+		($] < 5.009) ? "    IV = 0\n    NV = 0\n" : '';
+	    /mge;
+
 	    print $pattern, "\n" if $DEBUG;
 	    my $dump = <IN>;
 	    print $dump, "\n"    if $DEBUG;
-	    print "got:\n[\n$dump\n]\nexpected:\n[\n$pattern\n]\nnot "
-		unless $dump =~ /\A$pattern\Z/ms;
-	    print "ok $_[0]\n";
+	    like( $dump, qr/\A$pattern\Z/ms );
 	    close(IN);
             return $1;
 	} else {
@@ -50,6 +61,10 @@ our   $a;
 our   $b;
 my    $c;
 local $d = 0;
+
+END {
+    1 while unlink("peek$$");
+}
 
 do_test( 1,
 	$a = "foo",
@@ -206,20 +221,18 @@ do_test(13,
   SV = PVCV\\($ADDR\\) at $ADDR
     REFCNT = 2
     FLAGS = \\(PADMY,POK,pPOK,ANON,WEAKOUTSIDE\\)
-    IV = 0
-    NV = 0
+    $IVNV
     PROTOTYPE = ""
     COMP_STASH = $ADDR\\t"main"
     START = $ADDR ===> \\d+
     ROOT = $ADDR
-    XSUB = 0x0
-    XSUBANY = 0
+    $XSUB
     GVGV::GV = $ADDR\\t"main" :: "__ANON__[^"]*"
     FILE = ".*\\b(?i:peek\\.t)"
     DEPTH = 0
 (?:    MUTEXP = $ADDR
     OWNER = $ADDR
-)?    FLAGS = 0x404
+)?    FLAGS = 0x90
     OUTSIDE_SEQ = \\d+
     PADLIST = $ADDR
     PADNAME = $ADDR\\($ADDR\\) PAD = $ADDR\\($ADDR\\)
@@ -234,13 +247,11 @@ do_test(14,
   SV = PVCV\\($ADDR\\) at $ADDR
     REFCNT = (3|4)
     FLAGS = \\(\\)
-    IV = 0
-    NV = 0
+    $IVNV
     COMP_STASH = $ADDR\\t"main"
     START = $ADDR ===> \\d+
     ROOT = $ADDR
-    XSUB = 0x0
-    XSUBANY = 0
+    $XSUB
     GVGV::GV = $ADDR\\t"main" :: "do_test"
     FILE = ".*\\b(?i:peek\\.t)"
     DEPTH = 1
@@ -294,13 +305,7 @@ do_test(17,
 	*a,
 'SV = PVGV\\($ADDR\\) at $ADDR
   REFCNT = 5
-  FLAGS = \\(GMG,SMG,MULTI(?:,IN_PAD)?\\)
-  IV = 0
-  NV = 0
-  MAGIC = $ADDR
-    MG_VIRTUAL = &PL_vtbl_glob
-    MG_TYPE = PERL_MAGIC_glob\(\*\)
-    MG_OBJ = $ADDR
+  FLAGS = \\(SCREAM,MULTI(?:,IN_PAD)?\\)
   NAME = "a"
   NAMELEN = 1
   GvSTASH = $ADDR\\t"main"
@@ -441,10 +446,6 @@ do_test(21,
     MG_VIRTUAL = &PL_vtbl_taint
     MG_TYPE = PERL_MAGIC_taint\\(t\\)');
 
-END {
-  1 while unlink("peek$$");
-}
-
 # blessed refs
 do_test(22,
 	bless(\\undef, 'Foobar'),
@@ -481,11 +482,10 @@ do_test(23,
   SV = PVCV\\($ADDR\\) at $ADDR
     REFCNT = (2)
     FLAGS = \\(POK,pPOK,CONST\\)
-    IV = 0
-    NV = 0
+    $IVNV
     PROTOTYPE = ""
     COMP_STASH = 0x0
-    ROOT = 0x0
+    $ROOT
     XSUB = $ADDR
     XSUBANY = $ADDR \\(CONST SV\\)
     SV = PV\\($ADDR\\) at $ADDR
@@ -499,7 +499,7 @@ do_test(23,
     DEPTH = 0
 (?:    MUTEXP = $ADDR
     OWNER = $ADDR
-)?    FLAGS = 0x200
+)?    FLAGS = 0xc00
     OUTSIDE_SEQ = 0
     PADLIST = 0x0
     OUTSIDE = 0x0 \\(null\\)');	

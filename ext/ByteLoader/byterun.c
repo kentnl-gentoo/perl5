@@ -51,7 +51,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
     dVAR;
     register int insn;
     U32 ix;
-    SV *specialsv_list[6];
+    SV *specialsv_list[7];
 
     BYTECODE_HEADER_CHECK;	/* croak if incorrect platform */
     Newx(bstate->bs_obj_list, 32, void*); /* set op objlist */
@@ -63,8 +63,9 @@ byterun(pTHX_ register struct byteloader_state *bstate)
     specialsv_list[1] = &PL_sv_undef;
     specialsv_list[2] = &PL_sv_yes;
     specialsv_list[3] = &PL_sv_no;
-    specialsv_list[4] = pWARN_ALL;
-    specialsv_list[5] = pWARN_NONE;
+    specialsv_list[4] = (SV*)pWARN_ALL;
+    specialsv_list[5] = (SV*)pWARN_NONE;
+    specialsv_list[6] = (SV*)pWARN_STD;
 
     while ((insn = BGET_FGETC()) != EOF) {
 	switch (insn) {
@@ -142,8 +143,8 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 	    }
 	  case INSN_NEWSVX:		/* 9 */
 	    {
-		U32 arg;
-		BGET_U32(arg);
+		svtype arg;
+		BGET_svtype(arg);
 		BSET_newsvx(bstate->bs_sv, arg);
 		break;
 	    }
@@ -657,7 +658,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 	    {
 		pvindex arg;
 		BGET_pvindex(arg);
-		GvFILE(bstate->bs_sv) = arg;
+		BSET_gp_file(bstate->bs_sv, arg);
 		break;
 	    }
 	  case INSN_GP_IO:		/* 86 */
@@ -964,7 +965,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 	    {
 		I32 arg;
 		BGET_I32(arg);
-		cCOP->cop_arybase = arg;
+		BSET_cop_arybase(cCOP, arg);
 		break;
 	    }
 	  case INSN_COP_LINE:		/* 129 */
@@ -974,98 +975,91 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 		cCOP->cop_line = arg;
 		break;
 	    }
-	  case INSN_COP_IO:		/* 130 */
+	  case INSN_COP_WARNINGS:		/* 130 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
-		cCOP->cop_io = arg;
+		BSET_cop_warnings(cCOP, arg);
 		break;
 	    }
-	  case INSN_COP_WARNINGS:		/* 131 */
-	    {
-		svindex arg;
-		BGET_svindex(arg);
-		cCOP->cop_warnings = arg;
-		break;
-	    }
-	  case INSN_MAIN_START:		/* 132 */
+	  case INSN_MAIN_START:		/* 131 */
 	    {
 		opindex arg;
 		BGET_opindex(arg);
 		PL_main_start = arg;
 		break;
 	    }
-	  case INSN_MAIN_ROOT:		/* 133 */
+	  case INSN_MAIN_ROOT:		/* 132 */
 	    {
 		opindex arg;
 		BGET_opindex(arg);
 		PL_main_root = arg;
 		break;
 	    }
-	  case INSN_MAIN_CV:		/* 134 */
+	  case INSN_MAIN_CV:		/* 133 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		*(SV**)&PL_main_cv = arg;
 		break;
 	    }
-	  case INSN_CURPAD:		/* 135 */
+	  case INSN_CURPAD:		/* 134 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		BSET_curpad(PL_curpad, arg);
 		break;
 	    }
-	  case INSN_PUSH_BEGIN:		/* 136 */
+	  case INSN_PUSH_BEGIN:		/* 135 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		BSET_push_begin(PL_beginav, arg);
 		break;
 	    }
-	  case INSN_PUSH_INIT:		/* 137 */
+	  case INSN_PUSH_INIT:		/* 136 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		BSET_push_init(PL_initav, arg);
 		break;
 	    }
-	  case INSN_PUSH_END:		/* 138 */
+	  case INSN_PUSH_END:		/* 137 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		BSET_push_end(PL_endav, arg);
 		break;
 	    }
-	  case INSN_CURSTASH:		/* 139 */
+	  case INSN_CURSTASH:		/* 138 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		*(SV**)&PL_curstash = arg;
 		break;
 	    }
-	  case INSN_DEFSTASH:		/* 140 */
+	  case INSN_DEFSTASH:		/* 139 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		*(SV**)&PL_defstash = arg;
 		break;
 	    }
-	  case INSN_DATA:		/* 141 */
+	  case INSN_DATA:		/* 140 */
 	    {
 		U8 arg;
 		BGET_U8(arg);
 		BSET_data(none, arg);
 		break;
 	    }
-	  case INSN_INCAV:		/* 142 */
+	  case INSN_INCAV:		/* 141 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		*(SV**)&GvAV(PL_incgv) = arg;
 		break;
 	    }
-	  case INSN_LOAD_GLOB:		/* 143 */
+	  case INSN_LOAD_GLOB:		/* 142 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
@@ -1073,7 +1067,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 		break;
 	    }
 #ifdef USE_ITHREADS
-	  case INSN_REGEX_PADAV:		/* 144 */
+	  case INSN_REGEX_PADAV:		/* 143 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
@@ -1081,35 +1075,35 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 		break;
 	    }
 #endif
-	  case INSN_DOWARN:		/* 145 */
+	  case INSN_DOWARN:		/* 144 */
 	    {
 		U8 arg;
 		BGET_U8(arg);
 		PL_dowarn = arg;
 		break;
 	    }
-	  case INSN_COMPPAD_NAME:		/* 146 */
+	  case INSN_COMPPAD_NAME:		/* 145 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		*(SV**)&PL_comppad_name = arg;
 		break;
 	    }
-	  case INSN_XGV_STASH:		/* 147 */
+	  case INSN_XGV_STASH:		/* 146 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);
 		*(SV**)&GvSTASH(bstate->bs_sv) = arg;
 		break;
 	    }
-	  case INSN_SIGNAL:		/* 148 */
+	  case INSN_SIGNAL:		/* 147 */
 	    {
 		strconst arg;
 		BGET_strconst(arg);
 		BSET_signal(bstate->bs_sv, arg);
 		break;
 	    }
-	  case INSN_FORMFEED:		/* 149 */
+	  case INSN_FORMFEED:		/* 148 */
 	    {
 		svindex arg;
 		BGET_svindex(arg);

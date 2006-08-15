@@ -6,7 +6,8 @@
 
 $| = 1;
 
-print "1..1199\n";
+# please update note at bottom of file when you change this
+print "1..1231\n"; 
 
 BEGIN {
     chdir 't' if -d 't';
@@ -2638,7 +2639,11 @@ print "# some Unicode properties\n";
     print "# more whitespace: U+0085, U+2028, U+2029\n";
 
     # U+0085 needs to be forced to be Unicode, the \x{100} does that.
-    print "<\x{100}\x{0085}>" =~ /<\x{100}\s>/ ? "ok 845\n" : "not ok 845\n";
+    if ($ordA == 193) {
+	print "<\x{100}\x{0085}>" =~ /<\x{100}e>/ ? "ok 845\n" : "not ok 845\n";
+    } else {
+	print "<\x{100}\x{0085}>" =~ /<\x{100}\s>/ ? "ok 845\n" : "not ok 845\n";
+    }
     print "<\x{2028}>" =~ /<\s>/ ? "ok 846\n" : "not ok 846\n";
     print "<\x{2029}>" =~ /<\s>/ ? "ok 847\n" : "not ok 847\n";
 }
@@ -3181,7 +3186,10 @@ ok("bbbbac" =~ /$pattern/ && $1 eq 'a', "[perl #3547]");
 }
 
 {
-    split /(?{ split "" })/, "abc";
+    # XXX DAPM 13-Apr-06. Recursive split is still broken. It's only luck it
+    # hasn't been crashing. Disable this test until it is fixed properly.
+    # XXX also check what it returns rather than just doing ok(1,...)
+    # split /(?{ split "" })/, "abc";
     ok(1,'cache_re & "(?{": it dumps core in 5.6.1 & 5.8.0');
 }
 
@@ -3308,6 +3316,7 @@ ok("abc" =~ /[^\cA-\cB]/, '\cA in negated character class range');
 ok("a\cBb" =~ /[\cA-\cC]/, '\cB in character class range');
 ok("a\cCbc" =~ /[^\cA-\cB]/, '\cC in negated character class range');
 ok("a\cAb" =~ /(??{"\cA"})/, '\cA in ??{} pattern');
+ok("ab" !~ /a\cIb/x, '\cI in pattern');
 
 # perl #28532: optional zero-width match at end of string is ignored
 ok(("abc" =~ /^abc(\z)?/) && defined($1),
@@ -3465,4 +3474,107 @@ ok(("foba  ba$s" =~ qr/(foo|BaSS|bar)/i)
     ok($f eq "ab", "pos retained between calls # TODO") or print "# $@\n";
 }
 
-# last test 1199
+# [perl #37836] Simple Regex causes SEGV when run on specific data
+if ($ordA == 193) {
+    print "ok $test # Skip: in EBCDIC\n"; $test++;
+} else {
+    no warnings 'utf8';
+    $_ = pack('U0C2', 0xa2, 0xf8); # ill-formed UTF-8
+    my $ret = 0;
+    eval { $ret = s/[\0]+//g };
+    ok($ret == 0, "ill-formed UTF-8 doesn't match NUL in class");
+}
+
+{ # [perl #38293] chr(65535) should be allowed in regexes
+    no warnings 'utf8'; # to allow non-characters
+    my($c, $r, $s);
+
+    $c = chr 0xffff;
+    $c =~ s/$c//g;
+    ok($c eq "", "U+FFFF, parsed as atom");
+
+    $c = chr 0xffff;
+    $r = "\\$c";
+    $c =~ s/$r//g;
+    ok($c eq "", "U+FFFF backslashed, parsed as atom");
+
+    $c = chr 0xffff;
+    $c =~ s/[$c]//g;
+    ok($c eq "", "U+FFFF, parsed in class");
+
+    $c = chr 0xffff;
+    $r = "[\\$c]";
+    $c =~ s/$r//g;
+    ok($c eq "", "U+FFFF backslashed, parsed in class");
+
+    $s = "A\x{ffff}B";
+    $s =~ s/\x{ffff}//i;
+    ok($s eq "AB", "U+FFFF, EXACTF");
+
+    $s = "\x{ffff}A";
+    $s =~ s/\bA//;
+    ok($s eq "\x{ffff}", "U+FFFF, BOUND");
+
+    $s = "\x{ffff}!";
+    $s =~ s/\B!//;
+    ok($s eq "\x{ffff}", "U+FFFF, NBOUND");
+} # non-characters end
+
+{
+    # https://rt.perl.org/rt3/Ticket/Display.html?id=39583
+    
+    # The printing characters
+    my @chars = ("A".."Z");
+    my $delim = ",";
+    my $size = 32771 - 4;
+    my $test = '';
+
+    # create some random junk. Inefficient, but it works.
+    for ($i = 0 ; $i < $size ; $i++) {
+        $test .= $chars[int(rand(@chars))];
+    }
+
+    $test .= ($delim x 4);
+    my $res;
+    my $matched;
+    if ($test =~ s/^(.*?)${delim}{4}//s) {
+        $res = $1;
+        $matched=1;
+    } 
+    ok($matched,'pattern matches');
+    ok(length($test)==0,"Empty string");
+    ok(defined($res) && length($res)==$size,"\$1 is correct size");
+}
+
+{ # related to [perl #27940]
+    ok("\0-A"  =~ /\c@-A/, '@- should not be interpolated in a pattern');
+    ok("\0\0A" =~ /\c@+A/, '@+ should not be interpolated in a pattern');
+    ok("X\@-A"  =~ /X@-A/, '@- should not be interpolated in a pattern');
+    ok("X\@\@A" =~ /X@+A/, '@+ should not be interpolated in a pattern');
+
+    ok("X\0A" =~ /X\c@?A/,  '\c@?');
+    ok("X\0A" =~ /X\c@*A/,  '\c@*');
+    ok("X\0A" =~ /X\c@(A)/, '\c@(');
+    ok("X\0A" =~ /X(\c@)A/, '\c@)');
+    ok("X\0A" =~ /X\c@|ZA/, '\c@|');
+
+    ok("X\@A" =~ /X@?A/,  '@?');
+    ok("X\@A" =~ /X@*A/,  '@*');
+    ok("X\@A" =~ /X@(A)/, '@(');
+    ok("X\@A" =~ /X(@)A/, '@)');
+    ok("X\@A" =~ /X@|ZA/, '@|');
+
+    local $" = ','; # non-whitespace and non-RE-specific
+    ok('abc' =~ /(.)(.)(.)/, 'the last successful match is bogus');
+    ok("A@+B"  =~ /A@{+}B/,  'interpolation of @+ in /@{+}/');
+    ok("A@-B"  =~ /A@{-}B/,  'interpolation of @- in /@{-}/');
+    ok("A@+B"  =~ /A@{+}B/x, 'interpolation of @+ in /@{+}/x');
+    ok("A@-B"  =~ /A@{-}B/x, 'interpolation of @- in /@{-}/x');
+}
+
+# Keep the following test last -- it may crash perl
+
+ok(("a" x (2**15 - 10)) =~ /^()(a|bb)*$/, "Recursive stack cracker: #24274")
+    or print "# Unexpected outcome: should pass or crash perl\n";
+
+# last test 1231

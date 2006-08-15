@@ -1076,18 +1076,12 @@ redefined subroutine while the old routine is running.  Go figure.
 (F) You tried to unshift an "unreal" array that can't be unshifted, such
 as the main Perl stack.
 
-=item Can't upgrade that kind of scalar
+=item Can't upgrade %s (%d) to %d
 
 (P) The internal sv_upgrade routine adds "members" to an SV, making it
 into a more specialized kind of SV.  The top several SV types are so
 specialized, however, that they cannot be interconverted.  This message
 indicates that such a conversion was attempted.
-
-=item Can't upgrade to undef
-
-(P) The undefined SV is the bottom of the totem pole, in the scheme of
-upgradability.  Upgrading to undef indicates an error in the code
-calling sv_upgrade.
 
 =item Can't use anonymous symbol table for method lookup
 
@@ -1428,12 +1422,17 @@ conditional. Some people have exploited this bug to achieve a kind of
 static variable. Since we intend to fix this bug, we don't want people
 relying on this behavior. You can achieve a similar static effect by
 declaring the variable in a separate block outside the function, eg
-    
+
     sub f { my $x if 0; return $x++ }
 
 becomes
 
     { my $x; sub f { return $x++ } }
+
+Beginning with perl 5.9.4, you can also use C<state> variables to
+have lexicals that are initialized only once (see L<feature>):
+
+    sub f { state $x; return $x++ }
 
 =item DESTROY created new reference to dead object '%s'
 
@@ -1984,8 +1983,8 @@ operations.
 
 =item Integer overflow in format string for %s
 
-(F) The indexes and widths specified in the format string of printf()
-or sprintf() are too large.  The numbers must not overflow the size of
+(F) The indexes and widths specified in the format string of C<printf()>
+or C<sprintf()> are too large.  The numbers must not overflow the size of
 integers for your architecture.
 
 =item Integer overflow in version
@@ -2927,6 +2926,11 @@ data.
 (P) The internal do_trans routines were called with invalid operational
 data.
 
+=item panic: fold_constants JMPENV_PUSH returned %d
+
+(P) While attempting folding constants an exception other than an C<eval>
+failure was caught.
+
 =item panic: frexp
 
 (P) The library function frexp() failed, making printf("%f") impossible.
@@ -3741,6 +3745,16 @@ L<perlfunc/splice>.
 iterate more times than there are characters of input, which is what
 happened.) See L<perlfunc/split>.
 
+=item State variable %s will be reinitialized
+
+(W misc) You're declaring a C<state> variable inside a list. The list
+assignment will be treated by perl as a regular assignment, which means
+that the C<state> variable will be reinitialized each time the statement
+is run. The solution to have it initialized only once is to write the
+assignment on its own line, as in:
+
+    state $var = 42;
+
 =item Statement unlikely to be reached
 
 (W exec) You did an exec() with some statement after it other than a
@@ -3774,7 +3788,7 @@ C<can> may break this.
 (P) The substitution was looping infinitely.  (Obviously, a substitution
 shouldn't iterate more times than there are characters of input, which
 is what happened.)  See the discussion of substitution in
-L<perlop/"Quote and Quote-like Operators">.
+L<perlop/"Regexp Quote-Like Operators">.
 
 =item Substitution pattern not terminated
 
@@ -3944,8 +3958,7 @@ instead.
 
 =item The 'unique' attribute may only be applied to 'our' variables
 
-(F) Currently this attribute is not supported on C<my> or C<sub>
-declarations.  See L<perlfunc/our>.
+(F) This attribute was never supported on C<my> or C<sub> declarations.
 
 =item This Perl can't reset CRTL environ elements (%s)
 

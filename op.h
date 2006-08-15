@@ -36,6 +36,12 @@
 #define OPCODE U16
 #endif
 
+#ifdef PERL_MAD
+#  define MADPROP_IN_BASEOP	MADPROP*	op_madprop;
+#else
+#  define MADPROP_IN_BASEOP
+#endif
+
 #ifdef BASEOP_DEFINITION
 #define BASEOP BASEOP_DEFINITION
 #else
@@ -43,6 +49,7 @@
     OP*		op_next;		\
     OP*		op_sibling;		\
     OP*		(CPERLscope(*op_ppaddr))(pTHX);		\
+    MADPROP_IN_BASEOP			\
     PADOFFSET	op_targ;		\
     unsigned	op_type:9;		\
     unsigned	op_opt:1;		\
@@ -142,6 +149,9 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpASSIGN_BACKWARDS	64	/* Left & right switched. */
 #define OPpASSIGN_CV_TO_GV	128	/* Possible optimisation for constants. */
 
+/* Private for OP_[AS]ASSIGN */
+#define OPpASSIGN_STATE		32	/* Assign to a "state" variable */
+
 /* Private for OP_MATCH and OP_SUBST{,CONST} */
 #define OPpRUNTIME		64	/* Pattern coming in on the stack */
 
@@ -180,6 +190,8 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpOUR_INTRO		16	/* Variable was in an our() */
   /* OP_RV2[AH]V, OP_PAD[AH]V, OP_[AH]ELEM */
 #define OPpMAYBE_LVSUB		8	/* We might be an lvalue to return */
+  /* OP_PADSV only */
+#define OPpPAD_STATE		16	/* is a "state" pad */
   /* for OP_RV2?V, lower bits carry hints (currently only HINT_STRICT_REFS) */
 
   /* OP_RV2GV only */
@@ -355,13 +367,13 @@ struct pmop {
 #  define PmopSTASHPV_set(o,pv)	(PmopSTASHPV(o) = savesharedpv(pv))
 #  define PmopSTASH(o)		(PmopSTASHPV(o) \
 				 ? gv_stashpv(PmopSTASHPV(o),GV_ADD) : NULL)
-#  define PmopSTASH_set(o,hv)	PmopSTASHPV_set(o, ((hv) ? HvNAME_get(hv) : Nullch))
+#  define PmopSTASH_set(o,hv)	PmopSTASHPV_set(o, ((hv) ? HvNAME_get(hv) : NULL))
 #  define PmopSTASH_free(o)	PerlMemShared_free(PmopSTASHPV(o))
 
 #else
 #  define PmopSTASH(o)		((o)->op_pmstash)
 #  define PmopSTASH_set(o,hv)	((o)->op_pmstash = (hv))
-#  define PmopSTASHPV(o)	(PmopSTASH(o) ? HvNAME_get(PmopSTASH(o)) : Nullch)
+#  define PmopSTASHPV(o)	(PmopSTASH(o) ? HvNAME_get(PmopSTASH(o)) : NULL)
    /* op_pmstash is not refcounted */
 #  define PmopSTASHPV_set(o,pv)	PmopSTASH_set((o), gv_stashpv(pv,GV_ADD))
 #  define PmopSTASH_free(o)    
@@ -522,7 +534,7 @@ struct loop {
 #endif
 
 #define OpREFCNT_set(o,n)		((o)->op_targ = (n))
-#define OpREFCNT_inc(o)			((o) ? (++(o)->op_targ, (o)) : Nullop)
+#define OpREFCNT_inc(o)			((o) ? (++(o)->op_targ, (o)) : NULL)
 #define OpREFCNT_dec(o)			(--(o)->op_targ)
 
 /* flags used by Perl_load_module() */
@@ -532,6 +544,11 @@ struct loop {
 
 /* used in perly.y */
 #define ref(o, type) doref(o, type, TRUE)
+
+/* no longer used anywhere in core */
+#ifndef PERL_CORE
+#define cv_ckproto(cv, gv, p) cv_ckproto_len(cv, gv, p, p ? strlen(p) : 0)
+#endif
 
 #ifdef USE_REENTRANT_API
 #include "reentr.h"
@@ -544,8 +561,32 @@ struct loop {
 	(var = (OP *) Perl_Slab_Alloc(aTHX_ m,size))
 #define FreeOp(p) Perl_Slab_Free(aTHX_ p)
 #else
-#define NewOp(m, var, c, type) Newxz(var, c, type)
+#define NewOp(m, var, c, type)	\
+	(var = (MEM_WRAP_CHECK_(c,type) \
+	 (type*)PerlMemShared_calloc(c, sizeof(type))))
 #define NewOpSz(m, var, size)	\
-	(var = (OP*)safemalloc(size), memzero(var, size))
-#define FreeOp(p) Safefree(p)
+	(var = (OP*)PerlMemShared_calloc(1, size))
+#define FreeOp(p) PerlMemShared_free(p)
+#endif
+
+#ifdef PERL_MAD
+#  define MAD_NULL 1
+#  define MAD_PV 2
+#  define MAD_OP 3
+#  define MAD_SV 4
+
+struct madprop {
+    MADPROP* mad_next;
+    void *mad_val;
+    U32 mad_vlen;
+/*    short mad_count; */
+    char mad_key;
+    char mad_type;
+};
+
+struct token {
+    I32 tk_type;
+    YYSTYPE tk_lval;
+    MADPROP* tk_mad;
+};
 #endif

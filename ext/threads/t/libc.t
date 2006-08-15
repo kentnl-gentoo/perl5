@@ -1,60 +1,92 @@
+use strict;
+use warnings;
 
 BEGIN {
-    chdir 't' if -d 't';
-    push @INC, '../lib';
-    require Config; import Config;
-    unless ($Config{'useithreads'}) {
-        print "1..0 # Skip: no useithreads\n";
-        exit 0;
+    if ($ENV{'PERL_CORE'}){
+        chdir 't';
+        unshift @INC, '../lib';
+    }
+    use Config;
+    if (! $Config{'useithreads'}) {
+        print("1..0 # Skip: Perl not compiled with 'useithreads'\n");
+        exit(0);
     }
 }
 
 use ExtUtils::testlib;
-use strict;
-BEGIN { $| = 1; print "1..11\n"};
+
+sub ok {
+    my ($id, $ok, $name) = @_;
+
+    # You have to do it this way or VMS will get confused.
+    if ($ok) {
+        print("ok $id - $name\n");
+    } else {
+        print("not ok $id - $name\n");
+        printf("# Failed test at line %d\n", (caller)[2]);
+    }
+
+    return ($ok);
+}
 
 use threads;
-use threads::shared;
+
+BEGIN {
+    eval {
+        require threads::shared;
+        import threads::shared;
+    };
+    if ($@ || ! $threads::shared::threads_shared) {
+        print("1..0 # Skip: threads::shared not available\n");
+        exit(0);
+    }
+
+    $| = 1;
+    print("1..12\n");   ### Number of tests that will be run ###
+};
+
+ok(1, 1, 'Loaded');
+
+### Start of Testing ###
+
 my $i = 10;
 my $y = 20000;
+
 my %localtime;
-for(0..$i) {
-	$localtime{$_} = localtime($_);
+for (0..$i) {
+    $localtime{$_} = localtime($_);
 };
-my $mutex = 1;
+
+my $mutex = 2;
 share($mutex);
+
 sub localtime_r {
-#  print "Waiting for lock\n";
-  lock($mutex);
-#  print "foo\n";
-  my $retval = localtime(shift());
-#  unlock($mutex);
-  return $retval;
+    lock($mutex);
+    my $retval = localtime(shift());
+    return $retval;
 }
+
 my @threads;
-for(0..$i) {
-  my $thread = threads->create(sub {
-				 my $arg = $_;
-		    my $localtime = $localtime{$arg};
-		    my $error = 0;
-		    for(0..$y) {
-		      my $lt = localtime($arg);
-		      if($localtime ne $lt) {
-			$error++;
-		      }	
-		    }
-				 lock($mutex);
-				 if($error) {
-				   print "not ok $mutex # not a safe localtime\n";
-				 } else {
-				   print "ok $mutex\n";
-				 }
-				 $mutex++;
-		  });	
-  push @threads, $thread;
+for (0..$i) {
+    my $thread = threads->create(sub {
+                    my $arg = $_;
+                    my $localtime = $localtime{$arg};
+                    my $error = 0;
+                    for (0..$y) {
+                        my $lt = localtime($arg);
+                        if($localtime ne $lt) {
+                            $error++;
+                        }
+                    }
+                    lock($mutex);
+                    ok($mutex, ! $error, 'localtime safe');
+                    $mutex++;
+                  });
+    push @threads, $thread;
 }
 
-for(@threads) {
-  $_->join();
+for (@threads) {
+    $_->join();
 }
 
+# EOF

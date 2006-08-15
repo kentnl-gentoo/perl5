@@ -21,19 +21,28 @@ BEGIN {
     unshift @INC, 't';
   }
 
-  eval "use Test";
-  if ($@) {
-    require 'testutil.pl';
-    print "1..38\n";
+  sub load {
+    eval "use Test";
+    require 'testutil.pl' if $@;
   }
-  else {
-    plan(tests => 38);
+
+  if (42) {
+    load();
+    plan(tests => 42);
   }
 }
 
 use Devel::PPPort;
 use strict;
 $^W = 1;
+
+package Devel::PPPort;
+use vars '@ISA';
+require DynaLoader;
+@ISA = qw(DynaLoader);
+bootstrap Devel::PPPort;
+
+package main;
 
 use vars qw($my_sv @my_av %my_hv);
 
@@ -105,4 +114,10 @@ ok(Devel::PPPort::prepush(), 42);
 
 ok(join(':', Devel::PPPort::xsreturn(0)), 'test1');
 ok(join(':', Devel::PPPort::xsreturn(1)), 'test1:test2');
+
+ok(Devel::PPPort::PERL_ABS(42), 42);
+ok(Devel::PPPort::PERL_ABS(-13), 13);
+
+ok(Devel::PPPort::SVf(42), $] >= 5.004 ? '[42]' : '42');
+ok(Devel::PPPort::SVf('abc'), $] >= 5.004 ? '[abc]' : 'abc');
 

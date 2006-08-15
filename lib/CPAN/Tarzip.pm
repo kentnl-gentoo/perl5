@@ -4,7 +4,7 @@ use strict;
 use vars qw($VERSION @ISA $BUGHUNTING);
 use CPAN::Debug;
 use File::Basename ();
-$VERSION = sprintf "%.2f", substr(q$Rev: 336 $,4)/100;
+$VERSION = sprintf "%.6f", substr(q$Rev: 714 $,4)/1000000 + 5.4;
 # module is internal to CPAN.pm
 
 @ISA = qw(CPAN::Debug);
@@ -28,7 +28,7 @@ sub new {
         $bzip2 = File::Which::which("bzip2");
       }
       if ($bzip2) {
-        $me->{UNGZIPPRG} = $bzip2;
+        $me->{UNGZIPPRG} = $bzip2 || "bzip2";
       } else {
         $CPAN::Frontend->mydie(qq{
 CPAN.pm needs the external program bzip2 in order to handle '$file'.
@@ -39,7 +39,7 @@ program.
     }
   } else {
     # yes, we let gzip figure it out in *any* other case
-    $me->{UNGZIPPRG} = $CPAN::Config->{gzip};
+    $me->{UNGZIPPRG} = $CPAN::Config->{gzip} || "gzip";
   }
   bless $me, $class;
 }
@@ -60,7 +60,8 @@ sub gzip {
     $fhw->close;
     return 1;
   } else {
-    system(qq{$self->{UNGZIPPRG} -c "$read" > "$write"})==0;
+    my $command = CPAN::HandleConfig->safe_quote($self->{UNGZIPPRG});
+    system(qq{$command -c "$read" > "$write"})==0;
   }
 }
 
@@ -82,14 +83,17 @@ sub gunzip {
     $fhw->close;
     return 1;
   } else {
-    system(qq{$self->{UNGZIPPRG} -dc "$read" > "$write"})==0;
+    my $command = CPAN::HandleConfig->safe_quote($self->{UNGZIPPRG});
+    system(qq{$command -dc "$read" > "$write"})==0;
   }
 }
 
 
 sub gtest {
   my($self) = @_;
-  my $read = $self->{FILE};
+  return $self->{GTEST} if exists $self->{GTEST};
+  my $read = $self->{FILE} or die;
+  my $success;
   # After I had reread the documentation in zlib.h, I discovered that
   # uncompressed files do not lead to an gzerror (anymore?).
   if ( $CPAN::META->has_inst("Compress::Zlib") ) {
@@ -104,17 +108,18 @@ sub gtest {
         $buffer = "";
     }
     my $err = $gz->gzerror;
-    my $success = ! $err || $err == Compress::Zlib::Z_STREAM_END();
+    $success = ! $err || $err == Compress::Zlib::Z_STREAM_END();
     if ($len == -s $read){
         $success = 0;
         CPAN->debug("hit an uncompressed file") if $CPAN::DEBUG;
     }
     $gz->gzclose();
     CPAN->debug("err[$err]success[$success]") if $CPAN::DEBUG;
-    return $success;
   } else {
-      return system(qq{$self->{UNGZIPPRG} -dt "$read"})==0;
+    my $command = CPAN::HandleConfig->safe_quote($self->{UNGZIPPRG});
+    $success = 0==system(qq{$command -qdt "$read"});
   }
+  return $self->{GTEST} = $success;
 }
 
 
@@ -122,17 +127,24 @@ sub TIEHANDLE {
   my($class,$file) = @_;
   my $ret;
   $class->debug("file[$file]");
-  if ($CPAN::META->has_inst("Compress::Zlib")) {
+  my $self = $class->new($file);
+  if (0) {
+  } elsif (!$self->gtest) {
+    my $fh = FileHandle->new($file) or die "Could not open file[$file]: $!";
+    binmode $fh;
+    $self->{FH} = $fh;
+  } elsif ($CPAN::META->has_inst("Compress::Zlib")) {
     my $gz = Compress::Zlib::gzopen($file,"rb") or
 	die "Could not gzopen $file";
-    $ret = bless {GZ => $gz}, $class;
+    $self->{GZ} = $gz;
   } else {
-    my $pipe = "$CPAN::Config->{gzip} -dc $file |";
+    my $gzip = CPAN::HandleConfig->safe_quote($self->{UNGZIPPRG});
+    my $pipe = "$gzip -dc $file |";
     my $fh = FileHandle->new($pipe) or die "Could not pipe[$pipe]: $!";
     binmode $fh;
-    $ret = bless {FH => $fh}, $class;
+    $self->{FH} = $fh;
   }
-  $ret;
+  $self;
 }
 
 
@@ -189,7 +201,7 @@ sub untar {
     $prefer=2;
   } elsif (MM->maybe_command($self->{UNGZIPPRG})
            &&
-           MM->maybe_command($CPAN::Config->{'tar'})) {
+           MM->maybe_command($CPAN::Config->{tar})) {
     # should be default until Archive::Tar handles bzip2
     $prefer = 1;
   } elsif (
@@ -211,11 +223,13 @@ installed. Can't continue.
   if ($prefer==1) { # 1 => external gzip+tar
     my($system);
     my $is_compressed = $self->gtest();
+    my $tarcommand = CPAN::HandleConfig->safe_quote($CPAN::Config->{tar}) || "tar";
     if ($is_compressed) {
-      $system = qq{$self->{UNGZIPPRG} -dc }.
-          qq{< "$file" | $CPAN::Config->{tar} xvf -};
+      my $command = CPAN::HandleConfig->safe_quote($self->{UNGZIPPRG});
+      $system = qq{$command -dc }.
+          qq{< "$file" | $tarcommand xvf -};
     } else {
-      $system = qq{$CPAN::Config->{tar} xvf "$file"};
+      $system = qq{$tarcommand xvf "$file"};
     }
     if (system($system) != 0) {
       # people find the most curious tar binaries that cannot handle
@@ -231,7 +245,7 @@ installed. Can't continue.
         }
         $file = $ungzf;
       }
-      $system = qq{$CPAN::Config->{tar} xvf "$file"};
+      $system = qq{$tarcommand xvf "$file"};
       $CPAN::Frontend->myprint(qq{Using Tar:$system:\n});
       if (system($system)==0) {
         $CPAN::Frontend->myprint(qq{Untarred $file successfully\n});

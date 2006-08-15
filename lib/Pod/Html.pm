@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.0504;
+$VERSION = 1.07;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 @EXPORT_OK = qw(anchorify);
@@ -32,9 +32,20 @@ Converts files from pod format (see L<perlpod>) to HTML format.  It
 can automatically generate indexes and cross-references, and it keeps
 a cache of things it knows how to cross-reference.
 
-=head1 ARGUMENTS
+=head1 FUNCTIONS
 
-Pod::Html takes the following arguments:
+=head2 pod2html
+
+    pod2html("pod2html",
+             "--podpath=lib:ext:pod:vms",
+             "--podroot=/usr/src/perl",
+             "--htmlroot=/perl/nmanual",
+             "--libpods=perlfunc:perlguts:perlvar:perlrun:perlop",
+             "--recurse",
+             "--infile=foo.pod",
+             "--outfile=/perl/nmanual/foo.html");
+
+pod2html takes the following arguments:
 
 =over 4
 
@@ -187,16 +198,20 @@ Display progress messages.  By default, they won't be displayed.
 
 =back
 
-=head1 EXAMPLE
+=head2 htmlify
 
-    pod2html("pod2html",
-	     "--podpath=lib:ext:pod:vms",
-	     "--podroot=/usr/src/perl",
-	     "--htmlroot=/perl/nmanual",
-	     "--libpods=perlfunc:perlguts:perlvar:perlrun:perlop",
-	     "--recurse",
-	     "--infile=foo.pod",
-	     "--outfile=/perl/nmanual/foo.html");
+    htmlify($heading);
+
+Converts a pod section specification to a suitable section specification
+for HTML. Note that we keep spaces and special characters except 
+C<", ?> (Netscape problem) and the hyphen (writer's problem...).
+
+=head2 anchorify
+
+    anchorify(@heading);
+
+Similar to C<htmlify()>, but turns non-alphanumerics into underscores.  Note
+that C<anchorify()> is not exported by default.
 
 =head1 ENVIRONMENT
 
@@ -252,7 +267,6 @@ my %Items = ();			# associative array used to find the location
 
 my %Local_Items;
 my $Is83;
-my $PTQuote;
 
 my $Curdir = File::Spec->curdir;
 
@@ -303,7 +317,6 @@ sub init_globals {
 				#   to prevent the first <hr /> directive.
     $Paragraph = '';		# which paragraph we're processing (used
 				#   for error messages)
-    $PTQuote = 0;               # status of double-quote conversion
     %Sections = ();		# sections within this page
 
     %Local_Items = ();
@@ -498,8 +511,6 @@ END_OF_HEAD
     my $need_dd = 0;
     warn "Converting input file $Podfile\n" if $Verbose;
     foreach my $i (0..$#poddata){
-        $PTQuote = 0; # status of quote conversion
-
 	$_ = $poddata[$i];
 	$Paragraph = $i+1;
 	if (/^(=.*)/s) {	# is it a pod directive?
@@ -1393,12 +1404,12 @@ sub process_pre {
 #
 sub pure_text($){
     my $text = shift();
-    process_puretext( $text, \$PTQuote, 1 );
+    process_puretext( $text, 1 );
 }
 
 sub inIS_text($){
     my $text = shift();
-    process_puretext( $text, \$PTQuote, 0 );
+    process_puretext( $text, 0 );
 }
 
 #
@@ -1406,20 +1417,13 @@ sub inIS_text($){
 #  double-quotes and handling implicit C<> links.
 #
 sub process_puretext {
-    my($text, $quote, $notinIS) = @_;
+    my($text, $notinIS) = @_;
 
     ## Guessing at func() or [\$\@%&]*var references in plain text is destined
     ## to produce some strange looking ref's. uncomment to disable:
     ## $notinIS = 0;
 
     my(@words, $lead, $trail);
-
-    # convert double-quotes to single-quotes
-    if( $$quote && $text =~ s/"/''/s ){
-        $$quote = 0;
-    }
-    while ($text =~ s/"([^"]*)"/``$1''/sg) {};
-    $$quote = 1 if $text =~ s/"/``/s;
 
     # keep track of leading and trailing white-space
     $lead  = ($text =~ s/\A(\s+)//s ? $1 : "");
@@ -1486,6 +1490,7 @@ sub process_text {
     return if $Ignore;
     my( $tref ) = @_;
     my $res = process_text1( 0, $tref );
+    $res =~ s/\s+$//s;
     $$tref = $res;
 }
 
@@ -1821,10 +1826,9 @@ sub page_sect($$) {
 	    $section = "#$section" if $section;
             ### print STDERR "...section=$section\n";
 
-	    # check if there is a .pod with the page name
-	    if ($Pages{$page} =~ /([^:]*)\.pod:/) {
-		$link = "$Htmlroot/$1.html$section";
-	    } elsif ($Pages{$page} =~ /([^:]*)\.pm:/) {
+	    # check if there is a .pod with the page name.
+	    # for L<Foo>, Foo.(pod|pm) is preferred to A/Foo.(pod|pm)
+	    if ($Pages{$page} =~ /([^:]*)\.(?:pod|pm):/) {
 		$link = "$Htmlroot/$1.html$section";
 	    } else {
 		$link = "";
@@ -2026,7 +2030,7 @@ sub depod1($;$$){
   return $res unless defined $$rstr;
   if( ! defined( $func ) ){
       # skip to next begin of an interior sequence
-      while( $$rstr =~ s/\A(.*?)([BCEFILSXZ])<(<+[^\S\n]+)?// ){
+      while( $$rstr =~ s/\A(.*?)([BCEFILSXZ])<(<+[^\S\n]+)?//s ){
          # recurse into its text
 	  $res .= $1 . depod1( $rstr, $2, closing $3);
       }
@@ -2045,7 +2049,7 @@ sub depod1($;$$){
       # all others: either recurse into new function or
       # terminate at closing angle bracket
       my $term = pattern $closing;
-      while( $$rstr =~ s/\A(.*?)(([BCEFILSXZ])<(<+[^\S\n]+)?|$term)// ){
+      while( $$rstr =~ s/\A(.*?)(([BCEFILSXZ])<(<+[^\S\n]+)?|$term)//s ){
 	  $res .= $1;
 	  last unless $3;
           $res .= depod1( $rstr, $3, closing $4 );
@@ -2082,7 +2086,7 @@ sub fragment_id {
 
 	# honour the perlfunc manpage: func [PAR[,[ ]PAR]...]
 	# and some funnies with ... Module ...
-	return $1 if $text =~ m{^([a-z\d_]+)(\s+[A-Z\d,/& ]+)?$};
+	return $1 if $text =~ m{^([a-z\d_]+)(\s+[A-Z,/& ][A-Z\d,/& ]*)?$};
 	return $1 if $text =~ m{^([a-z\d]+)\s+Module(\s+[A-Z\d,/& ]+)?$};
 
 	# text? normalize!

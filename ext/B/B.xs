@@ -247,6 +247,73 @@ make_sv_object(pTHX_ SV *arg, SV *sv)
 }
 
 static SV *
+make_temp_object(pTHX_ SV *arg, SV *temp)
+{
+    SV *target;
+    const char *const type = svclassnames[SvTYPE(temp)];
+    const IV iv = PTR2IV(temp);
+
+    target = newSVrv(arg, type);
+    sv_setiv(target, iv);
+
+    /* Need to keep our "temp" around as long as the target exists.
+       Simplest way seems to be to hang it from magic, and let that clear
+       it up.  No vtable, so won't actually get in the way of anything.  */
+    sv_magicext(target, temp, PERL_MAGIC_sv, NULL, NULL, 0);
+    /* magic object has had its reference count increased, so we must drop
+       our reference.  */
+    SvREFCNT_dec(temp);
+    return arg;
+}
+
+static SV *
+make_warnings_object(pTHX_ SV *arg, STRLEN *warnings)
+{
+    const char *type = 0;
+    dMY_CXT;
+    IV iv = sizeof(specialsv_list)/sizeof(SV*);
+
+    /* Counting down is deliberate. Before the split between make_sv_object
+       and make_warnings_obj there appeared to be a bug - Nullsv and pWARN_STD
+       were both 0, so you could never get a B::SPECIAL for pWARN_STD  */
+
+    while (iv--) {
+	if ((SV*)warnings == specialsv_list[iv]) {
+	    type = "B::SPECIAL";
+	    break;
+	}
+    }
+    if (type) {
+	sv_setiv(newSVrv(arg, type), iv);
+	return arg;
+    } else {
+	/* B assumes that warnings are a regular SV. Seems easier to keep it
+	   happy by making them into a regular SV.  */
+	return make_temp_object(aTHX_ arg,
+				newSVpvn((char *)(warnings + 1), *warnings));
+    }
+}
+
+static SV *
+make_cop_io_object(pTHX_ SV *arg, COP *cop)
+{
+    if (CopHINTS_get(cop) & HINT_LEXICAL_IO) {
+	/* I feel you should be able to simply SvREFCNT_inc the return value
+	   from this, but if you do (and restore the line
+	   my $ioix = $cop->io->ix;
+	   in B::COP::bsave in Bytecode.pm, then you get errors about
+	   "attempt to free temp prematurely ... during global destruction.
+	   The SV's flags are consistent with the error, but quite how the
+	   temp escaped from the save stack is not clear.  */
+	SV *value = Perl_refcounted_he_fetch(aTHX_ cop->cop_hints_hash,
+					     0, "open", 4, 0, 0);
+	return make_temp_object(aTHX_ arg, newSVsv(value));
+    } else {
+	return make_sv_object(aTHX_ arg, NULL);
+    }
+}
+
+static SV *
 make_mg_object(pTHX_ SV *arg, MAGIC *mg)
 {
     sv_setiv(newSVrv(arg, "B::MAGIC"), PTR2IV(mg));
@@ -510,9 +577,9 @@ BOOT:
     specialsv_list[1] = &PL_sv_undef;
     specialsv_list[2] = &PL_sv_yes;
     specialsv_list[3] = &PL_sv_no;
-    specialsv_list[4] = pWARN_ALL;
-    specialsv_list[5] = pWARN_NONE;
-    specialsv_list[6] = pWARN_STD;
+    specialsv_list[4] = (SV *) pWARN_ALL;
+    specialsv_list[5] = (SV *) pWARN_NONE;
+    specialsv_list[6] = (SV *) pWARN_STD;
 #if PERL_VERSION <= 8
 #  define CVf_ASSERTION	0
 #endif
@@ -528,6 +595,7 @@ BOOT:
 #define B_main_root()	PL_main_root
 #define B_main_start()	PL_main_start
 #define B_amagic_generation()	PL_amagic_generation
+#define B_sub_generation()	PL_sub_generation
 #define B_defstash()	PL_defstash
 #define B_curstash()	PL_curstash
 #define B_dowarn()	PL_dowarn
@@ -573,6 +641,9 @@ B_main_start()
 
 long 
 B_amagic_generation()
+
+long
+B_sub_generation()
 
 B::AV
 B_comppadlist()
@@ -1053,10 +1124,9 @@ LOOP_lastop(o)
 #define COP_file(o)	CopFILE(o)
 #define COP_filegv(o)	CopFILEGV(o)
 #define COP_cop_seq(o)	o->cop_seq
-#define COP_arybase(o)	o->cop_arybase
+#define COP_arybase(o)	CopARYBASE_get(o)
 #define COP_line(o)	CopLINE(o)
-#define COP_warnings(o)	o->cop_warnings
-#define COP_io(o)	o->cop_io
+#define COP_hints(o)	CopHINTS_get(o)
 
 MODULE = B	PACKAGE = B::COP		PREFIX = COP_
 
@@ -1093,12 +1163,22 @@ U32
 COP_line(o)
 	B::COP	o
 
-B::SV
+void
 COP_warnings(o)
 	B::COP	o
+	PPCODE:
+	ST(0) = make_warnings_object(aTHX_ sv_newmortal(), o->cop_warnings);
+	XSRETURN(1);
 
-B::SV
+void
 COP_io(o)
+	B::COP	o
+	PPCODE:
+	ST(0) = make_cop_io_object(aTHX_ sv_newmortal(), o);
+	XSRETURN(1);
+
+U32
+COP_hints(o)
 	B::COP	o
 
 MODULE = B	PACKAGE = B::SV
@@ -1319,7 +1399,7 @@ IV
 MgREGEX(mg)
 	B::MAGIC	mg
     CODE:
-        if( mg->mg_type == 'r' ) {
+        if(mg->mg_type == PERL_MAGIC_qr) {
             RETVAL = MgREGEX(mg);
         }
         else {
@@ -1332,7 +1412,7 @@ SV*
 precomp(mg)
         B::MAGIC        mg
     CODE:
-        if (mg->mg_type == 'r') {
+        if (mg->mg_type == PERL_MAGIC_qr) {
             REGEXP* rx = (REGEXP*)mg->mg_obj;
             RETVAL = Nullsv;
             if( rx )
@@ -1636,10 +1716,18 @@ CvSTASH(cv)
 B::OP
 CvSTART(cv)
 	B::CV	cv
+    CODE:
+	RETVAL = CvISXSUB(cv) ? NULL : CvSTART(cv);
+    OUTPUT:
+	RETVAL
 
 B::OP
 CvROOT(cv)
 	B::CV	cv
+    CODE:
+	RETVAL = CvISXSUB(cv) ? NULL : CvROOT(cv);
+    OUTPUT:
+	RETVAL
 
 B::GV
 CvGV(cv)
@@ -1669,7 +1757,7 @@ void
 CvXSUB(cv)
 	B::CV	cv
     CODE:
-	ST(0) = sv_2mortal(newSViv(PTR2IV(CvXSUB(cv))));
+	ST(0) = sv_2mortal(newSViv(CvISXSUB(cv) ? PTR2IV(CvXSUB(cv)) : 0));
 
 
 void
@@ -1678,7 +1766,7 @@ CvXSUBANY(cv)
     CODE:
 	ST(0) = CvCONST(cv) ?
 	    make_sv_object(aTHX_ sv_newmortal(),(SV *)CvXSUBANY(cv).any_ptr) :
-	    sv_2mortal(newSViv(CvXSUBANY(cv).any_iv));
+	    sv_2mortal(newSViv(CvISXSUB(cv) ? CvXSUBANY(cv).any_iv : 0));
 
 MODULE = B    PACKAGE = B::CV
 

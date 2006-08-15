@@ -98,6 +98,11 @@
 #  define THREAD_CREATE_NEEDS_STACK (32*1024)
 #endif
 
+#ifdef __VMS
+  /* Default is 1024 on VAX, 8192 otherwise */
+#  define THREAD_CREATE_NEEDS_STACK (32*1024)
+#endif
+
 #ifdef I_MACH_CTHREADS
 
 /* cthreads interface */
@@ -333,8 +338,7 @@
 #ifndef ALLOC_THREAD_KEY
 #  define ALLOC_THREAD_KEY \
     STMT_START {						\
-	int _eC_;						\
-	if ((_eC_ = pthread_key_create(&PL_thr_key, 0))) {	\
+	if (pthread_key_create(&PL_thr_key, 0)) {		\
             write(2, STR_WITH_LEN("panic: pthread_key_create failed\n")); \
 	    exit(1);						\
 	}							\

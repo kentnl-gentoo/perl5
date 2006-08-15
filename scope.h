@@ -49,13 +49,16 @@
 #define SAVEt_BOOL		38
 #define SAVEt_SET_SVFLAGS	39
 #define SAVEt_SAVESWITCHSTACK	40
+#define SAVEt_COP_ARYBASE	41
+#define SAVEt_RE_STATE		42
+#define SAVEt_COMPILE_WARNINGS	43
 
 #ifndef SCOPE_SAVES_SIGNAL_MASK
 #define SCOPE_SAVES_SIGNAL_MASK 0
 #endif
 
-#define SSCHECK(need) if (PL_savestack_ix + (need) > PL_savestack_max) savestack_grow()
-#define SSGROW(need) if (PL_savestack_ix + (need) > PL_savestack_max) savestack_grow_cnt(need)
+#define SSCHECK(need) if (PL_savestack_ix + (I32)(need) > PL_savestack_max) savestack_grow()
+#define SSGROW(need) if (PL_savestack_ix + (I32)(need) > PL_savestack_max) savestack_grow_cnt(need)
 #define SSPUSHINT(i) (PL_savestack[PL_savestack_ix++].any_i32 = (I32)(i))
 #define SSPUSHLONG(i) (PL_savestack[PL_savestack_ix++].any_long = (long)(i))
 #define SSPUSHBOOL(p) (PL_savestack[PL_savestack_ix++].any_bool = (p))
@@ -111,37 +114,33 @@ Closing bracket on a callback.  See C<ENTER> and L<perlcall>.
 #endif
 #define LEAVE_SCOPE(old) if (PL_savestack_ix > old) leave_scope(old)
 
-/*
- * Not using SOFT_CAST on SAVESPTR, SAVEGENERICSV and SAVEFREESV
- * because these are used for several kinds of pointer values
- */
-#define SAVEI8(i)	save_I8(SOFT_CAST(I8*)&(i))
-#define SAVEI16(i)	save_I16(SOFT_CAST(I16*)&(i))
-#define SAVEI32(i)	save_I32(SOFT_CAST(I32*)&(i))
-#define SAVEINT(i)	save_int(SOFT_CAST(int*)&(i))
-#define SAVEIV(i)	save_iv(SOFT_CAST(IV*)&(i))
-#define SAVELONG(l)	save_long(SOFT_CAST(long*)&(l))
-#define SAVEBOOL(b)	save_bool(SOFT_CAST(bool*)&(b))
+#define SAVEI8(i)	save_I8((I8*)&(i))
+#define SAVEI16(i)	save_I16((I16*)&(i))
+#define SAVEI32(i)	save_I32((I32*)&(i))
+#define SAVEINT(i)	save_int((int*)&(i))
+#define SAVEIV(i)	save_iv((IV*)&(i))
+#define SAVELONG(l)	save_long((long*)&(l))
+#define SAVEBOOL(b)	save_bool((bool*)&(b))
 #define SAVESPTR(s)	save_sptr((SV**)&(s))
-#define SAVEPPTR(s)	save_pptr(SOFT_CAST(char**)&(s))
+#define SAVEPPTR(s)	save_pptr((char**)&(s))
 #define SAVEVPTR(s)	save_vptr((void*)&(s))
 #define SAVEPADSV(s)	save_padsv(s)
 #define SAVEFREESV(s)	save_freesv((SV*)(s))
 #define SAVEMORTALIZESV(s)	save_mortalizesv((SV*)(s))
-#define SAVEFREEOP(o)	save_freeop(SOFT_CAST(OP*)(o))
-#define SAVEFREEPV(p)	save_freepv(SOFT_CAST(char*)(p))
-#define SAVECLEARSV(sv)	save_clearsv(SOFT_CAST(SV**)&(sv))
+#define SAVEFREEOP(o)	save_freeop((OP*)(o))
+#define SAVEFREEPV(p)	save_freepv((char*)(p))
+#define SAVECLEARSV(sv)	save_clearsv((SV**)&(sv))
 #define SAVEGENERICSV(s)	save_generic_svref((SV**)&(s))
 #define SAVEGENERICPV(s)	save_generic_pvref((char**)&(s))
 #define SAVESHAREDPV(s)		save_shared_pvref((char**)&(s))
 #define SAVESETSVFLAGS(sv,mask,val)	save_set_svflags(sv,mask,val)
 #define SAVEDELETE(h,k,l) \
-	  save_delete(SOFT_CAST(HV*)(h), SOFT_CAST(char*)(k), (I32)(l))
+	  save_delete((HV*)(h), (char*)(k), (I32)(l))
 #define SAVEDESTRUCTOR(f,p) \
-	  save_destructor((DESTRUCTORFUNC_NOCONTEXT_t)(f), SOFT_CAST(void*)(p))
+	  save_destructor((DESTRUCTORFUNC_NOCONTEXT_t)(f), (void*)(p))
 
 #define SAVEDESTRUCTOR_X(f,p) \
-	  save_destructor_x((DESTRUCTORFUNC_t)(f), SOFT_CAST(void*)(p))
+	  save_destructor_x((DESTRUCTORFUNC_t)(f), (void*)(p))
 
 #define SAVESTACK_POS() \
     STMT_START {				\
@@ -154,11 +153,17 @@ Closing bracket on a callback.  See C<ENTER> and L<perlcall>.
 
 #define SAVEHINTS() \
     STMT_START {					\
-	SSCHECK(3);					\
+	SSCHECK(4);					\
 	if (PL_hints & HINT_LOCALIZE_HH) {		\
 	    SSPUSHPTR(GvHV(PL_hintgv));			\
-	    GvHV(PL_hintgv) = newHVhv(GvHV(PL_hintgv));	\
+	    GvHV(PL_hintgv) = Perl_hv_copy_hints_hv(aTHX_ GvHV(PL_hintgv)); \
 	}						\
+	if (PL_compiling.cop_hints_hash) {		\
+	    HINTS_REFCNT_LOCK;				\
+	    PL_compiling.cop_hints_hash->refcounted_he_refcnt++;	\
+	    HINTS_REFCNT_UNLOCK;			\
+	}						\
+	SSPUSHPTR(PL_compiling.cop_hints_hash);		\
 	SSPUSHINT(PL_hints);				\
 	SSPUSHINT(SAVEt_HINTS);				\
     } STMT_END
@@ -178,6 +183,26 @@ Closing bracket on a callback.  See C<ENTER> and L<perlcall>.
 	SSPUSHINT(SAVEt_SAVESWITCHSTACK);		\
 	SWITCHSTACK((f),(t));				\
 	PL_curstackinfo->si_stack = (t);		\
+    } STMT_END
+
+#define SAVECOPARYBASE(c) \
+    STMT_START {					\
+	SSCHECK(3);					\
+	SSPUSHINT(CopARYBASE_get(c));			\
+	SSPUSHPTR(c);					\
+	SSPUSHINT(SAVEt_COP_ARYBASE);			\
+    } STMT_END
+
+/* Need to do the cop warnings like this, rather than a "SAVEFREESHAREDPV",
+   because realloc() means that the value can actually change. Possibly
+   could have done savefreesharedpvREF, but this way actually seems cleaner,
+   as it simplifies the code that does the saves, and reduces the load on the
+   save stack.  */
+#define SAVECOMPILEWARNINGS() \
+    STMT_START {					\
+	SSCHECK(2);					\
+	SSPUSHPTR(PL_compiling.cop_warnings);		\
+	SSPUSHINT(SAVEt_COMPILE_WARNINGS);		\
     } STMT_END
 
 #ifdef USE_ITHREADS

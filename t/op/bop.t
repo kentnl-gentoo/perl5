@@ -15,7 +15,7 @@ BEGIN {
 # If you find tests are failing, please try adding names to tests to track
 # down where the failure is, and supply your new names as a patch.
 # (Just-in-time test naming)
-plan tests => 148;
+plan tests => 161;
 
 # numerics
 ok ((0xdead & 0xbeef) == 0x9ead);
@@ -339,4 +339,92 @@ SKIP: {
     $b = "bb\x{100}";
     $b &= "b";
     ok($b =~ /b+$/, 'Unicode "b" is NUL-terminated');
+}
+
+{
+    $a = chr(0x101) x 0x101;
+    $b = chr(0x0FF) x 0x0FF;
+
+    $c = $a | $b;
+    is($c, chr(0x1FF) x 0xFF . chr(0x101) x 2);
+
+    $c = $b | $a;
+    is($c, chr(0x1FF) x 0xFF . chr(0x101) x 2);
+
+    $c = $a & $b;
+    is($c, chr(0x001) x 0x0FF);
+
+    $c = $b & $a;
+    is($c, chr(0x001) x 0x0FF);
+
+    $c = $a ^ $b;
+    is($c, chr(0x1FE) x 0x0FF . chr(0x101) x 2);
+
+    $c = $b ^ $a;
+    is($c, chr(0x1FE) x 0x0FF . chr(0x101) x 2);
+}
+
+{
+    $a = chr(0x101) x 0x101;
+    $b = chr(0x0FF) x 0x0FF;
+
+    $a |= $b;
+    is($a, chr(0x1FF) x 0xFF . chr(0x101) x 2);
+}
+
+{
+    $a = chr(0x101) x 0x101;
+    $b = chr(0x0FF) x 0x0FF;
+
+    $b |= $a;
+    is($b, chr(0x1FF) x 0xFF . chr(0x101) x 2);
+}
+
+{
+    $a = chr(0x101) x 0x101;
+    $b = chr(0x0FF) x 0x0FF;
+
+    $a &= $b;
+    is($a, chr(0x001) x 0x0FF);
+}
+
+{
+    $a = chr(0x101) x 0x101;
+    $b = chr(0x0FF) x 0x0FF;
+
+    $b &= $a;
+    is($b, chr(0x001) x 0x0FF);
+}
+
+{
+    $a = chr(0x101) x 0x101;
+    $b = chr(0x0FF) x 0x0FF;
+
+    $a ^= $b;
+    is($a, chr(0x1FE) x 0x0FF . chr(0x101) x 2);
+}
+
+{
+    $a = chr(0x101) x 0x101;
+    $b = chr(0x0FF) x 0x0FF;
+
+    $b ^= $a;
+    is($b, chr(0x1FE) x 0x0FF . chr(0x101) x 2);
+}
+
+# update to pp_complement() via Coverity
+SKIP: {
+  # UTF-EBCDIC is limited to 0x7fffffff and can't encode ~0.
+  skip "EBCDIC" if $Is_EBCDIC;
+
+  my $str = "\x{10000}\x{800}";
+  # U+10000 is four bytes in UTF-8/UTF-EBCDIC.
+  # U+0800 is three bytes in UTF-8/UTF-EBCDIC.
+
+  no warnings "utf8";
+  { use bytes; $str =~ s/\C\C\z//; }
+
+  # it's really bogus that (~~malformed) is \0.
+  my $ref = "\x{10000}\0";
+  is(~~$str, $ref);
 }

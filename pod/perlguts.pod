@@ -1038,6 +1038,8 @@ The current kinds of Magic Virtual Tables are:
     e  PERL_MAGIC_envelem        vtbl_envelem   %ENV hash element
     f  PERL_MAGIC_fm             vtbl_fm        Formline ('compiled' format)
     g  PERL_MAGIC_regex_global   vtbl_mglob     m//g target / study()ed string
+    H  PERL_MAGIC_hints          vtbl_sig       %^H hash
+    h  PERL_MAGIC_hintselem      vtbl_hintselem %^H hash element
     I  PERL_MAGIC_isa            vtbl_isa       @ISA array
     i  PERL_MAGIC_isaelem        vtbl_isaelem   @ISA array element
     k  PERL_MAGIC_nkeys          vtbl_nkeys     scalar(keys()) lvalue
@@ -1060,7 +1062,6 @@ The current kinds of Magic Virtual Tables are:
     y  PERL_MAGIC_defelem        vtbl_defelem   Shadow "foreach" iterator
 						variable / smart parameter
 						vivification
-    *  PERL_MAGIC_glob           vtbl_glob      GV (typeglob)
     #  PERL_MAGIC_arylen         vtbl_arylen    Array length ($#ary)
     .  PERL_MAGIC_pos            vtbl_pos       pos() lvalue
     <  PERL_MAGIC_backref        vtbl_backref   back pointer to a weak ref 
@@ -1109,6 +1110,17 @@ sv_magic, so you can safely allocate it on the stack.
         uf.uf_set   = &my_set_fn;
         uf.uf_index = 0;
         sv_magic(sv, 0, PERL_MAGIC_uvar, (char*)&uf, sizeof(uf));
+
+Attaching C<PERL_MAGIC_uvar> to arrays is permissible but has no effect.
+
+For hashes there is a specialized hook that gives control over hash
+keys (but not values).  This hook calls C<PERL_MAGIC_uvar> 'get' magic
+if the "set" function in the C<ufuncs> structure is NULL.  The hook
+is activated whenever the hash is accessed with a key specified as
+an C<SV> through the functions C<hv_store_ent>, C<hv_fetch_ent>,
+C<hv_delete_ent>, and C<hv_exists_ent>.  Accessing the key as a string
+through the functions without the C<..._ent> suffix circumvents the
+hook.  See L<Hash::Util::Fieldhash/Guts> for a detailed description.
 
 Note that because multiple extensions may be using C<PERL_MAGIC_ext>
 or C<PERL_MAGIC_uvar> magic, it is important for extensions to take
@@ -1879,13 +1891,13 @@ interpreters, with one interpreter represented either as a C structure,
 or inside a thread-specific structure.  These structures contain all
 the context, the state of that interpreter.
 
-Two macros control the major Perl build flavors: MULTIPLICITY and
-USE_5005THREADS.  The MULTIPLICITY build has a C structure
-that packages all the interpreter state, and there is a similar thread-specific
-data structure under USE_5005THREADS.  In both cases,
-PERL_IMPLICIT_CONTEXT is also normally defined, and enables the
-support for passing in a "hidden" first argument that represents all three
-data structures.
+One macro controls the major Perl build flavor: MULTIPLICITY. The
+MULTIPLICITY build has a C structure that packages all the interpreter
+state. With multiplicity-enabled perls, PERL_IMPLICIT_CONTEXT is also
+normally defined, and enables the support for passing in a "hidden" first
+argument that represents all three data structures. MULTIPLICITY makes
+mutli-threaded perls possible (with the ithreads threading model, related
+to the macro USE_ITHREADS.)
 
 Two other "encapsulation" macros are the PERL_GLOBAL_STRUCT and
 PERL_GLOBAL_STRUCT_PRIVATE (the latter turns on the former, and the
@@ -1901,6 +1913,12 @@ correspondingly tear it down after perl_free() using Perl_free_global_struct(),
 please see F<miniperlmain.c> for usage details.  You may also need
 to use C<dVAR> in your coding to "declare the global variables"
 when you are using them.  dTHX does this for you automatically.
+
+To see whether you have non-const data you can use a BSD-compatible C<nm>:
+
+  nm libperl.a | grep -v ' [TURtr] '
+
+If this displays any C<D> or C<d> symbols, you have non-const data.
 
 For backward compatibility reasons defining just PERL_GLOBAL_STRUCT
 doesn't actually hide all symbols inside a big global struct: some
@@ -2141,8 +2159,8 @@ Just as PERL_IMPLICIT_CONTEXT provides a way to bundle up everything
 that the interpreter knows about itself and pass it around, so too are
 there plans to allow the interpreter to bundle up everything it knows
 about the environment it's running on.  This is enabled with the
-PERL_IMPLICIT_SYS macro.  Currently it only works with USE_ITHREADS
-and USE_5005THREADS on Windows (see inside iperlsys.h).
+PERL_IMPLICIT_SYS macro.  Currently it only works with USE_ITHREADS on
+Windows.
 
 This allows the ability to provide an extra pointer (called the "host"
 environment) for all the system calls.  This makes it possible for

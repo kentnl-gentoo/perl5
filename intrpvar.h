@@ -70,7 +70,6 @@ PERLVAR(Iformfeed,	SV *)		/* $^L */
 
 PERLVARI(Imaxsysfd,	I32,	MAXSYSFD)
 					/* top fd to pass to subprocesses */
-PERLVAR(Imultiline,	int)		/* $*--do strings hold >1 line? */
 PERLVAR(Istatusvalue,	I32)		/* $? */
 PERLVAR(Iexit_flags,	U8)		/* was exit() unexpected, etc. */
 #ifdef VMS
@@ -203,7 +202,7 @@ PERLVAR(Imodglobal,	HV *)		/* per-interp module data */
 
 /* these used to be in global before 5.004_68 */
 PERLVARI(Iprofiledata,	U32 *,	NULL)	/* table of ops, counts */
-PERLVARI(Irsfp,	PerlIO * VOL,	Nullfp) /* current source file pointer */
+PERLVARI(Irsfp,	PerlIO * VOL,	NULL)	/* current source file pointer */
 PERLVARI(Irsfp_filters,	AV *,	NULL)	/* keeps active source filters */
 
 PERLVAR(Icompiling,	COP)		/* compiling/done executing marker */
@@ -248,7 +247,7 @@ PERLVAR(Iosname,	char *)		/* operating system */
 
 PERLVAR(Isighandlerp,	Sighandler_t)
 
-PERLVARA(Ibody_roots,	SVt_LAST, void*) /* array of body roots */
+PERLVARA(Ibody_roots,	PERL_ARENA_ROOTS_SIZE, void*) /* array of body roots */
 
 PERLVAR(Inice_chunk,	char *)		/* a nice chunk of memory to reuse */
 PERLVAR(Inice_chunk_size,	U32)	/* how nice the chunk of memory is */
@@ -298,9 +297,26 @@ PERLVAR(Ilex_brackstack,char *)		/* what kind of brackets to pop */
 PERLVAR(Ilex_casestack,	char *)		/* what kind of case mods in effect */
 
 /* What we know when we're in LEX_KNOWNEXT state. */
+#ifdef PERL_MAD
+PERLVARA(Inexttoke,5,	NEXTTOKE)	/* value of next token, if any */
+PERLVAR(Ilasttoke,	I32)
+PERLVAR(Irealtokenstart,I32)
+PERLVAR(Ifaketokens,	I32)
+PERLVAR(Ithismad,	MADPROP *)
+PERLVAR(Ithistoken,	SV *)
+PERLVAR(Ithisopen,	SV *)
+PERLVAR(Ithisstuff,	SV *)
+PERLVAR(Ithisclose,	SV *)
+PERLVAR(Ithiswhite,	SV *)
+PERLVAR(Inextwhite,	SV *)
+PERLVAR(Iskipwhite,	SV *)
+PERLVAR(Iendwhite,	SV *)
+PERLVAR(Icurforce,	I32)
+#else
 PERLVARA(Inextval,5,	YYSTYPE)	/* value of next token, if any */
 PERLVARA(Inexttype,5,	I32)		/* type of next token */
 PERLVAR(Inexttoke,	I32)
+#endif
 
 PERLVAR(Ilinestr,	SV *)
 PERLVAR(Ibufptr,	char *)
@@ -414,7 +430,7 @@ PERLVAR(Iptr_table,	PTR_TBL_t*)
 #endif
 PERLVARI(Ibeginav_save, AV*, NULL)	/* save BEGIN{}s when compiling */
 
-PERLVARA(Ibody_arenaroots, SVt_LAST, void*) /* consolidated body-arena pointers */
+PERLVAR(Ibody_arenas, void*) /* pointer to list of body-arenas */
 
      /* 5.6.0 stopped here */
 
@@ -439,6 +455,12 @@ PERLVAR(Ireentrant_buffer, REENTR*)	/* here we store the _r buffers */
 
 PERLVARI(Isavebegin,     bool,	FALSE)	/* save BEGINs for compiler	*/
 
+#ifdef PERL_MAD
+PERLVARI(Imadskills,	bool, FALSE)	/* preserve all syntactic info */
+					/* (MAD = Misc Attribute Decoration) */
+PERLVARI(Ixmlfp, PerlIO *,NULL)
+#endif
+
 PERLVAR(Icustom_op_names, HV*)  /* Names of user defined ops */
 PERLVAR(Icustom_op_descs, HV*)  /* Descriptions of user defined ops */
 
@@ -448,7 +470,7 @@ PERLVARI(Iknown_layers, PerlIO_list_t *,NULL)
 PERLVARI(Idef_layerlist, PerlIO_list_t *,NULL)
 #endif
 
-PERLVARI(Iencoding,	SV*, Nullsv)		/* character encoding */
+PERLVARI(Iencoding,	SV*, NULL)		/* character encoding */
 
 PERLVAR(Idebug_pad,	struct perl_debug_pad)	/* always needed because of the re extension */
 
@@ -484,7 +506,14 @@ PERLVAR(Ireentrant_retint, int)	/* Integer return value from reentrant functions
 /* Hooks to shared SVs and locks. */
 PERLVARI(Isharehook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
 PERLVARI(Ilockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
-PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
+#ifdef NO_MATHOMS
+#  define PERL_UNLOCK_HOOK Perl_sv_nosharing
+#else
+/* This reference ensures that the mathoms are linked with perl */
+#  define PERL_UNLOCK_HOOK Perl_sv_nounlocking
+#endif
+PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(PERL_UNLOCK_HOOK))
+
 PERLVARI(Ithreadhook,	thrhook_proc_t,	MEMBER_TO_FPTR(Perl_nothreadhook))
 
 /* Force inclusion of both runops options */
@@ -508,11 +537,6 @@ PERLVARI(Irehash_seed, UV, 0)		/* 582 hash initializer */
 
 PERLVARI(Irehash_seed_set, bool, FALSE)	/* 582 hash initialized? */
 
-/* These two variables are needed to preserve 5.8.x bincompat because we can't
-   change function prototypes of two exported functions.  Probably should be
-   taken out of blead soon, and relevant prototypes changed.  */
-PERLVARI(Ifdscript, int, -1)	/* fd for script */
-PERLVARI(Isuidscript, int, -1)	/* fd for suid script */
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
 /* File descriptor to talk to the child which dumps scalars.  */
 PERLVARI(Idumper_fd, int, -1)
@@ -521,6 +545,17 @@ PERLVARI(Idumper_fd, int, -1)
 #ifdef PERL_IMPLICIT_CONTEXT
 PERLVARI(Imy_cxt_size, int, 0)		/* size of PL_my_cxt_list */
 PERLVARI(Imy_cxt_list, void **, NULL) /* per-module array of MY_CXT pointers */
+#endif
+
+#ifdef PERL_TRACK_MEMPOOL
+/* For use with the memory debugging code in util.c  */
+PERLVAR(Imemory_debug_header, struct perl_memory_debug_header)
+#endif
+
+#ifdef PERL_UTF8_CACHE_ASSERT
+PERLVARI(Iutf8cache, I8, -1)	/* Is the utf8 caching code enabled? */
+#else
+PERLVARI(Iutf8cache, I8, 1)	/* Is the utf8 caching code enabled? */
 #endif
 
 /* New variables must be added to the very end, before this comment,

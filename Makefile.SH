@@ -73,7 +73,7 @@ true)
 	sunos*)
 		linklibperl="-lperl"
 		;;
-	netbsd*|freebsd[234]*|openbsd*)
+	netbsd*|freebsd[234]*|openbsd*|dragonfly*)
 		linklibperl="-L. -lperl"
 		;;
 	interix*)
@@ -95,7 +95,7 @@ true)
 		linklibperl="-L `pwd | sed 's/\/UU$//'` -Wl,+s -Wl,+b$archlibexp/CORE -lperl"
 		;;
 	os390*)
-            shrpldflags='-W l,dll'
+            shrpldflags='-W l,XPLINK,dll'
 	    linklibperl='libperl.x'
 	    DPERL_EXTERNAL_GLOB=''
 	    ;;
@@ -155,10 +155,20 @@ esac
 
 : Prepare dependency lists for Makefile.
 dynamic_list=' '
+extra_dep=''
 for f in $dynamic_ext; do
     : the dependency named here will never exist
       base=`echo "$f" | sed 's/.*\///'`
-    dynamic_list="$dynamic_list lib/auto/$f/$base.$dlext"
+    this_target="lib/auto/$f/$base.$dlext"  
+    dynamic_list="$dynamic_list $this_target"
+
+    : Parallel makes reveal that we have some interdependencies
+    case $f in
+	Math/BigInt/FastCalc) extra_dep="$extra_dep
+$this_target: lib/auto/List/Util/Util.$dlext" ;;
+	Unicode/Normalize) extra_dep="$extra_dep
+$this_target: uni.data" ;;
+    esac
 done
 
 static_list=' '
@@ -189,6 +199,9 @@ CLDFLAGS = $ldflags
 
 mallocsrc = $mallocsrc
 mallocobj = $mallocobj
+madlyh = $madlyh
+madlysrc = $madlysrc
+madlyobj = $madlyobj
 LNS = $lns
 # NOTE: some systems don't grok "cp -f". XXX Configure test needed?
 CPS = $cp
@@ -234,7 +247,7 @@ dynamic_ext = $dynamic_list
 static_ext = $static_list
 nonxs_ext = $nonxs_list
 ext = \$(dynamic_ext) \$(static_ext) \$(nonxs_ext)
-DYNALOADER = lib/auto/DynaLoader/DynaLoader\$(LIB_EXT)
+DYNALOADER = DynaLoader\$(OBJ_EXT)
 
 libs = $perllibs $cryptlib
 
@@ -342,47 +355,80 @@ h1 = EXTERN.h INTERN.h XSUB.h av.h config.h cop.h cv.h dosish.h
 h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h opcode.h
 h3 = pad.h patchlevel.h perl.h perlapi.h perly.h pp.h proto.h regcomp.h
 h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
-h5 = utf8.h warnings.h
+h5 = utf8.h warnings.h $(madlyh)
 h = $(h1) $(h2) $(h3) $(h4) $(h5)
 
-c1 = $(mallocsrc) av.c scope.c op.c doop.c doio.c dump.c hv.c mg.c reentr.c
-c2 = perl.c perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c
-c3 = gv.c sv.c taint.c toke.c util.c deb.c run.c universal.c xsutils.c pad.c
-c4 = globals.c perlio.c perlapi.c numeric.c mathoms.c locale.c pp_pack.c pp_sort.c
+c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c  perl.c
+c2 = perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c sv.c
+c3 = taint.c toke.c util.c deb.c run.c universal.c xsutils.c pad.c globals.c
+c4 = perlio.c perlapi.c numeric.c mathoms.c locale.c pp_pack.c pp_sort.c
+c5 = $(madlysrc) $(mallocsrc)
 
-c = $(c1) $(c2) $(c3) $(c4) miniperlmain.c perlmain.c opmini.c
+c = $(c1) $(c2) $(c3) $(c4) $(c5) miniperlmain.c perlmain.c opmini.c
 
-obj1 = $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT)
-obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
+obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT)
+obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) perl$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) xsutils$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) mathoms$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT)
 
 obj = $(obj1) $(obj2) $(obj3) $(ARCHOBJS)
 
 lintflags = \
-    -bhn \
+    -b \
+    -n \
     -p \
-    -s \
     -Ncheck=%all \
     -Nlevel=4 \
+    -errchk=parentheses \
+    -errhdr=%all \
     -errfmt=src \
     -errtags \
-    -erroff=E_BAD_PTR_CAST \
-    -erroff=E_BLOCK_DECL_UNUSED \
-    -erroff=E_CONSTANT_CONDITION \
-    -erroff=E_BAD_PTR_CAST_ALIGN \
-    -erroff=E_PTRDIFF_OVERFLOW \
-    -erroff=E_EXPR_NULL_EFFECT \
-    -erroff=E_BAD_PTR_INT_COMBINATION \
-    -erroff=E_LOOP_EMPTY \
-    -erroff=E_TRUE_LOGICAL_EXPR \
-    -erroff=E_FALSE_LOGICAL_EXPR \
-    -erroff=E_INDISTING_FROM_TRUNC \
-    -erroff=E_POINTER_TO_OBJECT \
     -erroff=E_ASSIGN_NARROW_CONV \
+    -erroff=E_BAD_PTR_CAST \
+    -erroff=E_BAD_PTR_CAST_ALIGN \
+    -erroff=E_BAD_PTR_INT_COMBINATION \
     -erroff=E_BAD_SIGN_EXTEND \
+    -erroff=E_BLOCK_DECL_UNUSED \
+    -erroff=E_CASE_FALLTHRU \
+    -erroff=E_CONST_EXPR \
+    -erroff=E_CONSTANT_CONDITION \
+    -erroff=E_END_OF_LOOP_CODE_NOT_REACHED \
+    -erroff=E_EQUALITY_NOT_ASSIGNMENT \
+    -erroff=E_EXPR_NULL_EFFECT \
+    -erroff=E_FALSE_LOGICAL_EXPR \
     -erroff=E_INCL_NUSD \
+    -erroff=E_LOOP_EMPTY \
     -erroff=E_MAIN_PARAM \
-    -Wfoo.flow
+    -erroff=E_POINTER_TO_OBJECT \
+    -erroff=E_PTRDIFF_OVERFLOW \
+    -erroff=E_SHIFT_CNT_NEG_TOO_BIG_L \
+    -erroff=E_STATIC_UNUSED \
+    -erroff=E_TRUE_LOGICAL_EXPR
+
+splintflags = \
+    -I/usr/lib/gcc/i486-linux-gnu/4.0.2/include/ \
+    -D__builtin_va_list=va_list \
+    -Dsigjmp_buf=jmp_buf \
+    -warnposix \
+    \
+    +boolint \
+    +charintliteral \
+    -fixedformalarray \
+    -mustfreefresh \
+    -nestedextern \
+    -predboolint \
+    -predboolothers \
+    -preproc \
+    -boolops \
+    -shadow \
+    -nullstate \
+    +longintegral \
+    +matchanyintegral \
+    -type \
+    \
+    +line-len 999 \
+    +weak
+
+splintfiles = $(c1)
 
 .c$(OBJ_EXT):
 	$(CCCMD) $(PLDLFLAGS) $*.c
@@ -488,9 +534,9 @@ CCDLFLAGS		= `echo $ccdlflags|sed -e 's@-bE:.*/perl\.exp@-bE:perl.exp@'`
 LIBPERL_NONSHR		= libperl_nonshr$(LIB_EXT)
 MINIPERL_NONSHR		= miniperl_nonshr$(EXE_EXT)
 
-$(LIBPERL_NONSHR): perl$(OBJ_EXT) $(obj)
+$(LIBPERL_NONSHR): $(obj)
 	$(RMS) $(LIBPERL_NONSHR)
-	$(AR) rcu $(LIBPERL_NONSHR) perl$(OBJ_EXT) $(obj)
+	$(AR) rcu $(LIBPERL_NONSHR) $(obj)
 
 $(MINIPERL_NONSHR): $(LIBPERL_NONSHR) miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT)
 	$(CC) $(LDFLAGS) -o $(MINIPERL_NONSHR) miniperlmain$(OBJ_EXT) \
@@ -537,12 +583,12 @@ Makefile: $Makefile_s
 !GROK!THIS!
 else
 	$spitshell >>Makefile <<'!NO!SUBS!'
-$(LIBPERL): $& perl$(OBJ_EXT) $(obj) $(LIBPERLEXPORT)
+$(LIBPERL): $& $(obj) $(DYNALOADER) $(LIBPERLEXPORT)
 !NO!SUBS!
 	case "$useshrplib" in
 	true)
 		$spitshell >>Makefile <<'!NO!SUBS!'
-	$(LD) -o $@ $(SHRPLDFLAGS) perl$(OBJ_EXT) $(obj) $(libs)
+	$(LD) -o $@ $(SHRPLDFLAGS) $(obj) $(DYNALOADER) $(libs)
 !NO!SUBS!
 		case "$osname" in
 		aix)
@@ -557,7 +603,7 @@ $(LIBPERL): $& perl$(OBJ_EXT) $(obj) $(LIBPERLEXPORT)
 	*)
 		$spitshell >>Makefile <<'!NO!SUBS!'
 	rm -f $(LIBPERL)
-	$(AR) rcu $(LIBPERL) perl$(OBJ_EXT) $(obj)
+	$(AR) rcu $(LIBPERL) $(obj) $(DYNALOADER)
 	@$(ranlib) $(LIBPERL)
 !NO!SUBS!
 		;;
@@ -579,18 +625,18 @@ $(LIBPERL): $& perl$(OBJ_EXT) $(obj) $(LIBPERLEXPORT)
 	case "${osname}${osvers}" in
 	aix*|beos*)
 		$spitshell >>Makefile <<'!NO!SUBS!'
-miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
+miniperl: $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	$(CC) -o miniperl $(CLDFLAGS) \
 	    `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) perl$(OBJ_EXT) $(libs)
+	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	next4*)
 		$spitshell >>Makefile <<'!NO!SUBS!'
-miniperl: $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
+miniperl: $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	$(CC) -o miniperl `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) perl$(OBJ_EXT) $(libs)
+	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
@@ -608,19 +654,21 @@ NAMESPACEFLAGS = -force_flat_namespace
 		    ;;
 		esac
 		$spitshell >>Makefile <<'!NO!SUBS!'
-miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
+miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	-@rm -f miniperl.xok
 	$(CC) $(CLDFLAGS) $(NAMESPACEFLAGS) -o miniperl \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL) $(libs)
+	    `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
+	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	*)
 		$spitshell >>Makefile <<'!NO!SUBS!'
-miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
+miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	-@rm -f miniperl.xok
 	$(LDLIBPTH) $(CC) $(CLDFLAGS) -o miniperl \
-	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(LLIBPERL) $(libs)
+	    `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
+	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
 	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
@@ -628,20 +676,20 @@ miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(LIBPERL) opmini$(OBJ_EXT)
 
 	$spitshell >>Makefile <<'!NO!SUBS!'
 
-perl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
+perl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT)
 	-@rm -f miniperl.xok
-	$(SHRPENV) $(LDLIBPTH) $(CC) -o perl$(PERL_SUFFIX) $(PERL_PROFILE_LDFLAGS) $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+	$(SHRPENV) $(LDLIBPTH) $(CC) -o perl$(PERL_SUFFIX) $(PERL_PROFILE_LDFLAGS) $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 # Purify/Quantify Perls.
 
-pureperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) $(LDLIBPTH) purify $(CC) -o pureperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+pureperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT)
+	$(SHRPENV) $(LDLIBPTH) purify $(CC) -o pureperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
-purecovperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) $(LDLIBPTH) purecov $(CC) -o purecovperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+purecovperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT)
+	$(SHRPENV) $(LDLIBPTH) purecov $(CC) -o purecovperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
-quantperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) $(LDLIBPTH) quantify $(CC) -o quantperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+quantperl$(EXE_EXT): $& perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT)
+	$(SHRPENV) $(LDLIBPTH) quantify $(CC) -o quantperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 # Valgrind perl (currently Linux only)
 
@@ -658,8 +706,8 @@ perl.valgrind.config: config.sh
 
 perl.config.dashg:
 	@echo "Checking optimize='-g' in config.sh..."
-	@grep "^optimize="     config.sh
-	@egrep "^optimize='(-g|.*-g[1-3].*)'" config.sh >/dev/null || exit 1
+	@grep "^optimize=" config.sh
+	@egrep "^optimize='(.*-g.*)'" config.sh >/dev/null || exit 1
 
 perl.third.config: config.sh
 	@echo "To build perl.third you must Configure -Doptimize=-g -Uusemymalloc, checking..."
@@ -738,8 +786,8 @@ microperl:
 # checks as well as the special code to validate that the script in question
 # has been invoked correctly.
 
-suidperl$(EXE_EXT): $& sperl$(OBJ_EXT) perlmain$(OBJ_EXT) $(LIBPERL) $(DYNALOADER) $(static_ext) ext.libs $(PERLEXPORT)
-	$(SHRPENV) $(LDLIBPTH) $(CC) -o suidperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) sperl$(OBJ_EXT) $(DYNALOADER) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
+suidperl$(EXE_EXT): $& sperl$(OBJ_EXT) perlmain$(OBJ_EXT) $(LIBPERL) $(static_ext) ext.libs $(PERLEXPORT)
+	$(SHRPENV) $(LDLIBPTH) $(CC) -o suidperl $(CLDFLAGS) $(CCDLFLAGS) perlmain$(OBJ_EXT) sperl$(OBJ_EXT) $(static_ext) $(LLIBPERL) `cat ext.libs` $(libs)
 
 !NO!SUBS!
 
@@ -766,6 +814,10 @@ preplibrary: miniperl$(EXE_EXT) $(CONFIGPM) lib/lib.pm $(PREPLIBRARY_LIBPERL)
 	$(LDLIBPTH) ./miniperl -Ilib -e 'use AutoSplit; \
 		autosplit_lib_modules(@ARGV)' lib/*/*.pm
 	$(MAKE) lib/re.pm
+
+.PHONY: makeppport
+makeppport: miniperl$(EXE_EXT) $(CONFIGPM)
+	$(LDLIBPTH) ./miniperl -Ilib mkppport
 
 lib/Config.pod: config.sh miniperl$(EXE_EXT) configpm Porting/Glossary
 	$(LDLIBPTH) ./miniperl -Ilib configpm --heavy=lib/Config_heavy.pl lib/Config.pm
@@ -806,7 +858,7 @@ extra.pods: miniperl$(EXE_EXT)
 	-@rm -f pod/perlvms.pod
 	-@test -f vms/perlvms.pod && cd pod && $(LNS) ../vms/perlvms.pod perlvms.pod && cd .. && echo "pod/perlvms.pod" >> extra.pods
 	-@rm -f pod/perldelta.pod
-	-@test -f pod/perl593delta.pod && cd pod && $(LNS) perl593delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods # See buildtoc
+	-@test -f pod/perl594delta.pod && cd pod && $(LNS) perl594delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods # See buildtoc
 
 extras.make: perl$(EXE_EXT)
 	-@test ! -s extras.lst || PATH="`pwd`:${PATH}" PERL5LIB="`pwd`/lib" $(LDLIBPTH) ./perl -Ilib -MCPAN -e '@ARGV&&make(@ARGV)' `cat extras.lst`
@@ -880,9 +932,10 @@ install.html: all installhtml
 run_byacc:
 	@echo "run_byacc is obsolete; try 'make regen_perly' instead"
 
-# this outputs perly.act and perly.tab
+# this outputs perly.h, perly.act, perly.tab, madly.h, madly.act and madly.tab
 regen_perly:
 	perl regen_perly.pl
+	perl regen_perly.pl madly.y
 
 # We don't want to regenerate perly.c and perly.h, but they might
 # appear out-of-date after a patch is applied or a new distribution is
@@ -891,6 +944,13 @@ perly.c: perly.y
 	-@sh -c true
 
 perly.h: perly.y
+	-@sh -c true
+
+# Similary for madly.
+madly.c: madly.y
+	-@sh -c true
+
+madly.h: madly.y
 	-@sh -c true
 
 # No compat3.sym here since and including the 5.004_50.
@@ -958,14 +1018,25 @@ manicheck:	FORCE
 $(DYNALOADER):	miniperl$(EXE_EXT) preplibrary FORCE
 	@$(LDLIBPTH) sh ext/util/make_ext $(STATIC) $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
 
-d_dummy $(dynamic_ext):	miniperl$(EXE_EXT) preplibrary $(DYNALOADER) FORCE
+d_dummy $(dynamic_ext):	miniperl$(EXE_EXT) preplibrary makeppport $(DYNALOADER) FORCE
 	@$(LDLIBPTH) sh ext/util/make_ext dynamic $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
 
-s_dummy $(static_ext):	miniperl$(EXE_EXT) preplibrary $(DYNALOADER) FORCE
+s_dummy $(static_ext):	miniperl$(EXE_EXT) preplibrary makeppport $(DYNALOADER) FORCE
 	@$(LDLIBPTH) sh ext/util/make_ext $(STATIC) $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
 
 n_dummy $(nonxs_ext):	miniperl$(EXE_EXT) preplibrary $(DYNALOADER) FORCE
 	@$(LDLIBPTH) sh ext/util/make_ext nonxs $@ MAKE=$(MAKE) LIBPERL_A=$(LIBPERL)
+!NO!SUBS!
+
+$spitshell >>Makefile <<EOF
+$extra_dep
+EOF
+
+$spitshell >>Makefile <<'!NO!SUBS!'
+
+.PHONY: printconfig
+printconfig:
+	@eval `$(LDLIBPTH) ./perl -Ilib -V:$(CONFIGVAR)`; echo $$$(CONFIGVAR)
 
 .PHONY: clean _tidy _mopup _cleaner1 _cleaner2 \
 	realclean _realcleaner clobber _clobber \
@@ -1003,6 +1074,7 @@ _mopup:
 	-rm -f perlld cygwin.c ld2 libperl*.def libperl*.dll cygperl*.dll *.exe.stackdump
 	-rm -f perl$(EXE_EXT) suidperl$(EXE_EXT) miniperl$(EXE_EXT) $(LIBPERL) libperl.* microperl
 	-rm -f opcode.h-old opnames.h-old pp.sym-old pp_proto.h-old
+	-rm -f config.over
 
 # Do not 'make _tidy' directly.
 _tidy:
@@ -1022,6 +1094,7 @@ _cleaner1:
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	$(LDLIBPTH) sh ext/util/make_ext $(CLEAN) $$x MAKE=$(MAKE) ; \
 	done
+	$(LDLIBPTH) ./miniperl -Ilib mkppport --clean
 
 # Some systems do not support "?", so keep these files separate.
 _cleaner2:
@@ -1039,13 +1112,14 @@ _cleaner2:
 	rm -rf .config
 	rm -f preload
 	rm -f testcompile compilelog
-	rm -rf lib/Encode lib/Compress
+	rm -rf lib/Encode lib/Compress lib/Hash
+	rm -rf lib/IO/Compress lib/IO/Uncompress
 	rm -f lib/ExtUtils/ParseXS/t/XSTest.c
 	rm -f lib/ExtUtils/ParseXS/t/XSTest$(OBJ_EXT)
 	rm -f lib/ExtUtils/ParseXS/t/XSTest$(DLSUFFIX)
-	-rmdir lib/B lib/Data lib/CompressPlugin lib/UncompressPlugin
-	-rmdir lib/Filter/Util lib/IO/Socket lib/IO/Compress lib/IO/Uncompress
-	-rmdir lib/List lib/MIME lib/Scalar lib/Sys 
+	-rmdir lib/B lib/Data
+	-rmdir lib/Filter/Util lib/IO/Socket
+	-rmdir lib/List lib/MIME lib/Scalar lib/Sys
 	-rmdir lib/threads lib/XS
 
 _realcleaner:
@@ -1061,6 +1135,10 @@ _verycleaner:
 lint: $(c)
 	rm -f *.ln
 	lint $(lintflags) -DPERL_CORE -D_REENTRANT -DDEBUGGING -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 $(c)
+
+.PHONY: splint
+splint: $(c)
+	splint $(splintflags) -DPERL_CORE -D_REENTRANT -DDEBUGGING -D_LARGEFILE_SOURCE -D_FILE_OFFSET_BITS=64 $(splintfiles)
 
 # Need to unset during recursion to go out of loop.
 # The README below ensures that the dependency list is never empty and
@@ -1170,10 +1248,10 @@ test_prep.valgrind: test_prep perl.valgrind
 test.valgrind check.valgrind:	test_prep perl.valgrind.config
 	PERL=./perl PERL_DEBUG=PERL_VALGRIND=1 VALGRIND='$(VALGRIND)' $(MAKE) _test
 
-utest.valgrind ucheck.valgrind: test_prep.valgrind perl.valgrind
+utest.valgrind ucheck.valgrind: test_prep.valgrind perl.valgrind.config
 	PERL=./perl PERL_DEBUG=PERL_VALGRIND=1 TEST_ARGS=-utf8 $(MAKE) _test
 
-test_notty.valgrind: test_prep.valgrind perl.valgrind
+test_notty.valgrind: test_prep.valgrind perl.valgrind.config
 	PERL=./perl $(MAKE) PERL_DEBUG=PERL_VALGRIND=1 _test_notty
 
 # Targets for Third Degree testing.
@@ -1302,7 +1380,7 @@ tags:	TAGS
 	perl emacs/e2ctags.pl TAGS > tags
 
 ctags:
-	ctags -f Tags -N --totals --languages=c --langmap=c:+.h *.c *.h
+	ctags -f Tags -N --totals --languages=c --langmap=c:+.h --exclude=opmini.c *.c *.h
 
 # AUTOMATICALLY GENERATED MAKE DEPENDENCIES--PUT NOTHING BELOW THIS LINE
 # If this runs make out of memory, delete /usr/include lines.

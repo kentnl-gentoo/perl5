@@ -13,20 +13,30 @@ typedef char *pvindex;
 
 /* all this should be made endianness-agnostic */
 
-#define BGET_U8(arg)	arg = BGET_FGETC()
-#define BGET_U16(arg)	\
-	BGET_FREAD(&arg, sizeof(U16), 1)
-#define BGET_U32(arg)	\
-	BGET_FREAD(&arg, sizeof(U32), 1)
-#define BGET_UV(arg)	\
-	BGET_FREAD(&arg, sizeof(UV), 1)
-#define BGET_PADOFFSET(arg)	\
-	BGET_FREAD(&arg, sizeof(PADOFFSET), 1)
-#define BGET_long(arg)		\
-	BGET_FREAD(&arg, sizeof(long), 1)
+#define BGET_U8(arg) STMT_START {					\
+	const int _arg = BGET_FGETC();					\
+	if (_arg < 0) {							\
+	    Perl_croak(aTHX_						\
+		       "EOF or error while trying to read 1 byte for U8"); \
+	}								\
+	arg = (U8) _arg;						\
+    } STMT_END
 
-#define BGET_I32(arg)	BGET_U32(arg)
-#define BGET_IV(arg)	BGET_UV(arg)
+#define BGET_U16(arg)		BGET_OR_CROAK(arg, U16)
+#define BGET_I32(arg)		BGET_OR_CROAK(arg, U32)
+#define BGET_U32(arg)		BGET_OR_CROAK(arg, U32)
+#define BGET_IV(arg)		BGET_OR_CROAK(arg, IV)
+#define BGET_PADOFFSET(arg)	BGET_OR_CROAK(arg, PADOFFSET)
+#define BGET_long(arg)		BGET_OR_CROAK(arg, long)
+#define BGET_svtype(arg)	BGET_OR_CROAK(arg, svtype)
+
+#define BGET_OR_CROAK(arg, type) STMT_START {				\
+	if (BGET_FREAD(&arg, sizeof(type), 1) < 1) {			\
+	    Perl_croak(aTHX_						\
+		       "EOF or error while trying to read %d bytes for %s", \
+		       sizeof(type), STRINGIFY(type));			\
+	}								\
+    } STMT_END
 
 #define BGET_PV(arg)	STMT_START {					\
 	BGET_U32(arg);							\
@@ -91,7 +101,13 @@ typedef char *pvindex;
 	arg = arg ? savepv(arg) : arg;			\
     } STMT_END
 
-#define BSET_ldspecsv(sv, arg) sv = specialsv_list[arg]
+#define BSET_ldspecsv(sv, arg) STMT_START {				\
+	if(arg >= sizeof(specialsv_list) / sizeof(specialsv_list[0])) {	\
+	    Perl_croak(aTHX_ "Out of range special SV number %d", arg);	\
+	}								\
+	sv = specialsv_list[arg];					\
+    } STMT_END
+
 #define BSET_ldspecsvx(sv, arg) STMT_START {	\
 	BSET_ldspecsv(sv, arg);			\
 	BSET_OBJ_STOREX(sv);			\
@@ -317,7 +333,7 @@ typedef char *pvindex;
 	    GvCV(CvGV(cv)) = 0;               /* cv has been hijacked */\
             call_list(oldscope, PL_beginav);		\
             PL_curcop = &PL_compiling;			\
-            PL_compiling.op_private = (U8)(PL_hints & HINT_PRIVATE_MASK);\
+            CopHINTS_set(&PL_compiling, PL_hints);	\
             LEAVE;					\
 	} STMT_END
 #define BSET_push_init(ary,cv)				\
@@ -348,6 +364,30 @@ typedef char *pvindex;
 		name, strlen(name), cv, 0))
 
 #define BSET_xhv_name(hv, name)	hv_name_set((HV*)hv, name, strlen(name), 0)
+#define BSET_cop_arybase(c, b) CopARYBASE_set(c, b)
+#define BSET_cop_warnings(c, w) \
+	STMT_START {							\
+	    if (specialWARN((STRLEN *)w)) {				\
+		c->cop_warnings = (STRLEN *)w;				\
+	    } else {							\
+		STRLEN len;						\
+		const char *const p = SvPV_const(w, len);		\
+		c->cop_warnings =					\
+		    Perl_new_warnings_bitfield(aTHX_ NULL, p, len);	\
+		SvREFCNT_dec(w);					\
+	    }								\
+	} STMT_END
+#define BSET_gp_file(gv, file) \
+	STMT_START {							\
+	    STRLEN len = strlen(file);					\
+	    U32 hash;							\
+	    PERL_HASH(hash, file, len);					\
+	    if(GvFILE_HEK(gv)) {					\
+		Perl_unshare_hek(aTHX_ GvFILE_HEK(gv));			\
+	    }								\
+	    GvGP(gv)->gp_file_hek = share_hek(file, len, hash);		\
+	    Safefree(file);						\
+	} STMT_END
 
 /* NOTE: the bytecode header only sanity-checks the bytecode. If a script cares about
  * what version of Perl it's being called under, it should do a 'use 5.006_001' or

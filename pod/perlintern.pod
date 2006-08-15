@@ -470,6 +470,48 @@ Found in file gv.c
 
 =back
 
+=head1 Hash Manipulation Functions
+
+=over 8
+
+=item refcounted_he_chain_2hv
+X<refcounted_he_chain_2hv>
+
+Generates an returns a C<HV *> by walking up the tree starting at the passed
+in C<struct refcounted_he *>.
+
+	HV *	refcounted_he_chain_2hv(const struct refcounted_he *c)
+
+=for hackers
+Found in file hv.c
+
+=item refcounted_he_free
+X<refcounted_he_free>
+
+Decrements the reference count of the passed in C<struct refcounted_he *>
+by one. If the reference count reaches zero the structure's memory is freed,
+and C<refcounted_he_free> iterates onto the parent node.
+
+	void	refcounted_he_free(struct refcounted_he *he)
+
+=for hackers
+Found in file hv.c
+
+=item refcounted_he_new
+X<refcounted_he_new>
+
+Creates a new C<struct refcounted_he>. As S<key> is copied, and value is
+stored in a compact form, all references remain the property of the caller.
+The C<struct refcounted_he> is returned with a reference count of 1.
+
+	struct refcounted_he *	refcounted_he_new(struct refcounted_he *const parent, SV *const key, SV *const value)
+
+=for hackers
+Found in file hv.c
+
+
+=back
+
 =head1 IO Functions
 
 =over 8
@@ -493,6 +535,17 @@ Found in file doio.c
 =head1 Magical Functions
 
 =over 8
+
+=item magic_sethint
+X<magic_sethint>
+
+Triggered by a delete from %^H, records the key to
+C<PL_compiling.cop_hints_hash>.
+
+	int	magic_sethint(SV* sv, MAGIC* mg)
+
+=for hackers
+Found in file mg.c
 
 =item mg_localize
 X<mg_localize>
@@ -562,10 +615,10 @@ in PL_op->op_targ), wasting a name SV for them doesn't make sense.
 The SVs in the names AV have their PV being the name of the variable.
 NV+1..IV inclusive is a range of cop_seq numbers for which the name is
 valid.  For typed lexicals name SV is SVt_PVMG and SvSTASH points at the
-type.  For C<our> lexicals, the type is SVt_PVGV, and GvSTASH points at the
-stash of the associated global (so that duplicate C<our> declarations in the
-same package can be detected).  SvCUR is sometimes hijacked to
-store the generation number during compilation.
+type.  For C<our> lexicals, the type is also SVt_PVGV, with the MAGIC slot
+pointing at the stash of the associated global (so that duplicate C<our>
+declarations in the same package can be detected).  SvCUR is sometimes
+hijacked to store the generation number during compilation.
 
 If SvFAKE is set on the name SV, then that slot in the frame AV is
 a REFCNT'ed reference to a lexical from "outside". In this case,
@@ -655,11 +708,11 @@ offset.
 If C<typestash> is valid, the name is for a typed lexical; set the
 name's stash to that value.
 If C<ourstash> is valid, it's an our lexical, set the name's
-GvSTASH to that value
+OURSTASH to that value
 
 If fake, it means we're cloning an existing entry
 
-	PADOFFSET	pad_add_name(const char *name, HV* typestash, HV* ourstash, bool clone)
+	PADOFFSET	pad_add_name(const char *name, HV* typestash, HV* ourstash, bool clone, bool state)
 
 =for hackers
 Found in file pad.c

@@ -12,7 +12,7 @@ BEGIN {
 use warnings;
 
 require './test.pl';
-plan( tests => 132 );
+plan( tests => 154 );
 
 # type coersion on assignment
 $foo = 'foo';
@@ -89,6 +89,34 @@ is (scalar %foo, 0);
     is($msg, '');
     *foo = undef;
     like($msg, qr/Undefined value assigned to typeglob/);
+
+    no warnings 'once';
+    # test warnings for converting globs to other forms
+    my $copy = *PWOMPF;
+    foreach ($copy, *SKREEE) {
+	$msg = '';
+	my $victim = sprintf "%d", $_;
+	like($msg, qr/Argument "\*main::[A-Z]{6}" isn't numeric in sprintf/,
+	     "Warning on conversion to IV");
+	is($victim, 0);
+
+	$msg = '';
+	$victim = sprintf "%u", $_;
+	like($msg, qr/Argument "\*main::[A-Z]{6}" isn't numeric in sprintf/,
+	     "Warning on conversion to UV");
+	is($victim, 0);
+
+	$msg = '';
+	$victim = sprintf "%e", $_;
+	like($msg, qr/Argument "\*main::[A-Z]{6}" isn't numeric in sprintf/,
+	     "Warning on conversion to NV");
+	like($victim, qr/^0\.0+E\+?00/i, "Expect floating point zero");
+
+	$msg = '';
+	$victim = sprintf "%s", $_;
+	is($msg, '', "No warning on stringification");
+	is($victim, '' . $_);
+    }
 }
 
 my $test = curr_test();
@@ -378,6 +406,25 @@ is (ref $::{oonk}, 'SCALAR', "Export doesn't affect original");
 is (eval 'plunk', "Value", "Constant has correct value");
 is (ref \$::{plunk}, 'GLOB', "Symbol table has full typeglob");
 
+{
+    use vars qw($glook $smek $foof);
+    # Check reference assignment isn't affected by the SV type (bug #38439)
+    $glook = 3;
+    $smek = 4;
+    $foof = "halt and cool down";
+
+    my $rv = \*smek;
+    is($glook, 3);
+    *glook = $rv;
+    is($glook, 4);
+
+    my $pv = "";
+    $pv = \*smek;
+    is($foof, "halt and cool down");
+    *foof = $pv;
+    is($foof, 4);
+}
+
 format =
 .
 
@@ -393,6 +440,19 @@ foreach my $value ([1,2,3], {1=>2}, *STDOUT{IO}, \&ok, *STDOUT{FORMAT}) {
     like ($@, qr/^Cannot convert a reference to $type to typeglob/,
 	  "Cannot upgrade ref-to-$type to typeglob");
 }
+
+{
+    no warnings qw(once uninitialized);
+    my $g = \*clatter;
+    my $r = eval {no strict; ${*{$g}{SCALAR}}};
+    is ($@, '', "PERL_DONT_CREATE_GVSV shouldn't affect thingy syntax");
+
+    $g = \*vowm;
+    $r = eval {use strict; ${*{$g}{SCALAR}}};
+    is ($@, '',
+	"PERL_DONT_CREATE_GVSV shouldn't affect thingy syntax under strict");
+}
+
 __END__
 Perl
 Rules

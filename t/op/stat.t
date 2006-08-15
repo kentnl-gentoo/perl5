@@ -9,7 +9,7 @@ BEGIN {
 use Config;
 use File::Spec;
 
-plan tests => 86;
+plan tests => 95;
 
 my $Perl = which_perl();
 
@@ -59,7 +59,7 @@ SKIP: {
 
 SKIP: {
   skip "mtime and ctime not reliable", 2
-    if $Is_MSWin32 or $Is_NetWare or $Is_Cygwin or $Is_Dos or $Is_MacOS;
+    if $Is_MSWin32 or $Is_NetWare or $Is_Cygwin or $Is_Dos or $Is_MacOS or $Is_Darwin;
 
   ok( $mtime,           'mtime' );
   is( $mtime, $ctime,   'mtime == ctime' );
@@ -477,6 +477,34 @@ ok(unlink($f), 'unlink tmp file');
     my $s2 = -s _;
     is($s1, $s2, q(-T _ doesn't break the statbuffer));
     unlink $tmpfile;
+}
+
+SKIP: {
+    skip "No dirfd()", 3 unless $Config{d_dirfd};
+    ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
+    ok(stat(DIR), "stat() on dirhandle works"); 
+    ok(-d -r _ , "chained -x's on dirhandle"); 
+    closedir DIR;
+}
+
+{
+    # RT #8244: *FILE{IO} does not behave like *FILE for stat() and -X() operators
+    ok(open(F, ">", $tmpfile), 'can create temp file');
+    my @thwap = stat *F{IO};
+    ok(@thwap, "stat(*F{IO}) works");    
+    ok( -f *F{IO} , "single file tests work with *F{IO}");
+    close F;
+    unlink $tmpfile;
+
+    #PVIO's hold dirhandle information, so let's test them too.
+
+    SKIP: {
+        skip "No dirfd()", 3 unless $Config{d_dirfd};
+        ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
+        ok(stat(*DIR{IO}), "stat() on *DIR{IO} works");
+        ok(-d -r *DIR{IO} , "chained -x's on *DIR{IO}");
+        closedir DIR;
+    }
 }
 
 END {

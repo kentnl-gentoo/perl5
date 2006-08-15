@@ -77,7 +77,9 @@ esac
 case "`${cc:-cc} -V 2>&1`" in
 *"Intel(R) C++ Compiler"*|*"Intel(R) C Compiler"*)
     # This is needed for Configure's prototype checks to work correctly
-    ccflags="-we147 $ccflags"
+    # The -mp1 flag is needed to pass cmp related tests
+    # The -no-gcc flag is needed otherwise, icc pretends (poorly) to be gcc
+    ccflags="-we147 -mp1 -no-gcc $ccflags"
     # If we're using ICC, we usually want the best performance
     case "$optimize" in
     '') optimize='-O3' ;;
@@ -87,6 +89,15 @@ case "`${cc:-cc} -V 2>&1`" in
     optimize='-xO2'
     cccdlflags='-KPIC'
     lddlflags='-G -Bdynamic'
+    # Sun C doesn't support gcc attributes, but, in many cases, doesn't
+    # complain either.  Not all cases, though.
+    d_attribute_format='undef'
+    d_attribute_malloc='undef'
+    d_attribute_nonnull='undef'
+    d_attribute_noreturn='undef'
+    d_attribute_pure='undef'
+    d_attribute_unused='undef'
+    d_attribute_warn_unused_result='undef'
     ;;
 esac
 
@@ -97,8 +108,18 @@ case "$optimize" in
     case "`uname -m`" in
         ppc*)
             # on ppc, it seems that gcc (at least gcc 3.3.2) isn't happy
-	    # with -O2 ; so downgrade to -O1.
+            # with -O2 ; so downgrade to -O1.
             optimize='-O1'
+        ;;
+        ia64*)
+            # This architecture has had various problems with gcc's
+            # in the 3.2, 3.3, and 3.4 releases when optimized to -O2.  See
+            # RT #37156 for a discussion of the problem.
+            case "`${cc:-gcc} -v 2>&1`" in
+            *"version 3.2"*|*"version 3.3"*|*"version 3.4"*)
+                ccflags="-fno-delete-null-pointer-checks $ccflags"
+            ;;
+            esac
         ;;
     esac
     ;;
@@ -110,6 +131,7 @@ cat >try.c <<'EOM'
 /* Test for whether ELF binaries are produced */
 #include <fcntl.h>
 #include <stdlib.h>
+#include <unistd.h>
 main() {
 	char buffer[4];
 	int i=open("a.out",O_RDONLY);
@@ -260,6 +282,7 @@ case "`uname -m`" in
 sparc*)
 	case "$cccdlflags" in
 	*-fpic*) cccdlflags="`echo $cccdlflags|sed 's/-fpic/-fPIC/'`" ;;
+	*-fPIC*) ;;
 	*)	 cccdlflags="$cccdlflags -fPIC" ;;
 	esac
 	;;
@@ -330,3 +353,14 @@ $define|true|[yY]*)
     libswanted="$*"
     ;;
 esac
+
+# If we are using g++ we must use nm and force ourselves to use
+# the /usr/lib/libc.a (resetting the libc below to an empty string
+# makes Configure to look for the right one) because the symbol
+# scanning tricks of Configure will crash and burn horribly.
+case "$cc" in
+*g++*) usenm=true
+       libc=''
+       ;;
+esac
+

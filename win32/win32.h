@@ -200,15 +200,25 @@ struct utsname {
 
 #ifdef _MSC_VER			/* Microsoft Visual C++ */
 
+#ifndef UNDER_CE
 typedef long		uid_t;
 typedef long		gid_t;
 typedef unsigned short	mode_t;
+#endif
+
 #pragma  warning(disable: 4102)	/* "unreferenced label" */
 
 /* Visual C thinks that a pointer to a member variable is 16 bytes in size. */
 #define PERL_MEMBER_PTR_SIZE	16
 
 #define isnan		_isnan
+#define snprintf	_snprintf
+#define vsnprintf	_vsnprintf
+
+#if _MSC_VER < 1300
+/* VC6 has broken NaN semantics: NaN == NaN returns true instead of false */
+#define NAN_COMPARE_BROKEN 1
+#endif
 
 #endif /* _MSC_VER */
 
@@ -315,7 +325,7 @@ typedef struct {
 } child_IO_table;
 
 DllExport void		win32_get_child_IO(child_IO_table* ptr);
-DllExport HWND		win32_create_message_window();
+DllExport HWND		win32_create_message_window(void);
 
 #ifndef USE_SOCKETS_AS_HANDLES
 extern FILE *		my_fdopen(int, char *);
@@ -380,6 +390,9 @@ struct thread_intern {
     char		Wstrerror_buffer[512];
     struct servent	Wservent;
     char		Wgetlogin_buffer[128];
+#    ifdef USE_SOCKETS_AS_HANDLES
+    int			Winit_socktype;
+#    endif
 #    ifdef HAVE_DES_FCRYPT
     char		Wcrypt_buffer[30];
 #    endif
@@ -458,6 +471,7 @@ DllExport int win32_async_check(pTHX);
 #define w32_getlogin_buffer	(PL_sys_intern.thr_intern.Wgetlogin_buffer)
 #define w32_crypt_buffer	(PL_sys_intern.thr_intern.Wcrypt_buffer)
 #define w32_servent		(PL_sys_intern.thr_intern.Wservent)
+#define w32_init_socktype	(PL_sys_intern.thr_intern.Winit_socktype)
 #define w32_use_showwindow	(PL_sys_intern.thr_intern.Wuse_showwindow)
 #define w32_showwindow	(PL_sys_intern.thr_intern.Wshowwindow)
 
@@ -557,6 +571,18 @@ EXTERN_C _CRTIMP ioinfo* __pioinfo[];
 
 DllExport void *win32_signal_context(void);
 #define PERL_GET_SIG_CONTEXT win32_signal_context()
+
+#ifdef UNDER_CE
+#define Win_GetModuleHandle   XCEGetModuleHandleA
+#define Win_GetProcAddress    XCEGetProcAddressA
+#define Win_GetModuleFileName XCEGetModuleFileNameA
+#define Win_CreateSemaphore   CreateSemaphoreW
+#else
+#define Win_GetModuleHandle   GetModuleHandle
+#define Win_GetProcAddress    GetProcAddress
+#define Win_GetModuleFileName GetModuleFileName
+#define Win_CreateSemaphore   CreateSemaphore
+#endif
 
 #endif /* _INC_WIN32_PERL5 */
 

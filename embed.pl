@@ -3,10 +3,14 @@
 require 5.003;	# keep this compatible, an old perl is all we may have before
                 # we build the new one
 
+use strict;
+
 BEGIN {
     # Get function prototypes
     require 'regen_lib.pl';
 }
+
+my $SPLINT = 0; # Turn true for experimental splint support http://www.splint.org
 
 #
 # See database of global and static function prototypes in embed.fnc
@@ -155,13 +159,25 @@ sub write_protos {
 	my ($flags,$retval,$func,@args) = @_;
 	my @nonnull;
 	my $has_context = ( $flags !~ /n/ );
-	$ret .= '/* ' if $flags =~ /m/;
+	my $never_returns = ( $flags =~ /r/ );
+	my $commented_out = ( $flags =~ /m/ );
+	my $is_malloc = ( $flags =~ /a/ );
+	my $can_ignore = ( $flags !~ /R/ ) && !$is_malloc;
+
+	my $splint_flags = "";
+	if ( $SPLINT && !$commented_out ) {
+	    $splint_flags .= '/*@noreturn@*/ ' if $never_returns;
+	    if ($can_ignore && ($retval ne 'void') && ($retval !~ /\*/)) {
+		$retval .= " /*\@alt void\@*/";
+	    }
+	}
+
 	if ($flags =~ /s/) {
-	    $retval = "STATIC $retval";
+	    $retval = "STATIC $splint_flags$retval";
 	    $func = "S_$func";
 	}
 	else {
-	    $retval = "PERL_CALLCONV $retval";
+	    $retval = "PERL_CALLCONV $splint_flags$retval";
 	    if ($flags =~ /p/) {
 		$func = "Perl_$func";
 	    }
@@ -179,8 +195,10 @@ sub write_protos {
 		    our $unflagged_pointers;
 		    ++$unflagged_pointers;
 		}
-		push( @nonnull, $n ) if ( $arg =~ s/\s*\bNN\b\s+// );
-		$arg =~ s/\s*\bNULLOK\b\s+//; # strip NULLOK with no effect
+		my $nn = ( $arg =~ s/\s*\bNN\b\s+// );
+		push( @nonnull, $n ) if $nn;
+
+		my $nullok = ( $arg =~ s/\s*\bNULLOK\b\s+// ); # strip NULLOK with no effect
 
 		# Make sure each arg has at least a type and a var name.
 		# An arg of "int" is valid C, but want it to be "int foo".
@@ -189,6 +207,9 @@ sub write_protos {
 		$temp_arg =~ s/\s*\bstruct\b\s*/ /g;
 		if ( ($temp_arg ne "...") && ($temp_arg !~ /\w+\s+\w+/) ) {
 		    warn "$func: $arg doesn't have a name\n";
+		}
+		if ( $SPLINT && $nullok && !$commented_out ) {
+		    $arg = '/*@null@*/ ' . $arg;
 		}
 	    }
 	    $ret .= join ", ", @args;
@@ -201,11 +222,10 @@ sub write_protos {
 	if ( $flags =~ /r/ ) {
 	    push @attrs, "__attribute__noreturn__";
 	}
-	if ( $flags =~ /a/ ) {
+	if ( $is_malloc ) {
 	    push @attrs, "__attribute__malloc__";
-	    $flags .= "R"; # All allocing must check return value
 	}
-	if ( $flags =~ /R/ ) {
+	if ( !$can_ignore ) {
 	    push @attrs, "__attribute__warn_unused_result__";
 	}
 	if ( $flags =~ /P/ ) {
@@ -226,7 +246,7 @@ sub write_protos {
 	    $ret .= join( "\n", map { "\t\t\t$_" } @attrs );
 	}
 	$ret .= ";";
-	$ret .= ' */' if $flags =~ /m/;
+	$ret = "/* $ret */" if $commented_out;
 	$ret .= @attrs ? "\n\n" : "\n";
     }
     $ret;
@@ -319,6 +339,7 @@ sub readvars(\%$$@) {
 
 my %intrp;
 my %thread;
+my %globvar;
 
 readvars %intrp,  'intrpvar.h','I';
 readvars %thread, 'thrdvar.h','T';
@@ -537,7 +558,7 @@ print EM <<'END';
 
 #if !defined(PERL_CORE)
 #  define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,PTR2IV(ptr))
-#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,PTR2IV(ptr))
+#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,NULL,PTR2IV(ptr))
 #endif
 
 #if !defined(PERL_CORE) && !defined(PERL_NOCOMPAT)
@@ -876,14 +897,14 @@ START_EXTERN_C
 #undef PERLVARISC
 
 #define PERLVAR(v,t)	t* Perl_##v##_ptr(pTHX)				\
-			{ dVAR; return &(aTHX->v); }
+			{ dVAR; PERL_UNUSED_CONTEXT; return &(aTHX->v); }
 #define PERLVARA(v,n,t)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
-			{ dVAR; return &(aTHX->v); }
+			{ dVAR; PERL_UNUSED_CONTEXT; return &(aTHX->v); }
 
 #define PERLVARI(v,t,i)	PERLVAR(v,t)
 #define PERLVARIC(v,t,i) PERLVAR(v, const t)
 #define PERLVARISC(v,i)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
-			{ dVAR; return &(aTHX->v); }
+			{ dVAR; PERL_UNUSED_CONTEXT; return &(aTHX->v); }
 
 #include "thrdvar.h"
 #include "intrpvar.h"
@@ -891,16 +912,16 @@ START_EXTERN_C
 #undef PERLVAR
 #undef PERLVARA
 #define PERLVAR(v,t)	t* Perl_##v##_ptr(pTHX)				\
-			{ dVAR; return &(PL_##v); }
+			{ dVAR; PERL_UNUSED_CONTEXT; return &(PL_##v); }
 #define PERLVARA(v,n,t)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
-			{ dVAR; return &(PL_##v); }
+			{ dVAR; PERL_UNUSED_CONTEXT; return &(PL_##v); }
 #undef PERLVARIC
 #undef PERLVARISC
 #define PERLVARIC(v,t,i)	\
 			const t* Perl_##v##_ptr(pTHX)		\
-			{ return (const t *)&(PL_##v); }
+			{ PERL_UNUSED_CONTEXT; return (const t *)&(PL_##v); }
 #define PERLVARISC(v,i)	PL_##v##_t* Perl_##v##_ptr(pTHX)	\
-			{ dVAR; return &(PL_##v); }
+			{ dVAR; PERL_UNUSED_CONTEXT; return &(PL_##v); }
 #include "perlvars.h"
 
 #undef PERLVAR
@@ -915,15 +936,18 @@ START_EXTERN_C
 #undef PL_check
 #undef PL_fold_locale
 Perl_ppaddr_t** Perl_Gppaddr_ptr(pTHX) {
-    static const Perl_ppaddr_t* ppaddr_ptr = PL_ppaddr;
+    static Perl_ppaddr_t* const ppaddr_ptr = PL_ppaddr;
+    PERL_UNUSED_CONTEXT;
     return (Perl_ppaddr_t**)&ppaddr_ptr;
 }
 Perl_check_t**  Perl_Gcheck_ptr(pTHX) {
-    static const Perl_check_t* check_ptr  = PL_check;
+    static Perl_check_t* const check_ptr  = PL_check;
+    PERL_UNUSED_CONTEXT;
     return (Perl_check_t**)&check_ptr;
 }
 unsigned char** Perl_Gfold_locale_ptr(pTHX) {
-    static const unsigned char* fold_locale_ptr = PL_fold_locale;
+    static unsigned char* const fold_locale_ptr = PL_fold_locale;
+    PERL_UNUSED_CONTEXT;
     return (unsigned char**)&fold_locale_ptr;
 }
 #endif

@@ -1,34 +1,84 @@
 package CPAN::HandleConfig;
 use strict;
-use vars qw(%can %keys $dot_cpan $VERSION);
+use vars qw(%can %keys $VERSION);
 
-$VERSION = sprintf "%.2f", substr(q$Rev: 431 $,4)/100;
+$VERSION = sprintf "%.6f", substr(q$Rev: 740 $,4)/1000000 + 5.4;
 
 %can = (
-  'commit' => "Commit changes to disk",
-  'defaults' => "Reload defaults from disk",
-  'init'   => "Interactive setting of all options",
+        commit   => "Commit changes to disk",
+        defaults => "Reload defaults from disk",
+        help     => "Short help about 'o conf' usage",
+        init     => "Interactive setting of all options",
 );
 
-%keys = map { $_ => undef } qw(
-    build_cache build_dir bzip2
-    cache_metadata commandnumber_in_prompt cpan_home curl
-    dontload_hash
-    ftp ftp_proxy
-    getcwd gpg gzip
-    histfile histsize http_proxy
-    inactivity_timeout index_expire inhibit_startup_message
-    keep_source_where
-    lynx
-    make make_arg make_install_arg make_install_make_command makepl_arg
-    mbuild_arg mbuild_install_arg mbuild_install_build_command mbuildpl_arg
-    ncftp ncftpget no_proxy pager
-    prefer_installer prerequisites_policy
-    scan_cache shell show_upload_date
-    tar term_is_latin
-    unzip urllist
-    wait_list wget
-);
+%keys = map { $_ => undef } (
+                             #  allow_unauthenticated ?? some day...
+                             "build_cache",
+                             "build_dir",
+                             "bzip2",
+                             "cache_metadata",
+                             "check_sigs",
+                             "commandnumber_in_prompt",
+                             "cpan_home",
+                             "curl",
+                             "dontload_hash", # deprecated after 1.83_68 (rev. 581)
+                             "dontload_list",
+                             "ftp",
+                             "ftp_passive",
+                             "ftp_proxy",
+                             "getcwd",
+                             "gpg",
+                             "gzip",
+                             "histfile",
+                             "histsize",
+                             "http_proxy",
+                             "inactivity_timeout",
+                             "index_expire",
+                             "inhibit_startup_message",
+                             "keep_source_where",
+                             "lynx",
+                             "make",
+                             "make_arg",
+                             "make_install_arg",
+                             "make_install_make_command",
+                             "makepl_arg",
+                             "mbuild_arg",
+                             "mbuild_install_arg",
+                             "mbuild_install_build_command",
+                             "mbuildpl_arg",
+                             "ncftp",
+                             "ncftpget",
+                             "no_proxy",
+                             "pager",
+                             "password",
+                             "prefer_installer",
+                             "prerequisites_policy",
+                             "scan_cache",
+                             "shell",
+                             "show_upload_date",
+                             "tar",
+                             "term_is_latin",
+                             "term_ornaments",
+                             "unzip",
+                             "urllist",
+                             "username",
+                             "wait_list",
+                             "wget",
+                            );
+if ($^O eq "MSWin32") {
+    for my $k (qw(
+                  mbuild_install_build_command
+                  make_install_make_command
+                 )) {
+        delete $keys{$k};
+        if (exists $CPAN::Config->{$k}) {
+            for ("deleting previously set config variable '$k' => '$CPAN::Config->{$k}'") {
+                $CPAN::Frontend ? $CPAN::Frontend->mywarn($_) : warn $_;
+            }
+            delete $CPAN::Config->{$k};
+        }
+    }
+}
 
 # returns true on successful action
 sub edit {
@@ -73,13 +123,22 @@ sub edit {
 	    } else {
                 $self->prettyprint($o);
 	    }
-            if ($o eq "urllist" && $changed) {
-                # reset the cached values
-                undef $CPAN::FTP::Thesite;
-                undef $CPAN::FTP::Themethod;
+            if ($changed) {
+                if ($o eq "urllist") {
+                    # reset the cached values
+                    undef $CPAN::FTP::Thesite;
+                    undef $CPAN::FTP::Themethod;
+                } elsif ($o eq "dontload_list") {
+                    # empty it, it will be built up again
+                    $CPAN::META->{dontload_hash} = {};
+                }
             }
             return $changed;
-	} else {
+        } elsif ($o =~ /_hash$/) {
+            @args = () if @args==1 && $args[0] eq "";
+            push @args, "" if @args % 2;
+            $CPAN::Config->{$o} = { @args };
+        } else {
 	    $CPAN::Config->{$o} = $args[0] if defined $args[0];
 	    $self->prettyprint($o);
 	}
@@ -159,9 +218,14 @@ EOF
         $CPAN::Frontend->mydie("Couldn't open >$configpm: $!");
     $fh->print(qq[$msg\$CPAN::Config = \{\n]);
     foreach (sort keys %$CPAN::Config) {
+        unless (exists $keys{$_}) {
+            $CPAN::Frontend->mywarn("Dropping unknown config variable '$_'\n");
+            delete $CPAN::Config->{$_};
+            next;
+        }
 	$fh->print(
 		   "  '$_' => ",
-		   ExtUtils::MakeMaker::neatvalue($CPAN::Config->{$_}),
+		   $self->neatvalue($CPAN::Config->{$_}),
 		   ",\n"
 		  );
     }
@@ -176,7 +240,33 @@ EOF
     1;
 }
 
-*default = \&defaults;
+# stolen from MakeMaker; not taking the original because it is buggy;
+# bugreport will have to say: keys of hashes remain unquoted and can
+# produce syntax errors
+sub neatvalue {
+    my($self, $v) = @_;
+    return "undef" unless defined $v;
+    my($t) = ref $v;
+    return "q[$v]" unless $t;
+    if ($t eq 'ARRAY') {
+        my(@m, @neat);
+        push @m, "[";
+        foreach my $elem (@$v) {
+            push @neat, "q[$elem]";
+        }
+        push @m, join ", ", @neat;
+        push @m, "]";
+        return join "", @m;
+    }
+    return "$v" unless $t eq 'HASH';
+    my(@m, $key, $val);
+    while (($key,$val) = each %$v){
+        last unless defined $key; # cautious programming in case (undef,undef) is true
+        push(@m,"q[$key]=>".$self->neatvalue($val)) ;
+    }
+    return "{ ".join(', ',@m)." }";
+}
+
 sub defaults {
     my($self) = @_;
     my $done;
@@ -185,6 +275,59 @@ sub defaults {
       last if $done;
     }
     1;
+}
+
+=head2 C<< CLASS->safe_quote ITEM >>
+
+Quotes an item to become safe against spaces
+in shell interpolation. An item is enclosed
+in double quotes if:
+
+  - the item contains spaces in the middle
+  - the item does not start with a quote
+
+This happens to avoid shell interpolation
+problems when whitespace is present in
+directory names.
+
+This method uses C<commands_quote> to determine
+the correct quote. If C<commands_quote> is
+a space, no quoting will take place.
+
+
+if it starts and ends with the same quote character: leave it as it is
+
+if it contains no whitespace: leave it as it is
+
+if it contains whitespace, then
+
+if it contains quotes: better leave it as it is
+
+else: quote it with the correct quote type for the box we're on
+
+=cut
+
+{
+    # Instead of patching the guess, set commands_quote
+    # to the right value
+    my ($quotes,$use_quote)
+        = $^O eq 'MSWin32'
+            ? ('"', '"')
+                : (q<"'>, "'")
+                    ;
+
+    sub safe_quote {
+        my ($self, $command) = @_;
+        # Set up quote/default quote
+        my $quote = $CPAN::Config->{commands_quote} || $quotes;
+
+        if ($quote ne ' '
+            and $command =~ /\s/
+            and $command !~ /[$quote]/) {
+            return qq<$use_quote$command$use_quote>
+        }
+        return $command;
+    }
 }
 
 sub init {
@@ -228,20 +371,42 @@ END
     } else { return }
 }
 
+sub require_myconfig_or_config () {
+    return if $INC{"CPAN/MyConfig.pm"};
+    local @INC = @INC;
+    my $home = home();
+    unshift @INC, File::Spec->catdir($home,'.cpan');
+    eval { require CPAN::MyConfig };
+    my $err_myconfig = $@;
+    if ($err_myconfig and $err_myconfig !~ m#locate CPAN/MyConfig\.pm#) {
+        die "Error while requiring CPAN::MyConfig:\n$err_myconfig";
+    }
+    unless ($INC{"CPAN/MyConfig.pm"}) { # this guy has settled his needs already
+      eval {require CPAN::Config;}; # not everybody has one
+      my $err_config = $@;
+      if ($err_config and $err_config !~ m#locate CPAN/Config\.pm#) {
+          die "Error while requiring CPAN::Config:\n$err_config";
+      }
+    }
+}
+
+sub home () {
+    my $home;
+    if ($CPAN::META->has_usable("File::HomeDir")) {
+        $home = File::HomeDir->my_data;
+    } else {
+        $home = $ENV{HOME};
+    }
+    $home;
+}
+
 sub load {
     my($self, %args) = @_;
 	$CPAN::Be_Silent++ if $args{be_silent};
 
     my(@miss);
     use Carp;
-    unless ($INC{"CPAN/MyConfig.pm"}) { # this guy has settled his needs already
-      eval {require CPAN::Config;}; # not everybody has one
-    }
-    unless ($dot_cpan++){
-      unshift @INC, File::Spec->catdir($ENV{HOME},".cpan");
-      eval {require CPAN::MyConfig;}; # override system wide settings
-      shift @INC;
-    }
+    require_myconfig_or_config;
     return unless @miss = $self->missing_config_data;
 
     require CPAN::FirstTime;
@@ -264,7 +429,7 @@ sub load {
             $inc_key = "CPAN/Config.pm";
 	}
 	unless ($configpm) {
-	    $configpmdir = File::Spec->catdir($ENV{HOME},".cpan","CPAN");
+	    $configpmdir = File::Spec->catdir(home,".cpan","CPAN");
 	    File::Path::mkpath($configpmdir);
 	    $configpmtest = File::Spec->catfile($configpmdir,"MyConfig.pm");
 	    $configpm = _configpmtest($configpmdir,$configpmtest);
@@ -302,12 +467,12 @@ sub missing_config_data {
          "cache_metadata",
          "cpan_home",
          "ftp_proxy",
-         "gzip",
+         #"gzip",
          "http_proxy",
          "index_expire",
          "inhibit_startup_message",
          "keep_source_where",
-         "make",
+         #"make",
          "make_arg",
          "make_install_arg",
          "makepl_arg",
@@ -316,13 +481,14 @@ sub missing_config_data {
          "mbuild_install_build_command",
          "mbuildpl_arg",
          "no_proxy",
-         "pager",
+         #"pager",
          "prerequisites_policy",
          "scan_cache",
-         "tar",
-         "unzip",
+         #"tar",
+         #"unzip",
          "urllist",
         ) {
+        next unless exists $keys{$_};
 	push @miss, $_ unless defined $CPAN::Config->{$_};
     }
     return @miss;
@@ -331,20 +497,17 @@ sub missing_config_data {
 sub help {
     $CPAN::Frontend->myprint(q[
 Known options:
-  defaults  reload default config values from disk
   commit    commit session changes to disk
+  defaults  reload default config values from disk
+  help      this help
   init      go through a dialog to set all parameters
 
-You may edit key values in the follow fashion (the "o" is a literal
-letter o):
-
+Edit key values as in the following (the "o" is a literal letter o):
   o conf build_cache 15
-
   o conf build_dir "/foo/bar"
-
   o conf urllist shift
-
   o conf urllist unshift ftp://ftp.foo.bar/
+  o conf inhibit_startup_message 1
 
 ]);
     undef; #don't reprint CPAN::Config
@@ -377,8 +540,8 @@ sub cpl {
 }
 
 
-package ####::###### #hide from indexer
-    CPAN::Config;
+package
+    CPAN::Config; ####::###### #hide from indexer
 # note: J. Nick Koston wrote me that they are using
 # CPAN::Config->commit although undocumented. I suggested
 # CPAN::Shell->o("conf","commit") even when ugly it is at least
@@ -389,7 +552,7 @@ package ####::###### #hide from indexer
 
 use strict;
 use vars qw($AUTOLOAD $VERSION);
-$VERSION = sprintf "%.2f", substr(q$Rev: 431 $,4)/100;
+$VERSION = sprintf "%.2f", substr(q$Rev: 740 $,4)/100;
 
 # formerly CPAN::HandleConfig was known as CPAN::Config
 sub AUTOLOAD {
@@ -404,5 +567,5 @@ sub AUTOLOAD {
 __END__
 # Local Variables:
 # mode: cperl
-# cperl-indent-level: 2
+# cperl-indent-level: 4
 # End:

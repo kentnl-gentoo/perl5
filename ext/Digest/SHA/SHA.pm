@@ -1,10 +1,12 @@
 package Digest::SHA;
 
+require 5.006000;
+
 use strict;
 use warnings;
 use integer;
 
-our $VERSION = '5.32';
+our $VERSION = '5.43';
 
 require Exporter;
 our @ISA = qw(Exporter);
@@ -23,13 +25,14 @@ our @EXPORT_OK = qw(
 
 # If possible, inherit from Digest::base (which depends on MIME::Base64)
 
+*addfile = \&Addfile;
+
 eval {
 	require MIME::Base64;
 	require Digest::base;
 	push(@ISA, 'Digest::base');
 };
 if ($@) {
-	*addfile = \&Addfile;
 	*hexdigest = \&Hexdigest;
 	*b64digest = \&B64digest;
 }
@@ -85,23 +88,64 @@ sub add_bits {
 	return($self);
 }
 
-# local copy of "addfile" in case Digest::base not installed
+sub _bail {
+	my $msg = shift;
 
-sub Addfile {	# this is "addfile" from Digest::base 1.00
+        require Carp;
+        Carp::croak("$msg: $!");
+}
+
+sub _addfile {  # this is "addfile" from Digest::base 1.00
     my ($self, $handle) = @_;
 
     my $n;
     my $buf = "";
 
     while (($n = read($handle, $buf, 4096))) {
-	$self->add($buf);
+        $self->add($buf);
     }
-    unless (defined $n) {
-	require Carp;
-	Carp::croak("Read failed: $!");
-    }
+    _bail("Read failed") unless defined $n;
 
     $self;
+}
+
+sub Addfile {
+	my ($self, $file, $mode) = @_;
+
+	return(_addfile($self, $file)) unless ref(\$file) eq 'SCALAR';
+
+	$mode = defined($mode) ? $mode : "";
+	my ($binary, $portable) = map { $_ eq $mode } ("b", "p");
+	my $text = -T $file;
+
+	open(my $fh, "<$file")			## no critic
+		or _bail("Open failed");
+	binmode($fh) if $binary || $portable;
+
+	unless ($portable && $text) {
+		$self->_addfile($fh);
+		close($fh);
+		return($self);
+	}
+
+	my ($n1, $n2);
+	my ($buf1, $buf2) = ("", "");
+
+	while (($n1 = read($fh, $buf1, 4096))) {
+		while (substr($buf1, -1) eq "\015") {
+			$n2 = read($fh, $buf2, 4096);
+			_bail("Read failed") unless defined $n2;
+			last unless $n2;
+			$buf1 .= $buf2;
+		}
+		$buf1 =~ s/\015?\015\012/\012/g; 	# DOS/Windows
+		$buf1 =~ s/\015/\012/g;          	# Apple/MacOS 9
+		$self->add($buf1);
+	}
+	_bail("Read failed") unless defined $n1;
+	close($fh);
+
+	$self;
 }
 
 sub dump {
@@ -156,7 +200,10 @@ In programs:
 	$sha = Digest::SHA->new($alg);
 
 	$sha->add($data);		# feed data into stream
+
 	$sha->addfile(*F);
+	$sha->addfile($filename);
+
 	$sha->add_bits($bits);
 	$sha->add_bits($data, $nbits);
 
@@ -276,6 +323,30 @@ the larger and stronger hash functions.>
 
 ref. L<http://www.csrc.nist.gov/pki/HashWorkshop/NIST%20Statement/Burr_Mar2005.html>
 
+=head1 BASE64 DIGESTS
+
+By convention, CPAN Digest modules do not pad their Base64 output.
+This means that Base64 digests contain no trailing "=" characters.
+Unfortunately, problems can occur when feeding such digests to other
+software that expects properly padded Base64 encodings.
+
+For the time being, any necessary padding must be done by the user.
+Fortunately, the rule for accomplishing it is straightforward: if the
+length of a Base64-encoded digest isn't a multiple of 4, simply append
+1 or more "=" characters to the end of the digest until it is:
+
+	while (length($b64_digest) % 4) {
+		$b64_digest .= '=';
+	}
+
+To illustrate, I<sha256_base64("abc")> is computed to be
+
+	ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0
+
+which has a length of 43.  So, the properly padded version is
+
+	ungWv48Bz+pBQUDeXa4iI7ADYaOWF3qctBD/YfIAFa0=
+
 =head1 EXPORT
 
 None by default.
@@ -330,6 +401,11 @@ its SHA-1/224/256/384/512 digest encoded as a hexadecimal string.
 
 Logically joins the arguments into a single string, and returns
 its SHA-1/224/256/384/512 digest encoded as a Base64 string.
+
+It's important to note that the resulting string does B<not> contain
+the padding characters typical of Base64 encodings.  This omission is
+deliberate, and is done to maintain compatibility with the family of
+CPAN Digest modules.  See L</"BASE64 DIGESTS"> for details.
 
 =back
 
@@ -409,8 +485,28 @@ So, the following two statements do the same thing:
 Reads from I<FILE> until EOF, and appends that data to the current
 state.  The return value is the updated object itself.
 
-This method is inherited if L<Digest::base> is installed on your
-system.  Otherwise, a functionally equivalent substitute is used.
+=item B<addfile($filename [, $mode])>
+
+Reads the contents of I<$filename>, and appends that data to the current
+state.  The return value is the updated object itself.
+
+By default, I<$filename> is simply opened and read; no special modes
+or I/O disciplines are used.  To change this, set the optional I<$mode>
+argument to one of the following values:
+
+	"b"	read file in binary mode
+
+	"p"	use portable mode
+
+The "p" mode is handy since it ensures that the digest value of
+I<$filename> will be the same when computed on different operating
+systems.  It accomplishes this by internally translating all newlines
+in text files to UNIX format before calculating the digest; on the other
+hand, binary files are read in raw mode with no translation whatsoever.
+
+For a fuller discussion of newline formats, refer to CPAN module
+L<File::LocalizeNewlines>.  Its "universal line separator" regex forms
+the basis of I<addfile>'s portable mode processing.
 
 =item B<dump($filename)>
 
@@ -459,6 +555,11 @@ the original digest state.
 
 This method is inherited if L<Digest::base> is installed on your
 system.  Otherwise, a functionally equivalent substitute is used.
+
+It's important to note that the resulting string does B<not> contain
+the padding characters typical of Base64 encodings.  This omission is
+deliberate, and is done to maintain compatibility with the family of
+CPAN Digest modules.  See L</"BASE64 DIGESTS"> for details.
 
 =back
 
@@ -511,6 +612,11 @@ with the result encoded as a Base64 string.  Multiple I<$data>
 arguments are allowed, provided that I<$key> is the last argument
 in the list.
 
+It's important to note that the resulting string does B<not> contain
+the padding characters typical of Base64 encodings.  This omission is
+deliberate, and is done to maintain compatibility with the family of
+CPAN Digest modules.  See L</"BASE64 DIGESTS"> for details.
+
 =back
 
 =head1 SEE ALSO
@@ -539,8 +645,10 @@ The author is particularly grateful to
 	Jeffrey Friedl
 	Robert Gilmour
 	Brian Gladman
+	Adam Kennedy
 	Andy Lester
 	Alex Muntada
+	Steve Peters
 	Chris Skiscim
 	Martin Thurn
 	Gunnar Wolf
@@ -550,7 +658,7 @@ for their valuable comments and suggestions.
 
 =head1 COPYRIGHT AND LICENSE
 
-Copyright (C) 2003-2005 Mark Shelor
+Copyright (C) 2003-2006 Mark Shelor
 
 This library is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.

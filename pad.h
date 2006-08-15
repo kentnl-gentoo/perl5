@@ -50,14 +50,20 @@ typedef enum {
  * whether PL_comppad and PL_curpad are consistent and whether they have
  * active values */
 
+#ifndef PERL_MAD
+#  define pad_peg(label)
+#endif
+
 #ifdef DEBUGGING
 #  define ASSERT_CURPAD_LEGAL(label) \
+    pad_peg(label); \
     if (PL_comppad ? (AvARRAY(PL_comppad) != PL_curpad) : (PL_curpad != 0))  \
 	Perl_croak(aTHX_ "panic: illegal pad in %s: 0x%"UVxf"[0x%"UVxf"]",\
 	    label, PTR2UV(PL_comppad), PTR2UV(PL_curpad));
 
 
 #  define ASSERT_CURPAD_ACTIVE(label) \
+    pad_peg(label); \
     if (!PL_comppad || (AvARRAY(PL_comppad) != PL_curpad))		  \
 	Perl_croak(aTHX_ "panic: invalid pad in %s: 0x%"UVxf"[0x%"UVxf"]",\
 	    label, PTR2UV(PL_comppad), PTR2UV(PL_curpad));
@@ -138,37 +144,37 @@ Restore the old pad saved into the local variable opad by PAD_SAVE_LOCAL()
 
 #define PAD_BASE_SV(padlist, po) \
 	(AvARRAY(padlist)[1]) 	\
-	    ? AvARRAY((AV*)(AvARRAY(padlist)[1]))[po] : Nullsv;
+	    ? AvARRAY((AV*)(AvARRAY(padlist)[1]))[po] : NULL;
     
 
-#define PAD_SET_CUR_NOSAVE(padlist,n) \
-	PL_comppad = (PAD*) (AvARRAY(padlist)[n]);		\
+#define PAD_SET_CUR_NOSAVE(padlist,nth) \
+	PL_comppad = (PAD*) (AvARRAY(padlist)[nth]);		\
 	PL_curpad = AvARRAY(PL_comppad);			\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log,			\
 	      "Pad 0x%"UVxf"[0x%"UVxf"] set_cur    depth=%d\n",	\
-	      PTR2UV(PL_comppad), PTR2UV(PL_curpad), (int)(n)));
+	      PTR2UV(PL_comppad), PTR2UV(PL_curpad), (int)(nth)));
 
 
-#define PAD_SET_CUR(padlist,n) \
+#define PAD_SET_CUR(padlist,nth) \
 	SAVECOMPPAD();						\
-	PAD_SET_CUR_NOSAVE(padlist,n);
+	PAD_SET_CUR_NOSAVE(padlist,nth);
 
 
 #define PAD_SAVE_SETNULLPAD()	SAVECOMPPAD(); \
-	PL_comppad = Null(PAD*); PL_curpad = Null(SV**);	\
+	PL_comppad = NULL; PL_curpad = NULL;	\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log, "Pad set_null\n"));
 
 #define PAD_SAVE_LOCAL(opad,npad) \
 	opad = PL_comppad;					\
 	PL_comppad = (npad);					\
-	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : Null(SV**); \
+	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : NULL;	\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log,			\
 	      "Pad 0x%"UVxf"[0x%"UVxf"] save_local\n",		\
 	      PTR2UV(PL_comppad), PTR2UV(PL_curpad)));
 
 #define PAD_RESTORE_LOCAL(opad) \
 	PL_comppad = opad;					\
-	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : Null(SV**); \
+	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : NULL;	\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log,			\
 	      "Pad 0x%"UVxf"[0x%"UVxf"] restore_local\n",	\
 	      PTR2UV(PL_comppad), PTR2UV(PL_curpad)));
@@ -219,12 +225,14 @@ ling pad (lvalue) to C<gen>.  Note that C<SvCUR_set> is hijacked for this purpos
 */
 
 #define PAD_COMPNAME_FLAGS(po) SvFLAGS(*av_fetch(PL_comppad_name, (po), FALSE))
+#define PAD_COMPNAME_FLAGS_isOUR(po) \
+  ((PAD_COMPNAME_FLAGS(po) & (SVpad_NAME|SVpad_OUR)) == (SVpad_NAME|SVpad_OUR))
 #define PAD_COMPNAME_PV(po) SvPV_nolen(*av_fetch(PL_comppad_name, (po), FALSE))
 
 #define PAD_COMPNAME_TYPE(po) pad_compname_type(po)
 
 #define PAD_COMPNAME_OURSTASH(po) \
-    (GvSTASH(*av_fetch(PL_comppad_name, (po), FALSE)))
+    (OURSTASH(*av_fetch(PL_comppad_name, (po), FALSE)))
 
 #define PAD_COMPNAME_GEN(po) SvCUR(AvARRAY(PL_comppad_name)[po])
 
@@ -264,7 +272,7 @@ Clone the state variables associated with running and compiling pads.
 
 #define PAD_CLONE_VARS(proto_perl, param)				\
     PL_comppad = (AV *) ptr_table_fetch(PL_ptr_table, proto_perl->Icomppad); \
-    PL_curpad = PL_comppad ?  AvARRAY(PL_comppad) : Null(SV**);		\
+    PL_curpad = PL_comppad ?  AvARRAY(PL_comppad) : NULL;		\
     PL_comppad_name		= av_dup(proto_perl->Icomppad_name, param); \
     PL_comppad_name_fill	= proto_perl->Icomppad_name_fill;	\
     PL_comppad_name_floor	= proto_perl->Icomppad_name_floor;	\

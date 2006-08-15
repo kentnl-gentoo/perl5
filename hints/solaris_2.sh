@@ -463,6 +463,14 @@ case "$usemorebits" in
 	;;
 esac
 
+if test `uname -p` = i386; then
+    case "$use64bitint" in
+    "$define"|true|[yY]*)
+            ccflags="$ccflags -DPTR_IS_LONG"
+            ;;
+    esac
+fi
+
 if test `uname -p` = sparc -o `uname -p` = i386; then
     cat > UU/use64bitint.cbu <<'EOCBU'
 # This script UU/use64bitint.cbu will get 'called-back' by Configure
@@ -548,12 +556,13 @@ EOM
 		    ccflags="$ccflags -mcpu=v9"
 		fi 
 		ccflags="$ccflags -m64"
-		if test $processor = sparc -a X`getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null` != X; then
-		    # This adds in -Wa,-xarch=v9.  I suspect that's superfluous,
-		    # since the -m64 above should do that already.  Someone
-		    # with gcc-3.x.x, please test with gcc -v.   A.D. 20-Nov-2003
-		    ccflags="$ccflags -Wa,`getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null`"
-		fi
+
+		# This adds in -Wa,-xarch=v9.  I suspect that's superfluous,
+		# since the -m64 above should do that already.  Someone
+		# with gcc-3.x.x, please test with gcc -v.   A.D. 20-Nov-2003
+#		if test $processor = sparc -a X`getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null` != X; then
+#		    ccflags="$ccflags -Wa,`getconf XBS5_LP64_OFF64_CFLAGS 2>/dev/null`"
+#		fi
 		ldflags="$ldflags -m64"
 		lddlflags="$lddlflags -G -m64"
 		;;

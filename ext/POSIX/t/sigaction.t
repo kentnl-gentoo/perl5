@@ -16,7 +16,7 @@ BEGIN{
 	}
 }
 
-use Test::More tests => 30;
+use Test::More tests => 31;
 
 use strict;
 use vars qw/$bad $bad7 $ok10 $bad18 $ok/;
@@ -205,3 +205,6 @@ SKIP: {
     kill 'HUP', $$;
 }
 
+eval { sigaction(-999, "foo"); };
+like($@, qr/Negative signals/,
+    "Prevent negative signals instead of core dumping");

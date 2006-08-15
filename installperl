@@ -7,6 +7,31 @@ BEGIN {
     $ENV{PERL5LIB} = 'lib';
 }
 
+BEGIN {
+    use Config;
+    if ($Config{userelocatableinc}) {
+	# This might be a considered a hack. Need to get information about the
+	# configuration from Config.pm *before* Config.pm expands any .../
+	# prefixes.
+	#
+	# So we set $^X to pretend that we're the already installed perl, so
+	# Config.pm doesits ... expansion off that location.
+
+	my $location = $Config{initialinstalllocation};
+	die <<'OS' unless defined $location;
+$Config{initialinstalllocation} is not defined - can't install a relocatable
+perl without this.
+OS
+	$^X = "$location/perl";
+	# And then remove all trace of ever having loaded Config.pm, so that
+	# it will reload with the revised $^X
+	undef %Config::;
+	delete $INC{"Config.pm"};
+	delete $INC{"Config_heavy.pl"};
+	# You never saw us. We weren't here.
+    }
+}
+
 use strict;
 my ($Is_VMS, $Is_W32, $Is_OS2, $Is_Cygwin, $Is_Darwin,
     $nonono, $dostrip, $versiononly, $silent, $verbose, $force,
@@ -156,11 +181,8 @@ find(sub {
     if ("$File::Find::dir/$_" =~ m{^ext\b(.*)/([^/]+)\.pm$}) {
 	my($path, $modname) = ($1,$2);
 
-	# strip trailing component first
-	$path =~ s{/[^/]*$}{};
-
-	# strip optional "/lib";
-	$path =~ s{/lib\b}{};
+	# strip to optional "/lib", or remove trailing component
+	$path =~ s{.*/lib\b}{} or $path =~ s{/[^/]*$}{};
 
 	# strip any leading /
 	$path =~ s{^/}{};
@@ -577,7 +599,7 @@ if ($versiononly) {
 # Install pod pages.  Where? I guess in $installprivlib/pod
 # ($installprivlib/pods for cygwin).
 
-my $pod = ($Is_Cygwin || $Is_Darwin || $Is_VMS) ? 'pods' : 'pod';
+my $pod = ($Is_Cygwin || $Is_Darwin || $Is_VMS || $Is_W32) ? 'pods' : 'pod';
 if ( !$versiononly || ($installprivlib =~ m/\Q$ver/)) {
     mkpath("${installprivlib}/$pod", $verbose, 0777);
 
@@ -806,9 +828,9 @@ sub installlib {
     # ignore the cpan script in lib/CPAN/bin, the instmodsh and xsubpp
     # scripts in lib/ExtUtils, the prove script in lib/Test/Harness,
     # the corelist script from lib/Module/CoreList/bin and ptar* in
-    # lib/Archive/Tar/bin
+    # lib/Archive/Tar/bin, the config_data script in lib/Module/Build/scripts
     # (they're installed later with other utils)
-    return if $name =~ /^(?:cpan|instmodsh|prove|corelist|ptar|ptardiff)\z/;
+    return if $name =~ /^(?:cpan|instmodsh|prove|corelist|ptar|ptardiff|config_data)\z/;
     # ignore the Makefiles
     return if $name =~ /^makefile$/i;
     # ignore the test extensions
@@ -837,7 +859,7 @@ sub installlib {
     }
 
     if (-f $_) {
-	if (/\.(?:al|ix)$/ && !($dir =~ m[^auto/(.*)$] && $archpms{$1})) {
+	if (/\.(?:al|ix)$/ && !($dir =~ m[^auto/(.*)$])) {
 	    $installlib = $installprivlib;
 	    #We're installing *.al and *.ix files into $installprivlib,
 	    #but we have to delete old *.al and *.ix files from the 5.000

@@ -16,6 +16,8 @@ while (<DESC>) {
 }
 close DESC;
 $tot = $ind;
+die "Too many regexp opcodes! Maximum is 256, but there are $tot in file!"
+    if $tot>256;
 
 $tmp_h = 'tmp_reg.h';
 
@@ -43,6 +45,7 @@ EOP
 }
 
 print OUT <<EOP;
+#define REGNODE_MAX $oind
 
 #ifndef DOINIT
 EXTCONST U8 PL_regkind[];

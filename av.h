@@ -9,15 +9,23 @@
  */
 
 struct xpvav {
-    NV		xnv_nv;		/* numeric value, if any */
+    union {
+	NV	xnv_nv;		/* numeric value, if any */
+	HV *	xgv_stash;
+    }		xnv_u;
     SSize_t	xav_fill;       /* Index of last element present */
     SSize_t	xav_max;        /* max index for which array has space */
     union {
 	IV	xivu_iv;	/* integer value or pv offset */
 	UV	xivu_uv;
 	void *	xivu_p1;
+	I32	xivu_i32;
+	HEK *	xivu_namehek;
     }		xiv_u;
-    MAGIC*	xmg_magic;	/* magic for scalar array */
+    union {
+	MAGIC*	xmg_magic;	/* linked list of magicalness */
+	HV*	xmg_ourstash;	/* Stash for our (when SvPAD_OUR is true) */
+    } xmg_u;
     HV*		xmg_stash;	/* class package */
 };
 
@@ -31,8 +39,13 @@ typedef struct {
 	IV	xivu_iv;	/* integer value or pv offset */
 	UV	xivu_uv;
 	void *	xivu_p1;
+	I32	xivu_i32;
+	HEK *	xivu_namehek;
     }		xiv_u;
-    MAGIC*	xmg_magic;	/* magic for scalar array */
+    union {
+	MAGIC*	xmg_magic;	/* linked list of magicalness */
+	HV*	xmg_ourstash;	/* Stash for our (when SvPAD_OUR is true) */
+    } xmg_u;
     HV*		xmg_stash;	/* class package */
 } xpvav_allocated;
 #endif

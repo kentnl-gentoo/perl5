@@ -21,7 +21,9 @@
 #ifndef ___VMEM_H_INC___
 #define ___VMEM_H_INC___
 
+#ifndef UNDER_CE
 #define _USE_MSVCRT_MEM_ALLOC
+#endif
 #define _USE_LINKED_LIST
 
 // #define _USE_BUDDY_BLOCKS
@@ -205,7 +207,8 @@ void VMem::Free(void* pMem)
 		dTHX;
 	    	int *nowhere = NULL;
 	    	Perl_warn(aTHX_ "Free to wrong pool %p not %p",this,ptr->owner);
-            	*nowhere = 0;
+            	*nowhere = 0; /* this segfault is deliberate, 
+            	                 so you can see the stack trace */
 #else
                 ptr->owner->Free(pMem);	
 #endif

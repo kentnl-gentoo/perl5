@@ -70,13 +70,14 @@ your regular expression into (slightly) more readable parts.  The C<#>
 character is also treated as a metacharacter introducing a comment,
 just as in ordinary Perl code.  This also means that if you want real
 whitespace or C<#> characters in the pattern (outside a character
-class, where they are unaffected by C</x>), that you'll either have to 
-escape them or encode them using octal or hex escapes.  Taken together,
-these features go a long way towards making Perl's regular expressions
-more readable.  Note that you have to be careful not to include the
-pattern delimiter in the comment--perl has no way of knowing you did
-not intend to close the pattern early.  See the C-comment deletion code
-in L<perlop>.
+class, where they are unaffected by C</x>), then you'll either have to
+escape them (using backslashes or C<\Q...\E>) or encode them using octal
+or hex escapes.  Taken together, these features go a long way towards
+making Perl's regular expressions more readable.  Note that you have to
+be careful not to include the pattern delimiter in the comment--perl has
+no way of knowing you did not intend to close the pattern early.  See
+the C-comment deletion code in L<perlop>.  Also note that anything inside
+a C<\Q...\E> stays unaffected by C</x>.
 X</x>
 
 =head2 Regular Expressions
@@ -224,8 +225,17 @@ X<character class>
 
     [:class:]
 
-is also available.  The available classes and their backslash
-equivalents (if available) are as follows:
+is also available.  Note that the C<[> and C<]> braces are I<literal>;
+they must always be used within a character class expression.
+
+    # this is correct:
+    $string =~ /[[:alpha:]]/;
+
+    # this is not, and will generate a warning:
+    $string =~ /[:alpha:]/;
+
+The available classes and their backslash equivalents (if available) are
+as follows:
 X<character class>
 X<alpha> X<alnum> X<ascii> X<blank> X<cntrl> X<digit> X<graph>
 X<lower> X<print> X<punct> X<space> X<upper> X<word> X<xdigit>
@@ -274,7 +284,7 @@ The following equivalences to Unicode \p{} constructs and equivalent
 backslash character classes (if available), will hold:
 X<character class> X<\p> X<\p{}>
 
-    [:...:]	\p{...}		backslash
+    [[:...:]]	\p{...}		backslash
 
     alpha       IsAlpha
     alnum       IsAlnum
@@ -292,7 +302,7 @@ X<character class> X<\p> X<\p{}>
     word        IsWord
     xdigit      IsXDigit
 
-For example C<[:lower:]> and C<\p{IsLower}> are equivalent.
+For example C<[[:lower:]]> and C<\p{IsLower}> are equivalent.
 
 If the C<utf8> pragma is not used but the C<locale> pragma is, the
 classes correlate with the usual isalpha(3) interface (except for
@@ -339,11 +349,11 @@ You can negate the [::] character classes by prefixing the class name
 with a '^'. This is a Perl extension.  For example:
 X<character class, negation>
 
-    POSIX	traditional Unicode
+    POSIX         traditional  Unicode
 
-    [:^digit:]      \D      \P{IsDigit}
-    [:^space:]	    \S	    \P{IsSpace}
-    [:^word:]	    \W	    \P{IsWord}
+    [[:^digit:]]    \D         \P{IsDigit}
+    [[:^space:]]    \S         \P{IsSpace}
+    [[:^word:]]	    \W         \P{IsWord}
 
 Perl respects the POSIX standard in that POSIX character classes are
 only supported within a character class.  The POSIX character classes
@@ -685,6 +695,10 @@ so you should only do so if you are also using taint checking.
 Better yet, use the carefully constrained evaluation within a Safe
 compartment.  See L<perlsec> for details about both these mechanisms.
 
+Because perl's regex engine is not currently re-entrant, interpolated 
+code may not invoke the regex engine either directly with C<m//> or C<s///>),
+or indirectly with functions such as C<split>.
+
 =item C<(??{ code })>
 X<(??{})>
 X<regex, postponed> X<regexp, postponed> X<regular expression, postponed>
@@ -714,6 +728,10 @@ The following pattern matches a parenthesized group:
 	     )*
 	     \)
 	  }x;
+
+Because perl's regex engine is not currently re-entrant, delayed 
+code may not invoke the regex engine either directly with C<m//> or C<s///>),
+or indirectly with functions such as C<split>.
 
 =item C<< (?>pattern) >>
 X<backtrack> X<backtracking>

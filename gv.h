@@ -19,29 +19,53 @@ struct gp {
     CV *	gp_cv;		/* subroutine value */
     U32		gp_cvgen;	/* generational validity of cached gv_cv */
     line_t	gp_line;	/* line first declared at (for -w) */
-    char *	gp_file;	/* file first declared in (for -w) */
+    HEK *	gp_file_hek;	/* file first declared in (for -w) */
 };
 
 #define GvXPVGV(gv)	((XPVGV*)SvANY(gv))
 
-/* MSVC++ 6.0 (_MSC_VER == 1200) can't compile pp_hot.c with DEBUGGING enabled
- * if we include the following assert(). Must be a compiler bug because it
- * works fine with MSVC++ 7.0. Borland (5.5.1) has the same problem. And MinGW
- * (gcc-3.4.2) has a different problem when compiling win32/perllib.c! */
-#if defined(DEBUGGING) && \
-    ((!defined(_MSC_VER) || _MSC_VER > 1200) && \
-      !defined(__BORLANDC__) && !defined(__MINGW32__))
-#  define GvGP(gv)	(*(assert(SvTYPE(gv) == SVt_PVGV || \
-				  SvTYPE(gv) == SVt_PVLV), \
-			   &(GvXPVGV(gv)->xgv_gp)))
+
+#if defined (DEBUGGING) && defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN) && !defined(__INTEL_COMPILER)
+#  define GvGP(gv)							\
+	(*({GV *const shplep = (GV *) (gv);				\
+	    assert(SvTYPE(shplep) == SVt_PVGV || SvTYPE(shplep) == SVt_PVLV); \
+	    assert(isGV_with_GP(shplep));				\
+	    &((shplep)->sv_u.svu_gp);}))
+#  define GvFLAGS(gv)							\
+	(*({GV *const yaah  = (GV *) (gv);				\
+	    assert(SvTYPE(yaah) == SVt_PVGV || SvTYPE(yaah) == SVt_PVLV); \
+	    assert(isGV_with_GP(yaah));					\
+	    &(GvXPVGV(yaah)->xpv_cur);}))
+#  define GvSTASH(gv)							\
+	(*({ GV * const _gv = (GV *) (gv);				\
+	    assert(isGV_with_GP(_gv));					\
+	    assert(SvTYPE(_gv) == SVt_PVGV || SvTYPE(_gv) >= SVt_PVLV);	\
+	    &(GvXPVGV(_gv)->xnv_u.xgv_stash);				\
+	 }))
+#  define GvNAME_HEK(gv)						\
+	(*({ GV * const zzzz = (GV *) (gv);				\
+	   assert(isGV_with_GP(zzzz));					\
+	   assert(SvTYPE(zzzz) == SVt_PVGV || SvTYPE(zzzz) >= SVt_PVLV); \
+	   &(GvXPVGV(zzzz)->xiv_u.xivu_namehek);			\
+	 }))
+#  define GvNAME_get(gv)	({ assert(GvNAME_HEK(gv)); HEK_KEY(GvNAME_HEK(gv)); })
+#  define GvNAMELEN_get(gv)	({ assert(GvNAME_HEK(gv)); HEK_LEN(GvNAME_HEK(gv)); })
 #else
-#  define GvGP(gv)	(GvXPVGV(gv)->xgv_gp)
+#  define GvGP(gv)	((gv)->sv_u.svu_gp)
+#  define GvFLAGS(gv)	(GvXPVGV(gv)->xpv_cur)
+#  define GvSTASH(gv)	(GvXPVGV(gv)->xnv_u.xgv_stash)
+#  define GvNAME_HEK(gv)	(GvXPVGV(gv)->xiv_u.xivu_namehek)
+#  define GvNAME_get(gv)	HEK_KEY(GvNAME_HEK(gv))
+#  define GvNAMELEN_get(gv)	HEK_LEN(GvNAME_HEK(gv))
 #endif
 
-#define GvNAME(gv)	(GvXPVGV(gv)->xgv_name)
-#define GvNAMELEN(gv)	(GvXPVGV(gv)->xgv_namelen)
-#define GvSTASH(gv)	(GvXPVGV(gv)->xgv_stash)
-#define GvFLAGS(gv)	(GvXPVGV(gv)->xgv_flags)
+#define GvNAME(gv)	GvNAME_get(gv)
+#define GvNAMELEN(gv)	GvNAMELEN_get(gv)
+
+#define	GvASSIGN_GENERATION(gv)		(0 + ((XPV*) SvANY(gv))->xpv_len)
+#define	GvASSIGN_GENERATION_set(gv,val)			\
+	STMT_START { assert(SvTYPE(gv) == SVt_PVGV);	\
+		(((XPV*) SvANY(gv))->xpv_len = (val)); } STMT_END
 
 /*
 =head1 GV Functions
@@ -84,10 +108,11 @@ Return the SV from the GV.
 
 #define GvCV(gv)	(GvGP(gv)->gp_cv)
 #define GvCVGEN(gv)	(GvGP(gv)->gp_cvgen)
-#define GvCVu(gv)	(GvGP(gv)->gp_cvgen ? Nullcv : GvGP(gv)->gp_cv)
+#define GvCVu(gv)	(GvGP(gv)->gp_cvgen ? NULL : GvGP(gv)->gp_cv)
 
 #define GvLINE(gv)	(GvGP(gv)->gp_line)
-#define GvFILE(gv)	(GvGP(gv)->gp_file)
+#define GvFILE_HEK(gv)	(GvGP(gv)->gp_file_hek)
+#define GvFILE(gv)	HEK_KEY(GvFILE_HEK(gv))
 #define GvFILEGV(gv)	(gv_fetchfile(GvFILE(gv)))
 
 #define GvEGV(gv)	(GvGP(gv)->gp_egv)
@@ -141,8 +166,8 @@ Return the SV from the GV.
 #define GvIN_PAD_off(gv)	(GvFLAGS(gv) &= ~GVf_IN_PAD)
 
 #define GvUNIQUE(gv)            0
-#define GvUNIQUE_on(gv)
-#define GvUNIQUE_off(gv)
+#define GvUNIQUE_on(gv)         NOOP
+#define GvUNIQUE_off(gv)        NOOP
 
 #ifdef USE_ITHREADS
 #define GV_UNIQUE_CHECK
@@ -163,7 +188,9 @@ Return the SV from the GV.
 /*
  * symbol creation flags, for use in gv_fetchpv() and get_*v()
  */
-#define GV_ADD		0x01	/* add, if symbol not already there */
+#define GV_ADD		0x01	/* add, if symbol not already there
+				   For gv_name_set, adding a HEK for the first
+				   time, so don't try to free what's there.  */
 #define GV_ADDMULTI	0x02	/* add, pretending it has been added already */
 #define GV_ADDWARN	0x04	/* add, but warn if symbol wasn't already there */
 #define GV_ADDINEVAL	0x08	/* add, as though we're doing so within an eval */
@@ -173,6 +200,8 @@ Return the SV from the GV.
 #define GV_NOADD_NOINIT	0x20	/* Don't add the symbol if it's not there.
 				   Don't init it if it is there but ! PVGV */
 #define GV_NOEXPAND	0x40	/* Don't expand SvOK() entries to PVGV */
+#define GV_NOTQUAL	0x80	/* A plain symbol name, not qualified with a
+				   package (so skip checks for :: and ')  */
 
 /*      SVf_UTF8 (more accurately the return value from SvUTF8) is also valid
 	as a flag to gv_fetch_pvn_flags, so ensure it lies outside this range.
@@ -180,3 +209,13 @@ Return the SV from the GV.
 #define gv_fullname3(sv,gv,prefix) gv_fullname4(sv,gv,prefix,TRUE)
 #define gv_efullname3(sv,gv,prefix) gv_efullname4(sv,gv,prefix,TRUE)
 #define gv_fetchmethod(stash, name) gv_fetchmethod_autoload(stash, name, TRUE)
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

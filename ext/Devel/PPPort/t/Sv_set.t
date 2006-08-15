@@ -21,13 +21,14 @@ BEGIN {
     unshift @INC, 't';
   }
 
-  eval "use Test";
-  if ($@) {
-    require 'testutil.pl';
-    print "1..3\n";
+  sub load {
+    eval "use Test";
+    require 'testutil.pl' if $@;
   }
-  else {
-    plan(tests => 3);
+
+  if (5) {
+    load();
+    plan(tests => 5);
   }
 }
 
@@ -35,8 +36,32 @@ use Devel::PPPort;
 use strict;
 $^W = 1;
 
+package Devel::PPPort;
+use vars '@ISA';
+require DynaLoader;
+@ISA = qw(DynaLoader);
+bootstrap Devel::PPPort;
+
+package main;
+
 my $foo = 5;
 ok(&Devel::PPPort::TestSvUV_set($foo, 12345), 42);
 ok(&Devel::PPPort::TestSvPVX_const("mhx"), 43);
 ok(&Devel::PPPort::TestSvPVX_mutable("mhx"), 44);
+
+my $bar = [];
+
+bless $bar, 'foo';
+ok($bar->x(), 'foobar');
+
+Devel::PPPort::TestSvSTASH_set($bar, 'bar');
+ok($bar->x(), 'hacker');
+
+package foo;
+
+sub x { 'foobar' }
+
+package bar;
+
+sub x { 'hacker' }
 

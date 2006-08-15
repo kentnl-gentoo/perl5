@@ -76,7 +76,8 @@ PERLVARI(Guse_safe_putenv, int, 1)
 #endif
 
 #ifdef USE_PERLIO
-PERLVARA(Gperlio_fd_refcnt, 2048, int) /* PERLIO_MAX_REFCOUNTABLE_FD */
+PERLVARI(Gperlio_fd_refcnt, int*, 0) /* Pointer to array of fd refcounts.  */
+PERLVARI(Gperlio_fd_refcnt_size, int, 0) /* Size of the array */
 PERLVARI(Gperlio_debug_fd, int, 0) /* the fd to write perlio debug into, 0 means not set yet */
 #endif
 
@@ -132,4 +133,8 @@ PERLVAR(Gtimesbase, struct tms)
 PERLVAR(Gmy_ctx_mutex, perl_mutex)
 # endif
 PERLVARI(Gmy_cxt_index, int, 0)
+#endif
+
+#if defined(USE_ITHREADS)
+PERLVAR(Ghints_mutex, perl_mutex)    /* Mutex for refcounted he refcounting */
 #endif

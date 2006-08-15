@@ -19,7 +19,7 @@ use Exporter;
 our(%insn_data, @insn_name, @optype, @specialsv_name);
 
 @optype = qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP);
-@specialsv_name = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no pWARN_ALL pWARN_NONE);
+@specialsv_name = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no (SV*)pWARN_ALL (SV*)pWARN_NONE (SV*)pWARN_STD);
 
 # XXX insn_data is initialised this way because with a large
 # %insn_data = (foo => [...], bar => [...], ...) initialiser
@@ -35,7 +35,7 @@ $insn_data{stpv} = [5, \&PUT_U32, "GET_U32"];
 $insn_data{ldspecsv} = [6, \&PUT_U8, "GET_U8"];
 $insn_data{ldspecsvx} = [7, \&PUT_U8, "GET_U8"];
 $insn_data{newsv} = [8, \&PUT_U8, "GET_U8"];
-$insn_data{newsvx} = [9, \&PUT_U32, "GET_U32"];
+$insn_data{newsvx} = [9, \&PUT_svtype, "GET_svtype"];
 $insn_data{newop} = [11, \&PUT_U8, "GET_U8"];
 $insn_data{newopx} = [12, \&PUT_U16, "GET_U16"];
 $insn_data{newopn} = [13, \&PUT_U8, "GET_U8"];
@@ -154,26 +154,25 @@ $insn_data{cop_filegv} = [126, \&PUT_svindex, "GET_svindex"];
 $insn_data{cop_seq} = [127, \&PUT_U32, "GET_U32"];
 $insn_data{cop_arybase} = [128, \&PUT_I32, "GET_I32"];
 $insn_data{cop_line} = [129, \&PUT_U32, "GET_U32"];
-$insn_data{cop_io} = [130, \&PUT_svindex, "GET_svindex"];
-$insn_data{cop_warnings} = [131, \&PUT_svindex, "GET_svindex"];
-$insn_data{main_start} = [132, \&PUT_opindex, "GET_opindex"];
-$insn_data{main_root} = [133, \&PUT_opindex, "GET_opindex"];
-$insn_data{main_cv} = [134, \&PUT_svindex, "GET_svindex"];
-$insn_data{curpad} = [135, \&PUT_svindex, "GET_svindex"];
-$insn_data{push_begin} = [136, \&PUT_svindex, "GET_svindex"];
-$insn_data{push_init} = [137, \&PUT_svindex, "GET_svindex"];
-$insn_data{push_end} = [138, \&PUT_svindex, "GET_svindex"];
-$insn_data{curstash} = [139, \&PUT_svindex, "GET_svindex"];
-$insn_data{defstash} = [140, \&PUT_svindex, "GET_svindex"];
-$insn_data{data} = [141, \&PUT_U8, "GET_U8"];
-$insn_data{incav} = [142, \&PUT_svindex, "GET_svindex"];
-$insn_data{load_glob} = [143, \&PUT_svindex, "GET_svindex"];
-$insn_data{regex_padav} = [144, \&PUT_svindex, "GET_svindex"];
-$insn_data{dowarn} = [145, \&PUT_U8, "GET_U8"];
-$insn_data{comppad_name} = [146, \&PUT_svindex, "GET_svindex"];
-$insn_data{xgv_stash} = [147, \&PUT_svindex, "GET_svindex"];
-$insn_data{signal} = [148, \&PUT_strconst, "GET_strconst"];
-$insn_data{formfeed} = [149, \&PUT_svindex, "GET_svindex"];
+$insn_data{cop_warnings} = [130, \&PUT_svindex, "GET_svindex"];
+$insn_data{main_start} = [131, \&PUT_opindex, "GET_opindex"];
+$insn_data{main_root} = [132, \&PUT_opindex, "GET_opindex"];
+$insn_data{main_cv} = [133, \&PUT_svindex, "GET_svindex"];
+$insn_data{curpad} = [134, \&PUT_svindex, "GET_svindex"];
+$insn_data{push_begin} = [135, \&PUT_svindex, "GET_svindex"];
+$insn_data{push_init} = [136, \&PUT_svindex, "GET_svindex"];
+$insn_data{push_end} = [137, \&PUT_svindex, "GET_svindex"];
+$insn_data{curstash} = [138, \&PUT_svindex, "GET_svindex"];
+$insn_data{defstash} = [139, \&PUT_svindex, "GET_svindex"];
+$insn_data{data} = [140, \&PUT_U8, "GET_U8"];
+$insn_data{incav} = [141, \&PUT_svindex, "GET_svindex"];
+$insn_data{load_glob} = [142, \&PUT_svindex, "GET_svindex"];
+$insn_data{regex_padav} = [143, \&PUT_svindex, "GET_svindex"];
+$insn_data{dowarn} = [144, \&PUT_U8, "GET_U8"];
+$insn_data{comppad_name} = [145, \&PUT_svindex, "GET_svindex"];
+$insn_data{xgv_stash} = [146, \&PUT_svindex, "GET_svindex"];
+$insn_data{signal} = [147, \&PUT_strconst, "GET_strconst"];
+$insn_data{formfeed} = [148, \&PUT_svindex, "GET_svindex"];
 
 my ($insn_name, $insn_data);
 while (($insn_name, $insn_data) = each %insn_data) {

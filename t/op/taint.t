@@ -17,8 +17,7 @@ use Config;
 use File::Spec::Functions;
 
 BEGIN { require './test.pl'; }
-plan tests => 245;
-
+plan tests => 251;
 
 $| = 1;
 
@@ -1148,3 +1147,60 @@ TERNARY_CONDITIONALS: {
     }
     cmp_ok $i, '<', 10000, "infinite m//g";
 }
+
+SKIP:
+{
+    my $got_dualvar;
+    eval 'use Scalar::Util "dualvar"; $got_dualvar++';
+    skip "No Scalar::Util::dualvar" unless $got_dualvar;
+    my $a = Scalar::Util::dualvar(3, $^X);
+    my $b = $a + 5;
+    is ($b, 8, "Arithmetic on tainted dualvars works");
+}
+
+# opening '|-' should not trigger $ENV{PATH} check
+
+{
+    SKIP: {
+	skip "fork() is not available", 3 unless $Config{'d_fork'};
+
+	$ENV{'PATH'} = $TAINT;
+	local $SIG{'PIPE'} = 'IGNORE';
+	eval {
+	    my $pid = open my $pipe, '|-';
+	    if (!defined $pid) {
+		die "open failed: $!";
+	    }
+	    if (!$pid) {
+		kill 'KILL', $$;	# child suicide
+	    }
+	    close $pipe;
+	};
+	test $@ !~ /Insecure \$ENV/, 'fork triggers %ENV check';
+	test $@ eq '',               'pipe/fork/open/close failed';
+	eval {
+	    open my $pipe, "|$Invoke_Perl -e 1";
+	    close $pipe;
+	};
+	test $@ =~ /Insecure \$ENV/, 'popen neglects %ENV check';
+    }
+}
+
+{
+    package AUTOLOAD_TAINT;
+    sub AUTOLOAD {
+        our $AUTOLOAD;
+        return if $AUTOLOAD =~ /DESTROY/;
+        if ($AUTOLOAD =~ /untainted/) {
+            main::ok(!main::tainted($AUTOLOAD), '$AUTOLOAD can be untainted');
+        } else {
+            main::ok(main::tainted($AUTOLOAD), '$AUTOLOAD can be tainted');
+        }
+    }
+
+    package main;
+    my $o = bless [], 'AUTOLOAD_TAINT';
+    $o->$TAINT;
+    $o->untainted;
+}
+

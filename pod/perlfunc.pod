@@ -158,19 +158,23 @@ C<goto>, C<last>, C<next>, C<redo>, C<return>, C<sub>, C<wantarray>
 
 =item Keywords related to switch
 
-C<break>, C<continue>
+C<break>, C<continue>, C<given>, C<when>, C<default>
 
 (These are only available if you enable the "switch" feature.
 See L<feature> and L<perlsyn/"Switch statements">.)
 
 =item Keywords related to scoping
 
-C<caller>, C<import>, C<local>, C<my>, C<our>, C<package>, C<use>
+C<caller>, C<import>, C<local>, C<my>, C<our>, C<state>, C<package>,
+C<use>
+
+(C<state> is only available if the "state" feature is enabled. See
+L<feature>.)
 
 =item Miscellaneous functions
 
-C<defined>, C<dump>, C<eval>, C<formline>, C<local>, C<my>, C<our>, C<reset>,
-C<scalar>, C<undef>, C<wantarray>
+C<defined>, C<dump>, C<eval>, C<formline>, C<local>, C<my>, C<our>,
+C<reset>, C<scalar>, C<state>, C<undef>, C<wantarray>
 
 =item Functions for processes and process groups
 X<process> X<pid> X<process id>
@@ -227,10 +231,11 @@ C<gmtime>, C<localtime>, C<time>, C<times>
 =item Functions new in perl5
 X<perl5>
 
-C<abs>, C<bless>, C<chomp>, C<chr>, C<exists>, C<formline>, C<glob>,
-C<import>, C<lc>, C<lcfirst>, C<map>, C<my>, C<no>, C<our>, C<prototype>,
-C<qx>, C<qw>, C<readline>, C<readpipe>, C<ref>, C<sub*>, C<sysopen>, C<tie>,
-C<tied>, C<uc>, C<ucfirst>, C<untie>, C<use>
+C<abs>, C<bless>, C<break>, C<chomp>, C<chr>, C<continue>, C<default>, 
+C<exists>, C<formline>, C<given>, C<glob>, C<import>, C<lc>, C<lcfirst>,
+C<lock>, C<map>, C<my>, C<no>, C<our>, C<prototype>, C<qr>, C<qw>, C<qx>,
+C<readline>, C<readpipe>, C<ref>, C<sub>*, C<sysopen>, C<tie>, C<tied>, C<uc>,
+C<ucfirst>, C<untie>, C<use>, C<when>
 
 * - C<sub> was a keyword in perl4, but in perl5 it is an
 operator, which can be used in expressions.
@@ -281,11 +286,13 @@ X<-S>X<-b>X<-c>X<-t>X<-u>X<-g>X<-k>X<-T>X<-B>X<-M>X<-A>X<-C>
 
 =item -X EXPR
 
+=item -X DIRHANDLE
+
 =item -X
 
 A file test, where X is one of the letters listed below.  This unary
-operator takes one argument, either a filename or a filehandle, and
-tests the associated file to see if something is true about it.  If the
+operator takes one argument, either a filename, a filehandle, or a dirhandle, 
+and tests the associated file to see if something is true about it.  If the
 argument is omitted, tests C<$_>, except for C<-t>, which tests STDIN.
 Unless otherwise documented, it returns C<1> for true and C<''> for false, or
 the undefined value if the file doesn't exist.  Despite the funny
@@ -623,7 +630,8 @@ print a stack trace.  The value of EXPR indicates how many call frames
 to go back before the current one.
 
     ($package, $filename, $line, $subroutine, $hasargs,
-    $wantarray, $evaltext, $is_require, $hints, $bitmask) = caller($i);
+    $wantarray, $evaltext, $is_require, $hints, $bitmask, $hinthash)
+	 = caller($i);
 
 Here $subroutine may be C<(eval)> if the frame is not a subroutine
 call, but an C<eval>.  In such a case additional elements $evaltext and
@@ -639,6 +647,10 @@ C<$hints> and C<$bitmask> contain pragmatic hints that the caller was
 compiled with.  The C<$hints> and C<$bitmask> values are subject to change
 between versions of Perl, and are not meant for external use.
 
+C<$hinthash> is a reference to a hash containing the value of C<%^H> when the
+caller was compiled, or C<undef> if C<%^H> was empty. Do not modify the values
+of this hash, as they are the actual values stored in the optree.
+
 Furthermore, when called from within the DB package, caller returns more
 detailed information: it sets the list variable C<@DB::args> to be the
 arguments with which the subroutine was invoked.
@@ -652,6 +664,7 @@ previous time C<caller> was called.
 =item chdir EXPR
 X<chdir>
 X<cd>
+X<directory, change>
 
 =item chdir FILEHANDLE
 
@@ -688,7 +701,9 @@ successfully changed.  See also L</oct>, if all you have is a string.
 
 On systems that support fchmod, you might pass file handles among the
 files.  On systems that don't support fchmod, passing file handles
-produces a fatal error at run time.
+produces a fatal error at run time.   The file handles must be passed
+as globs or references to be recognized.  Barewords are considered
+file names.
 
     open(my $fh, "<", "foo");
     my $perm = (stat $fh)[2] & 07777;
@@ -784,7 +799,9 @@ successfully changed.
 
 On systems that support fchown, you might pass file handles among the
 files.  On systems that don't support fchown, passing file handles
-produces a fatal error at run time.
+produces a fatal error at run time.  The file handles must be passed
+as globs or references to be recognized.  Barewords are considered
+file names.
 
 Here's an example that looks up nonnumeric uids in the passwd file:
 
@@ -954,7 +971,7 @@ function, or use this relation:
 
 =item crypt PLAINTEXT,SALT
 X<crypt> X<digest> X<hash> X<salt> X<plaintext> X<password>
-X<decrypt> X<cryptography> X<passwd>
+X<decrypt> X<cryptography> X<passwd> X<encrypt>
 
 Creates a digest string exactly like the crypt(3) function in the C
 library (assuming that you actually have a version there that has not
@@ -1492,6 +1509,7 @@ there was an error.
 
 =item eval EXPR
 X<eval> X<try> X<catch> X<evaluate> X<parse> X<execute>
+X<error, handling> X<exception, handling>
 
 =item eval BLOCK
 
@@ -1985,7 +2003,7 @@ character may be taken to mean the beginning of an array name.
 C<formline> always returns true.  See L<perlform> for other examples.
 
 =item getc FILEHANDLE
-X<getc> X<getchar>
+X<getc> X<getchar> X<character> X<file, read>
 
 =item getc
 
@@ -2299,49 +2317,12 @@ X<gmtime> X<UTC> X<Greenwich>
 
 =item gmtime
 
-Converts a time as returned by the time function to an 9-element list
-with the time localized for the standard Greenwich time zone.
-Typically used as follows:
+Works just like L<localtime> but the returned values are
+localized for the standard Greenwich time zone.
 
-    #  0    1    2     3     4    5     6     7     8
-    ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) =
-					    gmtime(time);
-
-All list elements are numeric, and come straight out of the C `struct
-tm'.  $sec, $min, and $hour are the seconds, minutes, and hours of the
-specified time.  $mday is the day of the month, and $mon is the month
-itself, in the range C<0..11> with 0 indicating January and 11
-indicating December.  $year is the number of years since 1900.  That
-is, $year is C<123> in year 2023.  $wday is the day of the week, with
-0 indicating Sunday and 3 indicating Wednesday.  $yday is the day of
-the year, in the range C<0..364> (or C<0..365> in leap years).  $isdst
-is always C<0>.
-
-Note that the $year element is I<not> simply the last two digits of
-the year.  If you assume it is then you create non-Y2K-compliant
-programs--and you wouldn't want to do that, would you?
-
-The proper way to get a complete 4-digit year is simply:
-
-	$year += 1900;
-
-And to get the last two digits of the year (e.g., '01' in 2001) do:
-
-	$year = sprintf("%02d", $year % 100);
-
-If EXPR is omitted, C<gmtime()> uses the current time (C<gmtime(time)>).
-
-In scalar context, C<gmtime()> returns the ctime(3) value:
-
-    $now_string = gmtime;  # e.g., "Thu Oct 13 04:54:34 1994"
-
-If you need local time instead of GMT use the L</localtime> builtin. 
-See also the C<timegm> function provided by the C<Time::Local> module,
-and the strftime(3) and mktime(3) functions available via the L<POSIX> module.
-
-This scalar value is B<not> locale dependent (see L<perllocale>), but is
-instead a Perl builtin.  To get somewhat similar but locale dependent date
-strings, see the example in L</localtime>.
+Note: when called in list context, $isdst, the last value
+returned by gmtime is always C<0>.  There is no
+Daylight Saving Time in GMT.
 
 See L<perlport/gmtime> for portability concerns.
 
@@ -2463,7 +2444,7 @@ you've set the C<$[> variable to--but don't do that).  If the substring
 is not found, C<index> returns one less than the base, ordinarily C<-1>.
 
 =item int EXPR
-X<int> X<integer> X<truncate> X<trunc>
+X<int> X<integer> X<truncate> X<trunc> X<floor>
 
 =item int
 
@@ -2593,10 +2574,12 @@ same as the number actually killed).
     $cnt = kill 1, $child1, $child2;
     kill 9, @goners;
 
-If SIGNAL is zero, no signal is sent to the process.  This is a
-useful way to check that a child process is alive and hasn't changed
-its UID.  See L<perlport> for notes on the portability of this
-construct.
+If SIGNAL is zero, no signal is sent to the process, but the kill(2)
+system call will check whether it's possible to send a signal to it (that
+means, to be brief, that the process is owned by the same user, or we are
+the super-user).  This is a useful way to check that a child process is
+alive and hasn't changed its UID.  See L<perlport> for notes on the
+portability of this construct.
 
 Unlike in the shell, if SIGNAL is negative, it kills
 process groups instead of processes.  (On System V, a negative I<PROCESS>
@@ -2697,7 +2680,7 @@ be placed in parentheses.  See L<perlsub/"Temporary Values via local()">
 for details, including issues with tied arrays and hashes.
 
 =item localtime EXPR
-X<localtime>
+X<localtime> X<ctime>
 
 =item localtime
 
@@ -2726,6 +2709,9 @@ of the year.  That is, C<$year> is C<123> in year 2023.  The proper way
 to get a complete 4-digit year is simply:
 
     $year += 1900;
+
+Otherwise you create non-Y2K-compliant programs--and you wouldn't want
+to do that, would you?
 
 To get the last two digits of the year (e.g., '01' in 2001) do:
 
@@ -2763,6 +2749,13 @@ Note that the C<%a> and C<%b>, the short forms of the day of the week
 and the month of the year, may not necessarily be three characters wide.
 
 See L<perlport/localtime> for portability concerns.
+
+The L<Time::gmtime> and L<Time::localtime> modules provides a convenient,
+by-name access mechanism to the gmtime() and localtime() functions,
+respectively.
+
+For a comprehensive date and time representation look at the
+L<DateTime> module on CPAN.
 
 =item lock THING
 X<lock>
@@ -2893,6 +2886,9 @@ Note that according to the POSIX 1003.1-1996 the FILENAME may have any
 number of trailing slashes.  Some operating and filesystems do not get
 this right, so Perl automatically removes all trailing slashes to keep
 everyone happy.
+
+In order to recursively create a directory structure look at
+the C<mkpath> function of the L<File::Path> module.
 
 =item msgctl ID,CMD,ARG
 X<msgctl>
@@ -3416,7 +3412,7 @@ See L<perlunicode> and L<encoding> for more about Unicode.
 =item our EXPR
 X<our> X<global>
 
-=item our EXPR TYPE
+=item our TYPE EXPR
 
 =item our EXPR : ATTRS
 
@@ -3484,30 +3480,6 @@ from Perl 5.8.0 also via the C<Attribute::Handlers> module.  See
 L<perlsub/"Private Variables via my()"> for details, and L<fields>,
 L<attributes>, and L<Attribute::Handlers>.
 
-The only currently recognized C<our()> attribute is C<unique> which
-indicates that a single copy of the global is to be used by all
-interpreters should the program happen to be running in a
-multi-interpreter environment. (The default behaviour would be for
-each interpreter to have its own copy of the global.)  Examples:
-
-    our @EXPORT : unique = qw(foo);
-    our %EXPORT_TAGS : unique = (bar => [qw(aa bb cc)]);
-    our $VERSION : unique = "1.00";
-
-Note that this attribute also has the effect of making the global
-readonly when the first new interpreter is cloned (for example,
-when the first new thread is created).
-
-Multi-interpreter environments can come to being either through the
-fork() emulation on Windows platforms, or by embedding perl in a
-multi-threaded application.  The C<unique> attribute does nothing in
-all other environments.
-
-Warning: the current implementation of this attribute operates on the
-typeglob associated with the variable; this means that C<our $x : unique>
-also has the effect of C<our @x : unique; our %x : unique>. This may be
-subject to change.
-
 =item pack TEMPLATE,LIST
 X<pack>
 
@@ -3551,7 +3523,7 @@ of values, as follows:
     I	A unsigned integer value.
 	  (This 'integer' is _at_least_ 32 bits wide.  Its exact
            size depends on what a local C compiler calls 'int'.)
- 
+
     n	An unsigned short (16-bit) in "network" (big-endian) order.
     N	An unsigned long (32-bit) in "network" (big-endian) order.
     v	An unsigned short (16-bit) in "VAX" (little-endian) order.
@@ -3740,29 +3712,32 @@ so will result in a fatal error.
 The C</> template character allows packing and unpacking of a sequence of
 items where the packed structure contains a packed item count followed by 
 the packed items themselves.
-You write I<length-item>C</>I<sequence-item>.
 
-The I<length-item> can be any C<pack> template letter, and describes
-how the length value is packed.  The ones likely to be of most use are
-integer-packing ones like C<n> (for Java strings), C<w> (for ASN.1 or
-SNMP) and C<N> (for Sun XDR).
+For C<pack> you write I<length-item>C</>I<sequence-item> and the
+I<length-item> describes how the length value is packed. The ones likely
+to be of most use are integer-packing ones like C<n> (for Java strings),
+C<w> (for ASN.1 or SNMP) and C<N> (for Sun XDR).
 
 For C<pack>, the I<sequence-item> may have a repeat count, in which case
 the minimum of that and the number of available items is used as argument
 for the I<length-item>. If it has no repeat count or uses a '*', the number
-of available items is used. For C<unpack> the repeat count is always obtained
-by decoding the packed item count, and the I<sequence-item> must not have a
-repeat count.
+of available items is used.
+
+For C<unpack> an internal stack of integer arguments unpacked so far is
+used. You write C</>I<sequence-item> and the repeat count is obtained by
+popping off the last element from the stack. The I<sequence-item> must not
+have a repeat count.
 
 If the I<sequence-item> refers to a string type (C<"A">, C<"a"> or C<"Z">),
 the I<length-item> is a string length, not a number of strings. If there is
 an explicit repeat count for pack, the packed string will be adjusted to that
 given length.
 
-    unpack 'W/a', "\04Gurusamy";        gives ('Guru')
-    unpack 'a3/A* A*', '007 Bond  J ';  gives (' Bond', 'J')
-    pack 'n/a* w/a','hello,','world';   gives "\000\006hello,\005world"
-    pack 'a/W2', ord('a') .. ord('z');  gives '2ab'
+    unpack 'W/a', "\04Gurusamy";            gives ('Guru')
+    unpack 'a3/A A*', '007 Bond  J ';       gives (' Bond', 'J')
+    unpack 'a3 x2 /A A*', '007: Bond, J.';  gives ('Bond, J', '.')
+    pack 'n/a* w/a','hello,','world';       gives "\000\006hello,\005world"
+    pack 'a/W2', ord('a') .. ord('z');      gives '2ab'
 
 The I<length-item> is not returned explicitly from C<unpack>.
 
@@ -4234,7 +4209,7 @@ large or too small, then your version of Perl was probably compiled
 with the wrong number of RANDBITS.)
 
 =item read FILEHANDLE,SCALAR,LENGTH,OFFSET
-X<read>
+X<read> X<file, read>
 
 =item read FILEHANDLE,SCALAR,LENGTH
 
@@ -4414,6 +4389,10 @@ Builtin types include:
     REF
     GLOB
     LVALUE
+    FORMAT
+    IO
+    VSTRING
+    Regexp
 
 If the referenced object has been blessed into a package, then that package
 name is returned instead.  You can think of C<ref> as a C<typeof> operator.
@@ -4439,6 +4418,9 @@ boundaries, even though the system I<mv> command sometimes compensates
 for this.  Other restrictions include whether it works on directories,
 open files, or pre-existing files.  Check L<perlport> and either the
 rename(2) manpage or equivalent system documentation for details.
+
+For a platform independent C<move> function look at the L<File::Copy>
+module.
 
 =item require VERSION
 X<require>
@@ -4532,14 +4514,12 @@ will complain about not finding "F<Foo::Bar>" there.  In this case you can do:
 
         eval "require $class";
 
-Now that you understand how C<require> looks for files in the case of
-a bareword argument, there is a little extra functionality going on
-behind the scenes.  Before C<require> looks for a "F<.pm>" extension,
-it will first look for a filename with a "F<.pmc>" extension.  A file
-with this extension is assumed to be Perl bytecode generated by
-L<B::Bytecode|B::Bytecode>.  If this file is found, and its modification
-time is newer than a coinciding "F<.pm>" non-compiled file, it will be
-loaded in place of that non-compiled file ending in a "F<.pm>" extension.
+Now that you understand how C<require> looks for files in the case of a
+bareword argument, there is a little extra functionality going on behind
+the scenes.  Before C<require> looks for a "F<.pm>" extension, it will
+first look for a similar filename with a "F<.pmc>" extension. If this file
+is found, it will be loaded in place of any file ending in a "F<.pm>"
+extension.
 
 You can also insert hooks into the import facility, by putting directly
 Perl code into the @INC array.  There are three forms of hooks: subroutine
@@ -4549,9 +4529,43 @@ Subroutine references are the simplest case.  When the inclusion system
 walks through @INC and encounters a subroutine, this subroutine gets
 called with two parameters, the first being a reference to itself, and the
 second the name of the file to be included (e.g. "F<Foo/Bar.pm>").  The
-subroutine should return C<undef> or a filehandle, from which the file to
-include will be read.  If C<undef> is returned, C<require> will look at
-the remaining elements of @INC.
+subroutine should return nothing, or a list of up to 4 values in the
+following order:
+
+=over
+
+=item 1
+
+A reference to a scalar, containing any initial source code to prepend to
+the file or generator output.
+
+
+=item 2
+
+A filehandle, from which the file will be read.  
+
+=item 3
+
+A reference to a subroutine. If there is no filehandle (previous item),
+then this subroutine is expected to generate one line of source code per
+call, writing the line into C<$_> and returning 1, then returning 0 at
+"end of file". If there is a filehandle, then the subroutine will be
+called to act a simple source filter, with the line as read in C<$_>.
+Again, return 1 for each valid line, and 0 after all lines have been
+returned.
+
+=item 4
+
+Optional state for the subroutine. The state is passed in as C<$_[1]>. A
+reference to the subroutine itself is passed in as C<$_[0]>.
+
+=back
+
+If an empty list, C<undef>, or nothing that matches the first 3 values above
+is returned then C<require> will look at the remaining elements of @INC.
+Note that this file handle must be a real file handle (strictly a typeglob,
+or reference to a typeglob, blessed or unblessed) - tied file handles will be
+ignored and return value processing will stop there.
 
 If the hook is an array reference, its first element must be a subroutine
 reference.  This subroutine is called as above, but the first parameter is
@@ -4578,8 +4592,8 @@ or:
 
 If the hook is an object, it must provide an INC method that will be
 called as above, the first parameter being the object itself.  (Note that
-you must fully qualify the sub's name, as it is always forced into package
-C<main>.)  Here is a typical code layout:
+you must fully qualify the sub's name, as unqualified C<INC> is always forced
+into package C<main>.)  Here is a typical code layout:
 
     # In Foo.pm
     package Foo;
@@ -4683,6 +4697,9 @@ X<rmdir> X<rd> X<directory, remove>
 Deletes the directory specified by FILENAME if that directory is
 empty.  If it succeeds it returns true, otherwise it returns false and
 sets C<$!> (errno).  If FILENAME is omitted, uses C<$_>.
+
+To remove a directory tree recursively (C<rm -rf> on unix) look at
+the C<rmtree> function of the L<File::Path> module.
 
 =item s///
 
@@ -5798,16 +5815,18 @@ for a seed can fall prey to the mathematical property that
 one-third of the time.  So don't do that.
 
 =item stat FILEHANDLE
-X<stat> X<file, status>
+X<stat> X<file, status> X<ctime>
 
 =item stat EXPR
+
+=item stat DIRHANDLE
 
 =item stat
 
 Returns a 13-element list giving the status info for a file, either
-the file opened via FILEHANDLE, or named by EXPR.  If EXPR is omitted,
-it stats C<$_>.  Returns a null list if the stat fails.  Typically used
-as follows:
+the file opened via FILEHANDLE or DIRHANDLE, or named by EXPR.  If EXPR is 
+omitted, it stats C<$_>.  Returns a null list if the stat fails.  Typically
+used as follows:
 
     ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,
        $atime,$mtime,$ctime,$blksize,$blocks)
@@ -5858,7 +5877,7 @@ In scalar context, C<stat> returns a boolean value indicating success
 or failure, and, if successful, sets the information associated with
 the special filehandle C<_>.
 
-The File::stat module provides a convenient, by-name access mechanism:
+The L<File::stat> module provides a convenient, by-name access mechanism:
 
     use File::stat;
     $sb = stat($filename);
@@ -5898,7 +5917,7 @@ The commonly available C<S_IF*> constants are
 
     # File types.  Not necessarily all are available on your system.
 
-    S_IFREG S_IFDIR S_IFLNK S_IFBLK S_ISCHR S_IFIFO S_IFSOCK S_IFWHT S_ENFMT
+    S_IFREG S_IFDIR S_IFLNK S_IFBLK S_IFCHR S_IFIFO S_IFSOCK S_IFWHT S_ENFMT
 
     # The following are compatibility aliases for S_IRUSR, S_IWUSR, S_IXUSR.
 
@@ -5927,6 +5946,23 @@ and the C<S_IF*> functions are
 See your native chmod(2) and stat(2) documentation for more details
 about the C<S_*> constants.  To get status info for a symbolic link
 instead of the target file behind the link, use the C<lstat> function.
+
+=item state EXPR
+X<state>
+
+=item state TYPE EXPR
+
+=item state EXPR : ATTRS
+
+=item state TYPE EXPR : ATTRS
+
+C<state> declares a lexically scoped variable, just like C<my> does.
+However, those variables will be initialized only once, contrary to
+lexical variables that are reinitialized each time their enclosing block
+is entered.
+
+C<state> variables are only enabled when the C<feature 'state'> pragma is
+in effect.  See L<feature>.
 
 =item study SCALAR
 X<study>
@@ -6020,6 +6056,13 @@ that far from the end of the string.  If LENGTH is omitted, returns
 everything to the end of the string.  If LENGTH is negative, leaves that
 many characters off the end of the string.
 
+    my $s = "The black cat climbed the green tree";
+    my $color  = substr $s, 4, 5;	# black
+    my $middle = substr $s, 4, -11;	# black cat climbed the
+    my $end    = substr $s, 14;		# climbed the green tree
+    my $tail   = substr $s, -4;		# tree
+    my $z      = substr $s, -4, 2;	# tr
+
 You can use the substr() function as an lvalue, in which case EXPR
 must itself be an lvalue.  If you assign something shorter than LENGTH,
 the string will shrink, and if you assign something longer than LENGTH,
@@ -6044,6 +6087,10 @@ replacement string as the 4th argument.  This allows you to replace
 parts of the EXPR and return what was there before in one operation,
 just as you can with splice().
 
+    my $s = "The black cat climbed the green tree";
+    my $z = substr $s, 14, 7, "jumped from";	# climbed
+    # $s is now "The black cat jumped from the green tree"
+
 Note that the lvalue returned by the 3-arg version of substr() acts as
 a 'magic bullet'; each time it is assigned to, it remembers which part
 of the original string is being modified; for example:
@@ -6055,7 +6102,6 @@ of the original string is being modified; for example:
         $x = '56789';
         $_ = 'pq';  print $x,"\n";	# prints 5pq9
     }
-
 
 Prior to Perl version 5.9.1, the result of using an lvalue multiple times was
 unspecified.
@@ -6470,10 +6516,14 @@ a prominent exception being Mac OS Classic which uses 00:00:00, January 1,
 1904 in the current local time zone for its epoch.
 
 For measuring time in better granularity than one second,
-you may use either the Time::HiRes module (from CPAN, and starting from
+you may use either the L<Time::HiRes> module (from CPAN, and starting from
 Perl 5.8 part of the standard distribution), or if you have
 gettimeofday(2), you may be able to use the C<syscall> interface of Perl.
 See L<perlfaq8> for details.
+
+For date and time processing look at the many related modules on CPAN.
+For a comprehensive date and time representation look at the
+L<DateTime> module.
 
 =item times
 X<times>
@@ -6484,6 +6534,8 @@ seconds, for this process and the children of this process.
     ($user,$system,$cuser,$csystem) = times;
 
 In scalar context, C<times> returns C<$user>.
+
+Note that times for children are included only after they terminate.
 
 =item tr///
 
@@ -6501,6 +6553,9 @@ otherwise.
 
 The behavior is undefined if LENGTH is greater than the length of the
 file.
+
+The position in the file of FILEHANDLE is left unchanged.  You may want to
+call L<seek> before writing to the file.
 
 =item uc EXPR
 X<uc> X<uppercase> X<toupper>
@@ -6595,7 +6650,7 @@ parameter.  Examples:
 Note that this is a unary operator, not a list operator.
 
 =item unlink LIST
-X<unlink> X<delete> X<remove> X<rm>
+X<unlink> X<delete> X<remove> X<rm> X<del>
 
 =item unlink
 
@@ -6830,7 +6885,9 @@ uninitialized warning.
 
 On systems that support futimes, you might pass file handles among the
 files.  On systems that don't support futimes, passing file handles
-produces a fatal error at run time.
+produces a fatal error at run time.  The file handles must be passed
+as globs or references to be recognized.  Barewords are considered
+file names.
 
 =item values HASH
 X<values>
@@ -7120,7 +7177,7 @@ The status is returned in C<$?> and C<{^CHILD_ERROR_NATIVE}>.  If you say
     #...
     do {
 	$kid = waitpid(-1, WNOHANG);
-    } until $kid > 0;
+    } while $kid > 0;
 
 then you can do a non-blocking wait for all pending zombie processes.
 Non-blocking wait is available on machines supporting either the

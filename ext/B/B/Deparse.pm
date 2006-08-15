@@ -11,7 +11,7 @@ package B::Deparse;
 use Carp;
 use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
 	 OPf_WANT OPf_WANT_VOID OPf_WANT_SCALAR OPf_WANT_LIST
-	 OPf_KIDS OPf_REF OPf_STACKED OPf_SPECIAL OPf_MOD
+	 OPf_KIDS OPf_REF OPf_STACKED OPf_SPECIAL OPf_MOD OPpPAD_STATE
 	 OPpLVAL_INTRO OPpOUR_INTRO OPpENTERSUB_AMPER OPpSLICE OPpCONST_BARE
 	 OPpTRANS_SQUASH OPpTRANS_DELETE OPpTRANS_COMPLEMENT OPpTARGET_MY
 	 OPpCONST_ARYBASE OPpEXISTS_SUB OPpSORT_NUMERIC OPpSORT_INTEGER
@@ -20,7 +20,7 @@ use B qw(class main_root main_start main_cv svref_2object opnumber perlstring
          CVf_METHOD CVf_LOCKED CVf_LVALUE CVf_ASSERTION
 	 PMf_KEEP PMf_GLOBAL PMf_CONTINUE PMf_EVAL PMf_ONCE PMf_SKIPWHITE
 	 PMf_MULTILINE PMf_SINGLELINE PMf_FOLD PMf_EXTENDED);
-$VERSION = 0.73;
+$VERSION = 0.76;
 use strict;
 use vars qw/$AUTOLOAD/;
 use warnings ();
@@ -607,7 +607,7 @@ sub init {
     $self->{'warnings'} = defined ($self->{'ambient_warnings'})
 				? $self->{'ambient_warnings'} & WARN_MASK
 				: undef;
-    $self->{'hints'}    = $self->{'ambient_hints'} & 0xFF;
+    $self->{'hints'}    = $self->{'ambient_hints'};
 
     # also a convenient place to clear out subs_declared
     delete $self->{'subs_declared'};
@@ -1056,10 +1056,11 @@ sub maybe_my {
     my $self = shift;
     my($op, $cx, $text) = @_;
     if ($op->private & OPpLVAL_INTRO and not $self->{'avoid_local'}{$$op}) {
+	my $my = $op->private & OPpPAD_STATE ? "state" : "my";
 	if (want_scalar($op)) {
-	    return "my $text";
+	    return "$my $text";
 	} else {
-	    return $self->maybe_parens_func("my", $text, $cx, 16);
+	    return $self->maybe_parens_func($my, $text, $cx, 16);
 	}
     } else {
 	return $text;
@@ -1401,9 +1402,9 @@ sub pp_nextstate {
 	$self->{'warnings'} = $warning_bits;
     }
 
-    if ($self->{'hints'} != $op->private) {
-	push @text, declare_hints($self->{'hints'}, $op->private);
-	$self->{'hints'} = $op->private;
+    if ($self->{'hints'} != $op->hints) {
+	push @text, declare_hints($self->{'hints'}, $op->hints);
+	$self->{'hints'} = $op->hints;
     }
 
     # This should go after of any branches that add statements, to
@@ -2425,7 +2426,7 @@ sub pp_list {
     my($expr, @exprs);
     my $kid = $op->first->sibling; # skip pushmark
     my $lop;
-    my $local = "either"; # could be local(...), my(...) or our(...)
+    my $local = "either"; # could be local(...), my(...), state(...) or our(...)
     for ($lop = $kid; !null($lop); $lop = $lop->sibling) {
 	# This assumes that no other private flags equal 128, and that
 	# OPs that store things other than flags in their op_private,
@@ -2443,14 +2444,19 @@ sub pp_list {
 	    $local = ""; # or not
 	    last;
 	}
-	if ($lop->name =~ /^pad[ash]v$/) { # my()
-	    ($local = "", last) if $local eq "local" || $local eq "our";
-	    $local = "my";
+	if ($lop->name =~ /^pad[ash]v$/) {
+	    if ($lop->private & OPpPAD_STATE) { # state()
+		($local = "", last) if $local =~ /^(?:local|our|my)$/;
+		$local = "state";
+	    } else { # my()
+		($local = "", last) if $local =~ /^(?:local|our|state)$/;
+		$local = "my";
+	    }
 	} elsif ($lop->name =~ /^(gv|rv2)[ash]v$/
 			&& $lop->private & OPpOUR_INTRO
 		or $lop->name eq "null" && $lop->first->name eq "gvsv"
 			&& $lop->first->private & OPpOUR_INTRO) { # our()
-	    ($local = "", last) if $local eq "my" || $local eq "local";
+	    ($local = "", last) if $local =~ /^(?:my|local|state)$/;
 	    $local = "our";
 	} elsif ($lop->name ne "undef"
 		# specifically avoid the "reverse sort" optimisation,
@@ -2458,7 +2464,7 @@ sub pp_list {
 		&& !($lop->name eq 'sort' && ($lop->flags & OPpSORT_REVERSE)))
 	{
 	    # local()
-	    ($local = "", last) if $local eq "my" || $local eq "our";
+	    ($local = "", last) if $local =~ /^(?:my|our|state)$/;
 	    $local = "local";
 	}
     }
@@ -2504,7 +2510,7 @@ sub pp_cond_expr {
 	    (is_scope($false) || is_ifelse_cont($false))
 	    and $self->{'expand'} < 7) {
 	$cond = $self->deparse($cond, 8);
-	$true = $self->deparse($true, 8);
+	$true = $self->deparse($true, 6);
 	$false = $self->deparse($false, 8);
 	return $self->maybe_parens("$cond ? $true : $false", $cx, 8);
     }
@@ -2668,6 +2674,10 @@ sub pp_null {
 	return $self->pp_list($op, $cx);
     } elsif ($op->first->name eq "enter") {
 	return $self->pp_leave($op, $cx);
+    } elsif ($op->first->name eq "leave") {
+	return $self->pp_leave($op->first, $cx);
+    } elsif ($op->first->name eq "scope") {
+	return $self->pp_scope($op->first, $cx);
     } elsif ($op->targ == OP_STRINGIFY) {
 	return $self->dquote($op, $cx);
     } elsif (!null($op->first->sibling) and
@@ -3582,7 +3592,7 @@ sub const {
 	return $self->maybe_parens("\\" . $self->const($ref, 20), $cx, 20);
     } elsif ($sv->FLAGS & SVf_POK) {
 	my $str = $sv->PV;
-	if ($str =~ /[^ -~]/) { # ASCII for non-printing
+	if ($str =~ /[[:^print:]]/) {
 	    return single_delim("qq", '"', uninterp escape_str unback $str);
 	} else {
 	    return single_delim("q", "'", unback $str);
@@ -4121,12 +4131,10 @@ sub pp_split {
 	push @exprs, $self->deparse($kid, 6);
     }
 
-    # handle special case of split(), and split(" ") that compiles to /\s+/
+    # handle special case of split(), and split(' ') that compiles to /\s+/
     $kid = $op->first;
-    if ($kid->flags & OPf_SPECIAL
-	&& $exprs[0] eq '/\\s+/'
-	&& $kid->pmflags & PMf_SKIPWHITE ) {
-	    $exprs[0] = '" "';
+    if ($kid->flags & OPf_SPECIAL and $kid->pmflags & PMf_SKIPWHITE) {
+	$exprs[0] = "' '";
     }
 
     $expr = "split(" . join(", ", @exprs) . ")";

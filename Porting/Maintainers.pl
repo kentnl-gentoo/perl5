@@ -14,7 +14,7 @@ package Maintainers;
 	'ams'		=> 'Abhijit Menon-Sen <ams@cpan.org>',
 	'andk'		=> 'Andreas J. Koenig <andk@cpan.org>',
 	'arandal'       => 'Allison Randal <allison@perl.org>',
-	'autrijus'	=> 'Audrey Tang <autrijus@cpan.org>',
+	'audreyt'	=> 'Audrey Tang <cpan@audreyt.org>',
 	'bbb'		=> 'Rob Brown <bbb@cpan.org>',
 	'craig'		=> 'Craig Berry <craigberry@mac.com>',
 	'dankogai'	=> 'Dan Kogai <dankogai@cpan.org>',
@@ -28,6 +28,7 @@ package Maintainers;
 	'ilyam'		=> 'Ilya Martynov <ilyam@cpan.org>',
 	'ilyaz'		=> 'Ilya Zakharevich <ilyaz@cpan.org>',
 	'jand'		=> 'Jan Dubois <jand@activestate.com>',
+	'jdhedden'	=> 'Jerry D. Hedden <jdhedden@cpan.org>',
 	'jhi'		=> 'Jarkko Hietaniemi <jhi@cpan.org>',
 	'jstowe'	=> 'Jonathan Stowe <jstowe@cpan.org>',
 	'jv'		=> 'Johan Vromans <jv@cpan.org>',
@@ -42,6 +43,7 @@ package Maintainers;
 	'muir'		=> 'David Muir Sharnoff <muir@cpan.org>',
 	'neilb'		=> 'Neil Bowers <neilb@cpan.org>',
 	'ni-s'		=> 'Nick Ing-Simmons <nick@ing-simmons.net>',
+	'nuffin'	=> 'Yuval Kogman <nothingmuch@woobling.org>',
 	'p5p'		=> 'perl5-porters <perl5-porters@perl.org>',
 	'perlfaq'	=> 'perlfaq-workers <perlfaq-workers@perl.org>',
 	'petdance'	=> 'Andy Lester <andy@petdance.com>',
@@ -59,7 +61,9 @@ package Maintainers;
 	'smccam'	=> 'Stephen McCamant <smccam@cpan.org>',
 	'tels'		=> 'perl_dummy a-t bloodgate.com',
 	'tomhughes'	=> 'Tom Hughes <tomhughes@cpan.org>',
-	'tjenness'	=> 'Tim Jenness <tjenness@cpan.org>'
+	'tjenness'	=> 'Tim Jenness <tjenness@cpan.org>',
+	'tyemq'		=> 'Tye McQueen <tyemq@cpan.org>',
+	'yves'		=> 'Yves Orton <yves@cpan.org>',
 	);
 
 # The FILES is either filenames, or glob patterns, or directory
@@ -204,7 +208,7 @@ package Maintainers;
 
 	'encoding::warnings' =>
 		{
-		'MAINTAINER'	=> 'autrijus',
+		'MAINTAINER'	=> 'audreyt',
 		'FILES'		=> q[lib/encoding/warnings.pm lib/encoding/warnings],
 		'CPAN'		=> 1,
 		},
@@ -223,10 +227,18 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+        'ExtUtils::Install' =>
+
+		{
+		'MAINTAINER' => 'yves',
+		'FILES' => q[lib/ExtUtils/{Install,Installed,Packlist}.pm],
+		'CPAN' => 1,
+		},
+
 	'ExtUtils::MakeMaker' =>
 		{
 		'MAINTAINER'	=> 'mschwern',
-		'FILES'		=> q[lib/ExtUtils/{Command,Install,Installed,Liblist,MakeMaker,Manifest,Mkbootstrap,Mksymlists,MM*,MY,Packlist,testlib}.pm lib/ExtUtils/{Command,Liblist,MakeMaker,MANIFEST.SKIP}
+		'FILES'	=> q[lib/ExtUtils/{Command,Liblist,MakeMaker,Manifest,Mkbootstrap,Mksymlists,MM*,MY,testlib}.pm lib/ExtUtils/{Command,Liblist,MakeMaker,MANIFEST.SKIP}
 				     lib/ExtUtils/t t/lib/MakeMaker t/lib/TieIn.pm t/lib/TieOut.pm],
 		'CPAN'		=> 1,
 		},
@@ -368,6 +380,13 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+        'Math::Complex' =>
+                {
+                'MAINTAINER'    => 'jhi',
+                'FILES'         => q[lib/Math/Complex.pm lib/Math/Trig.pm],
+                'CPAN'          => 1,
+                },
+
 	'Memoize' =>
 		{
 		'MAINTAINER'	=> 'mjd',
@@ -382,10 +401,31 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'Module::Build' =>
+		{
+		'MAINTAINER'	=> 'kwilliams',
+		'FILES'		=> q[lib/Module/Build lib/Module/Build.pm],
+		'CPAN'		=> 1,
+		},
+
 	'Module::CoreList' =>
 		{
-		'MAINTAINER'	=> 'rclamp',
+		'MAINTAINER'	=> 'rgarcia',
 		'FILES'		=> q[lib/Module/CoreList lib/Module/CoreList.pm],
+		'CPAN'		=> 1,
+		},
+
+	'Module::Load' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Module/Load lib/Module/Load.pm],
+		'CPAN'		=> 1,
+		},
+
+	'Module::Loaded' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Module/Loaded lib/Module/Loaded.pm],
 		'CPAN'		=> 1,
 		},
 
@@ -400,6 +440,13 @@ package Maintainers;
 		{
 		'MAINTAINER'	=> 'dconway',
 		'FILES'		=> q[lib/NEXT.pm lib/NEXT],
+		'CPAN'		=> 1,
+		},
+
+	'Package::Constants' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Package/Constants lib/Package/Constants.pm],
 		'CPAN'		=> 1,
 		},
 
@@ -599,15 +646,30 @@ package Maintainers;
 
 	'threads' =>
 		{
-		'MAINTAINER' => 'abergman',
-		'FILES'	 => q[ext/threads],
-		'CPAN'		=> 0,
+		'MAINTAINER'	=> 'jdhedden',
+		'FILES'		=> q[ext/threads/hints ext/threads/t
+				     ext/threads/threads.{pm,xs} ext/threads/typemap],
+		'CPAN'		=> 1,
+		},
+
+	'threads::shared' =>
+		{
+		'MAINTAINER'	=> 'jdhedden',
+		'FILES'		=> q[ext/threads/shared],
+		'CPAN'		=> 1,
 		},
 
 	'Tie::File' =>
 		{
 		'MAINTAINER'	=> 'mjd',
 		'FILES'		=> q[lib/Tie/File.pm lib/Tie/File],
+		'CPAN'		=> 1,
+		},
+
+	'Tie::RefHash' =>
+		{
+		'MAINTAINER'	=> 'nuffin',
+		'FILES'		=> q[lib/Tie/RefHash.pm lib/Tie/RefHash],
 		'CPAN'		=> 1,
 		},
 
@@ -660,6 +722,13 @@ package Maintainers;
 		'MAINTAINER'	=> 'jand',
 		'FILES'		=> q[win32 README.win32 t/win32],
 		'CPAN'		=> 0,
+		},
+
+	'Win32API::File' =>
+		{
+		'MAINTAINER'	=> 'tyemq',
+		'FILES'		=> q[win32/ext/Win32API/File],
+		'CPAN'		=> 1,
 		},
 
 	'XSLoader' =>

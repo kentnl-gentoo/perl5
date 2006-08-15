@@ -144,134 +144,160 @@ ext/ByteLoader/byterun.c	Runtime support for bytecode loader
 ext/ByteLoader/byterun.h	Header for byterun.c
 ext/ByteLoader/hints/sunos.pl	Hints for named architecture
 ext/ByteLoader/Makefile.PL	Bytecode loader makefile writer
-ext/Compress/Zlib/Changes	Compress::Zlib
-ext/Compress/Zlib/config.in	Compress::Zlib
+ext/Compress/IO/Base/Changes	IO::Compress::Base
+ext/Compress/IO/Base/lib/File/GlobMapper.pm	IO::Compress::Base
+ext/Compress/IO/Base/lib/IO/Compress/Base/Common.pm	IO::Compress::Base
+ext/Compress/IO/Base/lib/IO/Compress/Base.pm	IO::Compress::Base
+ext/Compress/IO/Base/lib/IO/Uncompress/AnyUncompress.pm	IO::Compress::Base
+ext/Compress/IO/Base/lib/IO/Uncompress/Base.pm	IO::Compress::Base
+ext/Compress/IO/Base/Makefile.PL	IO::Compress::Base
+ext/Compress/IO/Base/private/MakeUtil.pm	IO::Compress::Base
+ext/Compress/IO/Base/README	IO::Compress::Base
+ext/Compress/IO/Base/t/01misc.t	IO::Compress::Base
+ext/Compress/IO/Base/t/99pod.t	IO::Compress::Base
+ext/Compress/IO/Base/t/globmapper.t	IO::Compress::Base
+ext/Compress/IO/Zlib/Changes	IO::Compress::Zlib
+ext/Compress/IO/Zlib/examples/gzappend	IO::Compress::Zlib
+ext/Compress/IO/Zlib/examples/gzcat	IO::Compress::Zlib
+ext/Compress/IO/Zlib/examples/gzgrep	IO::Compress::Zlib
+ext/Compress/IO/Zlib/examples/gzstream	IO::Compress::Zlib
+ext/Compress/IO/Zlib/examples/unzip	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Adapter/Deflate.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Adapter/Identity.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Deflate.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Gzip/Constants.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Gzip.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/RawDeflate.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Zip/Constants.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Zip.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Zlib/Constants.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Compress/Zlib/Extra.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Uncompress/Adapter/Identity.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Uncompress/Adapter/Inflate.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Uncompress/AnyInflate.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Uncompress/Gunzip.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Uncompress/Inflate.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Uncompress/RawInflate.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/lib/IO/Uncompress/Unzip.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/Makefile.PL	IO::Compress::Zlib
+ext/Compress/IO/Zlib/private/MakeUtil.pm	IO::Compress::Zlib
+ext/Compress/IO/Zlib/README	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/001zlib-generic-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/001zlib-generic-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/001zlib-generic-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/001zlib-generic-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/002any-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/002any-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/002any-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/002any-transparent.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/002any-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/004gziphdr.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/005defhdr.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/010examples.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/020isize.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/050interop-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/100generic-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/100generic-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/100generic-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/100generic-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/101truncate-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/101truncate-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/101truncate-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/101truncate-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/102tied-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/102tied-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/102tied-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/102tied-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/103newtied-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/103newtied-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/103newtied-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/103newtied-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/104destroy-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/104destroy-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/104destroy-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/104destroy-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/105oneshot-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/105oneshot-gzip-only.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/105oneshot-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/105oneshot-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/105oneshot-zip-only.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/105oneshot-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/106prime-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/106prime-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/106prime-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/106prime-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/107multi-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/107multi-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/107multi-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/107multi-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/108anyunc-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/108anyunc-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/108anyunc-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/108anyunc-transparent.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/108anyunc-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/109merge-deflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/109merge-gzip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/109merge-rawdeflate.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/109merge-zip.t	IO::Compress::Zlib
+ext/Compress/IO/Zlib/t/999pod.t	IO::Compress::Zlib
+ext/Compress/Raw/Zlib/Changes		Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/config.in		Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/examples/filtdef	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/examples/filtinf	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/fallback/constants.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/fallback/constants.xs	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/lib/Compress/Raw/Zlib.pm	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/Makefile.PL	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/private/MakeUtil.pm	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/README		Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/t/01version.t	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/t/02zlib.t	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/t/07bufsize.t	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/t/18lvalue.t	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/t/99pod.t		Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/typemap		Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/adler32.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/compress.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/crc32.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/crc32.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/deflate.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/deflate.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/infback.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/inffast.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/inffast.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/inffixed.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/inflate.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/inflate.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/inftrees.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/inftrees.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/trees.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/trees.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/uncompr.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/zconf.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/zlib.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/zutil.c	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/zlib-src/zutil.h	Compress::Raw::Zlib
+ext/Compress/Raw/Zlib/Zlib.xs		Compress::Raw::Zlib
+ext/Compress/Zlib/Changes		Compress::Zlib
 ext/Compress/Zlib/examples/filtdef	Compress::Zlib
 ext/Compress/Zlib/examples/filtinf	Compress::Zlib
 ext/Compress/Zlib/examples/gzcat	Compress::Zlib
-ext/Compress/Zlib/examples/gzcat.zlib	Compress::Zlib
 ext/Compress/Zlib/examples/gzgrep	Compress::Zlib
 ext/Compress/Zlib/examples/gzstream	Compress::Zlib
-ext/Compress/Zlib/fallback/constants.h	Compress::Zlib
-ext/Compress/Zlib/fallback/constants.xs	Compress::Zlib
-ext/Compress/Zlib/lib/Compress/Gzip/Constants.pm	Compress::Zlib
-ext/Compress/Zlib/lib/CompressPlugin/Deflate.pm	Compress::Zlib
-ext/Compress/Zlib/lib/CompressPlugin/Identity.pm	Compress::Zlib
-ext/Compress/Zlib/lib/Compress/Zip/Constants.pm	Compress::Zlib
-ext/Compress/Zlib/lib/Compress/Zlib/Common.pm	Compress::Zlib
-ext/Compress/Zlib/lib/Compress/Zlib/FileConstants.pm	Compress::Zlib
-ext/Compress/Zlib/lib/Compress/Zlib/ParseParameters.pm	Compress::Zlib
-ext/Compress/Zlib/lib/File/GlobMapper.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Compress/Base.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Compress/Deflate.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Compress/Gzip.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Compress/RawDeflate.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Compress/Zip.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Uncompress/AnyInflate.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Uncompress/AnyUncompress.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Uncompress/Base.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Uncompress/Gunzip.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Uncompress/Inflate.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Uncompress/RawInflate.pm	Compress::Zlib
-ext/Compress/Zlib/lib/IO/Uncompress/Unzip.pm	Compress::Zlib
-ext/Compress/Zlib/lib/UncompressPlugin/Identity.pm	Compress::Zlib
-ext/Compress/Zlib/lib/UncompressPlugin/Inflate.pm	Compress::Zlib
-ext/Compress/Zlib/Makefile.PL	Compress::Zlib
-ext/Compress/Zlib/pod/FAQ.pod	Compress::Zlib
-ext/Compress/Zlib/ppport.h	Compress::Zlib
-ext/Compress/Zlib/README	Compress::Zlib
-ext/Compress/Zlib/t/01version.t	Compress::Zlib
-ext/Compress/Zlib/t/02zlib.t	Compress::Zlib
-ext/Compress/Zlib/t/03zlib-v1.t	Compress::Zlib
-ext/Compress/Zlib/t/04generic-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/04generic-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/04generic-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/04generic-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/04zlib-generic-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/04zlib-generic-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/04zlib-generic-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/04zlib-generic-zip.t	Compress::Zlib
+ext/Compress/Zlib/lib/Compress/Zlib.pm	Compress::Zlib
+ext/Compress/Zlib/Makefile.PL		Compress::Zlib
+ext/Compress/Zlib/private/MakeUtil.pm	Compress::Zlib
+ext/Compress/Zlib/README		Compress::Zlib
+ext/Compress/Zlib/t/01version.t		Compress::Zlib
+ext/Compress/Zlib/t/03zlib-v1.t		Compress::Zlib
 ext/Compress/Zlib/t/05examples.t	Compress::Zlib
-ext/Compress/Zlib/t/06gzsetp.t	Compress::Zlib
-ext/Compress/Zlib/t/07bufsize.t	Compress::Zlib
+ext/Compress/Zlib/t/06gzsetp.t		Compress::Zlib
 ext/Compress/Zlib/t/08encoding.t	Compress::Zlib
-ext/Compress/Zlib/t/09gziphdr.t	Compress::Zlib
-ext/Compress/Zlib/t/10defhdr.t	Compress::Zlib
-ext/Compress/Zlib/t/11truncate.t	Compress::Zlib
-ext/Compress/Zlib/t/12any-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/12any-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/12any-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/12any-transparent.t	Compress::Zlib
-ext/Compress/Zlib/t/12any-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/13prime-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/13prime-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/13prime-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/13prime-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/14gzopen.t	Compress::Zlib
-ext/Compress/Zlib/t/15multi-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/15multi-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/15multi-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/15multi-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/16oneshot-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/16oneshot-gzip-only.t	Compress::Zlib
-ext/Compress/Zlib/t/16oneshot-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/16oneshot-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/16oneshot-zip-only.t	Compress::Zlib
-ext/Compress/Zlib/t/16oneshot-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/17isize.t	Compress::Zlib
-ext/Compress/Zlib/t/18lvalue.t	Compress::Zlib
-ext/Compress/Zlib/t/19destroy-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/19destroy-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/19destroy-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/19destroy-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/20tied-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/20tied-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/20tied-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/20tied-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/21newtied-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/21newtied-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/21newtied-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/21newtied-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/22merge-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/22merge-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/22merge-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/22merge-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/23misc.t	Compress::Zlib
-ext/Compress/Zlib/t/25anyunc-deflate.t	Compress::Zlib
-ext/Compress/Zlib/t/25anyunc-gzip.t	Compress::Zlib
-ext/Compress/Zlib/t/25anyunc-rawdeflate.t	Compress::Zlib
-ext/Compress/Zlib/t/25anyunc-transparent.t	Compress::Zlib
-ext/Compress/Zlib/t/25anyunc-zip.t	Compress::Zlib
-ext/Compress/Zlib/t/99pod.t	Compress::Zlib
-ext/Compress/Zlib/t/globmapper.t	Compress::Zlib
-ext/Compress/Zlib/typemap	Compress::Zlib
-ext/Compress/Zlib/Zlib.pm	Compress::Zlib
-ext/Compress/Zlib/zlib-src/adler32.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/compress.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/crc32.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/crc32.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/deflate.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/deflate.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/infback.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/inffast.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/inffast.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/inffixed.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/inflate.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/inflate.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/inftrees.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/inftrees.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/trees.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/trees.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/uncompr.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/zconf.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/zlib.h	Compress::Zlib
-ext/Compress/Zlib/zlib-src/zutil.c	Compress::Zlib
-ext/Compress/Zlib/zlib-src/zutil.h	Compress::Zlib
-ext/Compress/Zlib/Zlib.xs	Compress::Zlib
+ext/Compress/Zlib/t/14gzopen.t		Compress::Zlib
+ext/Compress/Zlib/t/99pod.t		Compress::Zlib
 ext/Cwd/Changes			Cwd extension Changelog
 ext/Cwd/Cwd.xs			Cwd extension external subroutines
 ext/Cwd/Makefile.PL		Cwd extension makefile maker
-ext/Cwd/ppport.h		portability header for Cwd
 ext/Cwd/t/cwd.t			See if Cwd works
 ext/Cwd/t/taint.t		See if Cwd works with taint
 ext/Cwd/t/win32.t		See if Cwd works on Win32
@@ -312,15 +338,15 @@ ext/Devel/Peek/t/Peek.t		See if Devel::Peek works
 ext/Devel/PPPort/apicheck_c.PL	Devel::PPPort apicheck generator
 ext/Devel/PPPort/Changes	Devel::PPPort changes
 ext/Devel/PPPort/devel/buildperl.pl	Devel::PPPort perl version builder
+ext/Devel/PPPort/devel/devtools.pl	Devel::PPPort development utilities
 ext/Devel/PPPort/devel/mkapidoc.sh	Devel::PPPort apidoc collector
 ext/Devel/PPPort/devel/mktodo	Devel::PPPort baseline/todo generator
 ext/Devel/PPPort/devel/mktodo.pl	Devel::PPPort baseline/todo generator
+ext/Devel/PPPort/devel/regenerate	Devel::PPPort API re-generator
 ext/Devel/PPPort/devel/scanprov	Devel::PPPort provided API scanner
 ext/Devel/PPPort/HACKERS	Devel::PPPort hackers documentation
 ext/Devel/PPPort/Makefile.PL	Devel::PPPort makefile writer
-ext/Devel/PPPort/MANIFEST	Devel::PPPort Manifest
 ext/Devel/PPPort/MANIFEST.SKIP	Devel::PPPort Manifest skip specs
-ext/Devel/PPPort/META.yml	Devel::PPPort meta-data in YAML
 ext/Devel/PPPort/mktests.PL	Devel::PPPort test file writer
 ext/Devel/PPPort/module2.c	Devel::PPPort test file
 ext/Devel/PPPort/module3.c	Devel::PPPort test file
@@ -352,10 +378,12 @@ ext/Devel/PPPort/parts/base/5008004	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/base/5008005	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/base/5008006	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/base/5008007	Devel::PPPort baseline todo file
+ext/Devel/PPPort/parts/base/5008008	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/base/5009000	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/base/5009001	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/base/5009002	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/base/5009003	Devel::PPPort baseline todo file
+ext/Devel/PPPort/parts/base/5009004	Devel::PPPort baseline todo file
 ext/Devel/PPPort/parts/embed.fnc	Devel::PPPort Perl API listing
 ext/Devel/PPPort/parts/inc/call	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/cop	Devel::PPPort include
@@ -370,16 +398,22 @@ ext/Devel/PPPort/parts/inc/mPUSH	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/MY_CXT	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/newCONSTSUB	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/newRV	Devel::PPPort include
+ext/Devel/PPPort/parts/inc/podtest	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/ppphbin	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/ppphdoc	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/ppphtest	Devel::PPPort include
+ext/Devel/PPPort/parts/inc/pvs	Devel::PPPort include
+ext/Devel/PPPort/parts/inc/snprintf	Devel::PPPort include
+ext/Devel/PPPort/parts/inc/strlfuncs	Devel::PPPort include
+ext/Devel/PPPort/parts/inc/SvPV	Devel::PPPort include
+ext/Devel/PPPort/parts/inc/SvREFCNT	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/Sv_set	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/sv_xpvf	Devel::PPPort include
-ext/Devel/PPPort/parts/inc/SvPV	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/threads	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/uv	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/variables	Devel::PPPort include
 ext/Devel/PPPort/parts/inc/version	Devel::PPPort include
+ext/Devel/PPPort/parts/inc/warn	Devel::PPPort include
 ext/Devel/PPPort/parts/ppptools.pl	Devel::PPPort various utilities
 ext/Devel/PPPort/parts/todo/5004000	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5004010	Devel::PPPort todo file
@@ -407,15 +441,16 @@ ext/Devel/PPPort/parts/todo/5008004	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5008005	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5008006	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5008007	Devel::PPPort todo file
+ext/Devel/PPPort/parts/todo/5008008	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5009000	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5009001	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5009002	Devel::PPPort todo file
 ext/Devel/PPPort/parts/todo/5009003	Devel::PPPort todo file
-ext/Devel/PPPort/PPPort.pm	Devel::PPPort extension
-ext/Devel/PPPort/PPPort.xs	Devel::PPPort extension
+ext/Devel/PPPort/parts/todo/5009004	Devel::PPPort todo file
 ext/Devel/PPPort/ppport_h.PL	Devel::PPPort ppport.h writer
 ext/Devel/PPPort/PPPort_pm.PL	Devel::PPPort PPPort.pm writer
-ext/Devel/PPPort/PPPort_xs.PL	Devel::PPPort PPPort.xs writer
+ext/Devel/PPPort/PPPort.xs	Devel::PPPort dummy PPPort.xs
+ext/Devel/PPPort/PPPort_xs.PL	Devel::PPPort RealPPPort.xs writer
 ext/Devel/PPPort/README		Devel::PPPort Readme
 ext/Devel/PPPort/soak		Devel::PPPort Test Harness to run under various Perls
 ext/Devel/PPPort/t/call.t	Devel::PPPort test file
@@ -430,15 +465,21 @@ ext/Devel/PPPort/t/mPUSH.t	Devel::PPPort test file
 ext/Devel/PPPort/t/MY_CXT.t	Devel::PPPort test file
 ext/Devel/PPPort/t/newCONSTSUB.t	Devel::PPPort test file
 ext/Devel/PPPort/t/newRV.t	Devel::PPPort test file
+ext/Devel/PPPort/TODO		Devel::PPPort Todo
+ext/Devel/PPPort/t/podtest.t	Devel::PPPort test file
 ext/Devel/PPPort/t/ppphtest.t	Devel::PPPort test file
+ext/Devel/PPPort/t/pvs.t	Devel::PPPort test file
+ext/Devel/PPPort/t/snprintf.t	Devel::PPPort test file
+ext/Devel/PPPort/t/strlfuncs.t	Devel::PPPort test file
+ext/Devel/PPPort/t/SvPV.t	Devel::PPPort test file
+ext/Devel/PPPort/t/SvREFCNT.t	Devel::PPPort test file
 ext/Devel/PPPort/t/Sv_set.t	Devel::PPPort test file
 ext/Devel/PPPort/t/sv_xpvf.t	Devel::PPPort test file
-ext/Devel/PPPort/t/SvPV.t	Devel::PPPort test file
 ext/Devel/PPPort/t/testutil.pl	Devel::PPPort test utilities
 ext/Devel/PPPort/t/threads.t	Devel::PPPort test file
 ext/Devel/PPPort/t/uv.t		Devel::PPPort test file
 ext/Devel/PPPort/t/variables.t	Devel::PPPort test file
-ext/Devel/PPPort/TODO		Devel::PPPort Todo
+ext/Devel/PPPort/t/warn.t	Devel::PPPort test file
 ext/Devel/PPPort/typemap	Devel::PPPort Typemap
 ext/Digest/MD5/Changes		Digest::MD5 extension changes
 ext/Digest/MD5/hints/dec_osf.pl	Hints for named architecture
@@ -459,7 +500,6 @@ ext/Digest/MD5/typemap		Digest::MD5 extension
 ext/Digest/SHA/bin/shasum	shasum script
 ext/Digest/SHA/Changes		Digest::SHA changes
 ext/Digest/SHA/Makefile.PL	Digest::SHA Makefile.PL
-ext/Digest/SHA/ppport.h		Digest::SHA extension
 ext/Digest/SHA/README		Digest::SHA README
 ext/Digest/SHA/SHA.pm		Digest::SHA extension
 ext/Digest/SHA/SHA.xs		Digest::SHA extension
@@ -532,6 +572,7 @@ ext/DynaLoader/hints/netbsd.pl	Hint for DynaLoader for named architecture
 ext/DynaLoader/hints/openbsd.pl	Hint for DynaLoader for named architecture
 ext/DynaLoader/Makefile.PL	Dynamic Loader makefile writer
 ext/DynaLoader/README		Dynamic Loader notes and intro
+ext/DynaLoader/t/DynaLoader.t	See if DynaLoader works
 ext/DynaLoader/t/XSLoader.t	See if XSLoader works
 ext/DynaLoader/XSLoader_pm.PL	Simple XS Loader perl module
 ext/Encode/AUTHORS		List of authors
@@ -580,7 +621,6 @@ ext/Encode/lib/Encode/Supported.pod	Documents for supported encodings
 ext/Encode/lib/Encode/Unicode/UTF7.pm	Encode extension
 ext/Encode/Makefile.PL		Encode extension makefile writer
 ext/Encode/MANIFEST		Encode extension
-ext/Encode/META.yml		Module meta-data in YAML
 ext/Encode/README		Encode extension
 ext/Encode/Symbol/Makefile.PL	Encode extension
 ext/Encode/Symbol/Symbol.pm	Encode extension
@@ -763,6 +803,23 @@ ext/GDBM_File/hints/sco.pl	Hint for GDBM_File for named architecture
 ext/GDBM_File/Makefile.PL	GDBM extension makefile writer
 ext/GDBM_File/t/gdbm.t		See if GDBM_File works
 ext/GDBM_File/typemap		GDBM extension interface types
+ext/Hash/Util/Changes		Change history of Hash::Util
+ext/Hash/Util/FieldHash/Changes			Changes for Hash::Util::FieldHash
+ext/Hash/Util/FieldHash/FieldHash.xs		XS portion
+ext/Hash/Util/FieldHash/lib/Hash/Util/FieldHash.pm	Perl portion and documentation
+ext/Hash/Util/FieldHash/Makefile.PL		Makefile for Hash::Util::FieldHash
+ext/Hash/Util/FieldHash/t/01_load.t		Test script
+ext/Hash/Util/FieldHash/t/02_function.t		Test script
+ext/Hash/Util/FieldHash/t/03_class.t		Test script
+ext/Hash/Util/FieldHash/t/04_thread.t		Test script
+ext/Hash/Util/FieldHash/t/05_perlhook.t		Test script
+ext/Hash/Util/FieldHash/t/10_hash.t		Adapted from t/op/hash.t
+ext/Hash/Util/FieldHash/t/11_hashassign.t	Adapted from t/op/hashassign.t
+ext/Hash/Util/FieldHash/t/12_hashwarn.t		Adapted from t/op/hashwarn.t
+ext/Hash/Util/lib/Hash/Util.pm	Hash::Util
+ext/Hash/Util/Makefile.PL	Makefile for Hash::Util
+ext/Hash/Util/t/Util.t		See if Hash::Util works
+ext/Hash/Util/Util.xs		XS bits of Hash::Util
 ext/I18N/Langinfo/fallback/const-c.inc	I18N::Langinfo
 ext/I18N/Langinfo/fallback/const-xs.inc	I18N::Langinfo
 ext/I18N/Langinfo/Langinfo.pm	I18N::Langinfo
@@ -950,14 +1007,20 @@ ext/POSIX/t/is.t		See if POSIX isxxx() work
 ext/POSIX/t/math.t		Basic math tests for POSIX
 ext/POSIX/t/posix.t		See if POSIX works
 ext/POSIX/t/sigaction.t		See if POSIX::sigaction works
+ext/POSIX/t/sysconf.t		See if POSIX works
 ext/POSIX/t/taint.t		See if POSIX works with taint
+ext/POSIX/t/termios.t		See if POSIX works
 ext/POSIX/t/time.t		See if POSIX time-related functions work
 ext/POSIX/t/waitpid.t		See if waitpid works
 ext/POSIX/typemap		POSIX extension interface types
 ext/re/hints/mpeix.pl		Hints for re for named architecture
 ext/re/Makefile.PL		re extension makefile writer
+ext/re/re_comp.h		re extension wrapper for regcomp.h
 ext/re/re.pm			re extension Perl module
+ext/re/re_top.h			re extension symbol hiding header
 ext/re/re.xs			re extension external subroutines
+ext/re/t/regop.pl		generate debug output for various patterns
+ext/re/t/regop.t		test RE optimizations by scraping debug output
 ext/re/t/re.t			see if re pragma works
 ext/Safe/t/safe1.t		See if Safe works
 ext/Safe/t/safe2.t		See if Safe works
@@ -1075,7 +1138,8 @@ ext/Thread/README		Thread README
 ext/Thread/README.threads		Notes about multithreading
 ext/threads/Changes		ithreads
 ext/Thread/Semaphore.pmx	Threadsafe semaphore
-ext/threads/hints/linux.pl	thread shared variables
+ext/threads/hints/hpux.pl	Hint file for HPUX
+ext/threads/hints/linux.pl	Hint file for Linux
 ext/threads/Makefile.PL		ithreads
 ext/Thread/specific.tx		Test thread-specific user data
 ext/threads/README		ithreads
@@ -1099,13 +1163,22 @@ ext/threads/shared/t/sv_simple.t	thread shared variables
 ext/threads/shared/t/wait.t	Test cond_wait and cond_timedwait
 ext/threads/shared/typemap	thread::shared types
 ext/threads/t/basic.t		ithreads
+ext/threads/t/blocks.t		Test threads in special blocks
+ext/threads/t/context.t		Explicit thread context
 ext/threads/t/end.t		Test end functions
+ext/threads/t/exit.t		Test exit and die in threads
+ext/threads/t/free2.t		More ithread destruction tests
+ext/threads/t/free.t		Test ithread destruction
 ext/threads/threads.pm		ithreads
 ext/threads/threads.xs		ithreads
 ext/threads/t/join.t		Testing the join function
+ext/threads/t/kill.t		Tests thread signalling
 ext/threads/t/libc.t		testing libc functions for threadsafety
 ext/threads/t/list.t		Test threads->list()
 ext/threads/t/problems.t	Test various memory problems
+ext/threads/t/stack_env.t	Tests for stack limits
+ext/threads/t/stack.t		Tests for stack limits
+ext/threads/t/state.t		Tests state methods
 ext/threads/t/stress_cv.t	Test with multiple threads, coderef cv argument.
 ext/threads/t/stress_re.t	Test with multiple threads, string cv argument and regexes.
 ext/threads/t/stress_string.t	Test with multiple threads, string cv argument.
@@ -1133,7 +1206,6 @@ ext/Time/HiRes/hints/svr4.pl	Hints for Time::HiRes for named architecture
 ext/Time/HiRes/HiRes.pm		Time::HiRes extension
 ext/Time/HiRes/HiRes.xs		Time::HiRes extension
 ext/Time/HiRes/Makefile.PL	Time::HiRes extension
-ext/Time/HiRes/ppport.h		portability header for Time::HiRes
 ext/Time/HiRes/t/HiRes.t	Test for Time::HiRes
 ext/Time/HiRes/typemap		Time::HiRes extension
 ext/Unicode/Normalize/Changes	Unicode::Normalize
@@ -1152,6 +1224,7 @@ ext/Unicode/Normalize/t/proto.t	Unicode::Normalize
 ext/Unicode/Normalize/t/short.t	Unicode::Normalize
 ext/Unicode/Normalize/t/split.t	Unicode::Normalize
 ext/Unicode/Normalize/t/test.t	Unicode::Normalize
+ext/Unicode/Normalize/t/tie.t	Unicode::Normalize
 ext/util/make_ext		Used by Makefile to execute extension Makefiles
 ext/XS/APItest/APItest.pm	XS::APItest extension
 ext/XS/APItest/APItest.xs	XS::APItest extension
@@ -1161,8 +1234,9 @@ ext/XS/APItest/MANIFEST		XS::APItest extension
 ext/XS/APItest/README		XS::APItest extension
 ext/XS/APItest/t/call.t		XS::APItest extension
 ext/XS/APItest/t/exception.t	XS::APItest extension
-ext/XS/APItest/t/hash.t		XS::APItest extension
+ext/XS/APItest/t/hash.t		XS::APItest: tests for hash related APIs
 ext/XS/APItest/t/my_cxt.t	XS::APItest: test MY_CXT interface
+ext/XS/APItest/t/op.t		XS::APItest: tests for OP related APIs
 ext/XS/APItest/t/printf.t	XS::APItest extension
 ext/XS/APItest/t/push.t		XS::APItest extension
 ext/XS/Typemap/Makefile.PL	XS::Typemap extension
@@ -1215,6 +1289,7 @@ hints/dcosx.sh			Hints for named architecture
 hints/dec_osf.sh		Hints for named architecture
 hints/dgux.sh			Hints for named architecture
 hints/dos_djgpp.sh		Hints for named architecture
+hints/dragonfly.sh		Hints for named architecture
 hints/dynixptx.sh		Hints for named architecture
 hints/dynix.sh			Hints for named architecture
 hints/epix.sh			Hints for named architecture
@@ -1261,6 +1336,7 @@ hints/powerux.sh		Hints for named architecture
 hints/qnx.sh			Hints for named architecture
 hints/README.hints		Notes about hints
 hints/rhapsody.sh		Hints for named architecture
+hints/riscos.sh			Hints for named architecture
 hints/sco_2_3_0.sh		Hints for named architecture
 hints/sco_2_3_1.sh		Hints for named architecture
 hints/sco_2_3_2.sh		Hints for named architecture
@@ -1460,6 +1536,9 @@ lib/CGI/t/no_tabindex.t	See if CGI.pm works
 lib/CGI/t/pretty.t		See if CGI.pm works
 lib/CGI/t/push.t		See if CGI::Push works
 lib/CGI/t/request.t		See if CGI.pm works
+lib/CGI/t/start_end_asterisk.t	See if CGI.pm works
+lib/CGI/t/start_end_end.t	See if CGI.pm works
+lib/CGI/t/start_end_start.t	See if CGI.pm works
 lib/CGI/t/switch.t		See if CGI::Switch still loads
 lib/CGI/t/util-58.t		See if 5.8-dependent features work
 lib/CGI/t/util.t		See if CGI.pm works
@@ -1487,12 +1566,12 @@ lib/CPAN/PAUSE2003.pub		CPAN public key
 lib/CPAN/PAUSE2005.pub		CPAN public key
 lib/CPAN.pm			Interface to Comprehensive Perl Archive Network
 lib/CPAN/SIGNATURE		CPAN public key
+lib/CPAN/t/01loadme.t		See if CPAN the module works
+lib/CPAN/t/02nox.t		See if CPAN::Nox works
+lib/CPAN/t/03pkgs.t		See if CPAN::Version works
+lib/CPAN/t/10version.t		See if CPAN the module works
+lib/CPAN/t/11mirroredby.t		See if CPAN::Mirrored::By works
 lib/CPAN/Tarzip.pm		helper package for CPAN.pm
-lib/CPAN/t/loadme.t		See if CPAN the module works
-lib/CPAN/t/mirroredby.t		See if CPAN::Mirrored::By works
-lib/CPAN/t/Nox.t		See if CPAN::Nox works
-lib/CPAN/t/vcmp.t		See if CPAN the module works
-lib/CPAN/t/version.t		See if CPAN::Version works
 lib/CPAN/Version.pm		Simple math with different flavors of version strings
 lib/ctime.pl			A ctime workalike
 lib/Cwd.pm			Various cwd routines (getcwd, fastcwd, chdir)
@@ -1535,6 +1614,7 @@ lib/encoding/warnings.pm	warn on implicit encoding conversions
 lib/encoding/warnings/t/1-warning.t	tests for encoding::warnings
 lib/encoding/warnings/t/2-fatal.t	tests for encoding::warnings
 lib/encoding/warnings/t/3-normal.t	tests for encoding::warnings
+lib/encoding/warnings/t/4-lexical.t	tests for encoding::warnings
 lib/English.pm			Readable aliases for short variables
 lib/English.t			See if English works
 lib/Env.pm			Map environment into ordinary variables
@@ -1545,6 +1625,7 @@ lib/Exporter/Heavy.pm		Complicated routines for Exporter
 lib/Exporter.pm			Exporter base class
 lib/Exporter.t			See if Exporter works
 lib/ExtUtils/CBuilder/Base.pm	Base class for ExtUtils::CBuilder methods
+lib/ExtUtils/CBuilder/Changes	Changes for ExtUtils::CBuilder
 lib/ExtUtils/CBuilder/Platform/aix.pm	CBuilder methods for AIX
 lib/ExtUtils/CBuilder/Platform/cygwin.pm	CBuilder methods for cygwin
 lib/ExtUtils/CBuilder/Platform/darwin.pm	CBuilder methods for darwin
@@ -1578,7 +1659,6 @@ lib/ExtUtils/MakeMaker/Tutorial.pod	Writing a module with MakeMaker
 lib/ExtUtils/MakeMaker/vmsish.pm	Platform agnostic vmsish.pm
 lib/ExtUtils/Manifest.pm	Utilities to write MANIFEST files
 lib/ExtUtils/MANIFEST.SKIP	The default MANIFEST.SKIP
-lib/ExtUtils/META.yml		ExtUtils::MakeMaker metadata
 lib/ExtUtils/Mkbootstrap.pm	Writes a bootstrap file (see MakeMaker)
 lib/ExtUtils/Mksymlists.pm	Writes a linker options file for extensions
 lib/ExtUtils/MM_AIX.pm		MakeMaker methods for AIX
@@ -1618,12 +1698,13 @@ lib/ExtUtils/t/Embed.t		See if ExtUtils::Embed and embedding works
 lib/ExtUtils/testlib.pm		Fixes up @INC to use just-built extension
 lib/ExtUtils/t/FIRST_MAKEFILE.t		See if FIRST_MAKEFILE works
 lib/ExtUtils/t/hints.t		See if hint files are honored.
-lib/ExtUtils/t/installbase.t	Test INSTALLBASE in MakeMaker
+lib/ExtUtils/t/INSTALL_BASE.t	Test INSTALL_BASE in MakeMaker
 lib/ExtUtils/t/Installed.t	See if ExtUtils::Installed works
 lib/ExtUtils/t/Install.t	See if ExtUtils::Install works
 lib/ExtUtils/t/INST_PREFIX.t	See if MakeMaker can apply PREFIXs
 lib/ExtUtils/t/INST.t		Check MakeMaker INST_* macros
 lib/ExtUtils/t/Liblist.t	See if ExtUtils::Liblist works
+lib/ExtUtils/t/make.t		See if make detection works
 lib/ExtUtils/t/Manifest.t	See if ExtUtils::Manifest works
 lib/ExtUtils/t/Mkbootstrap.t	See if ExtUtils::Mkbootstrap works
 lib/ExtUtils/t/MM_Any.t		See if ExtUtils::MM_Any works
@@ -1645,6 +1726,7 @@ lib/ExtUtils/t/prereq_print.t	See if PREREQ_PRINT works
 lib/ExtUtils/t/problems.t	How MakeMaker reacts to build problems
 lib/ExtUtils/t/prompt.t		See if E::MM::prompt() works
 lib/ExtUtils/t/recurs.t		See if recursive builds work
+lib/ExtUtils/t/revision.t	See if $Revision is correct
 lib/ExtUtils/t/split_command.t	See if MM's xargs-like function works
 lib/ExtUtils/t/testlib.t	See if ExtUtils::testlib works
 lib/ExtUtils/t/VERSION_FROM.t	See if MakeMaker's VERSION_FROM works
@@ -1735,8 +1817,6 @@ lib/Getopt/Std.pm		Fetch command options (getopt, getopts)
 lib/Getopt/Std.t		See if Getopt::Std and Getopt::Long work
 lib/h2ph.t			See if h2ph works like it should
 lib/h2xs.t			See if h2xs produces expected lists of files
-lib/Hash/Util.pm		Hash::Util
-lib/Hash/Util.t			See if Hash::Util works
 lib/hostname.pl			Old hostname code
 lib/I18N/Collate.pm		Routines to do strxfrm-based collation
 lib/I18N/Collate.t		See if I18N::Collate works
@@ -1913,9 +1993,73 @@ lib/Memoize/t/tie_sdbm.t	Memoize SDBM interface test
 lib/Memoize/t/tie_storable.t	Memoize Storable interface test
 lib/Memoize/t/tie.t		Memoize tied file test
 lib/Memoize/t/unmemoize.t	Memoize 'unmemoize' function test
+lib/Module/Build/API.pod	Module::Build
+lib/Module/Build/Authoring.pod	Module::Build
+lib/Module/Build/Base.pm	Module::Build
+lib/Module/Build/Changes	Module::Build
+lib/Module/Build/Compat.pm	Module::Build
+lib/Module/Build/ConfigData.pm	Module::Build
+lib/Module/Build/Cookbook.pm	Module::Build
+lib/Module/Build/ModuleInfo.pm	Module::Build
+lib/Module/Build/Notes.pm	Module::Build
+lib/Module/Build/Platform/aix.pm	Module::Build
+lib/Module/Build/Platform/Amiga.pm	Module::Build
+lib/Module/Build/Platform/cygwin.pm	Module::Build
+lib/Module/Build/Platform/darwin.pm	Module::Build
+lib/Module/Build/Platform/Default.pm	Module::Build
+lib/Module/Build/Platform/EBCDIC.pm	Module::Build
+lib/Module/Build/Platform/MacOS.pm	Module::Build
+lib/Module/Build/Platform/MPEiX.pm	Module::Build
+lib/Module/Build/Platform/os2.pm	Module::Build
+lib/Module/Build/Platform/RiscOS.pm	Module::Build
+lib/Module/Build/Platform/Unix.pm	Module::Build
+lib/Module/Build/Platform/VMS.pm	Module::Build
+lib/Module/Build/Platform/VOS.pm	Module::Build
+lib/Module/Build/Platform/Windows.pm	Module::Build
+lib/Module/Build.pm		Module::Build
+lib/Module/Build/PodParser.pm	Module::Build
+lib/Module/Build/PPMMaker.pm	Module::Build
+lib/Module/Build/scripts/config_data	Module::Build
+lib/Module/Build/t/basic.t	Module::Build
+lib/Module/Build/t/bundled/Tie/CPHash.pm	Module::Build.pm
+lib/Module/Build/t/compat.t	Module::Build
+lib/Module/Build/t/destinations.t	Module::Build
+lib/Module/Build/t/extend.t	Module::Build
+lib/Module/Build/t/ext.t	Module::Build
+lib/Module/Build/t/files.t	Module::Build
+lib/Module/Build/t/install.t	Module::Build
+lib/Module/Build/t/lib/DistGen.pm	Module::Build
+lib/Module/Build/t/lib/MBTest.pm	Module::Build
+lib/Module/Build/t/manifypods.t	Module::Build
+lib/Module/Build/t/mbyaml.t	Module::Build
+lib/Module/Build/t/metadata2.t	Module::Build
+lib/Module/Build/t/metadata.t	Module::Build
+lib/Module/Build/t/moduleinfo.t	Module::Build
+lib/Module/Build/t/notes.t	Module::Build
+lib/Module/Build/t/parents.t	Module::Build
+lib/Module/Build/t/pod_parser.t	Module::Build
+lib/Module/Build/t/ppm.t	Module::Build
+lib/Module/Build/t/runthrough.t	Module::Build
+lib/Module/Build/t/signature.t	Module::Build
+lib/Module/Build/t/tilde.t	Module::Build
+lib/Module/Build/t/versions.t	Module::Build
+lib/Module/Build/t/xs.t		Module::Build
+lib/Module/Build/Version.pm	Module::Build
+lib/Module/Build/YAML.pm	Module::Build
 lib/Module/CoreList/bin/corelist	Module::CoreList
 lib/Module/CoreList.pm			Module::CoreList
 lib/Module/CoreList/t/corelist.t	Module::CoreList
+lib/Module/CoreList/t/find_modules.t	Module::CoreList
+lib/Module/Loaded.pm	Module::Loaded
+lib/Module/Loaded/t/01_Module-Loaded.t	Module::Loaded tests
+lib/Module/Load.pm	Module::Load
+lib/Module/Load/t/01_Module-Load.t	Module::Load tests
+lib/Module/Load/t/to_load/config_file	Module::Load tests
+lib/Module/Load/t/to_load/LoadIt.pm	Module::Load tests
+lib/Module/Load/t/to_load/LoadMe.pl	Module::Load tests
+lib/Module/Load/t/to_load/Must/Be/Loaded.pm	Module::Load tests
+lib/Module/Load/t/to_load/TestModule.pm	Module::Load tests
+lib/Module/Load/t/to_load/ToBeLoaded	Module::Load tests
 lib/Net/Changes.libnet		libnet
 lib/Net/Cmd.pm			libnet
 lib/Net/Config.eg		libnet
@@ -1991,6 +2135,8 @@ lib/open.pm			Pragma to specify default I/O layers
 lib/open.t			See if the open pragma works
 lib/overload.pm			Module for overloading perl operators
 lib/overload.t			See if operator overloading works
+lib/Package/Constants.pm	Package::Constants
+lib/Package/Constants/t/01_list.t	Package::Constants tests
 lib/perl5db.pl			Perl debugging routines
 lib/PerlIO.pm			PerlIO support module
 lib/PerlIO/via/QuotedPrint.pm	PerlIO::via::QuotedPrint
@@ -2170,7 +2316,7 @@ lib/Pod/Simple/t/search_10survey_specific.t	Pod::Simple test file
 lib/Pod/Simple/t/search_12survey_cwd.t	Pod::Simple test file
 lib/Pod/Simple/t/search_20survey_two.t	Pod::Simple test file
 lib/Pod/Simple/t/search_22survey_two_shadowing.t	Pod::Simple test file
-lib/Pod/Simple/t/search_25_glob_squaa_coloncolon_kleene.t	Pod::Simple test file
+lib/Pod/Simple/t/search_25_glob_squaa.t	Pod::Simple test file
 lib/Pod/Simple/t/search_26_glob_kleene_k.t	Pod::Simple test file
 lib/Pod/Simple/t/search_27_glob_squaa_kleene.t	Pod::Simple test file
 lib/Pod/Simple/t/search_28_glob_z_kleene_k.t	Pod::Simple test file
@@ -2209,6 +2355,7 @@ lib/Pod/Text/Color.pm		Convert POD data to color ASCII text
 lib/Pod/Text/Overstrike.pm	Convert POD data to formatted overstrike text
 lib/Pod/Text.pm			Pod-Parser - convert POD data to formatted ASCII text
 lib/Pod/Text/Termcap.pm		Convert POD data to ASCII text with format escapes
+lib/Pod/t/filehandle.t		podlators test
 lib/Pod/t/Functions.t		See if Pod::Functions works
 lib/Pod/t/htmlescp.pod		pod2html escape test input data
 lib/Pod/t/htmlescp.t		pod2html escape test
@@ -2261,7 +2408,8 @@ lib/tainted.pl			Old code for tainting
 lib/Term/ANSIColor/ChangeLog	Term::ANSIColor
 lib/Term/ANSIColor.pm		Perl module supporting termcap usage
 lib/Term/ANSIColor/README	Term::ANSIColor
-lib/Term/ANSIColor/test.pl	See if Term::ANSIColor works
+lib/Term/ANSIColor/t/basic.t	Tests for Term::ANSIColor
+lib/Term/ANSIColor/t/pod.t	Tests for Term::ANSIColor
 lib/termcap.pl			Perl library supporting termcap usage
 lib/Term/Cap.pm			Perl module supporting termcap usage
 lib/Term/Cap.t			See if Term::Cap works
@@ -2285,6 +2433,7 @@ lib/Test/Harness/TAP.pod	Documentation for the Test Anything Protocol
 lib/Test/Harness/t/assert.t	Test::Harness::Assert test
 lib/Test/Harness/t/base.t	Test::Harness test
 lib/Test/Harness/t/callback.t	Test::Harness test
+lib/Test/Harness/t/failure.t	Test::Harness test
 lib/Test/Harness/t/from_line.t	Test::Harness test
 lib/Test/Harness/t/harness.t	Test::Harness test
 lib/Test/Harness/t/inc_taint.t	Test::Harness test
@@ -2299,6 +2448,7 @@ lib/Test/Harness/t/strap-analyze.t	Test::Harness::Straps test
 lib/Test/Harness/t/strap.t		Test::Harness::Straps test
 lib/Test/Harness/t/test-harness.t	Test::Harness test
 lib/Test/Harness/t/version.t	Test::Harness test
+lib/Test/Harness/Util.pm	Various utility functions for Test::Harness
 lib/Test/More.pm		More utilities for writing tests
 lib/Test.pm			A simple framework for writing test scripts
 lib/Test/Simple/Changes		Test::Simple changes
@@ -2383,6 +2533,7 @@ lib/Text/Abbrev.t		Test Text::Abbrev
 lib/Text/Balanced/Changes	Text::Balanced
 lib/Text/Balanced.pm		Text::Balanced
 lib/Text/Balanced/README	Text::Balanced
+lib/Text/Balanced/t/00-load.t	See if Text::Balanced works
 lib/Text/Balanced/t/extbrk.t	See if Text::Balanced works
 lib/Text/Balanced/t/extcbk.t	See if Text::Balanced works
 lib/Text/Balanced/t/extdel.t	See if Text::Balanced works
@@ -2391,6 +2542,8 @@ lib/Text/Balanced/t/extqlk.t	See if Text::Balanced works
 lib/Text/Balanced/t/exttag.t	See if Text::Balanced works
 lib/Text/Balanced/t/extvar.t	See if Text::Balanced works
 lib/Text/Balanced/t/gentag.t	See if Text::Balanced works
+lib/Text/Balanced/t/pod-coverage.t	See if Text::Balanced works
+lib/Text/Balanced/t/pod.t	See if Text::Balanced works
 lib/Text/ParseWords.pm		Perl module to split words on arbitrary delimiter
 lib/Text/ParseWords.t		See if Text::ParseWords works
 lib/Text/ParseWords/taint.t	See if Text::ParseWords works with tainting
@@ -2398,7 +2551,13 @@ lib/Text/Soundex.pm		Perl module to implement Soundex
 lib/Text/Soundex.t		See if Soundex works
 lib/Text/Tabs.pm		Do expand and unexpand
 lib/Text/TabsWrap/CHANGELOG	ChangeLog for Tabs+Wrap
+lib/Text/TabsWrap/t/37000.t	See if Text::Tabs is working
+lib/Text/TabsWrap/t/39548.t	See if Text::Tabs is working
+lib/Text/TabsWrap/t/belg4mit.t	See if Text::Tabs is working
 lib/Text/TabsWrap/t/fill.t	See if Text::Wrap::fill works
+lib/Text/TabsWrap/t/Jochen.t	See if Text::Tabs is working
+lib/Text/TabsWrap/t/sep2.t	See if Text::Tabs is working
+lib/Text/TabsWrap/t/sep.t	See if Text::Tabs is working
 lib/Text/TabsWrap/t/tabs.t	See if Text::Tabs works
 lib/Text/TabsWrap/t/wrap.t	See if Text::Wrap::wrap works
 lib/Text/Wrap.pm		Paragraph formatter
@@ -2457,7 +2616,10 @@ lib/Tie/Hash.pm			Base class for tied hashes
 lib/Tie/Memoize.pm		Base class for memoized tied hashes
 lib/Tie/Memoize.t		Test for Memoize.t
 lib/Tie/RefHash.pm		Base class for tied hashes with references as keys
-lib/Tie/RefHash.t		Test for Tie::RefHash and Tie::RefHash::Nestable
+lib/Tie/RefHash/rebless.t	Test for Tie::RefHash with rebless
+lib/Tie/RefHash/refhash.t	Test for Tie::RefHash and Tie::RefHash::Nestable
+lib/Tie/RefHash/storable.t	Test for Tie::RefHash with storable
+lib/Tie/RefHash/threaded.t	Test for Tie::RefHash with threads
 lib/Tie/Scalar.pm		Base class for tied scalars
 lib/Tie/Scalar.t		See if Tie::Scalar works
 lib/Tie/SubstrHash.pm		Compact hash for known key, value and table size
@@ -2541,6 +2703,16 @@ lib/warnings.pm			For "use warnings"
 lib/warnings/register.pm	For "use warnings::register"
 lib/warnings.t			See if warning controls work
 locale.c			locale-specific utility functions
+madly.act			parser actions; derived from madly.y
+madly.c				parser code (NOT derived from madly.y)
+madly.h				header file for madly.c; derived from madly.y
+madly.tab			parser state tables; derived from madly.y
+madly.y				Yacc grammar for MAD
+mad/nomad			Converts raw XML dump to something vaguely sane
+mad/p55				Perl 5 to Perl 5 translator - driver for nomad
+mad/P5AST.pm			Used by nomad
+mad/P5re.pm			Used by nomad
+mad/PLXML.pm			Used by nomad
 makeaperl.SH			perl script that produces a new perl binary
 makedef.pl			Create symbol export lists for linking
 makedepend.SH			Precursor to makedepend
@@ -2563,6 +2735,8 @@ mint/README			MiNT port
 mint/stdio.h			MiNT port
 mint/sys/time.h			MiNT port
 mint/time.h			MiNT port
+mkppport			A script that distributes ppport.h
+mkppport.lst			List of extensions that need a ppport.h
 mpeix/mpeix.c			MPE/iX port
 mpeix/mpeixish.h		MPE/iX port
 mpeix/mpeix_setjmp.c		MPE/iX port
@@ -2742,11 +2916,13 @@ pod/perl584delta.pod		Perl changes in version 5.8.4
 pod/perl585delta.pod		Perl changes in version 5.8.5
 pod/perl586delta.pod		Perl changes in version 5.8.6
 pod/perl587delta.pod		Perl changes in version 5.8.7
+pod/perl588delta.pod		Perl changes in version 5.8.8
 pod/perl58delta.pod		Perl changes in version 5.8.0
 pod/perl590delta.pod		Perl changes in version 5.9.0
 pod/perl591delta.pod		Perl changes in version 5.9.1
 pod/perl592delta.pod		Perl changes in version 5.9.2
 pod/perl593delta.pod		Perl changes in version 5.9.3
+pod/perl594delta.pod		Perl changes in version 5.9.4
 pod/perlapio.pod		Perl internal IO abstraction interface
 pod/perlapi.pod			Perl API listing (autogenerated)
 pod/perlartistic.pod		Perl Artistic License
@@ -2809,8 +2985,10 @@ pod/perl.pod			Perl overview (this section)
 pod/perlpod.pod			Perl plain old documentation
 pod/perlpodspec.pod		Perl plain old documentation format specification
 pod/perlport.pod		Perl portability guide
+pod/perlpragma.pod		Perl modules: writing a user pragma
 pod/perlref.pod			Perl references, the rest of the story
 pod/perlreftut.pod		Perl references short introduction
+pod/perlreguts.pod		Perl regular expression engine internals
 pod/perlre.pod			Perl regular expressions, the rest of the story
 pod/perlrequick.pod		Perl regular expressions quick start
 pod/perlreref.pod		Perl regular expressions quick reference
@@ -2829,6 +3007,7 @@ pod/perltoot.pod		Perl OO tutorial, part 1
 pod/perltrap.pod		Perl traps for the unwary
 pod/perlunicode.pod		Perl Unicode support
 pod/perluniintro.pod		Perl Unicode introduction
+pod/perlunitut.pod		Perl Unicode tutorial
 pod/perlutil.pod		utilities packaged with the Perl distribution
 pod/perlvar.pod			Perl predefined variables
 pod/perlxs.pod			Perl XS application programming interface
@@ -2926,6 +3105,7 @@ README.os390			Perl notes for OS/390
 README.os400			Perl notes for OS/400
 README.plan9			Perl notes for Plan 9
 README.qnx			Perl notes for QNX
+README.riscos			Perl notes for RISC OS
 README.solaris			Perl notes for Solaris
 README.symbian			Perl notes for Symbian
 README.tru64			Perl notes for Tru64
@@ -3024,6 +3204,7 @@ t/comp/colon.t			See if colons are parsed correctly
 t/comp/cpp.aux			main file for cpp.t
 t/comp/cpp.t			See if C preprocessor works
 t/comp/decl.t			See if declarations work
+t/comp/fold.t			See if constant folding works
 t/comp/hints.t			See if %^H works
 t/comp/multiline.t		See if multiline strings work
 t/comp/opsubs.t			See if q() etc. are not parsed as functions
@@ -3065,9 +3246,9 @@ t/lib/1_compile.t		See if the various libraries and extensions compile
 t/lib/common.pl			Helper for lib/{warnings,feature}.t
 t/lib/commonsense.t		See if configuration meets basic needs
 t/lib/compmod.pl		Helper for 1_compile.t
-t/lib/compress/ZlibTestUtils.pm	Compress::Zlib
 t/lib/compress/any.pl		Compress::Zlib
 t/lib/compress/anyunc.pl	Compress::Zlib
+t/lib/compress/CompTestUtils.pm	Compress::Zlib
 t/lib/compress/destroy.pl	Compress::Zlib
 t/lib/compress/generic.pl	Compress::Zlib
 t/lib/compress/merge.pl		Compress::Zlib
@@ -3123,6 +3304,8 @@ t/lib/Math/BigInt/BareCalc.pm	Bigint's simulation of Calc
 t/lib/Math/BigInt/Scalar.pm	Pure Perl module to support Math::BigInt
 t/lib/Math/BigInt/Subclass.pm	Empty subclass of BigInt for test
 t/lib/Math/BigRat/Test.pm		Math::BigRat test helper
+t/lib/mypragma.pm		An example user pragma
+t/lib/mypragma.t		Test the example user pragma
 t/lib/NoExporter.pm			Part of Test-Simple
 t/lib/sample-tests/bailout		Test data for Test::Harness
 t/lib/sample-tests/bignum		Test data for Test::Harness
@@ -3221,11 +3404,13 @@ t/op/args.t			See if operations on @_ work
 t/op/arith.t			See if arithmetic works
 t/op/array.t			See if array operations work
 t/op/assignwarn.t		See if OP= operators warn correctly for undef targets
+t/op/attrhand.t			See if attribute handlers work
 t/op/attrs.t			See if attributes on declarations work
 t/op/auto.t			See if autoincrement et all work
 t/op/avhv.t			See if pseudo-hashes work
 t/op/bless.t			See if bless works
 t/op/bop.t			See if bitops work
+t/op/caller.pl			Tests shared between caller.t and XS op.t
 t/op/caller.t			See if caller() works
 t/op/chars.t			See if character escapes work
 t/op/chdir.t			See if chdir works
@@ -3267,6 +3452,7 @@ t/op/hashassign.t		See if hash assignments work
 t/op/hash.t			See if the complexity attackers are repelled
 t/op/hashwarn.t			See if warnings for bad hash assignments work
 t/op/inccode.t			See if coderefs work in @INC
+t/op/incfilter.t		See if the source filters in coderef-in-@INC work
 t/op/inc.t			See if inc/dec of integers near 32 bit limit work
 t/op/index.t			See if index works
 t/op/int.t			See if int works
@@ -3320,6 +3506,7 @@ t/op/repeat.t			See if x operator works
 t/op/re_tests			Regular expressions for regexp.t
 t/op/reverse.t			See if reverse operator works
 t/op/runlevel.t			See if die() works from perl_call_*()
+t/op/rxcode.t			See if /(?{ code })/ works
 t/op/sleep.t			See if sleep works
 t/op/smartmatch.t		See if the ~~ operator works
 t/op/sort.t			See if sort works
@@ -3330,8 +3517,10 @@ t/op/sprintf.t			See if sprintf works
 t/op/srand.t			See if srand works
 t/op/sselect.t			See if 4 argument select works
 t/op/stash.t			See if %:: stashes work
+t/op/state.t			See if state variables work
 t/op/stat.t			See if stat works
 t/op/study.t			See if study works
+t/op/studytied.t		See if study works with tied scalars
 t/op/sub_lval.t			See if lvalue subroutines work
 t/op/subst_amp.t		See if $&-related substitution works
 t/op/substr.t			See if substr works
@@ -3419,9 +3608,11 @@ t/TestInit.pm			Preamble library for core tests
 t/test.pl			Simple testing library
 t/uni/case.pl			See if Unicode casing works
 t/uni/chomp.t			See if Unicode chomp works
+t/uni/chr.t			See if Unicode chr works
 t/uni/class.t			See if Unicode classes work (\p)
 t/uni/fold.t			See if Unicode folding works
 t/uni/lower.t			See if Unicode casing works
+t/uni/overload.t		See if Unicode overloading works
 t/uni/sprintf.t			See if Unicode sprintf works
 t/uni/title.t			See if Unicode casing works
 t/uni/tr_7jis.t			See if Unicode tr/// works
@@ -3445,6 +3636,7 @@ utfebcdic.h			Unicode on EBCDIC (UTF-EBCDIC, tr16) header
 util.c				Utility routines
 util.h				Dummy header
 utils/c2ph.PL			program to translate dbx stabs to perl
+utils/config_data.PL		Module::Build tool
 utils/corelist.PL		Module::CoreList
 utils/cpan.PL			easily interact with CPAN from the command line
 utils/dprofpp.PL		Perl code profile post-processor
@@ -3462,8 +3654,8 @@ utils/perlivp.PL		installation verification procedure
 utils/piconv.PL			iconv(1), reinvented in perl
 utils/pl2pm.PL			A pl to pm translator
 utils/prove.PL			The prove harness utility
-utils/ptar.PL			The ptar utility
 utils/ptardiff.PL		The ptardiff utility
+utils/ptar.PL			The ptar utility
 utils/shasum.PL			filter for computing SHA digests (analogous to md5sum)
 utils/splain.PL			Stand-alone version of diagnostics.pm
 utils/xsubpp.PL			External subroutine preprocessor
@@ -3515,9 +3707,17 @@ win32/bin/pl2bat.pl		wrap perl scripts into batch files
 win32/bin/runperl.pl		run perl script via batch file namesake
 win32/bin/search.pl		Win32 port
 win32/buildext.pl		Build extensions once miniperl is built
+win32/ce-helpers/cecopy-lib.pl	WinCE port
+win32/ce-helpers/compile-all.bat	WinCE port
+win32/ce-helpers/compile.bat	WinCE port
+win32/ce-helpers/comp.pl	WinCE port
+win32/ce-helpers/makedist.pl	WinCE port
+win32/ce-helpers/registry.bat	WinCE port
 win32/config.bc			Win32 base line config.sh (Borland C++ build)
+win32/config.ce			WinCE port
 win32/config.gc			Win32 base line config.sh (mingw32/gcc build)
 win32/config_H.bc		Win32 config header (Borland C++ build)
+win32/config_H.ce		WinCE port
 win32/config_H.gc		Win32 config header (GNU build)?
 win32/config_h.PL		Perl code to convert Win32 config.sh to config.h
 win32/config_H.vc		Win32 config header (Visual C++ build)
@@ -3527,6 +3727,19 @@ win32/config.vc			Win32 base line config.sh (Visual C++ build)
 win32/config.vc64		Win64 base line config.sh (Visual C++ build)
 win32/distclean.bat		Remove _ALL_ files not listed here in MANIFEST
 win32/dl_win32.xs		Win32 port
+win32/ext/Win32API/File/buffers.h			Win32API::File extension
+win32/ext/Win32API/File/cFile.h				Win32API::File extension
+win32/ext/Win32API/File/cFile.pc			Win32API::File extension
+win32/ext/Win32API/File/Changes				Win32API::File extension changes
+win32/ext/Win32API/File/const2perl.h			Win32API::File extension
+win32/ext/Win32API/File/ExtUtils/Myconst2perl.pm	Win32API::File extension
+win32/ext/Win32API/File/File.pm				Win32API::File extension
+win32/ext/Win32API/File/File.xs				Win32API::File extension
+win32/ext/Win32API/File/Makefile.PL			Win32API::File extension makefile write
+win32/ext/Win32API/File/README				Win32API::File extension Readme
+win32/ext/Win32API/File/t/file.t			See if Win32API::File extension works
+win32/ext/Win32API/File/t/tie.t				See if Win32API::File extension works
+win32/ext/Win32API/File/typemap				Win32API::File extension interface types
 win32/ext/Win32/Makefile.PL	Win32 extension makefile writer
 win32/ext/Win32/Win32.pm	Win32 extension Perl module
 win32/ext/Win32/Win32.xs	Win32 extension external subroutines
@@ -3538,6 +3751,7 @@ win32/include/dirent.h		Win32 port
 win32/include/netdb.h		Win32 port
 win32/include/sys/socket.h	Win32 port
 win32/Makefile			Win32 makefile for NMAKE (Visual C++ build)
+win32/Makefile.ce		WinCE port
 win32/makefile.mk		Win32 makefile for DMAKE (BC++, VC++ builds)
 win32/makeico.pl		script to create perlexe.ico image file
 win32/mdelete.bat		multifile delete
@@ -3545,55 +3759,26 @@ win32/perlexe.rc		associated perl binary with icon
 win32/perlglob.c		Win32 port
 win32/perlhost.h		Perl "host" implementation
 win32/perllib.c			Win32 port
+win32/perlmaince.c		WinCE port
+win32/perl.rc			WinCE port
 win32/pod.mak			Win32 port
 win32/runperl.c			Win32 port
 win32/splittree.pl		Win32 port
 win32/sync_ext.pl		Win32 port
-win32/vdir.h			Perl "host" virtual directory manager
-win32/vmem.h			Perl "host" memory manager
+win32/vdir.h			Perl "host" virtual directory manager for CE
+win32/vmem.h			Perl "host" memory manager for CE
 win32/win32.c			Win32 port
+win32/win32ceio.c		Win32/WinCE PerlIO layer support
 win32/win32.h			Win32 port
 win32/win32io.c			Win32 PerlIO layer support
 win32/win32iop.h		Win32 port
+win32/win32iop-o.h		WinCE port
 win32/win32sck.c		Win32 port
 win32/win32thread.c		Win32 functions for threads
 win32/win32thread.h		Win32 port mapping to threads
-wince/bin/exetype.pl			WinCE port
-wince/bin/perlglob.pl			WinCE port
-wince/bin/pl2bat.pl			WinCE port
-wince/bin/runperl.pl			WinCE port
-wince/bin/search.pl			WinCE port
-wince/cecopy-lib.pl			WinCE port
-wince/compile-all.bat			WinCE port
-wince/compile.bat			WinCE port
-wince/comp.pl				WinCE port
-wince/config.ce				WinCE port
-wince/config_H.ce			WinCE port
-wince/config_h.PL			WinCE port
-wince/config_sh.PL			WinCE port
-wince/dl_win32.xs			WinCE port
-wince/include/arpa/inet.h		WinCE port
-wince/include/sys/socket.h		WinCE port
-wince/makedist.pl			WinCE port
-wince/Makefile.ce			WinCE port
-wince/makeico.pl			WinCE port
-wince/perlhost.h	Perl "host" implementation
-wince/perllib.c				WinCE port
-wince/perlmain.c			WinCE port
-wince/perl.rc				WinCE port
-wince/registry.bat			WinCE port
-wince/runperl.c				WinCE port
-wince/splittree.pl			WinCE port
-wince/vdir.h			Perl "host" virtual directory manager for CE
-wince/vmem.h			Perl "host" memory manager for CE
-wince/win32.h				WinCE port
-wince/win32io.c				WinCE port
-wince/win32iop.h			WinCE port
-wince/win32thread.c			WinCE port
-wince/win32thread.h			WinCE port
-wince/wince.c				WinCE port
-wince/wince.h				WinCE port
-wince/wincesck.c			WinCE port
+win32/wince.c			WinCE port
+win32/wince.h			WinCE port
+win32/wincesck.c		WinCE port
 writemain.SH			Generate perlmain.c from miniperlmain.c+extensions
 x2p/a2p.c			Output of a2p.y run through byacc
 x2p/a2p.h			Global declarations

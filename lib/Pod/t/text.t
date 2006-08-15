@@ -1,9 +1,9 @@
 #!/usr/bin/perl -w
-# $Id: text.t,v 1.3 2004/12/31 21:29:48 eagle Exp $
+# $Id: text.t,v 1.5 2006-01-28 22:31:50 eagle Exp $
 #
 # text.t -- Additional specialized tests for Pod::Text.
 #
-# Copyright 2002, 2004 by Russ Allbery <rra@stanford.edu>
+# Copyright 2002, 2004, 2006 by Russ Allbery <rra@stanford.edu>
 #
 # This program is free software; you may redistribute it and/or modify it
 # under the same terms as Perl itself.
@@ -29,6 +29,7 @@ use Pod::Text;
 $loaded = 1;
 print "ok 1\n";
 
+my $parser = Pod::Text->new or die "Cannot create parser\n";
 my $n = 2;
 while (<DATA>) {
     next until $_ eq "###\n";
@@ -38,9 +39,9 @@ while (<DATA>) {
         print TMP $_;
     }
     close TMP;
-    my $parser = Pod::Text->new or die "Cannot create parser\n";
-    $parser->parse_from_file ('tmp.pod', 'out.tmp');
-    undef $parser;
+    open (OUT, '> out.tmp') or die "Cannot create out.tmp: $!\n";
+    $parser->parse_from_file ('tmp.pod', \*OUT);
+    close OUT;
     open (TMP, 'out.tmp') or die "Cannot open out.tmp: $!\n";
     my $output;
     {

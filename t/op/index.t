@@ -7,7 +7,7 @@ BEGIN {
 
 use strict;
 require './test.pl';
-plan( tests => 58 );
+plan( tests => 66 );
 
 my $foo = 'Now is the time for all good men to come to the aid of their country.';
 
@@ -86,8 +86,15 @@ is(rindex($a, "foo",    ), 0);
 }
 
 {
-    my $search = "foo \xc9 bar";
-    my $text = "a\xa3\xa3a $search    $search quux";
+    my $search;
+    my $text;
+    if (ord('A') == 193) {
+	$search = "foo \x71 bar";
+	$text = "a\xb1\xb1a $search    $search quux";
+    } else {
+	$search = "foo \xc9 bar";
+	$text = "a\xa3\xa3a $search    $search quux";
+    }
 
     my $text_utf8 = $text;
     utf8::upgrade($text_utf8);
@@ -120,4 +127,16 @@ is(rindex($a, "foo",    ), 0);
     is (rindex($text_octets, $search), -1);
     is (index($text, $search_octets), -1);
     is (rindex($text, $search_octets), -1);
+}
+
+foreach my $utf8 ('', ', utf-8') {
+    foreach my $arraybase (0, 1, -1, -2) {
+	my $expect_pos = 2 + $arraybase;
+
+	my $prog = "\$[ = $arraybase; \$big = \"N\\xabN\\xab\"; ";
+	$prog .= '$big .= chr 256; chop $big; ' if $utf8;
+	$prog .= 'print rindex $big, "N", 2 + $[';
+
+	fresh_perl_is($prog, $expect_pos, {}, "\$[ = $arraybase$utf8");
+    }
 }

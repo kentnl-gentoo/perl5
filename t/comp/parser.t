@@ -9,7 +9,7 @@ BEGIN {
 }
 
 require "./test.pl";
-plan( tests => 56 );
+plan( tests => 60 );
 
 eval '%@x=0;';
 like( $@, qr/^Can't modify hash dereference in repeat \(x\)/, '%@x=0' );
@@ -135,7 +135,7 @@ EOF
 {
     local $SIG{__WARN__} = sub { }; # silence mandatory warning
     eval q{ my $x = -F 1; };
-    like( $@, qr/(?:syntax|parse) error .* near "F 1"/, "unknown filetest operators" );
+    like( $@, qr/(?i:syntax|parse) error .* near "F 1"/, "unknown filetest operators" );
     is(
         eval q{ sub F { 42 } -F 1 },
 	'-42',
@@ -197,3 +197,16 @@ EOF
     like($@, qr/That use of \$\[ is unsupported/,
              'cannot assign list of <1 elements to $[');
 }
+
+# tests for "Bad name"
+eval q{ foo::$bar };
+like( $@, qr/Bad name after foo::/, 'Bad name after foo::' );
+eval q{ foo''bar };
+like( $@, qr/Bad name after foo'/, 'Bad name after foo\'' );
+
+# test for ?: context error
+eval q{($a ? $x : ($y)) = 5};
+like( $@, qr/Assignment to both a list and a scalar/, 'Assignment to both a list and a scalar' );
+
+eval q{ s/x/#/e };
+is( $@, '', 'comments in s///e' );

@@ -21,13 +21,14 @@ BEGIN {
     unshift @INC, 't';
   }
 
-  eval "use Test";
-  if ($@) {
-    require 'testutil.pl';
-    print "1..202\n";
+  sub load {
+    eval "use Test";
+    require 'testutil.pl' if $@;
   }
-  else {
-    plan(tests => 202);
+
+  if (203) {
+    load();
+    plan(tests => 203);
   }
 }
 
@@ -35,10 +36,18 @@ use Devel::PPPort;
 use strict;
 $^W = 1;
 
+package Devel::PPPort;
+use vars '@ISA';
+require DynaLoader;
+@ISA = qw(DynaLoader);
+bootstrap Devel::PPPort;
+
+package main;
+
 BEGIN {
-  if ($ENV{'SKIP_PPPHTEST'}) {
-    for (1 .. 202) {
-      ok(1);
+  if ($ENV{'SKIP_SLOW_TESTS'}) {
+    for (1 .. 203) {
+      skip("skip: SKIP_SLOW_TESTS", 0);
     }
     exit 0;
   }
@@ -212,6 +221,9 @@ __DATA__
 my $o = ppport(qw(--help));
 ok($o =~ /^Usage:.*ppport\.h/m);
 ok($o =~ /--help/m);
+
+$o = ppport(qw(--version));
+ok($o =~ /^This is.*ppport.*\d+\.\d+(?:_?\d+)?\.$/);
 
 $o = ppport(qw(--nochanges));
 ok($o =~ /^Scanning.*test\.xs/mi);

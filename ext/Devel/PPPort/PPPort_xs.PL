@@ -1,12 +1,12 @@
 ################################################################################
 #
-#  PPPort_xs.PL -- generate PPPort.xs
+#  PPPort_xs.PL -- generate RealPPPort.xs
 #
 ################################################################################
 #
-#  $Revision: 9 $
+#  $Revision: 11 $
 #  $Author: mhx $
-#  $Date: 2006/01/14 18:07:55 +0100 $
+#  $Date: 2006/07/21 19:21:40 +0200 $
 #
 ################################################################################
 #
@@ -40,7 +40,7 @@ END
 my $file;
 my $sec;
 
-for $file (glob 'parts/inc/*') {
+for $file (all_files_in_dir('parts/inc')) {
   my $spec = parse_partspec($file);
 
   my $msg = 0;
@@ -68,7 +68,7 @@ for $sec (keys %SECTION) {
   $data =~ s/^__\U$sec\E__$/$code/m;
 }
 
-open FH, ">PPPort.xs" or die "PPPort.xs: $!\n";
+open FH, ">RealPPPort.xs" or die "RealPPPort.xs: $!\n";
 print FH $data;
 close FH;
 
@@ -85,9 +85,9 @@ __DATA__
 *
 ********************************************************************************
 *
-*  $Revision: 9 $
+*  $Revision: 11 $
 *  $Author: mhx $
-*  $Date: 2006/01/14 18:07:55 +0100 $
+*  $Date: 2006/07/21 19:21:40 +0200 $
 *
 ********************************************************************************
 *

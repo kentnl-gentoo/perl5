@@ -10,12 +10,17 @@
 
 typedef OP OP_4tree;			/* Will be redefined later. */
 
+
+#define PERL_ENABLE_TRIE_OPTIMISATION 1
+#define PERL_ENABLE_EXTENDED_TRIE_OPTIMISATION 1
+#define PERL_ENABLE_EXPERIMENTAL_REGEX_OPTIMISATIONS 0
+
 /*
  * The "internal use only" fields in regexp.h are present to pass info from
  * compile to execute that permits the execute phase to run lots faster on
  * simple cases.  They are:
  *
- * regstart	sv that must begin a match; Nullch if none obvious
+ * regstart	sv that must begin a match; NULL if none obvious
  * reganch	is the match anchored (at beginning-of-line only)?
  * regmust	string (pointer into program) that match must include, or NULL
  *  [regmust changed to SV* for bminstr()--law]
@@ -311,16 +316,20 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 
 #define EXTRA_SIZE(guy) ((sizeof(guy)-1)/sizeof(struct regnode))
 
-#define REG_SEEN_ZERO_LEN	 1
-#define REG_SEEN_LOOKBEHIND	 2
-#define REG_SEEN_GPOS		 4
-#define REG_SEEN_EVAL		 8
-#define REG_SEEN_CANY		16
+#define REG_SEEN_ZERO_LEN	0x00000001
+#define REG_SEEN_LOOKBEHIND	0x00000002
+#define REG_SEEN_GPOS		0x00000004
+#define REG_SEEN_EVAL		0x00000008
+#define REG_SEEN_CANY		0x00000010
 #define REG_SEEN_SANY		REG_SEEN_CANY /* src bckwrd cmpt */
 
 START_EXTERN_C
 
+#ifdef PLUGGABLE_RE_EXTENSION
+#include "re_nodes.h"
+#else
 #include "regnodes.h"
+#endif
 
 /* The following have no fixed length. U8 so we can do strchr() on it. */
 #ifndef DOINIT
@@ -362,11 +371,12 @@ typedef struct re_scream_pos_data_s
  *   f - start-class data for regstclass optimization
  *   n - Root of op tree for (?{EVAL}) item
  *   o - Start op for (?{EVAL}) item
- *   p - Pad for (?{EVAL} item
+ *   p - Pad for (?{EVAL}) item
  *   s - swash for unicode-style character class, and the multicharacter
  *       strings resulting from casefolding the single-character entries
  *       in the character class
  *   t - trie struct
+ *   T - aho-trie struct
  * 20010712 mjd@plover.com
  * (Remember to update re_dup() and pregfree() if you add any items.)
  */
@@ -402,11 +412,7 @@ struct reg_substr_data {
 
 
 /* trie related stuff */
-/* an accepting state/position*/
-struct _reg_trie_accepted {
-    U8   *endpos;
-    U16  wordnum;
-};
+
 /* a transition record for the state machine. the
    check field determines which state "owns" the
    transition. the char the transition is for is
@@ -441,86 +447,220 @@ struct _reg_trie_state {
 
 
 
-typedef struct _reg_trie_accepted reg_trie_accepted;
 typedef struct _reg_trie_state    reg_trie_state;
 typedef struct _reg_trie_trans    reg_trie_trans;
 
 
 /* anything in here that needs to be freed later
-should be dealt with in pregfree */
+   should be dealt with in pregfree */
 struct _reg_trie_data {
     U16              uniquecharcount;
-    U16              wordcount;
-    STRLEN           charcount;
-    U32              laststate;
     U32              lasttrans;
     U16              *charmap;
     HV               *widecharmap;
     reg_trie_state   *states;
     reg_trie_trans   *trans;
+    char             *bitmap;
     U32              refcount;
+    U32              startstate;
+    STRLEN           minlen;
+    STRLEN           maxlen;
+    U32              *wordlen;
+    U32              laststate;   /* Build only */
 #ifdef DEBUGGING
+    U16              wordcount;   /* Build only */
+    STRLEN           charcount;   /* Build only */
     AV               *words;
     AV               *revcharmap;
 #endif
 };
-
 typedef struct _reg_trie_data reg_trie_data;
+
+struct _reg_ac_data {
+    U32              *fail;
+    reg_trie_state   *states;
+    reg_trie_data    *trie;
+    U32              refcount;
+};
+typedef struct _reg_ac_data reg_ac_data;
+
+/* ANY_BIT doesnt use the structure, so we can borrow it here.
+   This is simpler than refactoring all of it as wed end up with
+   three different sets... */
+
+#define TRIE_BITMAP(p)		(((reg_trie_data *)(p))->bitmap)
+#define TRIE_BITMAP_BYTE(p, c)	(TRIE_BITMAP(p)[(((U8)c) >> 3) & 31])
+#define TRIE_BITMAP_SET(p, c)	(TRIE_BITMAP_BYTE(p, c) |=  ANYOF_BIT((U8)c))
+#define TRIE_BITMAP_CLEAR(p,c)	(TRIE_BITMAP_BYTE(p, c) &= ~ANYOF_BIT((U8)c))
+#define TRIE_BITMAP_TEST(p, c)	(TRIE_BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
+
 
 /* these defines assume uniquecharcount is the correct variable, and state may be evaluated twice */
 #define TRIE_NODENUM(state) (((state)-1)/(trie->uniquecharcount)+1)
 #define SAFE_TRIE_NODENUM(state) ((state) ? (((state)-1)/(trie->uniquecharcount)+1) : (state))
 #define TRIE_NODEIDX(state) ((state) ? (((state)-1)*(trie->uniquecharcount)+1) : (state))
 
-#define DO_TRIE 1
-#define TRIE_DEBUG 1
+#ifdef DEBUGGING
+#define TRIE_WORDCOUNT(trie) ((trie)->wordcount)
+#define TRIE_CHARCOUNT(trie) ((trie)->charcount)
+#define TRIE_LASTSTATE(trie) ((trie)->laststate)
+#define TRIE_REVCHARMAP(trie) ((trie)->revcharmap)
+#else
+#define TRIE_WORDCOUNT(trie) (trie_wordcount)
+#define TRIE_CHARCOUNT(trie) (trie_charcount)
+/*#define TRIE_LASTSTATE(trie) (trie_laststate)*/
+#define TRIE_LASTSTATE(trie) ((trie)->laststate)
+#define TRIE_REVCHARMAP(trie) (trie_revcharmap)
+#endif
 
 #define RE_TRIE_MAXBUF_INIT 65536
 #define RE_TRIE_MAXBUF_NAME "\022E_TRIE_MAXBUF"
 #define RE_DEBUG_FLAGS "\022E_DEBUG_FLAGS"
 
-/* If you change these be sure to update ext/re/re.pm as well */
-#define RE_DEBUG_COMPILE       1
-#define RE_DEBUG_EXECUTE       2
-#define RE_DEBUG_TRIE_COMPILE  4
-#define RE_DEBUG_TRIE_EXECUTE  8
-#define RE_DEBUG_TRIE_MORE    16
-#define RE_DEBUG_OPTIMISE     32
-#define RE_DEBUG_OFFSETS      64
+/*
 
-#define DEBUG_OPTIMISE_r(x) DEBUG_r( if (SvIV(re_debug_flags) & RE_DEBUG_OPTIMISE) x  )
-#define DEBUG_EXECUTE_r(x) DEBUG_r( if (SvIV(re_debug_flags) & RE_DEBUG_EXECUTE) x  )
-#define DEBUG_COMPILE_r(x) DEBUG_r( if (SvIV(re_debug_flags) & RE_DEBUG_COMPILE) x  )
-#define DEBUG_OFFSETS_r(x) DEBUG_r( if (SvIV(re_debug_flags) & RE_DEBUG_OFFSETS) x  )
+RE_DEBUG_FLAGS is used to control what debug output is emitted
+its divided into three groups of options, some of which interact.
+The three groups are: Compile, Execute, Extra. There is room for a
+further group, as currently only the low three bytes are used.
+
+    Compile Options:
+    
+    PARSE
+    PEEP
+    TRIE
+    PROGRAM
+    OFFSETS
+
+    Execute Options:
+
+    INTUIT
+    MATCH
+    TRIE
+
+    Extra Options
+
+    TRIE
+    OFFSETS
+
+If you modify any of these make sure you make corresponding changes to
+re.pm, especially to the documentation.
+
+*/
+
+
+/* Compile */
+#define RE_DEBUG_COMPILE_MASK      0x0000FF
+#define RE_DEBUG_COMPILE_PARSE     0x000001
+#define RE_DEBUG_COMPILE_OPTIMISE  0x000002
+#define RE_DEBUG_COMPILE_TRIE      0x000004
+#define RE_DEBUG_COMPILE_DUMP      0x000008
+#define RE_DEBUG_COMPILE_OFFSETS   0x000010
+
+/* Execute */
+#define RE_DEBUG_EXECUTE_MASK      0x00FF00
+#define RE_DEBUG_EXECUTE_INTUIT    0x000100
+#define RE_DEBUG_EXECUTE_MATCH     0x000200
+#define RE_DEBUG_EXECUTE_TRIE      0x000400
+
+/* Extra */
+#define RE_DEBUG_EXTRA_MASK        0xFF0000
+#define RE_DEBUG_EXTRA_TRIE        0x010000
+#define RE_DEBUG_EXTRA_OFFSETS     0x020000
+#define RE_DEBUG_EXTRA_STATE       0x040000
+
+#define RE_DEBUG_FLAG(x) (re_debug_flags & x)
+/* Compile */
+#define DEBUG_COMPILE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_MASK) x  )
+#define DEBUG_PARSE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_PARSE) x  )
+#define DEBUG_OPTIMISE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_OPTIMISE) x  )
+#define DEBUG_PARSE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_PARSE) x  )
+#define DEBUG_DUMP_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_DUMP) x  )
+#define DEBUG_OFFSETS_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_OFFSETS) x  )
+#define DEBUG_TRIE_COMPILE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_TRIE) x )
+
+/* Execute */
+#define DEBUG_EXECUTE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXECUTE_MASK) x  )
+#define DEBUG_INTUIT_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXECUTE_INTUIT) x  )
+#define DEBUG_MATCH_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXECUTE_MATCH) x  )
+#define DEBUG_TRIE_EXECUTE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXECUTE_TRIE) x )
+
+/* Extra */
+#define DEBUG_EXTRA_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_MASK) x  )
+#define DEBUG_STATE_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_STATE) x )
+#define MJD_OFFSET_DEBUG(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_OFFSETS) \
+        Perl_warn_nocontext x )
+#define DEBUG_TRIE_COMPILE_MORE_r(x) DEBUG_TRIE_COMPILE_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_TRIE) x )
+#define DEBUG_TRIE_EXECUTE_MORE_r(x) DEBUG_TRIE_EXECUTE_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_TRIE) x )
+
 #define DEBUG_TRIE_r(x) DEBUG_r( \
-   if (SvIV(re_debug_flags) & RE_DEBUG_TRIE_COMPILE       \
-       || SvIV(re_debug_flags) & RE_DEBUG_TRIE_EXECUTE )  \
-   x  \
-)
-#define DEBUG_TRIE_EXECUTE_r(x) \
-    DEBUG_r( if (SvIV(re_debug_flags) & RE_DEBUG_TRIE_EXECUTE) x )
+    if (re_debug_flags & (RE_DEBUG_COMPILE_TRIE \
+        | RE_DEBUG_EXECUTE_TRIE )) x )
 
-#define DEBUG_TRIE_COMPILE_r(x) \
-    DEBUG_r( if (SvIV(re_debug_flags) & RE_DEBUG_TRIE_COMPILE) x )
-
-#define DEBUG_TRIE_EXECUTE_MORE_r(x) \
-    DEBUG_TRIE_EXECUTE_r( if (SvIV(re_debug_flags) & RE_DEBUG_TRIE_MORE) x )
-
-#define DEBUG_TRIE_COMPILE_MORE_r(x) \
-    DEBUG_TRIE_COMPILE_r( if (SvIV(re_debug_flags) & RE_DEBUG_TRIE_MORE) x )
-
-#define GET_RE_DEBUG_FLAGS DEBUG_r( \
-        re_debug_flags=get_sv(RE_DEBUG_FLAGS, 1); \
-        if (!SvIOK(re_debug_flags)) { \
-            sv_setiv(re_debug_flags, RE_DEBUG_COMPILE | RE_DEBUG_EXECUTE | RE_DEBUG_OFFSETS); \
-        } \
-    )
-
+/* initialization */
+/* get_sv() can return NULL during global destruction. */
+#define GET_RE_DEBUG_FLAGS DEBUG_r({ \
+        SV * re_debug_flags_sv = NULL; \
+        re_debug_flags_sv = get_sv(RE_DEBUG_FLAGS, 1); \
+        if (re_debug_flags_sv) { \
+            if (!SvIOK(re_debug_flags_sv)) \
+                sv_setuv(re_debug_flags_sv, RE_DEBUG_COMPILE_DUMP | RE_DEBUG_EXECUTE_MASK ); \
+            re_debug_flags=SvIV(re_debug_flags_sv); \
+        }\
+})
 
 #ifdef DEBUGGING
-#define GET_RE_DEBUG_FLAGS_DECL SV *re_debug_flags = NULL; GET_RE_DEBUG_FLAGS;
-#else
-#define GET_RE_DEBUG_FLAGS_DECL
-#endif
 
+#define GET_RE_DEBUG_FLAGS_DECL IV re_debug_flags = 0; GET_RE_DEBUG_FLAGS;
+
+#define RE_PV_COLOR_DECL(rpv,rlen,isuni,dsv,pv,l,m,c1,c2) \
+    const char * const rpv =                          \
+        pv_pretty((dsv), (pv), (l), (m), \
+            PL_colors[(c1)],PL_colors[(c2)], \
+            ((isuni) ? PERL_PV_ESCAPE_UNI : 0) );         \
+    const int rlen = SvCUR(dsv)
+
+#define RE_SV_ESCAPE(rpv,isuni,dsv,sv,m) \
+    const char * const rpv =                          \
+        pv_pretty((dsv), (SvPV_nolen_const(sv)), (SvCUR(sv)), (m), \
+            PL_colors[(c1)],PL_colors[(c2)], \
+            ((isuni) ? PERL_PV_ESCAPE_UNI : 0) )
+
+#define RE_PV_QUOTED_DECL(rpv,isuni,dsv,pv,l,m)                    \
+    const char * const rpv =                                       \
+        pv_pretty((dsv), (pv), (l), (m), \
+            PL_colors[0], PL_colors[1], \
+            ( PERL_PV_PRETTY_QUOTE | PERL_PV_PRETTY_ELIPSES |      \
+              ((isuni) ? PERL_PV_ESCAPE_UNI : 0))                  \
+        )                                                  
+
+#define RE_SV_DUMPLEN(ItEm) (SvCUR(ItEm) - (SvTAIL(ItEm)!=0))
+#define RE_SV_TAIL(ItEm) (SvTAIL(ItEm) ? "$" : "")
+    
+#else /* if not DEBUGGING */
+
+#define GET_RE_DEBUG_FLAGS_DECL
+#define RE_PV_COLOR_DECL(rpv,rlen,isuni,dsv,pv,l,m,c1,c2)
+#define RE_SV_ESCAPE(rpv,isuni,dsv,sv,m)
+#define RE_PV_QUOTED_DECL(rpv,isuni,dsv,pv,l,m)
+#define RE_SV_DUMPLEN(ItEm)
+#define RE_SV_TAIL(ItEm)
+
+#endif /* DEBUG RELATED DEFINES */
 

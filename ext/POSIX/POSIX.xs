@@ -732,7 +732,7 @@ getlflag(termios_ref)
 cc_t
 getcc(termios_ref, ccix)
 	POSIX::Termios	termios_ref
-	int		ccix
+	unsigned int	ccix
     CODE:
 #ifdef I_TERMIOS /* References a termios structure member so ifdef it out. */
 	if (ccix >= NCCS)
@@ -802,7 +802,7 @@ setlflag(termios_ref, lflag)
 void
 setcc(termios_ref, ccix, cc)
 	POSIX::Termios	termios_ref
-	int		ccix
+	unsigned int	ccix
 	cc_t		cc
     CODE:
 #ifdef I_TERMIOS /* References a termios structure member so ifdef it out. */
@@ -1259,6 +1259,10 @@ sigaction(sig, optaction, oldaction = 0)
 	    POSIX__SigSet sigset;
 	    SV** svp;
 	    SV** sigsvp;
+
+            if (sig < 0) {
+                croak("Negative signals are not allowed");
+            }
 
 	    if (sig == 0 && SvPOK(ST(0))) {
 	        const char *s = SvPVX_const(ST(0));

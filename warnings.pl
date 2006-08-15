@@ -276,12 +276,15 @@ print WARN <<'EOM' ;
 #define G_WARN_ONCE		8	/* set if 'once' ever enabled */
 #define G_WARN_ALL_MASK		(G_WARN_ALL_ON|G_WARN_ALL_OFF)
 
-#define pWARN_STD		Nullsv
-#define pWARN_ALL		(Nullsv+1)	/* use warnings 'all' */
-#define pWARN_NONE		(Nullsv+2)	/* no  warnings 'all' */
+#define pWARN_STD		NULL
+#define pWARN_ALL		(((STRLEN*)0)+1)    /* use warnings 'all' */
+#define pWARN_NONE		(((STRLEN*)0)+2)    /* no  warnings 'all' */
 
 #define specialWARN(x)		((x) == pWARN_STD || (x) == pWARN_ALL ||	\
 				 (x) == pWARN_NONE)
+
+/* if PL_warnhook is set to this value, then warnings die */
+#define PERL_WARNHOOK_FATAL	(((SV*)0) + 1)
 EOM
 
 my $offset = 0 ;
@@ -325,8 +328,12 @@ print WARN <<'EOM';
 #define isLEXWARN_on 	(PL_curcop->cop_warnings != pWARN_STD)
 #define isLEXWARN_off	(PL_curcop->cop_warnings == pWARN_STD)
 #define isWARN_ONCE	(PL_dowarn & (G_WARN_ON|G_WARN_ONCE))
-#define isWARN_on(c,x)	(IsSet(SvPVX_const(c), 2*(x)))
-#define isWARNf_on(c,x)	(IsSet(SvPVX_const(c), 2*(x)+1))
+#define isWARN_on(c,x)	(IsSet((U8 *)(c + 1), 2*(x)))
+#define isWARNf_on(c,x)	(IsSet((U8 *)(c + 1), 2*(x)+1))
+
+#define DUP_WARNINGS(p)		\
+    (STRLEN*)(specialWARN(p) ? (p)	\
+    : CopyD(p, PerlMemShared_malloc(sizeof(*p)+*p), sizeof(*p)+*p, char))
 
 #define ckWARN(w)		Perl_ckwarn(aTHX_ packWARN(w))
 #define ckWARN2(w1,w2)		Perl_ckwarn(aTHX_ packWARN2(w1,w2))

@@ -656,6 +656,17 @@ static stcxt_t *Context_ptr = NULL;
 	}								\
   } STMT_END
 
+#define MBUF_SAFEPVREAD(x,s,z)			\
+  STMT_START {					\
+	if ((mptr + (s)) <= mend) {		\
+		memcpy(x, mptr, s);		\
+		mptr += s;			\
+	} else {				\
+		Safefree(z);			\
+		return (SV *) 0;		\
+	}					\
+  } STMT_END
+
 #define MBUF_PUTC(c) 				\
   STMT_START {						\
 	if (mptr < mend)				\
@@ -984,6 +995,16 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
 		sv_free(z);								\
 		return (SV *) 0;						\
 	}											\
+  } STMT_END
+
+#define SAFEPVREAD(x,y,z)					\
+  STMT_START {							\
+	if (!cxt->fio)						\
+		MBUF_SAFEPVREAD(x,y,z);				\
+	else if (PerlIO_read(cxt->fio, x, y) != y)	 {	\
+		Safefree(z);					\
+		return (SV *) 0;				\
+	}							\
   } STMT_END
 
 /*
@@ -2329,7 +2350,11 @@ static int store_hash(pTHX_ stcxt_t *cxt, HV *hv)
 #else
 			HE *he = hv_iternext(hv);
 #endif
-			SV *key = hv_iterkeysv(he);
+			SV *key;
+
+			if (!he)
+				CROAK(("Hash %p inconsistent - expected %d keys, %dth is NULL", hv, len, i));
+			key = hv_iterkeysv(he);
 			av_store(av, AvFILLp(av)+1, key);	/* av_push(), really */
 		}
 			
@@ -3959,6 +3984,7 @@ static SV *retrieve_blessed(pTHX_ stcxt_t *cxt, const char *cname)
 	SV *sv;
 	char buf[LG_BLESS + 1];		/* Avoid malloc() if possible */
 	char *classname = buf;
+	char *malloced_classname = NULL;
 
 	TRACEME(("retrieve_blessed (#%d)", cxt->tagnum));
 	ASSERT(!cname, ("no bless-into class given here, got %s", cname));
@@ -3975,8 +4001,9 @@ static SV *retrieve_blessed(pTHX_ stcxt_t *cxt, const char *cname)
 		RLEN(len);
 		TRACEME(("** allocating %d bytes for class name", len+1));
 		New(10003, classname, len+1, char);
+		malloced_classname = classname;
 	}
-	READ(classname, len);
+	SAFEPVREAD(classname, len, malloced_classname);
 	classname[len] = '\0';		/* Mark string end */
 
 	/*
@@ -3985,16 +4012,18 @@ static SV *retrieve_blessed(pTHX_ stcxt_t *cxt, const char *cname)
 
 	TRACEME(("new class name \"%s\" will bear ID = %d", classname, cxt->classnum));
 
-	if (!av_store(cxt->aclass, cxt->classnum++, newSVpvn(classname, len)))
+	if (!av_store(cxt->aclass, cxt->classnum++, newSVpvn(classname, len))) {
+		Safefree(malloced_classname);
 		return (SV *) 0;
+	}
 
 	/*
 	 * Retrieve object and bless it.
 	 */
 
 	sv = retrieve(aTHX_ cxt, classname);	/* First SV which is SEEN will be blessed */
-	if (classname != buf)
-		Safefree(classname);
+	if (malloced_classname)
+		Safefree(malloced_classname);
 
 	return sv;
 }
@@ -4146,6 +4175,7 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 		 * on the stack.  Just like retrieve_blessed(), we limit the name to
 		 * LG_BLESS bytes.  This is an arbitrary decision.
 		 */
+		char *malloced_classname = NULL;
 
 		if (flags & SHF_LARGE_CLASSLEN)
 			RLEN(len);
@@ -4155,17 +4185,20 @@ static SV *retrieve_hook(pTHX_ stcxt_t *cxt, const char *cname)
 		if (len > LG_BLESS) {
 			TRACEME(("** allocating %d bytes for class name", len+1));
 			New(10003, classname, len+1, char);
+			malloced_classname = classname;
 		}
 
-		READ(classname, len);
+		SAFEPVREAD(classname, len, malloced_classname);
 		classname[len] = '\0';		/* Mark string end */
 
 		/*
 		 * Record new classname.
 		 */
 
-		if (!av_store(cxt->aclass, cxt->classnum++, newSVpvn(classname, len)))
+		if (!av_store(cxt->aclass, cxt->classnum++, newSVpvn(classname, len))) {
+			Safefree(malloced_classname);
 			return (SV *) 0;
+		}
 	}
 
 	TRACEME(("class name: %s", classname));

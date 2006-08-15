@@ -50,9 +50,11 @@ $ use_vmsdebug_perl = "n"
 $ use64bitall = "n"
 $ use64bitint = "n"
 $ uselargefiles = "n"
+$ usestdstat = "n"
 $ usesitecustomize = "n"
 $ C_Compiler_Replace = "CC="
-$ Thread_Live_Dangerously = "MT="
+$ thread_upcalls = "MTU="
+$ thread_kernel = "MTK="
 $ use_two_pot_malloc = "N"
 $ use_pack_malloc = "N"
 $ use_debugmalloc = "N"
@@ -903,7 +905,7 @@ $   config_symbols1 ="|installprivlib|installscript|installsitearch|installsitel
 $   config_symbols2 ="|prefix|privlib|privlibexp|scriptdir|sitearch|sitearchexp|sitebin|sitelib|sitelib_stem|sitelibexp|try_cxx|use64bitall|use64bitint|"
 $   config_symbols3 ="|usecasesensitive|usedefaulttypes|usedevel|useieee|useithreads|usemultiplicity|usemymalloc|usedebugging_perl|useperlio|usesecurelog|"
 $   config_symbols4 ="|usethreads|usevmsdebug|usefaststdio|usemallocwrap|unlink_all_versions|uselargefiles|usesitecustomize|"
-$   config_symbols5 ="|buildmake|builder|"
+$   config_symbols5 ="|buildmake|builder|usethreadupcalls|usekernelthreads"
 $!  
 $   open/read CONFIG 'config_sh'
 $   rd_conf_loop:
@@ -1194,6 +1196,9 @@ $   prefixbase = prefix - "]"
 $!  Add _ROOT to make install PERL_ROOT differ from build directory.
 $   prefix = prefixbase + "_ROOT.]"
 $ ENDIF
+$ ! more redundant scrubbing of values
+$ prefix = prefix - "000000."
+$ IF F$LOCATE(".]",prefix) .EQ. F$LENGTH(prefix) THEN prefix = prefix - "]" + ".]"
 $ src = prefix
 $!: determine root of directory hierarchy where package will be installed.
 $ dflt = prefix
@@ -2430,28 +2435,50 @@ $       use_5005_threads="N"
 $     ELSE
 $       use_5005_threads="Y"
 $     ENDIF
-$     ! Are they on VMS 7.1 on an alpha or itanium?
-$     if (archname.nes."VMS_VAX").and.("''f$extract(1,3, f$getsyi(""version""))'".ges."7.1")
+$     ! Are they on VMS 7.1 or greater?
+$     IF "''f$extract(1,3, f$getsyi(""version""))'" .GES. "7.1"
 $     THEN
 $       echo ""
-$       echo "Threaded perl can be linked to use multiple kernel threads"
-$       echo "and system upcalls on VMS 7.1+ on Alpha systems.  This feature"
-$       echo "allows multiple threads to execute simultaneously on an SMP"
-$       echo "system as well as preventing a single thread from blocking"
-$       echo "all the threads in a program, even on a single-processor"
-$       echo "machine.  Unfortunately, this feature isn't safe on an"
-$       echo "unpatched 7.1 system (several OS patches were required when"
-$       echo "this procedure was written)."
-$       bool_dflt = "n"
-$       rp = "Enable multiple kernel threads and upcalls? [''bool_dflt'] "
+$	echo "Threaded Perl can be linked to use system upcalls on your system. This feature"
+$	echo "allows the thread scheduler to be made aware of system events (such as I/O)"
+$	echo "so as to prevent a single thread from blocking all the threads in a program,"
+$	echo "even on a single-processor machine."
+$	bool_dflt = "y"
+$	IF f$type(usethreadupcalls) .NES. ""
+$	THEN
+$       	if .not. usethreadupcalls .or. usethreadupcalls .eqs. "undef" then bool_dflt="n"
+$	ENDIF
+$       rp = "Enable thread upcalls? [''bool_dflt'] "
 $       gosub myread
-$       if ans
+$       IF ans
 $       THEN
-$         Thread_Live_Dangerously = "MT=MT=1"
+$           thread_upcalls = "MTU=MTU=1"
+$	    usethreadupcalls = "define"
+$     	    ! Are they on alpha or itanium?
+$	    IF (archname .NES. "VMS_VAX") .AND. ("''f$extract(1,3, f$getsyi(""version""))'" .GES. "7.2")
+$     	    THEN
+$       	echo ""
+$       	echo "Threaded Perl can be linked to use multiple kernel threads on your system."
+$       	echo "This feature allows multiple user threads to make use of multiple CPUs on
+$		echo "a multi-processor machine."
+$       	bool_dflt = "n"
+$		IF f$type(usekernelthreads) .nes. ""
+$		THEN
+$       		if usekernelthreads .or. usekernelthreads .eqs. "define" then bool_dflt="y"
+$		ENDIF
+$       	rp = "Enable multiple kernel threads? [''bool_dflt'] "
+$       	gosub myread
+$       	IF ans
+$		THEN
+$           	    thread_kernel = "MTK=MTK=1"
+$	    	    usekernelthreads = "define"
+$           ENDIF
 $       ENDIF
 $     ENDIF
 $   ENDIF
 $ ENDIF
+$ IF F$TYPE(usethreadupcalls) .EQS. "" THEN usethreadupcalls = "undef"
+$ IF F$TYPE(usekernelthreads) .EQS. "" THEN usekernelthreads = "undef"
 $ IF archname .NES. "VMS_VAX"
 $ THEN
 $! Case sensitive?
@@ -3508,6 +3535,13 @@ $ i_netdb = "undef"
 $ tmp = "unistd.h"
 $ GOSUB inhdr
 $ i_unistd = tmp
+$!
+$! Check to see if we've got utime.h (which we should use if we have)
+$!
+$ i_netdb = "undef"
+$ tmp = "utime.h"
+$ GOSUB inhdr
+$ i_utime = tmp
 $!
 $! do we have getppid()?
 $!
@@ -4839,6 +4873,8 @@ $  ENDIF
 $!
 $  IF uselargefiles .OR. uselargefiles .eqs. "define"
 $  THEN
+$    echo4 "Largefile support enabled (plus standard stat support on V8.2 and later)"
+$    usestdstat = "y"
 $    IF (vms_ver .GES. "8.2") .AND. (archname .NES. "VMS_VAX")
 $    THEN
 $      echo4 -
@@ -5074,37 +5110,41 @@ $   d_truncate="define"
 $   d_wait4="define"
 $   d_index="define"
 $   pidtype="pid_t"
-$   sig_name1="ZERO HUP INT QUIT ILL TRAP IOT EMT FPE KILL BUS SEGV SYS PIPE ALRM "
-$   sig_name2="TERM ABRT USR1 USR2 SPARE18 SPARE19 CHLD CONT STOP TSTP TTIN TTOU "
-$   sig_name3="DEBUG SPARE27 SPARE28 SPARE29 SPARE30 SPARE31 SPARE32 "
-$   sig_name4="WINCH "
-$   sig_namert="RTMIN RTMAX"
-$   psnwc1="""ZERO"",""HUP"",""INT"",""QUIT"",""ILL"",""TRAP"",""IOT"",""EMT"",""FPE"",""KILL"",""BUS"",""SEGV"",""SYS"","
-$   psnwc2="""PIPE"",""ALRM"",""TERM"",""ABRT"",""USR1"",""USR2"",""SPARE18"",""SPARE19"",""CHLD"",""CONT"",""STOP"",""TSTP"","
-$   psnwc3="""TTIN"",""TTOU"",""DEBUG"",""SPARE27"",""SPARE28"",""SPARE29"",""SPARE30"",""SPARE31"",""SPARE32"","
-$   psnwc4_v7_3="""WINCH"","
-$   psnwcrt="""RTMIN"",""RTMAX"",0"
-$   sig_num1="0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 6 16 17 18 19 20 21 22 23 24 25 26 27 28 29 30 31 32 "
-$   sig_num_v7_3="28 "
-$   sig_numrt="33 64"
-$   sig_num_init1="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,6,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,"
-$   sig_num_init_v7_3="28,"
-$   sig_num_initrt="33,64,0"
-$   if (vms_ver .GES. "7.3")
-$   then
-$	sig_name = sig_name1 + sig_name2 + sig_name3 + sig_name4 + sig_namert
-$       sig_name_init = psnwc1 + psnwc2 + psnwc3 + psnwc4_v7_3 + psnwcrt
-$	sig_num = sig_num1 + sig_num_v7_3 + sig_numrt
-$	sig_num_init = sig_num_init1 + sig_num_v7_3 + sig_num_initrt
-$	sig_size="37"
-$   else
-$	sig_name = sig_name1 + sig_name2 + sig_name3 + sig_namert
-$       sig_name_init = psnwc1 + psnwc2 + psnwc3 + psnwcrt
-$	sig_num = sig_num1 + sig_numrt
-$	sig_num_init = sig_num_init1 + sig_num_initrt
-$	sig_size="36"
-$   endif
-$   sig_count="64"
+$   sig_name1="ZERO HUP INT QUIT ILL TRAP ABRT EMT FPE KILL BUS SEGV SYS PIPE"
+$   sig_name2=" ALRM TERM USR1 USR2 NUM18 NUM19 CHLD CONT STOP TSTP TTIN TTOU DEBUG"
+$   IF (vms_ver .GES. "7.3")
+$   THEN
+$     sig_name2 = sig_name2 + " NUM27 WINCH"
+$   ENDIF
+$!* signal.h defines SIGRTMIN as 33 and SIGRTMAX as 64, but there is no 
+$!* sigqueue function or other apparent means to do realtime signalling,
+$!* so let's not try to include the realtime range for now.
+$!* sig_name3=" NUM29 NUM30 NUM31 NUM32 RTMIN NUM34 NUM35 NUM36 NUM37 NUM38 NUM39 NUM40 NUM41 NUM42 NUM43"
+$!* sig_name4=" NUM44 NUM45 NUM46 NUM47 NUM48 NUM49 NUM50 NUM51 NUM52 NUM53 NUM54 NUM55 NUM56 NUM57 NUM58"
+$!* sig_name5=" NUM59 NUM60 NUM61 NUMT62 NUM63 RTMAX"
+$   sig_name = sig_name1 + sig_name2
+$   sig_num = ""
+$   sig_num_init = ""
+$   sig_name_init = ""
+$   sig_index = 0
+$!
+$ PARSE_SIG_NAME_LOOP:
+$!
+$   tmp = F$ELEMENT(sig_index, " ", sig_name)
+$   IF F$LENGTH(F$EDIT(tmp,"TRIM")) .eq. 0 THEN GOTO END_SIG_NAME_LOOP
+$   sig_name_init = sig_name_init + """''tmp'"","
+$   sig_num = sig_num + "''sig_index' "
+$   sig_num_init = sig_num_init + "''sig_index',"
+$   sig_index = sig_index + 1
+$   GOTO PARSE_SIG_NAME_LOOP
+$!
+$ END_SIG_NAME_LOOP:
+$!
+$   sig_name_init = sig_name_init + "0"
+$   sig_num_init = sig_num_init + "0"
+$   sig_size = "''sig_index'"
+$   sig_index = sig_index - 1
+$   sig_count = "''sig_index'"
 $   uidtype="uid_t"
 $   d_pathconf="define"
 $   d_fpathconf="define"
@@ -5479,20 +5519,12 @@ $   THEN
 $       echo4 "Yep, we can."
 $       kill_by_sigprc = "define"
 $!
-$!      since SIGBUS and SIGSEGV indistinguishable, make them the same here.
-$!      sigusr1 and sigusr2 show up in VMS6.2 and later
+$!	Use the same list of signals the CRTL does for recent systems, but cook our own for very old systems.
+$!	Note that the list controls what signals can be caught by name as well as what can be raised via kill().
 $!
-$       if  vms_ver .GES. "6.2"
-$       then
-$           sig_name="ZERO HUP INT QUIT ILL TRAP IOT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM ABRT USR1 USR2"
-$           psnwc1="""ZERO"",""HUP"",""INT"",""QUIT"",""ILL"",""TRAP"",""IOT"",""EMT"",""FPE"",""KILL"",""BUS"",""SEGV"",""SYS"","
-$           psnwc2="""PIPE"",""ALRM"",""TERM"",""ABRT"",""USR1"",""USR2"",0"
-$           sig_name_init = psnwc1 + psnwc2
-$           sig_num="0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 6 16 17"
-$           sig_num_init="0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,6,16,17,0"
-$           sig_size="19"
-$	    sig_count="17"
-$       else
+$       if  vms_ver .LT. "6.2"
+$	then
+$!          since SIGBUS and SIGSEGV indistinguishable, make them the same here.
 $           sig_name="ZERO HUP INT QUIT ILL TRAP IOT EMT FPE KILL BUS SEGV SYS PIPE ALRM TERM ABRT"
 $           psnwc1="""ZERO"",""HUP"",""INT"",""QUIT"",""ILL"",""TRAP"",""IOT"",""EMT"",""FPE"",""KILL"",""BUS"",""SEGV"",""SYS"","
 $           psnwc2="""PIPE"",""ALRM"",""TERM"",""ABRT"",0"
@@ -5583,13 +5615,12 @@ $ WC "cccdlflags='" + cccdlflags + "'"
 $ WC "ccdlflags='" + ccdlflags + "'"
 $ IF uselargefiles .OR. uselargefiles .EQS. "define"
 $ THEN
-$!    Perl can not use _USE_STD_STAT at the moment
-$!    IF d_symlink .OR. d_symlink .EQS. "define"
-$!    THEN
-$!	ccdefines = "_USE_STD_STAT=1"
-$!    ELSE
+$    IF usestdstat .OR. usestdstat .EQS. "define"
+$    THEN
+$	ccdefines = "_USE_STD_STAT=1"
+$    ELSE
 $	ccdefines = "_LARGEFILE=1"
-$!    ENDIF
+$    ENDIF
 $ ELSE
 $     ccdefines = ""
 $ ENDIF
@@ -5652,6 +5683,8 @@ $ WC "d_bincompat3='undef'"
 $! WC "d_bsdpgrp='undef'"
 $ WC "d_bsdgetpgrp='undef'"
 $ WC "d_bsdsetpgrp='undef'"
+$ WC "d_builtin_choose_expr='undef'" ! GCC only
+$ WC "d_builtin_expect='undef'" ! GCC only
 $ WC "d_bzero='" + d_bzero + "'"
 $ WC "d_casti32='define'"
 $ WC "d_castneg='define'"
@@ -5663,9 +5696,11 @@ $ WC "d_class='undef'"
 $ WC "d_cmsghdr_s='undef'"
 $ WC "d_const='define'"
 $ WC "d_copysignl='define'"
+$ WC "d_cplusplus='undef'"
 $ WC "d_crypt='define'"
 $ WC "d_csh='undef'"
 $ WC "d_cuserid='define'"
+$ WC "d_c99_variadic_macros='undef'"
 $ WC "d_dbl_dig='define'"
 $ WC "d_dbminitproto='undef'"
 $ WC "d_difftime='define'"
@@ -5754,6 +5789,7 @@ $ WC "d_grpasswd='undef'"
 $ WC "d_hasmntopt='undef'"
 $ WC "d_htonl='" + d_htonl + "'"
 $ WC "d_ilogbl='undef'"
+$ WC "d_inc_version_list='undef'"
 $ WC "d_index='" + d_index + "'"
 $ WC "d_inetaton='undef'"
 $ WC "d_int64_t='" + d_int64_t + "'"
@@ -5892,6 +5928,7 @@ $ WC "d_shmatprototype='undef'"
 $ WC "d_sigaction='" + d_sigaction + "'"
 $ WC "d_sigprocmask='" + d_sigprocmask + "'"
 $ WC "d_sigsetjmp='" + d_sigsetjmp + "'"
+$ WC "d_sitearch='define'"
 $ WC "d_sockatmark='undef'"
 $ WC "d_sockatmarkproto='undef'"
 $ WC "d_socket='" + d_socket + "'"
@@ -6108,7 +6145,7 @@ $ WC "i_termios='undef'"
 $ WC "i_time='define'"
 $ WC "i_unistd='" + i_unistd + "'"
 $ WC "i_ustat='undef'"
-$ WC "i_utime='undef'"
+$ WC "i_utime='" + i_utime + "'"
 $ WC "i_values='undef'"
 $ WC "i_varargs='undef'"
 $ WC "i_vfork='undef'"
@@ -6158,6 +6195,7 @@ $   WC "lseeksize='4'"
 $   WC "lseektype='int'"
 $ ENDIF
 $ WC "mab='" + "'"
+$ WC "mad='undef'"
 $ WC "make='" + make + "'"
 $ WC "malloctype='void *'"
 $ WC "usemallocwrap='" + usemallocwrap + "'"
@@ -6239,10 +6277,22 @@ $ WC "sh='MCR'"
 $ WC "shmattype='" + " '"
 $ WC "shortsize='" + shortsize + "'"
 $ WC "shrplib='define'"
-$ WC "sig_name='" + sig_name + "'"
-$ tmp = "sig_name_init='" + sig_name_init + "'"
-$ WC/symbol tmp
-$ DELETE/SYMBOL tmp
+$ IF (f$length(sig_name) .GE. 244)
+$ THEN
+$     tmp = "sig_name='" + sig_name + "'"
+$     WC/symbol tmp
+$     DELETE/SYMBOL tmp
+$ ELSE
+$     WC "sig_name='" + sig_name + "'"
+$ ENDIF
+$ IF (f$length(sig_name_init) .GE. 244)
+$ THEN
+$     tmp = "sig_name_init='" + sig_name_init + "'"
+$     WC/symbol tmp
+$     DELETE/SYMBOL tmp
+$ ELSE
+$     WC "sig_name_init='" + sig_name_init + "'"
+$ ENDIF
 $ WC "sig_num='" + sig_num + "'"
 $ WC "sig_num_init='" + sig_num_init + "'"
 $ WC "sig_count='" + sig_count + "'"
@@ -6298,6 +6348,7 @@ $ WC "usedl='" + usedl + "'"
 $ WC "usefaststdio='" + usefaststdio + "'"
 $ WC "useieee='" + useieee + "'"                    ! VMS-specific
 $ WC "useithreads='" + useithreads + "'"
+$ WC "usekernelthreads='" + usekernelthreads + "'"	! VMS-specific
 $ WC "uselargefiles='" + uselargefiles + "'"
 $ WC "uselongdouble='" + uselongdouble + "'"
 $ WC "usemorebits='" + usemorebits + "'"
@@ -6311,6 +6362,7 @@ $ WC "usesecurelog='" + usesecurelog + "'"  ! VMS-specific
 $ WC "usesitecustomize='" + usesitecustomize + "'"
 $ WC "usesocks='undef'"
 $ WC "usethreads='" + usethreads + "'"
+$ WC "usethreadupcalls='" + usethreadupcalls + "'"	! VMS-specific
 $ WC "usevendorprefix='" + "'" ! try to say no, though we'll be ignored as of MM 5.90_01
 $ WC "usevfork='true'"
 $ WC "usevmsdebug='" + usevmsdebug + "'"     ! VMS-specific
@@ -6615,13 +6667,12 @@ $   MALLOC_REPLACE = "MALLOC="
 $ ENDIF
 $ IF uselargefiles .OR. uselargefiles .EQS. "define"
 $ THEN
-$!    Perl can not use _USE_STD_STAT at the moment
-$!   IF d_symlink .or. d_symlink .eqs. "define"
-$!   THEN
-$!      LARGEFILE_REPLACE = "LARGEFILE=LARGEFILE=_USE_STD_STAT=1"
-$!   ELSE
+$   IF usestdstat .or. usestdstat .eqs. "define"
+$   THEN
+$      LARGEFILE_REPLACE = "LARGEFILE=LARGEFILE=_USE_STD_STAT=1"
+$   ELSE
 $      LARGEFILE_REPLACE = "LARGEFILE=LARGEFILE=_LARGEFILE=1"
-$!   ENDIF
+$   ENDIF
 $ ELSE
 $   LARGEFILE_REPLACE = "LARGEFILE="
 $ ENDIF
@@ -6629,7 +6680,7 @@ $ echo4 "Extracting ''defmakefile' (with variable substitutions)"
 $ DEFINE/USER_MODE sys$output 'UUmakefile'
 $ mcr []munchconfig 'config_sh' 'Makefile_SH' "''DECC_REPLACE'" "''DECCXX_REPLACE'" "''ARCH_TYPE'" "''GNUC_REPLACE'" -
 "''SOCKET_REPLACE'" "''THREAD_REPLACE'" "''C_Compiler_Replace'" "''MALLOC_REPLACE'" -
-"''Thread_Live_Dangerously'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'" "''LARGEFILE_REPLACE'"
+"''THREAD_UPCALLS'" "''THREAD_KERNEL'" "PV=''version'" "FLAGS=FLAGS=''extra_flags'" "''LARGEFILE_REPLACE'"
 $! Clean up after ourselves
 $ DELETE/NOLOG/NOCONFIRM []munchconfig.exe;
 $!
@@ -6870,8 +6921,6 @@ $!----------------------------------------------
 $ pcsi_producer = f$trnlnm("PCSI_PRODUCER")
 $ if pcsi_producer .eqs. ""
 $ then
-$   prefix = prefix - "000000."
-$   IF F$LOCATE(".]",prefix) .EQ. F$LENGTH(prefix) THEN prefix = prefix - "]" + ".]"
 $   WRITE CONFIG "$ define/translation=concealed ''vms_prefix' ''prefix'"
 $ else
 $  WRITE CONFIG "$ myproc = f$environment(""PROCEDURE"")"
@@ -6886,12 +6935,6 @@ $  WRITE CONFIG "$ then"
 $  WRITE CONFIG "$  define/translation=concealed ''vms_prefix' 'myroot_dev'['myroot_dir'.]"
 $  WRITE CONFIG "$ endif"
 $ endif
-$
-$ prefix = prefix - "000000."
-$ IF F$LOCATE(".]",prefix) .EQ. F$LENGTH(prefix) THEN prefix = prefix - "]" + ".]" 
-$ WRITE CONFIG "$ define/translation=concealed ''vms_prefix' ''prefix'"
-
-
 $ WRITE CONFIG "$ ext = "".exe"""
 $ IF sharedperl
 $ THEN
@@ -6923,9 +6966,6 @@ $   THEN
 $     WRITE CONFIG "$ set command ''vms_prefix':[000000]''packageup'.CLD"
 $   ENDIF
 $ ENDIF !  perl_symbol
-$ WRITE CONFIG "$ define/nolog pod2text ''vms_prefix':[lib.pod]pod2text.com"
-$ WRITE CONFIG "$ define/nolog pod2html ''vms_prefix':[lib.pod]pod2html.com"
-$ WRITE CONFIG "$ define/nolog pod2man  ''vms_prefix':[lib.pod]pod2man.com"
 $!
 $ IF (tzneedset)
 $ THEN
@@ -6948,16 +6988,16 @@ $ WRITE CONFIG "$ h2ph       == """ + perl_setup_perl + " ''vms_prefix':[utils]h
 $ WRITE CONFIG "$ h2xs       == """ + perl_setup_perl + " ''vms_prefix':[utils]h2xs.com"""
 $ WRITE CONFIG "$ instmodsh  == """ + perl_setup_perl + " ''vms_prefix':[utils]instmodsh.com"""
 $ WRITE CONFIG "$ libnetcfg  == """ + perl_setup_perl + " ''vms_prefix':[utils]libnetcfg.com"""
-$ WRITE CONFIG "$ perlbug    == """ + perl_setup_perl + " ''vms_prefix':[lib]perlbug.com"""
+$ WRITE CONFIG "$ perlbug    == """ + perl_setup_perl + " ''vms_prefix':[utils]perlbug.com"""
 $ WRITE CONFIG "$!perlcc     == """ + perl_setup_perl + " ''vms_prefix':[utils]perlcc.com"""
-$ WRITE CONFIG "$ perldoc    == """ + perl_setup_perl + " ''vms_prefix':[lib.pods]perldoc.com -t"""
+$ WRITE CONFIG "$ perldoc    == """ + perl_setup_perl + " ''vms_prefix':[utils]perldoc.com """"-t"""""""
 $ WRITE CONFIG "$ perlivp    == """ + perl_setup_perl + " ''vms_prefix':[utils]perlivp.com"""
 $ WRITE CONFIG "$ piconv     == """ + perl_setup_perl + " ''vms_prefix':[utils]piconv.com"""
 $ WRITE CONFIG "$ pl2pm      == """ + perl_setup_perl + " ''vms_prefix':[utils]pl2pm.com"""
-$ WRITE CONFIG "$ pod2html   == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2html"""
-$ WRITE CONFIG "$ pod2latex  == """ + perl_setup_perl + " ''vms_prefix':[lib.pod]pod2latex.com"""
-$ WRITE CONFIG "$ pod2text   == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2text"""
-$ WRITE CONFIG "$!pod2man    == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2man"""
+$ WRITE CONFIG "$ pod2html   == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2html.com"""
+$ WRITE CONFIG "$ pod2latex  == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2latex.com"""
+$ WRITE CONFIG "$ pod2text   == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2text.com"""
+$ WRITE CONFIG "$!pod2man    == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2man.com"""
 $ WRITE CONFIG "$ pod2usage  == """ + perl_setup_perl + " ''vms_prefix':[utils]pod2usage.com"""
 $ WRITE CONFIG "$ podchecker == """ + perl_setup_perl + " ''vms_prefix':[utils]podchecker.com"""
 $ WRITE CONFIG "$ podselect  == """ + perl_setup_perl + " ''vms_prefix':[utils]podselect.com"""

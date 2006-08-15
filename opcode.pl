@@ -79,6 +79,11 @@ my @raw_alias = (
 		 Perl_pp_ucfirst => ['lcfirst'],
 		 Perl_pp_sle => [qw(slt sgt sge)],
 		 Perl_pp_print => ['say'],
+		 Perl_pp_index => ['rindex'],
+		 Perl_pp_oct => ['hex'],
+		 Perl_pp_shift => ['pop'],
+		 Perl_pp_sin => [qw(cos exp log sqrt)],
+		 Perl_pp_bit_or => ['bit_xor'],
 		);
 
 while (my ($func, $names) = splice @raw_alias, 0, 2) {
@@ -903,7 +908,8 @@ ftbinary	-B			ck_ftst		isu-	F-
 
 # File calls.
 
-chdir		chdir			ck_fun		isT%	S?
+# chdir really behaves as if it had both "S?" and "F?"
+chdir		chdir			ck_chdir	isT%	S?
 chown		chown			ck_fun		imsT@	L
 chroot		chroot			ck_fun		isTu%	S?
 unlink		unlink			ck_fun		imsTu@	L

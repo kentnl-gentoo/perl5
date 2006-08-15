@@ -15,7 +15,10 @@ struct he {
        body arenas  */
     HE		*hent_next;	/* next entry in chain */
     HEK		*hent_hek;	/* hash key */
-    SV		*hent_val;	/* scalar value that was hashed */
+    union {
+	SV	*hent_val;	/* scalar value that was hashed */
+	Size_t	hent_refcount;	/* references for this shared hash key */
+    } he_valu;
 };
 
 /* hash key -- defined separately for use as shared pointer */
@@ -46,15 +49,23 @@ struct xpvhv_aux {
 /* hash structure: */
 /* This structure must match the beginning of struct xpvmg in sv.h. */
 struct xpvhv {
-    NV		xnv_nv;		/* numeric value, if any */
+    union {
+	NV	xnv_nv;		/* numeric value, if any */
+	HV *	xgv_stash;
+    }		xnv_u;
     STRLEN	xhv_fill;	/* how full xhv_array currently is */
     STRLEN	xhv_max;	/* subscript of last element of xhv_array */
     union {
 	IV	xivu_iv;	/* integer value or pv offset */
 	UV	xivu_uv;
 	void *	xivu_p1;
+	I32	xivu_i32;
+	HEK *	xivu_namehek;
     }		xiv_u;
-    MAGIC*	xmg_magic;	/* magic for scalar array */
+    union {
+	MAGIC*	xmg_magic;	/* linked list of magicalness */
+	HV*	xmg_ourstash;	/* Stash for our (when SvPAD_OUR is true) */
+    } xmg_u;
     HV*		xmg_stash;	/* class package */
 };
 
@@ -70,8 +81,13 @@ typedef struct {
 	IV	xivu_iv;	/* integer value or pv offset */
 	UV	xivu_uv;
 	void *	xivu_p1;
+	I32	xivu_i32;
+	HEK *	xivu_namehek;
     }		xiv_u;
-    MAGIC*	xmg_magic;	/* magic for scalar array */
+    union {
+	MAGIC*	xmg_magic;	/* linked list of magicalness */
+	HV*	xmg_ourstash;	/* Stash for our (when SvPAD_OUR is true) */
+    } xmg_u;
     HV*		xmg_stash;	/* class package */
 } xpvhv_allocated;
 #endif
@@ -186,7 +202,7 @@ the length of hash keys. This is very similar to the C<SvPV()> macro
 described elsewhere in this document.
 
 =for apidoc Am|SV*|HeSVKEY|HE* he
-Returns the key as an C<SV*>, or C<Nullsv> if the hash entry does not
+Returns the key as an C<SV*>, or C<NULL> if the hash entry does not
 contain an C<SV*> key.
 
 =for apidoc Am|SV*|HeSVKEY_force|HE* he
@@ -267,19 +283,6 @@ C<SV*>.
 #define HvREHASH_on(hv)		(SvFLAGS(hv) |= SVphv_REHASH)
 #define HvREHASH_off(hv)	(SvFLAGS(hv) &= ~SVphv_REHASH)
 
-/* Maybe amagical: */
-/* #define HV_AMAGICmb(hv)      (SvFLAGS(hv) & (SVpgv_badAM | SVpgv_AM)) */
-
-#define HV_AMAGIC(hv)        (SvFLAGS(hv) &   SVpgv_AM)
-#define HV_AMAGIC_on(hv)     (SvFLAGS(hv) |=  SVpgv_AM)
-#define HV_AMAGIC_off(hv)    (SvFLAGS(hv) &= ~SVpgv_AM)
-
-/*
-#define HV_AMAGICbad(hv)     (SvFLAGS(hv) & SVpgv_badAM)
-#define HV_badAMAGIC_on(hv)  (SvFLAGS(hv) |= SVpgv_badAM)
-#define HV_badAMAGIC_off(hv) (SvFLAGS(hv) &= ~SVpgv_badAM)
-*/
-
 #define Nullhe Null(HE*)
 #define HeNEXT(he)		(he)->hent_next
 #define HeKEY_hek(he)		(he)->hent_hek
@@ -291,16 +294,16 @@ C<SV*>.
 #define HeKREHASH(he)  HEK_REHASH(HeKEY_hek(he))
 #define HeKLEN_UTF8(he)  (HeKUTF8(he) ? -HeKLEN(he) : HeKLEN(he))
 #define HeKFLAGS(he)  HEK_FLAGS(HeKEY_hek(he))
-#define HeVAL(he)		(he)->hent_val
+#define HeVAL(he)		(he)->he_valu.hent_val
 #define HeHASH(he)		HEK_HASH(HeKEY_hek(he))
 #define HePV(he,lp)		((HeKLEN(he) == HEf_SVKEY) ?		\
 				 SvPV(HeKEY_sv(he),lp) :		\
 				 (((lp = HeKLEN(he)) >= 0) ?		\
-				  HeKEY(he) : Nullch))
+				  HeKEY(he) : NULL))
 
 #define HeSVKEY(he)		((HeKEY(he) && 				\
 				  HeKLEN(he) == HEf_SVKEY) ?		\
-				 HeKEY_sv(he) : Nullsv)
+				 HeKEY_sv(he) : NULL)
 
 #define HeSVKEY_force(he)	(HeKEY(he) ?				\
 				 ((HeKLEN(he) == HEf_SVKEY) ?		\
@@ -320,6 +323,7 @@ C<SV*>.
 #define HVhek_UTF8	0x01 /* Key is utf8 encoded. */
 #define HVhek_WASUTF8	0x02 /* Key is bytes here, but was supplied as utf8. */
 #define HVhek_REHASH	0x04 /* This key is in an hv using a custom HASH . */
+#define HVhek_UNSHARED	0x08 /* This key isn't a shared hash key. */
 #define HVhek_FREEKEY	0x100 /* Internal flag to say key is malloc()ed.  */
 #define HVhek_PLACEHOLD	0x200 /* Internal flag to create placeholder.
                                * (may change, but Storable is a core module) */
@@ -330,10 +334,11 @@ C<SV*>.
    into all keys as hv_iternext has no access to the hash flags. At this
    point Storable's tests get upset, because sometimes hashes are "keyed"
    and sometimes not, depending on the order of data insertion, and whether
-   it triggered rehashing. So currently HVhek_REHAS is exempt.
+   it triggered rehashing. So currently HVhek_REHASH is exempt.
+   Similarly UNSHARED
 */
    
-#define HVhek_ENABLEHVKFLAGS	(HVhek_MASK - HVhek_REHASH)
+#define HVhek_ENABLEHVKFLAGS	(HVhek_MASK & ~(HVhek_REHASH|HVhek_UNSHARED))
 
 #define HEK_UTF8(hek)		(HEK_FLAGS(hek) & HVhek_UTF8)
 #define HEK_UTF8_on(hek)	(HEK_FLAGS(hek) |= HVhek_UTF8)
@@ -362,7 +367,7 @@ C<SV*>.
 #define HV_ITERNEXT_WANTPLACEHOLDERS	0x01	/* Don't skip placeholders.  */
 
 #define hv_iternext(hv)	hv_iternext_flags(hv, 0)
-#define hv_magic(hv, gv, how) sv_magic((SV*)(hv), (SV*)(gv), how, Nullch, 0)
+#define hv_magic(hv, gv, how) sv_magic((SV*)(hv), (SV*)(gv), how, NULL, 0)
 
 /* available as a function in hv.c */
 #define Perl_sharepvn(sv, len, hash) HEK_KEY(share_hek(sv, len, hash))
@@ -372,8 +377,62 @@ C<SV*>.
     (++(((struct shared_he *)(((char *)hek)				\
 			      - STRUCT_OFFSET(struct shared_he,		\
 					      shared_he_hek)))		\
-	->shared_he_he.hent_val),					\
+	->shared_he_he.he_valu.hent_refcount),				\
      hek)
+
+/* This refcounted he structure is used for storing the hints used for lexical
+   pragmas. Without threads, it's basically struct he + refcount.
+   With threads, life gets more complex as the structure needs to be shared
+   between threads (because it hangs from OPs, which are shared), hence the
+   alternate definition and mutex.  */
+
+#ifdef PERL_CORE
+
+/* Gosh. This really isn't a good name any longer.  */
+struct refcounted_he {
+    struct refcounted_he *refcounted_he_next;	/* next entry in chain */
+#ifdef USE_ITHREADS
+    U32                   refcounted_he_hash;
+    U32                   refcounted_he_keylen;
+#else
+    HEK                  *refcounted_he_hek;	/* hint key */
+#endif
+    U32	                  refcounted_he_refcnt;	/* reference count */
+    union {
+	IV                refcounted_he_u_iv;
+	UV                refcounted_he_u_uv;
+	STRLEN            refcounted_he_u_len;
+    } refcounted_he_val;
+    /* First byte is flags. Then NUL-terminated value. Then for ithreads,
+       non-NUL terminated key.  */
+    char                  refcounted_he_data[1];
+};
+
+/* Flag bits are HVhek_UTF8, HVhek_WASUTF8, then */
+#define HVrhek_undef	0x00 /* Value is undef. */
+#define HVrhek_PV	0x10 /* Value is a string. */
+#define HVrhek_IV	0x20 /* Value is IV/UV. */
+#define HVrhek_delete	0x30 /* Value is placeholder - signifies delete. */
+#define HVrhek_typemask	0x30
+#define HVrhek_UTF8	0x40 /* string value is utf8. */
+#define HVrhek_UV	0x40 /* integer value is UV. */
+
+#  ifdef USE_ITHREADS
+#    define HINTS_REFCNT_LOCK		MUTEX_LOCK(&PL_hints_mutex)
+#    define HINTS_REFCNT_UNLOCK		MUTEX_UNLOCK(&PL_hints_mutex)
+#  else
+#    define HINTS_REFCNT_LOCK		NOOP
+#    define HINTS_REFCNT_UNLOCK		NOOP
+#  endif
+#endif
+
+#ifdef USE_ITHREADS
+#  define HINTS_REFCNT_INIT		MUTEX_INIT(&PL_hints_mutex)
+#  define HINTS_REFCNT_TERM		MUTEX_DESTROY(&PL_hints_mutex)
+#else
+#  define HINTS_REFCNT_INIT		NOOP
+#  define HINTS_REFCNT_TERM		NOOP
+#endif
 
 /*
  * Local variables:

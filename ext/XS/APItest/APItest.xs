@@ -86,7 +86,7 @@ test_freeent(freeent_function *f) {
 
     test_scalar = newSV(0);
     SvREFCNT_inc(test_scalar);
-    victim->hent_val = test_scalar;
+    HeVAL(victim) = test_scalar;
 
     /* Need this little game else we free the temps on the return stack.  */
     results[0] = SvREFCNT(test_scalar);
@@ -221,7 +221,55 @@ test_hv_delayfree_ent()
 	PPCODE:
 	test_freeent(&Perl_hv_delayfree_ent);
 	XSRETURN(4);
-	    
+
+SV *
+test_share_unshare_pvn(input)
+	PREINIT:
+	STRLEN len;
+	U32 hash;
+	char *pvx;
+	char *p;
+	INPUT:
+	SV *input
+	CODE:
+	pvx = SvPV(input, len);
+	PERL_HASH(hash, pvx, len);
+	p = sharepvn(pvx, len, hash);
+	RETVAL = newSVpvn(p, len);
+	unsharepvn(p, len, hash);
+	OUTPUT:
+	RETVAL
+
+bool
+refcounted_he_exists(key, level=0)
+	SV *key
+	IV level
+	CODE:
+	if (level) {
+	    croak("level must be zero, not %"IVdf, level);
+	}
+	RETVAL = (Perl_refcounted_he_fetch(aTHX_ PL_curcop->cop_hints_hash,
+					   key, NULL, 0, 0, 0)
+		  != &PL_sv_placeholder);
+	OUTPUT:
+	RETVAL
+
+
+SV *
+refcounted_he_fetch(key, level=0)
+	SV *key
+	IV level
+	CODE:
+	if (level) {
+	    croak("level must be zero, not %"IVdf, level);
+	}
+	RETVAL = Perl_refcounted_he_fetch(aTHX_ PL_curcop->cop_hints_hash, key,
+					  NULL, 0, 0, 0);
+	SvREFCNT_inc(RETVAL);
+	OUTPUT:
+	RETVAL
+	
+	
 =pod
 
 sub TIEHASH  { bless {}, $_[0] }
@@ -461,10 +509,15 @@ exception(throw_e)
         RETVAL
 
 void
-mycroak(pv)
-    const char* pv
+mycroak(sv)
+    SV* sv
     CODE:
-    Perl_croak(aTHX_ "%s", pv);
+    if (SvOK(sv)) {
+        Perl_croak(aTHX_ "%s", SvPV_nolen(sv));
+    }
+    else {
+	Perl_croak(aTHX_ NULL);
+    }
 
 SV*
 strtab()

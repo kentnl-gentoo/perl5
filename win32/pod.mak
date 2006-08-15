@@ -31,11 +31,13 @@ POD = \
 	perl585delta.pod	\
 	perl586delta.pod	\
 	perl587delta.pod	\
+	perl588delta.pod	\
 	perl58delta.pod	\
 	perl590delta.pod	\
 	perl591delta.pod	\
 	perl592delta.pod	\
 	perl593delta.pod	\
+	perl594delta.pod	\
 	perlapi.pod	\
 	perlapio.pod	\
 	perlartistic.pod	\
@@ -97,9 +99,11 @@ POD = \
 	perlpod.pod	\
 	perlpodspec.pod	\
 	perlport.pod	\
+	perlpragma.pod	\
 	perlre.pod	\
 	perlref.pod	\
 	perlreftut.pod	\
+	perlreguts.pod	\
 	perlrequick.pod	\
 	perlreref.pod	\
 	perlretut.pod	\
@@ -117,6 +121,7 @@ POD = \
 	perltrap.pod	\
 	perlunicode.pod	\
 	perluniintro.pod	\
+	perlunitut.pod	\
 	perlutil.pod	\
 	perlvar.pod	\
 	perlxs.pod	\
@@ -139,11 +144,13 @@ MAN = \
 	perl585delta.man	\
 	perl586delta.man	\
 	perl587delta.man	\
+	perl588delta.man	\
 	perl58delta.man	\
 	perl590delta.man	\
 	perl591delta.man	\
 	perl592delta.man	\
 	perl593delta.man	\
+	perl594delta.man	\
 	perlapi.man	\
 	perlapio.man	\
 	perlartistic.man	\
@@ -205,9 +212,11 @@ MAN = \
 	perlpod.man	\
 	perlpodspec.man	\
 	perlport.man	\
+	perlpragma.man	\
 	perlre.man	\
 	perlref.man	\
 	perlreftut.man	\
+	perlreguts.man	\
 	perlrequick.man	\
 	perlreref.man	\
 	perlretut.man	\
@@ -225,6 +234,7 @@ MAN = \
 	perltrap.man	\
 	perlunicode.man	\
 	perluniintro.man	\
+	perlunitut.man	\
 	perlutil.man	\
 	perlvar.man	\
 	perlxs.man	\
@@ -247,11 +257,13 @@ HTML = \
 	perl585delta.html	\
 	perl586delta.html	\
 	perl587delta.html	\
+	perl588delta.html	\
 	perl58delta.html	\
 	perl590delta.html	\
 	perl591delta.html	\
 	perl592delta.html	\
 	perl593delta.html	\
+	perl594delta.html	\
 	perlapi.html	\
 	perlapio.html	\
 	perlartistic.html	\
@@ -313,9 +325,11 @@ HTML = \
 	perlpod.html	\
 	perlpodspec.html	\
 	perlport.html	\
+	perlpragma.html	\
 	perlre.html	\
 	perlref.html	\
 	perlreftut.html	\
+	perlreguts.html	\
 	perlrequick.html	\
 	perlreref.html	\
 	perlretut.html	\
@@ -332,6 +346,7 @@ HTML = \
 	perltrap.html	\
 	perlunicode.html	\
 	perluniintro.html	\
+	perlunitut.html	\
 	perlutil.html	\
 	perlvar.html	\
 	perlxs.html	\
@@ -355,11 +370,13 @@ TEX = \
 	perl585delta.tex	\
 	perl586delta.tex	\
 	perl587delta.tex	\
+	perl588delta.tex	\
 	perl58delta.tex	\
 	perl590delta.tex	\
 	perl591delta.tex	\
 	perl592delta.tex	\
 	perl593delta.tex	\
+	perl594delta.tex	\
 	perlapi.tex	\
 	perlapio.tex	\
 	perlartistic.tex	\
@@ -421,9 +438,11 @@ TEX = \
 	perlpod.tex	\
 	perlpodspec.tex	\
 	perlport.tex	\
+	perlpragma.tex	\
 	perlre.tex	\
 	perlref.tex	\
 	perlreftut.tex	\
+	perlreguts.tex	\
 	perlrequick.tex	\
 	perlreref.tex	\
 	perlretut.tex	\
@@ -441,6 +460,7 @@ TEX = \
 	perltrap.tex	\
 	perlunicode.tex	\
 	perluniintro.tex	\
+	perlunitut.tex	\
 	perlutil.tex	\
 	perlvar.tex	\
 	perlxs.tex	\

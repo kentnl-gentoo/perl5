@@ -3,10 +3,10 @@
  *
  * Ref: FIPS PUB 198 The Keyed-Hash Message Authentication Code
  *
- * Copyright (C) 2003-2005 Mark Shelor, All Rights Reserved
+ * Copyright (C) 2003-2006 Mark Shelor, All Rights Reserved
  *
- * Version: 5.32
- * Fri Dec  2 02:32:20 MST 2005
+ * Version: 5.43
+ * Sat Aug  5 02:36:18 MST 2006
  *
  */
 
@@ -106,9 +106,7 @@ int hmacclose(h)
 HMAC *h;
 {
 	shaclose(h->osha);
-	if (h != NULL) {
-		memset(h, 0, sizeof(HMAC));
-		SHA_free(h);
-	}
+	memset(h, 0, sizeof(HMAC));
+	SHA_free(h);
 	return(0);
 }

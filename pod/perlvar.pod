@@ -124,6 +124,7 @@ arrays, then the hashes.
 =item $ARG
 
 =item $_
+X<$_> X<$ARG>
 
 The default input and pattern-searching space.  The following pairs are
 equivalent:
@@ -191,6 +192,7 @@ declaring C<our $> restores the global C<$_> in the current scope.
 =item $a
 
 =item $b
+X<$a> X<$b>
 
 Special package variables when using sort(), see L<perlfunc/sort>.
 Because of this specialness $a and $b don't need to be declared
@@ -203,6 +205,7 @@ able to use them in the sort() comparison block or function.
 =over 8
 
 =item $<I<digits>>
+X<$1> X<$2> X<$3>
 
 Contains the subpattern from the corresponding set of capturing
 parentheses from the last pattern match, not counting patterns
@@ -213,6 +216,7 @@ scoped to the current BLOCK.
 =item $MATCH
 
 =item $&
+X<$&> X<$MATCH>
 
 The string matched by the last successful pattern match (not counting
 any matches hidden within a BLOCK or eval() enclosed by the current
@@ -222,9 +226,12 @@ and dynamically scoped to the current BLOCK.
 The use of this variable anywhere in a program imposes a considerable
 performance penalty on all regular expression matches.  See L</BUGS>.
 
+See L</@-> for a replacement.
+
 =item $PREMATCH
 
 =item $`
+X<$`> X<$PREMATCH>
 
 The string preceding whatever was matched by the last successful
 pattern match (not counting any matches hidden within a BLOCK or eval
@@ -234,9 +241,12 @@ string.)  This variable is read-only.
 The use of this variable anywhere in a program imposes a considerable
 performance penalty on all regular expression matches.  See L</BUGS>.
 
+See L</@-> for a replacement.
+
 =item $POSTMATCH
 
 =item $'
+X<$'> X<$POSTMATCH>
 
 The string following whatever was matched by the last successful
 pattern match (not counting any matches hidden within a BLOCK or eval()
@@ -252,9 +262,12 @@ This variable is read-only and dynamically scoped to the current BLOCK.
 The use of this variable anywhere in a program imposes a considerable
 performance penalty on all regular expression matches.  See L</BUGS>.
 
+See L</@-> for a replacement.
+
 =item $LAST_PAREN_MATCH
 
 =item $+
+X<$+> X<$LAST_PAREN_MATCH>
 
 The text matched by the last bracket of the last successful search pattern.
 This is useful if you don't know which one of a set of alternative patterns
@@ -266,6 +279,7 @@ matched. For example:
 This variable is read-only and dynamically scoped to the current BLOCK.
 
 =item $^N
+X<$^N>
 
 The text matched by the used group most-recently closed (i.e. the group
 with the rightmost closing parenthesis) of the last successful search
@@ -286,6 +300,7 @@ This variable is dynamically scoped to the current BLOCK.
 =item @LAST_MATCH_END
 
 =item @+
+X<@+> X<@LAST_MATCH_END>
 
 This array holds the offsets of the ends of the last successful
 submatches in the currently active dynamic scope.  C<$+[0]> is
@@ -305,6 +320,7 @@ examples given for the C<@-> variable.
 =item $NR
 
 =item $.
+X<$.> X<$NR> X<$INPUT_LINE_NUMBER> X<line number>
 
 Current line number for the last filehandle accessed. 
 
@@ -339,6 +355,7 @@ which handle you last accessed.
 =item $RS
 
 =item $/
+X<$/> X<$RS> X<$INPUT_RECORD_SEPARATOR>
 
 The input record separator, newline by default.  This 
 influences Perl's idea of what a "line" is.  Works like B<awk>'s RS
@@ -374,7 +391,8 @@ will read a record of no more than 32768 bytes from FILE.  If you're
 not reading from a record-oriented file (or your OS doesn't have
 record-oriented files), then you'll likely get a full chunk of data
 with every read.  If a record is larger than the record size you've
-set, you'll get the record back in pieces.
+set, you'll get the record back in pieces.  Trying to set the record
+size to zero or less will cause reading in the (rest of the) whole file.
 
 On VMS, record reads are done with the equivalent of C<sysread>,
 so it's best not to mix record and non-record reads on the same
@@ -390,6 +408,7 @@ See also L<perlport/"Newlines">.  Also see C<$.>.
 =item $OUTPUT_AUTOFLUSH
 
 =item $|
+X<$|> X<autoflush> X<flush> X<$OUTPUT_AUTOFLUSH>
 
 If set to nonzero, forces a flush right away and after every write
 or print on the currently selected output channel.  Default is 0
@@ -410,6 +429,7 @@ for that.  (Mnemonic: when you want your pipes to be piping hot.)
 =item $OFS
 
 =item $,
+X<$,> X<$OFS> X<$OUTPUT_FIELD_SEPARATOR>
 
 The output field separator for the print operator.  If defined, this
 value is printed between each of print's arguments.  Default is C<undef>.
@@ -422,6 +442,7 @@ value is printed between each of print's arguments.  Default is C<undef>.
 =item $ORS
 
 =item $\
+X<$\> X<$ORS> X<$OUTPUT_RECORD_SEPARATOR>
 
 The output record separator for the print operator.  If defined, this
 value is printed after the last of print's arguments.  Default is C<undef>.
@@ -431,6 +452,7 @@ Also, it's just like C<$/>, but it's what you get "back" from Perl.)
 =item $LIST_SEPARATOR
 
 =item $"
+X<$"> X<$LIST_SEPARATOR>
 
 This is like C<$,> except that it applies to array and slice values
 interpolated into a double-quoted string (or similar interpreted
@@ -441,6 +463,7 @@ string).  Default is a space.  (Mnemonic: obvious, I think.)
 =item $SUBSEP
 
 =item $;
+X<$;> X<$SUBSEP> X<SUBSCRIPT_SEPARATOR>
 
 The subscript separator for multidimensional array emulation.  If you
 refer to a hash element as
@@ -473,6 +496,7 @@ in L<perllol>.
 =item $FORMAT_PAGE_NUMBER
 
 =item $%
+X<$%> X<$FORMAT_PAGE_NUMBER>
 
 The current page number of the currently selected output channel.
 Used with formats.
@@ -483,6 +507,7 @@ Used with formats.
 =item $FORMAT_LINES_PER_PAGE
 
 =item $=
+X<$=> X<$FORMAT_LINES_PER_PAGE>
 
 The current page length (printable lines) of the currently selected
 output channel.  Default is 60.  
@@ -494,6 +519,7 @@ Used with formats.
 =item $FORMAT_LINES_LEFT
 
 =item $-
+X<$-> X<$FORMAT_LINES_LEFT>
 
 The number of lines left on the page of the currently selected output
 channel.  
@@ -503,6 +529,7 @@ Used with formats.
 =item @LAST_MATCH_START
 
 =item @-
+X<@-> X<@LAST_MATCH_START>
 
 $-[0] is the offset of the start of the last successful match.
 C<$-[>I<n>C<]> is the offset of the start of the substring matched by
@@ -546,6 +573,7 @@ After a match against some variable $var:
 =item $FORMAT_NAME
 
 =item $~
+X<$~> X<$FORMAT_NAME>
 
 The name of the current report format for the currently selected output
 channel.  Default is the name of the filehandle.  (Mnemonic: brother to
@@ -556,6 +584,7 @@ C<$^>.)
 =item $FORMAT_TOP_NAME
 
 =item $^
+X<$^> X<$FORMAT_TOP_NAME>
 
 The name of the current top-of-page format for the currently selected
 output channel.  Default is the name of the filehandle with _TOP
@@ -566,6 +595,7 @@ appended.  (Mnemonic: points to top of page.)
 =item $FORMAT_LINE_BREAK_CHARACTERS
 
 =item $:
+X<$:> X<FORMAT_LINE_BREAK_CHARACTERS>
 
 The current set of characters after which a string may be broken to
 fill continuation fields (starting with ^) in a format.  Default is
@@ -577,12 +607,14 @@ poetry is a part of a line.)
 =item $FORMAT_FORMFEED
 
 =item $^L
+X<$^L> X<$FORMAT_FORMFEED>
 
 What formats output as a form feed.  Default is \f.
 
 =item $ACCUMULATOR
 
 =item $^A
+X<$^A> X<$ACCUMULATOR>
 
 The current value of the write() accumulator for format() lines.  A format
 contains formline() calls that put their result into C<$^A>.  After
@@ -594,6 +626,7 @@ L<perlfunc/formline()>.
 =item $CHILD_ERROR
 
 =item $?
+X<$?> X<$CHILD_ERROR>
 
 The status returned by the last pipe close, backtick (C<``>) command,
 successful call to wait() or waitpid(), or from the system()
@@ -625,6 +658,7 @@ status; see L<perlvms/$?> for details.
 Also see L<Error Indicators>.
 
 =item ${^CHILD_ERROR_NATIVE}
+X<$^CHILD_ERROR_NATIVE>
 
 The native status returned by the last pipe close, backtick (C<``>)
 command, successful call to wait() or waitpid(), or from the system()
@@ -636,6 +670,7 @@ Under VMS this reflects the actual VMS exit status; i.e. it is the same
 as $? when the pragma C<use vmsish 'status'> is in effect.
 
 =item ${^ENCODING}
+X<$^ENCODING>
 
 The I<object reference> to the Encode object that is used to convert
 the source code to Unicode.  Thanks to this variable your perl script
@@ -648,6 +683,7 @@ for more details.
 =item $ERRNO
 
 =item $!
+X<$!> X<$ERRNO> X<$OS_ERROR>
 
 If used numerically, yields the current value of the C C<errno>
 variable, or in other words, if a system or library call fails, it
@@ -678,6 +714,7 @@ went bang?)
 Also see L<Error Indicators>.
 
 =item %!
+X<%!>
 
 Each element of C<%!> has a true value only if C<$!> is set to that
 value.  For example, C<$!{ENOENT}> is true if and only if the current
@@ -692,6 +729,7 @@ validity of C<$!>.
 =item $EXTENDED_OS_ERROR
 
 =item $^E
+X<$^E> X<$EXTENDED_OS_ERROR>
 
 Error information specific to the current operating system.  At
 the moment, this differs from C<$!> under only VMS, OS/2, and Win32
@@ -721,6 +759,7 @@ Also see L<Error Indicators>.
 =item $EVAL_ERROR
 
 =item $@
+X<$@> X<$EVAL_ERROR>
 
 The Perl syntax error message from the last eval() operator.
 If $@ is the null string, the last eval() parsed and executed
@@ -738,6 +777,7 @@ Also see L<Error Indicators>.
 =item $PID
 
 =item $$
+X<$$> X<$PID> X<$PROCESS_ID>
 
 The process number of the Perl running this script.  You should
 consider this variable read-only, although it will be altered
@@ -754,6 +794,7 @@ you may use the CPAN module C<Linux::Pid>.
 =item $UID
 
 =item $<
+X<< $< >> X<$UID> X<$REAL_USER_ID>
 
 The real uid of this process.  (Mnemonic: it's the uid you came I<from>,
 if you're running setuid.)  You can change both the real uid and
@@ -766,6 +807,7 @@ detect any possible errors.
 =item $EUID
 
 =item $>
+X<< $> >> X<$EUID> X<$EFFECTIVE_USER_ID>
 
 The effective uid of this process.  Example:
 
@@ -785,6 +827,7 @@ supporting setreuid().
 =item $GID
 
 =item $(
+X<$(> X<$GID> X<$REAL_GROUP_ID>
 
 The real gid of this process.  If you are on a machine that supports
 membership in multiple groups simultaneously, gives a space separated
@@ -808,6 +851,7 @@ group you I<left>, if you're running setgid.)
 =item $EGID
 
 =item $)
+X<$)> X<$EGID> X<$EFFECTIVE_GROUP_ID>
 
 The effective gid of this process.  If you are on a machine that
 supports membership in multiple groups simultaneously, gives a space
@@ -837,6 +881,7 @@ and C<$)> can be swapped only on machines supporting setregid().
 =item $PROGRAM_NAME
 
 =item $0
+X<$0> X<$PROGRAM_NAME>
 
 Contains the name of the program being executed.
 
@@ -870,6 +915,7 @@ the view of C<$0> the other threads have will not change since they
 have their own copies of it.
 
 =item $[
+X<$[>
 
 The index of the first element in an array, and of the first character
 in a substring.  Default is 0, but you could theoretically set it
@@ -888,6 +934,7 @@ However, you can use local() on it to strictly bind its value to a
 lexical block.
 
 =item $]
+X<$]>
 
 The version + patchlevel / 1000 of the Perl interpreter.  This variable
 can be used to determine whether the Perl interpreter executing a
@@ -906,6 +953,7 @@ the Perl version that allows accurate string comparisons.
 =item $COMPILING
 
 =item $^C
+X<$^C> X<$COMPILING>
 
 The current value of the flag associated with the B<-c> switch.
 Mainly of use with B<-MO=...> to allow code to alter its behavior
@@ -916,6 +964,7 @@ C<$^C = 1> is similar to calling C<B::minus_c>.
 =item $DEBUGGING
 
 =item $^D
+X<$^D> X<$DEBUGGING>
 
 The current value of the debugging flags.  (Mnemonic: value of B<-D>
 switch.) May be read or set. Like its command-line equivalent, you can use
@@ -939,6 +988,7 @@ Under normal situations this variable should be of no interest to you.
 =item $SYSTEM_FD_MAX
 
 =item $^F
+X<$^F> X<$SYSTEM_FD_MAX>
 
 The maximum system file descriptor, ordinarily 2.  System file
 descriptors are passed to exec()ed processes, while higher file
@@ -994,20 +1044,19 @@ version of the same lexical pragma:
 
 =item %^H
 
-WARNING: This variable is strictly for internal use only.  Its availability,
-behavior, and contents are subject to change without notice.
-
 The %^H hash provides the same scoping semantic as $^H.  This makes it
-useful for implementation of lexically scoped pragmas.
+useful for implementation of lexically scoped pragmas. See L<perlpragma>.
 
 =item $INPLACE_EDIT
 
 =item $^I
+X<$^I> X<$INPLACE_EDIT>
 
 The current value of the inplace-edit extension.  Use C<undef> to disable
 inplace editing.  (Mnemonic: value of B<-i> switch.)
 
 =item $^M
+X<$^M>
 
 By default, running out of memory is an untrappable, fatal error.
 However, if suitably built, Perl can use the contents of C<$^M>
@@ -1026,6 +1075,7 @@ this variable.
 =item $OSNAME
 
 =item $^O
+X<$^O> X<$OSNAME>
 
 The name of the operating system under which this copy of Perl was
 built, as determined during the configuration process.  The value
@@ -1047,6 +1097,7 @@ part describes the output layers.
 =item $PERLDB
 
 =item $^P
+X<$^P> X<$PERLDB>
 
 The internal variable for debugging support.  The meanings of the
 various bits are subject to change, but currently indicate:
@@ -1106,6 +1157,7 @@ run-time only.  This is a new mechanism and the details may change.
 =item $LAST_REGEXP_CODE_RESULT
 
 =item $^R
+X<$^R> X<$LAST_REGEXP_CODE_RESULT>
 
 The result of evaluation of the last successful C<(?{ code })>
 regular expression assertion (see L<perlre>).  May be written to.
@@ -1113,6 +1165,7 @@ regular expression assertion (see L<perlre>).  May be written to.
 =item $EXCEPTIONS_BEING_CAUGHT
 
 =item $^S
+X<$^S> X<$EXCEPTIONS_BEING_CAUGHT>
 
 Current state of the interpreter.
 
@@ -1127,6 +1180,7 @@ The first state may happen in $SIG{__DIE__} and $SIG{__WARN__} handlers.
 =item $BASETIME
 
 =item $^T
+X<$^T> X<$BASETIME>
 
 The time at which the program began running, in seconds since the
 epoch (beginning of 1970).  The values returned by the B<-M>, B<-A>,
@@ -1145,6 +1199,12 @@ documentation for the C<-C> switch for more information about
 the possible values. This variable is set during Perl startup
 and is thereafter read-only.
 
+=item ${^UTF8CACHE}
+
+This variable controls the state of the internal UTF-8 offset caching code.
+1 for on (the default), 0 for off, -1 to debug the caching code by checking
+all its results against linear scans, and panicking on any discrepancy.
+
 =item ${^UTF8LOCALE}
 
 This variable indicates whether an UTF-8 locale was detected by perl at
@@ -1155,6 +1215,7 @@ switch); see L<perlrun> for more info on this.
 =item $PERL_VERSION
 
 =item $^V
+X<$^V> X<$PERL_VERSION>
 
 The revision, version, and subversion of the Perl interpreter, represented
 as a string composed of characters with those ordinals.  Thus in Perl v5.6.0
@@ -1162,11 +1223,14 @@ it equals C<chr(5) . chr(6) . chr(0)> and will return true for
 C<$^V eq v5.6.0>.  Note that the characters in this string value can
 potentially be in Unicode range.
 
+This variable first appeared in perl 5.6.0; earlier versions of perl will
+see an undefined value.
+
 This can be used to determine whether the Perl interpreter executing a
 script is in the right range of versions.  (Mnemonic: use ^V for Version
 Control.)  Example:
 
-    warn "No \"our\" declarations!\n" if $^V and $^V lt v5.6.0;
+    warn "Hashes not randomized!\n" if !$^V or $^V lt v5.8.1
 
 To convert C<$^V> into its string representation use sprintf()'s
 C<"%vd"> conversion:
@@ -1181,6 +1245,7 @@ See also C<$]> for an older representation of the Perl version.
 =item $WARNING
 
 =item $^W
+X<$^W> X<$WARNING>
 
 The current value of the warning switch, initially true if B<-w>
 was used, false otherwise, but directly modifiable.  (Mnemonic:
@@ -1191,12 +1256,26 @@ related to the B<-w> switch.)  See also L<warnings>.
 The current set of warning checks enabled by the C<use warnings> pragma.
 See the documentation of C<warnings> for more details.
 
+=item ${^WIN32_SLOPPY_STAT}
+
+If this variable is set to a true value, then stat() on Windows will
+not try to open the file. This means that the link count cannot be
+determined and file attributes may be out of date if additional
+hardlinks to the file exist. On the other hand, not opening the file
+is considerably faster, especially for files on network drives.
+
+This variable could be set in the F<sitecustomize.pl> file to
+configure the local Perl installation to use "sloppy" stat() by
+default.  See L<perlrun> for more information about site
+customization.
+
 =item $EXECUTABLE_NAME
 
 =item $^X
+X<$^X> X<$EXECUTABLE_NAME>
 
 The name used to execute the current copy of Perl, from C's
-C<argv[0]>.
+C<argv[0]> or (where supported) F</proc/self/exe>.
 
 Depending on the host operating system, the value of $^X may be
 a relative or absolute pathname of the perl program file, or may
@@ -1243,6 +1322,7 @@ command or referenced as a file.
           unless $secure_perl_path =~ m/$Config{_exe}$/i;}
 
 =item ARGV
+X<ARGV>
 
 The special filehandle that iterates over command-line filenames in
 C<@ARGV>. Usually written as the null filehandle in the angle operator
@@ -1254,10 +1334,12 @@ may not cause your function to automatically read the contents of all the
 files in C<@ARGV>.
 
 =item $ARGV
+X<$ARGV>
 
 contains the name of the current file when reading from <>.
 
 =item @ARGV
+X<@ARGV>
 
 The array @ARGV contains the command-line arguments intended for
 the script.  C<$#ARGV> is generally the number of arguments minus
@@ -1265,6 +1347,7 @@ one, because C<$ARGV[0]> is the first argument, I<not> the program's
 command name itself.  See C<$0> for the command name.
 
 =item ARGVOUT
+X<ARGVOUT>
 
 The special filehandle that points to the currently open output file
 when doing edit-in-place processing with B<-i>.  Useful when you have
@@ -1272,6 +1355,7 @@ to do a lot of inserting and don't want to keep modifying $_.  See
 L<perlrun> for the B<-i> switch.
 
 =item @F
+X<@F>
 
 The array @F contains the fields of each line read in when autosplit
 mode is turned on.  See L<perlrun> for the B<-a> switch.  This array
@@ -1279,6 +1363,7 @@ is package-specific, and must be declared or given a full package name
 if not in package main when running under C<strict 'vars'>.
 
 =item @INC
+X<@INC>
 
 The array @INC contains the list of places that the C<do EXPR>,
 C<require>, or C<use> constructs look for their library files.  It
@@ -1297,12 +1382,16 @@ You can also insert hooks into the file inclusion system by putting Perl
 code directly into @INC.  Those hooks may be subroutine references, array
 references or blessed objects.  See L<perlfunc/require> for details.
 
+=item @ARG
+
 =item @_
+X<@_> X<@ARG>
 
 Within a subroutine the array @_ contains the parameters passed to that
 subroutine.  See L<perlsub>.
 
 =item %INC
+X<%INC>
 
 The hash %INC contains entries for each filename included via the
 C<do>, C<require>, or C<use> operators.  The key is the filename
@@ -1320,6 +1409,7 @@ specific info.
 =item %ENV
 
 =item $ENV{expr}
+X<%ENV>
 
 The hash %ENV contains your current environment.  Setting a
 value in C<ENV> changes the environment for any child processes
@@ -1328,8 +1418,9 @@ you subsequently fork() off.
 =item %SIG
 
 =item $SIG{expr}
+X<%SIG>
 
-The hash %SIG contains signal handlers for signals.  For example:
+The hash C<%SIG> contains signal handlers for signals.  For example:
 
     sub handler {	# 1st argument is signal name
 	my($sig) = @_;
@@ -1368,24 +1459,29 @@ immediate (also known as "unsafe") to deferred, also known as
 Certain internal hooks can be also set using the %SIG hash.  The
 routine indicated by C<$SIG{__WARN__}> is called when a warning message is
 about to be printed.  The warning message is passed as the first
-argument.  The presence of a __WARN__ hook causes the ordinary printing
-of warnings to STDERR to be suppressed.  You can use this to save warnings
+argument.  The presence of a C<__WARN__> hook causes the ordinary printing
+of warnings to C<STDERR> to be suppressed.  You can use this to save warnings
 in a variable, or turn warnings into fatal errors, like this:
 
     local $SIG{__WARN__} = sub { die $_[0] };
     eval $proggie;
 
+As the C<'IGNORE'> hook is not supported by C<__WARN__>, you can
+disable warnings using the empty subroutine:
+
+    local $SIG{__WARN__} = sub {};
+
 The routine indicated by C<$SIG{__DIE__}> is called when a fatal exception
 is about to be thrown.  The error message is passed as the first
-argument.  When a __DIE__ hook routine returns, the exception
+argument.  When a C<__DIE__> hook routine returns, the exception
 processing continues as it would have in the absence of the hook,
-unless the hook routine itself exits via a C<goto>, a loop exit, or a die().
+unless the hook routine itself exits via a C<goto>, a loop exit, or a C<die()>.
 The C<__DIE__> handler is explicitly disabled during the call, so that you
 can die from a C<__DIE__> handler.  Similarly for C<__WARN__>.
 
 Due to an implementation glitch, the C<$SIG{__DIE__}> hook is called
 even inside an eval().  Do not use this to rewrite a pending exception
-in C<$@>, or as a bizarre substitute for overriding CORE::GLOBAL::die().
+in C<$@>, or as a bizarre substitute for overriding C<CORE::GLOBAL::die()>.
 This strange action at a distance may be fixed in a future release
 so that C<$SIG{__DIE__}> is only called if your program is about
 to exit, as was the original intent.  Any other use is deprecated.
@@ -1414,6 +1510,7 @@ L<warnings> for additional information.
 =back
 
 =head2 Error Indicators
+X<error> X<exception>
 
 The variables C<$@>, C<$!>, C<$^E>, and C<$?> contain information
 about different types of error conditions that may appear during
@@ -1520,7 +1617,8 @@ in the scope of C<use English>.  For that reason, saying C<use
 English> in libraries is strongly discouraged.  See the
 Devel::SawAmpersand module documentation from CPAN
 ( http://www.cpan.org/modules/by-module/Devel/ )
-for more information.
+for more information. Writing C<use English '-no_match_vars';>
+avoids the performance penalty.
 
 Having to even think about the C<$^S> variable in your exception
 handlers is simply wrong.  C<$SIG{__DIE__}> as currently implemented

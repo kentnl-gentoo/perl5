@@ -435,7 +435,7 @@ our(@ISA, @EXPORT, @EXPORT_OK, %EXPORT_TAGS, $VERSION);
 	      clearcache clearallcache disablecache enablecache);
 %EXPORT_TAGS=( all => [ @EXPORT, @EXPORT_OK ] ) ;
 
-$VERSION = 1.07;
+$VERSION = 1.08;
 
 # --- ':hireswallclock' special handling
 
@@ -456,6 +456,7 @@ sub import {
     my $class = shift;
     if (grep { $_ eq ":hireswallclock" } @_) {
 	@_ = grep { $_ ne ":hireswallclock" } @_;
+	local $^W=0;
 	*mytime = $hirestime if defined $hirestime;
     }
     Benchmark->export_to_level(1, $class, @_);
@@ -551,6 +552,8 @@ sub timediff {
     for (my $i=0; $i < @$a; ++$i) {
 	push(@r, $a->[$i] - $b->[$i]);
     }
+    #die "Bad timediff(): ($r[1] + $r[2]) <= 0 (@$a[1,2]|@$b[1,2])\n"
+    #        if ($r[1] + $r[2]) < 0;
     bless \@r;
 }
 
@@ -716,9 +719,16 @@ sub countit {
     my ($n, $tc);
 
     # First find the minimum $n that gives a significant timing.
+    my $zeros=0;
     for ($n = 1; ; $n *= 2 ) {
 	my $td = timeit($n, $code);
 	$tc = $td->[1] + $td->[2];
+	if ( $tc <= 0 and $n > 1024 ) {
+	    ++$zeros > 16
+	        and die "Timing is consistently zero in estimation loop, cannot benchmark. N=$n\n";
+	} else {
+	    $zeros = 0;
+	}
 	last if $tc > 0.1;
     }
 
@@ -752,7 +762,7 @@ sub countit {
     # with stable times and avoiding extra timeit()s is nice for
     # accuracy's sake.
     $n = int( $n * ( 1.05 * $tmax / $tc ) );
-
+    $zeros=0;
     while () {
 	my $td = timeit($n, $code);
 	$ntot  += $n;
@@ -763,7 +773,12 @@ sub countit {
 	$cstot += $td->[4];
 	$ttot = $utot + $stot;
 	last if $ttot >= $tmax;
-
+	if ( $ttot <= 0 ) {
+	    ++$zeros > 16
+	        and die "Timing is consistently zero, cannot benchmark. N=$n\n";
+	} else {
+	    $zeros = 0;
+	}
         $ttot = 0.01 if $ttot < 0.01;
 	my $r = $tmax / $ttot - 1; # Linear approximation.
 	$n = int( $r * $ntot );

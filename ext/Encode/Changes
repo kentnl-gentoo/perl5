@@ -1,10 +1,56 @@
 # Revision history for Perl extension Encode.
 #
-# $Id: Changes,v 2.14 2006/01/15 15:43:36 dankogai Exp dankogai $
+# $Id: Changes,v 2.17 2006/06/03 20:28:48 dankogai Exp dankogai $
 #
+$Revision: 2.17 $ $Date: 2006/06/03 20:28:48 $
+! bin/enc2xs
+  overhauled the -C option
+  - added ascii-ctrl', 'null', 'utf-8-strict' to core
+  - auto-generated Encode::ConfigLocal no longer use v-string for version
+  - now searches modules via File::Find so Encode/JP/Mobile is happy
+! Byte/Byte.pm CN/CN.pm EBCDIC/EBCDIC.pm JP/JP.pm KR/KR.pm Symbol/Symbol.pm
+  use strict added; though all they do is load XS, it's
+  still better a practice
+! *.pm
+  use warnings added to all of them for better practices' sake.
 
-$Revision: 2.14 $ $Date: 2006/01/15 15:43:36 $
-2.14  2006/01/15 15:06:36 $
+2.17 2006/05/09 17:10:09
+! encode.pm
+  'chin' =~ /^zh_CN|chin(?:a|ese)?$/i is true
+  but chin is not china or chinese.
+  http://d.hatena.ne.jp/jankogai/20060508/1147090316
+! Encode.xs
+  Integrated maintperl change (27824|27824) which I overlooked
+  -- sorry, Nicholas and Coverity Scan.
+  Message-Id: <200604152115.k3FLF1Ar014538@smtp3.ActiveState.com>
+  Message-Id: <200605091615.k49GF1gJ016777@smtp3.ActiveState.com>
+
+2.16 2006/05/03 18:24:10
+! bin/piconv
+  --xmlcref and --htmlcref added.
+! Encode.pm
+  Copyright Notice Added.
+  http://rt.cpan.org/NoAuth/Bug.html?id=#19056  
+! *
+  Replaced remaining ^\t with q( ) x 4. -- Perl Best Practice pp. 20
+  And all .pm's are now perltidy-ed.
+
+2.15 2006/04/06 15:44:11
+! Unicode/Unicode.xs
+  Addressed: UTF-16, UTF-32, UCS, UTF-7 decoders mishandle illegal characters
+  http://rt.cpan.org/NoAuth/Bug.html?id=#18556
+! Encode.pm
+  added str2bytes() as an alias to encode() and  bytes2str() as an alias 
+  to decode()
+  http://rt.cpan.org/NoAuth/Bug.html?id=#17103
+! Encode.xs
+  Change 26922: Avoid warning with MS Visual C compiler.
+  Message-Id: <200601231245.k0NCj2dw009484@smtp3.ActiveState.com>
+! t/perlio.t
+  Change 26067: As using -C to turn on utf8 IO is equivalent to the open pragma
+  Message-Id: <200511092227.jA9MRcYD009025@smtp3.ActiveState.com>
+
+2.14 2006/01/15 15:43:36
 ! Makefile.PL 
   Change 26295: Don't build manpages for Encode and Unicode::Normalize
   Message-Id: <200512071540.jB7Fe4Gt017960@smtp3.ActiveState.com>

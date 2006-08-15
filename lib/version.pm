@@ -1,20 +1,25 @@
 #!perl -w
 package version;
 
-use 5.005_03;
+use 5.005_04;
 use strict;
 
-require Exporter;
-use vars qw(@ISA $VERSION $CLASS @EXPORT);
+use vars qw(@ISA $VERSION $CLASS *qv);
 
-@ISA = qw(Exporter);
-
-@EXPORT = qw(qv);
-
-$VERSION = 0.53;
+$VERSION = 0.67;
 
 $CLASS = 'version';
 
 # Preloaded methods go here.
+sub import {
+    my ($class) = @_;
+    my $callpkg = caller();
+    no strict 'refs';
+    
+    *{$callpkg."::qv"} = 
+	    sub {return bless version::qv(shift), $class }
+	unless defined (&{"$callpkg\::qv"});
+
+}
 
 1;

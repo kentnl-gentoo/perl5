@@ -5,9 +5,9 @@
 #
 ################################################################################
 #
-#  $Revision: 10 $
+#  $Revision: 13 $
 #  $Author: mhx $
-#  $Date: 2006/01/14 23:02:12 +0100 $
+#  $Date: 2006/05/28 19:36:03 +0200 $
 #
 ################################################################################
 #
@@ -23,20 +23,19 @@
 use strict;
 use Getopt::Long;
 
-my %opt = (
-  base  => 0,
+require 'devel/devtools.pl';
+
+our %opt = (
+  base    => 0,
+  check   => 1,
+  verbose => 0,
 );
 
-GetOptions(\%opt, qw(
-            base
-          )) or die;
+GetOptions(\%opt, qw( base check! verbose )) or die;
 
-# my $outdir = $opt{base} ? 'parts/base' : 'parts/todo';
+identify();
+
 my $outdir = 'parts/todo';
-
-# for (glob "$outdir/*") {
-#   unlink or die "$_: $!\n";
-# }
 
 my $install = '/tmp/perl/install/default';
 # my $install = '/tmp/perl/install/thread';
@@ -51,12 +50,13 @@ for (1 .. $#perls) {
 
 shift @perls;
 
-$ENV{SKIP_PPPHTEST} = 1;
-
 for (@perls) {
   my $todo = do { my $v = $_->{todo}; $v =~ s/\D+//g; $v };
   -e "$outdir/$todo" and next;
   my @args = ('--perl', $_->{path}, '--todo', "$outdir/$todo", '--version', "$_->{todo}");
   push @args, '--base' if $opt{base};
-  system 'devel/mktodo.pl', @args and die "system(@args): [$!] [$?]\n";
+  push @args, '--verbose' if $opt{verbose};
+  push @args, '--nocheck' unless $opt{check};
+  runperl('devel/mktodo.pl', @args) or die "error running mktodo.pl [$!] [$?]\n";
 }
+

@@ -5,7 +5,7 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require './test.pl';
-    plan( tests => 31 );
+    plan( tests => 78 );
 }
 
 my @c;
@@ -77,15 +77,15 @@ sub testwarn {
     testwarn("\0" x 12);
 
     use warnings;
-    BEGIN { is( ${^WARNING_BITS}, "UUUUUUUUUUU\025", 'default bits on via "use warnings"' ); }
-    BEGIN { testwarn("UUUUUUUUUUU\025", "#1"); }
+    BEGIN { is( ${^WARNING_BITS}, "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\025", 'default bits on via "use warnings"' ); }
+    BEGIN { testwarn("\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\025", "#1"); }
     # run-time :
     # the warning mask has been extended by warnings::register
-    testwarn("UUUUUUUUUUUU");
+    testwarn("\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55");
 
     use warnings::register;
-    BEGIN { is( ${^WARNING_BITS}, "UUUUUUUUUUUU", 'warning bits on via "use warnings::register"' ) }
-    testwarn("UUUUUUUUUUUU","#3");
+    BEGIN { is( ${^WARNING_BITS}, "\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55", 'warning bits on via "use warnings::register"' ) }
+    testwarn("\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55\x55","#3");
 }
 
 
@@ -104,7 +104,7 @@ my $debugger_test =  q<
 sub pb { return (caller(0))[3] }
 
 my $i = eval $debugger_test;
-is( $i, 10, "do not skip over eval (and caller returns 10 elements)" );
+is( $i, 11, "do not skip over eval (and caller returns 10 elements)" );
 
 is( eval 'pb()', 'main::pb', "actually return the right function name" );
 
@@ -113,6 +113,25 @@ $^P = 16;
 $^P = $saved_perldb;
 
 $i = eval $debugger_test;
-is( $i, 10, 'do not skip over eval even if $^P had been on at some point' );
+is( $i, 11, 'do not skip over eval even if $^P had been on at some point' );
 is( eval 'pb()', 'main::pb', 'actually return the right function name even if $^P had been on at some point' );
 
+print "# caller can now return the compile time state of %^H\n";
+
+sub hint_exists {
+    my $key = shift;
+    my $level = shift;
+    my @results = caller($level||0);
+    exists $results[10]->{$key};
+}
+
+sub hint_fetch {
+    my $key = shift;
+    my $level = shift;
+    my @results = caller($level||0);
+    $results[10]->{$key};
+}
+
+$::testing_caller = 1;
+
+do './op/caller.pl';

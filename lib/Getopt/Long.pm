@@ -35,7 +35,7 @@ use 5.004;
 use strict;
 
 use vars qw($VERSION);
-$VERSION        =  2.35;
+$VERSION        =  2.35_01;
 # For testing versions only.
 #use vars qw($VERSION_STRING);
 #$VERSION_STRING = "2.35";
@@ -1241,12 +1241,14 @@ sub Configure (@) {
 	}
 	elsif ( $try eq 'getopt_compat' ) {
 	    $getopt_compat = $action;
+            $genprefix = $action ? "(--|-|\\+)" : "(--|-)";
 	}
 	elsif ( $try eq 'gnu_getopt' ) {
 	    if ( $action ) {
 		$gnu_compat = 1;
 		$bundling = 1;
 		$getopt_compat = 0;
+                $genprefix = "(--|-)";
 		$order = $PERMUTE;
 	    }
 	}

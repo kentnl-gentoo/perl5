@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.67";
+our $VERSION   = "0.69";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -37,8 +37,8 @@ my %style =
     "(*(    )*)goto #class (#addr)\n",
     "#class pp_#name"],
    "concise" =>
-   ["#hyphseq2 (*(   (x( ;)x))*)<#classsym> "
-    . "#exname#arg(?([#targarglife])?)~#flags(?(/#private)?)(x(;~->#next)x)\n"
+   ["#hyphseq2 (*(   (x( ;)x))*)<#classsym> #exname#arg(?([#targarglife])?)"
+    . "~#flags(?(/#private)?)(?(:#hints)?)(x(;~->#next)x)\n"
     , "  (*(    )*)     goto #seq\n",
     "(?(<#seq>)?)#exname#arg(?([#targarglife])?)"],
    "linenoise" =>
@@ -49,7 +49,7 @@ my %style =
    ["#class (#addr)\n\top_next\t\t#nextaddr\n\top_sibling\t#sibaddr\n\t"
     . "op_ppaddr\tPL_ppaddr[OP_#NAME]\n\top_type\t\t#typenum\n" .
     ($] > 5.009 ? '' : "\top_seq\t\t#seqnum\n")
-    . "\top_flags\t#flagval\n\top_private\t#privval\n"
+    . "\top_flags\t#flagval\n\top_private\t#privval\t#hintsval\n"
     . "(?(\top_first\t#firstaddr\n)?)(?(\top_last\t\t#lastaddr\n)?)"
     . "(?(\top_sv\t\t#svaddr\n)?)",
     "    GOTO #addr\n",
@@ -562,7 +562,8 @@ $priv{$_}{128} = "LVINTRO"
        "padav", "padhv", "enteriter");
 $priv{$_}{64} = "REFC" for ("leave", "leavesub", "leavesublv", "leavewrite");
 $priv{"aassign"}{64} = "COMMON";
-$priv{"aassign"}{32} = "PHASH" if $] < 5.009;
+$priv{"aassign"}{32} = $] < 5.009 ? "PHASH" : "STATE";
+$priv{"sassign"}{32} = "STATE";
 $priv{"sassign"}{64} = "BKWARD";
 $priv{$_}{64} = "RTIME" for ("match", "subst", "substcont", "qr");
 @{$priv{"trans"}}{1,2,4,8,16,64} = ("<UTF", ">UTF", "IDENT", "SQUASH", "DEL",
@@ -571,6 +572,7 @@ $priv{"repeat"}{64} = "DOLIST";
 $priv{"leaveloop"}{64} = "CONT";
 @{$priv{$_}}{32,64,96} = ("DREFAV", "DREFHV", "DREFSV")
   for (qw(rv2gv rv2sv padsv aelem helem));
+$priv{$_}{16} = "STATE" for ("padav", "padhv", "padsv");
 @{$priv{"entersub"}}{16,32,64} = ("DBG","TARG","NOMOD");
 @{$priv{$_}}{4,8,128} = ("INARGS","AMPER","NO()") for ("entersub", "rv2cv");
 $priv{"gv"}{32} = "EARLYCV";
@@ -616,17 +618,42 @@ if ($] >= 5.009) {
     for ("mapwhile", "mapstart", "grepwhile", "grepstart");
 }
 
-sub private_flags {
-    my($name, $x) = @_;
+our %hints; # used to display each COP's op_hints values
+
+# strict refs, subs, vars
+@hints{2,512,1024} = ('$', '&', '*');
+# integers, locale, bytes, arybase
+@hints{1,4,8,16,32} = ('i', 'l', 'b', '[');
+# block scope, localise %^H, $^OPEN
+@hints{256,131072,262144} = ('{','%','<');
+# overload new integer, float, binary, string, re
+@hints{4096,8192,16384,32768,65536} = ('I', 'F', 'B', 'S', 'R');
+# taint and eval
+@hints{1048576,2097152} = ('T', 'E');
+# filetest access, UTF-8, assertions, assertions seen
+@hints{4194304,8388608,16777216,33554432} = ('X', 'U', 'A', 'a');
+
+sub _flags {
+    my($hash, $x) = @_;
     my @s;
-    for my $flag (128, 96, 64, 32, 16, 8, 4, 2, 1) {
-	if ($priv{$name}{$flag} and $x & $flag and $x >= $flag) {
+    for my $flag (sort {$b <=> $a} keys %$hash) {
+	if ($hash->{$flag} and $x & $flag and $x >= $flag) {
 	    $x -= $flag;
-	    push @s, $priv{$name}{$flag};
+	    push @s, $hash->{$flag};
 	}
     }
     push @s, $x if $x;
     return join(",", @s);
+}
+
+sub private_flags {
+    my($name, $x) = @_;
+    _flags($priv{$name}, $x);
+}
+
+sub hints_flags {
+    my($x) = @_;
+    _flags(\%hints, $x);
 }
 
 sub concise_sv {
@@ -801,6 +828,12 @@ sub concise_op {
     $h{flags} = op_flags($op->flags);
     $h{privval} = $op->private;
     $h{private} = private_flags($h{name}, $op->private);
+    if ($op->can("hints")) {
+      $h{hintsval} = $op->hints;
+      $h{hints} = hints_flags($h{hintsval});
+    } else {
+      $h{hintsval} = $h{hints} = '';
+    }
     $h{addr} = sprintf("%#x", $$op);
     $h{typenum} = $op->type;
     $h{noise} = $linenoise[$op->type];
@@ -1390,6 +1423,16 @@ The OP's flags, abbreviated as a series of symbols.
 =item B<#flagval>
 
 The numeric value of the OP's flags.
+
+=item B<#hints>
+
+The COP's hint flags, rendered with abbreviated names if possible. An empty
+string if this is not a COP.
+
+=item B<#hintsval>
+
+The numeric value of the COP's hint flags, or an empty string if this is not
+a COP.
 
 =item B<#hyphseq>
 

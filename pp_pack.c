@@ -62,7 +62,7 @@ typedef struct tempsym {
 	(symptr)->grpend   = NULL;	\
 	(symptr)->code     = 0;		\
 	(symptr)->length   = 0;		\
-	(symptr)->howlen   = 0;		\
+	(symptr)->howlen   = e_no_len;	\
 	(symptr)->level    = 0;		\
 	(symptr)->flags    = (f);	\
 	(symptr)->strbeg   = 0;		\
@@ -702,34 +702,27 @@ next_uni_uu(pTHX_ const char **s, const char *end, I32 *out)
     return TRUE;
 }
 
-STATIC void
-bytes_to_uni(pTHX_ const U8 *start, STRLEN len, char **dest) {
-    U8 buffer[UTF8_MAXLEN];
+STATIC char *
+S_bytes_to_uni(const U8 *start, STRLEN len, char *dest) {
     const U8 * const end = start + len;
-    char *d = *dest;
+
     while (start < end) {
-        const int length =
-	    uvuni_to_utf8_flags(buffer, NATIVE_TO_UNI(*start), 0) - buffer;
-	switch(length) {
-	  case 1:
-	    *d++ = buffer[0];
-	    break;
-	  case 2:
-	    *d++ = buffer[0];
-	    *d++ = buffer[1];
-	    break;
-	  default:
-	    Perl_croak(aTHX_ "Perl bug: value %d UTF-8 expands to %d bytes",
-		       *start, length);
+	const UV uv = NATIVE_TO_ASCII(*start);
+	if (UNI_IS_INVARIANT(uv))
+	    *dest++ = (char)(U8)UTF_TO_NATIVE(uv);
+	else {
+	    *dest++ = (char)(U8)UTF8_EIGHT_BIT_HI(uv);
+	    *dest++ = (char)(U8)UTF8_EIGHT_BIT_LO(uv);
 	}
 	start++;
     }
-    *dest = d;
+    return dest;
 }
 
 #define PUSH_BYTES(utf8, cur, buf, len)				\
 STMT_START {							\
-    if (utf8) bytes_to_uni(aTHX_ (U8 *) buf, len, &(cur));	\
+    if (utf8)							\
+	(cur) = bytes_to_uni((U8 *) buf, len, (cur));		\
     else {							\
 	Copy(buf, cur, len, char);				\
 	(cur) += (len);						\
@@ -764,7 +757,7 @@ STMT_START {					\
 STMT_START {					\
     if (utf8) {					\
 	const U8 au8 = (byte);			\
-	bytes_to_uni(aTHX_ &au8, 1, &(s));	\
+	(s) = bytes_to_uni(&au8, 1, (s));	\
     } else *(U8 *)(s)++ = (byte);		\
 } STMT_END
 
@@ -783,7 +776,7 @@ STMT_START {							\
 
 static const char *_action( const tempsym_t* symptr )
 {
-    return ( symptr->flags & FLAG_PACK ) ? "pack" : "unpack";
+    return (const char *)(( symptr->flags & FLAG_PACK ) ? "pack" : "unpack");
 }
 
 /* Returns the sizeof() struct described by pat */
@@ -1151,41 +1144,6 @@ first_symbol(const char *pat, const char *patend) {
 	pat++;
     }
     return 0;
-}
-
-/*
-=for apidoc unpack_str
-
-The engine implementing unpack() Perl function. Note: parameters strbeg, new_s
-and ocnt are not used. This call should not be used, use unpackstring instead.
-
-=cut */
-
-I32
-Perl_unpack_str(pTHX_ const char *pat, const char *patend, const char *s, const char *strbeg, const char *strend, char **new_s, I32 ocnt, U32 flags)
-{
-    tempsym_t sym;
-    PERL_UNUSED_ARG(strbeg);
-    PERL_UNUSED_ARG(new_s);
-    PERL_UNUSED_ARG(ocnt);
-
-    if (flags & FLAG_DO_UTF8) flags |= FLAG_WAS_UTF8;
-    else if (need_utf8(pat, patend)) {
-	/* We probably should try to avoid this in case a scalar context call
-	   wouldn't get to the "U0" */
-	STRLEN len = strend - s;
-	s = (char *) bytes_to_utf8((U8 *) s, &len);
-	SAVEFREEPV(s);
-	strend = s + len;
-	flags |= FLAG_DO_UTF8;
-    }
-
-    if (first_symbol(pat, patend) != 'U' && (flags & FLAG_DO_UTF8))
-	flags |= FLAG_PARSE_UTF8;
-
-    TEMPSYM_INIT(&sym, pat, patend, flags);
-
-    return unpack_rec(&sym, s, s, strend, NULL );
 }
 
 /*
@@ -2130,7 +2088,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
              * algorithm, the code will be character-set independent
              * (and just as fast as doing character arithmetic)
              */
-            if (PL_uudmap['M'] == 0) {
+            if (PL_uudmap[(U8)'M'] == 0) {
 		size_t i;
 
 		for (i = 0; i < sizeof(PL_uuemap); ++i)
@@ -2139,7 +2097,7 @@ S_unpack_rec(pTHX_ tempsym_t* symptr, const char *s, const char *strbeg, const c
                  * Because ' ' and '`' map to the same value,
                  * we need to decode them both the same.
                  */
-                PL_uudmap[' '] = 0;
+                PL_uudmap[(U8)' '] = 0;
             }
 	    {
                 const STRLEN l = (STRLEN) (strend - s) * 3 / 4;
@@ -2394,28 +2352,6 @@ S_div128(pTHX_ SV *pnum, bool *done)
 }
 
 /*
-=for apidoc pack_cat
-
-The engine implementing pack() Perl function. Note: parameters next_in_list and
-flags are not used. This call should not be used; use packlist instead.
-
-=cut
-*/
-
-void
-Perl_pack_cat(pTHX_ SV *cat, const char *pat, const char *patend, register SV **beglist, SV **endlist, SV ***next_in_list, U32 flags)
-{
-    tempsym_t sym;
-    PERL_UNUSED_ARG(next_in_list);
-    PERL_UNUSED_ARG(flags);
-
-    TEMPSYM_INIT(&sym, pat, patend, FLAG_PACK);
-
-    (void)pack_rec( cat, &sym, beglist, endlist );
-}
-
-
-/*
 =for apidoc packlist
 
 The engine implementing pack() Perl function.
@@ -2427,14 +2363,13 @@ void
 Perl_packlist(pTHX_ SV *cat, const char *pat, const char *patend, register SV **beglist, SV **endlist )
 {
     dVAR;
-    STRLEN no_len;
     tempsym_t sym;
 
     TEMPSYM_INIT(&sym, pat, patend, FLAG_PACK);
 
     /* We're going to do changes through SvPVX(cat). Make sure it's valid.
        Also make sure any UTF8 flag is loaded */
-    SvPV_force(cat, no_len);
+    SvPV_force_nolen(cat);
     if (DO_UTF8(cat))
 	sym.flags |= FLAG_PARSE_UTF8 | FLAG_DO_UTF8;
 
@@ -2541,7 +2476,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	SV *fromstr;
 	STRLEN fromlen;
 	I32 len;
-	SV *lengthcode = Nullsv;
+	SV *lengthcode = NULL;
         I32 datumtype = symptr->code;
         howlen_t howlen = symptr->howlen;
 	char *start = SvPVX(cat);
@@ -2579,9 +2514,20 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    if (strchr("aAZ", lookahead.code)) {
 		if (lookahead.howlen == e_number) count = lookahead.length;
 		else {
-		    if (items > 0)
+		    if (items > 0) {
+			if (SvGAMAGIC(*beglist)) {
+			    /* Avoid reading the active data more than once
+			       by copying it to a temporary.  */
+			    STRLEN len;
+			    const char *const pv = SvPV_const(*beglist, len);
+			    SV *const temp = sv_2mortal(newSVpvn(pv, len));
+			    if (SvUTF8(*beglist))
+				SvUTF8_on(temp);
+			    *beglist = temp;
+			}
 			count = DO_UTF8(*beglist) ?
 			    sv_len_utf8(*beglist) : sv_len(*beglist);
+		    }
 		    else count = 0;
 		    if (lookahead.code == 'Z') count++;
 		}
@@ -2868,7 +2814,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    if (datumtype == 'B')
 		while (l++ < len) {
 		    if (utf8_source) {
-			UV val;
+			UV val = 0;
 			NEXT_UNI_VAL(val, cur, str, end, utf8_flags);
 			bits |= val & 1;
 		    } else bits |= *str++ & 1;
@@ -2882,7 +2828,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 		/* datumtype == 'b' */
 		while (l++ < len) {
 		    if (utf8_source) {
-			UV val;
+			UV val = 0;
 			NEXT_UNI_VAL(val, cur, str, end, utf8_flags);
 			if (val & 1) bits |= 0x80;
 		    } else if (*str++ & 1)
@@ -2937,7 +2883,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    if (datumtype == 'H')
 		while (l++ < len) {
 		    if (utf8_source) {
-			UV val;
+			UV val = 0;
 			NEXT_UNI_VAL(val, cur, str, end, utf8_flags);
 			if (val < 256 && isALPHA(val))
 			    bits |= (val + 9) & 0xf;
@@ -2956,7 +2902,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    else
 		while (l++ < len) {
 		    if (utf8_source) {
-			UV val;
+			UV val = 0;
 			NEXT_UNI_VAL(val, cur, str, end, utf8_flags);
 			if (val < 256 && isALPHA(val))
 			    bits |= ((val + 9) & 0xf) << 4;
@@ -3016,7 +2962,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 	    break;
 	case 'W': {
 	    char *end;
-	    U8 in_bytes = IN_BYTES;
+	    U8 in_bytes = (U8)IN_BYTES;
 
 	    end = start+SvLEN(cat)-1;
 	    if (utf8) end -= UTF8_MAXLEN-1;
@@ -3099,7 +3045,7 @@ S_pack_rec(pTHX_ SV *cat, tempsym_t* symptr, SV **beglist, SV **endlist )
 				len+(endb-buffer)*UTF8_EXPAND);
 			end = start+SvLEN(cat);
 		    }
-		    bytes_to_uni(aTHX_ buffer, endb-buffer, &cur);
+		    cur = bytes_to_uni(buffer, endb-buffer, cur);
 		} else {
 		    if (cur >= end) {
 			*cur = '\0';

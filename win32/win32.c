@@ -1167,23 +1167,36 @@ win32_stat(const char *path, Stat_t *sbuf)
     char	buffer[MAX_PATH+1];
     int		l = strlen(path);
     int		res;
-    HANDLE      handle;
     int         nlink = 1;
+    BOOL        expect_dir = FALSE;
+
+    GV          *gv_sloppy = gv_fetchpvs("\027IN32_SLOPPY_STAT",
+                                         GV_NOTQUAL, SVt_PV);
+    BOOL        sloppy = gv_sloppy && SvTRUE(GvSV(gv_sloppy));
 
     if (l > 1) {
 	switch(path[l - 1]) {
 	/* FindFirstFile() and stat() are buggy with a trailing
-	 * backslash, so change it to a forward slash :-( */
+	 * slashes, except for the root directory of a drive */
 	case '\\':
-	    if (l >= sizeof(buffer)) {
+        case '/':
+	    if (l > sizeof(buffer)) {
 		errno = ENAMETOOLONG;
 		return -1;
 	    }
-	    strncpy(buffer, path, l-1);
-	    buffer[l - 1] = '/';
-	    buffer[l] = '\0';
-	    path = buffer;
+            --l;
+            strncpy(buffer, path, l);
+            /* remove additional trailing slashes */
+            while (l > 1 && (buffer[l-1] == '/' || buffer[l-1] == '\\'))
+                --l;
+            /* add back slash if we otherwise end up with just a drive letter */
+            if (l == 2 && isALPHA(buffer[0]) && buffer[1] == ':')
+                buffer[l++] = '\\';
+            buffer[l] = '\0';
+            path = buffer;
+            expect_dir = TRUE;
 	    break;
+
 	/* FindFirstFile() is buggy with "x:", so add a dot :-( */
 	case ':':
 	    if (l == 2 && isALPHA(path[0])) {
@@ -1198,17 +1211,20 @@ win32_stat(const char *path, Stat_t *sbuf)
 	}
     }
 
-    /* We *must* open & close the file once; otherwise file attribute changes */
-    /* might not yet have propagated to "other" hard links of the same file.  */
-    /* This also gives us an opportunity to determine the number of links.    */
     path = PerlDir_mapA(path);
     l = strlen(path);
-    handle = CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
-    if (handle != INVALID_HANDLE_VALUE) {
-	BY_HANDLE_FILE_INFORMATION bhi;
-	if (GetFileInformationByHandle(handle, &bhi))
-	    nlink = bhi.nNumberOfLinks;
-	CloseHandle(handle);
+
+    if (!sloppy) {
+        /* We must open & close the file once; otherwise file attribute changes  */
+        /* might not yet have propagated to "other" hard links of the same file. */
+        /* This also gives us an opportunity to determine the number of links.   */
+        HANDLE handle = CreateFileA(path, 0, 0, NULL, OPEN_EXISTING, 0, NULL);
+        if (handle != INVALID_HANDLE_VALUE) {
+            BY_HANDLE_FILE_INFORMATION bhi;
+            if (GetFileInformationByHandle(handle, &bhi))
+                nlink = bhi.nNumberOfLinks;
+            CloseHandle(handle);
+        }
     }
 
     /* path will be mapped correctly above */
@@ -1245,6 +1261,10 @@ win32_stat(const char *path, Stat_t *sbuf)
 		return -1;
 	    }
 	}
+        if (expect_dir && !S_ISDIR(sbuf->st_mode)) {
+            errno = ENOTDIR;
+            return -1;
+        }
 #ifdef __BORLANDC__
 	if (S_ISDIR(sbuf->st_mode))
 	    sbuf->st_mode |= S_IWRITE | S_IEXEC;
@@ -1764,8 +1784,19 @@ win32_async_check(pTHX)
 
     w32_poll_count = 0;
 
-    if (hwnd == INVALID_HANDLE_VALUE)
+    if (hwnd == INVALID_HANDLE_VALUE) {
+        /* Call PeekMessage() to mark all pending messages in the queue as "old".
+         * This is necessary when we are being called by win32_msgwait() to
+         * make sure MsgWaitForMultipleObjects() stops reporting the same waiting
+         * message over and over.  An example how this can happen is when
+         * Perl is calling win32_waitpid() inside a GUI application and the GUI
+         * is generating messages before the process terminated.
+         */
+        PeekMessage(&msg, NULL, 0, 0, PM_NOREMOVE|PM_NOYIELD);
+        if (PL_sig_pending)
+            despatch_signals();
         return 1;
+    }
 
     /* Passing PeekMessage -1 as HWND (2nd arg) only get PostThreadMessage() messages
      * and ignores window messages - should co-exist better with windows apps e.g. Tk
@@ -2789,6 +2820,7 @@ win32_pclose(PerlIO *pf)
 	childpid = 0;
 
     if (!childpid) {
+        UNLOCK_FDPID_MUTEX;
 	errno = EBADF;
         return -1;
     }
@@ -4842,6 +4874,7 @@ Perl_win32_init(int *argcp, char ***argvp)
 void
 Perl_win32_term(void)
 {
+    HINTS_REFCNT_TERM;
     OP_REFCNT_TERM;
     MALLOC_TERM;
 }

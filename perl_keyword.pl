@@ -9,8 +9,8 @@ my @pos = qw(__DATA__ __END__ AUTOLOAD BEGIN CHECK DESTROY default defined
 	    delete do END else eval elsif exists for format foreach given grep
 	    goto glob INIT if last local m my map next no our pos print printf
 	    package prototype q qr qq qw qx redo return require s scalar sort
-	    split study sub tr tie tied use undef until untie unless when while
-	    y);
+	    split state study sub tr tie tied use undef until untie unless when
+	    while y);
 
 my @neg = qw(__FILE__ __LINE__ __PACKAGE__ and abs alarm atan2 accept bless
 	    break bind binmode CORE cmp chr cos chop close chdir chomp chmod
@@ -45,6 +45,8 @@ my %feature_kw = (
 	say     => 'say',
 
 	err	=> 'err',
+
+	state	=> 'state',
 	);
 
 my %pos = map { ($_ => 1) } @pos;
@@ -86,10 +88,9 @@ if(ckWARN_d(WARN_SYNTAX))
 END
   }
   elsif (my $feature = $feature_kw{$k}) {
-    my $feature_len = length($feature);
     $feature =~ s/([\\"])/\\$1/g;
     return <<END;
-return (FEATURE_IS_ENABLED("$feature", $feature_len) ? ${sign}KEY_$k : 0);
+return (FEATURE_IS_ENABLED("$feature") ? ${sign}KEY_$k : 0);
 END
   }
   return <<END;

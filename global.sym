@@ -74,6 +74,7 @@ Perl_sv_catpvf_mg_nocontext
 Perl_sv_setpvf_mg_nocontext
 Perl_fprintf_nocontext
 Perl_printf_nocontext
+Perl_cv_ckproto
 Perl_gv_const_sv
 Perl_cv_const_sv
 Perl_cv_undef
@@ -84,6 +85,7 @@ Perl_filter_read
 Perl_get_op_descs
 Perl_get_op_names
 Perl_get_ppaddr
+Perl_cxinc
 Perl_deb
 Perl_vdeb
 Perl_debprofdump
@@ -140,6 +142,7 @@ Perl_gv_fullname
 Perl_gv_fullname3
 Perl_gv_fullname4
 Perl_gv_init
+Perl_gv_name_set
 Perl_gv_stashpv
 Perl_gv_stashpvn
 Perl_gv_stashsv
@@ -161,6 +164,8 @@ Perl_hv_iternext_flags
 Perl_hv_iterval
 Perl_hv_ksplit
 Perl_hv_magic
+Perl_refcounted_he_fetch
+Perl_refcounted_he_new
 Perl_hv_store
 Perl_hv_store_ent
 Perl_hv_store_flags
@@ -295,6 +300,7 @@ Perl_newRANGE
 Perl_newSLICEOP
 Perl_newSTATEOP
 Perl_newSUB
+Perl_newXS_flags
 Perl_newXS
 Perl_newAV
 Perl_newAVREF
@@ -431,7 +437,6 @@ Perl_save_re_context
 Perl_save_padsv
 Perl_save_sptr
 Perl_save_svref
-Perl_save_threadsv
 Perl_scan_bin
 Perl_scan_hex
 Perl_scan_num
@@ -479,6 +484,7 @@ Perl_getcwd_sv
 Perl_sv_dec
 Perl_sv_dump
 Perl_sv_derived_from
+Perl_sv_does
 Perl_sv_eq
 Perl_sv_free
 Perl_sv_free2
@@ -529,6 +535,7 @@ Perl_sv_unref_flags
 Perl_sv_untaint
 Perl_sv_upgrade
 Perl_sv_usepvn
+Perl_sv_usepvn_flags
 Perl_sv_vcatpvfn
 Perl_sv_vsetpvfn
 Perl_str_to_version
@@ -545,6 +552,7 @@ Perl_unlnk
 Perl_unpack_str
 Perl_unpackstring
 Perl_unsharepvn
+Perl_unshare_hek
 Perl_utf16_to_utf8
 Perl_utf16_to_utf8_reversed
 Perl_utf8_length
@@ -597,6 +605,8 @@ Perl_sv_setsv_mg
 Perl_sv_usepvn_mg
 Perl_get_vtbl
 Perl_pv_display
+Perl_pv_escape
+Perl_pv_pretty
 Perl_dump_indent
 Perl_dump_vindent
 Perl_do_gv_dump
@@ -665,6 +675,7 @@ Perl_sv_copypv
 Perl_my_atof2
 Perl_my_socketpair
 Perl_sv_setsv_cow
+Perl_PerlIO_context_layers
 Perl_PerlIO_close
 Perl_PerlIO_fill
 Perl_PerlIO_fileno
@@ -706,6 +717,11 @@ Perl_stashpv_hvname_match
 Perl_gv_SVadd
 Perl_ckwarn
 Perl_ckwarn_d
+Perl_new_warnings_bitfield
 Perl_my_sprintf
+Perl_my_snprintf
+Perl_my_vsnprintf
 Perl_my_cxt_init
+Perl_my_strlcat
+Perl_my_strlcpy
 # ex: set ro:

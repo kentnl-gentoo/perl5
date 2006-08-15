@@ -5,6 +5,14 @@ BEGIN { @INC = '../../lib';}
 use ExtUtils::MakeMaker;
 use ExtUtils::Constant 0.11 'WriteConstants';
 use Config;
+my $rt_signals;
+if ($Config{sig_name} =~ /\bRTMIN\b/ && $Config{sig_name} =~ /\bRTMAX\b/) {
+    # Yes, it really has them. (Some systems define the C pre-processor
+    # symbols, but they depend on other macros that are only defined during
+    # kernel compilation
+    $rt_signals++;
+}
+
 my @libs;
 if ($^O ne 'MSWin32') {
     @libs = ('LIBS' => ["-lm -lposix -lcposix"]);
@@ -37,7 +45,8 @@ my @names =
       IGNBRK IGNCR IGNPAR INLCR INPCK INT_MAX INT_MIN ISIG ISTRIP IXOFF IXON
       LC_ALL LC_COLLATE LC_CTYPE LC_MESSAGES LC_MONETARY LC_NUMERIC LC_TIME
       LINK_MAX LONG_MAX LONG_MIN L_ctermid L_cuserid L_tmpnam MAX_CANON
-      MAX_INPUT MB_LEN_MAX NAME_MAX NCCS NGROUPS_MAX NOFLSH OPEN_MAX OPOST
+      MAX_INPUT MB_LEN_MAX MSG_CTRUNC MSG_DONTROUTE MSG_EOR MSG_OOB MSG_PEEK 
+      MSG_TRUNC MSG_WAITALL NAME_MAX NCCS NGROUPS_MAX NOFLSH OPEN_MAX OPOST
       PARENB PARMRK PARODD PATH_MAX PIPE_BUF RAND_MAX R_OK SCHAR_MAX
       SCHAR_MIN SEEK_CUR SEEK_END SEEK_SET SHRT_MAX SHRT_MIN SIGABRT SIGALRM
       SIGCHLD SIGCONT SIGFPE SIGHUP SIGILL SIGINT SIGKILL SIGPIPE SIGQUIT
@@ -56,13 +65,11 @@ my @names =
       _SC_VERSION),
    {name=>"CLK_TCK", not_constant=>1},
    {name=>"MB_CUR_MAX", not_constant=>1},
-   {name=>"SIGRTMAX", not_constant=>1},
-   {name=>"SIGRTMIN", not_constant=>1},
    {name=>"EXIT_FAILURE", default=>["IV", "1"]},
    {name=>"EXIT_SUCCESS", default=>["IV", "0"]},
-   {name=>"SIG_DFL", value=>"(IV)SIG_DFL"},
-   {name=>"SIG_ERR", value=>"(IV)SIG_ERR"},
-   {name=>"SIG_IGN", value=>"(IV)SIG_IGN"},
+   {name=>"SIG_DFL", value=>"(IV)SIG_DFL", not_constant=>1},
+   {name=>"SIG_ERR", value=>"(IV)SIG_ERR", not_constant=>1},
+   {name=>"SIG_IGN", value=>"(IV)SIG_IGN", not_constant=>1},
    # L_tmpnam[e] was a typo--retained for compatibility
    {name=>"L_tmpname", value=>"L_tmpnam"},
    {name=>"NULL", value=>"0"},
@@ -104,6 +111,16 @@ push @names, {name=>$_, type=>"IV", default=>["IV", "0"]}
               _POSIX_PATH_MAX _POSIX_PIPE_BUF _POSIX_SSIZE_MAX
               _POSIX_STREAM_MAX _POSIX_TZNAME_MAX _POSIX_VDISABLE _POSIX_VERSION
              ));
+
+if ($rt_signals) {
+    push @names, {name=>"SIGRTMAX", not_constant=>1},
+    {name=>"SIGRTMIN", not_constant=>1},
+} else {
+    # Well, it seems that your vendor has defined them, but not in a way that
+    # would actually compile.
+    push @names, {name=>"SIGRTMAX", macro=>0},
+    {name=>"SIGRTMIN", macro=>0},
+}
 
 WriteConstants(
     PROXYSUBS => 1,

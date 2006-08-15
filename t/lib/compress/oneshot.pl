@@ -4,7 +4,7 @@ use warnings;
 use bytes;
 
 use Test::More ;
-use ZlibTestUtils;
+use CompTestUtils;
 
 BEGIN {
     plan(skip_all => "oneshot needs Perl 5.005 or better - you have Perl $]" )
@@ -16,9 +16,9 @@ BEGIN {
     $extra = 1
         if eval { require Test::NoWarnings ;  import Test::NoWarnings; 1 };
 
-    plan tests => 944 + $extra ;
+    plan tests => 956 + $extra ;
 
-    use_ok('IO::Uncompress::AnyInflate', qw(anyinflate $AnyInflateError)) ;
+    use_ok('IO::Uncompress::AnyUncompress', qw(anyuncompress $AnyUncompressError)) ;
 
 }
 
@@ -34,7 +34,7 @@ sub run
 
 
     foreach my $bit ($CompressClass, $UncompressClass,
-                     'IO::Uncompress::AnyInflate',
+                     'IO::Uncompress::AnyUncompress',
                     )
     {
         my $Error = getErrorRef($bit);
@@ -72,6 +72,22 @@ sub run
             eval { $a = $Func->($in, $out) ;} ;
             like $@, mkErr("^$TopType: input and output filename are identical"),
                 '  Input and Output filename are the same';
+        }
+
+        {
+            my $dir = "tmpdir";
+            my $lex = new LexDir $dir ;
+            mkdir $dir, 0777 ;
+
+            $a = $Func->($dir, \$x) ;
+            is $a, undef, "  $TopType returned undef";
+            like $$Error, "/input file '$dir' is a directory/",
+                '  Input filename is a directory';
+
+            $a = $Func->(\$x, $dir) ;
+            is $a, undef, "  $TopType returned undef";
+            like $$Error, "/output file '$dir' is a directory/",
+                '  Output filename is a directory';
         }
 
         eval { $a = $Func->(\$in, \$in) ;} ;
@@ -136,7 +152,7 @@ sub run
     }
 
     foreach my $bit ($UncompressClass,
-                     'IO::Uncompress::AnyInflate',
+                     'IO::Uncompress::AnyUncompress',
                     )
     {
         my $Error = getErrorRef($bit);
@@ -199,8 +215,8 @@ sub run
 
         #is $result, $data, "  data ok";
 
-        ok ! anyinflate(\$out => \$result, Transparent => 0), "  anyinflate ok";
-        ok $AnyInflateError, "  Got error '$AnyInflateError'" ;
+        ok ! anyuncompress(\$out => \$result, Transparent => 0), "anyuncompress ok";
+        ok $AnyUncompressError, "  Got error '$AnyUncompressError'" ;
     }
 
 
@@ -212,6 +228,10 @@ sub run
         my $TopType = getTopFuncName($bit);
         my $TopTypeInverse = getInverse($bit);
         my $FuncInverse = getTopFuncRef($TopTypeInverse);
+
+        my @opts = ();
+        @opts = (RawInflate => 1)
+            if $CompressClass eq 'IO::Compress::RawInflate';
 
         for my $append ( 1, 0 )
         {
@@ -852,7 +872,7 @@ sub run
     }
 
     foreach my $bit ($UncompressClass,
-                     'IO::Uncompress::AnyInflate',
+                     'IO::Uncompress::AnyUncompress',
                     )
     {
         my $Error = getErrorRef($bit);
@@ -863,11 +883,15 @@ sub run
         my $buffer2 = "ABCDE" ;
         my $keep_orig = $buffer;
 
-        my $comp = compressBuffer($TopType, $buffer) ;
-        my $comp2 = compressBuffer($TopType, $buffer2) ;
+        my $comp = compressBuffer(getTopFuncName($UncompressClass), $buffer) ;
+        my $comp2 = compressBuffer(getTopFuncName($UncompressClass), $buffer2) ;
         my $keep_comp = $comp;
 
         my $incumbent = "incumbent data" ;
+
+        my @opts = ();
+        @opts = (RawInflate => 1)
+            if $bit eq 'IO::Uncompress::AnyUncompress';
 
         for my $append (0, 1)
         {
@@ -879,7 +903,7 @@ sub run
 
                 my $output ;
                 $output = $incumbent if $append ;
-                ok &$Func(\$comp, \$output, Append => $append), '  Uncompressed ok' ;
+                ok &$Func(\$comp, \$output, Append => $append, @opts), '  Uncompressed ok' ;
 
                 is $keep_comp, $comp, "  Input buffer not changed" ;
                 is $output, $expected, "  Uncompressed matches original";
@@ -890,7 +914,7 @@ sub run
 
                 my @output = ('first');
                 #$output = $incumbent if $append ;
-                ok &$Func(\$comp, \@output, Append => $append), '  Uncompressed ok' ;
+                ok &$Func(\$comp, \@output, Append => $append, @opts), '  Uncompressed ok' ;
 
                 is $keep_comp, $comp, "  Input buffer not changed" ;
                 is $output[0], 'first', "  Uncompressed matches original";
@@ -908,7 +932,7 @@ sub run
                 else
                   { ok ! -e $out_file, "  Output file does not exist" }
 
-                ok &$Func(\$comp, $out_file, Append => $append), '  Uncompressed ok' ;
+                ok &$Func(\$comp, $out_file, Append => $append, @opts), '  Uncompressed ok' ;
 
                 ok -e $out_file, "  Created output file";
                 my $content = readFile($out_file) ;
@@ -932,7 +956,7 @@ sub run
                 }
                 isa_ok $of, 'IO::File', '  $of' ;
 
-                ok &$Func(\$comp, $of, Append => $append, AutoClose => 1), '  Uncompressed ok' ;
+                ok &$Func(\$comp, $of, Append => $append, AutoClose => 1, @opts), '  Uncompressed ok' ;
 
                 ok -e $out_file, "  Created output file";
                 my $content = readFile($out_file) ;
@@ -952,7 +976,7 @@ sub run
 
                 writeFile($in_file, $comp);
 
-                ok &$Func($in_file, $out_file, Append => $append), '  Uncompressed ok' ;
+                ok &$Func($in_file, $out_file, Append => $append, @opts), '  Uncompressed ok' ;
 
                 ok -e $out_file, "  Created output file";
                 my $content = readFile($out_file) ;
@@ -978,7 +1002,7 @@ sub run
 
                 writeFile($in_file, $comp);
 
-                ok &$Func($in_file, $out, Append => $append, AutoClose => 1), '  Uncompressed ok' ;
+                ok &$Func($in_file, $out, Append => $append, AutoClose => 1, @opts), '  Uncompressed ok' ;
 
                 ok -e $out_file, "  Created output file";
                 my $content = readFile($out_file) ;
@@ -996,7 +1020,7 @@ sub run
                 my $output ;
                 $output = $incumbent if $append ;
 
-                ok &$Func($in_file, \$output, Append => $append), '  Uncompressed ok' ;
+                ok &$Func($in_file, \$output, Append => $append, @opts), '  Uncompressed ok' ;
 
                 is $keep_comp, $comp, "  Input buffer not changed" ;
                 is $output, $expected, "  Uncompressed matches original";
@@ -1014,7 +1038,7 @@ sub run
                 writeFile($in_file, $comp);
                 my $in = new IO::File "<$in_file" ;
 
-                ok &$Func($in, $out_file, Append => $append), '  Uncompressed ok' ;
+                ok &$Func($in, $out_file, Append => $append, @opts), '  Uncompressed ok' ;
 
                 ok -e $out_file, "  Created output file";
                 my $content = readFile($out_file) ;
@@ -1041,7 +1065,7 @@ sub run
                 writeFile($in_file, $comp);
                 my $in = new IO::File "<$in_file" ;
 
-                ok &$Func($in, $out, Append => $append, AutoClose => 1), '  Uncompressed ok' ;
+                ok &$Func($in, $out, Append => $append, AutoClose => 1, @opts), '  Uncompressed ok' ;
 
                 ok -e $out_file, "  Created output file";
                 my $content = readFile($out_file) ;
@@ -1060,7 +1084,7 @@ sub run
                 my $output ;
                 $output = $incumbent if $append ;
 
-                ok &$Func($in, \$output, Append => $append), '  Uncompressed ok' ;
+                ok &$Func($in, \$output, Append => $append, @opts), '  Uncompressed ok' ;
 
                 is $keep_comp, $comp, "  Input buffer not changed" ;
                 is $output, $expected, "  Uncompressed matches original";
@@ -1079,7 +1103,7 @@ sub run
                 my $output ;
                 $output = $incumbent if $append ;
 
-                ok &$Func('-', \$output, Append => $append), '  Uncompressed ok' 
+                ok &$Func('-', \$output, Append => $append, @opts), '  Uncompressed ok' 
                     or diag $$Error ;
 
                    open(STDIN, "<&SAVEIN");
@@ -1101,7 +1125,7 @@ sub run
             writeFile($in_file, $comp . $appended . $comp . $appended) ;
             my $in = new IO::File "<$in_file" ;
 
-            ok &$Func($in, \$out, Transparent => 0, InputLength => length $comp), '  Uncompressed ok' ;
+            ok &$Func($in, \$out, Transparent => 0, InputLength => length $comp, @opts), '  Uncompressed ok' ;
 
             is $out, $expected, "  Uncompressed matches original";
 
@@ -1110,7 +1134,7 @@ sub run
             is $buff, $appended, "  Appended data ok";
 
             $out = '';
-            ok &$Func($in, \$out, Transparent => 0, InputLength => length $comp), '  Uncompressed ok' ;
+            ok &$Func($in, \$out, Transparent => 0, InputLength => length $comp, @opts), '  Uncompressed ok' ;
 
             is $out, $expected, "  Uncompressed matches original";
 
@@ -1135,7 +1159,7 @@ sub run
 
             my $output ;
 
-            ok &$Func($stdin, \$output, Transparent => 0, InputLength => length $comp), '  Uncompressed ok' 
+            ok &$Func($stdin, \$output, Transparent => 0, InputLength => length $comp, @opts), '  Uncompressed ok' 
                 or diag $$Error ;
 
             my $buff ;
@@ -1149,7 +1173,7 @@ sub run
     }
 
     foreach my $bit ($UncompressClass,
-                     'IO::Uncompress::AnyInflate',
+                     'IO::Uncompress::AnyUncompress',
                     )
     {
         # TODO -- Add Append mode tests
@@ -1161,18 +1185,21 @@ sub run
         my $buffer = "abcde" ;
         my $keep_orig = $buffer;
 
-
-        my $null = compressBuffer($TopType, "") ;
-        my $undef = compressBuffer($TopType, undef) ;
-        my $comp = compressBuffer($TopType, $buffer) ;
+        my $null = compressBuffer(getTopFuncName($UncompressClass), "") ;
+        my $undef = compressBuffer(getTopFuncName($UncompressClass), undef) ;
+        my $comp = compressBuffer(getTopFuncName($UncompressClass), $buffer) ;
         my $keep_comp = $comp;
+
+        my @opts = ();
+        @opts = (RawInflate => 1)
+            if $bit eq 'IO::Uncompress::AnyUncompress';
 
         my $incumbent = "incumbent data" ;
 
         my $lex = new LexFile(my $file1, my $file2) ;
 
-        writeFile($file1, compressBuffer($TopType,"data1"));
-        writeFile($file2, compressBuffer($TopType,"data2"));
+        writeFile($file1, compressBuffer(getTopFuncName($UncompressClass),"data1"));
+        writeFile($file2, compressBuffer(getTopFuncName($UncompressClass),"data2"));
 
         my $of = new IO::File "<$file1" ;
         ok $of, "  Created output filehandle" ;
@@ -1188,7 +1215,7 @@ sub run
             title "$TopType - From ArrayRef to Buffer" ;
 
             my $output  ;
-            ok &$Func(\@input, \$output, AutoClose => 0), '  UnCompressed ok' ;
+            ok &$Func(\@input, \$output, AutoClose => 0, @opts), '  UnCompressed ok' ;
 
             is $output, join('', @expected)
         }
@@ -1199,7 +1226,7 @@ sub run
             my $lex = new LexFile my $output;
             $of->open("<$file1") ;
 
-            ok &$Func(\@input, $output, AutoClose => 0), '  UnCompressed ok' ;
+            ok &$Func(\@input, $output, AutoClose => 0, @opts), '  UnCompressed ok' ;
 
             is readFile($output), join('', @expected)
         }
@@ -1211,7 +1238,7 @@ sub run
             my $fh = new IO::File ">$output" ;
             $of->open("<$file1") ;
 
-            ok &$Func(\@input, $fh, AutoClose => 0), '  UnCompressed ok' ;
+            ok &$Func(\@input, $fh, AutoClose => 0, @opts), '  UnCompressed ok' ;
             $fh->close;
 
             is readFile($output), join('', @expected)
@@ -1222,7 +1249,7 @@ sub run
 
             my @output = (\'first') ;
             $of->open("<$file1") ;
-            ok &$Func(\@input, \@output, AutoClose => 0), '  UnCompressed ok' ;
+            ok &$Func(\@input, \@output, AutoClose => 0, @opts), '  UnCompressed ok' ;
 
             is_deeply \@input, \@keep, "  Input array not changed" ;
             is_deeply [map { defined $$_ ? $$_ : "" } @output], 
@@ -1233,7 +1260,7 @@ sub run
     }
 
     foreach my $bit ($UncompressClass,
-                     'IO::Uncompress::AnyInflate',
+                     'IO::Uncompress::AnyUncompress',
                     )
     {
         # TODO -- Add Append mode tests
@@ -1249,11 +1276,15 @@ sub run
         mkdir $tmpDir1, 0777;
         mkdir $tmpDir2, 0777;
 
+        my @opts = ();
+        @opts = (RawInflate => 1)
+            if $bit eq 'IO::Uncompress::AnyUncompress';
+
         ok   -d $tmpDir1, "  Temp Directory $tmpDir1 exists";
         #ok ! -d $tmpDir2, "  Temp Directory $tmpDir2 does not exist";
 
         my @files = map { "$tmpDir1/$_.tmp" } qw( a1 a2 a3) ;
-        foreach (@files) { writeFile($_, compressBuffer($TopType, "abc $_")) }
+        foreach (@files) { writeFile($_, compressBuffer(getTopFuncName($UncompressClass), "abc $_")) }
 
         my @expected = map { "abc $_" } @files ;
         my @outFiles = map { s/$tmpDir1/$tmpDir2/; $_ } @files ;
@@ -1261,7 +1292,7 @@ sub run
         {
             title "$TopType - From FileGlob to FileGlob" ;
 
-            ok &$Func("<$tmpDir1/a*.tmp>" => "<$tmpDir2/a#1.tmp>"), '  UnCompressed ok' 
+            ok &$Func("<$tmpDir1/a*.tmp>" => "<$tmpDir2/a#1.tmp>", @opts), '  UnCompressed ok' 
                 or diag $$Error ;
 
             my @copy = @expected;
@@ -1277,7 +1308,7 @@ sub run
             title "$TopType - From FileGlob to Arrayref" ;
 
             my @output = (\'first');
-            ok &$Func("<$tmpDir1/a*.tmp>" => \@output), '  UnCompressed ok' 
+            ok &$Func("<$tmpDir1/a*.tmp>" => \@output, @opts), '  UnCompressed ok' 
                 or diag $$Error ;
 
             my @copy = ('first', @expected);
@@ -1293,7 +1324,7 @@ sub run
             title "$TopType - From FileGlob to Buffer" ;
 
             my $output ;
-            ok &$Func("<$tmpDir1/a*.tmp>" => \$output), '  UnCompressed ok' 
+            ok &$Func("<$tmpDir1/a*.tmp>" => \$output, @opts), '  UnCompressed ok' 
                 or diag $$Error ;
 
             is $output, join('', @expected), "  got expected uncompressed data";
@@ -1304,7 +1335,7 @@ sub run
 
             my $lex = new LexFile my $output ;
             ok ! -e $output, "  $output does not exist" ;
-            ok &$Func("<$tmpDir1/a*.tmp>" => $output), '  UnCompressed ok' 
+            ok &$Func("<$tmpDir1/a*.tmp>" => $output, @opts), '  UnCompressed ok' 
                 or diag $$Error ;
 
             ok -e $output, "  $output does exist" ;
@@ -1317,7 +1348,7 @@ sub run
             my $output = 'abc' ;
             my $lex = new LexFile $output ;
             my $fh = new IO::File ">$output" ;
-            ok &$Func("<$tmpDir1/a*.tmp>" => $fh, AutoClose => 1), '  UnCompressed ok' 
+            ok &$Func("<$tmpDir1/a*.tmp>" => $fh, AutoClose => 1, @opts), '  UnCompressed ok' 
                 or diag $$Error ;
 
             ok -e $output, "  $output does exist" ;

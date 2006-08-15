@@ -42,12 +42,11 @@ S_more_he(pTHX)
     dVAR;
     HE* he;
     HE* heend;
-    Newx(he, PERL_ARENA_SIZE/sizeof(HE), HE);
-    HeNEXT(he) = (HE*) PL_body_arenaroots[HE_SVSLOT];
-    PL_body_arenaroots[HE_SVSLOT] = he;
+
+    he = (HE*) Perl_get_arena(aTHX_ PERL_ARENA_SIZE);
 
     heend = &he[PERL_ARENA_SIZE / sizeof(HE) - 1];
-    PL_body_roots[HE_SVSLOT] = ++he;
+    PL_body_roots[HE_SVSLOT] = he;
     while (he < heend) {
 	HeNEXT(he) = (HE*)(he + 1);
 	he++;
@@ -72,7 +71,8 @@ S_new_he(pTHX)
     LOCK_SV_MUTEX;
     if (!*root)
 	S_more_he(aTHX);
-    he = *root;
+    he = (HE*) *root;
+    assert(he);
     *root = HeNEXT(he);
     UNLOCK_SV_MUTEX;
     return he;
@@ -92,7 +92,7 @@ S_new_he(pTHX)
 #endif
 
 STATIC HEK *
-S_save_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
+S_save_hek_flags(const char *str, I32 len, U32 hash, int flags)
 {
     const int flags_masked = flags & HVhek_MASK;
     char *k;
@@ -104,7 +104,7 @@ S_save_hek_flags(pTHX_ const char *str, I32 len, U32 hash, int flags)
     HEK_KEY(hek)[len] = 0;
     HEK_LEN(hek) = len;
     HEK_HASH(hek) = hash;
-    HEK_FLAGS(hek) = (unsigned char)flags_masked;
+    HEK_FLAGS(hek) = (unsigned char)flags_masked | HVhek_UNSHARED;
 
     if (flags & HVhek_FREEKEY)
 	Safefree(str);
@@ -125,7 +125,7 @@ Perl_free_tied_hv_pool(pTHX)
 	he = HeNEXT(he);
 	del_HE(ohe);
     }
-    PL_hv_fetch_ent_mh = Nullhe;
+    PL_hv_fetch_ent_mh = NULL;
 }
 
 #if defined(USE_ITHREADS)
@@ -155,7 +155,7 @@ Perl_he_dup(pTHX_ const HE *e, bool shared, CLONE_PARAMS* param)
     HE *ret;
 
     if (!e)
-	return Nullhe;
+	return NULL;
     /* look for it in the table first */
     ret = (HE*)ptr_table_fetch(PL_ptr_table, e);
     if (ret)
@@ -372,7 +372,7 @@ Perl_hv_fetch(pTHX_ HV *hv, const char *key, I32 klen_i32, I32 lval)
     }
     hek = hv_fetch_common (hv, NULL, key, klen, flags,
 			   lval ? (HV_FETCH_JUST_SV | HV_FETCH_LVALUE) : HV_FETCH_JUST_SV,
-			   Nullsv, 0);
+			   NULL, 0);
     return hek ? &HeVAL(hek) : NULL;
 }
 
@@ -417,7 +417,7 @@ HE *
 Perl_hv_fetch_ent(pTHX_ HV *hv, SV *keysv, I32 lval, register U32 hash)
 {
     return hv_fetch_common(hv, keysv, NULL, 0, 0, 
-			   (lval ? HV_FETCH_LVALUE : 0), Nullsv, hash);
+			   (lval ? HV_FETCH_LVALUE : 0), NULL, hash);
 }
 
 STATIC HE *
@@ -436,6 +436,8 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	return NULL;
 
     if (keysv) {
+	if (SvSMAGICAL(hv) && SvGMAGICAL(hv))
+	    keysv = hv_magic_uvar_xkey(hv, keysv, action);
 	if (flags & HVhek_FREEKEY)
 	    Safefree(key);
 	key = SvPV_const(keysv, klen);
@@ -474,7 +476,7 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		    Newx(k, HEK_BASESIZE + sizeof(SV*), char);
 		    HeKEY_hek(entry) = (HEK*)k;
 		}
-		HeNEXT(entry) = Nullhe;
+		HeNEXT(entry) = NULL;
 		HeSVKEY_set(entry, keysv);
 		HeVAL(entry) = sv;
 		sv_upgrade(sv, SVt_PVLV);
@@ -498,10 +500,10 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 			const char * const nkey = strupr(savepvn(key,klen));
 			/* Note that this fetch is for nkey (the uppercased
 			   key) whereas the store is for key (the original)  */
-			entry = hv_fetch_common(hv, Nullsv, nkey, klen,
+			entry = hv_fetch_common(hv, NULL, nkey, klen,
 						HVhek_FREEKEY, /* free nkey */
 						0 /* non-LVAL fetch */,
-						Nullsv /* no value */,
+						NULL /* no value */,
 						0 /* compute hash */);
 			if (!entry && (action & HV_FETCH_LVALUE)) {
 			    /* This call will free key if necessary.
@@ -583,10 +585,10 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		}
 
 		TAINT_IF(save_taint);
-		if (!HvARRAY(hv) && !needs_store) {
+		if (!needs_store) {
 		    if (flags & HVhek_FREEKEY)
 			Safefree(key);
-		    return Nullhe;
+		    return NULL;
 		}
 #ifdef ENV_IS_CASELESS
 		else if (mg_find((SV*)hv, PERL_MAGIC_env)) {
@@ -637,7 +639,7 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     }
 
     if (is_utf8) {
-	char * const keysave = (char * const)key;
+	char * const keysave = (char *)key;
 	key = (char*)bytes_from_utf8((U8*)key, &klen, &is_utf8);
         if (is_utf8)
 	    flags |= HVhek_UTF8;
@@ -669,7 +671,7 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     masked_flags = (flags & HVhek_MASK);
 
 #ifdef DYNAMIC_ENV_FETCH
-    if (!HvARRAY(hv)) entry = Null(HE*);
+    if (!HvARRAY(hv)) entry = NULL;
     else
 #endif
     {
@@ -831,7 +833,7 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     {
 	const HE *counter = HeNEXT(entry);
 
-	xhv->xhv_keys++; /* HvKEYS(hv)++ */
+	xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
 	if (!counter) {				/* initial entry? */
 	    xhv->xhv_fill++; /* HvFILL(hv)++ */
 	} else if (xhv->xhv_keys > (IV)xhv->xhv_max) {
@@ -858,7 +860,7 @@ S_hv_fetch_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 }
 
 STATIC void
-S_hv_magic_check(pTHX_ HV *hv, bool *needs_copy, bool *needs_store)
+S_hv_magic_check(HV *hv, bool *needs_copy, bool *needs_store)
 {
     const MAGIC *mg = SvMAGIC(hv);
     *needs_copy = FALSE;
@@ -962,9 +964,11 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     int masked_flags;
 
     if (!hv)
-	return Nullsv;
+	return NULL;
 
     if (keysv) {
+	if (SvSMAGICAL(hv) && SvGMAGICAL(hv))
+	    keysv = hv_magic_uvar_xkey(hv, keysv, -1);
 	if (k_flags & HVhek_FREEKEY)
 	    Safefree(key);
 	key = SvPV_const(keysv, klen);
@@ -983,7 +987,7 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	    SV *sv;
 	    entry = hv_fetch_common(hv, keysv, key, klen,
 				    k_flags & ~HVhek_FREEKEY, HV_FETCH_LVALUE,
-				    Nullsv, hash);
+				    NULL, hash);
 	    sv = entry ? HeVAL(entry) : NULL;
 	    if (sv) {
 		if (SvMAGICAL(sv)) {
@@ -995,7 +999,7 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 			sv_unmagic(sv, PERL_MAGIC_tiedelem);
 			return sv;
 		    }		
-		    return Nullsv;		/* element cannot be deleted */
+		    return NULL;		/* element cannot be deleted */
 		}
 #ifdef ENV_IS_CASELESS
 		else if (mg_find((SV*)hv, PERL_MAGIC_env)) {
@@ -1015,7 +1019,7 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
     }
     xhv = (XPVHV*)SvANY(hv);
     if (!HvARRAY(hv))
-	return Nullsv;
+	return NULL;
 
     if (is_utf8) {
 	const char * const keysave = key;
@@ -1074,7 +1078,7 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	    return NULL;
 	}
 	if (SvREADONLY(hv) && HeVAL(entry) && SvREADONLY(HeVAL(entry))) {
-	    S_hv_notallowed(aTHX_ k_flags, key, klen,
+	    hv_notallowed(k_flags, key, klen,
 			    "Attempt to delete readonly key '%"SVf"' from"
 			    " a restricted hash");
 	}
@@ -1082,7 +1086,7 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
             Safefree(key);
 
 	if (d_flags & G_DISCARD)
-	    sv = Nullsv;
+	    sv = NULL;
 	else {
 	    sv = sv_2mortal(HeVAL(entry));
 	    HeVAL(entry) = &PL_sv_placeholder;
@@ -1109,21 +1113,21 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		HvLAZYDEL_on(hv);
 	    else
 		hv_free_ent(hv, entry);
-	    xhv->xhv_keys--; /* HvKEYS(hv)-- */
+	    xhv->xhv_keys--; /* HvTOTALKEYS(hv)-- */
 	    if (xhv->xhv_keys == 0)
 	        HvHASKFLAGS_off(hv);
 	}
 	return sv;
     }
     if (SvREADONLY(hv)) {
-        S_hv_notallowed(aTHX_ k_flags, key, klen,
+	hv_notallowed(k_flags, key, klen,
 			"Attempt to delete disallowed key '%"SVf"' from"
 			" a restricted hash");
     }
 
     if (k_flags & HVhek_FREEKEY)
 	Safefree(key);
-    return Nullsv;
+    return NULL;
 }
 
 STATIC void
@@ -1492,6 +1496,39 @@ Perl_newHVhv(pTHX_ HV *ohv)
     return hv;
 }
 
+/* A rather specialised version of newHVhv for copying %^H, ensuring all the
+   magic stays on it.  */
+HV *
+Perl_hv_copy_hints_hv(pTHX_ HV *const ohv)
+{
+    HV * const hv = newHV();
+    STRLEN hv_fill;
+
+    if (ohv && (hv_fill = HvFILL(ohv))) {
+	STRLEN hv_max = HvMAX(ohv);
+	HE *entry;
+	const I32 riter = HvRITER_get(ohv);
+	HE * const eiter = HvEITER_get(ohv);
+
+	while (hv_max && hv_max + 1 >= hv_fill * 2)
+	    hv_max = hv_max / 2;
+	HvMAX(hv) = hv_max;
+
+	hv_iterinit(ohv);
+	while ((entry = hv_iternext_flags(ohv, 0))) {
+	    SV *const sv = newSVsv(HeVAL(entry));
+	    sv_magic(sv, NULL, PERL_MAGIC_hintselem,
+		     (char *)newSVhek (HeKEY_hek(entry)), HEf_SVKEY);
+	    hv_store_flags(hv, HeKEY(entry), HeKLEN(entry),
+			   sv, HeHASH(entry), HeKFLAGS(entry));
+	}
+	HvRITER_set(ohv, riter);
+	HvEITER_set(ohv, eiter);
+    }
+    hv_magic(hv, NULL, PERL_MAGIC_hints);
+    return hv;
+}
+
 void
 Perl_hv_free_ent(pTHX_ HV *hv, register HE *entry)
 {
@@ -1560,8 +1597,8 @@ Perl_hv_clear(pTHX_ HV *hv)
 		    if (HeVAL(entry) && SvREADONLY(HeVAL(entry))) {
 			SV* const keysv = hv_iterkeysv(entry);
 			Perl_croak(aTHX_
-	"Attempt to delete readonly key '%"SVf"' from a restricted hash",
-				   keysv);
+				   "Attempt to delete readonly key '%"SVf"' from a restricted hash",
+				   (void*)keysv);
 		    }
 		    SvREFCNT_dec(HeVAL(entry));
 		    HeVAL(entry) = &PL_sv_placeholder;
@@ -1575,8 +1612,7 @@ Perl_hv_clear(pTHX_ HV *hv)
     hfreeentries(hv);
     HvPLACEHOLDERS_set(hv, 0);
     if (HvARRAY(hv))
-	(void)memzero(HvARRAY(hv),
-		      (xhv->xhv_max+1 /* HvMAX(hv)+1 */) * sizeof(HE*));
+	Zero(HvARRAY(hv), xhv->xhv_max+1 /* HvMAX(hv)+1 */, HE*);
 
     if (SvRMAGICAL(hv))
 	mg_clear((SV*)hv);
@@ -1607,7 +1643,16 @@ void
 Perl_hv_clear_placeholders(pTHX_ HV *hv)
 {
     dVAR;
-    I32 items = (I32)HvPLACEHOLDERS_get(hv);
+    const U32 items = (U32)HvPLACEHOLDERS_get(hv);
+
+    if (items)
+	clear_placeholders(hv, items);
+}
+
+static void
+S_clear_placeholders(pTHX_ HV *hv, U32 items)
+{
+    dVAR;
     I32 i;
 
     if (items == 0)
@@ -1719,7 +1764,7 @@ S_hfreeentries(pTHX_ HV *hv)
 		hv_free_ent(hv, entry);
 	    }
 	    iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
-	    iter->xhv_eiter = Null(HE*); /* HvEITER(hv) = Null(HE*) */
+	    iter->xhv_eiter = NULL;	/* HvEITER(hv) = NULL */
 
 	    /* There are now no allocated pointers in the aux structure.  */
 
@@ -1808,7 +1853,7 @@ Perl_hv_undef(pTHX_ HV *hv)
     if ((name = HvNAME_get(hv))) {
         if(PL_stashcache)
 	    hv_delete(PL_stashcache, name, HvNAMELEN_get(hv), G_DISCARD);
-	hv_name_set(hv, Nullch, 0, 0);
+	hv_name_set(hv, NULL, 0, 0);
     }
     SvFLAGS(hv) &= ~SVf_OOK;
     Safefree(HvARRAY(hv));
@@ -1821,7 +1866,7 @@ Perl_hv_undef(pTHX_ HV *hv)
 }
 
 static struct xpvhv_aux*
-S_hv_auxinit(pTHX_ HV *hv) {
+S_hv_auxinit(HV *hv) {
     struct xpvhv_aux *iter;
     char *array;
 
@@ -1839,7 +1884,7 @@ S_hv_auxinit(pTHX_ HV *hv) {
     iter = HvAUX(hv);
 
     iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
-    iter->xhv_eiter = Null(HE*); /* HvEITER(hv) = Null(HE*) */
+    iter->xhv_eiter = NULL;	/* HvEITER(hv) = NULL */
     iter->xhv_name = 0;
     iter->xhv_backreferences = 0;
     return iter;
@@ -1874,7 +1919,7 @@ Perl_hv_iterinit(pTHX_ HV *hv)
 	    hv_free_ent(hv, entry);
 	}
 	iter->xhv_riter = -1; 	/* HvRITER(hv) = -1 */
-	iter->xhv_eiter = Null(HE*); /* HvEITER(hv) = Null(HE*) */
+	iter->xhv_eiter = NULL; /* HvEITER(hv) = NULL */
     } else {
 	hv_auxinit(hv);
     }
@@ -1944,13 +1989,16 @@ Perl_hv_eiter_set(pTHX_ HV *hv, HE *eiter) {
 }
 
 void
-Perl_hv_name_set(pTHX_ HV *hv, const char *name, I32 len, int flags)
+Perl_hv_name_set(pTHX_ HV *hv, const char *name, U32 len, U32 flags)
 {
     dVAR;
     struct xpvhv_aux *iter;
     U32 hash;
 
     PERL_UNUSED_ARG(flags);
+
+    if (len > I32_MAX)
+	Perl_croak(aTHX_ "panic: hv name too long (%"UVuf")", (UV) len);
 
     if (SvOOK(hv)) {
 	iter = HvAUX(hv);
@@ -1970,6 +2018,7 @@ Perl_hv_name_set(pTHX_ HV *hv, const char *name, I32 len, int flags)
 AV **
 Perl_hv_backreferences_p(pTHX_ HV *hv) {
     struct xpvhv_aux * const iter = SvOOK(hv) ? HvAUX(hv) : hv_auxinit(hv);
+    PERL_UNUSED_CONTEXT;
     return &(iter->xhv_backreferences);
 }
 
@@ -2062,17 +2111,17 @@ Perl_hv_iternext_flags(pTHX_ HV *hv, I32 flags)
 	magic_nextpack((SV*) hv,mg,key);
 	if (SvOK(key)) {
 	    /* force key to stay around until next time */
-	    HeSVKEY_set(entry, SvREFCNT_inc(key));
+	    HeSVKEY_set(entry, SvREFCNT_inc_simple_NN(key));
 	    return entry;		/* beware, hent_val is not set */
 	}
 	if (HeVAL(entry))
 	    SvREFCNT_dec(HeVAL(entry));
 	Safefree(HeKEY_hek(entry));
 	del_HE(entry);
-	iter->xhv_eiter = Null(HE*); /* HvEITER(hv) = Null(HE*) */
-	return Null(HE*);
+	iter->xhv_eiter = NULL; /* HvEITER(hv) = NULL */
+	return NULL;
     }
-#ifdef DYNAMIC_ENV_FETCH  /* set up %ENV for iteration */
+#if defined(DYNAMIC_ENV_FETCH) && !defined(__riscos__)  /* set up %ENV for iteration */
     if (!entry && SvRMAGICAL((SV*)hv) && mg_find((SV*)hv, PERL_MAGIC_env)) {
 	prime_env_iter();
 #ifdef VMS
@@ -2262,7 +2311,6 @@ S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
     HE *entry;
     register HE **oentry;
     HE **first;
-    bool found = 0;
     bool is_utf8 = FALSE;
     int k_flags = 0;
     const char * const save = str;
@@ -2279,8 +2327,8 @@ S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
 	assert (he->shared_he_he.hent_hek == hek);
 
 	LOCK_STRTAB_MUTEX;
-	if (he->shared_he_he.hent_val - 1) {
-	    --he->shared_he_he.hent_val;
+	if (he->shared_he_he.he_valu.hent_refcount - 1) {
+	    --he->shared_he_he.he_valu.hent_refcount;
 	    UNLOCK_STRTAB_MUTEX;
 	    return;
 	}
@@ -2299,9 +2347,9 @@ S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
             k_flags |= HVhek_WASUTF8 | HVhek_FREEKEY;
     }
 
-    /* what follows is the moral equivalent of:
+    /* what follows was the moral equivalent of:
     if ((Svp = hv_fetch(PL_strtab, tmpsv, FALSE, hash))) {
-	if (--*Svp == Nullsv)
+	if (--*Svp == NULL)
 	    hv_delete(PL_strtab, str, len, G_DISCARD, hash);
     } */
     xhv = (XPVHV*)SvANY(PL_strtab);
@@ -2311,10 +2359,8 @@ S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
     if (he) {
 	const HE *const he_he = &(he->shared_he_he);
         for (entry = *oentry; entry; oentry = &HeNEXT(entry), entry = *oentry) {
-            if (entry != he_he)
-                continue;
-            found = 1;
-            break;
+            if (entry == he_he)
+                break;
         }
     } else {
         const int flags_masked = k_flags & HVhek_MASK;
@@ -2327,25 +2373,24 @@ S_unshare_hek_or_pvn(pTHX_ const HEK *hek, const char *str, I32 len, U32 hash)
                 continue;
             if (HeKFLAGS(entry) != flags_masked)
                 continue;
-            found = 1;
             break;
         }
     }
 
-    if (found) {
-        if (--HeVAL(entry) == Nullsv) {
+    if (entry) {
+        if (--entry->he_valu.hent_refcount == 0) {
             *oentry = HeNEXT(entry);
             if (!*first) {
 		/* There are now no entries in our slot.  */
                 xhv->xhv_fill--; /* HvFILL(hv)-- */
 	    }
             Safefree(entry);
-            xhv->xhv_keys--; /* HvKEYS(hv)-- */
+            xhv->xhv_keys--; /* HvTOTALKEYS(hv)-- */
         }
     }
 
     UNLOCK_STRTAB_MUTEX;
-    if (!found && ckWARN_d(WARN_INTERNAL))
+    if (!entry && ckWARN_d(WARN_INTERNAL))
 	Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
                     "Attempt to free non-existent shared string '%s'%s"
                     pTHX__FORMAT,
@@ -2397,7 +2442,7 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, register U32 hash, int flags)
     /* what follows is the moral equivalent of:
 
     if (!(Svp = hv_fetch(PL_strtab, str, len, FALSE)))
-	hv_store(PL_strtab, str, len, Nullsv, hash);
+	hv_store(PL_strtab, str, len, NULL, hash);
 
 	Can't rehash the shared string table, so not sure if it's worth
 	counting the number of entries in the linked list
@@ -2449,11 +2494,11 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, register U32 hash, int flags)
 	/* Still "point" to the HEK, so that other code need not know what
 	   we're up to.  */
 	HeKEY_hek(entry) = hek;
-	HeVAL(entry) = Nullsv;
+	entry->he_valu.hent_refcount = 0;
 	HeNEXT(entry) = next;
 	*head = entry;
 
-	xhv->xhv_keys++; /* HvKEYS(hv)++ */
+	xhv->xhv_keys++; /* HvTOTALKEYS(hv)++ */
 	if (!next) {			/* initial entry? */
 	    xhv->xhv_fill++; /* HvFILL(hv)++ */
 	} else if (xhv->xhv_keys > (IV)xhv->xhv_max /* HvKEYS(hv) > HvMAX(hv) */) {
@@ -2461,13 +2506,31 @@ S_share_hek_flags(pTHX_ const char *str, I32 len, register U32 hash, int flags)
 	}
     }
 
-    ++HeVAL(entry);				/* use value slot as REFCNT */
+    ++entry->he_valu.hent_refcount;
     UNLOCK_STRTAB_MUTEX;
 
     if (flags & HVhek_FREEKEY)
 	Safefree(str);
 
     return HeKEY_hek(entry);
+}
+
+STATIC SV *
+S_hv_magic_uvar_xkey(pTHX_ HV* hv, SV* keysv, int action)
+{
+    MAGIC* mg;
+    if ((mg = mg_find((SV*)hv, PERL_MAGIC_uvar))) {
+	struct ufuncs * const uf = (struct ufuncs *)mg->mg_ptr;
+	if (uf->uf_set == NULL) {
+	    SV* obj = mg->mg_obj;
+	    mg->mg_obj = keysv;         /* pass key */
+	    uf->uf_index = action;      /* pass action */
+	    magic_getuvar((SV*)hv, mg);
+	    keysv = mg->mg_obj;         /* may have changed */
+	    mg->mg_obj = obj;
+	}
+    }
+    return keysv;
 }
 
 I32 *
@@ -2511,6 +2574,355 @@ Perl_hv_placeholders_set(pTHX_ HV *hv, I32 ph)
     /* else we don't need to add magic to record 0 placeholders.  */
 }
 
+SV *
+S_refcounted_he_value(pTHX_ const struct refcounted_he *he)
+{
+    dVAR;
+    SV *value;
+    switch(he->refcounted_he_data[0] & HVrhek_typemask) {
+    case HVrhek_undef:
+	value = newSV(0);
+	break;
+    case HVrhek_delete:
+	value = &PL_sv_placeholder;
+	break;
+    case HVrhek_IV:
+	value = (he->refcounted_he_data[0] & HVrhek_UV)
+	    ? newSVuv(he->refcounted_he_val.refcounted_he_u_iv)
+	    : newSViv(he->refcounted_he_val.refcounted_he_u_uv);
+	break;
+    case HVrhek_PV:
+	/* Create a string SV that directly points to the bytes in our
+	   structure.  */
+	value = newSV(0);
+	sv_upgrade(value, SVt_PV);
+	SvPV_set(value, (char *) he->refcounted_he_data + 1);
+	SvCUR_set(value, he->refcounted_he_val.refcounted_he_u_len);
+	/* This stops anything trying to free it  */
+	SvLEN_set(value, 0);
+	SvPOK_on(value);
+	SvREADONLY_on(value);
+	if (he->refcounted_he_data[0] & HVrhek_UTF8)
+	    SvUTF8_on(value);
+	break;
+    default:
+	Perl_croak(aTHX_ "panic: refcounted_he_value bad flags %x",
+		   he->refcounted_he_data[0]);
+    }
+    return value;
+}
+
+#ifdef USE_ITHREADS
+/* A big expression to find the key offset */
+#define REF_HE_KEY(chain) \
+	((((chain->refcounted_he_data[0] & HVrhek_typemask) == HVrhek_PV) \
+	    ? chain->refcounted_he_val.refcounted_he_u_len + 1 : 0)	  \
+	 + 1 + chain->refcounted_he_data)
+#endif
+
+/*
+=for apidoc refcounted_he_chain_2hv
+
+Generates an returns a C<HV *> by walking up the tree starting at the passed
+in C<struct refcounted_he *>.
+
+=cut
+*/
+HV *
+Perl_refcounted_he_chain_2hv(pTHX_ const struct refcounted_he *chain)
+{
+    dVAR;
+    HV *hv = newHV();
+    U32 placeholders = 0;
+    /* We could chase the chain once to get an idea of the number of keys,
+       and call ksplit.  But for now we'll make a potentially inefficient
+       hash with only 8 entries in its array.  */
+    const U32 max = HvMAX(hv);
+
+    if (!HvARRAY(hv)) {
+	char *array;
+	Newxz(array, PERL_HV_ARRAY_ALLOC_BYTES(max + 1), char);
+	HvARRAY(hv) = (HE**)array;
+    }
+
+    while (chain) {
+#ifdef USE_ITHREADS
+	U32 hash = chain->refcounted_he_hash;
+#else
+	U32 hash = HEK_HASH(chain->refcounted_he_hek);
+#endif
+	HE **oentry = &((HvARRAY(hv))[hash & max]);
+	HE *entry = *oentry;
+	SV *value;
+
+	for (; entry; entry = HeNEXT(entry)) {
+	    if (HeHASH(entry) == hash) {
+		/* We might have a duplicate key here.  If so, entry is older
+		   than the key we've already put in the hash, so if they are
+		   the same, skip adding entry.  */
+#ifdef USE_ITHREADS
+		const STRLEN klen = HeKLEN(entry);
+		const char *const key = HeKEY(entry);
+		if (klen == chain->refcounted_he_keylen
+		    && (!!HeKUTF8(entry)
+			== !!(chain->refcounted_he_data[0] & HVhek_UTF8))
+		    && memEQ(key, REF_HE_KEY(chain), klen))
+		    goto next_please;
+#else
+		if (HeKEY_hek(entry) == chain->refcounted_he_hek)
+		    goto next_please;
+		if (HeKLEN(entry) == HEK_LEN(chain->refcounted_he_hek)
+		    && HeKUTF8(entry) == HEK_UTF8(chain->refcounted_he_hek)
+		    && memEQ(HeKEY(entry), HEK_KEY(chain->refcounted_he_hek),
+			     HeKLEN(entry)))
+		    goto next_please;
+#endif
+	    }
+	}
+	assert (!entry);
+	entry = new_HE();
+
+#ifdef USE_ITHREADS
+	HeKEY_hek(entry)
+	    = share_hek_flags(REF_HE_KEY(chain),
+			      chain->refcounted_he_keylen,
+			      chain->refcounted_he_hash,
+			      (chain->refcounted_he_data[0]
+			       & (HVhek_UTF8|HVhek_WASUTF8)));
+#else
+	HeKEY_hek(entry) = share_hek_hek(chain->refcounted_he_hek);
+#endif
+	value = refcounted_he_value(chain);
+	if (value == &PL_sv_placeholder)
+	    placeholders++;
+	HeVAL(entry) = value;
+
+	/* Link it into the chain.  */
+	HeNEXT(entry) = *oentry;
+	if (!HeNEXT(entry)) {
+	    /* initial entry.   */
+	    HvFILL(hv)++;
+	}
+	*oentry = entry;
+
+	HvTOTALKEYS(hv)++;
+
+    next_please:
+	chain = chain->refcounted_he_next;
+    }
+
+    if (placeholders) {
+	clear_placeholders(hv, placeholders);
+	HvTOTALKEYS(hv) -= placeholders;
+    }
+
+    /* We could check in the loop to see if we encounter any keys with key
+       flags, but it's probably not worth it, as this per-hash flag is only
+       really meant as an optimisation for things like Storable.  */
+    HvHASKFLAGS_on(hv);
+    DEBUG_A(Perl_hv_assert(aTHX_ hv));
+
+    return hv;
+}
+
+SV *
+Perl_refcounted_he_fetch(pTHX_ const struct refcounted_he *chain, SV *keysv,
+			 const char *key, STRLEN klen, int flags, U32 hash)
+{
+    dVAR;
+    /* Just to be awkward, if you're using this interface the UTF-8-or-not-ness
+       of your key has to exactly match that which is stored.  */
+    SV *value = &PL_sv_placeholder;
+    bool is_utf8;
+
+    if (keysv) {
+	if (flags & HVhek_FREEKEY)
+	    Safefree(key);
+	key = SvPV_const(keysv, klen);
+	flags = 0;
+	is_utf8 = (SvUTF8(keysv) != 0);
+    } else {
+	is_utf8 = ((flags & HVhek_UTF8) ? TRUE : FALSE);
+    }
+
+    if (!hash) {
+	if (keysv && (SvIsCOW_shared_hash(keysv))) {
+            hash = SvSHARED_HASH(keysv);
+        } else {
+            PERL_HASH(hash, key, klen);
+        }
+    }
+
+    for (; chain; chain = chain->refcounted_he_next) {
+#ifdef USE_ITHREADS
+	if (hash != chain->refcounted_he_hash)
+	    continue;
+	if (klen != chain->refcounted_he_keylen)
+	    continue;
+	if (memNE(REF_HE_KEY(chain),key,klen))
+	    continue;
+	if (!!is_utf8 != !!(chain->refcounted_he_data[0] & HVhek_UTF8))
+	    continue;
+#else
+	if (hash != HEK_HASH(chain->refcounted_he_hek))
+	    continue;
+	if (klen != (STRLEN)HEK_LEN(chain->refcounted_he_hek))
+	    continue;
+	if (memNE(HEK_KEY(chain->refcounted_he_hek),key,klen))
+	    continue;
+	if (!!is_utf8 != !!HEK_UTF8(chain->refcounted_he_hek))
+	    continue;
+#endif
+
+	value = sv_2mortal(refcounted_he_value(chain));
+	break;
+    }
+
+    if (flags & HVhek_FREEKEY)
+	Safefree(key);
+
+    return value;
+}
+
+/*
+=for apidoc refcounted_he_new
+
+Creates a new C<struct refcounted_he>. As S<key> is copied, and value is
+stored in a compact form, all references remain the property of the caller.
+The C<struct refcounted_he> is returned with a reference count of 1.
+
+=cut
+*/
+
+struct refcounted_he *
+Perl_refcounted_he_new(pTHX_ struct refcounted_he *const parent,
+		       SV *const key, SV *const value) {
+    dVAR;
+    struct refcounted_he *he;
+    STRLEN key_len;
+    const char *key_p = SvPV_const(key, key_len);
+    STRLEN value_len = 0;
+    const char *value_p = NULL;
+    char value_type;
+    char flags;
+    STRLEN key_offset;
+    U32 hash;
+    bool is_utf8 = SvUTF8(key) ? TRUE : FALSE;
+
+    if (SvPOK(value)) {
+	value_type = HVrhek_PV;
+    } else if (SvIOK(value)) {
+	value_type = HVrhek_IV;
+    } else if (value == &PL_sv_placeholder) {
+	value_type = HVrhek_delete;
+    } else if (!SvOK(value)) {
+	value_type = HVrhek_undef;
+    } else {
+	value_type = HVrhek_PV;
+    }
+
+    if (value_type == HVrhek_PV) {
+	value_p = SvPV_const(value, value_len);
+	key_offset = value_len + 2;
+    } else {
+	value_len = 0;
+	key_offset = 1;
+    }
+    flags = value_type;
+
+#ifdef USE_ITHREADS
+    he = (struct refcounted_he*)
+	PerlMemShared_malloc(sizeof(struct refcounted_he) - 1
+			     + key_len
+			     + key_offset);
+#else
+    he = (struct refcounted_he*)
+	PerlMemShared_malloc(sizeof(struct refcounted_he) - 1
+			     + key_offset);
+#endif
+
+
+    he->refcounted_he_next = parent;
+
+    if (value_type == HVrhek_PV) {
+	Copy(value_p, he->refcounted_he_data + 1, value_len + 1, char);
+	he->refcounted_he_val.refcounted_he_u_len = value_len;
+	if (SvUTF8(value)) {
+	    flags |= HVrhek_UTF8;
+	}
+    } else if (value_type == HVrhek_IV) {
+	if (SvUOK(value)) {
+	    he->refcounted_he_val.refcounted_he_u_uv = SvUVX(value);
+	    flags |= HVrhek_UV;
+	} else {
+	    he->refcounted_he_val.refcounted_he_u_iv = SvIVX(value);
+	}
+    }
+
+    if (is_utf8) {
+	/* Hash keys are always stored normalised to (yes) ISO-8859-1.
+	   As we're going to be building hash keys from this value in future,
+	   normalise it now.  */
+	key_p = (char*)bytes_from_utf8((const U8*)key_p, &key_len, &is_utf8);
+	flags |= is_utf8 ? HVhek_UTF8 : HVhek_WASUTF8;
+    }
+    PERL_HASH(hash, key_p, key_len);
+
+#ifdef USE_ITHREADS
+    he->refcounted_he_hash = hash;
+    he->refcounted_he_keylen = key_len;
+    Copy(key_p, he->refcounted_he_data + key_offset, key_len, char);
+#else
+    he->refcounted_he_hek = share_hek_flags(key_p, key_len, hash, flags);
+#endif
+
+    if (flags & HVhek_WASUTF8) {
+	/* If it was downgraded from UTF-8, then the pointer returned from
+	   bytes_from_utf8 is an allocated pointer that we must free.  */
+	Safefree(key_p);
+    }
+
+    he->refcounted_he_data[0] = flags;
+    he->refcounted_he_refcnt = 1;
+
+    return he;
+}
+
+/*
+=for apidoc refcounted_he_free
+
+Decrements the reference count of the passed in C<struct refcounted_he *>
+by one. If the reference count reaches zero the structure's memory is freed,
+and C<refcounted_he_free> iterates onto the parent node.
+
+=cut
+*/
+
+void
+Perl_refcounted_he_free(pTHX_ struct refcounted_he *he) {
+    PERL_UNUSED_CONTEXT;
+
+    while (he) {
+	struct refcounted_he *copy;
+	U32 new_count;
+
+	HINTS_REFCNT_LOCK;
+	new_count = --he->refcounted_he_refcnt;
+	HINTS_REFCNT_UNLOCK;
+	
+	if (new_count) {
+	    return;
+	}
+
+#ifndef USE_ITHREADS
+	unshare_hek_or_pvn (he->refcounted_he_hek, 0, 0, 0);
+#endif
+	copy = he;
+	he = he->refcounted_he_next;
+	PerlMemShared_free(copy);
+    }
+}
+
 /*
 =for apidoc hv_assert
 
@@ -2519,67 +2931,70 @@ Check that a hash is in an internally consistent state.
 =cut
 */
 
+#ifdef DEBUGGING
+
 void
 Perl_hv_assert(pTHX_ HV *hv)
 {
-  dVAR;
-  HE* entry;
-  int withflags = 0;
-  int placeholders = 0;
-  int real = 0;
-  int bad = 0;
-  const I32 riter = HvRITER_get(hv);
-  HE *eiter = HvEITER_get(hv);
+    dVAR;
+    HE* entry;
+    int withflags = 0;
+    int placeholders = 0;
+    int real = 0;
+    int bad = 0;
+    const I32 riter = HvRITER_get(hv);
+    HE *eiter = HvEITER_get(hv);
 
-  (void)hv_iterinit(hv);
+    (void)hv_iterinit(hv);
 
-  while ((entry = hv_iternext_flags(hv, HV_ITERNEXT_WANTPLACEHOLDERS))) {
-    /* sanity check the values */
-    if (HeVAL(entry) == &PL_sv_placeholder) {
-      placeholders++;
-    } else {
-      real++;
+    while ((entry = hv_iternext_flags(hv, HV_ITERNEXT_WANTPLACEHOLDERS))) {
+	/* sanity check the values */
+	if (HeVAL(entry) == &PL_sv_placeholder)
+	    placeholders++;
+	else
+	    real++;
+	/* sanity check the keys */
+	if (HeSVKEY(entry)) {
+	    NOOP;   /* Don't know what to check on SV keys.  */
+	} else if (HeKUTF8(entry)) {
+	    withflags++;
+	    if (HeKWASUTF8(entry)) {
+		PerlIO_printf(Perl_debug_log,
+			    "hash key has both WASUFT8 and UTF8: '%.*s'\n",
+			    (int) HeKLEN(entry),  HeKEY(entry));
+		bad = 1;
+	    }
+	} else if (HeKWASUTF8(entry))
+	    withflags++;
     }
-    /* sanity check the keys */
-    if (HeSVKEY(entry)) {
-      /* Don't know what to check on SV keys.  */
-    } else if (HeKUTF8(entry)) {
-      withflags++;
-       if (HeKWASUTF8(entry)) {
-	 PerlIO_printf(Perl_debug_log,
-		       "hash key has both WASUFT8 and UTF8: '%.*s'\n",
-		       (int) HeKLEN(entry),  HeKEY(entry));
-	 bad = 1;
-       }
-    } else if (HeKWASUTF8(entry)) {
-      withflags++;
+    if (!SvTIED_mg((SV*)hv, PERL_MAGIC_tied)) {
+	static const char bad_count[] = "Count %d %s(s), but hash reports %d\n";
+	const int nhashkeys = HvUSEDKEYS(hv);
+	const int nhashplaceholders = HvPLACEHOLDERS_get(hv);
+
+	if (nhashkeys != real) {
+	    PerlIO_printf(Perl_debug_log, bad_count, real, "keys", nhashkeys );
+	    bad = 1;
+	}
+	if (nhashplaceholders != placeholders) {
+	    PerlIO_printf(Perl_debug_log, bad_count, placeholders, "placeholder", nhashplaceholders );
+	    bad = 1;
+	}
     }
-  }
-  if (!SvTIED_mg((SV*)hv, PERL_MAGIC_tied)) {
-    if (HvUSEDKEYS(hv) != real) {
-      PerlIO_printf(Perl_debug_log, "Count %d key(s), but hash reports %d\n",
-		    (int) real, (int) HvUSEDKEYS(hv));
-      bad = 1;
+    if (withflags && ! HvHASKFLAGS(hv)) {
+	PerlIO_printf(Perl_debug_log,
+		    "Hash has HASKFLAGS off but I count %d key(s) with flags\n",
+		    withflags);
+	bad = 1;
     }
-    if (HvPLACEHOLDERS_get(hv) != placeholders) {
-      PerlIO_printf(Perl_debug_log,
-		    "Count %d placeholder(s), but hash reports %d\n",
-		    (int) placeholders, (int) HvPLACEHOLDERS_get(hv));
-      bad = 1;
+    if (bad) {
+	sv_dump((SV *)hv);
     }
-  }
-  if (withflags && ! HvHASKFLAGS(hv)) {
-    PerlIO_printf(Perl_debug_log,
-		  "Hash has HASKFLAGS off but I count %d key(s) with flags\n",
-		  withflags);
-    bad = 1;
-  }
-  if (bad) {
-    sv_dump((SV *)hv);
-  }
-  HvRITER_set(hv, riter);		/* Restore hash iterator state */
-  HvEITER_set(hv, eiter);
+    HvRITER_set(hv, riter);		/* Restore hash iterator state */
+    HvEITER_set(hv, eiter);
 }
+
+#endif
 
 /*
  * Local variables:

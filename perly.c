@@ -89,17 +89,11 @@ do {						\
 	YYFPRINTF Args;				\
 } while (0)
 
-#  define YYDSYMPRINT(Args)			\
-do {						\
-    if (yydebug)				\
-	yysymprint Args;			\
-} while (0)
-
 #  define YYDSYMPRINTF(Title, Token, Value)			\
 do {								\
     if (yydebug) {						\
 	YYFPRINTF (Perl_debug_log, "%s ", Title);		\
-	yysymprint (aTHX_ Perl_debug_log,  Token, Value);	\
+	yysymprint (Perl_debug_log,  Token, Value);	\
 	YYFPRINTF (Perl_debug_log, "\n");			\
     }								\
 } while (0)
@@ -109,7 +103,7 @@ do {								\
 `--------------------------------*/
 
 static void
-yysymprint (pTHX_ PerlIO *yyoutput, int yytype, const YYSTYPE *yyvaluep)
+yysymprint(PerlIO * const yyoutput, int yytype, const YYSTYPE * const yyvaluep)
 {
     if (yytype < YYNTOKENS) {
 	YYFPRINTF (yyoutput, "token %s (", yytname[yytype]);
@@ -146,14 +140,23 @@ yy_stack_print (pTHX_ const short *yyss, const short *yyssp, const YYSTYPE *yyvs
     for (i=0; i < count; i++)
 	PerlIO_printf(Perl_debug_log, " %8d", start+i);
     PerlIO_printf(Perl_debug_log, "\nstate:");
-    for (i=0, yyss += start; i < count; i++, yyss++)
-	PerlIO_printf(Perl_debug_log, " %8d", *yyss);
+    for (i=0; i < count; i++)
+	PerlIO_printf(Perl_debug_log, " %8d", yyss[start+i]);
     PerlIO_printf(Perl_debug_log, "\ntoken:");
-    for (i=0, yyns += start; i < count; i++, yyns++)
-	PerlIO_printf(Perl_debug_log, " %8.8s", *yyns);
+    for (i=0; i < count; i++)
+	PerlIO_printf(Perl_debug_log, " %8.8s", yyns[start+i]);
     PerlIO_printf(Perl_debug_log, "\nvalue:");
-    for (i=0, yyvs += start; i < count; i++, yyvs++)
-	PerlIO_printf(Perl_debug_log, " %8"UVxf, (UV)yyvs->ival);
+    for (i=0; i < count; i++) {
+	if (yy_is_opval[yystos[yyss[start+i]]]) {
+	    PerlIO_printf(Perl_debug_log, " %8.8s",
+		  yyvs[start+i].opval
+		    ? PL_op_name[yyvs[start+i].opval->op_type]
+		    : "NULL"
+	    );
+	}
+	else
+	    PerlIO_printf(Perl_debug_log, " %8"UVxf, (UV)yyvs[start+i].ival);
+    }
     PerlIO_printf(Perl_debug_log, "\n\n");
 }
 
@@ -189,7 +192,6 @@ do {					\
 
 #else /* !DEBUGGING */
 #  define YYDPRINTF(Args)
-#  define YYDSYMPRINT(Args)
 #  define YYDSYMPRINTF(Title, Token, Value)
 #  define YY_STACK_PRINT(yyss, yyssp, yyvs, yyns)
 #  define YY_REDUCE_PRINT(Rule)
@@ -303,6 +305,11 @@ Perl_yyparse (pTHX)
 	  rule.  */
     int yylen;
 
+#ifdef PERL_MAD
+    if (PL_madskills)
+	return madparse();
+#endif
+
     YYDPRINTF ((Perl_debug_log, "Starting parse\n"));
 
     ENTER;			/* force stack free before we return */
@@ -332,8 +339,6 @@ Perl_yyparse (pTHX)
     yyerrstatus = 0;
     yynerrs = 0;
     yychar = YYEMPTY;		/* Cause a token to be read.  */
-
-
 
     YYDPRINTF ((Perl_debug_log, "Entering state %d\n", yystate));
 
@@ -410,7 +415,11 @@ Perl_yyparse (pTHX)
     /* YYCHAR is either YYEMPTY or YYEOF or a valid lookahead symbol.  */
     if (yychar == YYEMPTY) {
 	YYDPRINTF ((Perl_debug_log, "Reading a token: "));
+#ifdef PERL_MAD
+	yychar = PL_madskills ? madlex() : yylex();
+#else
 	yychar = yylex();
+#endif
 #  ifdef EBCDIC
 	if (yychar >= 0 && yychar < 255) {
 	    yychar = NATIVE_TO_ASCII(yychar);
@@ -611,6 +620,10 @@ Perl_yyparse (pTHX)
 	    /* Pop the rest of the stack.  */
 	    while (yyss < yyssp) {
 		YYDSYMPRINTF ("Error: popping", yystos[*yyssp], yyvsp);
+		if (yy_is_opval[yystos[*yyssp]]) {
+		    YYDPRINTF ((Perl_debug_log, "(freeing op)\n"));
+		    op_free(yyvsp->opval);
+		}
 		YYPOPSTACK;
 	    }
 	    YYABORT;
@@ -648,6 +661,10 @@ Perl_yyparse (pTHX)
 	    YYABORT;
 
 	YYDSYMPRINTF ("Error: popping", yystos[*yyssp], yyvsp);
+	if (yy_is_opval[yystos[*yyssp]]) {
+	    YYDPRINTF ((Perl_debug_log, "(freeing op)\n"));
+	    op_free(yyvsp->opval);
+	}
 	yyvsp--;
 #ifdef DEBUGGING
 	yynsp--;

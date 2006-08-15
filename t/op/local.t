@@ -4,7 +4,7 @@ BEGIN {
     chdir 't' if -d 't';
     require './test.pl';
 }
-plan tests => 87;
+plan tests => 114;
 
 my $list_assignment_supported = 1;
 
@@ -341,4 +341,89 @@ is($@, "");
 }
 
 sub f { ok(0 == $[); }
+
+# sub localisation
+{
+	package Other;
+
+	sub f1 { "f1" }
+	sub f2 { "f2" }
+
+	no warnings "redefine";
+	{
+		local *f1 = sub  { "g1" };
+		::ok(f1() eq "g1", "localised sub via glob");
+	}
+	::ok(f1() eq "f1", "localised sub restored");
+	{
+		local $Other::{"f1"} = sub { "h1" };
+		::ok(f1() eq "h1", "localised sub via stash");
+	}
+	::ok(f1() eq "f1", "localised sub restored");
+	{
+		local @Other::{qw/ f1 f2 /} = (sub { "j1" }, sub { "j2" });
+		::ok(f1() eq "j1", "localised sub via stash slice");
+		::ok(f2() eq "j2", "localised sub via stash slice");
+	}
+	::ok(f1() eq "f1", "localised sub restored");
+	::ok(f2() eq "f2", "localised sub restored");
+}
+
+# Localising unicode keys (bug #38815)
+{
+    my %h;
+    $h{"\243"} = "pound";
+    $h{"\302\240"} = "octects";
+    is(scalar keys %h, 2);
+    {
+	my $unicode = chr 256;
+	my $ambigous = "\240" . $unicode;
+	chop $ambigous;
+	local $h{$unicode} = 256;
+	local $h{$ambigous} = 160;
+
+	is(scalar keys %h, 4);
+	is($h{"\243"}, "pound");
+	is($h{$unicode}, 256);
+	is($h{$ambigous}, 160);
+	is($h{"\302\240"}, "octects");
+    }
+    is(scalar keys %h, 2);
+    is($h{"\243"}, "pound");
+    is($h{"\302\240"}, "octects");
+}
+
+# And with slices
+{
+    my %h;
+    $h{"\243"} = "pound";
+    $h{"\302\240"} = "octects";
+    is(scalar keys %h, 2);
+    {
+	my $unicode = chr 256;
+	my $ambigous = "\240" . $unicode;
+	chop $ambigous;
+	local @h{$unicode, $ambigous} = (256, 160);
+
+	is(scalar keys %h, 4);
+	is($h{"\243"}, "pound");
+	is($h{$unicode}, 256);
+	is($h{$ambigous}, 160);
+	is($h{"\302\240"}, "octects");
+    }
+    is(scalar keys %h, 2);
+    is($h{"\243"}, "pound");
+    is($h{"\302\240"}, "octects");
+}
+
+# [perl #39012] localizing @_ element then shifting frees element too # soon
+
+{
+    my $x;
+    my $y = bless [], 'X39012';
+    sub X39012::DESTROY { $x++ }
+    sub { local $_[0]; shift }->($y);
+    ok(!$x,  '[perl #39012]');
+    
+}
 
