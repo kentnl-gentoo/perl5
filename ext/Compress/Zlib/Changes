@@ -1,6 +1,36 @@
 CHANGES
 -------
 
+  2.005 18 June 2007
+
+      * Added info about removing Compress::Zlib version 1, before
+        installing version 2. 
+
+  2.004 3 March 2007
+
+      * rewrote memGzip using IO::Compress::Gzip::gzip
+
+  2.003 2 January 2007
+
+      * Added explicit version checking
+
+  2.002 29 December 2006
+
+      * Documentation updates.
+
+      * Fix append mode with gzopen.
+        rt-cpan.org 24041
+
+      * Allow gzopen to read from and write to a scalar reference.
+
+  2.001 1 November 2006
+
+      * Remove beta status.
+
+  2.000_14 26 October 2006
+
+      * No changes.
+
   2.000_13 20 June 2006
 
       * No changes.

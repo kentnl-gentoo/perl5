@@ -8,7 +8,7 @@ BEGIN {
 require 'test.pl';
 use strict qw(refs subs);
 
-plan(102);
+plan(138);
 
 # Test glob operations.
 
@@ -414,19 +414,82 @@ TODO: {
 	'Accessing via the UTF8 byte sequence gives nothing');
 }
 
-TODO: {
+{
     no strict 'refs';
     $name1 = "\0Chalk";
     $name2 = "\0Cheese";
 
     isnt ($name1, $name2, "They differ");
 
-    is ($$name1, undef, 'Nothing before we start');
+    is ($$name1, undef, 'Nothing before we start (scalars)');
     is ($$name2, undef, 'Nothing before we start');
     $$name1 = "Yummy";
     is ($$name1, "Yummy", 'Accessing via the correct name works');
     is ($$name2, undef,
 	'Accessing via a different NUL-containing name gives nothing');
+    # defined uses a different code path
+    ok (defined $$name1, 'defined via the correct name works');
+    ok (!defined $$name2,
+	'defined via a different NUL-containing name gives nothing');
+
+    is ($name1->[0], undef, 'Nothing before we start (arrays)');
+    is ($name2->[0], undef, 'Nothing before we start');
+    $name1->[0] = "Yummy";
+    is ($name1->[0], "Yummy", 'Accessing via the correct name works');
+    is ($name2->[0], undef,
+	'Accessing via a different NUL-containing name gives nothing');
+    ok (defined $name1->[0], 'defined via the correct name works');
+    ok (!defined$name2->[0],
+	'defined via a different NUL-containing name gives nothing');
+
+    my (undef, $one) = @{$name1}[2,3];
+    my (undef, $two) = @{$name2}[2,3];
+    is ($one, undef, 'Nothing before we start (array slices)');
+    is ($two, undef, 'Nothing before we start');
+    @{$name1}[2,3] = ("Very", "Yummy");
+    (undef, $one) = @{$name1}[2,3];
+    (undef, $two) = @{$name2}[2,3];
+    is ($one, "Yummy", 'Accessing via the correct name works');
+    is ($two, undef,
+	'Accessing via a different NUL-containing name gives nothing');
+    ok (defined $one, 'defined via the correct name works');
+    ok (!defined $two,
+	'defined via a different NUL-containing name gives nothing');
+
+    is ($name1->{PWOF}, undef, 'Nothing before we start (hashes)');
+    is ($name2->{PWOF}, undef, 'Nothing before we start');
+    $name1->{PWOF} = "Yummy";
+    is ($name1->{PWOF}, "Yummy", 'Accessing via the correct name works');
+    is ($name2->{PWOF}, undef,
+	'Accessing via a different NUL-containing name gives nothing');
+    ok (defined $name1->{PWOF}, 'defined via the correct name works');
+    ok (!defined $name2->{PWOF},
+	'defined via a different NUL-containing name gives nothing');
+
+    my (undef, $one) = @{$name1}{'SNIF', 'BEEYOOP'};
+    my (undef, $two) = @{$name2}{'SNIF', 'BEEYOOP'};
+    is ($one, undef, 'Nothing before we start (hash slices)');
+    is ($two, undef, 'Nothing before we start');
+    @{$name1}{'SNIF', 'BEEYOOP'} = ("Very", "Yummy");
+    (undef, $one) = @{$name1}{'SNIF', 'BEEYOOP'};
+    (undef, $two) = @{$name2}{'SNIF', 'BEEYOOP'};
+    is ($one, "Yummy", 'Accessing via the correct name works');
+    is ($two, undef,
+	'Accessing via a different NUL-containing name gives nothing');
+    ok (defined $one, 'defined via the correct name works');
+    ok (!defined $two,
+	'defined via a different NUL-containing name gives nothing');
+
+    $name1 = "Left"; $name2 = "Left\0Right";
+    my $glob2 = *{$name2};
+
+    is ($glob1, undef, "We get different typeglobs. In fact, undef");
+
+    *{$name1} = sub {"One"};
+    *{$name2} = sub {"Two"};
+
+    is (&{$name1}, "One");
+    is (&{$name2}, "Two");
 }
 
 # test derefs after list slice
@@ -448,14 +511,29 @@ is ( (sub {"bar"})[0]->(), "bar", 'code deref from list slice w/ ->' );
 
 # test dereferencing errors
 {
-    eval q/ ${*STDOUT{IO}} /;
-    like($@, qr/Not a SCALAR reference/);
-    eval q/ @{*STDOUT{IO}} /;
-    like($@, qr/Not an ARRAY reference/);
-    eval q/ %{*STDOUT{IO}} /;
-    like($@, qr/Not a HASH reference/);
-    eval q/ &{*STDOUT{IO}} /;
-    like($@, qr/Not a CODE reference/);
+    format STDERR =
+.
+    my $ref;
+    foreach $ref (*STDOUT{IO}, *STDERR{FORMAT}) {
+	eval q/ $$ref /;
+	like($@, qr/Not a SCALAR reference/, "Scalar dereference");
+	eval q/ @$ref /;
+	like($@, qr/Not an ARRAY reference/, "Array dereference");
+	eval q/ %$ref /;
+	like($@, qr/Not a HASH reference/, "Hash dereference");
+	eval q/ &$ref /;
+	like($@, qr/Not a CODE reference/, "Code dereference");
+    }
+
+    $ref = *STDERR{FORMAT};
+    eval q/ *$ref /;
+    like($@, qr/Not a GLOB reference/, "Glob dereference");
+
+    $ref = *STDOUT{IO};
+    eval q/ *$ref /;
+    is($@, '', "Glob dereference of PVIO is acceptable");
+
+    is($ref, *{$ref}{IO}, "IO slot of the temporary glob is set correctly");
 }
 
 # Bit of a hack to make test.pl happy. There are 3 more tests after it leaves.

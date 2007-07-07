@@ -16,7 +16,6 @@ utils/h2xs
 utils/instmodsh
 utils/libnetcfg
 utils/perlbug
-utils/perlcc
 utils/perldoc   # pod = pod/perldoc.pod
 utils/perlivp
 utils/piconv
@@ -24,6 +23,9 @@ utils/pl2pm
 utils/prove
 utils/ptar
 utils/ptardiff
+utils/cpanp-run-perl
+utils/cpanp
+utils/cpan2dist
 utils/shasum
 utils/splain
 utils/xsubpp

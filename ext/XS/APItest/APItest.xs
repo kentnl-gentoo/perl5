@@ -30,7 +30,7 @@ my_cxt_setint_p(pMY_CXT_ int i)
 }
 
 SV*
-my_cxt_getsv_interp()
+my_cxt_getsv_interp(void)
 {
 #ifdef PERL_IMPLICIT_CONTEXT
     dTHX;
@@ -49,7 +49,11 @@ my_cxt_setsv_p(SV* sv _pMY_CXT)
 
 
 /* from exception.c */
-int exception(int);
+int apitest_exception(int);
+
+/* from core_or_not.inc */
+bool sv_setsv_cow_hashkey_core(void);
+bool sv_setsv_cow_hashkey_notcore(void);
 
 /* A routine to test hv_delayfree_ent
    (which itself is tested by testing on hv_free_ent  */
@@ -78,7 +82,7 @@ test_freeent(freeent_function *f) {
        test expect to be able to call del_HE on the HE  */
     if (!PL_body_roots[HE_SVSLOT])
 	croak("PL_he_root is 0");
-    victim = PL_body_roots[HE_SVSLOT];
+    victim = (HE*) PL_body_roots[HE_SVSLOT];
     PL_body_roots[HE_SVSLOT] = HeNEXT(victim);
 #endif
 
@@ -503,7 +507,7 @@ require_pv(pv)
 	require_pv(pv);
 
 int
-exception(throw_e)
+apitest_exception(throw_e)
     int throw_e
     OUTPUT:
         RETVAL
@@ -556,3 +560,34 @@ my_cxt_setsv(sv)
 	SvREFCNT_dec(MY_CXT.sv);
 	my_cxt_setsv_p(sv _aMY_CXT);
 	SvREFCNT_inc(sv);
+
+bool
+sv_setsv_cow_hashkey_core()
+
+bool
+sv_setsv_cow_hashkey_notcore()
+
+void
+BEGIN()
+    CODE:
+	sv_inc(get_sv("XS::APItest::BEGIN_called", GV_ADD|GV_ADDMULTI));
+
+void
+CHECK()
+    CODE:
+	sv_inc(get_sv("XS::APItest::CHECK_called", GV_ADD|GV_ADDMULTI));
+
+void
+UNITCHECK()
+    CODE:
+	sv_inc(get_sv("XS::APItest::UNITCHECK_called", GV_ADD|GV_ADDMULTI));
+
+void
+INIT()
+    CODE:
+	sv_inc(get_sv("XS::APItest::INIT_called", GV_ADD|GV_ADDMULTI));
+
+void
+END()
+    CODE:
+	sv_inc(get_sv("XS::APItest::END_called", GV_ADD|GV_ADDMULTI));

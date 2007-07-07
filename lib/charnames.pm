@@ -2,7 +2,7 @@ package charnames;
 use strict;
 use warnings;
 use File::Spec;
-our $VERSION = '1.05';
+our $VERSION = '1.06';
 
 use bytes ();		# for $bytes::hint_bits
 
@@ -167,7 +167,7 @@ sub charnames
 
     ## we know where it starts, so turn into number -
     ## the ordinal for the char.
-    $ord = hex substr($txt, $hexstart, $off[0] - $hexstart);
+    $ord = CORE::hex substr($txt, $hexstart, $off[0] - $hexstart);
   }
 
   if ($^H & $bytes::hint_bits) {	# "use bytes" in effect?
@@ -270,7 +270,7 @@ sub viacode
 
   # checking the length first is slightly faster
   if (length($hex) > 5 && hex($hex) > 0x10FFFF) {
-    carp sprintf "Unicode characters only allocated up to U+10FFFF (you asked for U+%X)", $hex;
+    carp "Unicode characters only allocated up to U+10FFFF (you asked for U+$hex)";
     return;
   }
 
@@ -294,7 +294,7 @@ sub vianame
 
   my $arg = shift;
 
-  return chr hex $1 if $arg =~ /^U\+([0-9a-fA-F]+)$/;
+  return chr CORE::hex $1 if $arg =~ /^U\+([0-9a-fA-F]+)$/;
 
   return $vianame{$arg} if exists $vianame{$arg};
 
@@ -304,7 +304,7 @@ sub vianame
   if ($[ <= $pos) {
     my $posLF = rindex $txt, "\n", $pos;
     (my $code = substr $txt, $posLF + 1, 6) =~ tr/\t//d;
-    return $vianame{$arg} = hex $code;
+    return $vianame{$arg} = CORE::hex $code;
 
     # If $pos is at the 1st line, $posLF must be $[ - 1 (not found);
     # then $posLF + 1 equals to $[ (at the beginning of $txt).

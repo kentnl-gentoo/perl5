@@ -58,21 +58,30 @@ if (grep { $_ eq 'PERL_CORE=1' } @ARGV) {
         die("No 'C' compiler found to build 'threads'\n");
     }
 
-    push(@conditional_params, 'DEFINE' => '-DHAS_PPPORT_H');
+    push(@conditional_params, 'DEFINE' => '-DHAS_PPPORT_H',
+                              'PREREQ_PM'         => {
+                                    'strict'            => 0,
+                                    'warnings'          => 0,
+                                    'overload'          => 0,
+                                    'Config'            => 0,
+                                    'Carp'              => 0,
+                                    'XSLoader'          => 0,
+
+                                    'ExtUtils::testlib' => 0,
+                                    'Hash::Util'        => 0,
+                                    'IO::File'          => 0,
+                              });
 }
 
 
 # Create Makefile
 WriteMakefile(
     'NAME'              => 'threads',
-    'AUTHOR'            => 'Artur Bergman <sky AT crucially DOT net>',
+    'AUTHOR'            => 'Artur Bergman, Jerry D. Hedden <jdhedden AT cpan DOT org>',
     'VERSION_FROM'      => 'threads.pm',
     'ABSTRACT_FROM'     => 'threads.pm',
     'PM' => {
         'threads.pm'    => '$(INST_LIBDIR)/threads.pm',
-    },
-    'PREREQ_PM'         => {
-        'XSLoader'        => 0,
     },
     'INSTALLDIRS'       => 'perl',
 

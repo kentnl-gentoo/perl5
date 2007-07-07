@@ -1,7 +1,7 @@
 /*    cv.h
  *
- *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999, 2000,
+ *    2001, 2002, 2003, 2004, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -14,6 +14,15 @@ struct xpvcv {
     union {
 	NV	xnv_nv;		/* numeric value, if any */
 	HV *	xgv_stash;
+	struct {
+	    U32	xlow;
+	    U32	xhigh;
+	}	xpad_cop_seq;	/* used by pad.c for cop_sequence */
+	struct {
+	    U32 xbm_previous;	/* how many characters in string before rare? */
+	    U8	xbm_flags;
+	    U8	xbm_rare;	/* rarest character in string */
+	}	xbm_s;		/* fields from PVBM */
     }		xnv_u;
     STRLEN	xpv_cur;	/* length of xp_pv as a C string */
     STRLEN	xpv_len;	/* allocated size */
@@ -115,7 +124,8 @@ Returns the stash of the CV.
 #define CvFILEGV(sv)	(gv_fetchfile(CvFILE(sv)))
 #if defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
 #  define CvDEPTH(sv) (*({const CV *_cv = (CV *)sv; \
-			  assert(SvTYPE(_cv) == SVt_PVCV); \
+			  assert(SvTYPE(_cv) == SVt_PVCV ||	 \
+				 SvTYPE(_cv) == SVt_PVFM);	 \
 			  &((XPVCV*)SvANY(_cv))->xiv_u.xivu_i32; \
 			}))
 #else
@@ -129,7 +139,6 @@ Returns the stash of the CV.
 #define CVf_METHOD	0x0001	/* CV is explicitly marked as a method */
 #define CVf_LOCKED	0x0002	/* CV locks itself or first arg on entry */
 #define CVf_LVALUE	0x0004  /* CV return value can be used as lvalue */
-#define CVf_ASSERTION   0x0008  /* CV called only when asserting */
 
 #define CVf_WEAKOUTSIDE	0x0010  /* CvOUTSIDE isn't ref counted */
 #define CVf_CLONE	0x0020	/* anon CV uses external lexicals */
@@ -143,7 +152,7 @@ Returns the stash of the CV.
 #define CVf_ISXSUB	0x0800	/* CV is an XSUB, not pure perl.  */
 
 /* This symbol for optimised communication between toke.c and op.c: */
-#define CVf_BUILTIN_ATTRS	(CVf_METHOD|CVf_LOCKED|CVf_LVALUE|CVf_ASSERTION)
+#define CVf_BUILTIN_ATTRS	(CVf_METHOD|CVf_LOCKED|CVf_LVALUE)
 
 #define CvCLONE(cv)		(CvFLAGS(cv) & CVf_CLONE)
 #define CvCLONE_on(cv)		(CvFLAGS(cv) |= CVf_CLONE)
@@ -177,15 +186,11 @@ Returns the stash of the CV.
 #define CvLVALUE_on(cv)		(CvFLAGS(cv) |= CVf_LVALUE)
 #define CvLVALUE_off(cv)	(CvFLAGS(cv) &= ~CVf_LVALUE)
 
-#define CvASSERTION(cv)		(CvFLAGS(cv) & CVf_ASSERTION)
-#define CvASSERTION_on(cv)	(CvFLAGS(cv) |= CVf_ASSERTION)
-#define CvASSERTION_off(cv)	(CvFLAGS(cv) &= ~CVf_ASSERTION)
-
 #define CvEVAL(cv)		(CvUNIQUE(cv) && !SvFAKE(cv))
 #define CvEVAL_on(cv)		(CvUNIQUE_on(cv),SvFAKE_off(cv))
 #define CvEVAL_off(cv)		CvUNIQUE_off(cv)
 
-/* BEGIN|CHECK|INIT|END */
+/* BEGIN|CHECK|INIT|UNITCHECK|END */
 #define CvSPECIAL(cv)		(CvUNIQUE(cv) && SvFAKE(cv))
 #define CvSPECIAL_on(cv)	(CvUNIQUE_on(cv),SvFAKE_on(cv))
 #define CvSPECIAL_off(cv)	(CvUNIQUE_off(cv),SvFAKE_off(cv))

@@ -10,7 +10,7 @@ BEGIN {
 use strict;
 use feature "state";
 
-plan tests => 34;
+plan tests => 37;
 
 ok( ! defined state $uninit, q(state vars are undef by default) );
 
@@ -18,32 +18,36 @@ ok( ! defined state $uninit, q(state vars are undef by default) );
 
 sub stateful {
     state $x;
-    state $y = 1;
+    state $y //= 1;
     my $z = 2;
-    return ($x++, $y++, $z++);
+    state ($t) //= 3;
+    return ($x++, $y++, $z++, $t++);
 }
 
-my ($x, $y, $z) = stateful();
+my ($x, $y, $z, $t) = stateful();
 is( $x, 0, 'uninitialized state var' );
 is( $y, 1, 'initialized state var' );
 is( $z, 2, 'lexical' );
+is( $t, 3, 'initialized state var, list syntax' );
 
-($x, $y, $z) = stateful();
+($x, $y, $z, $t) = stateful();
 is( $x, 1, 'incremented state var' );
 is( $y, 2, 'incremented state var' );
 is( $z, 2, 'reinitialized lexical' );
+is( $t, 4, 'incremented state var, list syntax' );
 
-($x, $y, $z) = stateful();
+($x, $y, $z, $t) = stateful();
 is( $x, 2, 'incremented state var' );
 is( $y, 3, 'incremented state var' );
 is( $z, 2, 'reinitialized lexical' );
+is( $t, 5, 'incremented state var, list syntax' );
 
 # in a nested block
 
 sub nesting {
-    state $foo = 10;
+    state $foo //= 10;
     my $t;
-    { state $bar = 12; $t = ++$bar }
+    { state $bar //= 12; $t = ++$bar }
     ++$foo;
     return ($foo, $t);
 }
@@ -79,7 +83,7 @@ is( $f2->(), 2, 'generator 2 once more' );
     sub TIESCALAR {bless {}};
     sub FETCH { ++$fetchcount; 18 };
     tie my $y, "countfetches";
-    sub foo { state $x = $y; $x++ }
+    sub foo { state $x //= $y; $x++ }
     ::is( foo(), 18, "initialisation with tied variable" );
     ::is( foo(), 19, "increments correctly" );
     ::is( foo(), 20, "increments correctly, twice" );
@@ -90,7 +94,7 @@ is( $f2->(), 2, 'generator 2 once more' );
 
 sub gen_cashier {
     my $amount = shift;
-    state $cash_in_store = 0;
+    state $cash_in_store;
     return {
 	add => sub { $cash_in_store += $amount },
 	del => sub { $cash_in_store -= $amount },
@@ -105,8 +109,7 @@ is( gen_cashier()->{bal}->(), 42, '$42 in my drawer' );
 # stateless assignment to a state variable
 
 sub stateless {
-    no warnings 'misc';
-    (state $reinitme, my $foo) = (42, 'bar');
+    state $reinitme = 42;
     ++$reinitme;
 }
 is( stateless(), 43, 'stateless function, first time' );
@@ -139,29 +142,18 @@ is( $xhval, 0, 'uninitialized state hash' );
 $xhval = stateful_hash();
 is( $xhval, 1, 'uninitialized state hash after one iteration' );
 
-# state declaration with a list
+# Recursion
 
-sub statelist {
-    # note that this should be a state assignment, while (state $lager, state $stout) shouldn't
-    state($lager, $stout) = (11, 22);
-    $lager++;
-    $stout++;
-    "$lager/$stout";
+sub noseworth {
+    my $level = shift;
+    state $recursed_state = 123;
+    is($recursed_state, 123, "state kept through recursion ($level)");
+    noseworth($level - 1) if $level;
 }
+noseworth(2);
 
-my $ls = statelist();
-is($ls, "12/23", 'list assignment to state scalars');
-$ls = statelist();
-is($ls, "13/24", 'list assignment to state scalars');
+# Assignment return value
 
-sub statelist2 {
-    state($sherry, $bourbon) = (1 .. 2);
-    $sherry++;
-    $bourbon++;
-    "$sherry/$bourbon";
-}
+sub pugnax { my $x = state $y = 42; $y++; $x; }
 
-$ls = statelist2();
-is($ls, "2/3", 'list assignment to state scalars');
-$ls = statelist2();
-is($ls, "3/4", 'list assignment to state scalars');
+is( pugnax(), 42, 'scalar state assignment return value' );

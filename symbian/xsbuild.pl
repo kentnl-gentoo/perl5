@@ -6,7 +6,8 @@ use Getopt::Long;
 use File::Basename;
 use Cwd;
 
-do "sanity.pl";
+unshift @INC, dirname $0 || '.';
+do "sanity.pl" or die $@;
 
 my $CoreBuild = -d "ext" && -f "perl.h" && -d "symbian" && -f "perl.c";
 
@@ -63,14 +64,13 @@ if ( !defined $SymbianVersion) {
 my ($SYMBIAN_ROOT, $SYMBIAN_VERSION, $SDK_NAME, $SDK_VARIANT, $SDK_VERSION);
 
 if ($CoreBuild) {
-    unshift @INC, "symbian";
-    do "sanity.pl";
-    my %VERSION = %{ do "version.pl" };
+    do "sanity.pl" or die $@;
+    my %VERSION = %{ do "version.pl" or die $@ };
     ($SYMBIAN_ROOT, $SYMBIAN_VERSION, $SDK_NAME, $SDK_VARIANT, $SDK_VERSION) =
-      @{ do "sdk.pl" };
+      @{ do "sdk.pl" or die $@ };
     $VERSION = "$VERSION{REVISION}$VERSION{VERSION}$VERSION{SUBVERSION}";
     $R_V_SV  = "$VERSION{REVISION}.$VERSION{VERSION}.$VERSION{SUBVERSION}";
-    $BUILDROOT    = do "cwd.pl";
+    $BUILDROOT    = do "cwd.pl" or die $@;
     $PerlVersion    = $R_V_SV;
 }
 
@@ -101,17 +101,17 @@ die "$0: Symbian version undefined\n" unless defined $SymbianVersion;
 
 $SymbianVersion =~ s:/:\\:g;
 
-die "$0: Symbian version '$SymbianVersion' not found\n"
-  unless -d "\\Symbian\\$SymbianVersion";
+#die "$0: Symbian version '$SymbianVersion' not found\n"
+#  unless -d "\\Symbian\\$SymbianVersion";
 
 die "$0: Perl version undefined\n" unless defined $PerlVersion;
 
+$PERLSDK = "$SYMBIAN_ROOT\\Perl\\$PerlVersion";
+
 die "$0: Perl version '$PerlVersion' not found\n"
-  if !$CoreBuild && !-d "\\Symbian\\Perl\\$PerlVersion";
+  if !$CoreBuild && !-d $PERLSDK;
 
 print "Configuring with Symbian $SymbianVersion and Perl $PerlVersion...\n";
-
-$PERLSDK = "\\Symbian\\Perl\\$PerlVersion";
 
 $R_V_SV = $PerlVersion;
 
@@ -163,21 +163,9 @@ sub run_PL {
         print "\t(Running $dir\\$PL)\n";
     }
     my $cmd;
-    if ($CoreBuild) {
-        # Problem: the Config.pm we have in $BUILDROOT\\lib carries the
-        # version number of the Perl we are building, while the Perl
-        # we are running might have some other version.  Solution:
-        # temporarily replace the Config.pm with a patched version.
-        my $V = sprintf "%vd", $^V;
-        unlink("$BUILDROOT\\lib\\Config.pm.bak");
-	print "(patching $BUILDROOT\\lib\\Config.pm)\n";
-	system_echo("perl -pi.bak -e \"s:\\Q$R_V_SV:$V:\" $BUILDROOT\\lib\\Config.pm");
-    }
+    $ENV{PERL_CORE} = 1 if $CoreBuild;
     system_echo("perl -I$BUILDROOT\\lib -I$BUILDROOT\\xlib\\symbian -I$BUILDROOT\\t\\lib $PL") == 0
       or warn "$0: $PL failed.\n";
-    if ($CoreBuild) {
-        system_echo("copy $BUILDROOT\\lib\\Config.pm.bak $BUILDROOT\\lib\\Config.pm");
-    }
     if ( defined $file ) { -s $file or die "$0: No $file created.\n" }
 }
 
@@ -268,6 +256,10 @@ sub write_mmp {
     if ($SDK_VARIANT eq 'S80') {
       push @{ $CONF{MACRO} }, '__SERIES80__'
 	unless grep { $_ eq '__SERIES80__' } @{ $CONF{MACRO} };
+    }
+    if ($SDK_VARIANT eq 'S90') {
+      push @{ $CONF{MACRO} }, '__SERIES90__'
+	unless grep { $_ eq '__SERIES90__' } @{ $CONF{MACRO} };
     }
     if ($SDK_VARIANT eq 'UIQ') {
       push @{ $CONF{MACRO} }, '__UIQ__'
@@ -415,11 +407,56 @@ sub update_dir {
     print getcwd(), "]\n";
 }
 
+sub patch_config {
+    # Problem: the Config.pm we have in $BUILDROOT\\lib carries the
+    # version number of the Perl we are building, while the Perl
+    # we are running might have some other version.  Solution:
+    # temporarily replace the Config.pm with a patched version.
+    #
+    # Reverse patch will be done with this special script
+    my $config_restore_script = "$BUILDROOT\\lib\\symbian_config_restore.pl";
+    # make sure the patch script was not left from previous run
+    unlink $config_restore_script;
+    return unless $CoreBuild;
+    my $V = sprintf "%vd", $^V;
+    # create reverse patch script
+    if (open(RSCRIPT, ">$config_restore_script")) {
+        print RSCRIPT <<__EOF__;
+#!perl -pi.bak
+s:\\Q$V:$R_V_SV:
+__EOF__
+        close RSCRIPT;
+    } else {
+        die "$0: Cannot create $config_restore_script: $!";
+    }
+    # patch the config
+    unlink("$BUILDROOT\\lib\\Config.pm.bak");
+    print "(patching $BUILDROOT\\lib\\Config.pm)\n";
+    system_echo("perl -pi.bak -e \"s:\\Q$R_V_SV:$V:\" $BUILDROOT\\lib\\Config.pm");
+}
+
+sub restore_config {
+    my $config_restore_script = "$BUILDROOT\\lib\\symbian_config_restore.pl";
+    # this function should always return True
+    # because it's commonly used in error handling blocks as
+    #   &restore_config and die
+    return 1 unless -f $config_restore_script;
+    unlink("$BUILDROOT\\lib\\Config.pm.bak");
+    print "(restoring $BUILDROOT\\lib\\Config.pm)\n";
+    system_echo("perl -pi.bak $config_restore_script $BUILDROOT\\lib\\Config.pm");
+    unlink "$BUILDROOT\\lib\\Config.pm.bak", $config_restore_script;
+    # above command should always return 2 already,
+    # but i want to be absolutely sure that return value is True
+    return 1;
+}
+
 sub xsconfig {
     my ( $ext, $dir ) = @_;
     print "Configuring for $ext, directory '$dir'...\n";
     my $extu = $CoreBuild ? "$BUILDROOT\\lib\\ExtUtils" : "$PERLSDK\\lib\\ExtUtils";
     update_dir($dir) or die "$0: chdir '$dir': $!\n";
+    &patch_config;
+
     my $build  = dirname($ext);
     my $base   = basename($ext);
     my $basexs = "$base.xs";
@@ -472,14 +509,14 @@ sub xsconfig {
         }
     }
     if ( my @c = glob("*.c *.cpp */*.c */*.cpp") ) {
-	@c = grep { ! m:^zlib-src/: } @c if $ext eq 'ext\Compress\Zlib';
+	map { s:^zlib-src/:: } @c if $ext eq 'ext\Compress\Raw\Zlib';
         for my $c (@c) {
             $c =~ s:/:\\:g;
             $src{$c}++;
         }
     }
     if ( my @h = glob("*.h */*.h") ) {
-        @h = grep { ! m:^zlib-src/: } @h if $ext eq 'ext\Compress\Zlib';
+        map { s:^zlib-src/:: } @h if $ext eq 'ext\Compress\Raw\Zlib';
         for my $h (@h) {
             $h =~ s:/:\\:g;
             $h = dirname($h);
@@ -540,7 +577,7 @@ sub xsconfig {
     }
     elsif ( $dir eq "ext\\Encode" ) {
         system_echo("perl bin\\enc2xs -Q -O -o def_t.c -f def_t.fnm") == 0
-          or die "$0: running enc2xs failed: $!\n";
+          or &restore_config and die "$0: running enc2xs failed: $!\n";
     }
 
     my @lst = sort keys %lst;
@@ -578,7 +615,7 @@ sub xsconfig {
             print "\tUsing $EXTVERSION for version...\n";
             $MM{VERSION} = $MM{XS_VERSION} = $EXTVERSION;
         }
-        die "$0: VERSION or XS_VERSION undefined\n"
+        (&restore_config and die "$0: VERSION or XS_VERSION undefined\n")
           unless defined $MM{VERSION} && defined $MM{XS_VERSION};
         if ( open( BASE_C, ">$basec" ) ) {
             print BASE_C <<__EOF__;
@@ -601,11 +638,13 @@ __EOF__
             && -s $basec
           )
         {
+            &restore_config;
             die "$0: perl xsubpp failed: $!\n";
         }
 
         print "\t_init.c\n";
-        open( _INIT_C, ">_init.c" ) or die "$!: _init.c: $!\n";
+        open( _INIT_C, ">_init.c" )
+            or &restore_config and die "$!: _init.c: $!\n";
         print _INIT_C <<__EOF__;
     #include "EXTERN.h"
     #include "perl.h"
@@ -649,6 +688,7 @@ __EOF__
                             && -s "$subbase.c"
                           )
                         {
+                            &restore_config;
                             die "$0: perl xsubpp failed: $!\n";
                         }
                         update_dir("..");
@@ -667,6 +707,8 @@ __EOF__
         write_mmp( $ext, $base, [ keys %incdir ], @src );
         write_makefile( $base, $build );
     }
+    &restore_config;
+
     my $lstname = $ext;
     $lstname =~ s:^ext\\::;
     $lstname =~ s:\\:-:g;
@@ -685,8 +727,14 @@ __EOF__
 
 sub update_cwd {
     $CWD = getcwd();
-    $CWD =~ s!^[CD]:!!i;
+    $CWD =~ s!^[A-Z]:!!i;
     $CWD =~ s!/!\\!g;
+}
+
+if (grep /^(Compress::Raw::Zlib|Cwd|Data::Dumper|Digest::SHA|Sys::Syslog|Time::HiRes)$/, @ARGV) {
+    &patch_config;
+    system_echo("perl -I$BUILDROOT\\lib -I$PERLSDK\\lib $BUILDROOT\\mkppport");
+    &restore_config;
 }
 
 for my $ext (@ARGV) {
@@ -901,7 +949,7 @@ __EOF__
                       or die "$0: make distclean failed\n";
                 }
             }
-	    if ( $ext eq "ext\\Compress\\Zlib" ) {
+	    if ( $ext eq "ext\\Compress\\Raw\\Zlib" ) {
 		my @bak;
 		find( sub { push @bak, $File::Find::name if /\.bak$/ }, "." );
 		unlink(@bak) if @bak;

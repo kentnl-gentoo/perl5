@@ -18,8 +18,7 @@ use vars qw($VERSION @ISA
 
 use ExtUtils::MakeMaker qw($Verbose neatvalue);
 
-# $VERSION needs to stay numeric to avoid test warnings
-$VERSION = '1.5003';
+$VERSION = '1.54_01';
 
 require ExtUtils::MM_Any;
 @ISA = qw(ExtUtils::MM_Any);
@@ -633,7 +632,7 @@ manifest :
 	$(PERLRUN) "-MExtUtils::Manifest=mkmanifest" -e mkmanifest
 
 veryclean : realclean
-	$(RM_F) *~ *.orig */*~ */*.orig
+	$(RM_F) *~ */*~ *.orig */*.orig *.bak */*.bak *.old */*.old 
 
 MAKE_FRAG
 
@@ -927,7 +926,7 @@ $(INST_DYNAMIC): $(OBJECT) $(MYEXTLIB) $(BOOTSTRAP) $(INST_ARCHAUTODIR)$(DFSEP).
 
     my $libs = '$(LDLOADLIBS)';
 
-    if (($Is_NetBSD || $Is_Interix) && $Config{'useshrplib'}) {
+    if (($Is_NetBSD || $Is_Interix) && $Config{'useshrplib'} eq 'true') {
 	# Use nothing on static perl platforms, and to the flags needed
 	# to link against the shared libperl library on shared perl
 	# platforms.  We peek at lddlflags to see if we need -Wl,-R
@@ -1029,6 +1028,9 @@ WARNING
             print "Executing $abs\n" if ($trace >= 2);
 
             my $version_check = qq{$abs -le "require $ver; print qq{VER_OK}"};
+            $version_check = "$Config{run} $version_check"
+                if defined $Config{run} and length $Config{run};
+
             # To avoid using the unportable 2>&1 to suppress STDERR,
             # we close it before running the command.
             # However, thanks to a thread library bug in many BSDs
@@ -1043,7 +1045,7 @@ WARNING
                 open STDERR, '>&STDERR_COPY' if $stderr_duped;
             }
 
-            if ($val =~ /^VER_OK/) {
+            if ($val =~ /^VER_OK/m) {
                 print "Using PERL=$abs\n" if $trace;
                 return $abs;
             } elsif ($trace >= 2) {
@@ -1064,95 +1066,104 @@ Inserts the sharpbang or equivalent magic number to a set of @files.
 
 =cut
 
-sub fixin { # stolen from the pink Camel book, more or less
-    my($self, @files) = @_;
+sub fixin {    # stolen from the pink Camel book, more or less
+    my ( $self, @files ) = @_;
 
-    my($does_shbang) = $Config{'sharpbang'} =~ /^\s*\#\!/;
+    my ($does_shbang) = $Config{'sharpbang'} =~ /^\s*\#\!/;
     for my $file (@files) {
         my $file_new = "$file.new";
         my $file_bak = "$file.bak";
 
-	local(*FIXIN);
-	local(*FIXOUT);
-	open(FIXIN, $file) or croak "Can't process '$file': $!";
-	local $/ = "\n";
-	chomp(my $line = <FIXIN>);
-	next unless $line =~ s/^\s*\#!\s*//;     # Not a shbang file.
-	# Now figure out the interpreter name.
-	my($cmd,$arg) = split ' ', $line, 2;
-	$cmd =~ s!^.*/!!;
+        local (*FIXIN);
+        local (*FIXOUT);
+        open( FIXIN, $file ) or croak "Can't process '$file': $!";
+        local $/ = "\n";
+        chomp( my $line = <FIXIN> );
+        next unless $line =~ s/^\s*\#!\s*//;    # Not a shbang file.
+        # Now figure out the interpreter name.
+        my ( $cmd, $arg ) = split ' ', $line, 2;
+        $cmd =~ s!^.*/!!;
 
-	# Now look (in reverse) for interpreter in absolute PATH (unless perl).
+        # Now look (in reverse) for interpreter in absolute PATH (unless perl).
         my $interpreter;
-	if ($cmd eq "perl") {
-            if ($Config{startperl} =~ m,^\#!.*/perl,) {
+        if ( $cmd eq "perl" ) {
+            if ( $Config{startperl} =~ m,^\#!.*/perl, ) {
                 $interpreter = $Config{startperl};
                 $interpreter =~ s,^\#!,,;
-            } else {
+            }
+            else {
                 $interpreter = $Config{perlpath};
             }
-	} else {
-	    my(@absdirs) = reverse grep {$self->file_name_is_absolute} $self->path;
-	    $interpreter = '';
-	    my($dir);
-	    foreach $dir (@absdirs) {
-		if ($self->maybe_command($cmd)) {
-		    warn "Ignoring $interpreter in $file\n" if $Verbose && $interpreter;
-		    $interpreter = $self->catfile($dir,$cmd);
-		}
-	    }
-	}
-	# Figure out how to invoke interpreter on this machine.
+        }
+        else {
+            my (@absdirs)
+                = reverse grep { $self->file_name_is_absolute } $self->path;
+            $interpreter = '';
+            my ($dir);
+            foreach $dir (@absdirs) {
+                if ( $self->maybe_command($cmd) ) {
+                    warn "Ignoring $interpreter in $file\n"
+                        if $Verbose && $interpreter;
+                    $interpreter = $self->catfile( $dir, $cmd );
+                }
+            }
+        }
 
-	my($shb) = "";
-	if ($interpreter) {
-	    print STDOUT "Changing sharpbang in $file to $interpreter" if $Verbose;
-	    # this is probably value-free on DOSISH platforms
-	    if ($does_shbang) {
-		$shb .= "$Config{'sharpbang'}$interpreter";
-		$shb .= ' ' . $arg if defined $arg;
-		$shb .= "\n";
-	    }
-	    $shb .= qq{
+        # Figure out how to invoke interpreter on this machine.
+
+        my ($shb) = "";
+        if ($interpreter) {
+            print STDOUT "Changing sharpbang in $file to $interpreter"
+                if $Verbose;
+
+            # this is probably value-free on DOSISH platforms
+            if ($does_shbang) {
+                $shb .= "$Config{'sharpbang'}$interpreter";
+                $shb .= ' ' . $arg if defined $arg;
+                $shb .= "\n";
+            }
+            $shb .= qq{
 eval 'exec $interpreter $arg -S \$0 \${1+"\$\@"}'
     if 0; # not running under some shell
-} unless $Is_Win32; # this won't work on win32, so don't
-	} else {
-	    warn "Can't find $cmd in PATH, $file unchanged"
-		if $Verbose;
-	    next;
-	}
+} unless $Is_Win32;    # this won't work on win32, so don't
+        }
+        else {
+            warn "Can't find $cmd in PATH, $file unchanged"
+                if $Verbose;
+            next;
+        }
 
-	unless ( open(FIXOUT,">$file_new") ) {
-	    warn "Can't create new $file: $!\n";
-	    next;
-	}
-	
-	# Print out the new #! line (or equivalent).
-	local $\;
-	undef $/;
-	print FIXOUT $shb, <FIXIN>;
-	close FIXIN;
-	close FIXOUT;
+        unless ( open( FIXOUT, ">$file_new" ) ) {
+            warn "Can't create new $file: $!\n";
+            next;
+        }
+
+        # Print out the new #! line (or equivalent).
+        local $\;
+        local $/;
+        print FIXOUT $shb, <FIXIN>;
+        close FIXIN;
+        close FIXOUT;
 
         chmod 0666, $file_bak;
         unlink $file_bak;
-	unless ( _rename($file, $file_bak) ) {	
-	    warn "Can't rename $file to $file_bak: $!";
-	    next;
-	}
-	unless ( _rename($file_new, $file) ) {	
-	    warn "Can't rename $file_new to $file: $!";
-	    unless ( _rename($file_bak, $file) ) {
-	        warn "Can't rename $file_bak back to $file either: $!";
-		warn "Leaving $file renamed as $file_bak\n";
-	    }
-	    next;
-	}
-	unlink $file_bak;
-    } continue {
-	close(FIXIN) if fileno(FIXIN);
-	system("$Config{'eunicefix'} $file") if $Config{'eunicefix'} ne ':';;
+        unless ( _rename( $file, $file_bak ) ) {
+            warn "Can't rename $file to $file_bak: $!";
+            next;
+        }
+        unless ( _rename( $file_new, $file ) ) {
+            warn "Can't rename $file_new to $file: $!";
+            unless ( _rename( $file_bak, $file ) ) {
+                warn "Can't rename $file_bak back to $file either: $!";
+                warn "Leaving $file renamed as $file_bak\n";
+            }
+            next;
+        }
+        unlink $file_bak;
+    }
+    continue {
+        close(FIXIN) if fileno(FIXIN);
+        system("$Config{'eunicefix'} $file") if $Config{'eunicefix'} ne ':';
     }
 }
 
@@ -1305,12 +1316,14 @@ sub init_MANPODS {
 
     # Set up names of manual pages to generate from pods
     foreach my $man (qw(MAN1 MAN3)) {
-	unless ($self->{"${man}PODS"}) {
-	    $self->{"${man}PODS"} = {};
-	    unless ($self->{"INSTALL${man}DIR"} =~ /^(none|\s*)$/) {
-		my $init = "init_${man}PODS";
-		$self->$init();
-	    }
+	if ( $self->{"${man}PODS"}
+             or $self->{"INSTALL${man}DIR"} =~ /^(none|\s*)$/
+        ) {
+            $self->{"${man}PODS"} ||= {};
+        }
+        else {
+            my $init_method = "init_${man}PODS";
+            $self->$init_method();
 	}
     }
 }
@@ -1415,8 +1428,6 @@ Initializes PMLIBDIRS and PM from PMLIBDIRS.
 sub init_PM {
     my $self = shift;
 
-    my $pm = $self->{PM};
-
     # Some larger extensions often wish to install a number of *.pm/pl
     # files into the library in various locations.
 
@@ -1468,6 +1479,8 @@ sub init_PM {
 	@{$self->{PMLIBPARENTDIRS}} = ('lib');
     }
 
+    return if $self->{PM} and $self->{ARGS}{PM};
+
     if (@{$self->{PMLIBDIRS}}){
 	print "Searching PMLIBDIRS: @{$self->{PMLIBDIRS}}\n"
 	    if ($Verbose >= 2);
@@ -1497,7 +1510,7 @@ sub init_PM {
 	    $inst = $self->libscan($inst);
 	    print "libscan($path) => '$inst'\n" if ($Verbose >= 2);
 	    return unless $inst;
-	    $pm->{$path} = $inst;
+	    $self->{PM}{$path} = $inst;
 	}, @{$self->{PMLIBDIRS}});
     }
 }
@@ -1572,24 +1585,17 @@ sub init_main {
     my $inc_carp_dir   = dirname($INC{'Carp.pm'});
 
     unless ($self->{PERL_SRC}){
-	my($dir);
-	foreach $dir ($Updir,
-                  $self->catdir($Updir,$Updir),
-                  $self->catdir($Updir,$Updir,$Updir),
-                  $self->catdir($Updir,$Updir,$Updir,$Updir),
-                  $self->catdir($Updir,$Updir,$Updir,$Updir,$Updir))
-        {
-	    if (
-		-f $self->catfile($dir,"config_h.SH")
-		&&
-		-f $self->catfile($dir,"perl.h")
-		&&
-		-f $self->catfile($dir,"lib","Exporter.pm")
-	       ) {
-		$self->{PERL_SRC}=$dir ;
-		last;
-	    }
-	}
+        foreach my $dir_count (1..8) { # 8 is the VMS limit for nesting
+            my $dir = $self->catdir(($Updir) x $dir_count);
+
+            if (-f $self->catfile($dir,"config_h.SH")   &&
+                -f $self->catfile($dir,"perl.h")        &&
+                -f $self->catfile($dir,"lib","Exporter.pm")
+            ) {
+                $self->{PERL_SRC}=$dir ;
+                last;
+            }
+        }
     }
 
     warn "PERL_CORE is set but I can't find your PERL_SRC!\n" if
@@ -2680,10 +2686,16 @@ sub parse_abstract {
 
 =item parse_version
 
-parse a file and return what you think is $VERSION in this file set to.
+    my $version = MM->parse_version($file);
+
+Parse a $file and return what $VERSION is set to by the first assignment.
 It will return the string "undef" if it can't figure out what $VERSION
-is. $VERSION should be for all to see, so our $VERSION or plain $VERSION
-are okay, but my $VERSION is not.
+is. $VERSION should be for all to see, so C<our $VERSION> or plain $VERSION
+are okay, but C<my $VERSION> is not.
+
+parse_version() will try to C<use version> before checking for C<$VERSION> so the following will work.
+
+    $VERSION = qv(1.2.3);
 
 =cut
 
@@ -2703,6 +2715,10 @@ sub parse_version {
 	my $eval = qq{
 	    package ExtUtils::MakeMaker::_version;
 	    no strict;
+	    BEGIN { eval {
+	        require version;
+	        "version"->import;
+	    } }
 
 	    local $1$2;
 	    \$$2=undef; do {
@@ -2834,7 +2850,6 @@ PERL_HDRS = \
 	$(PERL_INC)/regnodes.h		\
 	$(PERL_INC)/scope.h		\
 	$(PERL_INC)/sv.h		\
-	$(PERL_INC)/thrdvar.h		\
 	$(PERL_INC)/thread.h		\
 	$(PERL_INC)/unixish.h		\
 	$(PERL_INC)/util.h
@@ -2976,7 +2991,14 @@ PPD_OUT
 
     }
 
-    $ppd_xml .= sprintf <<'PPD_OUT', $Config{archname};
+    my $archname = $Config{archname};
+    if ($] >= 5.008) {
+        # archname did not change from 5.6 to 5.8, but those versions may
+        # not be not binary compatible so now we append the part of the
+        # version that changes when binary compatibility may change
+        $archname .= "-". substr($Config{version},0,3);
+    }
+    $ppd_xml .= sprintf <<'PPD_OUT', $archname;
         <OS NAME="$(OSNAME)" />
         <ARCHITECTURE NAME="%s" />
 PPD_OUT
@@ -3416,17 +3438,21 @@ TESTDB_SW = -d
 
 testdb :: testdb_\$(LINKTYPE)
 
-test :: \$(TEST_TYPE)
+test :: \$(TEST_TYPE) subdirs-test
+
+subdirs-test ::
+	\$(NOECHO) \$(NOOP)
+
 ");
 
     foreach my $dir (@{ $self->{DIR} }) {
-        my $test = $self->oneliner(sprintf <<'CODE', $dir);
-chdir '%s';  
-system '$(MAKE) test $(PASTHRU)' 
-    if -f '$(FIRST_MAKEFILE)';
-CODE
+        my $test = $self->cd($dir, '$(MAKE) test $(PASTHRU)');
 
-        push(@m, "\t\$(NOECHO) $test\n");
+        push @m, <<END
+subdirs-test ::
+	\$(NOECHO) $test
+
+END
     }
 
     push(@m, "\t\$(NOECHO) \$(ECHO) 'No tests defined for \$(NAME) extension.'\n")

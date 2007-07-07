@@ -5,31 +5,27 @@ use 5.008;
 use strict;
 use warnings;
 
-our $VERSION = '1.38';
+our $VERSION = '1.63';
 my $XS_VERSION = $VERSION;
 $VERSION = eval $VERSION;
 
+# Verify this Perl supports threads
+require Config;
+if (! $Config::Config{useithreads}) {
+    die("This Perl not built to support threads\n");
+}
 
-BEGIN {
-    # Verify this Perl supports threads
-    use Config;
-    if (! $Config{useithreads}) {
-        die("This Perl not built to support threads\n");
-    }
-
-    # Declare that we have been loaded
-    $threads::threads = 1;
-
-    # Complain if 'threads' is loaded after 'threads::shared'
-    if ($threads::shared::threads_shared) {
-        warn <<'_MSG_';
+# Complain if 'threads' is loaded after 'threads::shared'
+if ($threads::shared::threads_shared) {
+    warn <<'_MSG_';
 Warning, threads::shared has already been loaded.  To
 enable shared variables, 'use threads' must be called
 before threads::shared or any module that uses it.
 _MSG_
-   }
 }
 
+# Declare that we have been loaded
+$threads::threads = 1;
 
 # Load the XS code
 require XSLoader;
@@ -47,18 +43,27 @@ sub import
 
     # Handle args
     while (my $sym = shift) {
-        if ($sym =~ /^stack/i) {
-            threads->set_stack_size(shift);
+        if ($sym =~ /^(?:stack|exit)/i) {
+            if (defined(my $arg = shift)) {
+                if ($sym =~ /^stack/i) {
+                    threads->set_stack_size($arg);
+                } else {
+                    $threads::thread_exit_only = $arg =~ /^thread/i;
+                }
+            } else {
+                require Carp;
+                Carp::croak("threads: Missing argument for option: $sym");
+            }
 
-        } elsif ($sym =~ /^exit/i) {
-            my $flag = shift;
-            $threads::thread_exit_only = $flag =~ /^thread/i;
+        } elsif ($sym =~ /^str/i) {
+            import overload ('""' => \&tid);
 
-        } elsif ($sym =~ /all/) {
+        } elsif ($sym =~ /^(?::all|yield)$/) {
             push(@EXPORT, qw(yield));
 
         } else {
-            push(@EXPORT, $sym);
+            require Carp;
+            Carp::croak("threads: Unknown import option: $sym");
         }
     }
 
@@ -89,7 +94,7 @@ sub exit
     # Class method only
     if (ref($class)) {
         require Carp;
-        Carp::croak("Usage: threads->exit(status)");
+        Carp::croak('Usage: threads->exit(status)');
     }
 
     $class->set_thread_exit_only(1);
@@ -129,23 +134,29 @@ threads - Perl interpreter-based threads
 
 =head1 VERSION
 
-This document describes threads version 1.38
+This document describes threads version 1.63
 
 =head1 SYNOPSIS
 
-    use threads ('yield', 'stack_size' => 64*4096, 'exit' => 'threads_only');
+    use threads ('yield',
+                 'stack_size' => 64*4096,
+                 'exit' => 'threads_only',
+                 'stringify');
 
     sub start_thread {
         my @args = @_;
         print('Thread started: ', join(' ', @args), "\n");
     }
-    my $thread = threads->create('start_thread', 'argument');
-    $thread->join();
+    my $thr = threads->create('start_thread', 'argument');
+    $thr->join();
 
     threads->create(sub { print("I am a thread\n"); })->join();
 
-    my $thread3 = async { foreach (@files) { ... } };
-    $thread3->join();
+    my $thr2 = async { foreach (@files) { ... } };
+    $thr2->join();
+    if (my $err = $thr2->error()) {
+        warn("Thread error: $err\n");
+    }
 
     # Invoke thread in list context (implicit) so it can return a list
     my ($thr) = threads->create(sub { return (qw/a b c/); });
@@ -154,16 +165,16 @@ This document describes threads version 1.38
                               sub { return (qw/a b c/); });
     my @results = $thr->join();
 
-    $thread->detach();
+    $thr->detach();
 
     # Get a thread's object
-    $thread = threads->self();
-    $thread = threads->object($tid);
+    $thr = threads->self();
+    $thr = threads->object($tid);
 
     # Get a thread's ID
     $tid = threads->tid();
-    $tid = threads->self->tid();
-    $tid = $thread->tid();
+    $tid = $thr->tid();
+    $tid = "$thr";
 
     # Give other threads a chance to run
     threads->yield();
@@ -220,8 +231,11 @@ for emulating fork() on Windows.
 
 The I<threads> API is loosely based on the old Thread.pm API. It is very
 important to note that variables are not shared between threads, all variables
-are by default thread local.  To use shared variables one must use
-L<threads::shared>.
+are by default thread local.  To use shared variables one must also use
+L<threads::shared>:
+
+    use threads;
+    use threads::shared;
 
 It is also important to note that you must enable threads by doing C<use
 threads> as early as possible in the script itself, and that it is not
@@ -323,6 +337,17 @@ thread in a program being 0, and incrementing by 1 for every thread created.
 
 Class method that allows a thread to obtain its own ID.
 
+=item "$thr"
+
+If you add the C<stringify> import option to your C<use threads> declaration,
+then using a threads object in a string or a string context (e.g., as a hash
+key) will cause its ID to be used as the value:
+
+    use threads qw(stringify);
+
+    my $thr = threads->create(...);
+    print("Thread $thr started...\n");  # Prints out: Thread 1 started...
+
 =item threads->object($tid)
 
 This will return the I<threads> object for the I<active> thread associated
@@ -352,7 +377,7 @@ list of all non-joined, non-detached I<threads> objects.  In a scalar context,
 returns a count of the same.
 
 With a I<true> argument (using C<threads::running>), returns a list of all
-non-detached I<threads> objects that are still running.
+non-joined, non-detached I<threads> objects that are still running.
 
 With a I<false> argument (using C<threads::joinable>), returns a list of all
 non-joined, non-detached I<threads> objects that have finished running (i.e.,
@@ -377,8 +402,14 @@ to the more natural forms:
 
 C<async> creates a thread to execute the block immediately following
 it.  This block is treated as an anonymous subroutine, and so must have a
-semi-colon after the closing brace.  Like C<threads->create()>, C<async>
+semicolon after the closing brace.  Like C<threads-E<gt>create()>, C<async>
 returns a I<threads> object.
+
+=item $thr->error()
+
+Threads are executed in an C<eval> context.  This method will return C<undef>
+if the thread terminates I<normally>.  Otherwise, it returns the value of
+C<$@> associated with the thread's execution status in its C<eval> context.
 
 =item $thr->_handle()
 
@@ -441,7 +472,7 @@ If C<exit()> really is needed, then consider using the following:
     threads->exit() if threads->can('exit');   # Thread friendly
     exit(status);
 
-=item use threads 'exit' => 'thread_only'
+=item use threads 'exit' => 'threads_only'
 
 This globally overrides the default behavior of calling C<exit()> inside a
 thread, and effectively causes such calls to behave the same as
@@ -461,16 +492,15 @@ thread only.
 =item $thr->set_thread_exit_only(boolean)
 
 This can be used to change the I<exit thread only> behavior for a thread after
-it has been created.  With a I<true> argument, C<exit()> will cause the only
-the thread to exit.  With a I<false> argument, C<exit()> will terminate the
+it has been created.  With a I<true> argument, C<exit()> will cause only the
+thread to exit.  With a I<false> argument, C<exit()> will terminate the
 application.
 
 The I<main> thread is unaffected by this call.
 
 =item threads->set_thread_exit_only(boolean)
 
-Class method for use inside a thread to changes its own behavior for
-C<exit()>.
+Class method for use inside a thread to change its own behavior for C<exit()>.
 
 The I<main> thread is unaffected by this call.
 
@@ -486,13 +516,13 @@ thread.
 =item $thr->is_running()
 
 Returns true if a thread is still running (i.e., if its entry point function
-has not yet finished/exited).
+has not yet finished or exited).
 
 =item $thr->is_joinable()
 
 Returns true if the thread has finished running, is not detached and has not
-yet been joined.  In other works, the thread is ready to be joined and will
-not I<block>.
+yet been joined.  In other words, the thread is ready to be joined, and a call
+to C<$thr-E<gt>join()> will not I<block>.
 
 =item $thr->is_detached()
 
@@ -517,7 +547,7 @@ the appropriate type to be returned from C<-E<gt>join()>.
 
 Because thread creation and thread joining may occur in different contexts, it
 may be desirable to state the context explicitly to the thread's entry point
-function.  This may be done by calling C<-E<gt>create()> with a parameter hash
+function.  This may be done by calling C<-E<gt>create()> with a hash reference
 as the first argument:
 
     my $thr = threads->create({'context' => 'list'}, \&foo);
@@ -526,15 +556,17 @@ as the first argument:
 
 In the above, the threads object is returned to the parent thread in scalar
 context, and the thread's entry point function C<foo> will be called in list
-context such that the parent thread can receive a list from the C<-E<gt>join()>
-call.  Similarly, if you need the threads object, but your thread will not be
+(array) context such that the parent thread can receive a list (array) from
+the C<-E<gt>join()> call.  (C<'array'> is synonymous with C<'list'>.)
+
+Similarly, if you need the threads object, but your thread will not be
 returning a value (i.e., I<void> context), you would do the following:
 
     my $thr = threads->create({'context' => 'void'}, \&foo);
     ...
     $thr->join();
 
-The context type may also be used as the I<key> in the parameter hash followed
+The context type may also be used as the I<key> in the hash reference followed
 by a I<true> value:
 
     threads->create({'scalar' => 1}, \&foo);
@@ -563,8 +595,9 @@ L<wantarray()|perlfunc/"wantarray">.
 
 =head2 threads->wantarray()
 
-Class method to return the current thread's context.  This is the same as
-running L<wantarray()|perlfunc/"wantarray"> in the current thread.
+Class method to return the current thread's context.  This returns the same
+value as running L<wantarray()|perlfunc/"wantarray"> inside the current
+thread's entry point function.
 
 =head1 THREAD STACK SIZE
 
@@ -578,9 +611,9 @@ By tuning the stack size to more accurately reflect your application's needs,
 you may significantly reduce your application's memory usage, and increase the
 number of simultaneously running threads.
 
-N.B., on Windows, Address space allocation granularity is 64 KB, therefore,
-setting the stack smaller than that on Win32 Perl will not save any more
-memory.
+Note that on Windows, address space allocation granularity is 64 KB,
+therefore, setting the stack smaller than that on Win32 Perl will not save any
+more memory.
 
 =over
 
@@ -633,8 +666,8 @@ threaded applications.
 
 =item threads->create({'stack_size' => VALUE}, FUNCTION, ARGS)
 
-The stack size an individual threads may also be specified.  This may be done
-by calling C<-E<gt>create()> with a parameter hash as the first argument:
+To specify a particular stack size for any individual thread, call
+C<-E<gt>create()> with a hash reference as the first argument:
 
     my $thr = threads->create({'stack_size' => 32*4096}, \&foo, @args);
 
@@ -711,7 +744,7 @@ and I<resume> capabilities:
         ...
     }
 
-    # Create a semaphore and send it to a thread
+    # Create a semaphore and pass it to a thread
     my $sema = Thread::Semaphore->new();
     my $thr = threads->create('thr_func', $sema);
 
@@ -763,7 +796,8 @@ cause for the failure.
 =item Thread # terminated abnormally: ...
 
 A thread terminated in some manner other than just returning from its entry
-point function.  For example, the thread may have terminated using C<die>.
+point function, or by using C<threads-E<gt>exit()>.  For example, the thread
+may have terminated because of an error, or by using C<die>.
 
 =item Using minimum thread stack size of #
 
@@ -817,9 +851,46 @@ specified signal being used in a C<-E<gt>kill()> call.
 
 =back
 
-=head1 BUGS
+=head1 BUGS AND LIMITATIONS
+
+Before you consider posting a bug report, please consult, and possibly post a
+message to the discussion forum to see if what you've encountered is a known
+problem.
 
 =over
+
+=item Threadsafe modules
+
+See L<perlmod/"Making your module threadsafe"> when creating modules that may
+be used in threaded applications, especially if those modules use non-Perl
+data, or XS code.
+
+=item Using non-threadsafe modules
+
+Unfortunately, you may encounter Perl modules that are not I<threadsafe>.  For
+example, they may crash the Perl interpreter during execution, or may dump
+core on termination.  Depending on the module and the requirements of your
+application, it may be possible to work around such difficulties.
+
+If the module will only be used inside a thread, you can try loading the
+module from inside the thread entry point function using C<require> (and
+C<import> if needed):
+
+    sub thr_func
+    {
+        require Unsafe::Module
+        # import Unsafe::Module ...;
+
+        ....
+    }
+
+If the module is needed inside the I<main> thread, try modifying your
+application so that the module is loaded (again using C<require> and
+C<import>) after any threads are started, and in such a way that no other
+threads are started afterwards.
+
+If the above does not work, or is not adequate for your application, then file
+a bug report on L<http://rt.cpan.org/Public/> against the problematic module.
 
 =item Parent-child threads
 
@@ -845,7 +916,7 @@ signalling behavior is only in effect in the following situations:
 
 =over 4
 
-=item * Perl was been built with C<PERL_OLD_SIGNALS> (see C<perl -V>).
+=item * Perl has been built with C<PERL_OLD_SIGNALS> (see C<perl -V>).
 
 =item * The environment variable C<PERL_SIGNALS> is set to C<unsafe> (see L<perlrun/"PERL_SIGNALS">).
 
@@ -863,17 +934,25 @@ Perl version and the application code, results may range from success, to
 (apparently harmless) warnings of leaked scalar, or all the way up to crashing
 of the Perl interpreter.
 
+=item Returning objects from threads
+
+Returning objects from threads does not work.  Depending on the classes
+involved, you may be able to work around this by returning a serialized
+version of the object (e.g., using L<Data::Dumper> or L<Storable>), and then
+reconstituting it in the joining thread.
+
 =item Perl Bugs and the CPAN Version of L<threads>
 
-Support for threads extents beyond the code in this module (i.e.,
+Support for threads extends beyond the code in this module (i.e.,
 F<threads.pm> and F<threads.xs>), and into the Perl iterpreter itself.  Older
 versions of Perl contain bugs that may manifest themselves despite using the
 latest version of L<threads> from CPAN.  There is no workaround for this other
 than upgrading to the lastest version of Perl.
 
-(Before you consider posting a bug report, please consult, and possibly post a
-message to the discussion forum to see if what you've encountered is a known
-problem.)
+Even with the lastest version of Perl, it is known that certain constructs
+with threads may result in warning messages concerning leaked scalars or
+unreferenced scalars.  However, such warnings are harmless, and may safely be
+ignored.
 
 =back
 
@@ -887,7 +966,10 @@ L<threads> Discussion Forum on CPAN:
 L<http://www.cpanforum.com/dist/threads>
 
 Annotated POD for L<threads>:
-L<http://annocpan.org/~JDHEDDEN/threads-1.38/threads.pm>
+L<http://annocpan.org/~JDHEDDEN/threads-1.63/threads.pm>
+
+Source repository:
+L<http://code.google.com/p/threads-shared/>
 
 L<threads::shared>, L<perlthrtut>
 

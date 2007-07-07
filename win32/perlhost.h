@@ -21,6 +21,10 @@
 #include "vmem.h"
 #include "vdir.h"
 
+#ifndef WC_NO_BEST_FIT_CHARS
+#  define WC_NO_BEST_FIT_CHARS 0x00000400
+#endif
+
 START_EXTERN_C
 extern char *		g_win32_get_privlib(const char *pl);
 extern char *		g_win32_get_sitelib(const char *pl);
@@ -985,7 +989,14 @@ PerlLIOFileStat(struct IPerlLIO* piPerl, int handle, Stat_t *buffer)
 int
 PerlLIOIOCtl(struct IPerlLIO* piPerl, int i, unsigned int u, char *data)
 {
-    return win32_ioctlsocket((SOCKET)i, (long)u, (u_long*)data);
+    u_long u_long_arg;
+    int retval;
+
+    /* mauke says using memcpy avoids alignment issues */
+    memcpy(&u_long_arg, data, sizeof u_long_arg); 
+    retval = win32_ioctlsocket((SOCKET)i, (long)u, &u_long_arg);
+    memcpy(data, &u_long_arg, sizeof u_long_arg);
+    return retval;
 }
 
 int
@@ -1607,9 +1618,7 @@ PerlProcKill(struct IPerlProc* piPerl, int pid, int sig)
 int
 PerlProcKillpg(struct IPerlProc* piPerl, int pid, int sig)
 {
-    dTHX;
-    Perl_croak(aTHX_ "killpg not implemented!\n");
-    return 0;
+    return win32_kill(pid, -sig);
 }
 
 int
@@ -2240,16 +2249,15 @@ char*
 CPerlHost::GetChildDir(void)
 {
     dTHX;
-    int length;
     char* ptr;
+    size_t length;
+
     Newx(ptr, MAX_PATH+1, char);
-    if(ptr) {
-	m_pvDir->GetCurrentDirectoryA(MAX_PATH+1, ptr);
-	length = strlen(ptr);
-	if (length > 3) {
-	    if ((ptr[length-1] == '\\') || (ptr[length-1] == '/'))
-		ptr[length-1] = 0;
-	}
+    m_pvDir->GetCurrentDirectoryA(MAX_PATH+1, ptr);
+    length = strlen(ptr);
+    if (length > 3) {
+        if ((ptr[length-1] == '\\') || (ptr[length-1] == '/'))
+            ptr[length-1] = 0;
     }
     return ptr;
 }

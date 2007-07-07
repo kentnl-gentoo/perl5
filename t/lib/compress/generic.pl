@@ -18,7 +18,7 @@ BEGIN
     $extra = 1
         if $st ;
 
-    plan(tests => 615 + $extra) ;
+    plan(tests => 670 + $extra) ;
 }
 
 sub myGZreadFile
@@ -161,6 +161,7 @@ sub run
 
 
             my $lex = new LexFile my $name ;
+            #my $name = "/tmp/try.lzf";
 
             my $hello = <<EOM ;
 hello world
@@ -545,6 +546,37 @@ EOM
         }
 
         {
+            # embed a compressed file in another buffer
+            #================================
+
+
+            my $hello = <<EOM ;
+hello world
+this is a test
+EOM
+
+            my $trailer = "trailer data" ;
+
+            my $compressed ;
+
+            {
+              ok my $x = new $CompressClass(\$compressed);
+
+              ok $x->write($hello) ;
+              ok $x->close ;
+              $compressed .= $trailer ;
+            }
+
+            my $uncomp;
+            ok my $x = new $UncompressClass(\$compressed, Append => 1)  ;
+            1 while $x->read($uncomp) > 0 ;
+
+            ok $uncomp eq $hello ;
+            is $x->trailingData(), $trailer ;
+
+        }
+
+        {
             # Write
             # these tests come almost 100% from IO::String
 
@@ -600,7 +632,8 @@ EOM
 
             is myGZreadFile($name), "Heisan\nabcde\nf,g,h\nDEF.G.H" .
                                     ("1234567890" x 3) . "67890\n" .
-                                        "i(1)[1]\ni(2)[2]\ni(3)[3]\n\n";
+                                        "i(1)[1]\ni(2)[2]\ni(3)[3]\n\n",
+                                        "myGZreadFile ok";
 
 
         }
@@ -620,7 +653,9 @@ EOT
 
             my %opts = () ;
             my $iow = new $CompressClass $name, %opts;
+            is $iow->input_line_number, undef; 
             $iow->print($str) ;
+            is $iow->input_line_number, undef; 
             $iow->close ;
 
             my @tmp;
@@ -630,8 +665,8 @@ EOT
             
                 is $., 0; 
                 is $io->input_line_number, 0; 
-                ok ! $io->eof;
-                is $io->tell(), 0 ;
+                ok ! $io->eof, "eof";
+                is $io->tell(), 0, "tell 0" ;
                 #my @lines = <$io>;
                 my @lines = $io->getlines();
                 is @lines, 6
@@ -689,6 +724,29 @@ EOT
             }
             
             {
+                # Record mode
+                my $reclen = 7 ;
+                my $expected_records = int(length($str) / $reclen)
+                                        + (length($str) % $reclen ? 1 : 0);
+                local $/ = \$reclen;
+
+                my $io = $UncompressClass->new($name);
+                is $., 0; 
+                is $io->input_line_number, 0; 
+
+                ok ! $io->eof;
+                my @lines = $io->getlines();
+                is $., $expected_records; 
+                is $io->input_line_number, $expected_records; 
+                ok $io->eof;
+                is @lines, $expected_records, 
+                    "Got $expected_records records\n" ;
+                ok $lines[0] eq substr($str, 0, $reclen)
+                    or print "# $lines[0]\n";
+                ok $lines[1] eq substr($str, $reclen, $reclen);
+            }
+
+            {
                 local $/ = "is";
                 my $io = $UncompressClass->new($name);
                 my @lines = ();
@@ -723,16 +781,42 @@ EOT
                 eval { $io->read(1) } ;
                 like $@, mkErr("buffer parameter is read-only");
 
+                $buf = "abcd";
                 is $io->read($buf, 0), 0, "Requested 0 bytes" ;
+                is $buf, "", "Buffer empty";
 
-                ok $io->read($buf, 3) == 3 ;
-                ok $buf eq "Thi";
+                is $io->read($buf, 3), 3 ;
+                is $buf, "Thi";
             
-                ok $io->sysread($buf, 3, 2) == 3 ;
-                ok $buf eq "Ths i"
+                is $io->sysread($buf, 3, 2), 3 ;
+                is $buf, "Ths i"
                     or print "# [$buf]\n" ;;
                 ok ! $io->eof;
             
+                $buf = "ab" ;
+                is $io->read($buf, 3, 4), 3 ;
+                is $buf, "ab" . "\x00" x 2 . "s a"
+                    or print "# [$buf]\n" ;;
+                ok ! $io->eof;
+            
+                # read the rest of the file
+                $buf = '';
+                my $remain = length($str) - 9;
+                is $io->read($buf, $remain+1), $remain ;
+                is $buf, substr($str, 9);
+                ok $io->eof;
+
+                $buf = "hello";
+                is $io->read($buf, 10), 0 ;
+                is $buf, "", "Buffer empty";
+                ok $io->eof;
+
+                ok $io->close();
+                $buf = "hello";
+                is $io->read($buf, 10), 0 ;
+                is $buf, "hello", "Buffer not empty";
+                ok $io->eof;
+
         #        $io->seek(-4, 2);
         #    
         #        ok ! $io->eof;
@@ -824,6 +908,29 @@ EOT
             }
             
             {
+                # Record mode
+                my $reclen = 7 ;
+                my $expected_records = int(length($str) / $reclen)
+                                        + (length($str) % $reclen ? 1 : 0);
+                local $/ = \$reclen;
+
+                my $io = $UncompressClass->new($name);
+                is $., 0; 
+                is $io->input_line_number, 0; 
+
+                ok ! $io->eof;
+                my @lines = $io->getlines();
+                is $., $expected_records; 
+                is $io->input_line_number, $expected_records; 
+                ok $io->eof;
+                is @lines, $expected_records, 
+                    "Got $expected_records records\n" ;
+                ok $lines[0] eq substr($str, 0, $reclen)
+                    or print "# $lines[0]\n";
+                ok $lines[1] eq substr($str, $reclen, $reclen);
+            }
+
+            {
                 local $/ = "is";
                 my $io = $UncompressClass->new($name);
                 my @lines = ();
@@ -849,11 +956,15 @@ EOT
             }
             
             
-            # Test read
+            # Test Read
             
             {
                 my $io = $UncompressClass->new($name);
             
+                $buf = "abcd";
+                is $io->read($buf, 0), 0, "Requested 0 bytes" ;
+                is $buf, "", "Buffer empty";
+
                 ok $io->read($buf, 3) == 3 ;
                 ok $buf eq "Thi";
             
@@ -861,6 +972,30 @@ EOT
                 ok $buf eq "Ths i";
                 ok ! $io->eof;
             
+                $buf = "ab" ;
+                is $io->read($buf, 3, 4), 3 ;
+                is $buf, "ab" . "\x00" x 2 . "s a"
+                    or print "# [$buf]\n" ;;
+                ok ! $io->eof;
+            
+                # read the rest of the file
+                $buf = '';
+                my $remain = length($str) - 9;
+                is $io->read($buf, $remain), $remain ;
+                is $buf, substr($str, 9);
+                ok $io->eof;
+
+                $buf = "hello";
+                is $io->read($buf, 10), 0 ;
+                is $buf, "", "Buffer empty";
+                ok $io->eof;
+
+                ok $io->close();
+                $buf = "hello";
+                is $io->read($buf, 10), 0 ;
+                is $buf, "hello", "Buffer not empty";
+                ok $io->eof;
+
         #        $io->seek(-4, 2);
         #    
         #        ok ! $io->eof;

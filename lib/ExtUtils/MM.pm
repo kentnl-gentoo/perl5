@@ -3,7 +3,7 @@ package ExtUtils::MM;
 use strict;
 use ExtUtils::MakeMaker::Config;
 use vars qw(@ISA $VERSION);
-$VERSION = '0.05';
+$VERSION = '0.07';
 
 require ExtUtils::Liblist;
 require ExtUtils::MakeMaker;
@@ -48,7 +48,13 @@ $Is{VMS}    = $^O eq 'VMS';
 $Is{OS2}    = $^O eq 'os2';
 $Is{MacOS}  = $^O eq 'MacOS';
 if( $^O eq 'MSWin32' ) {
-    Win32::IsWin95() ? $Is{Win95} = 1 : $Is{Win32} = 1;
+    if (defined &DynaLoader::boot_DynaLoader) {
+	Win32::IsWin95() ? $Is{Win95} = 1 : $Is{Win32} = 1;
+    }
+    else {
+	# Can't use Win32::* with miniperl
+	!(defined $ENV{SYSTEMROOT}) ? $Is{Win95} = 1 : $Is{Win32} = 1;
+    }
 }
 $Is{UWIN}   = $^O =~ /^uwin(-nt)?$/;
 $Is{Cygwin} = $^O eq 'cygwin';

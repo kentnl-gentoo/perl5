@@ -5,12 +5,12 @@ use 5.006_00;
 use warnings::register;
 
 our($VERSION, %declared);
-$VERSION = '1.07';
+$VERSION = '1.10';
 
 #=======================================================================
 
 # Some names are evil choices.
-my %keywords = map +($_, 1), qw{ BEGIN INIT CHECK END DESTROY AUTOLOAD };
+my %keywords = map +($_, 1), qw{ BEGIN INIT CHECK UNITCHECK END DESTROY AUTOLOAD };
 
 my %forced_into_main = map +($_, 1),
     qw{ STDIN STDOUT STDERR ARGV ARGVOUT ENV INC SIG };
@@ -109,11 +109,8 @@ sub import {
 		    # constants from cv_const_sv are read only. So we have to:
 		    Internals::SvREADONLY($scalar, 1);
 		    $symtab->{$name} = \$scalar;
-		    Internals::inc_sub_generation;
+		    mro::method_changed_in($pkg);
 		} else {
-		    if(!exists $symtab->{$name}) {
-			print STDERR "$name $scalar\n";
-		    }
 		    *$full_name = sub () { $scalar };
 		}
 	    } elsif (@_) {

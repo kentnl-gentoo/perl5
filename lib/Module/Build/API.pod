@@ -715,6 +715,7 @@ C<*.t> in the F<t/> subdirectory.  If the C<recursive_test_files>
 property is true, then the C<t/> directory will be scanned recursively
 for C<*.t> files.
 
+
 =item xs_files
 
 [version 0.19]
@@ -920,14 +921,24 @@ exotic stuff will likely cause problems.
 In the future, the guts of this method might be replaced with a call
 out to C<version.pm>.
 
-=item config()
+=item config($key)
+
+=item config($key, $value)
+
+=item config() [deprecated]
 
 [version 0.22]
 
-Returns a hash reference containing the C<Config.pm> hash, including
-any changes the author or user has specified.  This is a reference to
-the actual internal hash we use, so you probably shouldn't modify
-stuff there.
+With a single argument C<$key>, returns the value associated with that
+key in the C<Config.pm> hash, including any changes the author or user
+has specified.  
+
+With C<$key> and C<$value> arguments, sets the value for future
+callers of C<config($key)>.
+
+With no arguments, returns a hash reference containing all such
+key-value pairs.  This usage is deprecated, though, because it's a
+resource hog and violates encapsulation.
 
 =item config_data($name)
 
@@ -1001,6 +1012,17 @@ roughly analogous (in function, not in form) to the Makefile created
 by C<ExtUtils::MakeMaker>.  This method also creates some temporary
 data in a directory called C<_build/>.  Both of these will be removed
 when the C<realclean> action is performed.
+
+Among the files created in C<_build/> is a F<_build/prereqs> file
+containing the set of prerequisites for this distribution, as a hash
+of hashes.  This file may be C<eval()>-ed to obtain the authoritative
+set of prereqs, which might be different from the contents of META.yml
+(because F<Build.PL> might have set them dynamically).  But fancy
+developers take heed: do not put any fancy custom runtime code in the
+F<_build/prereqs> file, leave it as a static declaration containing
+only strings and numbers.  Similarly, do not alter the structure of
+the internal C<< $self->{properties}{requires} >> (etc.) data members,
+because that's where this data comes from.
 
 =item current_action()
 
@@ -1273,6 +1295,18 @@ whatever is appropriate.  If you're running on an unknown platform, it
 will return C<undef> - there shouldn't be many unknown platforms
 though.
 
+=item is_vmsish()
+
+=item is_windowsish()
+
+=item is_unixish()
+
+Convenience functions that return a boolean value indicating whether
+this platform behaves respectively like VMS, Windows, or Unix.  For
+arbitrary reasons other platforms don't get their own such functions,
+at least not yet.
+
+
 =item prefix_relpaths()
 
 =item prefix_relpaths($installdirs)
@@ -1399,10 +1433,15 @@ C<"wallet">).  The user will be asked the question once.
 
 If C<prompt()> detects that it is not running interactively and there
 is nothing on STDIN or if the PERL_MM_USE_DEFAULT environment variable
-is set to true, the $default will be used without prompting.  This
-prevents automated processes from blocking on user input.
+is set to true, the $default will be used without prompting.
 
-If no $default is provided an empty string will be used instead.
+To prevent automated processes from blocking, the user must either set
+PERL_MM_USE_DEFAULT or attach something to STDIN (this can be a
+pipe/file containing a scripted set of answers or /dev/null.)
+
+If no $default is provided an empty string will be used instead.  In
+non-interactive mode, the absence of $default is an error (though
+explicitly passing C<undef()> as the default is valid as of 0.27.)
 
 This method may be called as a class or object method.
 
@@ -1548,8 +1587,6 @@ accessor methods for the following properties:
 
 =item c_source()
 
-=item config()
-
 =item config_dir()
 
 =item conflicts()
@@ -1648,6 +1685,6 @@ perl(1), L<Module::Build>(3), L<Module::Build::Authoring>(3),
 L<Module::Build::Cookbook>(3), L<ExtUtils::MakeMaker>(3), L<YAML>(3)
 
 F<META.yml> Specification:
-L<http://module-build.sourceforge.net/META-spec-v1.2.html>
+L<http://module-build.sourceforge.net/META-spec-current.html>
 
 =cut

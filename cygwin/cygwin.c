@@ -10,6 +10,8 @@
 #include <unistd.h>
 #include <process.h>
 #include <sys/cygwin.h>
+#include <alloca.h>
+#include <dlfcn.h>
 
 /*
  * pp_system() implemented via spawn()
@@ -57,7 +59,7 @@ do_aspawn (SV *really, void **mark, void **sp)
 
     while (++mark <= sp)
         if (*mark)
-            *a++ = SvPVx(*mark, n_a);
+            *a++ = SvPVx((SV *)*mark, n_a);
         else
             *a++ = "";
     *a = Nullch;
@@ -137,7 +139,6 @@ do_spawn (char *cmd)
 }
 
 /* see also Cwd.pm */
-static
 XS(Cygwin_cwd)
 {
     dXSARGS;
@@ -156,7 +157,6 @@ XS(Cygwin_cwd)
     XSRETURN_UNDEF;
 }
 
-static
 XS(XS_Cygwin_pid_to_winpid)
 {
     dXSARGS;
@@ -175,7 +175,6 @@ XS(XS_Cygwin_pid_to_winpid)
     XSRETURN_UNDEF;
 }
 
-static
 XS(XS_Cygwin_winpid_to_pid)
 {
     dXSARGS;
@@ -198,10 +197,21 @@ XS(XS_Cygwin_winpid_to_pid)
 void
 init_os_extras(void)
 {
-    char *file = __FILE__;
     dTHX;
+    char *file = __FILE__;
+    void *handle;
 
     newXS("Cwd::cwd", Cygwin_cwd, file);
     newXS("Cygwin::winpid_to_pid", XS_Cygwin_winpid_to_pid, file);
     newXS("Cygwin::pid_to_winpid", XS_Cygwin_pid_to_winpid, file);
+
+    /* Initialize Win32CORE if it has been statically linked. */
+    handle = dlopen(NULL, RTLD_LAZY);
+    if (handle) {
+        void (*pfn_init)(pTHX);
+        pfn_init = (void (*)(pTHX))dlsym(handle, "init_Win32CORE");
+        if (pfn_init)
+            pfn_init(aTHX);
+        dlclose(handle);
+    }
 }

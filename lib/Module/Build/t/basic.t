@@ -2,7 +2,7 @@
 
 use strict;
 use lib $ENV{PERL_CORE} ? '../lib/Module/Build/t/lib' : 't/lib';
-use MBTest tests => 55;
+use MBTest tests => 52;
 
 use Cwd ();
 my $cwd = Cwd::cwd;
@@ -145,6 +145,8 @@ my \$build = Module::Build->new(
   is $@, '';
 
   my $mb = Module::Build->resume;
+  ok $mb->valid_property('config');
+
   is $mb->config('cc'), $Config{cc};
   is $mb->config('foocakes'), 'barcakes';
 
@@ -156,14 +158,14 @@ my \$build = Module::Build->new(
   is $mb->args('any'), 'hey';
   is $mb->args('dee'), 'goo';
   is $mb->destdir, 'yo';
-  is $mb->runtime_params('destdir'), 'yo';
-  is $mb->runtime_params('verbose'), '1';
-  ok ! $mb->runtime_params('license');
-  ok my %runtime = $mb->runtime_params;
-  is scalar keys %runtime, 4;
-  is $runtime{destdir}, 'yo';
-  is $runtime{verbose}, '1';
-  ok $runtime{config};
+  my %runtime = $mb->runtime_params;
+  is_deeply \%runtime, 
+    {
+     verbose => 1,
+     destdir => 'yo',
+     use_rcfile => 0,
+     config => { foocakes => 'barcakes' },
+    };
 
   ok my $argsref = $mb->args;
   is $argsref->{foo}, 1;
@@ -201,6 +203,14 @@ my \$build = Module::Build->new(
     extra_compiler_flags => '-I/foo -I/bar',
     extra_linker_flags => '-L/foo -L/bar',
   );
+  ok $mb;
+  is_deeply $mb->extra_compiler_flags, ['-I/foo', '-I/bar'], "Should split shell string into list";
+  is_deeply $mb->extra_linker_flags,   ['-L/foo', '-L/bar'], "Should split shell string into list";
+
+  # Try again with command-line args
+  eval {Module::Build->run_perl_script('Build.PL', [], ['--extra_compiler_flags', '-I/foo -I/bar',
+							'--extra_linker_flags', '-L/foo -L/bar'])};
+  $mb = Module::Build->resume;
   ok $mb;
   is_deeply $mb->extra_compiler_flags, ['-I/foo', '-I/bar'], "Should split shell string into list";
   is_deeply $mb->extra_linker_flags,   ['-L/foo', '-L/bar'], "Should split shell string into list";

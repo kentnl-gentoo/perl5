@@ -953,10 +953,9 @@ Perl_my_atof2(pTHX_ const char* orig, NV* value)
 	else if (!seen_dp && GROK_NUMERIC_RADIX(&s, send)) {
 	    seen_dp = 1;
 	    if (sig_digits > MAX_SIG_DIGITS) {
-		++s;
-		while (isDIGIT(*s)) {
+		do {
 		    ++s;
-		}
+		} while (isDIGIT(*s));
 		break;
 	    }
 	}
@@ -1020,6 +1019,38 @@ long double
 Perl_my_frexpl(long double x, int *e) {
 	*e = x == 0.0L ? 0 : ilogbl(x) + 1;
 	return (scalbnl(x, -*e));
+}
+#endif
+
+/*
+=for apidoc Perl_signbit
+
+Return a non-zero integer if the sign bit on an NV is set, and 0 if
+it is not.  
+
+If Configure detects this system has a signbit() that will work with
+our NVs, then we just use it via the #define in perl.h.  Otherwise,
+fall back on this implementation.  As a first pass, this gets everything
+right except -0.0.  Alas, catching -0.0 is the main use for this function,
+so this is not too helpful yet.  Still, at least we have the scaffolding
+in place to support other systems, should that prove useful.
+
+
+Configure notes:  This function is called 'Perl_signbit' instead of a
+plain 'signbit' because it is easy to imagine a system having a signbit()
+function or macro that doesn't happen to work with our particular choice
+of NVs.  We shouldn't just re-#define signbit as Perl_signbit and expect
+the standard system headers to be happy.  Also, this is a no-context
+function (no pTHX_) because Perl_signbit() is usually re-#defined in
+perl.h as a simple macro call to the system's signbit().
+Users should just always call Perl_signbit().
+
+=cut
+*/
+#if !defined(HAS_SIGNBIT)
+int
+Perl_signbit(NV x) {
+    return (x < 0.0) ? 1 : 0;
 }
 #endif
 

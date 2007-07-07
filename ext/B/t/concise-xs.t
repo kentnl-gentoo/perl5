@@ -115,13 +115,7 @@ BEGIN {
 
 use Getopt::Std;
 use Carp;
-use Test::More tests => ( # per-pkg tests (function ct + require_ok)
-			  40 + 16	# Data::Dumper, Digest::MD5
-			  + 512 + 235	# B::Deparse, B
-			  + 595 + 190	# POSIX, IO::Socket
-			  + 3 * ($] > 5.009)
-			  + 16 * ($] >= 5.009003)
-			  - 22);	# fudge
+use Test::More 'no_plan';
 
 require_ok("B::Concise");
 
@@ -142,7 +136,7 @@ my $testpkgs = {
     Data::Dumper => { XS => [qw/ bootstrap Dumpxs /],
 		      dflt => 'perl' },
     B => { 
-	dflt => 'constant',		# all but 47/274
+	dflt => 'constant',		# all but 47/297
 	skip => [ 'regex_padav' ],	# threaded only
 	perl => [qw(
 		    walksymtable walkoptree_slow walkoptree_exec
@@ -157,7 +151,7 @@ my $testpkgs = {
 		  formfeed end_av dowarn diehook defstash curstash
 		  cstring comppadlist check_av cchar cast_I32 bootstrap
 		  begin_av amagic_generation sub_generation address
-		  )],
+		  ), $] > 5.009 ? ('unitcheck_av') : ()],
     },
 
     B::Deparse => { dflt => 'perl',	# 235 functions
@@ -165,7 +159,7 @@ my $testpkgs = {
 	XS => [qw( svref_2object perlstring opnumber main_start
 		   main_root main_cv )],
 
-	constant => [qw/ ASSIGN CVf_ASSERTION CVf_LOCKED CVf_LVALUE
+	constant => [qw/ ASSIGN CVf_LOCKED CVf_LVALUE
 		     CVf_METHOD LIST_CONTEXT OP_CONST OP_LIST OP_RV2SV
 		     OP_STRINGIFY OPf_KIDS OPf_MOD OPf_REF OPf_SPECIAL
 		     OPf_STACKED OPf_WANT OPf_WANT_LIST OPf_WANT_SCALAR
@@ -176,10 +170,10 @@ my $testpkgs = {
 		     OPpSORT_REVERSE OPpTARGET_MY OPpTRANS_COMPLEMENT
 		     OPpTRANS_DELETE OPpTRANS_SQUASH PMf_CONTINUE
 		     PMf_EVAL PMf_EXTENDED PMf_FOLD PMf_GLOBAL PMf_KEEP
-		     PMf_MULTILINE PMf_ONCE PMf_SINGLELINE PMf_SKIPWHITE
+		     PMf_MULTILINE PMf_ONCE PMf_SINGLELINE
 		     POSTFIX SVf_FAKE SVf_IOK SVf_NOK SVf_POK SVf_ROK
 		     SVpad_OUR SVs_RMG SVs_SMG SWAP_CHILDREN OPpPAD_STATE
-		     /],
+		     /, $] > 5.009 ? ('RXf_SKIPWHITE') : ('PMf_SKIPWHITE')],
 		 },
 
     POSIX => { dflt => 'constant',			# all but 252/589
@@ -213,8 +207,8 @@ my $testpkgs = {
 			     register_domain recv protocol peername
 			     new listen import getsockopt croak
 			     connected connect configure confess close
-			     carp bind atmark accept blocking
-			     /],
+			     carp bind atmark accept
+			     /, $] > 5.009 ? ('blocking') : () ],
 
 		    XS => [qw/ unpack_sockaddr_un unpack_sockaddr_in
 			   sockatmark sockaddr_family pack_sockaddr_un

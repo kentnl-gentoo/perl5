@@ -2,7 +2,13 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-#include "ppport.h"
+#ifdef USE_PPPORT_H
+#  include "ppport.h"
+#endif
+
+#if PERL_VERSION < 6
+#  define DD_USE_OLD_ID_FORMAT
+#endif
 
 static I32 num_q (const char *s, STRLEN slen);
 static I32 esc_q (char *dest, const char *src, STRLEN slen);
@@ -185,16 +191,7 @@ esc_q_utf8(pTHX_ SV* sv, register const char *src, register STRLEN slen)
 #endif
                 *r++ = (char)k;
             else {
-	      /* The return value of sprintf() is unportable.
-	       * In modern systems it returns (int) the number of characters,
-	       * but in older systems it might return (char*) the original
-	       * buffer, or it might even be (void).  The easiest portable
-	       * thing to do is probably use sprintf() in void context and
-	       * then strlen(buffer) for the length.  The more proper way
-	       * would of course be to figure out the prototype of sprintf.
-	       * --jhi */
-                sprintf(r, "\\x{%"UVxf"}", k);
-                r += strlen(r);
+                r = r + my_sprintf(r, "\\x{%"UVxf"}", k);
             }
         }
         *r++ = '"';
@@ -261,7 +258,13 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 {
     char tmpbuf[128];
     U32 i;
-    char *c, *r, *realpack, id[128];
+    char *c, *r, *realpack;
+#ifdef DD_USE_OLD_ID_FORMAT
+    char id[128];
+#else
+    UV id_buffer;
+    char *const id = (char *)&id_buffer;
+#endif
     SV **svp;
     SV *sv, *ipad, *ival;
     SV *blesspad = Nullsv;
@@ -272,6 +275,14 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 
     if (!val)
 	return 0;
+
+    /* If the ouput buffer has less than some arbitary amount of space
+       remaining, then enlarge it. For the test case (25M of output),
+       *1.1 was slower, *2.0 was the same, so the first guess of 1.5 is
+	deemed to be good enough.  */
+    if (SvTYPE(retval) >= SVt_PV && (SvLEN(retval) - SvCUR(retval)) < 42) {
+	sv_grow(retval, SvCUR(retval) * 3 / 2);
+    }
 
     realtype = SvTYPE(val);
 
@@ -297,8 +308,12 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	
 	ival = SvRV(val);
 	realtype = SvTYPE(ival);
-        (void) my_snprintf(id, sizeof(id), "0x%"UVxf, PTR2UV(ival));
-	idlen = strlen(id);
+#ifdef DD_USE_OLD_ID_FORMAT
+        idlen = my_snprintf(id, sizeof(id), "0x%"UVxf, PTR2UV(ival));
+#else
+	id_buffer = PTR2UV(ival);
+	idlen = sizeof(id_buffer);
+#endif
 	if (SvOBJECT(ival))
 	    realpack = HvNAME_get(SvSTASH(ival));
 	else
@@ -349,7 +364,11 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		    return 1;
 		}
 		else {
+#ifdef DD_USE_OLD_ID_FORMAT
 		    warn("ref name not found for %s", id);
+#else
+		    warn("ref name not found for 0x%"UVxf, PTR2UV(ival));
+#endif
 		    return 0;
 		}
 	    }
@@ -370,7 +389,7 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		av_push(seenentry, namesv);
 		(void)SvREFCNT_inc(val);
 		av_push(seenentry, val);
-		(void)hv_store(seenhv, id, strlen(id),
+		(void)hv_store(seenhv, id, idlen,
 			       newRV_inc((SV*)seenentry), 0);
 		SvREFCNT_dec(seenentry);
 	    }
@@ -422,7 +441,13 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	(*levelp)++;
 	ipad = sv_x(aTHX_ Nullsv, SvPVX_const(xpad), SvCUR(xpad), *levelp);
 
-	if (realtype <= SVt_PVBM) {			     /* scalar ref */
+	if (
+#if PERL_VERSION < 9
+		realtype <= SVt_PVBM
+#else
+		realtype <= SVt_PVMG
+#endif
+	) {			     /* scalar ref */
 	    SV * const namesv = newSVpvn("${", 2);
 	    sv_catpvn(namesv, name, namelen);
 	    sv_catpvn(namesv, "}", 1);
@@ -506,8 +531,7 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		
 		ilen = inamelen;
 		sv_setiv(ixsv, ix);
-                (void) sprintf(iname+ilen, "%"IVdf, (IV)ix);
-		ilen = strlen(iname);
+                ilen = ilen + my_sprintf(iname+ilen, "%"IVdf, (IV)ix);
 		iname[ilen++] = ']'; iname[ilen] = '\0';
 		if (indent >= 3) {
 		    sv_catsv(retval, totpad);
@@ -776,8 +800,13 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 	STRLEN i;
 	
 	if (namelen) {
-	    (void) my_snprintf(id, sizeof(id), "0x%"UVxf, PTR2UV(val));
-	    if ((svp = hv_fetch(seenhv, id, (idlen = strlen(id)), FALSE)) &&
+#ifdef DD_USE_OLD_ID_FORMAT
+	    idlen = my_snprintf(id, sizeof(id), "0x%"UVxf, PTR2UV(val));
+#else
+	    id_buffer = PTR2UV(val);
+	    idlen = sizeof(id_buffer);
+#endif
+	    if ((svp = hv_fetch(seenhv, id, idlen, FALSE)) &&
 		(sv = *svp) && SvROK(sv) &&
 		(seenentry = (AV*)SvRV(sv)))
 	    {
@@ -797,7 +826,7 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
 		seenentry = newAV();
 		av_push(seenentry, namesv);
 		av_push(seenentry, newRV_inc(val));
-		(void)hv_store(seenhv, id, strlen(id), newRV_inc((SV*)seenentry), 0);
+		(void)hv_store(seenhv, id, idlen, newRV_inc((SV*)seenentry), 0);
 		SvREFCNT_dec(seenentry);
 	    }
 	}
@@ -805,10 +834,9 @@ DD_dump(pTHX_ SV *val, const char *name, STRLEN namelen, SV *retval, HV *seenhv,
         if (DD_is_integer(val)) {
             STRLEN len;
 	    if (SvIsUV(val))
-	      (void) my_snprintf(tmpbuf, sizeof(tmpbuf), "%"UVuf, SvUV(val));
+	      len = my_snprintf(tmpbuf, sizeof(tmpbuf), "%"UVuf, SvUV(val));
 	    else
-	      (void) my_snprintf(tmpbuf, sizeof(tmpbuf), "%"IVdf, SvIV(val));
-            len = strlen(tmpbuf);
+	      len = my_snprintf(tmpbuf, sizeof(tmpbuf), "%"IVdf, SvIV(val));
             if (SvPOK(val)) {
               /* Need to check to see if this is a string such as " 0".
                  I'm assuming from sprintf isn't going to clash with utf8.
@@ -1093,8 +1121,7 @@ Data_Dumper_Dumpxs(href, ...)
 			STRLEN nchars;
 			sv_setpvn(name, "$", 1);
 			sv_catsv(name, varname);
-			(void) my_snprintf(tmpbuf, sizeof(tmpbuf), "%"IVdf, (IV)(i+1));
-			nchars = strlen(tmpbuf);
+			nchars = my_snprintf(tmpbuf, sizeof(tmpbuf), "%"IVdf, (IV)(i+1));
 			sv_catpvn(name, tmpbuf, nchars);
 		    }
 		

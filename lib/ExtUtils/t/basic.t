@@ -16,7 +16,7 @@ BEGIN {
 use strict;
 use Config;
 
-use Test::More tests => 80;
+use Test::More tests => 83;
 use MakeMaker::Test::Utils;
 use MakeMaker::Test::Setup::BFD;
 use File::Find;
@@ -105,7 +105,9 @@ like( $ppd_html, qr{^\s*<DEPENDENCY NAME="strict" VERSION="0,0,0,0" />}m,
                                                            '  <DEPENDENCY>' );
 like( $ppd_html, qr{^\s*<OS NAME="$Config{osname}" />}m,
                                                            '  <OS>'      );
-like( $ppd_html, qr{^\s*<ARCHITECTURE NAME="$Config{archname}" />}m,  
+my $archname = $Config{archname};
+$archname .= "-". substr($Config{version},0,3) if $] >= 5.008;
+like( $ppd_html, qr{^\s*<ARCHITECTURE NAME="$archname" />}m,
                                                            '  <ARCHITECTURE>');
 like( $ppd_html, qr{^\s*<CODEBASE HREF="" />}m,            '  <CODEBASE>');
 like( $ppd_html, qr{^\s*</IMPLEMENTATION>}m,           '  </IMPLEMENTATION>');
@@ -246,6 +248,11 @@ my $meta_yml = "$distdir/META.yml";
 ok( !-f 'META.yml',  'META.yml not written to source dir' );
 ok( -f $meta_yml,    'META.yml written to dist dir' );
 ok( !-e "META_new.yml", 'temp META.yml file not left around' );
+
+ok open META, $meta_yml or diag $!;
+my @meta = <META>;
+like $meta[-1], '/\n$/', "META.yml ends with a newline";
+ok close META;
 
 my $manifest = maniread("$distdir/MANIFEST");
 # VMS is non-case preserving, so we can't know what the MANIFEST will

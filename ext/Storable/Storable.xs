@@ -18,6 +18,8 @@
 #endif
 
 #if !defined(PERL_VERSION) || PERL_VERSION < 8
+#define NEED_load_module
+#define NEED_vload_module
 #include "ppport.h"             /* handle old perls */
 #endif
 
@@ -388,7 +390,7 @@ typedef struct stcxt {
   STMT_START {										\
 	SV *self = newSV(sizeof(stcxt_t) - 1);			\
 	SV *my_sv = newRV_noinc(self);					\
-	sv_bless(my_sv, gv_stashpv("Storable::Cxt", TRUE));	\
+	sv_bless(my_sv, gv_stashpv("Storable::Cxt", GV_ADD));	\
 	cxt = (stcxt_t *)SvPVX(self);					\
 	Zero(cxt, 1, stcxt_t);							\
 	cxt->my_sv = my_sv;								\
@@ -1047,7 +1049,7 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
 	SV *ref;								\
 	HV *stash;								\
 	TRACEME(("blessing 0x%"UVxf" in %s", PTR2UV(s), (p))); \
-	stash = gv_stashpv((p), TRUE);			\
+	stash = gv_stashpv((p), GV_ADD);			\
 	ref = newRV_noinc(s);					\
 	(void) sv_bless(ref, stash);			\
 	SvRV_set(ref, NULL);						\
@@ -2627,6 +2629,7 @@ static int store_code(pTHX_ stcxt_t *cxt, CV *cv)
 	 */
 	/* Ownership of both SVs is passed to load_module, which frees them. */
 	load_module(PERL_LOADMOD_NOIMPORT, newSVpvn("B::Deparse",10), newSVnv(0.61));
+        SPAGAIN;
 
 	ENTER;
 	SAVETMPS;
@@ -3049,7 +3052,7 @@ static int store_hook(
 		   failure, whereas the existing code assumes that it can
 		   safely store a tag zero. So for ptr_tables we store tag+1
 		*/
-		if ((fake_tag = ptr_table_fetch(cxt->pseen, xsv)))
+		if ((fake_tag = (char *)ptr_table_fetch(cxt->pseen, xsv)))
 			goto sv_seen;		/* Avoid moving code too far to the right */
 #else
 		if ((svh = hv_fetch(cxt->hseen, (char *) &xsv, sizeof(xsv), FALSE)))
@@ -3082,7 +3085,7 @@ static int store_hook(
 			return ret;
 
 #ifdef USE_PTR_TABLE
-		fake_tag = ptr_table_fetch(cxt->pseen, xsv);
+		fake_tag = (char *)ptr_table_fetch(cxt->pseen, xsv);
 		if (!sv)
 			CROAK(("Could not serialize item #%d from hook in %s", i, classname));
 #else
@@ -3456,7 +3459,9 @@ static int sv_type(pTHX_ SV *sv)
 		if (SvRMAGICAL(sv) && (mg_find(sv, 'p')))
 			return svis_TIED_ITEM;
 		/* FALL THROUGH */
+#if PERL_VERSION < 9
 	case SVt_PVBM:
+#endif
 		if (SvRMAGICAL(sv) && (mg_find(sv, 'q')))
 			return svis_TIED;
 		return SvROK(sv) ? svis_REF : svis_SCALAR;
@@ -3470,6 +3475,9 @@ static int sv_type(pTHX_ SV *sv)
 		return svis_HASH;
 	case SVt_PVCV:
 		return svis_CODE;
+#if PERL_VERSION > 8
+	/* case SVt_BIND: */
+#endif
 	default:
 		break;
 	}
@@ -3512,7 +3520,7 @@ static int store(pTHX_ stcxt_t *cxt, SV *sv)
 	 */
 
 #ifdef USE_PTR_TABLE
-	svh = ptr_table_fetch(pseen, sv);
+	svh = (SV **)ptr_table_fetch(pseen, sv);
 #else
 	svh = hv_fetch(hseen, (char *) &sv, sizeof(sv), FALSE);
 #endif
@@ -6283,7 +6291,11 @@ static SV *dclone(pTHX_ SV *sv)
 	 * Tied elements seem to need special handling.
 	 */
 
-	if (SvTYPE(sv) == SVt_PVLV && SvRMAGICAL(sv) && mg_find(sv, 'p')) {
+	if ((SvTYPE(sv) == SVt_PVLV
+#if PERL_VERSION < 8
+	     || SvTYPE(sv) == SVt_PVMG
+#endif
+	     ) && SvRMAGICAL(sv) && mg_find(sv, 'p')) {
 		mg_get(sv);
 	}
 
@@ -6371,7 +6383,7 @@ PROTOTYPES: ENABLE
 
 BOOT:
 {
-    HV *stash = gv_stashpvn("Storable", 8, TRUE);
+    HV *stash = gv_stashpvn("Storable", 8, GV_ADD);
     newCONSTSUB(stash, "BIN_MAJOR", newSViv(STORABLE_BIN_MAJOR));
     newCONSTSUB(stash, "BIN_MINOR", newSViv(STORABLE_BIN_MINOR));
     newCONSTSUB(stash, "BIN_WRITE_MINOR", newSViv(STORABLE_BIN_WRITE_MINOR));

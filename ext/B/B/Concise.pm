@@ -14,7 +14,7 @@ use warnings; # uses #3 and #4, since warnings uses Carp
 
 use Exporter (); # use #5
 
-our $VERSION   = "0.69";
+our $VERSION   = "0.72";
 our @ISA       = qw(Exporter);
 our @EXPORT_OK = qw( set_style set_style_standard add_callback
 		     concise_subref concise_cv concise_main
@@ -28,7 +28,7 @@ our %EXPORT_TAGS =
 # use #6
 use B qw(class ppname main_start main_root main_cv cstring svref_2object
 	 SVf_IOK SVf_NOK SVf_POK SVf_IVisUV SVf_FAKE OPf_KIDS OPf_SPECIAL
-	 CVf_ANON);
+	 CVf_ANON PAD_FAKELEX_ANON PAD_FAKELEX_MULTI);
 
 my %style =
   ("terse" =>
@@ -321,6 +321,10 @@ sub compile {
 		concise_specials("CHECK", $order,
 				 B::check_av->isa("B::AV") ?
 				 B::check_av->ARRAY : ());
+	    } elsif ($objname eq "UNITCHECK") {
+		concise_specials("UNITCHECK", $order,
+				 B::unitcheck_av->isa("B::AV") ?
+				 B::unitcheck_av->ARRAY : ());
 	    } elsif ($objname eq "END") {
 		concise_specials("END", $order,
 				 B::end_av->isa("B::AV") ?
@@ -624,14 +628,14 @@ our %hints; # used to display each COP's op_hints values
 @hints{2,512,1024} = ('$', '&', '*');
 # integers, locale, bytes, arybase
 @hints{1,4,8,16,32} = ('i', 'l', 'b', '[');
-# block scope, localise %^H, $^OPEN
-@hints{256,131072,262144} = ('{','%','<');
+# block scope, localise %^H, $^OPEN (in), $^OPEN (out)
+@hints{256,131072,262144,524288} = ('{','%','<','>');
 # overload new integer, float, binary, string, re
 @hints{4096,8192,16384,32768,65536} = ('I', 'F', 'B', 'S', 'R');
 # taint and eval
 @hints{1048576,2097152} = ('T', 'E');
-# filetest access, UTF-8, assertions, assertions seen
-@hints{4194304,8388608,16777216,33554432} = ('X', 'U', 'A', 'a');
+# filetest access, UTF-8
+@hints{4194304,8388608} = ('X', 'U');
 
 sub _flags {
     my($hash, $x) = @_;
@@ -727,15 +731,18 @@ sub concise_op {
 		    # These changes relate to the jumbo closure fix.
 		    # See changes 19939 and 20005
 		    my $fake = '';
-		    $fake .= 'a' if $padname->IVX & 1; # PAD_FAKELEX_ANON
-		    $fake .= 'm' if $padname->IVX & 2; # PAD_FAKELEX_MULTI
-		    $fake .= ':' . $padname->NVX if $curcv->CvFLAGS & CVf_ANON;
+		    $fake .= 'a'
+		   	if $padname->PARENT_FAKELEX_FLAGS & PAD_FAKELEX_ANON;
+		    $fake .= 'm'
+		   	if $padname->PARENT_FAKELEX_FLAGS & PAD_FAKELEX_MULTI;
+		    $fake .= ':' . $padname->PARENT_PAD_INDEX
+			if $curcv->CvFLAGS & CVf_ANON;
 		    $h{targarglife} = "$h{targarg}:FAKE:$fake";
 		}
 	    }
 	    else {
-		my $intro = $padname->NVX - $cop_seq_base;
-		my $finish = int($padname->IVX) - $cop_seq_base;
+		my $intro = $padname->COP_SEQ_RANGE_LOW - $cop_seq_base;
+		my $finish = int($padname->COP_SEQ_RANGE_HIGH) - $cop_seq_base;
 		$finish = "end" if $finish == 999999999 - $cop_seq_base;
 		$h{targarglife} = "$h{targarg}:$intro,$finish";
 	    }
@@ -810,7 +817,6 @@ sub concise_op {
     $h{seq} = "" if $h{seq} eq "-";
     if ($] > 5.009) {
 	$h{opt} = $op->opt;
-	$h{static} = $op->static;
 	$h{label} = $labels{$$op};
     } else {
 	$h{seqnum} = $op->seq;
@@ -1051,8 +1057,8 @@ Arguments that don't start with a hyphen are taken to be the names of
 subroutines to print the OPs of; if no such functions are specified,
 the main body of the program (outside any subroutines, and not
 including use'd or require'd files) is rendered.  Passing C<BEGIN>,
-C<CHECK>, C<INIT>, or C<END> will cause all of the corresponding
-special blocks to be printed.
+C<UNITCHECK>, C<CHECK>, C<INIT>, or C<END> will cause all of the
+corresponding special blocks to be printed.
 
 Options affect how things are rendered (ie printed).  They're presented
 here by their visual effect, 1st being strongest.  They're grouped
@@ -1495,13 +1501,6 @@ Whether or not the op has been optimised by the peephole optimiser.
 
 Only available in 5.9 and later.
 
-=item B<#static>
-
-Whether or not the op is statically defined.  This flag is used by the
-B::C compiler backend and indicates that the op should not be freed.
-
-Only available in 5.9 and later.
-
 =item B<#sibaddr>
 
 The address of the OP's next youngest sibling, in hexadecimal.
@@ -1572,6 +1571,7 @@ subroutine rendering is more representative, insofar as a single main
 program will have many subs.
 
 
+=back
 
 =head1 Using B::Concise outside of the O framework
 

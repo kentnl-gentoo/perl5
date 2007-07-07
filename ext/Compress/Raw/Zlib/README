@@ -1,12 +1,12 @@
 
                              Compress::Raw::Zlib
 
-                             Version 2.000_13
+                             Version 2.005
 
-                               20 June 2006
+                              18th June 2007
 
 
-       Copyright (c) 2005-2006 Paul Marquess. All rights reserved.
+       Copyright (c) 2005-2007 Paul Marquess. All rights reserved.
           This program is free software; you can redistribute it
            and/or modify it under the same terms as Perl itself.
 
@@ -19,12 +19,6 @@
                             http://www.zlib.org
 
 
-
-                                  WARNING
-                            THIS IS BETA CODE.
-
-                      DO NOT use in production code.
-                        Please report any problems.
 
 DESCRIPTION
 -----------
@@ -397,7 +391,7 @@ To help me help you, I need all of the following information:
           $VERSION = "1.05" ;
 
 
-     c. The version of zlib you have installed.
+     c. The version of zlib you have used.
         If you have successfully installed Compress::Raw::Zlib, this one-liner
         will tell you:
 

@@ -1,7 +1,7 @@
 /*    doio.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -710,10 +710,9 @@ Perl_nextargv(pTHX_ register GV *gv)
     if (io && (IoFLAGS(io) & IOf_ARGV) && (IoFLAGS(io) & IOf_START)) {
 	IoFLAGS(io) &= ~IOf_START;
 	if (PL_inplace) {
-	    if (!PL_argvout_stack)
-		PL_argvout_stack = newAV();
 	    assert(PL_defoutgv);
-	    av_push(PL_argvout_stack, SvREFCNT_inc_simple_NN(PL_defoutgv));
+	    Perl_av_create_and_push(aTHX_ &PL_argvout_stack,
+				    SvREFCNT_inc_simple_NN(PL_defoutgv));
 	}
     }
     if (PL_filemode & (S_ISUID|S_ISGID)) {
@@ -787,7 +786,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 			if (ckWARN_d(WARN_INPLACE))	
 			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			      "Can't do inplace edit: %"SVf" would not be unique",
-			      sv);
+			      SVfARG(sv));
 			do_close(gv,FALSE);
 			continue;
 		    }
@@ -798,7 +797,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 		        if (ckWARN_d(WARN_INPLACE))	
 			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			      "Can't rename %s to %"SVf": %s, skipping file",
-			      PL_oldname, (void*)sv, Strerror(errno));
+			      PL_oldname, SVfARG(sv), Strerror(errno));
 			do_close(gv,FALSE);
 			continue;
 		    }
@@ -815,7 +814,7 @@ Perl_nextargv(pTHX_ register GV *gv)
 		        if (ckWARN_d(WARN_INPLACE))	
 			    Perl_warner(aTHX_ packWARN(WARN_INPLACE),
 			      "Can't rename %s to %"SVf": %s, skipping file",
-			      PL_oldname, sv, Strerror(errno) );
+			      PL_oldname, SVfARG(sv), Strerror(errno) );
 			do_close(gv,FALSE);
 			continue;
 		    }
@@ -1197,32 +1196,24 @@ bool
 Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 {
     dVAR;
-    register const char *tmps;
-    STRLEN len;
-    U8 *tmpbuf = NULL;
-    bool happy = TRUE;
-
     /* assuming fp is checked earlier */
     if (!sv)
 	return TRUE;
-    switch (SvTYPE(sv)) {
-    case SVt_NULL:
-	if (ckWARN(WARN_UNINITIALIZED))
-	    report_uninit(sv);
-	return TRUE;
-    case SVt_IV:
-	if (SvIOK(sv)) {
-	    assert(!SvGMAGICAL(sv));
-	    if (SvIsUV(sv))
-		PerlIO_printf(fp, "%"UVuf, (UV)SvUVX(sv));
-	    else
-		PerlIO_printf(fp, "%"IVdf, (IV)SvIVX(sv));
-	    return !PerlIO_error(fp);
-	}
-	/* FALL THROUGH */
-    default:
+    if (SvTYPE(sv) == SVt_IV && SvIOK(sv)) {
+	assert(!SvGMAGICAL(sv));
+	if (SvIsUV(sv))
+	    PerlIO_printf(fp, "%"UVuf, (UV)SvUVX(sv));
+	else
+	    PerlIO_printf(fp, "%"IVdf, (IV)SvIVX(sv));
+	return !PerlIO_error(fp);
+    }
+    else {
+	STRLEN len;
 	/* Do this first to trigger any overloading.  */
-	tmps = SvPV_const(sv, len);
+	const char *tmps = SvPV_const(sv, len);
+	U8 *tmpbuf = NULL;
+	bool happy = TRUE;
+
 	if (PerlIO_isutf8(fp)) {
 	    if (!SvUTF8(sv)) {
 		/* We don't modify the original scalar.  */
@@ -1247,18 +1238,17 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 		}
 	    }
 	}
-	break;
+	/* To detect whether the process is about to overstep its
+	 * filesize limit we would need getrlimit().  We could then
+	 * also transparently raise the limit with setrlimit() --
+	 * but only until the system hard limit/the filesystem limit,
+	 * at which we would get EPERM.  Note that when using buffered
+	 * io the write failure can be delayed until the flush/close. --jhi */
+	if (len && (PerlIO_write(fp,tmps,len) == 0))
+	    happy = FALSE;
+	Safefree(tmpbuf);
+	return happy ? !PerlIO_error(fp) : FALSE;
     }
-    /* To detect whether the process is about to overstep its
-     * filesize limit we would need getrlimit().  We could then
-     * also transparently raise the limit with setrlimit() --
-     * but only until the system hard limit/the filesystem limit,
-     * at which we would get EPERM.  Note that when using buffered
-     * io the write failure can be delayed until the flush/close. --jhi */
-    if (len && (PerlIO_write(fp,tmps,len) == 0))
-	happy = FALSE;
-    Safefree(tmpbuf);
-    return happy ? !PerlIO_error(fp) : FALSE;
 }
 
 I32
@@ -1284,12 +1274,7 @@ Perl_my_stat(pTHX)
 	    if (IoIFP(io)) {
 	        return (PL_laststatval = PerlLIO_fstat(PerlIO_fileno(IoIFP(io)), &PL_statcache));
             } else if (IoDIRP(io)) {
-#ifdef HAS_DIRFD
-                return (PL_laststatval = PerlLIO_fstat(dirfd(IoDIRP(io)), &PL_statcache));
-#else
-                Perl_die(aTHX_ PL_no_func, "dirfd");
-                NORETURN_FUNCTION_END;
-#endif
+                return (PL_laststatval = PerlLIO_fstat(my_dirfd(IoDIRP(io)), &PL_statcache));
             } else {
                 if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
                     report_evil_fh(gv, io, PL_op->op_type);
@@ -1319,6 +1304,7 @@ Perl_my_stat(pTHX)
 	}
         else if (SvROK(sv) && SvTYPE(SvRV(sv)) == SVt_PVIO) {
             io = (IO*)SvRV(sv);
+	    gv = NULL;
             goto do_fstat_have_io;
         }
 
@@ -1394,7 +1380,7 @@ Perl_do_aexec5(pTHX_ SV *really, register SV **mark, register SV **sp,
 	       int fd, int do_report)
 {
     dVAR;
-#if defined(MACOS_TRADITIONAL) || defined(__SYMBIAN32__)
+#if defined(MACOS_TRADITIONAL) || defined(__SYMBIAN32__) || defined(__LIBCATAMOUNT__)
     Perl_croak(aTHX_ "exec? I'm not *that* kind of operating system");
 #else
     if (sp > mark) {
@@ -1446,11 +1432,13 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
     dVAR;
     register char **a;
     register char *s;
+    char *buf;
     char *cmd;
 
     /* Make a copy so we can change it */
     const Size_t cmdlen = strlen(incmd) + 1;
-    Newx(cmd, cmdlen, char);
+    Newx(buf, cmdlen, char);
+    cmd = buf;
     my_strlcpy(cmd, incmd, cmdlen);
 
     while (*cmd && isSPACE(*cmd))
@@ -1485,7 +1473,7 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
 		  PERL_FPU_POST_EXEC
 		  *s = '\'';
  		  S_exec_failed(aTHX_ PL_cshname, fd, do_report);
-		  Safefree(cmd);
+		  Safefree(buf);
 		  return FALSE;
 	      }
 	  }
@@ -1533,7 +1521,7 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
 	    PerlProc_execl(PL_sh_path, "sh", "-c", cmd, (char *)NULL);
 	    PERL_FPU_POST_EXEC
  	    S_exec_failed(aTHX_ PL_sh_path, fd, do_report);
-	    Safefree(cmd);
+	    Safefree(buf);
 	    return FALSE;
 	}
     }
@@ -1563,7 +1551,7 @@ Perl_do_exec3(pTHX_ const char *incmd, int fd, int do_report)
  	S_exec_failed(aTHX_ PL_Argv[0], fd, do_report);
     }
     do_execfree();
-    Safefree(cmd);
+    Safefree(buf);
     return FALSE;
 }
 
@@ -1611,7 +1599,7 @@ Perl_apply(pTHX_ I32 type, register SV **mark, register SV **sp)
     case OP_CHMOD:
 	APPLY_TAINT_PROPER();
 	if (++mark <= sp) {
-	    val = SvIVx(*mark);
+	    val = SvIV(*mark);
 	    APPLY_TAINT_PROPER();
 	    tot = sp - mark;
 	    while (++mark <= sp) {
@@ -1705,7 +1693,7 @@ nothing in the core.
 		Perl_croak(aTHX_ "Unrecognized signal name \"%s\"",s);
 	}
 	else
-	    val = SvIVx(*mark);
+	    val = SvIV(*mark);
 	APPLY_TAINT_PROPER();
 	tot = sp - mark;
 #ifdef VMS
@@ -1718,7 +1706,7 @@ nothing in the core.
 	     * CRTL's emulation of Unix-style signals and kill()
 	     */
 	    while (++mark <= sp) {
-		I32 proc = SvIVx(*mark);
+		I32 proc = SvIV(*mark);
 		register unsigned long int __vmssts;
 		APPLY_TAINT_PROPER();
 		if (!((__vmssts = sys$delprc(&proc,0)) & 1)) {
@@ -1742,7 +1730,7 @@ nothing in the core.
 	if (val < 0) {
 	    val = -val;
 	    while (++mark <= sp) {
-		const I32 proc = SvIVx(*mark);
+		const I32 proc = SvIV(*mark);
 		APPLY_TAINT_PROPER();
 #ifdef HAS_KILLPG
 		if (PerlProc_killpg(proc,val))	/* BSD */
@@ -1754,7 +1742,7 @@ nothing in the core.
 	}
 	else {
 	    while (++mark <= sp) {
-		const I32 proc = SvIVx(*mark);
+		const I32 proc = SvIV(*mark);
 		APPLY_TAINT_PROPER();
 		if (PerlProc_kill(proc, val))
 		    tot--;
@@ -1812,16 +1800,16 @@ nothing in the core.
            else {
                 Zero(&utbuf, sizeof utbuf, char);
 #ifdef HAS_FUTIMES
-		utbuf[0].tv_sec = (long)SvIVx(accessed);  /* time accessed */
+		utbuf[0].tv_sec = (long)SvIV(accessed);  /* time accessed */
 		utbuf[0].tv_usec = 0;
-		utbuf[1].tv_sec = (long)SvIVx(modified);  /* time modified */
+		utbuf[1].tv_sec = (long)SvIV(modified);  /* time modified */
 		utbuf[1].tv_usec = 0;
 #elif defined(BIG_TIME)
-                utbuf.actime = (Time_t)SvNVx(accessed);  /* time accessed */
-                utbuf.modtime = (Time_t)SvNVx(modified); /* time modified */
+                utbuf.actime = (Time_t)SvNV(accessed);  /* time accessed */
+                utbuf.modtime = (Time_t)SvNV(modified); /* time modified */
 #else
-                utbuf.actime = (Time_t)SvIVx(accessed);  /* time accessed */
-                utbuf.modtime = (Time_t)SvIVx(modified); /* time modified */
+                utbuf.actime = (Time_t)SvIV(accessed);  /* time accessed */
+                utbuf.modtime = (Time_t)SvIV(modified); /* time modified */
 #endif
             }
 	    APPLY_TAINT_PROPER();
@@ -1834,7 +1822,8 @@ nothing in the core.
 		    if (GvIO(gv) && IoIFP(GvIOp(gv))) {
 #ifdef HAS_FUTIMES
 			APPLY_TAINT_PROPER();
-			if (futimes(PerlIO_fileno(IoIFP(GvIOn(gv))), utbufp))
+			if (futimes(PerlIO_fileno(IoIFP(GvIOn(gv))),
+                            (struct timeval *) utbufp))
 			    tot--;
 #else
 			Perl_die(aTHX_ PL_no_func, "futimes");
@@ -1852,7 +1841,7 @@ nothing in the core.
 		    const char * const name = SvPV_nolen_const(*mark);
 		    APPLY_TAINT_PROPER();
 #ifdef HAS_FUTIMES
-		    if (utimes(name, utbufp))
+		    if (utimes(name, (struct timeval *)utbufp))
 #else
 		    if (PerlLIO_utime(name, utbufp))
 #endif
@@ -2251,7 +2240,8 @@ Perl_do_shmio(pTHX_ I32 optype, SV **mark, SV **sp)
     SETERRNO(0,0);
     if (shmctl(id, IPC_STAT, &shmds) == -1)
 	return -1;
-    if (mpos < 0 || msize < 0 || (size_t)mpos + msize > shmds.shm_segsz) {
+    if (mpos < 0 || msize < 0
+	|| (size_t)mpos + msize > (size_t)shmds.shm_segsz) {
 	SETERRNO(EFAULT,SS_ACCVIO);		/* can't do as caller requested */
 	return -1;
     }

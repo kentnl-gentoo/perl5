@@ -78,7 +78,7 @@ case `$cc -v 2>&1`"" in
 	    ccflags="$cc_cppflags"
 	    if [ "X$gccversion" = "X" ]; then
 		# Done too late in Configure if hinted
-		gccversion=`$cc --version | sed 's/.*(GCC) *//'`
+		gccversion=`$cc -dumpversion`
 		fi
 	    case "$gccversion" in
 		[012]*) # HP-UX and gcc-2.* break UINT32_MAX :-(
@@ -157,7 +157,7 @@ case `$cc -v 2>&1`"" in
 		done
 	    [ -z "$cc_found" ] && cc_found=`which cc`
 	    what $cc_found >&4
-	    ccversion=`what $cc_found | awk '/Compiler/{print $2}/Itanium/{print $6,$7}'`
+	    ccversion=`what $cc_found | awk '/Compiler/{print $2}/Itanium/{print $6,$7}/for Integrity/{print $7}'`
 	    case "$ccflags" in
                "-Ae "*) ;;
 		*)  ccflags="-Ae $cc_cppflags"
@@ -188,14 +188,17 @@ toke_cflags='ccflags="$ccflags -DARG_ZERO_IS_SCRIPT"'
     gcc_64native=no
 case "$ccisgcc" in
     $define|true|[Yy])
-	echo 'int main(){long l;printf("%d\\n",sizeof(l));}'>try.c
+	echo '#include <stdio.h>\nint main(){long l;printf("%d\\n",sizeof(l));}'>try.c
 	$cc -o try $ccflags $ldflags try.c
 	if [ "`try`" = "8" ]; then
-	    cat <<EOM >&4
+	    case "$use64bitall" in
+		$define|true|[Yy]) ;;
+		*)  cat <<EOM >&4
 
 *** This version of gcc uses 64 bit longs. -Duse64bitall is
 *** implicitly set to enable continuation
 EOM
+		esac
 	    use64bitall=$define
 	    gcc_64native=yes
 	    fi
@@ -336,6 +339,7 @@ else
 
 ## Optimization limits
 cat >try.c <<EOF
+#include <stdio.h>
 #include <sys/resource.h>
 
 int main ()
@@ -639,8 +643,14 @@ EOM
 	    set `echo X "$libswanted "| sed -e 's/ c / pthread c /'`
 	    shift
 	    libswanted="$*"
-	    fi
 
+	    # HP-UX 11.X seems to have no easy
+	    # way of detecting these *time_r protos.
+	    d_gmtime_r_proto='define'
+	    gmtime_r_proto='REENTRANT_PROTO_S_TS'
+	    d_localtime_r_proto='define'
+	    localtime_r_proto='REENTRANT_PROTO_S_TS'
+	    fi
 	;;
     esac
 EOCBU

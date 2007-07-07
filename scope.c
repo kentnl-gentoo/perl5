@@ -1,7 +1,7 @@
 /*    scope.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -165,12 +165,6 @@ S_save_scalar_at(pTHX_ SV **sptr)
     SV * const osv = *sptr;
     register SV * const sv = *sptr = newSV(0);
 
-#ifdef PERL_MAD
-    /* FIXME for MAD - this is causing ext/Safe/t/safeops.t to abort.  */
-    if (PL_formfeed && sv == PL_formfeed)
-	abort();
-#endif
-
     if (SvTYPE(osv) >= SVt_PVMG && SvMAGIC(osv) && SvTYPE(osv) != SVt_PVGV) {
 	if (SvGMAGICAL(osv)) {
 	    const bool oldtainted = PL_tainted;
@@ -188,10 +182,6 @@ Perl_save_scalar(pTHX_ GV *gv)
 {
     dVAR;
     SV ** const sptr = &GvSVn(gv);
-#ifdef PERL_MAD
-    if (PL_formfeed && *sptr == PL_formfeed)
-	abort();
-#endif
     PL_localizing = 1;
     SvGETMAGIC(*sptr);
     PL_localizing = 0;
@@ -208,10 +198,6 @@ void
 Perl_save_generic_svref(pTHX_ SV **sptr)
 {
     dVAR;
-#ifdef PERL_MAD
-    if (PL_formfeed && *sptr == PL_formfeed)
-	abort();
-#endif
     SSCHECK(3);
     SSPUSHPTR(sptr);
     SSPUSHPTR(SvREFCNT_inc(*sptr));
@@ -270,11 +256,19 @@ Perl_save_gp(pTHX_ GV *gv, I32 empty)
 	GP *gp = Perl_newGP(aTHX_ gv);
 
 	if (GvCVu(gv))
-	    PL_sub_generation++;	/* taking a method out of circulation */
+            mro_method_changed_in(GvSTASH(gv)); /* taking a method out of circulation ("local")*/
 	if (GvIOp(gv) && (IoFLAGS(GvIOp(gv)) & IOf_ARGV)) {
 	    gp->gp_io = newIO();
 	    IoFLAGS(gp->gp_io) |= IOf_ARGV|IOf_START;
 	}
+#ifdef PERL_DONT_CREATE_GVSV
+	if (gv == PL_errgv) {
+	    /* We could scatter this logic everywhere by changing the
+	       definition of ERRSV from GvSV() to GvSVn(), but it seems more
+	       efficient to do this check once here.  */
+	    gp->gp_sv = newSV(0);
+	}
+#endif
 	GvGP(gv) = gp;
     }
     else {
@@ -328,11 +322,6 @@ Perl_save_item(pTHX_ register SV *item)
     dVAR;
     register SV * const sv = newSVsv(item);
 
-#ifdef PERL_MAD
-    if (PL_formfeed && item == PL_formfeed)
-	abort();
-#endif
-
     SSCHECK(3);
     SSPUSHPTR(item);		/* remember the pointer */
     SSPUSHPTR(sv);		/* remember the value */
@@ -357,6 +346,26 @@ Perl_save_bool(pTHX_ bool *boolp)
     SSPUSHBOOL(*boolp);
     SSPUSHPTR(boolp);
     SSPUSHINT(SAVEt_BOOL);
+}
+
+void
+Perl_save_I8(pTHX_ I8 *bytep)
+{
+    dVAR;
+    SSCHECK(3);
+    SSPUSHINT(*bytep);
+    SSPUSHPTR(bytep);
+    SSPUSHINT(SAVEt_I8);
+}
+
+void
+Perl_save_I16(pTHX_ I16 *intp)
+{
+    dVAR;
+    SSCHECK(3);
+    SSPUSHINT(*intp);
+    SSPUSHPTR(intp);
+    SSPUSHINT(SAVEt_I16);
 }
 
 void
@@ -493,6 +502,16 @@ Perl_save_delete(pTHX_ HV *hv, char *key, I32 klen)
 }
 
 void
+Perl_save_destructor(pTHX_ DESTRUCTORFUNC_NOCONTEXT_t f, void* p)
+{
+    dVAR;
+    SSCHECK(3);
+    SSPUSHDPTR(f);
+    SSPUSHPTR(p);
+    SSPUSHINT(SAVEt_DESTRUCTOR);
+}
+
+void
 Perl_save_destructor_x(pTHX_ DESTRUCTORFUNC_t f, void* p)
 {
     dVAR;
@@ -534,7 +553,7 @@ Perl_save_helem(pTHX_ HV *hv, SV *key, SV **sptr)
     SvGETMAGIC(*sptr);
     SSCHECK(4);
     SSPUSHPTR(SvREFCNT_inc_simple(hv));
-    SSPUSHPTR(SvREFCNT_inc_simple(key));
+    SSPUSHPTR(newSVsv(key));
     SSPUSHPTR(SvREFCNT_inc(*sptr));
     SSPUSHINT(SAVEt_HELEM);
     save_scalar_at(sptr);
@@ -551,10 +570,6 @@ SV*
 Perl_save_svref(pTHX_ SV **sptr)
 {
     dVAR;
-#ifdef PERL_MAD
-    if (PL_formfeed && *sptr == PL_formfeed)
-	abort();
-#endif
     SvGETMAGIC(*sptr);
     SSCHECK(3);
     SSPUSHPTR(sptr);
@@ -622,7 +637,8 @@ Perl_leave_scope(pTHX_ I32 base)
 	    sv = *(SV**)ptr;
 	    DEBUG_S(PerlIO_printf(Perl_debug_log,
 				  "restore svref: %p %p:%s -> %p:%s\n",
-				  ptr, sv, SvPEEK(sv), value, SvPEEK(value)));
+				  (void*)ptr, (void*)sv, SvPEEK(sv),
+				  (void*)value, SvPEEK(value)));
 	    *(SV**)ptr = value;
 	    SvREFCNT_dec(sv);
 	    PL_localizing = 2;
@@ -664,15 +680,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    av = (AV*)SSPOPPTR;
 	    gv = (GV*)SSPOPPTR;
 	    if (GvAV(gv)) {
-		AV * const goner = GvAV(gv);
-		/* FIXME - this is a temporary hack until we work out what
-		   the correct behaviour for magic should be.  */
-		sv_unmagic((SV*)goner, PERL_MAGIC_arylen_p);
-		SvMAGIC_set(av, SvMAGIC(goner));
-		SvFLAGS((SV*)av) |= SvMAGICAL(goner);
-		SvMAGICAL_off(goner);
-		SvMAGIC_set(goner, NULL);
-		SvREFCNT_dec(goner);
+		SvREFCNT_dec(GvAV(gv));
 	    }
 	    GvAV(gv) = av;
 	    if (SvMAGICAL(av)) {
@@ -685,12 +693,7 @@ Perl_leave_scope(pTHX_ I32 base)
 	    hv = (HV*)SSPOPPTR;
 	    gv = (GV*)SSPOPPTR;
 	    if (GvHV(gv)) {
-		HV * const goner = GvHV(gv);
-		SvMAGIC_set(hv, SvMAGIC(goner));
-		SvFLAGS(hv) |= SvMAGICAL(goner);
-		SvMAGICAL_off(goner);
-		SvMAGIC_set(goner, NULL);
-		SvREFCNT_dec(goner);
+		SvREFCNT_dec(GvHV(gv));
 	    }
 	    GvHV(gv) = hv;
 	    if (SvMAGICAL(hv)) {
@@ -709,7 +712,15 @@ Perl_leave_scope(pTHX_ I32 base)
 	    break;
 	case SAVEt_I32:				/* I32 reference */
 	    ptr = SSPOPPTR;
+#ifdef PERL_DEBUG_READONLY_OPS
+	    {
+		const I32 val = SSPOPINT;
+		if (*(I32*)ptr != val)
+		    *(I32*)ptr = val;
+	    }
+#else
 	    *(I32*)ptr = (I32)SSPOPINT;
+#endif
 	    break;
 	case SAVEt_SPTR:			/* SV* reference */
 	    ptr = SSPOPPTR;
@@ -733,8 +744,9 @@ Perl_leave_scope(pTHX_ I32 base)
 	    gv = (GV*)SSPOPPTR;
 	    gp_free(gv);
 	    GvGP(gv) = (GP*)ptr;
-	    if (GvCVu(gv))
-		PL_sub_generation++;  /* putting a method back into circulation */
+            /* putting a method back into circulation ("local")*/
+	    if (GvCVu(gv) && (hv=GvSTASH(gv)) && HvNAME_get(hv))
+                mro_method_changed_in(hv);
 	    SvREFCNT_dec(gv);
 	    break;
 	case SAVEt_FREESV:
@@ -830,6 +842,10 @@ Perl_leave_scope(pTHX_ I32 base)
 	case SAVEt_STACK_POS:		/* Position on Perl stack */
 	    i = SSPOPINT;
 	    PL_stack_sp = PL_stack_base + i;
+	    break;
+	case SAVEt_STACK_CXPOS:         /* blk_oldsp on context stack */
+	    i = SSPOPINT;
+	    cxstack[i].blk_oldsp = SSPOPINT;
 	    break;
 	case SAVEt_AELEM:		/* array element */
 	    value = (SV*)SSPOPPTR;
@@ -999,6 +1015,10 @@ Perl_leave_scope(pTHX_ I32 base)
 		Copy(state, &PL_reg_state, 1, struct re_save_state);
 	    }
 	    break;
+	case SAVEt_PARSER:
+	    ptr = SSPOPPTR;
+	    parser_free((yy_parser *) ptr);
+	    break;
 	default:
 	    Perl_croak(aTHX_ "panic: leave_scope inconsistency");
 	}
@@ -1069,12 +1089,10 @@ Perl_cx_dump(pTHX_ PERL_CONTEXT *cx)
 		cx->blk_loop.label);
 	PerlIO_printf(Perl_debug_log, "BLK_LOOP.RESETSP = %ld\n",
 		(long)cx->blk_loop.resetsp);
-	PerlIO_printf(Perl_debug_log, "BLK_LOOP.REDO_OP = 0x%"UVxf"\n",
-		PTR2UV(cx->blk_loop.redo_op));
+	PerlIO_printf(Perl_debug_log, "BLK_LOOP.MY_OP = 0x%"UVxf"\n",
+		PTR2UV(cx->blk_loop.my_op));
 	PerlIO_printf(Perl_debug_log, "BLK_LOOP.NEXT_OP = 0x%"UVxf"\n",
-		PTR2UV(cx->blk_loop.next_op));
-	PerlIO_printf(Perl_debug_log, "BLK_LOOP.LAST_OP = 0x%"UVxf"\n",
-		PTR2UV(cx->blk_loop.last_op));
+		PTR2UV(CX_LOOP_NEXTOP_GET(cx)));
 	PerlIO_printf(Perl_debug_log, "BLK_LOOP.ITERIX = %ld\n",
 		(long)cx->blk_loop.iterix);
 	PerlIO_printf(Perl_debug_log, "BLK_LOOP.ITERARY = 0x%"UVxf"\n",

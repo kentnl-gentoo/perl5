@@ -7,7 +7,7 @@
 #
 package B;
 
-our $VERSION = '1.11';
+our $VERSION = '1.16';
 
 use XSLoader ();
 require Exporter;
@@ -21,9 +21,10 @@ require Exporter;
 		sub_generation amagic_generation perlstring
 		walkoptree_slow walkoptree walkoptree_exec walksymtable
 		parents comppadlist sv_undef compile_stats timing_info
-		begin_av init_av check_av end_av regex_padav dowarn
-		defstash curstash warnhook diehook inc_gv
+		begin_av init_av check_av end_av regex_padav dowarn defstash
+		curstash warnhook diehook inc_gv @optype @specialsv_name
 		);
+push @EXPORT_OK, qw(unitcheck_av) if $] > 5.009;
 
 sub OPf_KIDS ();
 use strict;
@@ -59,6 +60,13 @@ use strict;
 @B::COP::ISA = 'B::OP';
 
 @B::SPECIAL::ISA = 'B::OBJECT';
+
+@B::optype = qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP);
+# bytecode.pl contained the following comment:
+# Nullsv *must* come first in the following so that the condition
+# ($$sv == 0) can continue to be used to test (sv == Nullsv).
+@B::specialsv_name = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no
+			(SV*)pWARN_ALL (SV*)pWARN_NONE (SV*)pWARN_STD);
 
 {
     # Stop "-w" from complaining about the lack of a real B::OBJECT class
@@ -119,7 +127,7 @@ sub walkoptree_slow {
     $op_count++; # just for statistics
     $level ||= 0;
     warn(sprintf("walkoptree: %d. %s\n", $level, peekop($op))) if $debug;
-    $op->$method($level);
+    $op->$method($level) if $op->can($method);
     if ($$op && ($op->flags & OPf_KIDS)) {
 	my $kid;
 	unshift(@parents, $op);
@@ -128,7 +136,11 @@ sub walkoptree_slow {
 	}
 	shift @parents;
     }
-    if (class($op) eq 'PMOP' && ref($op->pmreplroot) && ${$op->pmreplroot}) {
+    if (class($op) eq 'PMOP'
+	&& ref($op->pmreplroot)
+	&& ${$op->pmreplroot}
+	&& $op->pmreplroot->isa( 'B::OP' ))
+    {
 	unshift(@parents, $op);
 	walkoptree_slow($op->pmreplroot, $method, $level + 1);
 	shift @parents;
@@ -384,6 +396,10 @@ Returns the AV object (i.e. in class B::AV) representing INIT blocks.
 
 Returns the AV object (i.e. in class B::AV) representing CHECK blocks.
 
+=item unitcheck_av
+
+Returns the AV object (i.e. in class B::AV) representing UNITCHECK blocks.
+
 =item begin_av
 
 Returns the AV object (i.e. in class B::AV) representing BEGIN blocks.
@@ -511,7 +527,26 @@ per-thread threadsv variables.
 
 =back
 
+=head2 Exported utility variabiles
 
+=over 4
+
+=item @optype
+
+  my $op_type = $optype[$op_type_num];
+
+A simple mapping of the op type number to its type (like 'COP' or 'BINOP').
+
+=item @specialsv_name
+
+  my $sv_name = $specialsv_name[$sv_index];
+
+Certain SV types are considered 'special'.  They're represented by
+B::SPECIAL and are referred to by a number from the specialsv_list.
+This array maps that number back to the name of the SV (like 'Nullsv'
+or '&PL_sv_undef').
+
+=back
 
 
 =head1 OVERVIEW OF CLASSES
@@ -982,8 +1017,6 @@ This returns the op description from the global C PL_op_desc array
 
 =item opt
 
-=item static
-
 =item flags
 
 =item private
@@ -1038,9 +1071,7 @@ This returns the op description from the global C PL_op_desc array
 
 =item pmflags
 
-=item pmdynflags
-
-=item pmpermflags
+=item extflags
 
 =item precomp
 

@@ -61,7 +61,6 @@ my $tree = {
        	'pack'		=> [ 5.008, DEFAULT_OFF],
        	'unpack'	=> [ 5.008, DEFAULT_OFF],
        	'threads'	=> [ 5.008, DEFAULT_OFF],
-	'assertions'    => [ 5.009, DEFAULT_OFF],
 
        	 #'default'	=> [ 5.008, DEFAULT_ON ],
   	}],
@@ -284,7 +283,7 @@ print WARN <<'EOM' ;
 				 (x) == pWARN_NONE)
 
 /* if PL_warnhook is set to this value, then warnings die */
-#define PERL_WARNHOOK_FATAL	(((SV*)0) + 1)
+#define PERL_WARNHOOK_FATAL	(&PL_sv_placeholder)
 EOM
 
 my $offset = 0 ;
@@ -319,9 +318,6 @@ print WARN tab(5, '#define WARNsize'),	"$warn_size\n" ;
 #print WARN tab(5, '#define WARN_ALLstring'), '"', ('\377' x $warn_size) , "\"\n" ;
 print WARN tab(5, '#define WARN_ALLstring'), '"', ('\125' x $warn_size) , "\"\n" ;
 print WARN tab(5, '#define WARN_NONEstring'), '"', ('\0' x $warn_size) , "\"\n" ;
-my $WARN_TAINTstring = mkOct($warn_size, map $_ * 2, @{ $list{'taint'} });
-
-print WARN tab(5, '#define WARN_TAINTstring'), qq["$WARN_TAINTstring"\n] ;
 
 print WARN <<'EOM';
 
@@ -332,8 +328,9 @@ print WARN <<'EOM';
 #define isWARNf_on(c,x)	(IsSet((U8 *)(c + 1), 2*(x)+1))
 
 #define DUP_WARNINGS(p)		\
-    (STRLEN*)(specialWARN(p) ? (p)	\
-    : CopyD(p, PerlMemShared_malloc(sizeof(*p)+*p), sizeof(*p)+*p, char))
+    (specialWARN(p) ? (STRLEN*)(p)	\
+    : (STRLEN*)CopyD(p, PerlMemShared_malloc(sizeof(*p)+*p), sizeof(*p)+*p, \
+		     			     char))
 
 #define ckWARN(w)		Perl_ckwarn(aTHX_ packWARN(w))
 #define ckWARN2(w1,w2)		Perl_ckwarn(aTHX_ packWARN2(w1,w2))
@@ -439,7 +436,14 @@ __END__
 
 package warnings;
 
-our $VERSION = '1.05';
+our $VERSION = '1.06';
+
+# Verify that we're called correctly so that warnings will work.
+# see also strict.pm.
+unless ( __FILE__ =~ /(^|[\/\\])\Q@{[__PACKAGE__]}\E\.pm$/ ) {
+    my (undef, $f, $l) = caller;
+    die("Incorrect use of pragma '@{[__PACKAGE__,]}' at $f line $l.\n");
+}
 
 =head1 NAME
 

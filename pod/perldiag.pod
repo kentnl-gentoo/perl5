@@ -493,6 +493,11 @@ then tried to access that symbol via conventional Perl syntax. The access
 triggers Perl to autovivify that typeglob, but it there is no legal conversion
 from that type of reference to a typeglob.
 
+=item Cannot copy to %s in %s
+
+(P) Perl detected an attempt to copy a value to an internal type that cannot
+be directly assigned not.
+
 =item Can only compress unsigned integers in pack
 
 (F) An argument to pack("w",...) was not an integer.  The BER compressed
@@ -825,6 +830,11 @@ usually double the curlies to get the same effect though, because the
 inner curlies will be considered a block that loops once.  See
 L<perlfunc/last>.
 
+=item Can't linearize anonymous symbol table
+
+(F) Perl tried to calculate the method resolution order (MRO) of a
+package, but failed because the package stash has no name.
+
 =item Can't load '%s' for module %s
 
 (F) The module you tried to load failed to load a dynamic extension. This
@@ -882,6 +892,13 @@ method, nor does any of its base classes.  See L<perlobj>.
 
 (W syntax) The @ISA array contained the name of another package that
 doesn't seem to exist.
+
+=item Can't locate package %s for the parents of %s
+
+(W syntax) You did not define (or require/use) the first package,
+which is named as a (possibly indirect) parent of the second by
+C<@ISA> inheritance.  Perl will treat this as if the undefined
+package had an empty C<@ISA>.
 
 =item Can't locate PerlIO%s
 
@@ -1231,7 +1248,7 @@ instead.
 
    unpack("H", "\x{2a1}")
 
-where the format expects to process a byte (a character with a value 
+where the format expects to process a byte (a character with a value
 below 256), but a higher value was provided instead. Perl uses the value
 modulus 256 instead, as if you had provided:
 
@@ -1243,8 +1260,8 @@ modulus 256 instead, as if you had provided:
 
    pack("u", "\x{1f3}b")
 
-where the format expects to process a sequence of bytes (character with a 
-value below 256), but some of the characters had a higher value. Perl 
+where the format expects to process a sequence of bytes (character with a
+value below 256), but some of the characters had a higher value. Perl
 uses the character values modulus 256 instead, as if you had provided:
 
    pack("u", "\x{f3}b")
@@ -1255,8 +1272,8 @@ uses the character values modulus 256 instead, as if you had provided:
 
    unpack("s", "\x{1f3}b")
 
-where the format expects to process a sequence of bytes (character with a 
-value below 256), but some of the characters had a higher value. Perl 
+where the format expects to process a sequence of bytes (character with a
+value below 256), but some of the characters had a higher value. Perl
 uses the character values modulus 256 instead, as if you had provided:
 
    unpack("s", "\x{f3}b")
@@ -1333,6 +1350,14 @@ an overloaded constant, or when trying to find the character name
 specified in the C<\N{...}> escape.  Perhaps you forgot to load the
 corresponding C<overload> or C<charnames> pragma?  See L<charnames> and
 L<overload>.
+
+=item Constant(%s)%s: %s in regex; marked by <-- HERE in m/%s/
+
+(F) The parser found inconsistencies while attempting to find
+the character name specified in the C<\N{...}> escape.  Perhaps you
+forgot to load the corresponding C<charnames> pragma?
+See L<charnames>.
+
 
 =item Constant is not %s reference
 
@@ -1578,6 +1603,14 @@ that in an eval().  See L<perlre/(?{ code })>.
 assertion, but that construct is only allowed when the C<use re 'eval'>
 pragma is in effect.  See L<perlre/(?{ code })>.
 
+=item EVAL without pos change exceeded limit in regex; marked by <-- HERE in m/%s/
+
+(F) You used a pattern that nested too many EVAL calls without consuming
+any text. Restructure the pattern so that text is consumed.
+
+The <-- HERE shows in the regular expression about where the problem was
+discovered.
+
 =item Excessively long <> operator
 
 (F) The contents of a <> operator may not exceed the maximum size of a
@@ -1633,9 +1666,9 @@ Check the #! line, or manually feed your script into Perl yourself.
 
 =item %s failed--call queue aborted
 
-(F) An untrapped exception was raised while executing a CHECK, INIT, or
-END subroutine.  Processing of the remainder of the queue of such
-routines has been prematurely ended.
+(F) An untrapped exception was raised while executing a UNITCHECK,
+CHECK, INIT, or END subroutine.  Processing of the remainder of the
+queue of such routines has been prematurely ended.
 
 =item False [] range "%s" in regex; marked by <-- HERE in m/%s/
 
@@ -1656,6 +1689,11 @@ you which section of the Perl source code is distressed.
 
 (F) Your machine apparently doesn't implement fcntl().  What is this, a
 PDP-11 or something?
+
+=item FETCHSIZE returned a negative value
+
+(F) A tied array claimed to have a negative number of elements, which
+is not possible.
 
 =item Field too wide in 'u' format in pack
 
@@ -1841,6 +1879,13 @@ about 250 characters for simple names, and somewhat more for compound
 names (like C<$A::B>).  You've exceeded Perl's limits.  Future versions
 of Perl are likely to eliminate these arbitrary limitations.
 
+=item Ignoring %s in character class in regex; marked by <-- HERE in m/%s/
+
+(W) Named Unicode character escapes (\N{...}) may return multi-char
+or zero length sequences. When such an escape is used in a character class
+its behaviour is not well defined. Check that the correct escape has
+been used, and the correct charname handler is in scope.
+
 =item Illegal binary digit %s
 
 (F) You used a digit other than 0 or 1 in a binary number.
@@ -1922,11 +1967,6 @@ name or CLI symbol definition when preparing to iterate over %ENV, and
 didn't see the expected delimiter between key and value, so the line was
 ignored.
 
-=item Impossible to activate assertion call
-
-(W assertions) You're calling an assertion function in a block that is
-not under the control of the C<assertions> pragma.
-
 =item (in cleanup) %s
 
 (W misc) This prefix usually indicates that a DESTROY() method raised
@@ -1938,11 +1978,26 @@ would otherwise result in the same message being repeated.
 Failure of user callbacks dispatched using the C<G_KEEPERR> flag could
 also result in this warning.  See L<perlcall/G_KEEPERR>.
 
+=item Inconsistent hierarchy during C3 merge of class '%s': merging failed on parent '%s'
+
+(F) The method resolution order (MRO) of the given class is not
+C3-consistent, and you have enabled the C3 MRO for this class.  See the C3
+documentation in L<mro> for more information.
+
 =item In EBCDIC the v-string components cannot exceed 2147483647
 
 (F) An error peculiar to EBCDIC.  Internally, v-strings are stored as
 Unicode code points, and encoded in EBCDIC as UTF-EBCDIC.  The UTF-EBCDIC
 encoding is limited to code points no larger than 2147483647 (0x7FFFFFFF).
+
+=item Infinite recursion in regex; marked by <-- HERE in m/%s/
+
+(F) You used a pattern that references itself without consuming any input
+text. You should check the pattern to ensure that recursive patterns
+either consume text or fail.
+
+The <-- HERE shows in the regular expression about where the problem was
+discovered.
 
 =item Insecure dependency in %s
 
@@ -2038,6 +2093,21 @@ recognized by Perl or by a user-supplied handler.  See L<attributes>.
 
 (W printf) Perl does not understand the given format conversion.  See
 L<perlfunc/sprintf>.
+
+=item Invalid escape in the specified encoding in regex; marked by <-- HERE in m/%s/
+
+(W regexp) The numeric escape (for example C<\xHH>) of value < 256
+didn't correspond to a single character through the conversion
+from the encoding specified by the encoding pragma.
+The escape was replaced with REPLACEMENT CHARACTER (U+FFFD) instead.
+The <-- HERE shows in the regular expression about where the
+escape was discovered.
+
+=item Invalid mro name: '%s'
+
+(F) You tried to C<mro::set_mro("classname", "foo")>
+or C<use mro 'foo'>, where C<foo> is not a valid method resolution order (MRO).
+(Currently, the only valid ones are C<dfs> and C<c3>). See L<mro>.
 
 =item Invalid [] range "%s" in regex; marked by <-- HERE in m/%s/
 
@@ -2167,11 +2237,10 @@ an undefined value for the length. See L<perlfunc/pack>.
 to check the return value of your socket() call?  See
 L<perlfunc/listen>.
 
-=item Lookbehind longer than %d not implemented in regex; marked by <-- HERE in m/%s/
+=item Lookbehind longer than %d not implemented in regex m/%s/
 
 (F) There is currently a limit on the length of string which lookbehind can
-handle. This restriction may be eased in a future release. The <-- HERE
-shows in the regular expression about where the problem was discovered.
+handle. This restriction may be eased in a future release. 
 
 =item lstat() on filehandle %s
 
@@ -2218,12 +2287,19 @@ when the function is called.
 
 =item Malformed UTF-8 character (%s)
 
-(S utf8) (F) Perl detected something that didn't comply with UTF-8
-encoding rules.
+(S utf8) (F) Perl detected a string that didn't comply with UTF-8
+encoding rules, even though it had the UTF8 flag on.
 
-One possible cause is that you read in data that you thought to be in
-UTF-8 but it wasn't (it was for example legacy 8-bit data).  Another
-possibility is careless use of utf8::upgrade().
+One possible cause is that you set the UTF8 flag yourself for data that
+you thought to be in UTF-8 but it wasn't (it was for example legacy
+8-bit data). To guard against this, you can use Encode::decode_utf8.
+
+If you use the C<:encoding(UTF-8)> PerlIO layer for input, invalid byte
+sequences are handled gracefully, but if you use C<:utf8>, the flag is
+set without validating the data, possibly resulting in this error
+message.
+
+See also L<Encode/"Handling Malformed Data">.
 
 =item Malformed UTF-16 surrogate
 
@@ -2244,6 +2320,14 @@ rules and perl was unable to guess how to make more progress.
 
 (F) You tried to unpack something that didn't comply with UTF-8 encoding
 rules and perl was unable to guess how to make more progress.
+
+=item Maximal count of pending signals (%s) exceeded
+
+(F) Perl aborted due to a too important number of signals pending. This
+usually indicates that your operating system tried to deliver signals
+too fast (with a very high priority), starving the perl process from
+resources it would need to reach a point where it can process signals
+safely. (See L<perlipc/"Deferred Signals (Safe Signals)">.)
 
 =item %s matches null string many times in regex; marked by <-- HERE in m/%s/
 
@@ -2456,6 +2540,12 @@ C<??> appear to be nested quantifiers, but aren't.  See L<perlre>.
 (S internal) The symbol in question was declared but somehow went out of
 scope before it could possibly have been used.
 
+=item next::method/next::can/maybe::next::method cannot find enclosing method
+
+(F) C<next::method> needs to be called within the context of a
+real method in a real package, and it could not find such a context.
+See L<mro>.
+
 =item No %s allowed while running setuid
 
 (F) Certain operations are deemed to be too insecure for a setuid or
@@ -2531,6 +2621,13 @@ name of the file from which to read data for stdin.
 
 (F) The setuid emulator requires that scripts have a well-formed #! line
 even on machines that don't support the #! construct.
+
+=item No next::method '%s' found for %s
+
+(F) C<next::method> found no further instances of this method name
+in the remaining packages of the MRO of this class.  If you don't want
+it throwing an exception, use C<maybe::next::method>
+or C<next::can>. See L<mro>.
 
 =item "no" not allowed in expression
 
@@ -2749,10 +2846,13 @@ which is odd, because hashes come in key/value pairs.
 
 =item Offset outside string
 
-(F) You tried to do a read/write/send/recv operation with an offset
-pointing outside the buffer.  This is difficult to imagine.  The sole
-exception to this is that C<sysread()>ing past the buffer will extend
-the buffer and zero pad the new area.
+(F, W layer) You tried to do a read/write/send/recv/seek operation
+with an offset pointing outside the buffer.  This is difficult to
+imagine.  The sole exceptions to this are that zero padding will
+take place when going past the end of the string when either
+C<sysread()>ing a file, or when seeking past the end of a scalar opened
+for I/O (in anticipation of future reads and to imitate the behaviour
+with real files).
 
 =item %s() on unopened %s
 
@@ -2772,6 +2872,20 @@ that isn't open.  Check your control flow.  See also L<perlfunc/-X>.
 =item oops: oopsHV
 
 (S internal) An internal warning that the grammar is screwed up.
+
+=item Opening dirhandle %s also as a file
+
+(W io deprecated) You used open() to associate a filehandle to
+a symbol (glob or scalar) that already holds a dirhandle.
+Although legal, this idiom might render your code confusing
+and is deprecated.
+
+=item Opening filehandle %s also as a directory
+
+(W io deprecated) You used opendir() to associate a dirhandle to
+a symbol (glob or scalar) that already holds a filehandle.
+Although legal, this idiom might render your code confusing
+and is deprecated.
 
 =item Operation "%s": no method found, %s
 
@@ -3073,6 +3187,15 @@ to even) byte length.
 
 (P) The lexer got into a bad state while processing a case modifier.
 
+=item Pattern subroutine nesting without pos change exceeded limit in regex; marked by <-- HERE in m/%s/
+
+(F) You used a pattern that uses too many nested subpattern calls without
+consuming any text. Restructure the pattern so text is consumed before the
+nesting limit is exceeded.
+
+The <-- HERE shows in the regular expression about where the problem was
+discovered.
+
 =item Parentheses missing around "%s" list
 
 (W parenthesis) You said something like
@@ -3368,7 +3491,7 @@ by prepending "0" to your numbers.
 
 =item readdir() attempted on invalid dirhandle %s
 
-(W io) The dirhandle you're reading from is either closed or not really 
+(W io) The dirhandle you're reading from is either closed or not really
 a dirhandle.  Check your control flow.
 
 =item readline() on closed filehandle %s
@@ -3401,8 +3524,9 @@ which is why it's currently left out of your copy.
 
 =item Recursive inheritance detected in package '%s'
 
-(F) More than 100 levels of inheritance were used.  Probably indicates
-an unintended loop in your inheritance hierarchy.
+(F) While calculating the method resolution order (MRO) of a package, Perl
+believes it found an infinite loop in the C<@ISA> hierarchy.  This is a
+crude check that bails out after 100 levels of C<@ISA> depth.
 
 =item Recursive inheritance detected while looking for method %s
 
@@ -3432,12 +3556,47 @@ Doing so has no effect.
 (W internal) The internal sv_replace() function was handed a new SV with
 a reference count of other than 1.
 
+=item Reference to invalid group 0
+
+(F) You used C<\g0> or similar in a regular expression. You may refer to
+capturing parentheses only with strictly positive integers (normal
+backreferences) or with stricly negative integers (relative
+backreferences), but using 0 does not make sense.
+
 =item Reference to nonexistent group in regex; marked by <-- HERE in m/%s/
 
 (F) You used something like C<\7> in your regular expression, but there are
 not at least seven sets of capturing parentheses in the expression. If you
 wanted to have the character with value 7 inserted into the regular expression,
 prepend a zero to make the number at least two digits: C<\07>
+
+The <-- HERE shows in the regular expression about where the problem was
+discovered.
+
+=item Reference to nonexistent or unclosed group in regex; marked by <-- HERE in m/%s/
+
+(F) You used something like C<\g{-7}> in your regular expression, but there are
+not at least seven sets of closed capturing parentheses in the expression before
+where the C<\g{-7}> was located.
+
+The <-- HERE shows in the regular expression about where the problem was
+discovered.
+
+=item Reference to nonexistent named group in regex; marked by <-- HERE in m/%s/
+
+(F) You used something like C<\k'NAME'> or C<< \k<NAME> >> in your regular
+expression, but there is no corresponding named capturing parentheses such
+as C<(?'NAME'...)> or C<(?<NAME>...). Check if the name has been spelled
+correctly both in the backreference and the declaration.
+
+The <-- HERE shows in the regular expression about where the problem was
+discovered.
+
+=item (?(DEFINE)....) does not allow branches in regex; marked by <-- HERE in m/%s/
+
+(F) You used something like C<(?(DEFINE)...|..)> which is illegal. The
+most likely cause of this error is that you left out a parenthesis inside
+of the C<....> part.
 
 The <-- HERE shows in the regular expression about where the problem was
 discovered.
@@ -3595,6 +3754,11 @@ where the problem was discovered. See L<perlre>.
 <-- HERE shows in the regular expression about where the problem was
 discovered.  See L<perlre>.
 
+=item Sequence \\%s... not terminated in regex; marked by <-- HERE in m/%s/
+
+(F) The regular expression expects a mandatory argument following the escape
+sequence and this has been omitted or incorrectly written.
+
 =item Sequence (?#... not terminated in regex; marked by <-- HERE in m/%s/
 
 (F) A regular expression comment must be terminated by a closing
@@ -3744,16 +3908,6 @@ L<perlfunc/splice>.
 (P) The split was looping infinitely.  (Obviously, a split shouldn't
 iterate more times than there are characters of input, which is what
 happened.) See L<perlfunc/split>.
-
-=item State variable %s will be reinitialized
-
-(W misc) You're declaring a C<state> variable inside a list. The list
-assignment will be treated by perl as a regular assignment, which means
-that the C<state> variable will be reinitialized each time the statement
-is run. The solution to have it initialized only once is to write the
-assignment on its own line, as in:
-
-    state $var = 42;
 
 =item Statement unlikely to be reached
 
@@ -4006,7 +4160,7 @@ See L<perlunicode/"User-Defined Character Properties">.
 
 =item Too deeply nested ()-groups
 
-(F) Your template contains ()-groups with a ridiculously deep nesting level. 
+(F) Your template contains ()-groups with a ridiculously deep nesting level.
 
 =item Too few args to syscall
 
@@ -4219,6 +4373,13 @@ category that is unknown to perl at this point.
 
 Note that if you want to enable a warnings category registered by a module
 (e.g. C<use warnings 'File::Find'>), you must have imported this module
+
+=item Unknown verb pattern '%s' in regex; marked by <-- HERE in m/%s/
+
+(F) You either made a typo or have incorrectly put a C<*> quantifier
+after an open brace in your pattern.  Check the pattern and review
+L<perlre> for details on legal verb patterns.
+
 first.
 
 =item unmatched [ in regex; marked by <-- HERE in m/%s/
@@ -4255,23 +4416,24 @@ subroutine.
 in your Perl script (or eval).  Perhaps you tried to run a compressed
 script, a binary program, or a directory as a Perl program.
 
-=item /%s/: Unrecognized escape \\%c in character class passed through
+=item Unrecognized escape \\%c in character class passed through in regex; marked by <-- HERE in m/%s/
 
 (W regexp) You used a backslash-character combination which is not
 recognized by Perl inside character classes.  The character was
 understood literally.
+The <-- HERE shows in the regular expression about where the
+escape was discovered.
 
 =item Unrecognized escape \\%c passed through
 
 (W misc) You used a backslash-character combination which is not
-recognized by Perl.
+recognized by Perl.  The character was understood literally.
 
 =item Unrecognized escape \\%c passed through in regex; marked by <-- HERE in m/%s/
 
 (W regexp) You used a backslash-character combination which is not
-recognized by Perl. This combination appears in an interpolated variable or
-a C<'>-delimited regular expression. The character was understood
-literally. The <-- HERE shows in the regular expression about where the
+recognized by Perl.  The character was understood literally.
+The <-- HERE shows in the regular expression about where the
 escape was discovered.
 
 =item Unrecognized signal name "%s"
@@ -4338,6 +4500,21 @@ character to get your parentheses to balance.  See L<attributes>.
 (F) An argument to unpack("w",...) was incompatible with the BER
 compressed integer format and could not be converted to an integer.
 See L<perlfunc/pack>.
+
+=item Unterminated verb pattern in regex; marked by <-- HERE in m/%s/
+
+(F) You used a pattern of the form C<(*VERB)> but did not terminate
+the pattern with a C<)>. Fix the pattern and retry.
+
+=item Unterminated verb pattern argument in regex; marked by <-- HERE in m/%s/
+
+(F) You used a pattern of the form C<(*VERB:ARG)> but did not terminate
+the pattern with a C<)>. Fix the pattern and retry.
+
+=item Unterminated \g{...} pattern in regex; marked by <-- HERE in m/%s/
+
+(F) You missed a close brace on a \g{..} pattern (group reference) in
+a regular expression. Fix the pattern and retry.
 
 =item Unterminated <> operator
 
@@ -4685,11 +4862,10 @@ something else of the same name (usually a subroutine) is exported by
 that module.  It usually means you put the wrong funny character on the
 front of your variable.
 
-=item Variable length lookbehind not implemented in regex; marked by <-- HERE in m/%s/
+=item Variable length lookbehind not implemented in m/%s/
 
 (F) Lookbehind is allowed only for subexpressions whose length is fixed and
-known at compile time. The <-- HERE shows in the regular expression about
-where the problem was discovered. See L<perlre>.
+known at compile time.  See L<perlre>.
 
 =item "%s" variable %s masks earlier declaration in same %s
 
@@ -4722,6 +4898,16 @@ anonymous, using the C<sub {}> syntax.  When inner anonymous subs that
 reference variables in outer subroutines are created, they
 are automatically rebound to the current values of such variables.
 
+=item Verb pattern '%s' has a mandatory argument in regex; marked by <-- HERE in m/%s/ 
+
+(F) You used a verb pattern that requires an argument. Supply an argument
+or check that you are using the right verb.
+
+=item Verb pattern '%s' may not have an argument in regex; marked by <-- HERE in m/%s/ 
+
+(F) You used a verb pattern that is not allowed an argument. Remove the 
+argument or check that you are using the right verb.
+
 =item Version number must be a constant number
 
 (P) The attempt to translate a C<use Module n.n LIST> statement into
@@ -4746,7 +4932,7 @@ minimum version.
 =item Warning: something's wrong
 
 (W) You passed warn() an empty string (the equivalent of C<warn "">) or
-you called it with no args and C<$_> was empty.
+you called it with no args and C<$@> was empty.
 
 =item Warning: unable to close filehandle %s properly
 

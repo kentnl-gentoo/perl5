@@ -1,6 +1,6 @@
 /*    utf8.c
  *
- *    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006,
+ *    Copyright (C) 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007
  *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
@@ -24,6 +24,13 @@
 #include "EXTERN.h"
 #define PERL_IN_UTF8_C
 #include "perl.h"
+
+#ifndef EBCDIC
+/* Separate prototypes needed because in ASCII systems these
+ * usually macros but they still are compiled as code, too. */
+PERL_CALLCONV UV	Perl_utf8n_to_uvchr(pTHX_ const U8 *s, STRLEN curlen, STRLEN *retlen, U32 flags);
+PERL_CALLCONV U8*	Perl_uvchr_to_utf8(pTHX_ U8 *d, UV uv);
+#endif
 
 static const char unees[] =
     "Malformed UTF-8 character (unexpected end of string)";
@@ -371,7 +378,7 @@ Perl_is_utf8_string_loclen(pTHX_ const U8 *s, STRLEN len, const U8 **ep, STRLEN 
 =for apidoc A|UV|utf8n_to_uvuni|const U8 *s|STRLEN curlen|STRLEN *retlen|U32 flags
 
 Bottom level UTF-8 decode routine.
-Returns the unicode code point value of the first character in the string C<s>
+Returns the Unicode code point value of the first character in the string C<s>
 which is assumed to be in UTF-8 encoding and no longer than C<curlen>;
 C<retlen> will be set to the length, in bytes, of that character.
 
@@ -889,7 +896,7 @@ Perl_utf16_to_utf8(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
     }
 
     if (bytelen & 1)
-	Perl_croak(aTHX_ "panic: utf16_to_utf8: odd bytelen %"UVf, (UV)bytelen);
+	Perl_croak(aTHX_ "panic: utf16_to_utf8: odd bytelen %"UVuf, (UV)bytelen);
 
     pend = p + bytelen;
 
@@ -1549,11 +1556,10 @@ Perl_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 minbits
 {
     dVAR;
     SV* retval;
-    SV* const tokenbufsv = sv_newmortal();
     dSP;
     const size_t pkg_len = strlen(pkg);
     const size_t name_len = strlen(name);
-    HV * const stash = gv_stashpvn(pkg, pkg_len, FALSE);
+    HV * const stash = gv_stashpvn(pkg, pkg_len, 0);
     SV* errsv_save;
 
     PUSHSTACKi(PERLSI_MAGIC);
@@ -1587,12 +1593,6 @@ Perl_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 minbits
     PUSHs(sv_2mortal(newSViv(minbits)));
     PUSHs(sv_2mortal(newSViv(none)));
     PUTBACK;
-    if (IN_PERL_COMPILETIME) {
-	/* XXX ought to be handled by lex_start */
-	SAVEI32(PL_in_my);
-	PL_in_my = 0;
-	sv_setpv(tokenbufsv, PL_tokenbuf);
-    }
     errsv_save = newSVsv(ERRSV);
     if (call_method("SWASHNEW", G_SCALAR))
 	retval = newSVsv(*PL_stack_sp--);
@@ -1604,16 +1604,12 @@ Perl_swash_init(pTHX_ const char* pkg, const char* name, SV *listsv, I32 minbits
     LEAVE;
     POPSTACK;
     if (IN_PERL_COMPILETIME) {
-	STRLEN len;
-	const char* const pv = SvPV_const(tokenbufsv, len);
-
-	Copy(pv, PL_tokenbuf, len+1, char);
 	CopHINTS_set(PL_curcop, PL_hints);
     }
     if (!SvROK(retval) || SvTYPE(SvRV(retval)) != SVt_PVHV) {
         if (SvPOK(retval))
 	    Perl_croak(aTHX_ "Can't find Unicode property definition \"%"SVf"\"",
-		       (void*)retval);
+		       SVfARG(retval));
 	Perl_croak(aTHX_ "SWASHNEW didn't return an HV ref");
     }
     return retval;
@@ -1719,7 +1715,8 @@ Perl_swash_fetch(pTHX_ SV *swash, const U8 *ptr, bool do_utf8)
 	}
 
 	PL_last_swash_hv = hv;
-	PL_last_swash_klen = klen;
+	assert(klen <= sizeof(PL_last_swash_key));
+	PL_last_swash_klen = (U8)klen;
 	/* FIXME change interpvar.h?  */
 	PL_last_swash_tmps = (U8 *) tmps;
 	PL_last_swash_slen = slen;

@@ -17,7 +17,7 @@ use Config;
 use File::Spec::Functions;
 
 BEGIN { require './test.pl'; }
-plan tests => 251;
+plan tests => 261;
 
 $| = 1;
 
@@ -44,7 +44,8 @@ my $Is_MSWin32  = $^O eq 'MSWin32';
 my $Is_NetWare  = $^O eq 'NetWare';
 my $Is_Dos      = $^O eq 'dos';
 my $Is_Cygwin   = $^O eq 'cygwin';
-my $Invoke_Perl = $Is_VMS      ? 'MCR Sys$Disk:[]Perl.' :
+my $Is_OpenBSD  = $^O eq 'openbsd';
+my $Invoke_Perl = $Is_VMS      ? 'MCR Sys$Disk:[]Perl.exe' :
                   $Is_MSWin32  ? '.\perl'               :
                   $Is_MacOS    ? ':perl'                :
                   $Is_NetWare  ? 'perl'                 : 
@@ -153,22 +154,6 @@ my $TEST = catfile(curdir(), 'TEST');
     $ENV{PATH} = '';
     delete @ENV{@MoreEnv};
     $ENV{TERM} = 'dumb';
-
-    if ($Is_Cygwin && ! -f 'cygwin1.dll') {
-	system("/usr/bin/cp /usr/bin/cygwin1.dll .") &&
-	    die "$0: failed to cp cygwin1.dll: $!\n";
-	eval q{
-	    END { unlink "cygwin1.dll" }
-	};
-    }
-
-    if ($Is_Cygwin && ! -f 'cygcrypt-0.dll' && -f '/usr/bin/cygcrypt-0.dll') {
-	system("/usr/bin/cp /usr/bin/cygcrypt-0.dll .") &&
-	    die "$0: failed to cp cygcrypt-0.dll: $!\n";
-	eval q{
-	    END { unlink "cygcrypt-0.dll" }
-	};
-    }
 
     test eval { `$echo 1` } eq "1\n";
 
@@ -1163,6 +1148,8 @@ SKIP:
 {
     SKIP: {
 	skip "fork() is not available", 3 unless $Config{'d_fork'};
+	skip "opening |- is not stable on threaded OpenBSD with taint", 3
+            if $Config{useithreads} && $Is_OpenBSD;
 
 	$ENV{'PATH'} = $TAINT;
 	local $SIG{'PIPE'} = 'IGNORE';
@@ -1204,3 +1191,74 @@ SKIP:
     $o->untainted;
 }
 
+{
+    # tests for tainted format in s?printf
+    eval { printf($TAINT . "# %s\n", "foo") };
+    like($@, qr/^Insecure dependency in printf/, q/printf doesn't like tainted formats/);
+    eval { printf("# %s\n", $TAINT . "foo") };
+    ok(!$@, q/printf accepts other tainted args/);
+    eval { sprintf($TAINT . "# %s\n", "foo") };
+    like($@, qr/^Insecure dependency in sprintf/, q/sprintf doesn't like tainted formats/);
+    eval { sprintf("# %s\n", $TAINT . "foo") };
+    ok(!$@, q/sprintf accepts other tainted args/);
+}
+
+{
+    # 40708
+    my $n  = 7e9;
+    8e9 - $n;
+
+    my $val = $n;
+    is ($val, '7000000000', 'Assignment to untainted variable');
+    $val = $TAINT;
+    $val = $n;
+    is ($val, '7000000000', 'Assignment to tainted variable');
+}
+
+{
+    my $val = 0;
+    my $tainted = '1' . $TAINT;
+    eval '$val = eval $tainted;';
+    is ($val, 0, "eval doesn't like tainted strings");
+    like ($@, qr/^Insecure dependency in eval/);
+
+    # Rather nice code to get a tainted undef by from Rick Delaney
+    open FH, "test.pl" or die $!;
+    seek FH, 0, 2 or die $!;
+    $tainted = <FH>;
+
+    eval 'eval $tainted';
+    like ($@, qr/^Insecure dependency in eval/);
+}
+
+# This may bomb out with the alarm signal so keep it last
+SKIP: {
+    skip "No alarm()"  unless $Config{d_alarm};
+    # Test from RT #41831]
+    # [PATCH] Bug & fix: hang when using study + taint mode (perl 5.6.1, 5.8.x)
+
+    my $DATA = <<'END' . $TAINT;
+line1 is here
+line2 is here
+line3 is here
+line4 is here
+
+END
+
+    #study $DATA;
+
+    ## don't set $SIG{ALRM}, since we'd never get to a user-level handler as
+    ## perl is stuck in a regexp infinite loop!
+
+    alarm(10);
+
+    if ($DATA =~ /^line2.*line4/m) {
+	fail("Should not be a match")
+    } else {
+	pass("Match on tainted multiline data should fail promptly");
+    }
+
+    alarm(0);
+}
+__END__
+# Keep the previous test last

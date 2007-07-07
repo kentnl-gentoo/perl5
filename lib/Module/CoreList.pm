@@ -1,7 +1,7 @@
 package Module::CoreList;
 use strict;
 use vars qw/$VERSION %released %patchlevel %version %families/;
-$VERSION = '2.08';
+$VERSION = '2.12';
 
 =head1 NAME
 
@@ -13,8 +13,9 @@ Module::CoreList - what modules shipped with versions of perl
 
  print $Module::CoreList::version{5.00503}{CPAN}; # prints 1.48
 
- print Module::CoreList->first_release('File::Spec');       # prints 5.00503
- print Module::CoreList->first_release('File::Spec', 0.82); # prints 5.006001
+ print Module::CoreList->first_release('File::Spec');         # prints 5.00405
+ print Module::CoreList->first_release_by_date('File::Spec'); # prints 5.005
+ print Module::CoreList->first_release('File::Spec', 0.82);   # prints 5.006001
 
  print join ', ', Module::CoreList->find_modules(qr/Data/);
     # prints 'Data::Dumper'
@@ -30,7 +31,7 @@ Module::CoreList - what modules shipped with versions of perl
 =head1 DESCRIPTION
 
 Module::CoreList contains the hash of hashes
-%Module::CoreList::version, this is keyed on perl version as indicated
+%Module::CoreList::version, that is keyed on perl version as indicated
 in $].  The second level hash is module => version pairs.
 
 Note, it is possible for the version of a module to be unspecified,
@@ -46,6 +47,13 @@ clusters known perl releases by their major versions.
 In 2.01 %Module::CoreList::patchlevel contains the branch and patchlevel
 corresponding to the specified perl version in the Perforce repository where
 the perl sources are kept.
+
+Starting with 2.10, the special module name C<Unicode> refers to the version of
+the Unicode Character Database bundled with Perl.
+
+Since 2.11, Module::CoreList::first_release() returns the first release
+in the order of perl version numbers. If you want to get the earliest
+perl release instead, use Module::CoreList::first_release_by_date().
 
 =head1 CAVEATS
 
@@ -66,14 +74,14 @@ Currently maintained by the perl 5 porters E<lt>perl5-porters@perl.orgE<gt>.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002-2006 Richard Clamp.  All Rights Reserved.
+Copyright (C) 2002-2007 Richard Clamp.  All Rights Reserved.
 
 This module is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-L<Module::Info>, L<perl>
+L<corelist>, L<Module::Info>, L<perl>
 
 =cut
 
@@ -92,16 +100,27 @@ END {
 }
 
 
-sub first_release {
+sub first_release_raw {
     my ($discard, $module, $version) = @_;
 
     my @perls = $version
         ? grep { exists $version{$_}{ $module } &&
-                        $version{$_}{ $module } >= $version } keys %version
+                        $version{$_}{ $module } ge $version } keys %version
         : grep { exists $version{$_}{ $module }             } keys %version;
 
+    return @perls;
+}
+
+sub first_release_by_date {
+    my @perls = &first_release_raw;
     return unless @perls;
     return (sort { $released{$a} cmp $released{$b} } @perls)[0];
+}
+
+sub first_release {
+    my @perls = &first_release_raw;
+    return unless @perls;
+    return (sort { $a cmp $b } @perls)[0];
 }
 
 sub find_modules {
@@ -132,12 +151,12 @@ sub find_modules {
     5.00405  => '1999-04-29',
     5.006    => '2000-03-22',
     5.006001 => '2001-04-08',
-    5.006002 => '2003-11-15',
     5.007003 => '2002-03-05',
     5.008    => '2002-07-19',
     5.008001 => '2003-09-25',
-    5.008002 => '2003-11-05',
     5.009    => '2003-10-27',
+    5.008002 => '2003-11-05',
+    5.006002 => '2003-11-15',
     5.008003 => '2004-01-14',
     5.00504  => '2004-02-23',
     5.009001 => '2004-03-16',
@@ -149,6 +168,7 @@ sub find_modules {
     5.009003 => '2006-01-28',
     5.008008 => '2006-01-31',
     5.009004 => '2006-08-15',
+    5.009005 => '2007-07-07',
    );
 
 # perforce branches and patch levels
@@ -175,6 +195,7 @@ sub find_modules {
     5.009003 => [perl => 26975],
     5.008008 => ['maint-5.8' => 27040],
     5.009004 => [perl => 28727],
+    5.009005 => [perl => 31562],
 );
 
 for my $version ( sort { $a <=> $b } keys %released ) {
@@ -236,6 +257,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'strict'                => undef,  # lib/strict.pm
         'subs'                  => undef,  # lib/subs.pm
     },
+
     5.001 => {
         'AnyDBM_File'           => undef,  # lib/AnyDBM_File.pm
         'AutoLoader'            => undef,  # lib/AutoLoader.pm
@@ -294,6 +316,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'strict'                => undef,  # lib/strict.pm
         'subs'                  => undef,  # lib/subs.pm
     },
+
     5.002 => {
         'AnyDBM_File'           => undef,  # lib/AnyDBM_File.pm
         'AutoLoader'            => undef,  # lib/AutoLoader.pm
@@ -373,6 +396,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'subs'                  => undef,  # lib/subs.pm
         'vars'                  => undef,  # lib/vars.pm
     },
+
     5.00307 => {
         'AnyDBM_File'           => undef, #./lib/AnyDBM_File.pm
         'AutoLoader'            => undef, #./lib/AutoLoader.pm
@@ -473,6 +497,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'VMS::Filespec'         => undef, #./vms/ext/Filespec.pm
         'VMS::Stdio'            => '2.0', #./vms/ext/Stdio/Stdio.pm
     },
+
     5.004   => {
         'AnyDBM_File'           => undef, #./lib/AnyDBM_File.pm
         'AutoLoader'            => undef, #./lib/AutoLoader.pm
@@ -606,6 +631,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'VMS::Stdio'            => '2.02', #./vms/ext/Stdio/Stdio.pm
         'vmsish'                => undef, #./vms/ext/vmsish.pm
     },
+
     5.005   => {
         'AnyDBM_File'           => undef, #./lib/AnyDBM_File.pm
         'attrs'                 => '1.0', #./ext/attrs/attrs.pm
@@ -781,6 +807,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'VMS::Stdio'            => '2.1', #./vms/ext/Stdio/Stdio.pm
         'vmsish'                => undef, #./vms/ext/vmsish.pm
     },
+
     5.00503   => {
         'AnyDBM_File'           => undef,
         'attrs'                 => '1.0',
@@ -957,6 +984,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'VMS::Stdio'            => 2.1,
         'vmsish'                => undef,
     },
+
     5.00405   => {
         'AnyDBM_File'           => undef, #./lib/AnyDBM_File.pm
         'attrs'                 => '0.1', #./lib/attrs.pm
@@ -1104,7 +1132,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'vmsish'                => undef, #./vms/ext/vmsish.pm
     },
 
-        5.00504 => {
+    5.00504 => {
         'AnyDBM_File'           => undef,  #lib/AnyDBM_File.pm
         'attrs'                 => '1.0',  #lib/attrs.pm
         'AutoLoader'            => undef,  #lib/AutoLoader.pm
@@ -1282,7 +1310,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'VMS::Filespec'         => undef,  #vms/ext/Filespec.pm
         'VMS::Stdio'            => '2.1',  #vms/ext/Stdio/Stdio.pm
         'vmsish'                => undef,  #vms/ext/vmsish.pm
-        },
+    },
 
     5.006   => {
         'AnyDBM_File'           => undef, #./lib/AnyDBM_File.pm
@@ -1501,6 +1529,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'warnings'              => undef, #./lib/warnings.pm
         'warnings::register'    => undef, #./lib/warnings/register.pm
     },
+
     5.006001   => {
         'AnyDBM_File'           => undef,
         'attributes'            => 0.03,
@@ -1724,6 +1753,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'warnings::register'    => undef,
         'XSLoader'              => '0.01',
     },
+
     5.006002 => {
         'AnyDBM_File'           => undef,  #lib/AnyDBM_File.pm
         'attributes'            => '0.03',  #lib/attributes.pm
@@ -1957,6 +1987,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::Local'           => undef, #lib/Time/Local.pm
         'Time::localtime'       => '1.01', #lib/Time/localtime.pm
         'Time::tm'              => undef, #lib/Time/tm.pm
+        'Unicode'               => '3.0.1', # lib/unicore/version
         'UNIVERSAL'             => undef, #lib/UNIVERSAL.pm
         'User::grent'           => undef, #lib/User/grent.pm
         'User::pwent'           => undef, #lib/User/pwent.pm
@@ -2607,6 +2638,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::Local'           => '1.04', #./lib/Time/Local.pm
         'Time::localtime'       => '1.02', #./lib/Time/localtime.pm
         'Time::tm'              => '1.00', #./lib/Time/tm.pm
+        'Unicode'               => '3.2.0', # lib/unicore/version
         'Unicode::Collate'      => '0.12', #./lib/Unicode/Collate.pm
         'Unicode::Normalize'    => '0.17', #./ext/Unicode/Normalize/Normalize.pm
         'Unicode::UCD'          => '0.2', #./lib/Unicode/UCD.pm
@@ -2963,6 +2995,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::Local'           => '1.07', #./lib/Time/Local.pm
         'Time::localtime'       => '1.02', #./lib/Time/localtime.pm
         'Time::tm'              => '1.00', #./lib/Time/tm.pm
+        'Unicode'               => '4.0.0', # lib/unicore/version
         'Unicode::Collate'      => '0.28', #./lib/Unicode/Collate.pm
         'Unicode::Normalize'    => '0.23', #./lib/Unicode/Normalize.pm
         'Unicode::UCD'          => '0.21', #./lib/Unicode/UCD.pm
@@ -3318,6 +3351,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::Local' => 1.07,  #Time\Local.pm
         'Time::localtime' => 1.02, #Time\localtime.pm
         'Time::tm' => '1.00',     #Time\tm.pm
+        'Unicode' => '4.0.0', # lib/unicore/version
         'Unicode::Collate' => '0.30', #Unicode\Collate.pm
         'Unicode::Normalize' => 0.25, #Unicode\Normalize.pm
         'Unicode::UCD' => 0.21, #Unicode\UCD.pm
@@ -3337,7 +3371,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'XSLoader' => 0.02,     #XSLoader.pm
     },
 
-        5.008003 => {
+    5.008003 => {
         'AnyDBM_File'           => '1.00',  #lib/AnyDBM_File.pm
         'Attribute::Handlers'   => '0.78',  #lib/Attribute/Handlers.pm
         'attributes'            => '0.06',  #lib/attributes.pm
@@ -3675,6 +3709,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::Local'           => '1.07',  #lib/Time/Local.pm
         'Time::localtime'       => '1.02',  #lib/Time/localtime.pm
         'Time::tm'              => '1.00',  #lib/Time/tm.pm
+        'Unicode'               => '4.0.0', # lib/unicore/version
         'Unicode::Collate'      => '0.33',  #lib/Unicode/Collate.pm
         'Unicode::Normalize'    => '0.28',  #lib/Unicode/Normalize.pm
         'Unicode::UCD'          => '0.21',  #lib/Unicode/UCD.pm
@@ -3692,7 +3727,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'XS::APItest'           => '0.03',  #lib/XS/APItest.pm
         'XSLoader'              => '0.02',  #lib/XSLoader.pm
         'XS::Typemap'           => '0.01',  #lib/XS/Typemap.pm
-        },
+    },
 
     5.009 => {
         'AnyDBM_File'           => '1.00',  #lib/AnyDBM_File.pm
@@ -4033,6 +4068,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::Local'           => '1.07',  #lib/Time/Local.pm
         'Time::localtime'       => '1.02',  #lib/Time/localtime.pm
         'Time::tm'              => '1.00',  #lib/Time/tm.pm
+        'Unicode'               => '4.0.0', #lib/unicore/version
         'Unicode::Collate'      => '0.28',  #lib/Unicode/Collate.pm
         'Unicode::Normalize'    => '0.23',  #lib/Unicode/Normalize.pm
         'Unicode::UCD'          => '0.21',  #lib/Unicode/UCD.pm
@@ -4051,7 +4087,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'XS::APItest'           => '0.02',  #lib/XS/APItest.pm
         'XS::Typemap'           => '0.01',  #lib/XS/Typemap.pm
         'XSLoader'              => '0.03',  #lib/XSLoader.pm
-       },
+    },
 
     5.009001 => {
         'AnyDBM_File'           => '1.00',  #lib/AnyDBM_File.pm
@@ -4399,6 +4435,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::Local'           => '1.07_94',  #lib/Time/Local.pm
         'Time::localtime'       => '1.02',  #lib/Time/localtime.pm
         'Time::tm'              => '1.00',  #lib/Time/tm.pm
+        'Unicode'               => '4.0.0', #lib/unicore/version
         'Unicode::Collate'      => '0.33',  #lib/Unicode/Collate.pm
         'Unicode::Normalize'    => '0.28',  #lib/Unicode/Normalize.pm
         'Unicode::UCD'          => '0.21',  #lib/Unicode/UCD.pm
@@ -4472,6 +4509,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Symbol'                => '1.05',  #lib/Symbol.pm
         'Test'                  => '1.24',  #lib/Test.pm
         'Thread'                => '2.00',  #lib/Thread.pm
+        'Unicode'               => '4.0.1', # lib/unicore/version
         'UNIVERSAL'             => '1.01',  #lib/UNIVERSAL.pm
         'utf8'                  => '1.03',  #lib/utf8.pm
         'vars'                  => '1.01',  #lib/vars.pm
@@ -4780,8 +4818,8 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'VMS::Filespec'         => '1.11',  #vms/ext/Filespec.pm
         'VMS::Stdio'            => '2.3',  #vms/ext/Stdio/Stdio.pm
     },
-    5.008005 => {
 
+    5.008005 => {
         'AnyDBM_File'           => '1.00',  #lib/AnyDBM_File.pm
         'attributes'            => '0.06',  #lib/attributes.pm
         'AutoLoader'            => '5.60',  #lib/AutoLoader.pm
@@ -5065,6 +5103,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Time::localtime'       => '1.02',  #lib/Time/localtime.pm
         'Time::tm'              => '1.00',  #lib/Time/tm.pm
         'Time::HiRes'           => '1.59',  #lib/Time/HiRes.pm
+        'Unicode'               => '4.0.1', # lib/unicore/version
         'Unicode::Collate'      => '0.40',  #lib/Unicode/Collate.pm
         'Unicode::UCD'          => '0.22',  #lib/Unicode/UCD.pm
         'Unicode::Normalize'    => '0.30',  #lib/Unicode/Normalize.pm
@@ -5144,6 +5183,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'VMS::Filespec'         => '1.11',  #vms/ext/Filespec.pm
         'VMS::Stdio'            => '2.3',  #vms/ext/Stdio/Stdio.pm
     },
+
     5.008006 => {
         'AnyDBM_File'           => '1.00',  #lib/AnyDBM_File.pm
         'Attribute::Handlers'   => '0.78_01',  #lib/Attribute/Handlers.pm
@@ -5493,6 +5533,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
         'Unicode::Normalize'    => '0.30',  #lib/Unicode/Normalize.pm
         'Unicode::UCD'          => '0.22',  #lib/Unicode/UCD.pm
         'UNIVERSAL'             => '1.01',  #lib/UNIVERSAL.pm
+        'Unicode'               => '4.0.1', # lib/unicore/version
         'User::grent'           => '1.00',  #lib/User/grent.pm
         'User::pwent'           => '1.00',  #lib/User/pwent.pm
         'utf8'                  => '1.04',  #lib/utf8.pm
@@ -5820,6 +5861,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
 	'Time::localtime'       => '1.02',
 	'Time::tm'              => '1.00',
 	'UNIVERSAL'             => '1.02',
+        'Unicode'               => '4.0.1',
 	'Unicode::Collate'      => '0.40',
 	'Unicode::Normalize'    => '0.30',
 	'Unicode::UCD'          => '0.22',
@@ -6182,6 +6224,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
 	'Time::localtime'       => '1.02',
 	'Time::tm'              => '1.00',
 	'UNIVERSAL'             => '1.01',
+        'Unicode'               => '4.1.0', # lib/unicore/version
 	'Unicode::Collate'      => '0.40',
 	'Unicode::Normalize'    => '0.32',
 	'Unicode::UCD'          => '0.23',
@@ -6624,6 +6667,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
 	'Time::localtime'       => '1.02',
 	'Time::tm'              => '1.00',
 	'UNIVERSAL'             => '1.03',
+        'Unicode'               => '4.1.0',
 	'Unicode::Collate'      => '0.52',
 	'Unicode::Normalize'    => '0.32',
 	'Unicode::UCD'          => '0.24',
@@ -6996,6 +7040,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
 	'Time::localtime'       => '1.02',
 	'Time::tm'              => '1.00',
 	'UNIVERSAL'             => '1.01',
+        'Unicode'               => '4.1.0',
 	'Unicode::Collate'      => '0.52',
 	'Unicode::Normalize'    => '0.32',
 	'Unicode::UCD'          => '0.24',
@@ -7469,6 +7514,7 @@ for my $version ( sort { $a <=> $b } keys %released ) {
 	'Time::localtime'       => '1.02',
 	'Time::tm'              => '1.00',
 	'UNIVERSAL'             => '1.04',
+        'Unicode'               => '4.1.0',
 	'Unicode::Collate'      => '0.52',
 	'Unicode::Normalize'    => '1.01',
 	'Unicode::UCD'          => '0.24',
@@ -7521,6 +7567,540 @@ for my $version ( sort { $a <=> $b } keys %released ) {
 	'version'               => '0.67',
 	'vmsish'                => '1.02',
 	'warnings'              => '1.05',
+	'warnings::register'    => '1.01',
+    },
+    5.009005 => {
+	'AnyDBM_File'           => '1.00',
+	'Archive::Extract'      => '0.22_01',
+	'Archive::Tar'          => '1.32',
+	'Archive::Tar::Constant'=> '0.02',
+	'Archive::Tar::File'    => '0.02',
+	'Attribute::Handlers'   => '0.78_06',
+	'AutoLoader'            => '5.63',
+	'AutoSplit'             => '1.05',
+	'B'                     => '1.16',
+	'B::Concise'            => '0.72',
+	'B::Debug'              => '1.05',
+	'B::Deparse'            => '0.82',
+	'B::Lint'               => '1.09',
+	'B::Showlex'            => '1.02',
+	'B::Terse'              => '1.05',
+	'B::Xref'               => '1.01',
+	'Benchmark'             => '1.1',
+	'CGI'                   => '3.29',
+	'CGI::Apache'           => '1.00',
+	'CGI::Carp'             => '1.29',
+	'CGI::Cookie'           => '1.28',
+	'CGI::Fast'             => '1.07',
+	'CGI::Pretty'           => '1.08',
+	'CGI::Push'             => '1.04',
+	'CGI::Switch'           => '1.00',
+	'CGI::Util'             => '1.5_01',
+	'CPAN'                  => '1.9102',
+	'CPAN::Debug'           => '5.400955',
+	'CPAN::FirstTime'       => '5.401669',
+	'CPAN::HandleConfig'    => '5.401744',
+	'CPAN::Kwalify'         => '5.401418',
+	'CPAN::Nox'             => '5.400844',
+	'CPAN::Queue'           => '5.401704',
+	'CPAN::Tarzip'          => '5.401717',
+	'CPAN::Version'         => '5.401387',
+	'CPANPLUS'              => '0.81_01',
+	'CPANPLUS::Backend'     => undef,
+	'CPANPLUS::Backend::RV' => undef,
+	'CPANPLUS::Config'      => undef,
+	'CPANPLUS::Configure'   => undef,
+	'CPANPLUS::Configure::Setup'=> undef,
+	'CPANPLUS::Dist'        => undef,
+	'CPANPLUS::Dist::Base'  => '0.01',
+	'CPANPLUS::Dist::Build' => '0.06_01',
+	'CPANPLUS::Dist::Build::Constants'=> '0.01',
+	'CPANPLUS::Dist::MM'    => undef,
+	'CPANPLUS::Dist::Sample'=> undef,
+	'CPANPLUS::Error'       => undef,
+	'CPANPLUS::Internals'   => '0.81_01',
+	'CPANPLUS::Internals::Constants'=> '0.01',
+	'CPANPLUS::Internals::Constants::Report'=> '0.01',
+	'CPANPLUS::Internals::Extract'=> undef,
+	'CPANPLUS::Internals::Fetch'=> undef,
+	'CPANPLUS::Internals::Report'=> undef,
+	'CPANPLUS::Internals::Search'=> undef,
+	'CPANPLUS::Internals::Source'=> undef,
+	'CPANPLUS::Internals::Utils'=> undef,
+	'CPANPLUS::Internals::Utils::Autoflush'=> undef,
+	'CPANPLUS::Module'      => undef,
+	'CPANPLUS::Module::Author'=> undef,
+	'CPANPLUS::Module::Author::Fake'=> undef,
+	'CPANPLUS::Module::Checksums'=> undef,
+	'CPANPLUS::Module::Fake'=> undef,
+	'CPANPLUS::Module::Signature'=> undef,
+	'CPANPLUS::Selfupdate'  => undef,
+	'CPANPLUS::Shell'       => undef,
+	'CPANPLUS::Shell::Classic'=> '0.0562',
+	'CPANPLUS::Shell::Default'=> '0.81_01',
+	'CPANPLUS::Shell::Default::Plugins::Remote'=> undef,
+	'CPANPLUS::Shell::Default::Plugins::Source'=> undef,
+	'CPANPLUS::inc'         => undef,
+	'Carp'                  => '1.07',
+	'Carp::Heavy'           => '1.07',
+	'Class::ISA'            => '0.33',
+	'Class::Struct'         => '0.63',
+	'Compress::Raw::Zlib'   => '2.005',
+	'Compress::Zlib'        => '2.005',
+	'Config'                => undef,
+	'Config::Extensions'    => '0.01',
+	'Cwd'                   => '3.25',
+	'DB'                    => '1.01',
+	'DBM_Filter'            => '0.02',
+	'DBM_Filter::compress'  => '0.01',
+	'DBM_Filter::encode'    => '0.01',
+	'DBM_Filter::int32'     => '0.01',
+	'DBM_Filter::null'      => '0.01',
+	'DBM_Filter::utf8'      => '0.01',
+	'DB_File'               => '1.815',
+	'DCLsym'                => '1.03',
+	'Data::Dumper'          => '2.121_13',
+	'Devel::DProf'          => '20050603.00',
+	'Devel::InnerPackage'   => '0.3',
+	'Devel::PPPort'         => '3.11_01',
+	'Devel::Peek'           => '1.03',
+	'Devel::SelfStubber'    => '1.03',
+	'Digest'                => '1.15',
+	'Digest::MD5'           => '2.36_01',
+	'Digest::SHA'           => '5.44',
+	'Digest::base'          => '1.00',
+	'Digest::file'          => '1.00',
+	'DirHandle'             => '1.01',
+	'Dumpvalue'             => '1.12',
+	'DynaLoader'            => '1.08',
+	'Encode'                => '2.23',
+	'Encode::Alias'         => '2.07',
+	'Encode::Byte'          => '2.03',
+	'Encode::CJKConstants'  => '2.02',
+	'Encode::CN'            => '2.02',
+	'Encode::CN::HZ'        => '2.04',
+	'Encode::Config'        => '2.04',
+	'Encode::EBCDIC'        => '2.02',
+	'Encode::Encoder'       => '2.01',
+	'Encode::Encoding'      => '2.05',
+	'Encode::GSM0338'       => '2.00',
+	'Encode::Guess'         => '2.02',
+	'Encode::JP'            => '2.03',
+	'Encode::JP::H2Z'       => '2.02',
+	'Encode::JP::JIS7'      => '2.03',
+	'Encode::KR'            => '2.02',
+	'Encode::KR::2022_KR'   => '2.02',
+	'Encode::MIME::Header'  => '2.05',
+	'Encode::MIME::Header::ISO_2022_JP'=> '1.03',
+	'Encode::MIME::Name'    => '1.01',
+	'Encode::Symbol'        => '2.02',
+	'Encode::TW'            => '2.02',
+	'Encode::Unicode'       => '2.05',
+	'Encode::Unicode::UTF7' => '2.04',
+	'English'               => '1.04',
+	'Env'                   => '1.00',
+	'Errno'                 => '1.10',
+	'Exporter'              => '5.60',
+	'Exporter::Heavy'       => '5.60',
+	'ExtUtils::CBuilder'    => '0.19',
+	'ExtUtils::CBuilder::Base'=> '0.12',
+	'ExtUtils::CBuilder::Platform::Unix'=> '0.12',
+	'ExtUtils::CBuilder::Platform::VMS'=> '0.12',
+	'ExtUtils::CBuilder::Platform::Windows'=> '0.13',
+	'ExtUtils::CBuilder::Platform::aix'=> '0.12',
+	'ExtUtils::CBuilder::Platform::cygwin'=> '0.12',
+	'ExtUtils::CBuilder::Platform::darwin'=> '0.12',
+	'ExtUtils::CBuilder::Platform::dec_osf'=> '0.01',
+	'ExtUtils::CBuilder::Platform::os2'=> '0.13',
+	'ExtUtils::Command'     => '1.13',
+	'ExtUtils::Command::MM' => '0.07',
+	'ExtUtils::Constant'    => '0.2',
+	'ExtUtils::Constant::Base'=> '0.04',
+	'ExtUtils::Constant::ProxySubs'=> '0.03',
+	'ExtUtils::Constant::Utils'=> '0.01',
+	'ExtUtils::Constant::XS'=> '0.02',
+	'ExtUtils::Embed'       => '1.26',
+	'ExtUtils::Install'     => '1.41_01',
+	'ExtUtils::Installed'   => '1.41',
+	'ExtUtils::Liblist'     => '1.03',
+	'ExtUtils::Liblist::Kid'=> '1.33',
+	'ExtUtils::MM'          => '0.07',
+	'ExtUtils::MM_AIX'      => '0.05',
+	'ExtUtils::MM_Any'      => '0.15',
+	'ExtUtils::MM_BeOS'     => '1.07',
+	'ExtUtils::MM_Cygwin'   => '1.1',
+	'ExtUtils::MM_DOS'      => '0.04',
+	'ExtUtils::MM_MacOS'    => '1.1',
+	'ExtUtils::MM_NW5'      => '2.1',
+	'ExtUtils::MM_OS2'      => '1.07',
+	'ExtUtils::MM_QNX'      => '0.04',
+	'ExtUtils::MM_UWIN'     => '0.04',
+	'ExtUtils::MM_Unix'     => '1.54_01',
+	'ExtUtils::MM_VMS'      => '5.76',
+	'ExtUtils::MM_VOS'      => '0.04',
+	'ExtUtils::MM_Win32'    => '1.15',
+	'ExtUtils::MM_Win95'    => '0.06',
+	'ExtUtils::MY'          => '0.03',
+	'ExtUtils::MakeMaker'   => '6.36',
+	'ExtUtils::MakeMaker::Config'=> '0.04',
+	'ExtUtils::MakeMaker::bytes'=> '0.03',
+	'ExtUtils::MakeMaker::vmsish'=> '0.03',
+	'ExtUtils::Manifest'    => '1.51_01',
+	'ExtUtils::Miniperl'    => undef,
+	'ExtUtils::Mkbootstrap' => '1.17',
+	'ExtUtils::Mksymlists'  => '1.21',
+	'ExtUtils::Packlist'    => '1.41',
+	'ExtUtils::ParseXS'     => '2.18',
+	'ExtUtils::testlib'     => '1.17',
+	'Fatal'                 => '1.05',
+	'Fcntl'                 => '1.06',
+	'File::Basename'        => '2.76',
+	'File::CheckTree'       => '4.3',
+	'File::Compare'         => '1.1005',
+	'File::Copy'            => '2.10',
+	'File::DosGlob'         => '1.00',
+	'File::Fetch'           => '0.10',
+	'File::Find'            => '1.11',
+	'File::Glob'            => '1.06',
+	'File::GlobMapper'      => '0.000_02',
+	'File::Path'            => '2.01',
+	'File::Spec'            => '3.25',
+	'File::Spec::Cygwin'    => '1.1_01',
+	'File::Spec::Epoc'      => '1.1',
+	'File::Spec::Functions' => '1.3',
+	'File::Spec::Mac'       => '1.4',
+	'File::Spec::OS2'       => '1.2',
+	'File::Spec::Unix'      => '1.5',
+	'File::Spec::VMS'       => '1.4_01',
+	'File::Spec::Win32'     => '1.6',
+	'File::Temp'            => '0.18',
+	'File::stat'            => '1.00',
+	'FileCache'             => '1.07',
+	'FileHandle'            => '2.01',
+	'Filespec'              => '1.11',
+	'Filter::Simple'        => '0.82',
+	'Filter::Util::Call'    => '1.0602',
+	'FindBin'               => '1.49',
+	'GDBM_File'             => '1.08',
+	'Getopt::Long'          => '2.36',
+	'Getopt::Std'           => '1.05',
+	'Hash::Util'            => '0.07',
+	'Hash::Util::FieldHash' => '1.01',
+	'I18N::Collate'         => '1.00',
+	'I18N::LangTags'        => '0.35',
+	'I18N::LangTags::Detect'=> '1.03',
+	'I18N::LangTags::List'  => '0.35',
+	'I18N::Langinfo'        => '0.02',
+	'IO'                    => '1.23_01',
+	'IO::Compress::Adapter::Deflate'=> '2.005',
+	'IO::Compress::Adapter::Identity'=> '2.005',
+	'IO::Compress::Base'    => '2.005',
+	'IO::Compress::Base::Common'=> '2.005',
+	'IO::Compress::Deflate' => '2.005',
+	'IO::Compress::Gzip'    => '2.005',
+	'IO::Compress::Gzip::Constants'=> '2.005',
+	'IO::Compress::RawDeflate'=> '2.005',
+	'IO::Compress::Zip'     => '2.005',
+	'IO::Compress::Zip::Constants'=> '2.005',
+	'IO::Compress::Zlib::Constants'=> '2.005',
+	'IO::Compress::Zlib::Extra'=> '2.005',
+	'IO::Dir'               => '1.06',
+	'IO::File'              => '1.14',
+	'IO::Handle'            => '1.27',
+	'IO::Pipe'              => '1.13',
+	'IO::Poll'              => '0.07',
+	'IO::Seekable'          => '1.10',
+	'IO::Select'            => '1.17',
+	'IO::Socket'            => '1.30_01',
+	'IO::Socket::INET'      => '1.31',
+	'IO::Socket::UNIX'      => '1.23',
+	'IO::Uncompress::Adapter::Identity'=> '2.005',
+	'IO::Uncompress::Adapter::Inflate'=> '2.005',
+	'IO::Uncompress::AnyInflate'=> '2.005',
+	'IO::Uncompress::AnyUncompress'=> '2.005',
+	'IO::Uncompress::Base'  => '2.005',
+	'IO::Uncompress::Gunzip'=> '2.005',
+	'IO::Uncompress::Inflate'=> '2.005',
+	'IO::Uncompress::RawInflate'=> '2.005',
+	'IO::Uncompress::Unzip' => '2.005',
+	'IO::Zlib'              => '1.05_01',
+	'IPC::Cmd'              => '0.36_01',
+	'IPC::Msg'              => '1.02',
+	'IPC::Open2'            => '1.02',
+	'IPC::Open3'            => '1.02',
+	'IPC::Semaphore'        => '1.02',
+	'IPC::SysV'             => '1.04',
+	'List::Util'            => '1.19',
+	'Locale::Constants'     => '2.07',
+	'Locale::Country'       => '2.07',
+	'Locale::Currency'      => '2.07',
+	'Locale::Language'      => '2.07',
+	'Locale::Maketext'      => '1.10_01',
+	'Locale::Maketext::Guts'=> undef,
+	'Locale::Maketext::GutsLoader'=> undef,
+	'Locale::Maketext::Simple'=> '0.18',
+	'Locale::Script'        => '2.07',
+	'Log::Message'          => '0.01',
+	'Log::Message::Config'  => '0.01',
+	'Log::Message::Handlers'=> undef,
+	'Log::Message::Item'    => undef,
+	'Log::Message::Simple'  => '0.0201',
+	'MIME::Base64'          => '3.07_01',
+	'MIME::QuotedPrint'     => '3.07',
+	'Math::BigFloat'        => '1.58',
+	'Math::BigFloat::Trace' => '0.01',
+	'Math::BigInt'          => '1.87',
+	'Math::BigInt::Calc'    => '0.51',
+	'Math::BigInt::CalcEmu' => '0.05',
+	'Math::BigInt::FastCalc'=> '0.15_01',
+	'Math::BigInt::Trace'   => '0.01',
+	'Math::BigRat'          => '0.19',
+	'Math::Complex'         => '1.37',
+	'Math::Trig'            => '1.04',
+	'Memoize'               => '1.01_02',
+	'Memoize::AnyDBM_File'  => '0.65',
+	'Memoize::Expire'       => '1.00',
+	'Memoize::ExpireFile'   => '1.01',
+	'Memoize::ExpireTest'   => '0.65',
+	'Memoize::NDBM_File'    => '0.65',
+	'Memoize::SDBM_File'    => '0.65',
+	'Memoize::Storable'     => '0.65',
+	'Module::Build'         => '0.2808',
+	'Module::Build::Base'   => undef,
+	'Module::Build::Compat' => '0.03',
+	'Module::Build::Config' => undef,
+	'Module::Build::ConfigData'=> undef,
+	'Module::Build::Cookbook'=> undef,
+	'Module::Build::ModuleInfo'=> undef,
+	'Module::Build::Notes'  => undef,
+	'Module::Build::PPMMaker'=> undef,
+	'Module::Build::Platform::Amiga'=> undef,
+	'Module::Build::Platform::Default'=> undef,
+	'Module::Build::Platform::EBCDIC'=> undef,
+	'Module::Build::Platform::MPEiX'=> undef,
+	'Module::Build::Platform::MacOS'=> undef,
+	'Module::Build::Platform::RiscOS'=> undef,
+	'Module::Build::Platform::Unix'=> undef,
+	'Module::Build::Platform::VMS'=> undef,
+	'Module::Build::Platform::VOS'=> undef,
+	'Module::Build::Platform::Windows'=> undef,
+	'Module::Build::Platform::aix'=> undef,
+	'Module::Build::Platform::cygwin'=> undef,
+	'Module::Build::Platform::darwin'=> undef,
+	'Module::Build::Platform::os2'=> undef,
+	'Module::Build::PodParser'=> undef,
+	'Module::Build::Version'=> '0.7203',
+	'Module::Build::YAML'   => '0.50',
+	'Module::CoreList'      => '2.12',
+	'Module::Load'          => '0.10',
+	'Module::Load::Conditional'=> '0.16',
+	'Module::Loaded'        => '0.01',
+	'Module::Pluggable'     => '3.6',
+	'Module::Pluggable::Object'=> '3.6',
+	'Moped::Msg'            => '0.01',
+	'NDBM_File'             => '1.07',
+	'NEXT'                  => '0.60_01',
+	'Net::Cmd'              => '2.28',
+	'Net::Config'           => '1.11',
+	'Net::Domain'           => '2.20',
+	'Net::FTP'              => '2.77',
+	'Net::FTP::A'           => '1.18',
+	'Net::FTP::E'           => '0.01',
+	'Net::FTP::I'           => '1.12',
+	'Net::FTP::L'           => '0.01',
+	'Net::FTP::dataconn'    => '0.11',
+	'Net::NNTP'             => '2.24',
+	'Net::Netrc'            => '2.12',
+	'Net::POP3'             => '2.29',
+	'Net::Ping'             => '2.31_04',
+	'Net::SMTP'             => '2.31',
+	'Net::Time'             => '2.10',
+	'Net::hostent'          => '1.01',
+	'Net::netent'           => '1.00',
+	'Net::protoent'         => '1.00',
+	'Net::servent'          => '1.01',
+	'O'                     => '1.00',
+	'ODBM_File'             => '1.07',
+	'Object::Accessor'      => '0.32',
+	'Opcode'                => '1.09',
+	'POSIX'                 => '1.13',
+	'Package::Constants'    => '0.01',
+	'Params::Check'         => '0.26',
+	'PerlIO'                => '1.04',
+	'PerlIO::encoding'      => '0.10',
+	'PerlIO::scalar'        => '0.05',
+	'PerlIO::via'           => '0.04',
+	'PerlIO::via::QuotedPrint'=> '0.06',
+	'Pod::Checker'          => '1.43',
+	'Pod::Escapes'          => '1.04',
+	'Pod::Find'             => '1.34',
+	'Pod::Functions'        => '1.03',
+	'Pod::Html'             => '1.08',
+	'Pod::InputObjects'     => '1.3',
+	'Pod::LaTeX'            => '0.58',
+	'Pod::Man'              => '2.12',
+	'Pod::ParseLink'        => '1.06',
+	'Pod::ParseUtils'       => '1.35',
+	'Pod::Parser'           => '1.35',
+	'Pod::Perldoc'          => '3.14_01',
+	'Pod::Perldoc::BaseTo'  => undef,
+	'Pod::Perldoc::GetOptsOO'=> undef,
+	'Pod::Perldoc::ToChecker'=> undef,
+	'Pod::Perldoc::ToMan'   => undef,
+	'Pod::Perldoc::ToNroff' => undef,
+	'Pod::Perldoc::ToPod'   => undef,
+	'Pod::Perldoc::ToRtf'   => undef,
+	'Pod::Perldoc::ToText'  => undef,
+	'Pod::Perldoc::ToTk'    => undef,
+	'Pod::Perldoc::ToXml'   => undef,
+	'Pod::PlainText'        => '2.02',
+	'Pod::Plainer'          => '0.01',
+	'Pod::Select'           => '1.35',
+	'Pod::Simple'           => '3.05',
+	'Pod::Simple::BlackBox' => undef,
+	'Pod::Simple::Checker'  => '2.02',
+	'Pod::Simple::Debug'    => undef,
+	'Pod::Simple::DumpAsText'=> '2.02',
+	'Pod::Simple::DumpAsXML'=> '2.02',
+	'Pod::Simple::HTML'     => '3.03',
+	'Pod::Simple::HTMLBatch'=> '3.02',
+	'Pod::Simple::HTMLLegacy'=> '5.01',
+	'Pod::Simple::LinkSection'=> undef,
+	'Pod::Simple::Methody'  => '2.02',
+	'Pod::Simple::Progress' => '1.01',
+	'Pod::Simple::PullParser'=> '2.02',
+	'Pod::Simple::PullParserEndToken'=> undef,
+	'Pod::Simple::PullParserStartToken'=> undef,
+	'Pod::Simple::PullParserTextToken'=> undef,
+	'Pod::Simple::PullParserToken'=> '2.02',
+	'Pod::Simple::RTF'      => '2.02',
+	'Pod::Simple::Search'   => '3.04',
+	'Pod::Simple::SimpleTree'=> '2.02',
+	'Pod::Simple::Text'     => '2.02',
+	'Pod::Simple::TextContent'=> '2.02',
+	'Pod::Simple::TiedOutFH'=> undef,
+	'Pod::Simple::Transcode'=> undef,
+	'Pod::Simple::TranscodeDumb'=> '2.02',
+	'Pod::Simple::TranscodeSmart'=> undef,
+	'Pod::Simple::XMLOutStream'=> '2.02',
+	'Pod::Text'             => '3.08',
+	'Pod::Text::Color'      => '2.03',
+	'Pod::Text::Overstrike' => '2',
+	'Pod::Text::Termcap'    => '2.03',
+	'Pod::Usage'            => '1.35',
+	'SDBM_File'             => '1.06',
+	'Safe'                  => '2.12',
+	'Scalar::Util'          => '1.19',
+	'Search::Dict'          => '1.02',
+	'SelectSaver'           => '1.01',
+	'SelfLoader'            => '1.11',
+	'Shell'                 => '0.72_01',
+	'Socket'                => '1.79',
+	'Stdio'                 => '2.3',
+	'Storable'              => '2.16',
+	'Switch'                => '2.13',
+	'Symbol'                => '1.06',
+	'Sys::Hostname'         => '1.11',
+	'Sys::Syslog'           => '0.18_01',
+	'Term::ANSIColor'       => '1.12',
+	'Term::Cap'             => '1.09',
+	'Term::Complete'        => '1.402',
+	'Term::ReadLine'        => '1.02',
+	'Term::UI'              => '0.14_01',
+	'Term::UI::History'     => undef,
+	'Test'                  => '1.25',
+	'Test::Builder'         => '0.70',
+	'Test::Builder::Module' => '0.68',
+	'Test::Builder::Tester' => '1.07',
+	'Test::Builder::Tester::Color'=> undef,
+	'Test::Harness'         => '2.64',
+	'Test::Harness::Assert' => '0.02',
+	'Test::Harness::Iterator'=> '0.02',
+	'Test::Harness::Point'  => '0.01',
+	'Test::Harness::Results'=> '0.01',
+	'Test::Harness::Straps' => '0.26',
+	'Test::Harness::Util'   => '0.01',
+	'Test::More'            => '0.70',
+	'Test::Simple'          => '0.70',
+	'Text::Abbrev'          => '1.01',
+	'Text::Balanced'        => '2.0.0',
+	'Text::ParseWords'      => '3.25',
+	'Text::Soundex'         => '3.02',
+	'Text::Tabs'            => '2007.1117',
+	'Text::Wrap'            => '2006.1117',
+	'Thread'                => '3.02',
+	'Thread::Queue'         => '2.00',
+	'Thread::Semaphore'     => '2.01',
+	'Tie::Array'            => '1.03',
+	'Tie::File'             => '0.97_02',
+	'Tie::Handle'           => '4.1',
+	'Tie::Hash'             => '1.02',
+	'Tie::Hash::NamedCapture'=> '0.06',
+	'Tie::Memoize'          => '1.1',
+	'Tie::RefHash'          => '1.37',
+	'Tie::Scalar'           => '1.00',
+	'Tie::SubstrHash'       => '1.00',
+	'Time::HiRes'           => '1.9707',
+	'Time::Local'           => '1.17',
+	'Time::Piece'           => '1.11_02',
+	'Time::Piece::Seconds'  => undef,
+	'Time::Seconds'         => undef,
+	'Time::gmtime'          => '1.03',
+	'Time::localtime'       => '1.02',
+	'Time::tm'              => '1.00',
+	'UNIVERSAL'             => '1.04',
+	'Unicode'               => '5.0.0',
+	'Unicode::Collate'      => '0.52',
+	'Unicode::Normalize'    => '1.02',
+	'Unicode::UCD'          => '0.25',
+	'User::grent'           => '1.01',
+	'User::pwent'           => '1.00',
+	'Win32'                 => '0.30',
+	'Win32API::File'        => '0.1001_01',
+	'Win32API::File::ExtUtils::Myconst2perl'=> '1',
+	'Win32CORE'             => '0.02',
+	'XS::APItest'           => '0.12',
+	'XS::Typemap'           => '0.02',
+	'XSLoader'              => '0.08',
+	'XSSymSet'              => '1.1',
+	'attributes'            => '0.08',
+	'attrs'                 => '1.02',
+	'autouse'               => '1.06',
+	'base'                  => '2.12',
+	'bigint'                => '0.22',
+	'bignum'                => '0.22',
+	'bigrat'                => '0.22',
+	'blib'                  => '1.03',
+	'bytes'                 => '1.03',
+	'charnames'             => '1.06',
+	'constant'              => '1.10',
+	'diagnostics'           => '1.17',
+	'encoding'              => '2.06',
+	'encoding::warnings'    => '0.11',
+	'feature'               => '1.10',
+	'fields'                => '2.12',
+	'filetest'              => '1.01',
+	'if'                    => '0.05',
+	'integer'               => '1.00',
+	'less'                  => '0.02',
+	'lib'                   => '0.5565',
+	'locale'                => '1.00',
+	'mro'                   => '1.00',
+	'open'                  => '1.05',
+	'ops'                   => '1.01',
+	'overload'              => '1.06',
+	're'                    => '0.08',
+	'sigtrap'               => '1.04',
+	'sort'                  => '2.01',
+	'strict'                => '1.04',
+	'subs'                  => '1.00',
+	'threads'               => '1.63',
+	'threads::shared'       => '1.12',
+	'utf8'                  => '1.07',
+	'vars'                  => '1.01',
+	'version'               => '0.7203',
+	'vmsish'                => '1.02',
+	'warnings'              => '1.06',
 	'warnings::register'    => '1.01',
     },
 );

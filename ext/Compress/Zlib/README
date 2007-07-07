@@ -1,23 +1,17 @@
 
                              Compress::Zlib
 
-                             Version 2.000_13
+                             Version 2.005
 
-                               20 June 2006
+                              18th June 2007
 
 
-       Copyright (c) 1995-2006 Paul Marquess. All rights reserved.
+       Copyright (c) 1995-2007 Paul Marquess. All rights reserved.
           This program is free software; you can redistribute it
            and/or modify it under the same terms as Perl itself.
 
 
 
-
-                                  WARNING
-                            THIS IS BETA CODE.
-
-                      DO NOT use in production code.
-                        Please report any problems.
 
 DESCRIPTION
 -----------

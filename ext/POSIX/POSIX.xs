@@ -1108,9 +1108,14 @@ char *
 setlocale(category, locale = 0)
 	int		category
 	char *		locale
+    PREINIT:
+	char *		retval;
     CODE:
-	RETVAL = setlocale(category, locale);
-	if (RETVAL) {
+	retval = setlocale(category, locale);
+	if (retval) {
+	    /* Save retval since subsequent setlocale() calls
+	     * may overwrite it. */
+	    RETVAL = savepv(retval);
 #ifdef USE_LOCALE_CTYPE
 	    if (category == LC_CTYPE
 #ifdef LC_ALL
@@ -1163,9 +1168,13 @@ setlocale(category, locale = 0)
 	    }
 #endif /* USE_LOCALE_NUMERIC */
 	}
+	else
+	    RETVAL = NULL;
     OUTPUT:
 	RETVAL
-
+    CLEANUP:
+        if (RETVAL)
+	    Safefree(RETVAL);
 
 NV
 acos(x)
@@ -1363,7 +1372,7 @@ sigaction(sig, optaction, oldaction = 0)
 		svp = hv_fetchs(action, "SAFE", FALSE);
 		act.sa_handler =
 			DPTR2FPTR(
-			    void (*)(),
+			    void (*)(int),
 			    (*svp && SvTRUE(*svp))
 				? PL_csighandlerp : PL_sighandlerp
 			);
@@ -1727,7 +1736,7 @@ tcsendbreak(fd, duration)
 	int		duration
 
 char *
-asctime(sec, min, hour, mday, mon, year, wday = 0, yday = 0, isdst = 0)
+asctime(sec, min, hour, mday, mon, year, wday = 0, yday = 0, isdst = -1)
 	int		sec
 	int		min
 	int		hour
@@ -1781,7 +1790,7 @@ difftime(time1, time2)
 	Time_t		time2
 
 SysRetLong
-mktime(sec, min, hour, mday, mon, year, wday = 0, yday = 0, isdst = 0)
+mktime(sec, min, hour, mday, mon, year, wday = 0, yday = 0, isdst = -1)
 	int		sec
 	int		min
 	int		hour
@@ -1804,7 +1813,7 @@ mktime(sec, min, hour, mday, mon, year, wday = 0, yday = 0, isdst = 0)
 	    mytm.tm_wday = wday;
 	    mytm.tm_yday = yday;
 	    mytm.tm_isdst = isdst;
-	    RETVAL = mktime(&mytm);
+	    RETVAL = (SysRetLong) mktime(&mytm);
 	}
     OUTPUT:
 	RETVAL
@@ -1853,7 +1862,7 @@ ctermid(s = 0)
 	char *          s = 0;
     CODE:
 #ifdef HAS_CTERMID_R
-	s = safemalloc((size_t) L_ctermid);
+	s = (char *) safemalloc((size_t) L_ctermid);
 #endif
 	RETVAL = ctermid(s);
     OUTPUT:

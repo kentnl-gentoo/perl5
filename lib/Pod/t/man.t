@@ -1,5 +1,5 @@
 #!/usr/bin/perl -w
-# $Id: man.t,v 1.9 2006-01-28 22:31:50 eagle Exp $
+# $Id: man.t,v 1.10 2006-09-16 20:25:25 eagle Exp $
 #
 # man.t -- Additional specialized tests for Pod::Man.
 #
@@ -29,6 +29,8 @@ use Pod::Man;
 $loaded = 1;
 print "ok 1\n";
 
+my $have_encoding = eval { require PerlIO::encoding; 1; } && ! $@;
+
 my $parser = Pod::Man->new or die "Cannot create parser\n";
 my $n = 2;
 while (<DATA>) {
@@ -36,12 +38,12 @@ while (<DATA>) {
     open (TMP, '> tmp.pod') or die "Cannot create tmp.pod: $!\n";
 
     # We have a test in ISO 8859-1 encoding.  Make sure that nothing strange
-    # happens if Perl thinks the world is Unicode.  Wrap this in eval so that
-    # older versions of Perl don't croak.
-    eval { binmode (\*TMP, ':encoding(iso-8859-1)') };
+    # happens if Perl thinks the world is Unicode.
+    binmode (\*TMP, ':encoding(iso-8859-1)') if $have_encoding;
 
     while (<DATA>) {
         last if $_ eq "###\n";
+        no warnings 'utf8';
         print TMP $_;
     }
     close TMP;
@@ -49,7 +51,7 @@ while (<DATA>) {
     $parser->parse_from_file ('tmp.pod', \*OUT);
     close OUT;
     open (OUT, 'out.tmp') or die "Cannot open out.tmp: $!\n";
-    while (<OUT>) { last if /^\.TH/ }
+    while (<OUT>) { last if /^\.nh/ }
     my $output;
     {
         local $/;
@@ -413,9 +415,11 @@ Blorpy \fBprok\fR  wugga chachacha.
 ###
 =head1 Hyphen in SE<lt>E<gt>
 
-Don't S<transform even-this hyphen>.
+Don't S<transform even-this hyphen>.  This "one's-fine!", as well.  However,
+$-0.13 should have a real hyphen.
 ###
 .SH "Hyphen in S<>"
 .IX Header "Hyphen in S<>"
-Don't transform\ even-this\ hyphen.
+Don't transform\ even-this\ hyphen.  This \*(L"one's-fine!\*(R", as well.  However,
+$\-0.13 should have a real hyphen.
 ###

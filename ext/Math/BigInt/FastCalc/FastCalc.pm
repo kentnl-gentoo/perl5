@@ -1,6 +1,6 @@
 package Math::BigInt::FastCalc;
 
-use 5.005;
+use 5.006002;
 use strict;
 # use warnings;	# dont use warnings for older Perls
 
@@ -11,7 +11,7 @@ use vars qw/@ISA $VERSION $BASE $BASE_LEN/;
 
 @ISA = qw(DynaLoader);
 
-$VERSION = '0.10';
+$VERSION = '0.15_01';
 
 bootstrap Math::BigInt::FastCalc $VERSION;
 
@@ -26,16 +26,17 @@ BEGIN
   # use Calc to override the methods that we do not provide in XS
 
   for my $method (qw/
-    new str
+    str
     add sub mul div
     rsft lsft
     mod modpow modinv
     gcd
-    pow root sqrt log_int fac
+    pow root sqrt log_int fac nok
     digit check
-    from_hex from_bin as_hex as_bin
+    from_hex from_bin from_oct as_hex as_bin as_oct
     zeros length base_len
     xor or and
+    alen 1ex
     /)
     {
     no strict 'refs';
@@ -113,11 +114,11 @@ Original math code by Mark Biggar, rewritten by Tels L<http://bloodgate.com/>
 in late 2000.
 Seperated from BigInt and shaped API with the help of John Peacock.
 Fixed, sped-up and enhanced by Tels http://bloodgate.com 2001-2003.
-Further streamlining (api_version 1 etc) by Tels 2004-2005.
+Further streamlining (api_version 1 etc.) by Tels 2004-2007.
 
 =head1 SEE ALSO
 
-L<Math::BigInt>, L<Math::BigFloat>, L<Math::BigInt::BitVect>,
+L<Math::BigInt>, L<Math::BigFloat>,
 L<Math::BigInt::GMP>, L<Math::BigInt::FastCalc> and L<Math::BigInt::Pari>.
 
 =cut

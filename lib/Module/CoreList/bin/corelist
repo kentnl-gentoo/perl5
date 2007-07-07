@@ -10,9 +10,9 @@ See L<Module::CoreList> for one.
 
 =head1 SYNOPSIS
 
-    corelist -v [<PerlVersion>]
+    corelist -v
     corelist [-a] <ModuleName> | /<ModuleRegex>/ [<ModuleVersion>] ...
-    corelist [-v <PerlVersion>] [ <ModuleName> | /<ModuleNameRegex>/ ] ...
+    corelist [-v <PerlVersion>] [ <ModuleName> | /<ModuleRegex>/ ] ...
 
 =head1 OPTIONS
 
@@ -20,9 +20,12 @@ See L<Module::CoreList> for one.
 
 =item -a modulename
 
+lists all versions of the given module (or the matching modules, in case you
+used a module regexp) in the perls Module::CoreList knows about.
+
     corelist -a utf8
 
-    utf8  was first released with perl 5.006
+    utf8 was first released with perl 5.006
       5.006      undef
       5.006001   undef
       5.006002   undef
@@ -53,12 +56,18 @@ all of the help
 
 lists all of the perl release versions we got the CoreList for.
 
-If you pass a version argument (value of C<$]>, like 5.00503),
+If you pass a version argument (value of C<$]>, like C<5.00503> or C<5.008008>),
 you get a list of all the modules and their respective versions.
+(If you have the C<version> module, you can also use new-style version numbers,
+like C<5.8.8>.)
 
 In module filtering context, it can be used as Perl version filter.
 
 =back
+
+As a special case, if you specify the module name C<Unicode>, you'll get
+the version number of the Unicode Character Database bundled with the
+requested perl versions.
 
 =cut
 
@@ -67,7 +76,6 @@ use Getopt::Long;
 use Pod::Usage;
 use strict;
 use warnings;
-use version ();
 
 my %Opts;
 
@@ -146,10 +154,9 @@ sub module_version {
             $Module::CoreList::version{$Opts{v}}{$mod} || 'undef';
     }
 
-    $ver = "" unless defined $ver;
-
     my $ret = Module::CoreList->first_release(@_);
-    my $msg = "$mod $ver";
+    my $msg = $mod;
+    $msg .= " $ver" if $ver;
 
     if( defined $ret ) {
         $msg .= " was ";
@@ -178,6 +185,10 @@ sub module_version {
 sub numify_version {
     my $ver = shift;
     if ( index( $ver, q{.}, index( $ver, q{.} ) ) >= 0 ) {
+	eval { require version };
+	if ($@) {
+	    die "You need to install version.pm to use dotted version numbers\n";
+	}
         $ver = version->new($ver)->numify;
     }
     return $ver;
@@ -187,7 +198,7 @@ sub numify_version {
 
     $ corelist File::Spec
 
-    File::Spec  was first released with perl 5.005
+    File::Spec was first released with perl 5.005
 
     $ corelist File::Spec 0.83
 
@@ -203,13 +214,13 @@ sub numify_version {
 
     $ corelist /IPC::Open/
 
-    IPC::Open2  was first released with perl 5
+    IPC::Open2 was first released with perl 5
 
-    IPC::Open3  was first released with perl 5
+    IPC::Open3 was first released with perl 5
 
     $ corelist /MANIFEST/i
 
-    ExtUtils::Manifest  was first released with perl 5.001
+    ExtUtils::Manifest was first released with perl 5.001
 
     $ corelist /Template/
 
@@ -241,10 +252,9 @@ sub numify_version {
 
 =head1 COPYRIGHT
 
-Copyright (c) 2002-2006 by D.H. aka PodMaster
+Copyright (c) 2002-2007 by D.H. aka PodMaster
 
-Current maintainer : Rafael Garcia-Suarez E<lt>rgarciasuarez at gmail dot
-comE<gt>
+Currently maintained by the perl 5 porters E<lt>perl5-porters@perl.orgE<gt>.
 
 This program is distributed under the same terms as perl itself.
 See http://perl.org/ or http://cpan.org/ for more info on that.

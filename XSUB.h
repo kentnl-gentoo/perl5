@@ -1,7 +1,7 @@
 /*    XSUB.h
  *
- *    Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
+ *    Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
+ *    2003, 2004, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -107,17 +107,21 @@ is a lexical $_ in scope.
 #  if defined(HASATTRIBUTE_UNUSED) && !defined(__cplusplus)
 #    define XS(name) void name(pTHX_ CV* cv __attribute__unused__)
 #  else
-#    define XS(name) void name(pTHX_ CV* cv)
+#    ifdef __cplusplus
+#      define XS(name) extern "C" void name(pTHX_ CV* cv)
+#    else
+#      define XS(name) void name(pTHX_ CV* cv)
+#    endif
 #  endif
 #endif
 
-#define dAX const I32 ax = MARK - PL_stack_base + 1
+#define dAX const I32 ax = (I32)(MARK - PL_stack_base + 1)
 
 #define dAXMARK				\
 	I32 ax = POPMARK;	\
 	register SV **mark = PL_stack_base + ax++
 
-#define dITEMS I32 items = SP - MARK
+#define dITEMS I32 items = (I32)(SP - MARK)
 
 #if defined(lint) && defined(S_SPLINT_S) /* www.splint.org */
 #  define dXSARGS \
@@ -258,7 +262,7 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 
 #define XSRETURN(off)					\
     STMT_START {					\
-	IV tmpXSoff = (off);				\
+	const IV tmpXSoff = (off);			\
 	PL_stack_sp = PL_stack_base + ax + (tmpXSoff - 1);	\
 	return;						\
     } STMT_END
@@ -291,15 +295,15 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 				    vn = "VERSION"), FALSE);		\
 	}								\
 	if (_sv) {							\
-	    SV *xssv = Perl_newSVpvf(aTHX_ "%s",XS_VERSION);		\
+	    SV *xssv = Perl_newSVpv(aTHX_ XS_VERSION, 0);		\
 	    xssv = new_version(xssv);					\
 	    if ( !sv_derived_from(_sv, "version") )			\
 		_sv = new_version(_sv);				\
 	    if ( vcmp(_sv,xssv) )					\
 		Perl_croak(aTHX_ "%s object version %"SVf" does not match %s%s%s%s %"SVf,\
-		      module, vstringify(xssv),				\
+		      module, SVfARG(vstringify(xssv)),			\
 		      vn ? "$" : "", vn ? module : "", vn ? "::" : "",	\
-		      vn ? vn : "bootstrap parameter", vstringify(_sv));\
+		      vn ? vn : "bootstrap parameter", SVfARG(vstringify(_sv)));\
 	}                                                               \
     } STMT_END
 #else
@@ -361,7 +365,6 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
             if (name[7] == 's'){                                \
                 arg = sv_2mortal(arg);                          \
             }                                                   \
-            SvOKp(arg);                                         \
 	} } STMT_END                                                     
 
 #if 1		/* for compatibility */

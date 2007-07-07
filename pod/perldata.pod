@@ -337,6 +337,12 @@ X<interpolation>
 
 There is no double interpolation in Perl, so the C<$100> is left as is.
 
+By default floating point numbers substituted inside strings use the
+dot (".")  as the decimal separator.  If C<use locale> is in effect,
+and POSIX::setlocale() has been called, the character used for the
+decimal separator is affected by the LC_NUMERIC locale.
+See L<perllocale> and L<POSIX>.
+
 As in some shells, you can enclose the variable name in braces to
 disambiguate it from following alphanumerics (and underscores).
 You must also do
@@ -379,7 +385,7 @@ Unicode strings, and for comparing version "numbers" using the string
 comparison operators, C<cmp>, C<gt>, C<lt> etc.  If there are two or
 more dots in the literal, the leading C<v> may be omitted.
 
-    print v9786;              # prints UTF-8 encoded SMILEY, "\x{263a}"
+    print v9786;              # prints SMILEY, "\x{263a}"
     print v102.111.111;       # prints "foo"
     print 102.111.111;        # same
 

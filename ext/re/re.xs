@@ -6,100 +6,182 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
+#include "re_comp.h"
+
 
 START_EXTERN_C
 
-extern regexp*	my_regcomp (pTHX_ char* exp, char* xend, PMOP* pm);
-extern I32	my_regexec (pTHX_ regexp* prog, char* stringarg, char* strend,
+extern REGEXP*	my_re_compile (pTHX_ const SV * const pattern, const U32 pm_flags);
+extern I32	my_regexec (pTHX_ REGEXP * const prog, char* stringarg, char* strend,
 			    char* strbeg, I32 minend, SV* screamer,
 			    void* data, U32 flags);
-extern void	my_regfree (pTHX_ struct regexp* r);
-extern char*	my_re_intuit_start (pTHX_ regexp *prog, SV *sv, char *strpos,
-				    char *strend, U32 flags,
+
+extern char*	my_re_intuit_start (pTHX_ REGEXP * const prog, SV *sv, char *strpos,
+				    char *strend, const U32 flags,
 				    struct re_scream_pos_data_s *data);
-extern SV*	my_re_intuit_string (pTHX_ regexp *prog);
+extern SV*	my_re_intuit_string (pTHX_ REGEXP * const prog);
+
+extern void	my_regfree (pTHX_ REGEXP * const r);
+
+extern void	my_reg_numbered_buff_fetch(pTHX_ REGEXP * const rx, const I32 paren,
+					   SV * const usesv);
+extern void	my_reg_numbered_buff_store(pTHX_ REGEXP * const rx, const I32 paren,
+					   SV const * const value);
+extern I32	my_reg_numbered_buff_length(pTHX_ REGEXP * const rx,
+					    const SV * const sv, const I32 paren);
+
+extern SV*	my_reg_named_buff(pTHX_ REGEXP * const, SV * const, SV * const,
+                              const U32);
+extern SV*	my_reg_named_buff_iter(pTHX_ REGEXP * const rx,
+                                   const SV * const lastkey, const U32 flags);
+
+extern SV*      my_reg_qr_package(pTHX_ REGEXP * const rx);
+#if defined(USE_ITHREADS)
+extern void*	my_regdupe (pTHX_ REGEXP * const r, CLONE_PARAMS *param);
+#endif
+
+EXTERN_C const struct regexp_engine my_reg_engine;
 
 END_EXTERN_C
 
-/* engine details need to be paired - non debugging, debuggin  */
-#define NEEDS_DEBUGGING 0x01
-struct regexp_engine {
-    regexp*	(*regcomp) (pTHX_ char* exp, char* xend, PMOP* pm);
-    I32		(*regexec) (pTHX_ regexp* prog, char* stringarg, char* strend,
-			    char* strbeg, I32 minend, SV* screamer,
-			    void* data, U32 flags);
-    char*	(*re_intuit_start) (pTHX_ regexp *prog, SV *sv, char *strpos,
-				    char *strend, U32 flags,
-				    struct re_scream_pos_data_s *data);
-    SV*		(*re_intuit_string) (pTHX_ regexp *prog);
-    void	(*regfree) (pTHX_ struct regexp* r);
+const struct regexp_engine my_reg_engine = { 
+        my_re_compile, 
+        my_regexec, 
+        my_re_intuit_start, 
+        my_re_intuit_string, 
+        my_regfree, 
+        my_reg_numbered_buff_fetch,
+        my_reg_numbered_buff_store,
+        my_reg_numbered_buff_length,
+        my_reg_named_buff,
+        my_reg_named_buff_iter,
+        my_reg_qr_package,
+#if defined(USE_ITHREADS)
+        my_regdupe 
+#endif
 };
-
-struct regexp_engine engines[] = {
-    { Perl_pregcomp, Perl_regexec_flags, Perl_re_intuit_start,
-      Perl_re_intuit_string, Perl_pregfree },
-    { my_regcomp, my_regexec, my_re_intuit_start, my_re_intuit_string,
-      my_regfree }
-};
-
-#define MY_CXT_KEY "re::_guts" XS_VERSION
-
-typedef struct {
-    int		x_oldflag;		/* debug flag */
-    unsigned int x_state;
-} my_cxt_t;
-
-START_MY_CXT
-
-#define oldflag		(MY_CXT.x_oldflag)
-
-static void
-install(pTHX_ unsigned int new_state)
-{
-    dMY_CXT;
-    const unsigned int states 
-	= sizeof(engines) / sizeof(struct regexp_engine) -1;
-    if(new_state == MY_CXT.x_state)
-	return;
-
-    if (new_state > states) {
-	Perl_croak(aTHX_ "panic: re::install state %u is illegal - max is %u",
-		   new_state, states);
-    }
-
-    PL_regexecp = engines[new_state].regexec;
-    PL_regcompp = engines[new_state].regcomp;
-    PL_regint_start = engines[new_state].re_intuit_start;
-    PL_regint_string = engines[new_state].re_intuit_string;
-    PL_regfree = engines[new_state].regfree;
-
-    if (new_state & NEEDS_DEBUGGING) {
-	PL_colorset = 0;	/* Allow reinspection of ENV. */
-	if (!(MY_CXT.x_state & NEEDS_DEBUGGING)) {
-	    /* Debugging is turned on for the first time.  */
-	    oldflag = PL_debug & DEBUG_r_FLAG;
-	    PL_debug |= DEBUG_r_FLAG;
-	}
-    } else {
-	if (!(MY_CXT.x_state & NEEDS_DEBUGGING)) {
-	    if (!oldflag)
-		PL_debug &= ~DEBUG_r_FLAG;
-	}
-    }
-
-    MY_CXT.x_state = new_state;
-}
 
 MODULE = re	PACKAGE = re
 
-BOOT:
+void
+install()
+    PPCODE:
+        PL_colorset = 0;	/* Allow reinspection of ENV. */
+        /* PL_debug |= DEBUG_r_FLAG; */
+	XPUSHs(sv_2mortal(newSViv(PTR2IV(&my_reg_engine))));
+	
+
+void
+regexp_pattern(sv)
+    SV * sv
+PROTOTYPE: $
+PREINIT:
+    REGEXP *re;
+PPCODE:
 {
-   MY_CXT_INIT;
+    /*
+       Checks if a reference is a regex or not. If the parameter is
+       not a ref, or is not the result of a qr// then returns false
+       in scalar context and an empty list in list context.
+       Otherwise in list context it returns the pattern and the
+       modifiers, in scalar context it returns the pattern just as it
+       would if the qr// was stringified normally, regardless as
+       to the class of the variable and any strigification overloads
+       on the object. 
+    */
+
+    if ((re = SvRX(sv))) /* assign deliberate */
+    {
+        /* Housten, we have a regex! */
+        SV *pattern;
+        STRLEN patlen = 0;
+        STRLEN left = 0;
+        char reflags[6];
+        
+        if ( GIMME_V == G_ARRAY ) {
+            /*
+               we are in list context so stringify
+               the modifiers that apply. We ignore "negative
+               modifiers" in this scenario. 
+            */
+
+            char *fptr = INT_PAT_MODS;
+            char ch;
+            U16 match_flags = (U16)((re->extflags & PMf_COMPILETIME) >> 12);
+
+            while((ch = *fptr++)) {
+                if(match_flags & 1) {
+                    reflags[left++] = ch;
+                }
+                match_flags >>= 1;
+            }
+
+            pattern = sv_2mortal(newSVpvn(re->precomp,re->prelen));
+            if (re->extflags & RXf_UTF8) SvUTF8_on(pattern);
+
+            /* return the pattern and the modifiers */
+            XPUSHs(pattern);
+            XPUSHs(sv_2mortal(newSVpvn(reflags,left)));
+            XSRETURN(2);
+        } else {
+            /* Scalar, so use the string that Perl would return */
+            /* return the pattern in (?msix:..) format */
+            pattern = sv_2mortal(newSVpvn(re->wrapped,re->wraplen));
+            if (re->extflags & RXf_UTF8) 
+                SvUTF8_on(pattern);
+            XPUSHs(pattern);
+            XSRETURN(1);
+        }
+    } else {
+        /* It ain't a regexp folks */
+        if ( GIMME_V == G_ARRAY ) {
+            /* return the empty list */
+            XSRETURN_UNDEF;
+        } else {
+            /* Because of the (?:..) wrapping involved in a 
+               stringified pattern it is impossible to get a 
+               result for a real regexp that would evaluate to 
+               false. Therefore we can return PL_sv_no to signify
+               that the object is not a regex, this means that one 
+               can say
+               
+                 if (regex($might_be_a_regex) eq '(?:foo)') { }
+               
+               and not worry about undefined values.
+            */
+            XSRETURN_NO;
+        }    
+    }
+    /* NOT-REACHED */
 }
 
 
 void
-install(new_state)
-  unsigned int new_state;
-  CODE:
-    install(aTHX_ new_state);
+regmust(sv)
+    SV * sv
+PROTOTYPE: $
+PREINIT:
+    REGEXP *re;
+PPCODE:
+{
+    if ((re = SvRX(sv))) /* assign deliberate */
+    {
+        SV *an = &PL_sv_no;
+        SV *fl = &PL_sv_no;
+        if (re->anchored_substr) {
+            an = newSVsv(re->anchored_substr);
+        } else if (re->anchored_utf8) {
+            an = newSVsv(re->anchored_utf8);
+        }
+        if (re->float_substr) {
+            fl = newSVsv(re->float_substr);
+        } else if (re->float_utf8) {
+            fl = newSVsv(re->float_utf8);
+        }
+        XPUSHs(an);
+        XPUSHs(fl);
+        XSRETURN(2);
+    }
+    XSRETURN_UNDEF;
+}
+

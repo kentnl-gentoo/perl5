@@ -1,4 +1,4 @@
-# $Id: /local/svn.schwern.org/CPAN/ExtUtils-MakeMaker/trunk/lib/ExtUtils/MakeMaker.pm 2539 2005-08-17T06:53:55.009300Z schwern  $
+# $Id: /mirror/svn.schwern.org/CPAN/ExtUtils-MakeMaker/trunk/lib/ExtUtils/MakeMaker.pm 32261 2007-07-03T08:08:29.826721Z schwern  $
 package ExtUtils::MakeMaker;
 
 BEGIN {require 5.005_03;}
@@ -10,9 +10,9 @@ use File::Path;
 
 use vars qw(
             @ISA @EXPORT @EXPORT_OK
-            $VERSION $Verbose %Config 
+            $VERSION $Verbose %Config
             @Prepend_parent @Parent
-            %Recognized_Att_Keys @Get_from_Config @MM_Sections @Overridable 
+            %Recognized_Att_Keys @Get_from_Config @MM_Sections @Overridable
             $Filename
            );
 
@@ -21,12 +21,13 @@ use vars qw(
 use vars qw($Revision);
 use strict;
 
-$VERSION = '6.30_02';
-$Revision = (q$Revision: 2539 $) =~ /Revision:\s+(\S+)/;
+$VERSION = '6.36';
+($Revision) = q$Revision: 32261 $ =~ /Revision:\s+(\S+)/;
 
 @ISA = qw(Exporter);
 @EXPORT = qw(&WriteMakefile &writeMakefile $Verbose &prompt);
-@EXPORT_OK = qw($VERSION &neatvalue &mkbootstrap &mksymlists);
+@EXPORT_OK = qw($VERSION &neatvalue &mkbootstrap &mksymlists
+                &WriteEmptyMakefile);
 
 # These will go away once the last of the Win32 & VMS specific code is 
 # purged.
@@ -67,41 +68,42 @@ sub WriteMakefile {
 # scalar.
 my %Att_Sigs;
 my %Special_Sigs = (
- C                  => 'array',
- CONFIG             => 'array',
- CONFIGURE          => 'code',
- DIR                => 'array',
- DL_FUNCS           => 'hash',
- DL_VARS            => 'array',
- EXCLUDE_EXT        => 'array',
- EXE_FILES          => 'array',
- FUNCLIST           => 'array',
- H                  => 'array',
- IMPORTS            => 'hash',
- INCLUDE_EXT        => 'array',
- LIBS               => ['array',''],
- MAN1PODS           => 'hash',
- MAN3PODS           => 'hash',
- PL_FILES           => 'hash',
- PM                 => 'hash',
- PMLIBDIRS          => 'array',
- PMLIBPARENTDIRS    => 'array',
- PREREQ_PM          => 'hash',
- SKIP               => 'array',
- TYPEMAPS           => 'array',
- XS                 => 'hash',
+ C                  => 'ARRAY',
+ CONFIG             => 'ARRAY',
+ CONFIGURE          => 'CODE',
+ DIR                => 'ARRAY',
+ DL_FUNCS           => 'HASH',
+ DL_VARS            => 'ARRAY',
+ EXCLUDE_EXT        => 'ARRAY',
+ EXE_FILES          => 'ARRAY',
+ FUNCLIST           => 'ARRAY',
+ H                  => 'ARRAY',
+ IMPORTS            => 'HASH',
+ INCLUDE_EXT        => 'ARRAY',
+ LIBS               => ['ARRAY',''],
+ MAN1PODS           => 'HASH',
+ MAN3PODS           => 'HASH',
+ PL_FILES           => 'HASH',
+ PM                 => 'HASH',
+ PMLIBDIRS          => 'ARRAY',
+ PMLIBPARENTDIRS    => 'ARRAY',
+ PREREQ_PM          => 'HASH',
+ SKIP               => 'ARRAY',
+ TYPEMAPS           => 'ARRAY',
+ XS                 => 'HASH',
+ VERSION            => ['version',''],
  _KEEP_AFTER_FLUSH  => '',
 
- clean      => 'hash',
- depend     => 'hash',
- dist       => 'hash',
- dynamic_lib=> 'hash',
- linkext    => 'hash',
- macro      => 'hash',
- postamble  => 'hash',
- realclean  => 'hash',
- test       => 'hash',
- tool_autosplit => 'hash',
+ clean      => 'HASH',
+ depend     => 'HASH',
+ dist       => 'HASH',
+ dynamic_lib=> 'HASH',
+ linkext    => 'HASH',
+ macro      => 'HASH',
+ postamble  => 'HASH',
+ realclean  => 'HASH',
+ test       => 'HASH',
+ tool_autosplit => 'HASH',
 );
 
 @Att_Sigs{keys %Recognized_Att_Keys} = ('') x keys %Recognized_Att_Keys;
@@ -119,18 +121,27 @@ sub _verify_att {
         }
 
         my @sigs   = ref $sig ? @$sig : $sig;
-        my $given = lc ref $val;
-        unless( grep $given eq $_, @sigs ) {
-            my $takes = join " or ", map { $_ ne '' ? "$_ reference"
-                                                    : "string/number"
-                                         } @sigs;
-            my $has   = $given ne '' ? "$given reference"
-                                     : "string/number";
+        my $given  = ref $val;
+        unless( grep { $given eq $_ || ($_ && eval{$val->isa($_)}) } @sigs ) {
+            my $takes = join " or ", map { _format_att($_) } @sigs;
+
+            my $has = _format_att($given);
             warn "WARNING: $key takes a $takes not a $has.\n".
                  "         Please inform the author.\n";
         }
     }
 }
+
+
+sub _format_att {
+    my $given = shift;
+    
+    return $given eq ''        ? "string/number"
+         : uc $given eq $given ? "$given reference"
+         :                       "$given object"
+         ;
+}
+
 
 sub prompt ($;$) {
     my($mess, $def) = @_;
@@ -414,13 +425,6 @@ sub new {
               $self->{PREREQ_PM}->{$prereq} : 'unknown version' ;
         }
     }
-    if (%unsatisfied && $self->{PREREQ_FATAL}){
-        my $failedprereqs = join ', ', map {"$_ $unsatisfied{$_}"} 
-                            keys %unsatisfied;
-        die qq{MakeMaker FATAL: prerequisites not found ($failedprereqs)\n
-               Please install these modules first and rerun 'perl Makefile.PL'.\n};
-    }
-
     if (defined $self->{CONFIGURE}) {
         if (ref $self->{CONFIGURE} eq 'CODE') {
             %configure_att = %{&{$self->{CONFIGURE}}};
@@ -490,6 +494,17 @@ sub new {
     } else {
         parse_args($self,split(' ', $ENV{PERL_MM_OPT} || ''),@ARGV);
     }
+    if (%unsatisfied && $self->{PREREQ_FATAL}){
+        my $failedprereqs = join "\n", map {"    $_ $unsatisfied{$_}"} 
+                            sort { $a cmp $b } keys %unsatisfied;
+        die <<"END";
+MakeMaker FATAL: prerequisites not found.
+$failedprereqs
+
+Please install these modules first and rerun 'perl Makefile.PL'.
+END
+    }
+
 
     $self->{NAME} ||= $self->guess_name;
 
@@ -630,19 +645,20 @@ END
 }
 
 sub WriteEmptyMakefile {
-    Carp::croak "WriteEmptyMakefile: Need even number of args" if @_ % 2;
+    Carp::croak "WriteEmptyMakefile: Need an even number of args" if @_ % 2;
 
     my %att = @_;
     my $self = MM->new(\%att);
-    if (-f $self->{MAKEFILE_OLD}) {
-      _unlink($self->{MAKEFILE_OLD}) or 
-        warn "unlink $self->{MAKEFILE_OLD}: $!";
+    
+    my $new = $self->{MAKEFILE};
+    my $old = $self->{MAKEFILE_OLD};
+    if (-f $old) {
+        _unlink($old) or warn "unlink $old: $!";
     }
-    if ( -f $self->{MAKEFILE} ) {
-        _rename($self->{MAKEFILE}, $self->{MAKEFILE_OLD}) or
-          warn "rename $self->{MAKEFILE} => $self->{MAKEFILE_OLD}: $!"
+    if ( -f $new ) {
+        _rename($new, $old) or warn "rename $new => $old: $!"
     }
-    open MF, '>'.$self->{MAKEFILE} or die "open $self->{MAKEFILE} for write: $!";
+    open MF, '>'.$new or die "open $new for write: $!";
     print MF <<'EOP';
 all:
 
@@ -655,7 +671,7 @@ makemakerdflt:
 test:
 
 EOP
-    close MF or die "close $self->{MAKEFILE} for write: $!";
+    close MF or die "close $new for write: $!";
 }
 
 sub check_manifest {
@@ -880,9 +896,11 @@ sub flush {
     my $self = shift;
     my($chunk);
     local *FH;
-    print STDOUT "Writing $self->{MAKEFILE} for $self->{NAME}\n";
 
-    unlink($self->{MAKEFILE}, "MakeMaker.tmp", $Is_VMS ? 'Descrip.MMS' : '');
+    my $finalname = $self->{MAKEFILE};
+    print STDOUT "Writing $finalname for $self->{NAME}\n";
+
+    unlink($finalname, "MakeMaker.tmp", $Is_VMS ? 'Descrip.MMS' : ());
     open(FH,">MakeMaker.tmp") or die "Unable to open MakeMaker.tmp: $!";
 
     for $chunk (@{$self->{RESULT}}) {
@@ -890,7 +908,6 @@ sub flush {
     }
 
     close FH;
-    my($finalname) = $self->{MAKEFILE};
     _rename("MakeMaker.tmp", $finalname) or
       warn "rename MakeMaker.tmp => $finalname: $!";
     chmod 0644, $finalname unless $Is_VMS;
@@ -1030,7 +1047,7 @@ The generated Makefile enables the user of the extension to invoke
 The Makefile to be produced may be altered by adding arguments of the
 form C<KEY=VALUE>. E.g.
 
-  perl Makefile.PL PREFIX=~
+  perl Makefile.PL INSTALL_BASE=~
 
 Other interesting targets in the generated Makefile are
 
@@ -1118,17 +1135,50 @@ C<UNINST> variable.
     make install UNINST=1
 
 
+=head2 INSTALL_BASE
+
+INSTALL_BASE can be passed into Makefile.PL to change where your
+module will be installed.  INSTALL_BASE is more like what everyone
+else calls "prefix" than PREFIX is.
+
+To have everything installed in your home directory, do the following.
+
+    # Unix users, INSTALL_BASE=~ works fine
+    perl Makefile.PL INSTALL_BASE=/path/to/your/home/dir
+
+Like PREFIX, it sets several INSTALL* attributes at once.  Unlike
+PREFIX it is easy to predict where the module will end up.  The
+installation pattern looks like this:
+
+    INSTALLARCHLIB     INSTALL_BASE/lib/perl5/$Config{archname}
+    INSTALLPRIVLIB     INSTALL_BASE/lib/perl5
+    INSTALLBIN         INSTALL_BASE/bin
+    INSTALLSCRIPT      INSTALL_BASE/bin
+    INSTALLMAN1DIR     INSTALL_BASE/man/man1
+    INSTALLMAN3DIR     INSTALL_BASE/man/man3
+
+INSTALL_BASE in MakeMaker and C<--install_base> in Module::Build (as
+of 0.28) install to the same location.  If you want MakeMaker and
+Module::Build to install to the same location simply set INSTALL_BASE
+and C<--install_base> to the same location.
+
+INSTALL_BASE was added in 6.31.
+
+
 =head2 PREFIX and LIB attribute
 
 PREFIX and LIB can be used to set several INSTALL* attributes in one
-go. The quickest way to install a module in a non-standard place might
-be
+go.  Here's an example for installing into your home directory.
 
-    perl Makefile.PL PREFIX=~
+    # Unix users, PREFIX=~ works fine
+    perl Makefile.PL PREFIX=/path/to/your/home/dir
 
 This will install all files in the module under your home directory,
 with man pages and libraries going into an appropriate place (usually
-~/man and ~/lib).
+~/man and ~/lib).  How the exact location is determined is complicated
+and depends on how your Perl was configured.  INSTALL_BASE works more
+like what other build systems call "prefix" than PREFIX and we
+recommend you use that instead.
 
 Another way to specify many INSTALL directories with a single
 parameter is LIB.
@@ -1459,10 +1509,6 @@ If your executables start with something like #!perl or
 #!/usr/bin/perl MakeMaker will change this to the path of the perl
 'Makefile.PL' was invoked with so the programs will be sure to run
 properly even if perl is not in /usr/bin/perl.
-
-=item EXTRA_META
-
-Extra text to be appended to the generated META.yml.
 
 =item FIRST_MAKEFILE
 
@@ -2029,16 +2075,23 @@ by the PREFIX.
 =item PREREQ_FATAL
 
 Bool. If this parameter is true, failing to have the required modules
-(or the right versions thereof) will be fatal. perl Makefile.PL will die
-with the proper message.
+(or the right versions thereof) will be fatal. C<perl Makefile.PL>
+will C<die> instead of simply informing the user of the missing dependencies.
 
-Note: see L<Test::Harness> for a shortcut for stopping tests early if
-you are missing dependencies.
+It is I<extremely> rare to have to use C<PREREQ_FATAL>. Its use by module
+authors is I<strongly discouraged> and should never be used lightly.
+Module installation tools have ways of resolving umet dependencies but
+to do that they need a F<Makefile>.  Using C<PREREQ_FATAL> breaks this.
+That's bad.
 
-Do I<not> use this parameter for simple requirements, which could be resolved
-at a later time, e.g. after an unsuccessful B<make test> of your module.
+The only situation where it is appropriate is when you have
+dependencies that are indispensible to actually I<write> a
+F<Makefile>. For example, MakeMaker's F<Makefile.PL> needs L<File::Spec>.
+If its not available it cannot write the F<Makefile>.
 
-It is I<extremely> rare to have to use C<PREREQ_FATAL> at all!
+Note: see L<Test::Harness> for a shortcut for stopping tests early
+if you are missing dependencies and are afraid that users might
+use your module with an incomplete environment.
 
 =item PREREQ_PM
 
@@ -2135,16 +2188,27 @@ MakeMaker object. The following lines will be parsed o.k.:
 
     $VERSION = '1.00';
     *VERSION = \'1.01';
-    $VERSION = (q$Revision: 2539 $) =~ /(\d+)/g;
+    ($VERSION) = q$Revision: 32261 $ =~ /(\d+)/g;
     $FOO::VERSION = '1.10';
     *FOO::VERSION = \'1.11';
-    our $VERSION = 1.2.3;       # new for perl5.6.0 
+    our $VERSION = 1.2.3;       # new for perl5.6.0
 
 but these will fail:
 
     my $VERSION = '1.01';
     local $VERSION = '1.02';
     local $FOO::VERSION = '1.30';
+
+L<version> will be loaded, if available, so this will work.
+
+    our $VERSION = qv(1.2.3);   # version.pm will be loaded if available
+
+Its up to you to declare a dependency on C<version>.  Also note that this
+feature was introduced in MakeMaker 6.35.  Earlier versions of MakeMaker
+require this:
+
+    # All on one line
+    use version; our $VERSION = qv(1.2.3);
 
 (Putting C<my> or C<local> on the preceding line will work o.k.)
 
@@ -2381,7 +2445,7 @@ directory with the name C<$(DISTNAME)-$(VERSION)>. If that directory
 exists, it will be removed first.
 
 Additionally, it will create a META.yml module meta-data file in the
-distdir and add this to the distdir's MANFIEST.  You can shut this
+distdir and add this to the distdir's MANIFEST.  You can shut this
 behavior off with the NO_META flag.
 
 =item   make disttest
@@ -2392,7 +2456,7 @@ a make test in that directory.
 =item    make tardist
 
 First does a distdir. Then a command $(PREOP) which defaults to a null
-command, followed by $(TOUNIX), which defaults to a null command under
+command, followed by $(TO_UNIX), which defaults to a null command under
 UNIX, and will convert files in distribution directory to UNIX format
 otherwise. Next it runs C<tar> on that directory into a tarfile and
 deletes the directory. Finishes with a command $(POSTOP) which
@@ -2477,7 +2541,8 @@ to create the Module, but this is a normal state of things, then you
 can create a F<Makefile> which does nothing, but succeeds on all the
 "usual" build targets.  To do so, use
 
-   ExtUtils::MakeMaker::WriteEmptyMakefile();
+    use ExtUtils::MakeMaker qw(WriteEmptyMakefile);
+    WriteEmptyMakefile();
 
 instead of WriteMakefile().
 
@@ -2534,8 +2599,15 @@ Same as the PERL_CORE parameter.  The parameter overrides this.
 
 =head1 SEE ALSO
 
-ExtUtils::MM_Unix, ExtUtils::Manifest ExtUtils::Install,
-ExtUtils::Embed
+L<Module::Build> is a pure-Perl alternative to MakeMaker which does
+not rely on make or any other external utility.  It is easier to
+extend to suit your needs.
+
+L<Module::Install> is a wrapper around MakeMaker which adds features
+not normally available.
+
+L<ExtUtils::ModuleMaker> and L<Module::Starter> are both modules to
+help you setup your distribution.
 
 =head1 AUTHORS
 

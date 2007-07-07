@@ -10,11 +10,11 @@ BEGIN {
     }
 }
 
-require "./test.pl";
+BEGIN { require "./test.pl"; }
 
 use Devel::Peek;
 
-plan(23);
+plan(24);
 
 our $DEBUG = 0;
 open(SAVERR, ">&STDERR") or die "Can't dup STDERR: $!";
@@ -125,7 +125,7 @@ do_test( 7,
 'SV = PVNV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(NOK,pNOK\\)
-  IV = 0
+  IV = \d+
   NV = 789\\.(?:1(?:000+\d+)?|0999+\d+)
   PV = $ADDR "789"\\\0
   CUR = 3
@@ -180,7 +180,7 @@ do_test(11,
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVAV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(\\)
     ARRAY = $ADDR
     FILL = 1
@@ -201,7 +201,7 @@ do_test(12,
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(SHAREKEYS\\)
     ARRAY = $ADDR  \\(0:7, 1:1\\)
     hash quality = 100.0%
@@ -282,6 +282,8 @@ do_test(15,
       MG_VIRTUAL = $ADDR
       MG_TYPE = PERL_MAGIC_qr\(r\)
       MG_OBJ = $ADDR
+        PAT = "\(\?-xism:tic\)"
+        REFCNT = 2
     STASH = $ADDR\\t"Regexp"');
 
 do_test(16,
@@ -291,7 +293,7 @@ do_test(16,
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(OBJECT,SHAREKEYS\\)
     STASH = $ADDR\\t"Tac"
     ARRAY = 0x0
@@ -305,7 +307,7 @@ do_test(17,
 	*a,
 'SV = PVGV\\($ADDR\\) at $ADDR
   REFCNT = 5
-  FLAGS = \\(SCREAM,MULTI(?:,IN_PAD)?\\)
+  FLAGS = \\(MULTI(?:,IN_PAD)?\\)
   NAME = "a"
   NAMELEN = 1
   GvSTASH = $ADDR\\t"main"
@@ -351,7 +353,7 @@ do_test(19,
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
     ARRAY = $ADDR  \\(0:7, 1:1\\)
     hash quality = 100.0%
@@ -375,7 +377,7 @@ do_test(19,
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
     ARRAY = $ADDR  \\(0:7, 1:1\\)
     hash quality = 100.0%
@@ -503,3 +505,13 @@ do_test(23,
     OUTSIDE_SEQ = 0
     PADLIST = 0x0
     OUTSIDE = 0x0 \\(null\\)');	
+
+# isUV should show on PVMG
+do_test(24,
+	do { my $v = $1; $v = ~0; $v },
+'SV = PVMG\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(IOK,pIOK,IsUV\\)
+  UV = \d+
+  NV = 0
+  PV = 0');

@@ -22,7 +22,7 @@ case $PERL_CONFIG_SH in
 	;;
 esac
 
-addtopath=`pwd`
+addtopath=`pwd | sed -e 's/ /\\\ /g'`
 $spitshell >>Makefile <<!GROK!THIS!
 
 cygwin.c: cygwin/cygwin.c
@@ -34,9 +34,10 @@ ld2: $& Makefile perlld ${src}/cygwin/ld2.in
 	@$sed s,@buildpath@,$addtopath,g <${src}/cygwin/ld2.in >ld2
 	@chmod a+x ld2
 	@echo "installing ld2 into $installbin"
-# install is included in Cygwin distributions, and we make a note of th
+# install is included in Cygwin distributions, and we make a note of the
 # requirement in the README.cygwin file. However, let's give them
 # a warning.
+	@test -d ${installbin} || mkdir -p ${installbin}
 	@/usr/bin/install -c -m 755 ld2 ${installbin}/ld2
 	@if test ! -f  ${installbin}/ld2; then \
 		echo "*************************************************" ; \
@@ -55,12 +56,9 @@ $spitshell >>Makefile <<!GROK!THIS!
 # perlld parameters
 #
 # these ones are mandatory
-DLLWRAP = 'dllwrap'
 VERSION = '$version'
 
 # following are optional.
-WRAPDRIVER = gcc
-DLLTOOL = dlltool
 EXPORT_ALL = 1
 
 # if some of extensions are empty,
@@ -71,9 +69,7 @@ EXP_EXT = .exp
 
 perlld: $& Makefile ${src}/cygwin/perlld.in
 	@echo "extracting perlld (with variable substitutions)"
-	@$sed -e s,@CC@,\${CC}, -e s,@DLLWRAP@,\${DLLWRAP},g \\
-	-e s,@WRAPDRIVER@,\${WRAPDRIVER},g -e s,@DLLTOOL@,\${DLLTOOL},g \\
-	-e s,@AS@,\${AS},g -e s,@EXPORT_ALL@,\${EXPORT_ALL},g \\
+	@$sed -e s,@CC@,\${CC}, -e s,@EXPORT_ALL@,\${EXPORT_ALL},g \\
 	-e s,@DEF_EXT@,\${DEF_EXT},g -e s,@EXP_EXT@,\${EXP_EXT},g \\
 	-e s,@LIB_EXT@,\${LIB_EXT},g -e s,@VERSION@,\${VERSION},g \\
 	${src}/cygwin/perlld.in >perlld
@@ -202,7 +198,15 @@ DIST_DIRECTORY = .dist
 
 distdir: miniperl
 	-mkdir $(DIST_DIRECTORY)
-	./miniperl '-MExtUtils::Manifest' \
+	./miniperl -Ilib '-MExtUtils::Manifest' \
 	-e "ExtUtils::Manifest::manicopy(ExtUtils::Manifest::maniread(),'$(DIST_DIRECTORY)')"
+
+cygwin1.dll: /bin/cygwin1.dll
+	cp /bin/cygwin1.dll .
+
+cygcrypt-0.dll: /bin/cygcrypt-0.dll
+	cp /bin/cygcrypt-0.dll .
+
+test_prep: cygwin1.dll cygcrypt-0.dll
 
 !NO!SUBS!

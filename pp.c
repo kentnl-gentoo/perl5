@@ -1,7 +1,7 @@
 /*    pp.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -222,6 +222,50 @@ PP(pp_rv2gv)
     RETURN;
 }
 
+/* Helper function for pp_rv2sv and pp_rv2av  */
+GV *
+Perl_softref2xv(pTHX_ SV *const sv, const char *const what, const U32 type,
+		SV ***spp)
+{
+    dVAR;
+    GV *gv;
+
+    if (PL_op->op_private & HINT_STRICT_REFS) {
+	if (SvOK(sv))
+	    Perl_die(aTHX_ PL_no_symref_sv, sv, what);
+	else
+	    Perl_die(aTHX_ PL_no_usym, what);
+    }
+    if (!SvOK(sv)) {
+	if (PL_op->op_flags & OPf_REF)
+	    Perl_die(aTHX_ PL_no_usym, what);
+	if (ckWARN(WARN_UNINITIALIZED))
+	    report_uninit(sv);
+	if (type != SVt_PV && GIMME_V == G_ARRAY) {
+	    (*spp)--;
+	    return NULL;
+	}
+	**spp = &PL_sv_undef;
+	return NULL;
+    }
+    if ((PL_op->op_flags & OPf_SPECIAL) &&
+	!(PL_op->op_flags & OPf_MOD))
+	{
+	    gv = gv_fetchsv(sv, 0, type);
+	    if (!gv
+		&& (!is_gv_magical_sv(sv,0)
+		    || !(gv = gv_fetchsv(sv, GV_ADD, type))))
+		{
+		    **spp = &PL_sv_undef;
+		    return NULL;
+		}
+	}
+    else {
+	gv = gv_fetchsv(sv, GV_ADD, type);
+    }
+    return gv;
+}
+
 PP(pp_rv2sv)
 {
     dVAR; dSP; dTOPss;
@@ -251,33 +295,9 @@ PP(pp_rv2sv)
 		if (SvROK(sv))
 		    goto wasref;
 	    }
-	    if (PL_op->op_private & HINT_STRICT_REFS) {
-		if (SvOK(sv))
-		    DIE(aTHX_ PL_no_symref_sv, sv, "a SCALAR");
-		else
-		    DIE(aTHX_ PL_no_usym, "a SCALAR");
-	    }
-	    if (!SvOK(sv)) {
-		if (PL_op->op_flags & OPf_REF)
-		    DIE(aTHX_ PL_no_usym, "a SCALAR");
-		if (ckWARN(WARN_UNINITIALIZED))
-		    report_uninit(sv);
-		RETSETUNDEF;
-	    }
-	    if ((PL_op->op_flags & OPf_SPECIAL) &&
-		!(PL_op->op_flags & OPf_MOD))
-	    {
-		gv = (GV*)gv_fetchsv(sv, 0, SVt_PV);
-		if (!gv
-		    && (!is_gv_magical_sv(sv, 0)
-			|| !(gv = (GV*)gv_fetchsv(sv, GV_ADD, SVt_PV))))
-		{
-		    RETSETUNDEF;
-		}
-	    }
-	    else {
-		gv = (GV*)gv_fetchsv(sv, GV_ADD, SVt_PV);
-	    }
+	    gv = Perl_softref2xv(aTHX_ sv, "a SCALAR", SVt_PV, &sp);
+	    if (!gv)
+		RETURN;
 	}
 	sv = GvSVn(gv);
     }
@@ -303,8 +323,7 @@ PP(pp_av2arylen)
     AV * const av = (AV*)TOPs;
     SV ** const sv = Perl_av_arylen_p(aTHX_ (AV*)av);
     if (!*sv) {
-	*sv = newSV(0);
-	sv_upgrade(*sv, SVt_PVMG);
+	*sv = newSV_type(SVt_PVMG);
 	sv_magic(*sv, (SV*)av, PERL_MAGIC_arylen, NULL, 0);
     }
     SETs(*sv);
@@ -387,18 +406,25 @@ PP(pp_prototype)
     SV *ret = &PL_sv_undef;
 
     if (SvPOK(TOPs) && SvCUR(TOPs) >= 7) {
-	const char * const s = SvPVX_const(TOPs);
+	const char * s = SvPVX_const(TOPs);
 	if (strnEQ(s, "CORE::", 6)) {
-	    const int code = keyword(s + 6, SvCUR(TOPs) - 6);
+	    const int code = keyword(s + 6, SvCUR(TOPs) - 6, 1);
 	    if (code < 0) {	/* Overridable. */
 #define MAX_ARGS_OP ((sizeof(I32) - 1) * 2)
-		int i = 0, n = 0, seen_question = 0;
+		int i = 0, n = 0, seen_question = 0, defgv = 0;
 		I32 oa;
 		char str[ MAX_ARGS_OP * 2 + 2 ]; /* One ';', one '\0' */
 
 		if (code == -KEY_chop || code == -KEY_chomp
-			|| code == -KEY_exec || code == -KEY_system)
+			|| code == -KEY_exec || code == -KEY_system || code == -KEY_err)
 		    goto set;
+		if (code == -KEY_mkdir) {
+		    ret = sv_2mortal(newSVpvs("_;$"));
+		    goto set;
+		}
+		if (code == -KEY_readpipe) {
+		    s = "CORE::backtick";
+		}
 		while (i < MAXO) {	/* The slow way. */
 		    if (strEQ(s + 6, PL_op_name[i])
 			|| strEQ(s + 6, PL_op_desc[i]))
@@ -409,9 +435,10 @@ PP(pp_prototype)
 		}
 		goto nonesuch;		/* Should not happen... */
 	      found:
+		defgv = PL_opargs[i] & OA_DEFGV;
 		oa = PL_opargs[i] >> OASHIFT;
 		while (oa) {
-		    if (oa & OA_OPTIONAL && !seen_question) {
+		    if (oa & OA_OPTIONAL && !seen_question && !defgv) {
 			seen_question = 1;
 			str[n++] = ';';
 		    }
@@ -425,6 +452,8 @@ PP(pp_prototype)
 		    str[n++] = ("?$@@%&*$")[oa & (OA_OPTIONAL - 1)];
 		    oa = oa >> 4;
 		}
+		if (defgv && str[n - 1] == '$')
+		    str[n - 1] = '_';
 		str[n++] = '\0';
 		ret = sv_2mortal(newSVpvn(str, n - 1));
 	    }
@@ -548,7 +577,7 @@ PP(pp_bless)
 	if (len == 0 && ckWARN(WARN_MISC))
 	    Perl_warner(aTHX_ packWARN(WARN_MISC),
 		   "Explicit blessing to '' (assuming package main)");
-	stash = gv_stashpvn(ptr, len, TRUE);
+	stash = gv_stashpvn(ptr, len, GV_ADD);
     }
 
     (void)sv_bless(TOPs, stash);
@@ -644,7 +673,7 @@ PP(pp_study)
     }
     s = (unsigned char*)(SvPV(sv, len));
     pos = len;
-    if (pos <= 0 || !SvPOK(sv)) {
+    if (pos <= 0 || !SvPOK(sv) || SvUTF8(sv)) {
 	/* No point in studying a zero length string, and not safe to study
 	   anything that doesn't appear to be a simple scalar (and hence might
 	   change between now and when the regexp engine runs without our set
@@ -799,6 +828,15 @@ PP(pp_undef)
 	    SvSetMagicSV(sv, &PL_sv_undef);
 	else {
 	    GP *gp;
+            HV *stash;
+
+            /* undef *Foo:: */
+            if((stash = GvHV((GV*)sv)) && HvNAME_get(stash))
+                mro_isa_changed_in(stash);
+            /* undef *Pkg::meth_name ... */
+            else if(GvCVu((GV*)sv) && (stash = GvSTASH((GV*)sv)) && HvNAME_get(stash))
+                mro_method_changed_in(stash);
+
 	    gp_free((GV*)sv);
 	    Newxz(gp, 1, GP);
 	    GvGP(sv) = gp_ref(gp);
@@ -1277,7 +1315,11 @@ PP(pp_divide)
 #endif /* PERL_TRY_UV_DIVIDE */
     {
 	dPOPPOPnnrl;
+#if defined(NAN_COMPARE_BROKEN) && defined(Perl_isnan)
+	if (! Perl_isnan(right) && right == 0.0)
+#else
 	if (right == 0.0)
+#endif
 	    DIE(aTHX_ "Illegal division by zero");
 	PUSHn( left / right );
 	RETURN;
@@ -1442,7 +1484,7 @@ PP(pp_repeat)
 	      count = (IV)nv;
     }
     else
-	 count = SvIVx(sv);
+	 count = SvIV(sv);
     if (GIMME == G_ARRAY && PL_op->op_private & OPpREPEAT_DOLIST) {
 	dMARK;
 	static const char oom_list_extend[] = "Out of memory during list extend";
@@ -1508,7 +1550,7 @@ PP(pp_repeat)
 		SvCUR_set(TARG, 0);
 	    else {
 		const STRLEN max = (UV)count * len;
-		if (len > ((MEM_SIZE)~0)/count)
+		if (len > MEM_SIZE_MAX / count)
 		     Perl_croak(aTHX_ oom_string_extend);
 	        MEM_WRAP_CHECK_1(max, char, oom_string_extend);
 		SvGROW(TARG, max + 1);
@@ -2537,8 +2579,12 @@ PP(pp_i_divide)
     }
 }
 
+#if defined(__GLIBC__) && IVSIZE == 8
 STATIC
 PP(pp_i_modulo_0)
+#else
+PP(pp_i_modulo)
+#endif
 {
      /* This is the vanilla old i_modulo. */
      dVAR; dSP; dATARGET; tryAMAGICbin(modulo,opASSIGN);
@@ -2558,6 +2604,7 @@ PP(pp_i_modulo_0)
 #if defined(__GLIBC__) && IVSIZE == 8
 STATIC
 PP(pp_i_modulo_1)
+
 {
      /* This is the i_modulo with the workaround for the _moddi3 bug
       * in (at least) glibc 2.2.5 (the PERL_ABS() the workaround).
@@ -2575,7 +2622,6 @@ PP(pp_i_modulo_1)
 	  RETURN;
      }
 }
-#endif
 
 PP(pp_i_modulo)
 {
@@ -2595,7 +2641,6 @@ PP(pp_i_modulo)
 	   * opcode dispatch table if that is the case, remembering to
 	   * also apply the workaround so that this first round works
 	   * right, too.  See [perl #9402] for more information. */
-#if defined(__GLIBC__) && IVSIZE == 8
 	  {
 	       IV l =   3;
 	       IV r = -10;
@@ -2611,7 +2656,6 @@ PP(pp_i_modulo)
 		    right = PERL_ABS(right);
 	       }
 	  }
-#endif
 	  /* avoid FPE_INTOVF on some platforms when left is IV_MIN */
 	  if (right == -1)
 	      SETi( 0 );
@@ -2620,6 +2664,7 @@ PP(pp_i_modulo)
 	  RETURN;
      }
 }
+#endif
 
 PP(pp_i_add)
 {
@@ -3300,6 +3345,8 @@ PP(pp_index)
 PP(pp_sprintf)
 {
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
+    if (SvTAINTED(MARK[1]))
+	TAINT_PROPER("sprintf");
     do_sprintf(TARG, SP-MARK, MARK+1);
     TAINT_IF(SvTAINTED(TARG));
     SP = ORIGMARK;
@@ -3323,7 +3370,7 @@ PP(pp_ord)
 
     XPUSHu(DO_UTF8(argsv) ?
 	   utf8n_to_uvchr(s, UTF8_MAXBYTES, 0, UTF8_ALLOW_ANYUV) :
-	   (*s & 0xff));
+	   (UV)(*s & 0xff));
 
     RETURN;
 }
@@ -3475,7 +3522,7 @@ PP(pp_ucfirst)
 	need = slen + 1;
     }
 
-    if (SvPADTMP(source) && !SvREADONLY(source) && inplace) {
+    if (SvPADTMP(source) && !SvREADONLY(source) && inplace && SvTEMP(source)) {
 	/* We can convert in place.  */
 
 	dest = source;
@@ -3558,7 +3605,7 @@ PP(pp_uc)
     SvGETMAGIC(source);
 
     if (SvPADTMP(source) && !SvREADONLY(source) && !SvAMAGIC(source)
-	&& !DO_UTF8(source)) {
+	&& SvTEMP(source) && !DO_UTF8(source)) {
 	/* We can convert in place.  */
 
 	dest = source;
@@ -3658,7 +3705,7 @@ PP(pp_lc)
     SvGETMAGIC(source);
 
     if (SvPADTMP(source) && !SvREADONLY(source) && !SvAMAGIC(source)
-	&& !DO_UTF8(source)) {
+	&& SvTEMP(source) && !DO_UTF8(source)) {
 	/* We can convert in place.  */
 
 	dest = source;
@@ -3825,7 +3872,7 @@ PP(pp_aslice)
 	    register SV **svp;
 	    I32 max = -1;
 	    for (svp = MARK + 1; svp <= SP; svp++) {
-		const I32 elem = SvIVx(*svp);
+		const I32 elem = SvIV(*svp);
 		if (elem > max)
 		    max = elem;
 	    }
@@ -3834,7 +3881,7 @@ PP(pp_aslice)
 	}
 	while (++MARK <= SP) {
 	    register SV **svp;
-	    I32 elem = SvIVx(*MARK);
+	    I32 elem = SvIV(*MARK);
 
 	    if (elem > 0)
 		elem -= arybase;
@@ -3862,7 +3909,7 @@ PP(pp_each)
 {
     dVAR;
     dSP;
-    HV * const hash = (HV*)POPs;
+    HV * hash = (HV*)POPs;
     HE *entry;
     const I32 gimme = GIMME_V;
 
@@ -4023,7 +4070,7 @@ PP(pp_hslice)
 
         if (lval) {
             if (!svp || *svp == &PL_sv_undef) {
-                DIE(aTHX_ PL_no_helem_sv, keysv);
+                DIE(aTHX_ PL_no_helem_sv, SVfARG(keysv));
             }
             if (localizing) {
 		if (HvNAME_get(hv) && isGV(*svp))
@@ -4035,7 +4082,7 @@ PP(pp_hslice)
 			STRLEN keylen;
 			const char * const key = SvPV_const(keysv, keylen);
 			SAVEDELETE(hv, savepvn(key,keylen),
-				   SvUTF8(keysv) ? -(I32)keylen : keylen);
+				   SvUTF8(keysv) ? -(I32)keylen : (I32)keylen);
 		    }
 		}
             }
@@ -4080,7 +4127,7 @@ PP(pp_lslice)
     register SV **lelem;
 
     if (GIMME != G_ARRAY) {
-	I32 ix = SvIVx(*lastlelem);
+	I32 ix = SvIV(*lastlelem);
 	if (ix < 0)
 	    ix += max;
 	else
@@ -4099,7 +4146,7 @@ PP(pp_lslice)
     }
 
     for (lelem = firstlelem; lelem <= lastlelem; lelem++) {
-	I32 ix = SvIVx(*lelem);
+	I32 ix = SvIV(*lelem);
 	if (ix < 0)
 	    ix += max;
 	else
@@ -4123,16 +4170,17 @@ PP(pp_anonlist)
 {
     dVAR; dSP; dMARK; dORIGMARK;
     const I32 items = SP - MARK;
-    SV * const av = sv_2mortal((SV*)av_make(items, MARK+1));
+    SV * const av = (SV *) av_make(items, MARK+1);
     SP = ORIGMARK;		/* av_make() might realloc stack_sp */
-    XPUSHs(av);
+    XPUSHs(sv_2mortal((PL_op->op_flags & OPf_SPECIAL)
+		      ? newRV_noinc(av) : av));
     RETURN;
 }
 
 PP(pp_anonhash)
 {
     dVAR; dSP; dMARK; dORIGMARK;
-    HV* const hv = (HV*)sv_2mortal((SV*)newHV());
+    HV* const hv = newHV();
 
     while (MARK < SP) {
 	SV * const key = *++MARK;
@@ -4144,7 +4192,8 @@ PP(pp_anonhash)
 	(void)hv_store_ent(hv,key,val,0);
     }
     SP = ORIGMARK;
-    XPUSHs((SV*)hv);
+    XPUSHs(sv_2mortal((PL_op->op_flags & OPf_SPECIAL)
+		      ? newRV_noinc((SV*) hv) : (SV*)hv));
     RETURN;
 }
 
@@ -4176,7 +4225,7 @@ PP(pp_splice)
     SP++;
 
     if (++MARK < SP) {
-	offset = i = SvIVx(*MARK);
+	offset = i = SvIV(*MARK);
 	if (offset < 0)
 	    offset += AvFILLp(ary) + 1;
 	else
@@ -4264,7 +4313,7 @@ PP(pp_splice)
 		    *dst-- = *src--;
 	    }
 	    dst = AvARRAY(ary);
-	    SvPV_set(ary, (char*)(AvARRAY(ary) - diff)); /* diff is negative */
+	    AvARRAY(ary) = AvARRAY(ary) - diff; /* diff is negative */
 	    AvMAX(ary) += diff;
 	}
 	else {
@@ -4300,7 +4349,7 @@ PP(pp_splice)
 		    dst = src - diff;
 		    Move(src, dst, offset, SV*);
 		}
-		SvPV_set(ary, (char*)(AvARRAY(ary) - diff));/* diff is positive */
+		AvARRAY(ary) = AvARRAY(ary) - diff;/* diff is positive */
 		AvMAX(ary) += diff;
 		AvFILLp(ary) += diff;
 	    }
@@ -4534,18 +4583,20 @@ PP(pp_split)
 	DIE(aTHX_ "panic: pp_split");
     rx = PM_GETRE(pm);
 
-    TAINT_IF((pm->op_pmflags & PMf_LOCALE) &&
-	     (pm->op_pmflags & (PMf_WHITE | PMf_SKIPWHITE)));
+    TAINT_IF((rx->extflags & RXf_PMf_LOCALE) &&
+	     (rx->extflags & (RXf_WHITE | RXf_SKIPWHITE)));
 
     RX_MATCH_UTF8_set(rx, do_utf8);
 
-    if (pm->op_pmreplroot) {
 #ifdef USE_ITHREADS
-	ary = GvAVn((GV*)PAD_SVl(INT2PTR(PADOFFSET, pm->op_pmreplroot)));
-#else
-	ary = GvAVn((GV*)pm->op_pmreplroot);
-#endif
+    if (pm->op_pmreplrootu.op_pmtargetoff) {
+	ary = GvAVn((GV*)PAD_SVl(pm->op_pmreplrootu.op_pmtargetoff));
     }
+#else
+    if (pm->op_pmreplrootu.op_pmtargetgv) {
+	ary = GvAVn(pm->op_pmreplrootu.op_pmtargetgv);
+    }
+#endif
     else if (gimme != G_ARRAY)
 	ary = GvAVn(PL_defgv);
     else
@@ -4575,8 +4626,12 @@ PP(pp_split)
     }
     base = SP - PL_stack_base;
     orig = s;
-    if (pm->op_pmflags & PMf_SKIPWHITE) {
-	if (pm->op_pmflags & PMf_LOCALE) {
+    if (rx->extflags & RXf_SKIPWHITE) {
+	if (do_utf8) {
+	    while (*s == ' ' || is_utf8_space((U8*)s))
+		s += UTF8SKIP(s);
+	}
+	else if (rx->extflags & RXf_PMf_LOCALE) {
 	    while (isSPACE_LC(*s))
 		s++;
 	}
@@ -4585,19 +4640,32 @@ PP(pp_split)
 		s++;
 	}
     }
-    if (pm->op_pmflags & PMf_MULTILINE) {
+    if (rx->extflags & PMf_MULTILINE) {
 	multiline = 1;
     }
 
     if (!limit)
 	limit = maxiters + 2;
-    if (pm->op_pmflags & PMf_WHITE) {
+    if (rx->extflags & RXf_WHITE) {
 	while (--limit) {
 	    m = s;
-	    while (m < strend &&
-		   !((pm->op_pmflags & PMf_LOCALE)
-		     ? isSPACE_LC(*m) : isSPACE(*m)))
-		++m;
+	    /* this one uses 'm' and is a negative test */
+	    if (do_utf8) {
+		while (m < strend && !( *m == ' ' || is_utf8_space((U8*)m) )) {
+		    const int t = UTF8SKIP(m);
+		    /* is_utf8_space returns FALSE for malform utf8 */
+		    if (strend - m < t)
+			m = strend;
+		    else
+			m += t;
+		}
+            } else if (rx->extflags & RXf_PMf_LOCALE) {
+	        while (m < strend && !isSPACE_LC(*m))
+		    ++m;
+            } else {
+                while (m < strend && !isSPACE(*m))
+                    ++m;
+            }  
 	    if (m >= strend)
 		break;
 
@@ -4608,14 +4676,26 @@ PP(pp_split)
 		(void)SvUTF8_on(dstr);
 	    XPUSHs(dstr);
 
-	    s = m + 1;
-	    while (s < strend &&
-		   ((pm->op_pmflags & PMf_LOCALE)
-		    ? isSPACE_LC(*s) : isSPACE(*s)))
-		++s;
+	    /* skip the whitespace found last */
+	    if (do_utf8)
+		s = m + UTF8SKIP(m);
+	    else
+		s = m + 1;
+
+	    /* this one uses 's' and is a positive test */
+	    if (do_utf8) {
+		while (s < strend && ( *s == ' ' || is_utf8_space((U8*)s) ))
+	            s +=  UTF8SKIP(s);
+            } else if (rx->extflags & RXf_PMf_LOCALE) {
+	        while (s < strend && isSPACE_LC(*s))
+		    ++s;
+            } else {
+                while (s < strend && isSPACE(*s))
+                    ++s;
+            } 	    
 	}
     }
-    else if (rx->precomp[0] == '^' && rx->precomp[1] == '\0') {
+    else if (rx->extflags & RXf_START_ONLY) {
 	while (--limit) {
 	    for (m = s; m < strend && *m != '\n'; m++)
 		;
@@ -4631,15 +4711,15 @@ PP(pp_split)
 	    s = m;
 	}
     }
-    else if (do_utf8 == ((rx->reganch & ROPT_UTF8) != 0) &&
-	     (rx->reganch & RE_USE_INTUIT) && !rx->nparens
-	     && (rx->reganch & ROPT_CHECK_ALL)
-	     && !(rx->reganch & ROPT_ANCH)) {
-	const int tail = (rx->reganch & RE_INTUIT_TAIL);
-	SV * const csv = CALLREG_INTUIT_STRING(aTHX_ rx);
+    else if (do_utf8 == ((rx->extflags & RXf_UTF8) != 0) &&
+	     (rx->extflags & RXf_USE_INTUIT) && !rx->nparens
+	     && (rx->extflags & RXf_CHECK_ALL)
+	     && !(rx->extflags & RXf_ANCH)) {
+	const int tail = (rx->extflags & RXf_INTUIT_TAIL);
+	SV * const csv = CALLREG_INTUIT_STRING(rx);
 
-	len = rx->minlen;
-	if (len == 1 && !(rx->reganch & ROPT_UTF8) && !tail) {
+	len = rx->minlenret;
+	if (len == 1 && !(rx->extflags & RXf_UTF8) && !tail) {
 	    const char c = *SvPV_nolen_const(csv);
 	    while (--limit) {
 		for (m = s; m < strend && *m != c; m++)
@@ -4686,7 +4766,7 @@ PP(pp_split)
 	{
 	    I32 rex_return;
 	    PUTBACK;
-	    rex_return = CALLREGEXEC(aTHX_ rx, (char*)s, (char*)strend, (char*)orig, 1 ,
+	    rex_return = CALLREGEXEC(rx, (char*)s, (char*)strend, (char*)orig, 1 ,
 			    sv, NULL, 0);
 	    SPAGAIN;
 	    if (rex_return == 0)
@@ -4699,7 +4779,7 @@ PP(pp_split)
 		s = orig + (m - s);
 		strend = s + (strend - m);
 	    }
-	    m = rx->startp[0] + orig;
+	    m = rx->offs[0].start + orig;
 	    dstr = newSVpvn(s, m-s);
 	    if (make_mortal)
 		sv_2mortal(dstr);
@@ -4709,8 +4789,8 @@ PP(pp_split)
 	    if (rx->nparens) {
 		I32 i;
 		for (i = 1; i <= (I32)rx->nparens; i++) {
-		    s = rx->startp[i] + orig;
-		    m = rx->endp[i] + orig;
+		    s = rx->offs[i].start + orig;
+		    m = rx->offs[i].end + orig;
 
 		    /* japhy (07/27/01) -- the (m && s) test doesn't catch
 		       parens that didn't match -- they should be set to
@@ -4727,7 +4807,7 @@ PP(pp_split)
 		    XPUSHs(dstr);
 		}
 	    }
-	    s = rx->endp[0] + orig;
+	    s = rx->offs[0].end + orig;
 	}
     }
 

@@ -47,7 +47,7 @@ sub numify { 0 + "${$_[0]}" }	# Not needed, additional overhead
 package main;
 
 $| = 1;
-use Test::More tests => 509;
+use Test::More tests => 522;
 
 
 $a = new Oscalar "087";
@@ -1252,4 +1252,84 @@ foreach my $op (qw(<=> == != < <= > >=)) {
 
     undef $obj;
     is ($ref, undef);
+}
+
+{
+    package bit;
+    # bit operations have overloadable assignment variants too
+
+    sub new { bless \$_[1], $_[0] }
+
+    use overload
+          "&=" => sub { bit->new($_[0]->val . ' & ' . $_[1]->val) }, 
+          "^=" => sub { bit->new($_[0]->val . ' ^ ' . $_[1]->val) },
+          "|"  => sub { bit->new($_[0]->val . ' | ' . $_[1]->val) }, # |= by fallback
+          ;
+
+    sub val { ${$_[0]} }
+
+    package main;
+
+    my $a = bit->new(my $va = 'a');
+    my $b = bit->new(my $vb = 'b');
+
+    $a &= $b;
+    is($a->val, 'a & b', "overloaded &= works");
+
+    my $c = bit->new(my $vc = 'c');
+
+    $b ^= $c;
+    is($b->val, 'b ^ c', "overloaded ^= works");
+
+    my $d = bit->new(my $vd = 'd');
+
+    $c |= $d;
+    is($c->val, 'c | d', "overloaded |= (by fallback) works");
+}
+
+{
+    # comparison operators with nomethod
+    my $warning = "";
+    my $method;
+
+    package nomethod_false;
+    use overload nomethod => sub { $method = 'nomethod'; 0 };
+
+    package nomethod_true;
+    use overload nomethod => sub { $method= 'nomethod'; 'true' };
+
+    package main;
+    local $^W = 1;
+    local $SIG{__WARN__} = sub { $warning = $_[0] };
+
+    my $f = bless [], 'nomethod_false';
+    ($warning, $method) = ("", "");
+    is($f eq 'whatever', 0, 'nomethod makes eq return 0');
+    is($method, 'nomethod');
+
+    my $t = bless [], 'nomethod_true';
+    ($warning, $method) = ("", "");
+    is($t eq 'whatever', 'true', 'nomethod makes eq return "true"');
+    is($method, 'nomethod');
+    is($warning, "", 'nomethod eq need not return number');
+
+    eval q{ 
+        package nomethod_false;
+        use overload cmp => sub { $method = 'cmp'; 0 };
+    };
+    $f = bless [], 'nomethod_false';
+    ($warning, $method) = ("", "");
+    ok($f eq 'whatever', 'eq falls back to cmp (nomethod not called)');
+    is($method, 'cmp');
+
+    eval q{
+        package nomethod_true;
+        use overload cmp => sub { $method = 'cmp'; 'true' };
+    };
+    $t = bless [], 'nomethod_true';
+    ($warning, $method) = ("", "");
+    ok($t eq 'whatever', 'eq falls back to cmp (nomethod not called)');
+    is($method, 'cmp');
+    like($warning, qr/isn't numeric/, 'cmp should return number');
+
 }

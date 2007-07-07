@@ -5,11 +5,5 @@
 # This file is read by mkppport at build time.
 #
 
-ext/Compress/Raw/Zlib
-ext/Cwd
-ext/Data/Dumper
-ext/Digest/SHA
-ext/Sys/Syslog
 ext/Time/HiRes
-
-win32/ext/Win32API/File
+ext/Win32API/File

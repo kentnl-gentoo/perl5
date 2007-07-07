@@ -528,18 +528,18 @@ Bourne shell script functions that can make your life easier:
     function edit {
 	if [ -L $1 ]; then
 	    mv $1 $1.orig
-		cp $1.orig $1
-		vi $1
+	    cp $1.orig $1
+	    vi $1
 	else
-	    /bin/vi $1
-		fi
+	    vi $1
+	fi
     }
 
     function unedit {
 	if [ -L $1.orig ]; then
 	    rm $1
-		mv $1.orig $1
-		fi
+	    mv $1.orig $1
+	fi
     }
 
 Replace "vi" with your favorite flavor of editor.
@@ -549,15 +549,15 @@ files which have been edited in your symlink tree:
 
     mkpatchorig() {
 	local diffopts
-	    for f in `find . -name '*.orig' | sed s,^\./,,`
-		do
-		    case `echo $f | sed 's,.orig$,,;s,.*\.,,'` in
-			c)   diffopts=-p ;;
+	for f in `find . -name '*.orig' | sed s,^\./,,`
+	do
+	    case `echo $f | sed 's,.orig$,,;s,.*\.,,'` in
+		c)   diffopts=-p ;;
 		pod) diffopts='-F^=' ;;
 		*)   diffopts= ;;
-		esac
-		    diff -du $diffopts $f `echo $f | sed 's,.orig$,,'`
-		    done
+	    esac
+	    diff -du $diffopts $f `echo $f | sed 's,.orig$,,'`
+	done
     }
 
 This function produces patches which include enough context to make
@@ -602,8 +602,10 @@ the 5.8 pumpking decides which of those patches is to be backported to the
 maint branch.  Only patches that survive the heat of the development
 branch get applied to maintenance versions.
 
-Your patch should also update the documentation and test suite.  See
-L<Writing a test>.
+Your patch should update the documentation and test suite.  See
+L<Writing a test>.  If you have added or removed files in the distribution,
+edit the MANIFEST file accordingly, sort the MANIFEST file using
+C<make manisort>, and include those changes as part of your patch.
 
 Patching documentation also follows the same order: if accepted, a patch
 is first applied to B<development>, and if relevant then it's backported
@@ -623,9 +625,15 @@ the searchable archives.
 
 The CPAN testers ( http://testers.cpan.org/ ) are a group of
 volunteers who test CPAN modules on a variety of platforms.  Perl
-Smokers ( http://www.nntp.perl.org/group/perl.daily-build )
+Smokers ( http://www.nntp.perl.org/group/perl.daily-build and
+http://www.nntp.perl.org/group/perl.daily-build.reports/ )
 automatically test Perl source releases on platforms with various
-configurations.  Both efforts welcome volunteers.
+configurations.  Both efforts welcome volunteers. In order to get
+involved in smoke testing of the perl itself visit
+L<http://search.cpan.org/dist/Test-Smoke>. In order to start smoke
+testing CPAN modules visit L<http://search.cpan.org/dist/CPAN-YACSmoke/>
+or L<http://search.cpan.org/dist/POE-Component-CPAN-YACSmoke/> or
+L<http://search.cpan.org/dist/CPAN-Reporter/>.
 
 It's a good idea to read and lurk for a while before chipping in.
 That way you'll get to see the dynamic of the conversations, learn the
@@ -1502,8 +1510,8 @@ cpd (http://pmd.sourceforge.net/cpd.html) is part of the pmd project
 analysis of Java code, but later the cpd part of it was extended to
 parse also C and C++.
 
-Download the pmd-X.y.jar from the SourceForge site, and then run
-it on source code thusly:
+Download the pmd-bin-X.Y.zip () from the SourceForge site, extract the
+pmd-X.Y.jar from it, and then run that on source code thusly:
 
   java -cp pmd-X.Y.jar net.sourceforge.pmd.cpd.CPD --minimum-tokens 100 --files /some/where/src --language c > cpd.txt
 
@@ -1917,7 +1925,7 @@ we can write the more sensible (see L<Test::More> for a full
 explanation of is() and other testing functions).
 
  is( "1.20.300.4000", sprintf "%vd", pack("U*",1,20,300,4000), 
-                                       "U* produces unicode" );
+                                       "U* produces Unicode" );
 
 Now we'll test that we got that space-at-the-beginning business right:
 
@@ -1928,7 +1936,7 @@ And finally we'll test that we don't make Unicode strings if C<U> is B<not>
 the first active format:
 
  isnt( v1.20.300.4000, sprintf "%vd", pack("C0U*",1,20,300,4000),
-                                       "U* not first isn't unicode" );
+                                       "U* not first isn't Unicode" );
 
 Mustn't forget to change the number of tests which appears at the top,
 or else the automated tester will get confused.  This will either look
@@ -2379,8 +2387,8 @@ and "Perl_-ly" APIs, for example:
 
 The first one explicitly passes in the context, which is needed for e.g.
 threaded builds.  The second one does that implicitly; do not get them
-mixed.  If you are not passing in a aTHX_, you will need to do a dTHX as
-the first thing in the function.
+mixed.  If you are not passing in a aTHX_, you will need to do a dTHX
+(or a dVAR) as the first thing in the function.
 
 See L<perlguts/"How multiple interpreters and concurrency are supported">
 for further discussion about context.
@@ -2419,7 +2427,7 @@ the right combination of C<const>s:
 There is a way to completely hide any modifiable globals (they are all
 moved to heap), the compilation setting C<-DPERL_GLOBAL_STRUCT_PRIVATE>.
 It is not normally used, but can be used for testing, read more
-about it in L<perlhack>.
+about it in L<perlguts/"Background and PERL_IMPLICIT_CONTEXT">.
 
 =item *
 
@@ -2436,7 +2444,7 @@ Exporting your new function
 
 The new shiny result of either genuine new functionality or your
 arduous refactoring is now ready and correctly exported.  So what
-could possibly be wrong?
+could possibly go wrong?
 
 Maybe simply that your function did not need to be exported in the
 first place.  Perl has a long and not so glorious history of exporting
@@ -2467,14 +2475,21 @@ incompatibilities in your system's header files.)
 Use the Configure C<-Dgccansipedantic> flag to enable the gcc
 C<-ansi -pedantic> flags which enforce stricter ANSI rules.
 
-If using the C<gcc -Wall> note that not all the possible
-warnings are given unless you also compile with C<-O>.
+If using the C<gcc -Wall> note that not all the possible warnings
+(like C<-Wunitialized>) are given unless you also compile with C<-O>.
+
+Note that if using gcc, starting from Perl 5.9.5 the Perl core source
+code files (the ones at the top level of the source code distribution,
+but not e.g. the extensions under ext/) are automatically compiled
+with as many as possible of the C<-std=c89>, C<-ansi>, C<-pedantic>,
+and a selection of C<-W> flags (see cflags.SH).
 
 Also study L<perlport> carefully to avoid any bad assumptions
-about the operating system, filesystem, and so forth.
+about the operating system, filesystems, and so forth.
 
-You may once in a while try a "make miniperl" to see whether we
+You may once in a while try a "make microperl" to see whether we
 can still compile Perl with just the bare minimum of interfaces.
+(See README.micro.)
 
 Do not assume an operating system indicates a certain compiler.
 
@@ -2528,7 +2543,7 @@ guaranteed to be B<int> or B<long>.  If you really explicitly need
 Assuming one can dereference any type of pointer for any type of data
 
   char *p = ...;
-  long pony = *p;
+  long pony = *p;    /* BAD */
 
 Many platforms, quite rightly so, will give you a core dump instead
 of a pony if the p happens not be correctly aligned.
@@ -2537,14 +2552,15 @@ of a pony if the p happens not be correctly aligned.
 
 Lvalue casts
 
-  (int)*p = ...;
+  (int)*p = ...;    /* BAD */
 
 Simply not portable.  Get your lvalue to be of the right type,
 or maybe use temporary variables, or dirty tricks with unions.
 
 =item *
 
-Assume B<anything> about structs
+Assume B<anything> about structs (especially the ones you
+don't control, like the ones coming from the system headers)
 
 =over 8
 
@@ -2558,23 +2574,39 @@ That no other fields exist besides the ones you know of
 
 =item *
 
-That a field is a certain signedness, sizeof, or type
+That a field is of certain signedness, sizeof, or type
 
 =item *
 
 That the fields are in a certain order
 
-=item *
-
-That the sizeof(struct) is the same everywhere
+=over 8
 
 =item *
 
-That there is no padding between the fields
+While C guarantees the ordering specified in the struct definition,
+between different platforms the definitions might differ
+
+=back
 
 =item *
 
-That there are no alignment requirements for the fields
+That the sizeof(struct) or the alignments are the same everywhere
+
+=over 8
+
+=item *
+
+There might be padding bytes between the fields to align the fields -
+the bytes can be anything
+
+=item *
+
+Structs are required to be aligned to the maximum alignment required
+by the fields - which for native types is for usually equivalent to
+sizeof() of the field
+
+=back
 
 =back
 
@@ -2583,7 +2615,7 @@ That there are no alignment requirements for the fields
 Mixing #define and #ifdef
 
   #define BURGLE(x) ... \
-  #ifdef BURGLE_OLD_STYLE
+  #ifdef BURGLE_OLD_STYLE        /* BAD */
   ... do it the old way ... \
   #else
   ... do it the new way ... \
@@ -2598,13 +2630,13 @@ Adding stuff after #endif or #else
 
   #ifdef SNOSH
   ...
-  #else !SNOSH
+  #else !SNOSH    /* BAD */
   ...
-  #endif SNOSH
+  #endif SNOSH    /* BAD */
 
-The #endif and #else cannot portably have anything after them.  If you
-want to document what is going (which is a good idea especially if the
-branches are long), use (C) comments:
+The #endif and #else cannot portably have anything non-comment after
+them.  If you want to document what is going (which is a good idea
+especially if the branches are long), use (C) comments:
 
   #ifdef SNOSH
   ...
@@ -2622,7 +2654,7 @@ Having a comma after the last element of an enum list
   enum color {
     CERULEAN,
     CHARTREUSE,
-    CINNABAR, /* Right here. */
+    CINNABAR,     /* BAD */
   };
 
 is not portable.  Leave out the last comma.
@@ -2634,7 +2666,7 @@ varies between compilers, you might need to (int).
 
 Using //-comments
 
-  // This function bamfoodles the zorklator.
+  // This function bamfoodles the zorklator.    /* BAD */
 
 That is C99 or C++.  Perl is C89.  Using the //-comments is silently
 allowed by many C compilers but cranking up the ANSI C89 strictness
@@ -2647,7 +2679,7 @@ Mixing declarations and code
   void zorklator()
   {
     int n = 3;
-    set_zorkmids(n);
+    set_zorkmids(n);    /* BAD */
     int q = 4;
 
 That is C99 or C++.  Some C compilers allow that, but you shouldn't.
@@ -2659,7 +2691,7 @@ The gcc option C<-Wdeclaration-after-statements> scans for such problems
 
 Introducing variables inside for()
 
-  for(int i = ...; ...; ...)
+  for(int i = ...; ...; ...) {    /* BAD */
 
 That is C99 or C++.  While it would indeed be awfully nice to have that
 also in C89, to limit the scope of the loop variable, alas, we cannot.
@@ -2671,22 +2703,23 @@ Mixing signed char pointers with unsigned char pointers
   int foo(char *s) { ... }
   ...
   unsigned char *t = ...; /* Or U8* t = ... */
-  foo(t);
+  foo(t);   /* BAD */
 
 While this is legal practice, it is certainly dubious, and downright
 fatal in at least one platform: for example VMS cc considers this a
-fatal error.  One cause for people often making this mistake is that
-a "naked char" and therefore dereferencing a "naked char pointer" have
-an undefined signedness: it depends on the compiler and the platform
-whether the result is signed or unsigned.  For this very same reason
-using a 'char' as an array index is bad.
+fatal error.  One cause for people often making this mistake is that a
+"naked char" and therefore dereferencing a "naked char pointer" have
+an undefined signedness: it depends on the compiler and the flags of
+the compiler and the underlying platform whether the result is signed
+or unsigned.  For this very same reason using a 'char' as an array
+index is bad.
 
 =item *
 
 Macros that have string constants and their arguments as substrings of
 the string constants
 
-  #define FOO(n) printf("number = %d\n", n)
+  #define FOO(n) printf("number = %d\n", n)    /* BAD */
   FOO(10);
 
 Pre-ANSI semantics for that was equivalent to
@@ -2703,7 +2736,7 @@ rest of the AIX compiler is very happily C89.
 Using printf formats for non-basic C types
 
    IV i = ...;
-   printf("i = %d\n", i);
+   printf("i = %d\n", i);    /* BAD */
 
 While this might by accident work in some platform (where IV happens
 to be an C<int>), in general it cannot.  IV might be something larger.
@@ -2711,7 +2744,7 @@ Even worse the situation is with more specific types (defined by Perl's
 configuration step in F<config.h>):
 
    Uid_t who = ...;
-   printf("who = %d\n", who);
+   printf("who = %d\n", who);    /* BAD */
 
 The problem here is that Uid_t might be not only not C<int>-wide
 but it might also be unsigned, in which case large uids would be
@@ -2759,11 +2792,13 @@ Perl_va_copy() if the NEED_VA_COPY is defined.
 
 =item *
 
-Using gcc brace groups
+Using gcc statement expressions
 
-   val = ({...;...;...});
+   val = ({...;...;...});    /* BAD */
 
-While a nice extension, it's not portable.
+While a nice extension, it's not portable.  The Perl code does
+admittedly use them if available to gain some extra speed
+(essentially as a funky form of inlining), but you shouldn't.
 
 =item *
 
@@ -2779,7 +2814,7 @@ Use the macros STMT_START and STMT_END.
 
 Testing for operating systems or versions when should be testing for features
 
-  #ifdef __FOONIX__
+  #ifdef __FOONIX__    /* BAD */
   foo = quux();
   #endif
 
@@ -2793,7 +2828,7 @@ not perfect, because the below is a compile-time check):
   foo = quux();
   #endif
 
-How does the HAS_QUUX become defined where it needs to be? Well, if
+How does the HAS_QUUX become defined where it needs to be?  Well, if
 Foonix happens to be UNIXy enought to be able to run the Configure
 script, and Configure has been taught about detecting and testing
 quux(), the HAS_QUUX will be correctly defined.  In other platforms,
@@ -2814,6 +2849,22 @@ you can temporarily try the following:
   #endif
 
 But in any case, try to keep the features and operating systems separate.
+
+=back
+
+=head2 Problematic System Interfaces
+
+=over 4
+
+=item *
+
+malloc(0), realloc(0), calloc(0, 0) are nonportable.  To be portable
+allocate at least one byte.  (In general you should rarely need to
+work at this low level, but instead use the various malloc wrappers.)
+
+=item *
+
+snprintf() - the return type is unportable.  Use my_snprintf() instead.
 
 =back
 
@@ -2887,6 +2938,10 @@ B<NOTE 3>: There are known memory leaks when there are compile-time
 errors within eval or require, seeing C<S_doeval> in the call stack
 is a good sign of these.  Fixing these leaks is non-trivial,
 unfortunately, but they must be fixed eventually.
+
+B<NOTE 4>: L<DynaLoader> will not clean up after itself completely
+unless Perl is built with the Configure option
+C<-Accflags=-DDL_UNLOAD_ALL_AT_EXIT>.
 
 =head2 Rational Software's Purify
 
@@ -3348,7 +3403,46 @@ If you see in a debugger a memory area mysteriously full of 0xABABABAB
 or 0xEFEFEFEF, you may be seeing the effect of the Poison() macros,
 see L<perlclib>.
 
+=item *
+
+Under ithreads the optree is read only. If you want to enforce this, to check
+for write accesses from buggy code, compile with C<-DPL_OP_SLAB_ALLOC> to
+enable the OP slab allocator and C<-DPERL_DEBUG_READONLY_OPS> to enable code
+that allocates op memory via C<mmap>, and sets it read-only at run time.
+Any write access to an op results in a C<SIGBUS> and abort.
+
+This code is intended for development only, and may not be portable even to
+all Unix variants. Also, it is an 80% solution, in that it isn't able to make
+all ops read only. Specifically it
+
+=over
+
+=item 1
+
+Only sets read-only on all slabs of ops at C<CHECK> time, hence ops allocated
+later via C<require> or C<eval> will be re-write
+
+=item 2
+
+Turns an entire slab of ops read-write if the refcount of any op in the slab
+needs to be decreased.
+
+=item 3
+
+Turns an entire slab of ops read-write if any op from the slab is freed.
+
 =back
+
+It's not possible to turn the slabs to read-only after an action requiring
+read-write access, as either can happen during op tree building time, so
+there may still be legitimate write access.
+
+However, as an 80% solution it is still effective, as currently it catches
+a write access during the generation of F<Config.pm>, which means that we
+can't yet build F<perl> with this enabled.
+
+=back
+
 
 =head1 CONCLUSION
 

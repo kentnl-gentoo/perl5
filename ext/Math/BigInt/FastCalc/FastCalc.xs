@@ -18,6 +18,22 @@ MODULE = Math::BigInt::FastCalc		PACKAGE = Math::BigInt::FastCalc
  #  * added __strip_zeros(), _copy()
  # 2004-08-13 0.07 Tels
  #  * added _is_two(), _is_ten(), _ten()
+ # 2007-04-02 0.08 Tels
+ #  * plug leaks by creating mortals
+ # 2007-05-27 0.09 Tels
+ #  * add _new()
+
+#define RETURN_MORTAL_INT(value)		\
+      ST(0) = sv_2mortal(newSViv(value));	\
+      XSRETURN(1);
+
+#define RETURN_MORTAL_BOOL(temp, comp)			\
+      ST(0) = sv_2mortal(boolSV( SvIV(temp) == comp));
+
+#define CONSTANT_OBJ(int)			\
+    RETVAL = newAV();				\
+    sv_2mortal((SV*)RETVAL);			\
+    av_push (RETVAL, newSViv( int ));
 
 void 
 _set_XS_BASE(BASE, BASE_LEN)
@@ -27,6 +43,57 @@ _set_XS_BASE(BASE, BASE_LEN)
   CODE:
     XS_BASE = SvNV(BASE); 
     XS_BASE_LEN = SvIV(BASE_LEN); 
+
+##############################################################################
+# _new
+
+AV *
+_new(class, x)
+  SV*	x
+  INIT:
+    STRLEN len;
+    char* cur;
+    STRLEN part_len;
+
+  CODE:
+    /* create the array */
+    RETVAL = newAV();
+    sv_2mortal((SV*)RETVAL);
+    if (SvIOK(x) && SvUV(x) < XS_BASE)
+      {
+      /* shortcut for integer arguments */
+      av_push (RETVAL, newSVuv( SvUV(x) ));
+      }
+    else
+      {
+      /* split the input (as string) into XS_BASE_LEN long parts */
+      /* in perl:
+		[ reverse(unpack("a" . ($il % $BASE_LEN+1)
+		. ("a$BASE_LEN" x ($il / $BASE_LEN)), $_[1])) ];
+      */
+      cur = SvPV(x, len);			/* convert to string & store length */
+      cur += len;				/* doing "cur = SvEND(x)" does not work! */
+      # process the string from the back
+      while (len > 0)
+        {
+        /* use either BASE_LEN or the amount of remaining digits */
+        part_len = (STRLEN) XS_BASE_LEN;
+        if (part_len > len)
+          {
+          part_len = len;
+          }
+        /* processed so many digits */
+        cur -= part_len;
+        len -= part_len;
+        /* printf ("part '%s' (part_len: %i, len: %i, BASE_LEN: %i)\n", cur, part_len, len, XS_BASE_LEN); */
+        if (part_len > 0)
+	  {
+	  av_push (RETVAL, newSVpvn(cur, part_len) );
+	  }
+        }
+      }
+  OUTPUT:
+    RETVAL
 
 ##############################################################################
 # _copy
@@ -230,51 +297,39 @@ _num(class,x)
 
 ##############################################################################
 
-void
+AV *
 _zero(class)
-  INIT:
-    AV* a;
-
   CODE:
-    a = newAV();
-    av_push (a, newSViv( 0 ));		/* zero */
-    ST(0) = newRV_noinc((SV*) a);
+    CONSTANT_OBJ(0)
+  OUTPUT:
+    RETVAL
 
 ##############################################################################
 
-void
+AV *
 _one(class)
-  INIT:
-    AV* a;
-
   CODE:
-    a = newAV();
-    av_push (a, newSViv( 1 ));		/* one */
-    ST(0) = newRV_noinc((SV*) a);
+    CONSTANT_OBJ(1)
+  OUTPUT:
+    RETVAL
 
 ##############################################################################
 
-void
+AV *
 _two(class)
-  INIT:
-    AV* a;
-
   CODE:
-    a = newAV();
-    av_push (a, newSViv( 2 ));		/* two */
-    ST(0) = newRV_noinc((SV*) a);
+    CONSTANT_OBJ(2)
+  OUTPUT:
+    RETVAL
 
 ##############################################################################
 
-void
+AV *
 _ten(class)
-  INIT:
-    AV* a;
-
   CODE:
-    a = newAV();
-    av_push (a, newSViv( 10 ));		/* ten */
-    ST(0) = newRV_noinc((SV*) a);
+    CONSTANT_OBJ(10)
+  OUTPUT:
+    RETVAL
 
 ##############################################################################
 
@@ -288,7 +343,7 @@ _is_even(class, x)
   CODE:
     a = (AV*)SvRV(x);		/* ref to aray, don't check ref */
     temp = *av_fetch(a, 0, 0);	/* fetch first element */
-    ST(0) = boolSV((SvIV(temp) & 1) == 0);
+    ST(0) = sv_2mortal(boolSV((SvIV(temp) & 1) == 0));
 
 ##############################################################################
 
@@ -302,7 +357,7 @@ _is_odd(class, x)
   CODE:
     a = (AV*)SvRV(x);		/* ref to aray, don't check ref */
     temp = *av_fetch(a, 0, 0);	/* fetch first element */
-    ST(0) = boolSV((SvIV(temp) & 1) != 0);
+    ST(0) = sv_2mortal(boolSV((SvIV(temp) & 1) != 0));
 
 ##############################################################################
 
@@ -321,7 +376,7 @@ _is_one(class, x)
       XSRETURN(1);			/* len != 1, can't be '1' */
       }
     temp = *av_fetch(a, 0, 0);		/* fetch first element */
-    ST(0) = boolSV((SvIV(temp) == 1));
+    RETURN_MORTAL_BOOL(temp, 1);
 
 ##############################################################################
 
@@ -340,7 +395,7 @@ _is_two(class, x)
       XSRETURN(1);			/* len != 1, can't be '2' */
       }
     temp = *av_fetch(a, 0, 0);		/* fetch first element */
-    ST(0) = boolSV((SvIV(temp) == 2));
+    RETURN_MORTAL_BOOL(temp, 2);
 
 ##############################################################################
 
@@ -359,7 +414,7 @@ _is_ten(class, x)
       XSRETURN(1);			/* len != 1, can't be '10' */
       }
     temp = *av_fetch(a, 0, 0);		/* fetch first element */
-    ST(0) = boolSV((SvIV(temp) == 10));
+    RETURN_MORTAL_BOOL(temp, 10);
 
 ##############################################################################
 
@@ -378,7 +433,7 @@ _is_zero(class, x)
       XSRETURN(1);			/* len != 1, can't be '0' */
       }
     temp = *av_fetch(a, 0, 0);		/* fetch first element */
-    ST(0) = boolSV((SvIV(temp) == 0));
+    RETURN_MORTAL_BOOL(temp, 0);
 
 ##############################################################################
 
@@ -388,16 +443,16 @@ _len(class,x)
   INIT:
     AV*	a;
     SV*	temp;
-    NV	elems;
+    IV	elems;
     STRLEN len;
 
   CODE:
     a = (AV*)SvRV(x);			/* ref to aray, don't check ref */
-    elems = (NV) av_len(a);		/* number of elems in array */
+    elems = av_len(a);			/* number of elems in array */
     temp = *av_fetch(a, elems, 0);	/* fetch last element */
     SvPV(temp, len);			/* convert to string & store length */
-    len += XS_BASE_LEN * elems;
-    ST(0) = newSViv(len);
+    len += (IV) XS_BASE_LEN * elems;
+    ST(0) = sv_2mortal(newSViv(len));
 
 ##############################################################################
 
@@ -425,13 +480,11 @@ _acmp(class, cx, cy);
 
     if (diff > 0)
       {
-      ST(0) = newSViv(1);		/* len differs: X > Y */
-      XSRETURN(1);
+      RETURN_MORTAL_INT(1);		/* len differs: X > Y */
       }
-    if (diff < 0)
+    else if (diff < 0)
       {
-      ST(0) = newSViv(-1);		/* len differs: X < Y */
-      XSRETURN(1);
+      RETURN_MORTAL_INT(-1);		/* len differs: X < Y */
       }
     /* both have same number of elements, so check length of last element
        and see if it differes */
@@ -442,13 +495,11 @@ _acmp(class, cx, cy);
     diff_str = (I32)lenx - (I32)leny;
     if (diff_str > 0)
       {
-      ST(0) = newSViv(1);		/* same len, but first elems differs in len */
-      XSRETURN(1);
+      RETURN_MORTAL_INT(1);		/* same len, but first elems differs in len */
       }
     if (diff_str < 0)
       {
-      ST(0) = newSViv(-1);		/* same len, but first elems differs in len */
-      XSRETURN(1);
+      RETURN_MORTAL_INT(-1);		/* same len, but first elems differs in len */
       }
     /* same number of digits, so need to make a full compare */
     diff_nv = 0;
@@ -465,13 +516,11 @@ _acmp(class, cx, cy);
       } 
     if (diff_nv > 0)
       {
-      ST(0) = newSViv(1);
-      XSRETURN(1);
+      RETURN_MORTAL_INT(1);
       }
     if (diff_nv < 0)
       {
-      ST(0) = newSViv(-1);
-      XSRETURN(1);
+      RETURN_MORTAL_INT(-1);
       }
-    ST(0) = newSViv(0);		/* equal */
+    ST(0) = sv_2mortal(newSViv(0));		/* X and Y are equal */
 

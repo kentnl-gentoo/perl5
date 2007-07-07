@@ -814,12 +814,12 @@ in the stash C<Baz::> in C<Bar::>'s stash.
 
 To get the stash pointer for a particular package, use the function:
 
-    HV*  gv_stashpv(const char* name, I32 create)
-    HV*  gv_stashsv(SV*, I32 create)
+    HV*  gv_stashpv(const char* name, I32 flags)
+    HV*  gv_stashsv(SV*, I32 flags)
 
 The first function takes a literal string, the second uses the string stored
 in the SV.  Remember that a stash is just a hash table, so you get back an
-C<HV*>.  The C<create> flag will create a new package if it is set.
+C<HV*>.  The C<flags> flag will create a new package if it is set to GV_ADD.
 
 The name that C<gv_stash*v> wants is the name of the package whose symbol table
 you want.  The default package is called C<main>.  If you have multiply nested
@@ -901,9 +901,9 @@ linked list of C<struct magic>'s, typedef'ed to C<MAGIC>.
         U16         mg_private;
         char        mg_type;
         U8          mg_flags;
+        I32         mg_len;
         SV*         mg_obj;
         char*       mg_ptr;
-        I32         mg_len;
     };
 
 Note this is current as of patchlevel 0, and could change at any time.
@@ -994,12 +994,12 @@ actions depending on which function is being called.
     svt_get             Do something before the value of the SV is retrieved.
     svt_set             Do something after the SV is assigned a value.
     svt_len             Report on the SV's length.
-    svt_clear		Clear something the SV represents.
+    svt_clear           Clear something the SV represents.
     svt_free            Free any extra storage associated with the SV.
 
-    svt_copy		copy tied variable magic to a tied element
-    svt_dup		duplicate a magic structure during thread cloning
-    svt_local		copy magic to local value during 'local'
+    svt_copy            copy tied variable magic to a tied element
+    svt_dup             duplicate a magic structure during thread cloning
+    svt_local           copy magic to local value during 'local'
 
 For instance, the MGVTBL structure called C<vtbl_sv> (which corresponds
 to an C<mg_type> of C<PERL_MAGIC_sv>) contains:
@@ -1024,51 +1024,50 @@ The current kinds of Magic Virtual Tables are:
     mg_type
     (old-style char and macro)   MGVTBL         Type of magic
     --------------------------   ------         ----------------------------
-    \0 PERL_MAGIC_sv             vtbl_sv        Special scalar variable
-    A  PERL_MAGIC_overload       vtbl_amagic    %OVERLOAD hash
+    \0 PERL_MAGIC_sv             vtbl_sv         Special scalar variable
+    A  PERL_MAGIC_overload       vtbl_amagic     %OVERLOAD hash
     a  PERL_MAGIC_overload_elem  vtbl_amagicelem %OVERLOAD hash element
-    c  PERL_MAGIC_overload_table (none)         Holds overload table (AMT)
-						on stash
-    B  PERL_MAGIC_bm             vtbl_bm        Boyer-Moore (fast string search)
-    D  PERL_MAGIC_regdata        vtbl_regdata   Regex match position data
-						(@+ and @- vars)
-    d  PERL_MAGIC_regdatum       vtbl_regdatum  Regex match position data
-						element
-    E  PERL_MAGIC_env            vtbl_env       %ENV hash
-    e  PERL_MAGIC_envelem        vtbl_envelem   %ENV hash element
-    f  PERL_MAGIC_fm             vtbl_fm        Formline ('compiled' format)
-    g  PERL_MAGIC_regex_global   vtbl_mglob     m//g target / study()ed string
-    H  PERL_MAGIC_hints          vtbl_sig       %^H hash
-    h  PERL_MAGIC_hintselem      vtbl_hintselem %^H hash element
-    I  PERL_MAGIC_isa            vtbl_isa       @ISA array
-    i  PERL_MAGIC_isaelem        vtbl_isaelem   @ISA array element
-    k  PERL_MAGIC_nkeys          vtbl_nkeys     scalar(keys()) lvalue
-    L  PERL_MAGIC_dbfile         (none)         Debugger %_<filename
-    l  PERL_MAGIC_dbline         vtbl_dbline    Debugger %_<filename element
-    m  PERL_MAGIC_mutex          vtbl_mutex     ???
-    o  PERL_MAGIC_collxfrm       vtbl_collxfrm  Locale collate transformation
-    P  PERL_MAGIC_tied           vtbl_pack      Tied array or hash
-    p  PERL_MAGIC_tiedelem       vtbl_packelem  Tied array or hash element
-    q  PERL_MAGIC_tiedscalar     vtbl_packelem  Tied scalar or handle
-    r  PERL_MAGIC_qr             vtbl_qr        precompiled qr// regex
-    S  PERL_MAGIC_sig            vtbl_sig       %SIG hash
-    s  PERL_MAGIC_sigelem        vtbl_sigelem   %SIG hash element
-    t  PERL_MAGIC_taint          vtbl_taint     Taintedness
-    U  PERL_MAGIC_uvar           vtbl_uvar      Available for use by extensions
-    v  PERL_MAGIC_vec            vtbl_vec       vec() lvalue
-    V  PERL_MAGIC_vstring        (none)         v-string scalars
-    w  PERL_MAGIC_utf8           vtbl_utf8      UTF-8 length+offset cache
-    x  PERL_MAGIC_substr         vtbl_substr    substr() lvalue
-    y  PERL_MAGIC_defelem        vtbl_defelem   Shadow "foreach" iterator
-						variable / smart parameter
-						vivification
-    #  PERL_MAGIC_arylen         vtbl_arylen    Array length ($#ary)
-    .  PERL_MAGIC_pos            vtbl_pos       pos() lvalue
-    <  PERL_MAGIC_backref        vtbl_backref   back pointer to a weak ref 
-    ~  PERL_MAGIC_ext            (none)         Available for use by extensions
-    :  PERL_MAGIC_symtab	 (none)		hash used as symbol table
-    %  PERL_MAGIC_rhash	 	 (none)		hash used as restricted hash
-    @  PERL_MAGIC_arylen_p	 vtbl_arylen_p	pointer to $#a from @a
+    c  PERL_MAGIC_overload_table (none)          Holds overload table (AMT)
+                                                 on stash
+    B  PERL_MAGIC_bm             vtbl_bm         Boyer-Moore (fast string search)
+    D  PERL_MAGIC_regdata        vtbl_regdata    Regex match position data
+                                                 (@+ and @- vars)
+    d  PERL_MAGIC_regdatum       vtbl_regdatum   Regex match position data
+                                                 element
+    E  PERL_MAGIC_env            vtbl_env        %ENV hash
+    e  PERL_MAGIC_envelem        vtbl_envelem    %ENV hash element
+    f  PERL_MAGIC_fm             vtbl_fm         Formline ('compiled' format)
+    g  PERL_MAGIC_regex_global   vtbl_mglob      m//g target / study()ed string
+    H  PERL_MAGIC_hints          vtbl_sig        %^H hash
+    h  PERL_MAGIC_hintselem      vtbl_hintselem  %^H hash element
+    I  PERL_MAGIC_isa            vtbl_isa        @ISA array
+    i  PERL_MAGIC_isaelem        vtbl_isaelem    @ISA array element
+    k  PERL_MAGIC_nkeys          vtbl_nkeys      scalar(keys()) lvalue
+    L  PERL_MAGIC_dbfile         (none)          Debugger %_<filename
+    l  PERL_MAGIC_dbline         vtbl_dbline     Debugger %_<filename element
+    o  PERL_MAGIC_collxfrm       vtbl_collxfrm   Locale collate transformation
+    P  PERL_MAGIC_tied           vtbl_pack       Tied array or hash
+    p  PERL_MAGIC_tiedelem       vtbl_packelem   Tied array or hash element
+    q  PERL_MAGIC_tiedscalar     vtbl_packelem   Tied scalar or handle
+    r  PERL_MAGIC_qr             vtbl_qr         precompiled qr// regex
+    S  PERL_MAGIC_sig            vtbl_sig        %SIG hash
+    s  PERL_MAGIC_sigelem        vtbl_sigelem    %SIG hash element
+    t  PERL_MAGIC_taint          vtbl_taint      Taintedness
+    U  PERL_MAGIC_uvar           vtbl_uvar       Available for use by extensions
+    v  PERL_MAGIC_vec            vtbl_vec        vec() lvalue
+    V  PERL_MAGIC_vstring        (none)          v-string scalars
+    w  PERL_MAGIC_utf8           vtbl_utf8       UTF-8 length+offset cache
+    x  PERL_MAGIC_substr         vtbl_substr     substr() lvalue
+    y  PERL_MAGIC_defelem        vtbl_defelem    Shadow "foreach" iterator
+                                                 variable / smart parameter
+                                                 vivification
+    #  PERL_MAGIC_arylen         vtbl_arylen     Array length ($#ary)
+    .  PERL_MAGIC_pos            vtbl_pos        pos() lvalue
+    <  PERL_MAGIC_backref        vtbl_backref    back pointer to a weak ref 
+    ~  PERL_MAGIC_ext            (none)          Available for use by extensions
+    :  PERL_MAGIC_symtab         (none)          hash used as symbol table
+    %  PERL_MAGIC_rhash          (none)          hash used as restricted hash
+    @  PERL_MAGIC_arylen_p       vtbl_arylen_p   pointer to $#a from @a
 
 
 When an uppercase and lowercase letter both exist in the table, then the
@@ -1187,7 +1186,7 @@ to do this.
     CODE:
         hash = newHV();
         tie = newRV_noinc((SV*)newHV());
-        stash = gv_stashpv("MyTie", TRUE);
+        stash = gv_stashpv("MyTie", GV_ADD);
         sv_bless(tie, stash);
         hv_magic(hash, (GV*)tie, PERL_MAGIC_tied);
         RETVAL = newRV_noinc(hash);
@@ -2056,9 +2055,9 @@ your Foo.xs:
         #include "perl.h"
         #include "XSUB.h"
 
-        static my_private_function(int arg1, int arg2);
+        STATIC void my_private_function(int arg1, int arg2);
 
-        static SV *
+        STATIC void
         my_private_function(int arg1, int arg2)
         {
             dTHX;       /* fetch context */
@@ -2096,9 +2095,9 @@ the Perl guts:
         #include "XSUB.h"
 
         /* pTHX_ only needed for functions that call Perl API */
-        static my_private_function(pTHX_ int arg1, int arg2);
+        STATIC void my_private_function(pTHX_ int arg1, int arg2);
 
-        static SV *
+        STATIC void
         my_private_function(pTHX_ int arg1, int arg2)
         {
             /* dTHX; not needed here, because THX is an argument */
@@ -2431,8 +2430,8 @@ To fix this, some people formed Unicode, Inc. and
 produced a new character set containing all the characters you can
 possibly think of and more. There are several ways of representing these
 characters, and the one Perl uses is called UTF-8. UTF-8 uses
-a variable number of bytes to represent a character, instead of just
-one. You can learn more about Unicode at http://www.unicode.org/
+a variable number of bytes to represent a character. You can learn more
+about Unicode and Perl's Unicode model in L<perlunicode>.
 
 =head2 How can I recognise a UTF-8 string?
 
@@ -2443,16 +2442,17 @@ C<v196.172>. Unfortunately, the non-Unicode string C<chr(196).chr(172)>
 has that byte sequence as well. So you can't tell just by looking - this
 is what makes Unicode input an interesting problem.
 
-The API function C<is_utf8_string> can help; it'll tell you if a string
-contains only valid UTF-8 characters. However, it can't do the work for
-you. On a character-by-character basis, C<is_utf8_char> will tell you
-whether the current character in a string is valid UTF-8.
+In general, you either have to know what you're dealing with, or you
+have to guess.  The API function C<is_utf8_string> can help; it'll tell
+you if a string contains only valid UTF-8 characters. However, it can't
+do the work for you. On a character-by-character basis, C<is_utf8_char>
+will tell you whether the current character in a string is valid UTF-8. 
 
 =head2 How does UTF-8 represent Unicode characters?
 
 As mentioned above, UTF-8 uses a variable number of bytes to store a
-character. Characters with values 1...128 are stored in one byte, just
-like good ol' ASCII. Character 129 is stored as C<v194.129>; this
+character. Characters with values 0...127 are stored in one byte, just
+like good ol' ASCII. Character 128 is stored as C<v194.128>; this
 continues up to character 191, which is C<v194.191>. Now we've run out of
 bits (191 is binary C<10111111>) so we move on; 192 is C<v195.128>. And
 so it goes on, moving to three bytes at character 2048.
@@ -2509,9 +2509,11 @@ So don't do that!
 =head2 How does Perl store UTF-8 strings?
 
 Currently, Perl deals with Unicode strings and non-Unicode strings
-slightly differently. If a string has been identified as being UTF-8
-encoded, Perl will set a flag in the SV, C<SVf_UTF8>. You can check and
-manipulate this flag with the following macros:
+slightly differently. A flag in the SV, C<SVf_UTF8>, indicates that the
+string is internally encoded as UTF-8. Without it, the byte value is the
+codepoint number and vice versa (in other words, the string is encoded
+as iso-8859-1). You can check and manipulate this flag with the
+following macros:
 
     SvUTF8(sv)
     SvUTF8_on(sv)
@@ -2523,7 +2525,7 @@ C<length>, C<substr> and other string handling operations will have
 undesirable results.
 
 The problem comes when you have, for instance, a string that isn't
-flagged is UTF-8, and contains a byte sequence that could be UTF-8 -
+flagged as UTF-8, and contains a byte sequence that could be UTF-8 -
 especially when combining non-UTF-8 and UTF-8 strings.
 
 Never forget that the C<SVf_UTF8> flag is separate to the PV value; you
@@ -2541,7 +2543,7 @@ manipulating SVs. More specifically, you cannot expect to do this:
 
 The C<char*> string does not tell you the whole story, and you can't
 copy or reconstruct an SV just by copying the string value. Check if the
-old SV has the UTF-8 flag set, and act accordingly:
+old SV has the UTF8 flag set, and act accordingly:
 
     p = SvPV(sv, len);
     frobnicate(p);
@@ -2554,14 +2556,14 @@ not it's dealing with UTF-8 data, so that it can handle the string
 appropriately.
 
 Since just passing an SV to an XS function and copying the data of
-the SV is not enough to copy the UTF-8 flags, even less right is just
+the SV is not enough to copy the UTF8 flags, even less right is just
 passing a C<char *> to an XS function.
 
 =head2 How do I convert a string to UTF-8?
 
-If you're mixing UTF-8 and non-UTF-8 strings, you might find it necessary
-to upgrade one of the strings to UTF-8. If you've got an SV, the easiest
-way to do this is:
+If you're mixing UTF-8 and non-UTF-8 strings, it is necessary to upgrade
+one of the strings to UTF-8. If you've got an SV, the easiest way to do
+this is:
 
     sv_utf8_upgrade(sv);
 
@@ -2572,7 +2574,7 @@ However, you must not do this, for example:
 
 If you do this in a binary operator, you will actually change one of the
 strings that came into the operator, and, while it shouldn't be noticeable
-by the end user, it can cause problems.
+by the end user, it can cause problems in deficient code.
 
 Instead, C<bytes_to_utf8> will give you a UTF-8-encoded B<copy> of its
 string argument. This is useful for having the data available for

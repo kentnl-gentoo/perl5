@@ -1,7 +1,7 @@
 /*    unixish.h
  *
- *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1999, 2000, 2001,
- *    by Larry Wall and others
+ *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1999, 2000, 2001, 2002,
+ *    2003, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -127,16 +127,23 @@
 #define Mkdir(path,mode)   mkdir((path),(mode))
 
 #ifndef PERL_SYS_INIT
-#  define PERL_SYS_INIT(c,v) MALLOC_CHECK_TAINT2(*c,*v) PERL_FPU_INIT MALLOC_INIT
+#  define PERL_SYS_INIT(c,v)						\
+	MALLOC_CHECK_TAINT2(*c,*v) PERL_FPU_INIT; PERLIO_INIT; MALLOC_INIT
 #endif
 
 #ifndef PERL_SYS_TERM
-#define PERL_SYS_TERM()		HINTS_REFCNT_TERM; OP_REFCNT_TERM; MALLOC_TERM
+#  define PERL_SYS_TERM() \
+    if (!PL_veto_cleanup) { \
+	HINTS_REFCNT_TERM; OP_REFCNT_TERM; PERLIO_TERM; MALLOC_TERM; \
+    }
+
 #endif
 
 #define BIT_BUCKET "/dev/null"
 
 #define dXSUB_SYS
 
+#ifndef NO_ENVIRON_ARRAY
 #define USE_ENVIRON_ARRAY
+#endif
 

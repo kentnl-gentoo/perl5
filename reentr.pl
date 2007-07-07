@@ -49,7 +49,7 @@ print <<EOF;
  *
  *    reentr.h
  *
- *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -61,13 +61,29 @@ print <<EOF;
 #ifndef REENTR_H
 #define REENTR_H
 
+/* If compiling for a threaded perl, we will macro-wrap the system/library
+ * interfaces (e.g. getpwent()) which have threaded versions
+ * (e.g. getpwent_r()), which will handle things correctly for
+ * the Perl interpreter, but otherwise (for XS) the wrapping does
+ * not take place.  See L<perlxs/Thread-aware system interfaces>.
+ */
+
+#ifndef PERL_REENTR_API
+# if defined(PERL_CORE) || defined(PERL_EXT)
+#  define PERL_REENTR_API 1
+# else
+#  define PERL_REENTR_API 0
+# endif
+#endif
+
 #ifdef USE_REENTRANT_API
  
 /* Deprecations: some platforms have the said reentrant interfaces
  * but they are declared obsolete and are not to be used.  Often this
  * means that the platform has threadsafed the interfaces (hopefully).
  * All this is OS version dependent, so we are of course fooling ourselves.
- * If you know of more deprecations on some platforms, please add your own. */
+ * If you know of more deprecations on some platforms, please add your own
+ * (by editing reentr.pl, mind!) */
 
 #ifdef __hpux
 #   undef HAS_CRYPT_R
@@ -94,9 +110,9 @@ print <<EOF;
  * memzero out certain structures before calling the functions.
  */
 #if defined(__OpenBSD__)
-#    define REENTR_MEMZERO(a,b) memzero(a,b),
+#    define REENTR_MEMZERO(a,b) memzero(a,b)
 #else
-#    define REENTR_MEMZERO(a,b)
+#    define REENTR_MEMZERO(a,b) 0
 #endif 
 
 #ifdef NETDB_R_OBSOLETE
@@ -547,7 +563,7 @@ EOF
 	    push @size, <<EOF;
 #   if defined(HAS_SYSCONF) && defined($sc) && !defined(__GLIBC__)
 	PL_reentrant_buffer->$sz = sysconf($sc);
-	if (PL_reentrant_buffer->$sz == -1)
+	if (PL_reentrant_buffer->$sz == (size_t) -1)
 		PL_reentrant_buffer->$sz = REENTRANTUSUALSIZE;
 #   else
 #       if defined(__osf__) && defined(__alpha) && defined(SIABUFSIZ)
@@ -634,6 +650,7 @@ EOF
 	push @wrap, $ifdef;
 
 	push @wrap, <<EOF;
+#  if defined(PERL_REENTR_API) && (PERL_REENTR_API+0 == 1)
 #   undef $func
 EOF
 
@@ -698,13 +715,17 @@ EOF
 			 } split '', $b;
 		$w = ", $w" if length $v;
 	    }
+
 	    my $call = "${func}_r($v$w)";
+	    if ($func eq 'localtime') {
+		$call = "L_R_TZSET $call";
+	    }
 
             # Must make OpenBSD happy
             my $memzero = '';
             if($p =~ /D$/ &&
                 ($genfunc eq 'protoent' || $genfunc eq 'servent')) {
-                $memzero = 'REENTR_MEMZERO(&PL_reentrant_buffer->_' . $genfunc . '_data, sizeof(PL_reentrant_buffer->_' . $genfunc . '_data))';
+                $memzero = 'REENTR_MEMZERO(&PL_reentrant_buffer->_' . $genfunc . '_data, sizeof(PL_reentrant_buffer->_' . $genfunc . '_data)),';
             }
 	    push @wrap, <<EOF;
 #   if !defined($func) && ${FUNC}_R_PROTO == REENTRANT_PROTO_$p
@@ -732,9 +753,13 @@ EOF
 		}
 	    }
 	    push @wrap, <<EOF;
-#   endif
+#  endif /* if defined(PERL_REENTR_API) && (PERL_REENTR_API+0 == 1) */
 EOF
 	}
+
+	    push @wrap, <<EOF;
+#   endif /* HAS_\U$func */
+EOF
 
 	push @wrap, $endif, "\n";
     }
@@ -776,7 +801,7 @@ print <<EOF;
  *
  *    reentr.c
  *
- *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.

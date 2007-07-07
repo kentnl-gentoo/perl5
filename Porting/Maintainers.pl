@@ -11,10 +11,12 @@ package Maintainers;
 %Maintainers =
 	(
 	'abergman'	=> 'Arthur Bergman <abergman@cpan.org>',
+	'abigail'	=> 'Abigail <abigail@abigail.be>',
 	'ams'		=> 'Abhijit Menon-Sen <ams@cpan.org>',
 	'andk'		=> 'Andreas J. Koenig <andk@cpan.org>',
 	'arandal'       => 'Allison Randal <allison@perl.org>',
 	'audreyt'	=> 'Audrey Tang <cpan@audreyt.org>',
+	'avar'		=> 'Ævar Arnfjörð Bjarmason <avar@cpan.org>',
 	'bbb'		=> 'Rob Brown <bbb@cpan.org>',
 	'craig'		=> 'Craig Berry <craigberry@mac.com>',
 	'dankogai'	=> 'Dan Kogai <dankogai@cpan.org>',
@@ -22,6 +24,7 @@ package Maintainers;
 	'dmanura'	=> 'David Manura <dmanura@cpan.org>',
 	'drolsky'	=> 'Dave Rolsky <drolsky@cpan.org>',
 	'elizabeth'	=> 'Elizabeth Mattijsen <liz@dijkmat.nl>',
+	'ferreira'	=> 'Adriano Ferreira <ferreira@cpan.org>',
 	'gbarr'		=> 'Graham Barr <gbarr@cpan.org>',
 	'gaas'		=> 'Gisle Aas <gaas@cpan.org>',
 	'gsar'		=> 'Gurusamy Sarathy <gsar@activestate.com>',
@@ -30,20 +33,24 @@ package Maintainers;
 	'jand'		=> 'Jan Dubois <jand@activestate.com>',
 	'jdhedden'	=> 'Jerry D. Hedden <jdhedden@cpan.org>',
 	'jhi'		=> 'Jarkko Hietaniemi <jhi@cpan.org>',
+	'jpeacock'	=> 'John Peacock <jpeacock@rowman.com>',
 	'jstowe'	=> 'Jonathan Stowe <jstowe@cpan.org>',
 	'jv'		=> 'Johan Vromans <jv@cpan.org>',
 	'kane'		=> 'Jos Boumans <kane@cpan.org>',
 	'kwilliams'	=> 'Ken Williams <kwilliams@cpan.org>',
 	'laun'		=> 'Wolfgang Laun <Wolfgang.Laun@alcatel.at>',
 	'lstein'	=> 'Lincoln D. Stein <lds@cpan.org>',
+	'lwall'		=> 'Larry Wall <lwall@cpan.org>',
 	'marekr'	=> 'Marek Rouchal <marekr@cpan.org>',
+	'markm'		=> 'Mark Mielke <markm@cpan.org>',
 	'mhx'		=> 'Marcus Holland-Moritz <mhx@cpan.org>',
 	'mjd'		=> 'Mark-Jason Dominus <mjd@plover.com>',
+	'msergeant'	=> 'Matt Sergeant <msergeant@cpan.org>',
 	'mshelor'	=> 'Mark Shelor <mshelor@cpan.org>',
 	'muir'		=> 'David Muir Sharnoff <muir@cpan.org>',
 	'neilb'		=> 'Neil Bowers <neilb@cpan.org>',
-	'ni-s'		=> 'Nick Ing-Simmons <nick@ing-simmons.net>',
 	'nuffin'	=> 'Yuval Kogman <nothingmuch@woobling.org>',
+	'osfameron'	=> 'Hakim Cassimally <osfameron@perl.org>',
 	'p5p'		=> 'perl5-porters <perl5-porters@perl.org>',
 	'perlfaq'	=> 'perlfaq-workers <perlfaq-workers@perl.org>',
 	'petdance'	=> 'Andy Lester <andy@petdance.com>',
@@ -51,6 +58,7 @@ package Maintainers;
 	'pvhp'		=> 'Peter Prymmer <pvhp@best.com>',
 	'rclamp'	=> 'Richard Clamp <rclamp@cpan.org>',
 	'rgarcia'	=> 'Rafael Garcia-Suarez <rgarcia@cpan.org>',
+	'rkobes'	=> 'Randy Kobes <rkobes@cpan.org>',
 	'rmbarker'	=> 'Robin Barker <rmbarker@cpan.org>',
 	'rra'		=> 'Russ Allbery <rra@cpan.org>',
 	'sadahiro'	=> 'SADAHIRO Tomoyuki <SADAHIRO@cpan.org>',
@@ -59,7 +67,8 @@ package Maintainers;
 	'sburke'	=> 'Sean Burke <sburke@cpan.org>',
 	'mschwern'	=> 'Michael Schwern <mschwern@cpan.org>',
 	'smccam'	=> 'Stephen McCamant <smccam@cpan.org>',
-	'tels'		=> 'perl_dummy a-t bloodgate.com',
+	'smueller'	=> 'Steffen Mueller <smueller@cpan.org>',
+	'tels'		=> 'Tels <nospam-abuse@bloodgate.com>',
 	'tomhughes'	=> 'Tom Hughes <tomhughes@cpan.org>',
 	'tjenness'	=> 'Tim Jenness <tjenness@cpan.org>',
 	'tyemq'		=> 'Tye McQueen <tyemq@cpan.org>',
@@ -72,6 +81,13 @@ package Maintainers;
 
 %Modules = (
 
+	'Archive::Extract' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Archive/Extract.pm lib/Archive/Extract],
+		'CPAN'		=> 1,
+		},
+
 	'Archive::Tar' =>
 		{
 		'MAINTAINER'	=> 'kane',
@@ -79,12 +95,12 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
-	'assertions' =>
+	'AutoLoader' =>
 		{
-		'MAINTAINER'	=> 'salva',
-		'FILES'		=> q[lib/assertions.pm lib/assertions t/comp/assertions.t t/comp/asstcompat.t],
+		'MAINTAINER'	=> 'smueller',
+		'FILES'		=> q[lib/AutoLoader.pm lib/AutoLoader.t],
 		'CPAN'		=> 1,
-		},
+	},
 
 	'Attribute::Handlers' =>
 		{
@@ -110,7 +126,7 @@ package Maintainers;
 
 	'base' =>
 		{
-		'MAINTAINER'	=> 'mschwern',
+		'MAINTAINER'	=> 'rgarcia',
 		'FILES'		=> q[lib/base.pm lib/fields.pm lib/base],
 		'CPAN'		=> 1,
 		},
@@ -122,10 +138,17 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'Compress::Raw::Zlib' =>
+		{
+		'MAINTAINER'	=> 'pmqs',
+		'FILES'		=> q[ext/Compress/Raw],
+		'CPAN'		=> 1,
+		},
+
 	'Compress::Zlib' =>
 		{
 		'MAINTAINER'	=> 'pmqs',
-		'FILES'		=> q[ext/Compress/Zlib t/lib/ZlibTestUtils.pm],
+		'FILES'		=> q[ext/Compress/Zlib],
 		'CPAN'		=> 1,
 		},
 
@@ -147,6 +170,34 @@ package Maintainers;
 		{
 		'MAINTAINER'	=> 'andk',
 		'FILES'		=> q[lib/CPAN.pm lib/CPAN],
+		'CPAN'		=> 1,
+		},
+
+	'CPANPLUS' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/CPANPLUS.pm
+				     lib/CPANPLUS/Backend lib/CPANPLUS/Backend.pm
+				     lib/CPANPLUS/bin
+				     lib/CPANPLUS/Config.pm
+				     lib/CPANPLUS/Configure lib/CPANPLUS/Configure.pm
+				     lib/CPANPLUS/Error.pm
+				     lib/CPANPLUS/FAQ.pod
+				     lib/CPANPLUS/Hacking.pod
+				     lib/CPANPLUS/inc.pm
+				     lib/CPANPLUS/Internals lib/CPANPLUS/Internals.pm
+				     lib/CPANPLUS/Module lib/CPANPLUS/Module.pm
+				     lib/CPANPLUS/Selfupdate.pm
+				     lib/CPANPLUS/Shell lib/CPANPLUS/Shell.pm
+				     lib/CPANPLUS/t
+				    ],
+		'CPAN'		=> 1,
+		},
+
+	'CPANPLUS::Dist::Build' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/CPANPLUS/Dist/Build.pm lib/CPANPLUS/Dist/Build],
 		'CPAN'		=> 1,
 		},
 
@@ -220,10 +271,24 @@ package Maintainers;
 		'CPAN'		=> 0,
 		},
 
+	'Exporter' =>
+		{
+		'MAINTAINER'	=> 'ferreira',
+		'FILES'		=> q[lib/Exporter.pm lib/Exporter.t lib/Exporter/Heavy.pm],
+		'CPAN'		=> 1,
+		},
+
 	'ExtUtils::CBuilder' =>
 		{
 		'MAINTAINER'	=> 'kwilliams',
 		'FILES'		=> q[lib/ExtUtils/CBuilder.pm lib/ExtUtils/CBuilder],
+		'CPAN'		=> 1,
+		},
+
+	'ExtUtils::Command' =>
+		{
+		'MAINTAINER'	=> 'rkobes',
+		'FILES'		=> q[lib/ExtUtils/Command.pm],
 		'CPAN'		=> 1,
 		},
 
@@ -238,8 +303,15 @@ package Maintainers;
 	'ExtUtils::MakeMaker' =>
 		{
 		'MAINTAINER'	=> 'mschwern',
-		'FILES'	=> q[lib/ExtUtils/{Command,Liblist,MakeMaker,Manifest,Mkbootstrap,Mksymlists,MM*,MY,testlib}.pm lib/ExtUtils/{Command,Liblist,MakeMaker,MANIFEST.SKIP}
+		'FILES'	=> q[lib/ExtUtils/{Liblist,MakeMaker,Mkbootstrap,Mksymlists,MM*,MY,testlib}.pm lib/ExtUtils/{Command,Liblist,MakeMaker}
 				     lib/ExtUtils/t t/lib/MakeMaker t/lib/TieIn.pm t/lib/TieOut.pm],
+		'CPAN'		=> 1,
+		},
+
+	'ExtUtils::Manifest' =>
+		{
+		'MAINTAINER'	=> 'rkobes',
+		'FILES'		=> q[lib/ExtUtils/{Manifest.pm,MANIFEST.SKIP} lib/ExtUtils/t/Manifest.t],
 		'CPAN'		=> 1,
 		},
 
@@ -255,6 +327,13 @@ package Maintainers;
 		'MAINTAINER'	=> 'perlfaq',
 		'FILES'		=> q[pod/perlfaq*],
 		'CPAN'		=> 0,
+		},
+
+	'File::Fetch' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/File/Fetch.pm lib/File/Fetch],
+		'CPAN'		=> 1,
 		},
 
 	'File::Spec' =>
@@ -315,6 +394,20 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'IO::Compress::Base' =>
+		{
+		'MAINTAINER'	=> 'pmqs',
+		'FILES'		=> q[ext/IO_Compress_Base],
+		'CPAN'		=> 1,
+		},
+
+	'IO::Compress::Zlib' =>
+		{
+		'MAINTAINER'	=> 'pmqs',
+		'FILES'		=> q[ext/IO_Compress_Zlib],
+		'CPAN'		=> 1,
+		},
+
 	'IO::Zlib' =>
 		{
 		'MAINTAINER'	=> 'tomhughes',
@@ -322,11 +415,18 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'IPC::Cmd' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/IPC/Cmd lib/IPC/Cmd.pm],
+		'CPAN'		=> 1,
+		},
+
 	'libnet' =>
 		{
 		'MAINTAINER'	=> 'gbarr',
 		'FILES'		=>
-			q[lib/Net/{Cmd,Config,Domain,FTP,Netrc,NNTP,POP3,SMTP,Time}.pm lib/Net/ChangeLog.libnet lib/Net/FTP lib/Net/*.eg lib/Net/libnetFAQ.pod lib/Net/README.libnet lib/Net/t],
+			q[lib/Net/{Cmd,Config,Domain,FTP,Netrc,NNTP,POP3,SMTP,Time}.pm lib/Net/ChangeLog lib/Net/FTP lib/Net/*.eg lib/Net/libnetFAQ.pod lib/Net/README lib/Net/t],
 		'CPAN'		=> 1,
 		},
 
@@ -347,8 +447,36 @@ package Maintainers;
 	'Locale::Maketext' =>
 		{
 		'MAINTAINER'	=> 'petdance',
-		'FILES'		=> q[lib/Locale/Maketext.pm lib/Locale/Maketext],
+		'FILES'		=> q[lib/Locale/Maketext.pm lib/Locale/Maketext.pod lib/Locale/Maketext/ChangeLog lib/Locale/Maketext/{Guts,GutsLoader}.pm lib/Locale/Maketext/README lib/Locale/Maketext/TPJ13.pod lib/Locale/Maketext/t],
 		'CPAN'		=> 1,
+		},
+
+	'Locale::Maketext::Simple' =>
+		{
+		'MAINTAINER'	=> 'audreyt',
+		'FILES'		=> q[lib/Locale/Maketext/Simple.pm lib/Locale/Maketext/Simple],
+		'CPAN'		=> 1,
+		},
+
+	'Log::Message' =>
+		{
+		'MAINTAINER'    => 'kane',
+                'FILES'         => q[lib/Log/Message.pm lib/Log/Message/{Config,Handlers,Item}.pm lib/Log/Message/t],
+                'CPAN'          => 1,
+		},
+
+	'Log::Message::Simple' =>
+                {
+                'MAINTAINER'    => 'kane',
+                'FILES'         => q[lib/Log/Message/Simple.pm lib/Log/Message/Simple],
+                'CPAN'          => 1,
+                },
+
+	'mad' =>
+		{
+		'MAINTAINER'	=> 'lwall',
+		'FILES'		=> q[mad],
+		'CPAN'		=> 0,
 		},
 
 	'Math::BigFloat' =>
@@ -418,7 +546,15 @@ package Maintainers;
 	'Module::Load' =>
 		{
 		'MAINTAINER'	=> 'kane',
-		'FILES'		=> q[lib/Module/Load lib/Module/Load.pm],
+		'FILES'		=> q[lib/Module/Load/t lib/Module/Load.pm],
+		'CPAN'		=> 1,
+		},
+
+	'Module::Load::Conditional' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Module/Load/Conditional
+				     lib/Module/Load/Conditional.pm],
 		'CPAN'		=> 1,
 		},
 
@@ -426,6 +562,16 @@ package Maintainers;
 		{
 		'MAINTAINER'	=> 'kane',
 		'FILES'		=> q[lib/Module/Loaded lib/Module/Loaded.pm],
+		'CPAN'		=> 1,
+		},
+
+	# NB. tests are located in t/Module_Pluggable to avoid directory
+	# depth issues on VMS
+	'Module::Pluggable' =>
+		{
+		'MAINTAINER'	=> 'simonw',
+		'FILES'		=> q[lib/Module/Pluggable lib/Module/Pluggable.pm
+				     lib/Devel/InnerPackage.pm t/Module_Pluggable],
 		'CPAN'		=> 1,
 		},
 
@@ -443,10 +589,24 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'Object::Accessor' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Object/Accessor.pm lib/Object/Accessor],
+		'CPAN'		=> 1,
+		},
+
 	'Package::Constants' =>
 		{
 		'MAINTAINER'	=> 'kane',
 		'FILES'		=> q[lib/Package/Constants lib/Package/Constants.pm],
+		'CPAN'		=> 1,
+		},
+
+	'Params::Check' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Params/Check lib/Params/Check.pm],
 		'CPAN'		=> 1,
 		},
 
@@ -464,21 +624,28 @@ package Maintainers;
 		'CPAN'		=> 0,
 		},
 
-	'perlio-doc' =>
-		{
-		'MAINTAINER'	=> 'ni-s',
-		'FILES'		=> q[pod/perlapio.pod
-				     pod/perliol.pod
-				     lib/PerlIO.pm],
-		'CPAN'		=> 0,
-		},
-
 	'PerlIO::via::QuotedPrint' =>
 		{
 		'MAINTAINER'	=> 'elizabeth',
 		'FILES'		=> q[lib/PerlIO/via/QuotedPrint.pm
 				     lib/PerlIO/via/t/QuotedPrint.t],
 		'CPAN'		=> 1,
+		},
+
+	'perlre' =>
+		{
+		'MAINTAINER'	=> 'abigail',
+		'FILES'		=> q[pod/perlrecharclass.pod
+				     pod/perlrebackslash.pod],
+		'CPAN'		=> 0,
+		},
+
+
+	'perlreapi' =>
+		{
+		MAINTAINER	=> 'avar',
+		FILES		=> 'pod/perlreapi.pod',
+		CPAN		=> 0,
 		},
 
 	'perlreftut' =>
@@ -545,7 +712,7 @@ package Maintainers;
 
 	'Pod::Perldoc' =>
 		{
-		'MAINTAINER'	=> 'sburke',
+		'MAINTAINER'	=> 'osfameron',
 		'FILES'		=> q[lib/Pod/Perldoc.pm lib/Pod/Perldoc],
 		'CPAN'		=> 1,
 		},
@@ -564,6 +731,13 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'Shell' =>
+		{
+		'MAINTAINER'	=> 'ferreira',
+		'FILES'		=> q[lib/Shell.pm lib/Shell.t],
+		'CPAN'		=> 1,
+		},
+
 	'Storable' =>
 		{
 		'MAINTAINER'	=> 'ams',
@@ -575,6 +749,13 @@ package Maintainers;
 		{
 		'MAINTAINER'	=> 'rgarcia',
 		'FILES'		=> q[lib/Switch.pm lib/Switch],
+		'CPAN'		=> 1,
+		},
+
+	'Sys::Syslog' =>
+		{
+		'MAINTAINER'	=> 'saper',
+		'FILES'		=> q[ext/Sys/Syslog],
 		'CPAN'		=> 1,
 		},
 
@@ -593,10 +774,24 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+	'Text::Soundex' =>
+		{
+		'MAINTAINER'	=> 'markm',
+		'FILES'		=> q[ext/Text/Soundex],
+		'CPAN'		=> 1,
+		},
+
 	'Term::ANSIColor' =>
 		{
 		'MAINTAINER'	=> 'rra',
 		'FILES'		=> q[lib/Term/ANSIColor.pm lib/Term/ANSIColor],
+		'CPAN'		=> 1,
+		},
+
+	'Term::UI' =>
+		{
+		'MAINTAINER'	=> 'kane',
+		'FILES'		=> q[lib/Term/UI.pm lib/Term/UI],
 		'CPAN'		=> 1,
 		},
 
@@ -648,7 +843,7 @@ package Maintainers;
 		{
 		'MAINTAINER'	=> 'jdhedden',
 		'FILES'		=> q[ext/threads/hints ext/threads/t
-				     ext/threads/threads.{pm,xs} ext/threads/typemap],
+				     ext/threads/threads.{pm,xs}],
 		'CPAN'		=> 1,
 		},
 
@@ -687,6 +882,13 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
+        'Time::Piece' =>
+                {
+                'MAINTAINER'    => 'msergeant',
+                'FILES'         => q[ext/Time/Piece],
+                'CPAN'          => 1,
+                },
+
 	'Unicode::Collate' =>
 		{
 		'MAINTAINER'	=> 'sadahiro',
@@ -699,6 +901,13 @@ package Maintainers;
 		{
 		'MAINTAINER'	=> 'sadahiro',
 		'FILES'		=> q[ext/Unicode/Normalize],
+		'CPAN'		=> 1,
+		},
+
+	'version' =>
+		{
+		'MAINTAINER'	=> 'jpeacock',
+		'FILES'		=> q[lib/version.pm lib/version.pod lib/version.t],
 		'CPAN'		=> 1,
 		},
 
@@ -720,14 +929,21 @@ package Maintainers;
 	'win32' =>
 		{
 		'MAINTAINER'	=> 'jand',
-		'FILES'		=> q[win32 README.win32 t/win32],
+		'FILES'		=> q[win32 README.win32 t/win32 ext/Win32CORE],
 		'CPAN'		=> 0,
+		},
+
+	'Win32' =>
+		{
+		'MAINTAINER'	=> 'jand',
+		'FILES'		=> q[ext/Win32],
+		'CPAN'		=> 1,
 		},
 
 	'Win32API::File' =>
 		{
 		'MAINTAINER'	=> 'tyemq',
-		'FILES'		=> q[win32/ext/Win32API/File],
+		'FILES'		=> q[ext/Win32API/File],
 		'CPAN'		=> 1,
 		},
 
@@ -744,7 +960,6 @@ package Maintainers;
 		'FILES'		=> q[x2p/s2p.PL],
 		'CPAN'		=> 0,
 		},
-
 	);
 
 1;

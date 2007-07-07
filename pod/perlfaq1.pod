@@ -1,6 +1,6 @@
 =head1 NAME
 
-perlfaq1 - General Questions About Perl ($Revision: 3606 $)
+perlfaq1 - General Questions About Perl ($Revision: 9681 $)
 
 =head1 DESCRIPTION
 
@@ -40,7 +40,7 @@ http://www.xray.mpe.mpg.de/mailing-lists/perl5-porters/
 and http://archive.develooper.com/perl5-porters@perl.org/
 or the news gateway nntp://nntp.perl.org/perl.perl5.porters or
 its web interface at http://nntp.perl.org/group/perl.perl5.porters ,
-or read the faq at http://simon-cozens.org/writings/p5p-faq ,
+or read the faq at http://dev.perl.org/perl5/docs/p5p-faq.html ,
 or you can subscribe to the mailing list by sending
 perl5-porters-request@perl.org a subscription request
 (an empty message with no subject is fine).
@@ -60,7 +60,7 @@ users the informal support will more than suffice.  See the answer to
 
 There is often a matter of opinion and taste, and there isn't any one
 answer that fits anyone.  In general, you want to use either the current
-stable release, or the stable release immediately prior to that one. 
+stable release, or the stable release immediately prior to that one.
 Currently, those are perl5.8.x and perl5.6.x, respectively.
 
 Beyond that, you have to consider several things and decide which is best
@@ -101,13 +101,13 @@ for a while, although not at the same level as the current releases.
 
 =item *
 
-No one is actively supporting perl4.x.  Five years ago it was a dead
+No one is actively supporting Perl 4.  Five years ago it was a dead
 camel carcass (according to this document).  Now it's barely a skeleton
 as its whitewashed bones have fractured or eroded.
 
 =item *
 
-There is no perl6.x for the next couple of years.  Stay tuned, but don't
+There is no Perl 6 for the next couple of years.  Stay tuned, but don't
 worry that you'll have to change major versions of Perl soon (i.e. before
 2008).
 
@@ -123,62 +123,62 @@ minor release (i.e. perl5.9.x, where 9 is the minor release).
 =back
 
 
-=head2 What are perl4, perl5, or perl6?
+=head2 What are Perl 4, Perl 5, or Perl 6?
 
 (contributed by brian d foy)
 
-In short, perl4 is the past, perl5 is the present, and perl6 is the
+In short, Pelr 4 is the past, Perl 5 is the present, and Perl 6 is the
 future.
 
-The number after perl (i.e. the 5 after perl5) is the major release
+The number after perl (i.e. the 5 after Perl 5) is the major release
 of the perl interpreter as well as the version of the language.  Each
 major version has significant differences that earlier versions cannot
 support.
 
-The current major release of Perl is perl5, and was released in 1994.
+The current major release of Perl is Perl 5, and was released in 1994.
 It can run scripts from the previous major release, perl4 (March 1991),
 but has significant differences. It introduced the concept of references,
-complex data structures, and modules.  The perl5 interpreter was a
+complex data structures, and modules.  The Perl 5 interpreter was a
 complete re-write of the previous perl sources.
 
-Perl6 is the next major version of Perl, but it's still in development
+Perl 6 is the next major version of Perl, but it's still in development
 in both its syntax and design.  The work started in 2002 and is still
 ongoing.  Many of the most interesting features have shown up in the
-latest versions of perl5, and some perl5 modules allow you to use some
-perl6 syntax in your programs.  You can learn more about perl6 at
+latest versions of Perl 5, and some Perl 5 modules allow you to use some
+Perl 6 syntax in your programs.  You can learn more about Perl 6 at
 http://dev.perl.org/perl6/ .
 
 See L<perlhist> for a history of Perl revisions.
 
-=head2 What is Ponie?
+=head2 What was Ponie?
 
 (contributed by brian d foy)
 
 Ponie stands for "Perl On the New Internal Engine", started by Arthur
 Bergman from Fotango in 2003, and subsequently run as a project of The
-Perl Foundation. Instead of using the current Perl internals, Ponie
-creates a new one that provides a translation path from Perl 5 to Perl 6
-(or anything else that targets Parrot, actually). You can also just keep
-using Perl 5 with Parrot, the virtual machine which will compile and run
-Perl 6 bytecode.
+Perl Foundation. It was abandoned in 2006
+(http://www.nntp.perl.org/group/perl.ponie.dev/487).
 
-You can get more information at http://www.poniecode.org/ and
-http://www.parrotcode.org .
+Instead of using the current Perl internals, Ponie aimed to create a
+new one that would provide a translation path from Perl 5 to Perl 6
+(or anything else that targets Parrot, actually). You would have been
+able  to just keep using Perl 5 with Parrot, the virtual machine which
+will compile and run Perl 6 bytecode.
 
-=head2 What is perl6?
+=head2 What is Perl 6?
 
 At The Second O'Reilly Open Source Software Convention, Larry Wall
-announced Perl6 development would begin in earnest. Perl6 was an oft
+announced Perl 6 development would begin in earnest. Perl 6 was an oft
 used term for Chip Salzenberg's project to rewrite Perl in C++ named
 Topaz. However, Topaz provided valuable insights to the next version
 of Perl and its implementation, but was ultimately abandoned.
 
-If you want to learn more about Perl6, or have a desire to help in
-the crusade to make Perl a better place then peruse the Perl6 developers
+If you want to learn more about Perl 6, or have a desire to help in
+the crusade to make Perl a better place then peruse the Perl 6 developers
 page at http://dev.perl.org/perl6/ and get involved.
 
-Perl6 is not scheduled for release yet, and Perl5 will still be supported
-for quite awhile after its release. Do not wait for Perl6 to do whatever
+Perl 6 is not scheduled for release yet, and Perl 5 will still be supported
+for quite awhile after its release. Do not wait for Perl 6 to do whatever
 you need to do.
 
 "We're really serious about reinventing everything that needs reinventing."
@@ -192,8 +192,8 @@ averaged only about one production release per year.
 
 Larry and the Perl development team occasionally make changes to the
 internal core of the language, but all possible efforts are made toward
-backward compatibility.  While not quite all perl4 scripts run flawlessly
-under perl5, an update to perl should nearly never invalidate a program
+backward compatibility.  While not quite all Perl 4 scripts run flawlessly
+under Perl 5, an update to perl should nearly never invalidate a program
 written for an earlier version of perl (barring accidental bug fixes
 and the rare new keyword).
 
@@ -220,7 +220,7 @@ Things that make Perl easier to learn: Unix experience, almost any kind
 of programming experience, an understanding of regular expressions, and
 the ability to understand other people's code.  If there's something you
 need to do, then it's probably already been done, and a working example is
-usually available for free.  Don't forget the new perl modules, either.
+usually available for free.  Don't forget Perl modules, either.
 They're discussed in Part 3 of this FAQ, along with CPAN, which is
 discussed in Part 2.
 
@@ -275,9 +275,7 @@ device drivers or context-switching code, complex multi-threaded
 shared-memory applications, or extremely large applications.  You'll
 notice that perl is not itself written in Perl.
 
-The new, native-code compiler for Perl may eventually reduce the
-limitations given in the previous statement to some degree, but understand
-that Perl remains fundamentally a dynamically typed language, not
+Perl remains fundamentally a dynamically typed language, not
 a statically typed one.  You certainly won't be chastised if you don't
 trust nuclear-plant or brain-surgery monitoring code to it.  And Larry
 will sleep easier, too--Wall Street programs not withstanding. :-)
@@ -312,14 +310,6 @@ tell you that a I<program> has been compiled to physical machine code
 once and can then be run multiple times, whereas a I<script> must be
 translated by a program each time it's used.
 
-Perl programs are (usually) neither strictly compiled nor strictly
-interpreted.  They can be compiled to a byte-code form (something of a
-Perl virtual machine) or to completely different languages, like C or
-assembly language.  You can't tell just by looking at it whether the
-source is destined for a pure interpreter, a parse-tree interpreter,
-a byte-code interpreter, or a native-code compiler, so it's hard to give
-a definitive answer here.
-
 Now that "script" and "scripting" are terms that have been seized by
 unscrupulous or unknowing marketeers for their own nefarious purposes,
 they have begun to take on strange and often pejorative meanings,
@@ -335,7 +325,7 @@ to sign email and usenet messages starting in the late 1980s. He
 previously used the phrase with many subjects ("Just another x hacker,"),
 so to distinguish his JAPH, he started to write them as Perl programs:
 
-	print "Just another Perl hacker,";
+	print "Just another Perl hacker, ";
 
 Note the trailing comma and space, which allows the addition of other
 JAxH clauses for his many other interests.
@@ -373,7 +363,7 @@ In general, the benefit of a language is closely related to the skill of
 the people using that language. If you or your team can be more faster,
 better, and stronger through Perl, you'll deliver more value. Remember,
 people often respond better to what they get out of it. If you run
-into resistance, figure out what those people get out of the other 
+into resistance, figure out what those people get out of the other
 choice and how Perl might satisfy that requirement.
 
 You don't have to worry about finding or paying for Perl; it's freely
@@ -400,15 +390,15 @@ You might find these links useful:
 
 =head1 REVISION
 
-Revision: $Revision: 3606 $
+Revision: $Revision: 9681 $
 
-Date: $Date: 2006-03-06 12:05:47 +0100 (lun, 06 mar 2006) $
+Date: $Date: 2007-06-26 01:36:56 +0200 (Tue, 26 Jun 2007) $
 
 See L<perlfaq> for source control details and availability.
 
 =head1 AUTHOR AND COPYRIGHT
 
-Copyright (c) 1997-2006 Tom Christiansen, Nathan Torkington, and
+Copyright (c) 1997-2007 Tom Christiansen, Nathan Torkington, and
 other authors as noted. All rights reserved.
 
 This documentation is free; you can redistribute it and/or modify it

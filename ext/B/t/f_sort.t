@@ -516,25 +516,24 @@ checkOptree(name   => q{Compound sort/map Expression },
 # e      </> match(/"=(\\d+)"/) l/RTIME
 # f      <#> gvsv[*_] s
 # g      <1> uc[t17] sK/1
-# h      <@> anonlist sKRM/1
-# i      <1> srefgen sK/1
-# j      <@> leave lKP
+# h      <@> anonlist sK*/1
+# i      <@> leave lKP
 #            goto 9
-# k  <@> sort lKMS*
-# l  <@> mapstart lK*
-# m  <|> mapwhile(other->n)[t26] lK
-# n      <#> gv[*_] s
-# o      <1> rv2sv sKM/DREFAV,1
-# p      <1> rv2av[t4] sKR/1
-# q      <$> const[IV 0] s
-# r      <2> aelem sK/2
+# j  <@> sort lKMS*
+# k  <@> mapstart lK*
+# l  <|> mapwhile(other->m)[t26] lK
+# m      <#> gv[*_] s
+# n      <1> rv2sv sKM/DREFAV,1
+# o      <1> rv2av[t4] sKR/1
+# p      <$> const[IV 0] s
+# q      <2> aelem sK/2
 # -      <@> scope lK
-#            goto m
-# s  <0> pushmark s
-# t  <#> gv[*new] s
-# u  <1> rv2av[t2] lKRM*/1
-# v  <2> aassign[t27] KS/COMMON
-# w  <1> leavesub[1 ref] K/REFC,1
+#            goto l
+# r  <0> pushmark s
+# s  <#> gv[*new] s
+# t  <1> rv2av[t2] lKRM*/1
+# u  <2> aassign[t27] KS/COMMON
+# v  <1> leavesub[1 ref] K/REFC,1
 EOT_EOT
 # 1  <;> nextstate(main 609 (eval 34):3) v:{
 # 2  <0> pushmark s
@@ -552,25 +551,24 @@ EOT_EOT
 # e      </> match(/"=(\\d+)"/) l/RTIME
 # f      <$> gvsv(*_) s
 # g      <1> uc[t9] sK/1
-# h      <@> anonlist sKRM/1
-# i      <1> srefgen sK/1
-# j      <@> leave lKP
+# h      <@> anonlist sK*/1
+# i      <@> leave lKP
 #            goto 9
-# k  <@> sort lKMS*
-# l  <@> mapstart lK*
-# m  <|> mapwhile(other->n)[t12] lK
-# n      <$> gv(*_) s
-# o      <1> rv2sv sKM/DREFAV,1
-# p      <1> rv2av[t2] sKR/1
-# q      <$> const(IV 0) s
-# r      <2> aelem sK/2
+# j  <@> sort lKMS*
+# k  <@> mapstart lK*
+# l  <|> mapwhile(other->m)[t12] lK
+# m      <$> gv(*_) s
+# n      <1> rv2sv sKM/DREFAV,1
+# o      <1> rv2av[t2] sKR/1
+# p      <$> const(IV 0) s
+# q      <2> aelem sK/2
 # -      <@> scope lK
-#            goto m
-# s  <0> pushmark s
-# t  <$> gv(*new) s
-# u  <1> rv2av[t1] lKRM*/1
-# v  <2> aassign[t13] KS/COMMON
-# w  <1> leavesub[1 ref] K/REFC,1
+#            goto l
+# r  <0> pushmark s
+# s  <$> gv(*new) s
+# t  <1> rv2av[t1] lKRM*/1
+# u  <2> aassign[t13] KS/COMMON
+# v  <1> leavesub[1 ref] K/REFC,1
 EONT_EONT
     
 
@@ -666,10 +664,7 @@ use sort 'stable';
 
 =cut
 
-checkOptree(note   => q{},
-	    bcopts => q{-exec},
-	    code   => q{use sort 'stable'; @new = sort { substr($a, 3, 5) cmp substr($b, 3, 5) } @old; },
-	    expect => <<'EOT_EOT', expect_nt => <<'EONT_EONT');
+my ($expect, $expect_nt) = (<<'EOT_EOT', <<'EONT_EONT');
 # 1  <;> nextstate(main 656 (eval 40):1) v:%,{
 # 2  <0> pushmark s
 # 3  <0> pushmark s
@@ -694,7 +689,16 @@ EOT_EOT
 # a  <2> aassign[t6] KS/COMMON
 # b  <1> leavesub[1 ref] K/REFC,1
 EONT_EONT
-    
+
+if($] < 5.009) {
+    # 5.8.x doesn't show the /STABLE flag, so massage the golden results.
+    s!/STABLE!!s foreach ($expect, $expect_nt);
+}
+
+checkOptree(note   => q{},
+	    bcopts => q{-exec},
+	    code   => q{use sort 'stable'; @new = sort { substr($a, 3, 5) cmp substr($b, 3, 5) } @old; },
+	    expect => $expect, expect_nt => $expect_nt);
 
 =for gentest
 

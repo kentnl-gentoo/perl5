@@ -1,7 +1,7 @@
 /*    scope.h
  *
  *    Copyright (C) 1993, 1994, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2004, 2005 by Larry Wall and others
+ *    2000, 2001, 2002, 2004, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -52,6 +52,8 @@
 #define SAVEt_COP_ARYBASE	41
 #define SAVEt_RE_STATE		42
 #define SAVEt_COMPILE_WARNINGS	43
+#define SAVEt_STACK_CXPOS	44
+#define SAVEt_PARSER		45
 
 #ifndef SCOPE_SAVES_SIGNAL_MASK
 #define SCOPE_SAVES_SIGNAL_MASK 0
@@ -205,16 +207,35 @@ Closing bracket on a callback.  See C<ENTER> and L<perlcall>.
 	SSPUSHINT(SAVEt_COMPILE_WARNINGS);		\
     } STMT_END
 
+#define SAVESTACK_CXPOS() \
+    STMT_START {                                  \
+        SSCHECK(3);                               \
+        SSPUSHINT(cxstack[cxstack_ix].blk_oldsp); \
+        SSPUSHINT(cxstack_ix);                    \
+        SSPUSHINT(SAVEt_STACK_CXPOS);             \
+    } STMT_END
+
+#define SAVEPARSER(p) \
+    STMT_START {                                  \
+        SSCHECK(2);                               \
+        SSPUSHPTR(p);		                  \
+        SSPUSHINT(SAVEt_PARSER); 	          \
+    } STMT_END
+
 #ifdef USE_ITHREADS
 #  define SAVECOPSTASH(c)	SAVEPPTR(CopSTASHPV(c))
 #  define SAVECOPSTASH_FREE(c)	SAVESHAREDPV(CopSTASHPV(c))
 #  define SAVECOPFILE(c)	SAVEPPTR(CopFILE(c))
 #  define SAVECOPFILE_FREE(c)	SAVESHAREDPV(CopFILE(c))
+#  define SAVECOPLABEL(c)	SAVEPPTR(CopLABEL(c))
+#  define SAVECOPLABEL_FREE(c)	SAVESHAREDPV(CopLABEL(c))
 #else
 #  define SAVECOPSTASH(c)	SAVESPTR(CopSTASH(c))
 #  define SAVECOPSTASH_FREE(c)	SAVECOPSTASH(c)	/* XXX not refcounted */
 #  define SAVECOPFILE(c)	SAVESPTR(CopFILEGV(c))
 #  define SAVECOPFILE_FREE(c)	SAVEGENERICSV(CopFILEGV(c))
+#  define SAVECOPLABEL(c)	SAVEPPTR(CopLABEL(c))
+#  define SAVECOPLABEL_FREE(c)	SAVEPPTR(CopLABEL(c))
 #endif
 
 #define SAVECOPLINE(c)		SAVEI32(CopLINE(c))

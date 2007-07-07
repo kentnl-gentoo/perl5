@@ -404,13 +404,6 @@ EOM
 	if test "`arch`" = i86pc -a `uname -r` = 5.6 && \
 	   ${cc:-cc} try.c -lpthread >/dev/null 2>&1 && ./a.out; then
 	    d_sigsetjmp=$undef
-	    cat << 'EOM' >&2
-
-You will see a *** WHOA THERE!!! ***  message from Configure for
-d_sigsetjmp.  Keep the recommended value.  See hints/solaris_2.sh
-for more information.
-
-EOM
 	fi
 
 	# These prototypes should be visible since we using
@@ -637,3 +630,17 @@ fi
 EOOVER
 
 rm -f try.c try.o try a.out
+
+# If using C++, the Configure scan for dlopen() will fail in Solaris
+# because one of the two (1) an extern "C" linkage definition is needed
+# (2) #include <dlfcn.h> is needed, *and* a cast to (void*(*)())
+# is needed for the &dlopen.  Adding any of these would require changing
+# a delicate spot in Configure, so easier just to force our guess here
+# for Solaris.  Much the same goes for dlerror().
+case "$cc" in
+*g++*|*CC*)
+  d_dlopen='define'
+  d_dlerror='define'
+  ;;
+esac
+

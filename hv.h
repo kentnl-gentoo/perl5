@@ -1,7 +1,7 @@
 /*    hv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -38,12 +38,33 @@ struct shared_he {
 
 /* Subject to change.
    Don't access this directly.
+   Use the funcs in mro.c
 */
+
+typedef enum {
+    MRO_DFS, /* 0 */
+    MRO_C3   /* 1 */
+} mro_alg;
+
+struct mro_meta {
+    AV      *mro_linear_dfs; /* cached dfs @ISA linearization */
+    AV      *mro_linear_c3;  /* cached c3 @ISA linearization */
+    HV      *mro_nextmethod; /* next::method caching */
+    U32     cache_gen;       /* Bumping this invalidates our method cache */
+    U32     pkg_gen;         /* Bumps when local methods/@ISA change */
+    mro_alg mro_which;       /* which mro alg is in use? */
+};
+
+/* Subject to change.
+   Don't access this directly.
+*/
+
 struct xpvhv_aux {
     HEK		*xhv_name;	/* name, if a symbol table */
     AV		*xhv_backreferences; /* back references for weak references */
     HE		*xhv_eiter;	/* current entry of iterator */
     I32		xhv_riter;	/* current root of iterator */
+    struct mro_meta *xhv_mro_meta;
 };
 
 /* hash structure: */
@@ -52,6 +73,15 @@ struct xpvhv {
     union {
 	NV	xnv_nv;		/* numeric value, if any */
 	HV *	xgv_stash;
+	struct {
+	    U32	xlow;
+	    U32	xhigh;
+	}	xpad_cop_seq;	/* used by pad.c for cop_sequence */
+	struct {
+	    U32 xbm_previous;	/* how many characters in string before rare? */
+	    U8	xbm_flags;
+	    U8	xbm_rare;	/* rarest character in string */
+	}	xbm_s;		/* fields from PVBM */
     }		xnv_u;
     STRLEN	xhv_fill;	/* how full xhv_array currently is */
     STRLEN	xhv_max;	/* subscript of last element of xhv_array */
@@ -71,9 +101,6 @@ struct xpvhv {
 
 #define xhv_keys xiv_u.xivu_iv
 
-#if 0
-typedef struct xpvhv xpvhv_allocated;
-#else
 typedef struct {
     STRLEN	xhv_fill;	/* how full xhv_array currently is */
     STRLEN	xhv_max;	/* subscript of last element of xhv_array */
@@ -90,7 +117,6 @@ typedef struct {
     } xmg_u;
     HV*		xmg_stash;	/* class package */
 } xpvhv_allocated;
-#endif
 
 /* hash a key */
 /* FYI: This is the "One-at-a-Time" algorithm by Bob Jenkins
@@ -233,14 +259,21 @@ C<SV*>.
 #define HvRITER_set(hv,r)	Perl_hv_riter_set(aTHX_ (HV*)(hv), r)
 #define HvEITER_set(hv,e)	Perl_hv_eiter_set(aTHX_ (HV*)(hv), e)
 #define HvRITER_get(hv)	(SvOOK(hv) ? HvAUX(hv)->xhv_riter : -1)
-#define HvEITER_get(hv)	(SvOOK(hv) ? HvAUX(hv)->xhv_eiter : 0)
+#define HvEITER_get(hv)	(SvOOK(hv) ? HvAUX(hv)->xhv_eiter : NULL)
 #define HvNAME(hv)	HvNAME_get(hv)
+
+/* Checking that hv is a valid package stash is the
+   caller's responsibility */
+#define HvMROMETA(hv) (HvAUX(hv)->xhv_mro_meta \
+                       ? HvAUX(hv)->xhv_mro_meta \
+                       : mro_meta_init(hv))
+
 /* FIXME - all of these should use a UTF8 aware API, which should also involve
    getting the length. */
 /* This macro may go away without notice.  */
-#define HvNAME_HEK(hv) (SvOOK(hv) ? HvAUX(hv)->xhv_name : 0)
+#define HvNAME_HEK(hv) (SvOOK(hv) ? HvAUX(hv)->xhv_name : NULL)
 #define HvNAME_get(hv)	((SvOOK(hv) && (HvAUX(hv)->xhv_name)) \
-			 ? HEK_KEY(HvAUX(hv)->xhv_name) : 0)
+			 ? HEK_KEY(HvAUX(hv)->xhv_name) : NULL)
 #define HvNAMELEN_get(hv)	((SvOOK(hv) && (HvAUX(hv)->xhv_name)) \
 				 ? HEK_LEN(HvAUX(hv)->xhv_name) : 0)
 
@@ -298,8 +331,7 @@ C<SV*>.
 #define HeHASH(he)		HEK_HASH(HeKEY_hek(he))
 #define HePV(he,lp)		((HeKLEN(he) == HEf_SVKEY) ?		\
 				 SvPV(HeKEY_sv(he),lp) :		\
-				 (((lp = HeKLEN(he)) >= 0) ?		\
-				  HeKEY(he) : NULL))
+				 ((lp = HeKLEN(he)), HeKEY(he)))
 
 #define HeSVKEY(he)		((HeKEY(he) && 				\
 				  HeKLEN(he) == HEf_SVKEY) ?		\
@@ -386,6 +418,8 @@ C<SV*>.
    between threads (because it hangs from OPs, which are shared), hence the
    alternate definition and mutex.  */
 
+struct refcounted_he;
+
 #ifdef PERL_CORE
 
 /* Gosh. This really isn't a good name any longer.  */
@@ -397,12 +431,13 @@ struct refcounted_he {
 #else
     HEK                  *refcounted_he_hek;	/* hint key */
 #endif
-    U32	                  refcounted_he_refcnt;	/* reference count */
     union {
 	IV                refcounted_he_u_iv;
 	UV                refcounted_he_u_uv;
 	STRLEN            refcounted_he_u_len;
+	void		 *refcounted_he_u_ptr;	/* Might be useful in future */
     } refcounted_he_val;
+    U32	                  refcounted_he_refcnt;	/* reference count */
     /* First byte is flags. Then NUL-terminated value. Then for ithreads,
        non-NUL terminated key.  */
     char                  refcounted_he_data[1];
@@ -410,12 +445,22 @@ struct refcounted_he {
 
 /* Flag bits are HVhek_UTF8, HVhek_WASUTF8, then */
 #define HVrhek_undef	0x00 /* Value is undef. */
-#define HVrhek_PV	0x10 /* Value is a string. */
-#define HVrhek_IV	0x20 /* Value is IV/UV. */
-#define HVrhek_delete	0x30 /* Value is placeholder - signifies delete. */
-#define HVrhek_typemask	0x30
-#define HVrhek_UTF8	0x40 /* string value is utf8. */
-#define HVrhek_UV	0x40 /* integer value is UV. */
+#define HVrhek_delete	0x10 /* Value is placeholder - signifies delete. */
+#define HVrhek_IV	0x20 /* Value is IV. */
+#define HVrhek_UV	0x30 /* Value is UV. */
+#define HVrhek_PV	0x40 /* Value is a (byte) string. */
+#define HVrhek_PV_UTF8	0x50 /* Value is a (utf8) string. */
+/* Two spare. As these have to live in the optree, you can't store anything
+   interpreter specific, such as SVs. :-( */
+#define HVrhek_typemask 0x70
+
+#ifdef USE_ITHREADS
+/* A big expression to find the key offset */
+#define REF_HE_KEY(chain)						\
+	((((chain->refcounted_he_data[0] & 0x60) == 0x40)		\
+	    ? chain->refcounted_he_val.refcounted_he_u_len + 1 : 0)	\
+	 + 1 + chain->refcounted_he_data)
+#endif
 
 #  ifdef USE_ITHREADS
 #    define HINTS_REFCNT_LOCK		MUTEX_LOCK(&PL_hints_mutex)
@@ -433,6 +478,15 @@ struct refcounted_he {
 #  define HINTS_REFCNT_INIT		NOOP
 #  define HINTS_REFCNT_TERM		NOOP
 #endif
+
+/* Hash actions
+ * Passed in PERL_MAGIC_uvar calls
+ */
+#define HV_DELETE          -1
+#define HV_FETCH_ISSTORE   0x01
+#define HV_FETCH_ISEXISTS  0x02
+#define HV_FETCH_LVALUE    0x04
+#define HV_FETCH_JUST_SV   0x08
 
 /*
  * Local variables:

@@ -95,7 +95,7 @@ Perl_av_extend(pTHX_ AV *av, I32 key)
 	    tmp = AvARRAY(av) - AvALLOC(av);
 	    Move(AvARRAY(av), AvALLOC(av), AvFILLp(av)+1, SV*);
 	    AvMAX(av) += tmp;
-	    SvPV_set(av, (char*)AvALLOC(av));
+	    AvARRAY(av) = AvALLOC(av);
 	    if (AvREAL(av)) {
 		while (tmp)
 		    ary[--tmp] = &PL_sv_undef;
@@ -171,7 +171,7 @@ Perl_av_extend(pTHX_ AV *av, I32 key)
 		    ary[--tmp] = &PL_sv_undef;
 	    }
 	    
-	    SvPV_set(av, (char*)AvALLOC(av));
+	    AvARRAY(av) = AvALLOC(av);
 	    AvMAX(av) = newmax;
 	}
     }
@@ -362,12 +362,10 @@ Creates a new AV.  The reference count is set to 1.
 AV *
 Perl_newAV(pTHX)
 {
-    register AV * const av = (AV*)newSV(0);
-
-    sv_upgrade((SV *)av, SVt_PVAV);
+    register AV * const av = (AV*)newSV_type(SVt_PVAV);
     /* sv_upgrade does AvREAL_only()  */
     AvALLOC(av) = 0;
-    SvPV_set(av, NULL);
+    AvARRAY(av) = NULL;
     AvMAX(av) = AvFILLp(av) = -1;
     return av;
 }
@@ -385,16 +383,14 @@ will have a reference count of 1.
 AV *
 Perl_av_make(pTHX_ register I32 size, register SV **strp)
 {
-    register AV * const av = (AV*)newSV(0);
-
-    sv_upgrade((SV *) av,SVt_PVAV);
+    register AV * const av = (AV*)newSV_type(SVt_PVAV);
     /* sv_upgrade does AvREAL_only()  */
     if (size) {		/* "defined" was returning undef for size==0 anyway. */
         register SV** ary;
         register I32 i;
 	Newx(ary,size,SV*);
 	AvALLOC(av) = ary;
-	SvPV_set(av, (char*)ary);
+	AvARRAY(av) = ary;
 	AvFILLp(av) = AvMAX(av) = size - 1;
 	for (i = 0; i < size; i++) {
 	    assert (*strp);
@@ -452,7 +448,7 @@ Perl_av_clear(pTHX_ register AV *av)
     extra = AvARRAY(av) - AvALLOC(av);
     if (extra) {
 	AvMAX(av) += extra;
-	SvPV_set(av, (char*)AvALLOC(av));
+	AvARRAY(av) = AvALLOC(av);
     }
     AvFILLp(av) = -1;
 
@@ -473,17 +469,38 @@ Perl_av_undef(pTHX_ register AV *av)
 
     /* Give any tie a chance to cleanup first */
     if (SvTIED_mg((SV*)av, PERL_MAGIC_tied)) 
-	av_fill(av, -1);   /* mg_clear() ? */
+	av_fill(av, -1);
 
     if (AvREAL(av)) {
 	register I32 key = AvFILLp(av) + 1;
 	while (key)
 	    SvREFCNT_dec(AvARRAY(av)[--key]);
     }
+
     Safefree(AvALLOC(av));
     AvALLOC(av) = NULL;
-    SvPV_set(av, NULL);
+    AvARRAY(av) = NULL;
     AvMAX(av) = AvFILLp(av) = -1;
+
+    if(SvRMAGICAL(av)) mg_clear((SV*)av);
+}
+
+/*
+
+=for apidoc av_create_and_push
+
+Push an SV onto the end of the array, creating the array if necessary.
+A small internal helper function to remove a commonly duplicated idiom.
+
+=cut
+*/
+
+void
+Perl_av_create_and_push(pTHX_ AV **const avp, SV *const val)
+{
+    if (!*avp)
+	*avp = newAV();
+    av_push(*avp, val);
 }
 
 /*
@@ -568,6 +585,26 @@ Perl_av_pop(pTHX_ register AV *av)
 }
 
 /*
+
+=for apidoc av_create_and_unshift_one
+
+Unshifts an SV onto the beginning of the array, creating the array if
+necessary.
+A small internal helper function to remove a commonly duplicated idiom.
+
+=cut
+*/
+
+SV **
+Perl_av_create_and_unshift_one(pTHX_ AV **const avp, SV *const val)
+{
+    if (!*avp)
+	*avp = newAV();
+    av_unshift(*avp, 1);
+    return av_store(*avp, 0, val);
+}
+
+/*
 =for apidoc av_unshift
 
 Unshift the given number of C<undef> values onto the beginning of the
@@ -618,14 +655,13 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
     
 	AvMAX(av) += i;
 	AvFILLp(av) += i;
-	SvPV_set(av, (char*)(AvARRAY(av) - i));
+	AvARRAY(av) = AvARRAY(av) - i;
     }
     if (num) {
 	register SV **ary;
-	I32 slide;
-	i = AvFILLp(av);
+	const I32 i = AvFILLp(av);
 	/* Create extra elements */
-	slide = i > 0 ? i : 0;
+	const I32 slide = i > 0 ? i : 0;
 	num += slide;
 	av_extend(av, i + num);
 	AvFILLp(av) += num;
@@ -637,7 +673,7 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
 	/* Make extra elements into a buffer */
 	AvMAX(av) -= slide;
 	AvFILLp(av) -= slide;
-	SvPV_set(av, (char*)(AvARRAY(av) + slide));
+	AvARRAY(av) = AvARRAY(av) + slide;
     }
 }
 
@@ -681,7 +717,7 @@ Perl_av_shift(pTHX_ register AV *av)
     retval = *AvARRAY(av);
     if (AvREAL(av))
 	*AvARRAY(av) = &PL_sv_undef;
-    SvPV_set(av, (char*)(AvARRAY(av) + 1));
+    AvARRAY(av) = AvARRAY(av) + 1;
     AvMAX(av)--;
     AvFILLp(av)--;
     if (SvSMAGICAL(av))
@@ -692,8 +728,8 @@ Perl_av_shift(pTHX_ register AV *av)
 /*
 =for apidoc av_len
 
-Returns the highest index in the array.  Returns -1 if the array is
-empty.
+Returns the highest index in the array.  The number of elements in the
+array is C<av_len(av) + 1>.  Returns -1 if the array is empty.
 
 =cut
 */
@@ -708,8 +744,14 @@ Perl_av_len(pTHX_ register const AV *av)
 /*
 =for apidoc av_fill
 
-Ensure than an array has a given number of elements, equivalent to
+Set the highest index in the array to the given number, equivalent to
 Perl's C<$#array = $fill;>.
+
+The number of elements in the an array will be C<fill + 1> after
+av_fill() returns.  If the array was previously shorter then the
+additional elements appended are set to C<PL_sv_undef>.  If the array
+was longer, then the excess elements are freed.  C<av_fill(av, -1)> is
+the same as C<av_clear(av)>.
 
 =cut
 */

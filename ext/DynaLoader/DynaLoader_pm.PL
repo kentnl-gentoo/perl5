@@ -68,7 +68,7 @@ unlink "DynaLoader.pm" if -f "DynaLoader.pm";
 open OUT, ">DynaLoader.pm" or die $!;
 print OUT <<'EOT';
 
-# Generated from DynaLoader.pm.PL
+# Generated from DynaLoader_pm.PL
 
 package DynaLoader;
 
@@ -84,7 +84,9 @@ package DynaLoader;
 #
 # Tim.Bunce@ig.co.uk, August 1994
 
-$VERSION = '1.07';
+BEGIN {
+    $VERSION = '1.08';
+}
 
 require AutoLoader;
 *AUTOLOAD = \&AutoLoader::AUTOLOAD;
@@ -490,7 +492,7 @@ sub dl_findfile {
         my(@names, $name);    # what filenames to look for
         if (m:-l: ) {          # convert -lname to appropriate library name
             s/-l//;
-            push(@names,"lib$_.<<=to_string($Config::Config{'so'})>>");
+            push(@names,"lib$_.<<=$dl_so>>");
             push(@names,"lib$_.a");
         } else {                # Umm, a bare name. Try various alternatives:
             # these should be ordered with the most likely first

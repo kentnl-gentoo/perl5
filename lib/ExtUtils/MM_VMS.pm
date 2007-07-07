@@ -18,7 +18,7 @@ use File::Basename;
 # $Revision can't be on the same line or SVN/K gets confused
 use vars qw($Revision
             $VERSION @ISA);
-$VERSION = '5.73_03';
+$VERSION = '5.76';
 
 require ExtUtils::MM_Any;
 require ExtUtils::MM_Unix;
@@ -1279,8 +1279,7 @@ $(OBJECT) : $(PERL_INC)perlsdio.h, $(PERL_INC)perlvars.h
 $(OBJECT) : $(PERL_INC)perly.h, $(PERL_INC)pp.h, $(PERL_INC)pp_proto.h
 $(OBJECT) : $(PERL_INC)proto.h, $(PERL_INC)regcomp.h, $(PERL_INC)regexp.h
 $(OBJECT) : $(PERL_INC)regnodes.h, $(PERL_INC)scope.h, $(PERL_INC)sv.h
-$(OBJECT) : $(PERL_INC)thrdvar.h, $(PERL_INC)thread.h
-$(OBJECT) : $(PERL_INC)util.h, $(PERL_INC)vmsish.h
+$(OBJECT) : $(PERL_INC)thread.h, $(PERL_INC)util.h, $(PERL_INC)vmsish.h
 
 ' if $self->{OBJECT}; 
 
@@ -1732,7 +1731,7 @@ sub oneliner {
     # Switches must be quoted else they will be lowercased.
     $switches = join ' ', map { qq{"$_"} } @$switches;
 
-    return qq{\$(ABSPERLRUN) $switches -e $cmd \"--\"};
+    return qq{\$(ABSPERLRUN) $switches -e $cmd "--"};
 }
 
 

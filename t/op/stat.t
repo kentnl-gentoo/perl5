@@ -9,7 +9,7 @@ BEGIN {
 use Config;
 use File::Spec;
 
-plan tests => 95;
+plan tests => 107;
 
 my $Perl = which_perl();
 
@@ -30,7 +30,7 @@ $Is_Rhapsody= $^O eq 'rhapsody';
 
 $Is_Dosish  = $Is_Dos || $Is_OS2 || $Is_MSWin32 || $Is_NetWare || $Is_Cygwin;
 
-$Is_UFS     = $Is_Darwin && (() = `df -t ufs .`) == 2;
+$Is_UFS     = $Is_Darwin && (() = `df -t ufs . 2>/dev/null`) == 2;
 
 my($DEV, $INO, $MODE, $NLINK, $UID, $GID, $RDEV, $SIZE,
    $ATIME, $MTIME, $CTIME, $BLKSIZE, $BLOCKS) = (0..12);
@@ -41,7 +41,7 @@ my $Curdir = File::Spec->curdir;
 my $tmpfile = 'Op_stat.tmp';
 my $tmpfile_link = $tmpfile.'2';
 
-
+chmod 0666, $tmpfile;
 1 while unlink $tmpfile;
 open(FOO, ">$tmpfile") || DIE("Can't open temp test file: $!");
 close FOO;
@@ -480,11 +480,22 @@ ok(unlink($f), 'unlink tmp file');
 }
 
 SKIP: {
-    skip "No dirfd()", 3 unless $Config{d_dirfd};
+    skip "No dirfd()", 9 unless $Config{d_dirfd} || $Config{d_dir_dd_fd};
     ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
     ok(stat(DIR), "stat() on dirhandle works"); 
     ok(-d -r _ , "chained -x's on dirhandle"); 
-    closedir DIR;
+    ok(-d DIR, "-d on a dirhandle works");
+
+    # And now for the ambigious bareword case
+    ok(open(DIR, "TEST"), 'Can open "TEST" dir')
+	|| diag "Can't open 'TEST':  $!";
+    my $size = (stat(DIR))[7];
+    ok(defined $size, "stat() on bareword works");
+    is($size, -s "TEST", "size returned by stat of bareword is for the file");
+    ok(-f _, "ambiguous bareword uses file handle, not dir handle");
+    ok(-f DIR);
+    closedir DIR or die $!;
+    close DIR or die $!;
 }
 
 {
@@ -499,14 +510,27 @@ SKIP: {
     #PVIO's hold dirhandle information, so let's test them too.
 
     SKIP: {
-        skip "No dirfd()", 3 unless $Config{d_dirfd};
+        skip "No dirfd()", 9 unless $Config{d_dirfd} || $Config{d_dir_dd_fd};
         ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
         ok(stat(*DIR{IO}), "stat() on *DIR{IO} works");
+	ok(-d _ , "The special file handle _ is set correctly"); 
         ok(-d -r *DIR{IO} , "chained -x's on *DIR{IO}");
-        closedir DIR;
+
+	# And now for the ambigious bareword case
+	ok(open(DIR, "TEST"), 'Can open "TEST" dir')
+	    || diag "Can't open 'TEST':  $!";
+	my $size = (stat(*DIR{IO}))[7];
+	ok(defined $size, "stat() on *THINGY{IO} works");
+	is($size, -s "TEST",
+	   "size returned by stat of *THINGY{IO} is for the file");
+	ok(-f _, "ambiguous *THINGY{IO} uses file handle, not dir handle");
+	ok(-f *DIR{IO});
+	closedir DIR or die $!;
+	close DIR or die $!;
     }
 }
 
 END {
+    chmod 0666, $tmpfile;
     1 while unlink $tmpfile;
 }

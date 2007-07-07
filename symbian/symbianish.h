@@ -22,7 +22,7 @@
  *	available to set I/O characteristics
  */
 #define	HAS_IOCTL		/ **/
- 
+
 /* HAS_UTIME:
  *	This symbol, if defined, indicates that the routine utime() is
  *	available to update the access and modification times of files.
@@ -47,7 +47,7 @@
 #undef HAS_WAIT
 
 #endif /* !PERL_MICRO */
-  
+
 /* USEMYBINMODE
  *	This symbol, if defined, indicates that the program should
  *	use the routine my_binmode(FILE *fp, char iotype) to insure
@@ -71,7 +71,7 @@
 #define USE_STAT_RDEV 	/**/
 
 /* ACME_MESS:
- *	This symbol, if defined, indicates that error messages should be 
+ *	This symbol, if defined, indicates that error messages should be
  *	should be generated in a format that allows the use of the Acme
  *	GUI/editor's autofind feature.
  */
@@ -120,7 +120,7 @@
 #define Mkdir(path,mode)   mkdir((path),(mode))
 
 #ifndef PERL_SYS_TERM
-#define PERL_SYS_TERM()		HINTS_REFCNT_TERM; OP_REFCNT_TERM; MALLOC_TERM; CloseSTDLIB();
+#define PERL_SYS_TERM()		HINTS_REFCNT_TERM; OP_REFCNT_TERM; PERLIO_TERM; MALLOC_TERM; CloseSTDLIB();
 #endif
 
 #define BIT_BUCKET "NUL:"

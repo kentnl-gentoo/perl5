@@ -10,14 +10,14 @@
 
 struct gp {
     SV *	gp_sv;		/* scalar value */
-    U32		gp_refcnt;	/* how many globs point to this? */
     struct io *	gp_io;		/* filehandle value */
-    CV *	gp_form;	/* format value */
-    AV *	gp_av;		/* array value */
-    HV *	gp_hv;		/* hash value */
-    GV *	gp_egv;		/* effective gv, if *glob */
     CV *	gp_cv;		/* subroutine value */
     U32		gp_cvgen;	/* generational validity of cached gv_cv */
+    U32		gp_refcnt;	/* how many globs point to this? */
+    HV *	gp_hv;		/* hash value */
+    AV *	gp_av;		/* array value */
+    CV *	gp_form;	/* format value */
+    GV *	gp_egv;		/* effective gv, if *glob */
     line_t	gp_line;	/* line first declared at (for -w) */
     HEK *	gp_file_hek;	/* file first declared in (for -w) */
 };
@@ -46,6 +46,7 @@ struct gp {
 	(*({ GV * const zzzz = (GV *) (gv);				\
 	   assert(isGV_with_GP(zzzz));					\
 	   assert(SvTYPE(zzzz) == SVt_PVGV || SvTYPE(zzzz) >= SVt_PVLV); \
+	   assert(!SvVALID(zzzz));					\
 	   &(GvXPVGV(zzzz)->xiv_u.xivu_namehek);			\
 	 }))
 #  define GvNAME_get(gv)	({ assert(GvNAME_HEK(gv)); HEK_KEY(GvNAME_HEK(gv)); })
@@ -87,7 +88,7 @@ Return the SV from the GV.
 #endif
 
 #define GvREFCNT(gv)	(GvGP(gv)->gp_refcnt)
-#define GvIO(gv)	((gv) && SvTYPE((SV*)gv) == SVt_PVGV && GvGP(gv) ? GvIOp(gv) : 0)
+#define GvIO(gv)	((gv) && SvTYPE((SV*)gv) == SVt_PVGV && GvGP(gv) ? GvIOp(gv) : NULL)
 #define GvIOp(gv)	(GvGP(gv)->gp_io)
 #define GvIOn(gv)	(GvIO(gv) ? GvIOp(gv) : GvIOp(gv_IOadd(gv)))
 
@@ -112,7 +113,7 @@ Return the SV from the GV.
 
 #define GvLINE(gv)	(GvGP(gv)->gp_line)
 #define GvFILE_HEK(gv)	(GvGP(gv)->gp_file_hek)
-#define GvFILE(gv)	HEK_KEY(GvFILE_HEK(gv))
+#define GvFILE(gv)	(GvFILE_HEK(gv) ? HEK_KEY(GvFILE_HEK(gv)) : NULL)
 #define GvFILEGV(gv)	(gv_fetchfile(GvFILE(gv)))
 
 #define GvEGV(gv)	(GvGP(gv)->gp_egv)
@@ -206,6 +207,10 @@ Return the SV from the GV.
 /*      SVf_UTF8 (more accurately the return value from SvUTF8) is also valid
 	as a flag to gv_fetch_pvn_flags, so ensure it lies outside this range.
 */
+
+#define GV_NOADD_MASK	(SVf_UTF8|GV_NOADD_NOINIT|GV_NOEXPAND|GV_NOTQUAL)
+/* The bit flags that don't cause gv_fetchpv() to add a symbol if not found */
+
 #define gv_fullname3(sv,gv,prefix) gv_fullname4(sv,gv,prefix,TRUE)
 #define gv_efullname3(sv,gv,prefix) gv_efullname4(sv,gv,prefix,TRUE)
 #define gv_fetchmethod(stash, name) gv_fetchmethod_autoload(stash, name, TRUE)

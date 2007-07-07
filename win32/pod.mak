@@ -38,6 +38,7 @@ POD = \
 	perl592delta.pod	\
 	perl593delta.pod	\
 	perl594delta.pod	\
+	perl595delta.pod	\
 	perlapi.pod	\
 	perlapio.pod	\
 	perlartistic.pod	\
@@ -47,6 +48,7 @@ POD = \
 	perlcall.pod	\
 	perlcheat.pod	\
 	perlclib.pod	\
+	perlcommunity.pod	\
 	perlcompile.pod	\
 	perldata.pod	\
 	perldbmfilter.pod	\
@@ -101,6 +103,9 @@ POD = \
 	perlport.pod	\
 	perlpragma.pod	\
 	perlre.pod	\
+	perlreapi.pod	\
+	perlrebackslash.pod	\
+	perlrecharclass.pod	\
 	perlref.pod	\
 	perlreftut.pod	\
 	perlreguts.pod	\
@@ -120,6 +125,7 @@ POD = \
 	perltoot.pod	\
 	perltrap.pod	\
 	perlunicode.pod	\
+	perlunifaq.pod	\
 	perluniintro.pod	\
 	perlunitut.pod	\
 	perlutil.pod	\
@@ -151,6 +157,7 @@ MAN = \
 	perl592delta.man	\
 	perl593delta.man	\
 	perl594delta.man	\
+	perl595delta.man	\
 	perlapi.man	\
 	perlapio.man	\
 	perlartistic.man	\
@@ -160,6 +167,7 @@ MAN = \
 	perlcall.man	\
 	perlcheat.man	\
 	perlclib.man	\
+	perlcommunity.man	\
 	perlcompile.man	\
 	perldata.man	\
 	perldbmfilter.man	\
@@ -214,6 +222,9 @@ MAN = \
 	perlport.man	\
 	perlpragma.man	\
 	perlre.man	\
+	perlreapi.man	\
+	perlrebackslash.man	\
+	perlrecharclass.man	\
 	perlref.man	\
 	perlreftut.man	\
 	perlreguts.man	\
@@ -233,6 +244,7 @@ MAN = \
 	perltoot.man	\
 	perltrap.man	\
 	perlunicode.man	\
+	perlunifaq.man	\
 	perluniintro.man	\
 	perlunitut.man	\
 	perlutil.man	\
@@ -264,6 +276,7 @@ HTML = \
 	perl592delta.html	\
 	perl593delta.html	\
 	perl594delta.html	\
+	perl595delta.html	\
 	perlapi.html	\
 	perlapio.html	\
 	perlartistic.html	\
@@ -273,6 +286,7 @@ HTML = \
 	perlcall.html	\
 	perlcheat.html	\
 	perlclib.html	\
+	perlcommunity.html	\
 	perlcompile.html	\
 	perldata.html	\
 	perldbmfilter.html	\
@@ -327,6 +341,9 @@ HTML = \
 	perlport.html	\
 	perlpragma.html	\
 	perlre.html	\
+	perlreapi.html	\
+	perlrebackslash.html	\
+	perlrecharclass.html	\
 	perlref.html	\
 	perlreftut.html	\
 	perlreguts.html	\
@@ -345,6 +362,7 @@ HTML = \
 	perltoot.html	\
 	perltrap.html	\
 	perlunicode.html	\
+	perlunifaq.html	\
 	perluniintro.html	\
 	perlunitut.html	\
 	perlutil.html	\
@@ -377,6 +395,7 @@ TEX = \
 	perl592delta.tex	\
 	perl593delta.tex	\
 	perl594delta.tex	\
+	perl595delta.tex	\
 	perlapi.tex	\
 	perlapio.tex	\
 	perlartistic.tex	\
@@ -386,6 +405,7 @@ TEX = \
 	perlcall.tex	\
 	perlcheat.tex	\
 	perlclib.tex	\
+	perlcommunity.tex	\
 	perlcompile.tex	\
 	perldata.tex	\
 	perldbmfilter.tex	\
@@ -440,6 +460,9 @@ TEX = \
 	perlport.tex	\
 	perlpragma.tex	\
 	perlre.tex	\
+	perlreapi.tex	\
+	perlrebackslash.tex	\
+	perlrecharclass.tex	\
 	perlref.tex	\
 	perlreftut.tex	\
 	perlreguts.tex	\
@@ -459,6 +482,7 @@ TEX = \
 	perltoot.tex	\
 	perltrap.tex	\
 	perlunicode.tex	\
+	perlunifaq.tex	\
 	perluniintro.tex	\
 	perlunitut.tex	\
 	perlutil.tex	\
@@ -541,9 +565,3 @@ podchecker:	podchecker.PL ../lib/Config.pm
 
 podselect:	podselect.PL ../lib/Config.pm
 	$(PERL) -I ../lib podselect.PL
-
-compile: all
-	$(REALPERL) -I../lib ../utils/perlcc pod2latex -o pod2latex.exe -v 10 -log ../compilelog
-	$(REALPERL) -I../lib ../utils/perlcc pod2man -o pod2man.exe -v 10 -log ../compilelog
-	$(REALPERL) -I../lib ../utils/perlcc pod2text -o pod2text.exe -v 10 -log ../compilelog
-	$(REALPERL) -I../lib ../utils/perlcc checkpods -o checkpods.exe -v 10 -log ../compilelog

@@ -25,7 +25,7 @@
 				 (x) == pWARN_NONE)
 
 /* if PL_warnhook is set to this value, then warnings die */
-#define PERL_WARNHOOK_FATAL	(((SV*)0) + 1)
+#define PERL_WARNHOOK_FATAL	(&PL_sv_placeholder)
 
 /* Warnings Categories added in Perl 5.008 */
 
@@ -76,14 +76,9 @@
 #define WARN_UTF8		44
 #define WARN_VOID		45
 
-/* Warnings Categories added in Perl 5.009 */
-
-#define WARN_ASSERTIONS		46
-
 #define WARNsize		12
 #define WARN_ALLstring		"\125\125\125\125\125\125\125\125\125\125\125\125"
 #define WARN_NONEstring		"\0\0\0\0\0\0\0\0\0\0\0\0"
-#define WARN_TAINTstring	"\0\0\0\0\0\0\0\0\0\100\0\0"
 
 #define isLEXWARN_on 	(PL_curcop->cop_warnings != pWARN_STD)
 #define isLEXWARN_off	(PL_curcop->cop_warnings == pWARN_STD)
@@ -92,8 +87,9 @@
 #define isWARNf_on(c,x)	(IsSet((U8 *)(c + 1), 2*(x)+1))
 
 #define DUP_WARNINGS(p)		\
-    (STRLEN*)(specialWARN(p) ? (p)	\
-    : CopyD(p, PerlMemShared_malloc(sizeof(*p)+*p), sizeof(*p)+*p, char))
+    (specialWARN(p) ? (STRLEN*)(p)	\
+    : (STRLEN*)CopyD(p, PerlMemShared_malloc(sizeof(*p)+*p), sizeof(*p)+*p, \
+		     			     char))
 
 #define ckWARN(w)		Perl_ckwarn(aTHX_ packWARN(w))
 #define ckWARN2(w1,w2)		Perl_ckwarn(aTHX_ packWARN2(w1,w2))

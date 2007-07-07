@@ -23,7 +23,6 @@
  */
 
 /* package attributes; */
-PERL_XS_EXPORT_C void XS_attributes__warn_reserved(pTHX_ CV *cv);
 PERL_XS_EXPORT_C void XS_attributes_reftype(pTHX_ CV *cv);
 PERL_XS_EXPORT_C void XS_attributes__modify_attrs(pTHX_ CV *cv);
 PERL_XS_EXPORT_C void XS_attributes__guess_stash(pTHX_ CV *cv);
@@ -72,21 +71,10 @@ modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 	switch (SvTYPE(sv)) {
 	case SVt_PVCV:
 	    switch ((int)len) {
-#ifdef CVf_ASSERTION
-	    case 9:
-		if (memEQ(name, "assertion", 9)) {
-		    if (negated)
-			CvFLAGS((CV*)sv) &= ~CVf_ASSERTION;
-		    else
-			CvFLAGS((CV*)sv) |= CVf_ASSERTION;
-		    continue;
-		}
-		break;
-#endif
 	    case 6:
 		switch (name[3]) {
-		case 'l':
 #ifdef CVf_LVALUE
+		case 'l':
 		    if (memEQ(name, "lvalue", 6)) {
 			if (negated)
 			    CvFLAGS((CV*)sv) &= ~CVf_LVALUE;
@@ -95,8 +83,8 @@ modify_SV_attributes(pTHX_ SV *sv, SV **retlist, SV **attrlist, int numattrs)
 			continue;
 		    }
 		    break;
+#endif
 		case 'k':
-#endif /* defined CVf_LVALUE */
 		    if (memEQ(name, "locked", 6)) {
 			if (negated)
 			    CvFLAGS((CV*)sv) &= ~CVf_LOCKED;
@@ -162,11 +150,11 @@ XS(XS_attributes_bootstrap)
 {
     dVAR;
     dXSARGS;
+    PERL_UNUSED_ARG(cv);
 
     if( items > 1 )
         Perl_croak(aTHX_ "Usage: attributes::bootstrap $module");
 
-    newXSproto("attributes::_warn_reserved", XS_attributes__warn_reserved, file, "");
     newXS("attributes::_modify_attrs",	XS_attributes__modify_attrs,	file);
     newXSproto("attributes::_guess_stash", XS_attributes__guess_stash, file, "$");
     newXSproto("attributes::_fetch_attrs", XS_attributes__fetch_attrs, file, "$");
@@ -180,6 +168,7 @@ XS(XS_attributes__modify_attrs)
     dVAR;
     dXSARGS;
     SV *rv, *sv;
+    PERL_UNUSED_ARG(cv);
 
     if (items < 1) {
 usage:
@@ -203,6 +192,7 @@ XS(XS_attributes__fetch_attrs)
     dXSARGS;
     SV *rv, *sv;
     cv_flags_t cvflags;
+    PERL_UNUSED_ARG(cv);
 
     if (items != 1) {
 usage:
@@ -229,8 +219,6 @@ usage:
 	    XPUSHs(sv_2mortal(newSVpvs("method")));
         if (GvUNIQUE(CvGV((CV*)sv)))
 	    XPUSHs(sv_2mortal(newSVpvs("unique")));
-	if (cvflags & CVf_ASSERTION)
-	    XPUSHs(sv_2mortal(newSVpvs("assertion")));
 	break;
     case SVt_PVGV:
 	if (GvUNIQUE(sv))
@@ -249,6 +237,7 @@ XS(XS_attributes__guess_stash)
     dXSARGS;
     SV *rv, *sv;
     dXSTARG;
+    PERL_UNUSED_ARG(cv);
 
     if (items != 1) {
 usage:
@@ -298,6 +287,7 @@ XS(XS_attributes_reftype)
     dXSARGS;
     SV *rv, *sv;
     dXSTARG;
+    PERL_UNUSED_ARG(cv);
 
     if (items != 1) {
 usage:
@@ -313,22 +303,6 @@ usage:
     sv = SvRV(rv);
     sv_setpv(TARG, sv_reftype(sv, 0));
     SvSETMAGIC(TARG);
-
-    XSRETURN(1);
-}
-
-XS(XS_attributes__warn_reserved)
-{
-    dVAR;
-    dXSARGS;
-
-    if (items != 0) {
-	Perl_croak(aTHX_
-		   "Usage: attributes::_warn_reserved ()");
-    }
-
-    EXTEND(SP,1);
-    ST(0) = boolSV(ckWARN(WARN_RESERVED));
 
     XSRETURN(1);
 }

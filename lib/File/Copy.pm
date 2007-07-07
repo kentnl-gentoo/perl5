@@ -23,7 +23,7 @@ sub mv;
 # package has not yet been updated to work with Perl 5.004, and so it
 # would be a Bad Thing for the CPAN module to grab it and replace this
 # module.  Therefore, we set this module's version higher than 2.0.
-$VERSION = '2.09';
+$VERSION = '2.10';
 
 require Exporter;
 @ISA = qw(Exporter);
@@ -64,6 +64,14 @@ sub _catname {
     return File::Spec->catfile($to, basename($from));
 }
 
+# _eq($from, $to) tells whether $from and $to are identical
+# works for strings and references
+sub _eq {
+    return $_[0] == $_[1] if ref $_[0] && ref $_[1];
+    return $_[0] eq $_[1] if !ref $_[0] && !ref $_[1];
+    return "";
+}
+
 sub copy {
     croak("Usage: copy(FROM, TO [, BUFFERSIZE]) ")
       unless(@_ == 2 || @_ == 3);
@@ -82,7 +90,7 @@ sub copy {
                             || UNIVERSAL::isa($to, 'IO::Handle'))
 			 : (ref(\$to) eq 'GLOB'));
 
-    if ($from eq $to) { # works for references, too
+    if (_eq($from, $to)) { # works for references, too
 	carp("'$from' and '$to' are identical (not copied)");
         # The "copy" was a success as the source and destination contain
         # the same data.
@@ -258,7 +266,8 @@ unless (defined &syscopy) {
 	    # preserve MPE file attributes.
 	    return system('/bin/cp', '-f', $_[0], $_[1]) == 0;
 	};
-    } elsif ($^O eq 'MSWin32') {
+    } elsif ($^O eq 'MSWin32' && defined &DynaLoader::boot_DynaLoader) {
+	# Win32::CopyFile() fill only work if we can load Win32.xs
 	*syscopy = sub {
 	    return 0 unless @_ == 2;
 	    return Win32::CopyFile(@_, 1);
@@ -335,9 +344,9 @@ filehandle to a file, use C<binmode> on the filehandle.
 
 An optional third parameter can be used to specify the buffer
 size used for copying. This is the number of bytes from the
-first file, that wil be held in memory at any given time, before
+first file, that will be held in memory at any given time, before
 being written to the second file. The default buffer size depends
-upon the file, but will generally be the whole file (up to 2Mb), or
+upon the file, but will generally be the whole file (up to 2MB), or
 1k for filehandles that do not reference files (eg. sockets).
 
 You may use the syntax C<use File::Copy "cp"> to get at the
@@ -375,7 +384,7 @@ this calls C<Win32::CopyFile>.
 On Mac OS (Classic), C<syscopy> calls C<Mac::MoreFiles::FSpFileCopy>,
 if available.
 
-B<Special behaviour if C<syscopy> is defined (OS/2, VMS and Win32)>
+B<Special behaviour if C<syscopy> is defined (OS/2, VMS and Win32)>:
 
 If both arguments to C<copy> are not file handles,
 then C<copy> will perform a "system copy" of

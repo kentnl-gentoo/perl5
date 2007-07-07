@@ -199,7 +199,6 @@ CLDFLAGS = $ldflags
 
 mallocsrc = $mallocsrc
 mallocobj = $mallocobj
-madlyh = $madlyh
 madlysrc = $madlysrc
 madlyobj = $madlyobj
 LNS = $lns
@@ -242,6 +241,9 @@ STATIC = $static_target
 # The following is used to include the current directory in
 # the dynamic loader path you are building a shared libperl.
 LDLIBPTH = $ldlibpth
+
+# Sometimes running an executable is an adventure.
+RUN = $run
 
 dynamic_ext = $dynamic_list
 static_ext = $static_list
@@ -355,10 +357,10 @@ h1 = EXTERN.h INTERN.h XSUB.h av.h config.h cop.h cv.h dosish.h
 h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h opcode.h
 h3 = pad.h patchlevel.h perl.h perlapi.h perly.h pp.h proto.h regcomp.h
 h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
-h5 = utf8.h warnings.h $(madlyh)
+h5 = utf8.h warnings.h
 h = $(h1) $(h2) $(h3) $(h4) $(h5)
 
-c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c  perl.c
+c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c mro.c perl.c
 c2 = perly.c pp.c pp_hot.c pp_ctl.c pp_sys.c regcomp.c regexec.c utf8.c sv.c
 c3 = taint.c toke.c util.c deb.c run.c universal.c xsutils.c pad.c globals.c
 c4 = perlio.c perlapi.c numeric.c mathoms.c locale.c pp_pack.c pp_sort.c
@@ -366,7 +368,7 @@ c5 = $(madlysrc) $(mallocsrc)
 
 c = $(c1) $(c2) $(c3) $(c4) $(c5) miniperlmain.c perlmain.c opmini.c
 
-obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT)
+obj1 = $(madlyobj) $(mallocobj) gv$(OBJ_EXT) toke$(OBJ_EXT) perly$(OBJ_EXT) op$(OBJ_EXT) pad$(OBJ_EXT) regcomp$(OBJ_EXT) dump$(OBJ_EXT) util$(OBJ_EXT) mg$(OBJ_EXT) reentr$(OBJ_EXT) mro$(OBJ_EXT)
 obj2 = hv$(OBJ_EXT) av$(OBJ_EXT) perl$(OBJ_EXT) run$(OBJ_EXT) pp_hot$(OBJ_EXT) sv$(OBJ_EXT) pp$(OBJ_EXT) scope$(OBJ_EXT) pp_ctl$(OBJ_EXT) pp_sys$(OBJ_EXT)
 obj3 = doop$(OBJ_EXT) doio$(OBJ_EXT) regexec$(OBJ_EXT) utf8$(OBJ_EXT) taint$(OBJ_EXT) deb$(OBJ_EXT) universal$(OBJ_EXT) xsutils$(OBJ_EXT) globals$(OBJ_EXT) perlio$(OBJ_EXT) perlapi$(OBJ_EXT) numeric$(OBJ_EXT) mathoms$(OBJ_EXT) locale$(OBJ_EXT) pp_pack$(OBJ_EXT) pp_sort$(OBJ_EXT)
 
@@ -443,13 +445,7 @@ all: $(FIRSTMAKEFILE) miniperl$(EXE_EXT) extra.pods $(private) $(unidatafiles) $
 	@echo " ";
 	@echo "	Everything is up to date. Type '$(MAKE) test' to run test suite."
 
-.PHONY: all compile translators utilities
-
-compile: all
-	echo "testing compilation" > testcompile;
-	cd utils;  $(MAKE) compile;
-	cd x2p; $(MAKE) compile;
-	cd pod; $(MAKE) compile;
+.PHONY: all translators utilities
 
 translators:	miniperl$(EXE_EXT) $(CONFIGPM) FORCE
 	@echo " "; echo "	Making x2p stuff"; cd x2p; $(LDLIBPTH) $(MAKE) all
@@ -479,6 +475,14 @@ opmini.c: op.c
 
 opmini\$(OBJ_EXT): opmini.c
 	\$(CCCMD) \$(PLDLFLAGS) $DPERL_EXTERNAL_GLOB opmini.c
+
+globals\$(OBJ_EXT): uudmap.h
+
+uudmap.h: generate_uudmap\$(EXE_EXT)
+	\$(RUN) ./generate_uudmap\$(EXE_EXT) >uudmap.h
+
+generate_uudmap\$(EXE_EXT): generate_uudmap\$(OBJ_EXT)
+	\$(CC) -o generate_uudmap \$(LDFLAGS) generate_uudmap\$(OBJ_EXT) \$(libs)
 
 !GROK!THIS!
 $spitshell >>Makefile <<'!NO!SUBS!'
@@ -569,7 +573,7 @@ os2)
 MINIPERLEXP		= miniperl
 
 perl5.def: $(MINIPERLEXP) makedef.pl config.sh $(SYM) $(SYMH) miniperl.map
-	./$(MINIPERLEXP) makedef.pl PLATFORM=os2 -DPERL_DLL=$(PERL_DLL) CC_FLAGS="$(OPTIMIZE)" > perl.exp
+	./$(MINIPERLEXP) makedef.pl PLATFORM=os2 -DPERL_DLL=$(PERL_DLL) CC_FLAGS="$(OPTIMIZE)" > perl5.def
 
 !NO!SUBS!
 	;;
@@ -588,6 +592,7 @@ $(LIBPERL): $& $(obj) $(DYNALOADER) $(LIBPERLEXPORT)
 	case "$useshrplib" in
 	true)
 		$spitshell >>Makefile <<'!NO!SUBS!'
+	rm -f $@
 	$(LD) -o $@ $(SHRPLDFLAGS) $(obj) $(DYNALOADER) $(libs)
 !NO!SUBS!
 		case "$osname" in
@@ -629,7 +634,7 @@ miniperl: $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	$(CC) -o miniperl $(CLDFLAGS) \
 	    `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
 	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
-	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+	$(LDLIBPTH) $(RUN) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	next4*)
@@ -637,7 +642,7 @@ miniperl: $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 miniperl: $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	$(CC) -o miniperl `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
 	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
-	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+	$(LDLIBPTH) $(RUN) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	darwin*)
@@ -659,7 +664,7 @@ miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	$(CC) $(CLDFLAGS) $(NAMESPACEFLAGS) -o miniperl \
 	    `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
 	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
-	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+	$(LDLIBPTH) $(RUN) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	*)
@@ -669,7 +674,7 @@ miniperl$(EXE_EXT): $& miniperlmain$(OBJ_EXT) $(obj) opmini$(OBJ_EXT)
 	$(LDLIBPTH) $(CC) $(CLDFLAGS) -o miniperl \
 	    `echo $(obj) | sed 's/ op$(OBJ_EXT) / /'` \
 	    miniperlmain$(OBJ_EXT) opmini$(OBJ_EXT) $(libs)
-	$(LDLIBPTH) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
+	$(LDLIBPTH) $(RUN) ./miniperl -w -Ilib -MExporter -e '<?>' || $(MAKE) minitest
 !NO!SUBS!
 		;;
 	esac
@@ -809,42 +814,43 @@ sperl$(OBJ_EXT): perl.c $(h)
 preplibrary: miniperl$(EXE_EXT) $(CONFIGPM) lib/lib.pm $(PREPLIBRARY_LIBPERL)
 	@sh ./makedir lib/auto
 	@echo "	AutoSplitting perl library"
-	$(LDLIBPTH) ./miniperl -Ilib -e 'use AutoSplit; \
+	$(LDLIBPTH) $(RUN) ./miniperl -Ilib -e 'use AutoSplit; \
 		autosplit_lib_modules(@ARGV)' lib/*.pm
-	$(LDLIBPTH) ./miniperl -Ilib -e 'use AutoSplit; \
+	$(LDLIBPTH) $(RUN) ./miniperl -Ilib -e 'use AutoSplit; \
 		autosplit_lib_modules(@ARGV)' lib/*/*.pm
 	$(MAKE) lib/re.pm
 
 .PHONY: makeppport
 makeppport: miniperl$(EXE_EXT) $(CONFIGPM)
-	$(LDLIBPTH) ./miniperl -Ilib mkppport
+	$(LDLIBPTH) $(RUN) ./miniperl$(EXE_EXT) -Ilib mkppport
 
 lib/Config.pod: config.sh miniperl$(EXE_EXT) configpm Porting/Glossary
-	$(LDLIBPTH) ./miniperl -Ilib configpm --heavy=lib/Config_heavy.pl lib/Config.pm
+	$(LDLIBPTH) $(RUN) ./miniperl -Ilib configpm
 
 $(CONFIGPM): lib/Config.pod
 
 lib/ExtUtils/Miniperl.pm: miniperlmain.c miniperl$(EXE_EXT) minimod.pl $(CONFIGPM)
-	$(LDLIBPTH) ./miniperl minimod.pl > lib/ExtUtils/Miniperl.pm
+	$(LDLIBPTH) $(RUN) ./miniperl minimod.pl > lib/ExtUtils/Miniperl.pm
 
 lib/re.pm: ext/re/re.pm
+	@-rm -f $@
 	cp ext/re/re.pm lib/re.pm
 
 $(plextract):	miniperl$(EXE_EXT) $(CONFIGPM) x2p/s2p
 	@-rm -f $@
-	$(LDLIBPTH) ./miniperl -I`pwd`/lib $@.PL
+	$(LDLIBPTH) $(RUN) ./miniperl -I`pwd`/lib $@.PL
 
 x2p/s2p: miniperl$(EXE_EXT) $(CONFIGPM) x2p/s2p.PL
 	cd x2p; $(LDLIBPTH) $(MAKE) s2p
 
 lib/lib.pm:	miniperl$(EXE_EXT) $(CONFIGPM)
 	@-rm -f $@
-	$(LDLIBPTH) ./miniperl -Ilib lib/lib_pm.PL
+	$(LDLIBPTH) $(RUN) ./miniperl -Ilib lib/lib_pm.PL
 
 unidatafiles $(unidatafiles): uni.data
 
 uni.data: miniperl$(EXE_EXT) $(CONFIGPM) lib/unicore/mktables
-	cd lib/unicore && $(LDLIBPTH) ../../miniperl -I../../lib mktables -w
+	cd lib/unicore && $(LDLIBPTH) $(RUN) ../../miniperl -I../../lib mktables -w
 	touch uni.data
 
 extra.pods: miniperl$(EXE_EXT)
@@ -858,7 +864,7 @@ extra.pods: miniperl$(EXE_EXT)
 	-@rm -f pod/perlvms.pod
 	-@test -f vms/perlvms.pod && cd pod && $(LNS) ../vms/perlvms.pod perlvms.pod && cd .. && echo "pod/perlvms.pod" >> extra.pods
 	-@rm -f pod/perldelta.pod
-	-@test -f pod/perl594delta.pod && cd pod && $(LNS) perl594delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods # See buildtoc
+	-@test -f pod/perl595delta.pod && cd pod && $(LNS) perl595delta.pod perldelta.pod && cd .. && echo "pod/perldelta.pod" >> extra.pods # See buildtoc
 
 extras.make: perl$(EXE_EXT)
 	-@test ! -s extras.lst || PATH="`pwd`:${PATH}" PERL5LIB="`pwd`/lib" $(LDLIBPTH) ./perl -Ilib -MCPAN -e '@ARGV&&make(@ARGV)' `cat extras.lst`
@@ -873,7 +879,7 @@ extras.install: perl$(EXE_EXT)
 	no-install install.perl install.man install.html
 
 META.yml:	Porting/makemeta Porting/Maintainers.pl Porting/Maintainers.pm
-	$(LDLIBPTH) ./miniperl -Ilib Porting/makemeta
+	$(LDLIBPTH) $(RUN) ./miniperl -Ilib Porting/makemeta
 
 install-strip:
 	$(MAKE) STRIPFLAGS=-s install DESTDIR="$(DESTDIR)"
@@ -894,15 +900,8 @@ no-install:
 INSTALL_DEPENDENCE = all
 
 install.perl:	$(INSTALL_DEPENDENCE) installperl
-	if [ -n "$(COMPILE)" ]; \
-	then \
-		cd utils; $(MAKE) compile; \
-		cd ../x2p; $(MAKE) compile; \
-		cd ../pod; $(MAKE) compile; \
-	else :; \
-	fi
 	$(LDLIBPTH) ./perl installperl --destdir=$(DESTDIR) $(INSTALLFLAGS) $(STRIPFLAGS)
-	$(MAKE) extras.install
+	-@test ! -s extras.lst || $(MAKE) extras.install
 
 install.man:	all installman
 	$(LDLIBPTH) ./perl installman --destdir=$(DESTDIR) $(INSTALLFLAGS)
@@ -932,10 +931,9 @@ install.html: all installhtml
 run_byacc:
 	@echo "run_byacc is obsolete; try 'make regen_perly' instead"
 
-# this outputs perly.h, perly.act, perly.tab, madly.h, madly.act and madly.tab
+# this outputs perly.h, perly.act and perly.tab
 regen_perly:
 	perl regen_perly.pl
-	perl regen_perly.pl madly.y
 
 # We don't want to regenerate perly.c and perly.h, but they might
 # appear out-of-date after a patch is applied or a new distribution is
@@ -946,25 +944,16 @@ perly.c: perly.y
 perly.h: perly.y
 	-@sh -c true
 
-# Similary for madly.
-madly.c: madly.y
-	-@sh -c true
-
-madly.h: madly.y
-	-@sh -c true
-
 # No compat3.sym here since and including the 5.004_50.
 # No interp.sym since 5.005_03.
 SYM  = global.sym globvar.sym perlio.sym pp.sym
 
-SYMH = perlvars.h intrpvar.h thrdvar.h
+SYMH = perlvars.h intrpvar.h
 
 CHMOD_W = chmod +w
 
 # The following files are generated automatically
 #	autodoc.pl:	pod/perlapi.pod pod/perlintern.pod
-#	bytecode.pl:	ext/ByteLoader/byterun.h ext/ByteLoader/byterun.c
-#			ext/B/B/Asmdata.pm
 #	embed.pl:	proto.h embed.h embedvar.h global.sym
 #			perlapi.h perlapi.c 
 # [* embed.pl needs pp.sym generated by opcode.pl! *]
@@ -982,8 +971,7 @@ CHMOD_W = chmod +w
 AUTOGEN_FILES = keywords.h opcode.h opnames.h pp_proto.h pp.sym proto.h \
 		embed.h embedvar.h global.sym \
 		pod/perlintern.pod pod/perlapi.pod \
-		perlapi.h perlapi.c ext/ByteLoader/byterun.h \
-		ext/ByteLoader/byterun.c ext/B/B/Asmdata.pm regnodes.h \
+		perlapi.h perlapi.c regnodes.h \
 		warnings.h lib/warnings.pm
 
 .PHONY: regen_headers regen_pods regen_all
@@ -1040,18 +1028,19 @@ printconfig:
 
 .PHONY: clean _tidy _mopup _cleaner1 _cleaner2 \
 	realclean _realcleaner clobber _clobber \
-	distclean veryclean _verycleaner
+	distclean veryclean _verycleaner \
+	cleanup_unpacked_files unpack_files
 
-clean:		_tidy _mopup
+clean:		cleanup_unpacked_files _tidy _mopup 
 
-realclean:	_realcleaner _mopup
+realclean:	cleanup_unpacked_files _realcleaner _mopup
 	@echo "Note that '$(MAKE) realclean' does not delete config.sh or Policy.sh"
 
 _clobber:
 	-@rm -f Cross/run-* Cross/to-* Cross/from-*
 	rm -f config.sh cppstdin Policy.sh extras.lst
 
-clobber:	_realcleaner _mopup _clobber
+clobber:	cleanup_unpacked_files _realcleaner _mopup _clobber
 
 distclean:	clobber
 
@@ -1061,7 +1050,7 @@ veryclean:	_verycleaner _mopup _clobber
 
 # Do not 'make _mopup' directly.
 _mopup:
-	rm -f *$(OBJ_EXT) *$(LIB_EXT) all perlmain.c opmini.c
+	rm -f *$(OBJ_EXT) *$(LIB_EXT) all perlmain.c opmini.c uudmap.h generate_uudmap$(EXE_EXT)
 	-rmdir .depending
 	-@test -f extra.pods && rm -f `cat extra.pods`
 	-@test -f vms/README_vms.pod && rm -f vms/README_vms.pod
@@ -1084,7 +1073,6 @@ _tidy:
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	$(LDLIBPTH) sh ext/util/make_ext clean $$x MAKE=$(MAKE) ; \
 	done
-	rm -f testcompile compilelog
 
 _cleaner1:
 	-cd os2; rm -f Makefile
@@ -1094,7 +1082,7 @@ _cleaner1:
 	-@for x in $(DYNALOADER) $(dynamic_ext) $(static_ext) $(nonxs_ext) ; do \
 	$(LDLIBPTH) sh ext/util/make_ext $(CLEAN) $$x MAKE=$(MAKE) ; \
 	done
-	$(LDLIBPTH) ./miniperl -Ilib mkppport --clean
+	-@test ! -f $(RUN) ./miniperl$(EXE_EXT) || $(LDLIBPTH) $(RUN) ./miniperl$(EXE_EXT) -Ilib mkppport --clean
 
 # Some systems do not support "?", so keep these files separate.
 _cleaner2:
@@ -1111,8 +1099,7 @@ _cleaner2:
 	rm -f h2ph.man pstruct
 	rm -rf .config
 	rm -f preload
-	rm -f testcompile compilelog
-	rm -rf lib/Encode lib/Compress lib/Hash
+	rm -rf lib/Encode lib/Compress lib/Hash lib/re
 	rm -rf lib/IO/Compress lib/IO/Uncompress
 	rm -f lib/ExtUtils/ParseXS/t/XSTest.c
 	rm -f lib/ExtUtils/ParseXS/t/XSTest$(OBJ_EXT)
@@ -1169,14 +1156,14 @@ makedepend: makedepend.SH config.sh
 	test.utf16 check.utf16 utest.utf16 ucheck.utf16 \
 	test.third check.third utest.third ucheck.third test_notty.third \
 	test.deparse test_notty.deparse test_harness test_harness_notty \
-	test.bytecompile minitest coretest test.taintwarn
+	minitest coretest test.taintwarn
 
 # Cannot delegate rebuilding of t/perl to make
 # to allow interlaced test and minitest
 
 TESTFILE=TEST
 
-_test_prep:
+_test_prep: unpack_files
 	cd t && (rm -f $(PERL)$(EXE_EXT); $(LNS) ../$(PERL)$(EXE_EXT) $(PERL)$(EXE_EXT))
 
 # Architecture-neutral stuff:
@@ -1191,6 +1178,12 @@ _test_tty:
 
 _test_notty:
 	cd t && $(PERL_DEBUG) PERL_SKIP_TTY_TEST=1 $(LDLIBPTH) $(PERL) $(TESTFILE) $(TEST_ARGS)
+
+unpack_files:
+	$(LDLIBPTH) $(RUN) ./miniperl$(EXE_EXT) -Ilib uupacktool.pl -u -m
+
+cleanup_unpacked_files:
+	-@test ! -f $(RUN) ./miniperl$(EXE_EXT) || $(LDLIBPTH) $(RUN) ./miniperl$(EXE_EXT) -Ilib uupacktool.pl -c
 
 # The second branch is for testing without a tty or controlling terminal,
 # see t/op/stat.t
@@ -1267,11 +1260,6 @@ utest.third ucheck.third: test_prep.third perl.third
 
 test_notty.third: test_prep.third perl.third
 	PERL=./perl.third $(MAKE) PERL_DEBUG=PERL_3LOG=1 _test_notty
-
-# Targets for Bytecode/ByteLoader testing.
-
-test.bytecompile:	test_prep
-	PERL=./perl TEST_ARGS=-bytecompile $(MAKE) _test
 
 # Targets for Deparse testing.
 

@@ -1,7 +1,7 @@
 /*    pp_sys.c
  *
- *    Copyright (C) 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    Copyright (C) 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003,
+ *    2004, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -195,11 +195,6 @@ void setprotoent(int);
 void endprotoent(void);
 void setservent(int);
 void endservent(void);
-#endif
-
-#if defined(__osf__) && defined(__cplusplus) && !defined(_XOPEN_SOURCE_EXTENDED)
-extern int readlink(const char *, char *, size_t);
-extern int fchdir(int);
 #endif
 
 #undef PERL_EFF_ACCESS	/* EFFective uid/gid ACCESS */
@@ -442,6 +437,7 @@ PP(pp_warn)
     else if (SP == MARK) {
 	tmpsv = &PL_sv_no;
 	EXTEND(SP, 1);
+	SP = MARK + 1;
     }
     else {
 	tmpsv = TOPs;
@@ -458,7 +454,7 @@ PP(pp_warn)
     if (!tmps || !len)
 	tmpsv = sv_2mortal(newSVpvs("Warning: something's wrong"));
 
-    Perl_warn(aTHX_ "%"SVf, (void*)tmpsv);
+    Perl_warn(aTHX_ "%"SVf, SVfARG(tmpsv));
     RETSETYES;
 }
 
@@ -522,7 +518,7 @@ PP(pp_die)
     if (!tmps || !len)
 	tmpsv = sv_2mortal(newSVpvs("Died"));
 
-    DIE(aTHX_ "%"SVf, (void*)tmpsv);
+    DIE(aTHX_ "%"SVf, SVfARG(tmpsv));
 }
 
 /* I/O. */
@@ -542,9 +538,14 @@ PP(pp_open)
 
     if (!isGV(gv))
 	DIE(aTHX_ PL_no_usym, "filehandle");
+
     if ((io = GvIOp(gv))) {
 	MAGIC *mg;
 	IoFLAGS(GvIOp(gv)) &= ~IOf_UNTAINT;
+
+	if (IoDIRP(io) && ckWARN2(WARN_IO, WARN_DEPRECATED))
+	    Perl_warner(aTHX_ packWARN2(WARN_IO, WARN_DEPRECATED),
+		    "Opening dirhandle %s also as a file", GvENAME(gv));
 
 	mg = SvTIED_mg((SV*)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
@@ -712,8 +713,12 @@ PP(pp_umask)
     Mode_t anum;
 
     if (MAXARG < 1) {
-	anum = PerlLIO_umask(0);
-	(void)PerlLIO_umask(anum);
+	anum = PerlLIO_umask(022);
+	/* setting it to 022 between the two calls to umask avoids
+	 * to have a window where the umask is set to 0 -- meaning
+	 * that another thread could create world-writeable files. */
+	if (anum != 022)
+	    (void)PerlLIO_umask(anum);
     }
     else
 	anum = PerlLIO_umask(POPi);
@@ -771,22 +776,23 @@ PP(pp_binmode)
     }
 
     PUTBACK;
-    if (PerlIO_binmode(aTHX_ fp,IoTYPE(io),mode_from_discipline(discp),
-                       (discp) ? SvPV_nolen_const(discp) : NULL)) {
-	if (IoOFP(io) && IoOFP(io) != IoIFP(io)) {
-	     if (!PerlIO_binmode(aTHX_ IoOFP(io),IoTYPE(io),
-			mode_from_discipline(discp),
-                       (discp) ? SvPV_nolen_const(discp) : NULL)) {
-		SPAGAIN;
-		RETPUSHUNDEF;
-	     }
+    {
+	const int mode = mode_from_discipline(discp);
+	const char *const d = (discp ? SvPV_nolen_const(discp) : NULL);
+	if (PerlIO_binmode(aTHX_ fp, IoTYPE(io), mode, d)) {
+	    if (IoOFP(io) && IoOFP(io) != IoIFP(io)) {
+		if (!PerlIO_binmode(aTHX_ IoOFP(io), IoTYPE(io), mode, d)) {
+		    SPAGAIN;
+		    RETPUSHUNDEF;
+		}
+	    }
+	    SPAGAIN;
+	    RETPUSHYES;
 	}
-	SPAGAIN;
-	RETPUSHYES;
-    }
-    else {
-	SPAGAIN;
-	RETPUSHUNDEF;
+	else {
+	    SPAGAIN;
+	    RETPUSHUNDEF;
+	}
     }
 }
 
@@ -844,10 +850,10 @@ PP(pp_tie)
 	/* Not clear why we don't call call_method here too.
 	 * perhaps to get different error message ?
 	 */
-	stash = gv_stashsv(*MARK, FALSE);
+	stash = gv_stashsv(*MARK, 0);
 	if (!stash || !(gv = gv_fetchmethod(stash, methname))) {
 	    DIE(aTHX_ "Can't locate object method \"%s\" via package \"%"SVf"\"",
-		 methname, (void*)*MARK);
+		 methname, SVfARG(*MARK));
 	}
 	ENTER;
 	PUSHSTACKi(PERLSI_MAGIC);
@@ -946,7 +952,7 @@ PP(pp_dbmopen)
 
     HV * const hv = (HV*)POPs;
     SV * const sv = sv_2mortal(newSVpvs("AnyDBM_File"));
-    stash = gv_stashsv(sv, FALSE);
+    stash = gv_stashsv(sv, 0);
     if (!stash || !(gv = gv_fetchmethod(stash, "TIEHASH"))) {
 	PUTBACK;
 	require_pv("AnyDBM_File.pm");
@@ -1489,6 +1495,8 @@ PP(pp_prtf)
 	goto just_say_no;
     }
     else {
+	if (SvTAINTED(MARK[1]))
+	    TAINT_PROPER("printf");
 	do_sprintf(sv, SP - MARK, MARK + 1);
 	if (!do_print(sv, fp))
 	    goto just_say_no;
@@ -1831,10 +1839,14 @@ PP(pp_send)
 
     SETERRNO(0,0);
     io = GvIO(gv);
-    if (!io || !IoIFP(io)) {
+    if (!io || !IoIFP(io) || IoTYPE(io) == IoTYPE_RDONLY) {
 	retval = -1;
-	if (ckWARN(WARN_CLOSED))
-	    report_evil_fh(gv, io, PL_op->op_type);
+	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED)) {
+	    if (io && IoIFP(io))
+		report_evil_fh(gv, io, OP_phoney_INPUT_ONLY);
+	    else
+		report_evil_fh(gv, io, PL_op->op_type);
+	}
 	SETERRNO(EBADF,RMS_IFI);
 	goto say_undef;
     }
@@ -2816,12 +2828,8 @@ PP(pp_stat)
                         PL_laststatval = 
                             PerlLIO_fstat(PerlIO_fileno(IoIFP(io)), &PL_statcache);   
                     } else if (IoDIRP(io)) {
-#ifdef HAS_DIRFD
                         PL_laststatval =
-                            PerlLIO_fstat(dirfd(IoDIRP(io)), &PL_statcache);
-#else
-                        DIE(aTHX_ PL_no_func, "dirfd");
-#endif
+                            PerlLIO_fstat(my_dirfd(IoDIRP(io)), &PL_statcache);
                     } else {
                         PL_laststatval = -1;
                     }
@@ -2912,9 +2920,9 @@ PP(pp_stat)
 	PUSHs(sv_2mortal(newSVnv(PL_statcache.st_mtime)));
 	PUSHs(sv_2mortal(newSVnv(PL_statcache.st_ctime)));
 #else
-	PUSHs(sv_2mortal(newSViv(PL_statcache.st_atime)));
-	PUSHs(sv_2mortal(newSViv(PL_statcache.st_mtime)));
-	PUSHs(sv_2mortal(newSViv(PL_statcache.st_ctime)));
+	PUSHs(sv_2mortal(newSViv((IV)PL_statcache.st_atime)));
+	PUSHs(sv_2mortal(newSViv((IV)PL_statcache.st_mtime)));
+	PUSHs(sv_2mortal(newSViv((IV)PL_statcache.st_ctime)));
 #endif
 #ifdef USE_STAT_BLOCKS
 	PUSHs(sv_2mortal(newSVuv(PL_statcache.st_blksize)));
@@ -3015,7 +3023,7 @@ PP(pp_ftrread)
 
     if (use_access) {
 #if defined(HAS_ACCESS) || defined (PERL_EFF_ACCESS)
-	const char *const name = POPpx;
+	const char *name = POPpx;
 	if (effective) {
 #  ifdef PERL_EFF_ACCESS
 	    result = PERL_EFF_ACCESS(name, access_mode);
@@ -3335,7 +3343,7 @@ PP(pp_fttext)
 
 #if defined(DOSISH) || defined(USEMYBINMODE)
     /* ignore trailing ^Z on short files */
-    if (len && len < sizeof(tbuf) && tbuf[len-1] == 26)
+    if (len && len < (I32)sizeof(tbuf) && tbuf[len-1] == 26)
 	--len;
 #endif
 
@@ -3404,7 +3412,7 @@ PP(pp_chdir)
             gv = (GV*)SvRV(sv);
         }
         else {
-	    tmps = SvPVx_nolen_const(sv);
+	    tmps = SvPV_nolen_const(sv);
 	}
     }
 
@@ -3435,15 +3443,10 @@ PP(pp_chdir)
 #ifdef HAS_FCHDIR
 	IO* const io = GvIO(gv);
 	if (io) {
-	    if (IoIFP(io)) {
-		PUSHi(fchdir(PerlIO_fileno(IoIFP(io))) >= 0);
-	    }
-	    else if (IoDIRP(io)) {
-#ifdef HAS_DIRFD
-		PUSHi(fchdir(dirfd(IoDIRP(io))) >= 0);
-#else
-		DIE(aTHX_ PL_no_func, "dirfd");
-#endif
+	    if (IoDIRP(io)) {
+		PUSHi(fchdir(my_dirfd(IoDIRP(io))) >= 0);
+	    } else if (IoIFP(io)) {
+                PUSHi(fchdir(PerlIO_fileno(IoIFP(io))) >= 0);
 	    }
 	    else {
 		if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
@@ -3763,6 +3766,9 @@ PP(pp_open_dir)
     if (!io)
 	goto nope;
 
+    if ((IoIFP(io) || IoOFP(io)) && ckWARN2(WARN_IO, WARN_DEPRECATED))
+	Perl_warner(aTHX_ packWARN2(WARN_IO, WARN_DEPRECATED),
+		"Opening filehandle %s also as a directory", GvENAME(gv));
     if (IoDIRP(io))
 	PerlDir_close(IoDIRP(io));
     if (!(IoDIRP(io) = PerlDir_open(dirname)))
@@ -4002,7 +4008,7 @@ PP(pp_fork)
 
 PP(pp_wait)
 {
-#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL)
+#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL) && !defined(__LIBCATAMOUNT__)
     dVAR; dSP; dTARGET;
     Pid_t childpid;
     int argflags;
@@ -4030,7 +4036,7 @@ PP(pp_wait)
 
 PP(pp_waitpid)
 {
-#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL)
+#if (!defined(DOSISH) || defined(OS2) || defined(WIN32)) && !defined(MACOS_TRADITIONAL) && !defined(__LIBCATAMOUNT__)
     dVAR; dSP; dTARGET;
     const int optype = POPi;
     const Pid_t pid = TOPi;
@@ -4061,6 +4067,11 @@ PP(pp_waitpid)
 PP(pp_system)
 {
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
+#if defined(__LIBCATAMOUNT__)
+    PL_statusvalue = -1;
+    SP = ORIGMARK;
+    XPUSHi(-1);
+#else
     I32 value;
     int result;
 
@@ -4184,7 +4195,8 @@ PP(pp_system)
     do_execfree();
     SP = ORIGMARK;
     XPUSHi(result ? value : STATUS_CURRENT);
-#endif /* !FORK or VMS */
+#endif /* !FORK or VMS or OS/2 */
+#endif
     RETURN;
 }
 
@@ -4649,9 +4661,9 @@ PP(pp_ghostent)
 	const int addrtype = POPi;
 	SV * const addrsv = POPs;
 	STRLEN addrlen;
-	Netdb_host_t addr = (Netdb_host_t) SvPVbyte(addrsv, addrlen);
+	const char *addr = (char *)SvPVbyte(addrsv, addrlen);
 
-	hent = PerlSock_gethostbyaddr((const char*)addr, (Netdb_hlen_t) addrlen, addrtype);
+	hent = PerlSock_gethostbyaddr(addr, (Netdb_hlen_t) addrlen, addrtype);
 #else
 	DIE(aTHX_ PL_no_sock_func, "gethostbyaddr");
 #endif

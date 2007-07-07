@@ -1,6 +1,39 @@
 CHANGES
 -------
 
+  2.005 18 June 2007
+
+      * Only include ppport.h when not being built with perl.
+        [core patch #30655]
+
+  2.004 3 March 2007
+
+      * Fixed lvalue substr issue
+
+      * Remove redundant code from Zlib.xs
+
+  2.003 2 January 2007
+
+      * Added explicit version checking
+
+  2.002 29 December 2006
+
+      * Documentation updates.
+
+  2.001 1 November 2006
+
+      * Remove beta status.
+
+  2.000_14 26 October 2006
+
+      * Fixed memory leak on realloc.
+
+      * Ticket #18986 says that ExtUtils::Install 1.39 fixes the in-use
+        issue on win32/cygwin, so make the code that checks whether trying
+        to install via the cpan shell conditional on the version of
+        ExtUtils::Install.
+        http://rt.cpan.org/Ticket/Display.html?id=18986
+
   2.000_10 13 March 2006
 
       * Fixed a potential NULL pointer dereference problem in

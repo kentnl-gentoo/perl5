@@ -1,3 +1,4 @@
+#./perl -w
 #
 # Create the export list for perl.
 #
@@ -5,11 +6,15 @@
 # and by AIX for creating libperl.a when -Dusershrplib is in effect,
 # and by MacOS Classic.
 #
-# reads global.sym, pp.sym, perlvars.h, intrpvar.h, thrdvar.h, config.h
+# reads global.sym, pp.sym, perlvars.h, intrpvar.h, config.h
 # On OS/2 reads miniperl.map and the previous version of perl5.def as well
 
-my $PLATFORM;
-my $CCTYPE;
+BEGIN { unshift @INC, "lib" }
+use strict;
+
+use vars qw($PLATFORM $CCTYPE $FILETYPE $CONFIG_ARGS $ARCHNAME $PATCHLEVEL);
+
+my (%define, %ordinal);
 
 while (@ARGV) {
     my $flag = shift;
@@ -67,7 +72,6 @@ my $exportperlmalloc = $PLATFORM eq 'os2';
 
 my $config_sh   = "config.sh";
 my $config_h    = "config.h";
-my $thrdvar_h   = "thrdvar.h";
 my $intrpvar_h  = "intrpvar.h";
 my $perlvars_h  = "perlvars.h";
 my $global_sym  = "global.sym";
@@ -81,13 +85,13 @@ if ($PLATFORM eq 'aix') {
 }
 elsif ($PLATFORM =~ /^win(?:32|ce)$/ || $PLATFORM eq 'netware') {
     $CCTYPE = "MSVC" unless defined $CCTYPE;
-    foreach ($thrdvar_h, $intrpvar_h, $perlvars_h, $global_sym,
+    foreach ($intrpvar_h, $perlvars_h, $global_sym,
 	     $pp_sym, $globvar_sym, $perlio_sym) {
 	s!^!..\\!;
     }
 }
 elsif ($PLATFORM eq 'MacOS') {
-    foreach ($thrdvar_h, $intrpvar_h, $perlvars_h, $global_sym,
+    foreach ($intrpvar_h, $perlvars_h, $global_sym,
 	     $pp_sym, $globvar_sym, $perlio_sym) {
 	s!^!::!;
     }
@@ -155,9 +159,13 @@ my $sym_ord = 0;
 print STDERR "Defines: (" . join(' ', sort keys %define) . ")\n";
 
 if ($PLATFORM =~ /^win(?:32|ce)$/) {
-    ($dll = ($define{PERL_DLL} || "perl59")) =~ s/\.dll$//i;
+    (my $dll = ($define{PERL_DLL} || "perl59")) =~ s/\.dll$//i;
     print "LIBRARY $dll\n";
-    print "DESCRIPTION 'Perl interpreter'\n";
+    # The DESCRIPTION module definition file statement is not supported
+    # by VC7 onwards.
+    if ($CCTYPE !~ /^MSVC7/ && $CCTYPE !~ /^MSVC8/) {
+	print "DESCRIPTION 'Perl interpreter'\n";
+    }
     print "EXPORTS\n";
     if ($define{PERL_IMPLICIT_SYS}) {
 	output_symbol("perl_get_host_info");
@@ -179,11 +187,11 @@ elsif ($PLATFORM eq 'os2') {
       }
       $sym_ord < $_ and $sym_ord = $_ for values %ordinal; # Take the max
     }
-    ($v = $]) =~ s/(\d\.\d\d\d)(\d\d)$/$1_$2/;
+    (my $v = $]) =~ s/(\d\.\d\d\d)(\d\d)$/$1_$2/;
     $v .= '-thread' if $ARCHNAME =~ /-thread/;
-    ($dll = $define{PERL_DLL}) =~ s/\.dll$//i;
+    (my $dll = $define{PERL_DLL}) =~ s/\.dll$//i;
     $v .= "\@$PATCHLEVEL" if $PATCHLEVEL;
-    $d = "DESCRIPTION '\@#perl5-porters\@perl.org:$v#\@ Perl interpreter, configured as $CONFIG_ARGS'";
+    my $d = "DESCRIPTION '\@#perl5-porters\@perl.org:$v#\@ Perl interpreter, configured as $CONFIG_ARGS'";
     $d = substr($d, 0, 249) . "...'" if length $d > 253;
     print <<"---EOP---";
 LIBRARY '$dll' INITINSTANCE TERMINSTANCE
@@ -195,9 +203,9 @@ EXPORTS
 ---EOP---
 }
 elsif ($PLATFORM eq 'aix') {
-    $OSVER = `uname -v`;
+    my $OSVER = `uname -v`;
     chop $OSVER;
-    $OSREL = `uname -r`;
+    my $OSREL = `uname -r`;
     chop $OSREL;
     if ($OSVER > 4 || ($OSVER == 4 && $OSREL >= 3)) {
 	print "#! ..\n";
@@ -390,6 +398,7 @@ elsif ($PLATFORM eq 'aix') {
 		     Perl_sys_intern_clear
 		     Perl_sys_intern_dup
 		     Perl_sys_intern_init
+		     Perl_my_sprintf
 		     PL_cryptseen
 		     PL_opsave
 		     PL_statusvalue_vms
@@ -623,7 +632,6 @@ else {
 unless ($define{'PERL_OLD_COPY_ON_WRITE'}) {
     skip_symbols [qw(
 		    Perl_sv_setsv_cow
-		    Perl_sv_release_IVX
 		  )];
 }
 
@@ -706,9 +714,6 @@ unless ($define{'USE_ITHREADS'}) {
 
 unless ($define{'USE_ITHREADS'}) {
     skip_symbols [qw(
-		    PL_ptr_table
-		    PL_pte_root
-		    PL_pte_arenaroot
 		    PL_op_mutex
 		    PL_regex_pad
 		    PL_regex_padav
@@ -716,6 +721,9 @@ unless ($define{'USE_ITHREADS'}) {
 		    PL_sharedsv_space_mutex
 		    PL_dollarzero_mutex
 		    PL_hints_mutex
+		    PL_perlio_mutex
+		    PL_regdupe
+		    Perl_parser_dup
 		    Perl_dirp_dup
 		    Perl_cx_dup
 		    Perl_si_dup
@@ -725,19 +733,12 @@ unless ($define{'USE_ITHREADS'}) {
 		    Perl_gp_dup
 		    Perl_he_dup
 		    Perl_mg_dup
+		    Perl_mro_meta_dup
 		    Perl_re_dup
 		    Perl_sv_dup
 		    Perl_rvpv_dup
 		    Perl_hek_dup
 		    Perl_sys_intern_dup
-		    Perl_ptr_table_clear
-		    Perl_ptr_table_fetch
-		    Perl_ptr_table_free
-		    Perl_ptr_table_new
-		    Perl_ptr_table_clear
-		    Perl_ptr_table_free
-		    Perl_ptr_table_split
-		    Perl_ptr_table_store
 		    perl_clone
 		    perl_clone_using
 		    Perl_sharedsv_find
@@ -748,6 +749,8 @@ unless ($define{'USE_ITHREADS'}) {
 		    Perl_sharedsv_thrcnt_inc
 		    Perl_sharedsv_unlock
 		    Perl_stashpv_hvname_match
+		    Perl_regdupe_internal
+		    Perl_newPADOP
 		    )];
 }
 
@@ -757,6 +760,7 @@ unless ($define{'PERL_IMPLICIT_CONTEXT'}) {
 		    PL_my_cxt_index
 		    PL_my_cxt_list
 		    PL_my_cxt_size
+		    PL_my_cxt_keys
 		    Perl_croak_nocontext
 		    Perl_die_nocontext
 		    Perl_deb_nocontext
@@ -771,6 +775,7 @@ unless ($define{'PERL_IMPLICIT_CONTEXT'}) {
 		    Perl_sv_catpvf_mg_nocontext
 		    Perl_sv_setpvf_mg_nocontext
 		    Perl_my_cxt_init
+		    Perl_my_cxt_index
 		    )];
 }
 
@@ -793,6 +798,13 @@ unless ($define{'PL_OP_SLAB_ALLOC'}) {
 		     Perl_Slab_Alloc
 		     Perl_Slab_Free
                     )];
+}
+
+unless ($define{'PERL_DEBUG_READONLY_OPS'}) {
+    skip_symbols [qw(
+		    PL_slab_count
+		    PL_slabs
+                  )];
 }
 
 unless ($define{'THREADS_HAVE_PIDS'}) {
@@ -876,6 +888,13 @@ if ($define{'PERL_MAD'}) {
 		    Perl_pmop_xmldump
 		    Perl_do_op_xmldump
 		    Perl_op_xmldump
+		    )];
+}
+
+unless ($define{'PERL_GLOBAL_STRUCT_PRIVATE'}) {
+    skip_symbols [qw(
+		    PL_my_cxt_keys
+		    Perl_my_cxt_index
 		    )];
 }
 
@@ -1094,13 +1113,30 @@ if ($define{'USE_PERLIO'}) {
 	emit_symbols \@layer_syms;
 	emit_symbols [qw(perlsio_binmode)];
     }
+    if ($define{'USE_ITHREADS'}) {
+	emit_symbols [qw(
+			PL_perlio_mutex
+			)];
+    }
+    else {
+	skip_symbols [qw(
+			PL_perlio_mutex
+			)];
+    }
 } else {
 	# -Uuseperlio
 	# Skip the PerlIO layer symbols - although
 	# nothing should have exported them anyway.
 	skip_symbols \@layer_syms;
-	skip_symbols [qw(perlsio_binmode)];
-        skip_symbols [qw(PL_def_layerlist PL_known_layers PL_perlio)];
+	skip_symbols [qw(
+			perlsio_binmode
+			PL_def_layerlist
+			PL_known_layers
+			PL_perlio
+			PL_perlio_debug_fd
+			PL_perlio_fd_refcnt
+			PL_perlio_fd_refcnt_size
+			)];
 
 	# Also do NOT add abstraction symbols from $perlio_sym
 	# abstraction is done as #define to stdio
@@ -1125,7 +1161,7 @@ for my $syms (@syms) {
 # variables
 
 if ($define{'MULTIPLICITY'}) {
-    for my $f ($perlvars_h, $intrpvar_h, $thrdvar_h) {
+    for my $f ($perlvars_h, $intrpvar_h) {
 	my $glob = readvar($f, sub { "Perl_" . $_[1] . $_[2] . "_ptr" });
 	emit_symbols $glob;
     }
@@ -1142,10 +1178,6 @@ else {
     }
     unless ($define{'MULTIPLICITY'}) {
 	my $glob = readvar($intrpvar_h);
-	emit_symbols $glob;
-    }
-    unless ($define{'MULTIPLICITY'}) {
-	my $glob = readvar($thrdvar_h);
 	emit_symbols $glob;
     }
 }
@@ -1277,6 +1309,7 @@ if ($PLATFORM =~ /^win(?:32|ce)$/) {
 			    win32_rewinddir
 			    win32_closedir
 			    win32_longpath
+			    win32_ansipath
 			    win32_os_id
 			    win32_getpid
 			    win32_crypt
@@ -1335,6 +1368,7 @@ if ($PLATFORM =~ /^win(?:32|ce)$/) {
     }
 }
 elsif ($PLATFORM eq 'os2') {
+    my (%mapped, @missing);
     open MAP, 'miniperl.map' or die 'Cannot read miniperl.map';
     /^\s*[\da-f:]+\s+(\w+)/i and $mapped{$1}++ foreach <MAP>;
     close MAP or die 'Cannot close miniperl.map';
@@ -1504,6 +1538,8 @@ foreach my $symbol (@stat_mods)
     {
 	try_symbol($symbol);
     }
+
+try_symbol("init_Win32CORE") if $static_ext =~ /\bWin32CORE\b/;
 
 # Now all symbols should be defined because
 # next we are going to output them.

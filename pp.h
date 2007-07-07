@@ -1,7 +1,7 @@
 /*    pp.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -59,16 +59,16 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 	STMT_START {					\
 	    if (++PL_markstack_ptr == PL_markstack_max)	\
 	    markstack_grow();				\
-	    *PL_markstack_ptr = (p) - PL_stack_base;	\
+	    *PL_markstack_ptr = (I32)((p) - PL_stack_base);\
 	} STMT_END
 
 #define TOPMARK		(*PL_markstack_ptr)
 #define POPMARK		(*PL_markstack_ptr--)
 
-#define dSP		register SV **sp = PL_stack_sp
+#define dSP		SV **sp = PL_stack_sp
 #define djSP		dSP
 #define dMARK		register SV **mark = PL_stack_base + POPMARK
-#define dORIGMARK	const I32 origmark = mark - PL_stack_base
+#define dORIGMARK	const I32 origmark = (I32)(mark - PL_stack_base)
 #define ORIGMARK	(PL_stack_base + origmark)
 
 #define SPAGAIN		sp = PL_stack_sp
@@ -403,7 +403,7 @@ and C<PUSHu>.
 	    if ((SvAMAGIC(left)||SvAMAGIC(right))) {\
 		SV * const tmpsv = amagic_call(left, \
 				   right, \
-				   meth_enum, \
+				   (meth_enum), \
 				   (assign)? AMGf_assign: 0); \
 		if (tmpsv) { \
 		    SPAGAIN; \
@@ -437,7 +437,7 @@ and C<PUSHu>.
           if(0) goto am_again;  /* shut up unused warning */ \
 	  am_again: \
 	    if ((SvAMAGIC(arg))&&\
-		(tmpsv=AMG_CALLun_var(arg,meth_enum))) {\
+		(tmpsv=AMG_CALLun_var(arg,(meth_enum)))) {\
 	       SPAGAIN; if (shift) sp += shift; \
 	       set(tmpsv); ret; } \
 	} STMT_END
@@ -466,6 +466,8 @@ and C<PUSHu>.
     } STMT_END
 
 #define tryAMAGICunDEREF(meth) tryAMAGICunW(meth,setAGAIN,0,(void)0)
+#define tryAMAGICunDEREF_var(meth_enum) \
+	tryAMAGICunW_var(meth_enum,setAGAIN,0,(void)0)
 
 #define opASSIGN (PL_op->op_flags & OPf_STACKED)
 #define SETsv(sv)	STMT_START {					\

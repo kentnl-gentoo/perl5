@@ -227,10 +227,10 @@ indirectly by the run-time system itself, usually due to a triggered event.
 Subroutines that do special, pre-defined things include C<AUTOLOAD>, C<CLONE>,
 C<DESTROY> plus all functions mentioned in L<perltie> and L<PerlIO::via>.
 
-The C<BEGIN>, C<CHECK>, C<INIT> and C<END> subroutines are not so much
-subroutines as named special code blocks, of which you can have more
-than one in a package, and which you can B<not> call explicitly.  See
-L<perlmod/"BEGIN, CHECK, INIT and END">
+The C<BEGIN>, C<UNITCHECK>, C<CHECK>, C<INIT> and C<END> subroutines
+are not so much subroutines as named special code blocks, of which you
+can have more than one in a package, and which you can B<not> call
+explicitly.  See L<perlmod/"BEGIN, UNITCHECK, CHECK, INIT and END">
 
 =head2 Private Variables via my()
 X<my> X<variable, lexical> X<lexical> X<lexical variable> X<scope, lexical>
@@ -453,26 +453,11 @@ each time the gimme_another() function is called:
 Also, since C<$x> is lexical, it can't be reached or modified by any Perl
 code outside.
 
-You can initialize state variables, and the assigment will be executed
-only once:
+Be aware that assignment to C<state> variables (as in C<state $x = 42>)
+are executed every time; to initialize (or re-initialize) an undefined
+state scalar, you can use, for example, the defined-or assignment :
 
-    sub starts_from_42 { state $x = 42; return ++$x }
-
-You can also, as a syntactic shortcut, initialize more than one if they're
-all declared within the same state() clause:
-
-    state ($a, $b, $c) = ( 'one', 'two', 'three' );
-
-However, be warned that state variables declared as part of a list will
-get assigned each time the statement will be executed, since it will be
-considered as a regular list assigment, not one to be executed only once:
-
-    (state $x, my $y) = (1, 2); # $x gets reinitialized every time !
-
-B<Caveat>: the code at the right side of the assignment to a state
-variable will be executed every time; only the assignment is disabled. So,
-avoid code that has side-effects, or that is slow to execute. This might
-be optimized out in a future version of Perl.
+    state $x //= initial_value();
 
 =head3 Persistent variables with closures
 
@@ -521,8 +506,9 @@ starts to run:
 	}
     }
 
-See L<perlmod/"BEGIN, CHECK, INIT and END"> about the
-special triggered code blocks, C<BEGIN>, C<CHECK>, C<INIT> and C<END>.
+See L<perlmod/"BEGIN, UNITCHECK, CHECK, INIT and END"> about the
+special triggered code blocks, C<BEGIN>, C<UNITCHECK>, C<CHECK>,
+C<INIT> and C<END>.
 
 If declared at the outermost scope (the file scope), then lexicals
 work somewhat like C's file statics.  They are available to all
@@ -1054,7 +1040,7 @@ corresponding built-in.
     sub myopen (*;$)	     myopen HANDLE, $name
     sub mypipe (**)	     mypipe READHANDLE, WRITEHANDLE
     sub mygrep (&@)	     mygrep { /foo/ } $a, $b, $c
-    sub myrand ($)	     myrand 42
+    sub myrand (;$)	     myrand 42
     sub mytime ()	     mytime
 
 Any backslashed prototype character represents an actual argument
@@ -1098,8 +1084,12 @@ follows:
 	...
     }
 
-A semicolon separates mandatory arguments from optional arguments.
+A semicolon (C<;>) separates mandatory arguments from optional arguments.
 It is redundant before C<@> or C<%>, which gobble up everything else.
+
+As the last character of a prototype, or just before a semicolon, you can
+use C<_> in place of C<$>: if this argument is not provided, C<$_> will be
+used instead.
 
 Note how the last three examples in the table above are treated
 specially by the parser.  C<mygrep()> is parsed as a true list
@@ -1367,7 +1357,8 @@ And, as you'll have noticed from the previous example, if you override
 C<glob>, the C<< <*> >> glob operator is overridden as well.
 
 In a similar fashion, overriding the C<readline> function also overrides
-the equivalent I/O operator C<< <FILEHANDLE> >>.
+the equivalent I/O operator C<< <FILEHANDLE> >>. Also, overriding
+C<readpipe> also overrides the operators C<``> and C<qx//>.
 
 Finally, some built-ins (e.g. C<exists> or C<grep>) can't be overridden.
 

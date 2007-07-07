@@ -2,7 +2,7 @@
 
 use strict;
 use lib $ENV{PERL_CORE} ? '../lib/Module/Build/t/lib' : 't/lib';
-use MBTest tests => 64;
+use MBTest tests => 65;
 
 use Cwd ();
 my $cwd = Cwd::cwd;
@@ -227,25 +227,32 @@ print "Hello, World!\n";
   eval{ $mb->y_n('Prompt?', 'invalid default') };
   like $@, qr/Invalid default/, "y_n() requires a default of 'y' or 'n'";
 
-  SKIP:{
 
-    skip "No available STDIN", 7 unless -t STDIN;
+  $ENV{PERL_MM_USE_DEFAULT} = 1;
 
-    $ENV{PERL_MM_USE_DEFAULT} = 1;
+  eval{ $mb->y_n('Is this a question?') };
+  print "\n"; # fake <enter> because the prompt prints before the checks
+  like $@, qr/ERROR:/,
+       'Do not allow default-less y_n() for unattended builds';
 
-    eval{ $mb->y_n("# Is this a question?") };
-    like $@, qr/ERROR:/, 'Do not allow default-less y_n() for unattended builds';
+  eval{ $ans = $mb->prompt('Is this a question?') };
+  print "\n"; # fake <enter> because the prompt prints before the checks
+  like $@, qr/ERROR:/,
+       'Do not allow default-less prompt() for unattended builds';
 
-    eval{ $ans = $mb->prompt('# Is this a question?') };
-    like $@, qr/ERROR:/, 'Do not allow default-less prompt() for unattended builds';
+
+  # When running Test::Smoke under a cron job, STDIN will be closed which
+  # will fool our _is_interactive() method causing various failures.
+  {
+    local *{Module::Build::_is_interactive} = sub { 1 };
 
     $ENV{PERL_MM_USE_DEFAULT} = 0;
 
-    $ans = $mb->prompt('# Is this a question?');
+    $ans = $mb->prompt('Is this a question?');
     print "\n"; # fake <enter> after input
     is $ans, 'y', "prompt() doesn't require default for interactive builds";
 
-    $ans = $mb->y_n('# Say yes');
+    $ans = $mb->y_n('Say yes');
     print "\n"; # fake <enter> after input
     ok $ans, "y_n() doesn't require default for interactive build";
 
@@ -253,15 +260,19 @@ print "Hello, World!\n";
     # Test Defaults
     *{Module::Build::_readline} = sub { '' };
 
-    $ans = $mb->prompt("# Is this a question");
+    $ans = $mb->prompt("Is this a question");
     is $ans, '', "default for prompt() without a default is ''";
 
-    $ans = $mb->prompt("# Is this a question", 'y');
+    $ans = $mb->prompt("Is this a question", 'y');
     is $ans, 'y', "  prompt() with a default";
 
-    $ans = $mb->y_n("# Is this a question", 'y');
+    $ans = $mb->y_n("Is this a question", 'y');
     ok $ans, "  y_n() with a default";
+
+    my @ans = $mb->prompt("Is this a question", undef);
+    is_deeply([@ans], [undef], "  prompt() with undef() default");
   }
+
 }
 
 # cleanup

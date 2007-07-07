@@ -135,6 +135,9 @@ typedef struct jmpenv JMPENV;
 
 struct cop {
     BASEOP
+    /* On LP64 putting this here takes advantage of the fact that BASEOP isn't
+       an exact multiple of 8 bytes to save structure padding.  */
+    line_t      cop_line;       /* line # of this command */
     char *	cop_label;	/* label for this construct */
 #ifdef USE_ITHREADS
     char *	cop_stashpv;	/* package line was compiled in */
@@ -145,7 +148,6 @@ struct cop {
 #endif
     U32		cop_hints;	/* hints bits from pragmata */
     U32		cop_seq;	/* parse sequence number */
-    line_t      cop_line;       /* line # of this command */
     /* Beware. mg.c and warnings.pl assume the type of this is STRLEN *:  */
     STRLEN *	cop_warnings;	/* lexical warnings bitmask */
     /* compile time state of %^H.  See the comment in op.c for how this is
@@ -160,8 +162,10 @@ struct cop {
 				 
 #  ifdef NETWARE
 #    define CopFILE_set(c,pv)	((c)->cop_file = savepv(pv))
+#    define CopFILE_setn(c,pv,l)  ((c)->cop_file = savepv((pv),(l)))
 #  else
 #    define CopFILE_set(c,pv)	((c)->cop_file = savesharedpv(pv))
+#    define CopFILE_setn(c,pv,l)  ((c)->cop_file = savesharedpvn((pv),(l)))
 #  endif
 
 #  define CopFILESV(c)		(CopFILE(c) \
@@ -186,17 +190,24 @@ struct cop {
 				 ? gv_stashpv(CopSTASHPV(c),GV_ADD) : NULL)
 #  define CopSTASH_set(c,hv)	CopSTASHPV_set(c, (hv) ? HvNAME_get(hv) : NULL)
 #  define CopSTASH_eq(c,hv)	((hv) && stashpv_hvname_match(c,hv))
+#  define CopLABEL(c)		((c)->cop_label)
+#  define CopLABEL_set(c,pv)	(CopLABEL(c) = (pv))
 #  ifdef NETWARE
 #    define CopSTASH_free(c) SAVECOPSTASH_FREE(c)
 #    define CopFILE_free(c) SAVECOPFILE_FREE(c)
+#    define CopLABEL_free(c) SAVECOPLABEL_FREE(c)
+#    define CopLABEL_alloc(pv)	((pv)?savepv(pv):NULL)
 #  else
 #    define CopSTASH_free(c)	PerlMemShared_free(CopSTASHPV(c))
 #    define CopFILE_free(c)	(PerlMemShared_free(CopFILE(c)),(CopFILE(c) = NULL))
+#    define CopLABEL_free(c)	(PerlMemShared_free(CopLABEL(c)),(CopLABEL(c) = NULL))
+#    define CopLABEL_alloc(pv)	((pv)?savesharedpv(pv):NULL)
 #  endif
 #else
 #  define CopFILEGV(c)		((c)->cop_filegv)
 #  define CopFILEGV_set(c,gv)	((c)->cop_filegv = (GV*)SvREFCNT_inc(gv))
 #  define CopFILE_set(c,pv)	CopFILEGV_set((c), gv_fetchfile(pv))
+#  define CopFILE_setn(c,pv,l)	CopFILEGV_set((c), gv_fetchfile_flags((pv),(l),0))
 #  define CopFILESV(c)		(CopFILEGV(c) ? GvSV(CopFILEGV(c)) : NULL)
 #  define CopFILEAV(c)		(CopFILEGV(c) ? GvAV(CopFILEGV(c)) : NULL)
 #  ifdef DEBUGGING
@@ -204,15 +215,20 @@ struct cop {
 #  else
 #    define CopFILEAVx(c)	(GvAV(CopFILEGV(c)))
 # endif
-#  define CopFILE(c)		(CopFILESV(c) ? SvPVX(CopFILESV(c)) : NULL)
+#  define CopFILE(c)		(CopFILEGV(c) && GvSV(CopFILEGV(c)) \
+				    ? SvPVX(GvSV(CopFILEGV(c))) : NULL)
 #  define CopSTASH(c)		((c)->cop_stash)
+#  define CopLABEL(c)		((c)->cop_label)
 #  define CopSTASH_set(c,hv)	((c)->cop_stash = (hv))
 #  define CopSTASHPV(c)		(CopSTASH(c) ? HvNAME_get(CopSTASH(c)) : NULL)
    /* cop_stash is not refcounted */
 #  define CopSTASHPV_set(c,pv)	CopSTASH_set((c), gv_stashpv(pv,GV_ADD))
 #  define CopSTASH_eq(c,hv)	(CopSTASH(c) == (hv))
+#  define CopLABEL_alloc(pv)	((pv)?savepv(pv):NULL)
+#  define CopLABEL_set(c,pv)	(CopLABEL(c) = (pv))
 #  define CopSTASH_free(c)	
 #  define CopFILE_free(c)	(SvREFCNT_dec(CopFILEGV(c)),(CopFILEGV(c) = NULL))
+#  define CopLABEL_free(c)	(Safefree(CopLABEL(c)),(CopLABEL(c) = NULL))
 
 #endif /* USE_ITHREADS */
 
@@ -320,7 +336,7 @@ struct block_sub {
 #define CLEAR_ARGARRAY(ary) \
     STMT_START {							\
 	AvMAX(ary) += AvARRAY(ary) - AvALLOC(ary);			\
-	SvPV_set(ary, (char*)AvALLOC(ary));				\
+	AvARRAY(ary) = AvALLOC(ary);					\
 	AvFILLp(ary) = -1;						\
     } STMT_END
 
@@ -358,8 +374,8 @@ struct block_sub {
 
 /* eval context */
 struct block_eval {
-    I32		old_in_eval;
-    I32		old_op_type;
+    U8		old_in_eval;
+    U16		old_op_type;
     SV *	old_namesv;
     OP *	old_eval_root;
     SV *	cur_text;
@@ -374,7 +390,7 @@ struct block_eval {
 	cx->blk_eval.old_op_type = PL_op->op_type;			\
 	cx->blk_eval.old_namesv = (n ? newSVpv(n,0) : NULL);		\
 	cx->blk_eval.old_eval_root = PL_eval_root;			\
-	cx->blk_eval.cur_text = PL_linestr;				\
+	cx->blk_eval.cur_text = PL_parser ? PL_parser->linestr : NULL;	\
 	cx->blk_eval.cv = NULL; /* set by doeval(), as applicable */	\
 	cx->blk_eval.retop = NULL;					\
 	cx->blk_eval.cur_top_env = PL_top_env; 				\
@@ -393,21 +409,39 @@ struct block_eval {
 struct block_loop {
     char *	label;
     I32		resetsp;
-    OP *	redo_op;
-    OP *	next_op;
-    OP *	last_op;
+    LOOP *	my_op;	/* My op, that contains redo, next and last ops.  */
+    /* (except for non_ithreads we need to modify next_op in pp_ctl.c, hence
+	why next_op is conditionally defined below.)  */
 #ifdef USE_ITHREADS
     void *	iterdata;
     PAD		*oldcomppad;
 #else
+    OP *	next_op;
     SV **	itervar;
 #endif
     SV *	itersave;
+    /* (from inspection of source code) for a .. range of strings this is the
+       current string.  */
     SV *	iterlval;
+    /* (from inspection of source code) for a foreach loop this is the array
+       being iterated over. For a .. range of numbers it's the current value.
+       A check is often made on the SvTYPE of iterary to determine whether
+       we are iterating over an array or a range. (numbers or strings)  */
     AV *	iterary;
     IV		iterix;
+    /* (from inspection of source code) for a .. range of numbers this is the
+       maximum value.  */
     IV		itermax;
 };
+/* It might be possible to squeeze this structure further. As best I can tell
+   itermax and iterlval are never used at the same time, so it might be possible
+   to make them into a union. However, I'm not confident that there are enough
+   flag bits/NULLable pointers in this structure alone to encode which is
+   active. There is, however, U8 of space free in struct block, which could be
+   used. Right now it may not be worth squeezing this structure further, as it's
+   the largest part of struct block, and currently struct block is 64 bytes on
+   an ILP32 system, which will give good cache alignment.
+*/
 
 #ifdef USE_ITHREADS
 #  define CxITERVAR(c)							\
@@ -432,12 +466,19 @@ struct block_loop {
 	    cx->blk_loop.itersave = NULL;
 #endif
 
+#ifdef USE_ITHREADS
+#  define PUSHLOOP_OP_NEXT		/* No need to do anything.  */
+#  define CX_LOOP_NEXTOP_GET(cx)	((cx)->blk_loop.my_op->op_nextop + 0)
+#else
+#  define PUSHLOOP_OP_NEXT		cx->blk_loop.next_op = cLOOP->op_nextop
+#  define CX_LOOP_NEXTOP_GET(cx)	((cx)->blk_loop.next_op + 0)
+#endif
+
 #define PUSHLOOP(cx, dat, s)						\
 	cx->blk_loop.label = PL_curcop->cop_label;			\
 	cx->blk_loop.resetsp = s - PL_stack_base;			\
-	cx->blk_loop.redo_op = cLOOP->op_redoop;			\
-	cx->blk_loop.next_op = cLOOP->op_nextop;			\
-	cx->blk_loop.last_op = cLOOP->op_lastop;			\
+	cx->blk_loop.my_op = cLOOP;					\
+	PUSHLOOP_OP_NEXT;						\
 	cx->blk_loop.iterlval = NULL;					\
 	cx->blk_loop.iterary = NULL;					\
 	cx->blk_loop.iterix = -1;					\
@@ -470,12 +511,14 @@ struct block_givwhen {
 
 /* context common to subroutines, evals and loops */
 struct block {
+    U16		blku_type;	/* what kind of context this is */
+    U8		blku_gimme;	/* is this block running in list context? */
+    U8		blku_spare;	/* Padding to match with struct subst */
     I32		blku_oldsp;	/* stack pointer to copy stuff down to */
     COP *	blku_oldcop;	/* old curcop pointer */
     I32		blku_oldmarksp;	/* mark stack index */
     I32		blku_oldscopesp;	/* scope stack index */
     PMOP *	blku_oldpm;	/* values of pattern match vars */
-    U8		blku_gimme;	/* is this block running in list context? */
 
     union {
 	struct block_sub	blku_sub;
@@ -529,12 +572,13 @@ struct block {
 
 /* substitution context */
 struct subst {
+    U16		sbu_type;	/* what kind of context this is */
+    U8		sbu_once;	/* Actually both booleans, but U8 to matches */
+    U8		sbu_rxtainted;	/* struct block */
     I32		sbu_iters;
     I32		sbu_maxiters;
     I32		sbu_rflags;
     I32		sbu_oldsave;
-    bool	sbu_once;
-    bool	sbu_rxtainted;
     char *	sbu_orig;
     SV *	sbu_dstr;
     SV *	sbu_targ;
@@ -583,12 +627,12 @@ struct subst {
 	ReREFCNT_dec(cx->sb_rx)
 
 struct context {
-    U32		cx_type;	/* what kind of context this is */
     union {
 	struct block	cx_blk;
 	struct subst	cx_subst;
     } cx_u;
 };
+#define cx_type cx_u.cx_subst.sbu_type
 
 #define CXTYPEMASK	0xff
 #define CXt_NULL	0
@@ -678,7 +722,7 @@ L<perlcall>.
 #define G_KEEPERR      16	/* Append errors to $@, don't overwrite it */
 #define G_NODEBUG      32	/* Disable debugging at toplevel.  */
 #define G_METHOD       64       /* Calling method. */
-#define G_FAKINGEVAL  256	/* Faking en eval context for call_sv or
+#define G_FAKINGEVAL  256	/* Faking an eval context for call_sv or
 				   fold_constants. */
 
 /* flag bits for PL_in_eval */
@@ -707,11 +751,11 @@ L<perlcall>.
 struct stackinfo {
     AV *		si_stack;	/* stack for current runlevel */
     PERL_CONTEXT *	si_cxstack;	/* context stack for runlevel */
+    struct stackinfo *	si_prev;
+    struct stackinfo *	si_next;
     I32			si_cxix;	/* current context index */
     I32			si_cxmax;	/* maximum allocated index */
     I32			si_type;	/* type of runlevel */
-    struct stackinfo *	si_prev;
-    struct stackinfo *	si_next;
     I32			si_markoff;	/* offset where markstack begins for us.
 					 * currently used only with DEBUGGING,
 					 * but not #ifdef-ed for bincompat */

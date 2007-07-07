@@ -4,7 +4,7 @@ use strict;
 use vars qw(@ISA $VERSION);
 require File::Spec::Unix;
 
-$VERSION = '1.1';
+$VERSION = '1.1_01';
 
 @ISA = qw(File::Spec::Unix);
 
@@ -40,14 +40,20 @@ and then File::Spec::Unix canonpath() is called on the result.
 sub canonpath {
     my($self,$path) = @_;
     $path =~ s|\\|/|g;
-    return $self->SUPER::canonpath($path);
+
+    # Handle network path names beginning with double slash
+    my $node = '';
+    if ( $path =~ s@^(//[^/]+)(?:/|\z)@/@s ) {
+        $node = $1;
+    }
+    return $node . $self->SUPER::canonpath($path);
 }
 
 sub catdir {
     my $self = shift;
 
     # Don't create something that looks like a //network/path
-    if ($_[0] eq '/' or $_[0] eq '\\') {
+    if ($_[0] and ($_[0] eq '/' or $_[0] eq '\\')) {
         shift;
         return $self->SUPER::catdir('', @_);
     }
@@ -90,6 +96,15 @@ sub tmpdir {
     return $tmpdir if defined $tmpdir;
     $tmpdir = $_[0]->_tmpdir( $ENV{TMPDIR}, "/tmp", 'C:/temp' );
 }
+
+=item case_tolerant
+
+Override Unix. Cygwin is always case-tolerant, indicating that it is not
+significant when comparing file specifications.
+
+=cut
+
+sub case_tolerant () { 1 }
 
 =back
 

@@ -4,7 +4,7 @@
 
 use strict;
 use lib $ENV{PERL_CORE} ? '../lib/Module/Build/t/lib' : 't/lib';
-use MBTest tests => 11;
+use MBTest tests => 14;
 
 use Cwd ();
 my $cwd = Cwd::cwd;
@@ -48,6 +48,20 @@ sub run_sample {
 
     $mb = run_sample( install_base => '~~' );
     is( $mb->install_base,      '~~' );
+
+  TODO: {
+    local $TODO = "Not handling spaces in _detildefy() properly yet";
+
+    $mb = run_sample( install_base => '~ foo' );
+    is( $mb->install_base,      '~ foo' );
+
+    # glob() doesn't work on non-existent paths with spaces
+    $mb = run_sample( install_base => '~/ foo' );
+    is( $mb->install_base,      "$ENV{HOME}/ foo" );
+
+    $mb = run_sample( install_base => '~/fo o' );
+    is( $mb->install_base,      "$ENV{HOME}/fo o" );
+  }
 
     $mb = run_sample( install_base => 'foo~' );
     is( $mb->install_base,      'foo~' );

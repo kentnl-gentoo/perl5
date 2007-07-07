@@ -7,7 +7,7 @@ use warnings;
 use File::Find;
 use ExtUtils::MM_Unix;
 
-my @lines;
+my %lines;
 find(sub {
     /(\.pm|_pm\.PL)$/ or return;
     /PPPort\.pm$/ and return;
@@ -22,8 +22,8 @@ find(sub {
 	and ( $module =~ s{^(.*)/lib/\1\b}{$1},
 	      $module =~ s{(\w+)/\1\b}{$1},
 	      $module =~ s{^B/O}{O},
-	      $module =~ s{^Compress/IO/Base/lib/}{},
-	      $module =~ s{^Compress/IO/Zlib/}{},
+	      $module =~ s{^IO_Compress_Base/lib/}{},
+	      $module =~ s{^IO_Compress_Zlib/(?:lib/)?}{},
 	      $module =~ s{^Devel/PPPort}{Devel},
 	      $module =~ s{^Encode/encoding}{encoding},
 	      $module =~ s{^IPC/SysV/}{IPC/},
@@ -33,8 +33,14 @@ find(sub {
 	    );
     $module =~ s{/}{::}g;
     $module =~ s/(\.pm|_pm\.PL)$//;
-    push @lines, sprintf "\t%-24s=> $version,\n", "'$module'";
-}, 'lib', 'ext', 'win32/ext', 'vms/ext', 'symbian/ext');
+    $lines{sprintf "\t%-24s=> $version,\n", "'$module'"}++;
+}, 'lib', 'ext', 'vms/ext', 'symbian/ext');
+
+if (open my $ucdv, "<", "lib/unicore/version") {
+    chomp (my $ucd = <$ucdv>);
+    $lines{sprintf "\t%-24s=> '$ucd',\n", "'Unicode'"}++;
+    close $ucdv;
+    }
 print "    $] => {\n";
-print sort @lines;
+print sort keys %lines;
 print "    },\n";

@@ -1,35 +1,27 @@
 package feature;
 
-our $VERSION = '1.01';
+our $VERSION = '1.10';
 
 # (feature name) => (internal name, used in %^H)
 my %feature = (
     switch => 'feature_switch',
-    "~~"   => "feature_~~",
     say    => "feature_say",
     err    => "feature_err",
-    dor    => "feature_err",
     state  => "feature_state",
 );
 
 my %feature_bundle = (
-    "5.10" => [qw(switch ~~ say err state)],
+    "5.10.0" => [qw(switch say err state)],
 );
+# latest version here
+# keep it harcoded until we actually bump the version number to 5.10
+$feature_bundle{"5.10"} = $feature_bundle{"5.10.0"};
+#$feature_bundle{"5.10"} = $feature_bundle{sprintf("%vd",$^V)};
 
+$feature_bundle{"5.9.5"} = $feature_bundle{"5.10.0"};
 
-# Here are some notes that probably shouldn't be in the public
-# documentation, but which it's useful to have somewhere.
-#
-# One side-effect of the change is that C<prototype("CORE::continue")>
-# no longer throws the error C<Can't find an opnumber for "continue">.
-# One of the tests in t/op/cproto.t had to be changed to accommodate
-# this, but it really shouldn't affect real-world code.
-#
 # TODO:
-# - sort out the smartmatch semantics
-# - think about versioned features (use switch => 2)
-#
-# -- Robin 2005-12
+# - think about versioned features (use feature switch => 2)
 
 =head1 NAME
 
@@ -46,6 +38,8 @@ feature - Perl pragma to enable new syntactic features
 	default		  { say "None of the above" }
     }
 
+    use feature ':5.10'; # loads all features available in perl 5.10
+
 =head1 DESCRIPTION
 
 It is usually impossible to add new syntax to Perl without breaking
@@ -54,78 +48,119 @@ risk. New syntactic constructs can be enabled by C<use feature 'foo'>,
 and will be parsed only when the appropriate feature pragma is in
 scope.
 
+=head2 Lexical effect
+
+Like other pragmas (C<use strict>, for example), features have a lexical
+effect. C<use feature qw(foo)> will only make the feature "foo" available
+from that point to the end of the enclosing block.
+
+    {
+        use feature 'say';
+        say "say is available here";
+    }
+    print "But not here.\n";
+
+=head2 C<no feature>
+
+Features can also be turned off by using C<no feature "foo">. This too
+has lexical effect.
+
+    use feature 'say';
+    say "say is available here";
+    {
+        no feature 'say';
+        print "But not here.\n";
+    }
+    say "Yet it is here.";
+
+C<no feature> with no features specified will turn off all features.
+
 =head2 The 'switch' feature
 
 C<use feature 'switch'> tells the compiler to enable the Perl 6
-given/when construct from here to the end of the enclosing BLOCK.
+given/when construct.
 
 See L<perlsyn/"Switch statements"> for details.
-
-=head2 The '~~' feature
-
-C<use feature '~~'> tells the compiler to enable the Perl 6
-smart match C<~~> operator from here to the end of the enclosing BLOCK.
-
-See L<perlsyn/"Smart Matching in Detail"> for details.
 
 =head2 The 'say' feature
 
 C<use feature 'say'> tells the compiler to enable the Perl 6
-C<say> function from here to the end of the enclosing BLOCK.
+C<say> function.
 
 See L<perlfunc/say> for details.
 
 =head2 the 'err' feature
 
 C<use feature 'err'> tells the compiler to enable the C<err>
-operator from here to the end of the enclosing BLOCK.
+operator.
 
 C<err> is a low-precedence variant of the C<//> operator:
 see C<perlop> for details.
 
-=head2 the 'dor' feature
-
-The 'dor' feature is an alias for the 'err' feature.
-
 =head2 the 'state' feature
 
 C<use feature 'state'> tells the compiler to enable C<state>
-variables from here to the end of the enclosing BLOCK.
+variables.
+
+See L<perlsub/"Persistent Private Variables"> for details.
 
 =head1 FEATURE BUNDLES
 
 It's possible to load a whole slew of features in one go, using
 a I<feature bundle>. The name of a feature bundle is prefixed with
 a colon, to distinguish it from an actual feature. At present, the
-only feature bundle is C<use feature ":5.10">, which is equivalent
-to C<use feature qw(switch ~~ say err state)>.
+only feature bundles are C<use feature ":5.10"> and C<use feature ":5.10.0">,
+which both are equivalent to C<use feature qw(switch say err state)>.
+
+In the forthcoming 5.10.X perl releases, C<use feature ":5.10"> will be
+equivalent to the latest C<use feature ":5.10.X">.
+
+=head1 IMPLICIT LOADING
+
+There are two ways to load the C<feature> pragma implicitly :
+
+=over 4
+
+=item *
+
+By using the C<-E> switch on the command-line instead of C<-e>. It enables
+all available features in the main compilation unit (that is, the one-liner.)
+
+=item *
+
+By requiring explicitly a minimal Perl version number for your program, with
+the C<use VERSION> construct, and when the version is higher than or equal to
+5.9.5. That is,
+
+    use 5.9.5;
+
+will do an implicit
+
+    use feature ':5.9.5';
+
+and so on.
+
+=back
 
 =cut
 
 sub import {
     my $class = shift;
     if (@_ == 0) {
-	require Carp;
-	Carp->import("croak");
 	croak("No features specified");
     }
     while (@_) {
 	my $name = shift(@_);
-	if ($name =~ /^:(.*)/) {
-	    if (!exists $feature_bundle{$1}) {
-		require Carp;
-		Carp->import("croak");
-		croak(sprintf('Feature bundle "%s" is not supported by Perl %vd',
-		    $1, $^V));
+	if (substr($name, 0, 1) eq ":") {
+	    my $v = substr($name, 1);
+	    if (!exists $feature_bundle{$v}) {
+		unknown_feature_bundle($v);
 	    }
-	    unshift @_, @{$feature_bundle{$1}};
+	    unshift @_, @{$feature_bundle{$v}};
 	    next;
 	}
 	if (!exists $feature{$name}) {
-	    require Carp;
-	    Carp->import("croak");
-	    croak(sprintf('Feature "%s" is not supported by Perl %vd',
-		$name, $^V));
+	    unknown_feature($name);
 	}
 	$^H{$feature{$name}} = 1;
     }
@@ -142,26 +177,38 @@ sub unimport {
 
     while (@_) {
 	my $name = shift;
-	if ($name =~ /^:(.*)/) {
-	    if (!exists $feature_bundle{$1}) {
-		require Carp;
-		Carp->import("croak");
-		croak(sprintf('Feature bundle "%s" is not supported by Perl %vd',
-		    $1, $^V));
+	if (substr($name, 0, 1) eq ":") {
+	    my $v = substr($name, 1);
+	    if (!exists $feature_bundle{$v}) {
+		unknown_feature_bundle($v);
 	    }
-	    unshift @_, @{$feature_bundle{$1}};
+	    unshift @_, @{$feature_bundle{$v}};
 	    next;
 	}
 	if (!exists($feature{$name})) {
-	    require Carp;
-	    Carp->import("croak");
-	    croak(sprintf('Feature "%s" is not supported by Perl %vd',
-		$name, $^V));
+	    unknown_feature($name);
 	}
 	else {
 	    delete $^H{$feature{$name}};
 	}
     }
+}
+
+sub unknown_feature {
+    my $feature = shift;
+    croak(sprintf('Feature "%s" is not supported by Perl %vd',
+	    $feature, $^V));
+}
+
+sub unknown_feature_bundle {
+    my $feature = shift;
+    croak(sprintf('Feature bundle "%s" is not supported by Perl %vd',
+	    $feature, $^V));
+}
+
+sub croak {
+    require Carp;
+    Carp::croak(@_);
 }
 
 1;

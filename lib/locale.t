@@ -43,7 +43,12 @@ eval {
 
 # Visual C's CRT goes silly on strings of the form "en_US.ISO8859-1"
 # and mingw32 uses said silly CRT
-$have_setlocale = 0 if (($^O eq 'MSWin32' || $^O eq 'NetWare') && $Config{cc} =~ /^(cl|gcc)/i);
+# This doesn't seem to be an issue any more, at least on Windows XP,
+# so re-enable the tests for Windows XP onwards.
+my $winxp = ($^O eq 'MSWin32' && defined &Win32::GetOSVersion &&
+		join('.', (Win32::GetOSVersion())[1..2]) >= 5.1);
+$have_setlocale = 0 if ((($^O eq 'MSWin32' && !$winxp) || $^O eq 'NetWare') &&
+		$Config{cc} =~ /^(cl|gcc)/i);
 
 # UWIN seems to loop after test 98, just skip for now
 $have_setlocale = 0 if ($^O =~ /^uwin/);
@@ -394,6 +399,17 @@ if (-x "/usr/bin/locale" && open(LOCALES, "/usr/bin/locale -a 2>/dev/null|")) {
 # The SYS$I18N_LOCALE logical name search list was not present on 
 # VAX VMS V5.5-12, but was on AXP && VAX VMS V6.2 as well as later versions.
     opendir(LOCALES, "SYS\$I18N_LOCALE:");
+    while ($_ = readdir(LOCALES)) {
+        chomp;
+        trylocale($_);
+    }
+    close(LOCALES);
+} elsif ($^O eq 'openbsd' && -e '/usr/share/locale') {
+
+   # OpenBSD doesn't have a locale executable, so reading /usr/share/locale
+   # is much easier and faster than the last resort method.
+
+    opendir(LOCALES, '/usr/share/locale');
     while ($_ = readdir(LOCALES)) {
         chomp;
         trylocale($_);

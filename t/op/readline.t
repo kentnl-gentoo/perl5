@@ -6,7 +6,7 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 14;
+plan tests => 18;
 
 eval { for (\2) { $_ = <FH> } };
 like($@, 'Modification of a read-only value attempted', '[perl #19566]');
@@ -83,8 +83,29 @@ fresh_perl_is('BEGIN{<>}', '',
               { switches => ['-w'], stdin => '', stderr => 1 },
               'No ARGVOUT used only once warning');
 
+fresh_perl_is('print readline', 'foo',
+              { switches => ['-w'], stdin => 'foo', stderr => 1 },
+              'readline() defaults to *ARGV');
+
+my $obj = bless [];
+$obj .= <DATA>;
+like($obj, qr/main=ARRAY.*world/, 'rcatline and refs');
+
+# bug #38631
+require Tie::Scalar;
+tie our $one, 'Tie::StdScalar', "A: ";
+tie our $two, 'Tie::StdScalar', "B: ";
+my $junk = $one;
+$one .= <DATA>;
+$two .= <DATA>;
+is( $one, "A: One\n", "rcatline works with tied scalars" );
+is( $two, "B: Two\n", "rcatline works with tied scalars" );
+
 __DATA__
 moo
 moo
  rules
  rules
+world
+One
+Two

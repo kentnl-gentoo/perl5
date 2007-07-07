@@ -5,20 +5,21 @@
 use strict;
 use lib "symbian";
 
-do "sanity.pl";
+do "sanity.pl" or die $@;
 
-my %VERSION = %{ do "version.pl" };
+my %VERSION = %{ do "version.pl" or die $@ };
 my $VERSION = "$VERSION{REVISION}$VERSION{VERSION}$VERSION{SUBVERSION}";
 my $R_V_SV  = "$VERSION{REVISION}.$VERSION{VERSION}.$VERSION{SUBVERSION}";
 
 my ($SYMBIAN_ROOT, $SYMBIAN_VERSION, $SDK_NAME, $SDK_VARIANT, $SDK_VERSION) =
-    @{ do "sdk.pl" };
-my $UID  = do "uid.pl";
-my %PORT = %{ do "port.pl" };
+    @{ do "sdk.pl" or die $@ };
+my $UID  = do "uid.pl" or die $@;
+my %PORT = %{ do "port.pl" or die $@ };
 
 my $ARM = 'thumb'; # TODO
 my $S60SDK = $ENV{S60SDK}; # from sdk.pl
 my $S80SDK = $ENV{S80SDK}; # from sdk.pl
+my $S90SDK = $ENV{S90SDK}; # from sdk.pl
 
 my $UREL = $ENV{UREL}; # from sdk.pl
 $UREL =~ s/-ARM-/$ARM/;
@@ -160,6 +161,8 @@ for my $target (@target) {
 qq[;Supports Series 60 v0.9\n(0x101F6F88), 0, 0, 0, {"Series60ProductID"}\n] :
          defined $S80SDK ?
 qq[;Supports Series 80 v2.0\n(0x101F8ED2), 0, 0, 0, {"Series80ProductID"}\n] :
+         defined $S90SDK ?
+qq[;Supports Series 90 v1.1\n(0x101FBE05), 0, 0, 0, {"Series90ProductID"}\n] :
          ";Supports Series NN";
 
     open PKG, ">$pkg" or die "$0: failed to create $pkg: $!\n";

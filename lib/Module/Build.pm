@@ -15,7 +15,7 @@ use Module::Build::Base;
 
 use vars qw($VERSION @ISA);
 @ISA = qw(Module::Build::Base);
-$VERSION = '0.2805';
+$VERSION = '0.2808';
 $VERSION = eval $VERSION;
 
 # Okay, this is the brute-force method of finding out what kind of
@@ -26,6 +26,7 @@ my %OSTYPES = qw(
 		 aix       Unix
 		 bsdos     Unix
 		 dgux      Unix
+		 dragonfly Unix
 		 dynixptx  Unix
 		 freebsd   Unix
 		 linux     Unix
@@ -33,6 +34,7 @@ my %OSTYPES = qw(
 		 irix      Unix
 		 darwin    Unix
 		 machten   Unix
+		 midnightbsd Unix
 		 next      Unix
 		 openbsd   Unix
 		 netbsd    Unix
@@ -46,6 +48,7 @@ my %OSTYPES = qw(
 		 sunos     Unix
 		 cygwin    Unix
 		 os2       Unix
+		 interix   Unix
 		 
 		 dos       Windows
 		 MSWin32   Windows
@@ -92,6 +95,10 @@ if (grep {-e File::Spec->catfile($_, qw(Module Build Platform), $^O) . '.pm'} @I
 }
 
 sub os_type { $OSTYPES{$^O} }
+
+sub is_vmsish { return ((os_type() || '') eq 'VMS') }
+sub is_windowsish { return ((os_type() || '') eq 'Windows') }
+sub is_unixish { return ((os_type() || '') eq 'Unix') }
 
 1;
 
@@ -149,22 +156,23 @@ This illustrates initial configuration and the running of three
 'actions'.  In this case the actions run are 'build' (the default
 action), 'test', and 'install'.  Other actions defined so far include:
 
-  build                          install     
-  clean                          manifest    
-  code                           manpages    
+  build                          manifest    
+  clean                          manpages    
+  code                           pardist     
   config_data                    ppd         
   diff                           ppmdist     
   dist                           prereq_report
   distcheck                      pure_install
   distclean                      realclean   
-  distdir                        skipcheck   
-  distmeta                       test        
-  distsign                       testcover   
-  disttest                       testdb      
-  docs                           testpod     
-  fakeinstall                    testpodcoverage
-  help                           versioninstall
-  html                                       
+  distdir                        retest      
+  distmeta                       skipcheck   
+  distsign                       test        
+  disttest                       testall     
+  docs                           testcover   
+  fakeinstall                    testdb      
+  help                           testpod     
+  html                           testpodcoverage
+  install                        versioninstall
 
 
 You can run the 'help' action for a complete list of actions.
@@ -347,7 +355,7 @@ F<META.yml> file must also be listed in F<MANIFEST> - if it's not, a
 warning will be issued.
 
 The current version of the F<META.yml> specification can be found at
-L<http://module-build.sourceforge.net/META-spec-v1.2.html>
+L<http://module-build.sourceforge.net/META-spec-current.html>
 
 =item distsign
 
@@ -466,6 +474,15 @@ also supply or override install paths by specifying there values on
 the command line with the C<bindoc> and C<libdoc> installation
 targets.
 
+=item pardist
+
+[version 0.2806]
+
+Generates a PAR binary distribution for use with L<PAR> or L<PAR::Dist>.
+
+It requires that the PAR::Dist module (version 0.17 and up) is
+installed on your system.
+
 =item ppd
 
 [version 0.20]
@@ -520,6 +537,17 @@ C<_build> directory and the C<Build> script.  If you run the
 C<realclean> action, you are essentially starting over, so you will
 have to re-create the C<Build> script again.
 
+=item retest
+
+[version 0.2806]
+
+This is just like the C<test> action, but doesn't actually build the
+distribution first, and doesn't add F<blib/> to the load path, and
+therefore will test against a I<previously> installed version of the
+distribution.  This can be used to verify that a certain installed
+distribution still works, or to see whether newer versions of a
+distribution still pass the old regression tests, and so on.
+
 =item skipcheck
 
 [version 0.05]
@@ -561,6 +589,33 @@ You may also pass several C<test_files> arguments separately:
 or use a C<glob()>-style pattern:
 
   ./Build test --test_files 't/01-*.t'
+
+=item testall
+
+[verion 0.2807]
+
+[Note: the 'testall' action and the code snippets below are currently
+in alpha stage, see
+L<"http://www.nntp.perl.org/group/perl.module.build/2007/03/msg584.html"> ]
+
+Runs the C<test> action plus each of the C<test$type> actions defined by
+the keys of the C<test_types> parameter.
+
+Currently, you need to define the ACTION_test$type method yourself and
+enumerate them in the test_types parameter.
+
+  my $mb = Module::Build->subclass(
+    code => q(
+      sub ACTION_testspecial { shift->generic_test(type => 'special'); }
+      sub ACTION_testauthor  { shift->generic_test(type => 'author'); }
+    )
+  )->new(
+    ...
+    test_types  => {
+      special => '.st',
+      author  => '.at',
+    },
+    ...
 
 =item testcover
 
@@ -848,8 +903,7 @@ system, you'll install as follows:
   libhtml => /home/ken/html
 
 Note that this is I<different> from how MakeMaker's C<PREFIX>
-parameter works.  See L</"Why PREFIX is not recommended"> for more
-details.  C<install_base> just gives you a default layout under the
+parameter works.  C<install_base> just gives you a default layout under the
 directory you specify, which may have little to do with the
 C<installdirs=site> layout.
 
@@ -998,7 +1052,7 @@ repository at <https://svn.perl.org/modules/Module-Build/trunk/>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2005 Ken Williams.  All rights reserved.
+Copyright (c) 2001-2006 Ken Williams.  All rights reserved.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
@@ -1006,11 +1060,11 @@ modify it under the same terms as Perl itself.
 
 =head1 SEE ALSO
 
-perl(1), L<Module::Build::Cookbook>(3), L<Module::Build::Authoring>(3),
-L<Module::Build::API>(3), L<ExtUtils::MakeMaker>(3), L<YAML>(3)
+perl(1), L<Module::Build::Cookbook>, L<Module::Build::Authoring>,
+L<Module::Build::API>, L<ExtUtils::MakeMaker>, L<YAML>
 
 F<META.yml> Specification:
-L<http://module-build.sourceforge.net/META-spec-v1.2.html>
+L<http://module-build.sourceforge.net/META-spec-current.html>
 
 L<http://www.dsmit.com/cons/>
 

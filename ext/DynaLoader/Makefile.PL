@@ -3,7 +3,7 @@ use ExtUtils::MakeMaker;
 WriteMakefile(
     NAME => 'DynaLoader',
     LINKTYPE	=> 'static',
-    DEFINE	=> '-DPERL_CORE -DLIBC="$(LIBC)"',
+    DEFINE	=> '-DLIBC="$(LIBC)"',
     MAN3PODS 	=> {}, 	# Pods will be built by installman.
     SKIP	=> [qw(dynamic dynamic_lib dynamic_bs)],
     XSPROTOARG => '-noprototypes', 		# XXX remove later?
@@ -34,8 +34,10 @@ test-xs:
 
 sub MY::static {
 	'
-static :: $(FIRST_MAKEFILE) $(OBJECT)
+$(PERL_SRC)/$(OBJECT) : $(FIRST_MAKEFILE) $(OBJECT)
 	$(RM_RF) $(PERL_SRC)/$(OBJECT)
 	$(CP) $(OBJECT) $(PERL_SRC)/$(OBJECT)
+
+static :: $(PERL_SRC)/$(OBJECT)
 ';
 }

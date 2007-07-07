@@ -1,6 +1,6 @@
 /*    pad.h
  *
- *    Copyright (C) 2002, 2003, 2005, by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -30,7 +30,69 @@ typedef U64TYPE PADOFFSET;
 #   endif
 #endif
 #define NOT_IN_PAD ((PADOFFSET) -1)
- 
+
+/* B.xs needs these for the benefit of B::Deparse */ 
+/* Low range end is exclusive (valid from the cop seq after this one) */
+/* High range end is inclusive (valid up to this cop seq) */
+
+#if defined (DEBUGGING) && defined(__GNUC__) && !defined(PERL_GCC_BRACE_GROUPS_FORBIDDEN)
+#  define COP_SEQ_RANGE_LOW(sv)						\
+	(({ SV *const _svi = (SV *) (sv);				\
+	  assert(SvTYPE(_svi) == SVt_NV || SvTYPE(_svi) >= SVt_PVNV);	\
+	  assert(SvTYPE(_svi) != SVt_PVAV);				\
+	  assert(SvTYPE(_svi) != SVt_PVHV);				\
+	  assert(SvTYPE(_svi) != SVt_PVCV);				\
+	  assert(SvTYPE(_svi) != SVt_PVFM);				\
+	  assert(!isGV_with_GP(_svi));					\
+	  ((XPVNV*) SvANY(_svi))->xnv_u.xpad_cop_seq.xlow;		\
+	 }))
+#  define COP_SEQ_RANGE_HIGH(sv)					\
+	(({ SV *const _svi = (SV *) (sv);				\
+	  assert(SvTYPE(_svi) == SVt_NV || SvTYPE(_svi) >= SVt_PVNV);	\
+	  assert(SvTYPE(_svi) != SVt_PVAV);				\
+	  assert(SvTYPE(_svi) != SVt_PVHV);				\
+	  assert(SvTYPE(_svi) != SVt_PVCV);				\
+	  assert(SvTYPE(_svi) != SVt_PVFM);				\
+	  assert(!isGV_with_GP(_svi));					\
+	  ((XPVNV*) SvANY(_svi))->xnv_u.xpad_cop_seq.xhigh;		\
+	 }))
+#  define PARENT_PAD_INDEX(sv)						\
+	(({ SV *const _svi = (SV *) (sv);				\
+	  assert(SvTYPE(_svi) == SVt_NV || SvTYPE(_svi) >= SVt_PVNV);	\
+	  assert(SvTYPE(_svi) != SVt_PVAV);				\
+	  assert(SvTYPE(_svi) != SVt_PVHV);				\
+	  assert(SvTYPE(_svi) != SVt_PVCV);				\
+	  assert(SvTYPE(_svi) != SVt_PVFM);				\
+	  assert(!isGV_with_GP(_svi));					\
+	  ((XPVNV*) SvANY(_svi))->xnv_u.xpad_cop_seq.xlow;		\
+	 }))
+#  define PARENT_FAKELEX_FLAGS(sv)					\
+	(({ SV *const _svi = (SV *) (sv);				\
+	  assert(SvTYPE(_svi) == SVt_NV || SvTYPE(_svi) >= SVt_PVNV);	\
+	  assert(SvTYPE(_svi) != SVt_PVAV);				\
+	  assert(SvTYPE(_svi) != SVt_PVHV);				\
+	  assert(SvTYPE(_svi) != SVt_PVCV);				\
+	  assert(SvTYPE(_svi) != SVt_PVFM);				\
+	  assert(!isGV_with_GP(_svi));					\
+	  ((XPVNV*) SvANY(_svi))->xnv_u.xpad_cop_seq.xhigh;		\
+	 }))
+#else
+#  define COP_SEQ_RANGE_LOW(sv)		\
+	(0 + (((XPVNV*) SvANY(sv))->xnv_u.xpad_cop_seq.xlow))
+#  define COP_SEQ_RANGE_HIGH(sv)	\
+	(0 + (((XPVNV*) SvANY(sv))->xnv_u.xpad_cop_seq.xhigh))
+
+
+#  define PARENT_PAD_INDEX(sv)		\
+	(0 + (((XPVNV*) SvANY(sv))->xnv_u.xpad_cop_seq.xlow))
+#  define PARENT_FAKELEX_FLAGS(sv)	\
+	(0 + (((XPVNV*) SvANY(sv))->xnv_u.xpad_cop_seq.xhigh))
+#endif
+
+/* Flags set in the SvIVX field of FAKE namesvs */
+    
+#define PAD_FAKELEX_ANON   1 /* the lex is declared in an ANON, or ... */
+#define PAD_FAKELEX_MULTI  2 /* the lex can be instantiated multiple times */
 
 /* flags for the pad_new() function */
 
@@ -214,29 +276,30 @@ Assumes the slot entry is a valid C<our> lexical.
 
 =for apidoc m|STRLEN|PAD_COMPNAME_GEN|PADOFFSET po
 The generation number of the name at offset C<po> in the current
-compiling pad (lvalue). Note that C<SvCUR> is hijacked for this purpose.
+compiling pad (lvalue). Note that C<SvUVX> is hijacked for this purpose.
 
 =for apidoc m|STRLEN|PAD_COMPNAME_GEN_set|PADOFFSET po|int gen
 Sets the generation number of the name at offset C<po> in the current
-ling pad (lvalue) to C<gen>.  Note that C<SvCUR_set> is hijacked for this purpose.
+ling pad (lvalue) to C<gen>.  Note that C<SvUV_set> is hijacked for this purpose.
 
 =cut
 
 */
 
-#define PAD_COMPNAME_FLAGS(po) SvFLAGS(*av_fetch(PL_comppad_name, (po), FALSE))
+#define PAD_COMPNAME_SV(po) (*av_fetch(PL_comppad_name, (po), FALSE))
+#define PAD_COMPNAME_FLAGS(po) SvFLAGS(PAD_COMPNAME_SV(po))
 #define PAD_COMPNAME_FLAGS_isOUR(po) \
   ((PAD_COMPNAME_FLAGS(po) & (SVpad_NAME|SVpad_OUR)) == (SVpad_NAME|SVpad_OUR))
-#define PAD_COMPNAME_PV(po) SvPV_nolen(*av_fetch(PL_comppad_name, (po), FALSE))
+#define PAD_COMPNAME_PV(po) SvPV_nolen(PAD_COMPNAME_SV(po))
 
 #define PAD_COMPNAME_TYPE(po) pad_compname_type(po)
 
 #define PAD_COMPNAME_OURSTASH(po) \
-    (OURSTASH(*av_fetch(PL_comppad_name, (po), FALSE)))
+    (SvOURSTASH(PAD_COMPNAME_SV(po)))
 
-#define PAD_COMPNAME_GEN(po) SvCUR(AvARRAY(PL_comppad_name)[po])
+#define PAD_COMPNAME_GEN(po) ((STRLEN)SvUVX(AvARRAY(PL_comppad_name)[po]))
 
-#define PAD_COMPNAME_GEN_set(po, gen) SvCUR_set(AvARRAY(PL_comppad_name)[po], gen)
+#define PAD_COMPNAME_GEN_set(po, gen) SvUV_set(AvARRAY(PL_comppad_name)[po], (UV)(gen))
 
 
 /*

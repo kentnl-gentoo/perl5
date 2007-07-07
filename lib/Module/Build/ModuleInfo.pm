@@ -163,6 +163,12 @@ sub _parse_file {
   my $fh = IO::File->new( $filename )
     or die( "Can't open '$filename': $!" );
 
+  $self->_parse_fh($fh);
+}
+
+sub _parse_fh {
+  my ($self, $fh) = @_;
+
   my( $in_pod, $seen_end, $need_vers ) = ( 0, 0, 0 );
   my( @pkgs, %vers, %pod, @pod );
   my $pkg = 'main';
@@ -215,14 +221,16 @@ sub _parse_file {
 	push( @pkgs, $vers_pkg ) unless grep( $vers_pkg eq $_, @pkgs );
 	$need_vers = 0 if $vers_pkg eq $pkg;
 
-	my $v =
-	  $self->_evaluate_version_line( $vers_sig, $vers_fullname, $line );
 	unless ( defined $vers{$vers_pkg} && length $vers{$vers_pkg} ) {
-	  $vers{$vers_pkg} = $v;
+	  $vers{$vers_pkg} = 
+	    $self->_evaluate_version_line( $vers_sig, $vers_fullname, $line );
 	} else {
-	  warn <<"EOM";
-Package '$vers_pkg' already declared with version '$vers{$vers_pkg}'
-ignoring new version '$v'.
+	  # Warn unless the user is using the "$VERSION = eval
+	  # $VERSION" idiom (though there are probably other idioms
+	  # that we should watch out for...)
+	  warn <<"EOM" unless $line =~ /=\s*eval/;
+Package '$vers_pkg' already declared with version '$vers{$vers_pkg}',
+ignoring subsequent declaration.
 EOM
 	}
 
@@ -278,20 +286,29 @@ sub _evaluate_version_line {
 
   # Some of this code came from the ExtUtils:: hierarchy.
 
-  my $eval = qq{q#  Hide from _packages_inside()
-		 #; package Module::Build::ModuleInfo::_version;
-		 no strict;
+  # We compile into $vsub because 'use version' would cause
+  # compiletime/runtime issues with local()
+  my $vsub;
+  my $eval = qq{BEGIN { q#  Hide from _packages_inside()
+    #; package Module::Build::ModuleInfo::_version;
+    no strict;
 
-		 local $sigil$var;
-		 \$$var=undef; do {
-		   $line
-		 }; \$$var
-		};
+    local $sigil$var;
+    \$$var=undef;
+      \$vsub = sub {
+        $line;
+        \$$var
+      };
+  }};
 
   local $^W;
-  # Try and get the $VERSION
-  my $result = eval $eval;
-  warn "Error evaling version line '$eval' in $self->{filename}: $@\n" if $@;
+  # Try to get the $VERSION
+  eval $eval;
+  warn "Error evaling version line '$eval' in $self->{filename}: $@\n"
+    if $@;
+  (ref($vsub) eq 'CODE') or
+    die "failed to build version sub for $self->{filename}";
+  my $result = $vsub->();
 
   # Bless it into our own version class
   $result = Module::Build::Version->new($result);
@@ -416,12 +433,12 @@ Can be called as either an object or a class method.
 
 =head1 AUTHOR
 
-Ken Williams <ken@cpan.org>, Randy W. Sims <RandyS@ThePierianSpring.org>
+Ken Williams <kwilliams@cpan.org>, Randy W. Sims <RandyS@ThePierianSpring.org>
 
 
 =head1 COPYRIGHT
 
-Copyright (c) 2001-2005 Ken Williams.  All rights reserved.
+Copyright (c) 2001-2006 Ken Williams.  All rights reserved.
 
 This library is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

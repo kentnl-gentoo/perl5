@@ -1,7 +1,7 @@
 /*    doop.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2004, 2005, 2006, by Larry Wall and others
+ *    2000, 2001, 2002, 2004, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -307,7 +307,12 @@ S_do_trans_simple_utf8(pTHX_ SV * const sv)
     const I32 grows = PL_op->op_private & OPpTRANS_GROWS;
     STRLEN len;
 
-    SV* const  rv = (SV*)cSVOP->op_sv;
+    SV* const  rv =
+#ifdef USE_ITHREADS
+		    PAD_SVl(cPADOP->op_padix);
+#else
+		    (SV*)cSVOP->op_sv;
+#endif
     HV* const  hv = (HV*)SvRV(rv);
     SV* const * svp = hv_fetchs(hv, "NONE", FALSE);
     const UV none = svp ? SvUV(*svp) : 0x7fffffff;
@@ -403,7 +408,12 @@ S_do_trans_count_utf8(pTHX_ SV * const sv)
     I32 matches = 0;
     STRLEN len;
 
-    SV* const rv = (SV*)cSVOP->op_sv;
+    SV* const  rv =
+#ifdef USE_ITHREADS
+		    PAD_SVl(cPADOP->op_padix);
+#else
+		    (SV*)cSVOP->op_sv;
+#endif
     HV* const hv = (HV*)SvRV(rv);
     SV* const * const svp = hv_fetchs(hv, "NONE", FALSE);
     const UV none = svp ? SvUV(*svp) : 0x7fffffff;
@@ -447,7 +457,12 @@ S_do_trans_complex_utf8(pTHX_ SV * const sv)
     const I32 squash   = PL_op->op_private & OPpTRANS_SQUASH;
     const I32 del      = PL_op->op_private & OPpTRANS_DELETE;
     const I32 grows    = PL_op->op_private & OPpTRANS_GROWS;
-    SV * const rv = (SV*)cSVOP->op_sv;
+    SV* const  rv =
+#ifdef USE_ITHREADS
+		    PAD_SVl(cPADOP->op_padix);
+#else
+		    (SV*)cSVOP->op_sv;
+#endif
     HV * const hv = (HV*)SvRV(rv);
     SV * const *svp = hv_fetchs(hv, "NONE", FALSE);
     const UV none = svp ? SvUV(*svp) : 0x7fffffff;
@@ -726,25 +741,32 @@ UV
 Perl_do_vecget(pTHX_ SV *sv, I32 offset, I32 size)
 {
     dVAR;
-    STRLEN srclen, len, uoffset;
+    STRLEN srclen, len, uoffset, bitoffs = 0;
     const unsigned char *s = (const unsigned char *) SvPV_const(sv, srclen);
     UV retnum = 0;
 
     if (offset < 0)
-	return retnum;
+	return 0;
     if (size < 1 || (size & (size-1))) /* size < 1 or not a power of two */
 	Perl_croak(aTHX_ "Illegal number of bits in vec");
 
     if (SvUTF8(sv))
 	(void) Perl_sv_utf8_downgrade(aTHX_ sv, TRUE);
 
-    uoffset = offset*size;	/* turn into bit offset */
-    len = (uoffset + size + 7) / 8;	/* required number of bytes */
+    if (size < 8) {
+	bitoffs = ((offset%8)*size)%8;
+	uoffset = offset/(8/size);
+    }
+    else if (size > 8)
+	uoffset = offset*(size/8);
+    else
+	uoffset = offset;
+
+    len = uoffset + (bitoffs + size + 7)/8;	/* required number of bytes */
     if (len > srclen) {
 	if (size <= 8)
 	    retnum = 0;
 	else {
-	    uoffset >>= 3;	/* turn into byte offset */
 	    if (size == 16) {
 		if (uoffset >= srclen)
 		    retnum = 0;
@@ -821,9 +843,8 @@ Perl_do_vecget(pTHX_ SV *sv, I32 offset, I32 size)
 	}
     }
     else if (size < 8)
-	retnum = (s[uoffset >> 3] >> (uoffset & 7)) & ((1 << size) - 1);
+	retnum = (s[uoffset] >> bitoffs) & ((1 << size) - 1);
     else {
-	uoffset >>= 3;	/* turn into byte offset */
 	if (size == 8)
 	    retnum = s[uoffset];
 	else if (size == 16)
@@ -865,7 +886,7 @@ void
 Perl_do_vecset(pTHX_ SV *sv)
 {
     dVAR;
-    register I32 offset;
+    register I32 offset, bitoffs = 0;
     register I32 size;
     register unsigned char *s;
     register UV lval;
@@ -894,8 +915,14 @@ Perl_do_vecset(pTHX_ SV *sv)
     if (size < 1 || (size & (size-1))) /* size < 1 or not a power of two */
 	Perl_croak(aTHX_ "Illegal number of bits in vec");
 
-    offset *= size;			/* turn into bit offset */
-    len = (offset + size + 7) / 8;	/* required number of bytes */
+    if (size < 8) {
+	bitoffs = ((offset%8)*size)%8;
+	offset /= 8/size;
+    }
+    else if (size > 8)
+	offset *= size/8;
+
+    len = offset + (bitoffs + size + 7)/8;	/* required number of bytes */
     if (len > targlen) {
 	s = (unsigned char*)SvGROW(targ, len + 1);
 	(void)memzero((char *)(s + targlen), len - targlen + 1);
@@ -904,14 +931,11 @@ Perl_do_vecset(pTHX_ SV *sv)
 
     if (size < 8) {
 	mask = (1 << size) - 1;
-	size = offset & 7;
 	lval &= mask;
-	offset >>= 3;			/* turn into byte offset */
-	s[offset] &= ~(mask << size);
-	s[offset] |= lval << size;
+	s[offset] &= ~(mask << bitoffs);
+	s[offset] |= lval << bitoffs;
     }
     else {
-	offset >>= 3;			/* turn into byte offset */
 	if (size == 8)
 	    s[offset  ] = (U8)( lval        & 0xff);
 	else if (size == 16) {
@@ -1425,8 +1449,10 @@ Perl_do_kv(pTHX)
 	    RETURN;
 	}
 
-	if (! SvTIED_mg((SV*)keys, PERL_MAGIC_tied))
+	if (! SvTIED_mg((SV*)keys, PERL_MAGIC_tied) )
+	{
 	    i = HvKEYS(keys);
+	}
 	else {
 	    i = 0;
 	    while (hv_iternext(keys)) i++;

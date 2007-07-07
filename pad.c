@@ -1,6 +1,6 @@
 /*    pad.c
  *
- *    Copyright (C) 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2004, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -72,19 +72,19 @@ but only by their index allocated at compile time (which is usually
 in PL_op->op_targ), wasting a name SV for them doesn't make sense.
 
 The SVs in the names AV have their PV being the name of the variable.
-NV+1..IV inclusive is a range of cop_seq numbers for which the name is
-valid.  For typed lexicals name SV is SVt_PVMG and SvSTASH points at the
-type.  For C<our> lexicals, the type is also SVt_PVGV, with the MAGIC slot
-pointing at the stash of the associated global (so that duplicate C<our>
-declarations in the same package can be detected).  SvCUR is sometimes
-hijacked to store the generation number during compilation.
+xlow+1..xhigh inclusive in the NV union is a range of cop_seq numbers for
+which the name is valid.  For typed lexicals name SV is SVt_PVMG and SvSTASH
+points at the type.  For C<our> lexicals, the type is also SVt_PVMG, with the
+SvOURSTASH slot pointing at the stash of the associated global (so that
+duplicate C<our> declarations in the same package can be detected).  SvUVX is
+sometimes hijacked to store the generation number during compilation.
 
 If SvFAKE is set on the name SV, then that slot in the frame AV is
 a REFCNT'ed reference to a lexical from "outside". In this case,
-the name SV does not use NVX and IVX to store a cop_seq range, since it is
-in scope throughout. Instead IVX stores some flags containing info about
+the name SV does not use xlow and xhigh to store a cop_seq range, since it is
+in scope throughout. Instead xhigh stores some flags containing info about
 the real lexical (is it declared in an anon, and is it capable of being
-instantiated multiple times?), and for fake ANONs, NVX contains the index
+instantiated multiple times?), and for fake ANONs, xlow contains the index
 within the parent's pad where the lexical's value is stored, to make
 cloning quicker.
 
@@ -111,8 +111,17 @@ to be generated in evals, such as
 #include "perl.h"
 #include "keywords.h"
 
+#define COP_SEQ_RANGE_LOW_set(sv,val)		\
+  STMT_START { ((XPVNV*)SvANY(sv))->xnv_u.xpad_cop_seq.xlow = (val); } STMT_END
+#define COP_SEQ_RANGE_HIGH_set(sv,val)		\
+  STMT_START { ((XPVNV*)SvANY(sv))->xnv_u.xpad_cop_seq.xhigh = (val); } STMT_END
 
-#define PAD_MAX 999999999
+#define PARENT_PAD_INDEX_set(sv,val)		\
+  STMT_START { ((XPVNV*)SvANY(sv))->xnv_u.xpad_cop_seq.xlow = (val); } STMT_END
+#define PARENT_FAKELEX_FLAGS_set(sv,val)	\
+  STMT_START { ((XPVNV*)SvANY(sv))->xnv_u.xpad_cop_seq.xhigh = (val); } STMT_END
+
+#define PAD_MAX I32_MAX
 
 #ifdef PERL_MAD
 void pad_peg(const char* s) {
@@ -159,7 +168,7 @@ Perl_pad_new(pTHX_ int flags)
 	    SAVEI32(PL_comppad_name_fill);
 	    SAVEI32(PL_min_intro_pending);
 	    SAVEI32(PL_max_intro_pending);
-	    SAVEI32(PL_cv_has_eval);
+	    SAVEBOOL(PL_cv_has_eval);
 	    if (flags & padnew_SAVESUB) {
 		SAVEI32(PL_pad_reset_pending);
 	    }
@@ -326,7 +335,7 @@ offset.
 If C<typestash> is valid, the name is for a typed lexical; set the
 name's stash to that value.
 If C<ourstash> is valid, it's an our lexical, set the name's
-OURSTASH to that value
+SvOURSTASH to that value
 
 If fake, it means we're cloning an existing entry
 
@@ -338,21 +347,21 @@ Perl_pad_add_name(pTHX_ const char *name, HV* typestash, HV* ourstash, bool fake
 {
     dVAR;
     const PADOFFSET offset = pad_alloc(OP_PADSV, SVs_PADMY);
-    SV* const namesv = newSV(0);
+    SV* const namesv
+	= newSV_type((ourstash || typestash) ? SVt_PVMG : SVt_PVNV);
 
     ASSERT_CURPAD_ACTIVE("pad_add_name");
 
-
-    sv_upgrade(namesv, (ourstash || typestash) ? SVt_PVMG : SVt_PVNV);
     sv_setpv(namesv, name);
 
     if (typestash) {
+	assert(SvTYPE(namesv) == SVt_PVMG);
 	SvPAD_TYPED_on(namesv);
 	SvSTASH_set(namesv, (HV*)SvREFCNT_inc_simple_NN((SV*)typestash));
     }
     if (ourstash) {
 	SvPAD_OUR_on(namesv);
-	OURSTASH_set(namesv, ourstash);
+	SvOURSTASH_set(namesv, ourstash);
 	SvREFCNT_inc_simple_void_NN(ourstash);
     }
     else if (state) {
@@ -367,8 +376,8 @@ Perl_pad_add_name(pTHX_ const char *name, HV* typestash, HV* ourstash, bool fake
     }
     else {
 	/* not yet introduced */
-	SvNV_set(namesv, (NV)PAD_MAX);	/* min */
-	SvIV_set(namesv, 0);		/* max */
+	COP_SEQ_RANGE_LOW_set(namesv, PAD_MAX);	/* min */
+	COP_SEQ_RANGE_HIGH_set(namesv, 0);		/* max */
 
 	if (!PL_min_intro_pending)
 	    PL_min_intro_pending = offset;
@@ -407,8 +416,6 @@ for a slot which has no name and no active value.
 /* And flag whether the incoming name is UTF8 or 8 bit?
    Could do this either with the +ve/-ve hack of the HV code, or expanding
    the flag bits. Either way, this makes proper Unicode safe pad support.
-   Also could change the sv structure to make the NV a union with 2 U32s,
-   so that SvCUR() could stop being overloaded in pad SVs.
    NWC
 */
 
@@ -477,12 +484,12 @@ Perl_pad_add_anon(pTHX_ SV* sv, OPCODE op_type)
 {
     dVAR;
     PADOFFSET ix;
-    SV* const name = newSV(0);
+    SV* const name = newSV_type(SVt_PVNV);
     pad_peg("add_anon");
-    sv_upgrade(name, SVt_PVNV);
     sv_setpvn(name, "&", 1);
-    SvIV_set(name, -1);
-    SvNV_set(name, 1);
+    /* Are these two actually ever read? */
+    COP_SEQ_RANGE_HIGH_set(name, ~0);
+    COP_SEQ_RANGE_LOW_set(name, 1);
     ix = pad_alloc(op_type, SVs_PADMY);
     av_store(PL_comppad_name, ix, name);
     /* XXX DAPM use PL_curpad[] ? */
@@ -536,16 +543,16 @@ Perl_pad_check_dup(pTHX_ const char *name, bool is_our, const HV *ourstash)
 	if (sv
 	    && sv != &PL_sv_undef
 	    && !SvFAKE(sv)
-	    && (SvIVX(sv) == PAD_MAX || SvIVX(sv) == 0)
+	    && (COP_SEQ_RANGE_HIGH(sv) == PAD_MAX || COP_SEQ_RANGE_HIGH(sv) == 0)
 	    && strEQ(name, SvPVX_const(sv)))
 	{
 	    if (is_our && (SvPAD_OUR(sv)))
 		break; /* "our" masking "our" */
 	    Perl_warner(aTHX_ packWARN(WARN_MISC),
 		"\"%s\" variable %s masks earlier declaration in same %s",
-		(is_our ? "our" : PL_in_my == KEY_my ? "my" : "state"),
+		(is_our ? "our" : PL_parser->in_my == KEY_my ? "my" : "state"),
 		name,
-		(SvIVX(sv) == PAD_MAX ? "scope" : "statement"));
+		(COP_SEQ_RANGE_HIGH(sv) == PAD_MAX ? "scope" : "statement"));
 	    --off;
 	    break;
 	}
@@ -557,8 +564,8 @@ Perl_pad_check_dup(pTHX_ const char *name, bool is_our, const HV *ourstash)
 	    if (sv
 		&& sv != &PL_sv_undef
 		&& !SvFAKE(sv)
-		&& (SvIVX(sv) == PAD_MAX || SvIVX(sv) == 0)
-		&& OURSTASH(sv) == ourstash
+		&& (COP_SEQ_RANGE_HIGH(sv) == PAD_MAX || COP_SEQ_RANGE_HIGH(sv) == 0)
+		&& SvOURSTASH(sv) == ourstash
 		&& strEQ(name, SvPVX_const(sv)))
 	    {
 		Perl_warner(aTHX_ packWARN(WARN_MISC),
@@ -613,7 +620,7 @@ Perl_pad_findmy(pTHX_ const char *name)
 	    && !SvFAKE(namesv)
 	    && (SvPAD_OUR(namesv))
 	    && strEQ(SvPVX_const(namesv), name)
-	    && U_32(SvNVX(namesv)) == PAD_MAX /* min */
+	    && COP_SEQ_RANGE_LOW(namesv) == PAD_MAX /* min */
 	)
 	    return offset;
     }
@@ -652,16 +659,11 @@ associated with the IVX field of a fake namesv.
 
 Note that pad_findlex() is recursive; it recurses up the chain of CVs,
 then comes back down, adding fake entries as it goes. It has to be this way
-because fake namesvs in anon protoypes have to store in NVX the index into
+because fake namesvs in anon protoypes have to store in xlow the index into
 the parent pad.
 
 =cut
 */
-
-/* Flags set in the SvIVX field of FAKE namesvs */
-
-#define PAD_FAKELEX_ANON   1 /* the lex is declared in an ANON, or ... */
-#define PAD_FAKELEX_MULTI  2 /* the lex can be instantiated multiple times */
 
 /* the CV has finished being compiled. This is not a sufficient test for
  * all CVs (eg XSUBs), but suffices for the CVs found in a lexical chain */
@@ -701,8 +703,8 @@ S_pad_findlex(pTHX_ const char *name, const CV* cv, U32 seq, int warn,
 	    {
 		if (SvFAKE(namesv))
 		    fake_offset = offset; /* in case we don't find a real one */
-		else if (  seq >  U_32(SvNVX(namesv))	/* min */
-			&& seq <= (U32)SvIVX(namesv))	/* max */
+		else if (  seq >  COP_SEQ_RANGE_LOW(namesv)	/* min */
+			&& seq <= COP_SEQ_RANGE_HIGH(namesv))	/* max */
 		    break;
 	    }
 	}
@@ -725,18 +727,19 @@ S_pad_findlex(pTHX_ const char *name, const CV* cv, U32 seq, int warn,
 				? PAD_FAKELEX_MULTI : 0;
 
 		DEBUG_Xv(PerlIO_printf(Perl_debug_log,
-		    "Pad findlex cv=0x%"UVxf" matched: offset=%ld (%ld,%ld)\n",
-		    PTR2UV(cv), (long)offset, (long)U_32(SvNVX(*out_name_sv)),
-		    (long)SvIVX(*out_name_sv)));
+		    "Pad findlex cv=0x%"UVxf" matched: offset=%ld (%lu,%lu)\n",
+		    PTR2UV(cv), (long)offset,
+		    (unsigned long)COP_SEQ_RANGE_LOW(*out_name_sv),
+		    (unsigned long)COP_SEQ_RANGE_HIGH(*out_name_sv)));
 	    }
 	    else { /* fake match */
 		offset = fake_offset;
 		*out_name_sv = name_svp[offset]; /* return the namesv */
-		*out_flags = SvIVX(*out_name_sv);
+		*out_flags = PARENT_FAKELEX_FLAGS(*out_name_sv);
 		DEBUG_Xv(PerlIO_printf(Perl_debug_log,
 		    "Pad findlex cv=0x%"UVxf" matched: offset=%ld flags=0x%lx index=%lu\n",
 		    PTR2UV(cv), (long)offset, (unsigned long)*out_flags,
-			(unsigned long)SvNVX(*out_name_sv) 
+		    (unsigned long) PARENT_PAD_INDEX(*out_name_sv) 
 		));
 	    }
 
@@ -848,21 +851,21 @@ S_pad_findlex(pTHX_ const char *name, const CV* cv, U32 seq, int warn,
 	    SvPVX_const(*out_name_sv),
 	    SvPAD_TYPED(*out_name_sv)
 		    ? SvSTASH(*out_name_sv) : NULL,
-	    OURSTASH(*out_name_sv),
+	    SvOURSTASH(*out_name_sv),
 	    1,  /* fake */
 	    0   /* not a state variable */
 	);
 
 	new_namesv = AvARRAY(PL_comppad_name)[new_offset];
-	SvIV_set(new_namesv, *out_flags);
+	PARENT_FAKELEX_FLAGS_set(new_namesv, *out_flags);
 
-	SvNV_set(new_namesv, (NV)0);
+	PARENT_PAD_INDEX_set(new_namesv, 0);
 	if (SvPAD_OUR(new_namesv)) {
 	    NOOP;   /* do nothing */
 	}
 	else if (CvLATE(cv)) {
 	    /* delayed creation - just note the offset within parent pad */
-	    SvNV_set(new_namesv, (NV)offset);
+	    PARENT_PAD_INDEX_set(new_namesv, offset);
 	    CvCLONE_on(cv);
 	}
 	else {
@@ -873,7 +876,7 @@ S_pad_findlex(pTHX_ const char *name, const CV* cv, U32 seq, int warn,
 		PTR2UV(cv), PTR2UV(*new_capturep), (long)new_offset));
 	}
 	*out_name_sv = new_namesv;
-	*out_flags = SvIVX(new_namesv);
+	*out_flags = PARENT_FAKELEX_FLAGS(new_namesv);
 
 	PL_comppad_name = ocomppad_name;
 	PL_comppad = ocomppad;
@@ -993,13 +996,14 @@ Perl_intro_my(pTHX)
     for (i = PL_min_intro_pending; i <= PL_max_intro_pending; i++) {
 	SV * const sv = svp[i];
 
-	if (sv && sv != &PL_sv_undef && !SvFAKE(sv) && !SvIVX(sv)) {
-	    SvIV_set(sv, PAD_MAX);	/* Don't know scope end yet. */
-	    SvNV_set(sv, (NV)PL_cop_seqmax);
+	if (sv && sv != &PL_sv_undef && !SvFAKE(sv) && !COP_SEQ_RANGE_HIGH(sv)) {
+	    COP_SEQ_RANGE_HIGH_set(sv, PAD_MAX);	/* Don't know scope end yet. */
+	    COP_SEQ_RANGE_LOW_set(sv, PL_cop_seqmax);
 	    DEBUG_Xv(PerlIO_printf(Perl_debug_log,
-		"Pad intromy: %ld \"%s\", (%ld,%ld)\n",
+		"Pad intromy: %ld \"%s\", (%lu,%lu)\n",
 		(long)i, SvPVX_const(sv),
-		(long)U_32(SvNVX(sv)), (long)SvIVX(sv))
+		(unsigned long)COP_SEQ_RANGE_LOW(sv),
+		(unsigned long)COP_SEQ_RANGE_HIGH(sv))
 	    );
 	}
     }
@@ -1037,18 +1041,19 @@ Perl_pad_leavemy(pTHX)
 		    && !SvFAKE(sv) && ckWARN_d(WARN_INTERNAL))
 		Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
 			    "%"SVf" never introduced",
-			    (void*)sv);
+			    SVfARG(sv));
 	}
     }
     /* "Deintroduce" my variables that are leaving with this scope. */
     for (off = AvFILLp(PL_comppad_name); off > PL_comppad_name_fill; off--) {
 	const SV * const sv = svp[off];
-	if (sv && sv != &PL_sv_undef && !SvFAKE(sv) && SvIVX(sv) == PAD_MAX) {
-	    SvIV_set(sv, PL_cop_seqmax);
+	if (sv && sv != &PL_sv_undef && !SvFAKE(sv) && COP_SEQ_RANGE_HIGH(sv) == PAD_MAX) {
+	    COP_SEQ_RANGE_HIGH_set(sv, PL_cop_seqmax);
 	    DEBUG_Xv(PerlIO_printf(Perl_debug_log,
-		"Pad leavemy: %ld \"%s\", (%ld,%ld)\n",
+		"Pad leavemy: %ld \"%s\", (%lu,%lu)\n",
 		(long)off, SvPVX_const(sv),
-		(long)U_32(SvNVX(sv)), (long)SvIVX(sv))
+		(unsigned long)COP_SEQ_RANGE_LOW(sv),
+		(unsigned long)COP_SEQ_RANGE_HIGH(sv))
 	    );
 	}
     }
@@ -1335,18 +1340,18 @@ Perl_do_dump_pad(pTHX_ I32 level, PerlIO *file, PADLIST *padlist, int full)
 		    PTR2UV(ppad[ix]),
 		    (unsigned long) (ppad[ix] ? SvREFCNT(ppad[ix]) : 0),
 		    SvPVX_const(namesv),
-		    (unsigned long)SvIVX(namesv),
-		    (unsigned long)SvNVX(namesv)
+		    (unsigned long)PARENT_FAKELEX_FLAGS(namesv),
+		    (unsigned long)PARENT_PAD_INDEX(namesv)
 
 		);
 	    else
 		Perl_dump_indent(aTHX_ level+1, file,
-		    "%2d. 0x%"UVxf"<%lu> (%ld,%ld) \"%s\"\n",
+		    "%2d. 0x%"UVxf"<%lu> (%lu,%lu) \"%s\"\n",
 		    (int) ix,
 		    PTR2UV(ppad[ix]),
 		    (unsigned long) (ppad[ix] ? SvREFCNT(ppad[ix]) : 0),
-		    (long)U_32(SvNVX(namesv)),
-		    (long)SvIVX(namesv),
+		    (unsigned long)COP_SEQ_RANGE_LOW(namesv),
+		    (unsigned long)COP_SEQ_RANGE_HIGH(namesv),
 		    SvPVX_const(namesv)
 		);
 	}
@@ -1450,8 +1455,7 @@ Perl_cv_clone(pTHX_ CV *proto)
     ENTER;
     SAVESPTR(PL_compcv);
 
-    cv = PL_compcv = (CV*)newSV(0);
-    sv_upgrade((SV *)cv, SvTYPE(proto));
+    cv = PL_compcv = (CV*)newSV_type(SvTYPE(proto));
     CvFLAGS(cv) = CvFLAGS(proto) & ~(CVf_CLONE|CVf_WEAKOUTSIDE);
     CvCLONED_on(cv);
 
@@ -1488,7 +1492,7 @@ Perl_cv_clone(pTHX_ CV *proto)
 	SV *sv = NULL;
 	if (namesv && namesv != &PL_sv_undef) { /* lexical */
 	    if (SvFAKE(namesv)) {   /* lexical from outside? */
-		sv = outpad[(I32)SvNVX(namesv)];
+		sv = outpad[PARENT_PAD_INDEX(namesv)];
 		assert(sv);
 		/* formats may have an inactive parent */
 		if (SvTYPE(proto) == SVt_PVFM && SvPADSTALE(sv)) {
@@ -1497,8 +1501,8 @@ Perl_cv_clone(pTHX_ CV *proto)
 			    "Variable \"%s\" is not available", SvPVX_const(namesv));
 		    sv = NULL;
 		}
-		else {
-		    assert(!SvPADSTALE(sv));
+		/* 'my $x if $y' can leave $x stale even in an active sub */
+		else if (!SvPADSTALE(sv)) {
 		    SvREFCNT_inc_simple_void_NN(sv);
 		}
 	    }
@@ -1615,7 +1619,10 @@ Perl_pad_push(pTHX_ PADLIST *padlist, int depth)
 	for ( ;ix > 0; ix--) {
 	    if (names_fill >= ix && names[ix] != &PL_sv_undef) {
 		const char sigil = SvPVX_const(names[ix])[0];
-		if ((SvFLAGS(names[ix]) & SVf_FAKE) || sigil == '&') {
+		if ((SvFLAGS(names[ix]) & SVf_FAKE)
+			|| (SvFLAGS(names[ix]) & SVpad_STATE)
+			|| sigil == '&')
+		{
 		    /* outer lexical or anon code */
 		    av_store(newpad, ix, SvREFCNT_inc(oldpad[ix]));
 		}

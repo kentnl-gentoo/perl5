@@ -1,7 +1,7 @@
 /*    pp_sort.c
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1525,7 +1525,7 @@ PP(pp_sort)
 		    SV *tmpstr = sv_newmortal();
 		    gv_efullname3(tmpstr, gv, NULL);
 		    DIE(aTHX_ "Undefined sort subroutine \"%"SVf"\" called",
-			(void*)tmpstr);
+			SVfARG(tmpstr));
 		}
 		else {
 		    DIE(aTHX_ "Undefined subroutine in sort");
@@ -1770,12 +1770,12 @@ S_sortcv_stacked(pTHX_ SV *a, SV *b)
 	SV** ary = AvALLOC(av);
 	if (AvARRAY(av) != ary) {
 	    AvMAX(av) += AvARRAY(av) - AvALLOC(av);
-	    SvPV_set(av, (char*)ary);
+	    AvARRAY(av) = ary;
 	}
 	if (AvMAX(av) < 1) {
 	    AvMAX(av) = 1;
 	    Renew(ary,2,SV*);
-	    SvPV_set(av, (char*)ary);
+	    AvARRAY(av) = ary;
 	}
     }
     AvFILLp(av) = 1;

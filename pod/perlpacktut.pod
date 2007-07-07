@@ -623,7 +623,7 @@ characters that are used in several European languages is in the next
 range, up to 255. After some more Latin extensions we find the character
 sets from languages using non-Roman alphabets, interspersed with a
 variety of symbol sets such as currency symbols, Zapf Dingbats or Braille.
-(You might want to visit L<www.unicode.org> for a look at some of
+(You might want to visit L<http://www.unicode.org/> for a look at some of
 them - my personal favourites are Telugu and Kannada.)
 
 The Unicode character sets associates characters with integers. Encoding
@@ -633,17 +633,24 @@ The UTF-8 encoding avoids this by storing the most common (from a western
 point of view) characters in a single byte while encoding the rarer
 ones in three or more bytes.
 
-So what has this got to do with C<pack>? Well, if you want to convert
-between a Unicode number and its UTF-8 representation you can do so by
-using template code C<U>. As an example, let's produce the UTF-8
-representation of the Euro currency symbol (code number 0x20AC):
+Perl uses UTF-8, internally, for most Unicode strings.
+
+So what has this got to do with C<pack>? Well, if you want to compose a
+Unicode string (that is internally encoded as UTF-8), you can do so by
+using template code C<U>. As an example, let's produce the Euro currency
+symbol (code number 0x20AC):
 
    $UTF8{Euro} = pack( 'U', 0x20AC );
+   # Equivalent to: $UTF8{Euro} = "\x{20ac}";
 
-Inspecting C<$UTF8{Euro}> shows that it contains 3 bytes: "\xe2\x82\xac". The
-round trip can be completed with C<unpack>:
+Inspecting C<$UTF8{Euro}> shows that it contains 3 bytes:
+"\xe2\x82\xac". However, it contains only 1 character, number 0x20AC.
+The round trip can be completed with C<unpack>:
 
    $Unicode{Euro} = unpack( 'U', $UTF8{Euro} );
+
+Unpacking using the C<U> template code also works on UTF-8 encoded byte
+strings.
 
 Usually you'll want to pack or unpack UTF-8 strings:
 
@@ -651,12 +658,17 @@ Usually you'll want to pack or unpack UTF-8 strings:
    my $alefbet = pack( 'U*', 0x05d0..0x05ea );
    my @hebrew = unpack( 'U*', $utf );
 
+Please note: in the general case, you're better off using
+Encode::decode_utf8 to decode a UTF-8 encoded byte string to a Perl
+Unicode string, and Encode::encode_utf8 to encode a Perl Unicode string
+to UTF-8 bytes. These functions provide means of handling invalid byte
+sequences and generally have a friendlier interface.
 
 =head2 Another Portable Binary Encoding
 
 The pack code C<w> has been added to support a portable binary data
 encoding scheme that goes way beyond simple integers. (Details can
-be found at L<Casbah.org>, the Scarab project.)  A BER (Binary Encoded
+be found at L<http://Casbah.org/>, the Scarab project.)  A BER (Binary Encoded
 Representation) compressed unsigned integer stores base 128
 digits, most significant digit first, with as few digits as possible.
 Bit eight (the high bit) is set on each byte except the last. There

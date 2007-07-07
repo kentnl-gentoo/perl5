@@ -1,5 +1,58 @@
 Revision history for Perl distribution PathTools.
 
+ - Added a workaround for auto-vivication-of-function-args Perl bug
+   (triggered by OS/2-specific code). [Ilya Zakharevich]
+
+ - Sync with a bleadperl change: miniperl can no longer use Win32::*
+   functions because it cannot load Win32.dll. [Jan Dubois]
+
+ - We only need to load ppport.h when building outside the core, so we
+   avoid using it when in the core.
+ 
+3.24 - Sun Nov 19 22:52:49 2006
+
+ - Fixed a bug in the $ENV{PWD}-updating of Cwd::chdir() when a
+   dirhandle is passed in. [Steve Peters]
+
+ - Add perl 5.005 to the list of requirements in the
+   Build.PL/Makefile.PL/META.yml.
+
+ - Add ExtUtils::CBuilder to the list of build_requires in Build.PL.
+
+ - Improved performance of canonpath() on Unix-ish platforms - on my
+   OS X laptop it looks like it's about twice as fast. [Ruslan Zakirov]
+
+3.23 - Wed Oct 11 12:11:25 2006
+
+ - Yet more Win32 fixes (sigh... seems like I'm fighting a neverending
+   waterbed...).  This time, fixed file_name_is_absolute() to know
+   what it's doing when the path includes a volume but a relative
+   path, like C:foo.txt .  This bug had impact in rel2abs() on Win32
+   too.
+
+3.22 - Mon Oct  9 21:50:52 2006
+
+ - Fixed the t/crossplatform.t test on Win32 (and possibly other
+   volume-aware platforms) now that rel2abs() always adds a drive
+   letter. [Reported by several parties]
+
+3.21 - Wed Oct  4 21:16:43 2006
+
+ - Added a bunch of X<> tags to the File::Spec docs to help
+   podindex. [Gabor Szabo]
+
+ - On Win32, abs2rel('C:\one\two\t\foo', 't\bar') should return
+   '..\foo' when the cwd is 'C:\one\two', but it wasn't noticing that
+   the two relevant volumes were the same so it would return the full
+   path 'C:\one\two\t\foo'.  This is fixed. [Spotted by Alexandr
+   Ciornii]
+
+ - On Win32, rel2abs() now always adds a volume (drive letter) if the
+   given path doesn't have a volume (drive letter or UNC volume).
+   Previously it could return a value that didn't have a volume if the
+   input was a semi-absolute path like /foo/bar instead of a
+   fully-absolute path like C:/foo/bar .
+
 3.19  Tue Jul 11 22:40:26 CDT 2006
 
  - When abs2rel() is called with two relative paths

@@ -1,5 +1,97 @@
 Revision history for Perl extension threads.
 
+-
+	- Sundry test suite fixes
+
+1.63 Tue Jun 26 21:15:27 EDT 2007
+	- Avoid double-free of the thread function
+	- Added reference in POD to perlmod section on thread safety
+	- Mention leaked and unreferenced scalar warnings in POD
+	- Removed BEGIN in threads.pm
+	- Only need to require Config
+
+1.62 Thu May 17 16:10:49 2007
+	- Fixed :all import option
+	- Fixed problems in test suite
+	- Subversion repository on Google
+
+1.61 Wed Mar 21 16:09:15 EDT 2007
+	- Fix 'list/array' context - both keywords are supported
+	- Upgraded ppport.h to Devel::PPPort 3.11
+	- Removed embed.t - unreliable
+
+1.59 Mon Feb  5 16:05:44 EST 2007
+	- POD tweaks per Wolfgang Laun
+
+1.58 Wed Jan 24 13:15:34 EST 2007
+	- Fix race conditions on thread destruction (Dave Mitchell)
+	- Ignore thread return value(s) in void context
+	- Check for missing args for 'use threads' options
+	- Check that stack size argument is numeric
+
+1.57 Wed Dec 20 13:10:26 EST 2006
+	- Fixes courtesy of Michael J. Pomraning
+	    Eliminates self joins
+	    Eliminates multiple, simultaneous joins on a thread
+	    Protects thread->state variable with mutexes
+	    Checks that OS join call is successful
+
+1.56 Fri Dec 15 12:18:47 EST 2006
+	- More fixes to test suite
+
+1.55 Fri Dec 15 11:24:46 EST 2006
+	- Fixes to test suite
+
+1.54 Thu Dec 14 14:12:30 EST 2006
+	- Added ->error() method
+
+1.53 Mon Nov 27 12:08:27 EST 2006
+	- Fix for a thread cloning bug
+	- Fixes to test suite
+
+1.52 Tue Nov 21 11:04:03 EST 2006
+	- Fix compiler warnings
+
+1.51 Wed Nov 15 14:25:30 EST 2006
+	- Thread destruction fix
+
+1.49 Fri Nov  3 08:33:28 EST 2006
+	- Fix a warning message
+
+1.48 Thu Nov  2 12:33:22 EST 2006
+	- Fix for segfault during thread destruction
+
+1.47 Mon Oct 30 16:02:53 EST 2006
+	- Fix t/thread.t crash under Win32
+	- Test multiple embedded Perl support
+
+1.46 Fri Oct 27 19:51:48 EST 2006
+	- Support multiple embedded Perls
+	- Document workaround for non-threadsafe modules
+
+1.45 Wed Oct 25 14:22:23 EDT 2006
+	- Makefile.PL changes for CORE
+	- Updated POD tests
+
+1.44 Wed Oct 11 08:55:50 EDT 2006
+	- Complain about bad import options
+	- Added example threads script
+
+1.43 Fri Oct  6 15:12:07 EDT 2006
+	- Stringify threads objects
+	- Removed 'typemap' file
+
+1.42 Mon Sep 18 11:17:13 EDT 2006
+	- Fixes to tests
+	- Move $threads::threads outside of BEGIN block
+
+1.41 Fri Sep  8 19:28:41 EST 2006
+	- Race condition fixes
+
+1.39 Tue Aug 30 12:00:00 EDT 2006
+	- Signals are safe in 5.8.0
+	- Upgraded ppport.h to Devel::PPPort 3.10
+
 1.38 Tue Aug  1 11:48:56 EDT 2006
 	- Fixes to tests
 

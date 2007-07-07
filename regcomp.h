@@ -1,19 +1,40 @@
 /*    regcomp.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2005 by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2005, 2006 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
  *
  */
+#include "regcharclass.h"
 
 typedef OP OP_4tree;			/* Will be redefined later. */
 
 
+/* Convert branch sequences to more efficient trie ops? */
 #define PERL_ENABLE_TRIE_OPTIMISATION 1
+
+/* Be really agressive about optimising patterns with trie sequences? */
 #define PERL_ENABLE_EXTENDED_TRIE_OPTIMISATION 1
+
+/* Should the optimiser take positive assertions into account? */
+#define PERL_ENABLE_POSITIVE_ASSERTION_STUDY 0
+
+/* Not for production use: */
 #define PERL_ENABLE_EXPERIMENTAL_REGEX_OPTIMISATIONS 0
+
+/* Activate offsets code - set to if 1 to enable */
+#ifdef DEBUGGING
+#define RE_TRACK_PATTERN_OFFSETS
+#endif
+
+/* Unless the next line is uncommented it is illegal to combine lazy 
+   matching with possessive matching. Frankly it doesn't make much sense 
+   to allow it as X*?+ matches nothing, X+?+ matches a single char only, 
+   and X{min,max}?+ matches min times only.
+ */
+/* #define REG_ALLOW_MINMOD_SUSPEND */
 
 /*
  * The "internal use only" fields in regexp.h are present to pass info from
@@ -78,6 +99,49 @@ typedef OP OP_4tree;			/* Will be redefined later. */
  * stored negative.]
  */
 
+/* This is the stuff that used to live in regexp.h that was truly
+   private to the engine itself. It now lives here. */
+
+
+
+ typedef struct regexp_internal {
+        int name_list_idx;	/* Optional data index of an array of paren names */
+        union {
+	    U32 *offsets;           /* offset annotations 20001228 MJD
+                                       data about mapping the program to the
+                                       string -
+                                       offsets[0] is proglen when this is used
+                                       */
+            U32 proglen;
+        } u;
+
+        regnode *regstclass;    /* Optional startclass as identified or constructed
+                                   by the optimiser */
+        struct reg_data *data;	/* Additional miscellaneous data used by the program.
+                                   Used to make it easier to clone and free arbitrary
+                                   data that the regops need. Often the ARG field of
+                                   a regop is an index into this structure */
+	regnode program[1];	/* Unwarranted chumminess with compiler. */
+} regexp_internal;
+
+#define RXi_SET(x,y) (x)->pprivate = (void*)(y)   
+#define RXi_GET(x)   ((regexp_internal *)((x)->pprivate))
+#define RXi_GET_DECL(r,ri) regexp_internal *ri = RXi_GET(r)
+/*
+ * Flags stored in regexp->intflags
+ * These are used only internally to the regexp engine
+ *
+ * See regexp.h for flags used externally to the regexp engine
+ */
+#define PREGf_SKIP		0x00000001
+#define PREGf_IMPLICIT		0x00000002 /* Converted .* to ^.* */
+#define PREGf_NAUGHTY		0x00000004 /* how exponential is this pattern? */
+#define PREGf_VERBARG_SEEN	0x00000008
+#define PREGf_CUTGROUP_SEEN	0x00000010
+
+
+/* this is where the old regcomp.h started */
+
 struct regnode_string {
     U8	str_len;
     U8  type;
@@ -85,6 +149,8 @@ struct regnode_string {
     char string[1];
 };
 
+/* Argument bearing node - workhorse, 
+   arg1 is often for the data field */
 struct regnode_1 {
     U8	flags;
     U8  type;
@@ -92,6 +158,16 @@ struct regnode_1 {
     U32 arg1;
 };
 
+/* Similar to a regnode_1 but with an extra signed argument */
+struct regnode_2L {
+    U8	flags;
+    U8  type;
+    U16 next_off;
+    U32 arg1;
+    I32 arg2;
+};
+
+/* 'Two field' -- Two 16 bit unsigned args */
 struct regnode_2 {
     U8	flags;
     U8  type;
@@ -100,9 +176,11 @@ struct regnode_2 {
     U16 arg2;
 };
 
-#define ANYOF_BITMAP_SIZE	32	/* 256 b/(8 b/B) */
-#define ANYOF_CLASSBITMAP_SIZE	 4	/* up to 32 (8*4) named classes */
 
+#define ANYOF_BITMAP_SIZE	32	/* 256 b/(8 b/B) */
+#define ANYOF_CLASSBITMAP_SIZE	 4	/* up to 40 (8*5) named classes */
+
+/* also used by trie */
 struct regnode_charclass {
     U8	flags;
     U8  type;
@@ -152,9 +230,12 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define ARG(p) ARG_VALUE(ARG_LOC(p))
 #define ARG1(p) ARG_VALUE(ARG1_LOC(p))
 #define ARG2(p) ARG_VALUE(ARG2_LOC(p))
+#define ARG2L(p) ARG_VALUE(ARG2L_LOC(p))
+
 #define ARG_SET(p, val) ARG__SET(ARG_LOC(p), (val))
 #define ARG1_SET(p, val) ARG__SET(ARG1_LOC(p), (val))
 #define ARG2_SET(p, val) ARG__SET(ARG2_LOC(p), (val))
+#define ARG2L_SET(p, val) ARG__SET(ARG2L_LOC(p), (val))
 
 #undef NEXT_OFF
 #undef NODE_ALIGN
@@ -187,6 +268,8 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define	ARG_LOC(p)	(((struct regnode_1 *)p)->arg1)
 #define	ARG1_LOC(p)	(((struct regnode_2 *)p)->arg1)
 #define	ARG2_LOC(p)	(((struct regnode_2 *)p)->arg2)
+#define ARG2L_LOC(p)	(((struct regnode_2L *)p)->arg2)
+
 #define NODE_STEP_REGNODE	1	/* sizeof(regnode)/sizeof(regnode) */
 #define EXTRA_STEP_2ARGS	EXTRA_SIZE(struct regnode_2)
 
@@ -263,6 +346,14 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 
 #define ANYOF_MAX	32
 
+/* pseudo classes, not stored in the class bitmap, but used as flags
+   during compilation of char classes */
+
+#define ANYOF_VERTWS	(ANYOF_MAX+1)
+#define ANYOF_NVERTWS	(ANYOF_MAX+2)
+#define ANYOF_HORIZWS	(ANYOF_MAX+3)
+#define ANYOF_NHORIZWS	(ANYOF_MAX+4)
+
 /* Backward source code compatibility. */
 
 #define ANYOF_ALNUML	 ANYOF_ALNUM
@@ -288,7 +379,7 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define ANYOF_BITMAP_ZERO(ret)	Zero(((struct regnode_charclass*)(ret))->bitmap, ANYOF_BITMAP_SIZE, char)
 
 #define ANYOF_BITMAP(p)		(((struct regnode_charclass*)(p))->bitmap)
-#define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[((c) >> 3) & 31])
+#define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[(((U8)(c)) >> 3) & 31])
 #define ANYOF_BITMAP_SET(p, c)	(ANYOF_BITMAP_BYTE(p, c) |=  ANYOF_BIT(c))
 #define ANYOF_BITMAP_CLEAR(p,c)	(ANYOF_BITMAP_BYTE(p, c) &= ~ANYOF_BIT(c))
 #define ANYOF_BITMAP_TEST(p, c)	(ANYOF_BITMAP_BYTE(p, c) &   ANYOF_BIT(c))
@@ -304,6 +395,7 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define ANYOF_SKIP		((ANYOF_SIZE - 1)/sizeof(regnode))
 #define ANYOF_CLASS_SKIP	((ANYOF_CLASS_SIZE - 1)/sizeof(regnode))
 #define ANYOF_CLASS_ADD_SKIP	(ANYOF_CLASS_SKIP - ANYOF_SKIP)
+
 
 /*
  * Utility definitions.
@@ -322,6 +414,11 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define REG_SEEN_EVAL		0x00000008
 #define REG_SEEN_CANY		0x00000010
 #define REG_SEEN_SANY		REG_SEEN_CANY /* src bckwrd cmpt */
+#define REG_SEEN_RECURSE        0x00000020
+#define REG_TOP_LEVEL_BRANCHES  0x00000040
+#define REG_SEEN_VERBARG        0x00000080
+#define REG_SEEN_CUTGROUP       0x00000100
+#define REG_SEEN_RUN_ON_COMMENT 0x00000200
 
 START_EXTERN_C
 
@@ -337,7 +434,9 @@ EXTCONST U8 PL_varies[];
 #else
 EXTCONST U8 PL_varies[] = {
     BRANCH, BACK, STAR, PLUS, CURLY, CURLYX, REF, REFF, REFFL,
-    WHILEM, CURLYM, CURLYN, BRANCHJ, IFTHEN, SUSPEND, CLUMP, 0
+    WHILEM, CURLYM, CURLYN, BRANCHJ, IFTHEN, SUSPEND, CLUMP,
+    NREF, NREFF, NREFFL,
+    0
 };
 #endif
 
@@ -354,17 +453,38 @@ EXTCONST U8 PL_simple[] = {
     SPACE,	SPACEL,
     NSPACE,	NSPACEL,
     DIGIT,	NDIGIT,
+    VERTWS,     NVERTWS,
+    HORIZWS,    NHORIZWS,
     0
 };
 #endif
 
+#ifndef PLUGGABLE_RE_EXTENSION
+#ifndef DOINIT
+EXTCONST regexp_engine PL_core_reg_engine;
+#else /* DOINIT */
+EXTCONST regexp_engine PL_core_reg_engine = { 
+        Perl_re_compile,
+        Perl_regexec_flags,
+        Perl_re_intuit_start,
+        Perl_re_intuit_string, 
+        Perl_regfree_internal,
+        Perl_reg_numbered_buff_fetch,
+        Perl_reg_numbered_buff_store,
+        Perl_reg_numbered_buff_length,
+        Perl_reg_named_buff,
+        Perl_reg_named_buff_iter,
+        Perl_reg_qr_package,
+#if defined(USE_ITHREADS)        
+        Perl_regdupe_internal
+#endif        
+};
+#endif /* DOINIT */
+#endif /* PLUGGABLE_RE_EXTENSION */
+
+
 END_EXTERN_C
 
-typedef struct re_scream_pos_data_s
-{
-    char **scream_olds;		/* match pos */
-    I32 *scream_pos;		/* Internal iterator of scream. */
-} re_scream_pos_data;
 
 /* .what is a character array with one character for each member of .data
  * The character describes the function of the corresponding .data item:
@@ -372,11 +492,14 @@ typedef struct re_scream_pos_data_s
  *   n - Root of op tree for (?{EVAL}) item
  *   o - Start op for (?{EVAL}) item
  *   p - Pad for (?{EVAL}) item
- *   s - swash for unicode-style character class, and the multicharacter
+ *   s - swash for Unicode-style character class, and the multicharacter
  *       strings resulting from casefolding the single-character entries
  *       in the character class
  *   t - trie struct
+ *   u - trie struct's widecharmap (a HV, so can't share, must dup)
+ *       also used for revcharmap and words under DEBUGGING
  *   T - aho-trie struct
+ *   S - sv for named capture lookup
  * 20010712 mjd@plover.com
  * (Remember to update re_dup() and pregfree() if you add any items.)
  */
@@ -386,28 +509,24 @@ struct reg_data {
     void* data[1];
 };
 
-struct reg_substr_datum {
-    I32 min_offset;
-    I32 max_offset;
-    SV *substr;		/* non-utf8 variant */
-    SV *utf8_substr;	/* utf8 variant */
-};
-
-struct reg_substr_data {
-    struct reg_substr_datum data[3];	/* Actual array */
-};
-
+/* Code in S_to_utf8_substr() and S_to_byte_substr() in regexec.c accesses
+   anchored* and float* via array indexes 0 and 1.  */
 #define anchored_substr substrs->data[0].substr
 #define anchored_utf8 substrs->data[0].utf8_substr
 #define anchored_offset substrs->data[0].min_offset
+#define anchored_end_shift substrs->data[0].end_shift
+
 #define float_substr substrs->data[1].substr
 #define float_utf8 substrs->data[1].utf8_substr
 #define float_min_offset substrs->data[1].min_offset
 #define float_max_offset substrs->data[1].max_offset
+#define float_end_shift substrs->data[1].end_shift
+
 #define check_substr substrs->data[2].substr
 #define check_utf8 substrs->data[2].utf8_substr
 #define check_offset_min substrs->data[2].min_offset
 #define check_offset_max substrs->data[2].max_offset
+#define check_end_shift substrs->data[2].end_shift
 
 
 
@@ -452,35 +571,53 @@ typedef struct _reg_trie_trans    reg_trie_trans;
 
 
 /* anything in here that needs to be freed later
-   should be dealt with in pregfree */
+   should be dealt with in pregfree.
+   refcount is first in both this and _reg_ac_data to allow a space
+   optimisation in Perl_regdupe.  */
 struct _reg_trie_data {
-    U16              uniquecharcount;
-    U32              lasttrans;
-    U16              *charmap;
-    HV               *widecharmap;
-    reg_trie_state   *states;
-    reg_trie_trans   *trans;
-    char             *bitmap;
-    U32              refcount;
-    U32              startstate;
-    STRLEN           minlen;
-    STRLEN           maxlen;
-    U32              *wordlen;
-    U32              laststate;   /* Build only */
+    U32             refcount;        /* number of times this trie is referenced */
+    U32             lasttrans;       /* last valid transition element */
+    U16             *charmap;        /* byte to charid lookup array */
+    reg_trie_state  *states;         /* state data */
+    reg_trie_trans  *trans;          /* array of transition elements */
+    char            *bitmap;         /* stclass bitmap */
+    U32             *wordlen;        /* array of lengths of words */
+    U16 	    *jump;           /* optional 1 indexed array of offsets before tail 
+                                        for the node following a given word. */
+    U16	            *nextword;       /* optional 1 indexed array to support linked list
+                                        of duplicate wordnums */
+    U16             uniquecharcount; /* unique chars in trie (width of trans table) */
+    U32             startstate;      /* initial state - used for common prefix optimisation */
+    STRLEN          minlen;          /* minimum length of words in trie - build/opt only? */
+    STRLEN          maxlen;          /* maximum length of words in trie - build/opt only? */
+    U32             statecount;      /* Build only - number of states in the states array 
+                                        (including the unused zero state) */
+    U32             wordcount;       /* Build only */
 #ifdef DEBUGGING
-    U16              wordcount;   /* Build only */
-    STRLEN           charcount;   /* Build only */
-    AV               *words;
-    AV               *revcharmap;
+    STRLEN          charcount;       /* Build only */
 #endif
 };
+/* There is one (3 under DEBUGGING) pointers that logically belong in this
+   structure, but are held outside as they need duplication on thread cloning,
+   whereas the rest of the structure can be read only:
+    HV              *widecharmap;    code points > 255 to charid
+#ifdef DEBUGGING
+    AV              *words;          Array of words contained in trie, for dumping
+    AV              *revcharmap;     Map of each charid back to its character representation
+#endif
+*/
+
+#define TRIE_WORDS_OFFSET 2
+
 typedef struct _reg_trie_data reg_trie_data;
 
+/* refcount is first in both this and _reg_trie_data to allow a space
+   optimisation in Perl_regdupe.  */
 struct _reg_ac_data {
+    U32              refcount;
+    U32              trie;
     U32              *fail;
     reg_trie_state   *states;
-    reg_trie_data    *trie;
-    U32              refcount;
 };
 typedef struct _reg_ac_data reg_ac_data;
 
@@ -489,11 +626,17 @@ typedef struct _reg_ac_data reg_ac_data;
    three different sets... */
 
 #define TRIE_BITMAP(p)		(((reg_trie_data *)(p))->bitmap)
-#define TRIE_BITMAP_BYTE(p, c)	(TRIE_BITMAP(p)[(((U8)c) >> 3) & 31])
+#define TRIE_BITMAP_BYTE(p, c)	(TRIE_BITMAP(p)[(((U8)(c)) >> 3) & 31])
 #define TRIE_BITMAP_SET(p, c)	(TRIE_BITMAP_BYTE(p, c) |=  ANYOF_BIT((U8)c))
 #define TRIE_BITMAP_CLEAR(p,c)	(TRIE_BITMAP_BYTE(p, c) &= ~ANYOF_BIT((U8)c))
 #define TRIE_BITMAP_TEST(p, c)	(TRIE_BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
 
+#define IS_ANYOF_TRIE(op) ((op)==TRIEC || (op)==AHOCORASICKC)
+#define IS_TRIE_AC(op) ((op)>=AHOCORASICK)
+
+
+#define BITMAP_BYTE(p, c)	(((U8*)p)[(((U8)(c)) >> 3) & 31])
+#define BITMAP_TEST(p, c)	(BITMAP_BYTE(p, c) &   ANYOF_BIT((U8)c))
 
 /* these defines assume uniquecharcount is the correct variable, and state may be evaluated twice */
 #define TRIE_NODENUM(state) (((state)-1)/(trie->uniquecharcount)+1)
@@ -501,16 +644,9 @@ typedef struct _reg_ac_data reg_ac_data;
 #define TRIE_NODEIDX(state) ((state) ? (((state)-1)*(trie->uniquecharcount)+1) : (state))
 
 #ifdef DEBUGGING
-#define TRIE_WORDCOUNT(trie) ((trie)->wordcount)
 #define TRIE_CHARCOUNT(trie) ((trie)->charcount)
-#define TRIE_LASTSTATE(trie) ((trie)->laststate)
-#define TRIE_REVCHARMAP(trie) ((trie)->revcharmap)
 #else
-#define TRIE_WORDCOUNT(trie) (trie_wordcount)
 #define TRIE_CHARCOUNT(trie) (trie_charcount)
-/*#define TRIE_LASTSTATE(trie) (trie_laststate)*/
-#define TRIE_LASTSTATE(trie) ((trie)->laststate)
-#define TRIE_REVCHARMAP(trie) (trie_revcharmap)
 #endif
 
 #define RE_TRIE_MAXBUF_INIT 65536
@@ -555,7 +691,7 @@ re.pm, especially to the documentation.
 #define RE_DEBUG_COMPILE_OPTIMISE  0x000002
 #define RE_DEBUG_COMPILE_TRIE      0x000004
 #define RE_DEBUG_COMPILE_DUMP      0x000008
-#define RE_DEBUG_COMPILE_OFFSETS   0x000010
+#define RE_DEBUG_COMPILE_FLAGS     0x000010
 
 /* Execute */
 #define RE_DEBUG_EXECUTE_MASK      0x00FF00
@@ -567,7 +703,12 @@ re.pm, especially to the documentation.
 #define RE_DEBUG_EXTRA_MASK        0xFF0000
 #define RE_DEBUG_EXTRA_TRIE        0x010000
 #define RE_DEBUG_EXTRA_OFFSETS     0x020000
-#define RE_DEBUG_EXTRA_STATE       0x040000
+#define RE_DEBUG_EXTRA_OFFDEBUG    0x040000
+#define RE_DEBUG_EXTRA_STATE       0x080000
+#define RE_DEBUG_EXTRA_OPTIMISE    0x100000
+#define RE_DEBUG_EXTRA_BUFFERS     0x400000
+/* combined */
+#define RE_DEBUG_EXTRA_STACK       0x280000
 
 #define RE_DEBUG_FLAG(x) (re_debug_flags & x)
 /* Compile */
@@ -581,11 +722,10 @@ re.pm, especially to the documentation.
     if (re_debug_flags & RE_DEBUG_COMPILE_PARSE) x  )
 #define DEBUG_DUMP_r(x) DEBUG_r( \
     if (re_debug_flags & RE_DEBUG_COMPILE_DUMP) x  )
-#define DEBUG_OFFSETS_r(x) DEBUG_r( \
-    if (re_debug_flags & RE_DEBUG_COMPILE_OFFSETS) x  )
 #define DEBUG_TRIE_COMPILE_r(x) DEBUG_r( \
     if (re_debug_flags & RE_DEBUG_COMPILE_TRIE) x )
-
+#define DEBUG_FLAGS_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_COMPILE_FLAGS) x )
 /* Execute */
 #define DEBUG_EXECUTE_r(x) DEBUG_r( \
     if (re_debug_flags & RE_DEBUG_EXECUTE_MASK) x  )
@@ -599,10 +739,20 @@ re.pm, especially to the documentation.
 /* Extra */
 #define DEBUG_EXTRA_r(x) DEBUG_r( \
     if (re_debug_flags & RE_DEBUG_EXTRA_MASK) x  )
+#define DEBUG_OFFSETS_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_OFFSETS) x  )
 #define DEBUG_STATE_r(x) DEBUG_r( \
     if (re_debug_flags & RE_DEBUG_EXTRA_STATE) x )
+#define DEBUG_STACK_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_STACK) x )
+#define DEBUG_BUFFERS_r(x) DEBUG_r( \
+    if (re_debug_flags & RE_DEBUG_EXTRA_BUFFERS) x )
+
+#define DEBUG_OPTIMISE_MORE_r(x) DEBUG_r( \
+    if ((RE_DEBUG_EXTRA_OPTIMISE|RE_DEBUG_COMPILE_OPTIMISE) == \
+         (re_debug_flags & (RE_DEBUG_EXTRA_OPTIMISE|RE_DEBUG_COMPILE_OPTIMISE)) ) x )
 #define MJD_OFFSET_DEBUG(x) DEBUG_r( \
-    if (re_debug_flags & RE_DEBUG_EXTRA_OFFSETS) \
+    if (re_debug_flags & RE_DEBUG_EXTRA_OFFDEBUG) \
         Perl_warn_nocontext x )
 #define DEBUG_TRIE_COMPILE_MORE_r(x) DEBUG_TRIE_COMPILE_r( \
     if (re_debug_flags & RE_DEBUG_EXTRA_TRIE) x )
@@ -633,22 +783,22 @@ re.pm, especially to the documentation.
     const char * const rpv =                          \
         pv_pretty((dsv), (pv), (l), (m), \
             PL_colors[(c1)],PL_colors[(c2)], \
-            ((isuni) ? PERL_PV_ESCAPE_UNI : 0) );         \
+            PERL_PV_ESCAPE_RE |((isuni) ? PERL_PV_ESCAPE_UNI : 0) );         \
     const int rlen = SvCUR(dsv)
 
 #define RE_SV_ESCAPE(rpv,isuni,dsv,sv,m) \
     const char * const rpv =                          \
         pv_pretty((dsv), (SvPV_nolen_const(sv)), (SvCUR(sv)), (m), \
             PL_colors[(c1)],PL_colors[(c2)], \
-            ((isuni) ? PERL_PV_ESCAPE_UNI : 0) )
+            PERL_PV_ESCAPE_RE |((isuni) ? PERL_PV_ESCAPE_UNI : 0) )
 
 #define RE_PV_QUOTED_DECL(rpv,isuni,dsv,pv,l,m)                    \
     const char * const rpv =                                       \
         pv_pretty((dsv), (pv), (l), (m), \
             PL_colors[0], PL_colors[1], \
-            ( PERL_PV_PRETTY_QUOTE | PERL_PV_PRETTY_ELIPSES |      \
+            ( PERL_PV_PRETTY_QUOTE | PERL_PV_ESCAPE_RE | PERL_PV_PRETTY_ELIPSES |      \
               ((isuni) ? PERL_PV_ESCAPE_UNI : 0))                  \
-        )                                                  
+        )
 
 #define RE_SV_DUMPLEN(ItEm) (SvCUR(ItEm) - (SvTAIL(ItEm)!=0))
 #define RE_SV_TAIL(ItEm) (SvTAIL(ItEm) ? "$" : "")
@@ -663,4 +813,6 @@ re.pm, especially to the documentation.
 #define RE_SV_TAIL(ItEm)
 
 #endif /* DEBUG RELATED DEFINES */
+
+
 

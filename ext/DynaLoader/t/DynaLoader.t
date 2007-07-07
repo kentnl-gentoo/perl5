@@ -12,16 +12,28 @@ use Config;
 use Test::More;
 my %modules;
 
+my $db_file;
+BEGIN {
+    use Config;
+    foreach (qw/SDBM_File GDBM_File ODBM_File NDBM_File DB_File/) {
+        if ($Config{extensions} =~ /\b$_\b/) {
+            $db_file = $_;
+            last;
+        }
+    }
+}
+
 %modules = (
    # ModuleName  => q| code to check that it was loaded |,
+    'List::Util' => q| ::is( ref List::Util->can('first'), 'CODE' ) |,  # 5.7.2
     'Cwd'        => q| ::is( ref Cwd->can('fastcwd'),'CODE' ) |,         # 5.7 ?
     'File::Glob' => q| ::is( ref File::Glob->can('doglob'),'CODE' ) |,   # 5.6
-    'SDBM_File'  => q| ::is( ref SDBM_File->can('TIEHASH'), 'CODE' ) |,  # 5.0
+    $db_file     => q| ::is( ref $db_file->can('TIEHASH'), 'CODE' ) |,  # 5.0
     'Socket'     => q| ::is( ref Socket->can('inet_aton'),'CODE' ) |,    # 5.0
     'Time::HiRes'=> q| ::is( ref Time::HiRes->can('usleep'),'CODE' ) |,  # 5.7.3
 );
 
-plan tests => 27 + keys(%modules) * 2;
+plan tests => 22 + keys(%modules) * 3;
 
 
 # Try to load the module
@@ -37,7 +49,7 @@ can_ok( 'DynaLoader' => 'dl_load_file'            ); # defined in XS section
 can_ok( 'DynaLoader' => 'dl_load_flags'           ); # defined in Perl section
 can_ok( 'DynaLoader' => 'dl_undef_symbols'        ); # defined in XS section
 SKIP: {
-    skip "unloading unsupported on VMS", 1 if $^O eq 'VMS';
+    skip "unloading unsupported on $^O", 1 if ($^O eq 'VMS' || $^O eq 'darwin');
     can_ok( 'DynaLoader' => 'dl_unload_file'          ); # defined in XS section
 }
 
@@ -89,7 +101,7 @@ SKIP: {
     # (not at least by that name) that the dl_findfile()
     # could find.
     skip "dl_findfile test not appropriate on $^O", 1
-	if $^O =~ /(win32|vms)/i;
+	if $^O =~ /(win32|vms|openbsd|cygwin)/i;
     # Play safe and only try this test if this system
     # looks pretty much Unix-like.
     skip "dl_findfile test not appropriate on $^O", 1
@@ -98,12 +110,15 @@ SKIP: {
 }
 
 # Now try to load well known XS modules
-my $extensions = $Config{'extensions'};
+my $extensions = $Config{'dynamic_ext'};
 $extensions =~ s|/|::|g;
 
 for my $module (sort keys %modules) {
     SKIP: {
-        skip "$module not available", 1 if $extensions !~ /\b$module\b/;
+        if ($extensions !~ /\b$module\b/) {
+            delete($modules{$module});
+            skip "$module not available", 3;
+        }
         eval "use $module";
         is( $@, '', "loading $module" );
     }
@@ -116,7 +131,7 @@ is( scalar @DynaLoader::dl_modules, scalar keys %modules, "checking number of it
 my @loaded_modules = @DynaLoader::dl_modules;
 for my $libref (reverse @DynaLoader::dl_librefs) {
   SKIP: {
-    skip "unloading unsupported on VMS", 2 if $^O eq 'VMS';
+    skip "unloading unsupported on $^O", 2 if ($^O eq 'VMS' || $^O eq 'darwin');
     my $module = pop @loaded_modules;
     my $r = eval { DynaLoader::dl_unload_file($libref) };
     is( $@, '', "calling dl_unload_file() for $module" );

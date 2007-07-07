@@ -1,5 +1,12 @@
 #!/usr/bin/perl -w
 
+BEGIN {
+   if( $ENV{PERL_CORE} ) {
+        chdir 't' if -d 't';
+        @INC = qw(../lib);
+    }
+}
+
 my ($Has_PH, $Field);
 BEGIN { 
     $Has_PH = $] < 5.009;
@@ -64,8 +71,8 @@ use base qw(M B2);
 # Test that multiple inheritance fails.
 package D6;
 eval { 'base'->import(qw(B2 M B3)); };
-::like($@, qr/can't multiply inherit %FIELDS/i, 
-                                        'No multiple field inheritance');
+::like($@, qr/can't multiply inherit fields/i, 
+    'No multiple field inheritance');
 
 package Foo::Bar;
 use base 'B1';
@@ -162,16 +169,19 @@ like $@,
     qr/^No such $Field "notthere" in variable \$obj3 of type D3/,
     "Compile failure of undeclared fields (helem)";
 
-# Slices
-# We should get compile time failures field name typos
-eval q(return; my D3 $obj3 = $obj2; my $k; @$obj3{$k,'notthere'} = ());
-like $@, 
-    qr/^No such $Field "notthere" in variable \$obj3 of type D3/,
-    "Compile failure of undeclared fields (hslice)";
-eval q(return; my D3 $obj3 = $obj2; my $k; @{$obj3}{$k,'notthere'} = ());
-like 
-    $@, qr/^No such $Field "notthere" in variable \$obj3 of type D3/,
-    "Compile failure of undeclared fields (hslice (block form))";
+SKIP: {
+    # Slices
+    # We should get compile time failures field name typos
+    skip "Doesn't work before 5.9", 2 if $] < 5.009;
+    eval q(return; my D3 $obj3 = $obj2; my $k; @$obj3{$k,'notthere'} = ());
+    like $@, 
+	qr/^No such $Field "notthere" in variable \$obj3 of type D3/,
+	"Compile failure of undeclared fields (hslice)";
+    eval q(return; my D3 $obj3 = $obj2; my $k; @{$obj3}{$k,'notthere'} = ());
+    like 
+	$@, qr/^No such $Field "notthere" in variable \$obj3 of type D3/,
+	"Compile failure of undeclared fields (hslice (block form))";
+}
 
 @$obj1{"_b1", "b1"} = (17, 29);
 is( $obj1->{_b1}, 17 );
@@ -197,7 +207,7 @@ eval {
     require base;
     'base'->import(qw(E1 E2));
 };
-::like( $@, qr/Can't multiply inherit %FIELDS/i, 'Again, no multi inherit' );
+::like( $@, qr/Can't multiply inherit fields/i, 'Again, no multi inherit' );
 
 
 # Test that a package with no fields can inherit from a package with

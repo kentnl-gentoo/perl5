@@ -10,7 +10,7 @@ BEGIN {
     require "./test.pl";
 }
 
-plan tests => 109;
+plan tests => 111;
 
 $a = {};
 bless $a, "Bob";
@@ -114,7 +114,7 @@ ok ! $a->can("export_tags");	# a method in Exporter
 cmp_ok eval { $a->VERSION }, '==', 2.718;
 
 ok ! (eval { $a->VERSION(2.719) });
-like $@, qr/^Alice version 2.719 \(v2\.719\.0\) required--this is only version 2.718 \(v2\.718\.0\) at /;
+like $@, qr/^Alice version 2.719 required--this is only version 2.718 at /;
 
 ok (eval { $a->VERSION(2.718) });
 is $@, '';
@@ -216,3 +216,15 @@ ok( Bar->DOES( 'Bar' ), '... and should fall back to isa()' );
 ok( Bar->DOES( 'Foo' ), '... even when inherited' );
 ok( Baz->DOES( 'Baz' ), '... even without inheriting any other DOES()' );
 ok( ! Baz->DOES( 'Foo' ), '... returning true or false appropriately' );
+
+package Pig;
+package Bodine;
+Bodine->isa('Pig');
+*isa = \&UNIVERSAL::isa;
+eval { isa({}, 'HASH') };
+::is($@, '', "*isa correctly found");
+
+package main;
+eval { UNIVERSAL::DOES([], "foo") };
+like( $@, qr/Can't call method "DOES" on unblessed reference/,
+    'DOES call error message says DOES, not isa' );

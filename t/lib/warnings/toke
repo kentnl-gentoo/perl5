@@ -279,9 +279,14 @@ Possible attempt to put comments in qw() list at - line 3.
 ########
 # toke.c
 use warnings 'syntax' ;
-print ("")
+print ("");
+print ("") and $x = 1;
+print ("") or die;
+print ("") // die;
+print (1+2) * 3 if 0; # only this one should warn
+print (1+2) if 0;
 EXPECT
-print (...) interpreted as function at - line 3.
+print (...) interpreted as function at - line 7.
 ########
 # toke.c
 no warnings 'syntax' ;
@@ -291,9 +296,10 @@ EXPECT
 ########
 # toke.c
 use warnings 'syntax' ;
-printf ("")
+printf ("");
+printf ("") . '';
 EXPECT
-printf (...) interpreted as function at - line 3.
+printf (...) interpreted as function at - line 4.
 ########
 # toke.c
 no warnings 'syntax' ;
@@ -303,9 +309,10 @@ EXPECT
 ########
 # toke.c
 use warnings 'syntax' ;
-sort ("")
+sort ("");
+sort ("") . '';
 EXPECT
-sort (...) interpreted as function at - line 3.
+sort (...) interpreted as function at - line 4.
 ########
 # toke.c
 no warnings 'syntax' ;
@@ -588,6 +595,11 @@ Warning: Use of "rand" without parentheses is ambiguous at - line 8.
 Warning: Use of "rand" without parentheses is ambiguous at - line 10.
 ########
 # toke.c
+use warnings "ambiguous";
+print for keys %+; # should not warn
+EXPECT
+########
+# toke.c
 sub fred {};
 -fred ;
 EXPECT
@@ -735,17 +747,6 @@ no warnings 'ambiguous';
 "@mjd_previously_unused_array";        
 EXPECT
 Possible unintended interpolation of @mjd_previously_unused_array in string at - line 3.
-########
-# toke.c
-# The \q should warn, the \_ should NOT warn.
-use warnings 'misc';
-"foo" =~ /\q/;
-"bar" =~ /\_/;
-no warnings 'misc';
-"foo" =~ /\q/;
-"bar" =~ /\_/;
-EXPECT
-Unrecognized escape \q passed through at - line 4.
 ########
 # toke.c
 # 20020328 mjd-perl-patch+@plover.com at behest of jfriedl@yahoo.com

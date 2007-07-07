@@ -1,7 +1,7 @@
 /*    av.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -12,6 +12,15 @@ struct xpvav {
     union {
 	NV	xnv_nv;		/* numeric value, if any */
 	HV *	xgv_stash;
+	struct {
+	    U32	xlow;
+	    U32	xhigh;
+	}	xpad_cop_seq;	/* used by pad.c for cop_sequence */
+	struct {
+	    U32 xbm_previous;	/* how many characters in string before rare? */
+	    U8	xbm_flags;
+	    U8	xbm_rare;	/* rarest character in string */
+	}	xbm_s;		/* fields from PVBM */
     }		xnv_u;
     SSize_t	xav_fill;       /* Index of last element present */
     SSize_t	xav_max;        /* max index for which array has space */
@@ -29,9 +38,6 @@ struct xpvav {
     HV*		xmg_stash;	/* class package */
 };
 
-#if 0
-typedef struct xpvav xpvav_allocated;
-#else
 typedef struct {
     SSize_t	xav_fill;       /* Index of last element present */
     SSize_t	xav_max;        /* max index for which array has space */
@@ -48,7 +54,6 @@ typedef struct {
     } xmg_u;
     HV*		xmg_stash;	/* class package */
 } xpvav_allocated;
-#endif
 
 /* SV**	xav_alloc; */
 #define xav_alloc xiv_u.xivu_p1

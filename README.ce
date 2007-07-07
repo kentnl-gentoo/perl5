@@ -39,7 +39,7 @@ File C<Cross.pm> is dead simple: for given cross-architecture places in @INC
 a path where perl modules are, and right C<Config.pm> in that place.
 
 That said, C<miniperl -Ilib -MConfig -we 1> should report an error, because
-it can not find C<Config.pm>. If it does not gives an error -- wrong C<Config.pm>
+it can not find C<Config.pm>. If it does not give an error -- wrong C<Config.pm>
 is substituted, and resulting binaries will be a mess.
 
 C<miniperl -MCross -MConfig -we 1> should run okay, and it will provide right
@@ -53,8 +53,6 @@ each extension in turn.
 
 All invokes of C<Makefile.PL> are provided with C<-MCross> so to enable cross-
 compile.
-
-=item *
 
 =back
 
@@ -88,7 +86,7 @@ L<http://www.rainer-keuchel.de/wince/dirlist.html>
 Normally you only need to edit C<./win32/ce-helpers/compile.bat>
 to reflect your system and run it.
 
-File C<./wince/compile.bat> is actually a wrapper to call
+File C<./win32/ce-helpers/compile.bat> is actually a wrapper to call
 C<nmake -f makefile.ce> with appropriate parameters and it accepts extra
 parameters and forwards them to C<nmake> command as additional
 arguments. You should pass target this way.
@@ -99,7 +97,7 @@ To prepare distribution you need to do following:
 
 =item * go to C<./win32> subdirectory
 
-=item * edit file C<compile.bat>
+=item * edit file C<./win32/ce-helpers/compile.bat>
 
 =item * run 
   compile.bat
@@ -151,7 +149,7 @@ or just
 to refer a cross-compilation that was created last time.
 
 All questions related to building for WinCE devices could be asked in
-L<perlce-user@lists.sourceforge.net> mailing list.
+F<perlce-user@lists.sourceforge.net> mailing list.
 
 =head1 Using Perl on WinCE
 
@@ -289,8 +287,7 @@ Extension building support was added.
 Two directories C<./win32> and C<./wince> were merged, so perlce build
 process comes in C<./win32> directory.
 
-=over
-
+=back
 
 =head1 AUTHORS
 
@@ -307,4 +304,3 @@ Many thanks and obligations to Rainer!
 made further support of WinCE port.
 
 =back
-

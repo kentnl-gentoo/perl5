@@ -6,7 +6,7 @@
 
 SRCDIR     = ..
 PV         = 59
-INST_VER   = 5.9.4
+INST_VER   = 5.9.5
 
 # INSTALL_ROOT specifies a path where this perl will be installed on CE device
 INSTALL_ROOT=/netzwerk/sprache/perl
@@ -571,6 +571,7 @@ MICROCORE_SRC	=		\
 		..\dump.c	\
 		..\globals.c	\
 		..\gv.c		\
+		..\mro.c	\
 		..\hv.c		\
 		..\mg.c		\
 		..\op.c		\
@@ -650,13 +651,12 @@ CORE_NOCFG_H	=		\
 		..\EXTERN.h	\
 		..\perlvars.h	\
 		..\intrpvar.h	\
-		..\thrdvar.h	\
 		.\include\dirent.h	\
 		.\include\netdb.h	\
 		.\include\sys\socket.h	\
 		.\win32.h
 
-DYNAMIC_EXT	= Socket IO Fcntl Opcode SDBM_File POSIX attrs Thread B re \
+DYNAMIC_EXT	= Socket IO Fcntl Opcode SDBM_File POSIX attrs B re \
 		Data/Dumper Devel/Peek ByteLoader Devel/DProf File/Glob \
 		Sys/Hostname
 
@@ -710,7 +710,7 @@ all: hostminiperl $(MINIMOD) $(CONFIGPM) $(UNIDATAFILES) $(PERLEXE) MakePPPort E
 
 $(DYNALOADER)$(o) : $(DYNALOADER).c xconfig.h $(EXTDIR)\DynaLoader\dlutils.c
 
-$(CONFIGPM) : $(HPERL) ..\config.sh config_h.PL ..\minimod.pl
+$(CONFIGPM) : $(HPERL) ..\config.sh .\xconfig.h config_h.PL ..\minimod.pl
 	cd .. && $(HPERL) configpm --cross=$(CROSS_NAME) --no-glossary
 	-mkdir $(XCOREDIR)
 	$(XCOPY) ..\*.h $(XCOREDIR)\*.*
@@ -718,12 +718,12 @@ $(CONFIGPM) : $(HPERL) ..\config.sh config_h.PL ..\minimod.pl
 	$(XCOPY) *.h $(XCOREDIR)\*.*
 	$(XCOPY) ..\ext\re\re.pm $(LIBDIR)\*.*
 	$(RCOPY) include $(XCOREDIR)\*.*
-	-$(HPERL) -I..\lib -MCross=$(CROSS_NAME) config_h.PL "INST_VER=$(INST_VER)" "CORE_DIR=$(XCOREDIR)" "CONFIG_H=xconfig.h"
-	$(XCOPY) xconfig.h $(XCOREDIR)\config.h
 
 .\xconfig.h:
 	-del /f xconfig.h
-	copy config_H.ce xconfig.h
+	-mkdir $(XCOREDIR)
+	-$(HPERL) -I..\lib -MCross=$(CROSS_NAME) config_h.PL "INST_VER=$(INST_VER)" "CORE_DIR=$(XCOREDIR)" "CONFIG_H=xconfig.h"
+	$(XCOPY) xconfig.h $(XCOREDIR)\config.h
 
 ..\config.sh: config.ce config_sh.PL
 	$(HPERL) -I..\lib -I. config_sh.PL $(CFG_VARS) config.ce > ..\config.sh
@@ -747,10 +747,10 @@ $(EXTDIR)\DynaLoader\dl_win32.xs: dl_win32.xs
 	$(COPY) dl_win32.xs $(EXTDIR)\DynaLoader\dl_win32.xs
 
 MakePPPort: $(MINIPERL) $(CONFIGPM)
-	$(MINIPERL) -I..\lib ..\mkppport
+	$(HPERL) -I..\lib -MCross=$(CROSS_NAME) ..\mkppport
 
 MakePPPort_clean:
-	-if exist $(MINIPERL) $(MINIPERL) -I..\lib ..\mkppport --clean
+	-if exist $(HPERL) $(HPERL) -I..\lib ..\mkppport --clean
 
 #----------------------------------------------------------------------------------
 NOT_COMPILE_EXT =
@@ -790,6 +790,7 @@ $(DLLDIR)\doop.obj \
 $(DLLDIR)\dump.obj \
 $(DLLDIR)\globals.obj \
 $(DLLDIR)\gv.obj \
+$(DLLDIR)\mro.obj \
 $(DLLDIR)\hv.obj \
 $(DLLDIR)\locale.obj \
 $(DLLDIR)\mathoms.obj \
@@ -933,7 +934,7 @@ zip:
 	$(HPERL) -I..\lib -MCross=$(CROSS_NAME) ce-helpers\makedist.pl --distdir=dist-$(CROSS_NAME) --cross-name=$(CROSS_NAME) --zip
 
 perl.ico:
-	$(HPERL) makeico.pl perl.ico
+	$(HPERL) -I..\lib ..\uupacktool.pl -u perlexe.ico.packd perl.ico
 
 hostminiperl: ..\miniperl.exe
 

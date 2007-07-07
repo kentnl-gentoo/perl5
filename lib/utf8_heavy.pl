@@ -187,14 +187,15 @@ sub SWASHNEW {
 	    ## (exception: user-defined properties and mappings), so we
 	    ## have a filename, so now we load it if we haven't already.
 	    ## If we have, return the cached results. The cache key is the
-	    ## file to load.
+	    ## class and file to load.
 	    ##
-	    if ($Cache{$file} and ref($Cache{$file}) eq $class) {
+	    my $found = $Cache{$class, $file};
+	    if ($found and ref($found) eq $class) {
 		print STDERR "Returning cached '$file' for \\p{$type}\n" if DEBUG;
-		return $Cache{$class, $file};
+		return $found;
 	    }
 
-	    $list = do $file;
+	    $list = do $file; die $@ if $@;
 	}
 
         $ListSorted = 1; ## we know that these lists are sorted
@@ -212,7 +213,7 @@ sub SWASHNEW {
 	$list = join '',
 	    map  { $_->[1] }
 	    sort { $a->[0] <=> $b->[0] }
-	    map  { /^([0-9a-fA-F]+)/; [ hex($1), $_ ] }
+	    map  { /^([0-9a-fA-F]+)/; [ CORE::hex($1), $_ ] }
 	    grep { /^([0-9a-fA-F]+)/ and not $seen{$1}++ } @tmp; # XXX doesn't do ranges right
     }
 
@@ -224,9 +225,9 @@ sub SWASHNEW {
     if ($minbits != 1 && $minbits < 32) { # not binary property
 	my $top = 0;
 	while ($list =~ /^([0-9a-fA-F]+)(?:[\t]([0-9a-fA-F]+)?)(?:[ \t]([0-9a-fA-F]+))?/mg) {
-	    my $min = hex $1;
-	    my $max = defined $2 ? hex $2 : $min;
-	    my $val = defined $3 ? hex $3 : 0;
+	    my $min = CORE::hex $1;
+	    my $max = defined $2 ? CORE::hex $2 : $min;
+	    my $val = defined $3 ? CORE::hex $3 : 0;
 	    $val += $max - $min if defined $3;
 	    $top = $val if $val > $top;
 	}

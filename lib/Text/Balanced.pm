@@ -7,9 +7,10 @@ use strict;
 package Text::Balanced;
 
 use Exporter;
+use SelfLoader;
 use vars qw { $VERSION @ISA %EXPORT_TAGS };
 
-$VERSION = '1.98_01';
+use version; $VERSION = qv('2.0.0');
 @ISA		= qw ( Exporter );
 		     
 %EXPORT_TAGS	= ( ALL => [ qw(
@@ -36,14 +37,6 @@ sub _match_variable($$);
 sub _match_codeblock($$$$$$$);
 sub _match_quotelike($$$$);
 
-sub carp {
-  require Carp; goto &Carp::carp;
-}
-
-sub croak {
-  require Carp; goto &Carp::croak;
-}
-
 # HANDLE RETURN VALUES IN VARIOUS CONTEXTS
 
 sub _failmsg {
@@ -64,8 +57,7 @@ sub _succeed
 	$@ = undef;
 	my ($wantarray,$textref) = splice @_, 0, 2;
 	my ($extrapos, $extralen) = @_>18 ? splice(@_, -2, 2) : (0,0);
-	my ($startlen) = $_[5];
-        my $oppos = $_[6];
+	my ($startlen, $oppos) = @_[5,6];
 	my $remainderpos = $_[2];
 	if ($wantarray)
 	{
@@ -336,7 +328,7 @@ sub _match_tagged	# ($$$$$$$)
 
 	if (!defined $rdel)
 	{
-		$rdelspec = $&;
+		$rdelspec = substr($$textref, $-[0], $+[0] - $-[0]);
 		unless ($rdelspec =~ s/\A([[(<{]+)($XMLNAME).*/ quotemeta "$1\/$2". _revbracket($1) /oes)
 		{
 			_failmsg "Unable to construct closing tag to match: $rdel",
@@ -351,7 +343,8 @@ sub _match_tagged	# ($$$$$$$)
 			for (qw,~ ! ^ & * ) _ + - = } ] : " ; ' > . ? / | ',)
 				{ next if $rdel =~ /\Q$_/; $del = $_; last }
 			unless ($del) {
-				croak ("Can't interpolate right delimiter $rdel")
+				use Carp;
+				croak "Can't interpolate right delimiter $rdel"
 			}
 			eval "qq$del$rdel$del";
 		};
@@ -590,15 +583,12 @@ sub _match_codeblock($$$$$$$)
 
 
 		# NEED TO COVER MANY MORE CASES HERE!!!
-		# NB 'case' is included here, because in Switch.pm,
-		# it's followed by a term, not an op
-
 		if ($$textref =~ m#\G\s*(?!$ldel_inner)
 					( [-+*x/%^&|.]=?
 					| [!=]~
 					| =(?!>)
 					| (\*\*|&&|\|\||<<|>>)=?
-					| case|split|grep|map|return
+					| split|grep|map|return
 					| [([]
 					)#gcx)
 		{
@@ -768,7 +758,7 @@ sub _match_quotelike($$$$)	# ($textref, $prepat, $allow_raw_match)
 			return;
 		}
 		$rd1pos = pos($$textref);
-		$$textref =~ m{\Q$label\E\n}gc;
+        $$textref =~ m{\Q$label\E\n}gc;
 		$ld2pos = pos($$textref);
 		return (
 			$startpos,	$oppos-$startpos,	# PREFIX
@@ -803,13 +793,15 @@ sub _match_quotelike($$$$)	# ($textref, $prepat, $allow_raw_match)
 		$rdel1 =~ tr/[({</])}>/;
 		defined(_match_bracketed($textref,"",$ldel1,"","",$rdel1))
 		|| do { pos $$textref = $startpos; return };
+        $ld2pos = pos($$textref);
+        $rd1pos = $ld2pos-1;
 	}
 	else
 	{
-		$$textref =~ /$ldel1[^\\$ldel1]*(\\.[^\\$ldel1]*)*$ldel1/gcs
+		$$textref =~ /\G$ldel1[^\\$ldel1]*(\\.[^\\$ldel1]*)*$ldel1/gcs
 		|| do { pos $$textref = $startpos; return };
+        $ld2pos = $rd1pos = pos($$textref)-1;
 	}
-	$ld2pos = $rd1pos = pos($$textref)-1;
 
 	my $second_arg = $op =~ /s|tr|y/ ? 1 : 0;
 	if ($second_arg)
@@ -894,7 +886,8 @@ sub extract_multiple (;$$$$)	# ($text, $functions_ref, $max_fields, $ignoreunkno
 
 		unless (wantarray)
 		{
-			carp ("extract_multiple reset maximal count to 1 in scalar context")
+			use Carp;
+			carp "extract_multiple reset maximal count to 1 in scalar context"
 				if $^W && defined($_[2]) && $max > 1;
 			$max = 1
 		}
@@ -932,7 +925,10 @@ sub extract_multiple (;$$$$)	# ($text, $functions_ref, $max_fields, $ignoreunkno
 				elsif (ref($func) eq 'Text::Balanced::Extractor')
 					{ @bits = $field = $func->extract($$textref) }
 				elsif( $$textref =~ m/\G$func/gc )
-					{ @bits = $field = defined($1) ? $1 : $& }
+					{ @bits = $field = defined($1)
+                                ? $1
+                                : substr($$textref, $-[0], $+[0] - $-[0])
+                    }
 				$pref ||= "";
 				if (defined($field) && length($field))
 				{
