@@ -12,6 +12,8 @@ use Module::Build;
     plan skip_all => 'C_support not enabled';
   } elsif ( !$have_c_compiler ) {
     plan skip_all => 'C_support enabled, but no compiler found';
+  } elsif ( $^O eq 'VMS' ) {
+    plan skip_all => 'Child test output confuses harness';
   } else {
     plan tests => 22;
   }
@@ -22,7 +24,7 @@ use Module::Build;
 
 use Cwd ();
 my $cwd = Cwd::cwd;
-my $tmp = File::Spec->catdir( $cwd, 't', '_tmp' );
+my $tmp = MBTest->tmpdir;
 
 use DistGen;
 my $dist = DistGen->new( dir => $tmp, xs => 1 );
@@ -109,7 +111,7 @@ $dist->remove;
 
 # Try a XS distro with a deep namespace
 
-$dist = DistGen->new( name => 'Simple::With::Deep::Namespace',
+$dist = DistGen->new( name => 'Simple::With::Deep::Name',
 		      dir => $tmp, xs => 1 );
 $dist->regen;
 chdir( $dist->dirname ) or die "Can't chdir to '@{[$dist->dirname]}': $!";
@@ -141,19 +143,14 @@ $dist = DistGen->new( name => 'Dist-Name', dir => $tmp, xs => 1 );
 $dist->remove_file('lib/Dist-Name.pm');
 $dist->remove_file('lib/Dist-Name.xs');
 
-$dist->change_file('Build.PL', <<"---");
-use strict;
-use Module::Build;
-
-my \$builder = Module::Build->new(
+$dist->change_build_pl
+  ({
     dist_name         => 'Dist-Name',
     dist_version_from => 'Simple.pm',
     pm_files => { 'Simple.pm' => 'lib/Simple.pm' },
     xs_files => { 'Simple.xs' => 'lib/Simple.xs' },
-);
+  });
 
-\$builder->create_build_script();
----
 $dist->add_file('Simple.xs', <<"---");
 #include "EXTERN.h"
 #include "perl.h"

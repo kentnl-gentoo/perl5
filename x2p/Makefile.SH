@@ -47,7 +47,7 @@ SHELL = $sh
 
 # These variables may need to be manually set for non-Unix systems.
 AR = $ar
-EXE_EXT = $_ext
+EXE_EXT = $_exe
 LIB_EXT = $_a
 OBJ_EXT = $_o
 PATH_SEP = $p_
@@ -61,6 +61,8 @@ TRNL = '$trnl'
 OPTIMIZE = $optimize
 
 .SUFFIXES: .c \$(OBJ_EXT)
+
+RUN = $run
 
 !GROK!THIS!
 
@@ -169,7 +171,7 @@ shlist:
 # These should be automatically generated
 
 $(plextract):
-	../miniperl -I../lib $@.PL
+	$(RUN) ../miniperl -I../lib $@.PL
 
 find2perl: find2perl.PL
 

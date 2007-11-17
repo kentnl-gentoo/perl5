@@ -122,7 +122,7 @@ BEGIN { $n_tests += 5 }
     $f{ $key} = $val;
     is( $f{ $key}, $val, "plain key set in field");
     my ( $id) = keys %f;
-    my $refaddr = hex +($key =~ /\(0x([[:xdigit:]]+)\)$/)[ 0];
+    my $refaddr = refaddr($key);
     is $id, $refaddr, "key is refaddr";
     bless $key;
     is( $f{ $key}, $val, "access through blessed");
@@ -280,6 +280,29 @@ BEGIN { $n_tests += 4 }
 }
 
 {
+    # prototypes in place?
+    my %proto_tab = (
+        fieldhash   => '\\%',
+        fieldhashes => '',
+        idhash      => '\\%',
+        idhashes    => '',
+        id          => '$',
+        id_2obj     => '$',
+        register    => '$@',
+    );
+
+
+    my @notfound = grep !exists $proto_tab{ $_} =>
+        @Hash::Util::FieldHash::EXPORT_OK;
+    ok @notfound == 0, "All exports in table";
+    is prototype( "Hash::Util::FieldHash::$_") || '', $proto_tab{ $_},
+        "$_ has prototype ($proto_tab{ $_})" for
+            @Hash::Util::FieldHash::EXPORT_OK;
+
+    BEGIN { $n_tests += 1 + @Hash::Util::FieldHash::EXPORT_OK }
+}
+
+{
     BEGIN { $n_tests += 1 }
     Hash::Util::FieldHash::_fieldhash \ my( %h), $fieldhash_mode;
     bless \ %h, 'abc'; # this bus-errors with a certain bug
@@ -291,6 +314,9 @@ BEGIN { plan tests => $n_tests }
 #######################################################################
 
 sub refaddr {
+    # silence possible warnings from hex() on 64bit systems
+    no warnings 'portable';
+
     my $ref = shift;
     hex +($ref =~ /\(0x([[:xdigit:]]+)\)$/)[ 0];
 }

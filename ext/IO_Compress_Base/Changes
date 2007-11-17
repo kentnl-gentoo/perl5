@@ -1,6 +1,16 @@
 CHANGES
 -------
 
+  2.008 2 November 2007
+
+      * Minor documentation changes in README
+
+  2.006 1 September 20007
+
+      * Makefile.PL
+        Added INSTALLDIRS directive to install as a core module when built
+        on a perl >= 5.9.
+
   2.005 18 June 2007
 
       * Stephen Turner reported a problem when using IO::Uncompress::Gunzip

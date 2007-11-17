@@ -183,7 +183,7 @@ sub _extract {
     #            @{$ae->files};
     
     for my $file ( @{$ae->files} ) { 
-        my $path = File::Spec->rel2abs( File::Spec->catdir($to, $file) );
+        my $path = File::Spec->rel2abs( File::Spec->catfile($to, $file) );
     
         $self->_mode_plus_w( file => $path );
     }
@@ -199,9 +199,16 @@ sub _extract {
     ### well, then we really don't know.
 
     my $dir;
-    for my $try ( File::Spec->rel2abs( File::Spec->catdir(   
-                    $to, $mod->package_name .'-'. $mod->package_version ) ),
-                  File::Spec->rel2abs( $ae->extract_path ),
+    for my $try (
+        File::Spec->rel2abs( 
+            ### _safe_path must be called before catdir because catdir on 
+            ### VMS currently will not handle the extra dots in the directories.
+            File::Spec->catdir( $self->_safe_path( path => $to ) ,  
+                                $self->_safe_path( path =>
+                                             $mod->package_name .'-'. 
+                                             $mod->package_version
+        ) ) ) ,
+        File::Spec->rel2abs( $ae->extract_path ),
     ) {
         ($dir = $try) && last if -d $try;
     }

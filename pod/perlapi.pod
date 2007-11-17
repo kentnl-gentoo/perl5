@@ -887,21 +887,21 @@ X<pv_pretty>
            |const U32 flags
 
 Converts a string into something presentable, handling escaping via
-pv_escape() and supporting quoting and elipses. 
+pv_escape() and supporting quoting and ellipses.
 
 If the PERL_PV_PRETTY_QUOTE flag is set then the result will be 
 double quoted with any double quotes in the string escaped. Otherwise
 if the PERL_PV_PRETTY_LTGT flag is set then the result be wrapped in
 angle brackets. 
            
-If the PERL_PV_PRETTY_ELIPSES flag is set and not all characters in
-string were output then an elipses C<...> will be appended to the 
+If the PERL_PV_PRETTY_ELLIPSES flag is set and not all characters in
+string were output then an ellipsis C<...> will be appended to the
 string. Note that this happens AFTER it has been quoted.
            
 If start_color is non-null then it will be inserted after the opening
 quote (if there is one) but before the escaped text. If end_color
 is non-null then it will be inserted after the escaped text but before
-any quotes or elipses.
+any quotes or ellipses.
 
 Returns a pointer to the prettified text as held by dsv.
            
@@ -2594,6 +2594,19 @@ wrapper for C<strncmp>).
 =for hackers
 Found in file handy.h
 
+=item sv_destroyable
+X<sv_destroyable>
+
+Dummy routine which reports that object can be destroyed when there is no
+sharing module present.  It ignores its single SV argument, and returns
+'true'.  Exists to avoid test for a NULL function pointer and because it
+could potentially warn under some level of strict-ness.
+
+	bool	sv_destroyable(SV *sv)
+
+=for hackers
+Found in file util.c
+
 =item sv_nosharing
 X<sv_nosharing>
 
@@ -2716,44 +2729,6 @@ out from under you the next time the cache is
 invalidated).
 
 	AV*	mro_get_linear_isa(HV* stash)
-
-=for hackers
-Found in file mro.c
-
-=item mro_get_linear_isa_c3
-X<mro_get_linear_isa_c3>
-
-Returns the C3 linearization of @ISA
-the given stash.  The return value is a read-only AV*.
-C<level> should be 0 (it is used internally in this
-function's recursion).
-
-You are responsible for C<SvREFCNT_inc()> on the
-return value if you plan to store it anywhere
-semi-permanently (otherwise it might be deleted
-out from under you the next time the cache is
-invalidated).
-
-	AV*	mro_get_linear_isa_c3(HV* stash, I32 level)
-
-=for hackers
-Found in file mro.c
-
-=item mro_get_linear_isa_dfs
-X<mro_get_linear_isa_dfs>
-
-Returns the Depth-First Search linearization of @ISA
-the given stash.  The return value is a read-only AV*.
-C<level> should be 0 (it is used internally in this
-function's recursion).
-
-You are responsible for C<SvREFCNT_inc()> on the
-return value if you plan to store it anywhere
-semi-permanently (otherwise it might be deleted
-out from under you the next time the cache is
-invalidated).
-
-	AV*	mro_get_linear_isa_dfs(HV* stash, I32 level)
 
 =for hackers
 Found in file mro.c
@@ -5167,11 +5142,11 @@ X<newSVpvn_share>
 
 Creates a new SV with its SvPVX_const pointing to a shared string in the string
 table. If the string does not already exist in the table, it is created
-first.  Turns on READONLY and FAKE.  The string's hash is stored in the UV
-slot of the SV; if the C<hash> parameter is non-zero, that value is used;
-otherwise the hash is computed.  The idea here is that as the string table
-is used for shared hash keys these strings will have SvPVX_const == HeKEY and
-hash lookup will avoid string compare.
+first.  Turns on READONLY and FAKE. If the C<hash> parameter is non-zero, that
+value is used; otherwise the hash is computed. The string's hash can be later
+be retrieved from the SV with the C<SvSHARED_HASH()> macro. The idea here is
+that as the string table is used for shared hash keys these strings will have
+SvPVX_const == HeKEY and hash lookup will avoid string compare.
 
 	SV*	newSVpvn_share(const char* s, I32 len, U32 hash)
 
@@ -5237,7 +5212,7 @@ Found in file sv.c
 =item newSV_type
 X<newSV_type>
 
-Creates a new SV, of the type specificied.  The reference count for the new SV
+Creates a new SV, of the type specified.  The reference count for the new SV
 is set to 1.
 
 	SV*	newSV_type(svtype type)

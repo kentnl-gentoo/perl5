@@ -317,9 +317,17 @@ Backward compatibility module for defunct CGI::Switch
 
 Internal utilities used by CGI module
 
+=item CORE
+
+Pseudo-namespace for Perl's core routines
+
 =item CPAN
 
 Query, download and build perl modules from CPAN sites
+
+=item CPAN::API::HOWTO
+
+A recipe book for programming with CPAN.pm
 
 =item CPAN::FirstTime
 
@@ -391,7 +399,7 @@ Get pathname of current working directory
 
 =item DB
 
-Programmatic interface to the Perl debugging API (draft, subject to
+Programmatic interface to the Perl debugging API
 
 =item DBM_Filter
 
@@ -1085,7 +1093,7 @@ Message objects for Log::Message
 
 Encoding and decoding of base64 strings
 
-=item MIME::Base64::QuotedPrint
+=item MIME::QuotedPrint
 
 Encoding and decoding of quoted-printable strings
 
@@ -1633,6 +1641,10 @@ Try every conceivable way to get hostname
 
 Perl interface to the UNIX syslog(3) calls
 
+=item Sys::Syslog::win32::Win32
+
+Win32 support for Sys::Syslog
+
 =item Term::ANSIColor
 
 Color screen output using ANSI escape sequences
@@ -1731,7 +1743,7 @@ Parse text into an array of tokens or array of arrays
 
 =item Text::Soundex
 
-Implementation of the Soundex Algorithm as Described by Knuth
+Implementation of the soundex algorithm.
 
 =item Text::Tabs
 

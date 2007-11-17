@@ -18,7 +18,7 @@ use utf8;
 use Tie::Hash;
 use Test::More 'no_plan';
 
-use_ok('XS::APItest');
+BEGIN {use_ok('XS::APItest')};
 
 sub preform_test;
 sub test_present;
@@ -95,9 +95,168 @@ foreach my $in ("", "N", "a\0b") {
     is ($got, $in, "test_share_unshare_pvn");
 }
 
+if ($] > 5.009) {
+    foreach ([\&XS::APItest::Hash::rot13_hash, \&rot13, "rot 13"],
+	     [\&XS::APItest::Hash::bitflip_hash, \&bitflip, "bitflip"],
+	    ) {
+	my ($setup, $mapping, $name) = @$_;
+	my %hash;
+	my %placebo = (a => 1, p => 2, i => 4, e => 8);
+	$setup->(\%hash);
+	$hash{a}++; @hash{qw(p i e)} = (2, 4, 8);
+
+	test_U_hash(\%hash, \%placebo, [f => 9, g => 10, h => 11], $mapping,
+		    $name);
+    }
+    foreach my $upgrade_o (0, 1) {
+	foreach my $upgrade_n (0, 1) {
+	    my (%hash, %placebo);
+	    XS::APItest::Hash::bitflip_hash(\%hash);
+	    foreach my $new (["7", 65, 67, 80],
+			     ["8", 163, 171, 215],
+			     ["U", 2603, 2604, 2604],
+			    ) {
+		foreach my $code (78, 240, 256, 1336) {
+		    my $key = chr $code;
+		    # This is the UTF-8 byte sequence for the key.
+		    my $key_utf8 = $key;
+		    utf8::encode($key_utf8);
+		    if ($upgrade_o) {
+			$key .= chr 256;
+			chop $key;
+		    }
+		    $hash{$key} = $placebo{$key} = $code;
+		    $hash{$key_utf8} = $placebo{$key_utf8} = "$code as UTF-8";
+		}
+		my $name = 'bitflip ' . shift @$new;
+		my @new_kv;
+		foreach my $code (@$new) {
+		    my $key = chr $code;
+		    if ($upgrade_n) {
+			$key .= chr 256;
+			chop $key;
+		    }
+		    push @new_kv, $key, $_;
+		}
+
+		$name .= ' upgraded(orig) ' if $upgrade_o;
+		$name .= ' upgraded(new) ' if $upgrade_n;
+		test_U_hash(\%hash, \%placebo, \@new_kv, \&bitflip, $name);
+	    }
+	}
+    }
+}
+
 exit;
 
 ################################   The End   ################################
+
+sub test_U_hash {
+    my ($hash, $placebo, $new, $mapping, $message) = @_;
+    my @hitlist = keys %$placebo;
+    print "# $message\n";
+
+    my @keys = sort keys %$hash;
+    is ("@keys", join(' ', sort($mapping->(keys %$placebo))),
+	"uvar magic called exactly once on store");
+
+    is (keys %$hash, keys %$placebo);
+
+    my $victim = shift @hitlist;
+    is (delete $hash->{$victim}, delete $placebo->{$victim});
+
+    is (keys %$hash, keys %$placebo);
+    @keys = sort keys %$hash;
+    is ("@keys", join(' ', sort($mapping->(keys %$placebo))));
+
+    $victim = shift @hitlist;
+    is (XS::APItest::Hash::delete_ent ($hash, $victim,
+				       XS::APItest::HV_DISABLE_UVAR_XKEY),
+	undef, "Deleting a known key with conversion disabled fails (ent)");
+    is (keys %$hash, keys %$placebo);
+
+    is (XS::APItest::Hash::delete_ent ($hash, $victim, 0),
+	delete $placebo->{$victim},
+	"Deleting a known key with conversion enabled works (ent)");
+    is (keys %$hash, keys %$placebo);
+    @keys = sort keys %$hash;
+    is ("@keys", join(' ', sort($mapping->(keys %$placebo))));
+
+    $victim = shift @hitlist;
+    is (XS::APItest::Hash::delete ($hash, $victim,
+				   XS::APItest::HV_DISABLE_UVAR_XKEY),
+	undef, "Deleting a known key with conversion disabled fails");
+    is (keys %$hash, keys %$placebo);
+
+    is (XS::APItest::Hash::delete ($hash, $victim, 0),
+	delete $placebo->{$victim},
+	"Deleting a known key with conversion enabled works");
+    is (keys %$hash, keys %$placebo);
+    @keys = sort keys %$hash;
+    is ("@keys", join(' ', sort($mapping->(keys %$placebo))));
+
+    my ($k, $v) = splice @$new, 0, 2;
+    $hash->{$k} = $v;
+    $placebo->{$k} = $v;
+    is (keys %$hash, keys %$placebo);
+    @keys = sort keys %$hash;
+    is ("@keys", join(' ', sort($mapping->(keys %$placebo))));
+
+    ($k, $v) = splice @$new, 0, 2;
+    is (XS::APItest::Hash::store_ent($hash, $k, $v), $v, "store_ent");
+    $placebo->{$k} = $v;
+    is (keys %$hash, keys %$placebo);
+    @keys = sort keys %$hash;
+    is ("@keys", join(' ', sort($mapping->(keys %$placebo))));
+
+    ($k, $v) = splice @$new, 0, 2;
+    is (XS::APItest::Hash::store($hash, $k, $v), $v, "store");
+    $placebo->{$k} = $v;
+    is (keys %$hash, keys %$placebo);
+    @keys = sort keys %$hash;
+    is ("@keys", join(' ', sort($mapping->(keys %$placebo))));
+
+    @hitlist = keys %$placebo;
+    $victim = shift @hitlist;
+    is (XS::APItest::Hash::fetch_ent($hash, $victim), $placebo->{$victim},
+	"fetch_ent");
+    is (XS::APItest::Hash::fetch_ent($hash, $mapping->($victim)), undef,
+	"fetch_ent (missing)");
+
+    $victim = shift @hitlist;
+    is (XS::APItest::Hash::fetch($hash, $victim), $placebo->{$victim},
+	"fetch");
+    is (XS::APItest::Hash::fetch($hash, $mapping->($victim)), undef,
+	"fetch (missing)");
+
+    $victim = shift @hitlist;
+    ok (XS::APItest::Hash::exists_ent($hash, $victim), "exists_ent");
+    ok (!XS::APItest::Hash::exists_ent($hash, $mapping->($victim)),
+	"exists_ent (missing)");
+
+    $victim = shift @hitlist;
+    die "Need a victim" unless defined $victim;
+    ok (XS::APItest::Hash::exists($hash, $victim), "exists");
+    ok (!XS::APItest::Hash::exists($hash, $mapping->($victim)),
+	"exists (missing)");
+
+    is (XS::APItest::Hash::common({hv => $hash, keysv => $victim}),
+	$placebo->{$victim}, "common (fetch)");
+    is (XS::APItest::Hash::common({hv => $hash, keypv => $victim}),
+	$placebo->{$victim}, "common (fetch pv)");
+    is (XS::APItest::Hash::common({hv => $hash, keysv => $victim,
+				   action => XS::APItest::HV_DISABLE_UVAR_XKEY}),
+	undef, "common (fetch) missing");
+    is (XS::APItest::Hash::common({hv => $hash, keypv => $victim,
+				   action => XS::APItest::HV_DISABLE_UVAR_XKEY}),
+	undef, "common (fetch pv) missing");
+    is (XS::APItest::Hash::common({hv => $hash, keysv => $mapping->($victim),
+				   action => XS::APItest::HV_DISABLE_UVAR_XKEY}),
+	$placebo->{$victim}, "common (fetch) missing mapped");
+    is (XS::APItest::Hash::common({hv => $hash, keypv => $mapping->($victim),
+				   action => XS::APItest::HV_DISABLE_UVAR_XKEY}),
+	$placebo->{$victim}, "common (fetch pv) missing mapped");
+}
 
 sub main_tests {
   my ($keys, $testkeys, $description) = @_;
@@ -260,4 +419,14 @@ sub brute_force_exists {
     return 1 if $key eq $_;
   }
   return 0;
+}
+
+sub rot13 {
+    my @results = map {my $a = $_; $a =~ tr/A-Za-z/N-ZA-Mn-za-m/; $a} @_;
+    wantarray ? @results : $results[0];
+}
+
+sub bitflip {
+    my @results = map {join '', map {chr(32 ^ ord $_)} split '', $_} @_;
+    wantarray ? @results : $results[0];
 }

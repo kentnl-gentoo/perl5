@@ -163,7 +163,7 @@ if ($PLATFORM =~ /^win(?:32|ce)$/) {
     print "LIBRARY $dll\n";
     # The DESCRIPTION module definition file statement is not supported
     # by VC7 onwards.
-    if ($CCTYPE !~ /^MSVC7/ && $CCTYPE !~ /^MSVC8/) {
+    if ($CCTYPE !~ /^MSVC7/ && $CCTYPE !~ /^MSVC8/ && $CCTYPE !~ /^MSVC9/) {
 	print "DESCRIPTION 'Perl interpreter'\n";
     }
     print "EXPORTS\n";
@@ -888,6 +888,19 @@ if ($define{'PERL_MAD'}) {
 		    Perl_pmop_xmldump
 		    Perl_do_op_xmldump
 		    Perl_op_xmldump
+		    )];
+}
+
+unless ($define{'MULTIPLICITY'}) {
+    skip_symbols [qw(
+		    PL_interp_size
+		    PL_interp_size_5_10_0
+		    )];
+}
+
+unless ($define{'PERL_GLOBAL_STRUCT'}) {
+    skip_symbols [qw(
+		    PL_global_struct_size
 		    )];
 }
 

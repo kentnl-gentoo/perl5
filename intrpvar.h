@@ -162,7 +162,9 @@ PERLVAR(Iregdummy,	regnode)	/* from regcomp.c */
 PERLVARI(Idumpindent,	U16,	4)	/* number of blanks per dump
 					   indentation level */
 
-/* Space for U16 here without increasing the structure size */
+
+PERLVAR(Iutf8locale,	bool)		/* utf8 locale detected */
+PERLVARI(Irehash_seed_set, bool, FALSE)	/* 582 hash initialized? */
 
 PERLVARA(Icolors,6,	char *)		/* from regcomp.c */
 
@@ -179,8 +181,6 @@ PERLVAR(Iwatchok,	char *)
 
 PERLVARI(Iregmatch_slab, regmatch_slab *,	NULL)
 PERLVAR(Iregmatch_state, regmatch_state *)
-
-PERLVARI(Idelayedisa,	HV*,	NULL)   /* stash for PL_delaymagic for magic_setisa */
 
 /* Put anything new that is pointer aligned here. */
 
@@ -258,10 +258,8 @@ PERLVAR(Istatusvalue_vms,U32)
 PERLVAR(Istatusvalue_posix,I32)
 #endif
 
-#ifdef CSH
-PERLVARI(Icshlen,	I32,	0)
-PERLVARI(Icshname,	const char *,	CSH)
-#endif
+PERLVARI(Isig_pending, int,0)           /* Number if highest signal pending */
+PERLVAR(Ipsig_pend, int *)		/* per-signal "count" of pending */
 
 /* shortcuts to various I/O objects */
 PERLVAR(Istdingv,	GV *)
@@ -351,12 +349,17 @@ PERLVAR(Ilastfd,	int)		/* what to preserve mode on */
 PERLVAR(Ioldname,	char *)		/* what to preserve mode on */
 PERLVAR(IArgv,		char **)	/* stuff to free from do_aexec, vfork safe */
 PERLVAR(ICmd,		char *)		/* stuff to free from do_aexec, vfork safe */
+/* Elements in this array have ';' appended and are injected as a single line
+   into the tokeniser. You can't put any (literal) newlines into any program
+   you stuff in into this array, as the point where it's injected is expecting
+   a single physical line. */
 PERLVAR(Ipreambleav,	AV *)
 PERLVAR(Imess_sv,	SV *)
 PERLVAR(Iors_sv,	SV *)		/* output record separator $\ */
 /* statics moved here for shared library purposes */
 PERLVARI(Igensym,	I32,	0)	/* next symbol for getsym() to define */
 PERLVARI(Icv_has_eval, bool, FALSE) /* PL_compcv includes an entereval or similar */
+PERLVAR(Itaint_warn,	bool)      /* taint warns instead of dying */
 PERLVARI(Ilaststype,	U16,	OP_STAT)
 PERLVARI(Ilaststatval,	int,	-1)
 
@@ -475,10 +478,10 @@ PERLVARI(Icollation_standard, bool,	TRUE)
 #endif /* USE_LOCALE_COLLATE */
 
 
-#ifdef PERL_UTF8_CACHE_ASSERT
+#if defined (PERL_UTF8_CACHE_ASSERT) || defined (DEBUGGING)
 #  define PERL___I -1
 #else
-#  define PERL___I -1
+#  define PERL___I 1
 #endif
 PERLVARI(Iutf8cache, I8, PERL___I)	/* Is the utf8 caching code enabled? */
 #undef PERL___I
@@ -549,13 +552,6 @@ PERLVARI(Ibeginav_save, AV*, NULL)	/* save BEGIN{}s when compiling */
 
 PERLVAR(Ibody_arenas, void*) /* pointer to list of body-arenas */
 
-PERLVAR(Ipsig_pend, int *)		/* per-signal "count" of pending */
-PERLVARI(Isig_pending, int,0)           /* Number if highest signal pending */
-
-
-PERLVAR(Itaint_warn,	bool)      /* taint warns instead of dying */
-PERLVAR(Iutf8locale,	bool)		/* utf8 locale detected */
-PERLVARI(Irehash_seed_set, bool, FALSE)	/* 582 hash initialized? */
 
 #ifdef USE_LOCALE_NUMERIC
 
@@ -573,13 +569,6 @@ PERLVAR(Iregex_padav,   AV*)		/* All regex objects */
 PERLVAR(Ireentrant_buffer, REENTR*)	/* here we store the _r buffers */
 #endif
 
-
-#ifdef PERL_MAD
-PERLVARI(Imadskills,	bool, FALSE)	/* preserve all syntactic info */
-					/* (MAD = Misc Attribute Decoration) */
-PERLVARI(Ixmlfp, PerlIO *,NULL)
-#endif
-
 PERLVAR(Icustom_op_names, HV*)  /* Names of user defined ops */
 PERLVAR(Icustom_op_descs, HV*)  /* Descriptions of user defined ops */
 
@@ -592,12 +581,6 @@ PERLVARI(Idef_layerlist, PerlIO_list_t *,NULL)
 PERLVARI(Iencoding,	SV*, NULL)		/* character encoding */
 
 PERLVAR(Idebug_pad,	struct perl_debug_pad)	/* always needed because of the re extension */
-
-#ifdef PL_OP_SLAB_ALLOC
-PERLVAR(IOpPtr,I32 **)
-PERLVARI(IOpSpace,I32,0)
-PERLVAR(IOpSlab,I32 *)
-#endif
 
 PERLVAR(Iutf8_idstart,	SV *)
 PERLVAR(Iutf8_idcont,	SV *)
@@ -632,28 +615,26 @@ PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(PERL_UNLOCK_HOOK))
 
 PERLVARI(Ithreadhook,	thrhook_proc_t,	MEMBER_TO_FPTR(Perl_nothreadhook))
 
-/* Stores the PPID */
-#ifdef THREADS_HAVE_PIDS
-PERLVARI(Ippid,		IV,		0)
-#endif
-
 PERLVARI(Ihash_seed, UV, 0)		/* Hash initializer */
 
 PERLVAR(IDBassertion,   SV *)
 
 PERLVARI(Irehash_seed, UV, 0)		/* 582 hash initializer */
 
-#ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
-/* File descriptor to talk to the child which dumps scalars.  */
-PERLVARI(Idumper_fd, int, -1)
-#endif
+PERLVARI(Iisarev, HV*, NULL) /* Reverse map of @ISA dependencies */
+
+/* The last unconditional member of the interpreter structure when 5.10.0 was
+   released. The offset of the end of this is baked into a global variable in 
+   any shared perl library which will allow a sanity test in future perl
+   releases.  */
+#define PERL_LAST_5_10_0_INTERP_MEMBER	Iisarev
 
 #ifdef PERL_IMPLICIT_CONTEXT
 PERLVARI(Imy_cxt_size, int, 0)		/* size of PL_my_cxt_list */
 PERLVARI(Imy_cxt_list, void **, NULL) /* per-module array of MY_CXT pointers */
-#ifdef PERL_GLOBAL_STRUCT_PRIVATE
+#  ifdef PERL_GLOBAL_STRUCT_PRIVATE
 PERLVARI(Imy_cxt_keys, const char **, NULL) /* per-module array of pointers to MY_CXT_KEY constants */
-#endif
+#  endif
 #endif
 
 #ifdef PERL_TRACK_MEMPOOL
@@ -661,15 +642,38 @@ PERLVARI(Imy_cxt_keys, const char **, NULL) /* per-module array of pointers to M
 PERLVAR(Imemory_debug_header, struct perl_memory_debug_header)
 #endif
 
+#ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
+/* File descriptor to talk to the child which dumps scalars.  */
+PERLVARI(Idumper_fd, int, -1)
+#endif
+
+/* Stores the PPID */
+#ifdef THREADS_HAVE_PIDS
+PERLVARI(Ippid,		IV,		0)
+#endif
+
+#ifdef PERL_MAD
+PERLVARI(Imadskills,	bool, FALSE)	/* preserve all syntactic info */
+					/* (MAD = Misc Attribute Decoration) */
+PERLVARI(Ixmlfp, PerlIO *,NULL)
+#endif
+
+#ifdef PL_OP_SLAB_ALLOC
+PERLVAR(IOpPtr,I32 **)
+PERLVARI(IOpSpace,I32,0)
+PERLVAR(IOpSlab,I32 *)
+#endif
+
 #ifdef PERL_DEBUG_READONLY_OPS
 PERLVARI(Islabs, I32**, NULL)	/* Array of slabs that have been allocated */
 PERLVARI(Islab_count, U32, 0)	/* Size of the array */
 #endif
 
-PERLVARI(Iisarev, HV*, NULL) /* Reverse map of @ISA dependencies */
+/* Can shared object be destroyed */
+PERLVARI(Idestroyhook, destroyable_proc_t, MEMBER_TO_FPTR(Perl_sv_destroyable))
 
-/* If you are adding a U8 or U16, see the 'Space' comments above on where
- * there are gaps which currently will be structure padding.  */
+/* If you are adding a U8 or U16, check to see if there are 'Space' comments
+ * above on where there are gaps which currently will be structure padding.  */
 
 /* Within a stable branch, new variables must be added to the very end, before
  * this comment, for binary compatibility (the offsets of the old members must

@@ -39,11 +39,15 @@ my $Conf    = $CB->configure_object;
 
 
 ### create a fake object, so we don't use the actual module tree
+### make sure to add dslip data, so CPANPLUS doesn't try to find
+### it in another module in the package, for which it needs the
+### module tree
 my $Mod = CPANPLUS::Module::Fake->new(
                 module  => 'Foo::Bar',
                 path    => 'src',
                 author  => CPANPLUS::Module::Author::Fake->new,
                 package => 'Foo-Bar-0.01.tar.gz',
+                dslip   => 'RdpO?',
             );
 
 $Conf->set_conf( base       => 'dummy-cpanplus' );
@@ -98,7 +102,7 @@ while( my($path,$need_cc) = each %Map ) {
                 
     ### set the fetch location -- it's local
     {   my $where = File::Spec->rel2abs(
-                            File::Spec->catdir( $Src, $path, $mod->package )
+                            File::Spec->catfile( $Src, $path, $mod->package )
                         );
                         
         $mod->status->fetch( $where );
@@ -160,7 +164,13 @@ while( my($path,$need_cc) = each %Map ) {
 
             # The installation directory actually needs to be in @INC
             # in order to test uninstallation
-            'lib'->import( File::Spec->catdir($Lib, 'lib', 'perl5') );
+            {   my $libdir = File::Spec->catdir($Lib, 'lib', 'perl5');
+                
+                # lib.pm is documented to require unix-style paths
+                $libdir = VMS::Filespec::unixify($libdir) if $^O eq 'VMS';
+
+                'lib'->import( $libdir );
+            }
 
             # EU::Installed and CP+::M are only capable of searching
             # for modules in the core directories.  We need to fake
@@ -232,13 +242,19 @@ sub find_module {
   my $file = File::Spec->catfile( split m/::/, $module );
   my $candidate;
   foreach (@INC) {
-    if (-e ($candidate = File::Spec->catdir($_, $file))
+    if (-e ($candidate = File::Spec->catfile($_, $file))
         or
-        -e ($candidate = File::Spec->catdir($_, "$file.pm"))
+        -e ($candidate = File::Spec->catfile($_, "$file.pm"))
         or
-        -e ($candidate = File::Spec->catdir($_, 'auto', $file))
+        -e ($candidate = File::Spec->catfile($_, 'auto', $file))
         or
-        -e ($candidate = File::Spec->catdir($_, 'auto', "$file.pm"))) {
+        -e ($candidate = File::Spec->catfile($_, 'auto', "$file.pm"))
+        or
+        -e ($candidate = File::Spec->catfile($_, $Config{archname},
+                                             'auto', $file))
+        or
+        -e ($candidate = File::Spec->catfile($_, $Config{archname},
+                                             'auto', "$file.pm"))) {
       return $candidate;
     }
   }

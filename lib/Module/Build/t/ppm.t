@@ -20,6 +20,8 @@ my $HTML_support = Module::Build::ConfigData->feature('HTML_support');
     plan skip_all => "Archive::Tar not installed to read archives.";
   } elsif ( ! eval {IO::Zlib->VERSION(1.01)} ) {
     plan skip_all => "IO::Zlib 1.01 required to read compressed archives.";
+  } elsif ( $^O eq 'VMS' ) {
+    plan skip_all => "Needs porting work on VMS";
   } else {
     plan tests => 12;
   }
@@ -28,7 +30,7 @@ my $HTML_support = Module::Build::ConfigData->feature('HTML_support');
 
 use Cwd ();
 my $cwd = Cwd::cwd;
-my $tmp = File::Spec->catdir( $cwd, 't', '_tmp' );
+my $tmp = MBTest->tmpdir;
 
 
 use DistGen;
@@ -50,16 +52,12 @@ Says "Hello"
 
 =cut
 ---
-$dist->change_file( 'Build.PL', <<"---" );
-
-my \$build = new Module::Build(
-  module_name => @{[$dist->name]},
+$dist->change_build_pl
+({
+  module_name => $dist->name,
   license     => 'perl',
   scripts     => [ 'hello' ],
-);
-
-\$build->create_build_script;
----
+});
 $dist->regen;
 
 chdir( $dist->dirname ) or die "Can't chdir to '@{[$dist->dirname]}': $!";

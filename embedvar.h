@@ -95,8 +95,6 @@
 #define PL_comppad_name_floor	(vTHX->Icomppad_name_floor)
 #define PL_cop_seqmax		(vTHX->Icop_seqmax)
 #define PL_cryptseen		(vTHX->Icryptseen)
-#define PL_cshlen		(vTHX->Icshlen)
-#define PL_cshname		(vTHX->Icshname)
 #define PL_curcop		(vTHX->Icurcop)
 #define PL_curcopdb		(vTHX->Icurcopdb)
 #define PL_curpad		(vTHX->Icurpad)
@@ -116,8 +114,8 @@
 #define PL_defgv		(vTHX->Idefgv)
 #define PL_defoutgv		(vTHX->Idefoutgv)
 #define PL_defstash		(vTHX->Idefstash)
-#define PL_delayedisa		(vTHX->Idelayedisa)
 #define PL_delaymagic		(vTHX->Idelaymagic)
+#define PL_destroyhook		(vTHX->Idestroyhook)
 #define PL_diehook		(vTHX->Idiehook)
 #define PL_dirty		(vTHX->Idirty)
 #define PL_doextract		(vTHX->Idoextract)
@@ -410,8 +408,6 @@
 #define PL_Icomppad_name_floor	PL_comppad_name_floor
 #define PL_Icop_seqmax		PL_cop_seqmax
 #define PL_Icryptseen		PL_cryptseen
-#define PL_Icshlen		PL_cshlen
-#define PL_Icshname		PL_cshname
 #define PL_Icurcop		PL_curcop
 #define PL_Icurcopdb		PL_curcopdb
 #define PL_Icurpad		PL_curpad
@@ -431,8 +427,8 @@
 #define PL_Idefgv		PL_defgv
 #define PL_Idefoutgv		PL_defoutgv
 #define PL_Idefstash		PL_defstash
-#define PL_Idelayedisa		PL_delayedisa
 #define PL_Idelaymagic		PL_delaymagic
+#define PL_Idestroyhook		PL_destroyhook
 #define PL_Idiehook		PL_diehook
 #define PL_Idirty		PL_dirty
 #define PL_Idoextract		PL_doextract
@@ -689,10 +685,16 @@
 #define PL_Gdollarzero_mutex	(my_vars->Gdollarzero_mutex)
 #define PL_fold_locale		(my_vars->Gfold_locale)
 #define PL_Gfold_locale		(my_vars->Gfold_locale)
+#define PL_global_struct_size	(my_vars->Gglobal_struct_size)
+#define PL_Gglobal_struct_size	(my_vars->Gglobal_struct_size)
 #define PL_hexdigit		(my_vars->Ghexdigit)
 #define PL_Ghexdigit		(my_vars->Ghexdigit)
 #define PL_hints_mutex		(my_vars->Ghints_mutex)
 #define PL_Ghints_mutex		(my_vars->Ghints_mutex)
+#define PL_interp_size		(my_vars->Ginterp_size)
+#define PL_Ginterp_size		(my_vars->Ginterp_size)
+#define PL_interp_size_5_10_0	(my_vars->Ginterp_size_5_10_0)
+#define PL_Ginterp_size_5_10_0	(my_vars->Ginterp_size_5_10_0)
 #define PL_malloc_mutex		(my_vars->Gmalloc_mutex)
 #define PL_Gmalloc_mutex	(my_vars->Gmalloc_mutex)
 #define PL_mmap_page_size	(my_vars->Gmmap_page_size)
@@ -719,6 +721,8 @@
 #define PL_Gperlio_mutex	(my_vars->Gperlio_mutex)
 #define PL_ppaddr		(my_vars->Gppaddr)
 #define PL_Gppaddr		(my_vars->Gppaddr)
+#define PL_revision		(my_vars->Grevision)
+#define PL_Grevision		(my_vars->Grevision)
 #define PL_runops_dbg		(my_vars->Grunops_dbg)
 #define PL_Grunops_dbg		(my_vars->Grunops_dbg)
 #define PL_runops_std		(my_vars->Grunops_std)
@@ -737,6 +741,8 @@
 #define PL_Gsig_trapped		(my_vars->Gsig_trapped)
 #define PL_sigfpe_saved		(my_vars->Gsigfpe_saved)
 #define PL_Gsigfpe_saved	(my_vars->Gsigfpe_saved)
+#define PL_subversion		(my_vars->Gsubversion)
+#define PL_Gsubversion		(my_vars->Gsubversion)
 #define PL_sv_placeholder	(my_vars->Gsv_placeholder)
 #define PL_Gsv_placeholder	(my_vars->Gsv_placeholder)
 #define PL_thr_key		(my_vars->Gthr_key)
@@ -745,6 +751,8 @@
 #define PL_Gtimesbase		(my_vars->Gtimesbase)
 #define PL_use_safe_putenv	(my_vars->Guse_safe_putenv)
 #define PL_Guse_safe_putenv	(my_vars->Guse_safe_putenv)
+#define PL_version		(my_vars->Gversion)
+#define PL_Gversion		(my_vars->Gversion)
 #define PL_veto_cleanup		(my_vars->Gveto_cleanup)
 #define PL_Gveto_cleanup	(my_vars->Gveto_cleanup)
 #define PL_watch_pvx		(my_vars->Gwatch_pvx)
@@ -761,8 +769,11 @@
 #define PL_Gdo_undump		PL_do_undump
 #define PL_Gdollarzero_mutex	PL_dollarzero_mutex
 #define PL_Gfold_locale		PL_fold_locale
+#define PL_Gglobal_struct_size	PL_global_struct_size
 #define PL_Ghexdigit		PL_hexdigit
 #define PL_Ghints_mutex		PL_hints_mutex
+#define PL_Ginterp_size		PL_interp_size
+#define PL_Ginterp_size_5_10_0	PL_interp_size_5_10_0
 #define PL_Gmalloc_mutex	PL_malloc_mutex
 #define PL_Gmmap_page_size	PL_mmap_page_size
 #define PL_Gmy_ctx_mutex	PL_my_ctx_mutex
@@ -776,6 +787,7 @@
 #define PL_Gperlio_fd_refcnt_size	PL_perlio_fd_refcnt_size
 #define PL_Gperlio_mutex	PL_perlio_mutex
 #define PL_Gppaddr		PL_ppaddr
+#define PL_Grevision		PL_revision
 #define PL_Grunops_dbg		PL_runops_dbg
 #define PL_Grunops_std		PL_runops_std
 #define PL_Gsh_path		PL_sh_path
@@ -785,10 +797,12 @@
 #define PL_Gsig_sv		PL_sig_sv
 #define PL_Gsig_trapped		PL_sig_trapped
 #define PL_Gsigfpe_saved	PL_sigfpe_saved
+#define PL_Gsubversion		PL_subversion
 #define PL_Gsv_placeholder	PL_sv_placeholder
 #define PL_Gthr_key		PL_thr_key
 #define PL_Gtimesbase		PL_timesbase
 #define PL_Guse_safe_putenv	PL_use_safe_putenv
+#define PL_Gversion		PL_version
 #define PL_Gveto_cleanup	PL_veto_cleanup
 #define PL_Gwatch_pvx		PL_watch_pvx
 

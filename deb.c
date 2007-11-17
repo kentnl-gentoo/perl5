@@ -1,7 +1,7 @@
 /*    deb.c
  *
- *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1998, 1999, 2000,
+ *    2001, 2002, 2003, 2004, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -41,15 +41,14 @@ Perl_deb_nocontext(const char *pat, ...)
 void
 Perl_deb(pTHX_ const char *pat, ...)
 {
-#ifdef DEBUGGING
     va_list args;
     va_start(args, pat);
+#ifdef DEBUGGING
     vdeb(pat, &args);
-    va_end(args);
 #else
     PERL_UNUSED_CONTEXT;
-    PERL_UNUSED_ARG(pat);
 #endif /* DEBUGGING */
+    va_end(args);
 }
 
 void

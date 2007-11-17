@@ -1,7 +1,7 @@
 /*    op.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006 by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -37,11 +37,7 @@
  *			which may or may not check number of children).
  */
 
-#ifdef DEBUGGING_OPS
-#define OPCODE opcode
-#else
 #define OPCODE U16
-#endif
 
 #ifdef PERL_MAD
 #  define MADPROP_IN_BASEOP	MADPROP*	op_madprop;
@@ -635,7 +631,7 @@ struct loop {
 
 struct madprop {
     MADPROP* mad_next;
-    void *mad_val;
+    const void *mad_val;
     U32 mad_vlen;
 /*    short mad_count; */
     char mad_key;
@@ -650,7 +646,7 @@ struct token {
 #endif
 
 /*
- * Values that can be hold by mad_key :
+ * Values that can be held by mad_key :
  * ^       unfilled head spot
  * ,       literal ,
  * ;       literal ; (blank if implicit ; at end of block)

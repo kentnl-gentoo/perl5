@@ -4459,6 +4459,33 @@ sub kt
     $_ = '123'; 
     iseq("$1",'abc',"/g leads to unsafe match vars: $1");
 }
+{
+    local $Message="Message-ID: <20070818091501.7eff4831@r2d2>";
+    my $str= "";
+    for(0..5){
+        my @x;
+        $str .= "@x"; # this should ALWAYS be the empty string
+        'a'=~/(a|)/;
+        push @x,1;
+    }
+    iseq(length($str),"0","Trie scope error, string should be empty");
+    $str="";
+    my @foo = ('a')x5;
+    for (@foo) {
+        my @bar;
+        $str .= "@bar";
+        s/a|/push @bar, 1/e;
+    }
+    iseq(length($str),"0","Trie scope error, string should be empty");
+}
+{
+# [perl #45605] Regexp failure with utf8-flagged and byte-flagged string
+
+    my $utf_8 = "\xd6schel";
+    utf8::upgrade($utf_8);
+    $utf_8 =~ m{(\xd6|&Ouml;)schel};
+    iseq($1,"\xd6","#45605");
+}
 
 # Test counter is at bottom of file. Put new tests above here.
 #-------------------------------------------------------------------
@@ -4505,10 +4532,19 @@ ok($@=~/\QSequence \k... not terminated in regex;\E/);
     iseq($_,"!Bang!1!Bang!2!Bang!3!Bang!");
 }
 
+# [perl #45337] utf8 + "[a]a{2}" + /$.../ = panic: sv_len_utf8 cache
+
+{
+    local ${^UTF8CACHE} = -1;
+    my $s="[a]a{2}";
+    utf8::upgrade $s;
+    ok("aaa" =~ /$s/, "#45337");
+}
+
 # Put new tests above the dotted line about a page above this comment
 iseq(0+$::test,$::TestCount,"Got the right number of tests!");
 # Don't forget to update this!
 BEGIN {
-    $::TestCount = 1961;
+    $::TestCount = 1965;
     print "1..$::TestCount\n";
 }

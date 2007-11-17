@@ -31,7 +31,7 @@ use overload (
 
 qw(
 ""	stringify
-0+	numify)			# Order of arguments unsignificant
+0+	numify)			# Order of arguments insignificant
 );
 
 sub new {
@@ -47,7 +47,7 @@ sub numify { 0 + "${$_[0]}" }	# Not needed, additional overhead
 package main;
 
 $| = 1;
-use Test::More tests => 522;
+use Test::More tests => 556;
 
 
 $a = new Oscalar "087";
@@ -744,10 +744,10 @@ else {
 		    }, 'deref';
   # Hash:
   my @cont = sort %$deref;
-  if ("\t" eq "\011") { # ascii
+  if ("\t" eq "\011") { # ASCII
       is("@cont", '23 5 fake foo');
   } 
-  else {                # ebcdic alpha-numeric sort order
+  else {                # EBCDIC alpha-numeric sort order
       is("@cont", 'fake foo 23 5');
   }
   my @keys = sort keys %$deref;
@@ -986,7 +986,7 @@ unless ($aaa) {
   main::is("$int_x", 1054);
 }
 
-# make sure that we don't inifinitely recurse
+# make sure that we don't infinitely recurse
 {
   my $c = 0;
   package Recurse;
@@ -1131,7 +1131,7 @@ like ($@, qr/zap/);
     like(overload::StrVal($no),       qr/^no_overload=ARRAY\(0x[0-9a-f]+\)$/);
 }
 
-# These are all check that overloaded values rather than reference addressess
+# These are all check that overloaded values rather than reference addresses
 # are what is getting tested.
 my ($two, $one, $un, $deux) = map {new Numify $_} 2, 1, 1, 2;
 my ($ein, $zwei) = (1, 2);
@@ -1212,7 +1212,7 @@ foreach my $op (qw(<=> == != < <= > >=)) {
     my $obj;
     $obj = bless {name => 'cool'}, 'Sklorsh';
     $obj->delete;
-    ok(eval {if ($obj) {1}; 1}, $@ || 'reblessed into nonexist namespace');
+    ok(eval {if ($obj) {1}; 1}, $@ || 'reblessed into nonexistent namespace');
 
     $obj = bless {name => 'cool'}, 'Sklorsh';
     $obj->delete_with_self;
@@ -1333,3 +1333,98 @@ foreach my $op (qw(<=> == != < <= > >=)) {
     like($warning, qr/isn't numeric/, 'cmp should return number');
 
 }
+
+{
+    # Subtle bug pre 5.10, as a side effect of the overloading flag being
+    # stored on the reference rather than the referent. Despite the fact that
+    # objects can only be accessed via references (even internally), the
+    # referent actually knows that it's blessed, not the references. So taking
+    # a new, unrelated, reference to it gives an object. However, the
+    # overloading-or-not flag was on the reference prior to 5.10, and taking
+    # a new reference didn't (use to) copy it.
+
+    package kayo;
+
+    use overload '""' => sub {${$_[0]}};
+
+    sub Pie {
+	return "$_[0], $_[1]";
+    }
+
+    package main;
+
+    my $class = 'kayo';
+    my $string = 'bam';
+    my $crunch_eth = bless \$string, $class;
+
+    is("$crunch_eth", $string);
+    is ($crunch_eth->Pie("Meat"), "$string, Meat");
+
+    my $wham_eth = \$string;
+
+    is("$wham_eth", $string,
+       'This reference did not have overloading in 5.8.8 and earlier');
+    is ($crunch_eth->Pie("Apple"), "$string, Apple");
+
+    my $class = ref $wham_eth;
+    $class =~ s/=.*//;
+
+    # Bless it back into its own class!
+    bless $wham_eth, $class;
+
+    is("$wham_eth", $string);
+    is ($crunch_eth->Pie("Blackbird"), "$string, Blackbird");
+}
+
+{
+    package numify_int;
+    use overload "0+" => sub { $_[0][0] += 1; 42 };
+    package numify_self;
+    use overload "0+" => sub { $_[0][0]++; $_[0] };
+    package numify_other;
+    use overload "0+" => sub { $_[0][0]++; $_[0][1] = bless [], 'numify_int' };
+    package numify_by_fallback;
+    use overload fallback => 1;
+
+    package main;
+    my $o = bless [], 'numify_int';
+    is(int($o), 42, 'numifies to integer');
+    is($o->[0], 1, 'int() numifies only once');
+
+    my $aref = [];
+    my $num_val = int($aref);
+    my $r = bless $aref, 'numify_self';
+    is(int($r), $num_val, 'numifies to self');
+    is($r->[0], 1, 'int() numifies once when returning self');
+
+    my $s = bless [], 'numify_other';
+    is(int($s), 42, 'numifies to numification of other object');
+    is($s->[0], 1, 'int() numifies once when returning other object');
+    is($s->[1][0], 1, 'returned object numifies too');
+
+    my $m = bless $aref, 'numify_by_fallback';
+    is(int($m), $num_val, 'numifies to usual reference value');
+    is(abs($m), $num_val, 'numifies to usual reference value');
+    is(-$m, -$num_val, 'numifies to usual reference value');
+    is(0+$m, $num_val, 'numifies to usual reference value');
+    is($m+0, $num_val, 'numifies to usual reference value');
+    is($m+$m, 2*$num_val, 'numifies to usual reference value');
+    is(0-$m, -$num_val, 'numifies to usual reference value');
+    is(1*$m, $num_val, 'numifies to usual reference value');
+    is($m/1, $num_val, 'numifies to usual reference value');
+    is($m%100, $num_val%100, 'numifies to usual reference value');
+    is($m**1, $num_val, 'numifies to usual reference value');
+
+    is(abs($aref), $num_val, 'abs() of ref');
+    is(-$aref, -$num_val, 'negative of ref');
+    is(0+$aref, $num_val, 'ref addition');
+    is($aref+0, $num_val, 'ref addition');
+    is($aref+$aref, 2*$num_val, 'ref addition');
+    is(0-$aref, -$num_val, 'subtraction of ref');
+    is(1*$aref, $num_val, 'multiplicaton of ref');
+    is($aref/1, $num_val, 'division of ref');
+    is($aref%100, $num_val%100, 'modulo of ref');
+    is($aref**1, $num_val, 'exponentiation of ref');
+}
+
+# EOF

@@ -226,10 +226,6 @@ END_EXTERN_C
 #define PL_cop_seqmax		(*Perl_Icop_seqmax_ptr(aTHX))
 #undef  PL_cryptseen
 #define PL_cryptseen		(*Perl_Icryptseen_ptr(aTHX))
-#undef  PL_cshlen
-#define PL_cshlen		(*Perl_Icshlen_ptr(aTHX))
-#undef  PL_cshname
-#define PL_cshname		(*Perl_Icshname_ptr(aTHX))
 #undef  PL_curcop
 #define PL_curcop		(*Perl_Icurcop_ptr(aTHX))
 #undef  PL_curcopdb
@@ -268,10 +264,10 @@ END_EXTERN_C
 #define PL_defoutgv		(*Perl_Idefoutgv_ptr(aTHX))
 #undef  PL_defstash
 #define PL_defstash		(*Perl_Idefstash_ptr(aTHX))
-#undef  PL_delayedisa
-#define PL_delayedisa		(*Perl_Idelayedisa_ptr(aTHX))
 #undef  PL_delaymagic
 #define PL_delaymagic		(*Perl_Idelaymagic_ptr(aTHX))
+#undef  PL_destroyhook
+#define PL_destroyhook		(*Perl_Idestroyhook_ptr(aTHX))
 #undef  PL_diehook
 #define PL_diehook		(*Perl_Idiehook_ptr(aTHX))
 #undef  PL_dirty
@@ -754,10 +750,16 @@ END_EXTERN_C
 #define PL_dollarzero_mutex	(*Perl_Gdollarzero_mutex_ptr(NULL))
 #undef  PL_fold_locale
 #define PL_fold_locale		(*Perl_Gfold_locale_ptr(NULL))
+#undef  PL_global_struct_size
+#define PL_global_struct_size	(*Perl_Gglobal_struct_size_ptr(NULL))
 #undef  PL_hexdigit
 #define PL_hexdigit		(*Perl_Ghexdigit_ptr(NULL))
 #undef  PL_hints_mutex
 #define PL_hints_mutex		(*Perl_Ghints_mutex_ptr(NULL))
+#undef  PL_interp_size
+#define PL_interp_size		(*Perl_Ginterp_size_ptr(NULL))
+#undef  PL_interp_size_5_10_0
+#define PL_interp_size_5_10_0	(*Perl_Ginterp_size_5_10_0_ptr(NULL))
 #undef  PL_malloc_mutex
 #define PL_malloc_mutex		(*Perl_Gmalloc_mutex_ptr(NULL))
 #undef  PL_mmap_page_size
@@ -784,6 +786,8 @@ END_EXTERN_C
 #define PL_perlio_mutex		(*Perl_Gperlio_mutex_ptr(NULL))
 #undef  PL_ppaddr
 #define PL_ppaddr		(*Perl_Gppaddr_ptr(NULL))
+#undef  PL_revision
+#define PL_revision		(*Perl_Grevision_ptr(NULL))
 #undef  PL_runops_dbg
 #define PL_runops_dbg		(*Perl_Grunops_dbg_ptr(NULL))
 #undef  PL_runops_std
@@ -802,6 +806,8 @@ END_EXTERN_C
 #define PL_sig_trapped		(*Perl_Gsig_trapped_ptr(NULL))
 #undef  PL_sigfpe_saved
 #define PL_sigfpe_saved		(*Perl_Gsigfpe_saved_ptr(NULL))
+#undef  PL_subversion
+#define PL_subversion		(*Perl_Gsubversion_ptr(NULL))
 #undef  PL_sv_placeholder
 #define PL_sv_placeholder	(*Perl_Gsv_placeholder_ptr(NULL))
 #undef  PL_thr_key
@@ -810,6 +816,8 @@ END_EXTERN_C
 #define PL_timesbase		(*Perl_Gtimesbase_ptr(NULL))
 #undef  PL_use_safe_putenv
 #define PL_use_safe_putenv	(*Perl_Guse_safe_putenv_ptr(NULL))
+#undef  PL_version
+#define PL_version		(*Perl_Gversion_ptr(NULL))
 #undef  PL_veto_cleanup
 #define PL_veto_cleanup		(*Perl_Gveto_cleanup_ptr(NULL))
 #undef  PL_watch_pvx

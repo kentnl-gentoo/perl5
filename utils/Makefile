@@ -1,6 +1,8 @@
 
 PERL = ../miniperl
 REALPERL = ../perl
+RUN =   # Used mainly cross-compilation setups.
+
 
 # Files to be built with variable substitution after miniperl is
 # available.  Dependencies handled manually below (for now).
@@ -12,7 +14,7 @@ plextractexe = ./c2ph ./config_data ./corelist ./cpan ./h2ph ./h2xs ./instmodsh 
 all: $(plextract) 
 
 $(plextract):
-	$(PERL) -I../lib $@.PL
+	$(RUN) $(PERL) -I../lib $@.PL
 
 c2ph:		c2ph.PL ../config.sh
 

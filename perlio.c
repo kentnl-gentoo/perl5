@@ -507,9 +507,8 @@ PerlIO_debug(const char *fmt, ...)
 #else
 	const char *s = CopFILE(PL_curcop);
 	STRLEN len;
-	SV * const sv = newSVpvs("");
-	Perl_sv_catpvf(aTHX_ sv, "%s:%" IVdf " ", s ? s : "(none)",
-		       (IV) CopLINE(PL_curcop));
+	SV * const sv = Perl_newSVpvf(aTHX_ "%s:%" IVdf " ", s ? s : "(none)",
+				      (IV) CopLINE(PL_curcop));
 	Perl_sv_vcatpvf(aTHX_ sv, fmt, &ap);
 
 	s = SvPV_const(sv, len);
@@ -2414,21 +2413,35 @@ PerlIO_cleanup(pTHX)
     }
 }
 
-void PerlIO_teardown(pTHX) /* Call only from PERL_SYS_TERM(). */
+void PerlIO_teardown() /* Call only from PERL_SYS_TERM(). */
 {
     dVAR;
+#if 0
+/* XXX we can't rely on an interpreter being present at this late stage,
+   XXX so we can't use a function like PerlLIO_write that relies on one
+   being present (at least in win32) :-(.
+   Disable for now.
+*/
 #ifdef DEBUGGING
     {
 	/* By now all filehandles should have been closed, so any
 	 * stray (non-STD-)filehandles indicate *possible* (PerlIO)
 	 * errors. */
+#define PERLIO_TEARDOWN_MESSAGE_BUF_SIZE 64
+#define PERLIO_TEARDOWN_MESSAGE_FD 2
+	char buf[PERLIO_TEARDOWN_MESSAGE_BUF_SIZE];
 	int i;
 	for (i = 3; i < PL_perlio_fd_refcnt_size; i++) {
-	    if (PL_perlio_fd_refcnt[i])
-		PerlIO_debug("PerlIO_cleanup: fd %d refcnt=%d\n",
-			     i, PL_perlio_fd_refcnt[i]);
+	    if (PL_perlio_fd_refcnt[i]) {
+		const STRLEN len =
+		    my_snprintf(buf, sizeof(buf),
+				"PerlIO_teardown: fd %d refcnt=%d\n",
+				i, PL_perlio_fd_refcnt[i]);
+		PerlLIO_write(PERLIO_TEARDOWN_MESSAGE_FD, buf, len);
+	    }
 	}
     }
+#endif
 #endif
     /* Not bothering with PL_perlio_mutex since by now
      * all the interpreters are gone. */
@@ -3572,6 +3585,7 @@ FILE *
 PerlIO_findFILE(PerlIO *f)
 {
     PerlIOl *l = *f;
+    FILE *stdio;
     while (l) {
 	if (l->tab == &PerlIO_stdio) {
 	    PerlIOStdio *s = PerlIOSelf(&l, PerlIOStdio);
@@ -3580,7 +3594,19 @@ PerlIO_findFILE(PerlIO *f)
 	l = *PerlIONext(&l);
     }
     /* Uses fallback "mode" via PerlIO_modestr() in PerlIO_exportFILE */
-    return PerlIO_exportFILE(f, NULL);
+    /* However, we're not really exporting a FILE * to someone else (who
+       becomes responsible for closing it, or calling PerlIO_releaseFILE())
+       So we need to undo its refernce count increase on the underlying file
+       descriptor. We have to do this, because if the loop above returns you
+       the FILE *, then *it* didn't increase any reference count. So there's
+       only one way to be consistent. */
+    stdio = PerlIO_exportFILE(f, NULL);
+    if (stdio) {
+	const int fd = fileno(stdio);
+	if (fd >= 0)
+	    PerlIOUnix_refcnt_dec(fd);
+    }
+    return stdio;
 }
 
 /* Use this to reverse PerlIO_exportFILE calls. */
@@ -5036,16 +5062,16 @@ int
 PerlIO_vprintf(PerlIO *f, const char *fmt, va_list ap)
 {
     dTHX;
-    SV * const sv = newSVpvs("");
+    SV * sv;
     const char *s;
     STRLEN len;
     SSize_t wrote;
 #ifdef NEED_VA_COPY
     va_list apc;
     Perl_va_copy(ap, apc);
-    sv_vcatpvf(sv, fmt, &apc);
+    sv = vnewSVpvf(fmt, &apc);
 #else
-    sv_vcatpvf(sv, fmt, &ap);
+    sv = vnewSVpvf(fmt, &ap);
 #endif
     s = SvPV_const(sv, len);
     wrote = PerlIO_write(f, s, len);

@@ -354,7 +354,7 @@ Perl_sv_add_arena(pTHX_ char *ptr, U32 size, U32 flags)
 #ifdef DEBUGGING
 	SvREFCNT(sv) = 0;
 #endif
-	/* Must always set typemask because it's awlays checked in on cleanup
+	/* Must always set typemask because it's always checked in on cleanup
 	   when the arenas are walked looking for objects.  */
 	SvFLAGS(sv) = SVTYPEMASK;
 	sv++;
@@ -2501,6 +2501,29 @@ Perl_sv_2nv(pTHX_ register SV *sv)
     return SvNVX(sv);
 }
 
+/*
+=for apidoc sv_2num
+
+Return an SV with the numeric value of the source SV, doing any necessary
+reference or overload conversion.  You must use the C<SvNUM(sv)> macro to
+access this function.
+
+=cut
+*/
+
+SV *
+Perl_sv_2num(pTHX_ register SV *sv)
+{
+    if (!SvROK(sv))
+	return sv;
+    if (SvAMAGIC(sv)) {
+	SV * const tmpsv = AMG_CALLun(sv,numer);
+	if (tmpsv && (!SvROK(tmpsv) || (SvRV(tmpsv) != SvRV(sv))))
+	    return sv_2num(tmpsv);
+    }
+    return sv_2mortal(newSVuv(PTR2UV(SvRV(sv))));
+}
+
 /* uiv_2buf(): private routine for use by sv_2pv_flags(): print an IV or
  * UV as a string towards the end of buf, and return pointers to start and
  * end of it.
@@ -2769,8 +2792,10 @@ Perl_sv_2pv_flags(pTHX_ register SV *sv, STRLEN *lp, I32 flags)
 	}
 	errno = olderrno;
 #ifdef FIXNEGATIVEZERO
-        if (*s == '-' && s[1] == '0' && !s[2])
-	    my_strlcpy(s, "0", SvLEN(s));
+        if (*s == '-' && s[1] == '0' && !s[2]) {
+	    s[0] = '0';
+	    s[1] = 0;
+	}
 #endif
 	while (*s) s++;
 #ifdef hcx
@@ -3536,7 +3561,7 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV *sstr, I32 flags)
 	}
 
 	if (dtype >= SVt_PV) {
-	    if (dtype == SVt_PVGV) {
+	    if (dtype == SVt_PVGV && isGV_with_GP(dstr)) {
 		glob_assign_ref(dstr, sstr);
 		return;
 	    }
@@ -5073,7 +5098,9 @@ Perl_sv_clear(pTHX_ register SV *sv)
     }
 
     if (SvOBJECT(sv)) {
-	if (PL_defstash) {		/* Still have a symbol table? */
+	if (PL_defstash &&	/* Still have a symbol table? */
+	    SvDESTROYABLE(sv))
+	{
 	    dSP;
 	    HV* stash;
 	    do {	
@@ -5397,7 +5424,7 @@ Perl_sv_len_utf8(pTHX_ register SV *sv)
 
 	if (PL_utf8cache) {
 	    STRLEN ulen;
-	    MAGIC *mg = SvMAGICAL(sv) ? mg_find(sv, PERL_MAGIC_utf8) : 0;
+	    MAGIC *mg = SvMAGICAL(sv) ? mg_find(sv, PERL_MAGIC_utf8) : NULL;
 
 	    if (mg && mg->mg_len != -1) {
 		ulen = mg->mg_len;
@@ -7059,11 +7086,11 @@ Perl_newSVhek(pTHX_ const HEK *hek)
 
 Creates a new SV with its SvPVX_const pointing to a shared string in the string
 table. If the string does not already exist in the table, it is created
-first.  Turns on READONLY and FAKE.  The string's hash is stored in the UV
-slot of the SV; if the C<hash> parameter is non-zero, that value is used;
-otherwise the hash is computed.  The idea here is that as the string table
-is used for shared hash keys these strings will have SvPVX_const == HeKEY and
-hash lookup will avoid string compare.
+first.  Turns on READONLY and FAKE. If the C<hash> parameter is non-zero, that
+value is used; otherwise the hash is computed. The string's hash can be later
+be retrieved from the SV with the C<SvSHARED_HASH()> macro. The idea here is
+that as the string table is used for shared hash keys these strings will have
+SvPVX_const == HeKEY and hash lookup will avoid string compare.
 
 =cut
 */
@@ -7216,7 +7243,7 @@ Perl_newSVuv(pTHX_ UV u)
 /*
 =for apidoc newSV_type
 
-Creates a new SV, of the type specificied.  The reference count for the new SV
+Creates a new SV, of the type specified.  The reference count for the new SV
 is set to 1.
 
 =cut
@@ -8601,10 +8628,11 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		%p		include pointer address (standard)	
 		%-p	(SVf)	include an SV (previously %_)
 		%-<num>p	include an SV with precision <num>	
-		%1p	(VDf)	include a v-string (as %vd)
 		%<num>p		reserved for future extensions
 
 	Robin Barker 2005-07-14
+
+		%1p	(VDf)	removed.  RMB 2007-10-19
 */
  	    char* r = q; 
 	    bool sv = FALSE;	
@@ -8624,13 +8652,6 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 			is_utf8 = TRUE;
 		    goto string;
 		}
-#if vdNUMBER
-		else if (n == vdNUMBER) {	/* VDf */
-		    vectorize = TRUE;
-		    VECTORIZE_ARGS
-		    goto format_vd;
-	  	}
-#endif
 		else if (n) {
 		    if (ckWARN_d(WARN_INTERNAL))
 			Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
@@ -9194,7 +9215,9 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 		: SvNV(argsv);
 
 	    need = 0;
-	    if (c != 'e' && c != 'E') {
+	    /* nv * 0 will be NaN for NaN, +Inf and -Inf, and 0 for anything
+	       else. frexp() has some unspecified behaviour for those three */
+	    if (c != 'e' && c != 'E' && (nv * 0) == 0) {
 		i = PERL_INT_MIN;
 		/* FIXME: if HAS_LONG_DOUBLE but not USE_LONG_DOUBLE this
 		   will cast our (long double) to (double) */
@@ -9495,7 +9518,7 @@ Perl_sv_vcatpvfn(pTHX_ SV *sv, const char *pat, STRLEN patlen, va_list *args, SV
 All the macros and functions in this section are for the private use of
 the main function, perl_clone().
 
-The foo_dup() functions make an exact copy of an existing foo thinngy.
+The foo_dup() functions make an exact copy of an existing foo thingy.
 During the course of a cloning, a hash table is used to map old addresses
 to new addresses. The table is created and manipulated with the
 ptr_table_* functions.
@@ -9994,10 +10017,10 @@ Perl_sv_dup(pTHX_ const SV *sstr, CLONE_PARAMS* param)
         /** We are joining here so we don't want do clone
 	    something that is bad **/
 	if (SvTYPE(sstr) == SVt_PVHV) {
-	    const char * const hvname = HvNAME_get(sstr);
+	    const HEK * const hvname = HvNAME_HEK(sstr);
 	    if (hvname)
 		/** don't clone stashes if they already exist **/
-		return (SV*)gv_stashpv(hvname,0);
+		return (SV*)gv_stashpvn(HEK_KEY(hvname), HEK_LEN(hvname), 0);
         }
     }
 
@@ -10027,8 +10050,7 @@ Perl_sv_dup(pTHX_ const SV *sstr, CLONE_PARAMS* param)
 
     /* don't clone objects whose class has asked us not to */
     if (SvOBJECT(sstr) && ! (SvFLAGS(SvSTASH(sstr)) & SVphv_CLONEABLE)) {
-	SvFLAGS(dstr) &= ~SVTYPEMASK;
-	SvOBJECT_off(dstr);
+	SvFLAGS(dstr) = 0;
 	return dstr;
     }
 
@@ -11167,7 +11189,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     PL_sub_generation	= proto_perl->Isub_generation;
     PL_isarev		= hv_dup_inc(proto_perl->Iisarev, param);
-    PL_delayedisa	= hv_dup_inc(proto_perl->Idelayedisa, param);
 
     /* funky return mechanisms */
     PL_forkprocess	= proto_perl->Iforkprocess;
@@ -11270,11 +11291,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 
     PL_runops		= proto_perl->Irunops;
 
-#ifdef CSH
-    PL_cshlen		= proto_perl->Icshlen;
-    PL_cshname		= proto_perl->Icshname; /* XXX never deallocated */
-#endif
-
     PL_parser		= parser_dup(proto_perl->Iparser, param);
 
     PL_subline		= proto_perl->Isubline;
@@ -11351,6 +11367,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_lockhook		= proto_perl->Ilockhook;
     PL_unlockhook	= proto_perl->Iunlockhook;
     PL_threadhook	= proto_perl->Ithreadhook;
+    PL_destroyhook	= proto_perl->Idestroyhook;
 
 #ifdef THREADS_HAVE_PIDS
     PL_ppid		= proto_perl->Ippid;
@@ -12074,9 +12091,22 @@ S_find_uninit_var(pTHX_ OP* obase, SV* uninit_sv, bool match)
 
     case OP_RV2SV:
     case OP_CUSTOM:
-    case OP_ENTERSUB:
 	match = 1; /* XS or custom code could trigger random warnings */
 	goto do_op;
+
+    case OP_ENTERSUB:
+    case OP_GOTO:
+	/* XXX tmp hack: these two may call an XS sub, and currently
+	  XS subs don't have a SUB entry on the context stack, so CV and
+	  pad determination goes wrong, and BAD things happen. So, just
+	  don't try to determine the value under those circumstances.
+	  Need a better fix at dome point. DAPM 11/2007 */
+	break;
+
+    case OP_POS:
+	/* def-ness of rval pos() is independent of the def-ness of its arg */
+	if ( !(obase->op_flags & OPf_MOD))
+	    break;
 
     case OP_SCHOMP:
     case OP_CHOMP:

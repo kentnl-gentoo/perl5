@@ -79,7 +79,7 @@
 %token <i_tkval> LOCAL MY MYSUB REQUIRE
 %token <i_tkval> COLONATTR
 
-%type <ival> prog progstart remember mremember savescope
+%type <ival> prog progstart remember mremember
 %type <ival>  startsub startanonsub startformsub
 /* FIXME for MAD - are these two ival? */
 %type <ival> mydefsv mintro
@@ -175,9 +175,6 @@ mremember:	/* NULL */	/* start a partial lexical scope */
 			{ $$ = block_start(FALSE); }
 	;
 
-savescope:	/* NULL */	/* remember stack pos in case of error */
-		{ $$ = PL_savestack_ix; }
-
 /* A collection of "lines" in the program */
 lineseq	:	/* NULL */
 			{ $$ = Nullop; }
@@ -188,12 +185,13 @@ lineseq	:	/* NULL */
 			    	    (LISTOP*)$1, (LISTOP*)$2),
 				$1);
 			}
-	|	lineseq savescope line
-			{   LEAVE_SCOPE($2);
-			    $$ = append_list(OP_LINESEQ,
-				(LISTOP*)$1, (LISTOP*)$3);
+	|	lineseq line
+			{   $$ = append_list(OP_LINESEQ,
+				(LISTOP*)$1, (LISTOP*)$2);
 			    PL_pad_reset_pending = TRUE;
-			    if ($1 && $3) PL_hints |= HINT_BLOCK_SCOPE; }
+			    if ($1 && $2)
+				PL_hints |= HINT_BLOCK_SCOPE;
+			}
 	;
 
 /* A "line" in the program */
@@ -262,7 +260,7 @@ sideff	:	error
 			  TOKEN_GETMAD($2,$$,'w');
 			}
 	|	expr FOR expr
-			{ $$ = newFOROP(0, Nullch, (line_t)IVAL($2),
+			{ $$ = newFOROP(0, NULL, (line_t)IVAL($2),
 					Nullop, $3, $1, Nullop);
 			  TOKEN_GETMAD($2,((LISTOP*)$$)->op_first->op_sibling,'w');
 			}
@@ -469,10 +467,10 @@ label	:	/* empty */
 			{
 #ifdef MAD
 			  YYSTYPE tmplval;
-			  tmplval.pval = Nullch;
+			  tmplval.pval = NULL;
 			  $$ = newTOKEN(OP_NULL, tmplval, 0);
 #else
-			  $$ = Nullch;
+			  $$ = NULL;
 #endif
 			}
 	|	LABEL

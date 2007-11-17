@@ -54,7 +54,8 @@ my $Conf = {
         'stored'            => 'sourcefiles',
         'dslip'             => '03modlist.data.gz',
         'update'            => '86400',
-        'mod'               => '02packages.details.txt.gz'
+        'mod'               => '02packages.details.txt.gz',
+        'custom_index'      => 'packages.txt',
     },
     '_build' => {
         'plugins'           => 'plugins',
@@ -65,6 +66,7 @@ my $Conf = {
         'autobundle_prefix' => 'Snapshot',
         'autdir'            => 'authors',
         'install_log_dir'   => 'install-logs',
+        'custom_sources'    => 'custom-sources',
         'sanity_check'      => 1,
     },
     '_mirror' => {
@@ -484,18 +486,42 @@ remains empty if you do not require super user permissiosn to install.
 =cut
 
         $Conf->{'program'}->{'sudo'} = do {
-            $>  # check for all install dirs!
-                # installsiteman3dir is a 5.8'ism.. don't check
-                # it on 5.6.x...
-                ? ( -w $Config{'installsitelib'} &&
-                    ( defined $Config{'installsiteman3dir'} &&
-                           -w $Config{'installsiteman3dir'}
-                    ) &&
-                    -w $Config{'installsitebin'} 
-                        ? undef
-                        : can_run('sudo') 
-                  )
-                : can_run('sudo')
+
+            ### let's assume you dont need sudo,
+            ### unless one of the below criteria tells us otherwise
+            my $sudo = undef;
+            
+            ### you're a normal user, you might need sudo
+            if( $> ) {
+    
+                ### check for all install dirs!
+                ### installsiteman3dir is a 5.8'ism.. don't check
+                ### it on 5.6.x...            
+                ### you have write permissions to the installdir,
+                ### you don't need sudo
+                if( -w $Config{'installsitelib'} &&
+                    ( defined $Config{'installsiteman3dir'} && 
+                      -w $Config{'installsiteman3dir'} 
+                    ) && -w $Config{'installsitebin'} 
+                ) {                    
+                    $sudo = undef;
+                    
+                ### you have PERL_MM_OPT set to some alternate
+                ### install place. You probably have write permissions
+                ### to that
+                } elsif ( $ENV{'PERL_MM_OPT'} and 
+                          $ENV{'PERL_MM_OPT'} =~ /INSTALL|LIB|PREFIX/
+                ) {
+                    $sudo = undef;
+
+                ### you probably don't have write permissions
+                } else {                
+                    $sudo = can_run('sudo');
+                }
+            }  
+            
+            ### and return the value
+            $sudo;
         };
 
 =item perlwrapper
@@ -532,14 +558,14 @@ with CPANPLUS, which is used to enable autoflushing in spawned processes.
                 
                 ### parallel to your cpanp/cpanp-boxed
                 my $maybe = File::Spec->rel2abs(
-                                File::Spec->catdir( dirname($0), $bin )
+                                File::Spec->catfile( dirname($0), $bin )
                             );        
                 $path = $maybe and last BIN if -f $maybe;
         
                 ### parallel to your CPANPLUS.pm:
                 ### $INC{cpanplus}/../bin/cpanp-run-perl
                 $maybe = File::Spec->rel2abs(
-                            File::Spec->catdir( 
+                            File::Spec->catfile( 
                                 dirname($INC{'CPANPLUS.pm'}),
                                 '..',   # lib dir
                                 'bin',  # bin dir
@@ -554,7 +580,7 @@ with CPANPLUS, which is used to enable autoflushing in spawned processes.
                 ### CPANPLUS.pm in
                 ### /tmp/cp/lib/perl5/site_perl/5.8.8
                 $maybe = File::Spec->rel2abs(
-                            File::Spec->catdir( 
+                            File::Spec->catfile( 
                                 dirname( $INC{'CPANPLUS.pm'} ),
                                 '..', '..', '..', '..', # 4x updir
                                 'bin',                  # bin dir
@@ -568,9 +594,16 @@ with CPANPLUS, which is used to enable autoflushing in spawned processes.
                 ### or user installs
                 ### note that we don't use 'can_run' as it's
                 ### not an executable, just a wrapper...
-                for my $dir (split(/\Q$Config::Config{path_sep}\E/, $ENV{PATH}),
-                             File::Spec->curdir
+                ### prefer anything that's found in the path paralel to your $^X
+                for my $dir (File::Spec->rel2abs( dirname($^X) ),
+                             split(/\Q$Config::Config{path_sep}\E/, $ENV{PATH}),
+                             File::Spec->curdir, 
                 ) {             
+
+                    ### On VMS the path could be in UNIX format, and we
+                    ### currently need it to be in VMS format
+                    $dir = VMS::Filespec::vmspath($dir) if ON_VMS;
+
                     $maybe = File::Spec->catfile( $dir, $bin );
                     $path = $maybe and last BIN if -f $maybe;
                 }
@@ -584,6 +617,8 @@ with CPANPLUS, which is used to enable autoflushing in spawned processes.
             ### cross your fingers...
             ### pass '-P' to perl: "run program through C 
             ### preprocessor before compilation"
+            ### XXX using -P actually changes the way some Makefile.PLs
+            ### are executed, so don't do that... --kane
             error(loc(
                 "Could not find the '%1' binary in your path".
                 "--this may be a problem.\n".

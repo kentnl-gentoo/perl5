@@ -255,8 +255,8 @@ Perl_pad_undef(pTHX_ CV* cv)
 	return;
 
     DEBUG_X(PerlIO_printf(Perl_debug_log,
-	  "Pad undef: cv=0x%"UVxf" padlist=0x%"UVxf"\n",
-	    PTR2UV(cv), PTR2UV(padlist))
+	  "Pad undef: cv=0x%"UVxf" padlist=0x%"UVxf" comppad=0x%"UVxf"\n",
+	    PTR2UV(cv), PTR2UV(padlist), PTR2UV(PL_comppad))
     );
 
     /* detach any '&' anon children in the pad; if afterwards they
@@ -1517,6 +1517,9 @@ Perl_cv_clone(pTHX_ CV *proto)
 		else
 		    sv = newSV(0);
 		SvPADMY_on(sv);
+		/* reset the 'assign only once' flag on each state var */
+		if (SvPAD_STATE(namesv))
+		    SvPADSTALE_on(sv);
 	    }
 	}
 	else if (IS_PADGV(ppad[ix]) || IS_PADCONST(ppad[ix])) {

@@ -6,7 +6,7 @@ use strict;
 
 our($VERSION, @ISA, @EXPORT_OK);
 
-$VERSION = "1.09";
+$VERSION = "1.11";
 
 use Carp;
 use Exporter ();
@@ -395,6 +395,8 @@ These are a hotchpotch of opcodes still waiting to be considered
 
     padsv padav padhv padany
 
+    once
+
     rv2gv refgen srefgen ref
 
     bless -- could be used to change ownership of objects (reblessing)
@@ -534,6 +536,14 @@ SystemV Interprocess Communications:
 
     shmctl shmget shmread shmwrite
 
+=item :load
+
+This tag holds opcodes related to loading modules and getting information
+about calling environment and args.
+
+    require dofile 
+    caller
+
 =item :still_to_be_decided
 
     chdir
@@ -548,9 +558,6 @@ SystemV Interprocess Communications:
     pack unpack -- can be used to create/use memory pointers
 
     entereval -- can be used to hide code from initial compile
-    require dofile 
-
-    caller -- get info about calling environment and args
 
     reset
 
@@ -563,14 +570,13 @@ a tag name but need to be tagged for completeness and documentation.
 
     syscall dump chroot
 
-
 =back
 
 =head1 SEE ALSO
 
-ops(3) -- perl pragma interface to Opcode module.
+L<ops> -- perl pragma interface to Opcode module.
 
-Safe(3) -- Opcode and namespace limited execution compartments
+L<Safe> -- Opcode and namespace limited execution compartments
 
 =head1 AUTHORS
 

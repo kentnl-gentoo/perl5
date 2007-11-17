@@ -2,7 +2,7 @@
 
 use strict;
 use lib qw[../lib lib];
-use Test::More tests => 13;
+use Test::More tests => 19;
 use Term::ReadLine;
 
 use_ok( 'Term::UI' );
@@ -106,9 +106,9 @@ my $tmpl = {
 #### test parse_options   
 {
     my $str =   q[command --no-foo --baz --bar=0 --quux=bleh ] .
-                q[--option="some'thing" -one-dash -single=blah' foo];
+                q[--option="some'thing" -one-dash -single=blah' foo bar-zot];
 
-    my $munged = 'command foo';
+    my $munged = 'command foo bar-zot';
     my $expected = {
             foo         => 0,
             baz         => 1,
@@ -121,6 +121,24 @@ my $tmpl = {
 
     my ($href,$rest) = $term->parse_options( $str );
 
-    is_deeply( $href, $expected, q[Parsing options] );
-    is($rest,$munged, q[Remaining unparsed string] );
+    is_deeply($href, $expected, qq[Parsing options] );
+    is($rest, $munged,          qq[Remaining unparsed string '$munged'] );
+}
+
+### more parse_options tests
+{   my @map = (
+        [ 'x --update_source'   => 'x', { update_source => 1 } ],
+        [ '--update_source'     => '',  { update_source => 1 } ],
+    );
+    
+    for my $aref ( @map ) {
+        my( $input, $munged, $expect ) = @$aref;
+        
+        my($href,$rest) = $term->parse_options( $input );
+        
+        ok( $href,              "Parsed '$input'" );
+        is_deeply( $href, $expect,
+                                "   Options parsed correctly" );
+        is( $rest, $munged,     "   Command parsed correctly" );
+    }
 }

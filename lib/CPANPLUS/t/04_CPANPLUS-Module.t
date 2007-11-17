@@ -22,7 +22,7 @@ my $CB      = CPANPLUS::Backend->new( $Conf );
 ### start with fresh sources ###
 ok( $CB->reload_indices( update_source => 0 ),  "Rebuilding trees" );  
 
-my $AuthName    = 'EUNOXS';
+my $AuthName    = TEST_CONF_AUTHOR;
 my $Auth        = $CB->author_tree( $AuthName );
 my $ModName     = TEST_CONF_MODULE;
 my $Mod         = $CB->module_tree( $ModName );
@@ -47,7 +47,7 @@ isa_ok( $Auth->parent,          'CPANPLUS::Backend' );
         name        =>  $ModName,
         comment     =>  undef,
         package     =>  'Foo-Bar-0.01.tar.gz',
-        path        =>  'authors/id/E/EU/EUNOXS',      
+        path        =>  'authors/id/EUNOXS',      
         version     =>  '0.01',
         dslip       =>  'cdpO ',
         description =>  'CPANPLUS Test Package', 
@@ -76,7 +76,7 @@ isa_ok( $Auth->parent,          'CPANPLUS::Backend' );
 
 ### convenience methods ###
 {   ok( 1,                                          "Convenience functions" );
-    is( $Mod->package_name,     'Foo-Bar',          "   Package name");
+    is( $Mod->package_name,      'Foo-Bar',         "   Package name");
     is( $Mod->package_version,   '0.01',            "   Package version");
     is( $Mod->package_extension, 'tar.gz',          "   Package extension");
     ok( !$Mod->package_is_perl_core,                "   Package not core");
@@ -171,6 +171,19 @@ isa_ok( $Auth->parent,          'CPANPLUS::Backend' );
         ok( $Mod->check_signature,
                             "Signature check OK" );
     }
+}
+
+### dslip & related
+{   my $dslip = $Mod->dslip;   
+    ok( $dslip,             "Got dslip information from $ModName ($dslip)" );
+    
+    ### now find it for a submodule
+    {   my $submod = $CB->module_tree( TEST_CONF_MODULE_SUB );
+        ok( $submod,        "   Found submodule " . $submod->name );
+        ok( $submod->dslip, "   Got dslip info (".$submod->dslip.")" );
+        is( $submod->dslip, $dslip,
+                            "   It's identical to $ModName" );
+    }                            
 }
 
 {   ### details() test ###   

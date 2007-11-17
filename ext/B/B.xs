@@ -1620,6 +1620,18 @@ is_empty(gv)
     OUTPUT:
         RETVAL
 
+bool
+isGV_with_GP(gv)
+	B::GV	gv
+    CODE:
+#if PERL_VERSION >= 9
+	RETVAL = isGV_with_GP(gv) ? TRUE : FALSE;
+#else
+	RETVAL = TRUE; /* In 5.8 and earlier they all are.  */
+#endif
+    OUTPUT:
+	RETVAL
+
 void*
 GvGP(gv)
 	B::GV	gv
@@ -1728,9 +1740,13 @@ B::GV
 IoBOTTOM_GV(io)
 	B::IO	io
 
+#if PERL_VERSION <= 8
+
 short
 IoSUBPROCESS(io)
 	B::IO	io
+
+#endif
 
 bool
 IsSTD(io,name)

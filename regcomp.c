@@ -1163,11 +1163,19 @@ is the recommended Unicode-aware way of saying
 
 #define TRIE_STORE_REVCHAR                                                 \
     STMT_START {                                                           \
-	SV *tmp = newSVpvs("");                                            \
-	if (UTF) SvUTF8_on(tmp);                                           \
-	Perl_sv_catpvf( aTHX_ tmp, "%c", (int)uvc );                       \
-	av_push( revcharmap, tmp );                                        \
-    } STMT_END
+	if (UTF) {							   \
+	    SV *zlopp = newSV(2);					   \
+	    unsigned char *flrbbbbb = (unsigned char *) SvPVX(zlopp);	   \
+	    unsigned const char *const kapow = uvuni_to_utf8(flrbbbbb, uvc & 0xFF); \
+	    SvCUR_set(zlopp, kapow - flrbbbbb);				   \
+	    SvPOK_on(zlopp);						   \
+	    SvUTF8_on(zlopp);						   \
+	    av_push(revcharmap, zlopp);					   \
+	} else {							   \
+	    char ooooff = (char)uvc;					   	   \
+	    av_push(revcharmap, newSVpvn(&ooooff, 1));			   \
+	}								   \
+        } STMT_END
 
 #define TRIE_READ_CHAR STMT_START {                                           \
     wordlen++;                                                                \
@@ -1405,7 +1413,20 @@ S_make_trie(pTHX_ RExC_state_t *pRExC_state, regnode *startbranch, regnode *firs
                     /* store the codepoint in the bitmap, and if its ascii
                        also store its folded equivelent. */
                     TRIE_BITMAP_SET(trie,uvc);
-                    if ( folder ) TRIE_BITMAP_SET(trie,folder[ uvc ]);
+
+		    /* store the folded codepoint */
+		    if ( folder ) TRIE_BITMAP_SET(trie,folder[ uvc ]);
+
+		    if ( !UTF ) {
+			/* store first byte of utf8 representation of
+			   codepoints in the 127 < uvc < 256 range */
+			if (127 < uvc && uvc < 192) {
+			    TRIE_BITMAP_SET(trie,194);
+			} else if (191 < uvc ) {
+			    TRIE_BITMAP_SET(trie,195);
+			/* && uvc < 256 -- we know uvc is < 256 already */
+			}
+		    }
                     set_bit = 0; /* We've done our bit :-) */
                 }
             } else {
@@ -3297,7 +3318,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 					SvUTF8(sv) && SvMAGICAL(sv) ?
 					mg_find(sv, PERL_MAGIC_utf8) : NULL;
 				    if (mg && mg->mg_len >= 0)
-					mg->mg_len += CHR_SVLEN(last_str);
+					mg->mg_len += CHR_SVLEN(last_str) - l;
 				}
 				data->last_end += l * (mincount - 1);
 			    }
@@ -4753,6 +4774,8 @@ reStudy:
         r->paren_names = NULL;
 
 #ifdef STUPID_PATTERN_CHECKS            
+    if (r->prelen == 0)
+        r->extflags |= RXf_NULL;
     if (r->extflags & RXf_SPLIT && r->prelen == 1 && r->precomp[0] == ' ')
         /* XXX: this should happen BEFORE we compile */
         r->extflags |= (RXf_SKIPWHITE|RXf_WHITE); 
@@ -4769,7 +4792,9 @@ reStudy:
         U8 fop = OP(first);
         U8 nop = OP(NEXTOPER(first));
         
-         if (PL_regkind[fop] == BOL && nop == END) 
+        if (PL_regkind[fop] == NOTHING && nop == END)
+            r->extflags |= RXf_NULL;
+        else if (PL_regkind[fop] == BOL && nop == END)
             r->extflags |= RXf_START_ONLY;
         else if (fop == PLUS && nop ==SPACE && OP(regnext(first))==END)
             r->extflags |= RXf_WHITE;    
@@ -4919,9 +4944,13 @@ Perl_reg_named_buff_exists(pTHX_ REGEXP * const rx, SV * const key,
 SV*
 Perl_reg_named_buff_firstkey(pTHX_ REGEXP * const rx, const U32 flags)
 {
-    (void)hv_iterinit(rx->paren_names);
+    if ( rx && rx->paren_names ) {
+	(void)hv_iterinit(rx->paren_names);
 
-    return CALLREG_NAMED_BUFF_NEXTKEY(rx, NULL, flags & ~RXapif_FIRSTKEY);
+	return CALLREG_NAMED_BUFF_NEXTKEY(rx, NULL, flags & ~RXapif_FIRSTKEY);
+    } else {
+	return FALSE;
+    }
 }
 
 SV*
@@ -6467,6 +6496,7 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep)
             | PERL_SCAN_DISALLOW_PREFIX
             | (SIZE_ONLY ? PERL_SCAN_SILENT_ILLDIGIT : 0);
         UV cp;
+	char string;
         len = (STRLEN)(endbrace - name - 2);
         cp = grok_hex(name + 2, &len, &fl, NULL);
         if ( len != (STRLEN)(endbrace - name - 2) ) {
@@ -6478,7 +6508,8 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep)
             *valuep = cp;
             return NULL;
         }
-        sv_str= Perl_newSVpvf_nocontext("%c",(int)cp);
+	string = (char)cp;
+        sv_str= newSVpvn(&string, 1);
     } else {
         /* fetch the charnames handler for this scope */
         HV * const table = GvHV(PL_hintgv);
@@ -6827,6 +6858,7 @@ tryagain:
     case 0xCE:
         if (!LOC && FOLD) {
             U32 len,cp;
+	    len=0; /* silence a spurious compiler warning */
             if ((cp = what_len_TRICKYFOLD_safe(RExC_parse,RExC_end,UTF,len))) {
                 *flagp |= HASWIDTH; /* could be SIMPLE too, but needs a handler in regexec.regrepeat */
                 RExC_parse+=len-1; /* we get one from nextchar() as well. :-( */
@@ -6866,6 +6898,11 @@ tryagain:
 	    RExC_seen_zerolen++;
 	    ret = reg_node(pRExC_state, KEEPS);
 	    *flagp |= SIMPLE;
+	    /* XXX:dmq : disabling in-place substitution seems to
+	     * be necessary here to avoid cases of memory corruption, as
+	     * with: C<$_="x" x 80; s/x\K/y/> -- rgs
+	     */
+	    RExC_seen |= REG_SEEN_LOOKBEHIND;
 	    goto finish_meta_pat;
 	case 'Z':
 	    ret = reg_node(pRExC_state, SEOL);
@@ -8777,19 +8814,17 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
     k = PL_regkind[OP(o)];
 
     if (k == EXACT) {
-	SV * const dsv = sv_2mortal(newSVpvs(""));
+	sv_catpvs(sv, " ");
 	/* Using is_utf8_string() (via PERL_PV_UNI_DETECT) 
 	 * is a crude hack but it may be the best for now since 
 	 * we have no flag "this EXACTish node was UTF-8" 
 	 * --jhi */
-	const char * const s = 
-	    pv_pretty(dsv, STRING(o), STR_LEN(o), 60, 
-	        PL_colors[0], PL_colors[1],
-	        PERL_PV_ESCAPE_UNI_DETECT |
-	        PERL_PV_PRETTY_ELIPSES    |
-	        PERL_PV_PRETTY_LTGT    
-            ); 
-	Perl_sv_catpvf(aTHX_ sv, " %s", s );
+	pv_pretty(sv, STRING(o), STR_LEN(o), 60, PL_colors[0], PL_colors[1],
+		  PERL_PV_ESCAPE_UNI_DETECT |
+		  PERL_PV_PRETTY_ELLIPSES   |
+		  PERL_PV_PRETTY_LTGT       |
+		  PERL_PV_PRETTY_NOCLEAR
+		  );
     } else if (k == TRIE) {
 	/* print the details of the trie in dumpuntil instead, as
 	 * progi->data isn't available here */
@@ -8818,7 +8853,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
             int i;
             int rangestart = -1;
             U8* bitmap = IS_ANYOF_TRIE(op) ? (U8*)ANYOF_BITMAP(o) : (U8*)TRIE_BITMAP(trie);
-            Perl_sv_catpvf(aTHX_ sv, "[");
+            sv_catpvs(sv, "[");
             for (i = 0; i <= 256; i++) {
                 if (i < 256 && BITMAP_TEST(bitmap,i)) {
                     if (rangestart == -1)
@@ -8835,7 +8870,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
                     rangestart = -1;
                 }
             }
-            Perl_sv_catpvf(aTHX_ sv, "]");
+            sv_catpvs(sv, "]");
         } 
 	 
     } else if (k == CURLY) {
@@ -8878,7 +8913,7 @@ Perl_regprop(pTHX_ const regexp *prog, SV *sv, const regnode *o)
     } else if (k == LOGICAL)
 	Perl_sv_catpvf(aTHX_ sv, "[%d]", o->flags);	/* 2: embedded, otherwise 1 */
     else if (k == FOLDCHAR)
-	Perl_sv_catpvf(aTHX_ sv, "[0x%"UVXf"]",ARG(o) );	
+	Perl_sv_catpvf(aTHX_ sv, "[0x%"UVXf"]", PTR2UV(ARG(o)) );
     else if (k == ANYOF) {
 	int i, rangestart = -1;
 	const U8 flags = ANYOF_FLAGS(o);
@@ -9646,12 +9681,24 @@ clear_re(pTHX_ void *r)
 STATIC void
 S_put_byte(pTHX_ SV *sv, int c)
 {
-    if (isCNTRL(c) || c == 255 || !isPRINT(c))
+    /* Our definition of isPRINT() ignores locales, so only bytes that are
+       not part of UTF-8 are considered printable. I assume that the same
+       holds for UTF-EBCDIC.
+       Also, code point 255 is not printable in either (it's E0 in EBCDIC,
+       which Wikipedia says:
+
+       EO, or Eight Ones, is an 8-bit EBCDIC character code represented as all
+       ones (binary 1111 1111, hexadecimal FF). It is similar, but not
+       identical, to the ASCII delete (DEL) or rubout control character.
+       ) So the old condition can be simplified to !isPRINT(c)  */
+    if (!isPRINT(c))
 	Perl_sv_catpvf(aTHX_ sv, "\\%o", c);
-    else if (c == '-' || c == ']' || c == '\\' || c == '^')
-	Perl_sv_catpvf(aTHX_ sv, "\\%c", c);
-    else
-	Perl_sv_catpvf(aTHX_ sv, "%c", c);
+    else {
+	const char string = c;
+	if (c == '-' || c == ']' || c == '\\' || c == '^')
+	    sv_catpvs(sv, "\\");
+	sv_catpvn(sv, &string, 1);
+    }
 }
 
 
@@ -9754,7 +9801,7 @@ S_dumpuntil(pTHX_ const regexp *r, const regnode *start, const regnode *node,
                     elem_ptr ? pv_pretty(sv, SvPV_nolen_const(*elem_ptr), SvCUR(*elem_ptr), 60,
 	                    PL_colors[0], PL_colors[1],
 	                    (SvUTF8(*elem_ptr) ? PERL_PV_ESCAPE_UNI : 0) |
-	                    PERL_PV_PRETTY_ELIPSES    |
+	                    PERL_PV_PRETTY_ELLIPSES    |
 	                    PERL_PV_PRETTY_LTGT
                             )
                             : "???"

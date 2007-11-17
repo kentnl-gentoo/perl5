@@ -40,19 +40,21 @@ CPANPLUS::Selfupdate
 
     my $Modules = {
         dependencies => {
-            'File::Fetch'               => '0.08', # win32 ftp support
+            'File::Fetch'               => '0.13_02', # win32 file:// support
             'File::Spec'                => '0.82',
             'IPC::Cmd'                  => '0.36', # 5.6.2 compat: 2-arg open
             'Locale::Maketext::Simple'  => '0.01',
             'Log::Message'              => '0.01',
             'Module::Load'              => '0.10',
-            'Module::Load::Conditional' => '0.16', # Better parsing: #23995
-            'version'                   => '0.70', # needed for M::L::C
+            'Module::Load::Conditional' => '0.18', # Better parsing: #23995,
+                                                   # uses version.pm for <=>
+            'version'                   => '0.73', # needed for M::L::C
                                                    # addresses #24630 and 
                                                    # #24675
+                                                   # Address ~0 overflow issue
             'Params::Check'             => '0.22',
             'Package::Constants'        => '0.01',
-            'Term::UI'                  => '0.05',
+            'Term::UI'                  => '0.18', # option parsing
             'Test::Harness'             => '2.62', # due to bug #19505
                                                    # only 2.58 and 2.60 are bad
             'Test::More'                => '0.47', # to run our tests
@@ -81,12 +83,8 @@ CPANPLUS::Selfupdate
             ],            
             cpantest        => [
                 {
-                    LWP              => '0.0',
-                    'LWP::UserAgent' => '0.0',
-                    'HTTP::Request'  => '0.0',
-                    URI              => '0.0',
-                    YAML             => '0.0',
-                    'Test::Reporter' => 1.27,
+                    'YAML::Tiny'     => '0.0',
+                    'Test::Reporter' => '1.34',
                 },
                 sub { 
                     my $cb = shift;

@@ -38,6 +38,8 @@
 
 #define DOCATCH(o) ((CATCH_GET == TRUE) ? docatch(o) : (o))
 
+#define dopoptosub(plop)	dopoptosub_at(cxstack, (plop))
+
 PP(pp_wantarray)
 {
     dVAR;
@@ -1297,13 +1299,6 @@ Perl_is_lvalue_sub(pTHX)
 	return cxstack[cxix].blk_sub.lval;
     else
 	return 0;
-}
-
-STATIC I32
-S_dopoptosub(pTHX_ I32 startingblock)
-{
-    dVAR;
-    return dopoptosub_at(cxstack, startingblock);
 }
 
 STATIC I32
@@ -2665,14 +2660,6 @@ S_save_lines(pTHX_ AV *array, SV *sv)
     }
 }
 
-STATIC void
-S_docatch_body(pTHX)
-{
-    dVAR;
-    CALLRUNOPS(aTHX);
-    return;
-}
-
 STATIC OP *
 S_docatch(pTHX_ OP *o)
 {
@@ -2693,7 +2680,7 @@ S_docatch(pTHX_ OP *o)
 	assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_EVAL);
 	cxstack[cxstack_ix].blk_eval.cur_top_env = PL_top_env;
  redo_body:
-	docatch_body();
+	CALLRUNOPS(aTHX);
 	break;
     case 3:
 	/* die caught by an inner eval - continue inner loop */
@@ -2737,7 +2724,6 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
     I32 gimme = G_VOID;
     I32 optype;
     OP dummy;
-    OP *rop;
     char tbuf[TYPE_DIGITS(long) + 12 + 10];
     char *tmpbuf = tbuf;
     char *safestr;
@@ -2795,9 +2781,9 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
     PUSHEVAL(cx, 0, NULL);
 
     if (runtime)
-	rop = doeval(G_SCALAR, startop, runcv, PL_curcop->cop_seq);
+	(void) doeval(G_SCALAR, startop, runcv, PL_curcop->cop_seq);
     else
-	rop = doeval(G_SCALAR, startop, PL_compcv, PL_cop_seqmax);
+	(void) doeval(G_SCALAR, startop, PL_compcv, PL_cop_seqmax);
     POPBLOCK(cx,PL_curpm);
     POPEVAL(cx);
 
@@ -2815,7 +2801,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
     PERL_UNUSED_VAR(newsp);
     PERL_UNUSED_VAR(optype);
 
-    return rop;
+    return PL_eval_start;
 }
 
 
@@ -2864,9 +2850,12 @@ Perl_find_runcv(pTHX_ U32 *db_seqp)
  * In the last case, startop is non-null, and contains the address of
  * a pointer that should be set to the just-compiled code.
  * outside is the lexically enclosing CV (if any) that invoked us.
+ * Returns a bool indicating whether the compile was successful; if so,
+ * PL_eval_start contains the first op of the compiled ocde; otherwise,
+ * pushes undef (also croaks if startop != NULL).
  */
 
-STATIC OP *
+STATIC bool
 S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 {
     dVAR; dSP;
@@ -2948,8 +2937,8 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	    const SV * const nsv = cx->blk_eval.old_namesv;
 	    (void)hv_store(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv),
                           &PL_sv_undef, 0);
-	    DIE(aTHX_ "%sCompilation failed in require",
-		*msg ? msg : "Unknown error\n");
+	    Perl_croak(aTHX_ "%sCompilation failed in require",
+		       *msg ? msg : "Unknown error\n");
 	}
 	else if (startop) {
 	    POPBLOCK(cx,PL_curpm);
@@ -2963,7 +2952,9 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	    }
 	}
 	PERL_UNUSED_VAR(newsp);
-	RETPUSHUNDEF;
+	PUSHs(&PL_sv_undef);
+	PUTBACK;
+	return FALSE;
     }
     CopLINE_set(&PL_compiling, 0);
     if (startop) {
@@ -3010,11 +3001,12 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
     PL_op = saveop;			/* The caller may need it. */
     PL_parser->lex_state = LEX_NOTPARSING;	/* $^S needs this. */
 
-    RETURNOP(PL_eval_start);
+    PUTBACK;
+    return TRUE;
 }
 
 STATIC PerlIO *
-S_check_type_and_open(pTHX_ const char *name, const char *mode)
+S_check_type_and_open(pTHX_ const char *name)
 {
     Stat_t st;
     const int st_rc = PerlLIO_stat(name, &st);
@@ -3023,36 +3015,40 @@ S_check_type_and_open(pTHX_ const char *name, const char *mode)
 	return NULL;
     }
 
-    return PerlIO_open(name, mode);
+    return PerlIO_open(name, PERL_SCRIPT_MODE);
 }
 
-STATIC PerlIO *
-S_doopen_pm(pTHX_ const char *name, const char *mode)
-{
 #ifndef PERL_DISABLE_PMC
-    const STRLEN namelen = strlen(name);
+STATIC PerlIO *
+S_doopen_pm(pTHX_ const char *name, const STRLEN namelen)
+{
     PerlIO *fp;
 
-    if (namelen > 3 && strEQ(name + namelen - 3, ".pm")) {
-	SV * const pmcsv = Perl_newSVpvf(aTHX_ "%s%c", name, 'c');
-	const char * const pmc = SvPV_nolen_const(pmcsv);
+    if (namelen > 3 && memEQs(name + namelen - 3, 3, ".pm")) {
+	SV *const pmcsv = newSV(namelen + 2);
+	char *const pmc = SvPVX(pmcsv);
 	Stat_t pmcstat;
+
+	memcpy(pmc, name, namelen);
+	pmc[namelen] = 'c';
+	pmc[namelen + 1] = '\0';
+
 	if (PerlLIO_stat(pmc, &pmcstat) < 0) {
-	    fp = check_type_and_open(name, mode);
+	    fp = check_type_and_open(name);
 	}
 	else {
-	    fp = check_type_and_open(pmc, mode);
+	    fp = check_type_and_open(pmc);
 	}
 	SvREFCNT_dec(pmcsv);
     }
     else {
-	fp = check_type_and_open(name, mode);
+	fp = check_type_and_open(name);
     }
     return fp;
-#else
-    return check_type_and_open(name, mode);
-#endif /* !PERL_DISABLE_PMC */
 }
+#else
+#  define doopen_pm(name, namelen) check_type_and_open(name)
+#endif /* !PERL_DISABLE_PMC */
 
 PP(pp_require)
 {
@@ -3061,6 +3057,11 @@ PP(pp_require)
     SV *sv;
     const char *name;
     STRLEN len;
+    char * unixname;
+    STRLEN unixlen;
+#ifdef VMS
+    int vms_unixname = 0;
+#endif
     const char *tryname = NULL;
     SV *namesv = NULL;
     const I32 gimme = GIMME_V;
@@ -3075,10 +3076,14 @@ PP(pp_require)
 
     sv = POPs;
     if ( (SvNIOKp(sv) || SvVOK(sv)) && PL_op->op_type != OP_DOFILE) {
-	if ( SvVOK(sv) && ckWARN(WARN_PORTABLE) )	/* require v5.6.1 */
+	if ( SvVOK(sv) && ckWARN(WARN_PORTABLE) ) {	/* require v5.6.1 */
+	    HV * hinthv = GvHV(PL_hintgv);
+	    SV ** ptr = NULL;
+	    if (hinthv) ptr = hv_fetchs(hinthv, "v_string", FALSE);
+	    if ( !(ptr && *ptr && SvIOK(*ptr) && SvIV(*ptr)) )
 		Perl_warner(aTHX_ packWARN(WARN_PORTABLE),
                         "v-string in use/require non-portable");
-
+	}
 	sv = new_version(sv);
 	if (!sv_derived_from(PL_patchlevel, "version"))
 	    upg_version(PL_patchlevel, TRUE);
@@ -3088,20 +3093,68 @@ PP(pp_require)
 		    SVfARG(vnormal(sv)), SVfARG(vnormal(PL_patchlevel)));
 	}
 	else {
-	    if ( vcmp(sv,PL_patchlevel) > 0 )
-		DIE(aTHX_ "Perl %"SVf" required--this is only %"SVf", stopped",
-		    SVfARG(vnormal(sv)), SVfARG(vnormal(PL_patchlevel)));
+	    if ( vcmp(sv,PL_patchlevel) > 0 ) {
+		I32 first = 0;
+		AV *lav;
+		SV * const req = SvRV(sv);
+		SV * const pv = *hv_fetchs((HV*)req, "original", FALSE);
+
+		/* get the left hand term */
+		lav = (AV *)SvRV(*hv_fetchs((HV*)req, "version", FALSE));
+
+		first  = SvIV(*av_fetch(lav,0,0));
+		if (   first > (int)PERL_REVISION    /* probably 'use 6.0' */
+		    || hv_exists((HV*)req, "qv", 2 ) /* qv style */
+		    || av_len(lav) > 1               /* FP with > 3 digits */
+		    || strstr(SvPVX(pv),".0")        /* FP with leading 0 */
+		   ) {
+		    DIE(aTHX_ "Perl %"SVf" required--this is only "
+		    	"%"SVf", stopped", SVfARG(vnormal(req)),
+			SVfARG(vnormal(PL_patchlevel)));
+		}
+		else { /* probably 'use 5.10' or 'use 5.8' */
+		    SV * hintsv = newSV(0);
+		    I32 second = 0;
+
+		    if (av_len(lav)>=1) 
+			second = SvIV(*av_fetch(lav,1,0));
+
+		    second /= second >= 600  ? 100 : 10;
+		    hintsv = Perl_newSVpvf(aTHX_ "v%d.%d.%d",
+		    	(int)first, (int)second,0);
+		    upg_version(hintsv, TRUE);
+
+		    DIE(aTHX_ "Perl %"SVf" required (did you mean %"SVf"?)"
+		    	"--this is only %"SVf", stopped",
+			SVfARG(vnormal(req)),
+			SVfARG(vnormal(hintsv)),
+			SVfARG(vnormal(PL_patchlevel)));
+		}
+	    }
 	}
 
-	/* If we request a version >= 5.9.5, load feature.pm with the
-	 * feature bundle that corresponds to the required version.
-	 * We do this only with use, not require. */
-	if (PL_compcv && vcmp(sv, sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
+        /* We do this only with use, not require. */
+	if (PL_compcv &&
+	  /* If we request a version >= 5.6.0, then v-string are OK
+	     so set $^H{v_string} to suppress the v-string warning */
+	    vcmp(sv, sv_2mortal(upg_version(newSVnv(5.006), FALSE))) >= 0) {
+	  HV * hinthv = GvHV(PL_hintgv);
+	  if( hinthv ) {
+	      SV *hint = newSViv(1);
+	      (void)hv_stores(hinthv, "v_string", hint);
+	      /* This will call through to Perl_magic_sethint() which in turn
+		 sets PL_hints correctly.  */
+	      SvSETMAGIC(hint);
+	  }
+	  /* If we request a version >= 5.9.5, load feature.pm with the
+	   * feature bundle that corresponds to the required version. */
+	  if (vcmp(sv, sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
 	    SV *const importsv = vnormal(sv);
 	    *SvPVX_mutable(importsv) = ':';
 	    ENTER;
 	    Perl_load_module(aTHX_ 0, newSVpvs("feature"), NULL, importsv, NULL);
 	    LEAVE;
+	  }
 	}
 
 	RETPUSHYES;
@@ -3110,13 +3163,37 @@ PP(pp_require)
     if (!(name && len > 0 && *name))
 	DIE(aTHX_ "Null filename used");
     TAINT_PROPER("require");
+
+
+#ifdef VMS
+    /* The key in the %ENV hash is in the syntax of file passed as the argument
+     * usually this is in UNIX format, but sometimes in VMS format, which
+     * can result in a module being pulled in more than once.
+     * To prevent this, the key must be stored in UNIX format if the VMS
+     * name can be translated to UNIX.
+     */
+    if ((unixname = tounixspec(name, NULL)) != NULL) {
+	unixlen = strlen(unixname);
+	vms_unixname = 1;
+    }
+    else
+#endif
+    {
+        /* if not VMS or VMS name can not be translated to UNIX, pass it
+	 * through.
+	 */
+	unixname = (char *) name;
+	unixlen = len;
+    }
     if (PL_op->op_type == OP_REQUIRE) {
-	SV * const * const svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
+	SV * const * const svp = hv_fetch(GvHVn(PL_incgv),
+					  unixname, unixlen, 0);
 	if ( svp ) {
 	    if (*svp != &PL_sv_undef)
 		RETPUSHYES;
 	    else
-		DIE(aTHX_ "Compilation failed in require");
+		DIE(aTHX_ "Attempt to reload %s aborted.\n"
+			    "Compilation failed in require", unixname);
 	}
     }
 
@@ -3124,7 +3201,7 @@ PP(pp_require)
 
     if (path_is_absolute(name)) {
 	tryname = name;
-	tryrsfp = doopen_pm(name,PERL_SCRIPT_MODE);
+	tryrsfp = doopen_pm(name, len);
     }
 #ifdef MACOS_TRADITIONAL
     if (!tryrsfp) {
@@ -3133,7 +3210,7 @@ PP(pp_require)
 	MacPerl_CanonDir(name, newname, 1);
 	if (path_is_absolute(newname)) {
 	    tryname = newname;
-	    tryrsfp = doopen_pm(newname,PERL_SCRIPT_MODE);
+	    tryrsfp = doopen_pm(newname, strlen(newname));
 	}
     }
 #endif
@@ -3141,11 +3218,11 @@ PP(pp_require)
 	AV * const ar = GvAVn(PL_incgv);
 	I32 i;
 #ifdef VMS
-	char *unixname;
-	if ((unixname = tounixspec(name, NULL)) != NULL)
+	if (vms_unixname)
 #endif
 	{
 	    namesv = newSV(0);
+	    sv_upgrade(namesv, SVt_PV);
 	    for (i = 0; i <= AvFILL(ar); i++) {
 		SV * const dirsv = *av_fetch(ar, i, TRUE);
 
@@ -3275,7 +3352,16 @@ PP(pp_require)
 			|| (*name == ':' && name[1] != ':' && strchr(name+2, ':'))
 #endif
 		  ) {
-		    const char *dir = SvPV_nolen_const(dirsv);
+		    const char *dir;
+		    STRLEN dirlen;
+
+		    if (SvOK(dirsv)) {
+			dir = SvPV_const(dirsv, dirlen);
+		    } else {
+			dir = "";
+			dirlen = 0;
+		    }
+
 #ifdef MACOS_TRADITIONAL
 		    char buf1[256];
 		    char buf2[256];
@@ -3303,13 +3389,32 @@ PP(pp_require)
 				       "%s\\%s",
 				       dir, name);
 #    else
-		    Perl_sv_setpvf(aTHX_ namesv, "%s/%s", dir, name);
+		    /* The equivalent of		    
+		       Perl_sv_setpvf(aTHX_ namesv, "%s/%s", dir, name);
+		       but without the need to parse the format string, or
+		       call strlen on either pointer, and with the correct
+		       allocation up front.  */
+		    {
+			char *tmp = SvGROW(namesv, dirlen + len + 2);
+
+			memcpy(tmp, dir, dirlen);
+			tmp +=dirlen;
+			*tmp++ = '/';
+			/* name came from an SV, so it will have a '\0' at the
+			   end that we can copy as part of this memcpy().  */
+			memcpy(tmp, name, len + 1);
+
+			SvCUR_set(namesv, dirlen + len + 1);
+
+			/* Don't even actually have to turn SvPOK_on() as we
+			   access it directly with SvPVX() below.  */
+		    }
 #    endif
 #  endif
 #endif
 		    TAINT_PROPER("require");
 		    tryname = SvPVX_const(namesv);
-		    tryrsfp = doopen_pm(tryname, PERL_SCRIPT_MODE);
+		    tryrsfp = doopen_pm(tryname, SvCUR(namesv));
 		    if (tryrsfp) {
 			if (tryname[0] == '.' && tryname[1] == '/')
 			    tryname += 2;
@@ -3367,11 +3472,13 @@ PP(pp_require)
     /* name is never assigned to again, so len is still strlen(name)  */
     /* Check whether a hook in @INC has already filled %INC */
     if (!hook_sv) {
-	(void)hv_store(GvHVn(PL_incgv), name, len, newSVpv(CopFILE(&PL_compiling),0),0);
+	(void)hv_store(GvHVn(PL_incgv),
+		       unixname, unixlen, newSVpv(CopFILE(&PL_compiling),0),0);
     } else {
-	SV** const svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
+	SV** const svp = hv_fetch(GvHVn(PL_incgv), unixname, unixlen, 0);
 	if (!svp)
-	    (void)hv_store(GvHVn(PL_incgv), name, len, SvREFCNT_inc_simple(hook_sv), 0 );
+	    (void)hv_store(GvHVn(PL_incgv),
+			   unixname, unixlen, SvREFCNT_inc_simple(hook_sv), 0 );
     }
 
     ENTER;
@@ -3410,7 +3517,10 @@ PP(pp_require)
     encoding = PL_encoding;
     PL_encoding = NULL;
 
-    op = DOCATCH(doeval(gimme, NULL, NULL, PL_curcop->cop_seq));
+    if (doeval(gimme, NULL, NULL, PL_curcop->cop_seq))
+	op = DOCATCH(PL_eval_start);
+    else
+	op = PL_op->op_next;
 
     /* Restore encoding. */
     PL_encoding = encoding;
@@ -3429,7 +3539,7 @@ PP(pp_entereval)
     char *tmpbuf = tbuf;
     char *safestr;
     STRLEN len;
-    OP *ret;
+    bool ok;
     CV* runcv;
     U32 seq;
     HV *saved_hh = NULL;
@@ -3502,13 +3612,13 @@ PP(pp_entereval)
     if (PERLDB_LINE && PL_curstash != PL_debstash)
 	save_lines(CopFILEAV(&PL_compiling), PL_parser->linestr);
     PUTBACK;
-    ret = doeval(gimme, NULL, runcv, seq);
+    ok = doeval(gimme, NULL, runcv, seq);
     if (PERLDB_INTER && was != (I32)PL_sub_generation /* Some subs defined here. */
-	&& ret != PL_op->op_next) {	/* Successive compilation. */
+	&& ok) {
 	/* Copy in anything fake and short. */
 	my_strlcpy(safestr, fakestr, fakelen);
     }
-    return DOCATCH(ret);
+    return ok ? DOCATCH(PL_eval_start) : PL_op->op_next;
 }
 
 PP(pp_leaveeval)
@@ -3994,12 +4104,12 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 			    RETPUSHNO;
 		    }
 		    else {
-			hv_store_ent(seen_this,
-			    sv_2mortal(newSViv(PTR2IV(*this_elem))),
-			    &PL_sv_undef, 0);
-			hv_store_ent(seen_other,
-			    sv_2mortal(newSViv(PTR2IV(*other_elem))),
-			    &PL_sv_undef, 0);
+			(void)hv_store_ent(seen_this,
+				sv_2mortal(newSViv(PTR2IV(*this_elem))),
+				&PL_sv_undef, 0);
+			(void)hv_store_ent(seen_other,
+				sv_2mortal(newSViv(PTR2IV(*other_elem))),
+				&PL_sv_undef, 0);
 			PUSHs(*this_elem);
 			PUSHs(*other_elem);
 			

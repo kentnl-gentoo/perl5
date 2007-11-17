@@ -1,7 +1,7 @@
 /*    regexp.h
  *
  *    Copyright (C) 1993, 1994, 1996, 1997, 1999, 2000, 2001, 2003,
- *    2005, 2006 by Larry Wall and others
+ *    2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -222,6 +222,10 @@ and check for NULL.
  * Note that flags starting with RXf_PMf_ have exact equivalents
  * stored in op_pmflags and which are defined in op.h, they are defined
  * numerically here only for clarity.
+ *
+ * NOTE: if you modify any RXf flags you should run regen.pl or regcomp.pl
+ * so that regnodes.h is updated with the changes. 
+ *
  */
 
 /* Anchor and GPOS related stuff */
@@ -240,6 +244,7 @@ and check for NULL.
 #define RXf_SKIPWHITE		0x00000100 /* Pattern is for a split / / */
 #define RXf_START_ONLY		0x00000200 /* Pattern is /^/ */
 #define RXf_WHITE		0x00000400 /* Pattern is /\s+/ */
+#define RXf_NULL		0x40000000 /* Pattern is // */
 
 /* 0x1F800 of extflags is used by (RXf_)PMf_COMPILETIME */
 #define RXf_PMf_LOCALE  	0x00000800 /* use locale */
@@ -289,6 +294,11 @@ and check for NULL.
 #define M_PAT_MODS      QR_PAT_MODS     LOOP_PAT_MODS
 #define S_PAT_MODS      M_PAT_MODS      EXEC_PAT_MODS
 
+/*
+ * NOTE: if you modify any RXf flags you should run regen.pl or regcomp.pl
+ * so that regnodes.h is updated with the changes. 
+ *
+ */
 
 /* What we have seen */
 #define RXf_LOOKBEHIND_SEEN	0x00020000
@@ -322,6 +332,11 @@ and check for NULL.
 #define RXf_TAINTED_SEEN	0x20000000
 #define RXf_TAINTED             0x80000000 /* this pattern is tainted */
 
+/*
+ * NOTE: if you modify any RXf flags you should run regen.pl or regcomp.pl
+ * so that regnodes.h is updated with the changes. 
+ *
+ */
 
 #define RX_HAS_CUTGROUP(prog) ((prog)->intflags & PREGf_CUTGROUP_SEEN)
 #define RX_MATCH_TAINTED(prog)	((prog)->extflags & RXf_TAINTED_SEEN)

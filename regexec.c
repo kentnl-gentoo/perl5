@@ -2937,7 +2937,7 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		    if ( got_wordnum ) {
 			if ( ! ST.accepted ) {
 			    ENTER;
-			    SAVETMPS;
+			    /* SAVETMPS; */ /* XXX is this necessary? dmq */
 			    bufflen = TRIE_INITAL_ACCEPT_BUFFLEN;
 			    sv_accept_buff=newSV(bufflen *
 					    sizeof(reg_trie_accepted) - 1);
@@ -3148,18 +3148,10 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		PL_reginput = (char *)ST.accept_buff[ best ].endpos;
 		if ( !ST.jump || !ST.jump[ST.accept_buff[best].wordnum]) {
 		    scan = ST.B;
-		    /* NOTREACHED */
 		} else {
 		    scan = ST.me + ST.jump[ST.accept_buff[best].wordnum];
-		    /* NOTREACHED */
                 }
-                if (has_cutgroup) {
-                    PUSH_YES_STATE_GOTO(TRIE_next, scan);    
-                    /* NOTREACHED */
-                } else {
-                    PUSH_STATE_GOTO(TRIE_next, scan);
-                    /* NOTREACHED */
-                }
+                PUSH_YES_STATE_GOTO(TRIE_next, scan);    
                 /* NOTREACHED */
 	    }
 	    /* NOTREACHED */
@@ -5413,8 +5405,8 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 	} else {
 	    while (scan < loceol && !isSPACE(*scan))
 		scan++;
-	    break;
 	}
+	break;
     case NSPACEL:
 	PL_reg_flags |= RF_tainted;
 	if (do_utf8) {
@@ -5580,8 +5572,8 @@ Perl_regclass_swash(pTHX_ const regexp *prog, register const regnode* node, bool
 	     * documentation of these array elements. */
 
 	    si = *ary;
-	    a  = SvROK(ary[1]) ? &ary[1] : 0;
-	    b  = SvTYPE(ary[2]) == SVt_PVAV ? &ary[2] : 0;
+	    a  = SvROK(ary[1]) ? &ary[1] : NULL;
+	    b  = SvTYPE(ary[2]) == SVt_PVAV ? &ary[2] : NULL;
 
 	    if (a)
 		sw = *a;

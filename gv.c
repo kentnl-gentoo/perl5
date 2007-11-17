@@ -33,6 +33,7 @@ Perl stores its global variables.
 #include "EXTERN.h"
 #define PERL_IN_GV_C
 #include "perl.h"
+#include "overload.c"
 
 static const char S_autoload[] = "AUTOLOAD";
 static const STRLEN S_autolen = sizeof(S_autoload)-1;
@@ -169,10 +170,24 @@ GP *
 Perl_newGP(pTHX_ GV *const gv)
 {
     GP *gp;
+    U32 hash;
+#ifdef USE_ITHREADS
     const char *const file
 	= (PL_curcop && CopFILE(PL_curcop)) ? CopFILE(PL_curcop) : "";
-    STRLEN len = strlen(file);
-    U32 hash;
+    const STRLEN len = strlen(file);
+#else
+    SV *const temp_sv = CopFILESV(PL_curcop);
+    const char *file;
+    STRLEN len;
+
+    if (temp_sv) {
+	file = SvPVX(temp_sv);
+	len = SvCUR(temp_sv);
+    } else {
+	file = "";
+	len = 0;
+    }
+#endif
 
     PERL_HASH(hash, file, len);
 
@@ -198,7 +213,8 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
     dVAR;
     const U32 old_type = SvTYPE(gv);
     const bool doproto = old_type > SVt_NULL;
-    const char * const proto = (doproto && SvPOK(gv)) ? SvPVX_const(gv) : NULL;
+    char * const proto = (doproto && SvPOK(gv)) ? SvPVX(gv) : NULL;
+    const STRLEN protolen = proto ? SvCUR(gv) : 0;
     SV *const has_constant = doproto && SvROK(gv) ? SvRV(gv) : NULL;
     const U32 exported_constant = has_constant ? SvPCS_IMPORTED(gv) : 0;
 
@@ -265,8 +281,8 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 	CvFILE_set_from_cop(GvCV(gv), PL_curcop);
 	CvSTASH(GvCV(gv)) = PL_curstash;
 	if (proto) {
-	    sv_setpv((SV*)GvCV(gv), proto);
-	    Safefree(proto);
+	    sv_usepvn_flags((SV*)GvCV(gv), proto, protolen,
+			    SV_HAS_TRAILING_NUL);
 	}
     }
 }
@@ -528,6 +544,37 @@ C<call_sv> apply equally to these functions.
 =cut
 */
 
+STATIC HV*
+S_gv_get_super_pkg(pTHX_ const char* name, I32 namelen)
+{
+    AV* superisa;
+    GV** gvp;
+    GV* gv;
+    HV* stash;
+
+    stash = gv_stashpvn(name, namelen, 0);
+    if(stash) return stash;
+
+    /* If we must create it, give it an @ISA array containing
+       the real package this SUPER is for, so that it's tied
+       into the cache invalidation code correctly */
+    stash = gv_stashpvn(name, namelen, GV_ADD);
+    gvp = (GV**)hv_fetchs(stash, "ISA", TRUE);
+    gv = *gvp;
+    gv_init(gv, stash, "ISA", 3, TRUE);
+    superisa = GvAVn(gv);
+    GvMULTI_on(gv);
+    sv_magic((SV*)superisa, (SV*)gv, PERL_MAGIC_isa, NULL, 0);
+#ifdef USE_ITHREADS
+    av_push(superisa, newSVpv(CopSTASHPV(PL_curcop), 0));
+#else
+    av_push(superisa, newSVhek(CopSTASH(PL_curcop)
+			       ? HvNAME_HEK(CopSTASH(PL_curcop)) : NULL));
+#endif
+
+    return stash;
+}
+
 GV *
 Perl_gv_fetchmethod_autoload(pTHX_ HV *stash, const char *name, I32 autoload)
 {
@@ -556,7 +603,7 @@ Perl_gv_fetchmethod_autoload(pTHX_ HV *stash, const char *name, I32 autoload)
 	    SV * const tmpstr = sv_2mortal(Perl_newSVpvf(aTHX_ "%s::SUPER",
 						  CopSTASHPV(PL_curcop)));
 	    /* __PACKAGE__::SUPER stash should be autovivified */
-	    stash = gv_stashpvn(SvPVX_const(tmpstr), SvCUR(tmpstr), GV_ADD);
+	    stash = gv_get_super_pkg(SvPVX_const(tmpstr), SvCUR(tmpstr));
 	    DEBUG_o( Perl_deb(aTHX_ "Treating %s as %s::%s\n",
 			 origname, HvNAME_get(stash), name) );
 	}
@@ -569,7 +616,7 @@ Perl_gv_fetchmethod_autoload(pTHX_ HV *stash, const char *name, I32 autoload)
 	    if (!stash && (nsplit - origname) >= 7 &&
 		strnEQ(nsplit - 7, "::SUPER", 7) &&
 		gv_stashpvn(origname, nsplit - origname - 7, 0))
-	      stash = gv_stashpvn(origname, nsplit - origname, GV_ADD);
+	      stash = gv_get_super_pkg(origname, nsplit - origname);
 	}
 	ostash = stash;
     }
@@ -828,6 +875,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
     const I32 add = flags & ~GV_NOADD_MASK;
     const char *const name_end = nambeg + full_len;
     const char *const name_em1 = name_end - 1;
+    U32 faking_it;
 
     if (flags & GV_NOTQUAL) {
 	/* Caller promised that there is no stash, so we can skip the check. */
@@ -1024,12 +1072,19 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	return gv;
     }
 
-    /* Adding a new symbol */
+    /* Adding a new symbol.
+       Unless of course there was already something non-GV here, in which case
+       we want to behave as if there was always a GV here, containing some sort
+       of subroutine.
+       Otherwise we run the risk of creating things like GvIO, which can cause
+       subtle bugs. eg the one that tripped up SQL::Translator  */
+
+    faking_it = SvOK(gv);
 
     if (add & GV_ADDWARN && ckWARN_d(WARN_INTERNAL))
 	Perl_warner(aTHX_ packWARN(WARN_INTERNAL), "Had to create %s unexpectedly", nambeg);
     gv_init(gv, stash, name, len, add & GV_ADDMULTI);
-    gv_init_sv(gv, sv_type);
+    gv_init_sv(gv, faking_it ? SVt_PVCV : sv_type);
 
     if (isALPHA(name[0]) && ! (isLEXWARN_on ? ckWARN(WARN_ONCE)
 			                    : (PL_dowarn & G_WARN_ON ) ) )
@@ -1230,7 +1285,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	}
 	case '*':
 	case '#':
-	    if (sv_type == SVt_PV && ckWARN2(WARN_DEPRECATED, WARN_SYNTAX))
+	    if (sv_type == SVt_PV && ckWARN2_d(WARN_DEPRECATED, WARN_SYNTAX))
 		Perl_warner(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX),
 			    "$%c is no longer supported", *name);
 	    break;
@@ -1399,7 +1454,8 @@ Perl_gv_check(pTHX_ const HV *stash)
 #ifdef USE_ITHREADS
 		CopFILE(PL_curcop) = (char *)file;	/* set for warning */
 #else
-		CopFILEGV(PL_curcop) = gv_fetchfile(file);
+		CopFILEGV(PL_curcop)
+		    = gv_fetchfile_flags(file, HEK_LEN(GvFILE_HEK(gv)), 0);
 #endif
 		Perl_warner(aTHX_ packWARN(WARN_ONCE),
 			"Name \"%s::%s\" used only once: possible typo",
@@ -1470,7 +1526,7 @@ Perl_gp_free(pTHX_ GV *gv)
     if (gp->gp_hv && SvTYPE(gp->gp_hv) == SVt_PVHV) {
 	const char *hvname = HvNAME_get(gp->gp_hv);
 	if (PL_stashcache && hvname)
-	    hv_delete(PL_stashcache, hvname, HvNAMELEN_get(gp->gp_hv),
+	    (void)hv_delete(PL_stashcache, hvname, HvNAMELEN_get(gp->gp_hv),
 		      G_DISCARD);
 	SvREFCNT_dec(gp->gp_hv);
     }
@@ -1559,7 +1615,7 @@ Perl_Gv_AMupdate(pTHX_ HV *stash)
 	const char * const cooky = PL_AMG_names[i];
 	/* Human-readable form, for debugging: */
 	const char * const cp = (i >= DESTROY_amg ? cooky : AMG_id2name(i));
-	const STRLEN l = strlen(cooky);
+	const STRLEN l = PL_AMG_namelens[i];
 
 	DEBUG_o( Perl_deb(aTHX_ "Checking overloading of \"%s\" in package \"%.256s\"\n",
 		     cp, HvNAME_get(stash)) );
@@ -1990,7 +2046,8 @@ Perl_amagic_call(pTHX_ SV *left, SV *right, int method, int flags)
     PUSHs(lr>0? left: right);
     PUSHs( lr > 0 ? &PL_sv_yes : ( assign ? &PL_sv_undef : &PL_sv_no ));
     if (notfound) {
-      PUSHs( sv_2mortal(newSVpv(AMG_id2name(method + assignshift),0)));
+      PUSHs( sv_2mortal(newSVpvn(AMG_id2name(method + assignshift),
+				 AMG_id2namelen(method + assignshift))));
     }
     PUSHs((SV*)cv);
     PUTBACK;

@@ -168,18 +168,44 @@ PP(pp_sassign)
 	if (!got_coderef) {
 	    /* We've been returned a constant rather than a full subroutine,
 	       but they expect a subroutine reference to apply.  */
-	    ENTER;
-	    SvREFCNT_inc_void(SvRV(cv));
-	    /* newCONSTSUB takes a reference count on the passed in SV
-	       from us.  We set the name to NULL, otherwise we get into
-	       all sorts of fun as the reference to our new sub is
-	       donated to the GV that we're about to assign to.
-	    */
-	    SvRV_set(left, (SV *)newCONSTSUB(GvSTASH(right), NULL,
+	    if (SvROK(cv)) {
+		ENTER;
+		SvREFCNT_inc_void(SvRV(cv));
+		/* newCONSTSUB takes a reference count on the passed in SV
+		   from us.  We set the name to NULL, otherwise we get into
+		   all sorts of fun as the reference to our new sub is
+		   donated to the GV that we're about to assign to.
+		*/
+		SvRV_set(left, (SV *)newCONSTSUB(GvSTASH(right), NULL,
 						 SvRV(cv)));
-	    SvREFCNT_dec(cv);
-	    LEAVE;
+		SvREFCNT_dec(cv);
+		LEAVE;
+	    } else {
+		/* What can happen for the corner case *{"BONK"} = \&{"BONK"};
+		   is that
+		   First:   ops for \&{"BONK"}; return us the constant in the
+			    symbol table
+		   Second:  ops for *{"BONK"} cause that symbol table entry
+			    (and our reference to it) to be upgraded from RV
+			    to typeblob)
+		   Thirdly: We get here. cv is actually PVGV now, and its
+			    GvCV() is actually the subroutine we're looking for
+
+		   So change the reference so that it points to the subroutine
+		   of that typeglob, as that's what they were after all along.
+		*/
+		GV *const upgraded = (GV *) cv;
+		CV *const source = GvCV(upgraded);
+
+		assert(source);
+		assert(CvFLAGS(source) & CVf_CONST);
+
+		SvREFCNT_inc_void(source);
+		SvREFCNT_dec(upgraded);
+		SvRV_set(left, (SV *)source);
+	    }
 	}
+
     }
     SvSetMagicSV(right, left);
     SETs(right);
@@ -470,8 +496,11 @@ PP(pp_defined)
 
 PP(pp_add)
 {
-    dVAR; dSP; dATARGET; bool useleft; tryAMAGICbin(add,opASSIGN);
-    useleft = USE_LEFT(TOPm1s);
+    dVAR; dSP; dATARGET; bool useleft; SV *svl, *svr;
+    tryAMAGICbin(add,opASSIGN);
+    svl = sv_2num(TOPm1s);
+    svr = sv_2num(TOPs);
+    useleft = USE_LEFT(svl);
 #ifdef PERL_PRESERVE_IVUV
     /* We must see if we can perform the addition with integers if possible,
        as the integer code detects overflow while the NV code doesn't.
@@ -519,8 +548,8 @@ PP(pp_add)
        unsigned code below is actually shorter than the old code. :-)
     */
 
-    SvIV_please(TOPs);
-    if (SvIOK(TOPs)) {
+    SvIV_please(svr);
+    if (SvIOK(svr)) {
 	/* Unless the left argument is integer in range we are going to have to
 	   use NV maths. Hence only attempt to coerce the right argument if
 	   we know the left is integer.  */
@@ -536,12 +565,12 @@ PP(pp_add)
 	       lots of code to speed up what is probably a rarish case.  */
 	} else {
 	    /* Left operand is defined, so is it IV? */
-	    SvIV_please(TOPm1s);
-	    if (SvIOK(TOPm1s)) {
-		if ((auvok = SvUOK(TOPm1s)))
-		    auv = SvUVX(TOPm1s);
+	    SvIV_please(svl);
+	    if (SvIOK(svl)) {
+		if ((auvok = SvUOK(svl)))
+		    auv = SvUVX(svl);
 		else {
-		    register const IV aiv = SvIVX(TOPm1s);
+		    register const IV aiv = SvIVX(svl);
 		    if (aiv >= 0) {
 			auv = aiv;
 			auvok = 1;	/* Now acting as a sign flag.  */
@@ -556,12 +585,12 @@ PP(pp_add)
 	    bool result_good = 0;
 	    UV result;
 	    register UV buv;
-	    bool buvok = SvUOK(TOPs);
+	    bool buvok = SvUOK(svr);
 	
 	    if (buvok)
-		buv = SvUVX(TOPs);
+		buv = SvUVX(svr);
 	    else {
-		register const IV biv = SvIVX(TOPs);
+		register const IV biv = SvIVX(svr);
 		if (biv >= 0) {
 		    buv = biv;
 		    buvok = 1;
@@ -619,13 +648,14 @@ PP(pp_add)
     }
 #endif
     {
-	dPOPnv;
+	NV value = SvNV(svr);
+	(void)POPs;
 	if (!useleft) {
 	    /* left operand is undef, treat as zero. + 0.0 is identity. */
 	    SETn(value);
 	    RETURN;
 	}
-	SETn( value + TOPn );
+	SETn( value + SvNV(svl) );
 	RETURN;
     }
 }
@@ -1005,6 +1035,8 @@ PP(pp_aassign)
 		}
 		TAINT_NOT;
 	    }
+	    if (PL_delaymagic & DM_ARRAY)
+		SvSETMAGIC((SV*)ary);
 	    break;
 	case SVt_PVHV: {				/* normal hash */
 		SV *tmpstr;
@@ -1150,14 +1182,6 @@ PP(pp_aassign)
 	lelem = firstlelem + (relem - firstrelem);
 	while (relem <= SP)
 	    *relem++ = (lelem <= lastlelem) ? *lelem++ : &PL_sv_undef;
-    }
-
-    /* This is done at the bottom and in this order because
-       mro_isa_changed_in() can throw exceptions */
-    if(PL_delayedisa) {
-        HV* stash = PL_delayedisa;
-        PL_delayedisa = NULL;
-        mro_isa_changed_in(stash);
     }
 
     RETURN;
@@ -3019,7 +3043,7 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 		packsv = sv;
             else {
 	        SV* const ref = newSViv(PTR2IV(stash));
-	        hv_store(PL_stashcache, packname, packlen, ref, 0);
+	        (void)hv_store(PL_stashcache, packname, packlen, ref, 0);
 	    }
 	    goto fetch;
 	}
@@ -3077,16 +3101,24 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 	}
 	if (!sep || ((sep - name) == 5 && strnEQ(name, "SUPER", 5))) {
 	    /* the method name is unqualified or starts with SUPER:: */
+#ifndef USE_ITHREADS
+	    if (sep)
+		stash = CopSTASH(PL_curcop);
+#else
 	    bool need_strlen = 1;
 	    if (sep) {
 		packname = CopSTASHPV(PL_curcop);
 	    }
-	    else if (stash) {
+	    else
+#endif
+	    if (stash) {
 		HEK * const packhek = HvNAME_HEK(stash);
 		if (packhek) {
 		    packname = HEK_KEY(packhek);
 		    packlen = HEK_LEN(packhek);
+#ifdef USE_ITHREADS
 		    need_strlen = 0;
+#endif
 		} else {
 		    goto croak;
 		}
@@ -3097,8 +3129,10 @@ S_method_common(pTHX_ SV* meth, U32* hashp)
 		Perl_croak(aTHX_
 			   "Can't use anonymous symbol table for method lookup");
 	    }
-	    else if (need_strlen)
+#ifdef USE_ITHREADS
+	    if (need_strlen)
 		packlen = strlen(packname);
+#endif
 
 	}
 	else {
