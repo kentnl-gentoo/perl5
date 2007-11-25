@@ -4,7 +4,7 @@ use Carp;
 use warnings;
 use strict;
 use vars qw($VERSION $AUTOLOAD);
-$VERSION = '0.78_06';
+$VERSION = '0.79';
 # $DB::single=1;
 
 my %symcache;
@@ -190,11 +190,9 @@ sub _apply_handler_AH_ {
 	my $sym = findsym($pkg, $ref);
 	$sym ||= $type eq 'CODE' ? 'ANON' : 'LEXICAL';
 	no warnings;
-	my $evaled = !$raw && eval("package $pkg; no warnings;
+	my $evaled = !$raw && eval("package $pkg; no warnings; no strict;
 				    local \$SIG{__WARN__}=sub{die}; [$data]");
-	$data = ($evaled && $data =~ /^\s*\[/)  ? [$evaled]
-	      : ($evaled)			? $evaled
-	      :					  [$data];
+	$data = $evaled || [$data];
 	$pkg->$handler($sym,
 		       (ref $sym eq 'GLOB' ? *{$sym}{ref $ref}||$ref : $ref),
 		       $attr,
@@ -231,8 +229,8 @@ Attribute::Handlers - Simpler definition of attribute handlers
 
 =head1 VERSION
 
-This document describes version 0.78 of Attribute::Handlers,
-released October 5, 2002.
+This document describes version 0.79 of Attribute::Handlers,
+released November 25, 2007.
 
 =head1 SYNOPSIS
 

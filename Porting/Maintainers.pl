@@ -769,7 +769,7 @@ package Maintainers;
 	'Safe' =>
 		{
 		'MAINTAINER'	=> 'rgarcia',
-		'FILES'		=> q[ext/Safe],
+		'FILES'		=> q[ext/Safe ext/Opcode/Safe.pm],
 		'CPAN'		=> 1,
 		},
 
@@ -844,13 +844,6 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
-	'Test::Builder' =>
-		{
-		'MAINTAINER'	=> 'mschwern',
-		'FILES'		=> q[lib/Test/Builder.pm],
-		'CPAN'		=> 1,
-		},
-
 	'Test::Harness' =>
 		{
 		'MAINTAINER'	=> 'petdance',
@@ -859,17 +852,12 @@ package Maintainers;
 		'CPAN'		=> 1,
 		},
 
-	'Test::More' =>
-		{
-		'MAINTAINER'	=> 'mschwern',
-		'FILES'		=> q[lib/Test/More.pm],
-		'CPAN'		=> 1,
-		},
-
 	'Test::Simple' =>
 		{
 		'MAINTAINER'	=> 'mschwern',
 		'FILES'		=> q[lib/Test/Simple.pm lib/Test/Simple
+				     lib/Test/Builder.pm lib/Test/Builder
+				     lib/Test/More.pm
 				     t/lib/Test/Simple],
 		'CPAN'		=> 1,
 		},
