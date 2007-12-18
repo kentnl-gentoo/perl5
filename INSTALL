@@ -671,14 +671,14 @@ present, at run time.  Of course, you can still search other @INC
 directories ahead of those in APPLLIB_EXP by using any of the standard
 run-time methods: $PERLLIB, $PERL5LIB, -I, use lib, etc.
 
-=item USE_SITECUSTOMIZE
+=item usesitecustomize
 
 Run-time customization of @INC can be enabled with:
 
 	sh Configure -Dusesitecustomize
 
-Which will define USE_SITECUSTOMIZE and $Config{usesitecustomize}.
-When enabled, make perl run F<$sitelibexp/sitecustomize.pl> before
+which will define USE_SITECUSTOMIZE and $Config{usesitecustomize}.
+When enabled, this makes perl run F<$sitelibexp/sitecustomize.pl> before
 anything else.  This script can then be set up to add additional
 entries to @INC.
 
@@ -1808,24 +1808,17 @@ If make test bombs out, just cd to the t directory and run ./TEST
 by hand to see if it makes any difference.  If individual tests
 bomb, you can run them by hand, e.g.,
 
-	./perl op/groups.t
+	cd t ; ./perl -MTestInit op/groups.t
 
 Another way to get more detailed information about failed tests and
 individual subtests is to cd to the t directory and run
 
-	./perl harness
+	cd t ; ./perl harness <list of tests>
 
 (this assumes that most basic tests succeed, since harness uses
-complicated constructs).  For extension and library tests you
-need a little bit more: you need to setup your environment variable
-PERL_CORE to a true value (like "1"), and you need to supply the
-right Perl library path:
+complicated constructs). If no list of tests is provided, harness
+will run all tests.
 
-	setenv PERL_CORE 1
-	./perl -I../lib ../ext/Socket/Socket.t
-	./perl -I../lib ../lib/less.t
-
-(For csh-like shells on UNIX; adjust appropriately for other platforms.)
 You should also read the individual tests to see if there are any helpful
 comments that apply to your system.  You may also need to setup your
 shared library path if you get errors like:
@@ -1840,7 +1833,7 @@ See L</"Building a shared Perl library"> earlier in this document.
 
 Note:  One possible reason for errors is that some external programs
 may be broken due to the combination of your environment and the way
-B<make test> exercises them.  For example, this may happen if you have
+'make test' exercises them.  For example, this may happen if you have
 one or more of these environment variables set:  LC_ALL LC_CTYPE
 LC_COLLATE LANG.  In some versions of UNIX, the non-English locales
 are known to cause programs to exhibit mysterious errors.
@@ -1869,8 +1862,13 @@ If your system is quite busy and doesn't respond quickly enough,
 these tests might fail.  If possible, try running the tests again
 with the system under a lighter load.  These timing-sensitive
 and load-sensitive tests include F<t/op/alarm.t>,
-F<ext/Time/HiRes/HiRes.t>, F<lib/Benchmark.t>,
+F<ext/Time/HiRes/t/HiRes.t>, F<ext/threads/shared/t/waithires.t>,
+F<ext/threads/shared/t/stress.t>, F<lib/Benchmark.t>,
 F<lib/Memoize/t/expmod_t.t>, and F<lib/Memoize/t/speed.t>.
+
+You might also experience some failures in F<t/op/stat.t> if you build
+perl on an NFS filesystem, if the remote clock and the system clock are
+different.
 
 =item Out of memory
 
@@ -1881,7 +1879,7 @@ test 85 will fail if run under either t/TEST or t/harness.
 
 Try stopping other jobs on the system and then running the test by itself:
 
-	cd t; ./perl op/pat.t
+	cd t; ./perl -MTestInit op/pat.t
 
 to see if you have any better luck.  If your perl still fails this
 test, it does not necessarily mean you have a broken perl.  This test
@@ -2081,6 +2079,83 @@ and skip installman altogether.
 See also L<"Maintaining completely separate versions"> for another
 approach.
 
+=head1 cd /usr/include; h2ph *.h sys/*.h
+
+Some perl scripts need to be able to obtain information from the
+system header files.  This command will convert the most commonly used
+header files in /usr/include into files that can be easily interpreted
+by perl.  These files will be placed in the architecture-dependent
+library ($archlib) directory you specified to Configure.
+
+Note:  Due to differences in the C and perl languages, the conversion
+of the header files is not perfect.  You will probably have to
+hand-edit some of the converted files to get them to parse correctly.
+For example, h2ph breaks spectacularly on type casting and certain
+structures.
+
+=head1 installhtml --help
+
+Some sites may wish to make perl documentation available in HTML
+format.  The installhtml utility can be used to convert pod
+documentation into linked HTML files and install them.
+
+Currently, the supplied ./installhtml script does not make use of the
+html Configure variables.  This should be fixed in a future release.
+
+The following command-line is an example of one used to convert
+perl documentation:
+
+  ./installhtml                   \
+      --podroot=.                 \
+      --podpath=lib:ext:pod:vms   \
+      --recurse                   \
+      --htmldir=/perl/nmanual     \
+      --htmlroot=/perl/nmanual    \
+      --splithead=pod/perlipc     \
+      --splititem=pod/perlfunc    \
+      --libpods=perlfunc:perlguts:perlvar:perlrun:perlop \
+      --verbose
+
+See the documentation in installhtml for more details.  It can take
+many minutes to execute a large installation and you should expect to
+see warnings like "no title", "unexpected directive" and "cannot
+resolve" as the files are processed. We are aware of these problems
+(and would welcome patches for them).
+
+You may find it helpful to run installhtml twice. That should reduce
+the number of "cannot resolve" warnings.
+
+=head1 cd pod && make tex && (process the latex files)
+
+Some sites may also wish to make the documentation in the pod/ directory
+available in TeX format.  Type
+
+	(cd pod && make tex && <process the latex files>)
+
+=head1 Starting all over again
+
+If you wish to re-build perl from the same build directory, you should
+clean it out with the command
+
+	make distclean
+
+or
+
+	make realclean
+
+The only difference between the two is that make distclean also removes
+your old config.sh and Policy.sh files.
+
+If you are upgrading from a previous version of perl, or if you
+change systems or compilers or make other significant changes, or if
+you are experiencing difficulties building perl, you should not re-use
+your old config.sh.
+
+If your reason to reuse your old config.sh is to save your particular
+installation choices, then you can probably achieve the same effect by
+using the Policy.sh file.  See the section on L<"Site-wide Policy
+settings"> above.
+
 =head1 Reporting Problems
 
 Wherever possible please use the perlbug tool supplied with this Perl
@@ -2234,83 +2309,6 @@ See your installed copy of the perllocal.pod file for a (possibly
 incomplete) list of locally installed modules.  Note that you want
 perllocal.pod, not perllocale.pod, for installed module information.
 
-=head1 cd /usr/include; h2ph *.h sys/*.h
-
-Some perl scripts need to be able to obtain information from the
-system header files.  This command will convert the most commonly used
-header files in /usr/include into files that can be easily interpreted
-by perl.  These files will be placed in the architecture-dependent
-library ($archlib) directory you specified to Configure.
-
-Note:  Due to differences in the C and perl languages, the conversion
-of the header files is not perfect.  You will probably have to
-hand-edit some of the converted files to get them to parse correctly.
-For example, h2ph breaks spectacularly on type casting and certain
-structures.
-
-=head1 installhtml --help
-
-Some sites may wish to make perl documentation available in HTML
-format.  The installhtml utility can be used to convert pod
-documentation into linked HTML files and install them.
-
-Currently, the supplied ./installhtml script does not make use of the
-html Configure variables.  This should be fixed in a future release.
-
-The following command-line is an example of one used to convert
-perl documentation:
-
-  ./installhtml                   \
-      --podroot=.                 \
-      --podpath=lib:ext:pod:vms   \
-      --recurse                   \
-      --htmldir=/perl/nmanual     \
-      --htmlroot=/perl/nmanual    \
-      --splithead=pod/perlipc     \
-      --splititem=pod/perlfunc    \
-      --libpods=perlfunc:perlguts:perlvar:perlrun:perlop \
-      --verbose
-
-See the documentation in installhtml for more details.  It can take
-many minutes to execute a large installation and you should expect to
-see warnings like "no title", "unexpected directive" and "cannot
-resolve" as the files are processed. We are aware of these problems
-(and would welcome patches for them).
-
-You may find it helpful to run installhtml twice. That should reduce
-the number of "cannot resolve" warnings.
-
-=head1 cd pod && make tex && (process the latex files)
-
-Some sites may also wish to make the documentation in the pod/ directory
-available in TeX format.  Type
-
-	(cd pod && make tex && <process the latex files>)
-
-=head1 Starting all over again
-
-If you wish to re-build perl from the same build directory, you should
-clean it out with the command
-
-	make distclean
-
-or
-
-	make realclean
-
-The only difference between the two is that make distclean also removes
-your old config.sh and Policy.sh files.
-
-If you are upgrading from a previous version of perl, or if you
-change systems or compilers or make other significant changes, or if
-you are experiencing difficulties building perl, you should not re-use
-your old config.sh.
-
-If your reason to reuse your old config.sh is to save your particular
-installation choices, then you can probably achieve the same effect by
-using the Policy.sh file.  See the section on L<"Site-wide Policy
-settings"> above.
-
 =head1 Minimizing the Perl installation
 
 The following section is meant for people worrying about squeezing the
@@ -2451,6 +2449,13 @@ use something like the below
 
 (The 'strace' is Linux-specific, other similar utilities include 'truss'
 and 'ktrace'.)
+
+=head2 C<-DNO_MATHOMS>
+
+If you configure perl with C<-Accflags=-DNO_MATHOMS>, the functions from
+F<mathoms.c> will not be compiled in. Those functions are no longer used
+by perl itself; for source compatibility reasons, though, they weren't
+completely removed.
 
 =head1 DOCUMENTATION
 

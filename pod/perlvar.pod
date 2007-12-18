@@ -181,7 +181,7 @@ test.  Outside a C<while> test, this will not happen.
 As C<$_> is a global variable, this may lead in some cases to unwanted
 side-effects.  As of perl 5.9.1, you can now use a lexical version of
 C<$_> by declaring it in a file or in a block with C<my>.  Moreover,
-declaring C<our $> restores the global C<$_> in the current scope.
+declaring C<our $_> restores the global C<$_> in the current scope.
 
 (Mnemonic: underline is understood in certain operations.)
 
@@ -1314,15 +1314,12 @@ switch); see L<perlrun> for more info on this.
 X<$^V> X<$PERL_VERSION>
 
 The revision, version, and subversion of the Perl interpreter, represented
-as a string composed of characters with those ordinals.  Thus in Perl v5.6.0
-it equals C<chr(5) . chr(6) . chr(0)> and will return true for
-C<$^V eq v5.6.0>.  Note that the characters in this string value can
-potentially be greater than 255.
+as a C<version> object.
 
 This variable first appeared in perl 5.6.0; earlier versions of perl will
-see an undefined value.
+see an undefined value. Before perl 5.10.0 $^V was represented as a v-string.
 
-This can be used to determine whether the Perl interpreter executing a
+$^V can be used to determine whether the Perl interpreter executing a
 script is in the right range of versions.  (Mnemonic: use ^V for Version
 Control.)  Example:
 

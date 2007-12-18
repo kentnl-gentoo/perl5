@@ -1,3 +1,5 @@
+=encoding utf8
+
 =head1 NAME
 
 perldelta - what is new for perl 5.10.0
@@ -21,7 +23,7 @@ pragma, like C<strict> or C<warnings>.
 
 Currently the following new features are available: C<switch> (adds a
 switch statement), C<say> (adds a C<say> built-in function), and C<state>
-(adds an C<state> keyword for declaring "static" variables). Those
+(adds a C<state> keyword for declaring "static" variables). Those
 features are described in their own sections of this document.
 
 The C<feature> pragma is also implicitly loaded when you require a minimal
@@ -191,7 +193,7 @@ which is much more efficient. (Yves Orton)
 
 =item Vertical and horizontal whitespace, and linebreak
 
-Regular expressions now recognize the C<\v> and C<\h> escapes, that match
+Regular expressions now recognize the C<\v> and C<\h> escapes that match
 vertical and horizontal whitespace, respectively. C<\V> and C<\H>
 logically match their complements.
 
@@ -258,7 +260,33 @@ available: the C3 algorithm. See L<mro> for more information.
 Note that, due to changes in the implementation of class hierarchy search,
 code that used to undef the C<*ISA> glob will most probably break. Anyway,
 undef'ing C<*ISA> had the side-effect of removing the magic on the @ISA
-array and should not have been done in the first place.
+array and should not have been done in the first place. Also, the
+cache C<*::ISA::CACHE::> no longer exists; to force reset the @ISA cache,
+you now need to use the C<mro> API, or more simply to assign to @ISA
+(e.g. with C<@ISA = @ISA>).
+
+=head2 readdir() may return a "short filename" on Windows
+
+The readdir() function may return a "short filename" when the long
+filename contains characters outside the ANSI codepage.  Similarly
+Cwd::cwd() may return a short directory name, and glob() may return short
+names as well.  On the NTFS file system these short names can always be
+represented in the ANSI codepage.  This will not be true for all other file
+system drivers; e.g. the FAT filesystem stores short filenames in the OEM
+codepage, so some files on FAT volumes remain unaccessible through the
+ANSI APIs.
+
+Similarly, $^X, @INC, and $ENV{PATH} are preprocessed at startup to make
+sure all paths are valid in the ANSI codepage (if possible).
+
+The Win32::GetLongPathName() function now returns the UTF-8 encoded
+correct long file name instead of using replacement characters to force
+the name into the ANSI codepage.  The new Win32::GetANSIPathName()
+function can be used to turn a long pathname into a short one only if the
+long one cannot be represented in the ANSI codepage.
+
+Many other functions in the C<Win32> module have been improved to accept
+UTF-8 encoded arguments.  Please see L<Win32> for details.
 
 =head2 readpipe() is now overridable
 
@@ -391,7 +419,9 @@ such as newline and backspace are output in C<\x> notation, rather than
 octal.
 
 The B<-C> option can no longer be used on the C<#!> line. It wasn't
-working there anyway.
+working there anyway, since the standard streams are already set up
+at this point in the execution of the perl interpreter. You can use
+binmode() instead to get the desired behaviour.
 
 =head2 UCD 5.0.0
 
@@ -416,8 +446,6 @@ group.)
 =head1 Incompatible Changes
 
 =head2 Packing and UTF-8 strings
-
-=for XXX update this
 
 The semantics of pack() and unpack() regarding UTF-8-encoded data has been
 changed. Processing is now by default character per character instead of
@@ -515,6 +543,14 @@ Previously, F<.pmc> files were loaded only if more recent than the
 matching F<.pm> file. Starting with 5.9.4, they'll be always loaded if
 they exist.
 
+=head2 $^V is now a C<version> object instead of a v-string
+
+$^V can still be used with the C<%vd> format in printf, but any
+character-level operations will now access the string representation
+of the C<version> object and not the ordinals of a v-string.
+Expressions like C<< substr($^V, 0, 2) >> or C<< split //, $^V >>
+no longer work and must be rewritten.
+
 =head2 @- and @+ in patterns
 
 The special arrays C<@-> and C<@+> are no longer interpolated in regular
@@ -590,6 +626,14 @@ use of the recursive inheritance while resolving a method or doing a
 C<$foo-E<gt>isa($bar)> lookup.
 
 =head1 Modules and Pragmata
+
+=head2 Upgrading individual core modules
+
+Even more core modules are now also available separately through the
+CPAN.  If you wish to update one of these modules, you don't need to
+wait for a new perl release.  From within the cpan shell, running the
+'r' command will report on modules with upgrades available.  See
+C<perldoc CPAN> for more information.
 
 =head2 Pragmata Changes
 
@@ -786,6 +830,16 @@ for F<.tar> (plain, gziped or bzipped) or F<.zip> files.
 C<CPANPLUS> provides an API and a command-line tool to access the CPAN
 mirrors.
 
+=item *
+
+C<Pod::Escapes> provides utilities that are useful in decoding Pod
+EE<lt>...E<gt> sequences.
+
+=item *
+
+C<Pod::Simple> is now the backend for several of the Pod-related modules
+included with Perl.
+
 =back
 
 =head2 Selected Changes to Core Modules
@@ -796,6 +850,9 @@ mirrors.
 
 C<Attribute::Handlers> can now report the caller's file and line number.
 (David Feldman)
+
+All interpreted attributes are now passed as array references. (Damian
+Conway)
 
 =item C<B::Lint>
 
@@ -833,7 +890,7 @@ C<i> command.
 
 =item ptar
 
-C<ptar> is a pure perl implementation of C<tar>, that comes with
+C<ptar> is a pure perl implementation of C<tar> that comes with
 C<Archive::Tar>.
 
 =item ptardiff
@@ -894,7 +951,7 @@ direct use).
 
 =item cpan2dist
 
-C<cpan2dist> is a new utility, that comes with CPANPLUS. It's a tool to
+C<cpan2dist> is a new utility that comes with CPANPLUS. It's a tool to
 create distributions (or packages) from CPAN modules.
 
 =item pod2html
@@ -1036,8 +1093,7 @@ this optimization. (Yves Orton)
 B<Note:> Much code exists that works around perl's historic poor
 performance on alternations. Often the tricks used to do so will disable
 the new optimisations. Hopefully the utility modules used for this purpose
-will be educated about these new optimisations by the time 5.10 is
-released.
+will be educated about these new optimisations.
 
 =item Aho-Corasick start-point optimisation
 
@@ -1165,6 +1221,9 @@ z/OS.
 
 Perl has been reported to work on DragonFlyBSD and MidnightBSD.
 
+Perl has also been reported to work on NexentaOS
+( http://www.gnusolaris.org/ ).
+
 The VMS port has been improved. See L<perlvms>.
 
 Support for Cray XT4 Catamount/Qk has been added. See
@@ -1223,7 +1282,7 @@ D. Hedden)
 
 chr() on a negative value now gives C<\x{FFFD}>, the Unicode replacement
 character, unless when the C<bytes> pragma is in effect, where the low
-eight bytes of the value are used.
+eight bits of the value are used.
 
 =item PERL5SHELL and tainting
 
@@ -1303,7 +1362,7 @@ properly carry that layer on the duped filehandle. (Rafael)
 
 =item Localisation of hash elements
 
-Localizing an hash element whose key was given as a variable didn't work
+Localizing a hash element whose key was given as a variable didn't work
 correctly if the variable was changed while the local() was in effect (as
 in C<local $h{$x}; ++$x>). (Bo Lindbergh)
 
@@ -1388,9 +1447,15 @@ details.
 
 =head1 Changed Internals
 
-In general, the source code of perl has been refactored, tied up, and
-optimized in many places. Also, memory management and allocation has been
-improved in a couple of points.
+In general, the source code of perl has been refactored, tidied up,
+and optimized in many places. Also, memory management and allocation
+has been improved in several points.
+
+When compiling the perl core with gcc, as many gcc warning flags are
+turned on as is possible on the platform.  (This quest for cleanliness
+doesn't extend to XS code because we cannot guarantee the tidiness of
+code we didn't write.)  Similar strictness flags have been added or
+tightened for various other C compilers.
 
 =head2 Reordering of SVt_* constants
 
@@ -1473,7 +1538,7 @@ inherits from C<B::SV> (it used to inherit from C<B::IV>).
 
 The anonymous hash and array constructors now take 1 op in the optree
 instead of 3, now that pp_anonhash and pp_anonlist return a reference to
-an hash/array when the op is flagged with OPf_SPECIAL (Nicholas Clark).
+an hash/array when the op is flagged with OPf_SPECIAL. (Nicholas Clark)
 
 =head1 Known Problems
 
@@ -1481,9 +1546,36 @@ There's still a remaining problem in the implementation of the lexical
 C<$_>: it doesn't work inside C</(?{...})/> blocks. (See the TODO test in
 F<t/op/mydef.t>.)
 
+Stacked filetest operators won't work when the C<filetest> pragma is in
+effect, because they rely on the stat() buffer C<_> being populated, and
+filetest bypasses stat().
+
+=head2 UTF-8 problems
+
+The handling of Unicode still is unclean in several places, where it's
+dependent on whether a string is internally flagged as UTF-8. This will
+be made more consistent in perl 5.12, but that won't be possible without
+a certain amount of backwards incompatibility.
+
 =head1 Platform Specific Problems
 
+When compiled with g++ and thread support on Linux, it's reported that the
+C<$!> stops working correctly. This is related to the fact that the glibc
+provides two strerror_r(3) implementation, and perl selects the wrong
+one.
+
 =head1 Reporting Bugs
+
+If you find what you think is a bug, you might check the articles
+recently posted to the comp.lang.perl.misc newsgroup and the perl
+bug database at http://rt.perl.org/rt3/ .  There may also be
+information at http://www.perl.org/ , the Perl Home Page.
+
+If you believe you have an unreported bug, please run the B<perlbug>
+program included with your release.  Be sure to trim your bug down
+to a tiny but sufficient test case.  Your bug report, along with the
+output of C<perl -V>, will be sent off to perlbug@perl.org to be
+analysed by the Perl porting team.
 
 =head1 SEE ALSO
 
