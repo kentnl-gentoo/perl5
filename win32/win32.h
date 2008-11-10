@@ -127,8 +127,11 @@ struct utsname {
 /* Define USE_FIXED_OSFHANDLE to fix MSVCRT's _open_osfhandle() on W95.
    It now uses some black magic to work seamlessly with the DLL CRT and
    works with MSVC++ 4.0+ or GCC/Mingw32
-	-- BKS 1-24-2000 */
-#if (defined(_M_IX86) && _MSC_VER >= 1000) || defined(__MINGW32__)
+	-- BKS 1-24-2000
+   Only use this fix for VC++ 6.x or earlier (and for GCC, which we assume
+   uses MSVCRT.DLL). Later versions use MSVCR70.dll, MSVCR71.dll, etc, which
+   do not require the fix. */
+#if (defined(_M_IX86) && _MSC_VER >= 1000 && _MSC_VER <= 1200) || defined(__MINGW32__)
 #define USE_FIXED_OSFHANDLE
 #endif
 
@@ -182,14 +185,15 @@ struct utsname {
 #define DllMain DllEntryPoint
 #endif
 
-#pragma warn -ccc	/* "condition is always true/false" */
-#pragma warn -rch	/* "unreachable code" */
-#pragma warn -sig	/* "conversion may lose significant digits" */
-#pragma warn -pia	/* "possibly incorrect assignment" */
-#pragma warn -par	/* "parameter 'foo' is never used" */
-#pragma warn -aus	/* "'foo' is assigned a value that is never used" */
-#pragma warn -use	/* "'foo' is declared but never used" */
-#pragma warn -csu	/* "comparing signed and unsigned values" */
+#pragma warn -8004	/* "'foo' is assigned a value that is never used" */
+#pragma warn -8008	/* "condition is always true/false" */
+#pragma warn -8012	/* "comparing signed and unsigned values" */
+#pragma warn -8027	/* "functions containing %s are not expanded inline" */
+#pragma warn -8057	/* "parameter 'foo' is never used" */
+#pragma warn -8060	/* "possibly incorrect assignment" */
+#pragma warn -8066	/* "unreachable code" */
+#pragma warn -8071	/* "conversion may lose significant digits" */
+#pragma warn -8080	/* "'foo' is declared but never used" */
 
 /* Borland C thinks that a pointer to a member variable is 12 bytes in size. */
 #define PERL_MEMBER_PTR_SIZE	12
@@ -200,15 +204,25 @@ struct utsname {
 
 #ifdef _MSC_VER			/* Microsoft Visual C++ */
 
+#ifndef UNDER_CE
 typedef long		uid_t;
 typedef long		gid_t;
 typedef unsigned short	mode_t;
+#endif
+
 #pragma  warning(disable: 4102)	/* "unreferenced label" */
 
 /* Visual C thinks that a pointer to a member variable is 16 bytes in size. */
 #define PERL_MEMBER_PTR_SIZE	16
 
 #define isnan		_isnan
+#define snprintf	_snprintf
+#define vsnprintf	_vsnprintf
+
+#if _MSC_VER < 1300
+/* VC6 has broken NaN semantics: NaN == NaN returns true instead of false */
+#define NAN_COMPARE_BROKEN 1
+#endif
 
 #endif /* _MSC_VER */
 
@@ -271,6 +285,7 @@ extern  gid_t	getegid(void);
 extern  int	setuid(uid_t uid);
 extern  int	setgid(gid_t gid);
 extern  int	kill(int pid, int sig);
+extern  int	killpg(int pid, int sig);
 #ifndef USE_PERL_SBRK
 extern  void	*sbrk(ptrdiff_t need);
 #  define HAS_SBRK_PROTO
@@ -326,7 +341,6 @@ extern char *		win32_get_sitelib(const char *pl);
 extern char *		win32_get_vendorlib(const char *pl);
 extern int		IsWin95(void);
 extern int		IsWinNT(void);
-extern void		win32_argv2utf8(int argc, char** argv);
 
 #ifdef PERL_IMPLICIT_SYS
 extern void		win32_delete_internal_host(void *h);
@@ -460,22 +474,6 @@ DllExport int win32_async_check(pTHX);
 #  define w32_showwindow	(PL_sys_intern.thr_intern.Wshowwindow)
 #endif /* USE_5005THREADS */
 
-/* UNICODE<>ANSI translation helpers */
-/* Use CP_ACP when mode is ANSI */
-/* Use CP_UTF8 when mode is UTF8 */
-
-#define A2WHELPER_LEN(lpa, alen, lpw, nBytes)\
-    (lpw[0] = 0, MultiByteToWideChar((IN_BYTES) ? CP_ACP : CP_UTF8, 0, \
-				    lpa, alen, lpw, (nBytes/sizeof(WCHAR))))
-#define A2WHELPER(lpa, lpw, nBytes)	A2WHELPER_LEN(lpa, -1, lpw, nBytes)
-
-#define W2AHELPER_LEN(lpw, wlen, lpa, nChars)\
-    (lpa[0] = '\0', WideCharToMultiByte((IN_BYTES) ? CP_ACP : CP_UTF8, 0, \
-				       lpw, wlen, (LPSTR)lpa, nChars,NULL,NULL))
-#define W2AHELPER(lpw, lpa, nChars)	W2AHELPER_LEN(lpw, -1, lpa, nChars)
-
-#define USING_WIDE() (0)
-
 #ifdef USE_ITHREADS
 #  define PERL_WAIT_FOR_CHILDREN \
     STMT_START {							\
@@ -572,6 +570,18 @@ EXTERN_C _CRTIMP ioinfo* __pioinfo[];
 
 DllExport void *win32_signal_context(void);
 #define PERL_GET_SIG_CONTEXT win32_signal_context()
+
+#ifdef UNDER_CE
+#define Win_GetModuleHandle   XCEGetModuleHandleA
+#define Win_GetProcAddress    XCEGetProcAddressA
+#define Win_GetModuleFileName XCEGetModuleFileNameA
+#define Win_CreateSemaphore   CreateSemaphoreW
+#else
+#define Win_GetModuleHandle   GetModuleHandle
+#define Win_GetProcAddress    GetProcAddress
+#define Win_GetModuleFileName GetModuleFileName
+#define Win_CreateSemaphore   CreateSemaphore
+#endif
 
 #endif /* _INC_WIN32_PERL5 */
 

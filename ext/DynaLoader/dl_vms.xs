@@ -1,8 +1,8 @@
 /* dl_vms.xs
  * 
- * Platform:  OpenVMS, VAX or AXP
+ * Platform:  OpenVMS, VAX or AXP or IA64
  * Author:    Charles Bailey  bailey@newman.upenn.edu
- * Revised:   12-Dec-1994
+ * Revised:   See http://public.activestate.com/cgi-bin/perlbrowse
  *
  *                           Implementation Note
  *     This section is added as an aid to users and DynaLoader developers, in
@@ -48,11 +48,6 @@
 #include "EXTERN.h"
 #include "perl.h"
 #include "XSUB.h"
-
-/* N.B.:
- * dl_debug and dl_last_error are static vars; you'll need to deal
- * with them appropriately if you need context independence
- */
 
 #include <descrip.h>
 #include <fscndef.h>
@@ -119,6 +114,7 @@ copy_errmsg(msg,unused)
       strncat(dl_last_error, msg->dsc$a_pointer, msg->dsc$w_length);
       dl_last_error[errlen+msg->dsc$w_length+1] = '\0';
     }
+    DLDEBUG(2,PerlIO_printf(Perl_debug_log, "Saved error message: %s\n", dl_last_error));
     return 0;
 }
 
@@ -136,19 +132,6 @@ dl_set_error(sts,stv)
     _ckvmssts(sys$putmsg(vec,copy_errmsg,0,0));
 }
 
-static unsigned int
-findsym_handler(void *sig, void *mech)
-{
-    dTHX;
-    unsigned long int myvec[8],args, *usig = (unsigned long int *) sig;
-    /* Be paranoid and assume signal vector passed in might be readonly */
-    myvec[0] = args = usig[0] > 10 ? 9 : usig[0] - 1;
-    while (--args) myvec[args] = usig[args];
-    _ckvmssts(sys$putmsg(myvec,copy_errmsg,0,0));
-    DLDEBUG(2,PerlIO_printf(Perl_debug_log, "findsym_handler: received\n\t%s\n",dl_last_error));
-    return SS$_CONTINUE;
-}
-
 /* wrapper for lib$find_image_symbol, so signalled errors can be saved
  * for dl_error and then returned */
 static unsigned long int
@@ -158,7 +141,7 @@ my_find_image_symbol(struct dsc$descriptor_s *imgname,
                      struct dsc$descriptor_s *defspec)
 {
   unsigned long int retsts;
-  VAXC$ESTABLISH(findsym_handler);
+  VAXC$ESTABLISH(lib$sig_to_ret);
   retsts = lib$find_image_symbol(imgname,symname,entry,defspec,DL_CASE_SENSITIVE);
   return retsts;
 }
@@ -247,8 +230,8 @@ dl_expandspec(filespec)
     }
 
 void
-dl_load_file(filespec, flags)
-    char *	filespec
+dl_load_file(filename, flags=0)
+    char *	filename
     int		flags
     PREINIT:
     dTHX;
@@ -269,10 +252,13 @@ dl_load_file(filespec, flags)
     void (*entry)();
     CODE:
 
-    DLDEBUG(1,PerlIO_printf(Perl_debug_log, "dl_load_file(%s,%x):\n", filespec,flags));
-    specdsc.dsc$a_pointer = tovmsspec(filespec,vmsspec);
+    DLDEBUG(1,PerlIO_printf(Perl_debug_log, "dl_load_file(%s,%x):\n", filename,flags));
+    specdsc.dsc$a_pointer = tovmsspec(filename,vmsspec);
     specdsc.dsc$w_length = strlen(specdsc.dsc$a_pointer);
-    DLDEBUG(2,PerlIO_printf(Perl_debug_log, "\tVMS-ified filespec is %s\n",
+    if (specdsc.dsc$w_length == 0) { /* undef in, empty out */
+        XSRETURN_EMPTY;
+    }
+    DLDEBUG(2,PerlIO_printf(Perl_debug_log, "\tVMS-ified filename is %s\n",
                       specdsc.dsc$a_pointer));
     Newx(dlptr,1,struct libref);
     dlptr->name.dsc$b_dtype = dlptr->defspec.dsc$b_dtype = DSC$K_DTYPE_T;
@@ -338,7 +324,7 @@ dl_find_symbol(librefptr,symname)
     void (*entry)();
     vmssts sts;
 
-    DLDEBUG(1,PerlIO_printf(Perl_debug_log, "dl_find_dymbol(%.*s,%.*s):\n",
+    DLDEBUG(1,PerlIO_printf(Perl_debug_log, "dl_find_symbol(%.*s,%.*s):\n",
                       thislib.name.dsc$w_length, thislib.name.dsc$a_pointer,
                       symdsc.dsc$w_length,symdsc.dsc$a_pointer));
     sts = my_find_image_symbol(&(thislib.name),&symdsc,
@@ -347,7 +333,7 @@ dl_find_symbol(librefptr,symname)
     DLDEBUG(2,PerlIO_printf(Perl_debug_log, "\tentry point is %d\n",
                       (unsigned long int) entry));
     if (!(sts & 1)) {
-      /* error message already saved by findsym_handler */
+      dl_set_error(sts,0);
       ST(0) = &PL_sv_undef;
     }
     else ST(0) = sv_2mortal(newSViv(PTR2IV(entry)));
@@ -368,9 +354,10 @@ dl_install_xsub(perl_name, symref, filename="$Package")
     CODE:
     DLDEBUG(2,PerlIO_printf(Perl_debug_log, "dl_install_xsub(name=%s, symref=%x)\n",
         perl_name, symref));
-    ST(0) = sv_2mortal(newRV((SV*)newXS(perl_name,
-				      (void(*)(pTHX_ CV *))symref,
-				      filename)));
+    ST(0) = sv_2mortal(newRV((SV*)newXS_flags(perl_name,
+					      (void(*)(pTHX_ CV *))symref,
+					      filename, NULL,
+					      XS_DYNAMIC_FILENAME)));
 
 
 char *

@@ -5,7 +5,9 @@ no strict 'refs';
 
 # On one line so MakeMaker will see it.
 require Exporter;  our $VERSION = $Exporter::VERSION;
-$Carp::Internal{"Exporter::Heavy"} = 1;
+
+# Carp 1.05+ does this now for us, but we may be running with an old Carp
+$Carp::Internal{'Exporter::Heavy'}++;
 
 =head1 NAME
 
@@ -195,6 +197,7 @@ sub heavy_export {
 	(*{"${callpkg}::$sym"} = \&{"${pkg}::$sym"}, next)
 	    unless $sym =~ s/^(\W)//;
 	$type = $1;
+	no warnings 'once';
 	*{"${callpkg}::$sym"} =
 	    $type eq '&' ? \&{"${pkg}::$sym"} :
 	    $type eq '$' ? \${"${pkg}::$sym"} :

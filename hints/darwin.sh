@@ -196,8 +196,8 @@ esac
 EOCBU
 
 # 64-bit addressing support. Currently strictly experimental. DFD 2005-06-06
-if [ "$use64bitall" ]
-then
+case "$use64bitall" in
+$define|true|[yY]*)
 case "$osvers" in
 [1-7].*)
      cat <<EOM >&4
@@ -206,30 +206,52 @@ case "$osvers" in
 
 *** 64-bit addressing is not supported for Mac OS X versions
 *** below 10.4 ("Tiger") or Darwin versions below 8. Please try
-*** again without -D64bitall. (-D64bitint will work, however.)
+*** again without -Duse64bitall. (-Duse64bitint will work, however.)
 
 EOM
      exit 1
   ;;
 *)
-    cat <<EOM >&4
+    case "$osvers" in
+    8.*)
+        cat <<EOM >&4
 
 
 
 *** Perl 64-bit addressing support is experimental for Mac OS X
-*** 10.4 ("Tiger") and Darwin version 8. Expect a number of test
-*** failures:
-***    ext/IO/io_*   ext/IPC/sysV/t/*   lib/Net/Ping/t/450_service
-***    Any test that uses sdbm
+*** 10.4 ("Tiger") and Darwin version 8. System V IPC is disabled
+*** due to problems with the 64-bit versions of msgctl, semctl,
+*** and shmctl. You should also expect the following test failures:
+***
+***    ext/threads/shared/t/wait (threaded builds only)
 
 EOM
+
+        [ "$d_msgctl" ] || d_msgctl='undef'
+        [ "$d_semctl" ] || d_semctl='undef'
+        [ "$d_shmctl" ] || d_shmctl='undef'
+    ;;
+    esac
+
+    case `uname -p` in 
+    powerpc) arch=ppc64 ;;
+    i386) arch=x86_64 ;;
+    *) cat <<EOM >&4
+
+*** Don't recognize processor, can't specify 64 bit compilation.
+
+EOM
+    ;;
+    esac
     for var in ccflags cppflags ld ldflags
     do
-       eval $var="\$${var}\ -arch\ ppc64"
+       eval $var="\$${var}\ -arch\ $arch"
     done
+
     ;;
 esac
-fi
+;;
+esac
 
 ##
 # System libraries

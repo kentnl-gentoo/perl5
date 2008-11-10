@@ -547,3 +547,44 @@ tie $h, "main";
 print $h,"\n";
 EXPECT
 3.3
+########
+sub TIESCALAR { bless {} }
+sub FETCH { shift()->{i} ++ }
+tie $h, "main";
+print $h.$h;
+EXPECT
+01
+########
+sub TIESCALAR { my $foo = $_[1]; bless \$foo, $_[0] }
+sub FETCH { ${$_[0]} }
+tie my $x, "main", 2;
+tie my $y, "main", 8;
+print $x | $y;
+EXPECT
+10
+########
+# Bug 37731
+sub foo::TIESCALAR { bless {value => $_[1]}, $_[0] }
+sub foo::FETCH { $_[0]->{value} }
+tie my $VAR, 'foo', '42';
+foreach my $var ($VAR) {
+    print +($var eq $VAR) ? "yes\n" : "no\n";
+}
+EXPECT
+yes
+########
+sub TIEARRAY { bless [], 'main' }
+{
+    local @a;
+    tie @a, 'main';
+}
+print "tied\n" if tied @a;
+EXPECT
+########
+sub TIEHASH { bless [], 'main' }
+{
+    local %h;
+    tie %h, 'main';
+}
+print "tied\n" if tied %h;
+EXPECT

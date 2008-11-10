@@ -1,11 +1,11 @@
 package ExtUtils::MM_Any;
 
 use strict;
-use vars qw($VERSION @ISA);
-$VERSION = '0.13';
+our $VERSION = '6.48';
 
+use Carp;
 use File::Spec;
-BEGIN { @ISA = qw(File::Spec); }
+BEGIN { our @ISA = qw(File::Spec); }
 
 # We need $Verbose
 use ExtUtils::MakeMaker qw($Verbose);
@@ -144,8 +144,8 @@ sub split_command {
     # newline.
     chomp $cmd;
 
-    # set aside 20% for macro expansion.
-    my $len_left = int($self->max_exec_len * 0.80);
+    # set aside 30% for macro expansion.
+    my $len_left = int($self->max_exec_len * 0.70);
     $len_left -= length $self->_expand_macros($cmd);
 
     do {
@@ -233,6 +233,24 @@ sub wraplist {
     my $self = shift;
     return join " \\\n\t", @_;
 }
+
+
+=head3 maketext_filter
+
+    my $filter_make_text = $mm->maketext_filter($make_text);
+
+The text of the Makefile is run through this method before writing to
+disk.  It allows systems a chance to make portability fixes to the
+Makefile.
+
+By default it does nothing.
+
+This method is protected and not intended to be called outside of
+MakeMaker.
+
+=cut
+
+sub maketext_filter { return $_[1] }
 
 
 =head3 cd  I<Abstract>
@@ -324,7 +342,28 @@ this is the max size of a shell command line.
 $self->{_MAX_EXEC_LEN} is set by this method, but only for testing purposes.
 
 
+=head3 make
 
+    my $make = $MM->make;
+
+Returns the make variant we're generating the Makefile for.  This attempts
+to do some normalization on the information from %Config or the user.
+
+=cut
+
+sub make {
+    my $self = shift;
+
+    my $make = lc $self->{MAKE};
+
+    # Truncate anything like foomake6 to just foomake.
+    $make =~ s/^(\w+make).*/$1/;
+
+    # Turn gnumake into gmake.
+    $make =~ s/^gnu/g/;
+
+    return $make;
+}
 
 
 =head2 Targets
@@ -626,7 +665,7 @@ confused or something gets snuck in before the real 'all' target.
 
 sub makemakerdflt_target {
     return <<'MAKE_FRAG';
-makemakerdflt: all
+makemakerdflt : all
 	$(NOECHO) $(NOOP)
 MAKE_FRAG
 
@@ -652,10 +691,6 @@ sub manifypods_target {
     # populate manXpods & dependencies:
     foreach my $name (keys %{$self->{MAN1PODS}}, keys %{$self->{MAN3PODS}}) {
         $dependencies .= " \\\n\t$name";
-    }
-
-    foreach my $name (keys %{$self->{MAN3PODS}}) {
-        $dependencies .= " \\\n\t$name"
     }
 
     my $manify = <<END;
@@ -685,10 +720,7 @@ Generate the metafile target.
 
 Writes the file META.yml YAML encoded meta-data about the module in
 the distdir.  The format follows Module::Build's as closely as
-possible.  Additionally, we include:
-
-    version_from
-    installdirs
+possible.
 
 =cut
 
@@ -696,29 +728,15 @@ sub metafile_target {
     my $self = shift;
 
     return <<'MAKE_FRAG' if $self->{NO_META};
-metafile:
+metafile :
 	$(NOECHO) $(NOOP)
 MAKE_FRAG
 
-    my $prereq_pm = '';
-    foreach my $mod ( sort { lc $a cmp lc $b } keys %{$self->{PREREQ_PM}} ) {
-        my $ver = $self->{PREREQ_PM}{$mod};
-        $prereq_pm .= sprintf "    %-30s %s\n", "$mod:", $ver;
-    }
-
-    my $meta = <<YAML;
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         $self->{DISTNAME}
-version:      $self->{VERSION}
-version_from: $self->{VERSION_FROM}
-installdirs:  $self->{INSTALLDIRS}
-requires:
-$prereq_pm
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version $ExtUtils::MakeMaker::VERSION
-YAML
-
+    my @metadata   = $self->metafile_data(
+        $self->{META_ADD}   || {},
+        $self->{META_MERGE} || {},
+    );
+    my $meta       = $self->metafile_file(@metadata);
     my @write_meta = $self->echo($meta, 'META_new.yml');
 
     return sprintf <<'MAKE_FRAG', join("\n\t", @write_meta);
@@ -727,6 +745,278 @@ metafile : create_distdir
 	%s
 	-$(NOECHO) $(MV) META_new.yml $(DISTVNAME)/META.yml
 MAKE_FRAG
+
+}
+
+
+=begin private
+
+=head3 _sort_pairs
+
+    my @pairs = _sort_pairs($sort_sub, \%hash);
+
+Sorts the pairs of a hash based on keys ordered according 
+to C<$sort_sub>.
+
+=end private
+
+=cut
+
+sub _sort_pairs {
+    my $sort  = shift;
+    my $pairs = shift;
+    return map  { $_ => $pairs->{$_} }
+           sort $sort
+           keys %$pairs;
+}
+
+
+# Taken from Module::Build::Base
+sub _hash_merge {
+    my ($self, $h, $k, $v) = @_;
+    if (ref $h->{$k} eq 'ARRAY') {
+        push @{$h->{$k}}, ref $v ? @$v : $v;
+    } elsif (ref $h->{$k} eq 'HASH') {
+        $self->_hash_merge($h->{$k}, $_, $v->{$_}) foreach keys %$v;
+    } else {
+        $h->{$k} = $v;
+    }
+}
+
+
+=head3 metafile_data
+
+    my @metadata_pairs = $mm->metafile_data(\%meta_add, \%meta_merge);
+
+Returns the data which MakeMaker turns into the META.yml file.
+
+Values of %meta_add will overwrite any existing metadata in those
+keys.  %meta_merge will be merged with them.
+
+=cut
+
+sub metafile_data {
+    my $self = shift;
+    my($meta_add, $meta_merge) = @_;
+
+    # The order in which standard meta keys should be written.
+    my @meta_order = qw(
+        name
+        version
+        abstract
+        author
+        license
+        distribution_type
+
+        configure_requires
+        build_requires
+        requires
+
+        resources
+
+        provides
+        no_index
+
+        generated_by
+        meta-spec
+    );
+
+    my %meta = (
+        name         => $self->{DISTNAME},
+        version      => $self->{VERSION},
+        abstract     => $self->{ABSTRACT},
+        license      => $self->{LICENSE} || 'unknown',
+        distribution_type => $self->{PM} ? 'module' : 'script',
+
+        configure_requires => {
+            'ExtUtils::MakeMaker'       => 0
+        },
+
+        no_index     => {
+            directory   => [qw(t inc)]
+        },
+
+        generated_by => "ExtUtils::MakeMaker version $ExtUtils::MakeMaker::VERSION",
+        'meta-spec'  => {
+            url         => 'http://module-build.sourceforge.net/META-spec-v1.4.html', 
+            version     => 1.4
+        },
+    );
+
+    # The author key is required and it takes a list.
+    $meta{author}   = defined $self->{AUTHOR}    ? [$self->{AUTHOR}] : [];
+
+    $meta{requires} = $self->{PREREQ_PM} if defined $self->{PREREQ_PM};
+    $meta{requires}{perl} = $self->{MIN_PERL_VERSION} if $self->{MIN_PERL_VERSION};
+
+    while( my($key, $val) = each %$meta_add ) {
+        $meta{$key} = $val;
+    }
+
+    while( my($key, $val) = each %$meta_merge ) {
+        $self->_hash_merge(\%meta, $key, $val);
+    }
+
+    my @meta_pairs;
+
+    # Put the standard keys first in the proper order.
+    for my $key (@meta_order) {
+        next unless exists $meta{$key};
+
+        push @meta_pairs, $key, delete $meta{$key};
+    }
+
+    # Then tack everything else onto the end, alpha sorted.
+    for my $key (sort {lc $a cmp lc $b} keys %meta) {
+        push @meta_pairs, $key, $meta{$key};
+    }
+
+    return @meta_pairs
+}
+
+=begin private
+
+=head3 _dump_hash
+
+    $yaml = _dump_hash(\%options, %hash);
+
+Implements a fake YAML dumper for a hash given
+as a list of pairs. No quoting/escaping is done. Keys
+are supposed to be strings. Values are undef, strings, 
+hash refs or array refs of strings.
+
+Supported options are:
+
+    delta => STR - indentation delta
+    use_header => BOOL - whether to include a YAML header
+    indent => STR - a string of spaces 
+          default: ''
+
+    max_key_length => INT - maximum key length used to align
+        keys and values of the same hash
+        default: 20
+    key_sort => CODE - a sort sub 
+            It may be undef, which means no sorting by keys
+        default: sub { lc $a cmp lc $b }
+
+    customs => HASH - special options for certain keys 
+           (whose values are hashes themselves)
+        may contain: max_key_length, key_sort, customs
+
+=end private
+
+=cut
+
+sub _dump_hash {
+    croak "first argument should be a hash ref" unless ref $_[0] eq 'HASH';
+    my $options = shift;
+    my %hash = @_;
+
+    # Use a list to preserve order.
+    my @pairs;
+
+    my $k_sort 
+        = exists $options->{key_sort} ? $options->{key_sort} 
+                                      : sub { lc $a cmp lc $b };
+    if ($k_sort) {
+        croak "'key_sort' should be a coderef" unless ref $k_sort eq 'CODE';
+        @pairs = _sort_pairs($k_sort, \%hash);
+    } else { # list of pairs, no sorting
+        @pairs = @_;
+    }
+
+    my $yaml     = $options->{use_header} ? "--- #YAML:1.0\n" : '';
+    my $indent   = $options->{indent} || '';
+    my $k_length = min(
+        ($options->{max_key_length} || 20),
+        max(map { length($_) + 1 } grep { !ref $hash{$_} } keys %hash)
+    );
+    my $customs  = $options->{customs} || {};
+
+    # printf format for key
+    my $k_format = "%-${k_length}s";
+
+    while( @pairs ) {
+        my($key, $val) = splice @pairs, 0, 2;
+        $val = '~' unless defined $val;
+        if(ref $val eq 'HASH') {
+            if ( keys %$val ) {
+                my %k_options = ( # options for recursive call
+                    delta => $options->{delta},
+                    use_header => 0,
+                    indent => $indent . $options->{delta},
+                );
+                if (exists $customs->{$key}) {
+                    my %k_custom = %{$customs->{$key}};
+                    foreach my $k qw(key_sort max_key_length customs) {
+                        $k_options{$k} = $k_custom{$k} if exists $k_custom{$k};
+                    }
+                }
+                $yaml .= $indent . "$key:\n" 
+                  . _dump_hash(\%k_options, %$val);
+            }
+            else {
+                $yaml .= $indent . "$key:  {}\n";
+            }
+        }
+        elsif (ref $val eq 'ARRAY') {
+            if( @$val ) {
+                $yaml .= $indent . "$key:\n";
+
+                for (@$val) {
+                    croak "only nested arrays of non-refs are supported" if ref $_;
+                    $yaml .= $indent . $options->{delta} . "- $_\n";
+                }
+            }
+            else {
+                $yaml .= $indent . "$key:  []\n";
+            }
+        }
+        elsif( ref $val and !blessed($val) ) {
+            croak "only nested hashes, arrays and objects are supported";
+        }
+        else {  # if it's an object, just stringify it
+            $yaml .= $indent . sprintf "$k_format  %s\n", "$key:", $val;
+        }
+    };
+
+    return $yaml;
+
+}
+
+sub blessed {
+    return eval { $_[0]->isa("UNIVERSAL"); };
+}
+
+sub max {
+    return (sort { $b <=> $a } @_)[0];
+}
+
+sub min {
+    return (sort { $a <=> $b } @_)[0];
+}
+
+=head3 metafile_file
+
+    my $meta_yml = $mm->metafile_file(@metadata_pairs);
+
+Turns the @metadata_pairs into YAML.
+
+This method does not implement a complete YAML dumper, being limited
+to dump a hash with values which are strings, undef's or nested hashes
+and arrays of strings. No quoting/escaping is done.
+
+=cut
+
+sub metafile_file {
+    my $self = shift;
+
+    my %dump_options = (
+        use_header => 1, 
+        delta      => ' ' x 4, 
+        key_sort   => undef,
+    );
+    return _dump_hash(\%dump_options, @_);
 
 }
 
@@ -938,6 +1228,28 @@ MAKE_FRAG
 Methods which help initialize the MakeMaker object and macros.
 
 
+=head3 init_ABSTRACT
+
+    $mm->init_ABSTRACT
+
+=cut
+
+sub init_ABSTRACT {
+    my $self = shift;
+
+    if( $self->{ABSTRACT_FROM} and $self->{ABSTRACT} ) {
+        warn "Both ABSTRACT_FROM and ABSTRACT are set.  ".
+             "Ignoring ABSTRACT_FROM.\n";
+        return;
+    }
+
+    if ($self->{ABSTRACT_FROM}){
+        $self->{ABSTRACT} = $self->parse_abstract($self->{ABSTRACT_FROM}) or
+            carp "WARNING: Setting ABSTRACT via file ".
+                 "'$self->{ABSTRACT_FROM}' failed\n";
+    }
+}
+
 =head3 init_INST
 
     $mm->init_INST;
@@ -1000,12 +1312,12 @@ INSTALLDIRS) and *PREFIX.
 sub init_INSTALL {
     my($self) = shift;
 
-    if( $self->{ARGS}{INSTALLBASE} and $self->{ARGS}{PREFIX} ) {
-        die "Only one of PREFIX or INSTALLBASE can be given.  Not both.\n";
+    if( $self->{ARGS}{INSTALL_BASE} and $self->{ARGS}{PREFIX} ) {
+        die "Only one of PREFIX or INSTALL_BASE can be given.  Not both.\n";
     }
 
-    if( $self->{ARGS}{INSTALLBASE} ) {
-        $self->init_INSTALL_from_INSTALLBASE;
+    if( $self->{ARGS}{INSTALL_BASE} ) {
+        $self->init_INSTALL_from_INSTALL_BASE;
     }
     else {
         $self->init_INSTALL_from_PREFIX;
@@ -1045,11 +1357,18 @@ sub init_INSTALL_from_PREFIX {
 
     $self->{INSTALLSITEBIN} ||= '$(INSTALLBIN)'
       unless $Config{installsitebin};
+    $self->{INSTALLSITESCRIPT} ||= '$(INSTALLSCRIPT)'
+      unless $Config{installsitescript};
 
     unless( $Config{installvendorbin} ) {
         $self->{INSTALLVENDORBIN} ||= $Config{usevendorprefix} 
                                     ? $Config{installbin}
                                     : '';
+    }
+    unless( $Config{installvendorscript} ) {
+        $self->{INSTALLVENDORSCRIPT} ||= $Config{usevendorprefix}
+                                       ? $Config{installscript}
+                                       : '';
     }
 
 
@@ -1110,6 +1429,12 @@ sub init_INSTALL_from_PREFIX {
                          d => 'bin' },
         script      => { s => $iprefix,
                          t => 'perl',
+                         d => 'bin' },
+        vendorscript=> { s => $vprefix,
+                         t => 'vendor',
+                         d => 'bin' },
+        sitescript  => { s => $sprefix,
+                         t => 'site',
                          d => 'bin' },
     );
     
@@ -1218,9 +1543,9 @@ sub init_INSTALL_from_PREFIX {
 }
 
 
-=head3 init_from_INSTALLBASE
+=head3 init_from_INSTALL_BASE
 
-    $mm->init_from_INSTALLBASE
+    $mm->init_from_INSTALL_BASE
 
 =cut
 
@@ -1233,11 +1558,11 @@ my %map = (
           );
 $map{script} = $map{bin};
 
-sub init_INSTALL_from_INSTALLBASE {
+sub init_INSTALL_from_INSTALL_BASE {
     my $self = shift;
 
     @{$self}{qw(PREFIX VENDORPREFIX SITEPREFIX PERLPREFIX)} = 
-                                                         '$(INSTALLBASE)';
+                                                         '$(INSTALL_BASE)';
 
     my %install;
     foreach my $thing (keys %map) {
@@ -1246,14 +1571,13 @@ sub init_INSTALL_from_INSTALLBASE {
             my $key = "INSTALL".$dir.$uc_thing;
 
             $install{$key} ||= 
-              $self->catdir('$(INSTALLBASE)', @{$map{$thing}});
+              $self->catdir('$(INSTALL_BASE)', @{$map{$thing}});
         }
     }
 
     # Adjust for variable quirks.
     $install{INSTALLARCHLIB} ||= delete $install{INSTALLARCH};
     $install{INSTALLPRIVLIB} ||= delete $install{INSTALLLIB};
-    delete @install{qw(INSTALLVENDORSCRIPT INSTALLSITESCRIPT)};
 
     foreach my $key (keys %install) {
         $self->{$key} ||= $install{$key};
@@ -1305,9 +1629,8 @@ sub init_VERSION {
     if ($self->{VERSION_FROM}){
         $self->{VERSION} = $self->parse_version($self->{VERSION_FROM});
         if( $self->{VERSION} eq 'undef' ) {
-            require Carp;
-            Carp::carp("WARNING: Setting VERSION via file ".
-                       "'$self->{VERSION_FROM}' failed\n");
+            carp("WARNING: Setting VERSION via file ".
+                 "'$self->{VERSION_FROM}' failed\n");
         }
     }
 
@@ -1360,8 +1683,7 @@ Defines at least these macros.
   MAKEFILE_OLD
   MAKE_APERL_FILE   File used by MAKE_APERL
 
-  SHELL             Program used to run
-                    shell commands
+  SHELL             Program used to run shell commands
 
   ECHO              Print text adding a newline on the end
   RM_F              Remove a file 
@@ -1374,7 +1696,7 @@ Defines at least these macros.
                     file
 
   UMASK_NULL        Nullify umask
-  DEV_NULL          Supress all command output
+  DEV_NULL          Suppress all command output
 
 
 =head3 init_DIRFILESEP  I<Abstract>
@@ -1434,7 +1756,19 @@ sub init_platform {
 }
 
 
+=head3 init_MAKE
 
+    $mm->init_MAKE
+
+Initialize MAKE from either a MAKE environment variable or $Config{make}.
+
+=cut
+
+sub init_MAKE {
+    my $self = shift;
+
+    $self->{MAKE} ||= $ENV{MAKE} || $Config{make};
+}
 
 
 =head2 Tools
@@ -1627,7 +1961,7 @@ sub installvars {
     return qw(PRIVLIB SITELIB  VENDORLIB
               ARCHLIB SITEARCH VENDORARCH
               BIN     SITEBIN  VENDORBIN
-              SCRIPT
+              SCRIPT  SITESCRIPT  VENDORSCRIPT
               MAN1DIR SITEMAN1DIR VENDORMAN1DIR
               MAN3DIR SITEMAN3DIR VENDORMAN3DIR
              );

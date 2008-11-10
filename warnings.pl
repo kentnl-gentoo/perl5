@@ -62,6 +62,7 @@ my $tree = {
        	'pack'		=> [ 5.008, DEFAULT_OFF],
        	'unpack'	=> [ 5.008, DEFAULT_OFF],
        	'threads'	=> [ 5.008, DEFAULT_OFF],
+
        	 #'default'	=> [ 5.008, DEFAULT_ON ],
   	}],
 } ;
@@ -275,12 +276,15 @@ print WARN <<'EOM' ;
 #define G_WARN_ONCE		8	/* set if 'once' ever enabled */
 #define G_WARN_ALL_MASK		(G_WARN_ALL_ON|G_WARN_ALL_OFF)
 
-#define pWARN_STD		Nullsv
-#define pWARN_ALL		(Nullsv+1)	/* use warnings 'all' */
-#define pWARN_NONE		(Nullsv+2)	/* no  warnings 'all' */
+#define pWARN_STD		NULL
+#define pWARN_ALL		(((SV*)0)+1)	/* use warnings 'all' */
+#define pWARN_NONE		(((SV*)0)+2)	/* no  warnings 'all' */
 
 #define specialWARN(x)		((x) == pWARN_STD || (x) == pWARN_ALL ||	\
 				 (x) == pWARN_NONE)
+
+/* if PL_warnhook is set to this value, then warnings die */
+#define PERL_WARNHOOK_FATAL	(((SV*)0) + 1)
 EOM
 
 my $offset = 0 ;
@@ -431,7 +435,7 @@ __END__
 
 package warnings;
 
-our $VERSION = '1.05';
+our $VERSION = '1.05_01';
 
 =head1 NAME
 
@@ -564,7 +568,7 @@ $All = "" ; vec($All, $Offsets{'all'}, 2) = 3 ;
 
 sub Croaker
 {
-    local $Carp::CarpInternal{'warnings'};
+    require Carp::Heavy; # this initializes %CarpInternal
     delete $Carp::CarpInternal{'warnings'};
     Carp::croak(@_);
 }

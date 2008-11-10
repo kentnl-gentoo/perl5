@@ -3,7 +3,7 @@ package DBM_Filter::int32 ;
 use strict;
 use warnings;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 # todo get Filter to figure endian.
 
@@ -23,7 +23,9 @@ sub Fetch
 
 __END__
 
-=head1 DBM_Filter::int32
+=head1 NAME
+
+DBM_Filter::int32 - filter for DBM_Filter
 
 =head1 SYNOPSIS
 
@@ -32,7 +34,7 @@ __END__
 
     $db = tie %hash, ...
     $db->Filter_Push('int32');
-    
+
 =head1 DESCRIPTION
 
 This DBM filter is used when interoperating with a C/C++ application

@@ -3,7 +3,7 @@ use strict;
 require Exporter;
 
 use vars qw($VERSION @ISA @EXPORT @EXPORT_OK);
-$VERSION = 1.0504;
+$VERSION = 1.09;
 @ISA = qw(Exporter);
 @EXPORT = qw(pod2html htmlify);
 @EXPORT_OK = qw(anchorify);
@@ -32,9 +32,20 @@ Converts files from pod format (see L<perlpod>) to HTML format.  It
 can automatically generate indexes and cross-references, and it keeps
 a cache of things it knows how to cross-reference.
 
-=head1 ARGUMENTS
+=head1 FUNCTIONS
 
-Pod::Html takes the following arguments:
+=head2 pod2html
+
+    pod2html("pod2html",
+             "--podpath=lib:ext:pod:vms",
+             "--podroot=/usr/src/perl",
+             "--htmlroot=/perl/nmanual",
+             "--libpods=perlfunc:perlguts:perlvar:perlrun:perlop",
+             "--recurse",
+             "--infile=foo.pod",
+             "--outfile=/perl/nmanual/foo.html");
+
+pod2html takes the following arguments:
 
 =over 4
 
@@ -187,16 +198,20 @@ Display progress messages.  By default, they won't be displayed.
 
 =back
 
-=head1 EXAMPLE
+=head2 htmlify
 
-    pod2html("pod2html",
-	     "--podpath=lib:ext:pod:vms",
-	     "--podroot=/usr/src/perl",
-	     "--htmlroot=/perl/nmanual",
-	     "--libpods=perlfunc:perlguts:perlvar:perlrun:perlop",
-	     "--recurse",
-	     "--infile=foo.pod",
-	     "--outfile=/perl/nmanual/foo.html");
+    htmlify($heading);
+
+Converts a pod section specification to a suitable section specification
+for HTML. Note that we keep spaces and special characters except 
+C<", ?> (Netscape problem) and the hyphen (writer's problem...).
+
+=head2 anchorify
+
+    anchorify(@heading);
+
+Similar to C<htmlify()>, but turns non-alphanumerics into underscores.  Note
+that C<anchorify()> is not exported by default.
 
 =head1 ENVIRONMENT
 
@@ -216,7 +231,6 @@ This program is distributed under the Artistic License.
 
 =cut
 
-
 my($Cachedir);
 my($Dircache, $Itemcache);
 my @Begin_Stack;
@@ -232,8 +246,8 @@ my $Verbose;
 my $Doindex;
 
 my $Backlink;
-my($Listlevel, @Listend);
-my $After_Lpar;
+my($Listlevel, @Listtype);
+my $ListNewTerm;
 use vars qw($Ignore);  # need to localize it later.
 
 my(%Items_Named, @Items_Seen);
@@ -252,7 +266,6 @@ my %Items = ();			# associative array used to find the location
 
 my %Local_Items;
 my $Is83;
-my $PTQuote;
 
 my $Curdir = File::Spec->curdir;
 
@@ -273,7 +286,7 @@ sub init_globals {
     $Htmldir = "";	    	# The directory to which the html pages
 				# will (eventually) be written.
     $Htmlfile = "";		# write to stdout by default
-    $Htmlfileurl = "" ;		# The url that other files would use to
+    $Htmlfileurl = "";		# The url that other files would use to
 				# refer to this file.  This is only used
 				# to make relative urls that point to
 				# other files.
@@ -289,8 +302,9 @@ sub init_globals {
     $Doindex = 1;   	    	# non-zero if we should generate an index
     $Backlink = '';		# text for "back to top" links
     $Listlevel = 0;		# current list depth
-    @Listend = ();		# the text to use to end the list.
-    $After_Lpar = 0;            # set to true after a par in an =item
+    @Listtype = ();		# list types for open lists
+    $ListNewTerm = 0;		# indicates new term in definition list; used
+    				# to correctly open/close <dd> tags
     $Ignore = 1;		# whether or not to format text.  we don't
 				#   format text until we hit our first pod
 				#   directive.
@@ -303,7 +317,6 @@ sub init_globals {
 				#   to prevent the first <hr /> directive.
     $Paragraph = '';		# which paragraph we're processing (used
 				#   for error messages)
-    $PTQuote = 0;               # status of double-quote conversion
     %Sections = ();		# sections within this page
 
     %Local_Items = ();
@@ -485,27 +498,35 @@ END_OF_HEAD
     # still generate an index, but surround it with an html comment.
     # that way some other program can extract it if desired.
     $index =~ s/--+/-/g;
-    print HTML "<p><a name=\"__index__\"></a></p>\n";
-    print HTML "<!-- INDEX BEGIN -->\n";
-    print HTML "<!--\n" unless $Doindex;
-    print HTML $index;
-    print HTML "-->\n" unless $Doindex;
-    print HTML "<!-- INDEX END -->\n\n";
-    print HTML "<hr />\n" if $Doindex and $index;
+
+    my $hr = ($Doindex and $index) ? qq(<hr name="index" />) : "";
+
+    unless ($Doindex)
+    {
+        $index = qq(<!--\n$index\n-->\n);
+    }
+
+    print HTML << "END_OF_INDEX";
+
+<!-- INDEX BEGIN -->
+<div name="index">
+<p><a name=\"__index__\"></a></p>
+$index
+$hr
+</div>
+<!-- INDEX END -->
+
+END_OF_INDEX
 
     # now convert this file
     my $after_item;             # set to true after an =item
-    my $need_dd = 0;
     warn "Converting input file $Podfile\n" if $Verbose;
     foreach my $i (0..$#poddata){
-        $PTQuote = 0; # status of quote conversion
-
 	$_ = $poddata[$i];
 	$Paragraph = $i+1;
 	if (/^(=.*)/s) {	# is it a pod directive?
 	    $Ignore = 0;
 	    $after_item = 0;
-	    $need_dd = 0;
 	    $_ = $1;
 	    if (/^=begin\s+(\S+)\s*(.*)/si) {# =begin
 		process_begin($1, $2);
@@ -521,12 +542,12 @@ END_OF_HEAD
 		if (/^=(head[1-6])\s+(.*\S)/s) {	# =head[1-6] heading
 		    process_head( $1, $2, $Doindex && $index );
 		} elsif (/^=item\s*(.*\S)?/sm) {	# =item text
-		    $need_dd = process_item( $1 );
+		    process_item( $1 );
 		    $after_item = 1;
 		} elsif (/^=over\s*(.*)/) {		# =over N
 		    process_over();
 		} elsif (/^=back/) {		# =back
-		    process_back($need_dd);
+		    process_back();
 		} elsif (/^=for\s+(\S+)\s*(.*)/si) {# =for
 		    process_for($1,$2);
 		} else {
@@ -541,8 +562,14 @@ END_OF_HEAD
 	    next if $Ignore;
 	    next if @Begin_Stack && $Begin_Stack[-1] ne 'html';
 	    print HTML and next if @Begin_Stack && $Begin_Stack[-1] eq 'html';
-	    print HTML "<dd>\n" if $need_dd;
 	    my $text = $_;
+
+	    # Open tag for definition list as we have something to put in it
+	    if( $ListNewTerm ){
+		print HTML "<dd>\n";
+		$ListNewTerm = 0;
+	    }
+
 	    if( $text =~ /\A\s+/ ){
 		process_pre( \$text );
 	        print HTML "<pre>\n$text</pre>\n";
@@ -572,12 +599,8 @@ END_OF_HEAD
 		}
 		## end of experimental
 
-		if( $after_item ){
-		    $After_Lpar = 1;
-		}
 		print HTML "<p>$text</p>\n";
 	    }
-	    print HTML "</dd>\n" if $need_dd;
 	    $after_item = 0;
 	}
     }
@@ -1052,12 +1075,12 @@ sub scan_items {
 
 	# figure out what kind of item it is.
 	# Build string for referencing this item.
-	if ( $txt =~ /\A=item\s+\*\s*(.*)\Z/s ) { # bullet
+	if ( $txt =~ /\A=item\s+\*\s*(.*)\Z/s ) { # bulleted list
 	    next unless $1;
 	    $item = $1;
         } elsif( $txt =~ /\A=item\s+(?>\d+\.?)\s*(.*)\Z/s ) { # numbered list
 	    $item = $1;
-	} elsif( $txt =~ /\A=item\s+(.*)\Z/s ) { # plain item
+	} elsif( $txt =~ /\A=item\s+(.*)\Z/s ) { # definition list
 	    $item = $1;
 	} else {
 	    next;
@@ -1077,12 +1100,7 @@ sub process_head {
     $tag =~ /head([1-6])/;
     my $level = $1;
 
-    if( $Listlevel ){
-	warn "$0: $Podfile: unterminated list at =head in paragraph $Paragraph.  ignoring.\n" unless $Quiet;
-        while( $Listlevel ){
-            process_back();
-        }
-    }
+    finish_list();
 
     print HTML "<p>\n";
     if( $level == 1 && ! $Top ){
@@ -1107,8 +1125,9 @@ my $EmittedItem;
 
 sub emit_item_tag($$$){
     my( $otext, $text, $compact ) = @_;
-    my $item = fragment_id( $text );
-
+    my $item = fragment_id( depod($text) , -generate);
+    Carp::confess("Undefined fragment '$text' (".depod($text).") from fragment_id() in emit_item_tag() in $Podfile")
+        if !defined $item;
     $EmittedItem = $item;
     ### print STDERR "emit_item_tag=$item ($text)\n";
 
@@ -1116,23 +1135,36 @@ sub emit_item_tag($$$){
     if ($Items_Named{$item}++) {
 	print HTML process_text( \$otext );
     } else {
-        my $name = 'item_' . $item;
+        my $name = $item;
         $name = anchorify($name);
-	print HTML qq{<a name="$name">}, process_text( \$otext ), '</a>';
+	print HTML qq{<a name="$name" class="item">}, process_text( \$otext ), '</a>';
     }
-    print HTML "</strong>\n";
+    print HTML "</strong>";
     undef( $EmittedItem );
 }
 
-sub emit_li {
+sub new_listitem {
     my( $tag ) = @_;
-    if( $Items_Seen[$Listlevel]++ == 0 ){
-	push( @Listend, "</$tag>" );
-	print HTML "<$tag>\n";
+    # Open tag for definition list as we have something to put in it
+    if( ($tag ne 'dl') && ($ListNewTerm) ){
+	print HTML "<dd>\n";
+	$ListNewTerm = 0;
     }
-    my $emitted = $tag eq 'dl' ? 'dt' : 'li';
-    print HTML "<$emitted>";
-    return $emitted;
+
+    if( $Items_Seen[$Listlevel]++ == 0 ){
+	# start of new list
+	push( @Listtype, "$tag" );
+	print HTML "<$tag>\n";
+    } else {
+	# if this is not the first item, close the previous one
+	if ( $tag eq 'dl' ){
+	    print HTML "</dd>\n" unless $ListNewTerm;
+	} else {
+	    print HTML "</li>\n";
+	}
+    }
+    my $opentag = $tag eq 'dl' ? 'dt' : 'li';
+    print HTML "<$opentag>";
 }
 
 #
@@ -1140,7 +1172,6 @@ sub emit_li {
 #
 sub process_item {
     my( $otext ) = @_;
-    my $need_dd = 0; # set to 1 if we need a <dd></dd> after an item
 
     # lots of documents start a list without doing an =over.  this is
     # bad!  but, the proper thing to do seems to be to just assume
@@ -1150,43 +1181,41 @@ sub process_item {
 	process_over();
     }
 
-    # formatting: insert a paragraph if preceding item has >1 paragraph
-    if( $After_Lpar ){
-	print HTML $need_dd ? "</dd>\n" : "</li>\n" if $After_Lpar;
-	$After_Lpar = 0;
-    }
-
     # remove formatting instructions from the text
     my $text = depod( $otext );
 
-    my $emitted; # the tag actually emitted, used for closing
-
     # all the list variants:
     if( $text =~ /\A\*/ ){ # bullet
-        $emitted = emit_li( 'ul' );
-        if ($text =~ /\A\*\s+(.+)\Z/s ) { # with additional text
+        new_listitem( 'ul' );
+        if ($text =~ /\A\*\s+(\S.*)\Z/s ) { # with additional text
             my $tag = $1;
             $otext =~ s/\A\*\s+//;
             emit_item_tag( $otext, $tag, 1 );
+            print HTML "\n";
         }
 
     } elsif( $text =~ /\A\d+/ ){ # numbered list
-        $emitted = emit_li( 'ol' );
-        if ($text =~ /\A(?>\d+\.?)\s*(.+)\Z/s ) { # with additional text
+        new_listitem( 'ol' );
+        if ($text =~ /\A(?>\d+\.?)\s*(\S.*)\Z/s ) { # with additional text
             my $tag = $1;
             $otext =~ s/\A\d+\.?\s*//;
             emit_item_tag( $otext, $tag, 1 );
+            print HTML "\n";
         }
 
     } else {			# definition list
-        $emitted = emit_li( 'dl' );
+        # new_listitem takes care of opening the <dt> tag
+        new_listitem( 'dl' );
         if ($text =~ /\A(.+)\Z/s ){ # should have text
             emit_item_tag( $otext, $text, 1 );
+	    # write the definition term and close <dt> tag
+	    print HTML "</dt>\n";
         }
-        $need_dd = 1;
+        # trigger opening a <dd> tag for the actual definition; will not
+        # happen if next paragraph is also a definition term (=item)
+        $ListNewTerm = 1;
     }
     print HTML "\n";
-    return $need_dd;
 }
 
 #
@@ -1196,30 +1225,31 @@ sub process_over {
     # start a new list
     $Listlevel++;
     push( @Items_Seen, 0 );
-    $After_Lpar = 0;
 }
 
 #
 # process_back - process a pod back tag and convert it to HTML format.
 #
 sub process_back {
-    my $need_dd = shift;
     if( $Listlevel == 0 ){
 	warn "$0: $Podfile: unexpected =back directive in paragraph $Paragraph.  ignoring.\n" unless $Quiet;
 	return;
     }
 
-    # close off the list.  note, I check to see if $Listend[$Listlevel] is
+    # close off the list.  note, I check to see if $Listtype[$Listlevel] is
     # defined because an =item directive may have never appeared and thus
-    # $Listend[$Listlevel] may have never been initialized.
+    # $Listtype[$Listlevel] may have never been initialized.
     $Listlevel--;
-    if( defined $Listend[$Listlevel] ){
-	print HTML $need_dd ? "</dd>\n" : "</li>\n" if $After_Lpar;
-	print HTML $Listend[$Listlevel];
-        print HTML "\n";
-        pop( @Listend );
+    if( defined $Listtype[$Listlevel] ){
+        if ( $Listtype[$Listlevel] eq 'dl' ){
+            print HTML "</dd>\n" unless $ListNewTerm;
+        } else {
+            print HTML "</li>\n";
+        }
+        print HTML "</$Listtype[$Listlevel]>\n";
+        pop( @Listtype );
+        $ListNewTerm = 0;
     }
-    $After_Lpar = 0;
 
     # clean up item count
     pop( @Items_Seen );
@@ -1278,8 +1308,8 @@ sub process_begin {
 sub process_end {
     my($whom, $text) = @_;
     $whom = lc($whom);
-    if ($Begin_Stack[-1] ne $whom ) {
-	die "Unmatched begin/end at chunk $Paragraph\n"
+    if (!defined $Begin_Stack[-1] or $Begin_Stack[-1] ne $whom ) {
+	Carp::confess("Unmatched begin/end at chunk $Paragraph in pod $Podfile\n")
     }
     pop( @Begin_Stack );
 }
@@ -1393,12 +1423,12 @@ sub process_pre {
 #
 sub pure_text($){
     my $text = shift();
-    process_puretext( $text, \$PTQuote, 1 );
+    process_puretext( $text, 1 );
 }
 
 sub inIS_text($){
     my $text = shift();
-    process_puretext( $text, \$PTQuote, 0 );
+    process_puretext( $text, 0 );
 }
 
 #
@@ -1406,20 +1436,13 @@ sub inIS_text($){
 #  double-quotes and handling implicit C<> links.
 #
 sub process_puretext {
-    my($text, $quote, $notinIS) = @_;
+    my($text, $notinIS) = @_;
 
     ## Guessing at func() or [\$\@%&]*var references in plain text is destined
     ## to produce some strange looking ref's. uncomment to disable:
     ## $notinIS = 0;
 
     my(@words, $lead, $trail);
-
-    # convert double-quotes to single-quotes
-    if( $$quote && $text =~ s/"/''/s ){
-        $$quote = 0;
-    }
-    while ($text =~ s/"([^"]*)"/``$1''/sg) {};
-    $$quote = 1 if $text =~ s/"/``/s;
 
     # keep track of leading and trailing white-space
     $lead  = ($text =~ s/\A(\s+)//s ? $1 : "");
@@ -1432,20 +1455,36 @@ sub process_puretext {
     foreach my $word (@words) {
 	# skip space runs
  	next if $word =~ /^\s*$/;
-	# see if we can infer a link
-	if( $notinIS && $word =~ /^(\w+)\((.*)\)$/ ) {
+	# see if we can infer a link or a function call
+	#
+	# NOTE: This is a word based search, it won't automatically
+	# mark "substr($var, 1, 2)" because the 1st word would be "substr($var"
+	# User has to enclose those with proper C<>
+
+	if( $notinIS && $word =~
+	    m/
+		^([a-z_]{2,})                 # The function name
+		\(
+		    ([0-9][a-z]*              # Manual page(1) or page(1M)
+		    |[^)]*[\$\@\%][^)]+       # ($foo), (1, @foo), (%hash)
+		    |                         # ()
+		    )
+		\)
+		([.,;]?)$                     # a possible punctuation follows
+	    /xi
+	) {
 	    # has parenthesis so should have been a C<> ref
             ## try for a pagename (perlXXX(1))?
-            my( $func, $args ) = ( $1, $2 );
+            my( $func, $args, $rest ) = ( $1, $2, $3 || '' );
             if( $args =~ /^\d+$/ ){
                 my $url = page_sect( $word, '' );
                 if( defined $url ){
-                    $word = "<a href=\"$url\">the $word manpage</a>";
+                    $word = qq(<a href="$url" class="man">the $word manpage</a>$rest);
                     next;
                 }
             }
             ## try function name for a link, append tt'ed argument list
-            $word = emit_C( $func, '', "($args)");
+            $word = emit_C( $func, '', "($args)") . $rest;
 
 #### disabled. either all (including $\W, $\w+{.*} etc.) or nothing.
 ##      } elsif( $notinIS && $word =~ /^[\$\@%&*]+\w+$/) {
@@ -1479,14 +1518,31 @@ sub process_puretext {
 #
 
 sub process_text1($$;$$);
-sub pattern ($) { $_[0] ? '[^\S\n]+'.('>' x ($_[0] + 1)) : '>' }
-sub closing ($) { local($_) = shift; (defined && s/\s+$//) ? length : 0 }
+sub pattern ($) { $_[0] ? '\s+'.('>' x ($_[0] + 1)) : '>' }
+sub closing ($) { local($_) = shift; (defined && s/\s+\z//) ? length : 0 }
 
 sub process_text {
     return if $Ignore;
     my( $tref ) = @_;
     my $res = process_text1( 0, $tref );
+    $res =~ s/\s+$//s;
     $$tref = $res;
+}
+
+sub process_text_rfc_links {
+    my $text = shift;
+
+    # For every "RFCnnnn" or "RFC nnn", link it to the authoritative
+    # ource. Do not use the /i modifier here. Require "RFC" to be written in
+    #  in capital letters.
+
+    $text =~ s{
+	(?<=[^<>[:alpha:]])           # Make sure this is not an URL already
+	(RFC\s*([0-9]{1,5}))(?![0-9]) # max 5 digits
+    }
+    {<a href="http://www.ietf.org/rfc/rfc$2.txt" class="rfc">$1</a>}gx;
+
+    $text;
 }
 
 sub process_text1($$;$$){
@@ -1523,11 +1579,11 @@ sub process_text1($$;$$){
 	$res = "&$escape;";
 
     } elsif( $func eq 'F' ){
-	# F<filename> - italizice
-	$res = '<em>' . process_text1( $lev, $rstr ) . '</em>';
+	# F<filename> - italicize
+	$res = '<em class="file">' . process_text1( $lev, $rstr ) . '</em>';
 
     } elsif( $func eq 'I' ){
-	# I<text> - italizice
+	# I<text> - italicize
 	$res = '<em>' . process_text1( $lev, $rstr ) . '</em>';
 
     } elsif( $func eq 'L' ){
@@ -1564,7 +1620,11 @@ sub process_text1($$;$$){
 	# check for link patterns
 	if( $par =~ m{^([^/]+?)/(?!")(.*?)$} ){     # name/ident
             # we've got a name/ident (no quotes)
-            ( $page, $ident ) = ( $1, $2 );
+            if (length $2) {
+                ( $page, $ident ) = ( $1, $2 );
+            } else {
+                ( $page, $section ) = ( $1, $2 );
+            }
             ### print STDERR "--> L<$par> to page $page, ident $ident\n";
 
 	} elsif( $par =~ m{^(.*?)/"?(.*?)"?$} ){ # [name]/"section"
@@ -1652,11 +1712,11 @@ sub process_text1($$;$$){
 
     } elsif( $func eq 'X' ){
 	# X<> - ignore
-	$$rstr =~ s/^[^>]*>//;
-
+	warn "$0: $Podfile: invalid X<> in paragraph $Paragraph.\n"
+	    unless $$rstr =~ s/^[^>]*>// or $Quiet;
     } elsif( $func eq 'Z' ){
 	# Z<> - empty
-	warn "$0: $Podfile: invalid X<> in paragraph $Paragraph.\n"
+	warn "$0: $Podfile: invalid Z<> in paragraph $Paragraph.\n"
 	    unless $$rstr =~ s/^>// or $Quiet;
 
     } else {
@@ -1674,9 +1734,12 @@ sub process_text1($$;$$){
 	}
 	if( $lev == 1 ){
 	    $res .= pure_text( $$rstr );
-	} else {
-	    warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph.\n" unless $Quiet;
+	} elsif( ! $Quiet ) {
+            my $snippet = substr($$rstr,0,60);
+            warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph: '$snippet'.\n" 
+                
 	}
+	$res = process_text_rfc_links($res);
     }
     return $res;
 }
@@ -1689,7 +1752,7 @@ sub go_ahead($$$){
     my $res = '';
     my @closing = ($closing);
     while( $$rstr =~
-      s/\A(.*?)(([BCEFILSXZ])<(<+[^\S\n]+)?|@{[pattern $closing[0]]})//s ){
+      s/\A(.*?)(([BCEFILSXZ])<(<+\s+)?|@{[pattern $closing[0]]})//s ){
 	$res .= $1;
 	unless( $3 ){
 	    shift @closing;
@@ -1699,7 +1762,10 @@ sub go_ahead($$$){
 	}
 	$res .= $2;
     }
-    warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph.\n" unless $Quiet;
+    unless ($Quiet) {
+        my $snippet = substr($$rstr,0,60);
+        warn "$0: $Podfile: undelimited $func<> in paragraph $Paragraph (go_ahead): '$snippet'.\n" 
+    }	        
     return $res;
 }
 
@@ -1821,10 +1887,9 @@ sub page_sect($$) {
 	    $section = "#$section" if $section;
             ### print STDERR "...section=$section\n";
 
-	    # check if there is a .pod with the page name
-	    if ($Pages{$page} =~ /([^:]*)\.pod:/) {
-		$link = "$Htmlroot/$1.html$section";
-	    } elsif ($Pages{$page} =~ /([^:]*)\.pm:/) {
+	    # check if there is a .pod with the page name.
+	    # for L<Foo>, Foo.(pod|pm) is preferred to A/Foo.(pod|pm)
+	    if ($Pages{$page} =~ /([^:]*)\.(?:pod|pm):/) {
 		$link = "$Htmlroot/$1.html$section";
 	    } else {
 		$link = "";
@@ -1896,10 +1961,13 @@ sub coderef($$){
     my( $url );
 
     my $fid = fragment_id( $item );
+    
     if( defined( $page ) && $page ne "" ){
 	# we have been given a $page...
 	$page =~ s{::}{/}g;
 
+        Carp::confess("Undefined fragment '$item' from fragment_id() in coderef() in $Podfile")
+            if !defined $fid;    
 	# Do we take it? Item could be a section!
 	my $base = $Items{$fid} || "";
 	$base =~ s{[^/]*/}{};
@@ -1926,7 +1994,7 @@ sub coderef($$){
             if( exists $Pages{$page} and $Pages{$page} =~ /([^:.]*)\.[^:]*:/){
 		$page = $1 . '.html';
 	    }
-	    my $link = "$Htmlroot/$page#item_" . anchorify($fid);
+	    my $link = "$Htmlroot/$page#" . anchorify($fid);
 
 	    # Here, we take advantage of the knowledge that $Htmlfileurl
 	    # ne '' implies $Htmlroot eq ''.
@@ -1937,7 +2005,7 @@ sub coderef($$){
 		$url = $link ;
 	    }
 	} else {
-	    $url = "#item_" . anchorify($fid);
+	    $url = "#" . anchorify($fid);
 	}
 
 	confess "url has space: $url" if $url =~ /"[^"]*\s[^"]*"/;
@@ -1964,9 +2032,11 @@ sub relative_url {
 # after the entire pod file has been read and converted.
 #
 sub finish_list {
-    while ($Listlevel > 0) {
-	print HTML "</dl>\n";
-	$Listlevel--;
+    if( $Listlevel ){
+	warn "$0: $Podfile: unterminated list(s) at =head in paragraph $Paragraph.  ignoring.\n" unless $Quiet;
+	while( $Listlevel ){
+            process_back();
+        }
     }
 }
 
@@ -1981,7 +2051,8 @@ sub htmlify {
     $heading =~ s/\s+\Z//;
     $heading =~ s/\A\s+//;
     # The hyphen is a disgrace to the English language.
-    $heading =~ s/[-"?]//g;
+    # $heading =~ s/[-"?]//g;
+    $heading =~ s/["?]//g;
     $heading = lc( $heading );
     return $heading;
 }
@@ -2026,7 +2097,7 @@ sub depod1($;$$){
   return $res unless defined $$rstr;
   if( ! defined( $func ) ){
       # skip to next begin of an interior sequence
-      while( $$rstr =~ s/\A(.*?)([BCEFILSXZ])<(<+[^\S\n]+)?// ){
+      while( $$rstr =~ s/\A(.*?)([BCEFILSXZ])<(<+[^\S\n]+)?//s ){
          # recurse into its text
 	  $res .= $1 . depod1( $rstr, $2, closing $3);
       }
@@ -2045,7 +2116,7 @@ sub depod1($;$$){
       # all others: either recurse into new function or
       # terminate at closing angle bracket
       my $term = pattern $closing;
-      while( $$rstr =~ s/\A(.*?)(([BCEFILSXZ])<(<+[^\S\n]+)?|$term)// ){
+      while( $$rstr =~ s/\A(.*?)(([BCEFILSXZ])<(<+[^\S\n]+)?|$term)//s ){
 	  $res .= $1;
 	  last unless $3;
           $res .= depod1( $rstr, $3, closing $4 );
@@ -2057,14 +2128,69 @@ sub depod1($;$$){
   return $res;
 }
 
+{
+    my %seen;   # static fragment record hash
+
+sub fragment_id_readable {
+    my $text     = shift;
+    my $generate = shift;   # optional flag
+
+    my $orig = $text;
+
+    # leave the words for the fragment identifier,
+    # change everything else to underbars.
+    $text =~ s/[^A-Za-z0-9_]+/_/g; # do not use \W to avoid locale dependency.
+    $text =~ s/_{2,}/_/g;
+    $text =~ s/\A_//;
+    $text =~ s/_\Z//;
+
+    unless ($text)
+    {
+        # Nothing left after removing punctuation, so leave it as is
+        # E.g. if option is named: "=item -#"
+
+        $text = $orig;
+    }
+
+    if ($generate) {
+        if ( exists $seen{$text} ) {
+            # This already exists, make it unique
+            $seen{$text}++;
+            $text = $text . $seen{$text};
+        } else {
+            $seen{$text} = 1;  # first time seen this fragment
+        }
+    }
+
+    $text;
+}}
+
+my @HC;
+sub fragment_id_obfuscated {  # This was the old "_2d_2d__"
+    my $text     = shift;
+    my $generate = shift;   # optional flag
+
+    # text? Normalize by obfuscating the fragment id to make it unique
+    $text =~ s/\s+/_/sg;
+
+    $text =~ s{(\W)}{
+        defined( $HC[ord($1)] ) ? $HC[ord($1)]
+        : ( $HC[ord($1)] = sprintf( "%%%02X", ord($1) ) ) }gxe;
+    $text = substr( $text, 0, 50 );
+
+    $text;
+}
+
 #
 # fragment_id - construct a fragment identifier from:
 #   a) =item text
 #   b) contents of C<...>
 #
-my @HC;
+
 sub fragment_id {
-    my $text = shift();
+    my $text     = shift;
+    my $generate = shift;   # optional flag
+
     $text =~ s/\s+\Z//s;
     if( $text ){
 	# a method or function?
@@ -2082,17 +2208,12 @@ sub fragment_id {
 
 	# honour the perlfunc manpage: func [PAR[,[ ]PAR]...]
 	# and some funnies with ... Module ...
-	return $1 if $text =~ m{^([a-z\d_]+)(\s+[A-Z\d,/& ]+)?$};
+	return $1 if $text =~ m{^([a-z\d_]+)(\s+[A-Z,/& ][A-Z\d,/& ]*)?$};
 	return $1 if $text =~ m{^([a-z\d]+)\s+Module(\s+[A-Z\d,/& ]+)?$};
 
-	# text? normalize!
-	$text =~ s/\s+/_/sg;
-	$text =~ s{(\W)}{
-         defined( $HC[ord($1)] ) ? $HC[ord($1)]
-                 : ( $HC[ord($1)] = sprintf( "%%%02X", ord($1) ) ) }gxe;
-        $text = substr( $text, 0, 50 );
+	return fragment_id_readable($text, $generate);
     } else {
-	return undef();
+	return;
     }
 }
 

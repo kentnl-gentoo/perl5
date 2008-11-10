@@ -4,7 +4,7 @@ use strict;
 use warnings;
 use Carp;
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 BEGIN
 {
@@ -23,7 +23,9 @@ sub Fetch { $_ = uncompress($_) }
 
 __END__
 
-=head1 DBM_Filter::compress
+=head1 NAME
+
+DBM_Filter::compress - filter for DBM_Filter
 
 =head1 SYNOPSIS
 
@@ -32,7 +34,7 @@ __END__
 
     $db = tie %hash, ...
     $db->Filter_Push('compress');
-    
+
 =head1 DESCRIPTION
 
 This DBM filter will compress all data before it is written to the database

@@ -32,6 +32,7 @@ POD = \
 	perl586delta.pod	\
 	perl587delta.pod	\
 	perl588delta.pod	\
+	perl589delta.pod	\
 	perl58delta.pod	\
 	perlapi.pod	\
 	perlapio.pod	\
@@ -42,6 +43,7 @@ POD = \
 	perlcall.pod	\
 	perlcheat.pod	\
 	perlclib.pod	\
+	perlcommunity.pod	\
 	perlcompile.pod	\
 	perldata.pod	\
 	perldbmfilter.pod	\
@@ -95,8 +97,11 @@ POD = \
 	perlpodspec.pod	\
 	perlport.pod	\
 	perlre.pod	\
+	perlrebackslash.pod	\
+	perlrecharclass.pod	\
 	perlref.pod	\
 	perlreftut.pod	\
+	perlreguts.pod	\
 	perlrequick.pod	\
 	perlreref.pod	\
 	perlretut.pod	\
@@ -113,7 +118,9 @@ POD = \
 	perltoot.pod	\
 	perltrap.pod	\
 	perlunicode.pod	\
+	perlunifaq.pod	\
 	perluniintro.pod	\
+	perlunitut.pod	\
 	perlutil.pod	\
 	perlvar.pod	\
 	perlxs.pod	\
@@ -137,6 +144,7 @@ MAN = \
 	perl586delta.man	\
 	perl587delta.man	\
 	perl588delta.man	\
+	perl589delta.man	\
 	perl58delta.man	\
 	perlapi.man	\
 	perlapio.man	\
@@ -147,6 +155,7 @@ MAN = \
 	perlcall.man	\
 	perlcheat.man	\
 	perlclib.man	\
+	perlcommunity.man	\
 	perlcompile.man	\
 	perldata.man	\
 	perldbmfilter.man	\
@@ -200,8 +209,11 @@ MAN = \
 	perlpodspec.man	\
 	perlport.man	\
 	perlre.man	\
+	perlrebackslash.man	\
+	perlrecharclass.man	\
 	perlref.man	\
 	perlreftut.man	\
+	perlreguts.man	\
 	perlrequick.man	\
 	perlreref.man	\
 	perlretut.man	\
@@ -218,7 +230,9 @@ MAN = \
 	perltoot.man	\
 	perltrap.man	\
 	perlunicode.man	\
+	perlunifaq.man	\
 	perluniintro.man	\
+	perlunitut.man	\
 	perlutil.man	\
 	perlvar.man	\
 	perlxs.man	\
@@ -242,6 +256,7 @@ HTML = \
 	perl586delta.html	\
 	perl587delta.html	\
 	perl588delta.html	\
+	perl589delta.html	\
 	perl58delta.html	\
 	perlapi.html	\
 	perlapio.html	\
@@ -252,6 +267,7 @@ HTML = \
 	perlcall.html	\
 	perlcheat.html	\
 	perlclib.html	\
+	perlcommunity.html	\
 	perlcompile.html	\
 	perldata.html	\
 	perldbmfilter.html	\
@@ -305,8 +321,11 @@ HTML = \
 	perlpodspec.html	\
 	perlport.html	\
 	perlre.html	\
+	perlrebackslash.html	\
+	perlrecharclass.html	\
 	perlref.html	\
 	perlreftut.html	\
+	perlreguts.html	\
 	perlrequick.html	\
 	perlreref.html	\
 	perlretut.html	\
@@ -322,7 +341,9 @@ HTML = \
 	perltoot.html	\
 	perltrap.html	\
 	perlunicode.html	\
+	perlunifaq.html	\
 	perluniintro.html	\
+	perlunitut.html	\
 	perlutil.html	\
 	perlvar.html	\
 	perlxs.html	\
@@ -347,6 +368,7 @@ TEX = \
 	perl586delta.tex	\
 	perl587delta.tex	\
 	perl588delta.tex	\
+	perl589delta.tex	\
 	perl58delta.tex	\
 	perlapi.tex	\
 	perlapio.tex	\
@@ -357,6 +379,7 @@ TEX = \
 	perlcall.tex	\
 	perlcheat.tex	\
 	perlclib.tex	\
+	perlcommunity.tex	\
 	perlcompile.tex	\
 	perldata.tex	\
 	perldbmfilter.tex	\
@@ -410,8 +433,11 @@ TEX = \
 	perlpodspec.tex	\
 	perlport.tex	\
 	perlre.tex	\
+	perlrebackslash.tex	\
+	perlrecharclass.tex	\
 	perlref.tex	\
 	perlreftut.tex	\
+	perlreguts.tex	\
 	perlrequick.tex	\
 	perlreref.tex	\
 	perlretut.tex	\
@@ -428,7 +454,9 @@ TEX = \
 	perltoot.tex	\
 	perltrap.tex	\
 	perlunicode.tex	\
+	perlunifaq.tex	\
 	perluniintro.tex	\
+	perlunitut.tex	\
 	perlutil.tex	\
 	perlvar.tex	\
 	perlxs.tex	\

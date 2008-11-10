@@ -49,7 +49,7 @@ print <<EOF;
  *
  *    reentr.h
  *
- *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -61,6 +61,21 @@ print <<EOF;
 #ifndef REENTR_H
 #define REENTR_H
 
+/* If compiling for a threaded perl, we will macro-wrap the system/library
+ * interfaces (e.g. getpwent()) which have threaded versions
+ * (e.g. getpwent_r()), which will handle things correctly for
+ * the Perl interpreter, but otherwise (for XS) the wrapping does
+ * not take place.  See L<perlxs/Thread-aware system interfaces>.
+ */
+
+#ifndef PERL_REENTR_API
+# if defined(PERL_CORE) || defined(PERL_EXT)
+#  define PERL_REENTR_API 1
+# else
+#  define PERL_REENTR_API 0
+# endif
+#endif
+
 #ifdef USE_REENTRANT_API
 
 #ifdef PERL_CORE
@@ -71,7 +86,8 @@ print <<EOF;
  * but they are declared obsolete and are not to be used.  Often this
  * means that the platform has threadsafed the interfaces (hopefully).
  * All this is OS version dependent, so we are of course fooling ourselves.
- * If you know of more deprecations on some platforms, please add your own. */
+ * If you know of more deprecations on some platforms, please add your own
+ * (by editing reentr.pl, mind!) */
 
 #ifdef __hpux
 #   undef HAS_CRYPT_R
@@ -541,7 +557,7 @@ EOF
 	    push @size, <<EOF;
 #   if defined(HAS_SYSCONF) && defined($sc) && !defined(__GLIBC__)
 	PL_reentrant_buffer->$sz = sysconf($sc);
-	if (PL_reentrant_buffer->$sz == -1)
+	if (PL_reentrant_buffer->$sz == (size_t) -1)
 		PL_reentrant_buffer->$sz = REENTRANTUSUALSIZE;
 #   else
 #       if defined(__osf__) && defined(__alpha) && defined(SIABUFSIZ)
@@ -628,6 +644,7 @@ EOF
 	push @wrap, $ifdef;
 
 	push @wrap, <<EOF;
+#  if defined(PERL_REENTR_API) && (PERL_REENTR_API+0 == 1)
 #   undef $func
 EOF
 
@@ -692,7 +709,11 @@ EOF
 			 } split '', $b;
 		$w = ", $w" if length $v;
 	    }
+
 	    my $call = "${func}_r($v$w)";
+	    if ($func eq 'localtime') {
+		$call = "L_R_TZSET $call";
+	    }
 
             # Must make OpenBSD happy
             my $memzero = '';
@@ -711,7 +732,7 @@ EOF
 		if ($func =~ /^get/) {
 		    my $rv = $v ? ", $v" : "";
 		    if ($r eq 'I') {
-			$call = qq[((PL_REENTRANT_RETINT = $call)$test ? $true : (((PL_REENTRANT_RETINT == ERANGE) || (errno == ERANGE)) ? ($seenm{$func}{$seenr{$func}})Perl_reentrant_retry("$func"$rv) : 0))];
+			$call = qq[((PL_REENTRANT_RETINT = $call)$test ? $true : ((PL_REENTRANT_RETINT == ERANGE) ? ($seenm{$func}{$seenr{$func}})Perl_reentrant_retry("$func"$rv) : 0))];
 			my $arg = join(", ", map { $seenm{$func}{substr($a,$_,1)}." ".$v[$_] } 0..$seenu{$func}-1);
 			my $ret = $seenr{$func} eq 'V' ? "" : "return ";
 			my $memzero_ = $memzero ? "$memzero, " : "";
@@ -744,9 +765,13 @@ EOF
 		}
 	    }
 	    push @wrap, <<EOF;
-#   endif
+#  endif /* if defined(PERL_REENTR_API) && (PERL_REENTR_API+0 == 1) */
 EOF
 	}
+
+	    push @wrap, <<EOF;
+#   endif /* HAS_\U$func */
+EOF
 
 	push @wrap, $endif, "\n";
     }
@@ -866,7 +891,7 @@ print <<EOF;
  *
  *    reentr.c
  *
- *    Copyright (C) 2002, 2003, 2005, 2006 by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006, 2007 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -921,6 +946,9 @@ Perl_reentrant_retry(const char *f, ...)
 {
     dTHX;
     void *retptr = NULL;
+    va_list ap;
+    va_start(ap, f);
+    {
 #ifdef USE_REENTRANT_API
 #  if defined(USE_HOSTENT_BUFFER) || defined(USE_GRENT_BUFFER) || defined(USE_NETENT_BUFFER) || defined(USE_PWENT_BUFFER) || defined(USE_PROTOENT_BUFFER) || defined(USE_SERVENT_BUFFER)
     void *p0;
@@ -934,9 +962,6 @@ Perl_reentrant_retry(const char *f, ...)
 #  if defined(USE_HOSTENT_BUFFER) || defined(USE_NETENT_BUFFER) || defined(USE_PROTOENT_BUFFER) || defined(USE_SERVENT_BUFFER)
     int anint;
 #  endif
-    va_list ap;
-
-    va_start(ap, f);
 
     switch (PL_op->op_type) {
 #ifdef USE_HOSTENT_BUFFER
@@ -1139,9 +1164,11 @@ Perl_reentrant_retry(const char *f, ...)
 	/* Not known how to retry, so just fail. */
 	break;
     }
-
-    va_end(ap);
+#else
+    PERL_UNUSED_ARG(f);
 #endif
+    }
+    va_end(ap);
     return retptr;
 }
 

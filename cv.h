@@ -1,15 +1,14 @@
 /*    cv.h
  *
- *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999,
- *    2000, 2001, 2002, 2003, 2004, by Larry Wall and others
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1999, 2000, 2001,
+ *    2002, 2003, 2004, 2006, 2007, 2008 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
  *
  */
 
-/* This structure must match XPVCV in B/C.pm and the beginning of XPVFM
- * in sv.h  */
+/* This structure must the beginning of XPVFM in sv.h  */
 
 struct xpvcv {
     char *	xpv_pv;		/* pointer to malloced string (for prototype) */
@@ -153,6 +152,9 @@ Returns the stash of the CV.
 #define CvWEAKOUTSIDE_on(cv)	(CvFLAGS(cv) |= CVf_WEAKOUTSIDE)
 #define CvWEAKOUTSIDE_off(cv)	(CvFLAGS(cv) &= ~CVf_WEAKOUTSIDE)
 
+#define CvISXSUB(cv)		(CvXSUB(cv) ? TRUE : FALSE)
+/* Flags for newXS_flags  */
+#define XS_DYNAMIC_FILENAME	0x01	/* The filename isn't static  */
 
 /*
 =head1 CV reference counts and CvOUTSIDE

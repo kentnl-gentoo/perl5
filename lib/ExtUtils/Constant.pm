@@ -1,6 +1,6 @@
 package ExtUtils::Constant;
 use vars qw (@ISA $VERSION @EXPORT_OK %EXPORT_TAGS);
-$VERSION = 0.17;
+$VERSION = 0.21;
 
 =head1 NAME
 
@@ -149,7 +149,7 @@ sub C_constant {
 				      breakout => $breakout}, @items);
 }
 
-=item XS_constant PACKAGE, TYPES, SUBNAME, C_SUBNAME
+=item XS_constant PACKAGE, TYPES, XS_SUBNAME, C_SUBNAME
 
 A function to generate the XS code to implement the perl subroutine
 I<PACKAGE>::constant used by I<PACKAGE>::AUTOLOAD to load constants.
@@ -163,7 +163,7 @@ be the same list of types as C<C_constant> was given.
 the number of parameters passed to the C function C<constant>]
 
 You can call the perl visible subroutine something other than C<constant> if
-you give the parameter I<SUBNAME>. The C subroutine it calls defaults to
+you give the parameter I<XS_SUBNAME>. The C subroutine it calls defaults to
 the name of the perl visible subroutine, unless you give the parameter
 I<C_SUBNAME>.
 
@@ -172,10 +172,10 @@ I<C_SUBNAME>.
 sub XS_constant {
   my $package = shift;
   my $what = shift;
-  my $subname = shift;
+  my $XS_subname = shift;
   my $C_subname = shift;
-  $subname ||= 'constant';
-  $C_subname ||= $subname;
+  $XS_subname ||= 'constant';
+  $C_subname ||= $XS_subname;
 
   if (!ref $what) {
     # Convert line of the form IV,UV,NV to hash
@@ -186,7 +186,7 @@ sub XS_constant {
 
   my $xs = <<"EOT";
 void
-$subname(sv)
+$XS_subname(sv)
     PREINIT:
 #ifdef dXSTARG
 	dXSTARG; /* Faster if we have it.  */
@@ -243,17 +243,23 @@ EOT
   $xs .= ', &sv' if $params->{SV};
   $xs .= ");\n";
 
+  # If anyone is insane enough to suggest a package name containing %
+  my $package_sprintf_safe = $package;
+  $package_sprintf_safe =~ s/%/%%/g;
+
   $xs .= << "EOT";
       /* Return 1 or 2 items. First is error message, or undef if no error.
            Second, if present, is found value */
         switch (type) {
         case PERL_constant_NOTFOUND:
-          sv = sv_2mortal(newSVpvf("%s is not a valid $package macro", s));
+          sv =
+	    sv_2mortal(newSVpvf("%s is not a valid $package_sprintf_safe macro", s));
           PUSHs(sv);
           break;
         case PERL_constant_NOTDEF:
           sv = sv_2mortal(newSVpvf(
-	    "Your vendor has not defined $package macro %s, used", s));
+	    "Your vendor has not defined $package_sprintf_safe macro %s, used",
+				   s));
           PUSHs(sv);
           break;
 EOT
@@ -283,7 +289,7 @@ EOT
   $xs .= << "EOT";
         default:
           sv = sv_2mortal(newSVpvf(
-	    "Unexpected return type %d while processing $package macro %s, used",
+	    "Unexpected return type %d while processing $package_sprintf_safe macro %s, used",
                type, s));
           PUSHs(sv);
         }
@@ -432,6 +438,15 @@ for each group with this number or more names in.
 An array of constants' names, either scalars containing names, or hashrefs
 as detailed in L<"C_constant">.
 
+=item PROXYSUBS
+
+If true, uses proxy subs. See L<ExtUtils::Constant::ProxySubs>.
+
+=item C_FH
+
+A filehandle to write the C code to.  If not given, then I<C_FILE> is opened
+for writing.
+
 =item C_FILE
 
 The name of the file to write containing the C code.  The default is
@@ -440,12 +455,17 @@ mistaken for anything related to a legitimate perl package name, and
 not naming the file C<.c> avoids having to override Makefile.PL's
 C<.xs> to C<.c> rules.
 
+=item XS_FH
+
+A filehandle to write the XS code to.  If not given, then I<XS_FILE> is opened
+for writing.
+
 =item XS_FILE
 
 The name of the file to write containing the XS code.  The default is
 C<const-xs.inc>.
 
-=item SUBNAME
+=item XS_SUBNAME
 
 The perl visible name of the XS subroutine generated which will return the
 constants. The default is C<constant>.
@@ -453,7 +473,7 @@ constants. The default is C<constant>.
 =item C_SUBNAME
 
 The name of the C subroutine generated which will return the constants.
-The default is I<SUBNAME>.  Child subroutines have C<_> and the name
+The default is I<XS_SUBNAME>.  Child subroutines have C<_> and the name
 length appended, so constants with 10 character names would be in
 C<constant_10> with the default I<XS_SUBNAME>.
 
@@ -466,50 +486,70 @@ sub WriteConstants {
     ( # defaults
      C_FILE =>       'const-c.inc',
      XS_FILE =>      'const-xs.inc',
-     SUBNAME =>      'constant',
+     XS_SUBNAME =>   'constant',
      DEFAULT_TYPE => 'IV',
      @_);
 
-  $ARGS{C_SUBNAME} ||= $ARGS{SUBNAME}; # No-one sane will have C_SUBNAME eq '0'
+  $ARGS{C_SUBNAME} ||= $ARGS{XS_SUBNAME}; # No-one sane will have C_SUBNAME eq '0'
 
   croak "Module name not specified" unless length $ARGS{NAME};
 
-  my ($c_fh, $xs_fh);
-  if ($] <= 5.008) {
-      # We need these little games, rather than doing things unconditionally,
-      # because we're used in core Makefile.PLs before IO is available (needed
-      # by filehandle), but also we want to work on older perls where undefined
-      # scalars do not automatically turn into anonymous file handles.
-      require FileHandle;
-      $c_fh = FileHandle->new();
-      $xs_fh = FileHandle->new();
+  my $c_fh = $ARGS{C_FH};
+  if (!$c_fh) {
+      if ($] <= 5.008) {
+	  # We need these little games, rather than doing things
+	  # unconditionally, because we're used in core Makefile.PLs before
+	  # IO is available (needed by filehandle), but also we want to work on
+	  # older perls where undefined scalars do not automatically turn into
+	  # anonymous file handles.
+	  require FileHandle;
+	  $c_fh = FileHandle->new();
+      }
+      open $c_fh, ">$ARGS{C_FILE}" or die "Can't open $ARGS{C_FILE}: $!";
   }
-  open $c_fh, ">$ARGS{C_FILE}" or die "Can't open $ARGS{C_FILE}: $!";
-  open $xs_fh, ">$ARGS{XS_FILE}" or die "Can't open $ARGS{XS_FILE}: $!";
+
+  my $xs_fh = $ARGS{XS_FH};
+  if (!$xs_fh) {
+      if ($] <= 5.008) {
+	  require FileHandle;
+	  $xs_fh = FileHandle->new();
+      }
+      open $xs_fh, ">$ARGS{XS_FILE}" or die "Can't open $ARGS{XS_FILE}: $!";
+  }
 
   # As this subroutine is intended to make code that isn't edited, there's no
   # need for the user to specify any types that aren't found in the list of
   # names.
-  my $types = {};
+  
+  if ($ARGS{PROXYSUBS}) {
+      require ExtUtils::Constant::ProxySubs;
+      $ARGS{C_FH} = $c_fh;
+      $ARGS{XS_FH} = $xs_fh;
+      ExtUtils::Constant::ProxySubs->WriteConstants(%ARGS);
+  } else {
+      my $types = {};
 
-  print $c_fh constant_types(); # macro defs
-  print $c_fh "\n";
+      print $c_fh constant_types(); # macro defs
+      print $c_fh "\n";
 
-  # indent is still undef. Until anyone implements indent style rules with it.
-  foreach (ExtUtils::Constant::XS->C_constant({package => $ARGS{NAME},
-					       subname => $ARGS{C_SUBNAME},
-					       default_type =>
-					       $ARGS{DEFAULT_TYPE},
-					       types => $types,
-					       breakout => $ARGS{BREAKOUT_AT}},
-					       @{$ARGS{NAMES}})) {
-    print $c_fh $_, "\n"; # C constant subs
+      # indent is still undef. Until anyone implements indent style rules with
+      # it.
+      foreach (ExtUtils::Constant::XS->C_constant({package => $ARGS{NAME},
+						   subname => $ARGS{C_SUBNAME},
+						   default_type =>
+						       $ARGS{DEFAULT_TYPE},
+						       types => $types,
+						       breakout =>
+						       $ARGS{BREAKOUT_AT}},
+						  @{$ARGS{NAMES}})) {
+	  print $c_fh $_, "\n"; # C constant subs
+      }
+      print $xs_fh XS_constant ($ARGS{NAME}, $types, $ARGS{XS_SUBNAME},
+				$ARGS{C_SUBNAME});
   }
-  print $xs_fh XS_constant ($ARGS{NAME}, $types, $ARGS{XS_SUBNAME},
-                            $ARGS{C_SUBNAME});
 
-  close $c_fh or warn "Error closing $ARGS{C_FILE}: $!";
-  close $xs_fh or warn "Error closing $ARGS{XS_FILE}: $!";
+  close $c_fh or warn "Error closing $ARGS{C_FILE}: $!" unless $ARGS{C_FH};
+  close $xs_fh or warn "Error closing $ARGS{XS_FILE}: $!" unless $ARGS{XS_FH};
 }
 
 1;

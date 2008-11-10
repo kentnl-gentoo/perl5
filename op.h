@@ -1,7 +1,7 @@
 /*    op.h
  *
- *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+ *    2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -79,6 +79,10 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  (Or block needs explicit scope entry.) */
 #define OPf_REF		16	/* Certified reference. */
 				/*  (Return container, not containee). */
+#define OPf_COP_TEMP	16	/* COP is likely to get freed soon.
+				   This is only used with ithreads, but isn't a
+				   conditional compile, else ext/B/defsubs.h
+				   gets confused. */
 #define OPf_MOD		32	/* Will modify (lvalue). */
 #define OPf_STACKED	64	/* Some arg is arriving on the stack. */
 #define OPf_SPECIAL	128	/* Do something weird for this op: */
@@ -102,6 +106,9 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_DBSTATE, indicates breakpoint
 				 *    (runtime property) */
 				/*  On OP_AELEMFAST, indiciates pad var */
+				/*  On OP_REQUIRE, was seen as CORE::require */
+				/*  On OP_ANONHASH and OP_ANONLIST, create a
+				    reference to the new anon hash or array */
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -129,6 +136,7 @@ Deprecated.  Use C<GIMME_V> instead.
 
 /* Private for OP_SASSIGN */
 #define OPpASSIGN_BACKWARDS	64	/* Left & right switched. */
+#define OPpASSIGN_CV_TO_GV	128	/* Possible optimisation for constants. */
 
 /* Private for OP_MATCH and OP_SUBST{,CONST} */
 #define OPpRUNTIME		64	/* Pattern coming in on the stack */
@@ -154,7 +162,7 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpENTERSUB_DB		16	/* Debug subroutine. */
 #define OPpENTERSUB_HASTARG	32	/* Called from OP tree. */
 #define OPpENTERSUB_NOMOD	64	/* Immune to mod() for :attrlist. */
-  /* OP_RV2CV only */
+  /* OP_ENTERSUB and OP_RV2CV only */
 #define OPpENTERSUB_AMPER	8	/* Used & form to call. */
 #define OPpENTERSUB_NOPAREN	128	/* bare sub call (without parens) */
 #define OPpENTERSUB_INARGS	4	/* Lval used as arg to a sub. */
@@ -164,9 +172,17 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpLVAL_DEFER		16	/* Defer creation of array/hash elem */
   /* OP_RV2?V, OP_GVSV, OP_ENTERITER only */
 #define OPpOUR_INTRO		16	/* Variable was in an our() */
-  /* OP_RV2[AH]V, OP_PAD[AH]V, OP_[AH]ELEM */
+  /* OP_RV2[AGH]V, OP_PAD[AH]V, OP_[AH]ELEM */
 #define OPpMAYBE_LVSUB		8	/* We might be an lvalue to return */
   /* for OP_RV2?V, lower bits carry hints (currently only HINT_STRICT_REFS) */
+
+  /* OP_RV2GV only */
+#define OPpDONT_INIT_GV		4	/* Call gv_fetchpv with GV_NOINIT */
+/* (Therefore will return whatever is currently in the symbol table, not
+   guaranteed to be a PVGV)  */
+
+  /* OP_RV2CV only */
+#define OPpMAY_RETURN_CONSTANT	1	/* If a constant sub, return the constant */
 
 /* Private for OPs with TARGLEX */
   /* (lower bits may carry MAXARG) */
@@ -174,8 +190,10 @@ Deprecated.  Use C<GIMME_V> instead.
 
 /* Private for OP_ENTERITER and OP_ITER */
 #define OPpITER_REVERSED	4	/* for (reverse ...) */
+#define OPpITER_DEF		8	/* for $_ or for my $_ */
 
 /* Private for OP_CONST */
+#define	OPpCONST_NOVER		2	/* no 6; */
 #define	OPpCONST_SHORTCIRCUIT	4	/* eg the constant 5 in (5 || foo) */
 #define	OPpCONST_STRICT		8	/* bearword subject to strict 'subs' */
 #define OPpCONST_ENTERED	16	/* Has been entered as symbol. */
@@ -214,7 +232,7 @@ Deprecated.  Use C<GIMME_V> instead.
 #define OPpHUSH_VMSISH		64	/* hush DCL exit msg vmsish mode*/
 #define OPpEXIT_VMSISH		128	/* exit(0) vs. exit(1) vmsish mode*/
 
-/* Private of OP_FTXXX */
+/* Private for OP_FTXXX */
 #define OPpFT_ACCESS		2	/* use filetest 'access' */
 #define OP_IS_FILETEST_ACCESS(op) 		\
 	(((op)->op_type) == OP_FTRREAD  ||	\
@@ -224,6 +242,9 @@ Deprecated.  Use C<GIMME_V> instead.
 	 ((op)->op_type) == OP_FTEWRITE ||	\
 	 ((op)->op_type) == OP_FTEEXEC)
 
+/* Private for OP_ENTEREVAL */
+#define OPpEVAL_HAS_HH		2	/* Does it have a copy of %^H */
+    
 struct op {
     BASEOP
 };
@@ -275,14 +296,32 @@ struct pmop {
 
 #ifdef USE_ITHREADS
 #define PM_GETRE(o)     (INT2PTR(REGEXP*,SvIVX(PL_regex_pad[(o)->op_pmoffset])))
-#define PM_SETRE(o,r)   STMT_START { SV* sv = PL_regex_pad[(o)->op_pmoffset]; sv_setiv(sv, PTR2IV(r)); } STMT_END
+/* The assignment is just to enforce type safety (or at least get a warning).
+ */
+#define PM_SETRE(o,r)	STMT_START {					\
+                            const REGEXP *const slosh = (r);		\
+                            PM_SETRE_OFFSET((o), PTR2IV(slosh));	\
+                        } STMT_END
+/* Actually you can assign any IV, not just an offset. And really should it be
+   UV? */
+#define PM_SETRE_OFFSET(o,iv) \
+			STMT_START { \
+                            SV* const sv = PL_regex_pad[(o)->op_pmoffset]; \
+                            sv_setiv(sv, (iv)); \
+                        } STMT_END
+
+#  ifndef PERL_CORE
+/* No longer used anywhere in the core.  Migrate to Devel::PPPort?  */
 #define PM_GETRE_SAFE(o) (PL_regex_pad ? PM_GETRE(o) : (REGEXP*)0)
 #define PM_SETRE_SAFE(o,r) if (PL_regex_pad) PM_SETRE(o,r)
+#  endif
 #else
 #define PM_GETRE(o)     ((o)->op_pmregexp)
 #define PM_SETRE(o,r)   ((o)->op_pmregexp = (r))
+#  ifndef PERL_CORE
 #define PM_GETRE_SAFE PM_GETRE
 #define PM_SETRE_SAFE PM_SETRE
+#  endif
 #endif
 
 #define PMdf_USED	0x01		/* pm has been used once already */
@@ -303,28 +342,29 @@ struct pmop {
 #define PMf_GLOBAL	0x0100		/* pattern had a g modifier */
 #define PMf_CONTINUE	0x0200		/* don't reset pos() if //g fails */
 #define PMf_EVAL	0x0400		/* evaluating replacement as expr */
-#define PMf_LOCALE	0x0800		/* use locale for character types */
-#define PMf_MULTILINE	0x1000		/* assume multiple lines */
-#define PMf_SINGLELINE	0x2000		/* assume single line */
-#define PMf_FOLD	0x4000		/* case insensitivity */
-#define PMf_EXTENDED	0x8000		/* chuck embedded whitespace */
+#define PMf_LOCALE	0x00800		/* use locale for character types */
+#define PMf_MULTILINE	0x01000		/* assume multiple lines */
+#define PMf_SINGLELINE	0x02000		/* assume single line */
+#define PMf_FOLD	0x04000		/* case insensitivity */
+#define PMf_EXTENDED	0x08000		/* chuck embedded whitespace */
+#define PMf_KEEPCOPY	0x10000		/* copy the string when matching */
 
 /* mask of bits stored in regexp->reganch */
-#define PMf_COMPILETIME	(PMf_MULTILINE|PMf_SINGLELINE|PMf_LOCALE|PMf_FOLD|PMf_EXTENDED)
+#define PMf_COMPILETIME	(PMf_MULTILINE|PMf_SINGLELINE|PMf_LOCALE|PMf_FOLD|PMf_EXTENDED|PMf_KEEPCOPY)
 
 #ifdef USE_ITHREADS
 
 #  define PmopSTASHPV(o)	((o)->op_pmstashpv)
 #  define PmopSTASHPV_set(o,pv)	(PmopSTASHPV(o) = savesharedpv(pv))
 #  define PmopSTASH(o)		(PmopSTASHPV(o) \
-				 ? gv_stashpv(PmopSTASHPV(o),GV_ADD) : Nullhv)
-#  define PmopSTASH_set(o,hv)	PmopSTASHPV_set(o, ((hv) ? HvNAME_get(hv) : Nullch))
+				 ? gv_stashpv(PmopSTASHPV(o),GV_ADD) : NULL)
+#  define PmopSTASH_set(o,hv)	PmopSTASHPV_set(o, ((hv) ? HvNAME_get(hv) : NULL))
 #  define PmopSTASH_free(o)	PerlMemShared_free(PmopSTASHPV(o))
 
 #else
 #  define PmopSTASH(o)		((o)->op_pmstash)
 #  define PmopSTASH_set(o,hv)	((o)->op_pmstash = (hv))
-#  define PmopSTASHPV(o)	(PmopSTASH(o) ? HvNAME_get(PmopSTASH(o)) : Nullch)
+#  define PmopSTASHPV(o)	(PmopSTASH(o) ? HvNAME_get(PmopSTASH(o)) : NULL)
    /* op_pmstash is not refcounted */
 #  define PmopSTASHPV_set(o,pv)	PmopSTASH_set((o), gv_stashpv(pv,GV_ADD))
 #  define PmopSTASH_free(o)    
@@ -467,6 +507,15 @@ struct loop {
 #define OA_SCALARREF 7
 #define OA_OPTIONAL 8
 
+/* Op_REFCNT is a reference count at the head of each op tree: needed
+ * since the tree is shared between threads, and between cloned closure
+ * copies in the same thread. OP_REFCNT_LOCK/UNLOCK is used when modifying
+ * this count.
+ * The same mutex is used to protect the refcounts of the reg_trie_data
+ * and reg_ac_data structures, which are shared between duplicated
+ * regexes.
+ */
+
 #ifdef USE_ITHREADS
 #  define OP_REFCNT_INIT		MUTEX_INIT(&PL_op_mutex)
 #  ifdef PERL_CORE
@@ -485,13 +534,19 @@ struct loop {
 #endif
 
 #define OpREFCNT_set(o,n)		((o)->op_targ = (n))
-#define OpREFCNT_inc(o)			((o) ? (++(o)->op_targ, (o)) : Nullop)
+#define OpREFCNT_inc(o)			((o) ? (++(o)->op_targ, (o)) : NULL)
 #define OpREFCNT_dec(o)			(--(o)->op_targ)
 
 /* flags used by Perl_load_module() */
 #define PERL_LOADMOD_DENY		0x1
 #define PERL_LOADMOD_NOIMPORT		0x2
 #define PERL_LOADMOD_IMPORT_OPS		0x4
+
+/* no longer used anywhere in core */
+#ifndef PERL_CORE
+#define cv_ckproto(cv, gv, p) \
+    cv_ckproto_len((CV *)(cv), (GV *)(gv), (char *)(p), (p) ? strlen(p) : 0)
+#endif
 
 #ifdef USE_REENTRANT_API
 #include "reentr.h"
@@ -509,3 +564,13 @@ struct loop {
 	(var = (OP*)safemalloc(size), memzero(var, size))
 #define FreeOp(p) Safefree(p)
 #endif
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

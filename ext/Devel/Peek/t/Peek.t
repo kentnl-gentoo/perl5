@@ -4,18 +4,21 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require Config; import Config;
-    if ($Config{'extensions'} !~ /\bPeek\b/) {
+    if ($Config{'extensions'} !~ /\bDevel\/Peek\b/) {
         print "1..0 # Skip: Devel::Peek was not built\n";
         exit 0;
     }
 }
 
+BEGIN { require "./test.pl"; }
+
 use Devel::Peek;
 
-print "1..22\n";
+plan(25);
 
 our $DEBUG = 0;
 open(SAVERR, ">&STDERR") or die "Can't dup STDERR: $!";
+
 
 sub do_test {
     my $pattern = pop;
@@ -30,12 +33,28 @@ sub do_test {
 	    $pattern =~ s/\$FLOAT/(?:\\d*\\.\\d+(?:e[-+]\\d+)?|\\d+)/g;
 	    # handle DEBUG_LEAKING_SCALARS prefix
 	    $pattern =~ s/^(\s*)(SV =.* at )/(?:$1ALLOCATED at .*?\n)?$1$2/mg;
+
+	    $pattern =~ s/^ *\$XSUB *\n/
+		($] < 5.009) ? "    XSUB = 0x0\n    XSUBANY = 0\n" : '';
+	    /mge;
+	    $pattern =~ s/^ *\$ROOT *\n/
+		($] < 5.009) ? "    ROOT = 0x0\n" : '';
+	    /mge;
+	    $pattern =~ s/\$RV/
+		($] < 5.011) ? 'RV' : 'IV';
+	    /mge;
+	    $pattern =~ s/^ *\$NV *\n/
+		($] < 5.011) ? "    NV = 0\n" : '';
+	    /mge;
+	    $pattern =~ s/^ *\$SUBPROCESS *\n/
+		($] < 5.009) ? "    SUBPROCESS = 0\n" : '';
+	    /mge;
+
+
 	    print $pattern, "\n" if $DEBUG;
 	    my $dump = <IN>;
 	    print $dump, "\n"    if $DEBUG;
-	    print "got:\n[\n$dump\n]\nexpected:\n[\n$pattern\n]\nnot "
-		unless $dump =~ /\A$pattern\Z/ms;
-	    print "ok $_[0]\n";
+	    like( $dump, qr/\A$pattern\Z/ms );
 	    close(IN);
             return $1;
 	} else {
@@ -51,6 +70,9 @@ our   $b;
 my    $c;
 local $d = 0;
 
+END {
+    1 while unlink("peek$$");
+}
 do_test( 1,
 	$a = "foo",
 'SV = PV\\($ADDR\\) at $ADDR
@@ -110,7 +132,7 @@ do_test( 7,
 'SV = PVNV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(NOK,pNOK\\)
-  IV = 0
+  IV = \d+
   NV = 789\\.(?:1(?:000+\d+)?|0999+\d+)
   PV = $ADDR "789"\\\0
   CUR = 3
@@ -131,7 +153,7 @@ do_test( 9,
 
 do_test(10,
         \$a,
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
@@ -160,12 +182,12 @@ if ($type eq 'N') {
 }
 do_test(11,
        [$b,$c],
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVAV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(\\)
     IV = 0
     NV = 0
@@ -183,12 +205,12 @@ do_test(11,
 
 do_test(12,
        {$b=>$c},
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(SHAREKEYS\\)
     IV = 1
     NV = $FLOAT
@@ -203,7 +225,7 @@ do_test(12,
 
 do_test(13,
         sub(){@_},
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
@@ -216,8 +238,7 @@ do_test(13,
     COMP_STASH = $ADDR\\t"main"
     START = $ADDR ===> \\d+
     ROOT = $ADDR
-    XSUB = 0x0
-    XSUBANY = 0
+    $XSUB
     GVGV::GV = $ADDR\\t"main" :: "__ANON__[^"]*"
     FILE = ".*\\b(?i:peek\\.t)"
     DEPTH = 0
@@ -231,7 +252,7 @@ do_test(13,
 
 do_test(14,
         \&do_test,
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
@@ -243,8 +264,7 @@ do_test(14,
     COMP_STASH = $ADDR\\t"main"
     START = $ADDR ===> \\d+
     ROOT = $ADDR
-    XSUB = 0x0
-    XSUBANY = 0
+    $XSUB
     GVGV::GV = $ADDR\\t"main" :: "do_test"
     FILE = ".*\\b(?i:peek\\.t)"
     DEPTH = 1
@@ -259,9 +279,25 @@ do_test(14,
       \\d+\\. $ADDR<\\d+> \\(\\d+,\\d+\\) "\\$dump"
     OUTSIDE = $ADDR \\(MAIN\\)');
 
+if ($] >= 5.011) {
 do_test(15,
         qr(tic),
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(ROK\\)
+  RV = $ADDR
+  SV = REGEXP\\($ADDR\\) at $ADDR
+    REFCNT = 2
+    FLAGS = \\(OBJECT,POK,pPOK\\)
+    IV = 0
+    PV = $ADDR "\\(\\?-xism:tic\\)"\\\0
+    CUR = 12
+    LEN = \\d+
+    STASH = $ADDR\\t"Regexp"');
+} else {
+do_test(15,
+        qr(tic),
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
@@ -276,15 +312,16 @@ do_test(15,
       MG_TYPE = PERL_MAGIC_qr\(r\)
       MG_OBJ = $ADDR
     STASH = $ADDR\\t"Regexp"');
+}
 
 do_test(16,
         (bless {}, "Tac"),
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(OBJECT,SHAREKEYS\\)
     IV = 0
     NV = 0
@@ -303,6 +340,7 @@ do_test(17,
   FLAGS = \\(GMG,SMG,MULTI(?:,IN_PAD)?\\)
   IV = 0
   NV = 0
+  PV = 0
   MAGIC = $ADDR
     MG_VIRTUAL = &PL_vtbl_glob
     MG_TYPE = PERL_MAGIC_glob\(\*\)
@@ -348,12 +386,12 @@ do_test(18,
 if (ord('A') == 193) {
 do_test(19,
 	{chr(256)=>chr(512)},
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
     UV = 1
     NV = $FLOAT
@@ -374,12 +412,12 @@ do_test(19,
 } else {
 do_test(19,
 	{chr(256)=>chr(512)},
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
   SV = PVHV\\($ADDR\\) at $ADDR
-    REFCNT = 2
+    REFCNT = 1
     FLAGS = \\(SHAREKEYS,HASKFLAGS\\)
     UV = 1
     NV = 0
@@ -452,14 +490,10 @@ do_test(21,
     MG_VIRTUAL = &PL_vtbl_taint
     MG_TYPE = PERL_MAGIC_taint\\(t\\)');
 
-END {
-  1 while unlink("peek$$");
-}
-
 # blessed refs
 do_test(22,
 	bless(\\undef, 'Foobar'),
-'SV = RV\\($ADDR\\) at $ADDR
+'SV = $RV\\($ADDR\\) at $ADDR
   REFCNT = 1
   FLAGS = \\(ROK\\)
   RV = $ADDR
@@ -476,3 +510,77 @@ do_test(22,
     CUR = 0
     LEN = 0
     STASH = $ADDR\s+"Foobar"');
+
+# Constant subroutines
+
+sub const () {
+    "Perl rules";
+}
+
+do_test(23,
+	\&const,
+'SV = $RV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(ROK\\)
+  RV = $ADDR
+  SV = PVCV\\($ADDR\\) at $ADDR
+    REFCNT = (2)
+    FLAGS = \\(POK,pPOK,CONST\\)
+    IV = 0
+    NV = 0
+    PROTOTYPE = ""
+    COMP_STASH = 0x0
+    $ROOT
+    XSUB = $ADDR
+    XSUBANY = $ADDR \\(CONST SV\\)
+    SV = PV\\($ADDR\\) at $ADDR
+      REFCNT = 1
+      FLAGS = \\(.*POK,READONLY,pPOK\\)
+      PV = $ADDR "Perl rules"\\\0
+      CUR = 10
+      LEN = \\d+
+    GVGV::GV = $ADDR\\t"main" :: "const"
+    FILE = ".*\\b(?i:peek\\.t)"
+    DEPTH = 0
+(?:    MUTEXP = $ADDR
+    OWNER = $ADDR
+)?    FLAGS = 0x200
+    OUTSIDE_SEQ = 0
+    PADLIST = 0x0
+    OUTSIDE = 0x0 \\(null\\)');	
+
+# isUV should show on PVMG
+do_test(24,
+	do { my $v = $1; $v = ~0; $v },
+'SV = PVMG\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(IOK,pIOK,IsUV\\)
+  UV = \d+
+  NV = 0
+  PV = 0');
+
+do_test(25,
+	*STDOUT{IO},
+'SV = $RV\\($ADDR\\) at $ADDR
+  REFCNT = 1
+  FLAGS = \\(ROK\\)
+  RV = $ADDR
+  SV = PVIO\\($ADDR\\) at $ADDR
+    REFCNT = 3
+    FLAGS = \\(OBJECT\\)
+    IV = 0
+    $NV
+    STASH = $ADDR\s+"IO::Handle"
+    IFP = $ADDR
+    OFP = $ADDR
+    DIRP = 0x0
+    LINES = 0
+    PAGE = 0
+    PAGE_LEN = 60
+    LINES_LEFT = 0
+    TOP_GV = 0x0
+    FMT_GV = 0x0
+    BOTTOM_GV = 0x0
+    $SUBPROCESS
+    TYPE = \'>\'
+    FLAGS = 0x0');

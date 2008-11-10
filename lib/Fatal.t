@@ -3,11 +3,11 @@
 BEGIN {
    chdir 't' if -d 't';
    @INC = '../lib';
-   print "1..15\n";
+   print "1..16\n";
 }
 
 use strict;
-use Fatal qw(open close :void opendir);
+use Fatal qw(open close :void opendir sin);
 
 my $i = 1;
 eval { open FOO, '<lkjqweriuapofukndajsdlfjnvcvn' };
@@ -33,4 +33,10 @@ print "ok $i\n"; ++$i;
 
 eval { my $a = opendir FOO, 'lkjqweriuapofukndajsdlfjnvcvn' };
 print "not " if $@ =~ /^Can't open/;
+print "ok $i\n"; ++$i;
+
+eval { Fatal->import(qw(print)) };
+if ($@ !~ m{Cannot make the non-overridable builtin print fatal}) {
+    print "not ";
+}
 print "ok $i\n"; ++$i;

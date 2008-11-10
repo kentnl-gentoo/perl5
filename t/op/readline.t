@@ -6,17 +6,17 @@ BEGIN {
     require './test.pl';
 }
 
-plan tests => 13;
+plan tests => 17;
 
 eval { for (\2) { $_ = <FH> } };
 like($@, 'Modification of a read-only value attempted', '[perl #19566]');
 
 {
-  open A,"+>a"; $a = 3;
+  my $file = tempfile();
+  open A,'+>',$file; $a = 3;
   is($a .= <A>, 3, '#21628 - $a .= <A> , A eof');
   close A; $a = 4;
   is($a .= <A>, 4, '#21628 - $a .= <A> , A closed');
-  unlink "a";
 }
 
 # 82 is chosen to exceed the length for sv_grow in do_readline (80)
@@ -83,8 +83,29 @@ SKIP: {
   }
 }
 
+fresh_perl_is('BEGIN{<>}', '',
+              { switches => ['-w'], stdin => '', stderr => 1 },
+              'No ARGVOUT used only once warning');
+
+my $obj = bless [];
+$obj .= <DATA>;
+like($obj, qr/main=ARRAY.*world/, 'rcatline and refs');
+
+# bug #38631
+require Tie::Scalar;
+tie our $one, 'Tie::StdScalar', "A: ";
+tie our $two, 'Tie::StdScalar', "B: ";
+my $junk = $one;
+$one .= <DATA>;
+$two .= <DATA>;
+is( $one, "A: One\n", "rcatline works with tied scalars" );
+is( $two, "B: Two\n", "rcatline works with tied scalars" );
+
 __DATA__
 moo
 moo
  rules
  rules
+world
+One
+Two

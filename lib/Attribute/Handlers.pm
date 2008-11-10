@@ -2,7 +2,7 @@ package Attribute::Handlers;
 use 5.006;
 use Carp;
 use warnings;
-$VERSION = '0.78_02';
+$VERSION = '0.78_03';
 # $DB::single=1;
 
 my %symcache;
@@ -833,7 +833,8 @@ this won't happen.
 
 =head1 AUTHOR
 
-Damian Conway (damian@conway.org)
+Damian Conway (damian@conway.org). The maintainer of this module is now Rafael
+Garcia-Suarez (rgarciasuarez@gmail.com).
 
 =head1 BUGS
 

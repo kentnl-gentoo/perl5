@@ -10,7 +10,8 @@ BEGIN {
 
 use warnings;
 use strict;
-plan tests => 57;
+plan tests => 58;
+our $TODO;
 
 our $foo;
 while ($?) {
@@ -204,7 +205,7 @@ is($ok, 1, 'goto in for(;;) with continuation');
 
 # bug #22299 - goto in require doesn't find label
 
-open my $f, ">goto01.pm" or die;
+open my $f, ">Op_goto01.pm" or die;
 print $f <<'EOT';
 package goto01;
 goto YYY;
@@ -214,9 +215,9 @@ YYY: print "OK\n";
 EOT
 close $f;
 
-$r = runperl(prog => 'use goto01; print qq[DONE\n]');
+$r = runperl(prog => 'use Op_goto01; print qq[DONE\n]');
 is($r, "OK\nDONE\n", "goto within use-d file"); 
-unlink "goto01.pm";
+unlink "Op_goto01.pm";
 
 # test for [perl #24108]
 $ok = 1;
@@ -446,3 +447,15 @@ like($@, qr/Can't goto subroutine from an eval-block/, 'eval block');
     );
     like($r, qr/bar/, "goto &foo in warn");
 }
+
+TODO: {
+    local $TODO = "[perl #43403] goto() from an if to an else doesn't undo local () changes";
+    our $global = "unmodified";
+    if ($global) { # true but not constant-folded
+         local $global = "modified";
+         goto ELSE;
+    } else {
+         ELSE: is($global, "unmodified");
+    }
+}
+

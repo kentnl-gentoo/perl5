@@ -1,9 +1,14 @@
-/*  vmsish.h
+/*    vmsish.h
  *
- * VMS-specific C header file for perl5.
+ *    VMS-specific C header file for perl5.
  *
- * Last revised: 16-Sep-1998 by Charles Bailey  bailey@newman.upenn.edu
- * Version: 5.5.2
+ *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001,
+ *    2002, 2003, 2004, 2005, 2006, 2007 by Charles Bailey and others.
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
+ *    Please see Changes*.* or the Perl Repository Browser for revision history.
  */
 
 #ifndef __vmsish_h_included
@@ -300,10 +305,12 @@
 #define HAVE_INTERP_INTERN
 struct interp_intern {
     int    hushed;
+    int	   posix_exit;
     double inv_rand_max;
 };
 #define VMSISH_HUSHED     (PL_sys_intern.hushed)
 #define MY_INV_RAND_MAX   (PL_sys_intern.inv_rand_max)
+#define MY_POSIX_EXIT	(PL_sys_intern.posix_exit)
 
 /* Flags for vmstrnenv() */
 #define PERL__TRNENV_SECURE 0x01
@@ -331,8 +338,8 @@ struct interp_intern {
 #endif
 
 #define BIT_BUCKET "_NLA0:"
-#define PERL_SYS_INIT(c,v)	MALLOC_CHECK_TAINT2(*c,*v) vms_image_init((c),(v)); MALLOC_INIT
-#define PERL_SYS_TERM()		OP_REFCNT_TERM; MALLOC_TERM
+#define PERL_SYS_INIT_BODY(c,v)	MALLOC_CHECK_TAINT2(*c,*v) vms_image_init((c),(v)); PERLIO_INIT; MALLOC_INIT
+#define PERL_SYS_TERM_BODY()		HINTS_REFCNT_TERM; OP_REFCNT_TERM; PERLIO_TERM; MALLOC_TERM
 #define dXSUB_SYS
 #define HAS_KILL
 #define HAS_WAIT
@@ -347,6 +354,7 @@ struct interp_intern {
  *	This symbol, if defined, indicates that the program is running under
  *	VMS.  It's a symbol automagically defined by all VMS C compilers I've seen.
  * Just in case, however . . . */
+/* Note that code really should be using __VMS to comply with ANSI */
 #ifndef VMS
 #define VMS		/**/
 #endif
@@ -442,12 +450,18 @@ struct interp_intern {
 # include <signal.h>
 #define ABORT() abort()
 
+#ifdef I_UTIME
+#include <utime.h>
+#else
 /* Used with our my_utime() routine in vms.c */
 struct utimbuf {
   time_t actime;
   time_t modtime;
 };
+#endif
+#ifndef DONT_MASK_RTL_CALLS
 #define utime my_utime
+#endif
 
 /* This is what times() returns, but <times.h> calls it tbuffer_t on VMS
  * prior to v7.0.  We check the DECC manifest to see whether it's already
@@ -760,66 +774,68 @@ typedef unsigned myino_t;
 #endif
 
 void	prime_env_iter (void);
-void	init_os_extras ();
+void	init_os_extras (void);
+int	Perl_vms_status_to_unix(int vms_status, int child_flag);
+int	Perl_unix_status_to_vms(int unix_status);
 /* prototype section start marker; `typedef' passes through cpp */
 typedef char  __VMS_PROTOTYPES__;
 int	Perl_vmstrnenv (const char *, char *, unsigned long int, struct dsc$descriptor_s **, unsigned long int);
 #if !defined(PERL_IMPLICIT_CONTEXT)
 char *	Perl_my_getenv (const char *, bool);
 int	Perl_my_trnlnm (const char *, char *, unsigned long int);
-char *	Perl_tounixspec (char *, char *);
-char *	Perl_tounixspec_ts (char *, char *);
-char *	Perl_tovmsspec (char *, char *);
-char *	Perl_tovmsspec_ts (char *, char *);
-char *	Perl_tounixpath (char *, char *);
-char *	Perl_tounixpath_ts (char *, char *);
-char *	Perl_tovmspath (char *, char *);
-char *	Perl_tovmspath_ts (char *, char *);
-int	Perl_do_rmdir (char *);
-char *	Perl_fileify_dirspec (char *, char *);
-char *	Perl_fileify_dirspec_ts (char *, char *);
-char *	Perl_pathify_dirspec (char *, char *);
-char *	Perl_pathify_dirspec_ts (char *, char *);
-char *	Perl_rmsexpand (char *, char *, char *, unsigned);
-char *	Perl_rmsexpand_ts (char *, char *, char *, unsigned);
-int	Perl_trim_unixpath (char *, char*, int);
-DIR *	Perl_opendir (char *);
-int	Perl_rmscopy (char *, char *, int);
-int	Perl_my_mkdir (char *, Mode_t);
+char *	Perl_tounixspec (const char *, char *);
+char *	Perl_tounixspec_ts (const char *, char *);
+char *	Perl_tovmsspec (const char *, char *);
+char *	Perl_tovmsspec_ts (const char *, char *);
+char *	Perl_tounixpath (const char *, char *);
+char *	Perl_tounixpath_ts (const char *, char *);
+char *	Perl_tovmspath (const char *, char *);
+char *	Perl_tovmspath_ts (const char *, char *);
+int	Perl_do_rmdir (const char *);
+char *	Perl_fileify_dirspec (const char *, char *);
+char *	Perl_fileify_dirspec_ts (const char *, char *);
+char *	Perl_pathify_dirspec (const char *, char *);
+char *	Perl_pathify_dirspec_ts (const char *, char *);
+char *	Perl_rmsexpand (const char *, char *, const char *, unsigned);
+char *	Perl_rmsexpand_ts (const char *, char *, const char *, unsigned);
+int	Perl_trim_unixpath (char *, const char*, int);
+DIR *	Perl_opendir (const char *);
+int	Perl_rmscopy (const char *, const char *, int);
+int	Perl_my_mkdir (const char *, Mode_t);
 bool	Perl_vms_do_aexec (SV *, SV **, SV **);
 #else
 char *	Perl_my_getenv (pTHX_ const char *, bool);
 int	Perl_my_trnlnm (pTHX_ const char *, char *, unsigned long int);
-char *	Perl_tounixspec (pTHX_ char *, char *);
-char *	Perl_tounixspec_ts (pTHX_ char *, char *);
-char *	Perl_tovmsspec (pTHX_ char *, char *);
-char *	Perl_tovmsspec_ts (pTHX_ char *, char *);
-char *	Perl_tounixpath (pTHX_ char *, char *);
-char *	Perl_tounixpath_ts (pTHX_ char *, char *);
-char *	Perl_tovmspath (pTHX_ char *, char *);
-char *	Perl_tovmspath_ts (pTHX_ char *, char *);
-int	Perl_do_rmdir (pTHX_ char *);
-char *	Perl_fileify_dirspec (pTHX_ char *, char *);
-char *	Perl_fileify_dirspec_ts (pTHX_ char *, char *);
-char *	Perl_pathify_dirspec (pTHX_ char *, char *);
-char *	Perl_pathify_dirspec_ts (pTHX_ char *, char *);
-char *	Perl_rmsexpand (pTHX_ char *, char *, char *, unsigned);
-char *	Perl_rmsexpand_ts (pTHX_ char *, char *, char *, unsigned);
-int	Perl_trim_unixpath (pTHX_ char *, char*, int);
-DIR *	Perl_opendir (pTHX_ char *);
-int	Perl_rmscopy (pTHX_ char *, char *, int);
-int	Perl_my_mkdir (pTHX_ char *, Mode_t);
+char *	Perl_tounixspec (pTHX_ const char *, char *);
+char *	Perl_tounixspec_ts (pTHX_ const char *, char *);
+char *	Perl_tovmsspec (pTHX_ const char *, char *);
+char *	Perl_tovmsspec_ts (pTHX_ const char *, char *);
+char *	Perl_tounixpath (pTHX_ const char *, char *);
+char *	Perl_tounixpath_ts (pTHX_ const char *, char *);
+char *	Perl_tovmspath (pTHX_ const char *, char *);
+char *	Perl_tovmspath_ts (pTHX_ const char *, char *);
+int	Perl_do_rmdir (pTHX_ const char *);
+char *	Perl_fileify_dirspec (pTHX_ const char *, char *);
+char *	Perl_fileify_dirspec_ts (pTHX_ const char *, char *);
+char *	Perl_pathify_dirspec (pTHX_ const char *, char *);
+char *	Perl_pathify_dirspec_ts (pTHX_ const char *, char *);
+char *	Perl_rmsexpand (pTHX_ const char *, char *, const char *, unsigned);
+char *	Perl_rmsexpand_ts (pTHX_ const char *, char *, const char *, unsigned);
+int	Perl_trim_unixpath (pTHX_ char *, const char*, int);
+DIR *	Perl_opendir (pTHX_ const char *);
+int	Perl_rmscopy (pTHX_ const char *, const char *, int);
+int	Perl_my_mkdir (pTHX_ const char *, Mode_t);
 bool	Perl_vms_do_aexec (pTHX_ SV *, SV **, SV **);
 #endif
 char *	Perl_my_getenv_len (pTHX_ const char *, unsigned long *, bool);
 int	Perl_vmssetenv (pTHX_ char *, char *, struct dsc$descriptor_s **);
-void	Perl_vmssetuserlnm(pTHX_ char *name, char *eqv);
+void	Perl_vmssetuserlnm(pTHX_ const char *name, const char *eqv);
 char *	Perl_my_crypt (pTHX_ const char *, const char *);
 Pid_t	Perl_my_waitpid (pTHX_ Pid_t, int *, int);
 char *	my_gconvert (double, int, int, char *);
-int	Perl_kill_file (pTHX_ char *);
-int	Perl_my_chdir (pTHX_ char *);
-FILE *	Perl_my_tmpfile ();
+int	Perl_kill_file (pTHX_ const char *);
+int	Perl_my_chdir (pTHX_ const char *);
+FILE *	Perl_my_tmpfile (void);
 #ifndef HOMEGROWN_POSIX_SIGNALS
 int	Perl_my_sigaction (pTHX_ int, const struct sigaction*, struct sigaction*);
 #endif
@@ -828,7 +844,7 @@ unsigned int	Perl_sig_to_vmscondition (int);
 int	Perl_my_kill (int, int);
 void	Perl_csighandler_init (void);
 #endif
-int	Perl_my_utime (pTHX_ char *, struct utimbuf *);
+int	Perl_my_utime (pTHX_ const char *, const struct utimbuf *);
 void	Perl_vms_image_init (int *, char ***);
 struct dirent *	Perl_readdir (pTHX_ DIR *);
 int	Perl_readdir_r(pTHX_ DIR *, struct dirent *, struct dirent **);
@@ -847,18 +863,18 @@ int     my_sigdelset   (sigset_t *, int);
 int     my_sigismember (sigset_t *, int);
 int     my_sigprocmask (int, sigset_t *, sigset_t *);
 #endif
-I32	Perl_cando_by_name (pTHX_ I32, Uid_t, char *);
+I32	Perl_cando_by_name (pTHX_ I32, Uid_t, const char *);
 int	Perl_flex_fstat (pTHX_ int, Stat_t *);
 int	Perl_flex_stat (pTHX_ const char *, Stat_t *);
-int	my_vfork ();
+int	my_vfork (void);
 bool	Perl_vms_do_exec (pTHX_ char *);
 unsigned long int	Perl_do_aspawn (pTHX_ void *, void **, void **);
-unsigned long int	Perl_do_spawn (pTHX_ char *);
+unsigned long int	Perl_do_spawn (pTHX_ const char *);
 FILE *  my_fdopen (int, const char *);
 int     my_fclose (FILE *);
 int    my_fwrite (const void *, size_t, size_t, FILE *);
 int	Perl_my_flush (pTHX_ FILE *);
-struct passwd *	Perl_my_getpwnam (pTHX_ char *name);
+struct passwd *	Perl_my_getpwnam (pTHX_ const char *name);
 struct passwd *	Perl_my_getpwuid (pTHX_ Uid_t uid);
 void	Perl_my_endpwent (pTHX);
 char *	my_getlogin (void);

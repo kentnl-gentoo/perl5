@@ -88,14 +88,14 @@ static void yydestruct(pTHX_ void *ptr);
 %token <ival> FUNC0 FUNC1 FUNC UNIOP LSTOP
 %token <ival> RELOP EQOP MULOP ADDOP
 %token <ival> DOLSHARP DO HASHBRACK NOAMP
-%token <ival> LOCAL MY MYSUB
+%token <ival> LOCAL MY MYSUB REQUIRE
 %token COLONATTR
 
-%type <ival> prog decl format startsub startanonsub startformsub
+%type <ival> prog decl format startsub startanonsub startformsub mintro
 %type <ival> progstart remember mremember '&'
 %type <opval> block mblock lineseq line loop cond else
 %type <opval> expr term subscripted scalar ary hsh arylen star amper sideff
-%type <opval> argexpr nexpr texpr iexpr mexpr mnexpr mtexpr miexpr
+%type <opval> argexpr nexpr texpr iexpr mexpr mnexpr miexpr
 %type <opval> listexpr listexprcom indirob listop method
 %type <opval> formname subname proto subbody cont my_scalar
 %type <opval> subattrlist myattrlist mysubrout myattrterm myterm
@@ -120,6 +120,7 @@ static void yydestruct(pTHX_ void *ptr);
 %nonassoc EQOP
 %nonassoc RELOP
 %nonassoc UNIOP UNIOPSUB
+%nonassoc REQUIRE
 %left <ival> SHIFTOP
 %left ADDOP
 %left MULOP
@@ -249,18 +250,18 @@ cont	:	/* NULL */
 	;
 
 /* Loops: while, until, for, and a bare block */
-loop	:	label WHILE '(' remember mtexpr ')' mblock cont
+loop	:	label WHILE '(' remember texpr ')' mintro mblock cont
 			{ PL_copline = (line_t)$2;
 			    $$ = block_end($4,
 				   newSTATEOP(0, $1,
-				     newWHILEOP(0, 1, (LOOP*)Nullop,
-						$2, $5, $7, $8))); }
-	|	label UNTIL '(' remember miexpr ')' mblock cont
+				     newWHILEOP8(0, 1, (LOOP*)Nullop,
+						 $2, $5, $8, $9, $7))); }
+	|	label UNTIL '(' remember iexpr ')' mintro mblock cont
 			{ PL_copline = (line_t)$2;
 			    $$ = block_end($4,
 				   newSTATEOP(0, $1,
-				     newWHILEOP(0, 1, (LOOP*)Nullop,
-						$2, $5, $7, $8))); }
+				     newWHILEOP8(0, 1, (LOOP*)Nullop,
+						 $2, $5, $8, $9, $7))); }
 	|	label FOR MY remember my_scalar '(' mexpr ')' mblock cont
 			{ $$ = block_end($4,
 				 newFOROP(0, $1, (line_t)$2, $5, $7, $9, $10)); }
@@ -271,14 +272,15 @@ loop	:	label WHILE '(' remember mtexpr ')' mblock cont
 	|	label FOR '(' remember mexpr ')' mblock cont
 			{ $$ = block_end($4,
 				 newFOROP(0, $1, (line_t)$2, Nullop, $5, $7, $8)); }
-	|	label FOR '(' remember mnexpr ';' mtexpr ';' mnexpr ')' mblock
+	|	label FOR '(' remember mnexpr ';' texpr ';' mintro mnexpr ')'
+	    	    mblock
 			/* basically fake up an initialize-while lineseq */
 			{ OP *forop;
 			  PL_copline = (line_t)$2;
 			  forop = newSTATEOP(0, $1,
-					    newWHILEOP(0, 1, (LOOP*)Nullop,
+					    newWHILEOP8(0, 1, (LOOP*)Nullop,
 						$2, scalar($7),
-						$11, $9));
+						$12, $10, $9));
 			  if ($5) {
 				forop = append_elem(OP_LINESEQ,
                                         newSTATEOP(0, ($1?savepv($1):Nullch),
@@ -289,9 +291,15 @@ loop	:	label WHILE '(' remember mtexpr ')' mblock cont
 			  $$ = block_end($4, forop); }
 	|	label block cont  /* a block is a loop that happens once */
 			{ $$ = newSTATEOP(0, $1,
-				 newWHILEOP(0, 1, (LOOP*)Nullop,
-					    NOLINE, Nullop, $2, $3)); }
+				 newWHILEOP8(0, 1, (LOOP*)Nullop,
+					     NOLINE, Nullop, $2, $3, 0)); }
 	;
+
+/* determine whether there are any new my declarations */
+mintro	:	/* NULL */
+			{ $$ = (PL_min_intro_pending &&
+			    PL_max_intro_pending >=  PL_min_intro_pending);
+			  intro_my(); }
 
 /* Normal expression */
 nexpr	:	/* NULL */
@@ -316,10 +324,6 @@ mexpr	:	expr
 	;
 
 mnexpr	:	nexpr
-			{ $$ = $1; intro_my(); }
-	;
-
-mtexpr	:	texpr
 			{ $$ = $1; intro_my(); }
 	;
 
@@ -599,7 +603,7 @@ anonymous:	'[' expr ']'
 
 /* Things called with "do" */
 termdo	:       DO term	%prec UNIOP                     /* do $filename */
-			{ $$ = dofile($2); }
+			{ $$ = dofile2($2, $1); }
 	|	DO block	%prec '('               /* do { code */
 			{ $$ = newUNOP(OP_NULL, OPf_SPECIAL, scope($2)); }
 	|	DO WORD '(' ')'                         /* do somesub() */
@@ -701,6 +705,10 @@ term	:	termbinop
 			{ $$ = newUNOP($1, 0, $2); }
 	|	UNIOP term                           /* Unary op */
 			{ $$ = newUNOP($1, 0, $2); }
+	|	REQUIRE                              /* require, $_ implied */
+			{ $$ = newOP(OP_REQUIRE, $1 ? OPf_SPECIAL : 0); }
+	|	REQUIRE term                         /* require Foo */
+			{ $$ = newUNOP(OP_REQUIRE, $1 ? OPf_SPECIAL : 0, $2); }
 	|	UNIOPSUB term                        /* Sub treated as unop */
 			{ $$ = newUNOP(OP_ENTERSUB, OPf_STACKED,
 			    append_elem(OP_LIST, $2, scalar($1))); }

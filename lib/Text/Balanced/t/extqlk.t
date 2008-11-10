@@ -14,7 +14,7 @@ BEGIN {
 # Change 1..1 below to 1..last_test_to_print .
 # (It may become useful if the test is moved to ./t subdirectory.)
 
-BEGIN { $| = 1; print "1..89\n"; }
+BEGIN { $| = 1; print "1..85\n"; }
 END {print "not ok 1\n" unless $loaded;}
 use Text::Balanced qw ( extract_quotelike );
 $loaded = 1;
@@ -42,7 +42,7 @@ while (defined($str = <DATA>))
 
 	 my @res;
 	eval qq{\@res = $cmd; };
-	debug "\t  got:\n" . join "", map { $res[$_]=~s/\n/\\n/g; "\t\t\t$_: [$res[$_]]\n"} (0..$#res);
+	debug "\t  got:\n" . join "", map { ($res[$_]||="<undef>")=~s/\n/\\n/g; "\t\t\t$_: [$res[$_]]\n"} (0..$#res);
 	debug "\t left: " . (map { s/\n/\\n/g; "[$_]\n" } my $cpy1 = $str)[0];
 	debug "\t  pos: " . (map { s/\n/\\n/g; "[$_]\n" } my $cpy2 = substr($str,pos($str)))[0] . "...]\n";
 	print "not " if (substr($str,pos($str),1) eq ';')==$neg;
@@ -75,12 +75,10 @@ __DATA__
 <<EOHERE; done();\nline1\nline2\nEOHERE\n; next;
      <<EOHERE; done();\nline1\nline2\nEOHERE\n; next;
 <<"EOHERE"; done()\nline1\nline2\nEOHERE\n and next
-<<`EOHERE`; done()\nline1\nline2\nEOHERE\n and next
 <<'EOHERE'; done()\nline1\n'line2'\nEOHERE\n and next
 <<'EOHERE;'; done()\nline1\nline2\nEOHERE;\n and next
 <<"   EOHERE"; done() \nline1\nline2\n   EOHERE\nand next
 <<""; done()\nline1\nline2\n\n and next
-<<; done()\nline1\nline2\n\n and next
 
 
 "this is a nested $var[$x] {";

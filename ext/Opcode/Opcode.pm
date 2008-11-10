@@ -6,7 +6,7 @@ use strict;
 
 our($VERSION, $XS_VERSION, @ISA, @EXPORT_OK);
 
-$VERSION = "1.06";
+$VERSION = 1.06_01;
 $XS_VERSION = "1.03";
 
 use Carp;
@@ -557,14 +557,13 @@ a tag name but need to be tagged for completeness and documentation.
 
     syscall dump chroot
 
-
 =back
 
 =head1 SEE ALSO
 
-ops(3) -- perl pragma interface to Opcode module.
+L<ops> -- perl pragma interface to Opcode module.
 
-Safe(3) -- Opcode and namespace limited execution compartments
+L<Safe> -- Opcode and namespace limited execution compartments
 
 =head1 AUTHORS
 

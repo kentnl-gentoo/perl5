@@ -25,11 +25,17 @@ chdir $ARGV[0] or die "$0: chdir '$ARGV[0]' failed: $!\n";
 # Files to skip from the check for one reason or another,
 # usually because they pull in their version from some other file.
 my %skip;
-@skip{'./lib/Exporter/Heavy.pm'} = ();
+@skip{
+    './lib/Carp/Heavy.pm',
+    './lib/Exporter/Heavy.pm',
+    './win32/FindExt.pm'
+} = ();
+my $skip_dirs = qr|^\./t/lib|;
 
 my @wanted;
 find(
      sub { /\.pm$/ &&
+	       $File::Find::dir !~ $skip_dirs &&
 	       ! exists $skip{$File::Find::name}
 	       &&
 	       do { my $file2 =

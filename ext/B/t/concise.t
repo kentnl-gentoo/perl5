@@ -14,10 +14,9 @@ BEGIN {
         exit 0;
     }
     require 'test.pl';		# we use runperl from 'test.pl', so can't use Test::More
-    sub diag { print "# @_\n" } # but this is still handy
 }
 
-plan tests => 149;
+plan tests => 157;
 
 require_ok("B::Concise");
 
@@ -201,10 +200,11 @@ SKIP: {
 
 	sub defd_empty {};
 	($res,$err) = render('-basic', \&defd_empty);
-	is(scalar split(/\n/, $res), 3,
+	my @lines = split(/\n/, $res);
+	is(scalar @lines, 3,
 	   "'sub defd_empty {}' seen as 3 liner");
 
-	is(1, $res =~ /leavesub/ && $res =~ /nextstate/,
+	is(1, $res =~ /leavesub/ && $res =~ /(next|db)state/,
 	   "'sub defd_empty {}' seen as 2 ops: leavesub,nextstate");
 
 	($res,$err) = render('-basic', \&not_even_declared);
@@ -386,5 +386,46 @@ $out = runperl ( switches => ["-MO=Concise,Config::AUTOLOAD"],
 like($out, qr/Config::AUTOLOAD exists in stash, but has no START/,
     "coderef properly undefined");
 
-__END__
+# test -stash and -src rendering
+# todo: stderr=1 puts '-e syntax OK' into $out,
+# conceivably fouling one of the lines that are tested
+$out = runperl ( switches => ["-MO=Concise,-stash=B::Concise,-src"],
+		 prog => '-e 1', stderr => 1 );
 
+like($out, qr/FUNC: \*B::Concise::concise_cv_obj/,
+     "stash rendering of B::Concise includes Concise::concise_cv_obj");
+
+like($out, qr/FUNC: \*B::Concise::walk_output/,
+     "stash rendering includes Concise::walk_output");
+
+like($out, qr/FUNC: \*B::Concise::PAD_FAKELEX_MULTI/,
+     "stash rendering includes constant sub: PAD_FAKELEX_MULTI");
+
+like($out, qr/PAD_FAKELEX_MULTI is a constant sub, optimized to a IV/,
+     "stash rendering identifies it as constant");
+
+like($out, qr/\# 4\d\d: \s+ \$l->concise\(\$level\);/,
+     "src-line rendering works");
+
+$out = runperl ( switches => ["-MO=Concise,-stash=ExtUtils::Mksymlists,-src,-exec"],
+		 prog => '-e 1', stderr => 1 );
+
+like($out, qr/FUNC: \*ExtUtils::Mksymlists::_write_vms/,
+     "stash rendering loads package as needed");
+
+$out = runperl ( switches => ["-MO=Concise,-stash=Data::Dumper,-src,-exec"],
+		 prog => '-e 1', stderr => 1 );
+
+like($out, qr/FUNC: \*Data::Dumper::format_refaddr/,
+     "stash rendering loads package as needed");
+
+my $prog = q{package FOO; sub bar { print "bar" } package main; FOO::bar(); };
+
+# this would fail if %INC used for -stash test
+$out = runperl ( switches => ["-MO=Concise,-src,-stash=FOO,-main"],
+		 prog => $prog, stderr => 1 );
+
+like($out, qr/FUNC: \*FOO::bar/,
+     "stash rendering works on inlined package");
+
+__END__

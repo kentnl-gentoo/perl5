@@ -65,25 +65,58 @@ ok( $c[4], "hasargs true with unknown sub" );
 
 # See if caller() returns the correct warning mask
 
-sub testwarn {
-    my $w = shift;
-    is( (caller(0))[9], $w, "warnings");
+sub show_bits
+{
+    my $in = shift;
+    my $out = '';
+    foreach (unpack('W*', $in)) {
+        $out .= sprintf('\x%02x', $_);
+    }
+    return $out;
 }
 
-# NB : extend the warning mask values below when new warnings are added
+sub check_bits
+{
+    local $Level = $Level + 2;
+    my ($got, $exp, $desc) = @_;
+    if (! ok($got eq $exp, $desc)) {
+        diag('     got: ' . show_bits($got));
+        diag('expected: ' . show_bits($exp));
+    }
+}
+
+sub testwarn {
+    my $w = shift;
+    my $id = shift;
+    check_bits( (caller(0))[9], $w, "warnings match caller ($id)");
+}
+
 {
     no warnings;
-    BEGIN { is( ${^WARNING_BITS}, "\0" x 12, 'warning bits' ) }
-    testwarn("\0" x 12);
+    # Build the warnings mask dynamically
+    my ($default, $registered);
+    BEGIN {
+	for my $i (0..$warnings::LAST_BIT/2 - 1) {
+	    vec($default, $i, 2) = 1;
+	}
+	$registered = $default;
+	vec($registered, $warnings::LAST_BIT/2, 2) = 1;
+    }
+    BEGIN { check_bits( ${^WARNING_BITS}, "\0" x 12, 'all bits off via "no warnings"' ) }
+    testwarn("\0" x 12, 'no bits');
+
     use warnings;
-    BEGIN { is( ${^WARNING_BITS}, "UUUUUUUUUUU\25", 'warning bits' ) }
-    BEGIN { testwarn("UUUUUUUUUUU\25"); }
+    BEGIN { check_bits( ${^WARNING_BITS}, $default,
+			'default bits on via "use warnings"' ); }
+    BEGIN { testwarn($default, 'all'); }
     # run-time :
     # the warning mask has been extended by warnings::register
-    testwarn("UUUUUUUUUUUU");
+    testwarn($registered, 'ahead of w::r');
+
     use warnings::register;
-    BEGIN { is( ${^WARNING_BITS}, "UUUUUUUUUUUU", 'warning bits' ) }
-    testwarn("UUUUUUUUUUUU");
+    BEGIN { check_bits( ${^WARNING_BITS}, $registered,
+			'warning bits on via "use warnings::register"' ) }
+    testwarn($registered, 'following w::r');
 }
 
 

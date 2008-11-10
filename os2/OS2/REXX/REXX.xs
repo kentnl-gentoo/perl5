@@ -138,7 +138,7 @@ exec_in_REXX_with(pTHX_ char *cmd, int c, char **handlerNames, RexxFunctionHandl
 	res = newSVpv(RXSTRPTR(result), RXSTRLEN(result));
 	DosFreeMem(RXSTRPTR(result));
     } else {
-	res = NEWSV(729,0);
+	res = newSV(0);
     }
     if (rc || SvTRUE(GvSV(PL_errgv))) {
 	if (SvTRUE(GvSV(PL_errgv))) {
@@ -223,7 +223,7 @@ PERLSTART(PCSZ name, ULONG argc, PRXSTRING argv, PCSZ queue, PRXSTRING ret)
 static ULONG
 PERLCALL(PCSZ name, ULONG argc, PRXSTRING argv, PCSZ queue, PRXSTRING ret)
 {
-  return PERLCALLcv(name, Nullsv, argc, argv, queue, ret);
+  return PERLCALLcv(name, NULL, argc, argv, queue, ret);
 }
 
 RexxFunctionHandler* PF = &PERLSTART;
@@ -556,7 +556,7 @@ _REXX_eval_with(cmd,...)
 	Newx(names, n, char*);
 	Newx(cvs, n, SV*);
 	/* XXX Unfinished... */
-	RETVAL = Nullsv;
+	RETVAL = NULL;
 	Safefree(names);
 	Safefree(cvs);
    }

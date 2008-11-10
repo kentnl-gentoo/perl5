@@ -1005,12 +1005,12 @@ corresponding built-in.
     sub myreverse (@)	     myreverse $a, $b, $c
     sub myjoin ($@)	     myjoin ":", $a, $b, $c
     sub mypop (\@)	     mypop @array
-    sub mysplice (\@$$@)     mysplice @array, @array, 0, @pushme
+    sub mysplice (\@$$@)     mysplice @array, 0, 2, @pushme
     sub mykeys (\%)	     mykeys %{$hashref}
     sub myopen (*;$)	     myopen HANDLE, $name
     sub mypipe (**)	     mypipe READHANDLE, WRITEHANDLE
     sub mygrep (&@)	     mygrep { /foo/ } $a, $b, $c
-    sub myrand ($)	     myrand 42
+    sub myrand (;$)	     myrand 42
     sub mytime ()	     mytime
 
 Any backslashed prototype character represents an actual argument
@@ -1268,10 +1268,9 @@ that understands regular expressions.
     sub glob {
 	my $pat = shift;
 	my @got;
-	local *D;
-	if (opendir D, '.') { 
-	    @got = grep /$pat/, readdir D; 
-	    closedir D;   
+	if (opendir my $d, '.') { 
+	    @got = grep /$pat/, readdir $d; 
+	    closedir $d;   
 	}
 	return @got;
     }

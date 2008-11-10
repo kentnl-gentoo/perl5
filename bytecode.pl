@@ -1,3 +1,4 @@
+#!perl -w
 BEGIN {
   push @INC, './lib';
   require 'regen_lib.pl';
@@ -9,12 +10,6 @@ my %alias_to = (
     U16 => [qw(OPCODE short)],
     U8  => [qw(char)],
 );
-
-my @optype= qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP);
-
-# Nullsv *must* come first in the following so that the condition
-# ($$sv == 0) can continue to be used to test (sv == Nullsv).
-my @specialsv = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no pWARN_ALL pWARN_NONE);
 
 my (%alias_from, $from, $tos);
 while (($from, $tos) = each %alias_to) {
@@ -38,6 +33,21 @@ EOT
 my $perl_header;
 ($perl_header = $c_header) =~ s{[/ ]?\*/?}{#}g;
 
+# We need the values of two variables from the as-yet uninistalled B.pm
+use vars qw(@optype @specialsv_name);
+{
+    open B, "ext/B/B.pm" or die "B: $!";
+    local $/;
+    my $b = <B>;
+    foreach my $var (qw(optype specialsv_name)) {
+	my ($declaration) = $b =~ /(\@B::$var = qw\(.*?\);)/s;
+	die "Can't find the declaration for \@B::$var" unless $declaration;
+	$declaration =~ s/\@B::/\@/s;
+	eval $declaration or die "$@ from $declaration";
+    }
+    close B;
+}
+
 safer_unlink "ext/ByteLoader/byterun.c", "ext/ByteLoader/byterun.h", "ext/B/B/Asmdata.pm";
 
 #
@@ -48,17 +58,16 @@ binmode ASMDATA_PM;
 print ASMDATA_PM $perl_header, <<'EOT';
 package B::Asmdata;
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 use Exporter;
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(%insn_data @insn_name @optype @specialsv_name);
-our(%insn_data, @insn_name, @optype, @specialsv_name);
+our(%insn_data, @insn_name);
 
+use B qw(@optype @specialsv_name);
 EOT
 print ASMDATA_PM <<"EOT";
-\@optype = qw(@optype);
-\@specialsv_name = qw(@specialsv);
 
 # XXX insn_data is initialised this way because with a large
 # %insn_data = (foo => [...], bar => [...], ...) initialiser
@@ -89,7 +98,10 @@ for ($i = 0; $i < @optype - 1; $i++) {
     printf BYTERUN_C "    sizeof(%s),\n", $optype[$i], $i;
 }
 printf BYTERUN_C "    sizeof(%s)\n", $optype[$i], $i;
-print BYTERUN_C <<'EOT';
+
+my $size = @specialsv_name;
+
+print BYTERUN_C <<"EOT";
 };
 
 void *
@@ -108,7 +120,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 {
     register int insn;
     U32 ix;
-    SV *specialsv_list[6];
+    SV *specialsv_list[$size];
 
     BYTECODE_HEADER_CHECK;	/* croak if incorrect platform */
     Newx(bstate->bs_obj_list, 32, void*); /* set op objlist */
@@ -118,8 +130,8 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 
 EOT
 
-for my $i ( 0 .. $#specialsv ) {
-    print BYTERUN_C "    specialsv_list[$i] = $specialsv[$i];\n";
+for my $i ( 0 .. $#specialsv_name ) {
+    print BYTERUN_C "    specialsv_list[$i] = $specialsv_name[$i];\n";
 }
 
 print BYTERUN_C <<'EOT';
@@ -146,6 +158,7 @@ while (<DATA>) {
 	next;
     }
     ($insn, $lvalue, $argtype, $flags) = split;
+    $flags = '' unless defined $flags;
     my $rvalcast = '';
     if ($argtype =~ m:(.+)/(.+):) {
 	($rvalcast, $argtype) = ("($1)", $2);
@@ -363,15 +376,15 @@ stop		PL_op					U32		s
 stpv		bstate->bs_pv.xpv_pv			U32		x
 ldspecsv	bstate->bs_sv				U8		x
 ldspecsvx	bstate->bs_sv				U8		x
-newsv		bstate->bs_sv				U8		x
-newsvx		bstate->bs_sv				U32		x
+newsv		bstate->bs_sv				svtype		x
+newsvx		bstate->bs_sv				svtype		x
 newop		PL_op					U8		x
 newopx		PL_op					U16		x
 newopn		PL_op					U8		x
 newpv		none					PV
 pv_cur		bstate->bs_pv.xpv_cur			STRLEN
 pv_free		bstate->bs_pv				none		x
-sv_upgrade	bstate->bs_sv				U8		x
+sv_upgrade	bstate->bs_sv				svtype		x
 sv_refcnt	SvREFCNT(bstate->bs_sv)			U32
 sv_refcnt_add	SvREFCNT(bstate->bs_sv)			I32		x
 sv_flags	SvFLAGS(bstate->bs_sv)			U32
@@ -488,7 +501,7 @@ cop_stash	cCOP					svindex		x
 cop_filegv	cCOP					svindex		x
 #endif
 cop_seq		cCOP->cop_seq				U32
-cop_arybase	cCOP->cop_arybase			I32
+cop_arybase	cCOP					I32		x
 cop_line	cCOP->cop_line				line_t
 cop_io		cCOP->cop_io				svindex
 cop_warnings	cCOP->cop_warnings			svindex

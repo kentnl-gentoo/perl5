@@ -1,7 +1,7 @@
 /*    pp.h
  *
- *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005 by Larry Wall and others
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1998, 1999, 2000, 2001,
+ *    2002, 2003, 2004, 2005, 2006, 2007, 2008 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -67,16 +67,16 @@ Refetch the stack pointer.  Used after a callback.  See L<perlcall>.
 	STMT_START {					\
 	    if (++PL_markstack_ptr == PL_markstack_max)	\
 	    markstack_grow();				\
-	    *PL_markstack_ptr = (p) - PL_stack_base;	\
+	    *PL_markstack_ptr = (I32)((p) - PL_stack_base);\
 	} STMT_END
 
 #define TOPMARK		(*PL_markstack_ptr)
 #define POPMARK		(*PL_markstack_ptr--)
 
-#define dSP		register SV **sp = PL_stack_sp
+#define dSP		SV **sp = PL_stack_sp
 #define djSP		dSP
 #define dMARK		register SV **mark = PL_stack_base + POPMARK
-#define dORIGMARK	const I32 origmark = mark - PL_stack_base
+#define dORIGMARK	const I32 origmark = (I32)(mark - PL_stack_base)
 #define ORIGMARK	(PL_stack_base + origmark)
 
 #define SPAGAIN		sp = PL_stack_sp
@@ -129,9 +129,9 @@ Pops a long off the stack.
 */
 
 #define PUTBACK		PL_stack_sp = sp
-#define RETURN		return PUTBACK, NORMAL
-#define RETURNOP(o)	return PUTBACK, o
-#define RETURNX(x)	return x, PUTBACK, NORMAL
+#define RETURN		return (PUTBACK, NORMAL)
+#define RETURNOP(o)	return (PUTBACK, o)
+#define RETURNX(x)	return (x, PUTBACK, NORMAL)
 
 #define POPs		(*sp--)
 #define POPp		(SvPVx(POPs, PL_na))		/* deprecated */
@@ -235,55 +235,55 @@ called to declare it.  Do not call multiple C<TARG>-oriented macros to
 return lists from XSUB's - see C<mXPUSHu> instead.  See also C<PUSHu> and
 C<mPUSHu>.
 
+=for apidoc Am|void|mPUSHs|SV* sv
+Push an SV onto the stack and mortalizes the SV.  The stack must have room
+for this element.  Does not use C<TARG>.  See also C<PUSHs> and C<mXPUSHs>.
+
 =for apidoc Am|void|PUSHmortal
 Push a new mortal SV onto the stack.  The stack must have room for this
-element.  Does not handle 'set' magic.  Does not use C<TARG>.  See also
-C<PUSHs>, C<XPUSHmortal> and C<XPUSHs>.
+element.  Does not use C<TARG>.  See also C<PUSHs>, C<XPUSHmortal> and C<XPUSHs>.
 
 =for apidoc Am|void|mPUSHp|char* str|STRLEN len
 Push a string onto the stack.  The stack must have room for this element.
-The C<len> indicates the length of the string.  Handles 'set' magic.  Does
-not use C<TARG>.  See also C<PUSHp>, C<mXPUSHp> and C<XPUSHp>.
+The C<len> indicates the length of the string.  Does not use C<TARG>.
+See also C<PUSHp>, C<mXPUSHp> and C<XPUSHp>.
 
 =for apidoc Am|void|mPUSHn|NV nv
 Push a double onto the stack.  The stack must have room for this element.
-Handles 'set' magic.  Does not use C<TARG>.  See also C<PUSHn>, C<mXPUSHn>
-and C<XPUSHn>.
+Does not use C<TARG>.  See also C<PUSHn>, C<mXPUSHn> and C<XPUSHn>.
 
 =for apidoc Am|void|mPUSHi|IV iv
 Push an integer onto the stack.  The stack must have room for this element.
-Handles 'set' magic.  Does not use C<TARG>.  See also C<PUSHi>, C<mXPUSHi>
-and C<XPUSHi>.
+Does not use C<TARG>.  See also C<PUSHi>, C<mXPUSHi> and C<XPUSHi>.
 
 =for apidoc Am|void|mPUSHu|UV uv
 Push an unsigned integer onto the stack.  The stack must have room for this
-element.  Handles 'set' magic.  Does not use C<TARG>.  See also C<PUSHu>,
-C<mXPUSHu> and C<XPUSHu>.
+element.  Does not use C<TARG>.  See also C<PUSHu>, C<mXPUSHu> and C<XPUSHu>.
+
+=for apidoc Am|void|mXPUSHs|SV* sv
+Push an SV onto the stack, extending the stack if necessary and mortalizes
+the SV.  Does not use C<TARG>.  See also C<XPUSHs> and C<mPUSHs>.
 
 =for apidoc Am|void|XPUSHmortal
-Push a new mortal SV onto the stack, extending the stack if necessary.  Does
-not handle 'set' magic.  Does not use C<TARG>.  See also C<XPUSHs>,
-C<PUSHmortal> and C<PUSHs>.
+Push a new mortal SV onto the stack, extending the stack if necessary.
+Does not use C<TARG>.  See also C<XPUSHs>, C<PUSHmortal> and C<PUSHs>.
 
 =for apidoc Am|void|mXPUSHp|char* str|STRLEN len
 Push a string onto the stack, extending the stack if necessary.  The C<len>
-indicates the length of the string.  Handles 'set' magic.  Does not use
-C<TARG>.  See also C<XPUSHp>, C<mPUSHp> and C<PUSHp>.
+indicates the length of the string.  Does not use C<TARG>.  See also C<XPUSHp>,
+C<mPUSHp> and C<PUSHp>.
 
 =for apidoc Am|void|mXPUSHn|NV nv
-Push a double onto the stack, extending the stack if necessary.  Handles
-'set' magic.  Does not use C<TARG>.  See also C<XPUSHn>, C<mPUSHn> and
-C<PUSHn>.
+Push a double onto the stack, extending the stack if necessary.
+Does not use C<TARG>.  See also C<XPUSHn>, C<mPUSHn> and C<PUSHn>.
 
 =for apidoc Am|void|mXPUSHi|IV iv
-Push an integer onto the stack, extending the stack if necessary.  Handles
-'set' magic.  Does not use C<TARG>.  See also C<XPUSHi>, C<mPUSHi> and
-C<PUSHi>.
+Push an integer onto the stack, extending the stack if necessary.
+Does not use C<TARG>.  See also C<XPUSHi>, C<mPUSHi> and C<PUSHi>.
 
 =for apidoc Am|void|mXPUSHu|UV uv
 Push an unsigned integer onto the stack, extending the stack if necessary.
-Handles 'set' magic.  Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu>
-and C<PUSHu>.
+Does not use C<TARG>.  See also C<XPUSHu>, C<mPUSHu> and C<PUSHu>.
 
 =cut
 */
@@ -314,17 +314,19 @@ and C<PUSHu>.
 #define XPUSHu(u)	STMT_START { sv_setuv(TARG, (UV)(u)); XPUSHTARG; } STMT_END
 #define XPUSHundef	STMT_START { SvOK_off(TARG); XPUSHs(TARG); } STMT_END
 
+#define mPUSHs(s)	PUSHs(sv_2mortal(s))
 #define PUSHmortal	PUSHs(sv_newmortal())
-#define mPUSHp(p,l)	sv_setpvn_mg(PUSHmortal, (p), (l))
-#define mPUSHn(n)	sv_setnv_mg(PUSHmortal, (NV)(n))
-#define mPUSHi(i)	sv_setiv_mg(PUSHmortal, (IV)(i))
-#define mPUSHu(u)	sv_setuv_mg(PUSHmortal, (UV)(u))
+#define mPUSHp(p,l)	PUSHs(newSVpvn_flags((p), (l), SVs_TEMP))
+#define mPUSHn(n)	sv_setnv(PUSHmortal, (NV)(n))
+#define mPUSHi(i)	sv_setiv(PUSHmortal, (IV)(i))
+#define mPUSHu(u)	sv_setuv(PUSHmortal, (UV)(u))
 
+#define mXPUSHs(s)	XPUSHs(sv_2mortal(s))
 #define XPUSHmortal	XPUSHs(sv_newmortal())
-#define mXPUSHp(p,l)	STMT_START { EXTEND(sp,1); sv_setpvn_mg(PUSHmortal, (p), (l)); } STMT_END
-#define mXPUSHn(n)	STMT_START { EXTEND(sp,1); sv_setnv_mg(PUSHmortal, (NV)(n)); } STMT_END
-#define mXPUSHi(i)	STMT_START { EXTEND(sp,1); sv_setiv_mg(PUSHmortal, (IV)(i)); } STMT_END
-#define mXPUSHu(u)	STMT_START { EXTEND(sp,1); sv_setuv_mg(PUSHmortal, (UV)(u)); } STMT_END
+#define mXPUSHp(p,l)	STMT_START { EXTEND(sp,1); mPUSHp((p), (l)); } STMT_END
+#define mXPUSHn(n)	STMT_START { EXTEND(sp,1); sv_setnv(PUSHmortal, (NV)(n)); } STMT_END
+#define mXPUSHi(i)	STMT_START { EXTEND(sp,1); sv_setiv(PUSHmortal, (IV)(i)); } STMT_END
+#define mXPUSHu(u)	STMT_START { EXTEND(sp,1); sv_setuv(PUSHmortal, (UV)(u)); } STMT_END
 
 #define SETs(s)		(*sp = s)
 #define SETTARG		STMT_START { SvSETMAGIC(TARG); SETs(TARG); } STMT_END
@@ -408,44 +410,61 @@ and C<PUSHu>.
 #define AMGf_assign	4
 #define AMGf_unary	8
 
-#define tryAMAGICbinW(meth,assign,set) STMT_START { \
-          if (PL_amagic_generation) { \
-	    SV* tmpsv; \
-	    SV* const right= *(sp); SV* const left= *(sp-1);\
-	    if ((SvAMAGIC(left)||SvAMAGIC(right))&&\
-		(tmpsv=amagic_call(left, \
+#define tryAMAGICbinW_var(meth_enum,assign,set) STMT_START { \
+	if (PL_amagic_generation) { \
+	    SV* const left = *(sp-1); \
+	    SV* const right = *(sp); \
+	    if ((SvAMAGIC(left)||SvAMAGIC(right))) {\
+		SV * const tmpsv = amagic_call(left, \
 				   right, \
-				   CAT2(meth,_amg), \
-				   (assign)? AMGf_assign: 0))) {\
-	       SPAGAIN;	\
-	       (void)POPs; set(tmpsv); RETURN; } \
-	  } \
+				   (meth_enum), \
+				   (assign)? AMGf_assign: 0); \
+		if (tmpsv) { \
+		    SPAGAIN; \
+		    (void)POPs; set(tmpsv); RETURN; } \
+		} \
+	    } \
 	} STMT_END
 
-#define tryAMAGICbin(meth,assign) tryAMAGICbinW(meth,assign,SETsv)
+#define tryAMAGICbinW(meth,assign,set) \
+    tryAMAGICbinW_var(CAT2(meth,_amg),assign,set)
+
+#define tryAMAGICbin_var(meth_enum,assign) \
+		tryAMAGICbinW_var(meth_enum,assign,SETsv)
+#define tryAMAGICbin(meth,assign) \
+		tryAMAGICbin_var(CAT2(meth,_amg),assign)
+
 #define tryAMAGICbinSET(meth,assign) tryAMAGICbinW(meth,assign,SETs)
 
-#define AMG_CALLun(sv,meth) amagic_call(sv,&PL_sv_undef,  \
-					CAT2(meth,_amg),AMGf_noright | AMGf_unary)
+#define tryAMAGICbinSET_var(meth_enum,assign) \
+    tryAMAGICbinW_var(meth_enum,assign,SETs)
+
+#define AMG_CALLun_var(sv,meth_enum) amagic_call(sv,&PL_sv_undef,  \
+					meth_enum,AMGf_noright | AMGf_unary)
+#define AMG_CALLun(sv,meth) AMG_CALLun_var(sv,CAT2(meth,_amg))
+
 #define AMG_CALLbinL(left,right,meth) \
             amagic_call(left,right,CAT2(meth,_amg),AMGf_noright)
 
-#define tryAMAGICunW(meth,set,shift,ret) STMT_START { \
+#define tryAMAGICunW_var(meth_enum,set,shift,ret) STMT_START { \
           if (PL_amagic_generation) { \
 	    SV* tmpsv; \
 	    SV* arg= sp[shift]; \
           if(0) goto am_again;  /* shut up unused warning */ \
 	  am_again: \
 	    if ((SvAMAGIC(arg))&&\
-		(tmpsv=AMG_CALLun(arg,meth))) {\
+		(tmpsv=AMG_CALLun_var(arg,(meth_enum)))) {\
 	       SPAGAIN; if (shift) sp += shift; \
 	       set(tmpsv); ret; } \
 	  } \
 	} STMT_END
+#define tryAMAGICunW(meth,set,shift,ret) \
+	tryAMAGICunW_var(CAT2(meth,_amg),set,shift,ret)
 
 #define FORCE_SETs(sv) STMT_START { sv_setsv(TARG, (sv)); SETTARG; } STMT_END
 
-#define tryAMAGICun(meth)	tryAMAGICunW(meth,SETsvUN,0,RETURN)
+#define tryAMAGICun_var(meth_enum) tryAMAGICunW_var(meth_enum,SETsvUN,0,RETURN)
+#define tryAMAGICun(meth)	tryAMAGICun_var(CAT2(meth,_amg))
 #define tryAMAGICunSET(meth)	tryAMAGICunW(meth,SETs,0,RETURN)
 #define tryAMAGICunTARGET(meth, shift)					\
 	STMT_START { dSP; sp--; 	/* get TARGET from below PL_stack_sp */		\
@@ -464,6 +483,8 @@ and C<PUSHu>.
     } STMT_END
 
 #define tryAMAGICunDEREF(meth) tryAMAGICunW(meth,setAGAIN,0,(void)0)
+#define tryAMAGICunDEREF_var(meth_enum) \
+	tryAMAGICunW_var(meth_enum,setAGAIN,0,(void)0)
 
 #define opASSIGN (PL_op->op_flags & OPf_STACKED)
 #define SETsv(sv)	STMT_START {					\
@@ -481,9 +502,9 @@ and C<PUSHu>.
 
 /* SV* ref causes confusion with the member variable
    changed SV* ref to SV* tmpRef */
-#define RvDEEPCP(rv) STMT_START { SV* tmpRef=SvRV(rv);      \
-  if (SvREFCNT(tmpRef)>1) {                 \
-    SvRV_set(rv, AMG_CALLun(rv,copy));	\
+#define RvDEEPCP(rv) STMT_START { SV* tmpRef=SvRV(rv); SV* rv_copy;     \
+  if (SvREFCNT(tmpRef)>1 && (rv_copy = AMG_CALLun(rv,copy))) {          \
+    SvRV_set(rv, rv_copy);		    \
     SvREFCNT_dec(tmpRef);                   \
   } } STMT_END
 

@@ -85,7 +85,7 @@ sub reindent($) {
 }
 
 my ($t, $tab, %curargs, $new, $eval_index, $dir, $name, $args, $outfile);
-my ($incl, $incl_type, $next);
+my ($incl, $incl_type, $incl_quote, $next);
 while (defined (my $file = next_file())) {
     if (-l $file and -d $file) {
         link_if_possible($file) if ($opt_l);
@@ -186,9 +186,10 @@ while (defined (my $file = next_file())) {
                       print OUT $t,"unless(defined(\&$name)) {\n    sub $name () {\t",$new,";}\n}\n";
 		    }
 		}
-	    } elsif (/^(include|import|include_next)\s*[<\"](.*)[>\"]/) {
+	    } elsif (/^(include|import|include_next)\s*([<\"])(.*)[>\"]/) {
                 $incl_type = $1;
-                $incl = $2;
+                $incl_quote = $2;
+                $incl = $3;
                 if (($incl_type eq 'include_next') ||
                     ($opt_e && exists($bad_file{$incl}))) {
                     $incl =~ s/\.h$/.ph/;
@@ -221,6 +222,10 @@ while (defined (my $file = next_file())) {
 			   "warn(\$\@) if \$\@;\n");
                 } else {
                     $incl =~ s/\.h$/.ph/;
+                    # copy the prefix in the quote syntax (#include "x.h") case
+                    if ($incl !~ m|/| && $incl_quote eq q{"} && $file =~ m|^(.*)/|) {
+                        $incl = "$1/$incl";
+                    }
 		    print OUT $t,"require '$incl';\n";
                 }
 	    } elsif (/^ifdef\s+(\w+)/) {
@@ -514,7 +519,7 @@ sub expr {
 		}
 	    } else {
 		if ($inif && $new !~ /defined\s*\($/) {
-		    $new .= '(defined(&' . $id . ') ? &' . $id . ' : 0)';
+		    $new .= '(defined(&' . $id . ') ? &' . $id . ' : undef)';
 		} elsif (/^\[/) {
 		    $new .= " \$$id";
 		} else {
@@ -724,8 +729,13 @@ sub queue_includes_from
                 $line .= <HEADER>;
             }
 
-            if ($line =~ /^#\s*include\s+<(.*?)>/) {
-                push(@ARGV, $1) unless $Is_converted{$1};
+            if ($line =~ /^#\s*include\s+([<"])(.*?)[>"]/) {
+                my ($delimiter, $new_file) = ($1, $2);
+                # copy the prefix in the quote syntax (#include "x.h") case
+                if ($delimiter eq q{"} && $file =~ m|^(.*)/|) {
+                    $new_file = "$1/$new_file";
+                }
+                push(@ARGV, $new_file) unless $Is_converted{$new_file};
             }
         }
     close HEADER;
@@ -772,25 +782,33 @@ sub build_preamble_if_necessary
     my (%define) = _extract_cc_defines();
 
     open  PREAMBLE, ">$preamble" or die "Cannot open $preamble:  $!";
-        print PREAMBLE "# This file was created by h2ph version $VERSION\n";
+	print PREAMBLE "# This file was created by h2ph version $VERSION\n";
 
-        foreach (sort keys %define) {
-            if ($opt_D) {
-                print PREAMBLE "# $_=$define{$_}\n";
-            }
-
-            if ($define{$_} =~ /^(\d+)U?L{0,2}$/i) {
-                print PREAMBLE
-                    "unless (defined &$_) { sub $_() { $1 } }\n\n";
-            } elsif ($define{$_} =~ /^\w+$/) {
-                print PREAMBLE
-                    "unless (defined &$_) { sub $_() { &$define{$_} } }\n\n";
-            } else {
-                print PREAMBLE
-                    "unless (defined &$_) { sub $_() { \"",
-                    quotemeta($define{$_}), "\" } }\n\n";
-            }
-        }
+	foreach (sort keys %define) {
+	    if ($opt_D) {
+		print PREAMBLE "# $_=$define{$_}\n";
+	    }
+	    if ($define{$_} =~ /^\((.*)\)$/) {
+		# parenthesized value:  d=(v)
+		$define{$_} = $1;
+	    }
+	    if ($define{$_} =~ /^([+-]?(\d+)?\.\d+([eE][+-]?\d+)?)[FL]?$/) {
+		# float:
+		print PREAMBLE
+		    "unless (defined &$_) { sub $_() { $1 } }\n\n";
+	    } elsif ($define{$_} =~ /^([+-]?\d+)U?L{0,2}$/i) {
+		# integer:
+		print PREAMBLE
+		    "unless (defined &$_) { sub $_() { $1 } }\n\n";
+	    } elsif ($define{$_} =~ /^\w+$/) {
+		print PREAMBLE
+		    "unless (defined &$_) { sub $_() { &$define{$_} } }\n\n";
+	    } else {
+		print PREAMBLE
+		    "unless (defined &$_) { sub $_() { \"",
+		    quotemeta($define{$_}), "\" } }\n\n";
+	    }
+	}
     close PREAMBLE               or die "Cannot close $preamble:  $!";
 }
 
@@ -802,15 +820,14 @@ sub _extract_cc_defines
 {
     my %define;
     my $allsymbols  = join " ",
-        @Config{'ccsymbols', 'cppsymbols', 'cppccsymbols'};
+	@Config{'ccsymbols', 'cppsymbols', 'cppccsymbols'};
 
     # Split compiler pre-definitions into `key=value' pairs:
-    foreach (split /\s+/, $allsymbols) {
-        /(.+?)=(.+)/ and $define{$1} = $2;
-
-        if ($opt_D) {
-            print STDERR "$_:  $1 -> $2\n";
-        }
+    while ($allsymbols =~ /([^\s]+)=((\\\s|[^\s])+)/g) {
+	$define{$1} = $2;
+	if ($opt_D) {
+	    print STDERR "$_:  $1 -> $2\n";
+	}
     }
 
     return %define;
@@ -860,7 +877,7 @@ If run with no arguments, filters standard input to standard output.
 =item -d destination_dir
 
 Put the resulting B<.ph> files beneath B<destination_dir>, instead of
-beneath the default Perl library location (C<$Config{'installsitsearch'}>).
+beneath the default Perl library location (C<$Config{'installsitearch'}>).
 
 =item -r
 
@@ -945,10 +962,10 @@ installation.
 Doesn't handle complicated expressions built piecemeal, a la:
 
     enum {
-        FIRST_VALUE,
-        SECOND_VALUE,
+	FIRST_VALUE,
+	SECOND_VALUE,
     #ifdef ABC
-        THIRD_VALUE
+	THIRD_VALUE
     #endif
     };
 

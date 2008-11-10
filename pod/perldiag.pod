@@ -9,7 +9,7 @@ desperation):
 
     (W) A warning (optional).
     (D) A deprecation (optional).
-    (S) A severe warning (default).
+    (S) A severe warning (enabled by default).
     (F) A fatal error (trappable).
     (P) An internal error you should never see (trappable).
     (X) A very fatal error (nontrappable).
@@ -27,7 +27,7 @@ and B<-W> switches. Warnings may be captured by setting C<$SIG{__WARN__}>
 to a reference to a routine that will be called on each warning instead
 of printing it.  See L<perlvar>.
 
-Default warnings are always enabled unless they are explicitly disabled
+Severe warnings are always enabled, unless they are explicitly disabled
 with the C<warnings> pragma or the B<-X> switch.
 
 Trappable errors may be trapped using the eval operator.  See
@@ -131,7 +131,7 @@ for example, turn C<-w -U> into C<-wU>.
 
 (F) msgsnd() requires a string at least as long as sizeof(long).
 
-=item %s argument is not a HASH or ARRAY element
+=item %s argument is not a HASH or ARRAY element or a subroutine
 
 (F) The argument to exists() must be a hash or array element, such as:
 
@@ -367,6 +367,12 @@ by setting environment variable C<PERL_BADFREE> to 1.
 (P) An internal request asked to add an array entry to something that
 wasn't a symbol table entry.
 
+=item Bad symbol for dirhandle
+
+(P) An internal request asked to add a dirhandle entry to something
+that wasn't a symbol table entry.
+
+
 =item Bad symbol for filehandle
 
 (P) An internal request asked to add a filehandle entry to something
@@ -485,6 +491,13 @@ See L<perlfunc/pack>.
 
 (F) An argument to pack("w",...) was negative.  The BER compressed integer
 format can only be used with positive integers.  See L<perlfunc/pack>.
+
+=item Cannot convert a reference to %s to typeglob
+
+(F) You manipulated Perl's symbol table directly, stored a reference in it,
+then tried to access that symbol via conventional Perl syntax. The access
+triggers Perl to autovivify that typeglob, but it there is no legal conversion
+from that type of reference to a typeglob.
 
 =item Can only compress unsigned integers in pack
 
@@ -694,15 +707,6 @@ found in the PATH.
 found in the PATH, or at least not with the correct permissions.  The
 script exists in the current directory, but PATH prohibits running it.
 
-=item Can't find %s property definition %s
-
-(F) You may have tried to use C<\p> which means a Unicode property (for
-example C<\p{Lu}> is all uppercase letters).  If you did mean to use a
-Unicode property, see L<perlunicode> for the list of known properties.
-If you didn't mean to use a Unicode property, escape the C<\p>, either
-by C<\\p> (just the C<\p>) or by C<\Q\p> (the rest of the string, until
-possible C<\E>).
-
 =item Can't find string terminator %s anywhere before EOF
 
 (F) Perl strings can stretch over multiple lines.  This message means
@@ -714,6 +718,15 @@ nesting levels, the following is missing its final parenthesis:
 If you're getting this error from a here-document, you may have included
 unseen whitespace before or after your closing tag. A good programmer's
 editor will have a way to help you find these characters.
+
+=item Can't find Unicode property definition "%s"
+
+(F) You may have tried to use C<\p> which means a Unicode property (for
+example C<\p{Lu}> is all uppercase letters).  If you did mean to use a
+Unicode property, see L<perlunicode> for the list of known properties.
+If you didn't mean to use a Unicode property, escape the C<\p>, either
+by C<\\p> (just the C<\p>) or by C<\Q\p> (the rest of the string, until
+possible C<\E>).
 
 =item Can't fork
 
@@ -759,6 +772,12 @@ loop.  You can't get there from here.  See L<perlfunc/goto>.
 a block, except that it isn't a proper block.  This usually occurs if
 you tried to jump out of a sort() block or subroutine, which is a no-no.
 See L<perlfunc/goto>.
+
+=item Can't goto subroutine from a sort sub (or similar callback)
+
+(F) The "goto subroutine" call can't be used to jump out of the
+comparison sub for a sort(), or from a similar callback (such
+as the reduce() function in List::Util).
 
 =item Can't goto subroutine from an eval-%s
 
@@ -960,13 +979,6 @@ missing.  You need to figure out where your CRTL misplaced its environ
 or define F<PERL_ENV_TABLES> (see L<perlvms>) so that environ is not
 searched.
 
-=item Can't redefine active sort subroutine %s
-
-(F) Perl optimizes the internal handling of sort subroutines and keeps
-pointers into them.  You tried to redefine one such sort subroutine when
-it was currently active, which is not allowed.  If you really want to do
-this, you should write C<sort { &func } @x> instead of C<sort func @x>.
-
 =item Can't "redo" outside a loop block
 
 (F) A "redo" statement was executed to restart the current block, but
@@ -1056,18 +1068,12 @@ redefined subroutine while the old routine is running.  Go figure.
 (F) You tried to unshift an "unreal" array that can't be unshifted, such
 as the main Perl stack.
 
-=item Can't upgrade that kind of scalar
+=item Can't upgrade %s (%d) to %d
 
 (P) The internal sv_upgrade routine adds "members" to an SV, making it
 into a more specialized kind of SV.  The top several SV types are so
 specialized, however, that they cannot be interconverted.  This message
 indicates that such a conversion was attempted.
-
-=item Can't upgrade to undef
-
-(P) The undefined SV is the bottom of the totem pole, in the scheme of
-upgradability.  Upgrading to undef indicates an error in the code
-calling sv_upgrade.
 
 =item Can't use anonymous symbol table for method lookup
 
@@ -1149,7 +1155,7 @@ references can be weakened.
 with an assignment operator, which implies modifying the value itself.
 Perhaps you need to copy the value to a temporary, and repeat that.
 
-=item Character in "C" format wrapped in pack
+=item Character in 'C' format wrapped in pack
 
 (W pack) You said
 
@@ -1164,7 +1170,7 @@ and so on) and not for Unicode characters, so Perl behaved as if you meant
 If you actually want to pack Unicode codepoints, use the C<"U"> format
 instead.
 
-=item Character in "c" format wrapped in pack
+=item Character in 'c' format wrapped in pack
 
 (W pack) You said
 
@@ -1179,9 +1185,50 @@ and so on) and not for Unicode characters, so Perl behaved as if you meant
 If you actually want to pack Unicode codepoints, use the C<"U"> format
 instead.
 
+=item Character in '%c' format wrapped in unpack
+
+(W unpack) You tried something like
+
+   unpack("H", "\x{2a1}")
+
+where the format expects to process a byte (a character with a value 
+below 256), but a higher value was provided instead. Perl uses the value
+modulus 256 instead, as if you had provided:
+
+   unpack("H", "\x{a1}")
+
+=item Character(s) in '%c' format wrapped in pack
+
+(W pack) You tried something like
+
+   pack("u", "\x{1f3}b")
+
+where the format expects to process a sequence of bytes (character with a 
+value below 256), but some of the characters had a higher value. Perl 
+uses the character values modulus 256 instead, as if you had provided:
+
+   pack("u", "\x{f3}b")
+
+=item Character(s) in '%c' format wrapped in unpack
+
+(W unpack) You tried something like
+
+   unpack("s", "\x{1f3}b")
+
+where the format expects to process a sequence of bytes (character with a 
+value below 256), but some of the characters had a higher value. Perl 
+uses the character values modulus 256 instead, as if you had provided:
+
+   unpack("s", "\x{f3}b")
+
 =item close() on unopened filehandle %s
 
 (W unopened) You tried to close a filehandle that was never opened.
+
+=item closedir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you tried to close is either closed or not really
+a dirhandle.  Check your control flow.
 
 =item Code missing after '/'
 
@@ -1403,6 +1450,10 @@ subroutine or package before the current location.  You can use an empty
 (W misc) You used the obsolescent C<dump()> built-in function, without fully
 qualifying it as C<CORE::dump()>.  Maybe it's a typo.  See L<perlfunc/dump>.
 
+=item dump is not supported
+
+(F) Your machine doesn't support dump/undump.
+
 =item Duplicate free() ignored
 
 (S malloc) An internal routine called free() on something that had
@@ -1545,6 +1596,18 @@ you which section of the Perl source code is distressed.
 (F) Your machine apparently doesn't implement fcntl().  What is this, a
 PDP-11 or something?
 
+=item FETCHSIZE returned a negative value
+
+(F) A tied array claimed to have a negative number of elements, which
+is not possible.
+
+=item Field too wide in 'u' format in pack
+
+(W pack) Each line in an uuencoded string start with a length indicator
+which can't encode values above 63. So there is no point in asking for
+a line length bigger than that. Perl will behave as if you specified
+C<u63> as format.
+
 =item Filehandle %s opened only for input
 
 (W io) You tried to write on a read-only filehandle.  If you intended
@@ -1647,10 +1710,10 @@ L<perlfunc/getsockopt>.
 
 =item Global symbol "%s" requires explicit package name
 
-(F) You've said "use strict vars", which indicates that all variables
-must either be lexically scoped (using "my"), declared beforehand using
-"our", or explicitly qualified to say which package the global variable
-is in (using "::").
+(F) You've said "use strict" or "use strict vars", which indicates 
+that all variables must either be lexically scoped (using "my"), 
+declared beforehand using "our", or explicitly qualified to say 
+which package the global variable is in (using "::").
 
 =item glob failed (%s)
 
@@ -1788,7 +1851,7 @@ Interpretation of the octal number stopped before the 8 or 9.
 =item Illegal switch in PERL5OPT: %s
 
 (X) The PERL5OPT environment variable may only be used to set the
-following switches: B<-[DIMUdmtw]>.
+following switches: B<-[CDIMUdmtw]>.
 
 =item Ill-formed CRTL environ value "%s"
 
@@ -1857,6 +1920,12 @@ transparently promotes all numbers to a floating point representation
 internally--subject to loss of precision errors in subsequent
 operations.
 
+=item Integer overflow in format string for %s
+
+(F) The indexes and widths specified in the format string of C<printf()>
+or C<sprintf()> are too large.  The numbers must not overflow the size of
+integers for your architecture.
+
 =item Internal disaster in regex; marked by <-- HERE in m/%s/
 
 (P) Something went badly wrong in the regular expression parser.
@@ -1899,6 +1968,15 @@ recognized by Perl or by a user-supplied handler.  See L<attributes>.
 
 (W printf) Perl does not understand the given format conversion.  See
 L<perlfunc/sprintf>.
+
+=item Invalid escape in the specified encoding in regex; marked by <-- HERE in m/%s/
+
+(W regexp) The numeric escape (for example C<\xHH>) of value < 256
+didn't correspond to a single character through the conversion
+from the encoding specified by the encoding pragma.
+The escape was replaced with REPLACEMENT CHARACTER (U+FFFD) instead.
+The <-- HERE shows in the regular expression about where the
+escape was discovered.
 
 =item Invalid [] range "%s" in regex; marked by <-- HERE in m/%s/
 
@@ -2056,17 +2134,47 @@ when the function is called.
 
 =item Malformed UTF-8 character (%s)
 
-(S utf8) (F) Perl detected something that didn't comply with UTF-8
-encoding rules.
+(S utf8) (F) Perl detected a string that didn't comply with UTF-8
+encoding rules, even though it had the UTF8 flag on.
 
-One possible cause is that you read in data that you thought to be in
-UTF-8 but it wasn't (it was for example legacy 8-bit data).  Another
-possibility is careless use of utf8::upgrade().
+One possible cause is that you set the UTF8 flag yourself for data that
+you thought to be in UTF-8 but it wasn't (it was for example legacy
+8-bit data). To guard against this, you can use Encode::decode_utf8.
+
+If you use the C<:encoding(UTF-8)> PerlIO layer for input, invalid byte
+sequences are handled gracefully, but if you use C<:utf8>, the flag is
+set without validating the data, possibly resulting in this error
+message.
+
+See also L<Encode/"Handling Malformed Data">.
 
 =item Malformed UTF-16 surrogate
 
 Perl thought it was reading UTF-16 encoded character data but while
 doing it Perl met a malformed Unicode surrogate.
+
+=item Malformed UTF-8 string in pack
+
+(F) You tried to pack something that didn't comply with UTF-8 encoding
+rules and perl was unable to guess how to make more progress.
+
+=item Malformed UTF-8 string in unpack
+
+(F) You tried to unpack something that didn't comply with UTF-8 encoding
+rules and perl was unable to guess how to make more progress.
+
+=item Malformed UTF-8 string in '%c' format in unpack
+
+(F) You tried to unpack something that didn't comply with UTF-8 encoding
+rules and perl was unable to guess how to make more progress.
+
+=item Maximal count of pending signals (%s) exceeded
+
+(F) Perl aborted due to a too important number of signals pending. This
+usually indicates that your operating system tried to deliver signals
+too fast (with a very high priority), starving the perl process from
+resources it would need to reach a point where it can process signals
+safely. (See L<perlipc/"Deferred Signals (Safe Signals)">.)
 
 =item %s matches null string many times in regex; marked by <-- HERE in m/%s/
 
@@ -2220,12 +2328,6 @@ See L<perlfunc/open> for details.
 
 (W syntax) Multidimensional arrays aren't written like C<$foo[1,2,3]>.
 They're written like C<$foo[1][2][3]>, as in C.
-
-=item '/' must be followed by 'a*', 'A*' or 'Z*'
-
-(F) You had a pack template indicating a counted-length string,
-Currently the only things that can have their length counted are a*, A*
-or Z*.  See L<perlfunc/pack>.
 
 =item '/' must follow a numeric type in unpack
 
@@ -2594,10 +2696,13 @@ which is odd, because hashes come in key/value pairs.
 
 =item Offset outside string
 
-(F) You tried to do a read/write/send/recv operation with an offset
-pointing outside the buffer.  This is difficult to imagine.  The sole
-exception to this is that C<sysread()>ing past the buffer will extend
-the buffer and zero pad the new area.
+(F, W layer) You tried to do a read/write/send/recv/seek operation
+with an offset pointing outside the buffer.  This is difficult to
+imagine.  The sole exceptions to this are that zero padding will
+take place when going past the end of the string when either
+C<sysread()>ing a file, or when seeking past the end of a scalar opened
+for I/O (in anticipation of future reads and to imitate the behaviour
+with real files).
 
 =item %s() on unopened %s
 
@@ -2692,6 +2797,12 @@ otherwise.
 (F) You had a template that specified an absolute position outside
 the string being unpacked.  See L<perlfunc/pack>.
 
+=item '@' outside of string with malformed UTF-8 in unpack
+
+(F) You had a template that specified an absolute position outside
+the string being unpacked. The string being unpacked was also invalid
+UTF-8. See L<perlfunc/pack>.
+
 =item %s package attribute may clash with future reserved word: %s
 
 (W reserved) A lowercase attribute name was used that had a
@@ -2712,6 +2823,13 @@ page.  See L<perlform>.
 =item panic: %s
 
 (P) An internal error.
+
+=item panic: attempt to call %s in %s
+
+(P) One of the file test operators entered a code branch that calls
+an ACL related-function, but that function is not available on this
+platform.  Earlier checks mean that it should not be possible to
+enter this branch on this platform.
 
 =item panic: ck_grep
 
@@ -2752,6 +2870,11 @@ data.
 
 (P) The internal do_trans routines were called with invalid operational
 data.
+
+=item panic: fold_constants JMPENV_PUSH returned %d
+
+(P) While attemtping folding constants an exception other than an C<eval>
+failure was caught.
 
 =item panic: frexp
 
@@ -2797,10 +2920,6 @@ references to an object.
 =item panic: malloc
 
 (P) Something requested a negative number of bytes of malloc.
-
-=item panic: mapstart
-
-(P) The compiler is screwed up with respect to the map() function.
 
 =item panic: memory wrap
 
@@ -2873,6 +2992,11 @@ then discovered it wasn't a subroutine or eval context.
 
 (P) scan_num() got called on something that wasn't a number.
 
+=item panic: sv_chop %s
+
+(P) The sv_chop() routine was passed a position that is not within the
+scalar's string buffer.
+
 =item panic: sv_insert
 
 (P) The sv_insert() routine was told to remove more string than there
@@ -2881,6 +3005,11 @@ was string.
 =item panic: top_env
 
 (P) The compiler attempted to do a goto, or something weird like that.
+
+=item panic: unimplemented op %s (#%d) called
+
+(P) The compiler is screwed up and attempted to use an op that isn't permitted
+at run time.
 
 =item panic: utf16_to_utf8: odd bytelen
 
@@ -3188,6 +3317,11 @@ are outside the range which can be represented by integers internally.
 One possible workaround is to force Perl to use magical string increment
 by prepending "0" to your numbers.
 
+=item readdir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you're reading from is either closed or not really 
+a dirhandle.  Check your control flow.
+
 =item readline() on closed filehandle %s
 
 (W closed) The filehandle you're reading from got itself closed sometime
@@ -3280,6 +3414,11 @@ terminates. You might use ^# instead.  See L<perlform>.
 (W syntax) You wrote your assignment operator backwards.  The = must
 always comes last, to avoid ambiguity with subsequent unary operators.
 
+=item rewinddir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you tried to do a rewinddir() on is either closed or not
+really a dirhandle.  Check your control flow.
+
 =item Runaway format
 
 (F) Your format contained the ~~ repeat-until-blank sequence, but it
@@ -3355,6 +3494,11 @@ the conditional expression, i.e. C<(foo) ? 0 : 1>.
 
 (W unopened) You tried to use the seek() or sysseek() function on a
 filehandle that was either never opened or has since been closed.
+
+=item seekdir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you are doing a seekdir() on is either closed or not
+really a dirhandle.  Check your control flow.
 
 =item select not implemented
 
@@ -3579,7 +3723,7 @@ C<can> may break this.
 (P) The substitution was looping infinitely.  (Obviously, a substitution
 shouldn't iterate more times than there are characters of input, which
 is what happened.)  See the discussion of substitution in
-L<perlop/"Quote and Quote-like Operators">.
+L<perlop/"Regexp Quote-Like Operators">.
 
 =item Substitution pattern not terminated
 
@@ -3701,6 +3845,11 @@ for Perl to reach.  Perl is doing you a favor by refusing.
 
 (W unopened) You tried to use the tell() function on a filehandle that
 was either never opened or has since been closed.
+
+=item telldir() attempted on invalid dirhandle %s
+
+(W io) The dirhandle you tried to telldir() is either closed or not really
+a dirhandle.  Check your control flow.
 
 =item That use of $[ is unsupported
 
@@ -4037,11 +4186,11 @@ reserved word.  It's best to put such a word in quotes, or capitalize it
 somehow, or insert an underbar into it.  You might also declare it as a
 subroutine.
 
-=item Unrecognized character %s
+=item Unrecognized character %s in column %d
 
 (F) The Perl parser has no idea what to do with the specified character
-in your Perl script (or eval).  Perhaps you tried to run a compressed
-script, a binary program, or a directory as a Perl program.
+in your Perl script (or eval) at the specified column.  Perhaps you tried 
+to run a compressed script, a binary program, or a directory as a Perl program.
 
 =item /%s/: Unrecognized escape \\%c in character class passed through
 
@@ -4368,7 +4517,7 @@ to be huge numbers, and so usually indicates programmer error.
 If you really do mean it, explicitly numify your reference, like so:
 C<$array[0+$ref]>.  This warning is not given for overloaded objects,
 either, because you can overload the numification and stringification
-operators and then you assumedly know what you are doing.
+operators and then you assumably know what you are doing.
 
 =item Use of reserved word "%s" is deprecated
 
@@ -4519,7 +4668,7 @@ the version number.
 =item Warning: something's wrong
 
 (W) You passed warn() an empty string (the equivalent of C<warn "">) or
-you called it with no args and C<$_> was empty.
+you called it with no args and C<$@> was empty.
 
 =item Warning: unable to close filehandle %s properly
 
@@ -4610,5 +4759,9 @@ not get any randomness out of your system.  This usually indicates
 Something Very Wrong.
 
 =back
+
+=head1 SEE ALSO
+
+L<warnings>, L<perllexwarn>.
 
 =cut

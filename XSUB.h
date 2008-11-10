@@ -1,7 +1,7 @@
 /*    XSUB.h
  *
- *    Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006 by Larry Wall and others
+ *    Copyright (C) 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002,
+ *    2003, 2004, 2005, 2006, 2007, 2008 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -71,11 +71,19 @@ This is usually handled automatically by C<xsubpp>.
 Sets up the C<ix> variable for an XSUB which has aliases.  This is usually
 handled automatically by C<xsubpp>.
 
+=for apidoc Ams||dUNDERBAR
+Sets up the C<padoff_du> variable for an XSUB that wishes to use
+C<UNDERBAR>.
+
+=for apidoc AmU||UNDERBAR
+The SV* corresponding to the $_ variable. Works even if there
+is a lexical $_ in scope. (Lexical $_ is available in perl 5.9.2 and later)
+
 =cut
 */
 
 #ifndef PERL_UNUSED_ARG
-#  ifdef lint
+#  if defined(lint) && defined(S_SPLINT_S) /* www.splint.org */
 #    include <note.h>
 #    define PERL_UNUSED_ARG(x) NOTE(ARGUNUSED(x))
 #  else
@@ -88,25 +96,41 @@ handled automatically by C<xsubpp>.
 
 #define ST(off) PL_stack_base[ax + (off)]
 
+/* XSPROTO() is also used by SWIG like this:
+ *
+ *     typedef XSPROTO(SwigPerlWrapper);
+ *     typedef SwigPerlWrapper *SwigPerlWrapperPtr;
+ *
+ * This code needs to be compilable under both C and C++.
+ *
+ * Don't forget to change the __attribute__unused__ version of XS()
+ * below too if you change XSPROTO() here.
+ */
+#define XSPROTO(name) void name(pTHX_ CV* cv)
+
 #if defined(__CYGWIN__) && defined(USE_DYNAMIC_LOADING)
-#  define XS(name) __declspec(dllexport) void name(pTHX_ CV* cv)
+#  define XS(name) __declspec(dllexport) XSPROTO(name)
 #else
-#  ifdef HASATTRIBUTE_UNUSED
+#  if defined(HASATTRIBUTE_UNUSED) && !defined(__cplusplus)
 #    define XS(name) void name(pTHX_ CV* cv __attribute__unused__)
 #  else
-#    define XS(name) void name(pTHX_ CV* cv)
+#    ifdef __cplusplus
+#      define XS(name) extern "C" XSPROTO(name)
+#    else
+#      define XS(name) XSPROTO(name)
+#    endif
 #  endif
 #endif
 
-#define dAX const I32 ax = MARK - PL_stack_base + 1
+#define dAX const I32 ax = (I32)(MARK - PL_stack_base + 1)
 
 #define dAXMARK				\
 	I32 ax = POPMARK;	\
 	register SV **mark = PL_stack_base + ax++
 
-#define dITEMS I32 items = SP - MARK
+#define dITEMS I32 items = (I32)(SP - MARK)
 
-#ifdef lint
+#if defined(lint) && defined(S_SPLINT_S) /* www.splint.org */
 #  define dXSARGS \
 	NOTE(ARGUNUSED(cv)) \
 	dSP; dAXMARK; dITEMS
@@ -127,13 +151,18 @@ handled automatically by C<xsubpp>.
 
 #ifdef __cplusplus
 #  define XSINTERFACE_CVT(ret,name) ret (*name)(...)
+#  define XSINTERFACE_CVT_ANON(ret) ret (*)(...)
 #else
 #  define XSINTERFACE_CVT(ret,name) ret (*name)()
+#  define XSINTERFACE_CVT_ANON(ret) ret (*)()
 #endif
 #define dXSFUNCTION(ret)		XSINTERFACE_CVT(ret,XSFUNCTION)
-#define XSINTERFACE_FUNC(ret,cv,f)     ((XSINTERFACE_CVT(ret,))(f))
+#define XSINTERFACE_FUNC(ret,cv,f)     ((XSINTERFACE_CVT_ANON(ret))(f))
 #define XSINTERFACE_FUNC_SET(cv,f)	\
 		CvXSUBANY(cv).any_dxptr = (void (*) (pTHX_ void*))(f)
+
+#define dUNDERBAR dNOOP
+#define UNDERBAR DEFSV
 
 /* Simple macros to put new mortal values onto the stack.   */
 /* Typically used to return values from XS functions.       */
@@ -208,6 +237,24 @@ Macro to verify that a PM module's $VERSION variable matches the XS
 module's C<XS_VERSION> variable.  This is usually handled automatically by
 C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 
+=head1 Simple Exception Handling Macros
+
+=for apidoc Ams||dXCPT
+Set up necessary local variables for exception handling.
+See L<perlguts/"Exception Handling">.
+
+=for apidoc AmU||XCPT_TRY_START
+Starts a try block.  See L<perlguts/"Exception Handling">.
+
+=for apidoc AmU||XCPT_TRY_END
+Ends a try block.  See L<perlguts/"Exception Handling">.
+
+=for apidoc AmU||XCPT_CATCH
+Introduces a catch block.  See L<perlguts/"Exception Handling">.
+
+=for apidoc Ams||XCPT_RETHROW
+Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
+
 =cut
 */
 
@@ -215,14 +262,14 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #define XST_mUV(i,v)  (ST(i) = sv_2mortal(newSVuv(v))  )
 #define XST_mNV(i,v)  (ST(i) = sv_2mortal(newSVnv(v))  )
 #define XST_mPV(i,v)  (ST(i) = sv_2mortal(newSVpv(v,0)))
-#define XST_mPVN(i,v,n)  (ST(i) = sv_2mortal(newSVpvn(v,n)))
+#define XST_mPVN(i,v,n)  (ST(i) = newSVpvn_flags(v,n, SVs_TEMP))
 #define XST_mNO(i)    (ST(i) = &PL_sv_no   )
 #define XST_mYES(i)   (ST(i) = &PL_sv_yes  )
 #define XST_mUNDEF(i) (ST(i) = &PL_sv_undef)
 
 #define XSRETURN(off)					\
     STMT_START {					\
-	IV tmpXSoff = (off);				\
+	const IV tmpXSoff = (off);			\
 	PL_stack_sp = PL_stack_base + ax + (tmpXSoff - 1);	\
 	return;						\
     } STMT_END
@@ -237,13 +284,13 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #define XSRETURN_UNDEF STMT_START { XST_mUNDEF(0); XSRETURN(1); } STMT_END
 #define XSRETURN_EMPTY STMT_START {                XSRETURN(0); } STMT_END
 
-#define newXSproto(a,b,c,d)	sv_setpv((SV*)newXS(a,b,c), d)
+#define newXSproto(a,b,c,d)	newXS_flags(a,b,c,d,0)
 
 #ifdef XS_VERSION
 #  define XS_VERSION_BOOTCHECK \
     STMT_START {							\
 	SV *_sv;							\
-	const char *vn = Nullch, *module = SvPV_nolen_const(ST(0));	\
+	const char *vn = NULL, *module = SvPV_nolen_const(ST(0));	\
 	if (items >= 2)	 /* version supplied as bootstrap arg */	\
 	    _sv = ST(1);						\
 	else {								\
@@ -264,13 +311,21 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 #  define XS_VERSION_BOOTCHECK
 #endif
 
+#ifdef NO_XSLOCKS
+#  define dXCPT             dJMPENV; int rEtV = 0
+#  define XCPT_TRY_START    JMPENV_PUSH(rEtV); if (rEtV == 0)
+#  define XCPT_TRY_END      JMPENV_POP;
+#  define XCPT_CATCH        if (rEtV != 0)
+#  define XCPT_RETHROW      JMPENV_JUMP(rEtV)
+#endif
+
 /* 
    The DBM_setFilter & DBM_ckFilter macros are only used by 
    the *DB*_File modules 
 */
 
 #define DBM_setFilter(db_type,code)				\
-	{							\
+	STMT_START {						\
 	    if (db_type)					\
 	        RETVAL = sv_mortalcopy(db_type) ;		\
 	    ST(0) = RETVAL ;					\
@@ -284,9 +339,10 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 	        else						\
 	            db_type = newSVsv(code) ;			\
 	    }	    						\
-	}
+	} STMT_END
 
 #define DBM_ckFilter(arg,type,name)				\
+        STMT_START {						\
 	if (db->type) {						\
 	    if (db->filtering) {				\
 	        croak("recursion detected in %s", name) ;	\
@@ -310,8 +366,7 @@ C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
             if (name[7] == 's'){                                \
                 arg = sv_2mortal(arg);                          \
             }                                                   \
-            SvOKp(arg);                                         \
-	}
+	} } STMT_END                                                     
 
 #if 1		/* for compatibility */
 #  define VTBL_sv		&PL_vtbl_sv

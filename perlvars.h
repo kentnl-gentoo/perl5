@@ -1,6 +1,7 @@
 /*    perlvars.h
  *
- *    Copyright (C) 1999, 2000, 2001, 2002, by Larry Wall and others
+ *    Copyright (C) 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007,
+ *    by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -53,7 +54,11 @@ PERLVAR(Gdollarzero_mutex, perl_mutex)	/* Modifying $0 */
 #endif
 
 /* This is constant on most architectures, a global on OS/2 */
+#ifdef OS2
+PERLVARI(Gsh_path,	      char *,	SH_PATH)/* full path of shell */
+#else
 PERLVARI(Gsh_path,	const char *,	SH_PATH)/* full path of shell */
+#endif
 
 #ifndef PERL_MICRO
 /* If Perl has to ignore SIGPFE, this is its saved state.
@@ -72,3 +77,40 @@ PERLVARI(Gcsighandlerp,	Sighandler_t, Perl_csighandler)	/* Pointer to C-level si
 #ifndef PERL_USE_SAFE_PUTENV
 PERLVARI(Guse_safe_putenv, int, 1)
 #endif
+
+#ifdef USE_PERLIO
+PERLVARI(Gperlio_fd_refcnt, int*, 0) /* Pointer to array of fd refcounts.  */
+PERLVARI(Gperlio_fd_refcnt_size, int, 0) /* Size of the array */
+#endif
+
+#if defined(USE_ITHREADS)
+PERLVAR(Gperlio_mutex, perl_mutex)    /* Mutex for perlio fd refcounts */
+#endif
+
+/* These are baked at compile time into any shared perl library.
+   In future 5.8.x releases this will allow us in main() to sanity test the
+   library we're linking against.  */
+
+PERLVARI(Grevision,	U8,	PERL_REVISION)
+PERLVARI(Gversion,	U8,	PERL_VERSION)
+PERLVARI(Gsubversion,	U8,	PERL_SUBVERSION)
+
+#if defined(MULTIPLICITY)
+#  define PERL_INTERPRETER_SIZE_UPTO_MEMBER(member)			\
+    STRUCT_OFFSET(struct interpreter, member) +				\
+    sizeof(((struct interpreter*)0)->member)
+
+/* This might be useful.  */
+PERLVARI(Ginterp_size,	U16,	sizeof(struct interpreter))
+
+/* This will be useful for subsequent releases, because this has to be the
+   same in your libperl as in main(), else you have a mismatch and must abort.
+*/
+PERLVARI(Ginterp_size_5_8_9, U16,
+	 PERL_INTERPRETER_SIZE_UPTO_MEMBER(PERL_LAST_5_8_9_INTERP_MEMBER))
+#endif
+
+/* this is currently set without MUTEX protection, so keep it a type which
+ * can be set atomically (ie not a bit field) */
+PERLVARI(Gveto_cleanup,	int, FALSE)	/* exit without cleanup */
+

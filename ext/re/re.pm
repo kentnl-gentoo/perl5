@@ -1,6 +1,6 @@
 package re;
 
-our $VERSION = 0.05;
+our $VERSION = 0.06_01;
 
 =head1 NAME
 
@@ -95,6 +95,15 @@ sub setcolor {
  };
 }
 
+my $installed = 0;
+
+sub _load_unload {
+    my $on = shift;
+    require XSLoader;
+    XSLoader::load('re');
+    install($on);
+}
+
 sub bits {
     my $on = shift;
     my $bits = 0;
@@ -102,21 +111,19 @@ sub bits {
 	require Carp;
 	Carp::carp("Useless use of \"re\" pragma");
     }
-    foreach my $s (@_){
-      if ($s eq 'debug' or $s eq 'debugcolor') {
- 	  setcolor() if $s eq 'debugcolor';
-	  require XSLoader;
-	  XSLoader::load('re');
-	  install() if $on;
-	  uninstall() unless $on;
-	  next;
-      }
-      if (exists $bitmask{$s}) {
-	  $bits |= $bitmask{$s};
-      } else {
-	  require Carp;
-	  Carp::carp("Unknown \"re\" subpragma '$s' (known ones are: @{[join(', ', map {qq('$_')} 'debug', 'debugcolor', sort keys %bitmask)]})");
-      }
+    foreach my $idx (0..$#_){
+        my $s=$_[$idx];
+	if ($s eq 'debug' or $s eq 'debugcolor') {
+	    setcolor() if $s eq 'debugcolor';
+	    _load_unload($on);
+        } elsif (exists $bitmask{$s}) {
+	    $bits |= $bitmask{$s};
+	} else {
+	    require Carp;
+	    Carp::carp("Unknown \"re\" subpragma '$s' (known ones are: ",
+                       join(', ', map {qq('$_')} 'debug', 'debugcolor', sort keys %bitmask),
+                       ")");
+	}
     }
     $bits;
 }

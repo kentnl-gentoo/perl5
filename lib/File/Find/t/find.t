@@ -1,22 +1,33 @@
 #!./perl
-
+use strict;
+use Cwd;
 
 my %Expect_File = (); # what we expect for $_ 
 my %Expect_Name = (); # what we expect for $File::Find::name/fullname
 my %Expect_Dir  = (); # what we expect for $File::Find::dir
 my $symlink_exists = eval { symlink("",""); 1 };
-my $warn_msg;
+my ($warn_msg, @files, $file);
 
 
 BEGIN {
+    require File::Spec;
     chdir 't' if -d 't';
-    unshift @INC => '../lib';
+    # May be doing dynamic loading while @INC is all relative
+    unshift @INC => File::Spec->rel2abs('../lib');
 
     $SIG{'__WARN__'} = sub { $warn_msg = $_[0]; warn "# $_[0]"; }
 }
 
-if ( $symlink_exists ) { print "1..199\n"; }
-else                   { print "1..85\n";  }
+my $test_count = 85;
+$test_count += 114 if $symlink_exists;
+$test_count += 18 if $^O eq 'MSWin32';
+$test_count += 2 if $^O eq 'MSWin32' and $symlink_exists;
+
+print "1..$test_count\n";
+#if ( $symlink_exists ) { print "1..199\n"; }
+#else                   { print "1..85\n";  }
+
+my $orig_dir = cwd();
 
 # Uncomment this to see where File::Find is chdir'ing to.  Helpful for
 # debugging its little jaunts around the filesystem.
@@ -73,8 +84,10 @@ my $case = 2;
 my $FastFileTests_OK = 0;
 
 sub cleanup {
+    chdir($orig_dir);
+    my $need_updir = 0;
     if (-d dir_path('for_find')) {
-        chdir(dir_path('for_find'));
+        $need_updir = 1 if chdir(dir_path('for_find'));
     }
     if (-d dir_path('fa')) {
 	unlink file_path('fa', 'fa_ord'),
@@ -91,7 +104,10 @@ sub cleanup {
 	rmdir dir_path('fb', 'fba');
 	rmdir dir_path('fb');
     }
-    chdir(File::Spec->updir);
+    if ($need_updir) {
+        my $updir = $^O eq 'VMS' ? File::Spec::VMS->updir() : File::Spec->updir;
+        chdir($updir);
+    }
     if (-d dir_path('for_find')) {
 	rmdir dir_path('for_find') or print "# Can't rmdir for_find: $!\n";
     }
@@ -818,4 +834,61 @@ if ( $symlink_exists ) {
     Check ($names[0] eq file_path_name('fa', 'faa', 'faa_ord'));
     unlink file_path('fa', 'faa_sl');
 
+}
+
+
+# Win32 checks  - [perl #41555]
+if ($^O eq 'MSWin32') {
+    require File::Spec::Win32;
+    my ($volume) = File::Spec::Win32->splitpath($orig_dir, 1);
+    print STDERR "VOLUME = $volume\n";
+    
+    # with chdir
+    %Expect_File = (File::Spec->curdir => 1,
+                    file_path('fsl') => 1,
+                    file_path('fa_ord') => 1,
+                    file_path('fab') => 1,
+                    file_path('fab_ord') => 1,
+                    file_path('faba') => 1,
+                    file_path('faba_ord') => 1,
+                    file_path('faa') => 1,
+                    file_path('faa_ord') => 1);
+
+    delete $Expect_File{ file_path('fsl') } unless $symlink_exists;
+    %Expect_Name = ();
+
+    %Expect_Dir = (dir_path('fa') => 1,
+                   dir_path('faa') => 1,
+                   dir_path('fab') => 1,
+                   dir_path('faba') => 1,
+                   dir_path('fb') => 1,
+                   dir_path('fba') => 1);
+    
+    
+    
+    File::Find::find( {wanted => \&wanted_File_Dir}, topdir('fa'));
+    Check( scalar(keys %Expect_File) == 0 );    
+    
+    # no_chdir
+    %Expect_File = ($volume . file_path_name('fa') => 1,
+                    $volume . file_path_name('fa', 'fsl') => 1,
+                    $volume . file_path_name('fa', 'fa_ord') => 1,
+                    $volume . file_path_name('fa', 'fab') => 1,
+                    $volume . file_path_name('fa', 'fab', 'fab_ord') => 1,
+                    $volume . file_path_name('fa', 'fab', 'faba') => 1,
+                    $volume . file_path_name('fa', 'fab', 'faba', 'faba_ord') => 1,
+                    $volume . file_path_name('fa', 'faa') => 1,
+                    $volume . file_path_name('fa', 'faa', 'faa_ord') => 1);
+                    
+
+    delete $Expect_File{ $volume . file_path_name('fa', 'fsl') } unless $symlink_exists;
+    %Expect_Name = ();
+
+    %Expect_Dir = ($volume . dir_path('fa') => 1,
+                   $volume . dir_path('fa', 'faa') => 1,
+                   $volume . dir_path('fa', 'fab') => 1,
+                   $volume . dir_path('fa', 'fab', 'faba') => 1);
+                   
+    File::Find::find( {wanted => \&wanted_File_Dir, no_chdir => 1}, $volume . topdir('fa'));
+    Check( scalar(keys %Expect_File) == 0 );
 }

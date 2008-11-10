@@ -1,7 +1,7 @@
 /*    regcomp.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2005 by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2005, 2006, 2007, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -15,7 +15,7 @@ typedef OP OP_4tree;			/* Will be redefined later. */
  * compile to execute that permits the execute phase to run lots faster on
  * simple cases.  They are:
  *
- * regstart	sv that must begin a match; Nullch if none obvious
+ * regstart	sv that must begin a match; NULL if none obvious
  * reganch	is the match anchored (at beginning-of-line only)?
  * regmust	string (pointer into program) that match must include, or NULL
  *  [regmust changed to SV* for bminstr()--law]
@@ -72,6 +72,11 @@ typedef OP OP_4tree;			/* Will be redefined later. */
  * stored negative.]
  */
 
+/* This is the stuff that used to live in regexp.h that was truly
+   private to the engine itself. It now lives here. */
+
+/* this is where the old regcomp.h started */
+
 struct regnode_string {
     U8	str_len;
     U8  type;
@@ -79,6 +84,8 @@ struct regnode_string {
     char string[1];
 };
 
+/* Argument bearing node - workhorse, 
+   arg1 is often for the data field */
 struct regnode_1 {
     U8	flags;
     U8  type;
@@ -86,6 +93,16 @@ struct regnode_1 {
     U32 arg1;
 };
 
+/* Similar to a regnode_1 but with an extra signed argument */
+struct regnode_2L {
+    U8	flags;
+    U8  type;
+    U16 next_off;
+    U32 arg1;
+    I32 arg2;
+};
+
+/* 'Two field' -- Two 16 bit unsigned args */
 struct regnode_2 {
     U8	flags;
     U8  type;
@@ -94,9 +111,11 @@ struct regnode_2 {
     U16 arg2;
 };
 
+
 #define ANYOF_BITMAP_SIZE	32	/* 256 b/(8 b/B) */
 #define ANYOF_CLASSBITMAP_SIZE	 4	/* up to 32 (8*4) named classes */
 
+/* also used by trie */
 struct regnode_charclass {
     U8	flags;
     U8  type;
@@ -146,9 +165,12 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define ARG(p) ARG_VALUE(ARG_LOC(p))
 #define ARG1(p) ARG_VALUE(ARG1_LOC(p))
 #define ARG2(p) ARG_VALUE(ARG2_LOC(p))
+#define ARG2L(p) ARG_VALUE(ARG2L_LOC(p))
+
 #define ARG_SET(p, val) ARG__SET(ARG_LOC(p), (val))
 #define ARG1_SET(p, val) ARG__SET(ARG1_LOC(p), (val))
 #define ARG2_SET(p, val) ARG__SET(ARG2_LOC(p), (val))
+#define ARG2L_SET(p, val) ARG__SET(ARG2L_LOC(p), (val))
 
 #undef NEXT_OFF
 #undef NODE_ALIGN
@@ -181,6 +203,8 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define	ARG_LOC(p)	(((struct regnode_1 *)p)->arg1)
 #define	ARG1_LOC(p)	(((struct regnode_2 *)p)->arg1)
 #define	ARG2_LOC(p)	(((struct regnode_2 *)p)->arg2)
+#define ARG2L_LOC(p)	(((struct regnode_2L *)p)->arg2)
+
 #define NODE_STEP_REGNODE	1	/* sizeof(regnode)/sizeof(regnode) */
 #define EXTRA_STEP_2ARGS	EXTRA_SIZE(struct regnode_2)
 
@@ -282,7 +306,7 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define ANYOF_BITMAP_ZERO(ret)	Zero(((struct regnode_charclass*)(ret))->bitmap, ANYOF_BITMAP_SIZE, char)
 
 #define ANYOF_BITMAP(p)		(((struct regnode_charclass*)(p))->bitmap)
-#define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[((c) >> 3) & 31])
+#define ANYOF_BITMAP_BYTE(p, c)	(ANYOF_BITMAP(p)[(((U8)(c)) >> 3) & 31])
 #define ANYOF_BITMAP_SET(p, c)	(ANYOF_BITMAP_BYTE(p, c) |=  ANYOF_BIT(c))
 #define ANYOF_BITMAP_CLEAR(p,c)	(ANYOF_BITMAP_BYTE(p, c) &= ~ANYOF_BIT(c))
 #define ANYOF_BITMAP_TEST(p, c)	(ANYOF_BITMAP_BYTE(p, c) &   ANYOF_BIT(c))
@@ -298,6 +322,7 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define ANYOF_SKIP		((ANYOF_SIZE - 1)/sizeof(regnode))
 #define ANYOF_CLASS_SKIP	((ANYOF_CLASS_SIZE - 1)/sizeof(regnode))
 #define ANYOF_CLASS_ADD_SKIP	(ANYOF_CLASS_SKIP - ANYOF_SKIP)
+
 
 /*
  * Utility definitions.
@@ -316,10 +341,15 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define REG_SEEN_EVAL		 8
 #define REG_SEEN_CANY		16
 #define REG_SEEN_SANY		REG_SEEN_CANY /* src bckwrd cmpt */
+#define REG_SEEN_RECURSE        0x00000020
 
 START_EXTERN_C
 
+#ifdef PLUGGABLE_RE_EXTENSION
+#include "re_nodes.h"
+#else
 #include "regnodes.h"
+#endif
 
 /* The following have no fixed length. U8 so we can do strchr() on it. */
 #ifndef DOINIT
@@ -362,7 +392,7 @@ typedef struct re_scream_pos_data_s
  *   n - Root of op tree for (?{EVAL}) item
  *   o - Start op for (?{EVAL}) item
  *   p - Pad for (?{EVAL} item
- *   s - swash for unicode-style character class, and the multicharacter
+ *   s - swash for Unicode-style character class, and the multicharacter
  *       strings resulting from casefolding the single-character entries
  *       in the character class
  * 20010712 mjd@plover.com
@@ -374,16 +404,8 @@ struct reg_data {
     void* data[1];
 };
 
-struct reg_substr_datum {
-    I32 min_offset;
-    I32 max_offset;
-    SV *substr;		/* non-utf8 variant */
-    SV *utf8_substr;	/* utf8 variant */
-};
-
-struct reg_substr_data {
-    struct reg_substr_datum data[3];	/* Actual array */
-};
+/* Code in S_to_utf8_substr() and S_to_byte_substr() in regexec.c accesses
+   anchored* and float* via array indexes 0 and 1.  */
 
 #define anchored_substr substrs->data[0].substr
 #define anchored_utf8 substrs->data[0].utf8_substr
@@ -396,3 +418,13 @@ struct reg_substr_data {
 #define check_utf8 substrs->data[2].utf8_substr
 #define check_offset_min substrs->data[2].min_offset
 #define check_offset_max substrs->data[2].max_offset
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

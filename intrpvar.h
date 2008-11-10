@@ -1,3 +1,13 @@
+/*   intrpvar.h 
+ *
+ *    Copyright (C) 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005,
+ *    2006, 2007, 2008 by Larry Wall and others
+ *
+ *    You may distribute under the terms of either the GNU General Public
+ *    License or the Artistic License, as specified in the README file.
+ *
+ */
+
 /***********************************************/
 /* Global only to current interpreter instance */
 /***********************************************/
@@ -74,6 +84,8 @@ PERLVAR(Istatusvalue,	I32)		/* $? */
 PERLVAR(Iexit_flags,	U8)		/* was exit() unexpected, etc. */
 #ifdef VMS
 PERLVAR(Istatusvalue_vms,U32)
+#else
+PERLVAR(Istatusvalue_posix,I32)
 #endif
 
 /* shortcuts to various I/O objects */
@@ -171,6 +183,10 @@ PERLVAR(IArgv,		char **)	/* stuff to free from do_aexec, vfork safe */
 PERLVAR(ICmd,		char *)		/* stuff to free from do_aexec, vfork safe */
 PERLVARI(Igensym,	I32,	0)	/* next symbol for getsym() to define */
 PERLVAR(Ipreambled,	bool)
+/* Elements in this array have ';' appended and are injected as a single line
+   into the tokeniser. You can't put any (literal) newlines into any program
+   you stuff in into this array, as the point where it's injected is expecting
+   a single physical line. */
 PERLVAR(Ipreambleav,	AV *)
 PERLVARI(Ilaststatval,	int,	-1)
 PERLVARI(Ilaststype,	I32,	OP_STAT)
@@ -201,8 +217,8 @@ PERLVAR(Imodglobal,	HV *)		/* per-interp module data */
 
 /* these used to be in global before 5.004_68 */
 PERLVARI(Iprofiledata,	U32 *,	NULL)	/* table of ops, counts */
-PERLVARI(Irsfp,	PerlIO * VOL,	Nullfp) /* current source file pointer */
-PERLVARI(Irsfp_filters,	AV *,	Nullav)	/* keeps active source filters */
+PERLVARI(Irsfp,	PerlIO * VOL,	NULL)	/* current source file pointer */
+PERLVARI(Irsfp_filters,	AV *,	NULL)	/* keeps active source filters */
 
 PERLVAR(Icompiling,	COP)		/* compiling/done executing marker */
 
@@ -254,20 +270,21 @@ PERLVARI(Ish_path_compat,	const char *,	SH_PATH)/* full path of shell */
 
 PERLVAR(Isighandlerp,	Sighandler_t)
 
-PERLVAR(Ixiv_arenaroot,	XPV*)		/* list of allocated xiv areas */
-PERLVAR(Ixiv_root,	IV *)		/* free xiv list */
-PERLVAR(Ixnv_root,	NV *)		/* free xnv list */
+PERLVAR(Ixiv_arenaroot,	xiv_allocated*)	/* list of allocated xiv areas */
+PERLVAR(Ixiv_root,	xiv_allocated *)		/* free xiv list */
+PERLVAR(Ixnv_root,	xnv_allocated *)		/* free xnv list */
 PERLVAR(Ixrv_root,	XRV *)		/* free xrv list */
-PERLVAR(Ixpv_root,	XPV *)		/* free xpv list */
+PERLVAR(Ixpv_root,	xpv_allocated *)	/* free xpv list */
 PERLVAR(Ixpviv_root,	XPVIV *)	/* free xpviv list */
 PERLVAR(Ixpvnv_root,	XPVNV *)	/* free xpvnv list */
 PERLVAR(Ixpvcv_root,	XPVCV *)	/* free xpvcv list */
-PERLVAR(Ixpvav_root,	XPVAV *)	/* free xpvav list */
-PERLVAR(Ixpvhv_root,	XPVHV *)	/* free xpvhv list */
+PERLVAR(Ixpvav_root,	xpvav_allocated *)	/* free xpvav list */
+PERLVAR(Ixpvhv_root,	xpvhv_allocated *)	/* free xpvhv list */
 PERLVAR(Ixpvmg_root,	XPVMG *)	/* free xpvmg list */
 PERLVAR(Ixpvlv_root,	XPVLV *)	/* free xpvlv list */
 PERLVAR(Ixpvbm_root,	XPVBM *)	/* free xpvbm list */
 PERLVAR(Ihe_root,	HE *)		/* free he list */
+
 PERLVAR(Inice_chunk,	char *)		/* a nice chunk of memory to reuse */
 PERLVAR(Inice_chunk_size,	U32)	/* how nice the chunk of memory is */
 
@@ -296,7 +313,7 @@ PERLVAR(Isv_yes,	SV)
 
 #ifdef CSH
 PERLVARI(Icshname,	const char *,	CSH)
-PERLVARI(Icshlen,	I32,	0)
+PERLVARI(Icshlen,	I32,	(sizeof(CSH "") - 1))
 #endif
 
 PERLVAR(Ilex_state,	U32)		/* next token is determined */
@@ -451,10 +468,14 @@ PERLVAR(ISock,		struct IPerlSock*)
 PERLVAR(IProc,		struct IPerlProc*)
 #endif
 
-#if defined(USE_ITHREADS)
+#if defined(USE_THREADS)
 PERLVAR(Iptr_table,	PTR_TBL_t*)
+#else
+/* Can't make that variable appear here in the interpreter structure for 5.8.9,
+   as it would break binary compatibility.  */
 #endif
-PERLVARI(Ibeginav_save, AV*, Nullav)	/* save BEGIN{}s when compiling */
+
+PERLVARI(Ibeginav_save, AV*, NULL)	/* save BEGIN{}s when compiling */
 
 #ifdef USE_5005THREADS
 PERLVAR(Ifdpid_mutex,	perl_mutex)	/* mutex for fdpid array */
@@ -463,14 +484,14 @@ PERLVAR(Isv_lock_mutex,	perl_mutex)	/* mutex for SvLOCK macro */
 
 PERLVAR(Inullstash,	HV *)		/* illegal symbols end up here */
 
-PERLVAR(Ixnv_arenaroot,	XPV*)		/* list of allocated xnv areas */
+PERLVAR(Ixnv_arenaroot,	xnv_allocated*)	/* list of allocated xnv areas */
 PERLVAR(Ixrv_arenaroot,	XPV*)		/* list of allocated xrv areas */
-PERLVAR(Ixpv_arenaroot,	XPV*)		/* list of allocated xpv areas */
+PERLVAR(Ixpv_arenaroot,	xpv_allocated *)	/* list of allocated xpv areas */
 PERLVAR(Ixpviv_arenaroot,XPVIV*)	/* list of allocated xpviv areas */
 PERLVAR(Ixpvnv_arenaroot,XPVNV*)	/* list of allocated xpvnv areas */
 PERLVAR(Ixpvcv_arenaroot,XPVCV*)	/* list of allocated xpvcv areas */
-PERLVAR(Ixpvav_arenaroot,XPVAV*)	/* list of allocated xpvav areas */
-PERLVAR(Ixpvhv_arenaroot,XPVHV*)	/* list of allocated xpvhv areas */
+PERLVAR(Ixpvav_arenaroot,xpvav_allocated*)	/* list of allocated xpvav areas */
+PERLVAR(Ixpvhv_arenaroot,xpvhv_allocated*)	/* list of allocated xpvhv areas */
 PERLVAR(Ixpvmg_arenaroot,XPVMG*)	/* list of allocated xpvmg areas */
 PERLVAR(Ixpvlv_arenaroot,XPVLV*)	/* list of allocated xpvlv areas */
 PERLVAR(Ixpvbm_arenaroot,XPVBM*)	/* list of allocated xpvbm areas */
@@ -488,9 +509,12 @@ PERLVAR(Inumeric_radix_sv,	SV *)	/* The radix separator if not '.' */
 #endif
 
 #if defined(USE_ITHREADS)
-PERLVAR(Iregex_pad,     SV**)		/* All regex objects */
-PERLVAR(Iregex_padav,   AV*)		/* All regex objects */
-
+PERLVAR(Iregex_pad,     SV**)		/* Shortcut into the array of
+					   regex_padav */
+PERLVAR(Iregex_padav,   AV*)		/* All regex objects, indexed via the
+					   values in op_pmoffset of pmop.
+					   Entry 0 is an array of IVs listing
+					   the now-free slots in the array */
 #endif
 
 #ifdef USE_REENTRANT_API
@@ -508,7 +532,7 @@ PERLVARI(Iknown_layers, PerlIO_list_t *,NULL)
 PERLVARI(Idef_layerlist, PerlIO_list_t *,NULL)
 #endif
 
-PERLVARI(Iencoding,	SV*, Nullsv)		/* character encoding */
+PERLVARI(Iencoding,	SV*, NULL)		/* character encoding */
 
 PERLVAR(Idebug_pad,	struct perl_debug_pad)	/* always needed because of the re extension */
 
@@ -527,7 +551,7 @@ PERLVAR(Iutf8_idcont,	SV *)
 
 PERLVAR(Isort_RealCmp,  SVCOMPARE_t)
 
-PERLVARI(Icheckav_save, AV*, Nullav)	/* save CHECK{}s when compiling */
+PERLVARI(Icheckav_save, AV*, NULL)	/* save CHECK{}s when compiling */
 
 PERLVARI(Iclocktick, long, 0)	/* this many times() ticks in a second */
 
@@ -543,8 +567,15 @@ PERLVAR(Ireentrant_retint, int)	/* Integer return value from reentrant functions
 
 /* Hooks to shared SVs and locks. */
 PERLVARI(Isharehook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
-PERLVARI(Ilockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nolocking))
-PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nounlocking))
+PERLVARI(Ilockhook,	share_proc_t,	MEMBER_TO_FPTR(Perl_sv_nosharing))
+#ifdef NO_MATHOMS
+#  define PERL_UNLOCK_HOOK Perl_sv_nosharing
+#else
+/* This reference ensures that the mathoms are linked with perl */
+#  define PERL_UNLOCK_HOOK Perl_sv_nounlocking
+#endif
+PERLVARI(Iunlockhook,	share_proc_t,	MEMBER_TO_FPTR(PERL_UNLOCK_HOOK))
+
 PERLVARI(Ithreadhook,	thrhook_proc_t,	MEMBER_TO_FPTR(Perl_nothreadhook))
 
 /* Force inclusion of both runops options */
@@ -564,15 +595,27 @@ PERLVARI(Irehash_seed, UV, 0)		/* 582 hash initializer */
 
 PERLVARI(Irehash_seed_set, bool, FALSE)	/* 582 hash initialized? */
 
-/* These two variables are needed to preserve 5.8.x bincompat because we can't
-   change function prototypes of two exported functions.  Probably should be
-   taken out of blead soon, and relevant prototypes changed.  */
+/* These two variables aren't used any more, but need to be kept for bincompat.
+   The irony is that they were added to avoid changing the prototypes of static
+   functions, which actualy could have been changed quite safely without
+   breaking bincompat.  */
 PERLVARI(Ifdscript, int, -1)	/* fd for script */
 PERLVARI(Isuidscript, int, -1)	/* fd for suid script */
 
 #if defined(USE_ITHREADS)
 PERLVAR(Ipte_root,	struct ptr_tbl_ent *)	/* free ptr_tbl_ent list */
 PERLVAR(Ipte_arenaroot,	XPV*)		/* list of allocated pte areas */
+#endif
+
+#ifdef PERL_UTF8_CACHE_ASSERT
+PERLVARI(Iutf8cache, I8, -1)	/* Is the utf8 caching code enabled? */
+#else
+PERLVARI(Iutf8cache, I8, 1)	/* Is the utf8 caching code enabled? */
+#endif
+
+#ifdef PERL_TRACK_MEMPOOL
+/* For use with the memory debugging code in util.c  */
+PERLVAR(Imemory_debug_header, struct perl_memory_debug_header)
 #endif
 
 /* New variables must be added to the very end, before this comment,
@@ -585,4 +628,25 @@ PERLVAR(Ipte_arenaroot,	XPV*)		/* list of allocated pte areas */
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
 /* File descriptor to talk to the child which dumps scalars.  */
 PERLVARI(Idumper_fd, int, -1)
+#endif
+
+PERLVARA(Ibody_roots, PERL_ARENA_ROOTS_SIZE, void*) /* array of body roots */
+PERLVAR(Ibody_arenas, void*) /* pointer to list of body-arenas */
+
+/* Can shared object be destroyed */
+PERLVARI(Idestroyhook, destroyable_proc_t, MEMBER_TO_FPTR(Perl_sv_destroyable))
+
+/* The last unconditional member of the interpreter structure when 5.8.9 was
+   released. The offset of the end of this is baked into a global variable in 
+   any shared perl library which will allow a sanity test in future perl
+   releases.  */
+#define PERL_LAST_5_8_9_INTERP_MEMBER	Idestroyhook
+
+#if !defined(USE_THREADS)
+PERLVAR(Iptr_table,	PTR_TBL_t*)
+#endif
+
+#if defined(USE_ITHREADS)
+PERLVARI(Iregdupe,	regdupe_t, MEMBER_TO_FPTR(Perl_regdupe))
+					/* Pointer to REx dupe()er */
 #endif

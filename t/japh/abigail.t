@@ -16,7 +16,7 @@
 # is unfortunately not a trivial task.
 #
 # WARNING: these tests are obfuscated.  Do not get frustrated.
-# Ask Abigail <abigail@foad.org>, or use the Deparse or Concise
+# Ask Abigail <abigail@abigail.be>, or use the Deparse or Concise
 # modules (the former parses Perl to Perl, the latter shows the
 # op syntax tree) like this:
 # ./perl -Ilib -MO=Deparse foo.pl
@@ -419,8 +419,8 @@ SWITCHES
 -Mstrict='}); print "Just another Perl Hacker"; ({'
 -l
 SKIP: No longer works in 5.8.2 and beyond.
-MSWin32
-NetWare
+SKIP_OS: MSWin32
+SKIP_OS: NetWare
 
 #######  rand
 srand 123456;$-=rand$_--=>@[[$-,$_]=@[[$_,$-]for(reverse+1..(@[=split
@@ -656,6 +656,7 @@ eval {die ["Just another Perl Hacker\n"]}; print ${${@}}[$#{@{${@}}}]
 ####### die 5
 eval {die [[qq [Just another Perl Hacker]]]};; print
 ${${${@}}[$#{@{${@}}}]}[$#{${@{${@}}}[$#{@{${@}}}]}]
+SKIP: Abuses a fixed bug; what is in $#{...} must be an arrayref, not an array
 
 ####### Closure returning itself.
 $_ = "\nrekcaH lreP rehtona tsuJ"; my $chop; $chop = sub {print chop; $chop};

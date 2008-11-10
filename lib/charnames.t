@@ -15,7 +15,7 @@ require File::Spec;
 
 $| = 1;
 
-print "1..74\n";
+print "1..76\n";
 
 use charnames ':full';
 
@@ -61,7 +61,7 @@ else { # EBCDIC where UTF-EBCDIC may be used (this may be 1047 specific since
 }
 
 sub to_bytes {
-    pack"a*", shift;
+    unpack"U0a*", shift;
 }
 
 {
@@ -271,11 +271,8 @@ print "ok 46\n";
 
 # ---- Alias extensions
 
-my $tmpfile = "tmp0000";
 my $alifile = File::Spec->catfile(File::Spec->updir, qw(lib unicore xyzzy_alias.pl));
 my $i = 0;
-1 while -e ++$tmpfile;
-END { if ($tmpfile) { 1 while unlink $tmpfile; } }
 
 my @prgs;
 {   local $/ = undef;
@@ -286,6 +283,7 @@ my $i = 46;
 for (@prgs) {
     my ($code, $exp) = ((split m/\nEXPECT\n/), '$');
     my ($prog, $fil) = ((split m/\nFILE\n/, $code), "");
+    my $tmpfile = tempfile();
     open my $tmp, "> $tmpfile" or die "Could not open $tmpfile: $!";
     print $tmp $prog, "\n";
     close $tmp or die "Could not close $tmpfile: $!";
@@ -323,7 +321,6 @@ for (@prgs) {
         print "not ";
 	}
     print "ok ", ++$i, "\n";
-    1 while unlink $tmpfile;
     $fil or next;
     1 while unlink $alifile;
     }
@@ -333,6 +330,22 @@ $_ = 'foobar';
 eval "use charnames ':full';";
 print "not " unless $_ eq 'foobar';
 print "ok 74\n";
+
+# Unicode slowdown noted by Phil Pennock, traced to a bug fix in index
+# SADAHIRO Tomoyuki's suggestion is to ensure that the UTF-8ness of both
+# arguments are indentical before calling index.
+# To do this can take advantage of the fact that unicore/Name.pl is 7 bit
+# (or at least should be). So assert that that it's true here.
+
+my $names = do "unicore/Name.pl";
+print defined $names ? "ok 75\n" : "not ok 75\n";
+if (ord('A') == 65) { # as on ASCII or UTF-8 machines
+  my $non_ascii = $names =~ tr/\0-\177//c;
+  print $non_ascii ? "not ok 76 # $non_ascii\n" : "ok 76\n";
+} else {
+  print "ok 76\n";
+}
+
 
 __END__
 # unsupported pragma

@@ -3,10 +3,14 @@
 require 5.003;	# keep this compatible, an old perl is all we may have before
                 # we build the new one
 
+use strict;
+
 BEGIN {
     # Get function prototypes
     require 'regen_lib.pl';
 }
+
+my $SPLINT = 0; # Turn true for experimental splint support http://www.splint.org
 
 #
 # See database of global and static function prototypes in embed.fnc
@@ -19,7 +23,7 @@ sub do_not_edit ($)
 {
     my $file = shift;
 
-    my $years = '1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006';
+    my $years = '1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008';
 
     $years =~ s/1999,/1999,\n  / if length $years > 40;
 
@@ -124,26 +128,6 @@ sub munge_c_files () {
     } '/dev/null', '', '';
     local $^I = '.bak';
     while (<>) {
-#	if (/^#\s*include\s+"perl.h"/) {
-#	    my $file = uc $ARGV;
-#	    $file =~ s/\./_/g;
-#	    print "#define PERL_IN_$file\n";
-#	}
-#	s{^(\w+)\s*\(}
-#	 {
-#	    my $f = $1;
-#	    my $repl = "$f(";
-#	    if (exists $functions->{$f}) {
-#		my $flags = $functions->{$f}[0];
-#		$repl = "Perl_$repl" if $flags =~ /p/;
-#		unless ($flags =~ /n/) {
-#		    $repl .= "pTHX";
-#		    $repl .= "_ " if @{$functions->{$f}} > 3;
-#		}
-#		warn("$ARGV:$.:$repl\n");
-#	    }
-#	    $repl;
-#	 }e;
 	s{(\b(\w+)[ \t]*\([ \t]*(?!aTHX))}
 	 {
 	    my $repl = $1;
@@ -175,14 +159,26 @@ sub write_protos {
 	my ($flags,$retval,$func,@args) = @_;
 	my @nonnull;
 	my $has_context = ( $flags !~ /n/ );
-	$ret .= '/* ' if $flags =~ /m/;
+	my $never_returns = ( $flags =~ /r/ );
+	my $commented_out = ( $flags =~ /m/ );
+	my $is_malloc = ( $flags =~ /a/ );
+	my $can_ignore = ( $flags !~ /R/ ) && !$is_malloc;
+
+	my $splint_flags = "";
+	if ( $SPLINT && !$commented_out ) {
+	    $splint_flags .= '/*@noreturn@*/ ' if $never_returns;
+	    if ($can_ignore && ($retval ne 'void') && ($retval !~ /\*/)) {
+		$retval .= " /*\@alt void\@*/";
+	    }
+	}
+
 	if ($flags =~ /s/) {
-	    $retval = "STATIC $retval";
+	    $retval = "STATIC $splint_flags$retval";
 	    $func = "S_$func";
 	}
 	else {
-	    $retval = "PERL_CALLCONV $retval";
-	    if ($flags =~ /p/) {
+	    $retval = "PERL_CALLCONV $splint_flags$retval";
+	    if ($flags =~ /[bp]/) {
 		$func = "Perl_$func";
 	    }
 	}
@@ -202,10 +198,23 @@ sub write_protos {
 		# Given the bugs fixed by changes 25822 and 26253, for now
 		# strip NN with no effect, until I'm confident that there are
 		# no similar bugs lurking.
-		# push( @nonnull, $n ) if ( $arg =~ s/\s*\bNN\b\s+// );
-		$arg =~ s/\s*\bNN\b\s+//;
 
-		$arg =~ s/\s*\bNULLOK\b\s+//; # strip NULLOK with no effect
+		my $nn = ( $arg =~ s/\s*\bNN\b\s+// );
+		# push( @nonnull, $n ) if $nn;
+
+		my $nullok = ( $arg =~ s/\s*\bNULLOK\b\s+// ); # strip NULLOK with no effect
+
+		# Make sure each arg has at least a type and a var name.
+		# An arg of "int" is valid C, but want it to be "int foo".
+		my $temp_arg = $arg;
+		$temp_arg =~ s/\*//g;
+		$temp_arg =~ s/\s*\bstruct\b\s*/ /g;
+		if ( ($temp_arg ne "...") && ($temp_arg !~ /\w+\s+\w+/) ) {
+		    warn "$func: $arg doesn't have a name\n";
+		}
+		if ( $SPLINT && $nullok && !$commented_out ) {
+		    $arg = '/*@null@*/ ' . $arg;
+		}
 	    }
 	    $ret .= join ", ", @args;
 	}
@@ -217,21 +226,24 @@ sub write_protos {
 	if ( $flags =~ /r/ ) {
 	    push @attrs, "__attribute__noreturn__";
 	}
-	if ( $flags =~ /a/ ) {
+	if ( $is_malloc ) {
 	    push @attrs, "__attribute__malloc__";
-	    $flags .= "R"; # All allocing must check return value
 	}
-	if ( $flags =~ /R/ ) {
+	if ( !$can_ignore ) {
 	    push @attrs, "__attribute__warn_unused_result__";
 	}
 	if ( $flags =~ /P/ ) {
 	    push @attrs, "__attribute__pure__";
 	}
 	if( $flags =~ /f/ ) {
-	    my $prefix = $has_context ? 'pTHX_' : '';
-	    my $args = scalar @args;
-	    push @attrs, sprintf "__attribute__format__(__printf__,%s%d,%s%d)",
-				    $prefix, $args - 1, $prefix, $args;
+	    my $prefix	= $has_context ? 'pTHX_' : '';
+	    my $args	= scalar @args;
+ 	    my $pat	= $args - 1;
+	    my $macro	= @nonnull && $nonnull[-1] == $pat  
+				? '__attribute__format__'
+				: '__attribute__format__null_ok__';
+	    push @attrs, sprintf "%s(__printf__,%s%d,%s%d)", $macro,
+				$prefix, $pat, $prefix, $args;
 	}
 	if ( @nonnull ) {
 	    my @pos = map { $has_context ? "pTHX_$_" : $_ } @nonnull;
@@ -242,25 +254,32 @@ sub write_protos {
 	    $ret .= join( "\n", map { "\t\t\t$_" } @attrs );
 	}
 	$ret .= ";";
-	$ret .= ' */' if $flags =~ /m/;
+	$ret = "/* $ret */" if $commented_out;
 	$ret .= @attrs ? "\n\n" : "\n";
     }
     $ret;
 }
 
-# generates global.sym (API export list), and populates %global with global symbols
-sub write_global_sym {
-    my $ret = "";
-    if (@_ > 1) {
-	my ($flags,$retval,$func,@args) = @_;
-	if ($flags =~ /[AX]/ && $flags !~ /[xm]/
-	    || $flags =~ /b/) { # public API, so export
-	    $func = "Perl_$func" if $flags =~ /[pbX]/;
-	    $ret = "$func\n";
-	}
-    }
-    $ret;
+# generates global.sym (API export list)
+{
+  my %seen;
+  sub write_global_sym {
+      my $ret = "";
+      if (@_ > 1) {
+	  my ($flags,$retval,$func,@args) = @_;
+	  # If a function is defined twice, for example before and after an
+	  # #else, only process the flags on the first instance for global.sym
+	  return $ret if $seen{$func}++;
+	  if ($flags =~ /[AX]/ && $flags !~ /[xm]/
+	      || $flags =~ /b/) { # public API, so export
+	      $func = "Perl_$func" if $flags =~ /[pbX]/;
+	      $ret = "$func\n";
+	  }
+      }
+      $ret;
+  }
 }
+
 
 our $unflagged_pointers;
 walk_table(\&write_protos,     "proto.h", undef, "/* ex: set ro: */\n");
@@ -297,7 +316,7 @@ sub readsyms (\%$) {
 	s/[ \t]*#.*//;		# Delete comments.
 	if (/^\s*(\S+)\s*$/) {
 	    my $sym = $1;
-	    warn "duplicate symbol $sym while processing $file\n"
+	    warn "duplicate symbol $sym while processing $file line $.\n"
 		if exists $$syms{$sym};
 	    $$syms{$sym} = 1;
 	}
@@ -318,7 +337,7 @@ sub readvars(\%$$@) {
 	if (/PERLVARA?I?C?\($pre(\w+)/) {
 	    my $sym = $1;
 	    $sym = $pre . $sym if $keep_pre;
-	    warn "duplicate symbol $sym while processing $file\n"
+	    warn "duplicate symbol $sym while processing $file line $.\n"
 		if exists $$syms{$sym};
 	    $$syms{$sym} = $pre || 1;
 	}
@@ -328,6 +347,7 @@ sub readvars(\%$$@) {
 
 my %intrp;
 my %thread;
+my %globvar;
 
 readvars %intrp,  'intrpvar.h','I';
 readvars %thread, 'thrdvar.h','T';
@@ -546,7 +566,7 @@ print EM <<'END';
 
 #if !defined(PERL_CORE)
 #  define sv_setptrobj(rv,ptr,name)	sv_setref_iv(rv,name,PTR2IV(ptr))
-#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,Nullch,PTR2IV(ptr))
+#  define sv_setptrref(rv,ptr)		sv_setref_iv(rv,NULL,PTR2IV(ptr))
 #endif
 
 #if !defined(PERL_CORE) && !defined(PERL_NOCOMPAT)
@@ -899,9 +919,9 @@ START_EXTERN_C
 #undef PERLVARIC
 
 #define PERLVAR(v,t)	t* Perl_##v##_ptr(pTHX)				\
-			{ return &(aTHX->v); }
+			{ PERL_UNUSED_CONTEXT; return &(aTHX->v); }
 #define PERLVARA(v,n,t)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
-			{ return &(aTHX->v); }
+			{ PERL_UNUSED_CONTEXT; return &(aTHX->v); }
 
 #define PERLVARI(v,t,i)	PERLVAR(v,t)
 #define PERLVARIC(v,t,i) PERLVAR(v, const t)
@@ -912,12 +932,12 @@ START_EXTERN_C
 #undef PERLVAR
 #undef PERLVARA
 #define PERLVAR(v,t)	t* Perl_##v##_ptr(pTHX)				\
-			{ return &(PL_##v); }
+			{ PERL_UNUSED_CONTEXT; return &(PL_##v); }
 #define PERLVARA(v,n,t)	PL_##v##_t* Perl_##v##_ptr(pTHX)		\
-			{ return &(PL_##v); }
+			{ PERL_UNUSED_CONTEXT; return &(PL_##v); }
 #undef PERLVARIC
 #define PERLVARIC(v,t,i)	const t* Perl_##v##_ptr(pTHX)		\
-			{ return (const t *)&(PL_##v); }
+			{ PERL_UNUSED_CONTEXT; return (const t *)&(PL_##v); }
 #include "perlvars.h"
 
 #undef PERLVAR

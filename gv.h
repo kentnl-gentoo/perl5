@@ -1,7 +1,7 @@
 /*    gv.h
  *
- *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    Copyright (C) 1991, 1992, 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000,
+ *    2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -31,6 +31,13 @@ struct gp {
 #define GvSTASH(gv)	(GvXPVGV(gv)->xgv_stash)
 #define GvFLAGS(gv)	(GvXPVGV(gv)->xgv_flags)
 
+#define GvNAME_get(gv)		(0 + GvXPVGV(gv)->xgv_name)
+#define GvNAMELEN_get(gv)	(0 + GvXPVGV(gv)->xgv_namelen)
+#define	GvASSIGN_GENERATION(gv)		(0 + ((XPV*) SvANY(gv))->xpv_cur)
+#define	GvASSIGN_GENERATION_set(gv,val)			\
+	STMT_START { assert(SvTYPE(gv) == SVt_PVGV);	\
+		(((XPV*) SvANY(gv))->xpv_cur = (val)); } STMT_END
+
 /*
 =head1 GV Functions
 
@@ -51,7 +58,7 @@ Return the SV from the GV.
 #endif
 
 #define GvREFCNT(gv)	(GvGP(gv)->gp_refcnt)
-#define GvIO(gv)	((gv) && SvTYPE((SV*)gv) == SVt_PVGV && GvGP(gv) ? GvIOp(gv) : 0)
+#define GvIO(gv)	((gv) && SvTYPE((SV*)gv) == SVt_PVGV && GvGP(gv) ? GvIOp(gv) : NULL)
 #define GvIOp(gv)	(GvGP(gv)->gp_io)
 #define GvIOn(gv)	(GvIO(gv) ? GvIOp(gv) : GvIOp(gv_IOadd(gv)))
 
@@ -156,11 +163,28 @@ Return the SV from the GV.
 /*
  * symbol creation flags, for use in gv_fetchpv() and get_*v()
  */
-#define GV_ADD		0x01	/* add, if symbol not already there */
+#define GV_ADD		0x01	/* add, if symbol not already there
+				   For gv_name_set, adding a HEK for the first
+				   time, so don't try to free what's there.  */
 #define GV_ADDMULTI	0x02	/* add, pretending it has been added already */
 #define GV_ADDWARN	0x04	/* add, but warn if symbol wasn't already there */
 #define GV_ADDINEVAL	0x08	/* add, as though we're doing so within an eval */
 #define GV_NOINIT	0x10	/* add, but don't init symbol, if type != PVGV */
+/* This is used by toke.c to avoid turing placeholder constants in the symbol
+   table into full PVGVs with attached constant subroutines.  */
+#define GV_NOADD_NOINIT	0x20	/* Don't add the symbol if it's not there.
+				   Don't init it if it is there but ! PVGV */
+#define GV_NOEXPAND	0x40	/* Don't expand SvOK() entries to PVGV */
+#define GV_NOTQUAL	0x80	/* A plain symbol name, not qualified with a
+				   package (so skip checks for :: and ')  */
+
+/*      SVf_UTF8 (more accurately the return value from SvUTF8) is also valid
+	as a flag to gv_fetch_pvn_flags, so ensure it lies outside this range.
+*/
+
+#define GV_NOADD_MASK	(SVf_UTF8|GV_NOADD_NOINIT|GV_NOEXPAND|GV_NOTQUAL)
+/* The bit flags that don't cause gv_fetchpv() to add a symbol if not found */
 
 #define gv_fullname3(sv,gv,prefix) gv_fullname4(sv,gv,prefix,TRUE)
 #define gv_efullname3(sv,gv,prefix) gv_efullname4(sv,gv,prefix,TRUE)
+#define gv_fetchmethod(stash, name) gv_fetchmethod_autoload(stash, name, TRUE)

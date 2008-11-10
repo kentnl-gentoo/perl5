@@ -379,9 +379,6 @@
 #    ifndef UVxf
 #      define UVxf			"lx"
 #    endif
-#    ifndef Nullch
-#      define Nullch			NULL
-#    endif
 #    ifndef MEM_ALIGNBYTES
 #      define MEM_ALIGNBYTES		4
 #    endif
@@ -973,7 +970,7 @@ static const char bucket_of[] =
 
 static void	morecore	(register int bucket);
 #  if defined(DEBUGGING)
-static void	botch		(char *diag, char *s, char *file, int line);
+static void	botch		(const char *diag, const char *s, const char *file, int line);
 #  endif
 static void	add_to_chain	(void *p, MEM_SIZE size, MEM_SIZE chip);
 static void*	get_from_chain	(MEM_SIZE size);
@@ -1156,11 +1153,11 @@ perl_get_emergency_buffer(IV *size)
     dTHX;
     /* First offense, give a possibility to recover by dieing. */
     /* No malloc involved here: */
-    GV **gvp = (GV**)hv_fetch(PL_defstash, "^M", 2, 0);
     SV *sv;
     char *pv;
+    GV **gvp = (GV**)hv_fetchs(PL_defstash, "^M", FALSE);
 
-    if (!gvp) gvp = (GV**)hv_fetch(PL_defstash, "\015", 1, 0);
+    if (!gvp) gvp = (GV**)hv_fetchs(PL_defstash, "\015", FALSE);
     if (!gvp || !(sv = GvSV(*gvp)) || !SvPOK(sv) 
         || (SvLEN(sv) < (1<<LOG_OF_MIN_ARENA) - M_OVERHEAD))
         return NULL;		/* Now die die die... */
@@ -1173,7 +1170,7 @@ perl_get_emergency_buffer(IV *size)
     }
 
     SvPOK_off(sv);
-    SvPV_set(sv, Nullch);
+    SvPV_set(sv, NULL);
     SvCUR_set(sv, 0);
     SvLEN_set(sv, 0);
     *size = malloced_size(pv) + M_OVERHEAD;
@@ -1249,7 +1246,7 @@ emergency_sbrk(MEM_SIZE size)
 	if (emergency_buffer_size) {
 	    add_to_chain(emergency_buffer, emergency_buffer_size, 0);
 	    emergency_buffer_size = 0;
-	    emergency_buffer = Nullch;
+	    emergency_buffer = NULL;
 	    have = 1;
 	}
 
@@ -1276,7 +1273,7 @@ emergency_sbrk(MEM_SIZE size)
     MALLOC_UNLOCK;
     emergency_sbrk_croak("Out of memory during request for %"UVuf" bytes, total sbrk() is %"UVuf" bytes", (UV)size, (UV)(goodsbrk + sbrk_slack));
     /* NOTREACHED */
-    return Nullch;
+    return NULL;
 }
 
 #else /*  !defined(PERL_EMERGENCY_SBRK) */
@@ -1284,21 +1281,22 @@ emergency_sbrk(MEM_SIZE size)
 #endif	/* defined PERL_EMERGENCY_SBRK */
 
 static void
-write2(char *mess)
+write2(const char *mess)
 {
   write(2, mess, strlen(mess));
 }
 
 #ifdef DEBUGGING
 #undef ASSERT
-#define	ASSERT(p,diag)   if (!(p)) botch(diag,STRINGIFY(p),__FILE__,__LINE__);  else
+#define	ASSERT(p,diag)   if (!(p)) botch(diag,STRINGIFY(p),__FILE__,__LINE__);
+
 static void
-botch(char *diag, char *s, char *file, int line)
+botch(const char *diag, const char *s, const char *file, int line)
 {
+    dTHX;
     if (!(PERL_MAYBE_ALIVE && PERL_GET_THX))
 	goto do_write;
     else {
-	dTHX;
 	if (PerlIO_printf(PerlIO_stderr(),
 			  "assertion botched (%s?): %s %s:%d\n",
 			  diag, s, file, line) != 0) {
@@ -1997,11 +1995,11 @@ morecore(register int bucket)
 }
 
 Free_t
-Perl_mfree(void *mp)
+Perl_mfree(Malloc_t where)
 {
   	register MEM_SIZE size;
 	register union overhead *ovp;
-	char *cp = (char*)mp;
+	char *cp = (char*)where;
 #ifdef PACK_MALLOC
 	u_char bucket;
 #endif 
@@ -2141,7 +2139,7 @@ Perl_realloc(void *mp, size_t nbytes)
 		    bad_free_warn = (pbf) ? atoi(pbf) : 1;
 		}
 		if (!bad_free_warn)
-		    return Nullch;
+		    return NULL;
 #ifdef RCHECK
 #ifdef PERL_CORE
 		{
@@ -2169,7 +2167,7 @@ Perl_realloc(void *mp, size_t nbytes)
 		warn("%s", "Bad realloc() ignored");
 #endif
 #endif
-		return Nullch;			/* sanity */
+		return NULL;			/* sanity */
 	    }
 
 	onb = BUCKET_SIZE_REAL(bucket);
@@ -2278,6 +2276,8 @@ Perl_realloc(void *mp, size_t nbytes)
 		nmalloc[bucket]--;
 		nmalloc[pow * BUCKETS_PER_POW2]++;
 #endif 	    
+		if (pow * BUCKETS_PER_POW2 > (MEM_SIZE)max_bucket)
+		    max_bucket = pow * BUCKETS_PER_POW2;
 		*(cp - M_OVERHEAD) = pow * BUCKETS_PER_POW2; /* Fill index. */
 		MALLOC_UNLOCK;
 		goto inplace_label;
@@ -2318,7 +2318,7 @@ Perl_strdup(const char *s)
     MEM_SIZE l = strlen(s);
     char *s1 = (char *)Perl_malloc(l+1);
 
-    return CopyD(s, s1, (MEM_SIZE)(l+1), char);
+    return (char *)CopyD(s, s1, (MEM_SIZE)(l+1), char);
 }
 
 #ifdef PERL_CORE
@@ -2341,7 +2341,7 @@ Perl_putenv(char *a)
   if (l < sizeof(buf))
       var = buf;
   else
-      var = Perl_malloc(l + 1);
+      var = (char *)Perl_malloc(l + 1);
   Copy(a, var, l, char);
   var[l + 1] = 0;
   my_setenv(var, val+1);

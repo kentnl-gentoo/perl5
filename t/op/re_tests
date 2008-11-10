@@ -1,3 +1,6 @@
+# This stops me getting screenfulls of syntax errors every time I accidentally
+# run this file via a shell glob
+__END__
 abc	abc	y	$&	abc
 abc	abc	y	$-[0]	0
 abc	abc	y	$+[0]	3
@@ -70,12 +73,17 @@ a.*c	axyzc	y	$&	axyzc
 a.*c	axyzd	n	-	-
 a[bc]d	abc	n	-	-
 a[bc]d	abd	y	$&	abd
+a[b]d	abd	y	$&	abd
+[a][b][d]	abd	y	$&	abd
+.[b].	abd	y	$&	abd
+.[b].	aBd	n	-	-
+(?i:.[b].)	abd	y	$&	abd
 a[b-d]e	abd	n	-	-
 a[b-d]e	ace	y	$&	ace
 a[b-d]	aac	y	$&	ac
 a[-b]	a-	y	$&	a-
 a[b-]	a-	y	$&	a-
-a[b-a]	-	c	-	Invalid [] range "b-a"
+a[b-a]	-	c	-	Invalid [] range \"b-a\"
 a[]b	-	c	-	Unmatched [
 a[	-	c	-	Unmatched [
 a]	a]	y	$&	a]
@@ -139,7 +147,7 @@ a\	-	c	-	Search pattern not terminated
 a\(b	a(b	y	$&-$1	a(b-
 a\(*b	ab	y	$&	ab
 a\(*b	a((b	y	$&	a((b
-a\\b	a\b	y	$&	a\b
+a\\b	a\\b	y	$&	a\\b
 abc)	-	c	-	Unmatched )
 (abc	-	c	-	Unmatched (
 ((a))	abc	y	$&-$1-$2	a-a-a
@@ -240,8 +248,8 @@ multiple words	multiple words, yeah	y	$&	multiple words
 (.*)c(.*)	abcde	y	$&-$1-$2	abcde-ab-de
 \((.*), (.*)\)	(a, b)	y	($2, $1)	(b, a)
 [k]	ab	n	-	-
-abcd	abcd	y	$&-\$&-\\$&	abcd-$&-\abcd
-a(bc)d	abcd	y	$1-\$1-\\$1	bc-$1-\bc
+abcd	abcd	y	$&-\$&-\\$&	abcd-\$&-\\abcd
+a(bc)d	abcd	y	$1-\$1-\\$1	bc-\$1-\\bc
 a[-]?c	ac	y	$&	ac
 (abc)\1	abcabc	y	$1	abc
 ([a-c]*)\1	abcabc	y	$1	abc
@@ -305,7 +313,7 @@ a[-]?c	ac	y	$&	ac
 'a[b-d]'i	AAC	y	$&	AC
 'a[-b]'i	A-	y	$&	A-
 'a[b-]'i	A-	y	$&	A-
-'a[b-a]'i	-	c	-	Invalid [] range "b-a"
+'a[b-a]'i	-	c	-	Invalid [] range \"b-a\"
 'a[]b'i	-	c	-	Unmatched [
 'a['i	-	c	-	Unmatched [
 'a]'i	A]	y	$&	A]
@@ -326,7 +334,7 @@ a[-]?c	ac	y	$&	ac
 'a\(b'i	A(B	y	$&-$1	A(B-
 'a\(*b'i	AB	y	$&	AB
 'a\(*b'i	A((B	y	$&	A((B
-'a\\b'i	A\B	y	$&	A\B
+'a\\b'i	A\\B	y	$&	A\\B
 'abc)'i	-	c	-	Unmatched )
 '(abc'i	-	c	-	Unmatched (
 '((a))'i	ABC	y	$&-$1-$2	A-A-A
@@ -388,8 +396,8 @@ a[-]?c	ac	y	$&	ac
 '(.*)c(.*)'i	ABCDE	y	$&-$1-$2	ABCDE-AB-DE
 '\((.*), (.*)\)'i	(A, B)	y	($2, $1)	(B, A)
 '[k]'i	AB	n	-	-
-'abcd'i	ABCD	y	$&-\$&-\\$&	ABCD-$&-\ABCD
-'a(bc)d'i	ABCD	y	$1-\$1-\\$1	BC-$1-\BC
+'abcd'i	ABCD	y	$&-\$&-\\$&	ABCD-\$&-\\ABCD
+'a(bc)d'i	ABCD	y	$1-\$1-\\$1	BC-\$1-\\BC
 'a[-]?c'i	AC	y	$&	AC
 '(abc)\1'i	ABCABC	y	$1	ABC
 '([a-c]*)\1'i	ABCABC	y	$1	ABC
@@ -490,7 +498,7 @@ a(?{}})b	-	c	-
 a(?{"{"})b	-	c	-	Sequence (?{...}) not terminated or not {}-balanced
 a(?{"\{"})b	cabd	y	$&	ab
 a(?{"{"}})b	-	c	-	Unmatched right curly bracket
-a(?{$bl="\{"}).b	caxbd	y	$bl	{
+a(?{$::bl="\{"}).b	caxbd	y	$::bl	{
 x(~~)*(?:(?:F)?)?	x~~	y	-	-
 ^a(?#xxx){3}c	aaac	y	$&	aaac
 '^a (?#xxx) (?#yyy) {3}c'x	aaac	y	$&	aaac
@@ -953,9 +961,71 @@ x(?#	x	c	-	Sequence (?#... not terminated
 (foo|fool|x.|money|parted)$	fools	n	-	-
 (x.|foo|fool|x.|money|parted|y.)$	fools	n	-	-
 (foo|fool|money|parted)$	fools	n	-	-
-(a|aa|aaa|aaaa|aaaaa|aaaaaa)(b|c)	aaaaaaaaaaaaaaab	y	$1$2	aaaaaab
-(a|aa|aaa|aaaa|aaaaa|aaaaaa)(??{$1&&""})(b|c)	aaaaaaaaaaaaaaab	y	$1$2	aaaaaab
+(a|aa|aaa||aaaa|aaaaa|aaaaaa)(b|c)	aaaaaaaaaaaaaaab	y	$1$2	aaaaaab
+(a|aa|aaa||aaaa|aaaaa|aaaaaa)(??{$1&&""})(b|c)	aaaaaaaaaaaaaaab	y	$1$2	aaaaaab
 (a|aa|aaa|aaaa|aaaaa|aaaaaa)(??{$1&&"foo"})(b|c)	aaaaaaaaaaaaaaab	n	-	-
 ^(a*?)(?!(aa|aaaa)*$)	aaaaaaaaaaaaaaaaaaaa	y	$1	a	# [perl #34195]
 ^(a*?)(?!(aa|aaaa)*$)(?=a\z)	aaaaaaaa	y	$1	aaaaaaa
 ^(.)\s+.$(?(1))	A B	y	$1	A	# [perl #37688]
+(?:r?)*?r|(.{2,4})	abcde	y	$1	abcd
+(?!)+?|(.{2,4})	abcde	y	$1	abcd
+^(a*?)(?!(a{6}|a{5})*$)	aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa	y	$+[1]	12	# super-linear cache bug may return 18
+^((?>(?:aa)?b)?)	aab	y	$1	aab
+^((?:aa)*)(?:X+((?:\d+|-)(?:X+(.+))?))?$	aaaaX5	y	$1	aaaa
+X(A|B||C|D)Y	XXXYYY	y	$&	XY	# Trie w/ NOTHING
+(?i:X([A]|[B]|y[Y]y|[D]|)Y)	XXXYYYB	y	$&	XY	# Trie w/ NOTHING
+^([a]{1})*$	aa	y	$1	a
+a(?!b(?!c))(..)	abababc	y	$1	bc	# test nested negatives
+a(?!b(?=a))(..)	abababc	y	$1	bc	# test nested lookaheads
+a(?!b(?!c(?!d(?!e))))...(.)	abxabcdxabcde	y	$1	e
+X(?!b+(?!(c+)*(?!(c+)*d))).*X	aXbbbbbbbcccccccccccccaaaX	y	-	-
+^(XXXXXXXXXX|YYYYYYYYYY|Z.Q*X|Z[TE]Q*P):	ZEQQQQQQQQQQQQQQQQQQP:	y	$1	ZEQQQQQQQQQQQQQQQQQQP
+^(XXXXXXXXXX|YYYYYYYYYY|Z.Q*X|Z[TE]Q*P):	ZEQQQX:	y	$1	ZEQQQX
+^([TUV]+|XXXXXXXXXX|YYYYYYYYYY|Z.Q*X|Z[TE]Q*P):	ZEQQQQQQQQQQQQQQQQQQP:	y	$1	ZEQQQQQQQQQQQQQQQQQQP
+^([TUV]+|XXXXXXXXXX|YYYYYYYYYY|Z.Q*X|Z[TE]Q*P):	ZEQQQX:	y	$1	ZEQQQX
+^([TUV]+|XXXXXXXXXX|YYYYYYYYYY|Z.Q*X|Z[TE]Q*P|[MKJ]):	ZEQQQQQQQQQQQQQQQQQQP:	y	$1	ZEQQQQQQQQQQQQQQQQQQP
+^([TUV]+|XXXXXXXXXX|YYYYYYYYYY|Z.Q*X|Z[TE]Q*P|[MKJ]):	ZEQQQX:	y	$1	ZEQQQX
+^(XXX|YYY|Z.Q*X|Z[TE]Q*P):	ZEQQQQQQQQQQQQQQQQQQP:	y	$1	ZEQQQQQQQQQQQQQQQQQQP
+^(XXX|YYY|Z.Q*X|Z[TE]Q*P):	ZEQQQX:	y	$1	ZEQQQX
+^([TUV]+|XXX|YYY|Z.Q*X|Z[TE]Q*P):	ZEQQQQQQQQQQQQQQQQQQP:	y	$1	ZEQQQQQQQQQQQQQQQQQQP
+^([TUV]+|XXX|YYY|Z.Q*X|Z[TE]Q*P):	ZEQQQX:	y	$1	ZEQQQX
+^([TUV]+|XXX|YYY|Z.Q*X|Z[TE]Q*P|[MKJ]):	ZEQQQQQQQQQQQQQQQQQQP:	y	$1	ZEQQQQQQQQQQQQQQQQQQP
+^([TUV]+|XXX|YYY|Z.Q*X|Z[TE]Q*P|[MKJ]):	ZEQQQX:	y	$1	ZEQQQX
+X(?:ABCF[cC]x*|ABCD|ABCF):(?:DIT|DID|DIM)	XABCFCxxxxxxxxxx:DIM	y	$&	XABCFCxxxxxxxxxx:DIM
+(((ABCD|ABCE|ABCF)))(A|B|C[xy]*):	ABCFCxxxxxxxxxx:DIM	y	$&	ABCFCxxxxxxxxxx:
+\x{100}?(??{""})xxx	xxx	y	$&	xxx
+(foo[1x]|bar[2x]|baz[3x])+y	foo1bar2baz3y	y	$1	baz3
+(foo[1x]|bar[2x]|baz[3x])+y	foo1bar2baz3y	y	$&	foo1bar2baz3y
+(foo[1x]|bar[2x]|baz[3x])*y	foo1bar2baz3y	y	$1	baz3
+(foo[1x]|bar[2x]|baz[3x])*y	foo1bar2baz3y	y	$&	foo1bar2baz3y
+
+([yX].|WORDS|[yX].|WORD)S	WORDS	y	$1	WORD
+(WORDS|WORLD|WORD)S	WORDS	y	$1	WORD
+([yX].|WORDS|WORD|[xY].)S	WORDS	y	$1	WORD
+(foo|fool|[zx].|money|parted)$	fool	y	$1	fool
+([zx].|foo|fool|[zq].|money|parted|[yx].)$	fool	y	$1	fool
+(foo|fool|[zx].|money|parted)$	fools	n	-	-
+([zx].|foo|fool|[qx].|money|parted|[py].)$	fools	n	-	-
+
+([yX].|WORDS|[yX].|WORD)+S	WORDS	y	$1	WORD
+(WORDS|WORLD|WORD)+S	WORDS	y	$1	WORD
+([yX].|WORDS|WORD|[xY].)+S	WORDS	y	$1	WORD
+(foo|fool|[zx].|money|parted)+$	fool	y	$1	fool
+([zx].|foo|fool|[zq].|money|parted|[yx].)+$	fool	y	$1	fool
+(foo|fool|[zx].|money|parted)+$	fools	n	-	-
+([zx].|foo|fool|[qx].|money|parted|[py].)+$	fools	n	-	-
+
+(x|y|z[QW])+(longish|loquatious|excessive|overblown[QW])+	xyzQzWlongishoverblownW	y	$1-$2	zW-overblownW
+(x|y|z[QW])*(longish|loquatious|excessive|overblown[QW])*	xyzQzWlongishoverblownW	y	$1-$2	zW-overblownW
+(x|y|z[QW]){1,5}(longish|loquatious|excessive|overblown[QW]){1,5}	xyzQzWlongishoverblownW	y	$1-$2	zW-overblownW
+
+a*(?!)	aaaab	n	-	-
+
+.*\z	foo\n	y	-	-
+^(?:(\d)x)?\d$	1	y	${\(defined($1)?1:0)}	0	
+
+# Two regressions in 5.8.x (only) introduced by change 30638
+# Simplification of the test failure in XML::LibXML::Simple:
+/^\s*i.*?o\s*$/s	io\n io	y	-	-
+# As reported in #59168 by Father Chrysostomos:
+/(.*?)a(?!(a+)b\2c)/	baaabaac	y	$&-$1	baa-ba

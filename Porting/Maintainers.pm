@@ -7,15 +7,19 @@ package Maintainers;
 use strict;
 
 use lib "Porting";
+# Please don't use post 5.008 features as this module is used by
+# Porting/makemeta, and that in turn has to be run by the perl just built.
+use 5.008;
 
 require "Maintainers.pl";
 use vars qw(%Modules %Maintainers);
 
-use vars qw(@ISA @EXPORT_OK);
+use vars qw(@ISA @EXPORT_OK $VERSION);
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(%Modules %Maintainers
 		get_module_files get_module_pat
 		show_results process_options);
+$VERSION = 0.02;
 require Exporter;
 
 use File::Find;
@@ -67,11 +71,14 @@ sub get_maintainer_modules {
 
 sub usage {
     print <<__EOF__;
-$0: Usage: $0 [[--maintainer M --module M --files --check]|file ...]
+$0: Usage: $0 [[--maintainer M --module M --files]|[--check] file ...]
 --maintainer M	list all maintainers matching M
 --module M	list all modules matching M
 --files		list all files
 --check		check consistency of Maintainers.pl
+			with a file	checks if it has a maintainer
+			with a dir	checks all files have a maintainer
+			otherwise	checks for multiple maintainers
 --opened	list all modules of files opened by perforce
 Matching is case-ignoring regexp, author matching is both by
 the short id and by the full name and email.  A "module" may
@@ -101,9 +108,12 @@ sub process_options {
     my @Files;
    
     if ($Opened) {
-	my @raw = `p4 opened`;
+	@Files = `p4 opened`;
 	die if $?;
-	@Files =  map {s!#.*!!s; s!^//depot/.*?/perl/!!; $_} @raw;
+	foreach (@Files) {
+	    s!#.*!!s;
+	    s!^//depot/(?:perl|.*?/perl)/!!;
+	}
     } else {
 	@Files = @ARGV;
     }
@@ -159,6 +169,13 @@ sub show_results {
 		    printf "%-15s $Modules{$m}{MAINTAINER}\n", $m;
 		}
 	    }
+	}
+    } elsif ($Check) {
+        if( @Files ) {
+	    missing_maintainers( qr{\.(?:[chty]|p[lm]|xs)\z}msx, @Files)
+	}
+	else { 
+	    duplicated_maintainers();
 	}
     } elsif (@Files) {
 	my %ModuleByFile;
@@ -233,26 +250,45 @@ sub show_results {
 	    }
 	}
     }
-    elsif ($Check) {
-	duplicated_maintainers();
-    }
     else {
 	usage();
     }
 }
 
-sub duplicated_maintainers {
-    my %files;
+my %files;
+
+sub maintainers_files {
+    %files = ();
     for my $k (keys %Modules) {
 	for my $f (get_module_files($k)) {
 	    ++$files{$f};
 	}
     }
+}
+
+sub duplicated_maintainers {
+    maintainers_files();
     for my $f (keys %files) {
 	if ($files{$f} > 1) {
 	    warn "File $f appears $files{$f} times in Maintainers.pl\n";
 	}
     }
+}
+
+sub warn_maintainer {
+    my $name = shift;
+    warn "File $name has no maintainer\n" if not $files{$name};
+}
+
+sub missing_maintainers {
+    my($check, @path) = @_;
+    maintainers_files();
+    my @dir;
+    for my $d (@path) {
+	if( -d $d ) { push @dir, $d } else { warn_maintainer($d) }
+    }
+    find sub { warn_maintainer($File::Find::name) if /$check/; }, @dir
+	if @dir;
 }
 
 1;

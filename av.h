@@ -1,7 +1,7 @@
 /*    av.h
  *
- *    Copyright (C) 1991, 1992, 1993, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, by Larry Wall and others
+ *    Copyright (C) 1991, 1992, 1993, 1995, 1996, 1997, 1998, 1999, 2000,
+ *    2001, 2002, 2006, 2007, 2008, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -21,6 +21,8 @@ struct xpvav {
     SV*		xav_arylen;
     U8		xav_flags;
 };
+
+typedef struct xpvav xpvav_allocated;
 
 
 /* AVf_REAL is set for all AVs whose xav_array contents are refcounted.

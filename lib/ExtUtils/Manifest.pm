@@ -13,11 +13,12 @@ use vars qw($VERSION @ISA @EXPORT_OK
           $Is_MacOS $Is_VMS 
           $Debug $Verbose $Quiet $MANIFEST $DEFAULT_MSKIP);
 
-$VERSION = '1.46';
+$VERSION = '1.55';
 @ISA=('Exporter');
 @EXPORT_OK = qw(mkmanifest
                 manicheck  filecheck  fullcheck  skipcheck
                 manifind   maniread   manicopy   maniadd
+                maniskip
                );
 
 $Is_MacOS = $^O eq 'MacOS';
@@ -71,16 +72,14 @@ exported on request
     mkmanifest();
 
 Writes all files in and below the current directory to your F<MANIFEST>.
-It works similar to
+It works similar to the result of the Unix command
 
     find . > MANIFEST
 
 All files that match any regular expression in a file F<MANIFEST.SKIP>
 (if it exists) are ignored.
 
-Any existing F<MANIFEST> file will be saved as F<MANIFEST.bak>.  Lines
-from the old F<MANIFEST> file is preserved, including any comments
-that are found in the existing F<MANIFEST> file in the new one.
+Any existing F<MANIFEST> file will be saved as F<MANIFEST.bak>.
 
 =cut
 
@@ -93,9 +92,11 @@ sub mkmanifest {
     my $read = (-r 'MANIFEST' && maniread()) or $manimiss++;
     $read = {} if $manimiss;
     local *M;
-    rename $MANIFEST, "$MANIFEST.bak" unless $manimiss;
-    open M, ">$MANIFEST" or die "Could not open $MANIFEST: $!";
-    my $skip = _maniskip();
+    my $bakbase = $MANIFEST;
+    $bakbase =~ s/\./_/g if $Is_VMS; # avoid double dots
+    rename $MANIFEST, "$bakbase.bak" unless $manimiss;
+    open M, "> $MANIFEST" or die "Could not open $MANIFEST: $!";
+    my $skip = maniskip();
     my $found = manifind();
     my($key,$val,$file,%all);
     %all = (%$found, %$read);
@@ -112,11 +113,14 @@ sub mkmanifest {
 	    warn "Added to $MANIFEST: $file\n" unless exists $read->{$file};
 	}
 	my $text = $all{$file};
-	($file,$text) = split(/\s+/,$text,2) if $Is_VMS && $text;
 	$file = _unmacify($file);
 	my $tabs = (5 - (length($file)+1)/8);
 	$tabs = 1 if $tabs < 1;
 	$tabs = 0 unless $text;
+        if ($file =~ /\s/) {
+            $file =~ s/([\\'])/\\$1/g;
+            $file = "'$file'";
+        }
 	print M $file, "\t" x $tabs, $text, "\n";
     }
     close M;
@@ -230,7 +234,7 @@ file.
 sub skipcheck {
     my($p) = @_;
     my $found = manifind();
-    my $matches = _maniskip();
+    my $matches = maniskip();
 
     my @skipped = ();
     foreach my $file (_sort keys %$found){
@@ -273,7 +277,7 @@ sub _check_manifest {
     my($p) = @_;
     my $read = maniread() || {};
     my $found = manifind($p);
-    my $skip  = _maniskip();
+    my $skip  = maniskip();
 
     my @missentry = ();
     foreach my $file (_sort keys %$found){
@@ -307,8 +311,8 @@ sub maniread {
     $mfile ||= $MANIFEST;
     my $read = {};
     local *M;
-    unless (open M, $mfile){
-        warn "$mfile: $!";
+    unless (open M, "< $mfile"){
+        warn "Problem opening $mfile: $!";
         return $read;
     }
     local $_;
@@ -316,7 +320,16 @@ sub maniread {
         chomp;
         next if /^\s*#/;
 
-        my($file, $comment) = /^(\S+)\s*(.*)/;
+        my($file, $comment);
+
+        # filename may contain spaces if enclosed in ''
+        # (in which case, \\ and \' are escapes)
+        if (($file, $comment) = /^'(\\[\\']|.+)+'\s*(.*)/) {
+            $file =~ s/\\([\\'])/$1/g;
+        }
+        else {
+            ($file, $comment) = /^(\S+)\s*(.*)/;
+        }
         next unless $file;
 
         if ($Is_MacOS) {
@@ -342,19 +355,38 @@ sub maniread {
     $read;
 }
 
+=item maniskip
+
+    my $skipchk = maniskip();
+    my $skipchk = maniskip($manifest_skip_file);
+
+    if ($skipchk->($file)) { .. }
+
+reads a named C<MANIFEST.SKIP> file (defaults to C<MANIFEST.SKIP> in
+the current directory) and returns a CODE reference that tests whether
+a given filename should be skipped.
+
+=cut
+
 # returns an anonymous sub that decides if an argument matches
-sub _maniskip {
+sub maniskip {
     my @skip ;
-    my $mfile = "$MANIFEST.SKIP";
-    local(*M,$_);
-    open M, $mfile or open M, $DEFAULT_MSKIP or return sub {0};
+    my $mfile = shift || "$MANIFEST.SKIP";
+    _check_mskip_directives($mfile) if -f $mfile;
+    local(*M, $_);
+    open M, "< $mfile" or open M, "< $DEFAULT_MSKIP" or return sub {0};
     while (<M>){
 	chomp;
+	s/\r//;
 	next if /^#/;
 	next if /^\s*$/;
+        s/^'//;
+        s/'$//;
 	push @skip, _macify($_);
     }
     close M;
+    return sub {0} unless (scalar @skip > 0);
+
     my $opts = $Is_VMS ? '(?i)' : '';
 
     # Make sure each entry is isolated in its own parentheses, in case
@@ -362,6 +394,77 @@ sub _maniskip {
     my $regex = join '|', map "(?:$_)", @skip;
 
     return sub { $_[0] =~ qr{$opts$regex} };
+}
+
+# checks for the special directives
+#   #!include_default
+#   #!include /path/to/some/manifest.skip
+# in a custom MANIFEST.SKIP for, for including
+# the content of, respectively, the default MANIFEST.SKIP
+# and an external manifest.skip file
+sub _check_mskip_directives {
+    my $mfile = shift;
+    local (*M, $_);
+    my @lines = ();
+    my $flag = 0;
+    unless (open M, "< $mfile") {
+        warn "Problem opening $mfile: $!";
+        return;
+    }
+    while (<M>) {
+        if (/^#!include_default\s*$/) {
+	    if (my @default = _include_mskip_file()) {
+	        push @lines, @default;
+		warn "Debug: Including default MANIFEST.SKIP\n" if $Debug;
+		$flag++;
+	    }
+	    next;
+        }
+	if (/^#!include\s+(.*)\s*$/) {
+	    my $external_file = $1;
+	    if (my @external = _include_mskip_file($external_file)) {
+	        push @lines, @external;
+		warn "Debug: Including external $external_file\n" if $Debug;
+		$flag++;
+	    }
+            next;
+        }
+        push @lines, $_;
+    }
+    close M;
+    return unless $flag;
+    my $bakbase = $mfile;
+    $bakbase =~ s/\./_/g if $Is_VMS;  # avoid double dots
+    rename $mfile, "$bakbase.bak";
+    warn "Debug: Saving original $mfile as $bakbase.bak\n" if $Debug;
+    unless (open M, "> $mfile") {
+        warn "Problem opening $mfile: $!";
+        return;
+    }
+    print M $_ for (@lines);
+    close M;
+    return;
+}
+
+# returns an array containing the lines of an external
+# manifest.skip file, if given, or $DEFAULT_MSKIP
+sub _include_mskip_file {
+    my $mskip = shift || $DEFAULT_MSKIP;
+    unless (-f $mskip) {
+        warn qq{Included file "$mskip" not found - skipping};
+        return;
+    }
+    local (*M, $_);
+    unless (open M, "< $mskip") {
+        warn "Problem opening $mskip: $!";
+        return;
+    }
+    my @lines = ();
+    push @lines, "\n#!start included $mskip\n";
+    push @lines, $_ while <M>;
+    close M;
+    push @lines, "#!end included $mskip\n\n";
+    return @lines;
 }
 
 =item manicopy
@@ -416,7 +519,10 @@ sub manicopy {
 
 sub cp_if_diff {
     my($from, $to, $how)=@_;
-    -f $from or carp "$0: $from not found";
+    if (! -f $from) {
+        carp "$from not found";
+        return;
+    }
     my($diff) = 0;
     local(*F,*T);
     open(F,"< $from\0") or die "Can't read $from: $!\n";
@@ -449,7 +555,7 @@ sub cp {
 
     copy($srcFile,$dstFile);
     utime $access, $mod + ($Is_VMS ? 1 : 0), $dstFile;
-    _manicopy_chmod($dstFile);
+    _manicopy_chmod($srcFile, $dstFile);
 }
 
 
@@ -458,7 +564,7 @@ sub ln {
     return &cp if $Is_VMS or ($^O eq 'MSWin32' and Win32::IsWin95());
     link($srcFile, $dstFile);
 
-    unless( _manicopy_chmod($dstFile) ) {
+    unless( _manicopy_chmod($srcFile, $dstFile) ) {
         unlink $dstFile;
         return;
     }
@@ -469,10 +575,10 @@ sub ln {
 # 2) Let everyone read it.
 # 3) If the owner can execute it, everyone can.
 sub _manicopy_chmod {
-    my($file) = shift;
+    my($srcFile, $dstFile) = @_;
 
-    my $perm = 0444 | (stat $file)[2] & 0700;
-    chmod( $perm | ( $perm & 0100 ? 0111 : 0 ), $file );
+    my $perm = 0444 | (stat $srcFile)[2] & 0700;
+    chmod( $perm | ( $perm & 0100 ? 0111 : 0 ), $dstFile );
 }
 
 # Files that are often modified in the distdir.  Don't hard link them.
@@ -550,6 +656,10 @@ sub maniadd {
 
     foreach my $file (_sort @needed) {
         my $comment = $additions->{$file} || '';
+        if ($file =~ /\s/) {
+            $file =~ s/([\\'])/\\$1/g;
+            $file = "'$file'";
+        }
         printf MANIFEST "%-40s %s\n", $file, $comment;
     }
     close MANIFEST or die "Error closing $MANIFEST: $!";
@@ -593,11 +703,14 @@ means F<foo/bar> style not F<foo\bar>.
 
 Anything between white space and an end of line within a C<MANIFEST>
 file is considered to be a comment.  Any line beginning with # is also
-a comment.
+a comment. Beginning with ExtUtils::Manifest 1.52, a filename may
+contain whitespace characters if it is enclosed in single quotes; single
+quotes or backslashes in that filename must be backslash-escaped.
 
     # this a comment
     some/file
     some/other/file            comment about some/file
+    'some/third file'          comment
 
 
 =head2 MANIFEST.SKIP
@@ -632,6 +745,26 @@ If no MANIFEST.SKIP file is found, a default set of skips will be
 used, similar to the example above.  If you want nothing skipped,
 simply make an empty MANIFEST.SKIP file.
 
+In one's own MANIFEST.SKIP file, certain directives
+can be used to include the contents of other MANIFEST.SKIP
+files. At present two such directives are recognized.
+
+=over 4
+
+=item #!include_default
+
+This inserts the contents of the default MANIFEST.SKIP file
+
+=item #!include /Path/to/another/manifest.skip
+
+This inserts the contents of the specified external file
+
+=back
+
+The included contents will be inserted into the MANIFEST.SKIP
+file in between I<#!start included /path/to/manifest.skip>
+and I<#!end included /path/to/manifest.skip> markers.
+The original MANIFEST.SKIP is saved as MANIFEST.SKIP.bak.
 
 =head2 EXPORT_OK
 
@@ -701,7 +834,9 @@ L<ExtUtils::MakeMaker> which has handy targets for most of the functionality.
 
 Andreas Koenig C<andreas.koenig@anima.de>
 
-Currently maintained by Michael G Schwern C<schwern@pobox.com>
+Maintained by Michael G Schwern C<schwern@pobox.com> within the
+ExtUtils-MakeMaker package and, as a separate CPAN package, by
+Randy Kobes C<r.kobes@uwinnipeg.ca>.
 
 =cut
 

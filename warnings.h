@@ -17,12 +17,15 @@
 #define G_WARN_ONCE		8	/* set if 'once' ever enabled */
 #define G_WARN_ALL_MASK		(G_WARN_ALL_ON|G_WARN_ALL_OFF)
 
-#define pWARN_STD		Nullsv
-#define pWARN_ALL		(Nullsv+1)	/* use warnings 'all' */
-#define pWARN_NONE		(Nullsv+2)	/* no  warnings 'all' */
+#define pWARN_STD		NULL
+#define pWARN_ALL		(((SV*)0)+1)	/* use warnings 'all' */
+#define pWARN_NONE		(((SV*)0)+2)	/* no  warnings 'all' */
 
 #define specialWARN(x)		((x) == pWARN_STD || (x) == pWARN_ALL ||	\
 				 (x) == pWARN_NONE)
+
+/* if PL_warnhook is set to this value, then warnings die */
+#define PERL_WARNHOOK_FATAL	(((SV*)0) + 1)
 
 /* Warnings Categories added in Perl 5.008 */
 

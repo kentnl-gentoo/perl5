@@ -3,9 +3,10 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
+    require './test.pl';
 }
 
-print "1..91\n";
+print "1..98\n";
 
 eval 'print "ok 1\n";';
 
@@ -38,11 +39,12 @@ $fact = 'local($foo)=$foo; $foo <= 1 ? 1 : $foo-- * (eval $fact);';
 $ans = eval $fact;
 if ($ans == 120) {print "ok 9\n";} else {print "not ok 9 $ans\n";}
 
-open(try,'>Op.eval');
-print try 'print "ok 10\n"; unlink "Op.eval";',"\n";
+my $tempfile = tempfile();
+open(try,'>',$tempfile);
+print try 'print "ok 10\n";',"\n";
 close try;
 
-do './Op.eval'; print $@;
+do "./$tempfile"; print $@;
 
 # Test the singlequoted eval optimizer
 
@@ -438,3 +440,109 @@ print "ok ",$test++," - #20798 (used to dump core)\n";
   eval $code;
   print   $c   eq 'V'  ? "ok " : "# '$c' ne 'V'\nnot ok ", $test++, "\n";
 }
+
+# [perl #34682] escaping an eval with last could coredump or dup output
+
+$got = runperl (
+    prog => 
+    'sub A::TIEARRAY { L: { eval { last L } } } tie @a, A; warn qq(ok\n)',
+stderr => 1);
+
+print "not " unless $got eq "ok\n";
+print "ok $test - eval and last\n"; $test++;
+
+# eval undef should be the same as eval "" barring any warnings
+
+{
+    local $@ = "foo";
+    eval undef;
+    print "not " unless $@ eq "";
+    print "ok $test # eval undef \n"; $test++;
+}
+
+{
+    no warnings;
+    eval "/ /a;";
+    print "not " unless $@ =~ /^syntax error/;
+    print "ok $test # eval syntax error, no warnings \n"; $test++;
+}
+
+
+# a syntax error in an eval called magically 9eg vie tie or overload)
+# resulted in an assertion failure in S_docatch, since doeval had already
+# poppedthe EVAL context due to the failure, but S_docatch expected the
+# context to still be there.
+
+{
+    my $ok  = 0;
+    package Eval1;
+    sub STORE { eval '('; $ok = 1 }
+    sub TIESCALAR { bless [] }
+
+    my $x;
+    tie $x, bless [];
+    $x = 1;
+    print "not " unless $ok;
+    print "ok $test # eval docatch \n"; $test++;
+}
+
+
+# [perl #51370] eval { die "\x{a10d}" } followed by eval { 1 } did not reset
+# length $@ 
+$@ = "";
+eval { die "\x{a10d}"; };
+$_ = length $@;
+eval { 1 };
+
+print "not " if ($@ ne "");
+print "ok $test # length of \$@ after eval\n"; $test++;
+
+print "not " if (length $@ != 0);
+print "ok $test # length of \$@ after eval\n"; $test++;
+
+# Check if eval { 1 }; compeltly resets $@
+if (eval "use Devel::Peek; 1;") {
+  $tempfile = tempfile();
+  $outfile = tempfile();
+  open PROG, ">", $tempfile or die "Can't create test file";
+  my $prog = <<'END_EVAL_TEST';
+    use Devel::Peek;
+    $! = 0;
+    $@ = $!;
+    my $ok = 0;
+    open(SAVERR, ">&STDERR") or die "Can't dup STDERR: $!";
+    if (open(OUT, '>', '@@@@')) {
+      open(STDERR, ">&OUT") or die "Can't dup OUT: $!";
+      Dump($@);
+      print STDERR "******\n";
+      eval { die "\x{a10d}"; };
+      $_ = length $@;
+      eval { 1 };
+      Dump($@);
+      open(STDERR, ">&SAVERR") or die "Can't restore STDERR: $!";
+      close(OUT);
+      if (open(IN, '<', '@@@@')) {
+        local $/;
+        my $in = <IN>;
+        my ($first, $second) = split (/\*\*\*\*\*\*\n/, $in, 2);
+        $first =~ s/,pNOK//;
+        $ok = 1 if ($first eq $second);
+      }
+    }
+
+    print $ok;
+END_EVAL_TEST
+    $prog =~ s/\@\@\@\@/$outfile/g;
+    print PROG $prog;
+   close PROG;
+
+   my $ok = runperl(progfile => $tempfile);
+   print "not " unless $ok;
+   print "ok $test # eval { 1 } completly resets \$@\n";
+
+   $test++;
+}
+else {
+  print "ok $test # skipped - eval { 1 } completly resets \$@";
+}
+

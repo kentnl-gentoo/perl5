@@ -6,7 +6,7 @@
 
 package warnings;
 
-our $VERSION = '1.05';
+our $VERSION = '1.05_01';
 
 =head1 NAME
 
@@ -294,7 +294,7 @@ $All = "" ; vec($All, $Offsets{'all'}, 2) = 3 ;
 
 sub Croaker
 {
-    local $Carp::CarpInternal{'warnings'};
+    require Carp::Heavy; # this initializes %CarpInternal
     delete $Carp::CarpInternal{'warnings'};
     Carp::croak(@_);
 }

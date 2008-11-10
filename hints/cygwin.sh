@@ -30,15 +30,20 @@ libswanted=`echo " $libswanted " | sed -e 's/ util / /g'`
 #   the Perl SysV IPC tests so not adding it --jhi 2003-08-09
 #   (with cygwin 1.5.7, cygipc is deprecated in favor of the builtin cygserver)
 libswanted="$libswanted gdbm_compat"
-test -z "$optimize" && optimize='-O2'
-ccflags="$ccflags -DPERL_USE_SAFE_PUTENV"
+test -z "$optimize" && optimize='-O3'
+man3ext='3pm'
+test -z "$use64bitint" && use64bitint='define'
+test -z "$usethreads" && usethreads='define'
+test -z "$usemymalloc" && usemymalloc='define'
+ccflags="$ccflags -DPERL_USE_SAFE_PUTENV -U__STRICT_ANSI__"
 # - otherwise i686-cygwin
 archname='cygwin'
 
 # dynamic loading
 # - otherwise -fpic
 cccdlflags=' '
-ld='ld2'
+lddlflags=' --shared'
+ld='g++'
 
 case "$osvers" in
 
@@ -50,10 +55,21 @@ case "$osvers" in
         ;;
 esac;
 
+# compile Win32CORE "module" as static. try to avoid the space.
+if test -z "$static_ext"; then
+  static_ext="Win32CORE"
+else
+  static_ext="$static_ext Win32CORE"
+fi
+
 # Win9x problem with non-blocking read from a closed pipe
 d_eofnblk='define'
 
-# strip exe's and dll's
+# suppress auto-import warnings
+ldflags="$ldflags -Wl,--enable-auto-import -Wl,--export-all-symbols -Wl,--stack,8388608 -Wl,--enable-auto-image-base"
+lddlflags="$lddlflags $ldflags"
+
+# strip exe's and dll's, better do it afterwards
 #ldflags="$ldflags -s"
 #ccdlflags="$ccdlflags -s"
 #lddlflags="$lddlflags -s"

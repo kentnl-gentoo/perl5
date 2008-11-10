@@ -39,7 +39,7 @@ DeadCode(pTHX)
 		int levels, tots = 0, levela, tota = 0, levelas, totas = 0;
 		int dumpit = 0;
 
-		if (CvXSUB(sv)) {
+		if (CvISXSUB(sv)) {
 		    continue;		/* XSUB */
 		}
 		if (!CvGV(sv)) {
@@ -226,9 +226,8 @@ _mstats_to_hv(HV *hv, const struct mstats_buffer *b, int level)
 	warn("FIXME: internal mstats buffer too short");
     
     for (type = 0; type < (level ? 4 : 2); type++) {
-	UV *p = 0, *p1 = 0;
+	UV *p = 0, *p1 = 0, i;
 	AV *av;
-	int i;
 	static const char *types[4] = { 
 	    "free", "used", "mem_size", "available_size"    
 	};

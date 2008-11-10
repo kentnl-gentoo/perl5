@@ -1,48 +1,51 @@
+use strict;
 use warnings;
 
 BEGIN {
-#    chdir 't' if -d 't';
-#    push @INC ,'../lib';
-    require Config; import Config;
-    unless ($Config{'useithreads'}) {
-        print "1..0 # Skip: no useithreads\n";
-        exit 0;
+    if ($ENV{'PERL_CORE'}){
+        chdir 't';
+        unshift @INC, '../lib';
     }
-    if ($Config{'extensions'} !~ /\bDevel\/Peek\b/) {
-	print "1..0 # Skip: Devel::Peek was not built\n";
-	exit 0;
+    use Config;
+    if (! $Config{'useithreads'}) {
+        print("1..0 # SKIP Perl not compiled with 'useithreads'\n");
+        exit(0);
     }
 }
 
+use ExtUtils::testlib;
 
 sub ok {
     my ($id, $ok, $name) = @_;
 
-    $name = '' unless defined $name;
     # You have to do it this way or VMS will get confused.
-    print $ok ? "ok $id - $name\n" : "not ok $id - $name\n";
+    if ($ok) {
+        print("ok $id - $name\n");
+    } else {
+        print("not ok $id - $name\n");
+        printf("# Failed test at line %d\n", (caller)[2]);
+    }
 
-    printf "# Failed test at line %d\n", (caller)[2] unless $ok;
-
-    return $ok;
+    return ($ok);
 }
 
-use Devel::Peek;
-use ExtUtils::testlib;
-use strict;
-BEGIN { print "1..10\n" };
+BEGIN {
+    $| = 1;
+    print("1..21\n");   ### Number of tests that will be run ###
+};
+
 use threads;
 use threads::shared;
-ok(1,1,"loaded");
+ok(1, 1, 'Loaded');
+
+### Start of Testing ###
 
 my $foo;
 my $bar = "foo";
 share($foo);
-eval {
-$foo = \$bar;
-};
-
+eval { $foo = \$bar; };
 ok(2,my $temp1 = $@ =~/^Invalid\b.*shared scalar/, "Wrong error message");
+
 share($bar);
 $foo = \$bar;
 ok(3, $temp1 = $foo =~/SCALAR/, "Check that is a ref");
@@ -68,3 +71,35 @@ $t2 = "text";
 $t1 = \$t2;
 threads->create(sub { $t1 = "bar" })->join();
 ok(10,$t1 eq 'bar',"Check that assign to a ROK works");
+
+ok(11, is_shared($foo), "Check for sharing");
+
+{
+    # Circular references with 3 shared scalars
+    my $x : shared;
+    my $y : shared;
+    my $z : shared;
+
+    $x = \$y;
+    $y = \$z;
+    $z = \$x;
+    ok(12, ref($x) eq 'REF', '$x ref type');
+    ok(13, ref($y) eq 'REF', '$y ref type');
+    ok(14, ref($z) eq 'REF', '$z ref type');
+
+    my @q :shared = ($x);
+    ok(15, ref($q[0]) eq 'REF', '$q[0] ref type');
+
+    my $w = $q[0];
+    ok(16, ref($w) eq 'REF', '$w ref type');
+    ok(17, ref($$w) eq 'REF', '$$w ref type');
+    ok(18, ref($$$w) eq 'REF', '$$$w ref type');
+    ok(19, ref($$$$w) eq 'REF', '$$$$w ref type');
+
+    ok(20, is_shared($x) == is_shared($w), '_id($x) == _id($w)');
+    ok(21, is_shared($w) == is_shared($$$$w), '_id($w) == _id($$$$w)');
+}
+
+exit(0);
+
+# EOF

@@ -1,12 +1,24 @@
 package POSIX;
+use strict;
+use warnings;
 
-our(@ISA, %EXPORT_TAGS, @EXPORT_OK, $AUTOLOAD) = ();
+our(@ISA, %EXPORT_TAGS, @EXPORT_OK, @EXPORT, $AUTOLOAD, %SIGRT) = ();
 
-our $VERSION = "1.09";
+# Note that 5.8.x isn't carrying change 30590 from 5.10, so there might need to
+# be a version number dance to reflect this.
+our $VERSION = "1.15";
 
 use AutoLoader;
 
 use XSLoader ();
+
+use Fcntl qw(FD_CLOEXEC F_DUPFD F_GETFD F_GETFL F_GETLK F_RDLCK F_SETFD
+	     F_SETFL F_SETLK F_SETLKW F_UNLCK F_WRLCK O_ACCMODE O_APPEND
+	     O_CREAT O_EXCL O_NOCTTY O_NONBLOCK O_RDONLY O_RDWR O_TRUNC
+	     O_WRONLY SEEK_CUR SEEK_END SEEK_SET
+	     S_ISBLK S_ISCHR S_ISDIR S_ISFIFO S_ISREG
+	     S_IRGRP S_IROTH S_IRUSR S_IRWXG S_IRWXO S_IRWXU S_ISGID S_ISUID
+	     S_IWGRP S_IWOTH S_IWUSR S_IXGRP S_IXOTH S_IXUSR);
 
 # Grandfather old foo_h form to new :foo_h form
 my $loaded;
@@ -25,11 +37,13 @@ sub usage;
 
 XSLoader::load 'POSIX', $VERSION;
 
-my %NON_CONSTS = (map {($_,1)}
-                  qw(S_ISBLK S_ISCHR S_ISDIR S_ISFIFO S_ISREG WEXITSTATUS
-                     WIFEXITED WIFSIGNALED WIFSTOPPED WSTOPSIG WTERMSIG));
+my %NON_CONSTS
+  = (map {($_,1)} qw(WEXITSTATUS WIFEXITED WIFSIGNALED WIFSTOPPED WSTOPSIG
+		     WTERMSIG));
 
 sub AUTOLOAD {
+    no strict;
+    no warnings 'uninitialized';
     if ($AUTOLOAD =~ /::(_?[a-z])/) {
 	# require AutoLoader;
 	$AutoLoader::AUTOLOAD = $AUTOLOAD;
@@ -54,7 +68,21 @@ sub AUTOLOAD {
 package POSIX::SigAction;
 
 use AutoLoader 'AUTOLOAD';
-sub new { bless {HANDLER => $_[1], MASK => $_[2], FLAGS => $_[3] || 0, SAFE => 0}, $_[0] }
+
+package POSIX::SigRt;
+
+use AutoLoader 'AUTOLOAD';
+
+use Tie::Hash;
+
+use vars qw($SIGACTION_FLAGS $_SIGRTMIN $_SIGRTMAX $_sigrtn @ISA);
+@POSIX::SigRt::ISA = qw(Tie::StdHash);
+
+$SIGACTION_FLAGS = 0;
+
+tie %POSIX::SIGRT, 'POSIX::SigRt';
+
+sub DESTROY {};
 
 package POSIX;
 
@@ -349,7 +377,7 @@ sub puts {
 
 sub remove {
     usage "remove(filename)" if @_ != 1;
-    CORE::unlink($_[0]);
+    (-d $_[0]) ? CORE::rmdir($_[0]) : CORE::unlink($_[0]);
 }
 
 sub rename {
@@ -812,10 +840,10 @@ sub load_imports {
     signal_h =>	[qw(SA_NOCLDSTOP SA_NOCLDWAIT SA_NODEFER SA_ONSTACK
 		SA_RESETHAND SA_RESTART SA_SIGINFO SIGABRT SIGALRM
 		SIGCHLD SIGCONT SIGFPE SIGHUP SIGILL SIGINT SIGKILL
-		SIGPIPE SIGQUIT SIGSEGV SIGSTOP SIGTERM SIGTSTP SIGTTIN
-		SIGTTOU SIGUSR1 SIGUSR2 SIG_BLOCK SIG_DFL SIG_ERR
-		SIG_IGN SIG_SETMASK SIG_UNBLOCK raise sigaction signal
-		sigpending sigprocmask sigsuspend)],
+		SIGPIPE %SIGRT SIGRTMIN SIGRTMAX SIGQUIT SIGSEGV SIGSTOP
+		SIGTERM SIGTSTP SIGTTIN	SIGTTOU SIGUSR1 SIGUSR2
+		SIG_BLOCK SIG_DFL SIG_ERR SIG_IGN SIG_SETMASK SIG_UNBLOCK
+		raise sigaction signal sigpending sigprocmask sigsuspend)],
 
     stdarg_h =>	[],
 
@@ -891,8 +919,13 @@ sub load_imports {
 );
 
 # Exporter::export_tags();
-for (values %EXPORT_TAGS) {
-  push @EXPORT, @$_;
+{
+  # De-duplicate the export list: 
+  my %export;
+  @export{map {@$_} values %EXPORT_TAGS} = ();
+  # Doing the de-dup with a temporary hash has the advantage that the SVs in
+  # @EXPORT are actually shared hash key sacalars, which will save some memory.
+  push @EXPORT, keys %export;
 }
 
 @EXPORT_OK = qw(
@@ -959,7 +992,63 @@ require Exporter;
 
 package POSIX::SigAction;
 
+sub new { bless {HANDLER => $_[1], MASK => $_[2], FLAGS => $_[3] || 0, SAFE => 0}, $_[0] }
 sub handler { $_[0]->{HANDLER} = $_[1] if @_ > 1; $_[0]->{HANDLER} };
 sub mask    { $_[0]->{MASK}    = $_[1] if @_ > 1; $_[0]->{MASK} };
 sub flags   { $_[0]->{FLAGS}   = $_[1] if @_ > 1; $_[0]->{FLAGS} };
 sub safe    { $_[0]->{SAFE}    = $_[1] if @_ > 1; $_[0]->{SAFE} };
+
+package POSIX::SigRt;
+
+
+sub _init {
+    $_SIGRTMIN = &POSIX::SIGRTMIN;
+    $_SIGRTMAX = &POSIX::SIGRTMAX;
+    $_sigrtn   = $_SIGRTMAX - $_SIGRTMIN;
+}
+
+sub _croak {
+    &_init unless defined $_sigrtn;
+    die "POSIX::SigRt not available" unless defined $_sigrtn && $_sigrtn > 0;
+}
+
+sub _getsig {
+    &_croak;
+    my $rtsig = $_[0];
+    # Allow (SIGRT)?MIN( + n)?, a common idiom when doing these things in C.
+    $rtsig = $_SIGRTMIN + ($1 || 0)
+	if $rtsig =~ /^(?:(?:SIG)?RT)?MIN(\s*\+\s*(\d+))?$/;
+    return $rtsig;
+}
+
+sub _exist {
+    my $rtsig = _getsig($_[1]);
+    my $ok    = $rtsig >= $_SIGRTMIN && $rtsig <= $_SIGRTMAX;
+    ($rtsig, $ok);
+}
+
+sub _check {
+    my ($rtsig, $ok) = &_exist;
+    die "No POSIX::SigRt signal $_[1] (valid range SIGRTMIN..SIGRTMAX, or $_SIGRTMIN..$_SIGRTMAX)"
+	unless $ok;
+    return $rtsig;
+}
+
+sub new {
+    my ($rtsig, $handler, $flags) = @_;
+    my $sigset = POSIX::SigSet->new($rtsig);
+    my $sigact = POSIX::SigAction->new($handler,
+				       $sigset,
+				       $flags);
+    POSIX::sigaction($rtsig, $sigact);
+}
+
+sub EXISTS { &_exist }
+sub FETCH  { my $rtsig = &_check;
+	     my $oa = POSIX::SigAction->new();
+	     POSIX::sigaction($rtsig, undef, $oa);
+	     return $oa->{HANDLER} }
+sub STORE  { my $rtsig = &_check; new($rtsig, $_[2], $SIGACTION_FLAGS) }
+sub DELETE { delete $SIG{ &_check } }
+sub CLEAR  { &_exist; delete @SIG{ &POSIX::SIGRTMIN .. &POSIX::SIGRTMAX } }
+sub SCALAR { &_croak; $_sigrtn + 1 }

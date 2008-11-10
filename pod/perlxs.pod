@@ -554,7 +554,7 @@ exception happens if this C<;> terminates the line, then this C<;>
 is quietly ignored.
 
 The following code demonstrates how to supply initialization code for
-function parameters.  The initialization code is eval'd within double
+function parameters.  The initialization code is eval'ed within double
 quotes by the compiler before it is added to the output so anything
 which should be interpreted literally [mainly C<$>, C<@>, or C<\\>]
 must be protected with backslashes.  The variables $var, $arg,
@@ -562,7 +562,7 @@ and $type can be used as in typemaps.
 
      bool_t
      rpcb_gettime(host,timep)
-          char *host = (char *)SvPV($arg,PL_na);
+          char *host = (char *)SvPV_nolen($arg);
           time_t &timep = 0;
         OUTPUT:
           timep
@@ -589,7 +589,7 @@ Here's a truly obscure example:
      bool_t
      rpcb_gettime(host,timep)
           time_t &timep; /* \$v{timep}=@{[$v{timep}=$arg]} */
-          char *host + SvOK($v{timep}) ? SvPV($arg,PL_na) : NULL;
+          char *host + SvOK($v{timep}) ? SvPV_nolen($arg) : NULL;
         OUTPUT:
           timep
 
@@ -950,10 +950,9 @@ The XS code, with ellipsis, follows.
           time_t timep = NO_INIT
 	PREINIT:
           char *host = "localhost";
-	  STRLEN n_a;
         CODE:
 	  if( items > 1 )
-	       host = (char *)SvPV(ST(1), n_a);
+	       host = (char *)SvPV_nolen(ST(1));
 	  RETVAL = rpcb_gettime( host, &timep );
         OUTPUT:
           timep
@@ -1094,8 +1093,8 @@ return value, should the need arise.
           time_t  timep;
           bool_t x;
         CODE:
-          ST(0) = sv_newmortal();
           if( rpcb_gettime( host, &timep ) ){
+               ST(0) = sv_newmortal();
                sv_setnv( ST(0), (double)timep);
           }
           else{
@@ -1242,10 +1241,9 @@ prototypes.
 	PROTOTYPE: $;$
 	PREINIT:
           char *host = "localhost";
-	  STRLEN n_a;
         CODE:
 		  if( items > 1 )
-		       host = (char *)SvPV(ST(1), n_a);
+		       host = (char *)SvPV_nolen(ST(1));
 		  RETVAL = rpcb_gettime( host, &timep );
         OUTPUT:
           timep
@@ -1313,7 +1311,7 @@ this:
 
 In this case, the function will overload both of the three way
 comparison operators.  For all overload operations using non-alpha
-characters, you must type the parameter without quoting, seperating
+characters, you must type the parameter without quoting, separating
 multiple overloads with whitespace.  Note that "" (the stringify 
 overload) should be entered as \"\" (i.e. escaped).
 
@@ -1391,7 +1389,7 @@ C<fp[]> with offsets being C<multiply_off>, C<divide_off>, C<add_off>,
 C<subtract_off>.  Then one can use 
 
     #define XSINTERFACE_FUNC_BYOFFSET(ret,cv,f) \
-	((XSINTERFACE_CVT(ret,))fp[CvXSUBANY(cv).any_i32])
+	((XSINTERFACE_CVT_ANON(ret))fp[CvXSUBANY(cv).any_i32])
     #define XSINTERFACE_FUNC_BYOFFSET_set(cv,f) \
 	CvXSUBANY(cv).any_i32 = CAT2( f, _off )
 
@@ -1921,6 +1919,11 @@ Below is an example module that makes use of the macros.
         else
           RETVAL = newSVpv(MY_CXT.name[index - 1]);
 
+    void
+    CLONE(...)
+	CODE:
+	MY_CXT_CLONE;
+
 
 B<REFERENCE>
 
@@ -1956,7 +1959,10 @@ of C<my_cxt_t>.
 
 The MY_CXT_INIT macro initialises storage for the C<my_cxt_t> struct.
 
-It I<must> be called exactly once -- typically in a BOOT: section.
+It I<must> be called exactly once -- typically in a BOOT: section. If you
+are maintaining multiple interpreters, it should be called once in each
+interpreter instance, except for interpreters cloned from existing ones.
+(But see C<MY_CXT_CLONE> below.)
 
 =item dMY_CXT
 
@@ -1977,7 +1983,52 @@ then use this to access the C<index> member
     dMY_CXT;
     MY_CXT.index = 2;
 
+=item aMY_CXT/pMY_CXT
+
+C<dMY_CXT> may be quite expensive to calculate, and to avoid the overhead
+of invoking it in each function it is possible to pass the declaration
+onto other functions using the C<aMY_CXT>/C<pMY_CXT> macros, eg
+
+    void sub1() {
+	dMY_CXT;
+	MY_CXT.index = 1;
+	sub2(aMY_CXT);
+    }
+
+    void sub2(pMY_CXT) {
+	MY_CXT.index = 2;
+    }
+
+Analogously to C<pTHX>, there are equivalent forms for when the macro is the
+first or last in multiple arguments, where an underscore represents a
+comma, i.e.  C<_aMY_CXT>, C<aMY_CXT_>, C<_pMY_CXT> and C<pMY_CXT_>.
+
+=item MY_CXT_CLONE
+
+By default, when a new interpreter is created as a copy of an existing one
+(eg via C<< threads->create() >>), both interpreters share the same physical
+my_cxt_t structure. Calling C<MY_CXT_CLONE> (typically via the package's
+C<CLONE()> function), causes a byte-for-byte copy of the structure to be
+taken, and any future dMY_CXT will cause the copy to be accessed instead.
+
 =back
+
+=head2 Thread-aware system interfaces
+
+Starting from Perl 5.8, in C/C++ level Perl knows how to wrap
+system/library interfaces that have thread-aware versions
+(e.g. getpwent_r()) into frontend macros (e.g. getpwent()) that
+correctly handle the multithreaded interaction with the Perl
+interpreter.  This will happen transparently, the only thing
+you need to do is to instantiate a Perl interpreter.
+
+This wrapping happens always when compiling Perl core source
+(PERL_CORE is defined) or the Perl core extensions (PERL_EXT is
+defined).  When compiling XS code outside of Perl core the wrapping
+does not take place.  Note, however, that intermixing the _r-forms
+(as Perl compiled for multithreaded operation will do) and the _r-less
+forms is neither well-defined (inconsistent results, data corruption,
+or even crashes become more likely), nor is it very portable.
 
 =head1 EXAMPLES
 

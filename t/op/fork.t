@@ -6,16 +6,12 @@ BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
     require Config; import Config;
-    unless ($Config{'d_fork'}
-	    or (($^O eq 'MSWin32' || $^O eq 'NetWare') and $Config{useithreads}
-		and $Config{ccflags} =~ /-DPERL_IMPLICIT_SYS/ 
-#               and !defined $Config{'useperlio'}
-               ))
-    {
+    unless ($Config{'d_fork'} or $Config{'d_pseudofork'}) {
 	print "1..0 # Skip: no fork\n";
 	exit 0;
     }
     $ENV{PERL5LIB} = "../lib";
+    require './test.pl';
 }
 
 if ($^O eq 'mpeix') {
@@ -29,9 +25,8 @@ undef $/;
 @prgs = split "\n########\n", <DATA>;
 print "1..", scalar @prgs, "\n";
 
-$tmpfile = "forktmp000";
-1 while -f ++$tmpfile;
-END { close TEST; unlink $tmpfile if $tmpfile; }
+$tmpfile = tempfile();
+END { close TEST }
 
 $CAT = (($^O eq 'MSWin32') ? '.\perl -e "print <>"' : (($^O eq 'NetWare') ? 'perl -e "print <>"' : 'cat'));
 
@@ -59,8 +54,8 @@ for (@prgs){
     }
     $status = $?;
     $results =~ s/\n+$//;
-    $results =~ s/at\s+forktmp\d+\s+line/at - line/g;
-    $results =~ s/of\s+forktmp\d+\s+aborted/of - aborted/g;
+    $results =~ s/at\s+$::tempfile_regexp\s+line/at - line/g;
+    $results =~ s/of\s+$::tempfile_regexp\s+aborted/of - aborted/g;
 # bison says 'parse error' instead of 'syntax error',
 # various yaccs may or may not capitalize 'syntax'.
     $results =~ s/^(syntax|parse) error/syntax error/mig;
@@ -232,6 +227,7 @@ EXPECT
 ########
 $| = 1;
 use Cwd;
+my $cwd = cwd(); # Make sure we load Win32.pm while "../lib" still works.
 $\ = "\n";
 my $dir;
 if (fork) {
@@ -443,4 +439,10 @@ if ($pid == 0) {
     print $rand_child ne $rand_parent, "\n";
 }
 EXPECT
+1
+########
+# [perl #39145] Perl_dounwind() crashing with Win32's fork() emulation
+sub { @_ = 3; fork ? die "1\n" : die "1\n" }->(2);
+EXPECT
+1
 1

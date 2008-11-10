@@ -43,6 +43,7 @@ while (@{$optref} && $optref->[0] =~ /^([\w_]+)=(.*)$/) {
 }
 
 FindExt::scan_ext("../ext");
+FindExt::scan_ext("ext") if -d 'ext';  # also look in win32/ext/ if it exists
 FindExt::set_static_extensions(split ' ', $opt{'static_ext'});
 
 my @dynamic_ext = FindExt::dynamic_ext();
@@ -72,12 +73,27 @@ if (-e $pl_h) {
 else {
     die "Can't find $pl_h: $!";
 }
+
+my $patch_file = '../.patch';
+
+if (-e $patch_file) {
+    open my $fh, "<", $patch_file or die "Can't open $patch_file: $!";
+    chomp($opt{PERL_PATCHLEVEL} = <$fh>);
+    close $fh;
+}
+
 $opt{VERSION} = "$opt{PERL_REVISION}.$opt{PERL_VERSION}.$opt{PERL_SUBVERSION}";
 $opt{INST_VER} =~ s|~VERSION~|$opt{VERSION}|g;
 $opt{'version_patchlevel_string'} = "version $opt{PERL_VERSION} subversion $opt{PERL_SUBVERSION}";
-$opt{'version_patchlevel_string'} .= " patchlevel $opt{PERL_PATCHLEVEL}" if exists $opt{PERL_PATCHLEVEL};
+$opt{'version_patchlevel_string'} .= " patch $opt{PERL_PATCHLEVEL}" if exists $opt{PERL_PATCHLEVEL};
 
-$opt{'osvers'} = join '.', (Win32::GetOSVersion())[1,2];
+my $ver = `ver 2>nul`;
+if ($ver =~ /Version (\d+\.\d+)/) {
+    $opt{'osvers'} = $1;
+}
+else {
+    $opt{'osvers'} = '4.0';
+}
 
 if (exists $opt{cc}) {
     # cl and bcc32 version detection borrowed from Test::Smoke's configsmoke.pl
@@ -103,7 +119,7 @@ $opt{libpth} = mungepath($opt{libpth}) if exists $opt{libpth};
 $opt{incpath} = mungepath($opt{incpath}) if exists $opt{incpath};
 
 # some functions are not available on Win9x
-if (defined(&Win32::IsWin95) && Win32::IsWin95()) {
+unless (defined $ENV{SYSTEMROOT}) { # SystemRoot has been introduced by WinNT
     $opt{d_flock} = 'undef';
     $opt{d_link} = 'undef';
 }
@@ -111,6 +127,10 @@ if (defined(&Win32::IsWin95) && Win32::IsWin95()) {
 if ($opt{uselargefiles} ne 'define') {
     $opt{lseeksize} = 4;
     $opt{lseektype} = 'off_t';
+}
+
+if ($opt{useithreads} eq 'define' && $opt{ccflags} =~ /-DPERL_IMPLICIT_SYS\b/) {
+    $opt{d_pseudofork} = 'define';
 }
 
 while (<>) {

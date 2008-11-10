@@ -3,7 +3,7 @@
  *    embedvar.h
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2003, 2004, 2005, 2006, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2004, 2005, 2006, 2007, 2008, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -213,6 +213,8 @@
 #define PL_beginav		(PERL_GET_INTERP->Ibeginav)
 #define PL_beginav_save		(PERL_GET_INTERP->Ibeginav_save)
 #define PL_bitcount		(PERL_GET_INTERP->Ibitcount)
+#define PL_body_arenas		(PERL_GET_INTERP->Ibody_arenas)
+#define PL_body_roots		(PERL_GET_INTERP->Ibody_roots)
 #define PL_bufend		(PERL_GET_INTERP->Ibufend)
 #define PL_bufptr		(PERL_GET_INTERP->Ibufptr)
 #define PL_checkav		(PERL_GET_INTERP->Icheckav)
@@ -245,6 +247,7 @@
 #define PL_debug_pad		(PERL_GET_INTERP->Idebug_pad)
 #define PL_def_layerlist	(PERL_GET_INTERP->Idef_layerlist)
 #define PL_defgv		(PERL_GET_INTERP->Idefgv)
+#define PL_destroyhook		(PERL_GET_INTERP->Idestroyhook)
 #define PL_diehook		(PERL_GET_INTERP->Idiehook)
 #define PL_doextract		(PERL_GET_INTERP->Idoextract)
 #define PL_doswitches		(PERL_GET_INTERP->Idoswitches)
@@ -331,6 +334,7 @@
 #define PL_max_intro_pending	(PERL_GET_INTERP->Imax_intro_pending)
 #define PL_maxo			(PERL_GET_INTERP->Imaxo)
 #define PL_maxsysfd		(PERL_GET_INTERP->Imaxsysfd)
+#define PL_memory_debug_header	(PERL_GET_INTERP->Imemory_debug_header)
 #define PL_mess_sv		(PERL_GET_INTERP->Imess_sv)
 #define PL_min_intro_pending	(PERL_GET_INTERP->Imin_intro_pending)
 #define PL_minus_F		(PERL_GET_INTERP->Iminus_F)
@@ -394,6 +398,7 @@
 #define PL_ptr_table		(PERL_GET_INTERP->Iptr_table)
 #define PL_reentrant_buffer	(PERL_GET_INTERP->Ireentrant_buffer)
 #define PL_reentrant_retint	(PERL_GET_INTERP->Ireentrant_retint)
+#define PL_regdupe		(PERL_GET_INTERP->Iregdupe)
 #define PL_regex_pad		(PERL_GET_INTERP->Iregex_pad)
 #define PL_regex_padav		(PERL_GET_INTERP->Iregex_padav)
 #define PL_rehash_seed		(PERL_GET_INTERP->Irehash_seed)
@@ -416,6 +421,7 @@
 #define PL_srand_called		(PERL_GET_INTERP->Isrand_called)
 #define PL_stashcache		(PERL_GET_INTERP->Istashcache)
 #define PL_statusvalue		(PERL_GET_INTERP->Istatusvalue)
+#define PL_statusvalue_posix	(PERL_GET_INTERP->Istatusvalue_posix)
 #define PL_statusvalue_vms	(PERL_GET_INTERP->Istatusvalue_vms)
 #define PL_stderrgv		(PERL_GET_INTERP->Istderrgv)
 #define PL_stdingv		(PERL_GET_INTERP->Istdingv)
@@ -469,6 +475,7 @@
 #define PL_utf8_toupper		(PERL_GET_INTERP->Iutf8_toupper)
 #define PL_utf8_upper		(PERL_GET_INTERP->Iutf8_upper)
 #define PL_utf8_xdigit		(PERL_GET_INTERP->Iutf8_xdigit)
+#define PL_utf8cache		(PERL_GET_INTERP->Iutf8cache)
 #define PL_utf8locale		(PERL_GET_INTERP->Iutf8locale)
 #define PL_uudmap		(PERL_GET_INTERP->Iuudmap)
 #define PL_warnhook		(PERL_GET_INTERP->Iwarnhook)
@@ -538,6 +545,8 @@
 #define PL_beginav		(vTHX->Ibeginav)
 #define PL_beginav_save		(vTHX->Ibeginav_save)
 #define PL_bitcount		(vTHX->Ibitcount)
+#define PL_body_arenas		(vTHX->Ibody_arenas)
+#define PL_body_roots		(vTHX->Ibody_roots)
 #define PL_bufend		(vTHX->Ibufend)
 #define PL_bufptr		(vTHX->Ibufptr)
 #define PL_checkav		(vTHX->Icheckav)
@@ -570,6 +579,7 @@
 #define PL_debug_pad		(vTHX->Idebug_pad)
 #define PL_def_layerlist	(vTHX->Idef_layerlist)
 #define PL_defgv		(vTHX->Idefgv)
+#define PL_destroyhook		(vTHX->Idestroyhook)
 #define PL_diehook		(vTHX->Idiehook)
 #define PL_doextract		(vTHX->Idoextract)
 #define PL_doswitches		(vTHX->Idoswitches)
@@ -656,6 +666,7 @@
 #define PL_max_intro_pending	(vTHX->Imax_intro_pending)
 #define PL_maxo			(vTHX->Imaxo)
 #define PL_maxsysfd		(vTHX->Imaxsysfd)
+#define PL_memory_debug_header	(vTHX->Imemory_debug_header)
 #define PL_mess_sv		(vTHX->Imess_sv)
 #define PL_min_intro_pending	(vTHX->Imin_intro_pending)
 #define PL_minus_F		(vTHX->Iminus_F)
@@ -719,6 +730,7 @@
 #define PL_ptr_table		(vTHX->Iptr_table)
 #define PL_reentrant_buffer	(vTHX->Ireentrant_buffer)
 #define PL_reentrant_retint	(vTHX->Ireentrant_retint)
+#define PL_regdupe		(vTHX->Iregdupe)
 #define PL_regex_pad		(vTHX->Iregex_pad)
 #define PL_regex_padav		(vTHX->Iregex_padav)
 #define PL_rehash_seed		(vTHX->Irehash_seed)
@@ -741,6 +753,7 @@
 #define PL_srand_called		(vTHX->Isrand_called)
 #define PL_stashcache		(vTHX->Istashcache)
 #define PL_statusvalue		(vTHX->Istatusvalue)
+#define PL_statusvalue_posix	(vTHX->Istatusvalue_posix)
 #define PL_statusvalue_vms	(vTHX->Istatusvalue_vms)
 #define PL_stderrgv		(vTHX->Istderrgv)
 #define PL_stdingv		(vTHX->Istdingv)
@@ -794,6 +807,7 @@
 #define PL_utf8_toupper		(vTHX->Iutf8_toupper)
 #define PL_utf8_upper		(vTHX->Iutf8_upper)
 #define PL_utf8_xdigit		(vTHX->Iutf8_xdigit)
+#define PL_utf8cache		(vTHX->Iutf8cache)
 #define PL_utf8locale		(vTHX->Iutf8locale)
 #define PL_uudmap		(vTHX->Iuudmap)
 #define PL_warnhook		(vTHX->Iwarnhook)
@@ -866,6 +880,8 @@
 #define PL_Ibeginav		PL_beginav
 #define PL_Ibeginav_save	PL_beginav_save
 #define PL_Ibitcount		PL_bitcount
+#define PL_Ibody_arenas		PL_body_arenas
+#define PL_Ibody_roots		PL_body_roots
 #define PL_Ibufend		PL_bufend
 #define PL_Ibufptr		PL_bufptr
 #define PL_Icheckav		PL_checkav
@@ -898,6 +914,7 @@
 #define PL_Idebug_pad		PL_debug_pad
 #define PL_Idef_layerlist	PL_def_layerlist
 #define PL_Idefgv		PL_defgv
+#define PL_Idestroyhook		PL_destroyhook
 #define PL_Idiehook		PL_diehook
 #define PL_Idoextract		PL_doextract
 #define PL_Idoswitches		PL_doswitches
@@ -984,6 +1001,7 @@
 #define PL_Imax_intro_pending	PL_max_intro_pending
 #define PL_Imaxo		PL_maxo
 #define PL_Imaxsysfd		PL_maxsysfd
+#define PL_Imemory_debug_header	PL_memory_debug_header
 #define PL_Imess_sv		PL_mess_sv
 #define PL_Imin_intro_pending	PL_min_intro_pending
 #define PL_Iminus_F		PL_minus_F
@@ -1047,6 +1065,7 @@
 #define PL_Iptr_table		PL_ptr_table
 #define PL_Ireentrant_buffer	PL_reentrant_buffer
 #define PL_Ireentrant_retint	PL_reentrant_retint
+#define PL_Iregdupe		PL_regdupe
 #define PL_Iregex_pad		PL_regex_pad
 #define PL_Iregex_padav		PL_regex_padav
 #define PL_Irehash_seed		PL_rehash_seed
@@ -1069,6 +1088,7 @@
 #define PL_Isrand_called	PL_srand_called
 #define PL_Istashcache		PL_stashcache
 #define PL_Istatusvalue		PL_statusvalue
+#define PL_Istatusvalue_posix	PL_statusvalue_posix
 #define PL_Istatusvalue_vms	PL_statusvalue_vms
 #define PL_Istderrgv		PL_stderrgv
 #define PL_Istdingv		PL_stdingv
@@ -1122,6 +1142,7 @@
 #define PL_Iutf8_toupper	PL_utf8_toupper
 #define PL_Iutf8_upper		PL_utf8_upper
 #define PL_Iutf8_xdigit		PL_utf8_xdigit
+#define PL_Iutf8cache		PL_utf8cache
 #define PL_Iutf8locale		PL_utf8locale
 #define PL_Iuudmap		PL_uudmap
 #define PL_Iwarnhook		PL_warnhook
@@ -1449,14 +1470,23 @@
 #define PL_do_undump		(PL_Vars.Gdo_undump)
 #define PL_dollarzero_mutex	(PL_Vars.Gdollarzero_mutex)
 #define PL_hexdigit		(PL_Vars.Ghexdigit)
+#define PL_interp_size		(PL_Vars.Ginterp_size)
+#define PL_interp_size_5_8_9	(PL_Vars.Ginterp_size_5_8_9)
 #define PL_malloc_mutex		(PL_Vars.Gmalloc_mutex)
 #define PL_op_mutex		(PL_Vars.Gop_mutex)
 #define PL_patleave		(PL_Vars.Gpatleave)
+#define PL_perlio_fd_refcnt	(PL_Vars.Gperlio_fd_refcnt)
+#define PL_perlio_fd_refcnt_size	(PL_Vars.Gperlio_fd_refcnt_size)
+#define PL_perlio_mutex		(PL_Vars.Gperlio_mutex)
+#define PL_revision		(PL_Vars.Grevision)
 #define PL_sh_path		(PL_Vars.Gsh_path)
 #define PL_sigfpe_saved		(PL_Vars.Gsigfpe_saved)
+#define PL_subversion		(PL_Vars.Gsubversion)
 #define PL_sv_placeholder	(PL_Vars.Gsv_placeholder)
 #define PL_thr_key		(PL_Vars.Gthr_key)
 #define PL_use_safe_putenv	(PL_Vars.Guse_safe_putenv)
+#define PL_version		(PL_Vars.Gversion)
+#define PL_veto_cleanup		(PL_Vars.Gveto_cleanup)
 
 #else /* !PERL_GLOBAL_STRUCT */
 
@@ -1467,14 +1497,23 @@
 #define PL_Gdo_undump		PL_do_undump
 #define PL_Gdollarzero_mutex	PL_dollarzero_mutex
 #define PL_Ghexdigit		PL_hexdigit
+#define PL_Ginterp_size		PL_interp_size
+#define PL_Ginterp_size_5_8_9	PL_interp_size_5_8_9
 #define PL_Gmalloc_mutex	PL_malloc_mutex
 #define PL_Gop_mutex		PL_op_mutex
 #define PL_Gpatleave		PL_patleave
+#define PL_Gperlio_fd_refcnt	PL_perlio_fd_refcnt
+#define PL_Gperlio_fd_refcnt_size	PL_perlio_fd_refcnt_size
+#define PL_Gperlio_mutex	PL_perlio_mutex
+#define PL_Grevision		PL_revision
 #define PL_Gsh_path		PL_sh_path
 #define PL_Gsigfpe_saved	PL_sigfpe_saved
+#define PL_Gsubversion		PL_subversion
 #define PL_Gsv_placeholder	PL_sv_placeholder
 #define PL_Gthr_key		PL_thr_key
 #define PL_Guse_safe_putenv	PL_use_safe_putenv
+#define PL_Gversion		PL_version
+#define PL_Gveto_cleanup	PL_veto_cleanup
 
 #endif /* PERL_GLOBAL_STRUCT */
 

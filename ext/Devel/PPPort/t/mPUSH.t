@@ -4,6 +4,10 @@
 #
 #            Edit mktests.PL and/or parts/inc/mPUSH instead.
 #
+#  This file was automatically generated from the definition files in the
+#  parts/inc/ subdirectory by mktests.PL. To learn more about how all this
+#  works, please read the F<HACKERS> file that came with this distribution.
+#
 ################################################################################
 
 BEGIN {
@@ -21,13 +25,14 @@ BEGIN {
     unshift @INC, 't';
   }
 
-  eval "use Test";
-  if ($@) {
-    require 'testutil.pl';
-    print "1..8\n";
+  sub load {
+    eval "use Test";
+    require 'testutil.pl' if $@;
   }
-  else {
-    plan(tests => 8);
+
+  if (10) {
+    load();
+    plan(tests => 10);
   }
 }
 
@@ -35,11 +40,21 @@ use Devel::PPPort;
 use strict;
 $^W = 1;
 
+package Devel::PPPort;
+use vars '@ISA';
+require DynaLoader;
+@ISA = qw(DynaLoader);
+bootstrap Devel::PPPort;
+
+package main;
+
+ok(join(':', &Devel::PPPort::mPUSHs()), "foo:bar:42");
 ok(join(':', &Devel::PPPort::mPUSHp()), "one:two:three");
 ok(join(':', &Devel::PPPort::mPUSHn()), "0.5:-0.25:0.125");
 ok(join(':', &Devel::PPPort::mPUSHi()), "-1:2:-3");
 ok(join(':', &Devel::PPPort::mPUSHu()), "1:2:3");
 
+ok(join(':', &Devel::PPPort::mXPUSHs()), "foo:bar:42");
 ok(join(':', &Devel::PPPort::mXPUSHp()), "one:two:three");
 ok(join(':', &Devel::PPPort::mXPUSHn()), "0.5:-0.25:0.125");
 ok(join(':', &Devel::PPPort::mXPUSHi()), "-1:2:-3");

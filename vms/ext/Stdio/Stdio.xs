@@ -1,8 +1,8 @@
 /* VMS::Stdio - VMS extensions to stdio routines 
  *
- * Version:  2.2
+ * Version:  2.3
  * Author:   Charles Bailey  bailey@newman.upenn.edu
- * Revised:  18-Jul-1998
+ * Revised:  14-Jun-2007
  *
  */
 
@@ -83,7 +83,7 @@ IV *pval;
 static SV *
 newFH(PerlIO *fp, char type) {
     SV *rv;
-    GV **stashp, *gv = (GV *)NEWSV(0,0);
+    GV **stashp, *gv = (GV *)newSV(0);
     HV *stash;
     IO *io;
 
@@ -93,10 +93,10 @@ newFH(PerlIO *fp, char type) {
      * equivalent to gv_fetchpv("VMS::Stdio::__FH__",TRUE,SVt_PVIO),
      * with a little less overhead, and good exercise for me. :-) */
     stashp = (GV **)hv_fetch(PL_defstash,"VMS::",5,TRUE);
-    if (!stashp || *stashp == (GV *)&PL_sv_undef) return Nullsv;
+    if (!stashp || *stashp == (GV *)&PL_sv_undef) return NULL;
     if (!(stash = GvHV(*stashp))) stash = GvHV(*stashp) = newHV();
     stashp = (GV **)hv_fetch(GvHV(*stashp),"Stdio::",7,TRUE);
-    if (!stashp || *stashp == (GV *)&PL_sv_undef) return Nullsv;
+    if (!stashp || *stashp == (GV *)&PL_sv_undef) return NULL;
     if (!(stash = GvHV(*stashp))) stash = GvHV(*stashp) = newHV();
 
     /* Set up GV to point to IO, and then take reference */
@@ -131,14 +131,14 @@ binmode(fh)
            SV *name;
 	   IO *io;
 	   char iotype;
-	   char filespec[NAM$C_MAXRSS], *acmode, *s, *colon, *dirend = Nullch;
+	   char filespec[NAM$C_MAXRSS], *acmode, *s, *colon, *dirend = NULL;
 	   int ret = 0, saverrno = errno, savevmserrno = vaxc$errno;
            SV pos;
            PerlIO *fp;
 	   io = sv_2io(fh);
            fp = io ? IoOFP(io) : NULL;
 	   iotype = io ? IoTYPE(io) : '\0';
-	    if (fp == NULL || strchr(">was+-|",iotype) == Nullch) {
+	    if (fp == NULL || strchr(">was+-|",iotype) == NULL) {
 	      set_errno(EBADF); set_vaxc_errno(SS$_IVCHAN); XSRETURN_UNDEF;
 	    }
            if (!PerlIO_getname(fp,filespec)) XSRETURN_UNDEF;
@@ -152,7 +152,7 @@ binmode(fh)
 	    }
 	    /* If we've got a non-file-structured device, clip off the trailing
 	     * junk, and don't lose sleep if we can't get a stream position.  */
-	    if (dirend == Nullch) *(colon+1) = '\0'; 
+	    if (dirend == NULL) *(colon+1) = '\0'; 
            if (iotype != '-' && (ret = PerlIO_getpos(fp, &pos)) == -1 && dirend)
 	      XSRETURN_UNDEF;
 	    switch (iotype) {
@@ -174,7 +174,7 @@ binmode(fh)
 	    }
            /* appearances to the contrary, this is an freopen substitute */
            name = sv_2mortal(newSVpvn(filespec,strlen(filespec)));
-           if (PerlIO_openn(aTHX_ Nullch,acmode,-1,0,0,fp,1,&name) == Nullfp) XSRETURN_UNDEF;
+           if (PerlIO_openn(aTHX_ NULL,acmode,-1,0,0,fp,1,&name) == NULL) XSRETURN_UNDEF;
            if (iotype != '-' && ret != -1 && PerlIO_setpos(fp,&pos) == -1) XSRETURN_UNDEF;
 	    if (ret == -1) { set_errno(saverrno); set_vaxc_errno(savevmserrno); }
 	    XSRETURN_YES;
@@ -192,12 +192,14 @@ flush(fp)
 
 char *
 getname(fp)
-       PerlIO * fp
+	PerlIO * fp
 	PROTOTYPE: $
 	CODE:
+            FILE *stdio = PerlIO_exportFILE(fp,0);
 	    char fname[NAM$C_MAXRSS+1];
 	    ST(0) = sv_newmortal();
-           if (PerlIO_getname(fp,fname) != NULL) sv_setpv(ST(0),fname);
+            if (fgetname(stdio,fname) != NULL) sv_setpv(ST(0),fname);
+            PerlIO_releaseFILE(fp,stdio);
 
 void
 rewind(fp)
@@ -347,8 +349,8 @@ vmsopen(spec,...)
 	        fp = fopen(spec,mode,args[0],args[1],args[2],args[3],args[4],args[5],args[6],args[7]);
 	        break;
 	    }
-           if (fp != Null(FILE*)) {
-             pio_fp = PerlIO_importFILE(fp,mode);
+	    if (fp != NULL) {
+             pio_fp = PerlIO_fdopen(fileno(fp),mode);
              fh = newFH(pio_fp,(mode[1] ? '+' : (mode[0] == 'r' ? '<' : (mode[0] == 'a' ? 'a' : '>'))));
 	     ST(0) = (fh ? sv_2mortal(fh) : &PL_sv_undef);
 	    }
@@ -363,8 +365,7 @@ vmssysopen(spec,mode,perm,...)
 	CODE:
 	    char *args[8];
 	    int i, myargc, fd;
-	    FILE *fp;
-           PerlIO *pio_fp;
+	    PerlIO *pio_fp;
 	    SV *fh;
 	    STRLEN n_a;
 	    if (!spec || !*spec) {
@@ -407,8 +408,7 @@ vmssysopen(spec,mode,perm,...)
 	    }
 	    i = mode & 3;
 	    if (fd >= 0 &&
-              ((fp = fdopen(fd, &("r\000w\000r+"[2*i]))) != Null(FILE*))) {
-             pio_fp = PerlIO_importFILE(fp,&("r\000w\000r+"[2*i]));
+              ((pio_fp = PerlIO_fdopen(fd, &("r\000w\000r+"[2*i]))) != NULL)) {
              fh = newFH(pio_fp,"<>++"[i]);
 	     ST(0) = (fh ? sv_2mortal(fh) : &PL_sv_undef);
 	    }
@@ -433,10 +433,10 @@ writeof(mysv)
 	    struct dsc$descriptor devdsc = {0, DSC$K_DTYPE_T, DSC$K_CLASS_S, devnam};
 	    IO *io = sv_2io(mysv);
            PerlIO *fp = io ? IoOFP(io) : NULL;
-	    if (fp == NULL || strchr(">was+-|",IoTYPE(io)) == Nullch) {
+	    if (fp == NULL || strchr(">was+-|",IoTYPE(io)) == NULL) {
 	      set_errno(EBADF); set_vaxc_errno(SS$_IVCHAN); XSRETURN_UNDEF;
 	    }
-           if (PerlIO_getname(fp,devnam) == Nullch) { ST(0) = &PL_sv_undef; XSRETURN(1); }
+           if (PerlIO_getname(fp,devnam) == NULL) { ST(0) = &PL_sv_undef; XSRETURN(1); }
 	    if ((cp = strrchr(devnam,':')) != NULL) *(cp+1) = '\0';
 	    devdsc.dsc$w_length = strlen(devnam);
 	    retsts = sys$assign(&devdsc,&chan,0,0);

@@ -1,6 +1,6 @@
 /*    pad.h
  *
- *    Copyright (C) 2002, 2003, 2005, by Larry Wall and others
+ *    Copyright (C) 2002, 2003, 2005, 2006, 2007, 2008 by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -30,7 +30,20 @@ typedef U64TYPE PADOFFSET;
 #   endif
 #endif
 #define NOT_IN_PAD ((PADOFFSET) -1)
- 
+
+/* B.xs needs these for the benefit of B::Deparse */ 
+/* Low range end is exclusive (valid from the cop seq after this one) */
+#define COP_SEQ_RANGE_LOW(sv)			U_32(SvNVX(sv))
+/* High range end is inclusive (valid up to this cop seq) */
+#define COP_SEQ_RANGE_HIGH(sv)			U_32(SvUVX(sv))
+
+#define PARENT_PAD_INDEX(sv)			U_32(SvNVX(sv))
+#define PARENT_FAKELEX_FLAGS(sv)		U_32(SvUVX(sv))
+
+/* Flags set in the SvIVX field of FAKE namesvs */
+    
+#define PAD_FAKELEX_ANON   1 /* the lex is declared in an ANON, or ... */
+#define PAD_FAKELEX_MULTI  2 /* the lex can be instantiated multiple times */
 
 /* flags for the pad_new() function */
 
@@ -138,37 +151,37 @@ Restore the old pad saved into the local variable opad by PAD_SAVE_LOCAL()
 
 #define PAD_BASE_SV(padlist, po) \
 	(AvARRAY(padlist)[1]) 	\
-	    ? AvARRAY((AV*)(AvARRAY(padlist)[1]))[po] : Nullsv;
+	    ? AvARRAY((AV*)(AvARRAY(padlist)[1]))[po] : NULL;
     
 
-#define PAD_SET_CUR_NOSAVE(padlist,n) \
-	PL_comppad = (PAD*) (AvARRAY(padlist)[n]);		\
+#define PAD_SET_CUR_NOSAVE(padlist,nth) \
+	PL_comppad = (PAD*) (AvARRAY(padlist)[nth]);		\
 	PL_curpad = AvARRAY(PL_comppad);			\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log,			\
 	      "Pad 0x%"UVxf"[0x%"UVxf"] set_cur    depth=%d\n",	\
-	      PTR2UV(PL_comppad), PTR2UV(PL_curpad), (int)(n)));
+	      PTR2UV(PL_comppad), PTR2UV(PL_curpad), (int)(nth)));
 
 
-#define PAD_SET_CUR(padlist,n) \
+#define PAD_SET_CUR(padlist,nth) \
 	SAVECOMPPAD();						\
-	PAD_SET_CUR_NOSAVE(padlist,n);
+	PAD_SET_CUR_NOSAVE(padlist,nth);
 
 
 #define PAD_SAVE_SETNULLPAD()	SAVECOMPPAD(); \
-	PL_comppad = Null(PAD*); PL_curpad = Null(SV**);	\
+	PL_comppad = NULL; PL_curpad = NULL;	\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log, "Pad set_null\n"));
 
 #define PAD_SAVE_LOCAL(opad,npad) \
 	opad = PL_comppad;					\
 	PL_comppad = (npad);					\
-	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : Null(SV**); \
+	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : NULL;	\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log,			\
 	      "Pad 0x%"UVxf"[0x%"UVxf"] save_local\n",		\
 	      PTR2UV(PL_comppad), PTR2UV(PL_curpad)));
 
 #define PAD_RESTORE_LOCAL(opad) \
 	PL_comppad = opad;					\
-	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : Null(SV**); \
+	PL_curpad =  PL_comppad ? AvARRAY(PL_comppad) : NULL;	\
 	DEBUG_Xv(PerlIO_printf(Perl_debug_log,			\
 	      "Pad 0x%"UVxf"[0x%"UVxf"] restore_local\n",	\
 	      PTR2UV(PL_comppad), PTR2UV(PL_curpad)));
@@ -218,13 +231,15 @@ ling pad (lvalue) to C<gen>.  Note that C<SvCUR_set> is hijacked for this purpos
 
 */
 
-#define PAD_COMPNAME_FLAGS(po) SvFLAGS(*av_fetch(PL_comppad_name, (po), FALSE))
-#define PAD_COMPNAME_PV(po) SvPV_nolen(*av_fetch(PL_comppad_name, (po), FALSE))
+#define PAD_COMPNAME_SV(po) (*av_fetch(PL_comppad_name, (po), FALSE))
+#define PAD_COMPNAME_FLAGS(po) SvFLAGS(PAD_COMPNAME_SV(po))
+#define PAD_COMPNAME_FLAGS_isOUR(po) (PAD_COMPNAME_FLAGS(po) & SVpad_OUR)
+#define PAD_COMPNAME_PV(po) SvPV_nolen(PAD_COMPNAME_SV(po))
 
 #define PAD_COMPNAME_TYPE(po) pad_compname_type(po)
 
 #define PAD_COMPNAME_OURSTASH(po) \
-    (GvSTASH(*av_fetch(PL_comppad_name, (po), FALSE)))
+    (SvOURSTASH(PAD_COMPNAME_SV(po)))
 
 #define PAD_COMPNAME_GEN(po) SvCUR(AvARRAY(PL_comppad_name)[po])
 
@@ -235,8 +250,7 @@ ling pad (lvalue) to C<gen>.  Note that C<SvCUR_set> is hijacked for this purpos
 =for apidoc m|void|PAD_DUP|PADLIST dstpad|PADLIST srcpad|CLONE_PARAMS* param
 Clone a padlist.
 
-=for apidoc m|void|PAD_CLONE_VARS|PerlInterpreter *proto_perl \
-|CLONE_PARAMS* param
+=for apidoc m|void|PAD_CLONE_VARS|PerlInterpreter *proto_perl|CLONE_PARAMS* param
 Clone the state variables associated with running and compiling pads.
 
 =cut
@@ -263,8 +277,8 @@ Clone the state variables associated with running and compiling pads.
  * sub's CV or padlist. */
 
 #define PAD_CLONE_VARS(proto_perl, param)				\
-    PL_comppad = ptr_table_fetch(PL_ptr_table, proto_perl->Tcomppad);	\
-    PL_curpad = PL_comppad ?  AvARRAY(PL_comppad) : Null(SV**);		\
+    PL_comppad = (AV *) ptr_table_fetch(PL_ptr_table, proto_perl->Tcomppad); \
+    PL_curpad = PL_comppad ?  AvARRAY(PL_comppad) : NULL;		\
     PL_comppad_name		= av_dup(proto_perl->Icomppad_name, param); \
     PL_comppad_name_fill	= proto_perl->Icomppad_name_fill;	\
     PL_comppad_name_floor	= proto_perl->Icomppad_name_floor;	\
@@ -274,3 +288,13 @@ Clone the state variables associated with running and compiling pads.
     PL_padix_floor		= proto_perl->Ipadix_floor;		\
     PL_pad_reset_pending	= proto_perl->Ipad_reset_pending;	\
     PL_cop_seqmax		= proto_perl->Icop_seqmax;
+
+/*
+ * Local variables:
+ * c-indentation-style: bsd
+ * c-basic-offset: 4
+ * indent-tabs-mode: t
+ * End:
+ *
+ * ex: set ts=8 sts=4 sw=4 noet:
+ */

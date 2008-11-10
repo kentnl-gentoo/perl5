@@ -6,12 +6,11 @@
 
 $| = 1;
 
-print "1..1187\n";
-
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
 }
+our $Message = "Line";
 
 eval 'use Config';          #  Defaults assumed if this fails
 
@@ -2035,16 +2034,30 @@ print "ok 683\n" if @a == 9 && "@a" eq "f o o \n $a $b b a r";
 
 my $test = 687;
 
-# Force scalar context on the patern match
-sub ok ($$) {
+# Force scalar context on the pattern match
+sub ok ($;$) {
     my($ok, $name) = @_;
+    my $todo = $TODO ? " # TODO $TODO" : '';
 
-    printf "%sok %d - %s\n", ($ok ? "" : "not "), $test, $name;
+    printf "%sok %d - %s\n", ($ok ? "" : "not "), $test,
+        ($name||$Message)."$todo\tLine ".((caller)[2]);
 
     printf "# Failed test at line %d\n", (caller)[2] unless $ok;
 
     $test++;
     return $ok;
+}
+
+sub skip {
+    my $why = shift;
+    $why =~ s/\n.*//s;
+    my $n    = @_ ? shift : 1;
+    for (1..$n) {
+        print "ok $test # skip: $why\n";
+        $test++;
+    }
+    local $^W = 0;
+    last SKIP;
 }
 
 {
@@ -2640,7 +2653,11 @@ print "# some Unicode properties\n";
     print "# more whitespace: U+0085, U+2028, U+2029\n";
 
     # U+0085 needs to be forced to be Unicode, the \x{100} does that.
-    print "<\x{100}\x{0085}>" =~ /<\x{100}\s>/ ? "ok 845\n" : "not ok 845\n";
+    if ($ordA == 193) {
+	print "<\x{100}\x{0085}>" =~ /<\x{100}e>/ ? "ok 845\n" : "not ok 845\n";
+    } else {
+	print "<\x{100}\x{0085}>" =~ /<\x{100}\s>/ ? "ok 845\n" : "not ok 845\n";
+    }
     print "<\x{2028}>" =~ /<\s>/ ? "ok 846\n" : "not ok 846\n";
     print "<\x{2029}>" =~ /<\s>/ ? "ok 847\n" : "not ok 847\n";
 }
@@ -2995,8 +3012,8 @@ sub IsSyriac1 {
 END
 }
 
-print "\x{0712}" =~ /\p{IsSyriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
-print "\x{072F}" =~ /\P{IsSyriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+ok("\x{0712}" =~ /\p{IsSyriac1}/, '\x{0712}, \p{IsSyriac1}');
+ok("\x{072F}" =~ /\P{IsSyriac1}/, '\x{072F}, \P{IsSyriac1}');
 
 sub Syriac1 {
     return <<'END';
@@ -3005,8 +3022,29 @@ sub Syriac1 {
 END
 }
 
-print "\x{0712}" =~ /\p{Syriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
-print "\x{072F}" =~ /\P{Syriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
+ok("\x{0712}" =~ /\p{Syriac1}/, '\x{0712}, \p{Syriac1}');
+ok("\x{072F}" =~ /\P{Syriac1}/, '\x{072F}, \p{Syriac1}');
+
+print "# user-defined character properties may lack \\n at the end\n";
+sub InGreekSmall   { return "03B1\t03C9" }
+sub InGreekCapital { return "0391\t03A9\n-03A2" }
+
+ok("\x{03C0}" =~ /\p{InGreekSmall}/,   "Small pi");
+ok("\x{03C2}" =~ /\p{InGreekSmall}/,   "Final sigma");
+ok("\x{03A0}" =~ /\p{InGreekCapital}/, "Capital PI");
+ok("\x{03A2}" =~ /\P{InGreekCapital}/, "Reserved");
+
+sub AsciiHexAndDash {
+    return <<'END';
++utf8::ASCII_Hex_Digit
++utf8::Dash
+END
+}
+
+ok("-" =~ /\p{Dash}/,            "'-' is Dash");
+ok("A" =~ /\p{ASCII_Hex_Digit}/, "'A' is ASCII_Hex_Digit");
+ok("-" =~ /\p{AsciiHexAndDash}/, "'-' is AsciiHexAndDash");
+ok("A" =~ /\p{AsciiHexAndDash}/, "'A' is AsciiHexAndDash");
 
 {
     print "# Change #18179\n";
@@ -3067,12 +3105,15 @@ print "\x{072F}" =~ /\P{Syriac1}/ ? "ok $test\n" : "not ok $test\n"; $test++;
     ok($a !~ /^\C{4}y/,     q{don't match \C{4}y});
 }
 
-$_ = 'aaaaaaaaaa';
-utf8::upgrade($_); chop $_; $\="\n";
-ok(/[^\s]+/, "m/[^\s]/ utf8");
-ok(/[^\d]+/, "m/[^\d]/ utf8");
-ok(($a = $_, $_ =~ s/[^\s]+/./g), "s/[^\s]/ utf8");
-ok(($a = $_, $a =~ s/[^\d]+/./g), "s/[^\s]/ utf8");
+{
+    local $\;
+    $_ = 'aaaaaaaaaa';
+    utf8::upgrade($_); chop $_; $\="\n";
+    ok(/[^\s]+/, "m/[^\s]/ utf8");
+    ok(/[^\d]+/, "m/[^\d]/ utf8");
+    ok(($a = $_, $_ =~ s/[^\s]+/./g), "s/[^\s]/ utf8");
+    ok(($a = $_, $a =~ s/[^\d]+/./g), "s/[^\s]/ utf8");
+}
 
 ok("\x{100}" =~ /\x{100}/, "[perl #15397]");
 ok("\x{100}" =~ /(\x{100})/, "[perl #15397]");
@@ -3127,13 +3168,13 @@ ok("bbbbac" =~ /$pattern/ && $1 eq 'a', "[perl #3547]");
     foreach (1,2,3,4) {
 	    $p++ if /(??{ $p })/
     }
-    ok ($p == 5, "[perl #20683] (??{ }) returns stale values");
+    iseq ($p, 5, "[perl #20683] (??{ }) returns stale values");
     { package P; $a=1; sub TIESCALAR { bless[] } sub FETCH { $a++ } }
     tie $p, P;
     foreach (1,2,3,4) {
 	    /(??{ $p })/
     }
-    ok ( $p == 5, "(??{ }) returns stale values");
+    iseq ( $p, 5, "(??{ }) returns stale values");
 }
 
 {
@@ -3280,6 +3321,7 @@ ok("abc" =~ /[^\cA-\cB]/, '\cA in negated character class range');
 ok("a\cBb" =~ /[\cA-\cC]/, '\cB in character class range');
 ok("a\cCbc" =~ /[^\cA-\cB]/, '\cC in negated character class range');
 ok("a\cAb" =~ /(??{"\cA"})/, '\cA in ??{} pattern');
+ok("ab" !~ /a\cIb/x, '\cI in pattern');
 
 # perl #28532: optional zero-width match at end of string is ignored
 ok(("abc" =~ /^abc(\z)?/) && defined($1),
@@ -3357,6 +3399,12 @@ ok(("foba  ba$s" =~ qr/(foo|Bass|bar)/i)
 ok(("foba  ba$s" =~ qr/(foo|BaSS|bar)/i)
     &&  $1 eq "ba$s",
    "TRIEF + LATIN SMALL LETTER SHARP S =~ SS");
+
+ok(("foba  ba${s}pxySS$s$s" =~ qr/(b(?:a${s}t|a${s}f|a${s}p)[xy]+$s*)/i)
+    &&  $1 eq "ba${s}pxySS$s$s",
+   "COMMON PREFIX TRIEF + LATIN SMALL LETTER SHARP S");
+
+   
 }
 
 
@@ -3395,5 +3443,432 @@ ok(("foba  ba$s" =~ qr/(foo|BaSS|bar)/i)
        "# assigning to original string should not corrupt match vars");
 }
 
-# last test 1187
+{
+    package wooosh;
+    sub gloople {
+      "!";
+    }
+    package main;
+    
+    my $aeek = bless {}, 'wooosh';
+    eval {$aeek->gloople() =~ /(.)/g;};
+    ok($@ eq "", "//g match against return value of sub") or print "# $@\n";
+}
 
+{
+    sub gloople {
+      "!";
+    }
+    eval {gloople() =~ /(.)/g;};
+    ok($@ eq "", "# 26410 didn't affect sub calls for some reason")
+	or print "# $@\n";
+}
+
+{
+    local $TODO = "See changes 26925-26928, which reverted change 26410";
+    package lv;
+    $var = "abc";
+    sub variable : lvalue { $var }
+
+    package main;
+    my $o = bless [], "lv";
+    my $f = "";
+    eval { for (1..2) { $f .= $1 if $o->variable =~ /(.)/g } };
+    ok($f eq "ab", "pos retained between calls") or print "# $@\n";
+}
+
+{
+    local $TODO = "See changes 26925-26928, which reverted change 26410";
+    $var = "abc";
+    sub variable : lvalue { $var }
+
+    my $f = "";
+    eval { for (1..2) { $f .= $1 if variable() =~ /(.)/g } };
+    ok($f eq "ab", "pos retained between calls") or print "# $@\n";
+}
+
+# [perl #37836] Simple Regex causes SEGV when run on specific data
+if ($ordA == 193) {
+    print "ok $test # Skip: in EBCDIC\n"; $test++;
+} else {
+    no warnings 'utf8';
+    $_ = pack('U0C2', 0xa2, 0xf8); # ill-formed UTF-8
+    my $ret = 0;
+    eval { $ret = s/[\0]+//g };
+    ok($ret == 0, "ill-formed UTF-8 doesn't match NUL in class");
+}
+
+{ # [perl #38293] chr(65535) should be allowed in regexes
+    no warnings 'utf8'; # to allow non-characters
+    my($c, $r, $s);
+
+    $c = chr 0xffff;
+    $c =~ s/$c//g;
+    ok($c eq "", "U+FFFF, parsed as atom");
+
+    $c = chr 0xffff;
+    $r = "\\$c";
+    $c =~ s/$r//g;
+    ok($c eq "", "U+FFFF backslashed, parsed as atom");
+
+    $c = chr 0xffff;
+    $c =~ s/[$c]//g;
+    ok($c eq "", "U+FFFF, parsed in class");
+
+    $c = chr 0xffff;
+    $r = "[\\$c]";
+    $c =~ s/$r//g;
+    ok($c eq "", "U+FFFF backslashed, parsed in class");
+
+    $s = "A\x{ffff}B";
+    $s =~ s/\x{ffff}//i;
+    ok($s eq "AB", "U+FFFF, EXACTF");
+
+    $s = "\x{ffff}A";
+    $s =~ s/\bA//;
+    ok($s eq "\x{ffff}", "U+FFFF, BOUND");
+
+    $s = "\x{ffff}!";
+    $s =~ s/\B!//;
+    ok($s eq "\x{ffff}", "U+FFFF, NBOUND");
+} # non-characters end
+
+
+{ # related to [perl #27940]
+    ok("\0-A"  =~ /\c@-A/, '@- should not be interpolated in a pattern');
+    ok("\0\0A" =~ /\c@+A/, '@+ should not be interpolated in a pattern');
+    ok("X\@-A"  =~ /X@-A/, '@- should not be interpolated in a pattern');
+    ok("X\@\@A" =~ /X@+A/, '@+ should not be interpolated in a pattern');
+
+    ok("X\0A" =~ /X\c@?A/,  '\c@?');
+    ok("X\0A" =~ /X\c@*A/,  '\c@*');
+    ok("X\0A" =~ /X\c@(A)/, '\c@(');
+    ok("X\0A" =~ /X(\c@)A/, '\c@)');
+    ok("X\0A" =~ /X\c@|ZA/, '\c@|');
+
+    ok("X\@A" =~ /X@?A/,  '@?');
+    ok("X\@A" =~ /X@*A/,  '@*');
+    ok("X\@A" =~ /X@(A)/, '@(');
+    ok("X\@A" =~ /X(@)A/, '@)');
+    ok("X\@A" =~ /X@|ZA/, '@|');
+
+    local $" = ','; # non-whitespace and non-RE-specific
+    ok('abc' =~ /(.)(.)(.)/, 'the last successful match is bogus');
+    ok("A@+B"  =~ /A@{+}B/,  'interpolation of @+ in /@{+}/');
+    ok("A@-B"  =~ /A@{-}B/,  'interpolation of @- in /@{-}/');
+    ok("A@+B"  =~ /A@{+}B/x, 'interpolation of @+ in /@{+}/x');
+    ok("A@-B"  =~ /A@{-}B/x, 'interpolation of @- in /@{-}/x');
+}
+
+sub iseq($$;$) { 
+    my ( $got, $expect, $name)=@_;
+    my $todo = $TODO ? " # TODO $TODO" : '';
+    
+    $_=defined($_) ? "'$_'" : "undef"
+        for $got, $expect;
+        
+    my $ok=  $got eq $expect;
+        
+    printf "%sok %d - %s$todo\n", ($ok ? "" : "not "), $test,
+        $name||"$Message:".((caller)[2]);
+
+    no warnings 'utf8';
+    printf "# Failed test at line %d\n".
+           "# expected: %s\n". 
+           "#   result: %s\n", 
+           (caller)[2], $expect, $got
+        unless $ok;
+
+    $test++;
+    return $ok;
+}   
+
+{
+    local $Message="RT#22395";
+    our $count;
+    for my $l (1,10,100,1000) {
+	$count=0;
+	('a' x $l) =~ /(.*)(?{$count++})[bc]/;
+	iseq($l+1,$count,"Should be L+1 not L*(L+3)/2 (L=$l)");
+    }
+}
+{
+    local $Message = "Relative Recursion";
+    local $Message = "RT#22614";
+    local $_='ab';
+    our @len=();
+    /(.){1,}(?{push @len,0+@-})(.){1,}(?{})^/;
+    iseq("@len","2 2 2");
+}
+{
+    local $Message = "RT#18209";
+    my $text = ' word1 word2 word3 word4 word5 word6 ';
+{
+    local $Message = "RT#36909 test";
+    $^R = 'Nothing';
+    {
+        local $^R = "Bad";
+        ok('x foofoo y' =~ m{
+         (foo) # $^R correctly set
+        (?{ "last regexp code result" })
+        }x);
+        iseq($^R,'last regexp code result');
+    }
+    iseq($^R,'Nothing');
+    {
+        local $^R = "Bad";
+
+        ok('x foofoo y' =~ m{
+         (?:foo|bar)+ # $^R correctly set
+        (?{"last regexp code result"})
+        }x);
+        iseq($^R,'last regexp code result');
+    }
+    iseq($^R,'Nothing');
+
+    {
+        local $^R = "Bad";
+        ok('x foofoo y' =~ m{
+         (foo|bar)\1+ # $^R undefined
+        (?{"last regexp code result"})
+        }x);
+        iseq($^R,'last regexp code result');
+    }
+    iseq($^R,'Nothing');
+}
+
+    my @words = ('word1', 'word3', 'word5');
+    my $count;
+    foreach my $word (@words){
+        $text =~ s/$word\s//gi; # Leave a space to seperate words in the resultant str.
+        # The following block is not working.
+        if($&){
+            $count++;
+        }
+        # End bad block
+    }
+    iseq($count,3);
+    iseq($text,' word2 word4 word6 ');
+}
+
+
+# stress test CURLYX/WHILEM.
+#
+# This test includes varying levels of nesting, and according to
+# profiling done against build 28905, exercises every code line in the
+# CURLYX and WHILEM blocks, except those related to LONGJMP, the
+# super-linear cache and warnings. It executes about 0.5M regexes
+
+{
+  my $r = qr/^
+  	    (?:
+  		( (?:a|z+)+ )
+  		(?:
+  		    ( (?:b|z+){3,}? )
+  		    (
+  			(?:
+  			    (?:
+				(?:c|z+){1,1}?z
+			    )?
+  			    (?:c|z+){1,1}
+  			)*
+  		    )
+  		    (?:z*){2,}
+  		    ( (?:z+|d)+ )
+  		    (?:
+  			( (?:e|z+)+ )
+  		    )*
+  		    ( (?:f|z+)+ )
+  		)*
+  		( (?:z+|g)+ )
+  		(?:
+  		    ( (?:h|z+)+ )
+  		)*
+  		( (?:i|z+)+ )
+  	    )+
+  	    ( (?:j|z+)+ )
+  	    (?:
+  		( (?:k|z+)+ )
+  	    )*
+  	    ( (?:l|z+)+ )
+  	$/x;
+  
+  
+  my $ok = 1;
+  my $msg = "CURLYX stress test";
+  OUTER:
+  for my $a ("x","a","aa") {
+    for my $b ("x","bbb","bbbb") {
+      my $bs = $a.$b;
+      for my $c ("x","c","cc") {
+        my $cs = $bs.$c;
+        for my $d ("x","d","dd") {
+          my $ds = $cs.$d;
+          for my $e ("x","e","ee") {
+            my $es = $ds.$e;
+            for my $f ("x","f","ff") {
+              my $fs = $es.$f;
+              for my $g ("x","g","gg") {
+                my $gs = $fs.$g;
+                for my $h ("x","h","hh") {
+                  my $hs = $gs.$h;
+                  for my $i ("x","i","ii") {
+                    my $is = $hs.$i;
+                    for my $j ("x","j","jj") {
+                      my $js = $is.$j;
+                      for my $k ("x","k","kk") {
+                        my $ks = $js.$k;
+                        for my $l ("x","l","ll") {
+                          my $ls = $ks.$l;
+                          if ($ls =~ $r) {
+                            if ($ls =~ /x/) {
+                              $msg .= ": unexpected match for [$ls]";
+			      $ok = 0;
+                              last OUTER;
+                            }
+                            my $cap = "$1$2$3$4$5$6$7$8$9$10$11$12";
+                            unless ($ls eq $cap) {
+                              $msg .= ": capture: [$ls], got [$cap]";
+			      $ok = 0;
+                              last OUTER;
+                            }
+                          }
+                          else {
+                            unless ($ls =~ /x/) {
+                              $msg = ": failed for [$ls]";
+			      $ok = 0;
+                              last OUTER;
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+  ok($ok, $msg);
+}
+
+{
+    my $str='abc'; 
+    my $count=0;
+    my $mval=0;
+    my $pval=0;
+    while ($str=~/b/g) { $mval=$#-; $pval=$#+; $count++ }
+    iseq($mval,0,"\@- should be empty [RT#36046]");
+    iseq($pval,0,"\@+ should be empty [RT#36046]");
+    iseq($count,1,"should have matched once only [RT#36046]");
+}
+
+{
+    use warnings;
+    local $Message = "ASCII pattern that really is utf8";
+    my @w;
+    local $SIG{__WARN__}=sub{push @w,"@_"};
+    my $c=qq(\x{DF}); 
+    ok($c=~/${c}|\x{100}/);
+    ok(@w==0);
+}    
+
+{
+    use charnames ":full";
+    ok("\N{ROMAN NUMERAL ONE}" =~ /\p{Alphabetic}/, "I =~ Alphabetic");
+    ok("\N{ROMAN NUMERAL ONE}" =~ /\p{Uppercase}/,  "I =~ Uppercase");
+    ok("\N{ROMAN NUMERAL ONE}" !~ /\p{Lowercase}/,  "I !~ Lowercase");
+    ok("\N{ROMAN NUMERAL ONE}" =~ /\p{IDStart}/,    "I =~ ID_Start");
+    ok("\N{ROMAN NUMERAL ONE}" =~ /\p{IDContinue}/, "I =~ ID_Continue");
+    ok("\N{SMALL ROMAN NUMERAL ONE}" =~ /\p{Alphabetic}/, "i =~ Alphabetic");
+    ok("\N{SMALL ROMAN NUMERAL ONE}" !~ /\p{Uppercase}/,  "i !~ Uppercase");
+    ok("\N{SMALL ROMAN NUMERAL ONE}" =~ /\p{Lowercase}/,  "i =~ Lowercase");
+    ok("\N{SMALL ROMAN NUMERAL ONE}" =~ /\p{IDStart}/,    "i =~ ID_Start");
+    ok("\N{SMALL ROMAN NUMERAL ONE}" =~ /\p{IDContinue}/, "i =~ ID_Continue");
+}
+
+{
+# requirement of Unicode Technical Standard #18, 1.7 Code Points
+# cf. http://www.unicode.org/reports/tr18/#Supplementary_Characters
+    for my $u (0x7FF, 0x800, 0xFFFF, 0x10000) {
+        no warnings 'utf8'; # oops
+        my $c = chr $u;
+        my $x = sprintf '%04X', $u;
+        ok( "A${c}B" =~ /A[\0-\x{10000}]B/, "unicode range - $x");
+    }
+}
+{
+    my $spaces="      ";
+    local $_=join 'bar',$spaces,$spaces;
+    our $count=0;
+    s/(?>\s+bar)(?{$count++})//g;
+    iseq($_,$spaces,"SUSPEND final string");
+    iseq($count,1,"Optimiser should have prevented more than one match");
+}
+
+# test for bug #52658
+{
+    my $reg = '../xxx/';
+    my @te = ($reg =~ m{^(/?(?:\.\./)*)}, $reg =~ s/(x)/'b'/eg > 1 ? '##' : '++');
+    #print "with bug:     (0)=$te[0]  (1)=$te[1]  reg=$reg\n";
+    iseq($reg, '../bbb/');
+    iseq($te[0], '../');
+}
+
+SKIP: {
+    unless ($ordA == 65) { skip("Assumes ASCII", 4) }
+
+    my @notIsPunct = grep {/[[:punct:]]/ and not /\p{IsPunct}/}
+			map {chr} 0x20..0x7f;
+    iseq( join('', @notIsPunct), '$+<=>^`|~',
+	'[:punct:] disagress with IsPunct on Symbols');
+
+    my @isPrint = grep {not/[[:print:]]/ and /\p{IsPrint}/}
+			map {chr} 0..0x1f, 0x7f..0x9f;
+    iseq( join('', @isPrint), "\x09\x0a\x0b\x0c\x0d\x85",
+	'IsPrint disagrees with [:print:] on control characters');
+
+    my @isPunct = grep {/[[:punct:]]/ != /\p{IsPunct}/}
+			map {chr} 0x80..0xff;
+    iseq( join('', @isPunct), "\xa1\xab\xb7\xbb\xbf",		# ¡ « · » ¿
+	'IsPunct disagrees with [:punct:] outside ASCII');
+
+    my @isPunctLatin1 = eval q{
+	use encoding 'latin1';
+	grep {/[[:punct:]]/ != /\p{IsPunct}/} map {chr} 0x80..0xff;
+    };
+    if( $@ ){ skip( $@, 1); }
+    iseq( join('', @isPunctLatin1), '', 
+	'IsPunct agrees with [:punct:] with explicit Latin1');
+} 
+
+# [perl #60034]
+{
+    my $a = "xyzt" x 8192;
+    ok($a =~ /\A(?>[a-z])*\z/, '(?>) does not cause wrongness on long string');
+    my $b = $a . chr 256;
+    chop $b;
+    iseq($a, $b);
+    ok($b =~ /\A(?>[a-z])*\z/,
+       '(?>) does not cause wrongness on long string with UTF-8');
+}
+
+# Test counter is at bottom of file. Put new tests above here.
+#-------------------------------------------------------------------
+# Keep the following tests last -- they may crash perl
+
+# [perl #45337] utf8 + "[a]a{2}" + /$.../ = panic: sv_len_utf8 cache
+
+{
+    local ${^UTF8CACHE} = -1;
+    my $s="[a]a{2}";
+    utf8::upgrade $s;
+    ok("aaa" =~ /$s/, "#45337");
+}
+
+# Put new tests above the dotted line about a page above this comment
+
+BEGIN{print "1..1276\n"};

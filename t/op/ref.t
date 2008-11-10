@@ -8,7 +8,7 @@ BEGIN {
 require 'test.pl';
 use strict qw(refs subs);
 
-plan (74);
+plan(182);
 
 # Test glob operations.
 
@@ -126,9 +126,49 @@ sub mysub2 { lc shift }
 
 # Test the ref operator.
 
-is (ref $subref, 'CODE');
-is (ref $ref, 'ARRAY');
-is (ref $refref, 'HASH');
+sub PVBM () { 'foo' }
+{ my $dummy = index 'foo', PVBM }
+
+my $pviv = 1; "$pviv";
+my $pvnv = 1.0; "$pvnv";
+my $x;
+
+# we don't test
+#   tied lvalue => SCALAR, as we haven't tested tie yet
+#   BIND, 'cos we can't create them yet
+#   REGEXP, 'cos that requires overload or Scalar::Util
+#   LVALUE ref, 'cos I can't work out how to create one :)
+
+for (
+    [ 'undef',          SCALAR  => \undef               ],
+    [ 'constant IV',    SCALAR  => \1                   ],
+    [ 'constant NV',    SCALAR  => \1.0                 ],
+    [ 'constant PV',    SCALAR  => \'f'                 ],
+    [ 'scalar',         SCALAR  => \$x                  ],
+    [ 'PVIV',           SCALAR  => \$pviv               ],
+    [ 'PVNV',           SCALAR  => \$pvnv               ],
+    [ 'PVMG',           SCALAR  => \$0                  ],
+    [ 'PVBM',           SCALAR  => \PVBM                ],
+    [ 'vstring',        SCALAR  => \v1                  ],
+    [ 'ref',            REF     => \\1                  ],
+    [ 'lvalue',         LVALUE  => \substr($x, 0, 0)    ],
+    [ 'named array',    ARRAY   => \@ary                ],
+    [ 'anon array',     ARRAY   => [ 1 ]                ],
+    [ 'named hash',     HASH    => \%whatever           ],
+    [ 'anon hash',      HASH    => { a => 1 }           ],
+    [ 'named sub',      CODE    => \&mysub,             ],
+    [ 'anon sub',       CODE    => sub { 1; }           ],
+    [ 'glob',           GLOB    => \*foo                ],
+    [ 'format',         FORMAT  => *STDERR{FORMAT}      ],
+) {
+    my ($desc, $type, $ref) = @$_;
+    is (ref $ref, $type, "ref() for ref to $desc");
+    like ("$ref", qr/^$type\(0x[0-9a-f]+\)$/, "stringify for ref to $desc");
+}
+
+is (ref *STDOUT{IO}, 'IO::Handle', 'IO refs are blessed into IO::Handle');
+like (*STDOUT{IO}, qr/^IO::Handle=IO\(0x[0-9a-f]+\)$/,
+    'stringify for IO refs');
 
 # Test anonymous hash syntax.
 
@@ -377,6 +417,171 @@ like (runperl(
     prog => '$x=bless[]; sub IO::Handle::DESTROY{$_="bad";s/bad/ok/;print}',
     stderr => 1
       ), qr/^(ok)+$/, 'STDOUT destructor');
+
+TODO: {
+    no strict 'refs';
+    $name8 = chr 163;
+    $name_utf8 = $name8 . chr 256;
+    chop $name_utf8;
+
+    is ($$name8, undef, 'Nothing before we start');
+    is ($$name_utf8, undef, 'Nothing before we start');
+    $$name8 = "Pound";
+    is ($$name8, "Pound", 'Accessing via 8 bit symref works');
+    local $TODO = "UTF8 mangled in symrefs";
+    is ($$name_utf8, "Pound", 'Accessing via UTF8 symref works');
+}
+
+TODO: {
+    no strict 'refs';
+    $name_utf8 = $name = chr 9787;
+    utf8::encode $name_utf8;
+
+    is (length $name, 1, "Name is 1 char");
+    is (length $name_utf8, 3, "UTF8 representation is 3 chars");
+
+    is ($$name, undef, 'Nothing before we start');
+    is ($$name_utf8, undef, 'Nothing before we start');
+    $$name = "Face";
+    is ($$name, "Face", 'Accessing via Unicode symref works');
+    local $TODO = "UTF8 mangled in symrefs";
+    is ($$name_utf8, undef,
+	'Accessing via the UTF8 byte sequence gives nothing');
+}
+
+{
+    no strict 'refs';
+    $name1 = "\0Chalk";
+    $name2 = "\0Cheese";
+
+    isnt ($name1, $name2, "They differ");
+
+    is ($$name1, undef, 'Nothing before we start (scalars)');
+    is ($$name2, undef, 'Nothing before we start');
+    $$name1 = "Yummy";
+    is ($$name1, "Yummy", 'Accessing via the correct name works');
+    # OK. For 5.8.x I think we're going to have to keep the NUL truncating
+    # behaviour, as it's the sort of thing that I can imagine someone relying
+    # on.
+    is ($$name2, "Yummy",
+	'Accessing via a different NUL-containing name gives the same thing');
+    # defined uses a different code path
+    ok (defined $$name1, 'defined via the correct name works');
+    ok (defined $$name2,
+	'defined via a different NUL-containing name gives the same thing');
+
+    is ($name1->[0], undef, 'Nothing before we start (arrays)');
+    is ($name2->[0], undef, 'Nothing before we start');
+    $name1->[0] = "Yummy";
+    is ($name1->[0], "Yummy", 'Accessing via the correct name works');
+    is ($name2->[0], "Yummy",
+	'Accessing via a different NUL-containing name gives the same thing');
+    ok (defined $name1->[0], 'defined via the correct name works');
+    ok (defined$name2->[0],
+	'defined via a different NUL-containing name gives the same thing');
+
+    my (undef, $one) = @{$name1}[2,3];
+    my (undef, $two) = @{$name2}[2,3];
+    is ($one, undef, 'Nothing before we start (array slices)');
+    is ($two, undef, 'Nothing before we start');
+    @{$name1}[2,3] = ("Very", "Yummy");
+    (undef, $one) = @{$name1}[2,3];
+    (undef, $two) = @{$name2}[2,3];
+    is ($one, "Yummy", 'Accessing via the correct name works');
+    is ($two, "Yummy",
+	'Accessing via a different NUL-containing name gives the same thing');
+    ok (defined $one, 'defined via the correct name works');
+    ok (defined $two,
+	'defined via a different NUL-containing name gives the same thing');
+
+    is ($name1->{PWOF}, undef, 'Nothing before we start (hashes)');
+    is ($name2->{PWOF}, undef, 'Nothing before we start');
+    $name1->{PWOF} = "Yummy";
+    is ($name1->{PWOF}, "Yummy", 'Accessing via the correct name works');
+    is ($name2->{PWOF}, "Yummy",
+	'Accessing via a different NUL-containing name gives the same thing');
+    ok (defined $name1->{PWOF}, 'defined via the correct name works');
+    ok (defined $name2->{PWOF},
+	'defined via a different NUL-containing name gives the same thing');
+
+    my (undef, $one) = @{$name1}{'SNIF', 'BEEYOOP'};
+    my (undef, $two) = @{$name2}{'SNIF', 'BEEYOOP'};
+    is ($one, undef, 'Nothing before we start (hash slices)');
+    is ($two, undef, 'Nothing before we start');
+    @{$name1}{'SNIF', 'BEEYOOP'} = ("Very", "Yummy");
+    (undef, $one) = @{$name1}{'SNIF', 'BEEYOOP'};
+    (undef, $two) = @{$name2}{'SNIF', 'BEEYOOP'};
+    is ($one, "Yummy", 'Accessing via the correct name works');
+    is ($two, "Yummy",
+	'Accessing via a different NUL-containing name gives the same thing');
+    ok (defined $one, 'defined via the correct name works');
+    ok (defined $two,
+	'defined via a different NUL-containing name gives the same thing');
+
+    $name1 = "Left"; $name2 = "Left\0Right";
+    my $glob2 = *{$name2};
+
+    is ($glob1, undef, "We get different typeglobs. In fact, undef");
+
+    *{$name1} = sub {"One"};
+    *{$name2} = sub {"Two"};
+
+    # In 5.8.x land these two are the same.
+    is (&{$name1}, "Two");
+    is (&{$name2}, "Two");
+}
+
+# test dereferencing errors
+{
+    format STDERR =
+.
+    my $ref;
+    foreach $ref (*STDOUT{IO}, *STDERR{FORMAT}) {
+	eval q/ $$ref /;
+	like($@, qr/Not a SCALAR reference/, "Scalar dereference");
+	eval q/ @$ref /;
+	like($@, qr/Not an ARRAY reference/, "Array dereference");
+	eval q/ %$ref /;
+	like($@, qr/Not a HASH reference/, "Hash dereference");
+	eval q/ &$ref /;
+	like($@, qr/Not a CODE reference/, "Code dereference");
+    }
+
+    $ref = *STDERR{FORMAT};
+    eval q/ *$ref /;
+    like($@, qr/Not a GLOB reference/, "Glob dereference");
+
+    $ref = *STDOUT{IO};
+    eval q/ *$ref /;
+    is($@, '', "Glob dereference of PVIO is acceptable");
+
+    is($ref, *{$ref}{IO}, "IO slot of the temporary glob is set correctly");
+}
+
+# these will segfault if they fail
+
+my $pvbm = PVBM;
+my $rpvbm = \$pvbm;
+
+ok (!eval { *$rpvbm }, 'PVBM ref is not a GLOB ref');
+ok (!eval { *$pvbm }, 'PVBM is not a GLOB ref');
+ok (!eval { $$pvbm }, 'PVBM is not a SCALAR ref');
+ok (!eval { @$pvbm }, 'PVBM is not an ARRAY ref');
+ok (!eval { %$pvbm }, 'PVBM is not a HASH ref');
+ok (!eval { $pvbm->() }, 'PVBM is not a CODE ref');
+ok (!eval { $rpvbm->foo }, 'PVBM is not an object');
+
+# bug 24254
+is( runperl(stderr => 1, prog => 'map eval qq(exit),1 for 1'), "");
+is( runperl(stderr => 1, prog => 'eval { for (1) { map { die } 2 } };'), "");
+is( runperl(stderr => 1, prog => 'for (125) { map { exit } (213)}'), "");
+is( runperl(stderr => 1, prog => 'map die,4 for 3'), "Died at -e line 1.\n");
+is( runperl(stderr => 1, prog => 'grep die,4 for 3'), "Died at -e line 1.\n");
+is( runperl(stderr => 1, prog => 'for $a (3) {@b=sort {die} 4,5}'), "Died at -e line 1.\n");
+
+# bug 57564
+is( runperl(stderr => 1, prog => 'my $i;for $i (1) { for $i (2) { } }'), "");
+
 
 # Bit of a hack to make test.pl happy. There are 3 more tests after it leaves.
 $test = curr_test();

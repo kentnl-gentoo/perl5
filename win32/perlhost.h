@@ -7,15 +7,23 @@
  *    License or the Artistic License, as specified in the README file.
  */
 
+#ifndef UNDER_CE
 #define CHECK_HOST_INTERP
+#endif
 
 #ifndef ___PerlHost_H___
 #define ___PerlHost_H___
 
+#ifndef UNDER_CE
 #include <signal.h>
+#endif
 #include "iperlsys.h"
 #include "vmem.h"
 #include "vdir.h"
+
+#ifndef WC_NO_BEST_FIT_CHARS
+#  define WC_NO_BEST_FIT_CHARS 0x00000400
+#endif
 
 START_EXTERN_C
 extern char *		g_win32_get_privlib(const char *pl);
@@ -608,14 +616,14 @@ PerlStdIOGetc(struct IPerlStdIO* piPerl, FILE* pf)
     return win32_getc(pf);
 }
 
-char*
+STDCHAR*
 PerlStdIOGetBase(struct IPerlStdIO* piPerl, FILE* pf)
 {
 #ifdef FILE_base
     FILE *f = pf;
     return FILE_base(f);
 #else
-    return Nullch;
+    return NULL;
 #endif
 }
 
@@ -641,14 +649,14 @@ PerlStdIOGetCnt(struct IPerlStdIO* piPerl, FILE* pf)
 #endif
 }
 
-char*
+STDCHAR*
 PerlStdIOGetPtr(struct IPerlStdIO* piPerl, FILE* pf)
 {
 #ifdef USE_STDIO_PTR
     FILE *f = pf;
     return FILE_ptr(f);
 #else
-    return Nullch;
+    return NULL;
 #endif
 }
 
@@ -734,7 +742,7 @@ PerlStdIOSetCnt(struct IPerlStdIO* piPerl, FILE* pf, int n)
 }
 
 void
-PerlStdIOSetPtr(struct IPerlStdIO* piPerl, FILE* pf, char * ptr)
+PerlStdIOSetPtr(struct IPerlStdIO* piPerl, FILE* pf, STDCHAR * ptr)
 {
 #ifdef STDIO_PTR_LVALUE
     FILE *f = pf;
@@ -823,6 +831,7 @@ PerlStdIOGetOSfhandle(struct IPerlStdIO* piPerl, int filenum)
 FILE*
 PerlStdIOFdupopen(struct IPerlStdIO* piPerl, FILE* pf)
 {
+#ifndef UNDER_CE
     FILE* pfdup;
     fpos_t pos;
     char mode[3];
@@ -870,6 +879,9 @@ PerlStdIOFdupopen(struct IPerlStdIO* piPerl, FILE* pf)
 	fsetpos(pfdup, &pos);
     }
     return pfdup;
+#else
+    return 0;
+#endif
 }
 
 struct IPerlStdIO perlStdIO =
@@ -977,7 +989,14 @@ PerlLIOFileStat(struct IPerlLIO* piPerl, int handle, Stat_t *buffer)
 int
 PerlLIOIOCtl(struct IPerlLIO* piPerl, int i, unsigned int u, char *data)
 {
-    return win32_ioctlsocket((SOCKET)i, (long)u, (u_long*)data);
+    u_long u_long_arg;
+    int retval;
+
+    /* mauke says using memcpy avoids alignment issues */
+    memcpy(&u_long_arg, data, sizeof u_long_arg); 
+    retval = win32_ioctlsocket((SOCKET)i, (long)u, &u_long_arg);
+    memcpy(data, &u_long_arg, sizeof u_long_arg);
+    return retval;
 }
 
 int
@@ -1599,9 +1618,7 @@ PerlProcKill(struct IPerlProc* piPerl, int pid, int sig)
 int
 PerlProcKillpg(struct IPerlProc* piPerl, int pid, int sig)
 {
-    dTHX;
-    Perl_croak(aTHX_ "killpg not implemented!\n");
-    return 0;
+    return win32_kill(pid, -sig);
 }
 
 int
@@ -1750,7 +1767,7 @@ restart:
 	    PL_curstash = PL_defstash;
 	    if (PL_endav && !PL_minus_c)
 		call_list(oldscope, PL_endav);
-	    status = STATUS_NATIVE_EXPORT;
+	    status = STATUS_EXIT;
 	    break;
 	case 3:
 	    if (PL_restartop) {
@@ -2118,6 +2135,10 @@ lookup(const void *arg1, const void *arg2)
 LPSTR*
 CPerlHost::Lookup(LPCSTR lpStr)
 {
+#ifdef UNDER_CE
+    if (!m_lppEnvList || !m_dwEnvCount)
+	return NULL;
+#endif
     if (!lpStr)
 	return NULL;
     return (LPSTR*)bsearch(&lpStr, m_lppEnvList, m_dwEnvCount, sizeof(LPSTR), lookup);
@@ -2214,16 +2235,15 @@ char*
 CPerlHost::GetChildDir(void)
 {
     dTHX;
-    int length;
     char* ptr;
+    size_t length;
+
     Newx(ptr, MAX_PATH+1, char);
-    if(ptr) {
-	m_pvDir->GetCurrentDirectoryA(MAX_PATH+1, ptr);
-	length = strlen(ptr);
-	if (length > 3) {
-	    if ((ptr[length-1] == '\\') || (ptr[length-1] == '/'))
-		ptr[length-1] = 0;
-	}
+    m_pvDir->GetCurrentDirectoryA(MAX_PATH+1, ptr);
+    length = strlen(ptr);
+    if (length > 3) {
+        if ((ptr[length-1] == '\\') || (ptr[length-1] == '/'))
+            ptr[length-1] = 0;
     }
     return ptr;
 }
@@ -2412,13 +2432,7 @@ CPerlHost::Chdir(const char *dirname)
 	errno = ENOENT;
 	return -1;
     }
-    if (USING_WIDE()) {
-	WCHAR wBuffer[MAX_PATH];
-	A2WHELPER(dirname, wBuffer, sizeof(wBuffer));
-	ret = m_pvDir->SetCurrentDirectoryW(wBuffer);
-    }
-    else
-	ret = m_pvDir->SetCurrentDirectoryA((char*)dirname);
+    ret = m_pvDir->SetCurrentDirectoryA((char*)dirname);
     if(ret < 0) {
 	errno = ENOENT;
     }

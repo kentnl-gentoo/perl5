@@ -12,14 +12,13 @@ BEGIN {
         print "1..0 # Skip: no fork\n";
 	    exit 0;
     }
+    require './test.pl'
 }
-
-use Test;
 
 plan tests => 17;
 
-my $STDOUT = './results-0';
-my $STDERR = './results-1';
+my $STDOUT = tempfile();
+my $STDERR = tempfile();
 my $PERL = $ENV{PERL} || './perl';
 my $FAILURE_CODE = 119;
 
@@ -82,7 +81,8 @@ sub it_didnt_work {
 sub try {
   my ($success, $reason) = runperl(@_);
   $reason =~ s/\n/\\n/g if defined $reason;
-  ok( !!$success, 1, $reason );
+  local $::Level = $::Level + 1;
+  ok( $success, $reason );
 }
 
 #  PERL5OPT    Command-line options (switches).  Switches in

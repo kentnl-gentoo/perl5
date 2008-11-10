@@ -15,8 +15,9 @@ BEGIN {
 
 use strict;
 use Config;
+use ExtUtils::MakeMaker;
 
-use Test::More tests => 80;
+use Test::More tests => 85;
 use MakeMaker::Test::Utils;
 use MakeMaker::Test::Setup::BFD;
 use File::Find;
@@ -29,6 +30,9 @@ delete @ENV{qw(PREFIX LIB MAKEFLAGS)};
 
 my $perl = which_perl();
 my $Is_VMS = $^O eq 'VMS';
+
+# GNV logical interferes with testing
+$ENV{'bin'} = '[.bin]' if $Is_VMS;
 
 chdir 't';
 
@@ -102,7 +106,9 @@ like( $ppd_html, qr{^\s*<DEPENDENCY NAME="strict" VERSION="0,0,0,0" />}m,
                                                            '  <DEPENDENCY>' );
 like( $ppd_html, qr{^\s*<OS NAME="$Config{osname}" />}m,
                                                            '  <OS>'      );
-like( $ppd_html, qr{^\s*<ARCHITECTURE NAME="$Config{archname}" />}m,  
+my $archname = $Config{archname};
+$archname .= "-". substr($Config{version},0,3) if $] >= 5.008;
+like( $ppd_html, qr{^\s*<ARCHITECTURE NAME="$archname" />}m,
                                                            '  <ARCHITECTURE>');
 like( $ppd_html, qr{^\s*<CODEBASE HREF="" />}m,            '  <CODEBASE>');
 like( $ppd_html, qr{^\s*</IMPLEMENTATION>}m,           '  </IMPLEMENTATION>');
@@ -243,6 +249,42 @@ my $meta_yml = "$distdir/META.yml";
 ok( !-f 'META.yml',  'META.yml not written to source dir' );
 ok( -f $meta_yml,    'META.yml written to dist dir' );
 ok( !-e "META_new.yml", 'temp META.yml file not left around' );
+
+SKIP: {
+    # META.yml spec 1.4 was added in 0.11
+    skip "Test::YAML::Meta >= 0.11 required", 2
+      unless eval { require Test::YAML::Meta }   and
+             Test::YAML::Meta->VERSION >= 0.11;
+
+    Test::YAML::Meta::meta_spec_ok($meta_yml);
+}
+
+ok open META, $meta_yml or diag $!;
+my $meta = join '', <META>;
+ok close META;
+
+is $meta, <<"END";
+--- #YAML:1.0
+name:               Big-Dummy
+version:            0.01
+abstract:           Try "our" hot dog's
+author:
+    - Michael G Schwern <schwern\@pobox.com>
+license:            unknown
+distribution_type:  module
+configure_requires:
+    ExtUtils::MakeMaker:  0
+requires:
+    strict:  0
+no_index:
+    directory:
+        - t
+        - inc
+generated_by:       ExtUtils::MakeMaker version $ExtUtils::MakeMaker::VERSION
+meta-spec:
+    url:      http://module-build.sourceforge.net/META-spec-v1.4.html
+    version:  1.4
+END
 
 my $manifest = maniread("$distdir/MANIFEST");
 # VMS is non-case preserving, so we can't know what the MANIFEST will

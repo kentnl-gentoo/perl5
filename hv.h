@@ -1,7 +1,7 @@
 /*    hv.h
  *
  *    Copyright (C) 1991, 1992, 1993, 1996, 1997, 1998, 1999,
- *    2000, 2001, 2002, 2005, by Larry Wall and others
+ *    2000, 2001, 2002, 2003, 2005, 2006, 2007, 2008, by Larry Wall and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -14,6 +14,9 @@ typedef struct hek HEK;
 
 /* entry in hash value chain */
 struct he {
+    /* Keep hent_next first in this structure, because sv_free_arenas take
+       advantage of this to share code between the he arenas and the SV
+       body arenas  */
     HE		*hent_next;	/* next entry in chain */
     HEK		*hent_hek;	/* hash key */
     SV		*hent_val;	/* scalar value that was hashed */
@@ -47,6 +50,8 @@ struct xpvhv {
     char	*xhv_name;	/* name, if a symbol table */
 };
 
+typedef struct xpvhv xpvhv_allocated;
+
 /* hash a key */
 /* FYI: This is the "One-at-a-Time" algorithm by Bob Jenkins
  * from requirements by Colin Plumb.
@@ -75,7 +80,7 @@ struct xpvhv {
 #endif
 #define PERL_HASH(hash,str,len) \
      STMT_START	{ \
-	register const char *s_PeRlHaSh_tmp = str; \
+	register const char * const s_PeRlHaSh_tmp = str; \
 	register const unsigned char *s_PeRlHaSh = (const unsigned char *)s_PeRlHaSh_tmp; \
 	register I32 i_PeRlHaSh = len; \
 	register U32 hash_PeRlHaSh = PERL_HASH_SEED; \
@@ -93,7 +98,7 @@ struct xpvhv {
 #ifdef PERL_HASH_INTERNAL_ACCESS
 #define PERL_HASH_INTERNAL(hash,str,len) \
      STMT_START	{ \
-	register const char *s_PeRlHaSh_tmp = str; \
+	register const char * const s_PeRlHaSh_tmp = str; \
 	register const unsigned char *s_PeRlHaSh = (const unsigned char *)s_PeRlHaSh_tmp; \
 	register I32 i_PeRlHaSh = len; \
 	register U32 hash_PeRlHaSh = PL_rehash_seed; \
@@ -154,10 +159,21 @@ variable C<PL_na>, though this is rather less efficient than using a local
 variable.  Remember though, that hash keys in perl are free to contain
 embedded nulls, so using C<strlen()> or similar is not a good way to find
 the length of hash keys. This is very similar to the C<SvPV()> macro
-described elsewhere in this document.
+described elsewhere in this document. See also C<HeUTF8>.
+
+If you are using C<HePV> to get values to pass to C<newSVpvn()> to create a
+new SV, you should consider using C<newSVhek(HeKEY_hek(he))> as it is more
+efficient.
+
+=for apidoc Am|char*|HeUTF8|HE* he|STRLEN len
+Returns whether the C<char *> value returned by C<HePV> is encoded in UTF-8,
+doing any necessary dereferencing of possibly C<SV*> keys.  The value returned
+will be 0 or non-0, not necessarily 1 (or even a value with any low bits set),
+so B<do not> blindly assign this to a C<bool> variable, as C<bool> may be a
+typedef for C<char>.
 
 =for apidoc Am|SV*|HeSVKEY|HE* he
-Returns the key as an C<SV*>, or C<Nullsv> if the hash entry does not
+Returns the key as an C<SV*>, or C<NULL> if the hash entry does not
 contain an C<SV*> key.
 
 =for apidoc Am|SV*|HeSVKEY_force|HE* he
@@ -212,7 +228,7 @@ C<SV*>.
 #define HvUSEDKEYS(hv)		XHvUSEDKEYS((XPVHV*)  SvANY(hv))
 #define HvTOTALKEYS(hv)		XHvTOTALKEYS((XPVHV*)  SvANY(hv))
 #define HvPLACEHOLDERS(hv)	(XHvPLACEHOLDERS((XPVHV*)  SvANY(hv)))
-#define HvPLACEHOLDERS_get(hv)	(0 + XHvPLACEHOLDERS((XPVHV*)  SvANY(hv)))
+#define HvPLACEHOLDERS_get(hv)	(0 + (I32)XHvPLACEHOLDERS((XPVHV*) SvANY(hv)))
 #define HvPLACEHOLDERS_set(hv, p)	\
 	(XHvPLACEHOLDERS((XPVHV*)  SvANY(hv)) = (p))
 
@@ -240,19 +256,6 @@ C<SV*>.
 #define HvREHASH_on(hv)		(SvFLAGS(hv) |= SVphv_REHASH)
 #define HvREHASH_off(hv)	(SvFLAGS(hv) &= ~SVphv_REHASH)
 
-/* Maybe amagical: */
-/* #define HV_AMAGICmb(hv)      (SvFLAGS(hv) & (SVpgv_badAM | SVpgv_AM)) */
-
-#define HV_AMAGIC(hv)        (SvFLAGS(hv) &   SVpgv_AM)
-#define HV_AMAGIC_on(hv)     (SvFLAGS(hv) |=  SVpgv_AM)
-#define HV_AMAGIC_off(hv)    (SvFLAGS(hv) &= ~SVpgv_AM)
-
-/*
-#define HV_AMAGICbad(hv)     (SvFLAGS(hv) & SVpgv_badAM)
-#define HV_badAMAGIC_on(hv)  (SvFLAGS(hv) |= SVpgv_badAM)
-#define HV_badAMAGIC_off(hv) (SvFLAGS(hv) &= ~SVpgv_badAM)
-*/
-
 #define Nullhe Null(HE*)
 #define HeNEXT(he)		(he)->hent_next
 #define HeKEY_hek(he)		(he)->hent_hek
@@ -268,18 +271,20 @@ C<SV*>.
 #define HeHASH(he)		HEK_HASH(HeKEY_hek(he))
 #define HePV(he,lp)		((HeKLEN(he) == HEf_SVKEY) ?		\
 				 SvPV(HeKEY_sv(he),lp) :		\
-				 (((lp = HeKLEN(he)) >= 0) ?		\
-				  HeKEY(he) : Nullch))
+				 ((lp = HeKLEN(he)), HeKEY(he)))
+#define HeUTF8(he)		((HeKLEN(he) == HEf_SVKEY) ?		\
+				 SvUTF8(HeKEY_sv(he)) :			\
+				 (U32)HeKUTF8(he))
 
 #define HeSVKEY(he)		((HeKEY(he) && 				\
 				  HeKLEN(he) == HEf_SVKEY) ?		\
-				 HeKEY_sv(he) : Nullsv)
+				 HeKEY_sv(he) : NULL)
 
 #define HeSVKEY_force(he)	(HeKEY(he) ?				\
 				 ((HeKLEN(he) == HEf_SVKEY) ?		\
 				  HeKEY_sv(he) :			\
-				  sv_2mortal(newSVpvn(HeKEY(he),	\
-						     HeKLEN(he)))) :	\
+				  newSVpvn_flags(HeKEY(he),		\
+						 HeKLEN(he), SVs_TEMP)) : \
 				 &PL_sv_undef)
 #define HeSVKEY_set(he,sv)	((HeKLEN(he) = HEf_SVKEY), (HeKEY_sv(he) = sv))
 
@@ -293,6 +298,7 @@ C<SV*>.
 #define HVhek_UTF8	0x01 /* Key is utf8 encoded. */
 #define HVhek_WASUTF8	0x02 /* Key is bytes here, but was supplied as utf8. */
 #define HVhek_REHASH	0x04 /* This key is in an hv using a custom HASH . */
+#define HVhek_UNSHARED	0x08 /* This key isn't a shared hash key. */
 #define HVhek_FREEKEY	0x100 /* Internal flag to say key is malloc()ed.  */
 #define HVhek_PLACEHOLD	0x200 /* Internal flag to create placeholder.
                                * (may change, but Storable is a core module) */
@@ -303,10 +309,11 @@ C<SV*>.
    into all keys as hv_iternext has no access to the hash flags. At this
    point Storable's tests get upset, because sometimes hashes are "keyed"
    and sometimes not, depending on the order of data insertion, and whether
-   it triggered rehashing. So currently HVhek_REHAS is exempt.
+   it triggered rehashing. So currently HVhek_REHASH is exempt.
+   Similarly UNSHARED
 */
    
-#define HVhek_ENABLEHVKFLAGS	(HVhek_MASK - HVhek_REHASH)
+#define HVhek_ENABLEHVKFLAGS	(HVhek_MASK & ~(HVhek_REHASH|HVhek_UNSHARED))
 
 #define HEK_UTF8(hek)		(HEK_FLAGS(hek) & HVhek_UTF8)
 #define HEK_UTF8_on(hek)	(HEK_FLAGS(hek) |= HVhek_UTF8)
@@ -334,9 +341,67 @@ C<SV*>.
 /* Flags for hv_iternext_flags.  */
 #define HV_ITERNEXT_WANTPLACEHOLDERS	0x01	/* Don't skip placeholders.  */
 
+#define hv_iternext(hv)	hv_iternext_flags(hv, 0)
+#define hv_magic(hv, gv, how) sv_magic((SV*)(hv), (SV*)(gv), how, NULL, 0)
+
 /* available as a function in hv.c */
 #define Perl_sharepvn(sv, len, hash) HEK_KEY(share_hek(sv, len, hash))
 #define sharepvn(sv, len, hash)	     Perl_sharepvn(sv, len, hash)
+
+/* These don't exist for 5.8.x, but there will be fewer merge conflicts in
+   various *ish.h headers if they are defined as no-ops.  */
+
+#define hv_store_ent(hv, keysv, val, hash)				\
+    ((HE *) hv_common((hv), (keysv), NULL, 0, 0, HV_FETCH_ISSTORE,	\
+		      (val), (hash)))
+
+#define hv_exists_ent(hv, keysv, hash)					\
+    (hv_common((hv), (keysv), NULL, 0, 0, HV_FETCH_ISEXISTS, 0, (hash))	\
+     ? TRUE : FALSE)
+#define hv_fetch_ent(hv, keysv, lval, hash)				\
+    ((HE *) hv_common((hv), (keysv), NULL, 0, 0,			\
+		      ((lval) ? HV_FETCH_LVALUE : 0), NULL, (hash)))
+#define hv_delete_ent(hv, key, flags, hash)				\
+    ((SV *) hv_common((hv), (key), NULL, 0, 0, (flags) | HV_DELETE,	\
+		      NULL, (hash)))
+
+#define hv_store_flags(hv, key, klen, val, hash, flags)			\
+    ((SV**) hv_common((hv), NULL, (key), (klen), (flags),		\
+		      (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV), (val),	\
+		      (hash)))
+
+#define hv_store(hv, key, klen, val, hash)				\
+    ((SV**) hv_common_key_len((hv), (key), (klen),			\
+			      (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV),	\
+			      (val), (hash)))
+
+#define hv_exists(hv, key, klen)					\
+    (hv_common_key_len((hv), (key), (klen), HV_FETCH_ISEXISTS, NULL, 0) \
+     ? TRUE : FALSE)
+
+#define hv_fetch(hv, key, klen, lval)					\
+    ((SV**) hv_common_key_len((hv), (key), (klen), (lval)		\
+			      ? (HV_FETCH_JUST_SV | HV_FETCH_LVALUE)	\
+			      : HV_FETCH_JUST_SV, NULL, 0))
+
+#define hv_delete(hv, key, klen, flags)					\
+    ((SV*) hv_common_key_len((hv), (key), (klen),			\
+			     (flags) | HV_DELETE, NULL, 0))
+
+#define HINTS_REFCNT_INIT            NOOP
+#define HINTS_REFCNT_TERM            NOOP
+
+/* Hash actions
+ * Passed in PERL_MAGIC_uvar calls
+ */
+#define HV_DISABLE_UVAR_XKEY	0x01
+/* We need to ensure that these don't clash with G_DISCARD, which is 2, as it
+   is documented as being passed to hv_delete().  */
+#define HV_FETCH_ISSTORE	0x04
+#define HV_FETCH_ISEXISTS	0x08
+#define HV_FETCH_LVALUE		0x10
+#define HV_FETCH_JUST_SV	0x20
+#define HV_DELETE		0x40
 
 /*
  * Local variables:

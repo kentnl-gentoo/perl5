@@ -50,7 +50,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 {
     register int insn;
     U32 ix;
-    SV *specialsv_list[6];
+    SV *specialsv_list[7];
 
     BYTECODE_HEADER_CHECK;	/* croak if incorrect platform */
     Newx(bstate->bs_obj_list, 32, void*); /* set op objlist */
@@ -62,8 +62,9 @@ byterun(pTHX_ register struct byteloader_state *bstate)
     specialsv_list[1] = &PL_sv_undef;
     specialsv_list[2] = &PL_sv_yes;
     specialsv_list[3] = &PL_sv_no;
-    specialsv_list[4] = pWARN_ALL;
-    specialsv_list[5] = pWARN_NONE;
+    specialsv_list[4] = (SV*)pWARN_ALL;
+    specialsv_list[5] = (SV*)pWARN_NONE;
+    specialsv_list[6] = (SV*)pWARN_STD;
 
     while ((insn = BGET_FGETC()) != EOF) {
 	switch (insn) {
@@ -134,15 +135,15 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 	    }
 	  case INSN_NEWSV:		/* 8 */
 	    {
-		U8 arg;
-		BGET_U8(arg);
+		svtype arg;
+		BGET_svtype(arg);
 		BSET_newsv(bstate->bs_sv, arg);
 		break;
 	    }
 	  case INSN_NEWSVX:		/* 9 */
 	    {
-		U32 arg;
-		BGET_U32(arg);
+		svtype arg;
+		BGET_svtype(arg);
 		BSET_newsvx(bstate->bs_sv, arg);
 		break;
 	    }
@@ -187,8 +188,8 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 	    }
 	  case INSN_SV_UPGRADE:		/* 17 */
 	    {
-		U8 arg;
-		BGET_U8(arg);
+		svtype arg;
+		BGET_svtype(arg);
 		BSET_sv_upgrade(bstate->bs_sv, arg);
 		break;
 	    }
@@ -970,7 +971,7 @@ byterun(pTHX_ register struct byteloader_state *bstate)
 	    {
 		I32 arg;
 		BGET_I32(arg);
-		cCOP->cop_arybase = arg;
+		BSET_cop_arybase(cCOP, arg);
 		break;
 	    }
 	  case INSN_COP_LINE:		/* 130 */

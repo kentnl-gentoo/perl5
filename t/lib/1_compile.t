@@ -19,7 +19,6 @@ my @Core_Modules = grep /\S/, <DATA>;
 chomp @Core_Modules;
 
 if (eval { require Socket }) {
-  push @Core_Modules, qw(Net::Domain);
   # Two Net:: modules need the Convert::EBCDIC if in EBDCIC.
   if (ord("A") != 193 || eval { require Convert::EBCDIC }) {
       push @Core_Modules, qw(Net::Cmd Net::POP3);
@@ -74,6 +73,3 @@ sub compile_module {
 # and vice-versa.  The list should only shrink.
 __DATA__
 ByteLoader
-CPAN::FirstTime
-DynaLoader
-Pod::Plainer

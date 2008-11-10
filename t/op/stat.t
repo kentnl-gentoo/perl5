@@ -9,7 +9,7 @@ BEGIN {
 use Config;
 use File::Spec;
 
-plan tests => 86;
+plan tests => 107;
 
 my $Perl = which_perl();
 
@@ -30,7 +30,7 @@ $Is_Rhapsody= $^O eq 'rhapsody';
 
 $Is_Dosish  = $Is_Dos || $Is_OS2 || $Is_MSWin32 || $Is_NetWare || $Is_Cygwin;
 
-$Is_UFS     = $Is_Darwin && (() = `df -t ufs .`) == 2;
+$Is_UFS     = $Is_Darwin && (() = `df -t ufs . 2>/dev/null`) == 2;
 
 my($DEV, $INO, $MODE, $NLINK, $UID, $GID, $RDEV, $SIZE,
    $ATIME, $MTIME, $CTIME, $BLKSIZE, $BLOCKS) = (0..12);
@@ -38,10 +38,10 @@ my($DEV, $INO, $MODE, $NLINK, $UID, $GID, $RDEV, $SIZE,
 my $Curdir = File::Spec->curdir;
 
 
-my $tmpfile = 'Op_stat.tmp';
-my $tmpfile_link = $tmpfile.'2';
+my $tmpfile = tempfile();
+my $tmpfile_link = tempfile();
 
-
+chmod 0666, $tmpfile;
 1 while unlink $tmpfile;
 open(FOO, ">$tmpfile") || DIE("Can't open temp test file: $!");
 close FOO;
@@ -49,15 +49,22 @@ close FOO;
 open(FOO, ">$tmpfile") || DIE("Can't open temp test file: $!");
 
 my($nlink, $mtime, $ctime) = (stat(FOO))[$NLINK, $MTIME, $CTIME];
+
+# The clock on a network filesystem might be different from the
+# system clock.
+my $Filesystem_Time_Offset = abs($mtime - time); 
+
+#nlink should if link support configured in Perl.
 SKIP: {
-    skip "No link count", 1 if $Is_VMS;
+    skip "No link count - Hard link support not built in.", 1
+	unless $Config{d_link};
 
     is($nlink, 1, 'nlink on regular file');
 }
 
 SKIP: {
   skip "mtime and ctime not reliable", 2
-    if $Is_MSWin32 or $Is_NetWare or $Is_Cygwin or $Is_Dos or $Is_MacOS;
+    if $Is_MSWin32 or $Is_NetWare or $Is_Cygwin or $Is_Dos or $Is_MacOS or $Is_Darwin;
 
   ok( $mtime,           'mtime' );
   is( $mtime, $ctime,   'mtime == ctime' );
@@ -218,6 +225,16 @@ SKIP: {
       unless -d '/dev' && -r '/dev' && -x '/dev';
     skip "Skipping: unexpected ls output in MP-RAS", 6
       if $Is_MPRAS;
+
+    # VMS problem:  If GNV or other UNIX like tool is installed, then
+    # sometimes Perl will find /bin/ls, and will try to run it.
+    # But since Perl on VMS does not know to run it under Bash, it will
+    # try to run the DCL verb LS.  And if the VMS product Language
+    # Sensitive Editor is installed, or some other LS verb, that will
+    # be run instead.  So do not do this until we can teach Perl
+    # when to use BASH on VMS.
+    skip "ls command not available to Perl in OpenVMS right now.", 6
+      if $Is_VMS;
 
     my $LS  = $Config{d_readlink} ? "ls -lL" : "ls -l";
     my $CMD = "$LS /dev 2>/dev/null";
@@ -440,20 +457,24 @@ SKIP: {
     unlink $linkname or print "# unlink $linkname failed: $!\n";
 }
 
-print "# Zzz...\n";
-sleep(3);
-my $f = 'tstamp.tmp';
-unlink $f;
-ok (open(S, "> $f"), 'can create tmp file');
-close S or die;
-my @a = stat $f;
-print "# time=$^T, stat=(@a)\n";
-my @b = (-M _, -A _, -C _);
-print "# -MAC=(@b)\n";
-ok( (-M _) < 0, 'negative -M works');
-ok( (-A _) < 0, 'negative -A works');
-ok( (-C _) < 0, 'negative -C works');
-ok(unlink($f), 'unlink tmp file');
+SKIP: {
+    skip "Too much clock skew between system and filesystem", 5
+	if ($Filesystem_Time_Offset > 5);
+    print "# Zzz...\n";
+    sleep($Filesystem_Time_Offset+1);
+    my $f = 'tstamp.tmp';
+    unlink $f;
+    ok (open(S, "> $f"), 'can create tmp file');
+    close S or die;
+    my @a = stat $f;
+    print "# time=$^T, stat=(@a)\n";
+    my @b = (-M _, -A _, -C _);
+    print "# -MAC=(@b)\n";
+    ok( (-M _) < 0, 'negative -M works');
+    ok( (-A _) < 0, 'negative -A works');
+    ok( (-C _) < 0, 'negative -C works');
+    ok(unlink($f), 'unlink tmp file');
+}
 
 {
     ok(open(F, ">", $tmpfile), 'can create temp file');
@@ -467,6 +488,58 @@ ok(unlink($f), 'unlink tmp file');
     unlink $tmpfile;
 }
 
+SKIP: {
+    skip "No dirfd()", 9 unless $Config{d_dirfd} || $Config{d_dir_dd_fd};
+    ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
+    ok(stat(DIR), "stat() on dirhandle works"); 
+    ok(-d _ , "-d on dirhandle"); 
+    ok(-d DIR, "-d on a dirhandle works");
+
+    # And now for the ambigious bareword case
+    ok(open(DIR, "TEST"), 'Can open "TEST" dir')
+	|| diag "Can't open 'TEST':  $!";
+    my $size = (stat(DIR))[7];
+    ok(defined $size, "stat() on bareword works");
+    is($size, -s "TEST", "size returned by stat of bareword is for the file");
+    ok(-f _, "ambiguous bareword uses file handle, not dir handle");
+    ok(-f DIR);
+    closedir DIR or die $!;
+    close DIR or die $!;
+}
+
+{
+    # RT #8244: *FILE{IO} does not behave like *FILE for stat() and -X() operators
+    ok(open(F, ">", $tmpfile), 'can create temp file');
+    my @thwap = stat *F{IO};
+    ok(@thwap, "stat(*F{IO}) works");    
+    ok( -f *F{IO} , "single file tests work with *F{IO}");
+    close F;
+    unlink $tmpfile;
+
+    #PVIO's hold dirhandle information, so let's test them too.
+
+    SKIP: {
+        skip "No dirfd()", 9 unless $Config{d_dirfd} || $Config{d_dir_dd_fd};
+        ok(opendir(DIR, "."), 'Can open "." dir') || diag "Can't open '.':  $!";
+        ok(stat(*DIR{IO}), "stat() on *DIR{IO} works");
+	ok(-d _ , "The special file handle _ is set correctly"); 
+        ok(-d *DIR{IO} , "-d on *DIR{IO}");
+
+	# And now for the ambigious bareword case
+	ok(open(DIR, "TEST"), 'Can open "TEST" dir')
+	    || diag "Can't open 'TEST':  $!";
+	my $size = (stat(*DIR{IO}))[7];
+	ok(defined $size, "stat() on *THINGY{IO} works");
+	is($size, -s "TEST",
+	   "size returned by stat of *THINGY{IO} is for the file");
+	ok(-f _, "ambiguous *THINGY{IO} uses file handle, not dir handle");
+	ok(-f *DIR{IO});
+	closedir DIR or die $!;
+	close DIR or die $!;
+    }
+}
+
 END {
+    chmod 0666, $tmpfile;
     1 while unlink $tmpfile;
 }

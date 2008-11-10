@@ -94,18 +94,9 @@ C<%main::>, or C<%::> for short.  Likewise the symbol table for the nested
 package mentioned earlier is named C<%OUTER::INNER::>.
 
 The value in each entry of the hash is what you are referring to when you
-use the C<*name> typeglob notation.  In fact, the following have the same
-effect, though the first is more efficient because it does the symbol
-table lookups at compile time:
+use the C<*name> typeglob notation.
 
     local *main::foo    = *main::bar;
-    local $main::{foo}  = $main::{bar};
-
-(Be sure to note the B<vast> difference between the second line above
-and C<local $main::foo = $main::bar>. The former is accessing the hash
-C<%main::>, which is the symbol table of package C<main>. The latter is
-simply assigning scalar C<$bar> in package C<main> to scalar C<$foo> of
-the same package.)
 
 You can use this to print out all the variables in a package, for
 instance.  The standard but antiquated F<dumpvar.pl> library and
@@ -315,9 +306,7 @@ and before the run time begins, in LIFO order.  C<CHECK> code blocks are used
 in the Perl compiler suite to save the compiled state of the program.
 
 C<INIT> blocks are run just before the Perl runtime begins execution, in
-"first in, first out" (FIFO) order. For example, the code generators
-documented in L<perlcc> make use of C<INIT> blocks to initialize and
-resolve pointers to XSUBs.
+"first in, first out" (FIFO) order.
 
 When you use the B<-n> and B<-p> switches to Perl, C<BEGIN> and
 C<END> work just as they do in B<awk>, as a degenerate case.
@@ -569,6 +558,9 @@ Like C<CLONE>, C<CLONE_SKIP> is called once per package; however, it is
 called just before cloning starts, and in the context of the parent
 thread. If it returns a true value, then no objects of that class will
 be cloned; or rather, they will be copied as unblessed, undef values.
+For example: if in the parent there are two references to a single blessed
+hash, then in the child there will be two references to a single undefined
+scalar value instead.
 This provides a simple mechanism for making a module threadsafe; just add
 C<sub CLONE_SKIP { 1 }> at the top of the class, and C<DESTROY()> will be
 now only be called once per object. Of course, if the child thread needs

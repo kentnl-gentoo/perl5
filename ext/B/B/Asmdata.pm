@@ -11,15 +11,14 @@
 #
 package B::Asmdata;
 
-our $VERSION = '1.01';
+our $VERSION = '1.02';
 
 use Exporter;
 @ISA = qw(Exporter);
 @EXPORT_OK = qw(%insn_data @insn_name @optype @specialsv_name);
-our(%insn_data, @insn_name, @optype, @specialsv_name);
+our(%insn_data, @insn_name);
 
-@optype = qw(OP UNOP BINOP LOGOP LISTOP PMOP SVOP PADOP PVOP LOOP COP);
-@specialsv_name = qw(Nullsv &PL_sv_undef &PL_sv_yes &PL_sv_no pWARN_ALL pWARN_NONE);
+use B qw(@optype @specialsv_name);
 
 # XXX insn_data is initialised this way because with a large
 # %insn_data = (foo => [...], bar => [...], ...) initialiser
@@ -34,15 +33,15 @@ $insn_data{stop} = [4, \&PUT_U32, "GET_U32"];
 $insn_data{stpv} = [5, \&PUT_U32, "GET_U32"];
 $insn_data{ldspecsv} = [6, \&PUT_U8, "GET_U8"];
 $insn_data{ldspecsvx} = [7, \&PUT_U8, "GET_U8"];
-$insn_data{newsv} = [8, \&PUT_U8, "GET_U8"];
-$insn_data{newsvx} = [9, \&PUT_U32, "GET_U32"];
+$insn_data{newsv} = [8, \&PUT_svtype, "GET_svtype"];
+$insn_data{newsvx} = [9, \&PUT_svtype, "GET_svtype"];
 $insn_data{newop} = [11, \&PUT_U8, "GET_U8"];
 $insn_data{newopx} = [12, \&PUT_U16, "GET_U16"];
 $insn_data{newopn} = [13, \&PUT_U8, "GET_U8"];
 $insn_data{newpv} = [14, \&PUT_PV, "GET_PV"];
 $insn_data{pv_cur} = [15, \&PUT_PADOFFSET, "GET_PADOFFSET"];
 $insn_data{pv_free} = [16, \&PUT_none, "GET_none"];
-$insn_data{sv_upgrade} = [17, \&PUT_U8, "GET_U8"];
+$insn_data{sv_upgrade} = [17, \&PUT_svtype, "GET_svtype"];
 $insn_data{sv_refcnt} = [18, \&PUT_U32, "GET_U32"];
 $insn_data{sv_refcnt_add} = [19, \&PUT_I32, "GET_I32"];
 $insn_data{sv_flags} = [20, \&PUT_U32, "GET_U32"];

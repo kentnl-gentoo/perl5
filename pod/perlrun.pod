@@ -280,7 +280,7 @@ An alternate delimiter may be specified using B<-F>.
 =item B<-C [I<number/list>]>
 X<-C>
 
-The C<-C> flag controls some Unicode of the Perl Unicode features.
+The C<-C> flag controls some of the Perl Unicode features.
 
 As of 5.8.1, the C<-C> can be followed either by a number or a list
 of option letters.  The letters, their numeric values, and effects
@@ -299,6 +299,15 @@ are as follows; listing the letters is equal to summing the numbers.
                variables (the LC_ALL, LC_TYPE, and LANG, in the order
                of decreasing precedence) -- if the variables indicate
                UTF-8, then the selected "IOEioA" are in effect
+    a   256   Set ${^UTF8CACHE} to -1, to run the UTF-8 caching code in
+              debugging mode.
+
+=for documenting_the_underdocumented
+perl.h gives W/128 as PERL_UNICODE_WIDESYSCALLS "/* for Sarathy */"
+
+=for todo
+perltodo mentions Unicode in %ENV and filenames. I guess that these will be
+options e and f (or F).
 
 For example, C<-COE> and C<-C6> will both turn on UTF-8-ness on both
 STDOUT and STDERR.  Repeating letters is just redundant, not cumulative
@@ -401,6 +410,8 @@ B<-D14> is equivalent to B<-Dtls>):
    524288  J  Do not s,t,P-debug (Jump over) opcodes within package DB
   1048576  v  Verbose: use in conjunction with other flags
   8388608  q  quiet - currently only suppresses the "EXECUTING" message
+  4194304  A  Consistency checks on internal structures
+  8388608  q  quiet - currently only suppressed the "EXECUTING" message
 
 All these flags require B<-DDEBUGGING> when you compile the Perl
 executable (but see L<Devel::Peek>, L<re> which may change this).
@@ -437,10 +448,10 @@ X<-f>
 Disable executing F<$Config{sitelib}/sitecustomize.pl> at startup.
 
 Perl can be built so that it by default will try to execute
-F<$Config{sitelib}/sitecustomize.pl> at startup.  This is a hook that
-allows the sysadmin to customize how perl behaves.  It can for
-instance be used to add entries to the @INC array to make perl find
-modules in non-standard locations.
+F<$Config{sitelib}/sitecustomize.pl> at startup (in a BEGIN block).
+This is a hook that allows the sysadmin to customize how perl behaves.
+It can for instance be used to add entries to the @INC array to make perl
+find modules in non-standard locations.
 
 =item B<-F>I<pattern>
 X<-F>
@@ -640,6 +651,10 @@ B<awk>:
 Note that the lines are not printed by default.  See B<-p> to have
 lines printed.  If a file named by an argument cannot be opened for
 some reason, Perl warns you about it and moves on to the next file.
+
+Also note that C<< <> >> passes command line arguments to
+L<perlfunc/open>, which doesn't necessarily interpret them as file names.
+See  L<perlop> for possible security implications.
 
 Here is an efficient way to delete all files that haven't been modified for
 at least a week:
@@ -851,10 +866,6 @@ execute a portion of your program before dumping, use the dump()
 operator instead.  Note: availability of B<undump> is platform
 specific and may not be available for a specific port of Perl.
 
-This switch has been superseded in favor of the new Perl code
-generator backends to the compiler.  See L<B> and L<B::Bytecode>
-for details.
-
 =item B<-U>
 X<-U>
 
@@ -949,18 +960,29 @@ See L<perllexwarn>.
 =item B<-x>
 X<-x>
 
-=item B<-x> I<directory>
+=item B<-x>I<directory>
 
 tells Perl that the program is embedded in a larger chunk of unrelated
 ASCII text, such as in a mail message.  Leading garbage will be
 discarded until the first line that starts with #! and contains the
 string "perl".  Any meaningful switches on that line will be applied.
+
+All references to line numbers by the program (warnings, errors, ...)
+will treat the #! line as the first line.
+Thus a warning on the 2nd line of the program (which is on the 100th
+line in the file) will be reported as line 2, and not as line 100.
+This can be overridden by using the #line directive.
+(See L<perlsyn/"Plain-Old-Comments-(Not!)">)
+
 If a directory name is specified, Perl will switch to that directory
 before running the program.  The B<-x> switch controls only the
 disposal of leading garbage.  The program must be terminated with
 C<__END__> if there is trailing garbage to be ignored (the program
 can process any or all of the trailing garbage via the DATA filehandle
 if desired).
+
+The directory, if specified, must appear immediately following the B<-x>
+with no intervening whitespace.
 
 =back
 
@@ -991,14 +1013,17 @@ X<PERL5LIB>
 A list of directories in which to look for Perl library
 files before looking in the standard library and the current
 directory.  Any architecture-specific directories under the specified
-locations are automatically included if they exist.  If PERL5LIB is not
-defined, PERLLIB is used.  Directories are separated (like in PATH) by
-a colon on unixish platforms and by a semicolon on Windows (the proper
-path separator being given by the command C<perl -V:path_sep>).
+locations are automatically included if they exist (this lookup
+being done at interpreter startup time.)
+
+If PERL5LIB is not defined, PERLLIB is used.  Directories are separated
+(like in PATH) by a colon on unixish platforms and by a semicolon on
+Windows (the proper path separator being given by the command C<perl
+-V:path_sep>).
 
 When running taint checks (either because the program was running setuid
-or setgid, or the B<-T> switch was used), neither variable is used.
-The program should instead say:
+or setgid, or the B<-T> or B<-t> switch was specified), neither variable
+is used. The program should instead say:
 
     use lib "/my/directory";
 
@@ -1006,7 +1031,7 @@ The program should instead say:
 X<PERL5OPT>
 
 Command-line options (switches).  Switches in this variable are taken
-as if they were on every Perl command line.  Only the B<-[DIMUdmtw]>
+as if they were on every Perl command line.  Only the B<-[CDIMUdmtw]>
 switches are allowed.  When running taint checks (because the program
 was running setuid or setgid, or the B<-T> switch was used), this
 variable is ignored.  If PERL5OPT begins with B<-T>, tainting will be
@@ -1023,7 +1048,9 @@ emphasise their similarity to variable "attributes". But the code that parses
 layer specification strings (which is also used to decode the PERLIO
 environment variable) treats the colon as a separator.
 
-An unset or empty PERLIO is equivalent to C<:stdio>.
+An unset or empty PERLIO is equivalent to the default set of layers for
+your platform, for example C<:unix:perlio> on UNIX-like systems
+and C<:unix:crlf> on Windows and other DOS-like systems.
 
 The list becomes the default for I<all> perl's IO. Consequently only built-in
 layers can appear in this list, as external layers (such as :encoding()) need
@@ -1101,9 +1128,9 @@ X<:utf8>
 
 A pseudolayer that turns on a flag on the layer below to tell perl
 that output should be in utf8 and that input should be regarded as
-already in utf8 form.  May be useful in PERLIO environment
-variable to make UTF-8 the default. (To turn off that behaviour
-use C<:bytes> layer.)
+already in valid utf8 form. It does not check for validity and as such
+should be handled with caution for input. Generally C<:encoding(utf8)> is
+the best option when reading UTF-8 encoded data.
 
 =item :win32
 X<:win32>
@@ -1133,6 +1160,9 @@ compiler's numeric file descriptor routines. There is an experimental native
 C<win32> layer which is expected to be enhanced and should eventually be
 the default under Win32.
 
+The PERLIO environment variable is completely ignored when perl
+is run in taint mode.
+
 =item PERLIO_DEBUG
 X<PERLIO_DEBUG>
 
@@ -1157,12 +1187,18 @@ A list of directories in which to look for Perl library
 files before looking in the standard library and the current directory.
 If PERL5LIB is defined, PERLLIB is not used.
 
+The PERLLIB environment variable is completely ignored when perl
+is run in taint mode.
+
 =item PERL5DB
 X<PERL5DB>
 
 The command used to load the debugger code.  The default is:
 
 	BEGIN { require 'perl5db.pl' }
+
+The PERL5DB environment variable only used when perl is started with
+a bare B<-d> switch.
 
 =item PERL5DB_THREADED
 X<PERL5DB_THREADED>
@@ -1185,6 +1221,11 @@ portability concerns.  Besides, perl can use a shell that may not be
 fit for interactive use, and setting COMSPEC to such a shell may
 interfere with the proper functioning of other programs (which usually
 look in COMSPEC to find a shell fit for interactive use).
+
+Before Perl 5.10.0 and 5.8.8, PERL5SHELL was not taint checked
+when running external commands.  It is recommended that
+you explicitly set (or delete) C<$ENV{PERL5SHELL}> when running
+in taint mode under Windows.
 
 =item PERL_ALLOW_NON_IFS_LSP (specific to the Win32 port)
 X<PERL_ALLOW_NON_IFS_LSP>
@@ -1235,20 +1276,23 @@ PERL_ENCODING environment variable is consulted for an encoding name.
 =item PERL_HASH_SEED
 X<PERL_HASH_SEED>
 
-(Since Perl 5.8.1.)  Used to randomise Perl's internal hash function.
+(Since Perl 5.8.1.)  Used to randomise perl's internal hash function.
 To emulate the pre-5.8.1 behaviour, set to an integer (zero means
 exactly the same order as 5.8.0).  "Pre-5.8.1" means, among other
-things, that hash keys will be ordered the same between different runs
-of Perl.
+things, that hash keys will always have the same ordering between
+different runs of perl.
+
+Most hashes return elements in the same order as Perl 5.8.0 by default.
+On a hash by hash basis, if pathological data is detected during a hash
+key insertion, then that hash will switch to an alternative random hash
+seed.
 
 The default behaviour is to randomise unless the PERL_HASH_SEED is set.
-If Perl has been compiled with C<-DUSE_HASH_SEED_EXPLICIT>, the default
+If perl has been compiled with C<-DUSE_HASH_SEED_EXPLICIT>, the default
 behaviour is B<not> to randomise unless the PERL_HASH_SEED is set.
 
-If PERL_HASH_SEED is unset or set to a non-numeric string, Perl uses
+If PERL_HASH_SEED is unset or set to a non-numeric string, perl uses
 the pseudorandom seed supplied by the operating system and libraries.
-This means that each different run of Perl will have a different
-ordering of the results of keys(), values(), and each().
 
 B<Please note that the hash seed is sensitive information>. Hashes are
 randomized to protect against local and remote attacks against Perl
