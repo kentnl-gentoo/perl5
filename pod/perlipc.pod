@@ -126,7 +126,7 @@ signal handlers like this:
 
     sub REAPER {
 	$waitedpid = wait;
-	# loathe sysV: it makes us not only reinstate
+	# loathe SysV: it makes us not only reinstate
 	# the handler, but place it after the wait
 	$SIG{CHLD} = \&REAPER;
     }
@@ -145,7 +145,7 @@ or better still:
         while (($child = waitpid(-1,WNOHANG)) > 0) {
 	    $Kid_Status{$child} = $?;
 	}
-	$SIG{CHLD} = \&REAPER;  # still loathe sysV
+	$SIG{CHLD} = \&REAPER;  # still loathe SysV
     }
     $SIG{CHLD} = \&REAPER;
     # do something that forks...
@@ -536,7 +536,7 @@ output doesn't wind up on the user's terminal).
 				or die "Can't write to /dev/null: $!";
 	defined(my $pid = fork)	or die "Can't fork: $!";
 	exit if $pid;
-	setsid			or die "Can't start a new session: $!";
+	die "Can't start a new session: $!" if setsid == -1;
 	open STDERR, '>&STDOUT'	or die "Can't dup stdout: $!";
     }
 
@@ -581,7 +581,7 @@ you opened whatever your kid writes to his STDOUT.
 	open (FILE, "> /safe/file")
 	    || die "can't open /safe/file: $!";
 	while (<STDIN>) {
-	    print FILE; # child's STDIN is parent's KID
+	    print FILE; # child's STDIN is parent's KID_TO_WRITE
 	}
 	exit;  # don't forget this
     }
@@ -933,7 +933,7 @@ go back to service a new client.
         while ((my $pid = waitpid(-1,WNOHANG)) > 0 && WIFEXITED($?)) {
             logmsg "reaped $waitedpid" . ($? ? " with exit $?" : '');
         }
-        $SIG{CHLD} = \&REAPER;  # loathe sysV
+        $SIG{CHLD} = \&REAPER;  # loathe SysV
     }
 
     $SIG{CHLD} = \&REAPER;
@@ -1115,7 +1115,7 @@ to be on the localhost, and thus everything works right.
         while (($waitedpid = waitpid(-1,WNOHANG)) > 0) {
 	    logmsg "reaped $waitedpid" . ($? ? " with exit $?" : '');
 	}
-	$SIG{CHLD} = \&REAPER;  # loathe sysV
+	$SIG{CHLD} = \&REAPER;  # loathe SysV
     }
 
     $SIG{CHLD} = \&REAPER;
