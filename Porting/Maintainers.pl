@@ -395,7 +395,7 @@ package Maintainers;
 			     't/'   => 'lib/',
 			   },
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'CPAN' =>
@@ -893,12 +893,12 @@ package Maintainers;
 
     'IO' =>
 	{
-	'MAINTAINER'	=> 'gbarr',
+	'MAINTAINER'	=> 'p5p',
 	'DISTRIBUTION'	=> 'GBARR/IO-1.25.tar.gz',
 	'FILES'		=> q[ext/IO/],
 	'EXCLUDED'	=> [ qw{t/test.pl}, ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'IO-Compress' =>
@@ -1186,7 +1186,7 @@ package Maintainers;
     'Module::Build' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.34_02.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.340201.tar.gz',
 	'FILES'		=> q[lib/Module/Build lib/Module/Build.pm],
 	'EXCLUDED'	=> [ qw{ t/par.t t/signature.t scripts/bundle.pl}, ],
 	'CPAN'		=> 1,
@@ -1649,7 +1649,7 @@ package Maintainers;
 			       },
 			   ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Term::ANSIColor' =>
@@ -2031,7 +2031,7 @@ package Maintainers;
 				XSLoader.pm}, # we use XSLoader_pm.PL
 			   ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     's2p' =>

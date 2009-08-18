@@ -570,7 +570,6 @@ sub new {
     $self->{'ambient_warnings'} = undef; # Assume no lexical warnings
     $self->{'ambient_hints'} = 0;
     $self->{'ambient_hinthash'} = undef;
-    $self->{'inlined_constants'} = $self->scan_for_constants;
     $self->init();
 
     while (my $arg = shift @_) {
@@ -605,25 +604,6 @@ sub new {
     sub WARN_MASK () {
 	return $WARN_MASK;
     }
-}
-
-sub scan_for_constants {
-    my ($self) = @_;
-    my %ret;
-
-    B::walksymtable(\%::, sub {
-        my ($gv) = @_;
-
-        my $cv = $gv->CV;
-        return if !$cv || class($cv) ne 'CV';
-
-        my $const = $cv->const_sv;
-        return if !$const || class($const) eq 'SPECIAL';
-
-        $ret{ 0 + $const->object_2svref } = $gv->NAME;
-    }, sub { 1 });
-
-    return \%ret;
 }
 
 # Initialise the contextual information, either from
@@ -3655,10 +3635,9 @@ sub const {
     if (class($sv) eq "SPECIAL") {
 	# sv_undef, sv_yes, sv_no
 	return ('undef', '1', $self->maybe_parens("!1", $cx, 21))[$$sv-1];
-    } elsif (class($sv) eq "NULL") {
+    }
+    if (class($sv) eq "NULL") {
        return 'undef';
-    } elsif ($cx and my $const = $self->{'inlined_constants'}->{ 0 + $sv->object_2svref }) {
-        return $const;
     }
     # convert a version object into the "v1.2.3" string in its V magic
     if ($sv->FLAGS & SVs_RMG) {

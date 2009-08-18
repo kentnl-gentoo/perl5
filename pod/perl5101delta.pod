@@ -35,7 +35,9 @@ However, contrary to 5.10.0, evaluating the flip-flop operators in boolean
 context ensures it can now be useful in a C<when()>, notably for
 implementing bistable conditions, like in:
 
-    when (/^=begin/ .. /^=end/) { ... }
+    when (/^=begin/ .. /^=end/) {
+      # do something
+    }
 
 =item defined-or operator
 
@@ -741,7 +743,7 @@ Upgraded from version 1.13 to 1.17.
 
 =item C<Safe>
 
-Upgraded from 2.12 to 2.17.
+Upgraded from 2.12 to 2.17_01.
 
 =item C<Scalar::Util>
 
@@ -993,7 +995,7 @@ etc.  The names of the extensions as specified to F<Configure>, and as
 reported by C<%Config::Config> under the keys C<dynamic_ext>,
 C<known_extensions>, C<nonxs_ext> and C<static_ext> have not changed, and
 still use C</>. Hence this change will not have any affect once perl is
-installed. However, C<Attributes::Handlers>, C<Safe> and C<mro> have now
+installed. However, C<Attribute::Handlers>, C<Safe> and C<mro> have now
 become extensions in their own right, so if you run F<Configure> with
 options to specify an exact list of extensions to build, you will need to
 change it to account for this.
@@ -1199,8 +1201,7 @@ greater than 255 [RT #59908].
 
 C<B::Deparse> failed to correctly deparse various constructs:
 C<readpipe STRING> [RT #62428], C<CORE::require(STRING)> [RT #62488],
-C<sub foo(_)> [RT #62484]. Also, constant subroutines were deparsed as
-their values.
+C<sub foo(_)> [RT #62484].
 
 =item *
 
