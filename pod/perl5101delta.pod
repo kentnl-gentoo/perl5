@@ -227,7 +227,7 @@ again sequentially and see if the failures go away.
 
 =head2 DTrace support
 
-Some support for DTrace has been added. See L<INSTALL/"DTrace support">.
+Some support for DTrace has been added. See "DTrace support" in F<INSTALL>.
 
 =head2 Support for C<configure_requires> in CPAN module metadata
 
@@ -398,6 +398,7 @@ Upgraded from version 1.08 to 1.11.
 =item C<CGI>
 
 Upgraded from version 3.29 to 3.43.
+(also includes the "default_value for popup_menu()" fix from 3.45).
 
 =item C<Compress::Zlib>
 
@@ -743,7 +744,7 @@ Upgraded from version 1.13 to 1.17.
 
 =item C<Safe>
 
-Upgraded from 2.12 to 2.17_01.
+Upgraded from 2.12 to 2.18.
 
 =item C<Scalar::Util>
 
@@ -990,7 +991,7 @@ Empty C<DESTROY> methods are no longer called.
 
 The layout of directories in F<ext> has been revised. Specifically, all
 extensions are now flat, and at the top level, with C</> in pathnames
-replaced by C<->, so that F<ext/Data/Dumper/> is now F<ext/Data-Dumper>,
+replaced by C<->, so that F<ext/Data/Dumper/> is now F<ext/Data-Dumper/>,
 etc.  The names of the extensions as specified to F<Configure>, and as
 reported by C<%Config::Config> under the keys C<dynamic_ext>,
 C<known_extensions>, C<nonxs_ext> and C<static_ext> have not changed, and
@@ -1007,7 +1008,7 @@ extensions to build.
 
 =head2 Configuration improvements
 
-if C<vendorlib> and C<vendorarch> are the same, then they are only added to
+If C<vendorlib> and C<vendorarch> are the same, then they are only added to
 C<@INC> once.
 
 C<$Config{usedevel}> and the C-level C<PERL_USE_DEVEL> are now defined if
@@ -1496,7 +1497,7 @@ This has been fixed.
 
 =item *
 
-The B<public> IV and NV flags are now not set if the string value has
+The I<public> IV and NV flags are now not set if the string value has
 trailing "garbage". This behaviour is consistent with not setting the
 public IV or NV flags if the value is out of range for the type.
 
