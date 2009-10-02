@@ -27,7 +27,7 @@ BEGIN {
 
 use Config;
 
-my $DOSISH    = $^O =~ /^(?:MSWin32|os2|dos|NetWare|mint)$/ ? 1 : 0;
+my $DOSISH    = $^O =~ /^(?:MSWin32|os2|dos|NetWare)$/ ? 1 : 0;
    $DOSISH    = 1 if !$DOSISH and $^O =~ /^uwin/;
 my $NONSTDIO  = exists $ENV{PERLIO} && $ENV{PERLIO} ne 'stdio'     ? 1 : 0;
 my $FASTSTDIO = $Config{d_faststdio} && $Config{usefaststdio}      ? 1 : 0;
@@ -125,7 +125,8 @@ SKIP: {
 	  $UTF8_STDIN ? [ "stdio", "utf8" ] : [ "stdio" ],
 	  "STDIN");
 
-    open(F, ">:crlf", "afile");
+    my $afile = tempfile();
+    open(F, ">:crlf", $afile);
 
     check([ PerlIO::get_layers(F) ],
 	  [ qw(stdio crlf) ],
@@ -199,8 +200,8 @@ SKIP: {
     {
 	use open(IN => ":crlf", OUT => ":encoding(cp1252)");
 
-	open F, "<afile";
-	open G, ">afile";
+	open F, '<', $afile;
+	open G, '>', $afile;
 
 	check([ PerlIO::get_layers(F, input  => 1) ],
 	      [ qw(stdio crlf) ],
@@ -216,10 +217,8 @@ SKIP: {
 
     # Check that PL_sigwarn's reference count is correct, and that 
     # &PerlIO::Layer::NoWarnings isn't prematurely freed.
-    fresh_perl_like (<<'EOT', qr/^CODE/);
-open(UTF, "<:raw:encoding(utf8)", "afile") or die $!;
+    fresh_perl_like (<<"EOT", qr/^CODE/);
+open(UTF, "<:raw:encoding(utf8)", '$afile') or die \$!;
 print ref *PerlIO::Layer::NoWarnings{CODE};
 EOT
-
-    1 while unlink "afile";
 }

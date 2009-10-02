@@ -16,7 +16,7 @@
 # is unfortunately not a trivial task.
 #
 # WARNING: these tests are obfuscated.  Do not get frustrated.
-# Ask Abigail <abigail@foad.org>, or use the Deparse or Concise
+# Ask Abigail <abigail@abigail.be>, or use the Deparse or Concise
 # modules (the former parses Perl to Perl, the latter shows the
 # op syntax tree) like this:
 # ./perl -Ilib -MO=Deparse foo.pl
@@ -33,8 +33,6 @@ BEGIN {
     require "./test.pl";
     undef &skip;
 }
-
-skip_all "Unhappy on MacOS" if $^O eq 'MacOS';
 
 #
 # ./test.pl does real evilness by jumping to a label.
@@ -256,8 +254,7 @@ truncate$0,-1+-s$0;exec$0;}}//rekcaH_lreP_rehtona_tsuJ
         close   $fh or die "Failed to close $progfile: $!\n";
 
         chmod 0755   => $progfile or die "Failed to chmod $progfile: $!\n";
-        my $command  = "./$progfile";
-           $command .= ' 2>&1' unless $^O eq 'MacOS';
+        my $command  = "./$progfile 2>&1";
         if ( $^O eq 'qnx' ) {
           skip "#!./perl not supported in QNX4";
           skip "#!./perl not supported in QNX4";

@@ -6,10 +6,35 @@
 # and by AIX for creating libperl.a when -Dusershrplib is in effect,
 # and by MacOS Classic.
 #
-# reads global.sym, pp.sym, perlvars.h, intrpvar.h, config.h
-# On OS/2 reads miniperl.map and the previous version of perl5.def as well
+# Reads from information stored in
+#
+#    config.h
+#    config.sh
+#    global.sym
+#    globvar.sym
+#    intrpvar.h
+#    macperl.sym  (on MacOS)
+#    miniperl.map (on OS/2)
+#    perl5.def    (on OS/2; this is the old version of the file being made)
+#    perlio.sym
+#    perlvars.h
+#
+# plus long lists of function names hard-coded directly in this script and
+# in the DATA section.
+#
+# Writes the result to STDOUT.
+#
+# Normally this script is invoked from a makefile (e.g. win32/Makefile),
+# which redirects STDOUT to a suitable file, such as:
+#
+#    perl5.def   OS/2
+#    perldll.def Windows
+#    perl.exp    AIX
+#    perl.imp    NetWare
+
 
 BEGIN { unshift @INC, "lib" }
+use Config;
 use strict;
 
 use vars qw($PLATFORM $CCTYPE $FILETYPE $CONFIG_ARGS $ARCHNAME $PATCHLEVEL);
@@ -51,7 +76,11 @@ if ($PLATFORM eq 'win32' or $PLATFORM eq 'wince' or $PLATFORM eq "aix") {
 	# the user might have chosen to disable because the canned configs are
 	# minimal configs that don't include any of those options.
 	my $opts = ($PLATFORM eq 'wince' ? '-MCross' : ''); # for wince need Cross.pm to get Config.pm
-	my $config = `$^X $opts -Ilib -V`;
+
+	$ENV{PERL5LIB} = join $Config{path_sep}, @INC;
+	my $cmd = "$^X $opts -V";
+	my $config = `$cmd`
+	    or die "Couldn't run [$cmd]: $!";
 	my($options) = $config =~ /^  Compile-time options: (.*?)\n^  \S/ms;
 	$options =~ s/\s+/ /g;
 	print STDERR "Options: ($options)\n";
@@ -129,6 +158,7 @@ while (<CFG>) {
     $define{$1} = 1 if /^\s*#\s*define\s+(MULTIPLICITY)\b/;
     $define{$1} = 1 if /^\s*#\s*define\s+(PERL_\w+)\b/;
     $define{$1} = 1 if /^\s*#\s*define\s+(USE_\w+)\b/;
+    $define{$1} = 1 if /^\s*#\s*define\s+(HAS_\w+)\b/;
 }
 close(CFG);
 
@@ -159,7 +189,7 @@ my $sym_ord = 0;
 print STDERR "Defines: (" . join(' ', sort keys %define) . ")\n";
 
 if ($PLATFORM =~ /^win(?:32|ce)$/) {
-    (my $dll = ($define{PERL_DLL} || "perl510")) =~ s/\.dll$//i;
+    (my $dll = ($define{PERL_DLL} || "perl511")) =~ s/\.dll$//i;
     print "LIBRARY $dll\n";
     # The DESCRIPTION module definition file statement is not supported
     # by VC7 onwards.
@@ -215,7 +245,7 @@ elsif ($PLATFORM eq 'aix') {
 }
 elsif ($PLATFORM eq 'netware') {
 	if ($FILETYPE eq 'def') {
-	print "LIBRARY perl510\n";
+	print "LIBRARY perl511\n";
 	print "DESCRIPTION 'Perl interpreter for NetWare'\n";
 	print "EXPORTS\n";
 	}
@@ -403,6 +433,13 @@ elsif ($PLATFORM eq 'aix') {
 		     PL_opsave
 		     PL_statusvalue_vms
 		     PL_sys_intern
+		     )]);
+    skip_symbols([qw(
+		     Perl_signbit
+		     )])
+	if $define{'HAS_SIGNBIT'};
+    emit_symbols([qw(
+		     boot_DynaLoader
 		     )]);
 }
 elsif ($PLATFORM eq 'os2') {
@@ -593,7 +630,6 @@ unless ($define{'DEBUGGING'}) {
 		    Perl_debstack
 		    Perl_debstackptrs
 		    Perl_pad_sv
-		    Perl_sv_peek
 		    Perl_hv_assert
 		    PL_block_type
 		    PL_watchaddr
@@ -667,6 +703,7 @@ else {
 		    Perl_dump_mstats
 		    Perl_get_mstats
 		    Perl_malloced_size
+		    Perl_malloc_good_size
 		    MallocCfg_ptr
 		    MallocCfgP_ptr
 		    )];
@@ -734,7 +771,7 @@ unless ($define{'USE_ITHREADS'}) {
 		    Perl_he_dup
 		    Perl_mg_dup
 		    Perl_mro_meta_dup
-		    Perl_re_dup
+		    Perl_re_dup_guts
 		    Perl_sv_dup
 		    Perl_rvpv_dup
 		    Perl_hek_dup
@@ -820,6 +857,12 @@ unless ($define{'PERL_NEED_APPCTX'}) {
 unless ($define{'PERL_NEED_TIMESBASE'}) {
     skip_symbols [qw(
 		    PL_timesbase
+		    )];
+}
+
+unless ($define{'DEBUG_LEAKING_SCALARS'}) {
+    skip_symbols [qw(
+		    PL_sv_serial
 		    )];
 }
 
@@ -999,8 +1042,10 @@ my @layer_syms = qw(
 		    PerlIO_arg_fetch
 		    PerlIO_debug
 		    PerlIO_define_layer
+		    PerlIO_find_layer
 		    PerlIO_isutf8
 		    PerlIO_layer_fetch
+		    PerlIO_list_alloc
 		    PerlIO_list_free
 		    PerlIO_modestr
 		    PerlIO_parse_layers

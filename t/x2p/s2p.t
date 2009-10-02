@@ -793,15 +793,18 @@ if ($^O eq 'VMS') {
   # default in the .com extenson if it's not already there
   $s2p = VMS::Filespec::vmsify($s2p);
   $psed = VMS::Filespec::vmsify($psed);
+  # Converting file specs from Unix format to VMS with the extended
+  # character set active can result in a trailing '.' added for null
+  # extensions.  This must be removed if the intent is to default the
+  # extension.
+  $s2p =~ s/\.$//;
+  $psed =~ s/\.$//;
   $s2p = VMS::Filespec::rmsexpand($s2p, '.com');
   $psed = VMS::Filespec::rmsexpand($psed, '.com');
 }
 my $sedcmd = [ $psed, '-f', $script, $stdin ];
 my $s2pcmd = [ $s2p,  '-f', $script ];
 my $plcmd  = [ $plsed, $stdin ];
-
-my $switches = '';
-$switches = ['-x'] if $^O eq 'MacOS';
 
 # psed: we create a local copy as linking may not work on some systems.
 copy( $s2p, $psed );
@@ -846,19 +849,19 @@ for my $tc ( sort keys %testcase ){
 
     # run and compare
     #
-    $psedres = runperl( args => $sedcmd, switches => $switches );
+    $psedres = runperl( args => $sedcmd );
     is( $psedres, $testcase{$tc}{expect}, "psed $tc" );
 
     # 2nd test: run s2p
     # translate the sed script to a Perl program
 
-    my $perlprog = runperl( args => $s2pcmd, switches => $switches );
+    my $perlprog = runperl( args => $s2pcmd );
     open( PP, ">$plsed" ) || goto FAIL_S2P;
     print PP $perlprog;
     close( PP ) || goto FAIL_S2P;
 
     # execute generated Perl program, compare
-    $s2pres = runperl( args => $plcmd, switches => $switches );
+    $s2pres = runperl( args => $plcmd );
     is( $s2pres, $testcase{$tc}{expect}, "s2p $tc" );
     next;
 

@@ -17,7 +17,7 @@ use Config;
 use File::Spec::Functions;
 
 BEGIN { require './test.pl'; }
-plan tests => 267;
+plan tests => 301;
 
 $| = 1;
 
@@ -42,7 +42,6 @@ BEGIN {
   }
 }
 
-my $Is_MacOS    = $^O eq 'MacOS';
 my $Is_VMS      = $^O eq 'VMS';
 my $Is_MSWin32  = $^O eq 'MSWin32';
 my $Is_NetWare  = $^O eq 'NetWare';
@@ -51,8 +50,7 @@ my $Is_Cygwin   = $^O eq 'cygwin';
 my $Is_OpenBSD  = $^O eq 'openbsd';
 my $Invoke_Perl = $Is_VMS      ? 'MCR Sys$Disk:[]Perl.exe' :
                   $Is_MSWin32  ? '.\perl'               :
-                  $Is_MacOS    ? ':perl'                :
-                  $Is_NetWare  ? 'perl'                 : 
+                  $Is_NetWare  ? 'perl'                 :
                                  './perl'               ;
 my @MoreEnv = qw/IFS CDPATH ENV BASH_ENV/;
 
@@ -134,7 +132,7 @@ sub test ($;$) {
 }
 
 # We need an external program to call.
-my $ECHO = ($Is_MSWin32 ? ".\\echo$$" : $Is_MacOS ? ":echo$$" : ($Is_NetWare ? "echo$$" : "./echo$$"));
+my $ECHO = ($Is_MSWin32 ? ".\\echo$$" : ($Is_NetWare ? "echo$$" : "./echo$$"));
 END { unlink $ECHO }
 open PROG, "> $ECHO" or die "Can't create $ECHO: $!";
 print PROG 'print "@ARGV\n"', "\n";
@@ -173,7 +171,7 @@ my $TEST = catfile(curdir(), 'TEST');
 
     SKIP: {
         skip "Environment tainting tests skipped", 4
-          if $Is_MSWin32 || $Is_NetWare || $Is_VMS || $Is_Dos || $Is_MacOS;
+          if $Is_MSWin32 || $Is_NetWare || $Is_VMS || $Is_Dos;
 
 	my @vars = ('PATH', @MoreEnv);
 	while (my $v = $vars[0]) {
@@ -285,7 +283,7 @@ my $TEST = catfile(curdir(), 'TEST');
 # How about command-line arguments? The problem is that we don't
 # always get some, so we'll run another process with some.
 SKIP: {
-    my $arg = catfile(curdir(), "arg$$");
+    my $arg = tempfile();
     open PROG, "> $arg" or die "Can't create $arg: $!";
     print PROG q{
 	eval { join('', @ARGV), kill 0 };
@@ -418,8 +416,7 @@ SKIP: {
     test !eval { require $foo }, 'require';
     test $@ =~ /^Insecure dependency/, $@;
 
-    my $filename = "./taintB$$";	# NB: $filename isn't tainted!
-    END { unlink $filename if defined $filename }
+    my $filename = tempfile();	# NB: $filename isn't tainted!
     $foo = $filename . $TAINT;
     unlink $filename;	# in any case
 
@@ -431,8 +428,7 @@ SKIP: {
     # just because Errno possibly failing.
     test eval('$!{ENOENT}') ||
 	$! == 2 || # File not found
-	($Is_Dos && $! == 22) ||
-	($^O eq 'mint' && $! == 33);
+	($Is_Dos && $! == 22);
 
     test !eval { open FOO, "> $foo" }, 'open for write';
     test $@ =~ /^Insecure dependency/, $@;
@@ -506,8 +502,7 @@ SKIP: {
 	my $foo = "x" x 979;
 	taint_these $foo;
 	local *FOO;
-	my $temp = "./taintC$$";
-	END { unlink $temp }
+	my $temp = tempfile();
 	test open(FOO, "> $temp"), "Couldn't open $temp for write: $!";
 
 	test !eval { ioctl FOO, $TAINT0, $foo }, 'ioctl';
@@ -630,7 +625,6 @@ SKIP: {
 	unlink($symlink);
 	my $sl = "/something/naughty";
 	# it has to be a real path on Mac OS
-	$sl = MacPerl::MakePath((MacPerl::Volumes())[0]) if $Is_MacOS;
 	symlink($sl, $symlink) or die "symlink: $!\n";
 	my $readlink = readlink($symlink);
 	test tainted $readlink;
@@ -975,15 +969,11 @@ TODO: {
     };
     test !$@;
 
-    SKIP: {
-        skip "no exec() on MacOS Classic" if $Is_MacOS;
-
-	eval { 
-            no warnings;
-            exec("lskdfj does not exist","with","args"); 
-        };
-	test !$@;
-    }
+    eval {
+	no warnings;
+	exec("lskdfj does not exist","with","args"); 
+    };
+    test !$@;
 
     # If you add tests here update also the above skip block for VMS.
 }
@@ -1252,6 +1242,70 @@ foreach my $ord (78, 163, 256) {
     is($line, 'A1');
     $line =~ /(A\S*)/;
     ok(!tainted($1), "\\S match with chr $ord");
+}
+
+{
+    # 59998
+    sub cr { my $x = crypt($_[0], $_[1]); $x }
+    sub co { my $x = ~$_[0]; $x }
+    my ($a, $b);
+    $a = cr('hello', 'foo' . $TAINT);
+    $b = cr('hello', 'foo');
+    ok(tainted($a),  "tainted crypt");
+    ok(!tainted($b), "untainted crypt");
+    $a = co('foo' . $TAINT);
+    $b = co('foo');
+    ok(tainted($a),  "tainted complement");
+    ok(!tainted($b), "untainted complement");
+}
+
+{
+    my @data = qw(bonk zam zlonk qunckkk);
+    # Clearly some sort of usenet bang-path
+    my $string = $TAINT . join "!", @data;
+
+    ok(tainted($string), "tainted data");
+
+    my @got = split /!|,/, $string;
+
+    # each @got would be useful here, but I want the test for earlier perls
+    for my $i (0 .. $#data) {
+	ok(tainted($got[$i]), "tainted result $i");
+	is($got[$i], $data[$i], "correct content $i");
+    }
+
+    ok(tainted($string), "still tainted data");
+
+    my @got = split /[!,]/, $string;
+
+    # each @got would be useful here, but I want the test for earlier perls
+    for my $i (0 .. $#data) {
+	ok(tainted($got[$i]), "tainted result $i");
+	is($got[$i], $data[$i], "correct content $i");
+    }
+
+    ok(tainted($string), "still tainted data");
+
+    my @got = split /!/, $string;
+
+    # each @got would be useful here, but I want the test for earlier perls
+    for my $i (0 .. $#data) {
+	ok(tainted($got[$i]), "tainted result $i");
+	is($got[$i], $data[$i], "correct content $i");
+    }
+}
+
+# Bug RT #52552 - broken by change at git commit id f337b08
+{
+    my $x = $TAINT. q{print "Hello world\n"};
+    my $y = pack "a*", $x;
+    ok(tainted($y), "pack a* preserves tainting");
+
+    my $z = pack "A*", q{print "Hello world\n"}.$TAINT;
+    ok(tainted($z), "pack A* preserves tainting");
+
+    my $zz = pack "a*a*", q{print "Hello world\n"}, $TAINT;
+    ok(tainted($zz), "pack a*a* preserves tainting");
 }
 
 # This may bomb out with the alarm signal so keep it last

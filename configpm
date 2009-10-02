@@ -34,6 +34,7 @@ sub usage { die <<EOF }
 usage: $0  [ options ]
     --cross=PLATFORM    cross-compile for a different platform
     --no-glossary       don't include Porting/Glossary in lib/Config.pod
+    --chdir=dir         change directory before writing files
 EOF
 
 use strict;
@@ -60,6 +61,7 @@ my %Allowed_Opts = (
     'cross'    => '', # --cross=PLATFORM - crosscompiling for PLATFORM
     'glossary' => 1,  # --no-glossary  - no glossary file inclusion,
                       #                  for compactness
+    'chdir'    => '', # --chdir=dir    - change directory before writing files
 );
 
 sub opts {
@@ -84,6 +86,10 @@ sub opts {
 
 
 my %Opts = opts();
+
+if ($Opts{chdir}) {
+    chdir $Opts{chdir} or die "$0: could not chdir $Opts{chdir}: $!"
+}
 
 my ($Config_SH, $Config_PM, $Config_heavy, $Config_POD);
 my $Glossary = 'Porting/Glossary';
@@ -116,6 +122,45 @@ package Config;
 use strict;
 # use warnings; Pulls in Carp
 # use vars pulls in Carp
+
+sub _V {
+    my ($bincompat, $non_bincompat, $date, $osname, @patches) = Internals::V();
+
+    my $opts = join ' ', sort split ' ', "$bincompat $non_bincompat";
+
+    # wrap at 76 columns.
+
+    $opts =~ s/(?=.{53})(.{1,53}) /$1\n                        /mg;
+
+    print Config::myconfig();
+    if ($^O eq 'VMS') {
+        print "\nCharacteristics of this PERLSHR image: \n";
+    } else {
+        print "\nCharacteristics of this binary (from libperl): \n";
+    }
+
+    print "  Compile-time options: $opts\n";
+
+    if (@patches) {
+        print "  Locally applied patches:\n";
+        print "\t$_\n" foreach @patches;
+    }
+
+    print "  Built under $osname\n";
+
+    print "  $date\n" if defined $date;
+
+    my @env = map { "$_=\"$ENV{$_}\"" } sort grep {/^PERL/} keys %ENV;
+    push @env, "CYGWIN=\"$ENV{CYGWIN}\"" if $^O eq 'cygwin';
+
+    if (@env) {
+        print "  \%ENV:\n";
+        print "    $_\n" foreach @env;
+    }
+    print "  \@INC:\n";
+    print "    $_\n" foreach @INC;
+}
+
 ENDOFBEG
 
 my $myver = sprintf "%vd", $^V;
@@ -123,6 +168,10 @@ my $myver = sprintf "%vd", $^V;
 $config_txt .= sprintf <<'ENDOFBEG', ($myver) x 3;
 # This file was created by configpm when Perl was built. Any changes
 # made to this file will be lost the next time perl is built.
+
+# for a description of the variables, please have a look at the
+# Glossary file, as written in the Porting folder, or use the url:
+# http://perl5.git.perl.org/perl.git/blob/HEAD:/Porting/Glossary
 
 package Config;
 use strict;
@@ -458,7 +507,19 @@ my $summary_expanded;
 sub myconfig {
     return $summary_expanded if $summary_expanded;
     ($summary_expanded = $summary) =~ s{\$(\w+)}
-		 { my $c = $Config::Config{$1}; defined($c) ? $c : 'undef' }ge;
+		 { 
+			my $c;
+			if ($1 eq 'git_ancestor_line') {
+				if ($Config::Config{git_ancestor}) {
+					$c= "\n  Ancestor: $Config::Config{git_ancestor}";
+				} else {
+					$c= "";
+				}
+			} else {
+                     		$c = $Config::Config{$1}; 
+			}
+			defined($c) ? $c : 'undef' 
+		}ge;
     $summary_expanded;
 }
 
@@ -534,6 +595,15 @@ foreach my $prefix (qw(libs libswanted)) {
 }
 
 $heavy_txt .= "EOVIRTUAL\n";
+
+$heavy_txt .= <<'ENDOFGIT';
+eval {
+	# do not have hairy conniptions if this isnt available
+	require 'Config_git.pl';
+	$Config_SH_expanded .= $Config::Git_Data;
+	1;
+} or warn "Warning: failed to load Config_git.pl, something strange about this perl...\n";
+ENDOFGIT
 
 $heavy_txt .= $fetch_string;
 
@@ -751,6 +821,10 @@ Values stored in config.sh as 'undef' are returned as undefined
 values.  The perl C<exists> function can be used to check if a
 named variable exists.
 
+For a description of the variables, please have a look at the
+Glossary file, as written in the Porting folder, or use the url:
+http://perl5.git.perl.org/perl.git/blob/HEAD:/Porting/Glossary
+
 =over 4
 
 =item myconfig()
@@ -832,6 +906,8 @@ some of the variables described below, or may have extraneous variables
 specific to that particular port.  See the port specific documentation
 in such cases.
 
+=cut
+
 ENDOFTAIL
 
 if ($Opts{glossary}) {
@@ -848,11 +924,15 @@ sub process {
       print CONFIG_POD <<EOF if $text;
 =back
 
+=cut
+
 EOF
       print CONFIG_POD <<EOF;
 =head2 $c
 
 =over 4
+
+=cut
 
 EOF
      $text = 1;
@@ -902,6 +982,21 @@ if ($Opts{glossary}) {
 print CONFIG_POD <<'ENDOFTAIL';
 
 =back
+
+=head1 GIT DATA
+
+Information on the git commit from which the current perl binary was compiled
+can be found in the variable C<$Config::Git_Data>.  The variable is a
+structured string that looks something like this:
+
+  git_commit_id='ea0c2dbd5f5ac6845ecc7ec6696415bf8e27bd52'
+  git_describe='GitLive-blead-1076-gea0c2db'
+  git_branch='smartmatch'
+  git_uncommitted_changes=''
+  git_commit_id_title='Commit id:'
+  git_commit_date='2009-05-09 17:47:31 +0200'
+
+Its format is not guaranteed not to change over time.
 
 =head1 NOTE
 

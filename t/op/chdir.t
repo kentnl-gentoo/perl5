@@ -12,7 +12,20 @@ require "test.pl";
 plan(tests => 48);
 
 my $IsVMS   = $^O eq 'VMS';
-my $IsMacOS = $^O eq 'MacOS';
+
+my $vms_unix_rpt = 0;
+my $vms_efs = 0;
+if ($IsVMS) {
+    if (eval 'require VMS::Feature') {
+        $vms_unix_rpt = VMS::Feature::current("filename_unix_report");
+        $vms_efs = VMS::Feature::current("efs_charset");
+    } else {
+        my $unix_rpt = $ENV{'DECC$FILENAME_UNIX_REPORT'} || '';
+        my $efs_charset = $ENV{'DECC$EFS_CHARSET'} || '';
+        $vms_unix_rpt = $unix_rpt =~ /^[ET1]/i; 
+        $vms_efs = $efs_charset =~ /^[ET1]/i; 
+    }
+}
 
 # For an op regression test, I don't want to rely on "use constant" working.
 my $has_fchdir = ($Config{d_fchdir} || "") eq "define";
@@ -25,8 +38,6 @@ use File::Spec::Functions qw(:DEFAULT splitdir rel2abs splitpath);
 # path separators than File::Spec.
 sub abs_path {
     my $d = rel2abs(curdir);
-
-    $d = uc($d) if $IsVMS;
     $d = lc($d) if $^O =~ /^uwin/;
     $d;
 }
@@ -36,8 +47,14 @@ my $Cwd = abs_path;
 # Let's get to a known position
 SKIP: {
     my ($vol,$dir) = splitpath(abs_path,1);
-    my $test_dir = $IsVMS ? 'T' : 't';
-    skip("Already in t/", 2) if (splitdir($dir))[-1] eq $test_dir;
+    my $test_dir = 't';
+    my $compare_dir = (splitdir($dir))[-1];
+
+    # VMS is case insensitive but will preserve case in EFS mode.
+    # So we must normalize the case for the compare.
+ 
+    $compare_dir = lc($compare_dir) if $IsVMS;
+    skip("Already in t/", 2) if $compare_dir eq $test_dir;
 
     ok( chdir($test_dir),     'chdir($test_dir)');
     is( abs_path, catdir($Cwd, $test_dir),    '  abs_path() agrees' );
@@ -116,7 +133,7 @@ sub check_env {
     my($key) = @_;
 
     # Make sure $ENV{'SYS$LOGIN'} is only honored on VMS.
-    if( $key eq 'SYS$LOGIN' && !$IsVMS && !$IsMacOS ) {
+    if( $key eq 'SYS$LOGIN' && !$IsVMS ) {
         ok( !chdir(),         "chdir() on $^O ignores only \$ENV{$key} set" );
         is( abs_path, $Cwd,   '  abs_path() did not change' );
         pass( "  no need to test SYS\$LOGIN on $^O" ) for 1..7;
@@ -164,10 +181,8 @@ sub clean_env {
         next if $IsVMS && $env eq 'SYS$LOGIN';
         next if $IsVMS && $env eq 'HOME' && !$Config{'d_setenv'};
 
-        unless ($IsMacOS) { # ENV on MacOS is "special" :-)
-            # On VMS, %ENV is many layered.
-            delete $ENV{$env} while exists $ENV{$env};
-        }
+	# On VMS, %ENV is many layered.
+	delete $ENV{$env} while exists $ENV{$env};
     }
 
     # The following means we won't really be testing for non-existence,
@@ -200,7 +215,7 @@ foreach my $key (@magic_envs) {
 
 {
     clean_env;
-    if (($IsVMS || $IsMacOS) && !$Config{'d_setenv'}) {
+    if ($IsVMS && !$Config{'d_setenv'}) {
         pass("Can't reset HOME, so chdir() test meaningless");
     } else {
         ok( !chdir(),                   'chdir() w/o any ENV set' );

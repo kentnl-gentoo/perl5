@@ -1,13 +1,7 @@
 #!perl
 
 BEGIN {
-    if ($ENV{PERL_CORE}) {
-	chdir('t') if -d 't';
-	@INC = ('.', '../lib', '../ext/B/t');
-    } else {
-	unshift @INC, 't';
-	push @INC, "../../t";
-    }
+    unshift @INC, 't';
     require Config;
     if (($Config::Config{'extensions'} !~ /\bB\b/) ){
         print "1..0 # Skip -- Perl configured without B module\n";
@@ -43,21 +37,27 @@ sub myyes() { 1==1 }
 sub myno () { return 1!=1 }
 sub pi () { 3.14159 };
 
+my $RV_class = $] >= 5.011 ? 'IV' : 'RV';
+
 my $want = {	# expected types, how value renders in-line, todos (maybe)
     mystr	=> [ 'PV', '"'.mystr.'"' ],
-    myhref	=> [ 'RV', '\\\\HASH'],
+    myhref	=> [ $RV_class, '\\\\HASH'],
     pi		=> [ 'NV', pi ],
-    myglob	=> [ 'RV', '\\\\' ],
-    mysub	=> [ 'RV', '\\\\' ],
-    myunsub	=> [ 'RV', '\\\\' ],
+    myglob	=> [ $RV_class, '\\\\' ],
+    mysub	=> [ $RV_class, '\\\\' ],
+    myunsub	=> [ $RV_class, '\\\\' ],
     # these are not inlined, at least not per BC::Concise
-    #myyes	=> [ 'RV', ],
-    #myno	=> [ 'RV', ],
+    #myyes	=> [ $RV_class, ],
+    #myno	=> [ $RV_class, ],
     $] > 5.009 ? (
-    myaref	=> [ 'RV', '\\\\' ],
+    myaref	=> [ $RV_class, '\\\\' ],
     myfl	=> [ 'NV', myfl ],
     myint	=> [ 'IV', myint ],
-    myrex	=> [ 'RV', '\\\\' ],
+    $] >= 5.011 ? (
+    myrex	=> [ $RV_class, '\\\\"\\(?-xism:Foo\\)"' ],
+    ) : (
+    myrex	=> [ $RV_class, '\\\\' ],
+    ),
     myundef	=> [ 'NULL', ],
     ) : (
     myaref	=> [ 'PVIV', '' ],

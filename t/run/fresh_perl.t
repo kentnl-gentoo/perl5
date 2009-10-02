@@ -57,7 +57,7 @@ foreach my $prog (@prgs) {
 
 __END__
 ########
-$a = ":="; split /($a)/o, "a:=b:=c"; print "@_"
+$a = ":="; @_ = split /($a)/o, "a:=b:=c"; print "@_"
 EXPECT
 a := b := c
 ########
@@ -93,7 +93,7 @@ EXPECT
 ########
 eval 'sub bar {print "In bar"}';
 ########
-system './perl -ne "print if eof" /dev/null' unless $^O eq 'MacOS'
+system './perl -ne "print if eof" /dev/null'
 ########
 chop($file = <DATA>);
 ########
@@ -275,7 +275,7 @@ print "ok\n" if ("\0" lt "\xFF");
 EXPECT
 ok
 ########
-open(H,$^O eq 'MacOS' ? ':run:fresh_perl.t' : 'run/fresh_perl.t'); # must be in the 't' directory
+open(H,'run/fresh_perl.t'); # must be in the 't' directory
 stat(H);
 print "ok\n" if (-e _ and -f _ and -r _);
 EXPECT
@@ -345,7 +345,7 @@ map {#this newline here tickles the bug
 $s += $_} (1,2,4);
 print "eat flaming death\n" unless ($s == 7);
 ########
-sub foo { local $_ = shift; split; @_ }
+sub foo { local $_ = shift; @_ = split; @_ }
 @x = foo(' x  y  z ');
 print "you die joe!\n" unless "@x" eq 'x y z';
 ########
@@ -716,36 +716,6 @@ ok
 print join '', @a, "\n";
 EXPECT
 123456789
-######## [ID 20020104.007] "coredump on dbmclose"
-package Foo;
-eval { require AnyDBM_File }; # not all places have dbm* functions
-if ($@) {
-    print "ok\n";
-    exit 0;
-}
-package Foo;
-sub new {
-        my $proto = shift;
-        my $class = ref($proto) || $proto;
-        my $self  = {};
-        bless($self,$class);
-        my %LT;
-        dbmopen(%LT, "dbmtest", 0666) ||
-	    die "Can't open dbmtest because of $!\n";
-        $self->{'LT'} = \%LT;
-        return $self;
-}
-sub DESTROY {
-        my $self = shift;
-	dbmclose(%{$self->{'LT'}});
-	1 while unlink 'dbmtest';
-	1 while unlink <dbmtest.*>;
-	print "ok\n";
-}
-package main;
-$test = Foo->new(); # must be package var
-EXPECT
-ok
 ######## example from Camel 5, ch. 15, pp.406 (with my)
 # SKIP: ord "A" == 193 # EBCDIC
 use strict;

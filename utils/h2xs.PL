@@ -234,7 +234,7 @@ of C<h2xs> may gain the ability to make educated guesses.
 
 When B<--compat-version> (B<-b>) is present the generated tests will use
 C<Test::More> rather than C<Test> which is the default for versions before
-5.7.2 .   C<Test::More> will be added to PREREQ_PM in the generated
+5.6.2.  C<Test::More> will be added to PREREQ_PM in the generated
 C<Makefile.PL>.
 
 =item B<--use-old-tests>
@@ -901,6 +901,7 @@ if( @path_h ){
 
         # Remove C and C++ comments
         $src =~ s#/\*[^*]*\*+([^/*][^*]*\*+)*/|("(\\.|[^"\\])*"|'(\\.|[^'\\])*'|.[^/"'\\]*)#$2#gs;
+        $src =~ s#//.*$##gm;
 
 	while ($src =~ /\benum\s*([\w_]*)\s*\{\s([^}]+)\}/gsc) {
 	    my ($enum_name, $enum_body) = ($1, $2);
@@ -912,7 +913,7 @@ if( @path_h ){
                 my ($key, $declared_val) = $item =~ /(\w+)\s*(?:=\s*(.*))?/;
                 $val = defined($declared_val) && length($declared_val) ? $declared_val : 1 + $val;
                 $seen_define{$key} = $val;
-                $const_names{$key}++;
+                $const_names{$key} = { name => $key, macro => 1 };
             }
         } # while (...)
       } # if (!defined $opt_e or $opt_e)
@@ -1076,7 +1077,14 @@ if( ! $opt_X ){  # use XS, unless it was disabled
     }
   }
 }
-my @const_names = sort keys %const_names;
+my (@const_specs, @const_names);
+
+for (sort(keys(%const_names))) {
+    my $v = $const_names{$_};
+    
+    push(@const_specs, ref($v) ? $v : $_);
+    push(@const_names, $_);
+}
 
 -d $modpmdir || mkpath([$modpmdir], 0, 0775);
 open(PM, ">$modpmname") || die "Can't create $ext$modpname/$modpmname: $!\n";
@@ -1465,7 +1473,7 @@ if( ! $opt_c ) {
                    XS_FILE =>      $xsfallback,
                    DEFAULT_TYPE => $opt_t,
                    NAME =>         $module,
-                   NAMES =>        \@const_names,
+                   NAMES =>        \@const_specs,
                  );
   print XS "#include \"$constscfname\"\n";
 }
@@ -1895,14 +1903,18 @@ open(PL, ">Makefile.PL") || die "Can't create $ext$modpname/Makefile.PL: $!\n";
 
 my $prereq_pm = '';
 
-if ( $compat_version < 5.00702 and $new_test )
+if ( $compat_version < 5.006002 and $new_test )
 {
   $prereq_pm .= q%'Test::More'  =>  0, %;
 }
-
-if ( $compat_version < 5.00600 and !$opt_X and $use_xsloader)
+elsif ( $compat_version < 5.006002 )
 {
-  $prereq_pm .= q%'XSLoader'  =>  0, %;
+  $prereq_pm .= q%'Test'        =>  0, %;
+}
+
+if ( $compat_version < 5.006 and !$opt_X and $use_xsloader)
+{
+  $prereq_pm .= q%'XSLoader'    =>  0, %;
 }
 
 print PL <<"END";
@@ -1950,7 +1962,7 @@ if (!$opt_c) {
                            XS_FILE =>      $constsxsfname,
                            DEFAULT_TYPE => $opt_t,
                            NAME =>         $module,
-                           NAMES =>        \@const_names,
+                           NAMES =>        \@const_specs,
                  );
   print PL <<"END";
 if  (eval {require ExtUtils::Constant; 1}) {
@@ -2018,13 +2030,17 @@ my $rmheadeq = "=" x length($rmhead);
 
 my $rm_prereq;
 
-if ( $compat_version < 5.00702 and $new_test )
+if ( $compat_version < 5.006002 and $new_test )
 {
-   $rm_prereq = 'Test::More';
+  $rm_prereq = 'Test::More';
+}
+elsif ( $compat_version < 5.006002 )
+{
+  $rm_prereq = 'Test';
 }
 else
 {
-   $rm_prereq = 'blah blah blah';
+  $rm_prereq = 'blah blah blah';
 }
 
 print RM <<_RMEND_;
@@ -2088,7 +2104,7 @@ _END_
 
 my $test_mod = 'Test::More';
 
-if ( $old_test or ($compat_version < 5.007 and not $new_test ))
+if ( $old_test or ($compat_version < 5.006002 and not $new_test ))
 {
   my $test_mod = 'Test';
 

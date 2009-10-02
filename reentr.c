@@ -115,10 +115,6 @@ Perl_reentrant_size(pTHX) {
 #       endif
 #   endif 
 #endif /* HAS_GETSPNAM_R */
-#ifdef HAS_GMTIME_R
-#endif /* HAS_GMTIME_R */
-#ifdef HAS_LOCALTIME_R
-#endif /* HAS_LOCALTIME_R */
 #ifdef HAS_RANDOM_R
 #endif /* HAS_RANDOM_R */
 #ifdef HAS_READDIR_R
@@ -205,10 +201,6 @@ Perl_reentrant_init(pTHX) {
 #   endif
 	Newx(PL_reentrant_buffer->_spent_buffer, PL_reentrant_buffer->_spent_size, char);
 #endif /* HAS_GETSPNAM_R */
-#ifdef HAS_GMTIME_R
-#endif /* HAS_GMTIME_R */
-#ifdef HAS_LOCALTIME_R
-#endif /* HAS_LOCALTIME_R */
 #ifdef HAS_RANDOM_R
 #endif /* HAS_RANDOM_R */
 #ifdef HAS_READDIR_R
@@ -280,10 +272,6 @@ Perl_reentrant_free(pTHX) {
 #ifdef HAS_GETSPNAM_R
 	Safefree(PL_reentrant_buffer->_spent_buffer);
 #endif /* HAS_GETSPNAM_R */
-#ifdef HAS_GMTIME_R
-#endif /* HAS_GMTIME_R */
-#ifdef HAS_LOCALTIME_R
-#endif /* HAS_LOCALTIME_R */
 #ifdef HAS_RANDOM_R
 #endif /* HAS_RANDOM_R */
 #ifdef HAS_READDIR_R
@@ -314,6 +302,11 @@ Perl_reentrant_retry(const char *f, ...)
     dTHX;
     void *retptr = NULL;
     va_list ap;
+#ifdef USE_REENTRANT_API
+    /* Easier to special case this here than in embed.pl. (Look at what it
+       generates for proto.h) */
+    PERL_ARGS_ASSERT_REENTRANT_RETRY;
+#endif
     va_start(ap, f);
     {
 #ifdef USE_REENTRANT_API

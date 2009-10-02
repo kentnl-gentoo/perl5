@@ -3,7 +3,9 @@
 use strict;
 use warnings;
 
-require q(./test.pl); plan(tests => 38);
+require q(./test.pl); plan(tests => 44);
+
+require mro;
 
 {
     package MRO_A;
@@ -173,6 +175,19 @@ is(eval { MRO_N->testfunc() }, 123);
 
     ok(eq_array(mro::get_linear_isa('ISACLEAR1'),[qw/ISACLEAR1/]));
     ok(eq_array(mro::get_linear_isa('ISACLEAR2'),[qw/ISACLEAR2/]));
+
+    # [perl #49564]  This is a pretty obscure way of clearing @ISA but
+    # it tests a regression that affects XS code calling av_clear too.
+    {
+        package ISACLEAR3;
+        our @ISA = qw/WW XX/;
+    }
+    ok(eq_array(mro::get_linear_isa('ISACLEAR3'),[qw/ISACLEAR3 WW XX/]));
+    {
+        package ISACLEAR3;
+        reset 'I';
+    }
+    ok(eq_array(mro::get_linear_isa('ISACLEAR3'),[qw/ISACLEAR3/]));
 }
 
 # Check that recursion bails out "cleanly" in a variety of cases
@@ -218,3 +233,35 @@ is(eval { MRO_N->testfunc() }, 123);
     is($stk_obj->foo(3), 6);
 }
 
+{ 
+  {
+    # assigning @ISA via arrayref to globref RT 60220
+    package P1;
+    sub new { bless {}, shift }
+    
+    package P2;
+  }
+  *{P2::ISA} = [ 'P1' ];
+  my $foo = P2->new;
+  ok(!eval { $foo->bark }, "no bark method");
+  no warnings 'once';  # otherwise it'll bark about P1::bark used only once
+  *{P1::bark} = sub { "[bark]" };
+  is(scalar eval { $foo->bark }, "[bark]", "can bark now");
+}
+
+{
+    # test mro::method_changed_in
+    my $count = mro::get_pkg_gen("MRO_A");
+    mro::method_changed_in("MRO_A");
+    my $count_new = mro::get_pkg_gen("MRO_A");
+
+    is($count_new, $count + 1);
+}
+
+{
+    # test if we can call mro::invalidate_all_method_caches;
+    eval {
+        mro::invalidate_all_method_caches();
+    };
+    is($@, "");
+}

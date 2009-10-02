@@ -3,8 +3,6 @@
 # $RCSfile: dbm.t,v $$Revision: 4.1 $$Date: 92/08/07 18:27:43 $
 
 BEGIN {
-    chdir 't' if -d 't';
-    @INC = '../lib';
     require Config; import Config;
     if ($Config{'extensions'} !~ /\bSDBM_File\b/) {
 	print "1..0 # Skip: no SDBM_File\n";
@@ -490,7 +488,7 @@ unlink <Op_dbmx*>, $Dfile;
    $h{"fred"} = "joe" ;
    ok(76, $h{"fred"} eq "joe");
 
-   eval { grep { $h{$_} } (1, 2, 3) };
+   eval { map { $h{$_} } (1, 2, 3) };
    ok (77, ! $@);
 
 
@@ -506,7 +504,7 @@ unlink <Op_dbmx*>, $Dfile;
 
    ok(79, $db->FIRSTKEY() eq "fred") ;
    
-   eval { grep { $h{$_} } (1, 2, 3) };
+   eval { map { $h{$_} } (1, 2, 3) };
    ok (80, ! $@);
 
    undef $db ;

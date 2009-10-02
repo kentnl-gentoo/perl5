@@ -8,10 +8,10 @@
 
 chdir 't' if -d 't';
 @INC = '../lib';
+require './test.pl';
 $Is_VMS = $^O eq 'VMS';
 $Is_MSWin32 = $^O eq 'MSWin32';
 $Is_NetWare = $^O eq 'NetWare';
-$Is_MacOS = $^O eq 'MacOS';
 $ENV{PERL5LIB} = "../lib" unless $Is_VMS;
 
 $|=1;
@@ -20,9 +20,7 @@ undef $/;
 @prgs = split "\n########\n", <DATA>;
 print "1..", scalar @prgs, "\n";
 
-$tmpfile = "runltmp000";
-1 while -f ++$tmpfile;
-END { if ($tmpfile) { 1 while unlink $tmpfile; } }
+$tmpfile = tempfile();
 
 for (@prgs){
     my $switch = "";
@@ -39,13 +37,11 @@ for (@prgs){
 		      `.\\perl -I../lib $switch $tmpfile 2>&1` :
 		  $Is_NetWare ?  
 		      `perl -I../lib $switch $tmpfile 2>&1` :
-		  $Is_MacOS ?
-		      `$^X -I::lib -MMac::err=unix $switch $tmpfile` :
 		  `./perl $switch $tmpfile 2>&1`;
     my $status = $?;
     $results =~ s/\n+$//;
     # allow expected output to be written as if $prog is on STDIN
-    $results =~ s/runltmp\d+/-/g;
+    $results =~ s/$::tempfile_regexp/-/ig;
     $results =~ s/\n%[A-Z]+-[SIWEF]-.*$// if $Is_VMS;  # clip off DCL status msg
     $expected =~ s/\n+$//;
     if ($results ne $expected) {

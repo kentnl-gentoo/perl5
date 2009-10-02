@@ -3,6 +3,7 @@
 BEGIN {
     chdir 't' if -d 't';
     @INC = '../lib';
+    require './test.pl';
 }
 
 print "1..28\n";
@@ -10,7 +11,7 @@ print "1..28\n";
 $TST = 'TST';
 
 $Is_Dosish = ($^O eq 'MSWin32' or $^O eq 'NetWare' or $^O eq 'dos' or
-              $^O eq 'os2' or $^O eq 'mint' or $^O eq 'cygwin' or
+              $^O eq 'os2' or $^O eq 'cygwin' or
               $^O =~ /^uwin/);
 
 open($TST, 'harness') || (die "Can't open harness");
@@ -101,9 +102,7 @@ close(OTHER);
 # something else.  ftell() on pipes, fifos, and sockets is defined to
 # return -1.
 
-my $written = "tell_write.txt";
-
-END { 1 while unlink($written) }
+my $written = tempfile();
 
 close($TST);
 open($tst,">$written")  || die "Cannot open $written:$!";

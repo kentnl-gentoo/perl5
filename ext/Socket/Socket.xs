@@ -182,7 +182,7 @@ my_inet_aton(register const char *cp, struct in_addr *addr)
 
 
 static int
-not_here(char *s)
+not_here(const char *s)
 {
     croak("Socket::%s not implemented on this architecture", s);
     return -1;
@@ -303,6 +303,7 @@ pack_sockaddr_un(pathname)
 	struct sockaddr_un sun_ad; /* fear using sun */
 	STRLEN len;
 	char * pathname_pv;
+	int addr_len;
 
 	Zero( &sun_ad, sizeof sun_ad, char );
 	sun_ad.sun_family = AF_UNIX;
@@ -336,7 +337,17 @@ pack_sockaddr_un(pathname)
 	Copy( pathname_pv, sun_ad.sun_path, len, char );
 #  endif
 	if (0) not_here("dummy");
-	ST(0) = sv_2mortal(newSVpvn((char *)&sun_ad, sizeof sun_ad));
+	if (len > 1 && sun_ad.sun_path[0] == '\0') {
+		/* Linux-style abstract-namespace socket.
+		 * The name is not a file name, but an array of arbitrary
+		 * character, starting with \0 and possibly including \0s,
+		 * therefore the length of the structure must denote the
+		 * end of that character array */
+		addr_len = (char *)&(sun_ad.sun_path) - (char *)&sun_ad + len;
+	} else {
+		addr_len = sizeof sun_ad;
+	}
+	ST(0) = sv_2mortal(newSVpvn((char *)&sun_ad, addr_len));
 #else
 	ST(0) = (SV *) not_here("pack_sockaddr_un");
 #endif
@@ -352,7 +363,7 @@ unpack_sockaddr_un(sun_sv)
 	struct sockaddr_un addr;
 	STRLEN sockaddrlen;
 	char * sun_ad = SvPVbyte(sun_sv,sockaddrlen);
-	char * e;
+	int addr_len;
 #   ifndef __linux__
 	/* On Linux sockaddrlen on sockets returned by accept, recvfrom,
 	   getpeername and getsockname is not equal to sizeof(addr). */
@@ -371,13 +382,17 @@ unpack_sockaddr_un(sun_sv)
 			addr.sun_family,
 			AF_UNIX);
 	}
-	e = (char*)addr.sun_path;
-	/* On Linux, the name of abstract unix domain sockets begins
-	 * with a '\0', so allow this. */
-	while ((*e || (e == addr.sun_path && e[1] && sockaddrlen > 1))
-		&& e < (char*)addr.sun_path + sizeof addr.sun_path)
-	    ++e;
-	ST(0) = sv_2mortal(newSVpvn(addr.sun_path, e - (char*)addr.sun_path));
+
+	if (addr.sun_path[0] == '\0') {
+		/* Linux-style abstract socket address begins with a nul
+		 * and can contain nuls. */
+		addr_len = (char *)&addr - (char *)&(addr.sun_path) + sockaddrlen;
+	} else {
+		for (addr_len = 0; addr.sun_path[addr_len]
+		     && addr_len < sizeof addr.sun_path; addr_len++);
+	}
+
+	ST(0) = sv_2mortal(newSVpvn(addr.sun_path, addr_len));
 #else
 	ST(0) = (SV *) not_here("unpack_sockaddr_un");
 #endif
@@ -442,3 +457,54 @@ unpack_sockaddr_in(sin_sv)
 	PUSHs(sv_2mortal(newSViv((IV) port)));
 	PUSHs(sv_2mortal(newSVpvn((char *)&ip_address, sizeof ip_address)));
 	}
+
+void
+inet_ntop(af, ip_address_sv)
+        int     af
+        SV *    ip_address_sv
+        CODE:
+#ifdef HAS_INETNTOP
+	STRLEN addrlen, struct_size;
+	struct in6_addr addr;
+	char str[INET6_ADDRSTRLEN];
+	char *ip_address = SvPV(ip_address_sv, addrlen);
+
+        if(af == AF_INET) {
+            struct_size = sizeof(struct in_addr);
+        } else if(af == AF_INET6) {
+            struct_size = sizeof(struct in6_addr);
+        } else {
+           croak("Bad address family for Socket::inet_ntop, got %d, should be either AF_INET or AF_INET6",
+               af);
+        }
+
+	Copy( ip_address, &addr, sizeof addr, char );
+	inet_ntop(af, &addr, str, INET6_ADDRSTRLEN);
+
+	ST(0) = sv_2mortal(newSVpv(str, strlen(str)));
+#else
+        ST(0) = (SV *)not_here("inet_ntop");
+#endif
+
+void
+inet_pton(af, host)
+        int           af
+        const char *  host
+        CODE:
+#ifdef HAS_INETPTON
+        int ok;
+        struct in6_addr ip_address;
+        if(af != AF_INET && af != AF_INET6) {
+           croak("Bad address family for %s, got %d, should be either AF_INET or AF_INET6",
+                        "Socket::inet_pton",
+                        af);
+        }
+        ok = (*host != '\0') && inet_pton(af, host, &ip_address);
+
+        ST(0) = sv_newmortal();
+        if (ok) {
+                sv_setpvn( ST(0), (char *)&ip_address, sizeof ip_address );
+        }
+#else
+        ST(0) = (SV *)not_here("inet_pton");
+#endif
