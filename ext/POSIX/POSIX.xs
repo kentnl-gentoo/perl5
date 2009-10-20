@@ -1217,7 +1217,7 @@ sigaction(sig, optaction, oldaction = 0)
 	{
 	    dVAR;
 	    POSIX__SigAction action;
-	    GV *siggv = gv_fetchpv("SIG", TRUE, SVt_PVHV);
+	    GV *siggv = gv_fetchpvs("SIG", GV_ADD, SVt_PVHV);
 	    struct sigaction act;
 	    struct sigaction oact;
 	    sigset_t sset;
@@ -1280,7 +1280,7 @@ sigaction(sig, optaction, oldaction = 0)
                XSRETURN_UNDEF;
 	    ENTER;
 	    /* Restore signal mask no matter how we exit this block. */
-	    osset_sv = newSVpv((char *)(&osset), sizeof(sigset_t));
+	    osset_sv = newSVpvn((char *)(&osset), sizeof(sigset_t));
 	    SAVEFREESV( osset_sv );
 	    SAVEDESTRUCTOR_X(restore_sigmask, osset_sv);
 
@@ -1295,7 +1295,7 @@ sigaction(sig, optaction, oldaction = 0)
 			sv_setsv(*svp, *sigsvp);
 		}
 		else {
-			sv_setpv(*svp, "DEFAULT");
+			sv_setpvs(*svp, "DEFAULT");
 		}
 		RETVAL = sigaction(sig, (struct sigaction *)0, & oact);
 		if(RETVAL == -1)
@@ -1457,7 +1457,7 @@ nice(incr)
 	errno = 0;
 	if ((incr = nice(incr)) != -1 || errno == 0) {
 	    if (incr == 0)
-		XPUSHs(sv_2mortal(newSVpvn("0 but true", 10)));
+		XPUSHs(newSVpvs_flags("0 but true", SVs_TEMP));
 	    else
 		XPUSHs(sv_2mortal(newSViv(incr)));
 	}
@@ -1512,11 +1512,11 @@ uname()
 	struct utsname buf;
 	if (uname(&buf) >= 0) {
 	    EXTEND(SP, 5);
-	    PUSHs(sv_2mortal(newSVpv(buf.sysname, 0)));
-	    PUSHs(sv_2mortal(newSVpv(buf.nodename, 0)));
-	    PUSHs(sv_2mortal(newSVpv(buf.release, 0)));
-	    PUSHs(sv_2mortal(newSVpv(buf.version, 0)));
-	    PUSHs(sv_2mortal(newSVpv(buf.machine, 0)));
+	    PUSHs(newSVpvn_flags(buf.sysname, strlen(buf.sysname), SVs_TEMP));
+	    PUSHs(newSVpvn_flags(buf.nodename, strlen(buf.nodename), SVs_TEMP));
+	    PUSHs(newSVpvn_flags(buf.release, strlen(buf.release), SVs_TEMP));
+	    PUSHs(newSVpvn_flags(buf.version, strlen(buf.version), SVs_TEMP));
+	    PUSHs(newSVpvn_flags(buf.machine, strlen(buf.machine), SVs_TEMP));
 	}
 #else
 	uname((char *) 0); /* A stub to call not_here(). */
@@ -1781,7 +1781,7 @@ mktime(sec, min, hour, mday, mon, year, wday = 0, yday = 0, isdst = -1)
 #     ST(0) = sv_2mortal(newSVpv(...))
 void
 strftime(fmt, sec, min, hour, mday, mon, year, wday = -1, yday = -1, isdst = -1)
-	char *		fmt
+	SV *		fmt
 	int		sec
 	int		min
 	int		hour
@@ -1793,10 +1793,14 @@ strftime(fmt, sec, min, hour, mday, mon, year, wday = -1, yday = -1, isdst = -1)
 	int		isdst
     CODE:
 	{
-	    char *buf = my_strftime(fmt, sec, min, hour, mday, mon, year, wday, yday, isdst);
+	    char *buf = my_strftime(SvPV_nolen(fmt), sec, min, hour, mday, mon, year, wday, yday, isdst);
 	    if (buf) {
-		ST(0) = sv_2mortal(newSVpv(buf, 0));
-		Safefree(buf);
+		SV *const sv = sv_newmortal();
+		sv_usepvn_flags(sv, buf, strlen(buf), SV_HAS_TRAILING_NUL);
+		if (SvUTF8(fmt)) {
+		    SvUTF8_on(sv);
+		}
+		ST(0) = sv;
 	    }
 	}
 
@@ -1809,8 +1813,8 @@ void
 tzname()
     PPCODE:
 	EXTEND(SP,2);
-	PUSHs(sv_2mortal(newSVpvn(tzname[0],strlen(tzname[0]))));
-	PUSHs(sv_2mortal(newSVpvn(tzname[1],strlen(tzname[1]))));
+	PUSHs(newSVpvn_flags(tzname[0], strlen(tzname[0]), SVs_TEMP));
+	PUSHs(newSVpvn_flags(tzname[1], strlen(tzname[1]), SVs_TEMP));
 
 SysRet
 access(filename, mode)

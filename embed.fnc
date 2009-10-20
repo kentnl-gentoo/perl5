@@ -213,10 +213,6 @@ Anp	|char*	|delimcpy	|NN char* to|NN const char* toend|NN const char* from \
 				|NN const char* fromend|int delim|NN I32* retlen
 : Used in op.c, perl.c
 pM	|void	|delete_eval_scope
-: Used in various files
-p	|void	|deprecate	|NN const char *const s
-: Used in various files
-p	|void	|deprecate_old	|NN const char *const s
 Afp	|OP*	|die		|NULLOK const char* pat|...
 #if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
 s	|OP*	|vdie		|NULLOK const char* pat|NULLOK va_list* args
@@ -493,8 +489,11 @@ ApR	|bool	|is_utf8_idcont	|NN const U8 *p
 ApR	|bool	|is_utf8_alpha	|NN const U8 *p
 ApR	|bool	|is_utf8_ascii	|NN const U8 *p
 ApR	|bool	|is_utf8_space	|NN const U8 *p
+ApR	|bool	|is_utf8_perl_space	|NN const U8 *p
+ApR	|bool	|is_utf8_perl_word	|NN const U8 *p
 ApR	|bool	|is_utf8_cntrl	|NN const U8 *p
 ApR	|bool	|is_utf8_digit	|NN const U8 *p
+ApR	|bool	|is_utf8_posix_digit	|NN const U8 *p
 ApR	|bool	|is_utf8_graph	|NN const U8 *p
 ApR	|bool	|is_utf8_upper	|NN const U8 *p
 ApR	|bool	|is_utf8_lower	|NN const U8 *p
@@ -506,6 +505,9 @@ ApR	|bool	|is_utf8_mark	|NN const U8 *p
 p	|OP*	|jmaybe		|NN OP *o
 : Used in pp.c 
 pP	|I32	|keyword	|NN const char *name|I32 len|bool all_keywords
+#if defined(PERL_IN_OP_C) || defined(PERL_DECL_PROT)
+s	|OP*	|opt_scalarhv	|NN OP* rep_op
+#endif
 Ap	|void	|leave_scope	|I32 base
 : Used in pp_ctl.c, and by Data::Alias
 EXp	|void	|lex_end
@@ -736,6 +738,8 @@ p	|OP*	|package	|NN OP* o
 #else
 p	|void	|package	|NN OP* o
 #endif
+: Used in perly.y
+p	|void	|package_version|NN OP* v
 : Used in op.c
 pd	|PADOFFSET|pad_alloc	|I32 optype|U32 tmptype
 : Used in toke.c and perly.y
@@ -1178,6 +1182,8 @@ XEpd	|void	|report_uninit	|NULLOK const SV *uninit_sv
 Afpd	|void	|warn		|NN const char* pat|...
 Ap	|void	|vwarn		|NN const char* pat|NULLOK va_list* args
 Afp	|void	|warner		|U32 err|NN const char* pat|...
+Afp	|void	|ck_warner	|U32 err|NN const char* pat|...
+Afp	|void	|ck_warner_d	|U32 err|NN const char* pat|...
 Ap	|void	|vwarner	|U32 err|NN const char* pat|NULLOK va_list* args
 : FIXME
 p	|void	|watch		|NN char** addr
@@ -1790,6 +1796,10 @@ s	|void	|update_debugger_info|NULLOK SV *orig_sv \
 				|NULLOK const char *const buf|STRLEN len
 sR	|char*	|skipspace	|NN char *s
 sR	|char*	|swallow_bom	|NN U8 *s
+#ifndef PERL_NO_UTF16_FILTER
+s	|I32	|utf16_textfilter|int idx|NN SV *sv|int maxlen
+s	|U8*	|add_utf16_textfilter|NN U8 *const s|bool reversed
+#endif
 s	|void	|checkcomma	|NN const char *s|NN const char *name \
 				|NN const char *what
 s	|bool	|feature_is_enabled|NN const char *const name|STRLEN namelen
@@ -1810,6 +1820,7 @@ so	|SV*	|new_constant	|NULLOK const char *s|STRLEN len \
 				|NN const char *key|STRLEN keylen|NN SV *sv \
 				|NULLOK SV *pv|NULLOK const char *type \
 				|STRLEN typelen
+s	|int	|deprecate_commaless_var_list
 s	|int	|ao		|int toketype
 #  if defined(PERL_CR_FILTER)
 s	|I32	|cr_textfilter	|int idx|NULLOK SV *sv|int maxlen
@@ -2085,6 +2096,9 @@ p	|void	|dump_sv_child	|NN SV *sv
 
 #ifdef PERL_DONT_CREATE_GVSV
 Apbm	|GV*	|gv_SVadd	|NULLOK GV *gv
+#endif
+#if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
+s	|bool	|ckwarn_common	|U32 w
 #endif
 Apo	|bool	|ckwarn		|U32 w
 Apo	|bool	|ckwarn_d	|U32 w

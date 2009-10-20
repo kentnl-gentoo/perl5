@@ -1,6 +1,6 @@
 package overload;
 
-our $VERSION = '1.08';
+our $VERSION = '1.09';
 
 sub nil {}
 
@@ -9,6 +9,7 @@ sub OVERLOAD {
   my %arg = @_;
   my ($sub, $fb);
   $ {$package . "::OVERLOAD"}{dummy}++; # Register with magic by touching.
+  $fb = ${$package . "::()"}; # preserve old fallback value RT#68196
   *{$package . "::()"} = \&nil; # Make it findable via fetchmethod.
   for (keys %arg) {
     if ($_ eq 'fallback') {

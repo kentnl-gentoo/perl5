@@ -8,7 +8,7 @@ These messages are classified as follows (listed in increasing order of
 desperation):
 
     (W) A warning (optional).
-    (D) A deprecation (optional).
+    (D) A deprecation (enabled by default).
     (S) A severe warning (enabled by default).
     (F) A fatal error (trappable).
     (P) An internal error you should never see (trappable).
@@ -2191,7 +2191,7 @@ neither as a system call or an ioctl call (SIOCATMARK).
 
 =item $* is no longer supported
 
-(S deprecated, syntax) The special variable C<$*>, deprecated in older perls, has
+(D deprecated, syntax) The special variable C<$*>, deprecated in older perls, has
 been removed as of 5.9.0 and is no longer supported. In previous versions of perl the use of
 C<$*> enabled or disabled multi-line matching within a string.
 
@@ -2201,7 +2201,7 @@ expressions behaved as if they were written using C</m>.)
 
 =item $# is no longer supported
 
-(S deprecated, syntax) The special variable C<$#>, deprecated in older perls, has
+(D deprecated, syntax) The special variable C<$#>, deprecated in older perls, has
 been removed as of 5.9.3 and is no longer supported. You should use the
 printf/sprintf functions instead.
 
@@ -3218,6 +3218,11 @@ at run time.
 =item panic: utf16_to_utf8: odd bytelen
 
 (P) Something tried to call utf16_to_utf8 with an odd (as opposed
+to even) byte length.
+
+=item panic: utf16_to_utf8_reversed: odd bytelen
+
+(P) Something tried to call utf16_to_utf8_reversed with an odd (as opposed
 to even) byte length.
 
 =item panic: yylex
@@ -4339,11 +4344,13 @@ Check the #! line, or manually feed your script into Perl yourself.
 (F) The unexec() routine failed for some reason.  See your local FSF
 representative, who probably put it there in the first place.
 
-=item Unicode character %s is illegal
+=item Unicode non-character %s is illegal for interchange
 
-(W utf8) Certain Unicode characters have been designated off-limits by
-the Unicode standard and should not be generated.  If you really know
-what you are doing you can turn off this warning by C<no warnings 'utf8';>.
+(W utf8) Certain codepoints, such as U+FFFE and U+FFFF, are defined by the
+Unicode standard to be non-characters. Those are legal codepoints, but are
+reserved for internal use; so, applications shouldn't attempt to exchange
+them. If you know what you are doing you can turn off this warning by
+C<no warnings 'utf8';>.
 
 =item Unknown BYTEORDER
 
@@ -4683,12 +4690,12 @@ is deprecated. See L<perlvar/"$[">.
 
 =item Use of bare << to mean <<"" is deprecated
 
-(D deprecated, W syntax) You are now encouraged to use the explicitly quoted
+(D deprecated) You are now encouraged to use the explicitly quoted
 form if you wish to use an empty line as the terminator of the here-document.
 
 =item Use of comma-less variable list is deprecated
 
-(D deprecated, W syntax) The values you give to a format should be
+(D deprecated) The values you give to a format should be
 separated by commas, not just aligned on a line.
 
 =item Use of chdir('') or chdir(undef) as chdir() deprecated

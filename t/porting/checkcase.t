@@ -2,13 +2,6 @@
 # Finds the files that have the same name, case insensitively,
 # in the current directory and its subdirectories
 
-BEGIN {
-    chdir 't' if -d 't';
-    @INC = '../lib';
-}
-
-
-
 use warnings;
 use strict;
 use File::Find;
@@ -20,10 +13,12 @@ find(sub {
 	   my $name = $File::Find::name;
 	   # Assumes that the path separator is exactly one character.
 	   $name =~ s/^\.\..//;
-	   push @{$files{lc $name}}, $name;
-	 }, '.');
 
-my $failed;
+	   # Special exemption for Makefile, makefile
+	   return if $name =~ m!\A(?:x2p/)?[Mm]akefile\z!;
+
+	   push @{$files{lc $name}}, $name;
+	 }, '..');
 
 foreach (values %files) {
     if (@$_ > 1) {

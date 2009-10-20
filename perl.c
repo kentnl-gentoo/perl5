@@ -391,6 +391,8 @@ perl_construct(pTHXx)
     PL_timesbase.tms_cstime = 0;
 #endif
 
+    PL_osname = Perl_savepvn(aTHX_ STR_WITH_LEN(OSNAME));
+
     PL_registered_mros = newHV();
     /* Start with 1 bucket, for DFS.  It's unlikely we'll need more.  */
     HvMAX(PL_registered_mros) = 0;
@@ -1047,21 +1049,21 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_isarev);
 
     FREETMPS;
-    if (destruct_level >= 2 && ckWARN_d(WARN_INTERNAL)) {
+    if (destruct_level >= 2) {
 	if (PL_scopestack_ix != 0)
-	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-	         "Unbalanced scopes: %ld more ENTERs than LEAVEs\n",
-		 (long)PL_scopestack_ix);
+	    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),
+			     "Unbalanced scopes: %ld more ENTERs than LEAVEs\n",
+			     (long)PL_scopestack_ix);
 	if (PL_savestack_ix != 0)
-	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-		 "Unbalanced saves: %ld more saves than restores\n",
-		 (long)PL_savestack_ix);
+	    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),
+			     "Unbalanced saves: %ld more saves than restores\n",
+			     (long)PL_savestack_ix);
 	if (PL_tmps_floor != -1)
-	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL),"Unbalanced tmps: %ld more allocs than frees\n",
-		 (long)PL_tmps_floor + 1);
+	    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),"Unbalanced tmps: %ld more allocs than frees\n",
+			     (long)PL_tmps_floor + 1);
 	if (cxstack_ix != -1)
-	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL),"Unbalanced context: %ld more PUSHes than POPs\n",
-		 (long)cxstack_ix + 1);
+	    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),"Unbalanced context: %ld more PUSHes than POPs\n",
+			     (long)cxstack_ix + 1);
     }
 
     /* Now absolutely destruct everything, somehow or other, loops or no. */
@@ -1641,7 +1643,7 @@ S_Internals_V(pTHX_ CV *cv)
 #else
     const int local_patch_count = 0;
 #endif
-    const int entries = 4 + local_patch_count;
+    const int entries = 3 + local_patch_count;
     int i;
     static char non_bincompat_options[] = 
 #  ifdef DEBUGGING
@@ -1702,8 +1704,6 @@ S_Internals_V(pTHX_ CV *cv)
 #else
     PUSHs(&PL_sv_undef);
 #endif
-
-    PUSHs(Perl_newSVpvn_flags(aTHX_ STR_WITH_LEN(OSNAME), SVs_TEMP));
 
     for (i = 1; i <= local_patch_count; i++) {
 	/* This will be an undef, if PL_localpatches[i] is NULL.  */
@@ -1996,9 +1996,8 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #  endif
 	    Sighandler_t sigstate = rsignal_state(SIGCHLD);
 	    if (sigstate == (Sighandler_t) SIG_IGN) {
-		if (ckWARN(WARN_SIGNAL))
-		    Perl_warner(aTHX_ packWARN(WARN_SIGNAL),
-				"Can't ignore signal CHLD, forcing to default");
+		Perl_ck_warner(aTHX_ packWARN(WARN_SIGNAL),
+			       "Can't ignore signal CHLD, forcing to default");
 		(void)rsignal(SIGCHLD, (Sighandler_t)SIG_DFL);
 	    }
 	}
@@ -3224,9 +3223,8 @@ Perl_moreswitches(pTHX_ const char *s)
  #endif
 	    PerlIO_printf(PerlIO_stdout(),
 		"\nThis is perl, %"SVf
-		" built for %s",
-		level,
-		ARCHNAME);
+		" built for " ARCHNAME,
+		level);
 	    SvREFCNT_dec(level);
 	}
 #else /* DGUX */
@@ -3884,9 +3882,6 @@ S_init_predump_symbols(pTHX)
     GvIOp(tmpgv) = MUTABLE_IO(SvREFCNT_inc_simple(io));
 
     PL_statname = newSV(0);		/* last filename we did stat on */
-
-    Safefree(PL_osname);
-    PL_osname = savepv(OSNAME);
 }
 
 void

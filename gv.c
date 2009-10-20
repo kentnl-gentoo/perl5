@@ -413,9 +413,8 @@ Perl_gv_fetchmeth(pTHX_ HV *stash, const char *name, STRLEN len, I32 level)
         cstash = gv_stashsv(linear_sv, 0);
 
         if (!cstash) {
-            if (ckWARN(WARN_SYNTAX))
-                Perl_warner(aTHX_ packWARN(WARN_SYNTAX), "Can't locate package %"SVf" for @%s::ISA",
-                    SVfARG(linear_sv), hvname);
+	    Perl_ck_warner(aTHX_ packWARN(WARN_SYNTAX), "Can't locate package %"SVf" for @%s::ISA",
+			   SVfARG(linear_sv), hvname);
             continue;
         }
 
@@ -729,11 +728,10 @@ Perl_gv_autoload4(pTHX_ HV *stash, const char *name, STRLEN len, I32 method)
      * Inheriting AUTOLOAD for non-methods works ... for now.
      */
     if (!method && (GvCVGEN(gv) || GvSTASH(gv) != stash)
-	&& ckWARN2(WARN_DEPRECATED, WARN_SYNTAX)
     )
-	Perl_warner(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX),
-	  "Use of inherited AUTOLOAD for non-method %s::%.*s() is deprecated",
-	     packname, (int)len, name);
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
+			 "Use of inherited AUTOLOAD for non-method %s::%.*s() is deprecated",
+			 packname, (int)len, name);
 
     if (CvISXSUB(cv)) {
         /* rather than lookup/init $AUTOLOAD here
@@ -1139,8 +1137,8 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 
     faking_it = SvOK(gv);
 
-    if (add & GV_ADDWARN && ckWARN_d(WARN_INTERNAL))
-	Perl_warner(aTHX_ packWARN(WARN_INTERNAL), "Had to create %s unexpectedly", nambeg);
+    if (add & GV_ADDWARN)
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL), "Had to create %s unexpectedly", nambeg);
     gv_init(gv, stash, name, len, add & GV_ADDMULTI);
     gv_init_sv(gv, faking_it ? SVt_PVCV : sv_type);
 
@@ -1352,9 +1350,9 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 	}
 	case '*':
 	case '#':
-	    if (sv_type == SVt_PV && ckWARN2_d(WARN_DEPRECATED, WARN_SYNTAX))
-		Perl_warner(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX),
-			    "$%c is no longer supported", *name);
+	    if (sv_type == SVt_PV)
+		Perl_ck_warner_d(aTHX_ packWARN2(WARN_DEPRECATED, WARN_SYNTAX),
+				 "$%c is no longer supported", *name);
 	    break;
 	case '|':
 	    sv_setiv(GvSVn(gv), (IV)(IoFLAGS(GvIOp(PL_defoutgv)) & IOf_FLUSH) != 0);
@@ -1561,10 +1559,9 @@ Perl_gp_free(pTHX_ GV *gv)
     if (!gv || !isGV_with_GP(gv) || !(gp = GvGP(gv)))
 	return;
     if (gp->gp_refcnt == 0) {
-	if (ckWARN_d(WARN_INTERNAL))
-	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-			"Attempt to free unreferenced glob pointers"
-                        pTHX__FORMAT pTHX__VALUE);
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),
+			 "Attempt to free unreferenced glob pointers"
+			 pTHX__FORMAT pTHX__VALUE);
         return;
     }
     if (--gp->gp_refcnt > 0) {

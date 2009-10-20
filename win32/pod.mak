@@ -23,6 +23,7 @@ POD = \
 	perl5100delta.pod	\
 	perl5101delta.pod	\
 	perl5110delta.pod	\
+	perl5111delta.pod	\
 	perl561delta.pod	\
 	perl56delta.pod	\
 	perl570delta.pod	\
@@ -107,6 +108,7 @@ POD = \
 	perlperf.pod	\
 	perlpod.pod	\
 	perlpodspec.pod	\
+	perlpolicy.pod	\
 	perlport.pod	\
 	perlpragma.pod	\
 	perlre.pod	\
@@ -149,6 +151,7 @@ MAN = \
 	perl5100delta.man	\
 	perl5101delta.man	\
 	perl5110delta.man	\
+	perl5111delta.man	\
 	perl561delta.man	\
 	perl56delta.man	\
 	perl570delta.man	\
@@ -233,6 +236,7 @@ MAN = \
 	perlperf.man	\
 	perlpod.man	\
 	perlpodspec.man	\
+	perlpolicy.man	\
 	perlport.man	\
 	perlpragma.man	\
 	perlre.man	\
@@ -275,6 +279,7 @@ HTML = \
 	perl5100delta.html	\
 	perl5101delta.html	\
 	perl5110delta.html	\
+	perl5111delta.html	\
 	perl561delta.html	\
 	perl56delta.html	\
 	perl570delta.html	\
@@ -359,6 +364,7 @@ HTML = \
 	perlperf.html	\
 	perlpod.html	\
 	perlpodspec.html	\
+	perlpolicy.html	\
 	perlport.html	\
 	perlpragma.html	\
 	perlre.html	\
@@ -401,6 +407,7 @@ TEX = \
 	perl5100delta.tex	\
 	perl5101delta.tex	\
 	perl5110delta.tex	\
+	perl5111delta.tex	\
 	perl561delta.tex	\
 	perl56delta.tex	\
 	perl570delta.tex	\
@@ -485,6 +492,7 @@ TEX = \
 	perlperf.tex	\
 	perlpod.tex	\
 	perlpodspec.tex	\
+	perlpolicy.tex	\
 	perlport.tex	\
 	perlpragma.tex	\
 	perlre.tex	\

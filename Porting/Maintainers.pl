@@ -147,6 +147,14 @@ use File::Glob qw(:case);
 # full pathname (eg 't/foo.t') or a pattern (e.g. qr{^t/}).
 # It defaults to the empty list.
 
+# DEPRECATED contains the *first* version of Perl in which the module
+# was considered deprecated.  It should only be present if the module is
+# actually deprecated.  Such modules should use deprecated.pm to
+# issue a warning if used.  E.g.:
+#
+#     use if $] >= 5.011, 'deprecate';
+#
+
 # MAP is a hash that maps CPAN paths to their core equivalents.
 # Each key reprepresents a string prefix, with longest prefixes checked
 # first. The first match causes that prefix to be replaced with the
@@ -300,17 +308,18 @@ use File::Glob qw(:case);
     'CGI' =>
 	{
 	'MAINTAINER'	=> 'lstein',
-	'DISTRIBUTION'	=> 'LDS/CGI.pm-3.45.tar.gz',
+	'DISTRIBUTION'	=> 'LDS/CGI.pm-3.48.tar.gz',
 	'FILES'		=> q[cpan/CGI],
 	'EXCLUDED'	=> [ qr{^t/lib/Test},
 				qw( cgi-lib_porting.html
 				    cgi_docs.html
 				    examples/WORLD_WRITABLE/18.157.1.253.sav
 				    t/gen-tests/gen-start-end-tags.pl
+				    t/fast.t
 				)
 			   ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Class::ISA' =>
@@ -320,6 +329,7 @@ use File::Glob qw(:case);
 	'FILES'		=> q[cpan/Class-ISA],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
+	'DEPRECATED'	=> 5.011,
 	},
 
     'Compress::Raw::Bzip2' =>
@@ -413,7 +423,7 @@ use File::Glob qw(:case);
     'CPANPLUS' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'KANE/CPANPLUS-0.88.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.89_03.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^t/dummy-.*\.hidden$},
@@ -513,7 +523,6 @@ use File::Glob qw(:case);
 	'MAINTAINER'	=> 'dankogai',
 	'DISTRIBUTION'	=> 'DANKOGAI/Encode-2.37.tar.gz',
 	'FILES'		=> q[cpan/Encode],
-	'EXCLUDED'	=> [ qw{t/piconv.t} ], # FIXME
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
 	},
@@ -550,9 +559,8 @@ use File::Glob qw(:case);
     'ExtUtils::CBuilder' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/ExtUtils-CBuilder-0.2602.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/ExtUtils-CBuilder-0.260301.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-CBuilder],
-	'EXCLUDED'	=> [ qw{devtools} ],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -574,7 +582,10 @@ use File::Glob qw(:case);
     'ExtUtils::Constant' =>
 	{
 	'MAINTAINER'	=> 'nwclark',
-	'DISTRIBUTION'	=> 'NWCLARK/ExtUtils-Constant-0.16.tar.gz',
+	 # Nick has confirmed that while we have diverged from CPAN,
+	 # this package isn't primarily maintained in core
+	 # Another release wll happen "Sometime"
+	 'DISTRIBUTION'	=> '',#'NWCLARK/ExtUtils-Constant-0.16.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-Constant],
 	'EXCLUDED'	=> [ qw{ lib/ExtUtils/Constant/Aaargh56Hash.pm
 				 examples/perl_keyword.pl
@@ -617,16 +628,22 @@ use File::Glob qw(:case);
     'ExtUtils::Manifest' =>
 	{
 	'MAINTAINER'	=> 'rkobes',
-	'DISTRIBUTION'	=> 'RKOBES/ExtUtils-Manifest-1.56.tar.gz',
+	'DISTRIBUTION'	=> 'RKOBES/ExtUtils-Manifest-1.57.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-Manifest],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'ExtUtils::ParseXS' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/ExtUtils-ParseXS-2.200403.tar.gz',
+    'DISTRIBUTION' => 'DAGOLDEN/ExtUtils-ParseXS-2.21.tar.gz',
+    'EXCLUDED'  => [ qw{
+	                t/bugs/RT48104.xs
+				    t/bugs/typemap
+					t/include/nsUniversalDetector.h
+					t/include/nscore.h
+				   }],
 	'FILES'		=> q[cpan/ExtUtils-ParseXS],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -652,15 +669,14 @@ use File::Glob qw(:case);
     'File::Path' =>
 	{
 	'MAINTAINER'	=> 'dland',
-	'DISTRIBUTION'	=> 'DLAND/File-Path-2.07_03.tar.gz',
+	'DISTRIBUTION'	=> 'DLAND/File-Path-2.08.tar.gz',
 	'FILES'		=> q[cpan/File-Path],
 	'EXCLUDED'	=> [ qw{eg/setup-extra-tests
 				t/pod.t
-				t/taint.t
 			       }
 			   ],
-	'MAP'		=> { ''		=> 'lib/File/',
-			     't/'	=> 't/',
+	'MAP'		=> { ''		=> 'cpan/File-Path/lib/File/',
+			     't/'	=> 'cpan/File-Path/t/',
 			   },
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
@@ -717,10 +733,10 @@ use File::Glob qw(:case);
 				 t/tee.t
 			       }
 			   ],
-	'MAP'		=> { 'Call/'	      => 'ext/Filter-Util-Call/',
-			     'filter-util.pl' => 't/lib/filter-util.pl',
+	'MAP'		=> { 'Call/'	      => 'cpan/Filter-Util-Call/',
+			     'filter-util.pl' => 'cpan/Filter-Util-Call/filter-util.pl',
 			     'perlfilter.pod' => 'pod/perlfilter.pod',
-			     ''		      => 'ext/Filter-Util-Call/',
+			     ''		      => 'cpan/Filter-Util-Call/',
 			   },
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
@@ -778,12 +794,10 @@ use File::Glob qw(:case);
 	{
 	'MAINTAINER'	=> 'pmqs',
 	'DISTRIBUTION'	=> 'PMQS/IO-Compress-2.021.tar.gz',
-	'FILES'		=> q[dist/IO-Compress],
-	'EXCLUDED'	=> [ qr{t/Test/},
-			     qw{t/cz-03zlib-v1.t},
-			   ],
+	'FILES'		=> q[cpan/IO-Compress],
+	'EXCLUDED'	=> [ qr{t/Test/} ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'IO::Zlib' =>
@@ -924,9 +938,9 @@ use File::Glob qw(:case);
 				t/mbimbf.t
 			       },
 			   ],
-	'MAP'		=> { '' => 'ext/Math-BigInt-FastCalc/',
+	'MAP'		=> { '' => 'cpan/Math-BigInt-FastCalc/',
 			     'lib/Math/BigInt/FastCalc.pm'
-				    => 'ext/Math-BigInt-FastCalc/FastCalc.pm',
+				    => 'cpan/Math-BigInt-FastCalc/FastCalc.pm',
 			   },
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
@@ -1001,7 +1015,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'RGARCIA/Module-CoreList-2.17.tar.gz',
+	'DISTRIBUTION'	=> 'RGARCIA/Module-CoreList-2.20.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',
@@ -1065,7 +1079,7 @@ use File::Glob qw(:case);
     'Object::Accessor' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'KANE/Object-Accessor-0.34.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Object-Accessor-0.36.tar.gz',
 	'FILES'		=> q[cpan/Object-Accessor],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -1104,11 +1118,14 @@ use File::Glob qw(:case);
     'Parse::CPAN::Meta' =>
 	{
 	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'ADAMK/Parse-CPAN-Meta-1.39.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/Parse-CPAN-Meta-1.40.tar.gz',
 	'FILES'		=> q[cpan/Parse-CPAN-Meta],
 	'EXCLUDED'	=> [ qw( t/97_meta.t t/98_pod.t t/99_pmv.t ) ],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
+	# NOTE: 'perl uupacktool.pl t/data/utf_16_le_bom.yml.packed'
+	# run by hand after import, as the core's test harness doesn't
+	# run dists' "make test" steps
 	},
 
     'PathTools' =>
@@ -1267,21 +1284,21 @@ use File::Glob qw(:case);
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',
 	'EXCLUDED'	=> [ qw(t/pod.t t/pod-coverage.t) ],
-	# DEPRECATED	=> 5.11.0,
+	'DEPRECATED'	=> 5.011,
 	},
 
     'Pod::Simple' =>
 	{
 	'MAINTAINER'	=> 'arandal',
-	'DISTRIBUTION'	=> 'ARANDAL/Pod-Simple-3.07.tar.gz',
+	'DISTRIBUTION'	=> 'ARANDAL/Pod-Simple-3.08.tar.gz',
 	'FILES'		=> q[cpan/Pod-Simple],
-	# XXX these two files correspond to similar ones in bleed under
-	# pod/, but the bleed ones have newer changes, and also seem to
+	# XXX these two files correspond to similar ones in blead under
+	# pod/, but the blead ones have newer changes, and also seem to
 	# have been in blead a long time. I'm going to assume then that
 	# the blead versions of these two files are authoritative - DAPM
 	'EXCLUDED'	=> [ qw( lib/perlpod.pod lib/perlpodspec.pod ) ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'podlators' =>
@@ -1340,25 +1357,27 @@ use File::Glob qw(:case);
 	'EXCLUDED'	=> [ qw{ t/01_use.t t/99_pod.t } ],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
+	'DEPRECATED'	=> 5.011,
 	},
 
     'Storable' =>
 	{
 	'MAINTAINER'	=> 'ams',
-	'DISTRIBUTION'	=> 'AMS/Storable-2.20.tar.gz',
+	'DISTRIBUTION'	=> 'AMS/Storable-2.21.tar.gz',
 	'FILES'		=> q[dist/Storable],
 	'EXCLUDED'	=> [ qr{^t/Test/} ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'Switch' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'RGARCIA/Switch-2.14.tar.gz',
+	'DISTRIBUTION'	=> 'RGARCIA/Switch-2.15.tar.gz',
 	'FILES'		=> q[dist/Switch],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',
+	'DEPRECATED'	=> 5.011,
 	},
 
     'Sys::Syslog' =>
@@ -1384,7 +1403,7 @@ use File::Glob qw(:case);
 	{
 	'MAINTAINER'	=> 'rra',
 	'DISTRIBUTION'	=> 'RRA/ANSIColor-2.02.tar.gz',
-	'FILES'		=> q{cpan/Term-ANSIColor},
+	'FILES'		=> q[cpan/Term-ANSIColor],
 	'EXCLUDED'	=> [ qr{^tests/}, qw(t/pod-spelling.t t/pod.t) ],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -1403,7 +1422,7 @@ use File::Glob qw(:case);
 	{
 	'MAINTAINER'	=> 'kane',
 	'DISTRIBUTION'	=> 'KANE/Term-UI-0.20.tar.gz',
-	'FILES'		=> q{cpan/Term-UI},
+	'FILES'		=> q[cpan/Term-UI],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1439,20 +1458,20 @@ use File::Glob qw(:case);
     'Test::Simple' =>
 	{
 	'MAINTAINER'	=> 'mschwern',
-	'DISTRIBUTION'	=> 'MSCHWERN/Test-Simple-0.92.tar.gz',
+	'DISTRIBUTION'	=> 'MSCHWERN/Test-Simple-0.94.tar.gz',
 	'FILES'		=> q[cpan/Test-Simple],
 	'EXCLUDED'	=> [
 			     qw{.perlcriticrc
 				.perltidyrc
+				t/00compile.t
 				t/pod.t
 				t/pod-coverage.t
 				t/Builder/reset_outputs.t
-
 				lib/Test/Builder/IO/Scalar.pm
 			       }
 			   ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Text::Balanced' =>
@@ -1473,8 +1492,8 @@ use File::Glob qw(:case);
 	'EXCLUDED'	=> [ qw( t/pod.t ) ],
 	# For the benefit of make_ext.pl, we have to have this accessible:
 	'MAP'		=> {
-			     'ParseWords.pm' => 'ext/Text-ParseWords/lib/Text/ParseWords.pm',
-			     ''              => 'ext/Text-ParseWords/',
+			     'ParseWords.pm' => 'cpan/Text-ParseWords/lib/Text/ParseWords.pm',
+			     ''              => 'cpan/Text-ParseWords/',
 			   },
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
@@ -1485,11 +1504,11 @@ use File::Glob qw(:case);
 	'MAINTAINER'	=> 'markm',
 	'DISTRIBUTION'	=> 'MARKM/Text-Soundex-3.03.tar.gz',
 	'FILES'		=> q[cpan/Text-Soundex],
-	'MAP'		=> { ''               => 'ext/Text-Soundex/',
+	'MAP'		=> { ''               => 'cpan/Text-Soundex/',
 			     # XXX these two files are clearly related,
 			     # but they appear to have diverged
 			     # considerably over the years
-	                     'test.pl'        => 'ext/Text-Soundex/t/Soundex.t',
+	                     'test.pl'        => 'cpan/Text-Soundex/t/Soundex.t',
 			   },
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
@@ -1550,7 +1569,7 @@ use File::Glob qw(:case);
     'threads::shared' =>
 	{
 	'MAINTAINER'	=> 'jdhedden',
-	'DISTRIBUTION'	=> 'JDHEDDEN/threads-shared-1.31.tar.gz',
+	'DISTRIBUTION'	=> 'JDHEDDEN/threads-shared-1.32.tar.gz',
 	'FILES'		=> q[dist/threads-shared],
 	'EXCLUDED'	=> [ qw(examples/class.pl
 				shared.h
@@ -1639,7 +1658,7 @@ use File::Glob qw(:case);
 	'DISTRIBUTION'	=> 'JPEACOCK/version-0.77.tar.gz',
 	'FILES'		=> q[lib/version.pm lib/version.pod lib/version.t
 			     lib/version],
-	'EXCLUDED'	=> [ qr{^t/.*\.t$}, qr{^vutil/},
+	'EXCLUDED'	=> [ qr{^t/.*\.t$}, qw{t/survey_locales}, qr{^vutil/},
 			     qw{lib/version/typemap},
 			     qw{vperl/vpp.pm},
 			   ],
@@ -1705,14 +1724,14 @@ use File::Glob qw(:case);
 
     'Win32API::File' =>
 	{
-	'MAINTAINER'	=> 'tyemq',
+	'MAINTAINER'	=> 'chorny',
 	'DISTRIBUTION'	=> 'CHORNY/Win32API-File-0.1101.zip',
 	'FILES'		=> q[cpan/Win32API-File],
 	'EXCLUDED'	=> [ qr{^ex/},
 			     qw{t/pod.t},
 			   ],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'XSLoader' =>

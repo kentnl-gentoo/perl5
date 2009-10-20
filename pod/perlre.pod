@@ -62,7 +62,7 @@ Extend your pattern's legibility by permitting whitespace and comments.
 =item p
 X</p> X<regex, preserve> X<regexp, preserve>
 
-Preserve the string matched such that ${^PREMATCH}, {$^MATCH}, and
+Preserve the string matched such that ${^PREMATCH}, ${^MATCH}, and
 ${^POSTMATCH} are available for use after matching.
 
 =item g and c
@@ -371,6 +371,8 @@ whole character class.  For example:
 
 matches zero, one, any alphabetic character, and the percent sign.
 
+=over 4
+
 =item C<$>
 
 Currency symbol
@@ -383,7 +385,6 @@ Mathematical symbols
 
 Modifier symbols (accents)
 
-=back
 
 =back
 

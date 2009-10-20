@@ -1,12 +1,16 @@
 #!/usr/bin/perl
 use warnings;
 use strict;
-use Test::More 'no_plan';
+
+require './test.pl';
+
+plan('no_plan');
+
 $|=1;
 
 my $make_exceptions_list = ($ARGV[0]||'') eq '--make-exceptions-list';
 
-open my $diagfh, "<:raw", "../pod/perldiag.pod"
+open my $diagfh, "<", "../pod/perldiag.pod"
   or die "Can't open ../pod/perldiag.pod: $!";
 
 my %entries;
@@ -46,7 +50,7 @@ sub check_file {
 
   print "# $codefn\n";
 
-  open my $codefh, "<:raw", $codefn
+  open my $codefh, "<", $codefn
     or die "Can't open $codefn: $!";
 
   my $listed_as;
@@ -147,7 +151,8 @@ sub check_file {
       if (exists $entries{$name}) {
         if ($entries{$name}{todo}) {
         TODO: {
-            local $TODO = 'in DATA';
+	    no warnings 'once';
+            local $::TODO = 'in DATA';
             fail("Presence of '$name' from $codefn line $.");
           }
         } else {
@@ -181,8 +186,6 @@ Ambiguous use of %c{%s%s} resolved to %c%s%s
 Ambiguous use of -%s resolved as -&%s()
 Argument "%s" isn't numeric
 Argument "%s" isn't numeric in %s
-Assertion: marks beyond string end
-Assertion: string is shorter than advertised
 Attempt to clear deleted array
 Attempt to free non-arena SV: 0x%x
 Attempt to free non-existent shared string '%s'%s
@@ -296,7 +299,6 @@ Opening dirhandle %s also as a file
 Opening filehandle %s also as a directory
 Operator or semicolon missing before %c%s
 Overloaded dereference did not return a reference
-Perl bug: predicted utf8 length not available
 PERL_SIGNALS illegal: "%s"
 Perl %s required (did you mean %s?)--this is only %s, stopped
 Perl %s required--this is only %s, stopped
@@ -351,7 +353,7 @@ U0 mode on a byte string
 Unbalanced string table refcount: (%d) for "%s"
 Undefined top format called
 Unexpected constant lvalue entersub entry via type/targ %d:%d
-Unicode character 0x%04
+Unicode non-character 0x%04
 Unknown PerlIO layer "scalar"
 Unknown Unicode option letter '%c'
 unrecognised control character '%c'

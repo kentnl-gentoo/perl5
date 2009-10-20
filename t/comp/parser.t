@@ -3,13 +3,52 @@
 # Checks if the parser behaves correctly in edge cases
 # (including weird syntax errors)
 
-BEGIN {
-    chdir 't' if -d 't';
-    @INC = '../lib';
+print "1..104\n";
+
+sub failed {
+    my ($got, $expected, $name) = @_;
+
+    print "not ok $test - $name\n";
+    my @caller = caller(1);
+    print "# Failed test at $caller[1] line $caller[2]\n";
+    if (defined $got) {
+	print "# Got '$got'\n";
+    } else {
+	print "# Got undef\n";
+    }
+    print "# Expected $expected\n";
+    return;
 }
 
-BEGIN { require "./test.pl"; }
-plan( tests => 112 );
+sub like {
+    my ($got, $pattern, $name) = @_;
+    $test = $test + 1;
+    if (defined $got && $got =~ $pattern) {
+	print "ok $test - $name\n";
+	# Principle of least surprise - maintain the expected interface, even
+	# though we aren't using it here (yet).
+	return 1;
+    }
+    failed($got, $pattern, $name);
+}
+
+sub is {
+    my ($got, $expect, $name) = @_;
+    $test = $test + 1;
+    if (defined $expect) {
+	if (defined $got && $got eq $expect) {
+	    print "ok $test - $name\n";
+	    return 1;
+	}
+	failed($got, "'$expect'", $name);
+    } else {
+	if (!defined $got) {
+	    print "ok $test - $name\n";
+	    return 1;
+	}
+	failed($got, 'undef', $name);
+    }
+}
 
 eval '%@x=0;';
 like( $@, qr/^Can't modify hash dereference in repeat \(x\)/, '%@x=0' );
@@ -109,7 +148,8 @@ my %data = ( foo => "\n" );
 print "#";
 print(
 $data{foo});
-pass();
+$test = $test + 1;
+print "ok $test\n";
 
 # Bug #21875
 # { q.* => ... } should be interpreted as hash, not block
@@ -127,7 +167,7 @@ EOF
 {
     my ($expect, $eval) = split / /, $line, 2;
     my $result = eval $eval;
-    ok($@ eq  '', "eval $eval");
+    is($@, '', "eval $eval");
     is(ref $result, $expect ? 'HASH' : '', $eval);
 }
 
@@ -155,15 +195,6 @@ EOF
     like( $@, qr/syntax error/, "use without body" );
 }
 
-# Bug #27024
-{
-    # this used to segfault (because $[=1 is optimized away to a null block)
-    my $x;
-    $[ = 1 while $x;
-    pass();
-    $[ = 0; # restore the original value for less side-effects
-}
-
 # [perl #2738] perl segfautls on input
 {
     eval q{ sub _ <> {} };
@@ -174,28 +205,6 @@ EOF
 
     eval q{ sub _ __FILE__ {} };
     like($@, qr/Illegal declaration of subroutine main::_/, "__FILE__ as prototype");
-}
-
-# [perl #36313] perl -e "1for$[=0" crash
-{
-    my $x;
-    $x = 1 for ($[) = 0;
-    pass('optimized assignment to $[ used to segfault in list context');
-    if ($[ = 0) { $x = 1 }
-    pass('optimized assignment to $[ used to segfault in scalar context');
-    $x = ($[=2.4);
-    is($x, 2, 'scalar assignment to $[ behaves like other variables');
-    $x = (($[) = 0);
-    is($x, 1, 'list assignment to $[ behaves like other variables');
-    $x = eval q{ ($[, $x) = (0) };
-    like($@, qr/That use of \$\[ is unsupported/,
-             'cannot assign to $[ in a list');
-    eval q{ ($[) = (0, 1) };
-    like($@, qr/That use of \$\[ is unsupported/,
-             'cannot assign list of >1 elements to $[');
-    eval q{ ($[) = () };
-    like($@, qr/That use of \$\[ is unsupported/,
-             'cannot assign list of <1 elements to $[');
 }
 
 # tests for "Bad name"

@@ -136,6 +136,7 @@ For ease of access, the Perl manual has been split up into several sections.
     perlapio		Perl internal IO abstraction interface
 
     perlhack		Perl hackers guide
+    perlpolicy		Perl development policies
     perlrepository	Perl source repository
 
 =head2 Miscellaneous
@@ -148,6 +149,7 @@ For ease of access, the Perl manual has been split up into several sections.
 
     perlhist		Perl history records
     perldelta		Perl changes since previous version
+    perl5110delta	Perl changes in version 5.11.0
     perl5101delta	Perl changes in version 5.10.1
     perl5100delta	Perl changes in version 5.10.0
     perl595delta	Perl changes in version 5.9.5

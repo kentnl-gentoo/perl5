@@ -353,10 +353,9 @@ S_del_sv(pTHX_ SV *p)
 	    }
 	}
 	if (!ok) {
-	    if (ckWARN_d(WARN_INTERNAL))	
-	        Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-			    "Attempt to free non-arena SV: 0x%"UVxf
-                            pTHX__FORMAT, PTR2UV(p) pTHX__VALUE);
+	    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),
+			     "Attempt to free non-arena SV: 0x%"UVxf
+			     pTHX__FORMAT, PTR2UV(p) pTHX__VALUE);
 	    return;
 	}
     }
@@ -4005,9 +4004,8 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV* sstr, const I32 flags)
     }
     else if (dtype == SVt_PVGV && isGV_with_GP(dstr)) {
 	if (!(sflags & SVf_OK)) {
-	    if (ckWARN(WARN_MISC))
-		Perl_warner(aTHX_ packWARN(WARN_MISC),
-			    "Undefined value assigned to typeglob");
+	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC),
+			   "Undefined value assigned to typeglob");
 	}
 	else {
 	    GV *gv = gv_fetchsv(sstr, GV_ADD, SVt_PVGV);
@@ -5239,8 +5237,7 @@ Perl_sv_rvweaken(pTHX_ SV *const sv)
     if (!SvROK(sv))
 	Perl_croak(aTHX_ "Can't weaken a nonreference");
     else if (SvWEAKREF(sv)) {
-	if (ckWARN(WARN_MISC))
-	    Perl_warner(aTHX_ packWARN(WARN_MISC), "Reference is already weak");
+	Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "Reference is already weak");
 	return sv;
     }
     tsv = SvRV(sv);
@@ -5918,10 +5915,9 @@ Perl_sv_free2(pTHX_ SV *const sv)
 
 #ifdef DEBUGGING
     if (SvTEMP(sv)) {
-	if (ckWARN_d(WARN_DEBUGGING))
-	    Perl_warner(aTHX_ packWARN(WARN_DEBUGGING),
-			"Attempt to free temp prematurely: SV 0x%"UVxf
-                        pTHX__FORMAT, PTR2UV(sv) pTHX__VALUE);
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_DEBUGGING),
+			 "Attempt to free temp prematurely: SV 0x%"UVxf
+			 pTHX__FORMAT, PTR2UV(sv) pTHX__VALUE);
 	return;
     }
 #endif
@@ -6290,7 +6286,13 @@ S_utf8_mg_pos_cache_update(pTHX_ SV *const sv, MAGIC **const mgp, const STRLEN b
     }
     assert(cache);
 
-    if (PL_utf8cache < 0) {
+    if (PL_utf8cache < 0 && SvPOKp(sv)) {
+	/* SvPOKp() because it's possible that sv has string overloading, and
+	   therefore is a reference, hence SvPVX() is actually a pointer.
+	   This cures the (very real) symptoms of RT 69422, but I'm not actually
+	   sure whether we should even be caching the results of UTF-8
+	   operations on overloading, given that nothing stops overloading
+	   returning a different value every time it's called.  */
 	const U8 *start = (const U8 *) SvPVX_const(sv);
 	const STRLEN realutf8 = utf8_length(start, start + byte);
 
@@ -7278,10 +7280,10 @@ Perl_sv_inc(pTHX_ register SV *const sv)
     if (flags & SVp_NOK) {
 	const NV was = SvNVX(sv);
 	if (NV_OVERFLOWS_INTEGERS_AT &&
-	    was >= NV_OVERFLOWS_INTEGERS_AT && ckWARN(WARN_IMPRECISION)) {
-	    Perl_warner(aTHX_ packWARN(WARN_IMPRECISION),
-			"Lost precision when incrementing %" NVff " by 1",
-			was);
+	    was >= NV_OVERFLOWS_INTEGERS_AT) {
+	    Perl_ck_warner(aTHX_ packWARN(WARN_IMPRECISION),
+			   "Lost precision when incrementing %" NVff " by 1",
+			   was);
 	}
 	(void)SvNOK_only(sv);
         SvNV_set(sv, was + 1.0);
@@ -7444,10 +7446,10 @@ Perl_sv_dec(pTHX_ register SV *const sv)
 	{
 	    const NV was = SvNVX(sv);
 	    if (NV_OVERFLOWS_INTEGERS_AT &&
-		was <= -NV_OVERFLOWS_INTEGERS_AT && ckWARN(WARN_IMPRECISION)) {
-		Perl_warner(aTHX_ packWARN(WARN_IMPRECISION),
-			    "Lost precision when decrementing %" NVff " by 1",
-			    was);
+		was <= -NV_OVERFLOWS_INTEGERS_AT) {
+		Perl_ck_warner(aTHX_ packWARN(WARN_IMPRECISION),
+			       "Lost precision when decrementing %" NVff " by 1",
+			       was);
 	    }
 	    (void)SvNOK_only(sv);
 	    SvNV_set(sv, was - 1.0);
@@ -7992,8 +7994,7 @@ Perl_newSVsv(pTHX_ register SV *const old)
     if (!old)
 	return NULL;
     if (SvTYPE(old) == SVTYPEMASK) {
-        if (ckWARN_d(WARN_INTERNAL))
-	    Perl_warner(aTHX_ packWARN(WARN_INTERNAL), "semi-panic: attempt to dup freed string");
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL), "semi-panic: attempt to dup freed string");
 	return NULL;
     }
     new_SV(sv);
@@ -8160,7 +8161,7 @@ Perl_sv_2io(pTHX_ SV *const sv)
 
 Using various gambits, try to get a CV from an SV; in addition, try if
 possible to set C<*st> and C<*gvp> to the stash and GV associated with it.
-The flags in C<lref> are passed to sv_fetchsv.
+The flags in C<lref> are passed to gv_fetchsv.
 
 =cut
 */
@@ -9438,9 +9439,8 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 		    goto string;
 		}
 		else if (n) {
-		    if (ckWARN_d(WARN_INTERNAL))
-			Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-			"internal %%<num>p might conflict with future printf extensions");
+		    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),
+				     "internal %%<num>p might conflict with future printf extensions");
 		}
 	    }
 	    q = r; 

@@ -1,13 +1,12 @@
 #!perl -w
 
 BEGIN {
-    if ($ENV{'PERL_CORE'}){
-        chdir 't';
-        @INC = '../lib';
-    }
+    chdir 't';
+    @INC = '../lib';
+    require './test.pl';
 }
 
-use Test::More tests => 208;
+plan(tests => 215);
 
 package UTF8Toggle;
 use strict;
@@ -151,7 +150,7 @@ SKIP: {
     }
 }
 
-my $tmpfile = 'overload.tmp';
+my $tmpfile = tempfile();
 
 foreach my $operator ('print', 'syswrite', 'syswrite len', 'syswrite off',
 		      'syswrite len off') {
@@ -211,7 +210,6 @@ foreach my $operator ('print', 'syswrite', 'syswrite len', 'syswrite off',
 	is ($line, "\351", "$operator $layer");
 
 	close $fh or die $!;
-	unlink $tmpfile or die $!;
     }
 }
 
@@ -264,6 +262,23 @@ foreach my $value ("\243", UTF8Toggle->new("\243")) {
     is (pack ("A/A", $value), pack ("A/A", "\243"));
 }
 
-END {
-    1 while -f $tmpfile and unlink $tmpfile || die "unlink '$tmpfile': $!";
+foreach my $value ("\243", UTF8Toggle->new("\243")) {
+    my $v;
+    $v = substr $value, 0, 1;
+    is ($v, "\243");
+    $v = substr $value, 0, 1;
+    is ($v, "\243");
+    $v = substr $value, 0, 1;
+    is ($v, "\243");
+}
+
+{
+    package RT69422;
+    use overload '""' => sub { $_[0]->{data} }
+}
+
+{
+    my $text = bless { data => "\x{3075}" }, 'RT69422';
+    my $p = substr $text, 0, 1;
+    is ($p, "\x{3075}");
 }

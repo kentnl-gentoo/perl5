@@ -1529,6 +1529,32 @@ Perl_warner_nocontext(U32 err, const char *pat, ...)
 #endif /* PERL_IMPLICIT_CONTEXT */
 
 void
+Perl_ck_warner_d(pTHX_ U32 err, const char* pat, ...)
+{
+    PERL_ARGS_ASSERT_CK_WARNER_D;
+
+    if (Perl_ckwarn_d(aTHX_ err)) {
+	va_list args;
+	va_start(args, pat);
+	vwarner(err, pat, &args);
+	va_end(args);
+    }
+}
+
+void
+Perl_ck_warner(pTHX_ U32 err, const char* pat, ...)
+{
+    PERL_ARGS_ASSERT_CK_WARNER;
+
+    if (Perl_ckwarn(aTHX_ err)) {
+	va_list args;
+	va_start(args, pat);
+	vwarner(err, pat, &args);
+	va_end(args);
+    }
+}
+
+void
 Perl_warner(pTHX_ U32  err, const char* pat,...)
 {
     va_list args;
@@ -1572,26 +1598,11 @@ bool
 Perl_ckwarn(pTHX_ U32 w)
 {
     dVAR;
-    return
-	(
-	       isLEXWARN_on
-	    && PL_curcop->cop_warnings != pWARN_NONE
-	    && (
-		   PL_curcop->cop_warnings == pWARN_ALL
-		|| isWARN_on(PL_curcop->cop_warnings, unpackWARN1(w))
-		|| (unpackWARN2(w) &&
-		     isWARN_on(PL_curcop->cop_warnings, unpackWARN2(w)))
-		|| (unpackWARN3(w) &&
-		     isWARN_on(PL_curcop->cop_warnings, unpackWARN3(w)))
-		|| (unpackWARN4(w) &&
-		     isWARN_on(PL_curcop->cop_warnings, unpackWARN4(w)))
-		)
-	)
-	||
-	(
-	    isLEXWARN_off && PL_dowarn & G_WARN_ON
-	)
-	;
+    /* If lexical warnings have not been set, use $^W.  */
+    if (isLEXWARN_off)
+	return PL_dowarn & G_WARN_ON;
+
+    return ckwarn_common(w);
 }
 
 /* implements the ckWARN?_d macro */
@@ -1600,22 +1611,42 @@ bool
 Perl_ckwarn_d(pTHX_ U32 w)
 {
     dVAR;
-    return
-	   isLEXWARN_off
-	|| PL_curcop->cop_warnings == pWARN_ALL
-	|| (
-	      PL_curcop->cop_warnings != pWARN_NONE 
-	   && (
-		   isWARN_on(PL_curcop->cop_warnings, unpackWARN1(w))
-	      || (unpackWARN2(w) &&
-		   isWARN_on(PL_curcop->cop_warnings, unpackWARN2(w)))
-	      || (unpackWARN3(w) &&
-		   isWARN_on(PL_curcop->cop_warnings, unpackWARN3(w)))
-	      || (unpackWARN4(w) &&
-		   isWARN_on(PL_curcop->cop_warnings, unpackWARN4(w)))
-	      )
-	   )
-	;
+    /* If lexical warnings have not been set then default classes warn.  */
+    if (isLEXWARN_off)
+	return TRUE;
+
+    return ckwarn_common(w);
+}
+
+static bool
+S_ckwarn_common(pTHX_ U32 w)
+{
+    if (PL_curcop->cop_warnings == pWARN_ALL)
+	return TRUE;
+
+    if (PL_curcop->cop_warnings == pWARN_NONE)
+	return FALSE;
+
+    /* Check the assumption that at least the first slot is non-zero.  */
+    assert(unpackWARN1(w));
+
+    /* Check the assumption that it is valid to stop as soon as a zero slot is
+       seen.  */
+    if (!unpackWARN2(w)) {
+	assert(!unpackWARN3(w));
+	assert(!unpackWARN4(w));
+    } else if (!unpackWARN3(w)) {
+	assert(!unpackWARN4(w));
+    }
+	
+    /* Right, dealt with all the special cases, which are implemented as non-
+       pointers, so there is a pointer to a real warnings mask.  */
+    do {
+	if (isWARN_on(PL_curcop->cop_warnings, unpackWARN1(w)))
+	    return TRUE;
+    } while (w >>= WARNshift);
+
+    return FALSE;
 }
 
 /* Set buffer=NULL to get a new one.  */
@@ -2281,8 +2312,7 @@ Perl_my_popen_list(pTHX_ const char *mode, int n, SV **args)
 	    }
 	    return NULL;
 	}
-	if (ckWARN(WARN_PIPE))
-	    Perl_warner(aTHX_ packWARN(WARN_PIPE), "Can't fork, trying again in 5 seconds");
+	Perl_ck_warner(aTHX_ packWARN(WARN_PIPE), "Can't fork, trying again in 5 seconds");
 	sleep(5);
     }
     if (pid == 0) {
@@ -2429,8 +2459,7 @@ Perl_my_popen(pTHX_ const char *cmd, const char *mode)
 		Perl_croak(aTHX_ "Can't fork: %s", Strerror(errno));
 	    return NULL;
 	}
-	if (ckWARN(WARN_PIPE))
-	    Perl_warner(aTHX_ packWARN(WARN_PIPE), "Can't fork, trying again in 5 seconds");
+	Perl_ck_warner(aTHX_ packWARN(WARN_PIPE), "Can't fork, trying again in 5 seconds");
 	sleep(5);
     }
     if (pid == 0) {
@@ -4301,9 +4330,8 @@ Perl_scan_version(pTHX_ const char *s, SV *rv, bool qv)
  			mult /= 10;
 			if (   (PERL_ABS(orev) > PERL_ABS(rev)) 
 			    || (PERL_ABS(rev) > VERSION_MAX )) {
-			    if(ckWARN(WARN_OVERFLOW))
-				Perl_warner(aTHX_ packWARN(WARN_OVERFLOW), 
-				"Integer overflow in version %d",VERSION_MAX);
+			    Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW), 
+					   "Integer overflow in version %d",VERSION_MAX);
 			    s = end - 1;
 			    rev = VERSION_MAX;
 			    vinf = 1;
@@ -4320,9 +4348,8 @@ Perl_scan_version(pTHX_ const char *s, SV *rv, bool qv)
  			mult *= 10;
 			if (   (PERL_ABS(orev) > PERL_ABS(rev)) 
 			    || (PERL_ABS(rev) > VERSION_MAX )) {
-			    if(ckWARN(WARN_OVERFLOW))
-				Perl_warner(aTHX_ packWARN(WARN_OVERFLOW), 
-				"Integer overflow in version");
+			    Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW), 
+					   "Integer overflow in version");
 			    end = s - 1;
 			    rev = VERSION_MAX;
 			    vinf = 1;
@@ -4570,10 +4597,9 @@ Perl_upg_version(pTHX_ SV *ver, bool qv)
 
     s = scan_version(version, ver, qv);
     if ( *s != '\0' ) 
-	if(ckWARN(WARN_MISC))
-	    Perl_warner(aTHX_ packWARN(WARN_MISC), 
-		"Version string '%s' contains invalid data; "
-		"ignoring: '%s'", version, s);
+	Perl_ck_warner(aTHX_ packWARN(WARN_MISC), 
+		       "Version string '%s' contains invalid data; "
+		       "ignoring: '%s'", version, s);
     Safefree(version);
     return ver;
 }

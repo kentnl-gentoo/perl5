@@ -1,56 +1,45 @@
-#!./perl
+#!./perl -w
 
-BEGIN {
-    chdir 't' if -d 't';
-    @INC = '../lib';
-    unless (find PerlIO::Layer 'perlio') {
-	print "1..0 # Skip: not perlio\n";
-	exit 0;
-    }
-    if ($ENV{PERL_CORE_MINITEST}) {
-	print "1..0 # Skip: no dynamic loading on miniperl, no threads\n";
-	exit 0;
-    }
-    require Config; import Config;
-    if ($Config{'extensions'} !~ /\bEncode\b/) {
-      print "1..0 # Skip: Encode was not built\n";
-      exit 0;
-    }
+print "1..18\n";
+my $test = 0;
+
+my %templates = (
+		 utf8 => 'C0U',
+		 utf16be => 'n',
+		 utf16le => 'v',
+		);
+
+sub bytes_to_utf {
+    my ($enc, $content, $do_bom) = @_;
+    my $template = $templates{$enc};
+    die "Unsupported encoding $enc" unless $template;
+    return pack "$template*", ($do_bom ? 0xFEFF : ()), unpack "C*", $content;
 }
-
-BEGIN { require "./test.pl"; }
-
-plan(tests => 15);
-
-my $BOM = chr(0xFEFF);
 
 sub test {
     my ($enc, $tag, $bom) = @_;
-    open(UTF_PL, ">:raw:encoding($enc)", "utf$$.pl")
-	or die "utf.pl($enc,$tag,$bom): $!";
-    print UTF_PL $BOM if $bom;
-    print UTF_PL "$tag\n";
-    close(UTF_PL);
+    open my $fh, ">", "utf$$.pl" or die "utf.pl: $!";
+    binmode $fh;
+    print $fh bytes_to_utf($enc, "$tag\n", $bom);
+    close $fh or die $!;
     my $got = do "./utf$$.pl";
-    is($got, $tag);
+    $test = $test + 1;
+    if (!defined $got) {
+	print "not ok $test # $enc $tag $bom; got undef\n";
+    } elsif ($got ne $tag) {
+	print "not ok $test # $enc $tag $bom; got '$got'\n";
+    } else {
+	print "ok $test\n";
+    }
 }
 
-test("utf16le",    123,   1);
-test("utf16le",    1234,  1);
-test("utf16le",    12345, 1);
-test("utf16be",    123,   1);
-test("utf16be",    1234,  1);
-test("utf16be",    12345, 1);
-test("utf8",       123,   1);
-test("utf8",       1234,  1);
-test("utf8",       12345, 1);
-
-test("utf16le",    123,   0);
-test("utf16le",    1234,  0);
-test("utf16le",    12345, 0);
-test("utf16be",    123,   0);
-test("utf16be",    1234,  0);
-test("utf16be",    12345, 0);
+for my $bom (0, 1) {
+    for my $enc (qw(utf16le utf16be utf8)) {
+	for my $value (123, 1234, 12345) {
+	    test($enc, $value, $bom);
+	}
+    }
+}
 
 END {
     1 while unlink "utf$$.pl";

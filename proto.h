@@ -516,16 +516,6 @@ PERL_CALLCONV char*	Perl_delimcpy(char* to, const char* toend, const char* from,
 	assert(to); assert(toend); assert(from); assert(fromend); assert(retlen)
 
 PERL_CALLCONV void	Perl_delete_eval_scope(pTHX);
-PERL_CALLCONV void	Perl_deprecate(pTHX_ const char *const s)
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_DEPRECATE	\
-	assert(s)
-
-PERL_CALLCONV void	Perl_deprecate_old(pTHX_ const char *const s)
-			__attribute__nonnull__(pTHX_1);
-#define PERL_ARGS_ASSERT_DEPRECATE_OLD	\
-	assert(s)
-
 PERL_CALLCONV OP*	Perl_die(pTHX_ const char* pat, ...)
 			__attribute__format__null_ok__(__printf__,pTHX_1,pTHX_2);
 
@@ -1345,6 +1335,18 @@ PERL_CALLCONV bool	Perl_is_utf8_space(pTHX_ const U8 *p)
 #define PERL_ARGS_ASSERT_IS_UTF8_SPACE	\
 	assert(p)
 
+PERL_CALLCONV bool	Perl_is_utf8_perl_space(pTHX_ const U8 *p)
+			__attribute__warn_unused_result__
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_IS_UTF8_PERL_SPACE	\
+	assert(p)
+
+PERL_CALLCONV bool	Perl_is_utf8_perl_word(pTHX_ const U8 *p)
+			__attribute__warn_unused_result__
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_IS_UTF8_PERL_WORD	\
+	assert(p)
+
 PERL_CALLCONV bool	Perl_is_utf8_cntrl(pTHX_ const U8 *p)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1);
@@ -1355,6 +1357,12 @@ PERL_CALLCONV bool	Perl_is_utf8_digit(pTHX_ const U8 *p)
 			__attribute__warn_unused_result__
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_IS_UTF8_DIGIT	\
+	assert(p)
+
+PERL_CALLCONV bool	Perl_is_utf8_posix_digit(pTHX_ const U8 *p)
+			__attribute__warn_unused_result__
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_IS_UTF8_POSIX_DIGIT	\
 	assert(p)
 
 PERL_CALLCONV bool	Perl_is_utf8_graph(pTHX_ const U8 *p)
@@ -1410,6 +1418,13 @@ PERL_CALLCONV I32	Perl_keyword(pTHX_ const char *name, I32 len, bool all_keyword
 #define PERL_ARGS_ASSERT_KEYWORD	\
 	assert(name)
 
+#if defined(PERL_IN_OP_C) || defined(PERL_DECL_PROT)
+STATIC OP*	S_opt_scalarhv(pTHX_ OP* rep_op)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_OPT_SCALARHV	\
+	assert(rep_op)
+
+#endif
 PERL_CALLCONV void	Perl_leave_scope(pTHX_ I32 base);
 PERL_CALLCONV void	Perl_lex_end(pTHX);
 PERL_CALLCONV void	Perl_lex_start(pTHX_ SV* line, PerlIO *rsfp, bool new_filter);
@@ -2329,6 +2344,11 @@ PERL_CALLCONV void	Perl_package(pTHX_ OP* o)
 	assert(o)
 
 #endif
+PERL_CALLCONV void	Perl_package_version(pTHX_ OP* v)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_PACKAGE_VERSION	\
+	assert(v)
+
 PERL_CALLCONV PADOFFSET	Perl_pad_alloc(pTHX_ I32 optype, U32 tmptype);
 PERL_CALLCONV PADOFFSET	Perl_allocmy(pTHX_ const char *const name)
 			__attribute__nonnull__(pTHX_1);
@@ -3693,6 +3713,18 @@ PERL_CALLCONV void	Perl_warner(pTHX_ U32 err, const char* pat, ...)
 			__attribute__format__(__printf__,pTHX_2,pTHX_3)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_WARNER	\
+	assert(pat)
+
+PERL_CALLCONV void	Perl_ck_warner(pTHX_ U32 err, const char* pat, ...)
+			__attribute__format__(__printf__,pTHX_2,pTHX_3)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_CK_WARNER	\
+	assert(pat)
+
+PERL_CALLCONV void	Perl_ck_warner_d(pTHX_ U32 err, const char* pat, ...)
+			__attribute__format__(__printf__,pTHX_2,pTHX_3)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_CK_WARNER_D	\
 	assert(pat)
 
 PERL_CALLCONV void	Perl_vwarner(pTHX_ U32 err, const char* pat, va_list* args)
@@ -5750,6 +5782,18 @@ STATIC char*	S_swallow_bom(pTHX_ U8 *s)
 #define PERL_ARGS_ASSERT_SWALLOW_BOM	\
 	assert(s)
 
+#ifndef PERL_NO_UTF16_FILTER
+STATIC I32	S_utf16_textfilter(pTHX_ int idx, SV *sv, int maxlen)
+			__attribute__nonnull__(pTHX_2);
+#define PERL_ARGS_ASSERT_UTF16_TEXTFILTER	\
+	assert(sv)
+
+STATIC U8*	S_add_utf16_textfilter(pTHX_ U8 *const s, bool reversed)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_ADD_UTF16_TEXTFILTER	\
+	assert(s)
+
+#endif
 STATIC void	S_checkcomma(pTHX_ const char *s, const char *name, const char *what)
 			__attribute__nonnull__(pTHX_1)
 			__attribute__nonnull__(pTHX_2)
@@ -5829,6 +5873,7 @@ STATIC SV*	S_new_constant(pTHX_ const char *s, STRLEN len, const char *key, STRL
 #define PERL_ARGS_ASSERT_NEW_CONSTANT	\
 	assert(key); assert(sv)
 
+STATIC int	S_deprecate_commaless_var_list(pTHX);
 STATIC int	S_ao(pTHX_ int toketype);
 #  if defined(PERL_CR_FILTER)
 STATIC I32	S_cr_textfilter(pTHX_ int idx, SV *sv, int maxlen);
@@ -6341,6 +6386,9 @@ PERL_CALLCONV void	Perl_dump_sv_child(pTHX_ SV *sv)
 
 #ifdef PERL_DONT_CREATE_GVSV
 /* PERL_CALLCONV GV*	Perl_gv_SVadd(pTHX_ GV *gv); */
+#endif
+#if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
+STATIC bool	S_ckwarn_common(pTHX_ U32 w);
 #endif
 PERL_CALLCONV bool	Perl_ckwarn(pTHX_ U32 w);
 PERL_CALLCONV bool	Perl_ckwarn_d(pTHX_ U32 w);

@@ -6,7 +6,7 @@ BEGIN {
     $INC{"feature.pm"} = 1; # so we don't attempt to load feature.pm
 }
 
-print "1..68\n";
+print "1..69\n";
 
 # Can't require test.pl, as we're testing the use/require mechanism here.
 
@@ -62,6 +62,14 @@ sub isnt ($$;$) {
     _ok ('isnt', @_);
 }
 
+# new style version numbers
+
+eval q{ use v5.5.630; };
+is ($@, '');
+
+eval q{ use 10.0.2; };
+like ($@, qr/^Perl v10\.0\.2 required/);
+
 eval "use 5.000";	# implicit semicolon
 is ($@, '');
 
@@ -113,9 +121,6 @@ eval 'use 5.11.0; no strict "refs"; ${"foo"} = "bar";';
 is ($@, "");
 # and they are properly scoped
 eval '{use 5.11.0;} ${"foo"} = "bar";';
-is ($@, "");
-# and this doesn't happen with require
-eval 'require 5.11.0; ${"foo"} = "bar";';
 is ($@, "");
 
 { use test_use }	# check that subparse saves pending tokens

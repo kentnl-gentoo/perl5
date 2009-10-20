@@ -127,7 +127,7 @@ Perl_uvuni_to_utf8_flags(pTHX_ U8 *d, UV uv, UV flags)
 		   !(flags & UNICODE_ALLOW_SUPER))
 		  )
 	      Perl_warner(aTHX_ packWARN(WARN_UTF8),
-			 "Unicode character 0x%04"UVxf" is illegal", uv);
+		      "Unicode non-character 0x%04"UVxf" is illegal for interchange", uv);
     }
     if (UNI_IS_INVARIANT(uv)) {
 	*d++ = (U8)UTF_TO_NATIVE(uv);
@@ -731,13 +731,11 @@ Perl_utf8_length(pTHX_ const U8 *s, const U8 *e)
     if (e != s) {
 	len--;
         warn_and_return:
-	if (ckWARN_d(WARN_UTF8)) {
-	    if (PL_op)
-		Perl_warner(aTHX_ packWARN(WARN_UTF8),
-			    "%s in %s", unees, OP_DESC(PL_op));
-	    else
-		Perl_warner(aTHX_ packWARN(WARN_UTF8), unees);
-	}
+	if (PL_op)
+	    Perl_ck_warner_d(aTHX_ packWARN(WARN_UTF8),
+			     "%s in %s", unees, OP_DESC(PL_op));
+	else
+	    Perl_ck_warner_d(aTHX_ packWARN(WARN_UTF8), unees);
     }
 
     return len;
@@ -987,12 +985,18 @@ Perl_utf16_to_utf8(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
 	    *d++ = (U8)(( uv        & 0x3f) | 0x80);
 	    continue;
 	}
-	if (uv >= 0xd800 && uv < 0xdbff) {	/* surrogates */
-	    UV low = (p[0] << 8) + p[1];
-	    p += 2;
-	    if (low < 0xdc00 || low >= 0xdfff)
+	if (uv >= 0xd800 && uv <= 0xdbff) {	/* surrogates */
+	    if (p >= pend) {
 		Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
-	    uv = ((uv - 0xd800) << 10) + (low - 0xdc00) + 0x10000;
+	    } else {
+		UV low = (p[0] << 8) + p[1];
+		p += 2;
+		if (low < 0xdc00 || low > 0xdfff)
+		    Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
+		uv = ((uv - 0xd800) << 10) + (low - 0xdc00) + 0x10000;
+	    }
+	} else if (uv >= 0xdc00 && uv <= 0xdfff) {
+	    Perl_croak(aTHX_ "Malformed UTF-16 surrogate");
 	}
 	if (uv < 0x10000) {
 	    *d++ = (U8)(( uv >> 12)         | 0xe0);
@@ -1021,6 +1025,10 @@ Perl_utf16_to_utf8_reversed(pTHX_ U8* p, U8* d, I32 bytelen, I32 *newlen)
     U8* const send = s + bytelen;
 
     PERL_ARGS_ASSERT_UTF16_TO_UTF8_REVERSED;
+
+    if (bytelen & 1)
+	Perl_croak(aTHX_ "panic: utf16_to_utf8_reversed: odd bytelen %"UVuf,
+		   (UV)bytelen);
 
     while (s < send) {
 	const U8 tmp = s[0];
@@ -1367,6 +1375,26 @@ Perl_is_utf8_space(pTHX_ const U8 *p)
 }
 
 bool
+Perl_is_utf8_perl_space(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_PERL_SPACE;
+
+    return is_utf8_common(p, &PL_utf8_perl_space, "IsPerlSpace");
+}
+
+bool
+Perl_is_utf8_perl_word(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_PERL_WORD;
+
+    return is_utf8_common(p, &PL_utf8_perl_word, "IsPerlWord");
+}
+
+bool
 Perl_is_utf8_digit(pTHX_ const U8 *p)
 {
     dVAR;
@@ -1374,6 +1402,16 @@ Perl_is_utf8_digit(pTHX_ const U8 *p)
     PERL_ARGS_ASSERT_IS_UTF8_DIGIT;
 
     return is_utf8_common(p, &PL_utf8_digit, "IsDigit");
+}
+
+bool
+Perl_is_utf8_posix_digit(pTHX_ const U8 *p)
+{
+    dVAR;
+
+    PERL_ARGS_ASSERT_IS_UTF8_POSIX_DIGIT;
+
+    return is_utf8_common(p, &PL_utf8_posix_digit, "IsPosixDigit");
 }
 
 bool
@@ -1443,7 +1481,7 @@ Perl_is_utf8_xdigit(pTHX_ const U8 *p)
 
     PERL_ARGS_ASSERT_IS_UTF8_XDIGIT;
 
-    return is_utf8_common(p, &PL_utf8_xdigit, "Isxdigit");
+    return is_utf8_common(p, &PL_utf8_xdigit, "IsXDigit");
 }
 
 bool

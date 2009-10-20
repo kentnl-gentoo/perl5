@@ -59,11 +59,11 @@ $map {$_} = "?" for
     "pxm\100nubz.org",
     "raf\100tradingpost.com.au",
     "smoketst\100hp46t243.cup.hp.com",
-        "oracle\100pcr8.pcr.com". # Probably Ed Eddington ed@pcr.com
         "root\100chronos.fi.muni.cz", # no clue - jrv 20090803
         "gomar\100md.media-web.de", # no clue - jrv 20090803
         "data-drift\100so.uio.no", # no data. originally private message from 199701282014.VAA12645@selters.uio.no
-
+		"arbor\100al37al08.telecel.pt", # reported perlbug ticket 5196 - no actual code contribution. no real name - jrv 20091006
+        "oracle\100pcr8.pcr.com", # Reported perlbug ticket 1015 - no patch - Probably Ed Eddington ed@pcr.com
 ;
 
 #
@@ -126,9 +126,11 @@ if (@authors) {
       } elsif (/^([-A-Za-z0-9 .\'À-ÖØöø-ÿ]+)[\t\n]/) {
     # Name only
     $untraced{$1}++;
-      } else {
+      } elsif (length $_) {
     chomp;
     warn "Can't parse line '$_'";
+      } else {
+	  next
       }
     }
   }
@@ -232,7 +234,8 @@ sub _raw_address {
     }
     $addr = lc $addr;
     $addr = $map{$addr} || $addr;
-    
+    $addr =~ s/\\100/@/g;  # Sometimes, there are encoded @ signs in the git log.
+
     if ($real_name) { $real_names{$addr} = $real_name};
     return $addr;
 }
@@ -416,6 +419,7 @@ ben_tilly\100operamail.com              btilly\100gmail.com
 ben\100morrow.me.uk                        mauzo\100csv.warwick.ac.uk
 +                                        mauzo\100.(none)
 bepi\100perl.it                        enrico.sorcinelli\100gmail.com
+bert\100alum.mit.edu			bert\100genscan.com
 brian.d.foy\100gmail.com                bdfoy\100cpan.org
 BQW10602\100nifty.com                    sadahiro\100cpan.org
 
@@ -434,8 +438,9 @@ cpan\100audreyt.org                     autrijus\100egb.elixus.org
 cpan\100ton.iguana.be                    me-01\100ton.iguana.be
 crt\100kiski.net                        perl\100ctweten.amsite.com
 
-damian\100conway.org                    damian\100cs.monash.edu.au
+dairiki\100dairiki.org			dairiki at dairiki.org
 dagolden\100cpan.org                    xdaveg\100gmail.com
+damian\100conway.org                    damian\100cs.monash.edu.au
 dan\100sidhe.org                        sugalsd\100lbcc.cc.or.us
 +                                       sugalskd\100osshe.edu
 daniel\100bitpusher.com                    daniel\100biz.bitpusher.com
@@ -453,9 +458,9 @@ dougw\100cpan.org                        doug_wilson\100intuit.com
 dwegscheid\100qtm.net                        wegscd\100whirlpool.com
 edwardp\100excitehome.net                    epeschko\100den-mdev1
 +                                        epeschko\100elmer.tci.com
++				         esp5\100pge.com
 egf7\100columbia.edu                    efifer\100sanwaint.com
 eggert\100twinsun.com                    eggert\100sea.sm.unisys.com
-epeschko\100den-mdev1                   esp5\100pge.com
 
 fugazi\100zyx.net                       larrysh\100cpan.org
 +                                        lshatzer\100islanddata.com
@@ -572,6 +577,7 @@ nospam-abuse\100bloodgate.com           tels\100bloodgate.com
 ian.phillipps\100iname.com                ian_phillipps\100yahoo.co.uk
 +                                        ian\100dial.pipex.com
 ignasi.roca\100fujitsu-siemens.com      ignasi.roca\100fujitsu.siemens.es
+ikegami\100adaelis.com				eric\100fmdev10.(none)
 ilmari\100ilmari.org                    ilmari\100vesla.ilmari.org
 illpide\100telecel.pt                        arbor\100al37al08.telecel.pt
 # see http://www.nntp.perl.org/group/perl.perl5.porters/2001/01/msg28925.html
@@ -596,6 +602,7 @@ paul.marquess\100btinternet.com         paul_marquess\100yahoo.co.uk
 +                                       paul.marquess\100openwave.com
 +                                       pmarquess\100bfsec.bt.co.uk
 +                                       pmqs\100cpan.org
++					paul\100paul-desktop.(none)
 Pavel.Zakouril\100mff.cuni.cz                root\100egg.karlov.mff.cuni.cz
 pcg\100goof.com                         schmorp\100schmorp.de
 perl\100cadop.com                       cdp\100hpescdp.fc.hp.com

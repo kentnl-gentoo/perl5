@@ -781,9 +781,9 @@ S_pad_findlex(pTHX_ const char *name, const CV* cv, U32 seq, int warn,
 			? CvANON(cv) && CvCLONE(cv) && !CvCLONED(cv)
 			: *out_flags & PAD_FAKELEX_ANON)
 		{
-		    if (warn && ckWARN(WARN_CLOSURE))
-			Perl_warner(aTHX_ packWARN(WARN_CLOSURE),
-			    "Variable \"%s\" is not available", name);
+		    if (warn)
+			Perl_ck_warner(aTHX_ packWARN(WARN_CLOSURE),
+				       "Variable \"%s\" is not available", name);
 		    *out_capture = NULL;
 		}
 
@@ -823,9 +823,8 @@ S_pad_findlex(pTHX_ const char *name, const CV* cv, U32 seq, int warn,
 		    if (SvPADSTALE(*out_capture)
 			&& !SvPAD_STATE(name_svp[offset]))
 		    {
-			if (ckWARN(WARN_CLOSURE))
-			    Perl_warner(aTHX_ packWARN(WARN_CLOSURE),
-				"Variable \"%s\" is not available", name);
+			Perl_ck_warner(aTHX_ packWARN(WARN_CLOSURE),
+				       "Variable \"%s\" is not available", name);
 			*out_capture = NULL;
 		    }
 		}
@@ -1066,11 +1065,10 @@ Perl_pad_leavemy(pTHX)
     if (PL_min_intro_pending && PL_comppad_name_fill < PL_min_intro_pending) {
 	for (off = PL_max_intro_pending; off >= PL_min_intro_pending; off--) {
 	    const SV * const sv = svp[off];
-	    if (sv && sv != &PL_sv_undef
-		    && !SvFAKE(sv) && ckWARN_d(WARN_INTERNAL))
-		Perl_warner(aTHX_ packWARN(WARN_INTERNAL),
-			    "%"SVf" never introduced",
-			    SVfARG(sv));
+	    if (sv && sv != &PL_sv_undef && !SvFAKE(sv))
+		Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),
+				 "%"SVf" never introduced",
+				 SVfARG(sv));
 	}
     }
     /* "Deintroduce" my variables that are leaving with this scope. */
@@ -1527,9 +1525,8 @@ Perl_cv_clone(pTHX_ CV *proto)
 		   while my $x if $false can leave an active var marked as
 		   stale. And state vars are always available */
 		if (SvPADSTALE(sv) && !SvPAD_STATE(namesv)) {
-		    if (ckWARN(WARN_CLOSURE))
-			Perl_warner(aTHX_ packWARN(WARN_CLOSURE),
-			    "Variable \"%s\" is not available", SvPVX_const(namesv));
+		    Perl_ck_warner(aTHX_ packWARN(WARN_CLOSURE),
+				   "Variable \"%s\" is not available", SvPVX_const(namesv));
 		    sv = NULL;
 		}
 		else 
