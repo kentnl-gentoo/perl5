@@ -86,6 +86,14 @@ which return C<-1> on failure.  Exceptions to this rule are C<wait>,
 C<waitpid>, and C<syscall>.  System calls also set the special C<$!>
 variable on failure.  Other functions do not, except accidentally.
 
+Extension modules can also hook into the Perl parser to define new
+kinds of keyword-headed expression.  These may look like functions, but
+may also look completely different.  The syntax following the keyword
+is defined entirely by the extension.  If you are an implementor, see
+L<perlapi/PL_keyword_plugin> for the mechanism.  If you are using such
+a module, see the module's documentation for details of the syntax that
+it defines.
+
 =head2 Perl Functions by Category
 X<function>
 
@@ -4189,6 +4197,9 @@ you will have to use a block returning the filehandle value instead:
     print { $files[$i] } "stuff\n";
     print { $OK ? STDOUT : STDERR } "stuff\n";
 
+Printing to a closed pipe or socket will generate a SIGPIPE signal.  See
+L<perlipc> for more on signal handling.
+
 =item printf FILEHANDLE FORMAT, LIST
 X<printf>
 
@@ -4329,6 +4340,15 @@ C<chdir> there, it would have been testing the wrong file.
 
     opendir(my $dh, $some_dir) || die "can't opendir $some_dir: $!";
     @dots = grep { /^\./ && -f "$some_dir/$_" } readdir($dh);
+    closedir $dh;
+
+As of Perl 5.11.2 you can use a bare C<readdir> in a C<while> loop,
+which will set C<$_> on every iteration.
+
+    opendir(my $dh, $some_dir) || die;
+    while(readdir $dh) {
+        print "$some_dir/$_\n";
+    }
     closedir $dh;
 
 =item readline EXPR
@@ -4764,6 +4784,10 @@ Used without arguments in scalar context, reverse() reverses C<$_>.
     $_ = "dlrow ,olleH";
     print reverse;                              # No output, list context
     print scalar reverse;                       # Hello, world
+
+Note that reversing an array to itself (as in C<@a = reverse @a>) will
+preserve non-existent elements whenever possible, i.e. for non magical
+arrays or tied arrays with C<EXISTS> and C<DELETE> methods.
 
 This operator is also handy for inverting a hash, although there are some
 caveats.  If a value is duplicated in the original hash, only one of those

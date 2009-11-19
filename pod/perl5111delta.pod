@@ -1,6 +1,6 @@
 =head1 NAME
 
-perldelta - what is new for perl v5.11.1
+perl5111delta - what is new for perl v5.11.1
 
 =head1 DESCRIPTION
 
@@ -134,7 +134,10 @@ Updated Object::Accessor to0.36
 
 =over 4
 
-=item L<pod/perlpolicy.pod> extends the "Social contract about contributed modules" into the beginnings of a document on Perl porting policies.
+=item *
+
+L<perlpolicy> extends the "Social contract about contributed modules" into
+the beginnings of a document on Perl porting policies.
 
 =back
 

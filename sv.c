@@ -1456,14 +1456,14 @@ Perl_sv_upgrade(pTHX_ register SV *const sv, svtype new_type)
 		   (unsigned long)new_type);
     }
 
-    if (old_type_details->arena) {
-	/* If there was an old body, then we need to free it.
-	   Note that there is an assumption that all bodies of types that
-	   can be upgraded came from arenas. Only the more complex non-
-	   upgradable types are allowed to be directly malloc()ed.  */
+    if (old_type > SVt_IV) { /* SVt_IVs are overloaded for PTEs */
 #ifdef PURIFY
 	my_safefree(old_body);
 #else
+	/* Note that there is an assumption that all bodies of types that
+	   can be upgraded came from arenas. Only the more complex non-
+	   upgradable types are allowed to be directly malloc()ed.  */
+	assert(old_type_details->arena);
 	del_body((void*)((char*)old_body + old_type_details->offset),
 		 &PL_body_roots[old_type]);
 #endif
@@ -3250,7 +3250,9 @@ Perl_sv_utf8_upgrade_flags_grow(pTHX_ register SV *const sv, const I32 flags, ST
 	return SvCUR(sv);
     }
 
-    if (SvCUR(sv) > 0) { /* Assume Latin-1/EBCDIC */
+    if (SvCUR(sv) == 0) {
+	if (extra) SvGROW(sv, extra);
+    } else { /* Assume Latin-1/EBCDIC */
 	/* This function could be much more efficient if we
 	 * had a FLAG in SVs to signal if there are any variant
 	 * chars in the PV.  Given that there isn't such a flag
@@ -3891,7 +3893,6 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV* sstr, const I32 flags)
 	}
 	/* Fall through */
 #endif
-    case SVt_REGEXP:
     case SVt_PV:
 	if (dtype < SVt_PV)
 	    sv_upgrade(dstr, SVt_PV);
@@ -3912,6 +3913,11 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV* sstr, const I32 flags)
 	else
 	    Perl_croak(aTHX_ "Bizarre copy of %s", type);
 	}
+	break;
+
+    case SVt_REGEXP:
+	if (dtype < SVt_REGEXP)
+	    sv_upgrade(dstr, SVt_REGEXP);
 	break;
 
 	/* case SVt_BIND: */
@@ -4015,6 +4021,9 @@ Perl_sv_setsv_flags(pTHX_ SV *dstr, register SV* sstr, const I32 flags)
 		GvGP(dstr) = gp_ref(GvGP(gv));
 	    }
 	}
+    }
+    else if (dtype == SVt_REGEXP && stype == SVt_REGEXP) {
+	reg_temp_copy((REGEXP*)dstr, (REGEXP*)sstr);
     }
     else if (sflags & SVp_POK) {
         bool isSwipe = 0;
@@ -11776,6 +11785,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_curcop = NULL;
     PL_markstack = 0;
     PL_scopestack = 0;
+    PL_scopestack_name = 0;
     PL_savestack = 0;
     PL_savestack_ix = 0;
     PL_savestack_max = -1;
@@ -11814,6 +11824,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_curcop = NULL;
     PL_markstack = 0;
     PL_scopestack = 0;
+    PL_scopestack_name = 0;
     PL_savestack = 0;
     PL_savestack_ix = 0;
     PL_savestack_max = -1;
@@ -12255,8 +12266,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 	PL_tmps_max		= proto_perl->Itmps_max;
 	PL_tmps_floor		= proto_perl->Itmps_floor;
 	Newx(PL_tmps_stack, PL_tmps_max, SV*);
-	sv_dup_inc_multiple(proto_perl->Itmps_stack, PL_tmps_stack, PL_tmps_ix,
-			    param);
+	sv_dup_inc_multiple(proto_perl->Itmps_stack, PL_tmps_stack,
+			    PL_tmps_ix+1, param);
 
 	/* next PUSHMARK() sets *(PL_markstack_ptr+1) */
 	i = proto_perl->Imarkstack_max - proto_perl->Imarkstack;
@@ -12275,6 +12286,10 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
 	Newxz(PL_scopestack, PL_scopestack_max, I32);
 	Copy(proto_perl->Iscopestack, PL_scopestack, PL_scopestack_ix, I32);
 
+#ifdef DEBUGGING
+	Newxz(PL_scopestack_name, PL_scopestack_max, const char *);
+	Copy(proto_perl->Iscopestack_name, PL_scopestack_name, PL_scopestack_ix, const char *);
+#endif
 	/* NOTE: si_dup() looks at PL_markstack */
 	PL_curstackinfo		= si_dup(proto_perl->Icurstackinfo, param);
 

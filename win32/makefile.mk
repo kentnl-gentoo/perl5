@@ -34,7 +34,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.11.1
+#INST_VER	*= \5.11.2
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -112,7 +112,7 @@ USE_LARGE_FILES	*= define
 #CCTYPE		*= MSVC90
 # Borland 5.02 or later
 #CCTYPE		*= BORLAND
-# MinGW with gcc-2.95.2 or later
+# MinGW or mingw-w64 with gcc-2.95.2 or later
 CCTYPE		*= GCC
 
 #
@@ -218,6 +218,29 @@ CCHOME		*= $(MSVCDIR)
 .ENDIF
 CCINCDIR	*= $(CCHOME)\include
 CCLIBDIR	*= $(CCHOME)\lib
+
+#
+# If building with gcc-4.x.x (or x86_64-w64-mingw32-gcc-4.x.x), then
+# uncomment  the following assignment to GCC_4XX, make sure that CCHOME
+# has been set correctly above, and uncomment the appropriate
+# GCCHELPERDLL line.
+# The name of the dll can change, depending upon which vendor has supplied
+# your 4.x.x compiler, and upon the values of "x".
+# (The dll will be in your mingw/bin folder, so check there if you're
+# unsure about the correct name.)
+# Without these corrections, the op/taint.t test script will fail.
+#
+#GCC_4XX		*= define
+#GCCHELPERDLL	*= $(CCHOME)\bin\libgcc_s_sjlj-1.dll
+#GCCHELPERDLL	*= $(CCHOME)\bin\libgcc_s_dw2-1.dll
+#GCCHELPERDLL	*= $(CCHOME)\bin\libgcc_s_1.dll
+
+#
+# uncomment this if you are using x86_64-w64-mingw32 cross-compiler
+# ie if your gcc executable is called 'x86_64-w64-mingw32-gcc'
+# instead of the usual 'gcc'.
+#
+#GCCCROSS	*= define
 
 #
 # Additional compiler flags can be specified here.
@@ -475,11 +498,15 @@ LINK_FLAGS	+= -L"$(CCLIBDIR)\Release"
 
 .ELIF "$(CCTYPE)" == "GCC"
 
-CC		= gcc
-LINK32		= g++
-LIB32		= ar rc
-IMPLIB		= dlltool
-RSC		= windres
+.IF "$(GCCCROSS)" == "define"
+ARCHPREFIX      = x86_64-w64-mingw32-
+.ENDIF
+
+CC		= $(ARCHPREFIX)gcc
+LINK32		= $(ARCHPREFIX)g++
+LIB32		= $(ARCHPREFIX)ar rc
+IMPLIB		= $(ARCHPREFIX)dlltool
+RSC		= $(ARCHPREFIX)windres
 
 i = .i
 o = .o
@@ -491,6 +518,9 @@ a = .a
 
 INCLUDES	= -I.\include -I. -I.. -I$(COREDIR)
 DEFINES		= -DWIN32 $(CRYPT_FLAG)
+.IF "$(WIN64)" == "define"
+DEFINES		+= -DWIN64 -DCONSERVATIVE
+.ENDIF
 LOCDEFS		= -DPERLDLL -DPERL_CORE
 SUBSYS		= console
 CXX_FLAG	= -xc++
@@ -610,7 +640,7 @@ LIBBASEFILES	= $(CRYPT_LIB) \
 # Since the code links against libraries that are compiled with /GS, this
 # "security cookie verification" must be included via bufferoverlow.lib.
 .IF "$(WIN64)" == "define"
-LIBBASEFILES    = $(LIBBASEFILES) bufferoverflowU.lib
+LIBBASEFILES    += bufferoverflowU.lib
 .ENDIF
 
 # we add LIBC here, since we may be using PerlCRT.dll
@@ -783,8 +813,18 @@ CFGH_TMPL	= config_H.bc
 
 .ELIF "$(CCTYPE)" == "GCC"
 
+.IF "$(WIN64)" == "define"
+.IF "$(GCCCROSS)" == "define"
+CFGSH_TMPL	= config.gc64
+CFGH_TMPL	= config_H.gc64
+.ELSE
+CFGSH_TMPL	= config.gc64nox
+CFGH_TMPL	= config_H.gc64nox
+.ENDIF
+.ELSE
 CFGSH_TMPL	= config.gc
 CFGH_TMPL	= config_H.gc
+.ENDIF
 PERLIMPLIB	= ..\libperl511$(a)
 PERLSTATICLIB	= ..\libperl511s$(a)
 
@@ -1220,7 +1260,7 @@ $(PERLDLL): perldll.def $(PERLDLL_OBJ) $(PERLDLL_RES) Extensions_static
 	    $(mktmp $(LKPRE) $(PERLDLL_OBJ) \
 		$(shell @type Extensions_static) \
 		$(LIBFILES) $(LKPOST))
-	dlltool --output-lib $(PERLIMPLIB) \
+	$(IMPLIB) --output-lib $(PERLIMPLIB) \
 		--dllname $(PERLDLL:b).dll \
 		--def perldll.def \
 		--base-file perl.base \
@@ -1440,7 +1480,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl5111delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl5112delta.pod ..\pod\perldelta.pod
 	cd ..\pod && $(MAKE) -f ..\win32\pod.mak converters
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
@@ -1581,6 +1621,11 @@ test-prep : all utils
 	$(XCOPY) $(GLOBBAT) ..\t\$(NULL)
 .ELSE
 	$(XCOPY) $(GLOBEXE) ..\t\$(NULL)
+.ENDIF
+.IF "$(CCTYPE)" == "GCC"
+.IF "$(GCC_4XX)" == "define"
+	$(XCOPY) $(GCCHELPERDLL) ..\t\$(NULL)
+.ENDIF
 .ENDIF
 
 test : $(RIGHTMAKE) test-prep

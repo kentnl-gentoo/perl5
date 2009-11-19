@@ -104,7 +104,7 @@ use File::Glob qw(:case);
     SIGNATURE THANKS TODO Todo VERSION WHATSNEW
 );
 
- 
+
 # Each entry in the  %Modules hash roughly represents a distribution,
 # except in the case of CPAN=1, where it *exactly* represents a single
 # CPAN distribution.
@@ -159,7 +159,7 @@ use File::Glob qw(:case);
 # Each key reprepresents a string prefix, with longest prefixes checked
 # first. The first match causes that prefix to be replaced with the
 # corresponding key. For example, with the following MAP:
-#   { 
+#   {
 #     'lib/'	 => 'lib/',
 #     ''	 => 'lib/Foo/',
 #   },
@@ -167,7 +167,7 @@ use File::Glob qw(:case);
 # these files are mapped as shown:
 #
 #    README     becomes lib/Foo/README
-#    lib/Foo.pm becomes lib/Foo.pm 
+#    lib/Foo.pm becomes lib/Foo.pm
 #
 # The default is dependent on the type of module.
 # For distributions which appear to be stored under ext/, it defaults to:
@@ -176,7 +176,7 @@ use File::Glob qw(:case);
 #
 # otherwise, it's
 #
-#   { 
+#   {
 #     'lib/'	 => 'lib/',
 #     ''	 => 'lib/Foo/Bar/',
 #   }
@@ -289,7 +289,7 @@ use File::Glob qw(:case);
     'base' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'RGARCIA/base-2.14.tar.gz',
+	'DISTRIBUTION'	=> 'RGARCIA/base-2.15.tar.gz',
 	'FILES'		=> q[dist/base],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',
@@ -423,7 +423,7 @@ use File::Glob qw(:case);
     'CPANPLUS' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.89_03.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.89_09.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^t/dummy-.*\.hidden$},
@@ -443,7 +443,7 @@ use File::Glob qw(:case);
     'CPANPLUS::Dist::Build' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.40.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.44.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS-Dist-Build],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{ t/99_pod.t
@@ -521,7 +521,7 @@ use File::Glob qw(:case);
     'Encode' =>
 	{
 	'MAINTAINER'	=> 'dankogai',
-	'DISTRIBUTION'	=> 'DANKOGAI/Encode-2.37.tar.gz',
+	'DISTRIBUTION'	=> 'DANKOGAI/Encode-2.38.tar.gz',
 	'FILES'		=> q[cpan/Encode],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
@@ -559,7 +559,7 @@ use File::Glob qw(:case);
     'ExtUtils::CBuilder' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/ExtUtils-CBuilder-0.260301.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/ExtUtils-CBuilder-0.27.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-CBuilder],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -660,7 +660,7 @@ use File::Glob qw(:case);
     'File::Fetch' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'KANE/File-Fetch-0.20.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/File-Fetch-0.22.tar.gz',
 	'FILES'		=> q[cpan/File-Fetch],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -812,7 +812,7 @@ use File::Glob qw(:case);
     'IPC::Cmd' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/IPC-Cmd-0.50.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/IPC-Cmd-0.54.tar.gz',
 	'FILES'		=> q[cpan/IPC-Cmd],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -1004,10 +1004,10 @@ use File::Glob qw(:case);
     'Module::Build' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.35.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.35_09.tar.gz',
 	'FILES'		=> q[cpan/Module-Build],
-	'EXCLUDED'	=> [ qw{ t/par.t t/signature.t scripts/bundle.pl},
-			     qr!^contrib/! ],
+	'EXCLUDED'	=> [ qw{ t/par.t t/signature.t },
+			     qr!^contrib/!,  qr!^devtools! ],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -1015,7 +1015,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'RGARCIA/Module-CoreList-2.20.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.22.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',
@@ -1033,7 +1033,7 @@ use File::Glob qw(:case);
     'Module::Load::Conditional' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'KANE/Module-Load-Conditional-0.30.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-Load-Conditional-0.34.tar.gz',
 	'FILES'		=> q[cpan/Module-Load-Conditional],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -1734,6 +1734,14 @@ use File::Glob qw(:case);
 	'UPSTREAM'	=> 'cpan',
 	},
 
+    'XS::APItest::KeywordRPN' =>
+	{
+	'MAINTAINER'	=> 'zefram',
+	'FILES'		=> q[ext/XS-APItest-KeywordRPN],
+	'CPAN'		=> 0,
+	'UPSTREAM'	=> 'blead',
+	},
+
     'XSLoader' =>
 	{
 	'MAINTAINER'	=> 'saper',
@@ -1942,6 +1950,7 @@ use File::Glob qw(:case);
 				lib/hostname.pl
 				lib/importenv.pl
 				lib/integer.{pm,t}
+				lib/legacy.{pm,t}
 				lib/less.{pm,t}
 				lib/locale.{pm,t}
 				lib/look.pl

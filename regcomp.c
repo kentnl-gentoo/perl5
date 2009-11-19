@@ -2833,13 +2833,18 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
                                 }
                             } else {
 /* 
-    Currently we assume that the trie can handle unicode and ascii
-    matches fold cased matches. If this proves true then the following
-    define will prevent tries in this situation. 
-    
-    #define TRIE_TYPE_IS_SAFE (UTF || optype==EXACT)
-*/
+    Currently we do not believe that the trie logic can
+    handle case insensitive matching properly when the
+    pattern is not unicode (thus forcing unicode semantics).
+
+    If/when this is fixed the following define can be swapped
+    in below to fully enable trie logic.
+
 #define TRIE_TYPE_IS_SAFE 1
+
+*/
+#define TRIE_TYPE_IS_SAFE (UTF || optype==EXACT)
+
                                 if ( last && TRIE_TYPE_IS_SAFE ) {
                                     make_trie( pRExC_state, 
                                             startbranch, first, cur, tail, count, 
@@ -6785,8 +6790,7 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp)
 		       SVfARG(sv_name)
                 );
         }
-        if (sv_name)    
-            SvREFCNT_dec(sv_name);    
+        SvREFCNT_dec(sv_name);
         if (!cached)
             SvREFCNT_dec(sv_str);    
         return len ? NULL : (regnode *)&len;
@@ -6864,12 +6868,9 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp)
     } else {	/* zero length */
         ret = reg_node(pRExC_state,NOTHING);
     }
-    if (!cached) {
+    SvREFCNT_dec(sv_name);
+    if (!cached)
         SvREFCNT_dec(sv_str);
-    }
-    if (sv_name) {
-        SvREFCNT_dec(sv_name); 
-    }
     return ret;
 
 }
@@ -8437,9 +8438,7 @@ parseit:
         *STRING(ret)= (char)value;
         STR_LEN(ret)= 1;
         RExC_emit += STR_SZ(1);
-	if (listsv) {
-	    SvREFCNT_dec(listsv);
-	}
+	SvREFCNT_dec(listsv);
         return ret;
     }
     /* optimize case-insensitive simple patterns (e.g. /[a-z]/i) */
@@ -9402,24 +9401,18 @@ Perl_pregfree2(pTHX_ REGEXP *rx)
         ReREFCNT_dec(r->mother_re);
     } else {
         CALLREGFREE_PVT(rx); /* free the private data */
-        if (RXp_PAREN_NAMES(r))
-            SvREFCNT_dec(RXp_PAREN_NAMES(r));
+        SvREFCNT_dec(RXp_PAREN_NAMES(r));
     }        
     if (r->substrs) {
-        if (r->anchored_substr)
-            SvREFCNT_dec(r->anchored_substr);
-        if (r->anchored_utf8)
-            SvREFCNT_dec(r->anchored_utf8);
-        if (r->float_substr)
-            SvREFCNT_dec(r->float_substr);
-        if (r->float_utf8)
-            SvREFCNT_dec(r->float_utf8);
+        SvREFCNT_dec(r->anchored_substr);
+        SvREFCNT_dec(r->anchored_utf8);
+        SvREFCNT_dec(r->float_substr);
+        SvREFCNT_dec(r->float_utf8);
 	Safefree(r->substrs);
     }
     RX_MATCH_COPY_FREE(rx);
 #ifdef PERL_OLD_COPY_ON_WRITE
-    if (r->saved_copy)
-        SvREFCNT_dec(r->saved_copy);
+    SvREFCNT_dec(r->saved_copy);
 #endif
     Safefree(r->offs);
 }
@@ -9442,15 +9435,18 @@ Perl_pregfree2(pTHX_ REGEXP *rx)
     
     
 REGEXP *
-Perl_reg_temp_copy (pTHX_ REGEXP *rx)
+Perl_reg_temp_copy (pTHX_ REGEXP *ret_x, REGEXP *rx)
 {
-    REGEXP *ret_x = (REGEXP*) newSV_type(SVt_REGEXP);
-    struct regexp *ret = (struct regexp *)SvANY(ret_x);
+    struct regexp *ret;
     struct regexp *const r = (struct regexp *)SvANY(rx);
     register const I32 npar = r->nparens+1;
 
     PERL_ARGS_ASSERT_REG_TEMP_COPY;
 
+    if (!ret_x)
+	ret_x = (REGEXP*) newSV_type(SVt_REGEXP);
+    ret = (struct regexp *)SvANY(ret_x);
+    
     (void)ReREFCNT_inc(rx);
     /* We can take advantage of the existing "copied buffer" mechanism in SVs
        by pointing directly at the buffer, but flagging that the allocated

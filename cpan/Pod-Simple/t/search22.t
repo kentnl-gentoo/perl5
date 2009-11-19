@@ -107,8 +107,9 @@ ok( ($name2where->{'perlthng'}    || 'huh???'), '/[^\^]testlib1/' );
 ok( ($name2where->{'squaa::Vliff'} || 'huh???'), '/[^\^]testlib1/' );
 
 # Some sanity:
-ok( ($name2where->{'squaa::Wowo'}  || 'huh???'), '/testlib2/' );
-
+skip $^O eq 'VMS' ? '-- case may or may not be preserved' : 0, 
+    ($name2where->{'squaa::Wowo'}  || 'huh???'), 
+    '/testlib2/';
 
 
 
