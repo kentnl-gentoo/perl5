@@ -304,6 +304,7 @@ cpan/Compress-Raw-Zlib/zlib-src/zutil.c		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/zlib-src/zutil.h		Compress::Raw::Zlib
 cpan/Compress-Raw-Zlib/Zlib.xs			Compress::Raw::Zlib
 cpan/CPAN/Changes				CPAN.pm Changes file
+cpan/CPAN/lib/App/Cpan.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/API/HOWTO.pod		recipe book for programming with CPAN.pm
 cpan/CPAN/lib/CPAN/Author.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Bundle.pm		helper package for CPAN.pm
@@ -312,7 +313,7 @@ cpan/CPAN/lib/CPAN/Complete.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Debug.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/DeferredCode.pm	helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Distribution.pm	helper package for CPAN.pm
-cpan/CPAN/lib/CPAN/Distroprefs.pm		helper package for CPAN.pm
+cpan/CPAN/lib/CPAN/Distroprefs.pm	helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Distrostatus.pm	helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Exception/blocked_urllist.pm	helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Exception/RecursiveDependency.pm	helper package for CPAN.pm
@@ -327,6 +328,7 @@ cpan/CPAN/lib/CPAN/Kwalify/distroprefs.dd		helper file for validating config fil
 cpan/CPAN/lib/CPAN/Kwalify/distroprefs.yml	helper file for validating config files
 cpan/CPAN/lib/CPAN/Kwalify.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/LWP/UserAgent.pm	helper package for CPAN.pm
+cpan/CPAN/lib/CPAN/Mirrors.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Module.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/Nox.pm			Runs CPAN while avoiding compiled extensions
 cpan/CPAN/lib/CPAN.pm			Interface to Comprehensive Perl Archive Network
@@ -1526,6 +1528,7 @@ cpan/Module-Build/lib/Module/Build/Authoring.pod	Module::Build
 cpan/Module-Build/lib/Module/Build/Base.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Bundling.pod		Module::Build
 cpan/Module-Build/lib/Module/Build/Compat.pm		Module::Build
+cpan/Module-Build/lib/Module/Build/ConfigData.pm	Configuration for Module::Build
 cpan/Module-Build/lib/Module/Build/Config.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Cookbook.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Dumper.pm		Module::Build
@@ -1551,6 +1554,7 @@ cpan/Module-Build/lib/Module/Build/PPMMaker.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Version.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/YAML.pm		Module::Build
 cpan/Module-Build/scripts/config_data			Module::Build
+cpan/Module-Build/t/00-compile.t			Module::Build
 cpan/Module-Build/t/actions/installdeps.t		Module::Build
 cpan/Module-Build/t/add_property.t			Module::Build
 cpan/Module-Build/t/basic.t				Module::Build
@@ -1944,7 +1948,6 @@ cpan/Pod-Simple/t/fcodes_s.t				Pod::Simple test file
 cpan/Pod-Simple/t/fcodes.t				Pod::Simple test file
 cpan/Pod-Simple/t/fornot.t				Pod::Simple test file
 cpan/Pod-Simple/t/for.t					Pod::Simple test file
-cpan/Pod-Simple/t/fullstop.t				Pod::Simple test file
 cpan/Pod-Simple/t/heads.t				Pod::Simple test file
 cpan/Pod-Simple/t/html01.t				Pod::Simple test file
 cpan/Pod-Simple/t/html02.t				Pod::Simple test file
@@ -2240,7 +2243,7 @@ cpan/Test-Simple/t/BEGIN_use_ok.t			Test::More use_ok() testing
 cpan/Test-Simple/t/buffer.t				Test::Builder buffering test
 cpan/Test-Simple/t/Builder/Builder.t			Test::Builder tests
 cpan/Test-Simple/t/Builder/carp.t			Test::Builder test
-cpan/Test-Simple/t/Builder/create.t			Test::Builder test 
+cpan/Test-Simple/t/Builder/create.t			Test::Builder test
 cpan/Test-Simple/t/Builder/current_test.t		Test::Builder tests
 cpan/Test-Simple/t/Builder/current_test_without_plan.t	Test::Builder tests
 cpan/Test-Simple/t/Builder/details.t			Test::Builder tests
@@ -2583,8 +2586,8 @@ dist/base/MANIFEST		base.pm manifest
 dist/base/META.yml		base.pm META.yml file
 dist/base/t/base.t		See if base works
 dist/base/t/compile-time.t	See if base works
-dist/base/t/fields-5.6.0.t	See if fields work
-dist/base/t/fields-5.8.0.t	See if fields work
+dist/base/t/fields-5_6_0.t	See if fields work
+dist/base/t/fields-5_8_0.t	See if fields work
 dist/base/t/fields-base.t	See if fields work
 dist/base/t/fields.t		See if fields work
 dist/base/t/isa.t		See if base's behaviour doesn't change
@@ -2754,6 +2757,7 @@ dist/Safe/t/safe2.t		See if Safe works
 dist/Safe/t/safe3.t		See if Safe works
 dist/Safe/t/safeload.t		Tests that some modules can be loaded by Safe
 dist/Safe/t/safeops.t		Tests that all ops can be trapped by Safe
+dist/Safe/t/safesort.t		Tests Safe with sort
 dist/Safe/t/safeuniversal.t	Tests Safe with functions from universal.c
 dist/SelfLoader/lib/SelfLoader.pm	Load functions only on demand
 dist/SelfLoader/t/01SelfLoader.t	See if SelfLoader works
@@ -3450,6 +3454,7 @@ lib/ExtUtils/XSSymSet.pm	on VMS, manage linker symbols when building extensions
 lib/fastcwd.pl			a faster but more dangerous getcwd
 lib/feature.pm			Pragma to enable new syntax
 lib/feature.t			See if features work
+lib/feature/unicode_strings.t	See if feature "unicode_strings" work
 lib/File/Basename.pm		Emulate the basename program
 lib/File/Basename.t		See if File::Basename works
 lib/File/CheckTree.pm		Perl module supporting wholesale file mode validation
@@ -3488,14 +3493,11 @@ lib/importenv.pl		Perl routine to get environment into variables
 lib/integer.pm			For "use integer"
 lib/integer.t			For "use integer" testing
 lib/Internals.t			For Internals::* testing
-lib/legacy.pm			Pragma to preserve legacy behavior
-lib/legacy.t			For "use legacy" testing
 lib/less.pm			For "use less"
 lib/less.t			See if less support works
 lib/locale.pm			For "use locale"
 lib/locale.t			See if locale support works
 lib/look.pl			A "look" equivalent
-lib/Module/Build/ConfigData.pm	Configuration for Module::Build
 lib/Net/hostent.pm		By-name interface to Perl's builtin gethost*
 lib/Net/hostent.t		See if Net::hostent works
 lib/Net/netent.pm		By-name interface to Perl's builtin getnet*
@@ -3592,12 +3594,14 @@ lib/Unicode/README		Explanation what happened to lib/unicode.
 lib/Unicode/UCD.pm		Unicode character database
 lib/Unicode/UCD.t		See if Unicode character database works
 lib/unicore/ArabicShaping.txt			Unicode character database
+lib/unicore/auxiliary/GCBTest.txt	Unicode character database
 lib/unicore/auxiliary/GraphemeBreakProperty.txt	Unicode character database
 lib/unicore/auxiliary/SentenceBreakProperty.txt	Unicode character database
 lib/unicore/auxiliary/WordBreakProperty.txt	Unicode character database
 lib/unicore/BidiMirroring.txt			Unicode character database
 lib/unicore/Blocks.txt				Unicode character database
 lib/unicore/CaseFolding.txt			Unicode character database
+lib/unicore/CJKRadicals.txt			Unicode character database
 lib/unicore/CompositionExclusions.txt		Unicode character database
 lib/unicore/DAge.txt				Unicode character database
 lib/unicore/DCoreProperties.txt			Unicode character database
@@ -3620,7 +3624,6 @@ lib/unicore/Jamo.txt				Unicode character database
 lib/unicore/LineBreak.txt			Unicode character database
 lib/unicore/Makefile				Unicode character database
 lib/unicore/mktables				Unicode character database generator
-lib/unicore/mktables.lst			File list for mktables
 lib/unicore/NameAliases.txt			Unicode character database
 lib/unicore/NamedSequences.txt			Unicode character database
 lib/unicore/NamedSqProv.txt			Unicode character database
@@ -3864,6 +3867,7 @@ pod/perl5101delta.pod		Perl changes in version 5.10.1
 pod/perl5110delta.pod		Perl changes in version 5.11.0
 pod/perl5111delta.pod		Perl changes in version 5.11.1
 pod/perl5112delta.pod		Perl changes in version 5.11.2
+pod/perl5113delta.pod		Perl changes in version 5.11.3
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4029,6 +4033,7 @@ Porting/makerel			Release making utility
 Porting/make_snapshot.pl	Make a tgz snapshot of our tree with a .patch file in it
 Porting/manicheck		Check against MANIFEST
 Porting/manisort		Sort the MANIFEST
+Porting/newtests-perldelta.pl	Generate Perldelta stub for newly added tests
 Porting/perldelta_template.pod	Template for creating new perldelta.pod files
 Porting/podtidy			Reformat pod using Pod::Tidy
 Porting/pumpkin.pod		Guidelines and hints for Perl maintainers
@@ -4157,7 +4162,7 @@ symbian/sanity.pl		Helper code for config.pl
 symbian/sdk.pl			Helper code for config.pl
 symbian/sisify.pl		Packaging utility
 symbian/symbian_dll.cpp		The DLL stub for Symbian
-symbian/symbianish.h		Header for Symbian	
+symbian/symbianish.h		Header for Symbian
 symbian/symbian_proto.h		Prototypes for Symbian
 symbian/symbian_stubs.c		Stub routines for Symbian
 symbian/symbian_stubs.h		Stub headers for Symbian
@@ -4185,9 +4190,13 @@ t/comp/bproto.t			See if builtins conform to their prototypes
 t/comp/cmdopt.t			See if command optimization works
 t/comp/colon.t			See if colons are parsed correctly
 t/comp/decl.t			See if declarations work
+t/comp/final_line_num.t		See if line numbers are correct at EOF
 t/comp/fold.t			See if constant folding works
+t/comp/form_scope.t		See if format scoping works
 t/comp/hints.aux		Auxillary file for %^H test
 t/comp/hints.t			See if %^H works
+t/comp/line_debug_0.aux		Auxiliary file for @{"_<$file"} test
+t/comp/line_debug.t		See if @{"_<$file"} works
 t/comp/multiline.t		See if multiline strings work
 t/comp/opsubs.t			See if q() etc. are not parsed as functions
 t/comp/our.t			Tests for our declaration
@@ -4382,6 +4391,7 @@ t/op/exists_sub.t		See if exists(&sub) works
 t/op/exp.t			See if math functions work
 t/op/fh.t			See if filehandles work
 t/op/filetest.t			See if file tests work
+t/op/filetest_t.t		See if -t file test works
 t/op/flip.t			See if range operator works
 t/op/fork.t			See if fork works
 t/op/getpid.t			See if $$ and getppid work with threads
@@ -4429,7 +4439,7 @@ t/op/numconvert.t		See if accessing fields does not change numeric values
 t/op/oct.t			See if oct and hex work
 t/op/ord.t			See if ord works
 t/op/or.t			See if || works in weird situations
-t/op/overload_integer.t		See if overload::constant for integer works after "use".   
+t/op/overload_integer.t		See if overload::constant for integer works after "use".
 t/op/override.t			See if operator overriding works
 t/op/pack.t			See if pack and unpack work
 t/op/pos.t			See if pos works
@@ -4437,6 +4447,7 @@ t/op/pow.t			See if ** works
 t/op/push.t			See if push and pop work
 t/op/pwent.t			See if getpw*() functions work
 t/op/qq.t			See if qq works
+t/op/qr.t			See if qr works
 t/op/quotemeta.t		See if quotemeta works
 t/op/rand.t			See if rand works
 t/op/range.t			See if .. works
@@ -4481,6 +4492,7 @@ t/op/undef.t			See if undef works
 t/op/universal.t		See if UNIVERSAL class works
 t/op/unshift.t			See if unshift works
 t/op/upgrade.t			See if upgrading and assigning scalars works
+t/op/utf8cache.t		Tests malfunctions of utf8 cache
 t/op/utf8decode.t		See if UTF-8 decoding works
 t/op/utfhash.t			See if utf8 keys in hashes behave
 t/op/utftaint.t			See if utf8 and taint work together
@@ -4501,7 +4513,7 @@ t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping are
 t/README			Instructions for regression tests
 t/re/pat_advanced.t		See if advanced esoteric patterns work
 t/re/pat_advanced_thr.t		See if advanced esoteric patterns work in another thread
-t/re/pat_psycho.t		See if insane esoteric and slow patterns work 
+t/re/pat_psycho.t		See if insane esoteric and slow patterns work
 t/re/pat_psycho_thr.t		See if insane esoteric and slow patterns work in another thread
 t/re/pat_re_eval.t		See if esoteric patterns using re 'eval' work
 t/re/pat_re_eval_thr.t		See if esoteric patterns using re 'eval' work in another thread
@@ -4543,6 +4555,7 @@ t/re/substr_thr.t		See if substr works in another thread
 t/re/subst.t			See if substitution works
 t/re/substT.t			See if substitution works with -T
 t/re/subst_wamp.t		See if substitution works with $& present
+t/re/uniprops.t			Test unicode \p{} regex constructs
 t/run/cloexec.t			Test close-on-exec.
 t/run/exit.t			Test perl's exit status.
 t/run/fresh_perl.t		Tests that require a fresh perl.
@@ -4698,6 +4711,7 @@ win32/Makefile.ce		WinCE port
 win32/makefile.mk		Win32 makefile for DMAKE (BC++, VC++ builds)
 win32/mdelete.bat		multifile delete
 win32/perlexe.ico		perlexe.ico image file
+win32/perlexe.manifest		Assembly manifest file
 win32/perlexe.rc		associated perl binary with icon
 win32/perlglob.c		Win32 port
 win32/perlhost.h		Perl "host" implementation

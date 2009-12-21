@@ -1209,10 +1209,13 @@ PP(pp_qr)
     SV * const rv = sv_newmortal();
 
     SvUPGRADE(rv, SVt_IV);
-    /* This RV is about to own a reference to the regexp. (In addition to the
-       reference already owned by the PMOP.  */
-    ReREFCNT_inc(rx);
-    SvRV_set(rv, MUTABLE_SV(rx));
+    /* For a subroutine describing itself as "This is a hacky workaround" I'm
+       loathe to use it here, but it seems to be the right fix. Or close.
+       The key part appears to be that it's essential for pp_qr to return a new
+       object (SV), which implies that there needs to be an effective way to
+       generate a new SV from the existing SV that is pre-compiled in the
+       optree.  */
+    SvRV_set(rv, MUTABLE_SV(reg_temp_copy(NULL, rx)));
     SvROK_on(rv);
 
     if (pkg) {
@@ -1258,7 +1261,11 @@ PP(pp_match)
     }
 
     PUTBACK;				/* EVAL blocks need stack_sp. */
-    s = SvPV_const(TARG, len);
+    /* Skip get-magic if this is a qr// clone, because regcomp has
+       already done it. */
+    s = ((struct regexp *)SvANY(rx))->mother_re
+	 ? SvPV_nomg_const(TARG, len)
+	 : SvPV_const(TARG, len);
     if (!s)
 	DIE(aTHX_ "panic: pp_match");
     strend = s + len;

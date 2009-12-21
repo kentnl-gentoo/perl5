@@ -607,7 +607,7 @@ Perl_sv_clean_all(pTHX)
 struct arena_desc {
     char       *arena;		/* the raw storage, allocated aligned */
     size_t      size;		/* its size ~4k typ */
-    U32		misc;		/* type, and in future other things. */
+    svtype	utype;		/* bodytype stored in arena */
 };
 
 struct arena_set;
@@ -720,7 +720,7 @@ Perl_sv_free_arenas(pTHX)
    TBD: export properly for hv.c: S_more_he().
 */
 void*
-Perl_get_arena(pTHX_ const size_t arena_size, const U32 misc)
+Perl_get_arena(pTHX_ const size_t arena_size, const svtype bodytype)
 {
     dVAR;
     struct arena_desc* adesc;
@@ -749,7 +749,7 @@ Perl_get_arena(pTHX_ const size_t arena_size, const U32 misc)
     
     Newx(adesc->arena, arena_size, char);
     adesc->size = arena_size;
-    adesc->misc = misc;
+    adesc->utype = bodytype;
     DEBUG_m(PerlIO_printf(Perl_debug_log, "arena %d added: %p size %"UVuf"\n", 
 			  curr, (void*)adesc->arena, (UV)arena_size));
 
@@ -1431,17 +1431,13 @@ Perl_sv_upgrade(pTHX_ register SV *const sv, svtype new_type)
 
 	if (new_type == SVt_PVIO) {
 	    IO * const io = MUTABLE_IO(sv);
-	    GV *iogv = gv_fetchpvs("FileHandle::", 0, SVt_PVHV);
+	    GV *iogv = gv_fetchpvs("IO::Handle::", GV_ADD, SVt_PVHV);
 
 	    SvOBJECT_on(io);
 	    /* Clear the stashcache because a new IO could overrule a package
 	       name */
 	    hv_clear(PL_stashcache);
 
-	    /* unless exists($main::{FileHandle}) and
-	       defined(%main::FileHandle::) */
-	    if (!(iogv && GvHV(iogv) && HvARRAY(GvHV(iogv))))
-		iogv = gv_fetchpvs("IO::Handle::", GV_ADD, SVt_PVHV);
 	    SvSTASH_set(io, MUTABLE_HV(SvREFCNT_inc(GvHV(iogv))));
 	    IoPAGE_LEN(sv) = 60;
 	}
@@ -5213,12 +5209,14 @@ Perl_sv_unmagic(pTHX_ SV *const sv, const int type)
 	else
 	    mgp = &mg->mg_moremagic;
     }
-    if (!SvMAGIC(sv)) {
+    if (SvMAGIC(sv)) {
+	if (SvMAGICAL(sv))	/* if we're under save_magic, wait for restore_magic; */
+	    mg_magical(sv);	/*    else fix the flags now */
+    }
+    else {
 	SvMAGICAL_off(sv);
 	SvFLAGS(sv) |= (SvFLAGS(sv) & (SVp_IOK|SVp_NOK|SVp_POK)) >> PRIVSHIFT;
-	SvMAGIC_set(sv, NULL);
     }
-
     return 0;
 }
 
@@ -6018,7 +6016,8 @@ Perl_sv_len_utf8(pTHX_ register SV *const sv)
 	    else {
 		ulen = Perl_utf8_length(aTHX_ s, s + len);
 		if (!SvREADONLY(sv)) {
-		    if (!mg) {
+		    if (!mg && (SvTYPE(sv) < SVt_PVMG ||
+				!(mg = mg_find(sv, PERL_MAGIC_utf8)))) {
 			mg = sv_magicext(sv, 0, PERL_MAGIC_utf8,
 					 &PL_vtbl_utf8, 0, 0);
 		    }
@@ -6098,8 +6097,10 @@ S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start
 
     assert (uoffset >= uoffset0);
 
-    if (SvMAGICAL(sv) && !SvREADONLY(sv) && PL_utf8cache
-	&& (*mgp || (*mgp = mg_find(sv, PERL_MAGIC_utf8)))) {
+    if (!SvREADONLY(sv)
+	&& PL_utf8cache
+	&& (*mgp || (SvTYPE(sv) >= SVt_PVMG &&
+		     (*mgp = mg_find(sv, PERL_MAGIC_utf8))))) {
 	if ((*mgp)->mg_ptr) {
 	    STRLEN *cache = (STRLEN *) (*mgp)->mg_ptr;
 	    if (cache[0] == uoffset) {
@@ -6282,7 +6283,8 @@ S_utf8_mg_pos_cache_update(pTHX_ SV *const sv, MAGIC **const mgp, const STRLEN b
     if (SvREADONLY(sv))
 	return;
 
-    if (!*mgp) {
+    if (!*mgp && (SvTYPE(sv) < SVt_PVMG ||
+		  !(*mgp = mg_find(sv, PERL_MAGIC_utf8)))) {
 	*mgp = sv_magicext(sv, 0, PERL_MAGIC_utf8, (MGVTBL*)&PL_vtbl_utf8, 0,
 			   0);
 	(*mgp)->mg_len = -1;
@@ -6479,8 +6481,11 @@ Perl_sv_pos_b2u(pTHX_ register SV *const sv, I32 *const offsetp)
 
     send = s + byte;
 
-    if (SvMAGICAL(sv) && !SvREADONLY(sv) && PL_utf8cache
-	&& (mg = mg_find(sv, PERL_MAGIC_utf8))) {
+    if (!SvREADONLY(sv)
+	&& PL_utf8cache
+	&& SvTYPE(sv) >= SVt_PVMG
+	&& (mg = mg_find(sv, PERL_MAGIC_utf8)))
+    {
 	if (mg->mg_ptr) {
 	    STRLEN * const cache = (STRLEN *) mg->mg_ptr;
 	    if (cache[1] == byte) {
@@ -9165,6 +9170,22 @@ Perl_sv_vsetpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
     sv_vcatpvfn(sv, pat, patlen, args, svargs, svmax, maybe_tainted);
 }
 
+
+/*
+ * Warn of missing argument to sprintf, and then return a defined value
+ * to avoid inappropriate "use of uninit" warnings [perl #71000].
+ */
+#define WARN_MISSING WARN_UNINITIALIZED /* Not sure we want a new category */
+STATIC SV*
+S_vcatpvfn_missing_argument(pTHX) {
+    if (ckWARN(WARN_MISSING)) {
+	Perl_warner(aTHX_ packWARN(WARN_MISSING), "Missing argument in %s",
+		PL_op ? OP_DESC(PL_op) : "sv_vcatpvfn()");
+    }
+    return &PL_sv_no;
+}
+
+
 STATIC I32
 S_expect_number(pTHX_ char **const pattern)
 {
@@ -9530,9 +9551,10 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 		    vecsv = va_arg(*args, SV*);
 		else if (evix) {
 		    vecsv = (evix > 0 && evix <= svmax)
-			? svargs[evix-1] : &PL_sv_undef;
+			? svargs[evix-1] : S_vcatpvfn_missing_argument(aTHX);
 		} else {
-		    vecsv = svix < svmax ? svargs[svix++] : &PL_sv_undef;
+		    vecsv = svix < svmax
+			? svargs[svix++] : S_vcatpvfn_missing_argument(aTHX);
 		}
 		dotstr = SvPV_const(vecsv, dotstrlen);
 		/* Keep the DO_UTF8 test *after* the SvPV call, else things go
@@ -9679,10 +9701,11 @@ Perl_sv_vcatpvfn(pTHX_ SV *const sv, const char *const pat, const STRLEN patlen,
 	if (!vectorize && !args) {
 	    if (efix) {
 		const I32 i = efix-1;
-		argsv = (i >= 0 && i < svmax) ? svargs[i] : &PL_sv_undef;
+		argsv = (i >= 0 && i < svmax)
+		    ? svargs[i] : S_vcatpvfn_missing_argument(aTHX);
 	    } else {
 		argsv = (svix >= 0 && svix < svmax)
-		    ? svargs[svix++] : &PL_sv_undef;
+		    ? svargs[svix++] : S_vcatpvfn_missing_argument(aTHX);
 	    }
 	}
 
@@ -12191,6 +12214,16 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_utf8_punct	= sv_dup_inc(proto_perl->Iutf8_punct, param);
     PL_utf8_xdigit	= sv_dup_inc(proto_perl->Iutf8_xdigit, param);
     PL_utf8_mark	= sv_dup_inc(proto_perl->Iutf8_mark, param);
+    PL_utf8_X_begin	= sv_dup_inc(proto_perl->Iutf8_X_begin, param);
+    PL_utf8_X_extend	= sv_dup_inc(proto_perl->Iutf8_X_extend, param);
+    PL_utf8_X_prepend	= sv_dup_inc(proto_perl->Iutf8_X_prepend, param);
+    PL_utf8_X_non_hangul	= sv_dup_inc(proto_perl->Iutf8_X_non_hangul, param);
+    PL_utf8_X_L	= sv_dup_inc(proto_perl->Iutf8_X_L, param);
+    PL_utf8_X_LV	= sv_dup_inc(proto_perl->Iutf8_X_LV, param);
+    PL_utf8_X_LVT	= sv_dup_inc(proto_perl->Iutf8_X_LVT, param);
+    PL_utf8_X_T	= sv_dup_inc(proto_perl->Iutf8_X_T, param);
+    PL_utf8_X_V	= sv_dup_inc(proto_perl->Iutf8_X_V, param);
+    PL_utf8_X_LV_LVT_V	= sv_dup_inc(proto_perl->Iutf8_X_LV_LVT_V, param);
     PL_utf8_toupper	= sv_dup_inc(proto_perl->Iutf8_toupper, param);
     PL_utf8_totitle	= sv_dup_inc(proto_perl->Iutf8_totitle, param);
     PL_utf8_tolower	= sv_dup_inc(proto_perl->Iutf8_tolower, param);

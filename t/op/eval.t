@@ -6,7 +6,7 @@ BEGIN {
     require './test.pl';
 }
 
-print "1..99\n";
+print "1..105\n";
 
 eval 'print "ok 1\n";';
 
@@ -557,3 +557,40 @@ $test++;
     print "ok $test - RT 63110\n";
     $test++;
 }
+
+curr_test($test);
+
+{
+    # test that the CV compiled for the eval is freed by checking that no additional 
+    # reference to outside lexicals are made.
+    my $x;
+    is(Internals::SvREFCNT($x), 1, "originally only 1 referece");
+    eval '$x';
+    is(Internals::SvREFCNT($x), 1, "execution eval doesn't create new references");
+}
+
+fresh_perl_is(<<'EOP', "ok\n", undef, 'RT #70862');
+$::{'@'}='';
+eval {};
+print "ok\n";
+EOP
+
+fresh_perl_is(<<'EOP', "ok\n", undef, 'variant of RT #70862');
+eval {
+    $::{'@'}='';
+};
+print "ok\n";
+EOP
+
+fresh_perl_is(<<'EOP', "ok\n", undef, 'related to RT #70862');
+$::{'@'}=\3;
+eval {};
+print "ok\n";
+EOP
+
+fresh_perl_is(<<'EOP', "ok\n", undef, 'related to RT #70862');
+eval {
+    $::{'@'}=\3;
+};
+print "ok\n";
+EOP

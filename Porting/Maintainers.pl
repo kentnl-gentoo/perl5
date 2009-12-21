@@ -186,7 +186,7 @@ use File::Glob qw(:case);
     'Archive::Extract' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'KANE/Archive-Extract-0.34.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.36.tar.gz',
 	'FILES'		=> q[cpan/Archive-Extract],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -379,7 +379,7 @@ use File::Glob qw(:case);
     'CPAN' =>
 	{
 	'MAINTAINER'	=> 'andk',
-	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_51.tar.gz',
+	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_53.tar.gz',
 	'FILES'		=> q[cpan/CPAN],
 	'EXCLUDED'	=> [ qr{^distroprefs/},
 			     qr{^inc/Test/},
@@ -423,7 +423,7 @@ use File::Glob qw(:case);
     'CPANPLUS' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.89_09.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.90.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^t/dummy-.*\.hidden$},
@@ -521,7 +521,7 @@ use File::Glob qw(:case);
     'Encode' =>
 	{
 	'MAINTAINER'	=> 'dankogai',
-	'DISTRIBUTION'	=> 'DANKOGAI/Encode-2.38.tar.gz',
+	'DISTRIBUTION'	=> 'DANKOGAI/Encode-2.39.tar.gz',
 	'FILES'		=> q[cpan/Encode],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> undef,
@@ -616,7 +616,7 @@ use File::Glob qw(:case);
     'ExtUtils::MakeMaker' =>
 	{
 	'MAINTAINER'	=> 'mschwern',
-	'DISTRIBUTION'	=> 'MSCHWERN/ExtUtils-MakeMaker-6.55_02.tar.gz',
+	'DISTRIBUTION'	=> 'MSCHWERN/ExtUtils-MakeMaker-6.56.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-MakeMaker],
 	'EXCLUDED'	=> [ qr{^t/lib/Test/},
 			     qr{^inc/ExtUtils/},
@@ -1004,7 +1004,7 @@ use File::Glob qw(:case);
     'Module::Build' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.35_09.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.36.tar.gz',
 	'FILES'		=> q[cpan/Module-Build],
 	'EXCLUDED'	=> [ qw{ t/par.t t/signature.t },
 			     qr!^contrib/!,  qr!^devtools! ],
@@ -1015,7 +1015,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.22.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.23.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',
@@ -1131,11 +1131,14 @@ use File::Glob qw(:case);
     'PathTools' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'SMUELLER/PathTools-3.30_02.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/PathTools-3.31.tar.gz',
 	'FILES'		=> q[cpan/Cwd],
 	'EXCLUDED'	=> [ qr{^t/lib/Test/} ],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> "cpan",
+	# NOTE: PathTools is in cpan/Cwd/ because it contains Cwd.xs and
+	# something, possibly Makefile.SH, makes an assumption that the
+	# leafname of some  file corresponds with the pathname of the directory.
 	},
 
     'perlebcdic' =>
@@ -1290,7 +1293,7 @@ use File::Glob qw(:case);
     'Pod::Simple' =>
 	{
 	'MAINTAINER'	=> 'arandal',
-	'DISTRIBUTION'	=> 'ARANDAL/Pod-Simple-3.08.tar.gz',
+	'DISTRIBUTION'	=> 'DWHEELER/Pod-Simple-3.13.tar.gz',
 	'FILES'		=> q[cpan/Pod-Simple],
 	# XXX these two files correspond to similar ones in blead under
 	# pod/, but the blead ones have newer changes, and also seem to
@@ -1555,7 +1558,7 @@ use File::Glob qw(:case);
     'threads' =>
 	{
 	'MAINTAINER'	=> 'jdhedden',
-	'DISTRIBUTION'	=> 'JDHEDDEN/threads-1.74.tar.gz',
+	'DISTRIBUTION'	=> 'JDHEDDEN/threads-1.75.tar.gz',
 	'FILES'		=> q[dist/threads],
 	'EXCLUDED'	=> [ qw(examples/pool.pl
 				t/pod.t
@@ -1938,6 +1941,7 @@ use File::Glob qw(:case);
 				lib/exceptions.pl
 				lib/fastcwd.pl
 				lib/feature.{pm,t}
+				lib/feature/
 				lib/filetest.{pm,t}
 				lib/find.pl
 				lib/finddepth.pl

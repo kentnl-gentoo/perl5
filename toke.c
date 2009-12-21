@@ -583,7 +583,7 @@ S_missingterm(pTHX_ char *s)
 	((0 != (PL_hints & HINT_LOCALIZE_HH))				\
 	    && S_feature_is_enabled(aTHX_ STR_WITH_LEN(name)))
 /* The longest string we pass in.  */
-#define MAX_FEATURE_LEN (sizeof("switch")-1)
+#define MAX_FEATURE_LEN (sizeof("unicode_strings")-1)
 
 /*
  * S_feature_is_enabled
@@ -1197,12 +1197,10 @@ Perl_lex_next_chunk(pTHX_ U32 flags)
     STRLEN old_bufend_pos, new_bufend_pos;
     STRLEN bufptr_pos, oldbufptr_pos, oldoldbufptr_pos;
     STRLEN linestart_pos, last_uni_pos, last_lop_pos;
+    bool got_some_for_debugger = 0;
     bool got_some;
     if (flags & ~(LEX_KEEP_PREVIOUS|LEX_FAKE_EOF))
 	Perl_croak(aTHX_ "Lexing code internal error (%s)", "lex_next_chunk");
-#ifdef PERL_MAD
-    flags |= LEX_KEEP_PREVIOUS;
-#endif /* PERL_MAD */
     linestr = PL_parser->linestr;
     buf = SvPVX(linestr);
     if (!(flags & LEX_KEEP_PREVIOUS) &&
@@ -1231,6 +1229,7 @@ Perl_lex_next_chunk(pTHX_ U32 flags)
 	got_some = 0;
     } else if (filter_gets(linestr, old_bufend_pos)) {
 	got_some = 1;
+	got_some_for_debugger = 1;
     } else {
 	if (!SvPOK(linestr))   /* can get undefined by filter_gets */
 	    sv_setpvs(linestr, "");
@@ -1270,7 +1269,7 @@ Perl_lex_next_chunk(pTHX_ U32 flags)
 	PL_parser->last_uni = buf + last_uni_pos;
     if (PL_parser->last_lop)
 	PL_parser->last_lop = buf + last_lop_pos;
-    if (got_some && (PERLDB_LINE || PERLDB_SAVESRC) &&
+    if (got_some_for_debugger && (PERLDB_LINE || PERLDB_SAVESRC) &&
 	    PL_curstash != PL_debstash) {
 	/* debugger active and we're not compiling the debugger code,
 	 * so store the line into the debugger's array of lines
@@ -3808,7 +3807,8 @@ S_tokenize_use(pTHX_ int is_use, char *s) {
     s = SKIPSPACE1(s);
     if (isDIGIT(*s) || (*s == 'v' && isDIGIT(s[1]))) {
 	s = force_version(s, TRUE);
-	if (*s == ';' || (s = SKIPSPACE1(s), *s == ';')) {
+	if (*s == ';' || *s == '}'
+		|| (s = SKIPSPACE1(s), (*s == ';' || *s == '}'))) {
 	    start_force(PL_curforce);
 	    NEXTVAL_NEXTTOKE.opval = NULL;
 	    force_next(WORD);
@@ -4324,10 +4324,13 @@ Perl_yylex(pTHX)
 		fake_eof = LEX_FAKE_EOF;
 	    }
 	    PL_bufptr = PL_bufend;
+	    CopLINE_inc(PL_curcop);
 	    if (!lex_next_chunk(fake_eof)) {
+		CopLINE_dec(PL_curcop);
 		s = PL_bufptr;
 		TOKEN(';');	/* not infinite loop because rsfp is NULL now */
 	    }
+	    CopLINE_dec(PL_curcop);
 #ifdef PERL_MAD
 	    if (!PL_rsfp)
 		PL_realtokenstart = -1;
@@ -4360,11 +4363,10 @@ Perl_yylex(pTHX)
 		    PL_doextract = FALSE;
 		}
 	    }
-	    incline(s);
+	    if (PL_rsfp)
+		incline(s);
 	} while (PL_doextract);
 	PL_oldoldbufptr = PL_oldbufptr = PL_bufptr = PL_linestart = s;
-	if ((PERLDB_LINE || PERLDB_SAVESRC) && PL_curstash != PL_debstash)
-	    update_debugger_info(PL_linestr, NULL, 0);
 	PL_bufend = SvPVX(PL_linestr) + SvCUR(PL_linestr);
 	PL_last_lop = PL_last_uni = NULL;
 	if (CopLINE(PL_curcop) == 1) {
@@ -5441,7 +5443,7 @@ Perl_yylex(pTHX)
 	d = s;
 	{
 	    const char tmp = *s;
-	    if (PL_lex_state == LEX_NORMAL)
+	    if (PL_lex_state == LEX_NORMAL || PL_lex_brackets)
 		s = SKIPSPACE1(s);
 
 	    if ((PL_expect != XREF || PL_oldoldbufptr == PL_last_lop)
@@ -5640,8 +5642,6 @@ Perl_yylex(pTHX)
 		    pl_yylval.ival = 0;
 		OPERATOR(DOTDOT);
 	    }
-	    if (PL_expect != XOPERATOR)
-		check_uni();
 	    Aop(OP_CONCAT);
 	}
 	/* FALL THROUGH */
@@ -6587,8 +6587,14 @@ Perl_yylex(pTHX)
 
 	case KEY_eval:
 	    s = SKIPSPACE1(s);
-	    PL_expect = (*s == '{') ? XTERMBLOCK : XTERM;
-	    UNIBRACK(OP_ENTEREVAL);
+	    if (*s == '{') { /* block eval */
+		PL_expect = XTERMBLOCK;
+		UNIBRACK(OP_ENTERTRY);
+	    }
+	    else { /* string eval */
+		PL_expect = XTERM;
+		UNIBRACK(OP_ENTEREVAL);
+	    }
 
 	case KEY_eof:
 	    UNI(OP_EOF);
@@ -11365,7 +11371,7 @@ S_scan_ident(pTHX_ register char *s, register const char *send, char *dest, STRL
     char *bracket = NULL;
     char funny = *s++;
     register char *d = dest;
-    register char * const e = d + destlen + 3;    /* two-character token, ending NUL */
+    register char * const e = d + destlen - 3;    /* two-character token, ending NUL */
 
     PERL_ARGS_ASSERT_SCAN_IDENT;
 
@@ -12018,10 +12024,12 @@ S_scan_heredoc(pTHX_ register char *s)
 	}
 #endif
 	PL_bufptr = s;
+	CopLINE_inc(PL_curcop);
 	if (!outer || !lex_next_chunk(0)) {
 	    CopLINE_set(PL_curcop, (line_t)PL_multi_start);
 	    missingterm(PL_tokenbuf);
 	}
+	CopLINE_dec(PL_curcop);
 	s = PL_bufptr;
 #ifdef PERL_MAD
 	stuffstart = s - SvPVX(PL_linestr);
@@ -12044,8 +12052,6 @@ S_scan_heredoc(pTHX_ register char *s)
 	else if (PL_bufend - PL_linestart == 1 && PL_bufend[-1] == '\r')
 	    PL_bufend[-1] = '\n';
 #endif
-	if ((PERLDB_LINE || PERLDB_SAVESRC) && PL_curstash != PL_debstash)
-	    update_debugger_info(PL_linestr, NULL, 0);
 	if (*s == term && memEQ(s,PL_tokenbuf,len)) {
 	    STRLEN off = PL_bufend - 1 - SvPVX_const(PL_linestr);
 	    *(SvPVX(PL_linestr) + off ) = ' ';
@@ -13286,17 +13292,17 @@ S_swallow_bom(pTHX_ U8 *s)
     switch (s[0]) {
     case 0xFF:
 	if (s[1] == 0xFE) {
-	    /* UTF-16 little-endian? (or UTF32-LE?) */
+	    /* UTF-16 little-endian? (or UTF-32LE?) */
 	    if (s[2] == 0 && s[3] == 0)  /* UTF-32 little-endian */
-		Perl_croak(aTHX_ "Unsupported script encoding UTF32-LE");
+		Perl_croak(aTHX_ "Unsupported script encoding UTF-32LE");
 #ifndef PERL_NO_UTF16_FILTER
-	    if (DEBUG_p_TEST || DEBUG_T_TEST) PerlIO_printf(Perl_debug_log, "UTF16-LE script encoding (BOM)\n");
+	    if (DEBUG_p_TEST || DEBUG_T_TEST) PerlIO_printf(Perl_debug_log, "UTF-16LE script encoding (BOM)\n");
 	    s += 2;
 	    if (PL_bufend > (char*)s) {
 		s = add_utf16_textfilter(s, TRUE);
 	    }
 #else
-	    Perl_croak(aTHX_ "Unsupported script encoding UTF16-LE");
+	    Perl_croak(aTHX_ "Unsupported script encoding UTF-16LE");
 #endif
 	}
 	break;
@@ -13309,7 +13315,7 @@ S_swallow_bom(pTHX_ U8 *s)
 		s = add_utf16_textfilter(s, FALSE);
 	    }
 #else
-	    Perl_croak(aTHX_ "Unsupported script encoding UTF16-BE");
+	    Perl_croak(aTHX_ "Unsupported script encoding UTF-16BE");
 #endif
 	}
 	break;
@@ -13324,15 +13330,19 @@ S_swallow_bom(pTHX_ U8 *s)
 	     if (s[1] == 0) {
 		  if (s[2] == 0xFE && s[3] == 0xFF) {
 		       /* UTF-32 big-endian */
-		       Perl_croak(aTHX_ "Unsupported script encoding UTF32-BE");
+		       Perl_croak(aTHX_ "Unsupported script encoding UTF-32BE");
 		  }
 	     }
 	     else if (s[2] == 0 && s[3] != 0) {
 		  /* Leading bytes
 		   * 00 xx 00 xx
 		   * are a good indicator of UTF-16BE. */
+#ifndef PERL_NO_UTF16_FILTER
 		  if (DEBUG_p_TEST || DEBUG_T_TEST) PerlIO_printf(Perl_debug_log, "UTF-16BE script encoding (no BOM)\n");
-		s = add_utf16_textfilter(s, FALSE);
+		  s = add_utf16_textfilter(s, FALSE);
+#else
+		  Perl_croak(aTHX_ "Unsupported script encoding UTF-16BE");
+#endif
 	     }
 	}
 #ifdef EBCDIC
@@ -13349,8 +13359,12 @@ S_swallow_bom(pTHX_ U8 *s)
 		  /* Leading bytes
 		   * xx 00 xx 00
 		   * are a good indicator of UTF-16LE. */
+#ifndef PERL_NO_UTF16_FILTER
 	      if (DEBUG_p_TEST || DEBUG_T_TEST) PerlIO_printf(Perl_debug_log, "UTF-16LE script encoding (no BOM)\n");
 	      s = add_utf16_textfilter(s, TRUE);
+#else
+	      Perl_croak(aTHX_ "Unsupported script encoding UTF-16LE");
+#endif
 	 }
     }
     return (char*)s;

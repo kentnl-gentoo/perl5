@@ -26,6 +26,10 @@ programming languages offer you 1 line of immortality?
 
 =head1 Tasks that only need Perl knowledge
 
+=head2 Improve Porting/cmpVERSION.pl to work from git tags
+
+See F<Porting/release_managers_guide.pod> for a bit more detail.
+
 =head2 Migrate t/ from custom TAP generation
 
 Many tests below F<t/> still generate TAP by "hand", rather than using library
@@ -194,6 +198,11 @@ The F<installman> script is slow. All it is doing text processing, which we're
 told is something Perl is good at. So it would be nice to know what it is doing
 that is taking so much CPU, and where possible address it.
 
+=head2 enable lexical enabling/disabling of inidvidual warnings
+
+Currently, warnings can only be enabled or disabled by category. There
+are times when it would be useful to quash a single warning, not a
+whole category.
 
 =head1 Tasks that need a little sysadmin-type knowledge
 

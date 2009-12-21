@@ -10,8 +10,10 @@ $|=1;
 
 my $make_exceptions_list = ($ARGV[0]||'') eq '--make-exceptions-list';
 
-open my $diagfh, "<", "../pod/perldiag.pod"
-  or die "Can't open ../pod/perldiag.pod: $!";
+chdir '..' or die "Can't chdir ..: $!";
+
+open my $diagfh, "<", "pod/perldiag.pod"
+  or die "Can't open pod/perldiag.pod: $!";
 
 my %entries;
 while (<DATA>) {
@@ -32,12 +34,12 @@ while (<$diagfh>) {
   }
 }
 
-my @todo = ('..');
+my @todo = <*>;
 while (@todo) {
   my $todo = shift @todo;
-  next if $todo ~~ ['../t', '../lib', '../ext', '../dist', '../cpan'];
+  next if $todo ~~ ['t', 'lib', 'ext', 'dist', 'cpan'];
   # opmini.c is just a copy of op.c, so there's no need to check again.
-  next if $todo eq '../opmini.c';
+  next if $todo eq 'opmini.c';
   if (-d $todo) {
     push @todo, glob "$todo/*";
   } elsif ($todo =~ m/\.[ch]$/) {
@@ -358,10 +360,10 @@ Unknown PerlIO layer "scalar"
 Unknown Unicode option letter '%c'
 unrecognised control character '%c'
 Unstable directory path, current directory changed unexpectedly
-Unsupported script encoding UTF16-BE
-Unsupported script encoding UTF16-LE
-Unsupported script encoding UTF32-BE
-Unsupported script encoding UTF32-LE
+Unsupported script encoding UTF-16BE
+Unsupported script encoding UTF-16LE
+Unsupported script encoding UTF-32BE
+Unsupported script encoding UTF-32LE
 Unterminated compressed integer in unpack
 Usage: CODE(0x%x)(%s)
 Usage: %s(%s)

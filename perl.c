@@ -108,8 +108,6 @@ S_init_tls_and_interp(PerlInterpreter *my_perl)
 	OP_REFCNT_INIT;
 	HINTS_REFCNT_INIT;
 	MUTEX_INIT(&PL_dollarzero_mutex);
-#  endif
-#ifdef PERL_IMPLICIT_CONTEXT
 	MUTEX_INIT(&PL_my_ctx_mutex);
 #  endif
     }
@@ -3844,6 +3842,9 @@ S_nuke_stacks(pTHX)
     Safefree(PL_tmps_stack);
     Safefree(PL_markstack);
     Safefree(PL_scopestack);
+#ifdef DEBUGGING
+    Safefree(PL_scopestack_name);
+#endif
     Safefree(PL_savestack);
 }
 
@@ -4024,7 +4025,7 @@ S_init_perllib(pTHX)
     const char *perl5lib = NULL;
 #endif
     const char *s;
-#ifdef WIN32
+#if defined(WIN32) && !defined(PERL_IS_MINIPERL)
     STRLEN len;
 #endif
 

@@ -1004,7 +1004,7 @@ PerlLIOIOCtl(struct IPerlLIO* piPerl, int i, unsigned int u, char *data)
 int
 PerlLIOIsatty(struct IPerlLIO* piPerl, int fd)
 {
-    return isatty(fd);
+    return win32_isatty(fd);
 }
 
 int
@@ -1769,6 +1769,16 @@ restart:
 	switch (status) {
 	case 0:
 	    CALLRUNOPS(aTHX);
+            /* We may have additional unclosed scopes if fork() was called
+             * from within a BEGIN block.  See perlfork.pod for more details.
+             * We cannot clean up these other scopes because they belong to a
+             * different interpreter, but we also cannot leave PL_scopestack_ix
+             * dangling because that can trigger an assertion in perl_destruct().
+             */
+            if (PL_scopestack_ix > oldscope) {
+                PL_scopestack[oldscope-1] = PL_scopestack[PL_scopestack_ix-1];
+                PL_scopestack_ix = oldscope;
+            }
 	    status = 0;
 	    break;
 	case 2:

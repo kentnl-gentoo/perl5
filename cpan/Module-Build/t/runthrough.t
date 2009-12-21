@@ -2,7 +2,7 @@
 
 use strict;
 use lib 't/lib';
-use MBTest tests => 30;
+use MBTest tests => 29;
 
 blib_load('Module::Build');
 blib_load('Module::Build::ConfigData');
@@ -13,7 +13,7 @@ my $have_yaml = Module::Build::ConfigData->feature('YAML_support');
 my $tmp = MBTest->tmpdir;
 
 use DistGen;
-my $dist = DistGen->new( dir => $tmp );
+my $dist = DistGen->new();
 $dist->change_build_pl
 ({
   module_name => 'Simple',
@@ -67,7 +67,7 @@ if ($^O eq 'VMS') {
         $vms_efs = VMS::Feature::current("efs_charset");
     } else {
         my $efs_charset = $ENV{'DECC$EFS_CHARSET'} || '';
-        $vms_efs = $efs_charset =~ /^[ET1]/i; 
+        $vms_efs = $efs_charset =~ /^[ET1]/i;
     }
     $Is_VMS_noefs = 0 if $vms_efs;
     if ($Is_VMS_noefs) {
@@ -94,7 +94,7 @@ ok grep {$_ eq 'save_out'     } $mb->cleanup;
   };
   $all_ok &&= is($@, '');
   $all_ok &&= like($output, qr/all tests successful/i);
-  
+
   # This is the output of lib/Simple/Script.PL
   $all_ok &&= ok(-e $mb->localize_file_path('lib/Simple/Script'));
 
@@ -113,16 +113,16 @@ SKIP: {
     stdout_of( sub { $mb->dispatch('disttest') } )
   };
   is $@, '';
-  
+
   # After a test, the distdir should contain a blib/ directory
   ok -e File::Spec->catdir('Simple-0.01', 'blib');
-  
+
   eval {$mb->dispatch('distdir')};
   is $@, '';
-  
+
   # The 'distdir' should contain a lib/ directory
   ok -e File::Spec->catdir('Simple-0.01', 'lib');
-  
+
   # The freshly run 'distdir' should never contain a blib/ directory, or
   # else it could get into the tarball
   ok ! -e File::Spec->catdir('Simple-0.01', 'blib');
@@ -147,38 +147,17 @@ SKIP: {
   # Make sure the 'script' file was recognized as a script.
   my $scripts = $mb->script_files;
   ok $scripts->{script};
-  
+
   # Check that a shebang line is rewritten
   my $blib_script = File::Spec->catfile( qw( blib script script ) );
   ok -e $blib_script;
-  
+
  SKIP: {
     skip("We do not rewrite shebang on VMS", 1) if $^O eq 'VMS';
     my $fh = IO::File->new($blib_script);
     my $first_line = <$fh>;
     isnt $first_line, "#!perl -w\n", "should rewrite the shebang line";
   }
-}
-
-{
-  # Check PPD
-  $mb->dispatch('ppd', args => {codebase => '/path/to/codebase'});
-
-  my $ppd = slurp('Simple.ppd');
-
-  # This test is quite a hack since with XML you don't really want to
-  # do a strict string comparison, but absent an XML parser it's the
-  # best we can do.
-  is $ppd, <<'EOF';
-<SOFTPKG NAME="Simple" VERSION="0.01">
-    <ABSTRACT>Perl extension for blah blah blah</ABSTRACT>
-    <AUTHOR>A. U. Thor, a.u.thor@a.galaxy.far.far.away</AUTHOR>
-    <IMPLEMENTATION>
-        <REQUIRE NAME="File::Spec" VERSION="0" />
-        <CODEBASE HREF="/path/to/codebase" />
-    </IMPLEMENTATION>
-</SOFTPKG>
-EOF
 }
 
 
@@ -197,7 +176,7 @@ SKIP: {
 echo Hello, World!
 ---
 
-  $dist = DistGen->new( dir => $tmp );
+  $dist = DistGen->new();
   $dist->change_build_pl({
 			  module_name => 'Simple',
 			  scripts     => [ 'bin/script.bat' ],

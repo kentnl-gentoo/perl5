@@ -1310,7 +1310,25 @@ EXTERN_C char *crypt(const char *, const char *);
 #   define SS_NORMAL  		0
 #endif
 
-#define ERRSV GvSV(PL_errgv)
+#define ERRSV GvSVn(PL_errgv)
+
+#define CLEAR_ERRSV() STMT_START {					\
+    if (!GvSV(PL_errgv)) {						\
+	sv_setpvs(GvSV(gv_add_by_type(PL_errgv, SVt_PV)), "");		\
+    } else if (SvREADONLY(GvSV(PL_errgv))) {				\
+	SvREFCNT_dec(GvSV(PL_errgv));					\
+	GvSV(PL_errgv) = newSVpvs("");					\
+    } else {								\
+	SV *const errsv = GvSV(PL_errgv);				\
+	sv_setpvs(errsv, "");						\
+	if (SvMAGICAL(errsv)) {						\
+	    mg_free(errsv);						\
+	}								\
+	SvPOK_only(errsv);						\
+    }									\
+    } STMT_END
+
+
 #ifdef PERL_CORE
 # define DEFSV (0 + GvSVn(PL_defgv))
 #else
@@ -4755,7 +4773,7 @@ enum {		/* pass one of these to get_vtbl */
 #define HINT_BLOCK_SCOPE	0x00000100
 #define HINT_STRICT_SUBS	0x00000200 /* strict pragma */
 #define HINT_STRICT_VARS	0x00000400 /* strict pragma */
-#define HINT_UNI_8_BIT		0x00000800 /* unicode8bit pragma */
+#define HINT_UNI_8_BIT		0x00000800 /* unicode_strings feature */
 
 /* The HINT_NEW_* constants are used by the overload pragma */
 #define HINT_NEW_INTEGER	0x00001000
@@ -6128,8 +6146,6 @@ extern void moncontrol(int);
 */
 
 #endif /* Include guard */
-
-#define CLEAR_ERRSV() STMT_START { sv_setpvn(ERRSV,"",0); if (SvMAGICAL(ERRSV)) { mg_free(ERRSV); } SvPOK_only(ERRSV); } STMT_END
 
 /*
  * Local variables:

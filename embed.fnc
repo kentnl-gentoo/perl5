@@ -502,6 +502,16 @@ ApR	|bool	|is_utf8_print	|NN const U8 *p
 ApR	|bool	|is_utf8_punct	|NN const U8 *p
 ApR	|bool	|is_utf8_xdigit	|NN const U8 *p
 ApR	|bool	|is_utf8_mark	|NN const U8 *p
+ApR	|bool	|is_utf8_X_begin	|NN const U8 *p
+ApR	|bool	|is_utf8_X_extend	|NN const U8 *p
+ApR	|bool	|is_utf8_X_prepend	|NN const U8 *p
+ApR	|bool	|is_utf8_X_non_hangul	|NN const U8 *p
+ApR	|bool	|is_utf8_X_L		|NN const U8 *p
+ApR	|bool	|is_utf8_X_LV		|NN const U8 *p
+ApR	|bool	|is_utf8_X_LVT		|NN const U8 *p
+ApR	|bool	|is_utf8_X_LV_LVT_V	|NN const U8 *p
+ApR	|bool	|is_utf8_X_T		|NN const U8 *p
+ApR	|bool	|is_utf8_X_V		|NN const U8 *p
 : Used in perly.y
 p	|OP*	|jmaybe		|NN OP *o
 : Used in pp.c 
@@ -516,17 +526,17 @@ EXp	|void	|lex_end
 : Used in various files
 p	|void	|lex_start	|NULLOK SV* line|NULLOK PerlIO *rsfp|bool new_filter
 : Public lexer API
-Apd	|bool	|lex_bufutf8
-Apd	|char*	|lex_grow_linestr|STRLEN len
-Apd	|void	|lex_stuff_pvn	|NN char* pv|STRLEN len|U32 flags
-Apd	|void	|lex_stuff_sv	|NN SV* sv|U32 flags
-Apd	|void	|lex_unstuff	|NN char* ptr
-Apd	|void	|lex_read_to	|NN char* ptr
-Apd	|void	|lex_discard_to	|NN char* ptr
-Apd	|bool	|lex_next_chunk	|U32 flags
-Apd	|I32	|lex_peek_unichar|U32 flags
-Apd	|I32	|lex_read_unichar|U32 flags
-Apd	|void	|lex_read_space	|U32 flags
+AMpd	|bool	|lex_bufutf8
+AMpd	|char*	|lex_grow_linestr|STRLEN len
+AMpd	|void	|lex_stuff_pvn	|NN char* pv|STRLEN len|U32 flags
+AMpd	|void	|lex_stuff_sv	|NN SV* sv|U32 flags
+AMpd	|void	|lex_unstuff	|NN char* ptr
+AMpd	|void	|lex_read_to	|NN char* ptr
+AMpd	|void	|lex_discard_to	|NN char* ptr
+AMpd	|bool	|lex_next_chunk	|U32 flags
+AMpd	|I32	|lex_peek_unichar|U32 flags
+AMpd	|I32	|lex_read_unichar|U32 flags
+AMpd	|void	|lex_read_space	|U32 flags
 : Used in various files
 Ap	|void	|op_null	|NN OP* o
 : FIXME. Used by Data::Alias
@@ -769,7 +779,9 @@ pR	|OP*	|oopsAV		|NN OP* o
 pR	|OP*	|oopsHV		|NN OP* o
 : Defined in pad.c, used only in op.c
 pd	|void	|pad_leavemy
+#ifdef DEBUGGING
 Apd	|SV*	|pad_sv		|PADOFFSET po
+#endif
 : Defined in pad.c, used only in op.c
 pd	|void	|pad_free	|PADOFFSET po
 #if defined(PERL_IN_PAD_C) || defined(PERL_DECL_PROT)
@@ -1376,7 +1388,7 @@ s	|HV*	|require_tie_mod|NN GV *gv|NN const char *varpv|NN SV* namesv \
 
 : #if defined(PERL_IN_HV_C) || defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
 : Used in hv.c
-paRxo	|void*	|get_arena	|const size_t svtype|const U32 misc
+paRxoM	|void*	|get_arena	|const size_t arenasize |const svtype bodytype
 : #endif
 
 #if defined(PERL_IN_HV_C) || defined(PERL_DECL_PROT)
@@ -1992,7 +2004,9 @@ p	|void	|free_tied_hv_pool
 pR	|int	|get_debug_opts	|NN const char **s|bool givehelp
 #endif
 Ap	|void	|save_set_svflags|NN SV *sv|U32 mask|U32 val
+#ifdef DEBUGGING
 Apod	|void	|hv_assert	|NN HV *hv
+#endif
 
 ApdR	|SV*	|hv_scalar	|NN HV *hv
 ApoR	|I32*	|hv_riter_p	|NN HV *hv

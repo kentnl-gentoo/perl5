@@ -8,7 +8,8 @@ BEGIN {
 
 use strict;
 use lib '../lib';
-use Test::More tests => 35;
+use Test::More tests => 48;
+#use Test::More 'no_plan';
 
 use_ok('Pod::Simple::XHTML') or exit;
 
@@ -17,11 +18,17 @@ isa_ok ($parser, 'Pod::Simple::XHTML');
 
 my $results;
 
-my $PERLDOC = "http://search.cpan.org/perldoc?";
+my $PERLDOC = "http://search.cpan.org/perldoc";
+my $MANURL = "http://man.he.net/man";
 
 initialize($parser, $results);
 $parser->parse_string_document( "=head1 Poit!" );
 is($results, qq{<h1 id="Poit-">Poit!</h1>\n\n}, "head1 level output");
+
+initialize($parser, $results);
+$parser->html_h_level(2);
+$parser->parse_string_document( "=head1 Poit!" );
+is($results, qq{<h2 id="Poit-">Poit!</h2>\n\n}, "head1 level output h_level 2");
 
 initialize($parser, $results);
 $parser->parse_string_document( "=head2 I think so Brain." );
@@ -35,6 +42,18 @@ initialize($parser, $results);
 $parser->parse_string_document( "=head4 Zort & Zog!" );
 is($results, qq{<h4 id="Zort-Zog-">Zort &amp; Zog!</h4>\n\n}, "head4 level output");
 
+sub x ($;&) {
+  my $code = $_[1];
+  Pod::Simple::XHTML->_out(
+  sub { $code->($_[0]) if $code },
+  "=pod\n\n$_[0]",
+) }
+
+like(
+  x("=head1 Header\n\n=for html <div>RAW<span>!</span></div>\n\nDone."),
+  qr/.+<\/h1>\s+<div>RAW<span>!<\/span><\/div>\s+.*/sm,
+  "heading building"
+) or exit;
 
 initialize($parser, $results);
 $parser->parse_string_document(<<'EOPOD');
@@ -403,7 +422,7 @@ $parser->parse_string_document(<<'EOPOD');
 A plain paragraph with a L<Newlines>.
 EOPOD
 is($results, <<"EOHTML", "Link entity in a paragraph");
-<p>A plain paragraph with a <a href="${PERLDOC}Newlines">Newlines</a>.</p>
+<p>A plain paragraph with a <a href="$PERLDOC?Newlines">Newlines</a>.</p>
 
 EOHTML
 
@@ -414,7 +433,7 @@ $parser->parse_string_document(<<'EOPOD');
 A plain paragraph with a L<perlport/Newlines>.
 EOPOD
 is($results, <<"EOHTML", "Link entity in a paragraph");
-<p>A plain paragraph with a <a href="${PERLDOC}perlport/Newlines">&quot;Newlines&quot; in perlport</a>.</p>
+<p>A plain paragraph with a <a href="$PERLDOC?perlport#Newlines">&quot;Newlines&quot; in perlport</a>.</p>
 
 EOHTML
 
@@ -507,7 +526,7 @@ A text paragraph using numeric POD entities: E<60>, E<62>.
 
 EOPOD
 is($results, <<"EOHTML", "Text with numeric entities");
-<p>A text paragraph using numeric POD entities: &#60;, &#62;.</p>
+<p>A text paragraph using numeric POD entities: &lt;, &gt;.</p>
 
 EOHTML
 
@@ -539,6 +558,34 @@ $parser->output_string( \$results ); # Send the resulting output to a string
 ok $parser->parse_string_document( "=head1 Poit!" ), 'Parse with headers';
 like $results, qr{<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />},
     'Should have proper http-equiv meta tag';
+
+# Test the link generation methods.
+is $parser->resolve_pod_page_link('Net::Ping', 'INSTALL'),
+    "$PERLDOC?Net::Ping#INSTALL",
+    'POD link with fragment';
+is $parser->resolve_pod_page_link('perlpodspec'),
+    "$PERLDOC?perlpodspec", 'Simple POD link';
+is $parser->resolve_pod_page_link(undef, 'SYNOPSIS'), '#SYNOPSIS',
+    'Simple fragment link';
+is $parser->resolve_pod_page_link(undef, 'this that'), '#this-that',
+    'Fragment link with space';
+is $parser->resolve_pod_page_link('perlpod', 'this that'),
+    "$PERLDOC?perlpod#this-that",
+    'POD link with fragment with space';
+
+is $parser->resolve_man_page_link('crontab(5)', 'EXAMPLE CRON FILE'),
+    "${MANURL}5/crontab", 'Man link with fragment';
+is $parser->resolve_man_page_link('crontab(5)'),
+    "${MANURL}5/crontab", 'Man link without fragment';
+is $parser->resolve_man_page_link('crontab'),
+    "${MANURL}1/crontab", 'Man link without section';
+
+# Make sure that batch_mode_page_object_init() works.
+ok $parser->batch_mode_page_object_init(0, 0, 0, 0, 6),
+    'Call batch_mode_page_object_init()';
+ok $parser->batch_mode, 'We should be in batch mode';
+is $parser->batch_mode_current_level, 6,
+    'The level should have been set';
 
 ######################################
 

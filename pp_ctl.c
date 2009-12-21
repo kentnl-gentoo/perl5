@@ -149,6 +149,26 @@ PP(pp_regcomp)
 	re = (REGEXP*) tmpstr;
 
     if (re) {
+	/* The match's LHS's get-magic might need to access this op's reg-
+	   exp (as is sometimes the case with $';  see bug 70764).  So we
+	   must call get-magic now before we replace the regexp. Hopeful-
+	   ly this hack can be replaced with the approach described at
+	   http://www.nntp.perl.org/group/perl.perl5.porters/2007/03
+	   /msg122415.html some day. */
+	OP *matchop = pm->op_next;
+	SV *lhs;
+	const bool was_tainted = PL_tainted;
+	if (matchop->op_flags & OPf_STACKED)
+	    lhs = TOPs;
+	else if (matchop->op_private & OPpTARGET_MY)
+	    lhs = PAD_SV(matchop->op_targ);
+	else lhs = DEFSV;
+	SvGETMAGIC(lhs);
+	/* Restore the previous value of PL_tainted (which may have been
+	   modified by get-magic), to avoid incorrectly setting the
+	   RXf_TAINTED flag further down. */
+	PL_tainted = was_tainted;
+
 	re = reg_temp_copy(NULL, re);
 	ReREFCNT_dec(PM_GETRE(pm));
 	PM_SETRE(pm, re);
@@ -1313,13 +1333,16 @@ S_dopoptolabel(pTHX_ const char *label)
 	case CXt_LOOP_LAZYSV:
 	case CXt_LOOP_FOR:
 	case CXt_LOOP_PLAIN:
-	    if ( !CxLABEL(cx) || strNE(label, CxLABEL(cx)) ) {
+	  {
+	    const char *cx_label = CxLABEL(cx);
+	    if (!cx_label || strNE(label, cx_label) ) {
 		DEBUG_l(Perl_deb(aTHX_ "(Skipping label #%ld %s)\n",
-			(long)i, CxLABEL(cx)));
+			(long)i, cx_label));
 		continue;
 	    }
 	    DEBUG_l( Perl_deb(aTHX_ "(Found label #%ld %s)\n", (long)i, label));
 	    return i;
+	  }
 	}
     }
     return i;
@@ -2393,9 +2416,11 @@ S_dofindlabel(pTHX_ OP *o, const char *label, OP **opstack, OP **oplimit)
 	OP *kid;
 	/* First try all the kids at this level, since that's likeliest. */
 	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling) {
-	    if ((kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) &&
-		    CopLABEL(kCOP) && strEQ(CopLABEL(kCOP), label))
-		return kid;
+	    if (kid->op_type == OP_NEXTSTATE || kid->op_type == OP_DBSTATE) {
+		const char *kid_label = CopLABEL(kCOP);
+		if (kid_label && strEQ(kid_label, label))
+		    return kid;
+	    }
 	}
 	for (kid = cUNOPo->op_first; kid; kid = kid->op_sibling) {
 	    if (kid == PL_lastgotoprobe)
@@ -2696,6 +2721,12 @@ PP(pp_goto)
             for (i = 1; enterops[i]; i++)
                 if (enterops[i]->op_type == OP_ENTERITER)
                     DIE(aTHX_ "Can't \"goto\" into the middle of a foreach loop");
+	}
+
+	if (*enterops && enterops[1]) {
+	    I32 i = enterops[1]->op_type == OP_ENTER && in_block ? 2 : 1;
+	    if (enterops[i])
+		deprecate("\"goto\" to jump into a construct");
 	}
 
 	/* pop unwanted frames */
@@ -3104,14 +3135,8 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	SAVEFREEOP(PL_eval_root);
 
     /* Set the context for this new optree.
-     * If the last op is an OP_REQUIRE, force scalar context.
-     * Otherwise, propagate the context from the eval(). */
-    if (PL_eval_root->op_type == OP_LEAVEEVAL
-	    && cUNOPx(PL_eval_root)->op_first->op_type == OP_LINESEQ
-	    && cLISTOPx(cUNOPx(PL_eval_root)->op_first)->op_last->op_type
-	    == OP_REQUIRE)
-	scalar(PL_eval_root);
-    else if ((gimme & G_WANT) == G_VOID)
+     * Propagate the context from the eval(). */
+    if ((gimme & G_WANT) == G_VOID)
 	scalarvoid(PL_eval_root);
     else if ((gimme & G_WANT) == G_ARRAY)
 	list(PL_eval_root);
@@ -4313,7 +4338,7 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 		    (void) sv_2mortal(MUTABLE_SV(seen_this));
 		}
 		if (NULL == seen_other) {
-		    seen_this = newHV();
+		    seen_other = newHV();
 		    (void) sv_2mortal(MUTABLE_SV(seen_other));
 		}
 		for(i = 0; i <= other_len; ++i) {
@@ -4321,7 +4346,8 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 		    SV * const * const other_elem = av_fetch(other_av, i, FALSE);
 
 		    if (!this_elem || !other_elem) {
-			if (this_elem || other_elem)
+			if ((this_elem && SvOK(*this_elem))
+				|| (other_elem && SvOK(*other_elem)))
 			    RETPUSHNO;
 		    }
 		    else if (hv_exists_ent(seen_this,
@@ -4849,8 +4875,8 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
     int status = 0;
     SV *upstream;
     STRLEN got_len;
-    const char *got_p = NULL;
-    const char *prune_from = NULL;
+    char *got_p = NULL;
+    char *prune_from = NULL;
     bool read_from_cache = FALSE;
     STRLEN umaxlen;
 
@@ -4953,8 +4979,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 		prune_from = got_p + umaxlen;
 	    }
 	} else {
-	    const char *const first_nl =
-		(const char *)memchr(got_p, '\n', got_len);
+	    char *const first_nl = (char *)memchr(got_p, '\n', got_len);
 	    if (first_nl && first_nl + 1 < got_p + got_len) {
 		/* There's a second line here... */
 		prune_from = first_nl + 1;
@@ -4980,6 +5005,7 @@ S_run_user_filter(pTHX_ int idx, SV *buf_sv, int maxlen)
 	    SvUTF8_on(cache);
 	}
 	SvCUR_set(upstream, got_len - cached_len);
+	*prune_from = 0;
 	/* Can't yet be EOF  */
 	if (status == 0)
 	    status = 1;

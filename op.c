@@ -985,7 +985,7 @@ Perl_scalarvoid(pTHX_ OP *o)
     want = o->op_flags & OPf_WANT;
     if ((want && want != OPf_WANT_SCALAR)
 	 || (PL_parser && PL_parser->error_count)
-	 || o->op_type == OP_RETURN)
+	 || o->op_type == OP_RETURN || o->op_type == OP_REQUIRE)
     {
 	return o;
     }
@@ -1083,6 +1083,17 @@ Perl_scalarvoid(pTHX_ OP *o)
       func_ops:
 	if (!(o->op_private & (OPpLVAL_INTRO|OPpOUR_INTRO)))
 	    /* Otherwise it's "Useless use of grep iterator" */
+	    useless = OP_DESC(o);
+	break;
+
+    case OP_SPLIT:
+	kid = cLISTOPo->op_first;
+	if (kid && kid->op_type == OP_PUSHRE
+#ifdef USE_ITHREADS
+		&& !((PMOP*)kid)->op_pmreplrootu.op_pmtargetoff)
+#else
+		&& !((PMOP*)kid)->op_pmreplrootu.op_pmtargetgv)
+#endif
 	    useless = OP_DESC(o);
 	break;
 
@@ -1215,10 +1226,6 @@ Perl_scalarvoid(pTHX_ OP *o)
     case OP_ENTEREVAL:
 	scalarkids(o);
 	break;
-    case OP_REQUIRE:
-	/* all requires must return a boolean value */
-	o->op_flags &= ~OPf_WANT;
-	/* FALL THROUGH */
     case OP_SCALAR:
 	return scalar(o);
     }
@@ -1307,10 +1314,6 @@ Perl_list(pTHX_ OP *o)
 	}
 	PL_curcop = &PL_compiling;
 	break;
-    case OP_REQUIRE:
-	/* all requires must return a boolean value */
-	o->op_flags &= ~OPf_WANT;
-	return scalar(o);
     }
     return o;
 }
@@ -3089,6 +3092,7 @@ Perl_newUNOP(pTHX_ I32 type, I32 flags, OP *first)
 	|| (PL_opargs[type] & OA_CLASS_MASK) == OA_FILESTATOP
 	|| (PL_opargs[type] & OA_CLASS_MASK) == OA_LOOPEXOP
 	|| type == OP_SASSIGN
+	|| type == OP_ENTERTRY
 	|| type == OP_NULL );
 
     if (!first)
@@ -4274,7 +4278,7 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 		    || left->op_type == OP_PADHV
 		    || left->op_type == OP_PADANY))
 	{
-	    maybe_common_vars = FALSE;
+	    if (left->op_type == OP_PADSV) maybe_common_vars = FALSE;
 	    if (left->op_private & OPpPAD_STATE) {
 		/* All single variable list context state assignments, hence
 		   state ($a) = ...
@@ -6597,8 +6601,6 @@ Perl_ck_eval(pTHX_ OP *o)
 	    /* establish postfix order */
 	    enter->op_next = (OP*)enter;
 
-	    CHECKOP(OP_ENTERTRY, enter);
-
 	    o = prepend_elem(OP_LINESEQ, (OP*)enter, (OP*)kid);
 	    o->op_type = OP_LEAVETRY;
 	    o->op_ppaddr = PL_ppaddr[OP_LEAVETRY];
@@ -7207,10 +7209,10 @@ Perl_ck_grep(pTHX_ OP *o)
     if (o->op_flags & OPf_STACKED) {
 	OP* k;
 	o = ck_sort(o);
-        kid = cLISTOPo->op_first->op_sibling;
-	if (!cUNOPx(kid)->op_next)
-	    Perl_croak(aTHX_ "panic: ck_grep");
-	for (k = cUNOPx(kid)->op_first; k; k = k->op_next) {
+        kid = cUNOPx(cLISTOPo->op_first->op_sibling)->op_first;
+	if (kid->op_type != OP_SCOPE && kid->op_type != OP_LEAVE)
+	    return no_fh_allowed(o);
+	for (k = kid; k; k = k->op_next) {
 	    kid = k;
 	}
 	NewOp(1101, gwop, 1, LOGOP);
@@ -7677,7 +7679,7 @@ Perl_ck_require(pTHX_ OP *o)
 	return newop;
     }
 
-    return ck_fun(o);
+    return scalar(ck_fun(o));
 }
 
 OP *
@@ -8362,7 +8364,7 @@ Perl_ck_each(pTHX_ OP *o)
 
 /* caller is supposed to assign the return to the 
    container of the rep_op var */
-OP *
+STATIC OP *
 S_opt_scalarhv(pTHX_ OP *rep_op) {
     UNOP *unop;
 
@@ -8391,7 +8393,7 @@ S_opt_scalarhv(pTHX_ OP *rep_op) {
  * beginning of the right-hand side. Returns the left-hand side of the
  * assignment if o acts in-place, or NULL otherwise. */
 
-OP *
+STATIC OP *
 S_is_inplace_av(pTHX_ OP *o, OP *oright) {
     OP *o2;
     OP *oleft = NULL;

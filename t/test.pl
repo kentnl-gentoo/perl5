@@ -158,7 +158,16 @@ sub display {
                     $y = $y . $backslash_escape{$c};
                 } else {
                     my $z = chr $c; # Maybe we can get away with a literal...
-                    $z = sprintf "\\%03o", $c if $z =~ /[[:^print:]]/;
+                    if ($z =~ /[[:^print:]]/) {
+
+                        # Use octal for characters traditionally expressed as
+                        # such: the low controls
+                        if ($c <= 037) {
+                            $z = sprintf "\\%03o", $c;
+                        } else {
+                            $z = sprintf "\\x{%x}", $c;
+                        }
+                    }
                     $y = $y . $z;
                 }
             }
@@ -729,9 +738,7 @@ sub fresh_perl_like {
     my($prog, $expected, $runperl_args, $name) = @_;
     local $Level = 2;
     _fresh_perl($prog,
-		sub { @_ ?
-			  $_[0] =~ (ref $expected ? $expected : /$expected/) :
-		          $expected },
+		sub { @_ ? $_[0] =~ $expected : $expected },
 		$runperl_args, $name);
 }
 

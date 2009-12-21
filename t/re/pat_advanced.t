@@ -21,7 +21,7 @@ BEGIN {
 }
 
 
-plan tests => 1146;  # Update this when adding/deleting tests.
+plan tests => 1143;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1120,7 +1120,6 @@ sub run_tests {
             '_'.pack('U', 0x00F1),        # _ + n-tilde
             'c'.pack('U', 0x0327),        # c + cedilla
             pack('U*', 0x00F1, 0x0327),   # n-tilde + cedilla
-            'a'.pack('U', 0x00B2),        # a + superscript two
             pack('U', 0x0391),            # ALPHA
             pack('U', 0x0391).'2',        # ALPHA + 2
             pack('U', 0x0391).'_',        # ALPHA + _
@@ -1729,8 +1728,8 @@ sub run_tests {
 
         my @isPrint = grep {not /[[:print:]]/ and /\p{IsPrint}/}
                             map {chr} 0 .. 0x1f, 0x7f .. 0x9f;
-        iseq join ('', @isPrint), "\x09\x0a\x0b\x0c\x0d\x85",
-            'IsPrint disagrees with [:print:] on control characters';
+        iseq join ('', @isPrint), "",
+            'IsPrint agrees with [:print:] on control characters';
 
         my @isPunct = grep {/[[:punct:]]/ != /\p{IsPunct}/}
                             map {chr} 0x80 .. 0xff;
@@ -1771,6 +1770,17 @@ sub run_tests {
         iseq $_, "!Bang!1!Bang!2!Bang!3!Bang!";
     }
 
+    { 
+        # Earlier versions of Perl said this was fatal.
+        local $Message = "U+0FFFF shouldn't crash the regex engine";
+        no warnings 'utf8';
+        my $a = eval "chr(65535)";
+        use warnings;
+        my $warning_message;
+        local $SIG{__WARN__} = sub { $warning_message = $_[0] };
+        eval $a =~ /[a-z]/;
+        ok(1);  # If it didn't crash, it worked.
+    }
 } # End of sub run_tests
 
 1;

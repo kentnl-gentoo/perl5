@@ -632,7 +632,6 @@ unless ($define{'DEBUGGING'}) {
 		    Perl_pad_sv
 		    Perl_hv_assert
 		    PL_block_type
-		    PL_scopestack_name
 		    PL_watchaddr
 		    PL_watchok
 		    PL_watch_pvx
@@ -759,6 +758,7 @@ unless ($define{'USE_ITHREADS'}) {
 		    PL_sharedsv_space_mutex
 		    PL_dollarzero_mutex
 		    PL_hints_mutex
+		    PL_my_ctx_mutex
 		    PL_perlio_mutex
 		    PL_regdupe
 		    Perl_parser_dup
@@ -794,7 +794,6 @@ unless ($define{'USE_ITHREADS'}) {
 
 unless ($define{'PERL_IMPLICIT_CONTEXT'}) {
     skip_symbols [qw(
-		    PL_my_ctx_mutex
 		    PL_my_cxt_index
 		    PL_my_cxt_list
 		    PL_my_cxt_size
@@ -1224,6 +1223,10 @@ if ($define{'MULTIPLICITY'}) {
 	my $glob = readvar($f, sub { "Perl_" . $_[1] . $_[2] . "_ptr" });
 	emit_symbols $glob;
     }
+    unless ($define{'USE_ITHREADS'}) {
+	# XXX needed for XS extensions that define PERL_CORE
+	emit_symbol("PL_curinterp");
+    }
     # XXX AIX seems to want the perlvars.h symbols, for some reason
     if ($PLATFORM eq 'aix' or $PLATFORM eq 'os2') {	# OS/2 needs PL_thr_key
 	my $glob = readvar($perlvars_h);
@@ -1285,6 +1288,7 @@ if ($PLATFORM =~ /^win(?:32|ce)$/) {
 			    win32_open
 			    win32_close
 			    win32_eof
+			    win32_isatty
 			    win32_read
 			    win32_write
 			    win32_spawnvp

@@ -22,7 +22,7 @@ krunch.pm krunch.pmc whap.pm whap.pmc);
 
 my $Is_EBCDIC = (ord('A') == 193) ? 1 : 0;
 my $Is_UTF8   = (${^OPEN} || "") =~ /:utf8/;
-my $total_tests = 48;
+my $total_tests = 49;
 if ($Is_EBCDIC || $Is_UTF8) { $total_tests -= 3; }
 print "1..$total_tests\n";
 
@@ -176,6 +176,7 @@ $foo = eval q{require bleah}; delete $INC{"bleah.pm"}; ++$::i;
 @foo = eval q{require bleah}; delete $INC{"bleah.pm"}; ++$::i;
        eval q{require bleah}; delete $INC{"bleah.pm"}; ++$::i;
        eval q{$_=$_+2;require bleah}; delete $INC{"bleah.pm"}; ++$::i;
+       eval q{return require bleah}; delete $INC{"bleah.pm"}; ++$::i;
 $foo = eval  {require bleah}; delete $INC{"bleah.pm"}; ++$::i;
 @foo = eval  {require bleah}; delete $INC{"bleah.pm"}; ++$::i;
        eval  {require bleah};
@@ -265,9 +266,9 @@ EOT
 if ($Is_EBCDIC || $Is_UTF8) { exit; }
 
 my %templates = (
-		 utf8 => 'C0U',
-		 utf16be => 'n',
-		 utf16le => 'v',
+		 'UTF-8'    => 'C0U',
+		 'UTF-16BE' => 'n',
+		 'UTF-16LE' => 'v',
 		);
 
 sub bytes_to_utf {
@@ -279,6 +280,9 @@ sub bytes_to_utf {
 
 foreach (sort keys %templates) {
     $i++; do_require(bytes_to_utf($_, qq(print "ok $i # $_\\n"; 1;\n), 1));
+    if ($@ =~ /^(Unsupported script encoding \Q$_\E)/) {
+	print "ok $i # skip $1\n";
+    }
 }
 
 END {

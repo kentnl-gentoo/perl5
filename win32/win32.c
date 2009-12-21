@@ -22,6 +22,7 @@
 #  define WC_NO_BEST_FIT_CHARS 0x00000400 /* requires Windows 2000 or later */
 #endif
 #include <winnt.h>
+#include <commctrl.h>
 #include <tlhelp32.h>
 #include <io.h>
 #include <signal.h>
@@ -3508,6 +3509,27 @@ win32_eof(int fd)
 }
 
 DllExport int
+win32_isatty(int fd)
+{
+    /* The Microsoft isatty() function returns true for *all*
+     * character mode devices, including "nul".  Our implementation
+     * should only return true if the handle has a console buffer.
+     */
+    DWORD mode;
+    HANDLE fh = (HANDLE)_get_osfhandle(fd);
+    if (fh == (HANDLE)-1) {
+        /* errno is already set to EBADF */
+        return 0;
+    }
+
+    if (GetConsoleMode(fh, &mode))
+        return 1;
+
+    errno = ENOTTY;
+    return 0;
+}
+
+DllExport int
 win32_dup(int fd)
 {
     return dup(fd);
@@ -4816,6 +4838,16 @@ Perl_win32_init(int *argcp, char ***argvp)
     _control87(MCW_EM, MCW_EM);
 #endif
     MALLOC_INIT;
+
+    /* When the manifest resource requests Common-Controls v6 then
+     * user32.dll no longer registers all the Windows classes used for
+     * standard controls but leaves some of them to be registered by
+     * comctl32.dll.  InitCommonControls() doesn't do anything but calling
+     * it makes sure comctl32.dll gets loaded into the process and registers
+     * the standard control classes.  Without this even normal Windows APIs
+     * like MessageBox() can fail under some versions of Windows XP.
+     */
+    InitCommonControls();
 
     module = GetModuleHandle("ntdll.dll");
     if (module) {

@@ -1,5 +1,176 @@
 Revision history for Perl extension Module::Build.
 
+0.36 - Sun Dec 20 15:02:38 EST 2009
+
+No changes from 0.35_15 other than the version number.
+
+Summary of major changes since 0.35:
+
+ Enhancements:
+
+ - Added 'Build installdeps' action to install needed dependencies via
+   a user-configurable command line program.  (Defaults to 'cpan'.)
+
+ - Command line options may be set via the PERL_MB_OPT environment
+   variable (similar to PERL_MM_OPT in ExtUtils::MakeMaker)
+
+ - Generates MYMETA.yml during Build.PL (new standard protocol for
+   communicating configuration results between toolchain components)
+
+ - Reduced amount of console output under normal operation (use --verbose
+   to see all output)
+
+ - Added experimental inc/ bundling; see Module::Build::Bundling for
+   details.
+
+ New or changed properties:
+
+ - Added 'share_dir' property to provide File::ShareDir support;
+   File::ShareDir automatically added to 'requires' if 'share_dir' is set
+
+ - Added 'needs_compiler' property.  Defaults to true if XS or c_source
+   exist.  If true, ExtUtils::CBuilder is also added to build_requires.
+
+ - 'C_support' is no longer an optional feature.  Modern ExtUtils::CBuilder
+   and ExtUtils::ParseXS added to the 'requires' list.  This ensures that
+   upgrading Module::Build will upgrade these critical modules.
+
+ - Clarified that 'apache' in the license attribute indicates the Apache
+   License 2.0 and added 'apache_1_1' for the older version of the license
+   (RT#50614)
+
+ Deprecations:
+
+ - Module::Build::Compat 'passthrough' style has been deprecated.  Using
+   'passthrough' will issue warnings on Makefile.PL generation.  See
+   Module::Build::Compat documentation for rationale.
+
+ Internals:
+
+ - Replaced use of YAML.pm with YAML::Tiny; Module::Build::YAML is now
+   based on YAML::Tiny as well
+
+ - A new get_metadata() method has been added as a simpler wrapper around
+   the old, kludgy prepare_metadata() API.
+
+ - Replaced guts of new_from_context().  Build.PL is now executed in a
+   separate process before resume() is called.  (This is generally only of
+   interest to Module::Build or toolchain developers) (RT#49350)
+
+ - Add support for 'package NAME VERSION' syntax added in Perl 5.11.1
+
+ Notable bug fixes:
+
+ - The "test" action now dies when using the 'use_tap_harness'
+   option and tests fail, matching the behavior under Test::Harness.
+   (RT#49080) [initial patch from David Wheeler; revised by David Golden]
+
+ - Updated PPM generation to PPM v4 (RT#49600) [Olivier Mengue]
+
+ - When module_name is not supplied, no packlist was being written; fixed
+   by guessing module_name from dist_version_from or the directory name
+   (just like ExtUtils::Manifest does without NAME) [David Golden]
+
+ - Failure to detect a compiler will now warn during Build.PL and be a
+   fatal error when trying to compile during Build. (RT#48918) [David
+   Golden]
+
+ - Auto-detection of abstract and author fixed for mixed-case POD headers
+   (RT#51117) [David Wheeler]
+
+ - resume() was not restoring additions to @INC added in Build.PL
+   (RT#50145) [David Golden]
+
+ - When tarball paths are less than 100 characters, disables 'prefix'
+   mode of Archive::Tar for maximum compatibility (RT#50571) [David Golden]
+
+ - Merging 'requires' and 'build_requires' in Module::Build::Compat could
+   lead to duplicate PREREQ_PM entries; now the highest version is used
+   for PREREQ_PM. (RT#50948) [David Golden]
+
+ - Module::Build::Compat will now die with an error if advanced,
+   non-numeric prerequisites are given, as these are not supported by
+   ExtUtils::MakeMaker in PREREQ_PM [David Golden]
+
+
+0.35_15 - Thu Dec 17 17:51:22 EST 2009
+
+ Bug fixes:
+
+ - Make sure PPM tests are skipped if IO::File is too old [David Golden]
+
+0.35_14 - Thu Dec 17 16:02:14 EST 2009
+
+ Bug fixes:
+
+ - If not set, the 'module_name' is detected from 'dist_version_from'
+   or from 'dist_name'.  The directory is no longer used. [David Golden]
+
+ - The 'share_dir' property no longer defaults to 'share' and must be
+   explicitly set instead; this fixes problems for CPAN distributions that
+   already have a 'share' directory for whatever reason [David Golden]
+
+ - Change t/00-compile.t test for more portability [David Golden]
+
+ - Skip ppm.t if Pod::Html is not available [David Goldenj]
+
+ - Changed guts of inc::latest to work properly on older versions of Perl
+   [David Golden]
+
+ - Ensure bundle_inc.t doesn't accidentally uninstall the installed M::B
+   during testing if the user had 'uninst=1' set during Build.PL
+   [David Golden]
+
+0.35_13 - Sat Dec  5 11:26:36 EST 2009
+
+ Bug fixes:
+
+ - Protect against tempfile errors when checking ExtUtils::Installed
+   [David Golden]
+
+0.35_12 - Fri Dec  4 23:06:49 EST 2009
+
+ Bug fixes:
+
+ - Protect inc/ bundling tests against broken ExtUtils::Installed
+   [David Golden]
+
+0.35_11 - Thu Dec  3 11:07:44 EST 2009
+
+ *** API CHANGE ***
+
+ - The old API for prepare_metadata() has been restored to avoid breaking
+   distributions that were overriding it (e.g. BioPerl), but the method
+   has been marked deprecated and may be made private or may disappear in
+   some future version of Module::Build. [David Golden]
+
+ - A new get_metadata() method has been added as a simpler wrapper around
+   the old, kludgy prepare_metadata() API. [David Golden]
+
+0.35_10 - Tue Nov 24 22:49:19 EST 2009
+
+ Bug fixes:
+
+ - bundle_inc.t is more careful about permissions and open filehandles
+   to avoid failures/skips on Win32 [David Golden]
+
+ - Fix compilation error in Module::Build::Platform::VMS (RT#51766)
+   [David Golden]
+
+ - Don't generate a MANIFEST.SKIP during distclean and add any generated
+   MANIFEST.SKIP to cleanup list [reported by Zefram, fixed by David Golden]
+
+ - Module::Build::ModuleInfo version parsing would fail if a module sets
+   its $VERSION from another module, but the other module is not installed.
+   We now try to detect such failures, prepend 'lib' to @INC and try again.
+   [David Golden]
+
+ - MYMETA.yml used to be generated from scratch, overriding any
+   customizations used to create META.yml.  Now, if META.yml exists, that
+   will be used as the base for MYMETA and only prereq fields will be
+   updated (to reflect any dynamic configuration); also, 'dynamic_config'
+   will be set to false and 'generated_by' will be updated [David Golden]
+
 0.35_09 - Thu Nov 19 01:30:42 EST 2009
 
  Bug fixes:

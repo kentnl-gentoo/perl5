@@ -28,7 +28,7 @@ L<Pod::Simple::HTML>, but it largely preserves the same interface.
 package Pod::Simple::XHTML;
 use strict;
 use vars qw( $VERSION @ISA $HAS_HTML_ENTITIES );
-$VERSION = '3.10';
+$VERSION = '3.13';
 use Carp ();
 use Pod::Simple::Methody ();
 @ISA = ('Pod::Simple::Methody');
@@ -76,6 +76,16 @@ to put before the "Foo%3a%3aBar". The default value is
 What to put after "Foo%3a%3aBar" in the URL. This option is not set by
 default.
 
+=head2 man_url_prefix
+
+In turning C<< L<crontab(5)> >> into http://whatever/man/1/crontab, what
+to put before the "1/crontab". The default value is
+"http://man.he.net/man".
+
+=head2 man_url_postfix
+
+What to put after "1/crontab" in the URL. This option is not set by default.
+
 =head2 title_prefix, title_postfix
 
 What to put before and after the title in the head. The values should
@@ -106,6 +116,12 @@ default value is just a content type header tag:
 
 Add additional meta tags here, or blocks of inline CSS or JavaScript
 (wrapped in the appropriate tags).
+
+=head2 html_h_level
+
+This is the level of HTML "Hn" element to which a Pod "head1" corresponds.  For
+example, if C<html_h_level> is set to 2, a head1 will produce an H2, a head2
+will produce an H3, and so on.
 
 =head2 default_title
 
@@ -146,11 +162,14 @@ index for the sake of tradition).
 __PACKAGE__->_accessorize(
  'perldoc_url_prefix',
  'perldoc_url_postfix',
+ 'man_url_prefix',
+ 'man_url_postfix',
  'title_prefix',  'title_postfix',
  'html_css', 
  'html_javascript',
  'html_doctype',
  'html_header_tags',
+ 'html_h_level',
  'title', # Used internally for the title extracted from the content
  'default_title',
  'force_title',
@@ -177,8 +196,8 @@ sub new {
   my $self = shift;
   my $new = $self->SUPER::new(@_);
   $new->{'output_fh'} ||= *STDOUT{IO};
-  $new->accept_targets( 'html', 'HTML' );
   $new->perldoc_url_prefix('http://search.cpan.org/perldoc?');
+  $new->man_url_prefix('http://man.he.net/man');
   $new->html_header_tags('<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1" />');
   $new->nix_X_codes(1);
   $new->codes_in_verbatim(1);
@@ -187,6 +206,11 @@ sub new {
   $new->{'output'} = [];
   $new->{'saved'} = [];
   $new->{'ids'} = {};
+
+  $new->{'__region_targets'}  = [];
+  $new->{'__literal_targets'} = {};
+  $new->accept_targets_as_html( 'html', 'HTML' );
+
   return $new;
 }
 
@@ -222,11 +246,31 @@ something like:
       }
   }
 
+=head2 accept_targets_as_html
+
+This method behaves like C<accept_targets_as_text>, but also marks the region
+as one whose content should be emitted literally, without HTML entity escaping
+or wrapping in a C<div> element.
+
 =cut
+
+sub __in_literal_xhtml_region {
+    return unless @{ $_[0]{__region_targets} };
+    my $target = $_[0]{__region_targets}[-1];
+    return $_[0]{__literal_targets}{ $target };
+}
+
+sub accept_targets_as_html {
+    my ($self, @targets) = @_;
+    $self->accept_targets(@targets);
+    $self->{__literal_targets}{$_} = 1 for @targets;
+}
 
 sub handle_text {
     # escape special characters in HTML (<, >, &, etc)
-    $_[0]{'scratch'} .= encode_entities( $_[1] )
+    $_[0]{'scratch'} .= $_[0]->__in_literal_xhtml_region
+                      ? $_[1]
+                      : encode_entities( $_[1] );
 }
 
 sub start_Para     { $_[0]{'scratch'} = '<p>' }
@@ -301,6 +345,11 @@ sub end_Verbatim {
 
 sub _end_head {
     my $h = delete $_[0]{in_head};
+
+    my $add = $_[0]->html_h_level;
+    $add = 1 unless defined $add;
+    $h += $add - 1;
+
     my $id = $_[0]->idify($_[0]{scratch});
     my $text = $_[0]{scratch};
     $_[0]{'scratch'} = qq{<h$h id="$id">$text</h$h>};
@@ -325,15 +374,24 @@ sub end_item_text   {
 # This handles =begin and =for blocks of all kinds.
 sub start_for { 
   my ($self, $flags) = @_;
-  $self->{'scratch'} .= '<div';
-  $self->{'scratch'} .= ' class="'.$flags->{'target'}.'"' if ($flags->{'target'});
-  $self->{'scratch'} .= '>';
+
+  push @{ $self->{__region_targets} }, $flags->{target_matching};
+
+  unless ($self->__in_literal_xhtml_region) {
+    $self->{scratch} .= '<div';
+    $self->{scratch} .= qq( class="$flags->{target}") if $flags->{target};
+    $self->{scratch} .= '>';
+  }
+
   $self->emit;
 
 }
 sub end_for { 
   my ($self) = @_;
-  $self->{'scratch'} .= '</div>';
+
+  $self->{'scratch'} .= '</div>' unless $self->__in_literal_xhtml_region;
+
+  pop @{ $self->{__region_targets} };
   $self->emit;
 }
 
@@ -433,53 +491,24 @@ sub end_B   { $_[0]{'scratch'} .= '</b>' }
 sub start_C { $_[0]{'scratch'} .= '<code>' }
 sub end_C   { $_[0]{'scratch'} .= '</code>' }
 
-sub start_E {
-  my ($self, $flags) = @_;
-  push @{ $self->{'saved'} }, $self->{'scratch'};
-  $self->{'scratch'} = '';
-}
-sub end_E   {
-  my ($self, $flags) = @_;
-  my $previous = pop @{ $self->{'saved'} };
-  my $entity = $self->{'scratch'};
-
-  if ($entity =~ 'sol' or $entity =~ 'verbar') {
-    my $char = Pod::Escapes::e2char($entity);
-    if (defined($char)) {
-      $self->{'scratch'} = $previous . $char;
-      return;
-    }
-  }
-
-  if ($entity =~ /^[0-9]/) {
-      $entity = '#' . $entity;
-  }
-
-  $self->{'scratch'} = $previous . '&'. $entity . ';'
-}
-
 sub start_F { $_[0]{'scratch'} .= '<i>' }
 sub end_F   { $_[0]{'scratch'} .= '</i>' }
 
 sub start_I { $_[0]{'scratch'} .= '<i>' }
 sub end_I   { $_[0]{'scratch'} .= '</i>' }
 
-sub start_L { 
+sub start_L {
   my ($self, $flags) = @_;
-    my $url;
-    if ($flags->{'type'} eq 'url') {
-      $url = $flags->{'to'};
-    } elsif ($flags->{'type'} eq 'pod') {
-      $url .= $self->perldoc_url_prefix || '';
-      $url .= $flags->{'to'} || '';
-      $url .= '/' . $flags->{'section'} if ($flags->{'section'});
-      $url .= $self->perldoc_url_postfix || '';
-#    require Data::Dumper;
-#    print STDERR Data::Dumper->Dump([$flags]);
-    }
+    my ($type, $to, $section) = @{$flags}{'type', 'to', 'section'};
+    my $url = $type eq 'url' ? $to
+            : $type eq 'pod' ? $self->resolve_pod_page_link($to, $section)
+            : $type eq 'man' ? $self->resolve_man_page_link($to, $section)
+            :                  undef;
 
-    $self->{'scratch'} .= '<a href="'. $url . '">';
+    # If it's an unknown type, use an attribute-less <a> like HTML.pm.
+    $self->{'scratch'} .= '<a' . ($url ? ' href="'. $url . '">' : '>');
 }
+
 sub end_L   { $_[0]{'scratch'} .= '</a>' }
 
 sub start_S { $_[0]{'scratch'} .= '<nobr>' }
@@ -494,6 +523,69 @@ sub emit {
   }
   $self->{'scratch'} = '';
   return;
+}
+
+=head2 resolve_pod_page_link
+
+  my $url = $pod->resolve_pod_page_link('Net::Ping', 'INSTALL');
+  my $url = $pod->resolve_pod_page_link('perlpodspec');
+  my $url = $pod->resolve_pod_page_link(undef, 'SYNOPSIS');
+
+Resolves a POD link target (typically a module or POD file name) and section
+name to a URL. The resulting link will be returned for the above examples as:
+
+  http://search.cpan.org/perldoc?Net::Ping#INSTALL
+  http://search.cpan.org/perldoc?perlpodspec
+  #SYNOPSIS
+
+Note that when there is only a section argument the URL will simply be a link
+to a section in the current document.
+
+=cut
+
+sub resolve_pod_page_link {
+    my ($self, $to, $section) = @_;
+    return undef unless defined $to || defined $section;
+    if (defined $section) {
+        $section = '#' . $self->idify($section, 1);
+        return $section unless defined $to;
+    } else {
+        $section = ''
+    }
+
+    return ($self->perldoc_url_prefix || '')
+        . encode_entities($to) . $section
+        . ($self->perldoc_url_postfix || '');
+}
+
+=head2 resolve_man_page_link
+
+  my $url = $pod->resolve_man_page_link('crontab(5)', 'EXAMPLE CRON FILE');
+  my $url = $pod->resolve_man_page_link('crontab');
+
+Resolves a man page link target and numeric section to a URL. The resulting
+link will be returned for the above examples as:
+
+    http://man.he.net/man5/crontab
+    http://man.he.net/man1/crontab
+
+Note that the first argument is required. The section number will be parsed
+from it, and if it's missing will default to 1. The second argument is
+currently ignored, as L<man.he.net|http://man.he.net> does not currently
+include linkable IDs or anchor names in its pages. Subclass to link to a
+different man page HTTP server.
+
+=cut
+
+sub resolve_man_page_link {
+    my ($self, $to, $section) = @_;
+    return undef unless defined $to;
+    my ($page, $part) = $to =~ /^([^(]+)(?:[(](\d+)[)])?$/;
+    return undef unless $page;
+    return ($self->man_url_prefix || '')
+        . ($part || 1) . "/" . encode_entities($page)
+        . ($self->man_url_postfix || '');
+
 }
 
 =head2 idify
@@ -545,8 +637,23 @@ sub idify {
     return "$t$i";
 }
 
-# Bypass built-in E<> handling to preserve entity encoding
-sub _treat_Es {} 
+=head2 batch_mode_page_object_init
+
+  $pod->batch_mode_page_object_init($batchconvobj, $module, $infile, $outfile, $depth);
+
+Called by L<Pod::Simple::HTMLBatch> so that the class has a chance to
+initialize the converter. Internally it sets the C<batch_mode> property to
+true and sets C<batch_mode_current_level()>, but Pod::Simple::XHTML does not
+currently use those features. Subclasses might, though.
+
+=cut
+
+sub batch_mode_page_object_init {
+  my ($self, $batchconvobj, $module, $infile, $outfile, $depth) = @_;
+  $self->batch_mode(1);
+  $self->batch_mode_current_level($depth);
+  return $self;
+}
 
 1;
 
@@ -554,22 +661,57 @@ __END__
 
 =head1 SEE ALSO
 
-L<Pod::Simple>, L<Pod::Simple::Methody>
+L<Pod::Simple>, L<Pod::Simple::Text>, L<Pod::Spell>
 
-=head1 COPYRIGHT
+=head1 SUPPORT
+
+Questions or discussion about POD and Pod::Simple should be sent to the
+pod-people@perl.org mail list. Send an empty email to
+pod-people-subscribe@perl.org to subscribe.
+
+This module is managed in an open GitHub repository,
+L<http://github.com/theory/pod-simple/>. Feel free to fork and contribute, or
+to clone L<git://github.com/theory/pod-simple.git> and send patches!
+
+Patches against Pod::Simple are welcome. Please send bug reports to
+<bug-pod-simple@rt.cpan.org>.
+
+=head1 COPYRIGHT AND DISCLAIMERS
 
 Copyright (c) 2003-2005 Allison Randal.
 
-This library is free software; you can redistribute it and/or modify
-it under the same terms as Perl itself.
+This library is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
 
-This library is distributed in the hope that it will be useful, but
+This program is distributed in the hope that it will be useful, but
 without any warranty; without even the implied warranty of
 merchantability or fitness for a particular purpose.
 
+=head1 ACKNOWLEDGEMENTS
+
+Thanks to L<Hurricane Electrict|http://he.net/> for permission to use its
+L<Linux man pages online|http://man.he.net/> site for man page links.
+
+Thanks to L<search.cpan.org|http://search.cpan.org/> for permission to use the
+site for Perl module links.
+
 =head1 AUTHOR
 
-Allison Randal <allison@perl.org>
+Pod::Simpele::XHTML was created by Allison Randal <allison@perl.org>.
+
+Pod::Simple was created by Sean M. Burke <sburke@cpan.org>.
+But don't bother him, he's retired.
+
+Pod::Simple is maintained by:
+
+=over
+
+=item * Allison Randal C<allison@perl.org>
+
+=item * Hans Dieter Pearcey C<hdp@cpan.org>
+
+=item * David E. Wheeler C<dwheeler@cpan.org>
+
+=back
 
 =cut
-
