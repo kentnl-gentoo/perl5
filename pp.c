@@ -3170,7 +3170,7 @@ PP(pp_substr)
 	const I32 upos = pos;
 	const I32 urem = rem;
 	if (utf8_curlen)
-	    sv_pos_u2b(sv, &pos, &rem);
+	    sv_pos_u2b(sv, (I32 *)&pos, (I32 *)&rem);
 	tmps += pos;
 	/* we either return a PV or an LV. If the TARG hasn't been used
 	 * before, or is of that type, reuse it; otherwise use a mortal

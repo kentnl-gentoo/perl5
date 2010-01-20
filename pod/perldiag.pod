@@ -115,8 +115,8 @@ which 'splits' output into two streams, such as
 (W misc) The pattern match (C<//>), substitution (C<s///>), and
 transliteration (C<tr///>) operators work on scalar values.  If you apply
 one of them to an array or a hash, it will convert the array or hash to
-a scalar value -- the length of an array, or the population info of a
-hash -- and then work on that scalar value.  This is probably not what
+a scalar value (the length of an array, or the population info of a
+hash) and then work on that scalar value.  This is probably not what
 you meant to do.  See L<perlfunc/grep> and L<perlfunc/map> for
 alternatives.
 
@@ -526,6 +526,11 @@ from that type of reference to a typeglob.
 (P) Perl detected an attempt to copy a value to an internal type that cannot
 be directly assigned not.
 
+=item Cannot find encoding "%s"
+
+(S io) You tried to apply an encoding that did not exist to a filehandle,
+either with open() or binmode().
+
 =item Can only compress unsigned integers in pack
 
 (F) An argument to pack("w",...) was not an integer.  The BER compressed
@@ -717,9 +722,9 @@ is no builtin with the name C<word>.
 =item Can't find %s character property "%s"
 
 (F) You used C<\p{}> or C<\P{}> but the character property by that name
-could not be found. Maybe you misspelled the name of the property
-(remember that the names of character properties consist only of
-alphanumeric characters), or maybe you forgot the C<Is> or C<In> prefix?
+could not be found. Maybe you misspelled the name of the property?
+See L<perluniprops/Properties accessible through \p{} and \P{}>
+for a complete list of available properties.
 
 =item Can't find label %s
 
@@ -752,8 +757,10 @@ editor will have a way to help you find these characters.
 =item Can't find Unicode property definition "%s"
 
 (F) You may have tried to use C<\p> which means a Unicode property (for
-example C<\p{Lu}> is all uppercase letters).  If you did mean to use a
-Unicode property, see L<perlunicode> for the list of known properties.
+example C<\p{Lu}> matches all uppercase letters).  If you did mean to use a
+Unicode property, see
+L<perluniprops/Properties accessible through \p{} and \P{}>
+for a complete list of available properties.
 If you didn't mean to use a Unicode property, escape the C<\p>, either
 by C<\\p> (just the C<\p>) or by C<\Q\p> (the rest of the string, until
 possible C<\E>).
@@ -1924,8 +1931,8 @@ to your Perl administrator.
 
 =item Illegal character in prototype for %s : %s
 
-(W syntax) An illegal character was found in a prototype declaration.  Legal
-characters in prototypes are $, @, %, *, ;, [, ], &, and \.
+(W illegalproto) An illegal character was found in a prototype declaration.
+Legal characters in prototypes are $, @, %, *, ;, [, ], &, and \.
 
 =item Illegal declaration of anonymous subroutine
 
@@ -2304,6 +2311,14 @@ You may wish to switch to using L<Math::BigInt> explicitly.
 (W io) You tried to do an lstat on a filehandle.  What did you mean
 by that?  lstat() makes sense only on filenames.  (Perl did a fstat()
 instead on the filehandle.)
+
+=item lvalue attribute ignored after the subroutine has been defined
+
+(W misc) Making a subroutine an lvalue subroutine after it has been defined
+by declaring the subroutine with a lvalue attribute is not
+possible. To make the the subroutine a lvalue subroutine add the
+lvalue attribute to the definition, or put the the declaration before
+the definition.
 
 =item Lvalue subs returning %s not implemented yet
 
@@ -3533,7 +3548,7 @@ in L<perlos2>.
 
 =item Prototype after '%c' for %s : %s
 
-(W syntax) A character follows % or @ in a prototype. This is useless,
+(W illegalproto) A character follows % or @ in a prototype. This is useless,
 since % and @ gobble the rest of the subroutine arguments.
 
 =item Prototype mismatch: %s vs %s
@@ -4916,7 +4931,7 @@ requesting a Unicode character between the code points 0xD800 and
 0xDFFF (inclusive).  That range is reserved exclusively for the use of
 UTF-16 encoding (by having two 16-bit UCS-2 characters); but Perl
 encodes its characters in UTF-8, so what you got is a very illegal
-character.  If you really know what you are doing you can turn off
+character.  If you really really know what you are doing you can turn off
 this warning by C<no warnings 'utf8';>.
 
 =item Value of %s can be "0"; test with defined()

@@ -3,7 +3,7 @@
 # Checks if the parser behaves correctly in edge cases
 # (including weird syntax errors)
 
-print "1..117\n";
+print "1..122\n";
 
 sub failed {
     my ($got, $expected, $name) = @_;
@@ -332,6 +332,26 @@ like($@, qr/BEGIN failed--compilation aborted/, 'BEGIN 7' );
   eval qq[ for $x ];
   like($@, qr/Identifier too long/, "too long id ticket case");
 }
+
+{
+  is(exists &zlonk, '', 'sub not present');
+  eval qq[ {sub zlonk} ];
+  is($@, '', 'sub declaration followed by a closing curly');
+  is(exists &zlonk, 1, 'sub now stubbed');
+  is(defined &zlonk, '', 'but no body defined');
+}
+
+# bug #71748
+eval q{
+	$_ = "";
+	s/(.)/
+	{
+	    #
+	}->{$1};
+	/e;
+	1;
+};
+is($@, "", "multiline whitespace inside substitute expression");
 
 # Add new tests HERE:
 

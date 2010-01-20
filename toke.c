@@ -1401,12 +1401,14 @@ chunk will not be discarded.
 =cut
 */
 
+#define LEX_NO_NEXT_CHUNK 0x80000000
+
 void
 Perl_lex_read_space(pTHX_ U32 flags)
 {
     char *s, *bufend;
     bool need_incline = 0;
-    if (flags & ~(LEX_KEEP_PREVIOUS))
+    if (flags & ~(LEX_KEEP_PREVIOUS|LEX_NO_NEXT_CHUNK))
 	Perl_croak(aTHX_ "Lexing code internal error (%s)", "lex_read_space");
 #ifdef PERL_MAD
     if (PL_skipwhite) {
@@ -1439,6 +1441,8 @@ Perl_lex_read_space(pTHX_ U32 flags)
 	    if (PL_madskills)
 		sv_catpvn(PL_skipwhite, PL_parser->bufptr, s-PL_parser->bufptr);
 #endif /* PERL_MAD */
+	    if (flags & LEX_NO_NEXT_CHUNK)
+		break;
 	    PL_parser->bufptr = s;
 	    CopLINE_inc(PL_curcop);
 	    got_more = lex_next_chunk(flags);
@@ -1714,20 +1718,12 @@ S_skipspace(pTHX_ register char *s)
     if (PL_lex_formbrack && PL_lex_brackets <= PL_lex_formbrack) {
 	while (s < PL_bufend && SPACE_OR_TAB(*s))
 	    s++;
-    } else if (PL_sublex_info.sub_inwhat || PL_lex_state == LEX_FORMLINE) {
-	while (isSPACE(*s) && *s != '\n')
-	    s++;
-	if (*s == '#') {
-	    do {
-		s++;
-	    } while (s != PL_bufend && *s != '\n');
-	}
-	if (*s == '\n')
-	    s++;
     } else {
 	STRLEN bufptr_pos = PL_bufptr - SvPVX(PL_linestr);
 	PL_bufptr = s;
-	lex_read_space(LEX_KEEP_PREVIOUS);
+	lex_read_space(LEX_KEEP_PREVIOUS |
+		(PL_sublex_info.sub_inwhat || PL_lex_state == LEX_FORMLINE ?
+		    LEX_NO_NEXT_CHUNK : 0));
 	s = PL_bufptr;
 	PL_bufptr = SvPVX(PL_linestr) + bufptr_pos;
 	if (PL_linestart > PL_bufptr)
@@ -2097,7 +2093,13 @@ S_force_version(pTHX_ char *s, int guessing)
 #endif
         if (*d == ';' || isSPACE(*d) || *d == '}' || !*d) {
 	    SV *ver;
+#ifdef USE_LOCALE_NUMERIC
+	    char *loc = setlocale(LC_NUMERIC, "C");
+#endif
             s = scan_num(s, &pl_yylval);
+#ifdef USE_LOCALE_NUMERIC
+	    setlocale(LC_NUMERIC, loc);
+#endif
             version = pl_yylval.opval;
 	    ver = cSVOPx(version)->op_sv;
 	    if (SvPOK(ver) && !SvNIOK(ver)) {
@@ -2116,6 +2118,53 @@ S_force_version(pTHX_ char *s, int guessing)
 #endif
 	    return s;
 	}
+    }
+
+#ifdef PERL_MAD
+    if (PL_madskills && !version) {
+	sv_free(PL_nextwhite);	/* let next token collect whitespace */
+	PL_nextwhite = 0;
+	s = SvPVX(PL_linestr) + startoff;
+    }
+#endif
+    /* NOTE: The parser sees the package name and the VERSION swapped */
+    start_force(PL_curforce);
+    NEXTVAL_NEXTTOKE.opval = version;
+    force_next(WORD);
+
+    return s;
+}
+
+/*
+ * S_force_strict_version
+ * Forces the next token to be a version number using strict syntax rules.
+ */
+
+STATIC char *
+S_force_strict_version(pTHX_ char *s)
+{
+    dVAR;
+    OP *version = NULL;
+#ifdef PERL_MAD
+    I32 startoff = s - SvPVX(PL_linestr);
+#endif
+    const char *errstr = NULL;
+
+    PERL_ARGS_ASSERT_FORCE_STRICT_VERSION;
+
+    while (isSPACE(*s)) /* leading whitespace */
+	s++;
+
+    if (is_STRICT_VERSION(s,&errstr)) {
+	SV *ver = newSV(0);
+	s = (char *)scan_version(s, ver, 0);
+	version = newSVOP(OP_CONST, 0, ver);
+    }
+    else if ( (*s != ';' && *s != '}' ) && (s = SKIPSPACE1(s), (*s != ';' && *s !='}' ))) {
+	PL_bufptr = s;
+	if (errstr)
+	    yyerror(errstr); /* version required */
+	return s;
     }
 
 #ifdef PERL_MAD
@@ -6965,7 +7014,7 @@ Perl_yylex(pTHX)
 
 	case KEY_package:
 	    s = force_word(s,WORD,FALSE,TRUE,FALSE);
-	    s = force_version(s, FALSE);
+	    s = force_strict_version(s);
 	    OPERATOR(PACKAGE);
 
 	case KEY_pipe:
@@ -7352,7 +7401,7 @@ Perl_yylex(pTHX)
 		    bool must_be_last = FALSE;
 		    bool underscore = FALSE;
 		    bool seen_underscore = FALSE;
-		    const bool warnsyntax = ckWARN(WARN_SYNTAX);
+		    const bool warnillegalproto = ckWARN(WARN_ILLEGALPROTO);
 
 		    s = scan_str(s,!!PL_madskills,FALSE);
 		    if (!s)
@@ -7364,7 +7413,7 @@ Perl_yylex(pTHX)
 			if (!isSPACE(*p)) {
 			    d[tmp++] = *p;
 
-			    if (warnsyntax) {
+			    if (warnillegalproto) {
 				if (must_be_last)
 				    proto_after_greedy_proto = TRUE;
 				if (!strchr("$@%*;[]&\\_", *p)) {
@@ -7397,11 +7446,11 @@ Perl_yylex(pTHX)
 		    }
 		    d[tmp] = '\0';
 		    if (proto_after_greedy_proto)
-			Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
+			Perl_warner(aTHX_ packWARN(WARN_ILLEGALPROTO),
 				    "Prototype after '%c' for %"SVf" : %s",
 				    greedy_proto, SVfARG(PL_subname), d);
 		    if (bad_proto)
-			Perl_warner(aTHX_ packWARN(WARN_SYNTAX),
+			Perl_warner(aTHX_ packWARN(WARN_ILLEGALPROTO),
 				    "Illegal character %sin prototype for %"SVf" : %s",
 				    seen_underscore ? "after '_' " : "",
 				    SVfARG(PL_subname), d);
@@ -7432,7 +7481,7 @@ Perl_yylex(pTHX)
 		else if (*s != '{' && key == KEY_sub) {
 		    if (!have_name)
 			Perl_croak(aTHX_ "Illegal declaration of anonymous subroutine");
-		    else if (*s != ';')
+		    else if (*s != ';' && *s != '}')
 			Perl_croak(aTHX_ "Illegal declaration of subroutine %"SVf, SVfARG(PL_subname));
 		}
 

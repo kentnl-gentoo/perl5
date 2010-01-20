@@ -6,7 +6,7 @@ use Scalar::Util qw(reftype);
 use Config qw(%Config);
 use constant is_usethreads => $Config{usethreads};
 
-$Safe::VERSION = "2.20";
+$Safe::VERSION = "2.21";
 
 # *** Don't declare any lexicals above this point ***
 #
@@ -62,6 +62,8 @@ my $default_share = [qw[
     &utf8::unicode_to_native
     $version::VERSION
     $version::CLASS
+    $version::STRICT
+    $version::LAX
     @version::ISA
 ], ($] >= 5.008001 && qw[
     &Regexp::DESTROY
@@ -306,7 +308,11 @@ sub reval {
         for my $ret (@ret) { # edit (via alias) any CODE refs
             next unless (reftype($ret)||'') eq 'CODE';
             my $sub = $ret; # avoid closure problems
-            $ret = sub { Opcode::_safe_call_sv($root, $obj->{Mask}, $sub) };
+            $ret = sub {
+                my @args = @_; # lexical to close over
+                my $sub_with_args = sub { $sub->(@args) };
+                return Opcode::_safe_call_sv($root, $obj->{Mask}, $sub_with_args)
+            };
         }
     }
 

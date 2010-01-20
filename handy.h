@@ -208,7 +208,7 @@ typedef U64TYPE U64;
  * GMTIME_MAX	GMTIME_MIN	LOCALTIME_MAX	LOCALTIME_MIN
  * HAS_CTIME64	HAS_LOCALTIME64	HAS_GMTIME64	HAS_DIFFTIME64
  * HAS_MKTIME64	HAS_ASCTIME64	HAS_GETADDRINFO	HAS_GETNAMEINFO
- * HAS_INETNTOP	HAS_INETPTON
+ * HAS_INETNTOP	HAS_INETPTON	CHARBITS
  * Not (yet) used at top level, but mention them for metaconfig
  */
 
@@ -656,6 +656,18 @@ US-ASCII (Basic Latin) range are viewed as not having any case.
 typedef U32 line_t;
 #define NOLINE ((line_t) 4294967295UL)
 
+/* Helpful alias for version prescan */
+#define is_LAX_VERSION(a,b) \
+	(a != Perl_prescan_version(aTHX_ a, FALSE, b, NULL, NULL, NULL, NULL))
+
+#define is_STRICT_VERSION(a,b) \
+	(a != Perl_prescan_version(aTHX_ a, TRUE, b, NULL, NULL, NULL, NULL))
+
+#define BADVERSION(a,b,c) \
+	if (b) { \
+	    *b = c; \
+	} \
+	return a;
 
 /*
 =head1 Memory Management

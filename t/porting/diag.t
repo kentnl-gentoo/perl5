@@ -11,6 +11,7 @@ $|=1;
 my $make_exceptions_list = ($ARGV[0]||'') eq '--make-exceptions-list';
 
 chdir '..' or die "Can't chdir ..: $!";
+BEGIN { defined $ENV{PERL_UNICODE} and push @INC, "lib"; }
 
 open my $diagfh, "<", "pod/perldiag.pod"
   or die "Can't open pod/perldiag.pod: $!";
@@ -272,6 +273,12 @@ Invalid type '%c' in pack
 Invalid type '%c' in %s
 Invalid type '%c' in unpack
 Invalid type ',' in %s
+Invalid strict version format (0 before decimal required)
+Invalid strict version format (no leading zeros)
+Invalid strict version format (no underscores)
+Invalid strict version format (v1.2.3 required)
+Invalid strict version format (version required)
+Invalid strict version format (1.[0-9] required)
 Invalid version format (alpha without decimal)
 Invalid version format (misplaced _ in number)
 Invalid version object

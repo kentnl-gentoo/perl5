@@ -46,6 +46,7 @@ my $tree = {
        	 			'printf'	=> [ 5.008, DEFAULT_OFF],
        	 			'prototype'	=> [ 5.008, DEFAULT_OFF],
        	 			'qw'		=> [ 5.008, DEFAULT_OFF],
+                                'illegalproto'  => [ 5.011, DEFAULT_OFF],
 			   }],
        	'severe'	=> [ 5.008, { 	
 				'inplace'	=> [ 5.008, DEFAULT_ON],
@@ -451,7 +452,7 @@ __END__
 
 package warnings;
 
-our $VERSION = '1.08';
+our $VERSION = '1.09';
 
 # Verify that we're called correctly so that warnings will work.
 # see also strict.pm.

@@ -559,7 +559,11 @@ all: $(FIRSTMAKEFILE) $(MINIPERL_EXE) miniperl $(generated_pods) $(private) $(un
 
 .PHONY: all translators utilities
 
-lib/Config_git.pl git_version.h: $(MINIPERL_EXE) make_patchnum.pl
+# Both git_version.h and lib/Config_git.pl are built
+# by make_patchnum.pl.
+git_version.h: lib/Config_git.pl
+
+lib/Config_git.pl: $(MINIPERL_EXE) make_patchnum.pl
 	$(MINIPERL) make_patchnum.pl
 
 # make sure that we recompile perl.c if the git version changes
@@ -603,7 +607,9 @@ perlmini\$(OBJ_EXT): perlmini.c
 
 globals\$(OBJ_EXT): uudmap.h bitcount.h
 
-uudmap.h bitcount.h: generate_uudmap\$(HOST_EXE_EXT)
+uudmap.h: bitcount.h
+
+bitcount.h: generate_uudmap\$(HOST_EXE_EXT)
 	\$(RUN) ./generate_uudmap\$(HOST_EXE_EXT) uudmap.h bitcount.h
 
 generate_uudmap\$(HOST_EXE_EXT): generate_uudmap\$(OBJ_EXT)
@@ -966,7 +972,9 @@ $spitshell >>$Makefile <<'!NO!SUBS!'
 .PHONY: preplibrary
 preplibrary: $(MINIPERL_EXE) $(CONFIGPM) lib/re.pm $(PREPLIBRARY_LIBPERL)
 
-$(CONFIGPM_FROM_CONFIG_SH) $(CONFIGPOD): config.sh $(MINIPERL_EXE) configpm Porting/Glossary lib/Config_git.pl
+$(CONFIGPM_FROM_CONFIG_SH): $(CONFIGPOD)
+
+$(CONFIGPOD): config.sh $(MINIPERL_EXE) configpm Porting/Glossary lib/Config_git.pl
 	$(MINIPERL) configpm
 
 lib/ExtUtils/Miniperl.pm: miniperlmain.c $(MINIPERL_EXE) minimod.pl $(CONFIGPM)
@@ -997,14 +1005,16 @@ uni.data: $(MINIPERL_EXE) $(CONFIGPM) lib/unicore/mktables $(nonxs_ext)
 pod/perltoc.pod: $(perltoc_pod_prereqs)  $(PERL_EXE) $(ext) pod/buildtoc
 	$(RUN_PERL) -f -Ilib pod/buildtoc --build-toc -q
 
-pod/perlapi.pod pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
+pod/perlapi.pod: pod/perlintern.pod
+
+pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 	$(MINIPERL) autodoc.pl
 
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perldelta.pod: pod/perl5113delta.pod
-	$(LNS) perl5113delta.pod pod/perldelta.pod
+pod/perldelta.pod: pod/perl5114delta.pod
+	$(LNS) perl5114delta.pod pod/perldelta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`

@@ -186,7 +186,7 @@ use File::Glob qw(:case);
     'Archive::Extract' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.36.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.38.tar.gz',
 	'FILES'		=> q[cpan/Archive-Extract],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -660,7 +660,7 @@ use File::Glob qw(:case);
     'File::Fetch' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/File-Fetch-0.22.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/File-Fetch-0.24.tar.gz',
 	'FILES'		=> q[cpan/File-Fetch],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -1004,7 +1004,7 @@ use File::Glob qw(:case);
     'Module::Build' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.36.tar.gz',
+	'DISTRIBUTION'	=> 'DAGOLDEN/Module-Build-0.3603.tar.gz',
 	'FILES'		=> q[cpan/Module-Build],
 	'EXCLUDED'	=> [ qw{ t/par.t t/signature.t },
 			     qr!^contrib/!,  qr!^devtools! ],

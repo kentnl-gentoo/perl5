@@ -786,7 +786,7 @@ to survive its use on the stack you need not do any mortalization.
 If you are not sure then doing an C<SvREFCNT_inc> and C<sv_2mortal>, or
 making a C<sv_mortalcopy> is safer.
 
-The mortal routines are not just for SVs -- AVs and HVs can be
+The mortal routines are not just for SVs; AVs and HVs can be
 made mortal by passing their address (type-casted to C<SV*>) to the
 C<sv_2mortal> or C<sv_mortalcopy> routines.
 
@@ -1624,11 +1624,10 @@ and C<dXSTARG>.
 =head2 Scratchpads
 
 The question remains on when the SVs which are I<target>s for opcodes
-are created. The answer is that they are created when the current unit --
-a subroutine or a file (for opcodes for statements outside of
-subroutines) -- is compiled. During this time a special anonymous Perl
-array is created, which is called a scratchpad for the current
-unit.
+are created. The answer is that they are created when the current
+unit--a subroutine or a file (for opcodes for statements outside of
+subroutines)--is compiled. During this time a special anonymous Perl
+array is created, which is called a scratchpad for the current unit.
 
 A scratchpad keeps SVs which are lexicals for the current unit and are
 targets for opcodes. One can deduce that an SV lives on a scratchpad
@@ -1895,7 +1894,7 @@ MULTIPLICITY build has a C structure that packages all the interpreter
 state. With multiplicity-enabled perls, PERL_IMPLICIT_CONTEXT is also
 normally defined, and enables the support for passing in a "hidden" first
 argument that represents all three data structures. MULTIPLICITY makes
-mutli-threaded perls possible (with the ithreads threading model, related
+multi-threaded perls possible (with the ithreads threading model, related
 to the macro USE_ITHREADS.)
 
 Two other "encapsulation" macros are the PERL_GLOBAL_STRUCT and
@@ -2512,7 +2511,8 @@ Currently, Perl deals with Unicode strings and non-Unicode strings
 slightly differently. A flag in the SV, C<SVf_UTF8>, indicates that the
 string is internally encoded as UTF-8. Without it, the byte value is the
 codepoint number and vice versa (in other words, the string is encoded
-as iso-8859-1). You can check and manipulate this flag with the
+as iso-8859-1, but C<use feature 'unicode_strings'> is needed to get iso-8859-1
+semantics). You can check and manipulate this flag with the
 following macros:
 
     SvUTF8(sv)
@@ -2652,8 +2652,7 @@ C<PL_custom_op_descs> and C<PL_custom_op_names> hashes. This means you
 need to enter a name and description for your op at the appropriate
 place in the C<PL_custom_op_names> and C<PL_custom_op_descs> hashes.
 
-Forthcoming versions of C<B::Generate> (version 1.0 and above) should
-directly support the creation of custom ops by name.
+C<B::Generate> directly supports the creation of custom ops by name.
 
 =head1 AUTHORS
 

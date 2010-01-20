@@ -155,19 +155,20 @@ PP(pp_regcomp)
 	   ly this hack can be replaced with the approach described at
 	   http://www.nntp.perl.org/group/perl.perl5.porters/2007/03
 	   /msg122415.html some day. */
-	OP *matchop = pm->op_next;
-	SV *lhs;
-	const bool was_tainted = PL_tainted;
-	if (matchop->op_flags & OPf_STACKED)
+	if(pm->op_type == OP_MATCH) {
+	 SV *lhs;
+	 const bool was_tainted = PL_tainted;
+	 if (pm->op_flags & OPf_STACKED)
 	    lhs = TOPs;
-	else if (matchop->op_private & OPpTARGET_MY)
-	    lhs = PAD_SV(matchop->op_targ);
-	else lhs = DEFSV;
-	SvGETMAGIC(lhs);
-	/* Restore the previous value of PL_tainted (which may have been
-	   modified by get-magic), to avoid incorrectly setting the
-	   RXf_TAINTED flag further down. */
-	PL_tainted = was_tainted;
+	 else if (pm->op_private & OPpTARGET_MY)
+	    lhs = PAD_SV(pm->op_targ);
+	 else lhs = DEFSV;
+	 SvGETMAGIC(lhs);
+	 /* Restore the previous value of PL_tainted (which may have been
+	    modified by get-magic), to avoid incorrectly setting the
+	    RXf_TAINTED flag further down. */
+	 PL_tainted = was_tainted;
+	}
 
 	re = reg_temp_copy(NULL, re);
 	ReREFCNT_dec(PM_GETRE(pm));
@@ -1881,7 +1882,7 @@ PP(pp_dbstate)
 	    /* don't do recursive DB::DB call */
 	    return NORMAL;
 
-	ENTER_with_name("sub");
+	ENTER;
 	SAVETMPS;
 
 	SAVEI32(PL_debug);
@@ -1896,7 +1897,7 @@ PP(pp_dbstate)
 	    (void)(*CvXSUB(cv))(aTHX_ cv);
 	    CvDEPTH(cv)--;
 	    FREETMPS;
-	    LEAVE_with_name("sub");
+	    LEAVE;
 	    return NORMAL;
 	}
 	else {
@@ -2559,7 +2560,7 @@ PP(pp_goto)
 		PUSHMARK(mark);
 		PUTBACK;
 		(void)(*CvXSUB(cv))(aTHX_ cv);
-		LEAVE_with_name("sub");
+		LEAVE;
 		return retop;
 	    }
 	    else {
@@ -3275,21 +3276,21 @@ PP(pp_require)
 			SVfARG(vnormal(PL_patchlevel)));
 		}
 		else { /* probably 'use 5.10' or 'use 5.8' */
-		    SV * hintsv = newSV(0);
+		    SV *hintsv;
 		    I32 second = 0;
 
 		    if (av_len(lav)>=1) 
 			second = SvIV(*av_fetch(lav,1,0));
 
 		    second /= second >= 600  ? 100 : 10;
-		    hintsv = Perl_newSVpvf(aTHX_ "v%d.%d.%d",
-		    	(int)first, (int)second,0);
+		    hintsv = Perl_newSVpvf(aTHX_ "v%d.%d.0",
+					   (int)first, (int)second);
 		    upg_version(hintsv, TRUE);
 
 		    DIE(aTHX_ "Perl %"SVf" required (did you mean %"SVf"?)"
 		    	"--this is only %"SVf", stopped",
 			SVfARG(vnormal(req)),
-			SVfARG(vnormal(hintsv)),
+			SVfARG(vnormal(sv_2mortal(hintsv))),
 			SVfARG(vnormal(PL_patchlevel)));
 		}
 	    }

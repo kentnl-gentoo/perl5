@@ -2986,11 +2986,17 @@ Perl_sv_2pv_flags(pTHX_ register SV *const sv, STRLEN *const lp, const I32 flags
 	    gv_efullname3(buffer, gv, "*");
 	    SvFLAGS(gv) |= wasfake;
 
-	    assert(SvPOK(buffer));
-	    if (lp) {
-		*lp = SvCUR(buffer);
+	    if (SvPOK(buffer)) {
+		if (lp) {
+		    *lp = SvCUR(buffer);
+		}
+		return SvPVX(buffer);
 	    }
-	    return SvPVX(buffer);
+	    else {
+		if (lp)
+		    *lp = 0;
+		return (char *)"";
+	    }
 	}
 
 	if (lp)
@@ -5658,7 +5664,8 @@ Perl_sv_clear(pTHX_ register SV *const sv)
 			&& !CvCONST(destructor)
 			/* Don't bother calling an empty destructor */
 			&& (CvISXSUB(destructor)
-			|| CvSTART(destructor)->op_next->op_type != OP_LEAVESUB))
+			|| (CvSTART(destructor)
+			    && (CvSTART(destructor)->op_next->op_type != OP_LEAVESUB))))
 		{
 		    SV* const tmpref = newRV(sv);
 	            SvREADONLY_on(tmpref);   /* DESTROY() could be naughty */
@@ -11035,10 +11042,23 @@ Perl_sv_dup(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		    GvNAME_HEK(dstr) = hek_dup(GvNAME_HEK(dstr), param);
 		    /* Don't call sv_add_backref here as it's going to be
 		       created as part of the magic cloning of the symbol
-		       table.  */
+		       table--unless this is during a join and the stash
+		       is not actually being cloned.  */
 		    /* Danger Will Robinson - GvGP(dstr) isn't initialised
 		       at the point of this comment.  */
 		    GvSTASH(dstr) = hv_dup(GvSTASH(dstr), param);
+		    if(param->flags & CLONEf_JOIN_IN) {
+			const HEK * const hvname
+			 = HvNAME_HEK(GvSTASH(dstr));
+			if( hvname
+			 && GvSTASH(dstr) == gv_stashpvn(
+			     HEK_KEY(hvname), HEK_LEN(hvname), 0
+			    )
+			  )
+			    Perl_sv_add_backref(
+			     aTHX_ MUTABLE_SV(GvSTASH(dstr)), dstr
+			    );
+		    }
 		    GvGP(dstr)	= gp_dup(GvGP(sstr), param);
 		    (void)GpREFCNT_inc(GvGP(dstr));
 		} else
@@ -11091,6 +11111,11 @@ Perl_sv_dup(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 		    else {
 			while (items-- > 0)
 			    *dst_ary++ = sv_dup(*src_ary++, param);
+			if (!(param->flags & CLONEf_COPY_STACKS)
+			     && AvREIFY(sstr))
+			{
+			    av_reify(MUTABLE_AV(dstr)); /* #41138 */
+			}
 		    }
 		    items = AvMAX((const AV *)sstr) - AvFILLp((const AV *)sstr);
 		    while (items-- > 0) {
@@ -11797,12 +11822,20 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PerlInterpreter * const my_perl = (PerlInterpreter*)(*ipM->pMalloc)(ipM, sizeof(PerlInterpreter));
 
     PERL_ARGS_ASSERT_PERL_CLONE_USING;
+#else		/* !PERL_IMPLICIT_SYS */
+    IV i;
+    CLONE_PARAMS clone_params;
+    CLONE_PARAMS* param = &clone_params;
+    PerlInterpreter * const my_perl = (PerlInterpreter*)PerlMem_malloc(sizeof(PerlInterpreter));
+
+    PERL_ARGS_ASSERT_PERL_CLONE;
+#endif		/* PERL_IMPLICIT_SYS */
 
     /* for each stash, determine whether its objects should be cloned */
     S_visit(proto_perl, do_mark_cloneable_stash, SVt_PVHV, SVTYPEMASK);
     PERL_SET_THX(my_perl);
 
-#  ifdef DEBUGGING
+#ifdef DEBUGGING
     PoisonNew(my_perl, 1, PerlInterpreter);
     PL_op = NULL;
     PL_curcop = NULL;
@@ -11815,10 +11848,14 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_sig_pending = 0;
     PL_parser = NULL;
     Zero(&PL_debug_pad, 1, struct perl_debug_pad);
-#  else	/* !DEBUGGING */
+#  ifdef DEBUG_LEAKING_SCALARS
+    PL_sv_serial = (((U32)my_perl >> 2) & 0xfff) * 1000000;
+#  endif
+#else	/* !DEBUGGING */
     Zero(my_perl, 1, PerlInterpreter);
-#  endif	/* DEBUGGING */
+#endif	/* DEBUGGING */
 
+#ifdef PERL_IMPLICIT_SYS
     /* host pointers */
     PL_Mem		= ipM;
     PL_MemShared	= ipMS;
@@ -11829,35 +11866,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_Dir		= ipD;
     PL_Sock		= ipS;
     PL_Proc		= ipP;
-#else		/* !PERL_IMPLICIT_SYS */
-    IV i;
-    CLONE_PARAMS clone_params;
-    CLONE_PARAMS* param = &clone_params;
-    PerlInterpreter * const my_perl = (PerlInterpreter*)PerlMem_malloc(sizeof(PerlInterpreter));
-
-    PERL_ARGS_ASSERT_PERL_CLONE;
-
-    /* for each stash, determine whether its objects should be cloned */
-    S_visit(proto_perl, do_mark_cloneable_stash, SVt_PVHV, SVTYPEMASK);
-    PERL_SET_THX(my_perl);
-
-#    ifdef DEBUGGING
-    PoisonNew(my_perl, 1, PerlInterpreter);
-    PL_op = NULL;
-    PL_curcop = NULL;
-    PL_markstack = 0;
-    PL_scopestack = 0;
-    PL_scopestack_name = 0;
-    PL_savestack = 0;
-    PL_savestack_ix = 0;
-    PL_savestack_max = -1;
-    PL_sig_pending = 0;
-    PL_parser = NULL;
-    Zero(&PL_debug_pad, 1, struct perl_debug_pad);
-#    else	/* !DEBUGGING */
-    Zero(my_perl, 1, PerlInterpreter);
-#    endif	/* DEBUGGING */
 #endif		/* PERL_IMPLICIT_SYS */
+
     param->flags = flags;
     param->proto_perl = proto_perl;
 
@@ -11916,6 +11926,10 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     SvIV_set(&PL_sv_yes, 1);
     SvNV_set(&PL_sv_yes, 1);
     ptr_table_store(PL_ptr_table, &proto_perl->Isv_yes, &PL_sv_yes);
+
+    /* dbargs array probably holds garbage; give the child a clean array */
+    PL_dbargs		= newAV();
+    ptr_table_store(PL_ptr_table, proto_perl->Idbargs, PL_dbargs);
 
     /* create (a non-shared!) shared string table */
     PL_strtab		= newHV();
@@ -12043,7 +12057,6 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     PL_DBsingle		= sv_dup(proto_perl->IDBsingle, param);
     PL_DBtrace		= sv_dup(proto_perl->IDBtrace, param);
     PL_DBsignal		= sv_dup(proto_perl->IDBsignal, param);
-    PL_dbargs		= av_dup(proto_perl->Idbargs, param);
 
     /* symbol tables */
     PL_defstash		= hv_dup_inc(proto_perl->Idefstash, param);

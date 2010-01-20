@@ -257,8 +257,7 @@ X<word> X<whitespace> X<character class> X<backreference>
     \D	     Match a non-digit character
     \pP	     Match P, named property.  Use \p{Prop} for longer names.
     \PP	     Match non-P
-    \X	     Match eXtended Unicode "combining character sequence",
-             equivalent to (?>\PM\pM*)
+    \X	     Match Unicode "eXtended grapheme cluster"
     \C	     Match a single C char (octet) even under Unicode.
 	     NOTE: breaks up characters into their UTF-8 bytes,
 	     so you may end up with malformed pieces of UTF-8.
@@ -517,7 +516,6 @@ left parentheses have opened before it.  Likewise \11 is a
 backreference only if at least 11 left parentheses have opened
 before it.  And so on.  \1 through \9 are always interpreted as
 backreferences.
-
 If the bracketing group did not match, the associated backreference won't
 match either. (This can happen if the bracketing group is optional, or
 in a different branch of an alternation.)
@@ -1037,6 +1035,12 @@ The following pattern matches a parenthesized group:
 See also C<(?PARNO)> for a different, more efficient way to accomplish
 the same task.
 
+For reasons of security, this construct is forbidden if the regular
+expression involves run-time interpolation of variables, unless the
+perilous C<use re 'eval'> pragma has been used (see L<re>), or the
+variables contain results of C<qr//> operator (see
+L<perlop/"qr/STRING/imosx">).
+
 Because perl's regex engine is not currently re-entrant, delayed
 code may not invoke the regex engine either directly with C<m//> or C<s///>),
 or indirectly with functions such as C<split>.
@@ -1346,7 +1350,7 @@ otherwise stated the ARG argument is optional; in some cases, it is
 forbidden.
 
 Any pattern containing a special backtracking verb that allows an argument
-has the special behaviour that when executed it sets the current packages'
+has the special behaviour that when executed it sets the current package's
 C<$REGERROR> and C<$REGMARK> variables. When doing so the following
 rules apply:
 
@@ -1467,8 +1471,7 @@ This zero-width pattern can be used to mark the point reached in a string
 when a certain part of the pattern has been successfully matched. This
 mark may be given a name. A later C<(*SKIP)> pattern will then skip
 forward to that point if backtracked into on failure. Any number of
-C<(*MARK)> patterns are allowed, and the NAME portion is optional and may
-be duplicated.
+C<(*MARK)> patterns are allowed, and the NAME portion may be duplicated.
 
 In addition to interacting with the C<(*SKIP)> pattern, C<(*MARK:NAME)>
 can be used to "label" a pattern branch, so that after matching, the

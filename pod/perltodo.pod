@@ -40,6 +40,9 @@ instead there is an intentionally simpler library, F<t/test.pl>. However,
 quite a few tests in F<t/> have not been refactored to use it. Refactoring
 any of these tests, one at a time, is a useful thing TODO.
 
+The subdirectories F<base>, F<cmd> and F<comp>, that contain the most
+basic tests, should be excluded from this task.
+
 =head2 Test that regen.pl was run
 
 There are various generated files shipped with the perl distribution, for
@@ -116,7 +119,7 @@ cash.
 
 =head2 Improve the coverage of the core tests
 
-Use Devel::Cover to ascertain the core modules's test coverage, then add
+Use Devel::Cover to ascertain the core modules' test coverage, then add
 tests that are currently missing.
 
 =head2 test B
@@ -624,6 +627,62 @@ bootstrap a cookbook.  (List::Util? Class::XSAccessor? Tree::Ternary_XS?)
 Another option could be deconstructing the implementation of some simpler
 functions in op.c.
 
+=head2 Allow XSUBs to inline themselves as OPs
+
+For a simple XSUB, often the subroutine dispatch takes more time than the
+XSUB itself. The tokeniser already has the ability to inline constant
+subroutines - it would be good to provide a way to inline other subroutines.
+
+Specifically, simplest approach looks to be to allow an XSUB to provide an
+alternative implementation of itself as a custom OP. A new flag bit in
+C<CvFLAGS()> would signal to the peephole optimiser to take an optree
+such as this:
+
+    b  <@> leave[1 ref] vKP/REFC ->(end)
+    1     <0> enter ->2
+    2     <;> nextstate(main 1 -e:1) v:{ ->3
+    a     <2> sassign vKS/2 ->b
+    8        <1> entersub[t2] sKS/TARG,1 ->9
+    -           <1> ex-list sK ->8
+    3              <0> pushmark s ->4
+    4              <$> const(IV 1) sM ->5
+    6              <1> rv2av[t1] lKM/1 ->7
+    5                 <$> gv(*a) s ->6
+    -              <1> ex-rv2cv sK ->-
+    7                 <$> gv(*x) s/EARLYCV ->8
+    -        <1> ex-rv2sv sKRM*/1 ->a
+    9           <$> gvsv(*b) s ->a
+
+perform the symbol table lookup of C<rv2cv> and C<gv(*x)>, locate the
+pointer to the custom OP that provides the direct implementation, and re-
+write the optree something like:
+
+    b  <@> leave[1 ref] vKP/REFC ->(end)
+    1     <0> enter ->2
+    2     <;> nextstate(main 1 -e:1) v:{ ->3
+    a     <2> sassign vKS/2 ->b
+    7        <1> custom_x -> 8
+    -           <1> ex-list sK ->7
+    3              <0> pushmark s ->4
+    4              <$> const(IV 1) sM ->5
+    6              <1> rv2av[t1] lKM/1 ->7
+    5                 <$> gv(*a) s ->6
+    -              <1> ex-rv2cv sK ->-
+    -                 <$> ex-gv(*x) s/EARLYCV ->7
+    -        <1> ex-rv2sv sKRM*/1 ->a
+    8           <$> gvsv(*b) s ->a
+
+I<i.e.> the C<gv(*)> OP has been nulled and spliced out of the execution
+path, and the C<entersub> OP has been replaced by the custom op.
+
+This approach should provide a measurable speed up to simple XSUBs inside
+tight loops. Initially one would have to write the OP alternative
+implementation by hand, but it's likely that this should be reasonably
+straightforward for the type of XSUB that would benefit the most. Longer
+term, once the run-time implementation is proven, it should be possible to
+progressively update ExtUtils::ParseXS to generate OP implementations for
+some XSUBs.
+
 =head2 Remove the use of SVs as temporaries in dump.c
 
 F<dump.c> contains debugging routines to dump out the contains of perl data
@@ -761,12 +820,6 @@ See L</"Virtualize operating system access">.
 
 Currently glob patterns and filenames returned from File::Glob::glob()
 are always byte strings.  See L</"Virtualize operating system access">.
-
-=head2 Unicode and lc/uc operators
-
-Some built-in operators (C<lc>, C<uc>, etc.) behave differently, based on
-what the internal encoding of their argument is. That should not be the
-case. Maybe add a pragma to switch behaviour.
 
 =head2 use less 'memory'
 
@@ -916,8 +969,7 @@ years for this discrepancy.
 The handling of Unicode is unclean in many places. For example, the regexp
 engine matches in Unicode semantics whenever the string or the pattern is
 flagged as UTF-8, but that should not be dependent on an internal storage
-detail of the string. Likewise, case folding behaviour is dependent on the
-UTF8 internal flag being on or off.
+detail of the string.
 
 =head2 Properly Unicode safe tokeniser and pads.
 
@@ -1049,7 +1101,7 @@ in fact, all of L<perlport> is.)
 This has actually already been implemented (but only for Win32),
 take a look at F<iperlsys.h> and F<win32/perlhost.h>.  While all Win32
 variants go through a set of "vtables" for operating system access,
-non-Win32 systems currently go straight for the POSIX/UNIX-style
+non-Win32 systems currently go straight for the POSIX/Unix-style
 system/library call.  Similar system as for Win32 should be
 implemented for all platforms.  The existing Win32 implementation
 probably does not need to survive alongside this proposed new

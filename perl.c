@@ -2,7 +2,8 @@
 /*    perl.c
  *
  *    Copyright (C) 1993, 1994, 1995, 1996, 1997, 1998, 1999, 2000, 2001
- *    2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009 by Larry Wall and others
+ *    2002, 2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010 by Larry Wall
+ *    and others
  *
  *    You may distribute under the terms of either the GNU General Public
  *    License or the Artistic License, as specified in the README file.
@@ -1162,7 +1163,7 @@ perl_destruct(pTHXx)
 		    PerlIO_printf(Perl_debug_log, "leaked: sv=0x%p"
 			" flags=0x%"UVxf
 			" refcnt=%"UVuf pTHX__FORMAT "\n"
-			"\tallocated at %s:%d %s %s%s\n",
+			"\tallocated at %s:%d %s %s%s; serial %"UVuf"\n",
 			(void*)sv, (UV)sv->sv_flags, (UV)sv->sv_refcnt
 			pTHX__VALUE,
 			sv->sv_debug_file ? sv->sv_debug_file : "(unknown)",
@@ -1170,7 +1171,8 @@ perl_destruct(pTHXx)
 			sv->sv_debug_inpad ? "for" : "by",
 			sv->sv_debug_optype ?
 			    PL_op_name[sv->sv_debug_optype]: "(none)",
-			sv->sv_debug_cloned ? " (cloned)" : ""
+			sv->sv_debug_cloned ? " (cloned)" : "",
+			sv->sv_debug_serial
 		    );
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
 		    Perl_dump_sv_child(aTHX_ sv);
@@ -1652,7 +1654,7 @@ S_Internals_V(pTHX_ CV *cv)
 			     " DEBUGGING"
 #  endif
 #  ifdef NO_MATHOMS
-                            " NO_MATHOMS"
+			     " NO_MATHOMS"
 #  endif
 #  ifdef PERL_DISABLE_PMC
 			     " PERL_DISABLE_PMC"
@@ -1678,11 +1680,14 @@ S_Internals_V(pTHX_ CV *cv)
 #  ifdef PERL_USE_SAFE_PUTENV
 			     " PERL_USE_SAFE_PUTENV"
 #  endif
-#  ifdef USE_SITECUSTOMIZE
-			     " USE_SITECUSTOMIZE"
-#  endif	       
+#  ifdef USE_ATTRIBUTES_FOR_PERLIO
+			     " USE_ATTRIBUTES_FOR_PERLIO"
+#  endif
 #  ifdef USE_FAST_STDIO
 			     " USE_FAST_STDIO"
+#  endif	       
+#  ifdef USE_SITECUSTOMIZE
+			     " USE_SITECUSTOMIZE"
 #  endif	       
 	;
     PERL_UNUSED_ARG(cv);
@@ -3249,7 +3254,7 @@ Perl_moreswitches(pTHX_ const char *s)
 #endif
 
 	PerlIO_printf(PerlIO_stdout(),
-		      "\n\nCopyright 1987-2009, Larry Wall\n");
+		      "\n\nCopyright 1987-2010, Larry Wall\n");
 #ifdef MSDOS
 	PerlIO_printf(PerlIO_stdout(),
 		      "\nMS-DOS port Copyright (c) 1989, 1990, Diomidis Spinellis\n");

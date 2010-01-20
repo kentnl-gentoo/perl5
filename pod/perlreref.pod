@@ -125,17 +125,17 @@ and L<perlunicode> for details.
    \S      A non-whitespace character
    \h      An horizontal white space
    \H      A non horizontal white space
-   \N      A non newline (like . without /s)
+   \N      A non newline (when not followed by a '{'; it's like . without /s)
    \v      A vertical white space
    \V      A non vertical white space
    \R      A generic newline           (?>\v|\x0D\x0A)
 
    \C      Match a byte (with Unicode, '.' matches a character)
    \pP     Match P-named (Unicode) property
-   \p{...} Match Unicode property with long name
+   \p{...} Match Unicode property with name longer than 1 character
    \PP     Match non-P
-   \P{...} Match lack of Unicode property with long name
-   \X      Match extended Unicode combining character sequence
+   \P{...} Match lack of Unicode property with name longer than 1 char
+   \X      Match Unicode extended grapheme cluster
 
 POSIX character classes and their Unicode and Perl equivalents:
 
@@ -178,7 +178,7 @@ All are zero-width assertions.
 
 =head2 QUANTIFIERS
 
-Quantifiers are greedy by default -- match the B<longest> leftmost.
+Quantifiers are greedy by default and match the B<longest> leftmost.
 
    Maximal Minimal Possessive Allowed range
    ------- ------- ---------- -------------
@@ -194,7 +194,7 @@ The possessive forms (new in Perl 5.10) prevent backtracking: what gets
 matched by a pattern with a possessive quantifier will not be backtracked
 into, even if that causes the whole match to fail.
 
-There is no quantifier {,n} -- that gets understood as a literal string.
+There is no quantifier C<{,n}>. That's interpreted as a literal string.
 
 =head2 EXTENDED CONSTRUCTS
 

@@ -233,21 +233,15 @@ cpan/Class-ISA/lib/Class/ISA.pm		Class::ISA
 cpan/Class-ISA/t/00_about_verbose.t	Tests for Class::ISA
 cpan/Class-ISA/t/01_old_junk.t		Tests for Class::ISA
 cpan/Compress-Raw-Bzip2/bzip2-src/blocksort.c
-cpan/Compress-Raw-Bzip2/bzip2-src/bzip2.c
-cpan/Compress-Raw-Bzip2/bzip2-src/bzip2recover.c
 cpan/Compress-Raw-Bzip2/bzip2-src/bzlib.c
 cpan/Compress-Raw-Bzip2/bzip2-src/bzlib.h
 cpan/Compress-Raw-Bzip2/bzip2-src/bzlib_private.h
 cpan/Compress-Raw-Bzip2/bzip2-src/compress.c
 cpan/Compress-Raw-Bzip2/bzip2-src/crctable.c
 cpan/Compress-Raw-Bzip2/bzip2-src/decompress.c
-cpan/Compress-Raw-Bzip2/bzip2-src/dlltest.c
 cpan/Compress-Raw-Bzip2/bzip2-src/huffman.c
 cpan/Compress-Raw-Bzip2/bzip2-src/LICENSE
-cpan/Compress-Raw-Bzip2/bzip2-src/mk251.c
 cpan/Compress-Raw-Bzip2/bzip2-src/randtable.c
-cpan/Compress-Raw-Bzip2/bzip2-src/spewG.c
-cpan/Compress-Raw-Bzip2/bzip2-src/unzcrash.c
 cpan/Compress-Raw-Bzip2/Bzip2.xs
 cpan/Compress-Raw-Bzip2/Changes
 cpan/Compress-Raw-Bzip2/fallback/constants.h
@@ -1059,6 +1053,7 @@ cpan/ExtUtils-ParseXS/t/XSUsage.pm		ExtUtils::ParseXS tests
 cpan/ExtUtils-ParseXS/t/XSUsage.xs		ExtUtils::ParseXS tests
 cpan/File-Fetch/lib/File/Fetch.pm	File::Fetch
 cpan/File-Fetch/t/01_File-Fetch.t	File::Fetch tests
+cpan/File-Fetch/t/null_subclass.t
 cpan/File-Path/lib/File/Path.pm		Do things like 'mkdir -p' and 'rm -r'
 cpan/File-Path/t/Path.t			See if File::Path works
 cpan/File-Path/t/taint.t		See if File::Path works with -T
@@ -3868,6 +3863,7 @@ pod/perl5110delta.pod		Perl changes in version 5.11.0
 pod/perl5111delta.pod		Perl changes in version 5.11.1
 pod/perl5112delta.pod		Perl changes in version 5.11.2
 pod/perl5113delta.pod		Perl changes in version 5.11.3
+pod/perl5114delta.pod		Perl changes in version 5.11.4
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4441,9 +4437,11 @@ t/op/ord.t			See if ord works
 t/op/or.t			See if || works in weird situations
 t/op/overload_integer.t		See if overload::constant for integer works after "use".
 t/op/override.t			See if operator overriding works
+t/op/packagev.t			See if package VERSION work
 t/op/pack.t			See if pack and unpack work
 t/op/pos.t			See if pos works
 t/op/pow.t			See if ** works
+t/op/protowarn.t		See if the illegalproto warnings work
 t/op/push.t			See if push and pop work
 t/op/pwent.t			See if getpw*() functions work
 t/op/qq.t			See if qq works

@@ -1035,22 +1035,23 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	    sv_copypv(sv, PL_ors_sv);
 	break;
     case '!':
-#ifdef VMS
-	sv_setnv(sv, (NV)((errno == EVMSERR) ? vaxc$errno : errno));
-	sv_setpv(sv, errno ? Strerror(errno) : "");
-#else
 	{
 	dSAVE_ERRNO;
+#ifdef VMS
+	sv_setnv(sv, (NV)((errno == EVMSERR) ? vaxc$errno : errno));
+#else
 	sv_setnv(sv, (NV)errno);
+#endif
 #ifdef OS2
 	if (errno == errno_isOS2 || errno == errno_isOS2_set)
 	    sv_setpv(sv, os2error(Perl_rc));
 	else
 #endif
 	sv_setpv(sv, errno ? Strerror(errno) : "");
+	SvPOK_on(sv);	/* may have got removed during taint processing */
 	RESTORE_ERRNO;
 	}
-#endif
+
 	SvRTRIM(sv);
 	SvNOK_on(sv);	/* what a wonderful hack! */
 	break;
@@ -2216,7 +2217,8 @@ Perl_magic_setmglob(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_SETMGLOB;
     PERL_UNUSED_CONTEXT;
     mg->mg_len = -1;
-    SvSCREAM_off(sv);
+    if (!isGV_with_GP(sv))
+	SvSCREAM_off(sv);
     return 0;
 }
 

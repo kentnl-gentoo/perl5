@@ -39,26 +39,6 @@ sub DEBUG () { 0 }  # Set to 0 for production; 1 for development
 # have been checked for somewhat more than just sanity.  It can handle all
 # existing Unicode character properties in those releases.
 #
-# This program needs to be able to run under miniperl.  Therefore, it uses a
-# minimum of other modules, and hence implements some things itself that could
-# be gotten from CPAN
-#
-# This program uses inputs published by the Unicode Consortium.  These can
-# change incompatibly between releases without the Perl maintainers realizing
-# it.  Therefore this program is now designed to try to flag these.  It looks
-# at the directories where the inputs are, and flags any unrecognized files.
-# It keeps track of all the properties in the files it handles, and flags any
-# that it doesn't know how to handle.  It also flags any input lines that
-# don't match the expected syntax, among other checks.
-# It is also designed so if a new input file matches one of the known
-# templates, one hopefully just needs to add it to a list to have it
-# processed.
-#
-# It tries to keep fatal errors to a minimum, to generate something usable for
-# testing purposes.  It always looks for files that could be inputs, and will
-# warn about any that it doesn't know how to handle (the -q option suppresses
-# the warning).
-#
 # This program is mostly about Unicode character (or code point) properties.
 # A property describes some attribute or quality of a code point, like if it
 # is lowercase or not, its name, what version of Unicode it was first defined
@@ -145,7 +125,7 @@ my $map_directory = 'To';        # Where map files go.
 # writing, such as the path to each one's file.  There is a heading in each
 # map table that gives the format of its entries, and what the map is for all
 # the code points missing from it.  (This allows tables to be more compact.)
-
+#
 # The Property data structure contains one or more tables.  All properties
 # contain a map table (except the $perl property which is a
 # pseudo-property containing only match tables), and any properties that
@@ -167,7 +147,7 @@ my $map_directory = 'To';        # Where map files go.
 # constructs will.  Generally a property will have either its map table or its
 # match tables written but not both.  Again, what gets written is controlled
 # by lists which can easily be changed.
-
+#
 # For information about the Unicode properties, see Unicode's UAX44 document:
 
 my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
@@ -188,9 +168,9 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # introductory comments.
 #
 # This program works on all properties as of 5.2, though the files for some
-# are suppressed from apparent lack of demand for.  You can change which are
-# output by changing lists in this program.
-
+# are suppressed from apparent lack of demand for them.  You can change which
+# are output by changing lists in this program.
+#
 # The old version of mktables emphasized the term "Fuzzy" to mean Unocde's
 # loose matchings rules (from Unicode TR18):
 #
@@ -204,7 +184,7 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # The program still allows Fuzzy to override its determination of if loose
 # matching should be used, but it isn't currently used, as it is no longer
 # needed; the calculations it makes are good enough.
-
+#
 # SUMMARY OF HOW IT WORKS:
 #
 #   Process arguments
@@ -234,20 +214,10 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 #        The Perl-defined properties are created and populated.  Many of these
 #            require data determined from the earlier steps
 #        Any Perl-defined synonyms are created, and name clashes between Perl
-#            and Unicode are reconciled.
+#            and Unicode are reconciled and warned about.
 #        All the properties are written to files
 #        Any other files are written, and final warnings issued.
-
-# As mentioned above, some properties are given in more than one file.  In
-# particular, the files in the extracted directory are supposedly just
-# reformattings of the others.  But they contain information not easily
-# derivable from the other files, including results for Unihan, which this
-# program doesn't ordinarily look at, and for unassigned code points.  They
-# also have historically had errors or been incomplete.  In an attempt to
-# create the best possible data, this program thus processes them first to
-# glean information missing from the other files; then processes those other
-# files to override any errors in the extracted ones.
-
+#
 # For clarity, a number of operators have been overloaded to work on tables:
 #   ~ means invert (take all characters not in the set).  The more
 #       conventional '!' is not used because of the possibility of confusing
@@ -261,48 +231,116 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # Operations are done on references and affect the underlying structures, so
 # that the copy constructors for them have been overloaded to not return a new
 # clone, but the input object itself.
-
+#
 # The bool operator is deliberately not overloaded to avoid confusion with
 # "should it mean if the object merely exists, or also is non-empty?".
-
 #
 # WHY CERTAIN DESIGN DECISIONS WERE MADE
-
-# XXX These comments need more work.
+#
+# This program needs to be able to run under miniperl.  Therefore, it uses a
+# minimum of other modules, and hence implements some things itself that could
+# be gotten from CPAN
+#
+# This program uses inputs published by the Unicode Consortium.  These can
+# change incompatibly between releases without the Perl maintainers realizing
+# it.  Therefore this program is now designed to try to flag these.  It looks
+# at the directories where the inputs are, and flags any unrecognized files.
+# It keeps track of all the properties in the files it handles, and flags any
+# that it doesn't know how to handle.  It also flags any input lines that
+# don't match the expected syntax, among other checks.
+#
+# It is also designed so if a new input file matches one of the known
+# templates, one hopefully just needs to add it to a list to have it
+# processed.
+#
+# As mentioned earlier, some properties are given in more than one file.  In
+# particular, the files in the extracted directory are supposedly just
+# reformattings of the others.  But they contain information not easily
+# derivable from the other files, including results for Unihan, which this
+# program doesn't ordinarily look at, and for unassigned code points.  They
+# also have historically had errors or been incomplete.  In an attempt to
+# create the best possible data, this program thus processes them first to
+# glean information missing from the other files; then processes those other
+# files to override any errors in the extracted ones.  Much of the design was
+# driven by this need to store things and then possibly override them.
+#
+# It tries to keep fatal errors to a minimum, to generate something usable for
+# testing purposes.  It always looks for files that could be inputs, and will
+# warn about any that it doesn't know how to handle (the -q option suppresses
+# the warning).
 #
 # Why have files written out for binary 'N' matches?
 #   For binary properties, if you know the mapping for either Y or N; the
-#   other is trivial to construct, so could be done at Perl run-time instead
-#   of having a file for it.  That is, if someone types in \p{foo: N}, Perl
-#   could translate that to \P{foo: Y} and not need a file.   The problem is
-#   communicating to Perl that a given property is binary.  Perl can't figure
-#   it out from looking at the N (or No), as some non-binary properties have
-#   these as property values.
-# Why
-# There are several types of properties, based on what form their values can
-# take on.  These are described in more detail below in the DATA STRUCTURES
-# section of these comments, but for now, you should know that there are
-# string properties, whose values are strings of one or more code points (such
-# as the Uppercase_mapping property); every other property maps to some other
-# form, like true or false, or a number, or a name, etc.  The reason there are
-# two directories for map files is because of the way utf8.c works.  It
-# expects that any files there are string properties, that is that the
-# mappings are each to one code point, with mappings in multiple code points
-# handled specially in an extra hash data structure.  Digit.pl is a table that
-# is written there for historical reasons, even though it doesn't fit that
-# mold.  Thus it can't currently be looked at by the Perl core.
+#   other is trivial to construct, so could be done at Perl run-time by just
+#   complementing the result, instead of having a file for it.  That is, if
+#   someone types in \p{foo: N}, Perl could translate that to \P{foo: Y} and
+#   not need a file.   The problem is communicating to Perl that a given
+#   property is binary.  Perl can't figure it out from looking at the N (or
+#   No), as some non-binary properties have these as property values.  So
+#   rather than inventing a way to communicate this info back to the core,
+#   which would have required changes there as well, it was simpler just to
+#   add the extra tables.
+#
+# Why is there more than one type of range?
+#   This simplified things.  There are some very specialized code points that
+#   have to be handled specially for output, such as Hangul syllable names.
+#   By creating a range type (done late in the development process), it
+#   allowed this to be stored with the range, and overridden by other input.
+#   Originally these were stored in another data structure, and it became a
+#   mess trying to decide if a second file that was for the same property was
+#   overriding the earlier one or not.
+#
+# Why are there two kinds of tables, match and map?
+#   (And there is a base class shared by the two as well.)  As stated above,
+#   they actually are for different things.  Development proceeded much more
+#   smoothly when I (khw) realized the distinction.  Map tables are used to
+#   give the property value for every code point (actually every code point
+#   that doesn't map to a default value).  Match tables are used for regular
+#   expression matches, and are essentially the inverse mapping.  Separating
+#   the two allows more specialized methods, and error checks so that one
+#   can't just take the intersection of two map tables, for example, as that
+#   is nonsensical.
 #
 # There are no match tables generated for matches of the null string.  These
-# would like like \p{JSN=}.  Perhaps something like them could be added if
-# necessary.  The JSN does have a real code point U+110B that maps to the null
-# string, but it is a contributory property, and therefore not output by
-# default.
+# would like like qr/\p{JSN=}/ currently without modifying the regex code.
+# Perhaps something like them could be added if necessary.  The JSN does have
+# a real code point U+110B that maps to the null string, but it is a
+# contributory property, and therefore not output by default.  And it's easily
+# handled so far by making the null string the default where it is a
+# possibility.
 #
 # DEBUGGING
 #
-# XXX Add more stuff here.   use perl instead of miniperl to find problems with
-# Scalar::Util
-
+# This program is written so it will run under miniperl.  Occasionally changes
+# will cause an error where the backtrace doesn't work well under miniperl.
+# To diagnose the problem, you can instead run it under regular perl, if you
+# have one compiled.
+#
+# There is a good trace facility.  To enable it, first sub DEBUG must be set
+# to return true.  Then a line like
+#
+# local $to_trace = 1 if main::DEBUG;
+#
+# can be added to enable tracing in its lexical scope or until you insert
+# another line:
+#
+# local $to_trace = 0 if main::DEBUG;
+#
+# then use a line like "trace $a, @b, %c, ...;
+#
+# Some of the more complex subroutines already have trace statements in them.
+# Permanent trace statements should be like:
+#
+# trace ... if main::DEBUG && $to_trace;
+#
+# If there is just one or a few files that you're debugging, you can easily
+# cause most everything else to be skipped.  Change the line
+#
+# my $debug_skip = 0;
+#
+# to 1, and every file whose object is in @input_file_objects and doesn't have
+# a, 'non_skip => 1,' in its constructor will be skipped.
+#
 # FUTURE ISSUES
 #
 # The program would break if Unicode were to change its names so that
@@ -335,7 +373,7 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # synonym would have to be used for the new property.  This is ugly, and
 # manual intervention would certainly be easier to do in the short run; lets
 # hope it never comes to this.
-
+#
 # A NOTE ON UNIHAN
 #
 # This program can generate tables from the Unihan database.  But it doesn't
@@ -368,17 +406,67 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # file could be edited to fix them.
 # have to be
 #
-# HOW TO ADD A FILE
-
-# Unicode Versions Notes
-
-# alpha's numbers halve in 2.1.9, answer cjk block at 4E00 were removed from PropList; not changed, could add gc Letter, put back in in 3.1.0
-# Some versions of 2.1.x Jamo.txt have the wrong value for 1105, which causes
-# real problems for the algorithms for Jamo calculations, so it is changed
-# here.
-#   White space vs Space.  in 3.2 perl has +205F=medium math space, fixed in 4.0, and ok in 3.1.1 because not there in unicode. synonym introduced in 4.1
-# ATBL = 202.  202 changed to ATB, and all code points stayed there.  So if you were useing ATBL you were out of luck.
-# Hrkt Katakana_Or_Hiragana came in 4.01, before was Unknown.
+# HOW TO ADD A FILE TO BE PROCESSED
+#
+# A new file from Unicode needs to have an object constructed for it in
+# @input_file_objects, probably at the end or at the end of the extracted
+# ones.  The program should warn you if its name will clash with others on
+# restrictive file systems, like DOS.  If so, figure out a better name, and
+# add lines to the README.perl file giving that.  If the file is a character
+# property, it should be in the format that Unicode has by default
+# standardized for such files for the more recently introduced ones.
+# If so, the Input_file constructor for @input_file_objects can just be the
+# file name and release it first appeared in.  If not, then it should be
+# possible to construct an each_line_handler() to massage the line into the
+# standardized form.
+#
+# For non-character properties, more code will be needed.  You can look at
+# the existing entries for clues.
+#
+# UNICODE VERSIONS NOTES
+#
+# The Unicode UCD has had a number of errors in it over the versions.  And
+# these remain, by policy, in the standard for that version.  Therefore it is
+# risky to correct them, because code may be expecting the error.  So this
+# program doesn't generally make changes, unless the error breaks the Perl
+# core.  As an example, some versions of 2.1.x Jamo.txt have the wrong value
+# for U+1105, which causes real problems for the algorithms for Jamo
+# calculations, so it is changed here.
+#
+# But it isn't so clear cut as to what to do about concepts that are
+# introduced in a later release; should they extend back to earlier releases
+# where the concept just didn't exist?  It was easier to do this than to not,
+# so that's what was done.  For example, the default value for code points not
+# in the files for various properties was probably undefined until changed by
+# some version.  No_Block for blocks is such an example.  This program will
+# assign No_Block even in Unicode versions that didn't have it.  This has the
+# benefit that code being written doesn't have to special case earlier
+# versions; and the detriment that it doesn't match the Standard precisely for
+# the affected versions.
+#
+# Here are some observations about some of the issues in early versions:
+#
+# The number of code points in \p{alpha} halve in 2.1.9.  It turns out that
+# the reason is that the CJK block starting at 4E00 was removed from PropList,
+# and was not put back in until 3.1.0
+#
+# Unicode introduced the synonym Space for White_Space in 4.1.  Perl has
+# always had a \p{Space}.  In release 3.2 only, they are not synonymous.  The
+# reason is that 3.2 introduced U+205F=medium math space, which was not
+# classed as white space, but Perl figured out that it should have been. 4.0
+# reclassified it correctly.
+#
+# Another change between 3.2 and 4.0 is the CCC property value ATBL.  In 3.2
+# this was erroneously a synonym for 202.  In 4.0, ATB became 202, and ATBL
+# was left with no code points, as all the ones that mapped to 202 stayed
+# mapped to 202.  Thus if your program used the numeric name for the class,
+# it would not have been affected, but if it used the mnemonic, it would have
+# been.
+#
+# \p{Script=Hrkt} (Katakana_Or_Hiragana) came in 4.0.1.  Before that code
+# points which eventually came to have this script property value, instead
+# mapped to "Unknown".  But in the next release all these code points were
+# moved to \p{sc=common} instead.
 #
 # The default for missing code points for BidiClass is complicated.  Starting
 # in 3.1.1, the derived file DBidiClass.txt handles this, but this program
@@ -902,7 +990,7 @@ my %ignored_files = (
     'StandardizedVariants.txt' => 'Only for glyph changes, not a Unicode character property.  Does not fit into current scheme where one code point is mapped',
 );
 
-################ End of externally interesting definitions ###############
+### End of externally interesting definitions, except for @input_file_objects
 
 my $HEADER=<<"EOF";
 # !!!!!!!   DO NOT EDIT THIS FILE   !!!!!!!
@@ -1848,8 +1936,8 @@ END
             my $fkey = File::Spec->rel2abs($file);
             my $expecting = delete $potential_files{$fkey};
             $expecting = delete $potential_files{lc($fkey)} unless defined $expecting;
-            Carp::my_carp("Was not expecting '$file'.") if 
-                    ! $expecting                    
+            Carp::my_carp("Was not expecting '$file'.") if
+                    ! $expecting
                     && ! defined $handle{$addr};
 
             # Having deleted from expected files, we can quit if not to do
@@ -4074,6 +4162,12 @@ sub trace { return main::trace(@_); }
     # standard.
     main::set_access('perl_extension', \%perl_extension, 'r');
 
+    my %output_range_counts;
+    # A boolean set iff this table is to have comments written in the
+    # output file that contain the number of code points in the range.
+    # The constructor can override the global flag of the same name.
+    main::set_access('output_range_counts', \%output_range_counts, 'r');
+
     sub new {
         # All arguments are key => value pairs, which you can see below, most
         # of which match fields documented above.  Otherwise: Pod_Entry,
@@ -4095,6 +4189,7 @@ sub trace { return main::trace(@_); }
         my $complete_name = $complete_name{$addr}
                           = delete $args{'Complete_Name'};
         $internal_only{$addr} = delete $args{'Internal_Only_Warning'} || 0;
+        $output_range_counts{$addr} = delete $args{'Output_Range_Counts'};
         $property{$addr} = delete $args{'_Property'};
         $range_list{$addr} = delete $args{'_Range_List'};
         $status{$addr} = delete $args{'Status'} || $NORMAL;
@@ -4114,6 +4209,8 @@ sub trace { return main::trace(@_); }
         # Can't use || above because conceivably the name could be 0, and
         # can't use // operator in case this program gets used in Perl 5.8
         $full_name{$addr} = $name{$addr} if ! defined $full_name{$addr};
+        $output_range_counts{$addr} = $output_range_counts if
+                                        ! defined $output_range_counts{$addr};
 
         $aliases{$addr} = [ ];
         $comment{$addr} = [ ];
@@ -4564,7 +4661,7 @@ sub trace { return main::trace(@_); }
                     # Add a comment with the size of the range, if requested.
                     # Expand Tabs to make sure they all start in the same
                     # column, and then unexpand to use mostly tabs.
-                    if (! $output_range_counts) {
+                    if (! $output_range_counts{$addr}) {
                         $OUT[-1] .= "\n";
                     }
                     else {
@@ -5170,7 +5267,7 @@ START\\tSTOP\\tMAPPING where START is the starting code point of the
 range, in hex; STOP is the ending point, or if omitted, the range has just one
 code point; MAPPING is what each code point between START and STOP maps to.
 END
-                if ($output_range_counts) {
+                if ($self->output_range_counts) {
                     $comment .= <<END;
 Numbers in comments in [brackets] indicate how many code points are in the
 range (omitted when the range is a single code point or if the mapping is to
@@ -5777,7 +5874,7 @@ sub trace { return main::trace(@_); }
         # 'table' (If you change the '=' must also change the ':' in lots of
         # places in this program that assume an equal sign)
         $complete = $property->full_name . "=$complete" if $property != $perl;
-        
+
 
         my $self = $class->SUPER::new(%args,
                                       Name => $name,
@@ -6406,7 +6503,7 @@ END
 START\\tSTOP\\twhere START is the starting code point of the range, in hex;
 STOP is the ending point, or if omitted, the range has just one code point.
 END
-            if ($output_range_counts) {
+            if ($leader->output_range_counts) {
                 $comment .= <<END;
 Numbers in comments in [brackets] indicate how many code points are in the
 range.
@@ -8674,7 +8771,7 @@ END
                             else {
                                 $default_map = $missings;
                             }
-                        
+
                             # And store it with the property for outside use.
                             $property_object->set_default_map($default_map);
                         }
@@ -8976,6 +9073,9 @@ END
                                         Internal_Only_Warning => 1,
                                         Perl_Extension => 1,
                                         Default_Map => $CODE_POINT,
+
+                                        # normalize.pm can't cope with these
+                                        Output_Range_Counts => 0,
 
                                         # This is a specially formatted table
                                         # explicitly for normalize.pm, which
@@ -9559,7 +9659,7 @@ sub process_GCB_test {
     while ($file->next_line) {
         push @backslash_X_tests, $_;
     }
-        
+
     return;
 }
 
@@ -10580,11 +10680,6 @@ sub compile_perl() {
         $ASCII->initialize([ 0..127 ]);
     }
 
-    # A number of the Perl synonyms have a restricted-range synonym whose name
-    # begins with Posix.  This hash gets filled in with them, so that they can
-    # be populated in a small loop.
-    my %posix_equivalent;
-
     # Get the best available case definitions.  Early Unicode versions didn't
     # have Uppercase and Lowercase defined, so use the general category
     # instead for them.
@@ -10597,7 +10692,10 @@ sub compile_perl() {
         $Lower->set_equivalent_to($gc->table('Lowercase_Letter'),
                                                                 Related => 1);
     }
-    $posix_equivalent{'Lower'} = $Lower;
+    $perl->add_match_table("PosixLower",
+                            Description => "[a-z]",
+                            Initialize => $Lower & $ASCII,
+                            );
 
     my $Upper = $perl->add_match_table('Upper');
     my $Unicode_Upper = property_ref('Uppercase');
@@ -10608,7 +10706,10 @@ sub compile_perl() {
         $Upper->set_equivalent_to($gc->table('Uppercase_Letter'),
                                                                 Related => 1);
     }
-    $posix_equivalent{'Upper'} = $Upper;
+    $perl->add_match_table("PosixUpper",
+                            Description => "[A-Z]",
+                            Initialize => $Upper & $ASCII,
+                            );
 
     # Earliest releases didn't have title case.  Initialize it to empty if not
     # otherwise present
@@ -10679,8 +10780,7 @@ sub compile_perl() {
     # one whose name generally begins with Posix that is posix-compliant, and
     # one that matches Unicode characters beyond the Posix, ASCII range
 
-    my $Alpha = $perl->add_match_table('Alpha',
-                        Description => '[[:Alpha:]] extended beyond ASCII');
+    my $Alpha = $perl->add_match_table('Alpha');
 
     # Alphabetic was not present in early releases
     my $Alphabetic = property_ref('Alphabetic');
@@ -10698,14 +10798,21 @@ sub compile_perl() {
                             + $gc->table('Mn')
                             + $gc->table('Mc'));
         $Alpha += $gc->table('Nl') if defined $gc->table('Nl');
+        $Alpha->add_description('Alphabetic');
     }
-    $posix_equivalent{'Alpha'} = $Alpha;
+    $perl->add_match_table("PosixAlpha",
+                            Description => "[A-Za-z]",
+                            Initialize => $Alpha & $ASCII,
+                            );
 
     my $Alnum = $perl->add_match_table('Alnum',
-                        Description => "[[:Alnum:]] extended beyond ASCII",
+                        Description => 'Alphabetic and (Decimal) Numeric',
                         Initialize => $Alpha + $gc->table('Decimal_Number'),
                         );
-    $posix_equivalent{'Alnum'} = $Alnum;
+    $perl->add_match_table("PosixAlnum",
+                            Description => "[A-Za-z0-9]",
+                            Initialize => $Alnum & $ASCII,
+                            );
 
     my $Word = $perl->add_match_table('Word',
                                 Description => '\w, including beyond ASCII',
@@ -10731,7 +10838,10 @@ sub compile_perl() {
                                             -   0x200B, # ZWSP
                                 );
     $Blank->add_alias('HorizSpace');        # Another name for it.
-    $posix_equivalent{'Blank'} = $Blank;
+    $perl->add_match_table("PosixBlank",
+                            Description => "\\t and ' '",
+                            Initialize => $Blank & $ASCII,
+                            );
 
     my $VertSpace = $perl->add_match_table('VertSpace',
                             Description => '\v',
@@ -10746,10 +10856,13 @@ sub compile_perl() {
     # No Posix equivalent for vertical space
 
     my $Space = $perl->add_match_table('Space',
-        Description => '\s including beyond ASCII plus vertical tab = [[:Space:]]',
-        Initialize => $Blank + $VertSpace,
+                Description => '\s including beyond ASCII plus vertical tab',
+                Initialize => $Blank + $VertSpace,
     );
-    $posix_equivalent{'Space'} = $Space;
+    $perl->add_match_table("PosixSpace",
+                            Description => "\\t \\n, \\x0B, \\f, \\r, and ' '",
+                            Initialize => $Space & $ASCII,
+                            );
 
     # Perl's traditional space doesn't include Vertical Tab
     my $SpacePerl = $perl->add_match_table('SpacePerl',
@@ -10762,9 +10875,12 @@ sub compile_perl() {
                             );
 
     my $Cntrl = $perl->add_match_table('Cntrl',
-                        Description => "[[:Cntrl:]] extended beyond ASCII");
+                                        Description => 'Control characters');
     $Cntrl->set_equivalent_to($gc->table('Cc'), Related => 1);
-    $posix_equivalent{'Cntrl'} = $Cntrl;
+    $perl->add_match_table("PosixCntrl",
+                            Description => '[\x00-\x1F]',
+                            Initialize => $Cntrl & $ASCII,
+                            );
 
     # $controls is a temporary used to construct Graph.
     my $controls = Range_List->new(Initialize => $gc->table('Unassigned')
@@ -10774,61 +10890,60 @@ sub compile_perl() {
 
     # Graph is  ~space &  ~(Cc|Cs|Cn) = ~(space + $controls)
     my $Graph = $perl->add_match_table('Graph',
-                        Description => "[[:Graph:]] extended beyond ASCII",
+                        Description => 'Characters that are graphical',
                         Initialize => ~ ($Space + $controls),
                         );
-    $posix_equivalent{'Graph'} = $Graph;
+    $perl->add_match_table("PosixGraph",
+                            Description => '[\x21-\x7E]',
+                            Initialize => $Graph & $ASCII,
+                            );
 
     my $Print = $perl->add_match_table('Print',
-                        Description => "[[:Print:]] extended beyond ASCII",
-                        Initialize => $Space + $Graph - $gc->table('Control'),
+                        Description => 'Characters that are graphical plus space characters (but no controls)',
+                        Initialize => $Blank + $Graph - $gc->table('Control'),
                         );
-    $posix_equivalent{'Print'} = $Print;
+    $perl->add_match_table("PosixPrint",
+                            Description => '[\x20-\x7E]',
+                            Initialize => $Print & $ASCII,
+                            );
 
     my $Punct = $perl->add_match_table('Punct');
     $Punct->set_equivalent_to($gc->table('Punctuation'), Related => 1);
 
     # \p{punct} doesn't include the symbols, which posix does
     $perl->add_match_table('PosixPunct',
-                            Description => "[[:Punct:]]",
-                            Initialize => $ASCII & ($gc->table('Punctuation')
-                                                    + $gc->table('Symbol')),
-                            );
+        Description => 'Graphical characters that aren\'t Word characters = [\x21-\x2F\x3A-\x40\x5B-\x60\x7B-\x7E]',
+        Initialize => $ASCII & ($gc->table('Punctuation')
+                                + $gc->table('Symbol')),
+        );
 
     my $Digit = $perl->add_match_table('Digit',
                             Description => '\d, extended beyond just [0-9]');
     $Digit->set_equivalent_to($gc->table('Decimal_Number'), Related => 1);
-    $posix_equivalent{'Digit'} = $Digit;
+    my $PosixDigit = $perl->add_match_table("PosixDigit",
+                                            Description => '[0-9]',
+                                            Initialize => $Digit & $ASCII,
+                                            );
 
-    # AHex was not present in early releases
-    my $Xdigit = $perl->add_match_table('XDigit',
-                                        Description => '[0-9A-Fa-f]');
-    my $AHex = property_ref('ASCII_Hex_Digit');
-    if (defined $AHex && ! $AHex->is_empty) {
-        $Xdigit->set_equivalent_to($AHex->table('Y'), Related => 1);
+    # Hex_Digit was not present in first release
+    my $Xdigit = $perl->add_match_table('XDigit');
+    my $Hex = property_ref('Hex_Digit');
+    if (defined $Hex && ! $Hex->is_empty) {
+        $Xdigit->set_equivalent_to($Hex->table('Y'), Related => 1);
     }
     else {
-        # (Have to use hex because could be running on an non-ASCII machine,
-        # and we want the Unicode (ASCII) values)
-        $Xdigit->initialize([ 0x30..0x39, 0x41..0x46, 0x61..0x66 ]);
+        # (Have to use hex instead of e.g. '0', because could be running on an
+        # non-ASCII machine, and we want the Unicode (ASCII) values)
+        $Xdigit->initialize([ 0x30..0x39, 0x41..0x46, 0x61..0x66,
+                              0xFF10..0xFF19, 0xFF21..0xFF26, 0xFF41..0xFF46]);
+        $Xdigit->add_description('[0-9A-Fa-f] and corresponding fullwidth versions, like U+FF10: FULLWIDTH DIGIT ZERO');
     }
-
-    # Now, add the ASCII-restricted tables that get uniform treatment
-    while (my ($name, $table) = each %posix_equivalent) {
-        $perl->add_match_table("Posix$name",
-                                Description => "[[:$name:]]",
-                                Initialize => $table & $ASCII,
-                                );
-    }
-    $perl->table('PosixDigit')->add_description('\d, restricted to ASCII');
-    $perl->table('PosixDigit')->add_description('[0-9]');
-
 
     my $dt = property_ref('Decomposition_Type');
     $dt->add_match_table('Non_Canon', Full_Name => 'Non_Canonical',
         Initialize => ~ ($dt->table('None') + $dt->table('Canonical')),
         Perl_Extension => 1,
-        Note => 'Perl extension consisting of the union of all non-canonical decompositions',
+        Note => 'Union of all non-canonical decompositions',
         );
 
     # _CanonDCIJ is equivalent to Soft_Dotted, but if on a release earlier
@@ -10860,7 +10975,7 @@ sub compile_perl() {
 
     my $gcb = property_ref('Grapheme_Cluster_Break');
 
-    # The 'extended' grapheme cluster came in 5.1.  The non-extended 
+    # The 'extended' grapheme cluster came in 5.1.  The non-extended
     # definition differs too much from the traditional Perl one to use.
     if (defined $gcb && defined $gcb->table('SpacingMark')) {
 
@@ -11926,6 +12041,10 @@ sub make_table_pod_entries($) {
             $parenthesized .= ')' if $parenthesized;
 
             push @info, $parenthesized if $parenthesized;
+
+            if ($table_property != $perl && $table->perl_extension) {
+                push @info, '(Perl extension)';
+            }
             push @info, "($string_count)" if $output_range_counts;
 
             # Now, we have both the entry and info so add them to the
@@ -12344,6 +12463,9 @@ single and compound forms if applicable.
 
 The right column will also caution you if a property means something different
 than what might normally be expected.
+
+All single forms are Perl extensions; a few compound forms are as well, and
+are noted as such.
 
 Numbers in (parentheses) indicate the total number of code points matched by
 the property.  For emphasis, those properties that match no code points at all
@@ -12838,10 +12960,14 @@ sub write_all_tables() {
                                 || ! defined $pod_directory
                                 || ! $alias->make_pod_entry;
 
+                        my $rhs = $full_property_name;
+                        if ($property != $perl && $table->perl_extension) {
+                            $rhs .= ' (Perl extension)';
+                        }
                         push @match_properties,
                             format_pod_line($indent_info_column,
                                         '\p{' . $alias->name . ': *}',
-                                        $full_property_name,
+                                        $rhs,
                                         $alias->status);
                     }
                 } # End of non-string-like property code
@@ -13916,7 +14042,7 @@ my @ascii_ordered_chars = (
     "\0",
     (-1) x 6,
     "\a", "\b", "\t", "\n",
-    -1,   # No Vt 
+    -1,   # No Vt
     "\f", "\r",
     (-1) x 18,
     " ", "!", "\"", "#", '$', "%", "&", "'",
@@ -14112,7 +14238,7 @@ sub Test_X($) {
     # If a string can be represented in both non-ut8 and utf8, test both cases
     UPGRADE:
     for my $to_upgrade (0 .. 1) {
-        
+
         if ($to_upgrade) {
 
             # If already in utf8, would just be a repeat
@@ -14168,3 +14294,6 @@ sub Finished() {
 
 Error('\p{Script=InGreek}');    # Bug #69018
 Test_X("1100 $nobreak 1161");  # Bug #70940
+Expect(0, 0x2028, '\p{Print}', ""); # Bug # 71722
+Expect(0, 0x2029, '\p{Print}', ""); # Bug # 71722
+Expect(1, 0xFF10, '\p{XDigit}', ""); # Bug # 71726

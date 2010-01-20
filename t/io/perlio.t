@@ -9,7 +9,7 @@ BEGIN {
 	require './test.pl';
 }
 
-plan tests => 40;
+plan tests => 42;
 
 use_ok('PerlIO');
 
@@ -93,15 +93,42 @@ ok(close($utffh));
     close OLDOUT;
 
     SKIP: {
-      skip("TMPDIR not honored on this platform", 2)
+      skip("TMPDIR not honored on this platform", 4)
         if !$Config{d_mkstemp}
         || $^O eq 'VMS' || $^O eq 'MSwin32' || $^O eq 'os2';
       local $ENV{TMPDIR} = $nonexistent;
+
+      # hardcoded default temp path
+      my $perlio_tmp_file_glob = '/tmp/PerlIO_??????';
+
       ok( open(my $x,"+<",undef), 'TMPDIR honored by magic temp file via 3 arg open with undef - works if TMPDIR points to a non-existent dir');
+
+      my $filename = find_filename($x, $perlio_tmp_file_glob);
+      is($filename, undef, "No tmp files leaked");
+      unlink $filename if defined $filename;
 
       mkdir $ENV{TMPDIR};
       ok(open(my $x,"+<",undef), 'TMPDIR honored by magic temp file via 3 arg open with undef - works if TMPDIR points to an existent dir');
+
+      $filename = find_filename($x, $perlio_tmp_file_glob);
+      is($filename, undef, "No tmp files leaked");
+      unlink $filename if defined $filename;
     }
+}
+
+sub find_filename {
+    my ($fh, @globs) = @_;
+    my ($dev, $inode) = stat $fh;
+    die "Can't stat $fh: $!" unless defined $dev;
+
+    foreach (@globs) {
+	foreach my $file (glob $_) {
+	    my ($this_dev, $this_inode) = stat $file;
+	    next unless defined $this_dev;
+	    return $file if $this_dev == $dev && $this_inode == $inode;
+	}
+    }
+    return;
 }
 
 # in-memory open

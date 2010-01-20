@@ -14,7 +14,7 @@ BEGIN {
 
 use warnings;
 
-plan 91;
+plan 92;
 
 $SIG{__WARN__} = sub { die @_ };
 
@@ -114,16 +114,21 @@ eval 'package A; sub PS : lvalue';
 @attrs = eval 'attributes::get \&A::PS';
 is "@attrs", "lvalue";
 
-# Test ability to modify existing sub's (or XSUB's) attributes.
-eval 'package A; sub X { $_[0] } sub X : lvalue';
-@attrs = eval 'attributes::get \&A::X';
+# Test attributes on predeclared subroutines, after definition
+eval 'package A; sub PS : lvalue; sub PS { }';
+@attrs = eval 'attributes::get \&A::PS';
 is "@attrs", "lvalue";
+
+# Test ability to modify existing sub's (or XSUB's) attributes.
+eval 'package A; sub X { $_[0] } sub X : method';
+@attrs = eval 'attributes::get \&A::X';
+is "@attrs", "method";
 
 # Above not with just 'pure' built-in attributes.
 sub Z::MODIFY_CODE_ATTRIBUTES { (); }
-eval 'package Z; sub L { $_[0] } sub L : Z lvalue';
+eval 'package Z; sub L { $_[0] } sub L : Z method';
 @attrs = eval 'attributes::get \&Z::L';
-is "@attrs", "lvalue Z";
+is "@attrs", "method Z";
 
 # Begin testing attributes that tie
 
