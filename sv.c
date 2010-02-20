@@ -1372,6 +1372,10 @@ Perl_sv_upgrade(pTHX_ register SV *const sv, svtype new_type)
 	break;
 
 
+    case SVt_REGEXP:
+	/* This ensures that SvTHINKFIRST(sv) is true, and hence that
+	   sv_force_normal_flags(sv) is called.  */
+	SvFAKE_on(sv);
     case SVt_PVIV:
 	/* XXX Is this still needed?  Was it ever needed?   Surely as there is
 	   no route from NV to PVIV, NOK can never be true  */
@@ -1382,7 +1386,6 @@ Perl_sv_upgrade(pTHX_ register SV *const sv, svtype new_type)
     case SVt_PVGV:
     case SVt_PVCV:
     case SVt_PVLV:
-    case SVt_REGEXP:
     case SVt_PVMG:
     case SVt_PVNV:
     case SVt_PV:
@@ -1431,7 +1434,7 @@ Perl_sv_upgrade(pTHX_ register SV *const sv, svtype new_type)
 
 	if (new_type == SVt_PVIO) {
 	    IO * const io = MUTABLE_IO(sv);
-	    GV *iogv = gv_fetchpvs("IO::Handle::", GV_ADD, SVt_PVHV);
+	    GV *iogv = gv_fetchpvs("IO::File::", GV_ADD, SVt_PVHV);
 
 	    SvOBJECT_on(io);
 	    /* Clear the stashcache because a new IO could overrule a package
@@ -3682,7 +3685,6 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
     SV **location;
     U8 import_flag = 0;
     const U32 stype = SvTYPE(sref);
-    bool mro_changes = FALSE;
 
     PERL_ARGS_ASSERT_GLOB_ASSIGN_REF;
 
@@ -3703,8 +3705,6 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
 	goto common;
     case SVt_PVAV:
 	location = (SV **) &GvAV(dstr);
-        if (strEQ(GvNAME((GV*)dstr), "ISA"))
-	    mro_changes = TRUE;
 	import_flag = GVf_IMPORTED_AV;
 	goto common;
     case SVt_PVIO:
@@ -3778,12 +3778,15 @@ S_glob_assign_ref(pTHX_ SV *const dstr, SV *const sstr)
 	    && CopSTASH_ne(PL_curcop, GvSTASH(dstr))) {
 	    GvFLAGS(dstr) |= import_flag;
 	}
+	if (stype == SVt_PVAV && strEQ(GvNAME((GV*)dstr), "ISA")) {
+	    sv_magic(sref, dstr, PERL_MAGIC_isa, NULL, 0);
+	    mro_isa_changed_in(GvSTASH(dstr));
+	}
 	break;
     }
     SvREFCNT_dec(dref);
     if (SvTAINTED(sstr))
 	SvTAINT(dstr);
-    if (mro_changes) mro_isa_changed_in(GvSTASH(dstr));
     return;
 }
 
@@ -4615,6 +4618,45 @@ Perl_sv_force_normal_flags(pTHX_ register SV *const sv, const U32 flags)
 	sv_unref_flags(sv, flags);
     else if (SvFAKE(sv) && SvTYPE(sv) == SVt_PVGV)
 	sv_unglob(sv);
+    else if (SvFAKE(sv) && SvTYPE(sv) == SVt_REGEXP) {
+	/* Need to downgrade the REGEXP to a simple(r) scalar. This is analagous
+	   to sv_unglob. We only need it here, so inline it.  */
+	const svtype new_type = SvMAGIC(sv) || SvSTASH(sv) ? SVt_PVMG : SVt_PV;
+	SV *const temp = newSV_type(new_type);
+	void *const temp_p = SvANY(sv);
+
+	if (new_type == SVt_PVMG) {
+	    SvMAGIC_set(temp, SvMAGIC(sv));
+	    SvMAGIC_set(sv, NULL);
+	    SvSTASH_set(temp, SvSTASH(sv));
+	    SvSTASH_set(sv, NULL);
+	}
+	SvCUR_set(temp, SvCUR(sv));
+	/* Remember that SvPVX is in the head, not the body. */
+	if (SvLEN(temp)) {
+	    SvLEN_set(temp, SvLEN(sv));
+	    /* This signals "buffer is owned by someone else" in sv_clear,
+	       which is the least effort way to stop it freeing the buffer.
+	    */
+	    SvLEN_set(sv, SvLEN(sv)+1);
+	} else {
+	    /* Their buffer is already owned by someone else. */
+	    SvPVX(sv) = savepvn(SvPVX(sv), SvCUR(sv));
+	    SvLEN_set(temp, SvCUR(sv)+1);
+	}
+
+	/* Now swap the rest of the bodies. */
+
+	SvFLAGS(sv) &= ~(SVf_FAKE|SVTYPEMASK);
+	SvFLAGS(sv) |= new_type;
+	SvANY(sv) = SvANY(temp);
+
+	SvFLAGS(temp) &= ~(SVTYPEMASK);
+	SvFLAGS(temp) |= SVt_REGEXP|SVf_FAKE;
+	SvANY(temp) = temp_p;
+
+	SvREFCNT_dec(temp);
+    }
 }
 
 /*
@@ -6030,6 +6072,10 @@ Perl_sv_len_utf8(pTHX_ register SV *const sv)
 		    }
 		    assert(mg);
 		    mg->mg_len = ulen;
+		    /* For now, treat "overflowed" as "still unknown".
+		       See RT #72924.  */
+		    if (ulen != (STRLEN) mg->mg_len)
+			mg->mg_len = -1;
 		}
 	    }
 	    return ulen;
@@ -6198,6 +6244,60 @@ S_sv_pos_u2b_cached(pTHX_ SV *const sv, MAGIC **const mgp, const U8 *const start
 
 
 /*
+=for apidoc sv_pos_u2b_flags
+
+Converts the value pointed to by offsetp from a count of UTF-8 chars from
+the start of the string, to a count of the equivalent number of bytes; if
+lenp is non-zero, it does the same to lenp, but this time starting from
+the offset, rather than from the start of the string. Handles type coercion.
+I<flags> is passed to C<SvPV_flags>, and usually should be
+C<SV_GMAGIC|SV_CONST_RETURN> to handle magic.
+
+=cut
+*/
+
+/*
+ * sv_pos_u2b_flags() uses, like sv_pos_b2u(), the mg_ptr of the potential
+ * PERL_MAGIC_utf8 of the sv to store the mapping between UTF-8 and
+ * byte offsets.  See also the comments of S_utf8_mg_pos_cache_update().
+ *
+ */
+
+STRLEN
+Perl_sv_pos_u2b_flags(pTHX_ SV *const sv, STRLEN uoffset, STRLEN *const lenp,
+		      U32 flags)
+{
+    const U8 *start;
+    STRLEN len;
+    STRLEN boffset;
+
+    PERL_ARGS_ASSERT_SV_POS_U2B_FLAGS;
+
+    start = (U8*)SvPV_flags(sv, len, flags);
+    if (len) {
+	const U8 * const send = start + len;
+	MAGIC *mg = NULL;
+	boffset = sv_pos_u2b_cached(sv, &mg, start, send, uoffset, 0, 0);
+
+	if (lenp) {
+	    /* Convert the relative offset to absolute.  */
+	    const STRLEN uoffset2 = uoffset + *lenp;
+	    const STRLEN boffset2
+		= sv_pos_u2b_cached(sv, &mg, start, send, uoffset2,
+				      uoffset, boffset) - boffset;
+
+	    *lenp = boffset2;
+	}
+    } else {
+	if (lenp)
+	    *lenp = 0;
+	boffset = 0;
+    }
+
+    return boffset;
+}
+
+/*
 =for apidoc sv_pos_u2b
 
 Converts the value pointed to by offsetp from a count of UTF-8 chars from
@@ -6205,6 +6305,9 @@ the start of the string, to a count of the equivalent number of bytes; if
 lenp is non-zero, it does the same to lenp, but this time starting from
 the offset, rather than from the start of the string. Handles magic and
 type coercion.
+
+Use C<sv_pos_u2b_flags> in preference, which correctly handles strings longer
+than 2Gb.
 
 =cut
 */
@@ -6216,44 +6319,22 @@ type coercion.
  *
  */
 
+/* This function is subject to size and sign problems */
+
 void
 Perl_sv_pos_u2b(pTHX_ register SV *const sv, I32 *const offsetp, I32 *const lenp)
 {
-    const U8 *start;
-    STRLEN len;
-
     PERL_ARGS_ASSERT_SV_POS_U2B;
 
-    if (!sv)
-	return;
-
-    start = (U8*)SvPV_const(sv, len);
-    if (len) {
-	STRLEN uoffset = (STRLEN) *offsetp;
-	const U8 * const send = start + len;
-	MAGIC *mg = NULL;
-	const STRLEN boffset = sv_pos_u2b_cached(sv, &mg, start, send,
-					     uoffset, 0, 0);
-
-	*offsetp = (I32) boffset;
-
-	if (lenp) {
-	    /* Convert the relative offset to absolute.  */
-	    const STRLEN uoffset2 = uoffset + (STRLEN) *lenp;
-	    const STRLEN boffset2
-		= sv_pos_u2b_cached(sv, &mg, start, send, uoffset2,
-				      uoffset, boffset) - boffset;
-
-	    *lenp = boffset2;
-	}
+    if (lenp) {
+	STRLEN ulen = (STRLEN)*lenp;
+	*offsetp = (I32)sv_pos_u2b_flags(sv, (STRLEN)*offsetp, &ulen,
+					 SV_GMAGIC|SV_CONST_RETURN);
+	*lenp = (I32)ulen;
+    } else {
+	*offsetp = (I32)sv_pos_u2b_flags(sv, (STRLEN)*offsetp, NULL,
+					 SV_GMAGIC|SV_CONST_RETURN);
     }
-    else {
-	 *offsetp = 0;
-	 if (lenp)
-	      *lenp = 0;
-    }
-
-    return;
 }
 
 /* Create and update the UTF8 magic offset cache, with the proffered utf8/

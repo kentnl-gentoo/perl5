@@ -1457,6 +1457,14 @@ there are neither package declarations nor a C<$VERSION>.
 long for Perl to handle.  You have to be seriously twisted to write code
 that triggers this error.
 
+=item Deprecated character(s) in \\N{...} starting at '%s'
+
+(D deprecated) Just about anything is legal for the C<...> in C<\N{...}>.
+But starting in 5.12, non-reasonable ones that don't look like names are
+deprecated.  A reasonable name begins with an alphabetic character and
+continues with any combination of alphanumerics, dashes, spaces, parentheses or
+colons.
+
 =item Deprecated use of my() in false conditional
 
 (D deprecated) You used a declaration similar to C<my $x if 0>.
@@ -1851,9 +1859,17 @@ earlier in the line, and you really meant a "less than".
 
 =item gmtime(%.0f) too large
 
-(W overflow) You called C<gmtime> with an number that was beyond the 64-bit
-range that it accepts, and some rounding resulted. This warning is also
-triggered with nan (the special not-a-number value).
+(W overflow) You called C<gmtime> with an number that was larger than
+it can reliably handle and C<gmtime> probably returned the wrong
+date. This warning is also triggered with nan (the special
+not-a-number value).
+
+=item gmtime(%.0f) too small
+
+(W overflow) You called C<gmtime> with an number that was smaller than
+it can reliably handle and C<gmtime> probably returned the wrong
+date. This warning is also triggered with nan (the special
+not-a-number value).
 
 =item Got an error from DosAllocMem
 
@@ -1904,10 +1920,10 @@ about 250 characters for simple names, and somewhat more for compound
 names (like C<$A::B>).  You've exceeded Perl's limits.  Future versions
 of Perl are likely to eliminate these arbitrary limitations.
 
-=item Ignoring %s in character class in regex; marked by <-- HERE in m/%s/
+=item Ignoring zero length \N{} in character class
 
-(W) Named Unicode character escapes (\N{...}) may return multi-char
-or zero length sequences. When such an escape is used in a character class
+(W) Named Unicode character escapes (\N{...}) may return a
+zero length sequence.  When such an escape is used in a character class
 its behaviour is not well defined. Check that the correct escape has
 been used, and the correct charname handler is in scope.
 
@@ -2289,8 +2305,17 @@ L<perlfunc/listen>.
 
 =item localtime(%.0f) too large
 
-(W overflow) You called C<localtime> with an number that was beyond the
-64-bit range that it accepts, and some rounding resulted. This warning is also triggered with nan (the special not-a-number value).
+(W overflow) You called C<localtime> with an number that was larger
+than it can reliably handle and C<localtime> probably returned the
+wrong date. This warning is also triggered with nan (the special
+not-a-number value).
+
+=item localtime(%.0f) too small
+
+(W overflow) You called C<localtime> with an number that was smaller
+than it can reliably handle and C<localtime> probably returned the
+wrong date. This warning is also triggered with nan (the special
+not-a-number value).
 
 =item Lookbehind longer than %d not implemented in regex m/%s/
 
@@ -2378,6 +2403,10 @@ See also L<Encode/"Handling Malformed Data">.
 (F) Perl thought it was reading UTF-16 encoded character data but while
 doing it Perl met a malformed Unicode surrogate.
 
+=item Malformed UTF-8 returned by \N
+
+(F) The charnames handler returned malformed UTF-8.
+
 =item Malformed UTF-8 string in pack
 
 (F) You tried to pack something that didn't comply with UTF-8 encoding
@@ -2450,10 +2479,13 @@ supplied.
 (F) The argument to the indicated command line switch must follow
 immediately after the switch, without intervening spaces.
 
-=item Missing %sbrace%s on \N{}
+=item Missing braces on \N{}
 
 (F) Wrong syntax of character name literal C<\N{charname}> within
-double-quotish context.
+double-quotish context.  This can also happen when there is a space (or
+comment) between the C<\N> and the C<{> in a regex with the C</x> modifier.
+This modifier does not change the requirement that the brace immediately follow
+the C<\N>.
 
 =item Missing comma after first argument to %s function
 
@@ -2489,7 +2521,34 @@ can vary from one line to the next.
 
 =item Missing right brace on %s
 
-(F) Missing right brace in C<\x{...}>, C<\p{...}> or C<\P{...}>.
+(F) Missing right brace in C<\x{...}>, C<\p{...}>, C<\P{...}>, or C<\N{...}>.
+
+=item Missing right brace on \\N{} or unescaped left brace after \\N
+
+(F)
+C<\N> has two meanings.
+
+The traditional one has it followed by a name enclosed
+in braces, meaning the character (or sequence of characters) given by that name.
+Thus C<\N{ASTERISK}> is another way of writing C<*>, valid in both
+double-quoted strings and regular expression patterns.  In patterns, it doesn't
+have the meaning an unescaped C<*> does.
+
+Starting in Perl 5.12.0, C<\N> also can have an additional meaning (only) in
+patterns, namely to match a non-newline character.  (This is short for
+C<[^\n]>, and like C<.> but is not affected by the C</s> regex modifier.)
+
+This can lead to some ambiguities.  When C<\N> is not followed immediately by a
+left brace, Perl assumes the C<[^\n]> meaning.  Also, if
+the braces form a valid quantifier such as C<\N{3}> or C<\N{5,}>, Perl assumes
+that this means to match the given quantity of non-newlines (in these examples,
+3; and 5 or more, respectively).  In all other case, where there is a C<\N{>
+and a matching C<}>, Perl assumes that a character name is desired.
+
+However, if there is no matching C<}>, Perl doesn't know if it was mistakenly
+omitted, or if C<[^\n]{> was desired, and
+raises this error.  If you meant the former, add the right brace; if you meant
+the latter, escape the brace with a backslash, like so: C<\N\{>
 
 =item Missing right curly or square bracket
 
@@ -2576,6 +2635,41 @@ that yet.
 sense to try to declare one with a package qualifier on the front.  Use
 local() if you want to localize a package variable.
 
+=item \\N in a character class must be a named character: \\N{...}
+
+(F) The new (5.12) meaning of C<\N> as C<[^\n]> is not valid in a bracketed
+character class, for the same reason that C<.> in a character class loses its
+specialness: it matches almost everything, which is probably not what you want.
+
+=item \\N{NAME} must be resolved by the lexer
+
+(F) When compiling a regex pattern, an unresolved named character or sequence
+was encountered.  This can happen in any of several ways that bypass the lexer,
+such as using single-quotish context:
+
+    $re = '\N{SPACE}';	# Wrong!
+    /$re/;
+
+Instead, use double-quotes:
+
+    $re = "\N{SPACE}";	# ok
+    /$re/;
+
+The lexer can be bypassed as well by creating the pattern from smaller
+components:
+
+    $re = '\N';
+    /${re}{SPACE}/;	# Wrong!
+
+It's not a good idea to split a construct in the middle like this, and it
+doesn't work here.  Instead use the solution above.
+
+Finally, the message also can happen under the C</x> regex modifier when the
+C<\N> is separated by spaces from the C<{>, in which case, remove the spaces.
+
+    /\N {SPACE}/x;	# Wrong!
+    /\N{SPACE}/x;	# ok
+
 =item Name "%s::%s" used only once: possible typo
 
 (W once) Typographical errors often show up as unique variable names.
@@ -2587,6 +2681,12 @@ NOTE: This warning detects symbols that have been used only once so $c, @c,
 %c, *c, &c, sub c{}, c(), and c (the filehandle or format) are considered
 the same; if a program uses $c only once but also uses any of the others it
 will not trigger this warning.
+
+=item Invalid hexadecimal number in \\N{U+...}
+
+(F) The character constant represented by C<...> is not a valid hexadecimal
+number.  Either it is empty, or you tried to use a character other than 0 - 9
+or A - F, a - f in a hexadecimal number.
 
 =item Negative '/' count in unpack
 
@@ -4522,19 +4622,21 @@ to run a compressed script, a binary program, or a directory as a Perl program.
 
 (W regexp) You used a backslash-character combination which is not
 recognized by Perl inside character classes.  The character was
-understood literally.
+understood literally, but this may change in a future version of Perl.
 The <-- HERE shows in the regular expression about where the
 escape was discovered.
 
 =item Unrecognized escape \\%c passed through
 
 (W misc) You used a backslash-character combination which is not
-recognized by Perl.  The character was understood literally.
+recognized by Perl.  The character was understood literally, but this may
+change in a future version of Perl.
 
 =item Unrecognized escape \\%c passed through in regex; marked by <-- HERE in m/%s/
 
 (W regexp) You used a backslash-character combination which is not
-recognized by Perl.  The character was understood literally.
+recognized by Perl.  The character was understood literally, but this may
+change in a future version of Perl.
 The <-- HERE shows in the regular expression about where the
 escape was discovered.
 
@@ -4924,9 +5026,23 @@ C<< @foo->[23] >> or C<< @$ref->[99] >>.  Versions of perl <= 5.6.1 used to
 allow this syntax, but shouldn't have. It is now deprecated, and will be
 removed in a future version.
 
+=item Using just the first character returned by \N{} in character class
+
+(W) A charnames handler may return a sequence of more than one character.
+Currently all but the first one are discarded when used in a regular
+expression pattern bracketed character class.
+
+=item Using just the first characters returned by \N{}
+
+(W) A charnames handler may return a sequence of characters.  There is a finite
+limit as to the number of characters that can be used, which this sequence
+exceeded.  In the message, the characters in the sequence are separated by
+dots, and each is shown by its ordinal in hex.  Anything to the left of the
+C<HERE> was retained; anything to the right was discarded.
+
 =item UTF-16 surrogate %s
 
-(W utf8) You tried to generate half of an UTF-16 surrogate by
+(W utf8) You tried to generate half of a UTF-16 surrogate by
 requesting a Unicode character between the code points 0xD800 and
 0xDFFF (inclusive).  That range is reserved exclusively for the use of
 UTF-16 encoding (by having two 16-bit UCS-2 characters); but Perl

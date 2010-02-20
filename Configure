@@ -30,7 +30,7 @@
 
 # $Id: Head.U 6 2006-08-25 22:21:46Z rmanfredi $
 #
-# Generated on Tue Jan  5 09:34:08 CET 2010 [metaconfig 3.5 PL0]
+# Generated on Sat Feb 13 19:05:42 CET 2010 [metaconfig 3.5 PL0]
 # (with additional metaconfig patches by perlbug@perl.org)
 
 cat >c1$$ <<EOF
@@ -2443,6 +2443,15 @@ egrep)
 	echo "Substituting grep for egrep."
 	egrep=$grep
 	_egrep=$grep
+	;;
+esac
+case "$less" in
+'')	;;
+*)	if $less -R </dev/null >/dev/null; then
+	       echo "Substituting less -R for less."
+	       less="$less -R"
+	       _less=$less
+	fi
 	;;
 esac
 case "$ln" in
@@ -7143,6 +7152,8 @@ esac
 
 : DTrace support
 dflt_dtrace='/usr/sbin/dtrace'
+$test -x /usr/bin/dtrace && dflt_dtrace='/usr/bin/dtrace'
+
 cat <<EOM
 
 Perl can be built to support DTrace on platforms that support it.
@@ -21488,7 +21499,7 @@ $eunicefix Cppsym.try
 ./Cppsym < Cppsym.know > Cppsym.true
 : Add in any linux cpp "predefined macros":
 case "$osname::$gccversion" in
-  *linux*::*.*|*gnukfreebsd*::*.*)
+  *linux*::*.*|*gnukfreebsd*::*.*|gnu::*.*)
     tHdrH=_tmpHdr
     rm -f $tHdrH'.h' $tHdrH
     touch $tHdrH'.h'

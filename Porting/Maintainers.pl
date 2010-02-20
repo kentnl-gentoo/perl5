@@ -261,7 +261,7 @@ use File::Glob qw(:case);
     'B::Debug' =>
 	{
 	'MAINTAINER'	=> 'rurban',
-	'DISTRIBUTION'	=> 'RURBAN/B-Debug-1.11.tar.gz',
+	'DISTRIBUTION'	=> 'RURBAN/B-Debug-1.12.tar.gz',
 	'FILES'		=> q[cpan/B-Debug],
 	'EXCLUDED'	=> [ qw( t/coverage.html t/pod.t ) ],
 	'CPAN'		=> 1,
@@ -379,13 +379,14 @@ use File::Glob qw(:case);
     'CPAN' =>
 	{
 	'MAINTAINER'	=> 'andk',
-	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_53.tar.gz',
+	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_56.tar.gz',
 	'FILES'		=> q[cpan/CPAN],
 	'EXCLUDED'	=> [ qr{^distroprefs/},
 			     qr{^inc/Test/},
 			     qr{^t/CPAN/authors/},
 			     qw{
 				lib/CPAN/Admin.pm
+				Makefile.PL
 				SlayMakefile
 				t/00signature.t
 				t/04clean_load.t
@@ -443,7 +444,7 @@ use File::Glob qw(:case);
     'CPANPLUS::Dist::Build' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.44.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.46.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS-Dist-Build],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{ t/99_pod.t
@@ -1281,7 +1282,7 @@ use File::Glob qw(:case);
 
     'Pod::Plainer' =>
 	{
-	'DISTRIBUTION'	=> 'RMBARKER/Pod-Plainer-1.01.tar.gz',
+	'DISTRIBUTION'	=> 'RMBARKER/Pod-Plainer-1.02.tar.gz',
 	'MAINTAINER'	=> 'rmbarker',
 	'FILES'		=> q[dist/Pod-Plainer],
 	'CPAN'		=> 1,
@@ -1307,7 +1308,7 @@ use File::Glob qw(:case);
     'podlators' =>
 	{
 	'MAINTAINER'	=> 'rra',
-	'DISTRIBUTION'	=> 'RRA/podlators-2.2.2.tar.gz',
+	'DISTRIBUTION'	=> 'RRA/podlators-2.3.1.tar.gz',
 	'FILES'		=> q[cpan/podlators
 			     pod/pod2man.PL
 			     pod/pod2text.PL
@@ -1322,7 +1323,7 @@ use File::Glob qw(:case);
     'Safe' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'RGARCIA/Safe-2.19.tar.gz',
+	'DISTRIBUTION'	=> 'RGARCIA/Safe-2.22.tar.gz',
 	'FILES'		=> q[dist/Safe],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',

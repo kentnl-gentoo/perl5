@@ -462,6 +462,18 @@ US-ASCII (Basic Latin) range are viewed as not having any case.
 #define isALNUM(c)	(isALPHA(c) || isDIGIT(c) || (c) == '_')
 #define isIDFIRST(c)	(isALPHA(c) || (c) == '_')
 #define isALPHA(c)	(isUPPER(c) || isLOWER(c))
+/* ALPHAU includes Unicode semantics for latin1 characters.  It has an extra
+ * >= AA test to speed up ASCII-only tests at the expense of the others */
+#define isALPHAU(c)	(isALPHA(c) || (NATIVE_TO_UNI((U8) c) >= 0xAA \
+    && ((NATIVE_TO_UNI((U8) c) >= 0xC0 \
+	    && NATIVE_TO_UNI((U8) c) != 0xD7 && NATIVE_TO_UNI((U8) c) != 0xF7) \
+	|| NATIVE_TO_UNI((U8) c) == 0xAA \
+	|| NATIVE_TO_UNI((U8) c) == 0xB5 \
+	|| NATIVE_TO_UNI((U8) c) == 0xBA)))
+#define isALNUMU(c)	(isDIGIT(c) || isALPHAU(c) || (c) == '_')
+
+/* continuation character for legal NAME in \N{NAME} */
+#define isCHARNAME_CONT(c) (isALNUMU(c) || (c) == ' ' || (c) == '-' || (c) == '(' || (c) == ')' || (c) == ':' || NATIVE_TO_UNI((U8) c) == 0xA0)
 #define isSPACE(c) \
 	((c) == ' ' || (c) == '\t' || (c) == '\n' || (c) =='\r' || (c) == '\f')
 #define isPSXSPC(c)	(isSPACE(c) || (c) == '\v')
@@ -789,9 +801,9 @@ PoisonWith(0xEF) for catching access to freed memory.
  * implementation unless -DPERL_MEM_LOG_NOIMPL is also defined.
  *
  * Known problems:
- * - all memory allocs do not get logged, only those
+ * - not all memory allocs get logged, only those
  *   that go through Newx() and derivatives (while all
- *  Safefrees do get logged)
+ *   Safefrees do get logged)
  * - __FILE__ and __LINE__ do not work everywhere
  * - __func__ or __FUNCTION__ even less so
  * - I think more goes on after the perlio frees but

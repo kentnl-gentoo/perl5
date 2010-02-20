@@ -31,6 +31,7 @@ Perl_realloc
 Perl_mfree
 Perl_get_context
 Perl_set_context
+Perl_regcurly
 Perl_amagic_call
 Perl_Gv_AMupdate
 Perl_gv_handler
@@ -567,6 +568,7 @@ Perl_sv_newmortal
 Perl_sv_newref
 Perl_sv_peek
 Perl_sv_pos_u2b
+Perl_sv_pos_u2b_flags
 Perl_sv_pos_b2u
 Perl_sv_pvn_force
 Perl_sv_pvutf8n_force

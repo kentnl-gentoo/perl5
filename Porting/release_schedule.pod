@@ -17,13 +17,18 @@ you should reset the version numbers to the next blead series.
  October 2       -  5.11.0  -   Jesse Vincent
  October 20      -  5.11.1  -   Jesse Vincent
  November 20     -  5.11.2  -   Leon Brocard
- December 20     -  5.11.3  -   Jesse Vincent or minion
+ December 20     -  5.11.3  -   Jesse Vincent
 
 =head2 2010
 
  January 20      -  5.11.4  -   Ricardo Signes
  February 20     -  5.11.5  -   Steve Hay
  March 20        -  5.11.6  -   Ask Bjørn Hansen
+ April 20        -  5.11.7  -   Leon Brocard
+ May 20          -  5.11.8  -   Ricardo Signes
+ June 20         -  5.11.9  -   Philippe Bruhat
+ July 20         -  5.11.10 -   Matt Trout
+ August 20       -  5.11.11 -   David Golden
 
 =head1 VICTIMS
 
@@ -35,16 +40,17 @@ Jesse Vincent <F<jesse@cpan.org>>
 Leon Brocard <F<acme@astray.com>>
 Yves Orton <F<demerphq@gmail.com>>
 Ricardo Signes <F<rjbs@manxome.org>>
-Steve Hay <F<stevehay@planit.com>>
+Steve Hay <F<steve.m.hay@googlemail.com>>
 Ask Bjørn Hansen <F<ask@perl.org>>
-
+David Golden <F<dagolden@cpan.org>>
+Philippe Bruhat <F<book@cpan.org>>
+Matt Trout <F<mst@shadowcat.co.uk>>
 
 =head2 Reticent victims
 
 These folks have said that they'd be willing to release Perl but would
 prefer that others have the opportunity before they pitch in:
 
-David Golden <F<xdave@gmail.com>> 
 
 
 =head1 AUTHOR

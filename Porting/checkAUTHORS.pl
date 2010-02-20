@@ -344,7 +344,8 @@ rgs                                     rgarciasuarez\100free.fr
 sky                                     sky\100nanisky.com
 +                                       artur\100contiller.se
 +                                       arthur\100contiller.se
-steveh                                  stevehay\100planit.com
+steveh                                  steve.m.hay\100googlemail.com
++                                       stevehay\100planit.com
 +                                       steve.hay\100uk.radan.com
 stevep                                  steve\100fisharerojo.org
 +                                       steve.peters\100gmail.com
@@ -522,6 +523,7 @@ jtobey\100john-edwin-tobey.org          jtobey\100user1.channel1.com
 jpeacock\100rowman.com                  john.peacock\100havurah-software.org
 +                                       jpeacock\100havurah-software.org
 +                                       jpeacock\100dsl092-147-156.wdc1.dsl.speakeasy.net
++                                       jpeacock\100jpeacock-hp.doesntexist.org
 jql\100accessone.com                    jql\100jql.accessone.com
 jsm28\100hermes.cam.ac.uk               jsm28\100cam.ac.uk
 

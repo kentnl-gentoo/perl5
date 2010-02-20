@@ -556,33 +556,33 @@ like this:
 	# code
     }
 
-The range operator also works on strings, using the magical auto-increment,
-see below.
+The range operator also works on strings, using the magical
+auto-increment, see below.
 
 In scalar context, ".." returns a boolean value.  The operator is
-bistable, like a flip-flop, and emulates the line-range (comma) operator
-of B<sed>, B<awk>, and various editors.  Each ".." operator maintains its
-own boolean state.  It is false as long as its left operand is false.
+bistable, like a flip-flop, and emulates the line-range (comma)
+operator of B<sed>, B<awk>, and various editors. Each ".." operator
+maintains its own boolean state, even across calls to a subroutine
+that contains it. It is false as long as its left operand is false.
 Once the left operand is true, the range operator stays true until the
 right operand is true, I<AFTER> which the range operator becomes false
-again.  It doesn't become false till the next time the range operator is
-evaluated.  It can test the right operand and become false on the same
-evaluation it became true (as in B<awk>), but it still returns true once.
-If you don't want it to test the right operand until the next
-evaluation, as in B<sed>, just use three dots ("...") instead of
+again.  It doesn't become false till the next time the range operator
+is evaluated.  It can test the right operand and become false on the
+same evaluation it became true (as in B<awk>), but it still returns
+true once. If you don't want it to test the right operand until the
+next evaluation, as in B<sed>, just use three dots ("...") instead of
 two.  In all other regards, "..." behaves just like ".." does.
 
 The right operand is not evaluated while the operator is in the
 "false" state, and the left operand is not evaluated while the
 operator is in the "true" state.  The precedence is a little lower
 than || and &&.  The value returned is either the empty string for
-false, or a sequence number (beginning with 1) for true.  The
-sequence number is reset for each range encountered.  The final
-sequence number in a range has the string "E0" appended to it, which
-doesn't affect its numeric value, but gives you something to search
-for if you want to exclude the endpoint.  You can exclude the
-beginning point by waiting for the sequence number to be greater
-than 1.
+false, or a sequence number (beginning with 1) for true.  The sequence
+number is reset for each range encountered.  The final sequence number
+in a range has the string "E0" appended to it, which doesn't affect
+its numeric value, but gives you something to search for if you want
+to exclude the endpoint.  You can exclude the beginning point by
+waiting for the sequence number to be greater than 1.
 
 If either operand of scalar ".." is a constant expression,
 that operand is considered true if it is equal (C<==>) to the current
@@ -816,16 +816,63 @@ between keys and values in hashes, and other paired elements in lists.
 =head2 Yada Yada Operator
 X<...> X<... operator> X<yada yada operator>
 
-The yada yada operator (noted C<...>) is a placeholder for code.
-It parses without error, but when executed it throws an exception
-with the text C<Unimplemented>:
+The yada yada operator (noted C<...>) is a placeholder for code. Perl
+parses it without error, but when you try to execute a yada yada, it
+throws an exception with the text C<Unimplemented>:
 
-    sub foo { ... }
-    foo();
+	sub unimplemented { ... }
+	
+	eval { unimplemented() };
+	if( $@ eq 'Unimplemented' ) {
+	  print "I found the yada yada!\n";
+	  }
 
-    Unimplemented at <file> line <line number>.
+You can only use the yada yada to stand in for a complete statement.
+These examples of the yada yada work:
 
-It takes no argument.
+	{ ... }
+	
+	sub foo { ... }
+	
+	...;
+	
+	eval { ... };
+	
+	sub foo {
+			my( $self ) = shift;
+			
+			...;
+			}
+			
+	do { my $n; ...; print 'Hurrah!' };
+
+The yada yada cannot stand in for an expression that is part of a
+larger statement since the C<...> is also the three-dot version of the
+range operator (see L<Range Operators>). These examples of the yada
+yada are still syntax errors:
+
+	print ...;
+	
+	open my($fh), '>', '/dev/passwd' or ...;
+	
+	if( $condition && ... ) { print "Hello\n" };
+
+There are some cases where Perl can't immediately tell the difference
+between an expression and a statement. For instance, the syntax for a
+block and an anonymous hash reference constructor look the same unless
+there's something in the braces that give Perl a hint. The yada yada
+is a syntax error if Perl doesn't guess that the C<{ ... }> is a
+block. In that case, it doesn't think the C<...> is the yada yada
+because it's expecting an expression instead of a statement:
+
+	my @transformed = map { ... } @input;  # syntax error
+
+You can use a C<;> inside your block to denote that the C<{ ... }> is
+a block and not a hash reference constructor. Now the yada yada works:
+
+	my @transformed = map {; ... } @input; # ; disambiguates
+
+	my @transformed = map { ...; } @input; # ; disambiguates
 
 =head2 List Operators (Rightward)
 X<operator, list, rightward> X<list operator>

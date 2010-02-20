@@ -2,7 +2,7 @@ package CPAN::HandleConfig;
 use strict;
 use vars qw(%can %keys $loading $VERSION);
 
-$VERSION = "5.5";
+$VERSION = "5.5001"; # see also CPAN::Config::VERSION at end of file
 
 %can = (
         commit   => "Commit changes to disk",
@@ -523,7 +523,8 @@ sub load {
     my($self, %args) = @_;
     $CPAN::Be_Silent++ if $args{be_silent};
     my $doit;
-    $doit = delete $args{doit};
+    $doit = delete $args{doit} || 0;
+    $loading = 0 unless defined $loading;
 
     use Carp;
     require_myconfig_or_config;
@@ -560,9 +561,14 @@ sub load {
         if ($configpm) {
           $INC{$inc_key} = $configpm;
         } else {
-          my $text = qq{WARNING: CPAN.pm is unable to } .
-              qq{create a configuration file.};
-          output($text, 'confess');
+          my $myconfigpm = File::Spec->catfile(home,".cpan","CPAN","MyConfig.pm");
+          $CPAN::Frontend->mydie(<<"END");
+WARNING: CPAN.pm is unable to write a configuration file.  You need write
+access to your default perl library directories or you must be able to
+create and write to '$myconfigpm'.
+
+Aborting configuration.
+END
         }
 
     }
@@ -634,7 +640,7 @@ Edit key values as in the following (the "o" is a literal letter o):
   o conf inhibit_startup_message 1
 
 ]);
-    undef; #don't reprint CPAN::Config
+    1; #don't reprint CPAN::Config
 }
 
 sub cpl {
@@ -706,7 +712,7 @@ sub prefs_lookup {
 
     use strict;
     use vars qw($AUTOLOAD $VERSION);
-    $VERSION = "5.5";
+    $VERSION = "5.5001";
 
     # formerly CPAN::HandleConfig was known as CPAN::Config
     sub AUTOLOAD { ## no critic

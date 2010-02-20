@@ -6,7 +6,7 @@ use Scalar::Util qw(reftype);
 use Config qw(%Config);
 use constant is_usethreads => $Config{usethreads};
 
-$Safe::VERSION = "2.21";
+$Safe::VERSION = "2.22";
 
 # *** Don't declare any lexicals above this point ***
 #
@@ -311,7 +311,21 @@ sub reval {
             $ret = sub {
                 my @args = @_; # lexical to close over
                 my $sub_with_args = sub { $sub->(@args) };
-                return Opcode::_safe_call_sv($root, $obj->{Mask}, $sub_with_args)
+
+                my @subret;
+                my $error;
+                do {
+                    local $@;  # needed due to perl_call_sv(sv, G_EVAL|G_KEEPERR)
+                    @subret = (wantarray)
+                        ?        Opcode::_safe_call_sv($root, $obj->{Mask}, $sub_with_args)
+                        : scalar Opcode::_safe_call_sv($root, $obj->{Mask}, $sub_with_args);
+                    $error = $@;
+                };
+                if ($error) { # rethrow exception
+                    $error =~ s/\t\(in cleanup\) //; # prefix added by G_KEEPERR
+                    die $error;
+                }
+                return (wantarray) ? @subret : $subret[0];
             };
         }
     }

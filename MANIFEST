@@ -332,7 +332,6 @@ cpan/CPAN/lib/CPAN/Shell.pm
 cpan/CPAN/lib/CPAN/Tarzip.pm		helper package for CPAN.pm
 cpan/CPAN/lib/CPAN/URL.pm
 cpan/CPAN/lib/CPAN/Version.pm		Simple math with different flavors of version strings
-cpan/CPAN/Makefile.PL
 cpan/CPAN/PAUSE2003.pub		CPAN public key
 cpan/CPAN/PAUSE2005.pub		CPAN public key
 cpan/CPAN/PAUSE2007.pub		CPAN public key
@@ -1766,10 +1765,13 @@ cpan/podlators/t/basic.pod			podlators test
 cpan/podlators/t/basic.t			podlators test
 cpan/podlators/t/basic.txt			podlators test
 cpan/podlators/t/color.t			podlators test
+cpan/podlators/t/devise-date.t			podlators test
 cpan/podlators/t/filehandle.t			podlators test
+cpan/podlators/t/man-heading.t			podlators test
 cpan/podlators/t/man-options.t			podlators test
 cpan/podlators/t/man.t				podlators test
 cpan/podlators/t/man-utf8.t			podlators test
+cpan/podlators/t/overstrike.t			podlators test
 cpan/podlators/t/parselink.t			podlators test
 cpan/podlators/t/pod-parser.t			podlators test
 cpan/podlators/t/pod-spelling.t			podlators test
@@ -1779,7 +1781,6 @@ cpan/podlators/t/text-encoding.t		podlators test
 cpan/podlators/t/text-options.t			podlators test
 cpan/podlators/t/text.t				podlators test
 cpan/podlators/t/text-utf8.t			podlators test
-cpan/podlators/VERSION				podlators custom Makefile.PL
 cpan/podlators/VERSION				podlators distribution version
 cpan/Pod-Parser/lib/Pod/Checker.pm		Pod-Parser - check POD documents for syntax errors
 cpan/Pod-Parser/lib/Pod/Find.pm			used by pod/splitpod
@@ -3628,7 +3629,6 @@ lib/unicore/PropertyAliases.txt			Unicode character database
 lib/unicore/PropList.txt			Unicode character database
 lib/unicore/PropValueAliases.txt		Unicode character database
 lib/unicore/README.perl				Unicode character database
-lib/unicore/README.perl				Unicode character database
 lib/unicore/ReadMe.txt				Unicode character database info
 lib/unicore/Scripts.txt				Unicode character database
 lib/unicore/SpecialCasing.txt			Unicode character database
@@ -3864,6 +3864,8 @@ pod/perl5111delta.pod		Perl changes in version 5.11.1
 pod/perl5112delta.pod		Perl changes in version 5.11.2
 pod/perl5113delta.pod		Perl changes in version 5.11.3
 pod/perl5114delta.pod		Perl changes in version 5.11.4
+pod/perl5115delta.pod		Perl changes in version 5.11.5
+pod/perl5120delta.pod		Perl changes in version 5.12.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -3998,6 +4000,7 @@ Porting/check83.pl		Check whether we are 8.3-friendly
 Porting/checkansi.pl		Check source code for ANSI-C violations
 Porting/checkAUTHORS.pl		Check that the AUTHORS file is complete
 Porting/checkcfgvar.pl		Check that config scripts define all symbols
+Porting/check-cpan-pollution	Check for commits that may wrongly touch CPAN distros
 Porting/checkURL.pl		Check whether we have working URLs
 Porting/checkVERSION.pl		Check whether we have $VERSIONs
 Porting/cmpVERSION.pl		Compare whether two trees have changed modules
@@ -4386,6 +4389,7 @@ t/op/exec.t			See if exec, system and qx work
 t/op/exists_sub.t		See if exists(&sub) works
 t/op/exp.t			See if math functions work
 t/op/fh.t			See if filehandles work
+t/op/filehandle.t		Tests for http://rt.perl.org/rt3/Ticket/Display.html?id=72586
 t/op/filetest.t			See if file tests work
 t/op/filetest_t.t		See if -t file test works
 t/op/flip.t			See if range operator works
@@ -4484,6 +4488,7 @@ t/op/threads.t			Misc. tests for perl features with threads
 t/op/tiearray.t			See if tie for arrays works
 t/op/tiehandle.t		See if tie for handles works
 t/op/tie.t			See if tie/untie functions work
+t/op/time_loop.t		Test that very large values don't hang gmtime and localtime.
 t/op/time.t			See if time functions work
 t/op/tr.t			See if tr works
 t/op/undef.t			See if undef works

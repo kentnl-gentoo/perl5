@@ -42,7 +42,7 @@ If you have problems, corrections, or questions, please see
 L<"Reporting Problems"> below.
 
 For information on what's new in this release, see the
-pod/perl5113delta.pod file.  For more information about how to find more
+pod/perl5115delta.pod file.  For more information about how to find more
 specific detail about changes, see the Changes file.
 
 =head1 DESCRIPTION
@@ -75,10 +75,10 @@ directory.
 
 =head2 Changes and Incompatibilities
 
-Please see pod/perl5113delta.pod for a description of the changes and
+Please see pod/perl5115delta.pod for a description of the changes and
 potential incompatibilities introduced with this release.  A few of
 the most important issues are listed below, but you should refer
-to pod/perl5113delta.pod for more detailed information.
+to pod/perl5115delta.pod for more detailed information.
 
 B<WARNING:> This version is not binary compatible with prior releases of Perl.
 If you have built extensions (i.e. modules that include C code)
@@ -93,7 +93,7 @@ The standard extensions supplied with Perl will be handled automatically.
 
 On a related issue, old modules may possibly be affected by the changes
 in the Perl language in the current release.  Please see
-pod/perl5113delta.pod for a description of what's changed.  See your
+pod/perl5115delta.pod for a description of what's changed.  See your
 installed copy of the perllocal.pod file for a (possibly incomplete)
 list of locally installed modules.  Also see CPAN::autobundle for one
 way to make a "bundle" of your currently installed modules.
@@ -524,9 +524,9 @@ The directories set up by Configure fall into three broad categories.
 
 =item Directories for the perl distribution
 
-By default, Configure will use the following directories for 5.11.4.
+By default, Configure will use the following directories for 5.11.5.
 $version is the full perl version number, including subversion, e.g.
-5.11.4 or 5.9.5, and $archname is a string like sun4-sunos,
+5.11.5 or 5.9.5, and $archname is a string like sun4-sunos,
 determined by Configure.  The full definitions of all Configure
 variables are in the file Porting/Glossary.
 
@@ -932,7 +932,8 @@ only if it is able to find the gdbm library.
 
 To disable certain extensions so that they are not built, use the
 -Dnoextensions=... and -Donlyextensions=... options.  They both accept
-a space-separated list of extensions.  The extensions listed in
+a space-separated list of extensions, such as C<IPC/SysV>. The extensions
+listed in
 C<noextensions> are removed from the list of extensions to build, while
 the C<onlyextensions> is rather more severe and builds only the listed
 extensions.  The latter should be used with extreme caution since
@@ -1835,7 +1836,7 @@ If make test bombs out, just cd to the t directory and run ./TEST
 by hand to see if it makes any difference.  If individual tests
 bomb, you can run them by hand, e.g.,
 
-	cd t ; ./perl -MTestInit op/groups.t
+	./perl -MTestInit t/op/groups.t
 
 Another way to get more detailed information about failed tests and
 individual subtests is to cd to the t directory and run
@@ -2335,9 +2336,9 @@ won't interfere with another version.  (The defaults guarantee this for
 libraries after 5.6.0, but not for executables. TODO?)  One convenient
 way to do this is by using a separate prefix for each version, such as
 
-	sh Configure -Dprefix=/opt/perl5.11.4
+	sh Configure -Dprefix=/opt/perl5.11.5
 
-and adding /opt/perl5.11.4/bin to the shell PATH variable.  Such users
+and adding /opt/perl5.11.5/bin to the shell PATH variable.  Such users
 may also wish to add a symbolic link /usr/local/bin/perl so that
 scripts can still start with #!/usr/local/bin/perl.
 
@@ -2352,11 +2353,11 @@ yet.
 
 =head2 Upgrading from 5.11.0 or earlier
 
-B<Perl 5.11.4 is binary incompatible with Perl 5.11.1 and any earlier
+B<Perl 5.11.5 is binary incompatible with Perl 5.11.1 and any earlier
 Perl release.>  Perl modules having binary parts
 (meaning that a C compiler is used) will have to be recompiled to be
-used with 5.11.4.  If you find you do need to rebuild an extension with
-5.11.4, you may safely do so without disturbing the older
+used with 5.11.5.  If you find you do need to rebuild an extension with
+5.11.5, you may safely do so without disturbing the older
 installations.  (See L<"Coexistence with earlier versions of perl 5">
 above.)
 

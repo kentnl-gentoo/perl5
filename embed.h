@@ -43,6 +43,9 @@
 #endif
 #define get_context		Perl_get_context
 #define set_context		Perl_set_context
+#if defined(PERL_CORE) || defined(PERL_EXT)
+#define regcurly		Perl_regcurly
+#endif
 #define amagic_call		Perl_amagic_call
 #define Gv_AMupdate		Perl_Gv_AMupdate
 #define gv_handler		Perl_gv_handler
@@ -391,6 +394,7 @@
 #define is_utf8_punct		Perl_is_utf8_punct
 #define is_utf8_xdigit		Perl_is_utf8_xdigit
 #define is_utf8_mark		Perl_is_utf8_mark
+#if defined(PERL_CORE) || defined(PERL_EXT)
 #define is_utf8_X_begin		Perl_is_utf8_X_begin
 #define is_utf8_X_extend	Perl_is_utf8_X_extend
 #define is_utf8_X_prepend	Perl_is_utf8_X_prepend
@@ -401,6 +405,7 @@
 #define is_utf8_X_LV_LVT_V	Perl_is_utf8_X_LV_LVT_V
 #define is_utf8_X_T		Perl_is_utf8_X_T
 #define is_utf8_X_V		Perl_is_utf8_X_V
+#endif
 #ifdef PERL_CORE
 #define jmaybe			Perl_jmaybe
 #define keyword			Perl_keyword
@@ -967,6 +972,7 @@
 #define sv_newref		Perl_sv_newref
 #define sv_peek			Perl_sv_peek
 #define sv_pos_u2b		Perl_sv_pos_u2b
+#define sv_pos_u2b_flags	Perl_sv_pos_u2b_flags
 #define sv_pos_b2u		Perl_sv_pos_b2u
 #define sv_pvutf8n_force	Perl_sv_pvutf8n_force
 #define sv_pvbyten_force	Perl_sv_pvbyten_force
@@ -1446,7 +1452,6 @@
 #define regbranch		S_regbranch
 #define reguni			S_reguni
 #define regclass		S_regclass
-#define regcurly		S_regcurly
 #define reg_node		S_reg_node
 #define reg_recode		S_reg_recode
 #define regpiece		S_regpiece
@@ -2453,6 +2458,9 @@
 #endif
 #define get_context		Perl_get_context
 #define set_context		Perl_set_context
+#if defined(PERL_CORE) || defined(PERL_EXT)
+#define regcurly		Perl_regcurly
+#endif
 #define amagic_call(a,b,c,d)	Perl_amagic_call(aTHX_ a,b,c,d)
 #define Gv_AMupdate(a,b)	Perl_Gv_AMupdate(aTHX_ a,b)
 #define gv_handler(a,b)		Perl_gv_handler(aTHX_ a,b)
@@ -2796,6 +2804,7 @@
 #define is_utf8_punct(a)	Perl_is_utf8_punct(aTHX_ a)
 #define is_utf8_xdigit(a)	Perl_is_utf8_xdigit(aTHX_ a)
 #define is_utf8_mark(a)		Perl_is_utf8_mark(aTHX_ a)
+#if defined(PERL_CORE) || defined(PERL_EXT)
 #define is_utf8_X_begin(a)	Perl_is_utf8_X_begin(aTHX_ a)
 #define is_utf8_X_extend(a)	Perl_is_utf8_X_extend(aTHX_ a)
 #define is_utf8_X_prepend(a)	Perl_is_utf8_X_prepend(aTHX_ a)
@@ -2806,6 +2815,7 @@
 #define is_utf8_X_LV_LVT_V(a)	Perl_is_utf8_X_LV_LVT_V(aTHX_ a)
 #define is_utf8_X_T(a)		Perl_is_utf8_X_T(aTHX_ a)
 #define is_utf8_X_V(a)		Perl_is_utf8_X_V(aTHX_ a)
+#endif
 #ifdef PERL_CORE
 #define jmaybe(a)		Perl_jmaybe(aTHX_ a)
 #define keyword(a,b,c)		Perl_keyword(aTHX_ a,b,c)
@@ -3371,6 +3381,7 @@
 #define sv_newref(a)		Perl_sv_newref(aTHX_ a)
 #define sv_peek(a)		Perl_sv_peek(aTHX_ a)
 #define sv_pos_u2b(a,b,c)	Perl_sv_pos_u2b(aTHX_ a,b,c)
+#define sv_pos_u2b_flags(a,b,c,d)	Perl_sv_pos_u2b_flags(aTHX_ a,b,c,d)
 #define sv_pos_b2u(a,b)		Perl_sv_pos_b2u(aTHX_ a,b)
 #define sv_pvutf8n_force(a,b)	Perl_sv_pvutf8n_force(aTHX_ a,b)
 #define sv_pvbyten_force(a,b)	Perl_sv_pvbyten_force(aTHX_ a,b)
@@ -3854,7 +3865,6 @@
 #define regbranch(a,b,c,d)	S_regbranch(aTHX_ a,b,c,d)
 #define reguni(a,b,c)		S_reguni(aTHX_ a,b,c)
 #define regclass(a,b)		S_regclass(aTHX_ a,b)
-#define regcurly		S_regcurly
 #define reg_node(a,b)		S_reg_node(aTHX_ a,b)
 #define reg_recode(a,b)		S_reg_recode(aTHX_ a,b)
 #define regpiece(a,b,c)		S_regpiece(aTHX_ a,b,c)

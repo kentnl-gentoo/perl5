@@ -119,6 +119,13 @@ PERL_CALLCONV void	Perl_set_context(void *t)
 #define PERL_ARGS_ASSERT_SET_CONTEXT	\
 	assert(t)
 
+PERL_CALLCONV I32	Perl_regcurly(const char *s)
+			__attribute__warn_unused_result__
+			__attribute__pure__
+			__attribute__nonnull__(1);
+#define PERL_ARGS_ASSERT_REGCURLY	\
+	assert(s)
+
 
 END_EXTERN_C
 
@@ -3374,6 +3381,11 @@ PERL_CALLCONV void	Perl_sv_pos_u2b(pTHX_ SV *const sv, I32 *const offsetp, I32 *
 #define PERL_ARGS_ASSERT_SV_POS_U2B	\
 	assert(offsetp)
 
+PERL_CALLCONV STRLEN	Perl_sv_pos_u2b_flags(pTHX_ SV *const sv, STRLEN uoffset, STRLEN *const lenp, U32 flags)
+			__attribute__nonnull__(pTHX_1);
+#define PERL_ARGS_ASSERT_SV_POS_U2B_FLAGS	\
+	assert(sv)
+
 PERL_CALLCONV void	Perl_sv_pos_b2u(pTHX_ SV *const sv, I32 *const offsetp)
 			__attribute__nonnull__(pTHX_2);
 #define PERL_ARGS_ASSERT_SV_POS_B2U	\
@@ -5308,12 +5320,6 @@ STATIC regnode*	S_regclass(pTHX_ struct RExC_state_t *pRExC_state, U32 depth)
 			__attribute__nonnull__(pTHX_1);
 #define PERL_ARGS_ASSERT_REGCLASS	\
 	assert(pRExC_state)
-
-STATIC I32	S_regcurly(const char *s)
-			__attribute__warn_unused_result__
-			__attribute__nonnull__(1);
-#define PERL_ARGS_ASSERT_REGCURLY	\
-	assert(s)
 
 STATIC regnode*	S_reg_node(pTHX_ struct RExC_state_t *pRExC_state, U8 op)
 			__attribute__nonnull__(pTHX_1);
