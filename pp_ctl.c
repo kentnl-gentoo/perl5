@@ -2831,6 +2831,20 @@ S_save_lines(pTHX_ AV *array, SV *sv)
     }
 }
 
+/*
+=for apidoc docatch
+
+Check for the cases 0 or 3 of cur_env.je_ret, only used inside an eval context.
+
+0 is used as continue inside eval,
+
+3 is used for a die caught by an inner eval - continue inner loop
+
+See cop.h: je_mustcatch, when set at any runlevel to TRUE, means eval ops must
+establish a local jmpenv to handle exception traps.
+
+=cut
+*/
 STATIC OP *
 S_docatch(pTHX_ OP *o)
 {
@@ -2882,13 +2896,20 @@ S_docatch(pTHX_ OP *o)
     return NULL;
 }
 
+/* James Bond: Do you expect me to talk?
+   Auric Goldfinger: No, Mr. Bond. I expect you to die.
+
+   This code is an ugly hack, doesn't work with lexicals in subroutines that are
+   called more than once, and is only used by regcomp.c, for (?{}) blocks.
+
+   Currently it is not used outside the core code. Best if it stays that way.
+*/
 OP *
 Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
 /* sv Text to convert to OP tree. */
 /* startop op_free() this to undo. */
 /* code Short string id of the caller. */
 {
-    /* FIXME - how much of this code is common with pp_entereval?  */
     dVAR; dSP;				/* Make POPBLOCK work. */
     PERL_CONTEXT *cx;
     SV **newsp;

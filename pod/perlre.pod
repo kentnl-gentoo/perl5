@@ -41,7 +41,7 @@ X<regular expression, single-line>
 Treat string as single line.  That is, change "." to match any character
 whatsoever, even a newline, which normally it would not match.
 
-Used together, as /ms, they let the "." match any character whatsoever,
+Used together, as C</ms>, they let the "." match any character whatsoever,
 while still allowing "^" and "$" to match, respectively, just after
 and just before newlines within the string.
 
@@ -82,20 +82,30 @@ modifiers may also be embedded within the regular expression itself using
 the C<(?...)> construct.  See below.
 
 The C</x> modifier itself needs a little more explanation.  It tells
-the regular expression parser to ignore whitespace that is neither
+the regular expression parser to ignore most whitespace that is neither
 backslashed nor within a character class.  You can use this to break up
 your regular expression into (slightly) more readable parts.  The C<#>
 character is also treated as a metacharacter introducing a comment,
 just as in ordinary Perl code.  This also means that if you want real
 whitespace or C<#> characters in the pattern (outside a character
 class, where they are unaffected by C</x>), then you'll either have to
-escape them (using backslashes or C<\Q...\E>) or encode them using octal
-or hex escapes.  Taken together, these features go a long way towards
+escape them (using backslashes or C<\Q...\E>) or encode them using octal,
+hex, or C<\N{}> escapes.  Taken together, these features go a long way towards
 making Perl's regular expressions more readable.  Note that you have to
 be careful not to include the pattern delimiter in the comment--perl has
 no way of knowing you did not intend to close the pattern early.  See
 the C-comment deletion code in L<perlop>.  Also note that anything inside
-a C<\Q...\E> stays unaffected by C</x>.
+a C<\Q...\E> stays unaffected by C</x>.  And note that C</x> doesn't affect
+whether space interpretation within a single multi-character construct.  For
+example in C<\x{...}>, regardless of the C</x> modifier, there can be no
+spaces.  Same for a L<quantifier|Quantifiers> such as C<{3}> or
+C<{5,}>.  Similarly, C<(?:...)> can't have a space between the C<?> and C<:>,
+but can between the C<(> and C<?>.  Within any delimiters for such a
+construct, allowed spaces are not affected by C</x>, and depend on the
+construct.  For example, C<\x{...}> can't have spaces because hexadecimal
+numbers don't have spaces in them.  But, Unicode properties can have spaces, so
+in C<\p{...}>  there can be spaces that follow the Unicode rules, for which see
+L<perluniprops.pod/Properties accessible through \p{} and \P{}>.
 X</x>
 
 =head2 Regular Expressions
@@ -226,6 +236,7 @@ X<\0> X<\c> X<\N> X<\x>
     \x{263a}	long hex char         (example: Unicode SMILEY)
     \cK		control char          (example: VT)
     \N{name}	named Unicode character
+    \N{U+263D}	Unicode character     (example: FIRST QUARTER MOON)
     \l		lowercase next char (think vi)
     \u		uppercase next char (think vi)
     \L		lowercase till \E (think vi)
@@ -270,7 +281,7 @@ X<word> X<whitespace> X<character class> X<backreference>
     \g{name} Named backreference
     \k<name> Named backreference
     \K       Keep the stuff left of the \K, don't include it in $&
-    \N       Any character but \n
+    \N       Any character but \n (experimental)
     \v       Vertical whitespace
     \V       Not vertical whitespace
     \h       Horizontal whitespace
@@ -300,6 +311,11 @@ C<\R> will atomically match a linebreak, including the network line-ending
 B<Note:> C<\R> has no special meaning inside of a character class;
 use C<\v> instead (vertical whitespace).
 X<\R>
+
+Note that C<\N> has two meanings.  When of the form C<\N{NAME}>, it matches the
+character whose name is C<NAME>; and similarly when of the form
+C<\N{U+I<wide hex char>}>, it matches the character whose Unicode ordinal is
+I<wide hex char>.  Otherwise it matches any character but C<\n>.
 
 The POSIX character class syntax
 X<character class>
@@ -2137,6 +2153,17 @@ Subroutine call to a named capture buffer. Equivalent to C<< (?&NAME) >>.
 =back
 
 =head1 BUGS
+
+There are numerous problems with case insensitive matching of characters
+outside the ASCII range, especially with those whose folds are multiple
+characters, such as ligatures like C<LATIN SMALL LIGATURE FF>.
+
+In a bracketed character class with case insensitive matching, ranges only work
+for ASCII characters.  For example,
+C<m/[\N{CYRILLIC CAPITAL LETTER A}-\N{CYRILLIC CAPITAL LETTER YA}]/i>
+doesn't match all the Russian upper and lower case letters.
+
+Many regular expression constructs don't work on EBCDIC platforms.
 
 This document varies from difficult to understand to completely
 and utterly opaque.  The wandering prose riddled with jargon is

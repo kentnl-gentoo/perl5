@@ -2755,6 +2755,8 @@ dist/Safe/t/safeload.t		Tests that some modules can be loaded by Safe
 dist/Safe/t/safeops.t		Tests that all ops can be trapped by Safe
 dist/Safe/t/safesort.t		Tests Safe with sort
 dist/Safe/t/safeuniversal.t	Tests Safe with functions from universal.c
+dist/Safe/t/safeutf8.t		Tests Safe with utf8.pm
+dist/Safe/t/safewrap.t		Tests Safe::wrap_code_ref()
 dist/SelfLoader/lib/SelfLoader.pm	Load functions only on demand
 dist/SelfLoader/t/01SelfLoader.t	See if SelfLoader works
 dist/SelfLoader/t/02SelfLoader-buggy.t	See if SelfLoader works
@@ -3865,6 +3867,7 @@ pod/perl5112delta.pod		Perl changes in version 5.11.2
 pod/perl5113delta.pod		Perl changes in version 5.11.3
 pod/perl5114delta.pod		Perl changes in version 5.11.4
 pod/perl5115delta.pod		Perl changes in version 5.11.5
+pod/perl5116delta.pod		Perl changes in version 5.11.6
 pod/perl5120delta.pod		Perl changes in version 5.12.0
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
@@ -4009,7 +4012,8 @@ Porting/config_h.pl		Reorder config_h.SH after metaconfig
 Porting/config.sh		Sample config.sh
 Porting/core-cpan-diff		Compare core distros with their CPAN equivalents
 Porting/corecpan.pl		Reports outdated dual-lived modules
-Porting/corelist-perldelta.pl		Generates data perldelta from Module::CoreList
+Porting/corelist-diff		Tool to produce corelist diffs
+Porting/corelist-perldelta.pl	Generates data perldelta from Module::CoreList
 Porting/corelist.pl		Generates data for Module::CoreList
 Porting/curliff.pl		Curliff or liff your curliffable files.
 Porting/expand-macro.pl		A tool to expand C macro definitions in the Perl source

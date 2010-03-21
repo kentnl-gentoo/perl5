@@ -7674,7 +7674,8 @@ string.  You are responsible for ensuring that the source string is at least
 C<len> bytes long.  If the C<s> argument is NULL the new SV will be undefined.
 Currently the only flag bits accepted are C<SVf_UTF8> and C<SVs_TEMP>.
 If C<SVs_TEMP> is set, then C<sv2mortal()> is called on the result before
-returning. If C<SVf_UTF8> is set, then it will be set on the new SV.
+returning. If C<SVf_UTF8> is set, C<s> is considered to be in UTF-8 and the
+C<SVf_UTF8> flag will be set on the new SV.
 C<newSVpvn_utf8()> is a convenience wrapper for this function, defined as
 
     #define newSVpvn_utf8(s, len, u)			\
@@ -12008,9 +12009,8 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     SvNV_set(&PL_sv_yes, 1);
     ptr_table_store(PL_ptr_table, &proto_perl->Isv_yes, &PL_sv_yes);
 
-    /* dbargs array probably holds garbage; give the child a clean array */
-    PL_dbargs		= newAV();
-    ptr_table_store(PL_ptr_table, proto_perl->Idbargs, PL_dbargs);
+    /* dbargs array probably holds garbage */
+    PL_dbargs		= NULL;
 
     /* create (a non-shared!) shared string table */
     PL_strtab		= newHV();
