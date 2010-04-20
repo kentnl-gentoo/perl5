@@ -24,9 +24,10 @@ our @EXPORT = qw( print_double print_int print_long
 		  sv_setsv_cow_hashkey_core sv_setsv_cow_hashkey_notcore
 		  rmagical_cast rmagical_flags
 		  DPeek utf16_to_utf8 utf16_to_utf8_reversed pmflag my_exit
+		  sv_count
 );
 
-our $VERSION = '0.17';
+our $VERSION = '0.18';
 
 use vars '$WARNINGS_ON_BOOTSTRAP';
 use vars map "\$${_}_called_PP", qw(BEGIN UNITCHECK CHECK INIT END);
@@ -84,8 +85,8 @@ XS::APItest - Test the perl C API
 
 =head1 ABSTRACT
 
-This module tests the perl C API. Currently tests that C<printf>
-works correctly.
+This module tests the perl C API. Also exposes various bit of the perl
+internals for the use of core test scripts.
 
 =head1 DESCRIPTION
 

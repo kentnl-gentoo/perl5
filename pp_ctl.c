@@ -264,6 +264,9 @@ PP(pp_substcont)
     register REGEXP * const rx = cx->sb_rx;
     SV *nsv = NULL;
     REGEXP *old = PM_GETRE(pm);
+
+    PERL_ASYNC_CHECK();
+
     if(old != rx) {
 	if(old)
 	    ReREFCNT_dec(old);
@@ -278,9 +281,11 @@ PP(pp_substcont)
 	if (cx->sb_iters > cx->sb_maxiters)
 	    DIE(aTHX_ "Substitution loop");
 
+	SvGETMAGIC(TOPs); /* possibly clear taint on $1 etc: #67962 */
+
 	if (!(cx->sb_rxtainted & 2) && SvTAINTED(TOPs))
 	    cx->sb_rxtainted |= 2;
-	sv_catsv(dstr, POPs);
+	sv_catsv_nomg(dstr, POPs);
 	/* XXX: adjust for positive offsets of \G for instance s/(.)\G//g with positive pos() */
 	s -= RX_GOFS(rx);
 
@@ -1337,11 +1342,11 @@ S_dopoptolabel(pTHX_ const char *label)
 	  {
 	    const char *cx_label = CxLABEL(cx);
 	    if (!cx_label || strNE(label, cx_label) ) {
-		DEBUG_l(Perl_deb(aTHX_ "(Skipping label #%ld %s)\n",
+		DEBUG_l(Perl_deb(aTHX_ "(poptolabel(): skipping label at cx=%ld %s)\n",
 			(long)i, cx_label));
 		continue;
 	    }
-	    DEBUG_l( Perl_deb(aTHX_ "(Found label #%ld %s)\n", (long)i, label));
+	    DEBUG_l( Perl_deb(aTHX_ "(poptolabel(): found label at cx=%ld %s)\n", (long)i, label));
 	    return i;
 	  }
 	}
@@ -1410,7 +1415,7 @@ S_dopoptosub_at(pTHX_ const PERL_CONTEXT *cxstk, I32 startingblock)
 	case CXt_EVAL:
 	case CXt_SUB:
 	case CXt_FORMAT:
-	    DEBUG_l( Perl_deb(aTHX_ "(Found sub #%ld)\n", (long)i));
+	    DEBUG_l( Perl_deb(aTHX_ "(dopoptosub_at(): found sub at cx=%ld)\n", (long)i));
 	    return i;
 	}
     }
@@ -1428,7 +1433,7 @@ S_dopoptoeval(pTHX_ I32 startingblock)
 	default:
 	    continue;
 	case CXt_EVAL:
-	    DEBUG_l( Perl_deb(aTHX_ "(Found eval #%ld)\n", (long)i));
+	    DEBUG_l( Perl_deb(aTHX_ "(dopoptoeval(): found eval at cx=%ld)\n", (long)i));
 	    return i;
 	}
     }
@@ -1457,7 +1462,7 @@ S_dopoptoloop(pTHX_ I32 startingblock)
 	case CXt_LOOP_LAZYSV:
 	case CXt_LOOP_FOR:
 	case CXt_LOOP_PLAIN:
-	    DEBUG_l( Perl_deb(aTHX_ "(Found loop #%ld)\n", (long)i));
+	    DEBUG_l( Perl_deb(aTHX_ "(dopoptoloop(): found loop at cx=%ld)\n", (long)i));
 	    return i;
 	}
     }
@@ -1475,7 +1480,7 @@ S_dopoptogiven(pTHX_ I32 startingblock)
 	default:
 	    continue;
 	case CXt_GIVEN:
-	    DEBUG_l( Perl_deb(aTHX_ "(Found given #%ld)\n", (long)i));
+	    DEBUG_l( Perl_deb(aTHX_ "(dopoptogiven(): found given at cx=%ld)\n", (long)i));
 	    return i;
 	case CXt_LOOP_PLAIN:
 	    assert(!CxFOREACHDEF(cx));
@@ -1484,7 +1489,7 @@ S_dopoptogiven(pTHX_ I32 startingblock)
 	case CXt_LOOP_LAZYSV:
 	case CXt_LOOP_FOR:
 	    if (CxFOREACHDEF(cx)) {
-		DEBUG_l( Perl_deb(aTHX_ "(Found foreach #%ld)\n", (long)i));
+		DEBUG_l( Perl_deb(aTHX_ "(dopoptogiven(): found foreach at cx=%ld)\n", (long)i));
 		return i;
 	    }
 	}
@@ -1503,7 +1508,7 @@ S_dopoptowhen(pTHX_ I32 startingblock)
 	default:
 	    continue;
 	case CXt_WHEN:
-	    DEBUG_l( Perl_deb(aTHX_ "(Found when #%ld)\n", (long)i));
+	    DEBUG_l( Perl_deb(aTHX_ "(dopoptowhen(): found when at cx=%ld)\n", (long)i));
 	    return i;
 	}
     }
@@ -1519,8 +1524,7 @@ Perl_dounwind(pTHX_ I32 cxix)
     while (cxstack_ix > cxix) {
 	SV *sv;
         register PERL_CONTEXT *cx = &cxstack[cxstack_ix];
-	DEBUG_l(PerlIO_printf(Perl_debug_log, "Unwinding block %ld, type %s\n",
-			      (long) cxstack_ix, PL_block_type[CxTYPE(cx)]));
+	DEBUG_CX("UNWIND");						\
 	/* Note: we don't need to restore the base context info till the end. */
 	switch (CxTYPE(cx)) {
 	case CXt_SUBST:
@@ -1652,6 +1656,10 @@ Perl_die_where(pTHX_ SV *msv)
 		SV * const nsv = cx->blk_eval.old_namesv;
                 (void)hv_store(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv),
                                &PL_sv_undef, 0);
+		/* note that unlike pp_entereval, pp_require isn't
+		 * supposed to trap errors. So now that we've popped the
+		 * EVAL that pp_require pushed, and processed the error
+		 * message, rethrow the error */
 		DIE(aTHX_ "%sCompilation failed in require",
 		    *msg ? msg : "Unknown error\n");
 	    }
@@ -1864,6 +1872,8 @@ PP(pp_dbstate)
     TAINT_NOT;		/* Each statement is presumed innocent */
     PL_stack_sp = PL_stack_base + cxstack[cxstack_ix].blk_oldsp;
     FREETMPS;
+
+    PERL_ASYNC_CHECK();
 
     if (PL_op->op_flags & OPf_SPECIAL /* breakpoint */
 	    || SvIV(PL_DBsingle) || SvIV(PL_DBsignal) || SvIV(PL_DBtrace))
@@ -2647,6 +2657,8 @@ PP(pp_goto)
     else
 	label = cPVOP->op_pv;
 
+    PERL_ASYNC_CHECK();
+
     if (label && *label) {
 	OP *gotoprobe = NULL;
 	bool leaving_eval = FALSE;
@@ -3040,6 +3052,35 @@ Perl_find_runcv(pTHX_ U32 *db_seqp)
 }
 
 
+/* Run yyparse() in a setjmp wrapper. Returns:
+ *   0: yyparse() successful
+ *   1: yyparse() failed
+ *   3: yyparse() died
+ */
+STATIC int
+S_try_yyparse(pTHX)
+{
+    int ret;
+    dJMPENV;
+
+    assert(CxTYPE(&cxstack[cxstack_ix]) == CXt_EVAL);
+    JMPENV_PUSH(ret);
+    switch (ret) {
+    case 0:
+	ret = yyparse() ? 1 : 0;
+	break;
+    case 3:
+	break;
+    default:
+	JMPENV_POP;
+	JMPENV_JUMP(ret);
+	/* NOTREACHED */
+    }
+    JMPENV_POP;
+    return ret;
+}
+
+
 /* Compile a require/do, an eval '', or a /(?{...})/.
  * In the last case, startop is non-null, and contains the address of
  * a pointer that should be set to the just-compiled code.
@@ -3054,8 +3095,10 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 {
     dVAR; dSP;
     OP * const saveop = PL_op;
+    bool in_require = (saveop && saveop->op_type == OP_REQUIRE);
+    int yystatus;
 
-    PL_in_eval = ((saveop && saveop->op_type == OP_REQUIRE)
+    PL_in_eval = (in_require
 		  ? (EVAL_INREQUIRE | (PL_in_eval & EVAL_INEVAL))
 		  : EVAL_INEVAL);
 
@@ -3107,27 +3150,39 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	PL_in_eval |= EVAL_KEEPERR;
     else
 	CLEAR_ERRSV();
-    if (yyparse() || PL_parser->error_count || !PL_eval_root) {
+
+    /* note that yyparse() may raise an exception, e.g. C<BEGIN{die}>,
+     * so honour CATCH_GET and trap it here if necessary */
+
+    yystatus = (!in_require && CATCH_GET) ? S_try_yyparse(aTHX) : yyparse();
+
+    if (yystatus || PL_parser->error_count || !PL_eval_root) {
 	SV **newsp;			/* Used by POPBLOCK. */
 	PERL_CONTEXT *cx = &cxstack[cxstack_ix];
-	I32 optype = 0;			/* Might be reset by POPEVAL. */
+	I32 optype;			/* Used by POPEVAL. */
 	const char *msg;
+
+	PERL_UNUSED_VAR(newsp);
+	PERL_UNUSED_VAR(optype);
 
 	PL_op = saveop;
 	if (PL_eval_root) {
 	    op_free(PL_eval_root);
 	    PL_eval_root = NULL;
 	}
-	SP = PL_stack_base + POPMARK;		/* pop original mark */
-	if (!startop) {
-	    POPBLOCK(cx,PL_curpm);
-	    POPEVAL(cx);
+	if (yystatus != 3) {
+	    SP = PL_stack_base + POPMARK;	/* pop original mark */
+	    if (!startop) {
+		POPBLOCK(cx,PL_curpm);
+		POPEVAL(cx);
+	    }
 	}
 	lex_end();
-	LEAVE_with_name("eval"); /* pp_entereval knows about this LEAVE.  */
+	if (yystatus != 3)
+	    LEAVE_with_name("eval"); /* pp_entereval knows about this LEAVE.  */
 
 	msg = SvPVx_nolen_const(ERRSV);
-	if (optype == OP_REQUIRE) {
+	if (in_require) {
 	    const SV * const nsv = cx->blk_eval.old_namesv;
 	    (void)hv_store(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv),
                           &PL_sv_undef, 0);
@@ -3135,8 +3190,10 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 		       *msg ? msg : "Unknown error\n");
 	}
 	else if (startop) {
-	    POPBLOCK(cx,PL_curpm);
-	    POPEVAL(cx);
+	    if (yystatus != 3) {
+		POPBLOCK(cx,PL_curpm);
+		POPEVAL(cx);
+	    }
 	    Perl_croak(aTHX_ "%sCompilation failed in regexp",
 		       (*msg ? msg : "Unknown error\n"));
 	}
@@ -3145,7 +3202,6 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	        sv_setpvs(ERRSV, "Compilation error");
 	    }
 	}
-	PERL_UNUSED_VAR(newsp);
 	PUSHs(&PL_sv_undef);
 	PUTBACK;
 	return FALSE;
@@ -3758,7 +3814,18 @@ PP(pp_entereval)
     if (PL_compiling.cop_hints_hash) {
 	Perl_refcounted_he_free(aTHX_ PL_compiling.cop_hints_hash);
     }
-    PL_compiling.cop_hints_hash = PL_curcop->cop_hints_hash;
+    if (Perl_fetch_cop_label(aTHX_ PL_curcop->cop_hints_hash, NULL, NULL)) {
+	/* The label, if present, is the first entry on the chain. So rather
+	   than writing a blank label in front of it (which involves an
+	   allocation), just use the next entry in the chain.  */
+	PL_compiling.cop_hints_hash
+	    = PL_curcop->cop_hints_hash->refcounted_he_next;
+	/* Check the assumption that this removed the label.  */
+	assert(Perl_fetch_cop_label(aTHX_ PL_compiling.cop_hints_hash, NULL,
+				    NULL) == NULL);
+    }
+    else
+	PL_compiling.cop_hints_hash = PL_curcop->cop_hints_hash;
     if (PL_compiling.cop_hints_hash) {
 	HINTS_REFCNT_LOCK;
 	PL_compiling.cop_hints_hash->refcounted_he_refcnt++;

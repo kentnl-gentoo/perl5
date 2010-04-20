@@ -1030,7 +1030,7 @@ PP(pp_pow)
 			   on same algorithm as above */
 			register UV result = 1;
 			register UV base = baseuv;
-			const bool odd_power = (bool)(power & 1);
+			const bool odd_power = cBOOL(power & 1);
 			if (odd_power) {
 			    result *= base;
 			}
@@ -3439,6 +3439,7 @@ PP(pp_sprintf)
     dVAR; dSP; dMARK; dORIGMARK; dTARGET;
     if (SvTAINTED(MARK[1]))
 	TAINT_PROPER("sprintf");
+    SvTAINTED_off(TARG);
     do_sprintf(TARG, SP-MARK, MARK+1);
     TAINT_IF(SvTAINTED(TARG));
     SP = ORIGMARK;

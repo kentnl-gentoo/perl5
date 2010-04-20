@@ -1061,12 +1061,17 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 			     (sv_type == SVt_PVHV && !GvIMPORTED_HV(*gvp)) )
 		    {
 			/* diag_listed_as: Variable "%s" is not imported%s */
-			Perl_warn(aTHX_ "Variable \"%c%s\" is not imported",
+			Perl_ck_warner_d(
+			    aTHX_ packWARN(WARN_MISC),
+			    "Variable \"%c%s\" is not imported",
 			    sv_type == SVt_PVAV ? '@' :
 			    sv_type == SVt_PVHV ? '%' : '$',
 			    name);
 			if (GvCVu(*gvp))
-			    Perl_warn(aTHX_ "\t(Did you mean &%s instead?)\n", name);
+			    Perl_ck_warner_d(
+				aTHX_ packWARN(WARN_MISC),
+				"\t(Did you mean &%s instead?)\n", name
+			    );
 			stash = NULL;
 		    }
 		}
@@ -1468,7 +1473,7 @@ Perl_gv_fullname4(pTHX_ SV *sv, const GV *gv, const char *prefix, bool keepmain)
 void
 Perl_gv_efullname4(pTHX_ SV *sv, const GV *gv, const char *prefix, bool keepmain)
 {
-    const GV * const egv = GvEGV(gv);
+    const GV * const egv = GvEGVx(gv);
 
     PERL_ARGS_ASSERT_GV_EFULLNAME4;
 
@@ -2394,7 +2399,7 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
 	    isGV_with_GP(gv) && GvGP(gv) &&
 	    !GvINTRO(gv) && GvREFCNT(gv) == 1 &&
 	    !GvSV(gv) && !GvAV(gv) && !GvHV(gv) && !GvIOp(gv) && !GvFORM(gv) &&
-	    GvEGV(gv) == gv && (stash = GvSTASH(gv))))
+	    GvEGVx(gv) == gv && (stash = GvSTASH(gv))))
 	return;
     cv = GvCV(gv);
     if (!cv) {

@@ -2812,47 +2812,51 @@ S_usage(pTHX_ const char *name)		/* XXX move this out into a module ? */
     /* This message really ought to be max 23 lines.
      * Removed -h because the user already knows that option. Others? */
 
+    /* Grouped as 6 lines per C string literal, to keep under the ANSI C 89
+       minimum of 509 character string literals.  */
     static const char * const usage_msg[] = {
-"-0[octal]         specify record separator (\\0, if no argument)",
-"-a                autosplit mode with -n or -p (splits $_ into @F)",
-"-C[number/list]   enables the listed Unicode features",
-"-c                check syntax only (runs BEGIN and CHECK blocks)",
-"-d[:debugger]     run program under debugger",
-"-D[number/list]   set debugging flags (argument is a bit mask or alphabets)",
-"-e program        one line of program (several -e's allowed, omit programfile)",
-"-E program        like -e, but enables all optional features",
-"-f                don't do $sitelib/sitecustomize.pl at startup",
-"-F/pattern/       split() pattern for -a switch (//'s are optional)",
-"-i[extension]     edit <> files in place (makes backup if extension supplied)",
-"-Idirectory       specify @INC/#include directory (several -I's allowed)",
-"-l[octal]         enable line ending processing, specifies line terminator",
-"-[mM][-]module    execute \"use/no module...\" before executing program",
-"-n                assume \"while (<>) { ... }\" loop around program",
-"-p                assume loop like -n but print line also, like sed",
-"-s                enable rudimentary parsing for switches after programfile",
-"-S                look for programfile using PATH environment variable",
-"-t                enable tainting warnings",
-"-T                enable tainting checks",
-"-u                dump core after parsing program",
-"-U                allow unsafe operations",
-"-v                print version, subversion (includes VERY IMPORTANT perl info)",
-"-V[:variable]     print configuration summary (or a single Config.pm variable)",
-"-w                enable many useful warnings (RECOMMENDED)",
-"-W                enable all warnings",
-"-x[directory]     strip off text before #!perl line and perhaps cd to directory",
-"-X                disable all warnings",
-"\n",
+"  -0[octal]         specify record separator (\\0, if no argument)\n"
+"  -a                autosplit mode with -n or -p (splits $_ into @F)\n"
+"  -C[number/list]   enables the listed Unicode features\n"
+"  -c                check syntax only (runs BEGIN and CHECK blocks)\n"
+"  -d[:debugger]     run program under debugger\n"
+"  -D[number/list]   set debugging flags (argument is a bit mask or alphabets)\n",
+"  -e program        one line of program (several -e's allowed, omit programfile)\n"
+"  -E program        like -e, but enables all optional features\n"
+"  -f                don't do $sitelib/sitecustomize.pl at startup\n"
+"  -F/pattern/       split() pattern for -a switch (//'s are optional)\n"
+"  -i[extension]     edit <> files in place (makes backup if extension supplied)\n"
+"  -Idirectory       specify @INC/#include directory (several -I's allowed)\n",
+"  -l[octal]         enable line ending processing, specifies line terminator\n"
+"  -[mM][-]module    execute \"use/no module...\" before executing program\n"
+"  -n                assume \"while (<>) { ... }\" loop around program\n"
+"  -p                assume loop like -n but print line also, like sed\n"
+"  -s                enable rudimentary parsing for switches after programfile\n"
+"  -S                look for programfile using PATH environment variable\n",
+"  -t                enable tainting warnings\n"
+"  -T                enable tainting checks\n"
+"  -u                dump core after parsing program\n"
+"  -U                allow unsafe operations\n"
+"  -v                print version, patchlevel and license\n"
+"  -V[:variable]     print configuration summary (or a single Config.pm variable)\n",
+"  -w                enable many useful warnings (RECOMMENDED)\n"
+"  -W                enable all warnings\n"
+"  -x[directory]     ignore text before #!perl line (optionally cd to directory)\n"
+"  -X                disable all warnings\n"
+"  \n"
+"Run 'perldoc perl' for more help with Perl.\n\n",
 NULL
 };
     const char * const *p = usage_msg;
+    PerlIO *out = PerlIO_stdout();
 
     PERL_ARGS_ASSERT_USAGE;
 
-    PerlIO_printf(PerlIO_stdout(),
-		  "\nUsage: %s [switches] [--] [programfile] [arguments]",
+    PerlIO_printf(out,
+		  "\nUsage: %s [switches] [--] [programfile] [arguments]\n",
 		  name);
     while (*p)
-	PerlIO_printf(PerlIO_stdout(), "\n  %s", *p++);
+	PerlIO_puts(out, *p++);
 }
 
 /* convert a string of -D options (or digits) into an int.
@@ -2863,31 +2867,31 @@ int
 Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
 {
     static const char * const usage_msgd[] = {
-      " Debugging flag values: (see also -d)",
-      "  p  Tokenizing and parsing (with v, displays parse stack)",
-      "  s  Stack snapshots (with v, displays all stacks)",
-      "  l  Context (loop) stack processing",
-      "  t  Trace execution",
-      "  o  Method and overloading resolution",
-      "  c  String/numeric conversions",
-      "  P  Print profiling info, source file input state",
-      "  m  Memory and SV allocation",
-      "  f  Format processing",
-      "  r  Regular expression parsing and execution",
-      "  x  Syntax tree dump",
-      "  u  Tainting checks",
-      "  H  Hash dump -- usurps values()",
-      "  X  Scratchpad allocation",
-      "  D  Cleaning up",
-      "  T  Tokenising",
-      "  R  Include reference counts of dumped variables (eg when using -Ds)",
-      "  J  Do not s,t,P-debug (Jump over) opcodes within package DB",
-      "  v  Verbose: use in conjunction with other flags",
-      "  C  Copy On Write",
-      "  A  Consistency checks on internal structures",
-      "  q  quiet - currently only suppresses the 'EXECUTING' message",
-      "  M  trace smart match resolution",
-      "  B  dump suBroutine definitions, including special Blocks like BEGIN",
+      " Debugging flag values: (see also -d)\n"
+      "  p  Tokenizing and parsing (with v, displays parse stack)\n"
+      "  s  Stack snapshots (with v, displays all stacks)\n"
+      "  l  Context (loop) stack processing\n"
+      "  t  Trace execution\n"
+      "  o  Method and overloading resolution\n",
+      "  c  String/numeric conversions\n"
+      "  P  Print profiling info, source file input state\n"
+      "  m  Memory and SV allocation\n"
+      "  f  Format processing\n"
+      "  r  Regular expression parsing and execution\n"
+      "  x  Syntax tree dump\n",
+      "  u  Tainting checks\n"
+      "  H  Hash dump -- usurps values()\n"
+      "  X  Scratchpad allocation\n"
+      "  D  Cleaning up\n"
+      "  T  Tokenising\n"
+      "  R  Include reference counts of dumped variables (eg when using -Ds)\n",
+      "  J  Do not s,t,P-debug (Jump over) opcodes within package DB\n"
+      "  v  Verbose: use in conjunction with other flags\n"
+      "  C  Copy On Write\n"
+      "  A  Consistency checks on internal structures\n"
+      "  q  quiet - currently only suppresses the 'EXECUTING' message\n"
+      "  M  trace smart match resolution\n"
+      "  B  dump suBroutine definitions, including special Blocks like BEGIN\n",
       NULL
     };
     int i = 0;
@@ -2913,7 +2917,7 @@ Perl_get_debug_opts(pTHX_ const char **s, bool givehelp)
     }
     else if (givehelp) {
       const char *const *p = usage_msgd;
-      while (*p) PerlIO_printf(PerlIO_stdout(), "%s\n", *p++);
+      while (*p) PerlIO_puts(PerlIO_stdout(), *p++);
     }
 #  ifdef EBCDIC
     if ((i & DEBUG_p_FLAG) && ckWARN_d(WARN_DEBUGGING))

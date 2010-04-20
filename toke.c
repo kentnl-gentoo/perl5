@@ -956,6 +956,8 @@ Perl_lex_stuff_pvn(pTHX_ char *pv, STRLEN len, U32 flags)
 	    lex_grow_linestr(SvCUR(PL_parser->linestr)+1+len+highhalf);
 	    bufptr = PL_parser->bufptr;
 	    Move(bufptr, bufptr+len+highhalf, PL_parser->bufend+1-bufptr, char);
+	    SvCUR_set(PL_parser->linestr,
+	    	SvCUR(PL_parser->linestr) + len+highhalf);
 	    PL_parser->bufend += len+highhalf;
 	    for (p = pv; p != e; p++) {
 		U8 c = (U8)*p;
@@ -994,6 +996,8 @@ Perl_lex_stuff_pvn(pTHX_ char *pv, STRLEN len, U32 flags)
 	    lex_grow_linestr(SvCUR(PL_parser->linestr)+1+len-highhalf);
 	    bufptr = PL_parser->bufptr;
 	    Move(bufptr, bufptr+len-highhalf, PL_parser->bufend+1-bufptr, char);
+	    SvCUR_set(PL_parser->linestr,
+	    	SvCUR(PL_parser->linestr) + len-highhalf);
 	    PL_parser->bufend += len-highhalf;
 	    for (p = pv; p != e; p++) {
 		U8 c = (U8)*p;
@@ -1009,6 +1013,7 @@ Perl_lex_stuff_pvn(pTHX_ char *pv, STRLEN len, U32 flags)
 	    lex_grow_linestr(SvCUR(PL_parser->linestr)+1+len);
 	    bufptr = PL_parser->bufptr;
 	    Move(bufptr, bufptr+len, PL_parser->bufend+1-bufptr, char);
+	    SvCUR_set(PL_parser->linestr, SvCUR(PL_parser->linestr) + len);
 	    PL_parser->bufend += len;
 	    Copy(pv, bufptr, len, char);
 	}
@@ -1124,7 +1129,7 @@ it is not permitted to discard text that has yet to be lexed.
 Normally it is not necessarily to do this directly, because it suffices to
 use the implicit discarding behaviour of L</lex_next_chunk> and things
 based on it.  However, if a token stretches across multiple lines,
-and the lexing code has kept multiple lines of text in the buffer fof
+and the lexing code has kept multiple lines of text in the buffer for
 that purpose, then after completion of the token it would be wise to
 explicitly discard the now-unneeded earlier lines, to avoid future
 multi-line tokens growing the buffer without bound.
@@ -13695,7 +13700,7 @@ S_utf16_textfilter(pTHX_ int idx, SV *sv, int maxlen)
     SV *const utf16_buffer = MUTABLE_SV(IoTOP_GV(filter));
     SV *const utf8_buffer = filter;
     IV status = IoPAGE(filter);
-    const bool reverse = (bool) IoLINES(filter);
+    const bool reverse = cBOOL(IoLINES(filter));
     I32 retval;
 
     /* As we're automatically added, at the lowest level, and hence only called
