@@ -224,6 +224,7 @@ cpan/CGI/t/unescapeHTML.t		See if CGI::unescapeHTML() works
 cpan/CGI/t/uploadInfo.t			See if CGI.pm works
 cpan/CGI/t/upload_post_text.txt		Test data for CGI.pm
 cpan/CGI/t/upload.t			See if CGI.pm works
+cpan/CGI/t/url.t			See if CGI.pm works
 cpan/CGI/t/user_agent.t			See if CGI->user_agent() works
 cpan/CGI/t/utf8.t			See if CGI.pm works
 cpan/CGI/t/util-58.t			See if 5.8-dependent features work
@@ -3218,6 +3219,7 @@ ext/XS-APItest-KeywordRPN/Makefile.PL	XS::APItest::KeywordRPN extension
 ext/XS-APItest-KeywordRPN/README	XS::APItest::KeywordRPN extension
 ext/XS-APItest-KeywordRPN/t/keyword_plugin.t	test keyword plugin mechanism
 ext/XS-APItest-KeywordRPN/t/multiline.t	test plugin parsing across lines
+ext/XS-APItest-KeywordRPN/t/stuff_svcur_bug.t	test for a bug in lex_stuff_pvn
 ext/XS-APItest/Makefile.PL	XS::APItest extension
 ext/XS-APItest/MANIFEST		XS::APItest extension
 ext/XS-APItest/notcore.c	Test API functions when PERL_CORE is not defined
@@ -3868,6 +3870,7 @@ pod/perl5113delta.pod		Perl changes in version 5.11.3
 pod/perl5114delta.pod		Perl changes in version 5.11.4
 pod/perl5115delta.pod		Perl changes in version 5.11.5
 pod/perl5120delta.pod		Perl changes in version 5.12.0
+pod/perl5121delta.pod		Perl changes in version 5.12.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4500,6 +4503,7 @@ t/op/unshift.t			See if unshift works
 t/op/upgrade.t			See if upgrading and assigning scalars works
 t/op/utf8cache.t		Tests malfunctions of utf8 cache
 t/op/utf8decode.t		See if UTF-8 decoding works
+t/op/utf8magic.t		See if utf8:: functions handle magic variables
 t/op/utfhash.t			See if utf8 keys in hashes behave
 t/op/utftaint.t			See if utf8 and taint work together
 t/op/vec.t			See if vectors work
