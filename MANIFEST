@@ -229,10 +229,6 @@ cpan/CGI/t/user_agent.t			See if CGI->user_agent() works
 cpan/CGI/t/utf8.t			See if CGI.pm works
 cpan/CGI/t/util-58.t			See if 5.8-dependent features work
 cpan/CGI/t/util.t			See if CGI.pm works
-cpan/Class-ISA/ChangeLog		Changes for Class::ISA
-cpan/Class-ISA/lib/Class/ISA.pm		Class::ISA
-cpan/Class-ISA/t/00_about_verbose.t	Tests for Class::ISA
-cpan/Class-ISA/t/01_old_junk.t		Tests for Class::ISA
 cpan/Compress-Raw-Bzip2/bzip2-src/blocksort.c
 cpan/Compress-Raw-Bzip2/bzip2-src/bzlib.c
 cpan/Compress-Raw-Bzip2/bzip2-src/bzlib.h
@@ -1042,6 +1038,7 @@ cpan/ExtUtils-ParseXS/Changes			ExtUtils::ParseXS change log
 cpan/ExtUtils-ParseXS/lib/ExtUtils/ParseXS.pm	converts Perl XS code into C code
 cpan/ExtUtils-ParseXS/lib/ExtUtils/xsubpp	External subroutine preprocessor
 cpan/ExtUtils-ParseXS/t/basic.t			See if ExtUtils::ParseXS works
+cpan/ExtUtils-ParseXS/t/lib/IncludeTester.pm	ExtUtils::ParseXS testing utility
 cpan/ExtUtils-ParseXS/t/more.t			Extended ExtUtils::ParseXS testing
 cpan/ExtUtils-ParseXS/t/typemap			Standard typemap for controlled testing
 cpan/ExtUtils-ParseXS/t/usage.t			ExtUtils::ParseXS tests
@@ -1349,6 +1346,13 @@ cpan/List-Util/t/tainted.t		Scalar::Util
 cpan/List-Util/t/weak.t			Scalar::Util
 cpan/List-Util/XS.pp			List::Util
 cpan/Locale-Codes/ChangeLog			Locale::Codes
+cpan/Locale-Codes/lib/Locale/Codes/Changes.pod	Locale::Codes documentation
+cpan/Locale-Codes/lib/Locale/Codes/Country.pm	Locale::Codes
+cpan/Locale-Codes/lib/Locale/Codes/Currency.pm	Locale::Codes
+cpan/Locale-Codes/lib/Locale/Codes/Language.pm	Locale::Codes
+cpan/Locale-Codes/lib/Locale/Codes.pm		Locale::Codes
+cpan/Locale-Codes/lib/Locale/Codes.pod		Locale::Codes documentation
+cpan/Locale-Codes/lib/Locale/Codes/Script.pm	Locale::Codes
 cpan/Locale-Codes/lib/Locale/Constants.pm	Locale::Codes
 cpan/Locale-Codes/lib/Locale/Constants.pod	Locale::Codes documentation
 cpan/Locale-Codes/lib/Locale/Country.pm		Locale::Codes
@@ -1359,16 +1363,21 @@ cpan/Locale-Codes/lib/Locale/Language.pm	Locale::Codes
 cpan/Locale-Codes/lib/Locale/Language.pod	Locale::Codes documentation
 cpan/Locale-Codes/lib/Locale/Script.pm		Locale::Codes
 cpan/Locale-Codes/lib/Locale/Script.pod		Locale::Codes documentation
-cpan/Locale-Codes/Makefile.PL
-cpan/Locale-Codes/README			Locale::Codes
-cpan/Locale-Codes/t/all.t			See if Locale::Codes work
-cpan/Locale-Codes/t/constants.t			See if Locale::Codes work
-cpan/Locale-Codes/t/country.t			See if Locale::Codes work
-cpan/Locale-Codes/t/currency.t			See if Locale::Codes work
-cpan/Locale-Codes/t/language.t			See if Locale::Codes work
-cpan/Locale-Codes/t/rename.t			See if Locale::Codes work
-cpan/Locale-Codes/t/script.t			See if Locale::Codes work
-cpan/Locale-Codes/t/uk.t			See if Locale::Codes work
+cpan/Locale-Codes/LICENSE			Locale::Codes
+cpan/Locale-Codes/README.first			Locale::Codes
+cpan/Locale-Codes/t/alias_code.t		Locale::Codes tests
+cpan/Locale-Codes/t/code2country.t		Locale::Codes tests
+cpan/Locale-Codes/t/code2currency.t		Locale::Codes tests
+cpan/Locale-Codes/t/code2language.t		Locale::Codes tests
+cpan/Locale-Codes/t/code2script.t		Locale::Codes tests
+cpan/Locale-Codes/t/country2code.t		Locale::Codes tests
+cpan/Locale-Codes/t/country_code2code.t		Locale::Codes tests
+cpan/Locale-Codes/t/country.t			Locale::Codes tests
+cpan/Locale-Codes/t/currency2code.t		Locale::Codes tests
+cpan/Locale-Codes/t/language2code.t		Locale::Codes tests
+cpan/Locale-Codes/t/language.t			Locale::Codes tests
+cpan/Locale-Codes/t/script2code.t		Locale::Codes tests
+cpan/Locale-Codes/t/testfunc.pl			Locale::Codes tests
 cpan/Locale-Maketext-Simple/lib/Locale/Maketext/Simple.pm	Locale::Simple
 cpan/Locale-Maketext-Simple/t/0-signature.t			Locale::Simple tests
 cpan/Locale-Maketext-Simple/t/1-basic.t				Locale::Simple tests
@@ -2742,8 +2751,6 @@ dist/Pod-Perldoc/t/01_about_verbose.t		test Pod::Perldoc
 dist/Pod-Perldoc/t/checkerbasic.t		test Pod::Perldoc::ToChecker
 dist/Pod-Perldoc/t/perldocbasic.t		test Pod::Perldoc basic operation
 dist/Pod-Perldoc/t/textbasic.t			test Pod::Perldoc::ToText
-dist/Pod-Plainer/Plainer.pm	Pod migration utility module
-dist/Pod-Plainer/t/plainer.t	Test Pod::Plainer
 dist/Safe/Changes		Changes for Safe.pm
 dist/Safe/Makefile.PL		Makefile.PL for Safe.pm
 dist/Safe/MANIFEST		MANIFEST for Safe.pm
@@ -2811,15 +2818,6 @@ dist/Storable/t/tied.t			See if Storable works
 dist/Storable/t/utf8hash.t		See if Storable works
 dist/Storable/t/utf8.t			See if Storable works
 dist/Storable/t/weak.t			Can Storable store weakrefs
-dist/Switch/Changes		Changes for Switch.pm
-dist/Switch/Makefile.PL		Makefile.PL for Switch.pm
-dist/Switch/MANIFEST		MANIFEST for Switch.pm
-dist/Switch/META.yml		META.yml for Switch.pm
-dist/Switch/README		README for Switch.pm
-dist/Switch/Switch.pm		Switch for Perl
-dist/Switch/t/given.t		See if Perl 6 given (switch) works
-dist/Switch/t/nested.t		See if nested switch works
-dist/Switch/t/switch.t		See if Perl 5 switch works
 dist/Thread-Queue/lib/Thread/Queue.pm	Thread-safe queues
 dist/Thread-Queue/t/01_basic.t		Thread::Queue tests
 dist/Thread-Queue/t/02_refs.t		Thread::Queue tests
@@ -2894,9 +2892,6 @@ doio.c			I/O operations
 doop.c			Support code for various operations
 dosish.h		Some defines for MS/DOSish machines
 dump.c			Debugging output
-emacs/cperl-mode.el	An alternate perl-mode
-emacs/e2ctags.pl	etags to ctags converter
-emacs/ptags		Creates smart TAGS file
 embed.fnc		Database used by embed.pl
 embed.h			Maps symbols to safer names
 embed.pl		Produces {embed,embedvar,proto}.h, global.sym
@@ -3231,8 +3226,9 @@ ext/XS-APItest/t/hash.t		XS::APItest: tests for hash related APIs
 ext/XS-APItest/t/my_cxt.t	XS::APItest: test MY_CXT interface
 ext/XS-APItest/t/my_exit.t	XS::APItest: test my_exit
 ext/XS-APItest/t/op.t		XS::APItest: tests for OP related APIs
-ext/XS-APItest/t/pmflag.t	Test deprecation warning for Perl_pmflag()
+ext/XS-APItest/t/pmflag.t	Test removal of Perl_pmflag()
 ext/XS-APItest/t/printf.t	XS::APItest extension
+ext/XS-APItest/t/ptr_table.t	Test ptr_table_* APIs
 ext/XS-APItest/t/push.t		XS::APItest extension
 ext/XS-APItest/t/rmagical.t	XS::APItest extension
 ext/XS-APItest/t/svpeek.t	XS::APItest extension
@@ -3240,6 +3236,7 @@ ext/XS-APItest/t/svsetsv.t	Test behaviour of sv_setsv with/without PERL_CORE
 ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
 ext/XS-APItest/t/xs_special_subs_require.t	for require too
 ext/XS-APItest/t/xs_special_subs.t	Test that XS BEGIN/CHECK/INIT/END work
+ext/XS-APItest/typemap
 ext/XS-Typemap/Makefile.PL	XS::Typemap extension
 ext/XS-Typemap/README		XS::Typemap extension
 ext/XS-Typemap/stdio.c		XS::Typemap extension
@@ -3872,6 +3869,7 @@ pod/perl5114delta.pod		Perl changes in version 5.11.4
 pod/perl5115delta.pod		Perl changes in version 5.11.5
 pod/perl5120delta.pod		Perl changes in version 5.12.0
 pod/perl5130delta.pod		Perl changes in version 5.13.0
+pod/perl5131delta.pod		Perl changes in version 5.13.1
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4007,6 +4005,7 @@ Porting/checkansi.pl		Check source code for ANSI-C violations
 Porting/checkAUTHORS.pl		Check that the AUTHORS file is complete
 Porting/checkcfgvar.pl		Check that config scripts define all symbols
 Porting/check-cpan-pollution	Check for commits that may wrongly touch CPAN distros
+Porting/checkpodencoding.pl	Check POD encoding
 Porting/checkURL.pl		Check whether we have working URLs
 Porting/checkVERSION.pl		Check whether we have $VERSIONs
 Porting/cmpVERSION.pl		Compare whether two trees have changed modules
@@ -4019,6 +4018,7 @@ Porting/corelist-diff		Tool to produce corelist diffs
 Porting/corelist-perldelta.pl	Generates data perldelta from Module::CoreList
 Porting/corelist.pl		Generates data for Module::CoreList
 Porting/curliff.pl		Curliff or liff your curliffable files.
+Porting/epigraphs.pod		the release epigraphs used over the years
 Porting/expand-macro.pl		A tool to expand C macro definitions in the Perl source
 Porting/findrfuncs		Find reentrant variants of functions used in an executable
 Porting/findvars		Find occurrences of words
@@ -4041,6 +4041,7 @@ Porting/manicheck		Check against MANIFEST
 Porting/manisort		Sort the MANIFEST
 Porting/newtests-perldelta.pl	Generate Perldelta stub for newly added tests
 Porting/perldelta_template.pod	Template for creating new perldelta.pod files
+Porting/perlhist_calculate.pl		Perform calculations to update perlhist
 Porting/podtidy			Reformat pod using Pod::Tidy
 Porting/pumpkin.pod		Guidelines and hints for Perl maintainers
 Porting/README.y2038		Perl notes for the 2038 fix
@@ -4386,7 +4387,9 @@ t/op/crypt.t			See if crypt works
 t/op/dbm.t			See if dbmopen/dbmclose work
 t/op/defins.t			See if auto-insert of defined() works
 t/op/delete.t			See if delete works
+t/op/die_except.t		See if die/eval avoids $@ clobberage
 t/op/die_exit.t			See if die and exit status interaction works
+t/op/die_keeperr.t		See if G_KEEPERR works for destructors
 t/op/die.t			See if die works
 t/op/dor.t			See if defined-or (//) works
 t/op/do.t			See if subroutines work
@@ -4507,11 +4510,13 @@ t/op/unshift.t			See if unshift works
 t/op/upgrade.t			See if upgrading and assigning scalars works
 t/op/utf8cache.t		Tests malfunctions of utf8 cache
 t/op/utf8decode.t		See if UTF-8 decoding works
+t/op/utf8magic.t		See if utf8:: functions handle magic variables
 t/op/utfhash.t			See if utf8 keys in hashes behave
 t/op/utftaint.t			See if utf8 and taint work together
 t/op/vec.t			See if vectors work
 t/op/ver.t			See if v-strings and the %v format flag work
 t/op/wantarray.t		See if wantarray works
+t/op/warn.t			See if warn works
 t/op/while_readdir.t		See if while(readdir) works
 t/op/write.t			See if write works (formats work)
 t/op/yadayada.t			See if ... works

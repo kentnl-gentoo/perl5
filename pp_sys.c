@@ -403,100 +403,91 @@ PP(pp_rcatline)
 PP(pp_warn)
 {
     dVAR; dSP; dMARK;
-    SV *tmpsv;
-    const char *tmps;
+    SV *exsv;
+    const char *pv;
     STRLEN len;
     if (SP - MARK > 1) {
 	dTARGET;
 	do_join(TARG, &PL_sv_no, MARK, SP);
-	tmpsv = TARG;
+	exsv = TARG;
 	SP = MARK + 1;
     }
     else if (SP == MARK) {
-	tmpsv = &PL_sv_no;
+	exsv = &PL_sv_no;
 	EXTEND(SP, 1);
 	SP = MARK + 1;
     }
     else {
-	tmpsv = TOPs;
+	exsv = TOPs;
     }
-    tmps = SvPV_const(tmpsv, len);
-    if ((!tmps || !len) && PL_errgv) {
-  	SV * const error = ERRSV;
-	SvUPGRADE(error, SVt_PV);
-	if (SvPOK(error) && SvCUR(error))
-	    sv_catpvs(error, "\t...caught");
-	tmpsv = error;
-	tmps = SvPV_const(tmpsv, len);
-    }
-    if (!tmps || !len)
-	tmpsv = newSVpvs_flags("Warning: something's wrong", SVs_TEMP);
 
-    Perl_warn(aTHX_ "%"SVf, SVfARG(tmpsv));
+    if (SvROK(exsv) || (pv = SvPV_const(exsv, len), len)) {
+	/* well-formed exception supplied */
+    }
+    else if (SvROK(ERRSV)) {
+	exsv = ERRSV;
+    }
+    else if (SvPOK(ERRSV) && SvCUR(ERRSV)) {
+	exsv = sv_mortalcopy(ERRSV);
+	sv_catpvs(exsv, "\t...caught");
+    }
+    else {
+	exsv = newSVpvs_flags("Warning: something's wrong", SVs_TEMP);
+    }
+    warn_sv(exsv);
     RETSETYES;
 }
 
 PP(pp_die)
 {
     dVAR; dSP; dMARK;
-    const char *tmps;
-    SV *tmpsv;
+    SV *exsv;
+    const char *pv;
     STRLEN len;
-    bool multiarg = 0;
 #ifdef VMS
     VMSISH_HUSHED  = VMSISH_HUSHED || (PL_op->op_private & OPpHUSH_VMSISH);
 #endif
     if (SP - MARK != 1) {
 	dTARGET;
 	do_join(TARG, &PL_sv_no, MARK, SP);
-	tmpsv = TARG;
-	tmps = SvPV_const(tmpsv, len);
-	multiarg = 1;
+	exsv = TARG;
 	SP = MARK + 1;
     }
     else {
-	tmpsv = TOPs;
-        tmps = SvROK(tmpsv) ? (const char *)NULL : SvPV_const(tmpsv, len);
+	exsv = TOPs;
     }
-    if (!tmps || !len) {
-	SV * const error = ERRSV;
-	SvUPGRADE(error, SVt_PV);
-	if (multiarg ? SvROK(error) : SvROK(tmpsv)) {
-	    if (!multiarg)
-		SvSetSV(error,tmpsv);
-	    else if (sv_isobject(error)) {
-		HV * const stash = SvSTASH(SvRV(error));
-		GV * const gv = gv_fetchmethod(stash, "PROPAGATE");
-		if (gv) {
-		    SV * const file = sv_2mortal(newSVpv(CopFILE(PL_curcop),0));
-		    SV * const line = sv_2mortal(newSVuv(CopLINE(PL_curcop)));
-		    EXTEND(SP, 3);
-		    PUSHMARK(SP);
-		    PUSHs(error);
-		    PUSHs(file);
- 		    PUSHs(line);
-		    PUTBACK;
-		    call_sv(MUTABLE_SV(GvCV(gv)),
-			    G_SCALAR|G_EVAL|G_KEEPERR);
-		    sv_setsv(error,*PL_stack_sp--);
-		}
-	    }
-	    DIE(aTHX_ NULL);
-	}
-	else {
-	    if (SvPOK(error) && SvCUR(error))
-		sv_catpvs(error, "\t...propagated");
-	    tmpsv = error;
-	    if (SvOK(tmpsv))
-		tmps = SvPV_const(tmpsv, len);
-	    else
-		tmps = NULL;
-	}
-    }
-    if (!tmps || !len)
-	tmpsv = newSVpvs_flags("Died", SVs_TEMP);
 
-    DIE(aTHX_ "%"SVf, SVfARG(tmpsv));
+    if (SvROK(exsv) || (pv = SvPV_const(exsv, len), len)) {
+	/* well-formed exception supplied */
+    }
+    else if (SvROK(ERRSV)) {
+	exsv = ERRSV;
+	if (sv_isobject(exsv)) {
+	    HV * const stash = SvSTASH(SvRV(exsv));
+	    GV * const gv = gv_fetchmethod(stash, "PROPAGATE");
+	    if (gv) {
+		SV * const file = sv_2mortal(newSVpv(CopFILE(PL_curcop),0));
+		SV * const line = sv_2mortal(newSVuv(CopLINE(PL_curcop)));
+		EXTEND(SP, 3);
+		PUSHMARK(SP);
+		PUSHs(exsv);
+		PUSHs(file);
+		PUSHs(line);
+		PUTBACK;
+		call_sv(MUTABLE_SV(GvCV(gv)),
+			G_SCALAR|G_EVAL|G_KEEPERR);
+		exsv = sv_mortalcopy(*PL_stack_sp--);
+	    }
+	}
+    }
+    else if (SvPOK(ERRSV) && SvCUR(ERRSV)) {
+	exsv = sv_mortalcopy(ERRSV);
+	sv_catpvs(exsv, "\t...propagated");
+    }
+    else {
+	exsv = newSVpvs_flags("Died", SVs_TEMP);
+    }
+    die_sv(exsv);
     RETURN;
 }
 
@@ -4514,22 +4505,22 @@ PP(pp_gmtime)
 	when = (Time64_T)now;
     }
     else {
-	double input = Perl_floor(POPn);
+	NV input = Perl_floor(POPn);
 	when = (Time64_T)input;
 	if (when != input) {
 	    Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
-			   "%s(%.0f) too large", opname, input);
+			   "%s(%.0" NVff ") too large", opname, input);
 	}
     }
 
     if ( TIME_LOWER_BOUND > when ) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
-		       "%s(%.0f) too small", opname, when);
+		       "%s(%.0" NVff ") too small", opname, when);
 	err = NULL;
     }
     else if( when > TIME_UPPER_BOUND ) {
 	Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
-		       "%s(%.0f) too large", opname, when);
+		       "%s(%.0" NVff ") too large", opname, when);
 	err = NULL;
     }
     else {
@@ -4542,7 +4533,7 @@ PP(pp_gmtime)
     if (err == NULL) {
 	/* XXX %lld broken for quads */
 	Perl_ck_warner(aTHX_ packWARN(WARN_OVERFLOW),
-		       "%s(%.0f) failed", opname, (double)when);
+		       "%s(%.0" NVff ") failed", opname, when);
     }
 
     if (GIMME != G_ARRAY) {	/* scalar context */

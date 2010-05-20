@@ -76,13 +76,9 @@ typedef enum {
 #endif
 
 /* There is collusion here with sv_clear - sv_clear exits early for SVt_NULL
-   and SVt_IV, so never reaches the clause at the end that uses
-   sv_type_details->body_size to determine whether to call safefree(). Hence
-   body_size can be set no-zero to record the size of PTEs and HEs, without
-   fear of bogus frees.  */
-#ifdef PERL_IN_SV_C
-#define PTE_SVSLOT	SVt_IV
-#endif
+   so never reaches the clause at the end that uses sv_type_details->body_size
+   to determine whether to call safefree(). Hence body_size can be set
+   non-zero to record the size of HEs, without fear of bogus frees.  */
 #if defined(PERL_IN_HV_C) || defined(PERL_IN_XS_APITEST)
 #define HE_SVSLOT	SVt_NULL
 #endif
@@ -1698,6 +1694,9 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>
  * This is used when the caller has already determined it is, and avoids
  * redundant work */
 #define SV_FORCE_UTF8_UPGRADE	4096
+/* if (after resolving magic etc), the SV is found to be overloaded,
+ * don't call the overload magic, just return as-is */
+#define SV_SKIP_OVERLOAD	8192
 
 /* The core is safe for this COW optimisation. XS code on CPAN may not be.
    So only default to doing the COW setup if we're in the core.
@@ -1778,6 +1777,7 @@ mg.c:1024: warning: left-hand operand of comma expression has no effect
 #define sv_utf8_upgrade(sv) sv_utf8_upgrade_flags(sv, SV_GMAGIC)
 #define sv_2iv(sv) sv_2iv_flags(sv, SV_GMAGIC)
 #define sv_2uv(sv) sv_2uv_flags(sv, SV_GMAGIC)
+#define sv_2nv(sv) sv_2nv_flags(sv, SV_GMAGIC)
 #define sv_insert(bigstr, offset, len, little, littlelen)		\
 	Perl_sv_insert_flags(aTHX_ (bigstr),(offset), (len), (little),	\
 			     (littlelen), SV_GMAGIC)

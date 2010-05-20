@@ -74,19 +74,10 @@ Perl_av_extend(pTHX_ AV *av, I32 key)
 
     mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied);
     if (mg) {
-	dSP;
-	ENTER;
-	SAVETMPS;
-	PUSHSTACKi(PERLSI_MAGIC);
-	PUSHMARK(SP);
-	EXTEND(SP,2);
-	PUSHs(SvTIED_obj(MUTABLE_SV(av), mg));
-	mPUSHi(key + 1);
-        PUTBACK;
-	call_method("EXTEND", G_SCALAR|G_DISCARD);
-	POPSTACK;
-	FREETMPS;
-	LEAVE;
+	SV *arg1 = sv_newmortal();
+	sv_setiv(arg1, (IV)(key + 1));
+	Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "EXTEND", G_DISCARD, 1,
+			    arg1);
 	return;
     }
     if (key > AvMAX(av)) {
@@ -245,6 +236,8 @@ Perl_av_fetch(pTHX_ register AV *av, I32 key, I32 lval)
             sv = sv_newmortal();
 	    sv_upgrade(sv, SVt_PVLV);
 	    mg_copy(MUTABLE_SV(av), sv, 0, key);
+	    if (!tied_magic) /* for regdata, force leavesub to make copies */
+		SvTEMP_off(sv);
 	    LvTYPE(sv) = 't';
 	    LvTARG(sv) = sv; /* fake (SV**) */
 	    return &(LvTARG(sv));
@@ -552,17 +545,8 @@ Perl_av_push(pTHX_ register AV *av, SV *val)
 	Perl_croak(aTHX_ "%s", PL_no_modify);
 
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
-	dSP;
-	PUSHSTACKi(PERLSI_MAGIC);
-	PUSHMARK(SP);
-	EXTEND(SP,2);
-	PUSHs(SvTIED_obj(MUTABLE_SV(av), mg));
-	PUSHs(val);
-	PUTBACK;
-	ENTER;
-	call_method("PUSH", G_SCALAR|G_DISCARD);
-	LEAVE;
-	POPSTACK;
+	Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "PUSH", G_DISCARD, 1,
+			    val);
 	return;
     }
     av_store(av,AvFILLp(av)+1,val);
@@ -590,19 +574,9 @@ Perl_av_pop(pTHX_ register AV *av)
     if (SvREADONLY(av))
 	Perl_croak(aTHX_ "%s", PL_no_modify);
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
-	dSP;    
-	PUSHSTACKi(PERLSI_MAGIC);
-	PUSHMARK(SP);
-	XPUSHs(SvTIED_obj(MUTABLE_SV(av), mg));
-	PUTBACK;
-	ENTER;
-	if (call_method("POP", G_SCALAR)) {
-	    retval = newSVsv(*PL_stack_sp--);    
-	} else {    
-	    retval = &PL_sv_undef;
-	}
-	LEAVE;
-	POPSTACK;
+	retval = Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "POP", 0, 0);
+	if (retval)
+	    retval = newSVsv(retval);
 	return retval;
     }
     if (AvFILL(av) < 0)
@@ -660,19 +634,8 @@ Perl_av_unshift(pTHX_ register AV *av, register I32 num)
 	Perl_croak(aTHX_ "%s", PL_no_modify);
 
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
-	dSP;
-	PUSHSTACKi(PERLSI_MAGIC);
-	PUSHMARK(SP);
-	EXTEND(SP,1+num);
-	PUSHs(SvTIED_obj(MUTABLE_SV(av), mg));
-	while (num-- > 0) {
-	    PUSHs(&PL_sv_undef);
-	}
-	PUTBACK;
-	ENTER;
-	call_method("UNSHIFT", G_SCALAR|G_DISCARD);
-	LEAVE;
-	POPSTACK;
+	Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "UNSHIFT",
+			    G_DISCARD | G_UNDEF_FILL, num);
 	return;
     }
 
@@ -732,19 +695,9 @@ Perl_av_shift(pTHX_ register AV *av)
     if (SvREADONLY(av))
 	Perl_croak(aTHX_ "%s", PL_no_modify);
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
-	dSP;
-	PUSHSTACKi(PERLSI_MAGIC);
-	PUSHMARK(SP);
-	XPUSHs(SvTIED_obj(MUTABLE_SV(av), mg));
-	PUTBACK;
-	ENTER;
-	if (call_method("SHIFT", G_SCALAR)) {
-	    retval = newSVsv(*PL_stack_sp--);            
-	} else {    
-	    retval = &PL_sv_undef;
-	}     
-	LEAVE;
-	POPSTACK;
+	retval = Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "SHIFT", 0, 0);
+	if (retval)
+	    retval = newSVsv(retval);
 	return retval;
     }
     if (AvFILL(av) < 0)
@@ -804,19 +757,10 @@ Perl_av_fill(pTHX_ register AV *av, I32 fill)
     if (fill < 0)
 	fill = -1;
     if ((mg = SvTIED_mg((const SV *)av, PERL_MAGIC_tied))) {
-	dSP;            
-	ENTER;
-	SAVETMPS;
-	PUSHSTACKi(PERLSI_MAGIC);
-	PUSHMARK(SP);
-	EXTEND(SP,2);
-	PUSHs(SvTIED_obj(MUTABLE_SV(av), mg));
-	mPUSHi(fill + 1);
-	PUTBACK;
-	call_method("STORESIZE", G_SCALAR|G_DISCARD);
-	POPSTACK;
-	FREETMPS;
-	LEAVE;
+	SV *arg1 = sv_newmortal();
+	sv_setiv(arg1, (IV)(fill + 1));
+	Perl_magic_methcall(aTHX_ MUTABLE_SV(av), mg, "STORESIZE", G_DISCARD,
+			    1, arg1);
 	return;
     }
     if (fill <= AvMAX(av)) {

@@ -1,3 +1,5 @@
+=encoding utf8
+
 =head1 NAME
 
 release_managers_guide - Releasing a new version of perl 5.x
@@ -356,6 +358,14 @@ installs is for < 5.11.0 only.
 (Then delete the installation directory.)
 
 XXX think of other configurations that need testing.
+
+=item *
+
+I<You MAY SKIP this step for SNAPSHOT>
+
+L<perlport> has a section currently named I<Supported Platforms> that
+indicates which platforms are known to build in the current release.
+If necessary update the list and the indicated version number.
 
 =item *
 
@@ -846,6 +856,10 @@ Be sure to commit your change:
 =item *
 
 Mail p5p to announce your new release, with a quote you prepared earlier.
+
+=item *
+
+Add your quote to F<Porting/epigraphs.pod> and commit it.
 
 =item *
 

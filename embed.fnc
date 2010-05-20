@@ -230,9 +230,10 @@ ApR	|I32	|my_chsize	|int fd|Off_t length
 pR	|OP*	|convert	|I32 optype|I32 flags|NULLOK OP* o
 : Used in op.c and perl.c
 pM	|PERL_CONTEXT*	|create_eval_scope|U32 flags
+Aprd	|void	|croak_sv	|NN SV *baseex
 : croak()'s first parm can be NULL.  Otherwise, mod_perl breaks.
 Afprd	|void	|croak		|NULLOK const char* pat|...
-Apr	|void	|vcroak		|NULLOK const char* pat|NULLOK va_list* args
+Aprd	|void	|vcroak		|NULLOK const char* pat|NULLOK va_list* args
 Aprd	|void	|croak_xs_usage	|NN const CV *const cv \
 				|NN const char *const params
 
@@ -286,12 +287,10 @@ Anp	|char*	|delimcpy	|NN char* to|NN const char* toend|NN const char* from \
 				|NN const char* fromend|int delim|NN I32* retlen
 : Used in op.c, perl.c
 pM	|void	|delete_eval_scope
-Afp	|OP*	|die		|NULLOK const char* pat|...
-#if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
-s	|OP*	|vdie		|NULLOK const char* pat|NULLOK va_list* args
-#endif
+Apd	|OP*	|die_sv		|NN SV *baseex
+Afpd	|OP*	|die		|NULLOK const char* pat|...
 : Used in util.c
-pr	|void	|die_where	|NULLOK SV* msv
+pr	|void	|die_unwind	|NN SV* msv
 Ap	|void	|dounwind	|I32 cxix
 : FIXME
 pmb	|bool	|do_aexec	|NULLOK SV* really|NN SV** mark|NN SV** sp
@@ -601,7 +600,7 @@ p	|void	|lex_start	|NULLOK SV* line|NULLOK PerlIO *rsfp|bool new_filter
 : Public lexer API
 AMpd	|bool	|lex_bufutf8
 AMpd	|char*	|lex_grow_linestr|STRLEN len
-AMpd	|void	|lex_stuff_pvn	|NN char* pv|STRLEN len|U32 flags
+AMpd	|void	|lex_stuff_pvn	|NN const char* pv|STRLEN len|U32 flags
 AMpd	|void	|lex_stuff_sv	|NN SV* sv|U32 flags
 AMpd	|void	|lex_unstuff	|NN char* ptr
 AMpd	|void	|lex_read_to	|NN char* ptr
@@ -628,6 +627,7 @@ Ap	|void	|vload_module|U32 flags|NN SV* name|NULLOK SV* ver|NULLOK va_list* args
 p	|OP*	|localize	|NN OP *o|I32 lex
 ApdR	|I32	|looks_like_number|NN SV *const sv
 Apd	|UV	|grok_bin	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
+EXpR	|char	|grok_bslash_c	|const char source|const bool output_warning
 Apd	|UV	|grok_hex	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
 Apd	|int	|grok_number	|NN const char *pv|STRLEN len|NULLOK UV *valuep
 ApdR	|bool	|grok_numeric_radix|NN const char **sp|NN const char *send
@@ -681,14 +681,18 @@ p	|int	|magic_setutf8	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_set_all_env|NN SV* sv|NN MAGIC* mg
 p	|U32	|magic_sizepack	|NN SV* sv|NN MAGIC* mg
 p	|int	|magic_wipepack	|NN SV* sv|NN MAGIC* mg
+pod	|SV*	|magic_methcall	|NN SV *sv|NN const MAGIC *mg \
+				|NN const char *meth|U32 flags \
+				|U32 argc|...
 Ap	|void	|markstack_grow
 #if defined(USE_LOCALE_COLLATE)
 p	|int	|magic_setcollxfrm|NN SV* sv|NN MAGIC* mg
 : Defined in locale.c, used only in sv.c
 p	|char*	|mem_collxfrm	|NN const char* s|STRLEN len|NN STRLEN* xlen
 #endif
-Afp	|SV*	|mess		|NN const char* pat|...
-Ap	|SV*	|vmess		|NN const char* pat|NULLOK va_list* args
+Afpd	|SV*	|mess		|NN const char* pat|...
+Apd	|SV*	|mess_sv	|NN SV* basemsg|bool consume
+Apd	|SV*	|vmess		|NN const char* pat|NULLOK va_list* args
 : FIXME - either make it public, or stop exporting it. (Data::Alias uses this)
 : Used in gv.c, op.c, toke.c
 EXp	|void	|qerror		|NN SV* err
@@ -904,7 +908,6 @@ Apd	|void	|packlist 	|NN SV *cat|NN const char *pat|NN const char *patend|NN SV 
 #if defined(PERL_USES_PL_PIDSTATUS) && defined(PERL_IN_UTIL_C)
 s	|void	|pidgone	|Pid_t pid|int status
 #endif
-DUXpo	|void	|pmflag		|NN U32 *pmfl|int ch
 : Used in perly.y
 p	|OP*	|pmruntime	|NN OP *o|NN OP *expr|bool isreg
 #if defined(PERL_IN_OP_C) || defined(PERL_DECL_PROT)
@@ -1090,7 +1093,7 @@ s	|bool	|glob_2number	|NN GV* const gv
 Amb	|IV	|sv_2iv		|NULLOK SV *sv
 Apd	|IV	|sv_2iv_flags	|NULLOK SV *const sv|const I32 flags
 Apd	|SV*	|sv_2mortal	|NULLOK SV *const sv
-Apd	|NV	|sv_2nv		|NULLOK SV *const sv
+Apd	|NV	|sv_2nv_flags	|NULLOK SV *const sv|const I32 flags
 : Used in pp.c, pp_hot.c, sv.c
 pMd	|SV*	|sv_2num	|NN SV *const sv
 Amb	|char*	|sv_2pv		|NULLOK SV *sv|NULLOK STRLEN *lp
@@ -1285,8 +1288,9 @@ pR	|UV	|get_hash_seed
 p	|void	|report_evil_fh	|NULLOK const GV *gv|NULLOK const IO *io|I32 op
 : Used in mg.c, pp.c, pp_hot.c, regcomp.c
 XEpd	|void	|report_uninit	|NULLOK const SV *uninit_sv
+Apd	|void	|warn_sv	|NN SV *baseex
 Afpd	|void	|warn		|NN const char* pat|...
-Ap	|void	|vwarn		|NN const char* pat|NULLOK va_list* args
+Apd	|void	|vwarn		|NN const char* pat|NULLOK va_list* args
 Afp	|void	|warner		|U32 err|NN const char* pat|...
 Afp	|void	|ck_warner	|U32 err|NN const char* pat|...
 Afp	|void	|ck_warner_d	|U32 err|NN const char* pat|...
@@ -1421,7 +1425,7 @@ ApR	|void*	|ptr_table_fetch|NN PTR_TBL_t *const tbl|NULLOK const void *const sv
 Ap	|void	|ptr_table_store|NN PTR_TBL_t *const tbl|NULLOK const void *const oldsv \
 				|NN void *const newsv
 Ap	|void	|ptr_table_split|NN PTR_TBL_t *const tbl
-Ap	|void	|ptr_table_clear|NULLOK PTR_TBL_t *const tbl
+ApD	|void	|ptr_table_clear|NULLOK PTR_TBL_t *const tbl
 Ap	|void	|ptr_table_free|NULLOK PTR_TBL_t *const tbl
 #if defined(USE_ITHREADS)
 #  if defined(HAVE_INTERP_INTERN)
@@ -1489,8 +1493,9 @@ sM	|SV *	|refcounted_he_value	|NN const struct refcounted_he *he
 
 #if defined(PERL_IN_MG_C) || defined(PERL_DECL_PROT)
 s	|void	|save_magic	|I32 mgs_ix|NN SV *sv
-s	|int	|magic_methpack	|NN SV *sv|NN const MAGIC *mg|NN const char *meth
-s	|int	|magic_methcall	|NN SV *sv|NN const MAGIC *mg|NN const char *meth|I32 f \
+-s	|int	|magic_methpack	|NN SV *sv|NN const MAGIC *mg|NN const char *meth
+s	|SV*	|magic_methcall1|NN SV *sv|NN const MAGIC *mg \
+				|NN const char *meth|U32 flags \
 				|int n|NULLOK SV *val
 s	|void	|restore_magic	|NULLOK const void *p
 s	|void	|unwind_handler_stack|NN const void *p
@@ -1952,8 +1957,8 @@ s	|char*	|stdize_locale	|NN char* locs
 #if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
 s	|const COP*|closest_cop	|NN const COP *cop|NULLOK const OP *o
 s	|SV*	|mess_alloc
-s	|SV *|vdie_croak_common|NULLOK const char *pat|NULLOK va_list *args
-s	|bool	|vdie_common	|NULLOK SV *message|bool warn
+s	|SV *|with_queued_errors|NN SV *ex
+s	|bool	|invoke_exception_hook|NULLOK SV *ex|bool warn
 sr	|char *	|write_no_mem
 #if defined(PERL_MEM_LOG) && !defined(PERL_MEM_LOG_NOIMPL)
 sn	|void	|mem_log_common	|enum mem_log_type mlt|const UV n|const UV typesize \

@@ -1211,6 +1211,10 @@ references can be weakened.
 with an assignment operator, which implies modifying the value itself.
 Perhaps you need to copy the value to a temporary, and repeat that.
 
+=item Character following "\\c" must be ASCII
+
+(F) In C<\cI<X>>, I<X> must be an ASCII character.
+
 =item Character in 'C' format wrapped in pack
 
 (W pack) You said
@@ -1419,6 +1423,12 @@ valid magic number.
 you have also specified an explicit size for the string.  See
 L<perlfunc/pack>.
 
+=item "\c%c" more clearly written simply as "%c"
+
+(D deprecated) The C<\cI<X>> construct is intended to be a way to specify
+non-printable characters.  You used it for a printable one, which is better
+written as simply itself.
+
 =item Deep recursion on subroutine "%s"
 
 (W recursion) This subroutine has called itself (directly or indirectly)
@@ -1452,7 +1462,7 @@ there are neither package declarations nor a C<$VERSION>.
 long for Perl to handle.  You have to be seriously twisted to write code
 that triggers this error.
 
-=item Deprecated character(s) in \\N{...} starting at '%s'
+=item Deprecated character in \\N{...}; marked by <-- HERE  in \\N{%s<-- HERE %s
 
 (D deprecated) Just about anything is legal for the C<...> in C<\N{...}>.
 But starting in 5.12, non-reasonable ones that don't look like names are
@@ -3425,13 +3435,6 @@ that a method requires a package that has not been loaded.
 so it was not possible to set up some or all fixed-width byte-order
 conversion functions.  This is only a problem when you're using the
 '<' or '>' modifiers in (un)pack templates.  See L<perlfunc/pack>.
-
-=item Perl_pmflag() is deprecated, and will be removed from the XS API
-
-(D deprecated) XS code called the C function C<Perl_pmflag>. This was part of
-Perl's listed public API for extending or embedding the perl interpreter. It has
-now been removed from the public API, and will be removed in a future release,
-hence XS code should be re-written not to use it.
 
 =item Perl %s required--this is only version %s, stopped
 

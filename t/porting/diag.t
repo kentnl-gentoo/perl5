@@ -282,6 +282,7 @@ Invalid strict version format (1.[0-9] required)
 Invalid version format (alpha without decimal)
 Invalid version format (misplaced _ in number)
 Invalid version object
+It is proposed that "\\c{" no longer be valid. It has historically evaluated to  ";".  If you disagree with this proposal, send email to perl5-porters@perl.org Otherwise, or in the meantime, you can work around this failure by changing "\\c{" to ";"
 'j' not supported on this platform
 'J' not supported on this platform
 Layer does not match this perl
@@ -365,7 +366,6 @@ Unexpected constant lvalue entersub entry via type/targ %d:%d
 Unicode non-character 0x%04
 Unknown PerlIO layer "scalar"
 Unknown Unicode option letter '%c'
-unrecognised control character '%c'
 Unstable directory path, current directory changed unexpectedly
 Unsupported script encoding UTF-16BE
 Unsupported script encoding UTF-16LE

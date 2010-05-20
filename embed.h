@@ -102,6 +102,7 @@
 #define convert			Perl_convert
 #define create_eval_scope	Perl_create_eval_scope
 #endif
+#define croak_sv		Perl_croak_sv
 #define croak			Perl_croak
 #define vcroak			Perl_vcroak
 #define croak_xs_usage		Perl_croak_xs_usage
@@ -154,14 +155,10 @@
 #ifdef PERL_CORE
 #define delete_eval_scope	Perl_delete_eval_scope
 #endif
+#define die_sv			Perl_die_sv
 #define die			Perl_die
-#if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
 #ifdef PERL_CORE
-#define vdie			S_vdie
-#endif
-#endif
-#ifdef PERL_CORE
-#define die_where		Perl_die_where
+#define die_unwind		Perl_die_unwind
 #endif
 #define dounwind		Perl_dounwind
 #ifdef PERL_CORE
@@ -458,6 +455,9 @@
 #endif
 #define looks_like_number	Perl_looks_like_number
 #define grok_bin		Perl_grok_bin
+#if defined(PERL_CORE) || defined(PERL_EXT)
+#define grok_bslash_c		Perl_grok_bslash_c
+#endif
 #define grok_hex		Perl_grok_hex
 #define grok_number		Perl_grok_number
 #define grok_numeric_radix	Perl_grok_numeric_radix
@@ -520,6 +520,7 @@
 #endif
 #endif
 #define mess			Perl_mess
+#define mess_sv			Perl_mess_sv
 #define vmess			Perl_vmess
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define qerror			Perl_qerror
@@ -911,7 +912,7 @@
 #endif
 #define sv_2iv_flags		Perl_sv_2iv_flags
 #define sv_2mortal		Perl_sv_2mortal
-#define sv_2nv			Perl_sv_2nv
+#define sv_2nv_flags		Perl_sv_2nv_flags
 #ifdef PERL_CORE
 #define sv_2num			Perl_sv_2num
 #endif
@@ -1072,6 +1073,7 @@
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define report_uninit		Perl_report_uninit
 #endif
+#define warn_sv			Perl_warn_sv
 #define warn			Perl_warn
 #define vwarn			Perl_vwarn
 #define warner			Perl_warner
@@ -1242,7 +1244,7 @@
 #ifdef PERL_CORE
 #define save_magic		S_save_magic
 #define magic_methpack		S_magic_methpack
-#define magic_methcall		S_magic_methcall
+#define magic_methcall1		S_magic_methcall1
 #define restore_magic		S_restore_magic
 #define unwind_handler_stack	S_unwind_handler_stack
 #endif
@@ -1673,8 +1675,8 @@
 #ifdef PERL_CORE
 #define closest_cop		S_closest_cop
 #define mess_alloc		S_mess_alloc
-#define vdie_croak_common	S_vdie_croak_common
-#define vdie_common		S_vdie_common
+#define with_queued_errors	S_with_queued_errors
+#define invoke_exception_hook	S_invoke_exception_hook
 #define write_no_mem		S_write_no_mem
 #endif
 #if defined(PERL_MEM_LOG) && !defined(PERL_MEM_LOG_NOIMPL)
@@ -2519,6 +2521,7 @@
 #define convert(a,b,c)		Perl_convert(aTHX_ a,b,c)
 #define create_eval_scope(a)	Perl_create_eval_scope(aTHX_ a)
 #endif
+#define croak_sv(a)		Perl_croak_sv(aTHX_ a)
 #define vcroak(a,b)		Perl_vcroak(aTHX_ a,b)
 #define croak_xs_usage(a,b)	Perl_croak_xs_usage(aTHX_ a,b)
 #if defined(PERL_IMPLICIT_CONTEXT)
@@ -2554,13 +2557,9 @@
 #ifdef PERL_CORE
 #define delete_eval_scope()	Perl_delete_eval_scope(aTHX)
 #endif
-#if defined(PERL_IN_UTIL_C) || defined(PERL_DECL_PROT)
+#define die_sv(a)		Perl_die_sv(aTHX_ a)
 #ifdef PERL_CORE
-#define vdie(a,b)		S_vdie(aTHX_ a,b)
-#endif
-#endif
-#ifdef PERL_CORE
-#define die_where(a)		Perl_die_where(aTHX_ a)
+#define die_unwind(a)		Perl_die_unwind(aTHX_ a)
 #endif
 #define dounwind(a)		Perl_dounwind(aTHX_ a)
 #ifdef PERL_CORE
@@ -2869,6 +2868,9 @@
 #endif
 #define looks_like_number(a)	Perl_looks_like_number(aTHX_ a)
 #define grok_bin(a,b,c,d)	Perl_grok_bin(aTHX_ a,b,c,d)
+#if defined(PERL_CORE) || defined(PERL_EXT)
+#define grok_bslash_c(a,b)	Perl_grok_bslash_c(aTHX_ a,b)
+#endif
 #define grok_hex(a,b,c,d)	Perl_grok_hex(aTHX_ a,b,c,d)
 #define grok_number(a,b,c)	Perl_grok_number(aTHX_ a,b,c)
 #define grok_numeric_radix(a,b)	Perl_grok_numeric_radix(aTHX_ a,b)
@@ -2930,6 +2932,7 @@
 #define mem_collxfrm(a,b,c)	Perl_mem_collxfrm(aTHX_ a,b,c)
 #endif
 #endif
+#define mess_sv(a,b)		Perl_mess_sv(aTHX_ a,b)
 #define vmess(a,b)		Perl_vmess(aTHX_ a,b)
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define qerror(a)		Perl_qerror(aTHX_ a)
@@ -3323,7 +3326,7 @@
 #endif
 #define sv_2iv_flags(a,b)	Perl_sv_2iv_flags(aTHX_ a,b)
 #define sv_2mortal(a)		Perl_sv_2mortal(aTHX_ a)
-#define sv_2nv(a)		Perl_sv_2nv(aTHX_ a)
+#define sv_2nv_flags(a,b)	Perl_sv_2nv_flags(aTHX_ a,b)
 #ifdef PERL_CORE
 #define sv_2num(a)		Perl_sv_2num(aTHX_ a)
 #endif
@@ -3482,6 +3485,7 @@
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define report_uninit(a)	Perl_report_uninit(aTHX_ a)
 #endif
+#define warn_sv(a)		Perl_warn_sv(aTHX_ a)
 #define vwarn(a,b)		Perl_vwarn(aTHX_ a,b)
 #define vwarner(a,b,c)		Perl_vwarner(aTHX_ a,b,c)
 #ifdef PERL_CORE
@@ -3647,7 +3651,7 @@
 #ifdef PERL_CORE
 #define save_magic(a,b)		S_save_magic(aTHX_ a,b)
 #define magic_methpack(a,b,c)	S_magic_methpack(aTHX_ a,b,c)
-#define magic_methcall(a,b,c,d,e,f)	S_magic_methcall(aTHX_ a,b,c,d,e,f)
+#define magic_methcall1(a,b,c,d,e,f)	S_magic_methcall1(aTHX_ a,b,c,d,e,f)
 #define restore_magic(a)	S_restore_magic(aTHX_ a)
 #define unwind_handler_stack(a)	S_unwind_handler_stack(aTHX_ a)
 #endif
@@ -4089,8 +4093,8 @@
 #ifdef PERL_CORE
 #define closest_cop(a,b)	S_closest_cop(aTHX_ a,b)
 #define mess_alloc()		S_mess_alloc(aTHX)
-#define vdie_croak_common(a,b)	S_vdie_croak_common(aTHX_ a,b)
-#define vdie_common(a,b)	S_vdie_common(aTHX_ a,b)
+#define with_queued_errors(a)	S_with_queued_errors(aTHX_ a)
+#define invoke_exception_hook(a,b)	S_invoke_exception_hook(aTHX_ a,b)
 #define write_no_mem()		S_write_no_mem(aTHX)
 #endif
 #if defined(PERL_MEM_LOG) && !defined(PERL_MEM_LOG_NOIMPL)

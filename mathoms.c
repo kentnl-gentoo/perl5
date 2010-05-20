@@ -42,6 +42,7 @@ PERL_CALLCONV void Perl_sv_unref(pTHX_ SV *sv);
 PERL_CALLCONV void Perl_sv_taint(pTHX_ SV *sv);
 PERL_CALLCONV IV Perl_sv_2iv(pTHX_ register SV *sv);
 PERL_CALLCONV UV Perl_sv_2uv(pTHX_ register SV *sv);
+PERL_CALLCONV NV Perl_sv_2nv(pTHX_ register SV *sv);
 PERL_CALLCONV char * Perl_sv_2pv(pTHX_ register SV *sv, STRLEN *lp);
 PERL_CALLCONV char * Perl_sv_2pv_nolen(pTHX_ register SV *sv);
 PERL_CALLCONV char * Perl_sv_2pvbyte_nolen(pTHX_ register SV *sv);
@@ -140,6 +141,17 @@ Perl_sv_2uv(pTHX_ register SV *sv)
 {
     return sv_2uv_flags(sv, SV_GMAGIC);
 }
+
+/* sv_2nv() is now a macro using Perl_sv_2nv_flags();
+ * this function provided for binary compatibility only
+ */
+
+NV
+Perl_sv_2nv(pTHX_ register SV *sv)
+{
+    return sv_2nv_flags(sv, SV_GMAGIC);
+}
+
 
 /* sv_2pv() is now a macro using Perl_sv_2pv_flags();
  * this function provided for binary compatibility only
@@ -1171,7 +1183,7 @@ Perl_save_long(pTHX_ long int *longp)
     SSCHECK(3);
     SSPUSHLONG(*longp);
     SSPUSHPTR(longp);
-    SSPUSHINT(SAVEt_LONG);
+    SSPUSHUV(SAVEt_LONG);
 }
 
 void
@@ -1184,7 +1196,7 @@ Perl_save_iv(pTHX_ IV *ivp)
     SSCHECK(3);
     SSPUSHIV(*ivp);
     SSPUSHPTR(ivp);
-    SSPUSHINT(SAVEt_IV);
+    SSPUSHUV(SAVEt_IV);
 }
 
 void
@@ -1196,7 +1208,7 @@ Perl_save_nogv(pTHX_ GV *gv)
 
     SSCHECK(2);
     SSPUSHPTR(gv);
-    SSPUSHINT(SAVEt_NSTAB);
+    SSPUSHUV(SAVEt_NSTAB);
 }
 
 void
@@ -1213,7 +1225,7 @@ Perl_save_list(pTHX_ register SV **sarg, I32 maxsarg)
 	SSCHECK(3);
 	SSPUSHPTR(sarg[i]);		/* remember the pointer */
 	SSPUSHPTR(sv);			/* remember the value */
-	SSPUSHINT(SAVEt_ITEM);
+	SSPUSHUV(SAVEt_ITEM);
     }
 }
 

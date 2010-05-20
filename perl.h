@@ -3197,14 +3197,6 @@ typedef pthread_key_t	perl_key;
 #  endif
 #endif
 
-#if !defined(PERL_CORE) && !defined(PERL_NO_SHORT_NAMES)
-#  if defined(PERL_IMPLICIT_CONTEXT)
-#    define pmflag(a,b)		Perl_pmflag(aTHX_ a,b)
-#  else
-#    define pmflag			Perl_pmflag
-#  endif
-#endif
-
 #ifdef HASATTRIBUTE_DEPRECATED
 #  define __attribute__deprecated__         __attribute__((deprecated))
 #endif
@@ -3332,6 +3324,7 @@ union any {
     void*	any_ptr;
     I32		any_i32;
     IV		any_iv;
+    UV		any_uv;
     long	any_long;
     bool	any_bool;
     void	(*any_dptr) (void*);
@@ -3453,9 +3446,6 @@ typedef struct magic_state MGS;	/* struct magic_state defined in mg.c */
 struct scan_data_t;		/* Used in S_* functions in regcomp.c */
 struct regnode_charclass_class;	/* Used in S_* functions in regcomp.c */
 
-/* Keep next first in this structure, because sv_free_arenas take
-   advantage of this to share code between the pte arenas and the SV
-   body arenas  */
 struct ptr_tbl_ent {
     struct ptr_tbl_ent*		next;
     const void*			oldval;
@@ -3466,6 +3456,9 @@ struct ptr_tbl {
     struct ptr_tbl_ent**	tbl_ary;
     UV				tbl_max;
     UV				tbl_items;
+    struct ptr_tbl_arena	*tbl_arena;
+    struct ptr_tbl_ent		*tbl_arena_next;
+    struct ptr_tbl_ent		*tbl_arena_end;
 };
 
 #if defined(iAPX286) || defined(M_I286) || defined(I80286)

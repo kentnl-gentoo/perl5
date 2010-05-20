@@ -914,7 +914,7 @@ Perl_lex_grow_linestr(pTHX_ STRLEN len)
 }
 
 /*
-=for apidoc Amx|void|lex_stuff_pvn|char *pv|STRLEN len|U32 flags
+=for apidoc Amx|void|lex_stuff_pvn|const char *pv|STRLEN len|U32 flags
 
 Insert characters into the lexer buffer (L</PL_parser-E<gt>linestr>),
 immediately after the current lexing point (L</PL_parser-E<gt>bufptr>),
@@ -936,7 +936,7 @@ function is more convenient.
 */
 
 void
-Perl_lex_stuff_pvn(pTHX_ char *pv, STRLEN len, U32 flags)
+Perl_lex_stuff_pvn(pTHX_ const char *pv, STRLEN len, U32 flags)
 {
     dVAR;
     char *bufptr;
@@ -948,7 +948,7 @@ Perl_lex_stuff_pvn(pTHX_ char *pv, STRLEN len, U32 flags)
 	    goto plain_copy;
 	} else {
 	    STRLEN highhalf = 0;
-	    char *p, *e = pv+len;
+	    const char *p, *e = pv+len;
 	    for (p = pv; p != e; p++)
 		highhalf += !!(((U8)*p) & 0x80);
 	    if (!highhalf)
@@ -972,7 +972,7 @@ Perl_lex_stuff_pvn(pTHX_ char *pv, STRLEN len, U32 flags)
     } else {
 	if (flags & LEX_STUFF_UTF8) {
 	    STRLEN highhalf = 0;
-	    char *p, *e = pv+len;
+	    const char *p, *e = pv+len;
 	    for (p = pv; p != e; p++) {
 		U8 c = (U8)*p;
 		if (c >= 0xc4) {
@@ -3264,14 +3264,11 @@ S_scan_const(pTHX_ char *start)
 			    }
 			}
 			if (problematic) {
-			    char *string;
-			    Newx(string, e - i + 1, char);
-			    Copy(i, string, e - i, char);
-			    string[e - i] = '\0';
+			    /* The e-i passed to the final %.*s makes sure that
+			     * should the trailing NUL be missing that this
+			     * print won't run off the end of the string */
 			    Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-				"Deprecated character(s) in \\N{...} starting at '%s'",
-				string);
-			    Safefree(string);
+				"Deprecated character in \\N{...}; marked by <-- HERE  in \\N{%.*s<-- HERE %.*s", i - s + 1, s, e - i, i + 1);
 			}
 		    }
 		} /* End \N{NAME} */
@@ -3286,12 +3283,7 @@ S_scan_const(pTHX_ char *start)
 	    case 'c':
 		s++;
 		if (s < send) {
-		    U8 c = *s++;
-#ifdef EBCDIC
-		    if (isLOWER(c))
-			c = toUPPER(c);
-#endif
-		    *d++ = NATIVE_TO_NEED(has_utf8,toCTRL(c));
+		    *d++ = grok_bslash_c(*s++, 1);
 		}
 		else {
 		    yyerror("Missing control char name in \\c");
@@ -5722,7 +5714,7 @@ Perl_yylex(pTHX)
 	    }
 	}
 
-	if (s[1] == '#' && (isIDFIRST_lazy_if(s+2,UTF) || strchr("{$:+-", s[2]))) {
+	if (s[1] == '#' && (isIDFIRST_lazy_if(s+2,UTF) || strchr("{$:+-@", s[2]))) {
 	    PL_tokenbuf[0] = '@';
 	    s = scan_ident(s + 1, PL_bufend, PL_tokenbuf + 1,
 			   sizeof PL_tokenbuf - 1, FALSE);
@@ -11854,19 +11846,6 @@ S_pmflag(U32 pmfl, const char ch) {
     case KEEPCOPY_PAT_MOD:  pmfl |= PMf_KEEPCOPY; break;
     }
     return pmfl;
-}
-
-void
-Perl_pmflag(pTHX_ U32* pmfl, int ch)
-{
-    PERL_ARGS_ASSERT_PMFLAG;
-
-    Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-		     "Perl_pmflag() is deprecated, and will be removed from the XS API");
-
-    if (ch<256) {
-	*pmfl = S_pmflag(*pmfl, (char)ch);
-    }
 }
 
 STATIC char *

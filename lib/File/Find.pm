@@ -3,7 +3,7 @@ use 5.006;
 use strict;
 use warnings;
 use warnings::register;
-our $VERSION = '1.15';
+our $VERSION = '1.16';
 require Exporter;
 require Cwd;
 
@@ -217,7 +217,7 @@ through a collection of variables.
 =back
 
 The above variables have all been localized and may be changed without
-effecting data outside of the wanted function.
+affecting data outside of the wanted function.
 
 For example, when examining the file F</some/path/foo.ext> you will have:
 

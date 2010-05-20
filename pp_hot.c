@@ -663,7 +663,7 @@ PP(pp_aelemfast)
     SV** const svp = av_fetch(av, PL_op->op_private, lval);
     SV *sv = (svp ? *svp : &PL_sv_undef);
     EXTEND(SP, 1);
-    if (!lval && SvGMAGICAL(sv))	/* see note in pp_helem() */
+    if (!lval && SvRMAGICAL(av) && SvGMAGICAL(sv)) /* see note in pp_helem() */
 	mg_get(sv);
     PUSHs(sv);
     RETURN;
@@ -1004,7 +1004,17 @@ PP(pp_aassign)
 	for (relem = firstrelem; relem <= lastrelem; relem++) {
 	    if ((sv = *relem)) {
 		TAINT_NOT;	/* Each item is independent */
-		*relem = sv_mortalcopy(sv);
+
+		/* Dear TODO test in t/op/sort.t, I love you.
+		   (It's relying on a panic, not a "semi-panic" from newSVsv()
+		   and then an assertion failure below.)  */
+		if (SvIS_FREED(sv)) {
+		    Perl_croak(aTHX_ "panic: attempt to copy freed scalar %p",
+			       (void*)sv);
+		}
+		/* Specifically *not* sv_mortalcopy(), as that will steal TEMPs,
+		   and we need a second copy of a temp here.  */
+		*relem = sv_2mortal(newSVsv(sv));
 	    }
 	}
     }
@@ -1027,7 +1037,8 @@ PP(pp_aassign)
 	    while (relem <= lastrelem) {	/* gobble up all the rest */
 		SV **didstore;
 		assert(*relem);
-		sv = newSVsv(*relem);
+		sv = newSV(0);
+		sv_setsv(sv, *relem);
 		*(relem++) = sv;
 		didstore = av_store(ary,i++,sv);
 		if (magic) {
@@ -1858,7 +1869,7 @@ PP(pp_helem)
      * meant the original regex may be out of scope by now. So as a
      * compromise, do the get magic here. (The MGf_GSKIP flag will stop it
      * being called too many times). */
-    if (!lval && SvGMAGICAL(sv))
+    if (!lval && SvRMAGICAL(hv) && SvGMAGICAL(sv))
 	mg_get(sv);
     PUSHs(sv);
     RETURN;
@@ -2115,6 +2126,7 @@ PP(pp_subst)
 	DIE(aTHX_ "%s", PL_no_modify);
     PUTBACK;
 
+  setup_match:
     s = SvPV_mutable(TARG, len);
     if (!SvPOKp(TARG) || SvTYPE(TARG) == SVt_PVGV)
 	force_on_match = 1;
@@ -2170,6 +2182,22 @@ PP(pp_subst)
 			 r_flags | REXEC_CHECKED);
     /* known replacement string? */
     if (dstr) {
+
+	/* Upgrade the source if the replacement is utf8 but the source is not,
+	 * but only if it matched; see
+	 * http://www.nntp.perl.org/group/perl.perl5.porters/2010/04/msg158809.html
+	 */
+	if (matched && DO_UTF8(dstr) && ! DO_UTF8(TARG)) {
+	    const STRLEN new_len = sv_utf8_upgrade(TARG);
+
+	    /* If the lengths are the same, the pattern contains only
+	     * invariants, can keep going; otherwise, various internal markers
+	     * could be off, so redo */
+	    if (new_len != len) {
+		goto setup_match;
+	    }
+	}
+
 	/* replacement needing upgrading? */
 	if (DO_UTF8(TARG) && !doutf8) {
 	     nsv = sv_newmortal();
@@ -2996,7 +3024,7 @@ PP(pp_aelem)
 	    vivify_ref(*svp, PL_op->op_private & OPpDEREF);
     }
     sv = (svp ? *svp : &PL_sv_undef);
-    if (!lval && SvGMAGICAL(sv))	/* see note in pp_helem() */
+    if (!lval && SvRMAGICAL(av) && SvGMAGICAL(sv)) /* see note in pp_helem() */
 	mg_get(sv);
     PUSHs(sv);
     RETURN;

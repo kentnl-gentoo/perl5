@@ -2485,14 +2485,14 @@ PP(pp_negate)
 
 PP(pp_not)
 {
-    dVAR; dSP; tryAMAGICunSET(not);
+    dVAR; dSP; tryAMAGICunSET_var(not_amg);
     *PL_stack_sp = boolSV(!SvTRUE(*PL_stack_sp));
     return NORMAL;
 }
 
 PP(pp_complement)
 {
-    dVAR; dSP; dTARGET; tryAMAGICun(compl);
+    dVAR; dSP; dTARGET; tryAMAGICun_var(compl_amg);
     {
       dTOPss;
       SvGETMAGIC(sv);
@@ -5326,7 +5326,8 @@ PP(pp_shift)
 {
     dVAR;
     dSP;
-    AV * const av = MUTABLE_AV(POPs);
+    AV * const av = PL_op->op_flags & OPf_SPECIAL
+	? MUTABLE_AV(GvAV(PL_defgv)) : MUTABLE_AV(POPs);
     SV * const sv = PL_op->op_type == OP_SHIFT ? av_shift(av) : av_pop(av);
     EXTEND(SP, 1);
     assert (sv);

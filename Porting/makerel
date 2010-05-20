@@ -66,7 +66,6 @@ my (@local_patches, @lpatch_tags, $lpatch_tags);
 @local_patches = grep { !/^\s*,?NULL/  } @local_patches;
 @lpatch_tags   = map  {  /^\s*,"(\w+)/ } @local_patches;
 $lpatch_tags   = join "-", @lpatch_tags;
-$lpatch_tags="";
 
 $perl = "perl-$vers";
 $reldir = "$perl";

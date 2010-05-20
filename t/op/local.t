@@ -5,7 +5,7 @@ BEGIN {
     @INC = qw(. ../lib);
     require './test.pl';
 }
-plan tests => 296;
+plan tests => 310;
 
 my $list_assignment_supported = 1;
 
@@ -325,6 +325,21 @@ ok(!defined $a[0]);
     local @a = @a;
     is("@a", $d);
 }
+# RT #7938: localising an array should make it temporarily untied
+{
+    @a = qw(a b c);
+    local @a = (6,7,8);
+    is("@a", "6 7 8", 'local @a assigned 6,7,8');
+    {
+	my $c = 0;
+	local *TA::STORE = sub { $c++ };
+	$a[0] = 9;
+	is($c, 0, 'STORE not called after array localised');
+    }
+    is("@a", "9 7 8", 'local @a should now be 9 7 8');
+}
+is("@a", "a b c", '@a should now contain original value');
+
 
 # local() should preserve the existenceness of tied array elements
 @a = ('a', 'b', 'c');
@@ -450,6 +465,7 @@ tie %h, 'TH';
 is($h{'a'}, 1);
 is($h{'b'}, 2);
 is($h{'c'}, 3);
+
 # local() should preserve the existenceness of tied hash elements
 ok(! exists $h{'y'});
 ok(! exists $h{'z'});
@@ -459,6 +475,24 @@ TODO: {
     local %h = %h;
     is(join("\n", map { "$_=>$h{$_}" } sort keys %h), $d);
 }
+
+# RT #7939: localising a hash should make it temporarily untied
+{
+    %h = qw(a 1 b 2 c 3);
+    local %h = qw(x 6 y 7 z 8);
+    is(join('', sort keys   %h), "xyz", 'local %h has new keys');
+    is(join('', sort values %h), "678", 'local %h has new values');
+    {
+	my $c = 0;
+	local *TH::STORE = sub { $c++ };
+	$h{x} = 9;
+	is($c, 0, 'STORE not called after hash localised');
+    }
+    is($h{x}, 9, '$h{x} should now be 9');
+}
+is(join('', sort keys   %h), "abc", 'restored %h has original keys');
+is(join('', sort values %h), "123", 'restored %h has original values');
+
 
 %h = (a => 1, b => 2, c => 3, d => 4);
 {
@@ -746,6 +780,33 @@ like( runperl(stderr => 1,
               prog => 'use constant foo => q(a);' .
                       'index(q(a), foo);' .
                       'local *g=${::}{foo};print q(ok);'), "ok", "[perl #52740]");
+
+# localising a tied scalar should give you an untied var
+{
+    package TS;
+    sub TIESCALAR { bless \my $self, shift }
+
+    my $s;
+    sub FETCH { $s .= ":F=${$_[0]}"; ${$_[0]} }
+    sub STORE { $s .= ":S($_[1])"; ${$_[0]} = $_[1]; }
+
+    package main;
+    tie $ts, 'TS';
+    $ts = 1;
+    {
+	$s .= ':L1';
+	local $ts;
+	$s .= ':L2';
+	is($ts, undef, 'local tied scalar initially undef');
+	$ts = 2;
+	is($ts, 2, 'local tied scalar now has a value');
+	$s .= ':E';
+    }
+    is($ts, 1, 'restored tied scalar has correct value');
+    $ts = 3;
+    is($s, ':S(1):L1:F=1:L2:E:F=1:S(3)',
+		"local tied scalar shouldn't call methods");
+}
 
 # Keep this test last, as it can SEGV
 {
