@@ -2098,7 +2098,7 @@ S_force_version(pTHX_ char *s, int guessing)
 	    curmad('X', newSVpvn(s,d-s));
 	}
 #endif
-        if (*d == ';' || isSPACE(*d) || *d == '}' || !*d) {
+        if (*d == ';' || isSPACE(*d) || *d == '{' || *d == '}' || !*d) {
 	    SV *ver;
 #ifdef USE_LOCALE_NUMERIC
 	    char *loc = setlocale(LC_NUMERIC, "C");
@@ -2167,7 +2167,9 @@ S_force_strict_version(pTHX_ char *s)
 	s = (char *)scan_version(s, ver, 0);
 	version = newSVOP(OP_CONST, 0, ver);
     }
-    else if ( (*s != ';' && *s != '}' ) && (s = SKIPSPACE1(s), (*s != ';' && *s !='}' ))) {
+    else if ( (*s != ';' && *s != '{' && *s != '}' ) &&
+	    (s = SKIPSPACE1(s), (*s != ';' && *s != '{' && *s != '}' )))
+    {
 	PL_bufptr = s;
 	if (errstr)
 	    yyerror(errstr); /* version required */
@@ -3268,7 +3270,8 @@ S_scan_const(pTHX_ char *start)
 			     * should the trailing NUL be missing that this
 			     * print won't run off the end of the string */
 			    Perl_warner(aTHX_ packWARN(WARN_DEPRECATED),
-				"Deprecated character in \\N{...}; marked by <-- HERE  in \\N{%.*s<-- HERE %.*s", i - s + 1, s, e - i, i + 1);
+					"Deprecated character in \\N{...}; marked by <-- HERE  in \\N{%.*s<-- HERE %.*s",
+					(int)(i - s + 1), s, (int)(e - i), i + 1);
 			}
 		    }
 		} /* End \N{NAME} */
@@ -7271,6 +7274,7 @@ Perl_yylex(pTHX)
 	    s = force_word(s,WORD,FALSE,TRUE,FALSE);
 	    s = SKIPSPACE1(s);
 	    s = force_strict_version(s);
+	    PL_lex_expect = XBLOCK;
 	    OPERATOR(PACKAGE);
 
 	case KEY_pipe:
@@ -8049,28 +8053,11 @@ S_pending_ident(pTHX)
     pl_yylval.opval = (OP*)newSVOP(OP_CONST, 0, newSVpvn(PL_tokenbuf + 1,
 						      tokenbuf_len - 1));
     pl_yylval.opval->op_private = OPpCONST_ENTERED;
-    gv_fetchpvn_flags(
-	    PL_tokenbuf + 1, tokenbuf_len - 1,
-	    /* If the identifier refers to a stash, don't autovivify it.
-	     * Change 24660 had the side effect of causing symbol table
-	     * hashes to always be defined, even if they were freshly
-	     * created and the only reference in the entire program was
-	     * the single statement with the defined %foo::bar:: test.
-	     * It appears that all code in the wild doing this actually
-	     * wants to know whether sub-packages have been loaded, so
-	     * by avoiding auto-vivifying symbol tables, we ensure that
-	     * defined %foo::bar:: continues to be false, and the existing
-	     * tests still give the expected answers, even though what
-	     * they're actually testing has now changed subtly.
-	     */
-	    (*PL_tokenbuf == '%'
-	     && *(d = PL_tokenbuf + tokenbuf_len - 1) == ':'
-	     && d[-1] == ':'
-	     ? 0
-	     : PL_in_eval ? (GV_ADDMULTI | GV_ADDINEVAL) : GV_ADD),
-	    ((PL_tokenbuf[0] == '$') ? SVt_PV
-	     : (PL_tokenbuf[0] == '@') ? SVt_PVAV
-	     : SVt_PVHV));
+    gv_fetchpvn_flags(PL_tokenbuf+1, tokenbuf_len - 1,
+		     PL_in_eval ? (GV_ADDMULTI | GV_ADDINEVAL) : GV_ADD,
+		     ((PL_tokenbuf[0] == '$') ? SVt_PV
+		      : (PL_tokenbuf[0] == '@') ? SVt_PVAV
+		      : SVt_PVHV));
     return WORD;
 }
 
@@ -11840,10 +11827,11 @@ static U32
 S_pmflag(U32 pmfl, const char ch) {
     switch (ch) {
 	CASE_STD_PMMOD_FLAGS_PARSE_SET(&pmfl);
-    case GLOBAL_PAT_MOD:    pmfl |= PMf_GLOBAL; break;
-    case CONTINUE_PAT_MOD:  pmfl |= PMf_CONTINUE; break;
-    case ONCE_PAT_MOD:      pmfl |= PMf_KEEP; break;
-    case KEEPCOPY_PAT_MOD:  pmfl |= PMf_KEEPCOPY; break;
+    case GLOBAL_PAT_MOD:      pmfl |= PMf_GLOBAL; break;
+    case CONTINUE_PAT_MOD:    pmfl |= PMf_CONTINUE; break;
+    case ONCE_PAT_MOD:        pmfl |= PMf_KEEP; break;
+    case KEEPCOPY_PAT_MOD:    pmfl |= PMf_KEEPCOPY; break;
+    case NONDESTRUCT_PAT_MOD: pmfl |= PMf_NONDESTRUCT; break;
     }
     return pmfl;
 }
@@ -11899,6 +11887,12 @@ S_scan_pat(pTHX_ char *start, I32 type)
 #endif
     while (*s && strchr(valid_flags, *s))
 	pm->op_pmflags = S_pmflag(pm->op_pmflags, *s++);
+
+    if (isALNUM(*s)) {
+	Perl_ck_warner_d(aTHX_ packWARN(WARN_SYNTAX),
+	    "Having no space between pattern and following word is deprecated");
+
+    }
 #ifdef PERL_MAD
     if (PL_madskills && modstart != s) {
 	SV* tmptoken = newSVpvn(modstart, s - modstart);
@@ -13096,13 +13090,12 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 		Perl_ck_warner(aTHX_ packWARN(WARN_SYNTAX), "Misplaced _ in number");
 	    }
 
-	    sv = newSV(0);
 	    if (overflowed) {
 		if (n > 4294967295.0)
 		    Perl_ck_warner(aTHX_ packWARN(WARN_PORTABLE),
 				   "%s number > %s non-portable",
 				   Base, max);
-		sv_setnv(sv, n);
+		sv = newSVnv(n);
 	    }
 	    else {
 #if UVSIZE > 4
@@ -13111,7 +13104,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 				   "%s number > %s non-portable",
 				   Base, max);
 #endif
-		sv_setuv(sv, u);
+		sv = newSVuv(u);
 	    }
 	    if (just_zero && (PL_hints & HINT_NEW_INTEGER))
 		sv = new_constant(start, s - start, "integer",
@@ -13242,9 +13235,6 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 	}
 
 
-	/* make an sv from the string */
-	sv = newSV(0);
-
 	/*
            We try to do an integer conversion first if no characters
            indicating "float" have been found.
@@ -13256,12 +13246,12 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 
             if (flags == IS_NUMBER_IN_UV) {
               if (uv <= IV_MAX)
-		sv_setiv(sv, uv); /* Prefer IVs over UVs. */
+		sv = newSViv(uv); /* Prefer IVs over UVs. */
               else
-	    	sv_setuv(sv, uv);
+	    	sv = newSVuv(uv);
             } else if (flags == (IS_NUMBER_IN_UV | IS_NUMBER_NEG)) {
               if (uv <= (UV) IV_MIN)
-                sv_setiv(sv, -(IV)uv);
+                sv = newSViv(-(IV)uv);
               else
 	    	floatit = TRUE;
             } else
@@ -13271,7 +13261,7 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 	    /* terminate the string */
 	    *d = '\0';
 	    nv = Atof(PL_tokenbuf);
-	    sv_setnv(sv, nv);
+	    sv = newSVnv(nv);
 	}
 
 	if ( floatit
@@ -13682,6 +13672,8 @@ S_utf16_textfilter(pTHX_ int idx, SV *sv, int maxlen)
     const bool reverse = cBOOL(IoLINES(filter));
     I32 retval;
 
+    PERL_ARGS_ASSERT_UTF16_TEXTFILTER;
+
     /* As we're automatically added, at the lowest level, and hence only called
        from this file, we can be sure that we're not called in block mode. Hence
        don't bother writing code to deal with block mode.  */
@@ -13794,6 +13786,8 @@ static U8 *
 S_add_utf16_textfilter(pTHX_ U8 *const s, bool reversed)
 {
     SV *filter = filter_add(S_utf16_textfilter, NULL);
+
+    PERL_ARGS_ASSERT_ADD_UTF16_TEXTFILTER;
 
     IoTOP_GV(filter) = MUTABLE_GV(newSVpvn((char *)s, PL_bufend - (char*)s));
     sv_setpvs(filter, "");

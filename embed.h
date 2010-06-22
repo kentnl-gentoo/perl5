@@ -315,9 +315,9 @@
 #endif
 #endif
 #define hv_undef		Perl_hv_undef
-#define ibcmp			Perl_ibcmp
-#define ibcmp_locale		Perl_ibcmp_locale
-#define ibcmp_utf8		Perl_ibcmp_utf8
+#define foldEQ			Perl_foldEQ
+#define foldEQ_locale		Perl_foldEQ_locale
+#define foldEQ_utf8		Perl_foldEQ_utf8
 #if defined(PERL_IN_DOIO_C) || defined(PERL_DECL_PROT)
 #ifdef PERL_CORE
 #define ingroup			S_ingroup
@@ -673,6 +673,7 @@
 #endif
 #define pad_findmy		Perl_pad_findmy
 #define find_rundefsvoffset	Perl_find_rundefsvoffset
+#define find_rundefsv		Perl_find_rundefsv
 #ifdef PERL_CORE
 #define oopsAV			Perl_oopsAV
 #define oopsHV			Perl_oopsHV
@@ -952,6 +953,7 @@
 #define sv_compile_2op		Perl_sv_compile_2op
 #define getcwd_sv		Perl_getcwd_sv
 #define sv_dec			Perl_sv_dec
+#define sv_dec_nomg		Perl_sv_dec_nomg
 #define sv_dump			Perl_sv_dump
 #define sv_derived_from		Perl_sv_derived_from
 #define sv_does			Perl_sv_does
@@ -963,6 +965,7 @@
 #define sv_gets			Perl_sv_gets
 #define sv_grow			Perl_sv_grow
 #define sv_inc			Perl_sv_inc
+#define sv_inc_nomg		Perl_sv_inc_nomg
 #define sv_insert_flags		Perl_sv_insert_flags
 #define sv_isa			Perl_sv_isa
 #define sv_isobject		Perl_sv_isobject
@@ -1178,7 +1181,13 @@
 #define sv_dup_inc_multiple	S_sv_dup_inc_multiple
 #endif
 #endif
+#if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
+#ifdef PERL_CORE
+#define sv_dup_common		S_sv_dup_common
+#endif
+#endif
 #define sv_dup			Perl_sv_dup
+#define sv_dup_inc		Perl_sv_dup_inc
 #define rvpv_dup		Perl_rvpv_dup
 #define parser_dup		Perl_parser_dup
 #endif
@@ -1769,6 +1778,11 @@
 #define pad_push		Perl_pad_push
 #define pad_compname_type	Perl_pad_compname_type
 #endif
+#if defined(USE_ITHREADS)
+#ifdef PERL_CORE
+#define padlist_dup		Perl_padlist_dup
+#endif
+#endif
 #if defined(PERL_IN_PAD_C) || defined(PERL_DECL_PROT)
 #ifdef PERL_CORE
 #define pad_findlex		S_pad_findlex
@@ -2039,6 +2053,13 @@
 #define mro_method_changed_in	Perl_mro_method_changed_in
 #ifdef PERL_CORE
 #define boot_core_mro		Perl_boot_core_mro
+#endif
+#if defined(USE_ITHREADS)
+#  if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
+#ifdef PERL_CORE
+#define unreferenced_to_tmp_stack	S_unreferenced_to_tmp_stack
+#endif
+#  endif
 #endif
 #define ck_anoncode		Perl_ck_anoncode
 #define ck_bitop		Perl_ck_bitop
@@ -2465,6 +2486,8 @@
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define regcurly		Perl_regcurly
 #endif
+#if defined(PERL_CORE) || defined(PERL_EXT)
+#endif
 #define amagic_call(a,b,c,d)	Perl_amagic_call(aTHX_ a,b,c,d)
 #define Gv_AMupdate(a,b)	Perl_Gv_AMupdate(aTHX_ a,b)
 #define gv_handler(a,b)		Perl_gv_handler(aTHX_ a,b)
@@ -2729,9 +2752,9 @@
 #endif
 #endif
 #define hv_undef(a)		Perl_hv_undef(aTHX_ a)
-#define ibcmp			Perl_ibcmp
-#define ibcmp_locale		Perl_ibcmp_locale
-#define ibcmp_utf8(a,b,c,d,e,f,g,h)	Perl_ibcmp_utf8(aTHX_ a,b,c,d,e,f,g,h)
+#define foldEQ			Perl_foldEQ
+#define foldEQ_locale		Perl_foldEQ_locale
+#define foldEQ_utf8(a,b,c,d,e,f,g,h)	Perl_foldEQ_utf8(aTHX_ a,b,c,d,e,f,g,h)
 #if defined(PERL_IN_DOIO_C) || defined(PERL_DECL_PROT)
 #ifdef PERL_CORE
 #define ingroup(a,b)		S_ingroup(aTHX_ a,b)
@@ -3084,6 +3107,7 @@
 #endif
 #define pad_findmy(a,b,c)	Perl_pad_findmy(aTHX_ a,b,c)
 #define find_rundefsvoffset()	Perl_find_rundefsvoffset(aTHX)
+#define find_rundefsv()		Perl_find_rundefsv(aTHX)
 #ifdef PERL_CORE
 #define oopsAV(a)		Perl_oopsAV(aTHX_ a)
 #define oopsHV(a)		Perl_oopsHV(aTHX_ a)
@@ -3365,6 +3389,7 @@
 #define sv_compile_2op(a,b,c,d)	Perl_sv_compile_2op(aTHX_ a,b,c,d)
 #define getcwd_sv(a)		Perl_getcwd_sv(aTHX_ a)
 #define sv_dec(a)		Perl_sv_dec(aTHX_ a)
+#define sv_dec_nomg(a)		Perl_sv_dec_nomg(aTHX_ a)
 #define sv_dump(a)		Perl_sv_dump(aTHX_ a)
 #define sv_derived_from(a,b)	Perl_sv_derived_from(aTHX_ a,b)
 #define sv_does(a,b)		Perl_sv_does(aTHX_ a,b)
@@ -3376,6 +3401,7 @@
 #define sv_gets(a,b,c)		Perl_sv_gets(aTHX_ a,b,c)
 #define sv_grow(a,b)		Perl_sv_grow(aTHX_ a,b)
 #define sv_inc(a)		Perl_sv_inc(aTHX_ a)
+#define sv_inc_nomg(a)		Perl_sv_inc_nomg(aTHX_ a)
 #define sv_insert_flags(a,b,c,d,e,f)	Perl_sv_insert_flags(aTHX_ a,b,c,d,e,f)
 #define sv_isa(a,b)		Perl_sv_isa(aTHX_ a,b)
 #define sv_isobject(a)		Perl_sv_isobject(aTHX_ a)
@@ -3583,7 +3609,13 @@
 #define sv_dup_inc_multiple(a,b,c,d)	S_sv_dup_inc_multiple(aTHX_ a,b,c,d)
 #endif
 #endif
+#if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
+#ifdef PERL_CORE
+#define sv_dup_common(a,b)	S_sv_dup_common(aTHX_ a,b)
+#endif
+#endif
 #define sv_dup(a,b)		Perl_sv_dup(aTHX_ a,b)
+#define sv_dup_inc(a,b)		Perl_sv_dup_inc(aTHX_ a,b)
 #define rvpv_dup(a,b,c)		Perl_rvpv_dup(aTHX_ a,b,c)
 #define parser_dup(a,b)		Perl_parser_dup(aTHX_ a,b)
 #endif
@@ -4187,6 +4219,11 @@
 #define pad_push(a,b)		Perl_pad_push(aTHX_ a,b)
 #define pad_compname_type(a)	Perl_pad_compname_type(aTHX_ a)
 #endif
+#if defined(USE_ITHREADS)
+#ifdef PERL_CORE
+#define padlist_dup(a,b)	Perl_padlist_dup(aTHX_ a,b)
+#endif
+#endif
 #if defined(PERL_IN_PAD_C) || defined(PERL_DECL_PROT)
 #ifdef PERL_CORE
 #define pad_findlex(a,b,c,d,e,f,g)	S_pad_findlex(aTHX_ a,b,c,d,e,f,g)
@@ -4469,6 +4506,13 @@
 #ifdef PERL_CORE
 #endif
 #ifdef PERL_CORE
+#endif
+#if defined(USE_ITHREADS)
+#  if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
+#ifdef PERL_CORE
+#define unreferenced_to_tmp_stack(a)	S_unreferenced_to_tmp_stack(aTHX_ a)
+#endif
+#  endif
 #endif
 #define ck_anoncode(a)		Perl_ck_anoncode(aTHX_ a)
 #define ck_bitop(a)		Perl_ck_bitop(aTHX_ a)

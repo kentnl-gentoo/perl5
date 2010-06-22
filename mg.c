@@ -179,7 +179,6 @@ S_is_container_magic(const MAGIC *mg)
     case PERL_MAGIC_rhash:
     case PERL_MAGIC_symtab:
     case PERL_MAGIC_tied: /* treat as value, so 'local @tied' isn't tied */
-    case PERL_MAGIC_tiedscalar: /* so 'local $scalar' isn't tied */
 	return 0;
     default:
 	return 1;
@@ -1557,7 +1556,7 @@ Perl_magic_setisa(pTHX_ SV *sv, MAGIC *mg)
     PERL_UNUSED_ARG(sv);
 
     /* Skip _isaelem because _isa will handle it shortly */
-    if (PL_delaymagic & DM_ARRAY && mg->mg_type == PERL_MAGIC_isaelem)
+    if (PL_delaymagic & DM_ARRAY_ISA && mg->mg_type == PERL_MAGIC_isaelem)
 	return 0;
 
     return magic_clearisa(NULL, mg);
@@ -1651,12 +1650,11 @@ Invoke a magic method (like FETCH).
 
 * sv and mg are the tied thinggy and the tie magic;
 * meth is the name of the method to call;
-* argc, arg1, arg2 are the number of args (in addition to $self) to pass to
-  the method, and the args themselves
+* argc is the number of args (in addition to $self) to pass to the method;
+       the args themselves are any values following the argc argument.
 * flags:
     G_DISCARD:     invoke method with G_DISCARD flag and don't return a value
-    G_UNDEF_FILL:  fill the stack with argc pointers to PL_sv_undef;
-                   ignore arg1 and arg2.
+    G_UNDEF_FILL:  fill the stack with argc pointers to PL_sv_undef.
 
 Returns the SV (if any) returned by the method, or NULL on failure.
 

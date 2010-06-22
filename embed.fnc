@@ -172,6 +172,8 @@ END_EXTERN_C
 /* functions with flag 'n' should come before here */
 START_EXTERN_C
 #  include "pp_proto.h"
+XEop	|bool	|try_amagic_bin	|int method|int flags
+XEop	|bool	|try_amagic_un	|int method|int flags
 Ap	|SV*	|amagic_call	|NN SV* left|NN SV* right|int method|int dir
 Ap	|int	|Gv_AMupdate	|NN HV* stash|bool destructing
 ApR	|CV*	|gv_handler	|NULLOK HV* stash|I32 id
@@ -459,6 +461,7 @@ Ap	|void*	|hv_common	|NULLOK HV *hv|NULLOK SV *keysv \
 Ap	|void*	|hv_common_key_len|NULLOK HV *hv|NN const char *key \
 				|I32 klen_i32|const int action|NULLOK SV *val \
 				|const U32 hash
+Apod	|STRLEN	|hv_fill	|NN HV const *const hv
 Ap	|void	|hv_free_ent	|NN HV *hv|NULLOK HE *entryK
 Apd	|I32	|hv_iterinit	|NN HV *hv
 ApdR	|char*	|hv_iterkey	|NN HE* entry|NN I32* retlen
@@ -496,9 +499,14 @@ Abmd	|HE*	|hv_store_ent	|NULLOK HV *hv|NULLOK SV *key|NULLOK SV *val\
 AbmM	|SV**	|hv_store_flags	|NULLOK HV *hv|NULLOK const char *key \
 				|I32 klen|NULLOK SV *val|U32 hash|int flags
 Apd	|void	|hv_undef	|NULLOK HV *hv
-AnpP	|I32	|ibcmp		|NN const char* a|NN const char* b|I32 len
-AnpP	|I32	|ibcmp_locale	|NN const char* a|NN const char* b|I32 len
-Apd	|I32	|ibcmp_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
+Am	|I32	|ibcmp		|NN const char* a|NN const char* b|I32 len
+AnpP	|I32	|foldEQ		|NN const char* a|NN const char* b|I32 len
+Am	|I32	|ibcmp_locale	|NN const char* a|NN const char* b|I32 len
+AnpP	|I32	|foldEQ_locale	|NN const char* a|NN const char* b|I32 len
+Am	|I32	|ibcmp_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
+				|bool u1|NN const char *s2|NULLOK char **pe2 \
+				|UV l2|bool u2
+Apd	|I32	|foldEQ_utf8	|NN const char *s1|NULLOK char **pe1|UV l1 \
 				|bool u1|NN const char *s2|NULLOK char **pe2 \
 				|UV l2|bool u2
 #if defined(PERL_IN_DOIO_C) || defined(PERL_DECL_PROT)
@@ -852,7 +860,9 @@ p	|PADOFFSET|allocmy	|NN const char *const name|const STRLEN len\
 				|const U32 flags
 : Used in op.c and toke.c
 AMpdR	|PADOFFSET|pad_findmy	|NN const char* name|STRLEN len|U32 flags
-Ap	|PADOFFSET|find_rundefsvoffset	|
+ApD	|PADOFFSET|find_rundefsvoffset	|
+: Used in pp.c
+Ap	|SV*	|find_rundefsv	|
 : Used in perly.y
 pR	|OP*	|oopsAV		|NN OP* o
 : Used in perly.y
@@ -1137,6 +1147,7 @@ Ap	|OP*	|sv_compile_2op	|NN SV *sv|NN OP **startop \
 				|NN const char *code|NN PAD **padp
 Apd	|int	|getcwd_sv	|NN SV* sv
 Apd	|void	|sv_dec		|NULLOK SV *const sv
+Apd	|void	|sv_dec_nomg	|NULLOK SV *const sv
 Ap	|void	|sv_dump	|NN SV* sv
 ApdR	|bool	|sv_derived_from|NN SV* sv|NN const char *const name
 ApdR	|bool	|sv_does	|NN SV* sv|NN const char *const name
@@ -1150,6 +1161,7 @@ pd	|void	|sv_free_arenas
 Apd	|char*	|sv_gets	|NN SV *const sv|NN PerlIO *const fp|I32 append
 Apd	|char*	|sv_grow	|NN SV *const sv|STRLEN newlen
 Apd	|void	|sv_inc		|NULLOK SV *const sv
+Apd	|void	|sv_inc_nomg	|NULLOK SV *const sv
 Amdb	|void	|sv_insert	|NN SV *const bigstr|const STRLEN offset \
 				|const STRLEN len|NN const char *const little \
 				|const STRLEN littlelen
@@ -1416,7 +1428,13 @@ ApR	|MAGIC*	|mg_dup		|NULLOK MAGIC *mg|NN CLONE_PARAMS *const param
 s	|SV **	|sv_dup_inc_multiple|NN SV *const *source|NN SV **dest \
 				|SSize_t items|NN CLONE_PARAMS *const param
 #endif
+#if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
+sR	|SV*	|sv_dup_common	|NN const SV *const sstr \
+				|NN CLONE_PARAMS *const param
+#endif
 ApR	|SV*	|sv_dup		|NULLOK const SV *const sstr|NN CLONE_PARAMS *const param
+ApR	|SV*	|sv_dup_inc	|NULLOK const SV *const sstr \
+				|NN CLONE_PARAMS *const param
 Ap	|void	|rvpv_dup	|NN SV *const dstr|NN const SV *const sstr|NN CLONE_PARAMS *const param
 Ap	|yy_parser*|parser_dup	|NULLOK const yy_parser *const proto|NN CLONE_PARAMS *const param
 #endif
@@ -1698,6 +1716,9 @@ s	|OP*	|doform		|NN CV *cv|NN GV *gv|NN OP *retop
 sR	|int	|dooneliner	|NN const char *cmd|NN const char *filename
 #  endif
 s	|SV *	|space_join_names_mortal|NN char *const *array
+so	|OP *	|tied_handle_method|NN const char *const methname|NN SV **sp \
+				|NN IO *const io|NN MAGIC *const mg \
+				|const U32 flags|...
 #endif
 
 #if defined(PERL_IN_REGCOMP_C) || defined(PERL_DECL_PROT)
@@ -2068,6 +2089,11 @@ pd	|void	|pad_fixup_inner_anons|NN PADLIST *padlist|NN CV *old_cv|NN CV *new_cv
 pdX	|void	|pad_push	|NN PADLIST *padlist|int depth
 : Only used in PAD_COMPNAME_TYPE() in op.c
 pR	|HV*	|pad_compname_type|const PADOFFSET po
+: Used in sv.c
+#if defined(USE_ITHREADS)
+pR	|AV*	|padlist_dup	|NULLOK AV *const srcpad \
+				|NN CLONE_PARAMS *const param
+#endif
 
 #if defined(PERL_IN_PAD_C) || defined(PERL_DECL_PROT)
 sd	|PADOFFSET|pad_findlex	|NN const char *name|NN const CV* cv|U32 seq|int warn \
@@ -2348,6 +2374,14 @@ xpoM	|struct refcounted_he *|store_cop_label \
 
 xpo	|int	|keyword_plugin_standard|NN char* keyword_ptr|STRLEN keyword_len|NN OP** op_ptr
 
+#if defined(USE_ITHREADS)
+#  if defined(PERL_IN_SV_C) || defined(PERL_DECL_PROT)
+s	|void	|unreferenced_to_tmp_stack|NN AV *const unreferenced
+#  endif
+Aanop	|CLONE_PARAMS *|clone_params_new|NN PerlInterpreter *const from \
+		|NN PerlInterpreter *const to
+Anop	|void	|clone_params_del|NN CLONE_PARAMS *param
+#endif
 END_EXTERN_C
 /*
  * ex: set ts=8 sts=4 sw=4 noet:

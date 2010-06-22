@@ -1110,6 +1110,11 @@ Perl_scalarvoid(pTHX_ OP *o)
        useless = "negative pattern binding (!~)";
        break;
 
+    case OP_SUBST:
+	if (cPMOPo->op_pmflags & PMf_NONDESTRUCT)
+	    useless = "Non-destructive substitution (s///r)";
+	break;
+
     case OP_RV2GV:
     case OP_RV2SV:
     case OP_RV2AV:
@@ -2225,6 +2230,11 @@ Perl_bind_match(pTHX_ I32 type, OP *left, OP *right)
 	no_bareword_allowed(right);
     }
 
+    /* !~ doesn't make sense with s///r, so error on it for now */
+    if (rtype == OP_SUBST && (cPMOPx(right)->op_pmflags & PMf_NONDESTRUCT) &&
+	type == OP_NOT)
+	yyerror("Using !~ with s///r doesn't make sense");
+
     ismatchop = rtype == OP_MATCH ||
 		rtype == OP_SUBST ||
 		rtype == OP_TRANS;
@@ -2238,7 +2248,9 @@ Perl_bind_match(pTHX_ I32 type, OP *left, OP *right)
 	right->op_flags |= OPf_STACKED;
 	if (rtype != OP_MATCH &&
             ! (rtype == OP_TRANS &&
-               right->op_private & OPpTRANS_IDENTICAL))
+               right->op_private & OPpTRANS_IDENTICAL) &&
+	    ! (rtype == OP_SUBST &&
+	       (cPMOPx(right)->op_pmflags & PMf_NONDESTRUCT)))
 	    newleft = mod(left, rtype);
 	else
 	    newleft = left;
@@ -5908,20 +5920,19 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 
     if (has_name) {
 	if (PERLDB_SUBLINE && PL_curstash != PL_debstash) {
-	    SV * const sv = newSV(0);
 	    SV * const tmpstr = sv_newmortal();
 	    GV * const db_postponed = gv_fetchpvs("DB::postponed",
 						  GV_ADDMULTI, SVt_PVHV);
 	    HV *hv;
-
-	    Perl_sv_setpvf(aTHX_ sv, "%s:%ld-%ld",
-			   CopFILE(PL_curcop),
-			   (long)PL_subline, (long)CopLINE(PL_curcop));
+	    SV * const sv = Perl_newSVpvf(aTHX_ "%s:%ld-%ld",
+					  CopFILE(PL_curcop),
+					  (long)PL_subline,
+					  (long)CopLINE(PL_curcop));
 	    gv_efullname3(tmpstr, gv, NULL);
 	    (void)hv_store(GvHV(PL_DBsub), SvPVX_const(tmpstr),
 		    SvCUR(tmpstr), sv, 0);
 	    hv = GvHVn(db_postponed);
-	    if (HvFILL(hv) > 0 && hv_exists(hv, SvPVX_const(tmpstr), SvCUR(tmpstr))) {
+	    if (HvTOTALKEYS(hv) > 0 && hv_exists(hv, SvPVX_const(tmpstr), SvCUR(tmpstr))) {
 		CV * const pcv = GvCV(db_postponed);
 		if (pcv) {
 		    dSP;
@@ -6747,17 +6758,6 @@ Perl_ck_rvconst(pTHX_ register OP *o)
 		Perl_croak(aTHX_ "Constant is not %s reference", badtype);
 	    return o;
 	}
-	else if ((o->op_type == OP_RV2HV || o->op_type == OP_RV2SV) &&
-		(PL_hints & HINT_STRICT_REFS) && SvPOK(kidsv)) {
-	    /* If this is an access to a stash, disable "strict refs", because
-	     * stashes aren't auto-vivified at compile-time (unless we store
-	     * symbols in them), and we don't want to produce a run-time
-	     * stricture error when auto-vivifying the stash. */
-	    const char *s = SvPV_nolen(kidsv);
-	    const STRLEN l = SvCUR(kidsv);
-	    if (l > 1 && s[l-1] == ':' && s[l-2] == ':')
-		o->op_private &= ~HINT_STRICT_REFS;
-	}
 	if ((o->op_private & HINT_STRICT_REFS) && (kid->op_private & OPpCONST_BARE)) {
 	    const char *badthing;
 	    switch (o->op_type) {
@@ -7167,11 +7167,12 @@ Perl_ck_glob(pTHX_ OP *o)
 	ENTER;
 	Perl_load_module(aTHX_ PERL_LOADMOD_NOIMPORT,
 		newSVpvs("File::Glob"), NULL, NULL, NULL);
-	gv = gv_fetchpvs("CORE::GLOBAL::glob", 0, SVt_PVCV);
-	glob_gv = gv_fetchpvs("File::Glob::csh_glob", 0, SVt_PVCV);
-	GvCV(gv) = GvCV(glob_gv);
-	SvREFCNT_inc_void(MUTABLE_SV(GvCV(gv)));
-	GvIMPORTED_CV_on(gv);
+	if((glob_gv = gv_fetchpvs("File::Glob::csh_glob", 0, SVt_PVCV))) {
+	    gv = gv_fetchpvs("CORE::GLOBAL::glob", 0, SVt_PVCV);
+	    GvCV(gv) = GvCV(glob_gv);
+	    SvREFCNT_inc_void(MUTABLE_SV(GvCV(gv)));
+	    GvIMPORTED_CV_on(gv);
+	}
 	LEAVE;
     }
 #endif /* PERL_EXTERNAL_GLOB */
@@ -8876,6 +8877,20 @@ Perl_peep(pTHX_ register OP *o)
 	    }
 	    break;
 	}
+	case OP_RV2SV:
+	case OP_RV2AV:
+	case OP_RV2HV:
+	    if (oldop
+		 && (  oldop->op_type == OP_AELEM
+		    || oldop->op_type == OP_PADSV
+		    || oldop->op_type == OP_RV2SV
+		    || oldop->op_type == OP_RV2GV
+		    || oldop->op_type == OP_HELEM
+		    )
+	         && (oldop->op_private & OPpDEREF)
+	    ) {
+		o->op_private |= OPpDEREFed;
+	    }
 
 	case OP_SORT: {
 	    /* will point to RV2AV or PADAV op on LHS/RHS of assign */

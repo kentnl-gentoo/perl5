@@ -22,7 +22,7 @@ sub syscopy;
 sub cp;
 sub mv;
 
-$VERSION = '2.18';
+$VERSION = '2.19';
 
 require Exporter;
 @ISA = qw(Exporter);
@@ -498,6 +498,12 @@ sort, it will be read from, and if it is a file I<name> it will
 be opened for reading. Likewise, the second argument will be
 written to (and created if need be).  Trying to copy a file on top
 of itself is a fatal error.
+
+If the destination (second argument) already exists and is a directory,
+and the source (first argument) is not a filehandle, then the source
+file will be copied into the directory specified by the destination,
+using the same base name as the source file.  It's a failure to have a
+filehandle as the source when the destination is a directory.
 
 B<Note that passing in
 files as handles instead of names may lead to loss of information

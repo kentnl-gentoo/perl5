@@ -351,7 +351,7 @@ use File::Glob qw(:case);
     'CPAN' =>
 	{
 	'MAINTAINER'	=> 'andk',
-	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_56.tar.gz',
+	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_57.tar.gz',
 	'FILES'		=> q[cpan/CPAN],
 	'EXCLUDED'	=> [ qr{^distroprefs/},
 			     qr{^inc/Test/},
@@ -789,7 +789,7 @@ use File::Glob qw(:case);
     'Locale-Codes' =>
 	{
 	'MAINTAINER'	=> 'sbeck',
-	'DISTRIBUTION'	=> 'SBECK/Locale-Codes-3.12.tar.gz',
+	'DISTRIBUTION'	=> 'SBECK/Locale-Codes-3.13.tar.gz',
 	'FILES'		=> q[cpan/Locale-Codes],
 	'EXCLUDED'	=> [ qw{t/pod_coverage.t t/pod.t}, qr{^t/runtests},
 			     qr{^internal/}, qr{^examples/} ],
@@ -1406,7 +1406,7 @@ use File::Glob qw(:case);
     'Thread::Semaphore' =>
 	{
 	'MAINTAINER'	=> 'jdhedden',
-	'DISTRIBUTION'	=> 'JDHEDDEN/Thread-Semaphore-2.09.tar.gz',
+	'DISTRIBUTION'	=> 'JDHEDDEN/Thread-Semaphore-2.11.tar.gz',
 	'FILES'		=> q[dist/Thread-Semaphore],
 	'EXCLUDED'	=> [ qw(examples/semaphore.pl
 				t/00_load.t

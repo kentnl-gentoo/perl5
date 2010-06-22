@@ -96,6 +96,7 @@ PP(pp_regcomp)
 
 #define tryAMAGICregexp(rx)			\
     STMT_START {				\
+	SvGETMAGIC(rx);				\
 	if (SvROK(rx) && SvAMAGIC(rx)) {	\
 	    SV *sv = AMG_CALLun(rx, regexp);	\
 	    if (sv) {				\
@@ -324,7 +325,10 @@ PP(pp_substcont)
 	    SvPV_set(dstr, NULL);
 
 	    TAINT_IF(cx->sb_rxtainted & 1);
-	    mPUSHi(saviters - 1);
+	    if (pm->op_pmflags & PMf_NONDESTRUCT)
+		PUSHs(targ);
+	    else
+		mPUSHi(saviters - 1);
 
 	    (void)SvPOK_only_UTF8(targ);
 	    TAINT_IF(cx->sb_rxtainted);
@@ -3357,8 +3361,9 @@ PP(pp_require)
 	    }
 	}
 
-        /* We do this only with use, not require. */
+	/* We do this only with "use", not "require" or "no". */
 	if (PL_compcv &&
+		!(cUNOP->op_first->op_private & OPpCONST_NOVER) &&
 	  /* If we request a version >= 5.9.5, load feature.pm with the
 	   * feature bundle that corresponds to the required version. */
 		vcmp(sv, sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
@@ -4158,6 +4163,19 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
     SV *e = TOPs;	/* e is for 'expression' */
     SV *d = TOPm1s;	/* d is for 'default', as in PL_defgv */
 
+    /* Take care only to invoke mg_get() once for each argument.
+     * Currently we do this by copying the SV if it's magical. */
+    if (d) {
+	if (SvGMAGICAL(d))
+	    d = sv_mortalcopy(d);
+    }
+    else
+	d = &PL_sv_undef;
+
+    assert(e);
+    if (SvGMAGICAL(e))
+	e = sv_mortalcopy(e);
+
     /* First of all, handle overload magic of the rightmost argument */
     if (SvAMAGIC(e)) {
 	SV * tmpsv;
@@ -4176,18 +4194,6 @@ S_do_smartmatch(pTHX_ HV *seen_this, HV *seen_other)
 
     SP -= 2;	/* Pop the values */
 
-    /* Take care only to invoke mg_get() once for each argument. 
-     * Currently we do this by copying the SV if it's magical. */
-    if (d) {
-	if (SvGMAGICAL(d))
-	    d = sv_mortalcopy(d);
-    }
-    else
-	d = &PL_sv_undef;
-
-    assert(e);
-    if (SvGMAGICAL(e))
-	e = sv_mortalcopy(e);
 
     /* ~~ undef */
     if (!SvOK(e)) {

@@ -552,28 +552,71 @@ PP(pp_open)
     RETURN;
 }
 
+/* These are private to this function, which is private to this file.
+   Use 0x04 rather than the next available bit, to help the compiler if the
+   architecture can generate more efficient instructions.  */
+#define MORTALIZE_NOT_NEEDED	0x04
+#define TIED_HANDLE_ARGC_SHIFT	3
+
+static OP *
+S_tied_handle_method(pTHX_ const char *const methname, SV **sp,
+		     IO *const io, MAGIC *const mg, const U32 flags, ...)
+{
+    U32 argc = flags >> TIED_HANDLE_ARGC_SHIFT;
+
+    PERL_ARGS_ASSERT_TIED_HANDLE_METHOD;
+
+    /* Ensure that our flag bits do not overlap.  */
+    assert((MORTALIZE_NOT_NEEDED & G_WANT) == 0);
+    assert((G_WANT >> TIED_HANDLE_ARGC_SHIFT) == 0);
+
+    PUSHMARK(sp);
+    PUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
+    if (argc) {
+	const U32 mortalize_not_needed = flags & MORTALIZE_NOT_NEEDED;
+	va_list args;
+	va_start(args, flags);
+	do {
+	    SV *const arg = va_arg(args, SV *);
+	    if(mortalize_not_needed)
+		PUSHs(arg);
+	    else
+		mPUSHs(arg);
+	} while (--argc);
+	va_end(args);
+    }
+
+    PUTBACK;
+    ENTER_with_name("call_tied_handle_method");
+    call_method(methname, flags & G_WANT);
+    LEAVE_with_name("call_tied_handle_method");
+    return NORMAL;
+}
+
+#define tied_handle_method(a,b,c,d)		\
+    S_tied_handle_method(aTHX_ a,b,c,d,G_SCALAR)
+#define tied_handle_method1(a,b,c,d,e)	\
+    S_tied_handle_method(aTHX_ a,b,c,d,G_SCALAR | (1 << TIED_HANDLE_ARGC_SHIFT),e)
+#define tied_handle_method2(a,b,c,d,e,f)	\
+    S_tied_handle_method(aTHX_ a,b,c,d,G_SCALAR | (2 << TIED_HANDLE_ARGC_SHIFT), e,f)
+
 PP(pp_close)
 {
     dVAR; dSP;
     GV * const gv = (MAXARG == 0) ? PL_defoutgv : MUTABLE_GV(POPs);
+
+    if (MAXARG == 0)
+	EXTEND(SP, 1);
 
     if (gv) {
 	IO * const io = GvIO(gv);
 	if (io) {
 	    MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	    if (mg) {
-		PUSHMARK(SP);
-		XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-		PUTBACK;
-		ENTER_with_name("call_CLOSE");
-		call_method("CLOSE", G_SCALAR);
-		LEAVE_with_name("call_CLOSE");
-		SPAGAIN;
-		RETURN;
+		return tied_handle_method("CLOSE", SP, io, mg);
 	    }
 	}
     }
-    EXTEND(SP, 1);
     PUSHs(boolSV(do_close(gv, TRUE)));
     RETURN;
 }
@@ -653,14 +696,7 @@ PP(pp_fileno)
     if (gv && (io = GvIO(gv))
 	&& (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar)))
     {
-	PUSHMARK(SP);
-	XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-	PUTBACK;
-	ENTER_with_name("call_FILENO");
-	call_method("FILENO", G_SCALAR);
-	LEAVE_with_name("call_FILENO");
-	SPAGAIN;
-	RETURN;
+	return tied_handle_method("FILENO", SP, io, mg);
     }
 
     if (!gv || !(io = GvIO(gv)) || !(fp = IoIFP(io))) {
@@ -726,20 +762,18 @@ PP(pp_binmode)
     if (gv && (io = GvIO(gv))) {
 	MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
-	    PUSHMARK(SP);
-	    XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-	    if (discp)
-		XPUSHs(discp);
-	    PUTBACK;
-	    ENTER_with_name("call_BINMODE");
-	    call_method("BINMODE", G_SCALAR);
-	    LEAVE_with_name("call_BINMODE");
-	    SPAGAIN;
-	    RETURN;
+	    /* This takes advantage of the implementation of the varargs
+	       function, which I don't think that the optimiser will be able to
+	       figure out. Although, as it's a static function, in theory it
+	       could.  */
+	    return S_tied_handle_method(aTHX_ "BINMODE", SP, io, mg,
+					G_SCALAR|MORTALIZE_NOT_NEEDED
+					| (discp
+					   ? (1 << TIED_HANDLE_ARGC_SHIFT) : 0),
+					discp);
 	}
     }
 
-    EXTEND(SP, 1);
     if (!(io = GvIO(gv)) || !(fp = IoIFP(io))) {
 	if (ckWARN2(WARN_UNOPENED,WARN_CLOSED))
 	    report_evil_fh(gv, io, PL_op->op_type);
@@ -821,8 +855,10 @@ PP(pp_tie)
 	call_method(methname, G_SCALAR);
     }
     else {
-	/* Not clear why we don't call call_method here too.
-	 * perhaps to get different error message ?
+	/* Can't use call_method here, else this: fileno FOO; tie @a, "FOO"
+	 * will attempt to invoke IO::File::TIEARRAY, with (best case) the
+	 * wrong error message, and worse case, supreme action at a distance.
+	 * (Sorry obfuscation writers. You're not going to be given this one.)
 	 */
 	STRLEN len;
 	const char *name = SvPV_nomg_const(*MARK, len);
@@ -878,7 +914,7 @@ PP(pp_untie)
 	    CV *cv;
 	    if (gv && isGV(gv) && (cv = GvCV(gv))) {
 	       PUSHMARK(SP);
-	       XPUSHs(SvTIED_obj(MUTABLE_SV(gv), mg));
+	       PUSHs(SvTIED_obj(MUTABLE_SV(gv), mg));
 	       mXPUSHi(SvREFCNT(obj) - 1);
 	       PUTBACK;
 	       ENTER_with_name("call_UNTIE");
@@ -1194,20 +1230,19 @@ PP(pp_getc)
     IO *io = NULL;
     GV * const gv = (MAXARG==0) ? PL_stdingv : MUTABLE_GV(POPs);
 
+    if (MAXARG == 0)
+	EXTEND(SP, 1);
+
     if (gv && (io = GvIO(gv))) {
 	MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
-	    const I32 gimme = GIMME_V;
-	    PUSHMARK(SP);
-	    XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-	    PUTBACK;
-	    ENTER;
-	    call_method("GETC", gimme);
-	    LEAVE;
-	    SPAGAIN;
-	    if (gimme == G_SCALAR)
+	    const U32 gimme = GIMME_V;
+	    S_tied_handle_method(aTHX_ "GETC", SP, io, mg, gimme);
+	    if (gimme == G_SCALAR) {
+		SPAGAIN;
 		SvSetMagicSV_nosteal(TARG, TOPs);
-	    RETURN;
+	    }
+	    return NORMAL;
 	}
     }
     if (!gv || do_eof(gv)) { /* make sure we have fp with something */
@@ -1265,14 +1300,15 @@ PP(pp_enterwrite)
     CV *cv = NULL;
     SV *tmpsv = NULL;
 
-    if (MAXARG == 0)
+    if (MAXARG == 0) {
 	gv = PL_defoutgv;
+	EXTEND(SP, 1);
+    }
     else {
 	gv = MUTABLE_GV(POPs);
 	if (!gv)
 	    gv = PL_defoutgv;
     }
-    EXTEND(SP, 1);
     io = GvIO(gv);
     if (!io) {
 	RETPUSHNO;
@@ -2004,38 +2040,40 @@ PP(pp_eof)
     GV *gv;
     IO *io;
     MAGIC *mg;
+    /*
+     * in Perl 5.12 and later, the additional parameter is a bitmask:
+     * 0 = eof
+     * 1 = eof(FH)
+     * 2 = eof()  <- ARGV magic
+     *
+     * I'll rely on the compiler's trace flow analysis to decide whether to
+     * actually assign this out here, or punt it into the only block where it is
+     * used. Doing it out here is DRY on the condition logic.
+     */
+    unsigned int which;
 
-    if (MAXARG)
+    if (MAXARG) {
 	gv = PL_last_in_gv = MUTABLE_GV(POPs);	/* eof(FH) */
-    else if (PL_op->op_flags & OPf_SPECIAL)
-	gv = PL_last_in_gv = GvEGVx(PL_argvgv);	/* eof() - ARGV magic */
-    else
-	gv = PL_last_in_gv;			/* eof */
+	which = 1;
+    }
+    else {
+	EXTEND(SP, 1);
+
+	if (PL_op->op_flags & OPf_SPECIAL) {
+	    gv = PL_last_in_gv = GvEGVx(PL_argvgv);	/* eof() - ARGV magic */
+	    which = 2;
+	}
+	else {
+	    gv = PL_last_in_gv;			/* eof */
+	    which = 0;
+	}
+    }
 
     if (!gv)
 	RETPUSHNO;
 
     if ((io = GvIO(gv)) && (mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar))) {
-	PUSHMARK(SP);
-	XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-	/*
-	 * in Perl 5.12 and later, the additional paramter is a bitmask:
-	 * 0 = eof
-	 * 1 = eof(FH)
-	 * 2 = eof()  <- ARGV magic
-	 */
-	if (MAXARG)
-	    mPUSHi(1);		/* 1 = eof(FH) - simple, explicit FH */
-	else if (PL_op->op_flags & OPf_SPECIAL)
-	    mPUSHi(2);		/* 2 = eof()   - ARGV magic */
-	else
-	    mPUSHi(0);		/* 0 = eof     - simple, implicit FH */
-	PUTBACK;
-	ENTER;
-	call_method("EOF", G_SCALAR);
-	LEAVE;
-	SPAGAIN;
-	RETURN;
+	return tied_handle_method1("EOF", SP, io, mg, newSVuv(which));
     }
 
     if (!MAXARG && (PL_op->op_flags & OPf_SPECIAL)) {	/* eof() */
@@ -2067,19 +2105,14 @@ PP(pp_tell)
 
     if (MAXARG != 0)
 	PL_last_in_gv = MUTABLE_GV(POPs);
+    else
+	EXTEND(SP, 1);
     gv = PL_last_in_gv;
 
     if (gv && (io = GvIO(gv))) {
 	MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
-	    PUSHMARK(SP);
-	    XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
-	    PUTBACK;
-	    ENTER;
-	    call_method("TELL", G_SCALAR);
-	    LEAVE;
-	    SPAGAIN;
-	    RETURN;
+	    return tied_handle_method("TELL", SP, io, mg);
 	}
     }
     else if (!gv) {
@@ -2113,20 +2146,14 @@ PP(pp_sysseek)
     if (gv && (io = GvIO(gv))) {
 	MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
-	    PUSHMARK(SP);
-	    XPUSHs(SvTIED_obj(MUTABLE_SV(io), mg));
 #if LSEEKSIZE > IVSIZE
-	    mXPUSHn((NV) offset);
+	    SV *const offset_sv = newSVnv((NV) offset);
 #else
-	    mXPUSHi(offset);
+	    SV *const offset_sv = newSViv(offset);
 #endif
-	    mXPUSHi(whence);
-	    PUTBACK;
-	    ENTER;
-	    call_method("SEEK", G_SCALAR);
-	    LEAVE;
-	    SPAGAIN;
-	    RETURN;
+
+	    return tied_handle_method2("SEEK", SP, io, mg, offset_sv,
+				       newSViv(whence));
 	}
     }
 
@@ -2950,6 +2977,53 @@ PP(pp_stat)
     RETURN;
 }
 
+#define tryAMAGICftest_MG(chr) STMT_START { \
+	if ( (SvFLAGS(TOPs) & (SVf_ROK|SVs_GMG)) \
+		&& S_try_amagic_ftest(aTHX_ chr)) \
+	    return NORMAL; \
+    } STMT_END
+
+STATIC bool
+S_try_amagic_ftest(pTHX_ char chr) {
+    dVAR;
+    dSP;
+    SV* const arg = TOPs;
+
+    assert(chr != '?');
+    SvGETMAGIC(arg);
+
+    if ((PL_op->op_flags & OPf_KIDS)
+	    && SvAMAGIC(TOPs))
+    {
+	const char tmpchr = chr;
+	const OP *next;
+	SV * const tmpsv = amagic_call(arg,
+				newSVpvn_flags(&tmpchr, 1, SVs_TEMP),
+				ftest_amg, AMGf_unary);
+
+	if (!tmpsv)
+	    return FALSE;
+
+	SPAGAIN;
+
+	next = PL_op->op_next;
+	if (next->op_type >= OP_FTRREAD &&
+	    next->op_type <= OP_FTBINARY &&
+	    next->op_private & OPpFT_STACKED
+	) {
+	    if (SvTRUE(tmpsv))
+		/* leave the object alone */
+		return TRUE;
+	}
+
+	SETs(tmpsv);
+	PUTBACK;
+	return TRUE;
+    }
+    return FALSE;
+}
+
+
 /* This macro is used by the stacked filetest operators :
  * if the previous filetest failed, short-circuit and pass its value.
  * Else, discard it from the stack and continue. --rgs
@@ -2992,7 +3066,7 @@ PP(pp_ftrread)
     case OP_FTEWRITE:	opchar = 'w'; break;
     case OP_FTEEXEC:	opchar = 'x'; break;
     }
-    tryAMAGICftest(opchar);
+    tryAMAGICftest_MG(opchar);
 
     STACKED_FTEST_CHECK;
 
@@ -3096,7 +3170,7 @@ PP(pp_ftis)
     case OP_FTCTIME:	opchar = 'C'; break;
     case OP_FTATIME:	opchar = 'A'; break;
     }
-    tryAMAGICftest(opchar);
+    tryAMAGICftest_MG(opchar);
 
     STACKED_FTEST_CHECK;
 
@@ -3153,7 +3227,7 @@ PP(pp_ftrowned)
     case OP_FTSGID:	opchar = 'g'; break;
     case OP_FTSVTX:	opchar = 'k'; break;
     }
-    tryAMAGICftest(opchar);
+    tryAMAGICftest_MG(opchar);
 
     /* I believe that all these three are likely to be defined on most every
        system these days.  */
@@ -3241,7 +3315,7 @@ PP(pp_ftlink)
     dSP;
     I32 result;
 
-    tryAMAGICftest('l');
+    tryAMAGICftest_MG('l');
     result = my_lstat();
     SPAGAIN;
 
@@ -3260,7 +3334,7 @@ PP(pp_fttty)
     GV *gv;
     SV *tmpsv = NULL;
 
-    tryAMAGICftest('t');
+    tryAMAGICftest_MG('t');
 
     STACKED_FTEST_CHECK;
 
@@ -3311,7 +3385,7 @@ PP(pp_fttext)
     GV *gv;
     PerlIO *fp;
 
-    tryAMAGICftest(PL_op->op_type == OP_FTTEXT ? 'T' : 'B');
+    tryAMAGICftest_MG(PL_op->op_type == OP_FTTEXT ? 'T' : 'B');
 
     STACKED_FTEST_CHECK;
 
@@ -3653,7 +3727,6 @@ PP(pp_readlink)
 #endif
     tmps = POPpconstx;
     len = readlink(tmps, buf, sizeof(buf) - 1);
-    EXTEND(SP, 1);
     if (len < 0)
 	RETPUSHUNDEF;
     PUSHp(buf, len);
@@ -4582,7 +4655,6 @@ PP(pp_alarm)
     int anum;
     anum = POPi;
     anum = alarm((unsigned int)anum);
-    EXTEND(SP, 1);
     if (anum < 0)
 	RETPUSHUNDEF;
     PUSHi(anum);

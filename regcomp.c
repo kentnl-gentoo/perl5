@@ -3116,7 +3116,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 	    }
 	    flags &= ~SCF_DO_STCLASS;
 	}
-	else if (strchr((const char*)PL_varies,OP(scan))) {
+	else if (REGNODE_VARIES(OP(scan))) {
 	    I32 mincount, maxcount, minnext, deltanext, fl = 0;
 	    I32 f = flags, pos_before = 0;
 	    regnode * const oscan = scan;
@@ -3268,7 +3268,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 
 		    /* Skip open. */
 		    nxt = regnext(nxt);
-		    if (!strchr((const char*)PL_simple,OP(nxt))
+		    if (!REGNODE_SIMPLE(OP(nxt))
 			&& !(PL_regkind[OP(nxt)] == EXACT
 			     && STR_LEN(nxt) == 1))
 			goto nogo;
@@ -3527,7 +3527,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		data->longest = &(data->longest_float);
 	    }
 	}
-	else if (strchr((const char*)PL_simple,OP(scan))) {
+	else if (REGNODE_SIMPLE(OP(scan))) {
 	    int value = 0;
 
 	    if (flags & SCF_DO_SUBSTR) {
@@ -4604,7 +4604,7 @@ reStudy:
 	    ri->regstclass = trie_op;
 	}
 #endif	
-	else if (strchr((const char*)PL_simple,OP(first)))
+	else if (REGNODE_SIMPLE(OP(first)))
 	    ri->regstclass = first;
 	else if (PL_regkind[OP(first)] == BOUND ||
 		 PL_regkind[OP(first)] == NBOUND)
@@ -4945,7 +4945,7 @@ reStudy:
 #endif
 #ifdef DEBUGGING
     if (RExC_paren_names) {
-        ri->name_list_idx = add_data( pRExC_state, 1, "p" );
+        ri->name_list_idx = add_data( pRExC_state, 1, "a" );
         ri->data->data[ri->name_list_idx] = (void*)SvREFCNT_inc(RExC_paren_name_list);
     } else
 #endif
@@ -9556,6 +9556,7 @@ Perl_regfree_internal(pTHX_ REGEXP * const rx)
 	while (--n >= 0) {
           /* If you add a ->what type here, update the comment in regcomp.h */
 	    switch (ri->data->what[n]) {
+	    case 'a':
 	    case 's':
 	    case 'S':
 	    case 'u':
@@ -9636,9 +9637,8 @@ Perl_regfree_internal(pTHX_ REGEXP * const rx)
     Safefree(ri);
 }
 
-#define sv_dup_inc(s,t)	SvREFCNT_inc(sv_dup(s,t))
-#define av_dup_inc(s,t)	MUTABLE_AV(SvREFCNT_inc(sv_dup((const SV *)s,t)))
-#define hv_dup_inc(s,t)	MUTABLE_HV(SvREFCNT_inc(sv_dup((const SV *)s,t)))
+#define av_dup_inc(s,t)	MUTABLE_AV(sv_dup_inc((const SV *)s,t))
+#define hv_dup_inc(s,t)	MUTABLE_HV(sv_dup_inc((const SV *)s,t))
 #define SAVEPVN(p,n)	((p) ? savepvn(p,n) : NULL)
 
 /* 
@@ -9790,8 +9790,9 @@ Perl_regdupe_internal(pTHX_ REGEXP * const rx, CLONE_PARAMS *param)
 	for (i = 0; i < count; i++) {
 	    d->what[i] = ri->data->what[i];
 	    switch (d->what[i]) {
-	        /* legal options are one of: sSfpontTu
+	        /* legal options are one of: sSfpontTua
 	           see also regcomp.h and pregfree() */
+	    case 'a': /* actually an AV, but the dup function is identical.  */
 	    case 's':
 	    case 'S':
 	    case 'p': /* actually an AV, but the dup function is identical.  */
@@ -9866,6 +9867,10 @@ Perl_regnext(pTHX_ register regnode *p)
 
     if (!p)
 	return(NULL);
+
+    if (OP(p) > REGNODE_MAX) {		/* regnode.type is unsigned */
+	Perl_croak(aTHX_ "Corrupted regexp opcode %d > %d", (int)OP(p), (int)REGNODE_MAX);
+    }
 
     offset = (reg_off_by_arg[OP(p)] ? ARG(p) : NEXT_OFF(p));
     if (offset == 0)

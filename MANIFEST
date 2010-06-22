@@ -2831,6 +2831,8 @@ dist/Thread-Semaphore/lib/Thread/Semaphore.pm	Thread-safe semaphores
 dist/Thread-Semaphore/t/01_basic.t		Thread::Semaphore tests
 dist/Thread-Semaphore/t/02_errs.t		Thread::Semaphore tests
 dist/Thread-Semaphore/t/03_nothreads.t		Thread::Semaphore tests
+dist/Thread-Semaphore/t/04_nonblocking.t	Thread::Semaphore tests
+dist/Thread-Semaphore/t/05_force.t	Thread::Semaphore tests
 dist/threads/hints/hpux.pl	Hint file for HPUX
 dist/threads/hints/linux.pl	Hint file for Linux
 dist/threads/Makefile.PL	ithreads
@@ -3870,6 +3872,7 @@ pod/perl5115delta.pod		Perl changes in version 5.11.5
 pod/perl5120delta.pod		Perl changes in version 5.12.0
 pod/perl5130delta.pod		Perl changes in version 5.13.0
 pod/perl5131delta.pod		Perl changes in version 5.13.1
+pod/perl5132delta.pod		Perl changes in version 5.13.2
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4207,6 +4210,7 @@ t/comp/line_debug.t		See if @{"_<$file"} works
 t/comp/multiline.t		See if multiline strings work
 t/comp/opsubs.t			See if q() etc. are not parsed as functions
 t/comp/our.t			Tests for our declaration
+t/comp/package_block.t		See if package block syntax works
 t/comp/package.t		See if packages work
 t/comp/parser.t			See if the parser works in edge cases
 t/comp/proto.t			See if function prototypes work
@@ -4504,6 +4508,7 @@ t/op/tie.t			See if tie/untie functions work
 t/op/time_loop.t		Test that very large values don't hang gmtime and localtime.
 t/op/time.t			See if time functions work
 t/op/tr.t			See if tr works
+t/op/turkish.t			See if we can implement Turkish casing
 t/op/undef.t			See if undef works
 t/op/universal.t		See if UNIVERSAL class works
 t/op/unshift.t			See if unshift works

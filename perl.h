@@ -3811,10 +3811,10 @@ Gid_t getegid (void);
 
 
 #define DEBUG_SCOPE(where) \
-    DEBUG_l(WITH_THR( \
+    DEBUG_l( \
     Perl_deb(aTHX_ "%s scope %ld (savestack=%ld) at %s:%d\n",	\
 		    where, (long)PL_scopestack_ix, (long)PL_savestack_ix, \
-		    __FILE__, __LINE__)));
+		    __FILE__, __LINE__));
 
 
 
@@ -4189,6 +4189,7 @@ typedef void (CPERLscope(*share_proc_t)) (pTHX_ SV *sv);
 typedef int  (CPERLscope(*thrhook_proc_t)) (pTHX);
 typedef OP* (CPERLscope(*PPADDR_t)[]) (pTHX);
 typedef bool (CPERLscope(*destroyable_proc_t)) (pTHX_ SV *sv);
+typedef void (CPERLscope(*despatch_signals_proc_t)) (pTHX);
 
 /* _ (for $_) must be first in the following list (DEFSV requires it) */
 #define THREADSV_NAMES "_123456789&`'+/.,\\\";^-%=|~:\001\005!@"
@@ -5025,6 +5026,19 @@ START_EXTERN_C
  * not the same beast. ANSI doesn't allow the assignment from one to the other.
  * (although most, but not all, compilers are prepared to do it)
  */
+
+/* args are:
+    vtable
+    get
+    set
+    len
+    clear
+    free
+    copy
+    dup
+    local
+*/
+
 MGVTBL_SET(
     PL_vtbl_sv,
     MEMBER_TO_FPTR(Perl_magic_get),
@@ -5677,7 +5691,7 @@ typedef struct am_table_short AMTS;
 
 #ifndef PERL_MICRO
 #	ifndef PERL_ASYNC_CHECK
-#		define PERL_ASYNC_CHECK() if (PL_sig_pending) despatch_signals()
+#		define PERL_ASYNC_CHECK() if (PL_sig_pending) CALL_FPTR(PL_signalhook)(aTHX)
 #	endif
 #endif
 

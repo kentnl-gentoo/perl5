@@ -70,12 +70,18 @@ S_write_no_mem(pTHX)
     NORETURN_FUNCTION_END;
 }
 
+#if defined (DEBUGGING) || defined(PERL_IMPLICIT_SYS) || defined (PERL_TRACK_MEMPOOL)
+#  define ALWAYS_NEED_THX
+#endif
+
 /* paranoid version of system's malloc() */
 
 Malloc_t
 Perl_safesysmalloc(MEM_SIZE size)
 {
+#ifdef ALWAYS_NEED_THX
     dTHX;
+#endif
     Malloc_t ptr;
 #ifdef HAS_64K_LIMIT
 	if (size > 0xffff) {
@@ -118,10 +124,15 @@ Perl_safesysmalloc(MEM_SIZE size)
 #endif
 	return ptr;
 }
-    else if (PL_nomemok)
-	return NULL;
     else {
-	return write_no_mem();
+#ifndef ALWAYS_NEED_THX
+	dTHX;
+#endif
+	if (PL_nomemok)
+	    return NULL;
+	else {
+	    return write_no_mem();
+	}
     }
     /*NOTREACHED*/
 }
@@ -131,7 +142,9 @@ Perl_safesysmalloc(MEM_SIZE size)
 Malloc_t
 Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 {
+#ifdef ALWAYS_NEED_THX
     dTHX;
+#endif
     Malloc_t ptr;
 #if !defined(STANDARD_C) && !defined(HAS_REALLOC_PROTOTYPE) && !defined(PERL_MICRO)
     Malloc_t PerlMem_realloc();
@@ -213,10 +226,15 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
     if (ptr != NULL) {
 	return ptr;
     }
-    else if (PL_nomemok)
-	return NULL;
     else {
-	return write_no_mem();
+#ifndef ALWAYS_NEED_THX
+	dTHX;
+#endif
+	if (PL_nomemok)
+	    return NULL;
+	else {
+	    return write_no_mem();
+	}
     }
     /*NOTREACHED*/
 }
@@ -226,7 +244,7 @@ Perl_safesysrealloc(Malloc_t where,MEM_SIZE size)
 Free_t
 Perl_safesysfree(Malloc_t where)
 {
-#if defined(PERL_IMPLICIT_SYS) || defined(PERL_TRACK_MEMPOOL)
+#ifdef ALWAYS_NEED_THX
     dTHX;
 #else
     dVAR;
@@ -268,7 +286,9 @@ Perl_safesysfree(Malloc_t where)
 Malloc_t
 Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
 {
+#ifdef ALWAYS_NEED_THX
     dTHX;
+#endif
     Malloc_t ptr;
     MEM_SIZE total_size = 0;
 
@@ -330,9 +350,14 @@ Perl_safesyscalloc(MEM_SIZE count, MEM_SIZE size)
 #endif
 	return ptr;
     }
-    else if (PL_nomemok)
-	return NULL;
-    return write_no_mem();
+    else {
+#ifndef ALWAYS_NEED_THX
+	dTHX;
+#endif
+	if (PL_nomemok)
+	    return NULL;
+	return write_no_mem();
+    }
 }
 
 /* These must be defined when not using Perl's malloc for binary
@@ -878,37 +903,58 @@ Perl_screaminstr(pTHX_ SV *bigstr, SV *littlestr, I32 start_shift, I32 end_shift
     return NULL;
 }
 
+/*
+=for apidoc foldEQ
+
+Returns true if the leading len bytes of the strings s1 and s2 are the same
+case-insensitively; false otherwise.  Uppercase and lowercase ASCII range bytes
+match themselves and their opposite case counterparts.  Non-cased and non-ASCII
+range bytes match only themselves.
+
+=cut
+*/
+
+
 I32
-Perl_ibcmp(const char *s1, const char *s2, register I32 len)
+Perl_foldEQ(const char *s1, const char *s2, register I32 len)
 {
     register const U8 *a = (const U8 *)s1;
     register const U8 *b = (const U8 *)s2;
 
-    PERL_ARGS_ASSERT_IBCMP;
+    PERL_ARGS_ASSERT_FOLDEQ;
 
     while (len--) {
 	if (*a != *b && *a != PL_fold[*b])
-	    return 1;
+	    return 0;
 	a++,b++;
     }
-    return 0;
+    return 1;
 }
 
+/*
+=for apidoc foldEQ_locale
+
+Returns true if the leading len bytes of the strings s1 and s2 are the same
+case-insensitively in the current locale; false otherwise.
+
+=cut
+*/
+
 I32
-Perl_ibcmp_locale(const char *s1, const char *s2, register I32 len)
+Perl_foldEQ_locale(const char *s1, const char *s2, register I32 len)
 {
     dVAR;
     register const U8 *a = (const U8 *)s1;
     register const U8 *b = (const U8 *)s2;
 
-    PERL_ARGS_ASSERT_IBCMP_LOCALE;
+    PERL_ARGS_ASSERT_FOLDEQ_LOCALE;
 
     while (len--) {
 	if (*a != *b && *a != PL_fold_locale[*b])
-	    return 1;
+	    return 0;
 	a++,b++;
     }
-    return 0;
+    return 1;
 }
 
 /* copy a string to a safe spot */
@@ -3855,10 +3901,18 @@ Perl_grok_bslash_c(pTHX_ const char source, const bool output_warning)
 	    Perl_croak(aTHX_ "It is proposed that \"\\c{\" no longer be valid. It has historically evaluated to\n \";\".  If you disagree with this proposal, send email to perl5-porters@perl.org\nOtherwise, or in the meantime, you can work around this failure by changing\n\"\\c{\" to \";\"");
 	}
 	else if (output_warning) {
+	    U8 clearer[3];
+	    U8 i = 0;
+	    if (! isALNUM(result)) {
+		clearer[i++] = '\\';
+	    }
+	    clearer[i++] = result;
+	    clearer[i++] = '\0';
+
 	    Perl_ck_warner_d(aTHX_ packWARN(WARN_DEPRECATED),
-			    "\"\\c%c\" more clearly written simply as \"%c\"",
+			    "\"\\c%c\" more clearly written simply as \"%s\"",
 			    source,
-			    result);
+			    clearer);
 	}
     }
 
@@ -4482,7 +4536,7 @@ dotted_decimal_version:
 	    saw_decimal++;
 	    d++;
 	}
-	else if (!*d || *d == ';' || isSPACE(*d) || *d == '}') {
+	else if (!*d || *d == ';' || isSPACE(*d) || *d == '{' || *d == '}') {
 	    if ( d == s ) {
 		/* found nothing */
 		BADVERSION(s,errstr,"Invalid version format (version required)");
@@ -4513,7 +4567,7 @@ dotted_decimal_version:
 
 	/* scan the fractional part after the decimal point*/
 
-	if (!isDIGIT(*d) && (strict || ! (!*d || *d == ';' || isSPACE(*d) || *d == '}') )) {
+	if (!isDIGIT(*d) && (strict || ! (!*d || *d == ';' || isSPACE(*d) || *d == '{' || *d == '}') )) {
 		/* strict or lax-but-not-the-end */
 		BADVERSION(s,errstr,"Invalid version format (fractional part required)");
 	}
@@ -4551,7 +4605,7 @@ version_prescan_finish:
     while (isSPACE(*d))
 	d++;
 
-    if (!isDIGIT(*d) && (! (!*d || *d == ';' || *d == '}') )) {
+    if (!isDIGIT(*d) && (! (!*d || *d == ';' || *d == '{' || *d == '}') )) {
 	/* trailing non-numeric data */
 	BADVERSION(s,errstr,"Invalid version format (non-numeric data)");
     }

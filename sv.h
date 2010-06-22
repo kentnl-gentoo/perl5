@@ -394,8 +394,9 @@ perform the upgrade if necessary.  See C<svtype>.
 /* RV upwards. However, SVf_ROK and SVp_IOK are exclusive  */
 #define SVprv_WEAKREF   0x80000000  /* Weak reference */
 
-#define _XPV_HEAD	\
-    union _xnvu xnv_u;	\
+#define _XPV_HEAD							\
+    HV*		xmg_stash;	/* class package */			\
+    union _xmgu	xmg_u;							\
     STRLEN	xpv_cur;	/* length of svu_pv as a C string */    \
     STRLEN	xpv_len 	/* allocated size */
 
@@ -415,12 +416,9 @@ union _xnvu {
 
 union _xivu {
     IV	    xivu_iv;		/* integer value */
-				/* xpvfm: lines */
     UV	    xivu_uv;
-    void *  xivu_p1;
-    I32	    xivu_i32;
+    I32	    xivu_i32;		/* BmUSEFUL */
     HEK *   xivu_namehek;	/* xpvlv, xpvgv: GvNAME */
-    HV *    xivu_hv;		/* regexp: paren_names */
 };
 
 union _xmgu {
@@ -449,23 +447,20 @@ struct xpvuv {
 struct xpvnv {
     _XPV_HEAD;
     union _xivu xiv_u;
+    union _xnvu xnv_u;
 };
-
-#define _XPVMG_HEAD				    \
-    union _xivu xiv_u;				    \
-    union _xmgu	xmg_u;				    \
-    HV*		xmg_stash	/* class package */
 
 /* This structure must match the beginning of struct xpvhv in hv.h. */
 struct xpvmg {
     _XPV_HEAD;
-    _XPVMG_HEAD;
+    union _xivu xiv_u;
+    union _xnvu xnv_u;
 };
 
 struct xpvlv {
     _XPV_HEAD;
-    _XPVMG_HEAD;
-
+    union _xivu xiv_u;
+    union _xnvu xnv_u;
     STRLEN	xlv_targoff;
     STRLEN	xlv_targlen;
     SV*		xlv_targ;
@@ -477,7 +472,8 @@ struct xpvlv {
    Boyer-Moore.  */
 struct xpvgv {
     _XPV_HEAD;
-    _XPVMG_HEAD;
+    union _xivu xiv_u;
+    union _xnvu xnv_u;
 };
 
 /* This structure must match XPVCV in cv.h */
@@ -505,8 +501,8 @@ typedef U16 cv_flags_t;
 
 struct xpvfm {
     _XPV_HEAD;
-    _XPVMG_HEAD;
     _XPVCV_COMMON;
+    IV		xfm_lines;
 };
 
 #define _XPVIO_TAIL							\
@@ -541,7 +537,7 @@ struct xpvfm {
 
 struct xpvio {
     _XPV_HEAD;
-    _XPVMG_HEAD;
+    union _xivu xiv_u;
     _XPVIO_TAIL;
 };
 
@@ -1068,6 +1064,7 @@ the scalar's value cannot change unless written to.
 	    assert(SvTYPE(_svivx) != SVt_PVCV);				\
 	    assert(SvTYPE(_svivx) != SVt_PVFM);				\
 	    assert(SvTYPE(_svivx) != SVt_PVIO);				\
+	    assert(SvTYPE(_svivx) != SVt_REGEXP);			\
 	    assert(!isGV_with_GP(_svivx));				\
 	    &(((XPVIV*) MUTABLE_PTR(SvANY(_svivx)))->xiv_iv);		\
 	 }))
@@ -1079,6 +1076,7 @@ the scalar's value cannot change unless written to.
 	    assert(SvTYPE(_svuvx) != SVt_PVCV);				\
 	    assert(SvTYPE(_svuvx) != SVt_PVFM);				\
 	    assert(SvTYPE(_svuvx) != SVt_PVIO);				\
+	    assert(SvTYPE(_svuvx) != SVt_REGEXP);			\
 	    assert(!isGV_with_GP(_svuvx));				\
 	    &(((XPVUV*) MUTABLE_PTR(SvANY(_svuvx)))->xuv_uv);		\
 	 }))
@@ -1090,6 +1088,7 @@ the scalar's value cannot change unless written to.
 	    assert(SvTYPE(_svnvx) != SVt_PVCV);				\
 	    assert(SvTYPE(_svnvx) != SVt_PVFM);				\
 	    assert(SvTYPE(_svnvx) != SVt_PVIO);				\
+	    assert(SvTYPE(_svnvx) != SVt_REGEXP);			\
 	    assert(!isGV_with_GP(_svnvx));				\
 	    &(((XPVNV*) MUTABLE_PTR(SvANY(_svnvx)))->xnv_u.xnv_nv);	\
 	 }))
@@ -1164,6 +1163,9 @@ the scalar's value cannot change unless written to.
 #define SvIV_please(sv) \
 	STMT_START {if (!SvIOKp(sv) && (SvNOK(sv) || SvPOK(sv))) \
 		(void) SvIV(sv); } STMT_END
+#define SvIV_please_nomg(sv) \
+	STMT_START {if (!SvIOKp(sv) && (SvNOK(sv) || SvPOK(sv))) \
+		(void) SvIV_nomg(sv); } STMT_END
 #define SvIV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
 		assert(SvTYPE(sv) != SVt_PVAV);		\
@@ -1302,7 +1304,7 @@ the scalar's value cannot change unless written to.
 
 #endif
 
-#define FmLINES(sv)	((XPVFM*)  SvANY(sv))->xiv_u.xivu_iv
+#define FmLINES(sv)	((XPVFM*)  SvANY(sv))->xfm_lines
 
 #define LvTYPE(sv)	((XPVLV*)  SvANY(sv))->xlv_type
 #define LvTARG(sv)	((XPVLV*)  SvANY(sv))->xlv_targ
@@ -1420,6 +1422,9 @@ otherwise use the more efficient C<SvIV>.
 Coerce the given SV to a double and return it. See C<SvNVx> for a version
 which guarantees to evaluate sv only once.
 
+=for apidoc Am|NV|SvNV_nomg|SV* sv
+Like C<SvNV> but doesn't process magic.
+
 =for apidoc Am|NV|SvNVx|SV* sv
 Coerces the given SV to a double and returns it. Guarantees to evaluate
 C<sv> only once. Only use this if C<sv> is an expression with side effects,
@@ -1511,6 +1516,7 @@ Like sv_utf8_upgrade, but doesn't do magic on C<sv>
 
 #define SvIV_nomg(sv) (SvIOK(sv) ? SvIVX(sv) : sv_2iv_flags(sv, 0))
 #define SvUV_nomg(sv) (SvIOK(sv) ? SvUVX(sv) : sv_2uv_flags(sv, 0))
+#define SvNV_nomg(sv) (SvNOK(sv) ? SvNVX(sv) : sv_2nv_flags(sv, 0))
 
 /* ----*/
 
@@ -1933,6 +1939,8 @@ struct clone_params {
   AV* stashes;
   UV  flags;
   PerlInterpreter *proto_perl;
+  PerlInterpreter *new_perl;
+  AV *unreferenced;
 };
 
 /*
