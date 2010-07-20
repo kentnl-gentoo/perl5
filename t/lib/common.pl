@@ -1,4 +1,9 @@
-# This code is used by lib/warnings.t and lib/feature.t
+# This code is used by lib/charnames.t, lib/feature.t, lib/subs.t,
+# lib/strict.t and lib/warnings.t
+#
+# On input, $::local_tests is the number of tests in the caller; or
+# 'no_plan' if unknown, in which case it is the caller's responsibility
+# to call cur_test() to find out how many this executed
 
 BEGIN {
     require './test.pl';
@@ -10,7 +15,9 @@ use File::Spec::Functions;
 
 use strict;
 use warnings;
-our $pragma_name;
+my (undef, $file) = caller;
+my ($pragma_name) = $file =~ /([A-Za-z_0-9]+)\.t$/
+    or die "Can't identify pragama to test from file name '$file'";
 
 $| = 1;
 
@@ -48,9 +55,11 @@ foreach my $file (@w_files) {
     close F ;
 }
 
-undef $/;
+local $/ = undef;
 
-plan tests => (scalar(@prgs)-$files);
+my $tests = $::local_tests || 0;
+$tests = scalar(@prgs)-$files + $tests if $tests !~ /\D/;
+plan $tests;    # If input is 'no_plan', pass it on unchanged
 
 for (@prgs){
     unless (/\n/)
@@ -90,10 +99,10 @@ for (@prgs){
 	    my $filename = shift @files ;
 	    my $code = shift @files ;
     	    push @temps, $filename ;
-    	    if ($filename =~ m#(.*)/#) {
+    	    if ($filename =~ m#(.*)/# && $filename !~ m#^\.\./#) {
                 mkpath($1);
                 push(@temp_path, $1);
-    	    }
+	    }
 	    open F, ">$filename" or die "Cannot open $filename: $!\n" ;
 	    print F $code ;
 	    close F or die "Cannot close $filename: $!\n";

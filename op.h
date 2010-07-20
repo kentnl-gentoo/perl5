@@ -645,6 +645,96 @@ struct loop {
 #define FreeOp(p) PerlMemShared_free(p)
 #endif
 
+struct block_hooks {
+    U32	    bhk_flags;
+    void    (*bhk_start)	(pTHX_ int full);
+    void    (*bhk_pre_end)	(pTHX_ OP **seq);
+    void    (*bhk_post_end)	(pTHX_ OP **seq);
+    void    (*bhk_eval)		(pTHX_ OP *const saveop);
+};
+
+/*
+=head1 Compile-time scope hooks
+
+=for apidoc m|U32|BhkFLAGS|BHK *hk
+Return the BHK's flags.
+
+=for apidoc m|void *|BhkENTRY|BHK *hk|which
+Return an entry from the BHK structure. I<which> is a preprocessor token
+indicating which entry to return. If the appropriate flag is not set
+this will return NULL. The type of the return value depends on which
+entry you ask for.
+
+=for apidoc Am|void|BhkENTRY_set|BHK *hk|which|void *ptr
+Set an entry in the BHK structure, and set the flags to indicate it is
+valid. I<which> is a preprocessing token indicating which entry to set.
+The type of I<ptr> depends on the entry.
+
+=for apidoc Am|void|BhkDISABLE|BHK *hk|which
+Temporarily disable an entry in this BHK structure, by clearing the
+appropriate flag. I<which> is a preprocessor token indicating which
+entry to disable.
+
+=for apidoc Am|void|BhkENABLE|BHK *hk|which
+Re-enable an entry in this BHK structure, by setting the appropriate
+flag. I<which> is a preprocessor token indicating which entry to enable.
+This will assert (under -DDEBUGGING) if the entry doesn't contain a valid
+pointer.
+
+=for apidoc m|void|CALL_BLOCK_HOOKS|which|arg
+Call all the registered block hooks for type I<which>. I<which> is a
+preprocessing token; the type of I<arg> depends on I<which>.
+
+=cut
+*/
+
+#define BhkFLAGS(hk)		((hk)->bhk_flags)
+
+#define BHKf_start	    0x01
+#define BHKf_pre_end	    0x02
+#define BHKf_post_end	    0x04
+#define BHKf_eval	    0x08
+
+#define BhkENTRY(hk, which) \
+    ((BhkFLAGS(hk) & BHKf_ ## which) ? ((hk)->bhk_ ## which) : NULL)
+
+#define BhkENABLE(hk, which) \
+    STMT_START { \
+	BhkFLAGS(hk) |= BHKf_ ## which; \
+	assert(BhkENTRY(hk, which)); \
+    } STMT_END
+
+#define BhkDISABLE(hk, which) \
+    STMT_START { \
+	BhkFLAGS(hk) &= ~(BHKf_ ## which); \
+    } STMT_END
+
+#define BhkENTRY_set(hk, which, ptr) \
+    STMT_START { \
+	(hk)->bhk_ ## which = ptr; \
+	BhkENABLE(hk, which); \
+    } STMT_END
+
+#define CALL_BLOCK_HOOKS(which, arg) \
+    STMT_START { \
+	if (PL_blockhooks) { \
+	    I32 i; \
+	    for (i = av_len(PL_blockhooks); i >= 0; i--) { \
+		SV *sv = AvARRAY(PL_blockhooks)[i]; \
+		BHK *hk; \
+		\
+		assert(SvIOK(sv)); \
+		if (SvUOK(sv)) \
+		    hk = INT2PTR(BHK *, SvUVX(sv)); \
+		else \
+		    hk = INT2PTR(BHK *, SvIVX(sv)); \
+		\
+		if (BhkENTRY(hk, which)) \
+		    CALL_FPTR(BhkENTRY(hk, which))(aTHX_ arg); \
+	    } \
+	} \
+    } STMT_END
+
 #ifdef PERL_MAD
 #  define MAD_NULL 1
 #  define MAD_PV 2

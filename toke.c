@@ -714,8 +714,9 @@ Perl_lex_start(pTHX_ SV *line, PerlIO *rsfp, bool new_filter)
 
     if (!len) {
 	parser->linestr = newSVpvs("\n;");
-    } else if (SvREADONLY(line) || s[len-1] != ';') {
-	parser->linestr = newSVsv(line);
+    } else if (SvREADONLY(line) || s[len-1] != ';' || !SvPOK(line)) {
+	/* avoid tie/overload weirdness */
+	parser->linestr = newSVpvn_flags(s, len, SvUTF8(line));
 	if (s[len-1] != ';')
 	    sv_catpvs(parser->linestr, "\n;");
     } else {
@@ -2811,7 +2812,8 @@ S_scan_const(pTHX_ char *start)
 
 	    s++;
 
-	    /* deprecate \1 in strings and substitution replacements */
+	    /* warn on \1 - \9 in substitution replacements, but note that \11
+	     * is an octal; and \19 is \1 followed by '9' */
 	    if (PL_lex_inwhat == OP_SUBST && !PL_lex_inpat &&
 		isDIGIT(*s) && *s != '0' && !isDIGIT(s[1]))
 	    {
@@ -2876,6 +2878,20 @@ S_scan_const(pTHX_ char *start)
 		    s += len;
 		}
 		goto NUM_ESCAPE_INSERT;
+
+	    /* eg. \o{24} indicates the octal constant \024 */
+	    case 'o':
+		{
+		    STRLEN len;
+
+		    char* error = grok_bslash_o(s, &uv, &len, 1);
+		    s += len;
+		    if (error) {
+			yyerror(error);
+			continue;
+		    }
+		    goto NUM_ESCAPE_INSERT;
+		}
 
 	    /* eg. \x24 indicates the hex constant 0x24 */
 	    case 'x':
@@ -3756,8 +3772,6 @@ Perl_filter_del(pTHX_ filter_t funcp)
     /* if filter is on top of stack (usual case) just pop it off */
     datasv = FILTER_DATA(AvFILLp(PL_rsfp_filters));
     if (IoANY(datasv) == FPTR2DPTR(void *, funcp)) {
-	IoFLAGS(datasv) &= ~IOf_FAKE_DIRP;
-	IoANY(datasv) = (void *)NULL;
 	sv_free(av_pop(PL_rsfp_filters));
 
         return;
@@ -8501,7 +8515,7 @@ Perl_keyword (pTHX_ const char *name, I32 len, bool all_keywords)
           if (name[1] == 'i' &&
               name[2] == 'e')
           {                                       /* tie        */
-            return KEY_tie;
+            return -KEY_tie;
           }
 
           goto unknown;
@@ -8945,7 +8959,7 @@ Perl_keyword (pTHX_ const char *name, I32 len, bool all_keywords)
                 case 'e':
                   if (name[3] == 'd')
                   {                               /* tied       */
-                    return KEY_tied;
+                    return -KEY_tied;
                   }
 
                   goto unknown;
@@ -9440,7 +9454,7 @@ Perl_keyword (pTHX_ const char *name, I32 len, bool all_keywords)
                     {
                       case 'e':
                         {                         /* untie      */
-                          return KEY_untie;
+                          return -KEY_untie;
                         }
 
                       case 'l':
@@ -11973,8 +11987,14 @@ S_scan_subst(pTHX_ char *start)
 	}
 	else if (strchr(S_PAT_MODS, *s))
 	    pm->op_pmflags = S_pmflag(pm->op_pmflags, *s++);
-	else
+	else {
+	    if (isALNUM(*s)) {
+		Perl_ck_warner_d(aTHX_ packWARN(WARN_SYNTAX),
+		    "Having no space between pattern and following word is deprecated");
+
+	    }
 	    break;
+	}
     }
 
 #ifdef PERL_MAD
@@ -12972,11 +12992,11 @@ Perl_scan_num(pTHX_ const char *start, YYSTYPE* lvalp)
 	    const char *base, *Base, *max;
 
 	    /* check for hex */
-	    if (s[1] == 'x') {
+	    if (s[1] == 'x' || s[1] == 'X') {
 		shift = 4;
 		s += 2;
 		just_zero = FALSE;
-	    } else if (s[1] == 'b') {
+	    } else if (s[1] == 'b' || s[1] == 'B') {
 		shift = 1;
 		s += 2;
 		just_zero = FALSE;

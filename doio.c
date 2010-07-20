@@ -1258,7 +1258,7 @@ Perl_do_print(pTHX_ register SV *sv, PerlIO *fp)
 }
 
 I32
-Perl_my_stat(pTHX)
+Perl_my_stat_flags(pTHX_ const U32 flags)
 {
     dVAR;
     dSP;
@@ -1314,7 +1314,7 @@ Perl_my_stat(pTHX)
             goto do_fstat_have_io;
         }
 
-	s = SvPV_const(sv, len);
+	s = SvPV_flags_const(sv, len, flags);
 	PL_statgv = NULL;
 	sv_setpvn(PL_statname, s, len);
 	s = SvPVX_const(PL_statname);		/* s now NUL-terminated */
@@ -1328,7 +1328,7 @@ Perl_my_stat(pTHX)
 
 
 I32
-Perl_my_lstat(pTHX)
+Perl_my_lstat_flags(pTHX_ const U32 flags)
 {
     dVAR;
     static const char no_prev_lstat[] = "The stat preceding -l _ wasn't an lstat";
@@ -1361,7 +1361,7 @@ Perl_my_lstat(pTHX)
 		GvENAME((const GV *)SvRV(sv)));
 	return (PL_laststatval = -1);
     }
-    file = SvPV_nolen_const(sv);
+    file = SvPV_flags_const_nolen(sv, flags);
     sv_setpv(PL_statname,file);
     PL_laststatval = PerlLIO_lstat(file,&PL_statcache);
     if (PL_laststatval < 0 && ckWARN(WARN_NEWLINE) && strchr(file, '\n'))
@@ -1721,9 +1721,10 @@ nothing in the core.
 	    while (++mark <= sp) {
 		I32 proc;
 		register unsigned long int __vmssts;
+		SvGETMAGIC(*mark);
 		if (!(SvIOK(*mark) || SvNOK(*mark) || looks_like_number(*mark)))
 		    Perl_croak(aTHX_ "Can't kill a non-numeric process ID");
-		proc = SvIV(*mark);
+		proc = SvIV_nomg(*mark);
 		APPLY_TAINT_PROPER();
 		if (!((__vmssts = sys$delprc(&proc,0)) & 1)) {
 		    tot--;
@@ -1748,9 +1749,10 @@ nothing in the core.
 	    val = -val;
 	    while (++mark <= sp) {
 		I32 proc;
+		SvGETMAGIC(*mark);
 		if (!(SvIOK(*mark) || SvNOK(*mark) || looks_like_number(*mark)))
 		    Perl_croak(aTHX_ "Can't kill a non-numeric process ID");
-		proc = SvIV(*mark);
+		proc = SvIV_nomg(*mark);
 		APPLY_TAINT_PROPER();
 #ifdef HAS_KILLPG
 		if (PerlProc_killpg(proc,val))	/* BSD */
@@ -1763,9 +1765,10 @@ nothing in the core.
 	else {
 	    while (++mark <= sp) {
 		I32 proc;
+		SvGETMAGIC(*mark);
 		if (!(SvIOK(*mark) || SvNOK(*mark) || looks_like_number(*mark)))
 		    Perl_croak(aTHX_ "Can't kill a non-numeric process ID");
-		proc = SvIV(*mark);
+		proc = SvIV_nomg(*mark);
 		APPLY_TAINT_PROPER();
 		if (PerlProc_kill(proc, val))
 		    tot--;

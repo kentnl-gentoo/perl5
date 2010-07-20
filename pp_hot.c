@@ -244,7 +244,7 @@ PP(pp_concat)
 	rcopied = TRUE;
     }
 
-    if (TARG != left) {
+    if (TARG != left) { /* not $l .= $r */
         STRLEN llen;
         const char* const lpv = SvPV_nomg_const(left, llen);
 	lbyte = !DO_UTF8(left);
@@ -254,22 +254,21 @@ PP(pp_concat)
 	else
 	    SvUTF8_off(TARG);
     }
-    else { /* TARG == left */
-        STRLEN llen;
+    else { /* $l .= $r */
 	if (!SvOK(TARG)) {
-	    if (left == right && ckWARN(WARN_UNINITIALIZED))
+	    if (left == right && ckWARN(WARN_UNINITIALIZED)) /* $l .= $l */
 		report_uninit(right);
 	    sv_setpvs(left, "");
 	}
-	(void)SvPV_nomg_const(left, llen);    /* Needed to set UTF8 flag */
-	lbyte = !DO_UTF8(left);
+	lbyte = (SvROK(left) && SvTYPE(SvRV(left)) == SVt_REGEXP)
+		    ?  !DO_UTF8(SvRV(left)) : !DO_UTF8(left);
 	if (IN_BYTES)
 	    SvUTF8_off(TARG);
     }
 
     if (!rcopied) {
 	if (left == right)
-	    /* $a.$a: do magic twice: tied might return different 2nd time */
+	    /* $r.$r: do magic twice: tied might return different 2nd time */
 	    SvGETMAGIC(right);
 	rpv = SvPV_nomg_const(right, rlen);
 	rbyte = !DO_UTF8(right);
@@ -405,7 +404,7 @@ PP(pp_preinc)
 {
     dVAR; dSP;
     if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
-	DIE(aTHX_ "%s", PL_no_modify);
+	Perl_croak_no_modify(aTHX);
     if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
         && SvIVX(TOPs) != IV_MAX)
     {
@@ -1219,7 +1218,7 @@ PP(pp_qr)
     SvROK_on(rv);
 
     if (pkg) {
-	HV* const stash = gv_stashpv(SvPV_nolen(pkg), GV_ADD);
+	HV *const stash = gv_stashsv(pkg, GV_ADD);
 	SvREFCNT_dec(pkg);
 	(void)sv_bless(rv, stash);
     }
@@ -1640,8 +1639,12 @@ Perl_do_readline(pTHX)
 	}
 	SvUPGRADE(sv, SVt_PV);
 	tmplen = SvLEN(sv);	/* remember if already alloced */
-	if (!tmplen && !SvREADONLY(sv))
-	    Sv_Grow(sv, 80);	/* try short-buffering it */
+	if (!tmplen && !SvREADONLY(sv)) {
+            /* try short-buffering it. Please update t/op/readline.t
+	     * if you change the growth length.
+	     */
+	    Sv_Grow(sv, 80);
+        }
 	offset = 0;
 	if (type == OP_RCATLINE && SvOK(sv)) {
 	    if (!SvPOK(sv)) {
@@ -2111,7 +2114,7 @@ PP(pp_subst)
 	 || ( ((SvTYPE(TARG) == SVt_PVGV && isGV_with_GP(TARG))
 	       || SvTYPE(TARG) > SVt_PVLV)
 	     && !(SvTYPE(TARG) == SVt_PVGV && SvFAKE(TARG)))))
-	DIE(aTHX_ "%s", PL_no_modify);
+	Perl_croak_no_modify(aTHX);
     PUTBACK;
 
   setup_match:
@@ -3027,7 +3030,7 @@ Perl_vivify_ref(pTHX_ SV *sv, U32 to_what)
     SvGETMAGIC(sv);
     if (!SvOK(sv)) {
 	if (SvREADONLY(sv))
-	    Perl_croak(aTHX_ "%s", PL_no_modify);
+	    Perl_croak_no_modify(aTHX);
 	prepare_SV_for_RV(sv);
 	switch (to_what) {
 	case OPpDEREF_SV:

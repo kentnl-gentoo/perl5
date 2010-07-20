@@ -4,7 +4,7 @@ package re;
 use strict;
 use warnings;
 
-our $VERSION     = "0.11";
+our $VERSION     = "0.12";
 our @ISA         = qw(Exporter);
 our @EXPORT_OK   = ('regmust',
                     qw(is_regexp regexp_pattern
@@ -307,7 +307,7 @@ Turns on all "extra" debugging options.
 
 =item BUFFERS
 
-Enable debugging the capture buffer storage during match. Warning,
+Enable debugging the capture group storage during match. Warning,
 this can potentially produce extremely large output.
 
 =item TRIEM

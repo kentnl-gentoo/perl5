@@ -2305,17 +2305,21 @@ Perl_scope(pTHX_ OP *o)
     }
     return o;
 }
-	
+
 int
 Perl_block_start(pTHX_ int full)
 {
     dVAR;
     const int retval = PL_savestack_ix;
+
     pad_block_start(full);
     SAVEHINTS();
     PL_hints &= ~HINT_BLOCK_SCOPE;
     SAVECOMPILEWARNINGS();
     PL_compiling.cop_warnings = DUP_WARNINGS(PL_compiling.cop_warnings);
+
+    CALL_BLOCK_HOOKS(start, full);
+
     return retval;
 }
 
@@ -2324,13 +2328,38 @@ Perl_block_end(pTHX_ I32 floor, OP *seq)
 {
     dVAR;
     const int needblockscope = PL_hints & HINT_BLOCK_SCOPE;
-    OP* const retval = scalarseq(seq);
+    OP* retval = scalarseq(seq);
+
+    CALL_BLOCK_HOOKS(pre_end, &retval);
+
     LEAVE_SCOPE(floor);
     CopHINTS_set(&PL_compiling, PL_hints);
     if (needblockscope)
 	PL_hints |= HINT_BLOCK_SCOPE; /* propagate out */
     pad_leavemy();
+
+    CALL_BLOCK_HOOKS(post_end, &retval);
+
     return retval;
+}
+
+/*
+=head1 Compile-time scope hooks
+
+=for apidoc Ao||blockhook_register
+
+Register a set of hooks to be called when the Perl lexical scope changes
+at compile time. See L<perlguts/"Compile-time scope hooks">.
+
+=cut
+*/
+
+void
+Perl_blockhook_register(pTHX_ BHK *hk)
+{
+    PERL_ARGS_ASSERT_BLOCKHOOK_REGISTER;
+
+    Perl_av_create_and_push(aTHX_ &PL_blockhooks, newSViv(PTR2IV(hk)));
 }
 
 STATIC OP *
@@ -5430,7 +5459,7 @@ Perl_cv_undef(pTHX_ CV *cv)
 	LEAVE;
     }
     SvPOK_off(MUTABLE_SV(cv));		/* forget prototype */
-    CvGV(cv) = NULL;
+    CvGV_set(cv, NULL);
 
     pad_undef(cv);
 
@@ -5447,8 +5476,9 @@ Perl_cv_undef(pTHX_ CV *cv)
     if (CvISXSUB(cv) && CvXSUB(cv)) {
 	CvXSUB(cv) = NULL;
     }
-    /* delete all flags except WEAKOUTSIDE */
-    CvFLAGS(cv) &= CVf_WEAKOUTSIDE;
+    /* delete all flags except WEAKOUTSIDE and CVGV_RC, which indicate the
+     * ref status of CvOUTSIDE and CvGV */
+    CvFLAGS(cv) &= (CVf_WEAKOUTSIDE|CVf_CVGV_RC);
 }
 
 void
@@ -5815,6 +5845,8 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    pad_fixup_inner_anons(CvPADLIST(cv), PL_compcv, cv);
 	    if (PERLDB_INTER)/* Advice debugger on the new sub. */
 	      ++PL_sub_generation;
+	    if (CvSTASH(cv))
+		sv_del_backref(MUTABLE_SV(CvSTASH(cv)), MUTABLE_SV(cv));
 	}
 	else {
 	    /* Might have had built-in attributes applied -- propagate them. */
@@ -5840,9 +5872,11 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	}
     }
     if (!CvGV(cv)) {
-	CvGV(cv) = gv;
+	CvGV_set(cv, gv);
 	CvFILE_set_from_cop(cv, PL_curcop);
 	CvSTASH(cv) = PL_curstash;
+	if (PL_curstash)
+	    Perl_sv_add_backref(aTHX_ MUTABLE_SV(PL_curstash), MUTABLE_SV(cv));
     }
     if (attrs) {
 	/* Need to do a C<use attributes $stash_of_cv,\&cv,@attrs>. */
@@ -6200,7 +6234,9 @@ Perl_newXS(pTHX_ const char *name, XSUBADDR_t subaddr, const char *filename)
             mro_method_changed_in(GvSTASH(gv)); /* newXS */
 	}
     }
-    CvGV(cv) = gv;
+    if (!name)
+	CvANON_on(cv);
+    CvGV_set(cv, gv);
     (void)gv_fetchfile(filename);
     CvFILE(cv) = (char *)filename; /* NOTE: not copied, as it is expected to be
 				   an external constant string */
@@ -6209,8 +6245,6 @@ Perl_newXS(pTHX_ const char *name, XSUBADDR_t subaddr, const char *filename)
 
     if (name)
 	process_special_blocks(name, gv, cv);
-    else
-	CvANON_on(cv);
 
     return cv;
 }
@@ -6251,7 +6285,7 @@ Perl_newFORM(pTHX_ I32 floor, OP *o, OP *block)
     }
     cv = PL_compcv;
     GvFORM(gv) = cv;
-    CvGV(cv) = gv;
+    CvGV_set(cv, gv);
     CvFILE_set_from_cop(cv, PL_curcop);
 
 

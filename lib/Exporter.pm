@@ -9,7 +9,7 @@ require 5.006;
 our $Debug = 0;
 our $ExportLevel = 0;
 our $Verbose ||= 0;
-our $VERSION = '5.64_02';
+our $VERSION = '5.64_03';
 our (%Cache);
 
 sub as_heavy {
@@ -62,7 +62,7 @@ sub import {
   }
   return export $pkg, $callpkg, ($args ? @_ : ()) if $heavy;
   local $SIG{__WARN__} = 
-	sub {require Carp; &Carp::carp};
+	sub {require Carp; &Carp::carp} if not $SIG{__WARN__};
   # shortcut for the common case of no type character
   *{"$callpkg\::$_"} = \&{"$pkg\::$_"} foreach @_;
 }

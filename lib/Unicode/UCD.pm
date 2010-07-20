@@ -3,7 +3,7 @@ package Unicode::UCD;
 use strict;
 use warnings;
 
-our $VERSION = '0.28';
+our $VERSION = '0.29';
 
 use Storable qw(dclone);
 
@@ -978,7 +978,7 @@ one or more codes (separated by spaces) that taken in order give the
 code points for the title case of I<code>.
 Each has at least four hexdigits.
 
-=item B<lower>
+=item B<upper>
 
 one or more codes (separated by spaces) that taken in order give the
 code points for the upper case of I<code>.

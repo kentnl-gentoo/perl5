@@ -2510,6 +2510,10 @@ comment) between the C<\N> and the C<{> in a regex with the C</x> modifier.
 This modifier does not change the requirement that the brace immediately follow
 the C<\N>.
 
+=item Missing braces on \o{}
+
+(F) A C<\o> must be followed immediately by a C<{> in double-quotish context.
+
 =item Missing comma after first argument to %s function
 
 (F) While certain functions allow you to specify a filehandle or an
@@ -2978,6 +2982,11 @@ to UTC.  If it's not, define the logical name
 F<SYS$TIMEZONE_DIFFERENTIAL> to translate to the number of seconds which
 need to be added to UTC to get local time.
 
+=item Non-octal character '%c'.  Resolved as "%s"
+
+(W digit)  In parsing an octal numeric constant, a character was unexpectedly
+encountered that isn't octal.  The resulting value is as indicated.
+
 =item Non-string passed as bitmask
 
 (W misc) A number has been passed as a bitmask argument to select().
@@ -3019,6 +3028,11 @@ about 250 characters.  You've exceeded that length.  Future
 versions of Perl are likely to eliminate this arbitrary limitation.  In
 the meantime, try using scientific notation (e.g. "1e6" instead of
 "1_000_000").
+
+=item Number with no digits
+
+(F) Perl was looking for a number but found nothing that looked like a number.
+This happens, for example with C<\o{}>, with no number between the braces.
 
 =item Octal number in vector unsupported
 
@@ -3785,8 +3799,8 @@ backreferences), but using 0 does not make sense.
 
 (F) You used something like C<\7> in your regular expression, but there are
 not at least seven sets of capturing parentheses in the expression. If you
-wanted to have the character with value 7 inserted into the regular expression,
-prepend a zero to make the number at least two digits: C<\07>
+wanted to have the character with ordinal 7 inserted into the regular expression,
+prepend zeroes to make it three digits long: C<\007>
 
 The <-- HERE shows in the regular expression about where the problem was
 discovered.
@@ -4960,15 +4974,6 @@ startup.
 In code that currently says C<use AutoLoader; @ISA = qw(AutoLoader);>
 you should remove AutoLoader from @ISA and change C<use AutoLoader;> to
 C<use AutoLoader 'AUTOLOAD';>.
-
-=item Use of octal value above 377 is deprecated
-
-(D deprecated, W regexp) There is a constant in the regular expression whose
-value is interpeted by Perl as octal and larger than 377 (255 decimal, 0xFF
-hex).  Perl may take this to mean different things depending on the rest of
-the regular expression.  If you meant such an octal value, convert it to
-hexadecimal and use C<\xHH> or C<\x{HH}> instead.  If you meant to have
-part of it mean a backreference, use C<\g> for that.  See L<perlre>.
 
 =item Use of %s in printf format not supported
 

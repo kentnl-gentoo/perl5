@@ -27,7 +27,10 @@ cpan/Archive-Extract/t/src/x.lzma		Archive::Extract tests
 cpan/Archive-Extract/t/src/x.par		Archive::Extract tests
 cpan/Archive-Extract/t/src/x.tar		Archive::Extract tests
 cpan/Archive-Extract/t/src/x.tar.gz		Archive::Extract tests
+cpan/Archive-Extract/t/src/x.tar.xz		Archive::Extract tests
 cpan/Archive-Extract/t/src/x.tgz		Archive::Extract tests
+cpan/Archive-Extract/t/src/x.txz		Archive::Extract tests
+cpan/Archive-Extract/t/src/x.xz		Archive::Extract tests
 cpan/Archive-Extract/t/src/x.Z			Archive::Extract tests
 cpan/Archive-Extract/t/src/x.zip		Archive::Extract tests
 cpan/Archive-Extract/t/src/y.jar		Archive::Extract tests
@@ -35,15 +38,16 @@ cpan/Archive-Extract/t/src/y.par		Archive::Extract tests
 cpan/Archive-Extract/t/src/y.tar		Archive::Extract tests
 cpan/Archive-Extract/t/src/y.tar.bz2		Archive::Extract tests
 cpan/Archive-Extract/t/src/y.tar.gz		Archive::Extract tests
+cpan/Archive-Extract/t/src/y.tar.xz		Archive::Extract tests
 cpan/Archive-Extract/t/src/y.tbz		Archive::Extract tests
 cpan/Archive-Extract/t/src/y.tgz		Archive::Extract tests
+cpan/Archive-Extract/t/src/y.txz		Archive::Extract tests
 cpan/Archive-Extract/t/src/y.zip		Archive::Extract tests
 cpan/Archive-Tar/bin/ptar				the ptar utility
 cpan/Archive-Tar/bin/ptardiff				the ptardiff utility
 cpan/Archive-Tar/lib/Archive/Tar/Constant.pm		Archive::Tar
 cpan/Archive-Tar/lib/Archive/Tar/File.pm		Archive::Tar
 cpan/Archive-Tar/lib/Archive/Tar.pm			Archive::Tar
-cpan/Archive-Tar/Makefile.PL				Achive::Tar
 cpan/Archive-Tar/t/01_use.t				Archive::Tar tests
 cpan/Archive-Tar/t/02_methods.t				Archive::Tar tests
 cpan/Archive-Tar/t/03_file.t				Archive::Tar tests
@@ -80,6 +84,7 @@ cpan/autodie/t/context_lexical.t	autodie - Context clobbering lexically
 cpan/autodie/t/context.t		autodie - Context clobbering tests
 cpan/autodie/t/crickey.t		autodie - Like an Australian
 cpan/autodie/t/dbmopen.t		autodie - dbm tests
+cpan/autodie/t/eval_error.t
 cpan/autodie/t/exception_class.t	autodie - Exception class subclasses
 cpan/autodie/t/exceptions.t		autodie - 5.10 exception tests.
 cpan/autodie/t/exec.t			autodie - exec tests.
@@ -1532,7 +1537,7 @@ cpan/Module-Build/lib/Module/Build/Authoring.pod	Module::Build
 cpan/Module-Build/lib/Module/Build/Base.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Bundling.pod		Module::Build
 cpan/Module-Build/lib/Module/Build/Compat.pm		Module::Build
-cpan/Module-Build/lib/Module/Build/ConfigData.pm	Configuration for Module::Build
+cpan/Module-Build/lib/Module/Build/ConfigData.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Config.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Cookbook.pm		Module::Build
 cpan/Module-Build/lib/Module/Build/Dumper.pm		Module::Build
@@ -2064,6 +2069,7 @@ cpan/Test-Harness/lib/TAP/Formatter/Console/Session.pm	A parser for Test Anythin
 cpan/Test-Harness/lib/TAP/Formatter/File.pm		A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Formatter/File/Session.pm	A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Formatter/Session.pm		A parser for Test Anything Protocol
+cpan/Test-Harness/lib/TAP/Harness/Beyond.pod
 cpan/Test-Harness/lib/TAP/Harness.pm			A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Object.pm			A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Parser/Aggregator.pm		A parser for Test Anything Protocol
@@ -2088,12 +2094,20 @@ cpan/Test-Harness/lib/TAP/Parser/Result/YAML.pm		A parser for Test Anything Prot
 cpan/Test-Harness/lib/TAP/Parser/Scheduler/Job.pm	A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Parser/Scheduler.pm		A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Parser/Scheduler/Spinner.pm	A parser for Test Anything Protocol
-cpan/Test-Harness/lib/TAP/Parser/Source/Perl.pm		A parser for Test Anything Protocol
+cpan/Test-Harness/lib/TAP/Parser/SourceHandler/Executable.pm
+cpan/Test-Harness/lib/TAP/Parser/SourceHandler/File.pm
+cpan/Test-Harness/lib/TAP/Parser/SourceHandler/Handle.pm
+cpan/Test-Harness/lib/TAP/Parser/SourceHandler/Perl.pm
+cpan/Test-Harness/lib/TAP/Parser/SourceHandler/pgTAP.pm
+cpan/Test-Harness/lib/TAP/Parser/SourceHandler.pm		A parser for Test Anything Protocol
+cpan/Test-Harness/lib/TAP/Parser/SourceHandler/RawTAP.pm
 cpan/Test-Harness/lib/TAP/Parser/Source.pm		A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Parser/Utils.pm		A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Parser/YAMLish/Reader.pm	A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Parser/YAMLish/Writer.pm	A parser for Test Anything Protocol
 cpan/Test-Harness/lib/Test/Harness.pm			A test harness
+cpan/Test-Harness/MANIFEST				
+cpan/Test-Harness/MANIFEST.CUMMULATIVE			
 cpan/Test-Harness/t/000-load.t				Test::Harness test
 cpan/Test-Harness/t/aggregator.t			Test::Harness test
 cpan/Test-Harness/t/bailout.t				Test::Harness test
@@ -2105,6 +2119,7 @@ cpan/Test-Harness/t/compat/inc-propagation.t		Test::Harness test
 cpan/Test-Harness/t/compat/inc_taint.t			Test::Harness test
 cpan/Test-Harness/t/compat/nonumbers.t			Test::Harness test
 cpan/Test-Harness/t/compat/regression.t			Test::Harness test
+cpan/Test-Harness/t/compat/subclass.t				Test::Harness test
 cpan/Test-Harness/t/compat/switches.t			Test::Harness test
 cpan/Test-Harness/t/compat/test-harness-compat.t	Test::Harness test
 cpan/Test-Harness/t/compat/version.t			Test::Harness test
@@ -2119,6 +2134,7 @@ cpan/Test-Harness/t/grammar.t				Test::Harness test
 cpan/Test-Harness/t/harness-bailout.t			Test::Harness test
 cpan/Test-Harness/t/harness-subclass.t			Test::Harness test
 cpan/Test-Harness/t/harness.t				Test::Harness test
+cpan/Test-Harness/t/iterator_factory.t				Test::Harness test
 cpan/Test-Harness/t/iterators.t				Test::Harness test
 cpan/Test-Harness/t/lib/App/Prove/Plugin/Dummy2.pm	Module for testing Test::Harness
 cpan/Test-Harness/t/lib/App/Prove/Plugin/Dummy.pm	Module for testing Test::Harness
@@ -2126,15 +2142,17 @@ cpan/Test-Harness/t/lib/Dev/Null.pm			Module for testing Test::Harness
 cpan/Test-Harness/t/lib/EmptyParser.pm			Module for testing Test::Harness
 cpan/Test-Harness/t/lib/IO/c55Capture.pm		Module for testing Test::Harness
 cpan/Test-Harness/t/lib/MyCustom.pm			Module for testing Test::Harness
+cpan/Test-Harness/t/lib/MyFileSourceHandler.pm				Test::Harness test
 cpan/Test-Harness/t/lib/MyGrammar.pm			Module for testing Test::Harness
-cpan/Test-Harness/t/lib/MyIteratorFactory.pm		Module for testing Test::Harness
 cpan/Test-Harness/t/lib/MyIterator.pm			Module for testing Test::Harness
-cpan/Test-Harness/t/lib/MyPerlSource.pm			Module for testing Test::Harness
+cpan/Test-Harness/t/lib/MyPerlSourceHandler.pm				Test::Harness test
 cpan/Test-Harness/t/lib/MyResultFactory.pm		Module for testing Test::Harness
 cpan/Test-Harness/t/lib/MyResult.pm			Module for testing Test::Harness
-cpan/Test-Harness/t/lib/MySource.pm			Module for testing Test::Harness
+cpan/Test-Harness/t/lib/MyShebangger.pm				Test::Harness test
+cpan/Test-Harness/t/lib/MySourceHandler.pm				Test::Harness test
 cpan/Test-Harness/t/lib/NoFork.pm			Module for testing Test::Harness
 cpan/Test-Harness/t/lib/NOP.pm				Module for testing Test::Harness
+cpan/Test-Harness/t/lib/TAP/Harness/TestSubclass.pm
 cpan/Test-Harness/t/lib/TAP/Parser/SubclassTest.pm	Module for testing Test::Harness
 cpan/Test-Harness/t/multiplexer.t			Test::Harness test
 cpan/Test-Harness/t/nofork-mux.t			Test::Harness test
@@ -2209,13 +2227,22 @@ cpan/Test-Harness/t/sample-tests/vms_nit		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/with_comments		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/zero_valid		Test data for Test::Harness
 cpan/Test-Harness/t/scheduler.t				Test::Harness test
+cpan/Test-Harness/t/source_handler.t				Test::Harness test
 cpan/Test-Harness/t/source.t				Test::Harness test
 cpan/Test-Harness/t/source_tests/harness		Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/harness_badtap		Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/harness_complain	Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/harness_directives	Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/harness_failure	Test data for Test::Harness
+cpan/Test-Harness/t/source_tests/psql				Test::Harness test
+cpan/Test-Harness/t/source_tests/psql.bat				Test::Harness test
 cpan/Test-Harness/t/source_tests/source			Test data for Test::Harness
+cpan/Test-Harness/t/source_tests/source.1				Test::Harness test
+cpan/Test-Harness/t/source_tests/source.bat				Test::Harness test
+cpan/Test-Harness/t/source_tests/source.pl				Test::Harness test
+cpan/Test-Harness/t/source_tests/source.sh				Test::Harness test
+cpan/Test-Harness/t/source_tests/source.t				Test::Harness test
+cpan/Test-Harness/t/source_tests/source.tap				Test::Harness test
 cpan/Test-Harness/t/spool.t				Test::Harness test
 cpan/Test-Harness/t/state_results.t			Test::Harness test
 cpan/Test-Harness/t/state.t				Test::Harness test
@@ -2512,6 +2539,8 @@ cpan/Unicode-Normalize/t/func.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/illegal.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/norm.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/null.t		Unicode::Normalize
+cpan/Unicode-Normalize/t/partial1.t		Unicode::Normalize
+cpan/Unicode-Normalize/t/partial2.t		Unicode::Normalize
 cpan/Unicode-Normalize/t/proto.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/split.t	Unicode::Normalize
 cpan/Unicode-Normalize/t/test.t		Unicode::Normalize
@@ -2700,6 +2729,7 @@ dist/Locale-Maketext/lib/Locale/Maketext.pod		Locale::Maketext documentation
 dist/Locale-Maketext/lib/Locale/Maketext/TPJ13.pod	Locale::Maketext documentation article
 dist/Locale-Maketext/README				Locale::Maketext
 dist/Locale-Maketext/t/01_about_verbose.t		See if Locale::Maketext works
+dist/Locale-Maketext/t/04_use_external_lex_cache.t	See if Locale::Maketext works
 dist/Locale-Maketext/t/10_make.t			See if Locale::Maketext works
 dist/Locale-Maketext/t/20_get.t				See if Locale::Maketext works
 dist/Locale-Maketext/t/30_local.t			See if Locale::Maketext works
@@ -2835,10 +2865,9 @@ dist/Thread-Semaphore/t/04_nonblocking.t	Thread::Semaphore tests
 dist/Thread-Semaphore/t/05_force.t	Thread::Semaphore tests
 dist/threads/hints/hpux.pl	Hint file for HPUX
 dist/threads/hints/linux.pl	Hint file for Linux
-dist/threads/Makefile.PL	ithreads
+dist/threads/lib/threads.pm		ithreads
 dist/threads-shared/hints/linux.pl	thread shared variables
-dist/threads-shared/Makefile.PL		thread shared variables
-dist/threads-shared/shared.pm		thread shared variables
+dist/threads-shared/lib/threads/shared.pm	thread shared variables
 dist/threads-shared/shared.xs		thread shared variables
 dist/threads-shared/t/0nothread.t	Tests for basic shared array functionality.
 dist/threads-shared/t/av_refs.t		Tests for arrays containing references
@@ -2866,7 +2895,6 @@ dist/threads/t/err.t		Test $thr->error()
 dist/threads/t/exit.t		Test exit and die in threads
 dist/threads/t/free2.t		More ithread destruction tests
 dist/threads/t/free.t		Test ithread destruction
-dist/threads/threads.pm		ithreads
 dist/threads/threads.xs		ithreads
 dist/threads/t/join.t		Testing the join function
 dist/threads/t/kill.t		Tests thread signalling
@@ -2980,7 +3008,6 @@ ext/DynaLoader/dl_dllload.xs	S/390 dllload() style implementation
 ext/DynaLoader/dl_dlopen.xs	BSD/SunOS4&5 dlopen() style implementation
 ext/DynaLoader/dl_dyld.xs	NeXT/Apple dyld implementation
 ext/DynaLoader/dl_hpux.xs	HP-UX implementation
-ext/DynaLoader/dl_mac.xs	MacOS implementation
 ext/DynaLoader/dl_mpeix.xs	MPE/iX implementation
 ext/DynaLoader/dl_next.xs	NeXT implementation
 ext/DynaLoader/dl_none.xs	Stub implementation
@@ -3222,11 +3249,17 @@ ext/XS-APItest/Makefile.PL	XS::APItest extension
 ext/XS-APItest/MANIFEST		XS::APItest extension
 ext/XS-APItest/notcore.c	Test API functions when PERL_CORE is not defined
 ext/XS-APItest/README		XS::APItest extension
+ext/XS-APItest/t/BHK.pm		Helper for ./blockhooks.t
+ext/XS-APItest/t/blockhooks-csc.t	XS::APItest: more tests for PL_blockhooks
+ext/XS-APItest/t/blockhooks.t	XS::APItest: tests for PL_blockhooks
+ext/XS-APItest/t/Block.pm	Helper for ./blockhooks.t
 ext/XS-APItest/t/call.t		XS::APItest extension
 ext/XS-APItest/t/exception.t	XS::APItest extension
 ext/XS-APItest/t/hash.t		XS::APItest: tests for hash related APIs
+ext/XS-APItest/t/Markers.pm	Helper for ./blockhooks.t
 ext/XS-APItest/t/my_cxt.t	XS::APItest: test MY_CXT interface
 ext/XS-APItest/t/my_exit.t	XS::APItest: test my_exit
+ext/XS-APItest/t/Null.pm	Helper for ./blockhooks.t
 ext/XS-APItest/t/op.t		XS::APItest: tests for OP related APIs
 ext/XS-APItest/t/pmflag.t	Test removal of Perl_pmflag()
 ext/XS-APItest/t/printf.t	XS::APItest extension
@@ -3870,9 +3903,11 @@ pod/perl5113delta.pod		Perl changes in version 5.11.3
 pod/perl5114delta.pod		Perl changes in version 5.11.4
 pod/perl5115delta.pod		Perl changes in version 5.11.5
 pod/perl5120delta.pod		Perl changes in version 5.12.0
+pod/perl5121delta.pod		Perl changes in version 5.12.1
 pod/perl5130delta.pod		Perl changes in version 5.13.0
 pod/perl5131delta.pod		Perl changes in version 5.13.1
 pod/perl5132delta.pod		Perl changes in version 5.13.2
+pod/perl5133delta.pod		Perl changes in version 5.13.3
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4011,6 +4046,7 @@ Porting/check-cpan-pollution	Check for commits that may wrongly touch CPAN distr
 Porting/checkpodencoding.pl	Check POD encoding
 Porting/checkURL.pl		Check whether we have working URLs
 Porting/checkVERSION.pl		Check whether we have $VERSIONs
+Porting/cherrymaint		Command line tool for updating cherrymaint
 Porting/cmpVERSION.pl		Compare whether two trees have changed modules
 Porting/config_H		Sample config.h
 Porting/config_h.pl		Reorder config_h.SH after metaconfig
@@ -4028,6 +4064,7 @@ Porting/findvars		Find occurrences of words
 Porting/fixCORE			Find and fix modules that generate warnings
 Porting/fixvars			Find undeclared variables with C compiler and fix em
 Porting/genlog			Generate formatted changelogs by querying p4d
+Porting/git-deltatool		Mark commits for perldelta in git notes
 Porting/git-find-p4-change	Find the change for a p4 change number
 Porting/git-make-p4-refs	Output git refs for each p4 change number, suitable for appending to .git/packed-refs
 Porting/GitUtils.pm		Generate the contents of a .patch file
@@ -4051,6 +4088,7 @@ Porting/README.y2038		Perl notes for the 2038 fix
 Porting/regcharclass.pl		Generate regcharclass.h from inline data
 Porting/release_managers_guide.pod	Release Manager's Guide
 Porting/release_schedule.pod	Schedule for future releases
+Porting/rt_list_patches		A tool to help you apply patches from RT
 Porting/sort_perldiag.pl	Keep our diagnostics orderly
 Porting/testall.atom		Cumulative profile with Third Degree
 Porting/thirdclean		Cleanup Third Degree reports
@@ -4256,6 +4294,7 @@ t/io/through.t			See if pipe passes data intact
 t/io/utf8.t			See if file seeking works
 t/japh/abigail.t		Obscure tests
 t/lib/1_compile.t		See if the various libraries and extensions compile
+t/lib/charnames/alias		Tests of "use charnames" with aliases.
 t/lib/Cname.pm			Test charnames in regexes (op/pat.t)
 t/lib/common.pl			Helper for lib/{warnings,feature}.t
 t/lib/commonsense.t		See if configuration meets basic needs
@@ -4284,6 +4323,7 @@ t/lib/Sans_mypragma.pm		Test module for t/lib/mypragma.t
 t/lib/strict/refs		Tests of "use strict 'refs'" for strict.t
 t/lib/strict/subs		Tests of "use strict 'subs'" for strict.t
 t/lib/strict/vars		Tests of "use strict 'vars'" for strict.t
+t/lib/subs/subs			Tests of "use subs"
 t/lib/test_use_14937.pm		A test pragma for t/comp/use.t
 t/lib/test_use.pm		A test pragma for t/comp/use.t
 t/lib/warnings/1global		Tests of global warnings for warnings.t
@@ -4474,6 +4514,7 @@ t/op/read.t			See if read() works
 t/op/recurse.t			See if deep recursion works
 t/op/ref.t			See if refs and objects work
 t/op/repeat.t			See if x operator works
+t/op/require_errors.t		See if errors from require are reported correctly
 t/op/reset.t			See if reset operator works
 t/op/reverse.t			See if reverse operator works
 t/op/runlevel.t			See if die() works from perl_call_*()
@@ -4527,8 +4568,10 @@ t/op/write.t			See if write works (formats work)
 t/op/yadayada.t			See if ... works
 t/perl.supp			Perl valgrind suppressions
 t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
+t/porting/authors.t		Check that all authors have been acknowledged
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/diag.t		Test completeness of perldiag.pod
+t/porting/dual-life.t		Check that dual-life bins are in utils
 t/porting/maintainers.t		Test that Porting/Maintaners.pl is up to date
 t/porting/manifest.t		Test that this MANIFEST file is well formed
 t/porting/podcheck.t		Test the POD of shipped modules is well formed

@@ -78,6 +78,8 @@ PERL_CALLCONV int Perl_magic_setglob(pTHX_ SV* sv, MAGIC* mg);
 PERL_CALLCONV AV * Perl_newAV(pTHX);
 PERL_CALLCONV HV * Perl_newHV(pTHX);
 PERL_CALLCONV IO * Perl_newIO(pTHX);
+PERL_CALLCONV I32 Perl_my_stat(pTHX);
+PERL_CALLCONV I32 Perl_my_lstat(pTHX);
 
 /* ref() is now a macro using Perl_doref;
  * this version provided for binary compatibility only.
@@ -697,13 +699,11 @@ Perl_init_i18nl14n(pTHX_ int printwarn)
 PP(pp_padany)
 {
     DIE(aTHX_ "NOT IMPL LINE %d",__LINE__);
-    return NORMAL;
 }
 
 PP(pp_mapstart)
 {
     DIE(aTHX_ "panic: mapstart");	/* uses grepstart */
-    return NORMAL;
 }
 
 /* These ops all have the same body as pp_null.  */
@@ -1519,6 +1519,18 @@ IO *
 Perl_newIO(pTHX)
 {
     return MUTABLE_IO(newSV_type(SVt_PVIO));
+}
+
+I32
+Perl_my_stat(pTHX)
+{
+    return my_stat_flags(SV_GMAGIC);
+}
+
+I32
+Perl_my_lstat(pTHX)
+{
+    return my_lstat_flags(SV_GMAGIC);
 }
 
 #endif /* NO_MATHOMS */

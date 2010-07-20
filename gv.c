@@ -193,6 +193,43 @@ Perl_newGP(pTHX_ GV *const gv)
     return gp;
 }
 
+/* Assign CvGV(cv) = gv, handling weak references.
+ * See also S_anonymise_cv_maybe */
+
+void
+Perl_cvgv_set(pTHX_ CV* cv, GV* gv)
+{
+    GV * const oldgv = CvGV(cv);
+    PERL_ARGS_ASSERT_CVGV_SET;
+
+    if (oldgv == gv)
+	return;
+
+    if (oldgv) {
+	if (CvCVGV_RC(cv)) {
+	    SvREFCNT_dec(oldgv);
+	    CvCVGV_RC_off(cv);
+	}
+	else {
+	    sv_del_backref(MUTABLE_SV(oldgv), MUTABLE_SV(cv));
+	}
+    }
+
+    SvANY(cv)->xcv_gv = gv;
+    assert(!CvCVGV_RC(cv));
+
+    if (!gv)
+	return;
+
+    if (isGV_with_GP(gv) && GvGP(gv) && (GvCV(gv) == cv || GvFORM(gv) == cv))
+	Perl_sv_add_backref(aTHX_ MUTABLE_SV(gv), MUTABLE_SV(cv));
+    else {
+	CvCVGV_RC_on(cv);
+	SvREFCNT_inc_simple_void_NN(gv);
+    }
+}
+
+
 void
 Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 {
@@ -248,10 +285,11 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
     if (multi || doproto)              /* doproto means it _was_ mentioned */
 	GvMULTI_on(gv);
     if (doproto) {			/* Replicate part of newSUB here. */
+	CV *cv;
 	ENTER;
 	if (has_constant) {
 	    /* newCONSTSUB takes ownership of the reference from us.  */
-	    GvCV(gv) = newCONSTSUB(stash, name, has_constant);
+	    cv = newCONSTSUB(stash, name, has_constant);
 	    /* If this reference was a copy of another, then the subroutine
 	       must have been "imported", by a Perl space assignment to a GV
 	       from a reference to CV.  */
@@ -259,16 +297,19 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 		GvIMPORTED_CV_on(gv);
 	} else {
 	    (void) start_subparse(0,0);	/* Create empty CV in compcv. */
-	    GvCV(gv) = PL_compcv;
+	    cv = PL_compcv;
 	}
+	GvCV(gv) = cv;
 	LEAVE;
 
         mro_method_changed_in(GvSTASH(gv)); /* sub Foo::bar($) { (shift) } sub ASDF::baz($); *ASDF::baz = \&Foo::bar */
-	CvGV(GvCV(gv)) = gv;
-	CvFILE_set_from_cop(GvCV(gv), PL_curcop);
-	CvSTASH(GvCV(gv)) = PL_curstash;
+	CvGV_set(cv, gv);
+	CvFILE_set_from_cop(cv, PL_curcop);
+	CvSTASH(cv) = PL_curstash;
+	if (PL_curstash)
+	    Perl_sv_add_backref(aTHX_ MUTABLE_SV(PL_curstash), MUTABLE_SV(cv));
 	if (proto) {
-	    sv_usepvn_flags(MUTABLE_SV(GvCV(gv)), proto, protolen,
+	    sv_usepvn_flags(MUTABLE_SV(cv), proto, protolen,
 			    SV_HAS_TRAILING_NUL);
 	}
     }
@@ -740,6 +781,8 @@ Perl_gv_autoload4(pTHX_ HV *stash, const char *name, STRLEN len, I32 method)
          * pass along the same data via some unused fields in the CV
          */
         CvSTASH(cv) = stash;
+	if (stash)
+	    Perl_sv_add_backref(aTHX_ MUTABLE_SV(stash), MUTABLE_SV(cv));
         SvPV_set(cv, (char *)name); /* cast to lose constness warning */
         SvCUR_set(cv, len);
         return gv;
@@ -2491,12 +2534,22 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
     SV **gvp;
     PERL_ARGS_ASSERT_GV_TRY_DOWNGRADE;
     if (!(SvREFCNT(gv) == 1 && SvTYPE(gv) == SVt_PVGV && !SvFAKE(gv) &&
-	    !SvOBJECT(gv) && !SvMAGICAL(gv) && !SvREADONLY(gv) &&
+	    !SvOBJECT(gv) && !SvREADONLY(gv) &&
 	    isGV_with_GP(gv) && GvGP(gv) &&
 	    !GvINTRO(gv) && GvREFCNT(gv) == 1 &&
 	    !GvSV(gv) && !GvAV(gv) && !GvHV(gv) && !GvIOp(gv) && !GvFORM(gv) &&
 	    GvEGVx(gv) == gv && (stash = GvSTASH(gv))))
 	return;
+    if (SvMAGICAL(gv)) {
+        MAGIC *mg;
+	/* only backref magic is allowed */
+	if (SvGMAGICAL(gv) || SvSMAGICAL(gv))
+	    return;
+        for (mg = SvMAGIC(gv); mg; mg = mg->mg_moremagic) {
+            if (mg->mg_type != PERL_MAGIC_backref)
+                return;
+	}
+    }
     cv = GvCV(gv);
     if (!cv) {
 	HEK *gvnhek = GvNAME_HEK(gv);

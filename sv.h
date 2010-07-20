@@ -106,6 +106,7 @@ typedef struct hek HEK;
 	SV**    svu_array;		\
 	HE**	svu_hash;		\
 	GP*	svu_gp;			\
+	PerlIO *svu_fp;			\
     }	sv_u
 
 
@@ -505,40 +506,37 @@ struct xpvfm {
     IV		xfm_lines;
 };
 
-#define _XPVIO_TAIL							\
-    PerlIO *	xio_ifp;	/* ifp and ofp are normally the same */	\
-    PerlIO *	xio_ofp;	/* but sockets need separate streams */	\
-    /* Cray addresses everything by word boundaries (64 bits) and	\
-     * code and data pointers cannot be mixed (which is exactly what	\
-     * Perl_filter_add() tries to do with the dirp), hence the		\
-     *  following union trick (as suggested by Gurusamy Sarathy).	\
-     * For further information see Geir Johansen's problem report	\
-     * titled [ID 20000612.002] Perl problem on Cray system		\
-     * The any pointer (known as IoANY()) will also be a good place	\
-     * to hang any IO disciplines to.					\
-     */									\
-    union {								\
-	DIR *	xiou_dirp;	/* for opendir, readdir, etc */		\
-	void *	xiou_any;	/* for alignment */			\
-    } xio_dirpu;							\
-    /* IV xio_lines is now in IVX  $. */				\
-    IV		xio_page;	/* $% */				\
-    IV		xio_page_len;	/* $= */				\
-    IV		xio_lines_left;	/* $- */				\
-    char *	xio_top_name;	/* $^ */				\
-    GV *	xio_top_gv;	/* $^ */				\
-    char *	xio_fmt_name;	/* $~ */				\
-    GV *	xio_fmt_gv;	/* $~ */				\
-    char *	xio_bottom_name;/* $^B */				\
-    GV *	xio_bottom_gv;	/* $^B */				\
-    char	xio_type;						\
-    U8		xio_flags
-
 
 struct xpvio {
     _XPV_HEAD;
     union _xivu xiv_u;
-    _XPVIO_TAIL;
+    /* ifp and ofp are normally the same, but sockets need separate streams */
+    PerlIO *	xio_ofp;
+    /* Cray addresses everything by word boundaries (64 bits) and
+     * code and data pointers cannot be mixed (which is exactly what
+     * Perl_filter_add() tries to do with the dirp), hence the
+     *  following union trick (as suggested by Gurusamy Sarathy).
+     * For further information see Geir Johansen's problem report
+     * titled [ID 20000612.002] Perl problem on Cray system
+     * The any pointer (known as IoANY()) will also be a good place
+     * to hang any IO disciplines to.
+     */
+    union {
+	DIR *	xiou_dirp;	/* for opendir, readdir, etc */
+	void *	xiou_any;	/* for alignment */
+    } xio_dirpu;
+    /* IV xio_lines is now in IVX  $. */
+    IV		xio_page;	/* $% */
+    IV		xio_page_len;	/* $= */
+    IV		xio_lines_left;	/* $- */
+    char *	xio_top_name;	/* $^ */
+    GV *	xio_top_gv;	/* $^ */
+    char *	xio_fmt_name;	/* $~ */
+    GV *	xio_fmt_gv;	/* $~ */
+    char *	xio_bottom_name;/* $^B */
+    GV *	xio_bottom_gv;	/* $^B */
+    char	xio_type;
+    U8		xio_flags;
 };
 
 #define xio_dirp	xio_dirpu.xiou_dirp
@@ -550,7 +548,8 @@ struct xpvio {
 #define IOf_DIDTOP	8	/* just did top of form */
 #define IOf_UNTAINT	16	/* consider this fp (and its data) "safe" */
 #define IOf_NOLINE	32	/* slurped a pseudo-line from empty file */
-#define IOf_FAKE_DIRP	64	/* xio_dirp is fake (source filters kludge) */
+#define IOf_FAKE_DIRP	64	/* xio_dirp is fake (source filters kludge)
+				   Also, when this is set, SvPVX() is valid */
 
 /* The following macros define implementation-independent predicates on SVs. */
 
@@ -1046,6 +1045,8 @@ the scalar's value cannot change unless written to.
 	    assert(SvTYPE(_svpvx) != SVt_PVAV);				\
 	    assert(SvTYPE(_svpvx) != SVt_PVHV);				\
 	    assert(!isGV_with_GP(_svpvx));				\
+	    assert(!(SvTYPE(_svpvx) == SVt_PVIO				\
+		     && !(IoFLAGS(_svpvx) & IOf_FAKE_DIRP)));		\
 	    &((_svpvx)->sv_u.svu_pv);					\
 	 }))
 #    define SvCUR(sv)							\
@@ -1054,6 +1055,8 @@ the scalar's value cannot change unless written to.
 	    assert(SvTYPE(_svcur) != SVt_PVAV);				\
 	    assert(SvTYPE(_svcur) != SVt_PVHV);				\
 	    assert(!isGV_with_GP(_svcur));				\
+	    assert(!(SvTYPE(_svcur) == SVt_PVIO				\
+		     && !(IoFLAGS(_svcur) & IOf_FAKE_DIRP)));		\
 	    &(((XPV*) MUTABLE_PTR(SvANY(_svcur)))->xpv_cur);		\
 	 }))
 #    define SvIVX(sv)							\
@@ -1100,6 +1103,8 @@ the scalar's value cannot change unless written to.
 	    assert(SvTYPE(_svrv) != SVt_PVCV);				\
 	    assert(SvTYPE(_svrv) != SVt_PVFM);				\
 	    assert(!isGV_with_GP(_svrv));				\
+	    assert(!(SvTYPE(_svrv) == SVt_PVIO				\
+		     && !(IoFLAGS(_svrv) & IOf_FAKE_DIRP)));		\
 	    &((_svrv)->sv_u.svu_rv);					\
 	 }))
 #    define SvRV_const(sv)						\
@@ -1110,6 +1115,8 @@ the scalar's value cannot change unless written to.
 	    assert(SvTYPE(_svrv) != SVt_PVCV);				\
 	    assert(SvTYPE(_svrv) != SVt_PVFM);				\
 	    assert(!isGV_with_GP(_svrv));				\
+	    assert(!(SvTYPE(_svrv) == SVt_PVIO				\
+		     && !(IoFLAGS(_svrv) & IOf_FAKE_DIRP)));		\
 	    (_svrv)->sv_u.svu_rv;					\
 	 })
 #    define SvMAGIC(sv)							\
@@ -1185,6 +1192,8 @@ the scalar's value cannot change unless written to.
 		assert(SvTYPE(sv) != SVt_PVAV);		\
 		assert(SvTYPE(sv) != SVt_PVHV);		\
 		assert(!isGV_with_GP(sv));		\
+		assert(!(SvTYPE(sv) == SVt_PVIO		\
+		     && !(IoFLAGS(sv) & IOf_FAKE_DIRP))); \
 		((sv)->sv_u.svu_pv = (val)); } STMT_END
 #define SvUV_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) == SVt_IV || SvTYPE(sv) >= SVt_PVIV); \
@@ -1200,6 +1209,8 @@ the scalar's value cannot change unless written to.
 		assert(SvTYPE(sv) != SVt_PVCV);		\
 		assert(SvTYPE(sv) != SVt_PVFM);		\
 		assert(!isGV_with_GP(sv));		\
+		assert(!(SvTYPE(sv) == SVt_PVIO		\
+		     && !(IoFLAGS(sv) & IOf_FAKE_DIRP))); \
                 ((sv)->sv_u.svu_rv = (val)); } STMT_END
 #define SvMAGIC_set(sv, val) \
         STMT_START { assert(SvTYPE(sv) >= SVt_PVMG); \
@@ -1212,12 +1223,16 @@ the scalar's value cannot change unless written to.
 		assert(SvTYPE(sv) != SVt_PVAV);		\
 		assert(SvTYPE(sv) != SVt_PVHV);		\
 		assert(!isGV_with_GP(sv));		\
+		assert(!(SvTYPE(sv) == SVt_PVIO		\
+		     && !(IoFLAGS(sv) & IOf_FAKE_DIRP))); \
 		(((XPV*)  SvANY(sv))->xpv_cur = (val)); } STMT_END
 #define SvLEN_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
 		assert(SvTYPE(sv) != SVt_PVAV);	\
 		assert(SvTYPE(sv) != SVt_PVHV);	\
 		assert(!isGV_with_GP(sv));	\
+		assert(!(SvTYPE(sv) == SVt_PVIO		\
+		     && !(IoFLAGS(sv) & IOf_FAKE_DIRP))); \
 		(((XPV*)  SvANY(sv))->xpv_len = (val)); } STMT_END
 #define SvEND_set(sv, val) \
 	STMT_START { assert(SvTYPE(sv) >= SVt_PV); \
@@ -1311,7 +1326,7 @@ the scalar's value cannot change unless written to.
 #define LvTARGOFF(sv)	((XPVLV*)  SvANY(sv))->xlv_targoff
 #define LvTARGLEN(sv)	((XPVLV*)  SvANY(sv))->xlv_targlen
 
-#define IoIFP(sv)	((XPVIO*)  SvANY(sv))->xio_ifp
+#define IoIFP(sv)	(sv)->sv_u.svu_fp
 #define IoOFP(sv)	((XPVIO*)  SvANY(sv))->xio_ofp
 #define IoDIRP(sv)	((XPVIO*)  SvANY(sv))->xio_dirp
 #define IoANY(sv)	((XPVIO*)  SvANY(sv))->xio_any

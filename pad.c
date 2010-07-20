@@ -1562,7 +1562,7 @@ Perl_cv_clone(pTHX_ CV *proto)
     SAVESPTR(PL_compcv);
 
     cv = PL_compcv = MUTABLE_CV(newSV_type(SvTYPE(proto)));
-    CvFLAGS(cv) = CvFLAGS(proto) & ~(CVf_CLONE|CVf_WEAKOUTSIDE);
+    CvFLAGS(cv) = CvFLAGS(proto) & ~(CVf_CLONE|CVf_WEAKOUTSIDE|CVf_CVGV_RC);
     CvCLONED_on(cv);
 
 #ifdef USE_ITHREADS
@@ -1571,8 +1571,10 @@ Perl_cv_clone(pTHX_ CV *proto)
 #else
     CvFILE(cv)		= CvFILE(proto);
 #endif
-    CvGV(cv)		= CvGV(proto);
+    CvGV_set(cv,CvGV(proto));
     CvSTASH(cv)		= CvSTASH(proto);
+    if (CvSTASH(cv))
+	Perl_sv_add_backref(aTHX_ MUTABLE_SV(CvSTASH(cv)), MUTABLE_SV(cv));
     OP_REFCNT_LOCK;
     CvROOT(cv)		= OpREFCNT_inc(CvROOT(proto));
     OP_REFCNT_UNLOCK;

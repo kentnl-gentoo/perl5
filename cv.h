@@ -41,7 +41,8 @@ Returns the stash of the CV.
 #define CvROOT(sv)	((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_root_u.xcv_root
 #define CvXSUB(sv)	((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_root_u.xcv_xsub
 #define CvXSUBANY(sv)	((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_start_u.xcv_xsubany
-#define CvGV(sv)	((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_gv
+#define CvGV(sv)	(0+((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_gv)
+#define CvGV_set(cv,gv)	Perl_cvgv_set(aTHX_ cv, gv)
 #define CvFILE(sv)	((XPVCV*)MUTABLE_PTR(SvANY(sv)))->xcv_file
 #ifdef USE_ITHREADS
 #  define CvFILE_set_from_cop(sv, cop)	(CvFILE(sv) = savepv(CopFILE(cop)))
@@ -70,11 +71,12 @@ Returns the stash of the CV.
 #define CVf_WEAKOUTSIDE	0x0010  /* CvOUTSIDE isn't ref counted */
 #define CVf_CLONE	0x0020	/* anon CV uses external lexicals */
 #define CVf_CLONED	0x0040	/* a clone of one of those */
-#define CVf_ANON	0x0080	/* CvGV() can't be trusted */
+#define CVf_ANON	0x0080	/* CV is not pointed to by a GV */
 #define CVf_UNIQUE	0x0100	/* sub is only called once (eg PL_main_cv,
 				 * require, eval). */
 #define CVf_NODEBUG	0x0200	/* no DB::sub indirection for this CV
 				   (esp. useful for special XSUBs) */
+#define CVf_CVGV_RC	0x0400	/* CvGV is reference counted */
 
 /* This symbol for optimised communication between toke.c and op.c: */
 #define CVf_BUILTIN_ATTRS	(CVf_METHOD|CVf_LVALUE)
@@ -127,6 +129,10 @@ Returns the stash of the CV.
 #define CvISXSUB(cv)		(CvFLAGS(cv) & CVf_ISXSUB)
 #define CvISXSUB_on(cv)		(CvFLAGS(cv) |= CVf_ISXSUB)
 #define CvISXSUB_off(cv)	(CvFLAGS(cv) &= ~CVf_ISXSUB)
+
+#define CvCVGV_RC(cv)		(CvFLAGS(cv) & CVf_CVGV_RC)
+#define CvCVGV_RC_on(cv)	(CvFLAGS(cv) |= CVf_CVGV_RC)
+#define CvCVGV_RC_off(cv)	(CvFLAGS(cv) &= ~CVf_CVGV_RC)
 
 /* Flags for newXS_flags  */
 #define XS_DYNAMIC_FILENAME	0x01	/* The filename isn't static  */

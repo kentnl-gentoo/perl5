@@ -1085,7 +1085,6 @@ S_hsplit(pTHX_ HV *hv)
     register I32 i;
     char *a = (char*) HvARRAY(hv);
     register HE **aep;
-    register HE **oentry;
     int longest_chain = 0;
     int was_shared;
 
@@ -1142,25 +1141,26 @@ S_hsplit(pTHX_ HV *hv)
     for (i=0; i<oldsize; i++,aep++) {
 	int left_length = 0;
 	int right_length = 0;
-	register HE *entry;
+	HE **oentry = aep;
+	HE *entry = *aep;
 	register HE **bep;
 
-	if (!*aep)				/* non-existent */
+	if (!entry)				/* non-existent */
 	    continue;
 	bep = aep+oldsize;
-	for (oentry = aep, entry = *aep; entry; entry = *oentry) {
+	do {
 	    if ((HeHASH(entry) & newsize) != (U32)i) {
 		*oentry = HeNEXT(entry);
 		HeNEXT(entry) = *bep;
 		*bep = entry;
 		right_length++;
-		continue;
 	    }
 	    else {
 		oentry = &HeNEXT(entry);
 		left_length++;
 	    }
-	}
+	    entry = *oentry;
+	} while (entry);
 	/* I think we don't actually need to keep track of the longest length,
 	   merely flag if anything is too long. But for the moment while
 	   developing this code I'll track it.  */
@@ -1250,8 +1250,6 @@ Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
     register I32 i;
     register char *a;
     register HE **aep;
-    register HE *entry;
-    register HE **oentry;
 
     PERL_ARGS_ASSERT_HV_KSPLIT;
 
@@ -1311,9 +1309,12 @@ Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
 
     aep = (HE**)a;
     for (i=0; i<oldsize; i++,aep++) {
-	if (!*aep)				/* non-existent */
+	HE **oentry = aep;
+	HE *entry = *aep;
+
+	if (!entry)				/* non-existent */
 	    continue;
-	for (oentry = aep, entry = *aep; entry; entry = *oentry) {
+	do {
 	    register I32 j = (HeHASH(entry) & newsize);
 
 	    if (j != i) {
@@ -1321,11 +1322,11 @@ Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
 		*oentry = HeNEXT(entry);
 		HeNEXT(entry) = aep[j];
 		aep[j] = entry;
-		continue;
 	    }
 	    else
 		oentry = &HeNEXT(entry);
-	}
+	    entry = *oentry;
+	} while (entry);
     }
 }
 
@@ -1457,8 +1458,8 @@ Perl_hv_free_ent(pTHX_ HV *hv, register HE *entry)
     if (!entry)
 	return;
     val = HeVAL(entry);
-    if (HvNAME(hv) && anonymise_cv(HvNAME_HEK(hv), val) && GvCVu(val))
-	mro_method_changed_in(hv);
+    if (val && isGV(val) && isGV_with_GP(val) && GvCVu(val) && HvNAME_get(hv))
+        mro_method_changed_in(hv);	/* deletion of method from stash */
     SvREFCNT_dec(val);
     if (HeKLEN(entry) == HEf_SVKEY) {
 	SvREFCNT_dec(HeKEY_sv(entry));
@@ -1471,33 +1472,6 @@ Perl_hv_free_ent(pTHX_ HV *hv, register HE *entry)
     del_HE(entry);
 }
 
-static I32
-S_anonymise_cv(pTHX_ HEK *stash, SV *val)
-{
-    CV *cv;
-
-    PERL_ARGS_ASSERT_ANONYMISE_CV;
-
-    if (val && isGV(val) && isGV_with_GP(val) && (cv = GvCV(val))) {
-	if ((SV *)CvGV(cv) == val) {
-	    GV *anongv;
-
-	    if (stash) {
-		SV *gvname = newSVhek(stash);
-		sv_catpvs(gvname, "::__ANON__");
-		anongv = gv_fetchsv(gvname, GV_ADDMULTI, SVt_PVCV);
-		SvREFCNT_dec(gvname);
-	    } else {
-		anongv = gv_fetchpvs("__ANON__::__ANON__", GV_ADDMULTI,
-				     SVt_PVCV);
-	    }
-	    CvGV(cv) = anongv;
-	    CvANON_on(cv);
-	    return 1;
-	}
-    }
-    return 0;
-}
 
 void
 Perl_hv_delayfree_ent(pTHX_ HV *hv, register HE *entry)
@@ -1661,22 +1635,6 @@ S_hfreeentries(pTHX_ HV *hv)
     if (!orig_array)
 	return;
 
-    if (HvNAME(hv) && orig_array != NULL) {
-	/* symbol table: make all the contained subs ANON */
-	STRLEN i;
-	XPVHV *xhv = (XPVHV*)SvANY(hv);
-
-	for (i = 0; i <= xhv->xhv_max; i++) {
-	    HE *entry = (HvARRAY(hv))[i];
-	    for (; entry; entry = HeNEXT(entry)) {
-		SV *val = HeVAL(entry);
-		/* we need to put the subs in the __ANON__ symtable, as
-		 * this one is being cleared. */
-		anonymise_cv(NULL, val);
-	    }
-	}
-    }
-
     if (SvOOK(hv)) {
 	/* If the hash is actually a symbol table with a name, look after the
 	   name.  */
@@ -1707,28 +1665,13 @@ S_hfreeentries(pTHX_ HV *hv)
 	if (SvOOK(hv)) {
 	    HE *entry;
             struct mro_meta *meta;
-	    struct xpvhv_aux *iter = HvAUX(hv);
-	    /* If there are weak references to this HV, we need to avoid
-	       freeing them up here.  In particular we need to keep the AV
-	       visible as what we're deleting might well have weak references
-	       back to this HV, so the for loop below may well trigger
-	       the removal of backreferences from this array.  */
+	    struct xpvhv_aux * const iter = HvAUX(hv);
+	    AV *const av = iter->xhv_backreferences;
 
-	    if (iter->xhv_backreferences) {
-		/* So donate them to regular backref magic to keep them safe.
-		   The sv_magic will increase the reference count of the AV,
-		   so we need to drop it first. */
-		SvREFCNT_dec(iter->xhv_backreferences);
-		if (AvFILLp(iter->xhv_backreferences) == -1) {
-		    /* Turns out that the array is empty. Just free it.  */
-		    SvREFCNT_dec(iter->xhv_backreferences);
-
-		} else {
-		    sv_magic(MUTABLE_SV(hv),
-			     MUTABLE_SV(iter->xhv_backreferences),
-			     PERL_MAGIC_backref, NULL, 0);
-		}
-		iter->xhv_backreferences = NULL;
+	    if (av) {
+		Perl_sv_kill_backrefs(aTHX_ MUTABLE_SV(hv), av);
+		SvREFCNT_dec(av);
+		iter->xhv_backreferences = 0;
 	    }
 
 	    entry = iter->xhv_eiter; /* HvEITER(hv) */
@@ -1764,7 +1707,7 @@ S_hfreeentries(pTHX_ HV *hv)
 	}
 
 	/* make everyone else think the array is empty, so that the destructors
-	 * called for freed entries can't recusively mess with us */
+	 * called for freed entries can't recursively mess with us */
 	HvARRAY(hv) = NULL;
 	((XPVHV*) SvANY(hv))->xhv_keys = 0;
 
@@ -2065,24 +2008,6 @@ Perl_hv_backreferences_p(pTHX_ HV *hv) {
     PERL_UNUSED_CONTEXT;
 
     return &(iter->xhv_backreferences);
-}
-
-void
-Perl_hv_kill_backrefs(pTHX_ HV *hv) {
-    AV *av;
-
-    PERL_ARGS_ASSERT_HV_KILL_BACKREFS;
-
-    if (!SvOOK(hv))
-	return;
-
-    av = HvAUX(hv)->xhv_backreferences;
-
-    if (av) {
-	HvAUX(hv)->xhv_backreferences = 0;
-	Perl_sv_kill_backrefs(aTHX_ MUTABLE_SV(hv), av);
-	SvREFCNT_dec(av);
-    }
 }
 
 /*

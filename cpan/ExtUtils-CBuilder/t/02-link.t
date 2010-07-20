@@ -2,7 +2,7 @@
 
 use strict;
 use Test::More;
-BEGIN {
+BEGIN { 
   if ($^O eq 'VMS') {
     # So we can get the return value of system()
     require vmsish;
@@ -67,7 +67,7 @@ SKIP: {
   # Try the executable
   my $ec = my_system($exe_file);
   is( $ec, 11, "got expected exit code from executable" )
-    or diag( $ec == -1 ? "Could not run '$exe_file': $!\n"
+    or diag( $ec == -1 ? "Could not run '$exe_file': $!\n" 
                        : "Unexpected exit code '$ec'\n");
 }
 

@@ -392,20 +392,20 @@ XS(XS_UNIVERSAL_VERSION)
 	    if ( hv_exists(MUTABLE_HV(SvRV(req)), "qv", 2 ) ) {
 		Perl_croak(aTHX_ "%s version %"SVf" required--"
 		       "this is only version %"SVf"", HvNAME_get(pkg),
-		       SVfARG(vnormal(req)),
-		       SVfARG(vnormal(sv)));
+		       SVfARG(sv_2mortal(vnormal(req))),
+		       SVfARG(sv_2mortal(vnormal(sv))));
 	    } else {
 		Perl_croak(aTHX_ "%s version %"SVf" required--"
 		       "this is only version %"SVf"", HvNAME_get(pkg),
-		       SVfARG(vstringify(req)),
-		       SVfARG(vstringify(sv)));
+		       SVfARG(sv_2mortal(vstringify(req))),
+		       SVfARG(sv_2mortal(vstringify(sv))));
 	    }
 	}
 
     }
 
     if ( SvOK(sv) && sv_derived_from(sv, "version") ) {
-	ST(0) = vstringify(sv);
+	ST(0) = sv_2mortal(vstringify(sv));
     } else {
 	ST(0) = sv;
     }
@@ -456,10 +456,10 @@ XS(XS_version_stringify)
 	 croak_xs_usage(cv, "lobj, ...");
      SP -= items;
      {
-	  SV *	lobj;
+	  SV *	lobj = ST(0);
 
-	  if (sv_derived_from(ST(0), "version")) {
-	       lobj = SvRV(ST(0));
+	  if (sv_derived_from(lobj, "version") && SvROK(lobj)) {
+	       lobj = SvRV(lobj);
 	  }
 	  else
 	       Perl_croak(aTHX_ "lobj is not of type version");
@@ -479,10 +479,10 @@ XS(XS_version_numify)
 	 croak_xs_usage(cv, "lobj, ...");
      SP -= items;
      {
-	  SV *	lobj;
+	  SV *	lobj = ST(0);
 
-	  if (sv_derived_from(ST(0), "version")) {
-	       lobj = SvRV(ST(0));
+	  if (sv_derived_from(lobj, "version") && SvROK(lobj)) {
+	       lobj = SvRV(lobj);
 	  }
 	  else
 	       Perl_croak(aTHX_ "lobj is not of type version");
@@ -502,10 +502,10 @@ XS(XS_version_normal)
 	 croak_xs_usage(cv, "lobj, ...");
      SP -= items;
      {
-	  SV *	lobj;
+	  SV *	lobj = ST(0);
 
-	  if (sv_derived_from(ST(0), "version")) {
-	       lobj = SvRV(ST(0));
+	  if (sv_derived_from(lobj, "version") && SvROK(lobj)) {
+	       lobj = SvRV(lobj);
 	  }
 	  else
 	       Perl_croak(aTHX_ "lobj is not of type version");
@@ -525,10 +525,10 @@ XS(XS_version_vcmp)
 	 croak_xs_usage(cv, "lobj, ...");
      SP -= items;
      {
-	  SV *	lobj;
+	  SV *	lobj = ST(0);
 
-	  if (sv_derived_from(ST(0), "version")) {
-	       lobj = SvRV(ST(0));
+	  if (sv_derived_from(lobj, "version") && SvROK(lobj)) {
+	       lobj = SvRV(lobj);
 	  }
 	  else
 	       Perl_croak(aTHX_ "lobj is not of type version");
@@ -541,7 +541,8 @@ XS(XS_version_vcmp)
 
 	       if ( ! sv_derived_from(robj, "version") )
 	       {
-		    robj = new_version(SvOK(robj) ? robj : newSVpvs("0"));
+		    robj = new_version(SvOK(robj) ? robj : newSVpvs_flags("0", SVs_TEMP));
+		    sv_2mortal(robj);
 	       }
 	       rvs = SvRV(robj);
 
@@ -569,7 +570,7 @@ XS(XS_version_boolean)
     if (items < 1)
 	croak_xs_usage(cv, "lobj, ...");
     SP -= items;
-    if (sv_derived_from(ST(0), "version")) {
+    if (sv_derived_from(ST(0), "version") && SvROK(ST(0))) {
 	SV * const lobj = SvRV(ST(0));
 	SV * const rs = newSViv( vcmp(lobj,new_version(newSVpvs("0"))) );
 	mPUSHs(rs);
@@ -586,7 +587,7 @@ XS(XS_version_noop)
     dXSARGS;
     if (items < 1)
 	croak_xs_usage(cv, "lobj, ...");
-    if (sv_derived_from(ST(0), "version"))
+    if (sv_derived_from(ST(0), "version") && SvROK(ST(0)))
 	Perl_croak(aTHX_ "operation not supported with version object");
     else
 	Perl_croak(aTHX_ "lobj is not of type version");
@@ -602,7 +603,7 @@ XS(XS_version_is_alpha)
     if (items != 1)
 	croak_xs_usage(cv, "lobj");
     SP -= items;
-    if (sv_derived_from(ST(0), "version")) {
+    if (sv_derived_from(ST(0), "version") && SvROK(ST(0))) {
 	SV * const lobj = ST(0);
 	if ( hv_exists(MUTABLE_HV(SvRV(lobj)), "alpha", 5 ) )
 	    XSRETURN_YES;
@@ -656,7 +657,7 @@ XS(XS_version_is_qv)
     if (items != 1)
 	croak_xs_usage(cv, "lobj");
     SP -= items;
-    if (sv_derived_from(ST(0), "version")) {
+    if (sv_derived_from(ST(0), "version") && SvROK(ST(0))) {
 	SV * const lobj = ST(0);
 	if ( hv_exists(MUTABLE_HV(SvRV(lobj)), "qv", 2 ) )
 	    XSRETURN_YES;
@@ -1283,7 +1284,7 @@ XS(XS_Tie_Hash_NamedCapture_STORE)
 
     if (!rx || !SvROK(ST(0))) {
         if (!PL_localizing)
-            Perl_croak(aTHX_ "%s", PL_no_modify);
+            Perl_croak_no_modify(aTHX);
         else
             XSRETURN_UNDEF;
     }
@@ -1305,7 +1306,7 @@ XS(XS_Tie_Hash_NamedCapture_DELETE)
 	croak_xs_usage(cv, "$key, $flags");
 
     if (!rx || !SvROK(ST(0)))
-        Perl_croak(aTHX_ "%s", PL_no_modify);
+        Perl_croak_no_modify(aTHX);
 
     SP -= items;
 
@@ -1326,7 +1327,7 @@ XS(XS_Tie_Hash_NamedCapture_CLEAR)
     rx = PL_curpm ? PM_GETRE(PL_curpm) : NULL;
 
     if (!rx || !SvROK(ST(0)))
-        Perl_croak(aTHX_ "%s", PL_no_modify);
+        Perl_croak_no_modify(aTHX);
 
     SP -= items;
 

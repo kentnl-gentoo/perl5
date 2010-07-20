@@ -162,7 +162,7 @@ PP(pp_rv2gv)
 		 * NI-S 1999/05/07
 		 */
 		if (SvREADONLY(sv))
-		    Perl_croak(aTHX_ "%s", PL_no_modify);
+		    Perl_croak_no_modify(aTHX);
 		if (PL_op->op_private & OPpDEREF) {
 		    GV *gv;
 		    if (cUNOP->op_targ) {
@@ -427,6 +427,14 @@ PP(pp_prototype)
 		}
 		if (code == -KEY_keys || code == -KEY_values || code == -KEY_each) {
 		    ret = newSVpvs_flags("\\[@%]", SVs_TEMP);
+		    goto set;
+		}
+		if (code == -KEY_tied || code == -KEY_untie) {
+		    ret = newSVpvs_flags("\\[$@%*]", SVs_TEMP);
+		    goto set;
+		}
+		if (code == -KEY_tie) {
+		    ret = newSVpvs_flags("\\[$@%*]$@", SVs_TEMP);
 		    goto set;
 		}
 		if (code == -KEY_readpipe) {
@@ -830,7 +838,7 @@ PP(pp_undef)
 	    /* let user-undef'd sub keep its identity */
 	    GV* const gv = CvGV((const CV *)sv);
 	    cv_undef(MUTABLE_CV(sv));
-	    CvGV((const CV *)sv) = gv;
+	    CvGV_set(MUTABLE_CV(sv), gv);
 	}
 	break;
     case SVt_PVGV:
@@ -877,7 +885,7 @@ PP(pp_predec)
 {
     dVAR; dSP;
     if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
-	DIE(aTHX_ "%s", PL_no_modify);
+	Perl_croak_no_modify(aTHX);
     if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
         && SvIVX(TOPs) != IV_MIN)
     {
@@ -894,7 +902,7 @@ PP(pp_postinc)
 {
     dVAR; dSP; dTARGET;
     if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
-	DIE(aTHX_ "%s", PL_no_modify);
+	Perl_croak_no_modify(aTHX);
     sv_setsv(TARG, TOPs);
     if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
         && SvIVX(TOPs) != IV_MAX)
@@ -916,7 +924,7 @@ PP(pp_postdec)
 {
     dVAR; dSP; dTARGET;
     if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
-	DIE(aTHX_ "%s", PL_no_modify);
+	Perl_croak_no_modify(aTHX);
     sv_setsv(TARG, TOPs);
     if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
         && SvIVX(TOPs) != IV_MIN)
@@ -3059,11 +3067,11 @@ PP(pp_oct)
         tmps++, len--;
     if (*tmps == '0')
         tmps++, len--;
-    if (*tmps == 'x') {
+    if (*tmps == 'x' || *tmps == 'X') {
     hex:
         result_uv = grok_hex (tmps, &len, &flags, &result_nv);
     }
-    else if (*tmps == 'b')
+    else if (*tmps == 'b' || *tmps == 'B')
         result_uv = grok_bin (tmps, &len, &flags, &result_nv);
     else
         result_uv = grok_oct (tmps, &len, &flags, &result_nv);
@@ -3610,7 +3618,6 @@ PP(pp_crypt)
 #else
     DIE(aTHX_
       "The crypt() function is unimplemented due to excessive paranoia.");
-    return NORMAL;
 #endif
 }
 
@@ -6012,7 +6019,6 @@ PP(unimplemented_op)
     dVAR;
     DIE(aTHX_ "panic: unimplemented op %s (#%d) called", OP_NAME(PL_op),
 	PL_op->op_type);
-    return NORMAL;
 }
 
 PP(pp_boolkeys)

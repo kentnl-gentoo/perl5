@@ -173,9 +173,11 @@ Send in a patch if you can clear up, fill out, or clarify an C<XXX>.
 There are a number of special data structures provided to the debugger by
 the Perl interpreter.
 
-The array C<@{$main::{'_<'.$filename}}> (aliased locally to C<@dbline> via glob
-assignment) contains the text from C<$filename>, with each element
-corresponding to a single line of C<$filename>.
+The array C<@{$main::{'_<'.$filename}}> (aliased locally to C<@dbline>
+via glob assignment) contains the text from C<$filename>, with each
+element corresponding to a single line of C<$filename>. Additionally,
+breakable lines will be dualvars with the numeric component being the
+memory address of a COP node. Non-breakable lines are dualvar to 0.
 
 The hash C<%{'_<'.$filename}> (aliased locally to C<%dbline> via glob 
 assignment) contains breakpoints and actions.  The keys are line numbers; 
@@ -952,6 +954,8 @@ sub eval {
 # Changes: 1.32: Jun 03, 2009 Jonathan Leto <jonathan@leto.net>
 #   + Fix bug where a key _< with undefined value was put into the symbol table
 #   +   when the $filename variable is not set
+# Changes: x.xx: Josh ben Jore <jjore@cpan.org>
+#   + TODO
 ########################################################################
 
 =head1 DEBUGGER INITIALIZATION
@@ -1461,7 +1465,8 @@ if ( defined $ENV{PERLDB_OPTS} ) {
 
 The last thing we do during initialization is determine which subroutine is
 to be used to obtain a new terminal when a new debugger is started. Right now,
-the debugger only handles X Windows, OS/2, and Mac OS X (darwin).
+the debugger only handles TCP sockets, X Windows, OS/2, amd Mac OS X
+(darwin).
 
 =cut
 
@@ -1471,7 +1476,11 @@ the debugger only handles X Windows, OS/2, and Mac OS X (darwin).
 
 if (not defined &get_fork_TTY)       # only if no routine exists
 {
-    if (defined $ENV{TERM}                       # If we know what kind
+    if ( defined $remoteport ) {                 
+                                                 # Expect an inetd-like server
+        *get_fork_TTY = \&socket_get_fork_TTY;   # to listen to us
+    }
+    elsif (defined $ENV{TERM}                    # If we know what kind
                                                  # of terminal this is,
         and $ENV{TERM} eq 'xterm'                # and it's an xterm,
         and defined $ENV{DISPLAY}                # and what display it's on,
@@ -1630,23 +1639,6 @@ We then determine what the console should be on various systems:
         $console = "con";
     }
 
-=item * MacOS - use C<Dev:Console:Perl Debug> if this is the MPW version; C<Dev:
-Console> if not.
-
-Note that Mac OS X returns C<darwin>, not C<MacOS>. Also note that the debugger doesn't do anything special for C<darwin>. Maybe it should.
-
-=cut
-
-    elsif ( $^O eq 'MacOS' ) {
-        if ( $MacPerl::Version !~ /MPW/ ) {
-            $console =
-              "Dev:Console:Perl Debug";    # Separate window for application
-        }
-        else {
-            $console = "Dev:Console";
-        }
-    } ## end elsif ($^O eq 'MacOS')
-
 =item * VMS - use C<sys$command>.
 
 =cut
@@ -1716,14 +1708,7 @@ and then tries to connect the input and output filehandles to it.
 
         # If RemotePort was defined in the options, connect input and output
         # to the socket.
-        require IO::Socket;
-        $OUT = new IO::Socket::INET(
-            Timeout  => '10',
-            PeerAddr => $remoteport,
-            Proto    => 'tcp',
-        );
-        if ( !$OUT ) { die "Unable to connect to remote host: $remoteport\n"; }
-        $IN = $OUT;
+        $IN = $OUT = connect_remoteport();
     } ## end if (defined $remoteport)
 
 =pod
@@ -1922,13 +1907,6 @@ sub DB {
     # Create an alias to the active file magical array to simplify
     # the code here.
     local (*dbline) = $main::{ '_<' . $filename };
-
-    # we need to check for pseudofiles on Mac OS (these are files
-    # not attached to a filename, but instead stored in Dev:Pseudo)
-    if ( $^O eq 'MacOS' && $#dbline < 0 ) {
-        $filename_ini = $filename = 'Dev:Pseudo';
-        *dbline = $main::{ '_<' . $filename };
-    }
 
     # Last line in the program.
     local $max = $#dbline;
@@ -6022,7 +6000,7 @@ sub setterm {
     # Load Term::Readline, but quietly; don't debug it and don't trace it.
     local $frame = 0;
     local $doret = -2;
-    eval { require Term::ReadLine } or die $@;
+    require Term::ReadLine;
 
     # If noTTY is set, but we have a TTY name, go ahead and hook up to it.
     if ($notty) {
@@ -6040,14 +6018,14 @@ sub setterm {
 
         # We don't have a TTY - try to find one via Term::Rendezvous.
         else {
-            eval "require Term::Rendezvous;" or die;
+            require Term::Rendezvous;
 
             # See if we have anything to pass to Term::Rendezvous.
             # Use $HOME/.perldbtty$$ if not.
             my $rv = $ENV{PERLDB_NOTTY} || "$ENV{HOME}/.perldbtty$$";
 
             # Rendezvous and get the filehandles.
-            my $term_rv = new Term::Rendezvous $rv;
+            my $term_rv = Term::Rendezvous->new( $rv );
             $IN  = $term_rv->IN;
             $OUT = $term_rv->OUT;
         } ## end else [ if ($tty)
@@ -6060,12 +6038,12 @@ sub setterm {
 
     # If we shouldn't use Term::ReadLine, don't.
     if ( !$rl ) {
-        $term = new Term::ReadLine::Stub 'perldb', $IN, $OUT;
+        $term = Term::ReadLine::Stub->new( 'perldb', $IN, $OUT );
     }
 
     # We're using Term::ReadLine. Get all the attributes for this terminal.
     else {
-        $term = new Term::ReadLine 'perldb', $IN, $OUT;
+        $term = Term::ReadLine->new( 'perldb', $IN, $OUT );
 
         $rl_attribs = $term->Attribs;
         $rl_attribs->{basic_word_break_characters} .= '-:+/*,[])}'
@@ -6135,10 +6113,37 @@ is tasked with doing all the necessary operating system mojo to get a new
 TTY (and probably another window) and to direct the new debugger to read and
 write there.
 
-The debugger provides C<get_fork_TTY> functions which work for X Windows,
-OS/2, and Mac OS X. Other systems are not supported. You are encouraged
-to write C<get_fork_TTY> functions which work for I<your> platform
-and contribute them.
+The debugger provides C<get_fork_TTY> functions which work for TCP
+socket servers, X Windows, OS/2, and Mac OS X. Other systems are not
+supported. You are encouraged to write C<get_fork_TTY> functions which
+work for I<your> platform and contribute them.
+
+=head3 C<socket_get_fork_TTY>
+
+=cut 
+
+sub connect_remoteport {
+    require IO::Socket;
+
+    my $socket = IO::Socket::INET->new(
+        Timeout  => '10',
+        PeerAddr => $remoteport,
+        Proto    => 'tcp',
+    );
+    if ( ! $socket ) {
+        die "Unable to connect to remote host: $remoteport\n";
+    }
+    return $socket;
+}
+
+sub socket_get_fork_TTY {
+    $tty = $IN = $OUT = connect_remoteport();
+
+    # Do I need to worry about setting $term?
+
+    reset_IN_OUT( $IN, $OUT );
+    return '';
+}
 
 =head3 C<xterm_get_fork_TTY>
 
@@ -6172,12 +6177,12 @@ qq[3>&1 xterm -title "Daughter Perl debugger $pids $name" -e sh -c 'tty 1>&3;\
 
     # We need $term defined or we can not switch to the newly created xterm
     if ($tty ne '' && !defined $term) {
-        eval { require Term::ReadLine } or die $@;
+        require Term::ReadLine;
         if ( !$rl ) {
-            $term = new Term::ReadLine::Stub 'perldb', $IN, $OUT;
+            $term = Term::ReadLine::Stub->new( 'perldb', $IN, $OUT );
         }
         else {
-            $term = new Term::ReadLine 'perldb', $IN, $OUT;
+            $term = Term::ReadLine->new( 'perldb', $IN, $OUT );
         }
     }
     # There's our new TTY.
@@ -6682,7 +6687,7 @@ sub parse_options {
                 local \$doret = -2; 
                 require '$optionRequire{$option}';
                 1;
-               } || die    # XXX: shouldn't happen
+               } || die $@   # XXX: shouldn't happen
           if defined $optionRequire{$option}
           && defined $val;
 
@@ -7599,14 +7604,20 @@ sub print_help {
 
 This routine does a lot of gyrations to be sure that the pager is C<less>.
 It checks for C<less> masquerading as C<more> and records the result in
-C<$ENV{LESS}> so we don't have to go through doing the stats again.
+C<$fixed_less> so we don't have to go through doing the stats again.
 
 =cut
 
 sub fix_less {
 
+    my $config_less = eval {
+       require Config;
+       $Config::Config{less};
+    };
+    return $config_less if $config_less;
+
     # We already know if this is set.
-    return if defined $ENV{LESS} && $ENV{LESS} =~ /r/;
+    return if $fixed_less;
 
     # Pager is less for sure.
     my $is_less = $pager =~ /\bless\b/;
@@ -7625,7 +7636,7 @@ sub fix_less {
 
     # changes environment!
     # 'r' added so we don't do (slow) stats again.
-    $ENV{LESS} .= 'r' if $is_less;
+    $fixed_less = 1 if $is_less;
 } ## end sub fix_less
 
 =head1 DIE AND WARN MANAGEMENT
@@ -8040,7 +8051,7 @@ Just checks the contents of C<$^O> and sets the C<$doccmd> global accordingly.
 =cut
 
 sub setman {
-    $doccmd = $^O !~ /^(?:MSWin32|VMS|os2|dos|amigaos|riscos|MacOS|NetWare)\z/s
+    $doccmd = $^O !~ /^(?:MSWin32|VMS|os2|dos|amigaos|riscos|NetWare)\z/s
       ? "man"         # O Happy Day!
       : "perldoc";    # Alas, poor unfortunates
 } ## end sub setman
@@ -8639,7 +8650,7 @@ if PadWalker could be loaded.
 
 =cut
 
-        if (not $text =~ /::/ and eval "require PadWalker; 1" and not $@ ) {
+        if (not $text =~ /::/ and eval { require PadWalker } ) {
             my $level = 1;
             while (1) {
                 my @info = caller($level);

@@ -117,17 +117,15 @@ PP(pp_regcomp)
 	sv_setpvs(tmpstr, "");
 	while (++MARK <= SP) {
 	    SV *msv = *MARK;
-	    if (PL_amagic_generation) {
-		SV *sv;
+	    SV *sv;
 
-		tryAMAGICregexp(msv);
+	    tryAMAGICregexp(msv);
 
-		if ((SvAMAGIC(tmpstr) || SvAMAGIC(msv)) &&
-		    (sv = amagic_call(tmpstr, msv, concat_amg, AMGf_assign)))
-		{
-		   sv_setsv(tmpstr, sv);
-		   continue;
-		}
+	    if ((SvAMAGIC(tmpstr) || SvAMAGIC(msv)) &&
+		(sv = amagic_call(tmpstr, msv, concat_amg, AMGf_assign)))
+	    {
+	       sv_setsv(tmpstr, sv);
+	       continue;
 	    }
 	    sv_catsv(tmpstr, msv);
 	}
@@ -176,8 +174,9 @@ PP(pp_regcomp)
 	PM_SETRE(pm, re);
     }
     else {
-	STRLEN len;
-	const char *t = SvOK(tmpstr) ? SvPV_const(tmpstr, len) : "";
+	STRLEN len = 0;
+	const char *t = SvOK(tmpstr) ? SvPV_nomg_const(tmpstr, len) : "";
+
 	re = PM_GETRE(pm);
 	assert (re != (REGEXP*) &PL_sv_undef);
 
@@ -215,10 +214,14 @@ PP(pp_regcomp)
 		const char *const p = SvPV(tmpstr, len);
 		tmpstr = newSVpvn_flags(p, len, SVs_TEMP);
 	    }
+	    else if (SvAMAGIC(tmpstr)) {
+		/* make a copy to avoid extra stringifies */
+		tmpstr = newSVpvn_flags(t, len, SVs_TEMP | SvUTF8(tmpstr));
+	    }
 
- 		if (eng) 
+	    if (eng)
 	        PM_SETRE(pm, CALLREGCOMP_ENG(eng, tmpstr, pm_flags));
-		else
+	    else
 	        PM_SETRE(pm, CALLREGCOMP(tmpstr, pm_flags));
 
 	    PL_reginterp_cnt = 0;	/* XXXX Be extra paranoid - needed
@@ -1635,8 +1638,8 @@ Perl_die_unwind(pTHX_ SV *msv)
 		 * supposed to trap errors. So now that we've popped the
 		 * EVAL that pp_require pushed, and processed the error
 		 * message, rethrow the error */
-		DIE(aTHX_ "%sCompilation failed in require",
-		    *msg ? msg : "Unknown error\n");
+		Perl_croak(aTHX_ "%sCompilation failed in require",
+			   *msg ? msg : "Unknown error\n");
 	    }
 	    if (in_eval & EVAL_KEEPERR) {
 		Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "\t(in cleanup) %s",
@@ -2911,6 +2914,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
     int runtime;
     CV* runcv = NULL;	/* initialise to avoid compiler warnings */
     STRLEN len;
+    bool need_catch;
 
     PERL_ARGS_ASSERT_SV_COMPILE_2OP;
 
@@ -2962,11 +2966,14 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
     PL_op->op_flags = 0;			/* Avoid uninit warning. */
     PUSHBLOCK(cx, CXt_EVAL|(IN_PERL_COMPILETIME ? 0 : CXp_REAL), SP);
     PUSHEVAL(cx, 0);
+    need_catch = CATCH_GET;
+    CATCH_SET(TRUE);
 
     if (runtime)
 	(void) doeval(G_SCALAR, startop, runcv, PL_curcop->cop_seq);
     else
 	(void) doeval(G_SCALAR, startop, PL_compcv, PL_cop_seqmax);
+    CATCH_SET(need_catch);
     POPBLOCK(cx,PL_curpm);
     POPEVAL(cx);
 
@@ -3127,6 +3134,8 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	PL_in_eval |= EVAL_KEEPERR;
     else
 	CLEAR_ERRSV();
+
+    CALL_BLOCK_HOOKS(eval, saveop);
 
     /* note that yyparse() may raise an exception, e.g. C<BEGIN{die}>,
      * so honour CATCH_GET and trap it here if necessary */
@@ -3362,21 +3371,20 @@ PP(pp_require)
 	}
 
 	/* We do this only with "use", not "require" or "no". */
-	if (PL_compcv &&
-		!(cUNOP->op_first->op_private & OPpCONST_NOVER) &&
-	  /* If we request a version >= 5.9.5, load feature.pm with the
-	   * feature bundle that corresponds to the required version. */
-		vcmp(sv, sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
-	    SV *const importsv = vnormal(sv);
-	    *SvPVX_mutable(importsv) = ':';
-	    ENTER_with_name("load_feature");
-	    Perl_load_module(aTHX_ 0, newSVpvs("feature"), NULL, importsv, NULL);
-	    LEAVE_with_name("load_feature");
-	}
-	/* If a version >= 5.11.0 is requested, strictures are on by default! */
-	if (PL_compcv &&
-		vcmp(sv, sv_2mortal(upg_version(newSVnv(5.011000), FALSE))) >= 0) {
-	    PL_hints |= (HINT_STRICT_REFS | HINT_STRICT_SUBS | HINT_STRICT_VARS);
+	if (PL_compcv && !(cUNOP->op_first->op_private & OPpCONST_NOVER)) {
+	    /* If we request a version >= 5.9.5, load feature.pm with the
+	     * feature bundle that corresponds to the required version. */
+	    if (vcmp(sv, sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
+		SV *const importsv = vnormal(sv);
+		*SvPVX_mutable(importsv) = ':';
+		ENTER_with_name("load_feature");
+		Perl_load_module(aTHX_ 0, newSVpvs("feature"), NULL, importsv, NULL);
+		LEAVE_with_name("load_feature");
+	    }
+	    /* If a version >= 5.11.0 is requested, strictures are on by default! */
+	    if (vcmp(sv, sv_2mortal(upg_version(newSVnv(5.011000), FALSE))) >= 0) {
+		PL_hints |= (HINT_STRICT_REFS | HINT_STRICT_SUBS | HINT_STRICT_VARS);
+	    }
 	}
 
 	RETPUSHYES;
@@ -3468,11 +3476,6 @@ PP(pp_require)
 			count = call_sv(loader, G_ARRAY);
 		    SPAGAIN;
 
-		    /* Adjust file name if the hook has set an %INC entry */
-		    svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
-		    if (svp)
-			tryname = SvPV_nolen_const(*svp);
-
 		    if (count > 0) {
 			int i = 0;
 			SV *arg;
@@ -3533,6 +3536,12 @@ PP(pp_require)
 		    PUTBACK;
 		    FREETMPS;
 		    LEAVE_with_name("call_INC");
+
+		    /* Adjust file name if the hook has set an %INC entry.
+		       This needs to happen after the FREETMPS above.  */
+		    svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
+		    if (svp)
+			tryname = SvPV_nolen_const(*svp);
 
 		    if (tryrsfp) {
 			hook_sv = dirsv;
@@ -3626,39 +3635,39 @@ PP(pp_require)
 	    }
 	}
     }
-    SAVECOPFILE_FREE(&PL_compiling);
-    CopFILE_set(&PL_compiling, tryrsfp ? tryname : name);
+    if (tryrsfp) {
+	SAVECOPFILE_FREE(&PL_compiling);
+	CopFILE_set(&PL_compiling, tryname);
+    }
     SvREFCNT_dec(namesv);
     if (!tryrsfp) {
 	if (PL_op->op_type == OP_REQUIRE) {
-	    const char *msgstr = name;
 	    if(errno == EMFILE) {
-		SV * const msg
-		    = sv_2mortal(Perl_newSVpvf(aTHX_ "%s:   %s", msgstr,
-					       Strerror(errno)));
-		msgstr = SvPV_nolen_const(msg);
+		/* diag_listed_as: Can't locate %s */
+		DIE(aTHX_ "Can't locate %s:   %s", name, Strerror(errno));
 	    } else {
 	        if (namesv) {			/* did we lookup @INC? */
 		    AV * const ar = GvAVn(PL_incgv);
 		    I32 i;
-		    SV * const msg = sv_2mortal(Perl_newSVpvf(aTHX_ 
-			"%s in @INC%s%s (@INC contains:",
-			msgstr,
-			(instr(msgstr, ".h ")
-			 ? " (change .h to .ph maybe?)" : ""),
-			(instr(msgstr, ".ph ")
-			 ? " (did you run h2ph?)" : "")
-							      ));
-		    
+		    SV *const inc = newSVpvs_flags("", SVs_TEMP);
 		    for (i = 0; i <= AvFILL(ar); i++) {
-			sv_catpvs(msg, " ");
-			sv_catsv(msg, *av_fetch(ar, i, TRUE));
+			sv_catpvs(inc, " ");
+			sv_catsv(inc, *av_fetch(ar, i, TRUE));
 		    }
-		    sv_catpvs(msg, ")");
-		    msgstr = SvPV_nolen_const(msg);
-		}    
+
+		    /* diag_listed_as: Can't locate %s */
+		    DIE(aTHX_
+			"Can't locate %s in @INC%s%s (@INC contains:%" SVf ")",
+			name,
+			(memEQ(name + len - 2, ".h", 3)
+			 ? " (change .h to .ph maybe?) (did you run h2ph?)" : ""),
+			(memEQ(name + len - 3, ".ph", 4)
+			 ? " (did you run h2ph?)" : ""),
+			inc
+			);
+		}
 	    }
-	    DIE(aTHX_ "Can't locate %s", msgstr);
+	    DIE(aTHX_ "Can't locate %s", name);
 	}
 
 	RETPUSHUNDEF;
@@ -3762,6 +3771,15 @@ PP(pp_entereval)
 	saved_hh = MUTABLE_HV(SvREFCNT_inc(POPs));
     }
     sv = POPs;
+    if (!SvPOK(sv)) {
+	/* make sure we've got a plain PV (no overload etc) before testing
+	 * for taint. Making a copy here is probably overkill, but better
+	 * safe than sorry */
+	STRLEN len;
+	const char * const p = SvPV_const(sv, len);
+
+	sv = newSVpvn_flags(p, len, SVs_TEMP | SvUTF8(sv));
+    }
 
     TAINT_IF(SvTAINTED(sv));
     TAINT_PROPER("eval");

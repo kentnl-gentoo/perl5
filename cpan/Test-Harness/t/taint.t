@@ -1,7 +1,7 @@
 #!/usr/bin/perl -w
 
 BEGIN {
-    unshift @INC, 't/lib';
+        unshift @INC, 't/lib';
 }
 
 # Test that options in PERL5OPT are propogated to tainted tests

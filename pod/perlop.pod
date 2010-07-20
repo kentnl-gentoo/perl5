@@ -1017,25 +1017,91 @@ from the next line.  This allows you to write:
 The following escape sequences are available in constructs that interpolate
 and in transliterations.
 X<\t> X<\n> X<\r> X<\f> X<\b> X<\a> X<\e> X<\x> X<\0> X<\c> X<\N> X<\N{}>
+X<\o{}>
 
     Sequence    Note  Description
-    \t                tab             (HT, TAB)
-    \n                newline         (NL)
-    \r                return          (CR)
-    \f                form feed       (FF)
-    \b                backspace       (BS)
-    \a                alarm (bell)    (BEL)
-    \e                escape          (ESC)
-    \033              octal char      (example: ESC)
-    \x1b              hex char        (example: ESC)
-    \x{263a}          wide hex char   (example: SMILEY)
-    \c[          [1]  control char    (example: chr(27))
-    \N{name}     [2]  named Unicode character
-    \N{U+263D}   [3]  Unicode character (example: FIRST QUARTER MOON)
+    \t                tab               (HT, TAB)
+    \n                newline           (NL)
+    \r                return            (CR)
+    \f                form feed         (FF)
+    \b                backspace         (BS)
+    \a                alarm (bell)      (BEL)
+    \e                escape            (ESC)
+    \x{263a}     [1]  hex char          (example: SMILEY)
+    \x1b         [2]  restricted range hex char (example: ESC)
+    \N{name}     [3]  named Unicode character
+    \N{U+263D}   [4]  Unicode character (example: FIRST QUARTER MOON)
+    \c[          [5]  control char      (example: chr(27))
+    \o{23072}    [6]  octal char        (example: SMILEY)
+    \033         [7]  restricted range octal char  (example: ESC)
 
 =over 4
 
 =item [1]
+
+The result is the character whose ordinal is the hexadecimal number between
+the braces.  If the ordinal is 0x100 and above, the character will be the
+Unicode character corresponding to the ordinal.  If the ordinal is between
+0 and 0xFF, the rules for which character it represents are the same as for
+L<restricted hex chars|/[2]>.
+
+Only hexadecimal digits are valid between the braces. If an invalid
+character is encountered, a warning will be issued and the invalid
+character and all subsequent characters (valid or invalid) within the
+braces will be discarded.
+
+If there are no valid digits between the braces, the generated character is
+the NULL character (C<\x{00}>).  However, an explicit empty brace (C<\x{}>)
+will not cause a warning.
+
+=item [2]
+
+The result is a single-byte character whose ordinal is in the range 0x00 to
+0xFF.
+
+Only hexadecimal digits are valid following C<\x>.  When C<\x> is followed
+by less than two valid digits, any valid digits will be zero-padded.  This
+means that C<\x7> will be interpreted as C<\x07> and C<\x> alone will be
+interpreted as C<\x00>.  Except at the end of a string, having less than
+two valid digits will result in a warning.  Note that while the warning
+says the illegal character is ignored, it is only ignored as part of the
+escape and will still be used as the subsequent character in the string.
+For example:
+
+  Original    Result    Warns?
+  "\x7"       "\x07"    no
+  "\x"        "\x00"    no
+  "\x7q"      "\x07q"   yes
+  "\xq"       "\x00q"   yes
+
+The B<run-time> interpretation of single-byte characters depends on the
+platform and on pragmata in effect.  On EBCDIC platforms the character is
+treated as native to the platform's code page.  On other platforms, the
+representation and semantics (sort order and which characters are upper
+case, lower case, digit, non-digit, etc.) depends on the current
+L<S<C<locale>>|perllocale> settings at run-time.
+
+However, when L<C<S<use feature 'unicode_strings'>>|feature> is in effect
+and both L<C<S<use bytes>>|bytes> and L<C<S<use locale>>|locale> are not,
+characters from 0x80 to 0xff are treated as Unicode code points from
+the Latin-1 Supplement block.
+
+Note that the locale semantics of single-byte characters in a regular
+expression are determined when the regular expression is compiled, not when
+the regular expression is used.  When a regular expression is interpolated
+into another regular expression -- any prior semantics are ignored and only
+current locale matters for the resulting regular expression.
+
+=item [3]
+
+For documentation of C<\N{name}>, see L<charnames>.
+
+=item [4]
+
+C<\N{U+I<wide hex char>}> means the Unicode character whose Unicode ordinal
+number is I<wide hex char>.
+
+=item [5]
 
 The character following C<\c> is mapped to some other character as shown in the
 table:
@@ -1070,14 +1136,35 @@ the 7th bit (0x40).
 
 To get platform independent controls, you can use C<\N{...}>.
 
-=item [2]
+=item [6]
 
-For documentation of C<\N{name}>, see L<charnames>.
+The result is the character whose ordinal is the octal number between the
+braces.
 
-=item [3]
+If a character that isn't an octal digit is encountered, a warning is raised,
+and the value is based on the octal digits before it, discarding it and all
+following characters up to the closing brace.  It is a fatal error if there are
+no octal digits at all.
 
-C<\N{U+I<wide hex char>}> means the Unicode character whose Unicode ordinal
-number is I<wide hex char>.
+=item [7]
+
+The result is the character whose ordinal is the given three digit octal
+number.  Some contexts allow 2 or even 1 digit, but any usage without exactly
+three digits, the first being a zero, may give unintended results.  (For
+example, see L<perlrebackslash/Octal escapes>.)  Starting in Perl 5.14, you may
+use C<\o{}> instead which avoids all these problems.  Otherwise, it is best to
+use this construct only for ordinals C<\077> and below, remembering to pad to
+the left with zeros to make three digits.  For larger ordinals, either use
+C<\o{}> , or convert to someething else, such as to hex and use C<\x{}>
+instead.
+
+A backslash followed by a non-octal digit in a bracketed character class
+(C<[\8]> or C<[\9]>) will be interpreted as a NULL character and the digit.
+Having fewer than 3 digits may lead to a misleading warning message that says
+that what follows is ignored.  For example, C<"\128"> in the ASCII character set
+is equivalent to the two characters C<"\n8">, but the warning C<Illegal octal
+digit '8' ignored> will be thrown.  To avoid this warning, make sure to pad
+your octal number with C<0>s: C<"\0128">.
 
 =back
 
@@ -1443,7 +1530,7 @@ made.  Otherwise it returns false (specifically, the empty string).
 If the C</r> (non-destructive) option is used then it will perform the
 substitution on a copy of the string and return the copy whether or not a
 substitution occurred. The original string will always remain unchanged in
-this case. The copy will always be a plain string, even If the input is an
+this case. The copy will always be a plain string, even if the input is an
 object or a tied variable.
 
 If no string is specified via the C<=~> or C<!~> operator, the C<$_>

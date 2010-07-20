@@ -10,7 +10,7 @@ BEGIN { *warnif = \&warnings::warnif }
 
 our(@EXPORT, @EXPORT_OK, %EXPORT_TAGS);
 
-our $VERSION = '1.02';
+our $VERSION = '1.03';
 
 my @fields;
 BEGIN { 
@@ -45,9 +45,6 @@ BEGIN {
 
 # from doio.c
 sub _ingroup {
-
-    $^O eq "MacOS"  and return 1;
-    
     my ($gid, $eff)   = @_;
 
     # I am assuming that since VMS doesn't have getgroups(2), $) will

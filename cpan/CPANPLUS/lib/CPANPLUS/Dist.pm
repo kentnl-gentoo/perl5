@@ -514,7 +514,7 @@ sub _resolve_prereqs {
             my $sub = CPANPLUS::Module->can(
                         'module_is_supplied_with_perl_core' );
             my $core = $sub->( $mod );
-            unless ( $core ) {
+            unless ( defined $core ) {
                error( loc( "No such module '%1' found on CPAN", $mod ) );
                next;
             }
@@ -611,10 +611,10 @@ sub _resolve_prereqs {
         ### part of core?
         if( $modobj->package_is_perl_core ) {
             error(loc("Prerequisite '%1' is perl-core (%2) -- not ".
-                      "installing that. Aborting install",
+                      "installing that. -- Note that the overall ".
+                      "install may fail due to this.",
                       $modobj->module, $modobj->package ) );
-            $flag++;
-            last;
+            next;
         }
 
         ### circular dependency code ###
@@ -672,7 +672,7 @@ sub _resolve_prereqs {
     keys %$prereqs;
 
     ### chdir back to where we started
-    chdir $original_wd;
+    $cb->_chdir( dir => $original_wd );
 
     return 1 unless $flag;
     return;

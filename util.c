@@ -1638,6 +1638,22 @@ Perl_croak(pTHX_ const char *pat, ...)
 }
 
 /*
+=for apidoc Am|void|croak_no_modify
+
+Exactly equivalent to C<Perl_croak(aTHX_ "%s", PL_no_modify)>, but generates
+terser object code than using C<Perl_croak>. Less code used on exception code
+paths reduces CPU cache pressure.
+
+=cut
+*/
+
+void
+Perl_croak_no_modify(pTHX)
+{
+    Perl_croak(aTHX_ "%s", PL_no_modify);
+}
+
+/*
 =for apidoc Am|void|warn_sv|SV *baseex
 
 This is an XS interface to Perl's C<warn> function.
@@ -3888,7 +3904,7 @@ Perl_report_evil_fh(pTHX_ const GV *gv, const IO *io, I32 op)
 char
 Perl_grok_bslash_c(pTHX_ const char source, const bool output_warning)
 {
-    
+
     U8 result;
 
     if (! isASCII(source)) {
@@ -3917,6 +3933,72 @@ Perl_grok_bslash_c(pTHX_ const char source, const bool output_warning)
     }
 
     return result;
+}
+
+char *
+Perl_grok_bslash_o(pTHX_ const char *s, UV *uv, STRLEN *len, const bool output_warning)
+{
+
+/*  Documentation to be supplied when interface nailed down finally
+ *  This returns NULL on success, otherwise a pointer to an internal constant
+ *  error message.  On input:
+ *	s   points to a string that begins with o, and the previous character was
+ *	    a backslash.
+ *	uv  points to a UV that will hold the output value
+ *	len will point to the next character in the string past the end of this
+ *	    construct
+ *	output_warning says whether to output any warning messages, or suppress
+ *	    them
+ */
+    char* e;
+    STRLEN numbers_len;
+    I32 flags = PERL_SCAN_ALLOW_UNDERSCORES
+		| PERL_SCAN_DISALLOW_PREFIX
+		/* XXX Until the message is improved in grok_oct, handle errors
+		 * ourselves */
+	        | PERL_SCAN_SILENT_ILLDIGIT;
+
+    PERL_ARGS_ASSERT_GROK_BSLASH_O;
+
+
+    assert(*s == 'o');
+    s++;
+
+    if (*s != '{') {
+	*len = 1;	/* Move past the o */
+	return "Missing braces on \\o{}";
+    }
+
+    e = strchr(s, '}');
+    if (!e) {
+	*len = 2;	/* Move past the o{ */
+	return "Missing right brace on \\o{";
+    }
+
+    /* Return past the '}' no matter what is inside the braces */
+    *len = e - s + 2;	/* 2 = 1 for the o + 1 for the '}' */
+
+    s++;    /* Point to first digit */
+
+    numbers_len = e - s;
+    if (numbers_len == 0) {
+	return "Number with no digits";
+    }
+
+    *uv = NATIVE_TO_UNI(grok_oct(s, &numbers_len, &flags, NULL));
+    /* Note that if has non-octal, will ignore everything starting with that up
+     * to the '}' */
+
+    if (output_warning && numbers_len != (STRLEN) (e - s)) {
+	Perl_ck_warner(aTHX_ packWARN(WARN_DIGIT),
+	/* diag_listed_as: Non-octal character '%c'.  Resolved as "%s" */
+		       "Non-octal character '%c'.  Resolved as \"\\o{%.*s}\"",
+		       *(s + numbers_len),
+		       (int) numbers_len,
+		       s);
+    }
+
+    return NULL;
 }
 
 /* To workaround core dumps from the uninitialised tm_zone we get the
@@ -4218,7 +4300,7 @@ Perl_my_strftime(pTHX_ const char *fmt, int sec, int min, int hour, int mday, in
     const int fmtlen = strlen(fmt);
     int bufsize = fmtlen + buflen;
 
-    Newx(buf, bufsize, char);
+    Renew(buf, bufsize, char);
     while (buf) {
       buflen = strftime(buf, bufsize, fmt, &mytm);
       if (buflen > 0 && buflen < bufsize)

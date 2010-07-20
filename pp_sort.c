@@ -1568,7 +1568,7 @@ PP(pp_sort)
 	}
 	else {
 	    if (SvREADONLY(av))
-		Perl_croak(aTHX_ "%s", PL_no_modify);
+		Perl_croak_no_modify(aTHX);
 	    else
 		SvREADONLY_on(av);
 	    p1 = p2 = AvARRAY(av);
@@ -1678,9 +1678,9 @@ PP(pp_sort)
 		    sort_flags);
 
 	    if (!(flags & OPf_SPECIAL)) {
-		LEAVESUB(cv);
-		if (!is_xsub)
-		    CvDEPTH(cv)--;
+		SV *sv;
+		POPSUB(cx, sv);
+		LEAVESUB(sv);
 	    }
 	    POPBLOCK(cx,PL_curpm);
 	    PL_stack_sp = newsp;
@@ -1771,8 +1771,13 @@ S_sortcv_stacked(pTHX_ SV *const a, SV *const b)
 
     PERL_ARGS_ASSERT_SORTCV_STACKED;
 
+    if (AvREAL(av)) {
+	av_clear(av);
+	AvREAL_off(av);
+	AvREIFY_on(av);
+    }
     if (AvMAX(av) < 1) {
-	SV** ary = AvALLOC(av);
+	SV **ary = AvALLOC(av);
 	if (AvARRAY(av) != ary) {
 	    AvMAX(av) += AvARRAY(av) - AvALLOC(av);
 	    AvARRAY(av) = ary;
@@ -1781,6 +1786,7 @@ S_sortcv_stacked(pTHX_ SV *const a, SV *const b)
 	    AvMAX(av) = 1;
 	    Renew(ary,2,SV*);
 	    AvARRAY(av) = ary;
+	    AvALLOC(av) = ary;
 	}
     }
     AvFILLp(av) = 1;
@@ -1852,7 +1858,7 @@ S_sv_i_ncmp(pTHX_ SV *const a, SV *const b)
 }
 
 #define tryCALL_AMAGICbin(left,right,meth) \
-    (PL_amagic_generation && (SvAMAGIC(left)||SvAMAGIC(right))) \
+    (SvAMAGIC(left)||SvAMAGIC(right)) \
 	? amagic_call(left, right, CAT2(meth,_amg), 0) \
 	: NULL;
 

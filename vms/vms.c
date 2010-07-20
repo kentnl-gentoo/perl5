@@ -89,83 +89,6 @@ struct item_list_3 {
 };
 #pragma member_alignment restore
 
-/* More specific prototype than in starlet_c.h makes programming errors
-   more visible.
- */
-#ifdef sys$getdviw
-#undef sys$getdviw
-int sys$getdviw
-       (unsigned long efn,
-	unsigned short chan,
-	const struct dsc$descriptor_s * devnam,
-	const struct item_list_3 * itmlst,
-	void * iosb,
-	void * (astadr)(unsigned long),
-	void * astprm,
-	void * nullarg);
-#endif
-
-#ifdef sys$get_security
-#undef sys$get_security
-int sys$get_security
-       (const struct dsc$descriptor_s * clsnam,
-	const struct dsc$descriptor_s * objnam,
-	const unsigned int *objhan,
-	unsigned int flags,
-	const struct item_list_3 * itmlst,
-	unsigned int * contxt,
-	const unsigned int * acmode);
-#endif
-
-#ifdef sys$set_security
-#undef sys$set_security
-int sys$set_security
-       (const struct dsc$descriptor_s * clsnam,
-	const struct dsc$descriptor_s * objnam,
-	const unsigned int *objhan,
-	unsigned int flags,
-	const struct item_list_3 * itmlst,
-	unsigned int * contxt,
-	const unsigned int * acmode);
-#endif
-
-#ifdef lib$find_image_symbol
-#undef lib$find_image_symbol
-int lib$find_image_symbol
-       (const struct dsc$descriptor_s * imgname,
-	const struct dsc$descriptor_s * symname,
-	void * symval,
-	const struct dsc$descriptor_s * defspec,
-	unsigned long flag);
-#endif
-
-#ifdef lib$rename_file
-#undef lib$rename_file
-int lib$rename_file
-       (const struct dsc$descriptor_s * old_file_dsc,
-	const struct dsc$descriptor_s * new_file_dsc,
-	const struct dsc$descriptor_s * default_file_dsc,
-	const struct dsc$descriptor_s * related_file_dsc,
-	const unsigned long * flags,
-	void * (success)(const struct dsc$descriptor_s * old_dsc,
-			 const struct dsc$descriptor_s * new_dsc,
-			 const void *),
-	void * (error)(const struct dsc$descriptor_s * old_dsc,
-		       const struct dsc$descriptor_s * new_dsc,
-		       const int * rms_sts,
-		       const int * rms_stv,
-		       const int * error_src,
-		       const void * usr_arg),
-	int (confirm)(const struct dsc$descriptor_s * old_dsc,
-		      const struct dsc$descriptor_s * new_dsc,
-		      const void * old_fab,
-		      const void * usr_arg),
-	void * user_arg,
-	struct dsc$descriptor_s * old_result_name_dsc,
-	struct dsc$descriptor_s * new_result_name_dsc,
-	unsigned long * file_scan_context);
-#endif
-
 #if __CRTL_VER >= 70300000 && !defined(__VAX)
 
 static int set_feature_default(const char *name, int value)
@@ -775,16 +698,6 @@ int scnt;
     }
     return count;
 }
-
-#ifdef sys$filescan
-#undef sys$filescan
-int sys$filescan
-   (const struct dsc$descriptor_s * srcstr,
-    struct filescan_itmlst_2 * valuelist,
-    unsigned long * fldflags,
-    struct dsc$descriptor_s *auxout,
-    unsigned short * retlen);
-#endif
 
 /* vms_split_path - Verify that the input file specification is a
  * VMS format file specification, and provide pointers to the components of
@@ -2484,6 +2397,7 @@ Perl_my_kill(int pid, int sig)
     dTHX;
     int iss;
     unsigned int code;
+#define sys$sigprc SYS$SIGPRC
     int sys$sigprc(unsigned int *pidadr,
                      struct dsc$descriptor_s *prcname,
                      unsigned int code);
@@ -5427,10 +5341,6 @@ Stat_t dst_st;
 	   }
 
 	    /* The source must be a file specification */
-	    vms_dir_file = PerlMem_malloc(VMS_MAXRSS);
-	    if (vms_dir_file == NULL)
-		_ckvmssts_noperl(SS$_INSFMEM);
-
 	    ret_str = do_fileify_dirspec(vms_dst, vms_dir_file, 0, NULL);
 	    if (ret_str == NULL) {
 		PerlMem_free(vms_dst);
@@ -12997,6 +12907,8 @@ Perl_flex_stat_int(pTHX_ const char *fspec, Stat_t *statbufp, int lstat_flag)
     }
     /* If we were successful, leave errno where we found it */
     if (retval == 0) RESTORE_ERRNO;
+    PerlMem_free(temp_fspec);
+    PerlMem_free(fileified);
     return retval;
 
 }  /* end of flex_stat_int() */
@@ -14316,9 +14228,10 @@ struct statbuf_t {
             if (mode) {
                 *mode = statbuf.old_st_mode;
             }
-	    return 0;
 	}
     }
+    PerlMem_free(temp_fspec);
+    PerlMem_free(fileified);
     return sts;
 }
 
@@ -14964,6 +14877,7 @@ const long vms_cc_features = (const long)set_features;
 ** Force a reference to LIB$INITIALIZE to ensure it
 ** exists in the image.
 */
+#define lib$initialize LIB$INITIALIZE
 int lib$initialize(void);
 #ifdef __DECC
 #pragma extern_model strict_refdef

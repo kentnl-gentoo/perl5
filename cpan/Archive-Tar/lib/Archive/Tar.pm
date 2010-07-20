@@ -23,7 +23,7 @@ require Exporter;
 use strict;
 use vars qw[$DEBUG $error $VERSION $WARN $FOLLOW_SYMLINK $CHOWN $CHMOD
             $DO_NOT_USE_PREFIX $HAS_PERLIO $HAS_IO_STRING $SAME_PERMISSIONS
-            $INSECURE_EXTRACT_MODE @ISA @EXPORT
+            $INSECURE_EXTRACT_MODE $ZERO_PAD_NUMBERS @ISA @EXPORT
          ];
 
 @ISA                    = qw[Exporter];
@@ -31,12 +31,13 @@ use vars qw[$DEBUG $error $VERSION $WARN $FOLLOW_SYMLINK $CHOWN $CHMOD
 $DEBUG                  = 0;
 $WARN                   = 1;
 $FOLLOW_SYMLINK         = 0;
-$VERSION                = "1.54";
+$VERSION                = "1.64";
 $CHOWN                  = 1;
 $CHMOD                  = 1;
 $SAME_PERMISSIONS       = $> == 0 ? 1 : 0;
 $DO_NOT_USE_PREFIX      = 0;
 $INSECURE_EXTRACT_MODE  = 0;
+$ZERO_PAD_NUMBERS       = 0;
 
 BEGIN {
     use Config;
@@ -211,10 +212,15 @@ sub read {
 sub _get_handle {
     my $self     = shift;
     my $file     = shift;   return unless defined $file;
-                            return $file if ref $file;
     my $compress = shift || 0;
     my $mode     = shift || READ_ONLY->( ZLIB ); # default to read only
 
+    ### Check if file is a file handle or IO glob
+    if ( ref $file ) {
+	return $file if eval{ *$file{IO} };
+	return $file if eval{ $file->isa(q{IO::Handle}) };
+	$file = q{}.$file;
+    }
 
     ### get a FH opened to the right class, so we can use it transparently
     ### throughout the program
@@ -300,6 +306,7 @@ sub _read_tar {
 
     my $count   = $opts->{limit}    || 0;
     my $filter  = $opts->{filter};
+    my $filter_cb = $opts->{filter_cb};
     my $extract = $opts->{extract}  || 0;
 
     ### set a cap on the amount of files to extract ###
@@ -317,6 +324,7 @@ sub _read_tar {
     while( $handle->read( $chunk, HEAD ) ) {
         ### IO::Zlib doesn't support this yet
         my $offset = eval { tell $handle } || 'unknown';
+        $@ = '';
 
         unless( $read++ ) {
             my $gzip = GZIP_MAGIC_NUM;
@@ -369,7 +377,7 @@ sub _read_tar {
         }
 
         ### ignore labels:
-        ### http://www.gnu.org/manual/tar/html_node/tar_139.html
+        ### http://www.gnu.org/software/tar/manual/html_chapter/Media.html#SEC159
         next if $entry->is_label;
 
         if( length $entry->type and ($entry->is_file || $entry->is_longlink) ) {
@@ -390,18 +398,55 @@ sub _read_tar {
 
             $data = $entry->get_content_by_ref;
 
-            ### just read everything into memory
-            ### can't do lazy loading since IO::Zlib doesn't support 'seek'
-            ### this is because Compress::Zlib doesn't support it =/
-            ### this reads in the whole data in one read() call.
-            if( $handle->read( $$data, $block ) < $block ) {
-                $self->_error( qq[Read error on tarfile (missing data) '].
-                                    $entry->full_path ."' at offset $offset" );
-                next LOOP;
-            }
+	    my $skip = 0;
+	    ### skip this entry if we're filtering
+	    if ($filter && $entry->name !~ $filter) {
+		$skip = 1;
 
-            ### throw away trailing garbage ###
-            substr ($$data, $entry->size) = "" if defined $$data;
+	    ### skip this entry if it's a pax header. This is a special file added
+	    ### by, among others, git-generated tarballs. It holds comments and is
+	    ### not meant for extracting. See #38932: pax_global_header extracted
+	    } elsif ( $entry->name eq PAX_HEADER ) {
+		$skip = 2;
+	    } elsif ($filter_cb && ! $filter_cb->($entry)) {
+		$skip = 3;
+	    }
+
+	    if ($skip) {
+		#
+		# Since we're skipping, do not allocate memory for the
+		# whole file.  Read it 64 BLOCKS at a time.  Do not 
+		# complete the skip yet because maybe what we read is a
+		# longlink and it won't get skipped after all
+		#
+		my $amt = $block;
+		while ($amt > 0) {
+		    $$data = '';
+		    my $this = 64 * BLOCK;
+		    $this = $amt if $this > $amt;
+		    if( $handle->read( $$data, $this ) < $this ) {
+			$self->_error( qq[Read error on tarfile (missing data) '].
+					    $entry->full_path ."' at offset $offset" );
+			next LOOP;
+		    }
+		    $amt -= $this;
+		}
+		### throw away trailing garbage ###
+		substr ($$data, $entry->size) = "" if defined $$data && $block < 64 * BLOCK;
+            } else {
+
+		### just read everything into memory
+		### can't do lazy loading since IO::Zlib doesn't support 'seek'
+		### this is because Compress::Zlib doesn't support it =/
+		### this reads in the whole data in one read() call.
+		if ( $handle->read( $$data, $block ) < $block ) {
+		    $self->_error( qq[Read error on tarfile (missing data) '].
+                                    $entry->full_path ."' at offset $offset" );
+		    next LOOP;
+		}
+		### throw away trailing garbage ###
+		substr ($$data, $entry->size) = "" if defined $$data;
+            }
 
             ### part II of the @LongLink munging -- need to do /after/
             ### the checksum check.
@@ -442,21 +487,23 @@ sub _read_tar {
             undef $real_name;
         }
 
-        ### skip this entry if we're filtering
-        if ($filter && $entry->name !~ $filter) {
-            next LOOP;
+	if ($filter && $entry->name !~ $filter) {
+	    next LOOP;
 
-        ### skip this entry if it's a pax header. This is a special file added
-        ### by, among others, git-generated tarballs. It holds comments and is
-        ### not meant for extracting. See #38932: pax_global_header extracted
-        } elsif ( $entry->name eq PAX_HEADER ) {
-            next LOOP;
+	### skip this entry if it's a pax header. This is a special file added
+	### by, among others, git-generated tarballs. It holds comments and is
+	### not meant for extracting. See #38932: pax_global_header extracted
+	} elsif ( $entry->name eq PAX_HEADER ) {
+	    next LOOP;
+	} elsif ($filter_cb && ! $filter_cb->($entry)) {
+	    next LOOP;
+	}
+
+        if ( $extract && !$entry->is_longlink
+                      && !$entry->is_unknown
+                      && !$entry->is_label ) {
+            $self->_extract_file( $entry ) or return;
         }
-
-        $self->_extract_file( $entry ) if $extract
-                                            && !$entry->is_longlink
-                                            && !$entry->is_unknown
-                                            && !$entry->is_label;
 
         ### Guard against tarfiles with garbage at the end
 	    last LOOP if $entry->name eq '';
@@ -1242,8 +1289,13 @@ sub write {
                         : $HAS_PERLIO ? $dummy
                         : do { seek $handle, 0, 0; local $/; <$handle> };
 
-    ### make sure to close the handle;
-    close $handle;
+    ### make sure to close the handle if we created it
+    if ( $file ne $handle ) {
+	unless( close $handle ) {
+	    $self->_error( qq[Could not write tar] );
+	    return;
+	}
+    }
 
     return $rv;
 }
@@ -1273,7 +1325,7 @@ sub _format_tar_entry {
     my $l = PREFIX_LENGTH; # is ambiguous otherwise...
     substr ($prefix, 0, -$l) = "" if length $prefix >= PREFIX_LENGTH;
 
-    my $f1 = "%06o"; my $f2  = "%11o";
+    my $f1 = "%06o"; my $f2  = $ZERO_PAD_NUMBERS ? "%011o" : "%11o";
 
     ### this might be optimizable with a 'changed' flag in the file objects ###
     my $tar = pack (
@@ -1296,6 +1348,7 @@ sub _format_tar_entry {
     );
 
     ### add the checksum ###
+    my $checksum_fmt = $ZERO_PAD_NUMBERS ? "%06o\0" : "%06o\0";
     substr($tar,148,7) = sprintf("%6o\0", unpack("%16C*",$tar));
 
     return $tar;
@@ -1873,6 +1926,13 @@ your perl to be able to  write stringified archives.
 
 Don't change this variable unless you B<really> know what you're
 doing.
+
+=head2 $Archive::Tar::ZERO_PAD_NUMBERS
+
+This variable holds a boolean indicating if we will create
+zero padded numbers for C<size>, C<mtime> and C<checksum>. 
+The default is C<0>, indicating that we will create space padded
+numbers. Added for compatibility with C<busybox> implementations.
 
 =head1 FAQ
 

@@ -487,8 +487,7 @@ PP(pp_die)
     else {
 	exsv = newSVpvs_flags("Died", SVs_TEMP);
     }
-    die_sv(exsv);
-    RETURN;
+    return die_sv(exsv);
 }
 
 /* I/O. */
@@ -677,7 +676,6 @@ badexit:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_func, "pipe");
-    return NORMAL;
 #endif
 }
 
@@ -1045,7 +1043,7 @@ PP(pp_sselect)
 	    if (SvIsCOW(sv))
 		sv_force_normal_flags(sv, 0);
 	    if (SvREADONLY(sv) && !(SvPOK(sv) && SvCUR(sv) == 0))
-		DIE(aTHX_ "%s", PL_no_modify);
+		Perl_croak_no_modify(aTHX);
 	}
 	if (!SvPOK(sv)) {
 	    Perl_ck_warner(aTHX_ packWARN(WARN_MISC), "Non-string passed as bitmask");
@@ -1168,7 +1166,6 @@ PP(pp_sselect)
     RETURN;
 #else
     DIE(aTHX_ "select not implemented");
-    return NORMAL;
 #endif
 }
 
@@ -2378,7 +2375,6 @@ PP(pp_flock)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "flock()");
-    return NORMAL;
 #endif
 }
 
@@ -2431,7 +2427,6 @@ PP(pp_socket)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "socket");
-    return NORMAL;
 #endif
 }
 
@@ -2493,7 +2488,6 @@ PP(pp_sockpair)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "socketpair");
-    return NORMAL;
 #endif
 }
 
@@ -2525,7 +2519,6 @@ nuts:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_sock_func, "bind");
-    return NORMAL;
 #endif
 }
 
@@ -2556,7 +2549,6 @@ nuts:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_sock_func, "connect");
-    return NORMAL;
 #endif
 }
 
@@ -2583,7 +2575,6 @@ nuts:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_sock_func, "listen");
-    return NORMAL;
 #endif
 }
 
@@ -2663,7 +2654,6 @@ badexit:
 
 #else
     DIE(aTHX_ PL_no_sock_func, "accept");
-    return NORMAL;
 #endif
 }
 
@@ -2688,7 +2678,6 @@ nuts:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_sock_func, "shutdown");
-    return NORMAL;
 #endif
 }
 
@@ -2766,7 +2755,6 @@ nuts2:
 
 #else
     DIE(aTHX_ PL_no_sock_func, PL_op_desc[PL_op->op_type]);
-    return NORMAL;
 #endif
 }
 
@@ -2831,7 +2819,6 @@ nuts2:
 
 #else
     DIE(aTHX_ PL_no_sock_func, PL_op_desc[PL_op->op_type]);
-    return NORMAL;
 #endif
 }
 
@@ -3146,7 +3133,7 @@ PP(pp_ftrread)
 #endif
     }
 
-    result = my_stat();
+    result = my_stat_flags(0);
     SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
@@ -3174,7 +3161,7 @@ PP(pp_ftis)
 
     STACKED_FTEST_CHECK;
 
-    result = my_stat();
+    result = my_stat_flags(0);
     SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
@@ -3246,7 +3233,7 @@ PP(pp_ftrowned)
 
     STACKED_FTEST_CHECK;
 
-    result = my_stat();
+    result = my_stat_flags(0);
     SPAGAIN;
     if (result < 0)
 	RETPUSHUNDEF;
@@ -3316,7 +3303,7 @@ PP(pp_ftlink)
     I32 result;
 
     tryAMAGICftest_MG('l');
-    result = my_lstat();
+    result = my_lstat_flags(0);
     SPAGAIN;
 
     if (result < 0)
@@ -3333,6 +3320,8 @@ PP(pp_fttty)
     int fd;
     GV *gv;
     SV *tmpsv = NULL;
+    char *name = NULL;
+    STRLEN namelen;
 
     tryAMAGICftest_MG('t');
 
@@ -3344,15 +3333,17 @@ PP(pp_fttty)
 	gv = MUTABLE_GV(POPs);
     else if (SvROK(TOPs) && isGV(SvRV(TOPs)))
 	gv = MUTABLE_GV(SvRV(POPs));
-    else
-	gv = gv_fetchsv(tmpsv = POPs, 0, SVt_PVIO);
+    else {
+	tmpsv = POPs;
+	name = SvPV_nomg(tmpsv, namelen);
+	gv = gv_fetchpvn_flags(name, namelen, SvUTF8(tmpsv), SVt_PVIO);
+    }
 
     if (GvIO(gv) && IoIFP(GvIOp(gv)))
 	fd = PerlIO_fileno(IoIFP(GvIOp(gv)));
     else if (tmpsv && SvOK(tmpsv)) {
-	const char *tmps = SvPV_nolen_const(tmpsv);
-	if (isDIGIT(*tmps))
-	    fd = atoi(tmps);
+	if (isDIGIT(*name))
+	    fd = atoi(name);
 	else 
 	    RETPUSHUNDEF;
     }
@@ -3453,7 +3444,7 @@ PP(pp_fttext)
       really_filename:
 	PL_statgv = NULL;
 	PL_laststype = OP_STAT;
-	sv_setpv(PL_statname, SvPV_nolen_const(sv));
+	sv_setpv(PL_statname, SvPV_nomg_const_nolen(sv));
 	if (!(fp = PerlIO_open(SvPVX_const(PL_statname), "r"))) {
 	    if (ckWARN(WARN_NEWLINE) && strchr(SvPV_nolen_const(PL_statname),
 					       '\n'))
@@ -3633,7 +3624,6 @@ PP(pp_chroot)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "chroot");
-    return NORMAL;
 #endif
 }
 
@@ -3708,7 +3698,6 @@ PP(pp_link)
 {
     /* Have neither.  */
     DIE(aTHX_ PL_no_func, PL_op_desc[PL_op->op_type]);
-    return NORMAL;
 }
 #endif
 
@@ -3923,7 +3912,6 @@ nope:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_dir_func, "opendir");
-    return NORMAL;
 #endif
 }
 
@@ -3931,7 +3919,6 @@ PP(pp_readdir)
 {
 #if !defined(Direntry_t) || !defined(HAS_READDIR)
     DIE(aTHX_ PL_no_dir_func, "readdir");
-    return NORMAL;
 #else
 #if !defined(I_DIRENT) && !defined(VMS)
     Direntry_t *readdir (DIR *);
@@ -4010,7 +3997,6 @@ nope:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_dir_func, "telldir");
-    return NORMAL;
 #endif
 }
 
@@ -4036,7 +4022,6 @@ nope:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_dir_func, "seekdir");
-    return NORMAL;
 #endif
 }
 
@@ -4060,7 +4045,6 @@ nope:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_dir_func, "rewinddir");
-    return NORMAL;
 #endif
 }
 
@@ -4093,7 +4077,6 @@ nope:
     RETPUSHUNDEF;
 #else
     DIE(aTHX_ PL_no_dir_func, "closedir");
-    return NORMAL;
 #endif
 }
 
@@ -4140,7 +4123,6 @@ PP(pp_fork)
     RETURN;
 #  else
     DIE(aTHX_ PL_no_func, "fork");
-    return NORMAL;
 #  endif
 #endif
 }
@@ -4170,7 +4152,6 @@ PP(pp_wait)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "wait");
-    return NORMAL;
 #endif
 }
 
@@ -4201,7 +4182,6 @@ PP(pp_waitpid)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "waitpid");
-    return NORMAL;
 #endif
 }
 
@@ -4407,7 +4387,6 @@ PP(pp_getppid)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "getppid");
-    return NORMAL;
 #endif
 }
 
@@ -4429,7 +4408,6 @@ PP(pp_getpgrp)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "getpgrp()");
-    return NORMAL;
 #endif
 }
 
@@ -4463,7 +4441,6 @@ PP(pp_setpgrp)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "setpgrp()");
-    return NORMAL;
 #endif
 }
 
@@ -4477,7 +4454,6 @@ PP(pp_getpriority)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "getpriority()");
-    return NORMAL;
 #endif
 }
 
@@ -4493,7 +4469,6 @@ PP(pp_setpriority)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "setpriority()");
-    return NORMAL;
 #endif
 }
 
@@ -4544,7 +4519,6 @@ PP(pp_tms)
     RETURN;
 #   else
     DIE(aTHX_ "times not implemented");
-    return NORMAL;
 #   endif
 #endif /* HAS_TIMES */
 }
@@ -4661,7 +4635,6 @@ PP(pp_alarm)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "alarm");
-    return NORMAL;
 #endif
 }
 
@@ -4731,7 +4704,6 @@ PP(pp_semget)
     RETURN;
 #else
     DIE(aTHX_ "System V IPC is not implemented on this machine");
-    return NORMAL;
 #endif
 }
 
@@ -4867,7 +4839,6 @@ PP(pp_ghostent)
     RETURN;
 #else
     DIE(aTHX_ PL_no_sock_func, "gethostent");
-    return NORMAL;
 #endif
 }
 
@@ -4941,7 +4912,6 @@ PP(pp_gnetent)
     RETURN;
 #else
     DIE(aTHX_ PL_no_sock_func, "getnetent");
-    return NORMAL;
 #endif
 }
 
@@ -5002,7 +4972,6 @@ PP(pp_gprotoent)
     RETURN;
 #else
     DIE(aTHX_ PL_no_sock_func, "getprotoent");
-    return NORMAL;
 #endif
 }
 
@@ -5078,7 +5047,6 @@ PP(pp_gservent)
     RETURN;
 #else
     DIE(aTHX_ PL_no_sock_func, "getservent");
-    return NORMAL;
 #endif
 }
 
@@ -5090,7 +5058,6 @@ PP(pp_shostent)
     RETSETYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "sethostent");
-    return NORMAL;
 #endif
 }
 
@@ -5102,7 +5069,6 @@ PP(pp_snetent)
     RETSETYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "setnetent");
-    return NORMAL;
 #endif
 }
 
@@ -5114,7 +5080,6 @@ PP(pp_sprotoent)
     RETSETYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "setprotoent");
-    return NORMAL;
 #endif
 }
 
@@ -5126,7 +5091,6 @@ PP(pp_sservent)
     RETSETYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "setservent");
-    return NORMAL;
 #endif
 }
 
@@ -5139,7 +5103,6 @@ PP(pp_ehostent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "endhostent");
-    return NORMAL;
 #endif
 }
 
@@ -5152,7 +5115,6 @@ PP(pp_enetent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "endnetent");
-    return NORMAL;
 #endif
 }
 
@@ -5165,7 +5127,6 @@ PP(pp_eprotoent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "endprotoent");
-    return NORMAL;
 #endif
 }
 
@@ -5178,7 +5139,6 @@ PP(pp_eservent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_sock_func, "endservent");
-    return NORMAL;
 #endif
 }
 
@@ -5412,7 +5372,6 @@ PP(pp_gpwent)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, PL_op_desc[PL_op->op_type]);
-    return NORMAL;
 #endif
 }
 
@@ -5424,7 +5383,6 @@ PP(pp_spwent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_func, "setpwent");
-    return NORMAL;
 #endif
 }
 
@@ -5436,7 +5394,6 @@ PP(pp_epwent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_func, "endpwent");
-    return NORMAL;
 #endif
 }
 
@@ -5511,7 +5468,6 @@ PP(pp_ggrent)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, PL_op_desc[PL_op->op_type]);
-    return NORMAL;
 #endif
 }
 
@@ -5523,7 +5479,6 @@ PP(pp_sgrent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_func, "setgrent");
-    return NORMAL;
 #endif
 }
 
@@ -5535,7 +5490,6 @@ PP(pp_egrent)
     RETPUSHYES;
 #else
     DIE(aTHX_ PL_no_func, "endgrent");
-    return NORMAL;
 #endif
 }
 
@@ -5551,7 +5505,6 @@ PP(pp_getlogin)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "getlogin");
-    return NORMAL;
 #endif
 }
 
@@ -5650,7 +5603,6 @@ PP(pp_syscall)
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "syscall");
-    return NORMAL;
 #endif
 }
 
