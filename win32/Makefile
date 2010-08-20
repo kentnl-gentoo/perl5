@@ -1,8 +1,8 @@
 #
-# Makefile to build perl on Windows NT using Microsoft NMAKE.
+# Makefile to build perl on Windows using Microsoft NMAKE.
 # Supported compilers:
-#	Visual C++ 2.0 or later
-#	MS Platform SDK 64-bit compiler and tools
+#	Microsoft Visual C++ 6.0 or later
+#	Windows SDK 64-bit compiler and tools
 #
 # This is set up to build a perl.exe that runs off a shared library
 # (perl513.dll).  Also makes individual DLLs for the XS extensions.
@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.13.3
+#INST_VER	= \5.13.4
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -95,16 +95,14 @@ USE_LARGE_FILES	= define
 #
 # uncomment exactly one of the following
 #
-# Visual C++ 2.x
-#CCTYPE		= MSVC20
-# Visual C++ > 2.x and < 6.x
-#CCTYPE		= MSVC
 # Visual C++ 6.x (aka Visual C++ 98)
 CCTYPE		= MSVC60
 # Visual C++ Toolkit 2003 (aka Visual C++ 7.x) (free command-line tools)
 #CCTYPE		= MSVC70FREE
 # Visual C++ .NET 2003 (aka Visual C++ 7.x) (full version)
 #CCTYPE		= MSVC70
+# Windows Server 2003 SP1 Platform SDK (April 2005)
+#CCTYPE		= SDK2003SP1
 # Visual C++ 2005 Express Edition (aka Visual C++ 8.x) (free version)
 #CCTYPE		= MSVC80FREE
 # Visual C++ 2005 (aka Visual C++ 8.x) (full version)
@@ -120,17 +118,6 @@ CCTYPE		= MSVC60
 # with all compilers that are known to have a working optimizer.
 #
 #CFG		= Debug
-
-#
-# uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
-# It has patches that fix known bugs in older versions of MSVCRT.DLL.
-# This currently requires VC 5.0 with Service Pack 3 or later.
-# Get it from CPAN at http://www.cpan.org/authors/id/D/DO/DOUGL/
-# and follow the directions in the package to install.
-#
-# Not recommended if you have VC 6.x and you're not running Windows 9x.
-#
-#USE_PERLCRT	= define
 
 #
 # uncomment to enable linking with setargv.obj under the Visual C
@@ -197,7 +184,6 @@ CRYPT_SRC	= fcrypt.c
 # so you may have to set CCHOME explicitly (spaces in the path name should
 # not be quoted)
 #
-#CCHOME		= f:\msvc20
 CCHOME		= $(MSVCDIR)
 CCINCDIR	= $(CCHOME)\include
 CCLIBDIR	= $(CCHOME)\lib
@@ -216,16 +202,6 @@ BUILDOPT	= $(BUILDOPTEXTRA)
 #
 #BUILDOPT	= $(BUILDOPT) -DPERL_HASH_SEED_EXPLICIT
 #BUILDOPT	= $(BUILDOPT) -DNO_HASH_SEED
-
-#
-# This should normally be disabled.  Adding -DPERL_POLLUTE enables support
-# for old symbols by default, at the expense of extreme pollution.  You most
-# probably just want to build modules that won't compile with
-#         perl Makefile.PL POLLUTE=1
-# instead of enabling this.  Please report such modules to the respective
-# authors.
-#
-#BUILDOPT	= $(BUILDOPT) -DPERL_POLLUTE
 
 #
 # This should normally be disabled.  Enabling it will disable the File::Glob
@@ -306,10 +282,6 @@ USE_PERLIO	= undef
 USE_LARGE_FILES	= undef
 !ENDIF
 
-!IF "$(USE_PERLCRT)" == ""
-USE_PERLCRT	= undef
-!ENDIF
-
 !IF "$(USE_IMP_SYS)$(USE_MULTI)" == "defineundef"
 USE_MULTI	= define
 !ENDIF
@@ -348,6 +320,13 @@ WIN64			= define
 WIN64			= undef
 !ENDIF
 !ENDIF
+!ENDIF
+
+# Treat 64-bit MSVC60 (doesn't really exist) as SDK2003SP1 because
+# both link against MSVCRT.dll (which is part of Windows itself) and
+# not against a compiler specific versioned runtime.
+!IF "$(WIN64)" == "define" && "$(CCTYPE)" == "MSVC60"
+CCTYPE		= SDK2003SP1
 !ENDIF
 
 ARCHITECTURE = $(PROCESSOR_ARCHITECTURE)
@@ -435,18 +414,10 @@ LOCDEFS		= -DPERLDLL -DPERL_CORE
 SUBSYS		= console
 CXX_FLAG	= -TP -EHsc
 
-!IF "$(USE_PERLCRT)" != "define"
 LIBC	= msvcrt.lib
-!ELSE
-LIBC	= PerlCRT.lib
-!ENDIF
 
 !IF  "$(CFG)" == "Debug"
-!  IF "$(CCTYPE)" == "MSVC20"
-OPTIMIZE	= -Od -MD -Z7 -DDEBUGGING
-!  ELSE
 OPTIMIZE	= -Od -MD -Zi -DDEBUGGING
-!  ENDIF
 LINK_DBG	= -debug
 !ELSE
 OPTIMIZE	= -MD -Zi -DNDEBUG
@@ -471,7 +442,7 @@ OPTIMIZE	= $(OPTIMIZE) -O1
 
 !IF "$(WIN64)" == "define"
 DEFINES		= $(DEFINES) -DWIN64 -DCONSERVATIVE
-OPTIMIZE	= $(OPTIMIZE) -Wp64 -fp:precise
+OPTIMIZE	= $(OPTIMIZE) -fp:precise
 !ENDIF
 
 # For now, silence VC++ 8.x's and 9.x's warnings about "unsafe" CRT functions
@@ -481,13 +452,26 @@ OPTIMIZE	= $(OPTIMIZE) -Wp64 -fp:precise
 DEFINES		= $(DEFINES) -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE
 !ENDIF
 
-# Use the MSVCRT read() fix if the PerlCRT was not chosen, but only when using
-# VC++ 6.x or earlier. Later versions use MSVCR70.dll, MSVCR71.dll, etc, which
-# do not require the fix.
-!IF "$(CCTYPE)" == "MSVC20" || "$(CCTYPE)" == "MSVC" || "$(CCTYPE)" == "MSVC60" 
-!  IF "$(USE_PERLCRT)" != "define"
-BUILDOPT	= $(BUILDOPT) -DPERL_MSVCRT_READFIX
+# In VS 2005 (VC++ 8.0) Microsoft changes time_t from 32-bit to
+# 64-bit, even in 32-bit mode.  It also provides the _USE_32BIT_TIME_T
+# preprocessor option to revert back to the old functionality for
+# backward compatibility.  We define this symbol here for older 32-bit
+# compilers only (which aren't using it at all) for the sole purpose
+# of getting it into $Config{ccflags}.  That way if someone builds
+# Perl itself with e.g. VC6 but later installs an XS module using VC8
+# the time_t types will still be compatible.
+!IF "$(WIN64)" == "undef"
+!  IF "$(CCTYPE)" == "MSVC60" || \
+      "$(CCTYPE)" == "MSVC70" || "$(CCTYPE)" == "MSVC70FREE"
+BUILDOPT	= $(BUILDOPT) -D_USE_32BIT_TIME_T
 !  ENDIF
+!ENDIF
+
+# Use the MSVCRT read() fix only when using VC++ 6.x or earlier. Later
+# versions use MSVCR70.dll, MSVCR71.dll, etc, which do not require the
+# fix.
+!IF "$(CCTYPE)" == "MSVC60" 
+BUILDOPT	= $(BUILDOPT) -DPERL_MSVCRT_READFIX
 !ENDIF
 
 LIBBASEFILES	= $(CRYPT_LIB) \
@@ -496,15 +480,14 @@ LIBBASEFILES	= $(CRYPT_LIB) \
 		netapi32.lib uuid.lib ws2_32.lib mpr.lib winmm.lib \
 		version.lib odbc32.lib odbccp32.lib comctl32.lib
 
-# The 64 bit Platform SDK compilers contain a runtime library that doesn't
-# include the buffer overrun verification code used by the /GS switch.
+# The 64 bit Windows Server 2003 SP1 SDK compilers link against MSVCRT.dll, which
+# doesn't include the buffer overrun verification code used by the /GS switch.
 # Since the code links against libraries that are compiled with /GS, this
-# "security cookie verification" must be included via bufferoverlow.lib.
-!IF "$(WIN64)" == "define"
+# "security cookie verification" code must be included via bufferoverflow.lib.
+!IF "$(WIN64)" == "define" && "$(CCTYPE)" == "SDK2003SP1"
 LIBBASEFILES    = $(LIBBASEFILES) bufferoverflowU.lib
 !ENDIF
 
-# we add LIBC here, since we may be using PerlCRT.dll
 LIBFILES	= $(LIBBASEFILES) $(LIBC)
 
 #EXTRACFLAGS	= -nologo -GF -W4 -wd4127 -wd4706
@@ -839,7 +822,7 @@ CFG_VARS	=					\
 		"LINK_FLAGS=$(LINK_FLAGS:"=\")"		\
 		"optimize=$(OPTIMIZE:"=\")"
 
-ICWD = -I..\cpan\Cwd -I..\cpan\Cwd\lib
+ICWD = -I..\dist\Cwd -I..\dist\Cwd\lib
 
 #
 # Top targets
@@ -848,11 +831,6 @@ ICWD = -I..\cpan\Cwd -I..\cpan\Cwd\lib
 all : .\config.h ..\git_version.h $(GLOBEXE) $(MINIMOD) $(CONFIGPM) \
 	$(UNIDATAFILES) MakePPPort $(PERLEXE) $(X2P) Extensions_nonxs Extensions $(PERLSTATIC)
 	@echo	Everything is up to date. '$(MAKE_BARE) test' to run test suite.
-
-..\regcharclass.h : ..\Porting\regcharclass.pl
-	cd ..
-	miniperl Porting\regcharclass.pl
-	cd win32
 
 regnodes : ..\regnodes.h
 
@@ -1120,7 +1098,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl5133delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl5134delta.pod ..\pod\perldelta.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
@@ -1266,7 +1244,7 @@ inst_lib : $(CONFIGPM)
 
 $(UNIDATAFILES) ..\pod\perluniprops.pod : $(MINIPERL) $(CONFIGPM) ..\lib\unicore\mktables Extensions_nonxs
 	cd ..\lib\unicore && \
-	..\$(MINIPERL) -I.. -I..\..\cpan\Cwd\lib -I..\..\cpan\Cwd mktables -P ..\..\pod -maketest -makelist -p -check $@ $(FIRSTUNIFILE)
+	..\$(MINIPERL) -I.. -I..\..\dist\Cwd\lib -I..\..\dist\Cwd mktables -P ..\..\pod -maketest -makelist -p -check $@ $(FIRSTUNIFILE)
 
 minitest : $(MINIPERL) $(GLOBEXE) $(CONFIGPM) utils $(UNIDATAFILES)
 	$(XCOPY) $(MINIPERL) ..\t\$(NULL)

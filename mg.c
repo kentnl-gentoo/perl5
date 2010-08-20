@@ -762,7 +762,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 {
     dVAR;
     register I32 paren;
-    register char *s = NULL;
+    register const char *s = NULL;
     register REGEXP *rx;
     const char * const remaining = mg->mg_ptr + 1;
     const char nextchar = *remaining;
@@ -1385,6 +1385,7 @@ Perl_despatch_signals(pTHX)
     PL_sig_pending = 0;
     for (sig = 1; sig < SIG_SIZE; sig++) {
 	if (PL_psig_pend[sig]) {
+	    dSAVE_ERRNO;
 	    PERL_BLOCKSIG_ADD(set, sig);
  	    PL_psig_pend[sig] = 0;
 	    PERL_BLOCKSIG_BLOCK(set);
@@ -1394,6 +1395,7 @@ Perl_despatch_signals(pTHX)
 	    (*PL_sighandlerp)(sig);
 #endif
 	    PERL_BLOCKSIG_UNBLOCK(set);
+	    RESTORE_ERRNO;
 	}
     }
 }
@@ -2253,7 +2255,8 @@ int
 Perl_magic_killbackrefs(pTHX_ SV *sv, MAGIC *mg)
 {
     PERL_ARGS_ASSERT_MAGIC_KILLBACKREFS;
-    return Perl_sv_kill_backrefs(aTHX_ sv, MUTABLE_AV(mg->mg_obj));
+    Perl_sv_kill_backrefs(aTHX_ sv, MUTABLE_AV(mg->mg_obj));
+    return 0;
 }
 
 int

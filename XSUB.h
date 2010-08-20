@@ -243,6 +243,10 @@ Macro to verify that a PM module's $VERSION variable matches the XS
 module's C<XS_VERSION> variable.  This is usually handled automatically by
 C<xsubpp>.  See L<perlxs/"The VERSIONCHECK: Keyword">.
 
+=for apidoc Ams||XS_APIVERSION_BOOTCHECK
+Macro to verify that the perl api version an XS module has been compiled against
+matches the api version of the perl interpreter it's being loaded into.
+
 =head1 Simple Exception Handling Macros
 
 =for apidoc Ams||dXCPT
@@ -293,7 +297,7 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 #define newXSproto(a,b,c,d)	newXS_flags(a,b,c,d,0)
 
 #ifdef XS_VERSION
-#  define XS_VERSION_BOOTCHECK \
+#  define XS_VERSION_BOOTCHECK						\
     STMT_START {							\
 	SV *_sv;							\
 	const char *vn = NULL, *module = SvPV_nolen_const(ST(0));	\
@@ -304,24 +308,56 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 	    _sv = get_sv(Perl_form(aTHX_ "%s::%s", module,		\
 				vn = "XS_VERSION"), FALSE);		\
 	    if (!_sv || !SvOK(_sv))					\
-		_sv = get_sv(Perl_form(aTHX_ "%s::%s", module,	\
+		_sv = get_sv(Perl_form(aTHX_ "%s::%s", module,		\
 				    vn = "VERSION"), FALSE);		\
 	}								\
 	if (_sv) {							\
-	    SV *xssv = Perl_newSVpv(aTHX_ XS_VERSION, 0);		\
-	    xssv = new_version(xssv);					\
-	    if ( !sv_derived_from(_sv, "version") )			\
-		_sv = new_version(_sv);				\
-	    if ( vcmp(_sv,xssv) )					\
-		Perl_croak(aTHX_ "%s object version %"SVf" does not match %s%s%s%s %"SVf,\
-		      module, SVfARG(vstringify(xssv)),			\
-		      vn ? "$" : "", vn ? module : "", vn ? "::" : "",	\
-		      vn ? vn : "bootstrap parameter", SVfARG(vstringify(_sv)));\
+	    SV *xpt = NULL;						\
+	    SV *xssv = Perl_newSVpvn(aTHX_ STR_WITH_LEN(XS_VERSION));	\
+	    SV *pmsv = sv_derived_from(_sv, "version")			\
+		? SvREFCNT_inc_simple_NN(_sv)				\
+		: new_version(_sv);					\
+	    xssv = upg_version(xssv, 0);				\
+	    if ( vcmp(pmsv,xssv) ) {	 				\
+		xpt = Perl_newSVpvf(aTHX_ "%s object version %"SVf	\
+				    " does not match %s%s%s%s %"SVf,	\
+				    module,				\
+				    SVfARG(Perl_sv_2mortal(aTHX_ vstringify(xssv))), \
+				    vn ? "$" : "", vn ? module : "",	\
+				    vn ? "::" : "",			\
+				    vn ? vn : "bootstrap parameter",	\
+				    SVfARG(Perl_sv_2mortal(aTHX_ vstringify(pmsv)))); \
+		Perl_sv_2mortal(aTHX_ xpt);				\
+	    }								\
+	    SvREFCNT_dec(xssv);						\
+	    SvREFCNT_dec(pmsv);						\
+	    if (xpt)							\
+		Perl_croak_sv(aTHX_ xpt);				\
 	}                                                               \
     } STMT_END
 #else
 #  define XS_VERSION_BOOTCHECK
 #endif
+
+#define XS_APIVERSION_BOOTCHECK						\
+    STMT_START {							\
+	SV *_xpt = NULL;						\
+	SV *_compver = Perl_newSVpv(aTHX_ "v" PERL_API_VERSION_STRING, 0); \
+	SV *_runver = new_version(PL_apiversion);			\
+	_compver = upg_version(_compver, 0);				\
+	if (vcmp(_compver, _runver)) {					\
+	    _xpt = Perl_newSVpvf(aTHX_ "Perl API version %"SVf		\
+				 " of %s does not match %"SVf,		\
+				 SVfARG(Perl_sv_2mortal(aTHX_ vstringify(_compver))), \
+				 SvPV_nolen_const(ST(0)),		\
+				 SVfARG(Perl_sv_2mortal(aTHX_ vstringify(_runver)))); \
+	    Perl_sv_2mortal(aTHX_ _xpt);				\
+	}								\
+	SvREFCNT_dec(_compver);						\
+	SvREFCNT_dec(_runver);						\
+	if (_xpt)							\
+	    Perl_croak_sv(aTHX_ _xpt);					\
+    } STMT_END
 
 #ifdef NO_XSLOCKS
 #  define dXCPT             dJMPENV; int rEtV = 0
@@ -331,9 +367,9 @@ Rethrows a previously caught exception.  See L<perlguts/"Exception Handling">.
 #  define XCPT_RETHROW      JMPENV_JUMP(rEtV)
 #endif
 
-/* 
-   The DBM_setFilter & DBM_ckFilter macros are only used by 
-   the *DB*_File modules 
+/*
+   The DBM_setFilter & DBM_ckFilter macros are only used by
+   the *DB*_File modules
 */
 
 #define DBM_setFilter(db_type,code)				\

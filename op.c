@@ -4275,6 +4275,7 @@ Perl_newASSIGNOP(pTHX_ I32 flags, OP *left, I32 optype, OP *right)
 	if (PL_eval_start)
 	    PL_eval_start = 0;
 	else if (left->op_type == OP_CONST) {
+	    deprecate("assignment to $[");
 	    /* FIXME for MAD */
 	    /* Result of assignment is always 1 (or we'd be dead already) */
 	    return newSVOP(OP_CONST, 0, newSViv(1));
@@ -5661,7 +5662,7 @@ Perl_newATTRSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     dVAR;
     GV *gv;
     const char *ps;
-    STRLEN ps_len;
+    STRLEN ps_len = 0; /* init it to avoid false uninit warning from icc */
     register CV *cv = NULL;
     SV *const_sv;
     /* If the subroutine has no body, no attributes, and no builtin attributes

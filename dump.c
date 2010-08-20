@@ -1500,7 +1500,8 @@ const struct flag_to_name cv_flags_names[] = {
     {CVf_LVALUE, "LVALUE,"},
     {CVf_METHOD, "METHOD,"},
     {CVf_WEAKOUTSIDE, "WEAKOUTSIDE,"},
-    {CVf_CVGV_RC, "CVGV_RC,"}
+    {CVf_CVGV_RC, "CVGV_RC,"},
+    {CVf_ISXSUB, "ISXSUB,"}
 };
 
 const struct flag_to_name hv_flags_names[] = {
@@ -1625,12 +1626,12 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 
 #ifdef DEBUG_LEAKING_SCALARS
     Perl_dump_indent(aTHX_ level, file,
-	"ALLOCATED at %s:%d %s %s%s; serial %"UVuf"\n",
+	"ALLOCATED at %s:%d %s %s (parent 0x%"UVxf"); serial %"UVuf"\n",
 	sv->sv_debug_file ? sv->sv_debug_file : "(unknown)",
 	sv->sv_debug_line,
 	sv->sv_debug_inpad ? "for" : "by",
 	sv->sv_debug_optype ? PL_op_name[sv->sv_debug_optype]: "(none)",
-	sv->sv_debug_cloned ? " (cloned)" : "",
+	PTR2UV(sv->sv_debug_parent),
 	sv->sv_debug_serial
     );
 #endif
@@ -1733,7 +1734,7 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 		do_hv_dump(level, file, "  OURSTASH", ost);
 	} else {
 	    if (SvMAGIC(sv))
-		do_magic_dump(level, file, SvMAGIC(sv), nest, maxnest, dumpops, pvlim);
+		do_magic_dump(level, file, SvMAGIC(sv), nest+1, maxnest, dumpops, pvlim);
 	}
 	if (SvSTASH(sv))
 	    do_hv_dump(level, file, "  STASH", SvSTASH(sv));
@@ -1884,29 +1885,34 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 		}
 	    }
 	}
-	if (nest < maxnest && !HvEITER_get(sv)) { /* Try to preserve iterator */
-	    HE *he;
-	    HV * const hv = MUTABLE_HV(sv);
-	    int count = maxnest - nest;
+	if (nest < maxnest) {
+	    if (HvEITER_get(sv)) /* preserve iterator */
+		Perl_dump_indent(aTHX_ level, file,
+		    "  (*** Active iterator; skipping element dump ***)\n");
+	    else {
+		HE *he;
+		HV * const hv = MUTABLE_HV(sv);
+		int count = maxnest - nest;
 
-	    hv_iterinit(hv);
-	    while ((he = hv_iternext_flags(hv, HV_ITERNEXT_WANTPLACEHOLDERS))
-                   && count--) {
-		STRLEN len;
-		const U32 hash = HeHASH(he);
-		SV * const keysv = hv_iterkeysv(he);
-		const char * const keypv = SvPV_const(keysv, len);
-		SV * const elt = hv_iterval(hv, he);
+		hv_iterinit(hv);
+		while ((he = hv_iternext_flags(hv, HV_ITERNEXT_WANTPLACEHOLDERS))
+		       && count--) {
+		    STRLEN len;
+		    const U32 hash = HeHASH(he);
+		    SV * const keysv = hv_iterkeysv(he);
+		    const char * const keypv = SvPV_const(keysv, len);
+		    SV * const elt = hv_iterval(hv, he);
 
-		Perl_dump_indent(aTHX_ level+1, file, "Elt %s ", pv_display(d, keypv, len, 0, pvlim));
-		if (SvUTF8(keysv))
-		    PerlIO_printf(file, "[UTF8 \"%s\"] ", sv_uni_display(d, keysv, 6 * SvCUR(keysv), UNI_DISPLAY_QQ));
-		if (HeKREHASH(he))
-		    PerlIO_printf(file, "[REHASH] ");
-		PerlIO_printf(file, "HASH = 0x%"UVxf"\n", (UV)hash);
-		do_sv_dump(level+1, file, elt, nest+1, maxnest, dumpops, pvlim);
+		    Perl_dump_indent(aTHX_ level+1, file, "Elt %s ", pv_display(d, keypv, len, 0, pvlim));
+		    if (SvUTF8(keysv))
+			PerlIO_printf(file, "[UTF8 \"%s\"] ", sv_uni_display(d, keysv, 6 * SvCUR(keysv), UNI_DISPLAY_QQ));
+		    if (HeKREHASH(he))
+			PerlIO_printf(file, "[REHASH] ");
+		    PerlIO_printf(file, "HASH = 0x%"UVxf"\n", (UV)hash);
+		    do_sv_dump(level+1, file, elt, nest+1, maxnest, dumpops, pvlim);
+		}
+		hv_iterinit(hv);		/* Return to status quo */
 	    }
-	    hv_iterinit(hv);		/* Return to status quo */
 	}
 	break;
     case SVt_PVCV:

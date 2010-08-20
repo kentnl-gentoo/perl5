@@ -348,6 +348,7 @@ perl_construct(pTHXx)
     PL_stashcache = newHV();
 
     PL_patchlevel = newSVpvs("v" PERL_VERSION_STRING);
+    PL_apiversion = newSVpvs("v" PERL_API_VERSION_STRING);
 
 #ifdef HAS_MMAP
     if (!PL_mmap_page_size) {
@@ -877,6 +878,7 @@ perl_destruct(pTHXx)
     Safefree(PL_inplace);
     PL_inplace = NULL;
     SvREFCNT_dec(PL_patchlevel);
+    SvREFCNT_dec(PL_apiversion);
 
     if (PL_e_script) {
 	SvREFCNT_dec(PL_e_script);
@@ -1162,7 +1164,8 @@ perl_destruct(pTHXx)
 		    PerlIO_printf(Perl_debug_log, "leaked: sv=0x%p"
 			" flags=0x%"UVxf
 			" refcnt=%"UVuf pTHX__FORMAT "\n"
-			"\tallocated at %s:%d %s %s%s; serial %"UVuf"\n",
+			"\tallocated at %s:%d %s %s (parent 0x%"UVxf");"
+			"serial %"UVuf"\n",
 			(void*)sv, (UV)sv->sv_flags, (UV)sv->sv_refcnt
 			pTHX__VALUE,
 			sv->sv_debug_file ? sv->sv_debug_file : "(unknown)",
@@ -1170,7 +1173,7 @@ perl_destruct(pTHXx)
 			sv->sv_debug_inpad ? "for" : "by",
 			sv->sv_debug_optype ?
 			    PL_op_name[sv->sv_debug_optype]: "(none)",
-			sv->sv_debug_cloned ? " (cloned)" : "",
+			PTR2UV(sv->sv_debug_parent),
 			sv->sv_debug_serial
 		    );
 #ifdef DEBUG_LEAKING_SCALARS_FORK_DUMP
@@ -1660,6 +1663,9 @@ S_Internals_V(pTHX_ CV *cv)
 #  endif
 #  ifdef PERL_DONT_CREATE_GVSV
 			     " PERL_DONT_CREATE_GVSV"
+#  endif
+#  ifdef PERL_EXTERNAL_GLOB
+			     " PERL_EXTERNAL_GLOB"
 #  endif
 #  ifdef PERL_IS_MINIPERL
 			     " PERL_IS_MINIPERL"
@@ -3774,15 +3780,30 @@ S_forbid_setid(pTHX_ const char flag, const bool suidscript) /* g */
 }
 
 void
+Perl_init_dbargs(pTHX)
+{
+    AV *const args = PL_dbargs = GvAV(gv_AVadd((gv_fetchpvs("DB::args",
+							    GV_ADDMULTI,
+							    SVt_PVAV))));
+
+    if (AvREAL(args)) {
+	/* Someone has already created it.
+	   It might have entries, and if we just turn off AvREAL(), they will
+	   "leak" until global destruction.  */
+	av_clear(args);
+    }
+    AvREAL_off(PL_dbargs);	/* XXX should be REIFY (see av.h) */
+}
+
+void
 Perl_init_debugger(pTHX)
 {
     dVAR;
     HV * const ostash = PL_curstash;
 
     PL_curstash = PL_debstash;
-    PL_dbargs = GvAV(gv_AVadd((gv_fetchpvs("DB::args", GV_ADDMULTI,
-					   SVt_PVAV))));
-    AvREAL_off(PL_dbargs);
+
+    Perl_init_dbargs(aTHX);
     PL_DBgv = gv_fetchpvs("DB::DB", GV_ADDMULTI, SVt_PVGV);
     PL_DBline = gv_fetchpvs("DB::dbline", GV_ADDMULTI, SVt_PVAV);
     PL_DBsub = gv_HVadd(gv_fetchpvs("DB::sub", GV_ADDMULTI, SVt_PVHV));

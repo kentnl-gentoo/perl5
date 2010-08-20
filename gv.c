@@ -288,8 +288,17 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 	CV *cv;
 	ENTER;
 	if (has_constant) {
+	    char *name0 = NULL;
+	    if (name[len])
+		/* newCONSTSUB doesn't take a len arg, so make sure we
+		 * give it a \0-terminated string */
+		name0 = savepvn(name,len);
+
 	    /* newCONSTSUB takes ownership of the reference from us.  */
-	    cv = newCONSTSUB(stash, name, has_constant);
+	    cv = newCONSTSUB(stash, (name0 ? name0 : name), has_constant);
+	    assert(GvCV(gv) == cv); /* newCONSTSUB should have set this */
+	    if (name0)
+		Safefree(name0);
 	    /* If this reference was a copy of another, then the subroutine
 	       must have been "imported", by a Perl space assignment to a GV
 	       from a reference to CV.  */
@@ -298,8 +307,8 @@ Perl_gv_init(pTHX_ GV *gv, HV *stash, const char *name, STRLEN len, int multi)
 	} else {
 	    (void) start_subparse(0,0);	/* Create empty CV in compcv. */
 	    cv = PL_compcv;
+	    GvCV(gv) = cv;
 	}
-	GvCV(gv) = cv;
 	LEAVE;
 
         mro_method_changed_in(GvSTASH(gv)); /* sub Foo::bar($) { (shift) } sub ASDF::baz($); *ASDF::baz = \&Foo::bar */

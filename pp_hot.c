@@ -112,6 +112,7 @@ PP(pp_and)
 PP(pp_sassign)
 {
     dVAR; dSP; dPOPTOPssrl;
+    U32 wasfake = 0;
 
     if (PL_op->op_private & OPpASSIGN_BACKWARDS) {
 	SV * const temp = left;
@@ -197,7 +198,14 @@ PP(pp_sassign)
 	}
 
     }
+    /* Allow glob assignments like *$x = ..., which, when the glob has a
+       SVf_FAKE flag, cannot be distinguished from $x = ... without looking
+       at the op tree. */
+    if( SvTYPE(right) == SVt_PVGV && cBINOP->op_last->op_type == OP_RV2GV
+     && (wasfake = SvFLAGS(right) & SVf_FAKE) )
+	SvFLAGS(right) &= ~SVf_FAKE;
     SvSetMagicSV(right, left);
+    if(wasfake) SvFLAGS(right) |= SVf_FAKE;
     SETs(right);
     RETURN;
 }
@@ -310,6 +318,7 @@ PP(pp_padsv)
 PP(pp_readline)
 {
     dVAR;
+    dSP; SvGETMAGIC(TOPs);
     tryAMAGICunTARGET(iter, 0);
     PL_last_in_gv = MUTABLE_GV(*PL_stack_sp--);
     if (!isGV_with_GP(PL_last_in_gv)) {
@@ -2601,10 +2610,13 @@ PP(pp_leavesublv)
 	    MARK = newsp + 1;
 	    EXTEND_MORTAL(1);
 	    if (MARK == SP) {
-		/* Temporaries are bad unless they happen to be elements
-		 * of a tied hash or array */
-		if (SvFLAGS(TOPs) & (SVs_TEMP | SVs_PADTMP | SVf_READONLY) &&
-		    !(SvRMAGICAL(TOPs) && mg_find(TOPs, PERL_MAGIC_tiedelem))) {
+		/* Temporaries are bad unless they happen to have set magic
+		 * attached, such as the elements of a tied hash or array */
+		if ((SvFLAGS(TOPs) & (SVs_TEMP | SVs_PADTMP) ||
+		     (SvFLAGS(TOPs) & (SVf_READONLY | SVf_FAKE))
+		       == SVf_READONLY
+		    ) &&
+		    !SvSMAGICAL(TOPs)) {
 		    LEAVE;
 		    cxstack_ix--;
 		    POPSUB(cx,sv);

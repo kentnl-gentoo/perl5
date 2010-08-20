@@ -2868,7 +2868,7 @@ S_scan_const(pTHX_ char *start)
 		    goto default_action;
 		}
 
-	    /* eg. \132 indicates the octal constant 0x132 */
+	    /* eg. \132 indicates the octal constant 0132 */
 	    case '0': case '1': case '2': case '3':
 	    case '4': case '5': case '6': case '7':
 		{
@@ -2883,10 +2883,11 @@ S_scan_const(pTHX_ char *start)
 	    case 'o':
 		{
 		    STRLEN len;
+		    const char* error;
 
-		    char* error = grok_bslash_o(s, &uv, &len, 1);
+		    bool valid = grok_bslash_o(s, &uv, &len, &error, 1);
 		    s += len;
-		    if (error) {
+		    if (! valid) {
 			yyerror(error);
 			continue;
 		    }
@@ -6204,8 +6205,9 @@ Perl_yylex(pTHX)
 		gvp = 0;
 		if (hgv && tmp != KEY_x && tmp != KEY_CORE)	/* never ambiguous */
 		    Perl_ck_warner(aTHX_ packWARN(WARN_AMBIGUOUS),
-				   "Ambiguous call resolved as CORE::%s(), %s",
-				   GvENAME(hgv), "qualify as such or use &");
+				   "Ambiguous call resolved as CORE::%s(), "
+				   "qualify as such or use &",
+				   GvENAME(hgv));
 	    }
 	}
 
@@ -6493,10 +6495,27 @@ Perl_yylex(pTHX)
 			const char *proto = SvPV_const(MUTABLE_SV(cv), protolen);
 			if (!protolen)
 			    TERM(FUNC0SUB);
-			if ((*proto == '$' || *proto == '_') && proto[1] == '\0')
-			    OPERATOR(UNIOPSUB);
 			while (*proto == ';')
 			    proto++;
+			if (
+			    (
+			        (
+			            *proto == '$' || *proto == '_'
+			         || *proto == '*'
+			        )
+			     && proto[1] == '\0'
+			    )
+			 || (
+			     *proto == '\\' && proto[1] && proto[2] == '\0'
+			    )
+			)
+			    OPERATOR(UNIOPSUB);
+			if (*proto == '\\' && proto[1] == '[') {
+			    const char *p = proto + 2;
+			    while(*p && *p != ']')
+				++p;
+			    if(*p == ']' && !p[1]) OPERATOR(UNIOPSUB);
+			}
 			if (*proto == '&' && *s == '{') {
 			    if (PL_curstash)
 				sv_setpvs(PL_subname, "__ANON__");

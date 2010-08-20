@@ -1,10 +1,10 @@
 #
-# Makefile to build perl on Windows NT using DMAKE.
+# Makefile to build perl on Windows using DMAKE.
 # Supported compilers:
-#	Visual C++ 2.0 or later
+#	Microsoft Visual C++ 6.0 or later
 #	Borland C++ 5.02 or later
-#	MinGW with gcc-2.95.2 or later
-#	MS Platform SDK 64-bit compiler and tools **experimental**
+#	MinGW with gcc-3.2 or later
+#	Windows SDK 64-bit compiler and tools **experimental**
 #
 # This is set up to build a perl.exe that runs off a shared library
 # (perl513.dll).  Also makes individual DLLs for the XS extensions.
@@ -39,7 +39,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.13.3
+#INST_VER	*= \5.13.4
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -97,10 +97,6 @@ USE_LARGE_FILES	*= define
 #
 # uncomment exactly one of the following
 #
-# Visual C++ 2.x
-#CCTYPE		*= MSVC20
-# Visual C++ > 2.x and < 6.x
-#CCTYPE		*= MSVC
 # Visual C++ 6.x (aka Visual C++ 98)
 #CCTYPE		*= MSVC60
 # Visual C++ Toolkit 2003 (aka Visual C++ 7.x) (free command-line tools)
@@ -117,7 +113,7 @@ USE_LARGE_FILES	*= define
 #CCTYPE		*= MSVC90
 # Borland 5.02 or later
 #CCTYPE		*= BORLAND
-# MinGW or mingw-w64 with gcc-2.95.2 or later
+# MinGW or mingw-w64 with gcc-3.2 or later
 CCTYPE		*= GCC
 
 #
@@ -138,17 +134,6 @@ CCTYPE		*= GCC
 # with all compilers that are known to have a working optimizer.
 #
 #CFG		*= Debug
-
-#
-# uncomment to enable use of PerlCRT.DLL when using the Visual C compiler.
-# It has patches that fix known bugs in older versions of MSVCRT.DLL.
-# This currently requires VC 5.0 with Service Pack 3 or later.
-# Get it from CPAN at http://www.cpan.org/authors/id/D/DO/DOUGL/
-# and follow the directions in the package to install.
-#
-# Not recommended if you have VC 6.x and you're not running Windows 9x.
-#
-#USE_PERLCRT	*= define
 
 #
 # uncomment to enable linking with setargv.obj under the Visual C
@@ -273,16 +258,6 @@ BUILDOPT	*= $(BUILDOPTEXTRA)
 #BUILDOPT	+= -DNO_HASH_SEED
 
 #
-# This should normally be disabled.  Adding -DPERL_POLLUTE enables support
-# for old symbols by default, at the expense of extreme pollution.  You most
-# probably just want to build modules that won't compile with
-#         perl Makefile.PL POLLUTE=1
-# instead of enabling this.  Please report such modules to the respective
-# authors.
-#
-#BUILDOPT	+= -DPERL_POLLUTE
-
-#
 # This should normally be disabled.  Enabling it will disable the File::Glob
 # implementation of CORE::glob.
 #
@@ -334,7 +309,6 @@ USE_ITHREADS	*= undef
 USE_IMP_SYS	*= undef
 USE_PERLIO	*= undef
 USE_LARGE_FILES	*= undef
-USE_PERLCRT	*= undef
 
 .IF "$(USE_IMP_SYS)" == "define"
 PERL_MALLOC	= undef
@@ -589,18 +563,10 @@ LOCDEFS		= -DPERLDLL -DPERL_CORE
 SUBSYS		= console
 CXX_FLAG	= -TP -EHsc
 
-.IF "$(USE_PERLCRT)" != "define"
 LIBC	= msvcrt.lib
-.ELSE
-LIBC	= PerlCRT.lib
-.ENDIF
 
 .IF  "$(CFG)" == "Debug"
-.IF "$(CCTYPE)" == "MSVC20"
-OPTIMIZE	= -Od -MD -Z7 -DDEBUGGING
-.ELSE
 OPTIMIZE	= -O1 -MD -Zi -DDEBUGGING
-.ENDIF
 LINK_DBG	= -debug
 .ELSE
 OPTIMIZE	= -MD -Zi -DNDEBUG
@@ -635,13 +601,11 @@ OPTIMIZE	+= -Wp64 -fp:precise
 DEFINES		+= -D_CRT_SECURE_NO_DEPRECATE -D_CRT_NONSTDC_NO_DEPRECATE
 .ENDIF
 
-# Use the MSVCRT read() fix if the PerlCRT was not chosen, but only when using
-# VC++ 6.x or earlier. Later versions use MSVCR70.dll, MSVCR71.dll, etc, which
-# do not require the fix.
-.IF "$(CCTYPE)" == "MSVC20" || "$(CCTYPE)" == "MSVC" || "$(CCTYPE)" == "MSVC60" 
-.IF "$(USE_PERLCRT)" != "define"
+# Use the MSVCRT read() fix only when using VC++ 6.x or earlier. Later
+# versions use MSVCR70.dll, MSVCR71.dll, etc, which do not require the
+# fix.
+.IF "$(CCTYPE)" == "MSVC60" 
 BUILDOPT	+= -DPERL_MSVCRT_READFIX
-.ENDIF
 .ENDIF
 
 LIBBASEFILES	= $(CRYPT_LIB) \
@@ -658,7 +622,6 @@ LIBBASEFILES	= $(CRYPT_LIB) \
 LIBBASEFILES    += bufferoverflowU.lib
 .ENDIF
 
-# we add LIBC here, since we may be using PerlCRT.dll
 LIBFILES	= $(LIBBASEFILES) $(LIBC)
 
 EXTRACFLAGS	= -nologo -GF -W3
@@ -1078,7 +1041,7 @@ ODBCCP32_DLL = $(SystemRoot)\system32\odbccp32.dll
 ODBCCP32_DLL = $(windir)\system\odbccp32.dll
 .ENDIF
 
-ICWD = -I..\cpan\Cwd -I..\cpan\Cwd\lib
+ICWD = -I..\dist\Cwd -I..\dist\Cwd\lib
 
 #
 # Top targets
@@ -1087,9 +1050,6 @@ ICWD = -I..\cpan\Cwd -I..\cpan\Cwd\lib
 all : CHECKDMAKE .\config.h ..\git_version.h $(GLOBEXE) $(MINIPERL) $(MK2)	\
 	$(RIGHTMAKE) $(MINIMOD) $(CONFIGPM) $(UNIDATAFILES) MakePPPort		\
 	$(PERLEXE) $(X2P) Extensions Extensions_nonxs $(PERLSTATIC)
-
-..\regcharclass.h : ..\Porting\regcharclass.pl
-	cd .. && miniperl Porting\regcharclass.pl && cd win32
 
 regnodes : ..\regnodes.h
 
@@ -1503,7 +1463,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl5133delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl5134delta.pod ..\pod\perldelta.pod
 	cd ..\pod && $(MAKE) -f ..\win32\pod.mak converters
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..
@@ -1648,7 +1608,7 @@ inst_lib : $(CONFIGPM)
 
 $(UNIDATAFILES) ..\pod\perluniprops.pod .UPDATEALL : $(MINIPERL) $(CONFIGPM) ..\lib\unicore\mktables Extensions_nonxs
 	cd ..\lib\unicore && \
-	..\$(MINIPERL) -I.. -I..\..\cpan\Cwd\lib -I..\..\cpan\Cwd mktables -P ..\..\pod -maketest -makelist -p
+	..\$(MINIPERL) -I.. -I..\..\dist\Cwd\lib -I..\..\dist\Cwd mktables -P ..\..\pod -maketest -makelist -p
 
 minitest : $(MINIPERL) $(GLOBEXE) $(CONFIGPM) $(UNIDATAFILES) utils
 	$(XCOPY) $(MINIPERL) ..\t\$(NULL)

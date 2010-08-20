@@ -1665,13 +1665,46 @@ S_hfreeentries(pTHX_ HV *hv)
 	if (SvOOK(hv)) {
 	    HE *entry;
             struct mro_meta *meta;
-	    struct xpvhv_aux * const iter = HvAUX(hv);
-	    AV *const av = iter->xhv_backreferences;
+	    struct xpvhv_aux *iter = HvAUX(hv);
+	    /* weak references: if called from sv_clear(), the backrefs
+	     * should already have been killed; if there are any left, its
+	     * because we're doing hv_clear() or hv_undef(), and the HV
+	     * will continue to live.
+	     * Because while freeing the entries we fake up a NULL HvARRAY
+	     * (and hence HvAUX), we need to store the backref array
+	     * somewhere else; but it still needs to be visible in case
+	     * any the things we free happen to call sv_del_backref().
+	     * We do this by storing it in magic instead.
+	     * If, during the entry freeing, a destructor happens to add
+	     * a new weak backref, then sv_add_backref will look in both
+	     * places (magic in HvAUX) for the AV, but will create a new
+	     * AV in HvAUX if it can't find one (if it finds it in magic,
+	     * it moves it back into HvAUX. So at the end of the iteration
+	     * we have to allow for this. */
 
-	    if (av) {
-		Perl_sv_kill_backrefs(aTHX_ MUTABLE_SV(hv), av);
-		SvREFCNT_dec(av);
-		iter->xhv_backreferences = 0;
+
+	    if (iter->xhv_backreferences) {
+		if (SvTYPE(iter->xhv_backreferences) == SVt_PVAV) {
+		    /* The sv_magic will increase the reference count of the AV,
+		       so we need to drop it first. */
+		    SvREFCNT_dec(iter->xhv_backreferences);
+		    if (AvFILLp(iter->xhv_backreferences) == -1) {
+			/* Turns out that the array is empty. Just free it.  */
+			SvREFCNT_dec(iter->xhv_backreferences);
+
+		    } else {
+			sv_magic(MUTABLE_SV(hv),
+				 MUTABLE_SV(iter->xhv_backreferences),
+				 PERL_MAGIC_backref, NULL, 0);
+		    }
+		}
+		else {
+		    MAGIC *mg;
+		    sv_magic(MUTABLE_SV(hv), NULL, PERL_MAGIC_backref, NULL, 0);
+		    mg = mg_find(MUTABLE_SV(hv), PERL_MAGIC_backref);
+		    mg->mg_obj = (SV*)iter->xhv_backreferences;
+		}
+		iter->xhv_backreferences = NULL;
 	    }
 
 	    entry = iter->xhv_eiter; /* HvEITER(hv) */
@@ -2008,6 +2041,25 @@ Perl_hv_backreferences_p(pTHX_ HV *hv) {
     PERL_UNUSED_CONTEXT;
 
     return &(iter->xhv_backreferences);
+}
+
+void
+Perl_hv_kill_backrefs(pTHX_ HV *hv) {
+    AV *av;
+
+    PERL_ARGS_ASSERT_HV_KILL_BACKREFS;
+
+    if (!SvOOK(hv))
+	return;
+
+    av = HvAUX(hv)->xhv_backreferences;
+
+    if (av) {
+	HvAUX(hv)->xhv_backreferences = 0;
+	Perl_sv_kill_backrefs(aTHX_ MUTABLE_SV(hv), av);
+	if (SvTYPE(av) == SVt_PVAV)
+	    SvREFCNT_dec(av);
+    }
 }
 
 /*

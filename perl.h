@@ -140,6 +140,18 @@
 #  define EXTERN_C extern
 #endif
 
+/* Fallback definitions in case we don't have definitions from config.h.
+   This should only matter for systems that don't use Configure and
+   haven't been modified to define PERL_STATIC_INLINE yet.
+*/
+#if !defined(PERL_STATIC_INLINE)
+#  ifdef HAS_STATIC_INLINE
+#    define PERL_STATIC_INLINE static inline
+#  else
+#    define PERL_STATIC_INLINE static
+#  endif
+#endif
+
 #ifdef PERL_GLOBAL_STRUCT
 #  ifndef PERL_GET_VARS
 #    ifdef PERL_GLOBAL_STRUCT_PRIVATE
@@ -965,6 +977,14 @@ EXTERN_C int usleep(unsigned int);
 */
 #ifndef PERL_STRLEN_ROUNDUP_QUANTUM
 #define PERL_STRLEN_ROUNDUP_QUANTUM Size_t_size
+#endif
+
+/* sv_grow() will expand strings by at least a certain percentage of
+   the previously *used* length to avoid excessive calls to realloc().
+   The default is 25% of the current length.
+*/
+#ifndef PERL_STRLEN_EXPAND_SHIFT
+#  define PERL_STRLEN_EXPAND_SHIFT 2
 #endif
 
 #if defined(STANDARD_C) && defined(I_STDDEF)
@@ -4881,6 +4901,10 @@ typedef struct exitlistentry {
 #define PERL_VERSION_STRING	STRINGIFY(PERL_REVISION) "." \
 				STRINGIFY(PERL_VERSION) "." \
 				STRINGIFY(PERL_SUBVERSION)
+
+#define PERL_API_VERSION_STRING	STRINGIFY(PERL_API_REVISION) "." \
+				STRINGIFY(PERL_API_VERSION) "." \
+				STRINGIFY(PERL_API_SUBVERSION)
 
 #ifdef PERL_GLOBAL_STRUCT
 struct perl_vars {

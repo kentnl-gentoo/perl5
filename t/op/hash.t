@@ -8,7 +8,7 @@ BEGIN {
 
 use strict;
 
-plan tests => 6;
+plan tests => 7;
 
 my %h;
 
@@ -118,3 +118,15 @@ my $dummy = index 'foo', PVBM;
 eval { my %h = (a => PVBM); 1 };
 
 ok (!$@, 'fbm scalar can be inserted into a hash');
+
+
+my $destroyed;
+{ package Class; DESTROY { ++$destroyed; } }
+
+$destroyed = 0;
+{
+    my %h;
+    keys(%h) = 1;
+    $h{key} = bless({}, 'Class');
+}
+is($destroyed, 1, 'Timely hash destruction with lvalue keys');

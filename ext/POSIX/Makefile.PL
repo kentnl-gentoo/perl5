@@ -1,7 +1,4 @@
-# Explicitly avoid including '.' in @INC; autoloader gets confused since it
-# can find POSIX.pm, but can't find autosplit.ix.
-BEGIN { @INC = '../../lib';}
-#
+# Expect this line to be read by t/posix.t, don't change it
 use ExtUtils::MakeMaker;
 use ExtUtils::Constant 0.11 'WriteConstants';
 use Config;
@@ -21,7 +18,8 @@ WriteMakefile(
     NAME	=> 'POSIX',
     @libs,
     XSPROTOARG	=> '-noprototypes',	# XXX remove later?
-    VERSION_FROM => 'POSIX.pm',
+    VERSION_FROM => 'lib/POSIX.pm',
+    ABSTRACT_FROM => 'lib/POSIX.pod',
     realclean	=> {FILES=> 'const-c.inc const-xs.inc'},
 );
 

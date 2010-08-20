@@ -1070,8 +1070,7 @@ Level 2 - Extended Unicode Support
         [12] have \X but we don't have a "Grapheme Cluster Mode"
         [14] see UAX#29, Word Boundaries
         [15] see UAX#21 "Case Mappings"
-        [16] have \N{...} but neither compute names of CJK Ideographs
-             and Hangul Syllables nor use a loose match [e]
+        [16] missing loose match [e]
 
 [e] C<\N{...}> allows namespaces (see L<charnames>).
 
@@ -1408,7 +1407,9 @@ Using caseless (C</i>) regular expression matching
 
 =item *
 
-Matching a number of properties in regular expressions, such as C<\w>
+Matching a number of properties in regular expressions, namely C<\b>,
+C<\B>, C<\s>, C<\S>, C<\w>, C<\W>, and all the Posix character classes
+I<except> C<[[:ascii:]]>.
 
 =item *
 

@@ -197,7 +197,7 @@ use File::Glob qw(:case);
     'Archive::Tar' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.64.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.68.tar.gz',
 	'FILES'		=> q[cpan/Archive-Tar],
 	'EXCLUDED'	=> [ qw(Makefile.PL) ],
 	'UPSTREAM'	=> 'cpan',
@@ -274,10 +274,10 @@ use File::Glob qw(:case);
     'B::Lint' =>
 	{
 	'MAINTAINER'	=> 'jjore',
-	'DISTRIBUTION'	=> 'JJORE/B-Lint-1.11.tar.gz',
-	'FILES'		=> q[cpan/B-Lint],
+	'DISTRIBUTION'	=> 'FLORA/B-Lint-1.12.tar.gz',
+	'FILES'		=> q[dist/B-Lint],
 	'EXCLUDED'	=> [ qw( t/test.pl ) ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'base' =>
@@ -316,19 +316,19 @@ use File::Glob qw(:case);
     'Compress::Raw::Bzip2' =>
 	{
 	'MAINTAINER'	=> 'pmqs',
-	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Bzip2-2.027.tar.gz',
+	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Bzip2-2.030.tar.gz',
 	'FILES'		=> q[cpan/Compress-Raw-Bzip2],
 	'EXCLUDED'	=> [ qr{^t/Test/},
 			     qw( bzip2-src/bzip2-cpp.patch
 			     )
 			   ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Compress::Raw::Zlib' =>
 	{
 	'MAINTAINER'	=> 'pmqs',
-	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Zlib-2.027.tar.gz',
+	'DISTRIBUTION'	=> 'PMQS/Compress-Raw-Zlib-2.030.tar.gz',
 
 	'FILES'		=> q[cpan/Compress-Raw-Zlib],
 	'EXCLUDED'	=> [ qr{^t/Test/},
@@ -336,7 +336,7 @@ use File::Glob qw(:case);
 				 t/99pod.t
 			       )
 			   ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'constant' =>
@@ -607,8 +607,8 @@ use File::Glob qw(:case);
 					t/include/nsUniversalDetector.h
 					t/include/nscore.h
 				   }],
-	'FILES'		=> q[cpan/ExtUtils-ParseXS],
-	'UPSTREAM'	=> 'cpan',
+	'FILES'		=> q[dist/ExtUtils-ParseXS],
+	'UPSTREAM'	=> 'blead',
 	},
 
     'faq' =>
@@ -745,7 +745,7 @@ use File::Glob qw(:case);
     'IO-Compress' =>
 	{
 	'MAINTAINER'	=> 'pmqs',
-	'DISTRIBUTION'	=> 'PMQS/IO-Compress-2.027.tar.gz',
+	'DISTRIBUTION'	=> 'PMQS/IO-Compress-2.030.tar.gz',
 	'FILES'		=> q[cpan/IO-Compress],
 	'EXCLUDED'	=> [ qr{t/Test/} ],
 	'UPSTREAM'	=> 'cpan',
@@ -956,7 +956,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.35.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.36.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1060,13 +1060,14 @@ use File::Glob qw(:case);
     'PathTools' =>
 	{
 	'MAINTAINER'	=> 'kwilliams',
-	'DISTRIBUTION'	=> 'SMUELLER/PathTools-3.31.tar.gz',
-	'FILES'		=> q[cpan/Cwd],
+	'DISTRIBUTION'	=> 'SMUELLER/PathTools-3.31_02.tar.gz',
+	'FILES'		=> q[dist/Cwd],
 	'EXCLUDED'	=> [ qr{^t/lib/Test/} ],
-	'UPSTREAM'	=> "cpan",
-	# NOTE: PathTools is in cpan/Cwd/ because it contains Cwd.xs and
-	# something, possibly Makefile.SH, makes an assumption that the
-	# leafname of some  file corresponds with the pathname of the directory.
+	'UPSTREAM'	=> "blead",
+	# NOTE: PathTools is in dist/Cwd/ instead of dist/PathTools because it
+	# contains Cwd.xs and something, possibly Makefile.SH, makes an assumption
+	# that the leafname of some file corresponds with the pathname of the
+	# directory.
 	},
 
     'perlebcdic' =>
@@ -1327,7 +1328,7 @@ use File::Glob qw(:case);
     'Test::Harness' =>
 	{
 	'MAINTAINER'	=> 'andya',
-	'DISTRIBUTION'	=> 'ANDYA/Test-Harness-3.21.tar.gz',
+	'DISTRIBUTION'	=> 'ANDYA/Test-Harness-3.22.tar.gz',
 	'FILES'		=> q[cpan/Test-Harness],
 	'EXCLUDED'	=> [ qr{^examples/},
 			     qr{^inc/},
@@ -1345,7 +1346,7 @@ use File::Glob qw(:case);
     'Test::Simple' =>
 	{
 	'MAINTAINER'	=> 'mschwern',
-	'DISTRIBUTION'	=> 'MSCHWERN/Test-Simple-0.94.tar.gz',
+	'DISTRIBUTION'	=> 'MSCHWERN/Test-Simple-0.96.tar.gz',
 	'FILES'		=> q[cpan/Test-Simple],
 	'EXCLUDED'	=> [
 			     qw{.perlcriticrc
@@ -1505,7 +1506,7 @@ use File::Glob qw(:case);
     'Unicode::Collate' =>
 	{
 	'MAINTAINER'	=> 'sadahiro',
-	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.53-withoutworldwriteables.tar.gz',
+	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.56-withoutworldwriteables.tar.gz',
 	'FILES'		=> q[cpan/Unicode-Collate],
 			    # ignore experimental XS version
 	'EXCLUDED'	=> [ qr{X$},
@@ -1763,6 +1764,7 @@ use File::Glob qw(:case);
 				lib/Thread.{pm,t}
 				lib/Tie/Array.pm
 				lib/Tie/Array/
+				lib/Tie/ExtraHash.t
 				lib/Tie/Handle.pm
 				lib/Tie/Handle/
 				lib/Tie/Hash.pm

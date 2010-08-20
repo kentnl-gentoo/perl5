@@ -175,7 +175,8 @@ run the following:
 to see any inconsistencies between the core and CPAN versions of distros,
 then fix the core, or cajole CPAN authors as appropriate. See also the
 C<-d> and C<-v> options for more detail.  You'll probably want to use the
-C<-c cachedir> option to avoid repeated CPAN downloads.
+C<-c cachedir> option to avoid repeated CPAN downloads and may want to
+use C<-m file:///mirror/path> if you made a local CPAN mirror.
 
 To see which core distro versions differ from the current CPAN versions:
 
@@ -241,6 +242,10 @@ changed since the previous release, but which still have the old version
 number. If there is more than one maintenance branch (e.g. 5.8.x, 5.10.x),
 then compare against both.
 
+Be sure to bump the version numbers in separate commits for each module
+(or group of related modules) so that changes can be cherry-picked later
+if necessary.
+
 Note that some of the files listed may be generated (e.g. copied from ext/
 to lib/, or a script like lib/lib_pm.PL is run to produce lib/lib.pm);
 make sure you edit the correct file!
@@ -266,11 +271,14 @@ edit the whole document.
 
 I<You MUST SKIP this step for SNAPSHOT>
 
-A week or two before the first release candidate, bump the perl version
-number (e.g. from 5.10.0 to 5.10.1), to allow sufficient time for testing
-and smoking with the target version built into the perl executable. For
-subsequent release candidates and the final release, it it not necessary
-to bump the version further.
+Bump the version number (e.g. from 5.12.0 to 5.12.1).
+
+For a blead release, this can happen on the day of the release.  For a
+release candidate for a stable perl, this should happen a week or two
+before the first release candidate to allow sufficient time for testing and
+smoking with the target version built into the perl executable. For
+subsequent release candidates and the final release, it it not necessary to
+bump the version further.
 
 There is a tool to semi-automate this process. It works in two stages.
 First, it generates a list of suggested changes, which you review and
@@ -306,6 +314,13 @@ this line in README.vms needs special handling:
 
     rename perl-5^.10^.1.dir perl-5_10_1.dir
 
+When doing a blead release, also make sure the C<PERL_API_*> constants in
+F<patchlevel.h> are in sync with the with the version you're releasing, unless
+you're absolutely sure the release you're about to make is 100% binary
+compatible to an earlier release. When releasing a stable perl version, the
+C<PERL_API_*> constants C<MUST NOT> be changed as we aim to guarantee binary
+compatibility in maint branches.
+
 Commit your changes:
 
     $ git st
@@ -324,6 +339,11 @@ I<You MUST SKIP this step for SNAPSHOT>
 
 Review and update INSTALL to account for the change in version number;
 in particular, the "Coexistence with earlier versions of perl 5" section.
+
+Be particularly careful with the section "Upgrading from 5.X.Y or earlier". For
+stable releases, this needs to refer to the last release in the previous
+development cycle. For blead releases, it needs to refer to the previous blead
+release.
 
 =item *
 
@@ -385,7 +405,19 @@ up-to-date.
 
 =item *
 
+For a blead release, if you did not bump the perl version number as part
+of I<advance actions>, do that now.
+
+=item *
+
 I<You MAY SKIP this step for SNAPSHOT>
+
+Finalize the perldelta.  In particular, fill in the Acknowledgements
+section.  You can generate a list of contributors with checkAUTHORS.pl.
+For example:
+
+  $ git log --pretty=fuller v5.13.2..HEAD | \
+    perl Porting/checkAUTHORS.pl --who -
 
 Re-read the perldelta to try to find any embarrassing typos and thinkos;
 remove any C<TODO> or C<XXX> flags; update the "Known Problems" section
@@ -400,11 +432,16 @@ formatting, e.g.
 
     $ perl pod/pod2html pod/perl5101delta.pod > /tmp/perl5101delta.html
 
+Another good HTML preview option is http://search.cpan.org/pod2html
+
+If you make changes, be sure to commit them.
+
 =item *
 
 Make sure you have a gitwise-clean perl directory (no modified files,
 unpushed commits etc):
 
+    $ git clean -dxf
     $ git status
 
 =item *
@@ -429,15 +466,18 @@ re-make perl to check that it's okay, then commit the updated versions:
 
     $ git commit -a -m 'make regen; make regen_perly'
 
+(XXX regen might be a problem depending on the bison version available.
+We need to get a wizard to give better instructions on what to do or not do.)
+
 =item *
 
 I<You MUST SKIP this step for SNAPSHOT>
 
-Update C<Module::Corelist> with module version data for the new release.
+Update C<Module::CoreList> with module version data for the new release.
 
 Note that if this is a maint release, you should run the following actions
-from the maint directory, but commit the C<Corelist.pm> changes in
-I<blead> and subsequently cherry-pick it.
+from the maint branch, but commit the C<CoreList.pm> changes in
+I<blead> and subsequently cherry-pick it.  XXX need a better example
 
 F<corelist.pl> uses ftp.funet.fi to verify information about dual-lived
 modules on CPAN. It can use a full, local CPAN mirror or fall back
@@ -450,7 +490,7 @@ http://www.cpan.org/misc/cpan-faq.html#How_mirror_CPAN)
 
 Then change to your perl checkout, and if necessary,
 
-    $ make perl
+    $ make
 
 If this not the first update for this version (e.g. if it was updated
 when the version number was originally bumped), first edit
@@ -543,7 +583,7 @@ Be sure to commit your changes:
 
 =item *
 
-I<You MUST SKIP this step for SNAPSHOT>
+I<You MUST SKIP this step for SNAPSHOT or BLEAD release>
 
 Update F<patchlevel.h> to add a C<-RC1>-or-whatever string; or, if this is
 a final release, remove it. For example:
@@ -579,11 +619,6 @@ directory, they will still identify themselves using git tags and
 commits.
 
 Then delete the temporary installation.
-
-=item *
-
-If this is maint release, make sure F<Porting/mergelog> is saved and
-committed.
 
 =item *
 
@@ -806,9 +841,14 @@ may need to contact a PAUSE administrator or even bump the version of perl.
 Upload both the .gz and .bz2 versions of the tarball.
 
 Wait until you receive notification emails from the PAUSE indexer
-confirming that your uploads have been successfully indexed.  Do not
-proceed any further until you are sure that the indexing of your uploads
-has been successful.
+confirming that your uploads have been received.  IMPORTANT -- you will
+probably get an email that indexing has failed (due to dual-life modules,
+apparently).  This is considered normal.
+
+Do not proceed any further until you are sure that your tarballs are on
+CPAN.  Check your authors directory on one of the "fast" CPAN mirrors
+(e.g.  cpan.shadowcatprojects.net, cpan.dagolden.com, cpan.hexten.net
+or cpan.cpantesters.org) to confirm that your uploads have been successful.
 
 =item *
 
@@ -940,13 +980,6 @@ Finally, commit:
 At this point you may want  to compare the commit with a previous bump to
 see if they look similar. See commit ca8de22071 for an example of a
 previous version bump.
-
-=item *
-
-I<You MUST SKIP this step for RC, BLEAD>
-
-If this was a maint release, then edit F<Porting/mergelog> to change
-all the C<d> (deferred) flags to C<.> (needs review).
 
 =item *
 

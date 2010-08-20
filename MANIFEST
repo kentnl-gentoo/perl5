@@ -164,10 +164,6 @@ cpan/bignum/t/ratopt_a.t		See if bigrat a => X works
 cpan/bignum/t/scope_f.t			See if no bignum works
 cpan/bignum/t/scope_i.t			See if no bigint works
 cpan/bignum/t/scope_r.t			See if no bigrat works
-cpan/B-Lint/lib/B/Lint/Debug.pm			Adds debugging stringification to B::
-cpan/B-Lint/lib/B/Lint.pm			Compiler Lint backend
-cpan/B-Lint/t/lint.t				See if B::Lint works
-cpan/B-Lint/t/pluglib/B/Lint/Plugin/Test.pm	See if B::Lint works
 cpan/CGI/Changes			Changelog for CGI.pm
 cpan/CGI/examples/caution.xbm		CGI example
 cpan/CGI/examples/clickable_image.cgi	CGI example
@@ -438,26 +434,6 @@ cpan/CPAN/t/02nox.t		See if CPAN::Nox works
 cpan/CPAN/t/03pkgs.t		See if CPAN::Version works
 cpan/CPAN/t/10version.t		See if CPAN the module works
 cpan/CPAN/t/11mirroredby.t		See if CPAN::Mirrored::By works
-cpan/Cwd/Changes			Cwd extension Changelog
-cpan/Cwd/Cwd.pm				Various cwd routines (getcwd, fastcwd, chdir)
-cpan/Cwd/Cwd.xs				Cwd extension external subroutines
-cpan/Cwd/lib/File/Spec/Cygwin.pm	portable operations on Cygwin file names
-cpan/Cwd/lib/File/Spec/Epoc.pm		portable operations on EPOC file names
-cpan/Cwd/lib/File/Spec/Functions.pm	Function interface to File::Spec object methods
-cpan/Cwd/lib/File/Spec/Mac.pm		portable operations on Mac file names
-cpan/Cwd/lib/File/Spec/OS2.pm		portable operations on OS2 file names
-cpan/Cwd/lib/File/Spec.pm		portable operations on file names
-cpan/Cwd/lib/File/Spec/Unix.pm		portable operations on Unix file names
-cpan/Cwd/lib/File/Spec/VMS.pm		portable operations on VMS file names
-cpan/Cwd/lib/File/Spec/Win32.pm		portable operations on Win32 and NetWare file names
-cpan/Cwd/t/crossplatform.t		See if File::Spec works crossplatform
-cpan/Cwd/t/cwd.t			See if Cwd works
-cpan/Cwd/t/Functions.t			See if File::Spec::Functions works
-cpan/Cwd/t/rel2abs2rel.t		See if File::Spec->rel2abs/abs2rel works
-cpan/Cwd/t/Spec.t			See if File::Spec works
-cpan/Cwd/t/taint.t			See if Cwd works with taint
-cpan/Cwd/t/tmpdir.t			See if File::Spec->tmpdir() works
-cpan/Cwd/t/win32.t			See if Cwd works on Win32
 cpan/DB_File/Changes		Berkeley DB extension change log
 cpan/DB_File/config.in		Part of Berkeley DB configuration
 cpan/DB_File/DB_File_BS		Berkeley DB extension mkbootstrap fodder
@@ -1039,20 +1015,6 @@ cpan/ExtUtils-MakeMaker/t/xs.t					Part of MakeMaker's test suite
 cpan/ExtUtils-Manifest/lib/ExtUtils/Manifest.pm			Utilities to write MANIFEST files
 cpan/ExtUtils-Manifest/lib/ExtUtils/MANIFEST.SKIP		The default MANIFEST.SKIP
 cpan/ExtUtils-Manifest/t/Manifest.t				See if ExtUtils::Manifest works
-cpan/ExtUtils-ParseXS/Changes			ExtUtils::ParseXS change log
-cpan/ExtUtils-ParseXS/lib/ExtUtils/ParseXS.pm	converts Perl XS code into C code
-cpan/ExtUtils-ParseXS/lib/ExtUtils/xsubpp	External subroutine preprocessor
-cpan/ExtUtils-ParseXS/t/basic.t			See if ExtUtils::ParseXS works
-cpan/ExtUtils-ParseXS/t/lib/IncludeTester.pm	ExtUtils::ParseXS testing utility
-cpan/ExtUtils-ParseXS/t/more.t			Extended ExtUtils::ParseXS testing
-cpan/ExtUtils-ParseXS/t/typemap			Standard typemap for controlled testing
-cpan/ExtUtils-ParseXS/t/usage.t			ExtUtils::ParseXS tests
-cpan/ExtUtils-ParseXS/t/XSInclude.xsh		Test file for ExtUtils::ParseXS tests
-cpan/ExtUtils-ParseXS/t/XSMore.xs		Test file for ExtUtils::ParseXS tests
-cpan/ExtUtils-ParseXS/t/XSTest.pm		Test file for ExtUtils::ParseXS tests
-cpan/ExtUtils-ParseXS/t/XSTest.xs		Test file for ExtUtils::ParseXS tests
-cpan/ExtUtils-ParseXS/t/XSUsage.pm		ExtUtils::ParseXS tests
-cpan/ExtUtils-ParseXS/t/XSUsage.xs		ExtUtils::ParseXS tests
 cpan/File-Fetch/lib/File/Fetch.pm	File::Fetch
 cpan/File-Fetch/t/01_File-Fetch.t	File::Fetch tests
 cpan/File-Fetch/t/null_subclass.t
@@ -2098,7 +2060,6 @@ cpan/Test-Harness/lib/TAP/Parser/SourceHandler/Executable.pm
 cpan/Test-Harness/lib/TAP/Parser/SourceHandler/File.pm
 cpan/Test-Harness/lib/TAP/Parser/SourceHandler/Handle.pm
 cpan/Test-Harness/lib/TAP/Parser/SourceHandler/Perl.pm
-cpan/Test-Harness/lib/TAP/Parser/SourceHandler/pgTAP.pm
 cpan/Test-Harness/lib/TAP/Parser/SourceHandler.pm		A parser for Test Anything Protocol
 cpan/Test-Harness/lib/TAP/Parser/SourceHandler/RawTAP.pm
 cpan/Test-Harness/lib/TAP/Parser/Source.pm		A parser for Test Anything Protocol
@@ -2148,13 +2109,13 @@ cpan/Test-Harness/t/lib/MyIterator.pm			Module for testing Test::Harness
 cpan/Test-Harness/t/lib/MyPerlSourceHandler.pm				Test::Harness test
 cpan/Test-Harness/t/lib/MyResultFactory.pm		Module for testing Test::Harness
 cpan/Test-Harness/t/lib/MyResult.pm			Module for testing Test::Harness
-cpan/Test-Harness/t/lib/MyShebangger.pm				Test::Harness test
 cpan/Test-Harness/t/lib/MySourceHandler.pm				Test::Harness test
 cpan/Test-Harness/t/lib/NoFork.pm			Module for testing Test::Harness
 cpan/Test-Harness/t/lib/NOP.pm				Module for testing Test::Harness
 cpan/Test-Harness/t/lib/TAP/Harness/TestSubclass.pm
 cpan/Test-Harness/t/lib/TAP/Parser/SubclassTest.pm	Module for testing Test::Harness
 cpan/Test-Harness/t/multiplexer.t			Test::Harness test
+cpan/Test-Harness/t/nested.t				Test::Harness test
 cpan/Test-Harness/t/nofork-mux.t			Test::Harness test
 cpan/Test-Harness/t/nofork.t				Test::Harness test
 cpan/Test-Harness/t/object.t				Test::Harness test
@@ -2169,6 +2130,7 @@ cpan/Test-Harness/t/proverc/emptyexec			Test data for Test::Harness
 cpan/Test-Harness/t/proverc.t				Test::Harness test
 cpan/Test-Harness/t/proverun.t				Test::Harness test
 cpan/Test-Harness/t/prove.t				Test::Harness test
+cpan/Test-Harness/t/proveversion.t				Test::Harness test
 cpan/Test-Harness/t/regression.t			Test::Harness test
 cpan/Test-Harness/t/results.t				Test::Harness test
 cpan/Test-Harness/t/sample-tests/bailout		Test data for Test::Harness
@@ -2205,6 +2167,7 @@ cpan/Test-Harness/t/sample-tests/shbang_misparse	Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/simple			Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/simple_fail		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/simple_yaml		Test data for Test::Harness
+cpan/Test-Harness/t/sample-tests/simple_yaml_missing_version13		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/skip			Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/skipall		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/skipall_nomsg		Test data for Test::Harness
@@ -2225,6 +2188,7 @@ cpan/Test-Harness/t/sample-tests/version_late		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/version_old		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/vms_nit		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/with_comments		Test data for Test::Harness
+cpan/Test-Harness/t/sample-tests/yaml_late_plan		Test data for Test::Harness
 cpan/Test-Harness/t/sample-tests/zero_valid		Test data for Test::Harness
 cpan/Test-Harness/t/scheduler.t				Test::Harness test
 cpan/Test-Harness/t/source_handler.t				Test::Harness test
@@ -2234,10 +2198,10 @@ cpan/Test-Harness/t/source_tests/harness_badtap		Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/harness_complain	Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/harness_directives	Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/harness_failure	Test data for Test::Harness
-cpan/Test-Harness/t/source_tests/psql				Test::Harness test
 cpan/Test-Harness/t/source_tests/psql.bat				Test::Harness test
 cpan/Test-Harness/t/source_tests/source			Test data for Test::Harness
 cpan/Test-Harness/t/source_tests/source.1				Test::Harness test
+cpan/Test-Harness/t/source_tests/source_args.sh				Test::Harness test
 cpan/Test-Harness/t/source_tests/source.bat				Test::Harness test
 cpan/Test-Harness/t/source_tests/source.pl				Test::Harness test
 cpan/Test-Harness/t/source_tests/source.sh				Test::Harness test
@@ -2361,6 +2325,7 @@ cpan/Test-Simple/t/plan_shouldnt_import.t		Test::Simple test
 cpan/Test-Simple/t/plan_skip_all.t			Test::More test, plan() w/skip_all
 cpan/Test-Simple/t/plan.t				Test::More test, plan()
 cpan/Test-Simple/t/require_ok.t				Test::Simple test
+cpan/Test-Simple/t/Simple/load.t			Test::Builder tests
 cpan/Test-Simple/t/simple.t				Test::Simple test, basic stuff
 cpan/Test-Simple/t/skipall.t				Test::More test, skip all tests
 cpan/Test-Simple/t/skip.t				Test::More test, SKIP tests
@@ -2370,7 +2335,13 @@ cpan/Test-Simple/t/subtest/die.t			Test::More test
 cpan/Test-Simple/t/subtest/do.t				Test::More test
 cpan/Test-Simple/t/subtest/exceptions.t			Test::More test
 cpan/Test-Simple/t/subtest/for_do_t.test		Test::More test
+cpan/Test-Simple/t/subtest/fork.t			Test::Builder tests
+cpan/Test-Simple/t/subtest/implicit_done.t			Test::Builder tests
+cpan/Test-Simple/t/subtest/line_numbers.t			Test::Builder tests
+cpan/Test-Simple/t/subtest/plan.t			Test::Builder tests
+cpan/Test-Simple/t/subtest/predicate.t			Test::Builder tests
 cpan/Test-Simple/t/subtest/singleton.t			Test::More test
+cpan/Test-Simple/t/subtest/todo.t			Test::Builder tests
 cpan/Test-Simple/t/tbm_doesnt_set_exported_to.t		Test::Builder::Module test
 cpan/Test-Simple/t/Tester/tbt_01basic.t			Test::Builder::Tester test
 cpan/Test-Simple/t/Tester/tbt_02fhrestore.t		Test::Builder::Tester test
@@ -2508,17 +2479,39 @@ cpan/Time-Piece/t/07arith.t	Test for Time::Piece
 cpan/Unicode-Collate/Changes			Unicode::Collate
 cpan/Unicode-Collate/Collate/allkeys.txt	Unicode::Collate
 cpan/Unicode-Collate/Collate/keys.txt		Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/cs.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/eo.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/es.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/es_trad.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/fr.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/nn.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/pl.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale.pm			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/ro.pl			Unicode::Collate
+cpan/Unicode-Collate/Collate/Locale/sv.pl			Unicode::Collate
 cpan/Unicode-Collate/Collate.pm			Unicode::Collate
 cpan/Unicode-Collate/README			Unicode::Collate
 cpan/Unicode-Collate/t/altern.t			Unicode::Collate
 cpan/Unicode-Collate/t/cjkrange.t		Unicode::Collate
 cpan/Unicode-Collate/t/contract.t		Unicode::Collate
+cpan/Unicode-Collate/t/default.t		Unicode::Collate
 cpan/Unicode-Collate/t/hangtype.t		Unicode::Collate
 cpan/Unicode-Collate/t/hangul.t			Unicode::Collate
 cpan/Unicode-Collate/t/ignor.t			Unicode::Collate
 cpan/Unicode-Collate/t/illegalp.t		Unicode::Collate
 cpan/Unicode-Collate/t/illegal.t		Unicode::Collate
 cpan/Unicode-Collate/t/index.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_cs.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_eo.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_es.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_estr.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_fr.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_nb.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_nn.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_pl.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_ro.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_sv.t			Unicode::Collate
+cpan/Unicode-Collate/t/loc_test.t			Unicode::Collate
 cpan/Unicode-Collate/t/normal.t			Unicode::Collate
 cpan/Unicode-Collate/t/override.t		Unicode::Collate
 cpan/Unicode-Collate/t/rearrang.t		Unicode::Collate
@@ -2633,8 +2626,32 @@ dist/base/t/version.t		See if base works with versions
 dist/base/t/warnings.t		See if base works with warnings
 dist/B-Deparse/Deparse.pm	Compiler Deparse backend
 dist/B-Deparse/t/deparse.t	See if B::Deparse works
+dist/B-Lint/lib/B/Lint/Debug.pm			Adds debugging stringification to B::
+dist/B-Lint/lib/B/Lint.pm			Compiler Lint backend
+dist/B-Lint/t/lint.t				See if B::Lint works
+dist/B-Lint/t/pluglib/B/Lint/Plugin/Test.pm	See if B::Lint works
 dist/constant/lib/constant.pm	For "use constant"
 dist/constant/t/constant.t	See if compile-time constants work
+dist/Cwd/Changes			Cwd extension Changelog
+dist/Cwd/Cwd.pm				Various cwd routines (getcwd, fastcwd, chdir)
+dist/Cwd/Cwd.xs				Cwd extension external subroutines
+dist/Cwd/lib/File/Spec/Cygwin.pm	portable operations on Cygwin file names
+dist/Cwd/lib/File/Spec/Epoc.pm		portable operations on EPOC file names
+dist/Cwd/lib/File/Spec/Functions.pm	Function interface to File::Spec object methods
+dist/Cwd/lib/File/Spec/Mac.pm		portable operations on Mac file names
+dist/Cwd/lib/File/Spec/OS2.pm		portable operations on OS2 file names
+dist/Cwd/lib/File/Spec.pm		portable operations on file names
+dist/Cwd/lib/File/Spec/Unix.pm		portable operations on Unix file names
+dist/Cwd/lib/File/Spec/VMS.pm		portable operations on VMS file names
+dist/Cwd/lib/File/Spec/Win32.pm		portable operations on Win32 and NetWare file names
+dist/Cwd/t/crossplatform.t		See if File::Spec works crossplatform
+dist/Cwd/t/cwd.t			See if Cwd works
+dist/Cwd/t/Functions.t			See if File::Spec::Functions works
+dist/Cwd/t/rel2abs2rel.t		See if File::Spec->rel2abs/abs2rel works
+dist/Cwd/t/Spec.t			See if File::Spec works
+dist/Cwd/t/taint.t			See if Cwd works with taint
+dist/Cwd/t/tmpdir.t			See if File::Spec->tmpdir() works
+dist/Cwd/t/win32.t			See if Cwd works on Win32
 dist/Data-Dumper/Changes	Data pretty printer, changelog
 dist/Data-Dumper/Dumper.pm	Data pretty printer, module
 dist/Data-Dumper/Dumper.xs	Data pretty printer, externals
@@ -2659,6 +2676,20 @@ dist/ExtUtils-Install/t/lib/MakeMaker/Test/Setup/BFD.pm	MakeMaker test utilities
 dist/ExtUtils-Install/t/lib/MakeMaker/Test/Utils.pm	MakeMaker test utilities
 dist/ExtUtils-Install/t/lib/TieOut.pm			Testing library to capture prints
 dist/ExtUtils-Install/t/Packlist.t			See if Packlist works
+dist/ExtUtils-ParseXS/Changes			ExtUtils::ParseXS change log
+dist/ExtUtils-ParseXS/lib/ExtUtils/ParseXS.pm	converts Perl XS code into C code
+dist/ExtUtils-ParseXS/lib/ExtUtils/xsubpp	External subroutine preprocessor
+dist/ExtUtils-ParseXS/t/basic.t			See if ExtUtils::ParseXS works
+dist/ExtUtils-ParseXS/t/lib/IncludeTester.pm	ExtUtils::ParseXS testing utility
+dist/ExtUtils-ParseXS/t/more.t			Extended ExtUtils::ParseXS testing
+dist/ExtUtils-ParseXS/t/typemap			Standard typemap for controlled testing
+dist/ExtUtils-ParseXS/t/usage.t			ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSInclude.xsh		Test file for ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSMore.xs		Test file for ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSTest.pm		Test file for ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSTest.xs		Test file for ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSUsage.pm		ExtUtils::ParseXS tests
+dist/ExtUtils-ParseXS/t/XSUsage.xs		ExtUtils::ParseXS tests
 dist/Filter-Simple/Changes					Filter::Simple
 dist/Filter-Simple/lib/Filter/Simple.pm				Simple frontend to Filter::Util::Call
 dist/Filter-Simple/t/data.t					See if Filter::Simple works
@@ -3152,9 +3183,9 @@ ext/POSIX/hints/openbsd.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/sunos_4.pl	Hint for POSIX for named architecture
 ext/POSIX/hints/svr4.pl		Hint for POSIX for named architecture
 ext/POSIX/hints/uts.pl		Hint for POSIX for named architecture
+ext/POSIX/lib/POSIX.pm		POSIX extension Perl module
+ext/POSIX/lib/POSIX.pod		POSIX extension documentation
 ext/POSIX/Makefile.PL		POSIX extension makefile writer
-ext/POSIX/POSIX.pm		POSIX extension Perl module
-ext/POSIX/POSIX.pod		POSIX extension documentation
 ext/POSIX/POSIX.xs		POSIX extension external subroutines
 ext/POSIX/t/is.t		See if POSIX isxxx() work
 ext/POSIX/t/math.t		Basic math tests for POSIX
@@ -3268,6 +3299,7 @@ ext/XS-APItest/t/push.t		XS::APItest extension
 ext/XS-APItest/t/rmagical.t	XS::APItest extension
 ext/XS-APItest/t/svpeek.t	XS::APItest extension
 ext/XS-APItest/t/svsetsv.t	Test behaviour of sv_setsv with/without PERL_CORE
+ext/XS-APItest/t/temp_lv_sub.t	XS::APItest: tests for lvalue subs returning temps
 ext/XS-APItest/t/utf16_to_utf8.t	Test behaviour of utf16_to_utf8{,reversed}
 ext/XS-APItest/t/xs_special_subs_require.t	for require too
 ext/XS-APItest/t/xs_special_subs.t	Test that XS BEGIN/CHECK/INIT/END work
@@ -3607,6 +3639,7 @@ lib/Tie/Array/push.t		Test for Tie::Array
 lib/Tie/Array/splice.t		Test for Tie::Array::SPLICE
 lib/Tie/Array/stdpush.t		Test for Tie::StdArray
 lib/Tie/Array/std.t		Test for Tie::StdArray
+lib/Tie/ExtraHash.t		Test for Tie::ExtraHash (in Tie/Hash.pm)
 lib/Tie/Handle.pm		Base class for tied handles
 lib/Tie/Handle/stdhandle_from_handle.t	Test for Tie::StdHandle/Handle backwards compat
 lib/Tie/Handle/stdhandle.t	Test for Tie::StdHandle
@@ -3789,6 +3822,7 @@ opcode.h			Automatically generated opcode header
 opcode.pl			Opcode header generator
 op.h				Opcode syntax tree header
 opnames.h			Automatically generated opcode header
+op_reg_common.h			Common parts of op.h, regexp.h header
 os2/Changes			Changelog for OS/2 port
 os2/diff.configure		Patches to Configure
 os2/dlfcn.h			Addon for dl_open
@@ -3908,6 +3942,7 @@ pod/perl5130delta.pod		Perl changes in version 5.13.0
 pod/perl5131delta.pod		Perl changes in version 5.13.1
 pod/perl5132delta.pod		Perl changes in version 5.13.2
 pod/perl5133delta.pod		Perl changes in version 5.13.3
+pod/perl5134delta.pod		Perl changes in version 5.13.4
 pod/perl561delta.pod		Perl changes in version 5.6.1
 pod/perl56delta.pod		Perl changes in version 5.6
 pod/perl570delta.pod		Perl changes in version 5.7.0
@@ -4058,6 +4093,7 @@ Porting/corelist-perldelta.pl	Generates data perldelta from Module::CoreList
 Porting/corelist.pl		Generates data for Module::CoreList
 Porting/curliff.pl		Curliff or liff your curliffable files.
 Porting/epigraphs.pod		the release epigraphs used over the years
+Porting/exec-bit.txt		List of files that get +x in release tarball
 Porting/expand-macro.pl		A tool to expand C macro definitions in the Perl source
 Porting/findrfuncs		Find reentrant variants of functions used in an executable
 Porting/findvars		Find occurrences of words
@@ -4271,6 +4307,7 @@ t/io/crlf.t			See if :crlf works
 t/io/crlf_through.t		See if pipe passes data intact with :crlf
 t/io/defout.t			See if PL_defoutgv works
 t/io/dup.t			See if >& works right
+t/io/errnosig.t			Test case for restoration $! when leaving signal handlers
 t/io/errno.t			See if $! is correctly set
 t/io/fflush.t			See if auto-flush on fork/exec/system/qx works
 t/io/fs.t			See if directory manipulations work
@@ -4445,6 +4482,7 @@ t/op/exists_sub.t		See if exists(&sub) works
 t/op/exp.t			See if math functions work
 t/op/fh.t			See if filehandles work
 t/op/filehandle.t		Tests for http://rt.perl.org/rt3/Ticket/Display.html?id=72586
+t/op/filetest_stack_ok.t	See if file tests leave their argument on the stack
 t/op/filetest.t			See if file tests work
 t/op/filetest_t.t		See if -t file test works
 t/op/flip.t			See if range operator works
@@ -4500,6 +4538,7 @@ t/op/packagev.t			See if package VERSION work
 t/op/pack.t			See if pack and unpack work
 t/op/pos.t			See if pos works
 t/op/pow.t			See if ** works
+t/op/print.t			See if print works
 t/op/protowarn.t		See if the illegalproto warnings work
 t/op/push.t			See if push and pop work
 t/op/pwent.t			See if getpw*() functions work
@@ -4544,6 +4583,7 @@ t/op/taint.t			See if tainting works
 t/op/threads_create.pl		Ancillary file for t/op/threads.t
 t/op/threads.t			Misc. tests for perl features with threads
 t/op/tiearray.t			See if tie for arrays works
+t/op/tie_fetch_count.t		See if FETCH is only called once on tied variables
 t/op/tiehandle.t		See if tie for handles works
 t/op/tie.t			See if tie/untie functions work
 t/op/time_loop.t		Test that very large values don't hang gmtime and localtime.
@@ -4571,12 +4611,14 @@ t/porting/args_assert.t		Check that all PERL_ARGS_ASSERT* macros are used
 t/porting/authors.t		Check that all authors have been acknowledged
 t/porting/checkcase.t		Check whether we are case-insensitive-fs-friendly
 t/porting/diag.t		Test completeness of perldiag.pod
-t/porting/dual-life.t		Check that dual-life bins are in utils
+t/porting/dual-life.t		Check that dual-life bins are in utils/
+t/porting/exec-bit.t		Check that exec-bit bins are identified
 t/porting/maintainers.t		Test that Porting/Maintaners.pl is up to date
 t/porting/manifest.t		Test that this MANIFEST file is well formed
 t/porting/podcheck.t		Test the POD of shipped modules is well formed
 t/porting/test_bootstrap.t	Test that the instructions for test bootstrapping aren't accidentally overlooked.
 t/README			Instructions for regression tests
+t/re/overload.t		Test against string corruption in pattern matches on overloaded objects
 t/re/pat_advanced.t		See if advanced esoteric patterns work
 t/re/pat_advanced_thr.t		See if advanced esoteric patterns work in another thread
 t/re/pat_psycho.t		See if insane esoteric and slow patterns work

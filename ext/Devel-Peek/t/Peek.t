@@ -76,7 +76,9 @@ sub do_test {
 	    print $pattern, "\n" if $DEBUG;
 	    my ($dump, $dump2) = split m/\*\*\*\*\*\n/, scalar <IN>;
 	    print $dump, "\n"    if $DEBUG;
-	    like( $dump, qr/\A$pattern\Z/ms );
+	    like( $dump, qr/\A$pattern\Z/ms,
+		"test id $_[0], line " . (caller)[2]);
+
 
             local $TODO = $repeat_todo;
             is($dump2, $dump);
@@ -571,7 +573,7 @@ do_test(23,
   RV = $ADDR
   SV = PVCV\\($ADDR\\) at $ADDR
     REFCNT = (2)
-    FLAGS = \\(POK,pPOK,CONST\\)
+    FLAGS = \\(POK,pPOK,CONST,ISXSUB\\)
     IV = 0					# $] < 5.009
     NV = 0					# $] < 5.009
     PROTOTYPE = ""

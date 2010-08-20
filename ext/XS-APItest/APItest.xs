@@ -618,9 +618,9 @@ refcounted_he_fetch(key, level=0)
 	SvREFCNT_inc(RETVAL);
 	OUTPUT:
 	RETVAL
-	
+
 #endif
-	
+
 =pod
 
 sub TIEHASH  { bless {}, $_[0] }
@@ -633,6 +633,29 @@ sub DELETE   { delete $_[0]->{$_[1]} }
 sub CLEAR    { %{$_[0]} = () }
 
 =cut
+
+
+MODULE = XS::APItest:TempLv		PACKAGE = XS::APItest::TempLv
+
+void
+make_temp_mg_lv(sv)
+SV* sv
+    PREINIT:
+	SV * const lv = newSV_type(SVt_PVLV);
+	STRLEN len;
+    PPCODE:
+        SvPV(sv, len);
+
+	sv_magic(lv, NULL, PERL_MAGIC_substr, NULL, 0);
+	LvTYPE(lv) = 'x';
+	LvTARG(lv) = SvREFCNT_inc_simple(sv);
+	LvTARGOFF(lv) = len == 0 ? 0 : 1;
+	LvTARGLEN(lv) = len < 2 ? 0 : len-2;
+
+	EXTEND(SP, 1);
+	ST(0) = sv_2mortal(lv);
+	XSRETURN(1);
+
 
 MODULE = XS::APItest::PtrTable	PACKAGE = XS::APItest::PtrTable PREFIX = ptr_table_
 
@@ -693,21 +716,21 @@ BOOT:
     BhkENTRY_set(&bhk_test, eval, blockhook_test_eval);
     Perl_blockhook_register(aTHX_ &bhk_test);
 
-    MY_CXT.cscgv = gv_fetchpvs("XS::APItest::COMPILE_SCOPE_CONTAINER", 
+    MY_CXT.cscgv = gv_fetchpvs("XS::APItest::COMPILE_SCOPE_CONTAINER",
         GV_ADDMULTI, SVt_PVAV);
     MY_CXT.cscav = GvAV(MY_CXT.cscgv);
 
     BhkENTRY_set(&bhk_csc, start, blockhook_csc_start);
     BhkENTRY_set(&bhk_csc, pre_end, blockhook_csc_pre_end);
     Perl_blockhook_register(aTHX_ &bhk_csc);
-}                              
+}
 
 void
 CLONE(...)
     CODE:
     MY_CXT_CLONE;
     MY_CXT.sv = newSVpv("initial_clone",0);
-    MY_CXT.cscgv = gv_fetchpvs("XS::APItest::COMPILE_SCOPE_CONTAINER", 
+    MY_CXT.cscgv = gv_fetchpvs("XS::APItest::COMPILE_SCOPE_CONTAINER",
         GV_ADDMULTI, SVt_PVAV);
     MY_CXT.cscav = NULL;
     MY_CXT.bhkav = get_av("XS::APItest::bhkav", GV_ADDMULTI);
@@ -1090,3 +1113,17 @@ bhk_record(bool on)
         MY_CXT.bhk_record = on;
         if (on)
             av_clear(MY_CXT.bhkav);
+
+BOOT:
+	{
+	HV* stash;
+	SV** meth = NULL;
+	CV* cv;
+	stash = gv_stashpv("XS::APItest::TempLv", 0);
+	if (stash)
+	    meth = hv_fetchs(stash, "make_temp_mg_lv", 0);
+	if (!meth)
+	    croak("lost method 'make_temp_mg_lv'");
+	cv = GvCV(*meth);
+	CvLVALUE_on(cv);
+	}

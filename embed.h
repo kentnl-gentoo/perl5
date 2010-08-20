@@ -331,6 +331,8 @@
 #endif
 #ifdef PERL_CORE
 #define init_argv_symbols	Perl_init_argv_symbols
+#endif
+#ifdef PERL_CORE
 #define init_debugger		Perl_init_debugger
 #endif
 #define init_stacks		Perl_init_stacks
@@ -1823,6 +1825,8 @@
 #endif
 #define hv_scalar		Perl_hv_scalar
 #define hv_name_set		Perl_hv_name_set
+#if defined(PERL_IN_DUMP_C) || defined(PERL_IN_HV_C) || defined(PERL_IN_SV_C)
+#endif
 #define hv_clear_placeholders	Perl_hv_clear_placeholders
 #ifdef PERL_CORE
 #define magic_scalarpack	Perl_magic_scalarpack
@@ -2910,7 +2914,7 @@
 #define grok_bin(a,b,c,d)	Perl_grok_bin(aTHX_ a,b,c,d)
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define grok_bslash_c(a,b)	Perl_grok_bslash_c(aTHX_ a,b)
-#define grok_bslash_o(a,b,c,d)	Perl_grok_bslash_o(aTHX_ a,b,c,d)
+#define grok_bslash_o(a,b,c,d,e)	Perl_grok_bslash_o(aTHX_ a,b,c,d,e)
 #endif
 #define grok_hex(a,b,c,d)	Perl_grok_hex(aTHX_ a,b,c,d)
 #define grok_number(a,b,c)	Perl_grok_number(aTHX_ a,b,c)
@@ -4276,6 +4280,10 @@
 #define hv_scalar(a)		Perl_hv_scalar(aTHX_ a)
 #define hv_name_set(a,b,c,d)	Perl_hv_name_set(aTHX_ a,b,c,d)
 #ifdef PERL_CORE
+#endif
+#if defined(PERL_IN_DUMP_C) || defined(PERL_IN_HV_C) || defined(PERL_IN_SV_C)
+#ifdef PERL_CORE
+#endif
 #endif
 #define hv_clear_placeholders(a)	Perl_hv_clear_placeholders(aTHX_ a)
 #ifdef PERL_CORE

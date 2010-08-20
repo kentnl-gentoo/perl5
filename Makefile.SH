@@ -198,6 +198,8 @@ $this_target: lib/auto/List/Util/Util.$dlext" ;;
 $this_target: uni.data" ;;
 	Text/ParseWords) extra_dep="$extra_dep
 $this_target: lib/auto/Scalar/Util.$dlext" ;;
+	SDBM_File) extra_dep="$extra_dep
+$this_target: lib/auto/Cwd/Cwd.$dlext" ;;
     esac
 done
 
@@ -461,7 +463,7 @@ h1 = EXTERN.h INTERN.h XSUB.h av.h $(CONFIGH) cop.h cv.h dosish.h
 h2 = embed.h form.h gv.h handy.h hv.h keywords.h mg.h op.h opcode.h
 h3 = pad.h patchlevel.h perl.h perlapi.h perly.h pp.h proto.h regcomp.h
 h4 = regexp.h scope.h sv.h unixish.h util.h iperlsys.h thread.h
-h5 = utf8.h warnings.h mydtrace.h
+h5 = utf8.h warnings.h mydtrace.h op_reg_common.h
 h = $(h1) $(h2) $(h3) $(h4) $(h5)
 
 c1 = av.c scope.c op.c doop.c doio.c dump.c gv.c hv.c mg.c reentr.c mro.c perl.c
@@ -484,7 +486,7 @@ obj = $(ndt_obj) $(DTRACE_O)
 perltoc_pod_prereqs = extra.pods pod/perlapi.pod pod/perldelta.pod pod/perlintern.pod pod/perlmodlib.pod pod/perluniprops.pod
 generated_pods = pod/perltoc.pod $(perltoc_pod_prereqs)
 
-Icwd = -Icpan/Cwd -Icpan/Cwd/lib
+Icwd = -Idist/Cwd -Idist/Cwd/lib
 
 lintflags = \
     -b \
@@ -585,38 +587,47 @@ utilities:	$(MINIPERL_EXE) $(CONFIGPM) $(plextract) FORCE
 FORCE:
 	@sh -c true
 !NO!SUBS!
-$spitshell >>$Makefile <<!GROK!THIS!
 
-# We do a copy of the op.c instead of a symlink because gcc gets huffy
+for file in op perl; do
+    if $issymlink $file.c; then
+        $spitshell >>$Makefile <<!GROK!THIS!
+
+# We do a copy of the $file.c instead of a symlink because gcc gets huffy
 # if we have a symlink forest to another disk (it complains about too many
 # levels of symbolic links, even if we have only two)
 
-opmini.c: op.c
-	\$(RMS) opmini.c
-	\$(CPS) op.c opmini.c
+${file}mini.c: $file.c
+	\$(RMS) ${file}mini.c
+	\$(CPS) ${file}.c ${file}mini.c
+!GROK!THIS!
+    else
+        $spitshell >>$Makefile <<!GROK!THIS!
 
-opmini\$(OBJ_EXT): opmini.c
-	\$(CCCMD) \$(PLDLFLAGS) $DPERL_EXTERNAL_GLOB opmini.c
+${file}mini.c: $file.c
+	\$(RMS) ${file}mini.c
+	\$(LNS) ${file}.c ${file}mini.c
+!GROK!THIS!
+    fi
 
-perlmini.c: perl.c
-	\$(RMS) perlmini.c
-	\$(CPS) perl.c perlmini.c
+    $spitshell >>$Makefile <<!GROK!THIS!
 
-perlmini\$(OBJ_EXT): perlmini.c
-	\$(CCCMD) \$(PLDLFLAGS) $DPERL_IS_MINIPERL perlmini.c
+${file}mini\$(OBJ_EXT): ${file}mini.c
+	\$(CCCMD) \$(PLDLFLAGS) $DPERL_IS_MINIPERL $DPERL_EXTERNAL_GLOB ${file}mini.c
+!GROK!THIS!
+done
 
-globals\$(OBJ_EXT): uudmap.h bitcount.h
+$spitshell >>$Makefile <<'!NO!SUBS!'
+
+globals$(OBJ_EXT): uudmap.h bitcount.h
 
 uudmap.h: bitcount.h
 
-bitcount.h: generate_uudmap\$(HOST_EXE_EXT)
-	\$(RUN) ./generate_uudmap\$(HOST_EXE_EXT) uudmap.h bitcount.h
+bitcount.h: generate_uudmap$(HOST_EXE_EXT)
+	$(RUN) ./generate_uudmap$(HOST_EXE_EXT) uudmap.h bitcount.h
 
-generate_uudmap\$(HOST_EXE_EXT): generate_uudmap\$(OBJ_EXT)
-	\$(CC) -o generate_uudmap\$(EXE_EXT) \$(LDFLAGS) generate_uudmap\$(OBJ_EXT) \$(libs)
+generate_uudmap$(HOST_EXE_EXT): generate_uudmap$(OBJ_EXT)
+	$(CC) -o generate_uudmap$(EXE_EXT) $(LDFLAGS) generate_uudmap$(OBJ_EXT) $(libs)
 
-!GROK!THIS!
-$spitshell >>$Makefile <<'!NO!SUBS!'
 miniperlmain$(OBJ_EXT): miniperlmain.c patchlevel.h
 	$(CCCMD) $(PLDLFLAGS) $*.c
 
@@ -1013,8 +1024,8 @@ pod/perlintern.pod: $(MINIPERL_EXE) autodoc.pl embed.fnc
 pod/perlmodlib.pod: $(MINIPERL_EXE) pod/perlmodlib.PL MANIFEST
 	$(MINIPERL) $(Icwd) pod/perlmodlib.PL -q
 
-pod/perldelta.pod: pod/perl5133delta.pod
-	$(LNS) perl5133delta.pod pod/perldelta.pod
+pod/perldelta.pod: pod/perl5134delta.pod
+	$(LNS) perl5134delta.pod pod/perldelta.pod
 
 extra.pods: $(MINIPERL_EXE)
 	-@test ! -f extra.pods || rm -f `cat extra.pods`

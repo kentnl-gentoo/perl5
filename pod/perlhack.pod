@@ -384,6 +384,10 @@ core:
     dist/ is for dual-life modules, where the blead source is
           canonical.
 
+For some dual-life modules it has not been discussed if the CPAN version or the
+blead source is canonical. Until that is done, those modules should be in
+F<cpan/>.
+
 =item Tests
 
 There are tests for nearly all the modules, built-ins and major bits
@@ -1758,6 +1762,10 @@ so there are some snags (and it would be wonderful for you to brush
 them out), but it basically works that way.  Everything else lives in
 F<t/>.
 
+Testing of warning messages is often separately done by using expect scripts in
+F<t/lib/warnings>.  This is because much of the setup for them is already done
+for you.
+
 If you add a new test directory under F<t/>, it is imperative that you 
 add that directory to F<t/HARNESS> and F<t/TEST>.
 
@@ -3111,7 +3119,8 @@ and its section titled "8. gcov: a Test Coverage Program"
 
 quick hint:
 
-    $ sh Configure -des  -Doptimize='-g' -Accflags='-fprofile-arcs -ftest-coverage' \
+    $ sh Configure -des -Dusedevel -Doptimize='-g' \
+        -Accflags='-fprofile-arcs -ftest-coverage' \
         -Aldflags='-fprofile-arcs -ftest-coverage' && make perl.gcov
     $ rm -f regexec.c.gcov regexec.gcda
     $ ./perl.gcov

@@ -8,6 +8,12 @@ plan('no_plan');
 
 $|=1;
 
+# --make-exceptions-list outputs the list of strings that don't have
+# perldiag.pod entries to STDERR without TAP formatting, so they can
+# easily be put in the __DATA__ section of this file.  This was done
+# initially so as to not create new test failures upon the initial
+# creation of this test file.  You probably shouldn't do it again.
+# Just add the documentation instead.
 my $make_exceptions_list = ($ARGV[0]||'') eq '--make-exceptions-list';
 
 chdir '..' or die "Can't chdir ..: $!";
@@ -70,23 +76,57 @@ while (<$diagfh>) {
 }
 
 # Recursively descend looking for source files.
-my @todo = <*>;
+my @todo = sort <*>;
 while (@todo) {
   my $todo = shift @todo;
   next if $todo ~~ ['t', 'lib', 'ext', 'dist', 'cpan'];
   # opmini.c is just a copy of op.c, so there's no need to check again.
   next if $todo eq 'opmini.c';
   if (-d $todo) {
-    push @todo, glob "$todo/*";
+    unshift @todo, sort glob "$todo/*";
   } elsif ($todo =~ m/\.[ch]$/) {
     check_file($todo);
   }
 }
 
+sub find_message {
+  my ($line) = @_;
+  my $text_re = qr/"(?<text>(?:\\"|[^"])*?)"/;
+  if ($line =~ m/$source_msg_re(?:_nocontext)? \s*
+    \(aTHX_ \s*
+    (?:packWARN\d*\((?<category>.*?)\),)? \s*
+    $text_re /x
+  ) {
+    return [$+{'text'}, $+{'category'}];
+  }
+  elsif ( $line =~ m{BADVERSION\([^"]*$text_re}) {
+    return [$+{'text'}, undef];
+  }
+  return;
+}
+
+# Standardize messages with variants into the form that appears
+# in perldiag.pod -- useful for things without a diag_listed_as annotation
+sub standardize {
+  my ($name) = @_;
+
+  if    ( $name =~ m/^(Invalid strict version format) \([^\)]*\)/ ) {
+    $name = "$1 (\%s)";
+  }
+  elsif ( $name =~ m/^(Invalid version format) \([^\)]*\)/ ) {
+    $name = "$1 (\%s)";
+  }
+  elsif ($name =~ m/^panic: /) {
+    $name = "panic: \%s";
+  }
+
+  return $name;
+}
+
 sub check_file {
   my ($codefn) = @_;
 
-  print "# $codefn\n";
+  print "# Checking $codefn\n";
 
   open my $codefh, "<", $codefn
     or die "Can't open $codefn: $!";
@@ -147,26 +187,21 @@ sub check_file {
       s/%"\s*$from/\%$specialformats{$from}"/g;
     }
     # The %"foo" thing needs to happen *before* this regex.
-    if (m/$source_msg_re(?:_nocontext)? \s*
-          \(aTHX_ \s*
-          (?:packWARN\d*\((?<category>.*?)\),)? \s*
-          "(?<text>(?:\\"|[^"])*?)"/x)
-    {
+    if ( my $found = find_message($_) ) {
     # diag($_);
     # DIE is just return Perl_die
+    my ($name, $category) = @$found;
     my $severity = {croak => [qw/P F/],
                       die   => [qw/P F/],
                       warn  => [qw/W D S/],
                      }->{$+{'routine'}||'die'};
     my @categories;
-    if ($+{'category'}) {
-        @categories = map {s/^WARN_//; lc $_} split /\s*[|,]\s*/, $+{'category'};
+    if (defined $category) {
+        @categories = map {s/^WARN_//; lc $_} split /\s*[|,]\s*/, $category;
     }
-    my $name;
     if ($listed_as and $listed_as_line == $. - $multiline) {
         $name = $listed_as;
     } else {
-        $name = $+{'text'};
         # The form listed in perldiag ignores most sorts of fancy printf
         # formatting, or makes it more perlish.
         $name =~ s/%%/\\%/g;
@@ -192,28 +227,43 @@ sub check_file {
       # inside an #if 0 block.
       next if $name eq 'SKIPME';
 
+      $name = standardize($name);
+
       if (exists $entries{$name}) {
-        if ($entries{$name}{todo}) {
+        if ( $entries{$name}{seen}++ ) {
+          # no need to repeat entries we've tested
+        } elsif ($entries{$name}{todo}) {
         TODO: {
             no warnings 'once';
             local $::TODO = 'in DATA';
-            fail("Presence of '$name' from $codefn line $.");
+            # There is no listing, but it is in the list of exceptions.  TODO FAIL.
+            fail($name);
+            diag(
+              "    Message '$name'\n    from $codefn line $. is not listed in pod/perldiag.pod\n".
+              "    (but it wasn't documented in 5.10 either, so marking it TODO)."
+            );
           }
         } else {
-          ok("Presence of '$name' from $codefn line $.");
+          # We found an actual valid entry in perldiag.pod for this error.
+          pass($name);
         }
         # Later, should start checking that the severity is correct, too.
-      } elsif ($name =~ m/^panic: /) {
-        # Just too many panic:s, they are hard to diagnose, and there
-        # is a generic "panic: %s" entry.  Leave these for another
-        # pass.
-        ok("Presence of '$name' from $codefn line $., covered by panic: %s entry");
       } else {
         if ($make_exceptions_list) {
+          # We're making an updated version of the exception list, to
+          # stick in the __DATA__ section.  I honestly can't think of
+          # a situation where this is the right thing to do, but I'm
+          # leaving it here, just in case one of my descendents thinks
+          # it's a good idea.
           print STDERR "$name\n";
         } else {
-          fail("Presence of '$name' from $codefn line $.");
+          # No listing found, and no excuse either.
+          # Find the correct place in perldiag.pod, and add a stanza beginning =item $name.
+          fail($name);
+          diag("    Message '$name'\n    from $codefn line $. is not listed in pod/perldiag.pod");
         }
+        # seen it, so only fail once for this message
+        $entries{$name}{seen}++;
       }
 
       die if $name =~ /%$/;
@@ -222,12 +272,10 @@ sub check_file {
 }
 # Lists all missing things as of the inaguration of this script, so we
 # don't have to go from "meh" to perfect all at once.
+# 
+# PLEASE DO NOT ADD TO THIS LIST.  Instead, write an entry in
+# pod/perldiag.pod for your new (warning|error).
 __DATA__
-Ambiguous call resolved as CORE::%s(), %s
-Ambiguous use of %c resolved as operator %c
-Ambiguous use of %c{%s} resolved to %c%s
-Ambiguous use of %c{%s%s} resolved to %c%s%s
-Ambiguous use of -%s resolved as -&%s()
 Argument "%s" isn't numeric
 Argument "%s" isn't numeric in %s
 Attempt to clear deleted array
@@ -317,15 +365,6 @@ Invalid type '%c' in pack
 Invalid type '%c' in %s
 Invalid type '%c' in unpack
 Invalid type ',' in %s
-Invalid strict version format (0 before decimal required)
-Invalid strict version format (no leading zeros)
-Invalid strict version format (no underscores)
-Invalid strict version format (v1.2.3 required)
-Invalid strict version format (version required)
-Invalid strict version format (1.[0-9] required)
-Invalid version format (alpha without decimal)
-Invalid version format (misplaced _ in number)
-Invalid version object
 It is proposed that "\c{" no longer be valid. It has historically evaluated to  ";".  If you disagree with this proposal, send email to perl5-porters@perl.org Otherwise, or in the meantime, you can work around this failure by changing "\c{" to ";"
 'j' not supported on this platform
 'J' not supported on this platform

@@ -89,6 +89,40 @@ C<tr/a-y//>, which was probably not what you would have expected.)
 you thought.  Normally it's pretty easy to disambiguate it by supplying
 a missing quote, operator, parenthesis pair or declaration.
 
+=item Ambiguous use of %c resolved as operator %c
+
+(W ambiguous) C<%>, C<&>, and C<*> are both infix operators (modulus,
+bitwise and, and multpication), and you said something like C<*foo *
+foo> that might be interpreted as either of them.  We assumed you
+meant the infix operator, but please try to make it more clear -- in
+the example given, you might write C<*foo * foo()> if you really meant
+to multiply a glob by the result of calling a function.
+
+=item Ambiguous use of %c{%s} resolved to %c%s
+
+(W ambiguous) You wrote something like C<@{foo}>, which might be
+asking for the variable C<@foo>, or it might be calling a function
+named foo, and dereferencing it as an array reference.  If you wanted
+the varable, you can just write C<@foo>.  If you wanted to call the
+function, write C<@{foo()}> ... or you could just not have a variable
+and a function with the same name, and save yourself a lot of trouble.
+
+=item Ambiguous use of %c{%s%s} resolved to %c%s%s
+
+(W ambiguous) You wrote something like C<${foo[2]}>, which might be
+looking for element number 2 of the array named C<@foo>, in which case
+please write C<$foo[2]>, or you might have meant to pass an anonymous
+arrayref to the function named foo, then do a scalar deref on the
+value it returns.  If you meant that, write C<${foo([2])}>.
+
+=item Ambiguous use of -%s resolved as -&%s()
+
+(W ambiguous) You wrote something like C<-foo>, which might be the
+string C<"-foo"> (outside of C<use strict 'subs'>), or a call to the
+function C<foo>, negated.  If you meant the string, just write
+C<"-foo">, and please use strict.  If you meant the function call,
+write C<-foo()>.
+
 =item '|' and '<' may not both be specified on command line
 
 (F) An error peculiar to VMS.  Perl does its own command line
@@ -2207,6 +2241,15 @@ colon or whitespace was seen between the elements of a layer list.
 If the previous attribute had a parenthesised parameter list, perhaps that
 list was terminated too soon.
 
+=item Invalid strict version format (%s)
+
+(F)  A version number did not meet the "strict" criteria for versions.
+A "strict" version number is a positive decimal number (integer or
+decimal-fraction) without exponentiation or else a dotted-decimal
+v-string with a leading 'v' character and at least three components.
+The parenthesized text indicates which criteria was not met.
+See the L<version> module for more details on allowed version formats.
+
 =item Invalid type '%s' in %s
 
 (F) The given character is not a valid pack or unpack type.
@@ -2214,16 +2257,24 @@ See L<perlfunc/pack>.
 (W) The given character is not a valid pack or unpack type but used to be
 silently ignored.
 
-=item Invalid version format (multiple underscores)
+=item Invalid version format (%s)
 
-(F) Versions may contain at most a single underscore, which signals
-that the version is a beta release.  See L<version> for the allowed
-version formats.
+(F)  A version number did not meet the "lax" criteria for versions.
+A "lax" version number is a positive decimal number (integer or
+decimal-fraction) without exponentiation or else a dotted-decimal
+v-string. If the v-string has less than three components, it must have a
+leading 'v' character.  Otherwise, the leading 'v' is optional.  Both
+decimal and dotted-decimal versions may have a trailing "alpha"
+component separated by an underscore character after a fractional or
+dotted-decimal component.  The parenthesized text indicates which
+criteria was not met.  See the L<version> module for more details on
+allowed version formats.
 
-=item Invalid version format (underscores before decimal)
+=item Invalid version object
 
-(F) Versions may not contain decimals after the optional underscore.
-See L<version> for the allowed version formats.
+(F)  The internal structure of the version object was invalid.  Perhaps
+the internals were modified directly in some way or an arbitrary reference
+was blessed into the "version" class.
 
 =item ioctl is not implemented
 

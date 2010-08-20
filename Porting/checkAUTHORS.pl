@@ -5,24 +5,35 @@ use Getopt::Long;
 use Text::Wrap;
 $Text::Wrap::columns = 80;
 
-my ($rank, $percentage, $cumulative, $reverse, $ta, @authors, %authors,
-    %untraced, %patchers, %committers, %real_names, $as_test_output);
-my $result = GetOptions ("rank" => \$rank,            # rank authors
-             "thanks-applied" => \$ta,        # ranks committers
-             "acknowledged=s"   => \@authors ,  # authors files
+my ($rank, $ta, $ack, $who, $tap) = (0) x 5;
+my ($author_file, $percentage, $cumulative, $reverse);
+my (%authors, %untraced, %patchers, %committers, %real_names);
+
+my $result = GetOptions (
+             # modes
+             "who" => \$who,
+             "rank" => \$rank,
+             "thanks-applied" => \$ta,
+             "missing"   => \$ack ,
+             "tap" => \$tap,
+             # modifiers
+             "authors" => \$author_file,
              "percentage" => \$percentage,      # show as %age
              "cumulative" => \$cumulative,
              "reverse" => \$reverse,
-             "tap" => \$as_test_output,
             );
 
-if (!$result or (($rank||0) + ($ta||0) + (@authors ? 1 : 0) != 1) or !@ARGV) {
+if (!$result or ( $rank + $ta + $who + $ack + $tap != 1 ) or !@ARGV) {
     usage();
 }
 
+$author_file ||= './AUTHORS';
+die "Can't locate '$author_file'. Specify it with '--author <path>'."
+  unless -f $author_file;
+
 my $map = generate_known_author_map();
 
-read_authors_files(@authors);
+read_authors_files($author_file);
 
 parse_commits_from_stdin();
 
@@ -30,31 +41,48 @@ if ($rank) {
   display_ordered(\%patchers);
 } elsif ($ta) {
   display_ordered(\%committers);
-} elsif ($as_test_output) {
+} elsif ($tap) {
   display_test_output(\%patchers, \%authors, \%real_names);
-} elsif (%authors) {
+} elsif ($ack) {
   display_missing_authors(\%patchers, \%authors, \%real_names);
+} elsif ($who) {
+  list_authors(\%patchers, \%authors);
 }
-
-
 
 exit(0);
 
 sub usage {
 
   die <<"EOS";
-$0 --rank changes                           # rank authors by patches
-$0 --acknowledged <authors file> changes    # Display unacknowledged authors
-$0 --thanks-applied changes                 # ranks committers of others' patches
-$0 --percentage ...                         # show rankings as percentages
-$0 --cumulative ...                         # show rankings cumulatively
-$0 --reverse ...                            # show rankings in reverse
-Specify stdin as - if needs be. Remember that option names can be abbreviated.
-Generate changes with git log --pretty=fuller rev1..rev2
+Usage: $0 [modes] [modifiers] <git-log-output-file>
+
+Modes (use only one):
+   --who                          # show list of unique authors by full name
+   --rank                         # rank authors by patches
+   --thanks-applied               # ranks committers of others' patches
+   --missing                      # display authors not in AUTHORS
+   --tap                          # show authors present/missing as TAP
+
+Modifiers:
+   --authors <authors-file>       # path to authors file (default: ./AUTHORS)
+   --percentage                   # show rankings as percentages
+   --cumulative                   # show rankings cumulatively
+   --reverse                      # show rankings in reverse
+
+Generate git-log-output-file with git log --pretty=fuller rev1..rev2
+(or pipe by specifing '-' for stdin).  For example:
+  \$ git log --pretty=fuller v5.12.0..v5.12.1 > gitlog
+  \$ perl Porting/checkAUTHORS.pl --rank --percentage gitlog
 EOS
 }
 
-
+sub list_authors {
+    my ($patchers, $authors) = @_;
+    binmode(STDOUT, ":utf8");
+    print "$_\n" for  sort { lc $a cmp lc $b }
+                      map { $authors->{$_} }
+                      keys %$patchers;
+}
 
 sub parse_commits_from_stdin {
     my @lines = split( /^commit\s*/sm, join( '', <> ) );
@@ -166,16 +194,18 @@ sub generate_known_author_map {
 sub read_authors_files {
     my @authors = (@_);
     return unless (@authors);
-    my %raw;
+    my (%count, %raw);
     foreach my $filename (@authors) {
         open FH, "<$filename" or die "Can't open $filename: $!";
         while (<FH>) {
             next if /^\#/;
             next if /^-- /;
-            if (/<([^>]+)>/) {
-
+            if (/^([^<]+)<([^>]+)>/) {
                 # Easy line.
-                $raw{$1}++;
+                my ($name, $email) = ($1, $2);
+                $name =~ s/\s*\z//;
+                $raw{$email} = $name;
+                $count{$email}++;
             } elsif (/^([-A-Za-z0-9 .\'À-ÖØöø-ÿ]+)[\t\n]/) {
 
                 # Name only
@@ -189,12 +219,11 @@ sub read_authors_files {
         }
     }
     foreach ( keys %raw ) {
-        print "E-mail $_ occurs $raw{$_} times\n" if $raw{$_} > 1;
-        $_ = lc $_;
-        $authors{ $map->{$_} || $_ }++;
+        print "E-mail $_ occurs $count{$_} times\n" if $count{$_} > 1;
+        my $lc = lc $_;
+        $authors{ $map->{$lc} || $lc } = $raw{$_};
     }
-    ++$authors{'!'};
-    ++$authors{'?'};
+    $authors{$_} = $_ for qw(? !);
 }
 
 sub display_test_output {
@@ -305,7 +334,7 @@ __DATA__
 # List of mappings. First entry the "correct" email address, as appears
 # in the AUTHORS file. Second is any "alias" mapped to it.
 #
-# If the "correct" email address is a '+', the entry above is reused; 
+# If the "correct" email address is a '+', the entry above is reused;
 # this for addresses with more than one alias.
 #
 # Note that all entries are in lowercase. Further, no '@' signs should
@@ -413,7 +442,8 @@ stevep                                  steve\100fisharerojo.org
 +                                       root\100dixie.cscaper.com
 timb                                    Tim.Bunce\100pobox.com
 +                                       tim.bunce\100ig.co.uk
-
+tonyc                                   tony\100develop-help.com
++                                       tony\100openbsd32.tony.develop-help.com
 
 #
 # Mere mortals.
@@ -610,7 +640,7 @@ larry\100wall.org                       lwall\100jpl-devvax.jpl.nasa.gov
 +                                       lwall\100scalpel.netlabs.com
 laszlo.molnar\100eth.ericsson.se        molnarl\100cdata.tvnet.hu
 +                                       ml1050\100freemail.hu
-lewart\100uiuc.edu                      lewart\100vadds.cvm.uiuc.edu    
+lewart\100uiuc.edu                      lewart\100vadds.cvm.uiuc.edu
 +                                       d-lewart\100uiuc.edu
 lkundrak\100v3.sk                      lubo.rintel\100gooddata.com
 lstein\100cshl.org                      lstein\100formaggio.cshl.org
@@ -681,7 +711,7 @@ perl\100greerga.m-l.org                 greerga\100m-l.org
 perl\100profvince.com                   vince\100profvince.com
 perl-rt\100wizbit.be                    p5p\100perl.wizbit.be
 # Maybe we should special case this to get real names out?
-Peter.Dintelmann\100Dresdner-Bank.com   peter.dintelmann\100dresdner-bank.com 
+Peter.Dintelmann\100Dresdner-Bank.com   peter.dintelmann\100dresdner-bank.com
 # NOTE: There is an intentional trailing space in the line above
 pfeifer\100wait.de                      pfeifer\100charly.informatik.uni-dortmund.de
 +                                       upf\100de.uu.net
@@ -718,6 +748,7 @@ rmbarker\100cpan.org                    rmb1\100cise.npl.co.uk
 +                                       robin.barker\100npl.co.uk
 +                                       rmb\100cise.npl.co.uk
 +                                       robin\100spade-ubuntu.(none)
++                                       r.m.barker\100btinternet.com
 robertmay\100cpan.org                   rob\100themayfamily.me.uk
 roberto\100keltia.freenix.fr            roberto\100eurocontrol.fr
 robin\100cpan.org                       robin\100kitsite.com

@@ -147,8 +147,7 @@ Private API to rest of sv.c
 
     new_SV(),  del_SV(),
 
-    new_XIV(), del_XIV(),
-    new_XNV(), del_XNV(),
+    new_XPVNV(), del_XPVGV(),
     etc
 
 Public API:
@@ -294,7 +293,7 @@ S_new_SV(pTHX_ const char *file, int line, const char *func)
 		    : 0
 	    );
     sv->sv_debug_inpad = 0;
-    sv->sv_debug_cloned = 0;
+    sv->sv_debug_parent = NULL;
     sv->sv_debug_file = PL_curcop ? savepv(CopFILE(PL_curcop)): NULL;
 
     sv->sv_debug_serial = PL_sv_serial++;
@@ -920,40 +919,25 @@ static const struct body_details bodies_by_type[] = {
       SVt_NV, FALSE, HADNV, HASARENA, FIT_ARENA(0, sizeof(NV)) },
 
     /* 8 bytes on most ILP32 with IEEE doubles */
-    { sizeof(XPV),
+    { sizeof(XPV) - STRUCT_OFFSET(XPV, xpv_cur),
       copy_length(XPV, xpv_len) - STRUCT_OFFSET(XPV, xpv_cur),
       + STRUCT_OFFSET(XPV, xpv_cur),
       SVt_PV, FALSE, NONV, HASARENA,
       FIT_ARENA(0, sizeof(XPV) - STRUCT_OFFSET(XPV, xpv_cur)) },
 
-#if 2 *PTRSIZE <= IVSIZE
     /* 12 */
-    { sizeof(XPVIV),
+    { sizeof(XPVIV) - STRUCT_OFFSET(XPV, xpv_cur),
       copy_length(XPVIV, xiv_u) - STRUCT_OFFSET(XPV, xpv_cur),
       + STRUCT_OFFSET(XPV, xpv_cur),
       SVt_PVIV, FALSE, NONV, HASARENA,
       FIT_ARENA(0, sizeof(XPVIV) - STRUCT_OFFSET(XPV, xpv_cur)) },
-    /* 12 */
-#else
-    { sizeof(XPVIV),
-      copy_length(XPVIV, xiv_u),
-      0,
-      SVt_PVIV, FALSE, NONV, HASARENA,
-      FIT_ARENA(0, sizeof(XPVIV)) },
-#endif
 
-#if (2 *PTRSIZE <= IVSIZE) && (2 *PTRSIZE <= NVSIZE)
     /* 20 */
-    { sizeof(XPVNV),
+    { sizeof(XPVNV) - STRUCT_OFFSET(XPV, xpv_cur),
       copy_length(XPVNV, xnv_u) - STRUCT_OFFSET(XPV, xpv_cur),
       + STRUCT_OFFSET(XPV, xpv_cur),
       SVt_PVNV, FALSE, HADNV, HASARENA,
       FIT_ARENA(0, sizeof(XPVNV) - STRUCT_OFFSET(XPV, xpv_cur)) },
-#else
-    /* 20 */
-    { sizeof(XPVNV), copy_length(XPVNV, xnv_u), 0, SVt_PVNV, FALSE, HADNV,
-      HASARENA, FIT_ARENA(0, sizeof(XPVNV)) },
-#endif
 
     /* 28 */
     { sizeof(XPVMG), copy_length(XPVMG, xnv_u), 0, SVt_PVMG, FALSE, HADNV,
@@ -1015,49 +999,20 @@ static const struct body_details bodies_by_type[] = {
 #define del_body_allocated(p, sv_type)		\
     del_body(p + bodies_by_type[sv_type].offset, &PL_body_roots[sv_type])
 
-
-#define my_safemalloc(s)	(void*)safemalloc(s)
-#define my_safecalloc(s)	(void*)safecalloc(s, 1)
-#define my_safefree(p)	safefree((char*)p)
-
 #ifdef PURIFY
 
-#define new_XNV()	my_safemalloc(sizeof(XPVNV))
-#define del_XNV(p)	my_safefree(p)
+#define new_XNV()	safemalloc(sizeof(XPVNV))
+#define new_XPVNV()	safemalloc(sizeof(XPVNV))
+#define new_XPVMG()	safemalloc(sizeof(XPVMG))
 
-#define new_XPVNV()	my_safemalloc(sizeof(XPVNV))
-#define del_XPVNV(p)	my_safefree(p)
-
-#define new_XPVAV()	my_safemalloc(sizeof(XPVAV))
-#define del_XPVAV(p)	my_safefree(p)
-
-#define new_XPVHV()	my_safemalloc(sizeof(XPVHV))
-#define del_XPVHV(p)	my_safefree(p)
-
-#define new_XPVMG()	my_safemalloc(sizeof(XPVMG))
-#define del_XPVMG(p)	my_safefree(p)
-
-#define new_XPVGV()	my_safemalloc(sizeof(XPVGV))
-#define del_XPVGV(p)	my_safefree(p)
+#define del_XPVGV(p)	safefree(p)
 
 #else /* !PURIFY */
 
 #define new_XNV()	new_body_allocated(SVt_NV)
-#define del_XNV(p)	del_body_allocated(p, SVt_NV)
-
 #define new_XPVNV()	new_body_allocated(SVt_PVNV)
-#define del_XPVNV(p)	del_body_allocated(p, SVt_PVNV)
-
-#define new_XPVAV()	new_body_allocated(SVt_PVAV)
-#define del_XPVAV(p)	del_body_allocated(p, SVt_PVAV)
-
-#define new_XPVHV()	new_body_allocated(SVt_PVHV)
-#define del_XPVHV(p)	del_body_allocated(p, SVt_PVHV)
-
 #define new_XPVMG()	new_body_allocated(SVt_PVMG)
-#define del_XPVMG(p)	del_body_allocated(p, SVt_PVMG)
 
-#define new_XPVGV()	new_body_allocated(SVt_PVGV)
 #define del_XPVGV(p)	del_body_allocated(p, SVt_PVGV)
 
 #endif /* PURIFY */
@@ -1065,9 +1020,9 @@ static const struct body_details bodies_by_type[] = {
 /* no arena for you! */
 
 #define new_NOARENA(details) \
-	my_safemalloc((details)->body_size + (details)->offset)
+	safemalloc((details)->body_size + (details)->offset)
 #define new_NOARENAZ(details) \
-	my_safecalloc((details)->body_size + (details)->offset)
+	safecalloc((details)->body_size + (details)->offset, 1)
 
 STATIC void *
 S_more_bodies (pTHX_ const svtype sv_type)
@@ -1445,7 +1400,7 @@ Perl_sv_upgrade(pTHX_ register SV *const sv, svtype new_type)
 
     if (old_type > SVt_IV) {
 #ifdef PURIFY
-	my_safefree(old_body);
+	safefree(old_body);
 #else
 	/* Note that there is an assumption that all bodies of types that
 	   can be upgraded came from arenas. Only the more complex non-
@@ -1536,6 +1491,10 @@ Perl_sv_grow(pTHX_ register SV *const sv, register STRLEN newlen)
 	s = SvPVX_mutable(sv);
 
     if (newlen > SvLEN(sv)) {		/* need more room? */
+	STRLEN minlen = SvCUR(sv);
+	minlen += (minlen >> PERL_STRLEN_EXPAND_SHIFT) + 10;
+	if (newlen < minlen)
+	    newlen = minlen;
 #ifndef Perl_safesysmalloc_size
 	newlen = PERL_STRLEN_ROUNDUP(newlen);
 #endif
@@ -5305,54 +5264,102 @@ Perl_sv_rvweaken(pTHX_ SV *const sv)
 
 /* Give tsv backref magic if it hasn't already got it, then push a
  * back-reference to sv onto the array associated with the backref magic.
+ *
+ * As an optimisation, if there's only one backref and it's not an AV,
+ * store it directly in the HvAUX or mg_obj slot, avoiding the need to
+ * allocate an AV. (Whether the slot holds an AV tells us whether this is
+ * active.)
+ *
+ * If an HV's backref is stored in magic, it is moved back to HvAUX.
  */
 
 /* A discussion about the backreferences array and its refcount:
  *
  * The AV holding the backreferences is pointed to either as the mg_obj of
- * PERL_MAGIC_backref, or in the specific case of a HV, from the
- * xhv_backreferences field of the HvAUX structure. The array is created
- * with a refcount of 2. This means that if during global destruction the
- * array gets picked on before its parent to have its refcount decremented
- * by the random zapper, it won't actually be freed, meaning it's still
- * there for when its parent gets freed.
- * When the parent SV is freed, in the case of magic, the magic is freed,
- * Perl_magic_killbackrefs is called which decrements one refcount, then
- * mg_obj is freed which kills the second count.
- * In the vase of a HV being freed, one ref is removed by S_hfreeentries,
- * the other by Perl_sv_kill_backrefs, which it calls.
+ * PERL_MAGIC_backref, or in the specific case of a HV that has the hv_aux
+ * structure, from the xhv_backreferences field. (A HV without hv_aux will
+ * have the standard magic instead.) The array is created with a refcount
+ * of 2. This means that if during global destruction the array gets
+ * picked on before its parent to have its refcount decremented by the
+ * random zapper, it won't actually be freed, meaning it's still there for
+ * when its parent gets freed.
+ *
+ * When the parent SV is freed, the extra ref is killed by
+ * Perl_sv_kill_backrefs.  The other ref is killed, in the case of magic,
+ * by mg_free() / MGf_REFCOUNTED, or for a hash, by Perl_hv_kill_backrefs.
+ *
+ * When a single backref SV is stored directly, it is not reference
+ * counted.
  */
 
 void
 Perl_sv_add_backref(pTHX_ SV *const tsv, SV *const sv)
 {
     dVAR;
-    AV *av;
+    SV **svp;
+    AV *av = NULL;
+    MAGIC *mg = NULL;
 
     PERL_ARGS_ASSERT_SV_ADD_BACKREF;
 
-    if (SvTYPE(tsv) == SVt_PVHV) {
-	AV **const avp = Perl_hv_backreferences_p(aTHX_ MUTABLE_HV(tsv));
+    /* find slot to store array or singleton backref */
 
-	av = *avp;
-	if (!av) {
-	    av = newAV();
-	    AvREAL_off(av);
-	    SvREFCNT_inc_simple_void(av); /* see discussion above */
-	    *avp = av;
+    if (SvTYPE(tsv) == SVt_PVHV) {
+	svp = (SV**)Perl_hv_backreferences_p(aTHX_ MUTABLE_HV(tsv));
+
+	if (!*svp) {
+	    if ((mg = mg_find(tsv, PERL_MAGIC_backref))) {
+		/* Aha. They've got it stowed in magic instead.
+		 * Move it back to xhv_backreferences */
+		*svp = mg->mg_obj;
+		/* Stop mg_free decreasing the reference count.  */
+		mg->mg_obj = NULL;
+		/* Stop mg_free even calling the destructor, given that
+		   there's no AV to free up.  */
+		mg->mg_virtual = 0;
+		sv_unmagic(tsv, PERL_MAGIC_backref);
+		mg = NULL;
+	    }
 	}
     } else {
-	const MAGIC *const mg
-	    = SvMAGICAL(tsv) ? mg_find(tsv, PERL_MAGIC_backref) : NULL;
-	if (mg)
-	    av = MUTABLE_AV(mg->mg_obj);
-	else {
-	    av = newAV();
-	    AvREAL_off(av);
-	    sv_magic(tsv, MUTABLE_SV(av), PERL_MAGIC_backref, NULL, 0);
-	    /* av now has a refcnt of 2; see discussion above */
+	if (! ((mg =
+	    (SvMAGICAL(tsv) ? mg_find(tsv, PERL_MAGIC_backref) : NULL))))
+	{
+	    sv_magic(tsv, NULL, PERL_MAGIC_backref, NULL, 0);
+	    mg = mg_find(tsv, PERL_MAGIC_backref);
 	}
+	svp = &(mg->mg_obj);
     }
+
+    /* create or retrieve the array */
+
+    if (   (!*svp && SvTYPE(sv) == SVt_PVAV)
+	|| (*svp && SvTYPE(*svp) != SVt_PVAV)
+    ) {
+	/* create array */
+	av = newAV();
+	AvREAL_off(av);
+	SvREFCNT_inc_simple_void(av);
+	/* av now has a refcnt of 2; see discussion above */
+	if (*svp) {
+	    /* move single existing backref to the array */
+	    av_extend(av, 1);
+	    AvARRAY(av)[++AvFILLp(av)] = *svp; /* av_push() */
+	}
+	*svp = (SV*)av;
+	if (mg)
+	    mg->mg_flags |= MGf_REFCOUNTED;
+    }
+    else
+	av = MUTABLE_AV(*svp);
+
+    if (!av) {
+	/* optimisation: store single backref directly in HvAUX or mg_obj */
+	*svp = sv;
+	return;
+    }
+    /* push new backref */
+    assert(SvTYPE(av) == SVt_PVAV);
     if (AvFILLp(av) >= AvMAX(av)) {
         av_extend(av, AvFILLp(av)+1);
     }
@@ -5367,64 +5374,84 @@ void
 Perl_sv_del_backref(pTHX_ SV *const tsv, SV *const sv)
 {
     dVAR;
-    AV *av = NULL;
-    SV **svp;
+    SV **svp = NULL;
     I32 i;
 
     PERL_ARGS_ASSERT_SV_DEL_BACKREF;
 
-    if (SvTYPE(tsv) == SVt_PVHV) {
-	if (SvOOK(tsv)) {
-	    /* SvOOK: We must avoid creating the hv_aux structure if its
-	     * not already there, as that is stored in the main HvARRAY(),
-	     * and hfreentries assumes that no-one reallocates HvARRAY()
-	     * while it is running.  */
-	    av = *Perl_hv_backreferences_p(aTHX_ MUTABLE_HV(tsv));
-	}
+    if (SvTYPE(tsv) == SVt_PVHV && SvOOK(tsv)) {
+	svp = (SV**)Perl_hv_backreferences_p(aTHX_ MUTABLE_HV(tsv));
     }
-    else {
-	const MAGIC *const mg
+    if (!svp || !*svp) {
+	MAGIC *const mg
 	    = SvMAGICAL(tsv) ? mg_find(tsv, PERL_MAGIC_backref) : NULL;
-	if (mg)
-	    av = MUTABLE_AV(mg->mg_obj);
+	svp =  mg ? &(mg->mg_obj) : NULL;
     }
 
-    if (!av)
+    if (!svp || !*svp)
 	Perl_croak(aTHX_ "panic: del_backref");
 
-    assert(!SvIS_FREED(av));
-
-    svp = AvARRAY(av);
-    /* We shouldn't be in here more than once, but for paranoia reasons lets
-       not assume this.  */
-    for (i = AvFILLp(av); i >= 0; i--) {
-	if (svp[i] == sv) {
-	    const SSize_t fill = AvFILLp(av);
-	    if (i != fill) {
-		/* We weren't the last entry.
-		   An unordered list has this property that you can take the
-		   last element off the end to fill the hole, and it's still
-		   an unordered list :-)
-		*/
-		svp[i] = svp[fill];
+    if (SvTYPE(*svp) == SVt_PVAV) {
+	int count = 0;
+	AV * const av = (AV*)*svp;
+	assert(!SvIS_FREED(av));
+	svp = AvARRAY(av);
+	for (i = AvFILLp(av); i >= 0; i--) {
+	    if (svp[i] == sv) {
+		const SSize_t fill = AvFILLp(av);
+		if (i != fill) {
+		    /* We weren't the last entry.
+		       An unordered list has this property that you can take the
+		       last element off the end to fill the hole, and it's still
+		       an unordered list :-)
+		    */
+		    svp[i] = svp[fill];
+		}
+		svp[fill] = NULL;
+		AvFILLp(av) = fill - 1;
+		count++;
+#ifndef DEBUGGING
+		break; /* should only be one */
+#endif
 	    }
-	    svp[fill] = NULL;
-	    AvFILLp(av) = fill - 1;
 	}
+	assert(count == 1);
     }
+    else {
+	/* optimisation: only a single backref, stored directly */
+	if (*svp != sv)
+	    Perl_croak(aTHX_ "panic: del_backref");
+	*svp = NULL;
+    }
+
 }
 
-int
+void
 Perl_sv_kill_backrefs(pTHX_ SV *const sv, AV *const av)
 {
-    SV **svp = AvARRAY(av);
+    SV **svp;
+    SV **last;
+    bool is_array;
 
     PERL_ARGS_ASSERT_SV_KILL_BACKREFS;
 
-    if (svp) {
-	SV *const *const last = svp + AvFILLp(av);
+    if (!av)
+	return;
 
+    is_array = (SvTYPE(av) == SVt_PVAV);
+    if (is_array) {
 	assert(!SvIS_FREED(av));
+	svp = AvARRAY(av);
+	if (svp)
+	    last = svp + AvFILLp(av);
+    }
+    else {
+	/* optimisation: only a single backref, stored directly */
+	svp = (SV**)&av;
+	last = svp;
+    }
+
+    if (svp) {
 	while (svp <= last) {
 	    if (*svp) {
 		SV *const referrer = *svp;
@@ -5465,14 +5492,17 @@ Perl_sv_kill_backrefs(pTHX_ SV *const sv, AV *const av)
 			       (UV)SvFLAGS(referrer));
 		}
 
-		*svp = NULL;
+		if (is_array)
+		    *svp = NULL;
 	    }
 	    svp++;
 	}
-	AvFILLp(av) = -1;
     }
-    SvREFCNT_dec(av); /* remove extra count added by sv_add_backref() */
-    return 0;
+    if (is_array) {
+	AvFILLp(av) = -1;
+	SvREFCNT_dec(av); /* remove extra count added by sv_add_backref() */
+    }
+    return;
 }
 
 /*
@@ -5831,6 +5861,7 @@ Perl_sv_clear(pTHX_ register SV *const sv)
 	if (PL_last_swash_hv == (const HV *)sv) {
 	    PL_last_swash_hv = NULL;
 	}
+	Perl_hv_kill_backrefs(aTHX_ MUTABLE_HV(sv));
 	hv_undef(MUTABLE_HV(sv));
 	break;
     case SVt_PVAV:
@@ -5929,7 +5960,7 @@ Perl_sv_clear(pTHX_ register SV *const sv)
 		 &PL_body_roots[type]);
     }
     else if (sv_type_details->body_size) {
-	my_safefree(SvANY(sv));
+	safefree(SvANY(sv));
     }
 }
 
@@ -10829,17 +10860,14 @@ Perl_mg_dup(pTHX_ MAGIC *mg, CLONE_PARAMS *const param)
 	}
 	else
 	*/
-	if(nmg->mg_type == PERL_MAGIC_backref) {
-	    /* The backref AV has its reference count deliberately bumped by
-	       1.  */
-	    nmg->mg_obj
-		= SvREFCNT_inc(av_dup_inc((const AV *) nmg->mg_obj, param));
-	}
-	else {
-	    nmg->mg_obj	= (nmg->mg_flags & MGf_REFCOUNTED)
-			      ? sv_dup_inc(nmg->mg_obj, param)
-			      : sv_dup(nmg->mg_obj, param);
-	}
+	nmg->mg_obj = (nmg->mg_flags & MGf_REFCOUNTED)
+			  ? nmg->mg_type == PERL_MAGIC_backref
+				/* The backref AV has its reference
+				 * count deliberately bumped by 1 */
+				? SvREFCNT_inc(av_dup_inc((const AV *)
+						    nmg->mg_obj, param))
+				: sv_dup_inc(nmg->mg_obj, param)
+			  : sv_dup(nmg->mg_obj, param);
 
 	if (nmg->mg_ptr && nmg->mg_type != PERL_MAGIC_regex_global) {
 	    if (nmg->mg_len > 0) {
@@ -11153,7 +11181,7 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
     dstr->sv_debug_optype = sstr->sv_debug_optype;
     dstr->sv_debug_line = sstr->sv_debug_line;
     dstr->sv_debug_inpad = sstr->sv_debug_inpad;
-    dstr->sv_debug_cloned = 1;
+    dstr->sv_debug_parent = (SV*)sstr;
     dstr->sv_debug_file = savepv(sstr->sv_debug_file);
 #endif
 
@@ -11402,8 +11430,12 @@ S_sv_dup_common(pTHX_ const SV *const sstr, CLONE_PARAMS *const param)
 				 * thread */
 			    ? NULL
 			    : saux->xhv_backreferences
-			    ? MUTABLE_AV(SvREFCNT_inc(
-						      sv_dup_inc((const SV *)saux->xhv_backreferences, param)))
+				? (SvTYPE(saux->xhv_backreferences) == SVt_PVAV)
+				    ? MUTABLE_AV(SvREFCNT_inc(
+					  sv_dup_inc((const SV *)
+					    saux->xhv_backreferences, param)))
+				    : MUTABLE_AV(sv_dup((const SV *)
+					    saux->xhv_backreferences, param))
 				: 0;
 
                         daux->xhv_mro_meta = saux->xhv_mro_meta
@@ -12283,6 +12315,7 @@ perl_clone_using(PerlInterpreter *proto_perl, UV flags,
     /* switches */
     PL_minus_c		= proto_perl->Iminus_c;
     PL_patchlevel	= sv_dup_inc(proto_perl->Ipatchlevel, param);
+    PL_apiversion	= sv_dup_inc(proto_perl->Iapiversion, param);
     PL_localpatches	= proto_perl->Ilocalpatches;
     PL_splitstr		= proto_perl->Isplitstr;
     PL_minus_n		= proto_perl->Iminus_n;
@@ -12828,9 +12861,11 @@ S_unreferenced_to_tmp_stack(pTHX_ AV *const unreferenced)
 void
 Perl_clone_params_del(CLONE_PARAMS *param)
 {
-    PerlInterpreter *const was = PERL_GET_THX;
+    /* This seemingly funky ordering keeps the build with PERL_GLOBAL_STRUCT
+       happy: */
     PerlInterpreter *const to = param->new_perl;
     dTHXa(to);
+    PerlInterpreter *const was = PERL_GET_THX;
 
     PERL_ARGS_ASSERT_CLONE_PARAMS_DEL;
 
@@ -12852,6 +12887,7 @@ Perl_clone_params_del(CLONE_PARAMS *param)
 CLONE_PARAMS *
 Perl_clone_params_new(PerlInterpreter *const from, PerlInterpreter *const to)
 {
+    dVAR;
     /* Need to play this game, as newAV() can call safesysmalloc(), and that
        does a dTHX; to get the context from thread local storage.
        FIXME - under PERL_CORE Newx(), Safefree() and friends should expand to

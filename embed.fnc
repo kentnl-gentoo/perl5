@@ -13,7 +13,7 @@
 :   A  Member of public API:
 :
 :         add entry to global.sym (unless x or m);
-:         any doc entry goes in perlapi.pod rather than perlintern.api
+:         any doc entry goes in perlapi.pod rather than perlintern.pod
 :         makes '#define foo Perl_foo' scope not just for PERL_CORE/PERL_EXT
 :
 :   a  Allocates memory a la malloc/calloc.  Also implies "R":
@@ -48,7 +48,7 @@
 :
 :   M  May change:
 :
-:         (currently no effect)
+:         any doc entry is marked that function may change
 :
 :   m  Implemented as a macro:
 :
@@ -517,6 +517,8 @@ sR	|bool	|ingroup	|Gid_t testgid|bool effective
 #endif
 : Used in toke.c
 p	|void	|init_argv_symbols|int argc|NN char **argv
+: Used in pp_ctl.c
+po	|void	|init_dbargs
 : Used in mg.c
 p	|void	|init_debugger
 Ap	|void	|init_stacks
@@ -638,8 +640,8 @@ Ap	|void	|vload_module|U32 flags|NN SV* name|NULLOK SV* ver|NULLOK va_list* args
 p	|OP*	|localize	|NN OP *o|I32 lex
 ApdR	|I32	|looks_like_number|NN SV *const sv
 Apd	|UV	|grok_bin	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
-EXpR	|char	|grok_bslash_c	|const char source|const bool output_warning
-EXpR	|char*	|grok_bslash_o	|NN const char* s|NN UV* uv|NN STRLEN* len|const bool output_warning
+EXMpR	|char	|grok_bslash_c	|const char source|const bool output_warning
+EXMpR	|bool	|grok_bslash_o	|NN const char* s|NN UV* uv|NN STRLEN* len|NN const char** error_msg|const bool output_warning
 Apd	|UV	|grok_hex	|NN const char* start|NN STRLEN* len_p|NN I32* flags|NULLOK NV *result
 Apd	|int	|grok_number	|NN const char *pv|STRLEN len|NULLOK UV *valuep
 ApdR	|bool	|grok_numeric_radix|NN const char **sp|NN const char *send
@@ -1860,7 +1862,7 @@ po	|void	|sv_add_backref	|NN SV *const tsv|NN SV *const sv
 
 #if defined(PERL_IN_HV_C) || defined(PERL_IN_MG_C) || defined(PERL_IN_SV_C)
 : Used in hv.c and mg.c
-poM	|int	|sv_kill_backrefs	|NN SV *const sv|NN AV *const av
+poM	|void	|sv_kill_backrefs	|NN SV *const sv|NULLOK AV *const av
 #endif
 
 pX	|void	|sv_del_backref	|NN SV *const tsv|NN SV *const sv
@@ -2136,6 +2138,10 @@ Apo	|void	|hv_eiter_set	|NN HV *hv|NULLOK HE *eiter
 Ap	|void	|hv_name_set	|NN HV *hv|NULLOK const char *name|U32 len|U32 flags
 : Used in dump.c and hv.c
 poM	|AV**	|hv_backreferences_p	|NN HV *hv
+#if defined(PERL_IN_DUMP_C) || defined(PERL_IN_HV_C) || defined(PERL_IN_SV_C)
+: Only used in sv.c
+poM	|void	|hv_kill_backrefs	|NN HV *hv
+#endif
 Apd	|void	|hv_clear_placeholders	|NN HV *hv
 ApoR	|I32*	|hv_placeholders_p	|NN HV *hv
 ApoR	|I32	|hv_placeholders_get	|NN const HV *hv

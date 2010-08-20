@@ -7,7 +7,7 @@ my (undef, $headerpath) = @ARGV;
 my ($out) = __FILE__ =~ /(^.*)\.PL/i;
 $out =~ s/_h$/.h/;
 unlink $out if -l $out;
-open(OUT,">$out") || die "Cannot open $file:$!";
+open(OUT,">$out") || die "Cannot open $out:$!";
 print "Extracting $out...\n";
 print OUT <<"END";
 /*
@@ -72,7 +72,11 @@ if ($] < 5.011) {
     doconst(CVf_LOCKED);
 }
 
-foreach my $tuple (['op.h'],['cop.h'],['regexp.h','RXf_'])
+# First element in each tuple is the file; second is a regex snippet
+# giving the prefix to limit the names of symbols to define that come
+# from that file.  If none, all symbols will be defined whose values
+# match the pattern below.
+foreach my $tuple (['op_reg_common.h','(?:(?:RXf_)?PMf_)'],['op.h'],['cop.h'],['regexp.h','RXf_'])
  {
   my $file = $tuple->[0];
   my $pfx = $tuple->[1] || '';
@@ -80,7 +84,11 @@ foreach my $tuple (['op.h'],['cop.h'],['regexp.h','RXf_'])
   open(OPH,"$path") || die "Cannot open $path:$!";
   while (<OPH>)
    {  
-    doconst($1) if (/#define\s+($pfx\w+)\s+([\(\)\|\dx]+)\s*(?:$|\/\*)/);
+    doconst($1) if (/ \#define \s+ ( $pfx \w+ ) \s+
+                        ( [()|\dx]+             # Parens, '|', digits, 'x'
+                          | \(? \d+ \s* << .*?  # digits left shifted by anything
+                        ) \s* (?: $| \/ \* )    # ending at comment or $
+                   /x);
    }  
   close(OPH);
  }

@@ -3316,12 +3316,10 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			nxt = nxt2;
 		    OP(nxt2)  = SUCCEED; /* Whas WHILEM */
 		    /* Need to optimize away parenths. */
-		    if (data->flags & SF_IN_PAR) {
+		    if ((data->flags & SF_IN_PAR) && OP(nxt) == CLOSE) {
 			/* Set the parenth number.  */
 			regnode *nxt1 = NEXTOPER(oscan) + EXTRA_STEP_2ARGS; /* OPEN*/
 
-			if (OP(nxt) != CLOSE)
-			    FAIL("Panic opt close");
 			oscan->flags = (U8)ARG(nxt);
 			if (RExC_open_parens) {
 			    RExC_open_parens[ARG(nxt1)-1]=oscan; /*open->CURLYM*/
@@ -7362,7 +7360,6 @@ tryagain:
 	    register UV ender;
 	    register char *p;
 	    char *s;
-	    char *error_msg;
 	    STRLEN foldlen;
 	    U8 tmpbuf[UTF8_MAXBYTES_CASE+1], *foldbuf;
 
@@ -7467,19 +7464,23 @@ tryagain:
 			{
 			    STRLEN brace_len = len;
 			    UV result;
-			    if ((error_msg = grok_bslash_o(p,
-							   &result,
-							   &brace_len,
-							   SIZE_ONLY))
-				!= NULL)
-			    {
+			    const char* error_msg;
+
+			    bool valid = grok_bslash_o(p,
+						       &result,
+						       &brace_len,
+						       &error_msg,
+						       1);
+			    p += brace_len;
+			    if (! valid) {
+				RExC_parse = p;	/* going to die anyway; point
+						   to exact spot of failure */
 				vFAIL(error_msg);
 			    }
 			    else
 			    {
 				ender = result;
 			    }
-			    p += brace_len;
 			    if (PL_encoding && ender < 0x100) {
 				goto recode_encoding;
 			    }
@@ -7997,7 +7998,6 @@ S_regclass(pTHX_ RExC_state_t *pRExC_state, U32 depth)
 
 parseit:
     while (RExC_parse < RExC_end && UCHARAT(RExC_parse) != ']') {
-	char* error_msg;
 
     charclassloop:
 
@@ -8106,15 +8106,18 @@ parseit:
 	    case 'a':	value = ASCII_TO_NATIVE('\007');break;
 	    case 'o':
 		RExC_parse--;	/* function expects to be pointed at the 'o' */
-		if ((error_msg = grok_bslash_o(RExC_parse,
+		{
+		    const char* error_msg;
+		    bool valid = grok_bslash_o(RExC_parse,
 					       &value,
 					       &numlen,
-					       SIZE_ONLY))
-		    != NULL)
-		{
-		    vFAIL(error_msg);
+					       &error_msg,
+					       SIZE_ONLY);
+		    RExC_parse += numlen;
+		    if (! valid) {
+			vFAIL(error_msg);
+		    }
 		}
-		RExC_parse += numlen;
 		if (PL_encoding && value < 0x100) {
 		    goto recode_encoding;
 		}
