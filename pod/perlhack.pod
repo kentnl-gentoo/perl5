@@ -214,15 +214,20 @@ changes.
 How to clone and use the git perl repository is described in L<perlrepository>.
 
 You can also choose to use rsync to get a copy of the current source tree
-for the bleadperl branch and all maintenance branches :
+for the bleadperl branch and all maintenance branches:
 
-    $ rsync -avz rsync://perl5.git.perl.org/APC/perl-current .
-    $ rsync -avz rsync://perl5.git.perl.org/APC/perl-5.10.x .
-    $ rsync -avz rsync://perl5.git.perl.org/APC/perl-5.8.x .
-    $ rsync -avz rsync://perl5.git.perl.org/APC/perl-5.6.x .
-    $ rsync -avz rsync://perl5.git.perl.org/APC/perl-5.005xx .
+    $ rsync -avz rsync://perl5.git.perl.org/perl-current .
+    $ rsync -avz rsync://perl5.git.perl.org/perl-5.12.x .
+    $ rsync -avz rsync://perl5.git.perl.org/perl-5.10.x .
+    $ rsync -avz rsync://perl5.git.perl.org/perl-5.8.x .
+    $ rsync -avz rsync://perl5.git.perl.org/perl-5.6.x .
+    $ rsync -avz rsync://perl5.git.perl.org/perl-5.005xx .
 
 (Add the C<--delete> option to remove leftover files)
+
+To get a full list of the available sync points:
+
+    $ rsync perl5.git.perl.org::
 
 You may also want to subscribe to the perl5-changes mailing list to
 receive a copy of each patch that gets submitted to the maintenance
@@ -375,6 +380,10 @@ core:
     cpan/ is for dual-life modules, where the CPAN module is canonical (should be patched first).
 
     dist/ is for dual-life modules, where the blead source is canonical.
+
+For some dual-life modules it has not been discussed if the CPAN version or the
+blead source is canonical. Until that is done, those modules should be in
+F<cpan/>.
 
 =item Tests
 
@@ -1822,6 +1831,7 @@ t/test.pl and ad hoc C<print $test ? "ok 42\n" : "not ok 42\n">.  The
 decision of which to use depends on what part of the test suite you're
 working on.  This is a measure to prevent a high-level failure (such
 as Config.pm breaking) from causing basic functionality tests to fail.
+If you write your own test, use the L<Test Anything Protocol|TAP>.
 
 =over 4
 

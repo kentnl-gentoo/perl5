@@ -1017,7 +1017,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.23.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.36.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'blead',
@@ -1035,7 +1035,7 @@ use File::Glob qw(:case);
     'Module::Load::Conditional' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Module-Load-Conditional-0.34.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-Load-Conditional-0.38.tar.gz',
 	'FILES'		=> q[cpan/Module-Load-Conditional],
 	'CPAN'		=> 1,
 	'UPSTREAM'	=> 'cpan',
@@ -1056,7 +1056,7 @@ use File::Glob qw(:case);
 	'DISTRIBUTION'	=> 'SIMONW/Module-Pluggable-3.9.tar.gz',
 	'FILES'		=> q[cpan/Module-Pluggable],
 	'CPAN'		=> 1,
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Net::Ping' =>

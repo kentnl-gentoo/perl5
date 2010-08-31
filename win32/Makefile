@@ -2,7 +2,7 @@
 # Makefile to build perl on Windows NT using Microsoft NMAKE.
 # Supported compilers:
 #	Visual C++ 2.0 or later
-#	MS Platform SDK 64-bit compiler and tools
+#	Windows SDK 64-bit compiler and tools
 #
 # This is set up to build a perl.exe that runs off a shared library
 # (perl512.dll).  Also makes individual DLLs for the XS extensions.
@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.12.1
+#INST_VER	= \5.12.2
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -105,6 +105,8 @@ CCTYPE		= MSVC60
 #CCTYPE		= MSVC70FREE
 # Visual C++ .NET 2003 (aka Visual C++ 7.x) (full version)
 #CCTYPE		= MSVC70
+# Windows Server 2003 SP1 Platform SDK (April 2005)
+#CCTYPE		= SDK2003SP1
 # Visual C++ 2005 Express Edition (aka Visual C++ 8.x) (free version)
 #CCTYPE		= MSVC80FREE
 # Visual C++ 2005 (aka Visual C++ 8.x) (full version)
@@ -350,6 +352,13 @@ WIN64			= undef
 !ENDIF
 !ENDIF
 
+# Treat 64-bit MSVC60 (doesn't really exist) as SDK2003SP1 because
+# both link against MSVCRT.dll (which is part of Windows itself) and
+# not against a compiler specific versioned runtime.
+!IF "$(WIN64)" == "define" && "$(CCTYPE)" == "MSVC60"
+CCTYPE		= SDK2003SP1
+!ENDIF
+
 ARCHITECTURE = $(PROCESSOR_ARCHITECTURE)
 !IF "$(ARCHITECTURE)" == "AMD64"
 ARCHITECTURE	= x64
@@ -471,7 +480,7 @@ OPTIMIZE	= $(OPTIMIZE) -O1
 
 !IF "$(WIN64)" == "define"
 DEFINES		= $(DEFINES) -DWIN64 -DCONSERVATIVE
-OPTIMIZE	= $(OPTIMIZE) -Wp64 -fp:precise
+OPTIMIZE	= $(OPTIMIZE) -fp:precise
 !ENDIF
 
 # For now, silence VC++ 8.x's and 9.x's warnings about "unsafe" CRT functions
@@ -496,11 +505,11 @@ LIBBASEFILES	= $(CRYPT_LIB) \
 		netapi32.lib uuid.lib ws2_32.lib mpr.lib winmm.lib \
 		version.lib odbc32.lib odbccp32.lib comctl32.lib
 
-# The 64 bit Platform SDK compilers contain a runtime library that doesn't
-# include the buffer overrun verification code used by the /GS switch.
+# The 64 bit Windows Server 2003 SP1 SDK compilers link against MSVCRT.dll, which
+# doesn't include the buffer overrun verification code used by the /GS switch.
 # Since the code links against libraries that are compiled with /GS, this
-# "security cookie verification" must be included via bufferoverlow.lib.
-!IF "$(WIN64)" == "define"
+# "security cookie verification" code must be included via bufferoverflow.lib.
+!IF "$(WIN64)" == "define" && "$(CCTYPE)" == "SDK2003SP1"
 LIBBASEFILES    = $(LIBBASEFILES) bufferoverflowU.lib
 !ENDIF
 
@@ -849,11 +858,6 @@ all : .\config.h ..\git_version.h $(GLOBEXE) $(MINIMOD) $(CONFIGPM) \
 	$(UNIDATAFILES) MakePPPort $(PERLEXE) $(X2P) Extensions_nonxs Extensions $(PERLSTATIC)
 	@echo	Everything is up to date. '$(MAKE_BARE) test' to run test suite.
 
-..\regcharclass.h : ..\Porting\regcharclass.pl
-	cd ..
-	miniperl Porting\regcharclass.pl
-	cd win32
-
 regnodes : ..\regnodes.h
 
 ..\regcomp$(o) : ..\regnodes.h ..\regcharclass.h	
@@ -1120,7 +1124,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl5121delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl5122delta.pod ..\pod\perldelta.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)

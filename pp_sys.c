@@ -1203,6 +1203,9 @@ PP(pp_getc)
     IO *io = NULL;
     GV * const gv = (MAXARG==0) ? PL_stdingv : MUTABLE_GV(POPs);
 
+    if (MAXARG == 0)
+	EXTEND(SP, 1);
+
     if (gv && (io = GvIO(gv))) {
 	MAGIC * const mg = SvTIED_mg((const SV *)io, PERL_MAGIC_tiedscalar);
 	if (mg) {
@@ -2016,10 +2019,14 @@ PP(pp_eof)
 
     if (MAXARG)
 	gv = PL_last_in_gv = MUTABLE_GV(POPs);	/* eof(FH) */
-    else if (PL_op->op_flags & OPf_SPECIAL)
-	gv = PL_last_in_gv = GvEGV(PL_argvgv);	/* eof() - ARGV magic */
-    else
-	gv = PL_last_in_gv;			/* eof */
+    else {
+	EXTEND(SP, 1);
+
+	if (PL_op->op_flags & OPf_SPECIAL)
+	    gv = PL_last_in_gv = GvEGV(PL_argvgv);	/* eof() - ARGV magic */
+	else
+	    gv = PL_last_in_gv;			/* eof */
+    }
 
     if (!gv)
 	RETPUSHNO;
@@ -2033,6 +2040,7 @@ PP(pp_eof)
 	 * 1 = eof(FH)
 	 * 2 = eof()  <- ARGV magic
 	 */
+	EXTEND(SP, 1);
 	if (MAXARG)
 	    mPUSHi(1);		/* 1 = eof(FH) - simple, explicit FH */
 	else if (PL_op->op_flags & OPf_SPECIAL)
@@ -2076,6 +2084,8 @@ PP(pp_tell)
 
     if (MAXARG != 0)
 	PL_last_in_gv = MUTABLE_GV(POPs);
+    else
+	EXTEND(SP, 1);
     gv = PL_last_in_gv;
 
     if (gv && (io = GvIO(gv))) {

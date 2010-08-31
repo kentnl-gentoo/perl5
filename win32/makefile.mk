@@ -39,7 +39,7 @@ INST_TOP	*= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	*= \5.12.1
+#INST_VER	*= \5.12.2
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -221,8 +221,6 @@ CCHOME		*= C:\MinGW
 .ELSE
 CCHOME		*= $(MSVCDIR)
 .ENDIF
-CCINCDIR	*= $(CCHOME)\include
-CCLIBDIR	*= $(CCHOME)\lib
 
 #
 # If building with gcc-4.x.x (or x86_64-w64-mingw32-gcc-4.x.x), then
@@ -246,6 +244,18 @@ CCLIBDIR	*= $(CCHOME)\lib
 # instead of the usual 'gcc'.
 #
 #GCCCROSS	*= define
+
+#
+# Following sets $Config{incpath} and $Config{libpth}
+#
+
+.IF "$(GCCCROSS)" == "define"
+CCINCDIR *= $(CCHOME)\mingw\include
+CCLIBDIR *= $(CCHOME)\mingw\lib
+.ELSE
+CCINCDIR *= $(CCHOME)\include
+CCLIBDIR *= $(CCHOME)\lib
+.ENDIF
 
 #
 # Additional compiler flags can be specified here.
@@ -1078,9 +1088,6 @@ all : CHECKDMAKE .\config.h ..\git_version.h $(GLOBEXE) $(MINIPERL) $(MK2)	\
 	$(RIGHTMAKE) $(MINIMOD) $(CONFIGPM) $(UNIDATAFILES) MakePPPort		\
 	$(PERLEXE) $(X2P) Extensions Extensions_nonxs $(PERLSTATIC)
 
-..\regcharclass.h : ..\Porting\regcharclass.pl
-	cd .. && miniperl Porting\regcharclass.pl && cd win32
-
 regnodes : ..\regnodes.h
 
 ..\regcomp$(o) : ..\regnodes.h ..\regcharclass.h	
@@ -1493,7 +1500,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl5121delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perl5122delta.pod ..\pod\perldelta.pod
 	cd ..\pod && $(MAKE) -f ..\win32\pod.mak converters
 	$(PERLEXE) $(PL2BAT) $(UTILS)
 	$(PERLEXE) $(ICWD) ..\autodoc.pl ..

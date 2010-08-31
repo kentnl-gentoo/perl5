@@ -1619,6 +1619,7 @@ Perl_die_where(pTHX_ SV *msv)
 
 	if (cxix >= 0) {
 	    I32 optype;
+	    SV *namesv;
 	    register PERL_CONTEXT *cx;
 	    SV **newsp;
 
@@ -1634,6 +1635,7 @@ Perl_die_where(pTHX_ SV *msv)
 		my_exit(1);
 	    }
 	    POPEVAL(cx);
+	    namesv = cx->blk_eval.old_namesv;
 
 	    if (gimme == G_SCALAR)
 		*++newsp = &PL_sv_undef;
@@ -1649,8 +1651,8 @@ Perl_die_where(pTHX_ SV *msv)
 
 	    if (optype == OP_REQUIRE) {
                 const char* const msg = SvPVx_nolen_const(ERRSV);
-		SV * const nsv = cx->blk_eval.old_namesv;
-                (void)hv_store(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv),
+                (void)hv_store(GvHVn(PL_incgv),
+                               SvPVX_const(namesv), SvCUR(namesv),
                                &PL_sv_undef, 0);
 		DIE(aTHX_ "%sCompilation failed in require",
 		    *msg ? msg : "Unknown error\n");
@@ -1797,11 +1799,8 @@ PP(pp_caller)
 	AV * const ary = cx->blk_sub.argarray;
 	const int off = AvARRAY(ary) - AvALLOC(ary);
 
-	if (!PL_dbargs) {
-	    PL_dbargs = GvAV(gv_AVadd(gv_fetchpvs("DB::args", GV_ADDMULTI,
-						  SVt_PVAV)));
-	    AvREAL_off(PL_dbargs);	/* XXX should be REIFY (see av.h) */
-	}
+	if (!PL_dbargs)
+	    Perl_init_dbargs(aTHX);
 
 	if (AvMAX(PL_dbargs) < AvFILLp(ary) + off)
 	    av_extend(PL_dbargs, AvFILLp(ary) + off);
@@ -2112,6 +2111,7 @@ PP(pp_return)
     SV **newsp;
     PMOP *newpm;
     I32 optype = 0;
+    SV *namesv;
     SV *sv;
     OP *retop = NULL;
 
@@ -2154,6 +2154,7 @@ PP(pp_return)
 	if (!(PL_in_eval & EVAL_KEEPERR))
 	    clear_errsv = TRUE;
 	POPEVAL(cx);
+	namesv = cx->blk_eval.old_namesv;
 	retop = cx->blk_eval.retop;
 	if (CxTRYBLOCK(cx))
 	    break;
@@ -2162,9 +2163,10 @@ PP(pp_return)
 	    (MARK == SP || (gimme == G_SCALAR && !SvTRUE(*SP))) )
 	{
 	    /* Unassume the success we assumed earlier. */
-	    SV * const nsv = cx->blk_eval.old_namesv;
-	    (void)hv_delete(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv), G_DISCARD);
-	    DIE(aTHX_ "%"SVf" did not return a true value", SVfARG(nsv));
+	    (void)hv_delete(GvHVn(PL_incgv),
+			    SvPVX_const(namesv), SvCUR(namesv),
+			    G_DISCARD);
+	    DIE(aTHX_ "%"SVf" did not return a true value", SVfARG(namesv));
 	}
 	break;
     case CXt_FORMAT:
@@ -3109,8 +3111,9 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	CLEAR_ERRSV();
     if (yyparse() || PL_parser->error_count || !PL_eval_root) {
 	SV **newsp;			/* Used by POPBLOCK. */
-	PERL_CONTEXT *cx = &cxstack[cxstack_ix];
+	PERL_CONTEXT *cx = NULL;
 	I32 optype = 0;			/* Might be reset by POPEVAL. */
+	SV *namesv = NULL;
 	const char *msg;
 
 	PL_op = saveop;
@@ -3122,15 +3125,23 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 	if (!startop) {
 	    POPBLOCK(cx,PL_curpm);
 	    POPEVAL(cx);
+	    namesv = cx->blk_eval.old_namesv;
 	}
 	lex_end();
 	LEAVE_with_name("eval"); /* pp_entereval knows about this LEAVE.  */
 
 	msg = SvPVx_nolen_const(ERRSV);
 	if (optype == OP_REQUIRE) {
-	    const SV * const nsv = cx->blk_eval.old_namesv;
-	    (void)hv_store(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv),
-                          &PL_sv_undef, 0);
+	    if (!cx) {
+		/* If cx is still NULL, it means that we didn't go in the
+		 * POPEVAL branch. */
+		cx = &cxstack[cxstack_ix];
+		assert(CxTYPE(cx) == CXt_EVAL);
+		namesv = cx->blk_eval.old_namesv;
+	    }
+	    (void)hv_store(GvHVn(PL_incgv),
+			   SvPVX_const(namesv), SvCUR(namesv),
+			   &PL_sv_undef, 0);
 	    Perl_croak(aTHX_ "%sCompilation failed in require",
 		       *msg ? msg : "Unknown error\n");
 	}
@@ -3317,21 +3328,21 @@ PP(pp_require)
 	    }
 	}
 
-        /* We do this only with use, not require. */
-	if (PL_compcv &&
-	  /* If we request a version >= 5.9.5, load feature.pm with the
-	   * feature bundle that corresponds to the required version. */
-		vcmp(sv, sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
-	    SV *const importsv = vnormal(sv);
-	    *SvPVX_mutable(importsv) = ':';
-	    ENTER_with_name("load_feature");
-	    Perl_load_module(aTHX_ 0, newSVpvs("feature"), NULL, importsv, NULL);
-	    LEAVE_with_name("load_feature");
-	}
-	/* If a version >= 5.11.0 is requested, strictures are on by default! */
-	if (PL_compcv &&
-		vcmp(sv, sv_2mortal(upg_version(newSVnv(5.011000), FALSE))) >= 0) {
-	    PL_hints |= (HINT_STRICT_REFS | HINT_STRICT_SUBS | HINT_STRICT_VARS);
+	/* We do this only with "use", not "require" or "no". */
+	if (PL_compcv && !(cUNOP->op_first->op_private & OPpCONST_NOVER)) {
+	    /* If we request a version >= 5.9.5, load feature.pm with the
+	     * feature bundle that corresponds to the required version. */
+	    if (vcmp(sv, sv_2mortal(upg_version(newSVnv(5.009005), FALSE))) >= 0) {
+		SV *const importsv = vnormal(sv);
+		*SvPVX_mutable(importsv) = ':';
+		ENTER_with_name("load_feature");
+		Perl_load_module(aTHX_ 0, newSVpvs("feature"), NULL, importsv, NULL);
+		LEAVE_with_name("load_feature");
+	    }
+	    /* If a version >= 5.11.0 is requested, strictures are on by default! */
+	    if (vcmp(sv, sv_2mortal(upg_version(newSVnv(5.011000), FALSE))) >= 0) {
+		PL_hints |= (HINT_STRICT_REFS | HINT_STRICT_SUBS | HINT_STRICT_VARS);
+	    }
 	}
 
 	RETPUSHYES;
@@ -3423,11 +3434,6 @@ PP(pp_require)
 			count = call_sv(loader, G_ARRAY);
 		    SPAGAIN;
 
-		    /* Adjust file name if the hook has set an %INC entry */
-		    svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
-		    if (svp)
-			tryname = SvPV_nolen_const(*svp);
-
 		    if (count > 0) {
 			int i = 0;
 			SV *arg;
@@ -3488,6 +3494,12 @@ PP(pp_require)
 		    PUTBACK;
 		    FREETMPS;
 		    LEAVE_with_name("call_INC");
+
+		    /* Adjust file name if the hook has set an %INC entry.
+		       This needs to happen after the FREETMPS above.  */
+		    svp = hv_fetch(GvHVn(PL_incgv), name, len, 0);
+		    if (svp)
+			tryname = SvPV_nolen_const(*svp);
 
 		    if (tryrsfp) {
 			hook_sv = dirsv;
@@ -3827,9 +3839,11 @@ PP(pp_leaveeval)
     OP *retop;
     const U8 save_flags = PL_op -> op_flags;
     I32 optype;
+    SV *namesv;
 
     POPBLOCK(cx,newpm);
     POPEVAL(cx);
+    namesv = cx->blk_eval.old_namesv;
     retop = cx->blk_eval.retop;
 
     TAINT_NOT;
@@ -3870,9 +3884,11 @@ PP(pp_leaveeval)
 	!(gimme == G_SCALAR ? SvTRUE(*SP) : SP > newsp))
     {
 	/* Unassume the success we assumed earlier. */
-	SV * const nsv = cx->blk_eval.old_namesv;
-	(void)hv_delete(GvHVn(PL_incgv), SvPVX_const(nsv), SvCUR(nsv), G_DISCARD);
-	retop = Perl_die(aTHX_ "%"SVf" did not return a true value", SVfARG(nsv));
+	(void)hv_delete(GvHVn(PL_incgv),
+			SvPVX_const(namesv), SvCUR(namesv),
+			G_DISCARD);
+	retop = Perl_die(aTHX_ "%"SVf" did not return a true value",
+			 SVfARG(namesv));
 	/* die_where() did LEAVE, or we won't be here */
     }
     else {

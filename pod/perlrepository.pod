@@ -64,7 +64,7 @@ directory.
 
 If you cloned using the git protocol, which is faster than ssh, then
 you will need to modify the URL for the origin remote to enable
-pushing. To do that edit F<.git/config> with L<git-config(1)> like
+pushing. To do that edit F<.git/config> with git-config(1) like
 this:
 
   % git config remote.origin.url ssh://perl5.git.perl.org/perl.git
@@ -175,10 +175,6 @@ remotes simultaneously you can do
 Neither of these last two commands will update your working directory,
 however both will update the remote-tracking branches in your
 repository.
-
-To switch to another branch:
-
-  % git checkout origin/maint-5.8-dor
 
 To make a local branch of a remote branch:
 
@@ -356,13 +352,19 @@ itself you can fix it up by editing the files once more and then issue:
 
 Now you should create a patch file for all your local changes:
 
-  % git format-patch origin
+  % git format-patch -M origin..
   0001-Rename-Leon-Brocard-to-Orange-Brocard.patch
 
-You should now send an email to perl5-porters@perl.org with a
-description of your changes, and include this patch file as an
-attachment.  (See the next section for how to configure and use git to
-send these emails for you.)
+You should now send an email to to
+L<perlbug@perl.org|mailto:perlbug@perl.org> with a description of your
+changes, and include this patch file as an attachment. In addition to
+being tracked by RT, mail to perlbug will automatically be forwarded
+to perl5-porters. You should only send patches to
+L<perl5-porters@perl.org|mailto:perl5-porters@perl.org> directly if the
+patch is not ready to be applied, but intended for discussion.
+
+See the next section for how to configure and use git to send these
+emails for you.
 
 If you want to delete your temporary branch, you may do so with:
 
@@ -375,8 +377,12 @@ If you want to delete your temporary branch, you may do so with:
 
 =head2 Using git to send patch emails
 
-In your ~/git/perl repository, set the destination email to the
-perl5-porters mailing list.
+In your ~/git/perl repository, set the destination email to perl's bug
+tracker:
+
+  $ git config sendemail.to perlbug@perl.org
+
+Or maybe perl5-porters (discussed above):
 
   $ git config sendemail.to perl5-porters@perl.org
 
@@ -403,7 +409,7 @@ Be aware that many files in the distribution are derivative--avoid
 patching them, because git won't see the changes to them, and the build
 process will overwrite them. Patch the originals instead.  Most
 utilities (like perldoc) are in this category, i.e. patch
-utils/perldoc.PL rather than utils/perldoc. Similarly, don't create
+F<utils/perldoc.PL> rather than F<utils/perldoc>. Similarly, don't create
 patches for files under $src_root/ext from their copies found in
 $install_root/lib.  If you are unsure about the proper location of a
 file that may have gotten copied while building the source
@@ -421,7 +427,6 @@ immediately after the source-changes that caused them, so as to have
 as little effect as possible on the bisectability of your patchset.
 
 =for XXX
-
 What should we recommend about binary files now? Do we need anything?
 
 =head2 Getting your patch accepted
@@ -733,8 +738,8 @@ The same patch as above, using github might look like this:
   % git push origin orange
 
 The orange branch has been pushed to GitHub, so you should now send an
-email to perl5-porters@perl.org with a description of your changes and
-the following information:
+email (see L</SUBMITTING A PATCH>) with a description of your changes
+and the following information:
 
   http://github.com/USERNAME/perl/tree/orange
   git@github.com:USERNAME/perl.git branch orange
@@ -877,9 +882,18 @@ C<.git/info/grafts> file:
 It is particularly important to have this graft line if any bisecting
 is done in the area of the "merge" in question.
 
-
-
 =head1 SEE ALSO
 
-The git documentation, accessible via C<git help command>.
+=over
 
+=item *
+
+The git documentation, accessible via the C<git help> command
+
+=item *
+
+L<perlpolicy> - Perl core development policy
+
+=back
+
+=cut

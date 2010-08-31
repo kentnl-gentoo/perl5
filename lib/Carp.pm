@@ -1,6 +1,6 @@
 package Carp;
 
-our $VERSION = '1.16';
+our $VERSION = '1.17';
 
 our $MaxEvalLen = 0;
 our $Verbose    = 0;
@@ -66,11 +66,14 @@ sub cluck   { warn longmess  @_ }
 
 sub caller_info {
   my $i = shift(@_) + 1;
-  package DB;
   my %call_info;
+  {
+  package DB;
+  @args = \$i; # A sentinal, which no-one else has the address of
   @call_info{
     qw(pack file line sub has_args wantarray evaltext is_require)
   } = defined &{"CORE::GLOBAL::caller"} ? &{"CORE::GLOBAL::caller"}($i) : caller($i);
+  }
   
   unless (defined $call_info{pack}) {
     return ();
@@ -78,7 +81,13 @@ sub caller_info {
 
   my $sub_name = Carp::get_subname(\%call_info);
   if ($call_info{has_args}) {
-    my @args = map {Carp::format_arg($_)} @DB::args;
+    my @args;
+    if (@DB::args == 1 && ref $DB::args[0] eq ref \$i && $DB::args[0] == \$i) {
+      @DB::args = (); # Don't let anyone see the address of $i
+      @args = "** Incomplete caller override detected; \@DB::args were not set **";
+    } else {
+      @args = map {Carp::format_arg($_)} @DB::args;
+    }
     if ($MaxArgNums and @args > $MaxArgNums) { # More than we want to show?
       $#args = $MaxArgNums;
       push @args, '...';
