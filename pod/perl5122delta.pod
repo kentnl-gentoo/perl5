@@ -279,10 +279,6 @@ Several memory leaks in L<stat()|perlfunc/"stat FILEHANDLE"> have been fixed.
 
 =item *
 
-A memory leak in F<vms.c>'s C<Perl_flex_stat_int()> has been fixed.
-
-=item *
-
 A memory leak in C<Perl_rename()> due to a double allocation has been
 fixed.
 
@@ -301,7 +297,7 @@ Perl 5.12.1 and contains approximately 2,000 lines of changes across
 
 Perl continues to flourish into its third decade thanks to a vibrant
 community of users and developers.  The following people are known to
-have contributed the improvements that became Perl 5.12.1:
+have contributed the improvements that became Perl 5.12.2:
 
 Abigail, Ævar Arnfjörð Bjarmason, Ben Morrow, brian d foy, Brian
 Phillips, Chas. Owens, Chris 'BinGOs' Williams, Chris Williams,
