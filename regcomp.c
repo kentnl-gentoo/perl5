@@ -196,7 +196,10 @@ typedef struct RExC_state_t {
  */
 #define	WORST		0	/* Worst case. */
 #define	HASWIDTH	0x01	/* Known to match non-null strings. */
-#define	SIMPLE		0x02	/* Simple enough to be STAR/PLUS operand. */
+
+/* Simple enough to be STAR/PLUS operand, in an EXACT node must be a single
+ * character, and if utf8, must be invariant. */
+#define	SIMPLE		0x02
 #define	SPSTART		0x04	/* Starts with * or +. */
 #define TRYAGAIN	0x08	/* Weeded out a declaration. */
 #define POSTPONED	0x10    /* (?1),(?&name), (??{...}) or similar */
@@ -218,6 +221,11 @@ typedef struct RExC_state_t {
 #define PAREN_SET(u8str,paren) PBYTE(u8str,paren) |= PBITVAL(paren)
 #define PAREN_UNSET(u8str,paren) PBYTE(u8str,paren) &= (~PBITVAL(paren))
 
+/* If not already in utf8, do a longjmp back to the beginning */
+#define UTF8_LONGJMP 42 /* Choose a value not likely to ever conflict */
+#define REQUIRE_UTF8	STMT_START {                                       \
+                                     if (! UTF) JMPENV_JUMP(UTF8_LONGJMP); \
+                        } STMT_END
 
 /* About scan_data_t.
 
@@ -3289,11 +3297,11 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 
 #ifdef DEBUGGING
 		    OP(nxt1 + 1) = OPTIMIZED; /* was count. */
-		    NEXT_OFF(nxt1+ 1) = 0; /* just for consistancy. */
-		    NEXT_OFF(nxt2) = 0;	/* just for consistancy with CURLY. */
+		    NEXT_OFF(nxt1+ 1) = 0; /* just for consistency. */
+		    NEXT_OFF(nxt2) = 0;	/* just for consistency with CURLY. */
 		    OP(nxt) = OPTIMIZED;	/* was CLOSE. */
 		    OP(nxt + 1) = OPTIMIZED; /* was count. */
-		    NEXT_OFF(nxt+ 1) = 0; /* just for consistancy. */
+		    NEXT_OFF(nxt+ 1) = 0; /* just for consistency. */
 #endif
 		}
 	      nogo:
@@ -4269,6 +4277,8 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
     I32 minlen = 0;
     I32 sawplus = 0;
     I32 sawopen = 0;
+    U8 jump_ret = 0;
+    dJMPENV;
     scan_data_t data;
     RExC_state_t RExC_state;
     RExC_state_t * const pRExC_state = &RExC_state;
@@ -4292,7 +4302,39 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
 		       PL_colors[4],PL_colors[5],s);
     });
 
-redo_first_pass:
+    /* Longjmp back to here if have to switch in midstream to utf8 */
+    if (! RExC_orig_utf8) {
+	JMPENV_PUSH(jump_ret);
+    }
+
+    if (jump_ret != 0) {
+        STRLEN len = plen;
+
+        /* Here, we longjmped back.  If the cause was other than changing to
+         * utf8, pop our own setjmp, and longjmp to the correct handler */
+	if (jump_ret != UTF8_LONGJMP) {
+	    JMPENV_POP;
+	    JMPENV_JUMP(jump_ret);
+	}
+
+	GET_RE_DEBUG_FLAGS;
+
+        /* It's possible to write a regexp in ascii that represents Unicode
+        codepoints outside of the byte range, such as via \x{100}. If we
+        detect such a sequence we have to convert the entire pattern to utf8
+        and then recompile, as our sizing calculation will have been based
+        on 1 byte == 1 character, but we will need to use utf8 to encode
+        at least some part of the pattern, and therefore must convert the whole
+        thing.
+        -- dmq */
+        DEBUG_PARSE_r(PerlIO_printf(Perl_debug_log,
+	    "UTF8 mismatch! Converting to utf8 for resizing and compile\n"));
+        exp = (char*)Perl_bytes_to_utf8(aTHX_ (U8*)SvPV(pattern, plen), &len);
+        xend = exp + len;
+        RExC_orig_utf8 = RExC_utf8 = 1;
+        SAVEFREEPV(exp);
+    }
+
     RExC_precomp = exp;
     RExC_flags = pm_flags;
     RExC_sawback = 0;
@@ -4331,24 +4373,14 @@ redo_first_pass:
 	RExC_precomp = NULL;
 	return(NULL);
     }
-    if (RExC_utf8 && !RExC_orig_utf8) {
-        /* It's possible to write a regexp in ascii that represents Unicode
-        codepoints outside of the byte range, such as via \x{100}. If we
-        detect such a sequence we have to convert the entire pattern to utf8
-        and then recompile, as our sizing calculation will have been based
-        on 1 byte == 1 character, but we will need to use utf8 to encode
-        at least some part of the pattern, and therefore must convert the whole
-        thing.
-        XXX: somehow figure out how to make this less expensive...
-        -- dmq */
-        STRLEN len = plen;
-        DEBUG_PARSE_r(PerlIO_printf(Perl_debug_log,
-	    "UTF8 mismatch! Converting to utf8 for resizing and compile\n"));
-        exp = (char*)Perl_bytes_to_utf8(aTHX_ (U8*)exp, &len);
-        xend = exp + len;
-        RExC_orig_utf8 = RExC_utf8;
-        SAVEFREEPV(exp);
-        goto redo_first_pass;
+
+    /* Here, finished first pass.  Get rid of our setjmp, which we added for
+     * efficiency only if the passed-in string wasn't in utf8, as shown by
+     * RExC_orig_utf8.  But if the first pass was redone, that variable will be
+     * 1 here even though the original string wasn't utf8, but in this case
+     * there will have been a long jump */
+    if (jump_ret == UTF8_LONGJMP || ! RExC_orig_utf8) {
+	JMPENV_POP;
     }
     DEBUG_PARSE_r({
         PerlIO_printf(Perl_debug_log, 
@@ -6744,7 +6776,7 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp)
 	return (regnode *) &RExC_parse; /* Invalid regnode pointer */
     }
 
-    RExC_utf8 = 1;	/* named sequences imply Unicode semantics */
+    REQUIRE_UTF8;	/* named sequences imply Unicode semantics */
     RExC_parse += 2;	/* Skip past the 'U+' */
 
     if (valuep) {   /* In a bracketed char class */
@@ -6789,7 +6821,7 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp)
     }
     else {	/* Not a char class */
 	char *s;	    /* String to put in generated EXACT node */
-	STRLEN len = 0;	    /* Its current length */
+	STRLEN len = 0;	    /* Its current byte length */
 	char *endchar;	    /* Points to '.' or '}' ending cur char in the input
 			       stream */
 
@@ -6799,7 +6831,7 @@ S_reg_namedseq(pTHX_ RExC_state_t *pRExC_state, UV *valuep, I32 *flagp)
 
 	/* Exact nodes can hold only a U8 length's of text = 255.  Loop through
 	 * the input which is of the form now 'c1.c2.c3...}' until find the
-	 * ending brace or exeed length 255.  The characters that exceed this
+	 * ending brace or exceed length 255.  The characters that exceed this
 	 * limit are dropped.  The limit could be relaxed should it become
 	 * desirable by reparsing this as (?:\N{NAME}), so could generate
 	 * multiple EXACT nodes, as is done for just regular input.  But this
@@ -7485,7 +7517,7 @@ tryagain:
 				goto recode_encoding;
 			    }
 			    if (ender > 0xff) {
-				RExC_utf8 = 1;
+				REQUIRE_UTF8;
 			    }
 			    break;
 			}
@@ -7503,7 +7535,7 @@ tryagain:
                                 STRLEN numlen = e - p - 1;
 				ender = grok_hex(p + 1, &numlen, &flags, NULL);
 				if (ender > 0xff)
-				    RExC_utf8 = 1;
+				    REQUIRE_UTF8;
 				p = e + 1;
 			    }
 			}
@@ -7523,12 +7555,13 @@ tryagain:
 		    case '0': case '1': case '2': case '3':case '4':
 		    case '5': case '6': case '7': case '8':case '9':
 			if (*p == '0' ||
-			  (isDIGIT(p[1]) && atoi(p) >= RExC_npar) ) {
-                            I32 flags = 0;
+			    (isOCTAL(p[1]) && atoi(p) >= RExC_npar))
+			{
+			    I32 flags = PERL_SCAN_SILENT_ILLDIGIT;
 			    STRLEN numlen = 3;
 			    ender = grok_oct(p, &numlen, &flags, NULL);
 			    if (ender > 0xff) {
-				RExC_utf8 = 1;
+				REQUIRE_UTF8;
 			    }
 			    p += numlen;
 			}
@@ -7545,7 +7578,7 @@ tryagain:
 			    ender = reg_recode((const char)(U8)ender, &enc);
 			    if (!enc && SIZE_ONLY)
 				ckWARNreg(p, "Invalid escape in the specified encoding");
-			    RExC_utf8 = 1;
+			    REQUIRE_UTF8;
 			}
 			break;
 		    case '\0':
@@ -8147,9 +8180,10 @@ parseit:
 		value = grok_bslash_c(*RExC_parse++, SIZE_ONLY);
 		break;
 	    case '0': case '1': case '2': case '3': case '4':
-	    case '5': case '6': case '7': case '8': case '9':
+	    case '5': case '6': case '7':
 		{
-		    I32 flags = 0;
+		    /* Take 1-3 octal digits */
+		    I32 flags = PERL_SCAN_SILENT_ILLDIGIT;
 		    numlen = 3;
 		    value = grok_oct(--RExC_parse, &numlen, &flags, NULL);
 		    RExC_parse += numlen;
@@ -8167,10 +8201,12 @@ parseit:
 		    break;
 		}
 	    default:
-		if (!SIZE_ONLY && isALPHA(value))
+		/* Allow \_ to not give an error */
+		if (!SIZE_ONLY && isALNUM(value) && value != '_') {
 		    ckWARN2reg(RExC_parse,
 			       "Unrecognized escape \\%c in character class passed through",
 			       (int)value);
+		}
 		break;
 	    }
 	} /* end of \blah */

@@ -2,9 +2,9 @@ package Safe;
 
 use 5.003_11;
 use strict;
-use Scalar::Util qw(reftype);
+use Scalar::Util qw(reftype refaddr);
 
-$Safe::VERSION = "2.27";
+$Safe::VERSION = "2.28";
 
 # *** Don't declare any lexicals above this point ***
 #
@@ -362,10 +362,12 @@ sub reval {
     return (wantarray) ? @subret : $subret[0];
 }
 
+my %OID;
 
 sub wrap_code_refs_within {
     my $obj = shift;
 
+    %OID = ();
     $obj->_find_code_refs('wrap_code_ref', @_);
 }
 
@@ -377,6 +379,10 @@ sub _find_code_refs {
     for my $item (@_) {
         my $reftype = $item && reftype $item
             or next;
+
+        # skip references already seen
+        next if ++$OID{refaddr $item} > 1;
+
         if ($reftype eq 'ARRAY') {
             $obj->_find_code_refs($visitor, @$item);
         }

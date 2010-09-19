@@ -90,6 +90,7 @@
 #define boot_core_PerlIO	Perl_boot_core_PerlIO
 #endif
 #define call_list		Perl_call_list
+#define caller_cx		Perl_caller_cx
 #ifdef PERL_CORE
 #define cando			Perl_cando
 #endif
@@ -102,6 +103,10 @@
 #endif
 #ifdef PERL_CORE
 #define convert			Perl_convert
+#endif
+#define cop_hints_2hv		Perl_cop_hints_2hv
+#define cop_hints_fetchpvn	Perl_cop_hints_fetchpvn
+#ifdef PERL_CORE
 #define create_eval_scope	Perl_create_eval_scope
 #endif
 #define croak_sv		Perl_croak_sv
@@ -304,6 +309,7 @@
 #define gv_stashpvn		Perl_gv_stashpvn
 #define gv_stashsv		Perl_gv_stashsv
 #define hv_clear		Perl_hv_clear
+#define hv_copy_hints_hv	Perl_hv_copy_hints_hv
 #define hv_delayfree_ent	Perl_hv_delayfree_ent
 #define hv_common		Perl_hv_common
 #define hv_common_key_len	Perl_hv_common_key_len
@@ -441,6 +447,7 @@
 #define lex_peek_unichar	Perl_lex_peek_unichar
 #define lex_read_unichar	Perl_lex_read_unichar
 #define lex_read_space		Perl_lex_read_space
+#define parse_fullstmt		Perl_parse_fullstmt
 #define op_null			Perl_op_null
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define op_clear		Perl_op_clear
@@ -706,6 +713,7 @@
 #ifdef PERL_CORE
 #define pad_swipe		Perl_pad_swipe
 #define peep			Perl_peep
+#define rpeep			Perl_rpeep
 #endif
 #if defined(USE_REENTRANT_API)
 #define reentrant_size		Perl_reentrant_size
@@ -846,9 +854,7 @@
 #define save_shared_pvref	Perl_save_shared_pvref
 #define save_gp			Perl_save_gp
 #define save_hash		Perl_save_hash
-#ifdef PERL_CORE
 #define save_hints		Perl_save_hints
-#endif
 #define save_helem_flags	Perl_save_helem_flags
 #define save_hptr		Perl_save_hptr
 #define save_I16		Perl_save_I16
@@ -1108,6 +1114,7 @@
 #define yylex			Perl_yylex
 #endif
 #ifdef PERL_CORE
+#define yyunlex			Perl_yyunlex
 #define yyparse			Perl_yyparse
 #define parser_free		Perl_parser_free
 #endif
@@ -1241,6 +1248,8 @@
 #if defined(PERL_IN_GV_C)
 #ifdef PERL_CORE
 #define gv_init_sv		S_gv_init_sv
+#define gv_magicalize_isa	S_gv_magicalize_isa
+#define gv_magicalize_overload	S_gv_magicalize_overload
 #define gv_get_super_pkg	S_gv_get_super_pkg
 #define require_tie_mod		S_require_tie_mod
 #endif
@@ -1614,7 +1623,6 @@
 #  endif
 #ifdef PERL_CORE
 #define more_sv			S_more_sv
-#define more_bodies		S_more_bodies
 #define sv_2iuv_common		S_sv_2iuv_common
 #define glob_assign_glob	S_glob_assign_glob
 #define glob_assign_ref		S_glob_assign_ref
@@ -1979,9 +1987,6 @@
 #define ckwarn_common		S_ckwarn_common
 #endif
 #endif
-#ifdef PERL_CORE
-#define offer_nice_chunk	Perl_offer_nice_chunk
-#endif
 #ifndef SPRINTF_RETURNS_STRLEN
 #endif
 #ifdef PERL_CORE
@@ -2070,6 +2075,9 @@
 #define mro_method_changed_in	Perl_mro_method_changed_in
 #ifdef PERL_CORE
 #define boot_core_mro		Perl_boot_core_mro
+#endif
+#ifdef PERL_CORE
+#define munge_qwlist_to_paren_list	Perl_munge_qwlist_to_paren_list
 #endif
 #if defined(USE_ITHREADS)
 #  if defined(PERL_IN_SV_C)
@@ -2549,6 +2557,7 @@
 #define boot_core_PerlIO()	Perl_boot_core_PerlIO(aTHX)
 #endif
 #define call_list(a,b)		Perl_call_list(aTHX_ a,b)
+#define caller_cx(a,b)		Perl_caller_cx(aTHX_ a,b)
 #ifdef PERL_CORE
 #define cando(a,b,c)		Perl_cando(aTHX_ a,b,c)
 #endif
@@ -2561,6 +2570,10 @@
 #endif
 #ifdef PERL_CORE
 #define convert(a,b,c)		Perl_convert(aTHX_ a,b,c)
+#endif
+#define cop_hints_2hv(a)	Perl_cop_hints_2hv(aTHX_ a)
+#define cop_hints_fetchpvn(a,b,c,d,e)	Perl_cop_hints_fetchpvn(aTHX_ a,b,c,d,e)
+#ifdef PERL_CORE
 #define create_eval_scope(a)	Perl_create_eval_scope(aTHX_ a)
 #endif
 #define croak_sv(a)		Perl_croak_sv(aTHX_ a)
@@ -2748,8 +2761,7 @@
 #define gv_stashpvn(a,b,c)	Perl_gv_stashpvn(aTHX_ a,b,c)
 #define gv_stashsv(a,b)		Perl_gv_stashsv(aTHX_ a,b)
 #define hv_clear(a)		Perl_hv_clear(aTHX_ a)
-#ifdef PERL_CORE
-#endif
+#define hv_copy_hints_hv(a)	Perl_hv_copy_hints_hv(aTHX_ a)
 #define hv_delayfree_ent(a,b)	Perl_hv_delayfree_ent(aTHX_ a,b)
 #define hv_common(a,b,c,d,e,f,g,h)	Perl_hv_common(aTHX_ a,b,c,d,e,f,g,h)
 #define hv_common_key_len(a,b,c,d,e,f)	Perl_hv_common_key_len(aTHX_ a,b,c,d,e,f)
@@ -2891,6 +2903,7 @@
 #define lex_peek_unichar(a)	Perl_lex_peek_unichar(aTHX_ a)
 #define lex_read_unichar(a)	Perl_lex_read_unichar(aTHX_ a)
 #define lex_read_space(a)	Perl_lex_read_space(aTHX_ a)
+#define parse_fullstmt(a)	Perl_parse_fullstmt(aTHX_ a)
 #define op_null(a)		Perl_op_null(aTHX_ a)
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #define op_clear(a)		Perl_op_clear(aTHX_ a)
@@ -3153,6 +3166,7 @@
 #ifdef PERL_CORE
 #define pad_swipe(a,b)		Perl_pad_swipe(aTHX_ a,b)
 #define peep(a)			Perl_peep(aTHX_ a)
+#define rpeep(a)		Perl_rpeep(aTHX_ a)
 #endif
 #if defined(USE_REENTRANT_API)
 #define reentrant_size()	Perl_reentrant_size(aTHX)
@@ -3294,9 +3308,7 @@
 #define save_shared_pvref(a)	Perl_save_shared_pvref(aTHX_ a)
 #define save_gp(a,b)		Perl_save_gp(aTHX_ a,b)
 #define save_hash(a)		Perl_save_hash(aTHX_ a)
-#ifdef PERL_CORE
 #define save_hints()		Perl_save_hints(aTHX)
-#endif
 #define save_helem_flags(a,b,c,d)	Perl_save_helem_flags(aTHX_ a,b,c,d)
 #define save_hptr(a)		Perl_save_hptr(aTHX_ a)
 #define save_I16(a)		Perl_save_I16(aTHX_ a)
@@ -3552,7 +3564,8 @@
 #define yylex()			Perl_yylex(aTHX)
 #endif
 #ifdef PERL_CORE
-#define yyparse()		Perl_yyparse(aTHX)
+#define yyunlex()		Perl_yyunlex(aTHX)
+#define yyparse(a)		Perl_yyparse(aTHX_ a)
 #define parser_free(a)		Perl_parser_free(aTHX_ a)
 #endif
 #if defined(PERL_IN_TOKE_C)
@@ -3682,11 +3695,11 @@
 #if defined(PERL_IN_GV_C)
 #ifdef PERL_CORE
 #define gv_init_sv(a,b)		S_gv_init_sv(aTHX_ a,b)
+#define gv_magicalize_isa(a,b,c)	S_gv_magicalize_isa(aTHX_ a,b,c)
+#define gv_magicalize_overload(a)	S_gv_magicalize_overload(aTHX_ a)
 #define gv_get_super_pkg(a,b)	S_gv_get_super_pkg(aTHX_ a,b)
 #define require_tie_mod(a,b,c,d,e)	S_require_tie_mod(aTHX_ a,b,c,d,e)
 #endif
-#endif
-#ifdef PERL_CORE
 #endif
 #if defined(PERL_IN_HV_C)
 #ifdef PERL_CORE
@@ -4070,13 +4083,14 @@
 #  endif
 #ifdef PERL_CORE
 #define more_sv()		S_more_sv(aTHX)
-#define more_bodies(a)		S_more_bodies(aTHX_ a)
 #define sv_2iuv_common(a)	S_sv_2iuv_common(aTHX_ a)
 #define glob_assign_glob(a,b,c)	S_glob_assign_glob(aTHX_ a,b,c)
 #define glob_assign_ref(a,b)	S_glob_assign_ref(aTHX_ a,b)
 #define ptr_table_find		S_ptr_table_find
 #define anonymise_cv_maybe(a,b)	S_anonymise_cv_maybe(aTHX_ a,b)
 #endif
+#endif
+#ifdef PERL_CORE
 #endif
 #if defined(PERL_IN_TOKE_C)
 #ifdef PERL_CORE
@@ -4439,9 +4453,6 @@
 #endif
 #if defined(PERL_CORE) || defined(PERL_EXT)
 #endif
-#ifdef PERL_CORE
-#define offer_nice_chunk(a,b)	Perl_offer_nice_chunk(aTHX_ a,b)
-#endif
 #ifndef SPRINTF_RETURNS_STRLEN
 #endif
 #ifdef PERL_CORE
@@ -4506,7 +4517,7 @@
 #  endif
 #ifdef PERL_CORE
 #define madlex()		Perl_madlex(aTHX)
-#define madparse()		Perl_madparse(aTHX)
+#define madparse(a)		Perl_madparse(aTHX_ a)
 #endif
 #endif
 #if !defined(HAS_SIGNBIT)
@@ -4536,6 +4547,7 @@
 #ifdef PERL_CORE
 #endif
 #ifdef PERL_CORE
+#define munge_qwlist_to_paren_list(a)	Perl_munge_qwlist_to_paren_list(aTHX_ a)
 #endif
 #if defined(USE_ITHREADS)
 #  if defined(PERL_IN_SV_C)

@@ -1061,6 +1061,7 @@ PP(pp_aassign)
 	    break;
 	case SVt_PVHV: {				/* normal hash */
 		SV *tmpstr;
+		SV** topelem = relem;
 
 		hash = MUTABLE_HV(sv);
 		magic = SvMAGICAL(hash) != 0;
@@ -1074,10 +1075,19 @@ PP(pp_aassign)
 		    tmpstr = newSV(0);
 		    if (*relem)
 			sv_setsv(tmpstr,*relem);	/* value */
-		    *(relem++) = tmpstr;
-		    if (gimme != G_VOID && hv_exists_ent(hash, sv, 0))
-			/* key overwrites an existing entry */
-			duplicates += 2;
+		    relem++;
+		    if (gimme != G_VOID) {
+			if (hv_exists_ent(hash, sv, 0))
+			    /* key overwrites an existing entry */
+			    duplicates += 2;
+			else
+			if (gimme == G_ARRAY) {
+			    /* copy element back: possibly to an earlier
+			     * stack location if we encountered dups earlier */
+			    *topelem++ = sv;
+			    *topelem++ = tmpstr;
+			}
+		    }
 		    didstore = hv_store_ent(hash,sv,tmpstr,0);
 		    if (magic) {
 			if (SvSMAGICAL(tmpstr))
@@ -1190,11 +1200,20 @@ PP(pp_aassign)
 	    SP = lastrelem;
 	else if (hash) {
 	    if (duplicates) {
-		/* Removes from the stack the entries which ended up as
-		 * duplicated keys in the hash (fix for [perl #24380]) */
-		Move(firsthashrelem + duplicates,
-			firsthashrelem, duplicates, SV**);
+		/* at this point we have removed the duplicate key/value
+		 * pairs from the stack, but the remaining values may be
+		 * wrong; i.e. with (a 1 a 2 b 3) on the stack we've removed
+		 * the (a 2), but the stack now probably contains
+		 * (a <freed> b 3), because { hv_save(a,1); hv_save(a,2) }
+		 * obliterates the earlier key. So refresh all values. */
 		lastrelem -= duplicates;
+		relem = firsthashrelem;
+		while (relem < lastrelem) {
+		    HE *he;
+		    sv = *relem++;
+		    he = hv_fetch_ent(hash, sv, 0, 0);
+		    *relem++ = (he ? HeVAL(he) : &PL_sv_undef);
+		}
 	    }
 	    SP = lastrelem;
 	}
@@ -1335,9 +1354,9 @@ PP(pp_match)
        /g matches against large strings.  So far a solution to this problem
        appears to be quite tricky.
        Test for the unsafe vars are TODO for now. */
-    if ((  !global && RX_NPARENS(rx)) 
-	    || SvTEMP(TARG) || PL_sawampersand ||
-	    (RX_EXTFLAGS(rx) & (RXf_EVAL_SEEN|RXf_PMf_KEEPCOPY)))
+    if (       (!global && RX_NPARENS(rx))
+	    || SvTEMP(TARG) || SvAMAGIC(TARG) || PL_sawampersand
+	    || (RX_EXTFLAGS(rx) & (RXf_EVAL_SEEN|RXf_PMf_KEEPCOPY)))
 	r_flags |= REXEC_COPY_STR;
     if (SvSCREAM(TARG))
 	r_flags |= REXEC_SCREAM;
@@ -2925,7 +2944,7 @@ try_autoload:
 
 	/* CvXSUB(cv) must not be NULL because newXS() refuses NULL xsub address */
 	assert(CvXSUB(cv));
-	CALL_FPTR(CvXSUB(cv))(aTHX_ cv);
+	CvXSUB(cv)(aTHX_ cv);
 
 	/* Enforce some sanity in scalar context. */
 	if (gimme == G_SCALAR && ++markix != PL_stack_sp - PL_stack_base ) {

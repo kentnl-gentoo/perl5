@@ -1275,6 +1275,9 @@ S_doform(pTHX_ CV *cv, GV *gv, OP *retop)
 
     PERL_ARGS_ASSERT_DOFORM;
 
+    if (cv && CvCLONE(cv))
+	cv = MUTABLE_CV(sv_2mortal(MUTABLE_SV(cv_clone(cv))));
+
     ENTER;
     SAVETMPS;
 
@@ -1330,9 +1333,6 @@ PP(pp_enterwrite)
 	not_a_format_reference:
 	DIE(aTHX_ "Not a format reference");
     }
-    if (CvCLONE(cv))
-	cv = MUTABLE_CV(sv_2mortal(MUTABLE_SV(cv_clone(cv))));
-
     IoFLAGS(io) &= ~IOf_DIDTOP;
     return doform(cv,gv,PL_op->op_next);
 }
@@ -1421,8 +1421,6 @@ PP(pp_leavewrite)
 	    else
 		DIE(aTHX_ "Undefined top format called");
 	}
-	if (cv && CvCLONE(cv))
-	    cv = MUTABLE_CV(sv_2mortal(MUTABLE_SV(cv_clone(cv))));
 	return doform(cv, gv, PL_op);
     }
 
@@ -4453,13 +4451,19 @@ PP(pp_setpgrp)
 #endif
 }
 
+#ifdef __GLIBC__
+#  define PRIORITY_WHICH_T(which) (__priority_which_t)which
+#else
+#  define PRIORITY_WHICH_T(which) which
+#endif
+
 PP(pp_getpriority)
 {
 #ifdef HAS_GETPRIORITY
     dVAR; dSP; dTARGET;
     const int who = POPi;
     const int which = TOPi;
-    SETi( getpriority(which, who) );
+    SETi( getpriority(PRIORITY_WHICH_T(which), who) );
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "getpriority()");
@@ -4474,12 +4478,14 @@ PP(pp_setpriority)
     const int who = POPi;
     const int which = TOPi;
     TAINT_PROPER("setpriority");
-    SETi( setpriority(which, who, niceval) >= 0 );
+    SETi( setpriority(PRIORITY_WHICH_T(which), who, niceval) >= 0 );
     RETURN;
 #else
     DIE(aTHX_ PL_no_func, "setpriority()");
 #endif
 }
+
+#undef PRIORITY_WHICH_T
 
 /* Time calls. */
 

@@ -314,6 +314,13 @@ Like C<hv_fetch>, but takes a literal string instead of a string/length pair.
 Like C<hv_store>, but takes a literal string instead of a string/length pair
 and omits the hash parameter.
 
+=head1 Lexer interface
+
+=for apidoc Amx|void|lex_stuff_pvs|const char *pv|U32 flags
+
+Like L</lex_stuff_pvn>, but takes a literal string instead of a
+string/length pair.
+
 =cut
 */
 
@@ -343,6 +350,8 @@ and omits the hash parameter.
 #define hv_stores(hv,key,val)						\
   ((SV **)Perl_hv_common(aTHX_ (hv), NULL, STR_WITH_LEN(key), 0,	\
 			 (HV_FETCH_ISSTORE|HV_FETCH_JUST_SV), (val), 0))
+
+#define lex_stuff_pvs(pv,flags) Perl_lex_stuff_pvn(aTHX_ STR_WITH_LEN(pv), flags)
 
 #define get_cvs(str, flags)					\
 	Perl_get_cvn_flags(aTHX_ STR_WITH_LEN(str), (flags))
@@ -446,6 +455,10 @@ whitespace.
 Returns a boolean indicating whether the C C<char> is a US-ASCII (Basic Latin)
 digit.
 
+=for apidoc Am|bool|isOCTAL|char ch
+Returns a boolean indicating whether the C C<char> is a US-ASCII (Basic Latin)
+octal digit, [0-7].
+
 =for apidoc Am|bool|isUPPER|char ch
 Returns a boolean indicating whether the C C<char> is a US-ASCII (Basic Latin)
 uppercase character.
@@ -473,6 +486,20 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 
 */
 
+/* FITS_IN_8_BITS(c) returns true if c occupies no more than 8 bits.  It is
+ * designed to be hopefully bomb-proof, making sure that no bits of
+ * information are lost even on a 64-bit machine, but to get the compiler to
+ * optimize it out if possible.  This is because Configure makes sure that the
+ * machine has an 8-bit byte, so if c is stored in a byte, the sizeof()
+ * guarantees that this evaluates to a constant true at compile time.  The use
+ * of the mask instead of '< 256' keeps gcc from complaining that it is alway
+ * true, when c's storage class is a byte */
+#ifdef HAS_QUAD
+#  define FITS_IN_8_BITS(c) ((sizeof(c) == 1) || (((U64)(c) & 0xFF) == (U64)(c)))
+#else
+#  define FITS_IN_8_BITS(c) ((sizeof(c) == 1) || (((U32)(c) & 0xFF) == (U32)(c)))
+#endif
+
 #define isALNUM(c)	(isALPHA(c) || isDIGIT(c) || (c) == '_')
 #define isIDFIRST(c)	(isALPHA(c) || (c) == '_')
 #define isALPHA(c)	(isUPPER(c) || isLOWER(c))
@@ -493,6 +520,7 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 #define isPSXSPC(c)	(isSPACE(c) || (c) == '\v')
 #define isBLANK(c)	((c) == ' ' || (c) == '\t')
 #define isDIGIT(c)	((c) >= '0' && (c) <= '9')
+#define isOCTAL(c)	((c) >= '0' && (c) <= '7')
 #ifdef EBCDIC
     /* In EBCDIC we do not do locales: therefore() isupper() is fine. */
 #   define isUPPER(c)	isupper(c)
@@ -505,9 +533,7 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 #   define isPUNCT(c)	ispunct(c)
 #   define isXDIGIT(c)	isxdigit(c)
 #   define toUPPER(c)	toupper(c)
-#   define toUPPER_LATIN1_MOD(c)    UNI_TO_NATIVE(PL_mod_latin1_uc[(U8) NATIVE_TO_UNI(c)])
 #   define toLOWER(c)	tolower(c)
-#   define toLOWER_LATIN1(c)	UNI_TO_NATIVE(PL_latin1_lc[(U8) NATIVE_TO_UNI(c)])
 #else
 #   define isUPPER(c)	((c) >= 'A' && (c) <= 'Z')
 #   define isLOWER(c)	((c) >= 'a' && (c) <= 'z')
@@ -519,12 +545,20 @@ patched there.  The file as of this writing is cpan/Devel-PPPort/parts/inc/misc
 #   define isPUNCT(c)	(((c) >= 33 && (c) <= 47) || ((c) >= 58 && (c) <= 64)  || ((c) >= 91 && (c) <= 96) || ((c) >= 123 && (c) <= 126))
 #   define isXDIGIT(c)  (isDIGIT(c) || ((c) >= 'a' && (c) <= 'f') || ((c) >= 'A' && (c) <= 'F'))
 
-/* Use table lookup for speed */
-#   define toLOWER_LATIN1(c)	(PL_latin1_lc[(U8) c])
 
-/* Modified uc.  Is correct uc except for three non-ascii chars which are
- * all mapped to one of them, and these need special handling */
-#   define toUPPER_LATIN1_MOD(c)    (PL_mod_latin1_uc[(U8) c])
+    /* Use table lookup for speed; return error character for input
+     * out-of-range */
+#   define toLOWER_LATIN1(c)    (FITS_IN_8_BITS(c)                            \
+                                ? UNI_TO_NATIVE(PL_latin1_lc[                 \
+                                                  NATIVE_TO_UNI( (U8) (c)) ]) \
+                                : UNICODE_REPLACEMENT)
+    /* Modified uc.  Is correct uc except for three non-ascii chars which are
+     * all mapped to one of them, and these need special handling; error
+     * character for input out-of-range */
+#   define toUPPER_LATIN1_MOD(c) (FITS_IN_8_BITS(c)                           \
+                                 ? UNI_TO_NATIVE(PL_mod_latin1_uc[            \
+                                                  NATIVE_TO_UNI( (U8) (c)) ]) \
+                                 : UNICODE_REPLACEMENT)
 
 /* ASCII casing. */
 #   define toUPPER(c)	(isLOWER(c) ? (c) - ('a' - 'A') : (c))

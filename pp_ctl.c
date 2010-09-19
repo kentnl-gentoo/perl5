@@ -1670,20 +1670,32 @@ PP(pp_xor)
 	RETSETNO;
 }
 
-PP(pp_caller)
+/*
+=for apidoc caller_cx
+
+The XSUB-writer's equivalent of L<caller()|perlfunc/caller>. The
+returned C<PERL_CONTEXT> structure can be interrogated to find all the
+information returned to Perl by C<caller>. Note that XSUBs don't get a
+stack frame, so C<caller_cx(0, NULL)> will return information for the
+immediately-surrounding Perl code.
+
+This function skips over the automatic calls to C<&DB::sub> made on the
+behalf of the debugger. If the stack frame requested was a sub called by
+C<DB::sub>, the return value will be the frame for the call to
+C<DB::sub>, since that has the correct line number/etc. for the call
+site. If I<dbcxp> is non-C<NULL>, it will be set to a pointer to the
+frame for the sub call itself.
+
+=cut
+*/
+
+const PERL_CONTEXT *
+Perl_caller_cx(pTHX_ I32 count, const PERL_CONTEXT **dbcxp)
 {
-    dVAR;
-    dSP;
     register I32 cxix = dopoptosub(cxstack_ix);
     register const PERL_CONTEXT *cx;
     register const PERL_CONTEXT *ccstack = cxstack;
     const PERL_SI *top_si = PL_curstackinfo;
-    I32 gimme;
-    const char *stashname;
-    I32 count = 0;
-
-    if (MAXARG)
-	count = POPi;
 
     for (;;) {
 	/* we may be in a higher stacklevel, so dig down deeper */
@@ -1692,13 +1704,8 @@ PP(pp_caller)
 	    ccstack = top_si->si_cxstack;
 	    cxix = dopoptosub_at(ccstack, top_si->si_cxix);
 	}
-	if (cxix < 0) {
-	    if (GIMME != G_ARRAY) {
-		EXTEND(SP, 1);
-		RETPUSHUNDEF;
-            }
-	    RETURN;
-	}
+	if (cxix < 0)
+	    return NULL;
 	/* caller() should not report the automatic calls to &DB::sub */
 	if (PL_DBsub && GvCV(PL_DBsub) && cxix >= 0 &&
 		ccstack[cxix].blk_sub.cv == GvCV(PL_DBsub))
@@ -1709,6 +1716,8 @@ PP(pp_caller)
     }
 
     cx = &ccstack[cxix];
+    if (dbcxp) *dbcxp = cx;
+
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
         const I32 dbcxix = dopoptosub_at(ccstack, cxix - 1);
 	/* We expect that ccstack[dbcxix] is CXt_SUB, anyway, the
@@ -1716,6 +1725,31 @@ PP(pp_caller)
 	/* caller() should not report the automatic calls to &DB::sub */
 	if (PL_DBsub && GvCV(PL_DBsub) && dbcxix >= 0 && ccstack[dbcxix].blk_sub.cv == GvCV(PL_DBsub))
 	    cx = &ccstack[dbcxix];
+    }
+
+    return cx;
+}
+
+PP(pp_caller)
+{
+    dVAR;
+    dSP;
+    register const PERL_CONTEXT *cx;
+    const PERL_CONTEXT *dbcx;
+    I32 gimme;
+    const char *stashname;
+    I32 count = 0;
+
+    if (MAXARG)
+	count = POPi;
+
+    cx = caller_cx(count, &dbcx);
+    if (!cx) {
+	if (GIMME != G_ARRAY) {
+	    EXTEND(SP, 1);
+	    RETPUSHUNDEF;
+	}
+	RETURN;
     }
 
     stashname = CopSTASHPV(cx->blk_oldcop);
@@ -1742,7 +1776,7 @@ PP(pp_caller)
     if (!MAXARG)
 	RETURN;
     if (CxTYPE(cx) == CXt_SUB || CxTYPE(cx) == CXt_FORMAT) {
-	GV * const cvgv = CvGV(ccstack[cxix].blk_sub.cv);
+	GV * const cvgv = CvGV(dbcx->blk_sub.cv);
 	/* So is ccstack[dbcxix]. */
 	if (isGV(cvgv)) {
 	    SV * const sv = newSV(0);
@@ -1912,36 +1946,31 @@ PP(pp_enteriter)
     dVAR; dSP; dMARK;
     register PERL_CONTEXT *cx;
     const I32 gimme = GIMME_V;
-    SV **svp;
+    void *itervar; /* location of the iteration variable */
     U8 cxtype = CXt_LOOP_FOR;
-#ifdef USE_ITHREADS
-    PAD *iterdata;
-#endif
 
     ENTER_with_name("loop1");
     SAVETMPS;
 
-    if (PL_op->op_targ) {
-	if (PL_op->op_private & OPpLVAL_INTRO) { /* for my $x (...) */
+    if (PL_op->op_targ) {			 /* "my" variable */
+	if (PL_op->op_private & OPpLVAL_INTRO) {        /* for my $x (...) */
 	    SvPADSTALE_off(PAD_SVl(PL_op->op_targ));
 	    SAVESETSVFLAGS(PAD_SVl(PL_op->op_targ),
 		    SVs_PADSTALE, SVs_PADSTALE);
 	}
 	SAVEPADSVANDMORTALIZE(PL_op->op_targ);
-#ifndef USE_ITHREADS
-	svp = &PAD_SVl(PL_op->op_targ);		/* "my" variable */
+#ifdef USE_ITHREADS
+	itervar = PL_comppad;
 #else
-	iterdata = NULL;
+	itervar = &PAD_SVl(PL_op->op_targ);
 #endif
     }
-    else {
+    else {					/* symbol table variable */
 	GV * const gv = MUTABLE_GV(POPs);
-	svp = &GvSV(gv);			/* symbol table variable */
-	SAVEGENERICSV(*svp);
+	SV** svp = &GvSV(gv);
+	save_pushptrptr(gv, SvREFCNT_inc(*svp), SAVEt_GVSV);
 	*svp = newSV(0);
-#ifdef USE_ITHREADS
-	iterdata = (PAD*)gv;
-#endif
+	itervar = (void *)gv;
     }
 
     if (PL_op->op_private & OPpITER_DEF)
@@ -1950,11 +1979,7 @@ PP(pp_enteriter)
     ENTER_with_name("loop2");
 
     PUSHBLOCK(cx, cxtype, SP);
-#ifdef USE_ITHREADS
-    PUSHLOOP_FOR(cx, iterdata, MARK, PL_op->op_targ);
-#else
-    PUSHLOOP_FOR(cx, svp, MARK, 0);
-#endif
+    PUSHLOOP_FOR(cx, itervar, MARK);
     if (PL_op->op_flags & OPf_STACKED) {
 	SV *maybe_ary = POPs;
 	if (SvTYPE(maybe_ary) != SVt_PVAV) {
@@ -2347,7 +2372,7 @@ PP(pp_next)
     if (PL_scopestack_ix < inner)
 	leave_scope(PL_scopestack[PL_scopestack_ix]);
     PL_curcop = cx->blk_oldcop;
-    return CX_LOOP_NEXTOP_GET(cx);
+    return (cx)->blk_loop.my_op->op_nextop;
 }
 
 PP(pp_redo)
@@ -2752,7 +2777,7 @@ PP(pp_goto)
 		 * for each op.  For now, we punt on the hard ones. */
 		if (PL_op->op_type == OP_ENTERITER)
 		    DIE(aTHX_ "Can't \"goto\" into the middle of a foreach loop");
-		CALL_FPTR(PL_op->op_ppaddr)(aTHX);
+		PL_op->op_ppaddr(aTHX);
 	    }
 	    PL_op = oldop;
 	}
@@ -3039,7 +3064,7 @@ Perl_find_runcv(pTHX_ U32 *db_seqp)
  *   3: yyparse() died
  */
 STATIC int
-S_try_yyparse(pTHX)
+S_try_yyparse(pTHX_ int gramtype)
 {
     int ret;
     dJMPENV;
@@ -3048,7 +3073,7 @@ S_try_yyparse(pTHX)
     JMPENV_PUSH(ret);
     switch (ret) {
     case 0:
-	ret = yyparse() ? 1 : 0;
+	ret = yyparse(gramtype) ? 1 : 0;
 	break;
     case 3:
 	break;
@@ -3137,7 +3162,7 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
     /* note that yyparse() may raise an exception, e.g. C<BEGIN{die}>,
      * so honour CATCH_GET and trap it here if necessary */
 
-    yystatus = (!in_require && CATCH_GET) ? S_try_yyparse(aTHX) : yyparse();
+    yystatus = (!in_require && CATCH_GET) ? S_try_yyparse(aTHX_ GRAMPROG) : yyparse(GRAMPROG);
 
     if (yystatus || PL_parser->error_count || !PL_eval_root) {
 	SV **newsp;			/* Used by POPBLOCK. */
@@ -3745,7 +3770,7 @@ PP(pp_hintseval)
 {
     dVAR;
     dSP;
-    mXPUSHs(MUTABLE_SV(Perl_hv_copy_hints_hv(aTHX_ MUTABLE_HV(cSVOP_sv))));
+    mXPUSHs(MUTABLE_SV(hv_copy_hints_hv(MUTABLE_HV(cSVOP_sv))));
     RETURN;
 }
 
@@ -3818,15 +3843,14 @@ PP(pp_entereval)
     if (PL_compiling.cop_hints_hash) {
 	Perl_refcounted_he_free(aTHX_ PL_compiling.cop_hints_hash);
     }
-    if (Perl_fetch_cop_label(aTHX_ PL_curcop->cop_hints_hash, NULL, NULL)) {
+    if (Perl_fetch_cop_label(aTHX_ PL_curcop, NULL, NULL)) {
 	/* The label, if present, is the first entry on the chain. So rather
 	   than writing a blank label in front of it (which involves an
 	   allocation), just use the next entry in the chain.  */
 	PL_compiling.cop_hints_hash
 	    = PL_curcop->cop_hints_hash->refcounted_he_next;
 	/* Check the assumption that this removed the label.  */
-	assert(Perl_fetch_cop_label(aTHX_ PL_compiling.cop_hints_hash, NULL,
-				    NULL) == NULL);
+	assert(Perl_fetch_cop_label(aTHX_ &PL_compiling, NULL, NULL) == NULL);
     }
     else
 	PL_compiling.cop_hints_hash = PL_curcop->cop_hints_hash;
@@ -4736,7 +4760,7 @@ PP(pp_break)
     PL_curcop = cx->blk_oldcop;
 
     if (CxFOREACH(cx))
-	return CX_LOOP_NEXTOP_GET(cx);
+	return (cx)->blk_loop.my_op->op_nextop;
     else
 	/* RETURNOP calls PUTBACK which restores the old old sp */
 	RETURNOP(cx->blk_givwhen.leave_op);

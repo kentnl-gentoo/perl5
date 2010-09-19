@@ -258,10 +258,10 @@ use File::Glob qw(:case);
     'B::Debug' =>
 	{
 	'MAINTAINER'	=> 'rurban',
-	'DISTRIBUTION'	=> 'RURBAN/B-Debug-1.12.tar.gz',
+	'DISTRIBUTION'	=> 'RURBAN/B-Debug-1.16.tar.gz',
 	'FILES'		=> q[cpan/B-Debug],
-	'EXCLUDED'	=> [ qw( t/coverage.html t/pod.t ) ],
-	'UPSTREAM'	=> undef,
+	'EXCLUDED'	=> [ qw( t/pod.t ) ],
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'B::Deparse' =>
@@ -291,10 +291,10 @@ use File::Glob qw(:case);
     'bignum' =>
 	{
 	'MAINTAINER'	=> 'tels',
-	'DISTRIBUTION'	=> 'TELS/math/bignum-0.23.tar.gz',
-	'FILES'		=> q[cpan/bignum],
+	'DISTRIBUTION'	=> 'FLORA/bignum-0.25.tar.gz',
+	'FILES'		=> q[dist/bignum],
 	'EXCLUDED'	=> [ qr{^inc/Module/}, qw(t/pod.t t/pod_cov.t) ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'CGI' =>
@@ -422,7 +422,7 @@ use File::Glob qw(:case);
     'CPANPLUS::Dist::Build' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.46.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.48.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS-Dist-Build],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{ t/99_pod.t
@@ -434,8 +434,8 @@ use File::Glob qw(:case);
 
     'Data::Dumper' =>
 	{
-	'MAINTAINER'	=> 'p5p', # Not gsar. Not ilyam
-	'DISTRIBUTION'	=> 'SMUELLER/Data-Dumper-2.126.tar.gz',
+	'MAINTAINER'	=> 'p5p', # Not gsar. Not ilyam. Not really smueller
+	'DISTRIBUTION'	=> 'SMUELLER/Data-Dumper-2.128.tar.gz',
 	'FILES'		=> q[dist/Data-Dumper],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -469,7 +469,7 @@ use File::Glob qw(:case);
 	'DISTRIBUTION'	=> 'GAAS/Digest-1.16.tar.gz',
 	'FILES'		=> q[cpan/Digest],
 	'EXCLUDED'	=> [ qw{digest-bench} ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> "cpan",
 	},
 
     'Digest::MD5' =>
@@ -478,7 +478,7 @@ use File::Glob qw(:case);
 	'DISTRIBUTION'	=> 'GAAS/Digest-MD5-2.40.tar.gz',
 	'FILES'		=> q[cpan/Digest-MD5],
 	'EXCLUDED'	=> [ qw{rfc1321.txt} ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> "cpan",
 	},
 
     'Digest::SHA' =>
@@ -493,7 +493,7 @@ use File::Glob qw(:case);
     'Encode' =>
 	{
 	'MAINTAINER'	=> 'dankogai',
-	'DISTRIBUTION'	=> 'DANKOGAI/Encode-2.39.tar.gz',
+	'DISTRIBUTION'	=> 'DANKOGAI/Encode-2.40.tar.gz',
 	'FILES'		=> q[cpan/Encode],
 	'UPSTREAM'	=> undef,
 	},
@@ -581,7 +581,7 @@ use File::Glob qw(:case);
     'ExtUtils::MakeMaker' =>
 	{
 	'MAINTAINER'	=> 'mschwern',
-	'DISTRIBUTION'	=> 'MSCHWERN/ExtUtils-MakeMaker-6.56.tar.gz',
+	'DISTRIBUTION'	=> 'CHORNY/ExtUtils-MakeMaker-6.57_05.tar.gz',
 	'FILES'		=> q[cpan/ExtUtils-MakeMaker],
 	'EXCLUDED'	=> [ qr{^t/lib/Test/},
 			     qr{^inc/ExtUtils/},
@@ -656,9 +656,9 @@ use File::Glob qw(:case);
     'Filter::Simple' =>
 	{
 	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'SMUELLER/Filter-Simple-0.84.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/Filter-Simple-0.85.tar.gz',
 	'FILES'		=> q[dist/Filter-Simple],
-	'EXCLUDED'	=> [ qw(Makefile.PL MANIFEST README META.yml),
+	'EXCLUDED'	=> [ qw(Makefile.PL),
 			     qr{^demo/}
 			   ],
 	'UPSTREAM'	=> 'blead',
@@ -729,8 +729,8 @@ use File::Glob qw(:case);
 	{
 	'MAINTAINER'	=> 'ilyaz',
 	'DISTRIBUTION'	=> 'ILYAZ/modules/if-0.0401.tar.gz',
-	'FILES'		=> q[cpan/if],
-	'UPSTREAM'	=> undef,
+	'FILES'		=> q[dist/if],
+	'UPSTREAM'	=> 'blead',
 	},
 
     'IO' =>
@@ -849,22 +849,22 @@ use File::Glob qw(:case);
     'Math::BigInt' =>
 	{
 	'MAINTAINER'	=> 'tels',
-	'DISTRIBUTION'	=> 'TELS/math/Math-BigInt-1.89.tar.gz',
-	'FILES'		=> q[cpan/Math-BigInt],
+	'DISTRIBUTION'	=> 'FLORA/Math-BigInt-1.95.tar.gz',
+	'FILES'		=> q[dist/Math-BigInt],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^examples/},
 			     qw{t/pod.t
 				t/pod_cov.t
 			       }
 			   ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'Math::BigInt::FastCalc' =>
 	{
 	'MAINTAINER'	=> 'tels',
-	'DISTRIBUTION'	=> 'TELS/math/Math-BigInt-FastCalc-0.19.tar.gz',
-	'FILES'		=> q[cpan/Math-BigInt-FastCalc],
+	'DISTRIBUTION'	=> 'FLORA/Math-BigInt-FastCalc-0.22.tar.gz',
+	'FILES'		=> q[dist/Math-BigInt-FastCalc],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{
 				t/pod.t
@@ -880,17 +880,17 @@ use File::Glob qw(:case);
 				t/mbimbf.t
 			       },
 			   ],
-	'MAP'		=> { '' => 'cpan/Math-BigInt-FastCalc/',
+	'MAP'		=> { '' => 'dist/Math-BigInt-FastCalc/',
 			     'lib/Math/BigInt/FastCalc.pm'
-				    => 'cpan/Math-BigInt-FastCalc/FastCalc.pm',
+				    => 'dist/Math-BigInt-FastCalc/FastCalc.pm',
 			   },
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'Math::BigRat' =>
 	{
 	'MAINTAINER'	=> 'tels',
-	'DISTRIBUTION'	=> 'LETO/Math-BigRat-0.24.tar.gz',
+	'DISTRIBUTION'	=> 'FLORA/Math-BigRat-0.26.tar.gz',
 	'FILES'		=> q[cpan/Math-BigRat],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{
@@ -898,7 +898,7 @@ use File::Glob qw(:case);
 				t/pod_cov.t
 			       },
 			   ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'cpan',
 	},
 
     'Math::Complex' =>
@@ -956,7 +956,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.36.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.38.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1227,7 +1227,7 @@ use File::Glob qw(:case);
     'Safe' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'RGARCIA/Safe-2.27.tar.gz',
+	'DISTRIBUTION'	=> 'RGARCIA/Safe-2.28.tar.gz',
 	'FILES'		=> q[dist/Safe],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1346,7 +1346,7 @@ use File::Glob qw(:case);
     'Test::Simple' =>
 	{
 	'MAINTAINER'	=> 'mschwern',
-	'DISTRIBUTION'	=> 'MSCHWERN/Test-Simple-0.96.tar.gz',
+	'DISTRIBUTION'	=> 'MSCHWERN/Test-Simple-0.97_01.tar.gz',
 	'FILES'		=> q[cpan/Test-Simple],
 	'EXCLUDED'	=> [
 			     qw{.perlcriticrc
@@ -1506,7 +1506,7 @@ use File::Glob qw(:case);
     'Unicode::Collate' =>
 	{
 	'MAINTAINER'	=> 'sadahiro',
-	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.56-withoutworldwriteables.tar.gz',
+	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.59-withoutworldwriteables.tar.gz',
 	'FILES'		=> q[cpan/Unicode-Collate],
 			    # ignore experimental XS version
 	'EXCLUDED'	=> [ qr{X$},
@@ -1767,7 +1767,7 @@ use File::Glob qw(:case);
 				lib/Tie/ExtraHash.t
 				lib/Tie/Handle.pm
 				lib/Tie/Handle/
-				lib/Tie/Hash.pm
+				lib/Tie/Hash.{pm,t}
 				lib/Tie/Hash/NamedCapture.pm
 				lib/Tie/Scalar.{pm,t}
 				lib/Tie/StdHandle.pm

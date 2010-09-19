@@ -963,6 +963,46 @@ Perl_gv_fetchsv(pTHX_ SV *name, I32 flags, const svtype sv_type) {
     return gv_fetchpvn_flags(nambeg, len, flags | SvUTF8(name), sv_type);
 }
 
+STATIC void
+S_gv_magicalize_isa(pTHX_ GV *gv, const char *nambeg, I32 add)
+{
+    AV* av;
+
+    PERL_ARGS_ASSERT_GV_MAGICALIZE_ISA;
+
+    av = GvAVn(gv);
+    GvMULTI_on(gv);
+    sv_magic(MUTABLE_SV(av), MUTABLE_SV(gv), PERL_MAGIC_isa,
+	     NULL, 0);
+    /* NOTE: No support for tied ISA */
+    if ((add & GV_ADDMULTI) && strEQ(nambeg,"AnyDBM_File::ISA")
+	&& AvFILLp(av) == -1)
+	{
+	    av_push(av, newSVpvs("NDBM_File"));
+	    gv_stashpvs("NDBM_File", GV_ADD);
+	    av_push(av, newSVpvs("DB_File"));
+	    gv_stashpvs("DB_File", GV_ADD);
+	    av_push(av, newSVpvs("GDBM_File"));
+	    gv_stashpvs("GDBM_File", GV_ADD);
+	    av_push(av, newSVpvs("SDBM_File"));
+	    gv_stashpvs("SDBM_File", GV_ADD);
+	    av_push(av, newSVpvs("ODBM_File"));
+	    gv_stashpvs("ODBM_File", GV_ADD);
+	}
+}
+
+STATIC void
+S_gv_magicalize_overload(pTHX_ GV *gv)
+{
+    HV* hv;
+
+    PERL_ARGS_ASSERT_GV_MAGICALIZE_OVERLOAD;
+
+    hv = GvHVn(gv);
+    GvMULTI_on(gv);
+    hv_magic(hv, NULL, PERL_MAGIC_overload);
+}
+
 GV *
 Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		       const svtype sv_type)
@@ -1204,7 +1244,32 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
         GvMULTI_on(gv) ;
 
     /* set up magic where warranted */
-    if (len > 1) {
+    if (stash != PL_defstash) { /* not the main stash */
+	/* We only have to check for four names here: EXPORT, ISA, OVERLOAD
+	   and VERSION. All the others apply only to the main stash. */
+	if (len > 1) {
+	    const char * const name2 = name + 1;
+	    switch (*name) {
+	    case 'E':
+		if (strnEQ(name2, "XPORT", 5))
+		    GvMULTI_on(gv);
+		break;
+	    case 'I':
+		if (strEQ(name2, "SA"))
+		    gv_magicalize_isa(gv, nambeg, add);
+		break;
+	    case 'O':
+		if (strEQ(name2, "VERLOAD"))
+		    gv_magicalize_overload(gv);
+		break;
+	    case 'V':
+		if (strEQ(name2, "ERSION"))
+		    GvMULTI_on(gv);
+		break;
+	    }
+	}
+    }
+    else if (len > 1) {
 #ifndef EBCDIC
 	if (*name > 'V' ) {
 	    NOOP;
@@ -1231,32 +1296,12 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		break;
 	    case 'I':
 		if (strEQ(name2, "SA")) {
-		    AV* const av = GvAVn(gv);
-		    GvMULTI_on(gv);
-		    sv_magic(MUTABLE_SV(av), MUTABLE_SV(gv), PERL_MAGIC_isa,
-			     NULL, 0);
-		    /* NOTE: No support for tied ISA */
-		    if ((add & GV_ADDMULTI) && strEQ(nambeg,"AnyDBM_File::ISA")
-			&& AvFILLp(av) == -1)
-			{
-			    av_push(av, newSVpvs("NDBM_File"));
-			    gv_stashpvs("NDBM_File", GV_ADD);
-			    av_push(av, newSVpvs("DB_File"));
-			    gv_stashpvs("DB_File", GV_ADD);
-			    av_push(av, newSVpvs("GDBM_File"));
-			    gv_stashpvs("GDBM_File", GV_ADD);
-			    av_push(av, newSVpvs("SDBM_File"));
-			    gv_stashpvs("SDBM_File", GV_ADD);
-			    av_push(av, newSVpvs("ODBM_File"));
-			    gv_stashpvs("ODBM_File", GV_ADD);
-			}
+		    gv_magicalize_isa(gv, nambeg, add);
 		}
 		break;
 	    case 'O':
 		if (strEQ(name2, "VERLOAD")) {
-		    HV* const hv = GvHVn(gv);
-		    GvMULTI_on(gv);
-		    hv_magic(hv, NULL, PERL_MAGIC_overload);
+		    gv_magicalize_overload(gv);
 		}
 		break;
 	    case 'S':

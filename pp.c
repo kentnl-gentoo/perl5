@@ -898,6 +898,8 @@ PP(pp_postinc)
     dVAR; dSP; dTARGET;
     if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
 	Perl_croak_no_modify(aTHX);
+    if (SvROK(TOPs))
+	TARG = sv_newmortal();
     sv_setsv(TARG, TOPs);
     if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
         && SvIVX(TOPs) != IV_MAX)
@@ -920,6 +922,8 @@ PP(pp_postdec)
     dVAR; dSP; dTARGET;
     if (SvTYPE(TOPs) >= SVt_PVAV || isGV_with_GP(TOPs))
 	Perl_croak_no_modify(aTHX);
+    if (SvROK(TOPs))
+	TARG = sv_newmortal();
     sv_setsv(TARG, TOPs);
     if (!SvREADONLY(TOPs) && SvIOK_notUV(TOPs) && !SvNOK(TOPs) && !SvPOK(TOPs)
         && SvIVX(TOPs) != IV_MIN)
@@ -3105,8 +3109,10 @@ PP(pp_length)
 	    = sv_2pv_flags(sv, &len,
 			   SV_UNDEF_RETURNS_NULL|SV_CONST_RETURN|SV_GMAGIC);
 
-	if (!p)
-	    SETs(&PL_sv_undef);
+	if (!p) {
+	    sv_setsv(TARG, &PL_sv_undef);
+	    SETTARG;
+	}
 	else if (DO_UTF8(sv)) {
 	    SETi(utf8_length((U8*)p, (U8*)p + len));
 	}
@@ -3119,7 +3125,8 @@ PP(pp_length)
 	else
 	    SETi(sv_len(sv));
     } else {
-	SETs(&PL_sv_undef);
+	sv_setsv_nomg(TARG, &PL_sv_undef);
+	SETTARG;
     }
     RETURN;
 }

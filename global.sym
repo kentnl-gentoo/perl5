@@ -58,11 +58,14 @@ Perl_av_iter_p
 Perl_block_gimme
 Perl_blockhook_register
 Perl_call_list
+Perl_caller_cx
 Perl_cast_ulong
 Perl_cast_i32
 Perl_cast_iv
 Perl_cast_uv
 Perl_my_chsize
+Perl_cop_hints_2hv
+Perl_cop_hints_fetchpvn
 Perl_croak_sv
 Perl_croak
 Perl_vcroak
@@ -161,6 +164,7 @@ Perl_gv_stashpv
 Perl_gv_stashpvn
 Perl_gv_stashsv
 Perl_hv_clear
+Perl_hv_copy_hints_hv
 Perl_hv_delayfree_ent
 Perl_hv_delete
 Perl_hv_delete_ent
@@ -274,6 +278,7 @@ Perl_lex_next_chunk
 Perl_lex_peek_unichar
 Perl_lex_read_unichar
 Perl_lex_read_space
+Perl_parse_fullstmt
 Perl_op_null
 Perl_op_clear
 Perl_op_refcnt_lock
@@ -492,6 +497,7 @@ Perl_save_generic_pvref
 Perl_save_shared_pvref
 Perl_save_gp
 Perl_save_hash
+Perl_save_hints
 Perl_save_helem_flags
 Perl_save_hptr
 Perl_save_I16

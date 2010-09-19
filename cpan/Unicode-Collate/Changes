@@ -1,5 +1,16 @@
 Revision history for Perl module Unicode::Collate.
 
+0.59  Sun Sep  5 17:03:52 2010
+    - U::C::Locale newly supports locales: az, fil, ha, lt, mt, tr, wo, yo.
+    - precomposites of a-uml, o-uml, and u-uml are tailored as well.
+        (affected locales: da, et, fi, fo, is, kl, nb, nn, sk, sv)
+
+0.58  Sun Aug 29 19:56:50 2010
+    - U::C::Locale newly supports locales: af, cy, da, fo, haw, is, kl, sw.
+
+0.57  Sun Aug 22 22:39:58 2010
+    - U::C::Locale newly supports locales: ca, et, fi, lv, sk, sl.
+
 0.56  Sun Aug  8 20:24:03 2010
     - Unicode::Collate::Locale newly supports locales: eo, nb, ro, sv.
     ! renamed t/locale_{xy}.t to t/loc_{xy}.t (for safer 8.3 names)

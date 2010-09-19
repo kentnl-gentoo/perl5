@@ -574,7 +574,7 @@ perl_destruct(pTHXx)
     /* Need to flush since END blocks can produce output */
     my_fflush_all();
 
-    if (CALL_FPTR(PL_threadhook)(aTHX)) {
+    if (PL_threadhook(aTHX)) {
         /* Threads hook has vetoed further cleanup */
 	PL_veto_cleanup = TRUE;
         return STATUS_EXIT;
@@ -1070,6 +1070,12 @@ perl_destruct(pTHXx)
 	    Perl_ck_warner_d(aTHX_ packWARN(WARN_INTERNAL),"Unbalanced context: %ld more PUSHes than POPs\n",
 			     (long)cxstack_ix + 1);
     }
+
+#ifdef PERL_IMPLICIT_CONTEXT
+    /* the entries in this list are allocated via SV PVX's, so get freed
+     * in sv_clean_all */
+    Safefree(PL_my_cxt_list);
+#endif
 
     /* Now absolutely destruct everything, somehow or other, loops or no. */
 
@@ -2162,7 +2168,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     /* now parse the script */
 
     SETERRNO(0,SS_NORMAL);
-    if (yyparse() || PL_parser->error_count) {
+    if (yyparse(GRAMPROG) || PL_parser->error_count) {
 	if (PL_minus_c)
 	    Perl_croak(aTHX_ "%s had compilation errors.\n", PL_origfilename);
 	else {

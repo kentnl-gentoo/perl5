@@ -4,7 +4,7 @@ use strict;
 use Carp;
 use base qw(Unicode::Collate);
 
-our $VERSION = '0.56';
+our $VERSION = '0.59';
 
 use File::Spec;
 
@@ -12,7 +12,10 @@ use File::Spec;
 my $KeyPath = File::Spec->catfile('allkeys.txt');
 my $PL_EXT  = '.pl';
 
-my %LocaleFile = map { ($_, $_) } qw(cs eo es fr nn pl ro sv);
+my %LocaleFile = map { ($_, $_) } qw(
+   af az ca cs cy da eo es et fi fil fo fr ha haw
+   is kl lt lv mt nn pl ro sk sl sv sw tr wo yo
+);
    $LocaleFile{'default'}         = '';
    $LocaleFile{'es__traditional'} = 'es_trad';
    $LocaleFile{'nb'} = 'nn';
@@ -37,19 +40,28 @@ sub getlocale {
     return shift->{accepted_locale};
 }
 
+sub _fetchpl {
+    my $accepted = shift;
+    my $f = $LocaleFile{$accepted};
+    return if !$f;
+    $f .= $PL_EXT;
+    my $path = File::Spec->catfile($ModPath, $f);
+    my $h = do $path;
+    croak "Unicode/Collate/Locale/$f can't be found" if !$h;
+    return $h;
+}
+
 sub new {
     my $class = shift;
     my %hash = @_;
-    my ($href,$file);
     $hash{accepted_locale} = _locale($hash{locale});
 
-    $file = $LocaleFile{ $hash{accepted_locale} };
-    if ($file) {
-	my $filepath = File::Spec->catfile($ModPath, $file.$PL_EXT);
-	$href = do $filepath;
+    if (exists $hash{table}) {
+	croak "your table can't be used with Unicode::Collate::Locale";
     }
-    $href->{table} = $KeyPath;
+    $hash{table} = $KeyPath;
 
+    my $href = _fetchpl($hash{accepted_locale});
     while (my($k,$v) = each %$href) {
 	if (exists $hash{$k}) {
 	    croak "$k is reserved by $hash{locale}, can't be overwritten";
@@ -98,11 +110,11 @@ C<es_ES_traditional> for Spanish in Spain (Traditional),
 If C<$localename> is not defined,
 fallback is selected in the following order:
 
-   1. language_territory_variant
-   2. language_territory
-   3. language__variant
-   4. language
-   5. default
+    1. language_territory_variant
+    2. language_territory
+    3. language__variant
+    4. language
+    5. default
 
 Tailoring tags provided by C<Unicode::Collate> are allowed
 as long as they are not used for C<'locale'> support.
@@ -113,10 +125,10 @@ E.g. a collator for French, which ignores diacritics and case difference
 (i.e. level 1), with reversed case ordering and no normalization.
 
     Unicode::Collate::Locale->new(
-	level => 1,
-	locale => 'fr',
-	upper_before_lower => 1,
-	normalization => undef
+        level => 1,
+        locale => 'fr',
+        upper_before_lower => 1,
+        normalization => undef
     )
 
 =head2 Methods
@@ -139,18 +151,47 @@ this method returns a string C<'default'> meaning no special tailoring.
 
 =head2 A list of tailorable locales
 
-    locale name        description
-
+      locale name       description
+    ----------------------------------------------------------
+      af                Afrikaans
+      az                Azerbaijani (Azeri)
+      ca                Catalan
       cs                Czech
+      cy                Welsh
+      da                Danish
       eo                Esperanto
       es                Spanish
       es__traditional   Spanish ('ch' and 'll' as a grapheme)
+      et                Estonian
+      fi                Finnish
+      fil               Filipino
+      fo                Faroese
       fr                French
+      ha                Hausa
+      haw               Hawaiian
+      is                Icelandic
+      kl                Kalaallisut
+      lt                Lithuanian
+      lv                Latvian
+      mt                Maltese
       nb                Norwegian Bokmal
       nn                Norwegian Nynorsk
       pl                Polish
       ro                Romanian
+      sk                Slovak
+      sl                Slovenian
       sv                Swedish
+      sw                Swahili
+      tr                Turkish
+      wo                Wolof
+      yo                Yoruba
+
+=head1 INSTALL
+
+Installation of Unicode::Collate::Locale requires F<Collate/Locale.pm>,
+F<Collate/Locale/*.pm> and F<Collate/allkeys.txt>.  On building,
+Unicode::Collate::Locale doesn't require F<data/*.txt> and F<mklocale>.
+Tests for Unicode::Collate::Locale are named F<t/loc_*.t>.
 
 =head1 AUTHOR
 

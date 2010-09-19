@@ -40,24 +40,6 @@ holds the key and hash value.
 static const char S_strtab_error[]
     = "Cannot modify shared string table in hv_%s";
 
-STATIC void
-S_more_he(pTHX)
-{
-    dVAR;
-    /* We could generate this at compile time via (another) auxiliary C
-       program?  */
-    const size_t arena_size = Perl_malloc_good_size(PERL_ARENA_SIZE);
-    HE* he = (HE*) Perl_get_arena(aTHX_ arena_size, HE_SVSLOT);
-    HE * const heend = &he[arena_size / sizeof(HE) - 1];
-
-    PL_body_roots[HE_SVSLOT] = he;
-    while (he < heend) {
-	HeNEXT(he) = (HE*)(he + 1);
-	he++;
-    }
-    HeNEXT(he) = 0;
-}
-
 #ifdef PURIFY
 
 #define new_HE() (HE*)safemalloc(sizeof(HE))
@@ -73,7 +55,7 @@ S_new_he(pTHX)
     void ** const root = &PL_body_roots[HE_SVSLOT];
 
     if (!*root)
-	S_more_he(aTHX);
+	Perl_more_bodies(aTHX_ HE_SVSLOT, sizeof(HE), PERL_ARENA_SIZE);
     he = (HE*) *root;
     assert(he);
     *root = HeNEXT(he);
@@ -313,7 +295,7 @@ Returns the hash entry which corresponds to the specified key in the hash.
 C<hash> must be a valid precomputed hash number for the given C<key>, or 0
 if you want the function to compute it.  IF C<lval> is set then the fetch
 will be part of a store.  Make sure the return value is non-null before
-accessing it.  The return value when C<tb> is a tied hash is a pointer to a
+accessing it.  The return value when C<hv> is a tied hash is a pointer to a
 static location, so be sure to make a copy of the structure if you need to
 store it somewhere.
 
@@ -1123,13 +1105,7 @@ S_hsplit(pTHX_ HV *hv)
     if (SvOOK(hv)) {
 	Copy(HvAUX(hv), &a[newsize * sizeof(HE*)], 1, struct xpvhv_aux);
     }
-    if (oldsize >= 64) {
-	offer_nice_chunk(HvARRAY(hv),
-			 PERL_HV_ARRAY_ALLOC_BYTES(oldsize)
-			 + (SvOOK(hv) ? sizeof(struct xpvhv_aux) : 0));
-    }
-    else
-	Safefree(HvARRAY(hv));
+    Safefree(HvARRAY(hv));
 #endif
 
     PL_nomemok = FALSE;
@@ -1288,13 +1264,7 @@ Perl_hv_ksplit(pTHX_ HV *hv, IV newmax)
 	if (SvOOK(hv)) {
 	    Copy(HvAUX(hv), &a[newsize * sizeof(HE*)], 1, struct xpvhv_aux);
 	}
-	if (oldsize >= 64) {
-	    offer_nice_chunk(HvARRAY(hv),
-			     PERL_HV_ARRAY_ALLOC_BYTES(oldsize)
-			     + (SvOOK(hv) ? sizeof(struct xpvhv_aux) : 0));
-	}
-	else
-	    Safefree(HvARRAY(hv));
+	Safefree(HvARRAY(hv));
 #endif
 	PL_nomemok = FALSE;
 	Zero(&a[oldsize * sizeof(HE*)], (newsize-oldsize) * sizeof(HE*), char); /* zero 2nd half*/
@@ -1412,8 +1382,18 @@ Perl_newHVhv(pTHX_ HV *ohv)
     return hv;
 }
 
-/* A rather specialised version of newHVhv for copying %^H, ensuring all the
-   magic stays on it.  */
+/*
+=for apidoc Am|HV *|hv_copy_hints_hv|HV *ohv
+
+A specialised version of L</newHVhv> for copying C<%^H>.  I<ohv> must be
+a pointer to a hash (which may have C<%^H> magic, but should be generally
+non-magical), or C<NULL> (interpreted as an empty hash).  The content
+of I<ohv> is copied to a new hash, which has the C<%^H>-specific magic
+added to it.  A pointer to the new hash is returned.
+
+=cut
+*/
+
 HV *
 Perl_hv_copy_hints_hv(pTHX_ HV *const ohv)
 {
@@ -1899,12 +1879,12 @@ S_hv_auxinit(HV *hv) {
 =for apidoc hv_iterinit
 
 Prepares a starting point to traverse a hash table.  Returns the number of
-keys in the hash (i.e. the same as C<HvKEYS(tb)>).  The return value is
+keys in the hash (i.e. the same as C<HvKEYS(hv)>).  The return value is
 currently only meaningful for hashes without tie magic.
 
 NOTE: Before version 5.004_65, C<hv_iterinit> used to return the number of
 hash buckets that happen to be in use.  If you still need that esoteric
-value, you can get it through the macro C<HvFILL(tb)>.
+value, you can get it through the macro C<HvFILL(hv)>.
 
 
 =cut
@@ -2641,6 +2621,57 @@ S_refcounted_he_value(pTHX_ const struct refcounted_he *he)
 }
 
 /*
+=for apidoc cop_hints_2hv
+
+Generates and returns a C<HV *> from the hinthash in the provided
+C<COP>. Returns C<NULL> if there isn't one there.
+
+=cut
+*/
+HV *
+Perl_cop_hints_2hv(pTHX_ const COP *cop)
+{
+    PERL_ARGS_ASSERT_COP_HINTS_2HV;
+
+    if (!cop->cop_hints_hash)
+	return NULL;
+
+    return Perl_refcounted_he_chain_2hv(aTHX_ cop->cop_hints_hash);
+}
+
+/*
+=for apidoc cop_hints_fetchsv
+
+Fetches an entry from the hinthash in the provided C<COP>. Returns NULL
+if the entry isn't there.
+
+=for apidoc cop_hints_fetchpvn
+
+See L</cop_hints_fetchsv>. If C<flags> includes C<HVhek_UTF8>, C<key> is
+in UTF-8.
+
+=for apidoc cop_hints_fetchpvs
+
+See L</cop_hints_fetchpvn>. This is a macro that takes a constant string
+for its argument, which is assumed to be ASCII (rather than UTF-8).
+
+=cut
+*/
+SV *
+Perl_cop_hints_fetchpvn(pTHX_ const COP *cop, const char *key, STRLEN klen,
+			    int flags, U32 hash)
+{
+    PERL_ARGS_ASSERT_COP_HINTS_FETCHPVN;
+
+    /* refcounted_he_fetch takes more flags than we do. Make sure
+     * noone's depending on being able to pass them here. */
+    flags &= ~HVhek_UTF8;
+
+    return Perl_refcounted_he_fetch(aTHX_ cop->cop_hints_hash, NULL,
+	key, klen, flags, hash);
+}
+
+/*
 =for apidoc refcounted_he_chain_2hv
 
 Generates and returns a C<HV *> by walking up the tree starting at the passed
@@ -2958,8 +2989,11 @@ Perl_refcounted_he_free(pTHX_ struct refcounted_he *he) {
 /* pp_entereval is aware that labels are stored with a key ':' at the top of
    the linked list.  */
 const char *
-Perl_fetch_cop_label(pTHX_ struct refcounted_he *const chain, STRLEN *len,
-		     U32 *flags) {
+Perl_fetch_cop_label(pTHX_ COP *const cop, STRLEN *len, U32 *flags) {
+    struct refcounted_he *const chain = cop->cop_hints_hash;
+
+    PERL_ARGS_ASSERT_FETCH_COP_LABEL;
+
     if (!chain)
 	return NULL;
 #ifdef USE_ITHREADS
@@ -2988,16 +3022,20 @@ Perl_fetch_cop_label(pTHX_ struct refcounted_he *const chain, STRLEN *len,
     return chain->refcounted_he_data + 1;
 }
 
-/* As newSTATEOP currently gets passed plain char* labels, we will only provide
-   that interface. Once it works out how to pass in length and UTF-8 ness, this
-   function will need superseding.  */
-struct refcounted_he *
-Perl_store_cop_label(pTHX_ struct refcounted_he *const chain, const char *label)
+void
+Perl_store_cop_label(pTHX_ COP *const cop, const char *label, STRLEN len,
+		     U32 flags)
 {
     PERL_ARGS_ASSERT_STORE_COP_LABEL;
 
-    return refcounted_he_new_common(chain, ":", 1, HVrhek_PV, HVrhek_PV,
-				    label, strlen(label));
+    if (flags & ~(SVf_UTF8))
+	Perl_croak(aTHX_ "panic: store_cop_label illegal flag bits 0x%" UVxf,
+		   (UV)flags);
+
+    cop->cop_hints_hash
+	= refcounted_he_new_common(cop->cop_hints_hash, ":", 1, HVrhek_PV,
+				   flags & SVf_UTF8 ? HVrhek_PV_UTF8 : HVrhek_PV,
+				   label, len);
 }
 
 /*

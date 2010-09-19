@@ -794,8 +794,15 @@ XS(XS_Internals_SvREADONLY)	/* This is dangerous stuff. */
 {
     dVAR;
     dXSARGS;
-    SV * const sv = SvRV(ST(0));
+    SV * const svz = ST(0);
+    SV * sv;
     PERL_UNUSED_ARG(cv);
+
+    /* [perl #77776] - called as &foo() not foo() */
+    if (!SvROK(svz))
+        croak_xs_usage(cv, "SCALAR[, ON]");
+
+    sv = SvRV(svz);
 
     if (items == 1) {
 	 if (SvREADONLY(sv))
@@ -821,8 +828,15 @@ XS(XS_Internals_SvREFCNT)	/* This is dangerous stuff. */
 {
     dVAR;
     dXSARGS;
-    SV * const sv = SvRV(ST(0));
+    SV * const svz = ST(0);
+    SV * sv;
     PERL_UNUSED_ARG(cv);
+
+    /* [perl #77776] - called as &foo() not foo() */
+    if (!SvROK(svz))
+        croak_xs_usage(cv, "SCALAR[, REFCOUNT]");
+
+    sv = SvRV(svz);
 
     if (items == 1)
 	 XSRETURN_IV(SvREFCNT(sv) - 1); /* Minus the ref created for us. */
@@ -839,7 +853,7 @@ XS(XS_Internals_hv_clear_placehold)
     dVAR;
     dXSARGS;
 
-    if (items != 1)
+    if (items != 1 || !SvROK(ST(0)))
 	croak_xs_usage(cv, "hv");
     else {
 	HV * const hv = MUTABLE_HV(SvRV(ST(0)));
@@ -1257,7 +1271,7 @@ XS(XS_Tie_Hash_NamedCapture_FETCH)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     ret = CALLREG_NAMED_BUFF_FETCH(rx, ST(1), flags);
 
     SPAGAIN;
@@ -1291,7 +1305,7 @@ XS(XS_Tie_Hash_NamedCapture_STORE)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     CALLREG_NAMED_BUFF_STORE(rx,ST(1), ST(2), flags);
 }
 
@@ -1310,7 +1324,7 @@ XS(XS_Tie_Hash_NamedCapture_DELETE)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     CALLREG_NAMED_BUFF_DELETE(rx, ST(1), flags);
 }
 
@@ -1331,7 +1345,7 @@ XS(XS_Tie_Hash_NamedCapture_CLEAR)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     CALLREG_NAMED_BUFF_CLEAR(rx, flags);
 }
 
@@ -1353,7 +1367,7 @@ XS(XS_Tie_Hash_NamedCapture_EXISTS)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     ret = CALLREG_NAMED_BUFF_EXISTS(rx, ST(1), flags);
 
     SPAGAIN;
@@ -1381,7 +1395,7 @@ XS(XS_Tie_Hash_NamedCapture_FIRSTK)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     ret = CALLREG_NAMED_BUFF_FIRSTKEY(rx, flags);
 
     SPAGAIN;
@@ -1413,7 +1427,7 @@ XS(XS_Tie_Hash_NamedCapture_NEXTK)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     ret = CALLREG_NAMED_BUFF_NEXTKEY(rx, ST(1), flags);
 
     SPAGAIN;
@@ -1444,7 +1458,7 @@ XS(XS_Tie_Hash_NamedCapture_SCALAR)
 
     SP -= items;
 
-    flags = (U32)INT2PTR(IV,SvIV(SvRV(MUTABLE_SV(ST(0)))));
+    flags = (U32)SvUV(SvRV(MUTABLE_SV(ST(0))));
     ret = CALLREG_NAMED_BUFF_SCALAR(rx, flags);
 
     SPAGAIN;

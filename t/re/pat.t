@@ -23,7 +23,7 @@ BEGIN {
 }
 
 
-plan tests => 350;  # Update this when adding/deleting tests.
+plan tests => 385;  # Update this when adding/deleting tests.
 
 run_tests() unless caller;
 
@@ -1002,6 +1002,81 @@ sub run_tests {
             my $str= "\n" x $i;
             ok $str=~/.*\z/, "implict MBOL check string disable does not break things length=$i";
         }
+    }
+    {
+        # we are actually testing that we dont die when executing these patterns
+        use utf8;
+        my $e = "Böck";
+        ok(utf8::is_utf8($e),"got a unicode string - rt75680");
+
+        ok($e !~ m/.*?[x]$/, "unicode string against /.*?[x]\$/ - rt75680");
+        ok($e !~ m/.*?\p{Space}$/i, "unicode string against /.*?\\p{space}\$/i - rt75680");
+        ok($e !~ m/.*?[xyz]$/, "unicode string against /.*?[xyz]\$/ - rt75680");
+        ok($e !~ m/(.*?)[,\p{isSpace}]+((?:\p{isAlpha}[\p{isSpace}\.]{1,2})+)\p{isSpace}*$/, "unicode string against big pattern - rt75680");
+    }
+    {
+        # we are actually testing that we dont die when executing these patterns
+        my $e = "B\x{f6}ck";
+        ok(!utf8::is_utf8($e), "got a latin string - rt75680");
+
+        ok($e !~ m/.*?[x]$/, "latin string against /.*?[x]\$/ - rt75680");
+        ok($e !~ m/.*?\p{Space}$/i, "latin string against /.*?\\p{space}\$/i - rt75680");
+        ok($e !~ m/.*?[xyz]$/,"latin string against /.*?[xyz]\$/ - rt75680");
+        ok($e !~ m/(.*?)[,\p{isSpace}]+((?:\p{isAlpha}[\p{isSpace}\.]{1,2})+)\p{isSpace}*$/,"latin string against big pattern - rt75680");
+    }
+
+    {
+        #
+        # Tests for bug 77414.
+        #
+
+        local $Message = '\p property after empty * match';
+        {
+            local $TODO = "Bug 77414";
+            ok "1" =~ /\s*\pN/;
+            ok "-" =~ /\s*\p{Dash}/;
+            ok " " =~ /\w*\p{Blank}/;
+        }
+
+        ok "1" =~ /\s*\pN+/;
+        ok "-" =~ /\s*\p{Dash}{1}/;
+        ok " " =~ /\w*\p{Blank}{1,4}/;
+
+    }
+
+    {
+        # Test that a regex followed by an operator and/or a statement modifier work
+        # These tests use string-eval so that it reports a clean error when it fails
+        # (without the string eval the test script might be unparseable)
+
+        # Note: these test check the behaviour that currently is valid syntax
+        # If a new regex modifier is added and a test fails then there is a backwards-compatibilty issue
+        # Note-2: a new deprecate warning was added for this with commit e6897b1a5db0410e387ccbf677e89fc4a1d8c97a
+        # which indicate that this syntax will be removed in 5.16.
+        # When this happens the tests can be removed
+
+        no warnings 'syntax';
+        iseq( eval q#my $r = "a" =~ m/a/lt 2;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by lt");
+        iseq( eval q#my $r = "a" =~ m/a/le 1;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by le");
+        iseq( eval q#my $r = "a" =~ m/a/eq 1;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by eq");
+        iseq( eval q#my $r = "a" =~ m/a/ne 0;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by ne");
+        iseq( eval q#my $r = "a" =~ m/a/and 1;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by and");
+        iseq( eval q#my $r = "a" =~ m/a/unless 0;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by unless");
+        iseq( eval q#my $c = 1; my $r; $r = "a" =~ m/a/while $c--;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by while");
+        iseq( eval q#my $c = 0; my $r; $r = "a" =~ m/a/until $c++;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by until");
+        iseq( eval q#my $r; $r = "a" =~ m/a/for 1;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by for");
+        iseq( eval q#my $r; $r = "a" =~ m/a/foreach 1;"eval_ok $r"#, "eval_ok 1", "regex (m//) followed by foreach");
+
+        iseq( eval q#my $t = "a"; my $r = $t =~ s/a//lt 2;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by lt");
+        iseq( eval q#my $t = "a"; my $r = $t =~ s/a//le 1;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by le");
+        iseq( eval q#my $t = "a"; my $r = $t =~ s/a//ne 0;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by ne");
+        iseq( eval q#my $t = "a"; my $r = $t =~ s/a//and 1;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by and");
+        iseq( eval q#my $t = "a"; my $r = $t =~ s/a//unless 0;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by unless");
+
+        iseq( eval q#my $c = 1; my $r; my $t = "a"; $r = $t =~ s/a//while $c--;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by while");
+        iseq( eval q#my $c = 0; my $r; my $t = "a"; $r = $t =~ s/a//until $c++;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by until");
+        iseq( eval q#my $r; my $t = "a"; $r = $t =~ s/a//for 1;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by for");
+        iseq( eval q#my $r; my $t = "a"; $r = $t =~ s/a//for 1;"eval_ok $r"#, "eval_ok 1", "regex (s///) followed by foreach");
     }
 
 } # End of sub run_tests

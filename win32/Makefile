@@ -37,7 +37,7 @@ INST_TOP	= $(INST_DRV)\perl
 # versioned installation can be obtained by setting INST_TOP above to a
 # path that includes an arbitrary version string.
 #
-#INST_VER	= \5.13.4
+#INST_VER	= \5.13.5
 
 #
 # Comment this out if you DON'T want your perl installation to have
@@ -979,7 +979,9 @@ $(X2P) : $(MINIPERL) $(X2P_OBJ) Extensions
 
 $(MINIDIR)\globals$(o) : $(UUDMAP_H) $(BITCOUNT_H)
 
-$(UUDMAP_H) $(BITCOUNT_H) : $(GENUUDMAP)
+$(UUDMAP_H) : $(BITCOUNT_H)
+
+$(BITCOUNT_H) : $(GENUUDMAP)
 	$(GENUUDMAP) $(UUDMAP_H) $(BITCOUNT_H)
 
 $(GENUUDMAP) : $(GENUUDMAP_OBJ)
@@ -1098,7 +1100,7 @@ utils: $(PERLEXE) $(X2P)
 	copy ..\README.vmesa    ..\pod\perlvmesa.pod
 	copy ..\README.vos      ..\pod\perlvos.pod
 	copy ..\README.win32    ..\pod\perlwin32.pod
-	copy ..\pod\perl5134delta.pod ..\pod\perldelta.pod
+	copy ..\pod\perldelta.pod ..\pod\perl5135delta.pod
 	$(MAKE) -f ..\win32\pod.mak converters
 	cd ..\win32
 	$(PERLEXE) $(PL2BAT) $(UTILS)
@@ -1192,7 +1194,7 @@ distclean: realclean
 	-cd $(PODDIR) && del /f *.html *.bat \
 	    perlaix.pod perlamiga.pod perlapi.pod perlapollo.pod \
 	    perlbeos.pod perlbs2000.pod perlce.pod perlcn.pod \
-	    perlcygwin.pod perldelta.pod perldgux.pod perldos.pod \
+	    perlcygwin.pod perl5135delta.pod perldgux.pod perldos.pod \
 	    perlepoc.pod perlfreebsd.pod perlhaiku.pod perlhpux.pod \
 	    perlhurd.pod perlintern.pod perlirix.pod perljp.pod perlko.pod \
 	    perllinux.pod perlmacos.pod perlmacosx.pod perlmodlib.pod \

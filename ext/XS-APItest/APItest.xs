@@ -634,7 +634,6 @@ sub CLEAR    { %{$_[0]} = () }
 
 =cut
 
-
 MODULE = XS::APItest:TempLv		PACKAGE = XS::APItest::TempLv
 
 void
@@ -1033,6 +1032,38 @@ rmagical_flags(sv)
         XSRETURN(3);
 
 void
+my_caller(level)
+        I32 level
+    PREINIT:
+        const PERL_CONTEXT *cx, *dbcx;
+        const char *pv;
+        const GV *gv;
+        HV *hv;
+    PPCODE:
+        cx = caller_cx(level, &dbcx);
+        EXTEND(SP, 8);
+
+        pv = CopSTASHPV(cx->blk_oldcop);
+        ST(0) = pv ? sv_2mortal(newSVpv(pv, 0)) : &PL_sv_undef;
+        gv = CvGV(cx->blk_sub.cv);
+        ST(1) = isGV(gv) ? sv_2mortal(newSVpv(GvNAME(gv), 0)) : &PL_sv_undef;
+
+        pv = CopSTASHPV(dbcx->blk_oldcop);
+        ST(2) = pv ? sv_2mortal(newSVpv(pv, 0)) : &PL_sv_undef;
+        gv = CvGV(dbcx->blk_sub.cv);
+        ST(3) = isGV(gv) ? sv_2mortal(newSVpv(GvNAME(gv), 0)) : &PL_sv_undef;
+
+        ST(4) = cop_hints_fetchpvs(cx->blk_oldcop, "foo");
+        ST(5) = cop_hints_fetchpvn(cx->blk_oldcop, "foo", 3, 0, 0);
+        ST(6) = cop_hints_fetchsv(cx->blk_oldcop, 
+                sv_2mortal(newSVpvn("foo", 3)), 0);
+
+        hv = cop_hints_2hv(cx->blk_oldcop);
+        ST(7) = hv ? sv_2mortal(newRV_noinc((SV *)hv)) : &PL_sv_undef;
+
+        XSRETURN(8);
+
+void
 DPeek (sv)
     SV   *sv
 
@@ -1113,6 +1144,74 @@ bhk_record(bool on)
         MY_CXT.bhk_record = on;
         if (on)
             av_clear(MY_CXT.bhkav);
+
+void
+test_savehints()
+    PREINIT:
+	SV **svp, *sv;
+    CODE:
+#define store_hint(KEY, VALUE) \
+		sv_setiv_mg(*hv_fetchs(GvHV(PL_hintgv), KEY, 1), (VALUE))
+#define hint_ok(KEY, EXPECT) \
+		((svp = hv_fetchs(GvHV(PL_hintgv), KEY, 0)) && \
+		    (sv = *svp) && SvIV(sv) == (EXPECT) && \
+		    (sv = cop_hints_fetchpvs(&PL_compiling, KEY)) && \
+		    SvIV(sv) == (EXPECT))
+#define check_hint(KEY, EXPECT) \
+		do { if (!hint_ok(KEY, EXPECT)) croak("fail"); } while(0)
+	PL_hints |= HINT_LOCALIZE_HH;
+	ENTER;
+	SAVEHINTS();
+	PL_hints &= HINT_INTEGER;
+	store_hint("t0", 123);
+	store_hint("t1", 456);
+	if (PL_hints & HINT_INTEGER) croak("fail");
+	check_hint("t0", 123); check_hint("t1", 456);
+	ENTER;
+	SAVEHINTS();
+	if (PL_hints & HINT_INTEGER) croak("fail");
+	check_hint("t0", 123); check_hint("t1", 456);
+	PL_hints |= HINT_INTEGER;
+	store_hint("t0", 321);
+	if (!(PL_hints & HINT_INTEGER)) croak("fail");
+	check_hint("t0", 321); check_hint("t1", 456);
+	LEAVE;
+	if (PL_hints & HINT_INTEGER) croak("fail");
+	check_hint("t0", 123); check_hint("t1", 456);
+	ENTER;
+	SAVEHINTS();
+	if (PL_hints & HINT_INTEGER) croak("fail");
+	check_hint("t0", 123); check_hint("t1", 456);
+	store_hint("t1", 654);
+	if (PL_hints & HINT_INTEGER) croak("fail");
+	check_hint("t0", 123); check_hint("t1", 654);
+	LEAVE;
+	if (PL_hints & HINT_INTEGER) croak("fail");
+	check_hint("t0", 123); check_hint("t1", 456);
+	LEAVE;
+#undef store_hint
+#undef hint_ok
+#undef check_hint
+
+void
+test_copyhints()
+    PREINIT:
+	HV *a, *b;
+    CODE:
+	PL_hints |= HINT_LOCALIZE_HH;
+	ENTER;
+	SAVEHINTS();
+	sv_setiv_mg(*hv_fetchs(GvHV(PL_hintgv), "t0", 1), 123);
+	if (SvIV(cop_hints_fetchpvs(&PL_compiling, "t0")) != 123) croak("fail");
+	a = newHVhv(GvHV(PL_hintgv));
+	sv_2mortal((SV*)a);
+	sv_setiv_mg(*hv_fetchs(a, "t0", 1), 456);
+	if (SvIV(cop_hints_fetchpvs(&PL_compiling, "t0")) != 123) croak("fail");
+	b = hv_copy_hints_hv(a);
+	sv_2mortal((SV*)b);
+	sv_setiv_mg(*hv_fetchs(b, "t0", 1), 789);
+	if (SvIV(cop_hints_fetchpvs(&PL_compiling, "t0")) != 789) croak("fail");
+	LEAVE;
 
 BOOT:
 	{

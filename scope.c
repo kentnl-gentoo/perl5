@@ -608,7 +608,7 @@ Perl_save_hints(pTHX)
     if (PL_hints & HINT_LOCALIZE_HH) {
 	save_pushptri32ptr(GvHV(PL_hintgv), PL_hints,
 			   PL_compiling.cop_hints_hash, SAVEt_HINTS);
-	GvHV(PL_hintgv) = Perl_hv_copy_hints_hv(aTHX_ GvHV(PL_hintgv));
+	GvHV(PL_hintgv) = hv_copy_hints_hv(GvHV(PL_hintgv));
     } else {
 	save_pushi32ptr(PL_hints, PL_compiling.cop_hints_hash, SAVEt_HINTS);
     }
@@ -778,9 +778,15 @@ Perl_leave_scope(pTHX_ I32 base)
 		*(char**)ptr = str;
 	    }
 	    break;
+	case SAVEt_GVSV:			/* scalar slot in GV */
+	    value = MUTABLE_SV(SSPOPPTR);
+	    gv = MUTABLE_GV(SSPOPPTR);
+	    ptr = &GvSV(gv);
+	    goto restore_svp;
 	case SAVEt_GENERIC_SVREF:		/* generic sv */
 	    value = MUTABLE_SV(SSPOPPTR);
 	    ptr = SSPOPPTR;
+	restore_svp:
 	    sv = *(SV**)ptr;
 	    *(SV**)ptr = value;
 	    SvREFCNT_dec(sv);
@@ -1232,8 +1238,6 @@ Perl_cx_dump(pTHX_ PERL_CONTEXT *cx)
 		(long)cx->blk_loop.resetsp);
 	PerlIO_printf(Perl_debug_log, "BLK_LOOP.MY_OP = 0x%"UVxf"\n",
 		PTR2UV(cx->blk_loop.my_op));
-	PerlIO_printf(Perl_debug_log, "BLK_LOOP.NEXT_OP = 0x%"UVxf"\n",
-		PTR2UV(CX_LOOP_NEXTOP_GET(cx)));
 	/* XXX: not accurate for LAZYSV/IV */
 	PerlIO_printf(Perl_debug_log, "BLK_LOOP.ITERARY = 0x%"UVxf"\n",
 		PTR2UV(cx->blk_loop.state_u.ary.ary));

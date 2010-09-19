@@ -117,7 +117,7 @@ struct STRUCT_SV {		/* struct sv { */
     PERL_BITFIELD32 sv_debug_optype:9;	/* the type of OP that allocated us */
     PERL_BITFIELD32 sv_debug_inpad:1;	/* was allocated in a pad for an OP */
     PERL_BITFIELD32 sv_debug_line:16;	/* the line where we were allocated */
-    U32		    sv_debug_serial;	/* serial number of sv allocation   */
+    UV		    sv_debug_serial;	/* serial number of sv allocation   */
     char *	    sv_debug_file;	/* the file where we were allocated */
     SV *	    sv_debug_parent;	/* what we were cloned from (ithreads)*/
 #endif
@@ -1876,10 +1876,10 @@ Returns a pointer to the character buffer.
 =cut
 */
 
-#define SvSHARE(sv) CALL_FPTR(PL_sharehook)(aTHX_ sv)
-#define SvLOCK(sv) CALL_FPTR(PL_lockhook)(aTHX_ sv)
-#define SvUNLOCK(sv) CALL_FPTR(PL_unlockhook)(aTHX_ sv)
-#define SvDESTROYABLE(sv) CALL_FPTR(PL_destroyhook)(aTHX_ sv)
+#define SvSHARE(sv) PL_sharehook(aTHX_ sv)
+#define SvLOCK(sv) PL_lockhook(aTHX_ sv)
+#define SvUNLOCK(sv) PL_unlockhook(aTHX_ sv)
+#define SvDESTROYABLE(sv) PL_destroyhook(aTHX_ sv)
 
 #define SvGETMAGIC(x) STMT_START { if (SvGMAGICAL(x)) mg_get(x); } STMT_END
 #define SvSETMAGIC(x) STMT_START { if (SvSMAGICAL(x)) mg_set(x); } STMT_END

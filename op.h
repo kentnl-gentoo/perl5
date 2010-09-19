@@ -54,7 +54,7 @@ typedef PERL_BITFIELD16 Optype;
 #define BASEOP				\
     OP*		op_next;		\
     OP*		op_sibling;		\
-    OP*		(CPERLscope(*op_ppaddr))(pTHX);		\
+    OP*		(*op_ppaddr)(pTHX);	\
     MADPROP_IN_BASEOP			\
     PADOFFSET	op_targ;		\
     PERL_BITFIELD16 op_type:9;		\
@@ -537,14 +537,13 @@ struct loop {
 #define OA_FOLDCONST 2
 #define OA_RETSCALAR 4
 #define OA_TARGET 8
-#define OA_RETINTEGER 16
+#define OA_TARGLEX 16
 #define OA_OTHERINT 32
 #define OA_DANGEROUS 64
 #define OA_DEFGV 128
-#define OA_TARGLEX 256
 
 /* The next 4 bits encode op class information */
-#define OCSHIFT 9
+#define OCSHIFT 8
 
 #define OA_CLASS_MASK (15 << OCSHIFT)
 
@@ -563,7 +562,7 @@ struct loop {
 #define OA_FILESTATOP (12 << OCSHIFT)
 #define OA_LOOPEXOP (13 << OCSHIFT)
 
-#define OASHIFT 13
+#define OASHIFT 12
 
 /* Remaining nybbles of PL_opargs */
 #define OA_SCALAR 1
@@ -733,7 +732,7 @@ preprocessing token; the type of I<arg> depends on I<which>.
 		    hk = INT2PTR(BHK *, SvIVX(sv)); \
 		\
 		if (BhkENTRY(hk, which)) \
-		    CALL_FPTR(BhkENTRY(hk, which))(aTHX_ arg); \
+		    BhkENTRY(hk, which)(aTHX_ arg); \
 	    } \
 	} \
     } STMT_END

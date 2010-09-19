@@ -29,7 +29,7 @@ Ing-Simmons, Chip Salzenberg, Tim Bunce, Malcolm Beattie, Gurusamy
 Sarathy, Graham Barr, Jarkko Hietaniemi, Hugo van der Sanden,
 Michael Schwern, Rafael Garcia-Suarez, Nicholas Clark, Richard Clamp,
 Leon Brocard, Dave Mitchell, Jesse Vincent, Ricardo Signes, Steve Hay,
-Matt S Trout and David Golden.
+Matt S Trout, David Golden, and Florian Ragwitz.
 
 =head2 PUMPKIN?
 
@@ -423,12 +423,14 @@ the strings?).
  Jesse    5.12.0        2010-Apr-12
 
  Jesse    5.12.1        2010-May-16     The 5.12 maintenance track
+ Jesse    5.12.2        2010-Sep-06
 
  Leon     5.13.0        2010-Apr-20     The 5.13 development track
  Ricardo  5.13.1        2010-May-20
  Matt     5.13.2        2010-Jun-22
  David G  5.13.3        2010-Jul-20
  Florian  5.13.4        2010-Aug-20
+ Steve    5.13.5        2010-Sep-19
 
 =head2 SELECTED RELEASE SIZES
 
