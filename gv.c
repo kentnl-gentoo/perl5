@@ -45,7 +45,13 @@ Perl_gv_add_by_type(pTHX_ GV *gv, svtype type)
 {
     SV **where;
 
-    if (!gv || SvTYPE((const SV *)gv) != SVt_PVGV) {
+    if (
+        !gv
+     || (
+            SvTYPE((const SV *)gv) != SVt_PVGV
+         && SvTYPE((const SV *)gv) != SVt_PVLV
+        )
+    ) {
 	const char *what;
 	if (type == SVt_PVIO) {
 	    /*
@@ -121,9 +127,9 @@ Perl_gv_fetchfile_flags(pTHX_ const char *const name, const STRLEN namelen,
 #else
 	sv_setpvn(GvSV(gv), name, namelen);
 #endif
-	if (PERLDB_LINE || PERLDB_SAVESRC)
-	    hv_magic(GvHVn(gv_AVadd(gv)), NULL, PERL_MAGIC_dbfile);
     }
+    if ((PERLDB_LINE || PERLDB_SAVESRC) && !GvAV(gv))
+	    hv_magic(GvHVn(gv_AVadd(gv)), NULL, PERL_MAGIC_dbfile);
     if (tmpbuf != smallbuf)
 	Safefree(tmpbuf);
     return gv;
@@ -921,11 +927,9 @@ Perl_gv_stashpvn(pTHX_ const char *name, U32 namelen, I32 flags)
 	Safefree(tmpbuf);
     if (!tmpgv)
 	return NULL;
-    if (!GvHV(tmpgv))
-	GvHV(tmpgv) = newHV();
     stash = GvHV(tmpgv);
-    if (!HvNAME_get(stash))
-	hv_name_set(stash, name, namelen, 0);
+    assert(stash);
+    assert(HvNAME_get(stash));
     return stash;
 }
 
@@ -964,7 +968,7 @@ Perl_gv_fetchsv(pTHX_ SV *name, I32 flags, const svtype sv_type) {
 }
 
 STATIC void
-S_gv_magicalize_isa(pTHX_ GV *gv, const char *nambeg, I32 add)
+S_gv_magicalize_isa(pTHX_ GV *gv)
 {
     AV* av;
 
@@ -974,21 +978,6 @@ S_gv_magicalize_isa(pTHX_ GV *gv, const char *nambeg, I32 add)
     GvMULTI_on(gv);
     sv_magic(MUTABLE_SV(av), MUTABLE_SV(gv), PERL_MAGIC_isa,
 	     NULL, 0);
-    /* NOTE: No support for tied ISA */
-    if ((add & GV_ADDMULTI) && strEQ(nambeg,"AnyDBM_File::ISA")
-	&& AvFILLp(av) == -1)
-	{
-	    av_push(av, newSVpvs("NDBM_File"));
-	    gv_stashpvs("NDBM_File", GV_ADD);
-	    av_push(av, newSVpvs("DB_File"));
-	    gv_stashpvs("DB_File", GV_ADD);
-	    av_push(av, newSVpvs("GDBM_File"));
-	    gv_stashpvs("GDBM_File", GV_ADD);
-	    av_push(av, newSVpvs("SDBM_File"));
-	    gv_stashpvs("SDBM_File", GV_ADD);
-	    av_push(av, newSVpvs("ODBM_File"));
-	    gv_stashpvs("ODBM_File", GV_ADD);
-	}
 }
 
 STATIC void
@@ -1046,26 +1035,28 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 
 	    len = name_cursor - name;
 	    if (len > 0) {
-		char smallbuf[128];
-		char *tmpbuf;
-
-		if (len + 2 <= (I32)sizeof (smallbuf))
-		    tmpbuf = smallbuf;
-		else
+		const char *key;
+		if (*name_cursor == ':') {
+		    key = name;
+		    len += 2;
+		} else {
+		    char *tmpbuf;
 		    Newx(tmpbuf, len+2, char);
-		Copy(name, tmpbuf, len, char);
-		tmpbuf[len++] = ':';
-		tmpbuf[len++] = ':';
-		gvp = (GV**)hv_fetch(stash,tmpbuf,len,add);
+		    Copy(name, tmpbuf, len, char);
+		    tmpbuf[len++] = ':';
+		    tmpbuf[len++] = ':';
+		    key = tmpbuf;
+		}
+		gvp = (GV**)hv_fetch(stash, key, len, add);
 		gv = gvp ? *gvp : NULL;
 		if (gv && gv != (const GV *)&PL_sv_undef) {
 		    if (SvTYPE(gv) != SVt_PVGV)
-			gv_init(gv, stash, tmpbuf, len, (add & GV_ADDMULTI));
+			gv_init(gv, stash, key, len, (add & GV_ADDMULTI));
 		    else
 			GvMULTI_on(gv);
 		}
-		if (tmpbuf != smallbuf)
-		    Safefree(tmpbuf);
+		if (key != name)
+		    Safefree((char *)key);
 		if (!gv || gv == (const GV *)&PL_sv_undef)
 		    return NULL;
 
@@ -1256,7 +1247,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		break;
 	    case 'I':
 		if (strEQ(name2, "SA"))
-		    gv_magicalize_isa(gv, nambeg, add);
+		    gv_magicalize_isa(gv);
 		break;
 	    case 'O':
 		if (strEQ(name2, "VERLOAD"))
@@ -1296,7 +1287,7 @@ Perl_gv_fetchpvn_flags(pTHX_ const char *nambeg, STRLEN full_len, I32 flags,
 		break;
 	    case 'I':
 		if (strEQ(name2, "SA")) {
-		    gv_magicalize_isa(gv, nambeg, add);
+		    gv_magicalize_isa(gv);
 		}
 		break;
 	    case 'O':
@@ -2587,6 +2578,11 @@ Perl_gv_try_downgrade(pTHX_ GV *gv)
     HEK *namehek;
     SV **gvp;
     PERL_ARGS_ASSERT_GV_TRY_DOWNGRADE;
+
+    /* XXX Why and where does this leave dangling pointers during global
+       destruction? */
+    if (PL_dirty) return;
+
     if (!(SvREFCNT(gv) == 1 && SvTYPE(gv) == SVt_PVGV && !SvFAKE(gv) &&
 	    !SvOBJECT(gv) && !SvREADONLY(gv) &&
 	    isGV_with_GP(gv) && GvGP(gv) &&

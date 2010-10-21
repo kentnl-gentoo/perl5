@@ -85,6 +85,8 @@
 #  include "regcomp.h"
 #endif
 
+#include "dquote_static.c"
+
 #ifdef op
 #undef op
 #endif /* op */
@@ -366,9 +368,10 @@ static const scan_data_t zero_scan_data =
 #define SCF_TRIE_RESTUDY        0x4000 /* Do restudy? */
 #define SCF_SEEN_ACCEPT         0x8000 
 
-#define UTF (RExC_utf8 != 0)
-#define LOC ((RExC_flags & RXf_PMf_LOCALE) != 0)
-#define FOLD ((RExC_flags & RXf_PMf_FOLD) != 0)
+#define UTF cBOOL(RExC_utf8)
+#define LOC cBOOL(RExC_flags & RXf_PMf_LOCALE)
+#define UNI_SEMANTICS cBOOL(RExC_flags & RXf_PMf_UNICODE)
+#define FOLD cBOOL(RExC_flags & RXf_PMf_FOLD)
 
 #define OOB_UNICODE		12345678
 #define OOB_NAMEDCLASS		-1
@@ -878,7 +881,7 @@ S_cl_or(const RExC_state_t *pRExC_state, struct regnode_charclass_class *cl, con
   Dumps the final compressed table form of the trie to Perl_debug_log.
   Used for debugging make_trie().
 */
- 
+
 STATIC void
 S_dump_trie(pTHX_ const struct _reg_trie_data *trie, HV *widecharmap,
 	    AV *revcharmap, U32 depth)
@@ -3204,7 +3207,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		/* These are the cases when once a subexpression
 		   fails at a particular position, it cannot succeed
 		   even after backtracking at the enclosing scope.
-		
+
 		   XXXX what if minimal match and we are at the
 		        initial run of {n,m}? */
 		if ((mincount != maxcount - 1) && (maxcount != REG_INFTY))
@@ -3345,7 +3348,6 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 #if 0
 			while ( nxt1 && (OP(nxt1) != WHILEM)) {
 			    regnode *nnxt = regnext(nxt1);
-			
 			    if (nnxt == nxt) {
 				if (reg_off_by_arg[OP(nxt1)])
 				    ARG_SET(nxt1, nxt2 - nxt1);
@@ -3412,7 +3414,6 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 
 			if (UTF)
 			    old = utf8_hop((U8*)s, old) - (U8*)s;
-			
 			l -= old;
 			/* Get the added string: */
 			last_str = newSVpvn_utf8(s  + old, l, UTF);
@@ -3500,13 +3501,13 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
     	        if (flags & SCF_DO_STCLASS_AND) {
                     for (value = 0; value < 256; value++)
                         if (!is_VERTWS_cp(value))
-                            ANYOF_BITMAP_CLEAR(data->start_class, value);  
-                }                                                              
-                else {                                                         
+                            ANYOF_BITMAP_CLEAR(data->start_class, value);
+                }
+                else {
                     for (value = 0; value < 256; value++)
                         if (is_VERTWS_cp(value))
-                            ANYOF_BITMAP_SET(data->start_class, value);	   
-                }                                                              
+                            ANYOF_BITMAP_SET(data->start_class, value);
+                }
                 if (flags & SCF_DO_STCLASS_OR)
 		    cl_and(data->start_class, and_withp);
 		flags &= ~SCF_DO_STCLASS;
@@ -3519,7 +3520,6 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 	        data->pos_delta += 1;
 		data->longest = &(data->longest_float);
     	    }
-    	    
 	}
 	else if (OP(scan) == FOLDCHAR) {
 	    int d = ARG(scan)==0xDF ? 1 : 2;
@@ -3577,19 +3577,37 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    if (flags & SCF_DO_STCLASS_AND) {
 			if (!(data->start_class->flags & ANYOF_LOCALE)) {
 			    ANYOF_CLASS_CLEAR(data->start_class,ANYOF_NALNUM);
-			    for (value = 0; value < 256; value++)
-				if (!isALNUM(value))
-				    ANYOF_BITMAP_CLEAR(data->start_class, value);
+                            if (FLAGS(scan) & USE_UNI) {
+                                for (value = 0; value < 256; value++) {
+                                    if (!isWORDCHAR_L1(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+                            } else {
+                                for (value = 0; value < 256; value++) {
+                                    if (!isALNUM(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+                            }
 			}
 		    }
 		    else {
 			if (data->start_class->flags & ANYOF_LOCALE)
 			    ANYOF_CLASS_SET(data->start_class,ANYOF_ALNUM);
-			else {
-			    for (value = 0; value < 256; value++)
-				if (isALNUM(value))
-				    ANYOF_BITMAP_SET(data->start_class, value);			
-			}
+                        else if (FLAGS(scan) & USE_UNI) {
+                            for (value = 0; value < 256; value++) {
+                                if (isWORDCHAR_L1(value)) {
+                                    ANYOF_BITMAP_SET(data->start_class, value);
+                                }
+                            }
+                        } else {
+                            for (value = 0; value < 256; value++) {
+                                if (isALNUM(value)) {
+                                    ANYOF_BITMAP_SET(data->start_class, value);
+                                }
+                            }
+                        }
 		    }
 		    break;
 		case ALNUML:
@@ -3606,9 +3624,19 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    if (flags & SCF_DO_STCLASS_AND) {
 			if (!(data->start_class->flags & ANYOF_LOCALE)) {
 			    ANYOF_CLASS_CLEAR(data->start_class,ANYOF_ALNUM);
-			    for (value = 0; value < 256; value++)
-				if (isALNUM(value))
-				    ANYOF_BITMAP_CLEAR(data->start_class, value);
+                            if (FLAGS(scan) & USE_UNI) {
+                                for (value = 0; value < 256; value++) {
+                                    if (isWORDCHAR_L1(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+                            } else {
+                                for (value = 0; value < 256; value++) {
+                                    if (isALNUM(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+			    }
 			}
 		    }
 		    else {
@@ -3617,7 +3645,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			else {
 			    for (value = 0; value < 256; value++)
 				if (!isALNUM(value))
-				    ANYOF_BITMAP_SET(data->start_class, value);			
+				    ANYOF_BITMAP_SET(data->start_class, value);
 			}
 		    }
 		    break;
@@ -3635,18 +3663,37 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    if (flags & SCF_DO_STCLASS_AND) {
 			if (!(data->start_class->flags & ANYOF_LOCALE)) {
 			    ANYOF_CLASS_CLEAR(data->start_class,ANYOF_NSPACE);
-			    for (value = 0; value < 256; value++)
-				if (!isSPACE(value))
-				    ANYOF_BITMAP_CLEAR(data->start_class, value);
+			    if (FLAGS(scan) & USE_UNI) {
+                                for (value = 0; value < 256; value++) {
+                                    if (!isSPACE_L1(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+                            } else {
+                                for (value = 0; value < 256; value++) {
+                                    if (!isSPACE(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+                            }
 			}
 		    }
 		    else {
-			if (data->start_class->flags & ANYOF_LOCALE)
+                        if (data->start_class->flags & ANYOF_LOCALE) {
 			    ANYOF_CLASS_SET(data->start_class,ANYOF_SPACE);
-			else {
-			    for (value = 0; value < 256; value++)
-				if (isSPACE(value))
-				    ANYOF_BITMAP_SET(data->start_class, value);			
+                        }
+                        else if (FLAGS(scan) & USE_UNI) {
+                            for (value = 0; value < 256; value++) {
+                                if (isSPACE_L1(value)) {
+                                    ANYOF_BITMAP_SET(data->start_class, value);
+                                }
+                            }
+                        } else {
+                            for (value = 0; value < 256; value++) {
+                                if (isSPACE(value)) {
+                                    ANYOF_BITMAP_SET(data->start_class, value);
+                                }
+                            }
 			}
 		    }
 		    break;
@@ -3664,19 +3711,38 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 		    if (flags & SCF_DO_STCLASS_AND) {
 			if (!(data->start_class->flags & ANYOF_LOCALE)) {
 			    ANYOF_CLASS_CLEAR(data->start_class,ANYOF_SPACE);
-			    for (value = 0; value < 256; value++)
-				if (isSPACE(value))
-				    ANYOF_BITMAP_CLEAR(data->start_class, value);
+                            if (FLAGS(scan) & USE_UNI) {
+                                for (value = 0; value < 256; value++) {
+                                    if (isSPACE_L1(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+                            } else {
+                                for (value = 0; value < 256; value++) {
+                                    if (isSPACE(value)) {
+                                        ANYOF_BITMAP_CLEAR(data->start_class, value);
+                                    }
+                                }
+                            }
 			}
 		    }
 		    else {
 			if (data->start_class->flags & ANYOF_LOCALE)
 			    ANYOF_CLASS_SET(data->start_class,ANYOF_NSPACE);
-			else {
-			    for (value = 0; value < 256; value++)
-				if (!isSPACE(value))
-				    ANYOF_BITMAP_SET(data->start_class, value);			
-			}
+                        else if (FLAGS(scan) & USE_UNI) {
+                            for (value = 0; value < 256; value++) {
+                                if (!isSPACE_L1(value)) {
+                                    ANYOF_BITMAP_SET(data->start_class, value);
+                                }
+                            }
+                        }
+                        else {
+                            for (value = 0; value < 256; value++) {
+                                if (!isSPACE(value)) {
+                                    ANYOF_BITMAP_SET(data->start_class, value);
+                                }
+                            }
+                        }
 		    }
 		    break;
 		case NSPACEL:
@@ -3706,7 +3772,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			else {
 			    for (value = 0; value < 256; value++)
 				if (isDIGIT(value))
-				    ANYOF_BITMAP_SET(data->start_class, value);			
+				    ANYOF_BITMAP_SET(data->start_class, value);
 			}
 		    }
 		    break;
@@ -3723,7 +3789,7 @@ S_study_chunk(pTHX_ RExC_state_t *pRExC_state, regnode **scanp,
 			else {
 			    for (value = 0; value < 256; value++)
 				if (!isDIGIT(value))
-				    ANYOF_BITMAP_SET(data->start_class, value);			
+				    ANYOF_BITMAP_SET(data->start_class, value);
 			}
 		    }
 		    break;
@@ -4270,8 +4336,8 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
     struct regexp *r;
     register regexp_internal *ri;
     STRLEN plen;
-    char  *exp = SvPV(pattern, plen);
-    char* xend = exp + plen;
+    char  *exp;
+    char* xend;
     regnode *scan;
     I32 flags;
     I32 minlen = 0;
@@ -4283,7 +4349,7 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
     RExC_state_t RExC_state;
     RExC_state_t * const pRExC_state = &RExC_state;
 #ifdef TRIE_STUDY_OPT    
-    int restudied= 0;
+    int restudied;
     RExC_state_t copyRExC_state;
 #endif    
     GET_RE_DEBUG_FLAGS_DECL;
@@ -4294,24 +4360,29 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
 
     RExC_utf8 = RExC_orig_utf8 = SvUTF8(pattern);
 
-    DEBUG_COMPILE_r({
-        SV *dsv= sv_newmortal();
-        RE_PV_QUOTED_DECL(s, RExC_utf8,
-            dsv, exp, plen, 60);
-        PerlIO_printf(Perl_debug_log, "%sCompiling REx%s %s\n",
-		       PL_colors[4],PL_colors[5],s);
-    });
 
     /* Longjmp back to here if have to switch in midstream to utf8 */
     if (! RExC_orig_utf8) {
 	JMPENV_PUSH(jump_ret);
     }
 
-    if (jump_ret != 0) {
+    if (jump_ret == 0) {    /* First time through */
+        exp = SvPV(pattern, plen);
+        xend = exp + plen;
+
+        DEBUG_COMPILE_r({
+            SV *dsv= sv_newmortal();
+            RE_PV_QUOTED_DECL(s, RExC_utf8,
+                dsv, exp, plen, 60);
+            PerlIO_printf(Perl_debug_log, "%sCompiling REx%s %s\n",
+                           PL_colors[4],PL_colors[5],s);
+        });
+    }
+    else {  /* longjumped back */
         STRLEN len = plen;
 
-        /* Here, we longjmped back.  If the cause was other than changing to
-         * utf8, pop our own setjmp, and longjmp to the correct handler */
+        /* If the cause for the longjmp was other than changing to utf8, pop
+         * our own setjmp, and longjmp to the correct handler */
 	if (jump_ret != UTF8_LONGJMP) {
 	    JMPENV_POP;
 	    JMPENV_JUMP(jump_ret);
@@ -4334,6 +4405,10 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
         RExC_orig_utf8 = RExC_utf8 = 1;
         SAVEFREEPV(exp);
     }
+
+#ifdef TRIE_STUDY_OPT
+    restudied = 0;
+#endif
 
     RExC_precomp = exp;
     RExC_flags = pm_flags;
@@ -4422,38 +4497,55 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
     r->extflags = pm_flags;
     {
         bool has_p     = ((r->extflags & RXf_PMf_KEEPCOPY) == RXf_PMf_KEEPCOPY);
-	bool has_minus = ((r->extflags & RXf_PMf_STD_PMMOD) != RXf_PMf_STD_PMMOD);
+        bool has_charset = cBOOL(r->extflags & (RXf_PMf_LOCALE|RXf_PMf_UNICODE));
+
+        /* The caret is output if there are any defaults: if not all the STD
+         * flags are set, or if no character set specifier is needed */
+        bool has_default =
+                    (((r->extflags & RXf_PMf_STD_PMMOD) != RXf_PMf_STD_PMMOD)
+                    || ! has_charset);
 	bool has_runon = ((RExC_seen & REG_SEEN_RUN_ON_COMMENT)==REG_SEEN_RUN_ON_COMMENT);
 	U16 reganch = (U16)((r->extflags & RXf_PMf_STD_PMMOD)
 			    >> RXf_PMf_STD_PMMOD_SHIFT);
 	const char *fptr = STD_PAT_MODS;        /*"msix"*/
 	char *p;
-	const STRLEN wraplen = plen + has_minus + has_p + has_runon
+        /* Allocate for the worst case, which is all the std flags are turned
+         * on.  If more precision is desired, we could do a population count of
+         * the flags set.  This could be done with a small lookup table, or by
+         * shifting, masking and adding, or even, when available, assembly
+         * language for a machine-language population count.
+         * We never output a minus, as all those are defaults, so are
+         * covered by the caret */
+	const STRLEN wraplen = plen + has_p + has_runon
+            + has_default       /* If needs a caret */
+            + has_charset       /* If needs a character set specifier */
             + (sizeof(STD_PAT_MODS) - 1)
             + (sizeof("(?:)") - 1);
 
-	p = sv_grow(MUTABLE_SV(rx), wraplen + 1);
-	SvCUR_set(rx, wraplen);
+        p = sv_grow(MUTABLE_SV(rx), wraplen + 1); /* +1 for the ending NUL */
 	SvPOK_on(rx);
 	SvFLAGS(rx) |= SvUTF8(pattern);
         *p++='('; *p++='?';
+
+        /* If a default, cover it using the caret */
+        if (has_default) {
+            *p++= DEFAULT_PAT_MOD;
+        }
+        if (has_charset) {
+            if (r->extflags & RXf_PMf_LOCALE) {
+                *p++ = LOCALE_PAT_MOD;
+            } else {
+                *p++ = UNICODE_PAT_MOD;
+            }
+        }
         if (has_p)
             *p++ = KEEPCOPY_PAT_MOD; /*'p'*/
         {
-            char *r = p + (sizeof(STD_PAT_MODS) - 1) + has_minus - 1;
-            char *colon = r + 1;
             char ch;
-
             while((ch = *fptr++)) {
                 if(reganch & 1)
                     *p++ = ch;
-                else
-                    *r-- = ch;
                 reganch >>= 1;
-            }
-            if(has_minus) {
-                *r = '-';
-                p = colon;
             }
         }
 
@@ -4466,6 +4558,7 @@ Perl_re_compile(pTHX_ SV * const pattern, U32 pm_flags)
             *p++ = '\n';
         *p++ = ')';
         *p = 0;
+	SvCUR_set(rx, p - SvPVX_const(rx));
     }
 
     r->intflags = 0;
@@ -5666,6 +5759,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 	if (*RExC_parse == '?') { /* (?...) */
 	    bool is_logical = 0;
 	    const char * const seqstart = RExC_parse;
+            bool has_use_defaults = FALSE;
 
 	    RExC_parse++;
 	    paren = *RExC_parse++;
@@ -5795,7 +5889,7 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		RExC_parse++;
 	    case '=':           /* (?=...) */
 		RExC_seen_zerolen++;
-			break;
+                break;
 	    case '!':           /* (?!...) */
 		RExC_seen_zerolen++;
 	        if (*RExC_parse == ')') {
@@ -6120,12 +6214,19 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		RExC_parse--; /* for vFAIL to print correctly */
                 vFAIL("Sequence (? incomplete");
                 break;
+            case DEFAULT_PAT_MOD:   /* Use default flags with the exceptions
+				       that follow */
+                has_use_defaults = TRUE;
+                STD_PMMOD_FLAGS_CLEAR(&RExC_flags);
+                RExC_flags &= ~(RXf_PMf_LOCALE|RXf_PMf_UNICODE);
+                goto parse_flags;
 	    default:
 	        --RExC_parse;
 	        parse_flags:      /* (?i) */  
 	    {
                 U32 posflags = 0, negflags = 0;
 	        U32 *flagsp = &posflags;
+                bool has_charset_modifier = 0;
 
 		while (*RExC_parse) {
 		    /* && strchr("iogcmsx", *RExC_parse) */
@@ -6133,6 +6234,32 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
 		       and must be globally applied -- japhy */
                     switch (*RExC_parse) {
 	            CASE_STD_PMMOD_FLAGS_PARSE_SET(flagsp);
+                    case LOCALE_PAT_MOD:
+                        if (has_charset_modifier || flagsp == &negflags) {
+                            goto fail_modifiers;
+                        }
+                        *flagsp &= ~RXf_PMf_UNICODE;
+                        *flagsp |= RXf_PMf_LOCALE;
+                        has_charset_modifier = 1;
+                        break;
+                    case UNICODE_PAT_MOD:
+                        if (has_charset_modifier || flagsp == &negflags) {
+                            goto fail_modifiers;
+                        }
+                        *flagsp &= ~RXf_PMf_LOCALE;
+                        *flagsp |= RXf_PMf_UNICODE;
+                        has_charset_modifier = 1;
+                        break;
+                    case DUAL_PAT_MOD:
+                        if (has_use_defaults
+                            || has_charset_modifier
+                            || flagsp == &negflags)
+                        {
+                            goto fail_modifiers;
+                        }
+                        *flagsp &= ~(RXf_PMf_LOCALE|RXf_PMf_UNICODE);
+                        has_charset_modifier = 1;
+                        break;
                     case ONCE_PAT_MOD: /* 'o' */
                     case GLOBAL_PAT_MOD: /* 'g' */
 			if (SIZE_ONLY && ckWARN(WARN_REGEXP)) {
@@ -6173,7 +6300,11 @@ S_reg(pTHX_ RExC_state_t *pRExC_state, I32 paren, I32 *flagp,U32 depth)
                         }
 	                break;
                     case '-':
-                        if (flagsp == &negflags) {
+                        /* A flag is a default iff it is following a minus,  so
+                         * if there is a minus, it means will be trying to
+                         * re-specify a default which is an error */
+                        if (has_use_defaults || flagsp == &negflags) {
+            fail_modifiers:
                             RExC_parse++;
 		            vFAIL3("Sequence (%.*s...) not recognized", RExC_parse-seqstart, seqstart);
 		            /*NOTREACHED*/
@@ -7164,31 +7295,61 @@ tryagain:
 	    *flagp |= HASWIDTH;
 	    goto finish_meta_pat;
 	case 'w':
-	    ret = reg_node(pRExC_state, (U8)(LOC ? ALNUML     : ALNUM));
+	    if (LOC) {
+                ret = reg_node(pRExC_state, (U8)(ALNUML));
+            } else {
+                ret = reg_node(pRExC_state, (U8)(ALNUM));
+                FLAGS(ret) = (UNI_SEMANTICS) ? USE_UNI : 0;
+            }
 	    *flagp |= HASWIDTH|SIMPLE;
 	    goto finish_meta_pat;
 	case 'W':
-	    ret = reg_node(pRExC_state, (U8)(LOC ? NALNUML    : NALNUM));
+            if (LOC) {
+                ret = reg_node(pRExC_state, (U8)(NALNUML));
+            } else {
+                ret = reg_node(pRExC_state, (U8)(NALNUM));
+                FLAGS(ret) = (UNI_SEMANTICS) ? USE_UNI : 0;
+            }
 	    *flagp |= HASWIDTH|SIMPLE;
 	    goto finish_meta_pat;
 	case 'b':
 	    RExC_seen_zerolen++;
 	    RExC_seen |= REG_SEEN_LOOKBEHIND;
-	    ret = reg_node(pRExC_state, (U8)(LOC ? BOUNDL     : BOUND));
+            if (LOC) {
+                ret = reg_node(pRExC_state, (U8)(BOUNDL));
+            } else {
+                ret = reg_node(pRExC_state, (U8)(BOUND));
+                FLAGS(ret) = (UNI_SEMANTICS) ? USE_UNI : 0;
+            }
 	    *flagp |= SIMPLE;
 	    goto finish_meta_pat;
 	case 'B':
 	    RExC_seen_zerolen++;
 	    RExC_seen |= REG_SEEN_LOOKBEHIND;
-	    ret = reg_node(pRExC_state, (U8)(LOC ? NBOUNDL    : NBOUND));
+            if (LOC) {
+                ret = reg_node(pRExC_state, (U8)(NBOUNDL));
+            } else {
+                ret = reg_node(pRExC_state, (U8)(NBOUND));
+                FLAGS(ret) = (UNI_SEMANTICS) ? USE_UNI : 0;
+            }
 	    *flagp |= SIMPLE;
 	    goto finish_meta_pat;
 	case 's':
-	    ret = reg_node(pRExC_state, (U8)(LOC ? SPACEL     : SPACE));
+            if (LOC) {
+                ret = reg_node(pRExC_state, (U8)(SPACEL));
+            } else {
+                ret = reg_node(pRExC_state, (U8)(SPACE));
+                FLAGS(ret) = (UNI_SEMANTICS) ? USE_UNI : 0;
+            }
 	    *flagp |= HASWIDTH|SIMPLE;
 	    goto finish_meta_pat;
 	case 'S':
-	    ret = reg_node(pRExC_state, (U8)(LOC ? NSPACEL    : NSPACE));
+            if (LOC) {
+                ret = reg_node(pRExC_state, (U8)(NSPACEL));
+            } else {
+                ret = reg_node(pRExC_state, (U8)(NSPACE));
+                FLAGS(ret) = (UNI_SEMANTICS) ? USE_UNI : 0;
+            }
 	    *flagp |= HASWIDTH|SIMPLE;
 	    goto finish_meta_pat;
 	case 'd':
@@ -7555,7 +7716,7 @@ tryagain:
 		    case '0': case '1': case '2': case '3':case '4':
 		    case '5': case '6': case '7': case '8':case '9':
 			if (*p == '0' ||
-			    (isOCTAL(p[1]) && atoi(p) >= RExC_npar))
+			    (isDIGIT(p[1]) && atoi(p) >= RExC_npar))
 			{
 			    I32 flags = PERL_SCAN_SILENT_ILLDIGIT;
 			    STRLEN numlen = 3;
@@ -7920,6 +8081,7 @@ case ANYOF_N##NAME:                                     \
     what = WORD;                                        \
     break
 
+/* Like above, but no locale test */
 #define _C_C_T_NOLOC_(NAME,TEST,WORD)                   \
 ANYOF_##NAME:                                           \
 	for (value = 0; value < 256; value++)           \
@@ -7932,6 +8094,42 @@ case ANYOF_N##NAME:                                     \
 	for (value = 0; value < 256; value++)           \
 	    if (!TEST)                                  \
 		ANYOF_BITMAP_SET(ret, value);           \
+    yesno = '!';                                        \
+    what = WORD;                                        \
+    break
+
+/* Like the above, but there are differences if we are in uni-8-bit or not, so
+ * there are two tests passed in, to use depending on that. There aren't any
+ * cases where the label is different from the name, so no need for that
+ * parameter */
+#define _C_C_T_UNI_8_BIT(NAME,TEST_8,TEST_7,WORD)       \
+ANYOF_##NAME:                                           \
+    if (LOC) ANYOF_CLASS_SET(ret, ANYOF_##NAME);        \
+    else if (UNI_SEMANTICS) {                           \
+        for (value = 0; value < 256; value++) {         \
+            if (TEST_8) ANYOF_BITMAP_SET(ret, value);   \
+        }                                               \
+    }                                                   \
+    else {                                              \
+        for (value = 0; value < 256; value++) {         \
+            if (TEST_7) ANYOF_BITMAP_SET(ret, value);   \
+        }                                               \
+    }                                                   \
+    yesno = '+';                                        \
+    what = WORD;                                        \
+    break;                                              \
+case ANYOF_N##NAME:                                     \
+    if (LOC) ANYOF_CLASS_SET(ret, ANYOF_N##NAME);       \
+    else if (UNI_SEMANTICS) {                           \
+        for (value = 0; value < 256; value++) {         \
+            if (! TEST_8) ANYOF_BITMAP_SET(ret, value); \
+        }                                               \
+    }                                                   \
+    else {                                              \
+        for (value = 0; value < 256; value++) {         \
+            if (! TEST_7) ANYOF_BITMAP_SET(ret, value); \
+        }                                               \
+    }                                                   \
     yesno = '!';                                        \
     what = WORD;                                        \
     break
@@ -8271,11 +8469,13 @@ parseit:
 		case _C_C_T_(PUNCT, isPUNCT(value), POSIX_CC_UNI_NAME("Punct"));
 		case _C_C_T_(UPPER, isUPPER(value), POSIX_CC_UNI_NAME("Upper"));
 #ifdef BROKEN_UNICODE_CHARCLASS_MAPPINGS
-		case _C_C_T_(ALNUM, isALNUM(value), "Word");
-		case _C_C_T_(SPACE, isSPACE(value), "SpacePerl");
+                /* \s, \w match all unicode if utf8. */
+                case _C_C_T_UNI_8_BIT(SPACE, isSPACE_L1(value), isSPACE(value), "SpacePerl");
+                case _C_C_T_UNI_8_BIT(ALNUM, isWORDCHAR_L1(value), isALNUM(value), "Word");
 #else
-		case _C_C_T_(SPACE, isSPACE(value), "PerlSpace");
-		case _C_C_T_(ALNUM, isALNUM(value), "PerlWord");
+                /* \s, \w match ascii and locale only */
+                case _C_C_T_UNI_8_BIT(SPACE, isSPACE_L1(value), isSPACE(value), "PerlSpace");
+                case _C_C_T_UNI_8_BIT(ALNUM, isWORDCHAR_L1(value), isALNUM(value), "PerlWord");
 #endif		
 		case _C_C_T_(XDIGIT, isXDIGIT(value), "XDigit");
 		case _C_C_T_NOLOC_(VERTWS, is_VERTWS_latin1(&value), "VertSpace");
@@ -8997,31 +9197,6 @@ S_regtail_study(pTHX_ RExC_state_t *pRExC_state, regnode *p, const regnode *val,
     }
 
     return exact;
-}
-#endif
-
-/*
- - regcurly - a little FSA that accepts {\d+,?\d*}
- */
-#ifndef PERL_IN_XSUB_RE
-I32
-Perl_regcurly(register const char *s)
-{
-    PERL_ARGS_ASSERT_REGCURLY;
-
-    if (*s++ != '{')
-	return FALSE;
-    if (!isDIGIT(*s))
-	return FALSE;
-    while (isDIGIT(*s))
-	s++;
-    if (*s == ',')
-	s++;
-    while (isDIGIT(*s))
-	s++;
-    if (*s != '}')
-	return FALSE;
-    return TRUE;
 }
 #endif
 

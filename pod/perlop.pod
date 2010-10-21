@@ -194,11 +194,12 @@ Unary "!" performs logical negation, i.e., "not".  See also C<not> for a lower
 precedence version of this.
 X<!>
 
-Unary "-" performs arithmetic negation if the operand is numeric.  If
-the operand is an identifier, a string consisting of a minus sign
-concatenated with the identifier is returned.  Otherwise, if the string
-starts with a plus or minus, a string starting with the opposite sign
-is returned.  One effect of these rules is that -bareword is equivalent
+Unary "-" performs arithmetic negation if the operand is numeric,
+including any string that looks like a number.  If the operand is
+an identifier, a string consisting of a minus sign concatenated
+with the identifier is returned.  Otherwise, if the string starts
+with a plus or minus, a string starting with the opposite sign is
+returned.  One effect of these rules is that -bareword is equivalent
 to the string "-bareword".  If, however, the string begins with a
 non-alphabetic character (excluding "+" or "-"), Perl will attempt to convert
 the string to a numeric and the arithmetic negation is performed. If the
@@ -1029,7 +1030,7 @@ X<\o{}>
     \e                  escape            (ESC)
     \x{263a}     [1,8]  hex char          (example: SMILEY)
     \x1b         [2,8]  restricted range hex char (example: ESC)
-    \N{name}     [3]    named Unicode character
+    \N{name}     [3]    named Unicode character or character sequence
     \N{U+263D}   [4,8]  Unicode character (example: FIRST QUARTER MOON)
     \c[          [5]    control char      (example: chr(27))
     \o{23072}    [6,8]  octal char        (example: SMILEY)
@@ -1073,7 +1074,7 @@ For example:
 
 =item [3]
 
-The result is the Unicode character given by I<name>.
+The result is the Unicode character or character sequence given by I<name>.
 See L<charnames>.
 
 =item [4]
@@ -1223,10 +1224,24 @@ C<join $", @array>.    "Punctuation" arrays such as C<@*> are only
 interpolated if the name is enclosed in braces C<@{*}>, but special
 arrays C<@_>, C<@+>, and C<@-> are interpolated, even without braces.
 
-You cannot include a literal C<$> or C<@> within a C<\Q> sequence.
-An unescaped C<$> or C<@> interpolates the corresponding variable,
-while escaping will cause the literal string C<\$> to be inserted.
-You'll need to write something like C<m/\Quser\E\@\Qhost/>.
+For double-quoted strings, the quoting from C<\Q> is applied after
+interpolation and escapes are processed.
+
+    "abc\Qfoo\tbar$s\Exyz"
+
+is equivalent to
+
+    "abc" . quotemeta("foo\tbar$s") . "xyz"
+
+For the pattern of regex operators (C<qr//>, C<m//> and C<s///>),
+the quoting from C<\Q> is applied after interpolation is processed,
+but before escapes are processed. This allows the pattern to match
+literally (except for C<$> and C<@>). For example, the following matches:
+
+    '\s\t' =~ /\Q\s\t/
+
+Because C<$> or C<@> trigger interpolation, you'll need to use something
+like C</\Quser\E\@\Qhost/> to match them literally.
 
 Patterns are subject to an additional level of interpretation as a
 regular expression.  This is done as a second pass, after variables are
@@ -1500,10 +1515,10 @@ regexp tries to match where the previous one leaves off.
 
 Here is the output (split into several lines):
 
- line-noise lowercase line-noise lowercase UPPERCASE line-noise
- UPPERCASE line-noise lowercase line-noise lowercase line-noise
- lowercase lowercase line-noise lowercase lowercase line-noise
- MiXeD line-noise. That's all!
+	line-noise lowercase line-noise UPPERCASE line-noise UPPERCASE
+	line-noise lowercase line-noise lowercase line-noise lowercase
+	lowercase line-noise lowercase lowercase line-noise lowercase
+	lowercase line-noise MiXeD line-noise. That's all!
 
 =item ?PATTERN?
 X<?>
@@ -2635,17 +2650,17 @@ floating point.  But by saying
 
     use integer;
 
-you may tell the compiler that it's okay to use integer operations
-(if it feels like it) from here to the end of the enclosing BLOCK.
-An inner BLOCK may countermand this by saying
+you may tell the compiler to use integer operations
+(see L<integer> for a detailed explanation) from here to the end of
+the enclosing BLOCK.  An inner BLOCK may countermand this by saying
 
     no integer;
 
 which lasts until the end of that BLOCK.  Note that this doesn't
-mean everything is only an integer, merely that Perl may use integer
-operations if it is so inclined.  For example, even under C<use
-integer>, if you take the C<sqrt(2)>, you'll still get C<1.4142135623731>
-or so.
+mean everything is an integer, merely that Perl will use integer
+operations for arithmetic, comparison, and bitwise operators.  For
+example, even under C<use integer>, if you take the C<sqrt(2)>, you'll
+still get C<1.4142135623731> or so.
 
 Used on numbers, the bitwise operators ("&", "|", "^", "~", "<<",
 and ">>") always produce integral results.  (But see also

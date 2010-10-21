@@ -142,6 +142,10 @@ Deprecated.  Use C<GIMME_V> instead.
 				/*  On OP_HELEM and OP_HSLICE, localization will be followed
 				    by assignment, so do not wipe the target if it is special
 				    (e.g. a glob or a magic SV) */
+				/*  On OP_MATCH, OP_SUBST & OP_TRANS, the
+				    operand of a logical or conditional
+				    that was optimised away, so it should
+				    not be bound via =~ */
 
 /* old names; don't use in new code, but don't break them, either */
 #define OPf_LIST	OPf_WANT_LIST
@@ -362,7 +366,7 @@ struct pmop {
 
 /* Leave some space, so future bit allocations can go either in the shared or
  * unshared area without affecting binary compatibility */
-#define PMf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT+8)
+#define PMf_BASE_SHIFT (_RXf_PMf_SHIFT_NEXT+7)
 
 /* taint $1 etc. if target tainted */
 #define PMf_RETAINT	(1<<(PMf_BASE_SHIFT+0))
@@ -618,6 +622,21 @@ struct loop {
 #define ref(o, type) doref(o, type, TRUE)
 #endif
 
+/*
+=head1 Optree Manipulation Functions
+
+=for apidoc Am|OP*|LINKLIST|OP *o
+Given the root of an optree, link the tree in execution order using the
+C<op_next> pointers and return the first op executed. If this has
+already been done, it will not be redone, and C<< o->op_next >> will be
+returned. If C<< o->op_next >> is not already set, I<o> should be at
+least an C<UNOP>.
+
+=cut
+*/
+
+#define LINKLIST(o) ((o)->op_next ? (o)->op_next : op_linklist((OP*)o))
+
 /* no longer used anywhere in core */
 #ifndef PERL_CORE
 #define cv_ckproto(cv, gv, p) \
@@ -692,13 +711,13 @@ preprocessing token; the type of I<arg> depends on I<which>.
 
 #define BhkFLAGS(hk)		((hk)->bhk_flags)
 
-#define BHKf_start	    0x01
-#define BHKf_pre_end	    0x02
-#define BHKf_post_end	    0x04
-#define BHKf_eval	    0x08
+#define BHKf_bhk_start	    0x01
+#define BHKf_bhk_pre_end    0x02
+#define BHKf_bhk_post_end   0x04
+#define BHKf_bhk_eval	    0x08
 
 #define BhkENTRY(hk, which) \
-    ((BhkFLAGS(hk) & BHKf_ ## which) ? ((hk)->bhk_ ## which) : NULL)
+    ((BhkFLAGS(hk) & BHKf_ ## which) ? ((hk)->which) : NULL)
 
 #define BhkENABLE(hk, which) \
     STMT_START { \
@@ -713,7 +732,7 @@ preprocessing token; the type of I<arg> depends on I<which>.
 
 #define BhkENTRY_set(hk, which, ptr) \
     STMT_START { \
-	(hk)->bhk_ ## which = ptr; \
+	(hk)->which = ptr; \
 	BhkENABLE(hk, which); \
     } STMT_END
 
@@ -736,6 +755,11 @@ preprocessing token; the type of I<arg> depends on I<which>.
 	    } \
 	} \
     } STMT_END
+
+/* flags for rv2cv_op_cv */
+
+#define RV2CVOPCV_MARK_EARLY     0x00000001
+#define RV2CVOPCV_RETURN_NAME_GV 0x00000002
 
 #ifdef PERL_MAD
 #  define MAD_NULL 1

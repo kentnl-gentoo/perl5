@@ -176,69 +176,91 @@
 #endif
 
 
-#define CCC_TRY_AFF(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC,LCFUNC)                          \
-        case NAMEL:                                                              \
-            PL_reg_flags |= RF_tainted;                                                 \
-            /* FALL THROUGH */                                                          \
-        case NAME:                                                                     \
-            if (!nextchr)                                                               \
-                sayNO;                                                                  \
-            if (utf8_target && UTF8_IS_CONTINUED(nextchr)) {                                \
-                if (!CAT2(PL_utf8_,CLASS)) {                                            \
-                    bool ok;                                                            \
-                    ENTER;                                                              \
-                    save_re_context();                                                  \
-                    ok=CAT2(is_utf8_,CLASS)((const U8*)STR);                            \
-                    assert(ok);                                                         \
-                    LEAVE;                                                              \
-                }                                                                       \
-                if (!(OP(scan) == NAME                                                  \
+#define _CCC_TRY_AFF_COMMON(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC)          \
+        case NAMEL:                                                         \
+            PL_reg_flags |= RF_tainted;                                     \
+            /* FALL THROUGH */                                              \
+        case NAME:                                                          \
+            if (!nextchr)                                                   \
+                sayNO;                                                      \
+            if (utf8_target && UTF8_IS_CONTINUED(nextchr)) {                \
+                if (!CAT2(PL_utf8_,CLASS)) {                                \
+                    bool ok;                                                \
+                    ENTER;                                                  \
+                    save_re_context();                                      \
+                    ok=CAT2(is_utf8_,CLASS)((const U8*)STR);                \
+                    assert(ok);                                             \
+                    LEAVE;                                                  \
+                }                                                           \
+                if (!(OP(scan) == NAME                                      \
                     ? cBOOL(swash_fetch(CAT2(PL_utf8_,CLASS), (U8*)locinput, utf8_target))  \
-                    : LCFUNC_utf8((U8*)locinput)))                                      \
-                {                                                                       \
-                    sayNO;                                                              \
-                }                                                                       \
-                locinput += PL_utf8skip[nextchr];                                       \
-                nextchr = UCHARAT(locinput);                                            \
-                break;                                                                  \
-            }                                                                           \
-            if (!(OP(scan) == NAME ? FUNC(nextchr) : LCFUNC(nextchr)))                  \
-                sayNO;                                                                  \
-            nextchr = UCHARAT(++locinput);                                              \
+                    : LCFUNC_utf8((U8*)locinput)))                          \
+                {                                                           \
+                    sayNO;                                                  \
+                }                                                           \
+                locinput += PL_utf8skip[nextchr];                           \
+                nextchr = UCHARAT(locinput);                                \
+                break;                                                      \
+            }                                                               \
+	    /* Drops through to the macro that calls this one */
+
+#define CCC_TRY_AFF(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC,LCFUNC)           \
+    _CCC_TRY_AFF_COMMON(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC)              \
+            if (!(OP(scan) == NAME ? FUNC(nextchr) : LCFUNC(nextchr)))      \
+                sayNO;                                                      \
+            nextchr = UCHARAT(++locinput);                                  \
             break
 
-#define CCC_TRY_NEG(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC,LCFUNC)                        \
-        case NAMEL:                                                              \
-            PL_reg_flags |= RF_tainted;                                                 \
-            /* FALL THROUGH */                                                          \
-        case NAME :                                                                     \
-            if (!nextchr && locinput >= PL_regeol)                                      \
-                sayNO;                                                                  \
-            if (utf8_target && UTF8_IS_CONTINUED(nextchr)) {                                \
-                if (!CAT2(PL_utf8_,CLASS)) {                                            \
-                    bool ok;                                                            \
-                    ENTER;                                                              \
-                    save_re_context();                                                  \
-                    ok=CAT2(is_utf8_,CLASS)((const U8*)STR);                            \
-                    assert(ok);                                                         \
-                    LEAVE;                                                              \
-                }                                                                       \
-                if ((OP(scan) == NAME                                                  \
+/* Almost identical to the above, but has a case for a node that matches chars
+ * between 128 and 255 using Unicode (latin1) semantics. */
+#define CCC_TRY_AFF_U(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNCU,LCFUNC)         \
+    _CCC_TRY_AFF_COMMON(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC)               \
+            if (!(OP(scan) == NAMEL ? LCFUNC(nextchr) : (FUNCU(nextchr) && (isASCII(nextchr) || (FLAGS(scan) & USE_UNI))))) \
+                sayNO;                                                       \
+            nextchr = UCHARAT(++locinput);                                   \
+            break
+
+#define _CCC_TRY_NEG_COMMON(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC)           \
+        case NAMEL:                                                          \
+            PL_reg_flags |= RF_tainted;                                      \
+            /* FALL THROUGH */                                               \
+        case NAME :                                                          \
+            if (!nextchr && locinput >= PL_regeol)                           \
+                sayNO;                                                       \
+            if (utf8_target && UTF8_IS_CONTINUED(nextchr)) {                 \
+                if (!CAT2(PL_utf8_,CLASS)) {                                 \
+                    bool ok;                                                 \
+                    ENTER;                                                   \
+                    save_re_context();                                       \
+                    ok=CAT2(is_utf8_,CLASS)((const U8*)STR);                 \
+                    assert(ok);                                              \
+                    LEAVE;                                                   \
+                }                                                            \
+                if ((OP(scan) == NAME                                        \
                     ? cBOOL(swash_fetch(CAT2(PL_utf8_,CLASS), (U8*)locinput, utf8_target))  \
-                    : LCFUNC_utf8((U8*)locinput)))                                      \
-                {                                                                       \
-                    sayNO;                                                              \
-                }                                                                       \
-                locinput += PL_utf8skip[nextchr];                                       \
-                nextchr = UCHARAT(locinput);                                            \
-                break;                                                                  \
-            }                                                                           \
-            if ((OP(scan) == NAME ? FUNC(nextchr) : LCFUNC(nextchr)))                   \
-                sayNO;                                                                  \
-            nextchr = UCHARAT(++locinput);                                              \
+                    : LCFUNC_utf8((U8*)locinput)))                           \
+                {                                                            \
+                    sayNO;                                                   \
+                }                                                            \
+                locinput += PL_utf8skip[nextchr];                            \
+                nextchr = UCHARAT(locinput);                                 \
+                break;                                                       \
+            }
+
+#define CCC_TRY_NEG(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC,LCFUNC)            \
+    _CCC_TRY_NEG_COMMON(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNC)               \
+            if ((OP(scan) == NAME ? FUNC(nextchr) : LCFUNC(nextchr)))        \
+                sayNO;                                                       \
+            nextchr = UCHARAT(++locinput);                                   \
             break
 
 
+#define CCC_TRY_NEG_U(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNCU,LCFUNC)         \
+    _CCC_TRY_NEG_COMMON(NAME,NAMEL,CLASS,STR,LCFUNC_utf8,FUNCU)              \
+            if ((OP(scan) == NAMEL ? LCFUNC(nextchr) : (FUNCU(nextchr) && (isASCII(nextchr) || (FLAGS(scan) & USE_UNI))))) \
+                sayNO;                                                       \
+            nextchr = UCHARAT(++locinput);                                   \
+            break
 
 
 
@@ -1506,12 +1528,19 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 		}
 		);
 	    }
-	    else {
+            else {  /* Not utf8 */
 		tmp = (s != PL_bostr) ? UCHARAT(s - 1) : '\n';
-		tmp = ((OP(c) == BOUND ? isALNUM(tmp) : isALNUM_LC(tmp)) != 0);
+                tmp = cBOOL((OP(c) == BOUNDL)
+                            ? isALNUM_LC(tmp)
+                            : (isWORDCHAR_L1(tmp)
+                               && (isASCII(tmp) || (FLAGS(c) & USE_UNI))));
 		REXEC_FBC_SCAN(
 		    if (tmp ==
-			!(OP(c) == BOUND ? isALNUM(*s) : isALNUM_LC(*s))) {
+                        !((OP(c) == BOUNDL)
+                          ? isALNUM_LC(*s)
+                          : (isWORDCHAR_L1((U8) *s)
+                             && (isASCII((U8) *s) || (FLAGS(c) & USE_UNI)))))
+		    {
 			tmp = !tmp;
 			REXEC_FBC_TRYIT;
 		}
@@ -1544,12 +1573,19 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    }
 	    else {
 		tmp = (s != PL_bostr) ? UCHARAT(s - 1) : '\n';
-		tmp = ((OP(c) == NBOUND ?
-			isALNUM(tmp) : isALNUM_LC(tmp)) != 0);
+                tmp = cBOOL((OP(c) == NBOUNDL)
+                            ? isALNUM_LC(tmp)
+                            : (isWORDCHAR_L1(tmp)
+                               && (isASCII(tmp) || (FLAGS(c) & USE_UNI))));
 		REXEC_FBC_SCAN(
-		    if (tmp ==
-			!(OP(c) == NBOUND ? isALNUM(*s) : isALNUM_LC(*s)))
+		    if (tmp == ! cBOOL(
+                            (OP(c) == NBOUNDL)
+                            ? isALNUM_LC(*s)
+                            : (isWORDCHAR_L1((U8) *s)
+                               && (isASCII((U8) *s) || (FLAGS(c) & USE_UNI)))))
+                    {
 			tmp = !tmp;
+                    }
 		    else REXEC_FBC_TRYIT;
 		);
 	    }
@@ -1560,7 +1596,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    REXEC_FBC_CSCAN_PRELOAD(
 		LOAD_UTF8_CHARCLASS_PERL_WORD(),
 		swash_fetch(RE_utf8_perl_word, (U8*)s, utf8_target),
-		isALNUM(*s)
+                (FLAGS(c) & USE_UNI) ? isWORDCHAR_L1((U8) *s) : isALNUM(*s)
 	    );
 	case ALNUML:
 	    REXEC_FBC_CSCAN_TAINT(
@@ -1571,7 +1607,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    REXEC_FBC_CSCAN_PRELOAD(
 		LOAD_UTF8_CHARCLASS_PERL_WORD(),
 		!swash_fetch(RE_utf8_perl_word, (U8*)s, utf8_target),
-		!isALNUM(*s)
+                ! ((FLAGS(c) & USE_UNI) ? isWORDCHAR_L1((U8) *s) : isALNUM(*s))
 	    );
 	case NALNUML:
 	    REXEC_FBC_CSCAN_TAINT(
@@ -1582,7 +1618,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    REXEC_FBC_CSCAN_PRELOAD(
 		LOAD_UTF8_CHARCLASS_PERL_SPACE(),
 		*s == ' ' || swash_fetch(RE_utf8_perl_space,(U8*)s, utf8_target),
-		isSPACE(*s)
+                isSPACE_L1((U8) *s) && (isASCII((U8) *s) || (FLAGS(c) & USE_UNI))
 	    );
 	case SPACEL:
 	    REXEC_FBC_CSCAN_TAINT(
@@ -1593,7 +1629,7 @@ S_find_byclass(pTHX_ regexp * prog, const regnode *c, char *s,
 	    REXEC_FBC_CSCAN_PRELOAD(
 		LOAD_UTF8_CHARCLASS_PERL_SPACE(),
 		!(*s == ' ' || swash_fetch(RE_utf8_perl_space,(U8*)s, utf8_target)),
-		!isSPACE(*s)
+                !(isSPACE_L1((U8) *s) && (isASCII((U8) *s) || (FLAGS(c) & USE_UNI)))
 	    );
 	case NSPACEL:
 	    REXEC_FBC_CSCAN_TAINT(
@@ -3569,7 +3605,14 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 	    else {
 		ln = (locinput != PL_bostr) ?
 		    UCHARAT(locinput - 1) : '\n';
-		if (OP(scan) == BOUND || OP(scan) == NBOUND) {
+		if (FLAGS(scan) & USE_UNI) {
+
+                    /* Here, can't be BOUNDL or NBOUNDL because they never set
+                     * the flags to USE_UNI */
+                    ln = isWORDCHAR_L1(ln);
+                    n = isWORDCHAR_L1(nextchr);
+                }
+                else if (OP(scan) == BOUND || OP(scan) == NBOUND) {
 		    ln = isALNUM(ln);
 		    n = isALNUM(nextchr);
 		}
@@ -3616,11 +3659,11 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		 sayNO;
 	    break;
 	/* Special char classes - The defines start on line 129 or so */
-	CCC_TRY_AFF( ALNUM,  ALNUML, perl_word,   "a", isALNUM_LC_utf8, isALNUM, isALNUM_LC);
-	CCC_TRY_NEG(NALNUM, NALNUML, perl_word,   "a", isALNUM_LC_utf8, isALNUM, isALNUM_LC);
+        CCC_TRY_AFF_U( ALNUM,  ALNUML, perl_word,   "a", isALNUM_LC_utf8, isWORDCHAR_L1, isALNUM_LC);
+        CCC_TRY_NEG_U(NALNUM, NALNUML, perl_word,   "a", isALNUM_LC_utf8, isWORDCHAR_L1, isALNUM_LC);
 
-	CCC_TRY_AFF( SPACE,  SPACEL, perl_space,  " ", isSPACE_LC_utf8, isSPACE, isSPACE_LC);
-	CCC_TRY_NEG(NSPACE, NSPACEL, perl_space,  " ", isSPACE_LC_utf8, isSPACE, isSPACE_LC);
+        CCC_TRY_AFF_U( SPACE,  SPACEL, perl_space,  " ", isSPACE_LC_utf8, isSPACE_L1, isSPACE_LC);
+        CCC_TRY_NEG_U(NSPACE, NSPACEL, perl_space,  " ", isSPACE_LC_utf8, isSPACE_L1, isSPACE_LC);
 
 	CCC_TRY_AFF( DIGIT,  DIGITL, posix_digit, "0", isDIGIT_LC_utf8, isDIGIT, isDIGIT_LC);
 	CCC_TRY_NEG(NDIGIT, NDIGITL, posix_digit, "0", isDIGIT_LC_utf8, isDIGIT, isDIGIT_LC);
@@ -3975,7 +4018,24 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		COP * const ocurcop = PL_curcop;
 		PAD *old_comppad;
 		char *saved_regeol = PL_regeol;
-	    
+		struct re_save_state saved_state;
+
+		/* To not corrupt the existing regex state while executing the
+		 * eval we would normally put it on the save stack, like with
+		 * save_re_context. However, re-evals have a weird scoping so we
+		 * can't just add ENTER/LEAVE here. With that, things like
+		 *
+		 *    (?{$a=2})(a(?{local$a=$a+1}))*aak*c(?{$b=$a})
+		 *
+		 * would break, as they expect the localisation to be unwound
+		 * only when the re-engine backtracks through the bit that
+		 * localised it.
+		 *
+		 * What we do instead is just saving the state in a local c
+		 * variable.
+		 */
+		Copy(&PL_reg_state, &saved_state, 1, struct re_save_state);
+
 		n = ARG(scan);
 		PL_op = (OP_4tree*)rexi->data->data[n];
 		DEBUG_STATE_r( PerlIO_printf(Perl_debug_log, 
@@ -3996,6 +4056,8 @@ S_regmatch(pTHX_ regmatch_info *reginfo, regnode *prog)
 		    ret = POPs;
 		    PUTBACK;
 		}
+
+		Copy(&saved_state, &PL_reg_state, 1, struct re_save_state);
 
 		PL_op = oop;
 		PAD_RESTORE_LOCAL(old_comppad);
@@ -5724,13 +5786,19 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 	    loceol = PL_regeol;
 	    LOAD_UTF8_CHARCLASS_ALNUM();
 	    while (hardcount < max && scan < loceol &&
-		   swash_fetch(PL_utf8_alnum, (U8*)scan, utf8_target)) {
+                   swash_fetch(PL_utf8_alnum, (U8*)scan, utf8_target))
+            {
 		scan += UTF8SKIP(scan);
 		hardcount++;
 	    }
+        } else if (FLAGS(p) & USE_UNI) {
+            while (scan < loceol && isWORDCHAR_L1((U8) *scan)) {
+                scan++;
+            }
 	} else {
-	    while (scan < loceol && isALNUM(*scan))
-		scan++;
+            while (scan < loceol && isALNUM((U8) *scan)) {
+                scan++;
+            }
 	}
 	break;
     case ALNUML:
@@ -5752,13 +5820,19 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 	    loceol = PL_regeol;
 	    LOAD_UTF8_CHARCLASS_ALNUM();
 	    while (hardcount < max && scan < loceol &&
-		   !swash_fetch(PL_utf8_alnum, (U8*)scan, utf8_target)) {
+                   !swash_fetch(PL_utf8_alnum, (U8*)scan, utf8_target))
+            {
 		scan += UTF8SKIP(scan);
 		hardcount++;
 	    }
+        } else if (FLAGS(p) & USE_UNI) {
+            while (scan < loceol && ! isWORDCHAR_L1((U8) *scan)) {
+                scan++;
+            }
 	} else {
-	    while (scan < loceol && !isALNUM(*scan))
-		scan++;
+            while (scan < loceol && ! isALNUM((U8) *scan)) {
+                scan++;
+            }
 	}
 	break;
     case NALNUML:
@@ -5781,13 +5855,18 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 	    LOAD_UTF8_CHARCLASS_SPACE();
 	    while (hardcount < max && scan < loceol &&
 		   (*scan == ' ' ||
-		    swash_fetch(PL_utf8_space,(U8*)scan, utf8_target))) {
+                    swash_fetch(PL_utf8_space,(U8*)scan, utf8_target)))
+            {
 		scan += UTF8SKIP(scan);
 		hardcount++;
 	    }
+        } else if (FLAGS(p) & USE_UNI) {
+            while (scan < loceol && isSPACE_L1((U8) *scan)) {
+                scan++;
+            }
 	} else {
-	    while (scan < loceol && isSPACE(*scan))
-		scan++;
+            while (scan < loceol && isSPACE((U8) *scan))
+                scan++;
 	}
 	break;
     case SPACEL:
@@ -5810,13 +5889,19 @@ S_regrepeat(pTHX_ const regexp *prog, const regnode *p, I32 max, int depth)
 	    LOAD_UTF8_CHARCLASS_SPACE();
 	    while (hardcount < max && scan < loceol &&
 		   !(*scan == ' ' ||
-		     swash_fetch(PL_utf8_space,(U8*)scan, utf8_target))) {
+                     swash_fetch(PL_utf8_space,(U8*)scan, utf8_target)))
+            {
 		scan += UTF8SKIP(scan);
 		hardcount++;
 	    }
+        } else if (FLAGS(p) & USE_UNI) {
+            while (scan < loceol && ! isSPACE_L1((U8) *scan)) {
+                scan++;
+            }
 	} else {
-	    while (scan < loceol && !isSPACE(*scan))
-		scan++;
+            while (scan < loceol && ! isSPACE((U8) *scan)) {
+                scan++;
+            }
 	}
 	break;
     case NSPACEL:

@@ -80,12 +80,6 @@ static I32 read_e_script(pTHX_ int idx, SV *buf_sv, int maxlen);
 #  define validate_suid(validarg, scriptname, fdscript, suidscript, linestr_sv, rsfp) S_validate_suid(aTHX_ rsfp)
 #endif
 
-#define CALL_BODY_EVAL(myop) \
-    if (PL_op == (myop)) \
-	PL_op = PL_ppaddr[OP_ENTEREVAL](aTHX); \
-    if (PL_op) \
-	CALLRUNOPS(aTHX);
-
 #define CALL_BODY_SUB(myop) \
     if (PL_op == (myop)) \
 	PL_op = PL_ppaddr[OP_ENTERSUB](aTHX); \
@@ -751,6 +745,10 @@ perl_destruct(pTHXx)
 	PL_main_root = NULL;
     }
     PL_main_start = NULL;
+    /* note that  PL_main_cv isn't usually actually freed at this point,
+     * due to the CvOUTSIDE refs from subs compiled within it. It will
+     * get freed once all the subs are freed in sv_clean_all(), for
+     * destruct_level > 0 */
     SvREFCNT_dec(PL_main_cv);
     PL_main_cv = NULL;
     PL_dirty = TRUE;
@@ -770,8 +768,6 @@ perl_destruct(pTHXx)
 	 */
 	sv_clean_objs();
 	PL_sv_objcount = 0;
-	if (PL_defoutgv && !SvREFCNT(PL_defoutgv))
-	    PL_defoutgv = NULL; /* may have been freed */
     }
 
     /* unhook hooks which will soon be, or use, destroyed data */
@@ -832,9 +828,6 @@ perl_destruct(pTHXx)
 	/* The exit() function will do everything that needs doing. */
         return STATUS_EXIT;
     }
-
-    /* reset so print() ends up where we expect */
-    setdefout(NULL);
 
 #ifdef USE_ITHREADS
     /* the syntax tree is shared between clones
@@ -1042,6 +1035,8 @@ perl_destruct(pTHXx)
     /* Prepare to destruct main symbol table.  */
 
     hv = PL_defstash;
+    /* break ref loop  *:: <=> %:: */
+    (void)hv_delete(hv, "main::", 6, G_DISCARD);
     PL_defstash = 0;
     SvREFCNT_dec(hv);
     SvREFCNT_dec(PL_curstname);
@@ -1244,8 +1239,6 @@ perl_destruct(pTHXx)
     Safefree(PL_psig_name);
     PL_psig_name = (SV**)NULL;
     PL_psig_ptr = (SV**)NULL;
-    Safefree(PL_psig_pend);
-    PL_psig_pend = (int*)NULL;
     {
 	/* We need to NULL PL_psig_pend first, so that
 	   signal handlers know not to use it */
@@ -2668,7 +2661,8 @@ Perl_call_sv(pTHX_ SV *sv, VOL I32 flags)
 /*
 =for apidoc p||eval_sv
 
-Tells Perl to C<eval> the string in the SV.
+Tells Perl to C<eval> the string in the SV. It supports the same flags
+as C<call_sv>, with the obvious exception of G_EVAL. See L<perlcall>.
 
 =cut
 */
@@ -2716,7 +2710,12 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
     switch (ret) {
     case 0:
  redo_body:
-	CALL_BODY_EVAL((OP*)&myop);
+	if (PL_op == (OP*)(&myop)) {
+	    PL_op = PL_ppaddr[OP_ENTEREVAL](aTHX);
+	    if (!PL_op)
+		goto fail; /* failed in compilation */
+	}
+	CALLRUNOPS(aTHX);
 	retval = PL_stack_sp - (PL_stack_base + oldmark);
 	if (!(flags & G_KEEPERR)) {
 	    CLEAR_ERRSV();
@@ -2739,6 +2738,7 @@ Perl_eval_sv(pTHX_ SV *sv, I32 flags)
 	    PL_restartop = 0;
 	    goto redo_body;
 	}
+      fail:
 	PL_stack_sp = PL_stack_base + oldmark;
 	if ((flags & G_WANT) == G_ARRAY)
 	    retval = 0;
@@ -3893,6 +3893,39 @@ S_nuke_stacks(pTHX)
     Safefree(PL_savestack);
 }
 
+void
+Perl_populate_isa(pTHX_ const char *name, STRLEN len, ...)
+{
+    GV *const gv = gv_fetchpvn(name, len, GV_ADD | GV_ADDMULTI, SVt_PVAV);
+    AV *const isa = GvAVn(gv);
+    va_list args;
+
+    PERL_ARGS_ASSERT_POPULATE_ISA;
+
+    if(AvFILLp(isa) != -1)
+	return;
+
+    /* NOTE: No support for tied ISA */
+
+    va_start(args, len);
+    do {
+	const char *const parent = va_arg(args, const char*);
+	size_t parent_len;
+
+	if (!parent)
+	    break;
+	parent_len = va_arg(args, size_t);
+
+	/* Arguments are supplied with a trailing ::  */
+	assert(parent_len > 2);
+	assert(parent[parent_len - 1] == ':');
+	assert(parent[parent_len - 2] == ':');
+	av_push(isa, newSVpvn(parent, parent_len - 2));
+	(void) gv_fetchpvn(parent, parent_len, GV_ADD, SVt_PVGV);
+    } while (1);
+    va_end(args);
+}
+
 
 STATIC void
 S_init_predump_symbols(pTHX)
@@ -3900,7 +3933,6 @@ S_init_predump_symbols(pTHX)
     dVAR;
     GV *tmpgv;
     IO *io;
-    AV *isa;
 
     sv_setpvs(get_sv("\"", GV_ADD), " ");
     PL_ofsgv = (GV*)SvREFCNT_inc(gv_fetchpvs(",", GV_ADD|GV_NOTQUAL, SVt_PV));
@@ -3919,14 +3951,11 @@ S_init_predump_symbols(pTHX)
        so that code that does C<use IO::Handle>; will still work.
     */
 		   
-    isa = get_av("IO::File::ISA", GV_ADD | GV_ADDMULTI);
-    av_push(isa, newSVpvs("IO::Handle"));
-    av_push(isa, newSVpvs("IO::Seekable"));
-    av_push(isa, newSVpvs("Exporter"));
-    (void) gv_fetchpvs("IO::Handle::", GV_ADD, SVt_PVGV);
-    (void) gv_fetchpvs("IO::Seekable::", GV_ADD, SVt_PVGV);
-    (void) gv_fetchpvs("Exporter::", GV_ADD, SVt_PVGV);
-
+    Perl_populate_isa(aTHX_ STR_WITH_LEN("IO::File::ISA"),
+		      STR_WITH_LEN("IO::Handle::"),
+		      STR_WITH_LEN("IO::Seekable::"),
+		      STR_WITH_LEN("Exporter::"),
+		      NULL);
 
     PL_stdingv = gv_fetchpvs("STDIN", GV_ADD|GV_NOTQUAL, SVt_PVIO);
     GvMULTI_on(PL_stdingv);

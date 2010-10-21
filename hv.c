@@ -692,7 +692,6 @@ Perl_hv_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 		}
 		HeVAL(entry) = val;
 	    } else if (action & HV_FETCH_ISSTORE) {
-		SvREFCNT_dec(HeVAL(entry));
 		HeVAL(entry) = val;
 	    }
 	} else if (HeVAL(entry) == &PL_sv_placeholder) {
@@ -880,17 +879,18 @@ Perl_hv_scalar(pTHX_ HV *hv)
 /*
 =for apidoc hv_delete
 
-Deletes a key/value pair in the hash.  The value SV is removed from the
-hash and returned to the caller.  The C<klen> is the length of the key.
-The C<flags> value will normally be zero; if set to G_DISCARD then NULL
-will be returned.
+Deletes a key/value pair in the hash.  The value's SV is removed from the
+hash, made mortal, and returned to the caller.  The C<klen> is the length of
+the key.  The C<flags> value will normally be zero; if set to G_DISCARD then
+NULL will be returned.  NULL will also be returned if the key is not found.
 
 =for apidoc hv_delete_ent
 
-Deletes a key/value pair in the hash.  The value SV is removed from the
-hash and returned to the caller.  The C<flags> value will normally be zero;
-if set to G_DISCARD then NULL will be returned.  C<hash> can be a valid
-precomputed hash value, or 0 to ask for it to be computed.
+Deletes a key/value pair in the hash.  The value SV is removed from the hash,
+made mortal, and returned to the caller.  The C<flags> value will normally be
+zero; if set to G_DISCARD then NULL will be returned.  NULL will also be
+returned if the key is not found.  C<hash> can be a valid precomputed hash
+value, or 0 to ask for it to be computed.
 
 =cut
 */
@@ -1036,6 +1036,19 @@ S_hv_delete_common(pTHX_ HV *hv, SV *keysv, const char *key, STRLEN klen,
 	    HvPLACEHOLDERS(hv)++;
 	} else {
 	    *oentry = HeNEXT(entry);
+
+	    /* If this is a stash and the key ends with ::, then someone is 
+	       deleting a package. */
+	    if (sv && HvNAME(hv)) {
+		if (keysv) key = SvPV(keysv, klen);
+		if (klen > 1 && key[klen-2] == ':' && key[klen-1] == ':'
+		 && SvTYPE(sv) == SVt_PVGV) {
+		    const HV * const stash = GvHV((GV *)sv);
+		    if (stash && HvNAME(stash))
+			mro_package_moved(NULL, stash, NULL, NULL, 0);
+		}
+	    }
+
 	    if (SvOOK(hv) && entry == HvAUX(hv)->xhv_eiter /* HvEITER(hv) */)
 		HvLAZYDEL_on(hv);
 	    else
@@ -2646,6 +2659,11 @@ Fetches an entry from the hinthash in the provided C<COP>. Returns NULL
 if the entry isn't there.
 
 =for apidoc cop_hints_fetchpvn
+
+See L</cop_hints_fetchsv>. If C<flags> includes C<HVhek_UTF8>, C<key> is
+in UTF-8.
+
+=for apidoc cop_hints_fetchpv
 
 See L</cop_hints_fetchsv>. If C<flags> includes C<HVhek_UTF8>, C<key> is
 in UTF-8.

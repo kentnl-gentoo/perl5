@@ -4,7 +4,7 @@ use strict;
 use Carp;
 use base qw(Unicode::Collate);
 
-our $VERSION = '0.59';
+our $VERSION = '0.63';
 
 use File::Spec;
 
@@ -13,18 +13,24 @@ my $KeyPath = File::Spec->catfile('allkeys.txt');
 my $PL_EXT  = '.pl';
 
 my %LocaleFile = map { ($_, $_) } qw(
-   af az ca cs cy da eo es et fi fil fo fr ha haw
-   is kl lt lv mt nn pl ro sk sl sv sw tr wo yo
+   af ar az ca cs cy da eo es et fi fil fo fr ha haw
+   hr hu hy ig is kk kl lt lv mt nb nn nso om pl ro ru
+   se sk sl sq sv sw tn to tr uk vi wo yo
 );
    $LocaleFile{'default'}         = '';
+   $LocaleFile{'de__phonebook'}   = 'de_phone';
    $LocaleFile{'es__traditional'} = 'es_trad';
-   $LocaleFile{'nb'} = 'nn';
+   $LocaleFile{'be'} = "ru";
+   $LocaleFile{'bg'} = "ru";
+   $LocaleFile{'mk'} = "ru";
+   $LocaleFile{'sr'} = "ru";
 
 sub _locale {
     my $locale = shift;
     if ($locale) {
 	$locale = lc $locale;
 	$locale =~ tr/\-\ \./_/;
+	$locale =~ s/_phone(?:bk)?\z/_phonebook/;
 	$locale =~ s/_trad\z/_traditional/;
 	$LocaleFile{$locale} and return $locale;
 
@@ -154,11 +160,15 @@ this method returns a string C<'default'> meaning no special tailoring.
       locale name       description
     ----------------------------------------------------------
       af                Afrikaans
+      ar                Arabic
       az                Azerbaijani (Azeri)
+      be                Belarusian
+      bg                Bulgarian
       ca                Catalan
       cs                Czech
       cy                Welsh
       da                Danish
+      de__phonebook     German (umlaut as 'ae', 'oe', 'ue')
       eo                Esperanto
       es                Spanish
       es__traditional   Spanish ('ch' and 'll' as a grapheme)
@@ -169,22 +179,54 @@ this method returns a string C<'default'> meaning no special tailoring.
       fr                French
       ha                Hausa
       haw               Hawaiian
+      hr                Croatian
+      hu                Hungarian
+      hy                Armenian
+      ig                Igbo
       is                Icelandic
+      kk                Kazakh
       kl                Kalaallisut
       lt                Lithuanian
       lv                Latvian
+      mk                Macedonian
       mt                Maltese
       nb                Norwegian Bokmal
       nn                Norwegian Nynorsk
+      nso               Northern Sotho
+      om                Oromo
       pl                Polish
       ro                Romanian
+      ru                Russian
+      se                Northern Sami
       sk                Slovak
       sl                Slovenian
+      sq                Albanian
+      sr                Serbian
       sv                Swedish
       sw                Swahili
+      tn                Tswana
+      to                Tonga
       tr                Turkish
+      uk                Ukrainian
+      vi                Vietnamese
       wo                Wolof
       yo                Yoruba
+    ----------------------------------------------------------
+
+Locales according to default UCA rules include:
+de (German),
+en (English),
+ga (Irish),
+id (Indonesian),
+it (Italian),
+ka (Georgian),
+ln (Lingala),
+ms (Malay),
+nl (Dutch),
+pt (Portuguese),
+st (Southern Sotho),
+xh (Xhosa),
+zu (Zulu).
 
 =head1 INSTALL
 
@@ -192,6 +234,21 @@ Installation of Unicode::Collate::Locale requires F<Collate/Locale.pm>,
 F<Collate/Locale/*.pm> and F<Collate/allkeys.txt>.  On building,
 Unicode::Collate::Locale doesn't require F<data/*.txt> and F<mklocale>.
 Tests for Unicode::Collate::Locale are named F<t/loc_*.t>.
+
+=head1 CAVEAT
+
+=over 4
+
+=item tailoring is not maximum
+
+If a certain letter is tailored, its equivalents are not always
+tailored as well as it. For example, even though W is tailored,
+fullwidth W (C<U+FF37>), W with acute (C<U+1E82>), etc. are not
+tailored. The result may depend on whether source strings are
+normalized or not, and whether decomposed or composed.
+Thus C<(normalization =E<gt> undef> is less preferred.
+
+=back
 
 =head1 AUTHOR
 
@@ -214,6 +271,10 @@ L<http://www.unicode.org/reports/tr10/>
 =item The Default Unicode Collation Element Table (DUCET)
 
 L<http://www.unicode.org/Public/UCA/latest/allkeys.txt>
+
+=item Unicode Locale Data Markup Language (LDML) - UTS #35
+
+L<http://www.unicode.org/reports/tr35/>
 
 =item CLDR - Unicode Common Locale Data Repository
 

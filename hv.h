@@ -67,6 +67,7 @@ struct mro_meta {
     (((smeta)->mro_which && (which) == (smeta)->mro_which) \
      ? (smeta)->mro_linear_current			   \
      : Perl_mro_get_private_data(aTHX_ (smeta), (which)))
+#define mro_isa_changed_in(stash) mro_isa_changed_in3(stash, NULL, 0)
 
 /* Subject to change.
    Don't access this directly.
@@ -453,6 +454,9 @@ C<SV*>.
 #define cop_hints_fetchsv(cop, keysv, hash) \
     Perl_cop_hints_fetchpvn(aTHX_ (cop), SvPV_nolen(keysv), SvCUR(keysv), \
 	(SvUTF8(keysv) ? HVhek_UTF8 : 0), (hash))
+
+#define cop_hints_fetchpv(cop, key, flags, hash) \
+    Perl_cop_hints_fetchpvn(aTHX_ (cop), key, strlen(key), (flags), (hash))
 
 #define cop_hints_fetchpvs(cop, key) \
     Perl_cop_hints_fetchpvn(aTHX_ (cop), STR_WITH_LEN(key), 0, 0)

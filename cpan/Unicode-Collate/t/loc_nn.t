@@ -31,7 +31,7 @@ ok($objNn->getlocale, 'nn');
 
 $objNn->change(level => 1);
 
-ok($objNn->lt("z", $ae));
+ok($objNn->lt('z', $ae));
 ok($objNn->lt($ae, $ostk));
 ok($objNn->lt($ostk, $arng));
 ok($objNn->lt($arng, "\x{292}"));
@@ -42,8 +42,7 @@ ok($objNn->eq('d', "\x{111}"));
 ok($objNn->eq("\x{111}", $eth));
 ok($objNn->eq('y', $uuml));
 ok($objNn->eq($uuml, "\x{171}"));
-
-ok($objNn->eq($ae,   $auml));
+ok($objNn->eq($ae, $auml));
 ok($objNn->eq($auml, "\x{119}"));
 ok($objNn->eq($ostk, $ouml));
 ok($objNn->eq($ouml, "\x{151}"));
@@ -57,8 +56,7 @@ ok($objNn->lt('d', "\x{111}"));
 ok($objNn->lt("\x{111}", $eth));
 ok($objNn->lt('y', $uuml));
 ok($objNn->lt($uuml, "\x{171}"));
-
-ok($objNn->lt($ae,   $auml));
+ok($objNn->lt($ae, $auml));
 ok($objNn->lt($auml, "\x{119}"));
 ok($objNn->lt($ostk, $ouml));
 ok($objNn->lt($ouml, "\x{151}"));
@@ -110,6 +108,23 @@ ok($objNn->eq("d\x{335}", "\x{111}"));
 ok($objNn->eq("D\x{335}", "\x{110}"));
 ok($objNn->eq("u\x{308}", $uuml));
 ok($objNn->eq("U\x{308}", $Uuml));
+ok($objNn->eq("u\x{30B}", "\x{171}"));
+ok($objNn->eq("U\x{30B}", "\x{170}"));
+ok($objNn->eq("a\x{308}", $auml));
+ok($objNn->eq("A\x{308}", $Auml));
+ok($objNn->eq("e\x{328}", "\x{119}"));
+ok($objNn->eq("E\x{328}", "\x{118}"));
+ok($objNn->eq("o\x{338}", $ostk));
+ok($objNn->eq("O\x{338}", $Ostk));
+ok($objNn->eq("o\x{308}", $ouml));
+ok($objNn->eq("O\x{308}", $Ouml));
+ok($objNn->eq("o\x{30B}", "\x{151}"));
+ok($objNn->eq("O\x{30B}", "\x{150}"));
+ok($objNn->eq("a\x{30A}", $arng));
+ok($objNn->eq("A\x{30A}", $Arng));
+
+# 74
+
 ok($objNn->eq("u\x{308}\x{300}", "\x{1DC}"));
 ok($objNn->eq("U\x{308}\x{300}", "\x{1DB}"));
 ok($objNn->eq("u\x{308}\x{301}", "\x{1D8}"));
@@ -118,33 +133,16 @@ ok($objNn->eq("u\x{308}\x{304}", "\x{1D6}"));
 ok($objNn->eq("U\x{308}\x{304}", "\x{1D5}"));
 ok($objNn->eq("u\x{308}\x{30C}", "\x{1DA}"));
 ok($objNn->eq("U\x{308}\x{30C}", "\x{1D9}"));
-ok($objNn->eq("u\x{30B}", "\x{171}"));
-ok($objNn->eq("U\x{30B}", "\x{170}"));
-
-# 70
-
 ok($objNn->eq("\x{1FD}", "$ae\x{301}"));
 ok($objNn->eq("\x{1FC}", "$AE\x{301}"));
 ok($objNn->eq("\x{1E3}", "$ae\x{304}"));
 ok($objNn->eq("\x{1E2}", "$AE\x{304}"));
-ok($objNn->eq("a\x{308}", $auml));
-ok($objNn->eq("A\x{308}", $Auml));
 ok($objNn->eq("a\x{308}\x{304}", "\x{1DF}"));
 ok($objNn->eq("A\x{308}\x{304}", "\x{1DE}"));
-ok($objNn->eq("e\x{328}", "\x{119}"));
-ok($objNn->eq("E\x{328}", "\x{118}"));
-ok($objNn->eq("o\x{338}", $ostk));
-ok($objNn->eq("O\x{338}", $Ostk));
 ok($objNn->eq("o\x{338}\x{301}", "\x{1FF}"));
 ok($objNn->eq("O\x{338}\x{301}", "\x{1FE}"));
-ok($objNn->eq("o\x{308}", $ouml));
-ok($objNn->eq("O\x{308}", $Ouml));
 ok($objNn->eq("o\x{308}\x{304}", "\x{22B}"));
 ok($objNn->eq("O\x{308}\x{304}", "\x{22A}"));
-ok($objNn->eq("o\x{30B}", "\x{151}"));
-ok($objNn->eq("O\x{30B}", "\x{150}"));
-ok($objNn->eq("a\x{30A}", $arng));
-ok($objNn->eq("A\x{30A}", $Arng));
 ok($objNn->eq("A\x{30A}", "\x{212B}"));
 ok($objNn->eq("a\x{30A}\x{301}", "\x{1FB}"));
 ok($objNn->eq("A\x{30A}\x{301}", "\x{1FA}"));

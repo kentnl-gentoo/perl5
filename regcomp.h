@@ -271,6 +271,8 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #undef STRING
 
 #define	OP(p)		((p)->type)
+#define FLAGS(p)	((p)->flags)	/* Caution: Doesn't apply to all
+					   regnode types */
 #define	OPERAND(p)	(((struct regnode_string *)p)->string)
 #define MASK(p)		((char*)OPERAND(p))
 #define	STR_LEN(p)	(((struct regnode_string *)p)->str_len)
@@ -305,6 +307,9 @@ struct regnode_charclass_class {	/* has [[:blah:]] classes */
 #define REG_MAGIC 0234
 
 #define SIZE_ONLY (RExC_emit == &PL_regdummy)
+
+/* Flags for node->flags of several of the node types */
+#define USE_UNI                0x01
 
 /* Flags for node->flags of ANYOF */
 

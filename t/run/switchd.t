@@ -7,9 +7,9 @@ BEGIN {
 
 BEGIN { require "./test.pl"; }
 
-# This test depends on t/lib/Devel/switchd.pm.
+# This test depends on t/lib/Devel/switchd*.pm.
 
-plan(tests => 2);
+plan(tests => 4);
 
 my $r;
 
@@ -44,3 +44,31 @@ __SWDTEST__
     like($r, qr/^sub<Devel::switchd::import>;import<Devel::switchd a 42>;DB<main,$::tempfile_regexp,9>;sub<Foo::foo>;DB<Foo,$::tempfile_regexp,5>;DB<Foo,$::tempfile_regexp,6>;DB<Foo,$::tempfile_regexp,6>;sub<Bar::bar>;DB<Bar,$::tempfile_regexp,2>;sub<Bar::bar>;DB<Bar,$::tempfile_regexp,2>;sub<Bar::bar>;DB<Bar,$::tempfile_regexp,2>;$/);
 }
 
+# [perl #71806]
+cmp_ok(
+  runperl(       # less is useful for something :-)
+   switches => [ '"-Mless ++INC->{q-Devel/_.pm-}"' ],
+   progs    => [
+    '#!perl -d:_',
+    'sub DB::DB{} print scalar @{q/_</.__FILE__}',
+   ],
+  ),
+ '>',
+  0,
+ 'The debugger can see the lines of the main program under #!perl -d',
+);
+
+# [perl #48332]
+like(
+  runperl(
+   switches => [ '-Ilib', '-d:switchd_empty' ],
+   progs    => [
+    'sub foo { print qq _1\n_ }',
+    '*old_foo = \&foo;',
+    '*foo = sub { print qq _2\n_ };',
+    'old_foo(); foo();',
+   ],
+  ),
+  qr "1\r?\n2\r?\n",
+ 'Subroutine redefinition works in the debugger [perl #48332]',
+);

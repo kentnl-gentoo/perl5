@@ -1035,7 +1035,7 @@ Perl_do_op_dump(pTHX_ I32 level, PerlIO *file, const OP *o)
 	}
 	else if (S_op_private_to_names(aTHX_ tmpsv, optype, o->op_private)) {
 	}
-	else if (PL_check[optype] != MEMBER_TO_FPTR(Perl_ck_ftst)) {
+	else if (PL_check[optype] != Perl_ck_ftst) {
 	    if (OP_IS_FILETEST_ACCESS(o->op_type) && o->op_private & OPpFT_ACCESS)
 		sv_catpv(tmpsv, ",FT_ACCESS");
 	    if (o->op_private & OPpFT_STACKED)
@@ -1248,6 +1248,7 @@ static const struct { const char type; const char *name; } magic_names[] = {
 	{ PERL_MAGIC_tied,           "tied(P)" },
 	{ PERL_MAGIC_sig,            "sig(S)" },
 	{ PERL_MAGIC_uvar,           "uvar(U)" },
+	{ PERL_MAGIC_checkcall,      "checkcall(])" },
 	{ PERL_MAGIC_overload_elem,  "overload_elem(a)" },
 	{ PERL_MAGIC_overload_table, "overload_table(c)" },
 	{ PERL_MAGIC_regdatum,       "regdatum(d)" },
@@ -2396,6 +2397,13 @@ Perl_sv_catxmlsv(pTHX_ SV *dsv, SV *ssv)
 }
 
 char *
+Perl_sv_catxmlpv(pTHX_ SV *dsv, const char *pv, int utf8)
+{
+    PERL_ARGS_ASSERT_SV_CATXMLPV;
+    return sv_catxmlpvn(dsv, pv, strlen(pv), utf8);
+}
+
+char *
 Perl_sv_catxmlpvn(pTHX_ SV *dsv, const char *pv, STRLEN len, int utf8)
 {
     unsigned int c;
@@ -2966,7 +2974,7 @@ Perl_do_op_xmldump(pTHX_ I32 level, PerlIO *file, const OP *o)
 	    if (o->op_private & OPpHUSH_VMSISH)
 		sv_catpv(tmpsv, ",HUSH_VMSISH");
 	}
-	else if (PL_check[o->op_type] != MEMBER_TO_FPTR(Perl_ck_ftst)) {
+	else if (PL_check[o->op_type] != Perl_ck_ftst) {
 	    if (OP_IS_FILETEST_ACCESS(o->op_type) && o->op_private & OPpFT_ACCESS)
 		sv_catpv(tmpsv, ",FT_ACCESS");
 	    if (o->op_private & OPpFT_STACKED)
