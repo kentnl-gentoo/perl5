@@ -1352,22 +1352,28 @@ Perl_do_magic_dump(pTHX_ I32 level, PerlIO *file, const MAGIC *mg, I32 nest, I32
 	    if (mg->mg_type == PERL_MAGIC_envelem &&
 		mg->mg_flags & MGf_TAINTEDDIR)
 	        Perl_dump_indent(aTHX_ level, file, "      TAINTEDDIR\n");
+	    if (mg->mg_type == PERL_MAGIC_regex_global &&
+		mg->mg_flags & MGf_MINMATCH)
+	        Perl_dump_indent(aTHX_ level, file, "      MINMATCH\n");
 	    if (mg->mg_flags & MGf_REFCOUNTED)
 	        Perl_dump_indent(aTHX_ level, file, "      REFCOUNTED\n");
             if (mg->mg_flags & MGf_GSKIP)
 	        Perl_dump_indent(aTHX_ level, file, "      GSKIP\n");
-	    if (mg->mg_type == PERL_MAGIC_regex_global &&
-		mg->mg_flags & MGf_MINMATCH)
-	        Perl_dump_indent(aTHX_ level, file, "      MINMATCH\n");
+	    if (mg->mg_flags & MGf_COPY)
+	        Perl_dump_indent(aTHX_ level, file, "      COPY\n");
+	    if (mg->mg_flags & MGf_DUP)
+	        Perl_dump_indent(aTHX_ level, file, "      DUP\n");
+	    if (mg->mg_flags & MGf_LOCAL)
+	        Perl_dump_indent(aTHX_ level, file, "      LOCAL\n");
         }
 	if (mg->mg_obj) {
-	    Perl_dump_indent(aTHX_ level, file, "    MG_OBJ = 0x%"UVxf"\n", 
+	    Perl_dump_indent(aTHX_ level, file, "    MG_OBJ = 0x%"UVxf"\n",
 	        PTR2UV(mg->mg_obj));
             if (mg->mg_type == PERL_MAGIC_qr) {
 		REGEXP* const re = (REGEXP *)mg->mg_obj;
 		SV * const dsv = sv_newmortal();
                 const char * const s
-		    = pv_pretty(dsv, RX_WRAPPED(re), RX_WRAPLEN(re), 
+		    = pv_pretty(dsv, RX_WRAPPED(re), RX_WRAPLEN(re),
                     60, NULL, NULL,
                     ( PERL_PV_PRETTY_QUOTE | PERL_PV_ESCAPE_RE | PERL_PV_PRETTY_ELLIPSES |
                     (RX_UTF8(re) ? PERL_PV_ESCAPE_UNI : 0))
@@ -1851,6 +1857,37 @@ Perl_do_sv_dump(pTHX_ I32 level, PerlIO *file, SV *sv, I32 nest, I32 maxnest, bo
 	    AV * const backrefs
 		= *Perl_hv_backreferences_p(aTHX_ MUTABLE_HV(sv));
 	    struct mro_meta * const meta = HvAUX(sv)->xhv_mro_meta;
+	    if (HvAUX(sv)->xhv_name_count)
+		Perl_dump_indent(aTHX_
+		 level, file, "  NAMECOUNT = %"IVdf"\n",
+		 (IV)HvAUX(sv)->xhv_name_count
+		);
+	    if (HvAUX(sv)->xhv_name && HvENAME_HEK_NN(sv)) {
+		if (HvAUX(sv)->xhv_name_count) {
+		    SV * const names = sv_newmortal();
+		    HEK ** const namep = (HEK **)HvAUX(sv)->xhv_name;
+		    const I32 count = HvAUX(sv)->xhv_name_count;
+		    HEK **hekp = namep - (count > 0);
+		    sv_setpv(names, "");
+		    while (++hekp < namep + (count < 0 ? -count : count))
+			if (*hekp) {
+			    sv_catpvs(names, ", \"");
+			    sv_catpvn(
+			     names, HEK_KEY(*hekp), HEK_LEN(*hekp)
+			    );
+			    sv_catpvs(names, "\"");
+			}
+			/* This should never happen. */
+			else sv_catpvs(names, ", (null)");
+		    Perl_dump_indent(aTHX_
+		     level, file, "  ENAME = %s\n", SvPV_nolen(names)+2
+		    );
+		}
+		else
+		    Perl_dump_indent(aTHX_
+		     level, file, "  ENAME = \"%s\"\n", HvENAME_get(sv)
+		    );
+	    }
 	    if (backrefs) {
 		Perl_dump_indent(aTHX_ level, file, "  BACKREFS = 0x%"UVxf"\n",
 				 PTR2UV(backrefs));

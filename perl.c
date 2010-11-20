@@ -557,8 +557,10 @@ perl_destruct(pTHXx)
 
         JMPENV_PUSH(x);
 	PERL_UNUSED_VAR(x);
-        if (PL_endav && !PL_minus_c)
+        if (PL_endav && !PL_minus_c) {
+	    PL_phase = PERL_PHASE_END;
             call_list(PL_scopestack_ix, PL_endav);
+	}
         JMPENV_POP;
     }
     LEAVE;
@@ -751,7 +753,7 @@ perl_destruct(pTHXx)
      * destruct_level > 0 */
     SvREFCNT_dec(PL_main_cv);
     PL_main_cv = NULL;
-    PL_dirty = TRUE;
+    PL_phase = PERL_PHASE_DESTRUCT;
 
     /* Tell PerlIO we are about to tear things apart in case
        we have layers which are using resources that should
@@ -864,7 +866,6 @@ perl_destruct(pTHXx)
     PL_minus_F      = FALSE;
     PL_doswitches   = FALSE;
     PL_dowarn       = G_WARN_OFF;
-    PL_doextract    = FALSE;
     PL_sawampersand = FALSE;	/* must save all match strings */
     PL_unsafe       = FALSE;
 
@@ -1004,6 +1005,7 @@ perl_destruct(pTHXx)
     SvREFCNT_dec(PL_utf8_tofold);
     SvREFCNT_dec(PL_utf8_idstart);
     SvREFCNT_dec(PL_utf8_idcont);
+    SvREFCNT_dec(PL_utf8_foldclosures);
     PL_utf8_alnum	= NULL;
     PL_utf8_ascii	= NULL;
     PL_utf8_alpha	= NULL;
@@ -1023,12 +1025,13 @@ perl_destruct(pTHXx)
     PL_utf8_tofold	= NULL;
     PL_utf8_idstart	= NULL;
     PL_utf8_idcont	= NULL;
+    PL_utf8_foldclosures = NULL;
 
     if (!specialWARN(PL_compiling.cop_warnings))
 	PerlMemShared_free(PL_compiling.cop_warnings);
     PL_compiling.cop_warnings = NULL;
-    Perl_refcounted_he_free(aTHX_ PL_compiling.cop_hints_hash);
-    PL_compiling.cop_hints_hash = NULL;
+    cophh_free(CopHINTHASH_get(&PL_compiling));
+    CopHINTHASH_set(&PL_compiling, cophh_new_empty());
     CopFILE_free(&PL_compiling);
     CopSTASH_free(&PL_compiling);
 
@@ -1604,10 +1607,13 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
     switch (ret) {
     case 0:
 	parse_body(env,xsinit);
-	if (PL_unitcheckav)
+	if (PL_unitcheckav) {
 	    call_list(oldscope, PL_unitcheckav);
-	if (PL_checkav)
+	}
+	if (PL_checkav) {
+	    PL_phase = PERL_PHASE_CHECK;
 	    call_list(oldscope, PL_checkav);
+	}
 	ret = 0;
 	break;
     case 1:
@@ -1619,10 +1625,13 @@ perl_parse(pTHXx_ XSINIT_t xsinit, int argc, char **argv, char **env)
 	    LEAVE;
 	FREETMPS;
 	PL_curstash = PL_defstash;
-	if (PL_unitcheckav)
+	if (PL_unitcheckav) {
 	    call_list(oldscope, PL_unitcheckav);
-	if (PL_checkav)
+	}
+	if (PL_checkav) {
+	    PL_phase = PERL_PHASE_CHECK;
 	    call_list(oldscope, PL_checkav);
+	}
 	ret = STATUS_EXIT;
 	break;
     case 3:
@@ -1746,12 +1755,15 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     const char *scriptname = NULL;
     VOL bool dosearch = FALSE;
     register char c;
+    bool doextract = FALSE;
     const char *cddir = NULL;
 #ifdef USE_SITECUSTOMIZE
     bool minus_f = FALSE;
 #endif
     SV *linestr_sv = newSV_type(SVt_PVIV);
     bool add_read_e_script = FALSE;
+
+    PL_phase = PERL_PHASE_START;
 
     SvGROW(linestr_sv, 80);
     sv_setpvs(linestr_sv,"");
@@ -1874,7 +1886,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 		goto reswitch;
 	    }
 	case 'x':
-	    PL_doextract = TRUE;
+	    doextract = TRUE;
 	    s++;
 	    if (*s)
 		cddir = s;
@@ -2018,7 +2030,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
 #  endif
 #endif
 
-	if (PL_doextract) {
+	if (doextract) {
 
 	    /* This will croak if suidscript is true, as -x cannot be used with
 	       setuid scripts.  */
@@ -2152,7 +2164,7 @@ S_parse_body(pTHX_ char **env, XSINIT_t xsinit)
     }
 #endif
 
-    lex_start(linestr_sv, rsfp, TRUE);
+    lex_start(linestr_sv, rsfp, 0);
     PL_subname = newSVpvs("main");
 
     if (add_read_e_script)
@@ -2243,8 +2255,10 @@ perl_run(pTHXx)
 	FREETMPS;
 	PL_curstash = PL_defstash;
 	if (!(PL_exit_flags & PERL_EXIT_DESTRUCT_END) &&
-	    PL_endav && !PL_minus_c)
+	    PL_endav && !PL_minus_c) {
+	    PL_phase = PERL_PHASE_END;
 	    call_list(oldscope, PL_endav);
+	}
 #ifdef MYMALLOC
 	if (PerlEnv_getenv("PERL_DEBUG_MSTATS"))
 	    dump_mstats("after execution:  ");
@@ -2293,14 +2307,18 @@ S_run_body(pTHX_ I32 oldscope)
 	}
 	if (PERLDB_SINGLE && PL_DBsingle)
 	    sv_setiv(PL_DBsingle, 1);
-	if (PL_initav)
+	if (PL_initav) {
+	    PL_phase = PERL_PHASE_INIT;
 	    call_list(oldscope, PL_initav);
+	}
 #ifdef PERL_DEBUG_READONLY_OPS
 	Perl_pending_Slabs_to_ro(aTHX);
 #endif
     }
 
     /* do it */
+
+    PL_phase = PERL_PHASE_RUN;
 
     if (PL_restartop) {
 	PL_restartjmpenv = NULL;
@@ -3674,24 +3692,21 @@ S_find_beginning(pTHX_ SV* linestr_sv, PerlIO *rsfp)
 
     /* skip forward in input to the real script? */
 
-    while (PL_doextract) {
+    do {
 	if ((s = sv_gets(linestr_sv, rsfp, 0)) == NULL)
 	    Perl_croak(aTHX_ "No Perl script found in input\n");
 	s2 = s;
-	if (*s == '#' && s[1] == '!' && ((s = instr(s,"perl")) || (s = instr(s2,"PERL")))) {
-	    PerlIO_ungetc(rsfp, '\n');		/* to keep line count right */
-	    PL_doextract = FALSE;
-	    while (*s && !(isSPACE (*s) || *s == '#')) s++;
-	    s2 = s;
-	    while (*s == ' ' || *s == '\t') s++;
-	    if (*s++ == '-') {
-		while (isDIGIT(s2[-1]) || s2[-1] == '-' || s2[-1] == '.'
-		       || s2[-1] == '_') s2--;
-		if (strnEQ(s2-4,"perl",4))
-		    while ((s = moreswitches(s)))
-			;
-	    }
-	}
+    } while (!(*s == '#' && s[1] == '!' && ((s = instr(s,"perl")) || (s = instr(s2,"PERL")))));
+    PerlIO_ungetc(rsfp, '\n');		/* to keep line count right */
+    while (*s && !(isSPACE (*s) || *s == '#')) s++;
+    s2 = s;
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s++ == '-') {
+	while (isDIGIT(s2[-1]) || s2[-1] == '-' || s2[-1] == '.'
+	       || s2[-1] == '_') s2--;
+	if (strnEQ(s2-4,"perl",4))
+	    while ((s = moreswitches(s)))
+		;
     }
 }
 

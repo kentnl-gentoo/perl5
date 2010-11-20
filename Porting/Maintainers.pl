@@ -82,7 +82,6 @@ use File::Glob qw(:case);
     'smccam'	=> 'Stephen McCamant <smccam@cpan.org>',
     'smpeters'	=> 'Steve Peters <steve@fisharerojo.org>',
     'smueller'	=> 'Steffen Mueller <smueller@cpan.org>',
-    'tels'	=> 'Tels <nospam-abuse@bloodgate.com>',
     'tomhughes'	=> 'Tom Hughes <tomhughes@cpan.org>',
     'tjenness'	=> 'Tim Jenness <tjenness@cpan.org>',
     'tyemq'	=> 'Tye McQueen <tyemq@cpan.org>',
@@ -188,7 +187,7 @@ use File::Glob qw(:case);
     'Archive::Extract' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.44.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Extract-0.46.tar.gz',
 	'FILES'		=> q[cpan/Archive-Extract],
 	'UPSTREAM'	=> 'cpan',
 	'BUGS'		=> 'bug-archive-extract@rt.cpan.org',
@@ -197,7 +196,7 @@ use File::Glob qw(:case);
     'Archive::Tar' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.68.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Archive-Tar-1.72.tar.gz',
 	'FILES'		=> q[cpan/Archive-Tar],
 	'EXCLUDED'	=> [ qw(Makefile.PL) ],
 	'UPSTREAM'	=> 'cpan',
@@ -242,7 +241,7 @@ use File::Glob qw(:case);
     'AutoLoader' =>
 	{
 	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'SMUELLER/AutoLoader-5.70.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/AutoLoader-5.71.tar.gz',
 	'FILES'		=> q[cpan/AutoLoader],
 	'EXCLUDED'	=> [ qw( t/00pod.t ) ],
 	'UPSTREAM'	=> 'cpan',
@@ -290,7 +289,7 @@ use File::Glob qw(:case);
 
     'bignum' =>
 	{
-	'MAINTAINER'	=> 'tels',
+	'MAINTAINER'	=> 'rafl',
 	'DISTRIBUTION'	=> 'FLORA/bignum-0.25.tar.gz',
 	'FILES'		=> q[dist/bignum],
 	'EXCLUDED'	=> [ qr{^inc/Module/}, qw(t/pod.t t/pod_cov.t) ],
@@ -300,7 +299,7 @@ use File::Glob qw(:case);
     'CGI' =>
 	{
 	'MAINTAINER'	=> 'lstein',
-	'DISTRIBUTION'	=> 'LDS/CGI.pm-3.49.tar.gz',
+	'DISTRIBUTION'	=> 'LDS/CGI.pm-3.50.tar.gz',
 	'FILES'		=> q[cpan/CGI],
 	'EXCLUDED'	=> [ qr{^t/lib/Test},
 				qw( cgi-lib_porting.html
@@ -357,7 +356,7 @@ use File::Glob qw(:case);
     'CPAN' =>
 	{
 	'MAINTAINER'	=> 'andk',
-	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_61.tar.gz',
+	'DISTRIBUTION'	=> 'ANDK/CPAN-1.94_62.tar.gz',
 	'FILES'		=> q[cpan/CPAN],
 	'EXCLUDED'	=> [ qr{^distroprefs/},
 			     qr{^inc/Test/},
@@ -401,7 +400,7 @@ use File::Glob qw(:case);
     'CPANPLUS' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9007.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-0.9010.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^t/dummy-.*\.hidden$},
@@ -422,7 +421,7 @@ use File::Glob qw(:case);
     'CPANPLUS::Dist::Build' =>
 	{
 	'MAINTAINER'	=> 'bingos',
-	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.48.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/CPANPLUS-Dist-Build-0.50.tar.gz',
 	'FILES'		=> q[cpan/CPANPLUS-Dist-Build],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{ t/99_pod.t
@@ -535,15 +534,15 @@ use File::Glob qw(:case);
 
     'ExtUtils::Command' =>
 	{
-	'MAINTAINER'	=> 'rkobes',
+	'MAINTAINER'	=> 'p5p',
 	'DISTRIBUTION'	=> 'RKOBES/ExtUtils-Command-1.16.tar.gz',
-	'FILES'		=> q[cpan/ExtUtils-Command],
+	'FILES'		=> q[dist/ExtUtils-Command],
 	'EXCLUDED'	=> [ qw{ t/shell_command.t
 				 t/shell_exit.t
 				 lib/Shell/Command.pm
 			       },
 			   ],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'ExtUtils::Constant' =>
@@ -591,10 +590,10 @@ use File::Glob qw(:case);
 
     'ExtUtils::Manifest' =>
 	{
-	'MAINTAINER'	=> 'rkobes',
+	'MAINTAINER'	=> 'p5p',
 	'DISTRIBUTION'	=> 'RKOBES/ExtUtils-Manifest-1.58.tar.gz',
-	'FILES'		=> q[cpan/ExtUtils-Manifest],
-	'UPSTREAM'	=> 'cpan',
+	'FILES'		=> q[dist/ExtUtils-Manifest],
+	'UPSTREAM'	=> 'blead',
 	},
 
     'ExtUtils::ParseXS' =>
@@ -621,7 +620,7 @@ use File::Glob qw(:case);
     'File::Fetch' =>
 	{
 	'MAINTAINER'	=> 'kane',
-	'DISTRIBUTION'	=> 'BINGOS/File-Fetch-0.24.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/File-Fetch-0.28.tar.gz',
 	'FILES'		=> q[cpan/File-Fetch],
 	'UPSTREAM'	=> 'cpan',
 	},
@@ -779,7 +778,7 @@ use File::Glob qw(:case);
     'lib' =>
 	{
 	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'SMUELLER/lib-0.62.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/lib-0.63.tar.gz',
 	'FILES'		=> q[dist/lib/],
 	'EXCLUDED'	=> [ qw{forPAUSE/lib.pm t/00pod.t} ],
 	'UPSTREAM'	=> 'blead',
@@ -808,7 +807,7 @@ use File::Glob qw(:case);
     'Locale::Maketext' =>
 	{
 	'MAINTAINER'	=> 'ferreira',
-	'DISTRIBUTION'	=> 'FERREIRA/Locale-Maketext-1.16.tar.gz',
+	'DISTRIBUTION'	=> 'TODDR/Locale-Maketext-1.17.tar.gz',
 	'FILES'		=> q[dist/Locale-Maketext],
 	'EXCLUDED'	=> [ qw{perlcriticrc t/00_load.t t/pod.t} ],
 	'UPSTREAM'	=> 'blead',
@@ -848,8 +847,8 @@ use File::Glob qw(:case);
 
     'Math::BigInt' =>
 	{
-	'MAINTAINER'	=> 'tels',
-	'DISTRIBUTION'	=> 'FLORA/Math-BigInt-1.96.tar.gz',
+	'MAINTAINER'	=> 'rafl',
+	'DISTRIBUTION'	=> 'FLORA/Math-BigInt-1.99.tar.gz',
 	'FILES'		=> q[dist/Math-BigInt],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qr{^examples/},
@@ -862,8 +861,8 @@ use File::Glob qw(:case);
 
     'Math::BigInt::FastCalc' =>
 	{
-	'MAINTAINER'	=> 'tels',
-	'DISTRIBUTION'	=> 'FLORA/Math-BigInt-FastCalc-0.22.tar.gz',
+	'MAINTAINER'	=> 'rafl',
+	'DISTRIBUTION'	=> 'FLORA/Math-BigInt-FastCalc-0.24.tar.gz',
 	'FILES'		=> q[dist/Math-BigInt-FastCalc],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{
@@ -880,25 +879,21 @@ use File::Glob qw(:case);
 				t/mbimbf.t
 			       },
 			   ],
-	'MAP'		=> { '' => 'dist/Math-BigInt-FastCalc/',
-			     'lib/Math/BigInt/FastCalc.pm'
-				    => 'dist/Math-BigInt-FastCalc/FastCalc.pm',
-			   },
 	'UPSTREAM'	=> 'blead',
 	},
 
     'Math::BigRat' =>
 	{
-	'MAINTAINER'	=> 'tels',
+	'MAINTAINER'	=> 'rafl',
 	'DISTRIBUTION'	=> 'FLORA/Math-BigRat-0.26.tar.gz',
-	'FILES'		=> q[cpan/Math-BigRat],
+	'FILES'		=> q[dist/Math-BigRat],
 	'EXCLUDED'	=> [ qr{^inc/},
 			     qw{
 				t/pod.t
 				t/pod_cov.t
 			       },
 			   ],
-	'UPSTREAM'	=> 'cpan',
+	'UPSTREAM'	=> 'blead',
 	},
 
     'Math::Complex' =>
@@ -932,7 +927,7 @@ use File::Glob qw(:case);
     'MIME::Base64' =>
 	{
 	'MAINTAINER'	=> 'gaas',
-	'DISTRIBUTION'	=> 'GAAS/MIME-Base64-3.09.tar.gz',
+	'DISTRIBUTION'	=> 'GAAS/MIME-Base64-3.10.tar.gz',
 	'FILES'		=> q[cpan/MIME-Base64],
 	'EXCLUDED'	=> [ qw{ t/bad-sv.t }, ],
 	'UPSTREAM'	=> 'cpan',
@@ -956,7 +951,7 @@ use File::Glob qw(:case);
     'Module::CoreList' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.39.tar.gz',
+	'DISTRIBUTION'	=> 'BINGOS/Module-CoreList-2.40.tar.gz',
 	'FILES'		=> q[dist/Module-CoreList],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1040,7 +1035,7 @@ use File::Glob qw(:case);
     'parent' =>
 	{
 	'MAINTAINER'	=> 'corion',
-	'DISTRIBUTION'	=> 'CORION/parent-0.223.tar.gz',
+	'DISTRIBUTION'	=> 'CORION/parent-0.224.tar.gz',
 	'FILES'		=> q[cpan/parent],
 	'UPSTREAM'	=> undef,
 	},
@@ -1126,7 +1121,7 @@ use File::Glob qw(:case);
 	{
 	'MAINTAINER'	=> 'mjd',
 	'FILES'		=> q[pod/perlreftut.pod],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'blead',
 	},
 
     'perlthrtut' =>
@@ -1188,13 +1183,14 @@ use File::Glob qw(:case);
     'Pod::Simple' =>
 	{
 	'MAINTAINER'	=> 'arandal',
-	'DISTRIBUTION'	=> 'DWHEELER/Pod-Simple-3.14.tar.gz',
+	'DISTRIBUTION'	=> 'DWHEELER/Pod-Simple-3.15.tar.gz',
 	'FILES'		=> q[cpan/Pod-Simple],
 	# XXX these two files correspond to similar ones in blead under
 	# pod/, but the blead ones have newer changes, and also seem to
 	# have been in blead a long time. I'm going to assume then that
 	# the blead versions of these two files are authoritative - DAPM
-	'EXCLUDED'	=> [ qw( lib/perlpod.pod lib/perlpodspec.pod ) ],
+  # Now been removed from Pod-Simple-3.15 commenting this out - bingos
+	#'EXCLUDED'	=> [ qw( lib/perlpod.pod lib/perlpodspec.pod ) ],
 	'UPSTREAM'	=> 'cpan',
 	},
 
@@ -1210,7 +1206,7 @@ use File::Glob qw(:case);
     'Safe' =>
 	{
 	'MAINTAINER'	=> 'rgarcia',
-	'DISTRIBUTION'	=> 'RGARCIA/Safe-2.28.tar.gz',
+	'DISTRIBUTION'	=> 'RGARCIA/Safe-2.29.tar.gz',
 	'FILES'		=> q[dist/Safe],
 	'UPSTREAM'	=> 'blead',
 	},
@@ -1231,7 +1227,7 @@ use File::Glob qw(:case);
     'SelfLoader' =>
 	{
 	'MAINTAINER'	=> 'smueller',
-	'DISTRIBUTION'	=> 'SMUELLER/SelfLoader-1.17.tar.gz',
+	'DISTRIBUTION'	=> 'SMUELLER/SelfLoader-1.18.tar.gz',
 	'FILES'		=> q[dist/SelfLoader],
 	'EXCLUDED'	=> [ qw{ t/00pod.t } ],
 	'UPSTREAM'	=> 'blead',
@@ -1251,7 +1247,7 @@ use File::Glob qw(:case);
     'Storable' =>
 	{
 	'MAINTAINER'	=> 'ams',
-	'DISTRIBUTION'	=> 'AMS/Storable-2.21.tar.gz',
+	'DISTRIBUTION'	=> 'AMS/Storable-2.24.tar.gz',
 	'FILES'		=> q[dist/Storable],
 	'EXCLUDED'	=> [ qr{^t/Test/} ],
 	'UPSTREAM'	=> 'blead',
@@ -1447,7 +1443,7 @@ use File::Glob qw(:case);
 	'MAINTAINER'	=> 'mjd',
 	'DISTRIBUTION'	=> 'MJD/Tie-File-0.96.tar.gz',
 	'FILES'		=> q[cpan/Tie-File],
-	'UPSTREAM'	=> undef,
+	'UPSTREAM'	=> 'first-come',
 	},
 
     'Tie::RefHash' =>
@@ -1489,7 +1485,7 @@ use File::Glob qw(:case);
     'Unicode::Collate' =>
 	{
 	'MAINTAINER'	=> 'sadahiro',
-	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.63-withoutworldwriteables.tar.gz',
+	'DISTRIBUTION'	=> 'SADAHIRO/Unicode-Collate-0.67-withoutworldwriteables.tar.gz',
 	'FILES'		=> q[cpan/Unicode-Collate],
 			    # ignore experimental XS version
 	'EXCLUDED'	=> [ qr{X$},
@@ -1646,6 +1642,7 @@ use File::Glob qw(:case);
 				ext/B/t/xref.t
 				ext/B/t/f_map.t
 				ext/B/t/optree_misc.t
+				ext/B/t/walkoptree.t
 				ext/B/hints/openbsd.pl
 				ext/B/hints/darwin.pl
 

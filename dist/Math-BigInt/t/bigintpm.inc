@@ -443,7 +443,7 @@ $z = 1e+129;			# definitely a float (may fail on UTS)
 $x = $class->new($z); is ($x->bsstr(),'1e+129');
 
 ###############################################################################
-# test for whitespace inlcuding newlines to be handled correctly
+# test for whitespace including newlines to be handled correctly
 
 # is ($Math::BigInt::strict,1);		# the default
 
@@ -525,7 +525,7 @@ $x = $class->new('+inf'); is ($x,'inf');
 
 ###############################################################################
 ###############################################################################
-# the followin tests only make sense with Math::BigInt::Calc or BareCalc or
+# the following tests only make sense with Math::BigInt::Calc or BareCalc or
 # FastCalc
 
 exit if $CALC !~ /^Math::BigInt::(|Bare|Fast)Calc$/; # for Pari et al.
@@ -583,7 +583,7 @@ is ($x, 23456);
 
 # construct a number with a zero-hole of BASE_LEN_SMALL
 {
- my @bl = $CL->_base_len(); my $bl = $bl[4];
+ my @bl = $CL->_base_len(); my $bl = $bl[5];
 
  $x = '1' x $bl . '0' x $bl . '1' x $bl . '0' x $bl;
  $y = '1' x (2*$bl);
@@ -1725,12 +1725,15 @@ abc:abc:5:NaN
 5:5:abc:NaN
 5:abc:5:NaN
 abc:5:5:NaN
+3:5:0:NaN
 # bmodpow Expected results
 0:0:2:1
 1:0:2:1
 0:0:1:0
+0:3:5:0
 8:7:5032:3840
 8:-1:5033:4404
+1e50:1:1:0
 98436739867439843769485798542749827593285729587325:43698764986460981048259837659386739857456983759328457:6943857329857295827698367:3104744730915914415259518
 # bmodpow Error cases
 8:8:-5:NaN

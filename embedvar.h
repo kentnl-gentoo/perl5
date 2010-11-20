@@ -106,6 +106,7 @@
 #define PL_curstname		(vTHX->Icurstname)
 #define PL_custom_op_descs	(vTHX->Icustom_op_descs)
 #define PL_custom_op_names	(vTHX->Icustom_op_names)
+#define PL_custom_ops		(vTHX->Icustom_ops)
 #define PL_cv_has_eval		(vTHX->Icv_has_eval)
 #define PL_dbargs		(vTHX->Idbargs)
 #define PL_debstash		(vTHX->Idebstash)
@@ -118,8 +119,6 @@
 #define PL_delaymagic		(vTHX->Idelaymagic)
 #define PL_destroyhook		(vTHX->Idestroyhook)
 #define PL_diehook		(vTHX->Idiehook)
-#define PL_dirty		(vTHX->Idirty)
-#define PL_doextract		(vTHX->Idoextract)
 #define PL_doswitches		(vTHX->Idoswitches)
 #define PL_dowarn		(vTHX->Idowarn)
 #define PL_dumper_fd		(vTHX->Idumper_fd)
@@ -233,6 +232,7 @@
 #define PL_perl_destruct_level	(vTHX->Iperl_destruct_level)
 #define PL_perldb		(vTHX->Iperldb)
 #define PL_perlio		(vTHX->Iperlio)
+#define PL_phase		(vTHX->Iphase)
 #define PL_pidstatus		(vTHX->Ipidstatus)
 #define PL_ppid			(vTHX->Ippid)
 #define PL_preambleav		(vTHX->Ipreambleav)
@@ -342,6 +342,7 @@
 #define PL_utf8_ascii		(vTHX->Iutf8_ascii)
 #define PL_utf8_cntrl		(vTHX->Iutf8_cntrl)
 #define PL_utf8_digit		(vTHX->Iutf8_digit)
+#define PL_utf8_foldclosures	(vTHX->Iutf8_foldclosures)
 #define PL_utf8_graph		(vTHX->Iutf8_graph)
 #define PL_utf8_idcont		(vTHX->Iutf8_idcont)
 #define PL_utf8_idstart		(vTHX->Iutf8_idstart)
@@ -436,6 +437,7 @@
 #define PL_Icurstname		PL_curstname
 #define PL_Icustom_op_descs	PL_custom_op_descs
 #define PL_Icustom_op_names	PL_custom_op_names
+#define PL_Icustom_ops		PL_custom_ops
 #define PL_Icv_has_eval		PL_cv_has_eval
 #define PL_Idbargs		PL_dbargs
 #define PL_Idebstash		PL_debstash
@@ -448,8 +450,6 @@
 #define PL_Idelaymagic		PL_delaymagic
 #define PL_Idestroyhook		PL_destroyhook
 #define PL_Idiehook		PL_diehook
-#define PL_Idirty		PL_dirty
-#define PL_Idoextract		PL_doextract
 #define PL_Idoswitches		PL_doswitches
 #define PL_Idowarn		PL_dowarn
 #define PL_Idumper_fd		PL_dumper_fd
@@ -563,6 +563,7 @@
 #define PL_Iperl_destruct_level	PL_perl_destruct_level
 #define PL_Iperldb		PL_perldb
 #define PL_Iperlio		PL_perlio
+#define PL_Iphase		PL_phase
 #define PL_Ipidstatus		PL_pidstatus
 #define PL_Ippid		PL_ppid
 #define PL_Ipreambleav		PL_preambleav
@@ -672,6 +673,7 @@
 #define PL_Iutf8_ascii		PL_utf8_ascii
 #define PL_Iutf8_cntrl		PL_utf8_cntrl
 #define PL_Iutf8_digit		PL_utf8_digit
+#define PL_Iutf8_foldclosures	PL_utf8_foldclosures
 #define PL_Iutf8_graph		PL_utf8_graph
 #define PL_Iutf8_idcont		PL_utf8_idcont
 #define PL_Iutf8_idstart	PL_utf8_idstart
@@ -773,8 +775,6 @@
 #define PL_Gsig_handlers_initted	(my_vars->Gsig_handlers_initted)
 #define PL_sig_ignoring		(my_vars->Gsig_ignoring)
 #define PL_Gsig_ignoring	(my_vars->Gsig_ignoring)
-#define PL_sig_sv		(my_vars->Gsig_sv)
-#define PL_Gsig_sv		(my_vars->Gsig_sv)
 #define PL_sig_trapped		(my_vars->Gsig_trapped)
 #define PL_Gsig_trapped		(my_vars->Gsig_trapped)
 #define PL_sigfpe_saved		(my_vars->Gsigfpe_saved)
@@ -834,7 +834,6 @@
 #define PL_Gsig_defaulting	PL_sig_defaulting
 #define PL_Gsig_handlers_initted	PL_sig_handlers_initted
 #define PL_Gsig_ignoring	PL_sig_ignoring
-#define PL_Gsig_sv		PL_sig_sv
 #define PL_Gsig_trapped		PL_sig_trapped
 #define PL_Gsigfpe_saved	PL_sigfpe_saved
 #define PL_Gsubversion		PL_subversion

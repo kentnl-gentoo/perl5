@@ -1,8 +1,7 @@
 package File::Glob;
 
 use strict;
-our($VERSION, @ISA, @EXPORT_OK, @EXPORT_FAIL, %EXPORT_TAGS,
-    $AUTOLOAD, $DEFAULT_FLAGS);
+our($VERSION, @ISA, @EXPORT_OK, @EXPORT_FAIL, %EXPORT_TAGS, $DEFAULT_FLAGS);
 
 require XSLoader;
 use feature 'switch';
@@ -37,7 +36,7 @@ use feature 'switch';
 
 @EXPORT_OK   = (@{$EXPORT_TAGS{'glob'}}, 'csh_glob');
 
-$VERSION = '1.09';
+$VERSION = '1.10';
 
 sub import {
     require Exporter;
@@ -57,32 +56,11 @@ sub import {
     } @_);
 }
 
-sub AUTOLOAD {
-    # This AUTOLOAD is used to 'autoload' constants from the constant()
-    # XS function.
-
-    my $constname;
-    ($constname = $AUTOLOAD) =~ s/.*:://;
-    my ($error, $val) = constant($constname);
-    if ($error) {
-	require Carp;
-	Carp::croak($error);
-    }
-    eval "sub $AUTOLOAD { $val }";
-    goto &$AUTOLOAD;
-}
-
 XSLoader::load();
 
 $DEFAULT_FLAGS = GLOB_CSH();
 if ($^O =~ /^(?:MSWin32|VMS|os2|dos|riscos)$/) {
     $DEFAULT_FLAGS |= GLOB_NOCASE();
-}
-
-sub bsd_glob {
-    my ($pat,$flags) = @_;
-    $flags = $DEFAULT_FLAGS if @_ < 2;
-    return doglob($pat,$flags);
 }
 
 # File::Glob::glob() is deprecated because its prototype is different from

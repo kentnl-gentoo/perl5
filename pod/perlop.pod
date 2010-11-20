@@ -236,9 +236,10 @@ of operation work on some other string.  The right argument is a search
 pattern, substitution, or transliteration.  The left argument is what is
 supposed to be searched, substituted, or transliterated instead of the default
 $_.  When used in scalar context, the return value generally indicates the
-success of the operation.  The exception is substitution with the C</r>
-(non-destructive) option, which causes the return value to be the result of
-the substition.  Behavior in list context depends on the particular operator.
+success of the operation.  The exceptions are substitution (s///)
+and transliteration (y///) with the C</r> (non-destructive) option,
+which cause the B<r>eturn value to be the result of the substitution.
+Behavior in list context depends on the particular operator.
 See L</"Regexp Quote-Like Operators"> for details and L<perlretut> for
 examples using these operators.
 
@@ -254,7 +255,8 @@ pattern C<\>, which it will consider a syntax error.
 Binary "!~" is just like "=~" except the return value is negated in
 the logical sense.
 
-Binary "!~" with a non-destructive substitution (s///r) is a syntax error.
+Binary "!~" with a non-destructive substitution (s///r) or transliteration
+(y///r) is a syntax error.
 
 =head2 Multiplicative Operators
 X<operator, multiplicative>
@@ -508,10 +510,11 @@ Although it has no direct equivalent in C, Perl's C<//> operator is related
 to its C-style or.  In fact, it's exactly the same as C<||>, except that it
 tests the left hand side's definedness instead of its truth.  Thus, C<$a // $b>
 is similar to C<defined($a) || $b> (except that it returns the value of C<$a>
-rather than the value of C<defined($a)>) and is exactly equivalent to
-C<defined($a) ? $a : $b>.  This is very useful for providing default values
-for variables.  If you actually want to test if at least one of C<$a> and
-C<$b> is defined, use C<defined($a // $b)>.
+rather than the value of C<defined($a)>) and yields the same result as
+C<defined($a) ? $a : $b> (except that the ternary-operator form can be
+used as a lvalue, while C<$a // $b> cannot).  This is very useful for
+providing default values for variables.  If you actually want to test if
+at least one of C<$a> and C<$b> is defined, use C<defined($a // $b)>.
 
 The C<||>, C<//> and C<&&> operators return the last value evaluated
 (unlike C's C<||> and C<&&>, which return 0 or 1). Thus, a reasonably
@@ -1139,7 +1142,7 @@ example, see L<perlrebackslash/Octal escapes>.)  Starting in Perl 5.14, you may
 use C<\o{}> instead which avoids all these problems.  Otherwise, it is best to
 use this construct only for ordinals C<\077> and below, remembering to pad to
 the left with zeros to make three digits.  For larger ordinals, either use
-C<\o{}> , or convert to someething else, such as to hex and use C<\x{}>
+C<\o{}> , or convert to something else, such as to hex and use C<\x{}>
 instead.
 
 Having fewer than 3 digits may lead to a misleading warning message that says
@@ -1188,8 +1191,8 @@ X<\l> X<\u> X<\L> X<\U> X<\E> X<\Q>
     \u		uppercase next char
     \L		lowercase till \E
     \U		uppercase till \E
-    \E		end case modification
     \Q		quote non-word characters till \E
+    \E		end either case modification or quoted section
 
 If C<use locale> is in effect, the case map used by C<\l>, C<\L>,
 C<\u> and C<\U> is taken from the current locale.  See L<perllocale>.
@@ -1425,31 +1428,33 @@ $Etc.  The conditional is true if any variables were assigned, i.e., if
 the pattern matched.
 
 The C</g> modifier specifies global pattern matching--that is,
-matching as many times as possible within the string.  How it behaves
-depends on the context.  In list context, it returns a list of the
+matching as many times as possible within the string. How it behaves
+depends on the context. In list context, it returns a list of the
 substrings matched by any capturing parentheses in the regular
-expression.  If there are no parentheses, it returns a list of all
+expression. If there are no parentheses, it returns a list of all
 the matched strings, as if there were parentheses around the whole
 pattern.
 
 In scalar context, each execution of C<m//g> finds the next match,
 returning true if it matches, and false if there is no further match.
-The position after the last match can be read or set using the pos()
-function; see L<perlfunc/pos>.   A failed match normally resets the
+The position after the last match can be read or set using the C<pos()>
+function; see L<perlfunc/pos>. A failed match normally resets the
 search position to the beginning of the string, but you can avoid that
-by adding the C</c> modifier (e.g. C<m//gc>).  Modifying the target
+by adding the C</c> modifier (e.g. C<m//gc>). Modifying the target
 string also resets the search position.
 
 =item \G assertion
 
 You can intermix C<m//g> matches with C<m/\G.../g>, where C<\G> is a
-zero-width assertion that matches the exact position where the previous
-C<m//g>, if any, left off.  Without the C</g> modifier, the C<\G> assertion
-still anchors at pos(), but the match is of course only attempted once.
-Using C<\G> without C</g> on a target string that has not previously had a
-C</g> match applied to it is the same as using the C<\A> assertion to match
-the beginning of the string.  Note also that, currently, C<\G> is only
-properly supported when anchored at the very beginning of the pattern.
+zero-width assertion that matches the exact position where the
+previous C<m//g>, if any, left off. Without the C</g> modifier, the
+C<\G> assertion still anchors at C<pos()> as it was at the start of
+the operation (see L<perlfunc/pos>), but the match is of course only
+attempted once. Using C<\G> without C</g> on a target string that has
+not previously had a C</g> match applied to it is the same as using
+the C<\A> assertion to match the beginning of the string.  Note also
+that, currently, C<\G> is only properly supported when anchored at the
+very beginning of the pattern.
 
 Examples:
 
@@ -1815,10 +1820,10 @@ C<use warnings> pragma and the B<-w> switch (that is, the C<$^W> variable)
 produces warnings if the STRING contains the "," or the "#" character.
 
 
-=item tr/SEARCHLIST/REPLACEMENTLIST/cds
+=item tr/SEARCHLIST/REPLACEMENTLIST/cdsr
 X<tr> X<y> X<transliterate> X</c> X</d> X</s>
 
-=item y/SEARCHLIST/REPLACEMENTLIST/cds
+=item y/SEARCHLIST/REPLACEMENTLIST/cdsr
 
 Transliterates all occurrences of the characters found in the search list
 with the corresponding character in the replacement list.  It returns
@@ -1826,6 +1831,12 @@ the number of characters replaced or deleted.  If no string is
 specified via the =~ or !~ operator, the $_ string is transliterated.  (The
 string specified with =~ must be a scalar variable, an array element, a
 hash element, or an assignment to one of those, i.e., an lvalue.)
+
+If the C</r> (non-destructive) option is used then it will perform the
+replacement on a copy of the string and return the copy whether or not it
+was modified. The original string will always remain unchanged in
+this case. The copy will always be a plain string, even if the input is an
+object or a tied variable.
 
 A character range may be specified with a hyphen, so C<tr/A-J/0-9/>
 does the same replacement as C<tr/ACEGIBDFHJ/0246813579/>.
@@ -1852,6 +1863,8 @@ Options:
     c	Complement the SEARCHLIST.
     d	Delete found but unreplaced characters.
     s	Squash duplicate replaced characters.
+    r	Return the modified string and leave the original string
+	untouched.
 
 If the C</c> modifier is specified, the SEARCHLIST character set
 is complemented.  If the C</d> modifier is specified, any characters
@@ -1882,8 +1895,15 @@ Examples:
     tr/a-zA-Z//s;		# bookkeeper -> bokeper
 
     ($HOST = $host) =~ tr/a-z/A-Z/;
+    $HOST = $host =~ tr/a-z/A-Z/r;   # same thing
+
+    $HOST = $host =~ tr/a-z/A-Z/r    # chained with s///
+                  =~ s/:/ -p/r;
 
     tr/a-zA-Z/ /cs;		# change non-alphas to single space
+
+    @stripped = map tr/a-zA-Z/ /csr, @original;
+				# /r with map
 
     tr [\200-\377]
        [\000-\177];		# delete 8th bit

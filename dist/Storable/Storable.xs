@@ -386,6 +386,7 @@ typedef struct stcxt {
 	SV *(**retrieve_vtbl)(pTHX_ struct stcxt *, const char *);	/* retrieve dispatch table */
 	SV *prev;		/* contexts chained backwards in real recursion */
 	SV *my_sv;		/* the blessed scalar who's SvPVX() I am */
+	int in_retrieve_overloaded; /* performance hack for retrieving overloaded objects */
 } stcxt_t;
 
 #define NEW_STORABLE_CXT_OBJ(cxt)					\
@@ -1045,6 +1046,8 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
 
 /*
  * Bless `s' in `p', via a temporary reference, required by sv_bless().
+ * "A" magic is added before the sv_bless for overloaded classes, this avoids
+ * an expensive call to S_reset_amagic in sv_bless.
  */
 #define BLESS(s,p) 							\
   STMT_START {								\
@@ -1053,6 +1056,11 @@ static const char byteorderstr_56[] = {BYTEORDER_BYTES_56, 0};
 	TRACEME(("blessing 0x%"UVxf" in %s", PTR2UV(s), (p))); \
 	stash = gv_stashpv((p), GV_ADD);			\
 	ref = newRV_noinc(s);					\
+	if (cxt->in_retrieve_overloaded && Gv_AMG(stash)) \
+	{ \
+	    cxt->in_retrieve_overloaded = 0; \
+		SvAMAGIC_on(ref);                            \
+	} \
 	(void) sv_bless(ref, stash);			\
 	SvRV_set(ref, NULL);						\
 	SvREFCNT_dec(ref);						\
@@ -1500,6 +1508,7 @@ static void init_retrieve_context(pTHX_ stcxt_t *cxt, int optype, int is_tainted
         cxt->use_bytes = -1;		/* Fetched from perl if needed */
 #endif
         cxt->accept_future_minor = -1;	/* Fetched from perl if needed */
+	cxt->in_retrieve_overloaded = 0;
 }
 
 /*
@@ -1550,6 +1559,7 @@ static void clean_retrieve_context(pTHX_ stcxt_t *cxt)
 #endif
         cxt->accept_future_minor = -1;	/* Fetched from perl if needed */
 
+	cxt->in_retrieve_overloaded = 0;
 	reset_context(cxt);
 }
 
@@ -3841,31 +3851,6 @@ static int do_store(
 	return status == 0;
 }
 
-/*
- * pstore
- *
- * Store the transitive data closure of given object to disk.
- * Returns 0 on error, a true value otherwise.
- */
-static int pstore(pTHX_ PerlIO *f, SV *sv)
-{
-	TRACEME(("pstore"));
-	return do_store(aTHX_ f, sv, 0, FALSE, (SV**) 0);
-
-}
-
-/*
- * net_pstore
- *
- * Same as pstore(), but network order is used for integers and doubles are
- * emitted as strings.
- */
-static int net_pstore(pTHX_ PerlIO *f, SV *sv)
-{
-	TRACEME(("net_pstore"));
-	return do_store(aTHX_ f, sv, 0, TRUE, (SV**) 0);
-}
-
 /***
  *** Memory stores.
  ***/
@@ -3880,42 +3865,6 @@ static SV *mbuf2sv(pTHX)
 	dSTCXT;
 
 	return newSVpv(mbase, MBUF_SIZE());
-}
-
-/*
- * mstore
- *
- * Store the transitive data closure of given object to memory.
- * Returns undef on error, a scalar value containing the data otherwise.
- */
-static SV *mstore(pTHX_ SV *sv)
-{
-	SV *out;
-
-	TRACEME(("mstore"));
-
-	if (!do_store(aTHX_ (PerlIO*) 0, sv, 0, FALSE, &out))
-		return &PL_sv_undef;
-
-	return out;
-}
-
-/*
- * net_mstore
- *
- * Same as mstore(), but network order is used for integers and doubles are
- * emitted as strings.
- */
-static SV *net_mstore(pTHX_ SV *sv)
-{
-	SV *out;
-
-	TRACEME(("net_mstore"));
-
-	if (!do_store(aTHX_ (PerlIO*) 0, sv, 0, TRUE, &out))
-		return &PL_sv_undef;
-
-	return out;
 }
 
 /***
@@ -4560,7 +4509,9 @@ static SV *retrieve_overloaded(pTHX_ stcxt_t *cxt, const char *cname)
 
 	rv = NEWSV(10002, 0);
 	SEEN(rv, cname, 0);		/* Will return if rv is null */
+	cxt->in_retrieve_overloaded = 1; /* so sv_bless doesn't call S_reset_amagic */
 	sv = retrieve(aTHX_ cxt, 0);	/* Retrieve <object> */
+	cxt->in_retrieve_overloaded = 0;
 	if (!sv)
 		return (SV *) 0;	/* Failed */
 
@@ -6412,37 +6363,44 @@ init_perinterp()
  CODE:
   init_perinterp(aTHX);
 
-int
+# pstore
+#
+# Store the transitive data closure of given object to disk.
+# Returns undef on error, a true value otherwise.
+
+# net_pstore
+#
+# Same as pstore(), but network order is used for integers and doubles are
+# emitted as strings.
+
+void
 pstore(f,obj)
 OutputStream	f
 SV *	obj
- CODE:
-  RETVAL = pstore(aTHX_ f, obj);
- OUTPUT:
-  RETVAL
+ ALIAS:
+  net_pstore = 1
+ PPCODE:
+  ST(0) = do_store(aTHX_ f, obj, 0, ix, (SV **)0) ? &PL_sv_yes : &PL_sv_undef;
+  XSRETURN(1);
 
-int
-net_pstore(f,obj)
-OutputStream	f
-SV *	obj
- CODE:
-  RETVAL = net_pstore(aTHX_ f, obj);
- OUTPUT:
-  RETVAL
+# mstore
+#
+# Store the transitive data closure of given object to memory.
+# Returns undef on error, a scalar value containing the data otherwise.
+
+# net_mstore
+#
+# Same as mstore(), but network order is used for integers and doubles are
+# emitted as strings.
 
 SV *
 mstore(obj)
 SV *	obj
+ ALIAS:
+  net_mstore = 1
  CODE:
-  RETVAL = mstore(aTHX_ obj);
- OUTPUT:
-  RETVAL
-
-SV *
-net_mstore(obj)
-SV *	obj
- CODE:
-  RETVAL = net_mstore(aTHX_ obj);
+  if (!do_store(aTHX_ (PerlIO*) 0, obj, 0, ix, &RETVAL))
+    RETVAL = &PL_sv_undef;
  OUTPUT:
   RETVAL
 
@@ -6470,23 +6428,23 @@ SV *	sv
  OUTPUT:
   RETVAL
 
-int
+bool
 last_op_in_netorder()
  CODE:
-  RETVAL = last_op_in_netorder(aTHX);
+  RETVAL = !!last_op_in_netorder(aTHX);
  OUTPUT:
   RETVAL
 
-int
+bool
 is_storing()
+ ALIAS:
+ is_storing = ST_STORE
+ is_retrieving = ST_RETRIEVE
  CODE:
-  RETVAL = is_storing(aTHX);
- OUTPUT:
-  RETVAL
+ {
+  dSTCXT;
 
-int
-is_retrieving()
- CODE:
-  RETVAL = is_retrieving(aTHX);
+  RETVAL = cxt->entry && (cxt->optype & ix) ? TRUE : FALSE;
+ }
  OUTPUT:
   RETVAL

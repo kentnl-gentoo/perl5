@@ -61,7 +61,7 @@ for my $tref ( @NumTests ){
 my $bas_tests = 20;
 
 # number of tests in section 3
-my $bug_tests = 4 + 3 * 3 * 5 * 2 * 3 + 2 + 1 + 1;
+my $bug_tests = 4 + 3 * 3 * 5 * 2 * 3 + 2 + 2 + 1;
 
 # number of tests in section 4
 my $hmb_tests = 35;
@@ -609,6 +609,20 @@ close STDOUT_DUP;
 
 *CmT =  *{$::{Comment}}{FORMAT};
 ok  defined *{$::{CmT}}{FORMAT}, "glob assign";
+
+if ($ENV{PERL_CORE_MINITEST}) {
+    ok 1, "Skip test for miniperl, as it does not support scalario";
+}
+else {
+    my $buf = "";
+    open my $fh, ">", \$buf;
+    my $old_fh = select $fh;
+    local $~ = "CmT";
+    write;
+    select $old_fh;
+    close $fh;
+    is $buf, "ok $test\n", "write to duplicated format";
+}
 
 fresh_perl_like(<<'EOP', qr/^Format STDOUT redefined at/, {stderr => 1}, '#64562 - Segmentation fault with redefined formats and warnings');
 #!./perl

@@ -38,7 +38,8 @@ while (<DATA>) {
     my ($key, $desc, $check, $flags, $args) = split(/\t+/, $_, 5);
     $args = '' unless defined $args;
 
-    warn qq[Description "$desc" duplicates $seen{$desc}\n] if $seen{$desc};
+    warn qq[Description "$desc" duplicates $seen{$desc}\n]
+     if $seen{$desc} and $key ne "transr";
     die qq[Opcode "$key" duplicates $seen{$key}\n] if $seen{$key};
     $seen{$desc} = qq[description of opcode "$key"];
     $seen{$key} = qq[opcode "$key"];
@@ -105,6 +106,8 @@ my @raw_alias = (
 		 Perl_pp_bit_or => ['bit_xor'],
 		 Perl_pp_rv2av => ['rv2hv'],
 		 Perl_pp_akeys => ['avalues'],
+		 Perl_pp_rkeys => [qw(rvalues reach)],
+		 Perl_pp_trans => [qw(trans transr)],
 		);
 
 while (my ($func, $names) = splice @raw_alias, 0, 2) {
@@ -177,11 +180,6 @@ print $on "#define OP_phoney_OUTPUT_ONLY -2\n\n";
 
 print <<END;
 START_EXTERN_C
-
-#define OP_NAME(o) ((o)->op_type == OP_CUSTOM ? custom_op_name(o) : \\
-                    PL_op_name[(o)->op_type])
-#define OP_DESC(o) ((o)->op_type == OP_CUSTOM ? custom_op_desc(o) : \\
-                    PL_op_desc[(o)->op_type])
 
 #ifndef DOINIT
 EXTCONST char* const PL_op_name[];
@@ -652,6 +650,7 @@ qr		pattern quote (qr//)	ck_match	s/
 subst		substitution (s///)	ck_match	dis/	S
 substcont	substitution iterator	ck_null		dis|	
 trans		transliteration (tr///)	ck_match	is"	S
+# transr (the /r version) is further down.
 
 # Lvalue operators.
 # sassign is special-cased for op class
@@ -808,11 +807,11 @@ lslice		list slice		ck_null		2	H L L
 anonlist	anonymous list ([])	ck_fun		ms@	L
 anonhash	anonymous hash ({})	ck_fun		ms@	L
 
-splice		splice			ck_fun		m@	A S? S? L
-push		push			ck_fun		imsT@	A L
+splice		splice			ck_push		m@	A S? S? L
+push		push			ck_push		imsT@	A L
 pop		pop			ck_shift	s%	A?
 shift		shift			ck_shift	s%	A?
-unshift		unshift			ck_fun		imsT@	A L
+unshift		unshift			ck_push		imsT@	A L
 sort		sort			ck_sort		dm@	C? L
 reverse		reverse			ck_fun		mt@	L
 
@@ -1099,3 +1098,11 @@ lock		lock			ck_rfun		s%	R
 once		once			ck_null		|	
 
 custom		unknown custom operator		ck_null		0
+
+# For smart dereference for each/keys/values
+reach		each on reference			ck_each		%	S
+rkeys		keys on reference			ck_each		t%	S
+rvalues		values on reference			ck_each		t%	S
+
+# y///r
+transr		transliteration (tr///)	ck_match	is"	S

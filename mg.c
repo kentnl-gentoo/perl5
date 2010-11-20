@@ -781,17 +781,13 @@ Perl_emulate_cop_io(pTHX_ const COP *const c, SV *const sv)
 	sv_setpvs(sv, "");
 	SvUTF8_off(sv);
 	if ((CopHINTS_get(c) & HINT_LEXICAL_IO_IN)) {
-	    SV *const value = Perl_refcounted_he_fetch(aTHX_
-						       c->cop_hints_hash,
-						       0, "open<", 5, 0, 0);
+	    SV *const value = cop_hints_fetch_pvs(c, "open<", 0);
 	    assert(value);
 	    sv_catsv(sv, value);
 	}
 	sv_catpvs(sv, "\0");
 	if ((CopHINTS_get(c) & HINT_LEXICAL_IO_OUT)) {
-	    SV *const value = Perl_refcounted_he_fetch(aTHX_
-						       c->cop_hints_hash,
-						       0, "open>", 5, 0, 0);
+	    SV *const value = cop_hints_fetch_pvs(c, "open>", 0);
 	    assert(value);
 	    sv_catsv(sv, value);
 	}
@@ -813,6 +809,8 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
     switch (*mg->mg_ptr) {
     case '\001':		/* ^A */
 	sv_setsv(sv, PL_bodytarget);
+	if (SvTAINTED(PL_bodytarget))
+	    SvTAINTED_on(sv);
 	break;
     case '\003':		/* ^C, ^CHILD_ERROR_NATIVE */
 	if (nextchar == '\0') {
@@ -881,6 +879,12 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
     case '\006':		/* ^F */
 	sv_setiv(sv, (IV)PL_maxsysfd);
 	break;
+    case '\007':		/* ^GLOBAL_PHASE */
+	if (strEQ(remaining, "LOBAL_PHASE")) {
+	    sv_setpvn(sv, PL_phase_names[PL_phase],
+		      strlen(PL_phase_names[PL_phase]));
+	}
+	break;
     case '\010':		/* ^H */
 	sv_setiv(sv, (IV)PL_hints);
 	break;
@@ -896,7 +900,7 @@ Perl_magic_get(pTHX_ SV *sv, MAGIC *mg)
 	    Perl_emulate_cop_io(aTHX_ &PL_compiling, sv);
 	}
 	break;
-    case '\020':		
+    case '\020':
 	if (nextchar == '\0') {       /* ^P */
 	    sv_setiv(sv, (IV)PL_perldb);
 	} else if (strEQ(remaining, "REMATCH")) { /* $^PREMATCH */
@@ -1615,26 +1619,34 @@ Perl_magic_clearisa(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_CLEARISA;
 
     /* Bail out if destruction is going on */
-    if(PL_dirty) return 0;
+    if(PL_phase == PERL_PHASE_DESTRUCT) return 0;
 
     if (sv)
 	av_clear(MUTABLE_AV(sv));
 
-    /* XXX Once it's possible, we need to
-       detect that our @ISA is aliased in
-       other stashes, and act on the stashes
-       of all of the aliases */
+    if (SvTYPE(mg->mg_obj) != SVt_PVGV && SvSMAGICAL(mg->mg_obj))
+	/* This occurs with setisa_elem magic, which calls this
+	   same function. */
+	mg = mg_find(mg->mg_obj, PERL_MAGIC_isa);
 
-    /* The first case occurs via setisa,
-       the second via setisa_elem, which
-       calls this same magic */
+    if (SvTYPE(mg->mg_obj) == SVt_PVAV) { /* multiple stashes */
+	SV **svp = AvARRAY((AV *)mg->mg_obj);
+	I32 items = AvFILLp((AV *)mg->mg_obj) + 1;
+	while (items--) {
+	    stash = GvSTASH((GV *)*svp++);
+	    if (stash && HvENAME(stash)) mro_isa_changed_in(stash);
+	}
+
+	return 0;
+    }
+
     stash = GvSTASH(
-        SvTYPE(mg->mg_obj) == SVt_PVGV
-            ? (const GV *)mg->mg_obj
-            : (const GV *)mg_find(mg->mg_obj, PERL_MAGIC_isa)->mg_obj
+        (const GV *)mg->mg_obj
     );
 
-    if (stash)
+    /* The stash may have been detached from the symbol table, so check its
+       name before doing anything. */
+    if (stash && HvENAME_get(stash))
 	mro_isa_changed_in(stash);
 
     return 0;
@@ -2385,6 +2397,7 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
     const char * const remaining = mg->mg_ptr + 1;
     I32 i;
     STRLEN len;
+    MAGIC *tmg;
 
     PERL_ARGS_ASSERT_MAGIC_SET;
 
@@ -2421,6 +2434,13 @@ Perl_magic_set(pTHX_ SV *sv, MAGIC *mg)
         break;
     case '\001':	/* ^A */
 	sv_setsv(PL_bodytarget, sv);
+	/* mg_set() has temporarily made sv non-magical */
+	if (PL_tainting) {
+	    if ((tmg = mg_find(sv,PERL_MAGIC_taint)) && tmg->mg_len & 1)
+		SvTAINTED_on(PL_bodytarget);
+	    else
+		SvTAINTED_off(PL_bodytarget);
+	}
 	break;
     case '\003':	/* ^C */
 	PL_minus_c = cBOOL(SvIV(sv));
@@ -2945,13 +2965,8 @@ Perl_sighandler(int sig)
     OP *myop = PL_op;
     U32 flags = 0;
     XPV * const tXpv = PL_Xpv;
+    I32 old_ss_ix = PL_savestack_ix;
 
-    if (PL_savestack_ix + 15 <= PL_savestack_max)
-	flags |= 1;
-    if (PL_markstack_ptr < PL_markstack_max - 2)
-	flags |= 4;
-    if (PL_scopestack_ix < PL_scopestack_max - 3)
-	flags |= 16;
 
     if (!PL_psig_ptr[sig]) {
 		PerlIO_printf(Perl_error_log, "Signal SIG%s received, but no signal handler set.\n",
@@ -2961,14 +2976,19 @@ Perl_sighandler(int sig)
 
     /* Max number of items pushed there is 3*n or 4. We cannot fix
        infinity, so we fix 4 (in fact 5): */
-    if (flags & 1) {
+    if (PL_savestack_ix + 15 <= PL_savestack_max) {
+	flags |= 1;
 	PL_savestack_ix += 5;		/* Protect save in progress. */
-	SAVEDESTRUCTOR_X(S_unwind_handler_stack, (void*)&flags);
+	SAVEDESTRUCTOR_X(S_unwind_handler_stack, NULL);
     }
-    if (flags & 4)
+    if (PL_markstack_ptr < PL_markstack_max - 2) {
+	flags |= 2;
 	PL_markstack_ptr++;		/* Protect mark. */
-    if (flags & 16)
-	PL_scopestack_ix += 1;
+    }
+    if (PL_scopestack_ix < PL_scopestack_max - 3) {
+	flags |= 4;
+	PL_scopestack_ix++;
+    }
     /* sv_2cv is too complicated, try a simpler variant first: */
     if (!SvROK(PL_psig_ptr[sig]) || !(cv = MUTABLE_CV(SvRV(PL_psig_ptr[sig])))
 	|| SvTYPE(cv) != SVt_PVCV) {
@@ -2985,16 +3005,15 @@ Perl_sighandler(int sig)
 	goto cleanup;
     }
 
-    if(PL_psig_name[sig]) {
-	sv = SvREFCNT_inc_NN(PL_psig_name[sig]);
-	flags |= 64;
-#if !defined(PERL_IMPLICIT_CONTEXT)
-	PL_sig_sv = sv;
-#endif
-    } else {
-	sv = sv_newmortal();
-	sv_setpv(sv,PL_sig_name[sig]);
-    }
+    sv = PL_psig_name[sig]
+	    ? SvREFCNT_inc_NN(PL_psig_name[sig])
+	    : newSVpv(PL_sig_name[sig],0);
+    flags |= 8;
+    SAVEFREESV(sv);
+
+    /* make sure our assumption about the size of the SAVEs are correct:
+     * 3 for SAVEDESTRUCTOR_X, 2 for SAVEFREESV */
+    assert(old_ss_ix + 2 + ((flags & 1) ? 3+5 : 0)  == PL_savestack_ix);
 
     PUSHSTACKi(PERLSI_SIGNAL);
     PUSHMARK(SP);
@@ -3052,13 +3071,13 @@ Perl_sighandler(int sig)
 	die_sv(ERRSV);
     }
 cleanup:
-    if (flags & 1)
-	PL_savestack_ix -= 8; /* Unprotect save in progress. */
-    if (flags & 4)
+    /* pop any of SAVEFREESV, SAVEDESTRUCTOR_X and "save in progress" */
+    PL_savestack_ix = old_ss_ix;
+    if (flags & 2)
 	PL_markstack_ptr--;
-    if (flags & 16)
+    if (flags & 4)
 	PL_scopestack_ix -= 1;
-    if (flags & 64)
+    if (flags & 8)
 	SvREFCNT_dec(sv);
     PL_op = myop;			/* Apparently not needed... */
 
@@ -3126,20 +3145,19 @@ S_restore_magic(pTHX_ const void *p)
 
 }
 
+/* clean up the mess created by Perl_sighandler().
+ * Note that this is only called during an exit in a signal handler;
+ * a die is trapped by the call_sv() and the SAVEDESTRUCTOR_X manually
+ * skipped over. This is why we don't need to fix up the markstack and
+ * scopestack - they're going to be set to 0 anyway */
+
 static void
 S_unwind_handler_stack(pTHX_ const void *p)
 {
     dVAR;
-    const U32 flags = *(const U32*)p;
+    PERL_UNUSED_ARG(p);
 
-    PERL_ARGS_ASSERT_UNWIND_HANDLER_STACK;
-
-    if (flags & 1)
-	PL_savestack_ix -= 5; /* Unprotect save in progress. */
-#if !defined(PERL_IMPLICIT_CONTEXT)
-    if (flags & 64)
-	SvREFCNT_dec(PL_sig_sv);
-#endif
+    PL_savestack_ix -= 5; /* Unprotect save in progress. */
 }
 
 /*
@@ -3170,8 +3188,8 @@ Perl_magic_sethint(pTHX_ SV *sv, MAGIC *mg)
        Doing this here saves a lot of doing it manually in perl code (and
        forgetting to do it, and consequent subtle errors.  */
     PL_hints |= HINT_LOCALIZE_HH;
-    PL_compiling.cop_hints_hash
-	= Perl_refcounted_he_new(aTHX_ PL_compiling.cop_hints_hash, key, sv);
+    CopHINTHASH_set(&PL_compiling,
+	cophh_store_sv(CopHINTHASH_get(&PL_compiling), key, 0, sv, 0));
     return 0;
 }
 
@@ -3196,9 +3214,9 @@ Perl_magic_clearhint(pTHX_ SV *sv, MAGIC *mg)
     PERL_UNUSED_ARG(sv);
 
     PL_hints |= HINT_LOCALIZE_HH;
-    PL_compiling.cop_hints_hash
-	= Perl_refcounted_he_new(aTHX_ PL_compiling.cop_hints_hash,
-				 MUTABLE_SV(mg->mg_ptr), &PL_sv_placeholder);
+    CopHINTHASH_set(&PL_compiling,
+	cophh_delete_sv(CopHINTHASH_get(&PL_compiling),
+				 MUTABLE_SV(mg->mg_ptr), 0, 0));
     return 0;
 }
 
@@ -3215,10 +3233,8 @@ Perl_magic_clearhints(pTHX_ SV *sv, MAGIC *mg)
     PERL_ARGS_ASSERT_MAGIC_CLEARHINTS;
     PERL_UNUSED_ARG(sv);
     PERL_UNUSED_ARG(mg);
-    if (PL_compiling.cop_hints_hash) {
-	Perl_refcounted_he_free(aTHX_ PL_compiling.cop_hints_hash);
-	PL_compiling.cop_hints_hash = NULL;
-    }
+    cophh_free(CopHINTHASH_get(&PL_compiling));
+    CopHINTHASH_set(&PL_compiling, cophh_new_empty());
     return 0;
 }
 

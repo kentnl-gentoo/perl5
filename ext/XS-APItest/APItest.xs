@@ -7,6 +7,7 @@ typedef SV *SVREF;
 typedef PTR_TBL_t *XS__APItest__PtrTable;
 
 #define croak_fail() croak("fail at " __FILE__ " line %d", __LINE__)
+#define croak_fail_ne(h, w) croak("fail %p!=%p at " __FILE__ " line %d", (h), (w), __LINE__)
 
 /* for my_cxt tests */
 
@@ -24,6 +25,7 @@ typedef struct {
     int peep_recording;
     AV *peep_recorder;
     AV *rpeep_recorder;
+    AV *xop_record;
 } my_cxt_t;
 
 START_MY_CXT
@@ -508,6 +510,67 @@ test_op_linklist_describe(OP *start)
     return SvPVX(rv);
 }
 
+/** establish_cleanup operator, ripped off from Scope::Cleanup **/
+
+STATIC void
+THX_run_cleanup(pTHX_ void *cleanup_code_ref)
+{
+    dSP;
+    ENTER;
+    SAVETMPS;
+    PUSHMARK(SP);
+    call_sv((SV*)cleanup_code_ref, G_VOID|G_DISCARD);
+    FREETMPS;
+    LEAVE;
+}
+
+STATIC OP *
+THX_pp_establish_cleanup(pTHX)
+{
+    dSP;
+    SV *cleanup_code_ref;
+    cleanup_code_ref = newSVsv(POPs);
+    SAVEFREESV(cleanup_code_ref);
+    SAVEDESTRUCTOR_X(THX_run_cleanup, cleanup_code_ref);
+    if(GIMME_V != G_VOID) PUSHs(&PL_sv_undef);
+    RETURN;
+}
+
+STATIC OP *
+THX_ck_entersub_establish_cleanup(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
+{
+    OP *pushop, *argop, *estop;
+    ck_entersub_args_proto(entersubop, namegv, ckobj);
+    pushop = cUNOPx(entersubop)->op_first;
+    if(!pushop->op_sibling) pushop = cUNOPx(pushop)->op_first;
+    argop = pushop->op_sibling;
+    pushop->op_sibling = argop->op_sibling;
+    argop->op_sibling = NULL;
+    op_free(entersubop);
+    NewOpSz(0, estop, sizeof(UNOP));
+    estop->op_type = OP_RAND;
+    estop->op_ppaddr = THX_pp_establish_cleanup;
+    cUNOPx(estop)->op_flags = OPf_KIDS;
+    cUNOPx(estop)->op_first = argop;
+    PL_hints |= HINT_BLOCK_SCOPE;
+    return estop;
+}
+
+STATIC OP *
+THX_ck_entersub_postinc(pTHX_ OP *entersubop, GV *namegv, SV *ckobj)
+{
+    OP *pushop, *argop, *estop;
+    ck_entersub_args_proto(entersubop, namegv, ckobj);
+    pushop = cUNOPx(entersubop)->op_first;
+    if(!pushop->op_sibling) pushop = cUNOPx(pushop)->op_first;
+    argop = pushop->op_sibling;
+    pushop->op_sibling = argop->op_sibling;
+    argop->op_sibling = NULL;
+    op_free(entersubop);
+    return newUNOP(OP_POSTINC, 0,
+	op_lvalue(op_contextualize(argop, G_SCALAR), OP_POSTINC));
+}
+
 /** RPN keyword parser **/
 
 #define sv_is_glob(sv) (SvTYPE(sv) == SVt_PVGV)
@@ -518,6 +581,10 @@ test_op_linklist_describe(OP *start)
 
 static SV *hintkey_rpn_sv, *hintkey_calcrpn_sv, *hintkey_stufftest_sv;
 static SV *hintkey_swaptwostmts_sv, *hintkey_looprest_sv;
+static SV *hintkey_scopelessblock_sv;
+static SV *hintkey_stmtasexpr_sv, *hintkey_stmtsasexpr_sv;
+static SV *hintkey_loopblock_sv, *hintkey_blockasexpr_sv;
+static SV *hintkey_swaplabel_sv, *hintkey_labelconst_sv;
 static int (*next_keyword_plugin)(pTHX_ char *, STRLEN, OP **);
 
 /* low-level parser helpers */
@@ -691,12 +758,79 @@ static OP *THX_parse_keyword_swaptwostmts(pTHX)
 #define parse_keyword_looprest() THX_parse_keyword_looprest(aTHX)
 static OP *THX_parse_keyword_looprest(pTHX)
 {
-    I32 condline;
+    return newWHILEOP(0, 1, NULL, newSVOP(OP_CONST, 0, &PL_sv_yes),
+			parse_stmtseq(0), NULL, 1);
+}
+
+#define parse_keyword_scopelessblock() THX_parse_keyword_scopelessblock(aTHX)
+static OP *THX_parse_keyword_scopelessblock(pTHX)
+{
+    I32 c;
     OP *body;
-    condline = CopLINE(PL_curcop);
+    lex_read_space(0);
+    if(lex_peek_unichar(0) != '{'/*}*/) croak("syntax error");
+    lex_read_unichar(0);
     body = parse_stmtseq(0);
-    return newWHILEOP(0, 1, NULL, condline, newSVOP(OP_CONST, 0, &PL_sv_yes),
-			body, NULL, 1);
+    c = lex_peek_unichar(0);
+    if(c != /*{*/'}' && c != /*[*/']' && c != /*(*/')') croak("syntax error");
+    lex_read_unichar(0);
+    return body;
+}
+
+#define parse_keyword_stmtasexpr() THX_parse_keyword_stmtasexpr(aTHX)
+static OP *THX_parse_keyword_stmtasexpr(pTHX)
+{
+    OP *o = parse_barestmt(0);
+    if (!o) o = newOP(OP_STUB, 0);
+    if (PL_hints & HINT_BLOCK_SCOPE) o->op_flags |= OPf_PARENS;
+    return op_scope(o);
+}
+
+#define parse_keyword_stmtsasexpr() THX_parse_keyword_stmtsasexpr(aTHX)
+static OP *THX_parse_keyword_stmtsasexpr(pTHX)
+{
+    OP *o;
+    lex_read_space(0);
+    if(lex_peek_unichar(0) != '{'/*}*/) croak("syntax error");
+    lex_read_unichar(0);
+    o = parse_stmtseq(0);
+    lex_read_space(0);
+    if(lex_peek_unichar(0) != /*{*/'}') croak("syntax error");
+    lex_read_unichar(0);
+    if (!o) o = newOP(OP_STUB, 0);
+    if (PL_hints & HINT_BLOCK_SCOPE) o->op_flags |= OPf_PARENS;
+    return op_scope(o);
+}
+
+#define parse_keyword_loopblock() THX_parse_keyword_loopblock(aTHX)
+static OP *THX_parse_keyword_loopblock(pTHX)
+{
+    return newWHILEOP(0, 1, NULL, newSVOP(OP_CONST, 0, &PL_sv_yes),
+			parse_block(0), NULL, 1);
+}
+
+#define parse_keyword_blockasexpr() THX_parse_keyword_blockasexpr(aTHX)
+static OP *THX_parse_keyword_blockasexpr(pTHX)
+{
+    OP *o = parse_block(0);
+    if (!o) o = newOP(OP_STUB, 0);
+    if (PL_hints & HINT_BLOCK_SCOPE) o->op_flags |= OPf_PARENS;
+    return op_scope(o);
+}
+
+#define parse_keyword_swaplabel() THX_parse_keyword_swaplabel(aTHX)
+static OP *THX_parse_keyword_swaplabel(pTHX)
+{
+    OP *sop = parse_barestmt(0);
+    SV *label = parse_label(PARSE_OPTIONAL);
+    if (label) sv_2mortal(label);
+    return newSTATEOP(0, label ? savepv(SvPVX(label)) : NULL, sop);
+}
+
+#define parse_keyword_labelconst() THX_parse_keyword_labelconst(aTHX)
+static OP *THX_parse_keyword_labelconst(pTHX)
+{
+    return newSVOP(OP_CONST, 0, parse_label(0));
 }
 
 /* plugin glue */
@@ -735,9 +869,53 @@ static int my_keyword_plugin(pTHX_
 		    keyword_active(hintkey_looprest_sv)) {
 	*op_ptr = parse_keyword_looprest();
 	return KEYWORD_PLUGIN_STMT;
+    } else if(keyword_len == 14 && strnEQ(keyword_ptr, "scopelessblock", 14) &&
+		    keyword_active(hintkey_scopelessblock_sv)) {
+	*op_ptr = parse_keyword_scopelessblock();
+	return KEYWORD_PLUGIN_STMT;
+    } else if(keyword_len == 10 && strnEQ(keyword_ptr, "stmtasexpr", 10) &&
+		    keyword_active(hintkey_stmtasexpr_sv)) {
+	*op_ptr = parse_keyword_stmtasexpr();
+	return KEYWORD_PLUGIN_EXPR;
+    } else if(keyword_len == 11 && strnEQ(keyword_ptr, "stmtsasexpr", 11) &&
+		    keyword_active(hintkey_stmtsasexpr_sv)) {
+	*op_ptr = parse_keyword_stmtsasexpr();
+	return KEYWORD_PLUGIN_EXPR;
+    } else if(keyword_len == 9 && strnEQ(keyword_ptr, "loopblock", 9) &&
+		    keyword_active(hintkey_loopblock_sv)) {
+	*op_ptr = parse_keyword_loopblock();
+	return KEYWORD_PLUGIN_STMT;
+    } else if(keyword_len == 11 && strnEQ(keyword_ptr, "blockasexpr", 11) &&
+		    keyword_active(hintkey_blockasexpr_sv)) {
+	*op_ptr = parse_keyword_blockasexpr();
+	return KEYWORD_PLUGIN_EXPR;
+    } else if(keyword_len == 9 && strnEQ(keyword_ptr, "swaplabel", 9) &&
+		    keyword_active(hintkey_swaplabel_sv)) {
+	*op_ptr = parse_keyword_swaplabel();
+	return KEYWORD_PLUGIN_STMT;
+    } else if(keyword_len == 10 && strnEQ(keyword_ptr, "labelconst", 10) &&
+		    keyword_active(hintkey_labelconst_sv)) {
+	*op_ptr = parse_keyword_labelconst();
+	return KEYWORD_PLUGIN_EXPR;
     } else {
 	return next_keyword_plugin(aTHX_ keyword_ptr, keyword_len, op_ptr);
     }
+}
+
+static XOP my_xop;
+
+static OP *
+pp_xop(pTHX)
+{
+    return PL_op->op_next;
+}
+
+static void
+peep_xop(pTHX_ OP *o, OP *oldop)
+{
+    dMY_CXT;
+    av_push(MY_CXT.xop_record, newSVpvf("peep:%x", o));
+    av_push(MY_CXT.xop_record, newSVpvf("oldop:%x", oldop));
 }
 
 XS(XS_XS__APItest__XSUB_XS_VERSION_undef);
@@ -751,6 +929,67 @@ MODULE = XS::APItest		PACKAGE = XS::APItest
 INCLUDE: const-xs.inc
 
 INCLUDE: numeric.xs
+
+MODULE = XS::APItest::utf8	PACKAGE = XS::APItest::utf8
+
+int
+bytes_cmp_utf8(bytes, utf8)
+	SV *bytes
+	SV *utf8
+    PREINIT:
+	const U8 *b;
+	STRLEN blen;
+	const U8 *u;
+	STRLEN ulen;
+    CODE:
+	b = (const U8 *)SvPVbyte(bytes, blen);
+	u = (const U8 *)SvPVbyte(utf8, ulen);
+	RETVAL = bytes_cmp_utf8(b, blen, u, ulen);
+    OUTPUT:
+	RETVAL
+
+MODULE = XS::APItest:Overload	PACKAGE = XS::APItest::Overload
+
+SV *
+amagic_deref_call(sv, what)
+	SV *sv
+	int what
+    PPCODE:
+	/* The reference is owned by something else.  */
+	PUSHs(amagic_deref_call(sv, what));
+
+# I'd certainly like to discourage the use of this macro, given that we now
+# have amagic_deref_call
+
+SV *
+tryAMAGICunDEREF_var(sv, what)
+	SV *sv
+	int what
+    PPCODE:
+	{
+	    SV **sp = &sv;
+	    switch(what) {
+	    case to_av_amg:
+		tryAMAGICunDEREF(to_av);
+		break;
+	    case to_cv_amg:
+		tryAMAGICunDEREF(to_cv);
+		break;
+	    case to_gv_amg:
+		tryAMAGICunDEREF(to_gv);
+		break;
+	    case to_hv_amg:
+		tryAMAGICunDEREF(to_hv);
+		break;
+	    case to_sv_amg:
+		tryAMAGICunDEREF(to_sv);
+		break;
+	    default:
+		croak("Invalid value %d passed to tryAMAGICunDEREF_var", what);
+	    }
+	}
+	/* The reference is owned by something else.  */
+	PUSHs(sv);
 
 MODULE = XS::APItest		PACKAGE = XS::APItest::XSUB
 
@@ -1039,9 +1278,7 @@ refcounted_he_exists(key, level=0)
 	if (level) {
 	    croak("level must be zero, not %"IVdf, level);
 	}
-	RETVAL = (Perl_refcounted_he_fetch(aTHX_ PL_curcop->cop_hints_hash,
-					   key, NULL, 0, 0, 0)
-		  != &PL_sv_placeholder);
+	RETVAL = (cop_hints_fetch_sv(PL_curcop, key, 0, 0) != &PL_sv_placeholder);
 	OUTPUT:
 	RETVAL
 
@@ -1053,8 +1290,7 @@ refcounted_he_fetch(key, level=0)
 	if (level) {
 	    croak("level must be zero, not %"IVdf, level);
 	}
-	RETVAL = Perl_refcounted_he_fetch(aTHX_ PL_curcop->cop_hints_hash, key,
-					  NULL, 0, 0, 0);
+	RETVAL = cop_hints_fetch_sv(PL_curcop, key, 0, 0);
 	SvREFCNT_inc(RETVAL);
 	OUTPUT:
 	RETVAL
@@ -1138,6 +1374,104 @@ XS::APItest::PtrTable table
 MODULE = XS::APItest		PACKAGE = XS::APItest
 
 PROTOTYPES: DISABLE
+
+HV *
+xop_custom_ops ()
+    CODE:
+        RETVAL = PL_custom_ops;
+    OUTPUT:
+        RETVAL
+
+HV *
+xop_custom_op_names ()
+    CODE:
+        PL_custom_op_names = newHV();
+        RETVAL = PL_custom_op_names;
+    OUTPUT:
+        RETVAL
+
+HV *
+xop_custom_op_descs ()
+    CODE:
+        PL_custom_op_descs = newHV();
+        RETVAL = PL_custom_op_descs;
+    OUTPUT:
+        RETVAL
+
+void
+xop_register ()
+    CODE:
+        XopENTRY_set(&my_xop, xop_name, "my_xop");
+        XopENTRY_set(&my_xop, xop_desc, "XOP for testing");
+        XopENTRY_set(&my_xop, xop_class, OA_UNOP);
+        XopENTRY_set(&my_xop, xop_peep, peep_xop);
+        Perl_custom_op_register(aTHX_ pp_xop, &my_xop);
+
+void
+xop_clear ()
+    CODE:
+        XopDISABLE(&my_xop, xop_name);
+        XopDISABLE(&my_xop, xop_desc);
+        XopDISABLE(&my_xop, xop_class);
+        XopDISABLE(&my_xop, xop_peep);
+
+IV
+xop_my_xop ()
+    CODE:
+        RETVAL = PTR2IV(&my_xop);
+    OUTPUT:
+        RETVAL
+
+IV
+xop_ppaddr ()
+    CODE:
+        RETVAL = PTR2IV(pp_xop);
+    OUTPUT:
+        RETVAL
+
+IV
+xop_OA_UNOP ()
+    CODE:
+        RETVAL = OA_UNOP;
+    OUTPUT:
+        RETVAL
+
+AV *
+xop_build_optree ()
+    CODE:
+        dMY_CXT;
+        UNOP *unop;
+        OP *kid;
+
+        MY_CXT.xop_record = newAV();
+
+        kid = newSVOP(OP_CONST, 0, newSViv(42));
+        
+        NewOp(1102, unop, 1, UNOP);
+        unop->op_type       = OP_CUSTOM;
+        unop->op_ppaddr     = pp_xop;
+        unop->op_flags      = OPf_KIDS;
+        unop->op_private    = 0;
+        unop->op_first      = kid;
+        unop->op_next       = NULL;
+        kid->op_next        = (OP*)unop;
+
+        av_push(MY_CXT.xop_record, newSVpvf("unop:%x", unop));
+        av_push(MY_CXT.xop_record, newSVpvf("kid:%x", kid));
+
+        av_push(MY_CXT.xop_record, newSVpvf("NAME:%s", OP_NAME((OP*)unop)));
+        av_push(MY_CXT.xop_record, newSVpvf("DESC:%s", OP_DESC((OP*)unop)));
+        av_push(MY_CXT.xop_record, newSVpvf("CLASS:%d", OP_CLASS((OP*)unop)));
+
+        PL_rpeepp(aTHX_ kid);
+
+        FreeOp(kid);
+        FreeOp(unop);
+
+        RETVAL = MY_CXT.xop_record;
+        MY_CXT.xop_record = NULL;
+    OUTPUT:
+        RETVAL
 
 BOOT:
 {
@@ -1503,12 +1837,12 @@ my_caller(level)
         gv = CvGV(dbcx->blk_sub.cv);
         ST(3) = isGV(gv) ? sv_2mortal(newSVpv(GvNAME(gv), 0)) : &PL_sv_undef;
 
-        ST(4) = cop_hints_fetchpvs(cx->blk_oldcop, "foo");
-        ST(5) = cop_hints_fetchpvn(cx->blk_oldcop, "foo", 3, 0, 0);
-        ST(6) = cop_hints_fetchsv(cx->blk_oldcop, 
-                sv_2mortal(newSVpvn("foo", 3)), 0);
+        ST(4) = cop_hints_fetch_pvs(cx->blk_oldcop, "foo", 0);
+        ST(5) = cop_hints_fetch_pvn(cx->blk_oldcop, "foo", 3, 0, 0);
+        ST(6) = cop_hints_fetch_sv(cx->blk_oldcop, 
+                sv_2mortal(newSVpvn("foo", 3)), 0, 0);
 
-        hv = cop_hints_2hv(cx->blk_oldcop);
+        hv = cop_hints_2hv(cx->blk_oldcop, 0);
         ST(7) = hv ? sv_2mortal(newRV_noinc((SV *)hv)) : &PL_sv_undef;
 
         XSRETURN(8);
@@ -1579,6 +1913,17 @@ void
 my_exit(int exitcode)
         PPCODE:
         my_exit(exitcode);
+
+U8
+first_byte(sv)
+	SV *sv
+   CODE:
+    char *s;
+    STRLEN len;
+	s = SvPVbyte(sv, len);
+	RETVAL = s[0];
+   OUTPUT:
+    RETVAL
 
 I32
 sv_count()
@@ -1756,7 +2101,8 @@ test_cv_getset_call_checker()
 #define check_cc(cv, xckfun, xckobj) \
     do { \
 	cv_get_call_checker((cv), &ckfun, &ckobj); \
-	if (ckfun != (xckfun) || ckobj != (xckobj)) croak_fail(); \
+	if (ckfun != (xckfun)) croak_fail_ne(FPTR2DPTR(void *, ckfun), xckfun); \
+	if (ckobj != (xckobj)) croak_fail_ne(FPTR2DPTR(void *, ckobj), xckobj); \
     } while(0)
 	troc_cv = get_cv("XS::APItest::test_rv2cv_op_cv", 0);
 	tsh_cv = get_cv("XS::APItest::test_savehints", 0);
@@ -1811,6 +2157,120 @@ cv_set_call_checker_multi_sum(CV *cv)
 	cv_set_call_checker(cv, THX_ck_entersub_multi_sum, &PL_sv_undef);
 
 void
+test_cophh()
+    PREINIT:
+	COPHH *a, *b;
+    CODE:
+#define check_ph(EXPR) \
+    	    do { if((EXPR) != &PL_sv_placeholder) croak("fail"); } while(0)
+#define check_iv(EXPR, EXPECT) \
+    	    do { if(SvIV(EXPR) != (EXPECT)) croak("fail"); } while(0)
+#define msvpvs(STR) sv_2mortal(newSVpvs(STR))
+#define msviv(VALUE) sv_2mortal(newSViv(VALUE))
+	a = cophh_new_empty();
+	check_ph(cophh_fetch_pvn(a, "foo_1", 5, 0, 0));
+	check_ph(cophh_fetch_pvs(a, "foo_1", 0));
+	check_ph(cophh_fetch_pv(a, "foo_1", 0, 0));
+	check_ph(cophh_fetch_sv(a, msvpvs("foo_1"), 0, 0));
+	a = cophh_store_pvn(a, "foo_1abc", 5, 0, msviv(111), 0);
+	a = cophh_store_pvs(a, "foo_2", msviv(222), 0);
+	a = cophh_store_pv(a, "foo_3", 0, msviv(333), 0);
+	a = cophh_store_sv(a, msvpvs("foo_4"), 0, msviv(444), 0);
+	check_iv(cophh_fetch_pvn(a, "foo_1xyz", 5, 0, 0), 111);
+	check_iv(cophh_fetch_pvs(a, "foo_1", 0), 111);
+	check_iv(cophh_fetch_pv(a, "foo_1", 0, 0), 111);
+	check_iv(cophh_fetch_sv(a, msvpvs("foo_1"), 0, 0), 111);
+	check_iv(cophh_fetch_pvs(a, "foo_2", 0), 222);
+	check_iv(cophh_fetch_pvs(a, "foo_3", 0), 333);
+	check_iv(cophh_fetch_pvs(a, "foo_4", 0), 444);
+	check_ph(cophh_fetch_pvs(a, "foo_5", 0));
+	b = cophh_copy(a);
+	b = cophh_store_pvs(b, "foo_1", msviv(1111), 0);
+	check_iv(cophh_fetch_pvs(a, "foo_1", 0), 111);
+	check_iv(cophh_fetch_pvs(a, "foo_2", 0), 222);
+	check_iv(cophh_fetch_pvs(a, "foo_3", 0), 333);
+	check_iv(cophh_fetch_pvs(a, "foo_4", 0), 444);
+	check_ph(cophh_fetch_pvs(a, "foo_5", 0));
+	check_iv(cophh_fetch_pvs(b, "foo_1", 0), 1111);
+	check_iv(cophh_fetch_pvs(b, "foo_2", 0), 222);
+	check_iv(cophh_fetch_pvs(b, "foo_3", 0), 333);
+	check_iv(cophh_fetch_pvs(b, "foo_4", 0), 444);
+	check_ph(cophh_fetch_pvs(b, "foo_5", 0));
+	a = cophh_delete_pvn(a, "foo_1abc", 5, 0, 0);
+	a = cophh_delete_pvs(a, "foo_2", 0);
+	b = cophh_delete_pv(b, "foo_3", 0, 0);
+	b = cophh_delete_sv(b, msvpvs("foo_4"), 0, 0);
+	check_ph(cophh_fetch_pvs(a, "foo_1", 0));
+	check_ph(cophh_fetch_pvs(a, "foo_2", 0));
+	check_iv(cophh_fetch_pvs(a, "foo_3", 0), 333);
+	check_iv(cophh_fetch_pvs(a, "foo_4", 0), 444);
+	check_ph(cophh_fetch_pvs(a, "foo_5", 0));
+	check_iv(cophh_fetch_pvs(b, "foo_1", 0), 1111);
+	check_iv(cophh_fetch_pvs(b, "foo_2", 0), 222);
+	check_ph(cophh_fetch_pvs(b, "foo_3", 0));
+	check_ph(cophh_fetch_pvs(b, "foo_4", 0));
+	check_ph(cophh_fetch_pvs(b, "foo_5", 0));
+	b = cophh_delete_pvs(b, "foo_3", 0);
+	b = cophh_delete_pvs(b, "foo_5", 0);
+	check_iv(cophh_fetch_pvs(b, "foo_1", 0), 1111);
+	check_iv(cophh_fetch_pvs(b, "foo_2", 0), 222);
+	check_ph(cophh_fetch_pvs(b, "foo_3", 0));
+	check_ph(cophh_fetch_pvs(b, "foo_4", 0));
+	check_ph(cophh_fetch_pvs(b, "foo_5", 0));
+	cophh_free(b);
+	check_ph(cophh_fetch_pvs(a, "foo_1", 0));
+	check_ph(cophh_fetch_pvs(a, "foo_2", 0));
+	check_iv(cophh_fetch_pvs(a, "foo_3", 0), 333);
+	check_iv(cophh_fetch_pvs(a, "foo_4", 0), 444);
+	check_ph(cophh_fetch_pvs(a, "foo_5", 0));
+	a = cophh_store_pvs(a, "foo_1", msviv(11111), COPHH_KEY_UTF8);
+	a = cophh_store_pvs(a, "foo_\xaa", msviv(123), 0);
+	a = cophh_store_pvs(a, "foo_\xc2\xbb", msviv(456), COPHH_KEY_UTF8);
+	a = cophh_store_pvs(a, "foo_\xc3\x8c", msviv(789), COPHH_KEY_UTF8);
+	a = cophh_store_pvs(a, "foo_\xd9\xa6", msviv(666), COPHH_KEY_UTF8);
+	check_iv(cophh_fetch_pvs(a, "foo_1", 0), 11111);
+	check_iv(cophh_fetch_pvs(a, "foo_1", COPHH_KEY_UTF8), 11111);
+	check_iv(cophh_fetch_pvs(a, "foo_\xaa", 0), 123);
+	check_iv(cophh_fetch_pvs(a, "foo_\xc2\xaa", COPHH_KEY_UTF8), 123);
+	check_ph(cophh_fetch_pvs(a, "foo_\xc2\xaa", 0));
+	check_iv(cophh_fetch_pvs(a, "foo_\xbb", 0), 456);
+	check_iv(cophh_fetch_pvs(a, "foo_\xc2\xbb", COPHH_KEY_UTF8), 456);
+	check_ph(cophh_fetch_pvs(a, "foo_\xc2\xbb", 0));
+	check_iv(cophh_fetch_pvs(a, "foo_\xcc", 0), 789);
+	check_iv(cophh_fetch_pvs(a, "foo_\xc3\x8c", COPHH_KEY_UTF8), 789);
+	check_ph(cophh_fetch_pvs(a, "foo_\xc2\x8c", 0));
+	check_iv(cophh_fetch_pvs(a, "foo_\xd9\xa6", COPHH_KEY_UTF8), 666);
+	check_ph(cophh_fetch_pvs(a, "foo_\xd9\xa6", 0));
+	ENTER;
+	SAVEFREECOPHH(a);
+	LEAVE;
+#undef check_ph
+#undef check_iv
+#undef msvpvs
+#undef msviv
+
+HV *
+example_cophh_2hv()
+    PREINIT:
+	COPHH *a;
+    CODE:
+#define msviv(VALUE) sv_2mortal(newSViv(VALUE))
+	a = cophh_new_empty();
+	a = cophh_store_pvs(a, "foo_0", msviv(999), 0);
+	a = cophh_store_pvs(a, "foo_1", msviv(111), 0);
+	a = cophh_store_pvs(a, "foo_\xaa", msviv(123), 0);
+	a = cophh_store_pvs(a, "foo_\xc2\xbb", msviv(456), COPHH_KEY_UTF8);
+	a = cophh_store_pvs(a, "foo_\xc3\x8c", msviv(789), COPHH_KEY_UTF8);
+	a = cophh_store_pvs(a, "foo_\xd9\xa6", msviv(666), COPHH_KEY_UTF8);
+	a = cophh_delete_pvs(a, "foo_0", 0);
+	a = cophh_delete_pvs(a, "foo_2", 0);
+	RETVAL = cophh_2hv(a, 0);
+	cophh_free(a);
+#undef msviv
+    OUTPUT:
+	RETVAL
+
+void
 test_savehints()
     PREINIT:
 	SV **svp, *sv;
@@ -1820,7 +2280,7 @@ test_savehints()
 #define hint_ok(KEY, EXPECT) \
 		((svp = hv_fetchs(GvHV(PL_hintgv), KEY, 0)) && \
 		    (sv = *svp) && SvIV(sv) == (EXPECT) && \
-		    (sv = cop_hints_fetchpvs(&PL_compiling, KEY)) && \
+		    (sv = cop_hints_fetch_pvs(&PL_compiling, KEY, 0)) && \
 		    SvIV(sv) == (EXPECT))
 #define check_hint(KEY, EXPECT) \
 		do { if (!hint_ok(KEY, EXPECT)) croak_fail(); } while(0)
@@ -1867,15 +2327,18 @@ test_copyhints()
 	ENTER;
 	SAVEHINTS();
 	sv_setiv_mg(*hv_fetchs(GvHV(PL_hintgv), "t0", 1), 123);
-	if (SvIV(cop_hints_fetchpvs(&PL_compiling, "t0")) != 123) croak_fail();
+	if (SvIV(cop_hints_fetch_pvs(&PL_compiling, "t0", 0)) != 123)
+	    croak_fail();
 	a = newHVhv(GvHV(PL_hintgv));
 	sv_2mortal((SV*)a);
 	sv_setiv_mg(*hv_fetchs(a, "t0", 1), 456);
-	if (SvIV(cop_hints_fetchpvs(&PL_compiling, "t0")) != 123) croak_fail();
+	if (SvIV(cop_hints_fetch_pvs(&PL_compiling, "t0", 0)) != 123)
+	    croak_fail();
 	b = hv_copy_hints_hv(a);
 	sv_2mortal((SV*)b);
 	sv_setiv_mg(*hv_fetchs(b, "t0", 1), 789);
-	if (SvIV(cop_hints_fetchpvs(&PL_compiling, "t0")) != 789) croak_fail();
+	if (SvIV(cop_hints_fetch_pvs(&PL_compiling, "t0", 0)) != 789)
+	    croak_fail();
 	LEAVE;
 
 void
@@ -2142,6 +2605,37 @@ BOOT:
     hintkey_stufftest_sv = newSVpvs_share("XS::APItest/stufftest");
     hintkey_swaptwostmts_sv = newSVpvs_share("XS::APItest/swaptwostmts");
     hintkey_looprest_sv = newSVpvs_share("XS::APItest/looprest");
+    hintkey_scopelessblock_sv = newSVpvs_share("XS::APItest/scopelessblock");
+    hintkey_stmtasexpr_sv = newSVpvs_share("XS::APItest/stmtasexpr");
+    hintkey_stmtsasexpr_sv = newSVpvs_share("XS::APItest/stmtsasexpr");
+    hintkey_loopblock_sv = newSVpvs_share("XS::APItest/loopblock");
+    hintkey_blockasexpr_sv = newSVpvs_share("XS::APItest/blockasexpr");
+    hintkey_swaplabel_sv = newSVpvs_share("XS::APItest/swaplabel");
+    hintkey_labelconst_sv = newSVpvs_share("XS::APItest/labelconst");
     next_keyword_plugin = PL_keyword_plugin;
     PL_keyword_plugin = my_keyword_plugin;
+}
+
+void
+establish_cleanup(...)
+PROTOTYPE: $
+CODE:
+    croak("establish_cleanup called as a function");
+
+BOOT:
+{
+    CV *estcv = get_cv("XS::APItest::establish_cleanup", 0);
+    cv_set_call_checker(estcv, THX_ck_entersub_establish_cleanup, (SV*)estcv);
+}
+
+void
+postinc(...)
+PROTOTYPE: $
+CODE:
+    croak("postinc called as a function");
+
+BOOT:
+{
+    CV *asscv = get_cv("XS::APItest::postinc", 0);
+    cv_set_call_checker(asscv, THX_ck_entersub_postinc, (SV*)asscv);
 }

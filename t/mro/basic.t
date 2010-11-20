@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-BEGIN { require q(./test.pl); } plan(tests => 49);
+BEGIN { require q(./test.pl); } plan(tests => 52);
 
 require mro;
 
@@ -57,7 +57,7 @@ ok(!mro::is_universal('MRO_B'));
 ok(mro::is_universal('MRO_B'));
 
 @UNIVERSAL::ISA = ();
-ok(mro::is_universal('MRO_B'));
+ok(!mro::is_universal('MRO_B'));
 
 # is_universal, get_mro, and get_linear_isa should
 # handle non-existant packages sanely
@@ -299,4 +299,32 @@ is(eval { MRO_N->testfunc() }, 123);
     @main::ISA = 'parent2';
     main->do;
     is $output, 'parentparent2', '@main::ISA is magical';
+}
+
+{
+    # Undefining *ISA, then modifying @ISA
+    # This broke Class::Trait. See [perl #79024].
+    {package Class::Trait::Base}
+    no strict 'refs';
+    undef   *{"Extra::TSpouse::ISA"};
+    'Extra::TSpouse'->isa('Class::Trait::Base'); # cache the mro
+    unshift @{"Extra::TSpouse::ISA"}, 'Class::Trait::Base';
+    ok 'Extra::TSpouse'->isa('Class::Trait::Base'),
+     'a isa b after undef *a::ISA and @a::ISA modification';
+}
+
+{
+    # Deleting $package::{ISA}
+    # Broken in 5.10.0; fixed in 5.13.7
+    @Blength::ISA = 'Bladd';
+    delete $Blength::{ISA};
+    ok !Blength->isa("Bladd"), 'delete $package::{ISA}';
+}
+
+{
+    # Undefining stashes
+    @Thrext::ISA = "Thwit";
+    @Thwit::ISA = "Sile";
+    undef %Thwit::;
+    ok !Thrext->isa('Sile'), 'undef %package:: updates subclasses';
 }

@@ -58,7 +58,7 @@ PERLVAR(Itmps_stack,	SV **)		/* mortals we've made */
 PERLVARI(Itmps_ix,	I32,	-1)
 PERLVARI(Itmps_floor,	I32,	-1)
 PERLVAR(Itmps_max,	I32)
-PERLVAR(Imodcount,	I32)		/* how much mod()ification in
+PERLVAR(Imodcount,	I32)		/* how much op_lvalue()ification in
 					   assignment? */
 
 PERLVAR(Imarkstack,	I32 *)		/* stack_sp locations we're
@@ -248,10 +248,11 @@ PERLVAR(Iregmatch_state, regmatch_state *)
 PERLVAR(Idelaymagic,	U16)		/* ($<,$>) = ... */
 PERLVAR(Ilocalizing,	U8)		/* are we processing a local() list? */
 PERLVAR(Icolorset,	bool)		/* from regcomp.c */
-PERLVARI(Idirty,	bool, FALSE)	/* in the middle of tearing things
-					   down? */
 PERLVAR(Iin_eval,	U8)		/* trap "fatal" errors? */
 PERLVAR(Itainted,	bool)		/* using variables controlled by $< */
+
+/* current phase the interpreter is in */
+PERLVARI(Iphase,	enum perl_phase, PERL_PHASE_CONSTRUCT)
 
 /* This value may be set when embedding for full cleanup  */
 /* 0=none, 1=full, 2=full with checks */
@@ -295,7 +296,7 @@ The C variable which corresponds to Perl's $^W warning variable.
 */
 
 PERLVAR(Idowarn,	U8)
-PERLVAR(Idoextract,	bool)
+     /* Space for a U8  */
 PERLVAR(Isawampersand,	bool)		/* must save all match strings */
 PERLVAR(Iunsafe,	bool)
 PERLVAR(Iexit_flags,	U8)		/* was exit() unexpected, etc. */
@@ -764,6 +765,12 @@ PERLVAR(Iregistered_mros, HV *)
 
 /* Compile-time block start/end hooks */
 PERLVAR(Iblockhooks, AV *)
+
+
+/* Everything that folds to a character, for case insensitivity regex matching */
+PERLVARI(Iutf8_foldclosures,	HV *, NULL)
+
+PERLVAR(Icustom_ops, HV *)      /* custom op registrations */
 
 /* If you are adding a U8 or U16, check to see if there are 'Space' comments
  * above on where there are gaps which currently will be structure padding.  */

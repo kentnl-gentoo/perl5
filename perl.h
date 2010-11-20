@@ -2387,10 +2387,6 @@ int isnan(double d);
 
 #endif
 
-#ifdef MYMALLOC
-#  include "malloc_ctl.h"
-#endif
-
 struct RExC_state_t;
 struct _reg_trie_data;
 
@@ -2414,6 +2410,7 @@ typedef struct pvop PVOP;
 typedef struct loop LOOP;
 
 typedef struct block_hooks BHK;
+typedef struct custom_op XOP;
 
 typedef struct interpreter PerlInterpreter;
 
@@ -4222,9 +4219,6 @@ typedef OP* (*PPADDR_t[]) (pTHX);
 typedef bool (*destroyable_proc_t) (pTHX_ SV *sv);
 typedef void (*despatch_signals_proc_t) (pTHX);
 
-/* _ (for $_) must be first in the following list (DEFSV requires it) */
-#define THREADSV_NAMES "_123456789&`'+/.,\\\";^-%=|~:\001\005!@"
-
 /* NeXT has problems with crt0.o globals */
 #if defined(__DYNAMIC__) && \
     (defined(NeXT) || defined(__NeXT__) || defined(PERL_DARWIN))
@@ -4719,6 +4713,39 @@ EXTCONST char PL_bincompat_options[] =
 EXTCONST char PL_bincompat_options[];
 #endif
 
+/* The interpreter phases. If these ever change, PL_phase_names right below will
+ * need to be updated accordingly. */
+enum perl_phase {
+    PERL_PHASE_CONSTRUCT	= 0,
+    PERL_PHASE_START		= 1,
+    PERL_PHASE_CHECK		= 2,
+    PERL_PHASE_INIT		= 3,
+    PERL_PHASE_RUN		= 4,
+    PERL_PHASE_END		= 5,
+    PERL_PHASE_DESTRUCT		= 6
+};
+
+#ifdef DOINIT
+EXTCONST char *const PL_phase_names[] = {
+    "CONSTRUCT",
+    "START",
+    "CHECK",
+    "INIT",
+    "RUN",
+    "END",
+    "DESTRUCT"
+};
+#else
+EXTCONST char *const PL_phase_names[];
+#endif
+
+#ifndef PERL_CORE
+/* Do not use this macro. It only exists for extensions that rely on PL_dirty
+ * instead of using the newer PL_phase, which provides everything PL_dirty
+ * provided, and more. */
+#  define PL_dirty (PL_phase == PERL_PHASE_DESTRUCT)
+#endif /* !PERL_CORE */
+
 END_EXTERN_C
 
 /*****************************************************************************/
@@ -4823,6 +4850,8 @@ enum {		/* pass one of these to get_vtbl */
 
 #define HINT_NO_AMAGIC		0x01000000 /* overloading pragma */
 
+#define HINT_RE_FLAGS		0x02000000 /* re '/xism' pragma */
+
 /* The following are stored in $^H{sort}, not in PL_hints */
 #define HINT_SORT_SORT_BITS	0x000000FF /* allow 256 different ones */
 #define HINT_SORT_QUICKSORT	0x00000001
@@ -4881,6 +4910,7 @@ typedef OP* (*Perl_ppaddr_t)(pTHX);
 typedef OP* (*Perl_check_t) (pTHX_ OP*);
 typedef void(*Perl_ophook_t)(pTHX_ OP*);
 typedef int (*Perl_keyword_plugin_t)(pTHX_ char*, STRLEN, OP**);
+typedef void(*Perl_cpeep_t)(pTHX_ OP *, OP *);
 
 #define KEYWORD_PLUGIN_DECLINE 0
 #define KEYWORD_PLUGIN_STMT    1
@@ -4976,6 +5006,10 @@ struct tempsym; /* defined in pp_pack.c */
 #undef PERL_PPDEF
 #define PERL_CKDEF(s)	PERL_CALLCONV OP *s (pTHX_ OP *o);
 #define PERL_PPDEF(s)	PERL_CALLCONV OP *s (pTHX);
+
+#ifdef MYMALLOC
+#  include "malloc_ctl.h"
+#endif
 
 #include "proto.h"
 

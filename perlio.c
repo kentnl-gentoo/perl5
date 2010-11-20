@@ -1340,6 +1340,8 @@ int
 PerlIO_apply_layers(pTHX_ PerlIO *f, const char *mode, const char *names)
 {
     int code = 0;
+    ENTER;
+    save_scalar(PL_errgv);
     if (f && names) {
 	PerlIO_list_t * const layers = PerlIO_list_alloc(aTHX);
 	code = PerlIO_parse_layers(aTHX_ layers, names);
@@ -1348,6 +1350,7 @@ PerlIO_apply_layers(pTHX_ PerlIO *f, const char *mode, const char *names)
 	}
 	PerlIO_list_free(aTHX_ layers);
     }
+    LEAVE;
     return code;
 }
 
@@ -3758,6 +3761,22 @@ PerlIOBuf_open(pTHX_ PerlIO_funcs *self, PerlIO_list_t *layers,
 		 */
 		PerlLIO_setmode(fd, O_BINARY);
 #endif
+#ifdef VMS
+#include <rms.h>
+		/* Enable line buffering with record-oriented regular files
+		 * so we don't introduce an extraneous record boundary when
+		 * the buffer fills up.
+		 */
+		if (PerlIOBase(f)->flags & PERLIO_F_CANWRITE) {
+		    Stat_t st;
+		    if (PerlLIO_fstat(fd, &st) == 0
+		        && S_ISREG(st.st_mode)
+		        && (st.st_fab_rfm == FAB$C_VAR 
+			    || st.st_fab_rfm == FAB$C_VFC)) {
+			PerlIOBase(f)->flags |= PERLIO_F_LINEBUF;
+		    }
+		}
+#endif
 	    }
 	}
     }
@@ -4117,7 +4136,7 @@ PerlIOBuf_get_base(pTHX_ PerlIO *f)
 
     if (!b->buf) {
 	if (!b->bufsiz)
-	    b->bufsiz = 4096;
+	    b->bufsiz = PERLIOBUF_DEFAULT_BUFSIZ;
 	Newxz(b->buf,b->bufsiz, STDCHAR);
 	if (!b->buf) {
 	    b->buf = (STDCHAR *) & b->oneword;
@@ -5232,8 +5251,7 @@ Perl_PerlIO_context_layers(pTHX_ const char *mode)
     if (!direction)
 	return NULL;
 
-    layers = Perl_refcounted_he_fetch(aTHX_ PL_curcop->cop_hints_hash,
-				      0, direction, 5, 0, 0);
+    layers = cop_hints_fetch_pvn(PL_curcop, direction, 5, 0, 0);
 
     assert(layers);
     return SvOK(layers) ? SvPV_nolen_const(layers) : NULL;

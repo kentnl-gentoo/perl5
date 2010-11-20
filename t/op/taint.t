@@ -17,7 +17,7 @@ use Config;
 use File::Spec::Functions;
 
 BEGIN { require './test.pl'; }
-plan tests => 325;
+plan tests => 336;
 
 $| = 1;
 
@@ -1396,6 +1396,38 @@ foreach my $ord (78, 163, 256) {
     ok(!tainted($untainted), '$untainted should yet still be untainted');
 }
 
+{
+    fresh_perl_is(<<'end', "ok", { switches => [ '-T' ] },
+    $TAINT = substr($^X, 0, 0);
+    formline('@'.('<'x("2000".$TAINT)).' | @*', 'hallo', 'welt');
+    print "ok";
+end
+    "formline survives a tainted dynamic picture");
+}
+
+{
+    ok(!tainted($^A), "format accumulator not tainted yet");
+    formline('@ | @*', 'hallo' . $TAINT, 'welt');
+    ok(tainted($^A), "tainted formline argument makes a tainted accumulator");
+    $^A = "";
+    ok(!tainted($^A), "accumulator can be explicitly untainted");
+    formline('@' .('<'*5) . ' | @*', 'hallo', 'welt');
+    ok(!tainted($^A), "accumulator still untainted");
+    $^A = "" . $TAINT;
+    ok(tainted($^A), "accumulator can be explicitly tainted");
+    formline('@' .('<'*5) . ' | @*', 'hallo', 'welt');
+    ok(tainted($^A), "accumulator still tainted");
+    $^A = "";
+    ok(!tainted($^A), "accumulator untainted again");
+    formline('@' .('<'*5) . ' | @*', 'hallo', 'welt');
+    ok(!tainted($^A), "accumulator still untainted");
+    formline('@' .('<'*(5+$TAINT0)) . ' | @*', 'hallo', 'welt');
+    TODO: {
+        local $::TODO = "get magic handled too late?";
+        ok(tainted($^A), "the accumulator should be tainted already");
+    }
+    ok(tainted($^A), "tainted formline picture makes a tainted accumulator");
+}
 
 # This may bomb out with the alarm signal so keep it last
 SKIP: {

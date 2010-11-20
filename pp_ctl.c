@@ -194,8 +194,7 @@ PP(pp_regcomp)
 		PM_SETRE(pm, NULL);	/* crucial if regcomp aborts */
 #endif
 	    } else if (PL_curcop->cop_hints_hash) {
-	        SV *ptr = Perl_refcounted_he_fetch(aTHX_ PL_curcop->cop_hints_hash, 0,
-				       "regcomp", 7, 0, 0);
+	        SV *ptr = cop_hints_fetch_pvs(PL_curcop, "regcomp", 0);
                 if (ptr && SvIOK(ptr) && SvIV(ptr))
                     eng = INT2PTR(regexp_engine*,SvIV(ptr));
 	    }
@@ -505,7 +504,7 @@ PP(pp_formline)
     NV value;
     bool gotsome = FALSE;
     STRLEN len;
-    const STRLEN fudge = SvPOK(tmpForm)
+    const STRLEN fudge = SvPOKp(tmpForm)
 			? (SvCUR(tmpForm) * (IN_BYTES ? 1 : 3) + 1) : 0;
     bool item_is_utf8 = FALSE;
     bool targ_is_utf8 = FALSE;
@@ -525,6 +524,8 @@ PP(pp_formline)
 	    return parseres;
     }
     SvPV_force(PL_formtarget, len);
+    if (SvTAINTED(tmpForm))
+	SvTAINTED_on(PL_formtarget);
     if (DO_UTF8(PL_formtarget))
 	targ_is_utf8 = TRUE;
     t = SvGROW(PL_formtarget, len + fudge + 1);  /* XXX SvCUR bad */
@@ -606,6 +607,8 @@ PP(pp_formline)
 		sv = &PL_sv_no;
 		Perl_ck_warner(aTHX_ packWARN(WARN_SYNTAX), "Not enough format arguments");
 	    }
+	    if (SvTAINTED(sv))
+		SvTAINTED_on(PL_formtarget);
 	    break;
 
 	case FF_CHECKNL:
@@ -1117,7 +1120,7 @@ PP(pp_mapwhile)
 	     * if necessary), then clear the current temps stack frame
 	     * *except* for those items. We do this splicing the items
 	     * into the start of the tmps frame (so some items may be on
-	     * the tmps stack twice), then moving PL_stack_floor above
+	     * the tmps stack twice), then moving PL_tmps_floor above
 	     * them, then freeing the frame. That way, the only tmps that
 	     * accumulate over iterations are the return values for map.
 	     * We have to do to this way so that everything gets correctly
@@ -1654,6 +1657,9 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    SV *namesv;
 	    register PERL_CONTEXT *cx;
 	    SV **newsp;
+	    COP *oldcop;
+	    JMPENV *restartjmpenv;
+	    OP *restartop;
 
 	    if (cxix < cxstack_ix)
 		dounwind(cxix);
@@ -1668,6 +1674,9 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    }
 	    POPEVAL(cx);
 	    namesv = cx->blk_eval.old_namesv;
+	    oldcop = cx->blk_oldcop;
+	    restartjmpenv = cx->blk_eval.cur_top_env;
+	    restartop = cx->blk_eval.retop;
 
 	    if (gimme == G_SCALAR)
 		*++newsp = &PL_sv_undef;
@@ -1679,7 +1688,7 @@ Perl_die_unwind(pTHX_ SV *msv)
 	     * XXX it might be better to find a way to avoid messing with
 	     * PL_curcop in save_re_context() instead, but this is a more
 	     * minimal fix --GSAR */
-	    PL_curcop = cx->blk_oldcop;
+	    PL_curcop = oldcop;
 
 	    if (optype == OP_REQUIRE) {
                 const char* const msg = SvPVx_nolen_const(exceptsv);
@@ -1700,9 +1709,8 @@ Perl_die_unwind(pTHX_ SV *msv)
 	    else {
 		sv_setsv(ERRSV, exceptsv);
 	    }
-	    assert(CxTYPE(cx) == CXt_EVAL);
-	    PL_restartjmpenv = cx->blk_eval.cur_top_env;
-	    PL_restartop = cx->blk_eval.retop;
+	    PL_restartjmpenv = restartjmpenv;
+	    PL_restartop = restartop;
 	    JMPENV_JUMP(3);
 	    /* NOTREACHED */
 	}
@@ -1915,9 +1923,7 @@ PP(pp_caller)
     }
 
     PUSHs(cx->blk_oldcop->cop_hints_hash ?
-	  sv_2mortal(newRV_noinc(
-				 MUTABLE_SV(Perl_refcounted_he_chain_2hv(aTHX_
-					      cx->blk_oldcop->cop_hints_hash))))
+	  sv_2mortal(newRV_noinc(MUTABLE_SV(cop_hints_2hv(cx->blk_oldcop, 0))))
 	  : &PL_sv_undef);
     RETURN;
 }
@@ -2229,7 +2235,6 @@ PP(pp_return)
 	retop = cx->blk_eval.retop;
 	if (CxTRYBLOCK(cx))
 	    break;
-	lex_end();
 	if (optype == OP_REQUIRE &&
 	    (MARK == SP || (gimme == G_SCALAR && !SvTRUE(*SP))) )
 	{
@@ -2782,6 +2787,14 @@ PP(pp_goto)
 				    enterops, enterops + GOTO_DEPTH);
 		if (retop)
 		    break;
+		if (gotoprobe->op_sibling &&
+			gotoprobe->op_sibling->op_type == OP_UNSTACK &&
+			gotoprobe->op_sibling->op_sibling) {
+		    retop = dofindlabel(gotoprobe->op_sibling->op_sibling,
+					label, enterops, enterops + GOTO_DEPTH);
+		    if (retop)
+			break;
+		}
 	    }
 	    PL_lastgotoprobe = gotoprobe;
 	}
@@ -2993,7 +3006,7 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
     PERL_ARGS_ASSERT_SV_COMPILE_2OP;
 
     ENTER_with_name("eval");
-    lex_start(sv, NULL, FALSE);
+    lex_start(sv, NULL, 0);
     SAVETMPS;
     /* switch to eval mode */
 
@@ -3053,7 +3066,6 @@ Perl_sv_compile_2op(pTHX_ SV *sv, OP** startop, const char *code, PAD** padp)
 
     (*startop)->op_type = OP_NULL;
     (*startop)->op_ppaddr = PL_ppaddr[OP_NULL];
-    lex_end();
     /* XXX DAPM do this properly one year */
     *padp = MUTABLE_AV(SvREFCNT_inc_simple(PL_comppad));
     LEAVE_with_name("eval");
@@ -3241,7 +3253,6 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 		namesv = cx->blk_eval.old_namesv;
 	    }
 	}
-	lex_end();
 	if (yystatus != 3)
 	    LEAVE_with_name("eval"); /* pp_entereval knows about this LEAVE.  */
 
@@ -3324,10 +3335,11 @@ S_doeval(pTHX_ int gimme, OP** startop, CV* outside, U32 seq)
 }
 
 STATIC PerlIO *
-S_check_type_and_open(pTHX_ const char *name)
+S_check_type_and_open(pTHX_ SV *name)
 {
     Stat_t st;
-    const int st_rc = PerlLIO_stat(name, &st);
+    const char *p = SvPV_nolen_const(name);
+    const int st_rc = PerlLIO_stat(p, &st);
 
     PERL_ARGS_ASSERT_CHECK_TYPE_AND_OPEN;
 
@@ -3335,41 +3347,35 @@ S_check_type_and_open(pTHX_ const char *name)
 	return NULL;
     }
 
-    return PerlIO_open(name, PERL_SCRIPT_MODE);
+#if !defined(PERLIO_IS_STDIO) && !defined(USE_SFIO)
+    return PerlIO_openn(aTHX_ NULL, PERL_SCRIPT_MODE, -1, 0, 0, NULL, 1, &name);
+#else
+    return PerlIO_open(p, PERL_SCRIPT_MODE);
+#endif
 }
 
 #ifndef PERL_DISABLE_PMC
 STATIC PerlIO *
-S_doopen_pm(pTHX_ const char *name, const STRLEN namelen)
+S_doopen_pm(pTHX_ SV *name)
 {
-    PerlIO *fp;
+    STRLEN namelen;
+    const char *p = SvPV_const(name, namelen);
 
     PERL_ARGS_ASSERT_DOOPEN_PM;
 
-    if (namelen > 3 && memEQs(name + namelen - 3, 3, ".pm")) {
-	SV *const pmcsv = newSV(namelen + 2);
-	char *const pmc = SvPVX(pmcsv);
+    if (namelen > 3 && memEQs(p + namelen - 3, 3, ".pm")) {
+	SV *const pmcsv = sv_mortalcopy(name);
 	Stat_t pmcstat;
 
-	memcpy(pmc, name, namelen);
-	pmc[namelen] = 'c';
-	pmc[namelen + 1] = '\0';
+	sv_catpvn(pmcsv, "c", 1);
 
-	if (PerlLIO_stat(pmc, &pmcstat) < 0) {
-	    fp = check_type_and_open(name);
-	}
-	else {
-	    fp = check_type_and_open(pmc);
-	}
-	SvREFCNT_dec(pmcsv);
+	if (PerlLIO_stat(SvPV_nolen_const(pmcsv), &pmcstat) >= 0)
+	    return check_type_and_open(pmcsv);
     }
-    else {
-	fp = check_type_and_open(name);
-    }
-    return fp;
+    return check_type_and_open(name);
 }
 #else
-#  define doopen_pm(name, namelen) check_type_and_open(name)
+#  define doopen_pm(name) check_type_and_open(name)
 #endif /* !PERL_DISABLE_PMC */
 
 PP(pp_require)
@@ -3507,8 +3513,9 @@ PP(pp_require)
     /* prepare to compile file */
 
     if (path_is_absolute(name)) {
+	/* At this point, name is SvPVX(sv)  */
 	tryname = name;
-	tryrsfp = doopen_pm(name, len);
+	tryrsfp = doopen_pm(sv);
     }
     if (!tryrsfp) {
 	AV * const ar = GvAVn(PL_incgv);
@@ -3688,15 +3695,13 @@ PP(pp_require)
 			memcpy(tmp, name, len + 1);
 
 			SvCUR_set(namesv, dirlen + len + 1);
-
-			/* Don't even actually have to turn SvPOK_on() as we
-			   access it directly with SvPVX() below.  */
+			SvPOK_on(namesv);
 		    }
 #  endif
 #endif
 		    TAINT_PROPER("require");
 		    tryname = SvPVX_const(namesv);
-		    tryrsfp = doopen_pm(tryname, SvCUR(namesv));
+		    tryrsfp = doopen_pm(namesv);
 		    if (tryrsfp) {
 			if (tryname[0] == '.' && tryname[1] == '/') {
 			    ++tryname;
@@ -3767,7 +3772,7 @@ PP(pp_require)
 
     ENTER_with_name("eval");
     SAVETMPS;
-    lex_start(NULL, tryrsfp, TRUE);
+    lex_start(NULL, tryrsfp, 0);
 
     SAVEHINTS();
     PL_hints = 0;
@@ -3862,7 +3867,7 @@ PP(pp_entereval)
     TAINT_PROPER("eval");
 
     ENTER_with_name("eval");
-    lex_start(sv, NULL, FALSE);
+    lex_start(sv, NULL, 0);
     SAVETMPS;
 
     /* switch to eval mode */
@@ -3895,25 +3900,18 @@ PP(pp_entereval)
     }
     SAVECOMPILEWARNINGS();
     PL_compiling.cop_warnings = DUP_WARNINGS(PL_curcop->cop_warnings);
-    if (PL_compiling.cop_hints_hash) {
-	Perl_refcounted_he_free(aTHX_ PL_compiling.cop_hints_hash);
-    }
+    cophh_free(CopHINTHASH_get(&PL_compiling));
     if (Perl_fetch_cop_label(aTHX_ PL_curcop, NULL, NULL)) {
 	/* The label, if present, is the first entry on the chain. So rather
 	   than writing a blank label in front of it (which involves an
 	   allocation), just use the next entry in the chain.  */
 	PL_compiling.cop_hints_hash
-	    = PL_curcop->cop_hints_hash->refcounted_he_next;
+	    = cophh_copy(PL_curcop->cop_hints_hash->refcounted_he_next);
 	/* Check the assumption that this removed the label.  */
 	assert(Perl_fetch_cop_label(aTHX_ &PL_compiling, NULL, NULL) == NULL);
     }
     else
-	PL_compiling.cop_hints_hash = PL_curcop->cop_hints_hash;
-    if (PL_compiling.cop_hints_hash) {
-	HINTS_REFCNT_LOCK;
-	PL_compiling.cop_hints_hash->refcounted_he_refcnt++;
-	HINTS_REFCNT_UNLOCK;
-    }
+	PL_compiling.cop_hints_hash = cophh_copy(PL_curcop->cop_hints_hash);
     /* special case: an eval '' executed within the DB package gets lexically
      * placed in the first non-DB CV rather than the current CV - this
      * allows the debugger to execute code, find lexicals etc, in the
@@ -4005,7 +4003,6 @@ PP(pp_leaveeval)
     assert(CvDEPTH(PL_compcv) == 1);
 #endif
     CvDEPTH(PL_compcv) = 0;
-    lex_end();
 
     if (optype == OP_REQUIRE &&
 	!(gimme == G_SCALAR ? SvTRUE(*SP) : SP > newsp))

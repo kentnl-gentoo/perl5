@@ -10,7 +10,7 @@ BEGIN {
 
 use strict;
 use warnings;
-plan(tests => 16);
+plan(tests => 21);
 
 {
     package New;
@@ -33,8 +33,6 @@ ok (New->isa (Old::), 'New inherits from Old');
 isa_ok (bless ({}, Old::), New::, 'Old object');
 isa_ok (bless ({}, New::), Old::, 'New object');
 
-
-no warnings; # temporary, until bug #77358 is fixed
 
 # Test that replacing a package by assigning to an existing glob
 # invalidates the isa caches
@@ -170,6 +168,9 @@ for(
   "replacing nonexistent nested packages by $$_{name} updates isa caches";
 }
 
+no warnings; # temporary; there seems to be a scoping bug, as this does not
+             # work when placed in the blocks below
+
 # Test that deleting stash elements containing
 # subpackages also invalidates the isa cache.
 # Maybe this does not belong in package_aliases.t, but it is closely
@@ -192,6 +193,77 @@ for(
  is $pet->speak, 'Woof!',
   'the deleted stash is gone completely when freed';
 }
+# Same thing, but with nested packages
+{
+ @Pett::ISA = ("Curr::Curr::Curr", "Hownd");
+ @Curr::Curr::Curr::ISA = "Latrator";
+
+ sub Latrator::speak { "Arff!" }
+ sub Hownd::speak { "Woof!" }
+
+ my $pet = bless [], "Pett";
+
+ my $life_raft = delete $::{'Curr::'};
+
+ is $pet->speak, 'Woof!',
+  'deleting a stash from its parent stash resets caches of substashes';
+
+ undef $life_raft;
+ is $pet->speak, 'Woof!',
+  'the deleted substash is gone completely when freed';
+}
+
+# [perl #77358]
+fresh_perl_is
+   q~#!perl -w
+     @Pet::ISA = "Tike";
+     @Tike::ISA = "Barker";
+     
+     sub Barker::speak { print "Woof!\n" }
+     sub Latrator::speak { print "Bow-wow!\n" }
+     
+     my $pet = bless [], "Pet";
+     
+     $pet->speak;
+     
+     sub Dog::speak { print "Hello.\n" } # strange dog!
+     @Dog::ISA = 'Latrator';
+     *Tike:: = delete $::{'Dog::'};
+     
+     $pet->speak;
+   ~,
+  "Woof!\nHello.\n",
+   { stderr => 1 },
+  "Assigning a nameless package over one w/subclasses updates isa caches";
+
+# mro_package_moved needs to make a distinction between replaced and
+# assigned stashes when keeping track of what it has seen so far.
+no warnings; {
+    no strict 'refs';
+
+    sub bar::blonk::blonk::phoo { "bbb" }
+    sub veclum::phoo { "lasrevinu" }
+    @feedlebomp::ISA = qw 'phoo::blonk::blonk veclum';
+    *phoo::baz:: = *bar::blonk::;   # now bar::blonk:: is on both sides
+    *phoo:: = *bar::;         # here bar::blonk:: is both deleted and added
+    *bar:: = *boo::;          # now it is only known as phoo::blonk::
+
+    # At this point, before the bug was fixed, %phoo::blonk::blonk:: ended
+    # up with no effective name, allowing it to be deleted without updating
+    # its subclasses’ caches.
+
+    my $accum = '';
+
+    $accum .= 'feedlebomp'->phoo;          # bbb
+    delete ${"phoo::blonk::"}{"blonk::"};
+    $accum .= 'feedlebomp'->phoo;          # bbb (Oops!)
+    @feedlebomp::ISA = @feedlebomp::ISA;
+    $accum .= 'feedlebomp'->phoo;          # lasrevinu
+
+    is $accum, 'bbblasrevinulasrevinu',
+      'nested classes deleted & added simultaneously';
+}
+use warnings;
 
 # mro_package_moved needs to check for self-referential packages.
 # This broke Text::Template [perl #78362].
@@ -199,3 +271,20 @@ watchdog 3;
 *foo:: = \%::;
 *Acme::META::Acme:: = \*Acme::; # indirect self-reference
 pass("mro_package_moved and self-referential packages");
+
+# Deleting a glob whose name does not indicate its location in the symbol
+# table but which nonetheless *is* in the symbol table.
+{
+    no strict refs=>;
+    no warnings;
+    @one::more::ISA = "four";
+    sub four::womp { "aoeaa" }
+    *two:: = *one::;
+    delete $::{"one::"};
+    @Childclass::ISA = 'two::more';
+    my $accum = 'Childclass'->womp . '-';
+    my $life_raft = delete ${"two::"}{"more::"};
+    $accum .= eval { 'Childclass'->womp } // '<undef>';
+    is $accum, 'aoeaa-<undef>',
+     'Deleting globs whose loc in the symtab differs from gv_fullname'
+}

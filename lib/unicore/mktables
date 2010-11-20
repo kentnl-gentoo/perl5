@@ -50,7 +50,7 @@ sub DEBUG () { 0 }  # Set to 0 for production; 1 for development
 #   the small actual loop to process the input files and finish up; then
 #   a __DATA__ section, for the .t tests
 #
-# This program works on all releases of Unicode through at least 5.2.  The
+# This program works on all releases of Unicode through at least 6.0.  The
 # outputs have been scrutinized most intently for release 5.1.  The others
 # have been checked for somewhat more than just sanity.  It can handle all
 # existing Unicode character properties in those releases.
@@ -183,9 +183,9 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # More information on Unicode version glitches is further down in these
 # introductory comments.
 #
-# This program works on all properties as of 5.2, though the files for some
-# are suppressed from apparent lack of demand for them.  You can change which
-# are output by changing lists in this program.
+# This program works on all non-provisional properties as of 6.0, though the
+# files for some are suppressed from apparent lack of demand for them.  You
+# can change which are output by changing lists in this program.
 #
 # The old version of mktables emphasized the term "Fuzzy" to mean Unocde's
 # loose matchings rules (from Unicode TR18):
@@ -418,7 +418,7 @@ my $unicode_reference_url = 'http://www.unicode.org/reports/tr44/';
 # Unicode_Radical_Stroke was listed in those files, so if the Unihan database
 # is present in the directory, a table will be generated for that property.
 # In 5.2, several more properties were added.  For your convenience, the two
-# arrays are initialized with all the 5.2 listed properties that are also in
+# arrays are initialized with all the 6.0 listed properties that are also in
 # earlier releases.  But these are commented out.  You can just uncomment the
 # ones you want, or use them as a template for adding entries for other
 # properties.
@@ -805,7 +805,7 @@ if ($v_version gt v3.2.0) {
                                 'Canonical_Combining_Class=Attached_Below_Left'
 }
 
-# These are listed in the Property aliases file in 5.2, but Unihan is ignored
+# These are listed in the Property aliases file in 6.0, but Unihan is ignored
 # unless explicitly added.
 if ($v_version ge v5.2.0) {
     my $unihan = 'Unihan; remove from list if using Unihan';
@@ -848,10 +848,10 @@ my %why_obsolete;    # Documentation only
 
     my $other_properties = 'other properties';
     my $contributory = "Used by Unicode internally for generating $other_properties and not intended to be used stand-alone";
-    my $why_no_expand  = "Easily computed, and yet doesn't cover the common encoding forms (UTF-16/8)",
+    my $why_no_expand  = "Deprecated by Unicode: less useful than UTF-specific calculations",
 
     %why_deprecated = (
-        'Grapheme_Link' => 'Deprecated by Unicode.  Use ccc=vr (Canonical_Combining_Class=Virama) instead',
+        'Grapheme_Link' => 'Deprecated by Unicode:  Duplicates ccc=vr (Canonical_Combining_Class=Virama)',
         'Jamo_Short_Name' => $contributory,
         'Line_Break=Surrogate' => 'Deprecated by Unicode because surrogates should never appear in well-formed text, and therefore shouldn\'t be the basis for line breaking',
         'Other_Alphabetic' => $contributory,
@@ -865,7 +865,7 @@ my %why_obsolete;    # Documentation only
     );
 
     %why_suppressed = (
-        # There is a lib/unicore/Decomposition.pl (used by normalize.pm) which
+        # There is a lib/unicore/Decomposition.pl (used by Normalize.pm) which
         # contains the same information, but without the algorithmically
         # determinable Hangul syllables'.  This file is not published, so it's
         # existence is not noted in the comment.
@@ -882,10 +882,7 @@ my %why_obsolete;    # Documentation only
         'Name' => "Accessible via 'use charnames;'",
         'Name_Alias' => "Accessible via 'use charnames;'",
 
-        # These are sort of jumping the gun; deprecation is proposed for
-        # Unicode version 6.0, but they have never been exposed by Perl, and
-        # likely are soon to be deprecated, so best not to expose them.
-        FC_NFKC_Closure => 'Use NFKC_Casefold instead',
+        FC_NFKC_Closure => 'Supplanted in usage by NFKC_Casefold; otherwise not useful',
         Expands_On_NFC => $why_no_expand,
         Expands_On_NFD => $why_no_expand,
         Expands_On_NFKC => $why_no_expand,
@@ -907,9 +904,15 @@ my %why_obsolete;    # Documentation only
 
 if ($v_version ge 4.0.0) {
     $why_stabilized{'Hyphen'} = 'Use the Line_Break property instead; see www.unicode.org/reports/tr14';
+    if ($v_version ge 6.0.0) {
+        $why_deprecated{'Hyphen'} = 'Supplanted by Line_Break property values; see www.unicode.org/reports/tr14';
+    }
 }
-if ($v_version ge 5.2.0) {
+if ($v_version ge 5.2.0 && $v_version lt 6.0.0) {
     $why_obsolete{'ISO_Comment'} = 'Code points for it have been removed';
+    if ($v_version ge 6.0.0) {
+        $why_deprecated{'ISO_Comment'} = 'No longer needed for chart generation; otherwise not useful, and code points for it have been removed';
+    }
 }
 
 # Probably obsolete forever
@@ -928,7 +931,7 @@ END
 
 # If you are using the Unihan database, you need to add the properties that
 # you want to extract from it to this table.  For your convenience, the
-# properties in the 5.2 PropertyAliases.txt file are listed, commented out
+# properties in the 6.0 PropertyAliases.txt file are listed, commented out
 my @cjk_properties = split "\n", <<'END';
 #cjkAccountingNumeric; kAccountingNumeric
 #cjkOtherNumeric; kOtherNumeric
@@ -947,7 +950,7 @@ my @cjk_properties = split "\n", <<'END';
 END
 
 # Similarly for the property values.  For your convenience, the lines in the
-# 5.2 PropertyAliases.txt file are listed.  Just remove the first BUT NOT both
+# 6.0 PropertyAliases.txt file are listed.  Just remove the first BUT NOT both
 # '#' marks
 my @cjk_property_values = split "\n", <<'END';
 ## @missing: 0000..10FFFF; cjkAccountingNumeric; NaN
@@ -1030,6 +1033,10 @@ my %ignored_files = (
     'ReadMe.txt' => 'Just comments',
     'README.TXT' => 'Just comments',
     'StandardizedVariants.txt' => 'Only for glyph changes, not a Unicode character property.  Does not fit into current scheme where one code point is mapped',
+    'EmojiSources.txt' => 'Not of general utility: for Japanese legacy cell-phone applications',
+    'IndicMatraCategory.txt' => 'Provisional',
+    'IndicSyllabicCategory.txt' => 'Provisional',
+    'ScriptExtensions.txt' => 'Provisional',
 );
 
 ### End of externally interesting definitions, except for @input_file_objects
@@ -3204,7 +3211,9 @@ sub trace { return main::trace(@_); }
         #                         existing one, but has a different value,
         #                         don't replace the existing one, but insert
         #                         this, one so that the same range can occur
-        #                         multiple times.
+        #                         multiple times.  They are stored LIFO, so
+        #                         that the final one inserted is the first one
+        #                         returned in an ordered search of the table.
         #       => anything else  is the same as => $IF_NOT_EQUIVALENT
         #
         # "same value" means identical for non-type-0 ranges, and it means
@@ -3433,23 +3442,60 @@ sub trace { return main::trace(@_); }
             return;
         }
 
-        # Here, we have taken care of the case where $replace is $NO, which
-        # means that whatever action we now take is done unconditionally.  It
-        # still could be that this call will result in a no-op, if duplicates
-        # aren't allowed, and we are inserting a range that merely duplicates
-        # data already in the range list; or also if deleting a non-existent
-        # range.
-        # $i still points to the first potential affected range.  Now find the
-        # highest range affected, which will determine the length parameter to
-        # splice.  (The input range can span multiple existing ones.)  While
-        # we are looking through the range list, see also if this is an
-        # insertion that will change the values of at least one of the
-        # affected ranges.  We don't need to do this check unless this is an
-        # insertion of non-multiples, and also since this is a boolean, we
-        # don't need to do it if have already determined that it will make a
-        # change; just unconditionally change them.  $cdm is created to be 1
-        # if either of these is true. (The 'c' in the name comes from below)
-        my $cdm = ($operation eq '-' || $replace == $MULTIPLE);
+        # Here, we have taken care of the case where $replace is $NO.
+        # Remember that here, r[$i-1]->end < $start <= r[$i]->end
+        # If inserting a multiple record, this is where it goes, before the
+        # first (if any) existing one.  This implies an insertion, and no
+        # change to any existing ranges.  Note that $i can be -1 if this new
+        # range doesn't actually duplicate any existing, and comes at the
+        # beginning of the list.
+        if ($replace == $MULTIPLE) {
+
+            if ($start != $end) {
+                Carp::my_carp_bug("$owner_name_of{$addr}Can't cope with adding a multiple record when the range ($start..$end) contains more than one code point.  No action taken.");
+                return;
+            }
+
+            # Don't add an exact duplicate, as it isn't really a multiple
+            if ($end >= $r->[$i]->start) {
+                if ($r->[$i]->start != $r->[$i]->end) {
+                    Carp::my_carp_bug("$owner_name_of{$addr}Can't cope with adding a multiple record when the other range ($r->[$i]) contains more than one code point.  No action taken.");
+                    return;
+                }
+                return if $value eq $r->[$i]->value && $type eq $r->[$i]->type;
+            }
+
+            trace "Adding multiple record at $i with $start..$end, $value" if main::DEBUG && $to_trace;
+            my @return = splice @$r,
+                                $i,
+                                0,
+                                Range->new($start,
+                                           $end,
+                                           Value => $value,
+                                           Type => $type);
+            if (main::DEBUG && $to_trace) {
+                trace "After splice:";
+                trace 'i-2=[', $i-2, ']', $r->[$i-2] if $i >= 2;
+                trace 'i-1=[', $i-1, ']', $r->[$i-1] if $i >= 1;
+                trace "i  =[", $i, "]", $r->[$i] if $i >= 0;
+                trace 'i+1=[', $i+1, ']', $r->[$i+1] if $i < @$r - 1;
+                trace 'i+2=[', $i+2, ']', $r->[$i+2] if $i < @$r - 2;
+                trace 'i+3=[', $i+3, ']', $r->[$i+3] if $i < @$r - 3;
+            }
+            return @return;
+        }
+
+        # Here, we have taken care of $NO and $MULTIPLE replaces.  This leaves
+        # delete, insert, and replace either unconditionally or if not
+        # equivalent.  $i still points to the first potential affected range.
+        # Now find the highest range affected, which will determine the length
+        # parameter to splice.  (The input range can span multiple existing
+        # ones.)  If this isn't a deletion, while we are looking through the
+        # range list, see also if this is a replacement rather than a clean
+        # insertion; that is if it will change the values of at least one
+        # existing range.  Start off assuming it is an insert, until find it
+        # isn't.
+        my $clean_insert = $operation eq '+';
         my $j;        # This will point to the highest affected range
 
         # For non-zero types, the standard form is the value itself;
@@ -3462,12 +3508,12 @@ sub trace { return main::trace(@_); }
             # searching
             last if $end < $r->[$j]->start;
 
-            # Here, overlaps the range at $j.  If the value's don't match,
-            # and this is supposedly an insertion, it becomes a change
-            # instead.  This is what the 'c' stands for in $cdm.
-            if (! $cdm) {
+            # Here, overlaps the range at $j.  If the values don't match,
+            # and so far we think this is a clean insertion, it becomes a
+            # non-clean insertion, i.e., a 'change' or 'replace' instead.
+            if ($clean_insert) {
                 if ($r->[$j]->standard_form ne $standard_form) {
-                    $cdm = 1;
+                    $clean_insert = 0;
                 }
                 else {
 
@@ -3481,7 +3527,7 @@ sub trace { return main::trace(@_); }
                         # same, but the non-standardized values aren't.  If
                         # replacing unconditionally, then replace
                         if( $replace == $UNCONDITIONALLY) {
-                            $cdm = 1;
+                            $clean_insert = 0;
                         }
                         else {
 
@@ -3495,13 +3541,13 @@ sub trace { return main::trace(@_); }
                                             && $pre_existing =~ /[a-z]/;
 
                             if ($old_mixed != $new_mixed) {
-                                $cdm = 1 if $new_mixed;
+                                $clean_insert = 0 if $new_mixed;
                                 if (main::DEBUG && $to_trace) {
-                                    if ($cdm) {
-                                        trace "Replacing $pre_existing with $value";
+                                    if ($clean_insert) {
+                                        trace "Retaining $pre_existing over $value";
                                     }
                                     else {
-                                        trace "Retaining $pre_existing over $value";
+                                        trace "Replacing $pre_existing with $value";
                                     }
                                 }
                             }
@@ -3515,13 +3561,13 @@ sub trace { return main::trace(@_); }
                                 my $old_punct = $pre_existing =~ /[-_]/;
 
                                 if ($old_punct != $new_punct) {
-                                    $cdm = 1 if $new_punct;
+                                    $clean_insert = 0 if $new_punct;
                                     if (main::DEBUG && $to_trace) {
-                                        if ($cdm) {
-                                            trace "Replacing $pre_existing with $value";
+                                        if ($clean_insert) {
+                                            trace "Retaining $pre_existing over $value";
                                         }
                                         else {
-                                            trace "Retaining $pre_existing over $value";
+                                            trace "Replacing $pre_existing with $value";
                                         }
                                     }
                                 }   # else existing one is just as "good";
@@ -3543,44 +3589,6 @@ sub trace { return main::trace(@_); }
 
         $j--;        # $j now points to the highest affected range.
         trace "Final affected range is $j: $r->[$j]" if main::DEBUG && $to_trace;
-
-        # If inserting a multiple record, this is where it goes, after all the
-        # existing ones for this range.  This implies an insertion, and no
-        # change to any existing ranges.  Note that $j can be -1 if this new
-        # range doesn't actually duplicate any existing, and comes at the
-        # beginning of the list, in which case we can handle it like any other
-        # insertion, and is easier to do so.
-        if ($replace == $MULTIPLE && $j >= 0) {
-
-            # This restriction could be remedied with a little extra work, but
-            # it won't hopefully ever be necessary
-            if ($r->[$j]->start != $r->[$j]->end) {
-                Carp::my_carp_bug("$owner_name_of{$addr}Can't cope with adding a multiple when the other range ($r->[$j]) contains more than one code point.  No action taken.");
-                return;
-            }
-
-            # Don't add an exact duplicate, as it isn't really a multiple
-            return if $value eq $r->[$j]->value && $type eq $r->[$j]->type;
-
-            trace "Adding multiple record at $j+1 with $start..$end, $value" if main::DEBUG && $to_trace;
-            my @return = splice @$r,
-                                $j+1,
-                                0,
-                                Range->new($start,
-                                           $end,
-                                           Value => $value,
-                                           Type => $type);
-            if (main::DEBUG && $to_trace) {
-                trace "After splice:";
-                trace 'j-2=[', $j-2, ']', $r->[$j-2] if $j >= 2;
-                trace 'j-1=[', $j-1, ']', $r->[$j-1] if $j >= 1;
-                trace "j  =[", $j, "]", $r->[$j] if $j >= 0;
-                trace 'j+1=[', $j+1, ']', $r->[$j+1] if $j < @$r - 1;
-                trace 'j+2=[', $j+2, ']', $r->[$j+2] if $j < @$r - 2;
-                trace 'j+3=[', $j+3, ']', $r->[$j+3] if $j < @$r - 3;
-            }
-            return @return;
-        }
 
         # Here, have taken care of $NO and $MULTIPLE replaces.
         # $j points to the highest affected range.  But it can be < $i or even
@@ -3607,8 +3615,9 @@ sub trace { return main::trace(@_); }
         }
         else {
 
-            # Here the entire input range is not in the gap before $i.  There
-            # is an affected one, and $j points to the highest such one.
+            # Here part of the input range is not in the gap before $i.  Thus,
+            # there is at least one affected one, and $j points to the highest
+            # such one.
 
             # At this point, here is the situation:
             # This is not an insertion of a multiple, nor of tentative ($NO)
@@ -3624,21 +3633,21 @@ sub trace { return main::trace(@_); }
             #   r[$i-1]->end < $start <= $end <= r[$j]->end
             #
             # Also:
-            #   $cdm is a boolean which is set true if and only if this is a
-            #        change or deletion (multiple was handled above).  In
-            #        other words, it could be renamed to be just $cd.
+            #   $clean_insert is a boolean which is set true if and only if
+            #        this is a "clean insertion", i.e., not a change nor a
+            #        deletion (multiple was handled above).
 
             # We now have enough information to decide if this call is a no-op
-            # or not.  It is a no-op if it is a deletion of a non-existent
-            # range, or an insertion of already existing data.
+            # or not.  It is a no-op if this is an insertion of already
+            # existing data.
 
-            if (main::DEBUG && $to_trace && ! $cdm
+            if (main::DEBUG && $to_trace && $clean_insert
                                          && $i == $j
                                          && $start >= $r->[$i]->start)
             {
                     trace "no-op";
             }
-            return if ! $cdm      # change or delete => not no-op
+            return if $clean_insert
                       && $i == $j # more than one affected range => not no-op
 
                       # Here, r[$i-1]->end < $start <= $end <= r[$i]->end
@@ -3675,7 +3684,7 @@ sub trace { return main::trace(@_); }
             $extends_above = ($j+1 < $range_list_size
                             && $r->[$j+1]->start == $end +1
                             && $r->[$j+1]->standard_form eq $standard_form
-                            && $r->[$j-1]->type == $type);
+                            && $r->[$j+1]->type == $type);
         }
         if ($extends_below && $extends_above) { # Adds to both
             $splice_start--;     # start replace at element below
@@ -3700,7 +3709,7 @@ sub trace { return main::trace(@_); }
                 # Here the new element adds to the one below, but not to the
                 # one above.  If inserting, and only to that one range,  can
                 # just change its ending to include the new one.
-                if ($length == 0 && ! $cdm) {
+                if ($length == 0 && $clean_insert) {
                     $r->[$i-1]->set_end($end);
                     trace "inserted range extends range to below so it is now $r->[$i-1]" if main::DEBUG && $to_trace;
                     return;
@@ -3716,7 +3725,7 @@ sub trace { return main::trace(@_); }
 
                 # Here the new element adds to the one above, but not below.
                 # Mirror the code above
-                if ($length == 0 && ! $cdm) {
+                if ($length == 0 && $clean_insert) {
                     $r->[$j+1]->set_start($start);
                     trace "inserted range extends range to above so it is now $r->[$j+1]" if main::DEBUG && $to_trace;
                     return;
@@ -6558,12 +6567,21 @@ sub trace { return main::trace(@_); }
         my $addr = do { no overloading; pack 'J', $self; };
         my $current_leader = ($related) ? $parent{$addr} : $leader{$addr};
 
-        if ($related &&
-            ! $other->perl_extension
-            && ! $current_leader->perl_extension)
-        {
-            Carp::my_carp_bug("set_equivalent_to should have 'Related => 0 for equivalencing two Unicode properties.  Assuming $self is not related to $other");
-            $related = 0;
+        if ($related) {
+            if ($current_leader->perl_extension) {
+                if ($other->perl_extension) {
+                    Carp::my_carp_bug("Use add_alias() to set two Perl tables '$self' and '$other', equivalent.");
+                    return;
+                }
+            } elsif (! $other->perl_extension) {
+                Carp::my_carp_bug("set_equivalent_to should have 'Related => 0 for equivalencing two Unicode properties.  Assuming $self is not related to $other");
+                $related = 0;
+            }
+        }
+
+        if (! $self->is_empty && ! $self->matches_identically_to($other)) {
+            Carp::my_carp_bug("$self should be empty or match identically to $other.  Not setting equivalent");
+            return;
         }
 
         my $leader = do { no overloading; pack 'J', $current_leader; };
@@ -8218,7 +8236,7 @@ sub finish_property_setup {
         }
     }
 
-    # This entry is still missing as of 5.2, perhaps because no short name for
+    # This entry is still missing as of 6.0, perhaps because no short name for
     # it.
     if (-e 'NameAliases.txt') {
         my $aliases = property_ref('Name_Alias');
@@ -10127,6 +10145,32 @@ END
         }
         return;
     }
+
+    sub filter_v6_ucd {
+
+        # Unicode 6.0 co-opted the name BELL for U+1F514, so change the input
+        # to pretend that U+0007 is ALERT instead, and for Perl 5.14, don't
+        # allow the BELL name for U+1F514, so that the old usage can be
+        # deprecated for one cycle.
+
+        return if $_ !~ /^(?:0007|1F514|070F);/;
+
+        my ($code_point, @fields) = split /\s*;\s*/, $_, -1;
+        if ($code_point eq '0007') {
+            $fields[$CHARNAME] = "ALERT";
+        }
+        elsif ($code_point eq '070F') { # Unicode Corrigendum #8; see
+                            # http://www.unicode.org/versions/corrigendum8.html
+            $fields[$BIDI] = "AL";
+        }
+        elsif ($^V lt v5.15.0) { # For 5.16 will convert to use Unicode's name
+            $fields[$CHARNAME] = "";
+        }
+
+        $_ = join ';', $code_point, @fields;
+
+        return;
+    }
 } # End closure for UnicodeData
 
 sub process_GCB_test {
@@ -10297,7 +10341,7 @@ sub filter_special_casing_line {
     # implemented, it would be by hard-coding in the casing functions in the
     # Perl core, not through tables.  But if there is a new condition we don't
     # know about, output a warning.  We know about all the conditions through
-    # 5.2
+    # 6.0
     if ($fields[4] ne "") {
         my @conditions = split ' ', $fields[4];
         if ($conditions[0] ne 'tr'  # We know that these languages have
@@ -11119,7 +11163,8 @@ sub compile_perl() {
     # range, with their names prefaced by 'Posix', to signify that these match
     # what the Posix standard says they should match.  A couple are
     # effectively this, but the name doesn't have 'Posix' in it because there
-    # just isn't any Posix equivalent.
+    # just isn't any Posix equivalent.  'XPosix' are the Posix tables extended
+    # to the full Unicode range, by our guesses as to what is appropriate.
 
     # 'Any' is all code points.  As an error check, instead of just setting it
     # to be that, construct it to be the union of all the major categories
@@ -11184,6 +11229,7 @@ sub compile_perl() {
         $Lower->set_equivalent_to($gc->table('Lowercase_Letter'),
                                                                 Related => 1);
     }
+    $Lower->add_alias('XPosixLower');
     $perl->add_match_table("PosixLower",
                             Description => "[a-z]",
                             Initialize => $Lower & $ASCII,
@@ -11198,6 +11244,7 @@ sub compile_perl() {
         $Upper->set_equivalent_to($gc->table('Uppercase_Letter'),
                                                                 Related => 1);
     }
+    $Upper->add_alias('XPosixUpper');
     $perl->add_match_table("PosixUpper",
                             Description => "[A-Z]",
                             Initialize => $Upper & $ASCII,
@@ -11292,6 +11339,7 @@ sub compile_perl() {
         $Alpha += $gc->table('Nl') if defined $gc->table('Nl');
         $Alpha->add_description('Alphabetic');
     }
+    $Alpha->add_alias('XPosixAlpha');
     $perl->add_match_table("PosixAlpha",
                             Description => "[A-Za-z]",
                             Initialize => $Alpha & $ASCII,
@@ -11301,23 +11349,27 @@ sub compile_perl() {
                         Description => 'Alphabetic and (Decimal) Numeric',
                         Initialize => $Alpha + $gc->table('Decimal_Number'),
                         );
+    $Alnum->add_alias('XPosixAlnum');
     $perl->add_match_table("PosixAlnum",
                             Description => "[A-Za-z0-9]",
                             Initialize => $Alnum & $ASCII,
                             );
 
     my $Word = $perl->add_match_table('Word',
-                                Description => '\w, including beyond ASCII',
+                                Description => '\w, including beyond ASCII;'
+                                            . ' = \p{Alnum} + \pM + \p{Pc}',
                                 Initialize => $Alnum + $gc->table('Mark'),
                                 );
+    $Word->add_alias('XPosixWord');
     my $Pc = $gc->table('Connector_Punctuation'); # 'Pc' Not in release 1
     $Word += $Pc if defined $Pc;
 
     # This is a Perl extension, so the name doesn't begin with Posix.
-    $perl->add_match_table('PerlWord',
+    my $PerlWord = $perl->add_match_table('PerlWord',
                     Description => '\w, restricted to ASCII = [A-Za-z0-9_]',
                     Initialize => $Word & $ASCII,
                     );
+    $PerlWord->add_alias('PosixWord');
 
     my $Blank = $perl->add_match_table('Blank',
                                 Description => '\h, Horizontal white space',
@@ -11330,6 +11382,7 @@ sub compile_perl() {
                                             -   0x200B, # ZWSP
                                 );
     $Blank->add_alias('HorizSpace');        # Another name for it.
+    $Blank->add_alias('XPosixBlank');
     $perl->add_match_table("PosixBlank",
                             Description => "\\t and ' '",
                             Initialize => $Blank & $ASCII,
@@ -11351,24 +11404,28 @@ sub compile_perl() {
                 Description => '\s including beyond ASCII plus vertical tab',
                 Initialize => $Blank + $VertSpace,
     );
+    $Space->add_alias('XPosixSpace');
     $perl->add_match_table("PosixSpace",
                             Description => "\\t, \\n, \\cK, \\f, \\r, and ' '.  (\\cK is vertical tab)",
                             Initialize => $Space & $ASCII,
                             );
 
     # Perl's traditional space doesn't include Vertical Tab
-    my $SpacePerl = $perl->add_match_table('SpacePerl',
+    my $XPerlSpace = $perl->add_match_table('XPerlSpace',
                                   Description => '\s, including beyond ASCII',
                                   Initialize => $Space - 0x000B,
                                 );
-    $perl->add_match_table('PerlSpace',
+    $XPerlSpace->add_alias('SpacePerl');    # A pre-existing synonym
+    my $PerlSpace = $perl->add_match_table('PerlSpace',
                             Description => '\s, restricted to ASCII',
-                            Initialize => $SpacePerl & $ASCII,
+                            Initialize => $XPerlSpace & $ASCII,
                             );
+
 
     my $Cntrl = $perl->add_match_table('Cntrl',
                                         Description => 'Control characters');
     $Cntrl->set_equivalent_to($gc->table('Cc'), Related => 1);
+    $Cntrl->add_alias('XPosixCntrl');
     $perl->add_match_table("PosixCntrl",
                             Description => "ASCII control characters: NUL, SOH, STX, ETX, EOT, ENQ, ACK, BEL, BS, HT, LF, VT, FF, CR, SO, SI, DLE, DC1, DC2, DC3, DC4, NAK, SYN, ETB, CAN, EOM, SUB, ESC, FS, GS, RS, US, and DEL",
                             Initialize => $Cntrl & $ASCII,
@@ -11385,6 +11442,7 @@ sub compile_perl() {
                         Description => 'Characters that are graphical',
                         Initialize => ~ ($Space + $controls),
                         );
+    $Graph->add_alias('XPosixGraph');
     $perl->add_match_table("PosixGraph",
                             Description =>
                                 '[-!"#$%&\'()*+,./:;<>?@[\\\]^_`{|}~0-9A-Za-z]',
@@ -11395,6 +11453,7 @@ sub compile_perl() {
                         Description => 'Characters that are graphical plus space characters (but no controls)',
                         Initialize => $Blank + $Graph - $gc->table('Control'),
                         );
+    $print->add_alias('XPosixPrint');
     $perl->add_match_table("PosixPrint",
                             Description =>
                               '[- 0-9A-Za-z!"#$%&\'()*+,./:;<>?@[\\\]^_`{|}~]',
@@ -11405,15 +11464,20 @@ sub compile_perl() {
     $Punct->set_equivalent_to($gc->table('Punctuation'), Related => 1);
 
     # \p{punct} doesn't include the symbols, which posix does
+    my $XPosixPunct = $perl->add_match_table('XPosixPunct',
+                    Description => '\p{Punct} + ASCII-range \p{Symbol}',
+                    Initialize => $gc->table('Punctuation')
+                                + ($ASCII & $gc->table('Symbol')),
+        );
     $perl->add_match_table('PosixPunct',
         Description => '[-!"#$%&\'()*+,./:;<>?@[\\\]^_`{|}~]',
-        Initialize => $ASCII & ($gc->table('Punctuation')
-                                + $gc->table('Symbol')),
+        Initialize => $ASCII & $XPosixPunct,
         );
 
     my $Digit = $perl->add_match_table('Digit',
-                            Description => '\d, extended beyond just [0-9]');
+                            Description => '[0-9] + all other decimal digits');
     $Digit->set_equivalent_to($gc->table('Decimal_Number'), Related => 1);
+    $Digit->add_alias('XPosixDigit');
     my $PosixDigit = $perl->add_match_table("PosixDigit",
                                             Description => '[0-9]',
                                             Initialize => $Digit & $ASCII,
@@ -11421,6 +11485,7 @@ sub compile_perl() {
 
     # Hex_Digit was not present in first release
     my $Xdigit = $perl->add_match_table('XDigit');
+    $Xdigit->add_alias('XPosixXDigit');
     my $Hex = property_ref('Hex_Digit');
     if (defined $Hex && ! $Hex->is_empty) {
         $Xdigit->set_equivalent_to($Hex->table('Y'), Related => 1);
@@ -11432,6 +11497,10 @@ sub compile_perl() {
                               0xFF10..0xFF19, 0xFF21..0xFF26, 0xFF41..0xFF46]);
         $Xdigit->add_description('[0-9A-Fa-f] and corresponding fullwidth versions, like U+FF10: FULLWIDTH DIGIT ZERO');
     }
+    $perl->add_match_table('PosixXDigit',
+                            Initialize => $ASCII & $Xdigit,
+                            Description => '[0-9A-Fa-f]',
+                        );
 
     my $dt = property_ref('Decomposition_Type');
     $dt->add_match_table('Non_Canon', Full_Name => 'Non_Canonical',
@@ -11563,7 +11632,7 @@ sub compile_perl() {
         $alias_sentence = <<END;
 The Name_Alias property adds duplicate code point entries with a corrected
 name.  The original (less correct, but still valid) name will be physically
-first.
+last.
 END
     }
     my $comment;
@@ -12830,7 +12899,7 @@ both single and compound forms.
 B<Compound forms> consist of two components, separated by an equals sign or a
 colon.  The first component is the property name, and the second component is
 the particular value of the property to match against, for example,
-'\\p{Script: Greek}' or '\\p{Script=Greek}' both mean to match characters
+'\\p{Script: Greek}' and '\\p{Script=Greek}' both mean to match characters
 whose Script property is Greek.
 
 B<Single forms>, like '\\p{Greek}', are mostly Perl-defined shortcuts for
@@ -12889,22 +12958,21 @@ several varieties of obsolesence:
 =item Obsolete
 
 Properties marked with $a_bold_obsolete in the table are considered
-obsolete.  At the time of this writing (Unicode version 5.2) there is no
-information in the Unicode standard about the implications of a property being
 obsolete.
 
 =item Stabilized
 
-Obsolete properties may be stabilized.  This means that they are not actively
-maintained by Unicode, and will not be extended as new characters are added to
-the standard.  Such properties are marked with $a_bold_stabilized in the
-table.  At the time of this writing (Unicode version 5.2) there is no further
-information in the Unicode standard about the implications of a property being
-stabilized.
+Obsolete properties may be stabilized.  Such a determination does not indicate
+that the property should or should not be used; instead it is a declaration
+that the property will not be maintained nor extended for newly encoded
+characters.  Such properties are marked with $a_bold_stabilized in the
+table.
 
 =item Deprecated
 
-Obsolete properties may be deprecated.  This means that their use is strongly
+An obsolete property may be deprecated, perhaps because its original intent
+has been replaced by another property or because its specification was somehow
+defective.  This means that its use is strongly
 discouraged, so much so that a warning will be issued if used, unless the
 regular expression is in the scope of a C<S<no warnings 'deprecated'>>
 statement.  $A_bold_deprecated flags each such entry in the table, and
@@ -13029,8 +13097,9 @@ the properties are listed enclosed in (parentheses).
 =back
 
 An installation can choose to allow any of these to be matched by changing the
-controlling lists contained in the program C<\$Config{privlib}>/F<unicore/$0>
-and then re-running F<$0>.  (C<\%Config> is available from the Config module).
+controlling lists contained in the program
+C<\$Config{privlib}>/F<unicore/mktables> and then re-running F<mktables>.
+(C<\%Config> is available from the Config module).
 
 =head1 Files in the I<To> directory (for serious hackers only)
 
@@ -13059,8 +13128,8 @@ names in parentheses), and any flags or comments about them, are:
 @map_tables_actually_output
 
 An installation can choose to change which files are generated by changing the
-controlling lists contained in the program C<\$Config{privlib}>/F<unicore/$0>
-and then re-running F<$0>.
+controlling lists contained in the program
+C<\$Config{privlib}>/F<unicore/mktables> and then re-running F<mktables>.
 
 Each of these files defines two hash entries to help reading programs decipher
 it.  One of them looks like this:
@@ -14030,7 +14099,12 @@ my @input_file_objects = (
                                             ? \&filter_v1_ucd
                                             : ($v_version eq v2.1.5)
                                                 ? \&filter_v2_1_5_ucd
-                                                : undef),
+
+                                                # And for 5.14 Perls with 6.0,
+                                                # have to also make changes
+                                                : ($v_version ge v6.0.0)
+                                                    ? \&filter_v6_ucd
+                                                    : undef),
 
                                             # And the main filter
                                             \&filter_UnicodeData_line,

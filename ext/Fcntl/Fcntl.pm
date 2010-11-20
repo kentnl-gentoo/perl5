@@ -56,12 +56,12 @@ See L<perlfunc/stat> about the S_I* constants.
 =cut
 
 use strict;
-our($VERSION, @ISA, @EXPORT, @EXPORT_OK, %EXPORT_TAGS, $AUTOLOAD);
+our($VERSION, @ISA, @EXPORT, @EXPORT_OK, %EXPORT_TAGS);
 
 require Exporter;
 require XSLoader;
 @ISA = qw(Exporter);
-$VERSION = '1.09';
+$VERSION = '1.10';
 
 XSLoader::load();
 
@@ -182,18 +182,5 @@ XSLoader::load();
 	O_NOLINK
 	O_NOTRANS
 ), map {@{$_}} values %EXPORT_TAGS);
-
-sub AUTOLOAD {
-    (my $constname = $AUTOLOAD) =~ s/.*:://;
-    die "&Fcntl::constant not defined" if $constname eq 'constant';
-    my ($error, $val) = constant($constname);
-    if ($error) {
-        my (undef,$file,$line) = caller;
-        die "$error at $file line $line\n";
-    }
-    no strict 'refs';
-    *$AUTOLOAD = sub { $val };
-    goto &$AUTOLOAD;
-}
 
 1;
